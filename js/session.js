@@ -27,6 +27,9 @@ const SESSION = {
   connected: false,
   _syncing:  false,  // true while applying remote state
   synced:    true,   // presentee-only: when false, presenter events are ignored
+  laser:     false,  // presenter-only: true when laser pointer is active
+  _laserMoveHandler: null, // mousemove listener ref for cleanup
+  _laserThrottle:    0,    // timestamp of last cursor-move emit
 };
 
 // ── Original function references (captured once) ─────────────
@@ -249,6 +252,12 @@ function joinSession(sessionId, role, password) {
     SESSION._syncing = false;
   });
 
+  // ── Presentee: receive laser pointer position ─────────────────
+  SESSION.socket.on('cursor-move', (pos) => {
+    if (SESSION.role !== 'presentee' || !SESSION.synced) return;
+    _updateLaserDot(pos);
+  });
+
   SESSION.socket.on('disconnect', () => {
     SESSION.connected = false;
   });
@@ -286,6 +295,9 @@ function applyPresenteeUI() {
       '<div class="drop-sub">The presenter will load the briefing package.</div>';
     dropZone.style.pointerEvents = 'none';
   }
+
+  // Lock tab navigation while synced (presenter controls the tab)
+  _setPresenteeTabLock(SESSION.synced);
 }
 
 function showSessionIndicator(sessionId, role) {
@@ -296,6 +308,8 @@ function showSessionIndicator(sessionId, role) {
   if (existingLeave) existingLeave.remove();
   const existingSync = document.getElementById('syncToggleBtn');
   if (existingSync) existingSync.remove();
+  const existingLaser = document.getElementById('laserBtn');
+  if (existingLaser) existingLaser.remove();
 
   const indicator = document.createElement('div');
   indicator.className = 'session-indicator role-' + role;
@@ -324,6 +338,16 @@ function showSessionIndicator(sessionId, role) {
     syncBtn.onclick = toggleSync;
     if (headerRight) headerRight.insertBefore(syncBtn, leaveBtn.nextSibling);
   }
+
+  // For presenters, add LASER POINTER button
+  if (role === 'presenter') {
+    const laserBtn = document.createElement('button');
+    laserBtn.className = 'load-btn';
+    laserBtn.id = 'laserBtn';
+    laserBtn.textContent = 'LASER: OFF';
+    laserBtn.onclick = toggleLaser;
+    if (headerRight) headerRight.insertBefore(laserBtn, leaveBtn.nextSibling);
+  }
 }
 
 // ── Leave room ────────────────────────────────────────────────
@@ -331,6 +355,15 @@ function leaveRoom() {
   if (!SESSION.socket) return;
 
   const wasPresentee = SESSION.role === 'presentee';
+  const wasPresenter = SESSION.role === 'presenter';
+
+  // Stop laser if active
+  if (wasPresenter && SESSION.laser) {
+    _setLaser(false);
+  }
+
+  // Hide the laser dot if visible
+  _updateLaserDot(null);
 
   SESSION.socket.disconnect();
   SESSION.socket = null;
@@ -338,6 +371,7 @@ function leaveRoom() {
   SESSION.role = null;
   SESSION.sessionId = null;
   SESSION.synced = true;
+  SESSION.laser = false;
 
   // Restore original function wrappers
   if (_origLoadPackage)  window.loadPackage  = _origLoadPackage;
@@ -353,6 +387,8 @@ function leaveRoom() {
   if (leaveBtn) leaveBtn.remove();
   const syncBtn = document.getElementById('syncToggleBtn');
   if (syncBtn) syncBtn.remove();
+  const laserBtn = document.getElementById('laserBtn');
+  if (laserBtn) laserBtn.remove();
 
   // Restore JOIN ROOM button
   const joinRoomBtn = document.getElementById('joinRoomBtn');
@@ -366,8 +402,23 @@ function leaveRoom() {
     if (editBtn) editBtn.style.display = '';
     const fileInput = document.getElementById('fileInput');
     if (fileInput) fileInput.disabled = false;
+    // Re-enable tab buttons
+    document.querySelectorAll('.tab-btn').forEach(b => { b.disabled = false; });
   }
+
+  // Return to the upload screen regardless of role
+  STATE.pkg = null;
+  STATE.selectedIdx = -1;
+  const uploadScreen  = document.getElementById('upload-screen');
+  const mainContent   = document.getElementById('main-content');
+  const headerMeta    = document.getElementById('header-meta');
+  if (uploadScreen)  uploadScreen.style.display  = '';
+  if (mainContent)   mainContent.style.display   = 'none';
+  if (headerMeta)    headerMeta.innerHTML         = '';
 }
+
+// Laser pointer throttle interval in milliseconds (~33fps)
+const LASER_THROTTLE_MS = 30;
 
 // ── Presentee sync toggle ─────────────────────────────────────
 function toggleSync() {
@@ -377,8 +428,87 @@ function toggleSync() {
     syncBtn.textContent = SESSION.synced ? 'SYNC: ON' : 'SYNC: OFF';
     syncBtn.classList.toggle('sync-off', !SESSION.synced);
   }
+  // Lock/unlock tab bar based on new sync state
+  _setPresenteeTabLock(SESSION.synced);
   // When re-enabling sync, immediately snap to the current presenter state
   if (SESSION.synced && SESSION.socket && SESSION.connected) {
     SESSION.socket.emit('request-sync');
+    // Hide the laser dot: the sync-state reply will re-show it if the
+    // presenter currently has the laser active (cursor-move arrives naturally)
+    _updateLaserDot(null);
   }
+}
+
+// ── Tab lock for synced presentees ────────────────────────────
+function _setPresenteeTabLock(locked) {
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    if (locked) {
+      b.dataset.origDisabled = b.disabled ? '1' : '0';
+      b.disabled = true;
+      b.title = 'Tab navigation locked — presenter controls the view';
+    } else {
+      // Restore to the natural disabled state (i.e. tab unavailable if no data)
+      if (b.dataset.origDisabled === '0') b.disabled = false;
+      b.title = '';
+    }
+  });
+}
+
+// ── Laser pointer (presenter) ─────────────────────────────────
+function toggleLaser() {
+  _setLaser(!SESSION.laser);
+}
+
+function _setLaser(on) {
+  SESSION.laser = on;
+  const btn = document.getElementById('laserBtn');
+  if (btn) {
+    btn.textContent = on ? 'LASER: ON' : 'LASER: OFF';
+    btn.classList.toggle('laser-active', on);
+  }
+
+  if (on) {
+    // Add mousemove listener
+    SESSION._laserMoveHandler = function (e) {
+      const now = Date.now();
+      if (now - SESSION._laserThrottle < LASER_THROTTLE_MS) return;
+      SESSION._laserThrottle = now;
+      if (SESSION.socket && SESSION.connected) {
+        SESSION.socket.emit('cursor-move', {
+          x: (e.clientX / window.innerWidth)  * 100,
+          y: (e.clientY / window.innerHeight) * 100,
+        });
+      }
+    };
+    window.addEventListener('mousemove', SESSION._laserMoveHandler);
+    document.documentElement.classList.add('laser-mode');
+  } else {
+    // Remove mousemove listener and hide dot on all presentees
+    if (SESSION._laserMoveHandler) {
+      window.removeEventListener('mousemove', SESSION._laserMoveHandler);
+      SESSION._laserMoveHandler = null;
+    }
+    if (SESSION.socket && SESSION.connected) {
+      SESSION.socket.emit('cursor-move', null); // tell presentees to hide dot
+    }
+    document.documentElement.classList.remove('laser-mode');
+  }
+}
+
+// ── Laser dot renderer (presentee) ───────────────────────────
+function _updateLaserDot(pos) {
+  let dot = document.getElementById('laserDot');
+  if (!pos) {
+    if (dot) dot.style.display = 'none';
+    return;
+  }
+  if (!dot) {
+    dot = document.createElement('div');
+    dot.id = 'laserDot';
+    dot.className = 'laser-dot';
+    document.body.appendChild(dot);
+  }
+  dot.style.left    = pos.x + '%';
+  dot.style.top     = pos.y + '%';
+  dot.style.display = '';
 }

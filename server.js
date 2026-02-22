@@ -178,6 +178,15 @@ io.on('connection', (socket) => {
     socket.to(currentSessionId).emit('display-changed', display);
   });
 
+  // ── Presenter: cursor move (laser pointer) ───────────────────
+  socket.on('cursor-move', (pos) => {
+    if (!currentSessionId || currentRole !== 'presenter') return;
+    const session = sessions.get(currentSessionId);
+    if (!session || session.presenterId !== socket.id) return;
+    // pos is {x, y} as viewport percentages, or null to hide the laser dot
+    socket.to(currentSessionId).emit('cursor-move', pos);
+  });
+
   // ── Presentee: request current session state (sync snap-back) ─
   socket.on('request-sync', () => {
     if (!currentSessionId || currentRole !== 'presentee') return;

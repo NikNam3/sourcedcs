@@ -267,3 +267,29 @@ header {
 #syncToggleBtn.sync-off { border-color: var(--amber); color: var(--amber); }
 :root.movie #syncToggleBtn.sync-off { border-color: var(--amber); color: var(--amber); }
 
+/* ── Laser button: ON state ──────────────────────────────────── */
+#laserBtn.laser-active { border-color: var(--red, #e74c3c); color: var(--red, #e74c3c); }
+:root.movie #laserBtn.laser-active { border-color: #ff3333; color: #ff3333; }
+
+/* ── Laser pointer dot (presentee view) ──────────────────────── */
+.laser-dot {
+  position: fixed;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(231, 76, 60, 0.85);
+  box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.3), 0 0 12px rgba(231, 76, 60, 0.6);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 9999;
+  transition: left 0.05s linear, top 0.05s linear;
+}
+:root.movie .laser-dot {
+  background: rgba(0, 255, 80, 0.85);
+  box-shadow: 0 0 0 3px rgba(0, 255, 80, 0.3), 0 0 12px rgba(0, 255, 80, 0.6);
+}
+
+/* ── Laser mode: show a crosshair cursor for the presenter ─── */
+:root.laser-mode { cursor: crosshair !important; }
+:root.laser-mode * { cursor: crosshair !important; }
+
