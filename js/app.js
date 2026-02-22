@@ -7,12 +7,23 @@
 // ── State ────────────────────────────────────────────────────
 const STATE = {
   pkg:          null,   // loaded package object {ato, aco, spins, comms}
+  packageYaml:  null,   // raw YAML string of the current package
   selectedIdx:  -1,
   currentTab:   'ato',
   theme:        'pro',
   display: {
     timeMode:  'Z',   // 'Z' = Zulu, 'L' = local (uses ato.local_offset_hours)
     coordMode: 'dm',  // 'dm' = decimal minutes, 'dms' = deg/min/sec, 'mgrs'
+  },
+  // ── Per-session ephemeral UI state (serialised by session.js for sync) ─
+  ui: {
+    scrolls: {},   // { tabName: fraction 0..1 } — scroll position per doc tab
+    map: {         // live map pan/zoom/filter (map-render.js uses this object directly)
+      tx: 0, ty: 0, sc: 1,
+      highlighted:     null,  // null = all, '__none__' = none, or msnKey string
+      engZonesVisible: true,
+      airspacesVisible: true,
+    },
   },
 };
 
@@ -282,6 +293,14 @@ function setCoordMode(m) {
 }
 
 // ── Tab routing ───────────────────────────────────────────────
+// Map of tab names to their scrollable container IDs (doc tabs only).
+const _TAB_SCROLL_IDS = {
+  aco:     'aco-content',
+  spins:   'spins-content',
+  comms:   'comms-content',
+  weather: 'weather-content',
+};
+
 function showTab(name) {
   // If coord pick is active and user navigates away from map, cancel pick
   // and restore the editor overlay
@@ -292,6 +311,14 @@ function showTab(name) {
     if (overlay) overlay.style.display = 'flex';
   }
 
+  // Save the leaving tab's scroll fraction before switching
+  const curScrollId = _TAB_SCROLL_IDS[STATE.currentTab];
+  const curScrollEl = curScrollId ? document.getElementById(curScrollId) : null;
+  if (curScrollEl) {
+    const max = curScrollEl.scrollHeight - curScrollEl.clientHeight;
+    if (max > 0) STATE.ui.scrolls[STATE.currentTab] = curScrollEl.scrollTop / max;
+  }
+
   STATE.currentTab = name;
   document.querySelectorAll('.tab-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.tab === name);
@@ -299,6 +326,16 @@ function showTab(name) {
   document.querySelectorAll('.view').forEach(v => {
     v.classList.toggle('active', v.id === 'view-' + name);
   });
+
+  // Restore the entering tab's scroll fraction (rAF so the view is visible first)
+  const newScrollId = _TAB_SCROLL_IDS[name];
+  const newScrollEl = newScrollId ? document.getElementById(newScrollId) : null;
+  if (newScrollEl && STATE.ui.scrolls[name] !== undefined) {
+    requestAnimationFrame(() => {
+      const max = newScrollEl.scrollHeight - newScrollEl.clientHeight;
+      if (max > 0) newScrollEl.scrollTop = STATE.ui.scrolls[name] * max;
+    });
+  }
 }
 
 // ── Package loading ───────────────────────────────────────────
@@ -310,6 +347,7 @@ function loadPackage(yamlText) {
     alert('YAML parse error: ' + e.message);
     return;
   }
+  STATE.packageYaml = yamlText; // store raw YAML for session sync
   loadPackage_obj(data);
 }
 
@@ -333,6 +371,11 @@ function loadPackage_obj(data) {
   }
 
   STATE.pkg = pkg;
+
+  // Reset per-package UI state so each new package starts from a clean slate
+  STATE.selectedIdx = -1;
+  STATE.ui.map     = { tx: 0, ty: 0, sc: 1, highlighted: null, engZonesVisible: true, airspacesVisible: true };
+  STATE.ui.scrolls = {};
 
   // ── Propagate header fields to sections that lack them ───
   // header uses ato_date (YYYY-MM-DD); sections expect ato_day for display

@@ -346,8 +346,13 @@ function drawMap(container, points, routes, geoData, airspaces) {
   });
   container.appendChild(sidebar);
 
+  // Expose sidebar filter setter for session sync (_applyMapFilter is cleared in renderMAP)
+  window._applyMapFilter = sidebar._applyFilter || null;
+
   // ── Pan / Zoom ───────────────────────────────────────────
-  const state = { tx: 0, ty: 0, sc: 1 };
+  // Use STATE.ui.map directly as the live state object — mutations here are
+  // automatically captured by _captureState() for session sync.
+  const state = STATE.ui.map;
 
   function applyTransform() {
     content.setAttribute('transform',
@@ -359,6 +364,8 @@ function drawMap(container, points, routes, geoData, airspaces) {
     });
     gridLabels.redraw(state.tx, state.ty, state.sc);
     redrawMeasure();
+    // Notify session of view change (debounced via _broadcastState in session.js)
+    if (typeof window._onMapStateChange === 'function') window._onMapStateChange();
   }
 
   function clamp() {

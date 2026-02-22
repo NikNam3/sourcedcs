@@ -812,6 +812,8 @@ function selectMission(idx) {
     detailField(col, 'NET',            m.control ? m.control.net_name || '—' : '—');
     detailField(col, 'AAR LOCATION',   m.aar_location_icao || '—');
   }));
+  // Notify session of selection change (presenter: triggers debounced state broadcast)
+  if (typeof window._onSelectMission === 'function') window._onSelectMission();
 }
 
 function closeDetail() {
@@ -820,4 +822,6 @@ function closeDetail() {
   document.querySelectorAll('.mission-card').forEach(function (c) {
     c.classList.remove('selected');
   });
+  // Notify session that detail panel was closed
+  if (typeof window._onSelectMission === 'function') window._onSelectMission();
 }

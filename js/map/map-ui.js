@@ -196,10 +196,19 @@ function createSidebar(opts) {
 
   sidebar.appendChild(el('div', 'map-sidebar-title', 'ROUTES'));
 
-  // null = all visible, '__none__' = all hidden, key = solo highlight
-  let highlighted = null;
+  // null = all visible, '__none__' = all hidden, key = solo highlight.
+  // Initialise from centralised state so state is preserved across theme re-renders.
+  let highlighted = STATE.ui.map.highlighted;
+
+  // Buttons for overlay toggles — set below if the overlays exist
+  let engBtn      = null;
+  let airspaceBtn = null;
+  let engVisible      = STATE.ui.map.engZonesVisible;
+  let airspaceVisible = STATE.ui.map.airspacesVisible;
 
   function applyVisibility() {
+    // Write back to centralised state
+    STATE.ui.map.highlighted = highlighted;
     Object.entries(opts.msnGroups).forEach(([key, g]) => {
       const visible = highlighted === null || highlighted === key;
       g.setAttribute('opacity', visible ? '1' : String(opts.C.dim));
@@ -217,6 +226,8 @@ function createSidebar(opts) {
     });
     sidebar.querySelector('.map-all-btn')?.classList.toggle('map-msn-active',   highlighted === null);
     sidebar.querySelector('.map-none-btn')?.classList.toggle('map-msn-active',  highlighted === '__none__');
+    // Notify session of filter change
+    if (typeof window._onMapStateChange === 'function') window._onMapStateChange();
   }
 
   opts.routes.forEach(r => {
@@ -254,24 +265,33 @@ function createSidebar(opts) {
     sidebar.appendChild(el('div', 'map-sidebar-title', 'OVERLAYS'));
 
     if (hasEngZones) {
-      let engVisible = true;
-      const engBtn = el('button', 'map-msn-btn map-msn-active', '◯ ENG ZONES');
+      engBtn = el('button', 'map-msn-btn', '◯ ENG ZONES');
+      engBtn.classList.toggle('map-msn-active', engVisible);
+      // Apply initial visibility from state
+      opts.engZoneG.setAttribute('display', engVisible ? '' : 'none');
+      if (opts.threatG) opts.threatG.setAttribute('display', engVisible ? '' : 'none');
       engBtn.addEventListener('click', () => {
         engVisible = !engVisible;
+        STATE.ui.map.engZonesVisible = engVisible;
         opts.engZoneG.setAttribute('display', engVisible ? '' : 'none');
         if (opts.threatG) opts.threatG.setAttribute('display', engVisible ? '' : 'none');
         engBtn.classList.toggle('map-msn-active', engVisible);
+        if (typeof window._onMapStateChange === 'function') window._onMapStateChange();
       });
       sidebar.appendChild(engBtn);
     }
 
     if (hasAirspaces) {
-      let airspaceVisible = true;
-      const airspaceBtn = el('button', 'map-msn-btn map-msn-active', '◯ AIRSPACES');
+      airspaceBtn = el('button', 'map-msn-btn', '◯ AIRSPACES');
+      airspaceBtn.classList.toggle('map-msn-active', airspaceVisible);
+      // Apply initial visibility from state
+      opts.airspaceG.setAttribute('display', airspaceVisible ? '' : 'none');
       airspaceBtn.addEventListener('click', () => {
         airspaceVisible = !airspaceVisible;
+        STATE.ui.map.airspacesVisible = airspaceVisible;
         opts.airspaceG.setAttribute('display', airspaceVisible ? '' : 'none');
         airspaceBtn.classList.toggle('map-msn-active', airspaceVisible);
+        if (typeof window._onMapStateChange === 'function') window._onMapStateChange();
       });
       sidebar.appendChild(airspaceBtn);
     }
@@ -324,6 +344,49 @@ function createSidebar(opts) {
   // Expose buttons so drawMap can wire them
   sidebar._measureBtn = measureBtn;
   sidebar._resetBtn = resetBtn;
+
+  // Apply initial highlighted state from STATE.ui.map
+  applyVisibility();
+
+  // External filter setter — called by session.js when applying a synced state snapshot.
+  // Applies route highlight and overlay visibility directly, without triggering
+  // another _onMapStateChange broadcast (unlike applyVisibility() which does).
+  sidebar._applyFilter = function (h, ev, av) {
+    // Update highlight — h can be null (all), '__none__', or a msnKey string
+    highlighted = (h !== undefined) ? h : null;
+    STATE.ui.map.highlighted = highlighted;
+
+    // Apply route visibility directly (mirrors applyVisibility but skips callback)
+    Object.entries(opts.msnGroups).forEach(([key, g]) => {
+      const visible = highlighted === null || highlighted === key;
+      g.setAttribute('opacity', visible ? '1' : String(opts.C.dim));
+      if (visible) g.removeAttribute('pointer-events');
+      else g.setAttribute('pointer-events', 'none');
+    });
+    sidebar.querySelectorAll('.map-msn-btn').forEach(btn => {
+      const k = btn.dataset.key;
+      if (!k) return;
+      btn.classList.toggle('map-msn-active', highlighted === k);
+      btn.classList.toggle('map-msn-dimmed', highlighted !== null && highlighted !== k);
+    });
+    sidebar.querySelector('.map-all-btn')?.classList.toggle('map-msn-active',  highlighted === null);
+    sidebar.querySelector('.map-none-btn')?.classList.toggle('map-msn-active', highlighted === '__none__');
+
+    if (engBtn && typeof ev === 'boolean') {
+      engVisible = ev;
+      STATE.ui.map.engZonesVisible = engVisible;
+      opts.engZoneG.setAttribute('display', engVisible ? '' : 'none');
+      if (opts.threatG) opts.threatG.setAttribute('display', engVisible ? '' : 'none');
+      engBtn.classList.toggle('map-msn-active', engVisible);
+    }
+    if (airspaceBtn && typeof av === 'boolean') {
+      airspaceVisible = av;
+      STATE.ui.map.airspacesVisible = airspaceVisible;
+      opts.airspaceG.setAttribute('display', airspaceVisible ? '' : 'none');
+      airspaceBtn.classList.toggle('map-msn-active', airspaceVisible);
+    }
+    // Note: no _onMapStateChange call — this is invoked during state sync, not user interaction
+  };
 
   return sidebar;
 }

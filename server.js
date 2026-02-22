@@ -53,23 +53,33 @@ app.use('/vendor', express.static(path.join(__dirname, 'node_modules', 'js-yaml'
 //
 // Structure:
 //   sessions.get(sessionId) → {
-//     presenterId:  socket.id | null,
-//     packageYaml:  string    | null,   // raw YAML text
-//     currentTab:   string,
-//     theme:        string,
-//     display:      { timeMode, coordMode },
+//     presenterId:       socket.id | null,
+//     presenterPassword: string    | null,   // hashed password
+//     uiState:           object,             // full serialised UI state snapshot
 //   }
 const sessions = new Map();
+
+// Default starting state for a new session (matches client STATE defaults)
+function _defaultUiState() {
+  return {
+    packageYaml: null,
+    currentTab:  'ato',
+    theme:       'pro',
+    display:     { timeMode: 'Z', coordMode: 'dm' },
+    ui: {
+      selectedMission: -1,
+      scrolls:         {},
+      map: { tx: 0, ty: 0, sc: 1, highlighted: null, engZonesVisible: true, airspacesVisible: true },
+    },
+  };
+}
 
 function getOrCreateSession(sessionId) {
   if (!sessions.has(sessionId)) {
     sessions.set(sessionId, {
-      presenterId:     null,
-      presenterPassword: null,  // set by the first presenter
-      packageYaml:     null,
-      currentTab:      'ato',
-      theme:           'pro',
-      display:         { timeMode: 'Z', coordMode: 'dm' },
+      presenterId:       null,
+      presenterPassword: null,
+      uiState:           _defaultUiState(),
     });
   }
   return sessions.get(sessionId);
@@ -119,63 +129,20 @@ io.on('connection', (socket) => {
     }
 
     // Send the current session state to the joining client
-    socket.emit('session-state', {
-      role:        currentRole,
-      packageYaml: session.packageYaml,
-      currentTab:  session.currentTab,
-      theme:       session.theme,
-      display:     session.display,
-    });
+    socket.emit('session-state', session.uiState);
   });
 
-  // ── Presenter: package loaded ──────────────────────────────
-  socket.on('package-loaded', (yamlText) => {
+  // ── Presenter: full UI state push (replaces all individual events) ─────────
+  socket.on('state-push', (uiState) => {
     if (!currentSessionId || currentRole !== 'presenter') return;
-    if (typeof yamlText !== 'string') return;
+    if (!uiState || typeof uiState !== 'object') return;
 
     const session = sessions.get(currentSessionId);
     if (!session || session.presenterId !== socket.id) return;
 
-    session.packageYaml = yamlText;
-    socket.to(currentSessionId).emit('package-loaded', yamlText);
-  });
-
-  // ── Presenter: tab changed ────────────────────────────────
-  socket.on('tab-changed', (tab) => {
-    if (!currentSessionId || currentRole !== 'presenter') return;
-    if (typeof tab !== 'string') return;
-
-    const session = sessions.get(currentSessionId);
-    if (!session || session.presenterId !== socket.id) return;
-
-    session.currentTab = tab;
-    socket.to(currentSessionId).emit('tab-changed', tab);
-  });
-
-  // ── Presenter: theme changed ──────────────────────────────
-  socket.on('theme-changed', (theme) => {
-    if (!currentSessionId || currentRole !== 'presenter') return;
-    if (typeof theme !== 'string') return;
-
-    const session = sessions.get(currentSessionId);
-    if (!session || session.presenterId !== socket.id) return;
-
-    session.theme = theme;
-    socket.to(currentSessionId).emit('theme-changed', theme);
-  });
-
-  // ── Presenter: display settings changed ───────────────────
-  socket.on('display-changed', (display) => {
-    if (!currentSessionId || currentRole !== 'presenter') return;
-    if (!display || typeof display !== 'object') return;
-
-    const session = sessions.get(currentSessionId);
-    if (!session || session.presenterId !== socket.id) return;
-
-    if (typeof display.timeMode  === 'string') session.display.timeMode  = display.timeMode;
-    if (typeof display.coordMode === 'string') session.display.coordMode = display.coordMode;
-
-    socket.to(currentSessionId).emit('display-changed', display);
+    // Persist and relay to all presentees in the room
+    session.uiState = uiState;
+    socket.to(currentSessionId).emit('state-push', uiState);
   });
 
   // ── Presenter: cursor move (laser pointer) ───────────────────
@@ -192,12 +159,7 @@ io.on('connection', (socket) => {
     if (!currentSessionId || currentRole !== 'presentee') return;
     const session = sessions.get(currentSessionId);
     if (!session) return;
-    socket.emit('sync-state', {
-      packageYaml: session.packageYaml,
-      currentTab:  session.currentTab,
-      theme:       session.theme,
-      display:     session.display,
-    });
+    socket.emit('sync-state', session.uiState);
   });
 
   // ── Disconnect ────────────────────────────────────────────

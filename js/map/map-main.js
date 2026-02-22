@@ -35,8 +35,9 @@ function svgText(text, attrs) {
 
 async function renderMAP(ato) {
   // Clear any previously exposed map state (stale references from last render)
-  window._mapState      = null;
-  window._applyMapState = null;
+  window._mapState       = null;
+  window._applyMapState  = null;
+  window._applyMapFilter = null;
 
   const container = document.getElementById('map-container');
   container.innerHTML = '';

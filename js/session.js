@@ -30,15 +30,24 @@ const SESSION = {
   laser:     false,  // presenter-only: true when laser pointer is active
   _laserMoveHandler: null, // mousemove listener ref for cleanup
   _laserThrottle:    0,    // timestamp of last cursor-move emit
+  _broadcastTimer:   null, // debounce timer for _broadcastState
+  _scrollHandlers:   [],   // scroll listeners added on presenter join
 };
 
-// ── Original function references (captured once) ─────────────
-// Saved before the first joinSession() call wraps the globals.
+// ── Unwrapped function references (module-level, used by _applyState) ─────
+// Originals are captured once; unwrapped refs are always the original functions.
 let _origLoadPackage  = null;
 let _origShowTab      = null;
 let _origSetTheme     = null;
 let _origSetTimeMode  = null;
 let _origSetCoordMode = null;
+
+// Unwrapped refs — set to originals in joinSession; used by _applyState
+let _loadPackage  = null;
+let _showTab      = null;
+let _setTheme     = null;
+let _setTimeMode  = null;
+let _setCoordMode = null;
 
 // ── Dialog helpers (global, called from onclick in HTML) ─────
 function openJoinDialog() {
@@ -100,49 +109,57 @@ function joinSession(sessionId, role, password) {
     _origSetCoordMode = window.setCoordMode;
   }
 
-  // Always restore originals first, then wrap if presenter
-  const _loadPackage  = _origLoadPackage;
-  const _showTab      = _origShowTab;
-  const _setTheme     = _origSetTheme;
-  const _setTimeMode  = _origSetTimeMode;
-  const _setCoordMode = _origSetCoordMode;
+  // Unwrapped refs — always the original functions; used by _applyState
+  _loadPackage  = _origLoadPackage;
+  _showTab      = _origShowTab;
+  _setTheme     = _origSetTheme;
+  _setTimeMode  = _origSetTimeMode;
+  _setCoordMode = _origSetCoordMode;
 
   // ── Wrap global functions for presenter sync ──────────────
   if (SESSION.role === 'presenter') {
     window.loadPackage = function (yamlText) {
       _loadPackage(yamlText);
-      if (SESSION.connected && !SESSION._syncing) {
-        SESSION.socket.emit('package-loaded', yamlText);
-      }
+      _broadcastState();
     };
 
     window.showTab = function (name) {
       _showTab(name);
-      if (SESSION.connected && !SESSION._syncing) {
-        SESSION.socket.emit('tab-changed', name);
-      }
+      _broadcastState();
     };
 
     window.setTheme = function (t) {
       _setTheme(t);
-      if (SESSION.connected && !SESSION._syncing) {
-        SESSION.socket.emit('theme-changed', t);
-      }
+      _broadcastState();
     };
 
     window.setTimeMode = function (m) {
       _setTimeMode(m);
-      if (SESSION.connected && !SESSION._syncing) {
-        SESSION.socket.emit('display-changed', { timeMode: m });
-      }
+      _broadcastState();
     };
 
     window.setCoordMode = function (m) {
       _setCoordMode(m);
-      if (SESSION.connected && !SESSION._syncing) {
-        SESSION.socket.emit('display-changed', { coordMode: m });
-      }
+      _broadcastState();
     };
+
+    // Callbacks — called by view-ato.js and map modules after local state changes
+    window._onSelectMission  = _broadcastState;
+    window._onMapStateChange = _broadcastState;
+
+    // Scroll listeners — save scroll fraction to STATE.ui.scrolls and broadcast
+    ['aco-content', 'spins-content', 'comms-content', 'weather-content'].forEach(id => {
+      const scrollEl = document.getElementById(id);
+      if (!scrollEl) return;
+      const tabId = id.replace('-content', '');
+      const handler = () => {
+        const max = scrollEl.scrollHeight - scrollEl.clientHeight;
+        if (max > 0) STATE.ui.scrolls[tabId] = scrollEl.scrollTop / max;
+        _broadcastState();
+      };
+      scrollEl.addEventListener('scroll', handler, { passive: true });
+      SESSION._scrollHandlers.push({ el: scrollEl, handler });
+    });
   } else {
     // Presentee: restore originals (don't broadcast)
     window.loadPackage  = _loadPackage;
@@ -150,6 +167,8 @@ function joinSession(sessionId, role, password) {
     window.setTheme     = _setTheme;
     window.setTimeMode  = _setTimeMode;
     window.setCoordMode = _setCoordMode;
+    window._onSelectMission  = null;
+    window._onMapStateChange = null;
   }
 
   // ── Connect to server ─────────────────────────────────────
@@ -179,64 +198,30 @@ function joinSession(sessionId, role, password) {
     window.setTheme     = _setTheme;
     window.setTimeMode  = _setTimeMode;
     window.setCoordMode = _setCoordMode;
+    window._onSelectMission  = null;
+    window._onMapStateChange = null;
   });
 
-  // ── Receive initial session state ──────────────────────────
-  SESSION.socket.on('session-state', (state) => {
-    // Close dialog on successful join
+  // ── Receive initial session state on join ──────────────────
+  SESSION.socket.on('session-state', (uiState) => {
     closeJoinDialog();
     showSessionIndicator(SESSION.sessionId, SESSION.role);
 
-    if (SESSION.role === 'presentee') {
+    if (SESSION.role === 'presenter') {
+      // Broadcast current client state so the server is up to date
+      // (handles reconnection after network blip)
+      _broadcastState();
+    } else {
       applyPresenteeUI();
-      SESSION._syncing = true;
-      if (state.theme)               _setTheme(state.theme);
-      if (state.display?.timeMode)   _setTimeMode(state.display.timeMode);
-      if (state.display?.coordMode)  _setCoordMode(state.display.coordMode);
-      if (state.packageYaml) {
-        _loadPackage(state.packageYaml);
-        // loadPackage_obj re-enables tab buttons based on data; re-lock them.
-        _setPresenteeTabLock(SESSION.synced);
-      }
-      if (state.currentTab)          _showTab(state.currentTab);
-      SESSION._syncing = false;
+      _applyState(uiState);
     }
   });
 
-  // ── Live updates from presenter ────────────────────────────
-  SESSION.socket.on('package-loaded', (yamlText) => {
-    if (SESSION.role === 'presentee' && SESSION.synced) {
-      SESSION._syncing = true;
-      _loadPackage(yamlText);
-      // Re-apply tab lock — loadPackage_obj re-enables buttons based on data.
-      _setPresenteeTabLock(true);
-      SESSION._syncing = false;
-    }
-  });
-
-  SESSION.socket.on('tab-changed', (tab) => {
-    if (SESSION.role === 'presentee' && SESSION.synced) {
-      SESSION._syncing = true;
-      _showTab(tab);
-      SESSION._syncing = false;
-    }
-  });
-
-  SESSION.socket.on('theme-changed', (theme) => {
-    if (SESSION.role === 'presentee' && SESSION.synced) {
-      SESSION._syncing = true;
-      _setTheme(theme);
-      SESSION._syncing = false;
-    }
-  });
-
-  SESSION.socket.on('display-changed', (display) => {
-    if (SESSION.role === 'presentee' && SESSION.synced) {
-      SESSION._syncing = true;
-      if (display.timeMode)  _setTimeMode(display.timeMode);
-      if (display.coordMode) _setCoordMode(display.coordMode);
-      SESSION._syncing = false;
-    }
+  // ── Live full-state push from presenter ────────────────────
+  // Replaces all individual events (package-loaded, tab-changed, etc.)
+  SESSION.socket.on('state-push', (uiState) => {
+    if (SESSION.role !== 'presentee' || !SESSION.synced) return;
+    _applyState(uiState);
   });
 
   SESSION.socket.on('presenter-disconnected', () => {
@@ -244,22 +229,10 @@ function joinSession(sessionId, role, password) {
   });
 
   // ── Snap-back: server reply to request-sync ────────────────
-  SESSION.socket.on('sync-state', (state) => {
+  SESSION.socket.on('sync-state', (uiState) => {
     if (SESSION.role !== 'presentee') return;
-    SESSION._syncing = true;
-    // Apply in dependency order: theme/display first (no package needed),
-    // then package (required before tab can be meaningfully displayed),
-    // then tab last.
-    if (state.theme)               _setTheme(state.theme);
-    if (state.display?.timeMode)   _setTimeMode(state.display.timeMode);
-    if (state.display?.coordMode)  _setCoordMode(state.display.coordMode);
-    if (state.packageYaml) {
-      _loadPackage(state.packageYaml);
-      // Re-apply tab lock — loadPackage_obj re-enables buttons based on data.
-      _setPresenteeTabLock(SESSION.synced);
-    }
-    if (state.currentTab)          _showTab(state.currentTab);
-    SESSION._syncing = false;
+    _applyState(uiState);
+    _setPresenteeTabLock(SESSION.synced);
   });
 
   // ── Presentee: receive laser pointer position ─────────────────
@@ -283,6 +256,94 @@ function joinSession(sessionId, role, password) {
 })();
 
 // ── UI helpers ───────────────────────────────────────────────
+// ── Full state capture (presenter → server → presentees) ─────
+// Returns a serialisable snapshot of everything needed to fully
+// reproduce the presenter's current view on a presentee's screen.
+function _captureState() {
+  return {
+    packageYaml: STATE.packageYaml || null,
+    currentTab:  STATE.currentTab,
+    theme:       STATE.theme,
+    display:     { timeMode: STATE.display.timeMode, coordMode: STATE.display.coordMode },
+    ui: {
+      selectedMission: STATE.selectedIdx,
+      scrolls: Object.assign({}, STATE.ui.scrolls),
+      map: {
+        tx:              STATE.ui.map.tx,
+        ty:              STATE.ui.map.ty,
+        sc:              STATE.ui.map.sc,
+        highlighted:     STATE.ui.map.highlighted,
+        engZonesVisible: STATE.ui.map.engZonesVisible,
+        airspacesVisible: STATE.ui.map.airspacesVisible,
+      },
+    },
+  };
+}
+
+// ── Apply a full state snapshot to the local UI (presentee) ──
+// Applies theme/display → package → tab → UI extras in the
+// correct dependency order.  Guards against feedback loops with
+// SESSION._syncing.
+function _applyState(s) {
+  if (!s) return;
+  SESSION._syncing = true;
+  try {
+    if (typeof s.theme === 'string')         _setTheme(s.theme);
+    if (s.display?.timeMode)                 _setTimeMode(s.display.timeMode);
+    if (s.display?.coordMode)                _setCoordMode(s.display.coordMode);
+    if (s.packageYaml) {
+      _loadPackage(s.packageYaml);
+      _setPresenteeTabLock(SESSION.synced);
+    }
+    if (typeof s.currentTab === 'string')    _showTab(s.currentTab);
+
+    if (s.ui) {
+      // Scroll positions — replace entirely to avoid accumulating stale tabs from a prior package
+      if (s.ui.scrolls) STATE.ui.scrolls = Object.assign({}, s.ui.scrolls);
+
+      // Map state (only if the map has been rendered)
+      if (s.ui.map) {
+        if (typeof window._applyMapState === 'function') {
+          window._applyMapState(s.ui.map);
+        }
+        if (typeof window._applyMapFilter === 'function') {
+          window._applyMapFilter(
+            s.ui.map.highlighted,
+            s.ui.map.engZonesVisible,
+            s.ui.map.airspacesVisible,
+          );
+        }
+      }
+
+      // Selected ATO mission (use the global directly; _syncing prevents re-broadcast)
+      if (typeof s.ui.selectedMission === 'number') {
+        if (s.ui.selectedMission >= 0 && STATE.pkg?.ato &&
+            typeof window.selectMission === 'function') {
+          window.selectMission(s.ui.selectedMission);
+        }
+        if (s.ui.selectedMission < 0 && typeof window.closeDetail === 'function') {
+          window.closeDetail();
+        }
+      }
+    }
+  } finally {
+    SESSION._syncing = false;
+  }
+}
+
+// ── Broadcast state (presenter → server, debounced 200 ms) ───
+// Debounced so rapid sequences (theme change → re-render → select mission)
+// only result in one network round-trip.
+function _broadcastState() {
+  if (SESSION._syncing || SESSION.role !== 'presenter' || !SESSION.connected) return;
+  clearTimeout(SESSION._broadcastTimer);
+  SESSION._broadcastTimer = setTimeout(() => {
+    if (SESSION.connected && SESSION.role === 'presenter') {
+      SESSION.socket.emit('state-push', _captureState());
+    }
+  }, 200);
+}
+
 function applyPresenteeUI() {
   // Hide LOAD PACKAGE button (presentee cannot load their own package)
   const loadPkgBtn = document.getElementById('loadPackageBtn');
@@ -375,6 +436,18 @@ function leaveRoom() {
   // Hide the laser dot if visible
   _updateLaserDot(null);
 
+  // Clear pending broadcast timer
+  clearTimeout(SESSION._broadcastTimer);
+  SESSION._broadcastTimer = null;
+
+  // Remove scroll listeners added on presenter join
+  SESSION._scrollHandlers.forEach(({ el, handler }) => el.removeEventListener('scroll', handler));
+  SESSION._scrollHandlers = [];
+
+  // Clear state-change callbacks
+  window._onSelectMission  = null;
+  window._onMapStateChange = null;
+
   SESSION.socket.disconnect();
   SESSION.socket = null;
   SESSION.connected = false;
@@ -418,7 +491,10 @@ function leaveRoom() {
 
   // Return to the upload screen regardless of role
   STATE.pkg = null;
+  STATE.packageYaml = null;
   STATE.selectedIdx = -1;
+  STATE.ui.map     = { tx: 0, ty: 0, sc: 1, highlighted: null, engZonesVisible: true, airspacesVisible: true };
+  STATE.ui.scrolls = {};
   const uploadScreen  = document.getElementById('upload-screen');
   const mainContent   = document.getElementById('main-content');
   const headerMeta    = document.getElementById('header-meta');
