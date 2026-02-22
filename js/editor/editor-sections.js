@@ -90,6 +90,11 @@ function openACOEditor() {
     aco.distributing_agency = h.dist.value || undefined;
     aco.acms                = body._acoAcms;
 
+    // Write directly to the shared header so _syncHeaders treats it as
+    // authoritative and doesn't let other sections (which still carry the
+    // old propagated value) overwrite the user's edit.
+    editorUpdateHeader(h.op.value, h.day.value);
+
     editorReRender();
   });
 }
@@ -351,6 +356,9 @@ function openSpinsEditor() {
     sp.version        = h.ver.value || undefined;
     sp.classification = h.cls.value || undefined;
     sp.sections       = body._spinsSections;
+
+    editorUpdateHeader(h.op.value, h.day.value);
+
     editorReRender();
   });
 }
@@ -470,6 +478,9 @@ function openCommsEditor() {
     cm.classification = h.cls.value || undefined;
     cm.uhf_presets    = _collectPresets(body._uhfFields);
     cm.vhf_presets    = _collectPresets(body._vhfFields);
+
+    editorUpdateHeader(h.op.value, h.day.value);
+
     editorReRender();
   });
 }
@@ -580,6 +591,8 @@ function openWeatherEditor() {
     wx.valid_from = h.from.value || undefined;
     wx.valid_to   = h.to.value || undefined;
     wx.operation  = h.op.value || undefined;
+
+    editorUpdateHeader(h.op.value, null);
 
     // Parse METARs
     wx.metars = f.metars.value.split('\n').map(function (l) { return l.trim(); }).filter(Boolean);

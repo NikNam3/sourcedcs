@@ -241,33 +241,38 @@ function editorReRender() {
 }
 
 // ── Sync shared header fields ────────────────────────────────
-// Finds the most recently set operation/ato_day across all sections
-// and propagates them, so editing one view's header updates all others.
+// Propagates operation/ato_day to all sections so they stay consistent.
+// The header is the single authoritative source of truth; section editors
+// write to STATE.pkg.header directly when saving, so the value is stable
+// across re-renders.  Sections without a header (old-style packages) still
+// work: the first non-null section value is collected as a fallback.
 function _syncHeaders() {
   var pkg = STATE.pkg;
   if (!pkg) return;
 
   var sections = ['ato', 'aco', 'spins', 'comms', 'weather'];
+  // Note: sections use 'ato_day' while header uses 'ato_date' — this is the
+  // existing naming convention in the data model (see loadPackage_obj).
   var operation = null;
   var atoDay    = null;
 
-  // Find the latest non-empty values across all sections
-  // Note: sections use 'ato_day' while header uses 'ato_date' — this is the
-  // existing naming convention in the data model (see loadPackage_obj).
-  sections.forEach(function (key) {
-    var sec = pkg[key];
-    if (!sec) return;
-    if (sec.operation) operation = sec.operation;
-    if (sec.ato_day)   atoDay   = sec.ato_day;
-  });
-
-  // Also check header
+  // 1. Header is authoritative — section editors write here directly on save.
   if (pkg.header) {
     if (pkg.header.operation) operation = pkg.header.operation;
     if (pkg.header.ato_date)  atoDay   = pkg.header.ato_date;
   }
 
-  // Propagate to all sections and header
+  // 2. Fallback for packages that have no header: collect from sections.
+  if (!operation || !atoDay) {
+    sections.forEach(function (key) {
+      var sec = pkg[key];
+      if (!sec) return;
+      if (!operation && sec.operation) operation = sec.operation;
+      if (!atoDay   && sec.ato_day)   atoDay   = sec.ato_day;
+    });
+  }
+
+  // 3. Propagate the final value to all sections and header.
   if (operation || atoDay) {
     sections.forEach(function (key) {
       var sec = pkg[key];
@@ -331,6 +336,16 @@ function editorEnsureSection(key) {
   if (!STATE.pkg) STATE.pkg = {};
   if (!STATE.pkg[key]) STATE.pkg[key] = {};
   return STATE.pkg[key];
+}
+
+// ── Update shared header ──────────────────────────────────────
+// Section editors call this after saving their own operation/ato_day fields
+// so that _syncHeaders() can treat pkg.header as the authoritative source.
+function editorUpdateHeader(operation, atoDay) {
+  if (!STATE.pkg) return;
+  if (!STATE.pkg.header) STATE.pkg.header = {};
+  if (operation) STATE.pkg.header.operation = operation;
+  if (atoDay)    STATE.pkg.header.ato_date  = atoDay;
 }
 
 function editorEnsureRegistry() {

@@ -178,6 +178,19 @@ io.on('connection', (socket) => {
     socket.to(currentSessionId).emit('display-changed', display);
   });
 
+  // ── Presentee: request current session state (sync snap-back) ─
+  socket.on('request-sync', () => {
+    if (!currentSessionId || currentRole !== 'presentee') return;
+    const session = sessions.get(currentSessionId);
+    if (!session) return;
+    socket.emit('sync-state', {
+      packageYaml: session.packageYaml,
+      currentTab:  session.currentTab,
+      theme:       session.theme,
+      display:     session.display,
+    });
+  });
+
   // ── Disconnect ────────────────────────────────────────────
   socket.on('disconnect', () => {
     if (currentSessionId && currentRole === 'presenter') {

@@ -234,6 +234,21 @@ function joinSession(sessionId, role, password) {
     console.warn('[SESSION] Presenter disconnected');
   });
 
+  // ── Snap-back: server reply to request-sync ────────────────
+  SESSION.socket.on('sync-state', (state) => {
+    if (SESSION.role !== 'presentee') return;
+    SESSION._syncing = true;
+    // Apply in dependency order: theme/display first (no package needed),
+    // then package (required before tab can be meaningfully displayed),
+    // then tab last.
+    if (state.theme)               _setTheme(state.theme);
+    if (state.display?.timeMode)   _setTimeMode(state.display.timeMode);
+    if (state.display?.coordMode)  _setCoordMode(state.display.coordMode);
+    if (state.packageYaml)         _loadPackage(state.packageYaml);
+    if (state.currentTab)          _showTab(state.currentTab);
+    SESSION._syncing = false;
+  });
+
   SESSION.socket.on('disconnect', () => {
     SESSION.connected = false;
   });
@@ -361,5 +376,9 @@ function toggleSync() {
   if (syncBtn) {
     syncBtn.textContent = SESSION.synced ? 'SYNC: ON' : 'SYNC: OFF';
     syncBtn.classList.toggle('sync-off', !SESSION.synced);
+  }
+  // When re-enabling sync, immediately snap to the current presenter state
+  if (SESSION.synced && SESSION.socket && SESSION.connected) {
+    SESSION.socket.emit('request-sync');
   }
 }
