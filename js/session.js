@@ -26,6 +26,7 @@ const SESSION = {
   sessionId: null,
   connected: false,
   _syncing:  false,  // true while applying remote state
+  synced:    true,   // presentee-only: when false, presenter events are ignored
 };
 
 // ── Original function references (captured once) ─────────────
@@ -197,7 +198,7 @@ function joinSession(sessionId, role, password) {
 
   // ── Live updates from presenter ────────────────────────────
   SESSION.socket.on('package-loaded', (yamlText) => {
-    if (SESSION.role === 'presentee') {
+    if (SESSION.role === 'presentee' && SESSION.synced) {
       SESSION._syncing = true;
       _loadPackage(yamlText);
       SESSION._syncing = false;
@@ -205,7 +206,7 @@ function joinSession(sessionId, role, password) {
   });
 
   SESSION.socket.on('tab-changed', (tab) => {
-    if (SESSION.role === 'presentee') {
+    if (SESSION.role === 'presentee' && SESSION.synced) {
       SESSION._syncing = true;
       _showTab(tab);
       SESSION._syncing = false;
@@ -213,7 +214,7 @@ function joinSession(sessionId, role, password) {
   });
 
   SESSION.socket.on('theme-changed', (theme) => {
-    if (SESSION.role === 'presentee') {
+    if (SESSION.role === 'presentee' && SESSION.synced) {
       SESSION._syncing = true;
       _setTheme(theme);
       SESSION._syncing = false;
@@ -221,7 +222,7 @@ function joinSession(sessionId, role, password) {
   });
 
   SESSION.socket.on('display-changed', (display) => {
-    if (SESSION.role === 'presentee') {
+    if (SESSION.role === 'presentee' && SESSION.synced) {
       SESSION._syncing = true;
       if (display.timeMode)  _setTimeMode(display.timeMode);
       if (display.coordMode) _setCoordMode(display.coordMode);
@@ -249,9 +250,13 @@ function joinSession(sessionId, role, password) {
 
 // ── UI helpers ───────────────────────────────────────────────
 function applyPresenteeUI() {
-  // Hide the LOAD PACKAGE button
-  const loadBtn = document.querySelector('.load-btn');
-  if (loadBtn) loadBtn.style.display = 'none';
+  // Hide LOAD PACKAGE button (presentee cannot load their own package)
+  const loadPkgBtn = document.getElementById('loadPackageBtn');
+  if (loadPkgBtn) loadPkgBtn.style.display = 'none';
+
+  // Hide EDIT button (presentees cannot edit)
+  const editBtn = document.getElementById('editModeBtn');
+  if (editBtn) editBtn.style.display = 'none';
 
   // Disable file input
   const fileInput = document.getElementById('fileInput');
@@ -269,13 +274,92 @@ function applyPresenteeUI() {
 }
 
 function showSessionIndicator(sessionId, role) {
-  // Remove existing indicator
+  // Remove existing indicator and action buttons
   const existing = document.querySelector('.session-indicator');
   if (existing) existing.remove();
+  const existingLeave = document.getElementById('leaveRoomBtn');
+  if (existingLeave) existingLeave.remove();
+  const existingSync = document.getElementById('syncToggleBtn');
+  if (existingSync) existingSync.remove();
 
   const indicator = document.createElement('div');
   indicator.className = 'session-indicator role-' + role;
   indicator.textContent = role.toUpperCase() + ' \u2022 ' + sessionId;
   const headerRight = document.querySelector('.header-right');
   if (headerRight) headerRight.prepend(indicator);
+
+  // Hide JOIN ROOM button (already in a session)
+  const joinRoomBtn = document.getElementById('joinRoomBtn');
+  if (joinRoomBtn) joinRoomBtn.style.display = 'none';
+
+  // Add LEAVE ROOM button
+  const leaveBtn = document.createElement('button');
+  leaveBtn.className = 'load-btn';
+  leaveBtn.id = 'leaveRoomBtn';
+  leaveBtn.textContent = 'LEAVE ROOM';
+  leaveBtn.onclick = leaveRoom;
+  if (headerRight) headerRight.insertBefore(leaveBtn, indicator.nextSibling);
+
+  // For presentees, add SYNC toggle button
+  if (role === 'presentee') {
+    const syncBtn = document.createElement('button');
+    syncBtn.className = 'load-btn';
+    syncBtn.id = 'syncToggleBtn';
+    syncBtn.textContent = 'SYNC: ON';
+    syncBtn.onclick = toggleSync;
+    if (headerRight) headerRight.insertBefore(syncBtn, leaveBtn.nextSibling);
+  }
+}
+
+// ── Leave room ────────────────────────────────────────────────
+function leaveRoom() {
+  if (!SESSION.socket) return;
+
+  const wasPresentee = SESSION.role === 'presentee';
+
+  SESSION.socket.disconnect();
+  SESSION.socket = null;
+  SESSION.connected = false;
+  SESSION.role = null;
+  SESSION.sessionId = null;
+  SESSION.synced = true;
+
+  // Restore original function wrappers
+  if (_origLoadPackage)  window.loadPackage  = _origLoadPackage;
+  if (_origShowTab)      window.showTab      = _origShowTab;
+  if (_origSetTheme)     window.setTheme     = _origSetTheme;
+  if (_origSetTimeMode)  window.setTimeMode  = _origSetTimeMode;
+  if (_origSetCoordMode) window.setCoordMode = _origSetCoordMode;
+
+  // Remove session UI elements
+  const indicator = document.querySelector('.session-indicator');
+  if (indicator) indicator.remove();
+  const leaveBtn = document.getElementById('leaveRoomBtn');
+  if (leaveBtn) leaveBtn.remove();
+  const syncBtn = document.getElementById('syncToggleBtn');
+  if (syncBtn) syncBtn.remove();
+
+  // Restore JOIN ROOM button
+  const joinRoomBtn = document.getElementById('joinRoomBtn');
+  if (joinRoomBtn) joinRoomBtn.style.display = '';
+
+  if (wasPresentee) {
+    // Restore LOAD PACKAGE and EDIT buttons
+    const loadPkgBtn = document.getElementById('loadPackageBtn');
+    if (loadPkgBtn) loadPkgBtn.style.display = '';
+    const editBtn = document.getElementById('editModeBtn');
+    if (editBtn) editBtn.style.display = '';
+    const fileInput = document.getElementById('fileInput');
+    if (fileInput) fileInput.disabled = false;
+  }
+}
+
+// ── Presentee sync toggle ─────────────────────────────────────
+function toggleSync() {
+  SESSION.synced = !SESSION.synced;
+  const syncBtn = document.getElementById('syncToggleBtn');
+  if (syncBtn) {
+    syncBtn.textContent = SESSION.synced ? 'SYNC: ON' : 'SYNC: OFF';
+    syncBtn.classList.toggle('sync-off', !SESSION.synced);
+  }
 }

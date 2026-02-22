@@ -30,10 +30,10 @@
         <button class="theme-btn"        data-theme="movie" onclick="setTheme('movie')">MFD</button>
       </div>
       <button class="edit-mode-btn" id="editModeBtn" onclick="toggleEditMode()">EDIT</button>
-      <button class="load-btn" onclick="exportPackageYaml()">EXPORT</button>
-      <button class="load-btn" onclick="document.getElementById('fileInput').click()">LOAD PACKAGE</button>
+      <button class="load-btn" id="exportBtn" onclick="exportPackageYaml()">EXPORT</button>
+      <button class="load-btn" id="loadPackageBtn" onclick="document.getElementById('fileInput').click()">LOAD PACKAGE</button>
       <input type="file" id="fileInput" accept=".yaml,.yml" style="display:none">
-      <button class="load-btn" onclick="openJoinDialog()">JOIN ROOM</button>
+      <button class="load-btn" id="joinRoomBtn" onclick="openJoinDialog()">JOIN ROOM</button>
     </div>
   </header>
 

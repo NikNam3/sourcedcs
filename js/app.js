@@ -566,13 +566,15 @@ function renderHeader(ato) {
   const ingame = ato._ingame_is_zulu
     ? fmtTime(ato.ingame_start_time)
     : fmtTime(localToZuluTime(ato.ingame_start_local)) || '—';
-  const items = [
-    ['IRL START',    irl,     ''],
-    ['INGAME START', ingame,  'ingame'],
-  ];
+  const items = [];
+  // Prepend operation and ATO day if available
+  if (ato.operation) items.push(['OPERATION', ato.operation, '']);
+  if (ato.ato_day)   items.push(['ATO DAY', ato.ato_day, '']);
+  items.push(['IRL START',    irl,    '']);
+  items.push(['INGAME START', ingame, 'ingame']);
 
-  // Header shows: date + ingame start only — full detail (AWACS, freq,
-  // bullseye, etc.) is in the ATO intel strip.
+  // Header shows: operation, ato day, irl/ingame times.
+  // Full detail (AWACS, freq, bullseye, etc.) is in the ATO intel strip.
   meta.innerHTML = '';
   items.forEach(([lbl, val, cls]) => {
     const block = el('div', 'meta-block');

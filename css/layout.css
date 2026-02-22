@@ -263,3 +263,7 @@ header {
 :root.movie .session-indicator.role-presenter { border-color: var(--cap);  color: var(--cap); }
 :root.movie .session-indicator.role-presentee { border-color: var(--blue); color: var(--blue); }
 
+/* ── Sync toggle: OFF state ──────────────────────────────────── */
+#syncToggleBtn.sync-off { border-color: var(--amber); color: var(--amber); }
+:root.movie #syncToggleBtn.sync-off { border-color: var(--amber); color: var(--amber); }
+
