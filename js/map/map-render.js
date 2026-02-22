@@ -371,6 +371,21 @@ function drawMap(container, points, routes, geoData, airspaces) {
     state.ty = Math.max(state.ty, -(MAP_HEIGHT * state.sc - MAP_HEIGHT + margin));
   }
 
+  // Expose current map transform for laser pointer sync.
+  // _mapState: live {tx, ty, sc} object — the presenter reads this on mousemove.
+  // _applyMapState: applies a {tx, ty, sc} snapshot with clamping so the
+  //   presentee's map view tracks the presenter's pan/zoom exactly.
+  window._mapState = state;
+  window._applyMapState = function (s) {
+    if (!s || typeof s.tx !== 'number' || typeof s.ty !== 'number' || typeof s.sc !== 'number') return;
+    if (!isFinite(s.tx) || !isFinite(s.ty) || !isFinite(s.sc) || s.sc <= 0) return;
+    state.tx = s.tx;
+    state.ty = s.ty;
+    state.sc = s.sc;
+    clamp();
+    applyTransform();
+  };
+
   sidebar._resetBtn.addEventListener('click', () => {
     state.tx = 0; state.ty = 0; state.sc = 1;
     clamp();

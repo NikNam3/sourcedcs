@@ -193,7 +193,11 @@ function joinSession(sessionId, role, password) {
       if (state.theme)               _setTheme(state.theme);
       if (state.display?.timeMode)   _setTimeMode(state.display.timeMode);
       if (state.display?.coordMode)  _setCoordMode(state.display.coordMode);
-      if (state.packageYaml)         _loadPackage(state.packageYaml);
+      if (state.packageYaml) {
+        _loadPackage(state.packageYaml);
+        // loadPackage_obj re-enables tab buttons based on data; re-lock them.
+        _setPresenteeTabLock(SESSION.synced);
+      }
       if (state.currentTab)          _showTab(state.currentTab);
       SESSION._syncing = false;
     }
@@ -204,6 +208,8 @@ function joinSession(sessionId, role, password) {
     if (SESSION.role === 'presentee' && SESSION.synced) {
       SESSION._syncing = true;
       _loadPackage(yamlText);
+      // Re-apply tab lock — loadPackage_obj re-enables buttons based on data.
+      _setPresenteeTabLock(true);
       SESSION._syncing = false;
     }
   });
@@ -247,7 +253,11 @@ function joinSession(sessionId, role, password) {
     if (state.theme)               _setTheme(state.theme);
     if (state.display?.timeMode)   _setTimeMode(state.display.timeMode);
     if (state.display?.coordMode)  _setCoordMode(state.display.coordMode);
-    if (state.packageYaml)         _loadPackage(state.packageYaml);
+    if (state.packageYaml) {
+      _loadPackage(state.packageYaml);
+      // Re-apply tab lock — loadPackage_obj re-enables buttons based on data.
+      _setPresenteeTabLock(SESSION.synced);
+    }
     if (state.currentTab)          _showTab(state.currentTab);
     SESSION._syncing = false;
   });
@@ -420,6 +430,22 @@ function leaveRoom() {
 // Laser pointer throttle interval in milliseconds (~33fps)
 const LASER_THROTTLE_MS = 30;
 
+// ── Scroll container helper ───────────────────────────────────
+// Returns the vertically-scrollable `.doc-scroll` element for the current
+// doc tab (ACO, SPINS, COMMS, WX), or null for ATO and MAP which do not use
+// a single shared scroll container.  Used by the laser pointer to mirror the
+// presenter's scroll position on the presentee.
+function _getActiveDocScroll() {
+  const idMap = {
+    aco:     'aco-content',
+    spins:   'spins-content',
+    comms:   'comms-content',
+    weather: 'weather-content',
+  };
+  const id = idMap[STATE.currentTab];
+  return id ? document.getElementById(id) : null;
+}
+
 // ── Presentee sync toggle ─────────────────────────────────────
 function toggleSync() {
   SESSION.synced = !SESSION.synced;
@@ -474,10 +500,28 @@ function _setLaser(on) {
       if (now - SESSION._laserThrottle < LASER_THROTTLE_MS) return;
       SESSION._laserThrottle = now;
       if (SESSION.socket && SESSION.connected) {
-        SESSION.socket.emit('cursor-move', {
+        const payload = {
           x: (e.clientX / window.innerWidth)  * 100,
           y: (e.clientY / window.innerHeight) * 100,
-        });
+        };
+
+        // Include scroll fraction for doc pages so presentee can mirror scroll
+        const scrollEl = _getActiveDocScroll();
+        if (scrollEl) {
+          const max = scrollEl.scrollHeight - scrollEl.clientHeight;
+          payload.scroll = max > 0 ? scrollEl.scrollTop / max : 0;
+        }
+
+        // Include map transform so presentee sees the same view
+        if (STATE.currentTab === 'map' && window._mapState) {
+          payload.mapState = {
+            tx: window._mapState.tx,
+            ty: window._mapState.ty,
+            sc: window._mapState.sc,
+          };
+        }
+
+        SESSION.socket.emit('cursor-move', payload);
       }
     };
     window.addEventListener('mousemove', SESSION._laserMoveHandler);
@@ -502,6 +546,19 @@ function _updateLaserDot(pos) {
     if (dot) dot.style.display = 'none';
     return;
   }
+
+  // Mirror the presenter's scroll position so the dot points at the same content
+  const scrollEl = _getActiveDocScroll();
+  if (scrollEl && pos.scroll !== undefined) {
+    const max = scrollEl.scrollHeight - scrollEl.clientHeight;
+    if (max > 0) scrollEl.scrollTop = pos.scroll * max;
+  }
+
+  // Mirror the presenter's map transform so the dot overlays the same map area
+  if (STATE.currentTab === 'map' && pos.mapState && typeof window._applyMapState === 'function') {
+    window._applyMapState(pos.mapState);
+  }
+
   if (!dot) {
     dot = document.createElement('div');
     dot.id = 'laserDot';

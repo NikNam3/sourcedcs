@@ -34,6 +34,10 @@ function svgText(text, attrs) {
 }
 
 async function renderMAP(ato) {
+  // Clear any previously exposed map state (stale references from last render)
+  window._mapState      = null;
+  window._applyMapState = null;
+
   const container = document.getElementById('map-container');
   container.innerHTML = '';
   container.appendChild(el('div', 'map-no-coords', 'Loading map data…'));
