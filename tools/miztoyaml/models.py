@@ -24,6 +24,7 @@ class Group:
     lat: float
     lon: float
     units: list[Unit] = field(default_factory=list)
+    alt_m: float | None = None    # terrain altitude in metres (from group route first waypoint)
 
 
 @dataclass

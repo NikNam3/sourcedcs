@@ -80,10 +80,20 @@ def parse_groups(coalition_block: str, theatre: str) -> list[Group]:
                 if not xy:
                     continue
                 lat, lon    = dcs_to_latlon(xy[0], xy[1], theatre)
-                units_block = lua_get_block(gb, 'units')
-                units       = parse_units(units_block, theatre) if units_block else []
+                units_block  = lua_get_block(gb, 'units')
+                units        = parse_units(units_block, theatre) if units_block else []
+                # Terrain altitude from the group's first route waypoint
+                alt_m: float | None = None
+                route_block = lua_get_block(gb, 'route')
+                if route_block:
+                    pts_block = lua_get_block(route_block, 'points')
+                    if pts_block:
+                        for idx, pb in lua_iter_array(pts_block):
+                            if idx == 1:
+                                alt_m = lua_num(pb, 'alt')
+                                break
                 groups.append(Group(name=name, x=xy[0], y=xy[1],
-                                    lat=lat, lon=lon, units=units))
+                                    lat=lat, lon=lon, units=units, alt_m=alt_m))
     return groups
 
 

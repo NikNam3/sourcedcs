@@ -55,11 +55,8 @@ def build_aim_points(group: Group, key: str) -> list[dict]:
 
 
 def _group_elevation_str(group: Group) -> str | None:
-    """Derive a target elevation string from the average altitude of its units."""
-    alts = [u.alt_m for u in group.units if u.alt_m is not None]
-    if not alts:
-        return None
-    return _elevation_str(sum(alts) / len(alts))
+    """Return target elevation from the group's first route waypoint altitude."""
+    return _elevation_str(group.alt_m)
 
 
 def build_targets(groups: list[Group]) -> dict:
