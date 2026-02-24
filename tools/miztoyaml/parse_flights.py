@@ -73,6 +73,8 @@ def _parse_waypoints(route_block: str, theatre: str) -> list[Waypoint]:
                             if hdg_rad is not None: orbit_heading_deg = round(math.degrees(hdg_rad))
                             orbit_cw = lua_bool(op, 'clockWise')
                         break
+        wp_alt_m   = lua_num(pb, 'alt')
+        wp_alt_ft  = round(wp_alt_m * _M_TO_FT) if wp_alt_m is not None else None
         lat, lon   = dcs_to_latlon(xy[0], xy[1], theatre)
         wpts.append(Waypoint(
             name=name, x=xy[0], y=xy[1], lat=lat, lon=lon,
@@ -80,6 +82,7 @@ def _parse_waypoints(route_block: str, theatre: str) -> list[Waypoint]:
             airdrome_id=int(airdrome) if airdrome is not None else None,
             link_unit_id=int(link_unit) if link_unit is not None else None,
             is_orbit=is_orbit,
+            alt_ft=wp_alt_ft,
             orbit_alt_ft=orbit_alt_ft,
             orbit_speed_kts=orbit_speed_kts,
             orbit_width_nm=orbit_width_nm,

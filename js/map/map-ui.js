@@ -28,6 +28,8 @@ const KIND_LABELS = {
 function buildSteerTargetRows(p) {
   const rows = [['NAME', p.sub], ['MISSION', p.label]];
   if (p.msnType) rows.push(['TYPE', p.msnType]);
+  if (p.altitude) rows.push(['TGT ALT', p.altitude]);
+  if (p.altFt != null) rows.push(['WP ALT', `${p.altFt.toLocaleString()} FT`]);
   return rows;
 }
 

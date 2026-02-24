@@ -208,6 +208,8 @@ def _classify_waypoints(flight: Flight,
         entry: dict = {"coords": wp_dms}
         if wp.name:
             entry["name"] = wp.name
+        if wp.alt_ft is not None:
+            entry["alt_ft"] = wp.alt_ft
         if aim_point_id:
             entry["aim_point_id"] = aim_point_id
         if shared_name is not None:

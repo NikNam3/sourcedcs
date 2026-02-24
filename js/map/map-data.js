@@ -147,11 +147,25 @@ function collectData(ato, aco) {
     //    (thicker dashed line) and shown as diamond target markers instead of
     //    hollow steer circles.  If a steer point has an 'orbit' block, also
     //    push an anchor airspace so the racetrack pattern is drawn on the map.
+    // Build a map from aim_point_id → target.altitude for quick lookup
+    const aimIdToTargetAlt = {};
+    (m.targets || []).forEach(tgt => {
+      if (tgt.altitude) {
+        (tgt.aim_points || []).forEach(ap => {
+          if (ap.aim_point_id) aimIdToTargetAlt[ap.aim_point_id] = tgt.altitude;
+        });
+        // Also key by target_id for direct target references
+        if (tgt.target_id) aimIdToTargetAlt[tgt.target_id] = tgt.altitude;
+      }
+    });
+
     (m.steer_points || []).forEach((sp, i) => {
       const nameRef = typeof sp === 'object' ? sp.name_ref : null;
       const raw     = typeof sp === 'string' ? sp : sp.coords;
       const label   = (typeof sp === 'object' && sp.name) ? sp.name : `SP${i + 1}`;
       const apId    = typeof sp === 'object' ? sp.aim_point_id : null;
+      const spAltFt = typeof sp === 'object' ? (sp.alt_ft ?? (sp.orbit ? sp.orbit.alt_ft : null)) : null;
+      const tgtAlt  = apId ? (aimIdToTargetAlt[apId] || null) : null;
       const p       = nameRef ? resolve(nameRef) : parseCoord(raw);
       if (p) {
         // Aim-point steer points use a thicker target-approach line on the route
@@ -160,6 +174,8 @@ function collectData(ato, aco) {
           ...p, kind: apId ? 'target' : 'steer',
           label: `${callsign}${msnNum ? ' · ' + msnNum : ''}`,
           sub: label, color, msnType: m.mission_type, mission: m,
+          altFt: spAltFt,
+          altitude: tgtAlt,
         });
         // Orbit/anchor track: render a racetrack on the map.
         // Skip if a near-identical orbit has already been pushed (proximity dedup).
@@ -209,7 +225,7 @@ function collectData(ato, aco) {
         const name = (typeof ap === 'object' && ap.name) ? ap.name : `AIM ${i + 1}`;
         const p    = parseCoord(raw);
         if (p) {
-          points.push({ ...p, kind: 'target', label: callsign, sub: name, color, msnType: m.mission_type, mission: m });
+          points.push({ ...p, kind: 'target', label: callsign, sub: name, color, msnType: m.mission_type, mission: m, altitude: target.altitude || null });
         }
       });
     });

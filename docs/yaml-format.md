@@ -537,6 +537,7 @@ steer_points:
 | `coords` | coord string | Waypoint position (used when `name_ref` is not set) |
 | `name_ref` | string | Name of an airfield (ICAO), carrier callsign or ID, or marshal point to use as the waypoint position |
 | `name` | string | Waypoint label shown on map |
+| `alt_ft` | number | Waypoint cruising altitude in feet — extracted from DCS by `miztoyaml.py`; shown in the map popup |
 | `aim_point_id` | string | Optional — informational link to a registry aim point id.  Set by `miztoyaml.py` when a flight waypoint lies on an aim point; ignored by the viewer |
 | `orbit` | object | Optional — present when the waypoint has a DCS Orbit task (CAP station, tanker track).  The map renders a racetrack pattern using these parameters. |
 | `orbit.alt_ft` | number | Orbit altitude in feet |
