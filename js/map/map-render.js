@@ -168,6 +168,11 @@ function drawMap(container, points, routes, geoData, airspaces) {
     constantSizeMarkers,
   };
 
+  // Persist ctx and geoData so the PDF exporter can produce chart/satellite
+  // map variants independently of the current live map mode.
+  STATE.mapUI._ctx     = ctx;
+  STATE.mapUI._geoData = geoData;
+
   // ── Map viewport wrapper ──────────────────────────────────
   // Wraps the tile canvas + SVG overlay so they can be stacked with
   // position:absolute while the sidebar remains a flex sibling.
@@ -420,6 +425,7 @@ function drawMap(container, points, routes, geoData, airspaces) {
     C, threatCol,
     airspaceColors: airResult.colors,
     defaultAirspaceCol: airResult.defaultCol,
+    svg,
   });
   container.appendChild(sidebar);
 

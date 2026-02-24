@@ -291,49 +291,67 @@ function createSidebar(opts) {
 
   sidebar.appendChild(el('div', 'map-sidebar-sep'));
 
-  // Overlays toggle (engagement zones + airspaces)
+  // Overlays toggle (engagement zones + airspaces + labels)
   const hasEngZones  = opts.points.some(p => p.kind === 'threat' && p.engagementRange);
   const hasAirspaces = opts.airspaces.length > 0;
 
-  if (hasEngZones || hasAirspaces) {
-    sidebar.appendChild(el('div', 'map-sidebar-title', 'OVERLAYS'));
+  sidebar.appendChild(el('div', 'map-sidebar-title', 'OVERLAYS'));
 
-    if (hasEngZones) {
-      let engVisible = STATE.mapUI?.engVisible !== false;
-      const engBtn = el('button', 'map-msn-btn' + (engVisible ? ' map-msn-active' : ''), '◯ ENG ZONES');
-      engBtn.addEventListener('click', () => {
-        engVisible = !engVisible;
-        opts.engZoneG.setAttribute('display', engVisible ? '' : 'none');
-        if (opts.threatG) opts.threatG.setAttribute('display', engVisible ? '' : 'none');
-        engBtn.classList.toggle('map-msn-active', engVisible);
-        STATE.mapUI.engVisible = engVisible;
-      });
-      // Apply initial visibility from saved state
-      if (!engVisible) {
-        opts.engZoneG.setAttribute('display', 'none');
-        if (opts.threatG) opts.threatG.setAttribute('display', 'none');
-      }
-      sidebar.appendChild(engBtn);
+  if (hasEngZones) {
+    let engVisible = STATE.mapUI?.engVisible !== false;
+    const engBtn = el('button', 'map-msn-btn' + (engVisible ? ' map-msn-active' : ''), '◯ ENG ZONES');
+    engBtn.addEventListener('click', () => {
+      engVisible = !engVisible;
+      opts.engZoneG.setAttribute('display', engVisible ? '' : 'none');
+      if (opts.threatG) opts.threatG.setAttribute('display', engVisible ? '' : 'none');
+      engBtn.classList.toggle('map-msn-active', engVisible);
+      STATE.mapUI.engVisible = engVisible;
+    });
+    // Apply initial visibility from saved state
+    if (!engVisible) {
+      opts.engZoneG.setAttribute('display', 'none');
+      if (opts.threatG) opts.threatG.setAttribute('display', 'none');
     }
-
-    if (hasAirspaces) {
-      let airspaceVisible = STATE.mapUI?.airVisible !== false;
-      const airspaceBtn = el('button', 'map-msn-btn' + (airspaceVisible ? ' map-msn-active' : ''), '◯ AIRSPACES');
-      airspaceBtn.addEventListener('click', () => {
-        airspaceVisible = !airspaceVisible;
-        opts.airspaceG.setAttribute('display', airspaceVisible ? '' : 'none');
-        airspaceBtn.classList.toggle('map-msn-active', airspaceVisible);
-        STATE.mapUI.airVisible = airspaceVisible;
-      });
-      // Apply initial visibility from saved state
-      if (!airspaceVisible) {
-        opts.airspaceG.setAttribute('display', 'none');
-      }
-      sidebar.appendChild(airspaceBtn);
-    }
-
-    sidebar.appendChild(el('div', 'map-sidebar-sep'));
+    sidebar.appendChild(engBtn);
   }
+
+  if (hasAirspaces) {
+    let airspaceVisible = STATE.mapUI?.airVisible !== false;
+    const airspaceBtn = el('button', 'map-msn-btn' + (airspaceVisible ? ' map-msn-active' : ''), '◯ AIRSPACES');
+    airspaceBtn.addEventListener('click', () => {
+      airspaceVisible = !airspaceVisible;
+      opts.airspaceG.setAttribute('display', airspaceVisible ? '' : 'none');
+      airspaceBtn.classList.toggle('map-msn-active', airspaceVisible);
+      STATE.mapUI.airVisible = airspaceVisible;
+    });
+    // Apply initial visibility from saved state
+    if (!airspaceVisible) {
+      opts.airspaceG.setAttribute('display', 'none');
+    }
+    sidebar.appendChild(airspaceBtn);
+  }
+
+  // Labels toggle — hide all marker / city / route text in the SVG
+  {
+    let labelsVisible = STATE.mapUI?.labelsVisible !== false;
+    const labelsBtn = el('button', 'map-msn-btn' + (labelsVisible ? ' map-msn-active' : ''), '◯ LABELS');
+    function _applyLabels(visible) {
+      if (opts.svg) {
+        opts.svg.querySelectorAll('text').forEach(t => t.setAttribute('display', visible ? '' : 'none'));
+      }
+    }
+    labelsBtn.addEventListener('click', () => {
+      labelsVisible = !labelsVisible;
+      labelsBtn.classList.toggle('map-msn-active', labelsVisible);
+      STATE.mapUI.labelsVisible = labelsVisible;
+      _applyLabels(labelsVisible);
+    });
+    // Apply initial state
+    if (!labelsVisible) _applyLabels(false);
+    sidebar.appendChild(labelsBtn);
+  }
+
+  sidebar.appendChild(el('div', 'map-sidebar-sep'));
 
   // Legend — mission types, fixed marker types, airspace types
   sidebar.appendChild(el('div', 'map-sidebar-title', 'LEGEND'));

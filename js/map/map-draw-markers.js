@@ -106,6 +106,7 @@ function drawSharedMarkers(ctx, points, showPopup) {
 // Returns the threat markers <g> element.
 function drawThreatMarkers(ctx, points, threatCol, showPopup) {
   const threatG = svgEl('g');
+  threatG.setAttribute('data-role', 'threat-markers');
 
   points.filter(p => p.kind === 'threat').forEach(p => {
     const mx = ctx.bx(p.lon).toFixed(1);

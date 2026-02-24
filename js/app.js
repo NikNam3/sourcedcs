@@ -573,6 +573,10 @@ function loadPackage_obj(data) {
   document.getElementById('upload-screen').style.display = 'none';
   document.getElementById('main-content').style.display  = 'flex';
 
+  // Show export button now that a package is loaded
+  const exportBtn = document.getElementById('exportYamlBtn');
+  if (exportBtn) exportBtn.style.display = '';
+
   // Populate compact header (IRL + Ingame in one place only)
   renderHeader(pkg.ato || null);
 
@@ -649,6 +653,10 @@ function unloadPackage() {
 
   document.getElementById('upload-screen').style.display = '';
   document.getElementById('main-content').style.display  = 'none';
+
+  // Hide export button when no package is loaded
+  const exportBtn = document.getElementById('exportYamlBtn');
+  if (exportBtn) exportBtn.style.display = 'none';
 
   renderHeader(null);
 

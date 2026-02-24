@@ -124,6 +124,34 @@
 .comms-flight-dtc  { font-size: 9px; letter-spacing: 1px; color: var(--text-3);
                      margin-left: auto; background: var(--bg3);
                      padding: 2px 6px; border: 1px solid var(--border); }
+/* Flight selector dropdown */
+.comms-flight-selector {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-strong);
+}
+.comms-selector-lbl {
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+.comms-selector-input {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 4px 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg3);
+  color: var(--text);
+  cursor: pointer;
+  min-width: 200px;
+}
+.comms-selector-input:focus { outline: none; border-color: var(--text); }
+:root.movie .comms-selector-input { background: var(--bg2); border-color: var(--border); }
+:root.movie .comms-selector-input:focus { border-color: var(--cap); }
 
 /* ═══════════════════════════════════════════════════════════
    SPINS-SPECIFIC

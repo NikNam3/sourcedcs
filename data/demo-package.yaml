@@ -447,22 +447,52 @@ spins:
     - {label: MIN SEPARATION, value: "5NM / 2000ft between coalition aircraft outside tactical formation", style: amber}
 
 comms:
+  operation: CLEAR SKY
+  ato_day: '2026-01-11'
   wing_lead: FALCON5
-  uhf_presets:
-    1:  {callsign: GUARD,       freq_mhz: 243.0,   role: Emergency}
-    2:  {callsign: PACKAGE,     freq_mhz: 260.0,   role: Package primary}
-    3:  {callsign: INTRAFLIGHT, freq_mhz: 261.5,   role: Intraflight}
-    11: {callsign: SCREWTOP,    freq_mhz: 260.0,   role: AWACS primary}
-    12: {callsign: SCREWTOP,    freq_mhz: 134.0,   role: AWACS secondary}
-    13: {callsign: SHELL3,      freq_mhz: 266.025, role: Tanker}
-    14: {callsign: ARCO4,       freq_mhz: 341.7,   role: Tanker}
-    15: {callsign: TEXACO2,     freq_mhz: 280.0,   role: Tanker}
-
-  vhf_presets:
-    1:  {callsign: GUARD,    freq_mhz: 121.5,   role: Emergency}
-    6:  {callsign: FALCON5,  freq_mhz: 133.3,   role: Package lead}
-    7:  {callsign: DRAGON6,  freq_mhz: 120.075, role: Flight}
-    8:  {callsign: BUZZARD4, freq_mhz: 129.225, role: Flight}
+  classification: UNCLAS
+  flights:
+    - callsign: FALCON5
+      dtc_cartridge: A
+      uhf_presets:
+        1:  {callsign: GUARD,       freq_mhz: 243.0,   role: Emergency}
+        2:  {callsign: PACKAGE,     freq_mhz: 260.0,   role: Package primary}
+        3:  {callsign: INTRAFLIGHT, freq_mhz: 261.5,   role: Intraflight}
+        11: {callsign: SCREWTOP,    freq_mhz: 260.0,   role: AWACS primary}
+        12: {callsign: SCREWTOP,    freq_mhz: 134.0,   role: AWACS secondary}
+        14: {callsign: ARCO4,       freq_mhz: 341.7,   role: Tanker}
+      vhf_presets:
+        1:  {callsign: GUARD,    freq_mhz: 121.5,   role: Emergency}
+        6:  {callsign: FALCON5,  freq_mhz: 133.3,   role: Package lead}
+    - callsign: DRAGON6
+      dtc_cartridge: B
+      uhf_presets:
+        1:  {callsign: GUARD,       freq_mhz: 243.0,   role: Emergency}
+        2:  {callsign: PACKAGE,     freq_mhz: 260.0,   role: Package primary}
+        3:  {callsign: INTRAFLIGHT, freq_mhz: 261.5,   role: Intraflight}
+        11: {callsign: SCREWTOP,    freq_mhz: 260.0,   role: AWACS primary}
+        15: {callsign: TEXACO2,     freq_mhz: 280.0,   role: Tanker}
+      vhf_presets:
+        1:  {callsign: GUARD,    freq_mhz: 121.5,   role: Emergency}
+        7:  {callsign: DRAGON6,  freq_mhz: 120.075, role: Flight}
+    - callsign: BUZZARD4
+      dtc_cartridge: C
+      uhf_presets:
+        1:  {callsign: GUARD,       freq_mhz: 243.0,   role: Emergency}
+        2:  {callsign: PACKAGE,     freq_mhz: 260.0,   role: Package primary}
+        3:  {callsign: INTRAFLIGHT, freq_mhz: 261.5,   role: Intraflight}
+        11: {callsign: SCREWTOP,    freq_mhz: 260.0,   role: AWACS primary}
+        13: {callsign: SHELL3,      freq_mhz: 266.025, role: Tanker}
+      vhf_presets:
+        1:  {callsign: GUARD,    freq_mhz: 121.5,   role: Emergency}
+        8:  {callsign: BUZZARD4, freq_mhz: 129.225, role: Flight}
+    - callsign: COWBOY7
+      uhf_presets:
+        1:  {callsign: GUARD,       freq_mhz: 243.0,   role: Emergency}
+        2:  {callsign: PACKAGE,     freq_mhz: 260.0,   role: Package primary}
+        3:  {callsign: INTRAFLIGHT, freq_mhz: 260.0,   role: Intraflight}
+      vhf_presets:
+        1:  {callsign: GUARD,    freq_mhz: 121.5,   role: Emergency}
 
 weather:
   issued: '2026-01-11'

@@ -69,6 +69,7 @@ function drawRoutes(ctx, routes, points, showPopup) {
           // named location's own marker stays the primary map symbol.
           mg.appendChild(makeSvgEl('circle', { r: STEER_RING_R, fill: 'none', stroke: p.color, 'stroke-width': ROUTE_STROKE_W }));
         } else {
+          mg.setAttribute('data-role', 'target-node');
           mg.appendChild(makeSvgEl('polygon', { points: TARGET_DIAMOND, fill: p.color + 'cc', stroke: p.color, 'stroke-width': ROUTE_STROKE_W }));
           mg.appendChild(makeSvgEl('circle',  { r: TARGET_DOT_R, fill: '#fff', opacity: 0.9 }));
           mapLabel(mg, p.sub, p.label, p.color, TARGET_LABEL_OFFSET);

@@ -185,6 +185,7 @@ function drawEngagementZones(ctx, points) {
   const threatCol = ctx.movie ? '#ff4444' : '#c0392b';
   const fillColor = ctx.movie ? 'rgba(255,68,68,0.08)' : 'rgba(192,57,43,0.07)';
   const engZoneG  = svgEl('g');
+  engZoneG.setAttribute('data-role', 'eng-zones');
   points.filter(p => p.kind === 'threat' && p.engagementRange).forEach(p => {
     engZoneG.appendChild(makeSvgEl('circle', {
       cx: ctx.bx(p.lon).toFixed(1),

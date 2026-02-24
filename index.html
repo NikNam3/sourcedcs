@@ -32,7 +32,7 @@
       <button class="edit-mode-btn" id="editModeBtn" onclick="toggleEditMode()">EDIT</button>
       <button class="load-btn" id="loadPackageBtn" onclick="document.getElementById('fileInput').click()">LOAD PACKAGE</button>
       <input type="file" id="fileInput" accept=".yaml,.yml" style="display:none">
-      <button class="load-btn" id="exportYamlBtn" style="display:none" onclick="exportPackageYaml()">EXPORT</button>
+      <button class="load-btn" id="exportYamlBtn" style="display:none" onclick="openExportDialog()">EXPORT</button>
       <button class="load-btn" id="leaveRoomBtn" style="display:none" onclick="leaveSession()">LEAVE ROOM</button>
       <button class="load-btn" id="joinRoomBtn" onclick="openJoinDialog()">JOIN ROOM</button>
     </div>
@@ -142,6 +142,48 @@
   </div>
 </div>
 
+<!-- Export Dialog -->
+<div class="dialog-overlay" id="exportDialog" style="display:none">
+  <div class="dialog-box" style="max-width:460px;width:100%">
+    <div class="dialog-title">EXPORT PACKAGE</div>
+
+    <label class="dialog-label">FORMAT</label>
+    <div class="dialog-role-toggle" id="exportFormatToggle">
+      <button class="dialog-role-btn active" data-format="yaml" onclick="selectExportFormat('yaml')">YAML</button>
+      <button class="dialog-role-btn"        data-format="pdf"  onclick="selectExportFormat('pdf')">PDF</button>
+    </div>
+
+    <div id="exportPdfOptions" style="display:none;margin-top:16px">
+      <label class="dialog-label" for="exportMissionSelect">MISSION FOCUS</label>
+      <select class="dialog-input" id="exportMissionSelect"></select>
+
+      <label class="dialog-label" style="margin-top:14px">SECTIONS TO INCLUDE</label>
+      <div style="display:flex;flex-direction:column;gap:7px;margin-top:5px">
+        <label style="display:flex;align-items:center;gap:8px;font-size:10px;letter-spacing:1px;cursor:pointer">
+          <input type="checkbox" id="exportChkMap"      checked> MAP (ACM + ROUTE)
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:10px;letter-spacing:1px;cursor:pointer">
+          <input type="checkbox" id="exportChkComms"    checked> COMMS
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:10px;letter-spacing:1px;cursor:pointer">
+          <input type="checkbox" id="exportChkTimeline" checked> TIMELINE (ALL MISSIONS)
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:10px;letter-spacing:1px;cursor:pointer">
+          <input type="checkbox" id="exportChkSpins"    checked> SPINS
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:10px;letter-spacing:1px;cursor:pointer">
+          <input type="checkbox" id="exportChkWeather"  checked> WEATHER
+        </label>
+      </div>
+    </div>
+
+    <div class="dialog-actions">
+      <button class="dialog-btn dialog-btn-cancel" onclick="closeExportDialog()">CANCEL</button>
+      <button class="dialog-btn dialog-btn-join"   onclick="submitExportDialog()">EXPORT</button>
+    </div>
+  </div>
+</div>
+
 <!-- Join Room Dialog -->
 <div class="dialog-overlay" id="joinDialog" style="display:none">
   <div class="dialog-box">
@@ -191,5 +233,6 @@
 <script src="js/editor/editor-registry.js"></script>
 <script src="js/editor/editor-missions.js"></script>
 <script src="js/editor/editor-sections.js"></script>
+<script src="js/export-pdf.js"></script>
 </body>
 </html>

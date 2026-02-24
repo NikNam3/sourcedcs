@@ -206,14 +206,12 @@ function leaveSession() {
 
 // ── UI helpers ───────────────────────────────────────────────
 
-// Toggle JOIN ROOM / LEAVE ROOM / EXPORT button visibility.
+// Toggle JOIN ROOM / LEAVE ROOM button visibility.
 function _showRoomButtons(inRoom) {
   const joinBtn   = document.getElementById('joinRoomBtn');
   const leaveBtn  = document.getElementById('leaveRoomBtn');
-  const exportBtn = document.getElementById('exportYamlBtn');
   if (joinBtn)   joinBtn.style.display   = inRoom ? 'none' : '';
   if (leaveBtn)  leaveBtn.style.display  = inRoom ? ''     : 'none';
-  if (exportBtn) exportBtn.style.display = inRoom ? ''     : 'none';
 }
 
 // Apply presentee restrictions: hide LOAD PACKAGE + EDIT buttons,

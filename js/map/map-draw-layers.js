@@ -321,6 +321,7 @@ function drawGrid(ctx) {
 // Returns the land <g> element.
 function drawLand(ctx, geoData) {
   const landG = svgEl('g');
+  landG.setAttribute('data-role', 'land');
   Object.values(geoData.countries).forEach(poly => {
     landG.appendChild(makeSvgEl('path', {
       d: poly.map((pt, i) =>
@@ -338,6 +339,7 @@ function drawLand(ctx, geoData) {
 // Returns the cities <g> element.
 function drawCities(ctx, geoData) {
   const cityG = svgEl('g');
+  cityG.setAttribute('data-role', 'cities');
   geoData.cities.forEach(city => {
     const major = city.pop === 3;
     const r     = CITY_DOT_RADIUS[city.pop] ?? CITY_DOT_RADIUS[1];

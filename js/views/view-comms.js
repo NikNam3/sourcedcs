@@ -27,22 +27,45 @@ function renderCOMMS(cm) {
 
   // ── Per-flight comms (new format: comms.flights[]) ────────
   if (Array.isArray(cm.flights) && cm.flights.length > 0) {
-    cm.flights.forEach(flt => {
-      const fltDiv = el('div', 'comms-flight-block');
+    // Flight selector row
+    const selectorRow = el('div', 'comms-flight-selector');
+    selectorRow.appendChild(el('span', 'comms-selector-lbl', 'FLIGHT'));
+    const sel = el('select', 'comms-selector-input');
+    cm.flights.forEach((flt, i) => {
+      const opt = document.createElement('option');
+      opt.value = String(i);
+      opt.textContent = (flt.callsign || flt.group || '—') +
+        (flt.dtc_cartridge ? ' · DTC ' + flt.dtc_cartridge : '');
+      sel.appendChild(opt);
+    });
+    selectorRow.appendChild(sel);
+    div.appendChild(selectorRow);
+
+    // Container re-rendered whenever the selection changes
+    const gridWrap = el('div', '');
+    div.appendChild(gridWrap);
+
+    function renderFlight(idx) {
+      gridWrap.innerHTML = '';
+      const flt = cm.flights[idx];
+      if (!flt) return;
+
       const hdr = el('div', 'comms-flight-header');
       hdr.appendChild(el('span', 'comms-flight-cs', flt.callsign || flt.group || '—'));
       if (flt.group && flt.group !== flt.callsign)
         hdr.appendChild(el('span', 'comms-flight-group', flt.group));
       if (flt.dtc_cartridge)
         hdr.appendChild(el('span', 'comms-flight-dtc', 'DTC: ' + flt.dtc_cartridge));
-      fltDiv.appendChild(hdr);
+      gridWrap.appendChild(hdr);
 
       const grid = el('div', 'comms-grid');
       radioBlock(grid, 'RADIO 1 — UHF  (225–400 MHz)', flt.uhf_presets);
       radioBlock(grid, 'RADIO 2 — VHF  (108–174 MHz)', flt.vhf_presets);
-      fltDiv.appendChild(grid);
-      div.appendChild(fltDiv);
-    });
+      gridWrap.appendChild(grid);
+    }
+
+    renderFlight(0);
+    sel.addEventListener('change', () => renderFlight(parseInt(sel.value, 10)));
     return;
   }
 
