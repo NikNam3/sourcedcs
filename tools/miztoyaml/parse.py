@@ -17,8 +17,10 @@ def parse_units(units_block: str, theatre: str) -> list[Unit]:
         xy = lua_xy(ub)
         if ut and xy:
             lat, lon = dcs_to_latlon(xy[0], xy[1], theatre)
+            alt_m    = lua_num(ub, 'alt')
             result.append(Unit(type=ut, x=xy[0], y=xy[1],
-                               lat=lat, lon=lon, role=unit_role(ut)))
+                               lat=lat, lon=lon, role=unit_role(ut),
+                               alt_m=alt_m))
     return result
 
 

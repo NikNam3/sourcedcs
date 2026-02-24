@@ -205,6 +205,7 @@ pulled into the mission.
 | `id` | string | Unique aim point identifier |
 | `name` | string | Display name |
 | `coords` | coord string | Position |
+| `elevation` | string | Terrain elevation (e.g. `150ft`) — extracted from DCS unit altitude by `miztoyaml.py` |
 
 ### `reference_points:` (list)
 

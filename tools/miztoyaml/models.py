@@ -13,6 +13,7 @@ class Unit:
     lat: float
     lon: float
     role: str | None
+    alt_m: float | None = None    # terrain altitude in metres (from DCS ["alt"])
 
 
 @dataclass

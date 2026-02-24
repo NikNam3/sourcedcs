@@ -9,6 +9,16 @@ from .projection import dcs_to_latlon, dms
 from .sam import identify_system
 
 
+_M_TO_FT = 3.28084    # metres → feet
+
+
+def _elevation_str(alt_m: float | None) -> str | None:
+    """Convert a DCS altitude in metres to a compact feet string, e.g. '150ft'."""
+    if alt_m is None:
+        return None
+    return f"{round(alt_m * _M_TO_FT)}ft"
+
+
 def build_aim_points(group: Group, key: str) -> list[dict]:
     aim_pts: list[dict] = []
     seen: set[tuple[int, int]] = set()
@@ -22,21 +32,34 @@ def build_aim_points(group: Group, key: str) -> list[dict]:
             continue
         seen.add(pos)
 
+        elev = _elevation_str(u.alt_m)
         if u.role == 'launcher':
-            aim_pts.append({"id": f"{key}-LN{ln_n}",
-                            "name": f"Launcher {ln_n}",
-                            "coords": dms(u.lat, u.lon)})
+            entry = {"id": f"{key}-LN{ln_n}", "name": f"Launcher {ln_n}",
+                     "coords": dms(u.lat, u.lon)}
+            if elev:
+                entry["elevation"] = elev
+            aim_pts.append(entry)
             ln_n += 1
         else:
-            aim_pts.append({"id": f"{key}-RD{rd_n}",
-                            "name": f"Radar {rd_n}",
-                            "coords": dms(u.lat, u.lon)})
+            entry = {"id": f"{key}-RD{rd_n}", "name": f"Radar {rd_n}",
+                     "coords": dms(u.lat, u.lon)}
+            if elev:
+                entry["elevation"] = elev
+            aim_pts.append(entry)
             rd_n += 1
 
     if not aim_pts:
         aim_pts.append({"id": f"{key}-1", "name": key,
                         "coords": dms(group.lat, group.lon)})
     return aim_pts
+
+
+def _group_elevation_str(group: Group) -> str | None:
+    """Derive a target elevation string from the average altitude of its units."""
+    alts = [u.alt_m for u in group.units if u.alt_m is not None]
+    if not alts:
+        return None
+    return _elevation_str(sum(alts) / len(alts))
 
 
 def build_targets(groups: list[Group]) -> dict:
@@ -49,12 +72,16 @@ def build_targets(groups: list[Group]) -> dict:
         m = re.match(r'TGT\s+(\S+)', g.name, re.IGNORECASE)
         if m:
             key = f"TGT-{seq}"; seq += 1
-            targets[key] = {
+            entry: dict = {
                 "name":       g.name,
                 "type":       m.group(1).upper(),
                 "coords":     dms(g.lat, g.lon),
-                "aim_points": build_aim_points(g, key),
             }
+            elev = _group_elevation_str(g)
+            if elev:
+                entry["elevation"] = elev
+            entry["aim_points"] = build_aim_points(g, key)
+            targets[key] = entry
             print(f"  TGT  {key}: {g.name}")
             continue
 
@@ -64,14 +91,18 @@ def build_targets(groups: list[Group]) -> dict:
 
         key = f"SAM-{seq}"; seq += 1
         aim_pts = build_aim_points(g, key)
-        targets[key] = {
+        entry = {
             "name":                f"{g.name} ({sys.name})",
             "type":                "SAM",
             "coords":              dms(g.lat, g.lon),
             "engagement_range_nm": sys.range_nm,
             "max_alt_ft":          sys.max_alt_ft,
-            "aim_points":          aim_pts,
         }
+        elev = _group_elevation_str(g)
+        if elev:
+            entry["elevation"] = elev
+        entry["aim_points"] = aim_pts
+        targets[key] = entry
         print(f"  {key}: {g.name} → {sys.name}  "
               f"[{len(aim_pts)} aim pts]  {dms(g.lat, g.lon)}")
 
