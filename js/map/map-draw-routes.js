@@ -49,7 +49,7 @@ function drawRoutes(ctx, routes, points, showPopup) {
 
     // ── Steer + target markers ───────────────────────────
     points
-      .filter(p => (p.kind === 'steer' || p.kind === 'target') &&
+      .filter(p => (p.kind === 'steer' || p.kind === 'steer-ref' || p.kind === 'target') &&
                    p.mission?.mission_number === r.msnNum &&
                    p.mission?.callsign       === r.callsign)
       .forEach(p => {
@@ -64,6 +64,10 @@ function drawRoutes(ctx, routes, points, showPopup) {
         if (p.kind === 'steer') {
           mg.appendChild(makeSvgEl('circle', { r: STEER_RING_R, fill: 'none', stroke: p.color, 'stroke-width': ROUTE_STROKE_W }));
           mapLabel(mg, p.sub, p.label, p.color, STEER_LABEL_OFFSET);
+        } else if (p.kind === 'steer-ref') {
+          // Named-reference waypoint: small hollow circle without a label so the
+          // named location's own marker stays the primary map symbol.
+          mg.appendChild(makeSvgEl('circle', { r: STEER_RING_R, fill: 'none', stroke: p.color, 'stroke-width': ROUTE_STROKE_W }));
         } else {
           mg.appendChild(makeSvgEl('polygon', { points: TARGET_DIAMOND, fill: p.color + 'cc', stroke: p.color, 'stroke-width': ROUTE_STROKE_W }));
           mg.appendChild(makeSvgEl('circle',  { r: TARGET_DOT_R, fill: '#fff', opacity: 0.9 }));

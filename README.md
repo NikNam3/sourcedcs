@@ -141,25 +141,21 @@ Presenter                          Server                        Presentee
 joinSession(id, 'presenter', pw)
         ─── join ──────────────▶   validate password
                                    store session
-                                         ◀── join-ok ──────────
-        ◀── join-ok ────────────
+                                   send current state
+        ◀── session-state ──────                      ◀── session-state ──
 
 loadPackage(yaml)
         ─── package-loaded ────▶   broadcast to room
                                          ─── package-loaded ──▶ loadPackage(yaml)
 
-showTab(name)
-        ─── tab-changed ──────▶   broadcast to room
-                                         ─── tab-changed ────▶  showTab(name)
-
-setTheme(t) / setTimeMode(m) / setCoordMode(m)
-        ─── theme/display ─────▶  broadcast to room
-                                         ─── theme/display ──▶  apply locally
-
 editorReRender() (for edits)
         ─── package-loaded ────▶   broadcast to room
                                          ─── package-loaded ──▶ loadPackage(yaml)
 ```
+
+Tab navigation, theme, and display-mode changes are **local to each client** and
+are not broadcast to the room.  Each presenter and presentee navigates
+independently.
 
 ### 5. Export
 
@@ -190,6 +186,12 @@ Global application state. All views read from `STATE.pkg` and `STATE.display`.
 | `theme` | string | Visual theme: `'pro'` (light) or `'movie'` (CRT green) |
 | `display.timeMode` | string | `'Z'` (Zulu) or `'L'` (local + offset) |
 | `display.coordMode` | string | `'dm'`, `'dms'`, or `'mgrs'` |
+| `mapUI.tx` / `mapUI.ty` / `mapUI.sc` | number | Map pan/zoom state (content-group transform); preserved across tab switches |
+| `mapUI.highlighted` | string\|null | Route filter: `null` = all visible, `'__none__'` = none, key = solo flight |
+| `mapUI.engVisible` | boolean | Engagement-zone overlay visibility |
+| `mapUI.airVisible` | boolean | Airspace overlay visibility |
+| `mapUI.measureMode` | string | Measurement tool state: `'off'` / `'waitA'` / `'waitB'` / `'fixed'` |
+| `mapUI.mapMode` | string | Background tile style: `'chart'` / `'tactical'` / `'elevation'` / `'satellite'` |
 
 ### `EDITOR` (editor-core.js)
 
@@ -233,21 +235,13 @@ CSS is split into modular files imported via `css/app.css`:
 See [`docs/yaml-format.md`](docs/yaml-format.md) for the full schema reference.
 
 
-# TODO
+## TODO
 
-map types + higher accuracy ?
-airfeild and lfight Information ma
-isr data
-+ documetns
-
-pdf Export
-kneeboard Export
-yaml Export
-
-miz -> yaml converter
-
-issues:
-miz yaml converter:
-    not reading alittude of targets
-    dense points
-    comms 
+- Map: additional tile types and higher accuracy geo data
+- ISR data section
+- PDF export
+- Kneeboard export
+- MIZ → YAML converter improvements:
+    - Read target altitude
+    - Dense waypoint filtering
+    - COMMS extraction

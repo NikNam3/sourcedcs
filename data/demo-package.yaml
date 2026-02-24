@@ -21,18 +21,28 @@ registry:
       name: Al Dhafra AB
       coords: N24°14'36" E054°27'07"
       elevation_ft: 77
+      runways:
+        - '13/31'
+        - '09/27'
     OMSJ:
       name: Sharjah Intl
       coords: N25°19'42" E055°31'06"
       elevation_ft: 111
+      runways:
+        - '12/30'
     OTBH:
       name: Al Udeid AB
       coords: N25°06'56" E051°18'58"
       elevation_ft: 130
+      runways:
+        - '16/34'
+        - '10/28'
     OMRK:
       name: Ras Al Khaimah Intl
       coords: N25°36'50" E055°56'15"
       elevation_ft: 102
+      runways:
+        - '17/35'
   carriers:
     CVN-71:
       name: USS ROOSEVELT
@@ -259,6 +269,30 @@ ato:
     steer_points:
     - coords: N26°10'00" E056°05'00"
       name: SP1
+  - mission_number: CVW8-101
+    callsign: TOMCAT1
+    mission_type: CAP
+    unit: VF-32
+    home_base_icao: CVN-71
+    deploy_location_icao: CVN-71
+    aar_location_icao: CVN-71
+    takeoff_time: '2010Z'
+    recovery_time: '2310Z'
+    aircraft:
+      count: 2
+      type: F-14B
+      loadout: 501+
+    targets:
+    - location: GULF OF OMAN
+      tos: '2100Z'
+      toffs: '2230Z'
+    control:
+      agency_id: SCREWTOP
+    steer_points:
+    - coords: N25°00'00" E059°30'00"
+      name: CAP1
+    - coords: N25°30'00" E060°00'00"
+      name: CAP2
 
 aco:
   id: ACO-26-01

@@ -372,6 +372,7 @@ function loadPackage_obj(data) {
         if (reg.name != null)          af.name          = reg.name;
         if (reg.coords != null)        af.coords        = reg.coords;
         if (reg.elevation_ft != null)  af.elevation_ft  = reg.elevation_ft;
+        if (reg.runways != null)       af.runways       = reg.runways;
       }
     });
   }
