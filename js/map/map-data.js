@@ -184,7 +184,12 @@ function collectData(ato, aco) {
       ...p,
       kind: 'threat',
       label: tgt.name || tgt.id || '?',
-      sub: [tgt.type, tgt.elevation, tgt.engagement_range_nm ? `ER ${tgt.engagement_range_nm}nm` : null].filter(Boolean).join(' · '),
+      sub: [
+        tgt.type,
+        tgt.elevation,
+        tgt.engagement_range_nm ? `ER ${tgt.engagement_range_nm}nm` : null,
+        tgt.max_alt_ft ? `MA ${tgt.max_alt_ft}ft` : null,
+      ].filter(Boolean).join(' · '),
       threatType: tgt.type,
       engagementRange: tgt.engagement_range_nm,
       maxAlt: tgt.max_alt_ft,

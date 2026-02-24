@@ -795,6 +795,20 @@ function selectMission(idx) {
         }
       });
     }
+
+    // Steer points with altitude — only shown when alt_ft is present in the YAML
+    var steerPts = (m.steer_points || []).filter(function(sp) {
+      return typeof sp === 'object' && sp.alt_ft != null;
+    });
+    if (steerPts.length) {
+      var wpField = el('div', 'detail-field');
+      wpField.appendChild(el('div', 'dk', 'WAYPOINTS'));
+      steerPts.forEach(function(sp) {
+        var name = sp.name || sp.name_ref || '?';
+        wpField.appendChild(el('div', 'dmpi-entry', name + ' · ' + Math.round(sp.alt_ft).toLocaleString() + ' FT'));
+      });
+      col.appendChild(wpField);
+    }
   }));
 
   // COL 4 — AAR / Refuel

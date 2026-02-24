@@ -61,9 +61,10 @@ function drawRoutes(ctx, routes, points, showPopup) {
         // Hit circle makes small markers easier to click
         mg.appendChild(makeSvgEl('circle', { r: ROUTE_HIT_RADIUS, fill: 'transparent', stroke: 'none' }));
 
+        const altSuffix = p.altFt != null ? ` · ${p.altFt}ft` : '';
         if (p.kind === 'steer') {
           mg.appendChild(makeSvgEl('circle', { r: STEER_RING_R, fill: 'none', stroke: p.color, 'stroke-width': ROUTE_STROKE_W }));
-          mapLabel(mg, p.sub, p.label, p.color, STEER_LABEL_OFFSET);
+          mapLabel(mg, p.sub + altSuffix, p.label, p.color, STEER_LABEL_OFFSET);
         } else if (p.kind === 'steer-ref') {
           // Named-reference waypoint: small hollow circle without a label so the
           // named location's own marker stays the primary map symbol.
@@ -72,7 +73,7 @@ function drawRoutes(ctx, routes, points, showPopup) {
           mg.setAttribute('data-role', 'target-node');
           mg.appendChild(makeSvgEl('polygon', { points: TARGET_DIAMOND, fill: p.color + 'cc', stroke: p.color, 'stroke-width': ROUTE_STROKE_W }));
           mg.appendChild(makeSvgEl('circle',  { r: TARGET_DOT_R, fill: '#fff', opacity: 0.9 }));
-          mapLabel(mg, p.sub, p.label, p.color, TARGET_LABEL_OFFSET);
+          mapLabel(mg, p.sub + altSuffix, p.label, p.color, TARGET_LABEL_OFFSET);
         }
 
         mg.style.cursor = 'pointer';
