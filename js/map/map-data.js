@@ -237,13 +237,6 @@ function collectData(ato, aco) {
       if (p) {
         // Aim-point steer points use a thicker target-approach line on the route
         route.pts.push({ ...p, kind: apId ? 'target-node' : 'route-node' });
-        points.push({
-          ...p, kind: apId ? 'target' : 'steer',
-          label: `${callsign}${msnNum ? ' · ' + msnNum : ''}`,
-          sub: label, color, msnType: m.mission_type, mission: m,
-          altFt: spAltFt,
-          altitude: tgtAlt,
-        });
         // When name_ref is set the named location (marshal point, airfield, carrier)
         // already appears as its own marker.  Push a 'steer-ref' point so a small
         // unlabelled hollow circle is drawn at the waypoint position, making it clear
@@ -254,6 +247,8 @@ function collectData(ato, aco) {
             ...p, kind: apId ? 'target' : 'steer',
             label: `${callsign}${msnNum ? ' · ' + msnNum : ''}`,
             sub: label, color, msnType: m.mission_type, mission: m,
+            altFt: spAltFt,
+            altitude: tgtAlt,
           });
         } else {
           points.push({
