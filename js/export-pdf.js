@@ -217,6 +217,9 @@ function _openPrintWindow(title, bodyHtml) {
   .tl-bar {
     position: absolute;
     top: 3px; bottom: 3px;
+    /* ato.css applies translateY(-50%) from top:50% context; reset it here
+       so bars sit correctly within the top:3px / bottom:3px bounds. */
+    transform: none;
     border-radius: 2px;
     display: flex;
     align-items: center;
@@ -226,6 +229,11 @@ function _openPrintWindow(title, bodyHtml) {
     white-space: nowrap;
     overflow: hidden;
   }
+  /* ato.css uses very low opacities for live-map overlay aesthetics; restore
+     full visibility in print so VUL windows and TOS bars are clearly readable. */
+  .tl-bar.vul { opacity: 0.55; }
+  .tl-bar.tos { opacity: 1; }
+  .tl-bar.tot { filter: none; }
   .tl-grid-line {
     position: absolute;
     top: 0; bottom: 0;
