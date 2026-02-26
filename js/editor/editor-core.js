@@ -101,7 +101,15 @@ function editorField(parent, label, value, opts) {
     });
   } else {
     input = document.createElement('input');
-    input.type = opts.type || 'text';
+    if (opts.type === 'number') {
+      // Use type="text" to avoid locale-specific decimal separators (e.g. comma
+      // instead of period) that break parseFloat when saving.
+      input.type = 'text';
+      input.inputMode = 'decimal';
+      input.setAttribute('data-numtype', 'number');
+    } else {
+      input.type = opts.type || 'text';
+    }
     input.className = 'ef-input';
   }
 

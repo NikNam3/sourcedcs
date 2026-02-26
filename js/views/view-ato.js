@@ -175,7 +175,7 @@ function renderTankers(tankers) {
       body.appendChild(_tankerRow('SPD', t.speed_kts + 'kt'));
     }
     if (t.freq_mhz != null) {
-      body.appendChild(_tankerRow('FREQ', parseFloat(t.freq_mhz).toFixed(1) + ' MHz'));
+      body.appendChild(_tankerRow('FREQ', t.freq_mhz + ' MHz'));
     }
     if (t.orbit_heading_deg != null) {
       var hdgStr = String(t.orbit_heading_deg).padStart(3, '0') + '°';

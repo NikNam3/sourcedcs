@@ -1,13 +1,13 @@
 schema_version: '1.0'
 header:
-  operation: INHERENT RESOLVE BROOMSTICK
+  operation: INHERENT RESOLVE BROOMSTICK V1.2
   ato_date: '2014-09-29'
   classification: CLASSIFIED
 registry:
   callsigns:
     SHADOW1:
       type: F16C
-      role: CAP flight lead
+      role: Package Lead
     TEXACO:
       type: KC135
       role: TANKER
@@ -19,7 +19,7 @@ registry:
       role: CAP flight lead
     BOLO1:
       type: F15ESE
-      role: STRIKE flight lead
+      role: STRIKE
   airfields:
     LTAG:
       name: Incirlik AB
@@ -668,7 +668,12 @@ registry:
       type: AWACS
       callsign: DARKSTAR
       platform: E-3A
-      primary_freq_mhz: '251.0'
+      primary_freq_mhz: '265.100'
+    MAGIC:
+      type: AWACS
+      callsign: MAGIC
+      platform: E-3A
+      primary_freq_mhz: '265.100'
   frequencies:
   - freq_mhz: 120.075
     callsign: null
@@ -809,7 +814,7 @@ ato:
   irl_date: null
   irl_time_zulu: null
   ingame_start_time: null
-  ingame_start_local: '1335'
+  ingame_start_local: '0625'
   local_offset_hours: 3
   ae_flags:
   - IRL
@@ -823,7 +828,7 @@ ato:
   carriers:
   - id: CVN-1
   missions:
-  - mission_number: MSN3890
+  - mission_number: MSN8023
     callsign: SHADOW1
     mission_type: CAP
     unit: null
@@ -835,7 +840,7 @@ ato:
     aircraft:
       count: 4
       type: F16C
-      loadout: 301+4X65D
+      loadout: 400+4X65D
     targets:
     - location: Tabqa SA
       target_id: SAM-14
@@ -898,7 +903,7 @@ ato:
       altitude_ft: 230
       shared: true
     dtc_cartridge: Broomstick_F16
-  - mission_number: MSN4390
+  - mission_number: MSN8523
     callsign: TEXACO
     mission_type: REFUELING
     unit: null
@@ -918,7 +923,7 @@ ato:
     steer_points:
     - coords: N37°23'29" E38°20'28"
       altitude_ft: 19000
-    - coords: N37°39'45" E38°20'15"
+    - coords: N37°42'12" E38°20'15"
       altitude_ft: 19000
       orbit:
         alt_ft: 19000
@@ -928,7 +933,7 @@ ato:
         heading_deg: 0
         cw: false
     dtc_cartridge: null
-  - mission_number: MSN4391
+  - mission_number: MSN8524
     callsign: SHELL
     mission_type: REFUELING
     unit: null
@@ -948,7 +953,7 @@ ato:
     steer_points:
     - coords: N37°15'20" E38°20'22"
       altitude_ft: 24000
-    - coords: N37°39'29" E38°20'10"
+    - coords: N37°42'12" E38°20'13"
       altitude_ft: 24000
       orbit:
         alt_ft: 24000
@@ -958,7 +963,7 @@ ato:
         heading_deg: 0
         cw: false
     dtc_cartridge: null
-  - mission_number: MSN3891
+  - mission_number: MSN8024
     callsign: HAT-1
     mission_type: CAP
     unit: null
@@ -997,7 +1002,7 @@ ato:
     - coords: N34°52'11" E35°52'21"
       altitude_ft: 25000
     dtc_cartridge: Broomstick_F18
-  - mission_number: MSN3892
+  - mission_number: MSN8025
     callsign: BOLO1
     mission_type: STRIKE
     unit: null
@@ -1017,9 +1022,9 @@ ato:
     steer_points:
     - coords: N36°51'50" E35°11'59"
       altitude_ft: 10000
-    - coords: N37°22'35" E37°45'05"
-      altitude_ft: 25000
-      shared: true
+    - name_ref: MARSHALL NORTH
+      name: MARSHALL NORTH
+      coords: N37°22'35" E37°45'05"
     - coords: N35°45'15" E38°34'55"
       name: RWY ATCK
       altitude_ft: 1099
@@ -1336,21 +1341,24 @@ weather:
   valid_from: 0000Z
   valid_to: 2359Z
   metars:
-  - METAR XXXX 290000Z 00000KT 9999 FEW079 15/00 Q1013 NOSIG
-  tafs: null
+    - METAR LTAG 290400Z 00000KT 9999 BKN095 15/00 A2992
+  tafs:
+    - TAF LTAG 290430Z 2918/3018 27040KT 9999 BKN0900
+      FM290800 03005KT 9999 SCT100
+      FM291400 20008KT 9999 FEW120
   mission_wx:
-  - mission_ref: MSN3890
+  - mission_ref: MSN8023
     notes: No significant weather impact.
-  - mission_ref: MSN4390
+  - mission_ref: MSN8523
     notes: No significant weather impact.
-  - mission_ref: MSN4391
+  - mission_ref: MSN8524
     notes: No significant weather impact.
-  - mission_ref: MSN3891
+  - mission_ref: MSN8024
     notes: No significant weather impact.
-  - mission_ref: MSN3892
+  - mission_ref: MSN8025
     notes: No significant weather impact.
 _meta:
-  source: inherent resolve broomstick
+  source: inherent resolve broomstick v1.2
   theatre: Syria
   targets: 22
   acm_zones: 5
