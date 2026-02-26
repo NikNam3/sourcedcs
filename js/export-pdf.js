@@ -347,6 +347,14 @@ function _buildMapSection(msnKey, mission) {
     // Remove popups and interactive overlays
     clone.querySelectorAll('.map-popup, .map-tile-attr').forEach(n => n.remove());
     clone.removeAttribute('style');
+    // Remove preserveAspectRatio="none" so the SVG scales with correct aspect
+    // ratio in the print layout (default xMidYMid meet is what we want).
+    clone.removeAttribute('preserveAspectRatio');
+
+    // Reset pan/zoom transform so the PDF always shows the full map, not the
+    // user's current zoomed-in / panned view.
+    const contentGEl = clone.getElementById('map-content');
+    if (contentGEl) contentGEl.removeAttribute('transform');
 
     // ── Chart background ──────────────────────────────────
     if (mapMode === 'chart') {
@@ -434,10 +442,10 @@ function _buildMapSection(msnKey, mission) {
       g.setAttribute('display', showTargets ? '' : 'none');
     });
 
-    // Show or hide all text labels
-    if (!showLabels) {
-      clone.querySelectorAll('text').forEach(t => t.setAttribute('display', 'none'));
-    }
+    // Show or hide all text labels — always explicitly set so labels hidden
+    // in the live map are correctly shown/hidden per variant, not inherited
+    // from the live map's toggle state.
+    clone.querySelectorAll('text').forEach(t => t.setAttribute('display', showLabels ? '' : 'none'));
 
     return new XMLSerializer().serializeToString(clone);
   }
@@ -510,9 +518,37 @@ function _buildFreqTable(label, presets) {
   if (!presets) return '';
   let html = `<p class="pdf-freq-label">${_escHtml(label)}</p>\n`;
   html += '<table><thead><tr><th>CH</th><th>CALLSIGN</th><th>MHz</th><th>ROLE</th></tr></thead><tbody>\n';
+
+  // Build a Map from freq_mhz → metadata for O(1) registry lookups.
+  // Use String keys so floating-point precision doesn't affect matching
+  // (both sides come from the same YAML parser so string form is identical).
+  const freqRegistry = STATE.pkg?.registry?.frequencies;
+  const freqMap = new Map();
+  if (Array.isArray(freqRegistry)) {
+    freqRegistry.forEach(f => { if (f.freq_mhz != null) freqMap.set(String(f.freq_mhz), f); });
+  }
+
   for (let ch = 1; ch <= PDF_MAX_PRESET_CHANNELS; ch++) {
     const key = Object.keys(presets).find(k => parseInt(k) === ch);
-    const p   = key ? presets[key] : { callsign: 'SPARE', freq_mhz: null, role: null };
+    let p;
+    if (key !== undefined) {
+      const val = presets[key];
+      if (val !== null && typeof val === 'object') {
+        // Old format: inline {callsign, freq_mhz, role}
+        p = val;
+      } else {
+        // New format: just a freq_mhz number — look up metadata from registry
+        const freq = parseFloat(val);
+        const meta = !isNaN(freq) ? freqMap.get(String(freq)) || null : null;
+        p = {
+          callsign: meta ? meta.callsign : null,
+          freq_mhz: isNaN(freq) ? null : freq,
+          role:     meta ? meta.role : null,
+        };
+      }
+    } else {
+      p = { callsign: 'SPARE', freq_mhz: null, role: null };
+    }
     const cls = !p.freq_mhz ? ' class="freq-empty"' : '';
     html += `<tr${cls}><td>${ch}</td><td>${_escHtml(p.callsign || '—')}</td><td>${_escHtml(String(p.freq_mhz ?? '—'))}</td><td>${_escHtml(p.role || '')}</td></tr>\n`;
   }
