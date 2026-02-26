@@ -14,11 +14,11 @@
 'use strict';
 
 // ── Registry category definitions ────────────────────────────
-// Maps category key → { label, fields[] }
+// Maps category key → { label, tab, fields[] }
 // fields: { key, label, type?, placeholder?, hint? }
 var REGISTRY_CATEGORIES = {
   airfields: {
-    label: 'AIRFIELDS',
+    label: 'AIRFIELDS', tab: 'AIRFIELDS',
     idLabel: 'ICAO',
     fields: [
       { key: 'name',         label: 'Name',         placeholder: 'e.g. Al Dhafra AB' },
@@ -27,7 +27,7 @@ var REGISTRY_CATEGORIES = {
     ],
   },
   carriers: {
-    label: 'CARRIERS',
+    label: 'CARRIERS', tab: 'CARRIERS',
     idLabel: 'ID',
     fields: [
       { key: 'name',            label: 'Name',            placeholder: 'e.g. USS ROOSEVELT' },
@@ -37,16 +37,24 @@ var REGISTRY_CATEGORIES = {
     ],
   },
   tankers: {
-    label: 'TANKERS',
+    label: 'TANKERS', tab: 'TANKERS',
     idLabel: 'ID',
     fields: [
-      { key: 'callsign', label: 'Callsign',  placeholder: 'e.g. ARCO4' },
-      { key: 'ar_track',  label: 'AR Track',  placeholder: 'e.g. AR394' },
-      { key: 'altitude',  label: 'Altitude',  placeholder: 'e.g. FL240' },
+      { key: 'callsign',           label: 'Callsign',           placeholder: 'e.g. ARCO4' },
+      { key: 'ar_track',           label: 'AR Track',           placeholder: 'e.g. AR394' },
+      { key: 'altitude',           label: 'Altitude',           placeholder: 'e.g. FL240' },
+      { key: 'tacan',              label: 'TACAN',              placeholder: 'e.g. 39X' },
+      { key: 'tacan_role',         label: 'TACAN Role',         placeholder: 'e.g. REFUELING' },
+      { key: 'freq_mhz',           label: 'Freq (MHz)',         type: 'number', placeholder: '251.0' },
+      { key: 'speed_kts',          label: 'Speed (kts)',        type: 'number', placeholder: '300' },
+      { key: 'orbit_anchor_coords', label: 'Orbit Anchor',     placeholder: "N24°30'00\" E055°30'00\"", coordPick: true },
+      { key: 'orbit_heading_deg',  label: 'Orbit Heading (°)', type: 'number', placeholder: '270' },
+      { key: 'orbit_leg_nm',       label: 'Orbit Leg (NM)',    type: 'number', placeholder: '20' },
+      { key: 'orbit_width_nm',     label: 'Orbit Width (NM)',  type: 'number', placeholder: '5' },
     ],
   },
   targets: {
-    label: 'TARGETS',
+    label: 'TARGETS', tab: 'TARGETS',
     idLabel: 'ID',
     fields: [
       { key: 'name',               label: 'Name',               placeholder: 'e.g. SA-2 Guideline' },
@@ -58,17 +66,17 @@ var REGISTRY_CATEGORIES = {
     ],
   },
   reference_points: {
-    label: 'REFERENCE POINTS',
+    label: 'REFERENCE POINTS', tab: 'REF PTS',
     isList: true,
     fields: [
       { key: 'name',     label: 'Name',     placeholder: 'e.g. COYOTE' },
-      { key: 'type',     label: 'Type',     placeholder: 'bullseye / marshal' },
+      { key: 'type',     label: 'Type',     type: 'select', options: [{ value: '', label: '— select type —' }, 'bullseye', 'marshal'] },
       { key: 'coords',   label: 'Coordinates', placeholder: "N26°51'19\" E056°21'37\"", coordPick: true },
       { key: 'altitude', label: 'Altitude', placeholder: 'FL250' },
     ],
   },
   control_agencies: {
-    label: 'CONTROL AGENCIES',
+    label: 'CONTROL AGENCIES', tab: 'CTRL',
     idLabel: 'ID',
     fields: [
       { key: 'type',              label: 'Type',            placeholder: 'AWACS / CRC' },
@@ -79,7 +87,7 @@ var REGISTRY_CATEGORIES = {
     ],
   },
   frequencies: {
-    label: 'FREQUENCIES',
+    label: 'FREQUENCIES', tab: 'FREQS',
     isList: true,
     idField: 'freq_mhz',
     fields: [
@@ -90,38 +98,69 @@ var REGISTRY_CATEGORIES = {
   },
 };
 
-// ── Open the registry list dialog ────────────────────────────
+// ── Active category for back-navigation (persists across dialog open/close) ──
+var _registryActiveCat = null;
+
+// ── Open the registry list dialog (tabbed — one category at a time) ──
 function openRegistryEditor() {
+  var activeCat = _registryActiveCat || Object.keys(REGISTRY_CATEGORIES)[0];
+  _registryActiveCat = null; // consume it
+
   openEditorDialog('REGISTRY', function (body) {
     var reg = (STATE.pkg && STATE.pkg.registry) || {};
 
-    Object.keys(REGISTRY_CATEGORIES).forEach(function (catKey) {
-      var cat   = REGISTRY_CATEGORIES[catKey];
-      var raw   = reg[catKey];
+    // Tab bar — one button per category
+    var tabBar = el('div', 'ef-tab-bar');
+    body.appendChild(tabBar);
+
+    // Content area — filled by showCategory()
+    var catContent = el('div', 'ef-cat-content');
+    body.appendChild(catContent);
+
+    function showCategory(catKey) {
+      // Update active tab button
+      tabBar.querySelectorAll('.ef-tab-btn').forEach(function (b) {
+        b.classList.toggle('ef-tab-active', b.dataset.cat === catKey);
+      });
+
+      catContent.innerHTML = '';
+      var cat = REGISTRY_CATEGORIES[catKey];
+      var raw = reg[catKey];
 
       if (cat.isList) {
-        var items  = Array.isArray(raw) ? raw : [];
+        var items   = Array.isArray(raw) ? raw : [];
         var idField = cat.idField || 'name';
-        var ids    = items.map(function (i) { return String(i[idField]); });
-        editorListBlock(body, cat.label, ids, function (container, id) {
+        var ids     = items.map(function (i) { return String(i[idField]); });
+        editorListBlock(catContent, cat.label, ids, function (container, id) {
           editorItemRow(container, id,
-            function () { editRegistryItem(catKey, id); },
-            function () { deleteRegistryItem(catKey, id); }
+            function () { _registryActiveCat = catKey; editRegistryItem(catKey, id); },
+            function () { _registryActiveCat = catKey; deleteRegistryItem(catKey, id); }
           );
-        }, function () { addRegistryItem(catKey); });
+        }, function () { _registryActiveCat = catKey; addRegistryItem(catKey); });
       } else {
         var items = raw || {};
         var ids   = Object.keys(items);
-        editorListBlock(body, cat.label, ids, function (container, id) {
+        editorListBlock(catContent, cat.label, ids, function (container, id) {
           var item  = items[id];
-          var label = id + (item.name ? ' — ' + item.name : '');
+          var label = id + (item.name ? ' \u2014 ' + item.name : '');
           editorItemRow(container, label,
-            function () { editRegistryItem(catKey, id); },
-            function () { deleteRegistryItem(catKey, id); }
+            function () { _registryActiveCat = catKey; editRegistryItem(catKey, id); },
+            function () { _registryActiveCat = catKey; deleteRegistryItem(catKey, id); }
           );
-        }, function () { addRegistryItem(catKey); });
+        }, function () { _registryActiveCat = catKey; addRegistryItem(catKey); });
       }
+    }
+
+    // Build tab buttons
+    Object.keys(REGISTRY_CATEGORIES).forEach(function (catKey) {
+      var cat = REGISTRY_CATEGORIES[catKey];
+      var btn = el('button', 'ef-tab-btn ef-btn', cat.tab);
+      btn.dataset.cat = catKey;
+      btn.addEventListener('click', function () { showCategory(catKey); });
+      tabBar.appendChild(btn);
     });
+
+    showCategory(activeCat);
   }, function () {
     // no-op on save for list view — individual items save themselves
   });
@@ -144,7 +183,7 @@ function editRegistryItem(catKey, id) {
 
   openEditorDialog('EDIT ' + cat.label.slice(0, -1) + ' — ' + id, function (body) {
     var backBtn = el('button', 'ef-btn ef-btn-back', 'BACK TO REGISTRY');
-    backBtn.addEventListener('click', function () { openRegistryEditor(); });
+    backBtn.addEventListener('click', function () { _registryActiveCat = catKey; openRegistryEditor(); });
     body.appendChild(backBtn);
 
     var fields = {};
@@ -159,6 +198,7 @@ function editRegistryItem(catKey, id) {
       fields[f.key] = editorField(body, f.label, item[f.key] != null ? item[f.key] : '', {
         type:        f.type || 'text',
         placeholder: f.placeholder || '',
+        options:     f.options,
         coordPick:   f.coordPick || false,
         disabled:    isIdField,
         hint:        isIdField ? (f.label + ' cannot be changed here') : undefined,
@@ -186,7 +226,7 @@ function addRegistryItem(catKey) {
 
   openEditorDialog('ADD ' + cat.label.slice(0, -1), function (body) {
     var backBtn = el('button', 'ef-btn ef-btn-back', 'BACK TO REGISTRY');
-    backBtn.addEventListener('click', function () { openRegistryEditor(); });
+    backBtn.addEventListener('click', function () { _registryActiveCat = catKey; openRegistryEditor(); });
     body.appendChild(backBtn);
 
     var fields = {};
@@ -203,6 +243,7 @@ function addRegistryItem(catKey) {
       fields[f.key] = editorField(body, f.label, '', {
         type:        f.type || 'text',
         placeholder: f.placeholder || '',
+        options:     f.options,
         coordPick:   f.coordPick || false,
       });
     });
@@ -301,7 +342,7 @@ function _saveRegistryItem(catKey) {
       } else {
         delete item[k];
       }
-    } else if (fields[k].type === 'number') {
+    } else if (fields[k].type === 'number' || fields[k].getAttribute('data-numtype') === 'number') {
       item[k] = parseFloat(val);
     } else {
       item[k] = val;
@@ -341,62 +382,4 @@ function _saveRegistryItem(catKey) {
   }
 
   editorReRender();
-}
-
-// ── Aim points sub-editor for targets ────────────────────────
-function _buildAimPointsEditor(parent, targetItem) {
-  var aimPoints = (targetItem.aim_points || []).map(function (ap) {
-    return { id: ap.id || '', name: ap.name || '', coords: ap.coords || '' };
-  });
-
-  var body = document.getElementById('editorBody');
-  body._aimPoints = aimPoints;
-
-  editorSectionTitle(parent, 'AIM POINTS');
-
-  var listEl = el('div', 'ef-list-items');
-  _renderAimPointsList(listEl, aimPoints);
-  parent.appendChild(listEl);
-
-  var addBtn = el('button', 'ef-btn ef-btn-add', '+ ADD AIM POINT');
-  addBtn.addEventListener('click', function () {
-    aimPoints.push({ id: '', name: '', coords: '' });
-    body._aimPoints = aimPoints;
-    _renderAimPointsList(listEl, aimPoints);
-  });
-  parent.appendChild(addBtn);
-}
-
-function _renderAimPointsList(container, aimPoints) {
-  container.innerHTML = '';
-  aimPoints.forEach(function (ap, i) {
-    var row = el('div', 'ef-ap-row');
-
-    var idInput = el('input', 'ef-input ef-input-sm');
-    idInput.placeholder = 'ID';
-    idInput.value = ap.id || '';
-    idInput.addEventListener('input', function () { ap.id = this.value; });
-
-    var nameInput = el('input', 'ef-input ef-input-sm');
-    nameInput.placeholder = 'Name';
-    nameInput.value = ap.name || '';
-    nameInput.addEventListener('input', function () { ap.name = this.value; });
-
-    var coordInput = el('input', 'ef-input ef-input-sm');
-    coordInput.placeholder = 'Coords';
-    coordInput.value = ap.coords || '';
-    coordInput.addEventListener('input', function () { ap.coords = this.value; });
-
-    var delBtn = el('button', 'ef-btn ef-btn-sm ef-btn-danger', '✕');
-    delBtn.addEventListener('click', function () {
-      aimPoints.splice(i, 1);
-      _renderAimPointsList(container, aimPoints);
-    });
-
-    row.appendChild(idInput);
-    row.appendChild(nameInput);
-    row.appendChild(coordInput);
-    row.appendChild(delBtn);
-    container.appendChild(row);
-  });
 }

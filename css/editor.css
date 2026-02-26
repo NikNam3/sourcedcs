@@ -298,3 +298,61 @@
   padding: 4px 8px;
   cursor: pointer;
 }
+
+/* ── Registry tab bar ────────────────────────────────────────── */
+.ef-tab-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.ef-tab-btn {
+  font-size: 8px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.ef-tab-btn.ef-tab-active {
+  background: var(--text);
+  color: var(--bg);
+}
+
+/* ── SPINS structured entry row ──────────────────────────────── */
+.ef-entry-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.ef-entry-type {
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--text-3);
+  min-width: 28px;
+  text-align: center;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+.ef-entry-row .ef-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Add-entry buttons row */
+.ef-add-entry-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+  margin-bottom: 6px;
+}
+
+/* Table form container */
+.ef-table-form {
+  margin-top: 6px;
+}

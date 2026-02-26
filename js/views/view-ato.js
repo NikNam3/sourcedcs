@@ -28,6 +28,7 @@ function renderATO(ato) {
   var prevIdx  = STATE.selectedIdx;
 
   renderIntelStrip(gc, ato);
+  renderTankers((STATE.pkg && STATE.pkg.registry && STATE.pkg.registry.tankers) || []);
   renderMissionCards(missions);
   renderTimeline(missions);
 
@@ -109,6 +110,94 @@ function renderIntelStrip(gc, ato) {
   var timesBtn = el('button', 'editor-btn', '✎ TIMES');
   timesBtn.addEventListener('click', openTimesEditor);
   row.appendChild(timesBtn);
+}
+
+// ═════════════════════════════════════════════════════════════
+// Tanker strip — horizontal row of compact tanker cards
+// ═════════════════════════════════════════════════════════════
+
+/**
+ * Render tanker cards from registry.tankers into #tankers-row.
+ * Shows: callsign, AR track, altitude, TACAN, orbit info.
+ */
+function renderTankers(tankers) {
+  var row = document.getElementById('tankers-row');
+  if (!row) return;
+  row.innerHTML = '';
+
+  var entries = Array.isArray(tankers)
+    ? tankers.map(function (t) { return [t.id || t.callsign || '', t]; })
+    : Object.entries(tankers || {});
+
+  if (!entries.length) {
+    // Hide the strip but keep the add button accessible via edit mode
+    row.style.display = 'none';
+    // The "+ TANKER" button is injected below and shown by edit-mode CSS
+    var addBtn = el('button', 'editor-btn editor-btn-add tanker-add-btn', '+ TANKER');
+    addBtn.addEventListener('click', function () { addRegistryItem('tankers'); });
+    row.appendChild(addBtn);
+    return;
+  }
+  row.style.display = 'flex';
+
+  entries.forEach(function (entry) {
+    var regKey = entry[0];
+    var t = entry[1];
+    var card = el('div', 'tanker-card');
+
+    // Header: callsign + TACAN badge + edit button (edit mode only)
+    var head = el('div', 'tanker-card-head');
+    head.appendChild(el('span', 'tanker-callsign', t.callsign || '—'));
+    if (t.tacan) {
+      var tacanBadge = el('span', 'tanker-tacan', t.tacan);
+      if (t.tacan_role) { tacanBadge.title = t.tacan_role; }
+      head.appendChild(tacanBadge);
+    }
+    var editBtn = el('button', 'editor-btn tanker-edit-btn', '✎');
+    editBtn.title = 'Edit tanker';
+    editBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      editRegistryItem('tankers', regKey);
+    });
+    head.appendChild(editBtn);
+    card.appendChild(head);
+
+    // Body: AR track, altitude, speed, frequency
+    var body = el('div', 'tanker-card-body');
+
+    if (t.ar_track) {
+      body.appendChild(_tankerRow('TRACK', t.ar_track));
+    }
+    if (t.altitude) {
+      body.appendChild(_tankerRow('ALT', t.altitude));
+    }
+    if (t.speed_kts) {
+      body.appendChild(_tankerRow('SPD', t.speed_kts + 'kt'));
+    }
+    if (t.freq_mhz != null) {
+      body.appendChild(_tankerRow('FREQ', t.freq_mhz + ' MHz'));
+    }
+    if (t.orbit_heading_deg != null) {
+      var hdgStr = String(t.orbit_heading_deg).padStart(3, '0') + '°';
+      if (t.orbit_leg_nm != null) { hdgStr += ' / ' + t.orbit_leg_nm + 'NM'; }
+      body.appendChild(_tankerRow('HDG/LEG', hdgStr));
+    }
+
+    card.appendChild(body);
+    row.appendChild(card);
+  });
+
+  // Add Tanker button (edit mode)
+  var addBtn = el('button', 'editor-btn editor-btn-add tanker-add-btn', '+ TANKER');
+  addBtn.addEventListener('click', function () { addRegistryItem('tankers'); });
+  row.appendChild(addBtn);
+}
+
+function _tankerRow(key, value) {
+  var r = el('div', 'tanker-row');
+  r.appendChild(el('span', 'tk', key));
+  r.appendChild(el('span', 'tv', value));
+  return r;
 }
 
 // ═════════════════════════════════════════════════════════════

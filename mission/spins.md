@@ -2,8 +2,8 @@
 
 ### C1.1 — Tactical Control
 
-PRIMARY AWACS: MAGIC1 / 265.100 MHz
-SECONDARY AWACS: MAGIC2 / 334.150 MHz
+PRIMARY AWACS: DARKSTAR / 265.100 MHz
+SECONDARY AWACS: MAGIC / 334.150 MHz
 
 ### C1.2 — Airspace Control
 
@@ -15,24 +15,24 @@ PACKAGE LEAD: SHADOW11
 
 ### C1.4 — Strike Lead
 
-STRIKE LEAD: BOLO11
+STRIKE LEAD: SHADOW11
 
 ## C3 — IFF / SIF
 
 NOTE: Squawk assigned Mode 3 code. Mode 4 mandatory.
 
 | MSN | MODE | CODE |
-|-----|------|------|
-| 6011 | 3 | 4811 |
-| 6012 | 3 | 4821 |
-| 6013 | 3 | 4831 |
-| 6014 | 3 | 4841 |
+|---|------|------|
+| 8023 | 3 | 4701 |
+| 8024 | 3 | 4711 |
+| 8025 | 3 | 4721 |
 
 ## C4 — RULES OF ENGAGEMENT
 
 ### C4.1 — PID
 
-NOTE: PID required prior to weapons release on air or surface contacts unless hostile act is demonstrated.
+PID required prior to weapons release on air contacts unless hostile act is demonstrated.
+PID on surface targets not designated by ATO required
 
 PID SOURCES: NCTR / radar profile, Correlated track from CRC/AWACS, Visual ID (VID)
 - Unidentified aircraft departing known mixed-use or adversary-controlled bases are NOT automatically hostile
@@ -47,8 +47,7 @@ NOTE: BVR weapons authorised only after PID or declaration by controlling agency
 ### C4.3 — SFC ATTACK
 
 - Weapons release authorized only on assigned ATO targets
-- Dynamic targeting requires CAOC approval unless self-defence
-- Collateral damage estimate 1-3 delegated; higher requires CAOC approval
+- Collateral damage estimate 3 delegated; higher requires CAOC approval
 
 ### C4.4 — Civilian Traffic
 
@@ -56,9 +55,9 @@ NO FACTOR
 
 ## C5 — EXECUTION
 
-### C5.6011 — SHADOW (SEAD)
+### C5.8023 — SHADOW (DEAD)
 
-OBJECTIVE: Degrade TS-024 Radar effectives with Maximum Effort.
+OBJECTIVE: Degrade ___ Radar effectives with Maximum Effort.
 - Reactive SEAD permitted against emitting threat systems tracking package aircraft
 
 ### C5.6012 — HAT (OCA-FTR)

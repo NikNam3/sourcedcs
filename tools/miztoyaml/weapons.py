@@ -176,6 +176,11 @@ def _canonical_weapon(name: str) -> str | None:
     if m:
         return f'CBU-{m.group(1)}'
 
+    # BLU anti-runway bombs
+    m = re.search(r'\bBLU-(\d+)\b', name, re.IGNORECASE)
+    if m:
+        return f'BLU-{m.group(1)}'
+
     return None  # unrecognized — excluded from encoding
 
 
@@ -237,6 +242,8 @@ _WEAPON_CAT: dict[str, tuple[str, str | None]] = {
     # ── CBU ──────────────────────────────────────────────────────────────────
     "CBU-87": ("agm", "87"), "CBU-97": ("agm", "97"),
     "CBU-103": ("agm", "103"), "CBU-105": ("agm", "105"),
+    # ── BLU Anti-Runway ──────────────────────────────────────────────────────
+    "BLU-107": ("agm", "B107"),
 }
 
 # Tasks that have a gun

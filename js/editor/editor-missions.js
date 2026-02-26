@@ -5,14 +5,12 @@
 // Each mission is edited through a multi-section form that
 // covers identification, aircraft, target, timing, control,
 // refuel, and steer points.
+//
+// Target sub-dialog and steer-point renderer live in
+// editor-missions-targets.js (kept separate for file size).
 // ═══════════════════════════════════════════════════════════
 
 'use strict';
-
-// ── Navigation state for target sub-dialog ───────────────────
-// Holds the mission form snapshot so we can navigate back from
-// the target editor without losing the rest of the form.
-var _msnNav = null; // { title, m, onSave }
 
 // ── Registry dropdown helper ─────────────────────────────────
 function _registryOptions(catKey, labelFn) {
@@ -33,7 +31,7 @@ function editMission(index) {
   var m = ato.missions[index];
   if (!m) return;
 
-  _openMissionForm('EDIT MISSION — ' + (m.callsign || '#' + index), m, function (updated) {
+  _openMissionForm('EDIT MISSION \u2014 ' + (m.callsign || '#' + index), m, function (updated) {
     ato.missions[index] = updated;
     editorReRender();
   });
@@ -95,9 +93,9 @@ function _buildIdentificationSection(body, m, f) {
   });
   if (m.mission_type) f.mission_type.value = m.mission_type;
   f.unit             = editorField(body, 'Unit',              m.unit, { placeholder: 'e.g. 510vFS' });
-  var afOpts = _registryOptions('airfields', function (id, af) { return id + (af.name ? ' — ' + af.name : ''); });
+  var afOpts = _registryOptions('airfields', function (id, af) { return id + (af.name ? ' \u2014 ' + af.name : ''); });
   // Combine airfields and carriers for deploy/recovery location
-  var cvOpts = _registryOptions('carriers', function (id, cv) { return id + (cv.name ? ' — ' + cv.name : ''); });
+  var cvOpts = _registryOptions('carriers', function (id, cv) { return id + (cv.name ? ' \u2014 ' + cv.name : ''); });
   var locationOpts = afOpts.concat(cvOpts.filter(function (o) { return o.value !== ''; }));
   f.home_base_icao   = editorField(body, 'Home Base', m.home_base_icao, { type: 'select', options: afOpts });
   f.deploy_location  = editorField(body, 'Deploy Location', m.deploy_location_icao, { type: 'select', options: locationOpts });
@@ -141,7 +139,7 @@ function _buildTargetSection(body, m, msnTitle, onSave) {
 function _buildControlSection(body, m, f) {
   editorSectionTitle(body, 'CONTROL');
   var ctrl = m.control || {};
-  var ctrlOpts = _registryOptions('control_agencies', function (id, ag) { return id + (ag.callsign ? ' — ' + ag.callsign : ''); });
+  var ctrlOpts = _registryOptions('control_agencies', function (id, ag) { return id + (ag.callsign ? ' \u2014 ' + ag.callsign : ''); });
   f.ctrl_agency_id = editorField(body, 'Control Agency', ctrl.agency_id, { type: 'select', options: ctrlOpts });
 
   // Resolve freq from registry when agency is selected
@@ -182,7 +180,7 @@ function _buildControlSection(body, m, f) {
 function _buildRefuelSection(body, m, f) {
   editorSectionTitle(body, 'REFUEL');
   var ref = m.refuel || {};
-  var tnkOpts = _registryOptions('tankers', function (id, t) { return id + (t.callsign ? ' — ' + t.callsign : ''); });
+  var tnkOpts = _registryOptions('tankers', function (id, t) { return id + (t.callsign ? ' \u2014 ' + t.callsign : ''); });
   f.ref_tanker_id = editorField(body, 'Tanker', ref.tanker_id, { type: 'select', options: tnkOpts });
   f.ref_net = editorField(body, 'AAR NET', ref.not_earlier_than, { placeholder: '2143' });
   f.ref_nlt = editorField(body, 'AAR NLT', ref.not_later_than,  { placeholder: '2150' });
@@ -320,106 +318,4 @@ function _saveMissionFromForm(onSave) {
   m.steer_points = steerPts.length ? steerPts : undefined;
 
   onSave(m);
-}
-
-// ── Targets compact list renderer ────────────────────────────
-function _renderTargetsList(listEl, targets, msnTitle, onSave) {
-  listEl.innerHTML = '';
-  targets.forEach(function (tgt, i) {
-    var label = tgt.location || (tgt.target_id ? '→ ' + tgt.target_id : 'TARGET ' + (i + 1));
-    editorItemRow(listEl, label,
-      function () { _editTarget(targets, i, msnTitle, onSave); },
-      function () {
-        targets.splice(i, 1);
-        _renderTargetsList(listEl, targets, msnTitle, onSave);
-      }
-    );
-  });
-}
-
-// ── Navigate back from target sub-dialog to mission form ─────
-function _reopenMissionForm() {
-  if (!_msnNav) return;
-  var nav = _msnNav;
-  _msnNav = null;
-  _openMissionForm(nav.title, nav.m, nav.onSave);
-}
-
-// ── Target sub-dialog (mirrors _editAcm in editor-sections.js) ─
-function _editTarget(targets, index, msnTitle, onSave) {
-  // Snapshot the mission form before body gets cleared by openEditorDialog
-  var draft = _collectMissionDraft();
-  if (draft) {
-    draft.targets = targets; // keep the live array so edits persist
-    _msnNav = { title: msnTitle, m: draft, onSave: onSave };
-  } else {
-    _msnNav = { title: msnTitle, m: { targets: targets }, onSave: onSave };
-  }
-
-  var tgt = targets[index];
-  var tgtOpts = _registryOptions('targets', function (id, t) { return id + (t.name ? ' — ' + t.name : ''); });
-
-  openEditorDialog('EDIT TARGET ' + (index + 1), function (body) {
-    var backBtn = el('button', 'ef-btn ef-btn-back', 'BACK TO MISSION');
-    backBtn.addEventListener('click', function () {
-      _reopenMissionForm();
-    });
-    body.appendChild(backBtn);
-
-    function bind(input, key) {
-      input.addEventListener('input', function () { tgt[key] = this.value || undefined; });
-    }
-    function bindSel(input, key) {
-      input.addEventListener('change', function () { tgt[key] = this.value || undefined; });
-    }
-
-    bind(editorField(body, 'Location', tgt.location, { placeholder: 'e.g. KHASAB' }), 'location');
-    bind(editorField(body, 'Altitude', tgt.altitude, { placeholder: 'e.g. E73FT' }), 'altitude');
-    bindSel(editorField(body, 'Target', tgt.target_id, { type: 'select', options: tgtOpts }), 'target_id');
-    bind(editorField(body, 'Mission Type Override', tgt.mission_type_override, { placeholder: 'e.g. AIRDEF' }), 'mission_type_override');
-    bind(editorField(body, 'TOT NET', tgt.tot_net, { placeholder: '2046' }), 'tot_net');
-    bind(editorField(body, 'TOT NLT', tgt.tot_nlt, { placeholder: '2111' }), 'tot_nlt');
-    bind(editorField(body, 'TOS', tgt.tos, { placeholder: '2040' }), 'tos');
-    bind(editorField(body, 'TOFFS', tgt.toffs, { placeholder: '2230' }), 'toffs');
-  }, function () {
-    // SAVE button: return to mission form after closeEditorDialog hides overlay
-    setTimeout(_reopenMissionForm, 0);
-  });
-}
-
-// ── Steer points list renderer ──────────────────────────────
-function _renderSteerPointsList(container, steerPts) {
-  container.innerHTML = '';
-  steerPts.forEach(function (sp, i) {
-    var row = el('div', 'ef-ap-row');
-
-    var nameInput = el('input', 'ef-input ef-input-sm');
-    nameInput.placeholder = 'Name (e.g. SP1)';
-    nameInput.value = sp.name || '';
-    nameInput.addEventListener('input', function () { sp.name = this.value; });
-    row.appendChild(nameInput);
-
-    var coordInput = el('input', 'ef-input ef-input-sm');
-    coordInput.placeholder = "N24°30'00\" E055°30'00\"";
-    coordInput.value = sp.coords || '';
-    coordInput.addEventListener('input', function () { sp.coords = this.value; });
-    row.appendChild(coordInput);
-
-    var pickBtn = el('button', 'ef-btn ef-btn-sm ef-btn-pick', '📍');
-    pickBtn.title = 'Pick from map';
-    pickBtn.type = 'button';
-    pickBtn.addEventListener('click', function () {
-      _startCoordPick(coordInput);
-    });
-    row.appendChild(pickBtn);
-
-    var delBtn = el('button', 'ef-btn ef-btn-sm ef-btn-danger', '✕');
-    delBtn.addEventListener('click', function () {
-      steerPts.splice(i, 1);
-      _renderSteerPointsList(container, steerPts);
-    });
-    row.appendChild(delBtn);
-
-    container.appendChild(row);
-  });
 }

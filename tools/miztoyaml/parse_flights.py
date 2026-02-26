@@ -56,25 +56,33 @@ def _parse_waypoints(route_block: str, theatre: str) -> list[Waypoint]:
         orbit_cw: bool | None = None
         if is_orbit and task_blk:
             # Navigate into task.params.tasks[1].params to find the Orbit entry
+            # Supports both ComboTask (params.tasks array) and ControlledTask (params.task)
             params_blk = lua_get_block(task_blk, 'params')
             tasks_blk  = lua_get_block(params_blk, 'tasks') if params_blk else None
+            orbit_params_blk: str | None = None
             if tasks_blk:
                 for _ti, tb in lua_iter_array(tasks_blk):
                     if lua_str(tb, 'id') == 'Orbit':
-                        op = lua_get_block(tb, 'params')
-                        if op:
-                            alt_m   = lua_num(op, 'altitude')
-                            spd_ms  = lua_num(op, 'speed')
-                            w_m     = lua_num(op, 'width')
-                            leg_m   = lua_num(op, 'legLength')
-                            hdg_rad = lua_num(op, 'hotLegDir')  # DCS stores in radians
-                            if alt_m   is not None: orbit_alt_ft      = round(alt_m   * _M_TO_FT)
-                            if spd_ms  is not None: orbit_speed_kts   = round(spd_ms  * _MPS_TO_KT)
-                            if w_m     is not None: orbit_width_nm    = round(w_m     / _M_TO_NM, 1)
-                            if leg_m   is not None: orbit_leg_nm      = round(leg_m   / _M_TO_NM, 1)
-                            if hdg_rad is not None: orbit_heading_deg = round(math.degrees(hdg_rad))
-                            orbit_cw = lua_bool(op, 'clockWise')
+                        orbit_params_blk = lua_get_block(tb, 'params')
                         break
+            if orbit_params_blk is None and params_blk:
+                # ControlledTask structure: params.task.params
+                task_inner = lua_get_block(params_blk, 'task')
+                if task_inner and lua_str(task_inner, 'id') == 'Orbit':
+                    orbit_params_blk = lua_get_block(task_inner, 'params')
+            if orbit_params_blk:
+                op = orbit_params_blk
+                alt_m   = lua_num(op, 'altitude')
+                spd_ms  = lua_num(op, 'speed')
+                w_m     = lua_num(op, 'width')
+                leg_m   = lua_num(op, 'legLength')
+                hdg_rad = lua_num(op, 'hotLegDir')  # DCS stores in radians
+                if alt_m   is not None: orbit_alt_ft      = round(alt_m   * _M_TO_FT)
+                if spd_ms  is not None: orbit_speed_kts   = round(spd_ms  * _MPS_TO_KT)
+                if w_m     is not None: orbit_width_nm    = round(w_m     / _M_TO_NM, 1)
+                if leg_m   is not None: orbit_leg_nm      = round(leg_m   / _M_TO_NM, 1)
+                if hdg_rad is not None: orbit_heading_deg = round(math.degrees(hdg_rad))
+                orbit_cw = lua_bool(op, 'clockWise')
         lat, lon   = dcs_to_latlon(xy[0], xy[1], theatre)
         wpts.append(Waypoint(
             name=name, x=xy[0], y=xy[1], lat=lat, lon=lon,

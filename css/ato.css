@@ -2,6 +2,10 @@
    ATO VIEW
 ═══════════════════════════════════════════════════════════ */
 
+/* #view-ato needs a positioning context so .detail-panel can
+   be positioned absolutely over the tankers-row */
+#view-ato { position: relative; }
+
 /* Intel strip */
 .intel-row {
   flex-shrink: 0;
@@ -39,6 +43,108 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Tanker strip */
+.tankers-row {
+  flex-shrink: 0;
+  height: 86px;
+  display: flex;
+  align-items: stretch;
+  overflow-x: auto;
+  padding: 6px 12px;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg2);
+}
+.tankers-row::before {
+  content: 'AAR';
+  font-size: 7px;
+  letter-spacing: 2px;
+  color: var(--text-3);
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  padding: 2px 0;
+  flex-shrink: 0;
+  align-self: center;
+}
+.tanker-card {
+  flex-shrink: 0;
+  min-width: 148px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--tanker);
+  background: var(--bg-card);
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.tanker-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  gap: 6px;
+}
+.tanker-callsign {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tanker);
+  white-space: nowrap;
+}
+.tanker-tacan {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--amber, #ffb020);
+  border: 1px solid var(--amber, #ffb020);
+  padding: 1px 5px;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  cursor: default;
+}
+.tanker-card-body {
+  padding: 4px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+.tanker-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 4px;
+}
+.tk {
+  font-size: 7px;
+  color: var(--text-3);
+  letter-spacing: .5px;
+  white-space: nowrap;
+}
+.tv {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100px;
+}
+.tanker-add-btn {
+  align-self: center;
+  flex-shrink: 0;
+  height: auto;
+}
+.tanker-edit-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 1px 5px;
+}
+/* Show the tankers row in edit mode even when empty */
+:root.edit-mode #tankers-row {
+  display: flex !important;
 }
 
 /* Mission cards */
@@ -191,7 +297,6 @@
 }
 .tl-swatch-tos {
   background: var(--text-3);
-  opacity: .5;
 }
 .tl-swatch-aar {
   background: repeating-linear-gradient(
@@ -247,7 +352,6 @@
 }
 .tl-bar:hover { filter: brightness(1.1); }
 .tl-bar.tos {
-  opacity: .75;
 }
 .tl-bar.tot {
   filter: brightness(1.15);
@@ -255,7 +359,7 @@
 }
 .tl-bar.vul {
   height: 28px;
-  opacity: .4;
+  opacity: .18;
   background: repeating-linear-gradient(
     -45deg,
     var(--red), var(--red) 3px,
@@ -313,7 +417,11 @@
 /* Detail panel */
 .detail-panel {
   display: none;
-  flex-shrink: 0;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
   border-top: 2px solid var(--border-strong);
   background: var(--bg2);
   max-height: 40vh;

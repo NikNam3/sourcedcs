@@ -310,7 +310,30 @@ function collectData(ato, aco) {
     if (route.pts.length >= 2) routes.push(route);
   });
 
-  // ── Phase 4: ACO airspace measures ────────────────────────
+  // ── Phase 4: Tanker orbit anchors ─────────────────────────
+  const tankerList = Array.isArray(ato.tankers) ? ato.tankers : Object.values(ato.tankers || {});
+  tankerList.forEach(t => {
+    if (!t.orbit_anchor_coords) return;
+    const anchorPt = parseCoord(t.orbit_anchor_coords);
+    if (!anchorPt) return;
+    airspaces.push({
+      kind: 'airspace',
+      name: t.callsign || 'TANKER',
+      type: 'REFUEL',
+      altLower: t.altitude || null,
+      altUpper: null,
+      lat: anchorPt.lat, lon: anchorPt.lon,
+      shape: 'anchor',
+      anchorPt,
+      headingDeg: t.orbit_heading_deg || 0,
+      legLengthNm: t.orbit_leg_nm || 10,
+      widthNm: t.orbit_width_nm || 5,
+      direction: 'cw',
+      speedKts: t.speed_kts,
+    });
+  });
+
+  // ── Phase 5: ACO airspace measures ────────────────────────
   (aco?.acms || []).forEach(acm => {
     const geo = acm.geometry || {};
     const acmBase = {

@@ -44,6 +44,15 @@ function openEditorDialog(title, buildFn, onSave) {
 
   titleEl.textContent = title;
   body.innerHTML = '';
+  // Clear any stale per-dialog state left from a previous form
+  // (e.g. _isNew set by addRegistryItem that would falsely trigger
+  // "ID IS REQUIRED" if the user then opens an edit dialog).
+  delete body._isNew;
+  delete body._editId;
+  delete body._editItem;
+  delete body._idInput;
+  delete body._editorFields;
+  delete body._catKey;
   EDITOR._onSave = onSave;
   buildFn(body);
   overlay.style.display = 'flex';
@@ -92,7 +101,15 @@ function editorField(parent, label, value, opts) {
     });
   } else {
     input = document.createElement('input');
-    input.type = opts.type || 'text';
+    if (opts.type === 'number') {
+      // Use type="text" to avoid locale-specific decimal separators (e.g. comma
+      // instead of period) that break parseFloat when saving.
+      input.type = 'text';
+      input.inputMode = 'decimal';
+      input.setAttribute('data-numtype', 'number');
+    } else {
+      input.type = opts.type || 'text';
+    }
     input.className = 'ef-input';
   }
 

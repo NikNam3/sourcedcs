@@ -21,6 +21,7 @@
   --sead:   #4a1a6b; --sead-bg:   #f3edfb;
   --strike: #6b0f1a; --strike-bg: #fbe8ea;
   --other:  #3d3400; --other-bg:  #f9f6e0;
+  --tanker: #005a5a; --tanker-bg: #e6f7f7;
 
   /* Semantic */
   --amber: #7c5000;
@@ -58,6 +59,7 @@
   --sead:   #c084fc; --sead-bg:   rgba(192,132,252,.10);
   --strike: #ff4444; --strike-bg: rgba(255,68,68,.10);
   --other:  #ffb020; --other-bg:  rgba(255,176,32,.10);
+  --tanker: #00e5e5; --tanker-bg: rgba(0,229,229,.10);
 
   --amber: #ffb020;
   --red:   #ff4444;
