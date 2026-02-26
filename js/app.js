@@ -441,11 +441,16 @@ function loadPackage_obj(data) {
       pkg.ato.tankers.forEach(t => {
         const reg = tankerRegMap[t.id] ?? tankerRegMap[t.callsign];
         if (reg) {
-          if (reg.callsign   != null) t.callsign   = reg.callsign;
-          if (reg.ar_track   != null) t.ar_track   = reg.ar_track;
-          if (reg.altitude   != null) t.altitude   = reg.altitude;
-          if (reg.altitude_ft!= null) t.altitude_ft= reg.altitude_ft;
-          if (reg.speed_kts  != null) t.speed_kts  = reg.speed_kts;
+          if (reg.callsign              != null) t.callsign              = reg.callsign;
+          if (reg.ar_track              != null) t.ar_track              = reg.ar_track;
+          if (reg.altitude              != null) t.altitude              = reg.altitude;
+          if (reg.altitude_ft           != null) t.altitude_ft           = reg.altitude_ft;
+          if (reg.speed_kts             != null) t.speed_kts             = reg.speed_kts;
+          if (reg.freq_mhz              != null) t.freq_mhz              = reg.freq_mhz;
+          if (reg.orbit_anchor_coords   != null) t.orbit_anchor_coords   = reg.orbit_anchor_coords;
+          if (reg.orbit_heading_deg     != null) t.orbit_heading_deg     = reg.orbit_heading_deg;
+          if (reg.orbit_leg_nm          != null) t.orbit_leg_nm          = reg.orbit_leg_nm;
+          if (reg.orbit_width_nm        != null) t.orbit_width_nm        = reg.orbit_width_nm;
         }
       });
     }

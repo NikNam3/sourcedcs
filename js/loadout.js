@@ -79,6 +79,9 @@ const WEAPON_DB = {
   '39':  { name: 'GBU-39',  full: 'GBU-39 SDB (250lb Small Diam.)', cat: 'gbu', color: '#39a0ff' },
   '54':  { name: 'GBU-54',  full: 'GBU-54 Laser JDAM (500lb)',      cat: 'gbu', color: '#39a0ff' },
 
+  // ── Anti-Runway Bombs (BLU) ─────────────────────────────
+  'B107': { name: 'BLU-107', full: 'BLU-107 Durandal (Anti-Runway)', cat: 'mk',  color: '#7a7875' },
+
   // ── Cluster Bombs (CBU) ──────────────────────────────────
   '87':  { name: 'CBU-87',  full: 'CBU-87 CEM Cluster Bomb',        cat: 'cbu', color: '#ff4444' },
   '97':  { name: 'CBU-97',  full: 'CBU-97 SFW Cluster Bomb',        cat: 'cbu', color: '#ff4444' },
@@ -158,34 +161,41 @@ function parseLoadout(raw) {
   }));
 
   // Parse weapon groups from agStr
-  // Strategy: find all positions where digit is followed by 'X'
-  // Split into tokens: everything between those boundaries
+  // Uses WEAPON_DB to resolve ambiguous code boundaries when multi-digit
+  // quantities follow digit-only codes (e.g. "3X3812XB107" → 3×GBU-38 + 12×BLU-107).
   const weapons = [];
   if (agStr.length > 0) {
-    // Find split points: index of each digit that precedes 'X'
-    // Pattern: a digit at position i where str[i+1] === 'X'
-    const splitPoints = [];
-    for (let i = 0; i < agStr.length - 1; i++) {
-      if (/\d/.test(agStr[i]) && agStr[i + 1] === 'X') {
-        splitPoints.push(i);
+    const re = /(\d+)X/g;
+    let m;
+    while ((m = re.exec(agStr)) !== null) {
+      const qty = parseInt(m[1], 10);
+      let   pos = m.index + m[0].length; // position right after 'X'
+
+      // Parse code: optional letter prefix + digits + optional letter suffix
+      const codeStart = pos;
+      if (pos < agStr.length && /[A-Z]/.test(agStr[pos])) pos++;
+      while (pos < agStr.length && /\d/.test(agStr[pos])) pos++;
+      if (pos < agStr.length && /[A-Z]/.test(agStr[pos])) pos++;
+
+      // Prefer the longest code that exists in WEAPON_DB; if the full code
+      // is unknown, try shorter prefixes so trailing digits can serve as the
+      // quantity of the next group (e.g. "381" → "38" when "381" is unknown).
+      let code = agStr.slice(codeStart, pos);
+      if (!WEAPON_DB[code]) {
+        for (let end = pos - 1; end > codeStart; end--) {
+          const candidate = agStr.slice(codeStart, end);
+          if (WEAPON_DB[candidate]) { code = candidate; pos = end; break; }
+        }
       }
-    }
 
-    splitPoints.forEach((start, idx) => {
-      const end = idx + 1 < splitPoints.length ? splitPoints[idx + 1] : agStr.length;
-      const token = agStr.slice(start, end); // e.g. "3X38" or "1X114"
-      const xPos  = token.indexOf('X');
-      if (xPos < 0) return;
-
-      const qty  = parseInt(token.slice(0, xPos), 10);
-      const code = token.slice(xPos + 1);           // "38" or "114"
+      re.lastIndex = pos; // advance past the code for next iteration
 
       weapons.push({
         qty,
         code,
         info: WEAPON_DB[code] || { name: code, full: `Unknown (code ${code})`, cat: 'unknown', color: '#7a7875' },
       });
-    });
+    }
   }
 
   return { aa, gun: hasGun, weapons, raw: str };
@@ -225,7 +235,7 @@ function loadoutWidget(raw) {
 
   // Gun cell
   const gunCell = el('div', 'lo-aa-cell' + (parsed.gun ? '' : ' lo-zero'));
-  const gunCount = el('div', 'lo-aa-count', parsed.gun ? '✓' : '—');
+  const gunCount = el('div', 'lo-aa-count', parsed.gun ? '+' : '—');
   gunCount.style.color = parsed.gun ? 'var(--amber)' : 'var(--text-3)';
   gunCell.appendChild(gunCount);
   gunCell.appendChild(el('div', 'lo-aa-name', 'GUN'));

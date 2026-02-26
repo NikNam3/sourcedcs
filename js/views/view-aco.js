@@ -94,7 +94,7 @@ function renderACO(aco) {
     tr.insertCell().appendChild(buildGeoCell(acm.geometry || {}));
 
     spanCell('aco-msns', (acm.missions || []).join(', ') || '—');
-    spanCell('aco-alt',  `${acm.alt_lower || '?'} → ${acm.alt_upper || '?'}`);
+    spanCell('aco-alt',  `${acm.alt_lower || '?'} → ${acm.alt_upper || 'FL660'}`);
     spanCell('aco-time', `${fmtTime(acm.time_from) || '—'} – ${fmtTime(acm.time_to) || '—'}`);
     spanCell('aco-ctrl', acm.control_agency || '—');
     spanCell('aco-ctrl', acm.control_freq_mhz ? acm.control_freq_mhz + ' MHz' : '—');

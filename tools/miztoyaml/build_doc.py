@@ -11,6 +11,7 @@ from .build_missions import (
     AIRDROME_IDS, CVN_NAMES,
     build_airfields_registry, build_missions,
 )
+from .projection import dms
 
 
 def build_carriers_registry(carriers: list[Carrier]) -> dict:
@@ -47,25 +48,44 @@ def build_callsigns_registry(flights: list[Flight]) -> dict | None:
 def build_tankers_list(flights: list[Flight]) -> list[dict] | None:
     """
     Build a list of tanker entries for registry.tankers.
-    Each entry has: callsign (group name), altitude_ft, speed_kts.
+    Each entry has: callsign, altitude, speed_kts, and orbit parameters
+    (anchor_coords, heading_deg, leg_nm, width_nm) extracted from the first
+    orbit waypoint.
     """
     result = []
     for f in flights:
         if not f.is_tanker:
             continue
-        # Grab orbit params from the first orbit steer point if available
+        # Grab orbit params from the first orbit waypoint if available
         alt_ft: int | None = None
         speed_kts: int | None = None
+        orbit_anchor_coords: str | None = None
+        orbit_heading_deg: int | None = None
+        orbit_leg_nm: float | None = None
+        orbit_width_nm: float | None = None
         for wp in f.waypoints:
             if wp.is_orbit:
-                alt_ft    = wp.orbit_alt_ft
-                speed_kts = wp.orbit_speed_kts
+                alt_ft             = wp.orbit_alt_ft
+                speed_kts          = wp.orbit_speed_kts
+                orbit_leg_nm       = wp.orbit_leg_nm
+                orbit_width_nm     = wp.orbit_width_nm
+                orbit_heading_deg  = wp.orbit_heading_deg
+                orbit_anchor_coords = dms(wp.lat, wp.lon)
                 break
         entry: dict = {"callsign": f.name}
-        if alt_ft    is not None:
+        if alt_ft is not None:
             entry["altitude_ft"] = alt_ft
             entry["altitude"]    = f"FL{round(alt_ft / 100):03d}"
-        if speed_kts is not None: entry["speed_kts"]   = speed_kts
+        if speed_kts is not None:
+            entry["speed_kts"] = speed_kts
+        if orbit_anchor_coords is not None:
+            entry["orbit_anchor_coords"] = orbit_anchor_coords
+        if orbit_heading_deg is not None:
+            entry["orbit_heading_deg"] = orbit_heading_deg
+        if orbit_leg_nm is not None:
+            entry["orbit_leg_nm"] = orbit_leg_nm
+        if orbit_width_nm is not None:
+            entry["orbit_width_nm"] = orbit_width_nm
         result.append(entry)
     return result or None
 
@@ -192,8 +212,16 @@ def build_doc(*, mission_name, mission_date, theatre,
     local_offset_hours = _THEATRE_OFFSET.get(theatre)
     if local_offset_hours is None and theatre:
         print(f"[!] Unknown theatre '{theatre}' — local_offset_hours will be None")
+
+    # Compute Zulu start time from local start time and theatre offset
+    ingame_start_zulu = None
+    if ingame_start_local and local_offset_hours is not None:
+        local_mins = int(ingame_start_local[:2]) * 60 + int(ingame_start_local[2:])
+        zulu_mins  = (local_mins - local_offset_hours * 60) % 1440
+        ingame_start_zulu = f"{zulu_mins // 60:02d}{zulu_mins % 60:02d}"
+        print(f"[+] ingame_start_local={ingame_start_local}L → ingame_start_time={ingame_start_zulu}Z")
+
     msn_start = 1000 + int(hashlib.md5(mission_name.encode()).hexdigest()[:4], 16) % 8000
-    tanker_msn_start = msn_start + 500
 
     # Bullseye name references registry.reference_points (first bullseye entry)
     bullseye_key = next(
@@ -204,9 +232,9 @@ def build_doc(*, mission_name, mission_date, theatre,
     airfields = build_airfields_registry(flights, carriers, theatre)
 
     # Build missions — also mutates ref_pts to add marshal points found in routes.
-    # AWACS flights are excluded from missions (handled by control_agencies).
+    # AWACS and tanker flights are excluded from missions.
     missions = build_missions(
-        flights, msn_start, tanker_msn_start,
+        flights, msn_start,
         targets, carriers, airfields, ref_pts) or None
     msn_numbers = [m["mission_number"] for m in missions] if missions else []
 
@@ -242,7 +270,7 @@ def build_doc(*, mission_name, mission_date, theatre,
         "ato": {
             "irl_date":           None,
             "irl_time_zulu":      None,
-            "ingame_start_time":  None,
+            "ingame_start_time":  ingame_start_zulu,
             "ingame_start_local": ingame_start_local,
             "local_offset_hours": local_offset_hours,
             "ae_flags":           ["IRL", "INGAME"],

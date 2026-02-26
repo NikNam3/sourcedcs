@@ -384,25 +384,24 @@ def _build_mission_targets(steer_pts: list[dict], targets: dict,
     return result or None
 
 
-def build_missions(flights: list[Flight], msn_start: int, tanker_msn_start: int,
+def build_missions(flights: list[Flight], msn_start: int,
                    targets: dict, carriers: list[Carrier],
                    airfields: dict[str, dict], ref_pts: dict) -> list[dict]:
     """
-    Produce the ato.missions list. Steer points are extracted and classified.
-    Tankers receive a separate mission number from tanker_msn_start.
+    Produce the ato.missions list for non-tanker, non-AWACS flights.
+    Tankers go to registry.tankers. AWACS go to registry.control_agencies.
     """
     missions = []
-    strike_i = tanker_i = 0
+    strike_i = 0
 
     for f in flights:
         if f.is_awacs:
             continue  # AWACS go to registry.control_agencies, not missions
         if f.is_tanker:
-            msn_num = f"MSN{tanker_msn_start + tanker_i}"
-            tanker_i += 1
-        else:
-            msn_num = f"MSN{msn_start + strike_i}"
-            strike_i += 1
+            continue  # Tankers go to registry.tankers, not missions
+
+        msn_num = f"MSN{msn_start + strike_i}"
+        strike_i += 1
 
         callsign = f.name  # group name is the mission callsign
         ac_base  = f.aircraft_type.split('_')[0]
@@ -412,26 +411,18 @@ def build_missions(flights: list[Flight], msn_start: int, tanker_msn_start: int,
             f.units[0].loadout if f.units else [], f.task)
 
         deploy, recovery = _home_base(f, airfields, carriers)
-        if not deploy and f.is_tanker:
-            for wp in (f.waypoints or []):
-                if wp.airdrome_id is not None:
-                    info = AIRDROME_IDS.get(wp.airdrome_id)
-                    if info:
-                        deploy = info["icao"]
-                        break
         if not recovery and deploy:
             recovery = deploy
 
         # Build steer points — also mutates ref_pts to add any marshal points
         steer_pts = _classify_waypoints(f, flights, targets, carriers, ref_pts)
 
-        msn_targets = None if f.is_tanker else \
-            _build_mission_targets(steer_pts, targets, f.task)
+        msn_targets = _build_mission_targets(steer_pts, targets, f.task)
 
         msn: dict = {
             "mission_number":       msn_num,
             "callsign":             callsign,
-            "mission_type":         "REFUELING" if f.is_tanker else f.task,
+            "mission_type":         f.task,
             "unit":                 None,
             "home_base_icao":       deploy,
             "deploy_location_icao": deploy,

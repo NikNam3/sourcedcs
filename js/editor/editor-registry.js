@@ -40,9 +40,17 @@ var REGISTRY_CATEGORIES = {
     label: 'TANKERS',
     idLabel: 'ID',
     fields: [
-      { key: 'callsign', label: 'Callsign',  placeholder: 'e.g. ARCO4' },
-      { key: 'ar_track',  label: 'AR Track',  placeholder: 'e.g. AR394' },
-      { key: 'altitude',  label: 'Altitude',  placeholder: 'e.g. FL240' },
+      { key: 'callsign',           label: 'Callsign',           placeholder: 'e.g. ARCO4' },
+      { key: 'ar_track',           label: 'AR Track',           placeholder: 'e.g. AR394' },
+      { key: 'altitude',           label: 'Altitude',           placeholder: 'e.g. FL240' },
+      { key: 'tacan',              label: 'TACAN',              placeholder: 'e.g. 39X' },
+      { key: 'tacan_role',         label: 'TACAN Role',         placeholder: 'e.g. REFUELING' },
+      { key: 'freq_mhz',           label: 'Freq (MHz)',         type: 'number', placeholder: '251.0' },
+      { key: 'speed_kts',          label: 'Speed (kts)',        type: 'number', placeholder: '300' },
+      { key: 'orbit_anchor_coords', label: 'Orbit Anchor',     placeholder: "N24°30'00\" E055°30'00\"", coordPick: true },
+      { key: 'orbit_heading_deg',  label: 'Orbit Heading (°)', type: 'number', placeholder: '270' },
+      { key: 'orbit_leg_nm',       label: 'Orbit Leg (NM)',    type: 'number', placeholder: '20' },
+      { key: 'orbit_width_nm',     label: 'Orbit Width (NM)',  type: 'number', placeholder: '5' },
     ],
   },
   targets: {
@@ -62,7 +70,7 @@ var REGISTRY_CATEGORIES = {
     isList: true,
     fields: [
       { key: 'name',     label: 'Name',     placeholder: 'e.g. COYOTE' },
-      { key: 'type',     label: 'Type',     placeholder: 'bullseye / marshal' },
+      { key: 'type',     label: 'Type',     type: 'select', options: [{ value: '', label: '— select type —' }, 'bullseye', 'marshal'] },
       { key: 'coords',   label: 'Coordinates', placeholder: "N26°51'19\" E056°21'37\"", coordPick: true },
       { key: 'altitude', label: 'Altitude', placeholder: 'FL250' },
     ],
@@ -104,7 +112,13 @@ function openRegistryEditor() {
         var idField = cat.idField || 'name';
         var ids    = items.map(function (i) { return String(i[idField]); });
         editorListBlock(body, cat.label, ids, function (container, id) {
-          editorItemRow(container, id,
+          var item = items[ids.indexOf(id)];
+          var label = id;
+          if (catKey === 'frequencies' && item) {
+            var parts = [item.callsign, item.role].filter(Boolean);
+            if (parts.length) label += ' — ' + parts.join(' · ');
+          }
+          editorItemRow(container, label,
             function () { editRegistryItem(catKey, id); },
             function () { deleteRegistryItem(catKey, id); }
           );
@@ -159,6 +173,7 @@ function editRegistryItem(catKey, id) {
       fields[f.key] = editorField(body, f.label, item[f.key] != null ? item[f.key] : '', {
         type:        f.type || 'text',
         placeholder: f.placeholder || '',
+        options:     f.options,
         coordPick:   f.coordPick || false,
         disabled:    isIdField,
         hint:        isIdField ? (f.label + ' cannot be changed here') : undefined,
@@ -203,6 +218,7 @@ function addRegistryItem(catKey) {
       fields[f.key] = editorField(body, f.label, '', {
         type:        f.type || 'text',
         placeholder: f.placeholder || '',
+        options:     f.options,
         coordPick:   f.coordPick || false,
       });
     });
