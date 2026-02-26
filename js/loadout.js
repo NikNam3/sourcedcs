@@ -225,7 +225,7 @@ function loadoutWidget(raw) {
 
   // Gun cell
   const gunCell = el('div', 'lo-aa-cell' + (parsed.gun ? '' : ' lo-zero'));
-  const gunCount = el('div', 'lo-aa-count', parsed.gun ? '✓' : '—');
+  const gunCount = el('div', 'lo-aa-count', parsed.gun ? '+' : '—');
   gunCount.style.color = parsed.gun ? 'var(--amber)' : 'var(--text-3)';
   gunCell.appendChild(gunCount);
   gunCell.appendChild(el('div', 'lo-aa-name', 'GUN'));
