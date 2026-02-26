@@ -191,7 +191,7 @@ io.on('connection', (socket) => {
 });
 
 // ── Start ────────────────────────────────────────────────────
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 4000;
 
 if (require.main === module) {
   server.listen(PORT, () => {
