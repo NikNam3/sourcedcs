@@ -247,7 +247,7 @@
 }
 .tl-bar:hover { filter: brightness(1.1); }
 .tl-bar.tos {
-  opacity: .5;
+  opacity: .75;
 }
 .tl-bar.tot {
   filter: brightness(1.15);
@@ -255,7 +255,7 @@
 }
 .tl-bar.vul {
   height: 28px;
-  opacity: .18;
+  opacity: .4;
   background: repeating-linear-gradient(
     -45deg,
     var(--red), var(--red) 3px,
