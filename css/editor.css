@@ -298,3 +298,97 @@
   padding: 4px 8px;
   cursor: pointer;
 }
+
+/* ── Registry category picker grid ──────────────────────────── */
+.ef-cat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+.ef-btn-category {
+  display: block;
+  width: 100%;
+  padding: 12px 8px;
+  text-align: center;
+  white-space: pre-line;
+  line-height: 1.6;
+  font-size: 9px;
+  letter-spacing: 1.5px;
+}
+
+/* ── SPINS structured entry rows ─────────────────────────────── */
+.ef-entry-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+  flex-wrap: nowrap;
+}
+.ef-entry-tag {
+  flex-shrink: 0;
+  font-size: 8px;
+  letter-spacing: 1px;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 2px;
+  min-width: 32px;
+  text-align: center;
+}
+.ef-entry-tag-hdg { background: var(--text-3); color: var(--bg); }
+.ef-entry-tag-lv  { background: var(--amber);  color: #000; }
+.ef-entry-tag-bul { background: var(--bg3); color: var(--text-2); border: 1px solid var(--border); }
+.ef-entry-tag-val { background: var(--bg3); color: var(--text-2); border: 1px solid var(--border); }
+
+.ef-entry-inp {
+  flex: 1;
+  min-width: 0;
+}
+.ef-entry-inp-half {
+  flex: 1;
+  min-width: 0;
+}
+.ef-entry-sep {
+  flex-shrink: 0;
+  color: var(--text-3);
+  font-size: 11px;
+  padding: 0 2px;
+}
+
+/* ── Add-entry buttons strip ─────────────────────────────────── */
+.ef-add-entry-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* ── IFF table rows ──────────────────────────────────────────── */
+.ef-iff-hdr-row {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 4px;
+  padding: 0 4px;
+}
+.ef-iff-hdr-cell {
+  flex: 1;
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: var(--text-3);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.ef-iff-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.ef-iff-row .ef-input-code {
+  max-width: 70px;
+}
+
+/* ── Narrow code input ───────────────────────────────────────── */
+.ef-input-code {
+  max-width: 70px;
+}

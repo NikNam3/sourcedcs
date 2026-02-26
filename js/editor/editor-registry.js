@@ -1,21 +1,10 @@
-// ═══════════════════════════════════════════════════════════
 // editor-registry.js — Registry CRUD editor
-//
-// Handles editing of all registry categories:
-//   airfields, carriers, tankers, targets, reference_points,
-//   control_agencies
-//
-// Each category follows the same pattern:
-//   1. List items with edit/delete buttons
-//   2. Open sub-dialog for add/edit with category-specific fields
-//   3. Save → update STATE.pkg.registry → re-render
-// ═══════════════════════════════════════════════════════════
+// Category-picker: compact 2-column grid navigates to per-category lists.
+// Categories: airfields, carriers, tankers, targets,
+//   reference_points, control_agencies, frequencies
 
 'use strict';
 
-// ── Registry category definitions ────────────────────────────
-// Maps category key → { label, fields[] }
-// fields: { key, label, type?, placeholder?, hint? }
 var REGISTRY_CATEGORIES = {
   airfields: {
     label: 'AIRFIELDS',
@@ -40,17 +29,17 @@ var REGISTRY_CATEGORIES = {
     label: 'TANKERS',
     idLabel: 'ID',
     fields: [
-      { key: 'callsign',           label: 'Callsign',           placeholder: 'e.g. ARCO4' },
-      { key: 'ar_track',           label: 'AR Track',           placeholder: 'e.g. AR394' },
-      { key: 'altitude',           label: 'Altitude',           placeholder: 'e.g. FL240' },
-      { key: 'tacan',              label: 'TACAN',              placeholder: 'e.g. 39X' },
-      { key: 'tacan_role',         label: 'TACAN Role',         placeholder: 'e.g. REFUELING' },
-      { key: 'freq_mhz',           label: 'Freq (MHz)',         type: 'number', placeholder: '251.0' },
-      { key: 'speed_kts',          label: 'Speed (kts)',        type: 'number', placeholder: '300' },
-      { key: 'orbit_anchor_coords', label: 'Orbit Anchor',     placeholder: "N24°30'00\" E055°30'00\"", coordPick: true },
-      { key: 'orbit_heading_deg',  label: 'Orbit Heading (°)', type: 'number', placeholder: '270' },
-      { key: 'orbit_leg_nm',       label: 'Orbit Leg (NM)',    type: 'number', placeholder: '20' },
-      { key: 'orbit_width_nm',     label: 'Orbit Width (NM)',  type: 'number', placeholder: '5' },
+      { key: 'callsign',            label: 'Callsign',           placeholder: 'e.g. ARCO4' },
+      { key: 'ar_track',            label: 'AR Track',           placeholder: 'e.g. AR394' },
+      { key: 'altitude',            label: 'Altitude',           placeholder: 'e.g. FL240' },
+      { key: 'tacan',               label: 'TACAN',              placeholder: 'e.g. 39X' },
+      { key: 'tacan_role',          label: 'TACAN Role',         placeholder: 'e.g. REFUELING' },
+      { key: 'freq_mhz',            label: 'Freq (MHz)',         type: 'number', placeholder: '251.0' },
+      { key: 'speed_kts',           label: 'Speed (kts)',        type: 'number', placeholder: '300' },
+      { key: 'orbit_anchor_coords', label: 'Orbit Anchor',      placeholder: "N24°30'00\" E055°30'00\"", coordPick: true },
+      { key: 'orbit_heading_deg',   label: 'Orbit Heading (°)', type: 'number', placeholder: '270' },
+      { key: 'orbit_leg_nm',        label: 'Orbit Leg (NM)',    type: 'number', placeholder: '20' },
+      { key: 'orbit_width_nm',      label: 'Orbit Width (NM)',  type: 'number', placeholder: '5' },
     ],
   },
   targets: {
@@ -98,50 +87,74 @@ var REGISTRY_CATEGORIES = {
   },
 };
 
-// ── Open the registry list dialog ────────────────────────────
 function openRegistryEditor() {
+  var reg = (STATE.pkg && STATE.pkg.registry) || {};
+
   openEditorDialog('REGISTRY', function (body) {
-    var reg = (STATE.pkg && STATE.pkg.registry) || {};
+    editorSectionTitle(body, 'SELECT CATEGORY');
+    var grid = el('div', 'ef-cat-grid');
 
     Object.keys(REGISTRY_CATEGORIES).forEach(function (catKey) {
-      var cat   = REGISTRY_CATEGORIES[catKey];
-      var raw   = reg[catKey];
+      var cat = REGISTRY_CATEGORIES[catKey];
+      var raw = reg[catKey];
+      var count = cat.isList
+        ? (Array.isArray(raw) ? raw.length : 0)
+        : Object.keys(raw || {}).length;
 
-      if (cat.isList) {
-        var items  = Array.isArray(raw) ? raw : [];
-        var idField = cat.idField || 'name';
-        var ids    = items.map(function (i) { return String(i[idField]); });
-        editorListBlock(body, cat.label, ids, function (container, id) {
-          var item = items[ids.indexOf(id)];
-          var label = id;
-          if (catKey === 'frequencies' && item) {
-            var parts = [item.callsign, item.role].filter(Boolean);
-            if (parts.length) label += ' — ' + parts.join(' · ');
-          }
-          editorItemRow(container, label,
-            function () { editRegistryItem(catKey, id); },
-            function () { deleteRegistryItem(catKey, id); }
-          );
-        }, function () { addRegistryItem(catKey); });
-      } else {
-        var items = raw || {};
-        var ids   = Object.keys(items);
-        editorListBlock(body, cat.label, ids, function (container, id) {
-          var item  = items[id];
-          var label = id + (item.name ? ' — ' + item.name : '');
-          editorItemRow(container, label,
-            function () { editRegistryItem(catKey, id); },
-            function () { deleteRegistryItem(catKey, id); }
-          );
-        }, function () { addRegistryItem(catKey); });
-      }
+      var btn = el('button', 'ef-btn ef-btn-category', cat.label + '\n(' + count + ')');
+      btn.addEventListener('click', function () { openRegistryCategoryEditor(catKey); });
+      grid.appendChild(btn);
     });
+
+    body.appendChild(grid);
+  }, function () {});
+}
+
+function openRegistryCategoryEditor(catKey) {
+  var cat = REGISTRY_CATEGORIES[catKey];
+  var reg = editorEnsureRegistry();
+
+  openEditorDialog(cat.label, function (body) {
+    var backBtn = el('button', 'ef-btn ef-btn-back', 'BACK TO REGISTRY');
+    backBtn.addEventListener('click', openRegistryEditor);
+    body.appendChild(backBtn);
+
+    if (cat.isList) {
+      var items   = Array.isArray(reg[catKey]) ? reg[catKey] : [];
+      var idField = cat.idField || 'name';
+      items.forEach(function (item) {
+        var id = String(item[idField]);
+        var label = id;
+        // For frequencies, show callsign and role in the list
+        if (catKey === 'frequencies') {
+          var parts = [item.callsign, item.role].filter(Boolean);
+          if (parts.length) label += ' \u2014 ' + parts.join(' \u00b7 ');
+        }
+        editorItemRow(body, label,
+          function () { editRegistryItem(catKey, id); },
+          function () { deleteRegistryItem(catKey, id); }
+        );
+      });
+    } else {
+      var items = reg[catKey] || {};
+      Object.keys(items).forEach(function (id) {
+        var item  = items[id];
+        var label = id + (item.name ? ' — ' + item.name : '');
+        editorItemRow(body, label,
+          function () { editRegistryItem(catKey, id); },
+          function () { deleteRegistryItem(catKey, id); }
+        );
+      });
+    }
+
+    var addBtn = el('button', 'ef-btn ef-btn-add', '+ ADD');
+    addBtn.addEventListener('click', function () { addRegistryItem(catKey); });
+    body.appendChild(addBtn);
   }, function () {
-    // no-op on save for list view — individual items save themselves
+    // no-op
   });
 }
 
-// ── Edit a single registry item ──────────────────────────────
 function editRegistryItem(catKey, id) {
   var cat = REGISTRY_CATEGORIES[catKey];
   var reg = editorEnsureRegistry();
@@ -157,14 +170,13 @@ function editRegistryItem(catKey, id) {
   }
 
   openEditorDialog('EDIT ' + cat.label.slice(0, -1) + ' — ' + id, function (body) {
-    var backBtn = el('button', 'ef-btn ef-btn-back', 'BACK TO REGISTRY');
-    backBtn.addEventListener('click', function () { openRegistryEditor(); });
+    var backBtn = el('button', 'ef-btn ef-btn-back', 'BACK TO ' + cat.label);
+    backBtn.addEventListener('click', function () { openRegistryCategoryEditor(catKey); });
     body.appendChild(backBtn);
 
     var fields = {};
 
     if (!cat.isList) {
-      // ID field (read-only for existing items)
       editorField(body, cat.idLabel, id, { disabled: true, hint: 'ID cannot be changed' });
     }
 
@@ -172,20 +184,18 @@ function editRegistryItem(catKey, id) {
       var isIdField = cat.isList && f.key === idField;
       fields[f.key] = editorField(body, f.label, item[f.key] != null ? item[f.key] : '', {
         type:        f.type || 'text',
-        placeholder: f.placeholder || '',
         options:     f.options,
+        placeholder: f.placeholder || '',
         coordPick:   f.coordPick || false,
         disabled:    isIdField,
         hint:        isIdField ? (f.label + ' cannot be changed here') : undefined,
       });
     });
 
-    // Target aim points sub-editor
     if (catKey === 'targets') {
       _buildAimPointsEditor(body, item);
     }
 
-    // Store fields reference for save
     body._editorFields = fields;
     body._editId = id;
     body._editItem = item;
@@ -195,13 +205,12 @@ function editRegistryItem(catKey, id) {
   });
 }
 
-// ── Add a new registry item ──────────────────────────────────
 function addRegistryItem(catKey) {
   var cat = REGISTRY_CATEGORIES[catKey];
 
   openEditorDialog('ADD ' + cat.label.slice(0, -1), function (body) {
-    var backBtn = el('button', 'ef-btn ef-btn-back', 'BACK TO REGISTRY');
-    backBtn.addEventListener('click', function () { openRegistryEditor(); });
+    var backBtn = el('button', 'ef-btn ef-btn-back', 'BACK TO ' + cat.label);
+    backBtn.addEventListener('click', function () { openRegistryCategoryEditor(catKey); });
     body.appendChild(backBtn);
 
     var fields = {};
@@ -217,8 +226,8 @@ function addRegistryItem(catKey) {
     cat.fields.forEach(function (f) {
       fields[f.key] = editorField(body, f.label, '', {
         type:        f.type || 'text',
-        placeholder: f.placeholder || '',
         options:     f.options,
+        placeholder: f.placeholder || '',
         coordPick:   f.coordPick || false,
       });
     });
@@ -231,7 +240,6 @@ function addRegistryItem(catKey) {
   });
 }
 
-// ── Delete a registry item ───────────────────────────────────
 function deleteRegistryItem(catKey, id) {
   if (!confirm('Delete ' + id + '?')) return;
 
@@ -247,19 +255,15 @@ function deleteRegistryItem(catKey, id) {
     if (reg[catKey]) delete reg[catKey][id];
   }
 
-  // Cascade: remove all references to the deleted item in missions & global_control
   _cascadeRegistryDelete(catKey, id);
-
   editorReRender();
-  openRegistryEditor(); // refresh list
+  openRegistryCategoryEditor(catKey);
 }
 
-// ── Cascade deletion: clear references to a deleted registry item ─
 function _cascadeRegistryDelete(catKey, id) {
   var ato = STATE.pkg && STATE.pkg.ato;
   if (!ato) return;
   var missions = ato.missions || [];
-
   if (catKey === 'airfields') {
     missions.forEach(function (m) {
       if (m.home_base_icao === id)       m.home_base_icao = undefined;
@@ -277,7 +281,6 @@ function _cascadeRegistryDelete(catKey, id) {
       });
     });
   } else if (catKey === 'control_agencies') {
-    // Clear global_control reference
     var gc = ato.global_control;
     if (gc && gc.agency_id === id) {
       gc.agency_id = undefined;
@@ -285,20 +288,17 @@ function _cascadeRegistryDelete(catKey, id) {
       gc.aircraft_type = undefined;
       gc.primary_freq_mhz = undefined;
     }
-    // Clear per-mission control references
     missions.forEach(function (m) {
       if (m.control && m.control.agency_id === id) delete m.control;
     });
   } else if (catKey === 'reference_points') {
-    // Clear bullseye if it references the deleted point
-    var globalControl = ato.global_control;
-    if (globalControl && globalControl.bullseye && typeof globalControl.bullseye === 'object' && globalControl.bullseye.name === id) {
-      globalControl.bullseye = undefined;
+    var gc2 = ato.global_control;
+    if (gc2 && gc2.bullseye && typeof gc2.bullseye === 'object' && gc2.bullseye.name === id) {
+      gc2.bullseye = undefined;
     }
   }
 }
 
-// ── Save registry item (shared by add/edit) ──────────────────
 function _saveRegistryItem(catKey) {
   var body   = document.getElementById('editorBody');
   var fields = body._editorFields;
@@ -306,17 +306,12 @@ function _saveRegistryItem(catKey) {
   var cat    = REGISTRY_CATEGORIES[catKey];
   var idField = cat.idField || 'name';
 
-  // Build item from form fields
   var item = body._editItem ? Object.assign({}, body._editItem) : {};
-  var preserveNull = catKey === 'frequencies';  // keep explicit nulls for freq metadata
+  var preserveNull = catKey === 'frequencies';
   Object.keys(fields).forEach(function (k) {
     var val = fields[k].value;
     if (val === '' || val == null) {
-      if (preserveNull) {
-        item[k] = null;
-      } else {
-        delete item[k];
-      }
+      if (preserveNull) { item[k] = null; } else { delete item[k]; }
     } else if (fields[k].type === 'number') {
       item[k] = parseFloat(val);
     } else {
@@ -324,7 +319,6 @@ function _saveRegistryItem(catKey) {
     }
   });
 
-  // Save aim points for targets
   if (catKey === 'targets' && body._aimPoints) {
     item.aim_points = body._aimPoints;
   }
@@ -359,21 +353,16 @@ function _saveRegistryItem(catKey) {
   editorReRender();
 }
 
-// ── Aim points sub-editor for targets ────────────────────────
 function _buildAimPointsEditor(parent, targetItem) {
   var aimPoints = (targetItem.aim_points || []).map(function (ap) {
     return { id: ap.id || '', name: ap.name || '', coords: ap.coords || '' };
   });
-
   var body = document.getElementById('editorBody');
   body._aimPoints = aimPoints;
-
   editorSectionTitle(parent, 'AIM POINTS');
-
   var listEl = el('div', 'ef-list-items');
   _renderAimPointsList(listEl, aimPoints);
   parent.appendChild(listEl);
-
   var addBtn = el('button', 'ef-btn ef-btn-add', '+ ADD AIM POINT');
   addBtn.addEventListener('click', function () {
     aimPoints.push({ id: '', name: '', coords: '' });
@@ -387,32 +376,22 @@ function _renderAimPointsList(container, aimPoints) {
   container.innerHTML = '';
   aimPoints.forEach(function (ap, i) {
     var row = el('div', 'ef-ap-row');
-
     var idInput = el('input', 'ef-input ef-input-sm');
-    idInput.placeholder = 'ID';
-    idInput.value = ap.id || '';
+    idInput.placeholder = 'ID'; idInput.value = ap.id || '';
     idInput.addEventListener('input', function () { ap.id = this.value; });
-
     var nameInput = el('input', 'ef-input ef-input-sm');
-    nameInput.placeholder = 'Name';
-    nameInput.value = ap.name || '';
+    nameInput.placeholder = 'Name'; nameInput.value = ap.name || '';
     nameInput.addEventListener('input', function () { ap.name = this.value; });
-
     var coordInput = el('input', 'ef-input ef-input-sm');
-    coordInput.placeholder = 'Coords';
-    coordInput.value = ap.coords || '';
+    coordInput.placeholder = 'Coords'; coordInput.value = ap.coords || '';
     coordInput.addEventListener('input', function () { ap.coords = this.value; });
-
     var delBtn = el('button', 'ef-btn ef-btn-sm ef-btn-danger', '✕');
     delBtn.addEventListener('click', function () {
       aimPoints.splice(i, 1);
       _renderAimPointsList(container, aimPoints);
     });
-
-    row.appendChild(idInput);
-    row.appendChild(nameInput);
-    row.appendChild(coordInput);
-    row.appendChild(delBtn);
+    row.appendChild(idInput); row.appendChild(nameInput);
+    row.appendChild(coordInput); row.appendChild(delBtn);
     container.appendChild(row);
   });
 }
