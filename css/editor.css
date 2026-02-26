@@ -164,6 +164,22 @@
   margin-bottom: 8px;
 }
 
+/* ── Category group headers in sections list ─────────────────── */
+.ef-group-header {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: var(--text-2);
+  padding: 10px 8px 4px;
+  margin-top: 8px;
+  border-bottom: 1px solid var(--border-strong);
+  margin-bottom: 2px;
+}
+.ef-group-header:first-child {
+  margin-top: 0;
+  padding-top: 4px;
+}
+
 /* ── Buttons ─────────────────────────────────────────────────── */
 .ef-btn {
   border: 1px solid var(--border-strong);

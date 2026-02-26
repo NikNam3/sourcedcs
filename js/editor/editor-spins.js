@@ -4,11 +4,16 @@
 // Replaces raw YAML entry editing with a structured list of
 // typed entry rows (HDG / KV / BULLET / TEXT).
 //
+// Category system:
+//   Each section has a `category` field: 'mandatory' or
+//   'mission_specific'. Sections are grouped by category in
+//   the editor list. Defaults to 'mandatory'.
+//
 // Special section handling:
 //   C5 / EXECUTION — auto-adds a heading + OBJECTIVE row for
 //     each mission in the ATO so nothing is forgotten.
-//   C3 / IFF        — auto-builds the IFF table with one row
-//     per mission when no table exists yet.
+//   C3 / IFF        — auto-ensures the IFF table has one row
+//     per mission; builds the table from scratch if absent.
 // ═══════════════════════════════════════════════════════════
 
 'use strict';
@@ -35,7 +40,7 @@ function openSpinsEditor() {
 
     var addBtn = el('button', 'ef-btn ef-btn-add', '+ ADD SECTION');
     addBtn.addEventListener('click', function () {
-      body._spinsSections.push({ title: 'NEW SECTION', entries: [] });
+      body._spinsSections.push({ title: 'NEW SECTION', entries: [], category: 'mandatory' });
       _renderSpinsSectionsList(listEl, body._spinsSections);
     });
     body.appendChild(addBtn);
@@ -53,15 +58,31 @@ function openSpinsEditor() {
 
 function _renderSpinsSectionsList(container, sections) {
   container.innerHTML = '';
-  sections.forEach(function (sec, i) {
-    var label = sec.title || 'Section ' + (i + 1);
-    editorItemRow(container, label,
-      function () { _editSpinsSection(sections, i); },
-      function () {
-        sections.splice(i, 1);
-        _renderSpinsSectionsList(container, sections);
-      }
-    );
+  var groups = [
+    { key: 'mandatory',        label: 'MANDATORY' },
+    { key: 'mission_specific', label: 'MISSION SPECIFIC' },
+  ];
+
+  groups.forEach(function (group) {
+    var members = sections
+      .map(function (s, i) { return { sec: s, idx: i }; })
+      .filter(function (item) { return (item.sec.category || 'mandatory') === group.key; });
+
+    if (!members.length) return;
+
+    container.appendChild(el('div', 'ef-group-header', group.label));
+    members.forEach(function (item) {
+      var label = item.sec.title || 'Section ' + (item.idx + 1);
+      (function (idx) {
+        editorItemRow(container, label,
+          function () { _editSpinsSection(sections, idx); },
+          function () {
+            sections.splice(idx, 1);
+            _renderSpinsSectionsList(container, sections);
+          }
+        );
+      })(item.idx);
+    });
   });
 }
 
@@ -77,8 +98,16 @@ function _editSpinsSection(sections, index) {
     });
     body.appendChild(backBtn);
 
-    var fTitle = editorField(body, 'Title', sec.title, { placeholder: 'e.g. C5 — EXECUTION' });
-    var fNote  = editorField(body, 'Note',  sec.note,  { placeholder: 'Optional section note' });
+    var fTitle = editorField(body, 'Title',    sec.title,                  { placeholder: 'e.g. C5 — EXECUTION' });
+    var fNote  = editorField(body, 'Note',     sec.note,                   { placeholder: 'Optional section note' });
+    var fCat   = editorField(body, 'Category', sec.category || 'mandatory', {
+      type: 'select',
+      options: [
+        { value: 'mandatory',        label: 'MANDATORY' },
+        { value: 'mission_specific', label: 'MISSION SPECIFIC' },
+      ],
+    });
+    fCat.value = sec.category || 'mandatory';
 
     var isExecution = /c5\b|execution/i.test(sec.title || '');
     var isIff       = /c3\b|iff\b/i.test(sec.title || '');
@@ -118,12 +147,17 @@ function _editSpinsSection(sections, index) {
     // ── Table (optional) ──────────────────────────────────────
     editorSectionTitle(body, 'TABLE (OPTIONAL)');
     var tableData = sec.table ? JSON.parse(JSON.stringify(sec.table)) : null;
-    if (isIff && !tableData) {
-      tableData = _buildMissionIffTable();
+    if (isIff) {
+      if (!tableData) {
+        tableData = _buildMissionIffTable();
+      } else {
+        _ensureMissionIffRows(tableData);
+      }
+      body.appendChild(el('div', 'ef-hint', '\u21b3 Missing mission rows auto-added from ATO. Fill in CODE for each.'));
     }
     _buildSpinsTableEditor(body, tableData);
 
-    body._spinsSecFields = { title: fTitle, note: fNote };
+    body._spinsSecFields = { title: fTitle, note: fNote, cat: fCat };
     body._spinsSections  = sections;
     body._spinsSecIndex  = index;
   }, function () {
@@ -137,8 +171,9 @@ function _collectSpinsSection(sections, index) {
   var body = document.getElementById('editorBody');
   if (!body || !body._spinsSecFields) return;
   var sec = sections[index];
-  sec.title   = body._spinsSecFields.title.value || '';
-  sec.note    = body._spinsSecFields.note.value || undefined;
+  sec.title    = body._spinsSecFields.title.value || '';
+  sec.note     = body._spinsSecFields.note.value || undefined;
+  sec.category = body._spinsSecFields.cat ? body._spinsSecFields.cat.value : (sec.category || 'mandatory');
   sec.entries = body._spinsEntries || [];
   if (body._spinsTableEnabled && body._spinsTableHeaders) {
     sec.table = {
@@ -229,6 +264,25 @@ function _ensureMissionHeadings(entries) {
     if (!exists) {
       entries.push({ heading: headingText });
       entries.push({ label: 'OBJECTIVE', value: '' });
+    }
+  });
+}
+
+// ── Auto-ensure IFF table has a row for every mission ─────────
+// Called when an existing IFF table is opened so newly-added
+// missions get their rows without wiping existing CODE values.
+function _ensureMissionIffRows(table) {
+  var missions = (STATE.pkg && STATE.pkg.ato && STATE.pkg.ato.missions) || [];
+  if (!missions.length) return;
+
+  var existingMsns = table.rows.map(function (r) { return String(r[0] || ''); });
+  missions.forEach(function (m) {
+    var msnNum = (m.mission_number || '').replace(/^MSN/i, '');
+    if (!msnNum) return;
+    var exists = existingMsns.some(function (e) { return e === msnNum; });
+    if (!exists) {
+      table.rows.push([msnNum, '3', '']);
+      existingMsns.push(msnNum);
     }
   });
 }
