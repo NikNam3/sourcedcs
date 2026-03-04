@@ -1,0 +1,561 @@
+/* ═══════════════════════════════════════════════════════════
+   MediaWiki:Citizen.css
+   Applies SOURCEDCS / ATO BRIEF visual identity to the
+   Citizen skin.  Mirrors the design tokens from:
+     atobrief/css/base.css  and  website/css/style.css
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Google Fonts ─────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+/* ── Citizen skin design-token overrides (light / default) ── */
+:root,
+.skin-citizen {
+  /* Backgrounds – warm off-white palette */
+  --color-surface-0:       #f4f3f0;   /* page canvas             */
+  --color-surface-1:       #edecea;   /* sidebar / elevated      */
+  --color-surface-2:       #e5e4e0;   /* toc / secondary         */
+  --color-surface-3:       #dddad5;   /* card surfaces           */
+  --color-surface-4:       #c8c5bf;   /* strongest surface       */
+
+  /* Text */
+  --color-base:            #1a1917;   /* primary text            */
+  --color-base--subtle:    #4a4845;   /* secondary text          */
+  --color-base--disabled:  #7a7875;   /* disabled / muted        */
+
+  /* Links / progressive actions */
+  --color-progressive:            #1a3a6b;
+  --color-progressive--hover:     #0f2548;
+  --color-progressive--active:    #0a1a30;
+  --color-progressive--focus:     #1a3a6b;
+
+  /* Borders */
+  --border-color-base:        #c8c5bf;
+  --border-color-interactive: #9a9690;
+
+  /* Destructive */
+  --color-destructive:       #9b1c1c;
+  --color-destructive--hover: #7a1515;
+
+  /* Success / warning */
+  --color-success: #1a5c2e;
+  --color-warning: #7c5000;
+
+  /* Border-radius – sharp corners to match ATO brief */
+  --border-radius--small:  0;
+  --border-radius--medium: 0;
+  --border-radius--large:  0;
+  --border-radius--pill:   0;
+
+  /* Typography */
+  --font-family-base:    'IBM Plex Mono', monospace;
+  --font-family-heading: 'IBM Plex Mono', monospace;
+
+  /* Shadows */
+  --box-shadow-card: 0 1px 3px rgba(0,0,0,.10);
+  --box-shadow-menu: 0 4px 12px rgba(0,0,0,.12);
+}
+
+/* ── Base typography ─────────────────────────────────────── */
+body,
+.skin-citizen {
+  font-family: 'IBM Plex Mono', monospace;
+  background-color: #f4f3f0;
+  color: #1a1917;
+}
+
+/* ── Page heading ────────────────────────────────────────── */
+#firstHeading,
+.page-heading h1 {
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 600;
+  font-size: 1.3rem;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: #1a1917;
+  border-bottom: 1px solid #c8c5bf;
+  padding-bottom: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+/* ── Site wordmark / logo text ───────────────────────────── */
+.citizen-logo__wordmark,
+#p-logo a,
+.mw-logo-wordmark {
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 600;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+}
+
+/* ── Header / top bar ────────────────────────────────────── */
+#citizen-page-header,
+.citizen-header,
+header.citizen-header {
+  background-color: #edecea;
+  border-bottom: 1px solid #9a9690;
+}
+
+/* ── Sticky header ───────────────────────────────────────── */
+.citizen-sticky-header {
+  background-color: #edecea;
+  border-bottom: 1px solid #9a9690;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────── */
+#citizen-sidebar,
+.citizen-sidebar {
+  background-color: #edecea;
+  border-right: 1px solid #c8c5bf;
+}
+
+/* Sidebar navigation labels */
+.citizen-nav__heading,
+.citizen-sidebar .citizen-nav__heading {
+  font-size: 0.65rem;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: #7a7875;
+  font-weight: 600;
+}
+
+/* Sidebar links */
+.citizen-nav__item a,
+.citizen-sidebar a {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.5px;
+  color: #1a1917;
+}
+.citizen-nav__item a:hover,
+.citizen-sidebar a:hover {
+  color: #1a3a6b;
+  background-color: #e5e4e0;
+}
+
+/* ── Table of contents ───────────────────────────────────── */
+.citizen-toc,
+#toc {
+  background-color: #edecea;
+  border: 1px solid #c8c5bf;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.75rem;
+}
+
+.citizen-toc__title,
+#toc .toctitle {
+  font-size: 0.7rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #7a7875;
+  font-weight: 600;
+}
+
+.citizen-toc__item a,
+#toc a {
+  color: #4a4845;
+}
+.citizen-toc__item a:hover,
+#toc a:hover {
+  color: #1a3a6b;
+}
+
+/* ── Content area ────────────────────────────────────────── */
+#mw-content-text,
+.mw-parser-output {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.82rem;
+  line-height: 1.8;
+  color: #1a1917;
+}
+
+/* ── Content headings ────────────────────────────────────── */
+.mw-parser-output h1,
+.mw-parser-output h2,
+.mw-parser-output h3,
+.mw-parser-output h4,
+.mw-parser-output h5,
+.mw-parser-output h6 {
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #1a1917;
+}
+
+.mw-parser-output h2 {
+  font-size: 0.95rem;
+  letter-spacing: 3px;
+  border-bottom: 1px solid #c8c5bf;
+  padding-bottom: 0.35rem;
+  margin-top: 2rem;
+}
+
+.mw-parser-output h3 {
+  font-size: 0.85rem;
+  letter-spacing: 2.5px;
+  color: #4a4845;
+}
+
+.mw-parser-output h4,
+.mw-parser-output h5,
+.mw-parser-output h6 {
+  font-size: 0.78rem;
+  letter-spacing: 2px;
+  color: #7a7875;
+}
+
+/* ── Links ───────────────────────────────────────────────── */
+.mw-parser-output a,
+#mw-content-text a {
+  color: #1a3a6b;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s, color 0.15s;
+}
+.mw-parser-output a:hover,
+#mw-content-text a:hover {
+  color: #0f2548;
+  border-bottom-color: #1a3a6b;
+}
+.mw-parser-output a.new,
+#mw-content-text a.new {
+  color: #9b1c1c;
+}
+.mw-parser-output a.new:hover {
+  color: #7a1515;
+  border-bottom-color: #9b1c1c;
+}
+
+/* ── Tables ──────────────────────────────────────────────── */
+.mw-parser-output table,
+.mw-parser-output .wikitable {
+  border: 1px solid #9a9690;
+  border-collapse: collapse;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.75rem;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+.mw-parser-output .wikitable th,
+.mw-parser-output table th {
+  background-color: #edecea;
+  border: 1px solid #9a9690;
+  padding: 6px 12px;
+  font-size: 0.7rem;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: #1a1917;
+  font-weight: 600;
+}
+.mw-parser-output .wikitable td,
+.mw-parser-output table td {
+  border: 1px solid #c8c5bf;
+  padding: 5px 12px;
+  color: #1a1917;
+  vertical-align: top;
+}
+.mw-parser-output .wikitable tr:nth-child(even) td {
+  background-color: #f4f3f0;
+}
+
+/* ── Code / pre ──────────────────────────────────────────── */
+.mw-parser-output code,
+.mw-parser-output kbd,
+.mw-parser-output pre,
+.mw-parser-output .mw-code {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.78rem;
+  background-color: #edecea;
+  border: 1px solid #c8c5bf;
+  color: #1a1917;
+}
+.mw-parser-output pre,
+.mw-parser-output .mw-code {
+  padding: 12px 16px;
+  overflow-x: auto;
+  line-height: 1.6;
+}
+.mw-parser-output code {
+  padding: 1px 5px;
+}
+
+/* ── Blockquote ──────────────────────────────────────────── */
+.mw-parser-output blockquote {
+  border-left: 2px solid #9a9690;
+  padding-left: 16px;
+  color: #4a4845;
+  margin: 1rem 0;
+  font-style: normal;
+}
+
+/* ── Horizontal rule ─────────────────────────────────────── */
+.mw-parser-output hr {
+  border: none;
+  border-top: 1px solid #c8c5bf;
+  margin: 1.5rem 0;
+}
+
+/* ── Search bar ──────────────────────────────────────────── */
+.citizen-search__input,
+#searchInput,
+input[type="search"] {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.78rem;
+  background: #f4f3f0;
+  border: 1px solid #9a9690;
+  color: #1a1917;
+  outline: none;
+}
+.citizen-search__input:focus,
+#searchInput:focus,
+input[type="search"]:focus {
+  border-color: #1a1917;
+  box-shadow: none;
+}
+
+/* ── Buttons / actions ───────────────────────────────────── */
+.citizen-btn,
+.mw-ui-button,
+input[type="button"],
+input[type="submit"],
+button {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  border: 1px solid #9a9690;
+  background: #e5e4e0;
+  color: #1a1917;
+  transition: background 0.15s, color 0.15s;
+}
+.citizen-btn:hover,
+.mw-ui-button:hover,
+input[type="button"]:hover,
+input[type="submit"]:hover,
+button:hover {
+  background: #1a1917;
+  color: #f4f3f0;
+  border-color: #1a1917;
+}
+.mw-ui-button.mw-ui-progressive {
+  background: #1a3a6b;
+  border-color: #1a3a6b;
+  color: #ffffff;
+}
+.mw-ui-button.mw-ui-progressive:hover {
+  background: #0f2548;
+  border-color: #0f2548;
+}
+
+/* ── Page actions (edit, history, etc.) ──────────────────── */
+.citizen-page-actions,
+.page-actions {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  letter-spacing: 1px;
+}
+.citizen-page-actions__item a {
+  font-size: 0.72rem;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: #4a4845;
+  border: 1px solid transparent;
+  padding: 4px 10px;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.citizen-page-actions__item a:hover {
+  color: #1a1917;
+  border-color: #9a9690;
+  background: #e5e4e0;
+  text-decoration: none;
+}
+
+/* ── User menu ───────────────────────────────────────────── */
+.citizen-user-menu,
+#p-personal {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+}
+.citizen-user-menu a {
+  letter-spacing: 0.5px;
+  color: #4a4845;
+}
+.citizen-user-menu a:hover {
+  color: #1a1917;
+}
+
+/* ── Dropdown / menu panels ──────────────────────────────── */
+.citizen-dropdown__menu,
+.citizen-menu {
+  background: #edecea;
+  border: 1px solid #9a9690;
+  box-shadow: 0 4px 12px rgba(0,0,0,.12);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.75rem;
+}
+.citizen-dropdown__menu a,
+.citizen-menu a {
+  color: #1a1917;
+  padding: 6px 14px;
+  letter-spacing: 0.5px;
+}
+.citizen-dropdown__menu a:hover,
+.citizen-menu a:hover {
+  background: #e5e4e0;
+  color: #1a1917;
+}
+
+/* ── Notification / alerts ───────────────────────────────── */
+.citizen-notification,
+.mw-notification {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.75rem;
+  border: 1px solid #9a9690;
+  background: #edecea;
+  color: #1a1917;
+}
+
+/* ── Info / warning / error boxes ───────────────────────── */
+.mw-message-box,
+.mw-message-box-notice,
+.mw-message-box-warning,
+.mw-message-box-error {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.75rem;
+  border-width: 1px;
+  border-style: solid;
+}
+.mw-message-box-notice {
+  background: #e6f1fb;
+  border-color: #1a3a6b;
+  color: #1a3a6b;
+}
+.mw-message-box-warning {
+  background: #fdf0e6;
+  border-color: #7c5000;
+  color: #7c5000;
+}
+.mw-message-box-error {
+  background: #fbe8ea;
+  border-color: #9b1c1c;
+  color: #9b1c1c;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: #edecea; }
+::-webkit-scrollbar-thumb { background: #9a9690; }
+::-webkit-scrollbar-thumb:hover { background: #1a1917; }
+
+/* ── Category links ──────────────────────────────────────── */
+#catlinks {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  background: #edecea;
+  border: 1px solid #c8c5bf;
+  padding: 6px 12px;
+}
+#catlinks a {
+  color: #1a3a6b;
+  letter-spacing: 0.5px;
+}
+
+/* ── Footer ──────────────────────────────────────────────── */
+#footer,
+.citizen-footer {
+  background: #edecea;
+  border-top: 1px solid #c8c5bf;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.7rem;
+  letter-spacing: 1px;
+  color: #7a7875;
+}
+#footer a,
+.citizen-footer a {
+  color: #7a7875;
+  border-bottom: 1px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+#footer a:hover,
+.citizen-footer a:hover {
+  color: #1a1917;
+  border-bottom-color: #1a1917;
+}
+
+/* ── Edit toolbar ────────────────────────────────────────── */
+.wikiEditor-toolbar,
+#toolbar {
+  background: #edecea;
+  border: 1px solid #c8c5bf;
+  border-bottom: none;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+/* ── Textarea (edit mode) ────────────────────────────────── */
+#wpTextbox1,
+textarea {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.78rem;
+  background: #f4f3f0;
+  border: 1px solid #9a9690;
+  color: #1a1917;
+}
+#wpTextbox1:focus,
+textarea:focus {
+  border-color: #1a1917;
+  outline: none;
+  box-shadow: none;
+}
+
+/* ── Input fields ────────────────────────────────────────── */
+input[type="text"],
+input[type="password"],
+input[type="email"],
+select {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.78rem;
+  background: #f4f3f0;
+  border: 1px solid #9a9690;
+  color: #1a1917;
+}
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="email"]:focus,
+select:focus {
+  border-color: #1a1917;
+  outline: none;
+  box-shadow: none;
+}
+
+/* ── Diff view ───────────────────────────────────────────── */
+.diff-context { background: #f4f3f0; }
+.diff-addedline { background: #e8f4ec; }
+.diff-deletedline { background: #fbe8ea; }
+.diff-marker { color: #9a9690; }
+table.diff td {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.75rem;
+}
+
+/* ── Recent changes / special pages ─────────────────────── */
+.mw-changeslist,
+.mw-changeslist-line {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.75rem;
+}
+
+/* ── Image captions ──────────────────────────────────────── */
+.thumbcaption,
+.mw-parser-output .thumbcaption {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.7rem;
+  color: #7a7875;
+  letter-spacing: 0.5px;
+}
+
+/* ── Selection highlight ─────────────────────────────────── */
+::selection {
+  background: #1a1917;
+  color: #f4f3f0;
+}
