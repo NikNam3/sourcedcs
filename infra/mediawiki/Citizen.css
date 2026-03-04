@@ -1,0 +1,875 @@
+/* ═══════════════════════════════════════════════════════════
+   MediaWiki:Citizen.css
+   Applies SOURCEDCS / ATO BRIEF visual identity to the
+   Citizen skin.  Mirrors the design tokens from:
+     atobrief/css/base.css  and  website/css/style.css
+
+   Key concerns addressed:
+   - Supports both light and dark modes via Citizen's built-in
+     theme toggle (data-mw-skin-color-scheme attribute).
+   - Light palette: warm off-white tones.
+   - Dark palette:  warm dark charcoal/brown tones (inverse).
+   - OOUI components use their own background variables;
+     those are overridden here too.
+   - Cards / surface boxes are forced to the near-background
+     palette with a 1 px border only.
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Google Fonts ─────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+/* ════════════════════════════════════════════════════════════
+   DESIGN TOKENS — LIGHT MODE
+   Applied to :root (default) and the explicit light selector.
+   ════════════════════════════════════════════════════════════ */
+
+:root,
+.skin-citizen,
+[data-mw-skin-color-scheme="light"] {
+  /* ── Surface backgrounds (warm off-white) ─────────────── */
+  --color-surface-0:       #f4f3f0;   /* page canvas             */
+  --color-surface-1:       #edecea;   /* header / sidebar        */
+  --color-surface-2:       #e5e4e0;   /* TOC / elevated card     */
+  --color-surface-3:       #edecea;   /* card surface (near bg)  */
+  --color-surface-4:       #e5e4e0;   /* strong card / selected  */
+
+  /* ── Text ─────────────────────────────────────────────── */
+  --color-base:                    #1a1917;
+  --color-base--emphasized:        #1a1917;
+  --color-base--subtle:            #4a4845;
+  --color-base--disabled:          #7a7875;
+
+  /* ── Links / progressive ──────────────────────────────── */
+  --color-progressive:             #1a3a6b;
+  --color-progressive--hover:      #0f2548;
+  --color-progressive--active:     #0a1a30;
+  --color-progressive--focus:      #1a3a6b;
+
+  /* ── Borders ──────────────────────────────────────────── */
+  --border-color-base:             #c8c5bf;
+  --border-color-interactive:      #9a9690;
+
+  /* ── Status colours ───────────────────────────────────── */
+  --color-destructive:             #9b1c1c;
+  --color-destructive--hover:      #7a1515;
+  --color-success:                 #1a5c2e;
+  --color-warning:                 #7c5000;
+  --color-notice:                  #1a3a6b;
+
+  /* ── Icons / accents ──────────────────────────────────── */
+  --color-icon:                    #4a4845;
+  --color-icon--subtle:            #7a7875;
+  --color-icon--emphasized:        #1a1917;
+  --color-icon-interactive:        #1a3a6b;
+
+  /* ── Border-radius: sharp corners ─────────────────────── */
+  --border-radius--small:          0;
+  --border-radius--medium:         0;
+  --border-radius--large:          0;
+  --border-radius--pill:           0;
+  --border-radius-sharp:           0;
+
+  /* ── Typography ───────────────────────────────────────── */
+  --font-family-base:    'IBM Plex Mono', monospace;
+  --font-family-heading: 'IBM Plex Mono', monospace;
+  --font-family-mono:    'IBM Plex Mono', monospace;
+
+  /* ── Shadows ──────────────────────────────────────────── */
+  --box-shadow-card:  0 1px 3px rgba(0,0,0,.10);
+  --box-shadow-menu:  0 4px 12px rgba(0,0,0,.12);
+  --box-shadow-drop:  0 2px 8px rgba(0,0,0,.10);
+
+  /* ── OOUI / MediaWiki core background variables ────────── */
+  --background-color-base:             #f4f3f0;
+  --background-color-base--hover:      #edecea;
+  --background-color-neutral:          #edecea;
+  --background-color-neutral-subtle:   #f4f3f0;
+  --background-color-interactive:      #e5e4e0;
+  --background-color-interactive-subtle: #edecea;
+  --background-color-progressive-subtle: #eaf0fa;
+  --background-color-disabled:         #e5e4e0;
+  --background-color-disabled-subtle:  #edecea;
+  --background-color-destructive-subtle: #fbe8ea;
+  --background-color-success-subtle:   #e8f4ec;
+  --background-color-warning-subtle:   #fdf0e6;
+  --background-color-notice-subtle:    #eaf0fa;
+
+  /* ── OOUI text / border variables ─────────────────────── */
+  --color-placeholder:                 #7a7875;
+
+  /* ── Button surface (for mode-aware hover) ─────────────── */
+  --color-surface-btn:                 #e5e4e0;
+  --color-surface-btn--hover-bg:       #1a1917;
+  --color-surface-btn--hover-text:     #f4f3f0;
+
+  /* ── Diff colours ─────────────────────────────────────── */
+  --color-diff-added:                  #e8f4ec;
+  --color-diff-deleted:                #fbe8ea;
+
+  /* ── Selection ────────────────────────────────────────── */
+  --color-selection-bg:                #1a1917;
+  --color-selection-text:              #f4f3f0;
+}
+
+/* ════════════════════════════════════════════════════════════
+   DESIGN TOKENS — DARK MODE
+   Warm dark charcoal/brown tones — the inverse aesthetic.
+   ════════════════════════════════════════════════════════════ */
+
+[data-mw-skin-color-scheme="dark"] {
+  /* ── Surface backgrounds (warm dark charcoal) ─────────── */
+  --color-surface-0:       #1a1917;   /* page canvas             */
+  --color-surface-1:       #242220;   /* header / sidebar        */
+  --color-surface-2:       #2e2c2a;   /* TOC / elevated card     */
+  --color-surface-3:       #242220;   /* card surface            */
+  --color-surface-4:       #363330;   /* strong card / selected  */
+
+  /* ── Text ─────────────────────────────────────────────── */
+  --color-base:                    #f0eeea;
+  --color-base--emphasized:        #f4f3f0;
+  --color-base--subtle:            #c8c5bf;
+  --color-base--disabled:          #7a7875;
+
+  /* ── Links / progressive ──────────────────────────────── */
+  --color-progressive:             #7ba7e0;
+  --color-progressive--hover:      #a0c0f0;
+  --color-progressive--active:     #c0d8f8;
+  --color-progressive--focus:      #7ba7e0;
+
+  /* ── Borders ──────────────────────────────────────────── */
+  --border-color-base:             #3d3a36;
+  --border-color-interactive:      #5a5650;
+
+  /* ── Status colours ───────────────────────────────────── */
+  --color-destructive:             #e07070;
+  --color-destructive--hover:      #f09090;
+  --color-success:                 #6abf7a;
+  --color-warning:                 #d4a040;
+  --color-notice:                  #7ba7e0;
+
+  /* ── Icons / accents ──────────────────────────────────── */
+  --color-icon:                    #c8c5bf;
+  --color-icon--subtle:            #7a7875;
+  --color-icon--emphasized:        #f4f3f0;
+  --color-icon-interactive:        #7ba7e0;
+
+  /* ── Border-radius: sharp corners ─────────────────────── */
+  --border-radius--small:          0;
+  --border-radius--medium:         0;
+  --border-radius--large:          0;
+  --border-radius--pill:           0;
+  --border-radius-sharp:           0;
+
+  /* ── Typography ───────────────────────────────────────── */
+  --font-family-base:    'IBM Plex Mono', monospace;
+  --font-family-heading: 'IBM Plex Mono', monospace;
+  --font-family-mono:    'IBM Plex Mono', monospace;
+
+  /* ── Shadows ──────────────────────────────────────────── */
+  --box-shadow-card:  0 1px 3px rgba(0,0,0,.40);
+  --box-shadow-menu:  0 4px 12px rgba(0,0,0,.50);
+  --box-shadow-drop:  0 2px 8px rgba(0,0,0,.40);
+
+  /* ── OOUI / MediaWiki core background variables ────────── */
+  --background-color-base:             #1a1917;
+  --background-color-base--hover:      #242220;
+  --background-color-neutral:          #242220;
+  --background-color-neutral-subtle:   #1a1917;
+  --background-color-interactive:      #2e2c2a;
+  --background-color-interactive-subtle: #242220;
+  --background-color-progressive-subtle: #1a2540;
+  --background-color-disabled:         #2e2c2a;
+  --background-color-disabled-subtle:  #242220;
+  --background-color-destructive-subtle: #3a1a1a;
+  --background-color-success-subtle:   #1a3020;
+  --background-color-warning-subtle:   #302010;
+  --background-color-notice-subtle:    #1a2540;
+
+  /* ── OOUI text / border variables ─────────────────────── */
+  --color-placeholder:                 #7a7875;
+
+  /* ── Button surface ────────────────────────────────────── */
+  --color-surface-btn:                 #2e2c2a;
+  --color-surface-btn--hover-bg:       #f4f3f0;
+  --color-surface-btn--hover-text:     #1a1917;
+
+  /* ── Diff colours ─────────────────────────────────────── */
+  --color-diff-added:                  #1a3020;
+  --color-diff-deleted:                #3a1a1a;
+
+  /* ── Selection ────────────────────────────────────────── */
+  --color-selection-bg:                #f4f3f0;
+  --color-selection-text:              #1a1917;
+}
+
+/* ════════════════════════════════════════════════════════════
+   OS DARK MODE PREFERENCE
+   Applies the dark palette when the OS prefers dark mode AND
+   the user has not set an explicit Citizen toggle
+   (i.e. data-mw-skin-color-scheme is absent entirely).
+   When the user sets the toggle, the explicit selectors above
+   take over with the same values, so there is no duplication.
+   ════════════════════════════════════════════════════════════ */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-mw-skin-color-scheme]),
+  .skin-citizen:not([data-mw-skin-color-scheme]) {
+    --color-surface-0:       #1a1917;
+    --color-surface-1:       #242220;
+    --color-surface-2:       #2e2c2a;
+    --color-surface-3:       #242220;
+    --color-surface-4:       #363330;
+    --color-base:            #f0eeea;
+    --color-base--emphasized: #f4f3f0;
+    --color-base--subtle:    #c8c5bf;
+    --color-base--disabled:  #7a7875;
+    --color-progressive:     #7ba7e0;
+    --color-progressive--hover: #a0c0f0;
+    --color-progressive--active: #c0d8f8;
+    --color-progressive--focus: #7ba7e0;
+    --color-icon:            #c8c5bf;
+    --color-icon--subtle:    #7a7875;
+    --color-icon--emphasized: #f4f3f0;
+    --color-icon-interactive: #7ba7e0;
+    --color-destructive:     #e07070;
+    --color-destructive--hover: #f09090;
+    --color-success:         #6abf7a;
+    --color-warning:         #d4a040;
+    --color-notice:          #7ba7e0;
+    --border-color-base:     #3d3a36;
+    --border-color-interactive: #5a5650;
+    --background-color-base:             #1a1917;
+    --background-color-base--hover:      #242220;
+    --background-color-neutral:          #242220;
+    --background-color-neutral-subtle:   #1a1917;
+    --background-color-interactive:      #2e2c2a;
+    --background-color-interactive-subtle: #242220;
+    --background-color-progressive-subtle: #1a2540;
+    --background-color-disabled:         #2e2c2a;
+    --background-color-disabled-subtle:  #242220;
+    --background-color-destructive-subtle: #3a1a1a;
+    --background-color-success-subtle:   #1a3020;
+    --background-color-warning-subtle:   #302010;
+    --background-color-notice-subtle:    #1a2540;
+    --font-family-base:    'IBM Plex Mono', monospace;
+    --font-family-heading: 'IBM Plex Mono', monospace;
+    --font-family-mono:    'IBM Plex Mono', monospace;
+    --box-shadow-card:  0 1px 3px rgba(0,0,0,.40);
+    --box-shadow-menu:  0 4px 12px rgba(0,0,0,.50);
+    --box-shadow-drop:  0 2px 8px rgba(0,0,0,.40);
+    --color-surface-btn:             #2e2c2a;
+    --color-surface-btn--hover-bg:   #f4f3f0;
+    --color-surface-btn--hover-text: #1a1917;
+    --color-diff-added:              #1a3020;
+    --color-diff-deleted:            #3a1a1a;
+    --color-selection-bg:            #f4f3f0;
+    --color-selection-text:          #1a1917;
+    --color-placeholder:             #7a7875;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   BASE
+   ════════════════════════════════════════════════════════════ */
+
+body,
+.skin-citizen {
+  font-family: var(--font-family-base);
+  background-color: var(--color-surface-0);
+  color: var(--color-base);
+}
+
+/* ── Page heading ────────────────────────────────────────── */
+#firstHeading,
+.page-heading h1 {
+  font-family: var(--font-family-heading);
+  font-weight: 600;
+  font-size: 1.3rem;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--color-base);
+  border-bottom: 1px solid var(--border-color-base);
+  padding-bottom: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+/* ── Site wordmark / logo text ───────────────────────────── */
+.citizen-logo__wordmark,
+#p-logo a,
+.mw-logo-wordmark {
+  font-family: var(--font-family-heading);
+  font-weight: 600;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+}
+
+/* ════════════════════════════════════════════════════════════
+   CARD / SURFACE BACKGROUNDS
+   ════════════════════════════════════════════════════════════ */
+
+/* Citizen generic card */
+.citizen-card,
+.citizen-card-list__item,
+.citizen-card__header,
+.citizen-card__body {
+  background-color: var(--color-surface-1);
+  border: 1px solid var(--border-color-base);
+  color: var(--color-base);
+}
+
+/* Page-info block (appears beneath article title) */
+.citizen-page-info,
+.citizen-page-info__item {
+  background-color: var(--color-surface-1);
+  border-color: var(--border-color-base);
+  color: var(--color-base--subtle);
+}
+
+/* Citizen header */
+#citizen-page-header,
+.citizen-header,
+header.citizen-header {
+  background-color: var(--color-surface-1);
+  border-bottom: 1px solid var(--border-color-interactive);
+}
+
+/* Sticky header */
+.citizen-sticky-header {
+  background-color: var(--color-surface-1);
+  border-bottom: 1px solid var(--border-color-interactive);
+}
+
+/* Sidebar */
+#citizen-sidebar,
+.citizen-sidebar {
+  background-color: var(--color-surface-1);
+  border-right: 1px solid var(--border-color-base);
+}
+
+/* Sidebar navigation labels */
+.citizen-nav__heading,
+.citizen-sidebar .citizen-nav__heading {
+  font-size: 0.65rem;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--color-base--disabled);
+  font-weight: 600;
+}
+
+/* Sidebar links */
+.citizen-nav__item a,
+.citizen-sidebar a {
+  font-family: var(--font-family-base);
+  font-size: 0.75rem;
+  letter-spacing: 0.5px;
+  color: var(--color-base);
+  background-color: transparent;
+}
+.citizen-nav__item a:hover,
+.citizen-sidebar a:hover {
+  color: var(--color-progressive);
+  background-color: var(--color-surface-2);
+}
+
+/* TOC */
+.citizen-toc,
+#toc {
+  background-color: var(--color-surface-1);
+  border: 1px solid var(--border-color-base);
+  font-family: var(--font-family-base);
+  font-size: 0.75rem;
+}
+.citizen-toc__title,
+#toc .toctitle {
+  font-size: 0.7rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--color-base--disabled);
+  font-weight: 600;
+}
+.citizen-toc__item a,
+#toc a {
+  color: var(--color-base--subtle);
+}
+.citizen-toc__item a:hover,
+#toc a:hover {
+  color: var(--color-progressive);
+}
+
+/* Citizen search suggestion / typeahead panel */
+.citizen-search-results,
+.citizen-typeahead {
+  background-color: var(--color-surface-1);
+  border: 1px solid var(--border-color-interactive);
+  box-shadow: var(--box-shadow-menu);
+}
+.citizen-search-results__item,
+.citizen-typeahead__item {
+  background-color: transparent;
+  color: var(--color-base);
+}
+.citizen-search-results__item:hover,
+.citizen-typeahead__item:hover {
+  background-color: var(--color-surface-2);
+}
+
+/* Citizen drawer / panel */
+.citizen-drawer,
+.citizen-drawer__inner,
+.citizen-panel {
+  background-color: var(--color-surface-1);
+  border-color: var(--border-color-base);
+}
+
+/* Citizen overflow menu */
+.citizen-overflow-menu,
+.citizen-dropdown__menu,
+.citizen-menu,
+.citizen-menu__item {
+  background-color: var(--color-surface-1);
+  border: 1px solid var(--border-color-interactive);
+  box-shadow: var(--box-shadow-menu);
+  font-family: var(--font-family-base);
+  font-size: 0.75rem;
+  color: var(--color-base);
+}
+.citizen-dropdown__menu a,
+.citizen-menu a,
+.citizen-menu__item a {
+  color: var(--color-base);
+  padding: 6px 14px;
+  letter-spacing: 0.5px;
+  background-color: transparent;
+}
+.citizen-dropdown__menu a:hover,
+.citizen-menu a:hover,
+.citizen-menu__item:hover {
+  background-color: var(--color-surface-2);
+  color: var(--color-base);
+}
+
+/* Page tools / toolbox (right-side panel in Citizen) */
+.citizen-page-tools,
+.citizen-page-tools__card {
+  background-color: var(--color-surface-1);
+  border: 1px solid var(--border-color-base);
+}
+
+/* ════════════════════════════════════════════════════════════
+   CONTENT AREA
+   ════════════════════════════════════════════════════════════ */
+
+#mw-content-text,
+.mw-parser-output {
+  font-family: var(--font-family-base);
+  font-size: 0.82rem;
+  line-height: 1.8;
+  color: var(--color-base);
+}
+
+/* Headings */
+.mw-parser-output h1,
+.mw-parser-output h2,
+.mw-parser-output h3,
+.mw-parser-output h4,
+.mw-parser-output h5,
+.mw-parser-output h6 {
+  font-family: var(--font-family-heading);
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--color-base);
+}
+.mw-parser-output h2 {
+  font-size: 0.95rem;
+  letter-spacing: 3px;
+  border-bottom: 1px solid var(--border-color-base);
+  padding-bottom: 0.35rem;
+  margin-top: 2rem;
+}
+.mw-parser-output h3 {
+  font-size: 0.85rem;
+  letter-spacing: 2.5px;
+  color: var(--color-base--subtle);
+}
+.mw-parser-output h4,
+.mw-parser-output h5,
+.mw-parser-output h6 {
+  font-size: 0.78rem;
+  letter-spacing: 2px;
+  color: var(--color-base--disabled);
+}
+
+/* Links */
+.mw-parser-output a,
+#mw-content-text a {
+  color: var(--color-progressive);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s, color 0.15s;
+}
+.mw-parser-output a:hover,
+#mw-content-text a:hover {
+  color: var(--color-progressive--hover);
+  border-bottom-color: var(--color-progressive);
+}
+.mw-parser-output a.new,
+#mw-content-text a.new {
+  color: var(--color-destructive);
+}
+.mw-parser-output a.new:hover {
+  color: var(--color-destructive--hover);
+  border-bottom-color: var(--color-destructive);
+}
+
+/* Tables */
+.mw-parser-output table,
+.mw-parser-output .wikitable {
+  border: 1px solid var(--border-color-interactive);
+  border-collapse: collapse;
+  font-family: var(--font-family-base);
+  font-size: 0.75rem;
+  background: var(--color-surface-0);
+  box-shadow: var(--box-shadow-card);
+}
+.mw-parser-output .wikitable th,
+.mw-parser-output table th {
+  background-color: var(--color-surface-1);
+  border: 1px solid var(--border-color-interactive);
+  padding: 6px 12px;
+  font-size: 0.7rem;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--color-base);
+  font-weight: 600;
+}
+.mw-parser-output .wikitable td,
+.mw-parser-output table td {
+  border: 1px solid var(--border-color-base);
+  padding: 5px 12px;
+  color: var(--color-base);
+  vertical-align: top;
+  background-color: var(--color-surface-0);
+}
+.mw-parser-output .wikitable tr:nth-child(even) td {
+  background-color: var(--color-surface-1);
+}
+
+/* Code / pre */
+.mw-parser-output code,
+.mw-parser-output kbd,
+.mw-parser-output pre,
+.mw-parser-output .mw-code {
+  font-family: var(--font-family-mono);
+  font-size: 0.78rem;
+  background-color: var(--color-surface-1);
+  border: 1px solid var(--border-color-base);
+  color: var(--color-base);
+}
+.mw-parser-output pre,
+.mw-parser-output .mw-code {
+  padding: 12px 16px;
+  overflow-x: auto;
+  line-height: 1.6;
+}
+.mw-parser-output code {
+  padding: 1px 5px;
+}
+
+/* Blockquote */
+.mw-parser-output blockquote {
+  border-left: 2px solid var(--border-color-interactive);
+  padding-left: 16px;
+  color: var(--color-base--subtle);
+  margin: 1rem 0;
+  font-style: normal;
+}
+
+/* Horizontal rule */
+.mw-parser-output hr {
+  border: none;
+  border-top: 1px solid var(--border-color-base);
+  margin: 1.5rem 0;
+}
+
+/* ════════════════════════════════════════════════════════════
+   MEDIAWIKI UI ELEMENTS
+   ════════════════════════════════════════════════════════════ */
+
+/* Search bar */
+.citizen-search__input,
+#searchInput,
+input[type="search"] {
+  font-family: var(--font-family-base);
+  font-size: 0.78rem;
+  background: var(--color-surface-0);
+  border: 1px solid var(--border-color-interactive);
+  color: var(--color-base);
+  outline: none;
+}
+.citizen-search__input:focus,
+#searchInput:focus,
+input[type="search"]:focus {
+  border-color: var(--color-base);
+  box-shadow: none;
+}
+
+/* Buttons */
+.citizen-btn,
+.mw-ui-button,
+input[type="button"],
+input[type="submit"],
+button {
+  font-family: var(--font-family-base);
+  font-size: 0.72rem;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  border: 1px solid var(--border-color-interactive);
+  background: var(--color-surface-btn);
+  color: var(--color-base);
+  transition: background 0.15s, color 0.15s;
+}
+.citizen-btn:hover,
+.mw-ui-button:hover,
+input[type="button"]:hover,
+input[type="submit"]:hover,
+button:hover {
+  background: var(--color-surface-btn--hover-bg);
+  color: var(--color-surface-btn--hover-text);
+  border-color: var(--color-surface-btn--hover-bg);
+}
+.mw-ui-button.mw-ui-progressive {
+  background: var(--color-progressive);
+  border-color: var(--color-progressive);
+  color: var(--background-color-base);
+}
+.mw-ui-button.mw-ui-progressive:hover {
+  background: var(--color-progressive--hover);
+  border-color: var(--color-progressive--hover);
+}
+
+/* Page actions (edit, history, talk…) */
+.citizen-page-actions,
+.page-actions {
+  font-family: var(--font-family-base);
+  font-size: 0.72rem;
+  letter-spacing: 1px;
+}
+.citizen-page-actions__item a {
+  font-size: 0.72rem;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--color-base--subtle);
+  border: 1px solid transparent;
+  padding: 4px 10px;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.citizen-page-actions__item a:hover {
+  color: var(--color-base);
+  border-color: var(--border-color-interactive);
+  background: var(--color-surface-2);
+  text-decoration: none;
+}
+
+/* User menu */
+.citizen-userInfo-title,
+.citizen-userInfo-title nav,
+.citizen-userInfo-title ul,
+.citizen-userInfo-title li,
+.citizen-userInfo-title a {
+  text-align: center;
+  display: block;
+  width: 100%;
+}
+.citizen-user-info,
+.citizen-user-menu__card,
+.citizen-menu__card {
+  border-radius: 0;
+  box-shadow: var(--box-shadow-card);
+  border: 1px solid var(--border-color-base);
+  background: var(--color-surface-1);
+}
+
+/* Remove red logout button */
+#pt-logout a,
+.citizen-user-menu #pt-logout a {
+  background: var(--color-surface-2);
+  color: var(--color-base);
+  border: 1px solid var(--border-color-base);
+  border-radius: 0;
+}
+#pt-logout a:hover,
+.citizen-user-menu #pt-logout a:hover {
+  background: var(--color-surface-btn--hover-bg);
+  color: var(--color-surface-btn--hover-text);
+}
+
+/* User info block at top */
+.citizen-user-info__name {
+  color: var(--color-base);
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+.citizen-user-info__groups {
+  color: var(--color-base--disabled);
+  font-size: 0.68rem;
+  letter-spacing: 1px;
+}
+
+/* Notification / alerts */
+.citizen-notification,
+.mw-notification {
+  font-family: var(--font-family-base);
+  font-size: 0.75rem;
+  border: 1px solid var(--border-color-interactive);
+  background: var(--color-surface-1);
+  color: var(--color-base);
+}
+
+/* Info / warning / error message boxes */
+.mw-message-box,
+.mw-message-box-notice,
+.mw-message-box-warning,
+.mw-message-box-error {
+  font-family: var(--font-family-base);
+  font-size: 0.75rem;
+  border-width: 1px;
+  border-style: solid;
+}
+.mw-message-box-notice {
+  background: var(--background-color-notice-subtle);
+  border-color: var(--color-notice);
+  color: var(--color-notice);
+}
+.mw-message-box-warning {
+  background: var(--background-color-warning-subtle);
+  border-color: var(--color-warning);
+  color: var(--color-warning);
+}
+.mw-message-box-error {
+  background: var(--background-color-destructive-subtle);
+  border-color: var(--color-destructive);
+  color: var(--color-destructive);
+}
+
+/* OOUI popup / dialog */
+.oo-ui-popupWidget-popup,
+.oo-ui-dialog-content,
+.oo-ui-messageDialog-content {
+  background-color: var(--color-surface-1);
+  border: 1px solid var(--border-color-interactive);
+  color: var(--color-base);
+  font-family: var(--font-family-base);
+}
+
+/* ════════════════════════════════════════════════════════════
+   SCROLLBAR, FOOTER, CATEGORY, DIFF, EDIT
+   ════════════════════════════════════════════════════════════ */
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--color-surface-1); }
+::-webkit-scrollbar-thumb { background: var(--border-color-interactive); }
+::-webkit-scrollbar-thumb:hover { background: var(--color-base); }
+
+#catlinks {
+  font-family: var(--font-family-base);
+  font-size: 0.72rem;
+  background: var(--color-surface-1);
+  border: 1px solid var(--border-color-base);
+  padding: 6px 12px;
+}
+#catlinks a {
+  color: var(--color-progressive);
+  letter-spacing: 0.5px;
+}
+
+#footer,
+.citizen-footer {
+  background: var(--color-surface-1);
+  border-top: 1px solid var(--border-color-base);
+  font-family: var(--font-family-base);
+  font-size: 0.7rem;
+  letter-spacing: 1px;
+  color: var(--color-base--disabled);
+}
+#footer a,
+.citizen-footer a {
+  color: var(--color-base--disabled);
+  border-bottom: 1px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+#footer a:hover,
+.citizen-footer a:hover {
+  color: var(--color-base);
+  border-bottom-color: var(--color-base);
+}
+
+.wikiEditor-toolbar,
+#toolbar {
+  background: var(--color-surface-1);
+  border: 1px solid var(--border-color-base);
+  border-bottom: none;
+  font-family: var(--font-family-base);
+}
+
+#wpTextbox1,
+textarea {
+  font-family: var(--font-family-mono);
+  font-size: 0.78rem;
+  background: var(--color-surface-0);
+  border: 1px solid var(--border-color-interactive);
+  color: var(--color-base);
+}
+#wpTextbox1:focus,
+textarea:focus {
+  border-color: var(--color-base);
+  outline: none;
+  box-shadow: none;
+}
+
+input[type="text"],
+input[type="password"],
+input[type="email"],
+select {
+  font-family: var(--font-family-base);
+  font-size: 0.78rem;
+  background: var(--color-surface-0);
+  border: 1px solid var(--border-color-interactive);
+  color: var(--color-base);
+}
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="email"]:focus,
+select:focus {
+  border-color: var(--color-base);
+  outline: none;
+  box-shadow: none;
+}
+
+.diff-context { background: var(--color-surface-0); }
+.diff-addedline { background: var(--color-diff-added); }
+.diff-deletedline { background: var(--color-diff-deleted); }
+.diff-marker { color: var(--border-color-interactive); }
+table.diff td {
+  font-family: var(--font-family-mono);
+  font-size: 0.75rem;
+}
+
+.mw-changeslist,
+.mw-changeslist-line {
+  font-family: var(--font-family-base);
+  font-size: 0.75rem;
+}
+
+.thumbcaption,
+.mw-parser-output .thumbcaption {
+  font-family: var(--font-family-base);
+  font-size: 0.7rem;
+  color: var(--color-base--disabled);
+  letter-spacing: 0.5px;
+}
+
+::selection {
+  background: var(--color-selection-bg);
+  color: var(--color-selection-text);
+}
