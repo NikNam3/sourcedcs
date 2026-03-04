@@ -3,60 +3,138 @@
    Applies SOURCEDCS / ATO BRIEF visual identity to the
    Citizen skin.  Mirrors the design tokens from:
      atobrief/css/base.css  and  website/css/style.css
+
+   Key concerns addressed:
+   - Citizen defaults to dark mode (or follows OS preference).
+     We override every dark-mode selector so the wiki always
+     renders in the warm off-white light palette.
+   - OOUI components use their own background variables;
+     those are overridden here too.
+   - Cards / surface boxes are forced to the near-background
+     palette (#f4f3f0 / #edecea) with a 1 px border only.
    ═══════════════════════════════════════════════════════════ */
 
 /* ── Google Fonts ─────────────────────────────────────────── */
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
-/* ── Citizen skin design-token overrides (light / default) ── */
+/* ════════════════════════════════════════════════════════════
+   DESIGN TOKENS
+   Applied to :root AND the dark-mode selectors so neither
+   the OS preference nor the skin's own theme-toggle can
+   switch to dark surfaces.
+   ════════════════════════════════════════════════════════════ */
+
+/* Light palette – shared rule-set (reused via the comma list) */
 :root,
-.skin-citizen {
-  /* Backgrounds – warm off-white palette */
+.skin-citizen,
+[data-mw-skin-color-scheme="dark"],
+[data-mw-skin-color-scheme="light"] {
+  /* ── Surface backgrounds (warm off-white) ─────────────── */
   --color-surface-0:       #f4f3f0;   /* page canvas             */
-  --color-surface-1:       #edecea;   /* sidebar / elevated      */
-  --color-surface-2:       #e5e4e0;   /* toc / secondary         */
-  --color-surface-3:       #dddad5;   /* card surfaces           */
-  --color-surface-4:       #c8c5bf;   /* strongest surface       */
+  --color-surface-1:       #edecea;   /* header / sidebar        */
+  --color-surface-2:       #e5e4e0;   /* TOC / elevated card     */
+  --color-surface-3:       #edecea;   /* card surface (near bg)  */
+  --color-surface-4:       #e5e4e0;   /* strong card / selected  */
 
-  /* Text */
-  --color-base:            #1a1917;   /* primary text            */
-  --color-base--subtle:    #4a4845;   /* secondary text          */
-  --color-base--disabled:  #7a7875;   /* disabled / muted        */
+  /* ── Text ─────────────────────────────────────────────── */
+  --color-base:                    #1a1917;
+  --color-base--emphasized:        #1a1917;
+  --color-base--subtle:            #4a4845;
+  --color-base--disabled:          #7a7875;
 
-  /* Links / progressive actions */
-  --color-progressive:            #1a3a6b;
-  --color-progressive--hover:     #0f2548;
-  --color-progressive--active:    #0a1a30;
-  --color-progressive--focus:     #1a3a6b;
+  /* ── Links / progressive ──────────────────────────────── */
+  --color-progressive:             #1a3a6b;
+  --color-progressive--hover:      #0f2548;
+  --color-progressive--active:     #0a1a30;
+  --color-progressive--focus:      #1a3a6b;
 
-  /* Borders */
-  --border-color-base:        #c8c5bf;
-  --border-color-interactive: #9a9690;
+  /* ── Borders ──────────────────────────────────────────── */
+  --border-color-base:             #c8c5bf;
+  --border-color-interactive:      #9a9690;
 
-  /* Destructive */
-  --color-destructive:       #9b1c1c;
-  --color-destructive--hover: #7a1515;
+  /* ── Status colours ───────────────────────────────────── */
+  --color-destructive:             #9b1c1c;
+  --color-destructive--hover:      #7a1515;
+  --color-success:                 #1a5c2e;
+  --color-warning:                 #7c5000;
+  --color-notice:                  #1a3a6b;
 
-  /* Success / warning */
-  --color-success: #1a5c2e;
-  --color-warning: #7c5000;
+  /* ── Icons / accents ──────────────────────────────────── */
+  --color-icon:                    #4a4845;
+  --color-icon--subtle:            #7a7875;
+  --color-icon--emphasized:        #1a1917;
+  --color-icon-interactive:        #1a3a6b;
 
-  /* Border-radius – sharp corners to match ATO brief */
-  --border-radius--small:  0;
-  --border-radius--medium: 0;
-  --border-radius--large:  0;
-  --border-radius--pill:   0;
+  /* ── Border-radius: sharp corners ─────────────────────── */
+  --border-radius--small:          0;
+  --border-radius--medium:         0;
+  --border-radius--large:          0;
+  --border-radius--pill:           0;
+  --border-radius-sharp:           0;
 
-  /* Typography */
+  /* ── Typography ───────────────────────────────────────── */
   --font-family-base:    'IBM Plex Mono', monospace;
   --font-family-heading: 'IBM Plex Mono', monospace;
+  --font-family-mono:    'IBM Plex Mono', monospace;
 
-  /* Shadows */
-  --box-shadow-card: 0 1px 3px rgba(0,0,0,.10);
-  --box-shadow-menu: 0 4px 12px rgba(0,0,0,.12);
+  /* ── Shadows ──────────────────────────────────────────── */
+  --box-shadow-card:  0 1px 3px rgba(0,0,0,.10);
+  --box-shadow-menu:  0 4px 12px rgba(0,0,0,.12);
+  --box-shadow-drop:  0 2px 8px rgba(0,0,0,.10);
+
+  /* ── OOUI / MediaWiki core background variables ────────── */
+  --background-color-base:             #f4f3f0;
+  --background-color-base--hover:      #edecea;
+  --background-color-neutral:          #edecea;
+  --background-color-neutral-subtle:   #f4f3f0;
+  --background-color-interactive:      #e5e4e0;
+  --background-color-interactive-subtle: #edecea;
+  --background-color-progressive-subtle: #eaf0fa;
+  --background-color-disabled:         #e5e4e0;
+  --background-color-disabled-subtle:  #edecea;
+  --background-color-destructive-subtle: #fbe8ea;
+  --background-color-success-subtle:   #e8f4ec;
+  --background-color-warning-subtle:   #fdf0e6;
+  --background-color-notice-subtle:    #eaf0fa;
+
+  /* ── OOUI text / border variables ─────────────────────── */
+  --color-base:                        #1a1917;
+  --color-placeholder:                 #7a7875;
+  --border-color-base:                 #c8c5bf;
 }
 
-/* ── Base typography ─────────────────────────────────────── */
+/* Also override the dark media query in case the skin injects
+   its own dark palette inside @media (prefers-color-scheme: dark) */
+@media (prefers-color-scheme: dark) {
+  :root,
+  .skin-citizen,
+  [data-mw-skin-color-scheme="dark"] {
+    --color-surface-0:       #f4f3f0;
+    --color-surface-1:       #edecea;
+    --color-surface-2:       #e5e4e0;
+    --color-surface-3:       #edecea;
+    --color-surface-4:       #e5e4e0;
+    --color-base:            #1a1917;
+    --color-base--emphasized: #1a1917;
+    --color-base--subtle:    #4a4845;
+    --color-base--disabled:  #7a7875;
+    --color-progressive:     #1a3a6b;
+    --color-icon:            #4a4845;
+    --color-icon--subtle:    #7a7875;
+    --border-color-base:     #c8c5bf;
+    --border-color-interactive: #9a9690;
+    --background-color-base:    #f4f3f0;
+    --background-color-neutral: #edecea;
+    --background-color-interactive: #e5e4e0;
+    --font-family-base:    'IBM Plex Mono', monospace;
+    --font-family-heading: 'IBM Plex Mono', monospace;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   BASE
+   ════════════════════════════════════════════════════════════ */
+
 body,
 .skin-citizen {
   font-family: 'IBM Plex Mono', monospace;
@@ -88,7 +166,32 @@ body,
   text-transform: uppercase;
 }
 
-/* ── Header / top bar ────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════
+   CARD / SURFACE BACKGROUNDS
+   The main fix: every card-like / box-like / elevated element
+   gets an explicit near-background fill so dark defaults can't
+   show through.
+   ════════════════════════════════════════════════════════════ */
+
+/* Citizen generic card */
+.citizen-card,
+.citizen-card-list__item,
+.citizen-card__header,
+.citizen-card__body {
+  background-color: #edecea;
+  border: 1px solid #c8c5bf;
+  color: #1a1917;
+}
+
+/* Page-info block (appears beneath article title) */
+.citizen-page-info,
+.citizen-page-info__item {
+  background-color: #edecea;
+  border-color: #c8c5bf;
+  color: #4a4845;
+}
+
+/* Citizen header */
 #citizen-page-header,
 .citizen-header,
 header.citizen-header {
@@ -96,13 +199,13 @@ header.citizen-header {
   border-bottom: 1px solid #9a9690;
 }
 
-/* ── Sticky header ───────────────────────────────────────── */
+/* Sticky header */
 .citizen-sticky-header {
   background-color: #edecea;
   border-bottom: 1px solid #9a9690;
 }
 
-/* ── Sidebar ─────────────────────────────────────────────── */
+/* Sidebar */
 #citizen-sidebar,
 .citizen-sidebar {
   background-color: #edecea;
@@ -126,6 +229,7 @@ header.citizen-header {
   font-size: 0.75rem;
   letter-spacing: 0.5px;
   color: #1a1917;
+  background-color: transparent;
 }
 .citizen-nav__item a:hover,
 .citizen-sidebar a:hover {
@@ -133,7 +237,7 @@ header.citizen-header {
   background-color: #e5e4e0;
 }
 
-/* ── Table of contents ───────────────────────────────────── */
+/* TOC */
 .citizen-toc,
 #toc {
   background-color: #edecea;
@@ -141,7 +245,6 @@ header.citizen-header {
   font-family: 'IBM Plex Mono', monospace;
   font-size: 0.75rem;
 }
-
 .citizen-toc__title,
 #toc .toctitle {
   font-size: 0.7rem;
@@ -150,7 +253,6 @@ header.citizen-header {
   color: #7a7875;
   font-weight: 600;
 }
-
 .citizen-toc__item a,
 #toc a {
   color: #4a4845;
@@ -160,7 +262,69 @@ header.citizen-header {
   color: #1a3a6b;
 }
 
-/* ── Content area ────────────────────────────────────────── */
+/* Citizen search suggestion / typeahead panel */
+.citizen-search-results,
+.citizen-typeahead {
+  background-color: #edecea;
+  border: 1px solid #9a9690;
+  box-shadow: 0 4px 12px rgba(0,0,0,.12);
+}
+.citizen-search-results__item,
+.citizen-typeahead__item {
+  background-color: transparent;
+  color: #1a1917;
+}
+.citizen-search-results__item:hover,
+.citizen-typeahead__item:hover {
+  background-color: #e5e4e0;
+}
+
+/* Citizen drawer / panel */
+.citizen-drawer,
+.citizen-drawer__inner,
+.citizen-panel {
+  background-color: #edecea;
+  border-color: #c8c5bf;
+}
+
+/* Citizen overflow menu */
+.citizen-overflow-menu,
+.citizen-dropdown__menu,
+.citizen-menu,
+.citizen-menu__item {
+  background-color: #edecea;
+  border: 1px solid #9a9690;
+  box-shadow: 0 4px 12px rgba(0,0,0,.12);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.75rem;
+  color: #1a1917;
+}
+.citizen-dropdown__menu a,
+.citizen-menu a,
+.citizen-menu__item a {
+  color: #1a1917;
+  padding: 6px 14px;
+  letter-spacing: 0.5px;
+  background-color: transparent;
+}
+.citizen-dropdown__menu a:hover,
+.citizen-menu a:hover,
+.citizen-menu__item:hover {
+  background-color: #e5e4e0;
+  color: #1a1917;
+}
+
+/* Page tools / toolbox (right-side panel in Citizen) */
+.citizen-page-tools,
+.citizen-page-tools__card {
+  background-color: #edecea;
+  border: 1px solid #c8c5bf;
+}
+
+/* ════════════════════════════════════════════════════════════
+   CONTENT AREA
+   ════════════════════════════════════════════════════════════ */
+
 #mw-content-text,
 .mw-parser-output {
   font-family: 'IBM Plex Mono', monospace;
@@ -169,7 +333,7 @@ header.citizen-header {
   color: #1a1917;
 }
 
-/* ── Content headings ────────────────────────────────────── */
+/* Headings */
 .mw-parser-output h1,
 .mw-parser-output h2,
 .mw-parser-output h3,
@@ -182,7 +346,6 @@ header.citizen-header {
   text-transform: uppercase;
   color: #1a1917;
 }
-
 .mw-parser-output h2 {
   font-size: 0.95rem;
   letter-spacing: 3px;
@@ -190,13 +353,11 @@ header.citizen-header {
   padding-bottom: 0.35rem;
   margin-top: 2rem;
 }
-
 .mw-parser-output h3 {
   font-size: 0.85rem;
   letter-spacing: 2.5px;
   color: #4a4845;
 }
-
 .mw-parser-output h4,
 .mw-parser-output h5,
 .mw-parser-output h6 {
@@ -205,7 +366,7 @@ header.citizen-header {
   color: #7a7875;
 }
 
-/* ── Links ───────────────────────────────────────────────── */
+/* Links */
 .mw-parser-output a,
 #mw-content-text a {
   color: #1a3a6b;
@@ -227,14 +388,14 @@ header.citizen-header {
   border-bottom-color: #9b1c1c;
 }
 
-/* ── Tables ──────────────────────────────────────────────── */
+/* Tables */
 .mw-parser-output table,
 .mw-parser-output .wikitable {
   border: 1px solid #9a9690;
   border-collapse: collapse;
   font-family: 'IBM Plex Mono', monospace;
   font-size: 0.75rem;
-  background: #ffffff;
+  background: var(--color-surface-0);
   box-shadow: 0 1px 3px rgba(0,0,0,.08);
 }
 .mw-parser-output .wikitable th,
@@ -254,12 +415,13 @@ header.citizen-header {
   padding: 5px 12px;
   color: #1a1917;
   vertical-align: top;
+  background-color: var(--color-surface-0);
 }
 .mw-parser-output .wikitable tr:nth-child(even) td {
-  background-color: #f4f3f0;
+  background-color: var(--color-surface-1);
 }
 
-/* ── Code / pre ──────────────────────────────────────────── */
+/* Code / pre */
 .mw-parser-output code,
 .mw-parser-output kbd,
 .mw-parser-output pre,
@@ -280,7 +442,7 @@ header.citizen-header {
   padding: 1px 5px;
 }
 
-/* ── Blockquote ──────────────────────────────────────────── */
+/* Blockquote */
 .mw-parser-output blockquote {
   border-left: 2px solid #9a9690;
   padding-left: 16px;
@@ -289,14 +451,18 @@ header.citizen-header {
   font-style: normal;
 }
 
-/* ── Horizontal rule ─────────────────────────────────────── */
+/* Horizontal rule */
 .mw-parser-output hr {
   border: none;
   border-top: 1px solid #c8c5bf;
   margin: 1.5rem 0;
 }
 
-/* ── Search bar ──────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════
+   MEDIAWIKI UI ELEMENTS
+   ════════════════════════════════════════════════════════════ */
+
+/* Search bar */
 .citizen-search__input,
 #searchInput,
 input[type="search"] {
@@ -314,7 +480,7 @@ input[type="search"]:focus {
   box-shadow: none;
 }
 
-/* ── Buttons / actions ───────────────────────────────────── */
+/* Buttons */
 .citizen-btn,
 .mw-ui-button,
 input[type="button"],
@@ -348,7 +514,7 @@ button:hover {
   border-color: #0f2548;
 }
 
-/* ── Page actions (edit, history, etc.) ──────────────────── */
+/* Page actions (edit, history, talk…) */
 .citizen-page-actions,
 .page-actions {
   font-family: 'IBM Plex Mono', monospace;
@@ -371,7 +537,7 @@ button:hover {
   text-decoration: none;
 }
 
-/* ── User menu ───────────────────────────────────────────── */
+/* User menu */
 .citizen-user-menu,
 #p-personal {
   font-family: 'IBM Plex Mono', monospace;
@@ -380,33 +546,13 @@ button:hover {
 .citizen-user-menu a {
   letter-spacing: 0.5px;
   color: #4a4845;
+  background-color: transparent;
 }
 .citizen-user-menu a:hover {
   color: #1a1917;
 }
 
-/* ── Dropdown / menu panels ──────────────────────────────── */
-.citizen-dropdown__menu,
-.citizen-menu {
-  background: #edecea;
-  border: 1px solid #9a9690;
-  box-shadow: 0 4px 12px rgba(0,0,0,.12);
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.75rem;
-}
-.citizen-dropdown__menu a,
-.citizen-menu a {
-  color: #1a1917;
-  padding: 6px 14px;
-  letter-spacing: 0.5px;
-}
-.citizen-dropdown__menu a:hover,
-.citizen-menu a:hover {
-  background: #e5e4e0;
-  color: #1a1917;
-}
-
-/* ── Notification / alerts ───────────────────────────────── */
+/* Notification / alerts */
 .citizen-notification,
 .mw-notification {
   font-family: 'IBM Plex Mono', monospace;
@@ -416,7 +562,7 @@ button:hover {
   color: #1a1917;
 }
 
-/* ── Info / warning / error boxes ───────────────────────── */
+/* Info / warning / error message boxes */
 .mw-message-box,
 .mw-message-box-notice,
 .mw-message-box-warning,
@@ -427,7 +573,7 @@ button:hover {
   border-style: solid;
 }
 .mw-message-box-notice {
-  background: #e6f1fb;
+  background: #eaf0fa;
   border-color: #1a3a6b;
   color: #1a3a6b;
 }
@@ -442,13 +588,25 @@ button:hover {
   color: #9b1c1c;
 }
 
-/* ── Scrollbar ───────────────────────────────────────────── */
+/* OOUI popup / dialog */
+.oo-ui-popupWidget-popup,
+.oo-ui-dialog-content,
+.oo-ui-messageDialog-content {
+  background-color: #edecea;
+  border: 1px solid #9a9690;
+  color: #1a1917;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+/* ════════════════════════════════════════════════════════════
+   SCROLLBAR, FOOTER, CATEGORY, DIFF, EDIT
+   ════════════════════════════════════════════════════════════ */
+
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: #edecea; }
 ::-webkit-scrollbar-thumb { background: #9a9690; }
 ::-webkit-scrollbar-thumb:hover { background: #1a1917; }
 
-/* ── Category links ──────────────────────────────────────── */
 #catlinks {
   font-family: 'IBM Plex Mono', monospace;
   font-size: 0.72rem;
@@ -461,7 +619,6 @@ button:hover {
   letter-spacing: 0.5px;
 }
 
-/* ── Footer ──────────────────────────────────────────────── */
 #footer,
 .citizen-footer {
   background: #edecea;
@@ -483,7 +640,6 @@ button:hover {
   border-bottom-color: #1a1917;
 }
 
-/* ── Edit toolbar ────────────────────────────────────────── */
 .wikiEditor-toolbar,
 #toolbar {
   background: #edecea;
@@ -492,7 +648,6 @@ button:hover {
   font-family: 'IBM Plex Mono', monospace;
 }
 
-/* ── Textarea (edit mode) ────────────────────────────────── */
 #wpTextbox1,
 textarea {
   font-family: 'IBM Plex Mono', monospace;
@@ -508,7 +663,6 @@ textarea:focus {
   box-shadow: none;
 }
 
-/* ── Input fields ────────────────────────────────────────── */
 input[type="text"],
 input[type="password"],
 input[type="email"],
@@ -528,7 +682,6 @@ select:focus {
   box-shadow: none;
 }
 
-/* ── Diff view ───────────────────────────────────────────── */
 .diff-context { background: #f4f3f0; }
 .diff-addedline { background: #e8f4ec; }
 .diff-deletedline { background: #fbe8ea; }
@@ -538,14 +691,12 @@ table.diff td {
   font-size: 0.75rem;
 }
 
-/* ── Recent changes / special pages ─────────────────────── */
 .mw-changeslist,
 .mw-changeslist-line {
   font-family: 'IBM Plex Mono', monospace;
   font-size: 0.75rem;
 }
 
-/* ── Image captions ──────────────────────────────────────── */
 .thumbcaption,
 .mw-parser-output .thumbcaption {
   font-family: 'IBM Plex Mono', monospace;
@@ -554,7 +705,6 @@ table.diff td {
   letter-spacing: 0.5px;
 }
 
-/* ── Selection highlight ─────────────────────────────────── */
 ::selection {
   background: #1a1917;
   color: #f4f3f0;
