@@ -1,0 +1,8 @@
+{
+  "__comment": "Map Discord role IDs (strings) to squadron info. Only guild members who have at least one listed role appear in the roster. Remove or replace the placeholder entry before deployment.",
+  "REPLACE_WITH_ROLE_ID": {
+    "name": "Example Role Name (human-readable label, not used in logic)",
+    "squadron": "example-sq-id",
+    "role": "Pilot"
+  }
+}

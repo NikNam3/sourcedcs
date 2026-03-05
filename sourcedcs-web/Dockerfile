@@ -15,6 +15,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY server.js     ./
 COPY package.json  ./
 COPY public/       ./public/
+COPY data/         ./data/
 
 # Create data dir as root, then hand ownership to node
 RUN mkdir -p /app/data && chown -R node:node /app/data

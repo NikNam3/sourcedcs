@@ -9,11 +9,11 @@ const app  = express();
 const PORT = process.env.PORT || 3000;
 
 /* ─── Data persistence ──────────────────────────────────── */
-const DATA_DIR      = path.join(__dirname, 'data');
-const EVENTS_FILE   = path.join(DATA_DIR, 'events.json');
-const APPS_FILE     = path.join(DATA_DIR, 'applications.json');
-const ROSTER_FILE   = path.join(DATA_DIR, 'roster.json');
-const SQUADRONS_FILE = path.join(DATA_DIR, 'squadrons.json');
+const DATA_DIR           = path.join(__dirname, 'data');
+const EVENTS_FILE        = path.join(DATA_DIR, 'events.json');
+const APPS_FILE          = path.join(DATA_DIR, 'applications.json');
+const SQUADRONS_FILE     = path.join(DATA_DIR, 'squadrons.json');
+const DISCORD_ROLES_FILE = path.join(DATA_DIR, 'discord-roles.json');
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
@@ -27,17 +27,108 @@ function sanitizeStr(value, maxLen) {
   return String(value || '').trim().slice(0, maxLen);
 }
 
-
-
 let events = loadJSON(EVENTS_FILE, []);
 let applications = loadJSON(APPS_FILE, []);
 let nextEventId = events.reduce((m, e) => Math.max(m, e.id || 0), 0) + 1;
 
-
-
-let roster = loadJSON(ROSTER_FILE, []);
 let squadrons = loadJSON(SQUADRONS_FILE, []);
-let nextRosterId = roster.reduce((m, r) => Math.max(m, r.id || 0), 0) + 1;
+
+/* ─── Discord roster integration ────────────────────────── */
+const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN || '';
+const DISCORD_GUILD_ID  = process.env.DISCORD_GUILD_ID  || '';
+const ROSTER_CACHE_TTL  = 5 * 60 * 1000; // 5 minutes
+
+let rosterCache = { data: [], fetchedAt: 0 };
+
+/**
+ * Parse a Discord display name in the format: (foo) bar "CALLSIGN"
+ * Returns the callsign if present, otherwise the bare name (bar).
+ */
+function parseDisplayName(displayName) {
+  if (!displayName) return '';
+  // Format: (anything) name "CALLSIGN"
+  const m = displayName.match(/^\(.*?\)\s+(\S+)\s+"([^"]*)"$/);
+  if (m) {
+    const name     = m[1];
+    const callsign = m[2].trim();
+    return callsign || name;
+  }
+  return displayName.trim();
+}
+
+async function fetchDiscordRoster() {
+  if (!DISCORD_BOT_TOKEN || !DISCORD_GUILD_ID) {
+    console.warn('[discord] DISCORD_BOT_TOKEN or DISCORD_GUILD_ID not set — roster will be empty');
+    return [];
+  }
+
+  const roleMapping = loadJSON(DISCORD_ROLES_FILE, {});
+  const knownRoleIds = Object.keys(roleMapping).filter(k => k !== '__comment');
+
+  if (!knownRoleIds.length) {
+    console.warn('[discord] discord-roles.json has no entries — roster will be empty');
+    return [];
+  }
+
+  let members = [];
+  let after = '0';
+
+  try {
+    while (true) {
+      const resp = await fetch(
+        `https://discord.com/api/v10/guilds/${DISCORD_GUILD_ID}/members?limit=1000&after=${after}`,
+        { headers: { Authorization: `Bot ${DISCORD_BOT_TOKEN}` } }
+      );
+      if (!resp.ok) {
+        const body = await resp.text();
+        console.error(`[discord] members fetch failed: ${resp.status} ${body}`);
+        break;
+      }
+      const batch = await resp.json();
+      if (!Array.isArray(batch) || batch.length === 0) break;
+      members.push(...batch);
+      if (batch.length < 1000) break;
+      after = batch[batch.length - 1].user.id;
+    }
+  } catch (err) {
+    console.error('[discord] Error fetching members:', err.message);
+    return [];
+  }
+
+  const roster = [];
+  for (const member of members) {
+    const matchedRoleId = (member.roles || []).find(r => knownRoleIds.includes(r));
+    if (!matchedRoleId) continue;
+
+    const mapping     = roleMapping[matchedRoleId];
+    const displayName = member.nick
+      || member.user?.global_name
+      || member.user?.username
+      || '';
+    const callsign    = parseDisplayName(displayName);
+
+    roster.push({
+      id:       member.user?.id || '',
+      callsign: sanitizeStr(callsign, 64),
+      squadron: sanitizeStr(mapping.squadron || '', 16),
+      role:     sanitizeStr(mapping.role     || '', 64),
+    });
+  }
+
+  return roster;
+}
+
+async function getRoster() {
+  if (Date.now() - rosterCache.fetchedAt < ROSTER_CACHE_TTL) {
+    return rosterCache.data;
+  }
+  const data = await fetchDiscordRoster();
+  rosterCache = { data, fetchedAt: Date.now() };
+  return data;
+}
+
+// Warm the cache on startup
+getRoster().catch(() => {});
 
 /* ─── Rate limiting ─────────────────────────────────────── */
 const limiter = rateLimit({
@@ -227,50 +318,15 @@ api.get('/applications', requireAuth, requireAdmin, (_req, res) => {
   res.json(applications);
 });
 
-/* ── Roster (public read, admin write) ── */
-api.get('/roster', (_req, res) => {
-  res.json(roster);
-});
-
-api.post('/roster', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
-  const { callsign, rank, airframe, role, status, squadron } = req.body;
-  if (!callsign) return res.status(400).json({ error: 'callsign is required' });
-  const entry = {
-    id:       nextRosterId++,
-    callsign: sanitizeStr(callsign, 32),
-    rank:     sanitizeStr(rank, 32),
-    airframe: sanitizeStr(airframe, 64),
-    role:     sanitizeStr(role, 64),
-    status:   sanitizeStr(status || 'active', 16),
-    squadron: sanitizeStr(squadron, 16),
-  };
-  roster.push(entry);
-  saveJSON(ROSTER_FILE, roster);
-  res.status(201).json(entry);
-});
-
-api.put('/roster/:id', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
-  const id  = Number(req.params.id);
-  const idx = roster.findIndex(r => r.id === id);
-  if (idx === -1) return res.status(404).json({ error: 'Pilot not found' });
-  const { callsign, rank, airframe, role, status, squadron } = req.body;
-  if (callsign !== undefined) roster[idx].callsign = sanitizeStr(callsign, 32);
-  if (rank !== undefined)     roster[idx].rank     = sanitizeStr(rank, 32);
-  if (airframe !== undefined) roster[idx].airframe = sanitizeStr(airframe, 64);
-  if (role !== undefined)     roster[idx].role     = sanitizeStr(role, 64);
-  if (status !== undefined)   roster[idx].status   = sanitizeStr(status, 16);
-  if (squadron !== undefined) roster[idx].squadron = sanitizeStr(squadron, 16);
-  saveJSON(ROSTER_FILE, roster);
-  res.json(roster[idx]);
-});
-
-api.delete('/roster/:id', writeOpsLimiter, requireAuth, requireAdmin, (req, res) => {
-  const id  = Number(req.params.id);
-  const idx = roster.findIndex(r => r.id === id);
-  if (idx === -1) return res.status(404).json({ error: 'Pilot not found' });
-  roster.splice(idx, 1);
-  saveJSON(ROSTER_FILE, roster);
-  res.json({ ok: true });
+/* ── Roster (public read, sourced from Discord) ── */
+api.get('/roster', async (_req, res) => {
+  try {
+    const data = await getRoster();
+    res.json(data);
+  } catch (err) {
+    console.error('[roster] Error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch roster' });
+  }
 });
 
 /* ── Squadrons (public read, admin write) ── */

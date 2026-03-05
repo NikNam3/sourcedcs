@@ -362,110 +362,30 @@ function submitSquadron(e) {
 }
 document.getElementById('sqModalOverlay').addEventListener('click', function(e) { if (e.target === this) closeSqModal(); });
 
-/* ── Data-driven roster ── */
+/* ── Data-driven roster (sourced from Discord) ── */
 var ROSTER = [];
 (function() {
   fetch('/api/roster').then(function(r){return r.json();}).then(function(list) {
     ROSTER = list;
     renderRoster(list);
-    if (isAdmin) {
-      document.getElementById('rosterAdminBar').style.display = '';
-      document.querySelectorAll('.roster-admin-col').forEach(function(el){el.style.display='';});
-    }
   }).catch(function() {
-    document.getElementById('rosterBody').innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-3)">Unable to load roster.</td></tr>';
+    document.getElementById('rosterBody').innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-3)">Unable to load roster.</td></tr>';
   });
 })();
 
 function renderRoster(list) {
   var tbody = document.getElementById('rosterBody');
   if (!list.length) {
-    tbody.innerHTML = '<tr class="roster-open-row"><td colspan="' + (isAdmin?6:5) + '" class="roster-open-cell">PILOT SLOTS OPEN \u2014 <a href="#join">APPLY NOW \u2192</a></td></tr>';
+    tbody.innerHTML = '<tr class="roster-open-row"><td colspan="3" class="roster-open-cell">PILOT SLOTS OPEN \u2014 <a href="#join">APPLY NOW \u2192</a></td></tr>';
     return;
   }
   var html = list.map(function(p) {
-    var badge = p.status === 'active' ? 'badge-active' : 'badge-inactive';
     return '<tr>' +
       '<td><span class="callsign">' + escH(p.callsign) + '</span></td>' +
-      '<td>' + escH(p.rank) + '</td>' +
-      '<td>' + escH(p.airframe) + '</td>' +
+      '<td>' + escH(p.squadron) + '</td>' +
       '<td>' + escH(p.role) + '</td>' +
-      '<td><span class="status-badge ' + badge + '">' + escH(p.status).toUpperCase() + '</span></td>' +
-      (isAdmin ? '<td class="roster-admin-col"><button class="admin-edit-btn" onclick="editRoster(' + p.id + ')">&#x270E;</button> <button class="admin-delete-btn" onclick="deleteRoster(' + p.id + ')">&#x2715;</button></td>' : '') +
     '</tr>';
   }).join('');
-  html += '<tr class="roster-open-row"><td colspan="' + (isAdmin?6:5) + '" class="roster-open-cell">PILOT SLOTS OPEN \u2014 <a href="#join">APPLY NOW \u2192</a></td></tr>';
+  html += '<tr class="roster-open-row"><td colspan="3" class="roster-open-cell">PILOT SLOTS OPEN \u2014 <a href="#join">APPLY NOW \u2192</a></td></tr>';
   tbody.innerHTML = html;
 }
-
-/* ── Roster modal ── */
-function openRosterModal(id) {
-  var overlay = document.getElementById('rosterModalOverlay');
-  overlay.style.display = 'flex';
-  document.body.style.overflow = 'hidden';
-  document.getElementById('rosterFormError').style.display = 'none';
-  if (id) {
-    var p = ROSTER.find(function(r){return r.id===id;});
-    if (p) {
-      document.getElementById('rosterModalTitle').textContent = '\u270E EDIT PILOT';
-      document.getElementById('rEditId').value = p.id;
-      document.getElementById('rCallsign').value = p.callsign;
-      document.getElementById('rRank').value = p.rank || '';
-      document.getElementById('rAirframe').value = p.airframe || '';
-      document.getElementById('rRole').value = p.role || '';
-      document.getElementById('rStatus').value = p.status || 'active';
-      document.getElementById('rSquadron').value = p.squadron || '';
-    }
-  } else {
-    document.getElementById('rosterModalTitle').textContent = '\u2295 ADD PILOT';
-    document.getElementById('rEditId').value = '';
-    document.getElementById('rosterForm').reset();
-  }
-}
-function closeRosterModal() {
-  document.getElementById('rosterModalOverlay').style.display = 'none';
-  document.body.style.overflow = '';
-}
-function editRoster(id) { openRosterModal(id); }
-function deleteRoster(id) {
-  if (!confirm('Remove this pilot from the roster?')) return;
-  fetch('/api/roster/' + id, {
-    method: 'DELETE',
-    headers: { 'Authorization': 'Bearer ' + (getToken()||'') }
-  }).then(function(r){return r.json();}).then(function() {
-    ROSTER = ROSTER.filter(function(r){return r.id!==id;});
-    renderRoster(ROSTER);
-  });
-}
-function submitRoster(e) {
-  e.preventDefault();
-  var editId = document.getElementById('rEditId').value;
-  var data = {
-    callsign: document.getElementById('rCallsign').value.trim(),
-    rank:     document.getElementById('rRank').value.trim(),
-    airframe: document.getElementById('rAirframe').value.trim(),
-    role:     document.getElementById('rRole').value.trim(),
-    status:   document.getElementById('rStatus').value,
-    squadron: document.getElementById('rSquadron').value,
-  };
-  if (!data.callsign) {
-    document.getElementById('rosterFormError').textContent = 'Callsign is required.';
-    document.getElementById('rosterFormError').style.display = '';
-    return;
-  }
-  var url    = editId ? '/api/roster/' + editId : '/api/roster';
-  var method = editId ? 'PUT' : 'POST';
-  fetch(url, {
-    method: method,
-    headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+(getToken()||'') },
-    body: JSON.stringify(data)
-  }).then(function(r){return r.json().then(function(j){return {ok:r.ok,body:j};});})
-  .then(function(res) {
-    if (!res.ok) { document.getElementById('rosterFormError').textContent = res.body.error; document.getElementById('rosterFormError').style.display = ''; return; }
-    if (editId) { var idx = ROSTER.findIndex(function(r){return r.id===Number(editId);}); if (idx!==-1) ROSTER[idx]=res.body; }
-    else ROSTER.push(res.body);
-    renderRoster(ROSTER);
-    closeRosterModal();
-  });
-}
-document.getElementById('rosterModalOverlay').addEventListener('click', function(e) { if (e.target === this) closeRosterModal(); });
