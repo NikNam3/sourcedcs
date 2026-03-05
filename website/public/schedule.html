@@ -203,6 +203,7 @@ function logout() {
 
 var currentToken = getToken();
 (function() {
+  if (!currentToken) return;
   var user = getUser();
   var name = (user && user.name) ? user.name.toUpperCase() : 'PILOT';
   var btn = document.getElementById('loginBtn');
