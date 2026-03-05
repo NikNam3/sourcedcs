@@ -1,0 +1,4 @@
+{
+  "Example Pilot Role": { "squadron": "ALPHA", "role": "Pilot" },
+  "Example RIO Role":   { "squadron": "ALPHA", "role": "RIO" }
+}

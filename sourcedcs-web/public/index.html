@@ -129,16 +129,16 @@
   <div class="section-container">
     <div class="section-label">PILOT ROSTER</div>
     <div class="admin-bar" id="rosterAdminBar" style="display:none">
-      <span class="admin-bar-label">ADMIN: ROSTER MANAGEMENT</span>
+      <span class="admin-bar-label">ADMIN: ROSTER (via Discord)</span>
       <div class="admin-bar-actions">
-        <button class="btn btn-primary admin-add-btn" onclick="openRosterModal()"><span class="btn-icon">&#x2295;</span> ADD PILOT</button>
+        <button class="btn btn-primary admin-add-btn" onclick="refreshRoster()"><span class="btn-icon">&#x21BB;</span> REFRESH FROM DISCORD</button>
       </div>
     </div>
     <div class="roster-scroll">
       <table class="roster-table">
-        <thead><tr><th>CALLSIGN</th><th>RANK</th><th>AIRFRAME</th><th>ROLE</th><th>STATUS</th><th class="roster-admin-col" style="display:none"></th></tr></thead>
+        <thead><tr><th>CALLSIGN</th><th>SQUADRON</th><th>ROLE</th></tr></thead>
         <tbody id="rosterBody">
-          <tr><td colspan="5" style="text-align:center;color:var(--text-3)">LOADING ROSTER...</td></tr>
+          <tr><td colspan="3" style="text-align:center;color:var(--text-3)">LOADING ROSTER...</td></tr>
         </tbody>
       </table>
     </div>
@@ -276,46 +276,6 @@
         <div class="form-actions">
           <button type="button" class="btn btn-ghost" onclick="closeApplyModal()">CANCEL</button>
           <button type="submit" class="btn btn-primary" id="applySubmitBtn"><span class="btn-icon">&#x2295;</span> SUBMIT APPLICATION</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-
-<!-- ROSTER MODAL -->
-<div class="modal-overlay" id="rosterModalOverlay" role="dialog" aria-modal="true" style="display:none">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title" id="rosterModalTitle">&#x2295; ADD PILOT</div>
-      <button class="modal-close" onclick="closeRosterModal()" aria-label="Close">&times;</button>
-    </div>
-    <div class="modal-body">
-      <form id="rosterForm" onsubmit="submitRoster(event)" novalidate>
-        <input type="hidden" id="rEditId" value="">
-        <div class="form-row">
-          <div class="form-group"><label class="form-label" for="rCallsign">CALLSIGN <span class="form-required">*</span></label><input class="form-input" id="rCallsign" maxlength="32" required></div>
-          <div class="form-group"><label class="form-label" for="rRank">RANK</label><input class="form-input" id="rRank" maxlength="32"></div>
-        </div>
-        <div class="form-row">
-          <div class="form-group"><label class="form-label" for="rAirframe">AIRFRAME</label><input class="form-input" id="rAirframe" maxlength="64"></div>
-          <div class="form-group"><label class="form-label" for="rRole">ROLE</label><input class="form-input" id="rRole" maxlength="64"></div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label" for="rStatus">STATUS</label>
-            <select class="form-select" id="rStatus"><option value="active">ACTIVE</option><option value="inactive">INACTIVE</option><option value="reserve">RESERVE</option></select>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="rSquadron">SQUADRON</label>
-            <select class="form-select" id="rSquadron">
-              <option value="">— NONE —</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-error" id="rosterFormError" style="display:none"></div>
-        <div class="form-actions">
-          <button type="button" class="btn btn-ghost" onclick="closeRosterModal()">CANCEL</button>
-          <button type="submit" class="btn btn-primary" id="rosterSubmitBtn"><span class="btn-icon">&#x2295;</span> SAVE PILOT</button>
         </div>
       </form>
     </div>

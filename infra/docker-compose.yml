@@ -175,6 +175,8 @@ services:
       - OLYMPUS_URL=${OLYMPUS_URL}
       - ASACS_URL=${ASACS_URL}
       - GITHUB_URL=${GITHUB_URL}
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - DISCORD_GUILD_ID=${DISCORD_GUILD_ID}
     networks:
       - web
 
