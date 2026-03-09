@@ -6,7 +6,7 @@ import math
 import re
 
 from .models import Carrier, Flight, Waypoint
-from .projection import dms
+from .projection import dcs_to_latlon, dms
 from .weapons import encode_loadout
 
 # ── Syria / PG / Caucasus airfield ID → ICAO / name lookup ───────────────────
@@ -347,19 +347,18 @@ def merge_shared_steerpoints(
         sp_type = cluster[0]["sp"]["special_type"]
 
         # Compute centroid of all points in the cluster
-        lats, lons, alts = [], [], []
+        dcs_xs, dcs_ys, alts = [], [], []
         for c in cluster:
             sp = c["sp"]
             # Use the raw DCS coords for position averaging
-            lats.append(sp.get("_x", 0))
-            lons.append(sp.get("_y", 0))
+            dcs_xs.append(sp.get("_x", 0))
+            dcs_ys.append(sp.get("_y", 0))
             alt = sp.get("_alt_ft")
             if alt is not None:
                 alts.append(alt)
 
-        from .projection import dcs_to_latlon
-        avg_x = sum(lats) / len(lats)
-        avg_y = sum(lons) / len(lons)
+        avg_x = sum(dcs_xs) / len(dcs_xs)
+        avg_y = sum(dcs_ys) / len(dcs_ys)
         avg_alt = round(sum(alts) / len(alts)) if alts else None
 
         # Determine name — pick the first non-None name from cluster members

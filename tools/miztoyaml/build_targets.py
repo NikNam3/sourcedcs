@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 
 from .models import Drawing, Group
 from .projection import dcs_to_latlon, dms
@@ -156,7 +157,7 @@ def _handle_free(d: Drawing, theatre: str) -> dict | None:
 
 # Handler registry: polygon_mode → handler function.
 # Add new airspace types by registering a handler here.
-_AIRSPACE_HANDLERS: dict[str, callable] = {
+_AIRSPACE_HANDLERS: dict[str, Callable] = {
     'circle': _handle_circle,
     'rect':   _handle_rect,
     'free':   _handle_free,
