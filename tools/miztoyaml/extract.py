@@ -172,11 +172,18 @@ def extract(miz_path: str, coalition: str = "blue") -> dict:
 
 
 def main():
+    import logging
     ap = argparse.ArgumentParser(description="DCS .miz → ATO brief YAML")
     ap.add_argument("miz")
     ap.add_argument("--coalition", "-c", default="blue", choices=["blue", "red"])
     ap.add_argument("--output",    "-o", default=None)
+    ap.add_argument("--verbose",   "-v", action="store_true",
+                    help="Enable debug logging for waypoint extraction and merging")
     args = ap.parse_args()
+
+    log_level = logging.DEBUG if args.verbose else logging.INFO
+    logging.basicConfig(level=log_level,
+                        format="[%(levelname)s] %(name)s: %(message)s")
 
     out = args.output or (Path(args.miz).stem + ".yaml")
     doc = extract(args.miz, args.coalition)

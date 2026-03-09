@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import math
 import re
 from collections import defaultdict
@@ -9,6 +10,8 @@ from collections import defaultdict
 from .models import Carrier, Flight, Waypoint
 from .projection import dms
 from .weapons import encode_loadout
+
+logger = logging.getLogger(__name__)
 
 # ── Syria / PG / Caucasus airfield ID → ICAO / name lookup ───────────────────
 AIRDROME_IDS: dict[int, dict] = {
@@ -207,6 +210,9 @@ def _classify_waypoints(flight: Flight,
                     continue
         inner.append(wp)
 
+    logger.debug("[%s] %d inner waypoints after filtering takeoff/landing",
+                 flight.name, len(inner))
+
     # Build flat DMS -> aim_point_id index across all targets
     aim_by_dms: dict[str, str] = {}
     for tgt in targets.values():
@@ -219,13 +225,15 @@ def _classify_waypoints(flight: Flight,
     emitted_orbits: list[tuple[float, float]] = []
 
     result = []
-    for wp in inner:
+    for wp_idx, wp in enumerate(inner):
         wp_dms = dms(wp.lat, wp.lon)
         special_type, special_name = _parse_special_waypoint(wp.name)
 
         # Marshal point handling
         if special_type == "marshal":
             marshal_display = wp.name.strip() if wp.name else "MARSHAL"
+            logger.debug("[%s] wp %d: MARSHAL %r → ref_pts key=%r  coords=%s",
+                         flight.name, wp_idx, wp.name, marshal_display, wp_dms)
             if marshal_display not in ref_pts:
                 ref_entry: dict = {
                     "name":   marshal_display,
@@ -240,9 +248,14 @@ def _classify_waypoints(flight: Flight,
                 "name": marshal_display,
                 "coords": wp_dms,
                 "special_type": "marshal",
+                # Store raw DCS coords so 3D merge calculations are accurate
+                "_x": wp.x,
+                "_y": wp.y,
             }
             if special_name:
                 sp_entry["special_name"] = special_name
+            if wp.alt_ft is not None:
+                sp_entry["altitude_ft"] = wp.alt_ft
             result.append(sp_entry)
             continue
 
@@ -253,6 +266,8 @@ def _classify_waypoints(flight: Flight,
                 for ox, oy in emitted_orbits
             )
             if too_close:
+                logger.debug("[%s] wp %d: orbit too close to previous orbit — skipping",
+                             flight.name, wp_idx)
                 continue
             emitted_orbits.append((wp.x, wp.y))
 
@@ -270,7 +285,7 @@ def _classify_waypoints(flight: Flight,
         if aim_point_id:
             entry["aim_point_id"] = aim_point_id
 
-        # Tag special types for merge processing
+        # Tag special types for merge processing and frontend rendering
         if special_type:
             entry["special_type"] = special_type
             if special_name:
@@ -292,6 +307,8 @@ def _classify_waypoints(flight: Flight,
                 "direction":   direction,
             }
 
+        logger.debug("[%s] wp %d: %r  special=%s  aim=%s  coords=%s",
+                     flight.name, wp_idx, wp.name, special_type, aim_point_id, wp_dms)
         result.append(entry)
 
     return result
@@ -315,6 +332,9 @@ def merge_shared_steerpoints(
             if sp.get("special_type"):
                 specials.append((flight_name, i, sp))
 
+    logger.debug("merge_shared_steerpoints: %d special waypoints across %d flights",
+                 len(specials), len(flight_steerpoints))
+
     groups: dict[tuple[str, str | None], list[tuple[str, int, dict]]] = defaultdict(list)
     for flight_name, idx, sp in specials:
         key = (sp["special_type"], sp.get("special_name"))
@@ -325,7 +345,12 @@ def merge_shared_steerpoints(
     merged_indices: dict[tuple[str, int], str] = {}
 
     for (stype, sname), candidates in groups.items():
+        logger.debug("  group (%s/%s): %d candidates: %s",
+                     stype, sname,
+                     len(candidates),
+                     [fn for fn, _, _ in candidates])
         if len(candidates) < 2:
+            logger.debug("    → only 1 candidate, no merge")
             continue
 
         clusters: list[list[tuple[str, int, dict]]] = []
@@ -346,9 +371,14 @@ def merge_shared_steerpoints(
                         sp2.get("_x", 0), sp2.get("_y", 0), sp2.get("altitude_ft"),
                     )
                     if dist <= _MERGE_THRESHOLD_FT:
+                        logger.debug("    merging %s#%d and %s#%d: dist=%.0fft ≤ %.0fft",
+                                     fn1, idx1, fn2, idx2, dist, _MERGE_THRESHOLD_FT)
                         cluster.append((fn2, idx2, sp2))
                         used.add(j)
                         break
+                    else:
+                        logger.debug("    NOT merging %s#%d and %s#%d: dist=%.0fft > %.0fft",
+                                     fn1, idx1, fn2, idx2, dist, _MERGE_THRESHOLD_FT)
 
             if len(cluster) >= 2:
                 clusters.append(cluster)
@@ -388,9 +418,13 @@ def merge_shared_steerpoints(
             if avg_alt is not None:
                 ssp["altitude_ft"] = avg_alt
 
+            logger.info("  → %s: type=%s  flights=%s  coords=%s",
+                        ssp_id, stype, ssp["flights"], centroid_coords)
             shared_steerpoints.append(ssp)
 
-    # Update flight steerpoints: replace merged entries with shared_steerpoint_id refs
+    # Update flight steerpoints: replace merged entries with shared_steerpoint_id refs.
+    # Non-merged special waypoints keep their special_type/special_name so the
+    # frontend can render them with the appropriate icon.
     updated: dict[str, list[dict]] = {}
     for flight_name, sps in flight_steerpoints.items():
         new_sps = []
@@ -399,12 +433,14 @@ def merge_shared_steerpoints(
             if ssp_id:
                 new_sps.append({"shared_steerpoint_id": ssp_id})
             else:
+                # Strip internal _x/_y DCS coordinate fields used during merge calculations.
+                # non-merged special waypoints keep their special_type/special_name so the
+                # frontend can render them with the appropriate icon.
                 clean = {k: v for k, v in sp.items() if not k.startswith("_")}
-                clean.pop("special_type", None)
-                clean.pop("special_name", None)
                 new_sps.append(clean)
         updated[flight_name] = new_sps
 
+    logger.info("merge_shared_steerpoints: %d shared steerpoints created", len(shared_steerpoints))
     return shared_steerpoints, updated
 
 
@@ -581,6 +617,8 @@ def build_missions(flights: list[Flight], msn_start: int,
         steer_pts = _classify_waypoints(f, flights, targets, carriers,
                                          airfields, ref_pts)
         flight_steerpoints[callsign] = steer_pts
+        logger.info("[%s] %s: %d steer_points extracted (deploy=%s  recovery=%s)",
+                    msn_num, callsign, len(steer_pts), deploy, recovery)
 
         msn_targets = _build_mission_targets(steer_pts, targets, f.task)
 

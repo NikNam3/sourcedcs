@@ -210,105 +210,76 @@ function collectData(ato, aco) {
     const deployLoc = resolve(m.deploy_location_icao);
     if (deployLoc) route.pts.push({ ...deployLoc, kind: 'route-node' });
 
-    // 2. Steer points — support both inline coords and name_ref to namedLocs.
-    //    name_ref takes precedence over coords when both are present.
-    //    Steer points with an aim_point_id are drawn as target-approach legs
-    //    (thicker dashed line) and shown as diamond target markers instead of
-    //    hollow steer circles.  If a steer point has an 'orbit' block, also
-    //    push an anchor airspace so the racetrack pattern is drawn on the map.
-    //    When name_ref is used the referenced location (airfield, carrier, marshal
-    //    point) already has its own named marker on the map.  A 'steer-ref' point
-    //    is pushed so a small unlabelled hollow circle appears at the waypoint,
-    //    making the route's exact passage through that location visible without
-    //    duplicating the named-location label.
-    //    Pre-scan: collect all aim-point coord keys in this mission so that steer
-    //    points which share a coordinate with an aim point (even without an explicit
-    //    aim_point_id link) are also rendered as unlabelled 'steer-ref' markers —
-    //    the aim-point diamond+label takes priority.
-    //    Also collect named-location (airfield, carrier, marshal point) coord keys:
-    //    if a steer point shares a coordinate with one of these reference points
-    //    (without using name_ref), the named-location marker takes priority.
-    const aimPtCoordKeys = new Set();
-    (m.targets || []).forEach(target => {
-      (target.aim_points || []).forEach(ap => {
-        const raw = typeof ap === 'string' ? ap : ap.coords;
-        const pt  = parseCoord(raw);
-        if (pt) aimPtCoordKeys.add(`${pt.lat},${pt.lon}`);
-      });
-    });
-    const namedLocCoordKeys = new Set(
-      Object.values(namedLocs).map(pt => `${pt.lat},${pt.lon}`)
-    );
-
+    // 2. Steer points — all waypoints contribute to the flight-path line.
+    //    Only IP and EP special waypoints (special_type:'ip'/'ep') are drawn with
+    //    an icon and label.  Marshal waypoints already have their own diamond marker
+    //    (from ato.marshal_points) so no additional icon is added for them.
+    //    Target waypoints (aim_point_id) drive the target-approach leg style on the
+    //    line and are labelled by the separate aim-point diamond markers in step 3.
+    //    Shared steerpoints (shared_steerpoint_id) are drawn by their own
+    //    'shared-steerpoint' markers added in Phase 4b; only the route node is
+    //    needed here to keep the flight-path line continuous.
+    //    Orbit blocks add a racetrack airspace shape to the map.
     (m.steer_points || []).forEach((sp, i) => {
-      // Handle shared steerpoint references
+      // Handle shared steerpoint references — route line only; SSP has its own marker.
       const sspId = typeof sp === 'object' ? sp.shared_steerpoint_id : null;
-      if (sspId && sharedSteerpointMap[sspId]) {
-        const ssp = sharedSteerpointMap[sspId];
-        const p = { lat: ssp.lat, lon: ssp.lon };
-        route.pts.push({ ...p, kind: 'route-node' });
-        const sspTypeLabel = (ssp.type || '').toUpperCase();
-        points.push({
-          ...p, kind: 'steer-ref',
-          label: `${callsign}${msnNum ? ' · ' + msnNum : ''}`,
-          sub: ssp.name ? `${sspTypeLabel} ${ssp.name}` : sspTypeLabel,
-          color, msnType: m.mission_type, mission: m,
-          altitude_ft: ssp.altitude_ft ?? null,
-        });
+      if (sspId) {
+        if (sharedSteerpointMap[sspId]) {
+          const ssp = sharedSteerpointMap[sspId];
+          route.pts.push({ lat: ssp.lat, lon: ssp.lon, kind: 'route-node' });
+        }
         return;
       }
 
-      const nameRef = typeof sp === 'object' ? sp.name_ref : null;
-      const raw     = typeof sp === 'string' ? sp : sp.coords;
-      const hasName = typeof sp === 'object' && sp.name;
-      const label   = hasName ? sp.name : null;
-      const apId    = typeof sp === 'object' ? sp.aim_point_id : null;
-      const altFt   = (typeof sp === 'object' && sp.altitude_ft != null) ? sp.altitude_ft : null;
-      const p       = (nameRef ? resolve(nameRef) : null) || parseCoord(raw);
-      if (p) {
-        route.pts.push({ ...p, kind: apId ? 'target-node' : 'route-node' });
-        const colocatedWithAimPt   = aimPtCoordKeys.has(`${p.lat},${p.lon}`);
-        const colocatedWithNamedLoc = namedLocCoordKeys.has(`${p.lat},${p.lon}`);
-        if (nameRef || apId || colocatedWithAimPt || colocatedWithNamedLoc || !hasName) {
-          points.push({
-            ...p, kind: 'steer-ref',
-            label: `${callsign}${msnNum ? ' · ' + msnNum : ''}`,
-            sub: nameRef || label || '', color, msnType: m.mission_type, mission: m,
-            altitude_ft: altFt,
+      const nameRef     = typeof sp === 'object' ? sp.name_ref : null;
+      const raw         = typeof sp === 'string' ? sp : sp.coords;
+      const label       = (typeof sp === 'object' && sp.name) ? sp.name : null;
+      const apId        = typeof sp === 'object' ? sp.aim_point_id : null;
+      const altFt       = (typeof sp === 'object' && sp.altitude_ft != null) ? sp.altitude_ft : null;
+      const specialType = typeof sp === 'object' ? sp.special_type : null;
+      const p           = (nameRef ? resolve(nameRef) : null) || parseCoord(raw);
+      if (!p) return;
+
+      // Always add to route for the flight-path line
+      route.pts.push({ ...p, kind: apId ? 'target-node' : 'route-node' });
+
+      // Only IP and EP waypoints get an icon + label on the map.
+      // Marshal waypoints have their own dedicated diamond markers.
+      // All other waypoints (named or unnamed) are route-shaping only.
+      if (specialType === 'ip' || specialType === 'ep') {
+        points.push({
+          ...p, kind: 'steer',
+          label: `${callsign}${msnNum ? ' · ' + msnNum : ''}`,
+          sub: label || specialType.toUpperCase(),
+          color, msnType: m.mission_type, mission: m,
+          altitude_ft: altFt,
+        });
+      }
+
+      // Orbit/anchor track: render a racetrack on the map.
+      // Skip if a near-identical orbit has already been pushed (proximity dedup).
+      if (typeof sp === 'object' && sp.orbit) {
+        const orb = sp.orbit;
+        const alreadyDrawn = airspaces.some(
+          a => a.shape === 'anchor' && _distNm(p.lat, p.lon, a.lat, a.lon) < ORBIT_MERGE_NM
+        );
+        if (!alreadyDrawn) {
+          airspaces.push({
+            kind: 'airspace',
+            name: label || `${callsign} ORBIT`,
+            type: m.mission_type === 'TANKER' ? 'REFUEL' : 'ORBIT',
+            altLower: orb.alt_ft != null ? Math.round(orb.alt_ft / 100) * 100 + 'ft' : null,
+            altUpper: null,
+            lat: p.lat, lon: p.lon,
+            shape: 'anchor',
+            anchorPt: p,
+            headingDeg: orb.heading_deg || 0,
+            legLengthNm: orb.leg_nm || 10,
+            widthNm: orb.width_nm || 5,
+            direction: (orb.direction || 'ccw').toLowerCase(),
+            speedKts: orb.speed_kts,
+            missions: [msnNum].filter(Boolean),
           });
-        } else {
-          points.push({
-            ...p, kind: 'steer',
-            label: `${callsign}${msnNum ? ' · ' + msnNum : ''}`,
-            sub: label, color, msnType: m.mission_type, mission: m,
-            altitude_ft: altFt,
-          });
-        }
-        // Orbit/anchor track: render a racetrack on the map.
-        // Skip if a near-identical orbit has already been pushed (proximity dedup).
-        if (typeof sp === 'object' && sp.orbit) {
-          const orb = sp.orbit;
-          const alreadyDrawn = airspaces.some(
-            a => a.shape === 'anchor' && _distNm(p.lat, p.lon, a.lat, a.lon) < ORBIT_MERGE_NM
-          );
-          if (!alreadyDrawn) {
-            airspaces.push({
-              kind: 'airspace',
-              name: label || `${callsign} ORBIT`,
-              type: m.mission_type === 'TANKER' ? 'REFUEL' : 'ORBIT',
-              altLower: orb.alt_ft != null ? Math.round(orb.alt_ft / 100) * 100 + 'ft' : null,
-              altUpper: null,
-              lat: p.lat, lon: p.lon,
-              shape: 'anchor',
-              anchorPt: p,
-              headingDeg: orb.heading_deg || 0,
-              legLengthNm: orb.leg_nm || 10,
-              widthNm: orb.width_nm || 5,
-              direction: (orb.direction || 'ccw').toLowerCase(),
-              speedKts: orb.speed_kts,
-              missions: [msnNum].filter(Boolean),
-            });
-          }
         }
       }
     });
