@@ -608,6 +608,41 @@ function loadPackage_obj(data) {
     });
   }
 
+  // ── Resolve shared steerpoints into mission steer_points ─
+  // Build a lookup map from shared steerpoint id → data, then inline the
+  // shared steerpoint coords/name into each referencing flight's steer_points.
+  if (data.shared_steerpoints && pkg.ato?.missions) {
+    const sspMap = {};
+    data.shared_steerpoints.forEach(ssp => {
+      if (ssp.id) sspMap[ssp.id] = ssp;
+    });
+    // Store the shared steerpoints on the ato for map rendering
+    pkg.ato.shared_steerpoints = data.shared_steerpoints;
+
+    pkg.ato.missions.forEach(m => {
+      if (!m.steer_points) return;
+      m.steer_points = m.steer_points.map(sp => {
+        if (sp.shared_steerpoint_id && sspMap[sp.shared_steerpoint_id]) {
+          const ref = sspMap[sp.shared_steerpoint_id];
+          return {
+            coords: ref.coords,
+            name: ref.name || ref.type?.toUpperCase() || sp.shared_steerpoint_id,
+            special_type: ref.type,
+            altitude_ft: ref.altitude_ft,
+            _shared: true,
+            _shared_id: sp.shared_steerpoint_id,
+            _shared_flights: ref.flights || [],
+          };
+        }
+        return sp;
+      });
+    });
+  }
+
+  // ── Resolve support flights into ato for map rendering ───
+  // Support flights are already in ato.support_flights from the YAML.
+  // Just ensure the data is available for map-data.js.
+
   STATE.selectedIdx = -1;
 
   // Show main content, hide upload screen

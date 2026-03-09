@@ -243,9 +243,12 @@ function collectData(ato, aco) {
     (m.steer_points || []).forEach((sp, i) => {
       const nameRef = typeof sp === 'object' ? sp.name_ref : null;
       const raw     = typeof sp === 'string' ? sp : sp.coords;
-      const label   = (typeof sp === 'object' && sp.name) ? sp.name : `SP${i + 1}`;
+      const hasName = typeof sp === 'object' && sp.name;
+      const label   = hasName ? sp.name : (typeof sp === 'string' ? `SP${i + 1}` : null);
       const apId    = typeof sp === 'object' ? sp.aim_point_id : null;
       const altFt   = (typeof sp === 'object' && sp.altitude_ft != null) ? sp.altitude_ft : null;
+      const isShared = typeof sp === 'object' && sp._shared;
+      const sharedFlights = (typeof sp === 'object' && sp._shared_flights) || [];
       const p       = (nameRef ? resolve(nameRef) : null) || parseCoord(raw);
       if (p) {
         // Aim-point steer points use a thicker target-approach line on the route
@@ -254,23 +257,29 @@ function collectData(ato, aco) {
         // labels this location: name_ref → named-location marker, aim_point_id or
         // coordinate-coincident aim point → aim-point diamond+label, or a
         // coordinate-coincident named location (airfield/carrier/marshal).
-        // In all these cases push only a small unlabelled 'steer-ref' circle so the
-        // route passage remains visible without overlaying the other label.
+        // Unnamed waypoints (no name key) also get no label — they are
+        // route-shaping points only.
         const colocatedWithAimPt   = aimPtCoordKeys.has(`${p.lat},${p.lon}`);
         const colocatedWithNamedLoc = namedLocCoordKeys.has(`${p.lat},${p.lon}`);
-        if (nameRef || apId || colocatedWithAimPt || colocatedWithNamedLoc) {
+        if (nameRef || apId || colocatedWithAimPt || colocatedWithNamedLoc || !label) {
           points.push({
             ...p, kind: 'steer-ref',
             label: `${callsign}${msnNum ? ' · ' + msnNum : ''}`,
-            sub: nameRef || label, color, msnType: m.mission_type, mission: m,
+            sub: nameRef || label || '', color, msnType: m.mission_type, mission: m,
             altitude_ft: altFt,
           });
         } else {
+          // For shared steerpoints, annotate the label with all flight callsigns
+          const sharedLabel = isShared && sharedFlights.length > 0
+            ? sharedFlights.join(', ')
+            : `${callsign}${msnNum ? ' · ' + msnNum : ''}`;
           points.push({
             ...p, kind: 'steer',
-            label: `${callsign}${msnNum ? ' · ' + msnNum : ''}`,
+            label: sharedLabel,
             sub: label, color, msnType: m.mission_type, mission: m,
             altitude_ft: altFt,
+            _shared: isShared,
+            _shared_flights: sharedFlights,
           });
         }
         // Orbit/anchor track: render a racetrack on the map.
@@ -293,7 +302,7 @@ function collectData(ato, aco) {
               headingDeg: orb.heading_deg || 0,
               legLengthNm: orb.leg_nm || 10,
               widthNm: orb.width_nm || 5,
-              direction: orb.cw === false ? 'ccw' : 'cw',
+              direction: orb.cw ? 'cw' : 'ccw',
               speedKts: orb.speed_kts,
               missions: [msnNum].filter(Boolean),
             });
@@ -346,9 +355,67 @@ function collectData(ato, aco) {
       headingDeg: t.orbit_heading_deg || 0,
       legLengthNm: t.orbit_leg_nm || 10,
       widthNm: t.orbit_width_nm || 5,
-      direction: (typeof t.orbit_direction === 'string' ? t.orbit_direction : 'cw').toLowerCase(),
+      direction: (typeof t.orbit_direction === 'string' ? t.orbit_direction : 'ccw').toLowerCase(),
       speedKts: t.speed_kts,
     });
+  });
+
+  // ── Phase 4b: Support flight routes + orbit anchors ──────
+  (ato.support_flights || []).forEach(sf => {
+    const sfColor  = sf.type === 'TANKER' ? typeColor('TANKER') : typeColor('AWACS');
+    const sfKey    = sf.callsign || sf.type || '?';
+    const sfRoute  = { msnKey: sfKey, callsign: sf.callsign || '?', msnNum: '', color: sfColor, pts: [] };
+
+    // Deploy location
+    const sfDeploy = resolve(sf.deploy_location_icao);
+    if (sfDeploy) sfRoute.pts.push({ ...sfDeploy, kind: 'route-node' });
+
+    // Steer points (with orbit rendering)
+    (sf.steer_points || []).forEach((sp, i) => {
+      const raw   = typeof sp === 'string' ? sp : sp.coords;
+      const label = (typeof sp === 'object' && sp.name) ? sp.name : null;
+      const p     = parseCoord(raw);
+      if (p) {
+        sfRoute.pts.push({ ...p, kind: 'route-node' });
+        if (label) {
+          points.push({
+            ...p, kind: 'steer',
+            label: sf.callsign || sf.type || '?',
+            sub: label, color: sfColor, msnType: sf.type,
+          });
+        }
+        // Orbit rendering for support flight steer points
+        if (typeof sp === 'object' && sp.orbit) {
+          const orb = sp.orbit;
+          const alreadyDrawn = airspaces.some(
+            a => a.shape === 'anchor' && _distNm(p.lat, p.lon, a.lat, a.lon) < ORBIT_MERGE_NM
+          );
+          if (!alreadyDrawn) {
+            airspaces.push({
+              kind: 'airspace',
+              name: label || `${sf.callsign || sf.type} ORBIT`,
+              type: sf.type === 'TANKER' ? 'REFUEL' : 'ORBIT',
+              altLower: orb.alt_ft != null ? Math.round(orb.alt_ft / 100) * 100 + 'ft' : null,
+              altUpper: null,
+              lat: p.lat, lon: p.lon,
+              shape: 'anchor',
+              anchorPt: p,
+              headingDeg: orb.heading_deg || 0,
+              legLengthNm: orb.leg_nm || 10,
+              widthNm: orb.width_nm || 5,
+              direction: orb.cw ? 'cw' : 'ccw',
+              speedKts: orb.speed_kts,
+            });
+          }
+        }
+      }
+    });
+
+    // Recovery location
+    const sfRec = resolve(sf.recovery_icao) || sfDeploy;
+    if (sfRec) sfRoute.pts.push({ ...sfRec, kind: 'route-node' });
+
+    if (sfRoute.pts.length >= 2) routes.push(sfRoute);
   });
 
   // ── Phase 5: ACO airspace measures ────────────────────────
