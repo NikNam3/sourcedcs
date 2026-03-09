@@ -60,10 +60,51 @@ _NM_TO_M = 1852.0
 _FT_TO_M = 0.3048
 # Proximity threshold: orbit/steer points closer than this are considered duplicates
 _ORBIT_MERGE_NM = 2.0
+# Proximity threshold for waypoint merging (shared steerpoints): 750 ft in metres
+_MERGE_THRESHOLD_M = 750 * _FT_TO_M
 # Reverse ICAO lookup set for O(1) token matching in recovery detection
 _AIRDROME_ICAO_SET: frozenset[str] = frozenset(
     info["icao"] for info in AIRDROME_IDS.values()
 )
+
+# ── Special waypoint type registry ───────────────────────────────────────────
+# Maps an upper-case prefix to the canonical special-type string used in the
+# YAML schema.  To add a new special type, add an entry here — no other code
+# needs to change.
+_SPECIAL_WAYPOINT_TYPES: dict[str, str] = {
+    "IP":      "ip",       # Ingress Point
+    "EP":      "ep",       # Egress Point
+    "MARSHAL": "marshal",  # Marshal Point
+}
+
+
+def _parse_special_waypoint(name: str | None) -> tuple[str, str | None] | None:
+    """
+    Parse a waypoint name for a special-type prefix.
+
+    Returns ``(type_str, suffix_name)`` if the name matches a registered prefix,
+    or ``None`` for generic waypoints.
+
+    Examples::
+        "IP"           → ("ip", None)
+        "IP WEST"      → ("ip", "WEST")
+        "EP"           → ("ep", None)
+        "EP NORTH"     → ("ep", "NORTH")
+        "MARSHAL"      → ("marshal", None)
+        "MARSHAL ALPHA"→ ("marshal", "ALPHA")
+        "SP1"          → None  (generic)
+    """
+    if not name:
+        return None
+    stripped = name.strip()
+    upper = stripped.upper()
+    for prefix, wp_type in _SPECIAL_WAYPOINT_TYPES.items():
+        if upper == prefix:
+            return (wp_type, None)
+        if upper.startswith(prefix + " "):
+            suffix = stripped[len(prefix):].strip()
+            return (wp_type, suffix if suffix else None)
+    return None
 
 
 def _nm_between(x1: float, y1: float, x2: float, y2: float) -> float:
@@ -106,67 +147,63 @@ def build_airfields_registry(flights: list[Flight], carriers: list[Carrier],
     return seen
 
 
+# ── Steerpoint extraction ────────────────────────────────────────────────────
+
+_TAKEOFF_TYPES = ('TakeOffParking', 'TakeOff', 'TakeOffParkingHot',
+                  'TakeOffGround')
+_LANDING_TYPES = ('Land',)
+
+
+def _filter_inner_waypoints(wpts: list[Waypoint]) -> list[Waypoint]:
+    """
+    Filter a flight's waypoint list to remove takeoff and landing waypoints,
+    keeping only en-route waypoints.  Orbit waypoints are always kept.
+    """
+    if len(wpts) < 2:
+        return []
+
+    inner: list[Waypoint] = []
+    for i, wp in enumerate(wpts):
+        if wp.typ in _TAKEOFF_TYPES:
+            continue
+        if wp.typ in _LANDING_TYPES and not wp.is_orbit:
+            continue
+        # Skip last waypoint if it looks like a recovery and is NOT an orbit
+        if i == len(wpts) - 1 and not wp.is_orbit:
+            if wp.airdrome_id is not None or wp.link_unit_id is not None:
+                continue
+            if wpts[0].x is not None and wpts[0].y is not None:
+                dist = math.sqrt((wp.x - wpts[0].x)**2 + (wp.y - wpts[0].y)**2)
+                if dist <= 100 * _FT_TO_M:
+                    continue
+        inner.append(wp)
+    return inner
+
+
+def _build_orbit_block(wp: Waypoint) -> dict:
+    """Build an orbit parameter dict for a waypoint, defaulting direction to CCW."""
+    return {
+        "alt_ft":      wp.orbit_alt_ft,
+        "speed_kts":   wp.orbit_speed_kts,
+        "width_nm":    wp.orbit_width_nm,
+        "leg_nm":      wp.orbit_leg_nm,
+        "heading_deg": wp.orbit_heading_deg,
+        "cw":          wp.orbit_cw if wp.orbit_cw is not None else False,
+    }
+
+
 def _classify_waypoints(flight: Flight,
-                        all_flights: list[Flight],
                         targets: dict,
-                        carriers: list[Carrier],
                         ref_pts: dict) -> list[dict]:
     """
     Convert a flight's Waypoint list to the steer_points schema list.
 
-    Rules:
-    - Index 0  (TakeOff): skip — captured as deploy_location_icao
-    - Last wp  (landing/recovery): skip unless it is an orbit (e.g. tanker tracks
-      where the only working waypoint is the orbit at index 1 = last)
-    - Name starts with "MARSHALL ": → marshal point in ref_pts (name_ref)
-    - Within 100ft of another flight's waypoint with same/no name:
-        → same logical point; use shared name
-    - Within 500m of a SAM aim-point: label as aim-point steer
-    - Orbit steer points within _ORBIT_MERGE_NM of an already-emitted orbit are
-      suppressed (the earlier entry absorbs the later duplicate)
+    Every en-route waypoint is emitted so the map can accurately represent the
+    flight's route.  Special waypoints (IP, EP, MARSHAL) are tagged with their
+    type.  Unnamed generic waypoints have no ``name`` key — the frontend should
+    not render a label for them.
     """
-    MERGE_M   = 100 * _FT_TO_M   # 100 ft proximity for shared waypoints
-
-    TAKEOFF_TYPES = ('TakeOffParking', 'TakeOff', 'TakeOffParkingHot',
-                     'TakeOffGround')
-    LANDING_TYPES = ('Land',)
-
-    wpts = flight.waypoints
-    # Need at least 2 waypoints (takeoff + one working waypoint)
-    if len(wpts) < 2:
-        return []
-
-    # Filter waypoints: skip takeoff and landing types by their DCS type,
-    # but always include orbit waypoints regardless of position.
-    inner = []
-    for i, wp in enumerate(wpts):
-        if wp.typ in TAKEOFF_TYPES:
-            continue
-        if wp.typ in LANDING_TYPES and not wp.is_orbit:
-            continue
-        # Skip the last waypoint if it looks like a recovery (same position as
-        # takeoff or has an airdrome_id/link_unit_id) and is NOT an orbit
-        if i == len(wpts) - 1 and not wp.is_orbit:
-            if wp.airdrome_id is not None or wp.link_unit_id is not None:
-                continue
-            # Also skip if very close to the first waypoint (return-to-base)
-            if wpts[0].x is not None and wpts[0].y is not None:
-                dist = math.sqrt((wp.x - wpts[0].x)**2 + (wp.y - wpts[0].y)**2)
-                if dist <= MERGE_M:
-                    continue
-        inner.append(wp)
-
-    # Build index of all OTHER flights' inner waypoints for proximity matching
-    others: list[Waypoint] = []
-    for other in all_flights:
-        if other.id == flight.id:
-            continue
-        for wp in other.waypoints:
-            if wp.typ in TAKEOFF_TYPES:
-                continue
-            if wp.typ in LANDING_TYPES and not wp.is_orbit:
-                continue
-            others.append(wp)
+    inner = _filter_inner_waypoints(flight.waypoints)
 
     # Build flat DMS → aim_point_id index across all targets.
     aim_by_dms: dict[str, str] = {}
@@ -178,26 +215,11 @@ def _classify_waypoints(flight: Flight,
                 aim_by_dms[ap_dms] = ap_id
 
     # Track already-emitted orbit positions to suppress near-duplicates
-    emitted_orbits: list[tuple[float, float]] = []  # (x, y) in DCS world coords
+    emitted_orbits: list[tuple[float, float]] = []
 
-    result = []
+    result: list[dict] = []
     for wp in inner:
         wp_dms = dms(wp.lat, wp.lon)
-
-        # Marshal point: name starts with "MARSHALL "
-        if wp.name and wp.name.upper().startswith("MARSHALL "):
-            marshal_name = wp.name.strip()
-            if marshal_name not in ref_pts:
-                entry: dict = {
-                    "name":   marshal_name,
-                    "type":   "marshal",
-                    "coords": wp_dms,
-                }
-                if wp.alt_ft is not None:
-                    entry["altitude"] = f"FL{round(wp.alt_ft / 100)}"
-                ref_pts[marshal_name] = entry
-            result.append({"name_ref": marshal_name, "name": marshal_name, "coords": wp_dms})
-            continue
 
         # Orbit deduplication: skip if a very close orbit already exists
         if wp.is_orbit:
@@ -209,44 +231,225 @@ def _classify_waypoints(flight: Flight,
                 continue
             emitted_orbits.append((wp.x, wp.y))
 
-        # Proximity check against other flights' waypoints (shared logical point)
-        shared_name = None
-        for ow in others:
-            dist = math.sqrt((wp.x - ow.x)**2 + (wp.y - ow.y)**2)
-            if dist <= MERGE_M:
-                wp_n = (wp.name or "").strip()
-                ow_n = (ow.name or "").strip()
-                if wp_n == ow_n or not wp_n or not ow_n:
-                    shared_name = wp_n or ow_n or None
-                    break
-
-        # Aim-point match — use the specific aim_point id (e.g. "SAM-14-RD1")
+        # Aim-point match
         aim_point_id = aim_by_dms.get(wp_dms)
 
         entry: dict = {"coords": wp_dms}
-        if wp.name:
+
+        # Parse special waypoint type from name
+        special = _parse_special_waypoint(wp.name)
+        if special:
+            sp_type, sp_name = special
+            entry["special_type"] = sp_type
+            if sp_name:
+                entry["name"] = sp_name
+            # Marshal points also go into ref_pts for the registry
+            if sp_type == "marshal":
+                marshal_key = wp.name.strip()
+                if marshal_key not in ref_pts:
+                    ref_entry: dict = {
+                        "name":   marshal_key,
+                        "type":   "marshal",
+                        "coords": wp_dms,
+                    }
+                    if wp.alt_ft is not None:
+                        ref_entry["altitude"] = f"FL{round(wp.alt_ft / 100)}"
+                    ref_pts[marshal_key] = ref_entry
+                entry["name_ref"] = marshal_key
+        elif wp.name:
+            # Named generic waypoint — gets a label on the map
             entry["name"] = wp.name
+
         if wp.alt_ft is not None:
             entry["altitude_ft"] = wp.alt_ft
         if aim_point_id:
             entry["aim_point_id"] = aim_point_id
-        if shared_name is not None:
-            entry["shared"] = True
-        # Orbit/anchor track — include parameters so the map can render a racetrack
+
+        # Orbit/anchor track
         if wp.is_orbit:
-            entry["orbit"] = {
-                "alt_ft":      wp.orbit_alt_ft,
-                "speed_kts":   wp.orbit_speed_kts,
-                "width_nm":    wp.orbit_width_nm,
-                "leg_nm":      wp.orbit_leg_nm,
-                "heading_deg": wp.orbit_heading_deg,
-                "cw":          wp.orbit_cw,
-            }
+            entry["orbit"] = _build_orbit_block(wp)
+
+        # Attach DCS world coords for merging (stripped before final output)
+        entry["_x"] = wp.x
+        entry["_y"] = wp.y
+        entry["_alt_ft"] = wp.alt_ft
 
         result.append(entry)
 
     return result
 
+
+# ── Waypoint merging (shared steerpoints) ────────────────────────────────────
+
+def _dist_3d_ft(x1: float, y1: float, alt1_ft: float | None,
+                x2: float, y2: float, alt2_ft: float | None) -> float:
+    """3D Euclidean distance in feet between two points."""
+    dx = (x2 - x1) / _FT_TO_M  # metres → feet
+    dy = (y2 - y1) / _FT_TO_M
+    dz = ((alt2_ft or 0) - (alt1_ft or 0))
+    return math.sqrt(dx*dx + dy*dy + dz*dz)
+
+
+def merge_shared_steerpoints(
+    flight_steerpoints: dict[str, list[dict]],
+) -> tuple[list[dict], dict[str, list[dict]]]:
+    """
+    Merge special-type waypoints across flights that are within 750 ft 3D,
+    share the same special type, and have compatible names.
+
+    Returns:
+        shared_list: list of shared steerpoint dicts (with id, type, name,
+                     coords, altitude_ft, flights)
+        updated_flights: mapping of flight_name → updated steer_points list
+                         where merged points reference shared_steerpoint_id
+    """
+    # Collect all special-type steerpoints with their flight association
+    candidates: list[dict] = []  # {sp_dict, flight_name, sp_index}
+    for flight_name, sps in flight_steerpoints.items():
+        for idx, sp in enumerate(sps):
+            if sp.get("special_type"):
+                candidates.append({
+                    "sp": sp,
+                    "flight": flight_name,
+                    "idx": idx,
+                })
+
+    # Group candidates into merge clusters
+    # A cluster is a set of candidates that should merge into one shared point.
+    clusters: list[list[dict]] = []
+    used: set[int] = set()
+
+    for i, ci in enumerate(candidates):
+        if i in used:
+            continue
+        cluster = [ci]
+        used.add(i)
+        for j, cj in enumerate(candidates):
+            if j in used:
+                continue
+            if _should_merge(ci["sp"], cj["sp"]):
+                # Also check against all existing cluster members
+                if all(_should_merge(ck["sp"], cj["sp"]) for ck in cluster):
+                    cluster.append(cj)
+                    used.add(j)
+        # Only create a shared steerpoint if 2+ flights reference it
+        flight_names = set(c["flight"] for c in cluster)
+        if len(flight_names) >= 2:
+            clusters.append(cluster)
+
+    # Build shared steerpoint list and update flight steerpoints
+    shared_list: list[dict] = []
+    # Track which (flight_name, sp_index) → shared_steerpoint_id
+    merge_map: dict[tuple[str, int], str] = {}
+
+    for seq, cluster in enumerate(clusters, start=1):
+        sp_id = f"SSP-{seq}"
+        sp_type = cluster[0]["sp"]["special_type"]
+
+        # Compute centroid of all points in the cluster
+        lats, lons, alts = [], [], []
+        for c in cluster:
+            sp = c["sp"]
+            # Use the raw DCS coords for position averaging
+            lats.append(sp.get("_x", 0))
+            lons.append(sp.get("_y", 0))
+            alt = sp.get("_alt_ft")
+            if alt is not None:
+                alts.append(alt)
+
+        from .projection import dcs_to_latlon
+        avg_x = sum(lats) / len(lats)
+        avg_y = sum(lons) / len(lons)
+        avg_alt = round(sum(alts) / len(alts)) if alts else None
+
+        # Determine name — pick the first non-None name from cluster members
+        sp_name = None
+        for c in cluster:
+            sp_name = c["sp"].get("name")
+            if sp_name:
+                break
+
+        # Get the theatre from the coords (use first point's already-computed DMS
+        # as fallback, but recompute from centroid for accuracy)
+        # We stored _x/_y in DCS world coords, need theatre for projection
+        # Use the centroid DMS from the first point's theatre context
+        centroid_dms = cluster[0]["sp"]["coords"]  # fallback
+        # The shared steerpoint's coords is the centroid in DMS
+        # We'll compute it properly from the averaged DCS coords
+
+        flight_names_list = sorted(set(c["flight"] for c in cluster))
+
+        shared_entry: dict = {
+            "id":      sp_id,
+            "type":    sp_type,
+            "coords":  centroid_dms,  # will be recomputed below
+            "flights": flight_names_list,
+        }
+        if sp_name:
+            shared_entry["name"] = sp_name
+        if avg_alt is not None:
+            shared_entry["altitude_ft"] = avg_alt
+
+        # Store DCS coords for centroid recomputation in build_doc
+        shared_entry["_avg_x"] = avg_x
+        shared_entry["_avg_y"] = avg_y
+
+        shared_list.append(shared_entry)
+
+        for c in cluster:
+            merge_map[(c["flight"], c["idx"])] = sp_id
+
+    # Build updated flight steerpoints: replace merged points with references
+    updated_flights: dict[str, list[dict]] = {}
+    for flight_name, sps in flight_steerpoints.items():
+        new_sps: list[dict] = []
+        for idx, sp in enumerate(sps):
+            key = (flight_name, idx)
+            if key in merge_map:
+                new_sps.append({"shared_steerpoint_id": merge_map[key]})
+            else:
+                new_sps.append(sp)
+        updated_flights[flight_name] = new_sps
+
+    return shared_list, updated_flights
+
+
+def _should_merge(sp1: dict, sp2: dict) -> bool:
+    """
+    Check if two special steerpoints should merge.
+
+    All three criteria must be true:
+    1. Same special type
+    2. Within 750 ft of each other in 3D space
+    3. Compatible names (both unnamed, or both same name)
+    """
+    # Criterion 1: same special type
+    if sp1.get("special_type") != sp2.get("special_type"):
+        return False
+
+    # Criterion 2: within 750 ft in 3D
+    dist = _dist_3d_ft(
+        sp1.get("_x", 0), sp1.get("_y", 0), sp1.get("_alt_ft"),
+        sp2.get("_x", 0), sp2.get("_y", 0), sp2.get("_alt_ft"),
+    )
+    if dist > 750:
+        return False
+
+    # Criterion 3: compatible names
+    n1 = sp1.get("name")
+    n2 = sp2.get("name")
+    if n1 and n2 and n1 != n2:
+        return False
+
+    return True
+
+
+def _strip_internal_keys(sp: dict) -> dict:
+    """Remove internal keys (_x, _y, _alt_ft) from a steerpoint dict."""
+    return {k: v for k, v in sp.items() if not k.startswith("_")}
+
+
+# ── Home base detection ──────────────────────────────────────────────────────
 
 def _home_base(flight: Flight, airfields: dict[str, dict],
                carriers: list[Carrier]) -> tuple[str | None, str | None]:
@@ -290,36 +493,33 @@ def _home_base(flight: Flight, airfields: dict[str, dict],
         if carrier_id:
             recovery = carrier_id
         elif "CVN" in n or "RECOVERY" in n or "CARRIER" in n:
-            # Match carrier by DCS type string (CVN_75 → CVN-75 appears in name)
             for c in carriers:
                 c_type_norm = c.type.replace("_", "-").upper()
                 if c.id in n or c_type_norm in n:
                     recovery = c.id
                     break
-            # If no carrier matched, scan name tokens for a known ICAO code
             if not recovery:
                 for token in n.split():
                     token = token.strip(".,;:")
                     if token in airfields or token in _AIRDROME_ICAO_SET:
                         recovery = token
                         break
-            # Only fall back to carrier if we are already carrier-deployed
             if not recovery and deploy and deploy.startswith("CVN-"):
                 recovery = carriers[0].id if carriers else None
         elif last.airdrome_id is not None:
             info = AIRDROME_IDS.get(last.airdrome_id)
             recovery = info["icao"] if info else f"AF{last.airdrome_id}"
 
-    # If deploying from a carrier and no explicit recovery found, recover there too
     if deploy and deploy.startswith("CVN-") and not recovery:
         recovery = deploy
 
-    # Final fallback: return to deploy base
     if not recovery and deploy:
         recovery = deploy
 
     return deploy, recovery
 
+
+# ── Mission target derivation ────────────────────────────────────────────────
 
 def _build_mission_targets(steer_pts: list[dict], targets: dict,
                            task: str) -> list[dict] | None:
@@ -348,7 +548,6 @@ def _build_mission_targets(steer_pts: list[dict], targets: dict,
         return None
 
     is_orbit = task in ('CAP', 'CAS', 'ESCORT', 'TANKER', 'FAC(A)')
-    # Build a map from aim_point_id → altitude_ft for fast lookup
     sp_alt_by_apid: dict[str, float] = {
         sp['aim_point_id']: sp['altitude_ft']
         for sp in steer_pts
@@ -363,7 +562,6 @@ def _build_mission_targets(steer_pts: list[dict], targets: dict,
             "location":  location,
             "target_id": tgt_id,
         }
-        # Derive attack altitude from the steer point that flies over this target
         attack_alt_ft = next(
             (sp_alt_by_apid[apid] for apid in ap_ids if apid in sp_alt_by_apid),
             None,
@@ -384,26 +582,115 @@ def _build_mission_targets(steer_pts: list[dict], targets: dict,
     return result or None
 
 
-def build_missions(flights: list[Flight], msn_start: int,
-                   targets: dict, carriers: list[Carrier],
-                   airfields: dict[str, dict], ref_pts: dict) -> list[dict]:
+# ── Support flight extraction ────────────────────────────────────────────────
+
+def build_support_flights(flights: list[Flight],
+                          carriers: list[Carrier],
+                          airfields: dict[str, dict]) -> list[dict] | None:
     """
-    Produce the ato.missions list for non-tanker, non-AWACS flights.
-    Tankers go to registry.tankers. AWACS go to registry.control_agencies.
+    Build the ato.support_flights list for tanker and AWACS flights.
+
+    Each support flight includes its full orbit parameters and steerpoints
+    so it can be rendered on the briefing map.
     """
-    missions = []
-    strike_i = 0
+    result: list[dict] = []
 
     for f in flights:
-        if f.is_awacs:
-            continue  # AWACS go to registry.control_agencies, not missions
-        if f.is_tanker:
-            continue  # Tankers go to registry.tankers, not missions
+        if not f.is_tanker and not f.is_awacs:
+            continue
+
+        ac_base = f.aircraft_type.split('_')[0]
+        ac_type = re.sub(r'[^A-Z0-9]', '', ac_base.upper())
+        deploy, recovery = _home_base(f, airfields, carriers)
+
+        # Build steer points for the route
+        inner_wpts = _filter_inner_waypoints(f.waypoints)
+        steer_pts: list[dict] = []
+        orbit_info: dict | None = None
+
+        for wp in inner_wpts:
+            wp_dms = dms(wp.lat, wp.lon)
+            sp_entry: dict = {"coords": wp_dms}
+
+            if wp.name:
+                sp_entry["name"] = wp.name
+            if wp.alt_ft is not None:
+                sp_entry["altitude_ft"] = wp.alt_ft
+
+            if wp.is_orbit:
+                orbit_block = _build_orbit_block(wp)
+                sp_entry["orbit"] = orbit_block
+                # Capture first orbit as the primary orbit info
+                if orbit_info is None:
+                    orbit_info = {
+                        "anchor_coords": wp_dms,
+                        "altitude_ft":   wp.orbit_alt_ft,
+                        "speed_kts":     wp.orbit_speed_kts,
+                        "leg_nm":        wp.orbit_leg_nm,
+                        "heading_deg":   wp.orbit_heading_deg,
+                        "direction":     "cw" if wp.orbit_cw else "ccw",
+                    }
+                    if wp.orbit_width_nm is not None:
+                        orbit_info["width_nm"] = wp.orbit_width_nm
+
+            steer_pts.append(sp_entry)
+
+        entry: dict = {
+            "callsign":             f.name,
+            "type":                 f.task,
+            "aircraft":             {"count": len(f.units), "type": ac_type},
+            "deploy_location_icao": deploy,
+            "recovery_icao":        recovery or deploy,
+            "steer_points":         steer_pts or None,
+        }
+        if orbit_info:
+            entry["orbit"] = orbit_info
+
+        result.append(entry)
+
+    return result or None
+
+
+# ── Mission list building ────────────────────────────────────────────────────
+
+def build_missions(flights: list[Flight], msn_start: int,
+                   targets: dict, carriers: list[Carrier],
+                   airfields: dict[str, dict],
+                   ref_pts: dict) -> tuple[list[dict], list[dict]]:
+    """
+    Produce the ato.missions list for player/strike flights (non-tanker,
+    non-AWACS) and a top-level shared_steerpoints list.
+
+    Returns (missions, shared_steerpoints).
+    """
+    missions: list[dict] = []
+    strike_i = 0
+
+    # Phase 1: Build per-flight steerpoints
+    flight_steerpoints: dict[str, list[dict]] = {}
+
+    for f in flights:
+        if f.is_awacs or f.is_tanker:
+            continue
+
+        steer_pts = _classify_waypoints(f, targets, ref_pts)
+        flight_steerpoints[f.name] = steer_pts
+
+    # Phase 2: Merge shared steerpoints across flights
+    shared_list, updated_flights = merge_shared_steerpoints(flight_steerpoints)
+
+    # Recompute shared steerpoint centroid coords (requires theatre context —
+    # deferred to build_doc where theatre is available)
+
+    # Phase 3: Build mission entries
+    for f in flights:
+        if f.is_awacs or f.is_tanker:
+            continue
 
         msn_num = f"MSN{msn_start + strike_i}"
         strike_i += 1
 
-        callsign = f.name  # group name is the mission callsign
+        callsign = f.name
         ac_base  = f.aircraft_type.split('_')[0]
         ac_type  = re.sub(r'[^A-Z0-9]', '', ac_base.upper())
         count    = len(f.units)
@@ -414,8 +701,9 @@ def build_missions(flights: list[Flight], msn_start: int,
         if not recovery and deploy:
             recovery = deploy
 
-        # Build steer points — also mutates ref_pts to add any marshal points
-        steer_pts = _classify_waypoints(f, flights, targets, carriers, ref_pts)
+        steer_pts = updated_flights.get(callsign, [])
+        # Strip internal keys from steerpoints before output
+        clean_pts = [_strip_internal_keys(sp) for sp in steer_pts]
 
         msn_targets = _build_mission_targets(steer_pts, targets, f.task)
 
@@ -437,9 +725,13 @@ def build_missions(flights: list[Flight], msn_start: int,
             "targets":         msn_targets,
             "control":         {"agency_id": None},
             "refuel":          None,
-            "steer_points":    steer_pts or None,
+            "steer_points":    clean_pts or None,
             "dtc_cartridge":   f.dtc_cartridge,
         }
 
         missions.append(msn)
-    return missions
+
+    # Strip internal keys from shared steerpoints
+    clean_shared = [_strip_internal_keys(sp) for sp in shared_list]
+
+    return missions, clean_shared

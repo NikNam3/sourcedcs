@@ -9,9 +9,9 @@ from .dtc import build_comms_from_dtc
 from .models import Carrier, Flight
 from .build_missions import (
     AIRDROME_IDS, CVN_NAMES,
-    build_airfields_registry, build_missions,
+    build_airfields_registry, build_missions, build_support_flights,
 )
-from .projection import dms
+from .projection import dcs_to_latlon, dms
 
 
 def build_carriers_registry(carriers: list[Carrier]) -> dict:
@@ -50,7 +50,7 @@ def build_tankers_list(flights: list[Flight]) -> list[dict] | None:
     Build a list of tanker entries for registry.tankers.
     Each entry has: callsign, altitude, speed_kts, and orbit parameters
     (anchor_coords, heading_deg, leg_nm, width_nm) extracted from the first
-    orbit waypoint.
+    orbit waypoint.  Default orbit direction is counterclockwise.
     """
     result = []
     for f in flights:
@@ -63,6 +63,7 @@ def build_tankers_list(flights: list[Flight]) -> list[dict] | None:
         orbit_heading_deg: int | None = None
         orbit_leg_nm: float | None = None
         orbit_width_nm: float | None = None
+        orbit_direction: str = "ccw"  # default counterclockwise
         for wp in f.waypoints:
             if wp.is_orbit:
                 alt_ft             = wp.orbit_alt_ft
@@ -71,6 +72,7 @@ def build_tankers_list(flights: list[Flight]) -> list[dict] | None:
                 orbit_width_nm     = wp.orbit_width_nm
                 orbit_heading_deg  = wp.orbit_heading_deg
                 orbit_anchor_coords = dms(wp.lat, wp.lon)
+                orbit_direction    = "cw" if wp.orbit_cw else "ccw"
                 break
         entry: dict = {"callsign": f.name}
         if alt_ft is not None:
@@ -86,6 +88,7 @@ def build_tankers_list(flights: list[Flight]) -> list[dict] | None:
             entry["orbit_leg_nm"] = orbit_leg_nm
         if orbit_width_nm is not None:
             entry["orbit_width_nm"] = orbit_width_nm
+        entry["orbit_direction"] = orbit_direction
         result.append(entry)
     return result or None
 
@@ -233,10 +236,24 @@ def build_doc(*, mission_name, mission_date, theatre,
 
     # Build missions — also mutates ref_pts to add marshal points found in routes.
     # AWACS and tanker flights are excluded from missions.
-    missions = build_missions(
+    # Returns (missions, shared_steerpoints).
+    missions, shared_steerpoints = build_missions(
         flights, msn_start,
-        targets, carriers, airfields, ref_pts) or None
+        targets, carriers, airfields, ref_pts)
+
+    # Recompute shared steerpoint centroid coords using the theatre projection
+    for ssp in shared_steerpoints:
+        if "_avg_x" in ssp and "_avg_y" in ssp:
+            avg_lat, avg_lon = dcs_to_latlon(ssp["_avg_x"], ssp["_avg_y"], theatre)
+            ssp["coords"] = dms(avg_lat, avg_lon)
+            del ssp["_avg_x"]
+            del ssp["_avg_y"]
+
+    missions = missions or None
     msn_numbers = [m["mission_number"] for m in missions] if missions else []
+
+    # Build support flights (tankers + AWACS)
+    support_flights = build_support_flights(flights, carriers, airfields)
 
     ato_airfields = [{"icao": icao, "role": "deploy"} for icao in airfields] or None
 
@@ -255,6 +272,8 @@ def build_doc(*, mission_name, mission_date, theatre,
             "ato_date":       mission_date,
             "classification": "CLASSIFIED",
         },
+
+        "shared_steerpoints": shared_steerpoints or None,
 
         "registry": {
             "callsigns":        build_callsigns_registry(flights),
@@ -281,6 +300,7 @@ def build_doc(*, mission_name, mission_date, theatre,
             "airfields": ato_airfields,
             "carriers":  build_carriers_ato(carriers) or None,
             "missions":  missions,
+            "support_flights": support_flights,
         },
 
         "aco": {

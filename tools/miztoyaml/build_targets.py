@@ -111,49 +111,77 @@ def _rect_boundary(cx: float, cy: float,
     return result
 
 
+def _handle_circle(d: Drawing, theatre: str) -> dict | None:
+    """Handle circle polygon mode → ROZ ACM."""
+    if d.radius_m is None:
+        return None
+    olat, olon = dcs_to_latlon(d.origin_x, d.origin_y, theatre)
+    return {
+        "type":     "ROZ",
+        "geometry": {
+            "center":    dms(olat, olon),
+            "radius_nm": round(d.radius_m / 1852.0, 1),
+        },
+    }
+
+
+def _handle_rect(d: Drawing, theatre: str) -> dict | None:
+    """Handle rect polygon mode → ORBIT ACM."""
+    if d.width_m is None or d.height_m is None:
+        return None
+    boundary = _rect_boundary(
+        d.origin_x, d.origin_y,
+        d.width_m, d.height_m,
+        d.angle_deg or 0.0,
+        theatre,
+    )
+    return {
+        "type":     "ORBIT",
+        "geometry": {"boundary": boundary},
+    }
+
+
+def _handle_free(d: Drawing, theatre: str) -> dict | None:
+    """Handle free polygon mode → ROZ ACM."""
+    boundary = []
+    for rel_x, rel_y in d.rel_points:
+        lat, lon = dcs_to_latlon(d.origin_x + rel_x,
+                                 d.origin_y + rel_y, theatre)
+        boundary.append(dms(lat, lon))
+    return {
+        "type":     "ROZ",
+        "geometry": {"boundary": boundary},
+    }
+
+
+# Handler registry: polygon_mode → handler function.
+# Add new airspace types by registering a handler here.
+_AIRSPACE_HANDLERS: dict[str, callable] = {
+    'circle': _handle_circle,
+    'rect':   _handle_rect,
+    'free':   _handle_free,
+}
+
+
 def build_acms(drawings: list[Drawing], theatre: str) -> list[dict]:
     acms: list[dict] = []
     n = 1
 
     for d in drawings:
-        olat, olon = dcs_to_latlon(d.origin_x, d.origin_y, theatre)
+        handler = _AIRSPACE_HANDLERS.get(d.polygon_mode)
+        if not handler:
+            continue
+        result = handler(d, theatre)
+        if result is None:
+            continue
+
         acm: dict = {
             "id":        f"ACM-{n:03d}",
             "name":      d.name,
             "alt_lower": "SFC",
             "alt_upper": "FL999",
         }
-
-        if d.polygon_mode == 'circle':
-            if d.radius_m is None:
-                continue
-            acm["type"]     = "ROZ"
-            acm["geometry"] = {
-                "center":    dms(olat, olon),
-                "radius_nm": round(d.radius_m / 1852.0, 1),
-            }
-
-        elif d.polygon_mode == 'rect':
-            if d.width_m is None or d.height_m is None:
-                continue
-            boundary = _rect_boundary(
-                d.origin_x, d.origin_y,
-                d.width_m, d.height_m,
-                d.angle_deg or 0.0,
-                theatre,
-            )
-            acm["type"]     = "ORBIT"
-            acm["geometry"] = {"boundary": boundary}
-
-        elif d.polygon_mode == 'free':
-            boundary = []
-            for rel_x, rel_y in d.rel_points:
-                lat, lon = dcs_to_latlon(d.origin_x + rel_x,
-                                         d.origin_y + rel_y, theatre)
-                boundary.append(dms(lat, lon))
-            acm["type"]     = "ROZ"
-            acm["geometry"] = {"boundary": boundary}
-
+        acm.update(result)
         acms.append(acm)
         print(f"  ACM-{n:03d}: {d.name}  ({d.polygon_mode})")
         n += 1
