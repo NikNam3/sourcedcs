@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "build:frontend": "cd frontend && npm ci && npm run build"
   },
   "license": "MIT",
   "dependencies": {

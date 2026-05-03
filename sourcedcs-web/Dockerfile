@@ -1,4 +1,13 @@
-# ─── Build stage ──────────────────────────────────────────
+# ─── Frontend build stage ─────────────────────────────────
+FROM node:20-alpine AS frontend-builder
+
+WORKDIR /app/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+# ─── Server deps stage ────────────────────────────────────
 FROM node:20-alpine AS deps
 
 WORKDIR /app
@@ -11,6 +20,7 @@ FROM node:20-alpine
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
+COPY --from=frontend-builder /app/dist ./dist
 
 COPY server.js     ./
 COPY package.json  ./

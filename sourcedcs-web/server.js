@@ -576,8 +576,23 @@ function requireSkillAdmin(req, res, next) {
 }
 
 /* ─── Dynamic config for client ─────────────────────────── */
-/* Serves Casdoor connection settings as a JS file so the client reads
-   them from environment variables rather than hardcoded values. */
+/* JSON endpoint consumed by the React frontend (ConfigContext). */
+app.get('/api/runtime-config', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({
+    casdoorClientId:  CASDOOR_CLIENT_ID   || '',
+    casdoorEndpoint:  CASDOOR_ENDPOINT    || '',
+    discordUrl:       DISCORD_URL,
+    wikiUrl:          WIKI_URL,
+    atoUrl:           ATO_URL,
+    olympusUrl:       OLYMPUS_URL,
+    asacsUrl:         ASACS_URL,
+    githubUrl:        GITHUB_URL,
+    skillAdminRoles:  SKILL_ADMIN_ROLES,
+  });
+});
+
+/* Legacy JS config shim for the old vanilla-JS pages. */
 app.get('/js/config.js', (_req, res) => {
   res.set('Content-Type', 'application/javascript; charset=utf-8');
   res.set('Cache-Control', 'no-store');
@@ -595,8 +610,14 @@ app.get('/js/config.js', (_req, res) => {
 });
 
 /* ─── Static files ──────────────────────────────────────── */
-const PUBLIC = path.join(__dirname, 'public');
-app.use(express.static(PUBLIC, {
+/* Serve the React build output when available, fall back to the legacy
+   vanilla-JS public/ folder so the server always starts successfully
+   even before the frontend has been built for the first time. */
+const DIST_DIR   = path.join(__dirname, 'dist');
+const PUBLIC_DIR = path.join(__dirname, 'public');
+const STATIC_DIR = fs.existsSync(DIST_DIR) ? DIST_DIR : PUBLIC_DIR;
+const PUBLIC     = STATIC_DIR; /* alias used by the SPA fallback below */
+app.use(express.static(STATIC_DIR, {
   index:    'index.html',
   maxAge:   '1h',
   etag:     true,
