@@ -354,6 +354,50 @@ function initMap() {
       },
     });
 
+    // ── Carrier Control Area (CCA) & Control Zone (CCZ) ─────────────────────
+    map.addSource('carrier-zones', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] }
+    });
+
+    // Zone Boundary Lines
+    map.addLayer({
+      id: 'carrier-zones-lines',
+      type: 'line',
+      source: 'carrier-zones',
+      paint: {
+        'line-color': [
+          'case',
+          ['==', ['get', 'zone'], 'CCZ'], '#ff4444', // Red for 5 NM CCZ
+          '#ffaa00'                                  // Amber/Orange for 50 NM CCA
+        ],
+        'line-width': 1.5,
+        'line-dasharray': [6, 4],
+        'line-opacity': 0.8,
+      },
+    });
+
+    // Zone Text Labels
+    map.addLayer({
+      id: 'carrier-zones-labels',
+      type: 'symbol',
+      source: 'carrier-zones',
+      filter: ['==', ['get', 'type'], 'label'],
+      layout: {
+        'text-field': ['get', 'label'],
+        'text-font': ['Roboto Regular', 'Noto Sans Regular'],
+        'text-size': 10,
+        'symbol-placement': 'point',
+        'text-anchor': 'bottom', // Anchors text right above the edge of the circle line
+        'text-allow-overlap': false,
+      },
+      paint: {
+        'text-color': ['case', ['==', ['get', 'zone'], 'CCZ'], '#ff4444', '#ffaa00'],
+        'text-halo-color': '#000000',
+        'text-halo-width': 1,
+      },
+    });
+
     // ── Cursor ───────────────────────────────────────────────────────────
     map.getCanvas().style.cursor = 'crosshair';
 
@@ -614,4 +658,78 @@ function applyMapTheme() {
   if (missionData) map.getSource('text-marks').setData(buildTextMarks());
   // Re-register coalition icons with theme-correct colors
   updateIcons(light);
+}
+
+// Helper to generate circle polygon points in GeoJSON format
+function createCirclePolygon(centerLng, centerLat, radiusNM, points = 64) {
+  const km = radiusNM * 1.852;
+  const coordinates = [];
+  const distanceX = km / (111.320 * Math.cos((centerLat * Math.PI) / 180));
+  const distanceY = km / 110.574;
+
+  for (let i = 0; i < points; i++) {
+    const theta = (i / points) * (2 * Math.PI);
+    const x = distanceX * Math.cos(theta);
+    const y = distanceY * Math.sin(theta);
+    coordinates.push([centerLng + x, centerLat + y]);
+  }
+  coordinates.push(coordinates[0]);
+
+  return {
+    type: 'Feature',
+    geometry: { type: 'Polygon', coordinates: [coordinates] },
+  };
+}
+
+// Scans active tracks for carriers (ship category = 4) and draws CCZ/CCA rings
+function updateCarrierZones() {
+  if (!mapReady) return;
+
+  if (settings.ccacczEnabled === false) {
+      map.getSource('carrier-zones').setData({ type: 'FeatureCollection', features: [] });
+      return;
+    }
+
+  const features = [];
+
+  for (const [id, track] of tracks.entries()) {
+    const isCarrier = track.category === 4 &&
+      (track.type?.includes('CVN') || track.typeName?.includes('CVN') || track.isCarrier);
+
+    if (isCarrier) {
+      // ── Define callsign from track object ──────────────────────────
+      const callsign = track.callsign || track.name || 'CVN';
+
+      // 1. Polygon geometries (Lines)
+      features.push({
+        ...createCirclePolygon(track.lon, track.lat, 5),
+        properties: { type: 'geometry', zone: 'CCZ' }
+      });
+      features.push({
+        ...createCirclePolygon(track.lon, track.lat, 50),
+        properties: { type: 'geometry', zone: 'CCA' }
+      });
+
+      // 2. Point geometries (Labels)
+      const latOffset5NM = 5 / 60;
+      const latOffset50NM = 50 / 60;
+
+      features.push({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [track.lon, track.lat + latOffset5NM] },
+        properties: { type: 'label', zone: 'CCZ', label: `CCZ 5NM (${callsign})` }
+      });
+
+      features.push({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [track.lon, track.lat + latOffset50NM] },
+        properties: { type: 'label', zone: 'CCA', label: `CCA 50NM (${callsign})` }
+      });
+    }
+  }
+
+  map.getSource('carrier-zones').setData({
+    type: 'FeatureCollection',
+    features: features
+  });
 }

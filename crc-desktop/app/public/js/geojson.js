@@ -782,5 +782,6 @@ function _doUpdateMap() {
   updateZoomLimits();
   updateTopbarUI();
   updateRadarBadge();
+  updateCarrierZones()
   if (typeof updateTrackPanel === 'function') updateTrackPanel();
 }

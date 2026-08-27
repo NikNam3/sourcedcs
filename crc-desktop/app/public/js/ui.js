@@ -475,6 +475,7 @@ function initColorSettings() {
   const $aiEn            = document.getElementById('set-ai-enabled');
   const $shipsEn         = document.getElementById('set-ships-enabled');
   const $hideGroundUnits = document.getElementById('set-hide-ground-units');
+  const $ccacczEn = document.getElementById('set-cca-ccz');
 
   if ($declutter) {
     $declutter.checked = settings.declutter ?? true;
@@ -527,6 +528,11 @@ function initColorSettings() {
       saveSettings();
       updateMap();
     });
+  }
+
+  if ($ccacczEn) {
+    $ccacczEn.checked = settings.ccacczEnabled ?? true;
+    $ccacczEn.addEventListener('change', () => { settings.ccacczEnabled = $ccacczEn.checked; saveSettings(); updateMap(); })
   }
 }
 
