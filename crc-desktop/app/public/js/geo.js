@@ -23,6 +23,51 @@ function bearingDeg(lat1, lon1, lat2, lon2) {
   return ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
 }
 
+// Central meridians of DCS's per-theater Transverse Mercator projection —
+// mirrors tools/miztoyaml/projection.py's _TM table (theatre name → lon0).
+// Only lon0 is needed here; fe/fn/k0 matter for the full x/y→lat/lon
+// projection, not for the convergence angle below.
+const THEATRE_LON0 = {
+  PersianGulf:    57,
+  Falklands:     -57,
+  Caucasus:       33,
+  MarianaIslands:147,
+  Nevada:       -117,
+  Normandy:       -3,
+  Syria:          39,
+  SinaiMap:       33,
+};
+
+// Grid convergence: the angle between DCS's internal flat-world grid north
+// (what the cockpit heading tape is referenced to) and true geodetic north
+// (what bearingDeg computes from lat/lon). This is the whole correction —
+// settings.hdgCorrection is a separate, purely manual fudge factor applied
+// on top at the display call sites, and is NOT real-world magnetic
+// variation (renamed from magVar once this math-based fix made that name
+// misleading — see ui.js/geojson.js call sites).
+// It grows with distance from the theater's central meridian and is ~0 near
+// it. First-order Transverse Mercator formula, accurate to a small fraction
+// of a degree across a DCS map's extent: γ = (lon - lon0) * sin(lat).
+// True bearing = grid bearing + γ, so grid bearing = true bearing - γ.
+function gridConvergenceDeg(lat, lon) {
+  const theatre = missionData && missionData.theatre;
+  const lon0    = theatre != null ? THEATRE_LON0[theatre] : null;
+  if (lon0 == null) return 0;
+  return (lon - lon0) * Math.sin(lat * Math.PI / 180);
+}
+
+// True geodetic bearing between two points, corrected to DCS's internal
+// flat-grid heading reference — the frame every displayed heading is built
+// from before settings.hdgCorrection is added at the call site. Deriving
+// this from position history/lat-lon math only (never DCS's own orientation
+// telemetry) keeps it something a real radar controller could plausibly
+// know for an unidentified contact.
+function gridBearingDeg(lat1, lon1, lat2, lon2) {
+  const trueBearing = bearingDeg(lat1, lon1, lat2, lon2);
+  const conv         = gridConvergenceDeg((lat1 + lat2) / 2, (lon1 + lon2) / 2);
+  return ((trueBearing - conv) % 360 + 360) % 360;
+}
+
 function projectPos(lat, lon, headingDeg, distM) {
   const R  = 6371000;
   const d  = distM / R;

@@ -73,6 +73,7 @@ let airportsDb    = {};
 
 let missionData      = null;
 let weather          = { pressurePa: 101325, tempK: 288.15 }; // ISA defaults until server sends live data
+let atisActive       = []; // [{ frequency, ownerId }] — who's currently transmitting ATIS where, from crc-sync
 let grpcStatus       = 'disconnected';
 let noRadarsActive   = false; // true when all radars are disabled / none available
 let srsStatus        = 'disconnected';
@@ -124,7 +125,7 @@ const DEFAULTS = {
   shipsEnabled:      false,
   hideGroundUnits:   false,
   braColor:      '#4488cc',
-  magVar:        0,
+  hdgCorrection: 0, // manual true->grid heading fudge factor — NOT real-world magnetic variation, see geo.js
   radarDebug:    false,
   textMarksEnabled: false, // DCS mission-editor Text objects, shown as a map layer
   extCenterlineNm: 25, // extended APP-radar centerline length
@@ -141,8 +142,10 @@ const DEFAULTS = {
   datalink:        false, // auto-include all friendly aircraft radars
   transitionAltFt: 18000, // ft — below this use QNH, at/above use standard (FL)
   gameTimeOffset:  0,     // hours — theater UTC offset subtracted to display Zulu
-  aprtManualWx:    {},    // per-airport manually-entered vis/cloud data, keyed by ICAO
-  aprtAtisFreq:    {},    // per-airport saved ATIS frequency, keyed by ICAO
+  aprtManualWx:    {},    // per-airport manually-entered vis/cloud data, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
+  aprtAtisFreq:    {},    // per-airport saved ATIS frequency, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
+  aprtAtisRwy:     {},    // per-airport saved ATIS runway, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
+  aprtAtisInfo:    {},    // per-airport saved ATIS info letter, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
   bullseyeOverride: {     // manual bullseye position override, per coalition
     blue: { enabled: false, lat: null, lon: null },
     red:  { enabled: false, lat: null, lon: null },
@@ -678,6 +681,47 @@ async function connect() {
         saveSettings();
         refreshCallsPanel();
         updateMap();
+        break;
+      case 'theater-settings':
+        // Squadron-wide config (crc-sync/src/theater-settings.js), same
+        // deal as 'squawk-map' above — pushed on connect and whenever any
+        // client edits transition alt / hdg correction / game-time offset
+        // from the Airport panel, authoritative over this client's cache.
+        settings.transitionAltFt = msg.transitionAltFt;
+        settings.hdgCorrection   = msg.hdgCorrection;
+        settings.gameTimeOffset  = msg.gameTimeOffset;
+        saveSettings();
+        updateMap();
+        if (typeof _updateAprtRefCard === 'function') _updateAprtRefCard();
+        if (typeof refreshAprtTheaterInputs === 'function') refreshAprtTheaterInputs();
+        break;
+      case 'atis':
+        // Live "who's transmitting ATIS on which frequency" list — pushed
+        // on connect, on every /api/atis-transmit start/stop, and on a
+        // periodic tick so a crashed client's entry still clears for
+        // everyone once it goes stale (see crc-sync's AtisStore.getActive()).
+        atisActive = msg.active || [];
+        if (typeof _updateAprtRefCard === 'function') _updateAprtRefCard();
+        break;
+      case 'apt-config':
+        // Squadron-wide config (crc-sync/src/apt-config.js): per-airport
+        // saved ATIS freq/runway/info-letter/manual-wx, same deal as
+        // 'squawk-map' — pushed on connect and whenever any client edits an
+        // airport's setup from the Airport panel, authoritative over this
+        // client's cache, so every controller sees the same runway/freq/wx
+        // for a given airport instead of only whoever last edited it.
+        settings.aprtAtisFreq = {};
+        settings.aprtAtisRwy  = {};
+        settings.aprtAtisInfo = {};
+        settings.aprtManualWx = {};
+        for (const [key, entry] of Object.entries(msg.airports || {})) {
+          settings.aprtAtisFreq[key] = entry.freq || '';
+          settings.aprtAtisRwy[key]  = entry.rwy  || '';
+          settings.aprtAtisInfo[key] = entry.info || '';
+          settings.aprtManualWx[key] = entry.manualWx || { vis: '', clouds: [] };
+        }
+        saveSettings();
+        if (typeof refreshAprtSelectedApt === 'function') refreshAprtSelectedApt();
         break;
       case 'snapshot':
         applySnapshot((msg.tracks || []).map(normaliseTrack));

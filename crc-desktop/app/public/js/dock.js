@@ -70,9 +70,29 @@ function initDock() {
   });
 
   loadDockLayout();
+  // The radars-panel's own init() (ui.js's initRadarPanel, invoked by
+  // mountExistingPanel while fromJSON()/buildDefaultDockLayout() above is
+  // still running) renders the Panels checkboxes against whatever sibling
+  // panels dockview has constructed *so far* — but fromJSON() walks the
+  // saved grid and recreates panels one at a time, so settings/airport/
+  // calls/radio frequently don't exist yet at that point and their
+  // checkboxes get built unchecked even when the saved layout has them
+  // open. Nothing re-renders afterward (onDidLayoutChange isn't wired up
+  // until below, and dockview has no onShow-style revisit hook despite
+  // ui.js's initRadarPanel returning one — see its comment). Re-rendering
+  // once more here, now that the whole restore has settled, fixes that.
+  if (typeof renderPanelControls === 'function') renderPanelControls();
   wireRadarsPanelButton();
 
   let saveTimer = null;
+  function scheduleSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      saveDockLayout();
+      captureOpenPanelPlacements();
+    }, 400);
+  }
+
   dock.api.onDidLayoutChange(() => {
     // IMPORTANT: never call addPanel()/removePanel() synchronously from
     // inside this callback. onDidLayoutChange can fire while dockview is
@@ -87,9 +107,36 @@ function initDock() {
     // bursts of change events into a single check — sidesteps this
     // entirely: by the time it runs, dockview's internal state has settled.
     scheduleEnsureRequiredPanels();
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(saveDockLayout, 400);
+    // The radars-panel's Panels section (ui.js) mirrors dock state in its
+    // own checkboxes/status text, but only re-renders on its own tab
+    // becoming active or a click inside it — closing a panel by its own tab
+    // (the dockview "x", not that checkbox) previously left the checkbox
+    // showing on/OPEN until the Panels tab happened to be revisited. Every
+    // layout change is a cheap enough re-render (a handful of DOM rows) to
+    // just do unconditionally rather than trying to detect "was it a
+    // close".
+    if (typeof renderPanelControls === 'function') renderPanelControls();
+    scheduleSave();
   });
+
+  // Backstop: while testing this against a real running instance (devtools
+  // protocol, driving actual pointer-event sash drags — a plain synthetic
+  // mouse event isn't enough, dockview's sash only listens for real
+  // PointerEvents), dock.api.onDidLayoutChange's debounced handler above
+  // reliably captured the very first layout change of a session but then
+  // repeatedly failed to fire for later ones — including plain resizes,
+  // which is exactly the case placement memory most needs. Subscribing a
+  // second, independent listener at that point kept receiving events fine,
+  // so *something* about long-lived delivery to the original subscriber
+  // was unreliable, though isolating the precise cause wasn't possible
+  // (the test setup itself had unrelated graphics-stack issues muddying
+  // results, so this may be a dockview quirk, a test artifact, or both).
+  // Rather than depend on fully understanding that, polling sidesteps it
+  // entirely: it doesn't rely on any specific event firing at all. 2s is
+  // frequent enough that a panel closed shortly after being resized still
+  // has fresh geometry recorded, and cheap enough (a handful of property
+  // reads, most of the time finding nothing changed) to just always run.
+  setInterval(scheduleSave, 2000);
 }
 
 // Panels with no dedicated reopen UI — always re-added if closed. Track Info
@@ -142,6 +189,16 @@ function leftGroupAnchor(excludeId) {
   return LEFT_CLUSTER.filter(id => id !== excludeId).find(id => dock.api.getPanel(id));
 }
 
+// Which "side" each closable panel belongs to — see the big comment above
+// PANEL_SIDE_SIZES below for why sizing is tracked per side rather than per
+// panel. `map` isn't listed: it never closes, so it never needs a
+// remembered size to come back to.
+const PANEL_SIDE = {
+  track: 'left', radars: 'left', airport: 'left', calls: 'left',
+  settings: 'right',
+  radio: 'bottom',
+};
+
 // Track Info's reopen path: clicking a track on the map (showTrackPanel, in
 // ui.js) calls this to get-or-create the panel before activating it, rather
 // than relying on a permanent required-panel restore.
@@ -149,10 +206,10 @@ function ensureTrackPanel() {
   const existing = dock.api.getPanel('track');
   if (existing) return existing;
   const anchor = leftGroupAnchor('track');
-  return dock.addPanel({
+  return dock.addPanel(withRememberedPlacement('track', {
     id: 'track', component: 'track', title: PANEL_TITLES.track,
     position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
-  });
+  }, !anchor));
 }
 
 let _ensureRequiredPanelsQueued = false;
@@ -173,10 +230,10 @@ function scheduleEnsureRequiredPanels() {
 // references for zero user-visible benefit.)
 function radarsPanelOptions() {
   const anchor = leftGroupAnchor('radars');
-  return {
+  return withRememberedPlacement('radars', {
     id: 'radars', component: 'radars', title: PANEL_TITLES.radars,
     position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
-  };
+  }, !anchor);
 }
 
 function wireRadarsPanelButton() {
@@ -212,23 +269,26 @@ function toggleOrFocusPanel(id, addOptionsFn) {
 // no radar tie and are purely manual. Future dockable panels (flight
 // strips, PAR scope, marshal stack, LSO, chat) register here too.
 const DOCKABLE_PANELS = {
-  settings: () => ({
+  // Always a fresh split off map (nothing else ever anchors to its own
+  // right side) — safe to unconditionally size from memory, see
+  // withRememberedPlacement's `allowGridSize` comment below.
+  settings: () => withRememberedPlacement('settings', {
     id: 'settings', component: 'settings', title: PANEL_TITLES.settings,
     position: { referencePanel: 'map', direction: 'right' },
-  }),
+  }, true),
   airport: () => {
     const anchor = leftGroupAnchor('airport');
-    return {
+    return withRememberedPlacement('airport', {
       id: 'airport', component: 'airport', title: PANEL_TITLES.airport,
       position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
-    };
+    }, !anchor);
   },
   calls: () => {
     const anchor = leftGroupAnchor('calls');
-    return {
+    return withRememberedPlacement('calls', {
       id: 'calls', component: 'calls', title: PANEL_TITLES.calls,
       position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
-    };
+    }, !anchor);
   },
   // No referencePanel/referenceGroup at all — dockview interprets a bare
   // `direction` as relative to the whole grid (confirmed against its
@@ -236,12 +296,14 @@ const DOCKABLE_PANELS = {
   // single panel), which is what makes this a genuine full-width bottom
   // strip rather than just "below the map panel" specifically. Re-adding it
   // this way after a close also always lands back as a fresh full-width
-  // strip, regardless of how the rest of the grid has been rearranged since.
-  radio: () => ({
+  // strip, regardless of how the rest of the grid has been rearranged
+  // since — always a fresh strip, so (like settings) safe to size from
+  // memory; 90 is just the first-ever-launch fallback.
+  radio: () => withRememberedPlacement('radio', {
     id: 'radio', component: 'radio', title: PANEL_TITLES.radio,
     position: { direction: 'below' },
     initialHeight: 90,
-  }),
+  }, true),
 };
 
 function isDockPanelOpen(id) {
@@ -267,6 +329,151 @@ function toggleDockPanel(id, open, { preserveFocus } = {}) {
   } else if (existing) {
     dock.api.removePanel(existing);
   }
+}
+
+// ── Placement memory: floats per panel, sizes per side ───────────────────
+// Closing an optional panel re-adds it later via a hardcoded `position` in
+// DOCKABLE_PANELS/radarsPanelOptions/ensureTrackPanel, which loses whatever
+// the user had actually set up. Two genuinely different things get
+// remembered here, deliberately kept in separate caches because they don't
+// generalize the same way:
+//
+//  - A panel dragged out into its own floating window. This is inherently
+//    per-PANEL — a float belongs to exactly one panel, there's no "side" to
+//    share it with — so it's kept in _panelFloats, keyed by panel id, and
+//    restored verbatim (an absolute x/y/width/height against the window is
+//    never ambiguous, regardless of what else is docked elsewhere).
+//
+//  - A docked panel's size. This is NOT really a per-panel thing: Track
+//    Info, Radars, Airport, and Squawk C/S all share the same physical
+//    column (LEFT_CLUSTER) — the "left side is 900px wide" fact belongs to
+//    that side, not to whichever one of them happened to be open when it
+//    was last resized. The very first version of this only remembered a
+//    resized width against the one panel that was open at the time: resize
+//    while Track is open, close Track, reopen Airport instead (still an
+//    empty side, so still a fresh split) — and Airport had no memory of
+//    its own, so it fell back to dockview's default ~50/50 split anyway.
+//    Tracking size per PANEL_SIDE instead of per panel id fixes that: any
+//    panel on a given side, however it gets reopened, restores that side's
+//    last known size. Kept in _sideSizes, keyed by 'left'/'right'/'bottom'
+//    (see PANEL_SIDE above) — and applied only when the panel reopening is
+//    about to become the sole/first occupant of a fresh split for its side
+//    (the `allowGridSize` argument each DOCKABLE_PANELS entry passes in,
+//    true only when it computed no anchor/sibling to join). Deliberately
+//    NOT applied when rejoining an EXISTING sibling group as a new tab —
+//    reproduced firsthand that forcing a remembered size there fights
+//    dockview's own splitview math (the group already has its own live,
+//    correct size) and can balloon one panel across most of the screen
+//    while squeezing every other one down to a sliver.
+//
+// There's no "about to be removed" dockview event to hook (only
+// onDidLayoutChange, which fires after removal, by which point the
+// panel's geometry is already gone) — instead this piggybacks on the same
+// debounced onDidLayoutChange tick (plus a periodic backstop poll, see
+// initDock()) saveDockLayout uses, recording every currently-open tracked
+// panel's current placement each time: whichever was live right before a
+// panel/side was later closed is what's still in the cache when it's
+// reopened.
+const PANEL_FLOAT_KEY = 'crc-desktop-panel-float';
+const SIDE_SIZE_KEY = 'crc-desktop-side-size';
+const PLACEMENT_TRACKED_IDS = ['track', 'radars', 'settings', 'airport', 'calls', 'radio'];
+
+function _loadJSON(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function _saveJSON(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (_) {}
+}
+
+let _panelFloats = _loadJSON(PANEL_FLOAT_KEY); // panel id -> floating box
+let _sideSizes = _loadJSON(SIDE_SIZE_KEY);     // 'left'/'right'/'bottom' -> {width, height}
+
+function captureOpenPanelPlacements() {
+  let floatsChanged = false;
+  let sidesChanged = false;
+  for (const id of PLACEMENT_TRACKED_IDS) {
+    const panel = dock.api.getPanel(id);
+    if (!panel) continue;
+    try {
+      if (panel.api.location.type === 'floating') {
+        const floatingGroup = dock.floatingGroups.find(g => g.group === panel.api.group);
+        const box = floatingGroup && floatingGroup.overlay.toJSON();
+        if (box && box.width > 0 && box.height > 0) {
+          _panelFloats[id] = box;
+          floatsChanged = true;
+          continue;
+        }
+      } else if (panel.api.location.type === 'grid' && id in _panelFloats) {
+        // Docked normally after previously having a remembered float. That
+        // float no longer reflects where this panel belongs — without this,
+        // it sits in _panelFloats forever (this cache is otherwise
+        // write-only) and withRememberedPlacement keeps reapplying it on
+        // every future reopen, so a panel the user re-docked and closed
+        // normally comes back floating — unexpectedly, and "sometimes on
+        // startup" specifically for panels force-restored (see
+        // REQUIRED_PANELS/DOCKABLE_PANELS) before this function has ever
+        // run this session to notice they're docked.
+        delete _panelFloats[id];
+        floatsChanged = true;
+      }
+      // Docked (or a floating box that failed the sanity check above —
+      // e.g. read mid-mutation). Read the size off the *group*, not the
+      // panel: panel.api.width/height only updates for whichever tab in
+      // the group is currently active — confirmed live (real mouse-drag
+      // resize via CDP) that a background tab's own panel.api.width stays
+      // stale at its original creation-time value forever, while
+      // panel.api.group.api.width tracks the group's actual live box
+      // regardless of which tab is active. Only overwrite with a real,
+      // laid-out measurement; a 0/undefined width or height means dockview
+      // hasn't measured it yet this tick (seen right after a fromJSON()
+      // restore), and persisting that would later apply a degenerate
+      // zero-size split.
+      const w = panel.api.group.api.width, h = panel.api.group.api.height;
+      const side = PANEL_SIDE[id];
+      if (side && Number.isFinite(w) && w > 0 && Number.isFinite(h) && h > 0) {
+        _sideSizes[side] = { width: w, height: h };
+        sidesChanged = true;
+      }
+    } catch (err) {
+      console.error(`[dock] failed to capture placement for panel '${id}':`, err.message);
+    }
+  }
+  if (floatsChanged) _saveJSON(PANEL_FLOAT_KEY, _panelFloats);
+  if (sidesChanged) _saveJSON(SIDE_SIZE_KEY, _sideSizes);
+}
+
+// Merges a remembered placement into freshly-computed addPanel() options.
+// A remembered float always applies (never ambiguous). A remembered side
+// size only applies when `allowGridSize` is true — see the big comment
+// above for why.
+function withRememberedPlacement(id, options, allowGridSize) {
+  const box = _panelFloats[id];
+  if (box) {
+    const { width, height, top, bottom, left, right } = box;
+    const position = {};
+    if (typeof top === 'number') position.top = top;
+    else if (typeof bottom === 'number') position.bottom = bottom;
+    if (typeof left === 'number') position.left = left;
+    else if (typeof right === 'number') position.right = right;
+    const { position: _drop, ...rest } = options;
+    return { ...rest, floating: { position, width, height } };
+  }
+  const sideSize = allowGridSize && _sideSizes[PANEL_SIDE[id]];
+  if (sideSize) {
+    const opts = { ...options };
+    if (typeof sideSize.width === 'number') opts.initialWidth = sideSize.width;
+    if (typeof sideSize.height === 'number') opts.initialHeight = sideSize.height;
+    return opts;
+  }
+  return options;
 }
 
 // ── Radar-driven panel visibility ───────────────────────────────────────

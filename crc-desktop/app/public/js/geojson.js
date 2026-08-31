@@ -521,10 +521,13 @@ function buildExtendedCenterline() {
 
   // The runway number is a magnetic heading (real-world convention) — the
   // map's geometry math (projectPos/bearingDeg) is all true-bearing, so it
-  // needs the same true = magnetic - magVar conversion the BRA readout uses
-  // in reverse (ui.js: displayed magnetic = true + magVar).
-  const magVar      = settings.magVar || 0;
-  const trueHeading = ((_aprtRwyHeading - magVar) % 360 + 360) % 360;
+  // needs the reverse of the chain the BRA readout uses (ui.js: displayed
+  // = grid + hdgCorrection, where grid = true - gridConvergenceDeg):
+  // magnetic -> grid (subtract hdgCorrection) -> true (add convergence back).
+  const hdgCorrection = settings.hdgCorrection || 0;
+  const gridHeading = ((_aprtRwyHeading - hdgCorrection) % 360 + 360) % 360;
+  const conv        = gridConvergenceDeg(_aprtSelectedApt.lat, _aprtSelectedApt.lon);
+  const trueHeading = ((gridHeading + conv) % 360 + 360) % 360;
   const reciprocal  = (trueHeading + 180) % 360;
 
   const lengthNm = settings.extCenterlineNm || 25;

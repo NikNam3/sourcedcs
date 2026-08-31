@@ -2,6 +2,8 @@
 
 const { WebSocketServer, WebSocket } = require('ws');
 const { resolveTrack, getSquawkConfig, setSquawkMapping, deleteSquawkMapping } = require('./resolve');
+const { getTheaterSettings, setTheaterSettings } = require('./theater-settings');
+const { getAptConfig, setAptConfig } = require('./apt-config');
 const { consumeTicket } = require('./auth');
 
 const VERSION  = 1;
@@ -21,6 +23,7 @@ class WsHub {
     this._gameTime    = null;
     this._grpcStatus  = 'disconnected';
     this._srsStatus   = 'disconnected';
+    this._atisActive  = []; // [{ frequency, ownerId }] — see setAtisActive()
   }
 
   attach(httpServer) {
@@ -54,6 +57,12 @@ class WsHub {
   setSrsStatus(s)     { this._srsStatus = s; this._broadcastStatus(); }
   broadcastRadarLocks(locks) { this._broadcast({ version: VERSION, type: 'radar-locks', locks }); }
 
+  // Live "who's transmitting ATIS on which frequency" list, from
+  // AtisStore.getActive() — called by server.js after every
+  // /api/atis-transmit mutation and on a periodic tick, so every connected
+  // client sees it (not just the next one to collide with it via a 409).
+  setAtisActive(list) { this._atisActive = list; this._broadcast(this._atisMsg()); }
+
   // Message shapes below are deliberately identical to crc-desktop's
   // original app/src/ws-server.js protocol (type names, field names, and
   // the connect-time send order in _onConnect below) — so the renderer's
@@ -65,6 +74,9 @@ class WsHub {
   _weatherMsg() { return { version: VERSION, type: 'weather', pressurePa: this._weather.pressurePa, tempK: this._weather.tempK }; }
   _gameTimeMsg(){ return { version: VERSION, type: 'game-time', datetime: this._gameTime }; }
   _squawkMapMsg() { return { version: VERSION, type: 'squawk-map', ...getSquawkConfig() }; }
+  _atisMsg()      { return { version: VERSION, type: 'atis', active: this._atisActive }; }
+  _theaterSettingsMsg() { return { version: VERSION, type: 'theater-settings', ...getTheaterSettings() }; }
+  _aptConfigMsg() { return { version: VERSION, type: 'apt-config', airports: getAptConfig() }; }
   _initMsg() {
     return {
       version:   VERSION,
@@ -74,6 +86,7 @@ class WsHub {
       airports:  this._missionData.airports,
       waypoints: this._missionData.waypoints,
       drawings:  this._missionData.drawings,
+      theatre:   this._missionData.theatre,
     };
   }
 
@@ -115,6 +128,9 @@ class WsHub {
     if (this._weather)     ws.send(JSON.stringify(this._weatherMsg()));
     if (this._gameTime)    ws.send(JSON.stringify(this._gameTimeMsg()));
     ws.send(JSON.stringify(this._squawkMapMsg()));
+    ws.send(JSON.stringify(this._theaterSettingsMsg()));
+    ws.send(JSON.stringify(this._aptConfigMsg()));
+    ws.send(JSON.stringify(this._atisMsg()));
     ws.send(JSON.stringify({
       version: VERSION,
       type:    'snapshot',
@@ -179,6 +195,23 @@ class WsHub {
     }
     if (msg.type === 'squawkMapDelete') {
       if (deleteSquawkMapping(msg.kind, msg.code)) this._broadcast(this._squawkMapMsg());
+      return;
+    }
+
+    // Theater settings (transition alt / hdg correction / game-time offset)
+    // are squadron-wide config too, same as squawk-map above — any client
+    // can push a patch and every client (including the sender) gets the
+    // authoritative merged result back.
+    if (msg.type === 'theaterSettingsSet') {
+      if (setTheaterSettings(msg)) this._broadcast(this._theaterSettingsMsg());
+      return;
+    }
+
+    // Per-airport ATIS config (freq / runway / info letter / manual wx) —
+    // same squadron-wide-config deal, keyed by airport (msg.key) instead of
+    // a single flat object.
+    if (msg.type === 'aptConfigSet') {
+      if (setAptConfig(msg.key, msg)) this._broadcast(this._aptConfigMsg());
       return;
     }
 

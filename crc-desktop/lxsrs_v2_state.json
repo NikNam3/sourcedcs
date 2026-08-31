@@ -17,7 +17,7 @@
       "modulation": "DISABLED"
     },
     {
-      "freq_mhz": 340.775,
+      "freq_mhz": 377.475,
       "modulation": "AM"
     },
     {
@@ -58,7 +58,7 @@
     1.0,
     1.0
   ],
-  "tx_slot": 5,
+  "tx_slot": 4,
   "sound_set": "RADIO_TRANS_APACHE",
   "noise_enabled": true,
   "unit_id": 100000001

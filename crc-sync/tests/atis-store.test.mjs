@@ -53,3 +53,35 @@ test('finish only clears the entry if it is still the same in-flight call', () =
   store.finish(251000000, currentCall);
   assert.equal(store.canStart(251000000, 'owner-b'), true);
 });
+
+test('getActive reports a loop as in-use through finish() — not just while a call is in flight', () => {
+  const store = new AtisStore();
+  const call = {};
+  store.start(251000000, 'owner-a', call);
+  assert.deepEqual(store.getActive(), [{ frequency: 251000000, ownerId: 'owner-a' }]);
+
+  store.finish(251000000, call); // one loop iteration's transmission finished playing
+  assert.deepEqual(store.getActive(), [{ frequency: 251000000, ownerId: 'owner-a' }],
+    'still in use during the pause before the loop\'s next call');
+});
+
+test('getActive clears once stop() is called, even mid-pause with no in-flight call', () => {
+  const store = new AtisStore();
+  const call = {};
+  store.start(251000000, 'owner-a', call);
+  store.finish(251000000, call); // now in the pause between calls — _byFreq is empty
+
+  assert.equal(store.stop(251000000, 'owner-a'), false, 'no in-flight call to cancel, so stop() itself reports nothing to stop');
+  assert.deepEqual(store.getActive(), [], 'but presence is still cleared immediately');
+});
+
+test('getActive prunes an entry once presenceTtlMs lapses without a fresh start/finish', () => {
+  const store = new AtisStore(8000, 10); // 10ms presence TTL for the test
+  store.start(251000000, 'owner-a', {});
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      assert.deepEqual(store.getActive(), []);
+      resolve();
+    }, 20);
+  });
+});

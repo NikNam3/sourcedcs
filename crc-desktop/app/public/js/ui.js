@@ -145,7 +145,7 @@ function updateBullseyeCursor(e) {
   const rect   = map.getCanvas().getBoundingClientRect();
   const cursor = map.unproject([e.clientX - rect.left, e.clientY - rect.top]);
   const distNm = haversineM(be.lat, be.lon, cursor.lat, cursor.lng) / 1852;
-  const hdg    = (Math.round(bearingDeg(be.lat, be.lon, cursor.lat, cursor.lng)) + (settings.magVar || 0) + 360) % 360;
+  const hdg    = (Math.round(gridBearingDeg(be.lat, be.lon, cursor.lat, cursor.lng)) + (settings.hdgCorrection || 0) + 360) % 360;
 
   $cursorBra.textContent = `${hdg.toString().padStart(3, '0')}/${Math.round(distNm).toString().padStart(3, '0')}`;
   $cursorBra.style.color = settings.braColor;
@@ -162,7 +162,7 @@ function updateBullseyeCursor(e) {
 function updateMeasureLine(lng1, lat1, lng2, lat2) {
   if (!mapReady) return;
   const distNm  = Math.round(haversineM(lat1, lng1, lat2, lng2) / 1852);
-  const bearing = (Math.round(bearingDeg(lat1, lng1, lat2, lng2)) + (settings.magVar || 0) + 360) % 360;
+  const bearing = (Math.round(gridBearingDeg(lat1, lng1, lat2, lng2)) + (settings.hdgCorrection || 0) + 360) % 360;
   const label   = `${bearing.toString().padStart(3,'0')} / ${distNm.toString().padStart(3,'0')}`;
   map.getSource('measure').setData({
     type: 'FeatureCollection',
@@ -667,20 +667,22 @@ function renderRadarSearchResults(term) {
   }
 }
 
-// The panels this radar list can drive open/closed. Airport is radar-linked
-// (see dock.js's RADAR_TYPE_TO_PANEL) — its row shows live open/closed
-// status plus a pin instead of a plain switch. Settings/Squawk C/S/Radio
-// have no radar tie and stay simple manual toggles. Labels read from
-// dock.js's PANEL_TITLES (the single source of truth for panel names) — a
-// function, not a top-level const, because dock.js loads after this file
-// and PANEL_TITLES wouldn't exist yet if this array were built at parse
-// time instead of when a panel actually needs rendering.
+// The panels this radar list can drive open/closed. Every row is rendered
+// identically (label + slider + pin) regardless of whether anything else
+// (a radar, for Airport — see dock.js's RADAR_TYPE_TO_PANEL) also drives
+// that panel's open/closed state; the slider always reflects live dock
+// state either way, so a separate radar-only status readout would just be
+// a second way of displaying the same bit. Labels read from dock.js's
+// PANEL_TITLES (the single source of truth for panel names) — a function,
+// not a top-level const, because dock.js loads after this file and
+// PANEL_TITLES wouldn't exist yet if this array were built at parse time
+// instead of when a panel actually needs rendering.
 function panelControlRows() {
   return [
-    { id: 'settings', label: PANEL_TITLES.settings, radarLinked: false },
-    { id: 'airport',  label: PANEL_TITLES.airport,  radarLinked: true },
-    { id: 'calls',    label: PANEL_TITLES.calls,    radarLinked: false },
-    { id: 'radio',    label: PANEL_TITLES.radio,    radarLinked: false },
+    { id: 'settings', label: PANEL_TITLES.settings },
+    { id: 'airport',  label: PANEL_TITLES.airport },
+    { id: 'calls',    label: PANEL_TITLES.calls },
+    { id: 'radio',    label: PANEL_TITLES.radio },
   ];
 }
 
@@ -689,7 +691,7 @@ function renderPanelControls() {
   if (!$panels) return;
   $panels.innerHTML = '';
 
-  for (const { id, label, radarLinked } of panelControlRows()) {
+  for (const { id, label } of panelControlRows()) {
     const $row = document.createElement('div');
     $row.className = 'panel-ctrl-row';
 
@@ -702,37 +704,29 @@ function renderPanelControls() {
     });
     $row.appendChild($label);
 
-    if (radarLinked) {
-      const open = isDockPanelOpen(id);
-      const $status = document.createElement('span');
-      $status.className = 'panel-ctrl-status' + (open ? ' is-open' : '');
-      $status.textContent = open ? 'OPEN' : '—';
-      $row.appendChild($status);
+    const $toggle = document.createElement('label');
+    $toggle.className = 'toggle';
+    const $cb = document.createElement('input');
+    $cb.type = 'checkbox';
+    $cb.checked = isDockPanelOpen(id);
+    $cb.addEventListener('click', e => e.stopPropagation());
+    $cb.addEventListener('change', () => toggleDockPanel(id, $cb.checked));
+    const $slider = document.createElement('span');
+    $slider.className = 'toggle-slider';
+    $toggle.appendChild($cb);
+    $toggle.appendChild($slider);
+    $row.appendChild($toggle);
 
-      const $pin = document.createElement('button');
-      $pin.className = 'panel-pin-btn' + (isPanelPinned(id) ? ' pinned' : '');
-      $pin.textContent = 'PIN';
-      $pin.title = 'Keep open regardless of radar state';
-      $pin.addEventListener('click', (e) => {
-        e.stopPropagation();
-        setPanelPinned(id, !isPanelPinned(id));
-        renderPanelControls();
-      });
-      $row.appendChild($pin);
-    } else {
-      const $toggle = document.createElement('label');
-      $toggle.className = 'toggle';
-      const $cb = document.createElement('input');
-      $cb.type = 'checkbox';
-      $cb.checked = isDockPanelOpen(id);
-      $cb.addEventListener('click', e => e.stopPropagation());
-      $cb.addEventListener('change', () => toggleDockPanel(id, $cb.checked));
-      const $slider = document.createElement('span');
-      $slider.className = 'toggle-slider';
-      $toggle.appendChild($cb);
-      $toggle.appendChild($slider);
-      $row.appendChild($toggle);
-    }
+    const $pin = document.createElement('button');
+    $pin.className = 'panel-pin-btn' + (isPanelPinned(id) ? ' pinned' : '');
+    $pin.textContent = 'PIN';
+    $pin.title = 'Keep open regardless of radar state';
+    $pin.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setPanelPinned(id, !isPanelPinned(id));
+      renderPanelControls();
+    });
+    $row.appendChild($pin);
 
     $panels.appendChild($row);
   }
@@ -1144,9 +1138,6 @@ function initTrackPanel() {
   const $panel   = document.getElementById('track-panel');
   if (!$panel) return;
 
-  // Close button
-  document.getElementById('tp-close').addEventListener('click', () => closeTrackPanel());
-
   // IFF buttons
   const iffColors = () => ({
     friendly: settings.colFriendly || '#4488cc',
@@ -1365,8 +1356,18 @@ function updateTrackPanel() {
   const vsSign = fpm >  50 ? '+' : fpm < -50 ? '' : '±';
   document.getElementById('tp-vs').textContent   =
     Math.abs(fpm) < 50 ? 'level' : `${vsSign}${Math.round(fpm)} fpm`;
+  // heading here is a true bearing (kinematics() derives it from raw
+  // lat/lon deltas) — first correct true→grid (gridConvergenceDeg, see
+  // geo.js: DCS's cockpit heading tape is referenced to its flat internal
+  // grid, not true geodetic north — the two differ by the local convergence
+  // angle), then apply settings.hdgCorrection the same way every other
+  // displayed heading does (BRA/cursor bearing above, runway heading in
+  // geojson.js): displayed = grid + hdgCorrection. hdgCorrection is a manual
+  // fudge factor, not real-world magnetic variation — see app.js DEFAULTS.
+  const conv   = gridConvergenceDeg(t.lat, t.lon);
+  const hdgMag = (Math.round(heading - conv) + (settings.hdgCorrection || 0) + 360) % 360;
   document.getElementById('tp-hdg').textContent  =
-    `${String(Math.round(heading)).padStart(3,'0')}°`;
+    `${String(hdgMag).padStart(3,'0')}°`;
   document.getElementById('tp-spd').textContent  =
     `${Math.round(speedKt)} kt`;
   document.getElementById('tp-sqwk').textContent =
@@ -1624,6 +1625,15 @@ function _updateAprtRwyHeading() {
 // from a different controller's client transmitting on the same frequency.
 const _atisOwnerId = crypto.randomUUID();
 
+// Set once initAprtPanel() has run (it only ever runs once — see dock.js's
+// mountExistingPanel), to whatever closure there recomputes the ATIS status
+// line from `atisActive` (the live "who's transmitting where" list synced
+// from crc-sync — see app.js's 'atis' case). Left null until the panel has
+// been opened at least once this session; _updateAprtRefCard()'s call below
+// is then just a no-op, which is fine since there's no ATIS status row
+// visible to update yet either.
+let _atisLiveRefresh = null;
+
 function _updateAprtRefCard() {
   const $card = document.getElementById('aprt-ref-card');
   if (!$card) return;
@@ -1695,24 +1705,31 @@ function _updateAprtRefCard() {
   if ($info) { $info.textContent = info || '—'; $info.className = info ? 'aprt-ref-v' : 'aprt-ref-v dim'; }
   if ($freq) { $freq.textContent = freq   ? `${freq} MHz` : '—'; $freq.className = freq ? 'aprt-ref-v' : 'aprt-ref-v dim'; }
   if ($ta)   { $ta.textContent   = taFt ? `${taFt.toLocaleString()} ft` : '—'; $ta.className = 'aprt-ref-v'; }
+
+  if (_atisLiveRefresh) _atisLiveRefresh();
+}
+
+// Re-syncs the theater settings inputs' displayed values from `settings`
+// state — called from app.js when a 'theater-settings' broadcast arrives
+// from crc-sync (any client, including this one, having edited it) so every
+// controller's airport panel shows the same transition altitude / heading
+// correction / game-time offset instead of only whoever last edited it
+// locally. No-op if the panel has never been mounted (inputs don't exist).
+function refreshAprtTheaterInputs() {
+  const $transAlt      = document.getElementById('aprt-transition-alt');
+  const $hdgCorrection = document.getElementById('aprt-hdg-correction');
+  const $timeOffset    = document.getElementById('aprt-time-offset');
+  if ($transAlt)      $transAlt.value      = settings.transitionAltFt ?? 18000;
+  if ($hdgCorrection) $hdgCorrection.value = settings.hdgCorrection ?? 0;
+  if ($timeOffset)    $timeOffset.value    = settings.gameTimeOffset ?? 0;
 }
 
 function initAprtPanel() {
   const $panel  = document.getElementById('aprt-panel');
-  const $close  = document.getElementById('aprt-close');
   const $search = document.getElementById('aprt-search');
   if (!$panel) return;
 
   _renderAprtAptList('');
-
-  if ($close) {
-    // Closing now means leaving this dockable panel entirely, same as
-    // unchecking it from the radars-panel's Panels list.
-    $close.addEventListener('click', (e) => {
-      e.stopPropagation();
-      toggleDockPanel('airport', false);
-    });
-  }
 
   if ($search) {
     $search.addEventListener('input', () => _renderAprtAptList($search.value));
@@ -1730,17 +1747,25 @@ function initAprtPanel() {
     });
   }
 
-  // Manual wx inputs — save on every change and refresh ref card
+  // Manual wx inputs — save locally + refresh ref card on every keystroke
+  // for instant feedback; push to crc-sync (src/apt-config.js, squadron-wide)
+  // only on 'change' (blur/enter/select-commit), not per keystroke, so
+  // typing "3000" into a cloud base doesn't fire 4 WS messages + 4
+  // synchronous config-file writes on the server.
   ['aprt-wx-vis',
    'aprt-cld-1-cov', 'aprt-cld-1-base',
    'aprt-cld-2-cov', 'aprt-cld-2-base',
    'aprt-cld-3-cov', 'aprt-cld-3-base',
   ].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.addEventListener('input', () => { _saveAprtManualWx(); _updateAprtRefCard(); });
+    if (!el) return;
+    el.addEventListener('input', () => { _saveAprtManualWx(); _updateAprtRefCard(); });
+    el.addEventListener('change', _syncAprtManualWx);
   });
 
-  // ATIS inputs that affect the ref card; freq also persisted per airport
+  // ATIS inputs that affect the ref card; freq/rwy/info also persisted per
+  // airport and synced squadron-wide (same local-instant / synced-on-change
+  // split as the manual wx inputs above).
   const $freqEl = document.getElementById('aprt-atis-freq');
   if ($freqEl) {
     $freqEl.addEventListener('input', () => {
@@ -1752,17 +1777,47 @@ function initAprtPanel() {
         saveSettings();
       }
     });
+    $freqEl.addEventListener('change', () => {
+      if (!_aprtSelectedApt) return;
+      const k = _aprtSelectedApt.icao || _aprtSelectedApt.name;
+      sendToSync({ type: 'aptConfigSet', key: k, freq: $freqEl.value });
+    });
   }
-  ['aprt-atis-info', 'aprt-atis-rwy'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('input', _updateAprtRefCard);
-  });
+  const $infoField = document.getElementById('aprt-atis-info');
+  if ($infoField) {
+    $infoField.addEventListener('input', _updateAprtRefCard);
+    $infoField.addEventListener('change', () => {
+      if (!_aprtSelectedApt) return;
+      const k = _aprtSelectedApt.icao || _aprtSelectedApt.name;
+      if (!settings.aprtAtisInfo) settings.aprtAtisInfo = {};
+      settings.aprtAtisInfo[k] = $infoField.value;
+      saveSettings();
+      sendToSync({ type: 'aptConfigSet', key: k, info: $infoField.value });
+    });
+  }
   const $rwyField = document.getElementById('aprt-atis-rwy');
-  if ($rwyField) $rwyField.addEventListener('input', _updateAprtRwyHeading);
+  if ($rwyField) {
+    $rwyField.addEventListener('input', () => { _updateAprtRwyHeading(); _updateAprtRefCard(); });
+    $rwyField.addEventListener('change', () => {
+      if (!_aprtSelectedApt) return;
+      const k = _aprtSelectedApt.icao || _aprtSelectedApt.name;
+      if (!settings.aprtAtisRwy) settings.aprtAtisRwy = {};
+      settings.aprtAtisRwy[k] = $rwyField.value;
+      saveSettings();
+      sendToSync({ type: 'aptConfigSet', key: k, rwy: $rwyField.value });
+    });
+  }
 
-  // Theater settings
+  // Theater settings — squadron-wide via crc-sync (src/theater-settings.js),
+  // same pattern as the SQWK C/S mapping in the Calls panel: update the
+  // local cache optimistically so this client feels instant, then push the
+  // change so every other connected controller's panel picks it up too
+  // (refreshAprtTheaterInputs(), called from app.js's 'theater-settings'
+  // case, re-syncs these inputs' displayed values on the resulting
+  // broadcast — including back to the client that made the edit, keeping
+  // everyone converged on whatever crc-sync ends up persisting).
   const $transAlt   = document.getElementById('aprt-transition-alt');
-  const $magVar     = document.getElementById('aprt-mag-var');
+  const $hdgCorrection = document.getElementById('aprt-hdg-correction');
   const $timeOffset = document.getElementById('aprt-time-offset');
 
   if ($transAlt) {
@@ -1770,13 +1825,21 @@ function initAprtPanel() {
     $transAlt.addEventListener('change', () => {
       settings.transitionAltFt = parseInt($transAlt.value) || 18000;
       saveSettings(); updateMap(); _updateAprtRefCard();
+      sendToSync({ type: 'theaterSettingsSet', transitionAltFt: settings.transitionAltFt });
     });
   }
-  if ($magVar) {
-    $magVar.value = settings.magVar ?? 0;
-    $magVar.addEventListener('input', () => {
-      settings.magVar = parseInt($magVar.value) || 0;
+  if ($hdgCorrection) {
+    $hdgCorrection.value = settings.hdgCorrection ?? 0;
+    // 'input' fires on every keystroke — kept local-only (map redraw needs
+    // to feel instant while typing). The synced push waits for 'change'
+    // (blur/enter/spinner-commit) below so crc-sync isn't getting a
+    // WS message + a synchronous config-file write per keystroke.
+    $hdgCorrection.addEventListener('input', () => {
+      settings.hdgCorrection = parseInt($hdgCorrection.value) || 0;
       saveSettings(); updateMap();
+    });
+    $hdgCorrection.addEventListener('change', () => {
+      sendToSync({ type: 'theaterSettingsSet', hdgCorrection: settings.hdgCorrection });
     });
   }
   if ($timeOffset) {
@@ -1784,6 +1847,7 @@ function initAprtPanel() {
     $timeOffset.addEventListener('change', () => {
       settings.gameTimeOffset = parseInt($timeOffset.value) || 0;
       saveSettings();
+      sendToSync({ type: 'theaterSettingsSet', gameTimeOffset: settings.gameTimeOffset });
     });
   }
 
@@ -1802,6 +1866,44 @@ function initAprtPanel() {
 
   const $tx     = document.getElementById('aprt-atis-tx');
   const $status = document.getElementById('aprt-atis-status');
+  // Cached node references, not re-queried per tick — same reasoning as
+  // $tx/$status above. dockview detaches the airport panel's DOM subtree
+  // from `document` when the panel is closed (checkbox, pin, its own tab's
+  // "x"), so a live `document.getElementById('aprt-atis-freq')` inside the
+  // 5s _doAtisTransmit loop below started returning null the moment the
+  // panel closed — `.value` on that null then threw, silently killing the
+  // loop (uncaught inside a setTimeout callback) and the ATIS with it. The
+  // cached element reference stays valid — and still reflects its current
+  // .value — even while detached, so the loop (and a real ATIS on a real
+  // frequency shouldn't care whether anyone has the panel open) keeps
+  // running regardless of the panel's open/closed state.
+  const $freq   = document.getElementById('aprt-atis-freq');
+  const $text   = document.getElementById('aprt-atis-text');
+
+  // Live cross-client indicator: `atisActive` (app.js) is the "who's
+  // transmitting on which frequency" list crc-sync broadcasts on every
+  // /api/atis-transmit start/stop and on a periodic tick (see AtisStore's
+  // presence tracking) — this is what turns "another controller is running
+  // ATIS on this frequency" from something you only discover by pressing
+  // TRANSMIT yourself and getting a 409 into something visible passively.
+  // Deliberately doesn't touch $tx.disabled — the 409 path remains the
+  // actual enforcement; this is a status hint, not a lock.
+  function _refreshAtisLiveStatus() {
+    if (_atisLooping || !$status) return; // our own loop's status already reflects reality
+    const freqMhz = parseFloat(($freq || {}).value);
+    const freqHz  = freqMhz ? Math.round(freqMhz * 1e6) : null;
+    const inUseElsewhere = freqHz != null &&
+      atisActive.some(a => a.frequency === freqHz && a.ownerId !== _atisOwnerId);
+    if (inUseElsewhere) {
+      $status.textContent = 'IN USE (another client)';
+      $status.className   = 'aprt-atis-status err';
+    } else if ($status.textContent === 'IN USE (another client)') {
+      $status.textContent = 'STOPPED';
+      $status.className   = 'aprt-atis-status';
+    }
+  }
+  _atisLiveRefresh = _refreshAtisLiveStatus;
+  _refreshAtisLiveStatus();
 
   function _stopAtisLoop() {
     _atisLooping = false;
@@ -1812,7 +1914,7 @@ function initAprtPanel() {
     // Best-effort: tell crc-sync to cancel/release this frequency so a
     // still-in-flight transmit doesn't keep playing and the frequency frees
     // up for another client immediately, instead of waiting out the TTL.
-    const freqMhz = parseFloat(document.getElementById('aprt-atis-freq').value);
+    const freqMhz = parseFloat(($freq || {}).value);
     if (freqMhz) {
       fetch('/api/atis-transmit', {
         method: 'POST',
@@ -1825,8 +1927,8 @@ function initAprtPanel() {
   function _doAtisTransmit() {
     if (!_atisLooping) return;
 
-    const freqMhz = parseFloat(document.getElementById('aprt-atis-freq').value);
-    const text    = (document.getElementById('aprt-atis-text').value || '').trim();
+    const freqMhz = parseFloat(($freq || {}).value);
+    const text    = (($text || {}).value || '').trim();
     if (!freqMhz || !text) { _stopAtisLoop(); return; }
 
     const pos  = _aprtSelectedApt
@@ -1868,8 +1970,8 @@ function initAprtPanel() {
       e.stopPropagation();
       if (_atisLooping) { _stopAtisLoop(); return; }
 
-      const freqMhz = parseFloat(document.getElementById('aprt-atis-freq').value);
-      const text    = (document.getElementById('aprt-atis-text').value || '').trim();
+      const freqMhz = parseFloat(($freq || {}).value);
+      const text    = (($text || {}).value || '').trim();
       if (!freqMhz || !text) {
         if ($status) { $status.textContent = 'Freq and text required.'; $status.className = 'aprt-atis-status err'; }
         return;
@@ -1915,12 +2017,17 @@ function _renderAprtAptList(filter) {
       e.stopPropagation();
       _aprtSelectedApt = a;
       _renderAprtAptList(document.getElementById('aprt-search').value || '');
-      // Restore saved ATIS freq for this airport
+      // Restore this airport's squadron-wide saved ATIS setup (freq/rwy/info
+      // — see crc-sync's apt-config.js; settings.aprtAtis* here is just this
+      // client's cache of the server-authoritative value).
+      const key = a.icao || a.name;
       const $f = document.getElementById('aprt-atis-freq');
-      if ($f) {
-        const savedFreq = (settings.aprtAtisFreq || {})[a.icao || a.name] || '';
-        $f.value = savedFreq;
-      }
+      if ($f) $f.value = (settings.aprtAtisFreq || {})[key] || '';
+      const $rwy = document.getElementById('aprt-atis-rwy');
+      if ($rwy) $rwy.value = (settings.aprtAtisRwy || {})[key] || '';
+      const $info = document.getElementById('aprt-atis-info');
+      if ($info) $info.value = (settings.aprtAtisInfo || {})[key] || '';
+      _updateAprtRwyHeading();
       _fetchAndShowAprtWeather(a);
     });
     $list.appendChild(row);
@@ -2038,18 +2145,31 @@ function _buildAtisText() {
   if ($text) $text.value = lines.join('\n');
 }
 
-function _saveAprtManualWx() {
-  if (!_aprtSelectedApt) return;
-  const key = _aprtSelectedApt.icao || _aprtSelectedApt.name;
-  if (!settings.aprtManualWx) settings.aprtManualWx = {};
-  settings.aprtManualWx[key] = {
+function _manualWxFromDom() {
+  return {
     vis: (document.getElementById('aprt-wx-vis') || {}).value || '',
     clouds: [1, 2, 3].map(i => ({
       cover: (document.getElementById(`aprt-cld-${i}-cov`) || {}).value || '',
       base:  (document.getElementById(`aprt-cld-${i}-base`) || {}).value || '',
     })),
   };
+}
+
+function _saveAprtManualWx() {
+  if (!_aprtSelectedApt) return;
+  const key = _aprtSelectedApt.icao || _aprtSelectedApt.name;
+  if (!settings.aprtManualWx) settings.aprtManualWx = {};
+  settings.aprtManualWx[key] = _manualWxFromDom();
   saveSettings();
+}
+
+// Pushes the currently-selected airport's manual wx to crc-sync (squadron-
+// wide, src/apt-config.js) — called on 'change' (see initAprtPanel), not
+// per-keystroke like _saveAprtManualWx above.
+function _syncAprtManualWx() {
+  if (!_aprtSelectedApt) return;
+  const key = _aprtSelectedApt.icao || _aprtSelectedApt.name;
+  sendToSync({ type: 'aptConfigSet', key, manualWx: _manualWxFromDom() });
 }
 
 function _loadAprtManualWx(apt) {
@@ -2070,6 +2190,40 @@ function _loadAprtManualWx(apt) {
     if ($cov)  $cov.value  = '';
     if ($base) $base.value = '';
   }
+}
+
+// Re-syncs the freq/runway/info/manual-wx inputs for whichever airport is
+// currently selected — called from app.js when an 'apt-config' broadcast
+// arrives from crc-sync (any client, including this one, having edited it),
+// so a second controller looking at the same airport sees the update live
+// instead of only the next time they reselect it. Skips whichever field (if
+// any) the user currently has focused, so a live edit from someone else
+// can't overwrite this controller's own in-progress keystrokes.
+function refreshAprtSelectedApt() {
+  if (!_aprtSelectedApt) return;
+  const key    = _aprtSelectedApt.icao || _aprtSelectedApt.name;
+  const active = document.activeElement;
+
+  const $f    = document.getElementById('aprt-atis-freq');
+  const $rwy  = document.getElementById('aprt-atis-rwy');
+  const $info = document.getElementById('aprt-atis-info');
+  if ($f    && active !== $f)    $f.value    = (settings.aprtAtisFreq || {})[key] || '';
+  if ($rwy  && active !== $rwy)  $rwy.value  = (settings.aprtAtisRwy  || {})[key] || '';
+  if ($info && active !== $info) $info.value = (settings.aprtAtisInfo || {})[key] || '';
+
+  const wx = (settings.aprtManualWx || {})[key] || {};
+  const $vis = document.getElementById('aprt-wx-vis');
+  if ($vis && active !== $vis) $vis.value = wx.vis || '';
+  for (let i = 1; i <= 3; i++) {
+    const c     = (wx.clouds || [])[i - 1] || {};
+    const $cov  = document.getElementById(`aprt-cld-${i}-cov`);
+    const $base = document.getElementById(`aprt-cld-${i}-base`);
+    if ($cov  && active !== $cov)  $cov.value  = c.cover || '';
+    if ($base && active !== $base) $base.value = c.base  || '';
+  }
+
+  _updateAprtRwyHeading();
+  _updateAprtRefCard();
 }
 
 // Called when airport list changes (new mission) while panel is open

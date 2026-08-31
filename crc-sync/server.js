@@ -159,6 +159,7 @@ app.post('/api/atis-transmit', auth.requireAuth, (req, res) => {
 
   if (stop) {
     atisStore.stop(freq, ownerId);
+    wsHub.setAtisActive(atisStore.getActive());
     return res.json({ ok: true });
   }
 
@@ -168,6 +169,7 @@ app.post('/api/atis-transmit', auth.requireAuth, (req, res) => {
 
   const { call, promise } = grpcClient.transmitAtis(body);
   atisStore.start(freq, ownerId, call);
+  wsHub.setAtisActive(atisStore.getActive());
   promise
     .then(r => { atisStore.finish(freq, call); res.json({ ok: true, duration_ms: r && r.duration_ms }); })
     .catch(err => { atisStore.finish(freq, call); res.status(503).json({ error: err.message }); });
@@ -206,12 +208,16 @@ app.get('/api/apt-weather', auth.requireAuth, (req, res) => {
 });
 
 // ── Stale reaper — mirrors crc-desktop's original 12s track eviction, now
-// also evicts orphaned CollaborativeStore entries in the same tick. ────────
+// also evicts orphaned CollaborativeStore entries in the same tick. Also
+// re-broadcasts AtisStore's active list so a client that crashed without
+// ever POSTing {stop:true} still clears from everyone else's "in use"
+// display once its presence entry lapses (see AtisStore.getActive()). ─────
 setInterval(() => {
   const n = trackStore.expireStale();
   const activeIds = new Set(trackStore.getAll().map(t => String(t.id)));
   const evicted = collabStore.evictStale(activeIds);
   if (n > 0 || evicted > 0) console.log(`[crc-sync] expired ${n} stale track(s), evicted ${evicted} overlay entr(y/ies)`);
+  wsHub.setAtisActive(atisStore.getActive());
 }, 5000);
 
 // ── Static hosting ───────────────────────────────────────────────────────

@@ -469,12 +469,13 @@ return net.lua2json(results)
   // ── Mission data ──────────────────────────────────────────────────────────
 
   async fetchMissionData() {
-    const [blue, red, airbases, waypoints, drawings] = await Promise.allSettled([
+    const [blue, red, airbases, waypoints, drawings, theatre] = await Promise.allSettled([
       this._getBullseye(3), // COALITION_BLUE
       this._getBullseye(2), // COALITION_RED
       this._getAirbases(),
       this._getNavpoints(),
       this._getDrawings(),
+      this._getTheatre(),
     ]);
 
     return {
@@ -485,7 +486,21 @@ return net.lua2json(results)
       airports:  airbases.status  === 'fulfilled' ? airbases.value  : [],
       waypoints: waypoints.status === 'fulfilled' ? waypoints.value : [],
       drawings:  drawings.status  === 'fulfilled' ? drawings.value  : [],
+      // Theatre (map) name, e.g. "Syria" — matches the identifiers in
+      // tools/miztoyaml/projection.py's _TM table. Used client-side purely
+      // for the grid-convergence correction on heading readouts (see
+      // crc-desktop/app/public/js/geo.js), not for anything gameplay-critical.
+      theatre:   theatre.status    === 'fulfilled' ? theatre.value    : null,
     };
+  }
+
+  _getTheatre() {
+    return new Promise((resolve, reject) => {
+      this._worldSvc.GetTheatre({}, (err, res) => {
+        if (err || !res || !res.theatre) return reject(err || new Error('no theatre'));
+        resolve(res.theatre);
+      });
+    });
   }
 
   _getBullseye(coalitionNum) {

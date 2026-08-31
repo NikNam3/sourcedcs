@@ -199,11 +199,6 @@
     }
     .panel-ctrl-row:last-child { border-bottom: none; }
     .panel-ctrl-label { flex: 1; cursor: pointer; }
-    .panel-ctrl-status {
-      font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase;
-      color: var(--ui-text-dim);
-    }
-    .panel-ctrl-status.is-open { color: var(--ui-active); }
     .panel-pin-btn {
       background: none; border: 1px solid var(--ui-border-2); color: var(--ui-text-dim);
       font-family: inherit; font-size: 9px; letter-spacing: 0.08em;
@@ -368,31 +363,11 @@
       flex-direction: column;
       overflow: hidden;
     }
-    .aprt-panel-header {
-      display: flex;
-      align-items: center;
-      padding: 10px 14px 9px;
-      border-bottom: 1px solid var(--ui-border-4);
-      flex-shrink: 0;
-    }
-    .aprt-panel-title {
-      flex: 1;
-      font-size: 10px;
-      letter-spacing: 0.12em;
-      color: var(--ui-text-dim);
-      text-transform: uppercase;
-    }
-    .aprt-close {
-      background: none; border: none; color: var(--ui-text-dim);
-      font-family: inherit; font-size: 13px; cursor: pointer; padding: 0;
-    }
-    .aprt-close:hover { color: var(--ui-text-bright); }
     /* scrollable body */
-    #aprt-panel > *:not(.aprt-panel-header) { flex-shrink: 0; }
+    #aprt-panel > * { flex-shrink: 0; }
     #aprt-panel {
       overflow-y: auto;
     }
-    .aprt-panel-header { position: sticky; top: 0; background: var(--ui-bg-solid); z-index: 1; }
     .aprt-section-label {
       font-size: 9px;
       letter-spacing: 0.12em;
@@ -585,12 +560,6 @@
     .tp-type-label {
       font-size: 9px; color: var(--ui-text-dim); letter-spacing: 0.1em;
     }
-    .tp-close {
-      background: none; border: none; color: var(--ui-text-dim);
-      font-family: inherit; font-size: 13px; cursor: pointer;
-      padding: 0 0 0 6px; line-height: 1; flex-shrink: 0;
-    }
-    .tp-close:hover { color: var(--ui-text-bright); }
     .tp-props {
       padding: 8px 12px;
       display: grid;
@@ -1419,7 +1388,6 @@
   <div class="tp-header">
     <span class="tp-callsign" id="tp-callsign">—</span>
     <span class="tp-type-label" id="tp-type"></span>
-    <button class="tp-close" id="tp-close">✕</button>
   </div>
   <div class="tp-props" id="tp-props">
     <span class="tp-key">ALT</span>   <span class="tp-val" id="tp-alt">—</span>
@@ -1529,11 +1497,6 @@
 
 <!-- Airport / Theater manager panel -->
 <div id="aprt-panel" class="dock-unmounted">
-
-  <div class="aprt-panel-header">
-    <span class="aprt-panel-title">AIRPORT / THEATER</span>
-    <button class="aprt-close" id="aprt-close">✕</button>
-  </div>
 
   <!-- ── Airport selection ── -->
   <div class="aprt-section-label">Airport</div>
@@ -1645,8 +1608,8 @@
         <input type="number" id="aprt-transition-alt" value="18000" min="0" max="60000" step="500" style="width:70px" />
       </div>
       <div class="aprt-row">
-        <span class="aprt-k">Mag variation (°)</span>
-        <input type="number" id="aprt-mag-var" value="0" min="-30" max="30" step="1" style="width:54px" />
+        <span class="aprt-k">HDG correction (°)</span>
+        <input type="number" id="aprt-hdg-correction" value="0" min="-30" max="30" step="1" style="width:54px" />
       </div>
       <div class="aprt-row">
         <span class="aprt-k">UTC offset (h)</span>
