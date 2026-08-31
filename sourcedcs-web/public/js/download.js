@@ -1,11 +1,3 @@
-/* ── Theme ── */
-function setTheme(t) {
-  document.documentElement.classList.toggle('movie', t === 'movie');
-  document.querySelectorAll('.theme-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.theme === t); });
-  try { localStorage.setItem('sdcs-theme', t); } catch(e) {}
-}
-(function() { try { if (localStorage.getItem('sdcs-theme') === 'movie') setTheme('movie'); } catch(e) {} })();
-
 /* ── Apply external links from config ── */
 (function() {
   function setLink(id, url) { var el = document.getElementById(id); if (el && url) el.href = url; }
@@ -14,12 +6,7 @@ function setTheme(t) {
   setLink('footerGithubLink', typeof GITHUB_URL  !== 'undefined' ? GITHUB_URL  : null);
 })();
 
-/* getToken, loginWithCasdoor and isAdminRole are provided by /js/auth.js */
-function getUser() { try { return JSON.parse(localStorage.getItem('sdcs-user') || 'null'); } catch(e) { return null; } }
-function logout() {
-  try { localStorage.removeItem('sdcs-token'); localStorage.removeItem('sdcs-user'); } catch(e) {}
-  location.reload();
-}
+/* getToken, loginWithCasdoor, isAdminRole, getUser, logout are provided by /js/auth.js */
 (function() {
   var user = getUser();
   var name = (user && user.name) ? user.name.toUpperCase() : 'USER';

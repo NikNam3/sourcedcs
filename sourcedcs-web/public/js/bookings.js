@@ -1,11 +1,3 @@
-/* ── Theme ── */
-function setTheme(t) {
-  document.documentElement.classList.toggle('movie', t === 'movie');
-  document.querySelectorAll('.theme-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.theme === t); });
-  try { localStorage.setItem('sdcs-theme', t); } catch(e) {}
-}
-(function() { try { if (localStorage.getItem('sdcs-theme') === 'movie') setTheme('movie'); } catch(e) {} })();
-
 /* ── External links ── */
 (function() {
   function setLink(id, url) { var el = document.getElementById(id); if (el && url) el.href = url; }
@@ -14,13 +6,8 @@ function setTheme(t) {
   setLink('footerGithubLink', typeof GITHUB_URL  !== 'undefined' ? GITHUB_URL  : null);
 })();
 
-/* getToken, loginWithCasdoor, isAdminRole, isBookingAdminRole provided by /js/auth.js */
-
-function getUser()  { try { return JSON.parse(localStorage.getItem('sdcs-user') || 'null'); } catch(e) { return null; } }
-function logout() {
-  try { localStorage.removeItem('sdcs-token'); localStorage.removeItem('sdcs-user'); } catch(e) {}
-  location.reload();
-}
+/* getToken, loginWithCasdoor, isAdminRole, isBookingAdminRole, getUser, logout, esc
+   provided by /js/auth.js */
 
 /* ════════════════════════════════════════════════════════════
    STATE
@@ -105,7 +92,7 @@ function bkPrefillDates() {
    LOAD
 ════════════════════════════════════════════════════════════ */
 function bkAuthHeaders(withJson) {
-  var h = { 'Authorization': 'Bearer ' + (currentToken || '') };
+  var h = authHeaders(currentToken);
   if (withJson) h['Content-Type'] = 'application/json';
   return h;
 }
@@ -599,6 +586,3 @@ function bkFmtZ(iso) {
   return iso.slice(0, 16).replace('T', ' ') + 'Z';
 }
 
-function esc(str) {
-  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}

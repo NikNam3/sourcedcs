@@ -1,0 +1,83 @@
+    /* Radar panel */
+    /* Position/visibility now owned by dockview (dock.js). */
+    #radars-panel {
+      background: var(--ui-bg-solid);
+      width: 100%; height: 100%;
+      padding: 14px 14px 20px;
+      overflow-y: auto;
+      box-sizing: border-box;
+    }
+    .radar-panel-title {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      color: var(--ui-text-dim);
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .radar-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 4px 0;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      color: var(--ui-text-bright);
+    }
+    .radar-row.disabled { color: var(--ui-text-dim); }
+    .radar-row.radar-row-add { cursor: pointer; }
+    .radar-row.radar-row-add:hover { color: var(--ui-active); }
+    .radar-check { accent-color: var(--ui-active); cursor: pointer; flex-shrink: 0; }
+    .radar-row-label { flex: 1; }
+    .radar-row-range {
+      font-size: 9px;
+      color: var(--ui-text-dim);
+      letter-spacing: 0.04em;
+      flex-shrink: 0;
+    }
+    .radar-empty { font-size: 10px; color: var(--ui-text-dim); font-style: italic; padding: 8px 0; }
+    .datalink-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 0 8px; margin-bottom: 4px;
+      border-bottom: 1px solid var(--ui-border-3);
+      font-size: 11px; letter-spacing: 0.07em;
+      color: var(--ui-text-bright);
+    }
+    .datalink-row.active { color: var(--ui-active); }
+    .datalink-label { flex: 1; }
+    #radar-count-badge {
+      display: inline-block;
+      font-size: 9px;
+      color: var(--ui-active);
+      margin-left: 3px;
+    }
+    #radar-search {
+      width: 100%; box-sizing: border-box;
+      background: var(--ui-bg-input); border: 1px solid var(--ui-border-2);
+      color: var(--ui-text-input); font-family: inherit; font-size: 10px;
+      padding: 4px 6px; margin-top: 10px; outline: none;
+    }
+    #radar-search::placeholder { color: var(--ui-text-dim); }
+    #radar-search-results {
+      max-height: 200px;
+      overflow-y: auto;
+      margin-top: 2px;
+    }
+
+    /* ── Panels section (radar-driven + manual dockable-panel control) ── */
+    .panel-ctrl-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 0;
+      font-size: 11px; letter-spacing: 0.05em;
+      color: var(--ui-text-bright);
+      border-bottom: 1px solid var(--ui-border-4);
+    }
+    .panel-ctrl-row:last-child { border-bottom: none; }
+    .panel-ctrl-label { flex: 1; cursor: pointer; }
+    .panel-pin-btn {
+      background: none; border: 1px solid var(--ui-border-2); color: var(--ui-text-dim);
+      font-family: inherit; font-size: 9px; letter-spacing: 0.08em;
+      padding: 2px 6px; cursor: pointer;
+    }
+    .panel-pin-btn:hover { border-color: var(--ui-text-bright); color: var(--ui-text-bright); }
+    .panel-pin-btn.pinned { border-color: var(--ui-active); color: var(--ui-active); }
+

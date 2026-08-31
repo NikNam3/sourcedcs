@@ -1,11 +1,3 @@
-/* ── Theme ── */
-function setTheme(t) {
-  document.documentElement.classList.toggle('movie', t === 'movie');
-  document.querySelectorAll('.theme-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.theme === t); });
-  try { localStorage.setItem('sdcs-theme', t); } catch(e) {}
-}
-(function() { try { if (localStorage.getItem('sdcs-theme') === 'movie') setTheme('movie'); } catch(e) {} })();
-
 /* ── Apply external links from config ── */
 (function() {
   function setLink(id, url) { var el = document.getElementById(id); if (el && url) el.href = url; }
@@ -19,20 +11,16 @@ function setTheme(t) {
   setLink('footerGithubLink', typeof GITHUB_URL   !== 'undefined' ? GITHUB_URL   : null);
 })();
 
-/* getToken, loginWithCasdoor and isAdminRole are provided by /js/auth.js */
+/* getToken, loginWithCasdoor, isAdminRole, getUser, logout, setTheme
+   are provided by /js/auth.js */
 
-function logoutCasdoor() {
-  try { localStorage.removeItem('sdcs-token'); localStorage.removeItem('sdcs-user'); } catch(e) {}
-  location.reload();
-}
 (function() {
   var token = getToken();
-  var user  = null;
-  try { user = JSON.parse(localStorage.getItem('sdcs-user') || 'null'); } catch(e) {}
+  var user  = getUser();
   if (!token) return;
   var name = (user && user.name) ? user.name.toUpperCase() : 'USER';
   var btn = document.getElementById('loginBtn');
-  if (btn) { btn.textContent = name + ' \u23FB'; btn.title = 'Click to log out'; btn.classList.add('login-btn--logout'); btn.onclick = logoutCasdoor; }
+  if (btn) { btn.textContent = name + ' \u23FB'; btn.title = 'Click to log out'; btn.classList.add('login-btn--logout'); btn.onclick = logout; }
   /* Only show member portal and hub button if user has at least one role */
   if (!hasAnyRole(token)) return;
   var hero = document.getElementById('heroMemberBtn');
@@ -439,7 +427,7 @@ function renderRoster(list) {
 function refreshRoster() {
   fetch('/api/roster/refresh', {
     method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + (getToken()||'') }
+    headers: authHeaders()
   }).then(function(r){return r.json();}).then(function() {
     return fetch('/api/roster').then(function(r){return r.json();});
   }).then(function(list) {

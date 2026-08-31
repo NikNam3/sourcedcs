@@ -1,11 +1,3 @@
-/* ── Theme ── */
-function setTheme(t) {
-  document.documentElement.classList.toggle('movie', t === 'movie');
-  document.querySelectorAll('.theme-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.theme === t); });
-  try { localStorage.setItem('sdcs-theme', t); } catch(e) {}
-}
-(function() { try { if (localStorage.getItem('sdcs-theme') === 'movie') setTheme('movie'); } catch(e) {} })();
-
 /* ── Apply external links from config ── */
 (function() {
   function setLink(id, url) { var el = document.getElementById(id); if (el && url) el.href = url; }
@@ -15,13 +7,8 @@ function setTheme(t) {
   setLink('footerGithubLink', typeof GITHUB_URL  !== 'undefined' ? GITHUB_URL  : null);
 })();
 
-/* getToken, loginWithCasdoor and isAdminRole are provided by /js/auth.js */
-
-function getUser()   { try { return JSON.parse(localStorage.getItem('sdcs-user') || 'null'); } catch(e) { return null; } }
-function logout() {
-  try { localStorage.removeItem('sdcs-token'); localStorage.removeItem('sdcs-user'); } catch(e) {}
-  location.reload();
-}
+/* getToken, loginWithCasdoor, isAdminRole, getUser, logout, setTheme
+   are provided by /js/auth.js */
 
 var currentToken = getToken();
 (function() {
@@ -216,10 +203,7 @@ function saveEvent(e) {
 
   fetch(url, {
     method:  method,
-    headers: {
-      'Content-Type':  'application/json',
-      'Authorization': 'Bearer ' + (currentToken || ''),
-    },
+    headers: authHeaders(currentToken, { 'Content-Type': 'application/json' }),
     body: JSON.stringify(payload),
   })
   .then(function(r) { return r.json().then(function(j) { return { ok:r.ok, body:j }; }); })
@@ -251,7 +235,7 @@ function saveEvent(e) {
 function deleteEvent(id) {
   fetch('/api/events/' + id, {
     method:  'DELETE',
-    headers: { 'Authorization': 'Bearer ' + (currentToken || '') },
+    headers: authHeaders(currentToken),
   })
   .then(function(r) { return r.json().then(function(j) { return { ok:r.ok, body:j }; }); })
   .then(function(res) {

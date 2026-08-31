@@ -1,0 +1,118 @@
+    /* ── Track info panel ── */
+    /* Position/visibility now owned by dockview (dock.js) — this is a tab in
+       the left group, sized to whatever the grid gives that group. */
+    #track-panel {
+      background: var(--ui-bg-solid);
+      width: 100%; height: 100%;
+      overflow-y: auto;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+    }
+    .tp-header {
+      display: flex; align-items: baseline; gap: 6px;
+      padding: 10px 12px 6px;
+      border-bottom: 1px solid var(--ui-border-4);
+    }
+    .tp-callsign {
+      font-size: 13px; font-weight: bold;
+      color: var(--ui-text-hi); letter-spacing: 0.12em;
+      flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .tp-type-label {
+      font-size: 9px; color: var(--ui-text-dim); letter-spacing: 0.1em;
+    }
+    .tp-props {
+      padding: 8px 12px;
+      display: grid;
+      grid-template-columns: max-content 1fr;
+      row-gap: 4px; column-gap: 12px;
+      border-bottom: 1px solid var(--ui-border-4);
+    }
+    .tp-key {
+      font-size: 9px; letter-spacing: 0.1em; color: var(--ui-text-dim);
+      text-transform: uppercase; padding-top: 1px;
+    }
+    .tp-val { color: var(--ui-text-bright); }
+    .tp-iff-state {
+      display: inline-block;
+      padding: 1px 6px;
+      border: 1px solid;
+      font-size: 9px; letter-spacing: 0.08em;
+      border-radius: 1px;
+    }
+    .tp-section {
+      padding: 6px 12px 8px;
+      border-bottom: 1px solid var(--ui-border-4);
+    }
+    .tp-section:last-child { border-bottom: none; }
+    .tp-section-label {
+      font-size: 9px; letter-spacing: 0.1em; color: var(--ui-text-dim);
+      text-transform: uppercase; margin-bottom: 6px;
+    }
+    .tp-iff-btns { display: flex; flex-wrap: wrap; gap: 4px; }
+    .tp-iff-btn {
+      background: none; border: 1px solid transparent;
+      font-family: 'Courier New', monospace; font-size: 9px;
+      letter-spacing: 0.07em; padding: 3px 6px; cursor: pointer;
+    }
+    .tp-iff-btn:hover { filter: brightness(1.3); }
+    .tp-iff-btn.iff-active { background: rgba(255,255,255,0.08); }
+    .tp-iff-clr {
+      background: none; border: 1px solid var(--ui-border-4);
+      color: var(--ui-text-dim); font-family: 'Courier New', monospace;
+      font-size: 9px; letter-spacing: 0.07em; padding: 3px 6px; cursor: pointer;
+      margin-left: auto;
+    }
+    .tp-iff-clr:hover { color: var(--ui-text-bright); border-color: var(--ui-border-2); }
+    .tp-rename-row { display: flex; gap: 4px; margin-top: 6px; }
+    .tp-rename-input {
+      flex: 1; background: var(--ui-bg-input); border: 1px solid var(--ui-border-2);
+      color: var(--ui-text-input); font-family: 'Courier New', monospace;
+      font-size: 10px; letter-spacing: 0.06em; padding: 2px 5px;
+      outline: none; text-transform: uppercase; min-width: 0;
+    }
+    .tp-rename-input:focus { border-color: var(--ui-text-bright); }
+    .tp-rename-input::placeholder { color: var(--ui-text-dim); text-transform: none; }
+    .tp-rename-btn {
+      background: none; border: 1px solid var(--ui-border-3); color: var(--ui-text-bright);
+      font-family: 'Courier New', monospace; font-size: 9px; letter-spacing: 0.06em;
+      padding: 2px 7px; cursor: pointer; flex-shrink: 0;
+    }
+    .tp-rename-btn:hover { border-color: var(--ui-text-bright); color: var(--ui-active); }
+    .tp-rename-clr { border-color: var(--ui-border-4); color: var(--ui-text-dim); }
+    .tp-rename-clr:hover { color: #cc4444; border-color: #cc4444; }
+    .tp-fpl-pre {
+      font-family: 'Courier New', monospace; font-size: 9px; line-height: 1.55;
+      color: var(--ui-text-bright); background: rgba(0,0,0,0.25);
+      border: 1px solid var(--ui-border-2); padding: 6px 8px;
+      white-space: pre-wrap; word-break: break-all; margin: 0;
+    }
+    .tp-fpl-status { font-size: 9px; color: var(--ui-text-dim); letter-spacing: 0.05em; }
+    #tp-fpl-section { display: none; }
+
+
+    /* ── Ground vehicle label popup ── */
+    #gnd-label-popup {
+      display: none;
+      position: fixed;
+      z-index: 100;
+      background: var(--ui-bg-solid);
+      border: 1px solid var(--ui-border-3);
+      padding: 4px 6px;
+      border-radius: 2px;
+    }
+    #gnd-label-input {
+      background: var(--ui-bg-input);
+      border: 1px solid var(--ui-border-2);
+      color: var(--ui-text-input);
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      padding: 3px 6px;
+      outline: none;
+      width: 140px;
+      text-transform: uppercase;
+    }
+    #gnd-label-input:focus { border-color: var(--ui-text-bright); }
+    #gnd-label-input::placeholder { color: var(--ui-text-dim); text-transform: none; }
+

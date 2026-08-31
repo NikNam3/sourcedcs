@@ -62,6 +62,18 @@ Instead, `lxsrs-setup.js`'s `ensureLxsrsVenv()` creates a venv under Electron's 
 
 If you change what `lxsrs_v2` needs (e.g. bump its own `pyproject.toml` dependencies), update `LXSRS_VENV_DEPS` in `lxsrs-setup.js` to match, and re-verify by actually deleting `~/.config/crc-desktop/lxsrs-venv` (Linux) and relaunching a packaged build — `npm test`'s stubbed-python3 tests exercise the *logic* (retry-on-incomplete, marker semantics) but not real package installation.
 
+#### Keeping `python-pkg/lxsrs_v2` in sync
+
+`python-pkg/lxsrs_v2` is a **vendored copy** of the top-level [`lxsrs_v2`](../lxsrs_v2) package's source — `pip install --no-deps --target=python-pkg lxsrs_v2/`, committed to git (see repo CLAUDE.md). This is a separate concern from the venv above: this copy is `lxsrs_v2`'s own Python source (`client.py`, `audio.py`, ...), bundled via `extraResources` at package time; the venv only holds its third-party *dependencies*, installed on the end user's machine at first run.
+
+There is no build step that keeps this copy in sync automatically — a bugfix to `../lxsrs_v2/lxsrs_v2/*.py` does **not** reach crc-desktop until this vendored copy is regenerated and committed. After changing anything under `../lxsrs_v2/lxsrs_v2/`, run:
+
+```bash
+crc-desktop/scripts/sync-lxsrs.sh
+```
+
+and commit whatever it changes under `python-pkg/`, alongside your `lxsrs_v2` change. To just check whether the two have drifted (e.g. someone edited `lxsrs_v2` and forgot to re-vendor) without changing anything, run `crc-desktop/scripts/check-lxsrs-sync.sh`. Neither script is currently wired into CI or `npm test`: `crc-desktop-release.yml`'s build matrix includes `windows-latest`, and this check depends on `bash`/`python3`/`pip3` being present and on `PATH`, which isn't guaranteed there — so for now this is a manual step, not an automated gate.
+
 ## Release / autoupdate
 
 Installers are built and published by `.github/workflows/crc-desktop-release.yml` (triggered by pushing a `crc-desktop-vX.Y.Z` tag) and hosted by `sourcedcs-web` — see the root `CLAUDE.md`'s "How to build and release crc-desktop" section for the full pipeline, including why the crc-sync-rebuild trigger at the end must stay unconditional.

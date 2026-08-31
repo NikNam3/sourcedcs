@@ -1,14 +1,7 @@
 /* gallery.js — Flight gallery page logic
-   getToken, loginWithCasdoor, isAdminRole, hasAnyRole are provided by auth.js
+   getToken, loginWithCasdoor, isAdminRole, hasAnyRole, getUser, logout, setTheme
+   are provided by auth.js
    ─────────────────────────────────────────────────────────────────────────── */
-
-/* ── Theme ── */
-function setTheme(t) {
-  document.documentElement.classList.toggle('movie', t === 'movie');
-  document.querySelectorAll('.theme-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.theme === t); });
-  try { localStorage.setItem('sdcs-theme', t); } catch(e) {}
-}
-(function() { try { if (localStorage.getItem('sdcs-theme') === 'movie') setTheme('movie'); } catch(e) {} })();
 
 /* ── Apply external links from config ── */
 (function() {
@@ -19,18 +12,13 @@ function setTheme(t) {
 })();
 
 /* ── Auth / login button ── */
-function logoutCasdoor() {
-  try { localStorage.removeItem('sdcs-token'); localStorage.removeItem('sdcs-user'); } catch(e) {}
-  location.reload();
-}
 (function() {
   var token = getToken();
-  var user  = null;
-  try { user = JSON.parse(localStorage.getItem('sdcs-user') || 'null'); } catch(e) {}
+  var user  = getUser();
   if (!token) return;
   var name = (user && user.name) ? user.name.toUpperCase() : 'USER';
   var btn = document.getElementById('loginBtn');
-  if (btn) { btn.textContent = name + ' \u23FB'; btn.title = 'Click to log out'; btn.classList.add('login-btn--logout'); btn.onclick = logoutCasdoor; }
+  if (btn) { btn.textContent = name + ' \u23FB'; btn.title = 'Click to log out'; btn.classList.add('login-btn--logout'); btn.onclick = logout; }
 })();
 
 /* ── Hamburger menu ── */
@@ -229,7 +217,7 @@ function submitGalEdit(e) {
   });
   fetch('/api/gallery', {
     method:  'PUT',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
+    headers: authHeaders(getToken(), { 'Content-Type': 'application/json' }),
     body:    JSON.stringify(updated),
   })
     .then(function(r) { return parseJSONResponse(r, 'Save failed'); })
@@ -265,7 +253,7 @@ function submitGalAdd(e) {
 
   fetch('/api/gallery/upload', {
     method:  'POST',
-    headers: { 'Authorization': 'Bearer ' + getToken() },
+    headers: authHeaders(),
     body:    fd,
   })
     .then(function(r) { return parseJSONResponse(r, 'Upload failed'); })
@@ -274,7 +262,7 @@ function submitGalAdd(e) {
       var newEntry = { src: resp.src, alt: alt || file.name, caption: caption };
       return fetch('/api/gallery', {
         method:  'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
+        headers: authHeaders(getToken(), { 'Content-Type': 'application/json' }),
         body:    JSON.stringify(galleryData.concat([newEntry])),
       });
     })
@@ -293,7 +281,7 @@ function deleteGalleryShot(idx) {
   if (!confirm('Remove this photo from the gallery?')) return;
   fetch('/api/gallery/' + idx, {
     method:  'DELETE',
-    headers: { 'Authorization': 'Bearer ' + getToken() },
+    headers: authHeaders(),
   })
     .then(function(r) { return parseJSONResponse(r, 'Delete failed'); })
     .then(function(resp) {

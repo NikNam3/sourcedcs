@@ -1,0 +1,15 @@
+    /* Dockview grid fills everything below the topbar; the map is just its
+       default center panel now, sized to whatever the grid gives it. */
+    #dock-root { position: fixed; top: 32px; left: 0; right: 0; bottom: 0; }
+    #map { width: 100%; height: 100%; }
+    /* Legacy panel content (track/calls/settings/aprt/radars) used to hide
+       itself via position:fixed + transform:translateX(-100%) before it was
+       migrated into dockview — now that they're plain in-flow divs sized to
+       whatever dockview gives them, a panel that dock.js hasn't mounted yet
+       this session (never opened) has nowhere else to go and renders inline
+       wherever it sits in the HTML source instead. This class is the
+       replacement "hidden until dockview actually places it" state —
+       mountExistingPanel() (dock.js) removes it the one time each panel is
+       first created. */
+    .dock-unmounted { display: none !important; }
+

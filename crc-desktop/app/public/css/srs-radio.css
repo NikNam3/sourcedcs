@@ -1,0 +1,311 @@
+    /* ── SRS Frequency modal ── */
+    #srs-freq-modal-overlay {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,0.55);
+      display: flex; align-items: center; justify-content: center;
+    }
+    #srs-freq-modal-overlay.hidden { display: none; }
+    #srs-freq-modal {
+      background: var(--ui-bg-solid);
+      border: 1px solid var(--ui-border-3);
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      color: var(--ui-text-bright);
+      padding: 16px 20px;
+      min-width: 220px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    #srs-freq-modal label {
+      color: var(--ui-text-dim);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    #srs-freq-modal-input {
+      background: var(--ui-bg-input);
+      border: 1px solid var(--ui-border-2);
+      color: var(--ui-text-input);
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      padding: 4px 8px;
+      width: 100%;
+      box-sizing: border-box;
+      outline: none;
+      letter-spacing: 0.05em;
+    }
+    #srs-freq-modal-input:focus { border-color: var(--ui-active); }
+    #srs-freq-modal-btns {
+      display: flex; gap: 6px; justify-content: flex-end;
+    }
+    #srs-freq-modal-btns button {
+      background: transparent;
+      border: 1px solid var(--ui-border-2);
+      color: var(--ui-text-dim);
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      padding: 3px 10px;
+      cursor: pointer;
+      text-transform: uppercase;
+    }
+    #srs-freq-modal-btns button:hover { border-color: var(--ui-border-3); color: var(--ui-text-bright); }
+    #srs-freq-modal-confirm { color: var(--ui-active) !important; border-color: var(--ui-active) !important; }
+    #srs-freq-modal-confirm:hover { background: rgba(138,170,106,0.08) !important; }
+
+    /* ── SRS Radio panel ── */
+    /* Position/visibility now owned by dockview (dock.js). */
+    #srs-radio-panel {
+      background: var(--ui-bg-solid);
+      width: 100%; height: 100%;
+      overflow-y: auto;
+      font-size: 11px;
+      font-family: 'Courier New', monospace;
+      letter-spacing: 0.05em;
+      user-select: none;
+    }
+
+    #srs-main-row {
+      display: flex;
+      align-items: flex-start;
+      padding: 4px 8px;
+      gap: 6px;
+    }
+
+    #srs-dot-wrap {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      height: 28px; /* aligns dot centre to first radio row */
+    }
+
+    /* Override base dot size for the radio status indicator */
+    #srs-dot {
+      width: 9px;
+      height: 9px;
+    }
+    #srs-dot.connected    { background: #4ec94e; box-shadow: 0 0 5px #4ec94e99; }
+    #srs-dot.reconnecting { background: #d4a017; box-shadow: 0 0 5px #d4a01799; }
+    #srs-dot.disconnected { background: #5a3a3a; box-shadow: none; }
+
+    #srs-radio-list {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: 4px;
+      flex: 1;
+    }
+
+    .srs-no-radios {
+      font-size: 10px;
+      color: var(--ui-text-dim);
+      font-style: italic;
+    }
+
+    .srs-slot-wrap {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      border: 1px solid var(--ui-border-4);
+      cursor: pointer;
+    }
+    .srs-slot-wrap:hover { border-color: var(--ui-border-2); }
+
+    .srs-slot {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 18px 2px 6px; /* right padding leaves room for the X */
+      background: transparent;
+      border: none;
+    }
+    .srs-slot.srs-slot-tx {
+      background: rgba(100,160,80,0.07);
+    }
+    .srs-slot.srs-slot-rx {
+      background: rgba(60,160,220,0.18);
+      box-shadow: inset 0 0 0 1px rgba(60,160,220,0.5);
+      animation: srs-rx-pulse 0.6s ease-in-out infinite alternate;
+    }
+    @keyframes srs-rx-pulse {
+      from { background: rgba(60,160,220,0.12); }
+      to   { background: rgba(60,160,220,0.28); }
+    }
+
+    .srs-slot-volrow {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      padding: 1px 4px 2px;
+      border-top: 1px solid var(--ui-border-4);
+    }
+
+    .srs-slot-n {
+      font-size: 9px;
+      color: var(--ui-text-dim);
+      min-width: 10px;
+    }
+
+    .srs-slot-freq {
+      color: var(--ui-text-bright);
+      cursor: pointer;
+      letter-spacing: 0.04em;
+    }
+    .srs-slot-freq:hover { color: var(--ui-text-hi); }
+
+    .srs-slot-mod {
+      font-size: 9px;
+      color: var(--ui-active);
+      cursor: pointer;
+      padding: 0 2px;
+      border: 1px solid transparent;
+    }
+    .srs-slot-mod:hover { border-color: var(--ui-border-2); }
+    .srs-slot-mod-fixed { cursor: default; color: var(--ui-text-dim); }
+    .srs-slot-mod-fixed:hover { border-color: transparent; }
+
+    .srs-slot-txbadge {
+      font-size: 9px;
+      color: var(--ui-active);
+      letter-spacing: 0.08em;
+    }
+
+    .srs-slot-settx {
+      font-size: 12px;
+      color: var(--ui-text-dim);
+      cursor: pointer;
+      padding: 0 2px;
+      line-height: 1;
+    }
+    .srs-slot-settx:hover { color: var(--ui-text-bright); }
+
+    .srs-slot-rm {
+      position: absolute;
+      top: 0;
+      right: 0;
+      font-size: 9px;
+      color: var(--ui-text-dim);
+      cursor: pointer;
+      padding: 1px 3px;
+      line-height: 1;
+      opacity: 0.4;
+    }
+    .srs-slot-rm:hover { color: #e06c75; opacity: 1; }
+
+    .srs-slot-vol {
+      flex: 1;
+      height: 4px;
+      cursor: pointer;
+      accent-color: var(--ui-accent, #61afef);
+      min-width: 0;
+    }
+
+    .srs-slot-vol-lbl {
+      font-size: 9px;
+      color: var(--ui-text-dim);
+      min-width: 22px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    #srs-ptt-btn {
+      background: none;
+      border: 1px solid var(--ui-border-3);
+      color: var(--ui-text-dim);
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      padding: 0 14px;
+      cursor: pointer;
+      flex-shrink: 0;
+      align-self: stretch;
+      min-height: 28px;
+      transition: background 0.05s, color 0.05s, border-color 0.05s;
+    }
+    #srs-ptt-btn:hover { border-color: var(--ui-active); color: var(--ui-active); }
+    #srs-ptt-btn.ptt-active {
+      background: rgba(100,160,80,0.2);
+      border-color: var(--ui-active);
+      color: var(--ui-active);
+      box-shadow: 0 0 6px rgba(100,160,80,0.3);
+    }
+
+    .srs-vol-group {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--ui-text-dim);
+    }
+
+    .srs-vol-label {
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ui-text-dim);
+    }
+
+    .srs-vol-val {
+      color: var(--ui-text-bright);
+      min-width: 26px;
+    }
+
+    .srs-vol-btn {
+      background: none;
+      border: 1px solid var(--ui-border-4);
+      color: var(--ui-text-dim);
+      font-family: inherit;
+      font-size: 10px;
+      padding: 1px 5px;
+      cursor: pointer;
+      line-height: 1;
+    }
+    .srs-vol-btn:hover { border-color: var(--ui-border-2); color: var(--ui-text-bright); }
+
+    #srs-add-radio {
+      background: none;
+      border: 1px solid var(--ui-border-4);
+      color: var(--ui-text-dim);
+      font-family: inherit;
+      font-size: 13px;
+      line-height: 1;
+      padding: 0 8px;
+      cursor: pointer;
+      flex-shrink: 0;
+      align-self: stretch;  /* match the height of adjacent slot-wraps */
+      min-height: 28px;
+    }
+    #srs-add-radio:hover { border-color: var(--ui-border-2); color: var(--ui-text-bright); }
+
+    #srs-add-intercom {
+      background: none;
+      border: 1px solid var(--ui-border-4);
+      color: var(--ui-text-dim);
+      font-family: inherit;
+      font-size: 11px;
+      line-height: 1;
+      padding: 0 6px;
+      cursor: pointer;
+      flex-shrink: 0;
+      align-self: stretch;
+      min-height: 28px;
+      letter-spacing: 0.05em;
+    }
+    #srs-add-intercom:hover { border-color: var(--ui-border-2); color: var(--ui-text-bright); }
+    #srs-add-intercom.srs-intercom-active { opacity: 0.35; cursor: default; }
+
+    .srs-ptt-key-input {
+      background: var(--ui-bg-2);
+      border: 1px solid var(--ui-border-4);
+      color: var(--ui-text-bright);
+      font-family: inherit;
+      font-size: 10px;
+      width: 52px;
+      padding: 1px 4px;
+      text-align: center;
+      cursor: pointer;
+    }
+    .srs-ptt-key-input:focus { border-color: var(--ui-active); outline: none; }
+    .srs-ptt-key-input.listening { border-color: var(--ui-warn, #e8a); color: var(--ui-warn, #e8a); }
+

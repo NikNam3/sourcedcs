@@ -1,25 +1,7 @@
 'use strict';
 
-/* ── Theme ──────────────────────────────────────────────── */
-function setTheme(t) {
-  document.documentElement.classList.toggle('movie', t === 'movie');
-  document.querySelectorAll('.theme-btn').forEach(function (b) {
-    b.classList.toggle('active', b.dataset.theme === t);
-  });
-  try { localStorage.setItem('sdcs-theme', t); } catch (e) {}
-}
-(function () {
-  try { if (localStorage.getItem('sdcs-theme') === 'movie') setTheme('movie'); } catch (e) {}
-})();
+/* setTheme, getUser, logout, esc, showToast provided by /js/auth.js */
 
-/* ── Auth helpers ───────────────────────────────────────── */
-function getUser() {
-  try { return JSON.parse(localStorage.getItem('sdcs-user') || 'null'); } catch (e) { return null; }
-}
-function logout() {
-  try { localStorage.removeItem('sdcs-token'); localStorage.removeItem('sdcs-user'); } catch (e) {}
-  location.reload();
-}
 function jwtSub(token) {
   try {
     var parts = token.split('.');
@@ -71,7 +53,7 @@ var _sheetSectionClosed = {};  /* { [moduleId]: bool } — collapsed sections/su
 
 /* ── Data loading ───────────────────────────────────────── */
 function loadAll(tok) {
-  var headers = { 'Authorization': 'Bearer ' + tok };
+  var headers = authHeaders(tok);
   Promise.all([
     fetch('/api/skill-tree').then(function (r) { return r.json(); }),
     fetch('/api/skill-grades', { headers: headers }).then(function (r) { return r.json(); }),
@@ -403,7 +385,7 @@ function requestGrading(moduleId, moduleTitle) {
 
   fetch('/api/grading-requests', {
     method:  'POST',
-    headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' },
+    headers: authHeaders(tok, { 'Content-Type': 'application/json' }),
     body:    JSON.stringify({ module_id: moduleId || null, module_title: moduleTitle || null }),
   }).then(function (r) {
     if (r.status === 409) { showToast('You already have an open grading request', true); return null; }
@@ -424,7 +406,7 @@ function cancelRequest(id) {
   if (!tok) return;
   fetch('/api/grading-requests/' + id, {
     method:  'DELETE',
-    headers: { 'Authorization': 'Bearer ' + tok },
+    headers: authHeaders(tok),
   }).then(function (r) {
     if (!r.ok) return r.json().then(function (e) { throw new Error(e.error || String(r.status)); });
     return r.json();
@@ -435,17 +417,4 @@ function cancelRequest(id) {
   }).catch(function (err) { showToast('Error: ' + err.message, true); });
 }
 
-/* ── Helpers ────────────────────────────────────────────── */
-function esc(str) {
-  return String(str || '')
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-var _toastTimer = null;
-function showToast(msg, isErr) {
-  var el = document.getElementById('toast');
-  el.textContent = msg;
-  el.className = 'skills-toast visible' + (isErr ? ' err' : '');
-  if (_toastTimer) clearTimeout(_toastTimer);
-  _toastTimer = setTimeout(function () { el.className = 'skills-toast'; }, 4000);
-}
+/* esc, showToast provided by /js/auth.js (toast duration now 3000ms, was 4000ms here) */

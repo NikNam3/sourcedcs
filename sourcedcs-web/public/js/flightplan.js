@@ -1,11 +1,3 @@
-/* ── Theme ── */
-function setTheme(t) {
-  document.documentElement.classList.toggle('movie', t === 'movie');
-  document.querySelectorAll('.theme-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.theme === t); });
-  try { localStorage.setItem('sdcs-theme', t); } catch(e) {}
-}
-(function() { try { if (localStorage.getItem('sdcs-theme') === 'movie') setTheme('movie'); } catch(e) {} })();
-
 /* ── External links ── */
 (function() {
   function setLink(id, url) { var el = document.getElementById(id); if (el && url) el.href = url; }
@@ -14,13 +6,8 @@ function setTheme(t) {
   setLink('footerGithubLink', typeof GITHUB_URL  !== 'undefined' ? GITHUB_URL  : null);
 })();
 
-/* getToken, loginWithCasdoor, isAdminRole provided by /js/auth.js */
-
-function getUser()  { try { return JSON.parse(localStorage.getItem('sdcs-user') || 'null'); } catch(e) { return null; } }
-function logout() {
-  try { localStorage.removeItem('sdcs-token'); localStorage.removeItem('sdcs-user'); } catch(e) {}
-  location.reload();
-}
+/* getToken, loginWithCasdoor, isAdminRole, getUser, logout, esc, setTheme
+   provided by /js/auth.js */
 
 /* ════════════════════════════════════════════════════════════
    COUNTERS + CONSTANTS — must be before auth IIFE
@@ -90,7 +77,7 @@ var currentToken = getToken();
 ════════════════════════════════════════════════════════════ */
 function fpLoadConfig() {
   fetch('/api/flight-plans/config', {
-    headers: currentToken ? { 'Authorization': 'Bearer ' + currentToken } : {},
+    headers: currentToken ? authHeaders(currentToken) : {},
   })
   .then(function(r) { return r.json(); })
   .then(function(cfg) {
@@ -157,10 +144,7 @@ function fpSaveConfig() {
 
   fetch('/api/flight-plans/config', {
     method:  'PUT',
-    headers: {
-      'Content-Type':  'application/json',
-      'Authorization': 'Bearer ' + (currentToken || ''),
-    },
+    headers: authHeaders(currentToken, { 'Content-Type': 'application/json' }),
     body: JSON.stringify({
       controllerSquadron: sel.value,
       notifyChannelId:    chEl ? chEl.value.trim() : '',
@@ -328,10 +312,7 @@ function fpSubmit() {
 
   fetch('/api/flight-plans', {
     method:  'POST',
-    headers: {
-      'Content-Type':  'application/json',
-      'Authorization': 'Bearer ' + (currentToken || ''),
-    },
+    headers: authHeaders(currentToken, { 'Content-Type': 'application/json' }),
     body: JSON.stringify(result.data),
   })
   .then(function(r) { return r.json().then(function(j) { return { ok: r.ok, body: j }; }); })
@@ -363,7 +344,7 @@ var fpAllPlans = [];
 
 function fpLoadPlans() {
   fetch('/api/flight-plans', {
-    headers: { 'Authorization': 'Bearer ' + (currentToken || '') },
+    headers: authHeaders(currentToken),
   })
   .then(function(r) { return r.json(); })
   .then(function(plans) {
@@ -461,7 +442,7 @@ function fpDeletePlan(id) {
 
   fetch('/api/flight-plans/' + id, {
     method:  'DELETE',
-    headers: { 'Authorization': 'Bearer ' + (currentToken || '') },
+    headers: authHeaders(currentToken),
   })
   .then(function(r) { return r.json().then(function(j) { return { ok: r.ok, body: j }; }); })
   .then(function(res) {
@@ -603,10 +584,7 @@ function fpSaveBaseOps(planId) {
 
   fetch('/api/flight-plans/' + planId + '/baseops', {
     method:  'PATCH',
-    headers: {
-      'Content-Type':  'application/json',
-      'Authorization': 'Bearer ' + (currentToken || ''),
-    },
+    headers: authHeaders(currentToken, { 'Content-Type': 'application/json' }),
     body: JSON.stringify({
       approvalSignature:   sig,
       actualDepartureTime: depTime,
@@ -736,9 +714,3 @@ function fpBuildPrintHTML(plan) {
     '</div></div>';
 }
 
-/* ════════════════════════════════════════════════════════════
-   UTILITY
-════════════════════════════════════════════════════════════ */
-function esc(str) {
-  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}

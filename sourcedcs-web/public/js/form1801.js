@@ -3,14 +3,6 @@
    Depends on: /js/config.js, /js/auth.js
 ════════════════════════════════════════════════════════════ */
 
-/* ── Theme ── */
-function setTheme(t) {
-  document.documentElement.classList.toggle('movie', t === 'movie');
-  document.querySelectorAll('.theme-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.theme === t); });
-  try { localStorage.setItem('sdcs-theme', t); } catch(e) {}
-}
-(function() { try { if (localStorage.getItem('sdcs-theme') === 'movie') setTheme('movie'); } catch(e) {} })();
-
 /* ── External links ── */
 (function() {
   function setLink(id, url) { var el = document.getElementById(id); if (el && url) el.href = url; }
@@ -19,13 +11,8 @@ function setTheme(t) {
   setLink('footerGithubLink', typeof GITHUB_URL  !== 'undefined' ? GITHUB_URL  : null);
 })();
 
-/* getToken, loginWithCasdoor, isAdminRole provided by /js/auth.js */
-
-function getUser() { try { return JSON.parse(localStorage.getItem('sdcs-user') || 'null'); } catch(e) { return null; } }
-function logout() {
-  try { localStorage.removeItem('sdcs-token'); localStorage.removeItem('sdcs-user'); } catch(e) {}
-  location.reload();
-}
+/* getToken, loginWithCasdoor, isAdminRole, getUser, logout, esc, setTheme
+   provided by /js/auth.js */
 
 /* ── State ── */
 var fpl1801ControllerSquadron = '';
@@ -201,7 +188,7 @@ function fpl1801UpdateLevelHint() {
 ════════════════════════════════════════════════════════════ */
 function fpl1801LoadConfig() {
   fetch('/api/flight-plans/config', {
-    headers: currentToken ? { 'Authorization': 'Bearer ' + currentToken } : {},
+    headers: currentToken ? authHeaders(currentToken) : {},
   })
   .then(function(r) { return r.json(); })
   .then(function(cfg) {
@@ -267,10 +254,7 @@ function fpl1801SaveConfig() {
 
   fetch('/api/flight-plans/config', {
     method:  'PUT',
-    headers: {
-      'Content-Type':  'application/json',
-      'Authorization': 'Bearer ' + (currentToken || ''),
-    },
+    headers: authHeaders(currentToken, { 'Content-Type': 'application/json' }),
     body: JSON.stringify({
       controllerSquadron: sel.value,
       notifyChannelId:    chEl ? chEl.value.trim() : '',
@@ -403,10 +387,7 @@ function fpl1801Submit() {
 
   fetch('/api/fpl1801', {
     method:  'POST',
-    headers: {
-      'Content-Type':  'application/json',
-      'Authorization': 'Bearer ' + (currentToken || ''),
-    },
+    headers: authHeaders(currentToken, { 'Content-Type': 'application/json' }),
     body: JSON.stringify(result.data),
   })
   .then(function(r) { return r.json().then(function(j) { return { ok: r.ok, body: j }; }); })
@@ -436,7 +417,7 @@ function fpl1801Submit() {
 ════════════════════════════════════════════════════════════ */
 function fpl1801LoadPlans() {
   fetch('/api/fpl1801', {
-    headers: { 'Authorization': 'Bearer ' + (currentToken || '') },
+    headers: authHeaders(currentToken),
   })
   .then(function(r) { return r.json(); })
   .then(function(plans) {
@@ -533,7 +514,7 @@ function fpl1801DeletePlan(id) {
 
   fetch('/api/fpl1801/' + id, {
     method:  'DELETE',
-    headers: { 'Authorization': 'Bearer ' + (currentToken || '') },
+    headers: authHeaders(currentToken),
   })
   .then(function(r) { return r.json().then(function(j) { return { ok: r.ok, body: j }; }); })
   .then(function(res) {
@@ -762,9 +743,3 @@ function fpl1801BuildPrintHTML(plan) {
   );
 }
 
-/* ════════════════════════════════════════════════════════════
-   UTILITY
-════════════════════════════════════════════════════════════ */
-function esc(str) {
-  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}

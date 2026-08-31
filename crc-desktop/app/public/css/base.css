@@ -1,0 +1,48 @@
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --ui-bg:          rgba(13,13,13,0.85);
+      --ui-bg-solid:    rgba(13,13,13,0.95);
+      --ui-bg-input:    #111;
+      --ui-border:      #1e2e1e;
+      --ui-border-2:    #2a3a2a;
+      --ui-border-3:    #2a4a2a;
+      --ui-border-4:    #1a2a1a;
+      --ui-text:        #4a6a4a;
+      --ui-text-dim:    #3a5a3a;
+      --ui-text-bright: #6a9a6a;
+      --ui-text-hi:     #8aca8a;
+      --ui-text-input:  #8aaa8a;
+      --ui-title:       #6a9a6a;
+      --ui-active:      #8aaa6a;
+      --ui-hover-bg:    #0d1f0d;
+      --ui-option-text: #4a7a4a;
+      --ui-sep:         #2a3a2a;
+    }
+    body.light {
+      --ui-bg:          rgba(237,236,234,0.92);
+      --ui-bg-solid:    rgba(237,236,234,0.98);
+      --ui-bg-input:    #f4f3f0;
+      --ui-border:      #c8c5bf;
+      --ui-border-2:    #9a9690;
+      --ui-border-3:    #9a9690;
+      --ui-border-4:    #c8c5bf;
+      --ui-text:        #4a4845;
+      --ui-text-dim:    #7a7875;
+      --ui-text-bright: #1a1917;
+      --ui-text-hi:     #1a1917;
+      --ui-text-input:  #1a1917;
+      --ui-title:       #1a1917;
+      --ui-active:      #1a5c2e;
+      --ui-hover-bg:    #e5e4e0;
+      --ui-option-text: #4a4845;
+      --ui-sep:         #9a9690;
+    }
+
+    body {
+      background: #0d0d0d;
+      font-family: 'Courier New', monospace;
+      color: var(--ui-text);
+      overflow: hidden;
+    }
+

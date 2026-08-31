@@ -38,6 +38,11 @@
 // Codes match the numeric portion of designations:
 //   missiles: last 2-3 digits of the designation number
 //   bombs:    2-3 digit number from GBU/Mk/CBU designation
+//
+// This is the decoder half of a wire format whose encoder half is
+// tools/miztoyaml/weapons.py's _WEAPON_CAT (that's what produces the short
+// codes this table looks up). A weapon added only on the Python side
+// silently renders here as "unknown" — keep both in sync when adding one.
 const WEAPON_DB = {
   // ── Air-to-Air (code used in AA section, not A2G groups) ─
   // Handled separately via the 3-digit air-to-air prefix

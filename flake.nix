@@ -12,7 +12,7 @@
         pkgs = nixpkgs.legacyPackages.${system};
 
         # Node.js versions matching each service's Dockerfile
-        nodejs22 = pkgs.nodejs_22;  # asacs-link
+        nodejs22 = pkgs.nodejs_22;
 
         # Python environment for repo tooling plus lxsrs_v2 development
         pythonEnv = pkgs.python3.withPackages (ps: [
@@ -94,26 +94,6 @@
           '';
         };
 
-        # asacs-link — DCS GCI server (WebSocket relay, ESM)
-        asacs-link = pkgs.buildNpmPackage {
-          pname = "asacs-link";
-          version = "1.0.0";
-          src = ./asacs_link;
-          nodejs = nodejs22;
-          npmDepsHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
-          installPhase = ''
-            mkdir -p $out/share/asacs-link
-            cp -r . $out/share/asacs-link/
-            mkdir -p $out/bin
-            cat > $out/bin/asacs-link <<EOF
-            #!/usr/bin/env sh
-            cd $out/share/asacs-link
-            exec ${nodejs22}/bin/node server.js "\$@"
-            EOF
-            chmod +x $out/bin/asacs-link
-          '';
-        };
-
         # lxsrs_v2 — Linux-oriented Python SRS client prototype
         lxsrs_v2 = pkgs.python3Packages.buildPythonApplication {
           pname = "lxsrs-v2";
@@ -148,7 +128,7 @@
 
       in {
         packages = {
-          inherit miztoyaml atobrief sourcedcs-web asacs-link lxsrs_v2;
+          inherit miztoyaml atobrief sourcedcs-web lxsrs_v2;
           default = miztoyaml;
         };
 
@@ -177,7 +157,6 @@
             echo "  miztoyaml:    python3 -m tools.miztoyaml <file.miz>"
             echo "  atobrief:     cd atobrief    && PORT=4000 npm start"
             echo "  sourcedcs-web: cd sourcedcs-web && PORT=7000 npm start"
-            echo "  asacs-link:   cd asacs_link  && PORT=3000 npm start"
             echo "  lxsrs_v2:     python3 -m lxsrs_v2 --freq 251.0 --ui"
             echo "  tests:        python3 -m pytest tools/tests/ -v"
             echo ""

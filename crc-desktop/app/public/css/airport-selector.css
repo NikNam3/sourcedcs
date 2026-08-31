@@ -1,0 +1,146 @@
+    .ref-option {
+      padding: 7px 14px;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      color: var(--ui-option-text);
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+    .ref-option:hover { background: var(--ui-hover-bg); color: var(--ui-text-hi); }
+    .ref-option.active { color: var(--ui-active); }
+    .ref-option.none-opt { color: var(--ui-text-dim); border-bottom: 1px solid var(--ui-border-4); }
+    .ref-option.none-opt:hover { color: var(--ui-text-bright); }
+    .ref-option.disabled { color: var(--ui-border-2); cursor: default; font-size: 10px; }
+    .ref-opt-type  { font-size: 9px; color: var(--ui-text-dim); letter-spacing: 0.04em; }
+    .ref-opt-badge { font-size: 9px; color: var(--ui-option-text); letter-spacing: 0.04em; margin-left: 4px; }
+
+    /* Airport selector */
+    #apt-dropdown {
+      display: none;
+      position: fixed;
+      top: 32px;
+      background: var(--ui-bg-solid);
+      border: 1px solid var(--ui-border-3);
+      z-index: 40;
+      min-width: 180px;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+    #apt-dropdown.open { display: block; }
+    .apt-option {
+      padding: 7px 14px;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      color: var(--ui-option-text);
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+    .apt-option:hover  { background: var(--ui-hover-bg); color: var(--ui-text-hi); }
+    .apt-option.active { color: var(--ui-active); }
+    .apt-opt-name      { font-size: 9px; color: var(--ui-text-dim); }
+
+    /* Airport search input */
+    #apt-search-row {
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--ui-border-4);
+    }
+    #apt-search {
+      width: 100%;
+      background: var(--ui-bg-input);
+      border: 1px solid var(--ui-border-2);
+      color: var(--ui-text-input);
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      padding: 3px 6px;
+      outline: none;
+    }
+    #apt-search::placeholder { color: var(--ui-text-dim); }
+    #apt-search:focus { border-color: var(--ui-text-bright); }
+
+    /* Airport display button (only shown in airport view) */
+    #apt-sep, #apt-display { display: none; }
+    #apt-display {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      color: var(--ui-text-dim);
+      cursor: pointer;
+      user-select: none;
+    }
+    #apt-display.active { color: var(--ui-active); }
+    #apt-display:hover  { color: var(--ui-text-bright); }
+
+    #btn-radars, #btn-coalition, #btn-patch-notes {
+      background: none;
+      border: 1px solid var(--ui-border-2);
+      color: var(--ui-text);
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      padding: 3px 8px;
+      cursor: pointer;
+    }
+    #btn-radars:hover, #btn-patch-notes:hover { border-color: var(--ui-text-bright); color: var(--ui-text-bright); }
+    #btn-patch-notes { display: none; }
+
+
+    /* ── Airport weather panel ── */
+    #apt-weather-panel {
+      display: none;
+      position: fixed;
+      z-index: 100;
+      background: var(--ui-bg-solid);
+      border: 1px solid var(--ui-border-3);
+      min-width: 160px;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+    }
+    .awp-header {
+      display: flex;
+      align-items: center;
+      padding: 6px 8px 5px;
+      border-bottom: 1px solid var(--ui-border-4);
+      gap: 6px;
+    }
+    .awp-label {
+      flex: 1;
+      font-size: 12px;
+      font-weight: bold;
+      color: var(--ui-text-hi);
+      letter-spacing: 0.12em;
+    }
+    .awp-close {
+      background: none; border: none; color: var(--ui-text-dim);
+      font-family: inherit; font-size: 12px; cursor: pointer;
+      padding: 0; line-height: 1;
+    }
+    .awp-close:hover { color: var(--ui-text-bright); }
+    .awp-body { padding: 7px 8px 9px; }
+    .awp-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    .awp-row:last-child { margin-bottom: 0; }
+    .awp-k {
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      color: var(--ui-text-dim);
+      text-transform: uppercase;
+      padding-top: 1px;
+      min-width: 36px;
+    }
+    .awp-v { color: var(--ui-text-bright); }
+    .awp-loading, .awp-err {
+      font-size: 10px;
+      color: var(--ui-text-dim);
+      font-style: italic;
+      padding: 2px 0;
+    }
+

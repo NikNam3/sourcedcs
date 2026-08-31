@@ -1,11 +1,3 @@
-/* ── Theme ── */
-function setTheme(t) {
-  document.documentElement.classList.toggle('movie', t === 'movie');
-  document.querySelectorAll('.theme-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.theme === t); });
-  try { localStorage.setItem('sdcs-theme', t); } catch(e) {}
-}
-(function() { try { if (localStorage.getItem('sdcs-theme') === 'movie') setTheme('movie'); } catch(e) {} })();
-
 /* ── Apply external links from config ── */
 (function() {
   function setLink(id, url) { var el = document.getElementById(id); if (el && url) el.href = url; }
@@ -14,11 +6,10 @@ function setTheme(t) {
   setLink('footerGithubLink', typeof GITHUB_URL  !== 'undefined' ? GITHUB_URL  : null);
 })();
 
-/* getToken and loginWithCasdoor are provided by /js/auth.js */
+/* getToken, loginWithCasdoor, getUser, logout, setTheme are provided by /js/auth.js */
 (function() {
   var token = getToken();
-  var user = null;
-  try { user = JSON.parse(localStorage.getItem('sdcs-user') || 'null'); } catch(e) {}
+  var user = getUser();
   if (!token) return;
   var name = (user && user.name) ? user.name.toUpperCase() : 'USER';
   var btn = document.getElementById('loginBtn');
@@ -26,7 +17,7 @@ function setTheme(t) {
     btn.textContent = name + ' ⏻';
     btn.title = 'Click to log out';
     btn.classList.add('login-btn--logout');
-    btn.onclick = function() { try { localStorage.removeItem('sdcs-token'); localStorage.removeItem('sdcs-user'); } catch(e) {} location.reload(); };
+    btn.onclick = logout;
   }
 })();
 

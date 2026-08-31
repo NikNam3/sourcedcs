@@ -210,7 +210,11 @@ def condense_loadout(weapons: list[str]) -> list[str]:
     return result
 
 
-# Weapon category table for ATO loadout encoding
+# Weapon category table for ATO loadout encoding. This is the encoder half
+# of a wire format whose decoder half is atobrief/public/js/loadout.js's
+# WEAPON_DB — that table must recognise every short code this one produces,
+# or a weapon added only here silently renders as "unknown" in the ATO brief
+# UI. Keep both in sync when adding a weapon.
 _WEAPON_CAT: dict[str, tuple[str, str | None]] = {
     # ── Air-to-Air ───────────────────────────────────────────────────────────
     "AIM-120C": ("fox3", None), "AIM-120C-7": ("fox3", None),

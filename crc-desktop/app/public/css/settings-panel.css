@@ -1,0 +1,177 @@
+    /* ── Settings panel ── */
+    /* Position/visibility now owned by dockview (dock.js). */
+    #settings-panel {
+      background: var(--ui-bg-solid);
+      width: 100%; height: 100%;
+      padding: 0;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Tabs */
+    .settings-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--ui-border-4);
+      flex-shrink: 0;
+    }
+    .stab {
+      flex: 1;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--ui-text-dim);
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      padding: 9px 4px;
+      cursor: pointer;
+      text-transform: uppercase;
+    }
+    .stab:hover  { color: var(--ui-text-bright); }
+    .stab.active { color: var(--ui-active); border-bottom-color: var(--ui-active); }
+
+    .stab-pane {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 16px 24px;
+    }
+
+    .setting-group { margin-bottom: 20px; }
+
+    .setting-label {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      color: var(--ui-text-dim);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      font-size: 11px;
+    }
+
+    /* Toggle switch */
+    .toggle {
+      position: relative;
+      width: 36px; height: 20px;
+      cursor: pointer;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: var(--ui-border);
+      border: 1px solid var(--ui-border-2);
+      border-radius: 10px;
+      transition: 0.2s;
+    }
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 14px; height: 14px;
+      top: 2px; left: 2px;
+      background: var(--ui-text-dim);
+      border-radius: 50%;
+      transition: 0.2s;
+    }
+    .toggle input:checked + .toggle-slider { background: var(--ui-border-3); border-color: var(--ui-active); }
+    .toggle input:checked + .toggle-slider::before {
+      transform: translateX(16px);
+      background: var(--ui-active);
+    }
+
+    input[type="number"], input[type="range"] {
+      background: var(--ui-bg-input);
+      border: 1px solid var(--ui-border-2);
+      color: var(--ui-text);
+      font-family: inherit;
+      font-size: 11px;
+      padding: 3px 6px;
+      width: 70px;
+    }
+    input[type="range"] {
+      width: 120px;
+      padding: 0;
+      accent-color: var(--ui-active);
+    }
+    input[type="color"] {
+      background: var(--ui-bg-input);
+      border: 1px solid var(--ui-border-2);
+      padding: 1px;
+      width: 34px;
+      height: 22px;
+      cursor: pointer;
+    }
+
+    .hr { border: none; border-top: 1px solid var(--ui-border-4); margin: 16px 0; }
+
+    .setting-select {
+      background: var(--ui-bg-2);
+      border: 1px solid var(--ui-border-3);
+      color: var(--ui-text-bright);
+      font-family: inherit;
+      font-size: 10px;
+      padding: 2px 4px;
+      max-width: 160px;
+      cursor: pointer;
+    }
+    .setting-select:focus { outline: none; border-color: var(--ui-active); }
+
+    .setting-btn {
+      background: none;
+      border: 1px solid var(--ui-border-4);
+      color: var(--ui-text-dim);
+      font-family: inherit;
+      font-size: 10px;
+      padding: 2px 7px;
+      cursor: pointer;
+      letter-spacing: 0.06em;
+    }
+    .setting-btn:hover { border-color: var(--ui-border-2); color: var(--ui-text-bright); }
+    .setting-btn.active-pick { border-color: var(--ui-active); color: var(--ui-active); }
+
+    /* Colour tab */
+    .col-group { margin-bottom: 18px; }
+    .col-group-label {
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      color: var(--ui-text-dim);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid var(--ui-border-4);
+    }
+    .col-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 7px;
+      font-size: 11px;
+    }
+    .col-swatch {
+      width: 14px; height: 14px;
+      border-radius: 2px;
+      border: 1px solid var(--ui-border-2);
+      display: inline-block;
+      margin-right: 6px;
+      vertical-align: middle;
+      pointer-events: none;
+    }
+    .col-label { display: flex; align-items: center; }
+    .col-reset {
+      background: none;
+      border: none;
+      color: var(--ui-text-dim);
+      font-family: inherit;
+      font-size: 9px;
+      cursor: pointer;
+      padding: 0 4px;
+      letter-spacing: 0.04em;
+    }
+    .col-reset:hover { color: var(--ui-text-bright); }
+

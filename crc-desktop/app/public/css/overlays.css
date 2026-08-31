@@ -1,0 +1,78 @@
+    /* ── Stale overlay ── */
+    #stale-banner {
+      position: fixed;
+      top: 32px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(60,30,10,0.9);
+      border: 1px solid #6a3a1a;
+      color: #9a5a3a;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      padding: 4px 14px;
+      z-index: 25;
+      display: none;
+    }
+    #stale-banner.visible { display: block; }
+
+    /* ── Bullseye pick banner ── */
+    #pick-banner {
+      position: fixed;
+      top: 32px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(10,40,60,0.9);
+      border: 1px solid #1a5a6a;
+      color: #4ab8d8;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      padding: 4px 14px;
+      z-index: 25;
+      display: none;
+    }
+    #pick-banner.visible { display: block; }
+
+    /* ── Disconnect overlay ── */
+    #disc-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 15;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    #disc-overlay.visible { opacity: 1; }
+    #disc-msg {
+      color: #6a3a3a;
+      font-size: 13px;
+      letter-spacing: 0.15em;
+      border: 1px solid #3a1a1a;
+      padding: 10px 24px;
+      background: rgba(13,13,13,0.9);
+    }
+
+    /* ── No AWACS overlay ── */
+    #no-awacs-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 14;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    #no-awacs-overlay.visible { opacity: 1; }
+    #no-awacs-msg {
+      color: #4a6a9a;
+      font-size: 13px;
+      letter-spacing: 0.15em;
+      border: 1px solid #1a2a4a;
+      padding: 10px 24px;
+      background: rgba(13,13,13,0.9);
+    }
+

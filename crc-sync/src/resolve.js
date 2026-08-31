@@ -19,6 +19,11 @@ const path = require('path');
 const GROUND_RADIUS_M = 5000;
 const GROUND_AGL_M    = 50;
 
+// Keep this list byte-identical to crc-desktop/app/public/js/iff.js's own
+// IFF_STATES — the client validates declare/rename mutations against its
+// copy (setIffOverride's IFF_STATES.includes(state) guard) before ever
+// sending them here, so a state added to only one side either gets silently
+// rejected client-side or accepted here but never offered as a UI option.
 const IFF_STATES = ['friendly', 'neutral', 'bogey', 'bandit', 'hostile'];
 
 const USER_COALITION = parseInt(process.env.CRCSYNC_COALITION, 10) === 2 ? 2 : 3; // 3=BLUE (default), 2=RED

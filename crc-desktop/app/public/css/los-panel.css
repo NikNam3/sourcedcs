@@ -1,0 +1,41 @@
+    /* LOS terrain profile chart — positioned dynamically by showLosProfile()
+       (ui.js), relative to the hovered row, since the radar panel is now a
+       dockable panel that can be anywhere on screen. */
+    #los-profile-panel {
+      position: fixed;
+      width: 300px;
+      background: var(--ui-bg-solid);
+      border-right: 1px solid var(--ui-border);
+      border-bottom: 1px solid var(--ui-border);
+      z-index: 31;
+      padding: 10px 12px 12px;
+      display: none;
+    }
+    #los-profile-panel.open { display: block; }
+    .los-profile-title {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      color: var(--ui-text-dim);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .los-profile-title span { color: var(--ui-text-bright); }
+    #los-profile-canvas { display: block; width: 100%; height: 130px; }
+    .los-profile-legend {
+      display: flex;
+      gap: 12px;
+      font-size: 9px;
+      letter-spacing: 0.05em;
+      color: var(--ui-text-dim);
+      margin-top: 6px;
+    }
+    .los-swatch {
+      display: inline-block;
+      width: 8px; height: 8px;
+      margin-right: 4px;
+      vertical-align: middle;
+    }
+    .los-swatch.terrain { background: #8a6a3a; }
+    .los-swatch.sight   { background: #33aa55; }
+    .los-swatch.blocked { background: #cc4444; }
+

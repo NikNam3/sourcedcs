@@ -354,6 +354,21 @@
 
 <script src="js/config.js"></script>
 <script src="js/auth.js"></script>
-<script src="js/wing-admin.js"></script>
+<!-- Load order: modal.js/state.js first (declare shared helpers/globals
+     every other file below uses at its own top level, e.g.
+     wireModalOutsideClick(...) calls) — roster-table.js next (loadAll,
+     renderTable, and the status/score display helpers the modals below
+     also call) — the 5 modal files (order among themselves doesn't
+     matter, none reference each other) — main.js LAST (bootstrap IIFE
+     runs immediately and calls into everything above). -->
+<script src="js/wing-admin/modal.js"></script>
+<script src="js/wing-admin/state.js"></script>
+<script src="js/wing-admin/roster-table.js"></script>
+<script src="js/wing-admin/squadron-crud.js"></script>
+<script src="js/wing-admin/discord-roles-modal.js"></script>
+<script src="js/wing-admin/role-sort-modal.js"></script>
+<script src="js/wing-admin/vacation-modal.js"></script>
+<script src="js/wing-admin/activity-heatmap.js"></script>
+<script src="js/wing-admin/main.js"></script>
 </body>
 </html>

@@ -1,9 +1,15 @@
 'use strict';
 
 // Casdoor OAuth helpers — ported verbatim from the convention used by
-// sourcedcs-web/server.js and atobrief/server.js (server-side code exchange,
+// sourcedcs-web/auth.js and atobrief/server.js (server-side code exchange,
 // client_secret never reaches the browser; "verification" is an unsigned
 // JWT payload decode, matching the existing repo-wide convention).
+//
+// This duplication is accepted, not accidental: each service's Docker build
+// context is scoped to just its own directory (see
+// .github/workflows/*-docker.yml), so a shared module isn't a drop-in
+// without also restructuring those build contexts. If you fix a bug in
+// casdoorTokenExchange/decodeJWT here, check the other two copies too.
 //
 // Adds one thing neither of those services needed: single-use, short-TTL WS
 // connect tickets (mintTicket/consumeTicket), so the long-lived bearer JWT

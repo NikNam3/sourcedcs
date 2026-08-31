@@ -67,6 +67,12 @@ app.get('/js/config.js', (_req, res) => {
 });
 
 // ── Casdoor token exchange (server-side; keeps client_secret private) ─
+// Duplicated near-verbatim in sourcedcs-web/auth.js and crc-sync/src/auth.js
+// — each service's Docker build context is scoped to just its own directory
+// (see .github/workflows/*-docker.yml), so a shared module isn't a drop-in
+// without also restructuring those build contexts. Accepted duplication for
+// now: if you fix a bug here (env var handling, error messages, etc.),
+// check whether it applies to the other two copies as well.
 function casdoorTokenExchange(code, redirectUri) {
   return new Promise((resolve, reject) => {
     if (!CASDOOR_ENDPOINT || !CASDOOR_CLIENT_ID || !CASDOOR_CLIENT_SECRET) {

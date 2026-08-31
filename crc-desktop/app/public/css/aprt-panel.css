@@ -1,0 +1,183 @@
+    /* ── APRT / Theater side panel ── */
+    /* Position/visibility now owned by dockview (dock.js). */
+    #aprt-panel {
+      background: var(--ui-bg-solid);
+      width: 100%; height: 100%;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    /* scrollable body */
+    #aprt-panel > * { flex-shrink: 0; }
+    #aprt-panel {
+      overflow-y: auto;
+    }
+    .aprt-section-label {
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      color: var(--ui-text-dim);
+      text-transform: uppercase;
+      padding: 12px 14px 5px;
+    }
+    #aprt-search {
+      display: block;
+      width: calc(100% - 28px);
+      margin: 0 14px 6px;
+      background: var(--ui-bg-input);
+      border: 1px solid var(--ui-border-2);
+      color: var(--ui-text-input);
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      padding: 4px 6px;
+      outline: none;
+    }
+    #aprt-search::placeholder { color: var(--ui-text-dim); }
+    #aprt-search:focus { border-color: var(--ui-text-bright); }
+    #aprt-apt-list { max-height: 160px; overflow-y: auto; }
+    .aprt-apt-row {
+      padding: 5px 14px;
+      font-size: 11px;
+      letter-spacing: 0.07em;
+      color: var(--ui-option-text);
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .aprt-apt-row:hover  { background: var(--ui-hover-bg); color: var(--ui-text-hi); }
+    .aprt-apt-row.active { color: var(--ui-active); }
+    .aprt-apt-sub { font-size: 9px; color: var(--ui-text-dim); }
+    #aprt-weather-block { padding: 6px 14px 4px; }
+    .aprt-sub-label {
+      font-size: 10px; font-weight: bold;
+      letter-spacing: 0.1em; color: var(--ui-text-hi);
+      margin-bottom: 6px;
+    }
+    .aprt-wx-row {
+      display: flex; gap: 8px; margin-bottom: 4px; font-size: 11px;
+    }
+    .aprt-wx-k {
+      font-size: 9px; letter-spacing: 0.1em; color: var(--ui-text-dim);
+      text-transform: uppercase; padding-top: 1px; min-width: 36px;
+    }
+    .aprt-wx-v { color: var(--ui-text-bright); }
+    .aprt-loading, .aprt-err { font-size: 10px; color: var(--ui-text-dim); font-style: italic; }
+    .aprt-cld-cover {
+      background: var(--ui-bg-input); border: 1px solid var(--ui-border-2);
+      color: var(--ui-text-input); font-family: inherit; font-size: 10px;
+      padding: 2px 3px; width: 52px; cursor: pointer; outline: none;
+    }
+    .aprt-cld-base {
+      background: var(--ui-bg-input); border: 1px solid var(--ui-border-2);
+      color: var(--ui-text-input); font-family: inherit; font-size: 10px;
+      padding: 2px 4px; width: 60px; outline: none;
+    }
+    /* Reference card */
+    #aprt-ref-card {
+      margin: 0 12px 10px;
+      border: 1px solid var(--ui-border-3);
+      background: rgba(0,0,0,0.2);
+      padding: 9px 11px 10px;
+      display: none;
+    }
+    body.light #aprt-ref-card { background: rgba(0,0,0,0.04); }
+    .aprt-ref-header {
+      display: flex; justify-content: space-between; align-items: baseline;
+      margin-bottom: 7px;
+    }
+    .aprt-ref-name {
+      font-size: 13px; font-weight: bold; letter-spacing: 0.12em;
+      color: var(--ui-text-hi);
+    }
+    .aprt-ref-icao-badge {
+      font-size: 9px; color: var(--ui-text-dim); letter-spacing: 0.1em;
+    }
+    .aprt-ref-row {
+      display: flex; gap: 8px; margin-bottom: 3px; font-size: 11px;
+      align-items: baseline;
+    }
+    .aprt-ref-k {
+      font-size: 9px; letter-spacing: 0.1em; color: var(--ui-text-dim);
+      text-transform: uppercase; min-width: 38px; padding-top: 1px;
+      flex-shrink: 0;
+    }
+    .aprt-ref-v {
+      color: var(--ui-text-hi); letter-spacing: 0.04em;
+    }
+    .aprt-ref-v.dim { color: var(--ui-text-dim); font-style: italic; }
+    .aprt-ref-sep {
+      border: none; border-top: 1px solid var(--ui-border-4); margin: 6px 0 5px;
+    }
+    /* collapsible edit section */
+    .aprt-edit-toggle {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 14px 4px; cursor: pointer; user-select: none;
+      font-size: 9px; letter-spacing: 0.12em; color: var(--ui-text-dim);
+      text-transform: uppercase;
+    }
+    .aprt-edit-toggle:hover { color: var(--ui-text-bright); }
+    .aprt-edit-toggle .aprt-edit-caret { font-size: 8px; transition: transform 0.15s; }
+    .aprt-edit-toggle.open .aprt-edit-caret { transform: rotate(90deg); }
+    #aprt-edit-body { display: none; }
+    #aprt-edit-body.open { display: block; }
+
+    .aprt-hr { border: none; border-top: 1px solid var(--ui-border-4); margin: 10px 0; }
+    .aprt-row {
+      display: flex; align-items: center;
+      justify-content: space-between;
+      padding: 0 14px; margin-bottom: 8px;
+      font-size: 11px; gap: 8px;
+    }
+    .aprt-k {
+      font-size: 9px; letter-spacing: 0.1em; color: var(--ui-text-dim);
+      text-transform: uppercase; flex: 1;
+    }
+    .aprt-radio-lbl {
+      font-size: 10px; color: var(--ui-text-bright);
+      cursor: pointer; display: flex; align-items: center; gap: 4px;
+    }
+    #aprt-atis-text {
+      display: block;
+      width: calc(100% - 28px);
+      margin: 6px 14px 0;
+      background: var(--ui-bg-input);
+      border: 1px solid var(--ui-border-2);
+      color: var(--ui-text-input);
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      letter-spacing: 0.04em;
+      padding: 5px 7px;
+      outline: none;
+      resize: vertical;
+      line-height: 1.5;
+    }
+    #aprt-atis-text::placeholder { color: var(--ui-text-dim); }
+    #aprt-atis-text:focus { border-color: var(--ui-text-bright); }
+    .aprt-btn {
+      background: none;
+      border: 1px solid var(--ui-border-3);
+      color: var(--ui-text-bright);
+      font-family: inherit; font-size: 10px;
+      letter-spacing: 0.08em; padding: 4px 10px; cursor: pointer;
+    }
+    .aprt-btn:hover { border-color: var(--ui-active); color: var(--ui-active); }
+    .aprt-btn:disabled { opacity: 0.4; cursor: default; }
+    .aprt-btn-active { border-color: #cc4444 !important; color: #cc4444 !important; }
+    #aprt-atis-tx { margin-left: 14px; }
+    .aprt-atis-status { font-size: 10px; color: var(--ui-text-dim); letter-spacing: 0.06em; }
+    .aprt-atis-status.ok  { color: var(--ui-active); }
+    .aprt-atis-status.err { color: #cc4444; }
+    #aprt-panel input[type="number"] {
+      background: var(--ui-bg-input);
+      border: 1px solid var(--ui-border-2);
+      color: var(--ui-text-input);
+      font-family: inherit; font-size: 11px; padding: 3px 6px;
+    }
+
+    /* Coalition toggle */
+    #btn-coalition          { color: #4488cc; border-color: #2255884d; }
+    #btn-coalition:hover    { color: #66aaee; border-color: #4488cc; }
+    #btn-coalition.coalition-red          { color: #cc4444; border-color: #882222; }
+    #btn-coalition.coalition-red:hover    { color: #ee6666; border-color: #cc4444; }
+

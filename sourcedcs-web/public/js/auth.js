@@ -2,6 +2,51 @@
 
 function getToken() { try { return localStorage.getItem('sdcs-token'); } catch(e) { return null; } }
 
+function getUser() { try { return JSON.parse(localStorage.getItem('sdcs-user') || 'null'); } catch(e) { return null; } }
+
+function logout() {
+  try { localStorage.removeItem('sdcs-token'); localStorage.removeItem('sdcs-user'); } catch(e) {}
+  location.reload();
+}
+
+/* Builds a fetch() headers object with a Bearer token attached. Pass an
+   explicit token (e.g. a locally cached one), including a falsy one if that's
+   what the caller has, or omit the argument entirely to use getToken().
+   `extra` merges in additional headers (e.g. Content-Type). */
+function authHeaders(token, extra) {
+  var h = {};
+  for (var k in (extra || {})) { h[k] = extra[k]; }
+  var t = arguments.length > 0 ? token : getToken();
+  h['Authorization'] = 'Bearer ' + (t || '');
+  return h;
+}
+
+/* ── Theme ── */
+function setTheme(t) {
+  document.documentElement.classList.toggle('movie', t === 'movie');
+  document.querySelectorAll('.theme-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.theme === t); });
+  try { localStorage.setItem('sdcs-theme', t); } catch(e) {}
+}
+(function() { try { if (localStorage.getItem('sdcs-theme') === 'movie') setTheme('movie'); } catch(e) {} })();
+
+/* ── HTML escaping ── */
+function esc(str) {
+  return String(str == null ? '' : str).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+/* ── Toast notifications (used by admin pages) ── */
+var _toastTimer = null;
+function showToast(msg, isErr) {
+  var el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'skills-toast visible' + (isErr ? ' err' : '');
+  if (_toastTimer) clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(function () { el.className = 'skills-toast'; }, 3000);
+}
+
 function loginWithCasdoor() {
   try { localStorage.setItem('sdcs-return-url', window.location.href); } catch(e) {}
   var ru = encodeURIComponent(window.location.origin + '/auth-callback.html');

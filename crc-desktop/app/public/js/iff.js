@@ -1,6 +1,11 @@
 'use strict';
 
 // ── IFF state constants ────────────────────────────────────────────────────
+// Keep this list byte-identical to crc-sync/src/resolve.js's own IFF_STATES
+// — this copy gates setIffOverride() below before a declare mutation is even
+// sent to crc-sync, so adding a state on only one side either gets rejected
+// here before it reaches the server, or accepted server-side but never
+// reachable from this UI.
 
 const IFF_STATES = ['friendly', 'neutral', 'bogey', 'bandit', 'hostile'];
 
