@@ -14,6 +14,7 @@ const AtisStore       = require('./src/atis-store');
 const WsHub           = require('./src/ws-hub');
 const resolvePkg      = require('./src/resolve');
 const auth            = require('./src/auth');
+const { createEfsp }  = require('./src/efsp');
 
 const PORT       = parseInt(process.env.PORT, 10) || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -102,7 +103,14 @@ const collabStore = new CollaborativeStore();
 const atisStore   = new AtisStore();
 const grpcClient  = new GrpcClient();
 const srsClient   = new SrsClient();
-const wsHub       = new WsHub(trackStore, collabStore);
+// EFSP (src/efsp/) is durably persisted (docs/adr/0002-durable-board-
+// persistence.md) — deliberately NOT cleared below on mission reload,
+// unlike trackStore/collabStore. Strips represent real controller work
+// product and must survive a DCS mission reload, not just a crc-sync
+// restart. DO NOT add efsp.boardStore/fdrStore clear() calls to the
+// mission-reload handler below.
+const efsp        = createEfsp();
+const wsHub       = new WsHub(trackStore, collabStore, efsp);
 
 wsHub.attach(server);
 
@@ -129,6 +137,10 @@ async function refreshAirportWeather(missionData) {
 grpcClient.on('mission-load', (missionData) => {
   trackStore.clear();
   collabStore.clear();
+  // Do NOT add efsp.boardStore.clear()/efsp.fdrStore.clear() here — EFSP
+  // Strips are durably persisted and MUST survive a mission reload, unlike
+  // tracks/the IFF overlay (see the `const efsp = createEfsp()` comment
+  // above and docs/adr/0002-durable-board-persistence.md).
   wsHub.setMissionData(missionData);
   console.log(`[crc-sync] mission init — ${missionData.airports.length} airports`);
 

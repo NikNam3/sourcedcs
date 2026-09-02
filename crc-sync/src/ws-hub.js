@@ -12,9 +12,10 @@ const TICK_MS  = 500; // per-client delta broadcast rate, matches crc-desktop's 
 const MAX_NAME_LEN = 40;
 
 class WsHub {
-  constructor(trackStore, collabStore) {
+  constructor(trackStore, collabStore, efsp) {
     this._trackStore  = trackStore;
     this._collabStore = collabStore;
+    this._efsp        = efsp; // EFSP subsystem facade, src/efsp/index.js — optional so existing callers/tests that only care about tracks/collab keep working
     this._wss         = null;
     this._sessions    = new Map(); // ws -> session
     this._missionData = null;
@@ -115,6 +116,10 @@ class WsHub {
     const session = {
       user,
       who: user.name || user.preferred_username || user.sub || 'unknown',
+      // EFSP's controllerId (guide §4.8.1's actingPositionId/actorId audit
+      // requirement) reuses this exact fallback chain rather than a second
+      // identity scheme — see src/efsp/index.js's controllerIdFor().
+      controllerId: user.name || user.preferred_username || user.sub || 'unknown',
       lastTrackSeq:  this._trackStore.currentSeq,
       lastCollabSeq: this._collabStore.currentSeq,
       timer: null,
@@ -123,6 +128,8 @@ class WsHub {
 
     // Same send order as the original _onConnect: status, init (if a
     // mission is loaded), weather, game-time, then a full track snapshot.
+    // The EFSP snapshot is appended at the end of this same connect-time
+    // send order, not a separate/independent path.
     ws.send(JSON.stringify(this._statusMsg()));
     if (this._missionData) ws.send(JSON.stringify(this._initMsg()));
     if (this._weather)     ws.send(JSON.stringify(this._weatherMsg()));
@@ -137,6 +144,7 @@ class WsHub {
       time:    Date.now() / 1000,
       tracks:  this._resolveAll(),
     }));
+    if (this._efsp) ws.send(JSON.stringify(this._efsp.snapshotFor()));
 
     session.timer = setInterval(() => this._tick(ws, session), TICK_MS);
 
@@ -145,11 +153,22 @@ class WsHub {
     ws.on('close', () => {
       clearInterval(session.timer);
       this._sessions.delete(ws);
+      if (this._efsp) this._efsp.onDisconnect(session);
     });
   }
 
   _tick(ws, session) {
     if (ws.readyState !== WebSocket.OPEN) return;
+
+    // EFSP heartbeat (guide §5.6 rule 5) — sent EVERY tick, unconditionally,
+    // unlike the track/collab delta below which early-returns on a quiet
+    // Board. A client needs a genuine periodic signal to detect staleness;
+    // "no message arrived" on an idle Board would otherwise be indistinguishable
+    // from a dead connection. Reuses this existing 500ms per-client timer
+    // rather than adding a second one.
+    if (this._efsp) {
+      ws.send(JSON.stringify({ version: VERSION, type: 'efsp-heartbeat', boardSeq: this._efsp.boardStore.currentSeq }));
+    }
 
     const trackDelta  = this._trackStore.getDeltaSince(session.lastTrackSeq);
     const collabDelta = this._collabStore.getDeltaSince(session.lastCollabSeq);
@@ -184,6 +203,19 @@ class WsHub {
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
     if (!msg) return;
+
+    // EFSP messages (efsp-mutation/efsp-resync/efsp-set-positions) — ack
+    // goes to the sender only, broadcast (when present) goes to everyone
+    // immediately, not on the 500ms track-delta tick (see efsp-ws.js's
+    // module comment / docs/adr/0004-immediate-board-broadcast.md).
+    if (this._efsp) {
+      const result = this._efsp.handleMessage(session, msg);
+      if (result) {
+        if (result.ack) ws.send(JSON.stringify(result.ack));
+        if (result.broadcast) this._broadcast(result.broadcast);
+        return;
+      }
+    }
 
     // Squawk-map edits are global config, not track-scoped — handle them
     // before the trackId-gated switch below and broadcast to everyone

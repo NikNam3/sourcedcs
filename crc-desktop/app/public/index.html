@@ -22,6 +22,7 @@
   <link rel="stylesheet" href="./css/overlays.css"/>
   <link rel="stylesheet" href="./css/squawk-panel.css"/>
   <link rel="stylesheet" href="./css/srs-radio.css"/>
+  <link rel="stylesheet" href="./css/efsp-panel.css"/>
 </head>
 <body>
 
@@ -50,6 +51,13 @@
 
   <div class="radar-panel-title" style="margin-top: 14px;">Panels</div>
   <div id="panel-controls"></div>
+
+  <!-- EFSP Position selector — independent of the radar checkboxes above
+       (Ground/Clearance Delivery have no associated radar). See
+       radar-panel.js's renderPositionControls(). -->
+  <div class="radar-panel-title" style="margin-top: 14px;">Acting As</div>
+  <div id="efsp-position-controls"></div>
+  <div id="efsp-position-warnings"></div>
 </div>
 
 <!-- LOS terrain profile — shown while hovering a row in the radar panel -->
@@ -178,6 +186,27 @@
     <label class="sqmap-seq-label" for="sqmap-seq-toggle">Sequential (SEQ) — <span style="color:var(--ui-active)">1101→HAT11</span></label>
   </div>
   <div id="sqmap-list"></div>
+</div>
+
+<!-- Electronic Flight Strip Panel — see app/public/js/panels/efsp/. Which
+     Position(s) a controller is acting as is set from the radars-panel's
+     Panels section (position-selector.js), not from here. -->
+<div id="efsp-panel" class="dock-unmounted">
+  <div class="efsp-toolbar">
+    <input type="text" id="efsp-new-strip-callsign" placeholder="Callsign" maxlength="7" autocomplete="off" />
+    <button id="efsp-create-strip-btn">+ New Strip</button>
+    <span id="efsp-create-strip-msg"></span>
+  </div>
+  <div id="efsp-connection-banner"></div>
+  <div id="efsp-mutation-error"></div>
+  <div id="efsp-mutation-warning"></div>
+  <div class="efsp-position-tabs" id="efsp-position-tabs"></div>
+  <div class="efsp-bay-tabs" id="efsp-bay-tabs"></div>
+  <div id="efsp-bay-content"></div>
+  <div class="efsp-dot-command-row">
+    <input type="text" id="efsp-dot-command-input" placeholder=".verb args" autocomplete="off" />
+  </div>
+  <div id="efsp-dot-command-preview"></div>
 </div>
 
 <!-- Airport weather panel (floating, click on map airport) -->
@@ -866,6 +895,22 @@
 <script src="./js/panels/track-panel.js"></script>
 <script src="./js/panels/tools-panel.js"></script>
 <script src="./js/panels/aprt-panel.js"></script>
+<!-- EFSP (Electronic Flight Strip Panel) — load order: leaf/no-dependency
+     modules first (state, template, drag math, nla labels, gestures,
+     dot-command, annotation model), then efsp-ws.js (depends on
+     efsp-state.js + sync.js's sendToSync, already loaded above), then
+     bay-view.js (depends on all of the above), then efsp-panel.js (the
+     top-level init dock.js mounts). -->
+<script src="./js/panels/efsp/efsp-state.js"></script>
+<script src="./js/panels/efsp/strip-template.js"></script>
+<script src="./js/panels/efsp/strip-drag.js"></script>
+<script src="./js/panels/efsp/efsp-nla.js"></script>
+<script src="./js/panels/efsp/efsp-gestures.js"></script>
+<script src="./js/panels/efsp/dot-command.js"></script>
+<script src="./js/panels/efsp/annotation-editor.js"></script>
+<script src="./js/panels/efsp/efsp-ws.js"></script>
+<script src="./js/panels/efsp/bay-view.js"></script>
+<script src="./js/panels/efsp/efsp-panel.js"></script>
 <script src="./js/app.js"></script>
 <script src="./js/srs-radio.js"></script>
 </body>

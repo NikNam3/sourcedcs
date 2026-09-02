@@ -157,6 +157,7 @@ function panelControlRows() {
     { id: 'airport',  label: PANEL_TITLES.airport },
     { id: 'calls',    label: PANEL_TITLES.calls },
     { id: 'radio',    label: PANEL_TITLES.radio },
+    { id: 'efsp',     label: PANEL_TITLES.efsp },
   ];
 }
 
@@ -206,6 +207,79 @@ function renderPanelControls() {
   }
 }
 
+// ── EFSP Position selector ("ACTING AS") ────────────────────────────────
+// New dedicated control, independent of the radar checkboxes above:
+// Ground/Clearance Delivery have no associated radar at all, so radar
+// selection can't stand in for "which Position(s) am I acting as" (guide
+// §4.8). Lives here rather than as its own panel because which Position a
+// controller holds is tied to which panels are relevant to them — the
+// same place the Panels section already lives. INCIRLIK's fixed Position
+// set — matches crc-sync's facility-config.js DEFAULT_CONFIG.positions.
+const EFSP_POSITIONS = ['OPS', 'CD', 'GND', 'TWR', 'APP'];
+
+// Cached once in initRadarPanel(), not looked up fresh per render — this
+// panel is called from app.js's async WS message handler (an
+// efsp-positions-ack can arrive while the user has switched to a
+// different tab), and dockview detaches an inactive tab's DOM from
+// `document` (see efsp-panel.js's module comment for the full story —
+// this is the exact same bug class, in the other direction: the Panels
+// tab going inactive while the Strip panel is what's showing).
+let _positionControlsEl = null;
+let _positionWarningsEl = null;
+
+function renderPositionControls() {
+  if (!_positionControlsEl || typeof getActingPositions !== 'function') return;
+  const $positions = _positionControlsEl;
+  $positions.innerHTML = '';
+
+  const held = new Set(getActingPositions());
+
+  for (const positionId of EFSP_POSITIONS) {
+    const $row = document.createElement('div');
+    $row.className = 'panel-ctrl-row';
+
+    const $label = document.createElement('span');
+    $label.className = 'panel-ctrl-label';
+    $label.textContent = positionId;
+    $row.appendChild($label);
+
+    const $toggle = document.createElement('label');
+    $toggle.className = 'toggle';
+    const $cb = document.createElement('input');
+    $cb.type = 'checkbox';
+    $cb.checked = held.has(positionId);
+    $cb.addEventListener('change', () => {
+      const next = new Set(held);
+      if ($cb.checked) next.add(positionId); else next.delete(positionId);
+      console.warn('[efsp] Acting-As checkbox changed:', positionId, '->', $cb.checked, '| sending held =', [...next]);
+      sendEfspSetPositions([...next]);
+      renderPositionControls();
+    });
+    const $slider = document.createElement('span');
+    $slider.className = 'toggle-slider';
+    $toggle.appendChild($cb);
+    $toggle.appendChild($slider);
+    $row.appendChild($toggle);
+
+    $positions.appendChild($row);
+  }
+}
+
+// Rendered from the efsp-positions-ack's `warnings` array (app.js) —
+// "warn, do not block" (guide §4.8.6 rule 5): the position change has
+// already been committed by the time this renders, this is purely the
+// count/destination notice, never a confirmation gate.
+function renderPositionWarnings(warnings) {
+  if (!_positionWarningsEl) return;
+  const $el = _positionWarningsEl;
+  if (!warnings || warnings.length === 0) { $el.textContent = ''; return; }
+  $el.textContent = warnings.map(w =>
+    w.routedTo
+      ? `${w.count} Strip(s) from ${w.positionId} routed to ${w.routedTo}`
+      : `${w.count} Strip(s) from ${w.positionId} have no covering Position — unassigned`
+  ).join(' · ');
+}
+
 // Updates the topbar Panels-control button's badge (number of active radars)
 function updateRadarBadge() {
   const $badge = document.getElementById('radar-count-badge');
@@ -221,6 +295,8 @@ function initRadarPanel() {
   const $dlToggle = document.getElementById('datalink-toggle');
   const $dlRow    = document.getElementById('datalink-row');
   const $search   = document.getElementById('radar-search');
+  _positionControlsEl = document.getElementById('efsp-position-controls');
+  _positionWarningsEl = document.getElementById('efsp-position-warnings');
 
   if ($dlToggle) {
     $dlToggle.checked = settings.datalink ?? false;
@@ -243,6 +319,7 @@ function initRadarPanel() {
   renderActiveRadars();
   renderRadarSearchResults('');
   renderPanelControls();
+  renderPositionControls();
 
   return {
     // Refresh every time the tab becomes active — active-radar list, search
@@ -254,6 +331,7 @@ function initRadarPanel() {
       renderActiveRadars();
       renderRadarSearchResults('');
       renderPanelControls();
+      renderPositionControls();
     },
     onClose: hideLosProfile,
   };

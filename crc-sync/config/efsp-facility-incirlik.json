@@ -1,0 +1,232 @@
+{
+  "facility": "INCIRLIK",
+  "positions": [
+    "OPS",
+    "CD",
+    "GND",
+    "TWR",
+    "APP"
+  ],
+  "coveringChain": {
+    "CD": "GND",
+    "GND": "TWR",
+    "TWR": "APP"
+  },
+  "blockVisibility": {
+    "DEPARTURE": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "14",
+      "16",
+      "17",
+      "18",
+      "19",
+      "20",
+      "21",
+      "22",
+      "23",
+      "24",
+      "25",
+      "26",
+      "2A",
+      "4A",
+      "4B",
+      "8A",
+      "8B",
+      "9A",
+      "9B",
+      "9C",
+      "9D",
+      "9E"
+    ],
+    "ARRIVAL": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "20",
+      "21",
+      "24",
+      "25",
+      "26",
+      "2A",
+      "4A",
+      "4B",
+      "8A",
+      "8B",
+      "9A-FUEL",
+      "9A-DEST",
+      "9A-PTOUT",
+      "9A-VECTOR",
+      "9A-SPEED",
+      "9E"
+    ]
+  },
+  "bays": {
+    "OPS": [
+      {
+        "bayId": "ops-filed",
+        "rackIds": [
+          "main"
+        ]
+      },
+      {
+        "bayId": "ops-proposed",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "PROPOSED"
+      },
+      {
+        "bayId": "ops-field-state",
+        "rackIds": [
+          "main"
+        ]
+      },
+      {
+        "bayId": "ops-coordination",
+        "rackIds": [
+          "main"
+        ]
+      }
+    ],
+    "CD": [
+      {
+        "bayId": "cd-pending-clearance",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "PENDING_CLEARANCE"
+      },
+      {
+        "bayId": "cd-cleared",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "CLEARED"
+      },
+      {
+        "bayId": "cd-held",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "HELD"
+      },
+      {
+        "bayId": "cd-coordination",
+        "rackIds": [
+          "main"
+        ]
+      }
+    ],
+    "GND": [
+      {
+        "bayId": "gnd-pushback",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "PUSHBACK"
+      },
+      {
+        "bayId": "gnd-taxi-out",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "TAXI"
+      },
+      {
+        "bayId": "gnd-taxi-in",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "TAXI_IN"
+      },
+      {
+        "bayId": "gnd-coordination",
+        "rackIds": [
+          "main"
+        ]
+      }
+    ],
+    "TWR": [
+      {
+        "bayId": "twr-runway-queue",
+        "rackIds": [
+          "rwy-05",
+          "rwy-23"
+        ],
+        "impliesState": "RUNWAY_QUEUE"
+      },
+      {
+        "bayId": "twr-airborne",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "DEPARTED"
+      },
+      {
+        "bayId": "twr-arrivals",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "HANDED_TO_TOWER"
+      },
+      {
+        "bayId": "twr-final",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "FINAL"
+      },
+      {
+        "bayId": "twr-landed",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "LANDED"
+      },
+      {
+        "bayId": "twr-coordination",
+        "rackIds": [
+          "main"
+        ]
+      }
+    ],
+    "APP": [
+      {
+        "bayId": "app-inbound",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "INBOUND"
+      },
+      {
+        "bayId": "app-departures",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "HANDED_OFF"
+      },
+      {
+        "bayId": "app-coordination",
+        "rackIds": [
+          "main"
+        ]
+      }
+    ]
+  }
+}

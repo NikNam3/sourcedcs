@@ -1,0 +1,315 @@
+/* Electronic Flight Strip Panel — guide §7.6/§7.7 sizing/color rules kept
+   simple for Phase 1: colour is a CSS custom property (configurable later,
+   §7.7 rule 1), never the only channel (border + position also encode
+   state), monospace for scanned tokens (§7.6.5), touch targets >=44px
+   (§7.6.4). */
+
+#efsp-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  font-family: 'Consolas', 'DejaVu Sans Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  background: #14181c;
+  color: #d8e0e6;
+}
+
+.efsp-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid #2a3038;
+  flex-wrap: wrap;
+}
+#efsp-new-strip-callsign {
+  min-height: 32px;
+  width: 100px;
+  padding: 4px 8px;
+  background: #0e1114;
+  border: 1px solid #2a3038;
+  color: #d8e0e6;
+  font: inherit;
+  text-transform: uppercase;
+}
+#efsp-create-strip-btn {
+  min-height: 32px;
+  padding: 4px 10px;
+  background: #2a3038;
+  border: 1px solid #4a7dbf;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+}
+#efsp-new-strip-callsign:disabled, #efsp-create-strip-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+/* Staleness banner (guide §5.6 rule 5) — empty and invisible (min-height
+   only) until _checkEfspStaleness() populates it; the Board-wide
+   desaturation below is the "visual degradation", this text is the
+   explicit "you MUST be able to tell" signal. */
+#efsp-connection-banner {
+  font-size: 12px;
+  color: #e0a83c;
+  padding: 4px 8px;
+  min-height: 16px;
+  border-bottom: 1px solid #2a3038;
+}
+/* Board-wide visual degradation while stale — not a corner icon; the
+   guide is explicit that the WHOLE Board must read as frozen. */
+#efsp-panel.efsp-board-stale #efsp-bay-content {
+  filter: saturate(0.35) brightness(0.8);
+}
+
+#efsp-mutation-error {
+  font-size: 12px;
+  color: #ff5c5c;
+  padding: 4px 8px;
+  min-height: 16px;
+  border-bottom: 1px solid #2a3038;
+}
+/* Distinct from #efsp-mutation-error on purpose (guide §7.7 rule 4) — a
+   warning (e.g. a duplicate beacon code, accepted anyway per §3.10.2 rule
+   7) must not read as a hard rejection. Amber, not red. */
+#efsp-mutation-warning {
+  font-size: 12px;
+  color: #e0a83c;
+  padding: 4px 8px;
+  min-height: 16px;
+  border-bottom: 1px solid #2a3038;
+}
+
+#efsp-create-strip-msg {
+  font-size: 11px;
+  color: #6a7580;
+}
+#efsp-create-strip-msg.efsp-msg-error {
+  color: #ff5c5c;
+}
+
+.efsp-position-tabs, .efsp-bay-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid #2a3038;
+}
+
+.efsp-position-tab.efsp-drop-target, .efsp-bay-tab.efsp-drop-target {
+  background: #2a4d33;
+  border-color: #39ff7a;
+  color: #fff;
+}
+
+.efsp-position-tab, .efsp-bay-tab {
+  min-height: 32px;
+  padding: 4px 10px;
+  background: #1c2228;
+  border: 1px solid #2a3038;
+  color: #a8b4bd;
+  cursor: pointer;
+  font: inherit;
+}
+
+/* Search Bay tab (guide §4.3) — visually distinct so a controller can tell
+   at a glance it's not a real, server-configured Bay. */
+.efsp-bay-tab-search {
+  border-color: #4a7dbf;
+  color: #d8e0e6;
+}
+.efsp-bay-tab-search-close {
+  min-height: 32px;
+  min-width: 24px;
+  padding: 0 6px;
+  margin-left: -6px;
+  background: #1c2228;
+  border: 1px solid #2a3038;
+  border-left: none;
+  color: #a8b4bd;
+  cursor: pointer;
+  font: inherit;
+}
+
+.efsp-position-tab.active, .efsp-bay-tab.active {
+  background: #2a3038;
+  color: #fff;
+  border-color: #4a7dbf;
+}
+
+.efsp-empty {
+  padding: 12px;
+  color: #6a7580;
+  font-style: italic;
+}
+
+#efsp-bay-content {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.efsp-rack {
+  margin-bottom: 12px;
+}
+
+.efsp-rack-header {
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #6a7580;
+  padding: 4px 6px;
+  cursor: pointer;
+  min-height: 24px;
+}
+
+.efsp-strip {
+  position: relative; /* anchors .efsp-highlight-popover */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  margin: 2px 0;
+  background: #1c2228;
+  border: 1px solid #2a3038;
+  border-left: 4px solid var(--efsp-highlight, transparent);
+  contain: layout style paint; /* §7.5 rule 5 — one Strip's text change can't invalidate the Bay's layout */
+  cursor: grab;
+  touch-action: none; /* §7.1 rule 2 — required for touch drag to work at all */
+  min-height: 44px; /* §7.6 rule 4 — touch target floor */
+}
+
+.efsp-strip-selected { outline: 2px solid #4a7dbf; }
+.efsp-strip-offset { margin-left: 18px; }
+.efsp-strip-flipped { justify-content: center; }
+.efsp-strip-attention { color: #ff5c5c; }
+.efsp-strip-dragging {
+  opacity: 0.55; /* §7.2 rule 3 */
+  position: fixed;
+  z-index: 100;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.efsp-block {
+  font-size: 13px;
+  white-space: pre;
+}
+.efsp-block-1 { font-weight: bold; min-width: 60px; }
+
+.efsp-block-editable {
+  min-width: 28px;
+  min-height: 20px;
+  padding: 2px 4px;
+  border-bottom: 1px dashed #4a5560;
+  cursor: text;
+}
+.efsp-block-editable:hover, .efsp-block-editable:focus {
+  background: #232a32;
+  outline: none;
+}
+.efsp-block-with-strike {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.efsp-confirm-vacated-btn {
+  min-width: 20px;
+  min-height: 20px;
+  padding: 0 3px;
+  background: transparent;
+  border: 1px solid #4a5560;
+  color: #d8e0e6;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+.efsp-block-input {
+  font: inherit;
+  font-size: 13px;
+  width: 90px;
+  background: #0e1114;
+  border: 1px solid #4a7dbf;
+  color: #d8e0e6;
+  padding: 2px 4px;
+}
+
+.efsp-nla-btn {
+  margin-left: auto;
+  min-height: 32px;
+  padding: 2px 10px;
+  background: #2a3038;
+  border: 1px solid #4a7dbf;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+}
+
+.efsp-offset-btn {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 2px 6px;
+  background: #2a3038;
+  border: 1px solid #4a5560;
+  color: #d8e0e6;
+  cursor: pointer;
+  font: inherit;
+}
+
+/* Highlight (guide §7.3) — a small swatch-pick popover anchored to the
+   Strip that opened it (contextmenu); .efsp-strip's own `position:
+   relative` (above) makes this absolute positioning anchor correctly. */
+.efsp-highlight-popover {
+  position: absolute;
+  top: 100%;
+  left: 8px;
+  z-index: 50;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: #1c2228;
+  border: 1px solid #4a7dbf;
+}
+.efsp-highlight-swatch {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #4a5560;
+  cursor: pointer;
+  padding: 0;
+}
+
+.efsp-insertion-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #4a9dff;
+  pointer-events: none;
+}
+
+.efsp-dot-command-row {
+  display: flex;
+  border-top: 1px solid #2a3038;
+}
+#efsp-dot-command-input {
+  flex: 1 1 auto;
+  background: #0e1114;
+  border: none;
+  color: #d8e0e6;
+  font: inherit;
+  padding: 8px;
+  min-height: 44px;
+}
+#efsp-dot-command-preview {
+  padding: 8px;
+  color: #6a7580;
+  font-size: 12px;
+}
+
+#efsp-position-warnings {
+  padding: 4px 4px 0;
+  font-size: 11px;
+  color: #e0a838;
+  min-height: 14px;
+}

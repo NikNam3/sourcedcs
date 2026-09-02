@@ -732,6 +732,51 @@ async function connect() {
           (msg.gone    || []).map(id => String(id)),
         );
         break;
+      // EFSP — sent once at connect (efsp-snapshot) plus immediately on
+      // every accepted Mutation (efsp-board-delta), not on this file's own
+      // 500ms track/delta rhythm (see crc-sync's docs/adr/0004-immediate-
+      // board-broadcast.md — the guide's <200ms remote-change budget).
+      case 'efsp-snapshot':
+        applyEfspSnapshot(msg);
+        if (typeof refreshEfspPanel === 'function') refreshEfspPanel();
+        if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
+        // §5.6.3 — replay every still-pending Mutation against this fresh
+        // baseline. A no-op on the very first connect (nothing pending
+        // yet); on a RECONNECT this is what stops a Mutation in flight at
+        // the moment of disconnect from being silently lost forever (its
+        // ack could never otherwise arrive on the dead connection —
+        // defect D6, "the worst failure mode in the system").
+        if (typeof replayPendingEfspMutations === 'function') {
+          replayPendingEfspMutations((orphaned) => {
+            if (typeof notifyEfspOrphanedMutation === 'function') notifyEfspOrphanedMutation(orphaned);
+          });
+        }
+        break;
+      case 'efsp-board-delta':
+        applyEfspDelta(msg);
+        if (typeof refreshEfspPanel === 'function') refreshEfspPanel();
+        if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
+        break;
+      // Sent every 500ms unconditionally (ws-hub.js's _tick) — the genuine
+      // periodic signal a staleness check needs, since "no message" on a
+      // quiet Board is not itself evidence the connection died (guide §5.6
+      // rule 5). See efsp-panel.js's staleness interval.
+      case 'efsp-heartbeat':
+        if (typeof noteEfspHeartbeat === 'function') noteEfspHeartbeat();
+        break;
+      case 'efsp-mutation-ack': {
+        const result = applyEfspMutationAck(msg);
+        if (!result.ok) console.warn('[efsp] Mutation rejected:', result.reason, msg);
+        if (typeof notifyEfspMutationAck === 'function') notifyEfspMutationAck(msg.clientMutationId, result);
+        if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
+        break;
+      }
+      case 'efsp-positions-ack':
+        console.warn('[efsp] efsp-positions-ack received, held =', msg.held, 'warnings =', msg.warnings);
+        if (typeof renderPositionControls === 'function') renderPositionControls();
+        if (typeof renderPositionWarnings === 'function') renderPositionWarnings(msg.warnings);
+        if (typeof refreshEfspPanel === 'function') refreshEfspPanel();
+        break;
       case 'radar-locks': {
         radarLocks.clear();
         for (const lock of (msg.locks || [])) {

@@ -257,3 +257,9 @@ function sendToSync(msg) {
     _syncSocket.send(JSON.stringify(msg));
   }
 }
+// sendToSync() above silently drops the message if the socket isn't OPEN —
+// fine for its existing callers (IFF declarations etc. get retried
+// implicitly by the next state sync), but EFSP callers need to be able to
+// tell "silently dropped" apart from "sent, waiting on a reply" to avoid
+// looking identically broken either way. See efsp-ws.js.
+function isSyncOpen() { return !!(_syncSocket && _syncSocket.readyState === WebSocket.OPEN); }

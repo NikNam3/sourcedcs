@@ -105,6 +105,15 @@ app.on('ready', async () => {
         },
     });
 
+    // Dev-only: auto-open DevTools so a renderer-side error (e.g. a
+    // SyntaxError from a global-scope naming collision, or a rejected EFSP
+    // Mutation) shows up immediately instead of failing with no visible
+    // trace. Gated on !app.isPackaged so this never fires in a released
+    // build — a real user should never see a DevTools window pop up.
+    if (!app.isPackaged) {
+        win.webContents.once('did-finish-load', () => win.webContents.openDevTools({ mode: 'right' }));
+    }
+
     // Allow the renderer to pop up a Casdoor login window (app/public/js/sync.js
     // calls window.open on the Casdoor authorize URL) — everything else stays
     // blocked, matching Electron's secure-by-default posture.
