@@ -152,6 +152,69 @@ test('a Strip mid-DEPARTED-to-APP-transfer (docs/adr/0007) round-trips correctly
   assert.equal(restored.bayId, 'app-departures');
 });
 
+// ── WP4A: cross-Facility HANDOFF survives a restart (docs/adr/0013-0015) ──
+// The direct analogue of WP4's own "test with an actual restart"
+// acceptance criterion, now for the D13 replication mechanism: a HANDOFF
+// interrupted mid-PROPOSE (before ACCEPT) must resolve to a determinate
+// state on BOTH replicas after restart — the sender's Strip still shows
+// coordination PROPOSED, and the receiver's replica still exists,
+// independently, in the receiving Facility's own Board.
+
+function createCtrStripMsg() {
+  return {
+    version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(),
+    facilityId: 'CENTER', actingPositionId: 'CTR',
+    op: {
+      kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', role: 'ARRIVAL',
+      fdr: { callsign: 'EAGLE1', aircraftType: 'F15', wakeCategory: 'D', originAirport: 'LTAC' },
+    },
+  };
+}
+
+test('a HANDOFF interrupted mid-PROPOSE (before ACCEPT) round-trips both replicas correctly across a simulated restart — each still exists, independently, on its own Facility\'s Board', () => {
+  const efsp1 = createEfsp();
+  const ctr = { controllerId: 'ctr', who: 'Ctr1' };
+
+  const created = efsp1.handleMessage(ctr, createCtrStripMsg());
+  assert.equal(created.ack.ok, true, JSON.stringify(created.ack));
+  const senderStrip = created.ack.strip;
+
+  const proposed = efsp1.handleMessage(ctr, {
+    version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(),
+    facilityId: 'CENTER', actingPositionId: 'CTR', stripId: senderStrip.stripId, baseRev: senderStrip.rev,
+    op: { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'APP' },
+  });
+  assert.equal(proposed.ack.ok, true, JSON.stringify(proposed.ack));
+  const receiverStripId = proposed.ack.strip.coordination.peerStripId;
+
+  // Simulated restart — fresh stores, restore() reads from disk. No ACCEPT
+  // has happened yet: both replicas should still show PROPOSED.
+  const efsp2 = createEfsp();
+
+  const restoredSender = efsp2.boardStoreFor('CENTER').getStrip(senderStrip.stripId);
+  assert.ok(restoredSender);
+  assert.equal(restoredSender.coordination.state, 'PROPOSED');
+  assert.equal(restoredSender.coordination.peerStripId, receiverStripId);
+
+  const restoredReceiver = efsp2.boardStoreFor('INCIRLIK').getStrip(receiverStripId);
+  assert.ok(restoredReceiver);
+  assert.equal(restoredReceiver.ownerPositionId, 'APP');
+  assert.equal(restoredReceiver.bayId, 'app-coordination');
+  assert.equal(restoredReceiver.coordination.state, 'PROPOSED');
+  assert.equal(restoredReceiver.coordination.peerStripId, senderStrip.stripId);
+
+  // The exchange can still be completed after the restart, exactly as if
+  // nothing had happened — no strand, no duplicate, no crash.
+  const app = { controllerId: 'app', who: 'App1' };
+  const accepted = efsp2.handleMessage(app, {
+    version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(),
+    facilityId: 'INCIRLIK', actingPositionId: 'APP', stripId: receiverStripId, baseRev: restoredReceiver.rev,
+    op: { kind: 'HANDOFF', action: 'ACCEPT' },
+  });
+  assert.equal(accepted.ack.ok, true, JSON.stringify(accepted.ack));
+  assert.equal(accepted.ack.strip.bayId, 'app-inbound');
+});
+
 test('a failed mutation does not write a new snapshot', () => {
   const efsp = createEfsp();
   const before = fs.existsSync(BOARD_SNAPSHOT_PATH) ? fs.readFileSync(BOARD_SNAPSHOT_PATH, 'utf8') : null;

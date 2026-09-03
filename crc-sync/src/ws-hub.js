@@ -58,6 +58,15 @@ class WsHub {
   setSrsStatus(s)     { this._srsStatus = s; this._broadcastStatus(); }
   broadcastRadarLocks(locks) { this._broadcast({ version: VERSION, type: 'radar-locks', locks }); }
 
+  // WP4A (docs/adr/0021) — §4.6.1's timed forwarding-obligation alerts.
+  // Unconditional to every connected client, same as broadcastRadarLocks
+  // above — no per-client filtering by held Position/Facility exists
+  // anywhere in this hub yet (matches every other EFSP broadcast type).
+  // `alert` is one entry from forwarding-obligations.js's
+  // ForwardingObligationMonitor onAlert callback: {facilityId, stripId,
+  // obligationType, dueAt, severity}.
+  broadcastEfspObligationAlert(alert) { this._broadcast({ version: VERSION, type: 'efsp-obligation-alert', ...alert }); }
+
   // Live "who's transmitting ATIS on which frequency" list, from
   // AtisStore.getActive() — called by server.js after every
   // /api/atis-transmit mutation and on a periodic tick, so every connected

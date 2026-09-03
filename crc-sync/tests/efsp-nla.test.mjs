@@ -55,12 +55,25 @@ test('PROPOSED is inhibited until a beacon code is assigned (guide §3.5)', () =
   assert.deepEqual(result, { inhibited: 'no beacon code assigned' });
 });
 
-test('PROPOSED with a beacon assigned advances to PENDING_CLEARANCE', () => {
-  const result = computeNla(makeStrip('PROPOSED'), makeFdr());
-  assert.deepEqual(result, { toState: 'PENDING_CLEARANCE' });
+test('PROPOSED with a beacon assigned but CD neither occupied nor covered is inhibited — no receiving Position present', () => {
+  const ctx = { isOccupied: () => false, coveringPositionFor: () => null };
+  const result = computeNla(makeStrip('PROPOSED'), makeFdr(), Date.now(), ctx);
+  assert.deepEqual(result, { inhibited: 'no receiving Position present' });
 });
 
-test('PROPOSED with a null fdr (defensive) is inhibited, not a throw', () => {
+test('PROPOSED with a beacon assigned advances to PENDING_CLEARANCE, transferring to CD, once CD is occupied', () => {
+  const ctx = { isOccupied: (id) => id === 'CD', coveringPositionFor: () => null };
+  const result = computeNla(makeStrip('PROPOSED'), makeFdr(), Date.now(), ctx);
+  assert.deepEqual(result, { toState: 'PENDING_CLEARANCE', transferTo: 'CD' });
+});
+
+test('PROPOSED transitions when CD is unoccupied but covered by another Position', () => {
+  const ctx = { isOccupied: () => false, coveringPositionFor: (id) => (id === 'CD' ? 'OPS' : null) };
+  const result = computeNla(makeStrip('PROPOSED'), makeFdr(), Date.now(), ctx);
+  assert.deepEqual(result, { toState: 'PENDING_CLEARANCE', transferTo: 'CD' });
+});
+
+test('PROPOSED with a null fdr (defensive) is inhibited on the beacon check, before occupancy is even considered', () => {
   const result = computeNla(makeStrip('PROPOSED'), null);
   assert.deepEqual(result, { inhibited: 'no beacon code assigned' });
 });
@@ -94,9 +107,16 @@ test('CLEARED is inhibited when a hold is in force (releaseState !== RELEASED)',
   }
 });
 
-test('CLEARED with releaseState RELEASED advances to PUSHBACK', () => {
-  const result = computeNla(makeStrip('CLEARED'), makeFdr());
-  assert.deepEqual(result, { toState: 'PUSHBACK' });
+test('CLEARED with releaseState RELEASED but GND neither occupied nor covered is inhibited', () => {
+  const ctx = { isOccupied: () => false, coveringPositionFor: () => null };
+  const result = computeNla(makeStrip('CLEARED'), makeFdr(), Date.now(), ctx);
+  assert.deepEqual(result, { inhibited: 'no receiving Position present' });
+});
+
+test('CLEARED with releaseState RELEASED advances to PUSHBACK, transferring to GND, once GND is occupied', () => {
+  const ctx = { isOccupied: (id) => id === 'GND', coveringPositionFor: () => null };
+  const result = computeNla(makeStrip('CLEARED'), makeFdr(), Date.now(), ctx);
+  assert.deepEqual(result, { toState: 'PUSHBACK', transferTo: 'GND' });
 });
 
 // ── HELD -> PUSHBACK (Release) ───────────────────────────────────────────
@@ -108,11 +128,12 @@ test('HELD is inhibited when the release time has not yet been reached', () => {
   assert.deepEqual(result, { inhibited: 'release time not reached' });
 });
 
-test('HELD releases once the release time has passed', () => {
+test('HELD releases once the release time has passed, transferring to GND, once GND is occupied', () => {
   const now = Date.UTC(2026, 0, 1, 12, 0, 0);
   const fdr = makeFdr({ assigned: { releaseState: 'RELEASE_TIME', releaseTimeUtc: now - 1000 } });
-  const result = computeNla(makeStrip('HELD'), fdr, now);
-  assert.deepEqual(result, { toState: 'PUSHBACK' });
+  const ctx = { isOccupied: (id) => id === 'GND', coveringPositionFor: () => null };
+  const result = computeNla(makeStrip('HELD'), fdr, now, ctx);
+  assert.deepEqual(result, { toState: 'PUSHBACK', transferTo: 'GND' });
 });
 
 test('HELD is inhibited once the derived void deadline has expired', () => {
@@ -122,9 +143,49 @@ test('HELD is inhibited once the derived void deadline has expired', () => {
   assert.deepEqual(result, { inhibited: 'void time expired' });
 });
 
-test('HELD with no active hold condition releases to PUSHBACK', () => {
-  const result = computeNla(makeStrip('HELD'), makeFdr());
-  assert.deepEqual(result, { toState: 'PUSHBACK' });
+test('HELD with no active hold condition but GND neither occupied nor covered is inhibited', () => {
+  const ctx = { isOccupied: () => false, coveringPositionFor: () => null };
+  const result = computeNla(makeStrip('HELD'), makeFdr(), Date.now(), ctx);
+  assert.deepEqual(result, { inhibited: 'no receiving Position present' });
+});
+
+test('HELD with no active hold condition releases to PUSHBACK, transferring to GND — a no-op reassignment if GND already held it', () => {
+  const ctx = { isOccupied: (id) => id === 'GND', coveringPositionFor: () => null };
+  const result = computeNla(makeStrip('HELD'), makeFdr(), Date.now(), ctx);
+  assert.deepEqual(result, { toState: 'PUSHBACK', transferTo: 'GND' });
+});
+
+// ── WP4A (docs/adr/0017), §4.6.2: HOLD_FOR_RELEASE + standing releases ───
+
+test('HELD with releaseState HOLD_FOR_RELEASE and no matching standing release is inhibited, pointing at OPERATIONAL_REQUEST', () => {
+  const fdr = makeFdr({ assigned: { releaseState: 'HOLD_FOR_RELEASE' } });
+  const ctx = { isOccupied: (id) => id === 'GND', coveringPositionFor: () => null, standingReleases: [] };
+  const result = computeNla(makeStrip('HELD'), fdr, Date.now(), ctx);
+  assert.deepEqual(result, { inhibited: 'outside standing release envelope — file OPERATIONAL_REQUEST' });
+});
+
+test('HELD with releaseState HOLD_FOR_RELEASE and a matching standing release proceeds normally (skips straight to the GND-occupancy check)', () => {
+  const fdr = makeFdr({ assigned: { releaseState: 'HOLD_FOR_RELEASE' }, filed: { route: 'DCT', requestedAltitude: '250', departureAirport: 'LTAG', destinationAirport: 'LTAC' } });
+  const ctx = {
+    isOccupied: (id) => id === 'GND', coveringPositionFor: () => null,
+    standingReleases: [{ envelopeId: 'e1', stereoRoute: 'DCT', active: true }],
+  };
+  const result = computeNla(makeStrip('HELD'), fdr, Date.now(), ctx);
+  assert.deepEqual(result, { toState: 'PUSHBACK', transferTo: 'GND' });
+});
+
+test('every pre-WP4A caller (ctx.standingReleases omitted) defaults to an empty envelope list — HOLD_FOR_RELEASE is inhibited by default, never a throw', () => {
+  const fdr = makeFdr({ assigned: { releaseState: 'HOLD_FOR_RELEASE' } });
+  const result = computeNla(makeStrip('HELD'), fdr, Date.now(), { isOccupied: () => true, coveringPositionFor: () => null });
+  assert.deepEqual(result, { inhibited: 'outside standing release envelope — file OPERATIONAL_REQUEST' });
+});
+
+test('RELEASE_TIME and CLEARANCE_VOID_TIME are unaffected by the standing-release check — only HOLD_FOR_RELEASE triggers it', () => {
+  const now = Date.UTC(2026, 0, 1, 12, 0, 0);
+  const fdr = makeFdr({ assigned: { releaseState: 'RELEASE_TIME', releaseTimeUtc: now - 1000 } });
+  const ctx = { isOccupied: (id) => id === 'GND', coveringPositionFor: () => null, standingReleases: [] };
+  const result = computeNla(makeStrip('HELD'), fdr, now, ctx);
+  assert.deepEqual(result, { toState: 'PUSHBACK', transferTo: 'GND' }); // not the standing-release inhibit
 });
 
 // ── isVoidExpired ────────────────────────────────────────────────────────
@@ -142,9 +203,21 @@ test('isVoidExpired is false when no voidDeadlineUtc is set', () => {
 
 // ── The rest of the straight-line lifecycle ─────────────────────────────
 
-test('PUSHBACK -> TAXI -> RUNWAY_QUEUE -> LUAW -> DEPARTED, unconditionally in Phase 1 (WP6 inhibits not yet built)', () => {
+test('PUSHBACK -> TAXI, state-only (still GND\'s own — no boundary crossed)', () => {
   assert.deepEqual(computeNla(makeStrip('PUSHBACK'), makeFdr()), { toState: 'TAXI' });
-  assert.deepEqual(computeNla(makeStrip('TAXI'), makeFdr()), { toState: 'RUNWAY_QUEUE' });
+});
+
+test('TAXI is inhibited when TWR is neither occupied nor covered', () => {
+  const ctx = { isOccupied: () => false, coveringPositionFor: () => null };
+  assert.deepEqual(computeNla(makeStrip('TAXI'), makeFdr(), Date.now(), ctx), { inhibited: 'no receiving Position present' });
+});
+
+test('TAXI transitions to RUNWAY_QUEUE, transferring to TWR, once TWR is occupied', () => {
+  const ctx = { isOccupied: (id) => id === 'TWR', coveringPositionFor: () => null };
+  assert.deepEqual(computeNla(makeStrip('TAXI'), makeFdr(), Date.now(), ctx), { toState: 'RUNWAY_QUEUE', transferTo: 'TWR' });
+});
+
+test('RUNWAY_QUEUE -> LUAW -> DEPARTED, state-only, unconditionally in Phase 2 (WP6 inhibits not yet built; both stay TWR\'s own)', () => {
   assert.deepEqual(computeNla(makeStrip('RUNWAY_QUEUE'), makeFdr()), { toState: 'LUAW' });
   assert.deepEqual(computeNla(makeStrip('LUAW'), makeFdr()), { toState: 'DEPARTED' });
 });
@@ -208,6 +281,23 @@ test('INBOUND transitions to HANDED_TO_TOWER, transferring to TWR, once TWR is o
 
 test('INBOUND transitions when TWR is unoccupied but covered', () => {
   const ctx = { isOccupied: () => false, coveringPositionFor: (id) => (id === 'TWR' ? 'APP' : null) };
+  assert.deepEqual(computeNla(makeArrivalStrip('INBOUND'), makeFdr(), Date.now(), ctx), { toState: 'HANDED_TO_TOWER', transferTo: 'TWR' });
+});
+
+// ── WP4A (docs/adr/0014): a CENTER-held INBOUND Strip's next step is the
+// cross-Facility HANDOFF, not an intrafacility TWR transfer ────────────
+
+test('INBOUND is inhibited with a HANDOFF-pointing reason when ctx.facilityId is CENTER, even if TWR would otherwise be occupied — there is no TWR at CENTER to transfer to at all', () => {
+  const ctx = { isOccupied: () => true, coveringPositionFor: () => null, facilityId: 'CENTER' };
+  assert.deepEqual(
+    computeNla(makeArrivalStrip('INBOUND'), makeFdr(), Date.now(), ctx),
+    { inhibited: 'cross-Facility HANDOFF required — use Coordinate' },
+  );
+});
+
+test('every pre-WP4A caller (ctx.facilityId omitted entirely) is completely unaffected — INBOUND still resolves via the ordinary TWR-occupancy path', () => {
+  const ctx = { isOccupied: (id) => id === 'TWR', coveringPositionFor: () => null };
+  assert.equal('facilityId' in ctx, false);
   assert.deepEqual(computeNla(makeArrivalStrip('INBOUND'), makeFdr(), Date.now(), ctx), { toState: 'HANDED_TO_TOWER', transferTo: 'TWR' });
 });
 

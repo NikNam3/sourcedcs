@@ -150,6 +150,7 @@
 }
 
 .efsp-rack {
+  position: relative; /* containing block for .efsp-insertion-line's `top` — bay-view.js computes that value AS AN OFFSET FROM THIS ELEMENT'S OWN top edge (targetTop - rackEl.getBoundingClientRect().top); without this, the nearest actually-positioned ancestor could be much further up the tree, and the line renders at a position offset by however far apart the two are (this shipped without it — off by roughly the height of everything above the Bay content: toolbar, Position tabs, Bay tabs). */
   margin-bottom: 12px;
 }
 
@@ -245,6 +246,20 @@
   cursor: pointer;
   font: inherit;
 }
+/* Per-State authority (guide §3.4, docs/adr/0010) — a Strip's NLA button
+   when the current owner isn't authorized to advance it. Deliberately NOT
+   just `opacity` on top of the normal look — a distinct border/background
+   makes it read as "not this controller's action" rather than "temporarily
+   unavailable, try again." Reason is in the `title` tooltip; §3.5 rule 2
+   ("MUST render the reason, not merely grey out") is satisfied that way
+   given a compact Strip has no room for inline explanatory text. */
+.efsp-nla-btn:disabled,
+.efsp-nla-btn-denied {
+  background: #1c2228;
+  border-color: #4a5560;
+  color: #6a7580;
+  cursor: not-allowed;
+}
 
 .efsp-offset-btn {
   min-width: 32px;
@@ -312,4 +327,131 @@
   font-size: 11px;
   color: #e0a838;
   min-height: 14px;
+}
+
+/* ── WP4A: cross-Facility coordination (guide §4.6) ─────────────────── */
+
+.efsp-coordinate-btn,
+.efsp-coordinate-accept-btn,
+.efsp-coordinate-reject-btn {
+  min-height: 32px;
+  padding: 2px 10px;
+  cursor: pointer;
+  font: inherit;
+}
+.efsp-coordinate-btn {
+  margin-left: auto;
+  background: #2a3038;
+  border: 1px solid #6a5bbf; /* a distinct hue from the NLA button's blue (#4a7dbf) — a different KIND of action, not a variant of NLA */
+  color: #fff;
+}
+.efsp-coordinate-accept-btn {
+  background: #1c3a24;
+  border: 1px solid #39ff7a;
+  color: #d8ffe4;
+}
+.efsp-coordinate-reject-btn {
+  background: #2a3038;
+  border: 1px solid #4a5560;
+  color: #a8b4bd;
+}
+
+.efsp-coordinate-popover {
+  position: absolute;
+  top: 100%;
+  right: 8px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  min-width: 220px;
+  background: #1c2228;
+  border: 1px solid #6a5bbf;
+}
+.efsp-coordinate-primitive-select {
+  min-height: 32px;
+  background: #0e1114;
+  border: 1px solid #2a3038;
+  color: #d8e0e6;
+  font: inherit;
+  padding: 4px;
+}
+.efsp-coordinate-note {
+  min-height: 44px;
+  resize: vertical;
+  background: #0e1114;
+  border: 1px solid #2a3038;
+  color: #d8e0e6;
+  font: inherit;
+  font-size: 12px;
+  padding: 4px;
+}
+.efsp-coordinate-note-required {
+  border-color: #ff5c5c;
+}
+.efsp-coordinate-degraded-warning {
+  font-size: 11px;
+  color: #ff9a3c;
+}
+.efsp-coordinate-send-btn {
+  min-height: 32px;
+  padding: 4px 10px;
+  background: #2a3038;
+  border: 1px solid #6a5bbf;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+}
+
+/* POINT_OUT dual-half rendering (guide §4.6 rule 1) — two ALWAYS-VISIBLE,
+   distinctly labelled chips, never a toggle: data ownership and separation
+   responsibility can genuinely differ, and the UI must show both at once. */
+.efsp-coordination-badges {
+  display: flex;
+  gap: 4px;
+  flex-basis: 100%;
+}
+.efsp-coordination-badge {
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  padding: 1px 5px;
+  border: 1px solid #4a5560;
+  color: #a8b4bd;
+}
+.efsp-coordination-badge-data { border-color: #6a5bbf; color: #c9c0ff; }
+.efsp-coordination-badge-sep  { border-color: #4a7dbf; color: #bfe0ff; }
+
+/* Forwarding-obligation alerts (guide §4.6.1) — a THIRD, distinct tier,
+   deliberately not reusing efsp-strip-attention's red (reserved, §7.7 rule
+   4) or the mutation-error/warning banner colours: a due-but-not-yet-
+   missed obligation reads differently from "this Strip needs attention
+   right now" or "your last action had a note." */
+.efsp-strip-obligation-due {
+  border-left-color: #3ecfe8;
+}
+.efsp-strip-obligation-overdue {
+  border-left-color: #ff9a3c;
+}
+.efsp-obligation-badge {
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border: 1px solid #3ecfe8;
+  color: #3ecfe8;
+  flex-basis: 100%;
+}
+.efsp-obligation-badge-overdue {
+  border-color: #ff9a3c;
+  color: #ff9a3c;
+}
+
+/* "Acting As" — Facility-grouped Position selector (radar-panel.js, WP4A). */
+.panel-ctrl-facility-header {
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #6a7580;
+  padding: 6px 4px 2px;
 }

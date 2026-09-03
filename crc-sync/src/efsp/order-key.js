@@ -59,13 +59,30 @@ function keyStart() { return ALPHA[MID]; }
  *   a === null  → "insert before everything currently in the Rack"
  *   b === null  → "insert after everything currently in the Rack"
  *   both null   → "first Strip in an empty Rack"
- * Throws (plain Error, non-ORDER_KEY_EXHAUSTED) if a >= b — a caller bug,
- * never true for two keys actually drawn from the same Rack.
+ * Throws `.code === 'ORDER_KEY_EXHAUSTED'` if a >= b, same as the headroom-
+ * exhaustion cases below — see the comment inline for why this is NOT
+ * purely a caller bug (a crash in production proved it isn't).
  */
 function keyBetween(a, b) {
   if (a === null && b === null) return keyStart();
   if (a !== null && b !== null && a >= b) {
-    throw new Error(`order-key: keyBetween requires a < b (got ${JSON.stringify(a)}, ${JSON.stringify(b)})`);
+    // NOT purely "a caller bug" — this module's own _jitter() tolerates a
+    // ~1-in-62 chance that two DIFFERENT Strips end up with the IDENTICAL
+    // key (see the header comment: "a jitter collision... ties the sort
+    // order cosmetically; board-store.js breaks ties by stripId"). That's
+    // fine for sorting, but it means a === b can genuinely happen HERE
+    // too, later, when a caller tries to insert a Strip between two
+    // Strips that collided earlier — confirmed in production (a MoveStrip
+    // crashed the whole server with exactly this "got \"V\", \"V\"" error,
+    // uncaught, before this fix). There is no valid key strictly between
+    // two equal (or inverted) bounds, so the recovery is identical to
+    // ORDER_KEY_EXHAUSTED below: the caller MUST rebalance the Rack
+    // (which reassigns fresh, guaranteed-distinct keys) and retry — hence
+    // the same error code, so _resolveOrderKey's existing retry path
+    // handles this automatically with no separate handling needed.
+    const err = new Error(`order-key: keyBetween requires a < b (got ${JSON.stringify(a)}, ${JSON.stringify(b)}) — rebalance the Rack and retry`);
+    err.code = 'ORDER_KEY_EXHAUSTED';
+    throw err;
   }
 
   // Insert after everything: a strict prefix always sorts before the

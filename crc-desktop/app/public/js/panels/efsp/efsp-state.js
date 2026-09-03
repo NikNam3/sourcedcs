@@ -23,6 +23,12 @@ let efspBays = [];
 // its ack arrives — replayed against a fresh baseline on reconnect (§5.6.3).
 const efspPendingMutations = new Map();
 
+// WP4A (docs/adr/0021) — stripId -> the most recent efsp-obligation-alert
+// for it (§4.6.1's timed forwarding obligations). One entry per Strip is
+// enough for this slice's rendering (a badge, not a log) — a Strip with
+// multiple simultaneously-due obligation types just shows its latest.
+const efspObligations = new Map();
+
 function applyEfspSnapshot(msg) {
   efspStrips.clear();
   efspFdrs.clear();
@@ -63,6 +69,18 @@ function applyEfspMutationAck(msg) {
 function registerPendingMutation(msg) {
   efspPendingMutations.set(msg.clientMutationId, msg);
 }
+
+/** Applies an efsp-obligation-alert (WP4A, §4.6.1) — one entry per stripId, most recent wins. */
+function applyEfspObligationAlert(msg) {
+  efspObligations.set(msg.stripId, {
+    facilityId: msg.facilityId, obligationType: msg.obligationType, dueAt: msg.dueAt, severity: msg.severity,
+  });
+}
+
+function getEfspObligation(stripId) { return efspObligations.get(stripId) || null; }
+
+/** Clears a Strip's obligation badge — called once its underlying condition is resolved client-side is NOT possible (the server never retracts an alert once raised this slice, docs/adr/0021's documented gap); exposed for completeness/tests and for efsp-panel.js to clear a DROPPED Strip's stale badge locally. */
+function clearEfspObligation(stripId) { efspObligations.delete(stripId); }
 
 function getPendingMutations() {
   return [...efspPendingMutations.values()];
@@ -128,6 +146,7 @@ function _resetEfspStateForTest() {
   efspFdrs.clear();
   efspPositions.clear();
   efspPendingMutations.clear();
+  efspObligations.clear();
   efspBoardSeq = 0;
   efspFacility = null;
   efspBays = [];
@@ -139,6 +158,7 @@ if (typeof module !== 'undefined' && module.exports) {
     registerPendingMutation, getPendingMutations, rebaseForResend,
     getEfspStrip, getEfspFdr, getEfspPosition, getAllEfspStrips, getAllEfspPositions,
     getEfspRack, searchEfspStrips, getEfspBoardSeq, getEfspFacility, getEfspBays,
+    applyEfspObligationAlert, getEfspObligation, clearEfspObligation,
     _resetEfspStateForTest,
   };
 }

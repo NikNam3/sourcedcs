@@ -31,31 +31,56 @@
 // role-scoped permission axis, checked by canCreateStripRole() below: OPS
 // originates DEPARTURE (guide §4.1 rule 3), APP originates ARRIVAL (the
 // Phase-2 stub for "no CTR Facility to hand an inbound flight off from
-// yet" — see docs/adr/0008). Neither Position's CreateStrip right extends
-// to the other's role. This is Phase 2's first genuine cross-Position
-// permission asymmetry, and it's what finally makes a real D21 regression
-// test possible (efsp-permission.test.mjs) — Phase 1's table couldn't
-// reveal a union bug because every Position but OPS was permission-
-// identical.
-
+// yet" — see docs/adr/0008, superseded this WP4A slice by docs/adr/0014).
+// Neither Position's CreateStrip right extends to the other's role. This
+// is Phase 2's first genuine cross-Position permission asymmetry, and it's
+// what finally makes a real D21 regression test possible
+// (efsp-permission.test.mjs) — Phase 1's table couldn't reveal a union bug
+// because every Position but OPS was permission-identical.
+//
+// WP4A (docs/adr/0015) adds CTR and 5 new op kinds — HANDOFF, POINT_OUT,
+// TRAFFIC, OPERATIONAL_REQUEST, AIT (guide §4.6's cross-Facility
+// coordination primitives). This is the SECOND genuine per-Position
+// permission asymmetry: only APP and CTR get these 5 kinds — CD/GND/TWR/
+// OPS get none, since none of them is a Position that ever touches a
+// Facility boundary. This table stays a single flat {positionId: Set}
+// map (not Facility-namespaced) ONLY because Position IDs are globally
+// unique strings across both Facilities in this slice (OPS/CD/GND/TWR/APP
+// vs CTR never collide) — a future Facility whose Position-ID space
+// collides with an existing one would break this assumption and needs its
+// own ADR before landing.
 const OP_KINDS = [
   'CreateStrip', 'MoveStrip', 'SetBlock', 'TransferStrip',
   'SetFlag', 'SetState', 'InvokeNla', 'Undo', 'DropStrip',
+  'HANDOFF', 'POINT_OUT', 'TRAFFIC', 'OPERATIONAL_REQUEST', 'AIT',
 ];
 
-const NON_CREATE_OPS = OP_KINDS.filter(k => k !== 'CreateStrip');
+// The 5 cross-Facility coordination primitives (guide §4.6) — split out so
+// PERMISSIONS below can grant them to exactly APP/CTR without repeating
+// the list, and so canMutate()'s D21 shape stays a single flat lookup.
+const COORDINATION_OP_KINDS = ['HANDOFF', 'POINT_OUT', 'TRAFFIC', 'OPERATIONAL_REQUEST', 'AIT'];
+
+const NON_CREATE_OPS = OP_KINDS.filter(k => k !== 'CreateStrip' && !COORDINATION_OP_KINDS.includes(k));
 
 // The coarse "may this Position class ever perform this KIND of op at
 // all" gate — CreateStrip is included here for OPS/APP (both originate
 // Strips, just for different roles) but the role itself is gated
 // separately by canCreateStripRole(), which board-store.js's
-// _applyCreateStrip calls in addition to this.
+// _applyCreateStrip calls in addition to this. The 5 COORDINATION_OP_KINDS
+// are included only for APP/CTR (guide §4.6: only ATC⇄ATC Positions that
+// actually sit on a Facility boundary get these — WP4A's deferred MRU
+// Positions, docs/adr/0012, get none at all, which is D12's refusal case).
 const PERMISSIONS = {
-  OPS: new Set(OP_KINDS),
+  OPS: new Set(OP_KINDS.filter(k => !COORDINATION_OP_KINDS.includes(k))),
   CD:  new Set(NON_CREATE_OPS),
   GND: new Set(NON_CREATE_OPS),
   TWR: new Set(NON_CREATE_OPS),
   APP: new Set(OP_KINDS),
+  // CTR gets CreateStrip too — it self-originates ARRIVAL Strips as the new
+  // terminus stub (docs/adr/0014, mirroring the same "nothing further
+  // upstream is built yet" shape as docs/adr/0008's original APP stub),
+  // since no third Facility exists upstream of CENTER this slice.
+  CTR: new Set(OP_KINDS),
 };
 
 // Which Strip Role(s) a Position may originate via CreateStrip. Every
@@ -64,7 +89,20 @@ const PERMISSIONS = {
 // Position has a CREATE_ROLE_PERMISSIONS entry" test.
 const CREATE_ROLE_PERMISSIONS = {
   OPS: new Set(['DEPARTURE']),
-  APP: new Set(['ARRIVAL']),
+  // APP's ARRIVAL right is DELIBERATELY EMPTY now (docs/adr/0014,
+  // superseding docs/adr/0008) — ARRIVAL Strips at APP now originate via
+  // the real CTR->APP HANDOFF (board-store.js's receiveCoordinationProposal),
+  // not local self-creation. APP keeps its entry here (rather than being
+  // removed from PERMISSIONS' coarse CreateStrip set) purely so the "every
+  // CreateStrip-eligible Position has a CREATE_ROLE_PERMISSIONS entry"
+  // invariant test still finds one — an intentional, reviewed change, not
+  // a silent regression, exactly as ADR 0008's own "Consequences" section
+  // asked for.
+  APP: new Set([]),
+  // CTR self-originates ARRIVAL Strips this slice — the same "no Facility
+  // further upstream is built yet" stub shape APP's entry used to have,
+  // since CENTER has no further-upstream Facility.
+  CTR: new Set(['ARRIVAL']),
 };
 
 /**
@@ -125,7 +163,13 @@ const DEPARTURE_STATE_OWNERS = {
 // table (§3.4 only gives the state sequence); this mirrors the same
 // per-Position-per-lifecycle-stage shape as DEPARTURE's guide-sourced one.
 const ARRIVAL_STATE_OWNERS = {
-  INBOUND:         ['APP'],
+  // CTR added (docs/adr/0014) — a CENTER-held INBOUND Strip (CTR's own
+  // local origination, mirroring APP's original ADR 0008 stub) needs its
+  // owning Position authorized to act on it too, even though "acting on
+  // it" now means proposing a cross-Facility HANDOFF via the Coordinate
+  // button rather than an ordinary NLA transfer (nla.js's computeArrivalNla
+  // INBOUND case is Facility-aware — see that module's comment).
+  INBOUND:         ['APP', 'CTR'],
   HANDED_TO_TOWER: ['TWR'],
   FINAL:           ['TWR'],
   LANDED:          ['TWR'],
@@ -148,5 +192,5 @@ function canActOnState(actingPositionId, role, state) {
 module.exports = {
   canMutate, canCreateStripRole, canActOnState,
   PERMISSIONS, CREATE_ROLE_PERMISSIONS, STATE_OWNERS_BY_ROLE, DEPARTURE_STATE_OWNERS, ARRIVAL_STATE_OWNERS,
-  OP_KINDS,
+  OP_KINDS, COORDINATION_OP_KINDS,
 };

@@ -15,6 +15,8 @@ const WsHub           = require('./src/ws-hub');
 const resolvePkg      = require('./src/resolve');
 const auth            = require('./src/auth');
 const { createEfsp }  = require('./src/efsp');
+const efspFacilityConfig = require('./src/efsp/facility-config');
+const { ForwardingObligationMonitor } = require('./src/efsp/forwarding-obligations');
 
 const PORT       = parseInt(process.env.PORT, 10) || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -231,6 +233,18 @@ setInterval(() => {
   if (n > 0 || evicted > 0) console.log(`[crc-sync] expired ${n} stale track(s), evicted ${evicted} overlay entr(y/ies)`);
   wsHub.setAtisActive(atisStore.getActive());
 }, 5000);
+
+// ── WP4A forwarding-obligation alerts (guide §4.6.1, docs/adr/0021) — a
+// deliberately separate timer/cadence from the stale reaper above: a
+// different subsystem, no reason to couple cadence. 15s is comfortably
+// fine-grained for minute-scale obligations. ─────────────────────────────
+const obligationMonitor = new ForwardingObligationMonitor({
+  boardStoreFor: efsp.boardStoreFor,
+  fdrStore: efsp.fdrStore,
+  facilityConfig: efspFacilityConfig,
+  onAlert: (alert) => wsHub.broadcastEfspObligationAlert(alert),
+});
+setInterval(() => obligationMonitor.tick(), 15000);
 
 // ── Static hosting ───────────────────────────────────────────────────────
 app.use(express.static(PUBLIC_DIR));

@@ -5,8 +5,8 @@
 // rather than inlined into ws-hub.js's existing message switch (the way
 // squawkMapSet/theaterSettingsSet/aptConfigSet are) because the EFSP
 // surface area — three message types, each with a distinct ack/broadcast
-// shape, one of which (mutation) covers eight op kinds — is bigger than
-// those single-shot squadron-config messages.
+// shape, one of which (mutation) now covers fourteen op kinds — is bigger
+// than those single-shot squadron-config messages.
 //
 // handleMessage() returns { ack, broadcast? } for ws-hub.js to send: `ack`
 // always goes to the sender only; `broadcast`, when present, goes to every
@@ -14,6 +14,18 @@
 // <200ms remote-change budget (§7.9) needs an immediate broadcast, not the
 // existing 500ms tick tracks/collab-store use (see board-store.js's module
 // comment; this is docs/adr/0004-immediate-board-broadcast.md).
+//
+// WP4A (docs/adr/0013) — every message now carries an OPTIONAL `facilityId`
+// field, defaulting to facilityConfig.DEFAULT_FACILITY_ID ('INCIRLIK') when
+// omitted, routed via ctx.boardStoreFor(facilityId)/positionStoreFor(...)
+// rather than the single fixed ctx.boardStore/ctx.positionStore index.js
+// built pre-WP4A. This keeps every pre-WP4A message shape (no facilityId
+// at all) behaving identically — a deliberate choice over a required
+// field, matching facility-config.js's own optional-trailing-param
+// back-compat pattern, and minimizing the blast radius on every existing
+// test/call site (docs/adr/0013's own back-compat discussion). A client
+// acting across both Facilities sends two independent messages (one per
+// facilityId) rather than one combined one — Boards remain two.
 
 const VERSION = 1;
 
@@ -33,26 +45,41 @@ function handleMessage(ctx, session, msg, persist) {
 }
 
 function _handleMutation(ctx, session, msg, persist) {
-  const { boardStore } = ctx;
+  const facilityId = msg.facilityId || ctx.facilityConfig.DEFAULT_FACILITY_ID;
+  const boardStore = ctx.boardStoreFor(facilityId);
+  if (!boardStore) {
+    return { ack: { version: VERSION, type: 'efsp-mutation-ack', clientMutationId: msg.clientMutationId, ok: false, reason: 'VALIDATION_ERROR', detail: `unknown facilityId: ${msg.facilityId}` } };
+  }
   const mutation = { clientMutationId: msg.clientMutationId, stripId: msg.stripId, baseRev: msg.baseRev, op: msg.op };
 
   const result = boardStore.applyMutation(mutation, msg.actingPositionId, session.controllerId);
   if (result.ok) persist();
 
+  // Every Strip record leaving this function — ack or broadcast — is
+  // stamped with facilityId, matching _snapshotMessage's per-record
+  // stamping below. Without this, a client's local Map (efsp-state.js,
+  // which just Map.set()s whatever record arrives) would end up with
+  // delta-derived Strips missing facilityId entirely, breaking any
+  // Facility-scoped filtering downstream — a real bug this WP4A slice
+  // would otherwise introduce, not a style choice.
+  const stampedStrip = result.strip ? { ...result.strip, facilityId } : result.strip;
+
   const ack = {
     version: VERSION, type: 'efsp-mutation-ack', clientMutationId: msg.clientMutationId,
+    facilityId,
     boardSeq: boardStore.currentSeq, ok: result.ok,
-    strip: result.strip, fdr: result.fdr, reason: result.reason, detail: result.detail,
+    strip: stampedStrip, fdr: result.fdr, reason: result.reason, detail: result.detail,
     warning: result.warning, routedTo: result.routedTo,
   };
   if (!result.ok) return { ack };
 
-  const dropped = result.strip.state === 'DROPPED';
+  const dropped = stampedStrip.state === 'DROPPED';
   return {
     ack,
     broadcast: {
       version: VERSION, type: 'efsp-board-delta', boardSeq: boardStore.currentSeq,
-      strips: { updated: dropped ? [] : [result.strip], gone: dropped ? [result.strip.stripId] : [] },
+      facilityId,
+      strips: { updated: dropped ? [] : [stampedStrip], gone: dropped ? [stampedStrip.stripId] : [] },
       fdrs: { updated: result.fdr ? [result.fdr] : [] },
       positions: { updated: [] },
     },
@@ -60,7 +87,12 @@ function _handleMutation(ctx, session, msg, persist) {
 }
 
 function _handleResync(ctx, msg) {
-  const { boardStore, fdrStore, positionStore, facilityConfig } = ctx;
+  const { fdrStore, facilityConfig } = ctx;
+  const facilityId = msg.facilityId || facilityConfig.DEFAULT_FACILITY_ID;
+  const boardStore = ctx.boardStoreFor(facilityId);
+  const positionStore = ctx.positionStoreFor(facilityId);
+  if (!boardStore || !positionStore) return { ack: _snapshotMessage(ctx) };
+
   const lastSeq = Number.isFinite(msg.lastBoardSeq) ? msg.lastBoardSeq : -1;
   const withinWindow = lastSeq >= 0 && boardStore.currentSeq - lastSeq <= RESYNC_RING_WINDOW;
 
@@ -68,16 +100,18 @@ function _handleResync(ctx, msg) {
     const delta = boardStore.getDeltaSince(lastSeq);
     return {
       ack: {
-        version: VERSION, type: 'efsp-board-delta', boardSeq: boardStore.currentSeq,
+        version: VERSION, type: 'efsp-board-delta', boardSeq: boardStore.currentSeq, facilityId,
         strips: {
-          updated: delta.updated.filter(s => s.state !== 'DROPPED'),
+          updated: delta.updated.filter(s => s.state !== 'DROPPED').map(s => ({ ...s, facilityId })),
           gone: delta.updated.filter(s => s.state === 'DROPPED').map(s => s.stripId),
         },
-        // FDRs/Positions are cheap enough at Phase-1 scale to always send
-        // in full rather than building a second/third ring buffer — see
-        // board-store.js's module comment.
+        // FDRs/Positions are cheap enough at this scale to always send in
+        // full rather than building a second/third ring buffer — see
+        // board-store.js's module comment. fdrStore is shared across every
+        // Facility (docs/adr/0013), so this list is NOT facility-scoped —
+        // it's the same full set a snapshot would carry.
         fdrs: { updated: fdrStore.getAll() },
-        positions: { updated: positionStore.getAll() },
+        positions: { updated: positionStore.getAll().map(p => ({ ...p, facilityId })) },
       },
     };
   }
@@ -86,7 +120,12 @@ function _handleResync(ctx, msg) {
 }
 
 function _handleSetPositions(ctx, session, msg) {
-  const { positionStore, boardStore } = ctx;
+  const facilityId = msg.facilityId || ctx.facilityConfig.DEFAULT_FACILITY_ID;
+  const positionStore = ctx.positionStoreFor(facilityId);
+  const boardStore = ctx.boardStoreFor(facilityId);
+  if (!positionStore || !boardStore) {
+    return { ack: { version: VERSION, type: 'efsp-positions-ack', held: [], warnings: [], reason: 'VALIDATION_ERROR', detail: `unknown facilityId: ${facilityId}` } };
+  }
   const held = Array.isArray(msg.held) ? msg.held : [];
   const { held: actuallyHeld, vacated } = positionStore.setHeldPositions(session.controllerId, session.who, held);
 
@@ -111,24 +150,49 @@ function _handleSetPositions(ctx, session, msg) {
   }
 
   return {
-    ack: { version: VERSION, type: 'efsp-positions-ack', held: actuallyHeld, warnings },
+    ack: { version: VERSION, type: 'efsp-positions-ack', facilityId, held: actuallyHeld, warnings },
     broadcast: {
-      version: VERSION, type: 'efsp-board-delta', boardSeq: boardStore.currentSeq,
-      strips: { updated: boardStore.getAll().filter(s => reassignedIds.includes(s.stripId)), gone: [] },
+      version: VERSION, type: 'efsp-board-delta', boardSeq: boardStore.currentSeq, facilityId,
+      strips: { updated: boardStore.getAll().filter(s => reassignedIds.includes(s.stripId)).map(s => ({ ...s, facilityId })), gone: [] },
       fdrs: { updated: [] },
-      positions: { updated: positionStore.getAll() },
+      positions: { updated: positionStore.getAll().map(p => ({ ...p, facilityId })) },
     },
   };
 }
 
+/**
+ * WP4A: sends every Facility's strips/positions/bays in one message (each
+ * record stamped with `facilityId`), since a client can now hold Positions
+ * and act across both. `boardSeq`/`facility` stay as top-level back-compat
+ * aliases for INCIRLIK specifically — `boardSeqByFacility`/`facilities` are
+ * the real, general shape.
+ */
 function _snapshotMessage(ctx) {
-  const { boardStore, fdrStore, positionStore, facilityConfig } = ctx;
+  const { fdrStore, facilityConfig } = ctx;
+  const facilityIds = facilityConfig.getFacilityIds();
+
+  const strips = [];
+  const positions = [];
+  const bays = [];
+  const boardSeqByFacility = {};
+
+  for (const facilityId of facilityIds) {
+    const boardStore = ctx.boardStoreFor(facilityId);
+    const positionStore = ctx.positionStoreFor(facilityId);
+    boardSeqByFacility[facilityId] = boardStore.currentSeq;
+    for (const s of boardStore.getAll().filter(s => s.state !== 'DROPPED')) strips.push({ ...s, facilityId });
+    for (const p of positionStore.getAll()) positions.push({ ...p, facilityId });
+    bays.push(...facilityConfig.getAllBays(facilityId));
+  }
+
+  const defaultFacilityId = facilityConfig.DEFAULT_FACILITY_ID;
   return {
-    version: VERSION, type: 'efsp-snapshot', boardSeq: boardStore.currentSeq,
-    facility: facilityConfig.getFacilityConfig().facility,
-    positions: positionStore.getAll(),
-    bays: facilityConfig.getAllBays(),
-    strips: boardStore.getAll().filter(s => s.state !== 'DROPPED'),
+    version: VERSION, type: 'efsp-snapshot',
+    boardSeq: boardSeqByFacility[defaultFacilityId], // back-compat alias
+    facility: facilityConfig.getFacilityConfig(defaultFacilityId).facility, // back-compat alias
+    facilities: facilityIds,
+    boardSeqByFacility,
+    positions, bays, strips,
     fdrs: fdrStore.getAll(),
   };
 }

@@ -213,9 +213,17 @@ function renderPanelControls() {
 // selection can't stand in for "which Position(s) am I acting as" (guide
 // §4.8). Lives here rather than as its own panel because which Position a
 // controller holds is tied to which panels are relevant to them — the
-// same place the Panels section already lives. INCIRLIK's fixed Position
-// set — matches crc-sync's facility-config.js DEFAULT_CONFIG.positions.
-const EFSP_POSITIONS = ['OPS', 'CD', 'GND', 'TWR', 'APP'];
+// same place the Panels section already lives.
+//
+// WP4A (docs/adr/0013) — grouped by Facility, matching crc-sync's
+// facility-config.js's own per-Facility Position sets exactly. Each
+// Facility's held set is sent independently (sendEfspSetPositions(
+// facilityId, held)) since each has its own PositionStore instance
+// server-side — checking CTR never touches INCIRLIK's held set at all.
+const EFSP_FACILITY_POSITIONS = {
+  INCIRLIK: ['OPS', 'CD', 'GND', 'TWR', 'APP'],
+  CENTER: ['CTR'],
+};
 
 // Cached once in initRadarPanel(), not looked up fresh per render — this
 // panel is called from app.js's async WS message handler (an
@@ -232,36 +240,43 @@ function renderPositionControls() {
   const $positions = _positionControlsEl;
   $positions.innerHTML = '';
 
-  const held = new Set(getActingPositions());
+  for (const [facilityId, positionIds] of Object.entries(EFSP_FACILITY_POSITIONS)) {
+    const held = new Set(getActingPositions(facilityId));
 
-  for (const positionId of EFSP_POSITIONS) {
-    const $row = document.createElement('div');
-    $row.className = 'panel-ctrl-row';
+    const $facilityHeader = document.createElement('div');
+    $facilityHeader.className = 'panel-ctrl-facility-header';
+    $facilityHeader.textContent = facilityId;
+    $positions.appendChild($facilityHeader);
 
-    const $label = document.createElement('span');
-    $label.className = 'panel-ctrl-label';
-    $label.textContent = positionId;
-    $row.appendChild($label);
+    for (const positionId of positionIds) {
+      const $row = document.createElement('div');
+      $row.className = 'panel-ctrl-row';
 
-    const $toggle = document.createElement('label');
-    $toggle.className = 'toggle';
-    const $cb = document.createElement('input');
-    $cb.type = 'checkbox';
-    $cb.checked = held.has(positionId);
-    $cb.addEventListener('change', () => {
-      const next = new Set(held);
-      if ($cb.checked) next.add(positionId); else next.delete(positionId);
-      console.warn('[efsp] Acting-As checkbox changed:', positionId, '->', $cb.checked, '| sending held =', [...next]);
-      sendEfspSetPositions([...next]);
-      renderPositionControls();
-    });
-    const $slider = document.createElement('span');
-    $slider.className = 'toggle-slider';
-    $toggle.appendChild($cb);
-    $toggle.appendChild($slider);
-    $row.appendChild($toggle);
+      const $label = document.createElement('span');
+      $label.className = 'panel-ctrl-label';
+      $label.textContent = positionId;
+      $row.appendChild($label);
 
-    $positions.appendChild($row);
+      const $toggle = document.createElement('label');
+      $toggle.className = 'toggle';
+      const $cb = document.createElement('input');
+      $cb.type = 'checkbox';
+      $cb.checked = held.has(positionId);
+      $cb.addEventListener('change', () => {
+        const next = new Set(held);
+        if ($cb.checked) next.add(positionId); else next.delete(positionId);
+        console.warn('[efsp] Acting-As checkbox changed:', facilityId, positionId, '->', $cb.checked, '| sending held =', [...next]);
+        sendEfspSetPositions(facilityId, [...next]);
+        renderPositionControls();
+      });
+      const $slider = document.createElement('span');
+      $slider.className = 'toggle-slider';
+      $toggle.appendChild($cb);
+      $toggle.appendChild($slider);
+      $row.appendChild($toggle);
+
+      $positions.appendChild($row);
+    }
   }
 }
 

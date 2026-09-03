@@ -1,8 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const { FdrStore, deriveEquipmentSuffix, VOID_DEADLINE_MINUTES } =
-  await import('../src/efsp/fdr-store.js');
+const {
+  FdrStore, deriveEquipmentSuffix, VOID_DEADLINE_MINUTES,
+  EDCT_WINDOW_MINUTES, CALL_FOR_RELEASE_BEFORE_MINUTES, CALL_FOR_RELEASE_AFTER_MINUTES,
+  TRACK_DEGRADATION_FLAGS, AIRSPACE_OWNERS,
+} = await import('../src/efsp/fdr-store.js');
 const { isReserved } = await import('../src/efsp/code-allocator.js');
 
 function makeSeed(overrides = {}) {
@@ -249,4 +252,137 @@ test('snapshot()/restore() round-trips both FDR state and code-allocator state',
   restored.restore(snap);
   assert.deepEqual(restored.getFdr(fdr.fdrId), fdr);
   assert.equal(restored.codeAllocator.isAllocated(fdr.identity.beaconAssigned), true);
+});
+
+// ── WP4A: EDCT / CALL_FOR_RELEASE (§4.6.2), docs/adr/0017 ──────────────
+
+test('a fresh FDR starts with every EDCT/CALL_FOR_RELEASE field null', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  assert.equal(fdr.assigned.edctTimeUtc, null);
+  assert.equal(fdr.assigned.edctWindowStartUtc, null);
+  assert.equal(fdr.assigned.edctWindowEndUtc, null);
+  assert.equal(fdr.assigned.callForReleaseTimeUtc, null);
+  assert.equal(fdr.assigned.callForReleaseWindowStartUtc, null);
+  assert.equal(fdr.assigned.callForReleaseWindowEndUtc, null);
+});
+
+test('setting releaseState EDCT with an edctTimeUtc derives a +/-5min window', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  const t = Date.UTC(2026, 0, 1, 12, 0, 0);
+
+  store.setField(fdr.fdrId, 'assigned.edctTimeUtc', t, { by: 'CTR' });
+  const result = store.setField(fdr.fdrId, 'assigned.releaseState', 'EDCT', { by: 'CTR' });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.fdr.assigned.edctWindowStartUtc, t - EDCT_WINDOW_MINUTES * 60 * 1000);
+  assert.equal(result.fdr.assigned.edctWindowEndUtc, t + EDCT_WINDOW_MINUTES * 60 * 1000);
+});
+
+test('setting releaseState CALL_FOR_RELEASE with a callForReleaseTimeUtc derives a -2/+1min window', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  const t = Date.UTC(2026, 0, 1, 12, 0, 0);
+
+  store.setField(fdr.fdrId, 'assigned.callForReleaseTimeUtc', t, { by: 'CTR' });
+  const result = store.setField(fdr.fdrId, 'assigned.releaseState', 'CALL_FOR_RELEASE', { by: 'CTR' });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.fdr.assigned.callForReleaseWindowStartUtc, t - CALL_FOR_RELEASE_BEFORE_MINUTES * 60 * 1000);
+  assert.equal(result.fdr.assigned.callForReleaseWindowEndUtc, t + CALL_FOR_RELEASE_AFTER_MINUTES * 60 * 1000);
+});
+
+test('leaving releaseState anything other than EDCT/CALL_FOR_RELEASE keeps both windows null, even with a time set (mirrors voidDeadlineUtc\'s own guard)', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  store.setField(fdr.fdrId, 'assigned.edctTimeUtc', Date.now(), { by: 'CTR' });
+  const result = store.setField(fdr.fdrId, 'assigned.releaseState', 'RELEASED', { by: 'CTR' });
+  assert.equal(result.fdr.assigned.edctWindowStartUtc, null);
+  assert.equal(result.fdr.assigned.edctWindowEndUtc, null);
+});
+
+test('switching releaseState away from EDCT clears its window even though edctTimeUtc itself is untouched', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  store.setField(fdr.fdrId, 'assigned.edctTimeUtc', Date.now(), { by: 'CTR' });
+  store.setField(fdr.fdrId, 'assigned.releaseState', 'EDCT', { by: 'CTR' });
+  const result = store.setField(fdr.fdrId, 'assigned.releaseState', 'HOLD_FOR_RELEASE', { by: 'CTR' });
+  assert.equal(result.fdr.assigned.edctWindowStartUtc, null);
+  assert.equal(result.fdr.assigned.edctWindowEndUtc, null);
+});
+
+// ── WP4A: track-degradation flag (§4.6 rule 5), docs/adr/0019 ──────────
+
+test('identity.trackDegradationFlag defaults to NONE and is writable via setField', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  assert.equal(fdr.identity.trackDegradationFlag, 'NONE');
+
+  const result = store.setField(fdr.fdrId, 'identity.trackDegradationFlag', 'CST', { by: 'CTR' });
+  assert.equal(result.ok, true);
+  assert.equal(result.fdr.identity.trackDegradationFlag, 'CST');
+});
+
+test('setField rejects an invalid track degradation flag', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  const result = store.setField(fdr.fdrId, 'identity.trackDegradationFlag', 'BOGUS', { by: 'CTR' });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'VALIDATION_ERROR');
+});
+
+test('every value TRACK_DEGRADATION_FLAGS lists is accepted', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  for (const flag of TRACK_DEGRADATION_FLAGS) {
+    assert.equal(store.setField(fdr.fdrId, 'identity.trackDegradationFlag', flag, { by: 'CTR' }).ok, true, flag);
+  }
+});
+
+// ── WP4A: airspace ownership as a direction (§4.6.4), docs/adr/0018 ────
+
+test('a fresh FDR\'s airspace ownership starts null (undecided), not a default direction', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  assert.deepEqual(fdr.airspace, { owner: null, changedAt: null, changedBy: null });
+});
+
+test('setAirspaceOwner accepts CONTROLLING_AGENCY and USING_AGENCY, stamping changedAt/changedBy', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+
+  const result = store.setAirspaceOwner(fdr.fdrId, 'USING_AGENCY', { by: 'CTR' });
+  assert.equal(result.ok, true);
+  assert.equal(result.fdr.airspace.owner, 'USING_AGENCY');
+  assert.equal(result.fdr.airspace.changedBy, 'CTR');
+  assert.ok(Number.isFinite(result.fdr.airspace.changedAt));
+});
+
+test('defect D15: setAirspaceOwner rejects every non-direction value, including both booleans — there is NO boolean path', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  for (const bogus of [true, false, 'released', 'hot', 'cold', 1, 0, null, undefined, '']) {
+    const result = store.setAirspaceOwner(fdr.fdrId, bogus, { by: 'CTR' });
+    assert.equal(result.ok, false, JSON.stringify(bogus));
+    assert.equal(result.reason, 'VALIDATION_ERROR', JSON.stringify(bogus));
+  }
+});
+
+test('setAirspaceOwner on a nonexistent fdrId returns NOT_FOUND', () => {
+  const store = new FdrStore();
+  const result = store.setAirspaceOwner('does-not-exist', 'USING_AGENCY', { by: 'CTR' });
+  assert.equal(result.reason, 'NOT_FOUND');
+});
+
+test('there is no generic setField path to airspace.owner at all — AIRSPACE_OWNERS/setAirspaceOwner is the only route', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  const result = store.setField(fdr.fdrId, 'airspace.owner', 'USING_AGENCY', { by: 'CTR' });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'VALIDATION_ERROR');
+});
+
+test('AIRSPACE_OWNERS has exactly the two directions the guide names, nothing else', () => {
+  assert.deepEqual([...AIRSPACE_OWNERS].sort(), ['CONTROLLING_AGENCY', 'USING_AGENCY']);
 });

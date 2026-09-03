@@ -136,52 +136,141 @@ function _buildStripEl(strip) {
   if (strip.flags.highlight) el.style.setProperty('--efsp-highlight', strip.flags.highlight);
   if (strip.flags.attention) el.classList.add('efsp-strip-attention');
   el.classList.toggle('efsp-strip-selected', strip.stripId === _selectedStripId);
+
+  // WP4A (docs/adr/0021) — a distinct third alert tier, deliberately NOT
+  // reusing efsp-strip-attention's red (reserved, guide §7.7 rule 4) or
+  // the mutation-error red — a due-but-not-yet-catastrophic obligation
+  // reads differently from "this Strip needs your attention right now."
+  const obligation = typeof getEfspObligation === 'function' ? getEfspObligation(strip.stripId) : null;
+  if (obligation) {
+    el.classList.add('efsp-strip-obligation-due');
+    if (obligation.severity === 'OVERDUE') el.classList.add('efsp-strip-obligation-overdue');
+  }
   el.setAttribute('tabindex', '0');
   el.setAttribute('role', 'listitem');
   el.setAttribute('aria-label', `Strip ${_blockLabel(fdr, strip, '1')}`);
 
   if (strip.flags.flipped) {
-    // Flip (guide §7.3): hides all Blocks except aircraft ID — one input,
-    // rendered here as the display-time consequence of that one flag.
+    // Flip (guide §7.3): hides all Blocks except aircraft ID — content
+    // only. Event listeners are still attached below UNCONDITIONALLY — a
+    // flipped Strip must remain double-clickable (to un-flip it),
+    // selectable and draggable. An earlier version of this function
+    // returned early right here, before any listener was ever attached,
+    // which made a flipped Strip permanently inert with no way back
+    // through the UI at all — this is that fix.
     el.appendChild(_buildBlockCell(strip, '1'));
-    return el;
-  }
+  } else {
+    // '9' (route) is included so the fields guide §8.5's flight-plan
+    // validation actually requires (route/altitude/departure/destination —
+    // nla.js's REQUIRED_FOR_CLEARANCE) are all reachable for editing
+    // directly on the Strip, not just at CreateStrip time.
+    //
+    // Reused unmodified for ARRIVAL Strips (Phase 2) rather than a separate
+    // per-role compact list: every one of these Block IDs is deliberately
+    // ALSO present in ARRIVAL_BLOCK_MAP (see strip-template.js), so
+    // _buildBlockCell resolves each one correctly per strip.role — '8'/'8A'/
+    // '8B'/'7' mean different fields on an ARRIVAL Strip, but the compact-
+    // view layout position is the same. A genuinely arrival-tailored compact
+    // layout (e.g. surfacing ETA/Block 6 here too) is a nice-to-have, not
+    // built in Phase 2.
+    const blocks = ['1', '3', '4', '5', '7', '8', '8A', '8B', '9', '25'];
+    for (const id of blocks) el.appendChild(_buildBlockCell(strip, id));
 
-  // '9' (route) is included so the fields guide §8.5's flight-plan
-  // validation actually requires (route/altitude/departure/destination —
-  // nla.js's REQUIRED_FOR_CLEARANCE) are all reachable for editing
-  // directly on the Strip, not just at CreateStrip time.
-  //
-  // Reused unmodified for ARRIVAL Strips (Phase 2) rather than a separate
-  // per-role compact list: every one of these Block IDs is deliberately
-  // ALSO present in ARRIVAL_BLOCK_MAP (see strip-template.js), so
-  // _buildBlockCell resolves each one correctly per strip.role — '8'/'8A'/
-  // '8B'/'7' mean different fields on an ARRIVAL Strip, but the compact-
-  // view layout position is the same. A genuinely arrival-tailored compact
-  // layout (e.g. surfacing ETA/Block 6 here too) is a nice-to-have, not
-  // built in Phase 2.
-  const blocks = ['1', '3', '4', '5', '7', '8', '8A', '8B', '9', '25'];
-  for (const id of blocks) el.appendChild(_buildBlockCell(strip, id));
+    // Offset (guide §7.3) — one input, a dedicated button so it's reachable
+    // from keyboard/touch per §7.1 rule 4, not just a drag/dblclick gesture.
+    const offsetBtn = document.createElement('button');
+    offsetBtn.className = 'efsp-offset-btn';
+    offsetBtn.title = 'Offset (cock)';
+    offsetBtn.textContent = '⇥';
+    offsetBtn.addEventListener('click', (e) => { e.stopPropagation(); _dispatchGesture(strip, toggleOffset); });
+    el.appendChild(offsetBtn);
 
-  // Offset (guide §7.3) — one input, a dedicated button so it's reachable
-  // from keyboard/touch per §7.1 rule 4, not just a drag/dblclick gesture.
-  const offsetBtn = document.createElement('button');
-  offsetBtn.className = 'efsp-offset-btn';
-  offsetBtn.title = 'Offset (cock)';
-  offsetBtn.textContent = '⇥';
-  offsetBtn.addEventListener('click', (e) => { e.stopPropagation(); _dispatchGesture(strip, toggleOffset); });
-  el.appendChild(offsetBtn);
+    // WP4A (docs/adr/0014): a CENTER-facility INBOUND ARRIVAL Strip's real
+    // next action is the Coordinate button below, never the ordinary
+    // intrafacility NLA (server-side, nla.js's computeArrivalNla already
+    // always inhibits this case with "cross-Facility HANDOFF required" —
+    // known client-side so the button doesn't render at all here, rather
+    // than rendering enabled and failing on every click).
+    const isCenterInbound = strip.role === 'ARRIVAL' && strip.state === 'INBOUND' && strip.facilityId === 'CENTER';
+    const nlaLabel = isCenterInbound ? null : nlaLabelFor(strip.state, strip.role);
+    if (nlaLabel) {
+      const btn = document.createElement('button');
+      btn.className = 'efsp-nla-btn';
+      btn.textContent = nlaLabel;
 
-  const nlaLabel = nlaLabelFor(strip.state, strip.role);
-  if (nlaLabel) {
-    const btn = document.createElement('button');
-    btn.className = 'efsp-nla-btn';
-    btn.textContent = nlaLabel;
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      _invokeNla(strip);
-    });
-    el.appendChild(btn);
+      // Per-State authority (guide §3.4 "normally owned by", docs/adr/0010)
+      // — the SERVER already rejects this if strip.ownerPositionId isn't
+      // authorized for strip.state; this is purely the proactive half, so
+      // the button never LOOKS pressable when it isn't. Keyed on the
+      // Strip's actual owner, not on which Position the viewing controller
+      // happens to be acting as — the authority question is about the
+      // Strip itself ("whose job is this state"), the same for every
+      // viewer looking at it.
+      if (!canActOnState(strip.ownerPositionId, strip.role, strip.state)) {
+        btn.disabled = true;
+        btn.classList.add('efsp-nla-btn-denied');
+        btn.title = `${strip.state} is not ${strip.ownerPositionId}'s to advance`;
+      } else {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          _invokeNla(strip);
+        });
+      }
+      el.appendChild(btn);
+    }
+
+    // ── WP4A coordination affordances ────────────────────────────────
+    if (_isPendingCoordinationReplica(strip)) {
+      // This Strip IS a proposal awaiting response — accept/reject
+      // REPLACE the normal NLA slot conceptually (there is no ordinary
+      // NLA for a Strip still sitting in a Coordination Bay), rendered
+      // alongside whatever (if anything) nlaLabelFor returned above.
+      const acceptBtn = document.createElement('button');
+      acceptBtn.className = 'efsp-coordinate-accept-btn';
+      acceptBtn.textContent = `Accept ${COORDINATION_PRIMITIVE_LABELS[strip.coordination.primitive] || strip.coordination.primitive}`;
+      acceptBtn.addEventListener('click', (e) => { e.stopPropagation(); _dispatchCoordination(strip, strip.coordination.primitive, 'ACCEPT'); });
+      el.appendChild(acceptBtn);
+
+      const rejectBtn = document.createElement('button');
+      rejectBtn.className = 'efsp-coordinate-reject-btn';
+      rejectBtn.textContent = 'Reject';
+      rejectBtn.addEventListener('click', (e) => { e.stopPropagation(); _dispatchCoordination(strip, strip.coordination.primitive, 'REJECT'); });
+      el.appendChild(rejectBtn);
+    } else if (_canProposeCoordination(strip)) {
+      const coordBtn = document.createElement('button');
+      coordBtn.className = 'efsp-coordinate-btn';
+      coordBtn.textContent = 'Coordinate…';
+      coordBtn.title = `Propose a cross-Facility coordination to ${COORDINATION_TARGETS[strip.ownerPositionId].positionId}`;
+      coordBtn.addEventListener('click', (e) => { e.stopPropagation(); _openCoordinatePopover(strip, el); });
+      el.appendChild(coordBtn);
+    }
+
+    // POINT_OUT dual-half rendering (guide §4.6 rule 1: "the UI MUST
+    // render both halves unambiguously") — two distinct, always-visible
+    // chips, never a toggle. Shown for any coordination primitive whose
+    // data-ownership and separation-responsibility refs can differ, but
+    // only POINT_OUT ever actually splits them (coordination.js's table).
+    if (strip.coordination && strip.coordination.primitive === 'POINT_OUT' && strip.coordination.state !== 'REJECTED') {
+      const badges = document.createElement('div');
+      badges.className = 'efsp-coordination-badges';
+      const dataChip = document.createElement('span');
+      dataChip.className = 'efsp-coordination-badge efsp-coordination-badge-data';
+      dataChip.textContent = `DATA: ${strip.coordination.dataOwnerPositionRef.positionId}`;
+      const sepChip = document.createElement('span');
+      sepChip.className = 'efsp-coordination-badge efsp-coordination-badge-sep';
+      sepChip.textContent = `SEP: ${strip.coordination.separationResponsibilityRef.positionId}`;
+      badges.appendChild(dataChip);
+      badges.appendChild(sepChip);
+      el.appendChild(badges);
+    }
+
+    if (obligation) {
+      const badge = document.createElement('span');
+      badge.className = 'efsp-obligation-badge' + (obligation.severity === 'OVERDUE' ? ' efsp-obligation-badge-overdue' : '');
+      badge.textContent = obligation.obligationType.replace(/_/g, ' ');
+      badge.title = `${obligation.obligationType} — ${obligation.severity}`;
+      el.appendChild(badge);
+    }
   }
 
   // Flip: dblclick. Highlight: right-click (contextmenu) opens a 3-swatch
@@ -265,6 +354,125 @@ function _transferStrip(strip, toPositionId, bayId, rackId) {
   sendEfspMutation(actingPositionId, strip, { kind: 'TransferStrip', toPositionId, bayId, rackId });
 }
 
+// ── WP4A: cross-Facility coordination (guide §4.6, docs/adr/0015-0016) ──
+//
+// Only HANDOFF/POINT_OUT/TRAFFIC/OPERATIONAL_REQUEST/AIT — the 5 primitives
+// permission.js grants exclusively to APP/CTR (§4.6, this slice's civil
+// ATC<->ATC scope). No MRU-refusal audit is needed yet: no MRU Position
+// exists this slice (docs/adr/0012's deferral) — gating the Coordinate
+// button to APP/CTR only is what D12 will extend once one does.
+//
+// Target Facility/Position is DETERMINISTIC this slice — there are only
+// two Facilities, and each of APP/CTR has exactly one counterpart on the
+// other side. A real multi-Facility topology would need a picker; this
+// slice deliberately doesn't build one it can't yet exercise.
+const COORDINATION_TARGETS = {
+  APP: { facilityId: 'CENTER', positionId: 'CTR' },
+  CTR: { facilityId: 'INCIRLIK', positionId: 'APP' },
+};
+
+/**
+ * A cross-Facility coordination replica lands in the receiving Position's
+ * Coordination Bay (bayId ends '-coordination') with coordination.state
+ * PROPOSED — that combination is what actually distinguishes "this Strip
+ * IS the pending proposal awaiting my response" from the SENDER's own
+ * Strip, which also carries coordination.state:'PROPOSED' but stays in
+ * its normal working Bay. Accepting/rejecting your own just-sent proposal
+ * makes no sense, so this check is load-bearing, not decorative.
+ */
+function _isPendingCoordinationReplica(strip) {
+  return !!(strip.coordination && strip.coordination.state === 'PROPOSED' && strip.bayId.endsWith('-coordination'));
+}
+
+/** A Strip may open a NEW coordination proposal only while it has no already-open one (server-enforced too — board-store.js's _applyCoordinationPropose). */
+function _canProposeCoordination(strip) {
+  if (strip.role !== 'ARRIVAL') return false;
+  if (!COORDINATION_TARGETS[strip.ownerPositionId]) return false;
+  if (!strip.coordination) return true;
+  return strip.coordination.state === 'REJECTED'; // ACTIVE/PROPOSED are open links; REJECTED can be retried
+}
+
+function _dispatchCoordination(strip, primitive, action, note) {
+  const actingPositionId = _resolveActingPositionId(strip);
+  if (!actingPositionId) return;
+  if (action === 'PROPOSE') {
+    const target = COORDINATION_TARGETS[strip.ownerPositionId];
+    if (!target) return;
+    sendEfspMutation(actingPositionId, strip, { kind: primitive, action: 'PROPOSE', toFacilityId: target.facilityId, toPositionId: target.positionId, note: note || undefined });
+  } else {
+    sendEfspMutation(actingPositionId, strip, { kind: primitive, action });
+  }
+}
+
+const COORDINATION_PRIMITIVE_LABELS = {
+  HANDOFF: 'Hand Off', POINT_OUT: 'Point Out', TRAFFIC: 'Traffic',
+  OPERATIONAL_REQUEST: 'Operational Request', AIT: 'AIT',
+};
+
+let _openCoordinatePopoverEl = null;
+
+function _closeCoordinatePopover() {
+  if (!_openCoordinatePopoverEl) return;
+  _openCoordinatePopoverEl.remove();
+  _openCoordinatePopoverEl = null;
+  document.removeEventListener('pointerdown', _onDocPointerDownCloseCoordinatePopover, true);
+}
+
+function _onDocPointerDownCloseCoordinatePopover(e) {
+  if (_openCoordinatePopoverEl && !_openCoordinatePopoverEl.contains(e.target)) _closeCoordinatePopover();
+}
+
+/** Opens the primitive-choice popover — mirrors _openHighlightPopover's exact pattern (anchor, outside-click close, deferred listener). */
+function _openCoordinatePopover(strip, anchorEl) {
+  _closeCoordinatePopover();
+  const fdr = getEfspFdr(strip.fdrId);
+  const degraded = !!(fdr && fdr.identity && fdr.identity.trackDegradationFlag && fdr.identity.trackDegradationFlag !== 'NONE');
+
+  const popover = document.createElement('div');
+  popover.className = 'efsp-coordinate-popover';
+  popover.addEventListener('pointerdown', (e) => e.stopPropagation());
+
+  if (degraded) {
+    const warn = document.createElement('div');
+    warn.className = 'efsp-coordinate-degraded-warning';
+    warn.textContent = `Track degraded (${fdr.identity.trackDegradationFlag}) — verbal coordination required, note mandatory`;
+    popover.appendChild(warn);
+  }
+
+  const select = document.createElement('select');
+  select.className = 'efsp-coordinate-primitive-select';
+  for (const primitive of ['HANDOFF', 'POINT_OUT', 'TRAFFIC', 'OPERATIONAL_REQUEST', 'AIT']) {
+    const opt = document.createElement('option');
+    opt.value = primitive;
+    opt.textContent = COORDINATION_PRIMITIVE_LABELS[primitive];
+    select.appendChild(opt);
+  }
+  popover.appendChild(select);
+
+  const note = document.createElement('textarea');
+  note.className = 'efsp-coordinate-note';
+  note.placeholder = degraded ? 'Verbal coordination note (required)' : 'Note (optional)';
+  popover.appendChild(note);
+
+  const sendBtn = document.createElement('button');
+  sendBtn.className = 'efsp-coordinate-send-btn';
+  sendBtn.textContent = 'Send';
+  sendBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (degraded && !note.value.trim()) {
+      note.classList.add('efsp-coordinate-note-required');
+      return;
+    }
+    _dispatchCoordination(strip, select.value, 'PROPOSE', note.value.trim());
+    _closeCoordinatePopover();
+  });
+  popover.appendChild(sendBtn);
+
+  anchorEl.appendChild(popover);
+  _openCoordinatePopoverEl = popover;
+  setTimeout(() => document.addEventListener('pointerdown', _onDocPointerDownCloseCoordinatePopover, true), 0);
+}
+
 // The four paper gestures (guide §7.3, defect D4) — efsp-gestures.js's
 // toggleOffset/toggleFlip/setHighlight/setAttention are pure and each
 // already dispatch exactly one Mutation; this is the one shared plumbing
@@ -338,7 +546,7 @@ function _defaultBayFor(positionId) {
 // collision (with app.js) previously broke the whole renderer silently
 // (app.js failed to parse, so initDock()/the WS connection never ran).
 
-let _efspDrag = null; // { stripId, rackEl, rects, insertionEl, dragEl, lastClientY, dropTargetEl }
+let _efspDrag = null; // { stripId, rackEl, rects, insertionEl, dragEl, lastClientY, dropTargetEl, hasMoved }
 
 function _onStripPointerDown(e, strip) {
   // pointerdown fires (and bubbles) BEFORE click — a button/input inside
@@ -363,14 +571,22 @@ function _onStripPointerDown(e, strip) {
 
   const insertionEl = document.createElement('div');
   insertionEl.className = 'efsp-insertion-line';
+  insertionEl.style.display = 'none'; // hidden until real movement — see _onStripPointerMove
   rackEl.appendChild(insertionEl);
 
-  e.currentTarget.classList.add('efsp-strip-dragging'); // semi-transparent while moving, §7.2.3
+  // .efsp-strip-dragging (semi-transparent + position:fixed, §7.2.3) is
+  // NOT applied here — deliberately deferred to _onStripPointerMove, only
+  // once real movement crosses DRAG_THRESHOLD_PX. Applying it immediately
+  // on pointerdown made even a plain click visually "pop" the Strip out of
+  // the flow for an instant (position:fixed kicking in with no actual
+  // drag), and a double-click — two independent pointerdown/pointerup
+  // cycles — popped it twice in quick succession, which read as a glitch.
 
   _efspDrag = {
     strip, rackEl, rects, insertionEl, dragEl: e.currentTarget,
-    startY: e.clientY, lastClientY: e.clientY,
+    startX: e.clientX, startY: e.clientY, lastClientY: e.clientY,
     dropTargetEl: null,
+    hasMoved: false, // set true in _onStripPointerMove once movement exceeds DRAG_THRESHOLD_PX
   };
 
   e.currentTarget.addEventListener('pointermove', _onStripPointerMove);
@@ -395,6 +611,18 @@ function _onStripPointerMove(e) {
   if (!_efspDrag) return;
   _efspDrag.lastClientY = e.clientY;
   const dy = e.clientY - _efspDrag.startY;
+
+  if (!_efspDrag.hasMoved) {
+    // A click with negligible movement must never commit a reorder or
+    // transfer (a controller hit exactly this: clicking a newly-created
+    // Strip relocated it to another Bay with no deliberate drag at all —
+    // see strip-drag.js's hasExceededDragThreshold for the full reasoning).
+    const dx = e.clientX - _efspDrag.startX;
+    if (!hasExceededDragThreshold(dx, dy)) return; // still just a click so far — no visual drag feedback at all yet
+    _efspDrag.hasMoved = true;
+    _efspDrag.dragEl.classList.add('efsp-strip-dragging'); // semi-transparent while moving, §7.2.3 — see _onStripPointerDown's comment on why this is deferred to here
+  }
+
   // transform-only movement (§7.2.4) — never top/left.
   _efspDrag.dragEl.style.transform = `translate3d(0, ${dy}px, 0)`;
 
@@ -421,7 +649,7 @@ function _onStripPointerMove(e) {
 
 function _finishDrag(commit) {
   if (!_efspDrag) return;
-  const { strip, rackEl, rects, dragEl, insertionEl, lastClientY, dropTargetEl } = _efspDrag;
+  const { strip, rackEl, rects, dragEl, insertionEl, lastClientY, dropTargetEl, hasMoved } = _efspDrag;
   dragEl.removeEventListener('pointermove', _onStripPointerMove);
   dragEl.removeEventListener('pointerup', _onStripPointerUp);
   dragEl.removeEventListener('pointercancel', _onStripPointerCancel);
@@ -430,7 +658,13 @@ function _finishDrag(commit) {
   insertionEl.remove();
   if (dropTargetEl) dropTargetEl.classList.remove('efsp-drop-target');
 
-  if (commit && dropTargetEl) {
+  // hasMoved gates BOTH branches below — a click with no real movement
+  // (DRAG_THRESHOLD_PX) commits nothing at all; the Strip's own separate
+  // 'click' listener handles selection instead. Without this gate,
+  // computeInsertionIndex() always resolves to SOME neighbor position
+  // whenever the Rack has other Strips in it (it never itself reports "no
+  // change"), so a plain click could silently reorder or relocate a Strip.
+  if (commit && hasMoved && dropTargetEl) {
     const toPositionId = dropTargetEl.dataset.efspDropPosition;
     const explicitBayId = dropTargetEl.dataset.efspDropBay || null;
     if (toPositionId === strip.ownerPositionId && explicitBayId) {
@@ -440,7 +674,7 @@ function _finishDrag(commit) {
       const targetBay = explicitBayId ? { bayId: explicitBayId, rackIds: [_defaultRackFor(explicitBayId)] } : _defaultBayFor(toPositionId);
       if (targetBay) _transferStrip(strip, toPositionId, targetBay.bayId, targetBay.rackIds[0]);
     }
-  } else if (commit && !rackEl.dataset.bayId.endsWith('-search')) {
+  } else if (commit && hasMoved && !rackEl.dataset.bayId.endsWith('-search')) {
     // Use the last known pointer Y directly, captured on every pointermove
     // above — NOT parsed back out of the CSS transform string, which is
     // already cleared by the time we'd read it here.
@@ -502,9 +736,24 @@ function renderBay(container, bayId) {
   const activeStripEl = document.activeElement ? document.activeElement.closest('.efsp-strip') : null;
   const focusedStripId = activeStripEl && container.contains(activeStripEl) ? activeStripEl.dataset.stripId : null;
 
-  const existingRackEls = new Map([...container.children].map(el => [el.dataset.rackId, el]));
-  for (const [rackId, el] of existingRackEls) {
-    if (!bay.rackIds.includes(rackId)) el.remove();
+  // Keyed by rackId ALONE would be wrong: multiple Bays share the literal
+  // Rack id "main" (e.g. OPS's ops-filed AND ops-proposed both use
+  // rackIds:['main']). A leftover Rack element from whichever Bay was
+  // rendered into this container before still passes "rackId is in
+  // bay.rackIds" and would get silently REUSED for the new Bay — with its
+  // dataset.bayId never updated, since only _buildRackShell sets it, only
+  // on creation. That's a real bug that shipped: switching from ops-filed
+  // to ops-proposed reused ops-filed's stale "main" Rack element, so every
+  // drag inside the (correctly strip-populated, but wrongly bay-tagged)
+  // Rack silently targeted ops-filed regardless of drag direction. Keying
+  // — and clearing — by the (bayId, rackId) PAIR is what actually fixes it.
+  const existingRackEls = new Map();
+  for (const el of [...container.children]) {
+    if (el.dataset.bayId === bayId && bay.rackIds.includes(el.dataset.rackId)) {
+      existingRackEls.set(el.dataset.rackId, el);
+    } else {
+      el.remove(); // a different Bay's leftover Rack (or a Rack no longer in this Bay's rackIds)
+    }
   }
   for (const rackId of bay.rackIds) {
     let rackEl = existingRackEls.get(rackId);
@@ -546,6 +795,7 @@ function _isProtectedStripEl(el) {
   if (_efspDrag && _efspDrag.strip.stripId === el.dataset.stripId) return true;
   if (el.querySelector('.efsp-block-input')) return true;
   if (_openHighlightPopoverEl && el.contains(_openHighlightPopoverEl)) return true;
+  if (_openCoordinatePopoverEl && el.contains(_openCoordinatePopoverEl)) return true;
   return false;
 }
 

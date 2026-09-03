@@ -17,31 +17,54 @@ const facilityConfig = await import('../src/efsp/facility-config.js');
 const blockMap = await import('../src/efsp/block-map.js');
 const nla = await import('../src/efsp/nla.js');
 const permission = await import('../src/efsp/permission.js');
+const coordination = await import('../src/efsp/coordination.js');
 
+// Mirrors index.js's real multi-Facility `rules`/ctx wiring exactly (not a
+// hand-simplified subset) — otherwise this fixture would silently diverge
+// from what the running server actually does. WP4A (docs/adr/0013): one
+// {BoardStore, PositionStore} pair per Facility, one shared FdrStore,
+// `ctx.boardStore`/`ctx.positionStore` kept as direct INCIRLIK aliases so
+// every pre-WP4A test below (which references them directly) is unchanged.
 function makeCtx() {
   const fdrStore = new FdrStore();
-  const positionStore = new PositionStore(facilityConfig.getPositionSet(), facilityConfig.getCoveringChain());
-  // Mirrors index.js's real `rules` wiring exactly (not a hand-simplified
-  // subset) — otherwise this fixture would silently diverge from what the
-  // running server actually does, especially now that CreateStrip's
-  // role-gating (canCreateStripRole) and computeNla's occupancy ctx are
-  // load-bearing, not just decorative.
-  const rules = {
-    resolveBlockTarget: (blockId, role) => blockMap.resolveBlockTarget(role, blockId),
-    bayImpliesState: (bayId) => facilityConfig.bayImpliesState(bayId),
-    bayForImpliedState: (positionId, state) => facilityConfig.bayForImpliedState(positionId, state),
-    computeNla: (strip, fdr, now, ctx) => nla.computeNla(strip, fdr, now, ctx),
-    isValidState: (state, role) => nla.isValidState(state, role),
-    isValidRole: (role) => blockMap.isValidRole(role),
-    isOccupied: (id) => positionStore.isOccupied(id),
-    coveringPositionFor: (id) => positionStore.coveringPositionFor(id),
-    canMutate: (actingPositionId, opKind) => permission.canMutate(actingPositionId, opKind),
-    canCreateStripRole: (actingPositionId, role) => permission.canCreateStripRole(actingPositionId, role),
-    canActOnState: (actingPositionId, role, state) => permission.canActOnState(actingPositionId, role, state),
-    isSelfCoordinated: (controllerId, id) => positionStore.isSelfCoordinated(controllerId, id),
+  const facilityIds = facilityConfig.getFacilityIds();
+  const facilities = new Map();
+
+  for (const facilityId of facilityIds) {
+    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getCoveringChain(facilityId));
+    const rules = {
+      resolveBlockTarget: (blockId, role) => blockMap.resolveBlockTarget(role, blockId),
+      bayImpliesState: (bayId) => facilityConfig.bayImpliesState(bayId, facilityId),
+      bayForImpliedState: (positionId, state) => facilityConfig.bayForImpliedState(positionId, state, facilityId),
+      coordinationBayFor: (positionId) => facilityConfig.coordinationBayFor(positionId, facilityId),
+      computeNla: (strip, fdr, now, ctx) => nla.computeNla(strip, fdr, now, ctx),
+      isValidState: (state, role) => nla.isValidState(state, role),
+      isValidRole: (role) => blockMap.isValidRole(role),
+      isOccupied: (id) => positionStore.isOccupied(id),
+      coveringPositionFor: (id) => positionStore.coveringPositionFor(id),
+      canMutate: (actingPositionId, opKind) => permission.canMutate(actingPositionId, opKind),
+      canCreateStripRole: (actingPositionId, role) => permission.canCreateStripRole(actingPositionId, role),
+      canActOnState: (actingPositionId, role, state) => permission.canActOnState(actingPositionId, role, state),
+      isSelfCoordinated: (controllerId, id) => positionStore.isSelfCoordinated(controllerId, id),
+      facilityId,
+      peerBoard: (otherFacilityId) => {
+        const other = facilities.get(otherFacilityId);
+        return other ? other.boardStore : null;
+      },
+      coordinationEffect: (primitive) => coordination.coordinationEffect(primitive),
+    };
+    const boardStore = new BoardStore(fdrStore, rules);
+    facilities.set(facilityId, { boardStore, positionStore });
+  }
+
+  const defaultFacility = facilities.get(facilityConfig.DEFAULT_FACILITY_ID);
+  return {
+    boardStore: defaultFacility.boardStore,
+    positionStore: defaultFacility.positionStore,
+    fdrStore, facilityConfig,
+    boardStoreFor: (facilityId = facilityConfig.DEFAULT_FACILITY_ID) => (facilities.get(facilityId) || {}).boardStore || null,
+    positionStoreFor: (facilityId = facilityConfig.DEFAULT_FACILITY_ID) => (facilities.get(facilityId) || {}).positionStore || null,
   };
-  const boardStore = new BoardStore(fdrStore, rules);
-  return { boardStore, fdrStore, positionStore, facilityConfig };
 }
 
 function noopPersist() {}
@@ -115,6 +138,11 @@ test('a rejected mutation\'s ack includes the human-readable detail, not just th
   const ctx = makeCtx();
   const created = handleMessage(ctx, SESSION, createStripMsg(), noopPersist); // PROPOSED
   const strip = created.ack.strip;
+  // PROPOSED's own NLA is now transfer-shaped (transfers to CD) — occupy CD
+  // so the doctrine-bypass check below is actually reached, rather than
+  // this Mutation instead being rejected earlier for "no receiving Position
+  // present", which isn't what this test is about.
+  ctx.positionStore.setHeldPositions('controller-cd', 'CD-Holder', ['CD']);
 
   // Drop straight into a Bay whose implied state (RUNWAY_QUEUE) skips
   // ahead of PROPOSED's legal next state (PENDING_CLEARANCE) — the exact

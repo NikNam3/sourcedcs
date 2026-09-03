@@ -52,9 +52,21 @@ test('keyBetween(a, b) sorts strictly between a and b, for many adjacent and dis
   }
 });
 
-test('keyBetween throws a plain (non-exhaustion) error when a >= b', () => {
-  assert.throws(() => keyBetween('B', 'A'), (err) => err.code !== 'ORDER_KEY_EXHAUSTED');
-  assert.throws(() => keyBetween('A', 'A'), (err) => err.code !== 'ORDER_KEY_EXHAUSTED');
+// a >= b throws ORDER_KEY_EXHAUSTED, same code as the headroom-exhaustion
+// cases — NOT a plain/uncoded error. This was found the hard way: a === b
+// genuinely happens when two Strips already collided on the same key (see
+// order-key.js's header comment on _jitter()'s ~1-in-62 collision rate,
+// tolerated for sorting), and a caller inserting between them hit an
+// uncoded throw that crashed the whole server in production before this
+// fix — board-store.js's _resolveOrderKey only retries-after-rebalance for
+// this exact code, so it MUST be ORDER_KEY_EXHAUSTED, not a distinct one.
+test('keyBetween(a, a) — two equal bounds, e.g. from a prior jitter collision — throws ORDER_KEY_EXHAUSTED, not a plain error', () => {
+  assert.throws(() => keyBetween('A', 'A'), (err) => err.code === 'ORDER_KEY_EXHAUSTED');
+  assert.throws(() => keyBetween('V', 'V'), (err) => err.code === 'ORDER_KEY_EXHAUSTED');
+});
+
+test('keyBetween(a, b) with inverted (a > b) bounds also throws ORDER_KEY_EXHAUSTED — a genuine caller-side ordering bug, but still must never crash the process uncaught', () => {
+  assert.throws(() => keyBetween('B', 'A'), (err) => err.code === 'ORDER_KEY_EXHAUSTED');
 });
 
 test('repeated insertion at the end builds a strictly increasing sequence', () => {

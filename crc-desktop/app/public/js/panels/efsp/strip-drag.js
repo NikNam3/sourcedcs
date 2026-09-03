@@ -39,6 +39,21 @@ function computeInsertionIndex(rects, pointerY) {
   };
 }
 
+// A pointerdown+pointerup with negligible movement is a click, not a drag
+// — bay-view.js's _finishDrag gates BOTH its commit branches on this,
+// because computeInsertionIndex() above always resolves to SOME neighbor
+// position whenever a Rack has other Strips in it (it has no "no change"
+// case), so without this threshold a plain click could silently reorder
+// or relocate a Strip via drop-target detection under the cursor at that
+// instant. Matches the drag-threshold convention virtually every
+// production drag-and-drop implementation uses for the same reason.
+const DRAG_THRESHOLD_PX = 5;
+
+/** @returns {boolean} true once total pointer travel from pointerdown exceeds DRAG_THRESHOLD_PX — the point at which a gesture stops being "just a click." */
+function hasExceededDragThreshold(dx, dy) {
+  return Math.hypot(dx, dy) > DRAG_THRESHOLD_PX;
+}
+
 /**
  * Pure keyed-diff decision for renderBay()'s Rack reconciliation (guide
  * §7.5.4 "keyed by stable stripId, never destroy-and-recreate", §4.8.5 rule
@@ -76,5 +91,5 @@ function computeRackReconciliation(existingIds, wantedIds, dirtyIds, protectedId
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { computeInsertionIndex, computeRackReconciliation };
+  module.exports = { computeInsertionIndex, computeRackReconciliation, DRAG_THRESHOLD_PX, hasExceededDragThreshold };
 }

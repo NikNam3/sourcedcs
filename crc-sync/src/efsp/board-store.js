@@ -54,6 +54,10 @@ class BoardStore {
    * @param {(state:string, role:string) => boolean} [rules.isValidState]
    * @param {(role:string) => boolean} [rules.isValidRole]
    * @param {(actingPositionId:string, role:string) => boolean} [rules.canCreateStripRole]
+   * @param {string} [rules.facilityId] — WP4A: this Board's own Facility id (docs/adr/0013)
+   * @param {(facilityId:string) => BoardStore|null} [rules.peerBoard] — WP4A: the OTHER Facility's BoardStore instance, for cross-Facility coordination (docs/adr/0015)
+   * @param {(positionId:string) => {bayId:string,rackIds:string[]}|null} [rules.coordinationBayFor] — WP4A
+   * @param {(primitive:string) => object|null} [rules.coordinationEffect] — WP4A, guide §4.6's primitive table (coordination.js)
    */
   constructor(fdrStore, rules) {
     this._fdrStore = fdrStore;
@@ -122,7 +126,23 @@ class BoardStore {
       this._rebalanceRack(bayId, rackId, excludeStripId);
       const refreshed = this.getRack(bayId, rackId).filter(s => s.stripId !== excludeStripId);
       const findKey2 = (id) => (id ? (refreshed.find(s => s.stripId === id) || {}).orderKey ?? null : null);
-      return keyBetween(findKey2(afterStripId), findKey2(beforeStripId));
+      let a = findKey2(afterStripId);
+      let b = findKey2(beforeStripId);
+      // The ONLY way this retry can still fail after a rebalance (which
+      // guarantees every Strip in the Rack gets a fresh, distinct key) is
+      // a > b — which can genuinely happen when afterStripId/beforeStripId
+      // were bounding two Strips that had COLLIDING keys before the
+      // rebalance (order-key.js's jitter tolerance): rebalance() preserves
+      // the Rack's own tie-broken order (by stripId), which can come out
+      // opposite to whatever the caller's after/before labels assumed.
+      // The caller's real intent — "insert between these two specific
+      // Strips" — doesn't actually depend on which one is labelled
+      // "after" vs "before" once already in this recovery path, so
+      // normalize direction here rather than let a second, unrecoverable
+      // throw reach applyMutation's catch-all and reject a perfectly
+      // resolvable Mutation.
+      if (a !== null && b !== null && a > b) { [a, b] = [b, a]; }
+      return keyBetween(a, b);
     }
   }
 
@@ -159,7 +179,24 @@ class BoardStore {
       return this._appliedMutations.get(mutation.clientMutationId); // idempotent replay, §5.2
     }
 
-    const result = this._dispatch(mutation, actingPositionId, by);
+    // This is the ONE choke point every Mutation flows through (guide's
+    // "Mutations, not state" architecture), so it's where "never throws"
+    // above actually has to be enforced, not just documented — an
+    // unexpected exception anywhere inside _dispatch() must become a
+    // rejection for the ONE Mutation that triggered it, never an uncaught
+    // exception that crashes the process for every connected controller.
+    // Found in production: a MoveStrip crashed the whole server via an
+    // edge case in order-key.js's keyBetween() (see that file's fix) —
+    // that specific cause is now handled properly, but this catch is the
+    // backstop for whatever the NEXT one turns out to be. Still logged
+    // loudly, since reaching here at all means a real bug exists somewhere.
+    let result;
+    try {
+      result = this._dispatch(mutation, actingPositionId, by);
+    } catch (err) {
+      console.error('[board-store] unexpected error applying Mutation — rejecting it instead of crashing:', err);
+      result = { ok: false, reason: 'VALIDATION_ERROR', detail: 'internal error processing mutation' };
+    }
 
     this._appliedMutations.set(mutation.clientMutationId, result);
     if (this._appliedMutations.size > APPLIED_MUTATIONS_CAP) {
@@ -212,6 +249,15 @@ class BoardStore {
       case 'InvokeNla':     result = this._applyInvokeNla(strip, by); break;
       case 'Undo':          result = this._applyUndo(strip, by); break;
       case 'DropStrip':     result = this._applyDropStrip(strip, op, by); break;
+      // WP4A cross-Facility coordination primitives (guide §4.6,
+      // docs/adr/0015) — all 5 share one handler; op.kind IS the primitive,
+      // op.action selects PROPOSE/ACCEPT/REJECT. See _applyCoordinationOp.
+      case 'HANDOFF':
+      case 'POINT_OUT':
+      case 'TRAFFIC':
+      case 'OPERATIONAL_REQUEST':
+      case 'AIT':
+        result = this._applyCoordinationOp(strip, op, by, actingPositionId); break;
       default:              result = { ok: false, reason: 'VALIDATION_ERROR', strip: deepClone(strip) };
     }
     this._recordAudit(mutation, actingPositionId, by, before, result);
@@ -275,6 +321,7 @@ class BoardStore {
       annotations: {},
       flags: newFlags(),
       correlation: { state: 'UNCORRELATED' }, // WP5 hook, inert in Phase 1
+      coordination: null, // WP4A hook (docs/adr/0015) — set by _applyCoordinationPropose/receiveCoordinationProposal once this Strip is party to a cross-Facility exchange
       createdAt: now, updatedAt: now, updatedBy: by || null,
     };
     this._strips.set(stripId, strip);
@@ -298,9 +345,12 @@ class BoardStore {
    * flight plan at all, which is exactly the bug this closes.
    * @returns {{ok:true, impliedState:string|null}|{ok:false, reason:string, detail:string}}
    */
-  /** {isOccupied, coveringPositionFor} bound from this._rules — computeNla()'s occupancy context (guide §4.5, e.g. DEPARTED's real Hand-Off-to-APP inhibit). Built once per call site rather than inline so both computeNla() call sites below stay in lockstep. */
+  /** {isOccupied, coveringPositionFor, facilityId} bound from this._rules — computeNla()'s occupancy context (guide §4.5, e.g. DEPARTED's real Hand-Off-to-APP inhibit). `facilityId` (WP4A, docs/adr/0014) lets nla.js distinguish a CENTER-held ARRIVAL Strip's INBOUND state (whose next step is the Coordinate/HANDOFF button, not an intrafacility NLA transfer) from an INCIRLIK one. Built once per call site rather than inline so both computeNla() call sites below stay in lockstep. */
   _nlaCtx() {
-    return { isOccupied: this._rules.isOccupied, coveringPositionFor: this._rules.coveringPositionFor };
+    return {
+      isOccupied: this._rules.isOccupied, coveringPositionFor: this._rules.coveringPositionFor,
+      facilityId: this._rules.facilityId, standingReleases: this._rules.standingReleases,
+    };
   }
 
   _validateBayImpliedTransition(strip, targetBayId) {
@@ -354,11 +404,13 @@ class BoardStore {
     const target = this._rules.resolveBlockTarget(op.blockId, strip.role);
     if (!target) return { ok: false, reason: 'VALIDATION_ERROR', strip };
 
-    if (target.kind === 'fdr') {
-      const fdrResult = target.path === 'identity.beaconAssigned'
-        ? this._fdrStore.setBeaconAssigned(strip.fdrId, op.value, { by })
-        : this._fdrStore.setField(strip.fdrId, target.path, op.value, { by });
-      if (!fdrResult.ok) return { ok: false, reason: fdrResult.reason, strip };
+    if (target.kind === 'fdr' || target.kind === 'airspace-owner') {
+      const fdrResult = target.kind === 'airspace-owner'
+        ? this._fdrStore.setAirspaceOwner(strip.fdrId, op.value, { by })
+        : target.path === 'identity.beaconAssigned'
+          ? this._fdrStore.setBeaconAssigned(strip.fdrId, op.value, { by })
+          : this._fdrStore.setField(strip.fdrId, target.path, op.value, { by });
+      if (!fdrResult.ok) return { ok: false, reason: fdrResult.reason, detail: fdrResult.detail, strip };
 
       // FDR keeps its own independent rev (guide §3.1); the Strip's rev is
       // also bumped here as a deliberate Phase-1 simplification so the
@@ -565,6 +617,271 @@ class BoardStore {
     strip.updatedBy = by || null;
     this._touch(strip.stripId);
     this._fdrStore.releaseFdr(strip.fdrId);
+    return { ok: true, strip };
+  }
+
+  // ── WP4A: cross-Facility coordination (guide §4.6, docs/adr/0013-0018) ──
+  //
+  // "The Strip does not cross the Facility boundary... one logical FDR, N
+  // per-Facility Strip replicas" (guide §4.6, defect D13 if built as a
+  // move). Concretely: this BoardStore instance is one Facility's Board
+  // (index.js's composition root now constructs one {BoardStore,
+  // PositionStore} pair PER Facility — see docs/adr/0013). A coordination
+  // primitive's PROPOSE action mutates the SENDER's own existing Strip
+  // (ownership-gated exactly like every other op — _dispatch's existing
+  // NOT_OWNER check already covers it) and, on success, calls a public
+  // method on the RECEIVING Facility's own BoardStore instance
+  // (`rules.peerBoard(facilityId)`) to mint a brand-new, independent Strip
+  // object there. From that point the two replicas are two rows in two
+  // separate `_strips` Maps, linked only by `coordination.peerStripId`/
+  // `peerFacilityId` — never a shared identity, never one object moved.
+  // Independent removability (a WP4A acceptance criterion) falls out of
+  // this for free: _applyDropStrip on one instance structurally cannot
+  // reach the other instance's Map at all.
+
+  /**
+   * @param {object} strip — the Strip this Mutation targets (already
+   *   verified by _dispatch to be owned by actingPositionId)
+   * @param {{kind:string, action:'PROPOSE'|'ACCEPT'|'REJECT', toFacilityId?:string, toPositionId?:string, note?:string}} op
+   */
+  _applyCoordinationOp(strip, op, by, actingPositionId) {
+    switch (op.action) {
+      case 'PROPOSE': return this._applyCoordinationPropose(strip, op, by, actingPositionId);
+      case 'ACCEPT':  return this._applyCoordinationAccept(strip, op, by, actingPositionId);
+      case 'REJECT':  return this._applyCoordinationReject(strip, op, by, actingPositionId);
+      default:        return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown coordination action: ${op.action}`, strip };
+    }
+  }
+
+  _applyCoordinationPropose(strip, op, by, actingPositionId) {
+    const primitive = op.kind;
+    const effect = this._rules.coordinationEffect ? this._rules.coordinationEffect(primitive) : null;
+    if (!effect) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown coordination primitive: ${primitive}`, strip };
+
+    if (strip.coordination && (strip.coordination.state === 'PROPOSED' || strip.coordination.state === 'ACTIVE')) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'this Strip already has an open coordination link', strip };
+    }
+    if (!op.toFacilityId || !op.toPositionId) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'toFacilityId and toPositionId are required', strip };
+    }
+    if (op.toFacilityId === this._rules.facilityId) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'coordination target must be a different Facility', strip };
+    }
+    const peer = this._rules.peerBoard ? this._rules.peerBoard(op.toFacilityId) : null;
+    if (!peer) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown Facility: ${op.toFacilityId}`, strip };
+
+    // Track-degradation soft interlock (guide §4.6 rule 5): CST/FAIL/IF/NT/
+    // TRK force verbal coordination; a non-empty note is the electronic
+    // stand-in for "verbal coordination occurred" (docs/adr/0019).
+    const fdr = this._fdrStore.getFdr(strip.fdrId);
+    const degraded = fdr && fdr.identity.trackDegradationFlag && fdr.identity.trackDegradationFlag !== 'NONE';
+    if (degraded && !op.note) {
+      return {
+        ok: false, reason: 'VALIDATION_ERROR',
+        detail: `track degradation (${fdr.identity.trackDegradationFlag}) forces verbal coordination — a note is required`,
+        strip,
+      };
+    }
+
+    const now = Date.now();
+    const proposal = peer.receiveCoordinationProposal({
+      primitive, fromFacilityId: this._rules.facilityId, fromPositionId: actingPositionId,
+      fromStripId: strip.stripId, toPositionId: op.toPositionId, fdrId: strip.fdrId,
+      note: op.note || null, by,
+    });
+    if (!proposal.ok) return { ok: false, reason: proposal.reason || 'VALIDATION_ERROR', detail: proposal.detail, strip };
+
+    strip.coordination = {
+      primitive,
+      state: 'PROPOSED',
+      peerFacilityId: op.toFacilityId,
+      peerStripId: proposal.strip.stripId,
+      peerPositionId: op.toPositionId,
+      // Jurisdiction stays with the initiator until (and unless) ACCEPT
+      // moves it — guide §4.6's table, modelled as two independent refs
+      // because POINT_OUT is the one primitive where they split (rule 1).
+      dataOwnerPositionRef: { facilityId: this._rules.facilityId, positionId: actingPositionId },
+      separationResponsibilityRef: { facilityId: this._rules.facilityId, positionId: actingPositionId },
+      radarIdTransferred: false,
+      commsTransferred: false,
+      lastForwardedEtaUtc: fdr ? fdr.filed.estimatedArrivalTimeUtc : null,
+      note: op.note || null,
+      initiatedAt: now, initiatedBy: by || null,
+      acceptedAt: null, acceptedBy: null,
+    };
+    strip.rev += 1;
+    strip.updatedAt = now;
+    strip.updatedBy = by || null;
+    this._touch(strip.stripId);
+    return { ok: true, strip };
+  }
+
+  _applyCoordinationAccept(strip, op, by, actingPositionId) {
+    if (!strip.coordination || strip.coordination.state !== 'PROPOSED') {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no pending coordination proposal on this Strip', strip };
+    }
+    const effect = this._rules.coordinationEffect ? this._rules.coordinationEffect(strip.coordination.primitive) : null;
+    if (!effect) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown coordination primitive: ${strip.coordination.primitive}`, strip };
+
+    const now = Date.now();
+    strip.coordination.state = 'ACTIVE';
+    strip.coordination.radarIdTransferred = effect.radarIdTransfers;
+    strip.coordination.commsTransferred = effect.commsTransfers;
+    strip.coordination.acceptedAt = now;
+    strip.coordination.acceptedBy = by || null;
+    if (effect.dataOwnershipMoves) {
+      strip.coordination.dataOwnerPositionRef = { facilityId: this._rules.facilityId, positionId: actingPositionId };
+    }
+    if (effect.separationResponsibilityMoves) {
+      strip.coordination.separationResponsibilityRef = { facilityId: this._rules.facilityId, positionId: actingPositionId };
+    }
+
+    // Move the Strip out of the Coordination Bay into the receiving
+    // Position's normal INBOUND working Bay — this Strip's real lifecycle
+    // starts now, same as any other ARRIVAL Strip (guide §3.4).
+    const targetBay = this._rules.bayForImpliedState ? this._rules.bayForImpliedState(strip.ownerPositionId, 'INBOUND') : null;
+    if (targetBay) {
+      strip.bayId = targetBay.bayId;
+      strip.rackId = targetBay.rackIds[0];
+      strip.orderKey = this._resolveOrderKey(targetBay.bayId, targetBay.rackIds[0], null, null, strip.stripId);
+    }
+    strip.state = 'INBOUND';
+    strip.rev += 1;
+    strip.updatedAt = now;
+    strip.updatedBy = by || null;
+    this._touch(strip.stripId);
+
+    // Tell the peer their sender-side Strip is now ACTIVE too — both
+    // replicas agree the exchange is live; each proceeds independently
+    // from here (D13's "independently removable" acceptance criterion).
+    if (this._rules.peerBoard) {
+      const peer = this._rules.peerBoard(strip.coordination.peerFacilityId);
+      if (peer) peer.receiveCoordinationResponse({ stripId: strip.coordination.peerStripId, response: 'ACCEPT', by });
+    }
+    return { ok: true, strip };
+  }
+
+  _applyCoordinationReject(strip, op, by) {
+    if (!strip.coordination || strip.coordination.state !== 'PROPOSED') {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no pending coordination proposal on this Strip', strip };
+    }
+    strip.coordination.state = 'REJECTED';
+    strip.rev += 1;
+    strip.updatedAt = Date.now();
+    strip.updatedBy = by || null;
+    this._touch(strip.stripId);
+
+    if (this._rules.peerBoard) {
+      const peer = this._rules.peerBoard(strip.coordination.peerFacilityId);
+      if (peer) peer.receiveCoordinationResponse({ stripId: strip.coordination.peerStripId, response: 'REJECT', by });
+    }
+    return { ok: true, strip };
+  }
+
+  /**
+   * Called by the SENDING Facility's BoardStore (via rules.peerBoard) when
+   * a coordination primitive is PROPOSEd against it — mints a brand-new,
+   * independent Strip in THIS Facility's own `_strips` Map, landing in the
+   * receiving Position's Coordination Bay. This is the actual "two
+   * replicas" mechanism (guide §4.6/D13): a new object, a new stripId, a
+   * new orderKey within this Board — never the sender's Strip relocated.
+   * Bypasses the normal ownership/baseRev/ordinary-permission gates
+   * entirely, same justification as reassignPositionStrips(): there is no
+   * controller "sending into" this Board from the inside to check against;
+   * the only gate that matters is which Bay the receiving Position has
+   * configured to accept it (coordinationBayFor — absent means refused).
+   * @returns {{ok:true, strip}|{ok:false, reason, detail}}
+   */
+  receiveCoordinationProposal({ primitive, fromFacilityId, fromPositionId, fromStripId, toPositionId, fdrId, note, by }) {
+    const fdr = this._fdrStore.getFdr(fdrId);
+    if (!fdr) return { ok: false, reason: 'NOT_FOUND', detail: 'referenced FDR not found' };
+
+    const coordinationBay = this._rules.coordinationBayFor ? this._rules.coordinationBayFor(toPositionId) : null;
+    if (!coordinationBay) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `no Coordination Bay configured for ${toPositionId}` };
+    }
+
+    const stripId = crypto.randomUUID();
+    const now = Date.now();
+    const rackStrips = this.getRack(coordinationBay.bayId, coordinationBay.rackIds[0]);
+    const afterStripId = rackStrips.length ? rackStrips[rackStrips.length - 1].stripId : null;
+    const orderKey = this._resolveOrderKey(coordinationBay.bayId, coordinationBay.rackIds[0], afterStripId, null, null);
+
+    const strip = {
+      stripId,
+      cid: this._nextCid(),
+      fdrId,
+      rev: 1,
+      // Every coordination primitive in this slice moves an ARRIVAL-shaped
+      // Strip (APP<->CTR, guide's recommended civil ATC<->ATC first
+      // slice) — state INBOUND from the moment it's minted, not a
+      // separate "not yet accepted" pseudo-state; coordination.state is
+      // what actually tracks PROPOSED/ACTIVE/REJECTED.
+      role: 'ARRIVAL',
+      state: 'INBOUND',
+      ownerPositionId: toPositionId,
+      bayId: coordinationBay.bayId,
+      rackId: coordinationBay.rackIds[0],
+      orderKey,
+      annotations: {},
+      flags: newFlags(),
+      correlation: { state: 'UNCORRELATED' },
+      coordination: {
+        primitive,
+        state: 'PROPOSED',
+        peerFacilityId: fromFacilityId,
+        peerStripId: fromStripId,
+        peerPositionId: fromPositionId,
+        dataOwnerPositionRef: { facilityId: fromFacilityId, positionId: fromPositionId },
+        separationResponsibilityRef: { facilityId: fromFacilityId, positionId: fromPositionId },
+        radarIdTransferred: false,
+        commsTransferred: false,
+        lastForwardedEtaUtc: fdr.filed.estimatedArrivalTimeUtc || null,
+        note: note || null,
+        initiatedAt: now, initiatedBy: by || null,
+        acceptedAt: null, acceptedBy: null,
+      },
+      createdAt: now, updatedAt: now, updatedBy: by || null,
+    };
+    this._strips.set(stripId, strip);
+    this._touch(stripId);
+    return { ok: true, strip };
+  }
+
+  /**
+   * Called by the RECEIVING Facility's BoardStore (via rules.peerBoard)
+   * once its controller has ACCEPTed or REJECTed a proposal — updates the
+   * SENDER's original Strip's coordination record to match, so both
+   * replicas agree on the outcome. Bypasses the ordinary Mutation gates
+   * for the same reason receiveCoordinationProposal does.
+   */
+  receiveCoordinationResponse({ stripId, response, by }) {
+    const strip = this._strips.get(stripId);
+    if (!strip || !strip.coordination) return { ok: false, reason: 'NOT_FOUND' };
+
+    const now = Date.now();
+    if (response === 'ACCEPT') {
+      const effect = this._rules.coordinationEffect ? this._rules.coordinationEffect(strip.coordination.primitive) : null;
+      strip.coordination.state = 'ACTIVE';
+      strip.coordination.acceptedAt = now;
+      strip.coordination.acceptedBy = by || null;
+      if (effect) {
+        strip.coordination.radarIdTransferred = effect.radarIdTransfers;
+        strip.coordination.commsTransferred = effect.commsTransfers;
+        if (effect.dataOwnershipMoves) {
+          strip.coordination.dataOwnerPositionRef = { facilityId: strip.coordination.peerFacilityId, positionId: strip.coordination.peerPositionId };
+        }
+        if (effect.separationResponsibilityMoves) {
+          strip.coordination.separationResponsibilityRef = { facilityId: strip.coordination.peerFacilityId, positionId: strip.coordination.peerPositionId };
+        }
+      }
+    } else {
+      strip.coordination.state = 'REJECTED';
+    }
+    strip.rev += 1;
+    strip.updatedAt = now;
+    strip.updatedBy = by || null;
+    this._touch(strip.stripId);
     return { ok: true, strip };
   }
 

@@ -777,6 +777,14 @@ async function connect() {
         if (typeof renderPositionWarnings === 'function') renderPositionWarnings(msg.warnings);
         if (typeof refreshEfspPanel === 'function') refreshEfspPanel();
         break;
+      // WP4A (docs/adr/0021), guide §4.6.1 — a timed forwarding obligation
+      // came due. Unconditional broadcast (ws-hub.js), same as
+      // efsp-board-delta — every connected client applies it and re-renders
+      // whatever Bay currently shows the affected Strip.
+      case 'efsp-obligation-alert':
+        if (typeof applyEfspObligationAlert === 'function') applyEfspObligationAlert(msg);
+        if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
+        break;
       case 'radar-locks': {
         radarLocks.clear();
         for (const lock of (msg.locks || [])) {

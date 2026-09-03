@@ -16,10 +16,30 @@
 // TWR and APP are both INCIRLIK Positions, so this is NOT WP4A's
 // cross-Facility HANDOFF, which is still APP<->CTR and still unbuilt).
 //
+// docs/adr/0012 extends that same transfer-shaped pattern to EVERY
+// transition that crosses a DEPARTURE_STATE_OWNERS boundary (not just
+// DEPARTED->APP): PROPOSED->PENDING_CLEARANCE, CLEARED->PUSHBACK,
+// HELD->PUSHBACK, and TAXI->RUNWAY_QUEUE all now carry `transferTo` and
+// the same occupancy-gated inhibit. A transition that stays with the same
+// owner (PENDING_CLEARANCE->CLEARED, PUSHBACK->TAXI, RUNWAY_QUEUE->LUAW,
+// LUAW->DEPARTED) is still state-only — no Position boundary, nothing to
+// transfer.
+//
 // Inhibits tied to machinery that doesn't exist yet — field state/
 // arresting gear (§9.7, WP6), alert-pad conflict (§9.6, WP6) — are simply
 // never triggered here (documented per state below), not fabricated as
 // always-true or always-false doctrine.
+//
+// WP4A (docs/adr/0014) migrates ARRIVAL's INBOUND origination from ADR
+// 0008's local APP self-creation stub to a real cross-Facility HANDOFF
+// from CTR (CENTER Facility) — see computeArrivalNla's INBOUND case,
+// which is now Facility-aware via ctx.facilityId. DEPARTURE's DEPARTED
+// case is deliberately UNCHANGED this slice (docs/adr/0016 confirms):
+// TWR and APP are both INCIRLIK Positions, so "Hand Off to APP" stays the
+// existing intrafacility TransferStrip, not WP4A's cross-Facility
+// primitive (still nowhere near DEPARTURE's own lifecycle this slice).
+
+const { matchesStandingRelease } = require('./release-envelope');
 
 const DEPARTURE_STATES = [
   'PROPOSED', 'PENDING_CLEARANCE', 'CLEARED', 'HELD', 'PUSHBACK', 'TAXI',
@@ -64,11 +84,13 @@ function isVoidExpired(fdr, now = Date.now()) {
   return !!(fdr && fdr.assigned.voidDeadlineUtc && now >= fdr.assigned.voidDeadlineUtc);
 }
 
-/** Normalizes the injected occupancy context, defaulting to "nothing is occupied, nothing covers" when omitted — a safe, meaningful degrade (an occupancy-gated NLA simply reports inhibited) rather than a throw, since not every caller has occupancy info at hand (e.g. a fixture-driven test). */
+/** Normalizes the injected occupancy context, defaulting to "nothing is occupied, nothing covers" when omitted — a safe, meaningful degrade (an occupancy-gated NLA simply reports inhibited) rather than a throw, since not every caller has occupancy info at hand (e.g. a fixture-driven test). `facilityId` (WP4A) defaults to undefined, which computeArrivalNla treats as "not CENTER" — i.e. every pre-WP4A caller that never passes it keeps the original INCIRLIK behavior unchanged. `standingReleases` (WP4A, §4.6.2) defaults to an empty array — no envelopes configured means nothing is ever pre-cleared by one. */
 function _normalizeCtx(ctx) {
   return {
     isOccupied: (ctx && ctx.isOccupied) || (() => false),
     coveringPositionFor: (ctx && ctx.coveringPositionFor) || (() => null),
+    facilityId: ctx && ctx.facilityId,
+    standingReleases: (ctx && ctx.standingReleases) || [],
   };
 }
 
@@ -82,10 +104,23 @@ function _normalizeCtx(ctx) {
 function computeDepartureNla(strip, fdr, now, ctx) {
   switch (strip.state) {
     case 'PROPOSED':
+      // Every boundary crossing between two DIFFERENT owning Positions
+      // (permission.js's DEPARTURE_STATE_OWNERS) is transfer-shaped, same
+      // pattern as DEPARTED->APP below — matches real strip-passing
+      // procedure (OPS finishes their part, the strip actually moves to
+      // the next desk in the SAME action, not a separate manual drag) and
+      // closes the single-Position-controller gap: without this, OPS
+      // alone has no drop target to hand a Strip to CD at all (CD's Bay
+      // tabs only render for Positions the acting controller holds).
       if (!fdr || !fdr.identity.beaconAssigned) return { inhibited: 'no beacon code assigned' };
-      return { toState: 'PENDING_CLEARANCE' };
+      if (!ctx.isOccupied('CD') && !ctx.coveringPositionFor('CD')) {
+        return { inhibited: 'no receiving Position present' };
+      }
+      return { toState: 'PENDING_CLEARANCE', transferTo: 'CD' };
 
     case 'PENDING_CLEARANCE':
+      // CLEARED is still CD's own (DEPARTURE_STATE_OWNERS), so this stays
+      // state-only — no Position boundary is crossed here.
       if (!isFlightPlanValid(fdr)) return { inhibited: 'flight plan invalid' };
       return { toState: 'CLEARED' };
 
@@ -93,22 +128,46 @@ function computeDepartureNla(strip, fdr, now, ctx) {
       if (fdr && fdr.assigned.releaseState !== 'RELEASED') return { inhibited: 'a hold is in force' };
       // Alert-pad conflict (§9.6) is WP6/field-state territory, not built
       // in Phase 2 — never triggers here.
-      return { toState: 'PUSHBACK' };
+      if (!ctx.isOccupied('GND') && !ctx.coveringPositionFor('GND')) {
+        return { inhibited: 'no receiving Position present' };
+      }
+      return { toState: 'PUSHBACK', transferTo: 'GND' };
 
     case 'HELD':
       if (fdr && fdr.assigned.releaseState === 'RELEASE_TIME' && fdr.assigned.releaseTimeUtc && now < fdr.assigned.releaseTimeUtc) {
         return { inhibited: 'release time not reached' };
       }
+      // WP4A (docs/adr/0017), §4.6.2: a HOLD_FOR_RELEASE flight that falls
+      // inside a configured standing-release envelope resolves on its own
+      // (the agreement already covers it); one that doesn't needs an
+      // explicit per-flight OPERATIONAL_REQUEST — the fallback the guide's
+      // own text names. Only checked for HOLD_FOR_RELEASE specifically:
+      // RELEASE_TIME/EDCT/CALL_FOR_RELEASE already have their own
+      // time-based gates above/below, and RELEASED has none at all.
+      if (fdr && fdr.assigned.releaseState === 'HOLD_FOR_RELEASE' && !matchesStandingRelease(fdr, ctx.standingReleases)) {
+        return { inhibited: 'outside standing release envelope — file OPERATIONAL_REQUEST' };
+      }
       if (isVoidExpired(fdr, now)) return { inhibited: 'void time expired' };
-      return { toState: 'PUSHBACK' };
+      // HELD is jointly owned by CD and GND (DEPARTURE_STATE_OWNERS) since
+      // either may be the one holding it, but PUSHBACK is GND's alone —
+      // always transfer to GND here, a no-op reassignment when GND already
+      // held it.
+      if (!ctx.isOccupied('GND') && !ctx.coveringPositionFor('GND')) {
+        return { inhibited: 'no receiving Position present' };
+      }
+      return { toState: 'PUSHBACK', transferTo: 'GND' };
 
     case 'PUSHBACK':
+      // TAXI is still GND's own — state-only.
       return { toState: 'TAXI' };
 
     case 'TAXI':
       // Runway-unavailable inhibit (§9.7 field state) is WP6 territory,
       // not built in Phase 2 — never triggers here.
-      return { toState: 'RUNWAY_QUEUE' };
+      if (!ctx.isOccupied('TWR') && !ctx.coveringPositionFor('TWR')) {
+        return { inhibited: 'no receiving Position present' };
+      }
+      return { toState: 'RUNWAY_QUEUE', transferTo: 'TWR' };
 
     case 'RUNWAY_QUEUE':
       // Runway-occupied inhibit (§9.7) is WP6 territory — never triggers here.
@@ -140,6 +199,18 @@ function computeDepartureNla(strip, fdr, now, ctx) {
 function computeArrivalNla(strip, fdr, now, ctx) {
   switch (strip.state) {
     case 'INBOUND':
+      // WP4A (docs/adr/0014): a CENTER-held INBOUND Strip's next step is
+      // the cross-Facility HANDOFF to APP — a genuinely different
+      // mechanism (guide §4.6, "a different mechanism entirely"), fired
+      // via the Coordinate button/dispatch path, not this ordinary
+      // intrafacility-transfer NLA. There is no TWR Position at CENTER to
+      // transfer to at all, so this branches BEFORE attempting the
+      // INCIRLIK-only TWR-occupancy check below. Every caller that never
+      // sets ctx.facilityId (every pre-WP4A call site, and every
+      // INCIRLIK-scoped one) is unaffected.
+      if (ctx.facilityId === 'CENTER') {
+        return { inhibited: 'cross-Facility HANDOFF required — use Coordinate' };
+      }
       if (!ctx.isOccupied('TWR') && !ctx.coveringPositionFor('TWR')) {
         return { inhibited: 'no receiving Position present' };
       }

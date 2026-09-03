@@ -4,16 +4,22 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-// facility-config.js reads its config path once at module load — set the
-// override env var before the first import, same pattern as
-// theater-settings.test.mjs.
+// facility-config.js reads its config paths once at module load — set both
+// override env vars before the first import, same pattern as
+// theater-settings.test.mjs. WP4A (docs/adr/0013) added a second Facility
+// with its own path/env var — omitting this one would let a test that
+// mutates CENTER's config (setFacilityConfig(..., 'CENTER')) write
+// straight to the real, committed config/efsp-facility-center.json.
 const tmpDir  = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-facility-config-test-'));
 const tmpFile = path.join(tmpDir, 'efsp-facility-incirlik.json');
+const tmpFileCenter = path.join(tmpDir, 'efsp-facility-center.json');
 process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = tmpFile;
+process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER = tmpFileCenter;
 
 const {
-  getFacilityConfig, getPositionSet, getCoveringChain, getBaysFor, getAllBays,
-  bayImpliesState, bayForImpliedState, setFacilityConfig, validateConfig, DEFAULT_CONFIG,
+  getFacilityIds, getFacilityConfig, getPositionSet, getCoveringChain, getBaysFor, getAllBays,
+  bayImpliesState, bayForImpliedState, coordinationBayFor, setFacilityConfig, validateConfig,
+  DEFAULT_CONFIG, DEFAULT_CENTER_CONFIG, DEFAULT_FACILITY_ID,
 } = await import('../src/efsp/facility-config.js');
 const { DEPARTURE_BLOCK_MAP, requiredBlocksFor } = await import('../src/efsp/block-map.js');
 
@@ -173,6 +179,71 @@ test('loading an on-disk config that fails validation falls back to DEFAULT_CONF
 test('bayForImpliedState resolves the Bay whose impliesState matches, falling back to the Position\'s first Bay', () => {
   assert.equal(bayForImpliedState('CD', 'CLEARED').bayId, 'cd-cleared');
   assert.equal(bayForImpliedState('OPS', 'NOT_A_REAL_STATE').bayId, getBaysFor('OPS')[0].bayId);
+});
+
+// ── WP4A (docs/adr/0013): a second Facility, CENTER/CTR ─────────────────
+
+test('DEFAULT_FACILITY_ID is INCIRLIK — every optional trailing facilityId param defaults to it', () => {
+  assert.equal(DEFAULT_FACILITY_ID, 'INCIRLIK');
+});
+
+test('getFacilityIds returns both Facilities, INCIRLIK first', () => {
+  assert.deepEqual(getFacilityIds(), ['INCIRLIK', 'CENTER']);
+});
+
+test('every zero-arg call site from before WP4A keeps behaving identically — the optional facilityId param defaults to INCIRLIK', () => {
+  assert.deepEqual(getPositionSet(), getPositionSet('INCIRLIK'));
+  assert.deepEqual(getCoveringChain(), getCoveringChain('INCIRLIK'));
+  assert.deepEqual(getBaysFor('OPS'), getBaysFor('OPS', 'INCIRLIK'));
+  assert.deepEqual(getFacilityConfig().facility, getFacilityConfig('INCIRLIK').facility);
+});
+
+test('CENTER has exactly one Position, CTR, with no covering Position (mirrors OPS\'s "absent from the chain" precedent)', () => {
+  assert.deepEqual(getPositionSet('CENTER'), ['CTR']);
+  assert.deepEqual(getCoveringChain('CENTER'), {});
+});
+
+test('INCIRLIK\'s own covering chain is NOT extended to CTR — the covering chain is an intrafacility occupancy-fallback mechanism, a different thing from the cross-Facility HANDOFF primitive (docs/adr/0013)', () => {
+  assert.equal('APP' in getCoveringChain('INCIRLIK'), false);
+});
+
+test('CTR has a Coordination Bay and an en-route Bay implying INBOUND', () => {
+  const bays = getBaysFor('CTR', 'CENTER');
+  assert.ok(bays.some(b => b.bayId.endsWith('-coordination')));
+  assert.equal(bayImpliesState('ctr-enroute', 'CENTER'), 'INBOUND');
+});
+
+test('coordinationBayFor resolves each Position\'s Coordination Bay in the correct Facility, and null for a Position with none', () => {
+  assert.equal(coordinationBayFor('APP', 'INCIRLIK').bayId, 'app-coordination');
+  assert.equal(coordinationBayFor('CTR', 'CENTER').bayId, 'ctr-app-coordination');
+  assert.equal(coordinationBayFor('NOT_A_POSITION', 'INCIRLIK'), null);
+});
+
+test('getAllBays stamps every Bay with its facilityId, and does not mix the two Facilities\' Bays together', () => {
+  const incirlikBays = getAllBays('INCIRLIK');
+  const centerBays = getAllBays('CENTER');
+  assert.ok(incirlikBays.every(b => b.facilityId === 'INCIRLIK'));
+  assert.ok(centerBays.every(b => b.facilityId === 'CENTER'));
+  assert.equal(incirlikBays.some(b => b.bayId === 'ctr-enroute'), false);
+  assert.equal(centerBays.some(b => b.bayId === 'ops-filed'), false);
+});
+
+test('DEFAULT_CENTER_CONFIG is a valid config on its own', () => {
+  assert.equal(validateConfig(DEFAULT_CENTER_CONFIG).ok, true);
+});
+
+test('setFacilityConfig targets the Facility named by its second argument, leaving the other untouched', () => {
+  const patchedCenter = { ...getFacilityConfig('CENTER'), facility: 'CENTER-TEST' };
+  assert.equal(setFacilityConfig(patchedCenter, 'CENTER'), true);
+  assert.equal(getFacilityConfig('CENTER').facility, 'CENTER-TEST');
+  assert.equal(getFacilityConfig('INCIRLIK').facility, 'INCIRLIK');
+  // Restore for any tests that might run after this one in the same file.
+  setFacilityConfig(DEFAULT_CENTER_CONFIG, 'CENTER');
+});
+
+test('setFacilityConfig rejects an unknown facilityId without throwing', () => {
+  const result = setFacilityConfig({ facility: 'GHOST' }, 'GHOST_FACILITY');
+  assert.equal(result.ok, false);
 });
 
 test('the actual committed config/efsp-facility-incirlik.json seed is valid JSON matching DEFAULT_CONFIG\'s shape, and round-trips through a fresh load + mutate + re-import', async () => {

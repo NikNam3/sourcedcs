@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 const {
   canMutate, canCreateStripRole, canActOnState,
   PERMISSIONS, CREATE_ROLE_PERMISSIONS, STATE_OWNERS_BY_ROLE, DEPARTURE_STATE_OWNERS, ARRIVAL_STATE_OWNERS,
-  OP_KINDS,
+  OP_KINDS, COORDINATION_OP_KINDS,
 } = await import('../src/efsp/permission.js');
 
 test('canMutate has exactly two parameters — structurally cannot accept a "held set" (guards defect D21 by construction)', () => {
@@ -29,13 +29,38 @@ test('OPS and APP both pass the coarse CreateStrip gate (both originate Strips, 
   }
 });
 
-test('every Position may perform every non-CreateStrip op kind (Phase 2 has no MRU-class Position yet to differ here)', () => {
-  const nonCreate = OP_KINDS.filter(k => k !== 'CreateStrip');
-  for (const id of ['OPS', 'CD', 'GND', 'TWR', 'APP']) {
+test('every Position may perform every non-CreateStrip, non-coordination op kind (Phase 2 had no MRU-class Position yet to differ here; WP4A\'s coordination primitives are the first op-kind-level asymmetry, tested separately below)', () => {
+  const nonCreate = OP_KINDS.filter(k => k !== 'CreateStrip' && !COORDINATION_OP_KINDS.includes(k));
+  for (const id of ['OPS', 'CD', 'GND', 'TWR', 'APP', 'CTR']) {
     for (const op of nonCreate) {
       assert.equal(canMutate(id, op), true, `${id} / ${op}`);
     }
   }
+});
+
+// ── WP4A: the 5 coordination primitives (guide §4.6) — the SECOND genuine
+// per-Position permission asymmetry, after OPS/APP's CreateStrip role split.
+
+test('only APP and CTR may use any of the 5 cross-Facility coordination primitives — CD/GND/TWR/OPS get none, since none of them ever touches a Facility boundary', () => {
+  for (const op of COORDINATION_OP_KINDS) {
+    assert.equal(canMutate('APP', op), true, op);
+    assert.equal(canMutate('CTR', op), true, op);
+    for (const id of ['OPS', 'CD', 'GND', 'TWR']) {
+      assert.equal(canMutate(id, op), false, `${id} / ${op}`);
+    }
+  }
+});
+
+test('CTR may CreateStrip (ARRIVAL only) and use every non-CreateStrip op kind, same shape as APP', () => {
+  assert.equal(canMutate('CTR', 'CreateStrip'), true);
+  for (const op of OP_KINDS.filter(k => k !== 'CreateStrip')) {
+    assert.equal(canMutate('CTR', op), true, op);
+  }
+});
+
+test('D21 regression: a controller holding both TWR and CTR is refused HANDOFF while acting as TWR, even though the same controller also holds CTR', () => {
+  assert.equal(canMutate('TWR', 'HANDOFF'), false);
+  assert.equal(canMutate('CTR', 'HANDOFF'), true);
 });
 
 test('an unknown Position is denied every op kind', () => {
@@ -67,9 +92,14 @@ test('OPS may originate DEPARTURE, and only DEPARTURE (guide §4.1 rule 3)', () 
   assert.equal(canCreateStripRole('OPS', 'ARRIVAL'), false);
 });
 
-test('APP may originate ARRIVAL, and only ARRIVAL (docs/adr/0008 — the Phase 2 stub for "no CTR to hand off from yet")', () => {
-  assert.equal(canCreateStripRole('APP', 'ARRIVAL'), true);
+test('APP may no longer originate ARRIVAL locally (docs/adr/0014, superseding docs/adr/0008\'s stub) — ARRIVAL Strips at APP now originate via the real CTR->APP HANDOFF', () => {
+  assert.equal(canCreateStripRole('APP', 'ARRIVAL'), false);
   assert.equal(canCreateStripRole('APP', 'DEPARTURE'), false);
+});
+
+test('CTR may originate ARRIVAL, and only ARRIVAL — the new terminus stub (docs/adr/0014), same shape APP\'s stub used to have', () => {
+  assert.equal(canCreateStripRole('CTR', 'ARRIVAL'), true);
+  assert.equal(canCreateStripRole('CTR', 'DEPARTURE'), false);
 });
 
 test('CD/GND/TWR may originate no Strip Role at all', () => {
@@ -87,19 +117,26 @@ test('every Position with CreateStrip in its coarse op-kind set has a CREATE_ROL
   }
 });
 
-test('D21 regression: a controller holding both OPS and APP is refused CreateStrip(role=ARRIVAL) while acting as OPS, even though the same controller also holds APP', () => {
+test('D21 regression: a controller holding both OPS and CTR is refused CreateStrip(role=ARRIVAL) while acting as OPS, even though the same controller also holds CTR', () => {
   // The point: canCreateStripRole takes exactly one Position, structurally
-  // — "also holds APP" has nowhere to leak in. This is the first test in
+  // — "also holds CTR" has nowhere to leak in. This is the first test in
   // the suite that can actually distinguish per-acting-Position evaluation
-  // from a union bug, since OPS and APP are genuinely permission-different
+  // from a union bug, since OPS and CTR are genuinely permission-different
   // (Phase 1's CD/GND/TWR were identical and couldn't reveal this).
+  // (WP4A, docs/adr/0014: this used to pair OPS with APP, before APP's own
+  // ARRIVAL right was narrowed away in favor of the real CTR->APP HANDOFF.)
   assert.equal(canCreateStripRole('OPS', 'ARRIVAL'), false);
-  assert.equal(canCreateStripRole('APP', 'ARRIVAL'), true);
+  assert.equal(canCreateStripRole('CTR', 'ARRIVAL'), true);
 });
 
-test('D21 regression, symmetric case: acting as APP is refused CreateStrip(role=DEPARTURE) even though the same controller also holds OPS', () => {
-  assert.equal(canCreateStripRole('APP', 'DEPARTURE'), false);
+test('D21 regression, symmetric case: acting as CTR is refused CreateStrip(role=DEPARTURE) even though the same controller also holds OPS', () => {
+  assert.equal(canCreateStripRole('CTR', 'DEPARTURE'), false);
   assert.equal(canCreateStripRole('OPS', 'DEPARTURE'), true);
+});
+
+test('APP now has an EMPTY CreateStrip role right at all (docs/adr/0014) — a controller holding APP may not originate any Strip Role locally, even though APP still passes the coarse CreateStrip op-kind gate', () => {
+  assert.equal(canCreateStripRole('APP', 'ARRIVAL'), false);
+  assert.equal(canCreateStripRole('APP', 'DEPARTURE'), false);
 });
 
 test('canCreateStripRole returns false for an unknown Position or an unknown role, never a throw', () => {

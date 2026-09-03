@@ -6,7 +6,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { computeInsertionIndex, computeRackReconciliation } = require('../app/public/js/panels/efsp/strip-drag.js');
+const { computeInsertionIndex, computeRackReconciliation, DRAG_THRESHOLD_PX, hasExceededDragThreshold } = require('../app/public/js/panels/efsp/strip-drag.js');
 
 function rect(stripId, top, height = 40) { return { stripId, top, height }; }
 
@@ -86,4 +86,38 @@ test('a protected Strip is NEVER rebuilt, even if it\'s dirty', () => {
 test('a protected Strip still appears in the order (so bay-view.js knows to skip it in place, not lose track of it)', () => {
   const result = computeRackReconciliation(['a', 'b', 'c'], ['c', 'b', 'a'], new Set(), new Set(['b']));
   assert.deepEqual(result.order.map(o => o.stripId), ['c', 'b', 'a']);
+});
+
+// ── hasExceededDragThreshold — click vs. drag ────────────────────────────
+// The actual bug this exists to fix: a click with negligible pointer
+// movement (normal mouse/trackpad jitter) was being treated as a real
+// drag and could silently relocate a Strip, since computeInsertionIndex
+// above always resolves to SOME neighbor position when a Rack has other
+// Strips — it has no "no movement happened" case of its own.
+
+test('zero movement is well under the threshold', () => {
+  assert.equal(hasExceededDragThreshold(0, 0), false);
+});
+
+test('movement just under the threshold does not count as a drag', () => {
+  assert.equal(hasExceededDragThreshold(DRAG_THRESHOLD_PX - 1, 0), false);
+  assert.equal(hasExceededDragThreshold(0, DRAG_THRESHOLD_PX - 1), false);
+});
+
+test('movement past the threshold counts as a drag, on either axis', () => {
+  assert.equal(hasExceededDragThreshold(DRAG_THRESHOLD_PX + 1, 0), true);
+  assert.equal(hasExceededDragThreshold(0, DRAG_THRESHOLD_PX + 1), true);
+});
+
+test('diagonal movement is measured as total distance (hypotenuse), not per-axis', () => {
+  // dx=4, dy=4: neither axis alone exceeds the (default 5px) threshold,
+  // but the combined distance (~5.66) does.
+  assert.equal(hasExceededDragThreshold(4, 4), true);
+  assert.equal(hasExceededDragThreshold(4, 0), false);
+  assert.equal(hasExceededDragThreshold(0, 4), false);
+});
+
+test('negative deltas (movement up/left) are treated the same as positive ones', () => {
+  assert.equal(hasExceededDragThreshold(-(DRAG_THRESHOLD_PX + 1), 0), true);
+  assert.equal(hasExceededDragThreshold(0, -(DRAG_THRESHOLD_PX + 1)), true);
 });

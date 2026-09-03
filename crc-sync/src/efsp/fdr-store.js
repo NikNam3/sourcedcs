@@ -17,10 +17,29 @@ const crypto = require('crypto');
 const { CodeAllocator } = require('./code-allocator');
 
 const VOID_DEADLINE_MINUTES = 30; // §3.8 — derived, not stored input
+const EDCT_WINDOW_MINUTES = 5;              // §4.6.2 — EDCT ± 5 min
+const CALL_FOR_RELEASE_BEFORE_MINUTES = 2;  // §4.6.2 — CALL_FOR_RELEASE − 2 min
+const CALL_FOR_RELEASE_AFTER_MINUTES = 1;   //           / + 1 min
 
-const RELEASE_STATES = new Set(['RELEASED', 'HOLD_FOR_RELEASE', 'RELEASE_TIME', 'CLEARANCE_VOID_TIME']);
+// WP4A (docs/adr/0017) added EDCT and CALL_FOR_RELEASE — §4.6.2's two
+// release states beyond §3.8's original four ("across the boundary": the
+// release travels controller-to-controller CTR->APP->TWR, per that
+// section's own text). The original four are unchanged/still Phase-2-only
+// reachable without WP4A at all.
+const RELEASE_STATES = new Set(['RELEASED', 'HOLD_FOR_RELEASE', 'RELEASE_TIME', 'CLEARANCE_VOID_TIME', 'EDCT', 'CALL_FOR_RELEASE']);
 const DEGRADATION_STATES = new Set(['NONE', 'TRANSPONDER_FAILED', 'MODE_C_FAILED']);
 const DATALINK_INDICATOR_STATES = new Set(['NONE', 'ISSUED']);
+// WP4A (docs/adr/0019) — guide §4.6 rule 5's track-degradation flags, which
+// force verbal coordination and disable silent cross-Facility transfer
+// while present (board-store.js's _applyCoordinationPropose). Genuinely
+// distinct from identity.degradation above (equipment failure — Mode C/
+// transponder — not radar-track quality); see this module's WP4A note
+// near WRITABLE_PATHS for why these are two separate fields, not a reuse.
+const TRACK_DEGRADATION_FLAGS = new Set(['NONE', 'CST', 'FAIL', 'IF', 'NT', 'TRK']);
+// WP4A (docs/adr/0018) — §4.6.4's airspace-ownership direction. Never a
+// bare boolean (D15) — enforced structurally by routing every write
+// through setAirspaceOwner() below, never the generic setField() path.
+const AIRSPACE_OWNERS = new Set(['CONTROLLING_AGENCY', 'USING_AGENCY']);
 
 const CALLSIGN_RE = /^[A-Za-z0-9]{1,7}$/; // §3.2 rule 1 — MUST NOT exceed 7 alphanumeric characters
 
@@ -50,6 +69,14 @@ const WRITABLE_PATHS = new Set([
   'assigned.voidTimeUtc', 'assigned.delayInfo', 'assigned.atisCode', 'assigned.datalinkClearanceIndicator',
   'assigned.movementAreaEntryTimeUtc', 'assigned.taxiTimeUtc', 'assigned.takeoffTimeUtc',
   'assigned.landingRunway',
+  // WP4A (docs/adr/0017) — §4.6.2's release-across-the-boundary additions.
+  // edctWindowStartUtc/EndUtc and callForReleaseWindowStartUtc/EndUtc are
+  // DERIVED (like voidDeadlineUtc above), not independently writable.
+  'assigned.edctTimeUtc', 'assigned.callForReleaseTimeUtc',
+  // WP4A (docs/adr/0019) track-degradation flag — see the module comment
+  // near TRACK_DEGRADATION_FLAGS for why this is distinct from
+  // identity.degradation.
+  'identity.trackDegradationFlag',
 ]);
 
 function getPath(obj, path) {
@@ -129,6 +156,7 @@ class FdrStore {
         tailNumber: seed.tailNumber || null,
         unit: seed.unit || null,
         homeStation: seed.homeStation || null,
+        trackDegradationFlag: 'NONE', // WP4A, §4.6 rule 5
       },
       filed: {
         route: seed.route || '',
@@ -150,6 +178,12 @@ class FdrStore {
         releaseTimeUtc: null,
         voidTimeUtc: null,
         voidDeadlineUtc: null,
+        edctTimeUtc: null,               // WP4A, §4.6.2
+        edctWindowStartUtc: null,        // derived: edctTimeUtc - 5min
+        edctWindowEndUtc: null,          // derived: edctTimeUtc + 5min
+        callForReleaseTimeUtc: null,     // WP4A, §4.6.2
+        callForReleaseWindowStartUtc: null, // derived: callForReleaseTimeUtc - 2min
+        callForReleaseWindowEndUtc: null,   // derived: callForReleaseTimeUtc + 1min
         delayInfo: null,
         atisCode: null,
         datalinkClearanceIndicator: 'NONE',
@@ -160,6 +194,10 @@ class FdrStore {
       },
       military: null,  // WP6 hook
       trackRef: null,  // WP5 hook
+      // WP4A (docs/adr/0018), §4.6.4 — a DIRECTION, never a bare boolean
+      // (D15). Only ever written via setAirspaceOwner() below, never the
+      // generic setField() path — see that method for why.
+      airspace: { owner: null, changedAt: null, changedBy: null },
       provenance,
       createdAt: now,
       updatedAt: now,
@@ -198,6 +236,9 @@ class FdrStore {
     if (path === 'assigned.datalinkClearanceIndicator' && !DATALINK_INDICATOR_STATES.has(value)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'invalid datalink clearance indicator' };
     }
+    if (path === 'identity.trackDegradationFlag' && !TRACK_DEGRADATION_FLAGS.has(value)) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'invalid track degradation flag' };
+    }
 
     setPath(fdr, path, value);
 
@@ -211,6 +252,20 @@ class FdrStore {
         fdr.assigned.releaseState === 'CLEARANCE_VOID_TIME' && fdr.assigned.voidTimeUtc
           ? fdr.assigned.voidTimeUtc + VOID_DEADLINE_MINUTES * 60 * 1000
           : null;
+    }
+
+    // WP4A (docs/adr/0017) — EDCT/CALL_FOR_RELEASE windows derive the same
+    // way voidDeadlineUtc does above: recomputed on every write of either
+    // the release state or the relevant time, never independently settable.
+    if (path === 'assigned.releaseState' || path === 'assigned.edctTimeUtc') {
+      const active = fdr.assigned.releaseState === 'EDCT' && fdr.assigned.edctTimeUtc;
+      fdr.assigned.edctWindowStartUtc = active ? fdr.assigned.edctTimeUtc - EDCT_WINDOW_MINUTES * 60 * 1000 : null;
+      fdr.assigned.edctWindowEndUtc   = active ? fdr.assigned.edctTimeUtc + EDCT_WINDOW_MINUTES * 60 * 1000 : null;
+    }
+    if (path === 'assigned.releaseState' || path === 'assigned.callForReleaseTimeUtc') {
+      const active = fdr.assigned.releaseState === 'CALL_FOR_RELEASE' && fdr.assigned.callForReleaseTimeUtc;
+      fdr.assigned.callForReleaseWindowStartUtc = active ? fdr.assigned.callForReleaseTimeUtc - CALL_FOR_RELEASE_BEFORE_MINUTES * 60 * 1000 : null;
+      fdr.assigned.callForReleaseWindowEndUtc   = active ? fdr.assigned.callForReleaseTimeUtc + CALL_FOR_RELEASE_AFTER_MINUTES * 60 * 1000 : null;
     }
 
     fdr.provenance[path] = 'CONTROLLER_ENTERED';
@@ -245,6 +300,35 @@ class FdrStore {
     return { ok: true, fdr, warning: check.warning };
   }
 
+  /**
+   * WP4A (docs/adr/0018), §4.6.4 — sets airspace ownership as a DIRECTION,
+   * never a bare boolean (defect D15: "released" means active in one
+   * direction and available in the other — the word alone is ambiguous).
+   * Routed through a dedicated setter, structurally excluded from the
+   * generic setField() path, for the same reason setBeaconAssigned() is:
+   * this needs validation beyond "is this key in the allow-list," and
+   * critically, `identity.trackDegradationFlag`'s WRITABLE_PATHS entry
+   * still can't be reused here — 'assigned.airspace.owner'/'airspace.owner'
+   * was deliberately never added to WRITABLE_PATHS at all, so there is no
+   * generic-path route to setting it as a boolean, or as anything else,
+   * even by accident. This is the template docs/adr/0018 flags for the
+   * deferred `separation_regime` field when TOFI eventually lands.
+   * @returns {{ok:true, fdr}|{ok:false, reason:'NOT_FOUND'|'VALIDATION_ERROR', detail?}}
+   */
+  setAirspaceOwner(fdrId, owner, { by } = {}) {
+    const fdr = this._fdrs.get(fdrId);
+    if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
+    if (!AIRSPACE_OWNERS.has(owner)) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `airspace ownership must be a direction (${[...AIRSPACE_OWNERS].join(' or ')}), not ${JSON.stringify(owner)}` };
+    }
+    fdr.airspace = { owner, changedAt: Date.now(), changedBy: by || null };
+    fdr.provenance['airspace.owner'] = 'CONTROLLER_ENTERED';
+    fdr.rev += 1;
+    fdr.updatedAt = Date.now();
+    fdr.updatedBy = by || null;
+    return { ok: true, fdr };
+  }
+
   /** Releases the FDR's beacon code — called when its Strip is DROPPED. */
   releaseFdr(fdrId) {
     const fdr = this._fdrs.get(fdrId);
@@ -262,4 +346,8 @@ class FdrStore {
   }
 }
 
-module.exports = { FdrStore, deriveEquipmentSuffix, WRITABLE_PATHS, RELEASE_STATES, VOID_DEADLINE_MINUTES };
+module.exports = {
+  FdrStore, deriveEquipmentSuffix, WRITABLE_PATHS, RELEASE_STATES, VOID_DEADLINE_MINUTES,
+  EDCT_WINDOW_MINUTES, CALL_FOR_RELEASE_BEFORE_MINUTES, CALL_FOR_RELEASE_AFTER_MINUTES,
+  TRACK_DEGRADATION_FLAGS, AIRSPACE_OWNERS,
+};

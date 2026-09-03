@@ -250,6 +250,45 @@ test('MoveStrip triggers a Rack rebalance transparently when orderKey headroom i
   assert.deepEqual(keys, [...keys].sort());
 });
 
+test('MoveStrip between two Strips whose orderKeys already collide (a real, if rare, outcome of order-key.js\'s jitter — guide §5.4) rebalances transparently instead of crashing — the exact production scenario that took the whole server down before this fix', () => {
+  const { board } = makeStore();
+  const a = createStrip(board, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'AAA1111' } } });
+  const b = createStrip(board, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'BBB2222' } } });
+  const c = createStrip(board, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'CCC3333' } } });
+
+  // Force the exact production crash shape directly (a jitter collision is
+  // ~1-in-62 and not worth relying on real randomness to reproduce) — a
+  // and b end up with the IDENTICAL orderKey "V", matching the actual
+  // crash log ("keyBetween requires a < b (got \"V\", \"V\")").
+  board.getStrip(a.stripId).orderKey = 'V';
+  board.getStrip(b.stripId).orderKey = 'V';
+
+  const result = board.applyMutation(
+    mutation(c, { kind: 'MoveStrip', bayId: 'proposed', rackId: 'main', afterStripId: a.stripId, beforeStripId: b.stripId }),
+    'OPS', 'OPS'
+  );
+  assert.equal(result.ok, true, JSON.stringify(result));
+
+  const rack = board.getRack('proposed', 'main');
+  const keys = rack.map(s => s.orderKey);
+  assert.equal(new Set(keys).size, keys.length, 'orderKeys must all be distinct after the transparent rebalance');
+});
+
+test('applyMutation never propagates an unexpected exception — it rejects the one Mutation instead of crashing the process, regardless of where the exception originates', () => {
+  const fdrStore = new FdrStore();
+  const board = new BoardStore(fdrStore, makeRules({
+    resolveBlockTarget: () => { throw new Error('boom — simulated unexpected failure deep in a rule'); },
+  }));
+  const strip = createStrip(board);
+  const result = board.applyMutation(mutation(strip, { kind: 'SetBlock', blockId: '9E', value: 'x' }), 'OPS', 'OPS');
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'VALIDATION_ERROR');
+  // The store itself is still alive and usable afterward — a caught
+  // exception on one Mutation must not leave internal state corrupted.
+  const after = board.applyMutation(mutation(board.getStrip(strip.stripId), { kind: 'SetFlag', flag: 'offset', value: true }), 'OPS', 'OPS');
+  assert.equal(after.ok, true);
+});
+
 // ── SetBlock: fdr-routed and annotation-routed ──────────────────────────────
 
 test('SetBlock routed to an fdr path writes through fdr-store and bumps the Strip rev too', () => {
@@ -280,6 +319,29 @@ test('SetBlock routed to an fdr path fails cleanly on invalid input (reserved be
   const result = board.applyMutation(mutation(strip, { kind: 'SetBlock', blockId: '5', value: '7700' }), 'OPS', 'OPS');
   assert.equal(result.ok, false);
   assert.equal(board.getStrip(strip.stripId).rev, revBefore);
+});
+
+// ── WP4A: SetBlock routed to airspace-owner (§4.6.4), docs/adr/0018 ──────
+
+test('SetBlock routed to airspace-owner writes through fdr-store\'s dedicated setAirspaceOwner, not the generic setField path', () => {
+  const { board, fdrStore } = makeStore({
+    resolveBlockTarget: (blockId) => (blockId === '24A' ? { kind: 'airspace-owner' } : null),
+  });
+  const strip = createStrip(board);
+  const result = board.applyMutation(mutation(strip, { kind: 'SetBlock', blockId: '24A', value: 'USING_AGENCY' }), 'OPS', 'OPS');
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(fdrStore.getFdr(strip.fdrId).airspace.owner, 'USING_AGENCY');
+});
+
+test('SetBlock routed to airspace-owner rejects a boolean value and surfaces the detail message (defect D15)', () => {
+  const { board } = makeStore({
+    resolveBlockTarget: (blockId) => (blockId === '24A' ? { kind: 'airspace-owner' } : null),
+  });
+  const strip = createStrip(board);
+  const result = board.applyMutation(mutation(strip, { kind: 'SetBlock', blockId: '24A', value: true }), 'OPS', 'OPS');
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'VALIDATION_ERROR');
+  assert.match(result.detail, /direction/);
 });
 
 test('SetBlock on an unknown blockId is rejected as VALIDATION_ERROR', () => {

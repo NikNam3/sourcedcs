@@ -47,6 +47,11 @@ const DEPARTURE_BLOCK_MAP = {
   '10': { required: true,  target: { kind: 'fdr', path: 'assigned.atisCode' } },
   '11': { required: true,  target: { kind: 'annotation' } },
   '14': { required: true,  target: { kind: 'fdr', path: 'assigned.releaseTimeUtc' } },
+  // WP4A (docs/adr/0017), §4.6.2's release-across-the-boundary additions —
+  // independently optional sub-fields, same doctrinal shape as ADR 0008's
+  // 9A-* split (each omittable per facility with no new validator logic).
+  '14B': { required: false, target: { kind: 'fdr', path: 'assigned.edctTimeUtc' } },
+  '14C': { required: false, target: { kind: 'fdr', path: 'assigned.callForReleaseTimeUtc' } },
   '16': { required: false, target: { kind: 'fdr', path: 'assigned.movementAreaEntryTimeUtc' } }, // metering deferred, §12
   '17': { required: false, target: { kind: 'fdr', path: 'assigned.taxiTimeUtc' } },
   '18': { required: true,  target: { kind: 'fdr', path: 'assigned.takeoffTimeUtc' } },
@@ -56,6 +61,12 @@ const DEPARTURE_BLOCK_MAP = {
   '22': { required: false, target: { kind: 'annotation' } },
   '23': { required: false, target: { kind: 'annotation' } },
   '24': { required: true,  target: { kind: 'annotation' } },
+  // WP4A (docs/adr/0018), §4.6.4 — airspace ownership as a direction. A
+  // dedicated target kind, not 'fdr'/'annotation' — see resolveBlockTarget
+  // below and fdr-store.js's setAirspaceOwner() for why this can't be a
+  // generic FDR path (the "no boolean path" requirement needs a
+  // structurally distinct route, not just a documented convention).
+  '24A': { required: false, target: { kind: 'airspace-owner' } },
   '25': { required: true,  target: { kind: 'system' } },
   '26': { required: true,  target: { kind: 'system' } },
 };
@@ -114,6 +125,7 @@ const ARRIVAL_BLOCK_MAP = {
   '20':       { required: false, target: { kind: 'annotation' } }, // radar scratchpad — Strip-local until WP5, see module comment
   '21':       { required: false, target: { kind: 'annotation' } }, // radar scratchpad — Strip-local until WP5, see module comment
   '24':       { required: true,  target: { kind: 'annotation' } },
+  '24A':      { required: false, target: { kind: 'airspace-owner' } }, // WP4A, §4.6.4 — see DEPARTURE_BLOCK_MAP's '24A' comment
   '25':       { required: true,  target: { kind: 'system' } },
   '26':       { required: true,  target: { kind: 'system' } },
 };
@@ -144,6 +156,10 @@ function resolveBlockTarget(role, blockId) {
   if (!def) return null;
   if (def.target.kind === 'fdr') return { kind: 'fdr', path: def.target.path };
   if (def.target.kind === 'annotation') return { kind: 'annotation' };
+  // WP4A (docs/adr/0018) — routed through fdr-store.js's dedicated
+  // setAirspaceOwner(), never the generic 'fdr' path above (see that
+  // method's own comment for why this needs to be structurally distinct).
+  if (def.target.kind === 'airspace-owner') return { kind: 'airspace-owner' };
   return null;
 }
 

@@ -207,16 +207,28 @@ function _setCreateStripMsg(text, isError) {
   _createStripMsgEl.classList.toggle('efsp-msg-error', !!isError);
 }
 
+// WP4A (docs/adr/0014): CTR self-originates ARRIVAL Strips this slice —
+// the same "no Facility further upstream is built yet" terminus stub
+// OPS/DEPARTURE always had, now on the CENTER side too. Reuses this one
+// callsign form rather than a second one — OPS is checked first so an
+// operator holding both keeps the existing DEPARTURE-by-default behavior.
+function _createStripOrigin() {
+  const held = getActingPositions();
+  if (held.includes('OPS')) return { actingPositionId: 'OPS', facilityId: 'INCIRLIK', bayId: 'ops-proposed', role: undefined };
+  if (held.includes('CTR')) return { actingPositionId: 'CTR', facilityId: 'CENTER', bayId: 'ctr-enroute', role: 'ARRIVAL' };
+  return null;
+}
+
 function _refreshCreateStripAvailability() {
   if (!_createStripInputEl || !_createStripBtnEl) return;
-  const canCreate = getActingPositions().includes('OPS');
-  _createStripInputEl.disabled = !canCreate;
-  _createStripBtnEl.disabled = !canCreate;
-  if (!canCreate) {
-    _setCreateStripMsg('OPS only — select OPS in Panels to create Strips', true);
+  const origin = _createStripOrigin();
+  _createStripInputEl.disabled = !origin;
+  _createStripBtnEl.disabled = !origin;
+  if (!origin) {
+    _setCreateStripMsg('OPS or CTR only — select one in Panels to create Strips', true);
   } else if (!_pendingCreateStripMutationId) {
-    // Clear a stale "OPS only"/validation message once OPS is selected —
-    // but never stomp "Creating…" while an attempt is still in flight.
+    // Clear a stale "OPS/CTR only"/validation message once one is selected
+    // — but never stomp "Creating…" while an attempt is still in flight.
     _setCreateStripMsg('', false);
   }
 }
@@ -224,8 +236,9 @@ function _refreshCreateStripAvailability() {
 function _submitCreateStrip() {
   if (!_createStripInputEl) return;
 
-  if (!getActingPositions().includes('OPS')) {
-    _setCreateStripMsg('OPS only — select OPS in Panels to create Strips', true);
+  const origin = _createStripOrigin();
+  if (!origin) {
+    _setCreateStripMsg('OPS or CTR only — select one in Panels to create Strips', true);
     return;
   }
   const callsign = _createStripInputEl.value.trim().toUpperCase();
@@ -238,13 +251,13 @@ function _submitCreateStrip() {
     return;
   }
 
-  _pendingCreateStripMutationId = sendEfspCreateStrip('OPS', {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main',
-    fdr: {
-      callsign, aircraftType: '', wakeCategory: '',
-      departureAirport: '', destinationAirport: '', route: '', requestedAltitude: '',
-    },
-  });
+  const fdr = origin.role === 'ARRIVAL'
+    ? { callsign, aircraftType: '', wakeCategory: '', originAirport: '', estimatedArrivalTimeUtc: null }
+    : { callsign, aircraftType: '', wakeCategory: '', departureAirport: '', destinationAirport: '', route: '', requestedAltitude: '' };
+
+  _pendingCreateStripMutationId = sendEfspCreateStrip(origin.actingPositionId, {
+    kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', role: origin.role, fdr,
+  }, origin.facilityId);
   _createStripInputEl.value = '';
   _setCreateStripMsg('Creating…', false);
 }

@@ -36,6 +36,9 @@ const DEPARTURE_BLOCK_MAP = {
   '10': { required: true,  target: { kind: 'fdr', path: 'assigned.atisCode' } },
   '11': { required: true,  target: { kind: 'annotation' } },
   '14': { required: true,  target: { kind: 'fdr', path: 'assigned.releaseTimeUtc' } },
+  // WP4A (docs/adr/0017), §4.6.2 — mirrors crc-sync's block-map.js exactly.
+  '14B': { required: false, target: { kind: 'fdr', path: 'assigned.edctTimeUtc' } },
+  '14C': { required: false, target: { kind: 'fdr', path: 'assigned.callForReleaseTimeUtc' } },
   '16': { required: false, target: { kind: 'fdr', path: 'assigned.movementAreaEntryTimeUtc' } },
   '17': { required: false, target: { kind: 'fdr', path: 'assigned.taxiTimeUtc' } },
   '18': { required: true,  target: { kind: 'fdr', path: 'assigned.takeoffTimeUtc' } },
@@ -45,6 +48,11 @@ const DEPARTURE_BLOCK_MAP = {
   '22': { required: false, target: { kind: 'annotation' } },
   '23': { required: false, target: { kind: 'annotation' } },
   '24': { required: true,  target: { kind: 'annotation' } },
+  // WP4A (docs/adr/0018), §4.6.4 — airspace ownership as a direction. Not
+  // fdr/annotation-routed on either side (see efsp-block-map-parity.test.js's
+  // isWritableKind) — read-only display here, since no client UI writes it
+  // this slice (server-only, via a future dedicated control, not SetBlock).
+  '24A': { required: false, target: { kind: 'airspace-owner' } },
   '25': { required: true,  target: { kind: 'system', field: 'state' } },
   '26': { required: true,  target: { kind: 'nla' } },
 };
@@ -78,6 +86,7 @@ const ARRIVAL_BLOCK_MAP = {
   '20':       { required: false, target: { kind: 'annotation' } },
   '21':       { required: false, target: { kind: 'annotation' } },
   '24':       { required: true,  target: { kind: 'annotation' } },
+  '24A':      { required: false, target: { kind: 'airspace-owner' } }, // WP4A, §4.6.4 — see DEPARTURE_BLOCK_MAP's '24A' comment
   '25':       { required: true,  target: { kind: 'system', field: 'state' } },
   '26':       { required: true,  target: { kind: 'nla' } },
 };
