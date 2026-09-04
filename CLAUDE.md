@@ -185,3 +185,5 @@ See `.env.example` for all required variables. Key ones:
 | `CRCSYNC_DCS_GRPC_HOST`, `CRCSYNC_SRS_HOST`, `CRCSYNC_SRS_PORT` | crc-sync (DCS server upstream) |
 | `DISCORD_BOT_TOKEN` | sourcedcs-web |
 | `RELEASE_UPLOAD_TOKEN` | sourcedcs-web (accepts uploads) + the `crc-desktop-release.yml` repo secret (sends them) — must match |
+| `CRCSYNC_SOURCEDCS_WEB_URL` | crc-sync (EFSP flight-plan lookup — reaches sourcedcs-web at `http://main-website:7000` inside the Docker stack) |
+| `FLIGHT_PLAN_SERVICE_TOKEN` | sourcedcs-web (accepts EFSP's filed-plan queries) + crc-sync (sends them) — must match |

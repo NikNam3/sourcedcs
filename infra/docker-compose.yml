@@ -282,6 +282,7 @@ services:
       - GRADING_CHANNEL_ID=${GRADING_CHANNEL_ID}
       - CASDOOR_CLIENT_SECRET=${CASDOOR_CLIENT_SECRET}
       - RELEASE_UPLOAD_TOKEN=${RELEASE_UPLOAD_TOKEN}
+      - FLIGHT_PLAN_SERVICE_TOKEN=${FLIGHT_PLAN_SERVICE_TOKEN}
     networks:
       - web
     volumes:
@@ -326,6 +327,8 @@ services:
       - DCS_GRPC_HOST=${CRCSYNC_DCS_GRPC_HOST:-server.sourcedcs.page:50051}
       - SRS_HOST=${CRCSYNC_SRS_HOST:-server.sourcedcs.page}
       - SRS_PORT=${CRCSYNC_SRS_PORT:-5002}
+      - CRCSYNC_SOURCEDCS_WEB_URL=${CRCSYNC_SOURCEDCS_WEB_URL:-http://main-website:7000}
+      - FLIGHT_PLAN_SERVICE_TOKEN=${FLIGHT_PLAN_SERVICE_TOKEN}
     networks:
       - web
 

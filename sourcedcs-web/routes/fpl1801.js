@@ -59,6 +59,23 @@ router.get('/fpl1801/by-callsign/:callsign', (req, res) => {
   res.json({ ...plan, submittedBy: plan.submittedBy ? { name: plan.submittedBy.name } : null });
 });
 
+/* GET /api/fpl1801/service/all — every currently-filed plan, for crc-sync's
+   EFSP "filed but not yet an active Strip" queue (OPS's ops-filed Bay).
+   Gated by the FLIGHT_PLAN_SERVICE_TOKEN shared secret (auth.js) instead
+   of a Casdoor session, same shape as /api/releases/upload -- crc-sync has
+   no interactive login of its own, and the alternative (asking it to
+   impersonate an admin/controller via requireAuth's unsigned JWT decode)
+   was deliberately rejected. submittedBy is redacted to .name only,
+   matching by-callsign's existing redaction above -- the caller only ever
+   needs "who filed this" for display, never the Casdoor sub. */
+router.get('/fpl1801/service/all', auth.requireFlightPlanService, (req, res) => {
+  const plans = store.state.fpl1801Plans.map(fp => ({
+    ...fp,
+    submittedBy: fp.submittedBy ? { name: fp.submittedBy.name } : null,
+  }));
+  res.json(plans);
+});
+
 /* GET /api/fpl1801 */
 router.get('/fpl1801', auth.requireAuth, (req, res) => {
   if (fpShared.fpIsAdminUser(req) || fpShared.fpIsControllerUser(req)) return res.json(store.state.fpl1801Plans);

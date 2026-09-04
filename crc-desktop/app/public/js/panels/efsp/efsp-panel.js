@@ -154,6 +154,7 @@ function _renderBayTabs() {
   _bayTabsEl.innerHTML = '';
   for (const bay of bays) {
     const isSearchBay = bay.bayId.endsWith('-search');
+    const isOpsFiledBay = bay.bayId === 'ops-filed';
     const tab = document.createElement('button');
     tab.className = 'efsp-bay-tab' + (bay.bayId === _activeBayId ? ' active' : '') + (isSearchBay ? ' efsp-bay-tab-search' : '');
     tab.textContent = isSearchBay ? `🔍 ${_searchQuery}` : bay.bayId;
@@ -161,7 +162,12 @@ function _renderBayTabs() {
     // Position's default one) — see bay-view.js's _finishDrag. Search is a
     // client-local pseudo-Bay (guide §4.3), so it deliberately does NOT
     // get a drop-target dataset — it's not a real destination server-side.
-    if (!isSearchBay) {
+    // ops-filed is a real server Bay but its CONTENT is now a client-local
+    // filed-plan queue, not a Rack of Strips (bay-view.js's renderBay
+    // special-case) — a Strip dropped here would render nowhere, so this
+    // tab must never accept drops either (facility-config.js's OPS bay
+    // order was also fixed so it's never anyone's *default* Bay either).
+    if (!isSearchBay && !isOpsFiledBay) {
       tab.dataset.efspDropPosition = bay.positionId;
       tab.dataset.efspDropBay = bay.bayId;
     }
@@ -200,6 +206,11 @@ function _renderBayTabs() {
 // mode, and every rejection path is now visible instead of silent too.
 
 let _pendingCreateStripMutationId = null;
+// Guards the flight-plan lookup in _submitCreateStrip() against a double-
+// submit while it's in flight (up to a few seconds — a real window a
+// second Enter/click could land in, unlike the near-instant validation
+// that runs before it).
+let _createStripLookupInFlight = false;
 
 function _setCreateStripMsg(text, isError) {
   if (!_createStripMsgEl) return;
@@ -221,6 +232,7 @@ function _createStripOrigin() {
 
 function _refreshCreateStripAvailability() {
   if (!_createStripInputEl || !_createStripBtnEl) return;
+  if (_createStripLookupInFlight) return; // don't fight the "Looking up flight plan…" message or re-enable mid-lookup — _submitCreateStrip owns this window
   const origin = _createStripOrigin();
   _createStripInputEl.disabled = !origin;
   _createStripBtnEl.disabled = !origin;
@@ -233,8 +245,8 @@ function _refreshCreateStripAvailability() {
   }
 }
 
-function _submitCreateStrip() {
-  if (!_createStripInputEl) return;
+async function _submitCreateStrip() {
+  if (!_createStripInputEl || _createStripLookupInFlight) return;
 
   const origin = _createStripOrigin();
   if (!origin) {
@@ -251,15 +263,75 @@ function _submitCreateStrip() {
     return;
   }
 
+  // Flight-plan pre-fill (guide §10.1 "auto-population — do it
+  // aggressively", §10.5 provenance fallback chains) — DEPARTURE-role
+  // only: the DD1801 lookup maps onto route/altitude/departure+destination
+  // airport/remarks (crc-sync's toFdrFiledSeed), which line up with
+  // DEPARTURE's filed shape, not ARRIVAL's (originAirport/arrivalFix/
+  // estimatedArrivalTimeUtc — a genuinely different set of fields). Bounded
+  // by the lookup's own client-side timeout; ANY failure (unreachable,
+  // no plan on file, malformed response) just leaves every field blank,
+  // exactly like today's behavior — Strip creation is never blocked on
+  // this succeeding, only delayed by a few seconds while it's tried.
+  let seed = {};
+  if (origin.role !== 'ARRIVAL' && typeof lookupFlightPlanClient === 'function') {
+    _createStripLookupInFlight = true;
+    if (_createStripInputEl) _createStripInputEl.disabled = true;
+    if (_createStripBtnEl) _createStripBtnEl.disabled = true;
+    _setCreateStripMsg('Looking up flight plan…', false);
+    try {
+      const result = await lookupFlightPlanClient(callsign);
+      if (result.found) seed = result.seed;
+    } finally {
+      // lookupFlightPlanClient is designed to never throw (see its own
+      // header comment) — this finally is a defense-in-depth backstop, not
+      // an expected path, so the form can never get stuck disabled.
+      _createStripLookupInFlight = false;
+      if (_createStripInputEl) _createStripInputEl.disabled = false;
+      if (_createStripBtnEl) _createStripBtnEl.disabled = false;
+    }
+  }
+
   const fdr = origin.role === 'ARRIVAL'
     ? { callsign, aircraftType: '', wakeCategory: '', originAirport: '', estimatedArrivalTimeUtc: null }
-    : { callsign, aircraftType: '', wakeCategory: '', departureAirport: '', destinationAirport: '', route: '', requestedAltitude: '' };
+    : {
+        callsign, aircraftType: '', wakeCategory: '',
+        departureAirport: '', destinationAirport: '', route: '', requestedAltitude: '',
+        ...seed, // overrides only the blanks above when the lookup actually found something
+      };
 
   _pendingCreateStripMutationId = sendEfspCreateStrip(origin.actingPositionId, {
     kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', role: origin.role, fdr,
   }, origin.facilityId);
   _createStripInputEl.value = '';
-  _setCreateStripMsg('Creating…', false);
+  _setCreateStripMsg(seed.route ? 'Creating (flight plan found)…' : 'Creating…', false);
+}
+
+/**
+ * Called from bay-view.js's ops-filed card "Create Strip" button — the
+ * plan's data is already in hand (it came from the same list fetch that
+ * rendered the card), so this skips lookupFlightPlanClient's network round
+ * trip entirely and goes straight to CreateStrip. DEPARTURE/OPS only, same
+ * scope restriction _submitCreateStrip's own lookup has — see
+ * docs/efsp-usage-guide.md §4 for why ARRIVAL/CTR is out of scope for this
+ * seed shape.
+ * @param {{callsign:string, seed:object}} plan
+ */
+function createStripFromFiledPlan(plan) {
+  if (!plan || !plan.callsign) return;
+  if (!getActingPositions().includes('OPS')) {
+    _setCreateStripMsg('OPS only — select OPS in Panels to create Strips', true);
+    return;
+  }
+  const fdr = {
+    callsign: plan.callsign, aircraftType: '', wakeCategory: '',
+    departureAirport: '', destinationAirport: '', route: '', requestedAltitude: '',
+    ...(plan.seed || {}),
+  };
+  _pendingCreateStripMutationId = sendEfspCreateStrip('OPS', {
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', fdr,
+  }, 'INCIRLIK');
+  _setCreateStripMsg('Creating ' + plan.callsign + ' (flight plan found)…', false);
 }
 
 // Rejections that reach here have no other visible surface — a dragged

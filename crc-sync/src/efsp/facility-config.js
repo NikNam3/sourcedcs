@@ -65,8 +65,17 @@ const DEFAULT_CONFIG = {
   },
   bays: {
     OPS: [
-      { bayId: 'ops-filed',    rackIds: ['main'] },
+      // ops-proposed listed FIRST deliberately — it's what bayForImpliedState's
+      // "no match, fall back to this Position's first Bay" default resolves
+      // to, and what a Strip dropped on OPS's Position tab generally (not a
+      // specific Bay tab) lands in via _defaultBayFor (crc-desktop's
+      // bay-view.js). ops-filed is no longer an ordinary Strip-holding Bay
+      // at all client-side (its content is the client-local filed-plan
+      // queue, guide-analogous to the search pseudo-Bay — see
+      // docs/efsp-usage-guide.md §4) — a Strip landing there by accident
+      // would become invisible, so it must never be anyone's "default" Bay.
       { bayId: 'ops-proposed', rackIds: ['main'], impliesState: 'PROPOSED' },
+      { bayId: 'ops-filed',    rackIds: ['main'] },
       { bayId: 'ops-field-state',   rackIds: ['main'] }, // WP6 hook, inert
       { bayId: 'ops-coordination',  rackIds: ['main'] }, // no cross-Facility primitive reaches OPS this slice — inert
     ],

@@ -36,6 +36,25 @@ const CASDOOR_ENDPOINT = process.env.CASDOOR_ENDPOINT;
    instead of requireAuth/requireAdmin. */
 const RELEASE_UPLOAD_TOKEN = process.env.RELEASE_UPLOAD_TOKEN || '';
 
+/* ─── EFSP flight-plan service access (crc-sync, not Casdoor) ─────── */
+/* crc-sync has no interactive Casdoor session either (see the comment
+   above), and it needs to read EVERY currently-filed DD1801 -- not just one
+   pilot's own, which GET /api/fpl1801's requireAuth + fpIsController/Admin
+   check would otherwise restrict it to. Same shared-secret-bearer-token
+   shape as release uploads, deliberately NOT an admin/controller role
+   impersonation: requireAuth's "verification" is just an unsigned JWT
+   payload decode (see decodeJWT below), so a caller COULD construct a
+   token claiming roles:['admin'] and it would be accepted -- that was
+   explicitly rejected as a way to solve this, because it would mean
+   trusting a fabricated claim instead of a real, provisioned secret. This
+   is that real secret. checkReleaseUploadToken (releases.js) is reused
+   here unrenamed -- it's already fully generic (providedToken,
+   expectedToken params, no releases-specific logic inside), just first
+   named for its original caller; a second constant-time-compare
+   implementation would be needless duplication of a security-sensitive
+   one-liner. */
+const FLIGHT_PLAN_SERVICE_TOKEN = process.env.FLIGHT_PLAN_SERVICE_TOKEN || '';
+
 /* Low-level "make the request, collect the body" helper shared by every
    hand-rolled REST caller in this codebase (Casdoor here, Discord in
    discord-client.js) — replaces 5 near-identical https.request wrappers
@@ -162,10 +181,19 @@ function requireReleaseUpload(req, res, next) {
   next();
 }
 
+function requireFlightPlanService(req, res, next) {
+  const auth = req.headers.authorization || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  if (!checkReleaseUploadToken(token, FLIGHT_PLAN_SERVICE_TOKEN)) {
+    return res.status(401).json({ error: 'Invalid or missing flight-plan service token' });
+  }
+  next();
+}
+
 module.exports = {
   SKILL_ADMIN_ROLES, BOOKING_ADMIN_ROLES,
   CASDOOR_CLIENT_ID, CASDOOR_ENDPOINT,
   rawRequest, casdoorTokenExchange, decodeJWT, registerPilot,
   requireAuth, requireAdmin, requireSkillAdmin, isBookingAdminUser,
-  requireBookingAdmin, requireReleaseUpload,
+  requireBookingAdmin, requireReleaseUpload, requireFlightPlanService,
 };

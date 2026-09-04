@@ -17,6 +17,7 @@ const auth            = require('./src/auth');
 const { createEfsp }  = require('./src/efsp');
 const efspFacilityConfig = require('./src/efsp/facility-config');
 const { ForwardingObligationMonitor } = require('./src/efsp/forwarding-obligations');
+const { lookupFlightPlan, toFdrFiledSeed, listFiledFlightPlans } = require('./src/efsp/flight-plan-lookup');
 
 const PORT       = parseInt(process.env.PORT, 10) || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -205,6 +206,39 @@ function nearestAirport(lat, lon, missionData) {
   }
   return best;
 }
+
+// EFSP CreateStrip pre-fill — looks up a pilot-submitted DD1801 flight plan
+// from sourcedcs-web by callsign (crc-sync/src/efsp/flight-plan-lookup.js).
+// lookupFlightPlan() never throws/rejects by construction (see that
+// module's own header comment) — this handler is still wrapped so a bug
+// there can never become an unhandled rejection that crashes the process,
+// same discipline board-store.js's applyMutation() catch-all uses.
+app.get('/api/flight-plan-lookup/:callsign', auth.requireAuth, async (req, res) => {
+  try {
+    const result = await lookupFlightPlan(req.params.callsign);
+    if (!result.found) return res.status(404).json({ found: false, reason: result.reason });
+    res.json({ found: true, seed: toFdrFiledSeed(result.plan) });
+  } catch (err) {
+    console.error('[flight-plan-lookup] unexpected error, responding 503 instead of crashing:', err);
+    res.status(503).json({ found: false, reason: 'lookup failed unexpectedly' });
+  }
+});
+
+// EFSP ops-filed queue — every currently-filed DD1801 plan
+// (crc-sync/src/efsp/flight-plan-lookup.js's listFiledFlightPlans(), which
+// itself talks to sourcedcs-web's service-token-gated /api/fpl1801/
+// service/all). Same never-throws-out-of-the-handler discipline as
+// /api/flight-plan-lookup above.
+app.get('/api/flight-plan-list', auth.requireAuth, async (req, res) => {
+  try {
+    const result = await listFiledFlightPlans();
+    if (!result.ok) return res.status(503).json({ ok: false, reason: result.reason });
+    res.json({ ok: true, plans: result.plans });
+  } catch (err) {
+    console.error('[flight-plan-lookup] unexpected error listing plans, responding 503 instead of crashing:', err);
+    res.status(503).json({ ok: false, reason: 'list failed unexpectedly' });
+  }
+});
 
 app.get('/api/apt-weather', auth.requireAuth, (req, res) => {
   const missionData = wsHub.getMissionData();

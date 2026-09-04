@@ -455,3 +455,46 @@
   color: #6a7580;
   padding: 6px 4px 2px;
 }
+
+/* ops-filed queue — the sourcedcs-web DD1801 pre-fill cards (bay-view.js's
+   _renderOpsFiledCards). Deliberately styled distinctly from .efsp-strip —
+   these are NOT Strips (no stripId, not draggable, no lifecycle state at
+   all) until "Create Strip" is pressed, and should never be mistaken for
+   one at a glance. */
+.efsp-filed-plan-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  margin: 2px 0;
+  background: #1c2228;
+  border: 1px dashed #4a5560; /* dashed, not solid — visually distinct from a real Strip's solid border */
+  min-height: 44px;
+}
+.efsp-filed-plan-callsign {
+  font-weight: bold;
+  min-width: 60px;
+}
+.efsp-filed-plan-summary {
+  color: #a8b4bd;
+  font-size: 13px;
+}
+.efsp-filed-plan-by {
+  color: #6a7580;
+  font-size: 11px;
+}
+.efsp-filed-plan-used {
+  color: #e0a83c;
+  font-size: 11px;
+}
+.efsp-filed-plan-create-btn {
+  margin-left: auto;
+  min-height: 32px;
+  padding: 4px 10px;
+  background: #2a3038;
+  border: 1px solid #4a7dbf;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+}

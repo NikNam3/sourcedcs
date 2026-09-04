@@ -97,11 +97,16 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
-  // ── crc-sync proxies (ticket mint + the three on-demand RPCs) ────────────
+  // ── crc-sync proxies (ticket mint + the on-demand RPCs) ──────────────────
   if (req.url === '/api/ws-ticket' && req.method === 'POST')      return proxyToSync(req, res, '/api/ws-ticket');
   if (req.url === '/api/atis-transmit' && req.method === 'POST')  return proxyToSync(req, res, '/api/atis-transmit');
   if (req.url === '/api/srs-clients')                              return proxyToSync(req, res, '/api/srs-clients');
   if (req.url.startsWith('/api/apt-weather'))                      return proxyToSync(req, res, req.url);
+  // EFSP CreateStrip pre-fill (crc-sync/src/efsp/flight-plan-lookup.js) —
+  // same reverse-proxy shape, so the renderer never needs crc-sync's
+  // bearer token directly for this either.
+  if (req.url.startsWith('/api/flight-plan-lookup/'))              return proxyToSync(req, res, req.url);
+  if (req.url === '/api/flight-plan-list')                         return proxyToSync(req, res, req.url);
 
   // ── SRS radio API proxy → lxsrs_v2 HTTP API (local pilot audio, unrelated to crc-sync) ─
   if (req.url.startsWith('/srs-api/')) {

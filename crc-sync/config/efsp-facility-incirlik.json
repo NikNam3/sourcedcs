@@ -83,17 +83,17 @@
   "bays": {
     "OPS": [
       {
-        "bayId": "ops-filed",
-        "rackIds": [
-          "main"
-        ]
-      },
-      {
         "bayId": "ops-proposed",
         "rackIds": [
           "main"
         ],
         "impliesState": "PROPOSED"
+      },
+      {
+        "bayId": "ops-filed",
+        "rackIds": [
+          "main"
+        ]
       },
       {
         "bayId": "ops-field-state",

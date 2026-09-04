@@ -99,7 +99,7 @@ test('getFacilityConfig returns a deep copy — mutating it never affects subseq
   cfg.positions.push('HACKED');
   cfg.bays.OPS[0].bayId = 'tampered';
   assert.deepEqual(getPositionSet(), ['OPS', 'CD', 'GND', 'TWR', 'APP']);
-  assert.equal(getBaysFor('OPS')[0].bayId, 'ops-filed');
+  assert.equal(getBaysFor('OPS')[0].bayId, 'ops-proposed');
 });
 
 test('setFacilityConfig persists to disk and survives being re-read from a fresh copy of the module state', () => {
