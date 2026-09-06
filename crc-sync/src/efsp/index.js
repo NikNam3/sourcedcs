@@ -83,11 +83,20 @@ function createEfsp() {
       // envelopes (facility-config.js data, §4.6.2), a plain array rather
       // than a function since it's cheap, small config, not derived state.
       standingReleases: facilityConfig.getFacilityConfig(facilityId).standingReleases || [],
+      // WP4A gap-closure (docs/adr/0022) — is a written directive on file
+      // for AIT at this Facility? Guide §4.6 rule 7: "configuration, not a
+      // default." Plain config value, same shape as standingReleases above.
+      aitAuthorized: !!facilityConfig.getFacilityConfig(facilityId).aitAuthorized,
       peerBoard: (otherFacilityId) => {
         const other = facilities.get(otherFacilityId);
         return other ? other.boardStore : null;
       },
       coordinationEffect: (primitive) => coordination.coordinationEffect(primitive),
+      // WP4A gap-closure (docs/adr/0022) — which EfspState a Strip Role
+      // must be in to PROPOSE a coordination link (see coordination.js).
+      coordinationEligibleState: (role) => coordination.coordinationEligibleState(role),
+      // WP4A second slice — TOFI's target resolution (permission.js).
+      tofiCounterparts: (actingPositionId) => permission.tofiCounterparts(actingPositionId),
     };
 
     const boardStore = new BoardStore(fdrStore, rules);

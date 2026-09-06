@@ -194,6 +194,14 @@
 <div id="efsp-panel" class="dock-unmounted">
   <div class="efsp-toolbar">
     <input type="text" id="efsp-new-strip-callsign" placeholder="Callsign" maxlength="7" autocomplete="off" />
+    <!-- Origin (Position + Role) picker (docs/adr/0023) — shown only when
+         2+ origins are simultaneously reachable, i.e. a combined-Position
+         controller (guide §4.8.1: "under low manning the combined case is
+         the normal case"), e.g. holding OPS+APP+CTR at once. Options are
+         built dynamically by efsp-panel.js's _refreshCreateStripAvailability
+         from whichever Positions are actually held right now — nothing
+         static here. Hidden by default via the native `hidden` attribute. -->
+    <select id="efsp-create-strip-role" hidden></select>
     <button id="efsp-create-strip-btn">+ New Strip</button>
     <span id="efsp-create-strip-msg"></span>
   </div>

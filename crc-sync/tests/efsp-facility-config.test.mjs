@@ -13,15 +13,17 @@ import path from 'path';
 const tmpDir  = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-facility-config-test-'));
 const tmpFile = path.join(tmpDir, 'efsp-facility-incirlik.json');
 const tmpFileCenter = path.join(tmpDir, 'efsp-facility-center.json');
+const tmpFileTactical = path.join(tmpDir, 'efsp-facility-tactical.json');
 process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = tmpFile;
 process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER = tmpFileCenter;
+process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL = tmpFileTactical;
 
 const {
-  getFacilityIds, getFacilityConfig, getPositionSet, getCoveringChain, getBaysFor, getAllBays,
+  getFacilityIds, getFacilityConfig, getPositionSet, getPositionClass, getCoveringChain, getBaysFor, getAllBays,
   bayImpliesState, bayForImpliedState, coordinationBayFor, setFacilityConfig, validateConfig,
-  DEFAULT_CONFIG, DEFAULT_CENTER_CONFIG, DEFAULT_FACILITY_ID,
+  DEFAULT_CONFIG, DEFAULT_CENTER_CONFIG, DEFAULT_TACTICAL_CONFIG, DEFAULT_FACILITY_ID,
 } = await import('../src/efsp/facility-config.js');
-const { DEPARTURE_BLOCK_MAP, requiredBlocksFor } = await import('../src/efsp/block-map.js');
+const { DEPARTURE_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP, requiredBlocksFor } = await import('../src/efsp/block-map.js');
 
 test('getPositionSet returns exactly INCIRLIK\'s five Phase 2 Positions', () => {
   assert.deepEqual(getPositionSet(), ['OPS', 'CD', 'GND', 'TWR', 'APP']);
@@ -187,8 +189,8 @@ test('DEFAULT_FACILITY_ID is INCIRLIK — every optional trailing facilityId par
   assert.equal(DEFAULT_FACILITY_ID, 'INCIRLIK');
 });
 
-test('getFacilityIds returns both Facilities, INCIRLIK first', () => {
-  assert.deepEqual(getFacilityIds(), ['INCIRLIK', 'CENTER']);
+test('getFacilityIds returns all three Facilities, INCIRLIK first', () => {
+  assert.deepEqual(getFacilityIds(), ['INCIRLIK', 'CENTER', 'TACTICAL']);
 });
 
 test('every zero-arg call site from before WP4A keeps behaving identically — the optional facilityId param defaults to INCIRLIK', () => {
@@ -213,6 +215,23 @@ test('CTR has a Coordination Bay and an en-route Bay implying INBOUND', () => {
   assert.equal(bayImpliesState('ctr-enroute', 'CENTER'), 'INBOUND');
 });
 
+test('docs/adr/0022: CTR also has a departures Bay implying HANDED_OFF, and DEPARTURE blockVisibility, for a Strip handed off from APP', () => {
+  assert.equal(bayImpliesState('ctr-departures', 'CENTER'), 'HANDED_OFF');
+  assert.deepEqual(new Set(DEFAULT_CENTER_CONFIG.blockVisibility.DEPARTURE), new Set(Object.keys(DEPARTURE_BLOCK_MAP)));
+});
+
+test('docs/adr/0023: both Facilities have an overflight Bay implying TRANSITING, and OVERFLIGHT blockVisibility covering every Block OVERFLIGHT_BLOCK_MAP defines', () => {
+  assert.equal(bayImpliesState('app-overflight', 'INCIRLIK'), 'TRANSITING');
+  assert.equal(bayImpliesState('ctr-overflight', 'CENTER'), 'TRANSITING');
+  assert.deepEqual(new Set(DEFAULT_CONFIG.blockVisibility.OVERFLIGHT), new Set(Object.keys(OVERFLIGHT_BLOCK_MAP)));
+  assert.deepEqual(new Set(DEFAULT_CENTER_CONFIG.blockVisibility.OVERFLIGHT), new Set(Object.keys(OVERFLIGHT_BLOCK_MAP)));
+});
+
+test('docs/adr/0022: aitAuthorized defaults to false on both Facilities', () => {
+  assert.equal(getFacilityConfig('INCIRLIK').aitAuthorized, false);
+  assert.equal(getFacilityConfig('CENTER').aitAuthorized, false);
+});
+
 test('coordinationBayFor resolves each Position\'s Coordination Bay in the correct Facility, and null for a Position with none', () => {
   assert.equal(coordinationBayFor('APP', 'INCIRLIK').bayId, 'app-coordination');
   assert.equal(coordinationBayFor('CTR', 'CENTER').bayId, 'ctr-app-coordination');
@@ -230,6 +249,55 @@ test('getAllBays stamps every Bay with its facilityId, and does not mix the two 
 
 test('DEFAULT_CENTER_CONFIG is a valid config on its own', () => {
   assert.equal(validateConfig(DEFAULT_CENTER_CONFIG).ok, true);
+});
+
+// ── WP4A second slice: the TACTICAL Facility and positionClass ──────────
+
+test('DEFAULT_TACTICAL_CONFIG is a valid config on its own', () => {
+  assert.equal(validateConfig(DEFAULT_TACTICAL_CONFIG).ok, true);
+});
+
+test('TACTICAL has exactly the 4 MRU/non-ATC Positions from guide §4.1', () => {
+  assert.deepEqual(new Set(getPositionSet('TACTICAL')), new Set(['TAC_C2', 'AIC', 'GCI', 'JTAC']));
+});
+
+test('getPositionClass resolves every Position\'s doctrinal class, searching across all Facilities (Position IDs are globally unique)', () => {
+  assert.equal(getPositionClass('APP'), 'MILITARY_ATC');
+  assert.equal(getPositionClass('CTR'), 'CIVIL_ATC');
+  assert.equal(getPositionClass('TAC_C2'), 'MRU');
+  assert.equal(getPositionClass('GCI'), 'MRU');
+  assert.equal(getPositionClass('AIC'), 'MRU_POSITION');
+  assert.equal(getPositionClass('JTAC'), 'NON_ATC');
+  assert.equal(getPositionClass('NOT_A_POSITION'), null);
+});
+
+test('AIC/GCI -> TAC_C2 is a legal intrafacility covering-chain entry, but TAC_C2 -> CTR is NOT — that hop would cross a Facility boundary (mirrors docs/adr/0013 point 4\'s identical APP -> CTR rejection)', () => {
+  const chain = getCoveringChain('TACTICAL');
+  assert.equal(chain.AIC, 'TAC_C2');
+  assert.equal(chain.GCI, 'TAC_C2');
+  assert.equal('TAC_C2' in chain, false);
+});
+
+test('every TACTICAL Position has at least one Bay, including a Coordination Bay — except JTAC, whose single read-only viewing Bay is deliberately not a Coordination Bay (it never holds any coordination or TOFI grant)', () => {
+  for (const id of ['TAC_C2', 'AIC', 'GCI']) {
+    const bays = getBaysFor(id, 'TACTICAL');
+    assert.ok(bays.length > 0, id);
+    assert.ok(bays.some(b => b.bayId.endsWith('-coordination')), `${id} has no Coordination Bay`);
+  }
+  const jtacBays = getBaysFor('JTAC', 'TACTICAL');
+  assert.ok(jtacBays.length > 0);
+  assert.equal(jtacBays.some(b => b.bayId.endsWith('-coordination')), false);
+});
+
+test('TAC_C2 and GCI each have Bays implying every MISSION lifecycle state that has an NLA (TASKED/AIRBORNE/ON_STATION)', () => {
+  assert.equal(bayImpliesState('tac-c2-tasked', 'TACTICAL'), 'TASKED');
+  assert.equal(bayImpliesState('tac-c2-airborne', 'TACTICAL'), 'AIRBORNE');
+  assert.equal(bayImpliesState('tac-c2-on-station', 'TACTICAL'), 'ON_STATION');
+  assert.equal(bayImpliesState('gci-on-station', 'TACTICAL'), 'ON_STATION');
+});
+
+test('TACTICAL\'s blockVisibility.MISSION covers every Block MISSION_BLOCK_MAP defines', () => {
+  assert.deepEqual(new Set(DEFAULT_TACTICAL_CONFIG.blockVisibility.MISSION), new Set(Object.keys(MISSION_BLOCK_MAP)));
 });
 
 test('setFacilityConfig targets the Facility named by its second argument, leaving the other untouched', () => {

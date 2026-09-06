@@ -74,7 +74,7 @@ function _handleMutation(ctx, session, msg, persist) {
   if (!result.ok) return { ack };
 
   const dropped = stampedStrip.state === 'DROPPED';
-  return {
+  const out = {
     ack,
     broadcast: {
       version: VERSION, type: 'efsp-board-delta', boardSeq: boardStore.currentSeq,
@@ -84,6 +84,29 @@ function _handleMutation(ctx, session, msg, persist) {
       positions: { updated: [] },
     },
   };
+
+  // Bug found in live testing: a coordination primitive's PROPOSE/ACCEPT/
+  // REJECT/STAND_BY mutates or mints a Strip in a DIFFERENT Facility's
+  // BoardStore (board-store.js's receiveCoordinationProposal/
+  // receiveCoordinationResponse — a direct in-process peer-board call, not
+  // itself a Mutation dispatched through this function). That side effect
+  // was a real, correct change to server state, but nothing ever told any
+  // connected client about it — only a full resync (reconnect) would ever
+  // pick it up. `peerFacilityId`/`peerStrip` (docs/adr/0022) let this
+  // build a SECOND board-delta, scoped to the peer Facility, so a client
+  // holding a Position there sees the new/updated replica immediately,
+  // same <200ms budget as the primary broadcast (guide §7.9).
+  if (result.peerStrip) {
+    const peerBoardStore = ctx.boardStoreFor(result.peerFacilityId);
+    out.peerBroadcast = {
+      version: VERSION, type: 'efsp-board-delta', boardSeq: peerBoardStore ? peerBoardStore.currentSeq : undefined,
+      facilityId: result.peerFacilityId,
+      strips: { updated: [{ ...result.peerStrip, facilityId: result.peerFacilityId }], gone: [] },
+      fdrs: { updated: [] }, // one shared FdrStore (docs/adr/0013) — already covered by the primary broadcast's fdrs.updated
+      positions: { updated: [] },
+    };
+  }
+  return out;
 }
 
 function _handleResync(ctx, msg) {
@@ -175,11 +198,17 @@ function _snapshotMessage(ctx) {
   const positions = [];
   const bays = [];
   const boardSeqByFacility = {};
+  // WP4A gap-closure (docs/adr/0022) — lets the client proactively disable
+  // the AIT option (rather than let the controller submit-and-silently-fail
+  // against the server-side check in board-store.js's
+  // _applyCoordinationPropose) when no written directive is on file.
+  const aitAuthorizedByFacility = {};
 
   for (const facilityId of facilityIds) {
     const boardStore = ctx.boardStoreFor(facilityId);
     const positionStore = ctx.positionStoreFor(facilityId);
     boardSeqByFacility[facilityId] = boardStore.currentSeq;
+    aitAuthorizedByFacility[facilityId] = !!facilityConfig.getFacilityConfig(facilityId).aitAuthorized;
     for (const s of boardStore.getAll().filter(s => s.state !== 'DROPPED')) strips.push({ ...s, facilityId });
     for (const p of positionStore.getAll()) positions.push({ ...p, facilityId });
     bays.push(...facilityConfig.getAllBays(facilityId));
@@ -192,6 +221,7 @@ function _snapshotMessage(ctx) {
     facility: facilityConfig.getFacilityConfig(defaultFacilityId).facility, // back-compat alias
     facilities: facilityIds,
     boardSeqByFacility,
+    aitAuthorizedByFacility,
     positions, bays, strips,
     fdrs: fdrStore.getAll(),
   };

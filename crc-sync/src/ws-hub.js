@@ -222,6 +222,13 @@ class WsHub {
       if (result) {
         if (result.ack) ws.send(JSON.stringify(result.ack));
         if (result.broadcast) this._broadcast(result.broadcast);
+        // WP4A gap-closure (docs/adr/0022) — a coordination primitive can
+        // touch a Strip in the PEER Facility's own Board (a brand-new
+        // replica on PROPOSE, an existing one's coordination state on
+        // ACCEPT/REJECT/STAND_BY); that needs its own board-delta, scoped
+        // to the peer facilityId, same immediate-broadcast treatment as
+        // the primary one above — see efsp-ws.js's own comment.
+        if (result.peerBroadcast) this._broadcast(result.peerBroadcast);
         return;
       }
     }

@@ -50,4 +50,45 @@ function coordinationEffect(primitive) {
   return COORDINATION_EFFECTS[primitive] || null;
 }
 
-module.exports = { COORDINATION_PRIMITIVES, COORDINATION_EFFECTS, isCoordinationPrimitive, coordinationEffect };
+// Which EfspState a Strip Role must be in to PROPOSE a coordination link —
+// i.e. which (role, state) combo has a Bay configured to receive it on the
+// OTHER side (facility-config.js's ARRIVAL app-inbound/ctr-enroute Bays and
+// DEPARTURE app-departures/ctr-departures Bays all imply exactly these
+// states). Gates ALL 5 primitives identically — POINT_OUT/TRAFFIC/
+// OPERATIONAL_REQUEST/AIT conceptually apply to any traffic a Position
+// holds, not just HANDOFF, so this is role-based, never primitive-based.
+// Originally this slice only ever produced ARRIVAL/INBOUND replicas
+// (docs/adr/0014's CTR->APP flow); docs/adr/0022 extends it to
+// DEPARTURE/HANDED_OFF (APP->CTR) without inventing any new EfspState —
+// CTR's terminus for a received DEPARTURE Strip is Drop-only, mirroring
+// APP's own existing DEPARTURE terminus.
+const COORDINATION_ELIGIBLE_STATES = { ARRIVAL: 'INBOUND', DEPARTURE: 'HANDED_OFF' };
+
+/** @returns {string|undefined} the EfspState `role` must be in to propose a coordination link, or undefined if this role never can. */
+function coordinationEligibleState(role) {
+  return COORDINATION_ELIGIBLE_STATES[role];
+}
+
+// WP4A second slice (docs/adr/0025), §4.6.3 — TOFI does NOT fit
+// COORDINATION_EFFECTS' shape above: jurisdiction (data ownership,
+// separation responsibility) never transfers in TOFI at all (guide rule 2:
+// "the Strip stays live and posted throughout tactical control"), so a
+// separate, parallel table by direction rather than a row alongside the 5
+// ATC<->ATC primitives. Purely descriptive (acceptPhrase is UI-facing
+// text, same as the other table's) — board-store.js's TOFI logic doesn't
+// need to consult this to decide what state to transition to, since ENTRY
+// vs EXIT is already an explicit field on the Mutation itself.
+const TOFI_EFFECTS = {
+  ENTRY: { acceptPhrase: 'TOFI ACKNOWLEDGED — ENTRY' },
+  EXIT:  { acceptPhrase: 'TOFI ACKNOWLEDGED — EXIT' },
+};
+
+/** @returns {{acceptPhrase:string}|null} */
+function tofiEffect(direction) {
+  return TOFI_EFFECTS[direction] || null;
+}
+
+module.exports = {
+  COORDINATION_PRIMITIVES, COORDINATION_EFFECTS, COORDINATION_ELIGIBLE_STATES, TOFI_EFFECTS,
+  isCoordinationPrimitive, coordinationEffect, coordinationEligibleState, tofiEffect,
+};

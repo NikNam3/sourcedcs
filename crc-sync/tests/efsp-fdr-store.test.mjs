@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 const {
   FdrStore, deriveEquipmentSuffix, VOID_DEADLINE_MINUTES,
   EDCT_WINDOW_MINUTES, CALL_FOR_RELEASE_BEFORE_MINUTES, CALL_FOR_RELEASE_AFTER_MINUTES,
-  TRACK_DEGRADATION_FLAGS, AIRSPACE_OWNERS,
+  TRACK_DEGRADATION_FLAGS, AIRSPACE_OWNERS, RADAR_SERVICE_STATES, SEPARATION_REGIMES,
 } = await import('../src/efsp/fdr-store.js');
 const { isReserved } = await import('../src/efsp/code-allocator.js');
 
@@ -385,4 +385,73 @@ test('there is no generic setField path to airspace.owner at all — AIRSPACE_OW
 
 test('AIRSPACE_OWNERS has exactly the two directions the guide names, nothing else', () => {
   assert.deepEqual([...AIRSPACE_OWNERS].sort(), ['CONTROLLING_AGENCY', 'USING_AGENCY']);
+});
+
+// ── WP4A second slice, §4.6.3 — the three-field separation model ────────
+
+test('a fresh FDR\'s tofi sub-object starts at its documented defaults, not null', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  assert.deepEqual(fdr.tofi, { ifrActive: false, radarService: null, separationRegime: null, changedAt: null, changedBy: null });
+});
+
+test('setTofi accepts a partial patch, merging into the existing sub-object rather than replacing it, and stamps changedAt/changedBy', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+
+  const first = store.setTofi(fdr.fdrId, { ifrActive: true }, { by: 'CTR' });
+  assert.equal(first.ok, true);
+  assert.equal(first.fdr.tofi.ifrActive, true);
+  assert.equal(first.fdr.tofi.radarService, null);
+  assert.equal(first.fdr.tofi.changedBy, 'CTR');
+  assert.ok(Number.isFinite(first.fdr.tofi.changedAt));
+
+  const second = store.setTofi(fdr.fdrId, { radarService: 'ACTIVE' }, { by: 'TAC_C2' });
+  assert.equal(second.ok, true);
+  assert.equal(second.fdr.tofi.ifrActive, true); // the first patch's field survives the second, independent write
+  assert.equal(second.fdr.tofi.radarService, 'ACTIVE');
+});
+
+test('defect D14: setTofi rejects an invalid radar_service or separation_regime value', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+
+  const badService = store.setTofi(fdr.fdrId, { radarService: 'ON' }, { by: 'CTR' });
+  assert.equal(badService.ok, false);
+  assert.equal(badService.reason, 'VALIDATION_ERROR');
+
+  const badRegime = store.setTofi(fdr.fdrId, { separationRegime: 'HOT' }, { by: 'CTR' });
+  assert.equal(badRegime.ok, false);
+  assert.equal(badRegime.reason, 'VALIDATION_ERROR');
+});
+
+test('setTofi accepts every documented separation_regime value, including DUE_REGARD and MARSA (mutually exclusive by construction — one enum field, not two booleans)', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  for (const regime of SEPARATION_REGIMES) {
+    const result = store.setTofi(fdr.fdrId, { separationRegime: regime }, { by: 'CTR' });
+    assert.equal(result.ok, true, regime);
+    assert.equal(result.fdr.tofi.separationRegime, regime);
+  }
+});
+
+test('setTofi on a nonexistent fdrId returns NOT_FOUND', () => {
+  const store = new FdrStore();
+  const result = store.setTofi('does-not-exist', { ifrActive: true }, { by: 'CTR' });
+  assert.equal(result.reason, 'NOT_FOUND');
+});
+
+test('there is no generic setField path to any tofi.* field at all — setTofi is the only route (defect D14: never derivable from airspace type or anything else)', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  for (const path of ['tofi.ifrActive', 'tofi.radarService', 'tofi.separationRegime']) {
+    const result = store.setField(fdr.fdrId, path, true, { by: 'CTR' });
+    assert.equal(result.ok, false, path);
+    assert.equal(result.reason, 'VALIDATION_ERROR', path);
+  }
+});
+
+test('RADAR_SERVICE_STATES and SEPARATION_REGIMES have exactly the values the guide names, nothing else', () => {
+  assert.deepEqual([...RADAR_SERVICE_STATES].sort(), ['ACTIVE', 'TERMINATED']);
+  assert.deepEqual([...SEPARATION_REGIMES].sort(), ['ATC', 'DUE_REGARD', 'MARSA', 'SEE_AND_AVOID', 'USING_AGENCY']);
 });

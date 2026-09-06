@@ -11,7 +11,7 @@ const {
   NLA_LABELS, nlaLabelFor, DOUBLE_TAP_MS, UNDO_WINDOW_MS,
   isWithinDoubleTapWindow, isUndoAvailable,
   DEFAULT_STALE_THRESHOLD_SECONDS, isEfspBoardStale,
-  STATE_OWNERS_BY_ROLE, DEPARTURE_STATE_OWNERS, ARRIVAL_STATE_OWNERS, canActOnState,
+  STATE_OWNERS_BY_ROLE, DEPARTURE_STATE_OWNERS, ARRIVAL_STATE_OWNERS, OVERFLIGHT_STATE_OWNERS, MISSION_STATE_OWNERS, canActOnState,
 } = require('../app/public/js/panels/efsp/efsp-nla.js');
 
 test('every DEPARTURE lifecycle state except DROPPED has a label', () => {
@@ -48,7 +48,16 @@ test('nlaLabelFor keeps DEPARTURE and ARRIVAL labels for the same state string e
 });
 
 test('nlaLabelFor returns null for an unknown role rather than throwing', () => {
-  assert.equal(nlaLabelFor('PROPOSED', 'OVERFLIGHT'), null);
+  assert.equal(nlaLabelFor('PROPOSED', 'NOT_A_ROLE'), null);
+});
+
+// ── MISSION lifecycle (WP4A second slice) ────────────────────────────────
+
+test('every MISSION lifecycle state except DROPPED has a label', () => {
+  for (const state of ['TASKED', 'AIRBORNE', 'ON_STATION', 'OFF_STATION', 'RTB']) {
+    assert.ok(nlaLabelFor(state, 'MISSION'), state);
+  }
+  assert.equal(nlaLabelFor('DROPPED', 'MISSION'), null);
 });
 
 // ── Double-tap guard ─────────────────────────────────────────────────────
@@ -140,9 +149,18 @@ test('canActOnState returns false for an unknown state, role, or Position, never
   assert.equal(canActOnState('NOT_A_POSITION', 'DEPARTURE', 'PROPOSED'), false);
 });
 
+test('MISSION states use their own independent table (WP4A second slice)', () => {
+  assert.equal(canActOnState('TAC_C2', 'MISSION', 'TASKED'), true);
+  assert.equal(canActOnState('GCI', 'MISSION', 'ON_STATION'), true);
+  assert.equal(canActOnState('AIC', 'MISSION', 'TASKED'), false);
+  assert.equal(canActOnState('JTAC', 'MISSION', 'TASKED'), false);
+});
+
 test('this client mirror stays in lockstep with the real, authoritative server table (permission.js) — this is a UX convenience, not a second source of truth, so drift here would be silently misleading, not just cosmetic', () => {
   const server = require('../../crc-sync/src/efsp/permission.js');
   assert.deepEqual(STATE_OWNERS_BY_ROLE, server.STATE_OWNERS_BY_ROLE);
   assert.deepEqual(DEPARTURE_STATE_OWNERS, server.DEPARTURE_STATE_OWNERS);
   assert.deepEqual(ARRIVAL_STATE_OWNERS, server.ARRIVAL_STATE_OWNERS);
+  assert.deepEqual(OVERFLIGHT_STATE_OWNERS, server.OVERFLIGHT_STATE_OWNERS);
+  assert.deepEqual(MISSION_STATE_OWNERS, server.MISSION_STATE_OWNERS);
 });

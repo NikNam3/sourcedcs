@@ -33,6 +33,12 @@ const { keyBetween, rebalance } = require('./order-key');
 const FLAG_KEYS = ['offset', 'flipped', 'removeIndicator', 'highlight', 'attention'];
 const APPLIED_MUTATIONS_CAP = 5000;
 
+// Every Strip Role's own starting EfspState, used by _applyCreateStrip when
+// the caller doesn't pass an explicit op.initialState. Deliberately just
+// each role's first lifecycle state, not the full STATES_BY_ROLE table
+// nla.js owns — board-store.js only ever needs the ONE starting value.
+const DEFAULT_INITIAL_STATE_BY_ROLE = { DEPARTURE: 'PROPOSED', ARRIVAL: 'INBOUND', OVERFLIGHT: 'TRANSITING', MISSION: 'TASKED' };
+
 function newFlags() {
   return { offset: false, flipped: false, removeIndicator: false, highlight: null, attention: null };
 }
@@ -258,6 +264,19 @@ class BoardStore {
       case 'OPERATIONAL_REQUEST':
       case 'AIT':
         result = this._applyCoordinationOp(strip, op, by, actingPositionId); break;
+      // WP4A second slice (docs/adr/0025) — TOFI (guide §4.6.3), the
+      // ATC<->MRU sub-protocol. Kept structurally separate from the 5
+      // primitives above (own strip.tofiCoordination field, own dispatcher)
+      // rather than folded into _applyCoordinationOp — TOFI is a two-step
+      // exchange (ENTRY and EXIT) plus a distinct comms-transfer action,
+      // none of which the single-shot PROPOSE/ACCEPT/REJECT shape above
+      // was built to express. See _applyTofiOp.
+      case 'TOFI':
+        result = this._applyTofiOp(strip, op, by, actingPositionId); break;
+      // docs/adr/0023 — converts this Strip's role IN PLACE, same Strip/
+      // FDR throughout, for a returning flight at the same Facility.
+      case 'ConvertToArrival':
+        result = this._applyConvertToArrival(strip, by, actingPositionId); break;
       default:              result = { ok: false, reason: 'VALIDATION_ERROR', strip: deepClone(strip) };
     }
     this._recordAudit(mutation, actingPositionId, by, before, result);
@@ -313,7 +332,14 @@ class BoardStore {
       fdrId: created.fdr.fdrId,
       rev: 1,
       role,
-      state: op.initialState || (role === 'ARRIVAL' ? 'INBOUND' : 'PROPOSED'),
+      // docs/adr/0023 bug fix — this used to be a raw `role === 'ARRIVAL' ?
+      // 'INBOUND' : 'PROPOSED'` binary, which silently gave a new
+      // OVERFLIGHT Strip the invalid state 'PROPOSED' (a DEPARTURE-only
+      // state, not even in OVERFLIGHT_STATE_SET) since no caller passes
+      // op.initialState explicitly. A small per-role table, not a wider
+      // rules-injection — board-store.js only ever needs each role's own
+      // starting state, never the full STATES_BY_ROLE list nla.js owns.
+      state: op.initialState || DEFAULT_INITIAL_STATE_BY_ROLE[role] || 'PROPOSED',
       ownerPositionId: actingPositionId,
       bayId: op.bayId,
       rackId: op.rackId,
@@ -322,11 +348,101 @@ class BoardStore {
       flags: newFlags(),
       correlation: { state: 'UNCORRELATED' }, // WP5 hook, inert in Phase 1
       coordination: null, // WP4A hook (docs/adr/0015) — set by _applyCoordinationPropose/receiveCoordinationProposal once this Strip is party to a cross-Facility exchange
+      tofiCoordination: null, // WP4A second slice hook — set by _applyTofiPropose/receiveTofiProposal once this Strip is party to a TOFI exchange
       createdAt: now, updatedAt: now, updatedBy: by || null,
     };
     this._strips.set(stripId, strip);
     this._touch(stripId);
     return { ok: true, strip, fdr: created.fdr };
+  }
+
+  /**
+   * docs/adr/0023 — converts a DEPARTURE Strip at its HANDED_OFF terminus
+   * into an ARRIVAL Strip IN PLACE: same stripId, same fdrId, throughout.
+   * A deliberate departure from guide §3.6's turnaround rule ("an ARRIVAL
+   * Strip that reaches DROPPED and a later DEPARTURE Strip for the same
+   * airframe are separate Strips referencing separate FDRs") — chosen
+   * explicitly over spawning a second Strip/FDR pair (the first version of
+   * this feature) after live testing found the two-Strip approach left a
+   * stale departure Strip behind and required copying every field by hand
+   * (route, altitude, remarks, identity, beacon code — the last of which
+   * can't even be copied cleanly, since fdr-store.js's createFdr always
+   * auto-allocates a fresh code). Reusing the same FDR makes every one of
+   * those problems structurally impossible: there is nothing to copy,
+   * because nothing new was created.
+   *
+   * Annotations/flags/coordination/correlation all reset to their fresh-
+   * Strip defaults — none of them carry a meaning that survives a role
+   * change (a DEPARTURE-phase annotation note, an old coordination link
+   * that already resolved, an attention flag from the outbound leg) — and
+   * this Strip's `role`-scoped Block Map, EfspState set and NLA table all
+   * genuinely change underneath it, so starting those fields clean avoids
+   * carrying over state that no longer means what it used to.
+   */
+  _applyConvertToArrival(strip, by, actingPositionId) {
+    if (strip.role !== 'DEPARTURE' || strip.state !== 'HANDED_OFF') {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'only a DEPARTURE Strip at HANDED_OFF can be converted to ARRIVAL', strip };
+    }
+    // Role-scoped, same two-tier permission shape _applyCreateStrip uses —
+    // the coarse canMutate('ConvertToArrival') gate already applied in
+    // _dispatch restricts this to APP/CTR; this is the fine-grained half,
+    // reusing canCreateStripRole's existing ARRIVAL-origination check
+    // rather than a parallel table that would only ever say the same thing.
+    if (this._rules.canCreateStripRole && !this._rules.canCreateStripRole(actingPositionId, 'ARRIVAL')) {
+      return { ok: false, reason: 'PERMISSION_DENIED', strip };
+    }
+    const targetBay = this._rules.bayForImpliedState ? this._rules.bayForImpliedState(strip.ownerPositionId, 'INBOUND') : null;
+    if (!targetBay) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `no ARRIVAL Bay configured for ${strip.ownerPositionId}`, strip };
+    }
+
+    // Bug found in live testing: DEPARTURE and ARRIVAL read DIFFERENT FDR
+    // fields for the same underlying idea — DEPARTURE's Block 8 is
+    // filed.departureAirport, ARRIVAL's Block 8 is filed.originAirport
+    // (block-map.js). Converting in place never touches the FDR otherwise
+    // (that's the whole point — same FDR throughout), so originAirport
+    // stayed permanently blank even though departureAirport still held the
+    // right value right next to it. The flight's real point of origin
+    // doesn't change just because it's airborne — for a sortie that
+    // departed Incirlik and never actually landed anywhere else, the
+    // departure record's own departureAirport IS the honest answer to
+    // "where is this arrival coming from." destinationAirport needs no
+    // equivalent remap — ARRIVAL has no "destination" field at all, since
+    // this Facility itself is the implicit destination.
+    //
+    // Block 7 is deliberately NOT remapped the same way: DEPARTURE's is
+    // filed.requestedAltitude (what was filed), ARRIVAL's is annotation-
+    // routed (guide §3.7's append-only sequence of ATC-ASSIGNED altitude
+    // clearances during descent) — genuinely different concepts, not two
+    // field names for the same fact. Seeding it from the filed altitude
+    // would misrepresent a filed value as an issued clearance; leaving it
+    // blank for the controller to actively assign is correct, not a gap.
+    const fdr = this._fdrStore.getFdr(strip.fdrId);
+    let updatedFdr = fdr;
+    if (fdr && fdr.filed.departureAirport) {
+      // Captured so it can ride in this method's own return value below —
+      // without it, efsp-ws.js's ack/broadcast has no fdr to include
+      // (mirrors _applySetBlock's own result.fdr pattern), and a connected
+      // client would never actually see originAirport update at all.
+      const fdrResult = this._fdrStore.setField(strip.fdrId, 'filed.originAirport', fdr.filed.departureAirport, { by });
+      if (fdrResult.ok) updatedFdr = fdrResult.fdr;
+    }
+
+    strip.role = 'ARRIVAL';
+    strip.state = 'INBOUND';
+    strip.bayId = targetBay.bayId;
+    strip.rackId = targetBay.rackIds[0];
+    strip.orderKey = this._resolveOrderKey(targetBay.bayId, targetBay.rackIds[0], null, null, strip.stripId);
+    strip.annotations = {};
+    strip.flags = newFlags();
+    strip.coordination = null;
+    strip.tofiCoordination = null;
+    strip.correlation = { state: 'UNCORRELATED' };
+    strip.rev += 1;
+    strip.updatedAt = Date.now();
+    strip.updatedBy = by || null;
+    this._touch(strip.stripId);
+    return { ok: true, strip, fdr: updatedFdr };
   }
 
   /**
@@ -404,12 +520,14 @@ class BoardStore {
     const target = this._rules.resolveBlockTarget(op.blockId, strip.role);
     if (!target) return { ok: false, reason: 'VALIDATION_ERROR', strip };
 
-    if (target.kind === 'fdr' || target.kind === 'airspace-owner') {
+    if (target.kind === 'fdr' || target.kind === 'airspace-owner' || target.kind === 'tofi') {
       const fdrResult = target.kind === 'airspace-owner'
         ? this._fdrStore.setAirspaceOwner(strip.fdrId, op.value, { by })
-        : target.path === 'identity.beaconAssigned'
-          ? this._fdrStore.setBeaconAssigned(strip.fdrId, op.value, { by })
-          : this._fdrStore.setField(strip.fdrId, target.path, op.value, { by });
+        : target.kind === 'tofi'
+          ? this._fdrStore.setTofi(strip.fdrId, { [target.field]: op.value }, { by })
+          : target.path === 'identity.beaconAssigned'
+            ? this._fdrStore.setBeaconAssigned(strip.fdrId, op.value, { by })
+            : this._fdrStore.setField(strip.fdrId, target.path, op.value, { by });
       if (!fdrResult.ok) return { ok: false, reason: fdrResult.reason, detail: fdrResult.detail, strip };
 
       // FDR keeps its own independent rev (guide §3.1); the Strip's rev is
@@ -560,6 +678,27 @@ class BoardStore {
       return { ok: false, reason: 'PERMISSION_DENIED', detail: `${strip.state} is not ${strip.ownerPositionId}'s to advance`, strip };
     }
 
+    // Bug found in live testing (docs/adr/0022's HANDOFF/HANDED_OFF case):
+    // a DEPARTURE Strip's only NLA at HANDED_OFF is Drop, which stayed
+    // live right alongside the new Coordinate button — nothing stopped a
+    // controller from dropping a Strip with a still-open (PROPOSED, i.e.
+    // not yet accepted/rejected) coordination proposal. Dropping never
+    // notifies the peer (only ACCEPT/REJECT call receiveCoordinationResponse),
+    // so the receiving Facility's replica was silently orphaned, waiting
+    // forever for a response that would never come. Mirrors the existing
+    // "a Strip cannot have two open coordination links at once" guard in
+    // _applyCoordinationPropose — same open-link concept, different action.
+    if (strip.coordination && strip.coordination.state === 'PROPOSED') {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'cannot advance a Strip with an open coordination proposal — accept, reject, or wait for a response first', strip };
+    }
+    // Same open-link guard, extended to TOFI's own coordination record
+    // (WP4A second slice) — a Strip with an open (unresolved) TOFI
+    // proposal shouldn't silently advance its own lifecycle out from under
+    // the pending exchange.
+    if (strip.tofiCoordination && strip.tofiCoordination.state === 'PROPOSED') {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'cannot advance a Strip with an open TOFI proposal — accept, reject, or wait for a response first', strip };
+    }
+
     const fdr = this._fdrStore.getFdr(strip.fdrId);
     const result = this._rules.computeNla(strip, fdr, now, this._nlaCtx());
     if (!result || result.inhibited) {
@@ -610,6 +749,26 @@ class BoardStore {
   }
 
   _applyDropStrip(strip, op, by) {
+    // Same open-coordination-link guard as _applyInvokeNla above, for the
+    // explicit DropStrip op (dot-command) path — see that guard's comment.
+    if (strip.coordination && strip.coordination.state === 'PROPOSED') {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'cannot drop a Strip with an open coordination proposal — accept, reject, or wait for a response first', strip };
+    }
+    if (strip.tofiCoordination && strip.tofiCoordination.state === 'PROPOSED') {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'cannot drop a Strip with an open TOFI proposal — accept, reject, or wait for a response first', strip };
+    }
+    // WP4A second slice, guide §4.6.3 rule 2: "the Strip stays live and
+    // posted throughout tactical control... dropping the Strip breaks all
+    // three [separation-model fields]." A hard rejection, not a soft warn
+    // like the verbal-path interlocks elsewhere in §4.6 — this is a
+    // data-integrity fact (the flight retains its IFR clearance and
+    // ATC-assigned beacon code while under tactical control), not a
+    // coordination nicety. Applies on EITHER side of the exchange (the
+    // ATC-side Strip and the MISSION-side Strip both carry their own
+    // tofiCoordination record — see receiveTofiProposal).
+    if (strip.tofiCoordination && strip.tofiCoordination.state === 'ACTIVE') {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'cannot drop a Strip under active tactical control — complete a TOFI exit first', strip };
+    }
     strip.state = 'DROPPED';
     strip.flags.removeIndicator = true; // distinct from delete (§3.4) — Strip stays queryable, see getRack()
     strip.rev += 1;
@@ -646,10 +805,16 @@ class BoardStore {
    */
   _applyCoordinationOp(strip, op, by, actingPositionId) {
     switch (op.action) {
-      case 'PROPOSE': return this._applyCoordinationPropose(strip, op, by, actingPositionId);
-      case 'ACCEPT':  return this._applyCoordinationAccept(strip, op, by, actingPositionId);
-      case 'REJECT':  return this._applyCoordinationReject(strip, op, by, actingPositionId);
-      default:        return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown coordination action: ${op.action}`, strip };
+      case 'PROPOSE':  return this._applyCoordinationPropose(strip, op, by, actingPositionId);
+      case 'ACCEPT':   return this._applyCoordinationAccept(strip, op, by, actingPositionId);
+      case 'REJECT':   return this._applyCoordinationReject(strip, op, by, actingPositionId);
+      // OPERATIONAL_REQUEST's 3-way response (guide §4.6: APPROVED/UNABLE/
+      // STAND BY) — ACCEPT/REJECT already cover APPROVED/UNABLE
+      // semantically (coordination.js's acceptPhrase:'APPROVED'), so
+      // STAND_BY is the only genuinely new action, and only valid for that
+      // one primitive (docs/adr/0022).
+      case 'STAND_BY': return this._applyCoordinationStandBy(strip, op, by);
+      default:         return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown coordination action: ${op.action}`, strip };
     }
   }
 
@@ -658,8 +823,38 @@ class BoardStore {
     const effect = this._rules.coordinationEffect ? this._rules.coordinationEffect(primitive) : null;
     if (!effect) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown coordination primitive: ${primitive}`, strip };
 
+    // AIT is configuration, not a default (guide §4.6 rule 7, docs/adr/0022)
+    // — every other primitive is always available to APP/CTR; AIT alone
+    // additionally requires a written directive on file for this Facility.
+    if (primitive === 'AIT' && !this._rules.aitAuthorized) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: "AIT requires a written directive — not authorized in this Facility's configuration", strip };
+    }
+
+    // Which (role, state) a Strip must be in to propose ANY of the 5
+    // primitives (docs/adr/0022) — the mirror of this check the client
+    // performs proactively in bay-view.js's _canProposeCoordination; this
+    // is the authoritative half, since the client's is only a convenience
+    // gate. Only the (role, state) combos a receiving Facility actually has
+    // a landing Bay configured for are eligible — see coordination.js.
+    if (this._rules.coordinationEligibleState && this._rules.coordinationEligibleState(strip.role) !== strip.state) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `a ${strip.role} Strip may not propose coordination from state ${strip.state}`, strip };
+    }
+
     if (strip.coordination && (strip.coordination.state === 'PROPOSED' || strip.coordination.state === 'ACTIVE')) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'this Strip already has an open coordination link', strip };
+    }
+    // A Strip currently sitting in ITS OWNER'S Coordination Bay is always
+    // the RECEIVER-side replica/proposal artifact, never a legitimate
+    // flight record to propose FROM — accept relocates a Strip OUT of the
+    // Coordination Bay (_applyCoordinationAccept), so one still there is
+    // either awaiting a response (already caught above) or REJECTED and
+    // left inert. Bug found in live testing: without this, a rejected
+    // receiver-side replica could re-propose right back to its own
+    // sender, minting a spurious third replica. Authoritative half of
+    // bay-view.js's _canProposeCoordination client-side gate.
+    const ownCoordinationBay = this._rules.coordinationBayFor ? this._rules.coordinationBayFor(strip.ownerPositionId) : null;
+    if (ownCoordinationBay && strip.bayId === ownCoordinationBay.bayId) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'this Strip is a coordination replica, not a flight record you can propose coordination from', strip };
     }
     if (!op.toFacilityId || !op.toPositionId) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'toFacilityId and toPositionId are required', strip };
@@ -687,6 +882,7 @@ class BoardStore {
     const proposal = peer.receiveCoordinationProposal({
       primitive, fromFacilityId: this._rules.facilityId, fromPositionId: actingPositionId,
       fromStripId: strip.stripId, toPositionId: op.toPositionId, fdrId: strip.fdrId,
+      fromRole: strip.role, fromState: strip.state,
       note: op.note || null, by,
     });
     if (!proposal.ok) return { ok: false, reason: proposal.reason || 'VALIDATION_ERROR', detail: proposal.detail, strip };
@@ -708,12 +904,20 @@ class BoardStore {
       note: op.note || null,
       initiatedAt: now, initiatedBy: by || null,
       acceptedAt: null, acceptedBy: null,
+      lastStandByAt: null, // OPERATIONAL_REQUEST-only (docs/adr/0022) — stamped by _applyCoordinationStandBy
     };
     strip.rev += 1;
     strip.updatedAt = now;
     strip.updatedBy = by || null;
     this._touch(strip.stripId);
-    return { ok: true, strip };
+    // Bug found in live testing: receiveCoordinationProposal mints a real
+    // Strip in the PEER Facility's own BoardStore (a live-in-memory side
+    // effect, correct), but nothing surfaced that to efsp-ws.js — meaning
+    // no connected client was ever told about it over the wire. Only a
+    // full resync (reconnect) would ever pick it up. peerFacilityId/
+    // peerStrip let _handleMutation broadcast a SECOND efsp-board-delta,
+    // scoped to the peer Facility, alongside the normal one for this side.
+    return { ok: true, strip, peerFacilityId: op.toFacilityId, peerStrip: proposal.strip };
   }
 
   _applyCoordinationAccept(strip, op, by, actingPositionId) {
@@ -737,15 +941,16 @@ class BoardStore {
     }
 
     // Move the Strip out of the Coordination Bay into the receiving
-    // Position's normal INBOUND working Bay — this Strip's real lifecycle
-    // starts now, same as any other ARRIVAL Strip (guide §3.4).
-    const targetBay = this._rules.bayForImpliedState ? this._rules.bayForImpliedState(strip.ownerPositionId, 'INBOUND') : null;
+    // Position's normal working Bay for whatever (role, state) it was
+    // already minted with (docs/adr/0022) — the replica's state was set
+    // correctly by receiveCoordinationProposal already; accept only
+    // relocates it, it never advances the state itself.
+    const targetBay = this._rules.bayForImpliedState ? this._rules.bayForImpliedState(strip.ownerPositionId, strip.state) : null;
     if (targetBay) {
       strip.bayId = targetBay.bayId;
       strip.rackId = targetBay.rackIds[0];
       strip.orderKey = this._resolveOrderKey(targetBay.bayId, targetBay.rackIds[0], null, null, strip.stripId);
     }
-    strip.state = 'INBOUND';
     strip.rev += 1;
     strip.updatedAt = now;
     strip.updatedBy = by || null;
@@ -754,11 +959,18 @@ class BoardStore {
     // Tell the peer their sender-side Strip is now ACTIVE too — both
     // replicas agree the exchange is live; each proceeds independently
     // from here (D13's "independently removable" acceptance criterion).
+    // Its return value is captured (previously discarded) for the same
+    // reason _applyCoordinationPropose's is — see that method's comment.
+    const peerFacilityId = strip.coordination.peerFacilityId;
+    let peerStrip = null;
     if (this._rules.peerBoard) {
-      const peer = this._rules.peerBoard(strip.coordination.peerFacilityId);
-      if (peer) peer.receiveCoordinationResponse({ stripId: strip.coordination.peerStripId, response: 'ACCEPT', by });
+      const peer = this._rules.peerBoard(peerFacilityId);
+      if (peer) {
+        const peerResult = peer.receiveCoordinationResponse({ stripId: strip.coordination.peerStripId, response: 'ACCEPT', by });
+        if (peerResult.ok) peerStrip = peerResult.strip;
+      }
     }
-    return { ok: true, strip };
+    return { ok: true, strip, peerFacilityId, peerStrip };
   }
 
   _applyCoordinationReject(strip, op, by) {
@@ -771,11 +983,48 @@ class BoardStore {
     strip.updatedBy = by || null;
     this._touch(strip.stripId);
 
+    const peerFacilityId = strip.coordination.peerFacilityId;
+    let peerStrip = null;
     if (this._rules.peerBoard) {
-      const peer = this._rules.peerBoard(strip.coordination.peerFacilityId);
-      if (peer) peer.receiveCoordinationResponse({ stripId: strip.coordination.peerStripId, response: 'REJECT', by });
+      const peer = this._rules.peerBoard(peerFacilityId);
+      if (peer) {
+        const peerResult = peer.receiveCoordinationResponse({ stripId: strip.coordination.peerStripId, response: 'REJECT', by });
+        if (peerResult.ok) peerStrip = peerResult.strip;
+      }
     }
-    return { ok: true, strip };
+    return { ok: true, strip, peerFacilityId, peerStrip };
+  }
+
+  /**
+   * OPERATIONAL_REQUEST's third response (guide §4.6, docs/adr/0022) — the
+   * request is still under consideration, not resolved either way.
+   * Deliberately does NOT touch strip.coordination.state (stays PROPOSED);
+   * only stamps a timestamp both sides can show so the requester sees the
+   * request wasn't silently dropped.
+   */
+  _applyCoordinationStandBy(strip, op, by) {
+    if (!strip.coordination || strip.coordination.state !== 'PROPOSED') {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no pending coordination proposal on this Strip', strip };
+    }
+    if (strip.coordination.primitive !== 'OPERATIONAL_REQUEST') {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'STAND_BY only applies to OPERATIONAL_REQUEST', strip };
+    }
+    strip.coordination.lastStandByAt = Date.now();
+    strip.rev += 1;
+    strip.updatedAt = Date.now();
+    strip.updatedBy = by || null;
+    this._touch(strip.stripId);
+
+    const peerFacilityId = strip.coordination.peerFacilityId;
+    let peerStrip = null;
+    if (this._rules.peerBoard) {
+      const peer = this._rules.peerBoard(peerFacilityId);
+      if (peer) {
+        const peerResult = peer.receiveCoordinationResponse({ stripId: strip.coordination.peerStripId, response: 'STAND_BY', by });
+        if (peerResult.ok) peerStrip = peerResult.strip;
+      }
+    }
+    return { ok: true, strip, peerFacilityId, peerStrip };
   }
 
   /**
@@ -790,9 +1039,15 @@ class BoardStore {
    * controller "sending into" this Board from the inside to check against;
    * the only gate that matters is which Bay the receiving Position has
    * configured to accept it (coordinationBayFor — absent means refused).
+   *
+   * `fromRole`/`fromState` (docs/adr/0022) — the replica is minted with the
+   * SENDER's own Strip Role/EfspState, not a hardcoded ARRIVAL/INBOUND
+   * shape. `_applyCoordinationPropose` already validated the sender's
+   * (role, state) is one of coordination.js's COORDINATION_ELIGIBLE_STATES
+   * combos, so nothing further to check here.
    * @returns {{ok:true, strip}|{ok:false, reason, detail}}
    */
-  receiveCoordinationProposal({ primitive, fromFacilityId, fromPositionId, fromStripId, toPositionId, fdrId, note, by }) {
+  receiveCoordinationProposal({ primitive, fromFacilityId, fromPositionId, fromStripId, toPositionId, fdrId, fromRole, fromState, note, by }) {
     const fdr = this._fdrStore.getFdr(fdrId);
     if (!fdr) return { ok: false, reason: 'NOT_FOUND', detail: 'referenced FDR not found' };
 
@@ -812,13 +1067,15 @@ class BoardStore {
       cid: this._nextCid(),
       fdrId,
       rev: 1,
-      // Every coordination primitive in this slice moves an ARRIVAL-shaped
-      // Strip (APP<->CTR, guide's recommended civil ATC<->ATC first
-      // slice) — state INBOUND from the moment it's minted, not a
-      // separate "not yet accepted" pseudo-state; coordination.state is
-      // what actually tracks PROPOSED/ACTIVE/REJECTED.
-      role: 'ARRIVAL',
-      state: 'INBOUND',
+      // The replica carries the SENDER's own Role/EfspState (docs/adr/0022)
+      // from the moment it's minted, not a separate "not yet accepted"
+      // pseudo-state — coordination.state is what actually tracks
+      // PROPOSED/ACTIVE/REJECTED. fromState is guaranteed to be one of
+      // coordination.js's COORDINATION_ELIGIBLE_STATES combos (checked by
+      // _applyCoordinationPropose before this is ever called), so the
+      // receiving Facility is guaranteed to have a Bay configured for it.
+      role: fromRole,
+      state: fromState,
       ownerPositionId: toPositionId,
       bayId: coordinationBay.bayId,
       rackId: coordinationBay.rackIds[0],
@@ -840,6 +1097,7 @@ class BoardStore {
         note: note || null,
         initiatedAt: now, initiatedBy: by || null,
         acceptedAt: null, acceptedBy: null,
+        lastStandByAt: null,
       },
       createdAt: now, updatedAt: now, updatedBy: by || null,
     };
@@ -875,8 +1133,368 @@ class BoardStore {
           strip.coordination.separationResponsibilityRef = { facilityId: strip.coordination.peerFacilityId, positionId: strip.coordination.peerPositionId };
         }
       }
+    } else if (response === 'STAND_BY') {
+      // Doesn't resolve anything — just lets the requester's own Strip
+      // show the request wasn't dropped (docs/adr/0022). state stays
+      // whatever it already was (PROPOSED).
+      strip.coordination.lastStandByAt = now;
     } else {
       strip.coordination.state = 'REJECTED';
+    }
+    strip.rev += 1;
+    strip.updatedAt = now;
+    strip.updatedBy = by || null;
+    this._touch(strip.stripId);
+    return { ok: true, strip };
+  }
+
+  // ── WP4A second slice: TOFI (guide §4.6.3, docs/adr/0025) ───────────────
+  //
+  // A genuinely different sub-protocol from the 5 primitives above, not a
+  // 6th row in the same table — deliberately kept structurally separate:
+  //
+  //  1. TWO independent exchanges over one Strip's life (ENTRY, then EXIT),
+  //     not one-shot — the ATC-side Strip's tofiCoordination re-enters
+  //     PROPOSED for EXIT after ENTRY's already resolved, which the 5
+  //     primitives' "already has an open link, ever" guard would forbid.
+  //  2. Jurisdiction (data ownership, separation responsibility) NEVER
+  //     transfers — the ATC-side Strip stays live and posted throughout
+  //     (rule 2). There is nothing analogous to dataOwnerPositionRef/
+  //     separationResponsibilityRef to move.
+  //  3. A distinct, separate comms-transfer ACTION (guide: "followed by a
+  //     SEPARATE transfer of communications") — not a boolean baked into
+  //     ACCEPT's effect the way commsTransfers is for the 5 primitives.
+  //  4. The receiving side's Strip is a different Strip ROLE (MISSION),
+  //     not a same-role mirror — and it shares the ATC-side Strip's own
+  //     fdrId rather than getting a fresh one (guide §9.8's "bind it to
+  //     the same FDR as any tower Strip for that flight," realized now
+  //     rather than deferred to WP7).
+  //
+  // Both sides of an active exchange carry their own `tofiCoordination`
+  // record (symmetric to `coordination`'s peerFacilityId/peerStripId/
+  // peerPositionId naming) — PROPOSE always originates on the ATC-side
+  // Strip; ACCEPT/REJECT/TRANSFER_COMMS are always invoked on the
+  // MISSION-side Strip (the receiving MRU controller's own record),
+  // mirroring exactly which side acts in the real-world exchange.
+
+  _applyTofiOp(strip, op, by, actingPositionId) {
+    switch (op.action) {
+      case 'PROPOSE':        return this._applyTofiPropose(strip, op, by, actingPositionId);
+      case 'ACCEPT':         return this._applyTofiAccept(strip, op, by);
+      case 'REJECT':         return this._applyTofiReject(strip, op, by);
+      case 'TRANSFER_COMMS': return this._applyTofiTransferComms(strip, op, by);
+      default:                return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown TOFI action: ${op.action}`, strip };
+    }
+  }
+
+  /**
+   * Always invoked on the ATC-side Strip. ENTRY mints a brand-new MISSION
+   * Strip on the target MRU Facility's own Board (receiveTofiProposal,
+   * sharing this Strip's fdrId); EXIT re-enters the SAME already-existing
+   * link (receiveTofiExitProposal), minting nothing new.
+   */
+  _applyTofiPropose(strip, op, by, actingPositionId) {
+    if (op.direction !== 'ENTRY' && op.direction !== 'EXIT') {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'direction must be ENTRY or EXIT', strip };
+    }
+    if (strip.tofiCoordination && strip.tofiCoordination.state === 'PROPOSED') {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'this Strip already has an open TOFI proposal', strip };
+    }
+
+    const now = Date.now();
+
+    if (op.direction === 'ENTRY') {
+      if (strip.tofiCoordination && strip.tofiCoordination.state === 'ACTIVE') {
+        return { ok: false, reason: 'VALIDATION_ERROR', detail: 'tactical control is already active on this Strip', strip };
+      }
+      if (!op.toFacilityId || !op.toPositionId) {
+        return { ok: false, reason: 'VALIDATION_ERROR', detail: 'toFacilityId and toPositionId are required', strip };
+      }
+      if (op.toFacilityId === this._rules.facilityId) {
+        return { ok: false, reason: 'VALIDATION_ERROR', detail: 'TOFI target must be a different Facility', strip };
+      }
+      if (this._rules.tofiCounterparts) {
+        const allowed = this._rules.tofiCounterparts(actingPositionId) || [];
+        if (!allowed.some(c => c.facilityId === op.toFacilityId && c.positionId === op.toPositionId)) {
+          return { ok: false, reason: 'VALIDATION_ERROR', detail: `${op.toPositionId} is not a valid TOFI counterpart for ${actingPositionId}`, strip };
+        }
+      }
+      const peer = this._rules.peerBoard ? this._rules.peerBoard(op.toFacilityId) : null;
+      if (!peer) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown Facility: ${op.toFacilityId}`, strip };
+
+      // Track-degradation soft interlock (guide §4.6 rule 5), same as the 5
+      // ATC<->ATC primitives (docs/adr/0019) — TOFI is named in the same
+      // §4.6 primitive table this rule sits directly under, so it applies
+      // here too, for both directions.
+      const entryFdr = this._fdrStore.getFdr(strip.fdrId);
+      const entryDegraded = entryFdr && entryFdr.identity.trackDegradationFlag && entryFdr.identity.trackDegradationFlag !== 'NONE';
+      if (entryDegraded && !op.note) {
+        return {
+          ok: false, reason: 'VALIDATION_ERROR',
+          detail: `track degradation (${entryFdr.identity.trackDegradationFlag}) forces verbal coordination — a note is required`,
+          strip,
+        };
+      }
+
+      const proposal = peer.receiveTofiProposal({
+        fromFacilityId: this._rules.facilityId, fromPositionId: actingPositionId,
+        fromStripId: strip.stripId, toPositionId: op.toPositionId, fdrId: strip.fdrId, note: op.note || null, by,
+      });
+      if (!proposal.ok) return { ok: false, reason: proposal.reason || 'VALIDATION_ERROR', detail: proposal.detail, strip };
+
+      strip.tofiCoordination = {
+        direction: 'ENTRY', state: 'PROPOSED',
+        peerFacilityId: op.toFacilityId, peerStripId: proposal.strip.stripId, peerPositionId: op.toPositionId,
+        commsTransferred: false, commsTransferredAt: null, commsTransferredBy: null,
+        note: op.note || null,
+        initiatedAt: now, initiatedBy: by || null, acceptedAt: null, acceptedBy: null,
+      };
+      strip.rev += 1; strip.updatedAt = now; strip.updatedBy = by || null;
+      this._touch(strip.stripId);
+      return { ok: true, strip, peerFacilityId: op.toFacilityId, peerStrip: proposal.strip };
+    }
+
+    // EXIT — re-enters the existing link; never mints a new Strip.
+    const prior = strip.tofiCoordination;
+    if (!prior || prior.state !== 'ACTIVE') {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no active tactical control to exit', strip };
+    }
+    const peer = this._rules.peerBoard ? this._rules.peerBoard(prior.peerFacilityId) : null;
+    if (!peer) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown Facility: ${prior.peerFacilityId}`, strip };
+
+    const exitFdr = this._fdrStore.getFdr(strip.fdrId);
+    const exitDegraded = exitFdr && exitFdr.identity.trackDegradationFlag && exitFdr.identity.trackDegradationFlag !== 'NONE';
+    if (exitDegraded && !op.note) {
+      return {
+        ok: false, reason: 'VALIDATION_ERROR',
+        detail: `track degradation (${exitFdr.identity.trackDegradationFlag}) forces verbal coordination — a note is required`,
+        strip,
+      };
+    }
+
+    const exitResult = peer.receiveTofiExitProposal({ stripId: prior.peerStripId, note: op.note || null, by });
+    if (!exitResult.ok) return { ok: false, reason: exitResult.reason || 'VALIDATION_ERROR', detail: exitResult.detail, strip };
+
+    strip.tofiCoordination = {
+      ...prior, direction: 'EXIT', state: 'PROPOSED',
+      commsTransferred: false, commsTransferredAt: null, commsTransferredBy: null,
+      note: op.note || null,
+      initiatedAt: now, initiatedBy: by || null, acceptedAt: null, acceptedBy: null,
+    };
+    strip.rev += 1; strip.updatedAt = now; strip.updatedBy = by || null;
+    this._touch(strip.stripId);
+    return { ok: true, strip, peerFacilityId: prior.peerFacilityId, peerStrip: exitResult.strip };
+  }
+
+  /**
+   * Always invoked on the MISSION-side Strip (the receiving MRU
+   * controller's own record) — ENTRY's accept transitions to ACTIVE; EXIT's
+   * accept transitions to COMPLETE (rule 3: exit is the safety-critical
+   * direction, ATC separation MUST be re-established BEFORE the exchange
+   * completes — enforced here as a hard precondition, not derived as a
+   * side effect of accepting).
+   */
+  _applyTofiAccept(strip, op, by) {
+    const tofi = strip.tofiCoordination;
+    if (!tofi || tofi.state !== 'PROPOSED') {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no pending TOFI proposal on this Strip', strip };
+    }
+    if (tofi.direction === 'EXIT') {
+      const fdr = this._fdrStore.getFdr(strip.fdrId);
+      if (!fdr || !fdr.tofi || fdr.tofi.separationRegime !== 'ATC') {
+        return { ok: false, reason: 'VALIDATION_ERROR', detail: 'separation_regime must be set back to ATC before completing a TOFI exit', strip };
+      }
+    }
+
+    const now = Date.now();
+    tofi.state = tofi.direction === 'EXIT' ? 'COMPLETE' : 'ACTIVE';
+    tofi.acceptedAt = now;
+    tofi.acceptedBy = by || null;
+
+    // ENTRY only — relocate the MISSION Strip out of the Coordination Bay
+    // into its normal working Bay for its own (already-correct) state,
+    // mirroring _applyCoordinationAccept's exact relocation pattern. EXIT
+    // never moved the Strip into the Coordination Bay in the first place
+    // (receiveTofiExitProposal doesn't touch bayId/rackId at all), so
+    // there's nothing to relocate back.
+    if (tofi.direction === 'ENTRY') {
+      const targetBay = this._rules.bayForImpliedState ? this._rules.bayForImpliedState(strip.ownerPositionId, strip.state) : null;
+      if (targetBay) {
+        strip.bayId = targetBay.bayId;
+        strip.rackId = targetBay.rackIds[0];
+        strip.orderKey = this._resolveOrderKey(targetBay.bayId, targetBay.rackIds[0], null, null, strip.stripId);
+      }
+    }
+
+    strip.rev += 1; strip.updatedAt = now; strip.updatedBy = by || null;
+    this._touch(strip.stripId);
+
+    let peerStrip = null;
+    if (this._rules.peerBoard) {
+      const peer = this._rules.peerBoard(tofi.peerFacilityId);
+      if (peer) {
+        const peerResult = peer.receiveTofiResponse({ stripId: tofi.peerStripId, response: 'ACCEPT', by });
+        if (peerResult.ok) peerStrip = peerResult.strip;
+      }
+    }
+    return { ok: true, strip, peerFacilityId: tofi.peerFacilityId, peerStrip };
+  }
+
+  /** Always invoked on the MISSION-side Strip, mirroring _applyTofiAccept's own side. */
+  _applyTofiReject(strip, op, by) {
+    const tofi = strip.tofiCoordination;
+    if (!tofi || tofi.state !== 'PROPOSED') {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no pending TOFI proposal on this Strip', strip };
+    }
+    tofi.state = 'REJECTED';
+    strip.rev += 1; strip.updatedAt = Date.now(); strip.updatedBy = by || null;
+    this._touch(strip.stripId);
+
+    let peerStrip = null;
+    if (this._rules.peerBoard) {
+      const peer = this._rules.peerBoard(tofi.peerFacilityId);
+      if (peer) {
+        const peerResult = peer.receiveTofiResponse({ stripId: tofi.peerStripId, response: 'REJECT', by });
+        if (peerResult.ok) peerStrip = peerResult.strip;
+      }
+    }
+    return { ok: true, strip, peerFacilityId: tofi.peerFacilityId, peerStrip };
+  }
+
+  /**
+   * Guide §4.6.3's own "separate transfer of communications" — a distinct
+   * action from ACCEPT, invocable on EITHER side of an accepted exchange
+   * (whoever currently holds the frequency initiates handing it off).
+   * Mirrored to the peer's own record so both sides agree comms have moved.
+   */
+  _applyTofiTransferComms(strip, op, by) {
+    const tofi = strip.tofiCoordination;
+    if (!tofi || !tofi.acceptedAt || tofi.commsTransferred) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no accepted TOFI exchange awaiting a comms transfer', strip };
+    }
+    const now = Date.now();
+    tofi.commsTransferred = true;
+    tofi.commsTransferredAt = now;
+    tofi.commsTransferredBy = by || null;
+    strip.rev += 1; strip.updatedAt = now; strip.updatedBy = by || null;
+    this._touch(strip.stripId);
+
+    let peerStrip = null;
+    if (this._rules.peerBoard) {
+      const peer = this._rules.peerBoard(tofi.peerFacilityId);
+      if (peer) {
+        const peerResult = peer.receiveTofiResponse({ stripId: tofi.peerStripId, response: 'TRANSFER_COMMS', by });
+        if (peerResult.ok) peerStrip = peerResult.strip;
+      }
+    }
+    return { ok: true, strip, peerFacilityId: tofi.peerFacilityId, peerStrip };
+  }
+
+  /**
+   * Called by the ATC-side Facility's BoardStore (via rules.peerBoard) on a
+   * TOFI ENTRY PROPOSE — mints a brand-new, independent MISSION Strip in
+   * THIS Facility's own `_strips` Map, landing in the receiving Position's
+   * Coordination Bay. Shares the ATC-side Strip's own fdrId (guide §9.8's
+   * binding, realized now) rather than minting a fresh FDR — the one
+   * genuinely new piece of D13-style replication this slice adds: every
+   * one of the 5 ATC<->ATC primitives already does this (their replica
+   * shares the sender's fdrId too), but always with the SAME Strip Role on
+   * both sides; TOFI is the first primitive to bind two DIFFERENT roles
+   * (the ATC-side role, and MISSION) to one shared FDR.
+   * @returns {{ok:true, strip}|{ok:false, reason, detail}}
+   */
+  receiveTofiProposal({ fromFacilityId, fromPositionId, fromStripId, toPositionId, fdrId, note, by }) {
+    const fdr = this._fdrStore.getFdr(fdrId);
+    if (!fdr) return { ok: false, reason: 'NOT_FOUND', detail: 'referenced FDR not found' };
+
+    const coordinationBay = this._rules.coordinationBayFor ? this._rules.coordinationBayFor(toPositionId) : null;
+    if (!coordinationBay) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `no Coordination Bay configured for ${toPositionId}` };
+    }
+
+    const stripId = crypto.randomUUID();
+    const now = Date.now();
+    const rackStrips = this.getRack(coordinationBay.bayId, coordinationBay.rackIds[0]);
+    const afterStripId = rackStrips.length ? rackStrips[rackStrips.length - 1].stripId : null;
+    const orderKey = this._resolveOrderKey(coordinationBay.bayId, coordinationBay.rackIds[0], afterStripId, null, null);
+
+    const strip = {
+      stripId,
+      cid: this._nextCid(),
+      fdrId, // shared with the ATC-side Strip — guide §9.8's binding
+      rev: 1,
+      role: 'MISSION',
+      state: DEFAULT_INITIAL_STATE_BY_ROLE.MISSION,
+      ownerPositionId: toPositionId,
+      bayId: coordinationBay.bayId,
+      rackId: coordinationBay.rackIds[0],
+      orderKey,
+      annotations: {},
+      flags: newFlags(),
+      correlation: { state: 'UNCORRELATED' },
+      coordination: null,
+      tofiCoordination: {
+        direction: 'ENTRY', state: 'PROPOSED',
+        peerFacilityId: fromFacilityId, peerStripId: fromStripId, peerPositionId: fromPositionId,
+        commsTransferred: false, commsTransferredAt: null, commsTransferredBy: null,
+        note: note || null,
+        initiatedAt: now, initiatedBy: by || null, acceptedAt: null, acceptedBy: null,
+      },
+      createdAt: now, updatedAt: now, updatedBy: by || null,
+    };
+    this._strips.set(stripId, strip);
+    this._touch(stripId);
+    return { ok: true, strip };
+  }
+
+  /**
+   * Called by the ATC-side Facility's BoardStore on a TOFI EXIT PROPOSE —
+   * re-enters the ALREADY-EXISTING MISSION Strip's tofiCoordination record
+   * rather than minting a new one (the mission has been live in TACTICAL's
+   * own Board throughout ENTRY's ACTIVE window).
+   */
+  receiveTofiExitProposal({ stripId, note, by }) {
+    const strip = this._strips.get(stripId);
+    if (!strip || !strip.tofiCoordination) return { ok: false, reason: 'NOT_FOUND' };
+
+    const now = Date.now();
+    strip.tofiCoordination.direction = 'EXIT';
+    strip.tofiCoordination.state = 'PROPOSED';
+    strip.tofiCoordination.commsTransferred = false;
+    strip.tofiCoordination.commsTransferredAt = null;
+    strip.tofiCoordination.commsTransferredBy = null;
+    strip.tofiCoordination.note = note || null;
+    strip.tofiCoordination.initiatedAt = now;
+    strip.tofiCoordination.initiatedBy = by || null;
+    strip.tofiCoordination.acceptedAt = null;
+    strip.tofiCoordination.acceptedBy = null;
+    strip.rev += 1; strip.updatedAt = now; strip.updatedBy = by || null;
+    this._touch(strip.stripId);
+    return { ok: true, strip };
+  }
+
+  /**
+   * Called by the MISSION-side Facility's BoardStore once its controller
+   * has ACCEPTed/REJECTed a TOFI proposal, or TRANSFER_COMMS'd — updates
+   * the ATC-side Strip's own tofiCoordination record to match, so both
+   * sides agree on the outcome. Mirrors receiveCoordinationResponse exactly.
+   */
+  receiveTofiResponse({ stripId, response, by }) {
+    const strip = this._strips.get(stripId);
+    if (!strip || !strip.tofiCoordination) return { ok: false, reason: 'NOT_FOUND' };
+
+    const now = Date.now();
+    const tofi = strip.tofiCoordination;
+    if (response === 'ACCEPT') {
+      tofi.state = tofi.direction === 'EXIT' ? 'COMPLETE' : 'ACTIVE';
+      tofi.acceptedAt = now;
+      tofi.acceptedBy = by || null;
+    } else if (response === 'REJECT') {
+      tofi.state = 'REJECTED';
+    } else if (response === 'TRANSFER_COMMS') {
+      tofi.commsTransferred = true;
+      tofi.commsTransferredAt = now;
+      tofi.commsTransferredBy = by || null;
     }
     strip.rev += 1;
     strip.updatedAt = now;

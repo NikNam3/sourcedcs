@@ -327,3 +327,65 @@ test('ARRIVAL\'s DROPPED has no NLA — a terminal state, same as DEPARTURE\'s',
 test('a Strip with no role at all (or role:DEPARTURE) is unaffected by ARRIVAL\'s table — dispatch is per-Strip, not global state', () => {
   assert.deepEqual(computeNla(makeStrip('PUSHBACK'), makeFdr()), { toState: 'TAXI' });
 });
+
+// ── OVERFLIGHT lifecycle (docs/adr/0023 — [SOURCE-DEFINED]) ──────────────
+// TRANSITING -> DROPPED — the simplest possible 2-state lifecycle, mirroring
+// DEPARTURE's own HANDED_OFF -> DROPPED terminus shape: an overflight never
+// lands at Incirlik, so none of ARRIVAL's tower/final/landed/taxi stages apply.
+
+function makeOverflightStrip(state) { return { state, role: 'OVERFLIGHT' }; }
+
+test('every declared OVERFLIGHT State has exactly one NLA or a rendered inhibit reason — never undefined/unhandled', async () => {
+  const { OVERFLIGHT_STATES } = await import('../src/efsp/nla.js');
+  for (const state of OVERFLIGHT_STATES) {
+    const result = computeNla(makeOverflightStrip(state), makeFdr());
+    if (state === 'DROPPED') {
+      assert.equal(result, null);
+    } else {
+      assert.ok(result !== undefined, state);
+      assert.ok(result === null || 'toState' in result || 'inhibited' in result, state);
+    }
+  }
+});
+
+test('TRANSITING advances to DROPPED, unconditionally — no occupancy gating, unlike DEPARTURE/ARRIVAL\'s transfer-shaped transitions', () => {
+  assert.deepEqual(computeNla(makeOverflightStrip('TRANSITING'), makeFdr()), { toState: 'DROPPED' });
+});
+
+test('OVERFLIGHT\'s DROPPED has no NLA — a terminal state, same as every other role\'s', () => {
+  assert.equal(computeNla(makeOverflightStrip('DROPPED'), makeFdr()), null);
+});
+
+// ── MISSION lifecycle (WP4A second slice) ────────────────────────────────
+// TASKED -> AIRBORNE -> ON_STATION -> OFF_STATION -> RTB -> DROPPED — the
+// guide's own published lifecycle (§9.8, line 215), not invented. No
+// occupancy gating, no transferTo, same shape as OVERFLIGHT's own table:
+// whichever Position originated (or received via TOFI ENTRY) the mission
+// works its entire lifecycle solo.
+
+function makeMissionStrip(state) { return { state, role: 'MISSION' }; }
+
+test('every declared MISSION State has exactly one NLA or a rendered inhibit reason — never undefined/unhandled', async () => {
+  const { MISSION_STATES } = await import('../src/efsp/nla.js');
+  for (const state of MISSION_STATES) {
+    const result = computeNla(makeMissionStrip(state), makeFdr());
+    if (state === 'DROPPED') {
+      assert.equal(result, null);
+    } else {
+      assert.ok(result !== undefined, state);
+      assert.ok(result === null || 'toState' in result || 'inhibited' in result, state);
+    }
+  }
+});
+
+test('MISSION advances linearly through its whole lifecycle, unconditionally — no occupancy gating', () => {
+  assert.deepEqual(computeNla(makeMissionStrip('TASKED'), makeFdr()), { toState: 'AIRBORNE' });
+  assert.deepEqual(computeNla(makeMissionStrip('AIRBORNE'), makeFdr()), { toState: 'ON_STATION' });
+  assert.deepEqual(computeNla(makeMissionStrip('ON_STATION'), makeFdr()), { toState: 'OFF_STATION' });
+  assert.deepEqual(computeNla(makeMissionStrip('OFF_STATION'), makeFdr()), { toState: 'RTB' });
+  assert.deepEqual(computeNla(makeMissionStrip('RTB'), makeFdr()), { toState: 'DROPPED' });
+});
+
+test('MISSION\'s DROPPED has no NLA — a terminal state, same as every other role\'s', () => {
+  assert.equal(computeNla(makeMissionStrip('DROPPED'), makeFdr()), null);
+});

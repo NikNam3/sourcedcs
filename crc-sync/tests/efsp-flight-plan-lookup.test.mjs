@@ -19,6 +19,7 @@ function makePlan(overrides = {}) {
   return {
     id: 'plan-1', route: 'DCT', levelValue: '250',
     depAerodrome: 'LTAG', destAerodrome: 'LTAC', otherInfo: 'DOF/260101',
+    aircraftType: 'F16', wtc: 'M',
     fplMessage: '(FPL-VIPER1-IG...)', worldTour: false,
     ...overrides,
   };
@@ -103,6 +104,7 @@ test('toFdrFiledSeed maps exactly the fields EFSP models, dropping everything DD
     route: 'DCT', requestedAltitude: '250',
     departureAirport: 'LTAG', destinationAirport: 'LTAC',
     remarks: 'DOF/260101',
+    aircraftType: 'F16', wakeCategory: 'M',
   });
   assert.equal('fplMessage' in seed, false);
   assert.equal('worldTour' in seed, false);
@@ -110,7 +112,10 @@ test('toFdrFiledSeed maps exactly the fields EFSP models, dropping everything DD
 
 test('toFdrFiledSeed never throws on a missing field — falls back to empty string, same as a blank CreateStrip', () => {
   const seed = toFdrFiledSeed({});
-  assert.deepEqual(seed, { route: '', requestedAltitude: '', departureAirport: '', destinationAirport: '', remarks: '' });
+  assert.deepEqual(seed, {
+    route: '', requestedAltitude: '', departureAirport: '', destinationAirport: '', remarks: '',
+    aircraftType: '', wakeCategory: '',
+  });
 });
 
 test('toFdrFiledSeed on null/non-object input returns an empty object, not a throw', () => {
@@ -136,7 +141,10 @@ test('listFiledFlightPlans maps each raw plan into a lightweight {id, callsign, 
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.deepEqual(result.plans, [{
     id: 1, callsign: 'VIPER1', submittedByName: 'Alice', submittedAt: '2026-01-01T00:00:00.000Z',
-    seed: { route: 'DCT', requestedAltitude: '250', departureAirport: 'LTAG', destinationAirport: 'LTAC', remarks: 'DOF/260101' },
+    seed: {
+      route: 'DCT', requestedAltitude: '250', departureAirport: 'LTAG', destinationAirport: 'LTAC', remarks: 'DOF/260101',
+      aircraftType: '', wakeCategory: '',
+    },
   }]);
 });
 

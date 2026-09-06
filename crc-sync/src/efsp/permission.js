@@ -1,5 +1,7 @@
 'use strict';
 
+const facilityConfig = require('./facility-config');
+
 // Per-acting-Position permission evaluation (EFSPImplementationGuide.md
 // §4.8.4) — table-driven, evaluated for the SINGLE acting Position on a
 // Mutation, NEVER as a union of every Position a controller happens to
@@ -53,6 +55,22 @@ const OP_KINDS = [
   'CreateStrip', 'MoveStrip', 'SetBlock', 'TransferStrip',
   'SetFlag', 'SetState', 'InvokeNla', 'Undo', 'DropStrip',
   'HANDOFF', 'POINT_OUT', 'TRAFFIC', 'OPERATIONAL_REQUEST', 'AIT',
+  // docs/adr/0023 — converts a DEPARTURE Strip at HANDED_OFF into an
+  // ARRIVAL Strip IN PLACE (same Strip, same FDR), for a flight returning
+  // to the same Facility that just handed it off. Deliberately restricted
+  // the same way the 5 coordination primitives are (only APP/CTR sit on a
+  // boundary where this makes sense) — see COORDINATION_OP_KINDS' own
+  // comment for why that exclusion pattern exists, and why it applies here
+  // too, not just to those 5.
+  'ConvertToArrival',
+  // WP4A second slice (docs/adr/0025) — TOFI (guide §4.6.3), the ATC<->MRU
+  // sub-protocol. Deliberately NOT folded into COORDINATION_OP_KINDS below
+  // (that set is specifically the 5 ATC<->ATC primitives) and deliberately
+  // NOT granted to APP even though APP otherwise gets the full OP_KINDS
+  // set — guide §4.1's own Position table lists TOFI only for CTR among
+  // the ATC Positions built so far, plus TAC_C2/GCI on the MRU side. See
+  // TOFI_OP_KINDS and each Position's own PERMISSIONS entry below.
+  'TOFI',
 ];
 
 // The 5 cross-Facility coordination primitives (guide §4.6) — split out so
@@ -60,7 +78,37 @@ const OP_KINDS = [
 // the list, and so canMutate()'s D21 shape stays a single flat lookup.
 const COORDINATION_OP_KINDS = ['HANDOFF', 'POINT_OUT', 'TRAFFIC', 'OPERATIONAL_REQUEST', 'AIT'];
 
-const NON_CREATE_OPS = OP_KINDS.filter(k => k !== 'CreateStrip' && !COORDINATION_OP_KINDS.includes(k));
+// Op kinds restricted to exactly APP/CTR, for reasons other than being a
+// cross-Facility coordination primitive — currently just ConvertToArrival
+// (docs/adr/0023). Kept separate from COORDINATION_OP_KINDS since it isn't
+// one (no cross-Facility exchange, no replica — a same-Facility in-place
+// role change), but needs the identical exclusion from OPS/CD/GND/TWR.
+const APP_CTR_ONLY_OP_KINDS = ['ConvertToArrival'];
+
+// TOFI (guide §4.6.3) — split out the same way COORDINATION_OP_KINDS is,
+// so it can be excluded from NON_CREATE_OPS/OPS's grant (nobody gets it by
+// default) and explicitly re-added only where guide §4.1's own Position
+// table names it (CTR, TAC_C2, GCI — see PERMISSIONS below).
+const TOFI_OP_KINDS = ['TOFI'];
+
+const NON_CREATE_OPS = OP_KINDS.filter(k => k !== 'CreateStrip' && !COORDINATION_OP_KINDS.includes(k) && !APP_CTR_ONLY_OP_KINDS.includes(k) && !TOFI_OP_KINDS.includes(k));
+
+// WP4A second slice (docs/adr/0025) — defect D12: "TAC_C2, GCI, AIC and
+// JTAC MUST NOT be given HANDOFF or POINT_OUT" (guide §4.1 rule 1), which
+// this generalizes to all 5 COORDINATION_OP_KINDS. Read from facility-
+// config.js's per-Position positionClasses map (docs/adr/0020's own
+// directive: "gate the 5 coordination op kinds on [a class concept]...
+// rather than the current flat per-Position-ID PERMISSIONS table") instead
+// of a hand-maintained ID list, so a future MRU/non-ATC Position
+// automatically inherits the same refusal with no new line needed here.
+// Applied as a structural strip-back below, layered on top of the
+// hand-authored PERMISSIONS table (belt-and-suspenders): even a future
+// typo that accidentally grants a coordination kind to an MRU Position's
+// entry gets silently corrected by this loop, not just documented against.
+const MRU_OR_NON_ATC_CLASSES = new Set(['MRU', 'MRU_POSITION', 'NON_ATC']);
+function _isMruOrNonAtc(positionId) {
+  return MRU_OR_NON_ATC_CLASSES.has(facilityConfig.getPositionClass(positionId));
+}
 
 // The coarse "may this Position class ever perform this KIND of op at
 // all" gate — CreateStrip is included here for OPS/APP (both originate
@@ -69,19 +117,56 @@ const NON_CREATE_OPS = OP_KINDS.filter(k => k !== 'CreateStrip' && !COORDINATION
 // _applyCreateStrip calls in addition to this. The 5 COORDINATION_OP_KINDS
 // are included only for APP/CTR (guide §4.6: only ATC⇄ATC Positions that
 // actually sit on a Facility boundary get these — WP4A's deferred MRU
-// Positions, docs/adr/0012, get none at all, which is D12's refusal case).
+// Positions, docs/adr/0020, get none at all, which is D12's refusal case).
+// ConvertToArrival is restricted the same way, for the same underlying
+// reason (only APP/CTR ever hold a DEPARTURE Strip at its HANDED_OFF
+// terminus in a position to convert it).
 const PERMISSIONS = {
-  OPS: new Set(OP_KINDS.filter(k => !COORDINATION_OP_KINDS.includes(k))),
+  OPS: new Set(OP_KINDS.filter(k => !COORDINATION_OP_KINDS.includes(k) && !APP_CTR_ONLY_OP_KINDS.includes(k) && !TOFI_OP_KINDS.includes(k))),
   CD:  new Set(NON_CREATE_OPS),
   GND: new Set(NON_CREATE_OPS),
   TWR: new Set(NON_CREATE_OPS),
-  APP: new Set(OP_KINDS),
+  // APP deliberately excludes TOFI even though it otherwise gets the full
+  // OP_KINDS set — guide §4.1's own Position table lists TOFI only for CTR
+  // among the ATC Positions built so far; APP is not on TOFI's ATC side.
+  APP: new Set(OP_KINDS.filter(k => !TOFI_OP_KINDS.includes(k))),
   // CTR gets CreateStrip too — it self-originates ARRIVAL Strips as the new
   // terminus stub (docs/adr/0014, mirroring the same "nothing further
   // upstream is built yet" shape as docs/adr/0008's original APP stub),
-  // since no third Facility exists upstream of CENTER this slice.
+  // since no third Facility exists upstream of CENTER this slice. CTR also
+  // gets TOFI (WP4A second slice) — the full OP_KINDS set already includes it.
   CTR: new Set(OP_KINDS),
+  // WP4A second slice — TAC_C2/GCI (class MRU) get ordinary Strip
+  // mechanics plus CreateStrip (they originate MISSION Strips, guide §9.8)
+  // plus TOFI, explicitly minus all 5 COORDINATION_OP_KINDS (D12 — an MRU
+  // must never be offered HANDOFF/POINT_OUT/TRAFFIC/OPERATIONAL_REQUEST/
+  // AIT, even in combination with a Position that does hold them; see the
+  // D21 regression test and the class-derived strip-back loop below).
+  TAC_C2: new Set([...NON_CREATE_OPS, 'CreateStrip', 'TOFI']),
+  GCI:    new Set([...NON_CREATE_OPS, 'CreateStrip', 'TOFI']),
+  // AIC (class MRU_POSITION) — "works under TAC_C2's TOFI" (guide §4.1):
+  // acts on MISSION Strips once TAC_C2 has already completed an exchange,
+  // never independently PROPOSEs/ACCEPTs one itself. Ordinary Strip
+  // mechanics only — no CreateStrip (doesn't originate MISSION Strips),
+  // no TOFI, no coordination kinds.
+  AIC: new Set(NON_CREATE_OPS),
+  // JTAC (class NON_ATC) — "MISSION (read-only)" (guide §4.1): granted
+  // nothing at all. Read access (snapshot/delta broadcast, efsp-ws.js) is
+  // unconditional and not gated by this table, so an empty grant set alone
+  // makes JTAC read-only with no separate mechanism needed.
+  JTAC: new Set([]),
 };
+
+// D12, enforced structurally rather than merely by careful hand-authoring
+// above (docs/adr/0020's own directive — see MRU_OR_NON_ATC_CLASSES'
+// comment). Any Position whose facility-config class is MRU/MRU_POSITION/
+// NON_ATC loses every one of the 5 COORDINATION_OP_KINDS here, regardless
+// of what PERMISSIONS[positionId] was constructed with above.
+for (const [positionId, ops] of Object.entries(PERMISSIONS)) {
+  if (_isMruOrNonAtc(positionId)) {
+    for (const opKind of COORDINATION_OP_KINDS) ops.delete(opKind);
+  }
+}
 
 // Which Strip Role(s) a Position may originate via CreateStrip. Every
 // Position in PERMISSIONS with CreateStrip in its op-kind set MUST have an
@@ -89,20 +174,31 @@ const PERMISSIONS = {
 // Position has a CREATE_ROLE_PERMISSIONS entry" test.
 const CREATE_ROLE_PERMISSIONS = {
   OPS: new Set(['DEPARTURE']),
-  // APP's ARRIVAL right is DELIBERATELY EMPTY now (docs/adr/0014,
-  // superseding docs/adr/0008) — ARRIVAL Strips at APP now originate via
-  // the real CTR->APP HANDOFF (board-store.js's receiveCoordinationProposal),
-  // not local self-creation. APP keeps its entry here (rather than being
-  // removed from PERMISSIONS' coarse CreateStrip set) purely so the "every
-  // CreateStrip-eligible Position has a CREATE_ROLE_PERMISSIONS entry"
-  // invariant test still finds one — an intentional, reviewed change, not
-  // a silent regression, exactly as ADR 0008's own "Consequences" section
-  // asked for.
-  APP: new Set([]),
-  // CTR self-originates ARRIVAL Strips this slice — the same "no Facility
-  // further upstream is built yet" stub shape APP's entry used to have,
-  // since CENTER has no further-upstream Facility.
-  CTR: new Set(['ARRIVAL']),
+  // docs/adr/0023 reopens this — ADR 0014 had deliberately emptied it,
+  // reasoning ARRIVAL Strips at APP should only ever arrive via the real
+  // CTR->APP HANDOFF, never local self-creation. Live testing against real
+  // ATC scenarios (a VFR aircraft picking up an IFR clearance airborne, an
+  // aircraft from an uncontrolled field with no flight plan on file, ...)
+  // found that reasoning too narrow: guide §4.1's own Position table lists
+  // APP's Strip Roles as "all", and none of those pop-up scenarios have a
+  // sending Facility to HANDOFF from — the flight simply isn't in the
+  // system yet until whichever Position takes the radio call originates
+  // it directly. ARRIVAL Strips can now originate BOTH ways: via a real
+  // cross-Facility HANDOFF, or via APP self-originating one directly, same
+  // as CTR already could.
+  APP: new Set(['ARRIVAL', 'OVERFLIGHT']),
+  // CTR self-originates ARRIVAL Strips (docs/adr/0014) — now also
+  // OVERFLIGHT (docs/adr/0023), for a flight transiting Center's airspace
+  // without landing or departing at Incirlik at all (guide §2/§6.3).
+  CTR: new Set(['ARRIVAL', 'OVERFLIGHT']),
+  // WP4A second slice — TAC_C2/GCI originate MISSION Strips (guide §9.8:
+  // "TAC_C2 works mission lines"). A standalone origination (own fresh
+  // FDR) for a mission that never touches ATC-controlled airspace at all —
+  // separate from, and coexisting with, a MISSION Strip minted as a TOFI
+  // ENTRY exchange's byproduct (board-store.js's receiveTofiProposal),
+  // which shares its FDR with the ATC-side Strip instead.
+  TAC_C2: new Set(['MISSION']),
+  GCI: new Set(['MISSION']),
 };
 
 /**
@@ -155,7 +251,16 @@ const DEPARTURE_STATE_OWNERS = {
   RUNWAY_QUEUE:      ['TWR'],
   LUAW:              ['TWR'],
   DEPARTED:          ['TWR'],
-  HANDED_OFF:        ['APP'],
+  // CTR added (docs/adr/0022 bug fix) — a CENTER-held HANDED_OFF Strip
+  // (received via APP's real HANDOFF, mirroring ARRIVAL_STATE_OWNERS.
+  // INBOUND's existing ['APP','CTR'] entry for the reverse direction)
+  // needs its owning Position authorized to Drop it, same as APP's own
+  // copy. Without this, a CENTER-side replica — whether legitimately
+  // ACCEPTed and moved to ctr-departures, or REJECTed and left inert in
+  // ctr-app-coordination — had NO way to ever be cleared: NLA's Drop
+  // button rendered but stayed permanently disabled (canActOnState denied
+  // to CTR), found in live testing.
+  HANDED_OFF:        ['APP', 'CTR'],
   // DROPPED is terminal — no NLA exists for it, so no entry is needed.
 };
 
@@ -176,7 +281,56 @@ const ARRIVAL_STATE_OWNERS = {
   TAXI_IN:         ['GND'],
 };
 
-const STATE_OWNERS_BY_ROLE = { DEPARTURE: DEPARTURE_STATE_OWNERS, ARRIVAL: ARRIVAL_STATE_OWNERS };
+// [SOURCE-DEFINED] (docs/adr/0023) — OVERFLIGHT has no guide-published
+// state table at all (§6.3 only notes it shares Blocks 20/21 with
+// ARRIVAL); its 2-state TRANSITING->DROPPED lifecycle mirrors DEPARTURE's
+// own HANDED_OFF->DROPPED terminus shape. Both Positions that may
+// originate one (permission.js's CREATE_ROLE_PERMISSIONS) may also act on
+// it, same "self-originator owns it" precedent as ARRIVAL's INBOUND row.
+const OVERFLIGHT_STATE_OWNERS = {
+  TRANSITING: ['APP', 'CTR'],
+  // DROPPED is terminal — no NLA exists for it, so no entry is needed.
+};
+
+// [SOURCE-DEFINED] (WP4A second slice) — MISSION has no guide-published
+// state-ownership table (§9.8 only names the lifecycle, guide line 215);
+// mirrors OVERFLIGHT_STATE_OWNERS' "self-originator owns it" precedent —
+// whichever Position originated the mission (CREATE_ROLE_PERMISSIONS
+// above) works its entire lifecycle solo. AIC/JTAC deliberately absent:
+// AIC works under TAC_C2's TOFI rather than owning state transitions
+// itself; JTAC's absence alone is what makes it read-only (guide §4.1:
+// "MISSION (read-only)"), no separate mechanism needed.
+const MISSION_STATE_OWNERS = {
+  TASKED:     ['TAC_C2', 'GCI'],
+  AIRBORNE:   ['TAC_C2', 'GCI'],
+  ON_STATION: ['TAC_C2', 'GCI'],
+  OFF_STATION: ['TAC_C2', 'GCI'],
+  RTB:        ['TAC_C2', 'GCI'],
+  // DROPPED is terminal — no NLA exists for it, so no entry is needed.
+};
+
+const STATE_OWNERS_BY_ROLE = { DEPARTURE: DEPARTURE_STATE_OWNERS, ARRIVAL: ARRIVAL_STATE_OWNERS, OVERFLIGHT: OVERFLIGHT_STATE_OWNERS, MISSION: MISSION_STATE_OWNERS };
+
+// WP4A second slice — TOFI's target resolution (guide §4.6.3, ATC<->MRU).
+// Per guide §4.1's own Position table, TOFI is listed only for CTR among
+// the ATC Positions built so far (not APP) — so the ATC side is CTR only,
+// but the MRU side has two candidates (TAC_C2, GCI), and this table
+// resolves which counterpart(s) are valid for a given acting Position
+// rather than assuming a fixed 1:1 pair the way the older, narrower
+// COORDINATION_TARGETS-style stub could. Small and static (not full
+// dynamic discovery) — board-store.js's _applyTofiPropose validates a
+// proposal's target against this for defense in depth, and
+// crc-desktop's TOFI popover mirrors it to build its target picker.
+const TOFI_COUNTERPARTS = {
+  CTR:    [{ facilityId: 'TACTICAL', positionId: 'TAC_C2' }, { facilityId: 'TACTICAL', positionId: 'GCI' }],
+  TAC_C2: [{ facilityId: 'CENTER', positionId: 'CTR' }],
+  GCI:    [{ facilityId: 'CENTER', positionId: 'CTR' }],
+};
+
+/** @returns {{facilityId:string, positionId:string}[]} the valid TOFI counterparts for `actingPositionId`, or an empty array if it has none. */
+function tofiCounterparts(actingPositionId) {
+  return TOFI_COUNTERPARTS[actingPositionId] || [];
+}
 
 /**
  * @param {string} actingPositionId
@@ -190,7 +344,8 @@ function canActOnState(actingPositionId, role, state) {
 }
 
 module.exports = {
-  canMutate, canCreateStripRole, canActOnState,
-  PERMISSIONS, CREATE_ROLE_PERMISSIONS, STATE_OWNERS_BY_ROLE, DEPARTURE_STATE_OWNERS, ARRIVAL_STATE_OWNERS,
-  OP_KINDS, COORDINATION_OP_KINDS,
+  canMutate, canCreateStripRole, canActOnState, tofiCounterparts,
+  PERMISSIONS, CREATE_ROLE_PERMISSIONS, STATE_OWNERS_BY_ROLE,
+  DEPARTURE_STATE_OWNERS, ARRIVAL_STATE_OWNERS, OVERFLIGHT_STATE_OWNERS, MISSION_STATE_OWNERS,
+  OP_KINDS, COORDINATION_OP_KINDS, APP_CTR_ONLY_OP_KINDS, TOFI_OP_KINDS, TOFI_COUNTERPARTS,
 };

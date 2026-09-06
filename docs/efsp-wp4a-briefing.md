@@ -1,88 +1,56 @@
-# EFSP — status and briefing for the next work package (WP4A)
+# EFSP — relief briefing for whoever picks up EFSP work next
 
-Entry point for whoever picks up EFSP work next. Read this, then `EFSPImplementationGuide.md` §4.6 (cited throughout below), then start a proper plan (`/plan` or equivalent) for WP4A itself — this document is a briefing and a recommended scope cut, not a line-by-line build order. WP4A is large enough, and touches enough genuinely new architecture (per-Facility Strip *replicas*, not a moved Strip), that it deserves its own dedicated planning pass with the project owner rather than being speculatively fully designed here.
+Entry point for the next agent/session. Read this, then `EFSPImplementationGuide.md` §4.6 (cited throughout below) if you're touching anything cross-Facility, then start a proper plan (`/plan` or equivalent) before writing code — this document is a handoff, not a build order.
 
-## 1. What's built (verified by direct code inspection, not from memory)
+**This revision supersedes the previous one.** The previous revision recommended a "first slice" scope cut for WP4A (§4 below, kept for the record) — that slice is now **fully built and tested**. Don't re-read the old framing as "what's left to do"; jump to §2/§3.
 
-Two rounds of implementation (this repo's own "Phase 1" and "Phase 2", which together cover the guide's **WP0 → WP4**) are complete and tested:
+## 0. Before anything else: nothing from WP4A onward is committed
 
-- **WP0** — Reconnaissance (`docs/adr/0003-wp0-findings-d1-a3-false.md`).
-- **WP1** — Domain model and protocol: FDR/Strip separation, JSON Mutation protocol, optimistic concurrency, durable persistence (`docs/adr/0001`, `0002`).
-- **WP1A** — Position occupancy, combination, handover, self-coordination, per-acting-Position permission evaluation (D21 guarded by construction — see `crc-sync/tests/efsp-permission.test.mjs`'s "has exactly N parameters" tests and the cross-role `canCreateStripRole` tests).
-- **WP2** — Block Map, both `DEPARTURE` and `ARRIVAL` (`crc-sync/src/efsp/block-map.js`), with a server/client parity test (`crc-desktop/tests/efsp-block-map-parity.test.js`).
-- **WP3** — Bays/Racks/interaction layer: keyed drag-safe rendering, the four paper gestures (offset/flip/highlight/attention), search Bay, heartbeat/staleness banner.
-- **WP4** — States, NLA (both lifecycles), transfer protocol with presence gating and covering-chain fallback, 30s Undo (state-only transitions), restart-survives-a-transfer tested. `docs/adr/0007`–`0012` record the real decisions here, most recently: every NLA transition that crosses a `DEPARTURE_STATE_OWNERS` boundary is now transfer-shaped (`docs/adr/0012`), not just `DEPARTED→APP`.
+`git status` in the repo root right now shows every WP4A-era file (everything touched since `docs/adr/0013`) as modified or untracked — `crc-sync/src/efsp/*`, `crc-desktop/app/public/js/panels/efsp/*`, both test directories, and `docs/adr/0013` through `0024`. This has been one long uncommitted working session. **Check with the project owner how they want this committed** (one large commit, split by ADR/feature, etc.) before doing anything else — don't assume and don't force-push/reset anything to "clean up" the tree.
 
-Both test suites are green: `crc-sync` 357 tests, `crc-desktop` 160 tests (`npm test` in each directory).
+## 1. Test status
 
-Facility/Position set currently live: one Facility (`INCIRLIK`), five Positions (`OPS`, `CD`, `GND`, `TWR`, `APP`), covering chain `CD→GND→TWR→APP` (**stops at APP** — see gap below).
+Both suites green as of this briefing: `crc-sync` **515** tests, `crc-desktop` **190** tests (`npm test` in each directory).
 
-### Known gaps worth closing, not large enough to be their own WP
+## 2. What's built
 
-- **Void-time expiry has no active alert.** Guide WP4 acceptance: *"Void-time expiry raises an alert at void + 30 minutes."* Today `nla.js`'s `isVoidExpired()` only gates the `HELD` NLA (passive — a controller has to look). No proactive alert/notification exists. Cheap, WP4-shaped, worth doing before or alongside WP4A rather than folding into it.
-- **The single-Position-controller drop-target gap** (`crc-desktop/app/public/js/panels/efsp/efsp-panel.js`, `_positionsWithBays()`'s own comment) is moot for the documented DEPARTURE/ARRIVAL lifecycle chains (ADR 0012 made those NLA buttons transfer automatically) but still real for any hand-off outside that chain.
-- **No ADR exists for the WP1A position-selection deviation** (`crc-sync/src/efsp/position-store.js`'s header comment: Positions are explicitly *not* derived from radar-station selection, contradicting the guide's D-9 assumption — this project's owner decided a dedicated Position selector instead). The guide's own §0.4 requires an ADR for every such departure; this one predates the ADR discipline being applied consistently and should get a retroactive one.
+**WP0–WP4** (this repo's "Phase 1"/"Phase 2"), unchanged from before:
+- WP0 Reconnaissance (`0003`). WP1 Domain model/protocol (`0001`, `0002`). WP1A Position occupancy/combination/handover/self-coordination/permission evaluation. WP2 Block Map for `DEPARTURE`/`ARRIVAL` (`crc-sync/src/efsp/block-map.js`). WP3 Bays/Racks/drag/gestures/search/staleness banner. WP4 States, NLA, transfer protocol, 30s Undo (`0007`–`0012`).
 
-None of these block WP4A. Worth a small pre-pass if convenient, otherwise fine to defer.
+**WP4A — first slice (civil ATC↔ATC only), fully built:**
+1. **`CENTER` Facility + `CTR` Position** (`0013`) — the backend is now N Facility-scoped `{BoardStore, PositionStore}` pairs sharing one `FdrStore`. `facility-config.js`'s intrafacility covering chain (`CD→GND→TWR→APP`) is **deliberately not** extended to `CTR` — that's a different mechanism (interfacility `HANDOFF`, not the occupancy-fallback covering chain), see that file's own comment.
+2. **The 5 cross-Facility coordination primitives** — `HANDOFF`, `POINT_OUT`, `TRAFFIC`, `OPERATIONAL_REQUEST`, `AIT` between `APP`↔`CTR` (`0015`, refined in `0022`: `OPERATIONAL_REQUEST`'s third `STAND_BY` response, `AIT`'s written-directive gating). `POINT_OUT`'s dual-jurisdiction split (data stays with initiator, separation moves to receiver) is rendered in the UI (`bay-view.js`'s `DATA:` chip).
+3. **Per-Facility Strip replication — the D13 mechanism** (`0015`) — a cross-Facility exchange mints a genuinely second Strip/replica in the receiving Facility, never moves the original. `board-store.js` has dedicated replica-proposal/accept/reject machinery, independent of `_applyTransferStrip`.
+4. **Forwarding obligations** (`0021`) — real periodic-scan machinery (`forwarding-obligations.js`'s `ForwardingObligationMonitor`), a new WS alert broadcast, unpersisted compliance counters. Covers `ADVANCE_FORWARDING` (15 min), `ETA_REVISION` (3 min), `AMENDMENT_INSIDE_30MIN`, `DATA_ONLY_VERIFICATION` (3 min) — the four §4.6.1 obligation types. **Does not** cover void-time expiry (see gap below).
+5. **Release-across-the-boundary** (`0017`) — `EDCT`/`CALL_FOR_RELEASE` extend the existing `RELEASE_STATES`, each deriving a window on write (±5 min / −2/+1 min); standing-release envelopes (`release-envelope.js`) with an `OPERATIONAL_REQUEST` fallback when a flight is `HOLD_FOR_RELEASE` and outside every configured envelope.
+6. **Airspace ownership as a direction** (`0018`) — `airspace.owner ∈ {CONTROLLING_AGENCY, USING_AGENCY}` via a dedicated setter, structurally excluded from the generic FDR field-write path (no boolean path exists). Reachable in the UI as an enum `<select>` Block 24A since `0022`.
+7. **Track-degradation forces the verbal path** (`0019`) — `identity.trackDegradationFlag !== 'NONE'` rejects a coordination `PROPOSE` unless `op.note` is non-empty. Reachable in the UI as enum `<select>` Block 5A since `0022`.
+8. **`TOFI`/`TACTICAL`/MRU Positions explicitly deferred**, recorded in `0020` exactly as the prior briefing recommended.
 
-## 2. Why WP4A is next, per the guide itself
+**Beyond the original first-slice scope**, built since:
+- **`0022`** — the two enum-`<select>` Blocks above (5A/24A) actually wired to the UI for the first time (both had working server-side setters and zero way to reach them before this).
+- **`0023`** — `APP` regains direct `ARRIVAL` self-origination for pop-up flights (alongside, not instead of, the real `CTR→APP HANDOFF` from `0014`) — for a flight with no sending Facility to hand off from at all. A real third Strip Role, **`OVERFLIGHT`** (`TRANSITING → DROPPED`, owned by `APP`/`CTR`, reuses `DEPARTURE`'s origin/destination/route/altitude/remarks fields to mean the flight's *real* origin/destination, never Incirlik). A **`ConvertToArrival`** Mutation — an in-place `DEPARTURE(HANDED_OFF) → ARRIVAL(INBOUND)` role/state change on the *same* Strip/FDR for a same-day turnaround, a deliberate, documented departure from guide §3.6's "always separate Strips" rule, restricted to `APP`/`CTR`. Also closed a long-standing gap: `identity.aircraftType`/`wakeCategory`/`tailNumber`/`unit`/`homeStation` had been validated and writable server-side since Phase 1 with **no Block anywhere ever routing a `SetBlock` at them** — new Blocks `3A`–`3E` on all three roles fix that.
+- **`0024`** — every Block Map entry (all three roles) now carries a `label` (guide §2 required this from the start; never implemented until now). Compact Strip view shows a small muted label above every value, closing the "which bare value is this?" usability gap raised in live testing.
+- **Live-testing bugfixes this session** (uncommitted, folded into the working tree, no dedicated ADR since they're pure bugfixes, not design decisions): the airspace-owner/degradation `<select>`'s `change`+`blur` double-`replaceWith()` crash (`bay-view.js`); a `STALE_REV` race when editing two different Blocks on the same Strip back-to-back (both click-to-edit paths now read the live Strip at commit time instead of the DOM-build-time snapshot); `toFdrFiledSeed()` (`flight-plan-lookup.js`) not mapping DD1801's `aircraftType`/`wtc` into the CreateStrip seed even though both exist on a filed plan.
 
-`EFSPImplementationGuide.md` §16 ("Build order, in one paragraph") is explicit:
+## 3. What's genuinely left
 
-> **"WP1A comes immediately after the protocol, and WP4A must not slip."** Together they are the load-bearing structure of an eighteen-position panel worked by three or four people... WP4A because the class distinction — military ATC does handoffs, Military Radar Units do not — is expensive to retrofit and easy to get wrong. **Every other work package assumes both.**
+**The deferred slice** (`0020`) — `TOFI` (§4.6.3, the three-field `ifr_active`/`radar_service`/`separation_regime` model, ATC⇄MRU), the `TACTICAL` Facility, MRU Positions (`TAC_C2`, `AIC`, `GCI`, `JTAC`), and the D12 audit (MRU Positions must have **zero** handoff/point-out affordance, even via combined-Position union — needs a real UI audit, not just an absent happy path). Guide's own note: this pairs naturally with WP6 (the military layer), since `separation_regime: MARSA` is conceptually part of that layer too.
 
-WP1A is done. WP4A's own entry criterion (§13) is `WP4`, also done. Every later work package in the guide's table (WP5 track correlation, WP6 military layer, WP7 ATO ingest, WP7A carrier/PAR, WP8 instrumentation) is explicitly *lower* priority than WP4A per this build-order note — WP5 "can proceed in parallel once the UI exists," but WP4A is called out by name as the one thing that must not slip. So: **WP4A is the next work package**, not WP5/6/7.
+**Three small pre-WP4A gaps, still open, non-blocking** (carried over from the previous briefing, still true):
+- **Void-time expiry has no proactive alert.** `nla.js`'s `isVoidExpired()` is still passive-only (a controller has to look). Cheap to close now that `forwarding-obligations.js`'s alerting machinery actually exists (`0021`) — a 5th obligation type is the natural shape, rather than inventing a second alerting mechanism.
+- **The single-Position-controller drop-target gap** (`efsp-panel.js`'s `_positionsWithBays()` comment, still there) — moot for the documented `DEPARTURE`/`ARRIVAL` chains (their NLA buttons transfer automatically per `0012`) but still real for a hand-off outside that chain: a controller holding only one Position has no tab to drag a Strip onto for a Position they don't hold.
+- **No ADR for the WP1A position-selection deviation** (`position-store.js`'s header comment — Positions are explicitly not derived from radar-station selection, contradicting the guide's D-9 assumption). Still no `docs/adr/*` file covers this decision retroactively.
 
-## 3. What WP4A actually is (§4.6, quoted in full — this is the hard part)
+**Not started at all** (correctly — lower priority per the guide's own build-order note, §16): WP5 (track correlation), WP6 (military layer, beyond what `0020` deferred into it), WP7 (ATO ingest), WP7A (carrier/PAR), WP8 (instrumentation).
 
-> **The Strip does not cross the Facility boundary.** Each Facility materialises its own Strip from forwarded data... **One logical Flight Data Record; N per-Facility Strip replicas; synchronised by data messages plus coordination events.** Implementing this as a strip *move* across Facilities is defect class D13.
+## 4. Original "first slice" recommendation (kept for the record, now done)
 
-This is a materially different mechanism from everything built so far. `TransferStrip` (guide §4.5, everything WP4 built) moves ownership of *one* Strip within a Facility. WP4A's cross-Facility primitives create a **second, independent Strip replica** in the receiving Facility — both sides can then be removed independently, and `ADR 0007`'s own text is explicit that `TWR→APP`'s existing "Hand Off" is *not* this mechanism (both are `INCIRLIK` Positions; there's no second Facility to replicate into yet).
+The previous revision of this briefing recommended scoping WP4A's first pass to civil ATC↔ATC only — `CENTER`/`CTR`, the 5 non-TOFI primitives, D13 replication, forwarding obligations, release-across-the-boundary, airspace-ownership-as-direction — deferring `TOFI`/`TACTICAL`/MRU to a follow-on slice. That's exactly what got built (§2 above), confirmed via direct code inspection, not from memory.
 
-**Guide-specified deliverables (§13, WP4A):**
-- The Facility model (§2, §4.6) — a second Facility. This project's own code comments already assume it will be called `CTR` (Ankara Center) — see `nla.js`'s and `docs/adr/0007`'s references to "the real cross-Facility HANDOFF, still APP↔CTR and still unbuilt."
-- Coordination primitives with correct jurisdiction semantics: `HANDOFF`, `POINT_OUT`, `TRAFFIC`, `OPERATIONAL_REQUEST`, `TOFI`, `AIT` (table at §4.6, reproduced below).
-- Per-Facility Strip replication from forwarded data (the D13 mechanism above).
-- Timed forwarding obligations (§4.6.1): 15-minute advance forwarding, >3-minute ETA revision, verbal+automated coordination inside 30 min of departure, 3-minute verification for data-only facilities.
-- Release objects across the boundary (§4.6.2): `RELEASED` / `HOLD_FOR_RELEASE` / `RELEASE_TIME` / `EDCT` (±5 min) / `CALL_FOR_RELEASE` (−2/+1 min), travelling controller-to-controller `CTR→APP→TWR`.
-- The three-field TOFI separation model (§4.6.3): `ifr_active` (bool), `radar_service` (`ACTIVE`/`TERMINATED`), `separation_regime` (`ATC`/`MARSA`/`USING_AGENCY`/`DUE_REGARD`/`SEE_AND_AVOID`) — explicitly **not derivable from each other or from airspace type**.
-- Airspace ownership as a direction (§4.6.4): `airspace.owner ∈ {CONTROLLING_AGENCY, USING_AGENCY}`, never a bare boolean.
+## 5. Where to start, depending on what's next
 
-| Primitive | Between | Radar ID | Comms | Jurisdiction | Accept |
-|---|---|---|---|---|---|
-| `HANDOFF` | ATC ⇄ ATC | transfers | **transfers** | passes to receiver | `"RADAR CONTACT"` |
-| `POINT_OUT` | ATC ⇄ ATC | transfers | does not | **stays with initiator** | `"POINT OUT APPROVED"` |
-| `TRAFFIC` | ATC ⇄ ATC | transfers | does not | stays with initiator | `"TRAFFIC OBSERVED"` |
-| `OPERATIONAL_REQUEST` | ATC ⇄ ATC | — | — | stays with requester | `"APPROVED"`/`"UNABLE"`/`"STAND BY"` |
-| `TOFI` | **ATC ⇄ MRU** | — | separate step | see §4.6.3 | acknowledgement |
-| `AIT` | ATC ⇄ ATC | transfers | transfers | passes | silent, requires a written directive |
-
-**Guide acceptance criteria (§13, WP4A):**
-- A `POINT_OUT` leaves data ownership with the initiator **and** moves separation responsibility to the receiver, and the UI shows both.
-- `TAC_C2`, `GCI`, `AIC` and `JTAC` have **no** handoff or point-out affordance at all — audited in the UI, not merely absent from the happy path. (This is defect **D12** — an MRU Position must never be offered an ATC primitive, even via combined-Position union — §4.6, §4.1.)
-- A cross-Facility exchange produces **two Strip replicas**, each independently removable, not one moved Strip.
-- A track-degradation flag disables silent transfer and forces the verbal path.
-- The 15/3/30-minute obligations each raise an alert at the right moment, with compliance instrumented.
-- `separation_regime` cannot be set implicitly by airspace type — attempting it is a validation error.
-- Setting airspace ownership requires a direction; no boolean path exists.
-
-## 4. Recommended scope cut for a first slice
-
-WP4A as specified pulls in the `TACTICAL` Facility and its MRU Positions (`TAC_C2`, `AIC`, `GCI`) purely to prove the D12 refusal case — that's a genuinely different *kind* of Position (no ATC service at all) from anything built so far, and `TOFI`'s MRU coordination is its own sub-protocol. Pulling all of that in at once mirrors exactly the mistake the existing Phase 2 plan deliberately avoided when it scoped APP+ARRIVAL without WP5/6/7.
-
-**Suggested first slice — civil ATC↔ATC only:**
-1. Add the `CENTER` Facility and `CTR` Position. Extend the covering chain to `CD→GND→TWR→APP→CTR` (currently truncated at `APP` — `facility-config.js`'s own comment already flags this as Phase-1-truncated).
-2. Build `HANDOFF`, `POINT_OUT`, `TRAFFIC`, `OPERATIONAL_REQUEST`, `AIT` between `APP` and `CTR` specifically — the real primitive `ADR 0007` said `TWR→APP` deliberately was *not*. This finally closes that loop: a departing flight's real path becomes `TWR→APP` (intrafacility `TransferStrip`, already built) then `APP→CTR` (interfacility `HANDOFF`, new), and an arriving flight's real origination becomes `CTR→APP` `HANDOFF` instead of `ADR 0008`'s current stub (APP self-originates ARRIVAL Strips because there's no CTR to hand off from yet).
-3. Per-Facility Strip replication, the D13 mechanism — this is the architectural core and should be designed first, before any primitive is wired to UI.
-4. Forwarding obligations (§4.6.1), release-across-boundary (§4.6.2), airspace-ownership-as-direction (§4.6.4).
-5. Defer `TOFI` (§4.6.3) and the `TACTICAL` Facility/MRU Positions to a follow-on slice, alongside or just before WP6 (the military layer, which `separation_regime: MARSA` and `TOFI` are conceptually part of). Record this deferral as an ADR — it's a genuine scope decision, not free.
-
-This isn't mandated by the guide (WP4A is specified as one work package) — it's a scoping recommendation for whoever plans this next, exactly the kind of call the existing Phase 2 plan made explicitly and recorded. Confirm it with the project owner before committing to it, the same way Phase 2's scope cut was a stated decision, not an assumption.
-
-## 5. Where to start
-
-- Re-read `EFSPImplementationGuide.md` §4.6 in full (lines ~456–541) and §2 (Defined Terms) for the Facility/Position vocabulary — `CTR`, `TAC_C2`, `AIC`, `GCI`, `JTAC` are all defined there.
-- `crc-sync/src/efsp/facility-config.js` — where `CENTER`/`CTR` gets added, mirroring how `APP`/`INCIRLIK` was extended in Phase 2.
-- `crc-sync/src/efsp/board-store.js` — every `_apply*` method assumes one Strip, one Facility; the replica mechanism is new machinery, not an extension of `_applyTransferStrip`.
-- `docs/adr/0007-departed-nla-real-handoff-to-app.md` and `0008-arrival-role-and-origination.md` — both explicitly describe what they are *not* (the real cross-Facility mechanism) and are the natural first things WP4A supersedes.
-- Write the ADRs as design decisions are actually made (this repo's established convention — `docs/adr/NNNN-title.md`, context/decision/alternatives/consequences), not speculatively upfront.
+- **If committing first**: this is a lot of surface (12 new/changed ADRs' worth of work) — talk to the project owner about commit granularity before running any `git add`.
+- **If closing the 3 small gaps**: `forwarding-obligations.js` (void-time alert), `efsp-panel.js`'s `_positionsWithBays()` (drop-target gap), `position-store.js` (retroactive ADR — no code change needed, just write it).
+- **If starting the deferred `TOFI`/`TACTICAL` slice**: re-read `EFSPImplementationGuide.md` §4.6.3 and §2's `TAC_C2`/`AIC`/`GCI`/`JTAC` definitions; `docs/adr/0020` for what was explicitly deferred and why; `crc-sync/src/efsp/facility-config.js` for where a `TACTICAL` Facility gets added (mirroring `CENTER`'s addition in `0013`); `permission.js`'s D12 guard pattern (`APP_CTR_ONLY_OP_KINDS`/`COORDINATION_OP_KINDS`) as the shape a "MRU may never hold this op kind, even combined" exclusion should take.
+- Write ADRs as design decisions are actually made — this repo's established convention (`docs/adr/NNNN-title.md`, context/decision/alternatives/consequences) — not speculatively upfront.

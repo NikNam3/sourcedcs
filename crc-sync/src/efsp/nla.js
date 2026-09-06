@@ -56,8 +56,26 @@ const DEPARTURE_STATE_SET = new Set(DEPARTURE_STATES);
 const ARRIVAL_STATES = ['INBOUND', 'HANDED_TO_TOWER', 'FINAL', 'LANDED', 'TAXI_IN', 'DROPPED'];
 const ARRIVAL_STATE_SET = new Set(ARRIVAL_STATES);
 
-const STATES_BY_ROLE = { DEPARTURE: DEPARTURE_STATES, ARRIVAL: ARRIVAL_STATES };
-const STATE_SETS_BY_ROLE = { DEPARTURE: DEPARTURE_STATE_SET, ARRIVAL: ARRIVAL_STATE_SET };
+// [SOURCE-DEFINED] (docs/adr/0023) — OVERFLIGHT has no guide-published
+// state table at all (§6.3 only notes it shares Blocks 20/21 with
+// ARRIVAL); deliberately the simplest possible 2-state lifecycle, mirroring
+// DEPARTURE's own HANDED_OFF->DROPPED terminus shape — an overflight never
+// lands at Incirlik, so none of ARRIVAL's tower/final/landed/taxi stages
+// apply.
+const OVERFLIGHT_STATES = ['TRANSITING', 'DROPPED'];
+const OVERFLIGHT_STATE_SET = new Set(OVERFLIGHT_STATES);
+
+// Guide-specified lifecycle (§9.8, line 215) — not invented. No occupancy/
+// transferTo gating, same reasoning as OVERFLIGHT's own table: TAC_C2/GCI
+// (whichever originated the mission, or received it via a TOFI ENTRY
+// exchange) work its entire lifecycle solo — the cross-Position richness
+// (AR-line/tanker join, ATO binding) is exactly the WP7 scope deferred by
+// this slice's own scope-cut ADR.
+const MISSION_STATES = ['TASKED', 'AIRBORNE', 'ON_STATION', 'OFF_STATION', 'RTB', 'DROPPED'];
+const MISSION_STATE_SET = new Set(MISSION_STATES);
+
+const STATES_BY_ROLE = { DEPARTURE: DEPARTURE_STATES, ARRIVAL: ARRIVAL_STATES, OVERFLIGHT: OVERFLIGHT_STATES, MISSION: MISSION_STATES };
+const STATE_SETS_BY_ROLE = { DEPARTURE: DEPARTURE_STATE_SET, ARRIVAL: ARRIVAL_STATE_SET, OVERFLIGHT: OVERFLIGHT_STATE_SET, MISSION: MISSION_STATE_SET };
 
 // Backward-compatible alias — every Phase 1 caller/test imports STATES
 // meaning "the departure lifecycle", which is still exactly what it means.
@@ -240,7 +258,44 @@ function computeArrivalNla(strip, fdr, now, ctx) {
   }
 }
 
-const COMPUTE_BY_ROLE = { DEPARTURE: computeDepartureNla, ARRIVAL: computeArrivalNla };
+/**
+ * OVERFLIGHT's entire NLA table (docs/adr/0023) — a flight transiting this
+ * Facility's airspace without landing or departing here at all (guide §2).
+ * No occupancy gating, no transferTo: unlike DEPARTURE/ARRIVAL, an
+ * overflight was never "owned" by a chain of Positions leading somewhere —
+ * whichever Position originated it (permission.js's CREATE_ROLE_PERMISSIONS)
+ * just works it until it exits coverage, then Drops it.
+ */
+function computeOverflightNla(strip) {
+  switch (strip.state) {
+    case 'TRANSITING':
+      return { toState: 'DROPPED' };
+    case 'DROPPED':
+    default:
+      return null;
+  }
+}
+
+/**
+ * MISSION's entire NLA table (WP4A second slice) — a simple linear
+ * progression through the guide's own 6-state lifecycle (§9.8), no
+ * occupancy gating, no transferTo — same shape as computeOverflightNla,
+ * for the same reason (the cross-Position richness a real mission-line
+ * panel would need is WP7 scope, deferred by this slice's scope-cut ADR).
+ */
+function computeMissionNla(strip) {
+  switch (strip.state) {
+    case 'TASKED':      return { toState: 'AIRBORNE' };
+    case 'AIRBORNE':    return { toState: 'ON_STATION' };
+    case 'ON_STATION':  return { toState: 'OFF_STATION' };
+    case 'OFF_STATION': return { toState: 'RTB' };
+    case 'RTB':         return { toState: 'DROPPED' };
+    case 'DROPPED':
+    default:            return null;
+  }
+}
+
+const COMPUTE_BY_ROLE = { DEPARTURE: computeDepartureNla, ARRIVAL: computeArrivalNla, OVERFLIGHT: computeOverflightNla, MISSION: computeMissionNla };
 
 /**
  * @param {object} strip
@@ -256,6 +311,6 @@ function computeNla(strip, fdr, now = Date.now(), ctx = {}) {
 }
 
 module.exports = {
-  STATES, DEPARTURE_STATES, ARRIVAL_STATES, STATES_BY_ROLE,
+  STATES, DEPARTURE_STATES, ARRIVAL_STATES, OVERFLIGHT_STATES, MISSION_STATES, STATES_BY_ROLE,
   isValidState, isFlightPlanValid, isVoidExpired, computeNla, REQUIRED_FOR_CLEARANCE,
 };

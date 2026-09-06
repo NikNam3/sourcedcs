@@ -40,6 +40,12 @@ const TRACK_DEGRADATION_FLAGS = new Set(['NONE', 'CST', 'FAIL', 'IF', 'NT', 'TRK
 // bare boolean (D15) — enforced structurally by routing every write
 // through setAirspaceOwner() below, never the generic setField() path.
 const AIRSPACE_OWNERS = new Set(['CONTROLLING_AGENCY', 'USING_AGENCY']);
+// WP4A second slice (docs/adr/0025), §4.6.3 — the three-field separation
+// model. Never independently derived from airspace type (defect D14) —
+// enforced structurally by routing every write through setTofi() below,
+// never the generic setField() path, exactly like AIRSPACE_OWNERS above.
+const RADAR_SERVICE_STATES = new Set(['ACTIVE', 'TERMINATED']);
+const SEPARATION_REGIMES = new Set(['ATC', 'MARSA', 'USING_AGENCY', 'DUE_REGARD', 'SEE_AND_AVOID']);
 
 const CALLSIGN_RE = /^[A-Za-z0-9]{1,7}$/; // §3.2 rule 1 — MUST NOT exceed 7 alphanumeric characters
 
@@ -77,6 +83,13 @@ const WRITABLE_PATHS = new Set([
   // near TRACK_DEGRADATION_FLAGS for why this is distinct from
   // identity.degradation.
   'identity.trackDegradationFlag',
+  // WP4A second slice (docs/adr/0026) — the minimal MISSION field set
+  // (guide §9.8's "military extension namespace"), present on every FDR
+  // regardless of role, same "present but unpopulated until relevant"
+  // precedent as the ARRIVAL-only fields above. Full ATO-driven richness
+  // (Mode 1/2/datalink code, MARSA, ordnance, ROZ/ACM) stays WP6/WP7 scope.
+  'mission.missionNumber', 'mission.packageId', 'mission.controllingAgency',
+  'mission.vulWindowStartUtc', 'mission.vulWindowEndUtc',
 ]);
 
 function getPath(obj, path) {
@@ -198,6 +211,24 @@ class FdrStore {
       // (D15). Only ever written via setAirspaceOwner() below, never the
       // generic setField() path — see that method for why.
       airspace: { owner: null, changedAt: null, changedBy: null },
+      // WP4A second slice (docs/adr/0026) — the minimal MISSION field set
+      // (guide §9.8), present but null/empty on every FDR regardless of
+      // role. Written through the generic setField() path (WRITABLE_PATHS
+      // above) — these are plain controller-entered values, unlike the
+      // separation-model fields below.
+      mission: {
+        missionNumber: seed.missionNumber || null,
+        packageId: seed.packageId || null,
+        controllingAgency: seed.controllingAgency || null,
+        vulWindowStartUtc: seed.vulWindowStartUtc || null,
+        vulWindowEndUtc: seed.vulWindowEndUtc || null,
+      },
+      // WP4A second slice (docs/adr/0025), §4.6.3 — the three-field
+      // separation model. Only ever written via setTofi() below, never the
+      // generic setField() path — see that method for why (mirrors
+      // airspace.owner's exact template, per docs/adr/0018/0020's own
+      // directive).
+      tofi: { ifrActive: false, radarService: null, separationRegime: null, changedAt: null, changedBy: null },
       provenance,
       createdAt: now,
       updatedAt: now,
@@ -329,6 +360,41 @@ class FdrStore {
     return { ok: true, fdr };
   }
 
+  /**
+   * WP4A second slice (docs/adr/0025), §4.6.3 — sets the three-field
+   * separation model (`ifr_active`/`radar_service`/`separation_regime`),
+   * none of which is derivable from any of the others or from airspace
+   * type (defect D14). Routed through a dedicated setter, structurally
+   * excluded from the generic setField() path, exactly like
+   * setAirspaceOwner() above — this IS the template that method's own
+   * comment named for this field when TOFI eventually landed.
+   *
+   * One setter accepting a partial patch, not three independent ones: a
+   * controller fills in each field incrementally via separate Block edits,
+   * and a single write path keeps provenance/rev bookkeeping in one place.
+   * Rule 5 ("DUE_REGARD and MARSA are mutually exclusive") is resolved BY
+   * CONSTRUCTION — separation_regime is one 5-value enum field, not two
+   * independent booleans — so no cross-field validation is needed here.
+   * @param {{ifrActive?:boolean, radarService?:string|null, separationRegime?:string|null}} patch
+   * @returns {{ok:true, fdr}|{ok:false, reason:'NOT_FOUND'|'VALIDATION_ERROR', detail?}}
+   */
+  setTofi(fdrId, patch, { by } = {}) {
+    const fdr = this._fdrs.get(fdrId);
+    if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
+    if (patch.radarService !== undefined && patch.radarService !== null && !RADAR_SERVICE_STATES.has(patch.radarService)) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `invalid radar_service: ${JSON.stringify(patch.radarService)}` };
+    }
+    if (patch.separationRegime !== undefined && patch.separationRegime !== null && !SEPARATION_REGIMES.has(patch.separationRegime)) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `invalid separation_regime: ${JSON.stringify(patch.separationRegime)}` };
+    }
+    fdr.tofi = { ...fdr.tofi, ...patch, changedAt: Date.now(), changedBy: by || null };
+    fdr.provenance['tofi'] = 'CONTROLLER_ENTERED';
+    fdr.rev += 1;
+    fdr.updatedAt = Date.now();
+    fdr.updatedBy = by || null;
+    return { ok: true, fdr };
+  }
+
   /** Releases the FDR's beacon code — called when its Strip is DROPPED. */
   releaseFdr(fdrId) {
     const fdr = this._fdrs.get(fdrId);
@@ -349,5 +415,5 @@ class FdrStore {
 module.exports = {
   FdrStore, deriveEquipmentSuffix, WRITABLE_PATHS, RELEASE_STATES, VOID_DEADLINE_MINUTES,
   EDCT_WINDOW_MINUTES, CALL_FOR_RELEASE_BEFORE_MINUTES, CALL_FOR_RELEASE_AFTER_MINUTES,
-  TRACK_DEGRADATION_FLAGS, AIRSPACE_OWNERS,
+  TRACK_DEGRADATION_FLAGS, AIRSPACE_OWNERS, RADAR_SERVICE_STATES, SEPARATION_REGIMES,
 };

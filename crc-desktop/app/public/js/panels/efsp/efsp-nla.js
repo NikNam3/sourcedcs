@@ -34,6 +34,20 @@ const NLA_LABELS = {
     LANDED:          'Taxi In',
     TAXI_IN:         'Drop',
   },
+  // [SOURCE-DEFINED] OVERFLIGHT lifecycle labels (docs/adr/0023) — mirrors
+  // nla.js's computeOverflightNla exactly.
+  OVERFLIGHT: {
+    TRANSITING: 'Drop',
+  },
+  // WP4A second slice — MISSION lifecycle labels, mirroring nla.js's
+  // computeMissionNla exactly (guide's own §9.8 lifecycle, line 215).
+  MISSION: {
+    TASKED:      'Airborne',
+    AIRBORNE:    'On Station',
+    ON_STATION:  'Off Station',
+    OFF_STATION: 'RTB',
+    RTB:         'Drop',
+  },
 };
 
 function nlaLabelFor(state, role = 'DEPARTURE') {
@@ -59,7 +73,7 @@ const DEPARTURE_STATE_OWNERS = {
   RUNWAY_QUEUE:      ['TWR'],
   LUAW:              ['TWR'],
   DEPARTED:          ['TWR'],
-  HANDED_OFF:        ['APP'],
+  HANDED_OFF:        ['APP', 'CTR'], // docs/adr/0022 bug fix — mirrors permission.js exactly
 };
 
 // [SOURCE-DEFINED] ARRIVAL lifecycle authority (docs/adr/0008/0010). CTR
@@ -72,6 +86,22 @@ const ARRIVAL_STATE_OWNERS = {
   TAXI_IN:         ['GND'],
 };
 
+// [SOURCE-DEFINED] OVERFLIGHT lifecycle authority (docs/adr/0023) — mirrors permission.js exactly.
+const OVERFLIGHT_STATE_OWNERS = {
+  TRANSITING: ['APP', 'CTR'],
+};
+
+// WP4A second slice — MISSION lifecycle authority, mirroring permission.js's
+// MISSION_STATE_OWNERS exactly. AIC/JTAC deliberately absent — see that
+// module's own comment.
+const MISSION_STATE_OWNERS = {
+  TASKED:      ['TAC_C2', 'GCI'],
+  AIRBORNE:    ['TAC_C2', 'GCI'],
+  ON_STATION:  ['TAC_C2', 'GCI'],
+  OFF_STATION: ['TAC_C2', 'GCI'],
+  RTB:         ['TAC_C2', 'GCI'],
+};
+
 // WP4A (docs/adr/0015) — client mirror of coordination.js's primitive
 // table, same "UX convenience, not a second source of enforcement" caveat
 // as everything else in this file. Used only for display (Coordinate
@@ -79,7 +109,22 @@ const ARRIVAL_STATE_OWNERS = {
 // COORDINATION_TARGETS/dispatch never consult this for anything gating.
 const COORDINATION_OP_KINDS = ['HANDOFF', 'POINT_OUT', 'TRAFFIC', 'OPERATIONAL_REQUEST', 'AIT'];
 
-const STATE_OWNERS_BY_ROLE = { DEPARTURE: DEPARTURE_STATE_OWNERS, ARRIVAL: ARRIVAL_STATE_OWNERS };
+// WP4A second slice — client mirror of permission.js's TOFI_OP_KINDS, same
+// convenience-only caveat. Used only by the drift test below — bay-view.js
+// gates its own TOFI button off TOFI_COUNTERPARTS (which Positions have a
+// valid target, not which op kinds exist), consistent with how
+// COORDINATION_OP_KINDS above is also drift-tested only, never consulted
+// by bay-view.js's own gating logic.
+const TOFI_OP_KINDS = ['TOFI'];
+
+// WP4A gap-closure (docs/adr/0022) — client mirror of coordination.js's
+// COORDINATION_ELIGIBLE_STATES, same "UX convenience, server has the real
+// gate in _applyCoordinationPropose" caveat as everything else here.
+// bay-view.js's _canProposeCoordination consults this directly (unlike
+// COORDINATION_OP_KINDS above, which only the drift test reads).
+const COORDINATION_ELIGIBLE_STATES = { ARRIVAL: 'INBOUND', DEPARTURE: 'HANDED_OFF' };
+
+const STATE_OWNERS_BY_ROLE = { DEPARTURE: DEPARTURE_STATE_OWNERS, ARRIVAL: ARRIVAL_STATE_OWNERS, OVERFLIGHT: OVERFLIGHT_STATE_OWNERS, MISSION: MISSION_STATE_OWNERS };
 
 /**
  * @param {string} actingPositionId
@@ -121,7 +166,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     NLA_LABELS, nlaLabelFor, DOUBLE_TAP_MS, UNDO_WINDOW_MS, isWithinDoubleTapWindow, isUndoAvailable,
     DEFAULT_STALE_THRESHOLD_SECONDS, isEfspBoardStale,
-    STATE_OWNERS_BY_ROLE, DEPARTURE_STATE_OWNERS, ARRIVAL_STATE_OWNERS, canActOnState,
-    COORDINATION_OP_KINDS,
+    STATE_OWNERS_BY_ROLE, DEPARTURE_STATE_OWNERS, ARRIVAL_STATE_OWNERS, OVERFLIGHT_STATE_OWNERS, MISSION_STATE_OWNERS, canActOnState,
+    COORDINATION_OP_KINDS, COORDINATION_ELIGIBLE_STATES, TOFI_OP_KINDS,
   };
 }

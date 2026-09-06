@@ -9,8 +9,14 @@
       "1",
       "2",
       "3",
+      "3A",
+      "3B",
+      "3C",
+      "3D",
+      "3E",
       "4",
       "5",
+      "5A",
       "6",
       "7",
       "8",
@@ -32,6 +38,76 @@
       "9A-VECTOR",
       "9A-SPEED",
       "9E"
+    ],
+    "DEPARTURE": [
+      "1",
+      "2",
+      "3",
+      "3A",
+      "3B",
+      "3C",
+      "3D",
+      "3E",
+      "4",
+      "5",
+      "5A",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "14",
+      "14B",
+      "14C",
+      "16",
+      "17",
+      "18",
+      "19",
+      "20",
+      "21",
+      "22",
+      "23",
+      "24",
+      "24A",
+      "25",
+      "26",
+      "2A",
+      "4A",
+      "4B",
+      "8A",
+      "8B",
+      "9A",
+      "9B",
+      "9C",
+      "9D",
+      "9E"
+    ],
+    "OVERFLIGHT": [
+      "1",
+      "2",
+      "3",
+      "3A",
+      "3B",
+      "3C",
+      "3D",
+      "3E",
+      "4",
+      "4A",
+      "4B",
+      "5",
+      "5A",
+      "7",
+      "8",
+      "8B",
+      "9",
+      "9E",
+      "20",
+      "21",
+      "24",
+      "24A",
+      "25",
+      "26"
     ]
   },
   "bays": {
@@ -44,6 +120,20 @@
         "impliesState": "INBOUND"
       },
       {
+        "bayId": "ctr-departures",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "HANDED_OFF"
+      },
+      {
+        "bayId": "ctr-overflight",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "TRANSITING"
+      },
+      {
         "bayId": "ctr-app-coordination",
         "rackIds": [
           "main"
@@ -52,5 +142,6 @@
     ]
   },
   "dataOnly": false,
-  "standingReleases": []
+  "standingReleases": [],
+  "aitAuthorized": false
 }

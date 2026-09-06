@@ -8,6 +8,7 @@ import crypto from 'crypto';
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-ws-coordination-test-'));
 process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = path.join(tmpDir, 'incirlik.json');
 process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER = path.join(tmpDir, 'center.json');
+process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL = path.join(tmpDir, 'tactical.json');
 
 const { handleMessage } = await import('../src/efsp/efsp-ws.js');
 const { BoardStore } = await import('../src/efsp/board-store.js');
@@ -46,6 +47,7 @@ function makeCtx() {
       facilityId,
       peerBoard: (otherFacilityId) => (facilities.get(otherFacilityId) || {}).boardStore || null,
       coordinationEffect: (primitive) => coordination.coordinationEffect(primitive),
+      tofiCounterparts: (actingPositionId) => permission.tofiCounterparts(actingPositionId),
     };
     const boardStore = new BoardStore(fdrStore, rules);
     facilities.set(facilityId, { boardStore, positionStore });
@@ -117,7 +119,19 @@ test('CTR originates an ARRIVAL Strip, proposes HANDOFF to APP, and APP accepts 
   assert.ok(proposed.broadcast, 'a successful mutation broadcasts');
   assert.equal(proposed.broadcast.facilityId, 'CENTER');
 
+  // Bug found in live testing: this is what was missing entirely — nothing
+  // told any client holding a Position at INCIRLIK that a brand-new
+  // replica had just landed in their Coordination Bay. Without
+  // peerBroadcast, a connected client would never see it appear at all
+  // outside of a full reconnect/resync.
+  assert.ok(proposed.peerBroadcast, 'PROPOSE also broadcasts the new replica to the PEER Facility');
+  assert.equal(proposed.peerBroadcast.facilityId, 'INCIRLIK');
+  assert.equal(proposed.peerBroadcast.strips.updated.length, 1);
   const receiverStripId = proposed.ack.strip.coordination.peerStripId;
+  assert.equal(proposed.peerBroadcast.strips.updated[0].stripId, receiverStripId);
+  assert.equal(proposed.peerBroadcast.strips.updated[0].facilityId, 'INCIRLIK');
+  assert.equal(proposed.peerBroadcast.strips.updated[0].bayId, 'app-coordination');
+
   const receiverStrip = ctx.boardStoreFor('INCIRLIK').getStrip(receiverStripId);
   assert.equal(receiverStrip.ownerPositionId, 'APP');
   assert.equal(receiverStrip.bayId, 'app-coordination');
@@ -131,6 +145,13 @@ test('CTR originates an ARRIVAL Strip, proposes HANDOFF to APP, and APP accepts 
   assert.equal(accepted.ack.ok, true, JSON.stringify(accepted.ack));
   assert.equal(accepted.ack.strip.bayId, 'app-inbound');
   assert.equal(accepted.ack.strip.state, 'INBOUND');
+
+  // ACCEPT also needs to tell CENTER the sender-side Strip is now ACTIVE —
+  // same gap, other direction.
+  assert.ok(accepted.peerBroadcast, 'ACCEPT also broadcasts the sender-side update to the PEER Facility');
+  assert.equal(accepted.peerBroadcast.facilityId, 'CENTER');
+  assert.equal(accepted.peerBroadcast.strips.updated[0].stripId, senderStrip.stripId);
+  assert.equal(accepted.peerBroadcast.strips.updated[0].coordination.state, 'ACTIVE');
 });
 
 test('efsp-resync is facility-scoped — resyncing CENTER never returns INCIRLIK\'s strips or vice versa', () => {
@@ -153,6 +174,12 @@ test('efsp-resync is facility-scoped — resyncing CENTER never returns INCIRLIK
   assert.equal(incirlikStrips.length, 1);
   assert.equal(centerStrips[0].role, 'ARRIVAL');
   assert.equal(incirlikStrips[0].role, 'DEPARTURE');
+});
+
+test('docs/adr/0022: the snapshot carries aitAuthorizedByFacility for every Facility, so the client can proactively disable the AIT option', () => {
+  const ctx = makeCtx();
+  const snapshot = handleMessage(ctx, CTR_SESSION, { type: 'efsp-resync', facilityId: 'CENTER', lastBoardSeq: -999999 }, noopPersist);
+  assert.deepEqual(snapshot.ack.aitAuthorizedByFacility, { INCIRLIK: false, CENTER: false, TACTICAL: false });
 });
 
 test('efsp-set-positions is facility-scoped — holding CTR at CENTER does not touch INCIRLIK\'s PositionStore', () => {
@@ -181,15 +208,17 @@ test('a resync-within-window delta also stamps facilityId on every updated Strip
   assert.equal(result.ack.strips.updated[0].facilityId, 'CENTER');
 });
 
-test('a snapshot includes both Facilities\' Bays, each correctly stamped', async () => {
+test('a snapshot includes every Facility\'s Bays, each correctly stamped', async () => {
   const ctx = makeCtx();
   const { snapshotMessage } = await import('../src/efsp/efsp-ws.js');
   const snap = snapshotMessage(ctx);
-  assert.equal(snap.facilities.sort().join(','), 'CENTER,INCIRLIK');
+  assert.equal(snap.facilities.sort().join(','), 'CENTER,INCIRLIK,TACTICAL');
   assert.ok(snap.bays.some(b => b.bayId === 'ctr-enroute' && b.facilityId === 'CENTER'));
   assert.ok(snap.bays.some(b => b.bayId === 'app-coordination' && b.facilityId === 'INCIRLIK'));
+  assert.ok(snap.bays.some(b => b.bayId === 'tac-c2-coordination' && b.facilityId === 'TACTICAL'));
   assert.equal(snap.facility, 'INCIRLIK'); // back-compat alias
   assert.equal(typeof snap.boardSeq, 'number'); // back-compat alias
   assert.equal(typeof snap.boardSeqByFacility.INCIRLIK, 'number');
   assert.equal(typeof snap.boardSeqByFacility.CENTER, 'number');
+  assert.equal(typeof snap.boardSeqByFacility.TACTICAL, 'number');
 });

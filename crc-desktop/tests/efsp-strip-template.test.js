@@ -7,8 +7,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
-  DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, resolveBlockValue, requiredBlocksFor, formatBlock3,
+  DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP, BLOCK_MAPS, resolveBlockValue, requiredBlocksFor, formatBlock3,
   activeAnnotationValue, hasActiveAnnotationEntry, isBlockEditable, CONFIRM_VACATED_ELIGIBLE_BLOCKS,
+  enumSelectOptionsFor, isBooleanToggleBlock, blockLabelFor,
 } = require('../app/public/js/panels/efsp/strip-template.js');
 
 const REQUIRED_DEPARTURE_BLOCKS = [
@@ -235,4 +236,118 @@ test('isBlockEditable defaults to DEPARTURE when no role is given', () => {
 
 test('every required ARRIVAL Block exists in ARRIVAL_BLOCK_MAP', () => {
   for (const id of REQUIRED_ARRIVAL_BLOCKS) assert.ok(ARRIVAL_BLOCK_MAP[id], id);
+});
+
+// ── MISSION_BLOCK_MAP (WP4A second slice) ────────────────────────────────
+
+const REQUIRED_MISSION_BLOCKS = ['M1', 'M3', 'M4', 'M25', 'M26'];
+
+function makeMissionFdr(overrides = {}) {
+  return {
+    identity: { callsign: 'EAGLE1', beaconAssigned: '4321', ...overrides.identity },
+    filed: { remarks: '', ...overrides.filed },
+    assigned: {},
+    mission: { missionNumber: 'ALPHA01', packageId: 'PKG1', controllingAgency: 'AWACS', vulWindowStartUtc: null, vulWindowEndUtc: null, ...overrides.mission },
+    provenance: {},
+  };
+}
+
+function makeMissionStrip(overrides = {}) {
+  return { rev: 1, cid: '001', role: 'MISSION', state: 'TASKED', flags: { removeIndicator: false }, annotations: {}, ...overrides };
+}
+
+test('requiredBlocksFor(MISSION) matches MISSION_BLOCK_MAP\'s required set', () => {
+  assert.deepEqual(requiredBlocksFor('MISSION').sort(), [...REQUIRED_MISSION_BLOCKS].sort());
+});
+
+test('resolveBlockValue routes to MISSION_BLOCK_MAP when strip.role is MISSION, reusing identity.callsign/beaconAssigned', () => {
+  const fdr = makeMissionFdr();
+  const strip = makeMissionStrip();
+  assert.equal(resolveBlockValue('M3', fdr, strip).value, 'EAGLE1');
+  assert.equal(resolveBlockValue('M4', fdr, strip).value, '4321');
+  assert.equal(resolveBlockValue('M1', fdr, strip).value, 'ALPHA01');
+  assert.equal(resolveBlockValue('M2', fdr, strip).value, 'PKG1');
+  assert.equal(resolveBlockValue('M5', fdr, strip).value, 'AWACS');
+});
+
+test('every required MISSION Block exists in MISSION_BLOCK_MAP', () => {
+  for (const id of REQUIRED_MISSION_BLOCKS) assert.ok(MISSION_BLOCK_MAP[id], id);
+});
+
+test('MISSION has no FAA-numbered Blocks — its namespace is entirely M-prefixed', () => {
+  for (const id of ['1', '2', '3', '4', '5', '8', '9', '24']) {
+    assert.equal(MISSION_BLOCK_MAP[id], undefined, id);
+  }
+});
+
+// ── WP4A gap-closure (docs/adr/0022) ────────────────────────────────────
+
+test('resolveBlockValue on Block 24A (airspace owner) reads fdr.airspace.owner — previously fell through to the null catch-all even before it had an edit path', () => {
+  const fdr = { identity: {}, filed: {}, assigned: {}, provenance: {}, airspace: { owner: 'USING_AGENCY' } };
+  assert.deepEqual(resolveBlockValue('24A', fdr, makeStrip()), { value: 'USING_AGENCY', provenance: 'CONTROLLER_ENTERED' });
+});
+
+test('resolveBlockValue on Block 24A with no airspace decided yet returns null, not undefined or a throw', () => {
+  const fdr = { identity: {}, filed: {}, assigned: {}, provenance: {}, airspace: { owner: null } };
+  assert.equal(resolveBlockValue('24A', fdr, makeStrip()).value, null);
+});
+
+test('resolveBlockValue on Block 5A (track-degradation) reads identity.trackDegradationFlag via the plain fdr path', () => {
+  const fdr = { identity: { trackDegradationFlag: 'CST' }, filed: {}, assigned: {}, provenance: {} };
+  assert.equal(resolveBlockValue('5A', fdr, makeStrip()).value, 'CST');
+});
+
+test('enumSelectOptionsFor returns the picker options for 5A, 24A, RSVC and SREG, null for an ordinary Block', () => {
+  assert.deepEqual(enumSelectOptionsFor('5A'), ['NONE', 'CST', 'FAIL', 'IF', 'NT', 'TRK']);
+  assert.deepEqual(enumSelectOptionsFor('24A'), ['CONTROLLING_AGENCY', 'USING_AGENCY']);
+  assert.deepEqual(enumSelectOptionsFor('RSVC'), ['ACTIVE', 'TERMINATED']);
+  assert.deepEqual(enumSelectOptionsFor('SREG'), ['ATC', 'MARSA', 'USING_AGENCY', 'DUE_REGARD', 'SEE_AND_AVOID']);
+  assert.equal(enumSelectOptionsFor('1'), null);
+});
+
+test('5A is plain fdr-routed (isBlockEditable true) but 24A/RSVC/SREG stay excluded from the generic free-text path — all still get the enum-select widget via enumSelectOptionsFor, checked ahead of isBlockEditable in bay-view.js', () => {
+  assert.equal(isBlockEditable('5A', 'DEPARTURE'), true);
+  assert.equal(isBlockEditable('24A', 'DEPARTURE'), false);
+  assert.equal(isBlockEditable('RSVC', 'DEPARTURE'), false);
+  assert.equal(isBlockEditable('SREG', 'DEPARTURE'), false);
+});
+
+// ── WP4A second slice, §4.6.3 — the three-field separation model ────────
+
+test('resolveBlockValue on IFR/RSVC/SREG reads the corresponding fdr.tofi field', () => {
+  const fdr = { identity: {}, filed: {}, assigned: {}, provenance: {}, tofi: { ifrActive: true, radarService: 'ACTIVE', separationRegime: 'MARSA' } };
+  assert.equal(resolveBlockValue('IFR', fdr, makeStrip()).value, true);
+  assert.equal(resolveBlockValue('RSVC', fdr, makeStrip()).value, 'ACTIVE');
+  assert.equal(resolveBlockValue('SREG', fdr, makeStrip()).value, 'MARSA');
+});
+
+test('resolveBlockValue on IFR/RSVC/SREG with no fdr.tofi at all returns null, not a throw', () => {
+  const fdr = { identity: {}, filed: {}, assigned: {}, provenance: {} };
+  assert.equal(resolveBlockValue('IFR', fdr, makeStrip()).value, null);
+  assert.equal(resolveBlockValue('RSVC', fdr, makeStrip()).value, null);
+});
+
+test('IFR is neither a free-text-editable Block nor an enum-select Block — it gets the boolean-toggle affordance instead', () => {
+  assert.equal(isBlockEditable('IFR', 'DEPARTURE'), false);
+  assert.equal(enumSelectOptionsFor('IFR'), null);
+  assert.equal(isBooleanToggleBlock('IFR'), true);
+  assert.equal(isBooleanToggleBlock('RSVC'), false);
+  assert.equal(isBooleanToggleBlock('1'), false);
+});
+
+// ── docs/adr/0024 — every Block Map entry has a short display label ────
+
+test('every entry in every Block Map has a non-empty label of 8 characters or fewer', () => {
+  for (const [role, map] of Object.entries(BLOCK_MAPS)) {
+    for (const [blockId, def] of Object.entries(map)) {
+      assert.ok(typeof def.label === 'string' && def.label.length > 0, `${role} Block ${blockId} is missing a label`);
+      assert.ok(def.label.length <= 8, `${role} Block ${blockId}'s label "${def.label}" is longer than 8 characters`);
+    }
+  }
+});
+
+test('blockLabelFor looks up a Block\'s label per role, and returns null for a Block that role has no entry for', () => {
+  assert.equal(blockLabelFor('5', 'DEPARTURE'), 'SQUAWK');
+  assert.equal(blockLabelFor('8', 'ARRIVAL'), 'ORIG');
+  assert.equal(blockLabelFor('8A', 'OVERFLIGHT'), null);
 });

@@ -75,3 +75,11 @@ test('server and client DEPARTURE_BLOCK_MAP agree on every Block ID, required fl
 test('server and client ARRIVAL_BLOCK_MAP agree on every Block ID, required flag, writability, fdr path, and provenance (Phase 2)', () => {
   assertBlockMapParity('ARRIVAL', server.ARRIVAL_BLOCK_MAP, client.ARRIVAL_BLOCK_MAP);
 });
+
+test('server and client OVERFLIGHT_BLOCK_MAP agree on every Block ID, required flag, writability, fdr path, and provenance (docs/adr/0023)', () => {
+  assertBlockMapParity('OVERFLIGHT', server.OVERFLIGHT_BLOCK_MAP, client.OVERFLIGHT_BLOCK_MAP);
+});
+
+test('server and client MISSION_BLOCK_MAP agree on every Block ID, required flag, writability, fdr path, and provenance (WP4A second slice)', () => {
+  assertBlockMapParity('MISSION', server.MISSION_BLOCK_MAP, client.MISSION_BLOCK_MAP);
+});

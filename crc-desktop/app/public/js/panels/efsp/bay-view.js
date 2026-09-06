@@ -45,6 +45,21 @@ function _buildBlockCell(strip, blockId) {
   span.dataset.block = blockId;
   span.textContent = _blockLabel(fdr, strip, blockId);
 
+  // WP4A gap-closure (docs/adr/0022) — restricted-enum Blocks (airspace
+  // ownership, track-degradation flag) get a <select>, never the generic
+  // free-text click-to-edit path below — this is the first UI either field
+  // has ever had (both had a working server-side setter and zero way to
+  // reach it). Checked before isBlockEditable() since these Blocks are
+  // deliberately excluded from that generic path (see strip-template.js's
+  // isBlockEditable comment).
+  const enumOptions = enumSelectOptionsFor(blockId);
+  if (enumOptions) return _buildEnumSelectCell(strip, blockId, span, enumOptions);
+
+  // WP4A second slice — IFR (a boolean, not a restricted-value string enum)
+  // gets a click-to-toggle affordance instead, same "checked before
+  // isBlockEditable()" reasoning as the enum-<select> case above.
+  if (isBooleanToggleBlock(blockId)) return _buildBooleanToggleCell(strip, blockId, span);
+
   if (!isBlockEditable(blockId, strip.role)) return span;
 
   span.classList.add('efsp-block-editable');
@@ -89,6 +104,89 @@ function _buildBlockCell(strip, blockId) {
   return span;
 }
 
+/**
+ * WP4A gap-closure (docs/adr/0022) — a click-to-reveal <select> for a
+ * restricted-enum Block (airspace ownership, track-degradation flag).
+ * Mirrors _buildBlockCell's click-to-edit shape (span -> input swap) but
+ * with a fixed option list instead of free text, so an invalid value is
+ * structurally unreachable from the UI, not just server-rejected.
+ */
+function _buildEnumSelectCell(strip, blockId, span, options) {
+  span.classList.add('efsp-block-editable', 'efsp-block-enum');
+  span.tabIndex = 0;
+  const open = (e) => {
+    e.stopPropagation();
+    const select = document.createElement('select');
+    select.className = 'efsp-block-input efsp-block-enum-select';
+    const blank = document.createElement('option');
+    blank.value = '';
+    blank.textContent = '—';
+    select.appendChild(blank);
+    for (const opt of options) {
+      const o = document.createElement('option');
+      o.value = opt;
+      o.textContent = opt;
+      select.appendChild(o);
+    }
+    select.value = span.textContent || '';
+    // Removing a focused element from the DOM fires 'blur' on it — so
+    // select.replaceWith(span) inside the 'change' handler below ALWAYS
+    // triggers the 'blur' listener's revert() right after, which then tried
+    // to replaceWith() an already-detached `select` a second time and threw
+    // ("the node to be removed is no longer a child of this node"). Guard
+    // both paths with a single-fire flag instead of relying on either one
+    // running at most once on its own.
+    let closed = false;
+    const revert = () => { if (closed) return; closed = true; select.replaceWith(span); };
+    select.addEventListener('change', () => {
+      if (closed) return;
+      closed = true;
+      const value = select.value;
+      select.replaceWith(span);
+      if (!value || value === span.textContent) return;
+      const positions = getActingPositions();
+      const actingPositionId = positions.includes(strip.ownerPositionId) ? strip.ownerPositionId : positions[0];
+      if (!actingPositionId) return;
+      const currentStrip = getEfspStrip(strip.stripId) || strip;
+      sendEfspMutation(actingPositionId, currentStrip, { kind: 'SetBlock', blockId, value });
+    });
+    select.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { ev.preventDefault(); revert(); } });
+    select.addEventListener('blur', revert);
+    select.addEventListener('pointerdown', (ev) => ev.stopPropagation());
+    span.replaceWith(select);
+    select.focus();
+  };
+  span.addEventListener('click', open);
+  span.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(e); } });
+  span.addEventListener('pointerdown', (e) => e.stopPropagation());
+  return span;
+}
+
+/**
+ * WP4A second slice — a click-to-toggle boolean affordance for IFR
+ * (guide §4.6.3's ifr_active). Simpler than _buildEnumSelectCell's
+ * span<->select swap since there's no third value to pick from: a click
+ * just sends the flipped value directly, reusing the existing ✓/blank
+ * boolean-render convention (_blockLabel) for display.
+ */
+function _buildBooleanToggleCell(strip, blockId, span) {
+  span.classList.add('efsp-block-editable', 'efsp-block-toggle');
+  span.tabIndex = 0;
+  const toggle = (e) => {
+    e.stopPropagation();
+    const positions = getActingPositions();
+    const actingPositionId = positions.includes(strip.ownerPositionId) ? strip.ownerPositionId : positions[0];
+    if (!actingPositionId) return;
+    const currentStrip = getEfspStrip(strip.stripId) || strip;
+    const currentValue = span.textContent === '✓';
+    sendEfspMutation(actingPositionId, currentStrip, { kind: 'SetBlock', blockId, value: !currentValue });
+  };
+  span.addEventListener('click', toggle);
+  span.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(e); } });
+  span.addEventListener('pointerdown', (e) => e.stopPropagation());
+  return span;
+}
+
 function _startBlockEdit(strip, blockId, span) {
   const currentValue = span.textContent;
   const input = document.createElement('input');
@@ -104,7 +202,14 @@ function _startBlockEdit(strip, blockId, span) {
     const positions = getActingPositions();
     const actingPositionId = positions.includes(strip.ownerPositionId) ? strip.ownerPositionId : positions[0];
     if (!actingPositionId) return;
-    sendEfspMutation(actingPositionId, strip, { kind: 'SetBlock', blockId, value });
+    // Read the CURRENT Strip (for its rev) rather than the `strip` this
+    // cell's DOM was built against — editing two different Blocks on the
+    // same Strip back-to-back (e.g. 3A then 3B) otherwise sends the second
+    // edit's baseRev from a snapshot the first edit's own ack had already
+    // moved past, and it comes back rejected as STALE_REV even though
+    // nothing else touched the Strip in between.
+    const currentStrip = getEfspStrip(strip.stripId) || strip;
+    sendEfspMutation(actingPositionId, currentStrip, { kind: 'SetBlock', blockId, value });
   };
 
   input.addEventListener('keydown', (e) => {
@@ -173,8 +278,45 @@ function _buildStripEl(strip) {
     // view layout position is the same. A genuinely arrival-tailored compact
     // layout (e.g. surfacing ETA/Block 6 here too) is a nice-to-have, not
     // built in Phase 2.
-    const blocks = ['1', '3', '4', '5', '7', '8', '8A', '8B', '9', '25'];
-    for (const id of blocks) el.appendChild(_buildBlockCell(strip, id));
+    // '5A'/'24A' (docs/adr/0022) — track-degradation flag and airspace
+    // ownership, both newly-editable enum Blocks; included so they're
+    // actually reachable somewhere in the compact view, not just present
+    // in the Block Map with no render path (the bug this closes).
+    // '3A'-'3E' (docs/adr/0023) — aircraft type/wake category/tail number/
+    // unit/home station: all five were already validated and writable
+    // server-side but had no Block anywhere routing a SetBlock at them,
+    // found live when "Spawn Return Strip" had nothing to actually copy.
+    // WP4A second slice — MISSION's fields (mission number/package/beacon/
+    // vul window) are structurally different from the callsign-runway-taxi
+    // shape every other role shares, so it gets its own compact-view list
+    // (the first role-conditional branch this array has ever needed —
+    // strip-template.js's MISSION_BLOCK_MAP uses an entirely M-prefixed
+    // namespace, none of which exists in the shared list below).
+    const blocks = strip.role === 'MISSION'
+      ? ['M3', 'M1', 'M2', 'M4', 'M5', 'M6', 'M7', 'M25']
+      // '5A'/'24A' (docs/adr/0022), '3A'-'3E' (docs/adr/0023) — see their
+      // own comments elsewhere in this file/strip-template.js. IFR/RSVC/
+      // SREG (WP4A second slice, §4.6.3) — the three-field separation
+      // model, reachable here for any role that can enter tactically-
+      // controlled airspace (not MISSION itself, the MRU-side record).
+      : ['1', '3', '3A', '3B', '3C', '3D', '3E', '4', '5', '5A', '7', '8', '8A', '8B', '9', '24A', 'IFR', 'RSVC', 'SREG', '25'];
+    // docs/adr/0024 — a small muted label stacked above each Block's value so
+    // a bare '0001'/'LTAG' isn't left to memory. Wrapping happens HERE, at
+    // the call site, rather than inside _buildBlockCell itself, so its
+    // click-to-edit/enum-<select> internals need zero changes.
+    for (const id of blocks) {
+      const chip = document.createElement('span');
+      chip.className = 'efsp-block-chip';
+      const label = blockLabelFor(id, strip.role);
+      if (label) {
+        const labelEl = document.createElement('span');
+        labelEl.className = 'efsp-block-label';
+        labelEl.textContent = label;
+        chip.appendChild(labelEl);
+      }
+      chip.appendChild(_buildBlockCell(strip, id));
+      el.appendChild(chip);
+    }
 
     // Offset (guide §7.3) — one input, a dedicated button so it's reachable
     // from keyboard/touch per §7.1 rule 4, not just a drag/dblclick gesture.
@@ -206,10 +348,20 @@ function _buildStripEl(strip) {
       // happens to be acting as — the authority question is about the
       // Strip itself ("whose job is this state"), the same for every
       // viewer looking at it.
+      // docs/adr/0022 bug fix — server-authoritative, this is the
+      // proactive half: an open (PROPOSED) coordination link means a peer
+      // Facility is waiting on this Strip, so its own NLA (Drop, for a
+      // DEPARTURE Strip at HANDED_OFF) must not look pressable — dropping
+      // out from under an open proposal orphaned the receiver's replica.
+      const hasOpenCoordination = strip.coordination && strip.coordination.state === 'PROPOSED';
       if (!canActOnState(strip.ownerPositionId, strip.role, strip.state)) {
         btn.disabled = true;
         btn.classList.add('efsp-nla-btn-denied');
         btn.title = `${strip.state} is not ${strip.ownerPositionId}'s to advance`;
+      } else if (hasOpenCoordination) {
+        btn.disabled = true;
+        btn.classList.add('efsp-nla-btn-denied');
+        btn.title = 'a coordination proposal is still open on this Strip — accept, reject, or wait for a response first';
       } else {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -225,17 +377,32 @@ function _buildStripEl(strip) {
       // REPLACE the normal NLA slot conceptually (there is no ordinary
       // NLA for a Strip still sitting in a Coordination Bay), rendered
       // alongside whatever (if anything) nlaLabelFor returned above.
+      //
+      // OPERATIONAL_REQUEST gets a 3-way response (guide §4.6: APPROVED/
+      // UNABLE/STAND BY, docs/adr/0022) — ACCEPT/REJECT already carry that
+      // meaning for it (coordination.js's acceptPhrase:'APPROVED'), so only
+      // the label and the extra Stand By button differ; every other
+      // primitive keeps its original 2-button Accept/Reject wording.
+      const isOpsRequest = strip.coordination.primitive === 'OPERATIONAL_REQUEST';
       const acceptBtn = document.createElement('button');
       acceptBtn.className = 'efsp-coordinate-accept-btn';
-      acceptBtn.textContent = `Accept ${COORDINATION_PRIMITIVE_LABELS[strip.coordination.primitive] || strip.coordination.primitive}`;
+      acceptBtn.textContent = isOpsRequest ? 'Approve' : `Accept ${COORDINATION_PRIMITIVE_LABELS[strip.coordination.primitive] || strip.coordination.primitive}`;
       acceptBtn.addEventListener('click', (e) => { e.stopPropagation(); _dispatchCoordination(strip, strip.coordination.primitive, 'ACCEPT'); });
       el.appendChild(acceptBtn);
 
       const rejectBtn = document.createElement('button');
       rejectBtn.className = 'efsp-coordinate-reject-btn';
-      rejectBtn.textContent = 'Reject';
+      rejectBtn.textContent = isOpsRequest ? 'Unable' : 'Reject';
       rejectBtn.addEventListener('click', (e) => { e.stopPropagation(); _dispatchCoordination(strip, strip.coordination.primitive, 'REJECT'); });
       el.appendChild(rejectBtn);
+
+      if (isOpsRequest) {
+        const standByBtn = document.createElement('button');
+        standByBtn.className = 'efsp-coordinate-standby-btn';
+        standByBtn.textContent = 'Stand By';
+        standByBtn.addEventListener('click', (e) => { e.stopPropagation(); _dispatchCoordination(strip, strip.coordination.primitive, 'STAND_BY'); });
+        el.appendChild(standByBtn);
+      }
     } else if (_canProposeCoordination(strip)) {
       const coordBtn = document.createElement('button');
       coordBtn.className = 'efsp-coordinate-btn';
@@ -243,6 +410,83 @@ function _buildStripEl(strip) {
       coordBtn.title = `Propose a cross-Facility coordination to ${COORDINATION_TARGETS[strip.ownerPositionId].positionId}`;
       coordBtn.addEventListener('click', (e) => { e.stopPropagation(); _openCoordinatePopover(strip, el); });
       el.appendChild(coordBtn);
+    }
+
+    // ── WP4A second slice: TOFI affordances (guide §4.6.3) ──────────────
+    if (_isPendingTofiReplica(strip)) {
+      // Always the MISSION-side Strip — the receiving MRU controller's own
+      // record, for both ENTRY and EXIT (mirrors board-store.js's side
+      // split exactly).
+      const label = strip.tofiCoordination.direction === 'EXIT' ? 'Exit' : 'Entry';
+      const tofiAcceptBtn = document.createElement('button');
+      tofiAcceptBtn.className = 'efsp-coordinate-accept-btn';
+      tofiAcceptBtn.textContent = `Accept TOFI ${label}`;
+      tofiAcceptBtn.addEventListener('click', (e) => { e.stopPropagation(); _dispatchTofi(strip, 'ACCEPT'); });
+      el.appendChild(tofiAcceptBtn);
+
+      const tofiRejectBtn = document.createElement('button');
+      tofiRejectBtn.className = 'efsp-coordinate-reject-btn';
+      tofiRejectBtn.textContent = 'Reject';
+      tofiRejectBtn.addEventListener('click', (e) => { e.stopPropagation(); _dispatchTofi(strip, 'REJECT'); });
+      el.appendChild(tofiRejectBtn);
+    } else if (_canProposeTofiExit(strip)) {
+      // EXIT's target is already known (tofiCoordination.peerFacilityId/
+      // peerPositionId) — no picker needed, unlike ENTRY.
+      const tofiExitBtn = document.createElement('button');
+      tofiExitBtn.className = 'efsp-coordinate-btn';
+      tofiExitBtn.textContent = 'TOFI Exit…';
+      tofiExitBtn.title = `Propose returning separation to ${strip.tofiCoordination.peerPositionId}`;
+      tofiExitBtn.addEventListener('click', (e) => { e.stopPropagation(); _dispatchTofi(strip, 'PROPOSE', 'EXIT'); });
+      el.appendChild(tofiExitBtn);
+    } else if (_canProposeTofiEntry(strip)) {
+      const counterparts = TOFI_COUNTERPARTS[strip.ownerPositionId];
+      const tofiEntryBtn = document.createElement('button');
+      tofiEntryBtn.className = 'efsp-coordinate-btn';
+      tofiEntryBtn.textContent = 'TOFI…';
+      tofiEntryBtn.title = 'Propose a Transfer of Flight Information to a Military Radar Unit';
+      tofiEntryBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // Single-candidate case (TAC_C2/GCI -> CTR) skips the picker
+        // entirely — behaves like today's deterministic COORDINATION_TARGETS
+        // stub. CTR's 2-candidate case always opens the popover.
+        if (counterparts.length === 1) _dispatchTofi(strip, 'PROPOSE', 'ENTRY', { target: counterparts[0] });
+        else _openTofiEntryPopover(strip, el, counterparts);
+      });
+      el.appendChild(tofiEntryBtn);
+    }
+
+    if (_canTransferTofiComms(strip)) {
+      const commsBtn = document.createElement('button');
+      commsBtn.className = 'efsp-coordinate-btn efsp-tofi-transfer-comms-btn';
+      commsBtn.textContent = 'Transfer Comms';
+      commsBtn.title = 'Guide §4.6.3 — a separate step from ACCEPT';
+      commsBtn.addEventListener('click', (e) => { e.stopPropagation(); _dispatchTofi(strip, 'TRANSFER_COMMS'); });
+      el.appendChild(commsBtn);
+    }
+
+    if (strip.tofiCoordination && strip.tofiCoordination.state !== 'REJECTED') {
+      const tofiBadge = document.createElement('span');
+      tofiBadge.className = 'efsp-coordination-badge efsp-tofi-badge';
+      tofiBadge.textContent = `TOFI ${strip.tofiCoordination.direction}: ${strip.tofiCoordination.state}`;
+      el.appendChild(tofiBadge);
+    }
+
+    // "Convert to Arrival" (docs/adr/0023) — a DEPARTURE Strip at its
+    // terminus (HANDED_OFF, whether still at APP or handed off further to
+    // CTR) turns into its return-leg ARRIVAL Strip IN PLACE: same stripId,
+    // same fdrId, throughout — never a second Strip. Two earlier versions
+    // of this button spawned a separate ARRIVAL Strip instead (per guide
+    // §3.6's turnaround rule); abandoned after live testing found that left
+    // a stale departure Strip behind, a duplicated beacon code, and needed
+    // every field copied by hand. board-store.js's _applyConvertToArrival
+    // is authoritative for the state/role/Bay/permission rules.
+    if (strip.role === 'DEPARTURE' && strip.state === 'HANDED_OFF') {
+      const spawnBtn = document.createElement('button');
+      spawnBtn.className = 'efsp-spawn-return-btn';
+      spawnBtn.textContent = 'Convert to Arrival →';
+      spawnBtn.title = `Turn this Strip into its return ARRIVAL leg at ${strip.ownerPositionId} — same Strip, same FDR, no duplicate`;
+      spawnBtn.addEventListener('click', (e) => { e.stopPropagation(); convertStripToArrival(strip); });
+      el.appendChild(spawnBtn);
     }
 
     // POINT_OUT dual-half rendering (guide §4.6 rule 1: "the UI MUST
@@ -262,6 +506,18 @@ function _buildStripEl(strip) {
       badges.appendChild(dataChip);
       badges.appendChild(sepChip);
       el.appendChild(badges);
+    }
+
+    // OPERATIONAL_REQUEST STAND BY indicator (docs/adr/0022) — on the
+    // REQUESTER's own Strip, so a still-open request doesn't read as
+    // silently ignored. Cleared the moment the request actually resolves
+    // (state leaves PROPOSED), same as the badges above.
+    if (strip.coordination && strip.coordination.primitive === 'OPERATIONAL_REQUEST'
+      && strip.coordination.state === 'PROPOSED' && strip.coordination.lastStandByAt) {
+      const standByBadge = document.createElement('span');
+      standByBadge.className = 'efsp-coordination-badge efsp-coordination-badge-standby';
+      standByBadge.textContent = 'STAND BY';
+      el.appendChild(standByBadge);
     }
 
     if (obligation) {
@@ -359,7 +615,7 @@ function _transferStrip(strip, toPositionId, bayId, rackId) {
 // Only HANDOFF/POINT_OUT/TRAFFIC/OPERATIONAL_REQUEST/AIT — the 5 primitives
 // permission.js grants exclusively to APP/CTR (§4.6, this slice's civil
 // ATC<->ATC scope). No MRU-refusal audit is needed yet: no MRU Position
-// exists this slice (docs/adr/0012's deferral) — gating the Coordinate
+// exists this slice (docs/adr/0020's deferral) — gating the Coordinate
 // button to APP/CTR only is what D12 will extend once one does.
 //
 // Target Facility/Position is DETERMINISTIC this slice — there are only
@@ -384,10 +640,34 @@ function _isPendingCoordinationReplica(strip) {
   return !!(strip.coordination && strip.coordination.state === 'PROPOSED' && strip.bayId.endsWith('-coordination'));
 }
 
-/** A Strip may open a NEW coordination proposal only while it has no already-open one (server-enforced too — board-store.js's _applyCoordinationPropose). */
+// COORDINATION_ELIGIBLE_STATES (docs/adr/0022) lives in efsp-nla.js, loaded
+// before this file — the established pattern for small doctrinal tables
+// that need a server/client drift test (see that module's own comment).
+// Was previously hardcoded to ARRIVAL-only here, which is what made the
+// Coordinate button unreachable for any DEPARTURE Strip — this fix closes
+// both the missing APP->CTR handoff AND the other 4 primitives' same
+// ARRIVAL-only gate.
+
+/**
+ * A Strip may open a NEW coordination proposal only while it has no
+ * already-open one (server-enforced too — board-store.js's
+ * _applyCoordinationPropose). REJECTED can be retried — but ONLY from the
+ * SENDER's own Strip, which stays in its normal working Bay the whole time
+ * (guide's real flight record). A Strip sitting in a Coordination Bay is
+ * always the RECEIVER-side replica/proposal artifact — jurisdiction never
+ * actually transferred there even once accepted (accept relocates it OUT
+ * of the Coordination Bay, board-store.js's _applyCoordinationAccept), so
+ * one still sitting there (PROPOSED awaiting response, or REJECTED and
+ * left inert) is never a legitimate flight record to propose FROM. Bug
+ * found in live testing: without this, a rejected receiver-side replica
+ * offered Coordinate again — letting a controller "hand off" CTR's own
+ * dead copy of a flight back to the very Position that sent it in the
+ * first place, an entirely spurious third replica.
+ */
 function _canProposeCoordination(strip) {
-  if (strip.role !== 'ARRIVAL') return false;
   if (!COORDINATION_TARGETS[strip.ownerPositionId]) return false;
+  if (COORDINATION_ELIGIBLE_STATES[strip.role] !== strip.state) return false;
+  if (strip.bayId.endsWith('-coordination')) return false;
   if (!strip.coordination) return true;
   return strip.coordination.state === 'REJECTED'; // ACTIVE/PROPOSED are open links; REJECTED can be retried
 }
@@ -402,6 +682,146 @@ function _dispatchCoordination(strip, primitive, action, note) {
   } else {
     sendEfspMutation(actingPositionId, strip, { kind: primitive, action });
   }
+}
+
+// ── WP4A second slice: TOFI (guide §4.6.3) — a genuinely different
+// sub-protocol from the 5 primitives above, not a 6th COORDINATION_TARGETS
+// entry (see crc-sync's board-store.js module comment for the full list of
+// structural differences: two independent exchanges per Strip, a distinct
+// comms-transfer action, no jurisdiction transfer ever, a different Strip
+// Role on the receiving side sharing one fdrId).
+//
+// Unlike COORDINATION_TARGETS' fixed 1:1 stub, TOFI genuinely needs a
+// picker: per the guide's own §4.1 Position table, TOFI is listed only for
+// CTR among the ATC Positions built so far (not APP), but the MRU side has
+// TWO candidates (TAC_C2, GCI) — CTR-initiated TOFI must let the controller
+// choose. TAC_C2/GCI-initiated TOFI has exactly one candidate (CTR) and
+// skips the picker, behaving like today's deterministic stub.
+const TOFI_COUNTERPARTS = {
+  CTR:    [{ facilityId: 'TACTICAL', positionId: 'TAC_C2' }, { facilityId: 'TACTICAL', positionId: 'GCI' }],
+  TAC_C2: [{ facilityId: 'CENTER', positionId: 'CTR' }],
+  GCI:    [{ facilityId: 'CENTER', positionId: 'CTR' }],
+};
+// D12 audit note: TAC_C2/AIC/GCI/JTAC must NEVER appear as keys in
+// COORDINATION_TARGETS above — that's what structurally prevents a
+// HANDOFF/POINT_OUT/TRAFFIC/OPERATIONAL_REQUEST/AIT button from ever
+// rendering for them, regardless of Position combination (see
+// efsp-coordination-client.test.js's permanent regression guard). TOFI's
+// OWN button (below) is the only coordination-shaped affordance any of
+// those 4 Positions ever get, and it only ever dispatches kind:'TOFI' —
+// structurally incapable of offering one of the 5 forbidden primitives.
+
+/** ENTRY may be proposed from a fresh Strip, or retried after a REJECTED one — always from the ATC-side Strip, never the MISSION-side replica. */
+function _canProposeTofiEntry(strip) {
+  if (!TOFI_COUNTERPARTS[strip.ownerPositionId]) return false;
+  if (strip.role === 'MISSION') return false;
+  if (!strip.tofiCoordination) return true;
+  return strip.tofiCoordination.state === 'REJECTED';
+}
+
+/** EXIT is only ever proposed from the ATC-side Strip, and only while tactical control is genuinely ACTIVE. */
+function _canProposeTofiExit(strip) {
+  if (strip.role === 'MISSION') return false;
+  return !!(strip.tofiCoordination && strip.tofiCoordination.state === 'ACTIVE');
+}
+
+/** Accept/Reject always render on the MISSION-side Strip — the receiving MRU controller's own record — for BOTH ENTRY and EXIT (mirrors board-store.js's own side-split exactly). */
+function _isPendingTofiReplica(strip) {
+  return strip.role === 'MISSION' && !!strip.tofiCoordination && strip.tofiCoordination.state === 'PROPOSED';
+}
+
+/** Transfer Comms is invocable on EITHER side of an accepted exchange that hasn't transferred comms yet. */
+function _canTransferTofiComms(strip) {
+  return !!(strip.tofiCoordination && strip.tofiCoordination.acceptedAt && !strip.tofiCoordination.commsTransferred);
+}
+
+function _dispatchTofi(strip, action, direction, overrides = {}) {
+  const actingPositionId = _resolveActingPositionId(strip);
+  if (!actingPositionId) return;
+  if (action === 'PROPOSE') {
+    const op = { kind: 'TOFI', action: 'PROPOSE', direction, note: overrides.note || undefined };
+    if (direction === 'ENTRY') {
+      const target = overrides.target;
+      if (!target) return;
+      op.toFacilityId = target.facilityId;
+      op.toPositionId = target.positionId;
+    }
+    sendEfspMutation(actingPositionId, strip, op);
+  } else {
+    sendEfspMutation(actingPositionId, strip, { kind: 'TOFI', action });
+  }
+}
+
+let _openTofiPopoverEl = null;
+
+function _closeTofiPopover() {
+  if (!_openTofiPopoverEl) return;
+  _openTofiPopoverEl.remove();
+  _openTofiPopoverEl = null;
+  document.removeEventListener('pointerdown', _onDocPointerDownCloseTofiPopover, true);
+}
+
+function _onDocPointerDownCloseTofiPopover(e) {
+  if (_openTofiPopoverEl && !_openTofiPopoverEl.contains(e.target)) _closeTofiPopover();
+}
+
+/**
+ * TOFI ENTRY's popover — structurally simpler than _openCoordinatePopover:
+ * no primitive choice (TOFI is the only thing this button ever sends), a
+ * target picker ONLY when more than one counterpart exists (CTR's case —
+ * TAC_C2/GCI's single-candidate case skips this popover entirely, see the
+ * click handler below). Reuses the same degraded-track warning/required-
+ * note pattern as the Coordinate popover (guide §4.6 rule 5 applies to
+ * TOFI too — crc-sync's board-store.js enforces this identically for both).
+ */
+function _openTofiEntryPopover(strip, anchorEl, counterparts) {
+  _closeTofiPopover();
+  const fdr = getEfspFdr(strip.fdrId);
+  const degraded = !!(fdr && fdr.identity && fdr.identity.trackDegradationFlag && fdr.identity.trackDegradationFlag !== 'NONE');
+
+  const popover = document.createElement('div');
+  popover.className = 'efsp-coordinate-popover efsp-tofi-popover';
+  popover.addEventListener('pointerdown', (e) => e.stopPropagation());
+
+  if (degraded) {
+    const warn = document.createElement('div');
+    warn.className = 'efsp-coordinate-degraded-warning';
+    warn.textContent = `Track degraded (${fdr.identity.trackDegradationFlag}) — verbal coordination required, note mandatory`;
+    popover.appendChild(warn);
+  }
+
+  const select = document.createElement('select');
+  select.className = 'efsp-coordinate-primitive-select';
+  for (const c of counterparts) {
+    const opt = document.createElement('option');
+    opt.value = JSON.stringify(c);
+    opt.textContent = `${c.positionId} (${c.facilityId})`;
+    select.appendChild(opt);
+  }
+  popover.appendChild(select);
+
+  const note = document.createElement('textarea');
+  note.className = 'efsp-coordinate-note';
+  note.placeholder = degraded ? 'Verbal coordination note (required)' : 'Note (optional)';
+  popover.appendChild(note);
+
+  const sendBtn = document.createElement('button');
+  sendBtn.className = 'efsp-coordinate-send-btn';
+  sendBtn.textContent = 'Send TOFI';
+  sendBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (degraded && !note.value.trim()) {
+      note.classList.add('efsp-coordinate-note-required');
+      return;
+    }
+    _dispatchTofi(strip, 'PROPOSE', 'ENTRY', { target: JSON.parse(select.value), note: note.value.trim() });
+    _closeTofiPopover();
+  });
+  popover.appendChild(sendBtn);
+
+  anchorEl.appendChild(popover);
+  _openTofiPopoverEl = popover;
+  setTimeout(() => document.addEventListener('pointerdown', _onDocPointerDownCloseTofiPopover, true), 0);
 }
 
 const COORDINATION_PRIMITIVE_LABELS = {
@@ -439,12 +859,21 @@ function _openCoordinatePopover(strip, anchorEl) {
     popover.appendChild(warn);
   }
 
+  // AIT is configuration, not a default (guide §4.6 rule 7, docs/adr/0022)
+  // — disabled here rather than letting a PROPOSE submit-and-silently-fail
+  // against the authoritative server-side check in board-store.js.
+  const aitAuthorized = isAitAuthorizedFor(strip.facilityId);
+
   const select = document.createElement('select');
   select.className = 'efsp-coordinate-primitive-select';
   for (const primitive of ['HANDOFF', 'POINT_OUT', 'TRAFFIC', 'OPERATIONAL_REQUEST', 'AIT']) {
     const opt = document.createElement('option');
     opt.value = primitive;
     opt.textContent = COORDINATION_PRIMITIVE_LABELS[primitive];
+    if (primitive === 'AIT' && !aitAuthorized) {
+      opt.disabled = true;
+      opt.textContent += ' (no written directive)';
+    }
     select.appendChild(opt);
   }
   popover.appendChild(select);

@@ -41,6 +41,18 @@
   cursor: pointer;
   font: inherit;
 }
+/* Origin (Position + Role) picker (docs/adr/0023) — shown only when 2+
+   origins are simultaneously reachable (a combined-Position controller,
+   e.g. holding OPS+APP+CTR at once); auto-resolved with no picker shown
+   for the common single-Position case. */
+#efsp-create-strip-role {
+  min-height: 32px;
+  padding: 4px 8px;
+  background: #0e1114;
+  border: 1px solid #2a3038;
+  color: #d8e0e6;
+  font: inherit;
+}
 #efsp-new-strip-callsign:disabled, #efsp-create-strip-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -165,7 +177,7 @@
 }
 
 .efsp-strip {
-  position: relative; /* anchors .efsp-highlight-popover */
+  position: relative; /* anchors .efsp-highlight-popover, .efsp-coordinate-popover */
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -175,10 +187,38 @@
   background: #1c2228;
   border: 1px solid #2a3038;
   border-left: 4px solid var(--efsp-highlight, transparent);
-  contain: layout style paint; /* §7.5 rule 5 — one Strip's text change can't invalidate the Bay's layout */
+  /* §7.5 rule 5 — one Strip's text change can't invalidate the Bay's
+     layout. `paint` deliberately dropped from this list: `contain: paint`
+     clips any descendant that paints outside this element's own box, which
+     silently hid BOTH .efsp-highlight-popover and .efsp-coordinate-popover
+     (each `top: 100%`, i.e. positioned below the Strip, entirely outside
+     it) — the click/contextmenu handler ran and appended the popover to
+     the DOM correctly, it just never became visible. `layout style` alone
+     still gives the intended reflow-isolation benefit. */
+  contain: layout style;
   cursor: grab;
   touch-action: none; /* §7.1 rule 2 — required for touch drag to work at all */
   min-height: 44px; /* §7.6 rule 4 — touch target floor */
+}
+
+/* docs/adr/0024 — a small muted label stacked above each compact-view
+   Block's value (chosen over inline "label: value" or hover-only after a
+   preview comparison) so e.g. '0001' reads as SQUAWK without memorizing
+   Block position. line-height:1 on the label keeps the two-line chip within
+   .efsp-strip's existing 44px touch-target floor above, no layout change
+   needed there. */
+.efsp-block-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+}
+.efsp-block-label {
+  font-size: 8px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: #6b7480;
+  text-transform: uppercase;
 }
 
 .efsp-strip-selected { outline: 2px solid #4a7dbf; }
@@ -345,6 +385,19 @@
   border: 1px solid #6a5bbf; /* a distinct hue from the NLA button's blue (#4a7dbf) — a different KIND of action, not a variant of NLA */
   color: #fff;
 }
+/* Convert to Arrival (docs/adr/0023) — an in-place role change (same
+   Strip, same FDR), not a Drop/Coordinate/NLA-style action — the dashed
+   border reads as "transforms this Strip," distinct from every solid-
+   bordered action button next to it. */
+.efsp-spawn-return-btn {
+  min-height: 32px;
+  padding: 2px 10px;
+  cursor: pointer;
+  font: inherit;
+  background: #2a3038;
+  border: 1px dashed #6a7078;
+  color: #a8b4bd;
+}
 .efsp-coordinate-accept-btn {
   background: #1c3a24;
   border: 1px solid #39ff7a;
@@ -354,6 +407,18 @@
   background: #2a3038;
   border: 1px solid #4a5560;
   color: #a8b4bd;
+}
+/* OPERATIONAL_REQUEST's 3rd response (guide §4.6, docs/adr/0022) — doesn't
+   resolve the request, so deliberately a neutral hue, not accept-green or
+   reject-grey. */
+.efsp-coordinate-standby-btn {
+  min-height: 32px;
+  padding: 2px 10px;
+  cursor: pointer;
+  font: inherit;
+  background: #2a3038;
+  border: 1px solid #e0a83c;
+  color: #ffe0a8;
 }
 
 .efsp-coordinate-popover {
@@ -421,6 +486,38 @@
 }
 .efsp-coordination-badge-data { border-color: #6a5bbf; color: #c9c0ff; }
 .efsp-coordination-badge-sep  { border-color: #4a7dbf; color: #bfe0ff; }
+/* OPERATIONAL_REQUEST STAND BY indicator (docs/adr/0022) — same neutral
+   hue as the Stand By button, on the REQUESTER's own Strip. */
+.efsp-coordination-badge-standby { border-color: #e0a83c; color: #ffe0a8; flex-basis: 100%; }
+
+/* Restricted-enum Blocks (airspace ownership, track-degradation) — a
+   dedicated <select>, docs/adr/0022. */
+.efsp-block-enum { cursor: pointer; }
+.efsp-block-enum-select {
+  min-height: 20px;
+  background: #0e1114;
+  border: 1px solid #6a5bbf;
+  color: #d8e0e6;
+  font: inherit;
+  font-size: inherit;
+}
+
+/* WP4A second slice — IFR (a boolean, not a restricted-value enum) gets a
+   plain click-to-toggle affordance, same cursor treatment as the enum
+   Blocks above but no <select> swap. */
+.efsp-block-toggle { cursor: pointer; }
+
+/* WP4A second slice — TOFI (guide §4.6.3), the ATC<->MRU sub-protocol. A
+   genuinely different sub-protocol from the 5 primitives above, not a
+   variant of them — a distinct hue (amber-gold, between the coordination
+   purple and the standby amber) so a controller scanning the Board can
+   tell TOFI apart from an ordinary cross-Facility coordination at a
+   glance. Every button/badge/popover here otherwise reuses the
+   .efsp-coordinate-*/.efsp-coordination-badge base rules above (layered
+   as a second class) rather than redeclaring layout properties. */
+.efsp-tofi-popover { border-color: #cf9b3c; }
+.efsp-tofi-transfer-comms-btn { border-color: #cf9b3c; color: #ffe3ad; }
+.efsp-tofi-badge { border-color: #cf9b3c; color: #ffe3ad; flex-basis: 100%; }
 
 /* Forwarding-obligation alerts (guide §4.6.1) — a THIRD, distinct tier,
    deliberately not reusing efsp-strip-attention's red (reserved, §7.7 rule

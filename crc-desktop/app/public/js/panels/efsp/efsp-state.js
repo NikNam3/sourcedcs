@@ -18,6 +18,11 @@ const efspPositions = new Map();  // positionId -> PositionOccupancy
 let efspBoardSeq = 0;
 let efspFacility = null;
 let efspBays = [];
+// WP4A gap-closure (docs/adr/0022) — facilityId -> is AIT authorized (a
+// written directive on file) there. Lets bay-view.js disable the AIT
+// option proactively instead of letting a PROPOSE submit-and-silently-fail
+// against the server-side check.
+let efspAitAuthorizedByFacility = {};
 
 // clientMutationId -> the original efsp-mutation message sent, kept until
 // its ack arrives — replayed against a fresh baseline on reconnect (§5.6.3).
@@ -39,6 +44,7 @@ function applyEfspSnapshot(msg) {
   efspBoardSeq = msg.boardSeq;
   efspFacility = msg.facility;
   efspBays = msg.bays || [];
+  efspAitAuthorizedByFacility = msg.aitAuthorizedByFacility || {};
 }
 
 function applyEfspDelta(msg) {
@@ -109,6 +115,7 @@ function getAllEfspPositions() { return [...efspPositions.values()]; }
 function getEfspBoardSeq() { return efspBoardSeq; }
 function getEfspFacility() { return efspFacility; }
 function getEfspBays() { return efspBays; }
+function isAitAuthorizedFor(facilityId) { return !!efspAitAuthorizedByFacility[facilityId]; }
 
 /** Strips currently placed in a Bay/Rack, in order, excluding DROPPED — mirrors board-store.js's getRack() exactly. */
 function getEfspRack(bayId, rackId) {
@@ -150,6 +157,7 @@ function _resetEfspStateForTest() {
   efspBoardSeq = 0;
   efspFacility = null;
   efspBays = [];
+  efspAitAuthorizedByFacility = {};
 }
 
 if (typeof module !== 'undefined' && module.exports) {
@@ -158,6 +166,7 @@ if (typeof module !== 'undefined' && module.exports) {
     registerPendingMutation, getPendingMutations, rebaseForResend,
     getEfspStrip, getEfspFdr, getEfspPosition, getAllEfspStrips, getAllEfspPositions,
     getEfspRack, searchEfspStrips, getEfspBoardSeq, getEfspFacility, getEfspBays,
+    isAitAuthorizedFor,
     applyEfspObligationAlert, getEfspObligation, clearEfspObligation,
     _resetEfspStateForTest,
   };

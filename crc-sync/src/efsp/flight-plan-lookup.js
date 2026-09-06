@@ -63,13 +63,21 @@ async function lookupFlightPlan(callsign, opts = {}) {
 }
 
 /**
- * Maps sourcedcs-web's DD1801 field names onto EFSP's FDR.filed shape
- * (fdr-store.js's createFdr() seed) — [SOURCE-DEFINED] mapping, since
+ * Maps sourcedcs-web's DD1801 field names onto EFSP's FDR seed shape
+ * (fdr-store.js's createFdr() seed — flat keys, nested into identity.* /
+ * filed.* by createFdr() itself) — [SOURCE-DEFINED] mapping, since
  * sourcedcs-web's schema predates and is independent of EFSP's, and the
  * two use different field names for the same concepts. Only carries over
  * what EFSP actually models; DD1801-specific fields with no FDR
  * equivalent (fplMessage, worldTour, liveStreaming, endurance, pob, pic,
  * altn1/altn2, ...) are dropped, not stashed anywhere — nothing reads them.
+ * aircraftType/wtc DO have an FDR home (identity.aircraftType/
+ * wakeCategory) even though they're not part of `filed`, unlike this
+ * function's name suggests — kept here anyway rather than a second mapping
+ * function, since it's still exactly "what a DD1801 plan can seed a new
+ * Strip's FDR with." tailNumber/unit/homeStation have no DD1801 equivalent
+ * at all (not part of an ICAO flight plan — squadron bookkeeping a
+ * controller enters by hand) and stay unseeded.
  * Never throws — a missing/malformed field on the plan just yields an
  * empty string for that seed field, same as an ordinary blank CreateStrip.
  */
@@ -81,6 +89,8 @@ function toFdrFiledSeed(plan) {
     departureAirport: plan.depAerodrome || '',
     destinationAirport: plan.destAerodrome || '',
     remarks: plan.otherInfo || '',
+    aircraftType: plan.aircraftType || '',
+    wakeCategory: plan.wtc || '',
   };
 }
 

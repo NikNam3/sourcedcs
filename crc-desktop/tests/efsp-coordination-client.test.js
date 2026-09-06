@@ -10,8 +10,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { COORDINATION_OP_KINDS } = require('../app/public/js/panels/efsp/efsp-nla.js');
+const { COORDINATION_OP_KINDS, COORDINATION_ELIGIBLE_STATES, TOFI_OP_KINDS } = require('../app/public/js/panels/efsp/efsp-nla.js');
 const server = require('../../crc-sync/src/efsp/permission.js');
+const serverCoordination = require('../../crc-sync/src/efsp/coordination.js');
 
 test('the client mirror of the 5 coordination primitives stays in lockstep with permission.js\'s COORDINATION_OP_KINDS', () => {
   assert.deepEqual(COORDINATION_OP_KINDS, server.COORDINATION_OP_KINDS);
@@ -25,5 +26,30 @@ test('none of the 5 collide with an ordinary op kind (OP_KINDS minus the coordin
   const nonCoordination = server.OP_KINDS.filter(k => !server.COORDINATION_OP_KINDS.includes(k));
   for (const primitive of COORDINATION_OP_KINDS) {
     assert.equal(nonCoordination.includes(primitive), false, primitive);
+  }
+});
+
+// WP4A gap-closure (docs/adr/0022) — the client's proactive Coordinate-
+// button gate must stay in lockstep with the server's authoritative
+// eligibility check (board-store.js's _applyCoordinationPropose), or the
+// button will either offer something the server rejects, or hide something
+// it would actually allow.
+test('the client mirror of COORDINATION_ELIGIBLE_STATES stays in lockstep with coordination.js\'s server copy', () => {
+  assert.deepEqual(COORDINATION_ELIGIBLE_STATES, serverCoordination.COORDINATION_ELIGIBLE_STATES);
+});
+
+// WP4A second slice — TOFI (guide §4.6.3), a 6th op kind but NOT a 6th
+// coordination primitive (see coordination.js's own module comment for why
+// it needs a structurally separate table). Same drift-guard template.
+
+test('the client mirror of TOFI_OP_KINDS stays in lockstep with permission.js\'s server copy', () => {
+  assert.deepEqual(TOFI_OP_KINDS, server.TOFI_OP_KINDS);
+});
+
+test('TOFI never collides with any of the 5 coordination primitives, or any ordinary op kind', () => {
+  const nonTofi = server.OP_KINDS.filter(k => !server.TOFI_OP_KINDS.includes(k));
+  for (const kind of TOFI_OP_KINDS) {
+    assert.equal(COORDINATION_OP_KINDS.includes(kind), false, kind);
+    assert.equal(nonTofi.includes(kind), false, kind);
   }
 });

@@ -41,11 +41,24 @@ const FACILITY_CONFIG_PATHS = {
     || path.join(__dirname, '../../config/efsp-facility-incirlik.json'),
   CENTER: process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER
     || path.join(__dirname, '../../config/efsp-facility-center.json'),
+  // WP4A second slice — the TACTICAL Facility (docs/adr/0013's pattern
+  // repeated for a third Facility).
+  TACTICAL: process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL
+    || path.join(__dirname, '../../config/efsp-facility-tactical.json'),
 };
 
 const DEFAULT_CONFIG = {
   facility: 'INCIRLIK',
   positions: ['OPS', 'CD', 'GND', 'TWR', 'APP'],
+  // WP4A second slice — every Position's doctrinal class (guide §4.1's own
+  // Class column), read by permission.js's getPositionClass() to gate the
+  // cross-Facility coordination primitives and TOFI structurally rather
+  // than by a hand-maintained per-ID list alone (docs/adr/0020's own
+  // directive). INCIRLIK has no MRU/NON_ATC Positions, so nothing here is
+  // ever excluded from coordination by class — CD/GND/TWR/OPS are excluded
+  // today purely because they don't sit on a Facility boundary, a
+  // different, pre-existing reason (see permission.js).
+  positionClasses: { OPS: 'BASOPS', CD: 'MILITARY_ATC', GND: 'MILITARY_ATC', TWR: 'MILITARY_ATC', APP: 'MILITARY_ATC' },
   // Still ends at APP, deliberately NOT extended to CTR — the covering
   // chain (guide §4.5 rule 3, §4.8.6) is an INTRAFACILITY occupancy-
   // fallback mechanism ("route to the covering Position within this
@@ -62,6 +75,7 @@ const DEFAULT_CONFIG = {
   blockVisibility: {
     DEPARTURE: Object.keys(blockMap.DEPARTURE_BLOCK_MAP),
     ARRIVAL: Object.keys(blockMap.ARRIVAL_BLOCK_MAP),
+    OVERFLIGHT: Object.keys(blockMap.OVERFLIGHT_BLOCK_MAP), // docs/adr/0023
   },
   bays: {
     OPS: [
@@ -104,8 +118,13 @@ const DEFAULT_CONFIG = {
       { bayId: 'twr-coordination', rackIds: ['main'] }, // inert this slice
     ],
     APP: [
-      { bayId: 'app-inbound',      rackIds: ['main'], impliesState: 'INBOUND' },   // receives ARRIVAL Strips via CTR's real HANDOFF (docs/adr/0014, superseding docs/adr/0008's local stub)
+      { bayId: 'app-inbound',      rackIds: ['main'], impliesState: 'INBOUND' },   // receives ARRIVAL Strips via CTR's real HANDOFF (docs/adr/0014, superseding docs/adr/0008's local stub) AND self-originated pop-up ARRIVALs (docs/adr/0023)
       { bayId: 'app-departures',   rackIds: ['main'], impliesState: 'HANDED_OFF' }, // receives DEPARTURE Strips from TWR's real Hand Off (docs/adr/0007)
+      // docs/adr/0023 — a flight transiting APP's delegated airspace
+      // without landing or departing at Incirlik (guide §2's OVERFLIGHT
+      // Strip Role), self-originated by APP directly (no sending Facility
+      // to receive a coordination proposal from).
+      { bayId: 'app-overflight',   rackIds: ['main'], impliesState: 'TRANSITING' },
       // WP4A hook (APP<->CTR) — no longer inert: receives proposed
       // HANDOFF/POINT_OUT/TRAFFIC/AIT replicas from CTR (docs/adr/0015).
       { bayId: 'app-coordination', rackIds: ['main'] },
@@ -124,35 +143,106 @@ const DEFAULT_CONFIG = {
   // envelope"). Empty by default; a real envelope is facility-config data,
   // not code (release-envelope.js's matchesStandingRelease()).
   standingReleases: [],
+  // AIT is configuration, not a default (guide §4.6 rule 7) — false until
+  // a real written directive is on file (docs/adr/0022).
+  aitAuthorized: false,
 };
 
 // [SOURCE-DEFINED] WP4A (docs/adr/0013) — the guide gives no published
 // default Bay set for CENTER/CTR (only INCIRLIK's §4.2 table is grounded).
-// This slice's CTR only ever handles ARRIVAL-shaped en-route strips (no
-// DEPARTURE lifecycle at CTR at all — see docs/adr/0012's scope-cut ADR),
-// so blockVisibility omits DEPARTURE entirely rather than populating it
-// with an empty/unused array.
+// docs/adr/0020 originally scoped CTR to ARRIVAL-shaped en-route strips
+// only; docs/adr/0022 narrowly corrects that — CTR can now also RECEIVE a
+// handed-off DEPARTURE Strip via APP's own HANDOFF (the mirror of CTR's
+// existing ARRIVAL HANDOFF to APP), with a Drop-only terminus, same as
+// APP's own DEPARTURE terminus today. No further DEPARTURE lifecycle
+// stages exist at CTR beyond that — the TACTICAL Facility/MRU Positions/
+// D12 audit/TOFI deferral from ADR 0012 still stands untouched.
 const DEFAULT_CENTER_CONFIG = {
   facility: 'CENTER',
   positions: ['CTR'],
+  positionClasses: { CTR: 'CIVIL_ATC' },
   // CTR has no covering Position this slice — mirrors OPS's "absent from
   // the chain" precedent (there is no second civil ATC Position upstream
   // of CTR built yet).
   coveringChain: {},
   blockVisibility: {
     ARRIVAL: Object.keys(blockMap.ARRIVAL_BLOCK_MAP),
+    DEPARTURE: Object.keys(blockMap.DEPARTURE_BLOCK_MAP), // docs/adr/0022
+    OVERFLIGHT: Object.keys(blockMap.OVERFLIGHT_BLOCK_MAP), // docs/adr/0023
   },
   bays: {
     CTR: [
       { bayId: 'ctr-enroute',           rackIds: ['main'], impliesState: 'INBOUND' },
-      { bayId: 'ctr-app-coordination',  rackIds: ['main'] }, // WP4A seam — proposed HANDOFF/POINT_OUT/TRAFFIC/AIT replicas from APP land here
+      // docs/adr/0022 — receives a DEPARTURE Strip handed off from APP;
+      // mirrors app-departures' exact shape (INCIRLIK's own DEPARTURE
+      // terminus Bay).
+      { bayId: 'ctr-departures',        rackIds: ['main'], impliesState: 'HANDED_OFF' },
+      // docs/adr/0023 — a flight transiting CENTER's airspace without
+      // landing or departing at Incirlik at all (guide §2's OVERFLIGHT
+      // Strip Role), self-originated by CTR directly.
+      { bayId: 'ctr-overflight',        rackIds: ['main'], impliesState: 'TRANSITING' },
+      { bayId: 'ctr-app-coordination',  rackIds: ['main'] }, // WP4A seam — proposed HANDOFF/POINT_OUT/TRAFFIC/OPERATIONAL_REQUEST/AIT replicas from APP land here
     ],
   },
   dataOnly: false,
   standingReleases: [],
+  aitAuthorized: false, // docs/adr/0022 — configuration, not a default
 };
 
-const DEFAULT_CONFIGS = { INCIRLIK: DEFAULT_CONFIG, CENTER: DEFAULT_CENTER_CONFIG };
+// [SOURCE-DEFINED] WP4A second slice (docs/adr/0025) — the TACTICAL
+// Facility and its 4 MRU/non-ATC Positions (TAC_C2, AIC, GCI, JTAC), the
+// deferred remainder of WP4A per docs/adr/0020. No guide-published default
+// Bay set exists for TACTICAL (only INCIRLIK's §4.2 table is grounded) —
+// this follows the guide's own §4.2 Bay-name table for TAC_C2/AIC/GCI
+// verbatim, plus a read-only viewing Bay for JTAC (guide §4.1: "MISSION
+// (read-only)" — enforced by JTAC never being granted ownership/mutation
+// rights anywhere in permission.js, not by a separate mechanism here).
+const DEFAULT_TACTICAL_CONFIG = {
+  facility: 'TACTICAL',
+  positions: ['TAC_C2', 'AIC', 'GCI', 'JTAC'],
+  positionClasses: { TAC_C2: 'MRU', GCI: 'MRU', AIC: 'MRU_POSITION', JTAC: 'NON_ATC' },
+  // AIC/GCI -> TAC_C2 is a legal INTRAFACILITY covering-chain entry (stays
+  // inside this Facility's own PositionStore instance). TAC_C2 -> CTR is
+  // deliberately NOT extended here, even though the guide's own §4.8.6
+  // text writes it as one chain — that hop crosses a Facility boundary,
+  // and position-store.js's coveringPositionFor() is structurally scoped
+  // to one Facility's own PositionStore (ADR 0013 point 4 already rejected
+  // extending APP -> CTR the identical way, after an earlier draft tried
+  // it and was reverted). An unoccupied TAC_C2 with no successor is an
+  // accepted "warn the controller, route nowhere" stranding case per guide
+  // §4.8.6 rule 5 ("warn, do not block"), not a silent gap.
+  coveringChain: { AIC: 'TAC_C2', GCI: 'TAC_C2' },
+  blockVisibility: {
+    MISSION: Object.keys(blockMap.MISSION_BLOCK_MAP),
+  },
+  bays: {
+    TAC_C2: [
+      { bayId: 'tac-c2-tasked',       rackIds: ['main'], impliesState: 'TASKED' },
+      { bayId: 'tac-c2-airborne',     rackIds: ['main'], impliesState: 'AIRBORNE' },
+      { bayId: 'tac-c2-on-station',   rackIds: ['main'], impliesState: 'ON_STATION' },
+      { bayId: 'tac-c2-tanker',       rackIds: ['main'] }, // guide's own Bay name — inert this slice, no AR-line/tanker join until WP7
+      { bayId: 'tac-c2-coordination', rackIds: ['main'] }, // TOFI lands here — a genuinely used Coordination Bay
+    ],
+    AIC: [
+      { bayId: 'aic-on-station',   rackIds: ['main'], impliesState: 'ON_STATION' },
+      { bayId: 'aic-committed',    rackIds: ['main'] },
+      { bayId: 'aic-coordination', rackIds: ['main'] }, // present but inert — AIC never holds a TOFI grant (permission.js)
+    ],
+    GCI: [
+      { bayId: 'gci-on-station',   rackIds: ['main'], impliesState: 'ON_STATION' },
+      { bayId: 'gci-committed',    rackIds: ['main'] },
+      { bayId: 'gci-coordination', rackIds: ['main'] }, // TOFI lands here, same as TAC_C2's
+    ],
+    JTAC: [
+      { bayId: 'jtac-mission', rackIds: ['main'] }, // read-only viewing Bay — ownership/permission alone enforces read-only
+    ],
+  },
+  dataOnly: false,
+  standingReleases: [],
+  aitAuthorized: false,
+};
+
+const DEFAULT_CONFIGS = { INCIRLIK: DEFAULT_CONFIG, CENTER: DEFAULT_CENTER_CONFIG, TACTICAL: DEFAULT_TACTICAL_CONFIG };
 
 function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
 
@@ -171,6 +261,11 @@ function validateConfig(candidate) {
   for (const positionId of Object.keys(candidate.bays || {})) {
     if (!(candidate.positions || []).includes(positionId)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `Bay set references unknown Position ${positionId}` };
+    }
+  }
+  for (const positionId of Object.keys(candidate.positionClasses || {})) {
+    if (!(candidate.positions || []).includes(positionId)) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `positionClasses references unknown Position ${positionId}` };
     }
   }
   return { ok: true };
@@ -212,6 +307,27 @@ function getFacilityConfig(facilityId = DEFAULT_FACILITY_ID) { return deepClone(
 function getPositionSet(facilityId = DEFAULT_FACILITY_ID) { return [...(configs.get(facilityId).positions)]; }
 
 function getCoveringChain(facilityId = DEFAULT_FACILITY_ID) { return { ...(configs.get(facilityId).coveringChain) }; }
+
+/**
+ * WP4A second slice — a Position's doctrinal class (guide §4.1's own Class
+ * column: MILITARY_ATC/CIVIL_ATC/BASOPS/MRU/MRU_POSITION/NON_ATC/...),
+ * permission.js's structural basis for D12 (an MRU/non-ATC Position must
+ * never be granted a cross-Facility ATC coordination primitive, regardless
+ * of any other Position the same controller also holds). Searches every
+ * known Facility's own positionClasses map, not just one — Position IDs
+ * are globally unique across Facilities in this slice (permission.js's own
+ * header comment), so a caller never needs to know which Facility a
+ * Position belongs to just to ask its class. Returns null for a Position
+ * with no class recorded anywhere (not an error — a config predating this
+ * field, or a genuinely classless test fixture).
+ */
+function getPositionClass(positionId) {
+  for (const config of configs.values()) {
+    const classes = config.positionClasses || {};
+    if (Object.prototype.hasOwnProperty.call(classes, positionId)) return classes[positionId];
+  }
+  return null;
+}
 
 function getBaysFor(positionId, facilityId = DEFAULT_FACILITY_ID) {
   return deepClone(configs.get(facilityId).bays[positionId] || []);
@@ -275,7 +391,7 @@ function coordinationBayFor(positionId, facilityId = DEFAULT_FACILITY_ID) {
 
 module.exports = {
   DEFAULT_FACILITY_ID, getFacilityIds,
-  getFacilityConfig, getPositionSet, getCoveringChain, getBaysFor, getAllBays,
+  getFacilityConfig, getPositionSet, getPositionClass, getCoveringChain, getBaysFor, getAllBays,
   bayImpliesState, bayForImpliedState, coordinationBayFor, setFacilityConfig, validateConfig,
-  DEFAULT_CONFIG, DEFAULT_CENTER_CONFIG, DEFAULT_CONFIGS,
+  DEFAULT_CONFIG, DEFAULT_CENTER_CONFIG, DEFAULT_TACTICAL_CONFIG, DEFAULT_CONFIGS,
 };
