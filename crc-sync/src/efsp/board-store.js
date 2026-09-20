@@ -1369,8 +1369,18 @@ class BoardStore {
    */
   _applyTofiTransferComms(strip, op, by) {
     const tofi = strip.tofiCoordination;
-    if (!tofi || !tofi.acceptedAt || tofi.commsTransferred) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no accepted TOFI exchange awaiting a comms transfer', strip };
+    // Three distinct causes, previously one shared message — split out so
+    // the ack's `detail` actually says which one happened, rather than
+    // leaving a live-testing session to guess from "no accepted TOFI
+    // exchange awaiting a comms transfer" alone.
+    if (!tofi) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'this Strip has no TOFI exchange at all', strip };
+    }
+    if (!tofi.acceptedAt) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `TOFI ${tofi.direction} has not been accepted yet (state: ${tofi.state})`, strip };
+    }
+    if (tofi.commsTransferred) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'comms were already transferred for this exchange', strip };
     }
     const now = Date.now();
     tofi.commsTransferred = true;

@@ -3,14 +3,42 @@
     "INCIRLIK": {
       "strips": [
         {
-          "stripId": "5ca707db-5a8b-46e1-8036-e9f8d0914720",
+          "stripId": "df892b5b-1079-446d-8c37-2b62c1fda63a",
           "cid": "001",
-          "fdrId": "5a49db52-0760-4f86-8796-7364fd4d21dc",
-          "rev": 10,
+          "fdrId": "7df1ba6b-8c44-44e1-92f1-d0ad648905aa",
+          "rev": 17,
+          "role": "ARRIVAL",
+          "state": "DROPPED",
+          "ownerPositionId": "GND",
+          "bayId": "gnd-taxi-in",
+          "rackId": "main",
+          "orderKey": "V",
+          "annotations": {},
+          "flags": {
+            "offset": false,
+            "flipped": false,
+            "removeIndicator": false,
+            "highlight": null,
+            "attention": null
+          },
+          "correlation": {
+            "state": "UNCORRELATED"
+          },
+          "coordination": null,
+          "tofiCoordination": null,
+          "createdAt": 1788694523277,
+          "updatedAt": 1788694753512,
+          "updatedBy": "niknam3"
+        },
+        {
+          "stripId": "ffa8fc74-1877-4371-bc4c-b50ba5b497b6",
+          "cid": "002",
+          "fdrId": "7df1ba6b-8c44-44e1-92f1-d0ad648905aa",
+          "rev": 1,
           "role": "ARRIVAL",
           "state": "INBOUND",
           "ownerPositionId": "APP",
-          "bayId": "app-inbound",
+          "bayId": "app-coordination",
           "rackId": "main",
           "orderKey": "V",
           "annotations": {},
@@ -24,83 +52,151 @@
           "correlation": {
             "state": "UNCORRELATED"
           },
-          "coordination": null,
-          "createdAt": 1788607303364,
-          "updatedAt": 1788607317817,
-          "updatedBy": "niknam3"
-        },
-        {
-          "stripId": "185449ca-13b5-4c9c-b7ce-5a9450262bf3",
-          "cid": "002",
-          "fdrId": "8c129fd5-19db-4a76-b934-375aa7e4a0f0",
-          "rev": 3,
-          "role": "DEPARTURE",
-          "state": "PROPOSED",
-          "ownerPositionId": "OPS",
-          "bayId": "ops-proposed",
-          "rackId": "main",
-          "orderKey": "V",
-          "annotations": {},
-          "flags": {
-            "offset": false,
-            "flipped": false,
-            "removeIndicator": false,
-            "highlight": null,
-            "attention": null
+          "coordination": {
+            "primitive": "HANDOFF",
+            "state": "PROPOSED",
+            "peerFacilityId": "CENTER",
+            "peerStripId": "6086f441-738f-41b9-8465-d4d26eb0eada",
+            "peerPositionId": "CTR",
+            "dataOwnerPositionRef": {
+              "facilityId": "CENTER",
+              "positionId": "CTR"
+            },
+            "separationResponsibilityRef": {
+              "facilityId": "CENTER",
+              "positionId": "CTR"
+            },
+            "radarIdTransferred": false,
+            "commsTransferred": false,
+            "lastForwardedEtaUtc": null,
+            "note": null,
+            "initiatedAt": 1788694655060,
+            "initiatedBy": "niknam3",
+            "acceptedAt": null,
+            "acceptedBy": null,
+            "lastStandByAt": null
           },
-          "correlation": {
-            "state": "UNCORRELATED"
-          },
-          "coordination": null,
-          "createdAt": 1788608255062,
-          "updatedAt": 1788608287069,
-          "updatedBy": "niknam3"
-        },
-        {
-          "stripId": "ed9442b8-acc6-4b4a-96da-c108e0111ac3",
-          "cid": "003",
-          "fdrId": "56b78099-6a25-435b-8e2b-7d9181453f8e",
-          "rev": 16,
-          "role": "ARRIVAL",
-          "state": "HANDED_TO_TOWER",
-          "ownerPositionId": "TWR",
-          "bayId": "twr-arrivals",
-          "rackId": "main",
-          "orderKey": "V",
-          "annotations": {},
-          "flags": {
-            "offset": false,
-            "flipped": false,
-            "removeIndicator": false,
-            "highlight": null,
-            "attention": null
-          },
-          "correlation": {
-            "state": "UNCORRELATED"
-          },
-          "coordination": null,
-          "createdAt": 1788610939656,
-          "updatedAt": 1788610997028,
+          "createdAt": 1788694655060,
+          "updatedAt": 1788694655060,
           "updatedBy": "niknam3"
         }
       ],
-      "cidSeq": 3
+      "cidSeq": 2
     },
     "CENTER": {
-      "strips": [],
-      "cidSeq": 0
+      "strips": [
+        {
+          "stripId": "6086f441-738f-41b9-8465-d4d26eb0eada",
+          "cid": "001",
+          "fdrId": "7df1ba6b-8c44-44e1-92f1-d0ad648905aa",
+          "rev": 8,
+          "role": "ARRIVAL",
+          "state": "INBOUND",
+          "ownerPositionId": "CTR",
+          "bayId": "ctr-enroute",
+          "rackId": "main",
+          "orderKey": "V",
+          "annotations": {},
+          "flags": {
+            "offset": false,
+            "flipped": false,
+            "removeIndicator": false,
+            "highlight": null,
+            "attention": null
+          },
+          "correlation": {
+            "state": "UNCORRELATED"
+          },
+          "coordination": {
+            "primitive": "HANDOFF",
+            "state": "PROPOSED",
+            "peerFacilityId": "INCIRLIK",
+            "peerStripId": "ffa8fc74-1877-4371-bc4c-b50ba5b497b6",
+            "peerPositionId": "APP",
+            "dataOwnerPositionRef": {
+              "facilityId": "CENTER",
+              "positionId": "CTR"
+            },
+            "separationResponsibilityRef": {
+              "facilityId": "CENTER",
+              "positionId": "CTR"
+            },
+            "radarIdTransferred": false,
+            "commsTransferred": false,
+            "lastForwardedEtaUtc": null,
+            "note": null,
+            "initiatedAt": 1788694655060,
+            "initiatedBy": "niknam3",
+            "acceptedAt": null,
+            "acceptedBy": null,
+            "lastStandByAt": null
+          },
+          "createdAt": 1788694573238,
+          "updatedAt": 1788694655060,
+          "updatedBy": "niknam3",
+          "tofiCoordination": null
+        }
+      ],
+      "cidSeq": 1
+    },
+    "TACTICAL": {
+      "strips": [
+        {
+          "stripId": "28b71331-ad12-4089-8ba1-bc5e5fdff26b",
+          "cid": "001",
+          "fdrId": "7df1ba6b-8c44-44e1-92f1-d0ad648905aa",
+          "rev": 10,
+          "role": "MISSION",
+          "state": "DROPPED",
+          "ownerPositionId": "GCI",
+          "bayId": "gci-committed",
+          "rackId": "main",
+          "orderKey": "V",
+          "annotations": {},
+          "flags": {
+            "offset": false,
+            "flipped": false,
+            "removeIndicator": false,
+            "highlight": null,
+            "attention": null
+          },
+          "correlation": {
+            "state": "UNCORRELATED"
+          },
+          "coordination": null,
+          "tofiCoordination": {
+            "direction": "EXIT",
+            "state": "PROPOSED",
+            "peerFacilityId": "CENTER",
+            "peerStripId": "6086f441-738f-41b9-8465-d4d26eb0eada",
+            "peerPositionId": "CTR",
+            "commsTransferred": false,
+            "commsTransferredAt": null,
+            "commsTransferredBy": null,
+            "note": null,
+            "initiatedAt": 1788694645169,
+            "initiatedBy": "niknam3",
+            "acceptedAt": null,
+            "acceptedBy": null
+          },
+          "createdAt": 1788694587495,
+          "updatedAt": 1788694645169,
+          "updatedBy": "niknam3"
+        }
+      ],
+      "cidSeq": 1
     }
   },
   "fdr": {
     "fdrs": [
       {
-        "fdrId": "5a49db52-0760-4f86-8796-7364fd4d21dc",
-        "rev": 2,
+        "fdrId": "7df1ba6b-8c44-44e1-92f1-d0ad648905aa",
+        "rev": 3,
         "identity": {
-          "callsign": "VADER11",
+          "callsign": "TEST101",
           "flightSize": 1,
-          "aircraftType": "",
-          "wakeCategory": "",
+          "aircraftType": "F16",
+          "wakeCategory": "M",
           "equipmentCodes": [],
           "equipmentSuffix": "",
           "degradation": "NONE",
@@ -114,14 +210,14 @@
           "trackDegradationFlag": "NONE"
         },
         "filed": {
-          "route": "DCT",
-          "requestedAltitude": "015",
+          "route": "DCT TOSIE DCT",
+          "requestedAltitude": "150",
           "departureAirport": "LTAG",
           "departureRunway": null,
           "destinationAirport": "LTAG",
           "proposedDepartureTimeUtc": null,
           "fullRouteClearance": false,
-          "remarks": "DOF/260904 OPR/DOD REG/##### STS/STATE RMK/OAT MDCN PERM 265501",
+          "remarks": "DOF/260906 OPR/DOD REG/91015 STS/STATE RMK/OAT MDCN PERM 265501",
           "originAirport": "LTAG",
           "arrivalFix": null,
           "estimatedArrivalTimeUtc": null
@@ -154,174 +250,34 @@
           "changedAt": null,
           "changedBy": null
         },
-        "provenance": {
-          "identity.beaconAssigned": "COMPUTER_GENERATED",
-          "identity.equipmentSuffix": "SYSTEM_DERIVED",
-          "filed.originAirport": "CONTROLLER_ENTERED"
+        "mission": {
+          "missionNumber": null,
+          "packageId": null,
+          "controllingAgency": null,
+          "vulWindowStartUtc": null,
+          "vulWindowEndUtc": null
         },
-        "createdAt": 1788607303363,
-        "updatedAt": 1788607317817,
-        "updatedBy": "niknam3"
-      },
-      {
-        "fdrId": "8c129fd5-19db-4a76-b934-375aa7e4a0f0",
-        "rev": 3,
-        "identity": {
-          "callsign": "VADER11",
-          "flightSize": 1,
-          "aircraftType": "F16",
-          "wakeCategory": "",
-          "equipmentCodes": [],
-          "equipmentSuffix": "",
-          "degradation": "NONE",
-          "beaconAssigned": "0002",
-          "beaconObserved": null,
-          "modeOne": null,
-          "modeTwo": null,
-          "tailNumber": null,
-          "unit": null,
-          "homeStation": null,
-          "trackDegradationFlag": "NONE"
-        },
-        "filed": {
-          "route": "DCT",
-          "requestedAltitude": "015",
-          "departureAirport": "LTAG",
-          "departureRunway": "05",
-          "destinationAirport": "LTAG",
-          "proposedDepartureTimeUtc": null,
-          "fullRouteClearance": false,
-          "remarks": "DOF/260904 OPR/DOD REG/##### STS/STATE RMK/OAT MDCN PERM 265501",
-          "originAirport": "",
-          "arrivalFix": null,
-          "estimatedArrivalTimeUtc": null
-        },
-        "assigned": {
-          "clearedRoute": null,
-          "clearedAltitude": null,
-          "releaseState": "RELEASED",
-          "releaseTimeUtc": null,
-          "voidTimeUtc": null,
-          "voidDeadlineUtc": null,
-          "edctTimeUtc": null,
-          "edctWindowStartUtc": null,
-          "edctWindowEndUtc": null,
-          "callForReleaseTimeUtc": null,
-          "callForReleaseWindowStartUtc": null,
-          "callForReleaseWindowEndUtc": null,
-          "delayInfo": null,
-          "atisCode": null,
-          "datalinkClearanceIndicator": "NONE",
-          "movementAreaEntryTimeUtc": null,
-          "taxiTimeUtc": null,
-          "takeoffTimeUtc": null,
-          "landingRunway": null
-        },
-        "military": null,
-        "trackRef": null,
-        "airspace": {
-          "owner": null,
+        "tofi": {
+          "ifrActive": false,
+          "radarService": null,
+          "separationRegime": null,
           "changedAt": null,
           "changedBy": null
         },
         "provenance": {
           "identity.beaconAssigned": "COMPUTER_GENERATED",
           "identity.equipmentSuffix": "SYSTEM_DERIVED",
-          "filed.departureRunway": "CONTROLLER_ENTERED",
-          "identity.aircraftType": "CONTROLLER_ENTERED"
-        },
-        "createdAt": 1788608255061,
-        "updatedAt": 1788608287069,
-        "updatedBy": "niknam3"
-      },
-      {
-        "fdrId": "56b78099-6a25-435b-8e2b-7d9181453f8e",
-        "rev": 7,
-        "identity": {
-          "callsign": "VADER11",
-          "flightSize": 1,
-          "aircraftType": "F16C",
-          "wakeCategory": "M",
-          "equipmentCodes": [],
-          "equipmentSuffix": "",
-          "degradation": "NONE",
-          "beaconAssigned": "0003",
-          "beaconObserved": null,
-          "modeOne": null,
-          "modeTwo": null,
-          "tailNumber": "016",
-          "unit": "SK",
-          "homeStation": "LTAG",
-          "trackDegradationFlag": "NONE"
-        },
-        "filed": {
-          "route": "DCT",
-          "requestedAltitude": "015",
-          "departureAirport": "LTAG",
-          "departureRunway": "23",
-          "destinationAirport": "LTAG",
-          "proposedDepartureTimeUtc": null,
-          "fullRouteClearance": false,
-          "remarks": "DOF/260904 OPR/DOD REG/##### STS/STATE RMK/OAT MDCN PERM 265501",
-          "originAirport": "LTAG",
-          "arrivalFix": null,
-          "estimatedArrivalTimeUtc": null
-        },
-        "assigned": {
-          "clearedRoute": null,
-          "clearedAltitude": null,
-          "releaseState": "RELEASED",
-          "releaseTimeUtc": null,
-          "voidTimeUtc": null,
-          "voidDeadlineUtc": null,
-          "edctTimeUtc": null,
-          "edctWindowStartUtc": null,
-          "edctWindowEndUtc": null,
-          "callForReleaseTimeUtc": null,
-          "callForReleaseWindowStartUtc": null,
-          "callForReleaseWindowEndUtc": null,
-          "delayInfo": null,
-          "atisCode": null,
-          "datalinkClearanceIndicator": "NONE",
-          "movementAreaEntryTimeUtc": null,
-          "taxiTimeUtc": null,
-          "takeoffTimeUtc": null,
-          "landingRunway": null
-        },
-        "military": null,
-        "trackRef": null,
-        "airspace": {
-          "owner": "USING_AGENCY",
-          "changedAt": 1788610961531,
-          "changedBy": "niknam3"
-        },
-        "provenance": {
-          "identity.beaconAssigned": "COMPUTER_GENERATED",
-          "identity.equipmentSuffix": "SYSTEM_DERIVED",
-          "identity.tailNumber": "CONTROLLER_ENTERED",
-          "identity.unit": "CONTROLLER_ENTERED",
-          "identity.homeStation": "CONTROLLER_ENTERED",
-          "filed.departureRunway": "CONTROLLER_ENTERED",
-          "airspace.owner": "CONTROLLER_ENTERED",
           "filed.originAirport": "CONTROLLER_ENTERED"
         },
-        "createdAt": 1788610939655,
-        "updatedAt": 1788610989057,
+        "createdAt": 1788694523276,
+        "updatedAt": 1788694665984,
         "updatedBy": "niknam3"
       }
     ],
     "codes": [
       [
         "0001",
-        "5a49db52-0760-4f86-8796-7364fd4d21dc"
-      ],
-      [
-        "0002",
-        "8c129fd5-19db-4a76-b934-375aa7e4a0f0"
-      ],
-      [
-        "0003",
-        "56b78099-6a25-435b-8e2b-7d9181453f8e"
+        "7df1ba6b-8c44-44e1-92f1-d0ad648905aa"
       ]
     ]
   }

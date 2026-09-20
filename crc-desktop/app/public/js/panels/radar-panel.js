@@ -223,6 +223,14 @@ function renderPanelControls() {
 const EFSP_FACILITY_POSITIONS = {
   INCIRLIK: ['OPS', 'CD', 'GND', 'TWR', 'APP'],
   CENTER: ['CTR'],
+  // WP4A second slice — TAC_C2/AIC/GCI/JTAC (crc-sync's facility-config.js
+  // DEFAULT_TACTICAL_CONFIG.positions). JTAC is included the same way as
+  // every other Position here even though it's read-only server-side (no
+  // ownership/mutation grant, permission.js) — holding it just means
+  // "viewing," which this checkbox UI has no separate concept for and
+  // doesn't need one: the backend enforces the read-only-ness regardless
+  // of what this list renders.
+  TACTICAL: ['TAC_C2', 'AIC', 'GCI', 'JTAC'],
 };
 
 // Cached once in initRadarPanel(), not looked up fresh per render — this

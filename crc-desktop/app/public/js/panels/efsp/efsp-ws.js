@@ -14,7 +14,7 @@
 // CTR never collide), which is what lets getActingPositions() below still
 // return one flat, facility-agnostic list for every pre-WP4A call site.
 const DEFAULT_EFSP_FACILITY_ID = 'INCIRLIK';
-let _actingPositionsByFacility = { INCIRLIK: [], CENTER: [] };
+let _actingPositionsByFacility = { INCIRLIK: [], CENTER: [], TACTICAL: [] };
 
 function efspClientMutationId() {
   // crypto.randomUUID() is available in Electron's Chromium renderer (and

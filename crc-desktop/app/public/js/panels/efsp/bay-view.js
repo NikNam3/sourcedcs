@@ -1320,6 +1320,13 @@ function _isProtectedStripEl(el) {
   if (el.querySelector('.efsp-block-input')) return true;
   if (_openHighlightPopoverEl && el.contains(_openHighlightPopoverEl)) return true;
   if (_openCoordinatePopoverEl && el.contains(_openCoordinatePopoverEl)) return true;
+  // WP4A second slice — the TOFI ENTRY popover was missing from this list
+  // entirely, so ANY board update (even an unrelated heartbeat/delta on a
+  // different Strip) rebuilt this Strip's DOM out from under it mid-
+  // interaction, destroying the popover before a controller could pick a
+  // non-default target and click Send. Same protection every other popover
+  // already gets above.
+  if (_openTofiPopoverEl && el.contains(_openTofiPopoverEl)) return true;
   return false;
 }
 
