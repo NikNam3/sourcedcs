@@ -345,7 +345,7 @@ test('every value TRACK_DEGRADATION_FLAGS lists is accepted', () => {
 test('a fresh FDR\'s airspace ownership starts null (undecided), not a default direction', () => {
   const store = new FdrStore();
   const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
-  assert.deepEqual(fdr.airspace, { owner: null, changedAt: null, changedBy: null });
+  assert.deepEqual(fdr.airspace, { owner: null, changedAt: null, changedBy: null, transitions: [] });
 });
 
 test('setAirspaceOwner accepts CONTROLLING_AGENCY and USING_AGENCY, stamping changedAt/changedBy', () => {

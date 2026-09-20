@@ -88,7 +88,27 @@ function tofiEffect(direction) {
   return TOFI_EFFECTS[direction] || null;
 }
 
+// Which EfspState an ATC-side Strip Role must be in to open a TOFI ENTRY —
+// TOFI's own analogue of COORDINATION_ELIGIBLE_STATES above, and added for
+// the same reason: without it, the TOFI button rendered (and the mutation
+// succeeded) on ANY Strip the acting Position owned, in any state, including
+// one that had not been worked yet.
+//
+// A flight can only enter tactically controlled airspace once it is actually
+// airborne and enroute, which is the same set of states the 5 primitives
+// already recognise as "airborne, being worked by an enroute Position" —
+// plus OVERFLIGHT, which has no entry in the table above only because it
+// never originates a HANDOFF, not because it is ever on the ground. MISSION
+// is deliberately absent: it is the MRU-side Role TOFI *creates*, never a
+// Role that opens an exchange of its own (docs/adr/0026).
+const TOFI_ELIGIBLE_STATES = { DEPARTURE: 'HANDED_OFF', ARRIVAL: 'INBOUND', OVERFLIGHT: 'TRANSITING' };
+
+/** @returns {string|undefined} the EfspState `role` must be in to open a TOFI ENTRY, or undefined if this role never can. */
+function tofiEligibleState(role) {
+  return TOFI_ELIGIBLE_STATES[role];
+}
+
 module.exports = {
-  COORDINATION_PRIMITIVES, COORDINATION_EFFECTS, COORDINATION_ELIGIBLE_STATES, TOFI_EFFECTS,
-  isCoordinationPrimitive, coordinationEffect, coordinationEligibleState, tofiEffect,
+  COORDINATION_PRIMITIVES, COORDINATION_EFFECTS, COORDINATION_ELIGIBLE_STATES, TOFI_EFFECTS, TOFI_ELIGIBLE_STATES,
+  isCoordinationPrimitive, coordinationEffect, coordinationEligibleState, tofiEffect, tofiEligibleState,
 };

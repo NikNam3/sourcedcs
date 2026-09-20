@@ -84,11 +84,19 @@ function createStripMsg(overrides = {}) {
 
 const SESSION = { controllerId: 'controller-1', who: 'Alice' };
 
+// A real client sends efsp-set-positions before it ever mutates, and
+// efsp-ws.js now requires the acting Position to be one the sending session
+// is Primary at. Fixtures declare the same thing, the same way.
+function holding(ctx, session, held) {
+  handleMessage(ctx, session, { type: 'efsp-set-positions', held }, noopPersist);
+}
+
 // Only OPS may CreateStrip (guide §4.1 rule 3, enforced by permission.js) —
 // tests that need a Strip owned by GND/TWR/etc. must create it as OPS and
 // then TransferStrip it, exactly like a real controller would.
 function createStripOwnedBy(ctx, toPositionId, bayId) {
   const opsSession = { controllerId: 'controller-ops', who: 'Ops1' };
+  holding(ctx, opsSession, ['OPS']);
   const created = handleMessage(ctx, opsSession, createStripMsg(), noopPersist);
   if (!created.ack.ok) throw new Error('fixture setup failed: ' + JSON.stringify(created.ack));
   const strip = created.ack.strip;
@@ -111,6 +119,7 @@ test('an unrecognized message type returns null (not an EFSP message)', () => {
 
 test('a successful efsp-mutation returns both an ack and a broadcast, and calls persist', () => {
   const ctx = makeCtx();
+  holding(ctx, SESSION, ['OPS']);
   let persisted = false;
   const result = handleMessage(ctx, SESSION, createStripMsg(), () => { persisted = true; });
 
@@ -136,6 +145,7 @@ test('a failed efsp-mutation returns only an ack (no broadcast), and does not pe
 
 test('a rejected mutation\'s ack includes the human-readable detail, not just the bare reason code', () => {
   const ctx = makeCtx();
+  holding(ctx, SESSION, ['OPS']);
   const created = handleMessage(ctx, SESSION, createStripMsg(), noopPersist); // PROPOSED
   const strip = created.ack.strip;
   // PROPOSED's own NLA is now transfer-shaped (transfers to CD) — occupy CD
@@ -161,6 +171,7 @@ test('a rejected mutation\'s ack includes the human-readable detail, not just th
 
 test('a DropStrip mutation broadcasts the stripId under "gone", not "updated"', () => {
   const ctx = makeCtx();
+  holding(ctx, SESSION, ['OPS']);
   const created = handleMessage(ctx, SESSION, createStripMsg(), noopPersist);
   const strip = created.ack.strip;
 

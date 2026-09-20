@@ -16,6 +16,8 @@
 // crc-desktop's efsp-panel.js `_searchInvocationCount` — a minimal §11.5
 // instrumentation hook, not a real dashboard).
 
+const { isVoidExpired } = require('./nla');
+
 const ADVANCE_FORWARDING_MINUTES = 15;   // §4.6.1
 const ETA_REVISION_THRESHOLD_MINUTES = 3; // §4.6.1
 const AMENDMENT_WINDOW_MINUTES = 30;      // §4.6.1
@@ -83,6 +85,26 @@ function computeDueObligations(strip, fdr, now, ctx = {}) {
     if (now >= dueAt) {
       obligations.push({ obligationType: 'DATA_ONLY_VERIFICATION', dueAt, severity: 'OVERDUE' });
     }
+  }
+
+  // VOID_TIME_EXPIRED — §3.8: a clearance void time carries "a derived
+  // deadline 30 minutes after the void time, at which the system MUST alert
+  // if the flight is not airborne." isVoidExpired() has existed since Phase 1
+  // but had exactly one caller: nla.js's own HELD case, where it inhibits the
+  // release button. That is a passive check — a controller has to go and look
+  // at the Strip to discover it. This is the alert the guide actually asks
+  // for, and it is the obligation this module's own header comment was
+  // written about (the "aspirational, not real" note above predates it).
+  //
+  // OVERDUE with no earlier WARNING tier, unlike ADVANCE_FORWARDING: §3.8
+  // describes a hard deadline, not a lead-time window, so there is no
+  // meaningful "due soon" moment to escalate from.
+  if (strip.role === 'DEPARTURE' && strip.state === 'HELD' && isVoidExpired(fdr, now)) {
+    obligations.push({
+      obligationType: 'VOID_TIME_EXPIRED',
+      dueAt: fdr.assigned.voidDeadlineUtc,
+      severity: 'OVERDUE',
+    });
   }
 
   return obligations;

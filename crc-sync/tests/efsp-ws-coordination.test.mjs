@@ -80,6 +80,13 @@ function createCtrStripMsg(overrides = {}) {
 const CTR_SESSION = { controllerId: 'ctr-controller', who: 'Ctr1' };
 const APP_SESSION = { controllerId: 'app-controller', who: 'App1' };
 
+// A real client sends efsp-set-positions before it ever mutates, and
+// efsp-ws.js now requires the acting Position to be one the sending session
+// is Primary at. Fixtures declare the same thing, the same way.
+function holding(ctx, session, facilityId, held) {
+  handleMessage(ctx, session, { type: 'efsp-set-positions', facilityId, held }, noopPersist);
+}
+
 // ── Every message carries an OPTIONAL facilityId, defaulting to INCIRLIK ─
 
 test('a message with no facilityId at all behaves exactly like it targeted INCIRLIK — full back-compat with pre-WP4A messages', () => {
@@ -88,7 +95,9 @@ test('a message with no facilityId at all behaves exactly like it targeted INCIR
     version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(), actingPositionId: 'OPS',
     op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', fdr: { callsign: 'VIPER1', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' } },
   };
-  const result = handleMessage(ctx, { controllerId: 'ops1', who: 'Ops1' }, msg, noopPersist);
+  const opsSession = { controllerId: 'ops1', who: 'Ops1' };
+  holding(ctx, opsSession, 'INCIRLIK', ['OPS']);
+  const result = handleMessage(ctx, opsSession, msg, noopPersist);
   assert.equal(result.ack.ok, true, JSON.stringify(result.ack));
   assert.equal(ctx.boardStore.getAll().length, 1); // landed on the INCIRLIK alias
   assert.equal(ctx.boardStoreFor('CENTER').getAll().length, 0);
@@ -104,6 +113,8 @@ test('a message with an unknown facilityId is rejected, not a throw', () => {
 
 test('CTR originates an ARRIVAL Strip, proposes HANDOFF to APP, and APP accepts it — full round trip through handleMessage with facilityId routing', () => {
   const ctx = makeCtx();
+  holding(ctx, CTR_SESSION, 'CENTER', ['CTR']);
+  holding(ctx, APP_SESSION, 'INCIRLIK', ['APP']);
 
   const created = handleMessage(ctx, CTR_SESSION, createCtrStripMsg(), noopPersist);
   assert.equal(created.ack.ok, true, JSON.stringify(created.ack));
@@ -156,8 +167,11 @@ test('CTR originates an ARRIVAL Strip, proposes HANDOFF to APP, and APP accepts 
 
 test('efsp-resync is facility-scoped — resyncing CENTER never returns INCIRLIK\'s strips or vice versa', () => {
   const ctx = makeCtx();
+  const opsSession = { controllerId: 'ops1', who: 'Ops1' };
+  holding(ctx, CTR_SESSION, 'CENTER', ['CTR']);
+  holding(ctx, opsSession, 'INCIRLIK', ['OPS']);
   handleMessage(ctx, CTR_SESSION, createCtrStripMsg(), noopPersist);
-  handleMessage(ctx, { controllerId: 'ops1', who: 'Ops1' }, {
+  handleMessage(ctx, opsSession, {
     version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(), actingPositionId: 'OPS',
     op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', fdr: { callsign: 'VIPER1', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' } },
   }, noopPersist);
@@ -192,6 +206,7 @@ test('efsp-set-positions is facility-scoped — holding CTR at CENTER does not t
 
 test('every Strip record in an efsp-mutation ack AND its broadcast delta carries facilityId, not just the snapshot — a client that only ever sees deltas after its first connect must still be able to filter by Facility', () => {
   const ctx = makeCtx();
+  holding(ctx, CTR_SESSION, 'CENTER', ['CTR']);
   const created = handleMessage(ctx, CTR_SESSION, createCtrStripMsg(), noopPersist);
   assert.equal(created.ack.strip.facilityId, 'CENTER');
   assert.equal(created.broadcast.strips.updated[0].facilityId, 'CENTER');
@@ -199,6 +214,7 @@ test('every Strip record in an efsp-mutation ack AND its broadcast delta carries
 
 test('a resync-within-window delta also stamps facilityId on every updated Strip', () => {
   const ctx = makeCtx();
+  holding(ctx, CTR_SESSION, 'CENTER', ['CTR']);
   const before = ctx.boardStoreFor('CENTER').currentSeq;
   handleMessage(ctx, CTR_SESSION, createCtrStripMsg(), noopPersist);
 

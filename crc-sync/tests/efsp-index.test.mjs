@@ -48,6 +48,7 @@ test('controllerIdFor uses the same fallback chain as ws-hub.js\'s session.who',
 test('handleMessage end-to-end: a CreateStrip mutation is reflected in boardStore/fdrStore directly', () => {
   const efsp = createEfsp();
   const session = { controllerId: 'c1', who: 'Alice' };
+  efsp.handleMessage(session, { type: 'efsp-set-positions', held: ['OPS'] });
   const result = efsp.handleMessage(session, createStripMsg());
   assert.equal(result.ack.ok, true);
   assert.equal(efsp.boardStore.getAll().length, 1);
@@ -81,6 +82,7 @@ test('onDisconnect releases every Position the controller held', () => {
 test('a successful mutation persists to BOARD_SNAPSHOT_PATH, and a freshly constructed efsp instance restores it', () => {
   const efsp1 = createEfsp();
   const session = { controllerId: 'c1', who: 'Alice' };
+  efsp1.handleMessage(session, { type: 'efsp-set-positions', held: ['OPS'] });
   const result = efsp1.handleMessage(session, createStripMsg());
   const stripId = result.ack.strip.stripId;
 
@@ -100,6 +102,7 @@ test('a Strip mid-DEPARTED-to-APP-transfer (docs/adr/0007) round-trips correctly
   const ops = { controllerId: 'ops', who: 'Ops1' };
   const twr = { controllerId: 'twr', who: 'Twr1' };
   const app = { controllerId: 'app', who: 'App1' };
+  efsp1.handleMessage(ops, { type: 'efsp-set-positions', held: ['OPS'] });
   efsp1.handleMessage(twr, { type: 'efsp-set-positions', held: ['TWR'] });
   efsp1.handleMessage(app, { type: 'efsp-set-positions', held: ['APP'] }); // APP must be occupied for the real, occupancy-gated Hand Off
 
@@ -174,6 +177,7 @@ function createCtrStripMsg() {
 test('a HANDOFF interrupted mid-PROPOSE (before ACCEPT) round-trips both replicas correctly across a simulated restart — each still exists, independently, on its own Facility\'s Board', () => {
   const efsp1 = createEfsp();
   const ctr = { controllerId: 'ctr', who: 'Ctr1' };
+  efsp1.handleMessage(ctr, { type: 'efsp-set-positions', facilityId: 'CENTER', held: ['CTR'] });
 
   const created = efsp1.handleMessage(ctr, createCtrStripMsg());
   assert.equal(created.ack.ok, true, JSON.stringify(created.ack));
@@ -206,6 +210,10 @@ test('a HANDOFF interrupted mid-PROPOSE (before ACCEPT) round-trips both replica
   // The exchange can still be completed after the restart, exactly as if
   // nothing had happened — no strand, no duplicate, no crash.
   const app = { controllerId: 'app', who: 'App1' };
+  // Position occupancy is deliberately ephemeral (ADR 0002 — it never enters
+  // the durable snapshot), so a reconnecting client re-declares it after a
+  // restart exactly like it does on a first connect.
+  efsp2.handleMessage(app, { type: 'efsp-set-positions', facilityId: 'INCIRLIK', held: ['APP'] });
   const accepted = efsp2.handleMessage(app, {
     version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(),
     facilityId: 'INCIRLIK', actingPositionId: 'APP', stripId: receiverStripId, baseRev: restoredReceiver.rev,

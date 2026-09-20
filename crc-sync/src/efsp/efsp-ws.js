@@ -50,6 +50,23 @@ function _handleMutation(ctx, session, msg, persist) {
   if (!boardStore) {
     return { ack: { version: VERSION, type: 'efsp-mutation-ack', clientMutationId: msg.clientMutationId, ok: false, reason: 'VALIDATION_ERROR', detail: `unknown facilityId: ${msg.facilityId}` } };
   }
+  // `actingPositionId` arrives as an untrusted client claim, and every
+  // per-Position authority rule downstream (permission.js's canMutate,
+  // board-store's NOT_OWNER check, canActOnState — defects D10/D12/D21) is
+  // evaluated against it. Until this check existed, nothing ever tied it to
+  // the connecting session: a client could drive any Strip on the Board by
+  // naming whichever Position happened to own it, whatever it had actually
+  // selected. Bound here, at the wire boundary where the claim enters, so
+  // board-store stays a pure function of (mutation, actingPositionId) with
+  // no session concept of its own.
+  //
+  // Primary, not merely held: selecting a Position someone else already has
+  // makes you an Observer (§4.8.2 rule 3, D18), and an Observer watches.
+  const positionStore = ctx.positionStoreFor(facilityId);
+  if (!positionStore || positionStore.primaryOf(msg.actingPositionId) !== session.controllerId) {
+    return { ack: { version: VERSION, type: 'efsp-mutation-ack', clientMutationId: msg.clientMutationId, facilityId, ok: false, reason: 'NOT_HOLDING_POSITION', detail: `you are not Primary at ${msg.actingPositionId} — select it before acting on its Strips` } };
+  }
+
   const mutation = { clientMutationId: msg.clientMutationId, stripId: msg.stripId, baseRev: msg.baseRev, op: msg.op };
 
   const result = boardStore.applyMutation(mutation, msg.actingPositionId, session.controllerId);

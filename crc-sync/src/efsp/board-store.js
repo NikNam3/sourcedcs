@@ -391,6 +391,32 @@ class BoardStore {
     if (this._rules.canCreateStripRole && !this._rules.canCreateStripRole(actingPositionId, 'ARRIVAL')) {
       return { ok: false, reason: 'PERMISSION_DENIED', strip };
     }
+    // The conversion nulls both coordination records wholesale below, so an
+    // unresolved link has to be refused here rather than silently discarded.
+    // Exactly the guard set _applyDropStrip uses, and asymmetric for the same
+    // reason: an ACTIVE *coordination* link is the normal condition of a
+    // Strip that has been handed off and accepted — jurisdiction moved, the
+    // exchange is finished, and converting for the return leg is precisely
+    // what CTR does next — whereas an ACTIVE *TOFI* link means tactical
+    // control is live right now (docs/adr/0025: jurisdiction never transfers,
+    // so the exchange stays open for its whole duration).
+    //
+    // Found by an end-to-end scenario trace, and reachable precisely because
+    // TOFI never changes the ATC-side Strip's own state: it sits at
+    // DEPARTURE/HANDED_OFF throughout, which is this op's entry condition. So
+    // "Convert to Arrival" was live mid-exchange — against a PROPOSED link it
+    // orphaned a replica that would wait forever for a response, and against
+    // an ACTIVE TOFI it ended tactical control with no notification to the
+    // MRU side at all.
+    if (strip.coordination && strip.coordination.state === 'PROPOSED') {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'cannot convert a Strip with an open coordination proposal — accept, reject, or wait for a response first', strip };
+    }
+    if (strip.tofiCoordination && strip.tofiCoordination.state === 'PROPOSED') {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'cannot convert a Strip with an open TOFI proposal — accept, reject, or wait for a response first', strip };
+    }
+    if (strip.tofiCoordination && strip.tofiCoordination.state === 'ACTIVE') {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'cannot convert a Strip under active tactical control — complete a TOFI exit first', strip };
+    }
     const targetBay = this._rules.bayForImpliedState ? this._rules.bayForImpliedState(strip.ownerPositionId, 'INBOUND') : null;
     if (!targetBay) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `no ARRIVAL Bay configured for ${strip.ownerPositionId}`, strip };
@@ -519,6 +545,12 @@ class BoardStore {
   _applySetBlock(strip, op, by) {
     const target = this._rules.resolveBlockTarget(op.blockId, strip.role);
     if (!target) return { ok: false, reason: 'VALIDATION_ERROR', strip };
+    // §8.1 — a Facility that hides a Block hides it for writes too, not just
+    // for rendering. Enforced here because this is the only path a Block
+    // value reaches an FDR or an annotation by.
+    if (this._rules.isBlockVisible && !this._rules.isBlockVisible(strip.role, op.blockId)) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `Block ${op.blockId} is not visible for ${strip.role} at this Facility`, strip };
+    }
 
     if (target.kind === 'fdr' || target.kind === 'airspace-owner' || target.kind === 'tofi') {
       const fdrResult = target.kind === 'airspace-owner'
@@ -723,6 +755,16 @@ class BoardStore {
         return { ok: false, reason: 'NLA_INHIBITED', detail: `no Bay configured for ${result.transferTo}/${result.toState}`, strip };
       }
       applied = this._applyTransferStrip(strip, { toPositionId: result.transferTo, bayId: targetBay.bayId, rackId: targetBay.rackIds[0] }, by);
+    } else if (result.toState === 'DROPPED') {
+      // Every Role's terminal NLA is a Drop (DEPARTURE at HANDED_OFF,
+      // ARRIVAL at TAXI_IN, OVERFLIGHT at TRANSITING, MISSION at RTB), and
+      // it has to mean exactly what the explicit DropStrip op means —
+      // same guards, same remove indicator, same beacon release. Routed
+      // through the one shared path rather than the generic state setter,
+      // for the same reason the transfer-shaped branch above reuses
+      // _applyTransferStrip (§3.5 rule 4: NLA accelerates an operation, it
+      // does not route around that operation's checks).
+      applied = this._retireStrip(strip, by);
     } else {
       applied = this._applySetState(strip, result.toState, by);
     }
@@ -745,6 +787,16 @@ class BoardStore {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no Undo available', strip };
     }
     this._nlaHistory.delete(strip.stripId);
+    // A terminal NLA Drop now does more than set a state (see _retireStrip),
+    // so undoing one has to put back what it took: clear the remove
+    // indicator and re-claim the beacon code. The code can only have been
+    // taken by another flight if one was created inside this 30s window —
+    // reacquireFdr leaves it alone in that case rather than minting a
+    // silent duplicate, exactly as a controller override would (D23).
+    if (strip.state === 'DROPPED') {
+      strip.flags.removeIndicator = false;
+      this._fdrStore.reacquireFdr(strip.fdrId);
+    }
     return this._applySetState(strip, last.prevState, by);
   }
 
@@ -757,6 +809,24 @@ class BoardStore {
     if (strip.tofiCoordination && strip.tofiCoordination.state === 'PROPOSED') {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'cannot drop a Strip with an open TOFI proposal — accept, reject, or wait for a response first', strip };
     }
+    return this._retireStrip(strip, by);
+  }
+
+  /**
+   * The ONE path by which a Strip reaches DROPPED, whichever op asked for it
+   * (the explicit DropStrip op, or a terminal NLA transition whose toState is
+   * DROPPED — every Role has one, labelled "Drop" in the UI).
+   *
+   * Found by an end-to-end scenario trace: this used to live entirely inside
+   * _applyDropStrip, which only the `.drop` dot-command ever reaches. The
+   * ordinary Drop *button* routes through InvokeNla -> _applySetState, a
+   * generic two-line state setter — so the guide §4.6.3 rule 2 rejection
+   * below was trivially bypassable from the default UI (dropping a Strip out
+   * from under a live TOFI exchange, leaving the peer's own record stuck at
+   * ACTIVE pointing at a Strip that no longer exists), and neither the remove
+   * indicator nor the beacon release ever happened on that path at all.
+   */
+  _retireStrip(strip, by) {
     // WP4A second slice, guide §4.6.3 rule 2: "the Strip stays live and
     // posted throughout tactical control... dropping the Strip breaks all
     // three [separation-model fields]." A hard rejection, not a soft warn
@@ -775,8 +845,29 @@ class BoardStore {
     strip.updatedAt = Date.now();
     strip.updatedBy = by || null;
     this._touch(strip.stripId);
-    this._fdrStore.releaseFdr(strip.fdrId);
+    this._releaseFdrIfLastStrip(strip);
     return { ok: true, strip };
+  }
+
+  /**
+   * Releases the FDR's beacon code only once NO other live Strip still
+   * references that FDR, anywhere (this Facility or any other).
+   *
+   * One FDR meant one live Strip until TOFI, which deliberately binds a
+   * MISSION Strip and its ATC-side Strip to one shared fdrId (docs/adr/0025)
+   * with independent lifecycles. An unconditional release therefore handed
+   * the shared Mode 3/A code back to the allocator when the MRU controller
+   * retired their MISSION Strip — while the ATC-side flight was still
+   * airborne and still squawking it — and the next CreateStrip could then
+   * mint that same code for an unrelated flight. Silent: the duplicate check
+   * (code-allocator.js's validateAssignment) only fires on a manual override,
+   * never on the automatic allocate() scan.
+   */
+  _releaseFdrIfLastStrip(strip) {
+    const othersLive = this._rules.liveStripsForFdr
+      ? this._rules.liveStripsForFdr(strip.fdrId, strip.stripId)
+      : 0;
+    if (othersLive === 0) this._fdrStore.releaseFdr(strip.fdrId);
   }
 
   // ── WP4A: cross-Facility coordination (guide §4.6, docs/adr/0013-0018) ──
@@ -1213,6 +1304,18 @@ class BoardStore {
       if (op.toFacilityId === this._rules.facilityId) {
         return { ok: false, reason: 'VALIDATION_ERROR', detail: 'TOFI target must be a different Facility', strip };
       }
+      // TOFI's own (role, state) gate — the 5 primitives have had one since
+      // docs/adr/0022 and TOFI never did, so a controller could open tactical
+      // control on a Strip that was not yet airborne, or on a MISSION Strip
+      // (the Role TOFI itself creates). See coordination.js.
+      if (this._rules.tofiEligibleState) {
+        const required = this._rules.tofiEligibleState(strip.role);
+        if (!required || strip.state !== required) {
+          return { ok: false, reason: 'VALIDATION_ERROR', detail: required
+            ? `a ${strip.role} Strip must be at ${required} to enter tactical control, not ${strip.state}`
+            : `a ${strip.role} Strip can never open a TOFI exchange`, strip };
+        }
+      }
       if (this._rules.tofiCounterparts) {
         const allowed = this._rules.tofiCounterparts(actingPositionId) || [];
         if (!allowed.some(c => c.facilityId === op.toFacilityId && c.positionId === op.toPositionId)) {
@@ -1299,10 +1402,21 @@ class BoardStore {
     if (!tofi || tofi.state !== 'PROPOSED') {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no pending TOFI proposal on this Strip', strip };
     }
+    // A soft warning, deliberately NOT a second hard gate beside
+    // separation_regime's. Both fields describe authority over the same
+    // real-world moment, and nothing cross-checked them before — a flight
+    // could return to ATC control with the airspace still booked out to the
+    // using agency. But the two are genuinely separable in real operations
+    // (a MOA can stay hot after one flight leaves it), so this is the §4.6
+    // verbal-path soft-interlock shape, not rule 3's hard precondition.
+    let warning;
     if (tofi.direction === 'EXIT') {
       const fdr = this._fdrStore.getFdr(strip.fdrId);
       if (!fdr || !fdr.tofi || fdr.tofi.separationRegime !== 'ATC') {
         return { ok: false, reason: 'VALIDATION_ERROR', detail: 'separation_regime must be set back to ATC before completing a TOFI exit', strip };
+      }
+      if (fdr.airspace && fdr.airspace.owner === 'USING_AGENCY') {
+        warning = 'AIRSPACE_STILL_WITH_USING_AGENCY';
       }
     }
 
@@ -1337,7 +1451,7 @@ class BoardStore {
         if (peerResult.ok) peerStrip = peerResult.strip;
       }
     }
-    return { ok: true, strip, peerFacilityId: tofi.peerFacilityId, peerStrip };
+    return { ok: true, strip, peerFacilityId: tofi.peerFacilityId, peerStrip, warning };
   }
 
   /** Always invoked on the MISSION-side Strip, mirroring _applyTofiAccept's own side. */

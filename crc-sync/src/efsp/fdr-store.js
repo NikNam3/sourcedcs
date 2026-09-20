@@ -210,7 +210,7 @@ class FdrStore {
       // WP4A (docs/adr/0018), §4.6.4 — a DIRECTION, never a bare boolean
       // (D15). Only ever written via setAirspaceOwner() below, never the
       // generic setField() path — see that method for why.
-      airspace: { owner: null, changedAt: null, changedBy: null },
+      airspace: { owner: null, changedAt: null, changedBy: null, transitions: [] },
       // WP4A second slice (docs/adr/0026) — the minimal MISSION field set
       // (guide §9.8), present but null/empty on every FDR regardless of
       // role. Written through the generic setField() path (WRITABLE_PATHS
@@ -352,7 +352,20 @@ class FdrStore {
     if (!AIRSPACE_OWNERS.has(owner)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `airspace ownership must be a direction (${[...AIRSPACE_OWNERS].join(' or ')}), not ${JSON.stringify(owner)}` };
     }
-    fdr.airspace = { owner, changedAt: Date.now(), changedBy: by || null };
+    // Append-only transition history alongside the current value. The flat
+    // overwrite this replaces lost the record of every prior handover: a MOA
+    // given to the using agency and later taken back read afterwards as if
+    // it had only ever been taken back. Every other controller-entered
+    // doctrinal fact is append-only for exactly this reason (§3.7, and JO
+    // 7110.65 ¶2-3-1's "do not erase or overwrite any item"); `owner` stays
+    // the current-value field so every existing reader is unaffected.
+    const now = Date.now();
+    fdr.airspace = {
+      owner,
+      changedAt: now,
+      changedBy: by || null,
+      transitions: [...(fdr.airspace.transitions || []), { owner, at: now, by: by || null }],
+    };
     fdr.provenance['airspace.owner'] = 'CONTROLLER_ENTERED';
     fdr.rev += 1;
     fdr.updatedAt = Date.now();
@@ -395,11 +408,35 @@ class FdrStore {
     return { ok: true, fdr };
   }
 
-  /** Releases the FDR's beacon code — called when its Strip is DROPPED. */
+  /**
+   * Releases the FDR's beacon code — called when its LAST live Strip is
+   * DROPPED. Callers must not invoke this while another Strip still
+   * references the FDR (TOFI binds two Strips to one fdrId, docs/adr/0025);
+   * board-store.js's _releaseFdrIfLastStrip is the guard that enforces it.
+   */
   releaseFdr(fdrId) {
     const fdr = this._fdrs.get(fdrId);
     if (!fdr) return;
     this._codeAllocator.release(fdr.identity.beaconAssigned);
+  }
+
+  /**
+   * Re-claims a code released by releaseFdr, for Undo of a terminal NLA Drop
+   * within its 30s window (§3.5 rule 5). No-op when the code has already gone
+   * to a different FDR in the meantime — that flight is now squawking it, and
+   * minting a knowing duplicate here would be worse than leaving this FDR's
+   * own recorded code un-reserved (defect D23: duplicates warn, never block).
+   * @returns {{ok:true, warning?:'DUPLICATE_IGNORED_WARNING'}|{ok:false, reason:'NOT_FOUND'}}
+   */
+  reacquireFdr(fdrId) {
+    const fdr = this._fdrs.get(fdrId);
+    if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
+    const code = fdr.identity.beaconAssigned;
+    if (!code) return { ok: true };
+    const holder = this._codeAllocator.holderOf(code);
+    if (holder && holder !== fdrId) return { ok: true, warning: 'DUPLICATE_IGNORED_WARNING' };
+    this._codeAllocator.reassign(fdrId, code, null);
+    return { ok: true };
   }
 
   // ── Persistence (durable per ADR 0002) ──────────────────────────────────

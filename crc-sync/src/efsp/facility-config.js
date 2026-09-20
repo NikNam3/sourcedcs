@@ -333,6 +333,29 @@ function getBaysFor(positionId, facilityId = DEFAULT_FACILITY_ID) {
   return deepClone(configs.get(facilityId).bays[positionId] || []);
 }
 
+/**
+ * May this Facility write this Block on this Role? (guide §8.1 — "the
+ * configurability is the specification.")
+ *
+ * blockVisibility was previously read only by validateConfig() at load time,
+ * to check that a narrowed config kept every REQUIRED Block visible. Nothing
+ * consulted it on the write path, so a Block a Facility had hidden was still
+ * writable by any client that named it. Neither shipped config narrows
+ * anything today, so this is latent rather than exploited — but the contract
+ * is that the config decides, and it has to decide at the point of the write.
+ *
+ * A Role with no entry at all is unrestricted, not invisible: a Facility that
+ * simply doesn't describe a Role (TACTICAL lists only MISSION) is saying
+ * nothing about it, not hiding every Block of it.
+ */
+function isBlockVisible(role, blockId, facilityId = DEFAULT_FACILITY_ID) {
+  const config = configs.get(facilityId);
+  if (!config) return true;
+  const visible = (config.blockVisibility || {})[role];
+  if (!visible) return true;
+  return visible.includes(blockId);
+}
+
 // Includes each Bay's owning positionId — lost by a plain Object.values()
 // flatten otherwise, and the client needs it to keep Bays "grouped by
 // Position, never merged into one undifferentiated pile" (guide §4.8.5
@@ -391,7 +414,7 @@ function coordinationBayFor(positionId, facilityId = DEFAULT_FACILITY_ID) {
 
 module.exports = {
   DEFAULT_FACILITY_ID, getFacilityIds,
-  getFacilityConfig, getPositionSet, getPositionClass, getCoveringChain, getBaysFor, getAllBays,
+  getFacilityConfig, getPositionSet, getPositionClass, getCoveringChain, getBaysFor, getAllBays, isBlockVisible,
   bayImpliesState, bayForImpliedState, coordinationBayFor, setFacilityConfig, validateConfig,
   DEFAULT_CONFIG, DEFAULT_CENTER_CONFIG, DEFAULT_TACTICAL_CONFIG, DEFAULT_CONFIGS,
 };

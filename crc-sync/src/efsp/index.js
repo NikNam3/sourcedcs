@@ -60,6 +60,7 @@ function createEfsp() {
 
     const rules = {
       resolveBlockTarget:  (blockId, role) => blockMap.resolveBlockTarget(role, blockId),
+      isBlockVisible:      (role, blockId) => facilityConfig.isBlockVisible(role, blockId, facilityId),
       bayImpliesState:     (bayId) => facilityConfig.bayImpliesState(bayId, facilityId),
       bayForImpliedState:  (positionId, state) => facilityConfig.bayForImpliedState(positionId, state, facilityId),
       coordinationBayFor:  (positionId) => facilityConfig.coordinationBayFor(positionId, facilityId),
@@ -91,10 +92,27 @@ function createEfsp() {
         const other = facilities.get(otherFacilityId);
         return other ? other.boardStore : null;
       },
+      // How many live (non-DROPPED) Strips still reference this FDR, across
+      // EVERY Facility, excluding one Strip by id. Deliberately global rather
+      // than this Facility's own Board: the FdrStore and its CodeAllocator
+      // are shared across all Facilities (see this file's module comment),
+      // so "is anyone still using this beacon code" is only answerable by
+      // looking at all of them. Same lazy-closure-over-`facilities` shape as
+      // peerBoard above, for the same construction-order reason.
+      liveStripsForFdr: (fdrId, excludeStripId) => {
+        let n = 0;
+        for (const { boardStore } of facilities.values()) {
+          for (const s of boardStore.getAll()) {
+            if (s.fdrId === fdrId && s.stripId !== excludeStripId && s.state !== 'DROPPED') n++;
+          }
+        }
+        return n;
+      },
       coordinationEffect: (primitive) => coordination.coordinationEffect(primitive),
       // WP4A gap-closure (docs/adr/0022) — which EfspState a Strip Role
       // must be in to PROPOSE a coordination link (see coordination.js).
       coordinationEligibleState: (role) => coordination.coordinationEligibleState(role),
+      tofiEligibleState: (role) => coordination.tofiEligibleState(role),
       // WP4A second slice — TOFI's target resolution (permission.js).
       tofiCounterparts: (actingPositionId) => permission.tofiCounterparts(actingPositionId),
     };

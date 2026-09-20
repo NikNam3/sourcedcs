@@ -195,3 +195,68 @@ test('tick() with no onAlert callback does not throw', () => {
   });
   assert.doesNotThrow(() => monitor.tick(NOW));
 });
+
+// ── VOID_TIME_EXPIRED ───────────────────────────────────────────────────
+//
+// §3.8's "the system MUST alert if the flight is not airborne" by the derived
+// 30-minute deadline. isVoidExpired() has existed since Phase 1 but only ever
+// inhibited the release button — a passive check a controller had to go and
+// look at. These cover it as a real obligation.
+
+function makeHeldStrip(overrides = {}) {
+  return { stripId: 's1', role: 'DEPARTURE', state: 'HELD', coordination: null, ...overrides };
+}
+function makeVoidFdr(voidDeadlineUtc, overrides = {}) {
+  return {
+    updatedAt: NOW,
+    filed: { estimatedArrivalTimeUtc: null, proposedDepartureTimeUtc: null, ...overrides.filed },
+    assigned: { releaseState: 'CLEARANCE_VOID_TIME', voidTimeUtc: voidDeadlineUtc - 30 * MIN, voidDeadlineUtc },
+  };
+}
+
+test('VOID_TIME_EXPIRED is not yet due one minute before the derived deadline', () => {
+  const fdr = makeVoidFdr(NOW + MIN);
+  assert.deepEqual(computeDueObligations(makeHeldStrip(), fdr, NOW), []);
+});
+
+test('VOID_TIME_EXPIRED fires as OVERDUE at exactly the deadline — a hard deadline, so no WARNING tier', () => {
+  const fdr = makeVoidFdr(NOW);
+  assert.deepEqual(computeDueObligations(makeHeldStrip(), fdr, NOW), [
+    { obligationType: 'VOID_TIME_EXPIRED', dueAt: NOW, severity: 'OVERDUE' },
+  ]);
+});
+
+test('VOID_TIME_EXPIRED never fires without a CLEARANCE_VOID_TIME release state — there is no deadline to miss', () => {
+  const fdr = { updatedAt: NOW, filed: {}, assigned: { releaseState: 'RELEASED', voidTimeUtc: null, voidDeadlineUtc: null } };
+  assert.deepEqual(computeDueObligations(makeHeldStrip(), fdr, NOW), []);
+});
+
+test('VOID_TIME_EXPIRED never fires for a Strip that is no longer HELD — the flight got away in time', () => {
+  const fdr = makeVoidFdr(NOW - MIN);
+  assert.deepEqual(computeDueObligations(makeHeldStrip({ state: 'DEPARTED' }), fdr, NOW), []);
+});
+
+test('VOID_TIME_EXPIRED never fires for a non-DEPARTURE Role — void time is a departure-clearance concept', () => {
+  const fdr = makeVoidFdr(NOW - MIN);
+  const strip = { stripId: 's1', role: 'ARRIVAL', state: 'HELD', coordination: null };
+  assert.equal(computeDueObligations(strip, fdr, NOW).some(o => o.obligationType === 'VOID_TIME_EXPIRED'), false);
+});
+
+test('the monitor raises a VOID_TIME_EXPIRED alert once, then de-duplicates it like every other obligation type', () => {
+  const strip = makeHeldStrip();
+  const fdr = makeVoidFdr(NOW - MIN);
+  const alerts = [];
+  const monitor = new ForwardingObligationMonitor({
+    boardStoreFor: () => ({ getAll: () => [strip] }),
+    fdrStore: { getFdr: () => fdr },
+    facilityConfig: { getFacilityIds: () => ['INCIRLIK'], getFacilityConfig: () => ({}) },
+    onAlert: (a) => alerts.push(a),
+  });
+
+  monitor.tick(NOW);
+  monitor.tick(NOW + MIN);
+  assert.equal(alerts.length, 1);
+  assert.equal(alerts[0].obligationType, 'VOID_TIME_EXPIRED');
+  assert.equal(alerts[0].severity, 'OVERDUE');
+  assert.equal(monitor.getComplianceStats().VOID_TIME_EXPIRED.missed, 1);
+});
