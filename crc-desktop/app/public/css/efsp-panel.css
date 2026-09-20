@@ -143,6 +143,17 @@
   font: inherit;
 }
 
+/* A Position this controller does NOT hold, shown only so a Strip can be
+   dragged onto it for a handoff. Recessed and not selectable — it has no Bay
+   content behind it. Still a full drop target (and still lights up under
+   .efsp-drop-target above during a drag). */
+.efsp-position-tab-drop-only {
+  background: transparent;
+  border-style: dashed;
+  color: #6a7580;
+  cursor: default;
+}
+
 .efsp-position-tab.active, .efsp-bay-tab.active {
   background: #2a3038;
   color: #fff;
@@ -484,6 +495,9 @@
   border: 1px solid #4a5560;
   color: #a8b4bd;
 }
+/* This flight has other live Strips elsewhere (a replica at another
+   Facility, or a MISSION Strip sharing its FDR). Advisory only. */
+.efsp-shared-fdr-badge { border-color: #4a7dbf; color: #bfe0ff; }
 .efsp-coordination-badge-data { border-color: #6a5bbf; color: #c9c0ff; }
 .efsp-coordination-badge-sep  { border-color: #4a7dbf; color: #bfe0ff; }
 /* OPERATIONAL_REQUEST STAND BY indicator (docs/adr/0022) — same neutral

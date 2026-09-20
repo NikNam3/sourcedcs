@@ -353,7 +353,17 @@ function _buildStripEl(strip) {
       // Facility is waiting on this Strip, so its own NLA (Drop, for a
       // DEPARTURE Strip at HANDED_OFF) must not look pressable — dropping
       // out from under an open proposal orphaned the receiver's replica.
-      const hasOpenCoordination = strip.coordination && strip.coordination.state === 'PROPOSED';
+      const hasOpenCoordination = (strip.coordination && strip.coordination.state === 'PROPOSED')
+        || (strip.tofiCoordination && strip.tofiCoordination.state === 'PROPOSED');
+      // A terminal NLA IS a Drop (every Role's last step is labelled that),
+      // and guide §4.6.3 rule 2 forbids dropping a Strip under live tactical
+      // control on either side of the exchange. The server enforces this on
+      // the shared retire path; this is the proactive half, so the button
+      // doesn't look pressable. Deliberately narrowed to the terminal step —
+      // a MISSION Strip's own lifecycle advances freely during an ACTIVE
+      // exchange (docs/adr/0026), it just cannot END during one.
+      const isTerminalDrop = nlaLabel === 'Drop';
+      const underTacticalControl = strip.tofiCoordination && strip.tofiCoordination.state === 'ACTIVE';
       if (!canActOnState(strip.ownerPositionId, strip.role, strip.state)) {
         btn.disabled = true;
         btn.classList.add('efsp-nla-btn-denied');
@@ -362,6 +372,10 @@ function _buildStripEl(strip) {
         btn.disabled = true;
         btn.classList.add('efsp-nla-btn-denied');
         btn.title = 'a coordination proposal is still open on this Strip — accept, reject, or wait for a response first';
+      } else if (isTerminalDrop && underTacticalControl) {
+        btn.disabled = true;
+        btn.classList.add('efsp-nla-btn-denied');
+        btn.title = 'this Strip is under active tactical control — complete a TOFI exit first';
       } else {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -421,7 +435,22 @@ function _buildStripEl(strip) {
       const tofiAcceptBtn = document.createElement('button');
       tofiAcceptBtn.className = 'efsp-coordinate-accept-btn';
       tofiAcceptBtn.textContent = `Accept TOFI ${label}`;
-      tofiAcceptBtn.addEventListener('click', (e) => { e.stopPropagation(); _dispatchTofi(strip, 'ACCEPT'); });
+      // Guide rule 3 — exit is the safety-critical direction, so the server
+      // refuses ACCEPT until separation_regime is back to ATC. Surfaced here
+      // because the MRU controller cannot fix it themselves: SREG lives on
+      // the ATC-side Strip only (MISSION_BLOCK_MAP has no such Block), so
+      // without being told what is missing they are left guessing at a
+      // generic rejection for something only the other controller can do.
+      const fdr = getEfspFdr(strip.fdrId);
+      const exitBlocked = strip.tofiCoordination.direction === 'EXIT'
+        && !(fdr && fdr.tofi && fdr.tofi.separationRegime === 'ATC');
+      if (exitBlocked) {
+        tofiAcceptBtn.disabled = true;
+        tofiAcceptBtn.classList.add('efsp-nla-btn-denied');
+        tofiAcceptBtn.title = `${strip.tofiCoordination.peerPositionId} must set separation regime back to ATC before this exit can be accepted`;
+      } else {
+        tofiAcceptBtn.addEventListener('click', (e) => { e.stopPropagation(); _dispatchTofi(strip, 'ACCEPT'); });
+      }
       el.appendChild(tofiAcceptBtn);
 
       const tofiRejectBtn = document.createElement('button');
@@ -480,13 +509,51 @@ function _buildStripEl(strip) {
     // a stale departure Strip behind, a duplicated beacon code, and needed
     // every field copied by hand. board-store.js's _applyConvertToArrival
     // is authoritative for the state/role/Bay/permission rules.
-    if (strip.role === 'DEPARTURE' && strip.state === 'HANDED_OFF') {
+    //
+    // Gated on an unresolved link as well as role/state, mirroring the
+    // server: the conversion discards both coordination records, and because
+    // TOFI never changes this Strip's own state, HANDED_OFF is exactly where
+    // a Strip sits for the whole of a tactical-control exchange — so this
+    // button was live mid-exchange and silently broke the link. An ACTIVE
+    // *coordination* link is fine (that handoff is complete; converting for
+    // the return leg is the normal next step) — only a pending one, or live
+    // tactical control, blocks it.
+    const convertBlockedBy = (strip.coordination && strip.coordination.state === 'PROPOSED')
+      ? 'an open coordination proposal'
+      : (strip.tofiCoordination && strip.tofiCoordination.state === 'PROPOSED')
+        ? 'an open TOFI proposal'
+        : (strip.tofiCoordination && strip.tofiCoordination.state === 'ACTIVE')
+          ? 'active tactical control'
+          : null;
+    if (strip.role === 'DEPARTURE' && strip.state === 'HANDED_OFF' && _resolveActingPositionId(strip)) {
       const spawnBtn = document.createElement('button');
       spawnBtn.className = 'efsp-spawn-return-btn';
       spawnBtn.textContent = 'Convert to Arrival →';
-      spawnBtn.title = `Turn this Strip into its return ARRIVAL leg at ${strip.ownerPositionId} — same Strip, same FDR, no duplicate`;
-      spawnBtn.addEventListener('click', (e) => { e.stopPropagation(); convertStripToArrival(strip); });
+      if (convertBlockedBy) {
+        spawnBtn.disabled = true;
+        spawnBtn.classList.add('efsp-nla-btn-denied');
+        spawnBtn.title = `cannot convert this Strip while it has ${convertBlockedBy} — resolve it first`;
+      } else {
+        spawnBtn.title = `Turn this Strip into its return ARRIVAL leg at ${strip.ownerPositionId} — same Strip, same FDR, no duplicate`;
+        spawnBtn.addEventListener('click', (e) => { e.stopPropagation(); convertStripToArrival(strip); });
+      }
       el.appendChild(spawnBtn);
+    }
+
+    // Shared-FDR indicator. A sortie that crosses a Facility boundary leaves
+    // several live Strips on one flight — the sender keeps its own, the
+    // receiver gets a replica, TOFI adds a MISSION Strip — and each holder
+    // retires theirs on their own schedule (guide §4.6). That is the design,
+    // but nothing on screen said a Strip had siblings, so a sender-side one
+    // would sit stale indefinitely and its beacon code stay held. Advisory
+    // only: never blocks anything, and never suggests which one is "right."
+    const siblings = otherLiveStripsForFdr(strip.fdrId, strip.stripId);
+    if (siblings.length > 0) {
+      const sharedBadge = document.createElement('span');
+      sharedBadge.className = 'efsp-coordination-badge efsp-shared-fdr-badge';
+      sharedBadge.textContent = `+${siblings.length}`;
+      sharedBadge.title = `this flight also has ${siblings.length === 1 ? 'a Strip' : `${siblings.length} Strips`} at ${siblings.map(s => `${s.facilityId || '?'}/${s.ownerPositionId}`).join(', ')}`;
+      el.appendChild(sharedBadge);
     }
 
     // POINT_OUT dual-half rendering (guide §4.6 rule 1: "the UI MUST
@@ -715,6 +782,12 @@ const TOFI_COUNTERPARTS = {
 function _canProposeTofiEntry(strip) {
   if (!TOFI_COUNTERPARTS[strip.ownerPositionId]) return false;
   if (strip.role === 'MISSION') return false;
+  // The (role, state) gate the 5 primitives have had since docs/adr/0022 and
+  // TOFI never did — a flight has to actually be airborne and enroute before
+  // it can enter tactically controlled airspace. Client mirror of
+  // coordination.js's TOFI_ELIGIBLE_STATES, kept in lockstep by
+  // efsp-coordination-client.test.js.
+  if (TOFI_ELIGIBLE_STATES[strip.role] !== strip.state) return false;
   if (!strip.tofiCoordination) return true;
   return strip.tofiCoordination.state === 'REJECTED';
 }

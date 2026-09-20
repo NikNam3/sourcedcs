@@ -124,6 +124,12 @@ const TOFI_OP_KINDS = ['TOFI'];
 // COORDINATION_OP_KINDS above, which only the drift test reads).
 const COORDINATION_ELIGIBLE_STATES = { ARRIVAL: 'INBOUND', DEPARTURE: 'HANDED_OFF' };
 
+// TOFI's own eligibility gate — client mirror of coordination.js's
+// TOFI_ELIGIBLE_STATES. Wider than the coordination one only by OVERFLIGHT,
+// which is absent above because it never originates a HANDOFF, not because
+// it is ever on the ground. Read by bay-view.js's _canProposeTofiEntry.
+const TOFI_ELIGIBLE_STATES = { DEPARTURE: 'HANDED_OFF', ARRIVAL: 'INBOUND', OVERFLIGHT: 'TRANSITING' };
+
 const STATE_OWNERS_BY_ROLE = { DEPARTURE: DEPARTURE_STATE_OWNERS, ARRIVAL: ARRIVAL_STATE_OWNERS, OVERFLIGHT: OVERFLIGHT_STATE_OWNERS, MISSION: MISSION_STATE_OWNERS };
 
 /**
@@ -167,6 +173,6 @@ if (typeof module !== 'undefined' && module.exports) {
     NLA_LABELS, nlaLabelFor, DOUBLE_TAP_MS, UNDO_WINDOW_MS, isWithinDoubleTapWindow, isUndoAvailable,
     DEFAULT_STALE_THRESHOLD_SECONDS, isEfspBoardStale,
     STATE_OWNERS_BY_ROLE, DEPARTURE_STATE_OWNERS, ARRIVAL_STATE_OWNERS, OVERFLIGHT_STATE_OWNERS, MISSION_STATE_OWNERS, canActOnState,
-    COORDINATION_OP_KINDS, COORDINATION_ELIGIBLE_STATES, TOFI_OP_KINDS,
+    COORDINATION_OP_KINDS, COORDINATION_ELIGIBLE_STATES, TOFI_OP_KINDS, TOFI_ELIGIBLE_STATES,
   };
 }

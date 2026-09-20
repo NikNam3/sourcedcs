@@ -53,3 +53,18 @@ test('TOFI never collides with any of the 5 coordination primitives, or any ordi
     assert.equal(nonTofi.includes(kind), false, kind);
   }
 });
+
+// WP4A second slice gap-closure — TOFI gained a (role, state) eligibility
+// gate of its own; same drift-guard template as COORDINATION_ELIGIBLE_STATES
+// above, since a client mirror that drifts either offers a TOFI button the
+// server will reject or hides one it would allow.
+const { TOFI_ELIGIBLE_STATES } = require('../app/public/js/panels/efsp/efsp-nla.js');
+
+test('the client mirror of TOFI_ELIGIBLE_STATES stays in lockstep with coordination.js\'s server copy', () => {
+  assert.deepEqual(TOFI_ELIGIBLE_STATES, serverCoordination.TOFI_ELIGIBLE_STATES);
+});
+
+test('TOFI eligibility covers every airborne ATC-side Role, and never MISSION — the Role it creates', () => {
+  assert.deepEqual(Object.keys(TOFI_ELIGIBLE_STATES).sort(), ['ARRIVAL', 'DEPARTURE', 'OVERFLIGHT']);
+  assert.equal(TOFI_ELIGIBLE_STATES.MISSION, undefined);
+});

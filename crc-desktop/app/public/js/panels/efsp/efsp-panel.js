@@ -89,6 +89,50 @@ function _positionsWithBays() {
   return byPosition;
 }
 
+/**
+ * The Position tab strip: every Position this controller holds, plus the
+ * other Positions at the same Facilities as DROP TARGETS ONLY.
+ *
+ * A tab is what carries the drop-position dataset attribute bay-view.js
+ * hit-tests during a drag, and only held Positions ever got one — so a
+ * controller holding a single Position had nothing to drag a handoff onto.
+ * It worked in testing only because test sessions hold several Positions at
+ * once and self-coordinate. The server never required the sender to hold the
+ * destination (every automatic NLA transfer already hands a Strip to a
+ * Position the sender does not hold), so this is purely a client gap, and
+ * the snapshot already carries every Facility's Bays.
+ *
+ * Scoped to Facilities this controller holds something at, because
+ * TransferStrip is per-Facility server-side — a cross-Facility drag would
+ * fail NO_RECEIVING_POSITION, i.e. a target the controller can aim at and
+ * never hit. Crossing a Facility boundary is what HANDOFF is for.
+ *
+ * Pure so it can be tested without a DOM; the render below is what is not.
+ * @param {Array<{bayId:string, positionId:string, facilityId:string}>} bays
+ * @param {string[]} heldPositionIds
+ * @returns {Array<{positionId:string, facilityId:string, held:boolean, bays:Array}>} held Positions first
+ */
+function computePositionTabs(bays, heldPositionIds) {
+  const held = new Set(heldPositionIds || []);
+  const heldFacilities = new Set();
+  for (const b of bays || []) if (held.has(b.positionId)) heldFacilities.add(b.facilityId);
+
+  const byPosition = new Map();
+  for (const b of bays || []) {
+    const isHeld = held.has(b.positionId);
+    if (!isHeld && !heldFacilities.has(b.facilityId)) continue;
+    let entry = byPosition.get(b.positionId);
+    if (!entry) {
+      entry = { positionId: b.positionId, facilityId: b.facilityId, held: isHeld, bays: [] };
+      byPosition.set(b.positionId, entry);
+    }
+    if (isHeld) entry.bays.push(b);
+  }
+
+  const all = [...byPosition.values()];
+  return [...all.filter(p => p.held), ...all.filter(p => !p.held)];
+}
+
 /** Runs (or clears, on an empty query) a search — one input, guide §4.3. Activates the search Bay for the current Position tab. */
 function _runEfspSearch(query) {
   const trimmed = (query || '').trim();
@@ -111,33 +155,36 @@ function getActiveEfspSearchQuery() { return _searchQuery; }
 function _renderPositionTabs() {
   if (!_positionTabsEl) return; // not initialized yet — initEfspPanel() hasn't run
   const byPosition = _positionsWithBays();
-  const positionIds = Object.keys(byPosition);
-  if (!positionIds.includes(_activePositionTab)) _activePositionTab = positionIds[0] || null;
+  const heldPositionIds = Object.keys(byPosition);
+  if (!heldPositionIds.includes(_activePositionTab)) _activePositionTab = heldPositionIds[0] || null;
 
   _positionTabsEl.innerHTML = '';
-  for (const positionId of positionIds) {
+  for (const { positionId, held } of computePositionTabs(getEfspBays(), getActingPositions())) {
     const tab = document.createElement('button');
-    tab.className = 'efsp-position-tab' + (positionId === _activePositionTab ? ' active' : '');
+    tab.className = 'efsp-position-tab'
+      + (positionId === _activePositionTab ? ' active' : '')
+      + (held ? '' : ' efsp-position-tab-drop-only');
     tab.textContent = positionId;
     // Doubles as a drag drop-zone (guide §4.2: "other Bays reachable
     // through header drop zones that double as drag targets") —
     // bay-view.js hit-tests for this attribute during a drag and issues a
-    // TransferStrip to this Position's default Bay on drop. NOTE: only
-    // Positions this controller currently HOLDS get a tab at all (see
-    // _positionsWithBays), so a single-Position controller has no tab to
-    // drop a handoff onto for a Position they don't hold themselves — a
-    // real gap for the single-controller-per-Position case, not just the
-    // combined-Position testing case this covers today.
+    // TransferStrip to this Position's default Bay on drop.
     tab.dataset.efspDropPosition = positionId;
-    tab.addEventListener('click', () => {
-      _activePositionTab = positionId;
-      _activeBayId = null;
-      _renderPositionTabs();
-    });
+    if (held) {
+      tab.addEventListener('click', () => {
+        _activePositionTab = positionId;
+        _activeBayId = null;
+        _renderPositionTabs();
+      });
+    } else {
+      // Not selectable: this controller has no Bay content to page through
+      // at a Position they do not hold. It exists to be dropped on.
+      tab.title = `${positionId} — drop a Strip here to hand it off (you are not holding this Position)`;
+    }
     _positionTabsEl.appendChild(tab);
   }
 
-  if (positionIds.length === 0) {
+  if (heldPositionIds.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'efsp-empty';
     empty.textContent = 'No Position held — select one in Panels.';
@@ -212,6 +259,9 @@ let _pendingCreateStripMutationId = null;
 // second Enter/click could land in, unlike the near-instant validation
 // that runs before it).
 let _createStripLookupInFlight = false;
+// Callsign the duplicate-origination warning has already been shown for, so
+// a second press goes through. Cleared on any successful create.
+let _pendingDuplicateCallsign = null;
 
 function _setCreateStripMsg(text, isError) {
   if (!_createStripMsgEl) return;
@@ -325,7 +375,14 @@ function _refreshCreateStripAvailability() {
  * for the state/role/Bay/permission rules; this just sends the Mutation.
  */
 function convertStripToArrival(strip) {
-  sendEfspMutation(strip.ownerPositionId, strip, { kind: 'ConvertToArrival' });
+  // _resolveActingPositionId (bay-view.js), like every other dispatch helper
+  // — not strip.ownerPositionId unconditionally. The server now requires the
+  // acting Position to be one this session is actually Primary at, so naming
+  // the owner regardless of whether this controller holds it is a guaranteed
+  // rejection rather than the silent pass it used to get.
+  const actingPositionId = _resolveActingPositionId(strip);
+  if (!actingPositionId) return;
+  sendEfspMutation(actingPositionId, strip, { kind: 'ConvertToArrival' });
 }
 
 async function _submitCreateStrip() {
@@ -345,6 +402,22 @@ async function _submitCreateStrip() {
     _setCreateStripMsg('Callsign must be 1-7 alphanumeric characters', true);
     return;
   }
+
+  // Duplicate-origination warning (§3.6). A flight handed off across a
+  // Facility boundary is meant to be picked up by ACCEPTing the replica that
+  // already exists for it — but nothing stopped a controller originating a
+  // fresh, unlinked Strip for the same callsign instead, which then carries
+  // its own beacon code and its own lifecycle for an aircraft that already
+  // had both. Two presses, not a block: genuinely distinct flights do reuse
+  // a callsign across a session, so this is the controller's call.
+  const existing = liveStripsForCallsign(callsign);
+  if (existing.length > 0 && _pendingDuplicateCallsign !== callsign) {
+    _pendingDuplicateCallsign = callsign;
+    const where = existing.map(s => `${s.facilityId || '?'}/${s.ownerPositionId}`).join(', ');
+    _setCreateStripMsg(`${callsign} already has a live Strip at ${where} — press again to create another anyway`, true);
+    return;
+  }
+  _pendingDuplicateCallsign = null;
 
   // Flight-plan pre-fill (guide §10.1 "auto-population — do it
   // aggressively", §10.5 provenance fallback chains) — DEPARTURE-role
@@ -396,6 +469,7 @@ async function _submitCreateStrip() {
     initialState: origin.initialState || undefined,
   }, origin.facilityId);
   _createStripInputEl.value = '';
+  _pendingDuplicateCallsign = null;
   _setCreateStripMsg(seed.route ? 'Creating (flight plan found)…' : 'Creating…', false);
 }
 
@@ -560,4 +634,11 @@ function initEfspPanel() {
   // once, not per initEfspPanel() call in case dock.js ever re-inits.
   if (!_staleCheckInterval) _staleCheckInterval = setInterval(_checkEfspStaleness, 1000);
   return { onShow: () => { _renderPositionTabs(); _refreshCreateStripAvailability(); } };
+}
+
+// Node-only export for the pure helpers above (the repo's dual-use pattern —
+// see efsp-nla.js). Everything else in this file touches the DOM directly and
+// stays browser-only.
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { computePositionTabs };
 }

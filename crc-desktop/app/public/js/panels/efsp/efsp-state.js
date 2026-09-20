@@ -117,6 +117,33 @@ function getEfspFacility() { return efspFacility; }
 function getEfspBays() { return efspBays; }
 function isAitAuthorizedFor(facilityId) { return !!efspAitAuthorizedByFacility[facilityId]; }
 
+/**
+ * Other live Strips sharing this FDR, excluding one by id.
+ *
+ * One flight legitimately has several Strips: every cross-Facility exchange
+ * mints a replica rather than moving the original (guide §4.6), and TOFI
+ * binds a MISSION Strip to the same FDR too. Each holder retires its own on
+ * its own schedule, so a sender-side Strip routinely outlives its usefulness
+ * with nothing on screen saying another one exists. This feeds the indicator
+ * that says so. Purely client-local — the snapshot already carries every
+ * Facility's Strips, so no server support is needed.
+ */
+function otherLiveStripsForFdr(fdrId, exceptStripId) {
+  if (!fdrId) return [];
+  return getAllEfspStrips().filter(s => s.fdrId === fdrId && s.stripId !== exceptStripId && s.state !== 'DROPPED');
+}
+
+/** Live Strips whose FDR carries this callsign — the duplicate-origination check (§3.6). */
+function liveStripsForCallsign(callsign) {
+  const target = (callsign || '').trim().toUpperCase();
+  if (!target) return [];
+  return getAllEfspStrips().filter((s) => {
+    if (s.state === 'DROPPED') return false;
+    const fdr = getEfspFdr(s.fdrId);
+    return !!(fdr && fdr.identity && (fdr.identity.callsign || '').toUpperCase() === target);
+  });
+}
+
 /** Strips currently placed in a Bay/Rack, in order, excluding DROPPED — mirrors board-store.js's getRack() exactly. */
 function getEfspRack(bayId, rackId) {
   return getAllEfspStrips()
@@ -165,6 +192,7 @@ if (typeof module !== 'undefined' && module.exports) {
     applyEfspSnapshot, applyEfspDelta, applyEfspMutationAck,
     registerPendingMutation, getPendingMutations, rebaseForResend,
     getEfspStrip, getEfspFdr, getEfspPosition, getAllEfspStrips, getAllEfspPositions,
+    otherLiveStripsForFdr, liveStripsForCallsign,
     getEfspRack, searchEfspStrips, getEfspBoardSeq, getEfspFacility, getEfspBays,
     isAitAuthorizedFor,
     applyEfspObligationAlert, getEfspObligation, clearEfspObligation,
