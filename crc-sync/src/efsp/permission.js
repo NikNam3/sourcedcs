@@ -71,6 +71,11 @@ const OP_KINDS = [
   // the ATC Positions built so far, plus TAC_C2/GCI on the MRU side. See
   // TOFI_OP_KINDS and each Position's own PERMISSIONS entry below.
   'TOFI',
+  // The RANGE slice — approving a flight onto an airspace's working
+  // frequency, and clearing that approval when it leaves. Granted to the ATC
+  // Positions that actually work airborne flights; a range Position gets
+  // neither, because it works no Strips at all (§4.1 rule 2).
+  'ApproveAirspaceEntry', 'ClearAirspaceEntry',
 ];
 
 // The 5 cross-Facility coordination primitives (guide §4.6) — split out so
@@ -85,13 +90,20 @@ const COORDINATION_OP_KINDS = ['HANDOFF', 'POINT_OUT', 'TRAFFIC', 'OPERATIONAL_R
 // role change), but needs the identical exclusion from OPS/CD/GND/TWR.
 const APP_CTR_ONLY_OP_KINDS = ['ConvertToArrival'];
 
+// Approving a flight into an airspace is something the Position working that
+// airborne flight does — APP and CTR here, since they are the Positions that
+// hold a flight once it is airborne. Kept separate from
+// APP_CTR_ONLY_OP_KINDS, which those two hold for an unrelated reason, so
+// neither list has to be read as "and also these".
+const AIRSPACE_ENTRY_OP_KINDS = ['ApproveAirspaceEntry', 'ClearAirspaceEntry'];
+
 // TOFI (guide §4.6.3) — split out the same way COORDINATION_OP_KINDS is,
 // so it can be excluded from NON_CREATE_OPS/OPS's grant (nobody gets it by
 // default) and explicitly re-added only where guide §4.1's own Position
 // table names it (CTR, TAC_C2, GCI — see PERMISSIONS below).
 const TOFI_OP_KINDS = ['TOFI'];
 
-const NON_CREATE_OPS = OP_KINDS.filter(k => k !== 'CreateStrip' && !COORDINATION_OP_KINDS.includes(k) && !APP_CTR_ONLY_OP_KINDS.includes(k) && !TOFI_OP_KINDS.includes(k));
+const NON_CREATE_OPS = OP_KINDS.filter(k => k !== 'CreateStrip' && !COORDINATION_OP_KINDS.includes(k) && !APP_CTR_ONLY_OP_KINDS.includes(k) && !TOFI_OP_KINDS.includes(k) && !AIRSPACE_ENTRY_OP_KINDS.includes(k));
 
 // WP4A second slice (docs/adr/0025) — defect D12: "TAC_C2, GCI, AIC and
 // JTAC MUST NOT be given HANDOFF or POINT_OUT" (guide §4.1 rule 1), which
@@ -110,6 +122,23 @@ function _isMruOrNonAtc(positionId) {
   return MRU_OR_NON_ATC_CLASSES.has(facilityConfig.getPositionClass(positionId));
 }
 
+// Guide §4.1's `RANGE` row: Class "Using agency", Primitives "no strip
+// primitives — owns airspace state", Strip Roles "none". A Position of this
+// class works no Strips at all, so it is refused every Strip op kind by
+// class, in canMutate below.
+//
+// Refusing by class rather than by omission from PERMISSIONS matters because
+// the RANGES Facility's Positions are DERIVED from the airspace config
+// (facility-config.js) rather than hand-listed here — there is no table entry
+// to leave out, and an unknown Position currently falls through to "no
+// permissions" only as a side effect of PERMISSIONS[id] being undefined.
+// This makes the refusal the rule it is meant to be, and keeps holding if
+// someone later adds a table entry for a range Position by mistake.
+const NO_STRIP_OP_CLASSES = new Set(['USING_AGENCY']);
+function _worksNoStrips(positionId) {
+  return NO_STRIP_OP_CLASSES.has(facilityConfig.getPositionClass(positionId));
+}
+
 // The coarse "may this Position class ever perform this KIND of op at
 // all" gate — CreateStrip is included here for OPS/APP (both originate
 // Strips, just for different roles) but the role itself is gated
@@ -122,7 +151,7 @@ function _isMruOrNonAtc(positionId) {
 // reason (only APP/CTR ever hold a DEPARTURE Strip at its HANDED_OFF
 // terminus in a position to convert it).
 const PERMISSIONS = {
-  OPS: new Set(OP_KINDS.filter(k => !COORDINATION_OP_KINDS.includes(k) && !APP_CTR_ONLY_OP_KINDS.includes(k) && !TOFI_OP_KINDS.includes(k))),
+  OPS: new Set(OP_KINDS.filter(k => !COORDINATION_OP_KINDS.includes(k) && !APP_CTR_ONLY_OP_KINDS.includes(k) && !TOFI_OP_KINDS.includes(k) && !AIRSPACE_ENTRY_OP_KINDS.includes(k))),
   CD:  new Set(NON_CREATE_OPS),
   GND: new Set(NON_CREATE_OPS),
   TWR: new Set(NON_CREATE_OPS),
@@ -207,6 +236,7 @@ const CREATE_ROLE_PERMISSIONS = {
  * @returns {boolean}
  */
 function canMutate(actingPositionId, opKind) {
+  if (_worksNoStrips(actingPositionId)) return false;
   const allowed = PERMISSIONS[actingPositionId];
   return !!allowed && allowed.has(opKind);
 }
@@ -347,5 +377,6 @@ module.exports = {
   canMutate, canCreateStripRole, canActOnState, tofiCounterparts,
   PERMISSIONS, CREATE_ROLE_PERMISSIONS, STATE_OWNERS_BY_ROLE,
   DEPARTURE_STATE_OWNERS, ARRIVAL_STATE_OWNERS, OVERFLIGHT_STATE_OWNERS, MISSION_STATE_OWNERS,
-  OP_KINDS, COORDINATION_OP_KINDS, APP_CTR_ONLY_OP_KINDS, TOFI_OP_KINDS, TOFI_COUNTERPARTS,
+  OP_KINDS, COORDINATION_OP_KINDS, APP_CTR_ONLY_OP_KINDS, TOFI_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_COUNTERPARTS,
+  NO_STRIP_OP_CLASSES,
 };

@@ -31,6 +31,8 @@ const path = require('path');
 const fs = require('fs');
 
 const { FdrStore } = require('./fdr-store');
+const { AirspaceStore } = require('./airspace-store');
+const airspaceConfig = require('./airspace-config');
 const { CodeAllocator } = require('./code-allocator');
 const { BoardStore } = require('./board-store');
 const { MutationLog } = require('./mutation-log');
@@ -51,6 +53,11 @@ function createEfsp() {
   const codeAllocator = new CodeAllocator();
   const fdrStore = new FdrStore(codeAllocator);
   const mutationLog = new MutationLog();
+  // One store for every Facility, like fdrStore — an airspace is a theater
+  // entity that NAMES its controlling Facility rather than being replicated
+  // into each one. There is no D13 replication question here because nothing
+  // is ever handed across a boundary; the record has exactly one home.
+  const airspaceStore = new AirspaceStore(airspaceConfig);
 
   const facilityIds = facilityConfig.getFacilityIds();
   const facilities = new Map(); // facilityId -> { boardStore, positionStore, rules }
@@ -115,6 +122,11 @@ function createEfsp() {
       tofiEligibleState: (role) => coordination.tofiEligibleState(role),
       // WP4A second slice — TOFI's target resolution (permission.js).
       tofiCounterparts: (actingPositionId) => permission.tofiCounterparts(actingPositionId),
+      // The RANGE slice — the airspace an entry approval names, so the Strip
+      // op can default the frequency from it and see whether it is active.
+      // The store is shared across every Facility, so this rule is the same
+      // function for all of them.
+      airspaceFor: (airspaceId) => airspaceStore.getAirspace(airspaceId),
     };
 
     const boardStore = new BoardStore(fdrStore, rules);
@@ -122,7 +134,7 @@ function createEfsp() {
     facilities.set(facilityId, { boardStore, positionStore, rules });
   }
 
-  _restore(facilities, fdrStore);
+  _restore(facilities, fdrStore, airspaceStore);
 
   const defaultFacility = facilities.get(facilityConfig.DEFAULT_FACILITY_ID);
 
@@ -132,6 +144,8 @@ function createEfsp() {
     boardStore: defaultFacility.boardStore,
     positionStore: defaultFacility.positionStore,
     fdrStore,
+    airspaceStore,
+    airspaceConfig,
     facilityConfig,
     // The real, Facility-aware accessors WP4A's wire protocol uses.
     boardStoreFor: (facilityId = facilityConfig.DEFAULT_FACILITY_ID) => {
@@ -146,6 +160,7 @@ function createEfsp() {
 
   return {
     boardStore: ctx.boardStore, fdrStore, positionStore: ctx.positionStore, mutationLog,
+    airspaceStore,
     boardStoreFor: ctx.boardStoreFor, positionStoreFor: ctx.positionStoreFor,
 
     /**
@@ -158,7 +173,7 @@ function createEfsp() {
       return user.name || user.preferred_username || user.sub || 'unknown';
     },
 
-    handleMessage: (session, msg) => handleMessage(ctx, session, msg, () => _persist(facilities, fdrStore)),
+    handleMessage: (session, msg) => handleMessage(ctx, session, msg, () => _persist(facilities, fdrStore, airspaceStore)),
 
     /** Abrupt disconnect (guide §4.8.6) — releases every Position the controller held, across EVERY Facility (a controller may hold Positions in more than one, guide §4.8.5). */
     onDisconnect: (session) => {
@@ -170,10 +185,15 @@ function createEfsp() {
   };
 }
 
-function _restore(facilities, fdrStore) {
+function _restore(facilities, fdrStore, airspaceStore) {
   try {
     const data = JSON.parse(fs.readFileSync(BOARD_SNAPSHOT_PATH, 'utf8'));
     fdrStore.restore(data.fdr);
+    // Airspace STATE is durable (ADR 0002); the definitions come from config
+    // on every boot, so restore() skips anything no longer configured and a
+    // newly configured airspace simply starts available. No migration either
+    // way — the same reasoning that keeps facility config out of the snapshot.
+    airspaceStore.restore(data.airspaces);
     // WP4A shape: { fdr, boards: { [facilityId]: boardSnapshot } }.
     // Falls back to the pre-WP4A single-board shape ({ fdr, board }) for
     // an on-disk snapshot written before this slice — restored into
@@ -194,11 +214,11 @@ function _restore(facilities, fdrStore) {
   }
 }
 
-function _persist(facilities, fdrStore) {
+function _persist(facilities, fdrStore, airspaceStore) {
   try {
     const boards = {};
     for (const [facilityId, { boardStore }] of facilities.entries()) boards[facilityId] = boardStore.snapshot();
-    fs.writeFileSync(BOARD_SNAPSHOT_PATH, JSON.stringify({ boards, fdr: fdrStore.snapshot() }, null, 2));
+    fs.writeFileSync(BOARD_SNAPSHOT_PATH, JSON.stringify({ boards, fdr: fdrStore.snapshot(), airspaces: airspaceStore.snapshot() }, null, 2));
   } catch (e) {
     console.warn('[efsp] failed to persist Board snapshot:', e.message);
   }

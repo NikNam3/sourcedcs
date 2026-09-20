@@ -5,7 +5,8 @@ const {
   canMutate, canCreateStripRole, canActOnState, tofiCounterparts,
   PERMISSIONS, CREATE_ROLE_PERMISSIONS, STATE_OWNERS_BY_ROLE,
   DEPARTURE_STATE_OWNERS, ARRIVAL_STATE_OWNERS, MISSION_STATE_OWNERS,
-  OP_KINDS, COORDINATION_OP_KINDS, APP_CTR_ONLY_OP_KINDS, TOFI_OP_KINDS,
+  OP_KINDS, COORDINATION_OP_KINDS, APP_CTR_ONLY_OP_KINDS, TOFI_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS,
+  NO_STRIP_OP_CLASSES,
 } = await import('../src/efsp/permission.js');
 
 test('canMutate has exactly two parameters — structurally cannot accept a "held set" (guards defect D21 by construction)', () => {
@@ -31,7 +32,7 @@ test('OPS and APP both pass the coarse CreateStrip gate (both originate Strips, 
 });
 
 test('every INCIRLIK/CENTER Position may perform every non-CreateStrip, non-coordination, non-APP/CTR-only, non-TOFI op kind (WP4A\'s coordination primitives, TOFI, and docs/adr/0023\'s ConvertToArrival are op-kind-level asymmetries, tested separately below)', () => {
-  const nonCreate = OP_KINDS.filter(k => k !== 'CreateStrip' && !COORDINATION_OP_KINDS.includes(k) && !APP_CTR_ONLY_OP_KINDS.includes(k) && !TOFI_OP_KINDS.includes(k));
+  const nonCreate = OP_KINDS.filter(k => k !== 'CreateStrip' && !COORDINATION_OP_KINDS.includes(k) && !APP_CTR_ONLY_OP_KINDS.includes(k) && !TOFI_OP_KINDS.includes(k) && !AIRSPACE_ENTRY_OP_KINDS.includes(k));
   for (const id of ['OPS', 'CD', 'GND', 'TWR', 'APP', 'CTR']) {
     for (const op of nonCreate) {
       assert.equal(canMutate(id, op), true, `${id} / ${op}`);
@@ -324,4 +325,26 @@ test('every state present in DEPARTURE_STATES/ARRIVAL_STATES/OVERFLIGHT_STATES/M
     if (state === 'DROPPED') continue;
     assert.ok(STATE_OWNERS_BY_ROLE.MISSION[state], `MISSION/${state}`);
   }
+});
+
+
+// ── the RANGE slice ──────────────────────────────────────────────────────
+
+test('only APP and CTR may approve a flight into an airspace — the Positions that hold an airborne flight', () => {
+  for (const opKind of AIRSPACE_ENTRY_OP_KINDS) {
+    assert.equal(canMutate('APP', opKind), true, opKind);
+    assert.equal(canMutate('CTR', opKind), true, opKind);
+    for (const id of ['OPS', 'CD', 'GND', 'TWR']) {
+      assert.equal(canMutate(id, opKind), false, `${id} ${opKind}`);
+    }
+  }
+});
+
+test('a range Position works no Strips at all — refused every op kind by class, not by being absent from the table', () => {
+  // Guide §4.1's RANGE row: Class "Using agency", Primitives "no strip
+  // primitives — owns airspace state", Strip Roles "none". The refusal has
+  // to be a rule rather than a side effect of PERMISSIONS having no entry,
+  // because the RANGES Facility's Positions are derived from the airspace
+  // config and so are never hand-listed there.
+  assert.ok(NO_STRIP_OP_CLASSES.has('USING_AGENCY'));
 });

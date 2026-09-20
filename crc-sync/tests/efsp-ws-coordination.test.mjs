@@ -193,7 +193,7 @@ test('efsp-resync is facility-scoped — resyncing CENTER never returns INCIRLIK
 test('docs/adr/0022: the snapshot carries aitAuthorizedByFacility for every Facility, so the client can proactively disable the AIT option', () => {
   const ctx = makeCtx();
   const snapshot = handleMessage(ctx, CTR_SESSION, { type: 'efsp-resync', facilityId: 'CENTER', lastBoardSeq: -999999 }, noopPersist);
-  assert.deepEqual(snapshot.ack.aitAuthorizedByFacility, { INCIRLIK: false, CENTER: false, TACTICAL: false });
+  assert.deepEqual(snapshot.ack.aitAuthorizedByFacility, { INCIRLIK: false, CENTER: false, TACTICAL: false, RANGES: false });
 });
 
 test('efsp-set-positions is facility-scoped — holding CTR at CENTER does not touch INCIRLIK\'s PositionStore', () => {
@@ -228,7 +228,7 @@ test('a snapshot includes every Facility\'s Bays, each correctly stamped', async
   const ctx = makeCtx();
   const { snapshotMessage } = await import('../src/efsp/efsp-ws.js');
   const snap = snapshotMessage(ctx);
-  assert.equal(snap.facilities.sort().join(','), 'CENTER,INCIRLIK,TACTICAL');
+  assert.equal(snap.facilities.sort().join(','), 'CENTER,INCIRLIK,RANGES,TACTICAL');
   assert.ok(snap.bays.some(b => b.bayId === 'ctr-enroute' && b.facilityId === 'CENTER'));
   assert.ok(snap.bays.some(b => b.bayId === 'app-coordination' && b.facilityId === 'INCIRLIK'));
   assert.ok(snap.bays.some(b => b.bayId === 'tac-c2-coordination' && b.facilityId === 'TACTICAL'));

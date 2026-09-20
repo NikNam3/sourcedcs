@@ -15,6 +15,10 @@
 
 const crypto = require('crypto');
 const { CodeAllocator } = require('./code-allocator');
+// One unit and one type for every frequency inside the EFSP: MHz, as a
+// number. Shared with airspace-config.js so a configured airspace frequency
+// and a frequency a flight is approved onto can never validate differently.
+const { isValidFrequency, MIN_FREQUENCY_MHZ, MAX_FREQUENCY_MHZ } = require('./airspace-config');
 
 const VOID_DEADLINE_MINUTES = 30; // §3.8 — derived, not stored input
 const EDCT_WINDOW_MINUTES = 5;              // §4.6.2 — EDCT ± 5 min
@@ -211,6 +215,17 @@ class FdrStore {
       // (D15). Only ever written via setAirspaceOwner() below, never the
       // generic setField() path — see that method for why.
       airspace: { owner: null, changedAt: null, changedBy: null, transitions: [] },
+      // The frequency this flight has been approved onto — guide Block 22,
+      // which the spec lists with an entirely empty notes column. Written
+      // only via setWorkingFrequency() below, never the generic setField()
+      // path, on the exact template setAirspaceOwner established
+      // (docs/adr/0018) and setTofi followed.
+      //
+      // [SOURCE-DEFINED]: the concept of a "working frequency" for an
+      // airspace, and of approving a flight onto one, appears nowhere in any
+      // FAA or DoD source the guide reached. It is this squadron's operating
+      // practice and must never be presented as doctrine (defect D11).
+      comms: { workingFrequencyMhz: null, airspaceId: null, changedAt: null, changedBy: null, transitions: [] },
       // WP4A second slice (docs/adr/0026) — the minimal MISSION field set
       // (guide §9.8), present but null/empty on every FDR regardless of
       // role. Written through the generic setField() path (WRITABLE_PATHS
@@ -404,6 +419,43 @@ class FdrStore {
     fdr.provenance['tofi'] = 'CONTROLLER_ENTERED';
     fdr.rev += 1;
     fdr.updatedAt = Date.now();
+    fdr.updatedBy = by || null;
+    return { ok: true, fdr };
+  }
+
+  /**
+   * Approves this flight onto a frequency, optionally tied to the airspace it
+   * is working in (guide Block 22). Append-only, like airspace ownership: a
+   * sortie that changes frequency three times has to be able to show all
+   * three afterwards, not just the last.
+   *
+   * Crucially this does NOT move jurisdiction. Guide §4.7 and defect D17 are
+   * explicit that modelling "ownership transfer = frequency change" inverts
+   * what Single Frequency Approach actually does — "the frequency is an
+   * attribute of the Strip; the controller is what moves". The owning
+   * controller keeps the Strip across this call; only the flight's radio
+   * moves.
+   *
+   * @param {number|null} frequencyMhz — MHz as a number, or null to clear
+   * @returns {{ok:true, fdr}|{ok:false, reason, detail?}}
+   */
+  setWorkingFrequency(fdrId, frequencyMhz, { airspaceId = null, by } = {}) {
+    const fdr = this._fdrs.get(fdrId);
+    if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
+    if (frequencyMhz !== null && !isValidFrequency(frequencyMhz)) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `frequency must be a number between ${MIN_FREQUENCY_MHZ} and ${MAX_FREQUENCY_MHZ} MHz, not ${JSON.stringify(frequencyMhz)}` };
+    }
+    const now = Date.now();
+    fdr.comms = {
+      workingFrequencyMhz: frequencyMhz,
+      airspaceId,
+      changedAt: now,
+      changedBy: by || null,
+      transitions: [...(fdr.comms.transitions || []), { workingFrequencyMhz: frequencyMhz, airspaceId, at: now, by: by || null }],
+    };
+    fdr.provenance['comms.workingFrequencyMhz'] = 'CONTROLLER_ENTERED';
+    fdr.rev += 1;
+    fdr.updatedAt = now;
     fdr.updatedBy = by || null;
     return { ok: true, fdr };
   }

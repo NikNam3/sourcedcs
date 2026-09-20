@@ -107,6 +107,23 @@ function computeDueObligations(strip, fdr, now, ctx = {}) {
     });
   }
 
+  // UNACTIVATED_AIRSPACE_ENTRY — guide §9.11: "Aircraft entering unactivated
+  // airspace MUST alert." The approval itself is deliberately not refused
+  // (see board-store.js's _applyApproveAirspaceEntry) — the airspace may
+  // well be hot in reality with the board simply not caught up, and refusing
+  // would be wrong far more often than right. This is the alert that makes
+  // allowing it safe.
+  //
+  // OVERDUE with no WARNING tier: the aircraft is either in airspace nobody
+  // has activated or it is not. There is no "due soon" about it.
+  if (strip.airspaceEntry && ctx.isAirspaceActive && !ctx.isAirspaceActive(strip.airspaceEntry.airspaceId)) {
+    obligations.push({
+      obligationType: 'UNACTIVATED_AIRSPACE_ENTRY',
+      dueAt: strip.airspaceEntry.approvedAt,
+      severity: 'OVERDUE',
+    });
+  }
+
   return obligations;
 }
 
@@ -120,12 +137,13 @@ const ALERTED_CAP = 20000; // safety cap, same shape as board-store.js's APPLIED
  */
 class ForwardingObligationMonitor {
   /**
-   * @param {{boardStoreFor:(facilityId:string)=>object, fdrStore:object, facilityConfig:object, onAlert?:(alert:object)=>void}} deps
+   * @param {{boardStoreFor:(facilityId:string)=>object, fdrStore:object, facilityConfig:object, airspaceStore?:object, onAlert?:(alert:object)=>void}} deps
    */
-  constructor({ boardStoreFor, fdrStore, facilityConfig, onAlert }) {
+  constructor({ boardStoreFor, fdrStore, facilityConfig, airspaceStore, onAlert }) {
     this._boardStoreFor = boardStoreFor;
     this._fdrStore = fdrStore;
     this._facilityConfig = facilityConfig;
+    this._airspaceStore = airspaceStore || null;
     this._onAlert = onAlert || (() => {});
     this._alerted = new Set(); // `${stripId}:${obligationType}`
     this._compliance = new Map(); // obligationType -> {met, missed}
@@ -142,7 +160,11 @@ class ForwardingObligationMonitor {
         const fdr = this._fdrStore.getFdr(strip.fdrId);
         if (!fdr) continue;
 
-        for (const obligation of computeDueObligations(strip, fdr, now, { dataOnly })) {
+        const isAirspaceActive = this._airspaceStore
+          ? (airspaceId) => this._airspaceStore.isActive(airspaceId)
+          : null;
+
+        for (const obligation of computeDueObligations(strip, fdr, now, { dataOnly, isAirspaceActive })) {
           const key = `${strip.stripId}:${obligation.obligationType}`;
           if (this._alerted.has(key)) continue;
           this._alerted.add(key);

@@ -276,6 +276,7 @@ const obligationMonitor = new ForwardingObligationMonitor({
   boardStoreFor: efsp.boardStoreFor,
   fdrStore: efsp.fdrStore,
   facilityConfig: efspFacilityConfig,
+  airspaceStore: efsp.airspaceStore,
   onAlert: (alert) => wsHub.broadcastEfspObligationAlert(alert),
 });
 setInterval(() => obligationMonitor.tick(), 15000);

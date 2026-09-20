@@ -29,6 +29,11 @@
 const fs = require('fs');
 const path = require('path');
 const blockMap = require('./block-map');
+// Required BEFORE this module builds its configs Map: the RANGES Facility's
+// Position set is derived from the airspace definitions (see
+// DEFAULT_RANGES_CONFIG). airspace-config.js deliberately does not require
+// this module back, so there is no cycle.
+const airspaceConfig = require('./airspace-config');
 
 const DEFAULT_FACILITY_ID = 'INCIRLIK';
 
@@ -45,6 +50,8 @@ const FACILITY_CONFIG_PATHS = {
   // repeated for a third Facility).
   TACTICAL: process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL
     || path.join(__dirname, '../../config/efsp-facility-tactical.json'),
+  RANGES: process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_RANGES
+    || path.join(__dirname, '../../config/efsp-facility-ranges.json'),
 };
 
 const DEFAULT_CONFIG = {
@@ -242,7 +249,43 @@ const DEFAULT_TACTICAL_CONFIG = {
   aitAuthorized: false,
 };
 
-const DEFAULT_CONFIGS = { INCIRLIK: DEFAULT_CONFIG, CENTER: DEFAULT_CENTER_CONFIG, TACTICAL: DEFAULT_TACTICAL_CONFIG };
+// The RANGES Facility (guide §4.1's fifth Facility, §4.1 rule 2). Unlike
+// every Facility above it, this one's Position set is DERIVED rather than
+// listed: a `RANGE` Position exists only for an airspace that has real
+// control of its own (airspace-config.js's usingPositionId). An ordinary MOA
+// contributes no Position at all — a flight working inside one is approved
+// onto a working frequency by whichever ATC Position owns the airspace, and
+// there is nobody else to be.
+//
+// `bays` is empty and stays empty. §4.1: "RANGE works no Strips... Give it a
+// Field State board", §4.2: "Airspace board (not a strip rack)". Its board is
+// airspace-store.js, which is not a Bay of Strips, so there is nothing for
+// getAllBays() to return here — and because the client builds its Position
+// tabs from Bays, a range Position correctly never grows a strip-rack tab.
+//
+// Absent from `coveringChain` deliberately: the chain exists to re-route
+// Strips away from a vacated Position (defect D19), and a Position that owns
+// no Strips has none to strand.
+const DEFAULT_RANGES_CONFIG = {
+  facility: 'RANGES',
+  positions: airspaceConfig.getRangePositionIds(),
+  positionClasses: Object.fromEntries(
+    airspaceConfig.getRangePositionIds().map(id => [id, 'USING_AGENCY'])
+  ),
+  coveringChain: {},
+  blockVisibility: {},
+  bays: {},
+  dataOnly: false,
+  standingReleases: [],
+  aitAuthorized: false,
+};
+
+const DEFAULT_CONFIGS = {
+  INCIRLIK: DEFAULT_CONFIG,
+  CENTER: DEFAULT_CENTER_CONFIG,
+  TACTICAL: DEFAULT_TACTICAL_CONFIG,
+  RANGES: DEFAULT_RANGES_CONFIG,
+};
 
 function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
 

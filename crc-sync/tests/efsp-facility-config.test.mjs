@@ -189,8 +189,18 @@ test('DEFAULT_FACILITY_ID is INCIRLIK — every optional trailing facilityId par
   assert.equal(DEFAULT_FACILITY_ID, 'INCIRLIK');
 });
 
-test('getFacilityIds returns all three Facilities, INCIRLIK first', () => {
-  assert.deepEqual(getFacilityIds(), ['INCIRLIK', 'CENTER', 'TACTICAL']);
+test('getFacilityIds returns every Facility, INCIRLIK first', () => {
+  assert.deepEqual(getFacilityIds(), ['INCIRLIK', 'CENTER', 'TACTICAL', 'RANGES']);
+});
+
+// The RANGES Facility (guide §4.1's fifth) is unlike the other four: its
+// Position set is DERIVED from the airspace config rather than listed, so
+// with no airspaces configured it is a real Facility with no Positions —
+// which is correct, not a defect. A Position exists only for a range that
+// has control of its own.
+test('RANGES exists with no Positions until an airspace declares one, and works no Strips', () => {
+  assert.deepEqual(getPositionSet('RANGES'), []);
+  assert.deepEqual(getAllBays('RANGES'), []); // its board is not a strip rack (§4.2)
 });
 
 test('every zero-arg call site from before WP4A keeps behaving identically — the optional facilityId param defaults to INCIRLIK', () => {

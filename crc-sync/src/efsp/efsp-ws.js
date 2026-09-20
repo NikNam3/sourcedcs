@@ -40,6 +40,7 @@ function handleMessage(ctx, session, msg, persist) {
     case 'efsp-mutation':      return _handleMutation(ctx, session, msg, persist);
     case 'efsp-resync':        return _handleResync(ctx, msg);
     case 'efsp-set-positions': return _handleSetPositions(ctx, session, msg);
+    case 'efsp-airspace-mutation': return _handleAirspaceMutation(ctx, session, msg, persist);
     default:                   return null; // not an EFSP message
   }
 }
@@ -159,6 +160,67 @@ function _handleResync(ctx, msg) {
   return { ack: _snapshotMessage(ctx) };
 }
 
+/**
+ * Airspace ops (schedule/request/approve/release/return) — a SEPARATE
+ * dispatch path from _handleMutation, because they target an airspace rather
+ * than a Strip. `applyMutation` is built on mutation.stripId, the Strip's
+ * baseRev and the Strip-owner check, none of which mean anything for a
+ * record that no Position owns and no Board holds.
+ *
+ * Guide §4.1 rule 2: the `RANGE` Position "works no Strips. It owns airspace
+ * state". This is the wire surface for that.
+ */
+function _handleAirspaceMutation(ctx, session, msg, persist) {
+  const airspaceStore = ctx.airspaceStore;
+  if (!airspaceStore) {
+    return { ack: { version: VERSION, type: 'efsp-airspace-ack', clientMutationId: msg.clientMutationId, ok: false, reason: 'VALIDATION_ERROR', detail: 'no airspace store' } };
+  }
+
+  // The same session binding _handleMutation carries (docs/adr/0029), for the
+  // same reason: actingPositionId arrives as an untrusted client claim, and
+  // the airspace store's whole authority model — who may approve activation,
+  // who may release — is evaluated against it. A new dispatch path is exactly
+  // where that check gets forgotten and the hole reopens.
+  //
+  // Which Facility's PositionStore to ask is the airspace's own controlling
+  // Facility, or RANGES for the using side; checking both covers a controller
+  // holding either end without letting them claim a Position they don't hold.
+  const facilityIds = ctx.facilityConfig.getFacilityIds();
+  const isPrimarySomewhere = facilityIds.some((facilityId) => {
+    const positionStore = ctx.positionStoreFor(facilityId);
+    return positionStore && positionStore.primaryOf(msg.actingPositionId) === session.controllerId;
+  });
+  if (!isPrimarySomewhere) {
+    return { ack: { version: VERSION, type: 'efsp-airspace-ack', clientMutationId: msg.clientMutationId, ok: false, reason: 'NOT_HOLDING_POSITION', detail: `you are not Primary at ${msg.actingPositionId} — select it before acting on airspace` } };
+  }
+
+  const result = airspaceStore.apply(
+    { airspaceId: msg.airspaceId, baseRev: msg.baseRev, op: msg.op },
+    msg.actingPositionId, session.controllerId,
+  );
+  if (result.ok) persist();
+
+  const ack = {
+    version: VERSION, type: 'efsp-airspace-ack', clientMutationId: msg.clientMutationId,
+    ok: result.ok, airspace: result.airspace, reason: result.reason, detail: result.detail,
+    airspaceSeq: airspaceStore.currentSeq,
+  };
+  if (!result.ok) return { ack };
+
+  // Broadcast to everyone, not just the two parties: an airspace going active
+  // changes what every controller in the theater is looking at, and the
+  // client filters by what it holds rather than the server pre-filtering
+  // (matching every other EFSP broadcast).
+  return {
+    ack,
+    broadcast: {
+      version: VERSION, type: 'efsp-airspace-delta',
+      airspaceSeq: airspaceStore.currentSeq,
+      airspaces: { updated: [result.airspace] },
+    },
+  };
+}
+
 function _handleSetPositions(ctx, session, msg) {
   const facilityId = msg.facilityId || ctx.facilityConfig.DEFAULT_FACILITY_ID;
   const positionStore = ctx.positionStoreFor(facilityId);
@@ -241,6 +303,10 @@ function _snapshotMessage(ctx) {
     aitAuthorizedByFacility,
     positions, bays, strips,
     fdrs: fdrStore.getAll(),
+    // The airspace board (guide §4.2 — "not a strip rack"), sent whole: the
+    // list is small, static in size, and every controller's board shows the
+    // same theater-wide set.
+    airspaces: ctx.airspaceStore ? ctx.airspaceStore.getAll() : [],
   };
 }
 

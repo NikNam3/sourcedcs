@@ -29,6 +29,38 @@ process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL = path.join(tmpDir, 'tact
 process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH = path.join(tmpDir, 'board.json');
 process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH = path.join(tmpDir, 'mutations.jsonl');
 
+// Two airspaces covering both shapes the squadron flies: a MOA owned by the
+// Center that owns the airspace it sits in, with no control of its own, and
+// an air-to-ground range with its own control tower and frequency. Written
+// before the imports below, because facility-config derives the RANGES
+// Facility's Position set from this at require time.
+process.env.CRCSYNC_EFSP_AIRSPACES_PATH = path.join(tmpDir, 'airspaces.json');
+fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify([
+  {
+    airspaceId: 'MOA-EAST', name: 'East MOA', type: 'MOA',
+    controllingFacilityId: 'CENTER', controllingPositionId: 'CTR',
+    workingFrequencyMhz: 134.25,
+  },
+  {
+    airspaceId: 'RANGE-SOUTH', name: 'South A/G Range', type: 'RANGE',
+    controllingFacilityId: 'INCIRLIK', controllingPositionId: 'APP',
+    usingPositionId: 'SOUTH_RANGE', controlFrequencyMhz: 283.5,
+  },
+  // Airspace STATE is durable (ADR 0002) and every test in this file shares
+  // one snapshot path, so a test that needs a specific starting state gets
+  // its own airspace rather than depending on what ran before it.
+  {
+    airspaceId: 'RANGE-WEST', name: 'West Range', type: 'RANGE',
+    controllingFacilityId: 'INCIRLIK', controllingPositionId: 'APP',
+    usingPositionId: 'WEST_RANGE', controlFrequencyMhz: 291.0,
+  },
+  {
+    airspaceId: 'MOA-NORTH', name: 'North MOA', type: 'MOA',
+    controllingFacilityId: 'CENTER', controllingPositionId: 'CTR',
+    workingFrequencyMhz: 139.5,
+  },
+]));
+
 const { createEfsp } = await import('../src/efsp/index.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
 
@@ -452,4 +484,147 @@ test('a Block a Facility does not make visible for a Role cannot be written', ()
   assert.match(ack.detail, /not visible/);
 
   facilityConfig.setFacilityConfig(narrowed, 'CENTER'); // restore for any later test
+});
+
+
+// ── Scenario 3: the airspace board ───────────────────────────────────────
+
+function airspaceAct(efsp, crewMember, positionId, airspaceId, op) {
+  const current = efsp.airspaceStore.getAirspace(airspaceId);
+  const result = efsp.handleMessage(crewMember.session, {
+    version: 1, type: 'efsp-airspace-mutation', clientMutationId: crypto.randomUUID(),
+    airspaceId, baseRev: current ? current.rev : 0, actingPositionId: positionId, op,
+  });
+  return result.ack;
+}
+
+test('SCENARIO a MOA sortie: Center books and activates its own MOA, a flight works it on the working frequency, then it all comes back', async () => {
+  const efsp = createEfsp();
+  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' });
+
+  // Ankara Center owns the airspace the MOA sits in, so CTR both books and
+  // activates it — there is no range control to ask, which is the ordinary
+  // case for a MOA.
+  const window = { fromUtc: Date.now(), toUtc: Date.now() + 2 * 60 * 60 * 1000 };
+  assert.equal(airspaceAct(efsp, c.CTR, 'CTR', 'MOA-EAST', { kind: 'ScheduleAirspace', ...window }).ok, true);
+  const activated = airspaceAct(efsp, c.CTR, 'CTR', 'MOA-EAST', { kind: 'ApproveActivation' });
+  assert.equal(activated.ok, true, JSON.stringify(activated));
+  assert.equal(activated.airspace.state, 'ACTIVE');
+
+  // A flight gets out to Center and is approved into the MOA.
+  let strip = mustAct(efsp, c.OPS, 'OPS', null, {
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FDR,
+  });
+  strip = jumpTo(efsp, c.OPS, 'OPS', strip, 'HANDED_OFF');
+  strip = mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'TransferStrip', toPositionId: 'APP', bayId: 'app-departures', rackId: 'main' });
+  const appStrip = mustAct(efsp, c.APP, 'APP', strip, { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' });
+  let ctrStrip = mustAct(efsp, c.CTR, 'CTR', efsp.boardStoreFor('CENTER').getStrip(appStrip.coordination.peerStripId), { kind: 'HANDOFF', action: 'ACCEPT' });
+
+  const ack = act(efsp, c.CTR, 'CTR', ctrStrip, { kind: 'ApproveAirspaceEntry', airspaceId: 'MOA-EAST' });
+  assert.equal(ack.ok, true, JSON.stringify(ack));
+  assert.equal(ack.warning, undefined, 'the airspace is active, so no alert');
+  assert.equal(ack.strip.airspaceEntry.airspaceId, 'MOA-EAST');
+  assert.equal(ack.strip.airspaceEntry.frequencyMhz, 134.25, 'defaulted from the airspace, not typed in');
+  assert.equal(ack.fdr.comms.workingFrequencyMhz, 134.25);
+
+  // Jurisdiction did NOT move — §4.7 / defect D17. The controller keeps the
+  // Strip; only the flight's radio went anywhere.
+  assert.equal(ack.strip.ownerPositionId, 'CTR');
+  ctrStrip = ack.strip;
+
+  // Out of the MOA, and the airspace goes back.
+  const cleared = act(efsp, c.CTR, 'CTR', ctrStrip, { kind: 'ClearAirspaceEntry' });
+  assert.equal(cleared.ok, true, JSON.stringify(cleared));
+  assert.equal(cleared.strip.airspaceEntry, null);
+  assert.equal(cleared.fdr.comms.workingFrequencyMhz, null);
+  // Append-only: the sortie can still show it was on 134.25 (§3.7's reasoning).
+  assert.deepEqual(cleared.fdr.comms.transitions.map(t => t.workingFrequencyMhz), [134.25, null]);
+
+  assert.equal(airspaceAct(efsp, c.CTR, 'CTR', 'MOA-EAST', { kind: 'ReleaseAirspace' }).ok, true);
+  assert.equal(airspaceAct(efsp, c.CTR, 'CTR', 'MOA-EAST', { kind: 'ReturnAirspace' }).ok, true);
+  assert.equal(efsp.airspaceStore.getAirspace('MOA-EAST').state, 'RETURNED');
+});
+
+test('SCENARIO a range with its own control: the range books it, Approach approves, and a flight goes to the range control frequency', () => {
+  const efsp = createEfsp();
+  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK', SOUTH_RANGE: 'RANGES' });
+
+  const window = { fromUtc: Date.now(), toUtc: Date.now() + 2 * 60 * 60 * 1000 };
+  assert.equal(airspaceAct(efsp, c.SOUTH_RANGE, 'SOUTH_RANGE', 'RANGE-SOUTH', { kind: 'ScheduleAirspace', ...window }).ok, true);
+  assert.equal(airspaceAct(efsp, c.SOUTH_RANGE, 'SOUTH_RANGE', 'RANGE-SOUTH', { kind: 'RequestActivation' }).ok, true);
+
+  // The range cannot activate its own airspace — §9.11's whole point.
+  const selfApproved = airspaceAct(efsp, c.SOUTH_RANGE, 'SOUTH_RANGE', 'RANGE-SOUTH', { kind: 'ApproveActivation' });
+  assert.equal(selfApproved.ok, false);
+  assert.equal(selfApproved.reason, 'PERMISSION_DENIED');
+
+  assert.equal(airspaceAct(efsp, c.APP, 'APP', 'RANGE-SOUTH', { kind: 'ApproveActivation' }).ok, true);
+
+  let strip = mustAct(efsp, c.OPS, 'OPS', null, {
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FDR,
+  });
+  strip = jumpTo(efsp, c.OPS, 'OPS', strip, 'HANDED_OFF');
+  strip = mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'TransferStrip', toPositionId: 'APP', bayId: 'app-departures', rackId: 'main' });
+
+  const ack = act(efsp, c.APP, 'APP', strip, { kind: 'ApproveAirspaceEntry', airspaceId: 'RANGE-SOUTH' });
+  assert.equal(ack.ok, true, JSON.stringify(ack));
+  assert.equal(ack.strip.airspaceEntry.frequencyMhz, 283.5, 'the range control tower\'s own frequency, not a working frequency');
+});
+
+test('a range Position works no Strips — it can run its airspace and nothing else', () => {
+  const efsp = createEfsp();
+  const c = crew(efsp, { OPS: 'INCIRLIK', WEST_RANGE: 'RANGES' });
+
+  const strip = mustAct(efsp, c.OPS, 'OPS', null, {
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FDR,
+  });
+  // Guide §4.1: "no strip primitives — owns airspace state", Strip Roles "none".
+  for (const op of [{ kind: 'InvokeNla' }, { kind: 'SetState', toState: 'HANDED_OFF' }, { kind: 'DropStrip', reason: 'x' }]) {
+    const ack = act(efsp, c.WEST_RANGE, 'WEST_RANGE', strip, op);
+    assert.equal(ack.ok, false, op.kind);
+  }
+  // But it is a real Position that really runs its own airspace.
+  const window = { fromUtc: Date.now(), toUtc: Date.now() + 60 * 60 * 1000 };
+  const scheduled = airspaceAct(efsp, c.WEST_RANGE, 'WEST_RANGE', 'RANGE-WEST', { kind: 'ScheduleAirspace', ...window });
+  assert.equal(scheduled.ok, true, JSON.stringify(scheduled));
+});
+
+test('approving a flight into airspace nobody has activated is allowed, but warns and raises an alert', async () => {
+  const efsp = createEfsp();
+  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK' });
+
+  let strip = mustAct(efsp, c.OPS, 'OPS', null, {
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FDR,
+  });
+  strip = jumpTo(efsp, c.OPS, 'OPS', strip, 'HANDED_OFF');
+  strip = mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'TransferStrip', toPositionId: 'APP', bayId: 'app-departures', rackId: 'main' });
+
+  // §9.11 says alert, not refuse: the block may well be hot in reality with
+  // the board simply not caught up, and refusing would be wrong more often
+  // than it would be right.
+  const ack = act(efsp, c.APP, 'APP', strip, { kind: 'ApproveAirspaceEntry', airspaceId: 'MOA-NORTH' });
+  assert.equal(ack.ok, true, JSON.stringify(ack));
+  assert.equal(ack.warning, 'AIRSPACE_NOT_ACTIVE');
+
+  const { ForwardingObligationMonitor } = await import('../src/efsp/forwarding-obligations.js');
+  const alerts = [];
+  const monitor = new ForwardingObligationMonitor({
+    boardStoreFor: efsp.boardStoreFor,
+    fdrStore: efsp.fdrStore,
+    facilityConfig,
+    airspaceStore: efsp.airspaceStore,
+    onAlert: (a) => alerts.push(a),
+  });
+  monitor.tick();
+  assert.equal(alerts.some(a => a.obligationType === 'UNACTIVATED_AIRSPACE_ENTRY'), true);
+});
+
+test('a controller cannot run an airspace from a Position it has not selected', () => {
+  const efsp = createEfsp();
+  const c = crew(efsp, { APP: 'INCIRLIK' });
+  // The same session binding every Strip mutation carries (docs/adr/0029) —
+  // a new dispatch path is exactly where that gets forgotten.
+  const ack = airspaceAct(efsp, c.APP, 'WEST_RANGE', 'RANGE-WEST', { kind: 'ScheduleAirspace', fromUtc: Date.now(), toUtc: Date.now() + 1000 });
+  assert.equal(ack.ok, false);
+  assert.equal(ack.reason, 'NOT_HOLDING_POSITION');
 });

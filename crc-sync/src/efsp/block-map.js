@@ -79,7 +79,12 @@ const DEPARTURE_BLOCK_MAP = {
   '19': { required: false, target: { kind: 'annotation' } },
   '20': { required: false, target: { kind: 'annotation' } },
   '21': { required: false, target: { kind: 'annotation' } },
-  '22': { required: false, target: { kind: 'annotation' } },
+  // Guide's own Block 22, "Frequency" — listed in §6.2 with an entirely
+  // empty notes column. Structured rather than a free-text annotation so a
+  // frequency can be validated as one unit and one type, and so approving a
+  // flight onto an airspace's working frequency can write it directly.
+  // Dedicated target kind for the same reason 24A has one.
+  '22': { required: false, target: { kind: 'frequency' } },
   '23': { required: false, target: { kind: 'annotation' } },
   '24': { required: true,  target: { kind: 'annotation' } },
   // WP4A (docs/adr/0018), §4.6.4 — airspace ownership as a direction. A
@@ -273,6 +278,10 @@ function resolveBlockTarget(role, blockId) {
   // that kind, 3 different Blocks share this one target kind but route to
   // 3 different keys on one fdr.tofi sub-object — `field` carries which.
   if (def.target.kind === 'tofi') return { kind: 'tofi', field: def.target.field };
+  // Routed through fdr-store.js's dedicated setWorkingFrequency(), same
+  // reasoning as 'airspace-owner' — a frequency needs validating as a number
+  // in one band, and the write is append-only.
+  if (def.target.kind === 'frequency') return { kind: 'frequency' };
   return null;
 }
 

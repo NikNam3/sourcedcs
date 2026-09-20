@@ -277,6 +277,16 @@ class BoardStore {
       // FDR throughout, for a returning flight at the same Facility.
       case 'ConvertToArrival':
         result = this._applyConvertToArrival(strip, by, actingPositionId); break;
+      // The RANGE slice — a flight is approved onto an airspace's working
+      // frequency. Deliberately an ordinary Strip Mutation and NOT a
+      // coordination primitive: nothing crosses a Facility boundary, no
+      // replica is minted, and above all no jurisdiction moves (guide §4.7 /
+      // defect D17 — "the frequency is an attribute of the Strip; the
+      // controller is what moves"). The approving controller keeps the Strip.
+      case 'ApproveAirspaceEntry':
+        result = this._applyApproveAirspaceEntry(strip, op, by); break;
+      case 'ClearAirspaceEntry':
+        result = this._applyClearAirspaceEntry(strip, by); break;
       default:              result = { ok: false, reason: 'VALIDATION_ERROR', strip: deepClone(strip) };
     }
     this._recordAudit(mutation, actingPositionId, by, before, result);
@@ -349,6 +359,7 @@ class BoardStore {
       correlation: { state: 'UNCORRELATED' }, // WP5 hook, inert in Phase 1
       coordination: null, // WP4A hook (docs/adr/0015) — set by _applyCoordinationPropose/receiveCoordinationProposal once this Strip is party to a cross-Facility exchange
       tofiCoordination: null, // WP4A second slice hook — set by _applyTofiPropose/receiveTofiProposal once this Strip is party to a TOFI exchange
+      airspaceEntry: null, // the RANGE slice — set by _applyApproveAirspaceEntry while this flight is working an airspace
       createdAt: now, updatedAt: now, updatedBy: by || null,
     };
     this._strips.set(stripId, strip);
@@ -488,6 +499,68 @@ class BoardStore {
    * @returns {{ok:true, impliedState:string|null}|{ok:false, reason:string, detail:string}}
    */
   /** {isOccupied, coveringPositionFor, facilityId} bound from this._rules — computeNla()'s occupancy context (guide §4.5, e.g. DEPARTED's real Hand-Off-to-APP inhibit). `facilityId` (WP4A, docs/adr/0014) lets nla.js distinguish a CENTER-held ARRIVAL Strip's INBOUND state (whose next step is the Coordinate/HANDOFF button, not an intrafacility NLA transfer) from an INCIRLIK one. Built once per call site rather than inline so both computeNla() call sites below stay in lockstep. */
+  /**
+   * Approves this flight to work inside an airspace, on a frequency.
+   *
+   * The frequency defaults from the airspace itself — a range with a control
+   * tower of its own hands the flight to that tower's frequency, an ordinary
+   * MOA to its working frequency — and an explicit `frequencyMhz` overrides
+   * both, because a controller assigning something off-config is a normal
+   * thing to do and refusing it would be worse than recording it.
+   *
+   * Entry into an airspace that is not ACTIVE is WARNED, never refused
+   * (guide §9.11: "aircraft entering unactivated airspace MUST alert").
+   * Refusing would be wrong every time the airspace is hot in reality and
+   * the board has simply not caught up, which is the situation the alert
+   * exists to surface.
+   */
+  _applyApproveAirspaceEntry(strip, op, by) {
+    if (!op.airspaceId) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'an airspace entry needs an airspaceId', strip };
+    }
+    const airspace = this._rules.airspaceFor ? this._rules.airspaceFor(op.airspaceId) : null;
+    if (!airspace) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown airspace: ${op.airspaceId}`, strip };
+    }
+
+    const definition = airspace.definition || {};
+    const frequencyMhz = op.frequencyMhz !== undefined && op.frequencyMhz !== null
+      ? op.frequencyMhz
+      : (definition.controlFrequencyMhz || definition.workingFrequencyMhz || null);
+
+    const fdrResult = this._fdrStore.setWorkingFrequency(strip.fdrId, frequencyMhz, { airspaceId: op.airspaceId, by });
+    if (!fdrResult.ok) return { ok: false, reason: fdrResult.reason, detail: fdrResult.detail, strip };
+
+    strip.airspaceEntry = {
+      airspaceId: op.airspaceId,
+      frequencyMhz,
+      approvedAt: Date.now(),
+      approvedBy: by || null,
+    };
+    strip.rev += 1;
+    strip.updatedAt = Date.now();
+    strip.updatedBy = by || null;
+    this._touch(strip.stripId);
+
+    const warning = airspace.state !== 'ACTIVE' ? 'AIRSPACE_NOT_ACTIVE' : undefined;
+    return { ok: true, strip, fdr: fdrResult.fdr, warning };
+  }
+
+  /** The flight leaves the airspace and comes back to the controller's own frequency. */
+  _applyClearAirspaceEntry(strip, by) {
+    if (!strip.airspaceEntry) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'this Strip is not working an airspace', strip };
+    }
+    const fdrResult = this._fdrStore.setWorkingFrequency(strip.fdrId, null, { airspaceId: null, by });
+    if (!fdrResult.ok) return { ok: false, reason: fdrResult.reason, detail: fdrResult.detail, strip };
+    strip.airspaceEntry = null;
+    strip.rev += 1;
+    strip.updatedAt = Date.now();
+    strip.updatedBy = by || null;
+    this._touch(strip.stripId);
+    return { ok: true, strip, fdr: fdrResult.fdr };
+  }
+
   _nlaCtx() {
     return {
       isOccupied: this._rules.isOccupied, coveringPositionFor: this._rules.coveringPositionFor,
@@ -552,14 +625,16 @@ class BoardStore {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `Block ${op.blockId} is not visible for ${strip.role} at this Facility`, strip };
     }
 
-    if (target.kind === 'fdr' || target.kind === 'airspace-owner' || target.kind === 'tofi') {
+    if (target.kind === 'fdr' || target.kind === 'airspace-owner' || target.kind === 'tofi' || target.kind === 'frequency') {
       const fdrResult = target.kind === 'airspace-owner'
         ? this._fdrStore.setAirspaceOwner(strip.fdrId, op.value, { by })
-        : target.kind === 'tofi'
-          ? this._fdrStore.setTofi(strip.fdrId, { [target.field]: op.value }, { by })
-          : target.path === 'identity.beaconAssigned'
-            ? this._fdrStore.setBeaconAssigned(strip.fdrId, op.value, { by })
-            : this._fdrStore.setField(strip.fdrId, target.path, op.value, { by });
+        : target.kind === 'frequency'
+          ? this._fdrStore.setWorkingFrequency(strip.fdrId, op.value === '' || op.value === undefined ? null : op.value, { by })
+          : target.kind === 'tofi'
+            ? this._fdrStore.setTofi(strip.fdrId, { [target.field]: op.value }, { by })
+            : target.path === 'identity.beaconAssigned'
+              ? this._fdrStore.setBeaconAssigned(strip.fdrId, op.value, { by })
+              : this._fdrStore.setField(strip.fdrId, target.path, op.value, { by });
       if (!fdrResult.ok) return { ok: false, reason: fdrResult.reason, detail: fdrResult.detail, strip };
 
       // FDR keeps its own independent rev (guide §3.1); the Strip's rev is
