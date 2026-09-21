@@ -139,8 +139,12 @@ class AirspaceStore {
       result = { ok: false, reason: 'VALIDATION_ERROR', detail: 'internal error processing airspace op' };
     }
 
-    if (result.ok) result.airspace = this.getAirspace(mutation.airspaceId);
-    else if (!result.airspace) result.airspace = this.getAirspace(mutation.airspaceId);
+    // Every result carries the record, success or not — the client renders
+    // from the ack either way, and a rejection that says nothing about the
+    // current state leaves the board showing whatever the client last
+    // guessed. Handlers that already attached one (the permission and
+    // illegal-transition paths) keep theirs.
+    if (!result.airspace) result.airspace = this.getAirspace(mutation.airspaceId);
     return result;
   }
 
