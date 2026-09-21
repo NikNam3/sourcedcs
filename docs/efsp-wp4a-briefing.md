@@ -11,7 +11,7 @@ to §4 for what is genuinely left.
 ## 1. State of the tree
 
 Committed and green: **crc-sync 655 tests, crc-desktop 244 tests** (`npm test` in each). Working
-tree clean as of this writing. ADRs run `0001`–`0039`.
+tree clean as of this writing. ADRs run `0001`–`0040`.
 
 ## 2. What's built
 
