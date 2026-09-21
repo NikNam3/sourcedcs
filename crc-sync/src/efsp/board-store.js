@@ -29,6 +29,7 @@
 
 const crypto = require('crypto');
 const { keyBetween, rebalance } = require('./order-key');
+const { isValidAltitude } = require('./airspace-config');
 
 const FLAG_KEYS = ['offset', 'flipped', 'removeIndicator', 'highlight', 'attention'];
 const APPLIED_MUTATIONS_CAP = 5000;
@@ -41,6 +42,29 @@ const DEFAULT_INITIAL_STATE_BY_ROLE = { DEPARTURE: 'PROPOSED', ARRIVAL: 'INBOUND
 
 function newFlags() {
   return { offset: false, flipped: false, removeIndicator: false, highlight: null, attention: null };
+}
+
+/**
+ * An altitude block a flight is restricted to inside an airspace. Feet,
+ * whole numbers, upper above lower, and — when the airspace publishes its
+ * own vertical limits — inside them, since a controller cannot assign a
+ * block the airspace does not contain.
+ */
+function _validateAltitudeBlock(block, definition) {
+  if (block === undefined || block === null) return { ok: true };
+  if (typeof block !== 'object') return { ok: false, detail: 'altitudeBlock must be {lowerFt, upperFt}' };
+  const { lowerFt, upperFt } = block;
+  if (!isValidAltitude(lowerFt) || !isValidAltitude(upperFt)) {
+    return { ok: false, detail: 'altitudeBlock needs whole-foot lowerFt and upperFt' };
+  }
+  if (upperFt <= lowerFt) return { ok: false, detail: 'altitudeBlock upperFt must be above lowerFt' };
+  if (isValidAltitude(definition.altLowerFt) && lowerFt < definition.altLowerFt) {
+    return { ok: false, detail: `${definition.name} starts at ${definition.altLowerFt} ft — ${lowerFt} is below it` };
+  }
+  if (isValidAltitude(definition.altUpperFt) && upperFt > definition.altUpperFt) {
+    return { ok: false, detail: `${definition.name} tops at ${definition.altUpperFt} ft — ${upperFt} is above it` };
+  }
+  return { ok: true };
 }
 
 function deepClone(obj) {
@@ -513,6 +537,13 @@ class BoardStore {
    * Refusing would be wrong every time the airspace is hot in reality and
    * the board has simply not caught up, which is the situation the alert
    * exists to surface.
+   *
+   * An optional `altitudeBlock` restricts this flight to a slice of the
+   * airspace — the ordinary way two aircraft share one block, or the way a
+   * working flight is pushed out of the way while somebody transits. Re-
+   * issuing this op on a Strip already in the same airspace AMENDS the
+   * restriction rather than being refused, because tightening or lifting a
+   * block mid-sortie is the normal case, not an error.
    */
   _applyApproveAirspaceEntry(strip, op, by) {
     if (!op.airspaceId) {
@@ -528,12 +559,21 @@ class BoardStore {
       ? op.frequencyMhz
       : (definition.controlFrequencyMhz || definition.workingFrequencyMhz || null);
 
+    const blockCheck = _validateAltitudeBlock(op.altitudeBlock, definition);
+    if (!blockCheck.ok) return { ok: false, reason: 'VALIDATION_ERROR', detail: blockCheck.detail, strip };
+
     const fdrResult = this._fdrStore.setWorkingFrequency(strip.fdrId, frequencyMhz, { airspaceId: op.airspaceId, by });
     if (!fdrResult.ok) return { ok: false, reason: fdrResult.reason, detail: fdrResult.detail, strip };
 
     strip.airspaceEntry = {
       airspaceId: op.airspaceId,
       frequencyMhz,
+      // null means "the whole block", which is what an aircraft working
+      // alone gets. It is deliberately not defaulted to the airspace's own
+      // vertical limits: "unrestricted within the airspace" and "restricted
+      // to exactly the airspace's limits" read the same on a Strip but mean
+      // different things to the controller who has to deconflict later.
+      altitudeBlock: op.altitudeBlock || null,
       approvedAt: Date.now(),
       approvedBy: by || null,
     };

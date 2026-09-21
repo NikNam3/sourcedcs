@@ -50,8 +50,15 @@ class AirspaceStore {
   /**
    * @param {object} airspaceConfig — airspace-config.js (injected rather than
    *   required directly, so tests can drive a fixture without touching disk)
+   * @param {{occupancyFor?:(airspaceId:string)=>number}} [deps] —
+   *   `occupancyFor` counts the flights currently approved into an airspace,
+   *   across every Facility's Board. Injected the same way board-store.js's
+   *   `liveStripsForFdr` is, and for the same reason: this store has no
+   *   business reaching into Boards, and the Boards do not exist yet when it
+   *   is constructed. Optional, so a fixture can drive the store alone.
    */
-  constructor(airspaceConfig) {
+  constructor(airspaceConfig, { occupancyFor } = {}) {
+    this._occupancyFor = occupancyFor || (() => 0);
     this._config = airspaceConfig;
     this._records = new Map(); // airspaceId -> record
     this._seq = 0;
@@ -269,9 +276,18 @@ class AirspaceStore {
       return this._denied(record, `${actingPositionId} is not the using agency for ${definition.name}`);
     }
     if (!this._canGo(record, 'RELEASED')) return this._illegal(record, 'RELEASED');
+
+    // Releasing a block somebody is still working is allowed — the
+    // controller may well know the flight is clear and the board simply has
+    // not caught up, which is the same judgement §9.11 makes about entering
+    // an unactivated one. But it must say so: those flights are still on the
+    // block's frequency, and from this moment the panel considers them to be
+    // in airspace nobody holds, which is exactly the condition
+    // UNACTIVATED_AIRSPACE_ENTRY then alerts on.
+    const occupied = this._occupancyFor(record.airspaceId);
     record.state = 'RELEASED';
-    this._touch(record, by, { state: 'RELEASED', actingPositionId });
-    return { ok: true };
+    this._touch(record, by, { state: 'RELEASED', actingPositionId, occupiedAtRelease: occupied });
+    return occupied > 0 ? { ok: true, warning: 'AIRSPACE_STILL_OCCUPIED', occupied } : { ok: true };
   }
 
   _return(record, definition, op, actingPositionId, by) {

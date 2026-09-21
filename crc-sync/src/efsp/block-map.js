@@ -71,6 +71,19 @@ const DEPARTURE_BLOCK_MAP = {
   // WP4A (docs/adr/0017), §4.6.2's release-across-the-boundary additions —
   // independently optional sub-fields, same doctrinal shape as ADR 0008's
   // 9A-* split (each omittable per facility with no new validator logic).
+  // The release STATE itself, and the void time the 30-minute deadline is
+  // derived from. Both were reachable only from a test until now: §3.8's
+  // whole release model gated the NLA and validated server-side, but no
+  // Block routed to `assigned.releaseState` or `assigned.voidTimeUtc`, so a
+  // controller could not put a flight on hold, or set a void time, at all —
+  // which also made WP4's own "void-time expiry raises an alert" criterion
+  // unexercisable in the real panel. Found by walking a release sortie.
+  //
+  // Numbered in the 14-family rather than taking the guide's unused 15: 14B
+  // and 14C are already local extensions of the same release cluster
+  // (docs/adr/0017), and a bare `15` would look like a guide Block it is not.
+  '14A': { required: false, target: { kind: 'fdr', path: 'assigned.releaseState' } },
+  '14D': { required: false, target: { kind: 'fdr', path: 'assigned.voidTimeUtc' } },
   '14B': { required: false, target: { kind: 'fdr', path: 'assigned.edctTimeUtc' } },
   '14C': { required: false, target: { kind: 'fdr', path: 'assigned.callForReleaseTimeUtc' } },
   '16': { required: false, target: { kind: 'fdr', path: 'assigned.movementAreaEntryTimeUtc' } }, // metering deferred, §12

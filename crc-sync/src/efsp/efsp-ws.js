@@ -203,6 +203,7 @@ function _handleAirspaceMutation(ctx, session, msg, persist) {
   const ack = {
     version: VERSION, type: 'efsp-airspace-ack', clientMutationId: msg.clientMutationId,
     ok: result.ok, airspace: result.airspace, reason: result.reason, detail: result.detail,
+    warning: result.warning, occupied: result.occupied,
     airspaceSeq: airspaceStore.currentSeq,
   };
   if (!result.ok) return { ack };

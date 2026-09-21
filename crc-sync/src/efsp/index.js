@@ -57,7 +57,17 @@ function createEfsp() {
   // entity that NAMES its controlling Facility rather than being replicated
   // into each one. There is no D13 replication question here because nothing
   // is ever handed across a boundary; the record has exactly one home.
-  const airspaceStore = new AirspaceStore(airspaceConfig);
+  const airspaceStore = new AirspaceStore(airspaceConfig, {
+    occupancyFor: (airspaceId) => {
+      let n = 0;
+      for (const { boardStore } of facilities.values()) {
+        for (const s of boardStore.getAll()) {
+          if (s.state !== 'DROPPED' && s.airspaceEntry && s.airspaceEntry.airspaceId === airspaceId) n++;
+        }
+      }
+      return n;
+    },
+  });
 
   const facilityIds = facilityConfig.getFacilityIds();
   const facilities = new Map(); // facilityId -> { boardStore, positionStore, rules }

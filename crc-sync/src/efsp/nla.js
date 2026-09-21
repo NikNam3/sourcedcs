@@ -97,6 +97,14 @@ function isFlightPlanValid(fdr) {
   return REQUIRED_FOR_CLEARANCE.every(k => !!fdr.filed[k]);
 }
 
+// The two release states whose gate is a derived WINDOW rather than a single
+// instant (docs/adr/0017). RELEASE_TIME is deliberately absent — it is a
+// "not before" with no upper bound, checked separately in the HELD case.
+const WINDOWED_RELEASE_STATES = {
+  EDCT:             { startKey: 'edctWindowStartUtc',           endKey: 'edctWindowEndUtc',           label: 'EDCT' },
+  CALL_FOR_RELEASE: { startKey: 'callForReleaseWindowStartUtc', endKey: 'callForReleaseWindowEndUtc', label: 'call-for-release' },
+};
+
 /** True at or after the derived 30-minute void deadline (guide §3.8). Alerting on this is a periodic job elsewhere (this is pure logic, no timers). */
 function isVoidExpired(fdr, now = Date.now()) {
   return !!(fdr && fdr.assigned.voidDeadlineUtc && now >= fdr.assigned.voidDeadlineUtc);
@@ -164,6 +172,21 @@ function computeDepartureNla(strip, fdr, now, ctx) {
       // time-based gates above/below, and RELEASED has none at all.
       if (fdr && fdr.assigned.releaseState === 'HOLD_FOR_RELEASE' && !matchesStandingRelease(fdr, ctx.standingReleases)) {
         return { inhibited: 'outside standing release envelope — file OPERATIONAL_REQUEST' };
+      }
+      // WP4A (docs/adr/0017), §4.6.2 — the EDCT and call-for-release
+      // windows. fdr-store.js has derived both on every write since that
+      // slice (EDCT ±5 min, call-for-release −2/+1), and until now nothing
+      // anywhere read them: a flight with a slot an hour away was not held
+      // at all, which made the whole derivation inert. Found by walking a
+      // release sortie. Missing a window inhibits too — a slot that has
+      // passed needs a new one, and sliding through it silently is exactly
+      // what the window exists to prevent.
+      const windowed = fdr && WINDOWED_RELEASE_STATES[fdr.assigned.releaseState];
+      if (windowed) {
+        const opensAt = fdr.assigned[windowed.startKey];
+        const closesAt = fdr.assigned[windowed.endKey];
+        if (opensAt && now < opensAt) return { inhibited: `${windowed.label} window is not open yet` };
+        if (closesAt && now > closesAt) return { inhibited: `${windowed.label} window has passed — a new slot is needed` };
       }
       if (isVoidExpired(fdr, now)) return { inhibited: 'void time expired' };
       // HELD is jointly owned by CD and GND (DEPARTURE_STATE_OWNERS) since

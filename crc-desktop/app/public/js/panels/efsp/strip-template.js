@@ -55,6 +55,10 @@ const DEPARTURE_BLOCK_MAP = {
   '11': { required: true,  label: 'APREQ',    target: { kind: 'annotation' } },
   '14': { required: true,  label: 'RLS TIME', target: { kind: 'fdr', path: 'assigned.releaseTimeUtc' } },
   // WP4A (docs/adr/0017), §4.6.2 — mirrors crc-sync's block-map.js exactly.
+  // See crc-sync's block-map.js for why these two exist and why they are
+  // numbered in the 14-family.
+  '14A': { required: false, label: 'RLS ST', target: { kind: 'fdr', path: 'assigned.releaseState' } },
+  '14D': { required: false, label: 'VOID',      target: { kind: 'fdr', path: 'assigned.voidTimeUtc' } },
   '14B': { required: false, label: 'EDCT',    target: { kind: 'fdr', path: 'assigned.edctTimeUtc' } },
   '14C': { required: false, label: 'CFR',     target: { kind: 'fdr', path: 'assigned.callForReleaseTimeUtc' } },
   '16': { required: false, label: 'MVMT',     target: { kind: 'fdr', path: 'assigned.movementAreaEntryTimeUtc' } },
@@ -316,6 +320,9 @@ function resolveBlockValue(blockId, fdr, strip) {
 // convention instead of a 2-option <select>.
 const ENUM_SELECT_BLOCKS = {
   '5A': ['NONE', 'CST', 'FAIL', 'IF', 'NT', 'TRK'],
+  // §3.8's release states. fdr-store.js validates the value; this is the
+  // picker so a controller never types one of six exact strings by hand.
+  '14A': ['RELEASED', 'HOLD_FOR_RELEASE', 'RELEASE_TIME', 'CLEARANCE_VOID_TIME', 'EDCT', 'CALL_FOR_RELEASE'],
   '24A': ['CONTROLLING_AGENCY', 'USING_AGENCY'],
   'RSVC': ['ACTIVE', 'TERMINATED'],
   'SREG': ['ATC', 'MARSA', 'USING_AGENCY', 'DUE_REGARD', 'SEE_AND_AVOID'],

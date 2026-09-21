@@ -29,11 +29,39 @@ const path = require('path');
 const AIRSPACES_PATH = process.env.CRCSYNC_EFSP_AIRSPACES_PATH
   || path.join(__dirname, '../../config/efsp-airspaces.json');
 
-// MOA — no control of its own; the controlling ATC Position approves a
-// frequency change to the airspace's working frequency and keeps the flight.
-// RANGE — has a range control tower with its own frequency, and usually a
-// `usingPositionId` for the controller who schedules and runs it.
-const AIRSPACE_TYPES = new Set(['MOA', 'RANGE']);
+// What kind of block this is. The FAA's special-use taxonomy and ICAO's
+// (which is what Turkey publishes) name overlapping things — a MOA in FAA
+// terms is usually charted as a danger or restricted area elsewhere — so
+// this set spans both rather than picking one and mistranslating.
+//
+// **Purely descriptive.** Nothing in the system derives behaviour from it,
+// and nothing may: defect D14 and guide §4.6.3 are explicit that
+// `separation_regime` "MUST NOT be derived from airspace type" — the
+// governing agreement picks the regime, including the case where ATC keeps
+// separating inside the block. `type` exists to label the airspace on the
+// board and nothing else. The two values that DO change behaviour are
+// `usingPositionId` (whether a Position exists for it) and which frequency
+// field is set.
+const AIRSPACE_TYPES = new Set([
+  'MOA',        // military operations area — FAA naming
+  'RANGE',      // a range, usually with control of its own
+  'DANGER',     // ICAO D — how most of these are charted outside the US
+  'RESTRICTED', // ICAO/FAA R
+  'PROHIBITED', // ICAO/FAA P
+  'WARNING',    // FAA W — over international water
+]);
+
+// Vertical limits, in feet. Both optional: an airspace with neither is
+// unbounded as far as this system is concerned, which is honest — the real
+// limits are published elsewhere and this is not a charting tool. When they
+// ARE set, a flight's altitude block has to fit inside them.
+const MIN_ALTITUDE_FT = 0;
+const MAX_ALTITUDE_FT = 100000;
+
+function isValidAltitude(value) {
+  return typeof value === 'number' && Number.isInteger(value)
+    && value >= MIN_ALTITUDE_FT && value <= MAX_ALTITUDE_FT;
+}
 
 // Deliberately one unit, one type, everywhere inside the EFSP: MHz as a
 // number. The wider repo is inconsistent (atis-store keys by integer Hz,
@@ -95,6 +123,14 @@ function validateAirspaces(candidate) {
       if (a[key] !== undefined && a[key] !== null && !isValidFrequency(a[key])) {
         return { ok: false, reason: 'VALIDATION_ERROR', detail: `${a.airspaceId}'s ${key} must be a number between ${MIN_FREQUENCY_MHZ} and ${MAX_FREQUENCY_MHZ} MHz` };
       }
+    }
+    for (const key of ['altLowerFt', 'altUpperFt']) {
+      if (a[key] !== undefined && a[key] !== null && !isValidAltitude(a[key])) {
+        return { ok: false, reason: 'VALIDATION_ERROR', detail: `${a.airspaceId}'s ${key} must be a whole number of feet between ${MIN_ALTITUDE_FT} and ${MAX_ALTITUDE_FT}` };
+      }
+    }
+    if (isValidAltitude(a.altLowerFt) && isValidAltitude(a.altUpperFt) && a.altUpperFt <= a.altLowerFt) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `${a.airspaceId}'s altUpperFt must be above its altLowerFt` };
     }
   }
   return { ok: true };
@@ -167,6 +203,7 @@ function setAirspaces(next) {
 
 module.exports = {
   getAirspaces, getAirspace, getRangePositionIds, airspacesForUsingPosition,
-  setAirspaces, validateAirspaces, isValidFrequency,
+  setAirspaces, validateAirspaces, isValidFrequency, isValidAltitude,
   AIRSPACE_TYPES, AIRSPACES_PATH, MIN_FREQUENCY_MHZ, MAX_FREQUENCY_MHZ,
+  MIN_ALTITUDE_FT, MAX_ALTITUDE_FT,
 };

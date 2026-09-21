@@ -148,8 +148,14 @@ function _buildAirspaceCard(airspace, heldPositionIds) {
     list.textContent = flights.map((s) => {
       const fdr = getEfspFdr(s.fdrId);
       const callsign = (fdr && fdr.identity && fdr.identity.callsign) || s.cid;
-      const frequencyMhz = s.airspaceEntry && s.airspaceEntry.frequencyMhz;
-      return frequencyMhz ? `${callsign} (${frequencyMhz.toFixed(3)})` : callsign;
+      const entry = s.airspaceEntry || {};
+      const bits = [];
+      if (entry.frequencyMhz) bits.push(entry.frequencyMhz.toFixed(3));
+      // The altitude block this flight is held to inside the airspace — the
+      // ordinary way two aircraft share one block, so it belongs on the
+      // board rather than only on the Strip.
+      if (entry.altitudeBlock) bits.push(`${entry.altitudeBlock.lowerFt}–${entry.altitudeBlock.upperFt} ft`);
+      return bits.length ? `${callsign} (${bits.join(', ')})` : callsign;
     }).join(', ');
     card.appendChild(list);
   }

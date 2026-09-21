@@ -789,6 +789,13 @@ async function connect() {
         if (!msg.ok) {
           console.warn('[efsp] airspace op rejected:', msg.reason, msg);
           if (typeof _showMutationError === 'function') _showMutationError(msg.reason || 'Rejected', msg.detail);
+        } else if (msg.warning === 'AIRSPACE_STILL_OCCUPIED') {
+          // Released with flights still in it. Allowed — the controller may
+          // know they are clear — but they are on the block's frequency and
+          // the panel now treats them as being in airspace nobody holds.
+          if (typeof _showMutationWarning === 'function') {
+            _showMutationWarning(`Released with ${msg.occupied} flight${msg.occupied === 1 ? '' : 's'} still in the block`);
+          }
         }
         if (typeof renderAirspacePanel === 'function') renderAirspacePanel();
         break;
