@@ -10,7 +10,7 @@ to §4 for what is genuinely left.
 
 ## 1. State of the tree
 
-Committed and green: **crc-sync 643 tests, crc-desktop 242 tests** (`npm test` in each). Working
+Committed and green: **crc-sync 655 tests, crc-desktop 244 tests** (`npm test` in each). Working
 tree clean as of this writing. ADRs run `0001`–`0039`.
 
 ## 2. What's built
@@ -113,6 +113,15 @@ They found four defects in machinery that already existed and looked finished:
 | The EDCT and call-for-release windows were derived on every write since ADR 0017 and read by nothing — a flight with a slot an hour away was not held | `0039` |
 | A Strip could be created, moved or transferred into a Bay the Facility does not have: accepted, holding a beacon code, invisible in every Rack | `0039` |
 | Releasing an airspace with flights still working it said nothing at all | `0038` |
+| `ConvertToArrival` erased every annotation on the Strip, on one click, with no undo | `0040` |
+| Airspace ops were invisible to the Mutation log — the only trace of who authorised a block was the record's own transitions, and a refusal left none | `0040` |
+
+**Concurrency is now covered and came back clean.** `efsp-scenario-concurrency.test.mjs` runs two
+controllers at one Board: colliding writes, an idempotent replay, both ends of a handoff acting at
+once, a client resyncing inside and outside the ring-buffer window, and a Mutation replayed against
+a Strip whose role changed while its client was away. Everything held on the first run — worth
+knowing, because it was the largest untested dimension in the system and the guide calls a silently
+lost Mutation (D6) the worst failure mode there is.
 
 **If you add a sortie, use `advance()` from the harness** rather than calling `InvokeNla` directly —
 the 400ms double-tap guard silently swallows a second press, so a chain walked without it passes

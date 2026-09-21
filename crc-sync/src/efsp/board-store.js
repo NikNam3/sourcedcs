@@ -389,6 +389,7 @@ class BoardStore {
       coordination: null, // WP4A hook (docs/adr/0015) — set by _applyCoordinationPropose/receiveCoordinationProposal once this Strip is party to a cross-Facility exchange
       tofiCoordination: null, // WP4A second slice hook — set by _applyTofiPropose/receiveTofiProposal once this Strip is party to a TOFI exchange
       airspaceEntry: null, // the RANGE slice — set by _applyApproveAirspaceEntry while this flight is working an airspace
+      previousLeg: null,   // set by ConvertToArrival — the departure leg's archived annotations
       createdAt: now, updatedAt: now, updatedBy: by || null,
     };
     this._strips.set(stripId, strip);
@@ -499,6 +500,25 @@ class BoardStore {
     strip.bayId = targetBay.bayId;
     strip.rackId = targetBay.rackIds[0];
     strip.orderKey = this._resolveOrderKey(targetBay.bayId, targetBay.rackIds[0], null, null, strip.stripId);
+    // The departure leg's annotations are ARCHIVED, not erased. Clearing the
+    // live set is right — a DEPARTURE Strip's Block 9A means something
+    // different on an ARRIVAL, so carrying the values across would mislabel
+    // them — but erasing them outright destroyed controller-entered data on
+    // one click, with no undo (ConvertToArrival records no NLA history, so
+    // §3.5 rule 5's window does not cover it). The append-only annotation
+    // model exists because JO 7110.65 ¶2-3-1 forbids erasing an item; a role
+    // change is not an exception to that.
+    //
+    // Kept on the Strip rather than left to the Mutation log: the log has it
+    // either way, but a controller asking "what did Ground tell them before
+    // they went out" is looking at the Strip, not reading a JSONL file.
+    strip.previousLeg = {
+      role: 'DEPARTURE',
+      annotations: strip.annotations,
+      flags: strip.flags,
+      convertedAt: Date.now(),
+      convertedBy: by || null,
+    };
     strip.annotations = {};
     strip.flags = newFlags();
     strip.coordination = null;

@@ -685,3 +685,8 @@
 /* §9.11 — approved into airspace nobody has activated. Allowed, but said
    plainly on the Strip rather than only in the obligation badge. */
 .efsp-airspace-badge-unactivated { border-color: #e0a83c; color: #ffe0a8; }
+
+/* A destructive one-click action awaiting its second press. */
+.efsp-confirm-needed { border-color: #e0a83c; color: #ffe0a8; }
+/* This return leg has a departure leg behind it, archived (docs/adr/0040). */
+.efsp-previous-leg-badge { border-color: #6a5bbf; color: #c9c0ff; }

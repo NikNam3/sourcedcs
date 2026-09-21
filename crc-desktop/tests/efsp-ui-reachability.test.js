@@ -328,6 +328,35 @@ test('Convert to Arrival is offered for the return leg, and refused mid-exchange
   assert.equal(findByText(blocked.el, 'Convert to Arrival →').disabled, true);
 });
 
+test('Convert to Arrival asks twice when it would clear annotations, and once when it would not', () => {
+  const clean = renderStrip({ strip: stripAt({ ownerPositionId: 'CTR' }), fdr: FDR, held: ['CTR'] });
+  click(findByText(clean.el, 'Convert to Arrival →'));
+  assert.equal(clean.sent[0].op.kind, 'ConvertToArrival', 'nothing to lose, so no ceremony');
+
+  const annotated = stripAt({
+    ownerPositionId: 'CTR',
+    annotations: { 24: { entries: [{ value: 'MIT 10', at: 1, by: 'APP' }] } },
+  });
+  const careful = renderStrip({ strip: annotated, fdr: FDR, held: ['CTR'] });
+  const btn = findByText(careful.el, 'Convert to Arrival →');
+  assert.match(btn.title, /archived and cleared/);
+  click(btn);
+  assert.deepEqual(careful.sent, [], 'the first press only warns');
+  click(findByText(careful.el, 'Convert — press again'));
+  assert.equal(careful.sent[0].op.kind, 'ConvertToArrival');
+});
+
+test('a return leg shows that it has a departure leg behind it', () => {
+  const returned = stripAt({
+    role: 'ARRIVAL', state: 'INBOUND', ownerPositionId: 'CTR', bayId: 'ctr-enroute',
+    previousLeg: { role: 'DEPARTURE', annotations: { 24: { entries: [{ value: 'MIT 10', at: 1, by: 'APP' }] } }, convertedAt: 1, convertedBy: 'CTR' },
+  });
+  const { el } = renderStrip({ strip: returned, fdr: FDR, held: ['CTR'] });
+  const badge = findByText(el, 'DEPARTURE ×1');
+  assert.ok(badge, 'the archived leg is not surfaced anywhere');
+  assert.match(badge.title, /24: MIT 10/);
+});
+
 test('a flight sharing a block by altitude shows its restriction, not just the airspace', () => {
   const airspaces = [{
     airspaceId: 'D-12', state: 'ACTIVE', rev: 1, transitions: [],

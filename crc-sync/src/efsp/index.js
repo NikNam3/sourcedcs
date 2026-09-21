@@ -145,6 +145,7 @@ function createEfsp() {
     facilities.set(facilityId, { boardStore, positionStore, rules });
   }
 
+  airspaceStore.setMutationLog(mutationLog);
   _validateAirspaceReferences(facilities);
   _restore(facilities, fdrStore, airspaceStore);
 

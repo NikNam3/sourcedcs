@@ -62,6 +62,7 @@ class AirspaceStore {
     this._config = airspaceConfig;
     this._records = new Map(); // airspaceId -> record
     this._seq = 0;
+    this._mutationLog = null;
     for (const definition of airspaceConfig.getAirspaces()) this._seed(definition);
   }
 
@@ -86,7 +87,39 @@ class AirspaceStore {
     });
   }
 
+  /**
+   * Same wiring BoardStore has, and for the same reason: who activated a
+   * block, who refused a request and why, and when a schedule moved are
+   * exactly the questions an after-action review asks. The record's own
+   * `transitions` array holds where the airspace has BEEN; this holds what
+   * was asked for, including the asks that were refused and so left no
+   * transition at all.
+   */
+  setMutationLog(mutationLog) { this._mutationLog = mutationLog; }
+
   get currentSeq() { return this._seq; }
+
+  _recordAudit(mutation, actingPositionId, by, before, result) {
+    if (!this._mutationLog) return;
+    this._mutationLog.record({
+      clientMutationId: mutation.clientMutationId,
+      op: mutation.op && mutation.op.kind,
+      // No stripId: an airspace op targets no Strip. Readers key on whichever
+      // id is present, which is why this is a distinct field rather than
+      // stripId reused for something that is not one.
+      airspaceId: mutation.airspaceId,
+      actingPositionId,
+      actorId: by || null,
+      at: Date.now(),
+      ok: result.ok,
+      // A refusal is the interesting half of an authority model, so failures
+      // are logged too — unlike BoardStore's, which records successes only.
+      reason: result.ok ? undefined : result.reason,
+      detail: result.ok ? undefined : result.detail,
+      before,
+      after: result.ok ? deepClone(this._records.get(mutation.airspaceId)) : undefined,
+    });
+  }
 
   getAirspace(airspaceId) {
     const record = this._records.get(airspaceId);
@@ -127,6 +160,7 @@ class AirspaceStore {
     }
 
     const op = mutation.op || {};
+    const before = deepClone(record);
     let result;
     try {
       switch (op.kind) {
@@ -152,6 +186,7 @@ class AirspaceStore {
     // guessed. Handlers that already attached one (the permission and
     // illegal-transition paths) keep theirs.
     if (!result.airspace) result.airspace = this.getAirspace(mutation.airspaceId);
+    this._recordAudit(mutation, actingPositionId, by, before, result);
     return result;
   }
 

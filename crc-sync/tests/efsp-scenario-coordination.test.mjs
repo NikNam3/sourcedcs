@@ -227,3 +227,26 @@ test('a Strip cannot be created, moved or transferred into a Bay that does not e
     kind: 'TransferStrip', toPositionId: 'APP', bayId: 'app-nowhere', rackId: 'main',
   }).ok, false);
 });
+
+test('converting a flight for its return leg archives the departure annotations rather than erasing them', () => {
+  const efsp = createEfsp();
+  const c = crew(efsp, ATC);
+
+  let strip = flight(efsp, c, 'ARCH1');
+  strip = mustAct(efsp, c.APP, 'APP', strip, { kind: 'SetBlock', blockId: '24', value: 'MIT 10 BEHIND VIPER2' });
+  strip = mustAct(efsp, c.APP, 'APP', strip, { kind: 'SetBlock', blockId: '19', value: 'PILOT REQUESTS FL280' });
+  assert.ok(Object.keys(strip.annotations).length >= 2);
+
+  const returning = mustAct(efsp, c.APP, 'APP', strip, { kind: 'ConvertToArrival' });
+
+  // The live set is cleared — a DEPARTURE Block means something else on an
+  // ARRIVAL, so carrying the values across would mislabel them.
+  assert.deepEqual(returning.annotations, {});
+  // But it is kept, because erasing a controller-entered item on one click
+  // with no undo is exactly what the append-only model exists to prevent.
+  assert.equal(returning.previousLeg.role, 'DEPARTURE');
+  assert.ok(returning.previousLeg.convertedAt);
+  const archived = JSON.stringify(returning.previousLeg.annotations);
+  assert.match(archived, /MIT 10 BEHIND VIPER2/);
+  assert.match(archived, /PILOT REQUESTS FL280/);
+});

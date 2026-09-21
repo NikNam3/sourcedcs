@@ -580,10 +580,41 @@ function _buildStripEl(strip) {
         spawnBtn.classList.add('efsp-nla-btn-denied');
         spawnBtn.title = `cannot convert this Strip while it has ${convertBlockedBy} — resolve it first`;
       } else {
-        spawnBtn.title = `Turn this Strip into its return ARRIVAL leg at ${strip.ownerPositionId} — same Strip, same FDR, no duplicate`;
-        spawnBtn.addEventListener('click', (e) => { e.stopPropagation(); convertStripToArrival(strip); });
+        // Two presses, because this clears the live annotation set in one
+        // click and there is no undo for it (the archive keeps the values —
+        // see board-store's previousLeg — but the working Strip is reset).
+        const annotated = Object.keys(strip.annotations || {}).length > 0;
+        spawnBtn.title = annotated
+          ? `Turn this Strip into its return ARRIVAL leg at ${strip.ownerPositionId}. Its ${Object.keys(strip.annotations).length} annotation(s) are archived and cleared from the working Strip — press twice.`
+          : `Turn this Strip into its return ARRIVAL leg at ${strip.ownerPositionId} — same Strip, same FDR, no duplicate`;
+        if (annotated && _pendingConvertStripId !== strip.stripId) spawnBtn.classList.add('efsp-confirm-needed');
+        spawnBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (annotated && _pendingConvertStripId !== strip.stripId) {
+            _pendingConvertStripId = strip.stripId;
+            spawnBtn.textContent = 'Convert — press again';
+            spawnBtn.classList.add('efsp-confirm-needed');
+            return;
+          }
+          _pendingConvertStripId = null;
+          convertStripToArrival(strip);
+        });
       }
       el.appendChild(spawnBtn);
+    }
+
+    // A return leg carries its departure leg's annotations, archived. Shown
+    // as a chip rather than hidden in the Mutation log, because "what did
+    // Ground tell them on the way out" is a question asked at the Strip.
+    if (strip.previousLeg && Object.keys(strip.previousLeg.annotations || {}).length > 0) {
+      const priorBadge = document.createElement('span');
+      priorBadge.className = 'efsp-coordination-badge efsp-previous-leg-badge';
+      const count = Object.keys(strip.previousLeg.annotations).length;
+      priorBadge.textContent = `${strip.previousLeg.role} ×${count}`;
+      priorBadge.title = Object.entries(strip.previousLeg.annotations)
+        .map(([blockId, cell]) => `${blockId}: ${(cell.entries || []).map(e => e.value).join(' / ')}`)
+        .join('\n');
+      el.appendChild(priorBadge);
     }
 
     // Shared-FDR indicator. A sortie that crosses a Facility boundary leaves
@@ -946,6 +977,10 @@ function _openTofiEntryPopover(strip, anchorEl, counterparts) {
 // Only the Positions that hold an airborne flight approve one into an
 // airspace — the client mirror of permission.js's AIRSPACE_ENTRY_OP_KINDS
 // grant. A range Position never appears here: it works no Strips at all.
+// The Strip awaiting a second press on Convert to Arrival. Module-level
+// rather than per-render, since a re-render rebuilds the button.
+let _pendingConvertStripId = null;
+
 const AIRSPACE_ENTRY_POSITIONS = ['APP', 'CTR'];
 
 // Blocks a controller can reach on a Strip, by role. Deliberately exported:
