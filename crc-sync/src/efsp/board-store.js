@@ -783,16 +783,20 @@ class BoardStore {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `Block ${op.blockId} is not visible for ${strip.role} at this Facility`, strip };
     }
 
-    if (target.kind === 'fdr' || target.kind === 'airspace-owner' || target.kind === 'tofi' || target.kind === 'frequency') {
+    if (target.kind === 'fdr' || target.kind === 'airspace-owner' || target.kind === 'tofi' || target.kind === 'frequency' || target.kind === 'military') {
       const fdrResult = target.kind === 'airspace-owner'
         ? this._fdrStore.setAirspaceOwner(strip.fdrId, op.value, { by })
         : target.kind === 'frequency'
           ? this._fdrStore.setWorkingFrequency(strip.fdrId, op.value === '' || op.value === undefined ? null : op.value, { by })
           : target.kind === 'tofi'
             ? this._fdrStore.setTofi(strip.fdrId, { [target.field]: op.value }, { by })
-            : target.path === 'identity.beaconAssigned'
-              ? this._fdrStore.setBeaconAssigned(strip.fdrId, op.value, { by })
-              : this._fdrStore.setField(strip.fdrId, target.path, op.value, { by });
+            // WP6 (docs/adr/0052), guide §6.4 — the military extension
+            // namespace, routed exactly like 'tofi' above.
+            : target.kind === 'military'
+              ? this._fdrStore.setMilitary(strip.fdrId, { [target.field]: op.value }, { by })
+              : target.path === 'identity.beaconAssigned'
+                ? this._fdrStore.setBeaconAssigned(strip.fdrId, op.value, { by })
+                : this._fdrStore.setField(strip.fdrId, target.path, op.value, { by });
       if (!fdrResult.ok) return { ok: false, reason: fdrResult.reason, detail: fdrResult.detail, strip };
 
       // FDR keeps its own independent rev (guide §3.1); the Strip's rev is

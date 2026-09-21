@@ -32,6 +32,17 @@
 //   - for fdr-routed Blocks: `target.path` (which FDR field) and `provenance`
 //     (the pre-edit provenance default — see strip-template.test.js's own
 //     "Block 9 defaults to COMPUTER_GENERATED" test, which this mirrors).
+//   - `interlock` (docs/adr/0051) — which Blocks §9.2's MARSA void interlock
+//     watches. Added in WP6: this test compared only the four things above,
+//     so the server could tag a Block and the client would never know, which
+//     is fine while the client's only use is a tooltip it composes itself and
+//     wrong the moment it needs to warn per-Block. The briefing listed this
+//     as a known gap; it is one line, so it is closed rather than carried.
+//   - for the `military` kind (docs/adr/0052) — `target.field`, i.e. WHICH key
+//     of fdr.military this Block writes. Same class of bug as a mismatched fdr
+//     path, and not covered by isWritableKind, which lumps every dedicated
+//     kind together as "not directly SetBlock-writable". `tofi` gets the same
+//     check for the same reason.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -64,6 +75,17 @@ function assertBlockMapParity(role, serverMap, clientMap) {
         assert.equal(s.target.path, c.target.path, `[${role}] Block ${id}: fdr path differs`);
       }
       assert.equal(s.provenance, c.provenance, `[${role}] Block ${id}: provenance default differs (server=${s.provenance}, client=${c.provenance})`);
+    }
+
+    assert.equal(s.interlock, c.interlock, `[${role}] Block ${id}: MARSA interlock tag differs (server=${s.interlock}, client=${c.interlock}) — §9.2 rule 2 keys on this`);
+
+    // The two dedicated kinds where several Blocks share one kind and `field`
+    // says which key of one sub-object each writes. A mismatch here sends the
+    // controller's edit to the wrong field of the right object, which is
+    // exactly as silent as a wrong fdr path and not caught above.
+    if (s.target.kind === 'tofi' || s.target.kind === 'military') {
+      assert.equal(s.target.kind, c.target.kind, `[${role}] Block ${id}: dedicated target kind differs (server=${s.target.kind}, client=${c.target.kind})`);
+      assert.equal(s.target.field, c.target.field, `[${role}] Block ${id}: ${s.target.kind} field differs (server=${s.target.field}, client=${c.target.field})`);
     }
   }
 }

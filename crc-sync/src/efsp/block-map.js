@@ -43,6 +43,27 @@ const DEPARTURE_BLOCK_MAP = {
   '3C': { required: false, target: { kind: 'fdr', path: 'identity.tailNumber' } },
   '3D': { required: false, target: { kind: 'fdr', path: 'identity.unit' } },
   '3E': { required: false, target: { kind: 'fdr', path: 'identity.homeStation' } },
+  // WP6 (docs/adr/0052), guide §6.4's military extension namespace. See
+  // MILITARY_BLOCK_NAMESPACE near the bottom of this file for the whole
+  // guide-M-number-to-Block-id mapping, and for why the M-prefix is not used.
+  //
+  // Both hang off Block 3 because the 3-family IS the airframe — 3A type, 3B
+  // wake, 3C tail, 3D unit, 3E home station — and a tailhook requirement and an
+  // ordnance state are both facts about the airframe and its configuration,
+  // not about the flight's intent or the clearance it has been issued.
+  //
+  // Dedicated 'military' target kind, never a generic 'fdr' path, on the
+  // setAirspaceOwner/setTofi template: 3F is a bare boolean (defect D15's own
+  // shape — "hook" alone does not say whether the aircraft HAS one or REQUIRES
+  // one, and only the second reading gates an arrival on a runway's gear being
+  // rigged) and 3G is a restricted enum. See fdr-store.js's setMilitary().
+  //
+  // Present on all three ATC Roles, not just DEPARTURE. docs/adr/0051's lesson
+  // was that a per-Role Block Map lets a rule hold on two Roles and silently
+  // not on the third; an aircraft's hook and its ordnance are facts about the
+  // airframe, so there is no Role they stop being true for.
+  '3F': { required: false, target: { kind: 'military', field: 'hookRequired' } },  // guide M15, §9.7
+  '3G': { required: false, target: { kind: 'military', field: 'ordnanceState' } }, // guide M14, §9.5
   '4':  { required: true,  target: { kind: 'system' } },
   '4A': { required: false, target: { kind: 'flag' } },
   '4B': { required: true,  target: { kind: 'fdr', path: 'assigned.datalinkClearanceIndicator' } },
@@ -203,6 +224,8 @@ const ARRIVAL_BLOCK_MAP = {
   '3C':       { required: false, target: { kind: 'fdr', path: 'identity.tailNumber' } },
   '3D':       { required: false, target: { kind: 'fdr', path: 'identity.unit' } },
   '3E':       { required: false, target: { kind: 'fdr', path: 'identity.homeStation' } },
+  '3F':       { required: false, target: { kind: 'military', field: 'hookRequired' } },  // WP6, guide M15 §9.7 — see DEPARTURE_BLOCK_MAP's '3F'/'3G' comment
+  '3G':       { required: false, target: { kind: 'military', field: 'ordnanceState' } }, // WP6, guide M14 §9.5
   '4':        { required: true,  target: { kind: 'system' } },
   '4A':       { required: false, target: { kind: 'flag' } },
   '4B':       { required: true,  target: { kind: 'fdr', path: 'assigned.datalinkClearanceIndicator' } },
@@ -263,6 +286,8 @@ const OVERFLIGHT_BLOCK_MAP = {
   '3C': { required: false, target: { kind: 'fdr', path: 'identity.tailNumber' } },
   '3D': { required: false, target: { kind: 'fdr', path: 'identity.unit' } },
   '3E': { required: false, target: { kind: 'fdr', path: 'identity.homeStation' } },
+  '3F': { required: false, target: { kind: 'military', field: 'hookRequired' } },  // WP6, guide M15 §9.7 — see DEPARTURE_BLOCK_MAP's '3F'/'3G' comment
+  '3G': { required: false, target: { kind: 'military', field: 'ordnanceState' } }, // WP6, guide M14 §9.5
   '4':  { required: true,  target: { kind: 'system' } },
   '4A': { required: false, target: { kind: 'flag' } },
   '4B': { required: true,  target: { kind: 'fdr', path: 'assigned.datalinkClearanceIndicator' } },
@@ -347,6 +372,67 @@ const MISSION_BLOCK_MAP = {
 
 const BLOCK_MAPS = { DEPARTURE: DEPARTURE_BLOCK_MAP, ARRIVAL: ARRIVAL_BLOCK_MAP, OVERFLIGHT: OVERFLIGHT_BLOCK_MAP, MISSION: MISSION_BLOCK_MAP };
 
+/**
+ * WP6 (docs/adr/0052) — the guide's §6.4 military-extension `M`-numbers, and
+ * what each one is called HERE. Written down once because this question has
+ * now come up four times (docs/adr/0026 froze M1-M8 with its own meanings,
+ * 0050 hit it for the stereo route, 0051 for the hook, and §9.4/§9.5/§9.6 all
+ * need fields), and each time it was re-derived from scratch.
+ *
+ * **The guide's M-numbers are NOT used as Block ids on the ATC Block Maps.**
+ * The `M`-prefix namespace belongs to MISSION_BLOCK_MAP, which docs/adr/0026
+ * froze with meanings that DIFFER from the guide's own §6.4 table — its M4 is
+ * the beacon where the guide's M4 is IFF Mode 1/2; its M5 is the controlling
+ * agency where the guide's M7 is. Renumbering a shipped Block Map is worse
+ * than the divergence, so M1-M8 stay exactly as they are and the guide's
+ * numbering is cited in comments rather than used as an id.
+ *
+ * The convention that replaces it is this codebase's own and has won every
+ * time it has been asked: **sub-letter the field onto its parent Block**
+ * ('3A'-'3E', '8A'/'8B', '9A'-'9F', '5A', '14A'-'14D'), and name the guide's
+ * M-number in the comment so the next reader can find the section.
+ *
+ * `blockId: null` means RESERVED, not undecided — the id is spoken for and
+ * lands with that field's own deliverable. Nothing reads this table at
+ * runtime; it is documentation that a test can assert against, which is what
+ * stops it drifting the way a comment would.
+ */
+const MILITARY_BLOCK_NAMESPACE = {
+  M9:  { field: 'military.altrvRef',    blockId: null,   guide: '§9.3 ALTRV reference — WP7/ATO, §12 present-and-unpopulated' },
+  M10: { field: 'military.mtr',         blockId: '9G-*', guide: '§9.4 MTR designator / entry fix / entry time — reserved, lands with §9.4' },
+  M11: { field: 'military.mtr',         blockId: '9H-*', guide: '§9.4 MTR exit fix / exit estimate / altitude after exit — reserved, lands with §9.4' },
+  M12: { field: 'military.arInfo',      blockId: null,   guide: '§9.2 AR track/anchor data — the MARSA RELATION is its own store (docs/adr/0051)' },
+  M13: { field: 'military.scl',         blockId: null,   guide: '§9.5 standard conventional load — ATO-owned, §12' },
+  M14: { field: 'military.ordnanceState', blockId: '3G', guide: '§9.5 ordnance state — BUILT' },
+  M15: { field: 'military.hookRequired',  blockId: '3F', guide: '§9.7 arresting-gear / hook requirement — BUILT' },
+  M16: { field: 'military.alertStatus',   blockId: null, guide: '§9.6 alert status — field present and validated; its Block is §9.6\'s own decision' },
+  M17: { field: 'military.fuelState',     blockId: null, guide: '§9.6 fuel state — §12' },
+  M18: { field: 'filed.stereoRouteName',  blockId: '9F', guide: '§9.10 stereo route — BUILT (docs/adr/0050; the guide mis-cites this as §9.9)' },
+  M19: { field: 'military.releaseAuthority', blockId: null, guide: '§9.5 weapons release authority — §12' },
+};
+
+// Why the 9G-*/9H- MTR Blocks are RESERVED rather than added here now: the
+// guide is explicit that M11's exit fix and exit estimate are "what a
+// controller asks for by voice and must post", so they want prominent
+// placement rather than a collapsed sub-field — and that placement is §9.4's
+// own design decision, made with §9.4 in hand. Adding six Blocks now would
+// mean either six more chips on every Strip or six entries on
+// efsp-ui-reachability.test.js's DELIBERATELY_NOT_IN_COMPACT_VIEW whose only
+// honest reason is "not designed yet", which is the promissory note that list
+// exists to refuse. The FIELDS are present and unpopulated per §12
+// (fdr-store.js's defaultMilitary), so the shape is settled in one pass even
+// though the surface is not.
+//
+// Nothing on MISSION_BLOCK_MAP, and that is a decision too. An ordnance state
+// and a hook requirement are facts about the airframe, and a MISSION Strip
+// shares its fdrId with the ATC Strip it is TOFI-linked to (docs/adr/0025), so
+// a write from either surface is a write to the same flight. Giving MISSION
+// its own Block for them would need an id in the very M-namespace this table
+// exists to stop reusing — and would add a second place the same aircraft's
+// ordnance can be declared from, which is docs/adr/0045's "two answers to one
+// question" in a new costume. When §9.8's mission line grows richer (WP7),
+// that is the ADR that should settle it.
+
 /** Every Strip Role this facility's Block Map data actually defines — board-store.js's CreateStrip validation calls this so an unknown role is a VALIDATION_ERROR, not a silent fallback. */
 function isValidRole(role) {
   return Object.prototype.hasOwnProperty.call(BLOCK_MAPS, role);
@@ -384,6 +470,10 @@ function resolveBlockTarget(role, blockId) {
   // reasoning as 'airspace-owner' — a frequency needs validating as a number
   // in one band, and the write is append-only.
   if (def.target.kind === 'frequency') return { kind: 'frequency' };
+  // WP6 (docs/adr/0052), guide §6.4 — routed through fdr-store.js's dedicated
+  // setMilitary(). Shares the 'tofi' shape exactly: several Blocks, one target
+  // kind, `field` carrying which key of one sub-object this Block writes.
+  if (def.target.kind === 'military') return { kind: 'military', field: def.target.field };
   return null;
 }
 
@@ -437,5 +527,5 @@ function validateFacilityConfig(config) {
 module.exports = {
   DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP, BLOCK_MAPS,
   isValidRole, requiredBlocksFor, resolveBlockTarget, validateFacilityConfig,
-  interlockFor, interlockBlocks,
+  interlockFor, interlockBlocks, MILITARY_BLOCK_NAMESPACE,
 };

@@ -362,3 +362,50 @@ test('sortie 10: a reconnecting controller still sees the relation that just voi
   assert.ok(snapshot.marsa.some(r => r.state === 'VOIDED' && r.voidedBy === 'CONTROLLER_COURSE_CHANGE'));
   assert.ok(snapshot.marsa.some(r => r.state === 'ACTIVE'));
 });
+
+// ── Sortie 11 — a pilot request that must NOT fire the interlock ────────────
+
+test('sortie 11: "SHELL71, VIPER11 has a hung store" does not void the AR', () => {
+  // The pilot-request axis (docs/adr/0050's habit), pointed at Phase 2's two
+  // new Blocks. A receiver reporting a hung store mid-join is one of the most
+  // likely things to actually happen on an AR, and the controller's response
+  // is to record it on the Strip — Block 3G, sitting in the 3-family right
+  // beside Block 20 and 21, which DO void.
+  //
+  // §9.2 rule 2 fires on "any SetBlock on assigned heading or altitude", and
+  // the interlock deliberately fires on any write to a tagged Block whether
+  // the value changed or not (docs/adr/0051). Both of those make it cheap to
+  // over-tag, and an ordnance declaration issues no instruction to anybody —
+  // voiding an AR because a pilot reported a malfunction would be the
+  // interlock doing the opposite of its job, at the worst possible moment.
+  const tanker = flight('SHELL73');
+  const rx = flight('VIPER31');
+  const relation = declareAr([tanker, rx], 'SHELL73');
+  assert.equal(relation.rendezvousAt, null, 'armed — this is the case that would void');
+
+  const hung = mustAct(efsp, c.APP, 'APP', fresh(rx), { kind: 'SetBlock', blockId: '3G', value: 'HUNG' });
+  assert.equal(efsp.fdrStore.getFdr(hung.fdrId).military.ordnanceState, 'HUNG');
+  assert.equal(efsp.marsaStore.getRelation(relation.marsaId).state, 'ACTIVE',
+    'reporting a hung store is not ATC issuing a course or an altitude');
+
+  // Same for the hook requirement, and on the tanker rather than the receiver.
+  mustAct(efsp, c.APP, 'APP', fresh(tanker), { kind: 'SetBlock', blockId: '3F', value: true });
+  assert.equal(efsp.marsaStore.getRelation(relation.marsaId).state, 'ACTIVE');
+
+  // And the interlock is still live — the relation is intact because nothing
+  // fired, not because it stopped working.
+  mustAct(efsp, c.APP, 'APP', fresh(rx), { kind: 'SetBlock', blockId: '21', value: '210' });
+  assert.equal(efsp.marsaStore.getRelation(relation.marsaId).state, 'VOIDED');
+  assert.equal(efsp.marsaStore.getRelation(relation.marsaId).voidedBy, 'CONTROLLER_ALTITUDE_CHANGE');
+});
+
+test('sortie 12: a controller cannot declare an ordnance state the panel does not offer', () => {
+  // The picker makes this unreachable from the UI; the server refuses it
+  // anyway, because a dot-command, a replayed Mutation and a second client
+  // all reach SetBlock without going through the picker.
+  const solo = flight('VIPER32');
+  const bad = act(efsp, c.APP, 'APP', solo, { kind: 'SetBlock', blockId: '3G', value: 'WINCHESTER' });
+  assert.equal(bad.ok, false);
+  assert.match(bad.detail, /invalid ordnance state/);
+  assert.equal(efsp.fdrStore.getFdr(solo.fdrId).military.ordnanceState, 'CLEAN');
+});

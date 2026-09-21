@@ -32,6 +32,17 @@ const DEPARTURE_BLOCK_MAP = {
   '3C': { required: false, label: 'TAIL',     target: { kind: 'fdr', path: 'identity.tailNumber' } },
   '3D': { required: false, label: 'UNIT',     target: { kind: 'fdr', path: 'identity.unit' } },
   '3E': { required: false, label: 'HOME',     target: { kind: 'fdr', path: 'identity.homeStation' } },
+  // WP6 (crc-sync's docs/adr/0052) — guide §6.4's military extension
+  // namespace. Mirrors crc-sync's block-map.js; see its MILITARY_BLOCK_NAMESPACE
+  // table for the whole guide-M-number-to-Block-id mapping and why the
+  // M-prefix is not reused. Both hang off Block 3 because the 3-family is the
+  // airframe, and both are on all three ATC Roles.
+  //
+  // 3F is a click-to-toggle boolean (BOOLEAN_TOGGLE_BLOCKS below) and 3G an
+  // enum <select> (ENUM_SELECT_BLOCKS) — never the generic free-text path,
+  // same as IFR and SREG.
+  '3F': { required: false, label: 'HOOK',     target: { kind: 'military', field: 'hookRequired' } },  // guide M15, §9.7
+  '3G': { required: false, label: 'ORDNANCE', target: { kind: 'military', field: 'ordnanceState' } }, // guide M14, §9.5
   '4':  { required: true,  label: 'CID',      target: { kind: 'system', field: 'cid' } },
   '4A': { required: false, label: 'RMV',      target: { kind: 'flag', flag: 'removeIndicator' } },
   '4B': { required: true,  label: 'DATALINK', target: { kind: 'fdr', path: 'assigned.datalinkClearanceIndicator' } },
@@ -85,8 +96,14 @@ const DEPARTURE_BLOCK_MAP = {
   // It matters more now than it did: crc-sync's docs/adr/0051 makes these two
   // the Blocks §9.2's MARSA interlock watches, so a controller typing into a
   // chip labelled SCRATCH could void a live AR with no idea why.
-  '20': { required: false, label: 'HDG',      target: { kind: 'annotation' } },
-  '21': { required: false, label: 'INIT ALT', target: { kind: 'annotation' } },
+  //
+  // The `interlock` tag itself is carried client-side as of WP6: it was
+  // server-only under docs/adr/0051, so crc-sync could tag a Block and the
+  // client had no way to know which Blocks §9.2 watches — fine while the only
+  // use was a tooltip the client composes for itself, wrong the moment it
+  // needs to say so per-Block. efsp-block-map-parity.test.js compares it now.
+  '20': { required: false, label: 'HDG',      target: { kind: 'annotation' }, interlock: 'COURSE' },
+  '21': { required: false, label: 'INIT ALT', target: { kind: 'annotation' }, interlock: 'ALTITUDE' },
   // The guide's own Block 22, "Frequency" — structured rather than a
   // free-text annotation since the RANGE slice, so approving a flight onto
   // an airspace's frequency can write it directly and it validates as one
@@ -125,13 +142,15 @@ const ARRIVAL_BLOCK_MAP = {
   '3C':       { required: false, label: 'TAIL',     target: { kind: 'fdr', path: 'identity.tailNumber' } },
   '3D':       { required: false, label: 'UNIT',     target: { kind: 'fdr', path: 'identity.unit' } },
   '3E':       { required: false, label: 'HOME',     target: { kind: 'fdr', path: 'identity.homeStation' } },
+  '3F':       { required: false, label: 'HOOK',     target: { kind: 'military', field: 'hookRequired' } },  // WP6, guide M15 §9.7 — see DEPARTURE_BLOCK_MAP's '3F'/'3G' comment
+  '3G':       { required: false, label: 'ORDNANCE', target: { kind: 'military', field: 'ordnanceState' } }, // WP6, guide M14 §9.5
   '4':        { required: true,  label: 'CID',      target: { kind: 'system', field: 'cid' } },
   '4A':       { required: false, label: 'RMV',      target: { kind: 'flag', flag: 'removeIndicator' } },
   '4B':       { required: true,  label: 'DATALINK', target: { kind: 'fdr', path: 'assigned.datalinkClearanceIndicator' } },
   '5':        { required: true,  label: 'SQUAWK',   target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
   '5A':       { required: false, label: 'DEGR',     target: { kind: 'fdr', path: 'identity.trackDegradationFlag' } }, // WP4A gap-closure — see DEPARTURE_BLOCK_MAP's '5A' comment
   '6':        { required: true,  label: 'ETA',      target: { kind: 'fdr', path: 'filed.estimatedArrivalTimeUtc' } },
-  '7':        { required: true,  label: 'ALT',      target: { kind: 'annotation' } },
+  '7':        { required: true,  label: 'ALT',      target: { kind: 'annotation' }, interlock: 'ALTITUDE' }, // §9.2 — see DEPARTURE_BLOCK_MAP's '20'/'21' comment
   '8':        { required: true,  label: 'ORIG',     target: { kind: 'fdr', path: 'filed.originAirport' } },
   '8A':       { required: false, label: 'FIX',      target: { kind: 'fdr', path: 'filed.arrivalFix' } },
   '8B':       { required: true,  label: 'RWY',      target: { kind: 'fdr', path: 'assigned.landingRunway' } },
@@ -139,7 +158,7 @@ const ARRIVAL_BLOCK_MAP = {
   '9A-FUEL':  { required: true,  label: 'MIN FUEL', target: { kind: 'annotation' } },
   '9A-DEST':  { required: false, label: 'DEST',     target: { kind: 'annotation' } },
   '9A-PTOUT': { required: false, label: 'PT OUT',   target: { kind: 'annotation' } },
-  '9A-VECTOR':{ required: false, label: 'VECTOR',   target: { kind: 'annotation' } },
+  '9A-VECTOR':{ required: false, label: 'VECTOR',   target: { kind: 'annotation' }, interlock: 'COURSE' }, // §9.2 — a radar vector IS a course assignment
   '9A-SPEED': { required: false, label: 'SPEED',    target: { kind: 'annotation' } },
   '9E':       { required: true,  label: 'RMKS',     target: { kind: 'fdr', path: 'filed.remarks' } },
   '20':       { required: false, label: 'SCRATCH',  target: { kind: 'annotation' } },
@@ -172,6 +191,8 @@ const OVERFLIGHT_BLOCK_MAP = {
   '3C': { required: false, label: 'TAIL',     target: { kind: 'fdr', path: 'identity.tailNumber' } },
   '3D': { required: false, label: 'UNIT',     target: { kind: 'fdr', path: 'identity.unit' } },
   '3E': { required: false, label: 'HOME',     target: { kind: 'fdr', path: 'identity.homeStation' } },
+  '3F': { required: false, label: 'HOOK',     target: { kind: 'military', field: 'hookRequired' } },  // WP6, guide M15 §9.7 — see DEPARTURE_BLOCK_MAP's '3F'/'3G' comment
+  '3G': { required: false, label: 'ORDNANCE', target: { kind: 'military', field: 'ordnanceState' } }, // WP6, guide M14 §9.5
   '4':  { required: true,  label: 'CID',      target: { kind: 'system', field: 'cid' } },
   '4A': { required: false, label: 'RMV',      target: { kind: 'flag', flag: 'removeIndicator' } },
   '4B': { required: true,  label: 'DATALINK', target: { kind: 'fdr', path: 'assigned.datalinkClearanceIndicator' } },
@@ -184,8 +205,8 @@ const OVERFLIGHT_BLOCK_MAP = {
   // like ARRIVAL's equivalents, so a transiting flight's clearance history is
   // append-only (§3.7) and confirmVacated works. See the server's copy for the
   // [SOURCE-DEFINED] note on the numbering.
-  '7A': { required: false, label: 'ASGN ALT', target: { kind: 'annotation' } },
-  '9A-VECTOR': { required: false, label: 'VECTOR', target: { kind: 'annotation' } },
+  '7A': { required: false, label: 'ASGN ALT', target: { kind: 'annotation' }, interlock: 'ALTITUDE' },
+  '9A-VECTOR': { required: false, label: 'VECTOR', target: { kind: 'annotation' }, interlock: 'COURSE' },
   '8':  { required: true,  label: 'ORIG',     target: { kind: 'fdr', path: 'filed.departureAirport' } },
   '8B': { required: true,  label: 'DEST',     target: { kind: 'fdr', path: 'filed.destinationAirport' } },
   '9':  { required: true,  label: 'RTE',      target: { kind: 'fdr', path: 'filed.route' }, provenance: 'COMPUTER_GENERATED' },
@@ -318,6 +339,15 @@ function resolveBlockValue(blockId, fdr, strip) {
   if (t.kind === 'tofi') {
     return { value: (fdr && fdr.tofi) ? fdr.tofi[t.field] : null, provenance: (fdr && fdr.provenance && fdr.provenance.tofi) || 'CONTROLLER_ENTERED' };
   }
+  // WP6 (crc-sync's docs/adr/0052), guide §6.4 — the military extension
+  // namespace, read exactly like 'tofi' above. The `fdr.military &&` guard is
+  // not defensive padding: this field was the literal `null` of a WP6 hook
+  // until 0052, and an FDR restored from a snapshot written before then can
+  // still arrive that way if it reaches a client before the server has
+  // reseeded it.
+  if (t.kind === 'military') {
+    return { value: (fdr && fdr.military) ? fdr.military[t.field] : null, provenance: (fdr && fdr.provenance && fdr.provenance.military) || 'CONTROLLER_ENTERED' };
+  }
   // The RANGE slice — Block 22, the frequency this flight has been approved
   // onto. Lives in fdr.comms for the same reason airspace ownership lives in
   // fdr.airspace: a dedicated setter, not a generic writable path.
@@ -354,6 +384,11 @@ const ENUM_SELECT_BLOCKS = {
   '24A': ['CONTROLLING_AGENCY', 'USING_AGENCY'],
   'RSVC': ['ACTIVE', 'TERMINATED'],
   'SREG': ['ATC', 'MARSA', 'USING_AGENCY', 'DUE_REGARD', 'SEE_AND_AVOID'],
+  // WP6 §9.5 (guide M14) — ordnance state. fdr-store.js's ORDNANCE_STATES is
+  // the authority; this is the picker. A static literal is right here, unlike
+  // Block 9F's route table, because these four values are the guide's own and
+  // are not runtime config.
+  '3G': ['CLEAN', 'LOADED', 'HUNG', 'EXPENDED'],
 };
 
 /** @returns {string[]|null} the option values for this Block if it's an enum-select Block, else null. */
@@ -366,7 +401,13 @@ function enumSelectOptionsFor(blockId) {
 // convention rather than a 2-option <select> — the counterpart to
 // ENUM_SELECT_BLOCKS for a restricted-VALUE-SET field that happens to have
 // exactly two values already spelled `true`/`false`, not a string enum.
-const BOOLEAN_TOGGLE_BLOCKS = new Set(['IFR']);
+// WP6 §9.7 (guide M15) — 3F, the arresting-gear/hook requirement, joins IFR
+// here for the same reason: a restricted value set that already has exactly
+// two values spelled true/false, so a 2-option <select> would be worse than
+// the ✓/blank toggle. The LABEL is what carries the D15 distinction the
+// server's dedicated setter enforces — it reads HOOK, and a ✓ means this
+// aircraft REQUIRES arresting gear, not merely that it has a tailhook.
+const BOOLEAN_TOGGLE_BLOCKS = new Set(['IFR', '3F']);
 
 /** @returns {boolean} whether this Block is edited via a click-to-toggle boolean affordance rather than free text or an enum <select>. */
 function isBooleanToggleBlock(blockId) {

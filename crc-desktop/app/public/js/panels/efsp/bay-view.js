@@ -1441,7 +1441,7 @@ const AIRSPACE_ENTRY_POSITIONS = ['APP', 'CTR'];
 function compactBlocksFor(role) {
   return role === 'MISSION'
     ? ['M3', 'M1', 'M2', 'M4', 'M5', 'M6', 'M7', 'M25']
-    : ['1', '3', '3A', '3B', '3C', '3D', '3E', '4', '5', '5A', '7', '8', '8A', '8B', '9', '9F',
+    : ['1', '3', '3A', '3B', '3C', '3D', '3E', '3F', '3G', '4', '5', '5A', '7', '8', '8A', '8B', '9', '9F',
        '14A', '14D', '22', '24A', 'IFR', 'RSVC', 'SREG', '25'];
 }
 

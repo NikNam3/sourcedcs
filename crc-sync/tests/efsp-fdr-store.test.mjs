@@ -84,14 +84,40 @@ test('createFdr derives equipmentSuffix from equipmentCodes and marks it SYSTEM_
   assert.equal(fdr.provenance['identity.equipmentSuffix'], 'SYSTEM_DERIVED');
 });
 
-test('createFdr leaves modeOne/modeTwo/beaconObserved/trackRef/military null (WP5/WP6/WP7 hooks, inert in Phase 1)', () => {
+test('createFdr leaves modeOne/modeTwo/beaconObserved/trackRef null (WP5/WP7 hooks, inert in Phase 1)', () => {
   const store = new FdrStore();
   const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
   assert.equal(fdr.identity.modeOne, null);
   assert.equal(fdr.identity.modeTwo, null);
   assert.equal(fdr.identity.beaconObserved, null);
   assert.equal(fdr.trackRef, null);
-  assert.equal(fdr.military, null);
+});
+
+// fdr.military stopped being the `null` WP6 hook this test used to assert in
+// docs/adr/0052. It is an object now, and the §12 discipline that made it
+// worth asserting moved INSIDE it: the two fields WP6 delivers are seeded to
+// their own defaults, and every field it does not deliver is still present and
+// null, which is the property this replaces the old assertion with.
+test('createFdr seeds guide §6.4\'s military namespace, with every undelivered field present and null (§12)', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  assert.equal(fdr.military.ordnanceState, 'CLEAN');   // M14, §9.5
+  assert.equal(fdr.military.hookRequired, false);      // M15, §9.7
+  assert.equal(fdr.military.alertStatus, 'NONE');      // M16, §9.6 — no Block yet
+  for (const key of ['altrvRef', 'arInfo', 'scl', 'fuelState', 'releaseAuthority']) {
+    assert.equal(fdr.military[key], null, `military.${key} must be present and null, not absent (§12)`);
+  }
+  for (const key of ['designator', 'entryFix', 'entryTimeUtc', 'exitFix', 'exitEstimateUtc', 'requestedAltitudeAfterExit']) {
+    assert.equal(fdr.military.mtr[key], null, `military.mtr.${key} must be present and null, not absent (§12)`);
+  }
+});
+
+test('two FDRs do not share one military.mtr object', () => {
+  const store = new FdrStore();
+  const { fdr: a } = store.createFdr(makeSeed(), { by: 'OPS' });
+  const { fdr: b } = store.createFdr(makeSeed({ callsign: 'MIL0002' }), { by: 'OPS' });
+  assert.notEqual(a.military, b.military);
+  assert.notEqual(a.military.mtr, b.military.mtr);
 });
 
 test('createFdr defaults flightSize to 1 and rejects non-positive-integer overrides silently falling back to 1', () => {
@@ -754,4 +780,86 @@ test('amending any OTHER filed field leaves the stereo name alone', () => {
     assert.equal(store.setField(fdr.fdrId, path, 'CHANGED', { by: 'CD' }).ok, true);
     assert.equal(store.getFdr(fdr.fdrId).filed.stereoRouteName, 'PACK 1', `after ${path}`);
   }
+});
+
+// ── WP6 (docs/adr/0052) — guide §6.4's military extension namespace ────────
+
+test('setMilitary writes the ordnance state and the hook requirement, and bumps rev', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  const before = fdr.rev;
+
+  const loaded = store.setMilitary(fdr.fdrId, { ordnanceState: 'LOADED' }, { by: 'OPS' });
+  assert.equal(loaded.ok, true);
+  assert.equal(loaded.fdr.military.ordnanceState, 'LOADED');
+  assert.equal(loaded.fdr.military.hookRequired, false, 'a partial patch leaves the other fields alone');
+  assert.equal(loaded.fdr.rev, before + 1);
+  assert.equal(loaded.fdr.provenance.military, 'CONTROLLER_ENTERED');
+
+  const hook = store.setMilitary(fdr.fdrId, { hookRequired: true }, { by: 'TWR' });
+  assert.equal(hook.fdr.military.hookRequired, true);
+  assert.equal(hook.fdr.military.ordnanceState, 'LOADED', 'and does not undo the earlier one');
+});
+
+test('setMilitary refuses a value outside either enum', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  for (const patch of [{ ordnanceState: 'ARMED' }, { alertStatus: 'READY' }]) {
+    const result = store.setMilitary(fdr.fdrId, patch, { by: 'OPS' });
+    assert.equal(result.ok, false, JSON.stringify(patch));
+    assert.equal(result.reason, 'VALIDATION_ERROR');
+  }
+  assert.equal(store.getFdr(fdr.fdrId).military.ordnanceState, 'CLEAN', 'a refusal leaves the record untouched');
+});
+
+// D15's shape: hookRequired is a bare boolean, so the one thing that must not
+// happen is a truthy STRING landing in it — "false" would read as true forever
+// after, and the field decides whether an arrival is gated on rigged gear.
+test('setMilitary refuses a non-boolean hookRequired rather than coercing it', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  for (const value of ['false', 'true', 1, 0, null]) {
+    const result = store.setMilitary(fdr.fdrId, { hookRequired: value }, { by: 'OPS' });
+    assert.equal(result.ok, false, JSON.stringify(value));
+  }
+  assert.equal(store.getFdr(fdr.fdrId).military.hookRequired, false);
+});
+
+test('setMilitary refuses a field WP6 does not deliver, rather than growing one', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  for (const key of ['mtr', 'altrvRef', 'arInfo', 'scl', 'fuelState', 'releaseAuthority', 'ordnanceStat']) {
+    const result = store.setMilitary(fdr.fdrId, { [key]: 'anything' }, { by: 'OPS' });
+    assert.equal(result.ok, false, key);
+    assert.match(result.detail, new RegExp(`military\\.${key} is not writable`));
+  }
+});
+
+test('setField cannot reach the military namespace at all — every path routes through setMilitary', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  for (const path of ['military', 'military.ordnanceState', 'military.hookRequired', 'military.alertStatus', 'military.mtr.designator']) {
+    const result = store.setField(fdr.fdrId, path, 'HUNG', { by: 'OPS' });
+    assert.equal(result.ok, false, path);
+    assert.equal(result.reason, 'VALIDATION_ERROR');
+  }
+});
+
+// The durable-snapshot case. Every board that has ever run carries FDRs whose
+// `military` is the literal null it was before docs/adr/0052, and a §9.5/§9.7
+// reader must not throw on exactly the flights that were already airborne
+// when the service restarted.
+test('restore seeds the military namespace onto an FDR written before it existed', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  const legacy = JSON.parse(JSON.stringify(store.snapshot()));
+  legacy.fdrs[0].military = null;
+
+  const restored = new FdrStore();
+  restored.restore(legacy);
+  const back = restored.getFdr(fdr.fdrId);
+  assert.equal(back.military.ordnanceState, 'CLEAN');
+  assert.equal(back.military.hookRequired, false);
+  assert.equal(back.military.mtr.designator, null);
+  assert.equal(restored.setMilitary(fdr.fdrId, { ordnanceState: 'HUNG' }, { by: 'OPS' }).ok, true);
 });

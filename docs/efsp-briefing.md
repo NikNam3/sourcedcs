@@ -4,21 +4,25 @@ Entry point for the next agent or session. Read this, then `docs/efsp-wp6-plan.m
 continuing WP6, then the part of `EFSPImplementationGuide.md` your work package names, then write a
 plan before writing code. This is a handoff, not a build order.
 
-**This revision supersedes the previous one.** The last revision recommended **WP6 proper**, and
-WP6 is now **in progress**: MARSA and its course/altitude void interlock (§9.2) are built (§3F).
-Four of WP6's eight deliverables remain — see §5. Before that the recommendation was stereo routes
-(§3E, built), and before that WP5 (§3C, built, along with a rework of the radar picture
-underneath it, §3B).
+**This revision supersedes the previous one.** WP6 is **in progress**: MARSA and its course/
+altitude void interlock (§9.2) are built (§3F), and so is §6.4's military Block namespace (§3G) —
+the pass that settled, once, what the guide's `M`-numbers are called here. Four of WP6's eight
+deliverables remain and the next one is **§9.7 field state** — see §5. Before MARSA the
+recommendation was stereo routes (§3E, built), and before that WP5 (§3C, built, along with a
+rework of the radar picture underneath it, §3B).
 
 ## 1. State of the tree
 
-Committed and green: **crc-sync 1034 tests, crc-desktop 358 tests** (`npm test` in each). ADRs run
-`0001`–`0051`.
+Committed and green: **crc-sync 1052 tests, crc-desktop 361 tests** (`npm test` in each). ADRs run
+`0001`–`0052`.
 
 **There is a written plan for the rest of WP6**, covering all five remaining deliverables plus the
-`[SOURCE-DEFINED]` audit, sequenced into phases that each land green with their own ADR. Phase 1
-(MARSA) is done. The plan carries a full design for §9.7 field state — the biggest remaining piece
-— including the seven integration decisions it needs; do not re-derive them.
+`[SOURCE-DEFINED]` audit, sequenced into phases that each land green with their own ADR. Phases 1
+(MARSA) and 2 (the Block namespace) are done, and Phase 2's own section in the plan records the one
+place it deviated. The plan carries a full design for §9.7 field state — the biggest remaining
+piece — including the seven integration decisions it needs; do not re-derive them. **§9.7's `3F`
+already exists**: Phase 2 built the hook requirement as a Block and a field, so Phase 3 owes the
+*check*, not the field.
 
 ```
 crc-sync/src/efsp/                        the subsystem — stores, rules, the wire handler
@@ -30,6 +34,7 @@ crc-sync/src/efsp/correlation-store.js    Strip<->contact records, keyed by fdrI
 crc-sync/src/efsp/correlation-match.js    the key ladder's matching rules (pure)
 crc-sync/src/efsp/correlation-reconciler.js  the 1Hz sweep + the rate metric
 crc-sync/src/efsp/marsa-store.js          the MARSA relation, and the void interlock
+crc-sync/src/efsp/block-map.js            the Block Maps, the interlock tags, MILITARY_BLOCK_NAMESPACE
 crc-desktop/app/public/js/panels/efsp/marsa-badge.js  the badge + the participant highlight
 crc-sync/src/state-paths.js               shipped defaults (config/) vs runtime state (state/)
 crc-desktop/app/public/js/panels/efsp/    the Strip panel, the airspace board, correlation-highlight
@@ -67,6 +72,8 @@ already meant shipped read-only reference data; `state-paths.js`'s header has th
 **Stereo routes** (`0050`). See §3E.
 
 **MARSA, and the course/altitude void interlock** (`0051`). See §3F.
+
+**The military Block namespace** (`0052`). See §3G.
 
 **Hardening driven by end-to-end sorties** (`0027`–`0033`, `0039`–`0041`, `0049`). See §3D.
 
@@ -198,6 +205,9 @@ every one in machinery that already existed and looked finished:
 | **OVERFLIGHT had no Block meaning "ATC assigned this course/altitude"** — so §9.2's interlock was silently unreachable on one of the three ATC Roles, and its acceptance criterion would have passed anyway | `0051` |
 | **DEPARTURE's Blocks 20 and 21 were labelled `SCRATCH`** since Phase 1 — they are the guide §6.2's own "Heading" and "Initial altitude"; ARRIVAL/OVERFLIGHT's meaning had been copied onto DEPARTURE. `CONFIRM_VACATED_ELIGIBLE_BLOCKS` has listed DEPARTURE's `21` all along, which only makes sense for an altitude | `0051` |
 | `.efsp-coordinate-submit` has had no CSS rule since WP5, so the bind picker's candidate rows render as default browser buttons inside a dark popover | `0051` |
+| **`efsp-block-map-parity.test.js` did not compare `interlock`** — adding the assertion failed immediately: the client had never carried the tag `0051` introduced, so the server could mark a Block and the panel could not know | `0052` |
+| …and it did not compare `target.field` either, so a `tofi`/`military` Block could route to the wrong key of the right object on one side only | `0052` |
+| **`efsp-ui-reachability.test.js` did not count a boolean-toggle Block as writable**, so the one test whose job is noticing an unreachable Block was blind to a whole class of them — harmless only because `IFR` was the sole example and happened to be in the compact view | `0052` |
 
 **`0041` is still the one to read if you read only one**, and `0043` is the second. Both are the same
 lesson from different directions: a shape that is correct the day it is written and wrong afterwards.
@@ -280,17 +290,62 @@ Five things to know before extending it:
 Unlike a correlation record, **a relation survives a restart intact** — a persisted track id is a
 lie after a restart, and a recorded verbal declaration is not.
 
+## 3G. The military Block namespace — settled once, on purpose
+
+`fdr.military` was the literal `null` of a `// WP6 hook` comment. `0052` turns it into an object in
+one pass, so §9.5, §9.6, §9.7 and §9.4 add **behaviour** rather than each adding schema and each
+answering the same three questions differently.
+
+The part worth not re-deriving is the naming, which had been asked and answered four separate
+times (`0026`'s frozen `M1`–`M8`, `0050`'s `9F`, `0051`'s `3F`, and three more deliverables
+waiting):
+
+- **The guide's §6.4 `M`-numbers are never Block ids on an ATC Block Map.** The `M`-prefix belongs
+  to `MISSION_BLOCK_MAP`, which `0026` froze with *different* meanings — its `M4` is the beacon,
+  the guide's `M4` is IFF Mode 1/2. A test holds every ATC Role to using no `M`-prefixed id at all.
+- **Sub-letter the field onto its parent Block**, and cite the guide's number in the comment. That
+  is what `3A`–`3E`, `8A`/`8B`, `9A`–`9F`, `5A` and `14A`–`14D` already do. So: `3G` ordnance
+  (`M14`) and `3F` hook (`M15`), both in the 3-family because **the 3-family is the airframe**.
+- **The mapping lives in code**, as `MILITARY_BLOCK_NAMESPACE` in `block-map.js`, asserted against
+  the Block Maps *and* against `setMilitary`'s allow-list. A comment drifts; this fails a test.
+
+Four things to know before extending it:
+
+- **Both new Blocks are on all three ATC Roles, and neither is on MISSION.** `0051`'s lesson
+  applied rather than remembered. MISSION is left out deliberately: it shares its `fdrId` with the
+  ATC Strip it is TOFI-linked to, so a Block there would be a *second place* to declare one
+  aircraft's ordnance — `0045`'s "two answers to one question" again.
+- **`hookRequired` is a bare boolean and that is exactly why it has a dedicated setter.** "Hook"
+  alone does not say *has one* or *requires one*, and only the second gates an arrival on rigged
+  gear. `setMilitary()` is `setTofi`'s shape, structurally excluded from `WRITABLE_PATHS`; it
+  **refuses an unknown key rather than merging it**, because §12's deferred fields sit in the same
+  object and "not writable yet" has to fail loudly.
+- **The deferred half is present, unpopulated, and has no write path at all** — `mtr`, `altrvRef`,
+  `arInfo`, `scl`, `fuelState`, `releaseAuthority`. `alertStatus` is the one middle case: enum
+  settled and validated, no Block, because picking its parent is §9.6's call. The `9G-*`/`9H-*` MTR
+  ids are *reserved*, for the same reason — §9.4 says `M11`'s two items want prominent placement,
+  so §9.4 places them.
+- **`restore()` seeds the namespace onto an FDR that predates it.** Every board that has ever run
+  has `military: null` on disk; without the seed a §9.5 reader throws on exactly the flights that
+  were airborne when the service restarted. The client guards the same case, because nothing
+  reseeds an FDR already in a connected client's cache.
+
+**`3G` accepts `HUNG` and nothing acts on it yet, and `alertStatus` is unreachable from the UI.**
+Both are visible half-features rather than silent ones, and both are the next deliverables' work.
+
+
 ## 4. What's left
 
 **Not started, in the guide's own order (§16):**
 
 - **WP6 — the military layer, in progress.** Entry is WP4. **Four** of its eight deliverables are
-  built: §9.11's airspace activation authority (`0036`), §6.4's first military extension Blocks
-  (`0026`), §9.10's stereo routes (`0050`, §3E) and §9.2's MARSA interlock (`0051`, §3F). The four
-  left are field state with arresting-gear gating and the runway-change workflow (§9.7),
-  alert/scramble constraints (§9.6), ordnance state (§9.5) and MTR fields (§9.4) — see §5. Two of
-  §13's five WP6 acceptance criteria are met; §9.7 carries two more and the `[SOURCE-DEFINED]`
-  audit is the fifth.
+  built: §9.11's airspace activation authority (`0036`), §6.4's military extension Blocks (`0026`
+  and now `0052`, §3G), §9.10's stereo routes (`0050`, §3E) and §9.2's MARSA interlock (`0051`,
+  §3F). The four left are field state with arresting-gear gating and the runway-change workflow
+  (§9.7), alert/scramble constraints (§9.6), ordnance state (§9.5) and MTR fields (§9.4) — see §5.
+  Two of §13's five WP6 acceptance criteria are met; §9.7 carries two more and the
+  `[SOURCE-DEFINED]` audit is the fifth. **§9.5, §9.6 and §9.4 now owe behaviour, not schema** —
+  `0052` turned the namespace on in one pass so they would not each have to.
 - **WP7 / WP7A / WP8** — ATO ingest, the carrier, instrumentation. D-4 puts ATO ingest off the
   critical path for anything in the tower chain.
 
@@ -339,13 +394,10 @@ lie after a restart, and a recorded verbal declaration is not.
 - **`crc-desktop/tests/` has no `helpers/`**, so `efsp-stereo-panel.test.js` carries a trimmed copy
   of `efsp-ui-reachability.test.js`'s `makeElement` DOM stub. Two copies is the point at which
   lifting it out is worth doing; the third should not be written.
-- **`efsp-block-map-parity.test.js` does not compare `interlock`** (`0051`). It checks existence,
-  `required`, writable-kind, `path` and `provenance` only, so the server can tag a Block and the
-  client will not know. Fine while the client's only use is a tooltip it composes itself; wrong the
-  moment it needs to warn per-Block.
-- **The MARSA participant highlight and the badge's placement are unverified by eye** (`0051`). The
-  reachability tests render the real `bay-view.js` against a DOM stub and prove the wiring; the
-  Strip now carries seven badge/indicator slots and nobody has looked at one with all of them lit.
+- **The Strip's layout is unverified by eye** (`0051`, `0052`). The reachability tests render the
+  real `bay-view.js` against a DOM stub and prove the wiring, not the pixels. The Strip carries
+  seven badge/indicator slots plus two more Block chips now (`HOOK`, `ORDNANCE`), and nobody has
+  looked at one with all of them lit.
 
 ## 5. Where to start
 
@@ -364,11 +416,16 @@ Two hooks for it already exist and should be used, not replaced: the `ops-field-
 layout. And `nla.js` already carries the exact placeholder comments where rules 1's inhibits belong
 — they say *"§9.7 is WP6 territory — never triggers here"*, and this is where that stops being true.
 
-**Before §9.7, one cheap thing: the `M`-namespace question needs settling once.** It has now come up
-three times (`0026`'s frozen `M1`–`M8`, `0050`'s `9F`, `0051`'s `3F` decision) and §9.5/§9.6/§9.4
-all need new Blocks. The convention that has won each time is **sub-letter the field onto its parent
-Block** and cite the guide's `M`-number in the comment. Write the whole mapping down in one ADR
-before adding the first of them.
+**Its `M15` half is already done.** `0052` built Block `3F` (`HOOK`) and `fdr.military.hookRequired`
+with the rest of the namespace, so §9.7 owes the *check* — `gearMismatchFor(fdr, runway)`, derived
+rather than stored — and not the field. §3G has the shape; the plan's rule-4 paragraph has the
+reasoning for computing rather than storing it, which is the part worth reading first.
+
+**The `M`-namespace question is settled** (`0052`, §3G) and should not be re-opened: the guide's
+`M`-numbers are never Block ids outside `MISSION_BLOCK_MAP`, fields sub-letter onto their parent
+Block, and `MILITARY_BLOCK_NAMESPACE` holds the mapping in code with a test behind it. §9.6 and
+§9.4 each have exactly one id left to choose — `alertStatus`'s parent, and the real `9G-*`/`9H-*`
+spellings — and both go in that table.
 
 The **`[SOURCE-DEFINED]` audit is a WP6 acceptance criterion in its own right** — *"No UI text or
 code comment presents a `[SOURCE-DEFINED]` behaviour as real-world doctrine. Audit this

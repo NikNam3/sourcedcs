@@ -57,6 +57,12 @@ const AIRSPACE_OWNERS = new Set(['CONTROLLING_AGENCY', 'USING_AGENCY']);
 // never the generic setField() path, exactly like AIRSPACE_OWNERS above.
 const RADAR_SERVICE_STATES = new Set(['ACTIVE', 'TERMINATED']);
 const SEPARATION_REGIMES = new Set(['ATC', 'MARSA', 'USING_AGENCY', 'DUE_REGARD', 'SEE_AND_AVOID']);
+// WP6 (docs/adr/0052), guide §6.4's military extension namespace. Both are
+// restricted enums routed through setMilitary() below, never the generic
+// setField() path — the same structural exclusion AIRSPACE_OWNERS and
+// SEPARATION_REGIMES get, and for the same reason.
+const ORDNANCE_STATES = new Set(['CLEAN', 'LOADED', 'HUNG', 'EXPENDED']); // §9.5 (M14)
+const ALERT_STATUSES = new Set(['NONE', 'ALERT', 'SCRAMBLE']);            // §9.6 (M16)
 
 const CALLSIGN_RE = /^[A-Za-z0-9]{1,7}$/; // §3.2 rule 1 — MUST NOT exceed 7 alphanumeric characters
 
@@ -74,8 +80,10 @@ const MAX_FREE_TEXT = 2000;
 // identity.modeOne/modeTwo (no setter anywhere — guards defect D24 by
 // construction, not validation), identity.beaconObserved (WP5 — written only
 // by setBeaconObserved, whose provenance is UPSTREAM_TRACK rather than a
-// controller), trackRef (permanently null, see its own comment) and military
-// (a WP6 hook, still always null), and all structural/system fields
+// controller), trackRef (permanently null, see its own comment), every path
+// under military (guide §6.4's extension namespace — an object since
+// docs/adr/0052, whose two written fields route through setMilitary() and
+// whose rest is §12's present-and-unpopulated), and all structural/system fields
 // (fdrId, rev, provenance, createdAt/updatedAt/updatedBy). identity.
 // beaconAssigned is listed here but routed through a dedicated method
 // (setBeaconAssigned) rather than the generic path, since it needs
@@ -155,6 +163,84 @@ function setPath(obj, path, value) {
 function deriveEquipmentSuffix(equipmentCodes) {
   if (!Array.isArray(equipmentCodes) || equipmentCodes.length === 0) return '';
   return [...equipmentCodes].map(String).sort().join('');
+}
+
+/**
+ * WP6 (docs/adr/0052) — guide §6.4's military extension namespace, turned on
+ * ONCE so the §9.5/§9.6/§9.7/§9.4 deliverables that follow add behaviour
+ * rather than schema. It was `null` with a `// WP6 hook` comment until now.
+ *
+ * Three groups, and the difference between them is the whole point of doing
+ * this in one pass:
+ *
+ *  - WRITTEN, with a Block and a setter: `ordnanceState` (§9.5, guide M14,
+ *    Block 3G), `hookRequired` (§9.7, guide M15, Block 3F). Both go through
+ *    setMilitary(), never setField().
+ *  - PRESENT, enum settled, NO Block yet: `alertStatus` (§9.6, guide M16).
+ *    The guide publishes the values; it publishes no parent Block to hang it
+ *    on, and picking one is a §9.6 decision that wants §9.6 in hand. The
+ *    setter validates it so the enum lives in exactly one place.
+ *  - PRESENT AND UNPOPULATED per §12, no setter and no Block at all, exactly
+ *    like identity.modeOne/modeTwo already are: the `mtr` sub-object (§9.4,
+ *    guide M10/M11 — the 9G- and 9H- Block ids are RESERVED for it, see
+ *    block-map.js), `altrvRef` (M9), `arInfo` (M12), `scl` (M13),
+ *    `fuelState` (M17) and `releaseAuthority` (M19). WP6 does not deliver
+ *    these; §12's rule is that a deferral leaves its fields in place rather
+ *    than absent, and that is all this is.
+ *
+ * A function rather than a frozen literal because every FDR needs its own
+ * `mtr` object — sharing one would make two flights' MTR entries the same
+ * entry, which is the kind of bug that only shows up with two aircraft.
+ */
+function defaultMilitary() {
+  return {
+    ordnanceState: 'CLEAN',   // §9.5 / M14 — Block 3G
+    hookRequired: false,      // §9.7 / M15 — Block 3F
+    alertStatus: 'NONE',      // §9.6 / M16 — no Block yet, see above
+    // §9.4 / M10 + M11 — reserved as Blocks 9G-*/9H-*, unwritable until §9.4
+    // lands (the guide is explicit that M11's exit fix and exit estimate are
+    // what a controller asks for BY VOICE and must post, so their placement
+    // is that deliverable's design decision, not this one's).
+    mtr: {
+      designator: null,
+      entryFix: null,
+      entryTimeUtc: null,
+      exitFix: null,
+      exitEstimateUtc: null,
+      requestedAltitudeAfterExit: null,
+    },
+    altrvRef: null,         // M9  — ALTRV, WP7/ATO territory
+    arInfo: null,           // M12 — air-refuelling info; the MARSA RELATION is
+                            //       docs/adr/0051's own store, this is the ATO
+                            //       track/anchor data that would describe it
+    scl: null,              // M13 — standard conventional load, ATO-owned
+    fuelState: null,        // M17
+    releaseAuthority: null, // M19
+  };
+}
+
+// The subset of fdr.military setMilitary() will write. Everything else in
+// defaultMilitary() is §12's present-and-unpopulated and is refused, by name,
+// rather than merged — see setMilitary()'s own comment.
+const MILITARY_WRITABLE_FIELDS = new Set(['ordnanceState', 'hookRequired', 'alertStatus']);
+
+/**
+ * Returns this FDR's military namespace, seeding it first if the record
+ * predates it.
+ *
+ * FDRs are durable (docs/adr/0002) and restore() reinstates whole objects off
+ * disk, so every board that has ever run carries FDRs whose `military` is the
+ * literal `null` this field was until docs/adr/0052. §12's "present and
+ * unpopulated rather than absent" is a promise about the SHAPE a reader sees,
+ * and a restored snapshot is a reader — without this, a §9.5 advisory reading
+ * `fdr.military.ordnanceState` throws on exactly the flights that were already
+ * airborne when the service restarted, which is the worst possible set.
+ *
+ * Seeds in place and returns the object, so callers can treat it as present.
+ */
+function ensureMilitary(fdr) {
+  if (!fdr.military) fdr.military = defaultMilitary();
+  return fdr.military;
 }
 
 class FdrStore {
@@ -308,7 +394,11 @@ class FdrStore {
         takeoffTimeUtc: null,
         landingRunway: null,            // ARRIVAL-role field, Phase 2
       },
-      military: null,  // WP6 hook
+      // WP6 (docs/adr/0052), guide §6.4 — the military extension namespace.
+      // `ordnanceState`/`hookRequired` are written via setMilitary() only,
+      // never the generic setField() path; everything else here is §12's
+      // present-and-unpopulated. See defaultMilitary() for the three groups.
+      military: defaultMilitary(),
       // Permanently null, and kept present per §12's rule that a deferral
       // leaves its fields in place. Guide §3.1 types it `TrackRef?`, but §6.6
       // rule 2 then forbids the only thing it could usefully hold: "do not
@@ -645,6 +735,62 @@ class FdrStore {
   }
 
   /**
+   * WP6 (docs/adr/0052), guide §6.4 — writes the military extension
+   * namespace's two controller-settable fields, `ordnanceState` (§9.5, M14)
+   * and `hookRequired` (§9.7, M15), plus `alertStatus` (§9.6, M16) once §9.6
+   * gives it a Block.
+   *
+   * One setter accepting a partial patch, not three, and structurally
+   * excluded from WRITABLE_PATHS — setTofi()'s exact shape and for its exact
+   * reasons. Both enums here are restricted value sets, and `hookRequired` is
+   * a bare boolean, which is the defect-D15 shape the generic path must never
+   * be able to reach: "hook" alone does not say whether it means the aircraft
+   * HAS one or REQUIRES one, and the answer decides whether an arrival is
+   * gated on a runway's gear being rigged (§9.7 rule 4). Routing it through a
+   * named method makes the reading structural rather than a convention in a
+   * comment.
+   *
+   * An unknown key is REFUSED rather than merged. `patch` arrives from a
+   * Block Map `field` on the wire, so a typo'd or invented field name would
+   * otherwise silently grow fdr.military a member nothing reads — and §12's
+   * deferred fields (mtr, altrvRef, arInfo, scl, fuelState, releaseAuthority)
+   * sit right beside these, so "not writable yet" has to fail loudly rather
+   * than become writable by accident.
+   *
+   * @param {{ordnanceState?:string, hookRequired?:boolean, alertStatus?:string}} patch
+   * @returns {{ok:true, fdr}|{ok:false, reason:'NOT_FOUND'|'VALIDATION_ERROR', detail?}}
+   */
+  setMilitary(fdrId, patch, { by } = {}) {
+    const fdr = this._fdrs.get(fdrId);
+    if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
+
+    for (const key of Object.keys(patch || {})) {
+      if (!MILITARY_WRITABLE_FIELDS.has(key)) {
+        return { ok: false, reason: 'VALIDATION_ERROR', detail: `military.${key} is not writable` };
+      }
+    }
+    if (patch.ordnanceState !== undefined && !ORDNANCE_STATES.has(patch.ordnanceState)) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `invalid ordnance state: ${JSON.stringify(patch.ordnanceState)}` };
+    }
+    if (patch.alertStatus !== undefined && !ALERT_STATUSES.has(patch.alertStatus)) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `invalid alert status: ${JSON.stringify(patch.alertStatus)}` };
+    }
+    if (patch.hookRequired !== undefined && typeof patch.hookRequired !== 'boolean') {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `hookRequired must be true or false, not ${JSON.stringify(patch.hookRequired)}` };
+    }
+
+    fdr.military = { ...ensureMilitary(fdr), ...patch };
+    // One provenance key for the whole sub-object, as `tofi` already does —
+    // these are filled in incrementally from separate Block edits and every
+    // one of them is controller-entered.
+    fdr.provenance['military'] = 'CONTROLLER_ENTERED';
+    fdr.rev += 1;
+    fdr.updatedAt = Date.now();
+    fdr.updatedBy = by || null;
+    return { ok: true, fdr };
+  }
+
+  /**
    * Approves this flight onto a frequency, optionally tied to the airspace it
    * is working in (guide Block 22). Append-only, like airspace ownership: a
    * sortie that changes frequency three times has to be able to show all
@@ -717,7 +863,14 @@ class FdrStore {
     return { fdrs: this.getAll(), codes: this._codeAllocator.snapshot() };
   }
   restore(data) {
-    this._fdrs = new Map((data?.fdrs || []).map(f => [f.fdrId, f]));
+    this._fdrs = new Map((data?.fdrs || []).map((f) => {
+      // Every FDR written before docs/adr/0052 has `military: null` on disk.
+      // Seeding on the way in (rather than on every read) means one place
+      // knows about the old shape and nothing downstream has to — see
+      // ensureMilitary() for why a null here is worse than it looks.
+      ensureMilitary(f);
+      return [f.fdrId, f];
+    }));
     this._codeAllocator.restore(data?.codes);
   }
 }
@@ -726,4 +879,5 @@ module.exports = {
   FdrStore, deriveEquipmentSuffix, WRITABLE_PATHS, RELEASE_STATES, VOID_DEADLINE_MINUTES,
   EDCT_WINDOW_MINUTES, CALL_FOR_RELEASE_BEFORE_MINUTES, CALL_FOR_RELEASE_AFTER_MINUTES,
   TRACK_DEGRADATION_FLAGS, AIRSPACE_OWNERS, RADAR_SERVICE_STATES, SEPARATION_REGIMES, MAX_FREE_TEXT,
+  ORDNANCE_STATES, ALERT_STATUSES, MILITARY_WRITABLE_FIELDS, defaultMilitary,
 };

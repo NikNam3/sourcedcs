@@ -24,7 +24,7 @@ const vm = require('vm');
 const path = require('path');
 
 const CLIENT = path.join(__dirname, '../app/public/js/panels/efsp');
-const { BLOCK_MAPS, isBlockEditable, enumSelectOptionsFor } = require(path.join(CLIENT, 'strip-template.js'));
+const { BLOCK_MAPS, isBlockEditable, enumSelectOptionsFor, isBooleanToggleBlock } = require(path.join(CLIENT, 'strip-template.js'));
 
 // ── 1. reachability ──────────────────────────────────────────────────────
 
@@ -86,7 +86,13 @@ for (const role of Object.keys(BLOCK_MAPS)) {
   test(`every writable ${role} Block is reachable from the Strip, or explicitly listed as not`, () => {
     const compact = compactBlocksFor(role);
     const unreachable = Object.keys(BLOCK_MAPS[role]).filter((blockId) => {
-      const writable = isBlockEditable(blockId, role) || enumSelectOptionsFor(blockId);
+      // isBooleanToggleBlock was missing from this disjunction until WP6, so a
+      // click-to-toggle Block was invisible to the one test whose whole job is
+      // noticing an unreachable Block. It cost nothing while IFR was the only
+      // one and IFR happened to be in the compact view; 3F (the hook
+      // requirement, §9.7) is the second, and the next one will not be noticed
+      // by luck.
+      const writable = isBlockEditable(blockId, role) || enumSelectOptionsFor(blockId) || isBooleanToggleBlock(blockId);
       if (!writable) return false;
       return !compact.includes(blockId) && !DELIBERATELY_NOT_IN_COMPACT_VIEW[blockId];
     });
@@ -201,7 +207,15 @@ const FDR = {
   fdrId: 'f1', rev: 1, provenance: {},
   identity: { callsign: 'VIPER1', beaconAssigned: '0001', trackDegradationFlag: 'NONE' },
   filed: {}, assigned: {}, tofi: { ifrActive: true }, airspace: {}, comms: {},
+  // WP6, guide §6.4 (crc-sync's docs/adr/0052) — seeded the way createFdr
+  // seeds it, not left off, so the Strip renders what a real one would.
+  military: { ordnanceState: 'CLEAN', hookRequired: false, alertStatus: 'NONE', mtr: {} },
 };
+
+/** The rendered cell for one Block, by its data-block attribute. */
+function blockCell(el, blockId) {
+  return descendants(el).find(c => c.dataset && c.dataset.block === blockId);
+}
 
 function stripAt(overrides) {
   return {
@@ -702,4 +716,54 @@ test('an ENDED relation leaves no badge and offers a fresh declaration', () => {
   });
   assert.equal(findByText(el, 'MARSA ⚠'), undefined);
   assert.ok(findByText(el, 'MARSA…'), 'ready to declare a new one');
+});
+
+// ── the military extension namespace (crc-sync's docs/adr/0052) ───────────
+//
+// The server half is proved by efsp-scenario-military.test.mjs. This is the
+// other half of the habit that keeps catching things: a green sortie says the
+// server does the right thing and nothing about whether a controller can ask
+// for it.
+
+test('ordnance state is a picker on the Strip, and sends the Block the server routes', () => {
+  const { el, sent } = renderStrip({ strip: stripAt(), fdr: FDR, held: ['APP'] });
+
+  const cell = blockCell(el, '3G');
+  assert.ok(cell, 'Block 3G (ordnance state) is not rendered on the Strip at all');
+  click(cell);
+
+  const select = descendants(el).find(c => c.tagName === 'select');
+  assert.ok(select, '3G opened no picker — free text would let a controller type an invalid state');
+  assert.deepEqual(select.children.map(o => o.value), ['', 'CLEAN', 'LOADED', 'HUNG', 'EXPENDED']);
+
+  select.value = 'HUNG';
+  for (const fn of select._listeners.change || []) fn({ stopPropagation() {} });
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].op.kind, 'SetBlock');
+  assert.equal(sent[0].op.blockId, '3G');
+  assert.equal(sent[0].op.value, 'HUNG');
+});
+
+test('the hook requirement toggles, and a blank cell sends true rather than clearing', () => {
+  const { el, sent } = renderStrip({ strip: stripAt(), fdr: FDR, held: ['APP'] });
+
+  const cell = blockCell(el, '3F');
+  assert.ok(cell, 'Block 3F (hook requirement) is not rendered on the Strip at all');
+  assert.equal(cell.textContent, '', 'hookRequired:false renders blank, like every other boolean Block');
+  click(cell);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].op.kind, 'SetBlock');
+  assert.equal(sent[0].op.blockId, '3F');
+  assert.equal(sent[0].op.value, true, 'a blank hook cell must SET the requirement, not clear it');
+});
+
+test('an FDR from before the military namespace existed still renders its Strip', () => {
+  // Nothing reseeds an FDR already in a connected client's cache, so a Strip
+  // can legitimately arrive with `military: null` — the literal value this
+  // field held until docs/adr/0052. Rendering must degrade to a blank cell,
+  // not throw and take the whole Bay down with it.
+  const legacy = { ...FDR, military: null };
+  const { el } = renderStrip({ strip: stripAt(), fdr: legacy, held: ['APP'] });
+  assert.equal(blockCell(el, '3G').textContent, '');
+  assert.equal(blockCell(el, '3F').textContent, '');
 });

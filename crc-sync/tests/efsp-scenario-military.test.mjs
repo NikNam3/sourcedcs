@@ -178,3 +178,58 @@ test('SCENARIO a controller holding both CTR and TAC_C2 still cannot hand off a 
   // JTAC is read-only by having no grant at all, rather than by a flag.
   assert.equal(act(efsp, c.JTAC, 'JTAC', mission, { kind: 'SetState', toState: 'AIRBORNE' }).ok, false);
 });
+
+// ── 22. the military extension namespace, end to end (docs/adr/0052) ──────
+
+test('SCENARIO a loaded flight declares a hung store and a hook requirement, on every ATC Role', () => {
+  const efsp = createEfsp();
+  const c = crew(efsp, ALL);
+
+  // The whole reason this reaches for the real wiring rather than a rules
+  // fixture: the 'military' target kind has to survive block-map.js ->
+  // board-store.js -> fdr-store.js's dedicated setter. Every hop is somewhere
+  // a new target kind has been forgotten before.
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'HUNG11' });
+
+  const loaded = mustAct(efsp, c.APP, 'APP', strip, { kind: 'SetBlock', blockId: '3G', value: 'LOADED' });
+  assert.equal(efsp.fdrStore.getFdr(loaded.fdrId).military.ordnanceState, 'LOADED');
+
+  const hooked = mustAct(efsp, c.APP, 'APP', loaded, { kind: 'SetBlock', blockId: '3F', value: true });
+  const fdr = efsp.fdrStore.getFdr(hooked.fdrId);
+  assert.equal(fdr.military.hookRequired, true);
+  assert.equal(fdr.military.ordnanceState, 'LOADED', 'one Block\'s write does not clear the other\'s');
+  assert.equal(fdr.provenance.military, 'CONTROLLER_ENTERED');
+
+  // The bad value is refused with a reason, not silently coerced or stored.
+  const bogus = act(efsp, c.APP, 'APP', hooked, { kind: 'SetBlock', blockId: '3G', value: 'ARMED' });
+  assert.equal(bogus.ok, false);
+  assert.match(bogus.detail, /invalid ordnance state/);
+  assert.equal(efsp.fdrStore.getFdr(hooked.fdrId).military.ordnanceState, 'LOADED');
+
+  // And the same Blocks work on an ARRIVAL, which is the Role that will
+  // actually care (§9.7's gear check is on landing). docs/adr/0051's lesson:
+  // check every Role, because the test that passes is not the one that matters.
+  const arrival = mustAct(efsp, c.APP, 'APP', hooked, { kind: 'ConvertToArrival' });
+  assert.equal(arrival.role, 'ARRIVAL');
+  const expended = mustAct(efsp, c.APP, 'APP', arrival, { kind: 'SetBlock', blockId: '3G', value: 'EXPENDED' });
+  assert.equal(efsp.fdrStore.getFdr(expended.fdrId).military.ordnanceState, 'EXPENDED');
+  assert.equal(efsp.fdrStore.getFdr(expended.fdrId).military.hookRequired, true,
+    'a Role change is not a reason for the airframe to stop needing a hook');
+});
+
+test('the deferred half of the military namespace has no write path at all (§12)', () => {
+  const efsp = createEfsp();
+  const c = crew(efsp, ALL);
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'DEFER1' });
+
+  // No Block routes to any of these, so SetBlock cannot reach them — which is
+  // what "present and unpopulated" has to mean in practice, not just at seed
+  // time. The 9G/9H ids are RESERVED for §9.4 and must not resolve yet.
+  for (const blockId of ['9G', '9G-MTR', '9H', '9H-ALT', 'M16']) {
+    const result = act(efsp, c.APP, 'APP', strip, { kind: 'SetBlock', blockId, value: 'X' });
+    assert.equal(result.ok, false, blockId);
+  }
+  const fdr = efsp.fdrStore.getFdr(strip.fdrId);
+  assert.equal(fdr.military.alertStatus, 'NONE');
+  assert.equal(fdr.military.mtr.designator, null);
+});

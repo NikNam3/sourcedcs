@@ -2,7 +2,10 @@
 
 > Companion to `docs/efsp-briefing.md`, which is the entry point. This is the
 > sequenced plan for WP6's remaining deliverables. **Phase 1 (MARSA) is done** —
-> see `docs/adr/0051`. Phase 3's design is the part worth not re-deriving.
+> see `docs/adr/0051`. **Phase 2 (the Block namespace) is done** — see
+> `docs/adr/0052`, and the note at the end of Phase 2 for the one place it
+> deviates from what is written below. Phase 3's design is the part worth not
+> re-deriving.
 
 ## Context
 
@@ -245,6 +248,27 @@ currently compares only existence / `required` / writable-kind / `path` / `prove
 Phase 1's new metadata is invisible to it — which is fine until the client needs to know, and
 wrong the moment it does.
 
+### What Phase 2 actually did, and the one deviation (`docs/adr/0052`)
+
+Built as written above, with one exception: **the `9G-*`/`9H-*` MTR Blocks are reserved, not
+added.** The mapping is settled and recorded in code (`MILITARY_BLOCK_NAMESPACE` in
+`block-map.js`, asserted against the Block Maps and against `setMilitary`'s allow-list), and
+`fdr.military.mtr`'s six fields are seeded per §12 — but the Blocks themselves land with Phase 6,
+because §9.4 is explicit that `M11`'s exit fix and exit estimate want *prominent placement*, and
+that is Phase 6's design call. Adding them now would have meant six more chips on every Strip or
+six `DELIBERATELY_NOT_IN_COMPACT_VIEW` entries whose only honest reason was "not designed yet".
+So **Phase 6 adds `WRITABLE_PATHS` entries and Blocks together**; everything else about the shape
+of `fdr.military` is settled and should not be re-opened.
+
+`M16` (alert status) went the same way and for the reason this plan already gave: the field is
+seeded and `setMilitary` validates the enum, and **Phase 5 picks its Block id** with §9.6 in hand.
+
+Two extras, both one line and both listed in the briefing as known gaps, so they were closed here
+rather than carried: the parity test now compares `interlock` (which **immediately failed** — the
+client had never carried the tag at all) and `target.field` for the `tofi`/`military` kinds, and
+`efsp-ui-reachability.test.js` now counts a boolean-toggle Block as writable (it did not, so `3F`
+would have been invisible to the one test whose job is noticing exactly that).
+
 ---
 
 ## Phase 3 — field state and arresting gear (§9.7)
@@ -326,12 +350,14 @@ writes the MutationLog. Session binding uses `_handleMutation`'s per-Facility ch
 correlation's "Primary somewhere": a field has exactly one Facility, and OPS at INCIRLIK must not
 suspend a runway elsewhere.
 
-**Rule 4: `3F`, not `M15`, and computed rather than stored.** `block-map.js`'s `9F` comment already
-resolved this collision once and states the rule — the `M`-prefix namespace belongs to
-`MISSION_BLOCK_MAP`, which `0026` froze with conflicting meanings. `3F` because the 3-family *is*
-the airframe (3A type, 3B wake, 3C tail, 3D unit, 3E home station) and a hook requirement is a fact
-about the airframe. **This supersedes Phase 2's "M9 and above follow the guide's numbering"
-below — see the note there.** The mismatch itself is a pure `gearMismatchFor(fdr, runway)`
+**Rule 4: `3F`, not `M15`, and computed rather than stored.** `3F` **already exists** — Phase 2
+built it (`docs/adr/0052`) on exactly this reasoning: the `M`-prefix namespace belongs to
+`MISSION_BLOCK_MAP`, which `0026` froze with conflicting meanings, and the 3-family *is* the
+airframe (3A type, 3B wake, 3C tail, 3D unit, 3E home station). It is a click-to-toggle boolean
+routed through `fdrStore.setMilitary()`, present on all three ATC Roles, and a ✓ means the aircraft
+**requires** arresting gear (not that it has a tailhook — that distinction is why it is not a
+generic writable path). What is left for this phase is the *check*, not the field. The mismatch
+itself is a pure `gearMismatchFor(fdr, runway)`
 **derived from two records that each already broadcast whole**, which satisfies `0045` more
 strongly than a stored field: a stored one would make a single `SetGearState` sweep every arrival
 Strip and bump each `rev`, flooding the delta ring and invalidating every controller's optimistic
@@ -395,7 +421,10 @@ read from config, and must not compute a taxi distance this codebase has no geom
 
 ## Phase 5 — alert and scramble (§9.6)
 
-`M16` ∈ `{NONE, ALERT, SCRAMBLE}` — field in Phase 2, behaviour here:
+`M16` ∈ `{NONE, ALERT, SCRAMBLE}` — the field landed in Phase 2 (`fdr.military.alertStatus`,
+validated by `setMilitary`) and **this phase picks its Block id**, which Phase 2 deliberately left
+open. Sub-letter it onto a parent per `docs/adr/0052`'s table; `MILITARY_BLOCK_NAMESPACE`'s `M16`
+row is where the answer goes, and a test already holds that row against the Block Maps. Behaviour:
 
 - A `SCRAMBLE` Strip raises a **Board-wide priority indication**.
 - The configured alert-pad access route is marked constrained, and conflicting taxi Strips flagged.
@@ -421,7 +450,17 @@ real taxi-route model would allow written down rather than faked.
 
 `M10` (designator / entry fix / entry time) and `M11` (exit fix / exit estimate / requested
 altitude after exit). The guide is explicit that **`M11`'s two items are what a controller asks
-for by voice and must post**, so they get prominent placement, not a collapsed sub-field.
+for by voice and must post**, so they get prominent placement, not a collapsed sub-field — which
+is exactly why Phase 2 reserved the ids rather than adding the Blocks blind.
+
+`fdr.military.mtr`'s six fields are already seeded and null (`docs/adr/0052`). This phase adds, in
+one go: the six `military.mtr.*` entries in `WRITABLE_PATHS`, the `9G-*`/`9H-*` Blocks on all three
+ATC Roles (`9G-MTR`/`9G-ENTRY`/`9G-TIME`, `9H-EXIT`/`9H-TIME`/`9H-ALT` — the `9A-*` split's shape,
+so per-Block facility narrowing works), their client mirrors and labels, and their placement. The
+`MILITARY_BLOCK_NAMESPACE` rows for `M10`/`M11` say `9G-*`/`9H-*` today; replace the wildcard with
+the real ids and the drift test starts checking them. Note these are plain `fdr`-routed free text,
+**not** the `military` target kind — that kind exists for the enum and the boolean, and an MTR
+designator is neither.
 
 The lost-comms rule — *"separate assuming the aircraft maintains the higher of the minimum IFR
 altitude for each remaining segment or the highest altitude in the last clearance"* — is

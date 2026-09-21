@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const { DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP, BLOCK_MAPS, isValidRole, requiredBlocksFor, resolveBlockTarget, validateFacilityConfig, interlockFor, interlockBlocks } =
+const { DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP, BLOCK_MAPS, isValidRole, requiredBlocksFor, resolveBlockTarget, validateFacilityConfig, interlockFor, interlockBlocks, MILITARY_BLOCK_NAMESPACE } =
   await import('../src/efsp/block-map.js');
+const { MILITARY_WRITABLE_FIELDS, defaultMilitary } = await import('../src/efsp/fdr-store.js');
 
 const REQUIRED_DEPARTURE_BLOCKS = [
   '1', '2', '3', '4', '4B', '5', '6', '7', '8', '8A', '8B', '9', '9D', '9E',
@@ -349,4 +350,94 @@ test('OVERFLIGHT\'s two new assignment Blocks are annotation-routed, so a cleara
   // And neither is required — a flight that is never vectored needs neither.
   assert.equal(OVERFLIGHT_BLOCK_MAP['7A'].required, false);
   assert.equal(OVERFLIGHT_BLOCK_MAP['9A-VECTOR'].required, false);
+});
+
+// ── WP6 (docs/adr/0052) — guide §6.4's military extension namespace ────────
+
+const ATC_ROLES = ['DEPARTURE', 'ARRIVAL', 'OVERFLIGHT'];
+
+test('the hook and ordnance Blocks exist on EVERY ATC Role, not just the one a test happened to use', () => {
+  // docs/adr/0051's lesson, asserted rather than trusted: each Role has its own
+  // Block Map, so a field added to one silently does not exist on the others,
+  // and the test that passes is not the test that matters. A hook requirement
+  // and an ordnance state are facts about the airframe — there is no ATC Role
+  // they stop being true for.
+  for (const role of ATC_ROLES) {
+    assert.deepEqual(resolveBlockTarget(role, '3F'), { kind: 'military', field: 'hookRequired' }, `${role}/3F`);
+    assert.deepEqual(resolveBlockTarget(role, '3G'), { kind: 'military', field: 'ordnanceState' }, `${role}/3G`);
+    assert.equal(BLOCK_MAPS[role]['3F'].required, false, `${role}/3F`);
+    assert.equal(BLOCK_MAPS[role]['3G'].required, false, `${role}/3G`);
+  }
+});
+
+test('MISSION gets neither, so one aircraft\'s ordnance has exactly one place to be declared', () => {
+  assert.equal(MISSION_BLOCK_MAP['3F'], undefined);
+  assert.equal(MISSION_BLOCK_MAP['3G'], undefined);
+  assert.equal(resolveBlockTarget('MISSION', '3G'), null);
+});
+
+test('the guide\'s M-prefix is never used as a Block id outside MISSION_BLOCK_MAP', () => {
+  // The collision docs/adr/0026 created and 0052 finally wrote down: the guide's
+  // §6.4 M-numbers mean different things from MISSION_BLOCK_MAP's frozen
+  // M1-M8, so an M-numbered Block on an ATC Map would be ambiguous by
+  // construction. Sub-letter onto the parent Block instead.
+  for (const role of ATC_ROLES) {
+    const mNumbered = Object.keys(BLOCK_MAPS[role]).filter(id => /^M\d/.test(id));
+    assert.deepEqual(mNumbered, [], `${role} must not use the M-prefix — sub-letter onto the parent Block instead`);
+  }
+});
+
+test('MILITARY_BLOCK_NAMESPACE agrees with the Block Maps it documents', () => {
+  // The table is documentation, and documentation drifts. This is what stops
+  // it: every entry claiming a concrete Block id must name one that exists and
+  // routes where it says, and every `military`-kind Block on any Map must
+  // appear in the table.
+  const claimed = new Map();
+  for (const [m, entry] of Object.entries(MILITARY_BLOCK_NAMESPACE)) {
+    if (!entry.blockId || entry.blockId.endsWith('*')) continue; // RESERVED, no Block yet
+    const def = DEPARTURE_BLOCK_MAP[entry.blockId];
+    assert.ok(def, `${m} claims Block ${entry.blockId}, which does not exist`);
+    claimed.set(entry.blockId, entry);
+    if (def.target.kind === 'military') {
+      assert.equal(`military.${def.target.field}`, entry.field, `${m}/${entry.blockId} writes a different field than the table says`);
+    }
+  }
+  for (const role of ATC_ROLES) {
+    for (const [id, def] of Object.entries(BLOCK_MAPS[role])) {
+      if (def.target.kind !== 'military') continue;
+      assert.ok(claimed.has(id), `${role}/${id} is a military Block with no MILITARY_BLOCK_NAMESPACE entry`);
+    }
+  }
+});
+
+test('every field the namespace table calls RESERVED or deferred is one setMilitary refuses to write', () => {
+  // §12's rule is that a deferral leaves its fields present and unpopulated.
+  // The failure mode is a deferred field quietly becoming writable because a
+  // setter merged a patch it did not check — so the table and the setter's
+  // allow-list are held against each other here rather than in a comment.
+  for (const [m, entry] of Object.entries(MILITARY_BLOCK_NAMESPACE)) {
+    if (!entry.field.startsWith('military.')) continue;
+    const key = entry.field.slice('military.'.length);
+    const hasBlock = !!entry.blockId && !entry.blockId.endsWith('*');
+    if (hasBlock) {
+      assert.ok(MILITARY_WRITABLE_FIELDS.has(key), `${m}: ${entry.field} has Block ${entry.blockId} but setMilitary will not write it`);
+    } else if (key !== 'alertStatus') {
+      // alertStatus is the one deliberate middle case — validated by the
+      // setter, no Block until §9.6 picks one. Everything else with no Block
+      // must be unwritable outright.
+      assert.equal(MILITARY_WRITABLE_FIELDS.has(key), false, `${m}: ${entry.field} has no Block but setMilitary would write it`);
+    }
+    assert.ok(key in defaultMilitary(), `${m}: ${entry.field} is not seeded on a new FDR (§12 wants it present, not absent)`);
+  }
+});
+
+test('no military Block is tagged as a MARSA interlock', () => {
+  // §9.2 rule 2 is about ATC ISSUING a course or an altitude. Declaring an
+  // ordnance state or a hook requirement issues nothing, and tagging one would
+  // void a live AR every time a pilot reported a hung store.
+  for (const role of ATC_ROLES) {
+    for (const [id, def] of Object.entries(BLOCK_MAPS[role])) {
+      if (def.target.kind === 'military') assert.equal(interlockFor(role, id), null, `${role}/${id}`);
+    }
+  }
 });

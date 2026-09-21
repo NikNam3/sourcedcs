@@ -14,8 +14,12 @@ Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green):
 - **`ops-filed` queue**: `OPS`'s `ops-filed` Bay now shows every currently-filed DD1801 plan as a card, each with a one-click "Create Strip" — see §4. ⚠️ **Requires a deployment step to actually work** — see the callout at the end of §4.
 - **Radar coverage follows the Positions you hold** — the radar selector is gone. See §8B.
 - **WP5: correlation** — every Strip says which contact on the scope it is, clicking a Strip rings its contact, and clicking a contact selects its Strip. See §8C.
+- **WP6, in progress** — the military layer, landing a deliverable at a time:
+  - **Stereo routes** — file a flight by short name and the server expands the whole route. See §4A. (The table ships empty; nothing works until somebody writes one.)
+  - **MARSA** — declaring that the military is separating its own aircraft, as a relation between flights rather than a flag on one, with the pre-rendezvous course/altitude interlock. See §8D.
+  - **The military Block namespace** — `ORDNANCE` (Block 3G) and `HOOK` (Block 3F) on every ATC Strip. The fields are live and recorded; the behaviour that reads them (§9.5's hung-ordnance advisory, §9.7's arresting-gear gating) is not built yet. See §6.
 
-Not built: WP6 (the wider military layer), WP7 (ATO ingest), WP7A (carrier/PAR), WP8 (instrumentation). `docs/efsp-briefing.md` is the current handoff note.
+Not built: the rest of WP6 — field state and arresting-gear gating (§9.7), alert/scramble (§9.6), the hung-ordnance advisory (§9.5), MTR fields (§9.4) — plus WP7 (ATO ingest), WP7A (carrier/PAR) and WP8 (instrumentation). `docs/efsp-briefing.md` is the current handoff note.
 
 Facility/Position map as it stands:
 
@@ -315,7 +319,14 @@ FDR {
     movementAreaEntryTimeUtc, taxiTimeUtc, takeoffTimeUtc,
     landingRunway                                                   — ARRIVAL-role field
   }
-  military      null   — WP6 hook, inert
+  military: {                                                       — WP6, guide §6.4's military extension namespace (docs/adr/0052)
+    ordnanceState ('CLEAN'|'LOADED'|'HUNG'|'EXPENDED')              — Block 3G, a picker. Recorded now; §9.5's hung-ordnance advisory is not built yet
+    hookRequired (bool)                                             — Block 3F, a ✓ toggle. Means this aircraft REQUIRES arresting gear, not merely that it has a tailhook
+    alertStatus ('NONE'|'ALERT'|'SCRAMBLE')                         — no Block yet; §9.6 picks one
+    mtr: { designator, entryFix, entryTimeUtc,
+           exitFix, exitEstimateUtc, requestedAltitudeAfterExit }   — §9.4, present and unpopulated; no way to write any of it yet
+    altrvRef, arInfo, scl, fuelState, releaseAuthority              — present and unpopulated, no setter (guide §12)
+  }
   trackRef      null   — permanently null; the correlation is its own record, keyed by fdrId (see §8C)
   airspace: { owner (null|'CONTROLLING_AGENCY'|'USING_AGENCY'), changedAt, changedBy }  — WP4A, §4.6.4, direction only, never a boolean
   provenance    { [path]: 'COMPUTER_GENERATED'|'CONTROLLER_ENTERED'|'SYSTEM_DERIVED' }
@@ -329,7 +340,10 @@ FDR {
 - **`filed`** — "what the pilot/flight plan asked for" (route, altitude, airports, times). This is what `isFlightPlanValid` checks before `CLEARED` is reachable, and what §4's pre-fill populates.
 - **`assigned`** — "what ATC has actually granted" (clearance, release state/timing, ATIS code, movement times). This is the bucket that changes as a flight progresses through the departure sequence.
 - **`airspace`** — WP4A only, a delegated-airspace direction, orthogonal to everything else.
-- **`military`** — reserved for WP6, don't populate it, nothing reads it yet.
+- **`military`** — guide §6.4's military extension namespace. Two fields are live and enterable from the Strip: **Block 3G (`ORDNANCE`)**, a four-value picker, and **Block 3F (`HOOK`)**, a ✓ toggle. Both sit in the 3-family beside aircraft type and tail number, because they are facts about the airframe, and both are on DEPARTURE, ARRIVAL and OVERFLIGHT Strips. Everything else in the object is present but unwritable — the field exists so its arrival later is not a schema change, and the server refuses a write to it by name rather than ignoring one.
+  - **`HOOK` ✓ means the aircraft requires arresting gear.** It is not "has a tailhook". §9.7's gear check will read it that way.
+  - **Setting `ORDNANCE` to `HUNG` raises no advisory yet.** It is recorded, audited and broadcast; the runway-selection advisory the guide asks for is §9.5's deliverable and is not built. Tell the tower by voice, as now.
+  - The guide numbers these `M14`/`M15` in its §6.4 table. **Those numbers are not used as Block ids here** — the `M`-prefix belongs to the MISSION Strip's own Block Map, which uses `M1`–`M8` with different meanings. The mapping between the guide's numbers and this system's Block ids is in `docs/adr/0052`.
 - **`trackRef`** — permanently null, and kept only so its absence isn't a schema change later. The correlation lives in its own store keyed by `fdrId`, because one flight can have several Strips and they are all the same aircraft — see §8C.
 
 ## 7. Release states (why a Strip can be stuck at CLEARED/HELD)
