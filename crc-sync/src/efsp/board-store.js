@@ -240,6 +240,16 @@ class BoardStore {
   _dispatch(mutation, actingPositionId, by) {
     const { op } = mutation;
 
+    // Coordination and TOFI notes carry the verbal half of an exchange and
+    // are free text, so they get the same ceiling as every other free-text
+    // field (see fdr-store.js's MAX_FREE_TEXT). Bounded HERE, at the one
+    // choke point every Mutation passes through, rather than at each of the
+    // eight places a note is read — an earlier attempt to patch those
+    // individually silently matched nothing and left the cap absent.
+    if (typeof op.note === 'string' && op.note.length > MAX_FREE_TEXT) {
+      op.note = op.note.slice(0, MAX_FREE_TEXT);
+    }
+
     // Per-acting-Position permission (guide §4.8.4) — evaluated for the
     // single acting Position on this Mutation only, NEVER as a union of
     // every Position the controller happens to hold (defect D21). This

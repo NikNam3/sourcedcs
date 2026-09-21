@@ -331,3 +331,22 @@ test('free text is capped, because a Strip rides whole in every broadcast', () =
     kind: 'SetBlock', blockId: '9', value: 'LTAG DCT VEDAS DCT LTAC, expect FL280 after VEDAS',
   }).ok, true);
 });
+
+test('a coordination note is capped too — it rides in the same broadcast as everything else', () => {
+  const efsp = createEfsp();
+  const c = crew(efsp, ATC);
+  let strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'NOTE1' });
+  strip = mustAct(efsp, c.APP, 'APP', strip, { kind: 'SetBlock', blockId: '5A', value: 'CST' });
+
+  // A degraded track forces the verbal path, so this is the one op kind that
+  // REQUIRES a note — and it was the one free-text field left uncapped.
+  const proposed = mustAct(efsp, c.APP, 'APP', strip, {
+    kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR',
+    note: 'Z'.repeat(50000),
+  });
+  assert.equal(proposed.coordination.note.length, 2000);
+
+  // And the peer's replica carries the bounded note, not the original.
+  const replica = efsp.boardStoreFor('CENTER').getStrip(proposed.coordination.peerStripId);
+  assert.equal(replica.coordination.note.length, 2000);
+});
