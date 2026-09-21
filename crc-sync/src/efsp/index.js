@@ -32,6 +32,7 @@ const fs = require('fs');
 
 const { FdrStore } = require('./fdr-store');
 const { AirspaceStore } = require('./airspace-store');
+const { CorrelationStore } = require('./correlation-store');
 const airspaceConfig = require('./airspace-config');
 const { CodeAllocator } = require('./code-allocator');
 const { BoardStore } = require('./board-store');
@@ -67,6 +68,15 @@ function createEfsp() {
       }
       return n;
     },
+  });
+
+  // WP5 (docs/adr/0045) — a FOURTH store, peer to the three above. Keyed by
+  // fdrId, and shared across every Facility for the same reason fdrStore is:
+  // a correlation is a fact about one airframe, and both halves of a
+  // cross-Facility exchange are looking at the same one. There is no D13
+  // replication question here either — the record has one home.
+  const correlationStore = new CorrelationStore({
+    fdrExists: (fdrId) => !!fdrStore.getFdr(fdrId),
   });
 
   const facilityIds = facilityConfig.getFacilityIds();
@@ -146,8 +156,9 @@ function createEfsp() {
   }
 
   airspaceStore.setMutationLog(mutationLog);
+  correlationStore.setMutationLog(mutationLog);
   _validateAirspaceReferences(facilities);
-  _restore(facilities, fdrStore, airspaceStore);
+  _restore(facilities, fdrStore, airspaceStore, correlationStore);
 
   const defaultFacility = facilities.get(facilityConfig.DEFAULT_FACILITY_ID);
 
@@ -158,6 +169,7 @@ function createEfsp() {
     positionStore: defaultFacility.positionStore,
     fdrStore,
     airspaceStore,
+    correlationStore,
     airspaceConfig,
     facilityConfig,
     // The real, Facility-aware accessors WP4A's wire protocol uses.
@@ -173,7 +185,7 @@ function createEfsp() {
 
   return {
     boardStore: ctx.boardStore, fdrStore, positionStore: ctx.positionStore, mutationLog,
-    airspaceStore,
+    airspaceStore, correlationStore,
     boardStoreFor: ctx.boardStoreFor, positionStoreFor: ctx.positionStoreFor,
 
     /**
@@ -186,7 +198,17 @@ function createEfsp() {
       return user.name || user.preferred_username || user.sub || 'unknown';
     },
 
-    handleMessage: (session, msg) => handleMessage(ctx, session, msg, () => _persist(facilities, fdrStore, airspaceStore)),
+    handleMessage: (session, msg) => handleMessage(ctx, session, msg, () => _persist(facilities, fdrStore, airspaceStore, correlationStore)),
+
+    /**
+     * Persist on demand. The correlation reconciler deliberately does NOT
+     * call this on its own tick (docs/adr/0045): a guaranteed 1Hz atomic
+     * whole-snapshot write is exactly the cost _persist's own comment frets
+     * about, and the only thing at risk in a crash is a few seconds of
+     * correlation history — the state itself recomputes within one tick of
+     * boot. This exists so a caller that genuinely needs a flush has one.
+     */
+    persist: () => _persist(facilities, fdrStore, airspaceStore, correlationStore),
 
     /** Abrupt disconnect (guide §4.8.6) — releases every Position the controller held, across EVERY Facility (a controller may hold Positions in more than one, guide §4.8.5). */
     onDisconnect: (session) => {
@@ -227,8 +249,16 @@ function createEfsp() {
  * that a live flight is already squawking is unambiguously right, and
  * leaving it free is unambiguously dangerous.
  */
-function _reconcileRestored(facilities, fdrStore) {
+function _reconcileRestored(facilities, fdrStore, correlationStore) {
   const allocator = fdrStore.codeAllocator;
+  // A correlation record whose FDR did not come back has nothing to be about.
+  // Dropped rather than reported, unlike the missing-FDR Strip case below: a
+  // Strip without an FDR still renders and a controller needs to know why,
+  // while a correlation without one is invisible either way.
+  if (correlationStore) {
+    const dropped = correlationStore.evictMissingFdrs();
+    if (dropped) console.warn(`[efsp] dropped ${dropped} restored correlation record(s) whose FDR is gone`);
+  }
   for (const [facilityId, { boardStore }] of facilities.entries()) {
     for (const strip of boardStore.getAll()) {
       if (strip.state === 'DROPPED') continue;
@@ -260,7 +290,7 @@ function _validateAirspaceReferences(facilities) {
   }
 }
 
-function _restore(facilities, fdrStore, airspaceStore) {
+function _restore(facilities, fdrStore, airspaceStore, correlationStore) {
   try {
     const data = JSON.parse(fs.readFileSync(BOARD_SNAPSHOT_PATH, 'utf8'));
     fdrStore.restore(data.fdr);
@@ -284,14 +314,19 @@ function _restore(facilities, fdrStore, airspaceStore) {
       const f = facilities.get(defaultFacilityId);
       if (f) f.boardStore.restore(data.board);
     }
+    // Correlation records after the FDRs, since restore() skips any whose FDR
+    // is gone. Every restored record comes back UNCORRELATED with its trackId
+    // and its binding nulled — a persisted track id is a lie the moment the
+    // process restarts, because DCS re-mints ids (docs/adr/0045).
+    if (correlationStore) correlationStore.restore(data.correlations);
     // After the Boards, not before — it has Strips to check against only now.
-    _reconcileRestored(facilities, fdrStore);
+    _reconcileRestored(facilities, fdrStore, correlationStore);
   } catch (e) {
     console.warn('[efsp] no prior Board snapshot to restore (first run, or it failed to load):', e.message);
   }
 }
 
-function _persist(facilities, fdrStore, airspaceStore) {
+function _persist(facilities, fdrStore, airspaceStore, correlationStore) {
   try {
     const boards = {};
     for (const [facilityId, { boardStore }] of facilities.entries()) boards[facilityId] = boardStore.snapshot();
@@ -303,7 +338,12 @@ function _persist(facilities, fdrStore, airspaceStore) {
     // and _restore's catch would come up with an empty Board. Losing one
     // Mutation to a crash is unavoidable; losing the entire session's Board
     // to one is not.
-    const payload = JSON.stringify({ boards, fdr: fdrStore.snapshot(), airspaces: airspaceStore.snapshot() }, null, 2);
+    const payload = JSON.stringify({
+      boards,
+      fdr: fdrStore.snapshot(),
+      airspaces: airspaceStore.snapshot(),
+      correlations: correlationStore ? correlationStore.snapshot() : [],
+    }, null, 2);
     const tmpPath = `${BOARD_SNAPSHOT_PATH}.tmp`;
     fs.writeFileSync(tmpPath, payload);
     fs.renameSync(tmpPath, BOARD_SNAPSHOT_PATH);

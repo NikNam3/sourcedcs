@@ -242,6 +242,25 @@ function canMutate(actingPositionId, opKind) {
 }
 
 /**
+ * May this Position bind or unbind a surveillance contact to a flight
+ * (WP5, docs/adr/0045)?
+ *
+ * Refused by CLASS, on the same basis as canMutate's first line: guide §4.1
+ * rule 2 makes a range Position the using agency, which "works no Strips" and
+ * has no flights to identify. Under docs/adr/0042 it has no scope either, so
+ * there is nothing for it to have seen.
+ *
+ * Everything else may. A correlation is not a clearance and no Position owns
+ * an FDR — a controller who can see the contact must be able to say so, even
+ * about a flight whose Strip belongs to somebody else. That includes an MRU:
+ * D12 is about being asked to provide ATC SERVICE (handoffs, point-outs), and
+ * "which blip is this" is not that.
+ */
+function canCorrelate(actingPositionId) {
+  return !_worksNoStrips(actingPositionId);
+}
+
+/**
  * The role-scoped half of CreateStrip permission (see the module comment).
  * Structurally the same D21 guard as canMutate() — exactly one
  * actingPositionId, never a held set.
@@ -374,7 +393,7 @@ function canActOnState(actingPositionId, role, state) {
 }
 
 module.exports = {
-  canMutate, canCreateStripRole, canActOnState, tofiCounterparts,
+  canMutate, canCorrelate, canCreateStripRole, canActOnState, tofiCounterparts,
   PERMISSIONS, CREATE_ROLE_PERMISSIONS, STATE_OWNERS_BY_ROLE,
   DEPARTURE_STATE_OWNERS, ARRIVAL_STATE_OWNERS, OVERFLIGHT_STATE_OWNERS, MISSION_STATE_OWNERS,
   OP_KINDS, COORDINATION_OP_KINDS, APP_CTR_ONLY_OP_KINDS, TOFI_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_COUNTERPARTS,

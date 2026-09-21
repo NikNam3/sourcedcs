@@ -12,6 +12,7 @@ process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = path.join(tmpDir, 'facility.json
 const { handleMessage, RESYNC_RING_WINDOW } = await import('../src/efsp/efsp-ws.js');
 const { BoardStore } = await import('../src/efsp/board-store.js');
 const { FdrStore } = await import('../src/efsp/fdr-store.js');
+const { CorrelationStore } = await import('../src/efsp/correlation-store.js');
 const { PositionStore } = await import('../src/efsp/position-store.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
 const blockMap = await import('../src/efsp/block-map.js');
@@ -58,10 +59,14 @@ function makeCtx() {
   }
 
   const defaultFacility = facilities.get(facilityConfig.DEFAULT_FACILITY_ID);
+  // WP5 (docs/adr/0045) — the fourth store, wired exactly as index.js does it,
+  // so the correlation dispatch path below is exercised against the real ctx
+  // shape rather than a hand-simplified one.
+  const correlationStore = new CorrelationStore({ fdrExists: (id) => !!fdrStore.getFdr(id) });
   return {
     boardStore: defaultFacility.boardStore,
     positionStore: defaultFacility.positionStore,
-    fdrStore, facilityConfig,
+    fdrStore, facilityConfig, correlationStore,
     boardStoreFor: (facilityId = facilityConfig.DEFAULT_FACILITY_ID) => (facilities.get(facilityId) || {}).boardStore || null,
     positionStoreFor: (facilityId = facilityConfig.DEFAULT_FACILITY_ID) => (facilities.get(facilityId) || {}).positionStore || null,
   };
@@ -288,4 +293,139 @@ test('a non-abrupt vacate does NOT auto-promote a waiting Observer, so its Strip
   assert.equal(ctx.positionStore.isOccupied('GND'), false); // Bob was NOT auto-promoted — an explicit prompt is required, not built here
   assert.equal(result.ack.warnings.length, 1); // so the Strip genuinely needed routing, and GND has no covering Position occupied in this fixture
   assert.equal(result.ack.warnings[0].routedTo, null);
+});
+
+// ── WP5 correlation ops — the third dispatch path (docs/adr/0045) ─────────
+
+function bindMsg(overrides = {}) {
+  return {
+    version: 1, type: 'efsp-correlation-mutation',
+    clientMutationId: crypto.randomUUID(),
+    actingPositionId: 'OPS',
+    op: { kind: 'BindTrack', trackId: '101' },
+    ...overrides,
+  };
+}
+
+/** A DEPARTURE Strip at OPS. A correlation op needs only an FDR that exists. */
+function createOpsStrip(ctx, session) {
+  const created = handleMessage(ctx, session, createStripMsg(), noopPersist);
+  if (!created.ack.ok) throw new Error('fixture setup failed: ' + JSON.stringify(created.ack));
+  return created.ack.strip;
+}
+
+test('efsp-correlation-mutation routes, binds, and broadcasts its own delta type', () => {
+  const ctx = makeCtx();
+  const session = { controllerId: 'c-app', who: 'App1' };
+  holding(ctx, session, ['OPS']);
+  const strip = createOpsStrip(ctx, session);
+
+  const result = handleMessage(ctx, session, bindMsg({ fdrId: strip.fdrId, baseRev: 0 }), noopPersist);
+
+  assert.equal(result.ack.type, 'efsp-correlation-ack');
+  assert.equal(result.ack.ok, true, JSON.stringify(result.ack));
+  assert.equal(result.ack.correlation.trackId, '101');
+  assert.equal(result.ack.correlation.matchedBy, 'BINDING');
+  // Its own delta type with its own seq — not a section of efsp-board-delta,
+  // because a correlation is not a Strip and rides no Board's sequence.
+  assert.equal(result.broadcast.type, 'efsp-correlation-delta');
+  assert.equal(result.broadcast.correlations.updated.length, 1);
+  assert.ok(Number.isFinite(result.broadcast.correlationSeq));
+  assert.equal(result.broadcast.strips, undefined);
+});
+
+test('UnbindTrack routes through the same path', () => {
+  const ctx = makeCtx();
+  const session = { controllerId: 'c-app', who: 'App1' };
+  holding(ctx, session, ['OPS']);
+  const strip = createOpsStrip(ctx, session);
+  handleMessage(ctx, session, bindMsg({ fdrId: strip.fdrId, baseRev: 0 }), noopPersist);
+
+  const rev = ctx.correlationStore.getCorrelation(strip.fdrId).rev;
+  const result = handleMessage(ctx, session, bindMsg({
+    fdrId: strip.fdrId, baseRev: rev, op: { kind: 'UnbindTrack' },
+  }), noopPersist);
+  assert.equal(result.ack.ok, true, JSON.stringify(result.ack));
+  assert.equal(result.ack.correlation.binding, null);
+});
+
+test('a correlation op from a session that is not Primary anywhere is refused (docs/adr/0029, third dispatch path)', () => {
+  const ctx = makeCtx();
+  const owner = { controllerId: 'c-ops3', who: 'Ops3' };
+  holding(ctx, owner, ['OPS']);
+  const strip = createOpsStrip(ctx, owner);
+
+  // Somebody else claims APP without holding it.
+  const impostor = { controllerId: 'c-nobody', who: 'Nobody' };
+  const result = handleMessage(ctx, impostor, bindMsg({ fdrId: strip.fdrId, baseRev: 0 }), noopPersist);
+  assert.equal(result.ack.ok, false);
+  assert.equal(result.ack.reason, 'NOT_HOLDING_POSITION');
+  assert.equal(result.broadcast, undefined);
+});
+
+test('any Primary may bind, whichever Facility holds a Strip for that flight', () => {
+  // A correlation is not a clearance, and the FDR is shared theater-wide
+  // (docs/adr/0013). A controller who can see the contact must be able to say
+  // so, even if the Strip is somebody else's.
+  const ctx = makeCtx();
+  const ops = { controllerId: 'c-ops2', who: 'Ops2' };
+  holding(ctx, ops, ['OPS']);
+  const strip = createOpsStrip(ctx, ops);
+
+  const ctr = { controllerId: 'c-ctr', who: 'Ctr1' };
+  handleMessage(ctx, ctr, { type: 'efsp-set-positions', facilityId: 'CENTER', held: ['CTR'] }, noopPersist);
+  const result = handleMessage(ctx, ctr, bindMsg({
+    fdrId: strip.fdrId, baseRev: 0, actingPositionId: 'CTR',
+  }), noopPersist);
+
+  assert.equal(result.ack.ok, true, JSON.stringify(result.ack));
+  assert.equal(result.ack.correlation.binding.boundPositionId, 'CTR', 'and the audit says who');
+});
+
+test('a refused correlation op still carries the record, so the client renders truth', () => {
+  const ctx = makeCtx();
+  const session = { controllerId: 'c-app', who: 'App1' };
+  holding(ctx, session, ['OPS']);
+  const strip = createOpsStrip(ctx, session);
+  handleMessage(ctx, session, bindMsg({ fdrId: strip.fdrId, baseRev: 0 }), noopPersist);
+
+  const stale = handleMessage(ctx, session, bindMsg({ fdrId: strip.fdrId, baseRev: 0, op: { kind: 'BindTrack', trackId: '999' } }), noopPersist);
+  assert.equal(stale.ack.ok, false);
+  assert.equal(stale.ack.reason, 'STALE_REV');
+  assert.equal(stale.ack.correlation.trackId, '101');
+});
+
+test('a correlation op for an unknown FDR is refused, not thrown', () => {
+  const ctx = makeCtx();
+  const session = { controllerId: 'c-ops4', who: 'Ops4' };
+  holding(ctx, session, ['OPS']);
+  const result = handleMessage(ctx, session, bindMsg({ fdrId: 'ghost', baseRev: 0 }), noopPersist);
+  assert.equal(result.ack.ok, false);
+  assert.equal(result.ack.reason, 'NOT_FOUND');
+});
+
+test('the snapshot carries correlation records alongside airspaces', () => {
+  const ctx = makeCtx();
+  const session = { controllerId: 'c-app', who: 'App1' };
+  holding(ctx, session, ['OPS']);
+  const strip = createOpsStrip(ctx, session);
+  handleMessage(ctx, session, bindMsg({ fdrId: strip.fdrId, baseRev: 0 }), noopPersist);
+
+  const snapshot = handleMessage(ctx, session, { type: 'efsp-resync', lastBoardSeq: -1 }, noopPersist).ack;
+  assert.equal(snapshot.type, 'efsp-snapshot');
+  assert.equal(snapshot.correlations.length, 1);
+  assert.equal(snapshot.correlations[0].fdrId, strip.fdrId);
+});
+
+test('efsp-resync has no correlation branch — a reconnecting client gets the snapshot and the next tick', () => {
+  // §5.6's "two paths only" is preserved because correlation never joins the
+  // board-seq delta path (_handleResync's own reasoning for FDRs/Positions).
+  const ctx = makeCtx();
+  const session = { controllerId: 'c-app', who: 'App1' };
+  holding(ctx, session, ['OPS']);
+  createOpsStrip(ctx, session);
+
+  const delta = handleMessage(ctx, session, { type: 'efsp-resync', lastBoardSeq: 0 }, noopPersist).ack;
+  assert.equal(delta.type, 'efsp-board-delta');
+  assert.equal(delta.correlations, undefined);
 });

@@ -671,6 +671,11 @@ function _buildStripEl(strip) {
       badge.title = `${obligation.obligationType} — ${obligation.severity}`;
       el.appendChild(badge);
     }
+
+    // WP5 (guide §6.6 rule 5) — which surveillance contact this flight is,
+    // and on what evidence. A Strip-level badge rather than a Block: see
+    // correlation-highlight.js's correlationBadgeFor for the three reasons.
+    _appendCorrelationBadge(el, strip);
   }
 
   // Flip: dblclick. Highlight: right-click (contextmenu) opens a 3-swatch
@@ -700,9 +705,174 @@ function _buildStripEl(strip) {
   return el;
 }
 
+/**
+ * The correlation badge, plus the bind/unbind affordances that go with it.
+ *
+ * Ambiguity is the case worth the extra control: the server refuses to guess
+ * between two contacts that match a flight equally well, so the badge becomes
+ * a button that lists them and lets the controller settle it. That is guide
+ * §6.6 rule 1's top rung — an explicit binding — becoming reachable, and it is
+ * also the only route for an aircraft with its transponder off that nothing
+ * matches by callsign.
+ */
+function _appendCorrelationBadge(el, strip) {
+  if (typeof correlationBadgeFor !== 'function') return;
+  const badge = correlationBadgeFor(strip);
+  if (!badge) return;
+
+  if (badge.warned) el.classList.add('efsp-strip-correlation-warned');
+
+  const node = document.createElement(badge.ambiguous ? 'button' : 'span');
+  node.className = badge.className;
+  node.textContent = badge.text;
+  node.title = badge.title;
+  if (badge.ambiguous) {
+    node.disabled = !_resolveActingPositionId(strip);
+    node.addEventListener('click', (e) => {
+      e.stopPropagation();
+      _openBindPopover(strip, node, badge.candidateTrackIds);
+    });
+  }
+  el.appendChild(node);
+
+  // A "Bind…" control for the uncorrelated case, and "Unbind" once bound.
+  const record = typeof getEfspCorrelationForStrip === 'function' ? getEfspCorrelationForStrip(strip) : null;
+  if (!record || badge.ambiguous) return;
+
+  if (record.binding) {
+    const unbind = document.createElement('button');
+    unbind.className = 'efsp-correlation-btn';
+    unbind.textContent = 'Unbind';
+    unbind.title = 'give the contact back to the automatic matcher';
+    unbind.disabled = !_resolveActingPositionId(strip);
+    unbind.addEventListener('click', (e) => {
+      e.stopPropagation();
+      _dispatchCorrelation(strip, { kind: 'UnbindTrack' });
+    });
+    el.appendChild(unbind);
+    return;
+  }
+
+  if (record.state === 'UNCORRELATED') {
+    const bind = document.createElement('button');
+    bind.className = 'efsp-correlation-btn';
+    bind.textContent = 'Bind…';
+    bind.title = 'pick the contact this flight is';
+    bind.disabled = !_resolveActingPositionId(strip);
+    bind.addEventListener('click', (e) => {
+      e.stopPropagation();
+      _openBindPopover(strip, bind, null);
+    });
+    el.appendChild(bind);
+  }
+}
+
+let _openBindPopoverEl = null;
+
+function _closeBindPopover() {
+  if (_openBindPopoverEl && _openBindPopoverEl.parentNode) {
+    _openBindPopoverEl.parentNode.removeChild(_openBindPopoverEl);
+  }
+  _openBindPopoverEl = null;
+  document.removeEventListener('pointerdown', _closeBindPopover, true);
+}
+
+/**
+ * A picker of candidate contacts. `candidateTrackIds` narrows it to the ones
+ * the server called ambiguous; null offers everything currently on the scope,
+ * which is the uncorrelated case where the controller knows something the
+ * matcher cannot.
+ */
+function _openBindPopover(strip, anchorEl, candidateTrackIds) {
+  _closeBindPopover();
+  const popover = document.createElement('div');
+  popover.className = 'efsp-coordinate-popover';
+  popover.addEventListener('pointerdown', (e) => e.stopPropagation());
+
+  const ids = candidateTrackIds && candidateTrackIds.length
+    ? candidateTrackIds
+    : (typeof window !== 'undefined' && typeof window.getAllTracks === 'function'
+      ? window.getAllTracks().filter(t => t.category === 1 || t.category === 2).map(t => String(t.id))
+      : []);
+
+  if (ids.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'efsp-coordinate-degraded-warning';
+    // Under the station-derived picture an empty scope has a cause worth
+    // naming (crc-sync's docs/adr/0042) — a Position with no radar sees
+    // nothing, so there is nothing to bind.
+    empty.textContent = 'No contacts in your coverage to bind.';
+    popover.appendChild(empty);
+  }
+
+  for (const trackId of ids) {
+    const track = typeof window !== 'undefined' && typeof window.getLatestTrack === 'function'
+      ? window.getLatestTrack(trackId) : null;
+    const row = document.createElement('button');
+    row.className = 'efsp-coordinate-submit';
+    row.textContent = track ? `${track.callsign || trackId}${track.squawk != null ? ` · ${String(track.squawk).padStart(4, '0')}` : ''}` : String(trackId);
+    row.addEventListener('click', (e) => {
+      e.stopPropagation();
+      _dispatchCorrelation(strip, { kind: 'BindTrack', trackId: String(trackId) });
+      _closeBindPopover();
+    });
+    popover.appendChild(row);
+  }
+
+  anchorEl.appendChild(popover);
+  _openBindPopoverEl = popover;
+  setTimeout(() => document.addEventListener('pointerdown', _closeBindPopover, true), 0);
+}
+
+function _dispatchCorrelation(strip, op) {
+  const actingPositionId = _resolveActingPositionId(strip);
+  if (!actingPositionId) return;
+  const record = typeof getEfspCorrelationForStrip === 'function' ? getEfspCorrelationForStrip(strip) : null;
+  sendEfspCorrelationMutation(actingPositionId, strip.fdrId, record ? record.rev : 0, op);
+}
+
 function _selectStrip(stripId) {
   _selectedStripId = _selectedStripId === stripId ? null : stripId;
+  _afterSelectionChanged();
+}
+
+/**
+ * Selects a Strip without the toggle. Called when a click on the MAP resolves
+ * to this Strip (correlation-highlight.js's selectStripForTrack) — clicking a
+ * contact twice must not deselect its Strip, which is what _selectStrip's
+ * toggle would do.
+ */
+function selectEfspStripById(stripId) {
+  if (!getEfspStrip(stripId)) return false;
+  _selectedStripId = stripId;
+  _afterSelectionChanged();
+  const el = _stripElById(stripId);
+  if (el && typeof el.scrollIntoView === 'function') {
+    el.scrollIntoView({ block: 'nearest' });
+  }
+  return true;
+}
+
+function _afterSelectionChanged() {
   renderAllOpenEfspBays();
+  // Ring the selected Strip's contact on the map (guide §6.6 rule 4). One Map
+  // lookup plus the existing rAF-batched updateMap() — see
+  // correlation-highlight.js on why the 1s budget is not a concern here.
+  if (typeof highlightCorrelatedTrack === 'function') highlightCorrelatedTrack(_selectedStripId);
+}
+
+function _stripElById(stripId) {
+  for (const { containerEl } of _openBayContainers || []) {
+    const el = containerEl && containerEl.querySelector
+      && containerEl.querySelector(`[data-strip-id="${stripId}"]`);
+    if (el) return el;
+  }
+  return null;
+}
+
+/** The Bays currently on screen — correlation-highlight.js prefers a Strip in one. */
+function getOpenEfspBayIds() {
+  return (_openBayContainers || []).map(entry => entry.bayId).filter(Boolean);
 }
 
 // Non-drag move path (WCAG 2.2 SC 2.5.7): select a Strip, then click a

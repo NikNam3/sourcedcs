@@ -14,7 +14,7 @@
 // board-store.js and references an fdrId, never the reverse.
 
 const crypto = require('crypto');
-const { CodeAllocator } = require('./code-allocator');
+const { CodeAllocator, isValidCodeFormat } = require('./code-allocator');
 // One unit and one type for every frequency inside the EFSP: MHz, as a
 // number. Shared with airspace-config.js so a configured airspace frequency
 // and a frequency a flight is approved onto can never validate differently.
@@ -65,8 +65,10 @@ const MAX_FREE_TEXT = 2000;
 // Paths a controller-driven SetBlock may target generically via setField().
 // Deliberately excludes identity.equipmentSuffix (derived-only, §3.3),
 // identity.modeOne/modeTwo (no setter anywhere — guards defect D24 by
-// construction, not validation), identity.beaconObserved/trackRef/military
-// (WP5/WP6 hooks, always null in Phase 1), and all structural/system fields
+// construction, not validation), identity.beaconObserved (WP5 — written only
+// by setBeaconObserved, whose provenance is UPSTREAM_TRACK rather than a
+// controller), trackRef (permanently null, see its own comment) and military
+// (a WP6 hook, still always null), and all structural/system fields
 // (fdrId, rev, provenance, createdAt/updatedAt/updatedBy). identity.
 // beaconAssigned is listed here but routed through a dedicated method
 // (setBeaconAssigned) rather than the generic path, since it needs
@@ -176,7 +178,11 @@ class FdrStore {
         equipmentSuffix: deriveEquipmentSuffix(equipmentCodes),
         degradation: 'NONE',
         beaconAssigned: minted.code,
-        beaconObserved: null, // WP5 hook — correlation subsystem not built in Phase 1
+        // What the aircraft is actually squawking, from the correlated contact
+        // (docs/adr/0045). Null means "assigned but nothing received", which
+        // §3.10.2 rule 1 makes one of three renderable states rather than an
+        // absence. Written only by setBeaconObserved().
+        beaconObserved: null,
         modeOne: null,        // ATO-owned, WP7 hook — no setter exists anywhere
         modeTwo: null,        // ATO-owned, WP7 hook — no setter exists anywhere
         tailNumber: seed.tailNumber || null,
@@ -219,7 +225,15 @@ class FdrStore {
         landingRunway: null,            // ARRIVAL-role field, Phase 2
       },
       military: null,  // WP6 hook
-      trackRef: null,  // WP5 hook
+      // Permanently null, and kept present per §12's rule that a deferral
+      // leaves its fields in place. Guide §3.1 types it `TrackRef?`, but §6.6
+      // rule 2 then forbids the only thing it could usefully hold: "do not
+      // store a raw track ID on the FDR". Anything else it could carry is
+      // either a staleable duplicate of the correlation record's state — which
+      // is the defect, not the fix — or the fdrId, i.e. the record's own key.
+      // The correlation lives in correlation-store.js, keyed by fdrId
+      // (docs/adr/0045). Nothing reads or writes this.
+      trackRef: null,
       // WP4A (docs/adr/0018), §4.6.4 — a DIRECTION, never a bare boolean
       // (D15). Only ever written via setAirspaceOwner() below, never the
       // generic setField() path — see that method for why.
@@ -356,6 +370,51 @@ class FdrStore {
     fdr.updatedAt = Date.now();
     fdr.updatedBy = by || null;
     return { ok: true, fdr, warning: check.warning };
+  }
+
+  /**
+   * WP5 (docs/adr/0045) — the code the aircraft is actually squawking, as
+   * reported by the correlated surveillance contact.
+   *
+   * This is the missing half of §3.10.2 rule 1: "Assigned and observed are two
+   * separate fields. Never one. The panel derives a mismatch state by
+   * comparing them, and renders three cases: matching, mismatched, and
+   * assigned but nothing received." `beaconAssigned` has been written since
+   * Phase 1; nothing ever wrote this, so the three-case render had no data
+   * behind it and the D22 defect it guards against was untestable.
+   *
+   * A dedicated setter, structurally excluded from WRITABLE_PATHS, on the
+   * setAirspaceOwner/setTofi/setWorkingFrequency template — but for a
+   * different reason than theirs. Those are excluded because they need
+   * validation beyond an allow-list check. This one is excluded because its
+   * provenance is UPSTREAM_TRACK: it is not a controller-entered value at all,
+   * and a generic-path route to setting it would be a route for a client to
+   * claim an aircraft is squawking something it is not.
+   *
+   * Writes ONLY on change, and does not bump `rev` otherwise. The reconciler
+   * calls this once a second per correlated flight; an unconditional write
+   * would churn every FDR's rev and provenance at reconcile cadence, and an
+   * FDR is broadcast whole on every update.
+   *
+   * @param {string|null} code — a 4-digit octal string, or null for "nothing
+   *   received" (which is a distinct, renderable state, not an absence).
+   * @returns {{ok:true, fdr, changed:boolean}|{ok:false, reason, detail?}}
+   */
+  setBeaconObserved(fdrId, code, { source = 'UPSTREAM_TRACK' } = {}) {
+    const fdr = this._fdrs.get(fdrId);
+    if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
+    if (code !== null && !isValidCodeFormat(code)) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `observed code must be 4 octal digits or null, not ${JSON.stringify(code)}` };
+    }
+    if (fdr.identity.beaconObserved === code) return { ok: true, fdr, changed: false };
+
+    fdr.identity.beaconObserved = code;
+    fdr.provenance['identity.beaconObserved'] = source;
+    fdr.rev += 1;
+    fdr.updatedAt = Date.now();
+    // No updatedBy: surveillance is not a controller, and stamping a
+    // controllerId here would attribute a machine observation to a person.
+    return { ok: true, fdr, changed: true };
   }
 
   /**

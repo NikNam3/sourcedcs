@@ -703,7 +703,7 @@ test('ConvertToArrival maps the departure record\'s departureAirport onto the ne
   assert.equal(fdrStore.getFdr(strip.fdrId).filed.originAirport, 'LTAG'); // persisted, not just echoed in the result
 });
 
-test('ConvertToArrival resets annotations/flags/coordination/correlation to fresh-Strip defaults — none of them mean the same thing under the new role', () => {
+test('ConvertToArrival resets annotations/flags/coordination to fresh-Strip defaults — none of them mean the same thing under the new role', () => {
   const facilities = makeFacilities();
   const { boardStore, positionStore } = facilities.get('INCIRLIK');
   positionStore.setHeldPositions('app-controller', 'App1', ['APP']);
@@ -720,7 +720,40 @@ test('ConvertToArrival resets annotations/flags/coordination/correlation to fres
   assert.deepEqual(converted.strip.annotations, {});
   assert.equal(converted.strip.flags.attention, null);
   assert.equal(converted.strip.coordination, null);
-  assert.deepEqual(converted.strip.correlation, { state: 'UNCORRELATED' });
+});
+
+test('a Strip carries no correlation field at all — it is keyed by fdrId, not stripId', () => {
+  // This assertion used to read the other way: a per-Strip
+  // `correlation: { state: 'UNCORRELATED' }` was set on creation and reset by
+  // ConvertToArrival. Both were wrong, and docs/adr/0045 explains why — one
+  // FDR legitimately has several Strips, so a per-Strip correlation lets two
+  // replicas of one airframe disagree about which contact it is, and
+  // ConvertToArrival threw away a correct binding for an aircraft that was
+  // still airborne and still squawking the code docs/adr/0023 kept for it.
+  const facilities = makeFacilities();
+  const { boardStore, positionStore } = facilities.get('INCIRLIK');
+  positionStore.setHeldPositions('app-controller', 'App1', ['APP']);
+  const strip = createAppHandedOffStrip(facilities);
+  assert.equal('correlation' in strip, false, 'not set on creation');
+
+  const converted = boardStore.applyMutation(mutation({
+    stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'ConvertToArrival' },
+  }), 'APP', 'app-controller');
+  assert.equal(converted.ok, true, JSON.stringify(converted));
+  assert.equal('correlation' in converted.strip, false, 'and not written by a role change');
+  assert.equal(converted.strip.fdrId, strip.fdrId, 'the same airframe, throughout');
+});
+
+test('a pre-WP5 snapshot’s stale per-Strip correlation is dropped on restore, not carried forward', () => {
+  const facilities = makeFacilities();
+  const { boardStore } = facilities.get('INCIRLIK');
+  boardStore.restore({
+    strips: [{ stripId: 's1', fdrId: 'f1', rev: 1, state: 'PROPOSED', correlation: { state: 'UNCORRELATED' } }],
+    cidSeq: 3,
+  });
+  const restored = boardStore.getStrip('s1');
+  assert.equal('correlation' in restored, false,
+    'a second, stale answer to "which contact is this" must not survive a restore');
 });
 
 test('ConvertToArrival is rejected on anything other than a DEPARTURE Strip at HANDED_OFF', () => {

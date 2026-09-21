@@ -80,6 +80,26 @@ const DEFAULT_CONFIG = {
   // Position within INCIRLIK, same as before WP4A. See
   // docs/adr/0013-facility-config-multi-facility.md.
   coveringChain: { CD: 'GND', GND: 'TWR', TWR: 'APP' },
+  // Which radars each Position works through (docs/adr/0042, docs/adr/0043).
+  // [SOURCE-DEFINED]: which scope sits at which console is squadron data, not
+  // doctrine, and the guide says nothing about it.
+  //
+  // Selectors, never radar ids. A radar's id is derived from live mission data
+  // (`apt:Incirlik` exists only while that theater is loaded), so a persisted
+  // list of ids is the exact shape docs/adr/0041 condemned — right the day it
+  // is written, silently empty the next time the data moves. A selector is
+  // resolved against whatever radars the current mission actually produced.
+  //
+  // An empty array is a statement, not an omission: Operations, Clearance
+  // Delivery and Ground have no scope, which is the fact docs/adr/0033 leans
+  // on, and a controller holding only those correctly sees nothing.
+  positionRadars: {
+    OPS: [],
+    CD: [],
+    GND: [],
+    TWR: [{ kind: 'airport', airport: 'LTAG' }],
+    APP: [{ kind: 'approach', airport: 'LTAG' }, { kind: 'airport', airport: 'LTAG' }],
+  },
   // Per-role visible-Block set (guide §8.2/§8.3) — defaults to "every Block
   // block-map.js defines for that role", i.e. nothing is hidden by default.
   // A facility MAY narrow this (e.g. omit optional 9A sub-fields), but
@@ -177,6 +197,13 @@ const DEFAULT_CENTER_CONFIG = {
   // the chain" precedent (there is no second civil ATC Position upstream
   // of CTR built yet).
   coveringChain: {},
+  // [SOURCE-DEFINED] — every airfield's approach radar in the theater, which
+  // is how an en-route Position gets an en-route picture. `airport: '*'`
+  // matches whatever airfields the loaded mission has, so this selector needs
+  // no editing when the theater changes (docs/adr/0043).
+  positionRadars: {
+    CTR: [{ kind: 'approach', airport: '*' }],
+  },
   // Blocks this Facility hides, by Role (guide §8.2's "a facility MAY narrow
   // this"). Empty by default — nothing is hidden anywhere, and a Block added
   // later stays visible without anyone regenerating a config file.
@@ -223,6 +250,20 @@ const DEFAULT_TACTICAL_CONFIG = {
   // accepted "warn the controller, route nowhere" stranding case per guide
   // §4.8.6 rule 5 ("warn, do not block"), not a silent gap.
   coveringChain: { AIC: 'TAC_C2', GCI: 'TAC_C2' },
+  // [SOURCE-DEFINED] — a Military Radar Unit in DCS works off the airborne
+  // picture: own-coalition AWACS and fighter radars. This is the same set the
+  // renderer's DATALINK toggle used to switch on client-side for everybody at
+  // once; it is a property of the Position now, which is where it belongs.
+  // `coalition: 'own'` resolves against CRCSYNC_COALITION.
+  //
+  // JTAC gets none: guide §4.1 makes it read-only and non-ATC, and nothing
+  // about a JTAC implies a radar scope.
+  positionRadars: {
+    TAC_C2: [{ kind: 'awacs', coalition: 'own' }, { kind: 'fighter', coalition: 'own' }],
+    AIC: [{ kind: 'awacs', coalition: 'own' }, { kind: 'fighter', coalition: 'own' }],
+    GCI: [{ kind: 'awacs', coalition: 'own' }, { kind: 'fighter', coalition: 'own' }],
+    JTAC: [],
+  },
   // Blocks this Facility hides, by Role (guide §8.2's "a facility MAY narrow
   // this"). Empty by default — nothing is hidden anywhere, and a Block added
   // later stays visible without anyone regenerating a config file.
@@ -278,7 +319,14 @@ const DEFAULT_RANGES_CONFIG = {
     airspaceConfig.getRangePositionIds().map(id => [id, 'USING_AGENCY'])
   ),
   coveringChain: {},
-  blockVisibility: {},
+  // `hiddenBlocks`, not the `blockVisibility` inclusion list docs/adr/0041
+  // replaced — this config is derived and never persisted, so the stale key
+  // was inert, but leaving it here invited the next reader to copy it.
+  hiddenBlocks: {},
+  // §4.1 rule 2: a range Position is the using agency and owns airspace state,
+  // not a scope. No selectors, and none derived either — unlike `positions`,
+  // there is nothing in the airspace config that describes a radar.
+  positionRadars: {},
   bays: {},
   dataOnly: false,
   standingReleases: [],
@@ -322,7 +370,49 @@ function validateConfig(candidate) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `positionClasses references unknown Position ${positionId}` };
     }
   }
+  // Radar selectors are checked for SHAPE only, not for resolving to anything.
+  // A selector naming an airfield this theater does not have is legitimate —
+  // the same config has to work across theaters — so an unresolvable selector
+  // is a startup warning (index.js's _validateRadarSelectors, following
+  // _validateAirspaceReferences), never a config rejection. A malformed one is
+  // a different matter: it can never resolve in any theater.
+  for (const [positionId, selectors] of Object.entries(candidate.positionRadars || {})) {
+    if (!(candidate.positions || []).includes(positionId)) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `positionRadars references unknown Position ${positionId}` };
+    }
+    if (!Array.isArray(selectors)) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `positionRadars.${positionId} must be an array of selectors` };
+    }
+    for (const selector of selectors) {
+      const problem = validateRadarSelector(selector);
+      if (problem) {
+        return { ok: false, reason: 'VALIDATION_ERROR', detail: `positionRadars.${positionId}: ${problem}` };
+      }
+    }
+  }
   return { ok: true };
+}
+
+const RADAR_SELECTOR_KINDS = new Set(['airport', 'approach', 'awacs', 'fighter', 'carrier']);
+
+/** Returns a human problem string, or null when the selector is well formed. */
+function validateRadarSelector(selector) {
+  if (!selector || typeof selector !== 'object') return 'a selector must be an object';
+  if (!RADAR_SELECTOR_KINDS.has(selector.kind)) {
+    return `unknown radar kind ${JSON.stringify(selector.kind)} (one of ${[...RADAR_SELECTOR_KINDS].join(', ')})`;
+  }
+  if (selector.airport !== undefined && typeof selector.airport !== 'string') {
+    return 'airport must be an ICAO/name string, or "*"';
+  }
+  if (selector.coalition !== undefined && selector.coalition !== 'own' && selector.coalition !== 'any') {
+    return 'coalition must be "own" or "any"';
+  }
+  // An airport selector against an airborne kind cannot mean anything, and a
+  // config that says it is confused about what it is asking for.
+  if (selector.airport && (selector.kind === 'awacs' || selector.kind === 'fighter')) {
+    return `${selector.kind} radars are airborne — an airport selector cannot match one`;
+  }
+  return null;
 }
 
 function _loadOne(facilityId) {
@@ -393,6 +483,28 @@ function getPositionClass(positionId) {
     if (Object.prototype.hasOwnProperty.call(classes, positionId)) return classes[positionId];
   }
   return null;
+}
+
+/**
+ * A Position's radar selectors (docs/adr/0043). Empty for a Position with no
+ * scope — Ground and Clearance Delivery genuinely have none, and that is the
+ * answer, not a gap.
+ */
+function getPositionRadars(positionId, facilityId = DEFAULT_FACILITY_ID) {
+  const config = configs.get(facilityId);
+  if (!config) return [];
+  return deepClone((config.positionRadars || {})[positionId] || []);
+}
+
+/** Every Position, anywhere, that has at least one radar selector — what the coverage panel calls a "radar Position". */
+function radarBearingPositionIds() {
+  const out = [];
+  for (const config of configs.values()) {
+    for (const [positionId, selectors] of Object.entries(config.positionRadars || {})) {
+      if (Array.isArray(selectors) && selectors.length) out.push(positionId);
+    }
+  }
+  return out;
 }
 
 function getBaysFor(positionId, facilityId = DEFAULT_FACILITY_ID) {
@@ -500,6 +612,7 @@ function coordinationBayFor(positionId, facilityId = DEFAULT_FACILITY_ID) {
 module.exports = {
   DEFAULT_FACILITY_ID, getFacilityIds,
   getFacilityConfig, getPositionSet, getPositionClass, getCoveringChain, getBaysFor, getAllBays, isBlockVisible,
+  getPositionRadars, radarBearingPositionIds, validateRadarSelector, RADAR_SELECTOR_KINDS,
   bayImpliesState, bayForImpliedState, bayExists, coordinationBayFor, setFacilityConfig, validateConfig,
   DEFAULT_CONFIG, DEFAULT_CENTER_CONFIG, DEFAULT_TACTICAL_CONFIG, DEFAULT_CONFIGS,
 };

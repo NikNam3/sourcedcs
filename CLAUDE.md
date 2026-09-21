@@ -8,7 +8,7 @@ SOURCE DCS is an open-source monorepo for a virtual aviation squadron. It contai
 
 - **atobrief** — Tactical briefing web app (ATO packages, airspace, SPINS, real-time presenter/presentee sync)
 - **sourcedcs-web** — Squadron public website (roster via Discord, events, applications, media, and crc-desktop's download page)
-- **crc-sync** — Central multiplayer sync backend for crc-desktop (DCS-gRPC + SRS client, Casdoor-authed WebSocket feed). Replaces the retired `asacs_link`.
+- **crc-sync** — Central multiplayer sync backend for crc-desktop (DCS-gRPC + SRS client, Casdoor-authed WebSocket feed). Also owns the **radar picture**: radars, sweep, terrain line-of-sight and per-Position coverage all live here rather than in each client (`docs/adr/0042`). Replaces the retired `asacs_link`.
 - **crc-desktop** — Electron desktop GCI/datalink client ("CRC") that connects to crc-sync. Bundles a local Node server and a Python SRS radio bridge (`lxsrs_v2`).
 - **lxsrs_v2** — Python SRS Standalone client library used by crc-desktop's bundled radio bridge (not a standalone service — see crc-desktop's architecture below).
 - **tools/miztoyaml** — Python CLI that converts DCS `.miz` mission files to ATO brief YAML
@@ -155,6 +155,13 @@ docker compose up -d                                  #   NOT mariadb/casdoor/ce
 1. `docker compose pull` is deliberately scoped to just the three images we publish. Pulling every service (including third-party base images like `mariadb:11`) means one transient registry hiccup on an image that didn't even change aborts the *entire* deploy under `set -e` — this once blocked an unrelated nginx config fix for hours.
 2. The `git pull` step is what actually gets a **non-image** config change (e.g. `infra/docker-compose.yml`, `nginx`'s embedded config, `.env.example`) onto the server. Before it existed, editing `docker-compose.yml` in the repo did nothing to the running stack until someone manually pulled on the server — `docker compose pull && up -d` alone only ever picks up new *images*.
 
+`crc-sync` mounts one volume, `crc-sync-data:/app/data`, holding only the DEM tile cache. It is
+deliberately **not** mounted over `/app/config`: a named volume starts empty and would shadow the
+facility, airspace, squawk-map and radar-spec files baked into the image, which presents as every one
+of them having reset to defaults. Note the consequence, recorded in `docs/adr/0042` and the EFSP
+briefing rather than fixed there: **`config/` has no volume, so the EFSP Board snapshot and mutation
+log do not survive a container recreate**, despite `docs/adr/0002` making the Board durable.
+
 `nginx`'s config is generated inline in `infra/docker-compose.yml`'s `command:` block (no standalone `nginx.conf`). `client_max_body_size` there is `350M` — needed for crc-desktop installer uploads; if you're debugging a `413` on any upload endpoint, check this first, and remember it only takes effect after the `git pull` + `docker compose up -d` sequence above actually runs on the server (not just after merging to `main`).
 
 ## How to build and release crc-desktop
@@ -187,3 +194,5 @@ See `.env.example` for all required variables. Key ones:
 | `RELEASE_UPLOAD_TOKEN` | sourcedcs-web (accepts uploads) + the `crc-desktop-release.yml` repo secret (sends them) — must match |
 | `CRCSYNC_SOURCEDCS_WEB_URL` | crc-sync (EFSP flight-plan lookup — reaches sourcedcs-web at `http://main-website:7000` inside the Docker stack) |
 | `FLIGHT_PLAN_SERVICE_TOKEN` | sourcedcs-web (accepts EFSP's filed-plan queries) + crc-sync (sends them) — must match |
+| `CRCSYNC_MAPTILER_KEY` | crc-sync (terrain masking for the radar picture — **optional**: without it every radar sees to its full range and nothing is masked, logged once at startup) |
+| `CRCSYNC_TERRAIN_CACHE_DIR` | crc-sync (DEM tile cache; the Docker stack points it at the `crc-sync-data` volume) |

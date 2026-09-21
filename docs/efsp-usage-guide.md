@@ -12,8 +12,10 @@ Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green):
 - **The `RANGE` station**: MOAs and ranges as real entities with a booked schedule, an activation approval round trip, and flights approved onto a working or range-control frequency — see §8A.
 - **Flight-plan pre-fill**: `OPS`'s CreateStrip form looks up a pilot-submitted DD1801 (ICAO IFR) flight plan from sourcedcs-web by callsign and pre-fills the departure fields — see §4.
 - **`ops-filed` queue**: `OPS`'s `ops-filed` Bay now shows every currently-filed DD1801 plan as a card, each with a one-click "Create Strip" — see §4. ⚠️ **Requires a deployment step to actually work** — see the callout at the end of §4.
+- **Radar coverage follows the Positions you hold** — the radar selector is gone. See §8B.
+- **WP5: correlation** — every Strip says which contact on the scope it is, clicking a Strip rings its contact, and clicking a contact selects its Strip. See §8C.
 
-Not built: WP5 (track correlation), WP6 (the wider military layer), WP7 (ATO ingest), WP7A (carrier/PAR), WP8 (instrumentation). `docs/efsp-wp4a-briefing.md` is the current handoff note.
+Not built: WP6 (the wider military layer), WP7 (ATO ingest), WP7A (carrier/PAR), WP8 (instrumentation). `docs/efsp-briefing.md` is the current handoff note.
 
 Facility/Position map as it stands:
 
@@ -183,7 +185,7 @@ FDR {
     equipmentCodes, equipmentSuffix (derived from equipmentCodes, never write directly),
     degradation ('NONE'|'TRANSPONDER_FAILED'|'MODE_C_FAILED')      — equipment failure
     beaconAssigned (Block 5, controller/system-set)
-    beaconObserved                                                  — WP5 hook, always null
+    beaconObserved                                                  — what the aircraft is ACTUALLY squawking, from its correlated contact
     modeOne, modeTwo                                                — WP7/ATO-owned, no setter exists (defect D24 guard)
     tailNumber, unit, homeStation
     trackDegradationFlag ('NONE'|'CST'|'FAIL'|'IF'|'NT'|'TRK')      — WP4A, radar-track quality (NOT equipment — see `degradation` above)
@@ -204,7 +206,7 @@ FDR {
     landingRunway                                                   — ARRIVAL-role field
   }
   military      null   — WP6 hook, inert
-  trackRef      null   — WP5 hook, inert
+  trackRef      null   — permanently null; the correlation is its own record, keyed by fdrId (see §8C)
   airspace: { owner (null|'CONTROLLING_AGENCY'|'USING_AGENCY'), changedAt, changedBy }  — WP4A, §4.6.4, direction only, never a boolean
   provenance    { [path]: 'COMPUTER_GENERATED'|'CONTROLLER_ENTERED'|'SYSTEM_DERIVED' }
   createdAt/updatedAt/updatedBy
@@ -213,10 +215,12 @@ FDR {
 
 **Subbucket usage, in plain terms:**
 - **`identity`** — "who/what is this aircraft" (callsign, type, squawk, equipment). Mostly filled at creation; `beaconAssigned` is minted automatically unless overridden.
+- **`beaconAssigned` and `beaconObserved` are two fields on purpose**, and comparing them is the point: they match (all well), they differ (the pilot is squawking the wrong code — the Strip shows `TRK?`), or observed is null (assigned, nothing received — either the transponder is off or nothing has correlated yet). Collapsing them into one would hide a mismatch entirely, which is a defect the guide names by number. `beaconObserved` is written by the correlation subsystem, never by a controller.
 - **`filed`** — "what the pilot/flight plan asked for" (route, altitude, airports, times). This is what `isFlightPlanValid` checks before `CLEARED` is reachable, and what §4's pre-fill populates.
 - **`assigned`** — "what ATC has actually granted" (clearance, release state/timing, ATIS code, movement times). This is the bucket that changes as a flight progresses through the departure sequence.
 - **`airspace`** — WP4A only, a delegated-airspace direction, orthogonal to everything else.
-- **`military`/`trackRef`** — reserved for WP6/WP5, don't populate them, nothing reads them yet.
+- **`military`** — reserved for WP6, don't populate it, nothing reads it yet.
+- **`trackRef`** — permanently null, and kept only so its absence isn't a schema change later. The correlation lives in its own store keyed by `fdrId`, because one flight can have several Strips and they are all the same aircraft — see §8C.
 
 ## 7. Release states (why a Strip can be stuck at CLEARED/HELD)
 
@@ -343,6 +347,67 @@ restriction rather than being refused, so tightening it and later lifting it (pa
 one action. No restriction at all is not the same as a restriction covering the whole area — the
 first says nobody has deconflicted this flight yet, the second says somebody has. The board shows
 each flight's block next to its callsign.
+
+## 8B. Radar coverage — it follows what you're acting as
+
+**There is no radar selector any more.** What you can see on the scope is decided by the Positions you
+hold under **ACTING AS**, not by anything you tick. The Coverage list in the same panel is read-only:
+it tells you which radars your Positions give you, and which Position gave you each one.
+
+| Holding | You see |
+|---|---|
+| `TWR` | Incirlik's field surveillance radar (40 nm, and the only one that shows ground vehicles) |
+| `APP` | that, plus the approach radar (80 nm) — you are the RAPCON |
+| `CTR` | every airfield's approach radar in the theater, i.e. the en-route picture |
+| `TAC_C2` / `AIC` / `GCI` | the own-coalition airborne picture (AWACS and fighter radars) |
+| `OPS`, `CD`, `GND`, `JTAC` | **nothing** |
+
+That last row is deliberate, not a fault. Ground and Clearance Delivery have no scope in any real
+facility, so holding only those shows an empty map and a banner saying **NO RADAR COVERAGE — HOLD A
+RADAR POSITION**. If you need the picture, take a radar Position; you will get it the moment you do.
+
+Two consequences worth knowing:
+
+- **Everyone holding the same Position sees the same thing**, down to when each contact's beam passed
+  over it. Observers included — you get the picture for a Position somebody else is Primary at.
+- **The picture can change without you touching anything**, when a colleague takes or hands back a
+  Position, or when an AWACS takes off. The Coverage list is the place to look.
+
+A radar whose aircraft is on the ground is listed with `GND` beside it and shows nothing — that is a
+parked AWACS, not a fault. Which scope sits at which console is squadron configuration
+(`positionRadars` in the facility config), and the shipped defaults are a guess.
+
+## 8C. Correlation — how a Strip finds its contact
+
+Every Strip carries a badge saying which surveillance contact it is:
+
+| Badge | Means | What to do |
+|---|---|---|
+| `TRK VIPER11` | **correlated.** Hover it to see how — its beacon code, its callsign, or a controller's binding | nothing |
+| `TRK?` | **provisional.** Hover it: usually the contact is squawking a different code from the one you assigned, or the callsign only nearly matches | check the squawk; bind it if you are sure |
+| `NO TRK` | **uncorrelated.** Nothing on your scope matches this flight | `Bind…` it if you can see which one it is |
+| `TRK ×2` | **ambiguous.** Two contacts match equally well, and the system will not guess | click it and pick the right one |
+
+`NO TRK` in a warmer colour, with a coloured edge on the Strip, means something stronger: the contact
+this flight *was* on has gone. That is different from never having found one, and it is worth a look.
+
+**`Bind…` is the override, and it wins over everything.** A jet with its transponder off, under a
+callsign DCS spells differently from the flight plan, will not match automatically — but if you can
+see it, you can say so, and the binding sticks until you `Unbind` it. It is also how you settle a
+`TRK ×2`.
+
+**Clicking works both ways.** Click a Strip and its contact gets a ring on the map. Click a contact
+and its Strip is selected and scrolled into view. Clicking a contact that has no Strip leaves your
+Strip selection alone — the absence of a ring is the answer.
+
+**After a DCS mission reload, every Strip briefly says `NO TRK` and then re-binds itself on the
+squawk, usually within a second.** That is correct and expected: a reload gives every aircraft a new
+internal identity, so the system drops the old one loudly rather than quietly pointing at something
+that no longer exists. A flight whose transponder is off will stay `NO TRK` until somebody binds it.
+
+The panel header shows a rate — `TRK 96% (24/25)` — of how many flights that could have a contact
+have one. It turns amber below 95%, which the guide treats as a defect rather than a fact of life. A
+flight still on the ramp is not counted.
 
 ## 9. General controls — quick reference
 

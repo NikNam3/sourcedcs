@@ -28,8 +28,15 @@ const SQUAWK_EMERGENCY = { 7700: 'gen', 7600: 'radio', 7500: 'hijack' };
 const EMERGENCY_COLOR  = { gen: '#cc2222', radio: '#b8a000', hijack: '#cc6600' };
 
 // Radar sweep
-const SWEEP_BEAM_DEG  = 4;   // rotating beam width in degrees
-const SWEEP_INTERVAL  = 50;  // ms between sweep ticks
+// Beam width for the debug overlay only. Detection is crc-sync's, and it
+// computes the instant the beam crosses a contact's bearing rather than
+// testing whether the beam happens to be within a few degrees of it — so this
+// is now purely how wide the drawn wedge is (see its src/coverage.js).
+const SWEEP_BEAM_DEG  = 4;
+// How often the fade/expiry pass runs. It used to be the sweep tick at 50ms,
+// where the interval decided which contacts were found at all; now nothing is
+// detected here and 250ms is smooth enough for a ten-second fade.
+const FADE_TICK_MS    = 250;
 
 // Assumed antenna/mast height (meters) above field elevation / waterline —
 // DCS doesn't report actual radar tower height, so ground-based radars need
@@ -40,25 +47,32 @@ const SHIP_RADAR_HEIGHT_M    = 40;
 
 // ── State ─────────────────────────────────────────────────────────────────
 
-// latestFromServer: all track data as received from server (no filtering).
-// tracks: tracks currently visible on scope (illuminated by at least one radar).
-// lastSweepMs: when each track was last hit by a radar beam.
-const latestFromServer = new Map(); // id → track (raw server data)
+// The radar picture is server-authoritative (crc-sync's docs/adr/0042). This
+// renderer no longer derives radars, owns a sweep phase, or decides what it is
+// allowed to see: crc-sync sends only the contacts the Positions this
+// controller holds can actually see, each stamped with `illuminatedAt` — when
+// the beam last passed over it — and `seenBy`, which radars saw it.
+//
+// Two maps, and the distinction between them is load-bearing:
+//   latestFromServer — every contact in this controller's coverage. The
+//     un-gated shared truth that IFF declarations, renames and track numbers
+//     read, so they reflect at once rather than waiting for a beam.
+//   tracks — the contacts still inside the fade window, i.e. what is on the
+//     scope right now. Telemetry (alt/hdg/spd/vs) stays gated on illumination
+//     on purpose: that IS the radar simulation, it is simply computed once on
+//     the server now instead of once per client.
+const latestFromServer = new Map(); // id → track (as delivered, incl. illuminatedAt)
 const tracks           = new Map(); // id → track (displayed)
 window.getAllTracks    = () => [...latestFromServer.values()];
-// Un-sweep-gated lookup for UI that should reflect crc-sync's shared state
-// immediately (IFF declarations, renames, track numbers) rather than waiting
-// for the simulated radar beam to illuminate the track — see ui.js's track
-// panel, which uses this for everything except telemetry (alt/hdg/spd/vs),
-// which stays sweep-gated on purpose (that IS the radar-realism simulation).
 window.getLatestTrack   = (id) => latestFromServer.get(String(id)) || null;
 const history          = new Map(); // id → [{lat, lon, alt, timestamp}, ...]
 const labelOffsets     = new Map(); // id → [dLat, dLon] relative to track
 
-// Per-radar sweep state
-const radarSweepStart  = new Map(); // radarId → sweepStartMs
-const noseScanLastMs   = new Map(); // radarId → lastScanMs (nose radars)
-const lastSweepMs      = new Map(); // trackId → timestamp of last illumination
+// When the server says each contact was last illuminated. Replaces the local
+// `lastSweepMs` the deleted sweep loop used to write, and is the one clock the
+// fade is computed against — so two controllers watching one contact see it
+// decay together.
+const lastSweepMs      = new Map(); // trackId → illuminatedAt, from the server
 const zeroSpeedSinceMs = new Map(); // trackId → timestamp when 0-speed-airborne first detected
 
 // User-assigned labels for ground vehicles (persists across view switches)
@@ -75,7 +89,7 @@ let missionData      = null;
 let weather          = { pressurePa: 101325, tempK: 288.15 }; // ISA defaults until server sends live data
 let atisActive       = []; // [{ frequency, ownerId }] — who's currently transmitting ATIS where, from crc-sync
 let grpcStatus       = 'disconnected';
-let noRadarsActive   = false; // true when all radars are disabled / none available
+let noRadarsActive   = false; // true when the held Positions grant no radar at all
 let srsStatus        = 'disconnected';
 let lastUpdateMs     = null;
 let mapReady         = false;
@@ -89,10 +103,24 @@ let selectedApt      = null;
 let _ws              = null;
 let approachRwyCourse = null; // used for approach-vector line
 
-// Radar selector — opt-in: only radars in this set are used for tracking.
-// Default: all off.  User enables radars from the Panels control (topbar
-// button — see dock.js's PANEL_TITLES for its current label).
-const enabledRadarIds = new Set();
+// ── Coverage ──────────────────────────────────────────────────────────────
+// What this controller is looking through, as crc-sync's `coverage` message
+// last stated it. Not a selection: it follows the Positions they hold
+// (crc-sync's docs/adr/0042), so there is nothing here for a user to toggle
+// and the radar selector that used to own it is gone. Ground, Clearance
+// Delivery and Operations have no scope, and a controller holding only those
+// correctly gets an empty list — the banner says so rather than the map going
+// quietly blank.
+let coverageRadars = [];          // [{id, type, label, lat, lon, elevM, rangeM, sweepMs, sweepStart, grantedBy, ...}]
+let coverageHeldPositions = [];   // [{facilityId, positionId, isPrimary}]
+
+/** Every radar this controller is looking through. */
+function getActiveRadars() { return coverageRadars; }
+
+/** The approach radar for an airfield, if we are looking through it — used by the extended centerline. */
+function coverageApproachFor(airportName) {
+  return coverageRadars.find(r => r.type === 'approach' && r.airport === airportName) || null;
+}
 
 // ── Static data ───────────────────────────────────────────────────────────
 
@@ -139,7 +167,7 @@ const DEFAULTS = {
   navDeclutter5:   true,  // hide navpoints whose names are not exactly 5 letters
   trailIntervalMs: 5000, // minimum ms between trail dot recordings
   declutter:       true,  // auto-hide labels for sequential-squawk formation flights
-  datalink:        false, // auto-include all friendly aircraft radars
+  datalink:        false, // draw datalink lock lines (geojson.js's buildDatalinkLines)
   transitionAltFt: 18000, // ft — below this use QNH, at/above use standard (FL)
   gameTimeOffset:  0,     // hours — theater UTC offset subtracted to display Zulu
   aprtManualWx:    {},    // per-airport manually-entered vis/cloud data, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
@@ -223,16 +251,10 @@ function indicatedAltFt(trueAltM) {
   }
 }
 
-function loadEnabledRadars() {
-  try {
-    const raw = localStorage.getItem('crc-desktop-enabled-radars');
-    if (raw) JSON.parse(raw).forEach(id => enabledRadarIds.add(id));
-  } catch (_) {}
-}
-
-function saveEnabledRadars() {
-  localStorage.setItem('crc-desktop-enabled-radars', JSON.stringify([...enabledRadarIds]));
-}
+// `crc-desktop-enabled-radars` in localStorage, and the load/save pair that
+// owned it, are gone: coverage is not a per-client preference any more, so
+// there is nothing to persist. A leftover key from a previous version is
+// harmless and simply never read again.
 
 // ── Scale helpers ─────────────────────────────────────────────────────────
 
@@ -269,219 +291,31 @@ function pushHistory(id, track) {
   if (h.length > max) h.splice(0, h.length - max);
 }
 
-// ── Radar simulation ──────────────────────────────────────────────────────
+// ── The picture, as delivered ─────────────────────────────────────────────
+//
+// Everything that used to live here is crc-sync's now: the radar list derived
+// from mission data, the 50ms rotating-beam sweep, the ±4° beam test and the
+// terrain call all moved into its src/radars.js, src/coverage.js and
+// src/terrain.js (its docs/adr/0042). Two bugs went with them. The sweep
+// sampled a ~22ms beam dwell on a 50ms tick and silently missed contacts
+// depending on where the tick landed; and every client ran its beams at its
+// own phase, so no two controllers ever saw quite the same picture — which is
+// what made a shared "this Strip is that contact" record impossible.
+//
+// What stays here is the part that was always a display concern: how a contact
+// fades once its beam has passed, and when it finally goes.
 
-const _HELIPAD_RE = /helipad|farp|fob/i;
-
-// Cache for getAllRadars() — valid for one sweep interval (< SWEEP_INTERVAL ms).
-// Avoids rebuilding the radar list on every call within the same tick.
-let _allRadarsCache   = null;
-let _allRadarsCacheMs = 0;
-
-function invalidateRadarsCache() {
-  _allRadarsCache = null;
-}
-
-// Returns every radar that could potentially be active (regardless of user toggle).
-// type: 'airport' | 'approach' | 'awacs' | 'fighter' | 'carrier'
-function getAllRadars() {
-  const now = Date.now();
-  if (_allRadarsCache && now - _allRadarsCacheMs < SWEEP_INTERVAL - 5) return _allRadarsCache;
-  _allRadarsCache   = _buildAllRadars();
-  _allRadarsCacheMs = now;
-  return _allRadarsCache;
-}
-
-function _buildAllRadars() {
-  const radars   = [];
-  const airports = (missionData && missionData.airports) || [];
-
-  for (const apt of airports) {
-    if (!apt.lat || !apt.lon) continue;
-    if (apt.name === 'H' || _HELIPAD_RE.test(apt.name)) continue;
-    const aptLabel = apt.icao || apt.name;
-
-    radars.push({
-      id: `apt:${apt.name}`, type: 'airport', label: aptLabel,
-      lat: apt.lat, lon: apt.lon, elevM: (apt.elev || 0) + AIRPORT_RADAR_HEIGHT_M,
-      rangeM: 40 * 1852, sweepMs: 2000,
-      seesGround: true, seesShips: false, noGroundAircraft: false,
-      angleFromNose: 360, heading: 0,
-    });
-
-    radars.push({
-      id: `app:${apt.name}`, type: 'approach', label: aptLabel + ' APP',
-      lat: apt.lat, lon: apt.lon, elevM: (apt.elev || 0) + AIRPORT_RADAR_HEIGHT_M,
-      rangeM: 80 * 1852, sweepMs: 3000,
-      seesGround: false, seesShips: false, noGroundAircraft: true,
-      angleFromNose: 360, heading: 0,
-    });
-  }
-
-  for (const t of latestFromServer.values()) {
-    if (t.category !== 1 && t.category !== 2) continue;
-    const spec = aircraftTypes[t.type];
-    if (!spec || !spec.radar) continue;
-    const onGnd = checkOnGround(t);
-    // 360° rotating dish → AWACS; forward-looking nose radar → fighter
-    const radarType = spec.radar.angleFromNose === 360 ? 'awacs' : 'fighter';
-    radars.push({
-      id: `crc:${t.id}`, type: radarType, label: resolveCallsign(t),
-      sublabel: spec.label || t.type,
-      lat: t.lat, lon: t.lon, elevM: t.alt,
-      rangeM: spec.radar.rangeNm * 1852, sweepMs: spec.radar.sweepMs,
-      seesGround: false, seesShips: true, noGroundAircraft: true,
-      angleFromNose: spec.radar.angleFromNose, heading: t.heading || 0,
-      onGround: onGnd,
-      coalition: t.coalition,
-    });
-  }
-
-  // Ship radars — all category-4 tracks get a radar entry.
-  // Known types (in aircraft-types.json with carrierRadar) use their spec;
-  // unknown ship types fall back to a generic 40 nm surface-search radar.
-  const SHIP_RADAR_DEFAULT = { rangeNm: 40, sweepMs: 5000 };
-  for (const t of latestFromServer.values()) {
-    if (t.category !== 4) continue;
-    const spec      = aircraftTypes[t.type];
-    const radarSpec = (spec && spec.carrierRadar) || SHIP_RADAR_DEFAULT;
-    radars.push({
-      id: `carrier:${t.id}`, type: 'carrier',
-      label:    resolveCallsign(t) || (spec && spec.label) || t.type,
-      sublabel: (spec && spec.label) || t.type,
-      lat: t.lat, lon: t.lon, elevM: t.alt + SHIP_RADAR_HEIGHT_M,
-      rangeM: radarSpec.rangeNm * 1852, sweepMs: radarSpec.sweepMs,
-      seesGround: false, seesShips: true, noGroundAircraft: true,
-      angleFromNose: 360, heading: 0,
-      onGround: false,
-    });
-    const isCarrier = (t.type && t.type.includes('CVN')) || (spec && spec.label && spec.label.includes('CVN'));
-    if (isCarrier) {
-      radars.push({
-        id: `app:${t.id}`, type: 'carrier',
-        label: `${resolveCallsign(t) || (spec && spec.label) || t.type} APP RDR`,
-        sublabel: (spec && spec.label) || t.type,
-        lat: t.lat, lon: t.lon, elevM: t.alt + 45,
-        rangeM: 50 * 1852,
-        sweepMs: 4000,
-        seesGround: false, seesShips: false, noGroundAircraft: true,
-        angleFromNose: 360,
-        heading: 0,
-        onGround: false,
-      });
-    }
-  }
-
-  return radars;
-}
-
-// Returns only the radars the user has explicitly enabled AND that are operational.
-// When datalink is active, all friendly airborne aircraft radars are included automatically.
-function getActiveRadars() {
-  const all    = getAllRadars();
-  const active = all.filter(r => enabledRadarIds.has(r.id) && !r.onGround);
-
-  if (!settings.datalink) return active;
-
-  // Datalink: auto-include every friendly coalition aircraft radar not already in the list
-  const activeIds = new Set(active.map(r => r.id));
-  for (const r of all) {
-    if (activeIds.has(r.id)) continue;
-    if (r.onGround) continue;
-    if (r.type !== 'awacs' && r.type !== 'fighter') continue;
-    if (r.coalition !== userCoalition) continue;
-    active.push(r);
-  }
-
-  return active;
-}
-
-// Sweep simulation — runs every SWEEP_INTERVAL ms.
-// For 360° radars: rotating beam illuminates each track as the beam passes over it.
-// For nose radars: beam oscillates left→right→left within the cone (one pass = sweepMs).
 setInterval(() => {
-  const now    = Date.now();
-  const radars = getActiveRadars();
-  let   changed = false;
+  const now = Date.now();
+  let changed = false;
 
-  // Per-tick on-ground cache: avoids repeating the airport-loop for each radar
-  // that tests the same track. Only computed for cat 1/2 (the only ones checked).
-  const onGroundCache = new Map();
-  for (const [id, t] of latestFromServer) {
-    if (t.category === 1 || t.category === 2) onGroundCache.set(id, checkOnGround(t));
-  }
-
-  for (const radar of radars) {
-    if (radar.angleFromNose === 360) {
-      if (!radarSweepStart.has(radar.id)) radarSweepStart.set(radar.id, now);
-      const sweepAngle = ((now - radarSweepStart.get(radar.id)) % radar.sweepMs) / radar.sweepMs * 360;
-
-      for (const [id, t] of latestFromServer) {
-        if (t.category === 3 && !radar.seesGround) continue;
-        if (t.category === 4 && !radar.seesShips) continue;
-        const isGroundContact = (t.category === 1 || t.category === 2) && onGroundCache.get(id);
-        if (radar.noGroundAircraft && isGroundContact) continue;
-        const distM = haversineM(radar.lat, radar.lon, t.lat, t.lon);
-        if (distM > radar.rangeM) continue;
-        const bearing = bearingDeg(radar.lat, radar.lon, t.lat, t.lon);
-        const diff = Math.abs(((bearing - sweepAngle + 540) % 360) - 180);
-        if (diff > SWEEP_BEAM_DEG) continue;
-        // Real-world DEM terrain masking doesn't apply within an airfield's own
-        // footprint: DCS grades airports flat regardless of what the actual
-        // terrain there looks like, so a ground contact sitting a few meters
-        // from the tower can get spuriously blocked by an unrelated real-world
-        // bump the sim doesn't model — see checkOnGround's GROUND_RADIUS_M.
-        if (!isGroundContact && losHasLineOfSight(radar.lat, radar.lon, radar.elevM, t.lat, t.lon, t.alt) === false) continue;
-
-        const prevSweep = lastSweepMs.get(id) || 0;
-        tracks.set(id, t);
-        lastSweepMs.set(id, now);
-        if (now - prevSweep > 1000) pushHistory(id, t);
-        changed = true;
-      }
-
-    } else {
-      // Nose radar: oscillating beam sweeps left→right→left
-      if (!radarSweepStart.has(radar.id)) radarSweepStart.set(radar.id, now);
-      const halfAngle = radar.angleFromNose / 2;
-      const cycleMs   = radar.sweepMs * 2;
-      const phase     = ((now - radarSweepStart.get(radar.id)) % cycleMs) / cycleMs;
-      const tNorm     = phase < 0.5 ? phase * 2 : (1 - phase) * 2;
-      const beamAngle = (radar.heading - halfAngle + tNorm * radar.angleFromNose + 360) % 360;
-
-      for (const [id, t] of latestFromServer) {
-        if (t.category === 3 && !radar.seesGround) continue;
-        if (t.category === 4 && !radar.seesShips) continue;
-        const isGroundContact = (t.category === 1 || t.category === 2) && onGroundCache.get(id);
-        if (radar.noGroundAircraft && isGroundContact) continue;
-        const distM = haversineM(radar.lat, radar.lon, t.lat, t.lon);
-        if (distM > radar.rangeM) continue;
-        const bearing = bearingDeg(radar.lat, radar.lon, t.lat, t.lon);
-        const diff = Math.abs(((bearing - beamAngle + 540) % 360) - 180);
-        if (diff > SWEEP_BEAM_DEG) continue;
-        // See the 360°-sweep branch above for why ground contacts skip real terrain LOS.
-        if (!isGroundContact && losHasLineOfSight(radar.lat, radar.lon, radar.elevM, t.lat, t.lon, t.alt) === false) continue;
-
-        const prevSweep = lastSweepMs.get(id) || 0;
-        tracks.set(id, t);
-        lastSweepMs.set(id, now);
-        if (now - prevSweep > 1000) pushHistory(id, t);
-        changed = true;
-      }
-    }
-  }
-
-  // "No radars active" overlay
-  const newNoRadars = radars.length === 0;
-  if (newNoRadars !== noRadarsActive) { noRadarsActive = newNoRadars; updateNoAwacsUI(); }
-
-  // Zero-speed-airborne detection: track when each visible airborne track first hits 0 kt.
-  // These tracks are faded out after the normal grace period even if the radar keeps sweeping them.
+  // Zero-speed-airborne detection: a contact that stops dead in the air is
+  // almost always a despawn DCS has not reported, so it ages out even while
+  // the beam keeps finding it.
   for (const [id, t] of tracks) {
     if (t.category === 3 || t.category === 4) { zeroSpeedSinceMs.delete(id); continue; }
-    if (onGroundCache.get(id)) { zeroSpeedSinceMs.delete(id); continue; }
-    const hist = history.get(id) || [];
-    const { speedKt } = kinematics(hist);
+    if (checkOnGround(t)) { zeroSpeedSinceMs.delete(id); continue; }
+    const { speedKt } = kinematics(history.get(id) || []);
     if (speedKt < 1) {
       if (!zeroSpeedSinceMs.has(id)) zeroSpeedSinceMs.set(id, now);
     } else {
@@ -489,7 +323,7 @@ setInterval(() => {
     }
   }
 
-  // Remove expired (fully faded) tracks
+  // Remove fully-faded contacts.
   const totalTrackLifeMs = FADE_DURATION_MS + (settings.fadeGraceMs ?? 10000);
   for (const [id] of tracks) {
     const sinceLastSweep = now - (lastSweepMs.get(id) || 0);
@@ -497,11 +331,10 @@ setInterval(() => {
     const sinceZeroSpeed = zeroSince ? now - zeroSince : 0;
     if (sinceLastSweep > totalTrackLifeMs || sinceZeroSpeed > totalTrackLifeMs) {
       tracks.delete(id);
-      lastSweepMs.delete(id);
       zeroSpeedSinceMs.delete(id);
       history.delete(id);
       labelOffsets.delete(id);
-      if (id === selectedRef) { selectedRef = null; }
+      if (id === selectedRef) selectedRef = null;
       changed = true;
     }
   }
@@ -511,62 +344,114 @@ setInterval(() => {
     updateMap();
   }
 
-  // Radar debug overlay update (runs even when no track changed)
+  // The debug beam overlay draws from the radar geometry in the coverage
+  // message, which carries the server's own sweep phase — so the beam it
+  // draws is where the beam actually is.
   if (settings.radarDebug && mapReady) {
-    map.getSource('radar-debug').setData(buildRadarDebug(radars));
+    map.getSource('radar-debug').setData(buildRadarDebug(coverageRadars));
   }
-}, SWEEP_INTERVAL);
+}, FADE_TICK_MS);
 
 // ── Track state ───────────────────────────────────────────────────────────
 
-// Clear all sweep/display state — called on snapshot reload or view switch.
-// latestFromServer is NOT cleared here; it holds raw server data.
-function resetSweepState() {
+// Clears the displayed picture. `latestFromServer` is NOT cleared here: it
+// holds everything in this controller's coverage, and a fade reset is not a
+// statement about what they are entitled to see.
+function resetDisplayedTracks() {
   tracks.clear();
   lastSweepMs.clear();
   zeroSpeedSinceMs.clear();
   history.clear();
   labelOffsets.clear();
-  radarSweepStart.clear();
   selectedRef = null;
   updateMap();
 }
 
+/**
+ * A full picture from the server. Arrives at connect and again whenever
+ * coverage changes — taking or handing back a Position releases radars, and
+ * every contact only those radars could see has to go with them, which a
+ * snapshot says without any chance of getting the diff wrong.
+ */
 function applySnapshot(trackList) {
   latestFromServer.clear();
   radarLocks.clear();
-  invalidateRadarsCache();
-  resetSweepState();
-  for (const t of trackList) latestFromServer.set(t.id, t);
+  resetDisplayedTracks();
+  for (const t of trackList) {
+    latestFromServer.set(t.id, t);
+    _receiveIllumination(t);
+  }
   lastUpdateMs = Date.now();
   updateMap();
-  // Rebuild panel in case AWACS/carrier tracks changed the available radar list
   refreshRadarPanelData();
 }
 
+/**
+ * Takes a delivered contact into the displayed picture if its beam has just
+ * passed over it. `illuminatedAt` is the server's instant, not ours, which is
+ * what keeps two controllers' fades in step.
+ */
+function _receiveIllumination(t) {
+  const at = t.illuminatedAt;
+  if (!Number.isFinite(at)) return false;
+  const previous = lastSweepMs.get(t.id) || 0;
+  if (at <= previous) return false;
+  tracks.set(t.id, t);
+  lastSweepMs.set(t.id, at);
+  // Same 1s floor the local sweep used, so a fast-scanning radar does not
+  // fill the trail with near-identical dots.
+  if (at - previous > 1000) pushHistory(t.id, t);
+  return true;
+}
+
 function applyDelta(updated, gone) {
+  let changed = false;
+
   for (const id of gone) {
     latestFromServer.delete(id);
-    // Displayed track stays in `tracks` and fades out naturally via lastSweepMs
+    // The displayed contact stays in `tracks` and fades out from its last
+    // illumination, the same as before — a contact leaving coverage should
+    // decay off the scope, not vanish mid-sweep.
   }
-  let metaChanged = false;
+
   for (const t of updated) {
     latestFromServer.set(t.id, t);
-    // Do NOT update position/kinematics here — those only update when the
-    // radar beam hits the track. But IFF/callsign/rename/track-number are
-    // the controller's own declarations (or a resolution of them), not
-    // something a beam needs to "reveal" — refresh them on an
-    // already-displayed track immediately so the map icon doesn't sit on
-    // stale IFF color/label until the next sweep happens to pass over it.
+    if (_receiveIllumination(t)) { changed = true; continue; }
+
+    // No new illumination, so this is an overlay edit: a declaration, a
+    // rename or a track number. Those are the controller's own statements,
+    // not something a beam has to reveal, so they land on an already-displayed
+    // contact at once rather than waiting for the next sweep.
     const displayed = tracks.get(t.id);
-    if (displayed) {
-      for (const key of ['iffState', 'iffOverride', 'callsign', 'rename', 'trackNumber']) {
-        if (displayed[key] !== t[key]) { displayed[key] = t[key]; metaChanged = true; }
-      }
+    if (!displayed) continue;
+    for (const key of ['iffState', 'iffOverride', 'callsign', 'rename', 'trackNumber']) {
+      if (displayed[key] !== t[key]) { displayed[key] = t[key]; changed = true; }
     }
   }
-  invalidateRadarsCache();
-  if (metaChanged) updateMap();
+
+  if (changed) { lastUpdateMs = Date.now(); updateMap(); }
+}
+
+/**
+ * A `coverage` message: which radars the Positions this controller holds let
+ * them look through (crc-sync's docs/adr/0042). Not a selection — there is
+ * nothing to toggle, and an empty list is the correct answer for a Ground or
+ * Clearance Delivery controller rather than a fault.
+ */
+function applyCoverage(msg) {
+  coverageRadars = msg.radars || [];
+  coverageHeldPositions = msg.heldPositions || [];
+
+  const nowNoRadars = coverageRadars.length === 0;
+  if (nowNoRadars !== noRadarsActive) { noRadarsActive = nowNoRadars; updateNoAwacsUI(); }
+
+  refreshRadarPanelData();
+  updateRadarBadge();
+  updateZoomLimits();
+  // Taking Tower or Approach is what opens the Airport panel now — see
+  // dock.js's notifyCoverageChanged.
+  if (typeof notifyCoverageChanged === 'function') notifyCoverageChanged();
+  updateMap();
 }
 
 // ── Zoom + pan limits ─────────────────────────────────────────────────────
@@ -657,7 +542,6 @@ async function connect() {
           localStorage.setItem('crc-desktop-mission-id', msg.missionId);
         }
         missionData = msg;
-        invalidateRadarsCache();
         if (mapReady) {
           map.getSource('airports').setData(buildAirports());
           map.getSource('bullseye').setData(buildBullseye());
@@ -665,7 +549,9 @@ async function connect() {
           map.getSource('drawings').setData(buildDrawings());
           map.getSource('text-marks').setData(buildTextMarks());
         }
-        // Rebuild radar panel so airport radars reflect the new mission
+        // The airfields changed, so the coverage list the server resolves for
+        // us will too — it sends a fresh `coverage` message of its own right
+        // after this. Redraw what we have in the meantime.
         refreshRadarPanelData();
         updateRadarBadge();
         // Refresh APRT panel airport list if panel is open
@@ -722,6 +608,12 @@ async function connect() {
         }
         saveSettings();
         if (typeof refreshAprtSelectedApt === 'function') refreshAprtSelectedApt();
+        break;
+      // Which radars our held Positions let us look through. Arrives before
+      // the first snapshot and again whenever the held set changes — see
+      // applyCoverage and crc-sync's docs/adr/0042.
+      case 'coverage':
+        applyCoverage(msg);
         break;
       case 'snapshot':
         applySnapshot((msg.tracks || []).map(normaliseTrack));
@@ -781,6 +673,24 @@ async function connect() {
       // The RANGE slice — an airspace is not a Strip and rides no Board's
       // seq, so it gets its own delta rather than a section of
       // efsp-board-delta.
+      // WP5 (crc-sync's docs/adr/0045) — changed correlation records, once
+      // per server reconcile tick. updateMap() matters as much as the
+      // re-render: a re-bind has to move the ring on the scope, not just the
+      // badge on the Strip.
+      case 'efsp-correlation-delta':
+        applyEfspCorrelationDelta(msg);
+        if (typeof refreshCorrelatedHighlight === 'function') refreshCorrelatedHighlight();
+        renderAllOpenEfspBays();
+        refreshEfspPanel();
+        updateMap();
+        break;
+      case 'efsp-correlation-ack':
+        if (!msg.ok) _showMutationError(msg);
+        applyEfspCorrelationDelta({ correlations: { updated: msg.correlation ? [msg.correlation] : [] } });
+        if (typeof refreshCorrelatedHighlight === 'function') refreshCorrelatedHighlight();
+        renderAllOpenEfspBays();
+        updateMap();
+        break;
       case 'efsp-airspace-delta':
         if (typeof applyEfspAirspaceDelta === 'function') applyEfspAirspaceDelta(msg);
         if (typeof renderAirspacePanel === 'function') renderAirspacePanel();
@@ -859,7 +769,6 @@ setInterval(() => {
 // ── Boot ──────────────────────────────────────────────────────────────────
 
 loadSettings();
-loadEnabledRadars();
 loadUserCoalition();
 loadIffOverrides();
 loadTrackRenames();

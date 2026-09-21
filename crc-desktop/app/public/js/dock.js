@@ -269,8 +269,8 @@ function toggleOrFocusPanel(id, addOptionsFn) {
 // Optional panels toggled from the radars-panel's "Panels" section (see
 // initRadarPanel() in ui.js) — off by default so the map keeps maximum
 // space until the user actually asks for one. Airport is additionally
-// driven by radar state (see notifyRadarToggled) — Settings/Squawk C/S have
-// no radar tie and are purely manual. Future dockable panels (flight
+// driven by radar coverage (see notifyCoverageChanged) — Settings/Squawk C/S
+// have no radar tie and are purely manual. Future dockable panels (flight
 // strips, PAR scope, marshal stack, LSO, chat) register here too.
 const DOCKABLE_PANELS = {
   // Always a fresh split off map (nothing else ever anchors to its own
@@ -331,9 +331,10 @@ function isDockPanelOpen(id) {
 // `preserveFocus`: dockview's addPanel() focuses whatever it just added by
 // default — fine for a deliberate "open this" click (Panels checkbox/pin),
 // but wrong for a panel opening as a *side effect* of something else (radar
-// implication, see notifyRadarToggled): confirmed firsthand that enabling a
-// radar mid-search yanked focus away from the Radars panel to the newly-
-// opened Airport panel, hiding the very search the user was still using.
+// implication, see notifyCoverageChanged): confirmed firsthand that gaining an
+// airport radar yanked focus away from the panel the user was working in to
+// the newly-opened Airport panel. It matters more now, not less — coverage can
+// change because a colleague took a Position, i.e. with no local input at all.
 function toggleDockPanel(id, open, { preserveFocus } = {}) {
   const optionsFn = DOCKABLE_PANELS[id];
   if (!optionsFn) return;
@@ -494,11 +495,16 @@ function withRememberedPlacement(id, options, allowGridSize) {
   return options;
 }
 
-// ── Radar-driven panel visibility ───────────────────────────────────────
-// Enabling a radar that implies a panel (currently just airport-type radars
-// → the Airport panel) opens it automatically; disabling the last radar
-// that implies it closes it again — unless the user has pinned it, which
-// keeps it open regardless of radar state until explicitly unpinned.
+// ── Coverage-driven panel visibility ────────────────────────────────────
+// Holding a Position that grants a radar implying a panel (currently just
+// airport-type radars → the Airport panel) opens it automatically; losing the
+// last radar that implies it closes it again — unless the user has pinned it,
+// which keeps it open until explicitly unpinned.
+//
+// The trigger used to be a user ticking a radar checkbox. Coverage follows the
+// held Positions now (crc-sync's docs/adr/0042), so the implication fires when
+// a controller takes Tower or Approach — which is when they want the Airport
+// panel anyway, and is a better signal than the one it replaced.
 // Settings/Squawk C/S have no radar tie and aren't affected by any of this.
 const RADAR_TYPE_TO_PANEL = { airport: 'airport' };
 
@@ -525,31 +531,36 @@ function setPanelPinned(id, pinned) {
     localStorage.setItem(PINNED_PANELS_KEY, JSON.stringify(_pinnedPanels));
   } catch (_) {}
   // Clicking PIN happens from inside the radars-panel's Panels section —
-  // preserve focus there too, same reasoning as notifyRadarToggled.
+  // preserve focus there too, same reasoning as notifyCoverageChanged.
   if (pinned) toggleDockPanel(id, true, { preserveFocus: true });
   else if (!isPanelImplied(id)) toggleDockPanel(id, false);
 }
 
-// True if any currently-enabled radar implies this panel.
+/** True if any radar in our current coverage implies this panel. */
 function isPanelImplied(panelId) {
-  for (const r of getAllRadars()) {
-    if (enabledRadarIds.has(r.id) && RADAR_TYPE_TO_PANEL[r.type] === panelId) return true;
+  for (const r of getActiveRadars()) {
+    if (RADAR_TYPE_TO_PANEL[r.type] === panelId) return true;
   }
   return false;
 }
 
-// Called from ui.js whenever a radar's enabled state changes (both from the
-// active-radars list and the add-radar search) — reacts only to this one
-// radar's own transition, not a continuously-enforced invariant, so
-// manually closing an implied-open panel afterward doesn't get fought the
-// way Track Info's old permanent auto-restore did.
-function notifyRadarToggled(radar, enabled) {
-  const panelId = RADAR_TYPE_TO_PANEL[radar.type];
-  if (!panelId) return;
-  if (enabled) {
-    toggleDockPanel(panelId, true, { preserveFocus: true });
-  } else if (!isPanelImplied(panelId) && !isPanelPinned(panelId)) {
-    toggleDockPanel(panelId, false);
+// Called once per `coverage` message. Unlike the per-radar hook it replaces,
+// this sees the whole set at once rather than one radar's transition — so it
+// compares against what the implication last said and only acts on a change,
+// which keeps the "manually closing an implied-open panel is not fought"
+// property the old hook had for the same reason.
+const _impliedPanelState = new Map(); // panelId -> was implied
+
+function notifyCoverageChanged() {
+  for (const panelId of new Set(Object.values(RADAR_TYPE_TO_PANEL))) {
+    const implied = isPanelImplied(panelId);
+    if (implied === _impliedPanelState.get(panelId)) continue;
+    _impliedPanelState.set(panelId, implied);
+    if (implied) {
+      toggleDockPanel(panelId, true, { preserveFocus: true });
+    } else if (!isPanelPinned(panelId)) {
+      toggleDockPanel(panelId, false);
+    }
   }
 }
 

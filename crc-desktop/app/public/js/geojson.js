@@ -517,7 +517,11 @@ function _extCenterlineTickPlan(zoom) {
 
 function buildExtendedCenterline() {
   if (!_aprtSelectedApt || _aprtRwyHeading == null) return { type: 'FeatureCollection', features: [] };
-  if (!enabledRadarIds.has('app:' + _aprtSelectedApt.name)) return { type: 'FeatureCollection', features: [] };
+  // Only drawn for an airfield whose approach radar we are actually looking
+  // through. Asked by airport rather than by radar id, because the id used to
+  // be built here as `'app:' + name` and crc-sync's CVN approach radars once
+  // shared that prefix (its docs/adr/0042 renamed them `cvapp:`).
+  if (!coverageApproachFor(_aprtSelectedApt.name)) return { type: 'FeatureCollection', features: [] };
 
   // The runway number is a magnetic heading (real-world convention) — the
   // map's geometry math (projectPos/bearingDeg) is all true-bearing, so it
@@ -621,6 +625,32 @@ function buildRefDot() {
   };
 }
 
+/**
+ * A ring around the contact the selected Strip is correlated to (guide §6.6
+ * rule 4). A near-copy of buildRefDot above, with one deliberate difference:
+ * it falls back to `latestFromServer` when the contact is not in the
+ * sweep-gated `tracks` map — the same fix buildRangeRing already carries.
+ *
+ * That matters. `tracks` only holds contacts inside the fade window, so a
+ * just-appeared or between-sweeps contact would render no ring and look like a
+ * broken highlight. A correlation is flight-data truth, not a radar return.
+ */
+function buildEfspCorrelationRing() {
+  if (typeof getCorrelatedHighlightTrackId !== 'function') return { type: 'FeatureCollection', features: [] };
+  const trackId = getCorrelatedHighlightTrackId();
+  if (!trackId) return { type: 'FeatureCollection', features: [] };
+  const t = tracks.get(trackId) || latestFromServer.get(trackId);
+  if (!t) return { type: 'FeatureCollection', features: [] };
+  return {
+    type: 'FeatureCollection',
+    features: [{
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [t.lon, t.lat] },
+      properties: {},
+    }],
+  };
+}
+
 function buildAirports() {
   if (!missionData || !missionData.airports) return { type: 'FeatureCollection', features: [] };
   return {
@@ -663,9 +693,12 @@ function buildRadarDebug(radars) {
     const color = isApt ? '#aa8833' : isApp ? '#3388aa' : '#33aa55';
 
     if (radar.angleFromNose === 360) {
-      // Rotating beam: single line in current sweep direction
-      if (!radarSweepStart.has(radar.id)) continue;
-      const angle = ((now - radarSweepStart.get(radar.id)) % radar.sweepMs) / radar.sweepMs * 360;
+      // Rotating beam: single line in the current sweep direction. The phase
+      // is the server's own (`sweepStart` in the coverage message), so the
+      // drawn beam is where the beam that reveals contacts actually is — it
+      // never was when every client minted its own phase.
+      if (!Number.isFinite(radar.sweepStart)) continue;
+      const angle = ((now - radar.sweepStart) % radar.sweepMs) / radar.sweepMs * 360;
       const visibleM = losVisibleRangeM(radar, angle, radar.rangeM);
       const [vLat, vLon] = projectPos(radar.lat, radar.lon, angle, visibleM);
       features.push({
@@ -685,10 +718,10 @@ function buildRadarDebug(radars) {
       }
     } else {
       // Nose radar: animated sweep beam + faint static cone edges
-      if (!radarSweepStart.has(radar.id)) continue;
+      if (!Number.isFinite(radar.sweepStart)) continue;
       const halfAngle = radar.angleFromNose / 2;
       const cycleMs   = radar.sweepMs * 2;
-      const phase     = ((now - radarSweepStart.get(radar.id)) % cycleMs) / cycleMs;
+      const phase     = ((now - radar.sweepStart) % cycleMs) / cycleMs;
       const tNorm     = phase < 0.5 ? phase * 2 : (1 - phase) * 2;
       const beamAngle = (radar.heading - halfAngle + tNorm * radar.angleFromNose + 360) % 360;
 
@@ -769,6 +802,7 @@ function _doUpdateMap() {
   if (!mapReady) return;
   map.getSource('range-ring').setData(buildRangeRing());
   map.getSource('ref-dot').setData(buildRefDot());
+  map.getSource('efsp-correlation').setData(buildEfspCorrelationRing());
   map.getSource('trails').setData(buildTrails());
   map.getSource('ppl').setData(buildPPL());
   // buildLabels first — it populates labelOffsets which buildLeaders depends on

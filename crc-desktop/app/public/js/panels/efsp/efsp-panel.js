@@ -609,6 +609,28 @@ function _wireDotCommand() {
 function refreshEfspPanel() {
   _renderPositionTabs();
   _refreshCreateStripAvailability();
+  _renderCorrelationRate();
+}
+
+/**
+ * One line: how many eligible flights are matched to a surveillance contact
+ * (guide §6.6 rule 6 — "If it drops below 95% in operation, that is a defect,
+ * not a fact of life"), red below the target.
+ *
+ * Hidden when the server reports null, which it does for an empty board — a
+ * board with nothing on it is not 100% correlated, and saying so would make
+ * the number meaningless exactly when a controller first looks at it.
+ */
+function _renderCorrelationRate() {
+  const el = document.getElementById('efsp-correlation-rate');
+  if (!el) return;
+  const stats = typeof getEfspCorrelationStats === 'function' ? getEfspCorrelationStats() : null;
+  if (!stats || stats.rate == null) { el.textContent = ''; el.className = ''; return; }
+  const matched = Math.round(stats.rate * stats.eligible);
+  el.textContent = `TRK ${Math.round(stats.rate * 100)}% (${matched}/${stats.eligible})`;
+  el.className = stats.rate < (stats.target ?? 0.95) ? 'efsp-correlation-rate-low' : '';
+  el.title = 'flights matched to a surveillance contact'
+    + (stats.sessionRate != null ? ` \u00b7 session ${Math.round(stats.sessionRate * 100)}%` : '');
 }
 
 function initEfspPanel() {

@@ -38,11 +38,18 @@ function _matchesOne(fdr, envelope) {
     matchedSomething = true;
   }
 
-  // radiusNm needs a position to check against — no Strip/FDR field in
-  // this slice carries one (WP5 track correlation isn't built), so a
-  // radius-only envelope can never be matched yet. Treat as unmatched
-  // rather than silently ignoring the restriction (a false "inside the
-  // envelope" would incorrectly waive the OPERATIONAL_REQUEST fallback).
+  // radiusNm still matches nothing, and now by choice rather than for want of
+  // a position: WP5's correlation can supply one (docs/adr/0045). It stays
+  // unmatched because a radius envelope would make a RELEASE decision depend
+  // on surveillance correlation, so a DCS re-ID would silently withdraw a
+  // standing release mid-taxi. Both answers to the uncorrelated case are bad
+  // in isolation — fail closed and a controller gets spurious
+  // OPERATIONAL_REQUESTs every time an id churns; fail open and a release is
+  // granted outside its envelope — so it belongs in a release-model slice
+  // with §3.8 in front of it. Deferred with reasons in docs/adr/0047.
+  //
+  // Unmatched rather than ignored: a false "inside the envelope" would
+  // incorrectly waive the OPERATIONAL_REQUEST fallback.
   if (envelope.radiusNm != null && !matchedSomething) return false;
 
   // An envelope with NO criteria at all matches nothing — an empty

@@ -1,86 +1,85 @@
 'use strict';
 
-// ── Radar selection panel: active radars listed short and flat; everything
-// else found via search. Split out of the former ui.js "god file" — see
-// panels/topbar.js for why this stays a plain script rather than an IIFE.
+// ── Coverage panel: the radars this controller is looking through ─────────
+//
+// This used to be a radar SELECTOR — a search box, a checkbox per radar, and
+// an `enabledRadarIds` set in localStorage that decided what this client could
+// see. It is now a read-only list, because coverage follows the Positions a
+// controller holds rather than what they tick (crc-sync's docs/adr/0042).
+//
+// That is the inverse of the arrow crc-sync's docs/adr/0033 rejected. 0033
+// refused to derive Positions FROM radar selection, partly because Ground and
+// Clearance Delivery have no radar at all, and partly because "coupling
+// authority to visibility means a controller silently acquires or loses the
+// right to act on Strips by adjusting their display". Running it the other way
+// — declare what you hold, receive what it can see — removes that hazard
+// instead of reintroducing it, and the "ACTING AS" selector below is still the
+// one and only place a Position is declared.
+//
+// The DATALINK toggle went with the selector. What it did — auto-include every
+// own-coalition airborne radar — is now a property of the Positions it belongs
+// to: TAC_C2, AIC and GCI carry `coalition: 'own'` selectors in crc-sync's
+// facility config. It was never really a display preference; it was a
+// description of what a Military Radar Unit works from.
+//
+// Split out of the former ui.js "god file" — see panels/topbar.js for why this
+// stays a plain script rather than an IIFE.
 
 const TYPE_LABELS = { airport: 'AIRPORT', approach: 'APPROACH', awacs: 'AWACS', fighter: 'FIGHTER', carrier: 'CARRIER' };
-const TYPE_RANGE_LABEL = (r) => {
-  const nm = Math.round(r.rangeM / 1852);
-  return `${nm}nm`;
-};
 
-// Single entry point for enabling/disabling a radar — keeps the existing
-// side effects (persistence, sweep/zoom recompute, map refresh) and adds
-// the radar → panel implication hook (dock.js's notifyRadarToggled).
-function setRadarEnabled(radar, enabled) {
-  if (enabled) enabledRadarIds.add(radar.id);
-  else enabledRadarIds.delete(radar.id);
-  saveEnabledRadars();
-  updateTopbarUI();
-  resetSweepState();
-  updateMap();
-  updateZoomLimits();
-  notifyRadarToggled(radar, enabled);
-}
-
-// Called from app.js when the underlying radar list itself changes (new
-// mission data, or the AWACS/carrier-derived radar set changing) rather
-// than a user toggling one — refreshes both the active list and whatever
-// search is currently in progress, without clearing/losing that search.
+// Called from app.js when a `coverage` message lands, or when the mission data
+// behind the radar list changes. There is nothing to preserve across a
+// re-render any more — no search term, no partial selection — so this just
+// redraws.
 function refreshRadarPanelData() {
-  renderActiveRadars();
-  const $search = document.getElementById('radar-search');
-  renderRadarSearchResults($search ? $search.value : '');
+  renderCoverageList();
 }
 
-// Only the radars actually in use — the point of this list is to stay
-// short and calm rather than showing every airport in the theater at once.
-// Turning one off here is the "remove" action (no separate delete control).
-function renderActiveRadars() {
+/**
+ * The radars our held Positions grant us, and why. An empty list is a real
+ * answer, not a failure: a Ground or Clearance Delivery controller has no
+ * scope, and saying which Position would give them one is more use than an
+ * empty box.
+ */
+function renderCoverageList() {
   const $list = document.getElementById('radar-active-list');
   if (!$list) return;
   $list.innerHTML = '';
 
-  const active = getAllRadars()
-    .filter(r => enabledRadarIds.has(r.id))
-    .sort((a, b) => a.label.localeCompare(b.label));
+  const radars = getActiveRadars();
 
-  if (active.length === 0) {
+  if (radars.length === 0) {
     const $empty = document.createElement('div');
     $empty.className = 'radar-empty';
-    $empty.textContent = 'No active radars — search below to add one.';
+    $empty.textContent = coverageHeldPositions.length === 0
+      ? 'No radar coverage — select a Position under ACTING AS below.'
+      : `No radar coverage. ${coverageHeldPositions.map(p => p.positionId).join(', ')} ${coverageHeldPositions.length === 1 ? 'works' : 'work'} no scope.`;
     $list.appendChild($empty);
     return;
   }
 
-  for (const r of active) {
+  for (const r of [...radars].sort((a, b) => a.label.localeCompare(b.label))) {
     const isGnd = !!r.onGround;
     const $row = document.createElement('div');
-    $row.className = 'radar-row' + (isGnd ? ' disabled' : '');
-
-    const $check = document.createElement('input');
-    $check.type      = 'checkbox';
-    $check.checked   = true;
-    $check.className = 'radar-check';
-    $check.title     = 'Uncheck to remove';
-    $check.addEventListener('change', () => {
-      setRadarEnabled(r, false);
-      renderActiveRadars();
-      renderPanelControls();
-    });
+    $row.className = 'radar-row radar-row-coverage' + (isGnd ? ' disabled' : '');
 
     const $label = document.createElement('span');
     $label.className = 'radar-row-label';
-    $label.textContent = r.label;
+    $label.textContent = r.label + (isGnd ? ' GND' : '');
+
+    // Which of the held Positions put this radar in the list — the answer to
+    // "why am I seeing this", which a checkbox never had to explain.
+    const $via = document.createElement('span');
+    $via.className = 'radar-row-via';
+    $via.textContent = (r.grantedBy || []).join('/');
 
     const $range = document.createElement('span');
     $range.className = 'radar-row-range';
-    $range.textContent = TYPE_RANGE_LABEL(r) + (isGnd ? ' GND' : '');
-    if (isGnd) $range.style.color = '#886633';
+    $range.textContent = `${Math.round(r.rangeM / 1852)}nm`;
+    $range.title = TYPE_LABELS[r.type] || r.type.toUpperCase();
 
-    $row.appendChild($check);
     $row.appendChild($label);
+    $row.appendChild($via);
     $row.appendChild($range);
     $row.addEventListener('mouseenter', () => showLosProfile(r, $row));
     $row.addEventListener('mouseleave', () => hideLosProfile());
@@ -88,58 +87,6 @@ function renderActiveRadars() {
   }
 }
 
-// Results only appear while the user is actually typing — an empty search
-// box shows nothing, keeping the panel quiet the rest of the time. Already-
-// active radars are excluded since they're already visible above.
-function renderRadarSearchResults(term) {
-  const $results = document.getElementById('radar-search-results');
-  if (!$results) return;
-  $results.innerHTML = '';
-
-  const q = (term || '').trim().toLowerCase();
-  if (!q) return;
-
-  const matches = getAllRadars()
-    .filter(r => !enabledRadarIds.has(r.id))
-    .filter(r => r.label.toLowerCase().includes(q) || (r.sublabel || '').toLowerCase().includes(q))
-    .sort((a, b) => a.label.localeCompare(b.label))
-    .slice(0, 30); // a broad match (e.g. a single letter) shouldn't dump the whole theater back in
-
-  if (matches.length === 0) {
-    const $empty = document.createElement('div');
-    $empty.className = 'radar-empty';
-    $empty.textContent = 'No match.';
-    $results.appendChild($empty);
-    return;
-  }
-
-  for (const r of matches) {
-    const $row = document.createElement('div');
-    $row.className = 'radar-row radar-row-add';
-
-    const $label = document.createElement('span');
-    $label.className = 'radar-row-label';
-    $label.textContent = r.label;
-
-    const $type = document.createElement('span');
-    $type.className = 'radar-row-range';
-    $type.textContent = TYPE_LABELS[r.type] || r.type.toUpperCase();
-
-    $row.appendChild($label);
-    $row.appendChild($type);
-    $row.addEventListener('mouseenter', () => showLosProfile(r, $row));
-    $row.addEventListener('mouseleave', () => hideLosProfile());
-    $row.addEventListener('click', () => {
-      setRadarEnabled(r, true);
-      const $search = document.getElementById('radar-search');
-      if ($search) $search.value = '';
-      renderRadarSearchResults('');
-      renderActiveRadars();
-      renderPanelControls();
-    });
-    $results.appendChild($row);
-  }
-}
 
 // The panels this radar list can drive open/closed. Every row is rendered
 // identically (label + slider + pin) regardless of whether anything else
@@ -346,44 +293,20 @@ function updateRadarBadge() {
 // (dock.js's wireRadarsPanelButton/toggleOrFocusPanel) — no open/close
 // class toggling or outside-click handling needed here any more.
 function initRadarPanel() {
-  const $dlToggle = document.getElementById('datalink-toggle');
-  const $dlRow    = document.getElementById('datalink-row');
-  const $search   = document.getElementById('radar-search');
   _positionControlsEl = document.getElementById('efsp-position-controls');
   _positionWarningsEl = document.getElementById('efsp-position-warnings');
 
-  if ($dlToggle) {
-    $dlToggle.checked = settings.datalink ?? false;
-    if ($dlRow) $dlRow.classList.toggle('active', !!settings.datalink);
-    $dlToggle.addEventListener('change', () => {
-      settings.datalink = $dlToggle.checked;
-      if ($dlRow) $dlRow.classList.toggle('active', $dlToggle.checked);
-      saveSettings();
-      updateTopbarUI();
-      resetSweepState();
-      updateMap();
-      updateZoomLimits();
-    });
-  }
-
-  if ($search) {
-    $search.addEventListener('input', () => renderRadarSearchResults($search.value));
-  }
-
-  renderActiveRadars();
-  renderRadarSearchResults('');
+  renderCoverageList();
   renderPanelControls();
   renderPositionControls();
 
   return {
-    // Refresh every time the tab becomes active — active-radar list, search
-    // (cleared), and panel statuses/pins may all have drifted while this
-    // panel was in the background (e.g. a radar toggled elsewhere, or a
-    // panel closed/pinned from its own tab).
+    // Refresh every time the tab becomes active — coverage, panel statuses and
+    // pins may all have drifted while this panel was in the background (a
+    // colleague taking a Position changes what an Observer here can see, and a
+    // panel may have been closed or pinned from its own tab).
     onShow: () => {
-      if ($search) { $search.value = ''; setTimeout(() => $search.focus(), 60); }
-      renderActiveRadars();
-      renderRadarSearchResults('');
+      renderCoverageList();
       renderPanelControls();
       renderPositionControls();
     },

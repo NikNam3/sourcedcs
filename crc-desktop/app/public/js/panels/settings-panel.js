@@ -30,6 +30,7 @@ function initSettings() {
     fadeGrace:      document.getElementById('set-fade-grace'),
     fadeGraceVal:   document.getElementById('set-fade-grace-val'),
     radarDebug:     document.getElementById('set-radar-debug'),
+    datalink:       document.getElementById('set-datalink'),
     textMarks:      document.getElementById('set-text-marks'),
     scale:          document.getElementById('set-scale'),
     scaleVal:       document.getElementById('set-scale-val'),
@@ -52,6 +53,7 @@ function initSettings() {
   els.lightMode.checked  = settings.lightMode;
   els.elevation.checked  = settings.showElevation;
   els.radarDebug.checked   = settings.radarDebug;
+  els.datalink.checked     = settings.datalink ?? false;
   els.textMarks.checked    = settings.textMarksEnabled;
   applyLightMode();
 
@@ -101,6 +103,7 @@ function initSettings() {
     persist('radarDebug', els.radarDebug.checked);
     if (!els.radarDebug.checked) hideLosProfile();
   });
+  els.datalink.addEventListener('change', () => persist('datalink', els.datalink.checked));
   els.textMarks.addEventListener('change', () => {
     settings.textMarksEnabled = els.textMarks.checked;
     saveSettings();

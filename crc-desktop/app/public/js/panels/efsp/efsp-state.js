@@ -40,6 +40,18 @@ const efspObligations = new Map();
 // replicated into each one.
 const efspAirspaces = new Map();
 
+// WP5 (crc-sync's docs/adr/0045) — fdrId -> the correlation record: which
+// surveillance contact this airframe is, on what evidence, and any warning.
+//
+// Keyed by fdrId, not stripId, and that is the point. One FDR legitimately has
+// several Strips — per-Facility replicas, a TOFI MISSION Strip, an arrival
+// converted in place — and they are all one airframe. A per-Strip correlation
+// would let two of them disagree about which contact it is, which is the
+// identity-reconciliation defect the subsystem exists to prevent.
+const efspCorrelations = new Map();
+// The correlation rate, as the server last reported it (guide §6.6 rule 6).
+let efspCorrelationStats = null;
+
 function applyEfspSnapshot(msg) {
   efspStrips.clear();
   efspFdrs.clear();
@@ -53,6 +65,60 @@ function applyEfspSnapshot(msg) {
   efspAitAuthorizedByFacility = msg.aitAuthorizedByFacility || {};
   efspAirspaces.clear();
   for (const a of msg.airspaces || []) efspAirspaces.set(a.airspaceId, a);
+  efspCorrelations.clear();
+  for (const r of msg.correlations || []) efspCorrelations.set(r.fdrId, r);
+}
+
+/**
+ * An efsp-correlation-delta — its own message type with its own seq, like the
+ * airspace delta. Changed records only, once per server reconcile tick.
+ *
+ * Note what does NOT need to happen here: clearing a warning. The record
+ * arrives whole, so a retracted warning simply comes back as `warning: null`.
+ * That is deliberately unlike the obligation alerts above, which the server
+ * cannot retract at all (see clearEfspObligation's comment).
+ */
+function applyEfspCorrelationDelta(msg) {
+  for (const r of (msg.correlations && msg.correlations.updated) || []) {
+    efspCorrelations.set(r.fdrId, r);
+  }
+  if (msg.stats) efspCorrelationStats = msg.stats;
+}
+
+function getEfspCorrelation(fdrId) { return efspCorrelations.get(fdrId) || null; }
+function getAllEfspCorrelations() { return [...efspCorrelations.values()]; }
+function getEfspCorrelationStats() { return efspCorrelationStats; }
+
+/** The correlation for whichever airframe this Strip is about. */
+function getEfspCorrelationForStrip(strip) {
+  return strip ? getEfspCorrelation(strip.fdrId) : null;
+}
+
+/** The contact this Strip is bound to, or null. What the map highlight reads. */
+function correlatedTrackIdForStrip(strip) {
+  const record = getEfspCorrelationForStrip(strip);
+  return record && record.trackId ? record.trackId : null;
+}
+
+/**
+ * The reverse lookup, for a click on the map: which live Strips are about the
+ * airframe this contact is?
+ *
+ * A linear walk rather than a maintained index — the same reasoning
+ * otherLiveStripsForFdr already documents, and the Strip count is in the tens.
+ * Returns several when one FDR has several Strips, which is the ordinary case
+ * after a cross-Facility handoff.
+ */
+function stripIdsForTrackId(trackId) {
+  const wanted = String(trackId);
+  const fdrIds = new Set();
+  for (const record of efspCorrelations.values()) {
+    if (record.trackId === wanted) fdrIds.add(record.fdrId);
+  }
+  if (fdrIds.size === 0) return [];
+  return getAllEfspStrips()
+    .filter(s => s.state !== 'DROPPED' && fdrIds.has(s.fdrId))
+    .map(s => s.stripId);
 }
 
 /** An efsp-airspace-delta — its own message type, since airspaces are not Strips and ride no Board's seq. */
@@ -202,6 +268,8 @@ function _resetEfspStateForTest() {
   efspPositions.clear();
   efspPendingMutations.clear();
   efspObligations.clear();
+  efspCorrelations.clear();
+  efspCorrelationStats = null;
   efspBoardSeq = 0;
   efspFacility = null;
   efspBays = [];
@@ -215,6 +283,9 @@ if (typeof module !== 'undefined' && module.exports) {
     getEfspStrip, getEfspFdr, getEfspPosition, getAllEfspStrips, getAllEfspPositions,
     otherLiveStripsForFdr, liveStripsForCallsign,
     applyEfspAirspaceDelta, getEfspAirspace, getAllEfspAirspaces, stripsInAirspace,
+    applyEfspCorrelationDelta, getEfspCorrelation, getAllEfspCorrelations,
+    getEfspCorrelationForStrip, correlatedTrackIdForStrip, stripIdsForTrackId,
+    getEfspCorrelationStats,
     getEfspRack, searchEfspStrips, getEfspBoardSeq, getEfspFacility, getEfspBays,
     isAitAuthorizedFor,
     applyEfspObligationAlert, getEfspObligation, clearEfspObligation,

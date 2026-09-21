@@ -107,6 +107,26 @@ function sendEfspAirspaceMutation(actingPositionId, airspaceId, baseRev, op) {
   });
 }
 
+/**
+ * Binding or unbinding a surveillance contact (WP5, crc-sync's
+ * docs/adr/0045) — guide §6.6 rule 1's top rung, "explicit controller
+ * binding". Its own message type because it targets an FDR: no stripId, no
+ * Strip baseRev, no Facility routing.
+ *
+ * The way out of every ambiguity the server's sweep reports, and the only way
+ * to correlate an aircraft with its transponder off and a callsign nothing
+ * matches. Not registered as a pending mutation, for the same reason an
+ * airspace op is not: §5.6.3's replay machinery is keyed on Strip identity,
+ * and a bind is cheap to reissue.
+ */
+function sendEfspCorrelationMutation(actingPositionId, fdrId, baseRev, op) {
+  _sendEfsp({
+    version: 1, type: 'efsp-correlation-mutation',
+    clientMutationId: efspClientMutationId(),
+    fdrId, baseRev, actingPositionId, op,
+  });
+}
+
 /** Resync after reconnect (guide §5.6) — server replies with efsp-board-delta or efsp-snapshot, never a third path. */
 function sendEfspResync(lastBoardSeq) {
   _sendEfsp({ version: 1, type: 'efsp-resync', lastBoardSeq });

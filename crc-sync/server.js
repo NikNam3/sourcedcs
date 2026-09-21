@@ -16,7 +16,12 @@ const resolvePkg      = require('./src/resolve');
 const auth            = require('./src/auth');
 const { createEfsp }  = require('./src/efsp');
 const efspFacilityConfig = require('./src/efsp/facility-config');
+const { buildRadars, loadRadarSpecs } = require('./src/radars');
+const { TerrainStore } = require('./src/terrain');
+const { CoverageEngine } = require('./src/coverage');
+const { StationCoverage, assignableRadars, reportUnresolvedSelectors } = require('./src/efsp/station-coverage');
 const { ForwardingObligationMonitor } = require('./src/efsp/forwarding-obligations');
+const { CorrelationReconciler, CORRELATION_TICK_MS } = require('./src/efsp/correlation-reconciler');
 const { lookupFlightPlan, toFdrFiledSeed, listFiledFlightPlans } = require('./src/efsp/flight-plan-lookup');
 
 const PORT       = parseInt(process.env.PORT, 10) || 3000;
@@ -113,9 +118,73 @@ const srsClient   = new SrsClient();
 // restart. DO NOT add efsp.boardStore/fdrStore clear() calls to the
 // mission-reload handler below.
 const efsp        = createEfsp();
-const wsHub       = new WsHub(trackStore, collabStore, efsp);
+
+// ── The radar picture (docs/adr/0042) ────────────────────────────────────
+// Radars, their sweep phase, terrain masking and who may look through what
+// all live here now rather than in each renderer. The chain is:
+//
+//   radar-specs.json + missionData + tracks  ->  buildRadars()
+//   StationCoverage    which Positions grant which of those radars
+//   CoverageEngine     what each of those radars is illuminating, one phase
+//                      for everybody, terrain included
+//   WsHub              each session gets only what its Positions can see
+//
+// The radar list is rebuilt per tick rather than cached: it depends on live
+// tracks (an AWACS taking off is a new radar) and the cost is a walk over the
+// airfield list plus the tracks, which the sweep does anyway.
+const radarSpecs   = loadRadarSpecs();
+const terrainStore = new TerrainStore();
+const coverageEngine = new CoverageEngine({ terrain: terrainStore });
+
+function currentRadars() {
+  return buildRadars({
+    missionData: wsHub.getMissionData(),
+    tracks: trackStore.getAll(),
+    radarSpecs,
+    // The resolved display callsign, so an AWACS's radar is labelled the way
+    // the controller sees it on the scope rather than by its raw unit name.
+    labelFor: (t) => resolvePkg.resolveCallsign(
+      t, collabStore.get(t.id), (id) => collabStore.getOrAssignTrackNumber(id),
+    ),
+  });
+}
+
+const stationCoverage = new StationCoverage({
+  facilityConfig: efspFacilityConfig,
+  positionStoreFor: efsp.positionStoreFor,
+  radars: currentRadars,
+});
+
+const picture = {
+  coverageFor: (controllerId) => {
+    const result = stationCoverage.forController(controllerId);
+    // Stamp each radar with the server's own sweep phase. The client draws the
+    // debug beam overlay from it, and that overlay used to be decorative —
+    // each renderer guessed its own phase, so the beam it drew was nowhere
+    // near where the beam that actually revealed a contact was. Now they are
+    // the same number.
+    const now = Date.now();
+    result.radars = result.radars.map(r => ({ ...r, sweepStart: coverageEngine.sweepStartFor(r.id, now) }));
+    return result;
+  },
+  illuminated: () => coverageEngine.illuminatedNow,
+  radars: currentRadars,
+};
+
+const wsHub       = new WsHub(trackStore, collabStore, efsp, picture);
 
 wsHub.attach(server);
+
+// One sweep for the whole server, over only the radars somebody is actually
+// looking through — an unattended airfield's radar costs nothing. Illumination
+// instants are computed rather than sampled (docs/adr/0043), so this interval
+// is a delivery choice: it bounds how late a contact can appear, not whether
+// it appears at all. 250ms against real scan periods of 2-3s is well inside
+// the noise.
+const COVERAGE_TICK_MS = 250;
+setInterval(() => {
+  coverageEngine.tick(stationCoverage.activeRadars(), trackStore.getAll(), wsHub.getMissionData());
+}, COVERAGE_TICK_MS);
 
 grpcClient.on('unit', (unitData) => {
   trackStore.update(unitData, srsClient.getTransponder(unitData.player));
@@ -140,12 +209,45 @@ async function refreshAirportWeather(missionData) {
 grpcClient.on('mission-load', (missionData) => {
   trackStore.clear();
   collabStore.clear();
+  // Every radar id, sweep phase and line-of-sight answer belonged to the
+  // theater that just went away.
+  coverageEngine.reset();
+  // And so did every track id. This is defect D1 in its most brutal form —
+  // nothing about any airframe changed and every contact was re-minted — so
+  // every Strip's correlation is dropped with a warning naming why, and the
+  // next tick re-binds each one on its beacon code. §6.6 rule 3 permits
+  // exactly two outcomes on an identity change; this does both, in order,
+  // rather than leaving a stale binding pointing at a contact that is gone.
+  // (Declared below with the other monitors; this closure runs long after.)
+  correlationReconciler.resetPicture('MISSION_RELOAD');
   // Do NOT add efsp.boardStore.clear()/efsp.fdrStore.clear() here — EFSP
   // Strips are durably persisted and MUST survive a mission reload, unlike
   // tracks/the IFF overlay (see the `const efsp = createEfsp()` comment
   // above and docs/adr/0002-durable-board-persistence.md).
   wsHub.setMissionData(missionData);
   console.log(`[crc-sync] mission init — ${missionData.airports.length} airports`);
+
+  // Which selectors found nothing in THIS theater — the only point at which
+  // that question has an answer, since a selector naming an airfield the map
+  // lacks is legitimate config.
+  const radars = currentRadars();
+  reportUnresolvedSelectors(efspFacilityConfig, radars);
+
+  // Fetch the DEM covering this theater's airfield radars up front. Without it
+  // the first minutes of a session fail open on every sight line and terrain
+  // masks nothing — correct behaviour, but not the behaviour anyone wants.
+  //
+  // Scoped to radars some Position is actually ASSIGNED, not every airfield in
+  // the theater: a 225-airfield map produces 450 airfield radars and would
+  // pre-fetch about nine hundred tiles for scopes nobody will ever look
+  // through. Not scoped to OCCUPIED Positions, though — a controller taking
+  // Approach mid-session must not then wait for a DEM. Airborne radars are
+  // excluded because they move, so there is no fixed circle to fetch, and
+  // they warm as they fly.
+  terrainStore.prewarmForRadars(
+    assignableRadars(efspFacilityConfig, radars)
+      .filter(r => r.type === 'airport' || r.type === 'approach'),
+  );
 
   airportWeather = new Map();
   refreshAirportWeather(missionData);
@@ -280,6 +382,23 @@ const obligationMonitor = new ForwardingObligationMonitor({
   onAlert: (alert) => wsHub.broadcastEfspObligationAlert(alert),
 });
 setInterval(() => obligationMonitor.tick(), 15000);
+
+// ── WP5 Strip<->track correlation (guide §6.6, docs/adr/0045/0046) ───────
+// Its own cadence again, and a much faster one: this is what keeps each
+// Strip's bound contact fresh, and §6.6 rule 4's benchmark is one second. The
+// store lives inside createEfsp() (it needs the MutationLog and the atomic
+// snapshot); the reconciler lives out here, because only this file has the
+// TrackStore — the same split airspaceStore and obligationMonitor already
+// have.
+const correlationReconciler = new CorrelationReconciler({
+  trackStore,
+  fdrStore: efsp.fdrStore,
+  correlationStore: efsp.correlationStore,
+  boardStoreFor: efsp.boardStoreFor,
+  facilityConfig: efspFacilityConfig,
+  onDelta: (payload) => wsHub.broadcastEfspCorrelationDelta(payload),
+});
+setInterval(() => correlationReconciler.tick(), CORRELATION_TICK_MS);
 
 // ── Static hosting ───────────────────────────────────────────────────────
 app.use(express.static(PUBLIC_DIR));

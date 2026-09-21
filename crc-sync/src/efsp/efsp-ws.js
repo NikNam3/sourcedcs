@@ -27,6 +27,12 @@
 // acting across both Facilities sends two independent messages (one per
 // facilityId) rather than one combined one — Boards remain two.
 
+// The only module this file requires. Every other rule reaches it through
+// `ctx`, injected by index.js — but a correlation op targets no Strip and no
+// Board, so there is no `rules` object on the path it takes, and threading one
+// through purely for a class check would be more indirection than it removes.
+const permission = require('./permission');
+
 const VERSION = 1;
 
 // board-store.js's own _log ring buffer is pruned back to ~1000 entries
@@ -41,6 +47,7 @@ function handleMessage(ctx, session, msg, persist) {
     case 'efsp-resync':        return _handleResync(ctx, msg);
     case 'efsp-set-positions': return _handleSetPositions(ctx, session, msg);
     case 'efsp-airspace-mutation': return _handleAirspaceMutation(ctx, session, msg, persist);
+    case 'efsp-correlation-mutation': return _handleCorrelationMutation(ctx, session, msg, persist);
     default:                   return null; // not an EFSP message
   }
 }
@@ -222,6 +229,78 @@ function _handleAirspaceMutation(ctx, session, msg, persist) {
   };
 }
 
+/**
+ * Correlation ops (BindTrack/UnbindTrack) — a THIRD dispatch path, for the
+ * same reason _handleAirspaceMutation is a second one: this targets an FDR.
+ * There is no stripId, no Strip baseRev and no Strip-owner check, because no
+ * Position owns an FDR.
+ *
+ * Guide §6.6 rule 1's top rung is "explicit controller binding", and this is
+ * its wire surface. It is the way out of every ambiguity the sweep reports,
+ * and the only way to correlate an aircraft with its transponder off and a
+ * callsign nothing matches.
+ */
+function _handleCorrelationMutation(ctx, session, msg, persist) {
+  const correlationStore = ctx.correlationStore;
+  if (!correlationStore) {
+    return { ack: { version: VERSION, type: 'efsp-correlation-ack', clientMutationId: msg.clientMutationId, ok: false, reason: 'VALIDATION_ERROR', detail: 'no correlation store' } };
+  }
+
+  // The same session binding the other two dispatch paths carry
+  // (docs/adr/0029), for the same reason: actingPositionId arrives as an
+  // untrusted client claim. This is now the THIRD place that check appears,
+  // and a new dispatch path is exactly where it gets forgotten and the hole
+  // reopens — _handleAirspaceMutation's own comment says so, and it was right
+  // twice.
+  //
+  // "Primary somewhere" is the right gate here rather than at a particular
+  // Facility: no Position owns an FDR, and a correlation is not a clearance.
+  // Any Primary may bind, whichever Facility holds a Strip for that flight —
+  // the FDR is already shared theater-wide (docs/adr/0013), and refusing would
+  // mean a controller who can see the contact cannot tell the system what they
+  // see. The binding records boundBy/boundPositionId, so the audit says who.
+  const facilityIds = ctx.facilityConfig.getFacilityIds();
+  const isPrimarySomewhere = facilityIds.some((facilityId) => {
+    const positionStore = ctx.positionStoreFor(facilityId);
+    return positionStore && positionStore.primaryOf(msg.actingPositionId) === session.controllerId;
+  });
+  if (!isPrimarySomewhere) {
+    return { ack: { version: VERSION, type: 'efsp-correlation-ack', clientMutationId: msg.clientMutationId, ok: false, reason: 'NOT_HOLDING_POSITION', detail: `you are not Primary at ${msg.actingPositionId} — select it before binding a contact` } };
+  }
+
+  // Refused by class, not by table: a range Position is the using agency, has
+  // no flights to identify (§4.1 rule 2) and, under docs/adr/0042, no scope on
+  // which to have seen anything.
+  if (!permission.canCorrelate(msg.actingPositionId)) {
+    return { ack: { version: VERSION, type: 'efsp-correlation-ack', clientMutationId: msg.clientMutationId, ok: false, reason: 'PERMISSION_DENIED', detail: `${msg.actingPositionId} works no flights, so it identifies no contacts` } };
+  }
+
+  const result = correlationStore.apply(
+    { clientMutationId: msg.clientMutationId, fdrId: msg.fdrId, baseRev: msg.baseRev, op: msg.op },
+    msg.actingPositionId, session.controllerId,
+  );
+  if (result.ok) persist();
+
+  const ack = {
+    version: VERSION, type: 'efsp-correlation-ack', clientMutationId: msg.clientMutationId,
+    ok: result.ok, correlation: result.correlation, reason: result.reason, detail: result.detail,
+    correlationSeq: correlationStore.currentSeq,
+  };
+  if (!result.ok) return { ack };
+
+  // Its own delta type with its own seq, like efsp-airspace-delta and
+  // deliberately NOT a section of efsp-board-delta: a correlation is not a
+  // Strip and rides no Board's sequence.
+  return {
+    ack,
+    broadcast: {
+      version: VERSION, type: 'efsp-correlation-delta',
+      correlationSeq: correlationStore.currentSeq,
+      correlations: { updated: [result.correlation] },
+    },
+  };
+}
+
 function _handleSetPositions(ctx, session, msg) {
   const facilityId = msg.facilityId || ctx.facilityConfig.DEFAULT_FACILITY_ID;
   const positionStore = ctx.positionStoreFor(facilityId);
@@ -308,6 +387,13 @@ function _snapshotMessage(ctx) {
     // list is small, static in size, and every controller's board shows the
     // same theater-wide set.
     airspaces: ctx.airspaceStore ? ctx.airspaceStore.getAll() : [],
+    // Correlation records, one per live FDR and sent whole for the same reason
+    // fdrs are: cheap enough at this scale that a second ring buffer would
+    // cost more than it saved (_handleResync's own stated reasoning). There is
+    // deliberately no correlation branch in efsp-resync either — a reconnecting
+    // client gets these in its snapshot and a fresh reconcile delta within a
+    // second, so §5.6's "two paths only" holds.
+    correlations: ctx.correlationStore ? ctx.correlationStore.getAll() : [],
   };
 }
 

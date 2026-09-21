@@ -173,6 +173,24 @@ function initMap(container) {
       },
     });
 
+    // ── Ring around the selected Strip's contact (guide §6.6 rule 4) ─────
+    // A SECOND source, deliberately not `ref-dot`. That one is the BRA
+    // reference track — a different, simultaneously-meaningful selection that
+    // buildRangeRing also reads — so overloading it would make selecting a
+    // Strip silently move the controller's bullseye reference. Wider radius
+    // and a distinct stroke so both rings can sit on one contact and still
+    // read as two different things; not the attention red, which guide §7.7
+    // rule 4 reserves.
+    map.addSource('efsp-correlation', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    map.addLayer({
+      id: 'efsp-correlation-ring', type: 'circle', source: 'efsp-correlation',
+      paint: {
+        'circle-radius': 15, 'circle-color': 'transparent',
+        'circle-stroke-color': '#c8b46a', 'circle-stroke-width': 2,
+        'circle-opacity': 0, 'circle-stroke-opacity': 0.9,
+      },
+    });
+
     // ── Airport labels ───────────────────────────────────────────────────
     map.addSource('airports', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
     map.addLayer({
@@ -404,6 +422,7 @@ function initMap(container) {
       if (_labelDragged) { _labelDragged = false; return; }
       const id = String(e.features[0].properties.id);
       showTrackPanel(id);
+      _selectStripForTrackIfAny(id);
     });
 
     // ── Left-click on airport label → weather panel ──────────────────────
@@ -420,6 +439,15 @@ function initMap(container) {
                           e.originalEvent.clientX, e.originalEvent.clientY);
     });
 
+    // Contact -> Strip, the other half of guide §6.6 rule 4's coupled
+    // selection. A contact with no Strip deliberately leaves the current Strip
+    // selection alone rather than clearing it — see
+    // correlation-highlight.js's selectStripForTrack.
+    // eslint-disable-next-line no-inner-declarations
+    function _selectStripForTrackIfAny(id) {
+      if (typeof selectStripForTrack === 'function') selectStripForTrack(id);
+    }
+
     // ── Left-click on track icon ─────────────────────────────────────────
     // Aircraft (cat 1/2) + ships (cat 4) → track info panel
     // Ground vehicles (cat 3) → ground label popup
@@ -434,6 +462,7 @@ function initMap(container) {
         showGroundLabelPopup(id, e.originalEvent.clientX, e.originalEvent.clientY);
       } else {
         showTrackPanel(id);
+        _selectStripForTrackIfAny(id);
       }
     });
 

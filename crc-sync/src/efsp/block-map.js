@@ -143,10 +143,15 @@ const DEPARTURE_BLOCK_MAP = {
 //
 // Blocks 20/21 are the guide's arrival radar-automation scratchpads
 // (§6.3 note 2 — "bind to the CRC track scratchpads, not Strip-local
-// storage" in the real system). WP5 track correlation isn't built yet
-// (strip.correlation stays inert), so these are Strip-local annotations
-// for now, same as DEPARTURE's — a documented Phase 2 simplification, to
-// be revisited once WP5 lands, not a silent doctrine violation.
+// storage" in the real system). They are Strip-local annotations, same as
+// DEPARTURE's, and WP5 settled that they stay that way (docs/adr/0047).
+// This track domain has no per-track scratchpad to bind to — collab-store.js
+// carries iff/rename/trackNumber and nothing else — so binding would mean
+// inventing a shared per-track free-text store with its own conflict,
+// retention and cap semantics for two Blocks. And a track-hosted scratchpad
+// would VANISH on a DCS re-ID, which is strictly worse than Strip-local for a
+// field a controller typed by hand. The guide's instinct assumes a radar
+// system with real track scratchpads; this one has none.
 //
 // Deliberately NOT carried over from DEPARTURE: Blocks 11/14/16/17/18
 // (APREQ, release/movement/taxi/takeoff times) are departure-specific

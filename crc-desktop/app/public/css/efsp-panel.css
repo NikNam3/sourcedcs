@@ -690,3 +690,74 @@
 .efsp-confirm-needed { border-color: #e0a83c; color: #ffe0a8; }
 /* This return leg has a departure leg behind it, archived (docs/adr/0040). */
 .efsp-previous-leg-badge { border-color: #6a5bbf; color: #c9c0ff; }
+
+    /* ── Correlation (WP5, guide §6.6 rule 5) ───────────────────────────────
+       Which surveillance contact a flight is, and on what evidence. A
+       Strip-level badge like the airspace and obligation badges — not a Block,
+       since a correlation is keyed by fdrId in its own store and is neither
+       FDR data nor a Strip annotation. Deliberately none of these use the
+       attention red that guide §7.7 rule 4 reserves. */
+    .efsp-correlation-badge {
+      display: inline-block;
+      font-size: 8px;
+      letter-spacing: 0.08em;
+      padding: 1px 4px;
+      margin-left: 4px;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+    .efsp-correlation-correlated {
+      color: #8aaa6a;
+      border-color: #8aaa6a55;
+    }
+    .efsp-correlation-provisional {
+      color: #c8b46a;
+      border-color: #c8b46a55;
+    }
+    .efsp-correlation-uncorrelated {
+      color: var(--ui-text-dim);
+      border-color: var(--ui-border-3);
+    }
+    /* A binding that BROKE reads louder than one that never existed — that is
+       the difference §6.6 rule 3 is about. */
+    .efsp-correlation-warned {
+      color: #cc8844;
+      border-color: #cc884477;
+    }
+    /* A button, not a label: it opens the candidate picker, which is where an
+       explicit binding (rule 1's top rung) becomes reachable. */
+    .efsp-correlation-ambiguous {
+      color: #cc8844;
+      border-color: #cc8844;
+      background: none;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    .efsp-correlation-ambiguous:hover:not(:disabled) { color: var(--ui-text-bright); }
+    .efsp-correlation-ambiguous:disabled { opacity: 0.45; cursor: default; }
+    .efsp-correlation-btn {
+      background: none;
+      border: 1px solid var(--ui-border-2);
+      color: var(--ui-text-dim);
+      font-family: inherit;
+      font-size: 8px;
+      letter-spacing: 0.08em;
+      padding: 1px 4px;
+      margin-left: 3px;
+      cursor: pointer;
+    }
+    .efsp-correlation-btn:hover:not(:disabled) { border-color: var(--ui-text-bright); color: var(--ui-text-bright); }
+    .efsp-correlation-btn:disabled { opacity: 0.4; cursor: default; }
+    /* A Strip whose contact went away, at the same tier as an overdue
+       obligation rather than at attention level. */
+    .efsp-strip-correlation-warned {
+      border-left: 2px solid #cc884499;
+    }
+    /* The rate readout in the panel header — one number (guide §11.5). */
+    #efsp-correlation-rate {
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      color: var(--ui-text-dim);
+      padding: 2px 0;
+    }
+    #efsp-correlation-rate.efsp-correlation-rate-low { color: #cc8844; }

@@ -329,6 +329,18 @@ services:
       - SRS_PORT=${CRCSYNC_SRS_PORT:-5002}
       - CRCSYNC_SOURCEDCS_WEB_URL=${CRCSYNC_SOURCEDCS_WEB_URL:-http://main-website:7000}
       - FLIGHT_PLAN_SERVICE_TOKEN=${FLIGHT_PLAN_SERVICE_TOKEN}
+      # Terrain masking for the radar picture is server-side now (crc-sync's
+      # docs/adr/0044), so the DEM tiles it samples are fetched here. Without a
+      # key the picture still works and terrain simply masks nothing — every
+      # radar sees to its full range — which is logged once at startup.
+      - CRCSYNC_MAPTILER_KEY=${CRCSYNC_MAPTILER_KEY:-}
+      - CRCSYNC_TERRAIN_CACHE_DIR=/app/data/terrain-cache
+    volumes:
+      # Derived DEM tiles only. Deliberately NOT mounted over /app/config: a
+      # named volume starts empty and would shadow the facility, airspace,
+      # squawk-map and radar-spec files baked into the image, which would look
+      # like every one of them had been reset to defaults.
+      - crc-sync-data:/app/data
     networks:
       - web
 
@@ -346,3 +358,4 @@ volumes:
   certbot-certs:
   casdoor-conf:
   sourcedcs-web-data:
+  crc-sync-data:

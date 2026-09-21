@@ -455,3 +455,96 @@ test('RADAR_SERVICE_STATES and SEPARATION_REGIMES have exactly the values the gu
   assert.deepEqual([...RADAR_SERVICE_STATES].sort(), ['ACTIVE', 'TERMINATED']);
   assert.deepEqual([...SEPARATION_REGIMES].sort(), ['ATC', 'DUE_REGARD', 'MARSA', 'SEE_AND_AVOID', 'USING_AGENCY']);
 });
+
+// ── identity.beaconObserved — WP5 (docs/adr/0045) ──────────────────────────
+//
+// The missing half of §3.10.2 rule 1's assigned-vs-observed pair. It was a
+// declared-but-never-written hook through Phase 1 and Phase 2, which meant the
+// three-case render the rule asks for (matching / mismatched / assigned but
+// nothing received) had no data behind it, and defect D22 could not be tested.
+
+test('setBeaconObserved records what the aircraft is actually squawking, with upstream provenance', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  const result = store.setBeaconObserved(fdr.fdrId, '0056');
+  assert.equal(result.ok, true);
+  assert.equal(result.changed, true);
+  assert.equal(store.getFdr(fdr.fdrId).identity.beaconObserved, '0056');
+  assert.equal(store.getFdr(fdr.fdrId).provenance['identity.beaconObserved'], 'UPSTREAM_TRACK');
+});
+
+test('a mismatch between assigned and observed is visible as two fields, never collapsed (defect D22)', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  const assigned = store.getFdr(fdr.fdrId).identity.beaconAssigned;
+  store.setBeaconObserved(fdr.fdrId, '0056');
+  const after = store.getFdr(fdr.fdrId).identity;
+  assert.equal(after.beaconAssigned, assigned, 'the assignment is untouched by an observation');
+  assert.equal(after.beaconObserved, '0056');
+  assert.notEqual(after.beaconAssigned, after.beaconObserved);
+});
+
+test('null is a real observed value — "assigned but nothing received", not an absence', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  store.setBeaconObserved(fdr.fdrId, '0056');
+  const result = store.setBeaconObserved(fdr.fdrId, null);
+  assert.equal(result.ok, true);
+  assert.equal(result.changed, true);
+  assert.equal(store.getFdr(fdr.fdrId).identity.beaconObserved, null);
+});
+
+test('setBeaconObserved writes only on change, so a once-a-second reconciler does not churn every FDR rev', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  const before = store.getFdr(fdr.fdrId).rev;
+
+  const first = store.setBeaconObserved(fdr.fdrId, '0041');
+  assert.equal(first.changed, true);
+  assert.equal(store.getFdr(fdr.fdrId).rev, before + 1);
+
+  const again = store.setBeaconObserved(fdr.fdrId, '0041');
+  assert.equal(again.ok, true);
+  assert.equal(again.changed, false);
+  assert.equal(store.getFdr(fdr.fdrId).rev, before + 1, 'an unchanged observation is a no-op');
+});
+
+test('an observation does not stamp updatedBy — surveillance is not a controller', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  store.setBeaconObserved(fdr.fdrId, '0041');
+  assert.equal(store.getFdr(fdr.fdrId).updatedBy, 'OPS', 'still whoever last actually acted');
+});
+
+test('setBeaconObserved refuses anything that is not a Mode 3/A code', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  for (const bad of ['8888', '99', '00000', 41, 'abcd', '']) {
+    const result = store.setBeaconObserved(fdr.fdrId, bad);
+    assert.equal(result.ok, false, JSON.stringify(bad));
+    assert.equal(result.reason, 'VALIDATION_ERROR', JSON.stringify(bad));
+  }
+  assert.equal(store.getFdr(fdr.fdrId).identity.beaconObserved, null);
+});
+
+test('setBeaconObserved on a nonexistent fdrId returns NOT_FOUND', () => {
+  const store = new FdrStore();
+  assert.equal(store.setBeaconObserved('nope', '0041').reason, 'NOT_FOUND');
+});
+
+test('there is no generic setField route to identity.beaconObserved — its provenance is not a controller', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  const result = store.setField(fdr.fdrId, 'identity.beaconObserved', '0056', { by: 'APP' });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'VALIDATION_ERROR');
+});
+
+test('trackRef stays null and has no route to being written — §6.6 rule 2 forbids what it could hold', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  assert.equal(fdr.trackRef, null);
+  const result = store.setField(fdr.fdrId, 'trackRef', 'track-101', { by: 'APP' });
+  assert.equal(result.ok, false);
+  assert.equal(store.getFdr(fdr.fdrId).trackRef, null);
+});

@@ -148,7 +148,7 @@ function click(el) {
  * capturing whatever it would have sent. Returns the rendered element and the
  * captured dispatches.
  */
-function renderStrip({ strip, fdr, held, airspaces = [] }) {
+function renderStrip({ strip, fdr, held, airspaces = [], correlations = [], tracks = [] }) {
   const sent = [];
   const sandbox = {
     console, module: { exports: {} }, setTimeout, clearTimeout, Date, JSON, Math, Number, Set, Map,
@@ -160,7 +160,7 @@ function renderStrip({ strip, fdr, held, airspaces = [] }) {
   vm.createContext(sandbox);
 
   for (const file of ['efsp-nla.js', 'strip-template.js', 'efsp-state.js', 'efsp-gestures.js',
-    'annotation-editor.js', 'strip-drag.js', 'bay-view.js']) {
+    'annotation-editor.js', 'strip-drag.js', 'correlation-highlight.js', 'bay-view.js']) {
     vm.runInContext(fs.readFileSync(path.join(CLIENT, file), 'utf8'), sandbox, { filename: file });
   }
 
@@ -170,8 +170,13 @@ function renderStrip({ strip, fdr, held, airspaces = [] }) {
   sandbox.sendEfspAirspaceMutation = (actingPositionId, airspaceId, rev, op) => { sent.push({ actingPositionId, airspaceId, op }); };
   sandbox.convertStripToArrival = (s) => { sent.push({ op: { kind: 'ConvertToArrival' } }); };
   sandbox.getActiveEfspSearchQuery = () => null;
+  sandbox.sendEfspCorrelationMutation = (actingPositionId, fdrId, rev, op) => { sent.push({ actingPositionId, fdrId, op }); };
+  sandbox.updateMap = () => {};
+  const liveTracks = new Map(tracks.map(t => [String(t.id), t]));
+  sandbox.window.getLatestTrack = (id) => liveTracks.get(String(id)) || null;
+  sandbox.window.getAllTracks = () => [...liveTracks.values()];
 
-  sandbox.applyEfspSnapshot({ strips: [strip], fdrs: [fdr], positions: [], bays: [], airspaces });
+  sandbox.applyEfspSnapshot({ strips: [strip], fdrs: [fdr], positions: [], bays: [], airspaces, correlations });
   const el = sandbox._buildStripEl(strip);
   return { el, sent, sandbox };
 }
@@ -464,4 +469,97 @@ test('with nothing configured the board says so rather than rendering blank', ()
   const { list, empty } = renderAirspaceBoard({ airspaces: [], held: ['CTR'] });
   assert.equal(list.children.length, 0);
   assert.equal(empty.hidden, false);
+});
+
+// ── 4. correlation (WP5, guide §6.6 rule 5) ──────────────────────────────
+//
+// Read-only state, so `isBlockEditable` is false and the reachability half
+// above cannot see it — which is exactly why it is a Strip-level badge rather
+// than a Block, and why it gets its own dispatch test instead. No entry in
+// DELIBERATELY_NOT_IN_COMPACT_VIEW is needed: no Block was added.
+
+function correlationOf(over = {}) {
+  return {
+    fdrId: 'f1', rev: 2, state: 'CORRELATED', trackId: '101', matchedBy: 'BEACON',
+    confidence: null, binding: null, warning: null, observedBeacon: '0041',
+    transitions: [], ...over,
+  };
+}
+
+test('a correlated Strip names its contact on its face', () => {
+  const { el } = renderStrip({
+    strip: stripAt(), fdr: FDR, held: ['APP'],
+    correlations: [correlationOf()],
+    tracks: [{ id: '101', callsign: 'VIPER1' }],
+  });
+  assert.ok(findByText(el, 'TRK VIPER1'), 'the badge must be on the Strip, not only in the record');
+});
+
+test('a Strip whose contact went away says so, and is marked', () => {
+  const { el } = renderStrip({
+    strip: stripAt(), fdr: FDR, held: ['APP'],
+    correlations: [correlationOf({
+      state: 'UNCORRELATED', trackId: null, matchedBy: null,
+      warning: { kind: 'TRACK_IDENTITY_LOST', lostTrackId: '101' },
+    })],
+  });
+  assert.ok(findByText(el, 'NO TRK'));
+  assert.ok(el.classList.contains('efsp-strip-correlation-warned'),
+    'a binding that broke has to be visible without reading the badge');
+});
+
+test('an ambiguous correlation offers its candidates, and picking one binds it', () => {
+  // The server refuses to guess between two contacts that match equally well
+  // (§3.10.2 rule 7 for codes), so the way out has to be reachable — this is
+  // §6.6 rule 1's top rung becoming a control.
+  const { el, sent } = renderStrip({
+    strip: stripAt(), fdr: FDR, held: ['APP'],
+    correlations: [correlationOf({
+      state: 'UNCORRELATED', trackId: null, matchedBy: null,
+      warning: { kind: 'AMBIGUOUS_BEACON', candidateTrackIds: ['101', '102'], detail: '2 contacts are squawking 0041 — bind one' },
+    })],
+    tracks: [{ id: '101', callsign: 'SOMEONE', squawk: 41, category: 1 }, { id: '102', callsign: 'SOMEONEELSE', squawk: 41, category: 1 }],
+  });
+
+  const badge = findByText(el, 'TRK ×2');
+  assert.ok(badge, 'the ambiguity must be visible');
+  click(badge);
+  const choice = findByText(el, 'SOMEONEELSE · 0041');
+  assert.ok(choice, 'both candidates must be offered, with enough to tell them apart');
+  click(choice);
+
+  assert.equal(sent[0].op.kind, 'BindTrack');
+  assert.equal(sent[0].op.trackId, '102');
+  assert.equal(sent[0].fdrId, 'f1');
+});
+
+test('an uncorrelated Strip offers Bind, and a bound one offers Unbind', () => {
+  const uncorrelated = renderStrip({
+    strip: stripAt(), fdr: FDR, held: ['APP'],
+    correlations: [correlationOf({ state: 'UNCORRELATED', trackId: null, matchedBy: null })],
+    tracks: [{ id: '303', callsign: 'MYSTERY', category: 1 }],
+  });
+  const bindBtn = findByText(uncorrelated.el, 'Bind…');
+  assert.ok(bindBtn, 'an aircraft the controller can see but nothing matches needs a way in');
+  click(bindBtn);
+  click(findByText(uncorrelated.el, 'MYSTERY'));
+  assert.equal(uncorrelated.sent[0].op.kind, 'BindTrack');
+  assert.equal(uncorrelated.sent[0].op.trackId, '303');
+
+  const bound = renderStrip({
+    strip: stripAt(), fdr: FDR, held: ['APP'],
+    correlations: [correlationOf({ matchedBy: 'BINDING', binding: { trackId: '101', boundPositionId: 'APP' } })],
+    tracks: [{ id: '101', callsign: 'VIPER1' }],
+  });
+  click(findByText(bound.el, 'Unbind'));
+  assert.equal(bound.sent[0].op.kind, 'UnbindTrack');
+});
+
+test('a controller holding no Position can see the correlation but not change it', () => {
+  const { el } = renderStrip({
+    strip: stripAt(), fdr: FDR, held: [],
+    correlations: [correlationOf({ state: 'UNCORRELATED', trackId: null, matchedBy: null })],
+  });
+  assert.ok(findByText(el, 'NO TRK'), 'still legible');
+  assert.equal(findByText(el, 'Bind…').disabled, true, 'but not actionable');
 });

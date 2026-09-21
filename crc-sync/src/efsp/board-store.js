@@ -396,7 +396,15 @@ class BoardStore {
       orderKey,
       annotations: {},
       flags: newFlags(),
-      correlation: { state: 'UNCORRELATED' }, // WP5 hook, inert in Phase 1
+      // No `correlation` field. The inert `{ state: 'UNCORRELATED' }` hook that
+      // used to sit here was keyed wrongly: one FDR legitimately has several
+      // Strips (per-Facility replicas, docs/adr/0013; a TOFI MISSION Strip;
+      // ConvertToArrival keeping one stripId across a role change), so a
+      // per-Strip correlation lets two replicas hold different answers to
+      // "which contact is this airframe" — and two answers to an identity
+      // question IS the defect class §6.6 exists to prevent. The correlation
+      // is keyed by fdrId in correlation-store.js (docs/adr/0045), and the
+      // client joins on fdrId to render it.
       coordination: null, // WP4A hook (docs/adr/0015) — set by _applyCoordinationPropose/receiveCoordinationProposal once this Strip is party to a cross-Facility exchange
       tofiCoordination: null, // WP4A second slice hook — set by _applyTofiPropose/receiveTofiProposal once this Strip is party to a TOFI exchange
       airspaceEntry: null, // the RANGE slice — set by _applyApproveAirspaceEntry while this flight is working an airspace
@@ -423,10 +431,12 @@ class BoardStore {
    * those problems structurally impossible: there is nothing to copy,
    * because nothing new was created.
    *
-   * Annotations/flags/coordination/correlation all reset to their fresh-
-   * Strip defaults — none of them carry a meaning that survives a role
-   * change (a DEPARTURE-phase annotation note, an old coordination link
-   * that already resolved, an attention flag from the outbound leg) — and
+   * Annotations/flags/coordination all reset to their fresh-Strip defaults —
+   * none of them carry a meaning that survives a role change (a DEPARTURE-
+   * phase annotation note, an old coordination link that already resolved,
+   * an attention flag from the outbound leg). The correlation is the one
+   * thing that does survive, and used to be reset here in error — see the
+   * comment at the reset site below, and docs/adr/0045. And
    * this Strip's `role`-scoped Block Map, EfspState set and NLA table all
    * genuinely change underneath it, so starting those fields clean avoids
    * carrying over state that no longer means what it used to.
@@ -534,7 +544,15 @@ class BoardStore {
     strip.flags = newFlags();
     strip.coordination = null;
     strip.tofiCoordination = null;
-    strip.correlation = { state: 'UNCORRELATED' };
+    // The correlation is deliberately NOT reset, and the line that used to do
+    // it here was wrong even while it was inert (docs/adr/0045). This fires on
+    // the same stripId, the same fdrId, the same airframe — still airborne,
+    // still squawking the code docs/adr/0023 went out of its way to keep. It
+    // threw away a correct binding for the one aircraft that certainly has
+    // one, which is §6.6 rule 3's silent break reached through a role change
+    // instead of a track-id change. Under the fdrId key there is nothing here
+    // to reset: the correlation is a fact about the airframe, and the airframe
+    // did not change legs — the paperwork did.
     strip.rev += 1;
     strip.updatedAt = Date.now();
     strip.updatedBy = by || null;
@@ -1340,7 +1358,10 @@ class BoardStore {
       orderKey,
       annotations: {},
       flags: newFlags(),
-      correlation: { state: 'UNCORRELATED' },
+      // No `correlation` — it is keyed by fdrId, and a replica shares the
+      // originator's FDR (docs/adr/0013), so it shares the correlation too.
+      // That is the case a per-Strip field got wrong: both halves of a
+      // cross-Facility exchange are looking at one airframe.
       coordination: {
         primitive,
         state: 'PROPOSED',
@@ -1722,7 +1743,10 @@ class BoardStore {
       orderKey,
       annotations: {},
       flags: newFlags(),
-      correlation: { state: 'UNCORRELATED' },
+      // No `correlation` — it is keyed by fdrId, and a replica shares the
+      // originator's FDR (docs/adr/0013), so it shares the correlation too.
+      // That is the case a per-Strip field got wrong: both halves of a
+      // cross-Facility exchange are looking at one airframe.
       coordination: null,
       tofiCoordination: {
         direction: 'ENTRY', state: 'PROPOSED',
@@ -1831,6 +1855,13 @@ class BoardStore {
   }
   restore(data) {
     this._strips = new Map((data?.strips || []).map(s => [s.stripId, s]));
+    // A snapshot written before docs/adr/0045 carries a per-Strip
+    // `correlation` field. Dropped rather than migrated: it was always the
+    // inert `{ state: 'UNCORRELATED' }` placeholder, so there is nothing in it
+    // to carry forward, and leaving it would put a second, stale answer to
+    // "which contact is this" next to the real one — which is the defect the
+    // key change removes, preserved through a restore.
+    for (const strip of this._strips.values()) delete strip.correlation;
     this._cidSeq = data?.cidSeq || 0;
     // Idempotency cache (_appliedMutations) is deliberately NOT persisted —
     // it only needs to survive a reconnect *within a session*, not a full
