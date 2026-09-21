@@ -34,6 +34,12 @@ const efspPendingMutations = new Map();
 // multiple simultaneously-due obligation types just shows its latest.
 const efspObligations = new Map();
 
+// The RANGE slice — airspaceId -> the airspace record (state, window, pending
+// request, history, plus its static definition). Theater-wide rather than
+// per-Facility: an airspace names its controlling Facility rather than being
+// replicated into each one.
+const efspAirspaces = new Map();
+
 function applyEfspSnapshot(msg) {
   efspStrips.clear();
   efspFdrs.clear();
@@ -45,6 +51,21 @@ function applyEfspSnapshot(msg) {
   efspFacility = msg.facility;
   efspBays = msg.bays || [];
   efspAitAuthorizedByFacility = msg.aitAuthorizedByFacility || {};
+  efspAirspaces.clear();
+  for (const a of msg.airspaces || []) efspAirspaces.set(a.airspaceId, a);
+}
+
+/** An efsp-airspace-delta — its own message type, since airspaces are not Strips and ride no Board's seq. */
+function applyEfspAirspaceDelta(msg) {
+  for (const a of (msg.airspaces && msg.airspaces.updated) || []) efspAirspaces.set(a.airspaceId, a);
+}
+
+function getEfspAirspace(airspaceId) { return efspAirspaces.get(airspaceId) || null; }
+function getAllEfspAirspaces() { return [...efspAirspaces.values()]; }
+
+/** Live Strips approved into this airspace — what a range controller sees of the flights in their block, read-only. */
+function stripsInAirspace(airspaceId) {
+  return getAllEfspStrips().filter(s => s.state !== 'DROPPED' && s.airspaceEntry && s.airspaceEntry.airspaceId === airspaceId);
 }
 
 function applyEfspDelta(msg) {
@@ -193,6 +214,7 @@ if (typeof module !== 'undefined' && module.exports) {
     registerPendingMutation, getPendingMutations, rebaseForResend,
     getEfspStrip, getEfspFdr, getEfspPosition, getAllEfspStrips, getAllEfspPositions,
     otherLiveStripsForFdr, liveStripsForCallsign,
+    applyEfspAirspaceDelta, getEfspAirspace, getAllEfspAirspaces, stripsInAirspace,
     getEfspRack, searchEfspStrips, getEfspBoardSeq, getEfspFacility, getEfspBays,
     isAitAuthorizedFor,
     applyEfspObligationAlert, getEfspObligation, clearEfspObligation,

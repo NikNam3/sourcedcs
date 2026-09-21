@@ -740,6 +740,7 @@ async function connect() {
         applyEfspSnapshot(msg);
         if (typeof refreshEfspPanel === 'function') refreshEfspPanel();
         if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
+        if (typeof renderAirspacePanel === 'function') renderAirspacePanel();
         // §5.6.3 — replay every still-pending Mutation against this fresh
         // baseline. A no-op on the very first connect (nothing pending
         // yet); on a RECONNECT this is what stops a Mutation in flight at
@@ -776,6 +777,20 @@ async function connect() {
         if (typeof renderPositionControls === 'function') renderPositionControls();
         if (typeof renderPositionWarnings === 'function') renderPositionWarnings(msg.warnings);
         if (typeof refreshEfspPanel === 'function') refreshEfspPanel();
+        break;
+      // The RANGE slice — an airspace is not a Strip and rides no Board's
+      // seq, so it gets its own delta rather than a section of
+      // efsp-board-delta.
+      case 'efsp-airspace-delta':
+        if (typeof applyEfspAirspaceDelta === 'function') applyEfspAirspaceDelta(msg);
+        if (typeof renderAirspacePanel === 'function') renderAirspacePanel();
+        break;
+      case 'efsp-airspace-ack':
+        if (!msg.ok) {
+          console.warn('[efsp] airspace op rejected:', msg.reason, msg);
+          if (typeof _showMutationError === 'function') _showMutationError(msg.reason || 'Rejected', msg.detail);
+        }
+        if (typeof renderAirspacePanel === 'function') renderAirspacePanel();
         break;
       // WP4A (docs/adr/0021), guide §4.6.1 — a timed forwarding obligation
       // came due. Unconditional broadcast (ws-hub.js), same as

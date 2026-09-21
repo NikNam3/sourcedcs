@@ -493,6 +493,53 @@ function _buildStripEl(strip) {
       el.appendChild(commsBtn);
     }
 
+    // ── The RANGE slice: working an airspace ────────────────────────────
+    //
+    // Approving a flight onto an airspace's frequency. Deliberately not a
+    // coordination affordance: nothing crosses a Facility boundary and no
+    // jurisdiction moves (§4.7 / D17 — "the frequency is an attribute of the
+    // Strip; the controller is what moves"), so the controller keeps the
+    // Strip throughout and this sits apart from the Coordinate/TOFI buttons.
+    if (strip.airspaceEntry) {
+      const airspace = getEfspAirspace(strip.airspaceEntry.airspaceId);
+      const name = (airspace && airspace.definition && airspace.definition.name) || strip.airspaceEntry.airspaceId;
+
+      const inBadge = document.createElement('span');
+      inBadge.className = 'efsp-coordination-badge efsp-airspace-badge';
+      const mhz = strip.airspaceEntry.frequencyMhz;
+      inBadge.textContent = mhz ? `${name} ${mhz.toFixed(3)}` : name;
+      // §9.11's alert condition, shown on the Strip itself rather than only
+      // as an obligation badge — the controller who approved it is the one
+      // who can do something about it.
+      if (airspace && airspace.state !== 'ACTIVE') {
+        inBadge.classList.add('efsp-airspace-badge-unactivated');
+        inBadge.title = `${name} is ${airspace.state}, not active`;
+      }
+      el.appendChild(inBadge);
+
+      if (_canApproveAirspaceEntry(strip)) {
+        const leaveBtn = document.createElement('button');
+        leaveBtn.className = 'efsp-coordinate-btn';
+        leaveBtn.textContent = 'Leave airspace';
+        leaveBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const actingPositionId = _resolveActingPositionId(strip);
+          if (actingPositionId) sendEfspMutation(actingPositionId, strip, { kind: 'ClearAirspaceEntry' });
+        });
+        el.appendChild(leaveBtn);
+      }
+    } else if (_canApproveAirspaceEntry(strip)) {
+      const airspaceBtn = document.createElement('button');
+      airspaceBtn.className = 'efsp-coordinate-btn';
+      airspaceBtn.textContent = 'Airspace…';
+      airspaceBtn.title = 'Approve this flight into an airspace, on its frequency';
+      airspaceBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        _openAirspaceEntryPopover(strip, el);
+      });
+      el.appendChild(airspaceBtn);
+    }
+
     if (strip.tofiCoordination && strip.tofiCoordination.state !== 'REJECTED') {
       const tofiBadge = document.createElement('span');
       tofiBadge.className = 'efsp-coordination-badge efsp-tofi-badge';
@@ -895,6 +942,78 @@ function _openTofiEntryPopover(strip, anchorEl, counterparts) {
   anchorEl.appendChild(popover);
   _openTofiPopoverEl = popover;
   setTimeout(() => document.addEventListener('pointerdown', _onDocPointerDownCloseTofiPopover, true), 0);
+}
+
+// Only the Positions that hold an airborne flight approve one into an
+// airspace — the client mirror of permission.js's AIRSPACE_ENTRY_OP_KINDS
+// grant. A range Position never appears here: it works no Strips at all.
+const AIRSPACE_ENTRY_POSITIONS = ['APP', 'CTR'];
+
+function _canApproveAirspaceEntry(strip) {
+  if (!AIRSPACE_ENTRY_POSITIONS.includes(strip.ownerPositionId)) return false;
+  return !!_resolveActingPositionId(strip);
+}
+
+let _openAirspacePopoverEl = null;
+
+function _closeAirspacePopover() {
+  if (_openAirspacePopoverEl && _openAirspacePopoverEl.parentNode) _openAirspacePopoverEl.parentNode.removeChild(_openAirspacePopoverEl);
+  _openAirspacePopoverEl = null;
+  document.removeEventListener('pointerdown', _onDocPointerDownCloseAirspacePopover, true);
+}
+
+function _onDocPointerDownCloseAirspacePopover() { _closeAirspacePopover(); }
+
+function _openAirspaceEntryPopover(strip, anchorEl) {
+  _closeAirspacePopover();
+  const airspaces = getAllEfspAirspaces();
+
+  const popover = document.createElement('div');
+  popover.className = 'efsp-coordinate-popover';
+  popover.addEventListener('pointerdown', (e) => e.stopPropagation());
+
+  if (airspaces.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'efsp-coordinate-degraded-warning';
+    empty.textContent = 'No airspaces configured';
+    popover.appendChild(empty);
+    anchorEl.appendChild(popover);
+    _openAirspacePopoverEl = popover;
+    setTimeout(() => document.addEventListener('pointerdown', _onDocPointerDownCloseAirspacePopover, true), 0);
+    return;
+  }
+
+  const select = document.createElement('select');
+  select.className = 'efsp-coordinate-primitive-select';
+  for (const a of airspaces) {
+    const definition = a.definition || {};
+    const frequency = definition.controlFrequencyMhz || definition.workingFrequencyMhz;
+    const opt = document.createElement('option');
+    opt.value = a.airspaceId;
+    // The state is in the label because entry into an unactivated airspace
+    // is allowed but alerts (§9.11) — worth seeing before clicking, not
+    // only afterwards.
+    opt.textContent = `${definition.name || a.airspaceId} — ${a.state}${frequency ? ` · ${frequency.toFixed(3)}` : ''}`;
+    select.appendChild(opt);
+  }
+  popover.appendChild(select);
+
+  const sendBtn = document.createElement('button');
+  sendBtn.className = 'efsp-coordinate-send-btn';
+  sendBtn.textContent = 'Approve entry';
+  sendBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const actingPositionId = _resolveActingPositionId(strip);
+    if (actingPositionId) {
+      sendEfspMutation(actingPositionId, strip, { kind: 'ApproveAirspaceEntry', airspaceId: select.value });
+    }
+    _closeAirspacePopover();
+  });
+  popover.appendChild(sendBtn);
+
+  anchorEl.appendChild(popover);
+  _openAirspacePopoverEl = popover;
+  setTimeout(() => document.addEventListener('pointerdown', _onDocPointerDownCloseAirspacePopover, true), 0);
 }
 
 const COORDINATION_PRIMITIVE_LABELS = {
@@ -1400,6 +1519,7 @@ function _isProtectedStripEl(el) {
   // non-default target and click Send. Same protection every other popover
   // already gets above.
   if (_openTofiPopoverEl && el.contains(_openTofiPopoverEl)) return true;
+  if (_openAirspacePopoverEl && el.contains(_openAirspacePopoverEl)) return true;
   return false;
 }
 

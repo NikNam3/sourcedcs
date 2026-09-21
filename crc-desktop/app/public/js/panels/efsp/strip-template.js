@@ -63,7 +63,11 @@ const DEPARTURE_BLOCK_MAP = {
   '19': { required: false, label: 'NOTE',     target: { kind: 'annotation' } },
   '20': { required: false, label: 'SCRATCH',  target: { kind: 'annotation' } },
   '21': { required: false, label: 'SCRATCH',  target: { kind: 'annotation' } },
-  '22': { required: false, label: 'NOTE',     target: { kind: 'annotation' } },
+  // The guide's own Block 22, "Frequency" — structured rather than a
+  // free-text annotation since the RANGE slice, so approving a flight onto
+  // an airspace's frequency can write it directly and it validates as one
+  // unit and one type (MHz, a number).
+  '22': { required: false, label: 'FREQ',     target: { kind: 'frequency' } },
   '23': { required: false, label: 'NOTE',     target: { kind: 'annotation' } },
   '24': { required: true,  label: 'NOTE',     target: { kind: 'annotation' } },
   // WP4A (docs/adr/0018), §4.6.4 — airspace ownership as a direction. Not
@@ -123,6 +127,11 @@ const ARRIVAL_BLOCK_MAP = {
   'SREG':     { required: false, label: 'SEP REG',  target: { kind: 'tofi', field: 'separationRegime' } },
   '25':       { required: true,  label: 'STATE',    target: { kind: 'system', field: 'state' } },
   '26':       { required: true,  label: 'NLA',      target: { kind: 'nla' } },
+  // Block 22 (Frequency) on the airborne roles too — the RANGE slice. A
+  // flight is approved onto an airspace's frequency while it is enroute,
+  // which is exactly when its Strip is an ARRIVAL or an OVERFLIGHT, so a
+  // DEPARTURE-only Block would have been invisible precisely when it matters.
+  '22':       { required: false, label: 'FREQ',     target: { kind: 'frequency' } },
 };
 
 // [SOURCE-DEFINED] Overflight Block Map (docs/adr/0023) — client mirror of
@@ -158,6 +167,11 @@ const OVERFLIGHT_BLOCK_MAP = {
   'SREG': { required: false, label: 'SEP REG', target: { kind: 'tofi', field: 'separationRegime' } },
   '25': { required: true,  label: 'STATE',    target: { kind: 'system', field: 'state' } },
   '26': { required: true,  label: 'NLA',      target: { kind: 'nla' } },
+  // Block 22 (Frequency) on the airborne roles too — the RANGE slice. A
+  // flight is approved onto an airspace's frequency while it is enroute,
+  // which is exactly when its Strip is an ARRIVAL or an OVERFLIGHT, so a
+  // DEPARTURE-only Block would have been invisible precisely when it matters.
+  '22':       { required: false, label: 'FREQ',     target: { kind: 'frequency' } },
 };
 
 // [SOURCE-DEFINED] WP4A second slice — client mirror of crc-sync's
@@ -272,6 +286,16 @@ function resolveBlockValue(blockId, fdr, strip) {
   if (t.kind === 'tofi') {
     return { value: (fdr && fdr.tofi) ? fdr.tofi[t.field] : null, provenance: (fdr && fdr.provenance && fdr.provenance.tofi) || 'CONTROLLER_ENTERED' };
   }
+  // The RANGE slice — Block 22, the frequency this flight has been approved
+  // onto. Lives in fdr.comms for the same reason airspace ownership lives in
+  // fdr.airspace: a dedicated setter, not a generic writable path.
+  if (t.kind === 'frequency') {
+    const mhz = (fdr && fdr.comms) ? fdr.comms.workingFrequencyMhz : null;
+    return {
+      value: mhz == null ? null : mhz.toFixed(3),
+      provenance: (fdr && fdr.provenance && fdr.provenance['comms.workingFrequencyMhz']) || 'CONTROLLER_ENTERED',
+    };
+  }
   return { value: null, provenance: 'SYSTEM_DERIVED' };
 }
 
@@ -337,7 +361,11 @@ function requiredBlocksFor(role = 'DEPARTURE') {
 function isBlockEditable(blockId, role = 'DEPARTURE') {
   const map = BLOCK_MAPS[role];
   const def = map && map[blockId];
-  return !!def && (def.target.kind === 'fdr' || def.target.kind === 'annotation');
+  // 'frequency' joins the editable kinds: unlike airspace-owner/tofi, which
+  // are restricted enums with their own <select>, a frequency is a free
+  // numeric entry — the ordinary click-to-edit path is right for it. The
+  // server validates the band.
+  return !!def && (def.target.kind === 'fdr' || def.target.kind === 'annotation' || def.target.kind === 'frequency');
 }
 
 if (typeof module !== 'undefined' && module.exports) {

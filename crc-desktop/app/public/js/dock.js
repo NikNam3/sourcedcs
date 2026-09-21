@@ -39,6 +39,7 @@ const PANEL_TITLES = {
   calls:    'SQWK C/S',
   radio:    'RADIO',
   efsp:     'FLIGHT STRIPS',
+  airspace: 'AIRSPACE',
 };
 
 const DOCK_LAYOUT_KEY = 'crc-desktop-dock-layout';
@@ -60,6 +61,7 @@ function initDock() {
         case 'radars':   return mountExistingPanel('radars-panel', initRadarPanel);
         case 'radio':    return mountExistingPanel('srs-radio-panel', null);
         case 'efsp':     return mountExistingPanel('efsp-panel', initEfspPanel);
+        case 'airspace': return mountExistingPanel('airspace-panel', initAirspacePanel);
         default: throw new Error(`[dock] unknown panel component: ${options.name}`);
       }
     },
@@ -185,7 +187,7 @@ function addMissingRequiredPanels() {
 // (it lands wherever the active group happens to be, sometimes merging
 // into completely the wrong group — both reproduced firsthand while
 // building this). `excludeId` leaves out the panel currently being placed.
-const LEFT_CLUSTER = ['track', 'radars', 'airport', 'calls', 'efsp'];
+const LEFT_CLUSTER = ['track', 'radars', 'airport', 'calls', 'efsp', 'airspace'];
 
 function leftGroupAnchor(excludeId) {
   return LEFT_CLUSTER.filter(id => id !== excludeId).find(id => dock.api.getPanel(id));
@@ -196,7 +198,7 @@ function leftGroupAnchor(excludeId) {
 // panel. `map` isn't listed: it never closes, so it never needs a
 // remembered size to come back to.
 const PANEL_SIDE = {
-  track: 'left', radars: 'left', airport: 'left', calls: 'left', efsp: 'left',
+  track: 'left', radars: 'left', airport: 'left', calls: 'left', efsp: 'left', airspace: 'left',
   settings: 'right',
   radio: 'bottom',
 };
@@ -296,6 +298,13 @@ const DOCKABLE_PANELS = {
     const anchor = leftGroupAnchor('efsp');
     return withRememberedPlacement('efsp', {
       id: 'efsp', component: 'efsp', title: PANEL_TITLES.efsp,
+      position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
+    }, !anchor);
+  },
+  airspace: () => {
+    const anchor = leftGroupAnchor('airspace');
+    return withRememberedPlacement('airspace', {
+      id: 'airspace', component: 'airspace', title: PANEL_TITLES.airspace,
       position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
     }, !anchor);
   },

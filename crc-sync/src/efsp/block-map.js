@@ -174,6 +174,11 @@ const ARRIVAL_BLOCK_MAP = {
   'SREG':     { required: false, target: { kind: 'tofi', field: 'separationRegime' } },
   '25':       { required: true,  target: { kind: 'system' } },
   '26':       { required: true,  target: { kind: 'system' } },
+  // Block 22 (Frequency) on the airborne roles too — the RANGE slice. A
+  // flight is approved onto an airspace's frequency while it is enroute,
+  // which is exactly when its Strip is an ARRIVAL or an OVERFLIGHT, so a
+  // DEPARTURE-only Block would have been invisible precisely when it matters.
+  '22': { required: false, target: { kind: 'frequency' } },
 };
 
 // [SOURCE-DEFINED] Overflight Block Map (docs/adr/0023) — a flight
@@ -216,6 +221,11 @@ const OVERFLIGHT_BLOCK_MAP = {
   'SREG': { required: false, target: { kind: 'tofi', field: 'separationRegime' } },
   '25': { required: true,  target: { kind: 'system' } },
   '26': { required: true,  target: { kind: 'system' } },
+  // Block 22 (Frequency) on the airborne roles too — the RANGE slice. A
+  // flight is approved onto an airspace's frequency while it is enroute,
+  // which is exactly when its Strip is an ARRIVAL or an OVERFLIGHT, so a
+  // DEPARTURE-only Block would have been invisible precisely when it matters.
+  '22': { required: false, target: { kind: 'frequency' } },
 };
 
 // [SOURCE-DEFINED] WP4A second slice (docs/adr/0026) — the MISSION Strip

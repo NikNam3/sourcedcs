@@ -14,7 +14,7 @@
 // CTR never collide), which is what lets getActingPositions() below still
 // return one flat, facility-agnostic list for every pre-WP4A call site.
 const DEFAULT_EFSP_FACILITY_ID = 'INCIRLIK';
-let _actingPositionsByFacility = { INCIRLIK: [], CENTER: [], TACTICAL: [] };
+let _actingPositionsByFacility = { INCIRLIK: [], CENTER: [], TACTICAL: [], RANGES: [] };
 
 function efspClientMutationId() {
   // crypto.randomUUID() is available in Electron's Chromium renderer (and
@@ -90,6 +90,21 @@ function sendEfspSetPositions(facilityId, held) {
 function getActingPositions(facilityId) {
   if (facilityId) return [...(_actingPositionsByFacility[facilityId] || [])];
   return Object.values(_actingPositionsByFacility).flat();
+}
+
+/**
+ * An airspace op (schedule/request/approve/release/return) — its own message
+ * type, because it targets an airspace rather than a Strip and so carries no
+ * stripId, no Strip baseRev and no Facility routing. Not registered as a
+ * pending mutation: the replay-on-reconnect machinery (§5.6.3) is keyed on
+ * Strip identity, and an airspace op is cheap to simply reissue by hand.
+ */
+function sendEfspAirspaceMutation(actingPositionId, airspaceId, baseRev, op) {
+  _sendEfsp({
+    version: 1, type: 'efsp-airspace-mutation',
+    clientMutationId: efspClientMutationId(),
+    airspaceId, baseRev, actingPositionId, op,
+  });
 }
 
 /** Resync after reconnect (guide §5.6) — server replies with efsp-board-delta or efsp-snapshot, never a third path. */

@@ -217,6 +217,14 @@
   <div id="efsp-dot-command-preview"></div>
 </div>
 
+<!-- Airspace board (guide §4.2 — "not a strip rack"). Its own panel rather
+     than a tab in the Strip panel: it holds no Strips, and a controller
+     running a range alongside an ATC Position wants both open at once. -->
+<div id="airspace-panel" class="dock-unmounted">
+  <div id="airspace-empty" class="efsp-empty">No airspaces configured.</div>
+  <div id="airspace-list"></div>
+</div>
+
 <!-- Airport weather panel (floating, click on map airport) -->
 <div id="apt-weather-panel"></div>
 
@@ -920,6 +928,7 @@
 <script src="./js/panels/efsp/bay-view.js"></script>
 <script src="./js/panels/efsp/efsp-flight-plan-lookup.js"></script>
 <script src="./js/panels/efsp/efsp-panel.js"></script>
+<script src="./js/panels/efsp/airspace-panel.js"></script>
 <script src="./js/app.js"></script>
 <script src="./js/srs-radio.js"></script>
 </body>

@@ -609,3 +609,79 @@
   cursor: pointer;
   font: inherit;
 }
+
+/* ── The airspace board (guide §4.2 — "not a strip rack") ───────────────── */
+
+#airspace-panel {
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.airspace-card {
+  border: 1px solid #2a3038;
+  border-left-width: 3px;
+  background: #1c2228;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+}
+
+/* The guide's own four state names (§4.6.4) — "hot"/"cold" are display sugar
+   with no doctrinal meaning, so they are not used here either. */
+.airspace-state-returned  { border-left-color: #4a5560; }
+.airspace-state-scheduled { border-left-color: #e0a83c; }
+.airspace-state-active    { border-left-color: #39ff7a; }
+.airspace-state-released  { border-left-color: #4a7dbf; }
+
+.airspace-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.airspace-name  { color: #d8e0e6; font-weight: 600; }
+.airspace-state { color: #a8b4bd; font-size: 11px; letter-spacing: 0.05em; }
+
+.airspace-meta {
+  color: #6a7580;
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.airspace-pending {
+  color: #ffe0a8;
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+/* Flights approved into this block. A list, never a rack — a range
+   controller needs to see who is in their airspace but works no Strips. */
+.airspace-flights {
+  color: #bfe0ff;
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+.airspace-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.airspace-action-btn {
+  min-height: 26px;
+  padding: 2px 8px;
+  background: #1c2228;
+  border: 1px solid #4a5560;
+  color: #d8e0e6;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+
+/* On a Strip: the airspace this flight is working, and its frequency. */
+.efsp-airspace-badge { border-color: #39ff7a; color: #bfffd4; }
+/* §9.11 — approved into airspace nobody has activated. Allowed, but said
+   plainly on the Strip rather than only in the obligation badge. */
+.efsp-airspace-badge-unactivated { border-color: #e0a83c; color: #ffe0a8; }

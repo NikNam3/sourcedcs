@@ -158,6 +158,7 @@ function panelControlRows() {
     { id: 'calls',    label: PANEL_TITLES.calls },
     { id: 'radio',    label: PANEL_TITLES.radio },
     { id: 'efsp',     label: PANEL_TITLES.efsp },
+    { id: 'airspace', label: PANEL_TITLES.airspace },
   ];
 }
 
@@ -231,7 +232,36 @@ const EFSP_FACILITY_POSITIONS = {
   // doesn't need one: the backend enforces the read-only-ness regardless
   // of what this list renders.
   TACTICAL: ['TAC_C2', 'AIC', 'GCI', 'JTAC'],
+  // RANGES is deliberately absent: its Position set is DERIVED server-side
+  // from the airspace config (a Position exists only for a range with
+  // control of its own), so there is nothing static to list. Those Positions
+  // come from the snapshot instead — see _efspPositionsFor below.
 };
+
+/**
+ * The Positions to offer for a Facility. Static for the three Strip
+ * Facilities, whose sets are fixed in facility-config.js; read from the
+ * snapshot for RANGES, whose set depends on which ranges are configured.
+ *
+ * Reading the snapshot for ALL of them would be tidier and would kill this
+ * hand-maintained mirror outright, but it would also mean no "acting as"
+ * checkboxes at all until the first snapshot lands — a worse failure than
+ * the drift it would prevent.
+ */
+function _efspPositionsFor(facilityId) {
+  if (EFSP_FACILITY_POSITIONS[facilityId]) return EFSP_FACILITY_POSITIONS[facilityId];
+  if (typeof getAllEfspPositions !== 'function') return [];
+  return getAllEfspPositions()
+    .filter(p => p.facilityId === facilityId)
+    .map(p => p.positionId);
+}
+
+/** Every Facility with at least one Position to act as — RANGES disappears entirely when no range is configured. */
+function _efspFacilityIds() {
+  const ids = Object.keys(EFSP_FACILITY_POSITIONS);
+  if (_efspPositionsFor('RANGES').length > 0) ids.push('RANGES');
+  return ids;
+}
 
 // Cached once in initRadarPanel(), not looked up fresh per render — this
 // panel is called from app.js's async WS message handler (an
@@ -248,7 +278,8 @@ function renderPositionControls() {
   const $positions = _positionControlsEl;
   $positions.innerHTML = '';
 
-  for (const [facilityId, positionIds] of Object.entries(EFSP_FACILITY_POSITIONS)) {
+  for (const facilityId of _efspFacilityIds()) {
+    const positionIds = _efspPositionsFor(facilityId);
     const held = new Set(getActingPositions(facilityId));
 
     const $facilityHeader = document.createElement('div');

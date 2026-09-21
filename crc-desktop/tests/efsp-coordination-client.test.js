@@ -68,3 +68,22 @@ test('TOFI eligibility covers every airborne ATC-side Role, and never MISSION �
   assert.deepEqual(Object.keys(TOFI_ELIGIBLE_STATES).sort(), ['ARRIVAL', 'DEPARTURE', 'OVERFLIGHT']);
   assert.equal(TOFI_ELIGIBLE_STATES.MISSION, undefined);
 });
+
+// The RANGE slice — bay-view.js decides whether to offer the "Airspace…"
+// button from a hard-coded list of Positions, mirroring permission.js's
+// grant. Same drift risk as every other mirror here: a list that falls out
+// of step either offers a button the server refuses or hides one it allows.
+test('the Positions the client offers airspace entry to are exactly the ones the server grants it to', () => {
+  const source = require('fs').readFileSync(require.resolve('../app/public/js/panels/efsp/bay-view.js'), 'utf8');
+  const match = source.match(/const AIRSPACE_ENTRY_POSITIONS = (\[[^\]]*\])/);
+  assert.ok(match, 'AIRSPACE_ENTRY_POSITIONS not found in bay-view.js');
+  const clientPositions = JSON.parse(match[1].replace(/'/g, '"'));
+
+  const granted = Object.keys(server.PERMISSIONS)
+    .filter(id => server.AIRSPACE_ENTRY_OP_KINDS.every(k => server.PERMISSIONS[id].has(k)));
+  assert.deepEqual(clientPositions.sort(), granted.sort());
+});
+
+test('a range Position works no Strips — the class refusal is a rule, not an absent table entry', () => {
+  assert.ok(server.NO_STRIP_OP_CLASSES.has('USING_AGENCY'));
+});
