@@ -761,3 +761,12 @@
       padding: 2px 0;
     }
     #efsp-correlation-rate.efsp-correlation-rate-low { color: #cc8844; }
+    /* Correlated, but to a contact outside THIS controller's coverage
+       (crc-sync's docs/adr/0042 made the picture per-Position). Dimmer than a
+       live correlation and distinctly not a warning: nothing is wrong, there
+       is simply nothing here to ring. */
+    .efsp-correlation-outside {
+      color: var(--ui-text-dim);
+      border-color: var(--ui-border-2);
+      font-style: italic;
+    }

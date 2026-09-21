@@ -44,11 +44,12 @@ const GRID_STRIDE = 4;   // sample every 4th pixel -> 128x128 grid per tile
 const GRID_N = TILE_SIZE / GRID_STRIDE;
 
 const MAPTILER_KEY = process.env.CRCSYNC_MAPTILER_KEY || '';
-// Not under config/: that directory is baked into the image and holds hand-
-// edited squadron data, while this is a few megabytes of derived cache. In the
-// compose stack it is a volume (infra/docker-compose.yml's crc-sync-data).
+// Under state/, not config/ (baked into the image, hand-edited squadron data)
+// and not data/ (baked into the image, shipped reference tables) — this is a
+// few megabytes of derived cache. In the compose stack it is a volume
+// (infra/docker-compose.yml's crc-sync-state). See src/state-paths.js.
 const CACHE_DIR = process.env.CRCSYNC_TERRAIN_CACHE_DIR
-  || path.join(__dirname, '../data/terrain-cache');
+  || path.join(__dirname, '../state/terrain-cache');
 
 const FETCH_TIMEOUT_MS = 15000;
 const MAX_CONCURRENT_FETCHES = 6;

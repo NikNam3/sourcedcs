@@ -1,4 +1,4 @@
-# 0048 — Runtime state lives in `data/`, shipped defaults in `config/`, and a read falls back from one to the other
+# 0048 — Runtime state lives in `state/`, shipped defaults in `config/`, and a read falls back from one to the other
 
 ## Context
 
@@ -33,8 +33,8 @@ data/     everything written at runtime. A volume in the compose stack.
 
 `src/state-paths.js` holds the whole of it:
 
-- **A write always goes to `data/`.**
-- **A read prefers `data/` and falls back to the shipped default in `config/`.**
+- **A write always goes to `state/`.**
+- **A read prefers `state/` and falls back to the shipped default in `config/`.**
 - **An explicit env override wins for both**, so every `CRCSYNC_*_PATH` variable the tests rely on behaves exactly as before.
 
 That gives three properties, and the third is the one worth having:
@@ -45,7 +45,7 @@ That gives three properties, and the third is the one worth having:
 
 Property 3 is `docs/adr/0041`'s question — *"what happens to this the next time the code grows?"* — asked of the deployment instead of a config list. Resolve the fallback once at module load and it breaks in a subtler way: a file written during a session would keep being read from the image until the next restart. So `readPath` resolves per call.
 
-`Dockerfile` creates `/app/data` and chowns it to `node` **before** dropping privileges — `COPY` runs as root, so `/app` is root-owned and the service could not otherwise write its own snapshot. Without a volume it is just a directory in the container, which is the pre-existing behaviour and keeps a plain `docker run` working.
+`Dockerfile` creates `/app/state` and chowns it to `node` **before** dropping privileges — `COPY` runs as root, so `/app` is root-owned and the service could not otherwise write its own snapshot. Without a volume it is just a directory in the container, which is the pre-existing behaviour and keeps a plain `docker run` working.
 
 **The two committed files are untracked and gitignored.** They are runtime state, not configuration. A fresh clone now starts with an empty Board, which is what a fresh install should do.
 
@@ -54,7 +54,7 @@ Property 3 is `docs/adr/0041`'s question — *"what happens to this the next tim
 ## Alternatives considered
 
 - **Mount a volume at `/app/config`.** Rejected: an empty named volume shadows the image's config files, so every shipped default would read as reset. `docs/adr/0042` already named this trap.
-- **An entrypoint that seeds the volume from the image on first run** (`cp -n /app/config-defaults/* /app/data/`). The standard pattern, and it would work — rejected because it moves the logic into a shell script that no test can see, and it seeds *once*: a default added by a later image update never reaches an already-seeded volume. Property 3 above is exactly what it gives up, and property 3 is the one that stops this recurring.
+- **An entrypoint that seeds the volume from the image on first run** (`cp -n /app/config-defaults/* /app/state/`). The standard pattern, and it would work — rejected because it moves the logic into a shell script that no test can see, and it seeds *once*: a default added by a later image update never reaches an already-seeded volume. Property 3 above is exactly what it gives up, and property 3 is the one that stops this recurring.
 - **Bind-mount a host directory over `config/`** and copy the shipped files in by hand on first deploy. Rejected: it makes correct deployment a manual step somebody has to remember, and the failure mode of forgetting is silent.
 - **Leave the read path alone and only move the two EFSP files**, as `docs/adr/0042` had scoped it. Rejected once the audit showed seven writers: fixing two and leaving five would have left the squawk map and ATIS config still resetting on deploy, and the next person to look would have to re-derive the whole problem.
 - **Keep the committed Board snapshot as a shipped default.** Rejected: a snapshot of somebody's old strips is not a useful default for anyone. The fallback still reads it if present, which is deliberate — it is what lets an operator seed the volume from the current live board if they want to — but it is not carried in git.
@@ -62,12 +62,12 @@ Property 3 is `docs/adr/0041`'s question — *"what happens to this the next tim
 
 ## Consequences
 
-- **`tests/state-paths.test.mjs` pins the read fallback in both directions**, including the case that matters on an image update: a volume full of live files plus a brand-new shipped default, where the new default must still be read. It also asserts that all nine runtime-written filenames resolve under `data/` — the assertion that would have caught the original bug, and the place to add a line if a tenth writer appears.
-- **Verified by running it, not only by test.** From a deleted `data/`, `createEfsp()` restored 2 Strips from the shipped `config/efsp-board.json` fallback and `persist()` then wrote `data/efsp-board.json`, leaving `config/` untouched.
+- **`tests/state-paths.test.mjs` pins the read fallback in both directions**, including the case that matters on an image update: a volume full of live files plus a brand-new shipped default, where the new default must still be read. It also asserts that all nine runtime-written filenames resolve under `state/` — the assertion that would have caught the original bug, and the place to add a line if a tenth writer appears.
+- **Verified by running it, not only by test.** From a deleted `state/`, `createEfsp()` restored 2 Strips from the shipped `config/efsp-board.json` fallback and `persist()` then wrote `state/efsp-board.json`, leaving `config/` untouched.
 - **The live server's current Board will not carry over by itself.** It exists only inside the running container, as it always has. To keep it, copy it into the volume before the next deploy:
   ```bash
   docker cp crc-sync:/app/config/efsp-board.json - \
-    | docker run --rm -i -v crc-sync-data:/data alpine tar x -C /data
+    | docker run --rm -i -v crc-sync-state:/state alpine tar x -C /state
   ```
   Doing nothing starts the Board empty, which is the honest default and is what happens on any deploy today.
 - **`config/` now means "read-only shipped default".** Anything that writes into it in future is a bug, and `state-paths.js`'s header says so.

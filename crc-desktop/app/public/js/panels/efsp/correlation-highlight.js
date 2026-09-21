@@ -129,7 +129,25 @@ function correlationBadgeFor(strip) {
   // display resolved.
   const track = typeof window !== 'undefined' && typeof window.getLatestTrack === 'function'
     ? window.getLatestTrack(record.trackId) : null;
-  const label = (track && track.callsign) || record.trackId;
+
+  // Correlation is a system-wide fact and is worked out against every contact
+  // the server has; coverage is per-controller (crc-sync's docs/adr/0042). So a
+  // Strip can legitimately be correlated to a contact THIS controller cannot
+  // see — an en-route flight bound on somebody else's radar, say.
+  //
+  // Say so, rather than showing a bare track id and a ring that never appears.
+  // Before this the badge read `TRK 101`, which looks like a callsign, and
+  // clicking the Strip did nothing visible. §6.6 rule 4 asks that selecting a
+  // Strip highlight its contact; when the contact is outside your picture the
+  // honest answer is that there is nothing to highlight.
+  if (!track) {
+    return {
+      text: 'TRK ··',
+      className: 'efsp-correlation-badge efsp-correlation-outside',
+      title: `correlated, but the contact is outside your radar coverage (${_correlatedSentence(record)})`,
+      outsideCoverage: true,
+    };
+  }
 
   if (record.state === 'PROVISIONAL') {
     return {
@@ -140,7 +158,7 @@ function correlationBadgeFor(strip) {
   }
 
   return {
-    text: `TRK ${label}`,
+    text: `TRK ${track.callsign || record.trackId}`,
     className: 'efsp-correlation-badge efsp-correlation-correlated',
     title: _correlatedSentence(record),
   };

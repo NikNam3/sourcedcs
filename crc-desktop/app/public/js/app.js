@@ -632,6 +632,12 @@ async function connect() {
         applyEfspSnapshot(msg);
         if (typeof refreshEfspPanel === 'function') refreshEfspPanel();
         if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
+        // A reconnect brings correlations back with the rest of the snapshot,
+        // so a Strip that was selected before the drop needs its ring redrawn
+        // — otherwise it stays absent until the next reconcile delta happens
+        // to touch that flight, which could be a while on a quiet board.
+        if (typeof refreshCorrelatedHighlight === 'function') refreshCorrelatedHighlight();
+        updateMap();
         if (typeof renderAirspacePanel === 'function') renderAirspacePanel();
         // §5.6.3 — replay every still-pending Mutation against this fresh
         // baseline. A no-op on the very first connect (nothing pending

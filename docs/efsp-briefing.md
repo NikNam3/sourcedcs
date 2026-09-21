@@ -11,8 +11,8 @@ picture underneath it (§3B). The recommendation now is **stereo routes then WP6
 
 ## 1. State of the tree
 
-Committed and green: **crc-sync 913 tests, crc-desktop 279 tests** (`npm test` in each). ADRs run
-`0001`–`0048`.
+Committed and green: **crc-sync 918 tests, crc-desktop 282 tests** (`npm test` in each). ADRs run
+`0001`–`0049`.
 
 ```
 crc-sync/src/efsp/                        the subsystem — stores, rules, the wire handler
@@ -25,7 +25,7 @@ crc-sync/src/efsp/correlation-match.js    the key ladder's matching rules (pure)
 crc-sync/src/efsp/correlation-reconciler.js  the 1Hz sweep + the rate metric
 crc-sync/src/state-paths.js               shipped defaults (config/) vs runtime state (data/)
 crc-desktop/app/public/js/panels/efsp/    the Strip panel, the airspace board, correlation-highlight
-docs/adr/                                 0001-0048, the reasoning behind every decision below
+docs/adr/                                 0001-0049, the reasoning behind every decision below
 docs/efsp-usage-guide.md                  how a controller actually drives it
 ```
 
@@ -55,7 +55,7 @@ committed to git, so a recreated container silently reverted controllers to an o
 is shipped defaults now, `data/` is runtime state and a volume, and a read falls back from one to the
 other so a new default lands with no migration.
 
-**Hardening driven by end-to-end sorties** (`0027`–`0033`, `0039`–`0041`). See §3D.
+**Hardening driven by end-to-end sorties** (`0027`–`0033`, `0039`–`0041`, `0049`). See §3D.
 
 ## 3A. The RANGE station
 
@@ -176,6 +176,12 @@ every one in machinery that already existed and looked finished:
 | **`ConvertToArrival` reset the correlation of an aircraft still airborne and still squawking its code** | `0045` |
 | `strip.correlation` was per-Strip, so two Facility replicas of one airframe could disagree | `0045` |
 | ADR `0019`'s note that no Block targets `trackDegradationFlag` was already stale — `5A` does | `0047` |
+| **Coverage was never re-sent when the radar list changed**, so a GCI controller whose AWACS had just taken off got contacts through it while their panel still listed nothing and the NO-COVERAGE banner stayed up | `0049` |
+| Illumination outlived the radar that produced it, so re-taking a vacated Position replayed contacts stamped from before the gap | `0049` |
+| A correlation record for a flight with no live Strip left was never retired — stuck with a stale contact, and sent in every snapshot forever | `0049` |
+| A Strip correlated to a contact outside the controller's coverage rendered a bare track id as though it were a callsign, and clicking it drew no ring | `0049` |
+| Binding a contact was pointer-only; `.bind`/`.unbind` were missing from the dot-command surface the guide calls a primary feature | `0049` |
+| **Seven things the service writes were going into the Docker image with no volume**, so every deploy discarded them — and two were committed to git, so a recreate silently reverted controllers to an old snapshot | `0048` |
 
 **`0041` is still the one to read if you read only one**, and `0043` is the second. Both are the same
 lesson from different directions: a shape that is correct the day it is written and wrong afterwards.
@@ -258,6 +264,11 @@ real, both small, and both bite in production rather than in the suite.
   bugfixes do not get one.
 - **Restart the local crc-sync after editing `crc-sync/src/`.** Node does not hot-reload it, and a
   stale process looks exactly like a broken change.
+- **Walk the sorties by hand once the suite is green.** `0049` is five defects found that way, in
+  code that had just been written, reviewed and covered — and all five sat in a TRANSITION: a radar
+  appearing, a Position vacated and retaken, a flight ending, a reconnect. The scenario files walk a
+  flight's life; none of them walks the *facility* changing underneath one. That is the gap in the
+  sortie suite itself, and manning churn and radar churn deserve to be scenarios rather than setup.
 - **Add a sortie, not just a unit test.** Every defect in §3D's table was invisible to per-mutation
   tests and obvious the moment a whole flight walked through. Use `advance()` from the harness rather
   than calling `InvokeNla` directly — the 400ms double-tap guard silently swallows a second press, so

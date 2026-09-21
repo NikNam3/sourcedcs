@@ -586,7 +586,32 @@ function _dispatchDotCommand(parsed) {
     sendEfspMutation(actingPositionId, strip, { kind: 'DropStrip', reason: parsed.args.join(' ') || 'manual' });
   } else if (parsed.verb === 'undo') {
     sendEfspMutation(actingPositionId, strip, { kind: 'Undo' });
+  } else if (parsed.verb === 'bind' || parsed.verb === 'unbind') {
+    // WP5 (guide §6.6 rule 1's top rung). The badge's picker is a pointer
+    // affordance; this is the keyboard path §7.1 rule 4 asks for at the
+    // positions that do the data entry, and §7.1 rule 5 is explicit that the
+    // dot-command surface is "a primary feature, not a power-user extra".
+    const record = typeof getEfspCorrelationForStrip === 'function' ? getEfspCorrelationForStrip(strip) : null;
+    const baseRev = record ? record.rev : 0;
+    if (parsed.verb === 'unbind') {
+      sendEfspCorrelationMutation(actingPositionId, strip.fdrId, baseRev, { kind: 'UnbindTrack' });
+      return;
+    }
+    const trackId = parsed.args[0];
+    if (!trackId) {
+      // Nothing to guess at: a bind names a specific contact, and picking one
+      // on the controller's behalf is exactly what the server refuses to do.
+      _showDotCommandError('.bind needs a track id — click the TRK badge to pick from the candidates');
+      return;
+    }
+    sendEfspCorrelationMutation(actingPositionId, strip.fdrId, baseRev, { kind: 'BindTrack', trackId: String(trackId) });
   }
+}
+
+/** Surfaces a dot-command problem where the preview already draws the eye. */
+function _showDotCommandError(message) {
+  if (!_dotCommandPreviewEl) return;
+  _dotCommandPreviewEl.textContent = message;
 }
 
 function _wireDotCommand() {

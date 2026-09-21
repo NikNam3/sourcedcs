@@ -334,13 +334,14 @@ services:
       # key the picture still works and terrain simply masks nothing — every
       # radar sees to its full range — which is logged once at startup.
       - CRCSYNC_MAPTILER_KEY=${CRCSYNC_MAPTILER_KEY:-}
-      - CRCSYNC_TERRAIN_CACHE_DIR=/app/data/terrain-cache
+      - CRCSYNC_TERRAIN_CACHE_DIR=/app/state/terrain-cache
     volumes:
-      # EVERYTHING crc-sync writes. Deliberately mounted at /app/data and NOT
-      # over /app/config: a named volume starts empty, so mounting it over
-      # config/ would shadow the facility, airspace, squawk-map and radar-spec
-      # files baked into the image and present as every one of them having
-      # reset to defaults.
+      # EVERYTHING crc-sync writes, and nothing else. Mounted at /app/state,
+      # deliberately NOT over /app/config (shipped squadron data: facility,
+      # airspace, squawk-map, radar specs) and NOT over /app/data (shipped
+      # reference tables: the airfield name-to-ICAO map). A named volume starts
+      # empty, so mounting it over either would shadow those files and present
+      # as every one of them having reset to defaults.
       #
       # So the service splits the two (crc-sync/src/state-paths.js):
       # config/ holds shipped defaults and is read-only in practice, data/ holds
@@ -350,7 +351,7 @@ services:
       # squadron squawk map, the theater settings, the per-airport ATIS config
       # and the airspace definitions — despite docs/adr/0002 making the Board
       # durable. See docs/adr/0048.
-      - crc-sync-data:/app/data
+      - crc-sync-state:/app/state
     networks:
       - web
 
@@ -368,4 +369,4 @@ volumes:
   certbot-certs:
   casdoor-conf:
   sourcedcs-web-data:
-  crc-sync-data:
+  crc-sync-state:

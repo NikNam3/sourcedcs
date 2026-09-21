@@ -159,6 +159,29 @@ class CoverageEngine {
     if (this._los.size > LOS_CACHE_MAX) this._los.clear();
   }
 
+  /**
+   * Drops radars that are no longer being swept from the live picture.
+   *
+   * Without this, illumination outlives the radar that produced it. The swept
+   * set is scoped to OCCUPIED Positions, so when the last controller holding
+   * Approach vacates, its radar stops sweeping — but its entries stayed put
+   * with their old timestamps. Re-taking the Position minutes later then
+   * replayed those contacts, stamped with an `illuminatedAt` from before the
+   * gap, so the client drew them already faded and expired them on the spot.
+   * Self-correcting within one scan, but wrong in the meantime and wrong in a
+   * way that reads as a bug rather than as radar behaviour.
+   *
+   * A contact another manned radar also sees keeps that radar and stays.
+   */
+  _pruneUnsweptRadars(sweptIds) {
+    for (const [trackId, hit] of this._illuminated) {
+      const still = hit.radarIds.filter(id => sweptIds.has(id));
+      if (still.length === hit.radarIds.length) continue;
+      if (still.length === 0) this._illuminated.delete(trackId);
+      else this._illuminated.set(trackId, { at: hit.at, radarIds: still });
+    }
+  }
+
   _lineOfSight(radar, track, now) {
     if (!this._terrain) return true;
     const key = `${radar.id}|${track.id}`;
@@ -205,6 +228,10 @@ class CoverageEngine {
       if (t.category === 1 || t.category === 2) onGround.set(String(t.id), checkOnGround(t, missionData));
     }
     this._evict(liveIds);
+    // Before the sweep, not after: an entry the sweep is about to refresh must
+    // keep whatever it had, and an entry for a radar nobody is looking through
+    // any more must not survive to be replayed.
+    this._pruneUnsweptRadars(new Set((radars || []).filter(r => !r.onGround).map(r => r.id)));
 
     const hits = new Map(); // trackId -> { at, radarIds:Set }
 

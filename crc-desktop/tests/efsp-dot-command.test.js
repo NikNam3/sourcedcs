@@ -49,3 +49,24 @@ test('returns null/handles undefined input without throwing', () => {
   assert.equal(parseDotCommand(undefined), null);
   assert.equal(parseDotCommand(null), null);
 });
+
+// ── WP5: .bind / .unbind (guide §6.6 rule 1, §7.1 rules 4-5) ─────────────
+// The badge's candidate picker is a pointer affordance. The guide is explicit
+// that the dot-command surface is "a primary feature, not a power-user extra",
+// and that data-entry positions need an efficient keyboard path.
+
+test('parseDotCommand reads .bind with a track id', () => {
+  assert.deepEqual(parseDotCommand('.bind 101'), { verb: 'bind', args: ['101'] });
+});
+
+test('parseDotCommand reads .unbind with no argument', () => {
+  assert.deepEqual(parseDotCommand('.unbind'), { verb: 'unbind', args: [] });
+});
+
+test('parseDotCommand is case-insensitive on the verb, as it is for every other one', () => {
+  assert.deepEqual(parseDotCommand('.BIND 101'), { verb: 'bind', args: ['101'] });
+});
+
+test('parseDotCommand keeps a track id that is not numeric — DCS ids are opaque strings', () => {
+  assert.deepEqual(parseDotCommand('.bind unit-42'), { verb: 'bind', args: ['unit-42'] });
+});

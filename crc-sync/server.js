@@ -182,7 +182,23 @@ wsHub.attach(server);
 // it appears at all. 250ms against real scan periods of 2-3s is well inside
 // the noise.
 const COVERAGE_TICK_MS = 250;
+
+// The radar list itself changes under everyone — an AWACS takes off or lands,
+// a ship spawns — and until this existed nothing told a client about it. A GCI
+// controller whose AWACS had just got airborne started receiving contacts
+// through it while their coverage panel still listed nothing and the
+// "NO RADAR COVERAGE" banner stayed up, because coverage was only re-sent on
+// efsp-set-positions and on mission load. Compared by id set so the refresh
+// fires once per takeoff, not once per tick.
+let lastRadarIds = '';
+
 setInterval(() => {
+  const radars = currentRadars();
+  const ids = radars.map(r => r.id).sort().join(',');
+  if (ids !== lastRadarIds) {
+    lastRadarIds = ids;
+    wsHub.refreshAllCoverage();
+  }
   coverageEngine.tick(stationCoverage.activeRadars(), trackStore.getAll(), wsHub.getMissionData());
 }, COVERAGE_TICK_MS);
 

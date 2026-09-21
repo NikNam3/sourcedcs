@@ -234,8 +234,52 @@ test('a fuzzy match reports its confidence rather than a mismatch', () => {
   load({
     strips: [strip('s1', 'f1')], fdrs: [fdr('f1', 'VIPER1')],
     correlations: [correlation('f1', { state: 'PROVISIONAL', matchedBy: 'CALLSIGN_FUZZY', confidence: 0.9, observedBeacon: null })],
+    tracks: [{ id: '101', callsign: 'VIPER11' }],
   });
   assert.match(correlationBadgeFor(state.getEfspStrip('s1')).title, /provisional, 0\.9/);
+});
+
+test('correlated to a contact outside your coverage says so, rather than showing a bare id', () => {
+  // Correlation is worked out against every contact the server has; coverage
+  // is per-Position (crc-sync's docs/adr/0042). So a Strip can legitimately be
+  // bound to a contact this controller cannot see — an en-route flight on
+  // somebody else's radar. The badge used to read `TRK 101`, which looks like
+  // a callsign, and clicking the Strip drew no ring at all.
+  load({
+    strips: [strip('s1', 'f1')], fdrs: [fdr('f1', 'VIPER1')],
+    correlations: [correlation('f1')],
+    tracks: [], // nothing in this controller's picture
+  });
+  const badge = correlationBadgeFor(state.getEfspStrip('s1'));
+  assert.equal(badge.outsideCoverage, true);
+  assert.match(badge.title, /outside your radar coverage/);
+  assert.match(badge.className, /efsp-correlation-outside/);
+  assert.ok(!/101/.test(badge.text), 'a raw track id must never read as a callsign');
+});
+
+test('the same record reads as a normal correlation once the contact enters coverage', () => {
+  load({
+    strips: [strip('s1', 'f1')], fdrs: [fdr('f1', 'VIPER1')],
+    correlations: [correlation('f1')],
+    tracks: [],
+  });
+  assert.equal(correlationBadgeFor(state.getEfspStrip('s1')).outsideCoverage, true);
+
+  liveTracks.set('101', { id: '101', callsign: 'VIPER1' });
+  const badge = correlationBadgeFor(state.getEfspStrip('s1'));
+  assert.equal(badge.outsideCoverage, undefined);
+  assert.equal(badge.text, 'TRK VIPER1');
+});
+
+test('a provisional match outside coverage also reads as outside, not as a mismatch', () => {
+  // Otherwise the tooltip would explain a squawk disagreement for a contact
+  // the controller cannot look at.
+  load({
+    strips: [strip('s1', 'f1')], fdrs: [fdr('f1', 'VIPER1', '0041')],
+    correlations: [correlation('f1', { state: 'PROVISIONAL', matchedBy: 'CALLSIGN_EXACT', observedBeacon: '0056' })],
+    tracks: [],
+  });
+  assert.equal(correlationBadgeFor(state.getEfspStrip('s1')).outsideCoverage, true);
 });
 
 test('an uncorrelated Strip reads NO TRK, and a broken binding reads louder', () => {

@@ -465,6 +465,34 @@ class CorrelationStore {
     return { changed };
   }
 
+  /**
+   * Forgets records for flights that are over.
+   *
+   * `releaseFdr` does not delete the FDR — it only frees the beacon code — so
+   * an FDR with nothing but DROPPED Strips lives forever, and its correlation
+   * record used to live with it: never swept again (eligibility needs a live
+   * Strip), stuck at whatever it last was, still carrying a `trackId` for a
+   * contact the flight has no claim on, and still sent in every snapshot. Over
+   * a long session that grows without bound.
+   *
+   * Retired rather than cleared, because the flight is finished rather than
+   * lost: a warning would say something is wrong when nothing is. What a
+   * controller did survives in the Mutation log, which is where "who bound
+   * what" belongs anyway.
+   *
+   * @param {Set<string>} fdrIdsWithLiveStrips
+   * @returns {string[]} the fdrIds retired
+   */
+  retireFinished(fdrIdsWithLiveStrips) {
+    const retired = [];
+    for (const fdrId of [...this._records.keys()]) {
+      if (fdrIdsWithLiveStrips.has(fdrId)) continue;
+      this._records.delete(fdrId);
+      retired.push(fdrId);
+    }
+    return retired;
+  }
+
   /** Forgets records whose FDR is gone — FDR lifecycle governs correlation lifecycle, with no separate retention policy. */
   evictMissingFdrs() {
     let dropped = 0;

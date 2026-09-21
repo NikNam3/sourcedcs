@@ -25,10 +25,17 @@
 // So: two directories, and a read rule.
 //
 //   config/  shipped defaults. Baked into the image, effectively read-only.
-//   data/    everything written at runtime. A volume in the compose stack.
+//   state/   everything written at runtime. A volume in the compose stack.
 //
-// Reads prefer `data/`, falling back to the shipped default in `config/`.
-// Writes always go to `data/`. That gives three properties worth having:
+// NOT `data/`. That name was the first choice and it was wrong: `data/` already
+// exists and holds shipped read-only reference data (`icao.json`, the airfield
+// name-to-ICAO table grpc-client.js requires). Overloading one directory to
+// mean both "baked in, never written" and "written constantly, must be a
+// volume" is the same ambiguity this module exists to remove, and it cost a
+// tracked file before it was noticed.
+//
+// Reads prefer `state/`, falling back to the shipped default in `config/`.
+// Writes always go to `state/`. That gives three properties worth having:
 //
 //   - first boot reads the shipped default and writes to the volume;
 //   - later boots read the volume;
@@ -48,15 +55,15 @@ const fs = require('fs');
 const path = require('path');
 
 const CONFIG_DIR = process.env.CRCSYNC_CONFIG_DIR || path.join(__dirname, '../config');
-const DATA_DIR = process.env.CRCSYNC_DATA_DIR || path.join(__dirname, '../data');
+const STATE_DIR = process.env.CRCSYNC_STATE_DIR || path.join(__dirname, '../state');
 
-/** Where a runtime-mutable file is written. Always the data directory. */
+/** Where a runtime-mutable file is written. Always the state directory. */
 function writePath(name, override) {
-  return override || path.join(DATA_DIR, name);
+  return override || path.join(STATE_DIR, name);
 }
 
 /**
- * Where to read it from: the live copy in `data/` if one exists, otherwise the
+ * Where to read it from: the live copy in `state/` if one exists, otherwise the
  * shipped default in `config/`.
  *
  * Resolved per call rather than once at load, because "does the live copy
@@ -64,11 +71,11 @@ function writePath(name, override) {
  */
 function readPath(name, override) {
   if (override) return override;
-  const live = path.join(DATA_DIR, name);
+  const live = path.join(STATE_DIR, name);
   try {
     if (fs.existsSync(live)) return live;
   } catch {
-    // An unreadable data directory is a deployment problem, not a reason to
+    // An unreadable state directory is a deployment problem, not a reason to
     // fail: fall back to the shipped default, which is better than nothing.
   }
   return path.join(CONFIG_DIR, name);
@@ -84,8 +91,8 @@ function statePaths(name, override) {
 
 /**
  * Makes sure the directory a state file is about to be written to exists.
- * Called before every write rather than once at startup: the data directory is
- * a volume mount, so it can be absent, and a service that cannot persist
+ * Called before every write rather than once at startup: the state directory
+ * is a volume mount, so it can be absent, and a service that cannot persist
  * should say which file it failed on rather than failing at boot for a file
  * nobody has touched yet.
  */
@@ -93,4 +100,4 @@ function ensureDirFor(filePath) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
 }
 
-module.exports = { CONFIG_DIR, DATA_DIR, readPath, writePath, statePaths, ensureDirFor };
+module.exports = { CONFIG_DIR, STATE_DIR, readPath, writePath, statePaths, ensureDirFor };

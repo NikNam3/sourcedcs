@@ -275,3 +275,42 @@ test('two radars illuminating one track both appear against it', () => {
   sweepOnce(engine, [APPROACH, second], [aircraft(1, 37.2, 35.2)]);
   assert.deepEqual(engine.illuminationFor('1').radarIds.sort(), ['app:X', 'app:Y']);
 });
+
+test('illumination does not outlive the radar that produced it', () => {
+  // Found by walking the sortie rather than by a test: the swept set is scoped
+  // to OCCUPIED Positions, so when the last holder of Approach vacates its
+  // radar stops sweeping — and its entries used to stay put with their old
+  // timestamps. Re-taking the Position minutes later replayed those contacts
+  // stamped from before the gap, so the client drew them already faded and
+  // expired them on the spot.
+  const engine = new CoverageEngine();
+  sweepOnce(engine, [APPROACH], [aircraft(1, 37.2, 35.2)]);
+  assert.ok(engine.illuminationFor('1'), 'illuminated while manned');
+
+  // The Position is vacated: activeRadars() no longer offers app:X.
+  engine.tick([], [aircraft(1, 37.2, 35.2)], null, 2_000_000);
+
+  assert.equal(engine.illuminationFor('1'), null, 'and the contact goes with the radar');
+  assert.equal(engine.isVisibleThrough('1', new Set(['app:X'])), false);
+});
+
+test('a contact another manned radar also sees keeps that radar and stays', () => {
+  const engine = new CoverageEngine();
+  const second = { ...APPROACH, id: 'app:Y' };
+  sweepOnce(engine, [APPROACH, second], [aircraft(1, 37.2, 35.2)]);
+  assert.deepEqual(engine.illuminationFor('1').radarIds.sort(), ['app:X', 'app:Y']);
+
+  // Only app:X's Position is vacated.
+  engine.tick([second], [aircraft(1, 37.2, 35.2)], null, 2_000_000);
+
+  assert.deepEqual(engine.illuminationFor('1').radarIds, ['app:Y']);
+  assert.equal(engine.isVisibleThrough('1', new Set(['app:Y'])), true);
+  assert.equal(engine.isVisibleThrough('1', new Set(['app:X'])), false);
+});
+
+test('a grounded radar counts as unswept, so its contacts do not linger either', () => {
+  const engine = new CoverageEngine();
+  sweepOnce(engine, [APPROACH], [aircraft(1, 37.2, 35.2)]);
+  engine.tick([{ ...APPROACH, onGround: true }], [aircraft(1, 37.2, 35.2)], null, 2_000_000);
+  assert.equal(engine.illuminationFor('1'), null);
+});

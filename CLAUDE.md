@@ -155,18 +155,19 @@ docker compose up -d                                  #   NOT mariadb/casdoor/ce
 1. `docker compose pull` is deliberately scoped to just the three images we publish. Pulling every service (including third-party base images like `mariadb:11`) means one transient registry hiccup on an image that didn't even change aborts the *entire* deploy under `set -e` — this once blocked an unrelated nginx config fix for hours.
 2. The `git pull` step is what actually gets a **non-image** config change (e.g. `infra/docker-compose.yml`, `nginx`'s embedded config, `.env.example`) onto the server. Before it existed, editing `docker-compose.yml` in the repo did nothing to the running stack until someone manually pulled on the server — `docker compose pull && up -d` alone only ever picks up new *images*.
 
-**`crc-sync` splits shipped defaults from runtime state, and it matters for deploys.** `config/` holds
-defaults baked into the image and is read-only in practice; `data/` holds everything the service
-writes and is the `crc-sync-data:/app/data` volume. A read prefers `data/` and falls back to the
-shipped default, so a new default added by an image update lands with no migration
-(`crc-sync/src/state-paths.js`, `docs/adr/0048`).
+**`crc-sync` has three directories, and the distinction matters for deploys.** `config/` holds shipped
+squadron defaults (facility, airspace, squawk map, radar specs) and `data/` holds shipped read-only
+reference tables (the airfield name-to-ICAO map) — both baked into the image. `state/` holds
+everything the service writes, and is the `crc-sync-state:/app/state` volume. A read prefers `state/`
+and falls back to the shipped default, so a new default added by an image update lands with no
+migration (`crc-sync/src/state-paths.js`, `docs/adr/0048`).
 
 Before that split, seven things were written into the image with no volume behind them and were
 silently discarded by every `docker compose up -d` — the EFSP Board, the whole Mutation audit log, the
 squadron squawk map, theater settings, per-airport ATIS config and the airspace definitions. Two of
 them were also committed to git, so a recreated container restored an old snapshot rather than
-starting empty. **Do not mount a volume over `/app/config`**: an empty named volume shadows the
-shipped files and presents as every one of them having reset.
+starting empty. **Do not mount a volume over `/app/config` or `/app/data`**: an empty named volume shadows the shipped
+files and presents as every one of them having reset.
 
 `nginx`'s config is generated inline in `infra/docker-compose.yml`'s `command:` block (no standalone `nginx.conf`). `client_max_body_size` there is `350M` — needed for crc-desktop installer uploads; if you're debugging a `413` on any upload endpoint, check this first, and remember it only takes effect after the `git pull` + `docker compose up -d` sequence above actually runs on the server (not just after merging to `main`).
 
@@ -201,4 +202,4 @@ See `.env.example` for all required variables. Key ones:
 | `CRCSYNC_SOURCEDCS_WEB_URL` | crc-sync (EFSP flight-plan lookup — reaches sourcedcs-web at `http://main-website:7000` inside the Docker stack) |
 | `FLIGHT_PLAN_SERVICE_TOKEN` | sourcedcs-web (accepts EFSP's filed-plan queries) + crc-sync (sends them) — must match |
 | `CRCSYNC_MAPTILER_KEY` | crc-sync (terrain masking for the radar picture — **optional**: without it every radar sees to its full range and nothing is masked, logged once at startup) |
-| `CRCSYNC_TERRAIN_CACHE_DIR` | crc-sync (DEM tile cache; the Docker stack points it at the `crc-sync-data` volume) |
+| `CRCSYNC_TERRAIN_CACHE_DIR` | crc-sync (DEM tile cache; the Docker stack points it at the `crc-sync-state` volume) |

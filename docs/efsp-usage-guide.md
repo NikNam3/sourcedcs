@@ -387,14 +387,21 @@ Every Strip carries a badge saying which surveillance contact it is:
 | `TRK?` | **provisional.** Hover it: usually the contact is squawking a different code from the one you assigned, or the callsign only nearly matches | check the squawk; bind it if you are sure |
 | `NO TRK` | **uncorrelated.** Nothing on your scope matches this flight | `Bind…` it if you can see which one it is |
 | `TRK ×2` | **ambiguous.** Two contacts match equally well, and the system will not guess | click it and pick the right one |
+| `TRK ··` | **correlated, but the contact is outside your coverage.** Somebody else's radar has it; yours does not | nothing — it is not yours to see |
 
 `NO TRK` in a warmer colour, with a coloured edge on the Strip, means something stronger: the contact
 this flight *was* on has gone. That is different from never having found one, and it is worth a look.
 
+That `TRK ··` row is worth understanding, because it is the seam between two ideas. Correlation is
+worked out once, server-side, against every contact the server knows about — it is a fact about the
+flight. Coverage is per-Position and is about *you*. So a flight can be correctly bound to a contact
+that simply is not on your scope, which is the normal case for an en-route flight when you are working
+Tower. Nothing is wrong, and there is nothing to click.
+
 **`Bind…` is the override, and it wins over everything.** A jet with its transponder off, under a
 callsign DCS spells differently from the flight plan, will not match automatically — but if you can
 see it, you can say so, and the binding sticks until you `Unbind` it. It is also how you settle a
-`TRK ×2`.
+`TRK ×2`. From the keyboard: `.bind <track id>` and `.unbind` on the selected Strip.
 
 **Clicking works both ways.** Click a Strip and its contact gets a ring on the map. Click a contact
 and its Strip is selected and scrolled into view. Clicking a contact that has no Strip leaves your
@@ -415,5 +422,5 @@ flight still on the ramp is not counted.
 - Each held Position gets its own tab; each Position's Bays (§3) are its own tabs underneath.
 - **Drag** a Strip onto another Position's tab to transfer it (same-Facility only); onto a Bay tab within your own Position to move it there.
 - **Search**: `.find <text>` dot-command, or the search icon — matches callsign/beacon, opens a temporary search-results Bay.
-- **Dot-commands**: `.drop [reason]`, `.undo`, `.find <text>`, applied to whichever Strip is currently selected.
+- **Dot-commands**: `.drop [reason]`, `.undo`, `.find <text>`, `.bind <track id>`, `.unbind`, applied to whichever Strip is currently selected.
 - **Undo**: 30-second window, state-only NLA transitions only (not transfers/handoffs — those revert via a manual transfer back).

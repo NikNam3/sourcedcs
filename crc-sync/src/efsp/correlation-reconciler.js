@@ -135,6 +135,11 @@ class CorrelationReconciler {
     const { byBeacon, byStem, byId } = buildTrackIndices(tracks);
     const stripsByFdr = this._liveStripsByFdr();
 
+    // A flight with no live Strip anywhere is over, and its record goes with
+    // it. Note the distinction from eligibility: a Strip sitting at PROPOSED is
+    // live but ineligible — it has no contact YET — and must not be retired.
+    this._store.retireFinished(new Set(stripsByFdr.keys()));
+
     const eligible = [];
     for (const fdr of this._fdrStore.getAll()) {
       const strips = stripsByFdr.get(fdr.fdrId);

@@ -404,3 +404,39 @@ test('the sweep never touches a Strip even when the contact contradicts its stat
   assert.equal(store.getCorrelation('f1').state, 'CORRELATED', 'it correlates...');
   assert.deepEqual(strips, before, '...and moves nothing');
 });
+
+// ── flights that are over ─────────────────────────────────────────────────
+
+test('a flight with no live Strip left is retired, not kept forever with a stale contact', () => {
+  // Found by walking the sortie: releaseFdr only frees the beacon code, it does
+  // not delete the FDR — so an FDR with nothing but DROPPED Strips lives
+  // forever, and its correlation record lived with it. Never swept again
+  // (eligibility needs a live Strip), stuck at whatever it last was, still
+  // carrying a trackId, and still sent in every snapshot.
+  const strips = [strip('f1', 'AIRBORNE')];
+  const { reconciler, store } = build({
+    fdrs: [fdr('f1', 'VIPER1', '0041')], strips, tracks: [track(1, 'VIPER1', 41)],
+  });
+  reconciler.tick();
+  assert.equal(store.getCorrelation('f1').trackId, '1');
+
+  strips[0] = strip('f1', 'DROPPED');
+  reconciler.tick();
+
+  assert.equal(store.getCorrelation('f1'), null, 'the flight is over, so the record goes');
+  assert.deepEqual(store.getAll(), [], 'and the snapshot stops carrying it');
+});
+
+test('a live-but-ineligible Strip is NOT retired — it has no contact yet, which is different', () => {
+  const strips = [strip('f1', 'AIRBORNE')];
+  const { reconciler, store } = build({
+    fdrs: [fdr('f1', 'VIPER1', '0041')], strips, tracks: [track(1, 'VIPER1', 41)],
+  });
+  reconciler.tick();
+
+  // Back to a pre-movement state: still a live Strip, just nothing to find.
+  strips[0] = strip('f1', 'PROPOSED');
+  reconciler.tick();
+
+  assert.ok(store.getCorrelation('f1'), 'the record survives a flight going quiet');
+});
