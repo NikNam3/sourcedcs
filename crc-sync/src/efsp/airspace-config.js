@@ -14,7 +14,8 @@
 // working inside it is approved onto a working frequency by whichever ATC
 // Position owns the airspace, which is the common case. That means this
 // module must not require facility-config.js back; it validates Position
-// references by shape only, and index.js cross-checks them at startup.
+// references by shape only, and index.js's _validateAirspaceReferences
+// cross-checks them against the real Position sets at startup.
 //
 // [SOURCE-DEFINED]: the guide models no working frequency, no range-control
 // frequency, and no airspace *type* taxonomy at all — its only airspace

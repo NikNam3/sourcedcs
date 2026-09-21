@@ -4,15 +4,14 @@ Entry point for the next agent/session. Read this, then the relevant part of
 `EFSPImplementationGuide.md`, then start a proper plan before writing code — this is a handoff, not
 a build order.
 
-**This revision supersedes the previous one.** The previous revision described WP4A's second slice
-(`TOFI`/`TACTICAL`/MRU Positions) as the outstanding deferred work and claimed nothing since ADR
-0013 was committed. Both are now out of date: that slice is built, and everything through
-`53fb563` is committed. Jump to §2/§3.
+**This revision supersedes the previous one.** The previous revision named `RANGE`/airspace
+scheduling as the next work package. It is now built (§3A), so that recommendation is spent — jump
+to §4 for what is genuinely left.
 
 ## 1. State of the tree
 
-Committed and green: **crc-sync 576 tests, crc-desktop 211 tests** (`npm test` in each). Working
-tree clean as of this writing. ADRs run `0001`–`0033`.
+Committed and green: **crc-sync 611 tests, crc-desktop 222 tests** (`npm test` in each). Working
+tree clean as of this writing. ADRs run `0001`–`0037`.
 
 ## 2. What's built
 
@@ -35,12 +34,14 @@ D12 true by construction (MRU Positions structurally cannot hold the 5 ATC↔ATC
 jurisdiction never transfers, the MISSION Strip shares the ATC-side Strip's `fdrId`, EXIT re-enters
 the same link, and `TRANSFER_COMMS` is its own action.
 
-**Scenario-driven hardening** (`0027`–`0033`, this session). See §3.
+**Scenario-driven hardening** (`0027`–`0033`). See §3.
+
+**The `RANGE` station and the airspace board** (`0034`–`0037`). See §3A.
 
 ## 3. The sortie traces, and what they found
 
-Until this session every test exercised one mutation or one primitive in isolation. Nobody had ever
-walked a whole flight through the system. Two sorties were traced through the real code and then
+Before that pass every test exercised one mutation or one primitive in isolation, and nobody had
+ever walked a whole flight through the system. Two sorties were traced through the real code and then
 encoded as end-to-end tests (`crc-sync/tests/efsp-scenarios.test.mjs`): a **civil round trip**
 (Incirlik IFR → `CTR` → airspace to the using agency and back → return leg → landed and dropped) and
 a **military round trip** (Incirlik IFR → `CTR` → tactical control under `TAC_C2` → goes VFR → TOFI
@@ -66,22 +67,40 @@ Two things the traces showed were *missing* rather than wrong, also added: a bad
 flight has other live Strips elsewhere (one sortie legitimately leaves several, and a stale one was
 invisible), and a two-press warning when originating a Strip for a callsign that already has one.
 
-**The three long-standing gaps from the previous briefing are closed.** Void-time expiry is now the
+**The three long-standing gaps that briefing had carried are closed.** Void-time expiry is now the
 5th forwarding obligation, so §3.8's required alert actually fires instead of only inhibiting a
 button. The single-Position drop-target gap is closed — Positions a controller does not hold render
 as drop-only tabs, scoped to Facilities they hold something at. And the WP1A Position-selection
 deviation from D-9 finally has its ADR (`0033`).
 
+## 3A. The RANGE station
+
+An airspace is now a first-class entity with its own store (`0034`), not a per-flight enum. It
+carries the guide's four state names, a booked window, an append-only history, and a real approval
+round trip between the using agency and whichever ATC Position owns it (`0036`). Flights are
+approved onto a working frequency, or onto a range control tower's own frequency, through the
+guide's Block 22 — structured at last rather than free text (`0037`).
+
+Two things about the shape are worth knowing before extending it:
+
+- **A range Position works no Strips, structurally.** Guide §4.1's own Class column for `RANGE` is
+  "Using agency", its Primitives column reads "no strip primitives — owns airspace state", and its
+  Strip Roles column is "none". `permission.js` refuses every Strip op to the `USING_AGENCY` class
+  in `canMutate`, by class rather than by absence from the table — because the `RANGES` Facility's
+  Positions are *derived* from the airspace config and are never hand-listed (`0035`).
+- **Most MOAs have no range control.** A Position exists only for a range that genuinely has one;
+  an ordinary MOA is scheduled and activated by the ATC Position that owns the airspace it sits in,
+  with no second party and no request step. That is the common case, not an exception.
+
+`crc-sync/config/efsp-airspaces.json` ships **empty**: the real MOAs, ranges, owning authorities and
+frequencies are squadron data. Nothing works until it is filled in, and the panel says so rather
+than rendering blank. `tests/efsp-scenarios.test.mjs` writes its own fixture, which is the place to
+look for the config shape in use.
+
 ## 4. What's genuinely left
 
-**`RANGE` / airspace scheduling — newly identified, and the blocker for any real MOA sortie.** The
-guide's §4.1 `RANGE` design (a using-agency Position, an airspace board with
-scheduled/active/released/returned, a real PROPOSE/ACCEPT round trip) is **entirely unbuilt** —
-`grep -rn "RANGE" crc-sync/src/efsp/*.js` returns nothing. Today a MOA transit is representable only
-as the FDR's `airspace.owner` enum plus free text in `filed.route`/`filed.remarks`. That enum is now
-auditable and cross-checked (`0032`), which is enough to fly the scenario honestly, but it is not
-airspace scheduling. Deliberately deferred — this is a work package on the scale of a WP4A slice,
-not a fix — and recorded as such in `0032`. **This is the natural next work package.**
+**Fill in the airspace config.** Everything above is exercised only by test fixtures until the real
+names, frequencies and owning authorities land in `efsp-airspaces.json`.
 
 **`AIC`/`JTAC` are configured but barely exercised.** `0025` gave them Bays and classes; no scenario
 has driven a Strip through them. `JTAC`'s read-only-ness is enforced only by the absence of an
@@ -105,11 +124,14 @@ no caller).
 
 ## 5. Where to start, depending on what's next
 
-- **Building `RANGE`**: read guide §4.1's Position table and §4.6.4, then `0032` for what was
-  deferred and why. `facility-config.js`'s `DEFAULT_TACTICAL_CONFIG` is the template for adding a
-  Facility (`0013`, `0025` both did it); `coordination.js`'s two tables are the template for a new
-  exchange protocol, and `0025`'s reasoning about why TOFI needed its own table rather than a 6th
-  row is the thing to re-read before deciding which shape airspace scheduling takes.
+- **Extending the airspace model** (geometry, entry detection, a scheduling calendar): read `0034`
+  for why the entity is a third store and what its lifecycle means, then `0036` for the authority
+  split. Note that nothing in the repo does point-in-polygon or geofencing of any kind — "is this
+  track inside that airspace" has no implementation anywhere, so automatic entry detection is a
+  genuine new capability rather than a wiring job. `atobrief`'s `aco.acms` already models named
+  airspace with geometry and a controlling agency, and `tools/miztoyaml` builds those from DCS
+  mission drawings; crc-sync's own `grpc-client.js` reads the same drawings but drops their `name`,
+  which is a one-line change if that route is taken.
 - **The D12 UI audit**: `permission.js`'s `COORDINATION_OP_KINDS`-stripping loop is the structural
   guarantee; what's missing is walking the actual rendered UI for a controller holding `TAC_C2` and
   `CTR` simultaneously and confirming no forbidden affordance appears.

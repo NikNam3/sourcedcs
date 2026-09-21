@@ -134,6 +134,7 @@ function createEfsp() {
     facilities.set(facilityId, { boardStore, positionStore, rules });
   }
 
+  _validateAirspaceReferences(facilities);
   _restore(facilities, fdrStore, airspaceStore);
 
   const defaultFacility = facilities.get(facilityConfig.DEFAULT_FACILITY_ID);
@@ -183,6 +184,34 @@ function createEfsp() {
     /** Sent once at connect, appended to ws-hub.js's existing connect-time send order. */
     snapshotFor: () => snapshotMessage(ctx),
   };
+}
+
+/**
+ * Cross-checks every airspace's `controllingPositionId` against the Facility
+ * it names. airspace-config.js validates its own shape but deliberately does
+ * not require facility-config.js back (facility-config derives the RANGES
+ * Position set FROM it, so the dependency only runs one way) — which leaves
+ * exactly one thing unchecked, and it is the one that matters: an airspace
+ * naming a Position that does not exist can never be activated by anybody,
+ * and would fail as a silent PERMISSION_DENIED with nothing pointing at the
+ * config. Warns rather than throws: a typo in one airspace should not stop
+ * the server, and the rest of the board still works.
+ *
+ * `usingPositionId` needs no check — the RANGES Facility's Position set is
+ * built from those values, so it exists by construction.
+ */
+function _validateAirspaceReferences(facilities) {
+  for (const airspace of airspaceConfig.getAirspaces()) {
+    const facility = facilities.get(airspace.controllingFacilityId);
+    if (!facility) {
+      console.warn(`[efsp] airspace ${airspace.airspaceId} names unknown Facility ${airspace.controllingFacilityId} — nobody can activate it`);
+      continue;
+    }
+    const positions = facilityConfig.getPositionSet(airspace.controllingFacilityId);
+    if (!positions.includes(airspace.controllingPositionId)) {
+      console.warn(`[efsp] airspace ${airspace.airspaceId} names controlling Position ${airspace.controllingPositionId}, which does not exist at ${airspace.controllingFacilityId} — nobody can activate it`);
+    }
+  }
 }
 
 function _restore(facilities, fdrStore, airspaceStore) {

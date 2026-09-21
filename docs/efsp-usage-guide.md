@@ -1,17 +1,19 @@
 # EFSP usage guide
 
-A working reference for the Electronic Flight Strip Panel — what's built, how to drive it, and what every field on a Strip/FDR is for. Written after WP4A's first slice (`docs/adr/0013`-`0021`); see those and `docs/adr/0001`-`0012` for the reasoning behind any of this, and `EFSPImplementationGuide.md` for the spec it implements.
+A working reference for the Electronic Flight Strip Panel — what's built, how to drive it, and what every field on a Strip/FDR is for. Kept current as the panel grows; see `docs/adr/` for the reasoning behind any of this, and `EFSPImplementationGuide.md` for the spec it implements.
 
 ## 1. Status right now
 
-Built and tested (749 tests across `crc-sync`/`crc-desktop`/`sourcedcs-web`, all green):
+Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green):
 
 - **WP0-WP4** (guide): domain model, Mutation protocol, Position occupancy/combination, Block Map, Bays/Racks/drag, States/NLA/transfer, 30s Undo.
-- **WP4A first slice**: a second Facility (`CENTER`/`CTR`) alongside `INCIRLIK`'s five Positions; the 5 cross-Facility coordination primitives (`HANDOFF`/`POINT_OUT`/`TRAFFIC`/`OPERATIONAL_REQUEST`/`AIT`) between `APP` and `CTR`; per-Facility Strip replication (two independent Strips linked by `coordination`, not one moved Strip); `EDCT`/`CALL_FOR_RELEASE` release states + standing-release envelopes; airspace ownership as a direction; track-degradation soft interlock; timed forwarding-obligation alerts.
+- **WP4A first slice**: a second Facility (`CENTER`/`CTR`) alongside `INCIRLIK`'s five Positions; the 5 cross-Facility coordination primitives (`HANDOFF`/`POINT_OUT`/`TRAFFIC`/`OPERATIONAL_REQUEST`/`AIT`) between `APP` and `CTR`; per-Facility Strip replication (two independent Strips linked by `coordination`, not one moved Strip); `EDCT`/`CALL_FOR_RELEASE` release states + standing-release envelopes; airspace ownership as a direction; track-degradation soft interlock; timed forwarding-obligation alerts — see §8.
+- **WP4A second slice**: the `TACTICAL` Facility (`TAC_C2`/`AIC`/`GCI`/`JTAC`), a `MISSION` Strip Role, and TOFI — the ATC⇄MRU exchange for handing a flight into tactical control and getting it back (`docs/adr/0025`/`0026`).
+- **The `RANGE` station**: MOAs and ranges as real entities with a booked schedule, an activation approval round trip, and flights approved onto a working or range-control frequency — see §8A.
 - **Flight-plan pre-fill**: `OPS`'s CreateStrip form looks up a pilot-submitted DD1801 (ICAO IFR) flight plan from sourcedcs-web by callsign and pre-fills the departure fields — see §4.
 - **`ops-filed` queue**: `OPS`'s `ops-filed` Bay now shows every currently-filed DD1801 plan as a card, each with a one-click "Create Strip" — see §4. ⚠️ **Requires a deployment step to actually work** — see the callout at the end of §4.
 
-Deferred (see `docs/adr/0020`): `TOFI`, the `TACTICAL` Facility, MRU Positions (`TAC_C2`/`AIC`/`GCI`/`JTAC`), the D12 MRU-refusal audit.
+Not built: WP5 (track correlation), WP6 (the wider military layer), WP7 (ATO ingest), WP7A (carrier/PAR), WP8 (instrumentation). `docs/efsp-wp4a-briefing.md` is the current handoff note.
 
 Facility/Position map as it stands:
 
@@ -19,6 +21,8 @@ Facility/Position map as it stands:
 |---|---|---|
 | `INCIRLIK` | `OPS`, `CD`, `GND`, `TWR`, `APP` | Covering chain `CD→GND→TWR→APP` |
 | `CENTER` | `CTR` | No covering chain (mirrors `OPS`) |
+| `TACTICAL` | `TAC_C2`, `AIC`, `GCI`, `JTAC` | `AIC`/`GCI` covered by `TAC_C2`; `JTAC` is read-only |
+| `RANGES` | derived from the airspace config | One Position per range that has control of its own; works no Strips — see §8A |
 
 ## 2. How to mark a Strip CLEARED
 
@@ -263,9 +267,64 @@ Primitive cheat sheet (what moves on ACCEPT):
 
 `POINT_OUT` shows two badges on the Strip ("DATA: X" / "SEP: Y") since those can genuinely differ.
 
+## 8A. Airspace: MOAs, ranges and working frequencies
+
+Open **Panels → AIRSPACE** for the airspace board. It is a separate panel from the Strip panel
+because a range holds no Strips — you can have both open at once.
+
+**Defining airspaces.** `crc-sync/config/efsp-airspaces.json` ships empty; nothing appears on the
+board until it is filled in. One entry per MOA or range:
+
+```json
+[
+  {
+    "airspaceId": "MOA-EAST",
+    "name": "East MOA",
+    "type": "MOA",
+    "controllingFacilityId": "CENTER",
+    "controllingPositionId": "CTR",
+    "workingFrequencyMhz": 134.25
+  },
+  {
+    "airspaceId": "RANGE-SOUTH",
+    "name": "South A/G Range",
+    "type": "RANGE",
+    "controllingFacilityId": "INCIRLIK",
+    "controllingPositionId": "APP",
+    "usingPositionId": "SOUTH_RANGE",
+    "controlFrequencyMhz": 283.5
+  }
+]
+```
+
+- `controllingPositionId` is **who approves activation** — the Position that owns the airspace the
+  MOA sits in. For the MOAs around Incirlik that is Ankara Center (`CTR`), not Incirlik Approach.
+- `usingPositionId` is **only** for a range with a control tower of its own. Including it creates a
+  Position under a `RANGES` Facility that somebody can act as; leaving it out (the ordinary MOA
+  case) creates no Position at all, and the controlling Position runs the airspace by itself.
+- Frequencies are **MHz as a number**, 30–400. A range's `controlFrequencyMhz` is its tower; a
+  MOA's `workingFrequencyMhz` is what flights working inside it go to.
+- crc-sync must be restarted after editing this file.
+
+**The lifecycle.** `RETURNED` (available) → `SCHEDULED` (booked) → `ACTIVE` (in use) → `RELEASED`
+(the using agency is finished) → `RETURNED` again. A range schedules its own airspace and requests
+activation; the controlling ATC Position approves it, and takes it back at the end. A MOA with no
+range control skips the request — its controlling Position schedules and activates directly.
+
+If you hold both sides, you still press both buttons: the state changes are real, only the
+conversation with another controller collapses.
+
+**Putting a flight in.** On the Strip, **Airspace…** → pick the airspace → *Approve entry*. The
+flight's frequency (Block 22, `FREQ`) is filled from the airspace, and a badge on the Strip names
+where it is working. **Leave airspace** clears both. You keep the Strip throughout — approving a
+frequency change hands over nothing.
+
+Approving a flight into an airspace nobody has activated is allowed, not blocked — the block may
+well be hot with the board simply not caught up — but the badge turns amber and an alert is raised.
+
 ## 9. General controls — quick reference
 
-- Set which Position(s) you're acting as under **Panels → Acting As** (grouped by Facility now — `INCIRLIK` and `CENTER` are independent checkbox groups).
+- Set which Position(s) you're acting as under **Panels → Acting As** (grouped by Facility — `INCIRLIK`, `CENTER`, `TACTICAL` and, once any range is configured, `RANGES` are independent checkbox groups).
 - Each held Position gets its own tab; each Position's Bays (§3) are its own tabs underneath.
 - **Drag** a Strip onto another Position's tab to transfer it (same-Facility only); onto a Bay tab within your own Position to move it there.
 - **Search**: `.find <text>` dot-command, or the search icon — matches callsign/beacon, opens a temporary search-results Bay.
