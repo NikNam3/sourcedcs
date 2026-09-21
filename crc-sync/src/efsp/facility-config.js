@@ -420,6 +420,19 @@ function getAllBays(facilityId = DEFAULT_FACILITY_ID) {
   return out;
 }
 
+/**
+ * Is this a Bay this Facility actually has?
+ *
+ * Nothing checked until a scenario created a Strip in `ctr-overflights` when
+ * the Bay is `ctr-overflight`: the Strip was created, took a beacon code, and
+ * appeared in no Rack on any Board — invisible and unrecoverable, because
+ * every read path goes through a Bay. A typo in a client, or a stale bayId
+ * after a config change, produced a ghost.
+ */
+function bayExists(bayId, facilityId = DEFAULT_FACILITY_ID) {
+  return getAllBays(facilityId).some(b => b.bayId === bayId);
+}
+
 /** A Bay's configured implied EfspState (guide §3.5 rule 4), or null if the Bay doesn't imply one. */
 function bayImpliesState(bayId, facilityId = DEFAULT_FACILITY_ID) {
   const bay = getAllBays(facilityId).find(b => b.bayId === bayId);
@@ -469,6 +482,6 @@ function coordinationBayFor(positionId, facilityId = DEFAULT_FACILITY_ID) {
 module.exports = {
   DEFAULT_FACILITY_ID, getFacilityIds,
   getFacilityConfig, getPositionSet, getPositionClass, getCoveringChain, getBaysFor, getAllBays, isBlockVisible,
-  bayImpliesState, bayForImpliedState, coordinationBayFor, setFacilityConfig, validateConfig,
+  bayImpliesState, bayForImpliedState, bayExists, coordinationBayFor, setFacilityConfig, validateConfig,
   DEFAULT_CONFIG, DEFAULT_CENTER_CONFIG, DEFAULT_TACTICAL_CONFIG, DEFAULT_CONFIGS,
 };

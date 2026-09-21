@@ -336,6 +336,11 @@ class BoardStore {
   }
 
   _applyCreateStrip(op, actingPositionId, by) {
+    // A Strip in a Bay this Facility does not have is invisible on every
+    // Board — every read path goes through a Bay — while still holding a
+    // beacon code. Cheaper to refuse than to hunt for later.
+    const bayCheck = this._requireKnownBay(op.bayId);
+    if (bayCheck) return bayCheck;
     const role = op.role || 'DEPARTURE';
     if (this._rules.isValidRole && !this._rules.isValidRole(role)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown Strip Role: ${role}` };
@@ -639,7 +644,15 @@ class BoardStore {
     return { ok: true, impliedState };
   }
 
+  /** @returns {object|null} a rejection when this Facility has no such Bay, else null. */
+  _requireKnownBay(bayId, strip) {
+    if (!this._rules.bayExists || this._rules.bayExists(bayId)) return null;
+    return { ok: false, reason: 'VALIDATION_ERROR', detail: `no such Bay here: ${bayId}`, strip };
+  }
+
   _applyMoveStrip(strip, op, by) {
+    const bayCheck = this._requireKnownBay(op.bayId, strip);
+    if (bayCheck) return bayCheck;
     const check = this._validateBayImpliedTransition(strip, op.bayId);
     if (!check.ok) return { ok: false, reason: check.reason, detail: check.detail, strip };
 
@@ -720,6 +733,8 @@ class BoardStore {
   }
 
   _applyTransferStrip(strip, op, by) {
+    const bayCheck = this._requireKnownBay(op.bayId, strip);
+    if (bayCheck) return bayCheck;
     // Same check _applyMoveStrip uses (§3.5 rule 4) — a Transfer landing in
     // a Bay configured with an implied EfspState is validated EXACTLY like
     // pressing that NLA button would be, before anything else about this
