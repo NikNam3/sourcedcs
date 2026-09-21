@@ -52,6 +52,18 @@ const efspCorrelations = new Map();
 // The correlation rate, as the server last reported it (guide §6.6 rule 6).
 let efspCorrelationStats = null;
 
+// WP6 (crc-sync's docs/adr/0051) — marsaId -> the MARSA relation: which
+// flights have declared that military authority is separating them, on whose
+// declaration, and whether it is still standing.
+//
+// Keyed by marsaId with fdrId PARTICIPANTS, which is what makes §9.2's "model
+// it as an edge, not a flag" real on this side too. A per-Strip flag could not
+// say who else is in the relation, and two Strips of one airframe could carry
+// different answers. Finished relations stay in the Map on purpose: a VOIDED
+// one is the alert §9.2 rule 2 requires, and dropping it would erase the
+// warning for whoever just reconnected.
+const efspMarsa = new Map();
+
 function applyEfspSnapshot(msg) {
   efspStrips.clear();
   efspFdrs.clear();
@@ -67,6 +79,76 @@ function applyEfspSnapshot(msg) {
   for (const a of msg.airspaces || []) efspAirspaces.set(a.airspaceId, a);
   efspCorrelations.clear();
   for (const r of msg.correlations || []) efspCorrelations.set(r.fdrId, r);
+  efspMarsa.clear();
+  for (const r of msg.marsa || []) efspMarsa.set(r.marsaId, r);
+}
+
+/**
+ * An efsp-marsa-delta — its own message type with its own seq, like the
+ * airspace and correlation deltas. A relation is not a Strip and rides no
+ * Board's sequence.
+ *
+ * The record arrives whole, so a void needs nothing cleared here: `voidedBy`
+ * simply comes back set, and a relation that a controller later re-declares is
+ * a different record with a different marsaId. That is docs/adr/0045's shape —
+ * deliberately unlike the obligation alerts, which the server cannot retract at
+ * all.
+ */
+function applyEfspMarsaDelta(msg) {
+  for (const r of (msg.marsa && msg.marsa.updated) || []) efspMarsa.set(r.marsaId, r);
+}
+
+function getEfspMarsa(marsaId) { return efspMarsa.get(marsaId) || null; }
+function getAllEfspMarsa() { return [...efspMarsa.values()]; }
+
+/** The ACTIVE relation this flight is in, or null. At most one — crc-sync enforces it. */
+function activeMarsaForFdr(fdrId) {
+  if (!fdrId) return null;
+  for (const relation of efspMarsa.values()) {
+    if (relation.state === 'ACTIVE' && relation.participants.includes(fdrId)) return relation;
+  }
+  return null;
+}
+
+/**
+ * The relation this Strip should render: the ACTIVE one if there is one, else
+ * the most recently finished one this flight was in.
+ *
+ * Showing a finished relation is the point rather than clutter. §9.2 rule 2
+ * requires a void to "alert every participant Strip", and the void is exactly
+ * the moment the relation stops being ACTIVE — a badge that only rendered live
+ * relations would make the alert vanish at the instant it is raised.
+ */
+function marsaForStrip(strip) {
+  if (!strip) return null;
+  const active = activeMarsaForFdr(strip.fdrId);
+  if (active) return active;
+  let latest = null;
+  for (const relation of efspMarsa.values()) {
+    if (!relation.participants.includes(strip.fdrId)) continue;
+    if (!latest || (relation.endedAt || 0) > (latest.endedAt || 0)) latest = relation;
+  }
+  return latest;
+}
+
+/**
+ * The other live Strips in this flight's ACTIVE relation — §9.2 rule 5:
+ * "selecting one participant MUST highlight the others."
+ *
+ * A linear walk rather than a maintained index, the same reasoning
+ * otherLiveStripsForFdr and stripIdsForTrackId already document: the Strip
+ * count is in the tens, and a relation has a handful of participants. Returns
+ * every Strip of every participant, which is right — one participant worked by
+ * two Facilities has two Strips and both are in the relation.
+ */
+function marsaParticipantStripIds(strip) {
+  const relation = strip ? activeMarsaForFdr(strip.fdrId) : null;
+  if (!relation) return [];
+  const others = new Set(relation.participants.filter(id => id !== strip.fdrId));
+  if (others.size === 0) return [];
+  return getAllEfspStrips()
+    .filter(s => s.state !== 'DROPPED' && others.has(s.fdrId))
+    .map(s => s.stripId);
 }
 
 /**
@@ -270,6 +352,7 @@ function _resetEfspStateForTest() {
   efspObligations.clear();
   efspCorrelations.clear();
   efspCorrelationStats = null;
+  efspMarsa.clear();
   efspBoardSeq = 0;
   efspFacility = null;
   efspBays = [];
@@ -286,6 +369,8 @@ if (typeof module !== 'undefined' && module.exports) {
     applyEfspCorrelationDelta, getEfspCorrelation, getAllEfspCorrelations,
     getEfspCorrelationForStrip, correlatedTrackIdForStrip, stripIdsForTrackId,
     getEfspCorrelationStats,
+    applyEfspMarsaDelta, getEfspMarsa, getAllEfspMarsa,
+    activeMarsaForFdr, marsaForStrip, marsaParticipantStripIds,
     getEfspRack, searchEfspStrips, getEfspBoardSeq, getEfspFacility, getEfspBays,
     isAitAuthorizedFor,
     applyEfspObligationAlert, getEfspObligation, clearEfspObligation,

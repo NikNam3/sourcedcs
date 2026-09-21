@@ -404,6 +404,14 @@ class WsHub {
         // to the peer facilityId, same immediate-broadcast treatment as
         // the primary one above — see efsp-ws.js's own comment.
         if (result.peerBroadcast) this._broadcast(result.peerBroadcast);
+        // WP6 (docs/adr/0051) — a Strip Mutation can void or retire a MARSA
+        // relation as a side effect (§9.2 rule 2's interlock, or a flight
+        // ending). A relation is not a Strip and rides no Board's sequence, so
+        // it needs its own delta beside the board one, on the same round trip:
+        // §9.2 rule 2 requires the void to "alert every participant Strip", and
+        // waiting for the next MARSA op to carry it would be docs/adr/0022's
+        // bug again — a correct server-side change no client ever hears about.
+        if (result.marsaBroadcast) this._broadcast(result.marsaBroadcast);
         // Declaring a different held set is what changes a controller's
         // coverage (docs/adr/0042) — taking APP hands you the RAPCON's
         // scopes, giving it up takes them away again. Done here rather than

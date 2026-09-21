@@ -676,6 +676,11 @@ function _buildStripEl(strip) {
     // and on what evidence. A Strip-level badge rather than a Block: see
     // correlation-highlight.js's correlationBadgeFor for the three reasons.
     _appendCorrelationBadge(el, strip);
+
+    // WP6 (guide §9.2 rules 2, 5 and 6) — whether military authority is
+    // separating this flight, and whether the pre-rendezvous interlock is
+    // armed. Same badge-not-Block reasoning as the correlation badge above.
+    _appendMarsaBadge(el, strip);
   }
 
   // Flip: dblclick. Highlight: right-click (contextmenu) opens a 3-swatch
@@ -824,6 +829,269 @@ function _openBindPopover(strip, anchorEl, candidateTrackIds) {
   setTimeout(() => document.addEventListener('pointerdown', _closeBindPopover, true), 0);
 }
 
+/**
+ * MARSA (§9.2) — the badge, the participant highlight, and the control that
+ * opens the relation's actions.
+ *
+ * The highlight (rule 5, "selecting one participant MUST highlight the others")
+ * is a class on the Strip rather than anything drawn here: the selected Strip's
+ * participants are resolved once in _afterSelectionChanged and read back while
+ * each Strip is built, which is the same shape the correlation ring uses.
+ */
+function _appendMarsaBadge(el, strip) {
+  if (typeof marsaBadgeFor !== 'function') return;
+
+  if (typeof isMarsaHighlighted === 'function' && isMarsaHighlighted(strip.stripId)) {
+    el.classList.add('efsp-strip-marsa-participant');
+  }
+
+  const badge = marsaBadgeFor(strip);
+  if (!badge) {
+    // No relation and no history: offer the declaration itself, since a
+    // controller has to be able to start one from a Strip that has never been
+    // in one. Left out entirely when nobody can act, rather than rendered
+    // disabled — a Strip nobody holds should not grow a control.
+    if (!_resolveActingPositionId(strip)) return;
+    const declare = document.createElement('button');
+    declare.className = 'efsp-marsa-btn';
+    declare.textContent = 'MARSA…';
+    declare.title = 'declare that military authority is separating this flight from another';
+    declare.addEventListener('click', (e) => {
+      e.stopPropagation();
+      _openMarsaPopover(strip, declare);
+    });
+    el.appendChild(declare);
+    return;
+  }
+
+  // A VOIDED relation flags the whole Strip, not just the badge — §9.2 rule 2
+  // calls it an ALERT, and an alert that reads as one more chip among six is
+  // not one.
+  if (badge.voided) el.classList.add('efsp-strip-marsa-voided');
+  if (badge.armed) el.classList.add('efsp-strip-marsa-armed');
+
+  const node = document.createElement('button');
+  node.className = badge.className;
+  node.textContent = badge.text;
+  node.title = badge.title;
+  node.dataset.marsaId = badge.marsaId;
+  // A button in every state, including VOIDED: rule 5 wants the relation
+  // "visible as a link", and after a void the controller most needs to see who
+  // else was in it.
+  node.disabled = !_resolveActingPositionId(strip);
+  node.addEventListener('click', (e) => {
+    e.stopPropagation();
+    _openMarsaPopover(strip, node);
+  });
+  el.appendChild(node);
+}
+
+let _openMarsaPopoverEl = null;
+
+function _closeMarsaPopover() {
+  if (_openMarsaPopoverEl && _openMarsaPopoverEl.parentNode) {
+    _openMarsaPopoverEl.parentNode.removeChild(_openMarsaPopoverEl);
+  }
+  _openMarsaPopoverEl = null;
+  document.removeEventListener('pointerdown', _closeMarsaPopover, true);
+}
+
+/**
+ * The relation's actions, and — for a declaration — who is in it.
+ *
+ * `declaringCallsign` is a required free-text field and that is doctrine, not
+ * an oversight: §9.2 rule 1 says "the declaration is the tanker's, and it is
+ * verbal — the EFSP records it, it does not decide it." So the form asks who
+ * said it rather than guessing from the Strip.
+ */
+function _openMarsaPopover(strip, anchorEl) {
+  _closeMarsaPopover();
+  const popover = document.createElement('div');
+  popover.className = 'efsp-coordinate-popover efsp-marsa-popover';
+  popover.addEventListener('pointerdown', (e) => e.stopPropagation());
+
+  const relation = typeof marsaForStrip === 'function' ? marsaForStrip(strip) : null;
+  const active = relation && relation.state === 'ACTIVE' ? relation : null;
+
+  if (relation) {
+    // Rule 5's link, made concrete: naming the other participants, and letting
+    // the controller jump to one.
+    const heading = document.createElement('div');
+    heading.className = 'efsp-marsa-popover-heading';
+    heading.textContent = relation.state === 'VOIDED'
+      ? `MARSA voided — declared by ${relation.declaringCallsign}`
+      : `MARSA — declared by ${relation.declaringCallsign}`;
+    heading.title = typeof MARSA_EXPANSION === 'string' ? MARSA_EXPANSION : '';
+    popover.appendChild(heading);
+
+    for (const fdrId of relation.participants) {
+      if (fdrId === strip.fdrId) continue;
+      const peer = getAllEfspStrips().find(s => s.fdrId === fdrId && s.state !== 'DROPPED');
+      const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(fdrId) : null;
+      const label = (fdr && fdr.identity && fdr.identity.callsign) || fdrId;
+      const row = document.createElement('button');
+      row.className = 'efsp-marsa-participant-btn';
+      row.textContent = label;
+      row.title = peer ? 'select this participant' : 'this participant has no live Strip on your board';
+      row.disabled = !peer;
+      if (peer) {
+        row.addEventListener('click', (e) => {
+          e.stopPropagation();
+          _closeMarsaPopover();
+          selectEfspStripById(peer.stripId);
+        });
+      }
+      popover.appendChild(row);
+    }
+  }
+
+  for (const action of (typeof marsaActionsFor === 'function' ? marsaActionsFor(strip) : [])) {
+    if (action.kind === 'DeclareMarsa') {
+      popover.appendChild(_buildMarsaDeclareForm(strip));
+      continue;
+    }
+    if (action.kind === 'AddParticipant') {
+      popover.appendChild(_buildMarsaAddForm(strip, active));
+      continue;
+    }
+    const btn = document.createElement('button');
+    btn.className = 'efsp-coordinate-submit';
+    btn.textContent = action.label;
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      _closeMarsaPopover();
+      const op = action.kind === 'RemoveParticipant'
+        ? { kind: 'RemoveParticipant', fdrId: strip.fdrId }
+        : { kind: action.kind };
+      _dispatchMarsa(strip, action.marsaId, op);
+    });
+    popover.appendChild(btn);
+  }
+
+  anchorEl.appendChild(popover);
+  _openMarsaPopoverEl = popover;
+  setTimeout(() => document.addEventListener('pointerdown', _closeMarsaPopover, true), 0);
+}
+
+/** Which other live flights this one could be put into a relation with. */
+function _marsaCandidates(strip) {
+  return getAllEfspStrips().filter((s) => {
+    if (s.state === 'DROPPED' || s.fdrId === strip.fdrId) return false;
+    // A flight already under MARSA cannot be in a second relation — crc-sync
+    // refuses it, and offering it here would be a control that always fails.
+    return !(typeof activeMarsaForFdr === 'function' && activeMarsaForFdr(s.fdrId));
+  });
+}
+
+function _marsaCandidateSelect(strip) {
+  const select = document.createElement('select');
+  select.className = 'efsp-coordinate-primitive-select';
+  for (const s of _marsaCandidates(strip)) {
+    const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(s.fdrId) : null;
+    const option = document.createElement('option');
+    option.value = s.fdrId;
+    option.textContent = (fdr && fdr.identity && fdr.identity.callsign) || s.fdrId;
+    select.appendChild(option);
+  }
+  return select;
+}
+
+function _buildMarsaDeclareForm(strip) {
+  const wrap = document.createElement('div');
+  const candidates = _marsaCandidates(strip);
+  if (candidates.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'efsp-coordinate-degraded-warning';
+    empty.textContent = 'no other live flight is available to declare MARSA with';
+    wrap.appendChild(empty);
+    return wrap;
+  }
+
+  const other = _marsaCandidateSelect(strip);
+  wrap.appendChild(other);
+
+  const startEvent = document.createElement('select');
+  startEvent.className = 'efsp-coordinate-primitive-select';
+  for (const [value, label] of [
+    ['TANKER_ACCEPTED', 'tanker accepted MARSA'],
+    ['MTR_ENTRY', 'MTR entry'],
+    ['LOCAL_DECLARATION', 'local declaration'],
+  ]) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = label;
+    startEvent.appendChild(option);
+  }
+  wrap.appendChild(startEvent);
+
+  const endCondition = document.createElement('select');
+  endCondition.className = 'efsp-coordinate-primitive-select';
+  for (const [value, label] of [
+    ['VERTICALLY_POSITIONED', 'until vertically positioned'],
+    ['MTR_COMPLETE', 'until MTR complete'],
+    ['ATC_SEPARATION_ESTABLISHED', 'until ATC separation is re-established'],
+  ]) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = label;
+    endCondition.appendChild(option);
+  }
+  wrap.appendChild(endCondition);
+
+  const declaring = document.createElement('input');
+  declaring.className = 'efsp-coordinate-note';
+  declaring.placeholder = 'who declared it (heard on frequency)';
+  wrap.appendChild(declaring);
+
+  const send = document.createElement('button');
+  send.className = 'efsp-coordinate-send-btn';
+  send.textContent = 'Declare';
+  send.addEventListener('click', (e) => {
+    e.stopPropagation();
+    _closeMarsaPopover();
+    _dispatchMarsa(strip, undefined, {
+      kind: 'DeclareMarsa',
+      participants: [strip.fdrId, other.value],
+      startEvent: startEvent.value,
+      endCondition: endCondition.value,
+      declaringCallsign: (declaring.value || '').trim(),
+    });
+  });
+  wrap.appendChild(send);
+  return wrap;
+}
+
+function _buildMarsaAddForm(strip, active) {
+  const wrap = document.createElement('div');
+  const candidates = _marsaCandidates(strip);
+  if (candidates.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'efsp-coordinate-degraded-warning';
+    empty.textContent = 'no other live flight is available to join this relation';
+    wrap.appendChild(empty);
+    return wrap;
+  }
+  const other = _marsaCandidateSelect(strip);
+  wrap.appendChild(other);
+  const add = document.createElement('button');
+  add.className = 'efsp-coordinate-send-btn';
+  add.textContent = 'Add to MARSA';
+  add.addEventListener('click', (e) => {
+    e.stopPropagation();
+    _closeMarsaPopover();
+    _dispatchMarsa(strip, active && active.marsaId, { kind: 'AddParticipant', fdrId: other.value });
+  });
+  wrap.appendChild(add);
+  return wrap;
+}
+
+function _dispatchMarsa(strip, marsaId, op) {
+  const actingPositionId = _resolveActingPositionId(strip);
+  if (!actingPositionId) return;
+  const relation = marsaId && typeof getEfspMarsa === 'function' ? getEfspMarsa(marsaId) : null;
+  sendEfspMarsaMutation(actingPositionId, marsaId, relation ? relation.rev : undefined, op);
+}
+
 function _dispatchCorrelation(strip, op) {
   const actingPositionId = _resolveActingPositionId(strip);
   if (!actingPositionId) return;
@@ -854,6 +1122,12 @@ function selectEfspStripById(stripId) {
 }
 
 function _afterSelectionChanged() {
+  // §9.2 rule 5 — "selecting one participant MUST highlight the others."
+  // Resolved BEFORE the re-render below, not after, because the highlight is a
+  // class each Strip element reads while it is being built. Doing it the other
+  // way round would leave the highlight one selection behind, which is the kind
+  // of off-by-one that looks like a race and is not.
+  if (typeof highlightMarsaParticipants === 'function') highlightMarsaParticipants(_selectedStripId);
   renderAllOpenEfspBays();
   // Ring the selected Strip's contact on the map (guide §6.6 rule 4). One Map
   // lookup plus the existing rAF-batched updateMap() — see

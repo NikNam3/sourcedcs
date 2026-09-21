@@ -770,3 +770,123 @@
       border-color: var(--ui-border-2);
       font-style: italic;
     }
+
+    /* ── MARSA (WP6, guide §9.2 — crc-sync's docs/adr/0051) ────────────────
+       "Military Authority Assumes Responsibility for Separation of Aircraft."
+       A Strip-level badge like the correlation and airspace badges, and not a
+       Block, for the same reason: the relation is keyed by its own id with
+       fdrId participants, so it is neither FDR data nor a Strip annotation.
+
+       Three states that must be distinguishable at a glance, because each
+       means something different to the controller looking at it:
+         armed   — the pre-rendezvous interlock is live. A heading or altitude
+                   here VOIDS the relation, so this has to be visible BEFORE
+                   they type, not after.
+         active  — joined up, interlock spent. Quiet.
+         voided  — rule 2's alert. Loud.
+       An ENDED relation renders nothing at all, so it needs no rule here. */
+    .efsp-marsa-badge {
+      display: inline-block;
+      font-size: 8px;
+      letter-spacing: 0.08em;
+      padding: 1px 4px;
+      margin-left: 4px;
+      border: 1px solid transparent;
+      white-space: nowrap;
+      background: none;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    .efsp-marsa-badge:disabled { opacity: 0.45; cursor: default; }
+    .efsp-marsa-badge:hover:not(:disabled) { color: var(--ui-text-bright); }
+    /* Established: the military is separating them and nothing is pending. */
+    .efsp-marsa-active {
+      color: #6a9ebf;
+      border-color: #6a9ebf55;
+    }
+    /* Armed. Same amber tier as a broken correlation and an overdue
+       obligation — deliberately NOT the attention red guide §7.7 rule 4
+       reserves, because nothing has gone wrong yet. */
+    .efsp-marsa-armed {
+      color: #c8b46a;
+      border-color: #c8b46a;
+    }
+    /* Voided. This is the one badge in the subsystem that reports something
+       the controller just did and may not have meant, so it reads louder than
+       the amber tier without taking the reserved attention colour. */
+    .efsp-marsa-voided {
+      color: #d4703a;
+      border-color: #d4703a;
+    }
+    /* "Declare MARSA…" on a Strip in no relation — a plain control, not a
+       state, so it matches the correlation Bind/Unbind buttons. */
+    .efsp-marsa-btn {
+      background: none;
+      border: 1px solid var(--ui-border-2);
+      color: var(--ui-text-dim);
+      font-family: inherit;
+      font-size: 8px;
+      letter-spacing: 0.08em;
+      padding: 1px 4px;
+      margin-left: 3px;
+      cursor: pointer;
+    }
+    .efsp-marsa-btn:hover:not(:disabled) { border-color: var(--ui-text-bright); color: var(--ui-text-bright); }
+    .efsp-marsa-btn:disabled { opacity: 0.4; cursor: default; }
+    /* Strip-level edges, same tier as .efsp-strip-correlation-warned. The
+       armed one is the point of the whole deliverable: a controller about to
+       vector this aircraft should see it on the Strip, not only in a tooltip
+       they have to hover for. */
+    .efsp-strip-marsa-armed  { border-left: 2px solid #c8b46a99; }
+    .efsp-strip-marsa-voided { border-left: 2px solid #d4703a; }
+    /* §9.2 rule 5 — "selecting one participant MUST highlight the others."
+       An outline rather than a left edge, so it never competes with the state
+       edges above: a Strip can be a voided participant AND a highlighted peer
+       of the selected Strip at the same time. */
+    .efsp-strip-marsa-participant {
+      outline: 1px dashed #6a9ebf99;
+      outline-offset: -2px;
+    }
+    .efsp-marsa-popover-heading {
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      color: var(--ui-text-dim);
+      padding: 2px 0 4px;
+      border-bottom: 1px solid var(--ui-border-3);
+      margin-bottom: 4px;
+    }
+    /* Rule 5's "visible as a link": each other participant, selectable. */
+    .efsp-marsa-participant-btn {
+      display: block;
+      width: 100%;
+      text-align: left;
+      background: none;
+      border: 1px solid transparent;
+      color: #6a9ebf;
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      padding: 2px 4px;
+      cursor: pointer;
+    }
+    .efsp-marsa-participant-btn:hover:not(:disabled) { border-color: #6a9ebf; color: var(--ui-text-bright); }
+    .efsp-marsa-participant-btn:disabled { opacity: 0.4; cursor: default; }
+    /* Used by the bind picker's candidate rows since WP5 and by the MARSA
+       popover's actions now — it had no rule until this slice, so both
+       rendered as the browser's default button inside a dark popover. */
+    .efsp-coordinate-submit {
+      display: block;
+      width: 100%;
+      text-align: left;
+      background: none;
+      border: 1px solid var(--ui-border-2);
+      color: var(--ui-text);
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      padding: 2px 4px;
+      margin-top: 3px;
+      cursor: pointer;
+    }
+    .efsp-coordinate-submit:hover:not(:disabled) { border-color: var(--ui-text-bright); color: var(--ui-text-bright); }
+    .efsp-coordinate-submit:disabled { opacity: 0.4; cursor: default; }

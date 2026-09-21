@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 const {
-  canMutate, canCreateStripRole, canActOnState, tofiCounterparts,
+  canMutate, canCorrelate, canDeclareMarsa, canCreateStripRole, canActOnState, tofiCounterparts,
   PERMISSIONS, CREATE_ROLE_PERMISSIONS, STATE_OWNERS_BY_ROLE,
   DEPARTURE_STATE_OWNERS, ARRIVAL_STATE_OWNERS, MISSION_STATE_OWNERS,
   OP_KINDS, COORDINATION_OP_KINDS, APP_CTR_ONLY_OP_KINDS, TOFI_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS,
@@ -347,4 +347,50 @@ test('a range Position works no Strips at all — refused every op kind by class
   // because the RANGES Facility's Positions are derived from the airspace
   // config and so are never hand-listed there.
   assert.ok(NO_STRIP_OP_CLASSES.has('USING_AGENCY'));
+});
+
+
+// ── WP6: MARSA (§9.2, docs/adr/0051) ─────────────────────────────────────
+
+test('canDeclareMarsa has exactly one parameter — the same D21 guard canMutate has', () => {
+  assert.equal(canDeclareMarsa.length, 1);
+});
+
+test('a range Position declares no MARSA, for the same reason it correlates nothing', () => {
+  // Refused by CLASS, not by omission from a table — the RANGES Facility's
+  // Positions are derived from the airspace config (docs/adr/0035) and are
+  // never hand-listed, so there is no entry to leave out. A Position that
+  // works no Strips has no flights to put into a relation.
+  // This file configures no airspaces, so the RANGES Facility has no derived
+  // Positions to name here. What IS assertable, and is the whole of the rule:
+  // whatever canCorrelate refuses by class, canDeclareMarsa refuses
+  // identically — both gate on _worksNoStrips and nothing else, so a Position
+  // of class USING_AGENCY is refused by both wherever one exists.
+  for (const id of ['OPS', 'CD', 'GND', 'TWR', 'APP', 'CTR', 'TAC_C2', 'GCI', 'AIC', 'JTAC']) {
+    assert.equal(canDeclareMarsa(id), canCorrelate(id), id);
+  }
+});
+
+test('an MRU may declare MARSA — D12 is about ATC service, and MARSA is its opposite', () => {
+  // D12 refuses TAC_C2/GCI/AIC/JTAC the 5 coordination primitives because an
+  // MRU must never be asked to provide ATC SERVICE. MARSA is the military
+  // authority saying it will separate its OWN aircraft, which is precisely the
+  // MRU's assertion to make — and §9.2 rule 1 puts the declaration with the
+  // tanker, verbally, so whichever Position takes that call records it.
+  for (const id of ['TAC_C2', 'GCI', 'AIC', 'JTAC']) {
+    assert.equal(canDeclareMarsa(id), true, id);
+    for (const opKind of COORDINATION_OP_KINDS) {
+      assert.equal(canMutate(id, opKind), false, `${id} must still be refused ${opKind}`);
+    }
+  }
+});
+
+test('MARSA is NOT in OP_KINDS — a new op kind there would be picked up silently by every filtered grant', () => {
+  // PERMISSIONS' entries for OPS/APP/CTR are built with .filter() over
+  // OP_KINDS, so anything added there lands in them without a line being
+  // written. That is the maximally-permissive trap the module comment warns
+  // about, which is why MARSA has its own predicate instead.
+  for (const kind of OP_KINDS) {
+    assert.ok(!/Marsa/i.test(kind), `${kind} should not be a Strip Mutation op kind`);
+  }
 });

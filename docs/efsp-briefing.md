@@ -1,18 +1,24 @@
 # EFSP — relief briefing for whoever picks up EFSP work next
 
-Entry point for the next agent or session. Read this, then the part of
-`EFSPImplementationGuide.md` your work package names, then write a plan before writing code. This is
-a handoff, not a build order.
+Entry point for the next agent or session. Read this, then `docs/efsp-wp6-plan.md` if you are
+continuing WP6, then the part of `EFSPImplementationGuide.md` your work package names, then write a
+plan before writing code. This is a handoff, not a build order.
 
-**This revision supersedes the previous one.** The last revision recommended **stereo routes then
-WP6**; stereo routes are built (§3E), so the recommendation now is **WP6 proper** — see §5. Before
-that it was called `efsp-wp4a-briefing.md` and briefed WP5, which is also built (§3C), along with a
-rework of the radar picture underneath it (§3B).
+**This revision supersedes the previous one.** The last revision recommended **WP6 proper**, and
+WP6 is now **in progress**: MARSA and its course/altitude void interlock (§9.2) are built (§3F).
+Four of WP6's eight deliverables remain — see §5. Before that the recommendation was stereo routes
+(§3E, built), and before that WP5 (§3C, built, along with a rework of the radar picture
+underneath it, §3B).
 
 ## 1. State of the tree
 
-Committed and green: **crc-sync 984 tests, crc-desktop 324 tests** (`npm test` in each). ADRs run
-`0001`–`0050`.
+Committed and green: **crc-sync 1034 tests, crc-desktop 358 tests** (`npm test` in each). ADRs run
+`0001`–`0051`.
+
+**There is a written plan for the rest of WP6**, covering all five remaining deliverables plus the
+`[SOURCE-DEFINED]` audit, sequenced into phases that each land green with their own ADR. Phase 1
+(MARSA) is done. The plan carries a full design for §9.7 field state — the biggest remaining piece
+— including the seven integration decisions it needs; do not re-derive them.
 
 ```
 crc-sync/src/efsp/                        the subsystem — stores, rules, the wire handler
@@ -23,9 +29,11 @@ crc-sync/src/efsp/station-coverage.js     which Positions grant which radars
 crc-sync/src/efsp/correlation-store.js    Strip<->contact records, keyed by fdrId
 crc-sync/src/efsp/correlation-match.js    the key ladder's matching rules (pure)
 crc-sync/src/efsp/correlation-reconciler.js  the 1Hz sweep + the rate metric
+crc-sync/src/efsp/marsa-store.js          the MARSA relation, and the void interlock
+crc-desktop/app/public/js/panels/efsp/marsa-badge.js  the badge + the participant highlight
 crc-sync/src/state-paths.js               shipped defaults (config/) vs runtime state (state/)
 crc-desktop/app/public/js/panels/efsp/    the Strip panel, the airspace board, correlation-highlight
-docs/adr/                                 0001-0050, the reasoning behind every decision below
+docs/adr/                                 0001-0051, the reasoning behind every decision below
 docs/efsp-usage-guide.md                  how a controller actually drives it
 ```
 
@@ -57,6 +65,8 @@ other so a new default lands with no migration. (Not `data/` — that name was t
 already meant shipped read-only reference data; `state-paths.js`'s header has the whole story.)
 
 **Stereo routes** (`0050`). See §3E.
+
+**MARSA, and the course/altitude void interlock** (`0051`). See §3F.
 
 **Hardening driven by end-to-end sorties** (`0027`–`0033`, `0039`–`0041`, `0049`). See §3D.
 
@@ -185,6 +195,9 @@ every one in machinery that already existed and looked finished:
 | A Strip correlated to a contact outside the controller's coverage rendered a bare track id as though it were a callsign, and clicking it drew no ring | `0049` |
 | Binding a contact was pointer-only; `.bind`/`.unbind` were missing from the dot-command surface the guide calls a primary feature | `0049` |
 | **Seven things the service writes were going into the Docker image with no volume**, so every deploy discarded them — and two were committed to git, so a recreate silently reverted controllers to an old snapshot | `0048` |
+| **OVERFLIGHT had no Block meaning "ATC assigned this course/altitude"** — so §9.2's interlock was silently unreachable on one of the three ATC Roles, and its acceptance criterion would have passed anyway | `0051` |
+| **DEPARTURE's Blocks 20 and 21 were labelled `SCRATCH`** since Phase 1 — they are the guide §6.2's own "Heading" and "Initial altitude"; ARRIVAL/OVERFLIGHT's meaning had been copied onto DEPARTURE. `CONFIRM_VACATED_ELIGIBLE_BLOCKS` has listed DEPARTURE's `21` all along, which only makes sense for an altitude | `0051` |
+| `.efsp-coordinate-submit` has had no CSS rule since WP5, so the bind picker's candidate rows render as default browser buttons inside a dark popover | `0051` |
 
 **`0041` is still the one to read if you read only one**, and `0043` is the second. Both are the same
 lesson from different directions: a shape that is correct the day it is written and wrong afterwards.
@@ -234,15 +247,50 @@ label, the altitude and the envelope match; dropping and re-filing minted a new 
 is §3D's lesson arriving again, in the place it always arrives: not in a mutation, but in a
 transition nobody had walked.
 
+## 3F. MARSA — the highest-value military interlock
+
+§9.2's title is the design brief: *"model it as an edge, not a flag."* A **fifth store** (`0051`),
+keyed by `marsaId`, whose participants are `fdrId`s — `0045`'s key choice reused, and for the same
+reason: a `stripId` participant list would let two replicas of one airframe disagree about whether
+it is separating itself.
+
+Five things to know before extending it:
+
+- **The interlock voids; it does not refuse.** A pre-rendezvous heading or altitude goes through and
+  the relation ends under it. That is the conservative direction — ATC re-assumes separation —
+  and refusing the clearance would leave a controller arguing with the panel about an aircraft in
+  the air. The same asymmetry settles two smaller calls: it fires on *any* write to a tagged Block,
+  changed or not, with `confirmVacated` the one carve-out (it issues nothing).
+- **Rendezvous is an explicit controller action, not inferred from the radar picture.** `0047`'s
+  call about "detected airborne", one step further on. A proximity threshold would be D11, and its
+  failure is asymmetric: firing early **silently disarms the highest-value interlock in the military
+  layer**, with nothing on any screen saying so.
+- **Which Blocks count is Block Map data** (`interlock: 'COURSE'|'ALTITUDE'`), not a list held next
+  to the interlock. Per-Role, because **DEPARTURE's Block 7 is the filed request and ARRIVAL's is
+  the assigned altitude** — same id, opposite answers. A list elsewhere is `0041`'s frozen inclusion
+  list again.
+- **OVERFLIGHT had no assignment Block at all** and gained two (`7A`, `9A-VECTOR`). Without them the
+  acceptance criterion passed on two Roles and quietly did not hold on the third. Worth carrying
+  forward: *when a rule is per-Role, check every Role, because the test that passes is not the test
+  that matters.*
+- **The relation owns `separationRegime` while ACTIVE**, and a direct `SREG` write is refused with a
+  reason pointing at End/Void. Two answers to "who is separating these aircraft" is the defect class.
+  Anything that touches `fdr.tofi.separationRegime` now has a non-controller writer to account for.
+
+Unlike a correlation record, **a relation survives a restart intact** — a persisted track id is a
+lie after a restart, and a recorded verbal declaration is not.
+
 ## 4. What's left
 
 **Not started, in the guide's own order (§16):**
 
-- **WP6 — the military layer.** Entry is WP4. **Three** of its eight deliverables are now built:
-  §9.11's airspace activation authority (`0036`), §6.4's military extension Blocks, and §9.10's
-  stereo routes (`0050`, §3E). The five left are the MARSA course/altitude void interlock (§9.2),
-  field state with arresting-gear gating and the runway-change workflow (§9.7), alert/scramble
-  constraints (§9.6), ordnance state (§9.5) and MTR fields (§9.4) — see §5.
+- **WP6 — the military layer, in progress.** Entry is WP4. **Four** of its eight deliverables are
+  built: §9.11's airspace activation authority (`0036`), §6.4's first military extension Blocks
+  (`0026`), §9.10's stereo routes (`0050`, §3E) and §9.2's MARSA interlock (`0051`, §3F). The four
+  left are field state with arresting-gear gating and the runway-change workflow (§9.7),
+  alert/scramble constraints (§9.6), ordnance state (§9.5) and MTR fields (§9.4) — see §5. Two of
+  §13's five WP6 acceptance criteria are met; §9.7 carries two more and the `[SOURCE-DEFINED]`
+  audit is the fifth.
 - **WP7 / WP7A / WP8** — ATO ingest, the carrier, instrumentation. D-4 puts ATO ingest off the
   critical path for anything in the tower chain.
 
@@ -291,16 +339,36 @@ transition nobody had walked.
 - **`crc-desktop/tests/` has no `helpers/`**, so `efsp-stereo-panel.test.js` carries a trimmed copy
   of `efsp-ui-reachability.test.js`'s `makeElement` DOM stub. Two copies is the point at which
   lifting it out is worth doing; the third should not be written.
+- **`efsp-block-map-parity.test.js` does not compare `interlock`** (`0051`). It checks existence,
+  `required`, writable-kind, `path` and `provenance` only, so the server can tag a Block and the
+  client will not know. Fine while the client's only use is a tooltip it composes itself; wrong the
+  moment it needs to warn per-Block.
+- **The MARSA participant highlight and the badge's placement are unverified by eye** (`0051`). The
+  reachability tests render the real `bay-view.js` against a DOM stub and prove the wiring; the
+  Strip now carries seven badge/indicator slots and nobody has looked at one with all of them lit.
 
 ## 5. Where to start
 
-**Recommended: WP6 proper.** Read its acceptance criteria in §13 before picking a deliverable. The
-**MARSA course/altitude void interlock (§9.2)** is the guide's own pick — *"the highest-value single
-military interlock available"* — and its acceptance line is concrete: a heading or altitude
-assignment to a MARSA participant before rendezvous voids the relation, sets `voidedBy`, and alerts
-every participant Strip. That makes it a relation between FDRs with its own void semantics, which is
-a genuinely new shape in this subsystem; `0050`'s "one flight, one answer" reasoning and `0045`'s
-record-with-a-warning shape are both worth reading first.
+**Recommended: §9.7 field state**, the next phase of the WP6 plan. The guide calls it *"the
+highest-value military-specific feature in the guide, and it has no civil equivalent"*, it carries
+**two** of §13's five WP6 acceptance criteria, and §9.5's hung-ordnance propagation and §9.6's alert
+pad both build on it. Its full integration design — fifth-vs-per-Facility store, where the runway
+inventory lives, how rule 1 reaches `nla.js`, the two-acknowledgement runway-change machine,
+permission, the `M15` hook check, and why rule 5's *"broadcast on the Board sequence"* has to be
+deviated from — is already written down in the WP6 plan. Read it rather than re-deriving it; several
+of those decisions are non-obvious and one of them (the sequence) is a deliberate deviation from the
+guide's literal text that needs its reasoning carried into the ADR.
+
+Two hooks for it already exist and should be used, not replaced: the `ops-field-state` Bay in
+`facility-config.js` (currently `// WP6 hook, inert`) and `twr-runway-queue`'s one-Rack-per-runway
+layout. And `nla.js` already carries the exact placeholder comments where rules 1's inhibits belong
+— they say *"§9.7 is WP6 territory — never triggers here"*, and this is where that stops being true.
+
+**Before §9.7, one cheap thing: the `M`-namespace question needs settling once.** It has now come up
+three times (`0026`'s frozen `M1`–`M8`, `0050`'s `9F`, `0051`'s `3F` decision) and §9.5/§9.6/§9.4
+all need new Blocks. The convention that has won each time is **sub-letter the field onto its parent
+Block** and cite the guide's `M`-number in the comment. Write the whole mapping down in one ADR
+before adding the first of them.
 
 The **`[SOURCE-DEFINED]` audit is a WP6 acceptance criterion in its own right** — *"No UI text or
 code comment presents a `[SOURCE-DEFINED]` behaviour as real-world doctrine. Audit this
@@ -329,6 +397,10 @@ suite.
   appearing, a Position vacated and retaken, a flight ending, a reconnect. The scenario files walk a
   flight's life; none of them walks the *facility* changing underneath one. That is the gap in the
   sortie suite itself, and manning churn and radar churn deserve to be scenarios rather than setup.
+- **When a rule is per-Role, check every Role.** `0051`'s acceptance criterion would have passed on
+  DEPARTURE and ARRIVAL while doing nothing at all on OVERFLIGHT, because each Role has its own
+  Block Map and the criterion names no Role. The test that passes is not always the test that
+  matters; `block-map.js`'s `interlockBlocks()` exists so that one is now asserted per Role.
 - **Walk what a PILOT would ask for, not just what a Strip does.** `0050` shipped complete against
   its acceptance criterion and its own design, and four defects plus one reversed decision fell out
   of asking "what if they request a different stereo?" and "what if they cancel it?" — questions the

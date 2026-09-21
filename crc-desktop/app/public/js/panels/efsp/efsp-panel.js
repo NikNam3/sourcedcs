@@ -741,7 +741,91 @@ function _dispatchDotCommand(parsed) {
       return;
     }
     sendEfspCorrelationMutation(actingPositionId, strip.fdrId, baseRev, { kind: 'BindTrack', trackId: String(trackId) });
+  } else if (MARSA_VERBS[parsed.verb]) {
+    _dispatchMarsaDotCommand(parsed, strip, actingPositionId);
   }
+}
+
+// WP6 (guide §9.2) — the keyboard path to the MARSA relation, for the same
+// reason .bind has one: §7.1 rule 5 makes the dot-command surface "a primary
+// feature, not a power-user extra", and the badge's popover is the pointer
+// affordance, not the only one.
+//
+// `.marsa <CALLSIGN> [DECLARER]` reads the way the radio call arrives —
+// "SHELL71 accepting MARSA with VIPER11" — rather than making the controller
+// type two fdrIds nobody can see.
+const MARSA_VERBS = {
+  marsa: 'DeclareMarsa',
+  rendezvous: 'MarkRendezvous',
+  endmarsa: 'EndMarsa',
+  voidmarsa: 'VoidMarsa',
+};
+
+function _dispatchMarsaDotCommand(parsed, strip, actingPositionId) {
+  const relation = typeof marsaForStrip === 'function' ? marsaForStrip(strip) : null;
+  const active = relation && relation.state === 'ACTIVE' ? relation : null;
+
+  if (parsed.verb === 'marsa') {
+    const callsign = (parsed.args[0] || '').trim();
+    if (!callsign) {
+      _showDotCommandError('.marsa needs the other flight — e.g. .marsa VIPER11 SHELL71');
+      return;
+    }
+    if (active) {
+      // Already in one: the useful reading of ".marsa VIPER13" on a live
+      // relation is "VIPER13 is joining us", not "start a second relation" —
+      // which crc-sync would refuse anyway, since a flight is in at most one.
+      const joining = _marsaStripByCallsign(callsign);
+      if (!joining) { _showDotCommandError(`no live Strip for ${callsign.toUpperCase()}`); return; }
+      sendEfspMarsaMutation(actingPositionId, active.marsaId, active.rev, { kind: 'AddParticipant', fdrId: joining.fdrId });
+      return;
+    }
+    const other = _marsaStripByCallsign(callsign);
+    if (!other) { _showDotCommandError(`no live Strip for ${callsign.toUpperCase()}`); return; }
+    // §9.2 rule 1 — the declaration is the tanker's and it is verbal, so who
+    // said it is required. Defaulted to the selected Strip's own callsign,
+    // which is the usual case (the tanker's Strip is the one in front of you),
+    // and overridable by a second argument when it is not.
+    const declaringCallsign = (parsed.args[1] || '').trim().toUpperCase()
+      || _marsaCallsignOf(strip)
+      || '';
+    if (!declaringCallsign) {
+      _showDotCommandError('.marsa needs the callsign that declared it — e.g. .marsa VIPER11 SHELL71');
+      return;
+    }
+    sendEfspMarsaMutation(actingPositionId, undefined, undefined, {
+      kind: 'DeclareMarsa',
+      participants: [strip.fdrId, other.fdrId],
+      // [SOURCE-DEFINED] defaults: the typed form is the fast path for the
+      // common AR case, and the popover is where a controller picks an MTR
+      // entry or a local declaration. §9.2 rule 1's aerial-refuelling case is
+      // the one the guide spells out in full, so it is the one defaulted to.
+      startEvent: 'TANKER_ACCEPTED',
+      endCondition: 'VERTICALLY_POSITIONED',
+      declaringCallsign,
+    });
+    return;
+  }
+
+  if (!active) {
+    _showDotCommandError(`.${parsed.verb} needs an active MARSA relation on this flight`);
+    return;
+  }
+  sendEfspMarsaMutation(actingPositionId, active.marsaId, active.rev, {
+    kind: MARSA_VERBS[parsed.verb],
+    note: parsed.args.join(' ') || undefined,
+  });
+}
+
+function _marsaCallsignOf(strip) {
+  const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(strip.fdrId) : null;
+  return (fdr && fdr.identity && fdr.identity.callsign) || '';
+}
+
+/** The live Strip whose flight answers to this callsign — how a controller names a flight out loud. */
+function _marsaStripByCallsign(callsign) {
+  const matches = typeof liveStripsForCallsign === 'function' ? liveStripsForCallsign(callsign) : [];
+  return matches[0] || null;
 }
 
 /**

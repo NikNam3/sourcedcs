@@ -61,6 +61,28 @@ export function mustAirspaceAct(efsp, crewMember, positionId, airspaceId, op) {
   return ack.airspace;
 }
 
+/**
+ * A MARSA op (§9.2) — its own message type, since it targets a relation
+ * between flights rather than any one Strip.
+ *
+ * `marsaId` is optional: DeclareMarsa mints the relation, so there is nothing
+ * to name or to base a rev on yet (the same shape CreateStrip has in act()).
+ */
+export function marsaAct(efsp, crewMember, positionId, marsaId, op) {
+  const current = marsaId ? efsp.marsaStore.getRelation(marsaId) : null;
+  const result = efsp.handleMessage(crewMember.session, {
+    version: 1, type: 'efsp-marsa-mutation', clientMutationId: crypto.randomUUID(),
+    marsaId, baseRev: current ? current.rev : undefined, actingPositionId: positionId, op,
+  });
+  return result.ack;
+}
+
+export function mustMarsaAct(efsp, crewMember, positionId, marsaId, op) {
+  const ack = marsaAct(efsp, crewMember, positionId, marsaId, op);
+  assert.equal(ack.ok, true, `${op.kind} on ${marsaId || '(new)'} as ${positionId}: ${JSON.stringify(ack)}`);
+  return ack.marsa;
+}
+
 /** SetState rather than InvokeNla where a test needs to jump — see advance(). */
 export function jumpTo(efsp, crewMember, positionId, strip, toState) {
   return mustAct(efsp, crewMember, positionId, strip, { kind: 'SetState', toState });

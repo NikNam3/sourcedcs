@@ -112,8 +112,23 @@ const DEPARTURE_BLOCK_MAP = {
   '17': { required: false, target: { kind: 'fdr', path: 'assigned.taxiTimeUtc' } },
   '18': { required: true,  target: { kind: 'fdr', path: 'assigned.takeoffTimeUtc' } },
   '19': { required: false, target: { kind: 'annotation' } },
-  '20': { required: false, target: { kind: 'annotation' } },
-  '21': { required: false, target: { kind: 'annotation' } },
+  // WP6 (docs/adr/0051), §9.2 rule 2 — the MARSA course/altitude void
+  // interlock. Blocks 20 and 21 are the guide's OWN §6.2 names for these
+  // ("Heading", "Initial altitude"), so no new Block is invented here: what is
+  // new is the `interlock` tag declaring which of them carries an ATC
+  // ASSIGNMENT, which is the thing §9.2 rule 2 keys on.
+  //
+  // Declared as Block Map DATA rather than a hard-coded list in
+  // marsa-store.js, per §6.5's "the Block Map MUST be data, not code" — and
+  // for the concrete reason docs/adr/0041 taught: a list of Block ids kept
+  // somewhere other than the Block Map is a set that silently stops matching
+  // the moment the Block Map grows.
+  //
+  // Block 7 above is deliberately NOT tagged. It is filed.requestedAltitude —
+  // what the flight ASKED FOR, not what ATC assigned it. Amending a filed
+  // request is not "issuing an altitude change".
+  '20': { required: false, target: { kind: 'annotation' }, interlock: 'COURSE' },
+  '21': { required: false, target: { kind: 'annotation' }, interlock: 'ALTITUDE' },
   // Guide's own Block 22, "Frequency" — listed in §6.2 with an entirely
   // empty notes column. Structured rather than a free-text annotation so a
   // frequency can be validated as one unit and one type, and so approving a
@@ -194,7 +209,11 @@ const ARRIVAL_BLOCK_MAP = {
   '5':        { required: true,  target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
   '5A':       { required: false, target: { kind: 'fdr', path: 'identity.trackDegradationFlag' } }, // WP4A gap-closure, §4.6 rule 5 — see DEPARTURE_BLOCK_MAP's '5A' comment
   '6':        { required: true,  target: { kind: 'fdr', path: 'filed.estimatedArrivalTimeUtc' } },
-  '7':        { required: true,  target: { kind: 'annotation' } }, // assigned/cleared altitude — confirmVacated-eligible, see module comment
+  // assigned/cleared altitude — confirmVacated-eligible, see module comment.
+  // interlock ALTITUDE (docs/adr/0051): unlike DEPARTURE's Block 7 this one IS
+  // the assigned altitude, which is exactly why it was annotation-routed in the
+  // first place. See DEPARTURE_BLOCK_MAP's '20'/'21' comment.
+  '7':        { required: true,  target: { kind: 'annotation' }, interlock: 'ALTITUDE' },
   '8':        { required: true,  target: { kind: 'fdr', path: 'filed.originAirport' } },
   '8A':       { required: false, target: { kind: 'fdr', path: 'filed.arrivalFix' } },
   '8B':       { required: true,  target: { kind: 'fdr', path: 'assigned.landingRunway' } },
@@ -202,7 +221,9 @@ const ARRIVAL_BLOCK_MAP = {
   '9A-FUEL':  { required: true,  target: { kind: 'annotation' } }, // minimum fuel — the doctrinal exception, guide §6.3 note 1
   '9A-DEST':  { required: false, target: { kind: 'annotation' } },
   '9A-PTOUT': { required: false, target: { kind: 'annotation' } },
-  '9A-VECTOR':{ required: false, target: { kind: 'annotation' } },
+  // interlock COURSE (docs/adr/0051) — a radar vector IS a course assignment,
+  // and it is the only Block on an ARRIVAL Strip that is one.
+  '9A-VECTOR':{ required: false, target: { kind: 'annotation' }, interlock: 'COURSE' },
   '9A-SPEED': { required: false, target: { kind: 'annotation' } },
   '9E':       { required: true,  target: { kind: 'fdr', path: 'filed.remarks' } },
   '20':       { required: false, target: { kind: 'annotation' } }, // radar scratchpad — Strip-local until WP5, see module comment
@@ -248,6 +269,28 @@ const OVERFLIGHT_BLOCK_MAP = {
   '5':  { required: true,  target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
   '5A': { required: false, target: { kind: 'fdr', path: 'identity.trackDegradationFlag' } }, // WP4A gap-closure, §4.6 rule 5 — see DEPARTURE_BLOCK_MAP's '5A' comment
   '7':  { required: true,  target: { kind: 'fdr', path: 'filed.requestedAltitude' } },
+  // [SOURCE-DEFINED] WP6 (docs/adr/0051) — OVERFLIGHT had NO Block carrying an
+  // ATC course or altitude assignment, which made §9.2 rule 2's interlock
+  // silently unreachable for one Strip Role: a MARSA participant transiting on
+  // an OVERFLIGHT Strip could be vectored or climbed with nothing voiding the
+  // relation. The acceptance criterion would have passed on DEPARTURE and
+  // ARRIVAL and quietly not held here.
+  //
+  // Both mirror ARRIVAL's shape — annotation-routed, so they carry §3.7's
+  // append-only + confirmVacated model, which is what an altitude clearance
+  // needs. Sub-lettered onto their parent Blocks per this file's convention
+  // ('3A'-'3E', '8A'/'8B', '9A'-'9F', '5A', '14A'-'14D'): '7A' is Block 7's
+  // altitude, assigned rather than requested. Numbered '7A' and not plain '7'
+  // because OVERFLIGHT's Block 7 already means filed.requestedAltitude here and
+  // ARRIVAL's does not — the two Roles genuinely differ, and collapsing them
+  // would be the field-reuse mistake docs/adr/0023 avoided for '8'/'8B'.
+  //
+  // Same [SOURCE-DEFINED] basis as OVERFLIGHT_BLOCK_MAP's whole existence: the
+  // guide publishes no Overflight field table beyond the 20/21 scratchpad note,
+  // so this mirrors ARRIVAL's structure rather than transcribing doctrine that
+  // does not exist. MUST NOT be presented as real FAA numbering (§0.2).
+  '7A': { required: false, target: { kind: 'annotation' }, interlock: 'ALTITUDE' },
+  '9A-VECTOR': { required: false, target: { kind: 'annotation' }, interlock: 'COURSE' },
   '8':  { required: true,  target: { kind: 'fdr', path: 'filed.departureAirport' } },  // the flight's real origin, not Incirlik
   '8B': { required: true,  target: { kind: 'fdr', path: 'filed.destinationAirport' } }, // the flight's real destination, not Incirlik
   '9':  { required: true,  target: { kind: 'fdr', path: 'filed.route' }, provenance: 'COMPUTER_GENERATED' },
@@ -291,6 +334,15 @@ const MISSION_BLOCK_MAP = {
   'M8': { required: false, target: { kind: 'fdr', path: 'filed.remarks' } },
   'M25': { required: true, target: { kind: 'system' } },
   'M26': { required: true, target: { kind: 'system' } },
+  // No `interlock` Block here, and that is a decision rather than an omission
+  // (docs/adr/0051). §9.2 rule 2's interlock is about ATC ISSUING a course or
+  // altitude — "issuing a course or altitude change prior to rendezvous" — and
+  // a MISSION Strip is the MRU-side mission line (§9.8), not an ATC clearance
+  // surface. The ATC-side replica of the same flight is where a clearance is
+  // issued, and because the relation's participants are fdrIds rather than
+  // stripIds (docs/adr/0045's key choice, reused), a void raised there IS a
+  // void of this flight's relation. Tagging a MISSION Block would not add
+  // coverage; it would add a second place the same aircraft can void from.
 };
 
 const BLOCK_MAPS = { DEPARTURE: DEPARTURE_BLOCK_MAP, ARRIVAL: ARRIVAL_BLOCK_MAP, OVERFLIGHT: OVERFLIGHT_BLOCK_MAP, MISSION: MISSION_BLOCK_MAP };
@@ -336,6 +388,33 @@ function resolveBlockTarget(role, blockId) {
 }
 
 /**
+ * WP6 (docs/adr/0051), §9.2 rule 2 — does writing this Block constitute ATC
+ * issuing a course or an altitude assignment?
+ *
+ * @returns {'COURSE'|'ALTITUDE'|null} null for every Block that is neither,
+ *   and for an unknown Block ID or Role.
+ *
+ * Read by board-store.js's _applySetBlock, which hands a non-null answer to
+ * marsa-store.js's voidForAssignment. Deliberately a Block Map lookup and not a
+ * list of ids held in marsa-store.js: the Block Map is the one place that knows
+ * what a Block MEANS, it is per-Role (ARRIVAL's Block 7 is an assigned altitude
+ * and DEPARTURE's Block 7 is a filed request — the same id, opposite answers),
+ * and a parallel list kept elsewhere is docs/adr/0041's frozen inclusion list
+ * in a new costume.
+ */
+function interlockFor(role, blockId) {
+  const map = BLOCK_MAPS[role];
+  const def = map && map[blockId];
+  return (def && def.interlock) || null;
+}
+
+/** Every Block, per Role, that interlockFor() answers non-null for — used by the test that holds each Role to having the coverage docs/adr/0051 claims. */
+function interlockBlocks(role) {
+  const map = BLOCK_MAPS[role] || {};
+  return Object.entries(map).filter(([, def]) => def.interlock).map(([id]) => id);
+}
+
+/**
  * Validates a facility's Block Map configuration (guide §8.3): every ✱
  * Block for the role MUST be present and visible. This is genuinely how
  * §8.3's arrival-specific "9A must retain minimum fuel" exception is
@@ -358,4 +437,5 @@ function validateFacilityConfig(config) {
 module.exports = {
   DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP, BLOCK_MAPS,
   isValidRole, requiredBlocksFor, resolveBlockTarget, validateFacilityConfig,
+  interlockFor, interlockBlocks,
 };

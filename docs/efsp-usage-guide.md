@@ -533,11 +533,87 @@ The panel header shows a rate — `TRK 96% (24/25)` — of how many flights that
 have one. It turns amber below 95%, which the guide treats as a defect rather than a fact of life. A
 flight still on the ramp is not counted.
 
+## 8D. MARSA — when the military separates its own
+
+**MARSA** is *Military Authority Assumes Responsibility for Separation of Aircraft*. It is a
+relationship between two or more flights, not a checkbox on one — so it lives on every participant's
+Strip at once, and ending it ends it for all of them.
+
+The usual case is air refuelling: the tanker tells you it is accepting MARSA, and from that moment
+you stop separating it from its receivers. **You record the declaration; you do not make it.** That
+is why the form asks who said it.
+
+### Declaring one
+
+`MARSA…` on the Strip, or `.marsa VIPER11` on the selected Strip (add a second callsign —
+`.marsa VIPER11 SHELL71` — if the flight that declared it is not the one you have selected).
+
+Pick the other flight, the start event, and when it ends. The typed form defaults to the refuelling
+case (tanker accepted / until vertically positioned); the popover is where you pick an MTR entry or a
+local declaration instead.
+
+A flight is in **at most one** relation at a time. Once one is running, `.marsa <CALLSIGN>` means
+"this flight is joining us" rather than "start another one".
+
+### The badge, and the one that matters
+
+| Badge | Means | What to do |
+|---|---|---|
+| `MARSA ⚠` | **declared, but they have not joined up yet.** The interlock is live | see below before you assign anything |
+| `MARSA` | **joined up.** Rendezvous is marked, the interlock is spent | nothing |
+| `MARSA ✕` | **voided.** Hover it — it says why. ATC is separating them again from that moment | resume separating them |
+
+Selecting any participant outlines the others, so you can see at a glance who is in it.
+
+### The interlock — the thing to know before you touch anything
+
+> **While the badge reads `MARSA ⚠`, assigning a heading or an altitude to any participant voids the
+> relation.**
+
+That is doctrine, not a panel quirk: issuing a course or altitude change before the rendezvous breaks
+the join-up, so the military can no longer be assumed to be separating them. The panel does **not**
+refuse your clearance — it goes through, and MARSA ends underneath it, with every participant's Strip
+showing `MARSA ✕` and the reason. Separation is yours again.
+
+The Blocks that trip it are the ones that mean *ATC assigned this*:
+
+| Strip | Heading | Altitude |
+|---|---|---|
+| Departure | `HDG` (Block 20) | `INIT ALT` (Block 21) |
+| Arrival | `VECTOR` | Block 7, the cleared altitude |
+| Overflight | `VECTOR` | `ASGN ALT` |
+
+Amending the **filed** requested altitude (a departure's `ALT` chip) is not an assignment and does not
+void anything. Neither does confirming a vacated altitude — that records where the aircraft has
+*been*, not where you are sending it.
+
+Once they are joined up, press **Mark rendezvous** (or `.rendezvous`). The badge drops to `MARSA` and
+you can climb the tanker without voiding anything. Nothing marks it for you: whether two aircraft
+have joined up is your call, not something the panel infers from the radar picture.
+
+### Changing one
+
+- **A late joiner** — `Add a flight…`, or `.marsa <CALLSIGN>` on a participant's Strip. The relation
+  keeps its history; it is not restarted.
+- **One breaking off** — `Remove this flight` on that flight's own Strip. The rest carry on. Remove
+  the second-to-last and the relation ends by itself.
+- **Done normally** — `End MARSA`, or `.endmarsa`.
+- **Taking separation back early** — `Void MARSA`, or `.voidmarsa`.
+
+Ending or voiding sets every participant's separation regime back to `ATC` for you.
+
+**You cannot edit the `SEP REG` Block while a relation is live.** It would let the Strip and the
+relation disagree about who is separating the aircraft. End or void the relation instead — that is
+the thing you were reaching for anyway, and it sets the field back as part of doing it.
+
+**A relation survives a crc-sync restart.** A tanker's declaration does not stop being true because
+the server bounced, so it comes back exactly as it was, rendezvous and all.
+
 ## 9. General controls — quick reference
 
 - Set which Position(s) you're acting as under **Panels → Acting As** (grouped by Facility — `INCIRLIK`, `CENTER`, `TACTICAL` and, once any range is configured, `RANGES` are independent checkbox groups).
 - Each held Position gets its own tab; each Position's Bays (§3) are its own tabs underneath.
 - **Drag** a Strip onto another Position's tab to transfer it (same-Facility only); onto a Bay tab within your own Position to move it there.
 - **Search**: `.find <text>` dot-command, or the search icon — matches callsign/beacon, opens a temporary search-results Bay.
-- **Dot-commands**: `.drop [reason]`, `.undo`, `.find <text>`, `.bind <track id>`, `.unbind`, applied to whichever Strip is currently selected.
+- **Dot-commands**: `.drop [reason]`, `.undo`, `.find <text>`, `.bind <track id>`, `.unbind`, `.stereo <NAME> <CALLSIGN>`, and for MARSA (§8D) `.marsa <CALLSIGN> [DECLARER]`, `.rendezvous`, `.endmarsa`, `.voidmarsa` — all but `.find` and `.stereo` apply to whichever Strip is currently selected.
 - **Undo**: 30-second window, state-only NLA transitions only (not transfers/handoffs — those revert via a manual transfer back).

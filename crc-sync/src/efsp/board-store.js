@@ -283,7 +283,7 @@ class BoardStore {
     let result;
     switch (op.kind) {
       case 'MoveStrip':     result = this._applyMoveStrip(strip, op, by); break;
-      case 'SetBlock':      result = this._applySetBlock(strip, op, by); break;
+      case 'SetBlock':      result = this._applySetBlock(strip, op, by, actingPositionId, mutation.clientMutationId); break;
       case 'TransferStrip': result = this._applyTransferStrip(strip, op, by); break;
       case 'SetFlag':       result = this._applySetFlag(strip, op, by); break;
       case 'SetState':      result = this._applySetState(strip, op.toState, by); break;
@@ -717,9 +717,65 @@ class BoardStore {
     return { ok: true, strip };
   }
 
-  _applySetBlock(strip, op, by) {
+  /**
+   * WP6 (docs/adr/0051), §9.2 rule 2 — the MARSA course/altitude void
+   * interlock, applied AFTER the write has succeeded.
+   *
+   * It voids; it does not refuse, and the direction is the whole point. A
+   * controller who needs to turn or climb a joining aircraft must be able to,
+   * immediately — refusing the clearance would leave them arguing with the
+   * panel about an aircraft in the air. So the assignment applies and the
+   * relation ends under it, which is the conservative outcome: ATC re-assumes
+   * separation. See marsa-store.js's module comment.
+   *
+   * `confirmVacated` is deliberately excluded. It carries no value and issues
+   * no instruction — it is the controller recording that the aircraft has LEFT
+   * an altitude it was assigned earlier (§3.7 rule 3). Voiding a live AR on
+   * that would be the interlock firing at the one moment nothing was issued.
+   */
+  _marsaVoidFor(strip, op, by, actingPositionId, clientMutationId) {
+    if (!this._rules.marsaInterlockFor || !this._rules.voidMarsaForAssignment) return null;
+    if (op.confirmVacated) return null;
+    const interlock = this._rules.marsaInterlockFor(strip.role, op.blockId);
+    if (!interlock) return null;
+    return this._rules.voidMarsaForAssignment(strip.fdrId, {
+      cause: interlock === 'COURSE' ? 'CONTROLLER_COURSE_CHANGE' : 'CONTROLLER_ALTITUDE_CHANGE',
+      blockId: op.blockId,
+      clientMutationId,
+      actingPositionId,
+      by,
+    });
+  }
+
+  _applySetBlock(strip, op, by, actingPositionId, clientMutationId) {
     const target = this._rules.resolveBlockTarget(op.blockId, strip.role);
     if (!target) return { ok: false, reason: 'VALIDATION_ERROR', strip };
+
+    // WP6 (docs/adr/0051) — while an ACTIVE MARSA relation holds this flight,
+    // the relation owns its separation regime and a direct Block write to it is
+    // refused.
+    //
+    // Two answers to "who is separating these aircraft" is the defect class
+    // this subsystem exists to prevent, and §4.8.3 names the exact failure: "if
+    // a second controller takes TAC_C2 ten minutes later, the state must
+    // already be correct, or they inherit a lie." marsa-store.js writes the
+    // regime on declare and writes it back on end/void; letting SREG be edited
+    // underneath that would let the FDR and the relation disagree with nothing
+    // saying which was right.
+    //
+    // Refused rather than silently overridden, and the reason names the way
+    // out: End or Void the relation, which sets the regime back to ATC as part
+    // of doing so. That IS the action the controller wanted.
+    if (target.kind === 'tofi' && target.field === 'separationRegime' && this._rules.activeMarsaFor) {
+      const active = this._rules.activeMarsaFor(strip.fdrId);
+      if (active) {
+        return {
+          ok: false, reason: 'VALIDATION_ERROR',
+          detail: `this flight is in an active MARSA relation declared by ${active.declaringCallsign} — end or void it to hand separation back to ATC`,
+          strip,
+        };
+      }
+    }
     // §8.1 — a Facility that hides a Block hides it for writes too, not just
     // for rendering. Enforced here because this is the only path a Block
     // value reaches an FDR or an annotation by.
@@ -748,10 +804,21 @@ class BoardStore {
       strip.updatedAt = Date.now();
       strip.updatedBy = by || null;
       this._touch(strip.stripId);
-      return { ok: true, strip, fdr: fdrResult.fdr, warning: fdrResult.warning };
+      return {
+        ok: true, strip, fdr: fdrResult.fdr, warning: fdrResult.warning,
+        marsaVoided: this._marsaVoidFor(strip, op, by, actingPositionId, clientMutationId),
+      };
     }
 
-    return this._applyAnnotationSet(strip, op.blockId, op.value, op.confirmVacated, by);
+    const result = this._applyAnnotationSet(strip, op.blockId, op.value, op.confirmVacated, by);
+    // Every Block the interlock tags is annotation-routed today (DEPARTURE's
+    // 20/21, ARRIVAL's 7 and 9A-VECTOR, OVERFLIGHT's 7A and 9A-VECTOR), so in
+    // practice this is the branch that fires — but the check sits on both paths
+    // because which routing a Block uses is a Block Map decision that can
+    // change, and an interlock that silently stops covering a Block when its
+    // target kind changes is the failure mode docs/adr/0041 is about.
+    if (result.ok) result.marsaVoided = this._marsaVoidFor(strip, op, by, actingPositionId, clientMutationId);
+    return result;
   }
 
   /**
@@ -1030,8 +1097,12 @@ class BoardStore {
     strip.updatedAt = Date.now();
     strip.updatedBy = by || null;
     this._touch(strip.stripId);
-    this._releaseFdrIfLastStrip(strip);
-    return { ok: true, strip };
+    // `marsaChanged` rather than `marsaVoided`: this is a flight ENDING, not a
+    // clearance voiding a relation, and the two must not render as the same
+    // thing. A tanker landing mid-AR leaves the relation `ENDED` with
+    // `endedBy: 'PARTICIPANT_RETIRED'`; nothing went wrong and no alert is due.
+    const marsaChanged = this._releaseFdrIfLastStrip(strip, by);
+    return { ok: true, strip, marsaChanged: marsaChanged && marsaChanged.length ? marsaChanged : undefined };
   }
 
   /**
@@ -1048,11 +1119,20 @@ class BoardStore {
    * (code-allocator.js's validateAssignment) only fires on a manual override,
    * never on the automatic allocate() scan.
    */
-  _releaseFdrIfLastStrip(strip) {
+  _releaseFdrIfLastStrip(strip, by) {
     const othersLive = this._rules.liveStripsForFdr
       ? this._rules.liveStripsForFdr(strip.fdrId, strip.stripId)
       : 0;
-    if (othersLive === 0) this._fdrStore.releaseFdr(strip.fdrId);
+    if (othersLive !== 0) return null;
+    this._fdrStore.releaseFdr(strip.fdrId);
+    // WP6 (docs/adr/0051) — the flight is over, so it leaves any MARSA relation
+    // it was in. Left alone the relation would keep naming an aircraft on the
+    // ground, keep its separation regime at MARSA on an FDR nobody is working,
+    // and keep arming an interlock for a flight that cannot be assigned
+    // anything. Same shape correlation-store.js's retireFinished has, arriving
+    // from the other direction: correlation is swept by a 1Hz reconciler and
+    // MARSA has no sweep, so the Strip lifecycle has to say so out loud.
+    return this._rules.retireMarsaForFdr ? this._rules.retireMarsaForFdr(strip.fdrId, by) : null;
   }
 
   // ── WP4A: cross-Facility coordination (guide §4.6, docs/adr/0013-0018) ──

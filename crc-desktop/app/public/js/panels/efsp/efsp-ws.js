@@ -127,6 +127,26 @@ function sendEfspCorrelationMutation(actingPositionId, fdrId, baseRev, op) {
   });
 }
 
+/**
+ * A MARSA op (WP6, §9.2 — crc-sync's docs/adr/0051). Its own message type
+ * because it targets a relation BETWEEN flights: no stripId, no Strip baseRev,
+ * no Facility routing, and no single fdrId either, since a relation's
+ * participants can be worked by different Facilities at once.
+ *
+ * `marsaId` is undefined for DeclareMarsa, which mints the relation — the same
+ * shape CreateStrip has, which carries no stripId or baseRev either.
+ *
+ * Not registered as a pending mutation, for the reason the airspace and
+ * correlation sends give: §5.6.3's replay machinery is keyed on Strip identity.
+ */
+function sendEfspMarsaMutation(actingPositionId, marsaId, baseRev, op) {
+  _sendEfsp({
+    version: 1, type: 'efsp-marsa-mutation',
+    clientMutationId: efspClientMutationId(),
+    marsaId, baseRev, actingPositionId, op,
+  });
+}
+
 /** Resync after reconnect (guide §5.6) — server replies with efsp-board-delta or efsp-snapshot, never a third path. */
 function sendEfspResync(lastBoardSeq) {
   _sendEfsp({ version: 1, type: 'efsp-resync', lastBoardSeq });

@@ -32,6 +32,7 @@ const fs = require('fs');
 const { FdrStore } = require('./fdr-store');
 const { AirspaceStore } = require('./airspace-store');
 const { CorrelationStore } = require('./correlation-store');
+const { MarsaStore } = require('./marsa-store');
 const airspaceConfig = require('./airspace-config');
 const { CodeAllocator } = require('./code-allocator');
 const { BoardStore } = require('./board-store');
@@ -81,6 +82,24 @@ function createEfsp() {
   // replication question here either — the record has one home.
   const correlationStore = new CorrelationStore({
     fdrExists: (fdrId) => !!fdrStore.getFdr(fdrId),
+  });
+
+  // WP6 (docs/adr/0051) — a FIFTH store, peer to the four above and shared
+  // across every Facility for the same reason fdrStore and correlationStore
+  // are: MARSA is a fact about a set of airframes, not about one Facility's
+  // Board, and both halves of a cross-Facility exchange are looking at the same
+  // relation. There is no D13 replication question here either — the record has
+  // one home, and its participants are fdrIds, which are already theater-wide.
+  //
+  // setSeparationRegime is injected rather than reached for: the store must not
+  // hold an FdrStore (correlation-store.js's fdrExists precedent), and guide
+  // §4.8.3 requires the regime to actually change when a flight enters a MARSA
+  // block — "if a second controller takes TAC_C2 ten minutes later, the state
+  // must already be correct, or they inherit a lie."
+  const marsaStore = new MarsaStore({
+    fdrExists: (fdrId) => !!fdrStore.getFdr(fdrId),
+    setSeparationRegime: (fdrId, separationRegime, { by } = {}) =>
+      fdrStore.setTofi(fdrId, { separationRegime }, { by }),
   });
 
   const facilityIds = facilityConfig.getFacilityIds();
@@ -152,6 +171,20 @@ function createEfsp() {
       // The store is shared across every Facility, so this rule is the same
       // function for all of them.
       airspaceFor: (airspaceId) => airspaceStore.getAirspace(airspaceId),
+      // WP6 (docs/adr/0051), §9.2 — the three hooks MARSA needs inside a Strip
+      // Mutation. All three are plain closures over the one shared store, with
+      // no per-Facility scoping, because a relation is not a Facility's
+      // property: a tanker worked by CENTER and a receiver worked by INCIRLIK
+      // are in one relation, and a clearance issued at either end must void it.
+      //
+      // marsaInterlockFor is the Block Map lookup rather than a list of Block
+      // ids held in board-store.js — see block-map.js's interlockFor() for why
+      // that separation matters (the same Block id means opposite things on
+      // different Roles).
+      marsaInterlockFor:       (role, blockId) => blockMap.interlockFor(role, blockId),
+      voidMarsaForAssignment:  (fdrId, ctx) => marsaStore.voidForAssignment(fdrId, ctx),
+      activeMarsaFor:          (fdrId) => marsaStore.activeFor(fdrId),
+      retireMarsaForFdr:       (fdrId, by) => marsaStore.onFdrRetired(fdrId, by),
     };
 
     const boardStore = new BoardStore(fdrStore, rules);
@@ -161,8 +194,9 @@ function createEfsp() {
 
   airspaceStore.setMutationLog(mutationLog);
   correlationStore.setMutationLog(mutationLog);
+  marsaStore.setMutationLog(mutationLog);
   _validateAirspaceReferences(facilities);
-  _restore(facilities, fdrStore, airspaceStore, correlationStore);
+  _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaStore);
 
   const defaultFacility = facilities.get(facilityConfig.DEFAULT_FACILITY_ID);
 
@@ -174,6 +208,7 @@ function createEfsp() {
     fdrStore,
     airspaceStore,
     correlationStore,
+    marsaStore,
     airspaceConfig,
     facilityConfig,
     // The real, Facility-aware accessors WP4A's wire protocol uses.
@@ -189,7 +224,7 @@ function createEfsp() {
 
   return {
     boardStore: ctx.boardStore, fdrStore, positionStore: ctx.positionStore, mutationLog,
-    airspaceStore, correlationStore,
+    airspaceStore, correlationStore, marsaStore,
     boardStoreFor: ctx.boardStoreFor, positionStoreFor: ctx.positionStoreFor,
 
     /**
@@ -202,7 +237,7 @@ function createEfsp() {
       return user.name || user.preferred_username || user.sub || 'unknown';
     },
 
-    handleMessage: (session, msg) => handleMessage(ctx, session, msg, () => _persist(facilities, fdrStore, airspaceStore, correlationStore)),
+    handleMessage: (session, msg) => handleMessage(ctx, session, msg, () => _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaStore)),
 
     /**
      * Persist on demand. The correlation reconciler deliberately does NOT
@@ -212,7 +247,7 @@ function createEfsp() {
      * correlation history — the state itself recomputes within one tick of
      * boot. This exists so a caller that genuinely needs a flush has one.
      */
-    persist: () => _persist(facilities, fdrStore, airspaceStore, correlationStore),
+    persist: () => _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaStore),
 
     /** Abrupt disconnect (guide §4.8.6) — releases every Position the controller held, across EVERY Facility (a controller may hold Positions in more than one, guide §4.8.5). */
     onDisconnect: (session) => {
@@ -253,8 +288,17 @@ function createEfsp() {
  * that a live flight is already squawking is unambiguously right, and
  * leaving it free is unambiguously dangerous.
  */
-function _reconcileRestored(facilities, fdrStore, correlationStore) {
+function _reconcileRestored(facilities, fdrStore, correlationStore, marsaStore) {
   const allocator = fdrStore.codeAllocator;
+  // A MARSA relation whose participants' FDRs are all gone has nothing left to
+  // be about. Dropped rather than reported, on the same split the correlation
+  // case below documents: an orphaned relation is invisible either way, and a
+  // relation that kept a partial participant list would be a live claim that
+  // ATC is not separating an aircraft that no longer exists.
+  if (marsaStore) {
+    const dropped = marsaStore.evictMissingFdrs();
+    if (dropped) console.warn(`[efsp] dropped ${dropped} restored MARSA relation(s) whose participants are gone`);
+  }
   // A correlation record whose FDR did not come back has nothing to be about.
   // Dropped rather than reported, unlike the missing-FDR Strip case below: a
   // Strip without an FDR still renders and a controller needs to know why,
@@ -294,7 +338,7 @@ function _validateAirspaceReferences(facilities) {
   }
 }
 
-function _restore(facilities, fdrStore, airspaceStore, correlationStore) {
+function _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaStore) {
   try {
     const data = JSON.parse(fs.readFileSync(BOARD_SNAPSHOT_READ_PATH, 'utf8'));
     fdrStore.restore(data.fdr);
@@ -323,14 +367,22 @@ function _restore(facilities, fdrStore, airspaceStore, correlationStore) {
     // and its binding nulled — a persisted track id is a lie the moment the
     // process restarts, because DCS re-mints ids (docs/adr/0045).
     if (correlationStore) correlationStore.restore(data.correlations);
+    // MARSA relations after the FDRs too, and for the opposite reason to the
+    // correlation case above: a relation comes back INTACT, state and all. A
+    // persisted track id is a lie after a restart because DCS re-mints ids; a
+    // persisted MARSA relation names fdrIds and records a verbal declaration a
+    // tanker crew made, which a crc-sync restart does not make untrue. Coming
+    // back up with every AR silently reverted to ATC separation would be
+    // §4.8.3's "second controller inherits a lie", caused by us.
+    if (marsaStore) marsaStore.restore(data.marsa);
     // After the Boards, not before — it has Strips to check against only now.
-    _reconcileRestored(facilities, fdrStore, correlationStore);
+    _reconcileRestored(facilities, fdrStore, correlationStore, marsaStore);
   } catch (e) {
     console.warn('[efsp] no prior Board snapshot to restore (first run, or it failed to load):', e.message);
   }
 }
 
-function _persist(facilities, fdrStore, airspaceStore, correlationStore) {
+function _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaStore) {
   try {
     const boards = {};
     for (const [facilityId, { boardStore }] of facilities.entries()) boards[facilityId] = boardStore.snapshot();
@@ -347,6 +399,7 @@ function _persist(facilities, fdrStore, airspaceStore, correlationStore) {
       fdr: fdrStore.snapshot(),
       airspaces: airspaceStore.snapshot(),
       correlations: correlationStore ? correlationStore.snapshot() : [],
+      marsa: marsaStore ? marsaStore.snapshot() : [],
     }, null, 2);
     const tmpPath = `${BOARD_SNAPSHOT_PATH}.tmp`;
     // Same directory as the target, so the rename below stays within one

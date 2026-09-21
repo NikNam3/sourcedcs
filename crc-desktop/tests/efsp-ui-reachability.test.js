@@ -38,8 +38,16 @@ const DELIBERATELY_NOT_IN_COMPACT_VIEW = {
   '9A': 'route restriction — annotation editor', '9B': 'route restriction — annotation editor',
   '9C': 'route restriction — annotation editor', '9D': 'full-route-clearance flag — annotation editor',
   '9E': 'remarks — annotation editor', '11': 'APREQ — annotation editor',
-  '19': 'note — annotation editor', '20': 'scratchpad — annotation editor',
-  '21': 'scratchpad — annotation editor', '23': 'note — annotation editor',
+  '19': 'note — annotation editor',
+  // 20/21 mean two different things by Role and are reached the same way in
+  // both: the radar scratchpads on ARRIVAL/OVERFLIGHT (§6.3 note 2), and on
+  // DEPARTURE the guide's own "Heading" and "Initial altitude" (§6.2). Both
+  // are append-only annotation cells, so the annotation editor is the right
+  // surface — but on DEPARTURE they are also the Blocks §9.2's MARSA interlock
+  // watches, so they are not idle scratch and the label says so now.
+  '20': 'heading (DEPARTURE) / radar scratchpad (ARRIVAL, OVERFLIGHT) — annotation editor',
+  '21': 'initial altitude (DEPARTURE) / radar scratchpad (ARRIVAL, OVERFLIGHT) — annotation editor',
+  '23': 'note — annotation editor',
   '24': 'miles-in-trail remarks — annotation editor',
   '6': 'proposed departure time — set by the flight-plan lookup, rarely typed',
   '10': 'ATIS code — the airport panel owns this',
@@ -55,7 +63,11 @@ const DELIBERATELY_NOT_IN_COMPACT_VIEW = {
   '9A-FUEL': 'arrival restriction — annotation editor',
   '9A-DEST': 'arrival restriction — annotation editor',
   '9A-PTOUT': 'arrival restriction — annotation editor',
-  '9A-VECTOR': 'arrival restriction — annotation editor',
+  // On ARRIVAL an arrival restriction; on OVERFLIGHT the course assignment
+  // §9.2's interlock watches (crc-sync's docs/adr/0051). Append-only either
+  // way, so the annotation editor is the surface for both.
+  '9A-VECTOR': 'radar vector — annotation editor',
+  '7A': 'OVERFLIGHT assigned altitude — append-only clearance history, annotation editor',
   '9A-SPEED': 'arrival restriction — annotation editor',
   M8: 'mission remarks — annotation editor',
 };
@@ -148,7 +160,7 @@ function click(el) {
  * capturing whatever it would have sent. Returns the rendered element and the
  * captured dispatches.
  */
-function renderStrip({ strip, fdr, held, airspaces = [], correlations = [], tracks = [] }) {
+function renderStrip({ strip, fdr, held, airspaces = [], correlations = [], tracks = [], marsa = [], otherStrips = [] }) {
   const sent = [];
   const sandbox = {
     console, module: { exports: {} }, setTimeout, clearTimeout, Date, JSON, Math, Number, Set, Map,
@@ -160,7 +172,7 @@ function renderStrip({ strip, fdr, held, airspaces = [], correlations = [], trac
   vm.createContext(sandbox);
 
   for (const file of ['efsp-nla.js', 'strip-template.js', 'efsp-state.js', 'efsp-gestures.js',
-    'annotation-editor.js', 'strip-drag.js', 'correlation-highlight.js', 'bay-view.js']) {
+    'annotation-editor.js', 'strip-drag.js', 'correlation-highlight.js', 'marsa-badge.js', 'bay-view.js']) {
     vm.runInContext(fs.readFileSync(path.join(CLIENT, file), 'utf8'), sandbox, { filename: file });
   }
 
@@ -171,12 +183,16 @@ function renderStrip({ strip, fdr, held, airspaces = [], correlations = [], trac
   sandbox.convertStripToArrival = (s) => { sent.push({ op: { kind: 'ConvertToArrival' } }); };
   sandbox.getActiveEfspSearchQuery = () => null;
   sandbox.sendEfspCorrelationMutation = (actingPositionId, fdrId, rev, op) => { sent.push({ actingPositionId, fdrId, op }); };
+  sandbox.sendEfspMarsaMutation = (actingPositionId, marsaId, rev, op) => { sent.push({ actingPositionId, marsaId, op }); };
   sandbox.updateMap = () => {};
   const liveTracks = new Map(tracks.map(t => [String(t.id), t]));
   sandbox.window.getLatestTrack = (id) => liveTracks.get(String(id)) || null;
   sandbox.window.getAllTracks = () => [...liveTracks.values()];
 
-  sandbox.applyEfspSnapshot({ strips: [strip], fdrs: [fdr], positions: [], bays: [], airspaces, correlations });
+  sandbox.applyEfspSnapshot({
+    strips: [strip, ...otherStrips], fdrs: [fdr, ...otherStrips.map(s => ({ ...FDR, fdrId: s.fdrId, identity: { ...FDR.identity, callsign: s._callsign || s.fdrId } }))],
+    positions: [], bays: [], airspaces, correlations, marsa,
+  });
   const el = sandbox._buildStripEl(strip);
   return { el, sent, sandbox };
 }
@@ -562,4 +578,128 @@ test('a controller holding no Position can see the correlation but not change it
   });
   assert.ok(findByText(el, 'NO TRK'), 'still legible');
   assert.equal(findByText(el, 'Bind…').disabled, true, 'but not actionable');
+});
+
+
+// ── 5. MARSA on the Strip (§9.2 rules 2 and 5, crc-sync's docs/adr/0051) ──
+//
+// The badge itself is a read-only indicator, and this file's own blind spot is
+// that it holds only WRITABLE Blocks — so an indicator is invisible to the
+// reachability half above. These tests are the other half: they render the
+// real bay-view.js and assert the badge is there, the control is enabled when
+// somebody can act, and the op that leaves is the right one.
+
+function marsaRelation(over = {}) {
+  return {
+    marsaId: 'm-1', rev: 3, state: 'ACTIVE', declaringCallsign: 'SHELL71',
+    participants: ['f1', 'f2'], startEvent: 'TANKER_ACCEPTED',
+    endCondition: 'VERTICALLY_POSITIONED', startedAt: 1000, rendezvousAt: null,
+    voidedBy: null, voidedDetail: null, endedAt: null, endedBy: null, transitions: [],
+    ...over,
+  };
+}
+
+const PEER_STRIP = { ...stripAt({}), stripId: 's2', fdrId: 'f2', _callsign: 'SHELL71' };
+
+test('a MARSA participant Strip carries the badge, and it says the interlock is armed', () => {
+  const { el } = renderStrip({
+    strip: stripAt({}), fdr: FDR, held: ['APP'],
+    marsa: [marsaRelation()], otherStrips: [PEER_STRIP],
+  });
+  assert.ok(findByText(el, 'MARSA ⚠'), 'the armed badge is on the Strip');
+  assert.ok(el.classList._set.has('efsp-strip-marsa-armed'));
+});
+
+test('a VOIDED relation flags the whole Strip — rule 2 calls it an alert', () => {
+  const { el } = renderStrip({
+    strip: stripAt({}), fdr: FDR, held: ['APP'],
+    marsa: [marsaRelation({ state: 'VOIDED', voidedBy: 'CONTROLLER_COURSE_CHANGE', endedAt: 2000 })],
+    otherStrips: [PEER_STRIP],
+  });
+  assert.ok(findByText(el, 'MARSA ✕'));
+  // Not just a chip among six: an alert that reads as one more chip is not one.
+  assert.ok(el.classList._set.has('efsp-strip-marsa-voided'));
+});
+
+test('a flight in no relation is offered the declaration', () => {
+  const { el } = renderStrip({ strip: stripAt({}), fdr: FDR, held: ['APP'], otherStrips: [PEER_STRIP] });
+  assert.ok(findByText(el, 'MARSA…'), 'a controller can start a relation from a Strip that has never been in one');
+});
+
+test('declaring MARSA sends DeclareMarsa with both flights and the declaring callsign', () => {
+  const { el, sent } = renderStrip({
+    strip: stripAt({}), fdr: FDR, held: ['APP'], otherStrips: [PEER_STRIP],
+  });
+  click(findByText(el, 'MARSA…'));
+  click(findByText(el, 'Declare'));
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].op.kind, 'DeclareMarsa');
+  assert.deepEqual([...sent[0].op.participants].sort(), ['f1', 'f2']);
+  assert.equal(sent[0].op.startEvent, 'TANKER_ACCEPTED');
+  assert.equal(sent[0].op.endCondition, 'VERTICALLY_POSITIONED');
+  assert.equal(sent[0].actingPositionId, 'APP');
+});
+
+test('an armed relation offers the rendezvous, and marking it sends MarkRendezvous', () => {
+  const { el, sent } = renderStrip({
+    strip: stripAt({}), fdr: FDR, held: ['APP'],
+    marsa: [marsaRelation()], otherStrips: [PEER_STRIP],
+  });
+  click(findByText(el, 'MARSA ⚠'));
+  click(findByText(el, 'Mark rendezvous'));
+  assert.equal(sent[0].op.kind, 'MarkRendezvous');
+  assert.equal(sent[0].marsaId, 'm-1');
+});
+
+test('ending and voiding are both reachable, and carry the relation id', () => {
+  for (const [label, kind] of [['End MARSA', 'EndMarsa'], ['Void MARSA', 'VoidMarsa']]) {
+    const { el, sent } = renderStrip({
+      strip: stripAt({}), fdr: FDR, held: ['APP'],
+      marsa: [marsaRelation({ rendezvousAt: 2000 })], otherStrips: [PEER_STRIP],
+    });
+    click(findByText(el, 'MARSA'));
+    click(findByText(el, label));
+    assert.equal(sent[0].op.kind, kind, label);
+    assert.equal(sent[0].marsaId, 'm-1', label);
+  }
+});
+
+test('a receiver breaking off sends RemoveParticipant naming ITS OWN flight', () => {
+  const { el, sent } = renderStrip({
+    strip: stripAt({}), fdr: FDR, held: ['APP'],
+    marsa: [marsaRelation({ rendezvousAt: 2000 })], otherStrips: [PEER_STRIP],
+  });
+  click(findByText(el, 'MARSA'));
+  click(findByText(el, 'Remove this flight'));
+  assert.equal(sent[0].op.kind, 'RemoveParticipant');
+  assert.equal(sent[0].op.fdrId, 'f1', 'the Strip you pressed it on is the one leaving');
+});
+
+test('the popover names the other participants — rule 5\'s "visible as a link"', () => {
+  const { el } = renderStrip({
+    strip: stripAt({}), fdr: FDR, held: ['APP'],
+    marsa: [marsaRelation()], otherStrips: [PEER_STRIP],
+  });
+  click(findByText(el, 'MARSA ⚠'));
+  assert.ok(findByText(el, 'SHELL71'), 'the other participant is named, not just counted');
+});
+
+test('the badge is disabled when the controller holds no Position that can act', () => {
+  const { el } = renderStrip({
+    strip: stripAt({}), fdr: FDR, held: [],
+    marsa: [marsaRelation()], otherStrips: [PEER_STRIP],
+  });
+  const badge = findByText(el, 'MARSA ⚠');
+  assert.ok(badge, 'still rendered — the relation is a fact whoever is watching');
+  assert.equal(badge.disabled, true, 'but not actionable');
+});
+
+test('an ENDED relation leaves no badge and offers a fresh declaration', () => {
+  const { el } = renderStrip({
+    strip: stripAt({}), fdr: FDR, held: ['APP'],
+    marsa: [marsaRelation({ state: 'ENDED', endedBy: 'END_CONDITION', endedAt: 4000 })],
+    otherStrips: [PEER_STRIP],
+  });
+  assert.equal(findByText(el, 'MARSA ⚠'), undefined);
+  assert.ok(findByText(el, 'MARSA…'), 'ready to declare a new one');
 });

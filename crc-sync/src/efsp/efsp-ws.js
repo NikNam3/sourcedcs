@@ -48,6 +48,7 @@ function handleMessage(ctx, session, msg, persist) {
     case 'efsp-set-positions': return _handleSetPositions(ctx, session, msg);
     case 'efsp-airspace-mutation': return _handleAirspaceMutation(ctx, session, msg, persist);
     case 'efsp-correlation-mutation': return _handleCorrelationMutation(ctx, session, msg, persist);
+    case 'efsp-marsa-mutation': return _handleMarsaMutation(ctx, session, msg, persist);
     default:                   return null; // not an EFSP message
   }
 }
@@ -130,6 +131,26 @@ function _handleMutation(ctx, session, msg, persist) {
       fdrs: { updated: [] }, // one shared FdrStore (docs/adr/0013) — already covered by the primary broadcast's fdrs.updated
       positions: { updated: [] },
     };
+  }
+
+  // WP6 (docs/adr/0051) — a Strip Mutation can change a MARSA relation without
+  // being a MARSA op: §9.2 rule 2's interlock voids one when a course or
+  // altitude is assigned before rendezvous (`marsaVoided`), and a flight's last
+  // Strip being dropped retires it from any relation it was in
+  // (`marsaChanged`). Both are real changes to server state that no
+  // efsp-board-delta can carry, because a relation is not a Strip and its
+  // participants' Strips may sit in another Facility entirely.
+  //
+  // Emitted as a THIRD broadcast on the same round trip rather than left for
+  // the next MARSA op, so the clearance and the void reach every participant's
+  // controller together — exactly the bug docs/adr/0022 found for peer Strips,
+  // where a correct server-side change reached no client until a reconnect.
+  const marsaChanged = [
+    ...(result.marsaVoided ? [result.marsaVoided] : []),
+    ...(result.marsaChanged || []),
+  ];
+  if (marsaChanged.length > 0 && ctx.marsaStore) {
+    out.marsaBroadcast = _marsaDelta(ctx.marsaStore, marsaChanged);
   }
   return out;
 }
@@ -301,6 +322,77 @@ function _handleCorrelationMutation(ctx, session, msg, persist) {
   };
 }
 
+/**
+ * MARSA ops (§9.2) — a FOURTH dispatch path, for the same reason the airspace
+ * and correlation paths exist: this targets a relation BETWEEN flights. There
+ * is no stripId, no Strip baseRev and no Strip-owner check, because no Position
+ * owns a relation and none of its participants' Strips is privileged over the
+ * others.
+ */
+function _handleMarsaMutation(ctx, session, msg, persist) {
+  const marsaStore = ctx.marsaStore;
+  if (!marsaStore) {
+    return { ack: { version: VERSION, type: 'efsp-marsa-ack', clientMutationId: msg.clientMutationId, ok: false, reason: 'VALIDATION_ERROR', detail: 'no MARSA store' } };
+  }
+
+  // The same session binding the other three dispatch paths carry
+  // (docs/adr/0029). This is now the FOURTH place the check appears, and
+  // _handleAirspaceMutation's comment — "a new dispatch path is exactly where
+  // that check gets forgotten and the hole reopens" — has now been right three
+  // times. actingPositionId is an untrusted client claim.
+  //
+  // "Primary somewhere" rather than at a particular Facility, matching
+  // correlation and for a stronger version of its reason: a relation's
+  // participants may be worked by different Facilities at once (a tanker at
+  // CENTER, a receiver at INCIRLIK), so there is no single Facility whose
+  // PositionStore could be the right one to ask. The relation records
+  // declaredBy/declaredPositionId, so the audit still says who.
+  const facilityIds = ctx.facilityConfig.getFacilityIds();
+  const isPrimarySomewhere = facilityIds.some((facilityId) => {
+    const positionStore = ctx.positionStoreFor(facilityId);
+    return positionStore && positionStore.primaryOf(msg.actingPositionId) === session.controllerId;
+  });
+  if (!isPrimarySomewhere) {
+    return { ack: { version: VERSION, type: 'efsp-marsa-ack', clientMutationId: msg.clientMutationId, ok: false, reason: 'NOT_HOLDING_POSITION', detail: `you are not Primary at ${msg.actingPositionId} — select it before acting on a MARSA relation` } };
+  }
+
+  // Refused by class, not by table — a range Position is the using agency and
+  // works no Strips (§4.1 rule 2), so it has no flights to put into a relation.
+  if (!permission.canDeclareMarsa(msg.actingPositionId)) {
+    return { ack: { version: VERSION, type: 'efsp-marsa-ack', clientMutationId: msg.clientMutationId, ok: false, reason: 'PERMISSION_DENIED', detail: `${msg.actingPositionId} works no flights, so it declares no MARSA` } };
+  }
+
+  const result = marsaStore.apply(
+    { clientMutationId: msg.clientMutationId, marsaId: msg.marsaId, baseRev: msg.baseRev, op: msg.op },
+    msg.actingPositionId, session.controllerId,
+  );
+  if (result.ok) persist();
+
+  const ack = {
+    version: VERSION, type: 'efsp-marsa-ack', clientMutationId: msg.clientMutationId,
+    ok: result.ok, marsa: result.relation, reason: result.reason, detail: result.detail,
+    marsaSeq: marsaStore.currentSeq,
+  };
+  if (!result.ok) return { ack };
+
+  // Broadcast to everyone rather than to the participants' owners, matching
+  // every other EFSP broadcast: the client filters by what it holds. §9.2 rule
+  // 5 requires the relation to render on EVERY participant Strip, and those
+  // Strips can sit in different Facilities in front of different controllers —
+  // pre-filtering server-side would mean working out that set here, twice
+  // (once for the relation, once for its replicas), to save nothing.
+  return { ack, broadcast: _marsaDelta(marsaStore, [result.relation]) };
+}
+
+/** Its own delta type with its own seq, like efsp-airspace-delta and efsp-correlation-delta — a relation is not a Strip and rides no Board's sequence. */
+function _marsaDelta(marsaStore, relations) {
+  return {
+    version: VERSION, type: 'efsp-marsa-delta',
+    marsaSeq: marsaStore.currentSeq,
+    marsa: { updated: relations.filter(Boolean) },
+  };
+}
+
 function _handleSetPositions(ctx, session, msg) {
   const facilityId = msg.facilityId || ctx.facilityConfig.DEFAULT_FACILITY_ID;
   const positionStore = ctx.positionStoreFor(facilityId);
@@ -394,6 +486,14 @@ function _snapshotMessage(ctx) {
     // client gets these in its snapshot and a fresh reconcile delta within a
     // second, so §5.6's "two paths only" holds.
     correlations: ctx.correlationStore ? ctx.correlationStore.getAll() : [],
+    // MARSA relations (§9.2), sent whole for the same reason correlations are.
+    // Finished ones ride along too: §9.2 rule 5 puts the relation on every
+    // participant Strip, and a relation that was VOIDED by the interlock is
+    // precisely the one a reconnecting controller most needs to see — dropping
+    // it on reconnect would make the alert the rule requires disappear for the
+    // one person who just missed it. No efsp-resync branch either, matching
+    // correlation and airspace, so §5.6's "two paths only" holds.
+    marsa: ctx.marsaStore ? ctx.marsaStore.getAll() : [],
   };
 }
 

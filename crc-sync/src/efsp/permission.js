@@ -261,6 +261,30 @@ function canCorrelate(actingPositionId) {
 }
 
 /**
+ * May this Position declare, amend, end or void a MARSA relation (WP6,
+ * docs/adr/0051)?
+ *
+ * Refused by CLASS, the same first line canMutate and canCorrelate share: guide
+ * §4.1 rule 2 makes a range Position the using agency, which "works no Strips"
+ * and therefore has no flights to put into a relation.
+ *
+ * Everything else may, INCLUDING an MRU (TAC_C2/GCI). That is deliberate and it
+ * is not D12: D12 is about an MRU being asked to provide ATC SERVICE —
+ * handoffs, point-outs, separation — and MARSA is the precise opposite. It is
+ * the military authority saying it will separate its own aircraft, which is the
+ * MRU's own assertion to make. §9.2 rule 1 puts the declaration with the tanker
+ * and makes it verbal; whichever Position takes that call records it.
+ *
+ * Kept as its own predicate rather than an entry in OP_KINDS for the reason the
+ * module comment gives about the flat table: every PERMISSIONS entry built with
+ * a `.filter()` would pick a new op kind up silently, which is the
+ * maximally-permissive trap D21 exists to catch.
+ */
+function canDeclareMarsa(actingPositionId) {
+  return !_worksNoStrips(actingPositionId);
+}
+
+/**
  * The role-scoped half of CreateStrip permission (see the module comment).
  * Structurally the same D21 guard as canMutate() — exactly one
  * actingPositionId, never a held set.
@@ -393,7 +417,7 @@ function canActOnState(actingPositionId, role, state) {
 }
 
 module.exports = {
-  canMutate, canCorrelate, canCreateStripRole, canActOnState, tofiCounterparts,
+  canMutate, canCorrelate, canDeclareMarsa, canCreateStripRole, canActOnState, tofiCounterparts,
   PERMISSIONS, CREATE_ROLE_PERMISSIONS, STATE_OWNERS_BY_ROLE,
   DEPARTURE_STATE_OWNERS, ARRIVAL_STATE_OWNERS, OVERFLIGHT_STATE_OWNERS, MISSION_STATE_OWNERS,
   OP_KINDS, COORDINATION_OP_KINDS, APP_CTR_ONLY_OP_KINDS, TOFI_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_COUNTERPARTS,

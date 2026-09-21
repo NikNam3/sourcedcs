@@ -636,6 +636,12 @@ async function connect() {
         // have restarted, which is also the only way the table can change.
         // See efsp-panel.js's _loadStereoRoutes for the bug this closes.
         if (typeof reloadEfspStereoRoutes === 'function') reloadEfspStereoRoutes();
+        // MARSA relations come back with the snapshot too, so the selected
+        // Strip's participant highlight has to be re-resolved before the
+        // re-render below — same reason the correlation ring is, a few lines
+        // down. Resolved first, rendered second: the highlight is a class each
+        // Strip reads while being built.
+        if (typeof refreshMarsaHighlight === 'function') refreshMarsaHighlight();
         if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
         // A reconnect brings correlations back with the rest of the snapshot,
         // so a Strip that was selected before the drop needs its ring redrawn
@@ -701,6 +707,28 @@ async function connect() {
         if (typeof refreshCorrelatedHighlight === 'function') refreshCorrelatedHighlight();
         renderAllOpenEfspBays();
         updateMap();
+        break;
+      // WP6 (crc-sync's docs/adr/0051), guide §9.2. Its own delta type with its
+      // own seq, like the airspace and correlation deltas — a relation is not a
+      // Strip and rides no Board's sequence.
+      //
+      // A delta lands for two reasons: somebody acted on a relation, or a
+      // clearance voided one. The second arrives ALONGSIDE an efsp-board-delta
+      // in the same round trip, which is why this case does a full re-render
+      // rather than trusting the board delta to have done one — the two
+      // messages are independent and either may arrive first.
+      case 'efsp-marsa-delta':
+        if (typeof applyEfspMarsaDelta === 'function') applyEfspMarsaDelta(msg);
+        if (typeof refreshMarsaHighlight === 'function') refreshMarsaHighlight();
+        renderAllOpenEfspBays();
+        break;
+      case 'efsp-marsa-ack':
+        if (!msg.ok) _showMutationError(msg);
+        if (typeof applyEfspMarsaDelta === 'function') {
+          applyEfspMarsaDelta({ marsa: { updated: msg.marsa ? [msg.marsa] : [] } });
+        }
+        if (typeof refreshMarsaHighlight === 'function') refreshMarsaHighlight();
+        renderAllOpenEfspBays();
         break;
       case 'efsp-airspace-delta':
         if (typeof applyEfspAirspaceDelta === 'function') applyEfspAirspaceDelta(msg);

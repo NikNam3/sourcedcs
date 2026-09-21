@@ -75,8 +75,18 @@ const DEPARTURE_BLOCK_MAP = {
   '17': { required: false, label: 'TAXI',     target: { kind: 'fdr', path: 'assigned.taxiTimeUtc' } },
   '18': { required: true,  label: 'TAKEOFF',  target: { kind: 'fdr', path: 'assigned.takeoffTimeUtc' } },
   '19': { required: false, label: 'NOTE',     target: { kind: 'annotation' } },
-  '20': { required: false, label: 'SCRATCH',  target: { kind: 'annotation' } },
-  '21': { required: false, label: 'SCRATCH',  target: { kind: 'annotation' } },
+  // These are NOT scratchpads, and were mislabelled as such until WP6. Guide
+  // §6.2's own DEPARTURE table names Block 20 "Heading" and Block 21 "Initial
+  // altitude"; it is ARRIVAL and OVERFLIGHT where 20/21 are the radar
+  // scratchpads (§6.3 note 2), and that meaning was copied onto DEPARTURE by
+  // mistake. CONFIRM_VACATED_ELIGIBLE_BLOCKS below has always listed
+  // DEPARTURE's '21', which only makes sense for an altitude.
+  //
+  // It matters more now than it did: crc-sync's docs/adr/0051 makes these two
+  // the Blocks §9.2's MARSA interlock watches, so a controller typing into a
+  // chip labelled SCRATCH could void a live AR with no idea why.
+  '20': { required: false, label: 'HDG',      target: { kind: 'annotation' } },
+  '21': { required: false, label: 'INIT ALT', target: { kind: 'annotation' } },
   // The guide's own Block 22, "Frequency" — structured rather than a
   // free-text annotation since the RANGE slice, so approving a flight onto
   // an airspace's frequency can write it directly and it validates as one
@@ -168,6 +178,14 @@ const OVERFLIGHT_BLOCK_MAP = {
   '5':  { required: true,  label: 'SQUAWK',   target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
   '5A': { required: false, label: 'DEGR',     target: { kind: 'fdr', path: 'identity.trackDegradationFlag' } },
   '7':  { required: true,  label: 'ALT',      target: { kind: 'fdr', path: 'filed.requestedAltitude' } },
+  // WP6 (crc-sync's docs/adr/0051) — OVERFLIGHT had no Block carrying an ATC
+  // course or altitude ASSIGNMENT, only the filed request above, which left
+  // §9.2's MARSA interlock unreachable on this one Role. Annotation-routed
+  // like ARRIVAL's equivalents, so a transiting flight's clearance history is
+  // append-only (§3.7) and confirmVacated works. See the server's copy for the
+  // [SOURCE-DEFINED] note on the numbering.
+  '7A': { required: false, label: 'ASGN ALT', target: { kind: 'annotation' } },
+  '9A-VECTOR': { required: false, label: 'VECTOR', target: { kind: 'annotation' } },
   '8':  { required: true,  label: 'ORIG',     target: { kind: 'fdr', path: 'filed.departureAirport' } },
   '8B': { required: true,  label: 'DEST',     target: { kind: 'fdr', path: 'filed.destinationAirport' } },
   '9':  { required: true,  label: 'RTE',      target: { kind: 'fdr', path: 'filed.route' }, provenance: 'COMPUTER_GENERATED' },

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const { DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP, isValidRole, requiredBlocksFor, resolveBlockTarget, validateFacilityConfig } =
+const { DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP, BLOCK_MAPS, isValidRole, requiredBlocksFor, resolveBlockTarget, validateFacilityConfig, interlockFor, interlockBlocks } =
   await import('../src/efsp/block-map.js');
 
 const REQUIRED_DEPARTURE_BLOCKS = [
@@ -281,4 +281,72 @@ test('a SetBlock at 9F routes to filed.stereoRouteName — writing it is how a f
   for (const role of ['ARRIVAL', 'OVERFLIGHT', 'MISSION']) {
     assert.equal(resolveBlockTarget(role, '9F'), null, role);
   }
+});
+
+
+// ── WP6: the MARSA course/altitude interlock (§9.2 rule 2, docs/adr/0051) ──
+
+test('every Strip Role a controller issues clearances on has BOTH a course and an altitude interlock Block', () => {
+  // The point of this test. §13's acceptance criterion — "a heading or
+  // altitude assignment to a MARSA participant before rendezvous voids the
+  // relation" — can pass on one Role while silently not holding on another,
+  // because each Role has its own Block Map. OVERFLIGHT had neither Block
+  // before this slice, so a participant transiting on one could be vectored
+  // with nothing voiding anything, and nothing anywhere would have said so.
+  for (const role of ['DEPARTURE', 'ARRIVAL', 'OVERFLIGHT']) {
+    const kinds = interlockBlocks(role).map(id => interlockFor(role, id));
+    assert.ok(kinds.includes('COURSE'), `${role} has no course-assignment Block`);
+    assert.ok(kinds.includes('ALTITUDE'), `${role} has no altitude-assignment Block`);
+  }
+});
+
+test('MISSION has no interlock Block, and that is a decision', () => {
+  // The interlock is about ATC ISSUING a clearance; a MISSION Strip is the
+  // MRU-side mission line (§9.8), not a clearance surface. The relation's
+  // participants are fdrIds, so a void raised on the ATC-side replica of the
+  // same flight IS a void of this flight's relation — tagging a MISSION Block
+  // would add a second place the same aircraft can void from, not coverage.
+  assert.deepEqual(interlockBlocks('MISSION'), []);
+});
+
+test('the interlock answer is per-Role — Block 7 means opposite things on DEPARTURE and ARRIVAL', () => {
+  // DEPARTURE's Block 7 is filed.requestedAltitude, what the flight ASKED FOR.
+  // ARRIVAL's Block 7 is the assigned/cleared altitude. Same id, opposite
+  // answers — which is why this lives in the Block Map and not in a list of
+  // ids held next to the interlock.
+  assert.equal(interlockFor('DEPARTURE', '7'), null);
+  assert.equal(interlockFor('ARRIVAL', '7'), 'ALTITUDE');
+  assert.equal(interlockFor('DEPARTURE', '20'), 'COURSE');
+  assert.equal(interlockFor('DEPARTURE', '21'), 'ALTITUDE');
+  assert.equal(interlockFor('OVERFLIGHT', '7A'), 'ALTITUDE');
+  assert.equal(interlockFor('OVERFLIGHT', '9A-VECTOR'), 'COURSE');
+});
+
+test('interlockFor is null for an unknown Block or Role rather than throwing', () => {
+  assert.equal(interlockFor('DEPARTURE', 'NOPE'), null);
+  assert.equal(interlockFor('NOT_A_ROLE', '20'), null);
+});
+
+test('every interlock Block is one a controller can actually write', () => {
+  // An interlock on a system/composite Block would never fire: resolveBlockTarget
+  // returns null for those, so SetBlock refuses before reaching the interlock
+  // at all. That would be the acceptance criterion held by an unreachable path
+  // — docs/adr/0039's defect class exactly.
+  for (const role of Object.keys(BLOCK_MAPS)) {
+    for (const blockId of interlockBlocks(role)) {
+      assert.ok(resolveBlockTarget(role, blockId), `${role}/${blockId} is tagged but not writable`);
+    }
+  }
+});
+
+test('OVERFLIGHT\'s two new assignment Blocks are annotation-routed, so a clearance history survives', () => {
+  // §3.7's append-only model: a transiting flight given three altitudes has to
+  // be able to show all three afterwards, and confirmVacated has to be
+  // available — the same reason ARRIVAL's Block 7 is annotation-routed rather
+  // than an FDR field.
+  assert.deepEqual(resolveBlockTarget('OVERFLIGHT', '7A'), { kind: 'annotation' });
+  assert.deepEqual(resolveBlockTarget('OVERFLIGHT', '9A-VECTOR'), { kind: 'annotation' });
+  // And neither is required — a flight that is never vectored needs neither.
+  assert.equal(OVERFLIGHT_BLOCK_MAP['7A'].required, false);
+  assert.equal(OVERFLIGHT_BLOCK_MAP['9A-VECTOR'].required, false);
 });
