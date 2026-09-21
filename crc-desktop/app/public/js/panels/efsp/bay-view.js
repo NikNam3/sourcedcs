@@ -292,14 +292,7 @@ function _buildStripEl(strip) {
     // (the first role-conditional branch this array has ever needed —
     // strip-template.js's MISSION_BLOCK_MAP uses an entirely M-prefixed
     // namespace, none of which exists in the shared list below).
-    const blocks = strip.role === 'MISSION'
-      ? ['M3', 'M1', 'M2', 'M4', 'M5', 'M6', 'M7', 'M25']
-      // '5A'/'24A' (docs/adr/0022), '3A'-'3E' (docs/adr/0023) — see their
-      // own comments elsewhere in this file/strip-template.js. IFR/RSVC/
-      // SREG (WP4A second slice, §4.6.3) — the three-field separation
-      // model, reachable here for any role that can enter tactically-
-      // controlled airspace (not MISSION itself, the MRU-side record).
-      : ['1', '3', '3A', '3B', '3C', '3D', '3E', '4', '5', '5A', '7', '8', '8A', '8B', '9', '24A', 'IFR', 'RSVC', 'SREG', '25'];
+    const blocks = compactBlocksFor(strip.role);
     // docs/adr/0024 — a small muted label stacked above each Block's value so
     // a bare '0001'/'LTAG' isn't left to memory. Wrapping happens HERE, at
     // the call site, rather than inside _buildBlockCell itself, so its
@@ -507,7 +500,13 @@ function _buildStripEl(strip) {
       const inBadge = document.createElement('span');
       inBadge.className = 'efsp-coordination-badge efsp-airspace-badge';
       const mhz = strip.airspaceEntry.frequencyMhz;
-      inBadge.textContent = mhz ? `${name} ${mhz.toFixed(3)}` : name;
+      const block = strip.airspaceEntry.altitudeBlock;
+      // The altitude restriction belongs HERE, not only on the airspace
+      // board: two aircraft sharing one block are only safe if the
+      // controller working each of them can see who is held to what, and
+      // the Strip is what they are looking at.
+      inBadge.textContent = [name, mhz ? mhz.toFixed(3) : null,
+        block ? `${block.lowerFt}–${block.upperFt} ft` : null].filter(Boolean).join(' ');
       // §9.11's alert condition, shown on the Strip itself rather than only
       // as an obligation badge — the controller who approved it is the one
       // who can do something about it.
@@ -948,6 +947,17 @@ function _openTofiEntryPopover(strip, anchorEl, counterparts) {
 // airspace — the client mirror of permission.js's AIRSPACE_ENTRY_OP_KINDS
 // grant. A range Position never appears here: it works no Strips at all.
 const AIRSPACE_ENTRY_POSITIONS = ['APP', 'CTR'];
+
+// Blocks a controller can reach on a Strip, by role. Deliberately exported:
+// a Block present in the Block Map but absent here is editable in principle
+// and invisible in practice, which is how §3.8's release model shipped
+// unreachable. efsp-ui-reachability.test.js holds this to the Block Maps.
+function compactBlocksFor(role) {
+  return role === 'MISSION'
+    ? ['M3', 'M1', 'M2', 'M4', 'M5', 'M6', 'M7', 'M25']
+    : ['1', '3', '3A', '3B', '3C', '3D', '3E', '4', '5', '5A', '7', '8', '8A', '8B', '9',
+       '14A', '14D', '22', '24A', 'IFR', 'RSVC', 'SREG', '25'];
+}
 
 function _canApproveAirspaceEntry(strip) {
   if (!AIRSPACE_ENTRY_POSITIONS.includes(strip.ownerPositionId)) return false;

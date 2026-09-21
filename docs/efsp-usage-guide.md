@@ -220,6 +220,10 @@ FDR {
 
 ## 7. Release states (why a Strip can be stuck at CLEARED/HELD)
 
+Set the release state on Block **14A** (`RLS ST`, a picker) and, for a void time, Block **14D**.
+Anything other than `RELEASED` holds the Strip at `CLEARED` — move it to `HELD`, which is what
+`HELD` means, and the time-based gates below are checked there.
+
 | `releaseState` | Meaning | What un-sticks it |
 |---|---|---|
 | `RELEASED` | Normal — no hold | n/a |
@@ -229,7 +233,10 @@ FDR {
 | `EDCT` | Expected Departure Clearance Time | Window is `edctTimeUtc` ± 5 min |
 | `CALL_FOR_RELEASE` | Call-for-release procedure | Window is `callForReleaseTimeUtc` − 2 / + 1 min |
 
-`HELD`'s NLA ("Release") is inhibited on `RELEASE_TIME` (not yet reached) or void-time-expired; `CLEARED`'s NLA is inhibited on anything other than `RELEASED`.
+`HELD`'s NLA ("Release") is inhibited when the release time has not been reached, when an EDCT or
+call-for-release window is not open yet **or has already passed** (a missed slot needs a new one),
+when a `HOLD_FOR_RELEASE` flight matches no standing-release envelope, or when the void time has
+expired. `CLEARED`'s NLA is inhibited on anything other than `RELEASED`.
 
 ## 8. WP4A: cross-Facility coordination (APP ↔ CTR)
 
@@ -302,8 +309,14 @@ board until it is filled in. One entry per MOA or range:
 - `usingPositionId` is **only** for a range with a control tower of its own. Including it creates a
   Position under a `RANGES` Facility that somebody can act as; leaving it out (the ordinary MOA
   case) creates no Position at all, and the controlling Position runs the airspace by itself.
+- `type` is one of `MOA`, `RANGE`, `DANGER`, `RESTRICTED`, `PROHIBITED`, `WARNING` — the FAA and
+  ICAO names for overlapping things, since what the FAA calls a MOA is usually charted as a danger
+  or restricted area here. It is a **label only**: nothing in the system behaves differently because
+  of it, and nothing may — separation regime in particular is never derived from airspace type.
 - Frequencies are **MHz as a number**, 30–400. A range's `controlFrequencyMhz` is its tower; a
   MOA's `workingFrequencyMhz` is what flights working inside it go to.
+- `altLowerFt` / `altUpperFt` are optional published vertical limits, in whole feet. When set, any
+  altitude block assigned to a flight has to fit inside them.
 - crc-sync must be restarted after editing this file.
 
 **The lifecycle.** `RETURNED` (available) → `SCHEDULED` (booked) → `ACTIVE` (in use) → `RELEASED`
@@ -321,6 +334,15 @@ frequency change hands over nothing.
 
 Approving a flight into an airspace nobody has activated is allowed, not blocked — the block may
 well be hot with the board simply not caught up — but the badge turns amber and an alert is raised.
+Releasing a block with flights still in it is allowed for the same reason, and warns the same way.
+
+**Sharing a block by altitude.** Approving entry takes an optional altitude block, which is how two
+aircraft use one area: hold the working flight down to 5,000–15,000 while a transit crosses at
+20,000–28,000. Re-issuing the approval on a flight already in that airspace **amends** the
+restriction rather than being refused, so tightening it and later lifting it (pass `null`) are both
+one action. No restriction at all is not the same as a restriction covering the whole area — the
+first says nobody has deconflicted this flight yet, the second says somebody has. The board shows
+each flight's block next to its callsign.
 
 ## 9. General controls — quick reference
 

@@ -10,8 +10,8 @@ to §4 for what is genuinely left.
 
 ## 1. State of the tree
 
-Committed and green: **crc-sync 611 tests, crc-desktop 222 tests** (`npm test` in each). Working
-tree clean as of this writing. ADRs run `0001`–`0037`.
+Committed and green: **crc-sync 643 tests, crc-desktop 242 tests** (`npm test` in each). Working
+tree clean as of this writing. ADRs run `0001`–`0039`.
 
 ## 2. What's built
 
@@ -96,6 +96,36 @@ Two things about the shape are worth knowing before extending it:
 frequencies are squadron data. Nothing works until it is filled in, and the panel says so rather
 than rendering blank. `tests/efsp-scenarios.test.mjs` writes its own fixture, which is the place to
 look for the config shape in use.
+
+## 3B. The sortie suite
+
+Twenty-six flights are now walked end to end, in five files under
+`crc-sync/tests/efsp-scenario-*.test.mjs` with a shared harness in `tests/helpers/`. Each file gets
+its own durable board, because airspace and Strip state persist (ADR 0002) and tests sharing a file
+share a board — a scenario needing a specific starting state uses its own airspace rather than
+inheriting whatever ran before it.
+
+They found four defects in machinery that already existed and looked finished:
+
+| Defect | ADR |
+|---|---|
+| Nothing routed to `assigned.releaseState` or `assigned.voidTimeUtc` — §3.8's whole release model was unreachable from the panel, which also made WP4's own void-alert criterion unexercisable | `0039` |
+| The EDCT and call-for-release windows were derived on every write since ADR 0017 and read by nothing — a flight with a slot an hour away was not held | `0039` |
+| A Strip could be created, moved or transferred into a Bay the Facility does not have: accepted, holding a beacon code, invisible in every Rack | `0039` |
+| Releasing an airspace with flights still working it said nothing at all | `0038` |
+
+**If you add a sortie, use `advance()` from the harness** rather than calling `InvokeNla` directly —
+the 400ms double-tap guard silently swallows a second press, so a chain walked without it passes
+while doing half of what it claims.
+
+**And add the matching UI check.** A green sortie proves the server does the right thing; it says
+nothing about whether anything in the panel sends the op.
+`crc-desktop/tests/efsp-ui-reachability.test.js` closes that loop — it renders the real
+`bay-view.js` and `airspace-panel.js` against a DOM stub and asserts the control exists, is enabled
+when it should be, and dispatches the right op. It also holds every writable Block to being reachable
+somewhere, which is what caught §3.8's release model being invisible: a Block can be in the Map,
+validated server-side, gating the state machine, and rendered nowhere. That has now happened twice
+(docs/adr/0022 for 5A/24A, docs/adr/0039 for 14A/14D/22).
 
 ## 4. What's genuinely left
 
