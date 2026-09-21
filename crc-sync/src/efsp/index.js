@@ -212,6 +212,40 @@ function createEfsp() {
  * `usingPositionId` needs no check — the RANGES Facility's Position set is
  * built from those values, so it exists by construction.
  */
+/**
+ * Checks that what came back off disk agrees with itself.
+ *
+ * Strips, FDRs and the allocated-code map are three parts of one snapshot,
+ * and nothing ever verified they matched. Two ways they can disagree, both
+ * silent: a live Strip whose FDR is missing renders with no callsign and
+ * computes its NLA against null; and a live Strip whose beacon code is not
+ * marked allocated lets the very next CreateStrip mint that same code for a
+ * different aircraft — the identical failure docs/adr/0028 fixed for the
+ * shared-FDR case, arriving by a different route.
+ *
+ * The code case is repaired rather than just reported: re-reserving a code
+ * that a live flight is already squawking is unambiguously right, and
+ * leaving it free is unambiguously dangerous.
+ */
+function _reconcileRestored(facilities, fdrStore) {
+  const allocator = fdrStore.codeAllocator;
+  for (const [facilityId, { boardStore }] of facilities.entries()) {
+    for (const strip of boardStore.getAll()) {
+      if (strip.state === 'DROPPED') continue;
+      const fdr = fdrStore.getFdr(strip.fdrId);
+      if (!fdr) {
+        console.warn(`[efsp] restored Strip ${strip.stripId} at ${facilityId} references a missing FDR ${strip.fdrId} — it will render without flight data`);
+        continue;
+      }
+      const code = fdr.identity.beaconAssigned;
+      if (code && !allocator.isAllocated(code)) {
+        console.warn(`[efsp] restored Strip ${strip.stripId} squawks ${code}, which the code pool had free — re-reserving it`);
+        allocator.reassign(strip.fdrId, code, null);
+      }
+    }
+  }
+}
+
 function _validateAirspaceReferences(facilities) {
   for (const airspace of airspaceConfig.getAirspaces()) {
     const facility = facilities.get(airspace.controllingFacilityId);
@@ -250,6 +284,8 @@ function _restore(facilities, fdrStore, airspaceStore) {
       const f = facilities.get(defaultFacilityId);
       if (f) f.boardStore.restore(data.board);
     }
+    // After the Boards, not before — it has Strips to check against only now.
+    _reconcileRestored(facilities, fdrStore);
   } catch (e) {
     console.warn('[efsp] no prior Board snapshot to restore (first run, or it failed to load):', e.message);
   }
@@ -259,7 +295,18 @@ function _persist(facilities, fdrStore, airspaceStore) {
   try {
     const boards = {};
     for (const [facilityId, { boardStore }] of facilities.entries()) boards[facilityId] = boardStore.snapshot();
-    fs.writeFileSync(BOARD_SNAPSHOT_PATH, JSON.stringify({ boards, fdr: fdrStore.snapshot(), airspaces: airspaceStore.snapshot() }, null, 2));
+    // Written to a sibling and renamed, because rename is atomic on POSIX
+    // and a plain write is not. This runs after EVERY successful Mutation,
+    // so the process spends a meaningful fraction of a busy session inside
+    // this call — a crash or a power loss partway through would leave a
+    // truncated file, which JSON.parse then rejects wholesale on restart,
+    // and _restore's catch would come up with an empty Board. Losing one
+    // Mutation to a crash is unavoidable; losing the entire session's Board
+    // to one is not.
+    const payload = JSON.stringify({ boards, fdr: fdrStore.snapshot(), airspaces: airspaceStore.snapshot() }, null, 2);
+    const tmpPath = `${BOARD_SNAPSHOT_PATH}.tmp`;
+    fs.writeFileSync(tmpPath, payload);
+    fs.renameSync(tmpPath, BOARD_SNAPSHOT_PATH);
   } catch (e) {
     console.warn('[efsp] failed to persist Board snapshot:', e.message);
   }

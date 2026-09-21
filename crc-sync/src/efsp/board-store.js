@@ -30,6 +30,7 @@
 const crypto = require('crypto');
 const { keyBetween, rebalance } = require('./order-key');
 const { isValidAltitude } = require('./airspace-config');
+const { MAX_FREE_TEXT } = require('./fdr-store');
 
 const FLAG_KEYS = ['offset', 'flipped', 'removeIndicator', 'highlight', 'attention'];
 const APPLIED_MUTATIONS_CAP = 5000;
@@ -734,6 +735,12 @@ class BoardStore {
    * aircraft has actually left, not amending to something new).
    */
   _applyAnnotationSet(strip, blockId, value, confirmVacated, by) {
+    // Same ceiling the FDR's free-text fields get, for the same reason: an
+    // annotation rides in every broadcast of this Strip and is append-only,
+    // so an oversized one is permanent as well as repeated.
+    if (typeof value === 'string' && value.length > MAX_FREE_TEXT) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `an annotation is limited to ${MAX_FREE_TEXT} characters`, strip };
+    }
     const cell = strip.annotations[blockId] || (strip.annotations[blockId] = { blockId, entries: [] });
     const active = cell.entries.find(e => e.status === 'ACTIVE');
 

@@ -276,3 +276,58 @@ test('the Mutation log records who did what, including the airspace ops and the 
   assert.equal(refused.actingPositionId, 'APP');
   assert.equal(refused.reason, 'PERMISSION_DENIED');
 });
+
+// ── what comes back off disk ────────────────────────────────────────────
+
+test('a restored Strip whose beacon code the pool had free gets it re-reserved', () => {
+  const efsp = createEfsp();
+  const c = crew(efsp, ATC);
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'RECON2' });
+  const code = efsp.fdrStore.getFdr(strip.fdrId).identity.beaconAssigned;
+
+  // Corrupt the snapshot the way a partial write or an older format would:
+  // the Strip and its FDR survive, the allocated-code map does not.
+  const snapshotPath = process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH;
+  const data = JSON.parse(fs.readFileSync(snapshotPath, 'utf8'));
+  data.fdr.codes = [];
+  fs.writeFileSync(snapshotPath, JSON.stringify(data));
+
+  // Left alone, the next CreateStrip would mint this code for a different
+  // aircraft — the same failure ADR 0028 fixed, arriving another way.
+  const after = createEfsp();
+  assert.equal(after.fdrStore._codeAllocator.isAllocated(code), true,
+    'a code a live flight is squawking must not be left in the pool');
+  assert.equal(after.fdrStore._codeAllocator.holderOf(code), strip.fdrId);
+});
+
+test('the snapshot is written atomically, so a crash mid-write cannot empty the Board', () => {
+  const efsp = createEfsp();
+  const c = crew(efsp, ATC);
+  airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'ATOMIC1' });
+
+  const snapshotPath = process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH;
+  // The real guarantee: the live file is only ever replaced by rename, so it
+  // is always a whole JSON document, never a partial one.
+  assert.doesNotThrow(() => JSON.parse(fs.readFileSync(snapshotPath, 'utf8')));
+  assert.equal(fs.existsSync(`${snapshotPath}.tmp`), false, 'the scratch file does not outlive the write');
+});
+
+test('free text is capped, because a Strip rides whole in every broadcast', () => {
+  const efsp = createEfsp();
+  const c = crew(efsp, ATC);
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'LONG1' });
+
+  const huge = 'X'.repeat(5000);
+  const route = act(efsp, c.APP, 'APP', strip, { kind: 'SetBlock', blockId: '9', value: huge });
+  assert.equal(route.ok, false);
+  assert.match(route.detail, /limited to \d+ characters/);
+
+  const annotation = act(efsp, c.APP, 'APP', strip, { kind: 'SetBlock', blockId: '24', value: huge });
+  assert.equal(annotation.ok, false);
+  assert.match(annotation.detail, /annotation is limited/);
+
+  // An ordinary entry is unaffected — the ceiling is for accidents.
+  assert.equal(act(efsp, c.APP, 'APP', strip, {
+    kind: 'SetBlock', blockId: '9', value: 'LTAG DCT VEDAS DCT LTAC, expect FL280 after VEDAS',
+  }).ok, true);
+});

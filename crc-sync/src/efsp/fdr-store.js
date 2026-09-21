@@ -53,6 +53,15 @@ const SEPARATION_REGIMES = new Set(['ATC', 'MARSA', 'USING_AGENCY', 'DUE_REGARD'
 
 const CALLSIGN_RE = /^[A-Za-z0-9]{1,7}$/; // §3.2 rule 1 — MUST NOT exceed 7 alphanumeric characters
 
+// A ceiling on controller-entered free text. The guide sets no limit, and
+// none of these fields has a natural one — a route or a remark is as long as
+// it needs to be. But nothing bounded them at all, and a Strip is broadcast
+// whole to every connected client on every update (docs/adr/0004's immediate
+// broadcast), so one pasted document would ride on every subsequent change
+// and sit in the durable snapshot forever. Generous enough that no real
+// entry meets it, low enough that an accident stays an accident.
+const MAX_FREE_TEXT = 2000;
+
 // Paths a controller-driven SetBlock may target generically via setField().
 // Deliberately excludes identity.equipmentSuffix (derived-only, §3.3),
 // identity.modeOne/modeTwo (no setter anywhere — guards defect D24 by
@@ -272,6 +281,9 @@ class FdrStore {
     }
     if (!WRITABLE_PATHS.has(path)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `${path} is not writable` };
+    }
+    if (typeof value === 'string' && value.length > MAX_FREE_TEXT) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `${path} is limited to ${MAX_FREE_TEXT} characters` };
     }
     if (path === 'identity.degradation' && !DEGRADATION_STATES.has(value)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'invalid degradation state' };
@@ -504,5 +516,5 @@ class FdrStore {
 module.exports = {
   FdrStore, deriveEquipmentSuffix, WRITABLE_PATHS, RELEASE_STATES, VOID_DEADLINE_MINUTES,
   EDCT_WINDOW_MINUTES, CALL_FOR_RELEASE_BEFORE_MINUTES, CALL_FOR_RELEASE_AFTER_MINUTES,
-  TRACK_DEGRADATION_FLAGS, AIRSPACE_OWNERS, RADAR_SERVICE_STATES, SEPARATION_REGIMES,
+  TRACK_DEGRADATION_FLAGS, AIRSPACE_OWNERS, RADAR_SERVICE_STATES, SEPARATION_REGIMES, MAX_FREE_TEXT,
 };
