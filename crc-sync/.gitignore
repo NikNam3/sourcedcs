@@ -1,1 +1,9 @@
 data/
+
+# Runtime state, not config — it moved to data/ (src/state-paths.js) and the
+# old copies were tracked here by accident. An audit log in version control
+# grows forever, and a committed Board snapshot means a deploy silently
+# reverts controllers to somebody else's old strips.
+config/efsp-board.json
+config/efsp-board.json.tmp
+config/efsp-mutations.jsonl

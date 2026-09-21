@@ -27,7 +27,6 @@
 // back-compat — `efsp.boardStoreFor(facilityId)`/`positionStoreFor(...)`
 // are the real, general accessors everything WP4A-aware should use.
 
-const path = require('path');
 const fs = require('fs');
 
 const { FdrStore } = require('./fdr-store');
@@ -44,11 +43,16 @@ const blockMap = require('./block-map');
 const facilityConfig = require('./facility-config');
 const coordination = require('./coordination');
 const { handleMessage, snapshotMessage } = require('./efsp-ws');
+const { statePaths, ensureDirFor } = require('../state-paths');
 
 // Overridable so tests exercise the restore/persist path against a temp
 // file — same pattern as every other config/*.json path in this package.
-const BOARD_SNAPSHOT_PATH = process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH
-  || path.join(__dirname, '../../config/efsp-board.json');
+// The Board is durable (docs/adr/0002), and used to be written into the
+// image's config/ with no volume behind it — so a container recreate lost it,
+// or worse, restored a snapshot somebody had committed to git. It lives in
+// data/ now; see src/state-paths.js.
+const { read: BOARD_SNAPSHOT_READ_PATH, write: BOARD_SNAPSHOT_PATH } =
+  statePaths('efsp-board.json', process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH);
 
 function createEfsp() {
   const codeAllocator = new CodeAllocator();
@@ -292,7 +296,7 @@ function _validateAirspaceReferences(facilities) {
 
 function _restore(facilities, fdrStore, airspaceStore, correlationStore) {
   try {
-    const data = JSON.parse(fs.readFileSync(BOARD_SNAPSHOT_PATH, 'utf8'));
+    const data = JSON.parse(fs.readFileSync(BOARD_SNAPSHOT_READ_PATH, 'utf8'));
     fdrStore.restore(data.fdr);
     // Airspace STATE is durable (ADR 0002); the definitions come from config
     // on every boot, so restore() skips anything no longer configured and a
@@ -345,6 +349,10 @@ function _persist(facilities, fdrStore, airspaceStore, correlationStore) {
       correlations: correlationStore ? correlationStore.snapshot() : [],
     }, null, 2);
     const tmpPath = `${BOARD_SNAPSHOT_PATH}.tmp`;
+    // Same directory as the target, so the rename below stays within one
+    // filesystem — across a mount boundary it is not atomic, and the whole
+    // point of the sibling-then-rename is that it is.
+    ensureDirFor(BOARD_SNAPSHOT_PATH);
     fs.writeFileSync(tmpPath, payload);
     fs.renameSync(tmpPath, BOARD_SNAPSHOT_PATH);
   } catch (e) {

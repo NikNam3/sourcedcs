@@ -14,7 +14,6 @@
 //     local settings panel, are now config/squawk-map.json (squadron-wide).
 
 const fs   = require('fs');
-const path = require('path');
 
 const GROUND_RADIUS_M = 5000;
 const GROUND_AGL_M    = 50;
@@ -31,13 +30,15 @@ const USER_COALITION = parseInt(process.env.CRCSYNC_COALITION, 10) === 2 ? 2 : 3
 // Overridable so tests can exercise the mutate/persist path against a temp
 // file instead of the real squadron-wide config (same env-var-override
 // pattern as CRCSYNC_COALITION above).
-const SQUAWK_MAP_PATH = process.env.CRCSYNC_SQUAWK_MAP_PATH || path.join(__dirname, '../config/squawk-map.json');
+const { statePaths, ensureDirFor } = require('./state-paths');
+const { read: SQUAWK_MAP_READ_PATH, write: SQUAWK_MAP_PATH } =
+  statePaths('squawk-map.json', process.env.CRCSYNC_SQUAWK_MAP_PATH);
 const SQUAWK_NAME_MAX_LEN = 20;
 
 let squawkMap = {};
 let squawkSeq = {};
 try {
-  const cfg = JSON.parse(fs.readFileSync(SQUAWK_MAP_PATH, 'utf8'));
+  const cfg = JSON.parse(fs.readFileSync(SQUAWK_MAP_READ_PATH, 'utf8'));
   squawkMap = cfg.squawkMap || {};
   squawkSeq = cfg.squawkSeq || {};
 } catch (e) {
@@ -46,6 +47,7 @@ try {
 
 function _persistSquawkConfig() {
   try {
+    ensureDirFor(SQUAWK_MAP_PATH);
     fs.writeFileSync(SQUAWK_MAP_PATH, JSON.stringify({ squawkMap, squawkSeq }, null, 2));
   } catch (e) {
     console.warn('[resolve] failed to persist config/squawk-map.json:', e.message);

@@ -10,13 +10,14 @@
 // Phase 1 — see the implementation plan's placeholder-decisions list.
 
 const fs = require('fs');
-const path = require('path');
+const { writePath, ensureDirFor } = require('../state-paths');
 
 // Overridable so tests exercise the append/read path against a temp file
 // instead of the real squadron-wide log — same pattern as theater-settings
 // .js's CRCSYNC_THEATER_SETTINGS_PATH.
-const MUTATION_LOG_PATH = process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH
-  || path.join(__dirname, '../../config/efsp-mutations.jsonl');
+// Append-only audit state, so it lives in data/ rather than config/ — it was
+// previously written into the image and committed to git (see state-paths.js).
+const MUTATION_LOG_PATH = writePath('efsp-mutations.jsonl', process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH);
 
 class MutationLog {
   constructor(filePath) {
@@ -30,6 +31,7 @@ class MutationLog {
    */
   record(entry) {
     try {
+      ensureDirFor(this._path);
       fs.appendFileSync(this._path, JSON.stringify(entry) + '\n');
     } catch (e) {
       console.warn('[efsp-mutation-log] failed to append:', e.message);

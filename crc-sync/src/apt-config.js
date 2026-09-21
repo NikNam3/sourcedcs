@@ -12,14 +12,14 @@
 // live from any connected client (ws-hub.js's 'aptConfigSet' message) and
 // persisted so it survives a crc-sync restart.
 
-const fs   = require('fs');
-const path = require('path');
+const fs = require('fs');
+const { statePaths, ensureDirFor } = require('./state-paths');
 
 // Overridable so tests can exercise the mutate/persist path against a temp
 // file instead of the real squadron-wide config (same pattern as
 // resolve.js's CRCSYNC_SQUAWK_MAP_PATH).
-const APT_CONFIG_PATH = process.env.CRCSYNC_APT_CONFIG_PATH
-  || path.join(__dirname, '../config/apt-config.json');
+const { read: APT_CONFIG_READ_PATH, write: APT_CONFIG_PATH } =
+  statePaths('apt-config.json', process.env.CRCSYNC_APT_CONFIG_PATH);
 
 const KEY_MAX_LEN   = 40; // airport ICAO/name — generous, these are always short
 const FREQ_MAX_LEN  = 16;
@@ -33,13 +33,14 @@ const MAX_AIRPORTS     = 500; // no DCS theater has anywhere near this many airp
 
 let byAirport = {};
 try {
-  byAirport = JSON.parse(fs.readFileSync(APT_CONFIG_PATH, 'utf8'));
+  byAirport = JSON.parse(fs.readFileSync(APT_CONFIG_READ_PATH, 'utf8'));
 } catch (e) {
   console.warn('[apt-config] failed to load config/apt-config.json, starting empty:', e.message);
 }
 
 function _persist() {
   try {
+    ensureDirFor(APT_CONFIG_PATH);
     fs.writeFileSync(APT_CONFIG_PATH, JSON.stringify(byAirport, null, 2));
   } catch (e) {
     console.warn('[apt-config] failed to persist config/apt-config.json:', e.message);

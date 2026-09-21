@@ -336,10 +336,20 @@ services:
       - CRCSYNC_MAPTILER_KEY=${CRCSYNC_MAPTILER_KEY:-}
       - CRCSYNC_TERRAIN_CACHE_DIR=/app/data/terrain-cache
     volumes:
-      # Derived DEM tiles only. Deliberately NOT mounted over /app/config: a
-      # named volume starts empty and would shadow the facility, airspace,
-      # squawk-map and radar-spec files baked into the image, which would look
-      # like every one of them had been reset to defaults.
+      # EVERYTHING crc-sync writes. Deliberately mounted at /app/data and NOT
+      # over /app/config: a named volume starts empty, so mounting it over
+      # config/ would shadow the facility, airspace, squawk-map and radar-spec
+      # files baked into the image and present as every one of them having
+      # reset to defaults.
+      #
+      # So the service splits the two (crc-sync/src/state-paths.js):
+      # config/ holds shipped defaults and is read-only in practice, data/ holds
+      # runtime state, and a read prefers data/ and falls back to the shipped
+      # default. Without this volume a `docker compose up -d` that recreated the
+      # container discarded the EFSP Board, the whole Mutation audit log, the
+      # squadron squawk map, the theater settings, the per-airport ATIS config
+      # and the airspace definitions — despite docs/adr/0002 making the Board
+      # durable. See docs/adr/0048.
       - crc-sync-data:/app/data
     networks:
       - web

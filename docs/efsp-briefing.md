@@ -11,8 +11,8 @@ picture underneath it (§3B). The recommendation now is **stereo routes then WP6
 
 ## 1. State of the tree
 
-Committed and green: **crc-sync 899 tests, crc-desktop 279 tests** (`npm test` in each). ADRs run
-`0001`–`0047`.
+Committed and green: **crc-sync 913 tests, crc-desktop 279 tests** (`npm test` in each). ADRs run
+`0001`–`0048`.
 
 ```
 crc-sync/src/efsp/                        the subsystem — stores, rules, the wire handler
@@ -23,8 +23,9 @@ crc-sync/src/efsp/station-coverage.js     which Positions grant which radars
 crc-sync/src/efsp/correlation-store.js    Strip<->contact records, keyed by fdrId
 crc-sync/src/efsp/correlation-match.js    the key ladder's matching rules (pure)
 crc-sync/src/efsp/correlation-reconciler.js  the 1Hz sweep + the rate metric
+crc-sync/src/state-paths.js               shipped defaults (config/) vs runtime state (data/)
 crc-desktop/app/public/js/panels/efsp/    the Strip panel, the airspace board, correlation-highlight
-docs/adr/                                 0001-0047, the reasoning behind every decision below
+docs/adr/                                 0001-0048, the reasoning behind every decision below
 docs/efsp-usage-guide.md                  how a controller actually drives it
 ```
 
@@ -46,6 +47,13 @@ military half (`0025`, `0026`): a `positionClass` concept making D12 true by con
 **The radar picture, reworked** (`0042`–`0044`). See §3B.
 
 **WP5, track correlation** (`0045`–`0047`). See §3C.
+
+**Durable runtime state** (`0048`). Seven things the service writes were going into the Docker image
+with no volume behind it, so every deploy discarded the Board, the whole audit log, the squadron
+squawk map, theater settings, ATIS config and the airspace definitions — and two of them were
+committed to git, so a recreated container silently reverted controllers to an old snapshot. `config/`
+is shipped defaults now, `data/` is runtime state and a volume, and a read falls back from one to the
+other so a new default lands with no migration.
 
 **Hardening driven by end-to-end sorties** (`0027`–`0033`, `0039`–`0041`). See §3D.
 
@@ -207,17 +215,14 @@ changed while its client was away.
 
 **Smaller, known, non-blocking:**
 
+- `sourcedcs-web`'s `store.js` writes its JSON with a plain `fs.writeFileSync` — no tmp-and-rename —
+  so it has the non-atomic-write problem `0041` fixed in crc-sync's `_persist`. Different service,
+  small change, noted in `0048` because the audit walked past it.
+
 - The server never retracts a forwarding-obligation alert once raised (`efsp-state.js` says so) — a
   Strip released after a void-time alert keeps the badge until the client reloads. **The correlation
   warning shows the shape that fixes this** (`0045`): a field on a record that broadcasts whole.
   Retrofitting obligations to it is a small, self-contained job.
-- **The `crc-sync` service has no volume for `config/`** (`0042`'s Consequences). `efsp-board.json`
-  and `efsp-mutations.jsonl` live inside the image, so a `docker compose up -d` that recreates the
-  container discards them — `0002`'s durability and `0041`'s atomic `_persist` do not survive the
-  deployment. This pass added `crc-sync-data:/app/data` for the DEM cache only and deliberately did
-  **not** mount over `/app/config`, since an empty named volume would shadow the facility, airspace,
-  squawk-map and radar-spec files baked into the image. **Fixing this properly is its own change, and
-  it is the highest-value item in this list.**
 - Airspace ops are not replayed on reconnect, unlike Strip mutations. Deliberate and tested
   (`efsp-scenario-manning.test.mjs`); correlation is the same, and for the stated reason
   (`_handleResync`'s "cheap enough at this scale").

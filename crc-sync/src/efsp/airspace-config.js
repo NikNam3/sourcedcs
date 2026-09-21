@@ -24,10 +24,12 @@
 // or DoD doctrine, and must never be presented as such (defect D11).
 
 const fs = require('fs');
-const path = require('path');
+const { statePaths, ensureDirFor } = require('../state-paths');
 
-const AIRSPACES_PATH = process.env.CRCSYNC_EFSP_AIRSPACES_PATH
-  || path.join(__dirname, '../../config/efsp-airspaces.json');
+// Squadron data that a live edit rewrites (setAirspaces), so it reads from
+// data/ if a live copy exists and always writes there — see state-paths.js.
+const { read: AIRSPACES_PATH, write: AIRSPACES_WRITE_PATH } =
+  statePaths('efsp-airspaces.json', process.env.CRCSYNC_EFSP_AIRSPACES_PATH);
 
 // What kind of block this is. The FAA's special-use taxonomy and ICAO's
 // (which is what Turkey publishes) name overlapping things — a MOA in FAA
@@ -194,7 +196,8 @@ function setAirspaces(next) {
   if (!check.ok) return check;
   airspaces = deepClone(next);
   try {
-    fs.writeFileSync(AIRSPACES_PATH, JSON.stringify(airspaces, null, 2));
+    ensureDirFor(AIRSPACES_WRITE_PATH);
+    fs.writeFileSync(AIRSPACES_WRITE_PATH, JSON.stringify(airspaces, null, 2));
   } catch (e) {
     console.warn('[efsp-airspace-config] failed to persist airspaces:', e.message);
   }

@@ -27,13 +27,13 @@
 // one EfspState — Filed/Taxi In/Arrivals/every Coordination Bay have none.
 
 const fs = require('fs');
-const path = require('path');
 const blockMap = require('./block-map');
 // Required BEFORE this module builds its configs Map: the RANGES Facility's
 // Position set is derived from the airspace definitions (see
 // DEFAULT_RANGES_CONFIG). airspace-config.js deliberately does not require
 // this module back, so there is no cycle.
 const airspaceConfig = require('./airspace-config');
+const { readPath, writePath, ensureDirFor } = require('../state-paths');
 
 const DEFAULT_FACILITY_ID = 'INCIRLIK';
 
@@ -41,16 +41,27 @@ const DEFAULT_FACILITY_ID = 'INCIRLIK';
 // file — same pattern as theater-settings.js's CRCSYNC_THEATER_SETTINGS_PATH.
 // One env var per Facility, so a test can override either (or both)
 // independently without the two Facilities' on-disk state colliding.
-const FACILITY_CONFIG_PATHS = {
-  INCIRLIK: process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH
-    || path.join(__dirname, '../../config/efsp-facility-incirlik.json'),
-  CENTER: process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER
-    || path.join(__dirname, '../../config/efsp-facility-center.json'),
+// `setFacilityConfig` rewrites these, so each has a read path (data/ if a live
+// copy exists, else the shipped default) and a write path (always data/) — see
+// state-paths.js for why that split exists at all.
+const FACILITY_CONFIG_FILES = {
+  INCIRLIK: ['efsp-facility-incirlik.json', process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH],
+  CENTER: ['efsp-facility-center.json', process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER],
   // WP4A second slice — the TACTICAL Facility (docs/adr/0013's pattern
   // repeated for a third Facility).
-  TACTICAL: process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL
-    || path.join(__dirname, '../../config/efsp-facility-tactical.json'),
+  TACTICAL: ['efsp-facility-tactical.json', process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL],
 };
+
+/** Kept as a name->path map for any existing reader; resolved fresh per call. */
+const FACILITY_CONFIG_PATHS = new Proxy({}, {
+  get: (_t, facilityId) => {
+    const entry = FACILITY_CONFIG_FILES[facilityId];
+    return entry ? writePath(entry[0], entry[1]) : undefined;
+  },
+  has: (_t, facilityId) => facilityId in FACILITY_CONFIG_FILES,
+  ownKeys: () => Object.keys(FACILITY_CONFIG_FILES),
+  getOwnPropertyDescriptor: () => ({ enumerable: true, configurable: true }),
+});
 
 // RANGES is deliberately absent from the path table above: its Position set
 // is DERIVED from airspace-config.js, so an on-disk override would freeze a
@@ -420,7 +431,8 @@ function _loadOne(facilityId) {
   let config = deepClone(defaults);
   if (DERIVED_FACILITY_IDS.has(facilityId)) return config;
   try {
-    const onDisk = JSON.parse(fs.readFileSync(FACILITY_CONFIG_PATHS[facilityId], 'utf8'));
+    const [name, override] = FACILITY_CONFIG_FILES[facilityId];
+    const onDisk = JSON.parse(fs.readFileSync(readPath(name, override), 'utf8'));
     // A `blockVisibility` inclusion list from before this was an exclusion
     // list. Dropped rather than converted: every shipped one was a full set
     // for its day, so it expressed no narrowing at all — converting it would
@@ -449,7 +461,9 @@ const configs = new Map(Object.keys(DEFAULT_CONFIGS).map(id => [id, _loadOne(id)
 function _persist(facilityId) {
   if (DERIVED_FACILITY_IDS.has(facilityId)) return; // see DERIVED_FACILITY_IDS
   try {
-    fs.writeFileSync(FACILITY_CONFIG_PATHS[facilityId], JSON.stringify(configs.get(facilityId), null, 2));
+    const target = FACILITY_CONFIG_PATHS[facilityId];
+    ensureDirFor(target);
+    fs.writeFileSync(target, JSON.stringify(configs.get(facilityId), null, 2));
   } catch (e) {
     console.warn(`[efsp-facility-config] failed to persist ${facilityId} config:`, e.message);
   }

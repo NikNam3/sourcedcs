@@ -11,13 +11,14 @@
 // persisted so it survives a crc-sync restart.
 
 const fs   = require('fs');
-const path = require('path');
+const { statePaths, ensureDirFor } = require('./state-paths');
 
-// Overridable so tests can exercise the mutate/persist path against a temp
-// file instead of the real squadron-wide config (same pattern as
-// resolve.js's CRCSYNC_SQUAWK_MAP_PATH).
-const THEATER_SETTINGS_PATH = process.env.CRCSYNC_THEATER_SETTINGS_PATH
-  || path.join(__dirname, '../config/theater-settings.json');
+// Read from data/ if a live copy exists, else the shipped default in config/;
+// always write to data/ (see state-paths.js). Overridable so tests can exercise
+// the mutate/persist path against a temp file instead of the real squadron-wide
+// config.
+const { read: THEATER_SETTINGS_READ_PATH, write: THEATER_SETTINGS_PATH } =
+  statePaths('theater-settings.json', process.env.CRCSYNC_THEATER_SETTINGS_PATH);
 
 const DEFAULTS = {
   transitionAltFt: 18000, // ft — below this use QNH, at/above use standard (FL)
@@ -27,7 +28,7 @@ const DEFAULTS = {
 
 let settings = { ...DEFAULTS };
 try {
-  const cfg = JSON.parse(fs.readFileSync(THEATER_SETTINGS_PATH, 'utf8'));
+  const cfg = JSON.parse(fs.readFileSync(THEATER_SETTINGS_READ_PATH, 'utf8'));
   settings = { ...DEFAULTS, ...cfg };
 } catch (e) {
   console.warn('[theater-settings] failed to load config/theater-settings.json, using defaults:', e.message);
@@ -35,6 +36,7 @@ try {
 
 function _persist() {
   try {
+    ensureDirFor(THEATER_SETTINGS_PATH);
     fs.writeFileSync(THEATER_SETTINGS_PATH, JSON.stringify(settings, null, 2));
   } catch (e) {
     console.warn('[theater-settings] failed to persist config/theater-settings.json:', e.message);
