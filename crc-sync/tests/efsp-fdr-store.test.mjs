@@ -1,5 +1,24 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+
+// createFdr() expands §9.10 stereo routes (docs/adr/0050), so this file needs
+// a table to expand against — and its own, pointed at a temp file, so it can
+// never read or write the real committed config/efsp-stereo-routes.json
+// (which ships empty). Set before the first import: stereo-routes.js resolves
+// its path and loads once at require time.
+const stereoTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-fdr-store-stereo-'));
+process.env.CRCSYNC_EFSP_STEREO_ROUTES_PATH = path.join(stereoTmpDir, 'efsp-stereo-routes.json');
+fs.writeFileSync(process.env.CRCSYNC_EFSP_STEREO_ROUTES_PATH, JSON.stringify([
+  {
+    name: 'PACK 1', description: 'north departure',
+    departureAirport: 'LTAG', destinationAirport: 'LTAG',
+    route: 'LTAG DCT ALPHA DCT LTAG', requestedAltitude: '250', remarks: 'squadron standard',
+  },
+  { name: 'PACK 9', route: 'LTAG DCT RETIRED', active: false },
+]));
 
 const {
   FdrStore, deriveEquipmentSuffix, VOID_DEADLINE_MINUTES,
@@ -547,4 +566,192 @@ test('trackRef stays null and has no route to being written — §6.6 rule 2 for
   const result = store.setField(fdr.fdrId, 'trackRef', 'track-101', { by: 'APP' });
   assert.equal(result.ok, false);
   assert.equal(store.getFdr(fdr.fdrId).trackRef, null);
+});
+
+// ── §9.10 stereo routes (docs/adr/0050) ──────────────────────────────────
+
+test('ACCEPTANCE (WP6): a stereo route filed by short name produces a complete FDR', () => {
+  // The guide's own acceptance criterion for this deliverable, word for word.
+  // Callsign and short name are ALL that is supplied — everything else comes
+  // out of the table, which is what "does not require a full flight-plan
+  // form" (§9.10) means in practice.
+  const store = new FdrStore();
+  const { ok, fdr } = store.createFdr({ callsign: 'PACK11', stereoRouteName: 'PACK1' }, { by: 'OPS' });
+  assert.equal(ok, true);
+  assert.equal(fdr.filed.route, 'LTAG DCT ALPHA DCT LTAG');
+  assert.equal(fdr.filed.requestedAltitude, '250');
+  assert.equal(fdr.filed.departureAirport, 'LTAG');
+  assert.equal(fdr.filed.destinationAirport, 'LTAG');
+  assert.equal(fdr.filed.remarks, 'squadron standard');
+  assert.equal(fdr.filed.stereoRouteName, 'PACK 1');
+});
+
+test('the FDR records the table\'s canonical name, not the spelling that was typed', () => {
+  const store = new FdrStore();
+  for (const typed of ['PACK1', 'pack 1', 'pack-1']) {
+    const { fdr } = store.createFdr({ callsign: 'VIPER1', stereoRouteName: typed }, { by: 'OPS' });
+    assert.equal(fdr.filed.stereoRouteName, 'PACK 1', `typed ${typed}`);
+  }
+});
+
+test('an unknown stereo name is refused outright, not silently blanked', () => {
+  // Deliberately unlike flight-plan-lookup.js's never-block contract: that
+  // fronts a remote service that can be down, this is local config, and "not
+  // in the table" is a wrong answer rather than a transient failure.
+  const store = new FdrStore();
+  const result = store.createFdr({ callsign: 'VIPER1', stereoRouteName: 'PACK99' }, { by: 'OPS' });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'VALIDATION_ERROR');
+  assert.match(result.detail, /PACK99 is not a configured stereo route/);
+});
+
+test('a retired stereo route is refused with its own message, not reported as a typo', () => {
+  const store = new FdrStore();
+  const result = store.createFdr({ callsign: 'VIPER1', stereoRouteName: 'pack9' }, { by: 'OPS' });
+  assert.equal(result.ok, false);
+  assert.match(result.detail, /PACK 9 is not an active stereo route/);
+});
+
+test('a refused stereo filing burns no beacon code — the check runs before allocate()', () => {
+  // The "a denied CreateStrip has no side effects" property. Get this
+  // ordering wrong and every typo leaks a code out of a finite pool.
+  const store = new FdrStore();
+  const before = store.createFdr({ callsign: 'FIRST' }, { by: 'OPS' });
+  assert.equal(store.createFdr({ callsign: 'NOPE', stereoRouteName: 'PACK99' }, { by: 'OPS' }).ok, false);
+  assert.equal(store.createFdr({ callsign: 'NOPE2', stereoRouteName: 'PACK9' }, { by: 'OPS' }).ok, false);
+  const after = store.createFdr({ callsign: 'SECOND' }, { by: 'OPS' });
+  // Two refusals in between cost exactly nothing: the next code is the one
+  // that would have followed anyway.
+  assert.equal(
+    Number.parseInt(after.fdr.identity.beaconAssigned, 8) - Number.parseInt(before.fdr.identity.beaconAssigned, 8),
+    1);
+});
+
+test('an explicitly supplied field beats the stereo\'s — the table is a template, not an override', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(
+    { callsign: 'VIPER1', stereoRouteName: 'PACK1', destinationAirport: 'LTAC', requestedAltitude: '310' },
+    { by: 'OPS' });
+  assert.equal(fdr.filed.destinationAirport, 'LTAC');
+  assert.equal(fdr.filed.requestedAltitude, '310');
+  // Everything not explicitly given still comes from the table.
+  assert.equal(fdr.filed.route, 'LTAG DCT ALPHA DCT LTAG');
+  assert.equal(fdr.filed.departureAirport, 'LTAG');
+  // And the flight is still on PACK 1 — an amended destination does not
+  // un-file it.
+  assert.equal(fdr.filed.stereoRouteName, 'PACK 1');
+});
+
+test('a blank or absent stereoRouteName leaves every existing caller behaving identically', () => {
+  const store = new FdrStore();
+  for (const seed of [makeSeed(), makeSeed({ stereoRouteName: '' }), makeSeed({ stereoRouteName: null })]) {
+    const { ok, fdr } = store.createFdr(seed, { by: 'OPS' });
+    assert.equal(ok, true);
+    assert.equal(fdr.filed.stereoRouteName, '');
+    assert.equal(fdr.filed.route, 'DCT');
+  }
+});
+
+test('fields the table filled are COMPUTER_GENERATED, fields the controller gave are not (§10.5)', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr({ callsign: 'VIPER1', stereoRouteName: 'PACK1', destinationAirport: 'LTAC' }, { by: 'OPS' });
+  assert.equal(fdr.provenance['filed.route'], 'COMPUTER_GENERATED');
+  assert.equal(fdr.provenance['filed.stereoRouteName'], 'COMPUTER_GENERATED');
+  assert.equal(fdr.provenance['filed.destinationAirport'], undefined);
+});
+
+test('writing filed.stereoRouteName RE-FILES the flight — route and altitude come from the table', () => {
+  // "VIPER11, request change to PACK 2." Naming a different route IS the
+  // amendment; leaving the old route under the new label would be a lie the
+  // standing-release matcher then believes.
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  assert.equal(fdr.filed.route, 'DCT');
+  const revBefore = fdr.rev; // the store hands back the live object, so read it before the write
+
+  const result = store.setField(fdr.fdrId, 'filed.stereoRouteName', 'pack1', { by: 'CD' });
+  assert.equal(result.ok, true);
+  assert.equal(result.fdr.filed.stereoRouteName, 'PACK 1'); // canonical, not what was typed
+  assert.equal(result.fdr.filed.route, 'LTAG DCT ALPHA DCT LTAG');
+  assert.equal(result.fdr.filed.requestedAltitude, '250');
+  assert.equal(result.fdr.filed.departureAirport, 'LTAG');
+  assert.equal(result.fdr.filed.destinationAirport, 'LTAG');
+  assert.equal(result.fdr.rev, revBefore + 1);
+});
+
+test('a re-file overwrites the previous route unconditionally — no stale leg survives it', () => {
+  // The opposite precedence from createFdr's, on purpose: there an explicit
+  // seed value is the controller's entry and wins; here the explicit entry
+  // IS the route name.
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed({ requestedAltitude: '310', destinationAirport: 'LTAC' }), { by: 'OPS' });
+  const { fdr: refiled } = store.setField(fdr.fdrId, 'filed.stereoRouteName', 'PACK 1', { by: 'CD' });
+  assert.equal(refiled.filed.requestedAltitude, '250');
+  assert.equal(refiled.filed.destinationAirport, 'LTAG');
+});
+
+test('a re-file leaves remarks and the issued clearance alone', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed({ remarks: 'PPR 1420, tail swap' }), { by: 'OPS' });
+  store.setField(fdr.fdrId, 'assigned.clearedRoute', 'AS FILED, RADAR VECTORS', { by: 'CD' });
+  const { fdr: refiled } = store.setField(fdr.fdrId, 'filed.stereoRouteName', 'PACK 1', { by: 'CD' });
+  // Remarks are controller free text with nothing to do with the route;
+  // clearedRoute is a clearance already issued to the pilot (§3.1).
+  assert.equal(refiled.filed.remarks, 'PPR 1420, tail swap');
+  assert.equal(refiled.assigned.clearedRoute, 'AS FILED, RADAR VECTORS');
+});
+
+test('re-filing onto an unknown or retired route writes NOTHING and does not bump rev', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr({ callsign: 'PACK11', stereoRouteName: 'PACK1' }, { by: 'OPS' });
+  const before = JSON.stringify(store.getFdr(fdr.fdrId));
+
+  for (const [name, pattern] of [['PACK99', /not a configured stereo route/], ['PACK 9', /not an active stereo route/]]) {
+    const result = store.setField(fdr.fdrId, 'filed.stereoRouteName', name, { by: 'CD' });
+    assert.equal(result.ok, false, name);
+    assert.match(result.detail, pattern);
+  }
+  // A half-applied re-file would leave the label and the route disagreeing,
+  // which is the exact state this design exists to prevent.
+  assert.equal(JSON.stringify(store.getFdr(fdr.fdrId)), before);
+});
+
+test('clearing the stereo name un-labels the flight without blanking its route', () => {
+  // "Cancel the stereo" must never leave a taxiing aircraft with no route.
+  const store = new FdrStore();
+  const { fdr } = store.createFdr({ callsign: 'PACK11', stereoRouteName: 'PACK1' }, { by: 'OPS' });
+  for (const empty of ['', '   ', null]) {
+    store.setField(fdr.fdrId, 'filed.stereoRouteName', 'PACK 1', { by: 'CD' }); // re-label first
+    const { ok, fdr: cleared } = store.setField(fdr.fdrId, 'filed.stereoRouteName', empty, { by: 'CD' });
+    assert.equal(ok, true, JSON.stringify(empty));
+    assert.equal(cleared.filed.stereoRouteName, '');
+    assert.equal(cleared.filed.route, 'LTAG DCT ALPHA DCT LTAG');
+  }
+});
+
+test('a re-filed route is COMPUTER_GENERATED, and the name the controller typed is not', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  const { fdr: refiled } = store.setField(fdr.fdrId, 'filed.stereoRouteName', 'PACK 1', { by: 'CD' });
+  assert.equal(refiled.provenance['filed.route'], 'COMPUTER_GENERATED');
+  assert.equal(refiled.provenance['filed.stereoRouteName'], 'CONTROLLER_ENTERED');
+});
+
+test('amending the route clears the stereo name — an amended route is no longer the canned one', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr({ callsign: 'PACK11', stereoRouteName: 'PACK1' }, { by: 'OPS' });
+  assert.equal(fdr.filed.stereoRouteName, 'PACK 1');
+  const result = store.setField(fdr.fdrId, 'filed.route', 'LTAG DCT DELTA', { by: 'CD' });
+  assert.equal(result.ok, true);
+  assert.equal(result.fdr.filed.stereoRouteName, '');
+  assert.equal(result.fdr.filed.route, 'LTAG DCT DELTA');
+});
+
+test('amending any OTHER filed field leaves the stereo name alone', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr({ callsign: 'PACK11', stereoRouteName: 'PACK1' }, { by: 'OPS' });
+  for (const path of ['filed.requestedAltitude', 'filed.destinationAirport', 'filed.remarks']) {
+    assert.equal(store.setField(fdr.fdrId, path, 'CHANGED', { by: 'CD' }).ok, true);
+    assert.equal(store.getFdr(fdr.fdrId).filed.stereoRouteName, 'PACK 1', `after ${path}`);
+  }
 });

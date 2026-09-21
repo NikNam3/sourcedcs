@@ -70,3 +70,30 @@ test('parseDotCommand is case-insensitive on the verb, as it is for every other 
 test('parseDotCommand keeps a track id that is not numeric — DCS ids are opaque strings', () => {
   assert.deepEqual(parseDotCommand('.bind unit-42'), { verb: 'bind', args: ['unit-42'] });
 });
+
+// ── .stereo (§9.10, docs/adr/0050) ───────────────────────────────────────
+// Characterisation, not new behaviour: .stereo needed NO parser change at
+// all. These pin that — if someone later "improves" the parser (quoted
+// arguments, say), the single-token route-name rule efsp-panel.js's
+// _fileStereoByName depends on would break here first.
+
+test('.stereo parses as an ordinary two-argument verb', () => {
+  assert.deepEqual(parseDotCommand('.stereo PACK1 VIPER11'), { verb: 'stereo', args: ['PACK1', 'VIPER11'] });
+});
+
+test('.stereo with a missing callsign parses fine — arity is the dispatcher\'s business, not the parser\'s', () => {
+  assert.deepEqual(parseDotCommand('.stereo PACK1'), { verb: 'stereo', args: ['PACK1'] });
+  assert.deepEqual(parseDotCommand('.stereo'), { verb: 'stereo', args: [] });
+});
+
+test('a spaced route name splits into two arguments — which is why the name must be one token', () => {
+  // `.stereo PACK 1 VIPER11` is indistinguishable from a two-token name
+  // followed by a callsign. The dispatcher takes args[0] as the name, and
+  // stereo-routes.js's normaliser is what makes `PACK1` reach a route the
+  // squadron spelled "PACK 1".
+  assert.deepEqual(parseDotCommand('.stereo PACK 1 VIPER11'), { verb: 'stereo', args: ['PACK', '1', 'VIPER11'] });
+});
+
+test('the verb lowercases, so .STEREO works from a caps-lock console', () => {
+  assert.deepEqual(parseDotCommand('.STEREO PACK1 VIPER11'), { verb: 'stereo', args: ['PACK1', 'VIPER11'] });
+});

@@ -389,3 +389,48 @@ test('MISSION advances linearly through its whole lifecycle, unconditionally —
 test('MISSION\'s DROPPED has no NLA — a terminal state, same as every other role\'s', () => {
   assert.equal(computeNla(makeMissionStrip('DROPPED'), makeFdr()), null);
 });
+
+// ── §9.10 stereo routes meet the standing release (docs/adr/0050) ────────
+
+test('HELD + HOLD_FOR_RELEASE clears when the flight was FILED on the envelope\'s stereo route', () => {
+  // The interaction the whole slice turns on: the agreement is for a named
+  // route, and this is the flight that named it.
+  const fdr = makeFdr({
+    assigned: { releaseState: 'HOLD_FOR_RELEASE' },
+    filed: { stereoRouteName: 'PACK 1', route: 'LTAG DCT ALPHA DCT LTAG' },
+  });
+  const ctx = {
+    isOccupied: (id) => id === 'GND', coveringPositionFor: () => null,
+    standingReleases: [{ envelopeId: 'e1', stereoRoute: 'PACK 1', active: true }],
+  };
+  assert.deepEqual(computeNla(makeStrip('HELD'), fdr, Date.now(), ctx), { toState: 'PUSHBACK', transferTo: 'GND' });
+});
+
+test('an envelope naming the EXPANDED route does not release a flight filed under a stereo name', () => {
+  const fdr = makeFdr({
+    assigned: { releaseState: 'HOLD_FOR_RELEASE' },
+    filed: { stereoRouteName: 'PACK 1', route: 'LTAG DCT ALPHA DCT LTAG' },
+  });
+  const ctx = {
+    isOccupied: (id) => id === 'GND', coveringPositionFor: () => null,
+    standingReleases: [{ envelopeId: 'e1', stereoRoute: 'LTAG DCT ALPHA DCT LTAG', active: true }],
+  };
+  assert.deepEqual(computeNla(makeStrip('HELD'), fdr, Date.now(), ctx),
+    { inhibited: 'outside standing release envelope — file OPERATIONAL_REQUEST' });
+});
+
+test('amending a stereo flight\'s route puts it back outside the envelope — the label cleared with the route', () => {
+  // fdr-store.js's setField clears filed.stereoRouteName on a route
+  // amendment; this is what that clearing is FOR. Modelled here as the
+  // post-amendment FDR the store would have produced.
+  const amended = makeFdr({
+    assigned: { releaseState: 'HOLD_FOR_RELEASE' },
+    filed: { stereoRouteName: '', route: 'LTAG DCT DELTA' },
+  });
+  const ctx = {
+    isOccupied: (id) => id === 'GND', coveringPositionFor: () => null,
+    standingReleases: [{ envelopeId: 'e1', stereoRoute: 'PACK 1', active: true }],
+  };
+  assert.deepEqual(computeNla(makeStrip('HELD'), amended, Date.now(), ctx),
+    { inhibited: 'outside standing release envelope — file OPERATIONAL_REQUEST' });
+});

@@ -51,6 +51,16 @@ const DEPARTURE_BLOCK_MAP = {
   '9C': { required: false, label: 'RESTR',    target: { kind: 'annotation' } },
   '9D': { required: true,  label: 'FULL RTE', target: { kind: 'fdr', path: 'filed.fullRouteClearance' } },
   '9E': { required: true,  label: 'RMKS',     target: { kind: 'fdr', path: 'filed.remarks' } },
+  // §9.10 stereo route name (docs/adr/0050) — mirrors crc-sync's
+  // block-map.js '9F' exactly; see that module's comment for why it is not
+  // numbered M18 and why writing it re-files the flight rather than just
+  // relabelling it. Ordinary click-to-edit free text, deliberately NOT in
+  // ENUM_SELECT_BLOCKS despite being a restricted value set: that table is
+  // a static client-side literal and the route table is runtime config, so
+  // a picker there would need a dynamic option source it has no shape for.
+  // The server refuses a name that is not in the table, and the rejection
+  // now carries its detail to the controller.
+  '9F': { required: false, label: 'STEREO',   target: { kind: 'fdr', path: 'filed.stereoRouteName' } },
   '10': { required: true,  label: 'ATIS',     target: { kind: 'fdr', path: 'assigned.atisCode' } },
   '11': { required: true,  label: 'APREQ',    target: { kind: 'annotation' } },
   '14': { required: true,  label: 'RLS TIME', target: { kind: 'fdr', path: 'assigned.releaseTimeUtc' } },

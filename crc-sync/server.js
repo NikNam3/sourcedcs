@@ -23,6 +23,7 @@ const { StationCoverage, assignableRadars, reportUnresolvedSelectors } = require
 const { ForwardingObligationMonitor } = require('./src/efsp/forwarding-obligations');
 const { CorrelationReconciler, CORRELATION_TICK_MS } = require('./src/efsp/correlation-reconciler');
 const { lookupFlightPlan, toFdrFiledSeed, listFiledFlightPlans } = require('./src/efsp/flight-plan-lookup');
+const efspStereoRoutes = require('./src/efsp/stereo-routes');
 
 const PORT       = parseInt(process.env.PORT, 10) || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -355,6 +356,23 @@ app.get('/api/flight-plan-list', auth.requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[flight-plan-lookup] unexpected error listing plans, responding 503 instead of crashing:', err);
     res.status(503).json({ ok: false, reason: 'list failed unexpectedly' });
+  }
+});
+
+// §9.10's canned-route table (docs/adr/0050), for EFSP's file-by-short-name
+// picker. Active routes only: a retired route must not be offered, and the
+// client has no business rendering one it would then be refused for filing.
+// Read-only — there is no editor this slice, and an editor cannot just POST
+// here, because guide §8.4 requires configuration changes to be versioned
+// and attributed. Same never-throws-out-of-the-handler discipline as the two
+// flight-plan routes above, though nothing here does I/O: the table is
+// already in memory.
+app.get('/api/stereo-routes', auth.requireAuth, (_req, res) => {
+  try {
+    res.json({ ok: true, routes: efspStereoRoutes.getActiveStereoRoutes() });
+  } catch (err) {
+    console.error('[efsp-stereo-routes] unexpected error, responding 503 instead of crashing:', err);
+    res.status(503).json({ ok: false, reason: 'stereo route lookup failed unexpectedly' });
   }
 });
 

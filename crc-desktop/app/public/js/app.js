@@ -631,6 +631,11 @@ async function connect() {
       case 'efsp-snapshot':
         applyEfspSnapshot(msg);
         if (typeof refreshEfspPanel === 'function') refreshEfspPanel();
+        // §9.10's route table is fetched over HTTP, not carried on the
+        // snapshot — but a snapshot is the one event that means crc-sync may
+        // have restarted, which is also the only way the table can change.
+        // See efsp-panel.js's _loadStereoRoutes for the bug this closes.
+        if (typeof reloadEfspStereoRoutes === 'function') reloadEfspStereoRoutes();
         if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
         // A reconnect brings correlations back with the rest of the snapshot,
         // so a Strip that was selected before the drop needs its ring redrawn

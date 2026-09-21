@@ -351,3 +351,38 @@ test('blockLabelFor looks up a Block\'s label per role, and returns null for a B
   assert.equal(blockLabelFor('8', 'ARRIVAL'), 'ORIG');
   assert.equal(blockLabelFor('8A', 'OVERFLIGHT'), null);
 });
+
+// ── §9.10 Block 9F, the stereo route name (docs/adr/0050) ────────────────
+
+test('Block 9F is labelled STEREO and bound to filed.stereoRouteName on DEPARTURE', () => {
+  assert.equal(blockLabelFor('9F', 'DEPARTURE'), 'STEREO');
+  assert.equal(DEPARTURE_BLOCK_MAP['9F'].target.path, 'filed.stereoRouteName');
+  assert.ok(blockLabelFor('9F', 'DEPARTURE').length <= 8, 'docs/adr/0024 caps a Block label at 8 characters');
+});
+
+test('resolveBlockValue reads the stereo name off the FDR', () => {
+  const fdr = { filed: { stereoRouteName: 'PACK 1' }, provenance: { 'filed.stereoRouteName': 'COMPUTER_GENERATED' } };
+  const resolved = resolveBlockValue('9F', fdr, makeStrip());
+  assert.equal(resolved.value, 'PACK 1');
+  assert.equal(resolved.provenance, 'COMPUTER_GENERATED');
+});
+
+test('a flight filed without a stereo renders Block 9F as blank, not as a broken cell', () => {
+  // The common case by a wide margin — most flights are not on a canned
+  // route, and the shipped table is empty. An unset name reads as the empty
+  // string exactly like filed.route and filed.remarks do, because 9F is
+  // plain fdr-routed; a Strip restored from a board persisted before 9F
+  // existed has no key at all, and reads as null.
+  assert.equal(resolveBlockValue('9F', { filed: { stereoRouteName: '' }, provenance: {} }, makeStrip()).value, '');
+  assert.equal(resolveBlockValue('9F', { filed: {}, provenance: {} }, makeStrip()).value, null);
+  assert.equal(resolveBlockValue('9F', null, makeStrip()).value, null);
+});
+
+test('Block 9F is ordinary click-to-edit free text — typing a route name into it re-files the flight', () => {
+  assert.equal(isBlockEditable('9F', 'DEPARTURE'), true);
+  // Not a picker: the valid set is runtime config, and ENUM_SELECT_BLOCKS is
+  // a static literal. The create-strip dropdown is where discovery happens;
+  // the server refuses a name that is not in the table.
+  assert.equal(enumSelectOptionsFor('9F'), null);
+  assert.equal(isBooleanToggleBlock('9F'), false);
+});

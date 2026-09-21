@@ -19,6 +19,13 @@ const { CodeAllocator, isValidCodeFormat } = require('./code-allocator');
 // number. Shared with airspace-config.js so a configured airspace frequency
 // and a frequency a flight is approved onto can never validate differently.
 const { isValidFrequency, MIN_FREQUENCY_MHZ, MAX_FREQUENCY_MHZ } = require('./airspace-config');
+// §9.10's canned-route table (docs/adr/0050). A data-table require rather
+// than the validator-only one above, and deliberately so: createFdr() is the
+// single place a flat seed is interpreted into identity.*/filed.*, and
+// expanding a short name into a route IS seed interpretation. Putting it in
+// board-store.js's _applyCreateStrip instead would mean any second creation
+// path — or a test constructing an FdrStore directly — silently skips it.
+const stereoRoutes = require('./stereo-routes');
 
 const VOID_DEADLINE_MINUTES = 30; // §3.8 — derived, not stored input
 const EDCT_WINDOW_MINUTES = 5;              // §4.6.2 — EDCT ± 5 min
@@ -73,12 +80,31 @@ const MAX_FREE_TEXT = 2000;
 // beaconAssigned is listed here but routed through a dedicated method
 // (setBeaconAssigned) rather than the generic path, since it needs
 // code-allocator validation, not just a plain write.
+//
+// filed.stereoRouteName (§9.10, docs/adr/0050) IS here, and it is the one
+// entry in this list whose write does more than write: setField() validates
+// it against the route table and RE-EXPANDS the filed route from it. See
+// that branch for why re-filing rather than relabelling is the only safe
+// reading of "put this flight on PACK 2".
+//
+// It shipped unwritable, on the reasoning that nla.js's standing-release
+// gate matches on it (release-envelope.js), so a name no table entry backs
+// would waive a HOLD_FOR_RELEASE the OPERATIONAL_REQUEST fallback exists to
+// force. That threat is real and is still closed — by resolving every
+// written name against the table, which is a stronger guarantee than
+// unwritability was, because it also makes the name and the route agree by
+// construction. What unwritability actually cost was the ability to switch
+// or cancel a stereo on a live Strip: the only remedies were to hand-edit
+// the route (losing the label, the altitude and the envelope match) or to
+// drop and re-file (a new beacon code and CID for an aircraft already
+// squawking). Found by walking the "VIPER11 request change to PACK 2" case.
 const WRITABLE_PATHS = new Set([
   'identity.callsign', 'identity.flightSize', 'identity.aircraftType', 'identity.wakeCategory',
   'identity.equipmentCodes', 'identity.degradation',
   'identity.tailNumber', 'identity.unit', 'identity.homeStation',
   'filed.route', 'filed.requestedAltitude', 'filed.departureAirport', 'filed.departureRunway',
   'filed.destinationAirport', 'filed.proposedDepartureTimeUtc', 'filed.fullRouteClearance', 'filed.remarks',
+  'filed.stereoRouteName',
   // ARRIVAL-role fields (Phase 2) — present on every FDR regardless of the
   // Strip role that ends up referencing it, same "present but unpopulated
   // until relevant" precedent as the DEPARTURE-only fields above (guide
@@ -146,6 +172,12 @@ class FdrStore {
    * Creates a new FDR from filed intent (§3.1, §3.2). Mints a beacon code
    * internally via the code allocator — this is NOT a client-facing RPC
    * (guide §3.10.1's split: crc-sync mints, EFSP only displays/overrides).
+   *
+   * `seed.stereoRouteName` files by §9.10 short name: the route table is
+   * resolved HERE, server-side, and its expansion fills whatever the seed
+   * left blank. WP6's acceptance criterion — "a stereo route filed by short
+   * name produces a complete FDR" — is this function's postcondition.
+   *
    * Returns { ok:true, fdr } or { ok:false, reason }.
    */
   createFdr(seed, { by }) {
@@ -153,6 +185,43 @@ class FdrStore {
     if (!CALLSIGN_RE.test(callsign)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'callsign must be 1-7 alphanumeric characters' };
     }
+
+    // §9.10 / docs/adr/0050 — resolve the short name BEFORE allocate() below,
+    // or a refused CreateStrip leaks a beacon code out of the pool. Same
+    // "a denied CreateStrip has no side effects" discipline board-store.js's
+    // canCreateStripRole check already documents.
+    //
+    // An unknown name is REFUSED, not silently blanked — deliberately unlike
+    // flight-plan-lookup.js's never-block contract, and the difference is
+    // principled: that lookup fronts a remote service that can legitimately
+    // be down, so degrading to a blank Strip is the right failure. This table
+    // is local config. "Not in the table" is not a transient failure, it is a
+    // wrong answer, and a Strip that claims a stereo it isn't flying is worse
+    // than no Strip — it would also carry a name into release-envelope.js's
+    // matcher that no configured route backs.
+    let stereoSeed = {};
+    let stereoName = '';
+    const requestedStereo = seed.stereoRouteName;
+    if (requestedStereo != null && String(requestedStereo).trim() !== '') {
+      const route = stereoRoutes.resolveStereoRoute(requestedStereo);
+      if (!route) {
+        return { ok: false, reason: 'VALIDATION_ERROR', detail: `${requestedStereo} is not a configured stereo route` };
+      }
+      // Retired rather than mistyped, so it gets its own message. Note this
+      // refuses only NEW filings: a flight already airborne on a route the
+      // squadron has since deactivated keeps its name and its route, because
+      // deactivation is not retroactive.
+      if (route.active === false) {
+        return { ok: false, reason: 'VALIDATION_ERROR', detail: `${route.name} is not an active stereo route` };
+      }
+      stereoSeed = stereoRoutes.toFdrFiledSeed(route);
+      stereoName = route.name; // the CANONICAL spelling, not whatever was typed
+    }
+    // The stereo is a template ("file me the usual"); an explicitly supplied
+    // value is an amendment and wins. Same layering efsp-panel.js already
+    // applies to the DD1801 seed. In practice they rarely collide — picking a
+    // stereo client-side skips the flight-plan lookup entirely.
+    const filedFrom = (key) => seed[key] || stereoSeed[key] || '';
 
     const fdrId = crypto.randomUUID();
     const now = Date.now();
@@ -165,6 +234,16 @@ class FdrStore {
       'identity.beaconAssigned': 'COMPUTER_GENERATED',
       'identity.equipmentSuffix': 'SYSTEM_DERIVED',
     };
+    // Guide §10.5's provenance fallback chains — a field the table filled was
+    // not typed by the controller. Block 9's declared pre-edit default is
+    // already COMPUTER_GENERATED (block-map.js), and setField() flips any of
+    // these to CONTROLLER_ENTERED the moment one is actually edited.
+    if (stereoName) {
+      for (const key of ['route', 'requestedAltitude', 'departureAirport', 'destinationAirport', 'remarks']) {
+        if (!seed[key] && stereoSeed[key]) provenance[`filed.${key}`] = 'COMPUTER_GENERATED';
+      }
+      provenance['filed.stereoRouteName'] = 'COMPUTER_GENERATED';
+    }
 
     const fdr = {
       fdrId,
@@ -191,14 +270,19 @@ class FdrStore {
         trackDegradationFlag: 'NONE', // WP4A, §4.6 rule 5
       },
       filed: {
-        route: seed.route || '',
-        requestedAltitude: seed.requestedAltitude || '',
-        departureAirport: seed.departureAirport || '',
+        route: filedFrom('route'),
+        requestedAltitude: filedFrom('requestedAltitude'),
+        departureAirport: filedFrom('departureAirport'),
         departureRunway: seed.departureRunway || null,
-        destinationAirport: seed.destinationAirport || '',
+        destinationAirport: filedFrom('destinationAirport'),
+        // §9.10 (docs/adr/0050) — the short name this flight was filed under.
+        // Its expansion is filed.route beside it; this is the label, and what
+        // a standing-release envelope matches on. Not in WRITABLE_PATHS — see
+        // that list's own comment for why.
+        stereoRouteName: stereoName,
         proposedDepartureTimeUtc: seed.proposedDepartureTimeUtc || null,
         fullRouteClearance: !!seed.fullRouteClearance,
-        remarks: seed.remarks || '',
+        remarks: filedFrom('remarks'),
         originAirport: seed.originAirport || '',                       // ARRIVAL-role field, Phase 2
         arrivalFix: seed.arrivalFix || null,                            // ARRIVAL-role field, Phase 2
         estimatedArrivalTimeUtc: seed.estimatedArrivalTimeUtc || null,  // ARRIVAL-role field, Phase 2
@@ -312,12 +396,78 @@ class FdrStore {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'invalid track degradation flag' };
     }
 
+    // §9.10 re-filing (docs/adr/0050). Resolved against the table BEFORE any
+    // write, so a bad name leaves the FDR byte-identical and does not bump
+    // rev — the no-partial-write property every other inline validator here
+    // has, and it matters more for this one because a half-applied re-file
+    // would leave the label and the route disagreeing, which is the exact
+    // state the whole design exists to prevent.
+    let stereoExpansion = null;
+    if (path === 'filed.stereoRouteName') {
+      const requested = value == null ? '' : String(value).trim();
+      if (requested === '') {
+        // Clearing the LABEL only. The route stays: un-filing a stereo must
+        // never blank a taxiing flight's route out from under it, and a
+        // controller who wants the route gone edits Block 9.
+        value = '';
+      } else {
+        const route = stereoRoutes.resolveStereoRoute(requested);
+        if (!route) {
+          return { ok: false, reason: 'VALIDATION_ERROR', detail: `${requested} is not a configured stereo route` };
+        }
+        if (route.active === false) {
+          return { ok: false, reason: 'VALIDATION_ERROR', detail: `${route.name} is not an active stereo route` };
+        }
+        value = route.name; // the table's spelling, not what was typed
+        stereoExpansion = route;
+      }
+    }
+
     setPath(fdr, path, value);
+
+    // A re-file REWRITES the filed route from the table rather than merely
+    // relabelling the Strip. Relabelling was the alternative and it is
+    // unsafe: it would let "PACK 2" sit on a Strip still carrying PACK 1's
+    // route and altitude — a lie on the board, and one release-envelope.js
+    // would believe when it decides whether a standing release covers the
+    // flight. Naming a different route IS the amendment; the derive-on-write
+    // shape is identity.equipmentCodes -> equipmentSuffix above.
+    //
+    // Unlike createFdr()'s expansion, this overwrites unconditionally. There
+    // the seed is a controller's explicit entry and wins; here the explicit
+    // entry IS the new route name, so leaving PACK 1's 250 on a flight now
+    // filed PACK 2 would be the stale value, not a preserved one.
+    //
+    // Two fields are deliberately NOT touched:
+    //   filed.remarks        — controller free text that has nothing to do
+    //                          with the route; clobbering it is the
+    //                          annotation-erasure mistake docs/adr/0040 had
+    //                          to fix once already.
+    //   assigned.clearedRoute — a re-file amends FILED intent (§3.1). The
+    //                          clearance already issued is a separate field
+    //                          and a separate conversation with the pilot.
+    if (stereoExpansion) {
+      const seed = stereoRoutes.toFdrFiledSeed(stereoExpansion);
+      for (const key of ['route', 'requestedAltitude', 'departureAirport', 'destinationAirport']) {
+        fdr.filed[key] = seed[key];
+        fdr.provenance[`filed.${key}`] = 'COMPUTER_GENERATED';
+      }
+    }
 
     if (path === 'identity.equipmentCodes') {
       fdr.identity.equipmentSuffix = deriveEquipmentSuffix(value);
       fdr.provenance['identity.equipmentSuffix'] = 'SYSTEM_DERIVED';
     }
+
+    // §9.10 (docs/adr/0050) — an amended route is no longer the canned one,
+    // so the stereo label goes with it. Same derive-on-write shape as
+    // equipmentSuffix above and voidDeadlineUtc below, and it is what stops
+    // filed.stereoRouteName becoming a lie that nla.js's standing-release
+    // gate then believes: without this, amending PACK 1's route to anything
+    // at all would keep the PACK 1 envelope waiving the flight's hold.
+    // Clearing the name never touches the route — un-labelling a flight must
+    // not blank its route mid-taxi.
+    if (path === 'filed.route') fdr.filed.stereoRouteName = '';
 
     if (path === 'assigned.releaseState' || path === 'assigned.voidTimeUtc') {
       fdr.assigned.voidDeadlineUtc =

@@ -107,6 +107,9 @@ const httpServer = http.createServer((req, res) => {
   // bearer token directly for this either.
   if (req.url.startsWith('/api/flight-plan-lookup/'))              return proxyToSync(req, res, req.url);
   if (req.url === '/api/flight-plan-list')                         return proxyToSync(req, res, req.url);
+  // §9.10's stereo route table (crc-sync/src/efsp/stereo-routes.js) — the
+  // file-by-short-name picker's option source. Same shape again.
+  if (req.url === '/api/stereo-routes')                            return proxyToSync(req, res, req.url);
 
   // ── SRS radio API proxy → lxsrs_v2 HTTP API (local pilot audio, unrelated to crc-sync) ─
   if (req.url.startsWith('/srs-api/')) {

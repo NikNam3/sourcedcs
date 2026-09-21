@@ -250,3 +250,35 @@ test('validateFacilityConfig rejects an empty visibleBlocks list for a real role
   const result = validateFacilityConfig({ role: 'DEPARTURE', visibleBlocks: [] });
   assert.equal(result.ok, false);
 });
+
+// ── §9.10 Block 9F, the stereo route name (docs/adr/0050) ────────────────
+
+test('Block 9F exists on DEPARTURE only — the other roles never file a local canned route', () => {
+  assert.ok(DEPARTURE_BLOCK_MAP['9F'], 'DEPARTURE should carry 9F');
+  assert.equal(ARRIVAL_BLOCK_MAP['9F'], undefined);
+  assert.equal(OVERFLIGHT_BLOCK_MAP['9F'], undefined);
+  assert.equal(MISSION_BLOCK_MAP['9F'], undefined);
+});
+
+test('Block 9F is optional — most flights are not filed on a stereo', () => {
+  assert.equal(DEPARTURE_BLOCK_MAP['9F'].required, false);
+  assert.equal(requiredBlocksFor('DEPARTURE').includes('9F'), false);
+});
+
+test('the guide\'s M18 number is deliberately NOT taken — it belongs to MISSION\'s own namespace', () => {
+  // docs/adr/0026 froze M1-M8/M25/M26 with their own meanings (its M4 is the
+  // beacon; the guide's M4 is IFF Mode 1/2), and MISSION is the one Role that
+  // never files a stereo. See block-map.js's '9F' comment.
+  for (const map of [DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP]) {
+    assert.equal(map['M18'], undefined);
+  }
+});
+
+test('a SetBlock at 9F routes to filed.stereoRouteName — writing it is how a flight is re-filed', () => {
+  assert.deepEqual(resolveBlockTarget('DEPARTURE', '9F'), { kind: 'fdr', path: 'filed.stereoRouteName' });
+  // And nowhere else: the other Roles have no 9F at all, so a SetBlock at it
+  // there is the ordinary unknown-Block VALIDATION_ERROR.
+  for (const role of ['ARRIVAL', 'OVERFLIGHT', 'MISSION']) {
+    assert.equal(resolveBlockTarget(role, '9F'), null, role);
+  }
+});

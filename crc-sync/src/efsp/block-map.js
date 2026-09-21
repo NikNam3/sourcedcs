@@ -65,6 +65,28 @@ const DEPARTURE_BLOCK_MAP = {
   '9C': { required: false, target: { kind: 'annotation' } },
   '9D': { required: true,  target: { kind: 'fdr', path: 'filed.fullRouteClearance' } },
   '9E': { required: true,  target: { kind: 'fdr', path: 'filed.remarks' } },
+  // §9.10 stereo route name (docs/adr/0050). The guide numbers this Block
+  // M18 in its §6.4 military-extension table (whose "Basis" column cites
+  // §9.9, ATO ingest — that is a mis-citation in the guide; §9.10 is the
+  // right section). It is NOT numbered M18 here, for two reasons: the
+  // M-prefix namespace belongs to MISSION_BLOCK_MAP, which docs/adr/0026
+  // froze with its own meanings (its M4 is the beacon, the guide's M4 is IFF
+  // Mode 1/2), and MISSION is the one Role that never files a stereo. '9F'
+  // instead, because sub-lettering a field onto its parent Block is this
+  // codebase's actual convention ('3A'-'3E', '8A'/'8B', '9A'-'9E', '5A',
+  // '14A'-'14D'), and a stereo route name IS Block 9's route, named.
+  //
+  // Plain 'fdr'-routed, like '5A' and unlike '24A' — writing it IS how a
+  // controller re-files a live flight onto another stereo ("VIPER11 request
+  // change to PACK 2"). It shipped as its own read-only kind; that made the
+  // switch case reachable only by hand-editing the route (losing the label
+  // and the standing-release match) or by dropping and re-creating the Strip
+  // (a new beacon code mid-taxi). fdr-store.js's setField() validates the
+  // name against the table and re-expands the route from it, so the name and
+  // the route cannot disagree — the same inline-validation precedent
+  // identity.trackDegradationFlag set, not a weaker guard than the read-only
+  // kind was.
+  '9F': { required: false, target: { kind: 'fdr', path: 'filed.stereoRouteName' } },
   '10': { required: true,  target: { kind: 'fdr', path: 'assigned.atisCode' } },
   '11': { required: true,  target: { kind: 'annotation' } },
   '14': { required: true,  target: { kind: 'fdr', path: 'assigned.releaseTimeUtc' } },

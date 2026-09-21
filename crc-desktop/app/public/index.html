@@ -199,6 +199,14 @@
          from whichever Positions are actually held right now — nothing
          static here. Hidden by default via the native `hidden` attribute. -->
     <select id="efsp-create-strip-role" hidden></select>
+    <!-- File by §9.10 short name (docs/adr/0050). Options come from
+         crc-sync's GET /api/stereo-routes at panel init; hidden whenever
+         that list is empty, which is the shipped state — the squadron
+         installs its own table, so a controller who has none sees the
+         toolbar exactly as it was before this existed. Also hidden for the
+         ARRIVAL/MISSION origins, which have no filed-route concept a canned
+         route could seed. -->
+    <select id="efsp-create-strip-stereo" hidden></select>
     <button id="efsp-create-strip-btn">+ New Strip</button>
     <span id="efsp-create-strip-msg"></span>
   </div>
@@ -942,6 +950,7 @@
 <script src="./js/panels/efsp/correlation-highlight.js"></script>
 <script src="./js/panels/efsp/bay-view.js"></script>
 <script src="./js/panels/efsp/efsp-flight-plan-lookup.js"></script>
+<script src="./js/panels/efsp/efsp-stereo-routes.js"></script>
 <script src="./js/panels/efsp/efsp-panel.js"></script>
 <script src="./js/panels/efsp/airspace-panel.js"></script>
 <script src="./js/app.js"></script>

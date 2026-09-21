@@ -33,6 +33,7 @@ let _createStripInputEl = null;
 let _createStripBtnEl = null;
 let _createStripMsgEl = null;
 let _createStripRoleEl = null;
+let _createStripStereoEl = null;
 let _dotCommandInputEl = null;
 let _dotCommandPreviewEl = null;
 let _mutationErrorEl = null;
@@ -263,6 +264,68 @@ let _createStripLookupInFlight = false;
 // a second press goes through. Cleared on any successful create.
 let _pendingDuplicateCallsign = null;
 
+// §9.10's canned-route table (docs/adr/0050). Static squadron configuration:
+// it only changes when somebody edits a file and restarts crc-sync, so this
+// is not polled the way `ops-filed`'s queue is (that queue is other people's
+// live filings, which is a different kind of thing).
+//
+// But it IS refetched on every snapshot, not just at panel init, and that
+// distinction cost a bug: the table changing implies a crc-sync restart,
+// which drops every socket, and the reconnect delivers a fresh
+// efsp-snapshot. Fetching only at init meant a squadron could edit the
+// table, restart the service, and have every controller keep the OLD
+// picker until they reloaded the whole app. A snapshot is exactly the event
+// that means "the server you were talking to may not be the one you are
+// talking to now", so it is the right trigger — and it is free, because
+// _refreshStereoRoutes is a no-op re-render when nothing changed.
+let _stereoRoutes = [];
+let _stereoRoutesInFlight = false;
+
+function _loadStereoRoutes() {
+  if (typeof listStereoRoutesClient !== 'function') return;
+  // Fire and forget: the picker appears when the list lands. Nothing waits
+  // on it, and the failure case is identical to the (shipped) empty-table
+  // case — no picker, file by hand exactly as before. The in-flight latch
+  // stops a burst of snapshots (a flapping connection) stacking fetches.
+  if (_stereoRoutesInFlight) return;
+  _stereoRoutesInFlight = true;
+  listStereoRoutesClient().then((routes) => {
+    _stereoRoutesInFlight = false;
+    _stereoRoutes = Array.isArray(routes) ? routes : [];
+    _refreshCreateStripAvailability();
+  });
+}
+
+/**
+ * Called from app.js when an efsp-snapshot lands — see _loadStereoRoutes.
+ * Safe before initEfspPanel() has run: the fetch just populates the cache
+ * and the render inside no-ops until the elements are cached.
+ */
+function reloadEfspStereoRoutes() { _loadStereoRoutes(); }
+
+/** The stereo name currently picked in the toolbar, or '' for none. */
+function _selectedStereoName() {
+  if (!_createStripStereoEl || _createStripStereoEl.hidden) return '';
+  return _createStripStereoEl.value || '';
+}
+
+/**
+ * Roles a canned route can seed. DEPARTURE only, matching Block 9F's own
+ * Block-Map placement: ARRIVAL's filed shape is originAirport/arrivalFix/
+ * estimatedArrivalTimeUtc, MISSION has no filed route at all, and an
+ * OVERFLIGHT by definition did not depart here, so a locally-defined route
+ * out of this base is not what it filed.
+ *
+ * Takes the ORIGIN rather than the role string on purpose: OPS's entry in
+ * CREATE_STRIP_ORIGINS carries `role: undefined` to mean DEPARTURE (the
+ * server's own default), so a bare `role === 'DEPARTURE'` would exclude the
+ * one Position that files these. _createStripOriginKey already normalises
+ * the same way.
+ */
+function _stereoEligibleOrigin(origin) {
+  return !!origin && (origin.role || 'DEPARTURE') === 'DEPARTURE';
+}
+
 function _setCreateStripMsg(text, isError) {
   if (!_createStripMsgEl) return;
   _createStripMsgEl.textContent = text || '';
@@ -349,6 +412,33 @@ function _refreshCreateStripAvailability() {
     }
   }
   const origin = _createStripOrigin();
+  if (_createStripStereoEl) {
+    // Hidden unless a table is actually installed AND the selected origin
+    // could use one. The shipped table is empty, so for a squadron that has
+    // not written one this control never appears at all — no empty picker
+    // to puzzle over, and the toolbar is byte-identical to before.
+    const usable = _stereoRoutes.length > 0 && _stereoEligibleOrigin(origin);
+    _createStripStereoEl.hidden = !usable;
+    if (usable) {
+      const prevName = _createStripStereoEl.value;
+      _createStripStereoEl.innerHTML = '';
+      // Blank first, so "no stereo" stays the default and the existing
+      // hand-filing path is never something you have to deselect into.
+      const none = document.createElement('option');
+      none.value = '';
+      none.textContent = '— no stereo —';
+      _createStripStereoEl.appendChild(none);
+      for (const r of _stereoRoutes) {
+        const opt = document.createElement('option');
+        opt.value = r.name;
+        opt.textContent = r.description ? `${r.name} — ${r.description}` : r.name;
+        _createStripStereoEl.appendChild(opt);
+      }
+      // Same "never silently reset a deliberate choice" rule the role
+      // select above follows.
+      if (_stereoRoutes.some(r => r.name === prevName)) _createStripStereoEl.value = prevName;
+    }
+  }
   _createStripInputEl.disabled = !origin;
   _createStripBtnEl.disabled = !origin;
   if (!origin) {
@@ -435,8 +525,18 @@ async function _submitCreateStrip() {
   // plan on file, malformed response) just leaves every field blank,
   // exactly like today's behavior — Strip creation is never blocked on
   // this succeeding, only delayed by a few seconds while it's tried.
+  // §9.10 / docs/adr/0050 — filing by short name. A picked stereo SKIPS the
+  // DD1801 lookup below entirely, rather than racing it: filing a canned
+  // route is an explicit choice a controller just made, where the lookup is
+  // a best-effort background guess, and §9.10's whole premise is the path
+  // taken *without* the international form. Spending up to four seconds
+  // fetching a plan whose fields the stereo would mostly supply anyway is
+  // latency for nothing — and it keeps the server's seed-wins-over-stereo
+  // precedence rule out of the one place a real controller could hit it.
+  const stereoRouteName = _stereoEligibleOrigin(origin) ? _selectedStereoName() : '';
+
   let seed = {};
-  if (origin.role !== 'ARRIVAL' && origin.role !== 'OVERFLIGHT' && origin.role !== 'MISSION' && typeof lookupFlightPlanClient === 'function') {
+  if (!stereoRouteName && origin.role !== 'ARRIVAL' && origin.role !== 'OVERFLIGHT' && origin.role !== 'MISSION' && typeof lookupFlightPlanClient === 'function') {
     _createStripLookupInFlight = true;
     if (_createStripInputEl) _createStripInputEl.disabled = true;
     if (_createStripBtnEl) _createStripBtnEl.disabled = true;
@@ -458,19 +558,32 @@ async function _submitCreateStrip() {
     ? { callsign, aircraftType: '', wakeCategory: '', originAirport: '', estimatedArrivalTimeUtc: null }
     : origin.role === 'MISSION'
       ? { callsign, missionNumber: '', packageId: '', controllingAgency: '', vulWindowStartUtc: null, vulWindowEndUtc: null }
-      : {
-          callsign, aircraftType: '', wakeCategory: '',
-          departureAirport: '', destinationAirport: '', route: '', requestedAltitude: '',
-          ...seed, // overrides only the blanks above when the lookup actually found something
-        };
+      : stereoRouteName
+        // Only the callsign and the short name go over the wire — route,
+        // altitude and airports are left ABSENT rather than blank so the
+        // server's table fills them (an empty string would count as an
+        // explicit value and win over the expansion). The server resolves
+        // the name again and refuses one it doesn't know, so this client
+        // list is the picker's option source, never the authority.
+        ? { callsign, aircraftType: '', wakeCategory: '', stereoRouteName }
+        : {
+            callsign, aircraftType: '', wakeCategory: '',
+            departureAirport: '', destinationAirport: '', route: '', requestedAltitude: '',
+            ...seed, // overrides only the blanks above when the lookup actually found something
+          };
 
   _pendingCreateStripMutationId = sendEfspCreateStrip(origin.actingPositionId, {
     kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', role: origin.role, fdr,
     initialState: origin.initialState || undefined,
   }, origin.facilityId);
   _createStripInputEl.value = '';
+  if (_createStripStereoEl) _createStripStereoEl.value = '';
   _pendingDuplicateCallsign = null;
-  _setCreateStripMsg(seed.route ? 'Creating (flight plan found)…' : 'Creating…', false);
+  _setCreateStripMsg(
+    stereoRouteName ? `Creating (${stereoRouteName})…`
+      : seed.route ? 'Creating (flight plan found)…'
+        : 'Creating…',
+    false);
 }
 
 /**
@@ -554,7 +667,13 @@ function notifyEfspMutationAck(clientMutationId, result) {
   else if (result.warning) _showMutationWarning(result.warning);
   if (clientMutationId !== _pendingCreateStripMutationId) return;
   _pendingCreateStripMutationId = null;
-  _setCreateStripMsg(result.ok ? '' : `Rejected: ${result.reason || 'unknown error'}`, !result.ok);
+  // `detail` carries the only part worth reading for a whole class of
+  // rejection — "VALIDATION_ERROR" alone doesn't distinguish a malformed
+  // callsign from "PACK9 is not a configured stereo route". It was being
+  // dropped on the floor; the reason stays as the prefix so nothing that
+  // relied on it has changed.
+  const why = result.detail ? `${result.reason || 'rejected'} — ${result.detail}` : (result.reason || 'unknown error');
+  _setCreateStripMsg(result.ok ? '' : `Rejected: ${why}`, !result.ok);
 }
 
 function _wireCreateStrip() {
@@ -572,6 +691,23 @@ function _dispatchDotCommand(parsed) {
   // strip-selection-dependent verbs below need one.
   if (parsed.verb === 'find') {
     _runEfspSearch(parsed.args.join(' '));
+    return;
+  }
+
+  // .stereo <NAME> <CALLSIGN> — file by §9.10 short name (docs/adr/0050).
+  // Creates a Strip, so like .find it belongs above the selected-Strip
+  // guard: there is nothing selected yet, that's the point. Guide §7.1 rule
+  // 5 is explicit that the dot-command surface is "a primary feature, not a
+  // power-user extra", and filing a canned route by typing its name is the
+  // most literal reading of §9.10's "a filing path that does not require a
+  // full flight-plan form" available.
+  //
+  // The name is ONE token. `.stereo PACK 1 VIPER11` would be ambiguous
+  // against `.stereo PACK1 VIPER11`, and normalisation is what makes the
+  // single-token rule harmless: `PACK1` resolves a route the squadron
+  // spelled "PACK 1".
+  if (parsed.verb === 'stereo') {
+    _fileStereoByName(parsed.args[0], parsed.args[1]);
     return;
   }
 
@@ -608,10 +744,93 @@ function _dispatchDotCommand(parsed) {
   }
 }
 
+/**
+ * `.stereo <NAME> <CALLSIGN>` — the keyboard half of filing by short name.
+ *
+ * Shares _createStripOrigin() with the toolbar rather than duplicating the
+ * OPS/APP/CTR gate and the combined-Position choice, so the two surfaces can
+ * never disagree about who may originate what.
+ *
+ * Deliberately does NOT reuse _submitCreateStrip's duplicate-callsign
+ * two-press warning (§3.6), including the duplicate-origination check —
+ * which this originally skipped, on the reasoning that "a controller who
+ * typed a verb, a route name and a callsign has been explicit enough."
+ * That was wrong, and worth recording as wrong: §3.6's guard is not about
+ * how deliberate the request was, it is about state the controller CANNOT
+ * SEE — a replica already live at another Facility that should be picked up
+ * by ACCEPTing it, not re-originated with a second beacon code and a second
+ * lifecycle. Typing a longer command tells you nothing about that.
+ */
+function _fileStereoByName(rawName, rawCallsign) {
+  const name = String(rawName || '').trim();
+  const callsign = String(rawCallsign || '').trim().toUpperCase();
+  if (!name || !callsign) {
+    _showDotCommandError('.stereo needs a route name and a callsign — e.g. .stereo PACK1 VIPER11');
+    return;
+  }
+  if (!/^[A-Z0-9]{1,7}$/.test(callsign)) {
+    _showDotCommandError(`${callsign} is not a valid callsign — 1-7 alphanumeric characters`);
+    return;
+  }
+
+  const origin = _createStripOrigin();
+  if (!origin) {
+    _showDotCommandError('OPS, APP or CTR only — select one in Panels to create Strips');
+    return;
+  }
+  if (!_stereoEligibleOrigin(origin)) {
+    _showDotCommandError(`a stereo route seeds a DEPARTURE Strip, not ${origin.role}`);
+    return;
+  }
+
+  // A courtesy check against the fetched list, not the gate — the server
+  // resolves the name again and refuses an unknown one regardless. Same
+  // standing as .bind's "needs a track id" precheck: catch the typo where
+  // the controller is looking instead of making them wait for a rejection.
+  const known = _stereoRoutes.find(r =>
+    typeof normalizeStereoNameClient === 'function'
+      ? normalizeStereoNameClient(r.name) === normalizeStereoNameClient(name)
+      : r.name === name);
+  if (!known) {
+    _showDotCommandError(`${name} is not a configured stereo route`);
+    return;
+  }
+
+  // §3.6 duplicate origination, shared with the button rather than skipped.
+  // Re-entering the same command confirms, the same way pressing + New Strip
+  // twice does; _pendingDuplicateCallsign is the same latch, so confirming
+  // on one surface confirms on both.
+  const existing = liveStripsForCallsign(callsign);
+  if (existing.length > 0 && _pendingDuplicateCallsign !== callsign) {
+    _pendingDuplicateCallsign = callsign;
+    const where = existing.map(s => `${s.facilityId || '?'}/${s.ownerPositionId}`).join(', ');
+    _showDotCommandError(`${callsign} already has a live Strip at ${where} — repeat the command to create another anyway`);
+    return;
+  }
+  _pendingDuplicateCallsign = null;
+
+  _pendingCreateStripMutationId = sendEfspCreateStrip(origin.actingPositionId, {
+    kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', role: origin.role,
+    fdr: { callsign, aircraftType: '', wakeCategory: '', stereoRouteName: known.name },
+    initialState: origin.initialState || undefined,
+  }, origin.facilityId);
+  _setCreateStripMsg(`Creating ${callsign} (${known.name})…`, false);
+}
+
+// Set by _showDotCommandError, read by _wireDotCommand's Enter handler so it
+// knows not to wipe the message it just asked for. Without this the clear
+// below erased every dot-command error the instant it was written — .bind's
+// "needs a track id" has never once been visible on screen, which made a
+// mistyped .bind indistinguishable from the input not registering at all.
+// Found writing efsp-stereo-panel.test.js; it is the same silent-failure
+// shape the create-strip box's own rejection message was added to close.
+let _dotCommandErrorShown = false;
+
 /** Surfaces a dot-command problem where the preview already draws the eye. */
 function _showDotCommandError(message) {
   if (!_dotCommandPreviewEl) return;
   _dotCommandPreviewEl.textContent = message;
+  _dotCommandErrorShown = true;
 }
 
 function _wireDotCommand() {
@@ -624,9 +843,12 @@ function _wireDotCommand() {
     if (e.key !== 'Enter') return;
     const parsed = parseDotCommand(_dotCommandInputEl.value);
     if (!parsed) return;
+    _dotCommandErrorShown = false;
     _dispatchDotCommand(parsed);
     _dotCommandInputEl.value = '';
-    if (_dotCommandPreviewEl) _dotCommandPreviewEl.textContent = '';
+    // Clear the echoed command, but NOT a message the dispatch just wrote
+    // there — see _dotCommandErrorShown for the bug that was.
+    if (_dotCommandPreviewEl && !_dotCommandErrorShown) _dotCommandPreviewEl.textContent = '';
   });
 }
 
@@ -667,6 +889,7 @@ function initEfspPanel() {
   _createStripBtnEl = document.getElementById('efsp-create-strip-btn');
   _createStripMsgEl = document.getElementById('efsp-create-strip-msg');
   _createStripRoleEl = document.getElementById('efsp-create-strip-role');
+  _createStripStereoEl = document.getElementById('efsp-create-strip-stereo');
   _dotCommandInputEl = document.getElementById('efsp-dot-command-input');
   _dotCommandPreviewEl = document.getElementById('efsp-dot-command-preview');
   _mutationErrorEl = document.getElementById('efsp-mutation-error');
@@ -675,6 +898,7 @@ function initEfspPanel() {
 
   _wireCreateStrip();
   _wireDotCommand();
+  _loadStereoRoutes();
   _renderPositionTabs();
   // One check per second is plenty for a 10s-default threshold — no need to
   // schedule a fresh timeout per heartbeat (§5.6 rule 5's banner). Started

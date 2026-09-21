@@ -143,6 +143,115 @@ The by-callsign lookup above only helps if `OPS` already knows the callsign. `op
 
 > ⚠️ **Deployment step required, not yet live**: `FLIGHT_PLAN_SERVICE_TOKEN` must be set to the **same** value in both sourcedcs-web's and crc-sync's environment (`.env.example` has the entry; `infra/docker-compose.yml` wires it through) before this actually returns anything — until it's set, `ops-filed` will just always show "No filed flight plans waiting." (fails closed, not broken). The live dev `sourcedcs-web` instance also needs restarting to pick up its side of this change (the auth route is new code) — that wasn't done as part of this work, since restarting a shared, more actively-used service wasn't this session's call to make unilaterally.
 
+## 4A. Stereo routes — filing by short name
+
+A **stereo route** is a locally-defined canned route the squadron files by a short name instead of
+filling in a whole flight plan. This is real practice, not a sim convenience: assigned aircraft at
+Kunsan file locally-defined "Pack" routes by phone or email without the international form. The
+guide calls it (§9.10) *"the single most authentic-feeling military flight-data behaviour
+available."*
+
+Type a callsign, pick `PACK 1`, press **+ New Strip** — the Strip is created with route, altitude,
+departure and destination airports and remarks already filled in from the table.
+
+> **The shipped table is empty.** That is deliberate: the real routes are squadron data, and
+> inventing plausible-looking ones would put invented content on a Strip where it reads as doctrine.
+> **Until you install a table, the stereo picker does not appear at all** and everything works
+> exactly as it did before — that is not a bug, it is "no routes configured".
+
+### Installing a table
+
+The file is a JSON array. `name` and `route` are required; everything else is optional.
+
+```jsonc
+[
+  {
+    "name": "PACK 1",                                  // what a controller files it as
+    "description": "north MOA and recover",            // shown in the picker
+    "departureAirport": "LTAG",
+    "destinationAirport": "LTAG",
+    "route": "LTAG DCT ADANA DCT TOROS DCT LTAG",      // the expansion — the point of the record
+    "requestedAltitude": "250",
+    "remarks": "squadron standard"
+  },
+  {
+    "name": "PACK 2",
+    "route": "LTAG DCT BRAVO DCT LTAG",
+    "active": false                                    // retired: not filable, not in the picker
+  }
+]
+```
+
+Three places it can live, highest priority first:
+
+| Path | Use |
+|---|---|
+| `CRCSYNC_EFSP_STEREO_ROUTES_PATH` | an explicit override; mostly for tests |
+| `crc-sync/state/efsp-stereo-routes.json` | **the live squadron table** — on the `crc-sync-state` volume, survives deploys |
+| `crc-sync/config/efsp-stereo-routes.json` | the shipped default, baked into the image (ships `[]`) |
+
+**Restart crc-sync after editing.** The table loads once at startup — there is no editing UI in this
+slice, and a running process will not notice the file changed. If the file is malformed, crc-sync
+logs a warning and starts with an empty table rather than refusing to boot.
+
+Names are matched loosely: `PACK1`, `pack 1` and `PACK-1` all reach a route the table spells
+`"PACK 1"`, and the Strip always shows the table's spelling. Two names that differ only in spacing
+or case are rejected as a duplicate when the file loads — they would be the same route to a
+controller.
+
+### Filing one
+
+- **The picker.** A dropdown appears beside the callsign box once a table exists. It only shows for
+  `OPS`'s DEPARTURE origin — an arrival or a mission line has no filed route a canned departure
+  route could seed — and only lists active routes.
+- **`.stereo PACK1 VIPER11`** in the dot-command line does the same thing from the keyboard. The
+  route name is **one token**: write `PACK1`, not `PACK 1`, and the loose matching above handles it.
+  `.stereo` on its own, with an unknown route, or with a bad callsign tells you so in the preview
+  line and sends nothing.
+
+Picking a stereo **skips the DD1801 flight-plan lookup** (§4) rather than doing both — filing by
+short name is the path taken when there is no filed form, so there is nothing to look up. Leave the
+picker blank and §4's automatic pre-fill behaves exactly as before.
+
+An unknown or retired name is **refused**, not quietly turned into a blank Strip, and the reason
+appears next to the create box. That is on purpose and is different from the DD1801 lookup, which
+degrades to blank: sourcedcs-web being down is a temporary failure, but a name that is not in the
+table is simply wrong.
+
+### Switching, and cancelling
+
+The short name shows on the Strip as Block **`STEREO`** (`9F`), next to `RTE`, and you edit it the
+ordinary way — click, type, enter.
+
+**Typing a route name into `STEREO` re-files the flight.** *"VIPER11, request change to PACK 2"* is
+one edit: the route, altitude, departure and destination are all rewritten from the table, and the
+aircraft keeps the squawk and the CID it was already given. This works in both directions — a flight
+that filed a plain route the normal way and then asks for the standard route on first contact is the
+same edit.
+
+Two things a re-file deliberately leaves alone: **Block 9E (remarks)**, which is your own text and
+has nothing to do with the route, and **any clearance you have already issued** — amending what was
+*filed* is not the same as re-clearing the aircraft, and that is still a conversation with the pilot.
+
+**Clearing `STEREO` cancels the stereo without touching the route.** The flight keeps flying what it
+was flying, it just stops being labelled as a canned route. If you want the route gone too, edit
+Block 9.
+
+**Editing Block 9 (the route) also clears the `STEREO` label**, in the other direction. An amended
+route is no longer the canned one, and leaving the label would make the Strip claim a route it is not
+flying — and would keep a standing release (§7) covering a flight the agreement no longer describes.
+
+A name that is not in the table, or one that has been retired, is **refused and changes nothing at
+all** — the Strip is left exactly as it was, with the reason shown. Retiring a route
+(`"active": false`) stops new filings and re-files only; a flight already airborne on it keeps its
+route and its label.
+
+**Where this lives in code:** `crc-sync/src/efsp/stereo-routes.js` (the table, validation, name
+resolution) → `fdr-store.js`'s `createFdr()` (the expansion, server-side) →
+`GET /api/stereo-routes` → `crc-desktop/app/server.js` proxy →
+`efsp-stereo-routes.js` → `efsp-panel.js`'s picker and `.stereo` verb. Design reasoning is in
+`docs/adr/0050`.
+
 ## 5. Strip fields
 
 ```
@@ -193,6 +302,7 @@ FDR {
   filed: {
     route, requestedAltitude, departureAirport, departureRunway, destinationAirport,
     proposedDepartureTimeUtc, fullRouteClearance, remarks,
+    stereoRouteName (Block 9F)                                      — §9.10; writing it re-files the flight from the route table; cleared when `route` is amended (§4A)
     originAirport, arrivalFix, estimatedArrivalTimeUtc              — ARRIVAL-role fields only
   }
   assigned: {
@@ -241,6 +351,13 @@ Anything other than `RELEASED` holds the Strip at `CLEARED` — move it to `HELD
 call-for-release window is not open yet **or has already passed** (a missed slot needs a new one),
 when a `HOLD_FOR_RELEASE` flight matches no standing-release envelope, or when the void time has
 expired. `CLEARED`'s NLA is inhibited on anything other than `RELEASED`.
+
+**Standing releases and stereo routes.** An envelope's `stereoRoute` is matched against the flight's
+filed **short name** (§4A) when it has one, and against its route string when it does not. So an
+envelope written as `"stereoRoute": "PACK 1"` covers every flight filed on PACK 1, whatever the
+expansion is — and stops covering one the moment somebody amends its route, because that clears the
+label. Envelopes configured before stereo routes existed, which named a route string, still work
+unchanged.
 
 ## 8. WP4A: cross-Facility coordination (APP ↔ CTR)
 

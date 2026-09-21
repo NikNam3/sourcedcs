@@ -1157,10 +1157,17 @@ const AIRSPACE_ENTRY_POSITIONS = ['APP', 'CTR'];
 // a Block present in the Block Map but absent here is editable in principle
 // and invisible in practice, which is how §3.8's release model shipped
 // unreachable. efsp-ui-reachability.test.js holds this to the Block Maps.
+//
+// '9F' (STEREO, docs/adr/0050) is here by choice rather than by that test's
+// insistence — the test holds only WRITABLE Blocks, and 9F is read-only, so
+// nothing would have failed had it been left out. That is precisely the
+// blind spot the briefing's §6 names, so: a controller needs to see which
+// canned route a flight filed, not least because it is what decides whether
+// a standing release covers the flight.
 function compactBlocksFor(role) {
   return role === 'MISSION'
     ? ['M3', 'M1', 'M2', 'M4', 'M5', 'M6', 'M7', 'M25']
-    : ['1', '3', '3A', '3B', '3C', '3D', '3E', '4', '5', '5A', '7', '8', '8A', '8B', '9',
+    : ['1', '3', '3A', '3B', '3C', '3D', '3E', '4', '5', '5A', '7', '8', '8A', '8B', '9', '9F',
        '14A', '14D', '22', '24A', 'IFR', 'RSVC', 'SREG', '25'];
 }
 
