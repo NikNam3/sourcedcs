@@ -330,3 +330,14 @@ test('range Positions are derived from the airspaces that declare one — a MOA 
   const derived = [...new Set(FIXTURE.filter(a => a.usingPositionId).map(a => a.usingPositionId))];
   assert.deepEqual(derived, ['RANGE_1_CONTROL']);
 });
+
+test('the RANGES Facility config is derived, never loaded from or written to disk', async () => {
+  // Its Position set comes from the airspace config, so an on-disk override
+  // would freeze a `positions` array that goes stale the moment an airspace
+  // is added or removed.
+  const facilityConfig = await import('../src/efsp/facility-config.js');
+  const result = facilityConfig.setFacilityConfig({ positions: ['FAKE_RANGE'] }, 'RANGES');
+  assert.equal(result.ok, false);
+  assert.match(result.detail, /derived from the airspace config/);
+  assert.deepEqual(facilityConfig.getPositionSet('RANGES'), []);
+});

@@ -50,9 +50,15 @@ const FACILITY_CONFIG_PATHS = {
   // repeated for a third Facility).
   TACTICAL: process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL
     || path.join(__dirname, '../../config/efsp-facility-tactical.json'),
-  RANGES: process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_RANGES
-    || path.join(__dirname, '../../config/efsp-facility-ranges.json'),
 };
+
+// RANGES is deliberately absent from the path table above: its Position set
+// is DERIVED from airspace-config.js, so an on-disk override would freeze a
+// `positions` array that then silently goes stale the moment an airspace is
+// added or removed. Deriving it every boot is the whole point — there is
+// nothing here a facility config could usefully say. Also spares a
+// load-failure warning on every startup for a file that should never exist.
+const DERIVED_FACILITY_IDS = new Set(['RANGES']);
 
 const DEFAULT_CONFIG = {
   facility: 'INCIRLIK',
@@ -317,6 +323,7 @@ function validateConfig(candidate) {
 function _loadOne(facilityId) {
   const defaults = DEFAULT_CONFIGS[facilityId];
   let config = deepClone(defaults);
+  if (DERIVED_FACILITY_IDS.has(facilityId)) return config;
   try {
     const onDisk = JSON.parse(fs.readFileSync(FACILITY_CONFIG_PATHS[facilityId], 'utf8'));
     const merged = { ...deepClone(defaults), ...onDisk };
@@ -335,6 +342,7 @@ function _loadOne(facilityId) {
 const configs = new Map(Object.keys(DEFAULT_CONFIGS).map(id => [id, _loadOne(id)]));
 
 function _persist(facilityId) {
+  if (DERIVED_FACILITY_IDS.has(facilityId)) return; // see DERIVED_FACILITY_IDS
   try {
     fs.writeFileSync(FACILITY_CONFIG_PATHS[facilityId], JSON.stringify(configs.get(facilityId), null, 2));
   } catch (e) {
@@ -426,6 +434,9 @@ function bayImpliesState(bayId, facilityId = DEFAULT_FACILITY_ID) {
  */
 function setFacilityConfig(next, facilityId = DEFAULT_FACILITY_ID) {
   if (!next || typeof next !== 'object') return false;
+  if (DERIVED_FACILITY_IDS.has(facilityId)) {
+    return { ok: false, reason: 'VALIDATION_ERROR', detail: `${facilityId}'s Positions are derived from the airspace config — edit that instead` };
+  }
   if (!DEFAULT_CONFIGS[facilityId]) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown facilityId ${facilityId}` };
   const merged = { ...deepClone(DEFAULT_CONFIGS[facilityId]), ...deepClone(next) };
   const check = validateConfig(merged);
