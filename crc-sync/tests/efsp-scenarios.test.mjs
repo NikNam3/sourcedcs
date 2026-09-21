@@ -461,30 +461,30 @@ test('TOFI cannot be opened on a Strip that is not yet airborne, nor on a MISSIO
   assert.match(ack.detail, /must be at INBOUND to enter tactical control/);
 });
 
-test('a Block a Facility does not make visible for a Role cannot be written', () => {
+test('a Block a Facility hides cannot be written', () => {
   const efsp = createEfsp();
-  const c = crew(efsp, { TAC_C2: 'TACTICAL', CTR: 'CENTER' });
+  const c = crew(efsp, { CTR: 'CENTER' });
 
-  // TACTICAL declares visibility for MISSION only, and MISSION's own Block
-  // Map has no IFR/SREG (those are ATC-side fields) — so a MISSION Strip
-  // has no route to them. Confirm the Facility-level gate itself, using a
-  // Block that resolves for the Role but is not in this Facility's list.
   const ctrStrip = mustAct(efsp, c.CTR, 'CTR', null, {
     kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', role: 'ARRIVAL',
     fdr: { callsign: 'EAGLE3', aircraftType: 'F15', wakeCategory: 'D', originAirport: 'LTAC' },
   });
-  const narrowed = facilityConfig.getFacilityConfig('CENTER');
-  facilityConfig.setFacilityConfig({
-    ...narrowed,
-    blockVisibility: { ...narrowed.blockVisibility, ARRIVAL: narrowed.blockVisibility.ARRIVAL.filter(b => b !== '24A') },
-  }, 'CENTER');
 
-  const ack = act(efsp, c.CTR, 'CTR', ctrStrip, { kind: 'SetBlock', blockId: '24A', value: 'USING_AGENCY' });
-  assert.equal(ack.ok, false);
-  assert.match(ack.detail, /not visible/);
-
-  facilityConfig.setFacilityConfig(narrowed, 'CENTER'); // restore for any later test
+  const before = facilityConfig.getFacilityConfig('CENTER');
+  // Hiding is expressed as an exclusion, so it survives a Block being added
+  // later rather than silently swallowing it (docs/adr/0041).
+  facilityConfig.setFacilityConfig({ ...before, hiddenBlocks: { ARRIVAL: ['24A'] } }, 'CENTER');
+  try {
+    const ack = act(efsp, c.CTR, 'CTR', ctrStrip, { kind: 'SetBlock', blockId: '24A', value: 'USING_AGENCY' });
+    assert.equal(ack.ok, false);
+    assert.match(ack.detail, /not visible/);
+    // Everything it did not hide still works.
+    assert.equal(act(efsp, c.CTR, 'CTR', ctrStrip, { kind: 'SetBlock', blockId: 'SREG', value: 'ATC' }).ok, true);
+  } finally {
+    facilityConfig.setFacilityConfig(before, 'CENTER');
+  }
 });
+
 
 
 // ── Scenario 3: the airspace board ───────────────────────────────────────

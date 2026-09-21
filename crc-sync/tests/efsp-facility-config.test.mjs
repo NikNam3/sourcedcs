@@ -20,7 +20,7 @@ process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL = tmpFileTactical;
 
 const {
   getFacilityIds, getFacilityConfig, getPositionSet, getPositionClass, getCoveringChain, getBaysFor, getAllBays,
-  bayImpliesState, bayForImpliedState, coordinationBayFor, setFacilityConfig, validateConfig,
+  bayImpliesState, bayForImpliedState, coordinationBayFor, setFacilityConfig, validateConfig, isBlockVisible,
   DEFAULT_CONFIG, DEFAULT_CENTER_CONFIG, DEFAULT_TACTICAL_CONFIG, DEFAULT_FACILITY_ID,
 } = await import('../src/efsp/facility-config.js');
 const { DEPARTURE_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP, requiredBlocksFor } = await import('../src/efsp/block-map.js');
@@ -127,12 +127,18 @@ test('DEFAULT_CONFIG matches what a fresh, unconfigured store actually serves', 
   assert.deepEqual(getCoveringChain(), DEFAULT_CONFIG.coveringChain);
 });
 
-test('DEFAULT_CONFIG.blockVisibility.DEPARTURE includes every Block block-map.js defines for DEPARTURE — nothing hidden by default', () => {
-  assert.deepEqual(new Set(DEFAULT_CONFIG.blockVisibility.DEPARTURE), new Set(Object.keys(DEPARTURE_BLOCK_MAP)));
+test('nothing is hidden by default, at any Facility — and a Block added later stays that way', () => {
+  // This is an exclusion list precisely so a new Block cannot fall outside
+  // it. An inclusion list of "everything today" silently became a deny-list
+  // for everything invented tomorrow, which is how IFR/RSVC/SREG ended up
+  // unwritable on the real server (docs/adr/0041).
+  for (const config of [DEFAULT_CONFIG, DEFAULT_CENTER_CONFIG, DEFAULT_TACTICAL_CONFIG]) {
+    assert.deepEqual(config.hiddenBlocks, {}, config.facility);
+  }
 });
 
-test('validateConfig rejects a config omitting a required Block from blockVisibility.DEPARTURE', () => {
-  const candidate = { ...getFacilityConfig(), blockVisibility: { DEPARTURE: DEFAULT_CONFIG.blockVisibility.DEPARTURE.filter(id => id !== '1') } };
+test('validateConfig rejects a config hiding a required Block', () => {
+  const candidate = { ...getFacilityConfig(), hiddenBlocks: { DEPARTURE: ['1'] } };
   const result = validateConfig(candidate);
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'VALIDATION_ERROR');
@@ -141,7 +147,7 @@ test('validateConfig rejects a config omitting a required Block from blockVisibi
 
 test('validateConfig accepts a config omitting only optional (non-required) Blocks', () => {
   const optionalId = Object.keys(DEPARTURE_BLOCK_MAP).find(id => !requiredBlocksFor('DEPARTURE').includes(id));
-  const candidate = { ...getFacilityConfig(), blockVisibility: { DEPARTURE: DEFAULT_CONFIG.blockVisibility.DEPARTURE.filter(id => id !== optionalId) } };
+  const candidate = { ...getFacilityConfig(), hiddenBlocks: { DEPARTURE: [optionalId] } };
   assert.equal(validateConfig(candidate).ok, true);
 });
 
@@ -154,11 +160,11 @@ test('validateConfig rejects a Bay set referencing a Position not in the Positio
 
 test('setFacilityConfig rejects an invalid config and does not persist it', () => {
   const before = getFacilityConfig();
-  const invalid = { ...before, blockVisibility: { DEPARTURE: [] } };
+  const invalid = { ...before, hiddenBlocks: { DEPARTURE: ['1'] } };
   const result = setFacilityConfig(invalid);
   assert.equal(result.ok, false);
   // Unpersisted — the live config is unchanged.
-  assert.deepEqual(getFacilityConfig().blockVisibility, before.blockVisibility);
+  assert.deepEqual(getFacilityConfig().hiddenBlocks, before.hiddenBlocks);
 });
 
 test('loading an on-disk config that fails validation falls back to DEFAULT_CONFIG rather than throwing', async () => {
@@ -167,7 +173,7 @@ test('loading an on-disk config that fails validation falls back to DEFAULT_CONF
   const path2 = await import('path');
   const dir = fs2.mkdtempSync(path2.join(os2.tmpdir(), 'efsp-facility-config-badload-'));
   const file = path2.join(dir, 'efsp-facility-incirlik.json');
-  fs2.writeFileSync(file, JSON.stringify({ ...DEFAULT_CONFIG, blockVisibility: { DEPARTURE: [] } }));
+  fs2.writeFileSync(file, JSON.stringify({ ...DEFAULT_CONFIG, hiddenBlocks: { DEPARTURE: ['1'] } }));
 
   const prevPath = process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH;
   process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = file;
@@ -175,7 +181,7 @@ test('loading an on-disk config that fails validation falls back to DEFAULT_CONF
   process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = prevPath;
 
   assert.deepEqual(fresh.getPositionSet(), DEFAULT_CONFIG.positions);
-  assert.deepEqual(fresh.getFacilityConfig().blockVisibility, DEFAULT_CONFIG.blockVisibility);
+  assert.deepEqual(fresh.getFacilityConfig().hiddenBlocks, DEFAULT_CONFIG.hiddenBlocks);
 });
 
 test('bayForImpliedState resolves the Bay whose impliesState matches, falling back to the Position\'s first Bay', () => {
@@ -225,16 +231,13 @@ test('CTR has a Coordination Bay and an en-route Bay implying INBOUND', () => {
   assert.equal(bayImpliesState('ctr-enroute', 'CENTER'), 'INBOUND');
 });
 
-test('docs/adr/0022: CTR also has a departures Bay implying HANDED_OFF, and DEPARTURE blockVisibility, for a Strip handed off from APP', () => {
+test('docs/adr/0022: CTR also has a departures Bay implying HANDED_OFF, for a Strip handed off from APP', () => {
   assert.equal(bayImpliesState('ctr-departures', 'CENTER'), 'HANDED_OFF');
-  assert.deepEqual(new Set(DEFAULT_CENTER_CONFIG.blockVisibility.DEPARTURE), new Set(Object.keys(DEPARTURE_BLOCK_MAP)));
 });
 
-test('docs/adr/0023: both Facilities have an overflight Bay implying TRANSITING, and OVERFLIGHT blockVisibility covering every Block OVERFLIGHT_BLOCK_MAP defines', () => {
+test('docs/adr/0023: both Facilities have an overflight Bay implying TRANSITING', () => {
   assert.equal(bayImpliesState('app-overflight', 'INCIRLIK'), 'TRANSITING');
   assert.equal(bayImpliesState('ctr-overflight', 'CENTER'), 'TRANSITING');
-  assert.deepEqual(new Set(DEFAULT_CONFIG.blockVisibility.OVERFLIGHT), new Set(Object.keys(OVERFLIGHT_BLOCK_MAP)));
-  assert.deepEqual(new Set(DEFAULT_CENTER_CONFIG.blockVisibility.OVERFLIGHT), new Set(Object.keys(OVERFLIGHT_BLOCK_MAP)));
 });
 
 test('docs/adr/0022: aitAuthorized defaults to false on both Facilities', () => {
@@ -306,8 +309,19 @@ test('TAC_C2 and GCI each have Bays implying every MISSION lifecycle state that 
   assert.equal(bayImpliesState('gci-on-station', 'TACTICAL'), 'ON_STATION');
 });
 
-test('TACTICAL\'s blockVisibility.MISSION covers every Block MISSION_BLOCK_MAP defines', () => {
-  assert.deepEqual(new Set(DEFAULT_TACTICAL_CONFIG.blockVisibility.MISSION), new Set(Object.keys(MISSION_BLOCK_MAP)));
+test('every Block of every Role is writable at every Facility, since none hides anything', () => {
+  for (const [facilityId, map] of [['INCIRLIK', DEPARTURE_BLOCK_MAP], ['CENTER', DEPARTURE_BLOCK_MAP], ['TACTICAL', MISSION_BLOCK_MAP]]) {
+    const role = map === MISSION_BLOCK_MAP ? 'MISSION' : 'DEPARTURE';
+    for (const blockId of Object.keys(map)) {
+      assert.equal(isBlockVisible(role, blockId, facilityId), true, `${facilityId} ${role} ${blockId}`);
+    }
+  }
+});
+
+test('no default config carries a legacy blockVisibility list — one would hide every Block added since it was written', () => {
+  for (const config of [DEFAULT_CONFIG, DEFAULT_CENTER_CONFIG, DEFAULT_TACTICAL_CONFIG]) {
+    assert.equal(config.blockVisibility, undefined, config.facility);
+  }
 });
 
 test('setFacilityConfig targets the Facility named by its second argument, leaving the other untouched', () => {

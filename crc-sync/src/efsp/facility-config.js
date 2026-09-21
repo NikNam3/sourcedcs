@@ -85,11 +85,10 @@ const DEFAULT_CONFIG = {
   // A facility MAY narrow this (e.g. omit optional 9A sub-fields), but
   // validateConfig() below enforces the doctrinal exceptions (every
   // required Block MUST stay visible) rather than just checking shape.
-  blockVisibility: {
-    DEPARTURE: Object.keys(blockMap.DEPARTURE_BLOCK_MAP),
-    ARRIVAL: Object.keys(blockMap.ARRIVAL_BLOCK_MAP),
-    OVERFLIGHT: Object.keys(blockMap.OVERFLIGHT_BLOCK_MAP), // docs/adr/0023
-  },
+  // Blocks this Facility hides, by Role (guide §8.2's "a facility MAY narrow
+  // this"). Empty by default — nothing is hidden anywhere, and a Block added
+  // later stays visible without anyone regenerating a config file.
+  hiddenBlocks: {},
   bays: {
     OPS: [
       // ops-proposed listed FIRST deliberately — it's what bayForImpliedState's
@@ -178,11 +177,10 @@ const DEFAULT_CENTER_CONFIG = {
   // the chain" precedent (there is no second civil ATC Position upstream
   // of CTR built yet).
   coveringChain: {},
-  blockVisibility: {
-    ARRIVAL: Object.keys(blockMap.ARRIVAL_BLOCK_MAP),
-    DEPARTURE: Object.keys(blockMap.DEPARTURE_BLOCK_MAP), // docs/adr/0022
-    OVERFLIGHT: Object.keys(blockMap.OVERFLIGHT_BLOCK_MAP), // docs/adr/0023
-  },
+  // Blocks this Facility hides, by Role (guide §8.2's "a facility MAY narrow
+  // this"). Empty by default — nothing is hidden anywhere, and a Block added
+  // later stays visible without anyone regenerating a config file.
+  hiddenBlocks: {},
   bays: {
     CTR: [
       { bayId: 'ctr-enroute',           rackIds: ['main'], impliesState: 'INBOUND' },
@@ -225,9 +223,10 @@ const DEFAULT_TACTICAL_CONFIG = {
   // accepted "warn the controller, route nowhere" stranding case per guide
   // §4.8.6 rule 5 ("warn, do not block"), not a silent gap.
   coveringChain: { AIC: 'TAC_C2', GCI: 'TAC_C2' },
-  blockVisibility: {
-    MISSION: Object.keys(blockMap.MISSION_BLOCK_MAP),
-  },
+  // Blocks this Facility hides, by Role (guide §8.2's "a facility MAY narrow
+  // this"). Empty by default — nothing is hidden anywhere, and a Block added
+  // later stays visible without anyone regenerating a config file.
+  hiddenBlocks: {},
   bays: {
     TAC_C2: [
       { bayId: 'tac-c2-tasked',       rackIds: ['main'], impliesState: 'TASKED' },
@@ -303,8 +302,14 @@ function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
  * {ok:true} or {ok:false, reason:'VALIDATION_ERROR', detail}.
  */
 function validateConfig(candidate) {
-  for (const role of Object.keys(candidate.blockVisibility || {})) {
-    const result = blockMap.validateFacilityConfig({ role, visibleBlocks: candidate.blockVisibility[role] });
+  // The doctrinal check is unchanged (guide §8.3: every REQUIRED Block MUST
+  // stay visible) — only the direction it reads from. What a Facility hides
+  // is subtracted from the Block Map, and the remainder still has to contain
+  // every required Block.
+  for (const role of Object.keys(candidate.hiddenBlocks || {})) {
+    const all = Object.keys(blockMap.BLOCK_MAPS[role] || {});
+    const visibleBlocks = all.filter(b => !candidate.hiddenBlocks[role].includes(b));
+    const result = blockMap.validateFacilityConfig({ role, visibleBlocks });
     if (!result.ok) return result;
   }
   for (const positionId of Object.keys(candidate.bays || {})) {
@@ -326,6 +331,16 @@ function _loadOne(facilityId) {
   if (DERIVED_FACILITY_IDS.has(facilityId)) return config;
   try {
     const onDisk = JSON.parse(fs.readFileSync(FACILITY_CONFIG_PATHS[facilityId], 'utf8'));
+    // A `blockVisibility` inclusion list from before this was an exclusion
+    // list. Dropped rather than converted: every shipped one was a full set
+    // for its day, so it expressed no narrowing at all — converting it would
+    // faithfully preserve the accidental hiding of every Block added since,
+    // which is the bug. Any genuine narrowing has to be restated as
+    // `hiddenBlocks`, and the warning says so.
+    if (onDisk.blockVisibility) {
+      console.warn(`[efsp-facility-config] ${facilityId}: ignoring a legacy blockVisibility list — express any narrowing as hiddenBlocks instead`);
+      delete onDisk.blockVisibility;
+    }
     const merged = { ...deepClone(defaults), ...onDisk };
     const check = validateConfig(merged);
     if (!check.ok) {
@@ -388,23 +403,26 @@ function getBaysFor(positionId, facilityId = DEFAULT_FACILITY_ID) {
  * May this Facility write this Block on this Role? (guide §8.1 — "the
  * configurability is the specification.")
  *
- * blockVisibility was previously read only by validateConfig() at load time,
- * to check that a narrowed config kept every REQUIRED Block visible. Nothing
- * consulted it on the write path, so a Block a Facility had hidden was still
- * writable by any client that named it. Neither shipped config narrows
- * anything today, so this is latent rather than exploited — but the contract
- * is that the config decides, and it has to decide at the point of the write.
+ * Expressed as what a Facility HIDES, not what it shows. The original shape
+ * was an inclusion list, which looked equivalent and was not: a persisted
+ * list is a snapshot of "everything that existed the day it was written", so
+ * every Block invented afterwards silently fell outside it. The shipped
+ * configs had frozen lists from before the separation-model Blocks existed,
+ * which meant `IFR`/`RSVC`/`SREG` were unwritable on the real server — and
+ * since completing a TOFI exit requires setting `SREG` to ATC, tactical
+ * control could be entered and never left. The release Blocks 14A/14D and
+ * the frequency Block 22 were caught the same way. Tests never saw it
+ * because they build config from the defaults, which are derived from the
+ * Block Map and so are always current.
  *
- * A Role with no entry at all is unrestricted, not invisible: a Facility that
- * simply doesn't describe a Role (TACTICAL lists only MISSION) is saying
- * nothing about it, not hiding every Block of it.
+ * An exclusion list cannot drift that way: a new Block is visible until
+ * somebody deliberately hides it.
  */
 function isBlockVisible(role, blockId, facilityId = DEFAULT_FACILITY_ID) {
   const config = configs.get(facilityId);
   if (!config) return true;
-  const visible = (config.blockVisibility || {})[role];
-  if (!visible) return true;
-  return visible.includes(blockId);
+  const hidden = (config.hiddenBlocks || {})[role];
+  return !hidden || !hidden.includes(blockId);
 }
 
 // Includes each Bay's owning positionId — lost by a plain Object.values()
