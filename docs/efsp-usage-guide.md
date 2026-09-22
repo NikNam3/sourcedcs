@@ -271,7 +271,7 @@ Strip {
   orderKey          fractional-index string; sort order within a Rack
   annotations       { blockId: { blockId, entries: [{value, status, at, by}] } } — §3.7 append-only cells (below)
   flags             { offset, flipped, removeIndicator, highlight, attention } — the four paper gestures (below)
-  correlation       { state: 'UNCORRELATED' } — WP5 track-correlation hook, always inert right now
+  correlation       which contact on the scope this Strip is — WP5, live. See §8C
   coordination      null, or the WP4A cross-Facility exchange record — see §8
   createdAt/updatedAt/updatedBy
 }

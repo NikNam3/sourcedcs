@@ -491,13 +491,19 @@ after every further deliverable.
 
 ## Files
 
-**New (crc-sync):** `src/efsp/marsa-store.js`, `src/efsp/field-state-store.js`,
-`config/efsp-field-state-*.json`, `tests/efsp-marsa-store.test.mjs`,
-`tests/efsp-scenario-marsa.test.mjs`, `tests/efsp-field-state.test.mjs`,
+> Phases 1–2 are built, so several entries below already exist. **Still to create:**
+> `crc-sync/src/efsp/field-state-store.js`, `crc-sync/src/efsp/field-state.js` (the pure module),
+> `crc-sync/tests/efsp-field-state.test.mjs`, `crc-sync/tests/efsp-scenario-field-state.test.mjs`,
+> `crc-desktop/app/public/js/panels/efsp/field-state-panel.js` and
+> `crc-desktop/tests/efsp-field-state-client.test.js`.
+
+**New (crc-sync):** ~~`src/efsp/marsa-store.js`~~ (built, `0051`), `src/efsp/field-state-store.js`,
+`config/efsp-field-state-*.json`, ~~`tests/efsp-marsa-store.test.mjs`~~,
+~~`tests/efsp-scenario-marsa.test.mjs`~~, `tests/efsp-field-state.test.mjs`,
 `tests/efsp-scenario-field-state.test.mjs`.
 
-**New (crc-desktop):** `app/public/js/panels/efsp/marsa-badge.js`,
-`app/public/js/panels/efsp/field-state-panel.js`, `tests/efsp-marsa-client.test.js`,
+**New (crc-desktop):** ~~`app/public/js/panels/efsp/marsa-badge.js`~~ (built, `0051`),
+`app/public/js/panels/efsp/field-state-panel.js`, ~~`tests/efsp-marsa-client.test.js`~~,
 `tests/efsp-field-state-client.test.js`.
 
 **Changed (crc-sync):** `src/efsp/index.js` (compose + persist/restore both new stores),
@@ -524,16 +530,31 @@ its own §1 says so).
 
 Per phase, in order:
 
-1. `cd crc-sync && npm test` — must stay green and grow from **984**.
-2. `cd crc-desktop && npm test` — must stay green and grow from **324**.
+1. `cd crc-sync && npm test` — must stay green and grow from **1052** (Phase 2's baseline).
+2. `cd crc-desktop && npm test` — must stay green and grow from **361**.
 3. **Restart the local crc-sync process** after any `crc-sync/src/` edit — Node does not
    hot-reload and a stale process looks exactly like a broken change (briefing §6).
-4. **Walk the sortie by hand in the running app**, not just in the suite. For Phase 1 that is:
-   file a tanker and two receivers, declare MARSA from the tanker's Strip, confirm the badge
-   appears on all three, assign a heading to one receiver, confirm all three Strips show the void
-   with the cause — then repeat after `MarkRendezvous` and confirm it does *not* void.
-5. **Then walk the pilot requests**, which is where `0050`'s four defects came from: a receiver
-   joining late, one breaking off, a tanker landing mid-AR, a controller trying to set `SREG`
-   by hand while a relation is live, and a crc-sync restart mid-relation.
+4. **Walk the sortie by hand in the running app**, not just in the suite. For **Phase 3** that is:
+   file a departure and taxi it into `twr-runway-queue`'s `rwy-05` Rack; as `OPS`, begin a barrier
+   change on 05; confirm the departure's NLA is inhibited **with the reason rendered on the Strip**,
+   and that an arrival on final to the same runway is too; complete the inspection as `OPS` and
+   confirm both free up. Then propose a runway change as `TWR` and confirm `BeginRunwayChange` is
+   refused until **both** `OPS` and `APP` have acknowledged.
+5. **Then walk the pilot requests** — the axis that found `0050`'s four defects and, for §9.7,
+   the one most likely to find more:
+   - *"request runway 23"* from a Strip already sitting in the `rwy-05` Rack.
+   - an aircraft **already on final** when the barrier change starts. The plan is explicit that
+     `FINAL → LANDED` must **not** be inhibited: it is an observation that the aircraft touched
+     down, and inhibiting it makes the board lie and strands a landed aircraft with no legal
+     transition. Walk it and confirm.
+   - a divert arriving with `3F` (`HOOK`) set onto a runway whose gear is derigged.
+   - a runway change proposed and then **rejected** — `REJECTED` is terminal; check what the
+     proposer sees.
+   - two controllers reconfiguring at once (the `STALE_REV` collision, which is correct rather
+     than costly — confirm the refusal is *audited*, not returned early).
+   - **a crc-sync restart mid-suspension.** This is the one the rule-5 design exists for: a
+     controller reconnecting after a suspension must not see an `OPEN` runway.
 6. Note in the ADR that **browser automation was not available** in the prior session, so
-   anything layout-dependent is still unverified by eye unless it gets clicked this time.
+   anything layout-dependent is still unverified by eye unless it gets clicked this time. As of
+   Phase 2 the Strip carries seven badge/indicator slots plus `HOOK` and `ORDNANCE`, and the
+   field-state panel is a new dock surface nobody has seen.

@@ -38,7 +38,7 @@ crc-sync/src/efsp/block-map.js            the Block Maps, the interlock tags, MI
 crc-desktop/app/public/js/panels/efsp/marsa-badge.js  the badge + the participant highlight
 crc-sync/src/state-paths.js               shipped defaults (config/) vs runtime state (state/)
 crc-desktop/app/public/js/panels/efsp/    the Strip panel, the airspace board, correlation-highlight
-docs/adr/                                 0001-0051, the reasoning behind every decision below
+docs/adr/                                 0001-0052, the reasoning behind every decision below
 docs/efsp-usage-guide.md                  how a controller actually drives it
 ```
 
