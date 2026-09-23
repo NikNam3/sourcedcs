@@ -163,7 +163,26 @@ function _handleResync(ctx, msg) {
   if (!boardStore || !positionStore) return { ack: _snapshotMessage(ctx) };
 
   const lastSeq = Number.isFinite(msg.lastBoardSeq) ? msg.lastBoardSeq : -1;
-  const withinWindow = lastSeq >= 0 && boardStore.currentSeq - lastSeq <= RESYNC_RING_WINDOW;
+  // Two ways a delta cannot serve this client, and only one of them used to be
+  // checked.
+  //
+  // `currentSeq - lastSeq > WINDOW` is the client being too far BEHIND — it
+  // missed more than the ring holds, so replaying from there would skip
+  // changes.
+  //
+  // `lastSeq > currentSeq` is the server having gone BACKWARDS: it restarted
+  // with no snapshot, or was restored from an older one, so its sequence is
+  // lower than what the client already saw. The subtraction then goes NEGATIVE
+  // and sailed through the window check — the server replayed a delta from an
+  // empty ring, found nothing, and answered "no changes" to a client holding a
+  // whole Board of Strips that no longer exist. They stayed on screen forever,
+  // and no amount of reconnecting cleared them.
+  //
+  // Found by clearing the local Board during development and watching a Strip
+  // survive it. Same class as docs/adr/0049's five: not a mutation, a
+  // TRANSITION — here, the server's own lifetime.
+  const rewound = lastSeq > boardStore.currentSeq;
+  const withinWindow = lastSeq >= 0 && !rewound && boardStore.currentSeq - lastSeq <= RESYNC_RING_WINDOW;
 
   if (withinWindow) {
     const delta = boardStore.getDeltaSince(lastSeq);

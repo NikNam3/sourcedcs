@@ -220,10 +220,26 @@ test('resync with a missing/non-finite lastBoardSeq is treated as TOO_OLD (snaps
   assert.equal(result.ack.type, 'efsp-snapshot');
 });
 
+test('resync from a client AHEAD of the server returns a snapshot — the server restarted', () => {
+  // The case a cleared or rolled-back Board produces, and the one the window
+  // check missed for its whole life: `currentSeq - lastSeq` goes NEGATIVE, which
+  // is trivially <= the window, so the server replayed a delta from an empty
+  // ring, found nothing, and told a client holding a whole Board of Strips that
+  // nothing had changed. They never went away.
+  const ctx = makeCtx();
+  const ahead = ctx.boardStore.currentSeq + 50;
+
+  const result = handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq: ahead }, noopPersist);
+  assert.equal(result.ack.type, 'efsp-snapshot', 'a client ahead of the server must be re-seeded, not patched');
+  // And the snapshot is authoritative about emptiness: applyEfspSnapshot
+  // clears before it fills, so this is what actually removes the stale Strips.
+  assert.deepEqual(result.ack.strips, []);
+});
+
 test('resync never returns a third message type — only efsp-board-delta or efsp-snapshot', () => {
   const ctx = makeCtx();
   handleMessage(ctx, SESSION, createStripMsg(), noopPersist);
-  for (const lastBoardSeq of [ctx.boardStore.currentSeq, 0, -1, ctx.boardStore.currentSeq - RESYNC_RING_WINDOW]) {
+  for (const lastBoardSeq of [ctx.boardStore.currentSeq, 0, -1, ctx.boardStore.currentSeq - RESYNC_RING_WINDOW, ctx.boardStore.currentSeq + 1]) {
     const result = handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq }, noopPersist);
     assert.ok(['efsp-board-delta', 'efsp-snapshot'].includes(result.ack.type));
   }
