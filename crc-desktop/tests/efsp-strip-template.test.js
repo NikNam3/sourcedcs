@@ -419,3 +419,37 @@ test('supersededAnnotationEntries is everything the Block is no longer showing a
 test('a Block with only an ACTIVE entry has no superseded entries', () => {
   assert.deepEqual(supersededAnnotationEntries(withCell([e('6000', 'ACTIVE')]), '21'), []);
 });
+
+// ── labels have to tell Blocks apart ─────────────────────────────────────
+
+test('no two Blocks in a Role share a label', () => {
+  // Surfaced the moment the expanded view started rendering the long tail: a
+  // DEPARTURE Strip had FOUR fields labelled NOTE (2A, 19, 23, 24) and THREE
+  // labelled RESTR (9A, 9B, 9C). All seven were writable and none of them said
+  // what it was. They had never been rendered, so nobody had to read them.
+  //
+  // Several were not merely ambiguous but wrong against guide §6.2: 2A is the
+  // Voice Clearance Issued checkbox, 19 is Gate/parking, 23 is Facility
+  // remarks, 24 is Miles/minutes-in-trail, and 9A-9C are "facility use", not
+  // altitude restrictions — those are Block 9's own manual half.
+  for (const [role, map] of Object.entries(BLOCK_MAPS)) {
+    const byLabel = {};
+    for (const [id, def] of Object.entries(map)) {
+      if (!def.label) continue;
+      (byLabel[def.label] = byLabel[def.label] || []).push(id);
+    }
+    const dupes = Object.entries(byLabel).filter(([, ids]) => ids.length > 1);
+    assert.deepEqual(dupes, [], `${role}: two Blocks cannot share one label`);
+  }
+});
+
+test('every label fits the compact chip', () => {
+  // strip-template.js's own header rule: 8 characters or fewer, so the compact
+  // view never has to grow wider to fit one.
+  for (const [role, map] of Object.entries(BLOCK_MAPS)) {
+    for (const [id, def] of Object.entries(map)) {
+      if (!def.label) continue;
+      assert.ok(def.label.length <= 8, `${role}/${id}: label "${def.label}" is ${def.label.length} characters`);
+    }
+  }
+});

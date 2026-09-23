@@ -19,11 +19,16 @@
 // never used for display, only validation/permission/routing, matching the
 // same asymmetry efsp-block-map-parity.test.js already documents for
 // `field`/`flag`. Kept to 8 characters or fewer so the compact view never
-// has to grow wider to fit one.
+// has to grow wider to fit one, and UNIQUE within a Role — a label is the
+// only thing telling two Blocks apart, and the expanded view renders the long
+// tail where four Blocks once all read NOTE and three all read RESTR. Take the
+// wording from the guide's own §6.2/§6.3 field column rather than inventing
+// one; several of those seven were wrong, not just ambiguous.
+// efsp-strip-template.test.js holds both rules.
 const DEPARTURE_BLOCK_MAP = {
   '1':  { required: true,  label: 'CALLSIGN', target: { kind: 'fdr', path: 'identity.callsign' } },
   '2':  { required: true,  label: 'REV',      target: { kind: 'system', field: 'rev' } },
-  '2A': { required: false, label: 'NOTE',     target: { kind: 'annotation' } },
+  '2A': { required: false, label: 'VOICE',     target: { kind: 'annotation' } },
   '3':  { required: true,  label: 'TYPE',     target: { kind: 'composite' } },
   // docs/adr/0023 gap-closure — see crc-sync's block-map.js's '3A' comment
   // for the full rationale. Plain 'fdr'-routed, like '5A'.
@@ -57,9 +62,9 @@ const DEPARTURE_BLOCK_MAP = {
   '8A': { required: true,  label: 'RWY',      target: { kind: 'fdr', path: 'filed.departureRunway' } },
   '8B': { required: true,  label: 'DEST',     target: { kind: 'fdr', path: 'filed.destinationAirport' } },
   '9':  { required: true,  label: 'RTE',      target: { kind: 'fdr', path: 'filed.route' }, provenance: 'COMPUTER_GENERATED' },
-  '9A': { required: false, label: 'RESTR',    target: { kind: 'annotation' } },
-  '9B': { required: false, label: 'RESTR',    target: { kind: 'annotation' } },
-  '9C': { required: false, label: 'RESTR',    target: { kind: 'annotation' } },
+  '9A': { required: false, label: 'FAC A',    target: { kind: 'annotation' } },
+  '9B': { required: false, label: 'FAC B',    target: { kind: 'annotation' } },
+  '9C': { required: false, label: 'FAC C',    target: { kind: 'annotation' } },
   '9D': { required: true,  label: 'FULL RTE', target: { kind: 'fdr', path: 'filed.fullRouteClearance' } },
   '9E': { required: true,  label: 'RMKS',     target: { kind: 'fdr', path: 'filed.remarks' } },
   // §9.10 stereo route name (docs/adr/0050) — mirrors crc-sync's
@@ -85,7 +90,7 @@ const DEPARTURE_BLOCK_MAP = {
   '16': { required: false, label: 'MVMT',     target: { kind: 'fdr', path: 'assigned.movementAreaEntryTimeUtc' } },
   '17': { required: false, label: 'TAXI',     target: { kind: 'fdr', path: 'assigned.taxiTimeUtc' } },
   '18': { required: true,  label: 'TAKEOFF',  target: { kind: 'fdr', path: 'assigned.takeoffTimeUtc' } },
-  '19': { required: false, label: 'NOTE',     target: { kind: 'annotation' } },
+  '19': { required: false, label: 'GATE',     target: { kind: 'annotation' } },
   // These are NOT scratchpads, and were mislabelled as such until WP6. Guide
   // §6.2's own DEPARTURE table names Block 20 "Heading" and Block 21 "Initial
   // altitude"; it is ARRIVAL and OVERFLIGHT where 20/21 are the radar
@@ -109,8 +114,8 @@ const DEPARTURE_BLOCK_MAP = {
   // an airspace's frequency can write it directly and it validates as one
   // unit and one type (MHz, a number).
   '22': { required: false, label: 'FREQ',     target: { kind: 'frequency' } },
-  '23': { required: false, label: 'NOTE',     target: { kind: 'annotation' } },
-  '24': { required: true,  label: 'NOTE',     target: { kind: 'annotation' } },
+  '23': { required: false, label: 'FAC RMKS',     target: { kind: 'annotation' } },
+  '24': { required: true,  label: 'MIT RMKS',     target: { kind: 'annotation' } },
   // WP4A (docs/adr/0018), §4.6.4 — airspace ownership as a direction. Not
   // fdr/annotation-routed on either side (see efsp-block-map-parity.test.js's
   // isWritableKind) — edited via a dedicated <select> widget (bay-view.js's
@@ -135,7 +140,7 @@ const DEPARTURE_BLOCK_MAP = {
 const ARRIVAL_BLOCK_MAP = {
   '1':        { required: true,  label: 'CALLSIGN', target: { kind: 'fdr', path: 'identity.callsign' } },
   '2':        { required: true,  label: 'REV',      target: { kind: 'system', field: 'rev' } },
-  '2A':       { required: false, label: 'NOTE',     target: { kind: 'annotation' } },
+  '2A':       { required: false, label: 'VOICE',     target: { kind: 'annotation' } },
   '3':        { required: true,  label: 'TYPE',     target: { kind: 'composite' } },
   '3A':       { required: false, label: 'ACFT',     target: { kind: 'fdr', path: 'identity.aircraftType' } }, // docs/adr/0023 gap-closure — see DEPARTURE_BLOCK_MAP's '3A' comment
   '3B':       { required: false, label: 'WAKE',     target: { kind: 'fdr', path: 'identity.wakeCategory' } },
@@ -161,9 +166,9 @@ const ARRIVAL_BLOCK_MAP = {
   '9A-VECTOR':{ required: false, label: 'VECTOR',   target: { kind: 'annotation' }, interlock: 'COURSE' }, // §9.2 — a radar vector IS a course assignment
   '9A-SPEED': { required: false, label: 'SPEED',    target: { kind: 'annotation' } },
   '9E':       { required: true,  label: 'RMKS',     target: { kind: 'fdr', path: 'filed.remarks' } },
-  '20':       { required: false, label: 'SCRATCH',  target: { kind: 'annotation' } },
-  '21':       { required: false, label: 'SCRATCH',  target: { kind: 'annotation' } },
-  '24':       { required: true,  label: 'NOTE',     target: { kind: 'annotation' } },
+  '20':       { required: false, label: 'SCRATCH1',  target: { kind: 'annotation' } },
+  '21':       { required: false, label: 'SCRATCH2',  target: { kind: 'annotation' } },
+  '24':       { required: true,  label: 'MIT RMKS',     target: { kind: 'annotation' } },
   '24A':      { required: false, label: 'ARSPC',    target: { kind: 'airspace-owner' } }, // WP4A, §4.6.4 — see DEPARTURE_BLOCK_MAP's '24A' comment
   'IFR':      { required: false, label: 'IFR',      target: { kind: 'tofi', field: 'ifrActive' } },       // WP4A second slice, §4.6.3 — see DEPARTURE_BLOCK_MAP's comment
   'RSVC':     { required: false, label: 'RADAR',    target: { kind: 'tofi', field: 'radarService' } },
@@ -211,9 +216,9 @@ const OVERFLIGHT_BLOCK_MAP = {
   '8B': { required: true,  label: 'DEST',     target: { kind: 'fdr', path: 'filed.destinationAirport' } },
   '9':  { required: true,  label: 'RTE',      target: { kind: 'fdr', path: 'filed.route' }, provenance: 'COMPUTER_GENERATED' },
   '9E': { required: true,  label: 'RMKS',     target: { kind: 'fdr', path: 'filed.remarks' } },
-  '20': { required: false, label: 'SCRATCH',  target: { kind: 'annotation' } },
-  '21': { required: false, label: 'SCRATCH',  target: { kind: 'annotation' } },
-  '24': { required: true,  label: 'NOTE',     target: { kind: 'annotation' } },
+  '20': { required: false, label: 'SCRATCH1',  target: { kind: 'annotation' } },
+  '21': { required: false, label: 'SCRATCH2',  target: { kind: 'annotation' } },
+  '24': { required: true,  label: 'MIT RMKS',     target: { kind: 'annotation' } },
   '24A':{ required: false, label: 'ARSPC',    target: { kind: 'airspace-owner' } },
   'IFR':  { required: false, label: 'IFR',     target: { kind: 'tofi', field: 'ifrActive' } },      // WP4A second slice, §4.6.3 — see DEPARTURE_BLOCK_MAP's comment
   'RSVC': { required: false, label: 'RADAR',   target: { kind: 'tofi', field: 'radarService' } },
