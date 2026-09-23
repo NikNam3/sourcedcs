@@ -779,7 +779,23 @@ function _closeBindPopover() {
     _openBindPopoverEl.parentNode.removeChild(_openBindPopoverEl);
   }
   _openBindPopoverEl = null;
-  document.removeEventListener('pointerdown', _closeBindPopover, true);
+  document.removeEventListener('pointerdown', _onDocPointerDownCloseBindPopover, true);
+}
+
+// The dismiss-on-outside-click listener MUST test the target, the way
+// _onDocPointerDownCloseTofiPopover and its Coordinate/Highlight peers always
+// have. This one was registered as a bare `_closeBindPopover`, so it closed on
+// ANY pointerdown — including one inside its own popover.
+//
+// The popover's own `pointerdown` -> stopPropagation() looks like it should
+// prevent that and cannot: this listener is on `document` in the CAPTURE
+// phase, so it runs BEFORE the event ever reaches the popover to be stopped.
+// The candidate row was therefore torn out of the DOM between pointerdown and
+// pointerup, and a `click` never fired on it at all — so binding by pointer
+// silently did nothing, while `.bind` worked and every dispatch test passed
+// (the DOM stub invokes click handlers directly and fires no pointerdown).
+function _onDocPointerDownCloseBindPopover(e) {
+  if (_openBindPopoverEl && !_openBindPopoverEl.contains(e.target)) _closeBindPopover();
 }
 
 /**
@@ -826,7 +842,7 @@ function _openBindPopover(strip, anchorEl, candidateTrackIds) {
 
   anchorEl.appendChild(popover);
   _openBindPopoverEl = popover;
-  setTimeout(() => document.addEventListener('pointerdown', _closeBindPopover, true), 0);
+  setTimeout(() => document.addEventListener('pointerdown', _onDocPointerDownCloseBindPopover, true), 0);
 }
 
 /**
@@ -893,7 +909,16 @@ function _closeMarsaPopover() {
     _openMarsaPopoverEl.parentNode.removeChild(_openMarsaPopoverEl);
   }
   _openMarsaPopoverEl = null;
-  document.removeEventListener('pointerdown', _closeMarsaPopover, true);
+  document.removeEventListener('pointerdown', _onDocPointerDownCloseMarsaPopover, true);
+}
+
+// Tests the target, for the reason spelled out on
+// _onDocPointerDownCloseBindPopover above. This popover is the one where it
+// hurt most: it is the only one carrying <select>s and a text input, so
+// pressing ANY of its own controls dismissed it, and Declare / Rendezvous /
+// End / Void could never be clicked at all.
+function _onDocPointerDownCloseMarsaPopover(e) {
+  if (_openMarsaPopoverEl && !_openMarsaPopoverEl.contains(e.target)) _closeMarsaPopover();
 }
 
 /**
@@ -970,7 +995,7 @@ function _openMarsaPopover(strip, anchorEl) {
 
   anchorEl.appendChild(popover);
   _openMarsaPopoverEl = popover;
-  setTimeout(() => document.addEventListener('pointerdown', _closeMarsaPopover, true), 0);
+  setTimeout(() => document.addEventListener('pointerdown', _onDocPointerDownCloseMarsaPopover, true), 0);
 }
 
 /** Which other live flights this one could be put into a relation with. */
@@ -1458,7 +1483,12 @@ function _closeAirspacePopover() {
   document.removeEventListener('pointerdown', _onDocPointerDownCloseAirspacePopover, true);
 }
 
-function _onDocPointerDownCloseAirspacePopover() { _closeAirspacePopover(); }
+// Same fix, same reason (see _onDocPointerDownCloseBindPopover). This one
+// took no event argument at all, so it closed on every pointerdown — which
+// made the airspace <select> and its Send button unreachable by pointer.
+function _onDocPointerDownCloseAirspacePopover(e) {
+  if (_openAirspacePopoverEl && !_openAirspacePopoverEl.contains(e.target)) _closeAirspacePopover();
+}
 
 function _openAirspaceEntryPopover(strip, anchorEl) {
   _closeAirspacePopover();

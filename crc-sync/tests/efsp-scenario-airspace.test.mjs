@@ -293,3 +293,38 @@ test('SCENARIO a flight approved into a block nobody activated: allowed, flagged
   const alerts = await obligationAlerts(efsp, facilityConfig);
   assert.equal(alerts.some(a => a.obligationType === 'UNACTIVATED_AIRSPACE_ENTRY'), true);
 });
+
+// ── Block 22 typed by hand (the frequency a controller hears on the radio) ──
+
+test('SCENARIO a controller types a frequency into Block 22 and it is accepted', () => {
+  // Found in the running app: every typed frequency was refused with
+  // `frequency must be a number between 30 and 400 MHz, not "360.200"` — a
+  // message naming a value that is plainly in range. The panel's click-to-edit
+  // cell sends a string, isValidFrequency() requires a number, and nothing
+  // bridged them, so the only writer that ever worked was ApproveAirspaceEntry
+  // passing a number straight out of config.
+  const efsp = createEfsp();
+  const c = crew(efsp, ATC);
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'FREQ11' });
+
+  const typed = mustAct(efsp, c.APP, 'APP', strip, { kind: 'SetBlock', blockId: '22', value: '360.200' });
+  assert.equal(efsp.fdrStore.getFdr(typed.fdrId).comms.workingFrequencyMhz, 360.2);
+
+  // A whole number and surrounding whitespace both work.
+  const round = mustAct(efsp, c.APP, 'APP', typed, { kind: 'SetBlock', blockId: '22', value: ' 251 ' });
+  assert.equal(efsp.fdrStore.getFdr(round.fdrId).comms.workingFrequencyMhz, 251);
+
+  // Clearing still clears rather than writing 0 — Number('') is 0, which is
+  // the trap this had to step around.
+  const cleared = mustAct(efsp, c.APP, 'APP', round, { kind: 'SetBlock', blockId: '22', value: '' });
+  assert.equal(efsp.fdrStore.getFdr(cleared.fdrId).comms.workingFrequencyMhz, null);
+
+  // And genuinely bad input is still refused, with the band in the message.
+  for (const bad of ['not a frequency', '12.5', '9000']) {
+    const result = act(efsp, c.APP, 'APP', efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId), {
+      kind: 'SetBlock', blockId: '22', value: bad,
+    });
+    assert.equal(result.ok, false, bad);
+    assert.match(result.detail, /frequency must be a number/);
+  }
+});

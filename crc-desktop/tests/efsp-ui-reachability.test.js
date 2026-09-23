@@ -168,10 +168,19 @@ function click(el) {
  */
 function renderStrip({ strip, fdr, held, airspaces = [], correlations = [], tracks = [], marsa = [], otherStrips = [] }) {
   const sent = [];
+  const docListeners = {};
   const sandbox = {
     console, module: { exports: {} }, setTimeout, clearTimeout, Date, JSON, Math, Number, Set, Map,
     Array, Object, String, Boolean, isNaN, parseInt, parseFloat, crypto: { randomUUID: () => 'test-id' },
-    document: { getElementById: () => null, createElement: makeElement, addEventListener() {}, removeEventListener() {}, body: makeElement('body') },
+    // Document-level listeners are RECORDED, not dropped. The dismiss-on-
+    // outside-click popovers register here in the capture phase, and a stub
+    // that swallowed them made a whole class of bug — a popover that closes on
+    // its own controls — structurally invisible to every test in this file.
+    document: {
+      getElementById: () => null, createElement: makeElement, body: makeElement('body'),
+      addEventListener(type, fn) { (docListeners[type] = docListeners[type] || []).push(fn); },
+      removeEventListener(type, fn) { docListeners[type] = (docListeners[type] || []).filter(f => f !== fn); },
+    },
     window: { prompt: () => 'a note', getSelection: () => ({ removeAllRanges() {} }) },
   };
   sandbox.globalThis = sandbox;
@@ -200,7 +209,12 @@ function renderStrip({ strip, fdr, held, airspaces = [], correlations = [], trac
     positions: [], bays: [], airspaces, correlations, marsa,
   });
   const el = sandbox._buildStripEl(strip);
-  return { el, sent, sandbox };
+  // Fires what a real pointer press fires first: the document capture-phase
+  // listeners, before the event would reach the element itself.
+  const pointerDownOn = (target) => {
+    for (const fn of docListeners.pointerdown || []) fn({ target, stopPropagation() {}, preventDefault() {} });
+  };
+  return { el, sent, sandbox, pointerDownOn };
 }
 
 const FDR = {
@@ -766,4 +780,84 @@ test('an FDR from before the military namespace existed still renders its Strip'
   const { el } = renderStrip({ strip: stripAt(), fdr: legacy, held: ['APP'] });
   assert.equal(blockCell(el, '3G').textContent, '');
   assert.equal(blockCell(el, '3F').textContent, '');
+});
+
+// ── popovers must not dismiss on their own controls ──────────────────────
+//
+// Found by hand in the running app: the MARSA menu closed the instant you
+// pressed any of its selects. The cause was one missing target test in a
+// document-level CAPTURE-phase pointerdown listener — so the popover was torn
+// out between pointerdown and pointerup and its buttons never saw a click.
+//
+// Invisible to every other test here, because those call click handlers
+// directly and a real pointer press fires pointerdown first. These tests fire
+// it the way a browser does.
+
+// The dismiss listener is registered in a deferred setTimeout(…, 0) — so every
+// one of these has to let a real tick elapse first, or nothing is listening
+// and the "still open" half passes for the wrong reason.
+const tick = () => new Promise(r => setTimeout(r, 0));
+
+test('the MARSA popover survives a press on its own controls, and closes on one outside', async () => {
+  const { el, pointerDownOn } = renderStrip({ strip: stripAt(), fdr: FDR, held: ['APP'] });
+  click(findByText(el, 'MARSA…'));
+
+  const popover = descendants(el).find(c => (c.className || '').includes('efsp-marsa-popover'));
+  assert.ok(popover, 'no MARSA popover opened');
+  await tick();
+
+  // The stub's removeChild drops the node from its parent's children but
+  // leaves `parentNode` set, so attachment is tested by membership.
+  const attached = () => descendants(el).includes(popover);
+
+  const inner = descendants(popover)[0];
+  assert.ok(inner, 'the popover rendered no controls to press');
+  assert.ok(attached(), 'precondition: the popover is open before anything is pressed');
+  pointerDownOn(inner);
+  assert.ok(attached(), 'pressing a control inside the popover closed it');
+
+  pointerDownOn(el);
+  assert.equal(attached(), false, 'a press outside the popover must still dismiss it');
+});
+
+test('the bind and airspace popovers behave the same way', async () => {
+  // Both had the identical defect and both carry a picker plus a submit
+  // button, so both were unusable by pointer while their dot-command and
+  // server paths were fine.
+  const uncorrelated = stripAt({ correlation: { state: 'UNCORRELATED' } });
+  const bind = renderStrip({
+    strip: uncorrelated, fdr: FDR, held: ['APP'],
+    tracks: [{ id: 't1', callsign: 'VIPER1', lat: 37, lon: 35 }],
+  });
+  const bindBtn = descendants(bind.el).find(c => (c.className || '').includes('efsp-bind-btn'));
+  if (bindBtn) {
+    click(bindBtn);
+    await tick();
+    const popover = descendants(bind.el).find(c => (c.className || '').includes('popover'));
+    if (popover) {
+      const inner = descendants(popover)[0];
+      if (inner) {
+        bind.pointerDownOn(inner);
+        assert.ok(descendants(bind.el).includes(popover), 'the bind picker closed on its own candidate row');
+      }
+    }
+  }
+
+  const air = renderStrip({
+    strip: stripAt({ ownerPositionId: 'APP' }), fdr: FDR, held: ['APP'],
+    airspaces: [{ airspaceId: 'MOA1', name: 'North MOA', state: 'ACTIVE', workingFrequencyMhz: 251.0 }],
+  });
+  const airBtn = descendants(air.el).find(c => (c.textContent || '').includes('Airspace'));
+  if (airBtn) {
+    click(airBtn);
+    await tick();
+    const popover = descendants(air.el).find(c => (c.className || '').includes('popover'));
+    if (popover) {
+      const inner = descendants(popover)[0];
+      if (inner) {
+        air.pointerDownOn(inner);
+        assert.ok(descendants(air.el).includes(popover), 'the airspace popover closed on its own picker');
+      }
+    }
+  }
 });

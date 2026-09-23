@@ -72,6 +72,36 @@ function deepClone(obj) {
   return obj == null ? obj : JSON.parse(JSON.stringify(obj));
 }
 
+/**
+ * Block 22's value, as a frequency.
+ *
+ * Every Block a controller types into arrives as a STRING — the panel's
+ * click-to-edit cell is an <input type="text"> and always has been — while
+ * isValidFrequency() requires a number, deliberately, so that a configured
+ * airspace frequency and a flight's approved frequency can never validate
+ * differently (airspace-config.js's own header says so).
+ *
+ * Nothing bridged the two, so typing into Block 22 was refused with
+ * `frequency must be a number between 30 and 400 MHz, not "360.200"` — a
+ * message naming a value that looks perfectly valid, which is the worst kind.
+ * The Block has been reachable since the RANGE slice and the only writer that
+ * ever worked was ApproveAirspaceEntry, which passes a real number from config.
+ *
+ * Parsed here rather than coerced in the client because this is the one
+ * boundary every writer crosses; a client-side fix would leave the dot-command
+ * surface and any second client to make the same mistake again. Strict on
+ * purpose: Number('') is 0 and Number('  ') is 0, so a blank must be caught
+ * first, and anything that is not a plain decimal is left alone to be refused
+ * by the validator with its own message.
+ */
+function _frequencyFromBlockValue(value) {
+  if (value === '' || value === undefined || value === null) return null;
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  if (trimmed === '') return null;
+  return /^\d+(\.\d+)?$/.test(trimmed) ? Number(trimmed) : value;
+}
+
 class BoardStore {
   /**
    * @param {import('./fdr-store').FdrStore} fdrStore
@@ -787,7 +817,7 @@ class BoardStore {
       const fdrResult = target.kind === 'airspace-owner'
         ? this._fdrStore.setAirspaceOwner(strip.fdrId, op.value, { by })
         : target.kind === 'frequency'
-          ? this._fdrStore.setWorkingFrequency(strip.fdrId, op.value === '' || op.value === undefined ? null : op.value, { by })
+          ? this._fdrStore.setWorkingFrequency(strip.fdrId, _frequencyFromBlockValue(op.value), { by })
           : target.kind === 'tofi'
             ? this._fdrStore.setTofi(strip.fdrId, { [target.field]: op.value }, { by })
             // WP6 (docs/adr/0052), guide §6.4 — the military extension
