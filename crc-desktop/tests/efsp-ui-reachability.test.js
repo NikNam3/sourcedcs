@@ -82,15 +82,63 @@ for (const role of Object.keys(BLOCK_MAPS)) {
   });
 }
 
-test('the expanded view renders EVERY Block for the Role, in Block Map order', () => {
-  // Including the read-only ones — it is the first place Block 2/4/25 can be
-  // read explicitly. Map order is deliberate: it is the order of the paper
-  // strip and of the guide's own §6.2/§6.3 tables, so it is learnable and
-  // stable, unlike anything derived from a property that changes as the Strip
-  // is worked.
+test('the expanded view shows what the chips do NOT, in Block Map order', () => {
+  // It listed every Block at first, which made it mostly a second copy of what
+  // the controller was already looking at — 26 of ~30 rows saying nothing new,
+  // with the few that mattered buried among them. The panel's job is reaching
+  // what the chips cannot.
+  //
+  // Map order is deliberate: the order of the paper strip and of the guide's
+  // own §6.2/§6.3 tables, so it is learnable and stable rather than derived
+  // from a property that changes as the Strip is worked.
   for (const role of Object.keys(BLOCK_MAPS)) {
-    assert.deepEqual(expandedBlocksFor(role), Object.keys(BLOCK_MAPS[role]), role);
+    const compact = compactBlocksFor(role);
+    const expanded = expandedBlocksFor(role);
+    const expected = Object.keys(BLOCK_MAPS[role]).filter(id => !compact.includes(id));
+    assert.deepEqual(expanded, expected, role);
+    assert.equal(expanded.some(id => compact.includes(id)), false, `${role}: duplicates a chip`);
   }
+});
+
+test('a chip whose history is truncated stays in the expanded view, so the * has somewhere to land', () => {
+  // §3.7 rule 2's overflow indicator promises "full history on tap". Filtering
+  // a Block out just because it has a chip would make that promise point at
+  // nothing — so a Block the chip cannot fully show is the one exception to
+  // "only what is not already on the Strip".
+  const many = ['2000', '3000', '4000', '5000'].map(v => ({ value: v, status: 'SUPERSEDED', at: 1, by: 'c-OPS' }));
+  const strip = stripAt({
+    state: 'PROPOSED', ownerPositionId: 'OPS',
+    annotations: { 21: { blockId: '21', entries: [...many, { value: '6000', status: 'ACTIVE', at: 2, by: 'c-OPS' }] } },
+  });
+  assert.ok(compactBlocksFor('DEPARTURE').includes('21'), 'precondition: 21 is a chip');
+
+  const r = renderStrip({ strip, fdr: FDR, held: ['OPS'] });
+  r.sandbox.renderAllOpenEfspBays = () => {};
+  click(descendants(r.el).find(c => (c.className || '').includes('efsp-expand-btn')));
+  const expandedEl = r.sandbox._buildStripEl(strip);
+  const ids = descendants(expandedEl).filter(c => c.dataset && c.dataset.expandedBlock).map(c => c.dataset.expandedBlock);
+  assert.ok(ids.includes('21'), 'a truncated chip must still be reachable in full');
+});
+
+test('an expansion toggle makes the reconciler rebuild the Strip', () => {
+  // The bug this exists for: the toggle set its state and asked for a
+  // re-render, but the reconciler reuses an element unless something marks it
+  // dirty, and it only ever compared `rev` and selection. Expansion is
+  // client-local and moves neither, so the button did nothing visible at all.
+  //
+  // Asserted against the RULE, not against a freshly-built element — a test
+  // that only checks the `data-expanded` stamp passes whether or not the
+  // reconciler ever reads it, which is exactly how the first version of this
+  // test let the bug back through.
+  const { sandbox, el } = renderStrip({ strip: stripAt({ stripId: 's1' }), fdr: FDR, held: ['APP'] });
+  const needsRebuild = sandbox._stripElNeedsRebuild;
+  const wanted = { rev: Number(el.dataset.rev) };
+
+  assert.equal(el.dataset.expanded, '0', 'the element records what it was built as');
+  assert.equal(needsRebuild(el, wanted, null, null), false, 'nothing changed');
+  assert.equal(needsRebuild(el, wanted, null, 's1'), true, 'now expanded — must rebuild');
+  assert.equal(needsRebuild(el, wanted, 's1', null), true, 'now selected — must rebuild');
+  assert.equal(needsRebuild(el, { rev: wanted.rev + 1 }, null, null), true, 'rev moved — must rebuild');
 });
 
 test('the clearance Blocks a controller edits on most Strips are chips, per Role', () => {

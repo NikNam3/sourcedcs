@@ -415,32 +415,60 @@ function _appendExpandButton(container, strip) {
 }
 
 /**
- * Every Block for this Strip's Role, with its full §3.7 history.
+ * The Blocks that have no chip, with their full §3.7 history.
  *
  * The surface `DELIBERATELY_NOT_IN_COMPACT_VIEW` has been promising since it
  * was written: its entries said "annotation editor" for a thing that did not
  * exist, so a fully implemented, guide-required Block could be excused from
  * the reachability test and reachable from nowhere.
  *
- * Rendered in BLOCK MAP ORDER, deliberately rather than by default: that is
- * the order of the paper strip and of the guide's own §6.2/§6.3 tables, so it
- * is learnable and stable — unlike any ordering derived from a property that
- * changes as the Strip is worked.
+ * Shows only what the chips do not — see _expandedBlockIdsFor. Rendered in
+ * BLOCK MAP ORDER, deliberately rather than by default: that is the order of
+ * the paper strip and of the guide's own §6.2/§6.3 tables, so it is learnable
+ * and stable — unlike any ordering derived from a property that changes as the
+ * Strip is worked.
  *
  * The editable cell is _buildBlockCell unchanged, so free text, the enum
  * <select>, the boolean toggle and the confirmVacated button all arrive with
  * their Enter-commits / Esc-reverts / never-on-blur contract intact rather
  * than being reimplemented in a second surface.
  */
+/**
+ * Which Blocks the expanded view lists — what is NOT already on the Strip.
+ *
+ * It listed every Block for the Role at first, which made it mostly a second
+ * copy of the chips a controller was already looking at: 26 of ~30 rows said
+ * nothing new, and the handful that did were buried. The panel's job is
+ * reaching what the chips cannot, so that is all it shows.
+ *
+ * One exception, and it is load-bearing rather than a nicety: a chip whose
+ * history is truncated renders a `*` that promises "full history on tap"
+ * (§3.7 rule 2), and this panel is where that tap lands. Filtering such a
+ * Block out because it already has a chip would make the indicator point at
+ * nothing — so a Block with more priors than the chip can show stays in,
+ * precisely because the chip is not telling the whole story.
+ */
+function _expandedBlockIdsFor(strip, map) {
+  const onStrip = new Set(compactBlocksFor(strip.role));
+  return Object.keys(map).filter((blockId) => {
+    if (!onStrip.has(blockId)) return true;
+    return typeof supersededAnnotationEntries === 'function'
+      && supersededAnnotationEntries(strip, blockId).length > CHIP_HISTORY_LIMIT;
+  });
+}
+
 function _appendExpandedView(el, strip) {
   if (_expandedStripId !== strip.stripId) return;
   const map = (typeof BLOCK_MAPS === 'object' && BLOCK_MAPS[strip.role]) || null;
   if (!map) return;
 
+  const blocks = _expandedBlockIdsFor(strip, map);
+  if (blocks.length === 0) return;
+
   const panel = document.createElement('div');
   panel.className = 'efsp-strip-expanded';
 
-  for (const blockId of Object.keys(map)) {
+  for (const blockId of blocks) {
     const row = document.createElement('div');
     row.className = 'efsp-expanded-row';
     row.dataset.expandedBlock = blockId;
@@ -469,6 +497,12 @@ function _buildStripEl(strip) {
   el.className = 'efsp-strip';
   el.dataset.stripId = strip.stripId;
   el.dataset.rev = String(strip.rev); // renderBay()'s keyed reconciliation reuse check
+  // Expansion is CLIENT-LOCAL state and does not move `rev`, so the
+  // reconciler cannot see a toggle unless the rendered element records what it
+  // was built as — exactly the problem selection already had, solved the same
+  // way. Without this the toggle set _expandedStripId, asked for a re-render,
+  // and the reconciler reused every element unchanged: nothing on screen moved.
+  el.dataset.expanded = _expandedStripId === strip.stripId ? '1' : '0';
   el.dataset.positionId = strip.ownerPositionId; // read during drag drop-target resolution
   if (strip.flags.offset) el.classList.add('efsp-strip-offset');
   if (strip.flags.flipped) el.classList.add('efsp-strip-flipped');
@@ -2395,6 +2429,29 @@ function _isProtectedStripEl(el) {
   return false;
 }
 
+/**
+ * Does this already-rendered Strip element differ from what it should be?
+ *
+ * Every input is an argument rather than read from module state, so the rule
+ * can be tested directly — the reconciler that calls it needs a Rack, a Bay
+ * and a populated store, and a rule buried inside it is a rule nothing checks.
+ *
+ * Three ways a Strip goes stale, and only the first is server state:
+ *  - `rev` moved — somebody changed the Strip.
+ *  - selection changed — client-local, does not move `rev`.
+ *  - expansion changed — client-local, does not move `rev` either. This one
+ *    was missing, so the expand toggle set its state, asked for a re-render,
+ *    and the reconciler reused every element unchanged. The button did
+ *    nothing visible at all.
+ */
+function _stripElNeedsRebuild(el, wanted, selectedStripId, expandedStripId) {
+  const id = el.dataset.stripId;
+  if (el.dataset.rev !== String(wanted.rev)) return true;
+  if (el.classList.contains('efsp-strip-selected') !== (id === selectedStripId)) return true;
+  if ((el.dataset.expanded === '1') !== (id === expandedStripId)) return true;
+  return false;
+}
+
 function _reconcileRackStrips(rackEl, bayId, rackId) {
   const wanted = bayId.endsWith('-search') ? searchEfspStrips(getActiveEfspSearchQuery()) : getEfspRack(bayId, rackId);
   const wantedById = new Map(wanted.map(s => [s.stripId, s]));
@@ -2408,9 +2465,7 @@ function _reconcileRackStrips(rackEl, bayId, rackId) {
       .filter(([id, el]) => {
         const w = wantedById.get(id);
         if (!w) return false; // no longer wanted — toRemove handles it, not a rebuild
-        const revChanged = el.dataset.rev !== String(w.rev);
-        const selectionChanged = el.classList.contains('efsp-strip-selected') !== (id === _selectedStripId);
-        return revChanged || selectionChanged;
+        return _stripElNeedsRebuild(el, w, _selectedStripId, _expandedStripId);
       })
       .map(([id]) => id)
   );

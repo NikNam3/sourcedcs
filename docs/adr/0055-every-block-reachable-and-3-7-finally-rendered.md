@@ -20,9 +20,13 @@ Separately, **§3.7 had never been visible**. `resolveBlockValue` collapses a ce
 
 The per-Role test now renders the Strip, renders it expanded, and requires every writable Block to actually appear in one of them. Nothing can be excused by assertion. This is the root fix — the list was the mechanism by which a fully implemented, guide-required Block could be simultaneously unreachable and green.
 
-### An expanded Strip view, one Strip at a time
+### An expanded Strip view, one Strip at a time, showing only what the chips do not
 
-A `▼` toggle renders every Block in `BLOCK_MAPS[strip.role]`, **in Block Map order** — deliberate, not a default: that is the order of the paper strip and of the guide's own §6.2/§6.3 tables, so it is learnable and stable, unlike anything derived from a property that changes as the Strip is worked. Read-only Blocks render too, so this is also the first place Block `2`/`4`/`25` can be read explicitly.
+A `▼` toggle renders the Blocks that have **no chip**, **in Block Map order** — deliberate, not a default: that is the order of the paper strip and of the guide's own §6.2/§6.3 tables, so it is learnable and stable, unlike anything derived from a property that changes as the Strip is worked. Read-only Blocks without a chip render too, so this is also the first place Block `2`/`4A`/`26` can be read explicitly.
+
+It listed *every* Block first, and that was wrong in use: 26 of ~30 rows repeated chips the controller was already looking at, burying the handful that said anything new. The panel's job is reaching what the chips cannot, so that is all it shows.
+
+**One exception, and it is load-bearing rather than a nicety.** A chip whose history is truncated renders a `*` promising "full history on tap", and this panel is where that tap lands — so a Block with more priors than its chip can show stays in the panel *because* the chip is not telling the whole story. Filtering it out for having a chip would make the indicator point at nothing.
 
 **`_expandedStripId` is a single id, not a Set.** DEPARTURE's Block Map is ~30 entries; several Strips expanded at once means 30 × N rows rebuilt on every board delta, in a panel whose rendering rules exist to keep Bays cheap. Bounded by construction rather than by hoping.
 
@@ -75,4 +79,5 @@ Adding two entries fixes two instances of a class, so the test enumerates the cl
 - `confirmVacated` now dispatches against the live Strip, not the one its DOM was built against; it was the only cell action missing that stale-`baseRev` fix.
 - Acting-position resolution is `_resolveActingPositionId` in all three former inline copies.
 - The DOM stubs support `.class` in `querySelector`, which is what made `_isProtectedStripEl`'s `.efsp-block-input` check testable at all — it could not fire while the stub returned null.
+- **Expansion had to become a third staleness input.** `_reconcileRackStrips` decided whether to rebuild an element from `rev` and selection only, and expansion is client-local state that moves neither — so the first version of the toggle set its state, asked for a re-render, and the reconciler reused every element unchanged. The button did nothing visible at all. The rule is now `_stripElNeedsRebuild(el, wanted, selectedStripId, expandedStripId)`, taking every input as an argument so it can be tested directly: a rule buried inside a function that needs a Rack, a Bay and a populated store is a rule nothing checks. The first test written for this asserted the `data-expanded` stamp instead of the rule, and passed with the fix reverted — which is how the bug would have come back.
 - **Nothing here has been clicked.** Every claim is a wiring assertion against a DOM stub. The chip history, the overflow `*`, the expanded panel and the pinned actions row are all layout, and layout is exactly what these tests do not cover.

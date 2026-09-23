@@ -19,7 +19,7 @@ Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green):
   - **MARSA** — declaring that the military is separating its own aircraft, as a relation between flights rather than a flag on one, with the pre-rendezvous course/altitude interlock. See §8D.
   - **The military Block namespace** — `ORDNANCE` (Block 3G) and `HOOK` (Block 3F) on every ATC Strip. The fields are live and recorded; the behaviour that reads them (§9.5's hung-ordnance advisory, §9.7's arresting-gear gating) is not built yet. See §6.
   - **The mission line exists from tasking** — `TAC_C2` frags a mission line against a filed flight before it moves, and TOFI later lands on the one that is already there. Accepting tactical control now requires stating the separation regime. See §8C1.
-  - **Every Block is reachable, and amendments are visible** — the `▼` button on a Strip opens every Block for its Role, and a superseded value now shows struck through in the Block itself (§3.7). Heading and initial altitude are chips on a DEPARTURE Strip; the radar vector is one on ARRIVAL/OVERFLIGHT.
+  - **Every Block is reachable, and amendments are visible** — the `▼` button on a Strip opens the Blocks that have no chip, and a superseded value now shows struck through in the Block itself (§3.7). Heading and initial altitude are chips on a DEPARTURE Strip; the radar vector is one on ARRIVAL/OVERFLIGHT. See §4B.
 
 Not built: the rest of WP6 — field state and arresting-gear gating (§9.7), alert/scramble (§9.6), the hung-ordnance advisory (§9.5), MTR fields (§9.4) — plus WP7 (ATO ingest), WP7A (carrier/PAR) and WP8 (instrumentation). `docs/efsp-briefing.md` is the current handoff note.
 
@@ -263,9 +263,13 @@ resolution) → `fdr-store.js`'s `createFdr()` (the expansion, server-side) →
 ### The chips, and the `▼` button
 
 A Strip shows the Blocks a controller edits on most Strips of that Role. Everything
-else — every remaining Block, including the read-only ones — is behind the **`▼`**
-button in the Strip's control row. One Strip is expanded at a time, and the list is in
-Block Map order, which is the order of the paper strip.
+else is behind the **`▼`** button in the Strip's control row — and *only* the rest:
+the panel never repeats a Block that already has a chip, so it is the short list of
+what you cannot otherwise see. One Strip is expanded at a time, in Block Map order,
+which is the order of the paper strip.
+
+(The one thing it does repeat is a Block whose history is too long for its chip —
+that is what the `*` opens.)
 
 Blocks that are chips now and were not before: **`HDG` (20)** and **`INIT ALT` (21)**
 on DEPARTURE, **`VECTOR`** on ARRIVAL and OVERFLIGHT, **`ASGN ALT` (7A)** on
