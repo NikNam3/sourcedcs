@@ -587,6 +587,16 @@ function createMapPanel() {
   if (!_mapPanelElement) {
     _mapPanelElement = document.createElement('div');
     _mapPanelElement.id = 'map';
+    // The no-coverage overlay belongs to the MAP, not to the window. It ships
+    // in index.html at document top level and was `position: fixed; inset: 0`,
+    // so an empty scope greyed out the entire application — the Strip panel,
+    // the radio, the airport panel, everything — when the only thing that had
+    // nothing to show was the map. Adopted into the map panel here (rather
+    // than duplicated into the markup) so it covers exactly the surface whose
+    // emptiness it is explaining. app.js toggles it by id, which is unaffected
+    // by where it lives.
+    const noCoverage = document.getElementById('no-awacs-overlay');
+    if (noCoverage) _mapPanelElement.appendChild(noCoverage);
   }
 
   return {

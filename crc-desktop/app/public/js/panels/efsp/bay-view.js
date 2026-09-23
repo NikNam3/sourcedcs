@@ -229,6 +229,89 @@ function _startBlockEdit(strip, blockId, span) {
   input.select();
 }
 
+// Two presses, not one, and not a modal. Dropping is the one Strip action with
+// no Undo outside the terminal NLA's 30s window (§3.5 rule 5 covers that path,
+// not this one), so it needs a speed bump — but the §3.6 duplicate-origination
+// warning already established two-press as this panel's shape for "are you
+// sure", and a second shape for the same question would be worse than none.
+let _pendingDropStripId = null;
+let _dropDisarmTimer = null;
+const DROP_ARM_MS = 5000;
+
+/**
+ * Is `DropStrip` worth offering on this Strip?
+ *
+ * The gap this closes: `DropStrip` has never been state-gated server-side and
+ * OPS has always held the permission, so an OPS controller who proposed the
+ * wrong Strip could always drop it — but the ONLY way to ask was the `.drop`
+ * dot-command. The NLA button reads "Send to Clearance" at PROPOSED; "Drop" is
+ * every Role's TERMINAL transition and appears nowhere else. So a fully
+ * implemented, permitted operation had no affordance at all.
+ *
+ * Invisible to efsp-ui-reachability.test.js because that test holds every
+ * writable BLOCK to being reachable and says nothing about OPS — the same
+ * blind spot that hid the boolean-toggle Blocks, one level up.
+ *
+ * Deliberately NOT rendered when:
+ *  - the terminal NLA already says "Drop" — one question, one control.
+ *  - an exchange is open or live on this Strip. board-store refuses those
+ *    (`_applyDropStrip`'s two guards, and `_retireStrip`'s ACTIVE-TOFI
+ *    refusal), and a control that always fails is worse than no control —
+ *    the rule _marsaCandidates already follows.
+ */
+function _canDropStrip(strip) {
+  if (!_resolveActingPositionId(strip)) return false;
+  if (strip.state === 'DROPPED') return false;
+  if (nlaLabelFor(strip.state, strip.role) === 'Drop') return false;
+  const co = strip.coordination;
+  if (co && co.state === 'PROPOSED') return false;
+  const tofi = strip.tofiCoordination;
+  if (tofi && (tofi.state === 'PROPOSED' || tofi.state === 'ACTIVE')) return false;
+  return true;
+}
+
+function _appendDropButton(el, strip) {
+  if (!_canDropStrip(strip)) return;
+  const armed = _pendingDropStripId === strip.stripId;
+  const btn = document.createElement('button');
+  btn.className = 'efsp-drop-btn' + (armed ? ' efsp-drop-btn-armed' : '');
+  btn.textContent = armed ? 'Drop?' : '✕';
+  btn.title = armed
+    ? 'press again to drop this Strip — this cannot be undone'
+    : 'Drop this Strip (e.g. proposed in error)';
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const actingPositionId = _resolveActingPositionId(strip);
+    if (!actingPositionId) return;
+    if (_pendingDropStripId !== strip.stripId) {
+      // Arm IN PLACE rather than re-rendering the Bay: the label has to say
+      // what the next press does, and rebuilding every Strip to change one
+      // word would also throw away any open annotation cell on the Board.
+      _pendingDropStripId = strip.stripId;
+      btn.textContent = 'Drop?';
+      btn.title = 'press again to drop this Strip — this cannot be undone';
+      btn.classList.add('efsp-drop-btn-armed');
+      // Disarms itself. An armed control left sitting on the Board is a trap
+      // for the next person to click it, and a Strip is not reliably
+      // re-rendered on any particular schedule.
+      clearTimeout(_dropDisarmTimer);
+      _dropDisarmTimer = setTimeout(() => {
+        if (_pendingDropStripId !== strip.stripId) return;
+        _pendingDropStripId = null;
+        btn.textContent = '✕';
+        btn.title = 'Drop this Strip (e.g. proposed in error)';
+        btn.classList.remove('efsp-drop-btn-armed');
+      }, DROP_ARM_MS);
+      return;
+    }
+    clearTimeout(_dropDisarmTimer);
+    _pendingDropStripId = null;
+    sendEfspMutation(actingPositionId, getEfspStrip(strip.stripId) || strip, { kind: 'DropStrip', reason: 'dropped from the Strip' });
+  });
+  btn.addEventListener('pointerdown', (e) => e.stopPropagation());
+  el.appendChild(btn);
+}
+
 function _buildStripEl(strip) {
   const fdr = getEfspFdr(strip.fdrId);
   const el = document.createElement('div');
@@ -319,6 +402,8 @@ function _buildStripEl(strip) {
     offsetBtn.textContent = '⇥';
     offsetBtn.addEventListener('click', (e) => { e.stopPropagation(); _dispatchGesture(strip, toggleOffset); });
     el.appendChild(offsetBtn);
+
+    _appendDropButton(el, strip);
 
     // WP4A (docs/adr/0014): a CENTER-facility INBOUND ARRIVAL Strip's real
     // next action is the Coordinate button below, never the ordinary

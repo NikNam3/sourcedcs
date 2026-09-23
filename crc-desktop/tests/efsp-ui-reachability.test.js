@@ -869,3 +869,60 @@ test('the bind and airspace popovers behave the same way', async () => {
     }
   }
 });
+
+// ── ops, not just Blocks ─────────────────────────────────────────────────
+//
+// The reachability half above holds every writable BLOCK to being reachable.
+// It says nothing about OPS, and that is how DropStrip stayed affordance-less:
+// server-side it has never been state-gated and OPS has always held the
+// permission, but the only way to ask was the `.drop` dot-command. The NLA
+// button reads "Send to Clearance" at PROPOSED — "Drop" is every Role's
+// TERMINAL transition and appears nowhere else.
+
+test('a Strip proposed in error can be dropped from the Strip itself, in two presses', () => {
+  const strip = stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS', bayId: 'ops-proposed' });
+  const { el, sent } = renderStrip({ strip, fdr: FDR, held: ['OPS'] });
+
+  const drop = descendants(el).find(c => (c.className || '').includes('efsp-drop-btn'));
+  assert.ok(drop, 'no Drop affordance on a PROPOSED Strip — OPS would have to know `.drop` exists');
+
+  // First press arms rather than drops: this is the one Strip action with no
+  // Undo outside the terminal NLA's 30s window.
+  click(drop);
+  assert.deepEqual(sent, [], 'the first press must not drop anything');
+
+  // It arms in place, so the label says what the next press does.
+  assert.equal(drop.textContent, 'Drop?', 'the armed label must say what the next press does');
+  assert.ok(drop.classList.contains('efsp-drop-btn-armed'));
+
+  click(drop);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].op.kind, 'DropStrip');
+  assert.equal(sent[0].actingPositionId, 'OPS');
+});
+
+test('Drop is not offered where the server would refuse it, or where the NLA already says Drop', () => {
+  const hasDrop = (strip, held) =>
+    !!descendants(renderStrip({ strip, fdr: FDR, held }).el).find(c => (c.className || '').includes('efsp-drop-btn'));
+
+  // The terminal state's own NLA is "Drop" — one question, one control.
+  assert.equal(hasDrop(stripAt({ state: 'HANDED_OFF', ownerPositionId: 'APP' }), ['APP']), false);
+
+  // An open coordination proposal: _applyDropStrip refuses these outright, so
+  // offering the control would be offering a button that always fails.
+  assert.equal(hasDrop(stripAt({
+    state: 'INBOUND', ownerPositionId: 'CTR',
+    coordination: { primitive: 'HANDOFF', state: 'PROPOSED', peerFacilityId: 'INCIRLIK', peerPositionId: 'APP' },
+  }), ['CTR']), false);
+
+  // And a live TOFI — guide §4.6.3 rule 2, the Strip stays posted throughout
+  // tactical control.
+  assert.equal(hasDrop(stripAt({
+    state: 'INBOUND', ownerPositionId: 'CTR',
+    tofiCoordination: { direction: 'ENTRY', state: 'ACTIVE', peerFacilityId: 'TACTICAL', peerPositionId: 'TAC_C2' },
+  }), ['CTR']), false);
+
+  // Nobody holding the Position means no control at all, not a disabled one —
+  // a Strip nobody holds should not grow an affordance.
+  assert.equal(hasDrop(stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' }), []), false);
+});

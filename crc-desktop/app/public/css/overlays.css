@@ -54,8 +54,13 @@
     }
 
     /* ── No AWACS overlay ── */
+    /* Absolute, not fixed: this is scoped to the map panel (dock.js adopts it
+       into #map, which is position:relative for exactly this). It used to be
+       fixed/inset-0 and washed out the whole application — including every
+       panel that had plenty to show — whenever the held Positions granted no
+       radar. The message is about the scope; so is the overlay. */
     #no-awacs-overlay {
-      position: fixed;
+      position: absolute;
       inset: 0;
       background: rgba(0,0,0,0.5);
       z-index: 14;

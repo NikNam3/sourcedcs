@@ -323,6 +323,29 @@
   font: inherit;
 }
 
+/* Drop — the affordance for "this Strip was a mistake". Same 32px touch
+   target as the offset button beside it (§7.1 rule 4 / WP3's measured
+   minimum), muted until armed so it never competes with the NLA button for
+   attention; the armed state is the only red-adjacent thing on the Strip
+   apart from the attention mark, and it is deliberately short-lived. */
+.efsp-drop-btn {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 2px 6px;
+  background: #2a3038;
+  border: 1px solid #4a5560;
+  color: #8c9aa6;
+  cursor: pointer;
+  font: inherit;
+}
+.efsp-drop-btn:hover { color: #d8e0e6; border-color: #7a8690; }
+.efsp-drop-btn-armed {
+  background: #4a2626;
+  border-color: #9a4040;
+  color: #f0d8d8;
+  min-width: 0;
+}
+
 /* Highlight (guide §7.3) — a small swatch-pick popover anchored to the
    Strip that opened it (contextmenu); .efsp-strip's own `position:
    relative` (above) makes this absolute positioning anchor correctly. */
