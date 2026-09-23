@@ -19,6 +19,7 @@ Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green):
   - **MARSA** — declaring that the military is separating its own aircraft, as a relation between flights rather than a flag on one, with the pre-rendezvous course/altitude interlock. See §8D.
   - **The military Block namespace** — `ORDNANCE` (Block 3G) and `HOOK` (Block 3F) on every ATC Strip. The fields are live and recorded; the behaviour that reads them (§9.5's hung-ordnance advisory, §9.7's arresting-gear gating) is not built yet. See §6.
   - **The mission line exists from tasking** — `TAC_C2` frags a mission line against a filed flight before it moves, and TOFI later lands on the one that is already there. Accepting tactical control now requires stating the separation regime. See §8C1.
+  - **Every Block is reachable, and amendments are visible** — the `▼` button on a Strip opens every Block for its Role, and a superseded value now shows struck through in the Block itself (§3.7). Heading and initial altitude are chips on a DEPARTURE Strip; the radar vector is one on ARRIVAL/OVERFLIGHT.
 
 Not built: the rest of WP6 — field state and arresting-gear gating (§9.7), alert/scramble (§9.6), the hung-ordnance advisory (§9.5), MTR fields (§9.4) — plus WP7 (ATO ingest), WP7A (carrier/PAR) and WP8 (instrumentation). `docs/efsp-briefing.md` is the current handoff note.
 
@@ -256,6 +257,38 @@ resolution) → `fdr-store.js`'s `createFdr()` (the expansion, server-side) →
 `GET /api/stereo-routes` → `crc-desktop/app/server.js` proxy →
 `efsp-stereo-routes.js` → `efsp-panel.js`'s picker and `.stereo` verb. Design reasoning is in
 `docs/adr/0050`.
+
+## 4B. Reading and amending Blocks
+
+### The chips, and the `▼` button
+
+A Strip shows the Blocks a controller edits on most Strips of that Role. Everything
+else — every remaining Block, including the read-only ones — is behind the **`▼`**
+button in the Strip's control row. One Strip is expanded at a time, and the list is in
+Block Map order, which is the order of the paper strip.
+
+Blocks that are chips now and were not before: **`HDG` (20)** and **`INIT ALT` (21)**
+on DEPARTURE, **`VECTOR`** on ARRIVAL and OVERFLIGHT, **`ASGN ALT` (7A)** on
+OVERFLIGHT. Those are the ones issued with nearly every clearance.
+
+⚠️ **`INIT ALT` and `VECTOR` are the Blocks §9.2's MARSA interlock watches.** Writing
+one on a flight in an active MARSA relation, before rendezvous, voids the relation.
+That is the interlock working — but it now fires from the panel, where before it could
+only be reached by a dot-command or the server.
+
+### Amendments stay visible (§3.7)
+
+Amending an annotation Block does not overwrite it. The prior value stays in the same
+Block, **struck through**, until the Strip is dropped — FAA JO 7110.65 ¶2-3-1's *"do
+not erase or overwrite any item."*
+
+- Up to **two** prior values show on the chip. Beyond that a **`*`** appears; click it
+  for the full chain in the expanded view.
+- A Block written once shows no history at all.
+- **`⌿` strikes a vacated altitude.** It marks the current value struck rather than
+  removing it, and it is the controller's call: an altitude must not be struck until
+  the aircraft has reported or is observed leaving it. Available on DEPARTURE's
+  `INIT ALT` and ARRIVAL's `ALT`.
 
 ## 5. Strip fields
 

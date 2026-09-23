@@ -265,6 +265,37 @@ function hasActiveAnnotationEntry(strip, blockId) {
   return !!(cell && cell.entries.some(e => e.status === 'ACTIVE'));
 }
 
+/**
+ * Every entry in an annotation Block, in the order they were written.
+ *
+ * The missing half of §3.7. `activeAnnotationValue` above collapses a cell to
+ * its one ACTIVE entry, and until now that was the ONLY thing that ever
+ * reached the DOM — so a superseded value was kept faithfully by the server,
+ * persisted, broadcast, and then thrown away by the renderer. §3.7 rule 2:
+ *
+ *   "A superseded value MUST remain visible in the same Block, rendered
+ *    struck through, until the Strip is DROPPED."
+ *
+ * Returns the raw entries (`{value, status, at, by}`), including the ACTIVE
+ * one, so a caller can render the whole chain or slice the prior ones off the
+ * front. `[]` for a Block that has never been written, and for a Block that is
+ * not annotation-routed at all — those have no history by construction, and
+ * returning `[]` rather than null means no caller needs a null check to ask.
+ *
+ * Pure and DOM-free, like its two neighbours, so the ordering and status rules
+ * are testable without rendering anything.
+ */
+function annotationHistory(strip, blockId) {
+  const cell = strip && strip.annotations && strip.annotations[blockId];
+  if (!cell || !Array.isArray(cell.entries)) return [];
+  return cell.entries;
+}
+
+/** The entries a Block shows ABOVE its current value — everything that is no longer ACTIVE, oldest first. */
+function supersededAnnotationEntries(strip, blockId) {
+  return annotationHistory(strip, blockId).filter(e => e.status !== 'ACTIVE');
+}
+
 // Annotation Blocks eligible for the confirmVacated action (guide §3.7 rule
 // 3 — "a vacated altitude MUST NOT be struck automatically on assignment...
 // implement as an explicit confirmVacated action"). Kept next to the Block
@@ -447,7 +478,8 @@ function isBlockEditable(blockId, role = 'DEPARTURE') {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP, BLOCK_MAPS, resolveBlockValue, requiredBlocksFor, formatBlock3,
-    activeAnnotationValue, hasActiveAnnotationEntry, isBlockEditable, CONFIRM_VACATED_ELIGIBLE_BLOCKS,
+    activeAnnotationValue, hasActiveAnnotationEntry, annotationHistory, supersededAnnotationEntries,
+    isBlockEditable, CONFIRM_VACATED_ELIGIBLE_BLOCKS,
     enumSelectOptionsFor, isBooleanToggleBlock, blockLabelFor,
   };
 }

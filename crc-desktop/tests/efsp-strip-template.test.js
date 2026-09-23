@@ -8,7 +8,8 @@ const assert = require('node:assert/strict');
 
 const {
   DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP, BLOCK_MAPS, resolveBlockValue, requiredBlocksFor, formatBlock3,
-  activeAnnotationValue, hasActiveAnnotationEntry, isBlockEditable, CONFIRM_VACATED_ELIGIBLE_BLOCKS,
+  activeAnnotationValue, hasActiveAnnotationEntry, annotationHistory, supersededAnnotationEntries,
+  isBlockEditable, CONFIRM_VACATED_ELIGIBLE_BLOCKS,
   enumSelectOptionsFor, isBooleanToggleBlock, blockLabelFor,
 } = require('../app/public/js/panels/efsp/strip-template.js');
 
@@ -385,4 +386,36 @@ test('Block 9F is ordinary click-to-edit free text — typing a route name into 
   // the server refuses a name that is not in the table.
   assert.equal(enumSelectOptionsFor('9F'), null);
   assert.equal(isBooleanToggleBlock('9F'), false);
+});
+
+// ── §3.7 history, the half that never reached the DOM ────────────────────
+
+const e = (value, status) => ({ value, status, at: 1, by: 'c-OPS' });
+const withCell = (entries) => ({ annotations: { 21: { blockId: '21', entries } } });
+
+test('annotationHistory returns every entry in the order written', () => {
+  const strip = withCell([e('2000', 'SUPERSEDED'), e('4000', 'STRUCK'), e('6000', 'ACTIVE')]);
+  assert.deepEqual(annotationHistory(strip, '21').map(x => x.value), ['2000', '4000', '6000']);
+  assert.deepEqual(annotationHistory(strip, '21').map(x => x.status), ['SUPERSEDED', 'STRUCK', 'ACTIVE']);
+});
+
+test('annotationHistory is [] for a Block never written, and for one that is not an annotation', () => {
+  // [] rather than null, so no caller needs a null check to ask the question.
+  assert.deepEqual(annotationHistory(withCell([]), '20'), []);
+  assert.deepEqual(annotationHistory({ annotations: {} }, '21'), []);
+  assert.deepEqual(annotationHistory({}, '21'), []);
+  assert.deepEqual(annotationHistory(withCell([e('x', 'ACTIVE')]), '9'), [], 'Block 9 is fdr-routed');
+});
+
+test('supersededAnnotationEntries is everything the Block is no longer showing as current', () => {
+  const strip = withCell([e('2000', 'SUPERSEDED'), e('4000', 'STRUCK'), e('5000', 'PREPLANNED'), e('6000', 'ACTIVE')]);
+  assert.deepEqual(supersededAnnotationEntries(strip, '21').map(x => x.value), ['2000', '4000', '5000']);
+  // PREPLANNED is carried through as its own status rather than folded into
+  // SUPERSEDED — it is a distinct thing the server can produce and nothing has
+  // ever rendered it.
+  assert.equal(supersededAnnotationEntries(strip, '21')[2].status, 'PREPLANNED');
+});
+
+test('a Block with only an ACTIVE entry has no superseded entries', () => {
+  assert.deepEqual(supersededAnnotationEntries(withCell([e('6000', 'ACTIVE')]), '21'), []);
 });

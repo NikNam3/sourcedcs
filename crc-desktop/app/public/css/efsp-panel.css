@@ -288,7 +288,7 @@
 }
 
 .efsp-nla-btn {
-  margin-left: auto;
+  /* margin-left:auto removed — .efsp-strip-actions owns the placement now. */
   min-height: 32px;
   padding: 2px 10px;
   background: #2a3038;
@@ -321,6 +321,86 @@
   color: #d8e0e6;
   cursor: pointer;
   font: inherit;
+}
+
+/* The trailing controls get their OWN final row rather than floating to
+   wherever the chips stop wrapping. `.efsp-nla-btn`'s old `margin-left: auto`
+   put the primary affordance on a different row from Strip to Strip depending
+   on callsign length and which optional Blocks were populated — NLA is reached
+   for without looking, so its position must not be a function of chip count.
+   `flex-basis: 100%` is the idiom the badges below already use to claim a
+   line. */
+.efsp-strip-actions {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+/* Expand — opens every Block for the Strip's Role (§3.7's "full history on
+   tap" surface, and the only way to reach a Block that has no chip). */
+.efsp-expand-btn {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 2px 6px;
+  background: #2a3038;
+  border: 1px solid #4a5560;
+  color: #8c9aa6;
+  cursor: pointer;
+  font: inherit;
+}
+.efsp-expand-btn:hover { color: #d8e0e6; border-color: #7a8690; }
+
+.efsp-strip-expanded {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid #333c45;
+}
+.efsp-expanded-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+}
+.efsp-expanded-label {
+  flex: 0 0 76px;
+  font-size: 9px;
+  letter-spacing: 0.02em;
+  color: #6b7480;
+  text-transform: uppercase;
+}
+.efsp-expanded-value { display: inline-flex; align-items: center; gap: 4px; }
+
+/* §3.7 rule 2 — "a superseded value MUST remain visible in the same Block,
+   rendered struck through, until the Strip is DROPPED." Nothing rendered any
+   of this before: resolveBlockValue collapsed every cell to its one ACTIVE
+   entry and the server's whole history was discarded by the renderer. */
+.efsp-annotation-history { display: inline-flex; align-items: center; gap: 4px; }
+.efsp-annotation-entry {
+  font-size: 12px;
+  white-space: pre;
+}
+.efsp-annotation-entry-superseded { color: #7d8792; text-decoration: line-through; }
+.efsp-annotation-entry-struck     { color: #9a6a6a; text-decoration: line-through; }
+/* A distinct status the server can produce, never previously shown — not
+   struck, because it was never active. */
+.efsp-annotation-entry-preplanned { color: #6a7d92; font-style: italic; }
+
+/* ATOP's `*` convention for state the strip cannot render — rule 2's own
+   overflow indicator, which is what makes capping the chip legal. */
+.efsp-annotation-overflow {
+  background: none;
+  border: none;
+  padding: 0 2px;
+  color: #b0883c;
+  cursor: pointer;
+  font: inherit;
+  font-weight: bold;
 }
 
 /* Drop — the affordance for "this Strip was a mistake". Same 32px touch

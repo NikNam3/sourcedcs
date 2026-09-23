@@ -27,79 +27,86 @@ const CLIENT = path.join(__dirname, '../app/public/js/panels/efsp');
 const { BLOCK_MAPS, isBlockEditable, enumSelectOptionsFor, isBooleanToggleBlock } = require(path.join(CLIENT, 'strip-template.js'));
 
 // ── 1. reachability ──────────────────────────────────────────────────────
+//
+// This half used to hold every writable Block to being in the compact view OR
+// on a DELIBERATELY_NOT_IN_COMPACT_VIEW excuse list. That list is gone, and
+// its absence is the point: most of its entries excused a Block with the
+// reason "annotation editor" — a surface that was never built. An excuse list
+// whose reasons name surfaces that do not exist is a test reporting green
+// while covering nothing, and it hid the fact that five of six MARSA interlock
+// Blocks, and several guide-REQUIRED Blocks including 9A-FUEL, could not be
+// reached from the panel at all.
+//
+// So the check is behavioural now: render the Strip, render it expanded, and
+// require every writable Block to actually appear in one of them. Nothing can
+// be excused by assertion.
+
+/** The compact Block list bay-view.js actually renders, read from the module rather than scraped out of its source. */
+function compactBlocksFor(role) {
+  return clientSandbox().compactBlocksFor(role);
+}
 
 /**
- * Blocks that are writable but deliberately not in the compact view, each
- * with the reason. Anything NOT here has to be reachable — that is the point
- * of the list. Keep it short and keep the reasons honest.
+ * Every Block id the expanded view renders for a Role — by pressing the real
+ * toggle, not by poking module state.
+ *
+ * `_expandedStripId` is a `let`, and a `let` at the top level of a vm script
+ * is a lexical binding rather than a property of the context, so assigning
+ * `sandbox._expandedStripId` creates a different variable the module never
+ * reads. Clicking the button is both the only thing that works and the more
+ * honest test: it exercises the path a controller takes.
  */
-const DELIBERATELY_NOT_IN_COMPACT_VIEW = {
-  '2A': 'scratchpad annotation — reachable through the annotation editor',
-  '9A': 'route restriction — annotation editor', '9B': 'route restriction — annotation editor',
-  '9C': 'route restriction — annotation editor', '9D': 'full-route-clearance flag — annotation editor',
-  '9E': 'remarks — annotation editor', '11': 'APREQ — annotation editor',
-  '19': 'note — annotation editor',
-  // 20/21 mean two different things by Role and are reached the same way in
-  // both: the radar scratchpads on ARRIVAL/OVERFLIGHT (§6.3 note 2), and on
-  // DEPARTURE the guide's own "Heading" and "Initial altitude" (§6.2). Both
-  // are append-only annotation cells, so the annotation editor is the right
-  // surface — but on DEPARTURE they are also the Blocks §9.2's MARSA interlock
-  // watches, so they are not idle scratch and the label says so now.
-  '20': 'heading (DEPARTURE) / radar scratchpad (ARRIVAL, OVERFLIGHT) — annotation editor',
-  '21': 'initial altitude (DEPARTURE) / radar scratchpad (ARRIVAL, OVERFLIGHT) — annotation editor',
-  '23': 'note — annotation editor',
-  '24': 'miles-in-trail remarks — annotation editor',
-  '6': 'proposed departure time — set by the flight-plan lookup, rarely typed',
-  '10': 'ATIS code — the airport panel owns this',
-  '14': 'release time — only meaningful with a RELEASE_TIME state, set alongside it',
-  '14B': 'EDCT time — same, alongside the EDCT release state',
-  '14C': 'call-for-release time — same',
-  '16': 'movement-area entry time — metering, deferred (§12)',
-  '17': 'taxi time', '18': 'takeoff time',
-  '4B': 'datalink clearance indicator — no workflow needs it yet',
-  '8A': 'departure runway is in the compact view for DEPARTURE; ARRIVAL has no equivalent',
-  // ARRIVAL's Block 7 is an append-only sequence of issued altitude
-  // clearances (§3.7), split into named sub-Blocks — all annotation editor.
-  '9A-FUEL': 'arrival restriction — annotation editor',
-  '9A-DEST': 'arrival restriction — annotation editor',
-  '9A-PTOUT': 'arrival restriction — annotation editor',
-  // On ARRIVAL an arrival restriction; on OVERFLIGHT the course assignment
-  // §9.2's interlock watches (crc-sync's docs/adr/0051). Append-only either
-  // way, so the annotation editor is the surface for both.
-  '9A-VECTOR': 'radar vector — annotation editor',
-  '7A': 'OVERFLIGHT assigned altitude — append-only clearance history, annotation editor',
-  '9A-SPEED': 'arrival restriction — annotation editor',
-  M8: 'mission remarks — annotation editor',
-};
-
-/** The compact-view list bay-view.js actually renders, read from the source. */
-function compactBlocksFor(role) {
-  const source = fs.readFileSync(path.join(CLIENT, 'bay-view.js'), 'utf8');
-  const body = source.slice(source.indexOf('function compactBlocksFor'));
-  const mission = body.match(/\['M3'[^\]]*\]/);
-  const ordinary = body.match(/\['1',[\s\S]*?\]/);
-  assert.ok(mission && ordinary, 'could not read the compact-view Block list out of bay-view.js');
-  return JSON.parse((role === 'MISSION' ? mission[0] : ordinary[0]).replace(/'/g, '"').replace(/\s+/g, ''));
+function expandedBlocksFor(role) {
+  const strip = stripAt({ role, state: role === 'MISSION' ? 'TASKED' : 'PROPOSED', ownerPositionId: 'OPS' });
+  const r = renderStrip({ strip, fdr: FDR, held: ['OPS'] });
+  // The toggle re-renders every open Bay, which needs a real DOM; the state
+  // it sets is what matters, so the rebuild is stubbed and done by hand below.
+  r.sandbox.renderAllOpenEfspBays = () => {};
+  const toggle = descendants(r.el).find(c => (c.className || '').includes('efsp-expand-btn'));
+  assert.ok(toggle, `${role}: no expand toggle on the Strip`);
+  click(toggle);
+  const expandedEl = r.sandbox._buildStripEl(strip);
+  return descendants(expandedEl).filter(c => c.dataset && c.dataset.expandedBlock).map(c => c.dataset.expandedBlock);
 }
 
 for (const role of Object.keys(BLOCK_MAPS)) {
-  test(`every writable ${role} Block is reachable from the Strip, or explicitly listed as not`, () => {
+  test(`every writable ${role} Block is somewhere a controller can reach`, () => {
     const compact = compactBlocksFor(role);
+    const expanded = expandedBlocksFor(role);
     const unreachable = Object.keys(BLOCK_MAPS[role]).filter((blockId) => {
-      // isBooleanToggleBlock was missing from this disjunction until WP6, so a
-      // click-to-toggle Block was invisible to the one test whose whole job is
-      // noticing an unreachable Block. It cost nothing while IFR was the only
-      // one and IFR happened to be in the compact view; 3F (the hook
-      // requirement, §9.7) is the second, and the next one will not be noticed
-      // by luck.
       const writable = isBlockEditable(blockId, role) || enumSelectOptionsFor(blockId) || isBooleanToggleBlock(blockId);
       if (!writable) return false;
-      return !compact.includes(blockId) && !DELIBERATELY_NOT_IN_COMPACT_VIEW[blockId];
+      return !compact.includes(blockId) && !expanded.includes(blockId);
     });
-    assert.deepEqual(unreachable, [],
-      `${role}: writable but nowhere a controller can reach — add to the compact view, or to DELIBERATELY_NOT_IN_COMPACT_VIEW with a reason`);
+    assert.deepEqual(unreachable, [], `${role}: writable but nowhere a controller can reach`);
   });
 }
+
+test('the expanded view renders EVERY Block for the Role, in Block Map order', () => {
+  // Including the read-only ones — it is the first place Block 2/4/25 can be
+  // read explicitly. Map order is deliberate: it is the order of the paper
+  // strip and of the guide's own §6.2/§6.3 tables, so it is learnable and
+  // stable, unlike anything derived from a property that changes as the Strip
+  // is worked.
+  for (const role of Object.keys(BLOCK_MAPS)) {
+    assert.deepEqual(expandedBlocksFor(role), Object.keys(BLOCK_MAPS[role]), role);
+  }
+});
+
+test('the clearance Blocks a controller edits on most Strips are chips, per Role', () => {
+  // The criterion is EDIT FREQUENCY, not interlock-ness — see
+  // COMPACT_BLOCKS_BY_ROLE's comment. A heading and an initial altitude are
+  // issued with every departure clearance; a radar vector constantly.
+  assert.ok(compactBlocksFor('DEPARTURE').includes('20'), 'DEPARTURE HDG');
+  assert.ok(compactBlocksFor('DEPARTURE').includes('21'), 'DEPARTURE INIT ALT');
+  assert.ok(compactBlocksFor('ARRIVAL').includes('9A-VECTOR'), 'ARRIVAL VECTOR');
+  assert.ok(compactBlocksFor('OVERFLIGHT').includes('7A'), 'OVERFLIGHT ASGN ALT');
+  assert.ok(compactBlocksFor('OVERFLIGHT').includes('9A-VECTOR'), 'OVERFLIGHT VECTOR');
+  // And the Role-specific meanings do not leak: 20/21 are radar scratchpads on
+  // the airborne Roles, which is why they could never live in a shared list.
+  assert.equal(compactBlocksFor('ARRIVAL').includes('21'), false);
+  assert.equal(compactBlocksFor('OVERFLIGHT').includes('20'), false);
+});
 
 test('the Blocks the release and airspace sorties depend on are all on the Strip', () => {
   const compact = compactBlocksFor('DEPARTURE');
@@ -114,6 +121,20 @@ test('the release state is a picker, not free text — six exact strings nobody 
   assert.deepEqual(enumSelectOptionsFor('14A'),
     ['RELEASED', 'HOLD_FOR_RELEASE', 'RELEASE_TIME', 'CLEARANCE_VOID_TIME', 'EDCT', 'CALL_FOR_RELEASE']);
 });
+
+/**
+ * One sandbox, built lazily, for reading bay-view.js's own module values.
+ *
+ * This replaces a regex that scraped the compact-Block list out of the source
+ * (`body.match(/\['1',[\s\S]*?\]/)`) and assumed exactly two array literals,
+ * the ordinary one starting `['1',`. Making the list per-Role broke it
+ * instantly. Reading the real function from the real module cannot drift.
+ */
+let _readSandbox = null;
+function clientSandbox() {
+  if (!_readSandbox) _readSandbox = renderStrip({ strip: stripAt(), fdr: FDR, held: ['APP'] }).sandbox;
+  return _readSandbox;
+}
 
 // ── 2. dispatch ──────────────────────────────────────────────────────────
 
@@ -137,7 +158,16 @@ function makeElement(tag) {
     addEventListener(type, fn) { (this._listeners[type] = this._listeners[type] || []).push(fn); },
     removeEventListener() {},
     contains(other) { return this === other || this.children.some(c => c.contains && c.contains(other)); },
-    querySelector() { return null; },
+    querySelector(sel) {
+      // Enough for `.class` lookups, which is all the panel uses — notably
+      // _isProtectedStripEl's `.efsp-block-input` check, which silently could
+      // not fire while this returned null and so was untestable.
+      if (typeof sel !== 'string' || !sel.startsWith('.')) return null;
+      const want = sel.slice(1);
+      const hit = (n) => (n.className || '').split(/\s+/).includes(want)
+        ? n : n.children.reduce((found, c) => found || hit(c), null);
+      return this.children.reduce((found, c) => found || hit(c), null);
+    },
     getBoundingClientRect() { return { top: 0, bottom: 10, left: 0, right: 10, height: 10, width: 10 }; },
     focus() {}, select() {}, setAttribute() {}, removeAttribute() {},
     set innerHTML(v) { if (v === '') this.children = []; },
@@ -925,4 +955,130 @@ test('Drop is not offered where the server would refuse it, or where the NLA alr
   // Nobody holding the Position means no control at all, not a disabled one —
   // a Strip nobody holds should not grow an affordance.
   assert.equal(hasDrop(stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' }), []), false);
+});
+
+// ── §3.7 on the Strip itself ─────────────────────────────────────────────
+//
+// Rule 2 wants the superseded value "in the same Block", not one click away:
+// the server has kept, persisted and broadcast every entry since Phase 1 and
+// resolveBlockValue threw all but the ACTIVE one away before it reached the
+// DOM. These assert the chip, which is where the rule points.
+
+function cellWithHistory(entries) {
+  return stripAt({
+    state: 'PROPOSED', ownerPositionId: 'OPS', bayId: 'ops-proposed',
+    annotations: { 21: { blockId: '21', entries } },
+  });
+}
+const entry = (value, status) => ({ value, status, at: Date.now(), by: 'c-OPS' });
+const historyIn = (el) => descendants(el).filter(c => (c.className || '').includes('efsp-annotation-entry'));
+
+test('a Block written once shows no history at all', () => {
+  // The common case by far. It must not sprout an empty container on every
+  // unamended Block of every Strip.
+  const { el } = renderStrip({ strip: cellWithHistory([entry('6000', 'ACTIVE')]), fdr: FDR, held: ['OPS'] });
+  assert.deepEqual(historyIn(el), []);
+  assert.equal(descendants(el).filter(c => (c.className || '').includes('efsp-annotation-history')).length, 0);
+});
+
+test('an amended Block shows the prior value struck through, on the Strip', () => {
+  const { el } = renderStrip({
+    strip: cellWithHistory([entry('4000', 'SUPERSEDED'), entry('6000', 'ACTIVE')]),
+    fdr: FDR, held: ['OPS'],
+  });
+  const prior = historyIn(el);
+  assert.equal(prior.length, 1);
+  assert.equal(prior[0].textContent, '4000');
+  assert.ok(prior[0].className.includes('efsp-annotation-entry-superseded'));
+  // And the current value is still the cell's own.
+  assert.equal(blockCell(el, '21').textContent, '6000');
+});
+
+test('a struck entry renders as struck, not as superseded', () => {
+  const { el } = renderStrip({
+    strip: cellWithHistory([entry('4000', 'STRUCK'), entry('6000', 'ACTIVE')]),
+    fdr: FDR, held: ['OPS'],
+  });
+  assert.ok(historyIn(el)[0].className.includes('efsp-annotation-entry-struck'));
+});
+
+test('a much-amended Block caps at two priors and offers the overflow indicator', () => {
+  // §3.7 rule 2's own escape hatch — "where space does not permit, the Block
+  // MUST render an overflow indicator and expose full history on tap",
+  // modelled on ATOP's `*`. History is append-only for the life of the Strip,
+  // so without this a long sortie grows a chip without limit.
+  const strip = cellWithHistory([
+    entry('2000', 'SUPERSEDED'), entry('3000', 'SUPERSEDED'),
+    entry('4000', 'SUPERSEDED'), entry('5000', 'SUPERSEDED'), entry('6000', 'ACTIVE'),
+  ]);
+  const { el } = renderStrip({ strip, fdr: FDR, held: ['OPS'] });
+
+  const shown = historyIn(el).map(c => c.textContent);
+  assert.deepEqual(shown, ['4000', '5000'], 'the two most recent priors, oldest of those first');
+
+  const overflow = descendants(el).find(c => (c.className || '').includes('efsp-annotation-overflow'));
+  assert.ok(overflow, 'no overflow indicator');
+  assert.equal(overflow.textContent, '*');
+  assert.match(overflow.title, /2 earlier entries/);
+});
+
+test('the expanded view shows the whole chain, which is what makes capping the chip legal', () => {
+  const strip = cellWithHistory([
+    entry('2000', 'SUPERSEDED'), entry('3000', 'SUPERSEDED'),
+    entry('4000', 'SUPERSEDED'), entry('5000', 'SUPERSEDED'), entry('6000', 'ACTIVE'),
+  ]);
+  const r = renderStrip({ strip, fdr: FDR, held: ['OPS'] });
+  r.sandbox.renderAllOpenEfspBays = () => {};
+  click(descendants(r.el).find(c => (c.className || '').includes('efsp-expand-btn')));
+
+  const expanded = r.sandbox._buildStripEl(strip);
+  const row = descendants(expanded).find(c => c.dataset && c.dataset.expandedBlock === '21');
+  assert.ok(row);
+  assert.deepEqual(descendants(row).filter(c => (c.className || '').includes('efsp-annotation-entry')).map(c => c.textContent),
+    ['2000', '3000', '4000', '5000'], 'unbounded here');
+});
+
+test('confirm-vacated is reachable on DEPARTURE 21, and strikes rather than clears', () => {
+  // §3.7 rule 3's explicit action. The button has existed since Phase 2 and no
+  // test has ever exercised it — stripAt() always set `annotations: {}`, and
+  // Block 21 had no chip to render it on.
+  const strip = cellWithHistory([entry('6000', 'ACTIVE')]);
+  const { el, sent } = renderStrip({ strip, fdr: FDR, held: ['OPS'] });
+  const strike = descendants(el).find(c => (c.className || '').includes('efsp-confirm-vacated-btn'));
+  assert.ok(strike, 'no confirm-vacated button on an ACTIVE altitude');
+  click(strike);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].op.blockId, '21');
+  assert.equal(sent[0].op.confirmVacated, true);
+  assert.equal(sent[0].op.value, undefined, 'it marks the entry struck, it never amends');
+});
+
+// ── interactive state survives a remote re-render ────────────────────────
+
+test('every popover protects its Strip from reconciliation', () => {
+  // Enumerates the CLASS, not the instances. The bind and MARSA popovers were
+  // both missing from _isProtectedStripEl — the third time that list was found
+  // incomplete after the same bug, so a seventh popover must fail here rather
+  // than be discovered by a controller losing a half-filled form to somebody
+  // else's board delta.
+  const cases = [
+    ['Coordinate…', stripAt(), ['APP']],
+    ['TOFI…', stripAt({ ownerPositionId: 'CTR' }), ['CTR']],
+    ['MARSA…', stripAt(), ['APP']],
+  ];
+  for (const [label, strip, held] of cases) {
+    const r = renderStrip({ strip, fdr: FDR, held, otherStrips: [stripAt({ stripId: 's9', fdrId: 'f9' })] });
+    const btn = findByText(r.el, label);
+    assert.ok(btn, `${label} not rendered`);
+    click(btn);
+    assert.equal(r.sandbox._isProtectedStripEl(r.el), true,
+      `${label} is open but its Strip is not protected — a remote delta would destroy it mid-interaction`);
+  }
+});
+
+test('an open Block edit protects its Strip too', () => {
+  const { el, sandbox } = renderStrip({ strip: stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' }), fdr: FDR, held: ['OPS'] });
+  assert.equal(sandbox._isProtectedStripEl(el), false, 'nothing open yet');
+  click(blockCell(el, '9'));
+  assert.equal(sandbox._isProtectedStripEl(el), true);
 });

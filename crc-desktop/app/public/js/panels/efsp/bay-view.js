@@ -95,7 +95,12 @@ function _buildBlockCell(strip, blockId) {
       e.stopPropagation();
       const actingPositionId = _resolveActingPositionId(strip);
       if (!actingPositionId) return;
-      sendEfspMutation(actingPositionId, strip, { kind: 'SetBlock', blockId, confirmVacated: true });
+      // The LIVE Strip for its rev, not the one this cell's DOM was built
+      // against — the same stale-baseRev fix _startBlockEdit and
+      // _buildEnumSelectCell already carry. Without it, striking a vacated
+      // altitude straight after any other edit to the same Strip comes back
+      // STALE_REV for no reason a controller could see.
+      sendEfspMutation(actingPositionId, getEfspStrip(strip.stripId) || strip, { kind: 'SetBlock', blockId, confirmVacated: true });
     });
     wrapper.appendChild(strikeBtn);
     return wrapper;
@@ -144,8 +149,7 @@ function _buildEnumSelectCell(strip, blockId, span, options) {
       const value = select.value;
       select.replaceWith(span);
       if (!value || value === span.textContent) return;
-      const positions = getActingPositions();
-      const actingPositionId = positions.includes(strip.ownerPositionId) ? strip.ownerPositionId : positions[0];
+      const actingPositionId = _resolveActingPositionId(strip);
       if (!actingPositionId) return;
       const currentStrip = getEfspStrip(strip.stripId) || strip;
       sendEfspMutation(actingPositionId, currentStrip, { kind: 'SetBlock', blockId, value });
@@ -174,8 +178,7 @@ function _buildBooleanToggleCell(strip, blockId, span) {
   span.tabIndex = 0;
   const toggle = (e) => {
     e.stopPropagation();
-    const positions = getActingPositions();
-    const actingPositionId = positions.includes(strip.ownerPositionId) ? strip.ownerPositionId : positions[0];
+    const actingPositionId = _resolveActingPositionId(strip);
     if (!actingPositionId) return;
     const currentStrip = getEfspStrip(strip.stripId) || strip;
     const currentValue = span.textContent === '✓';
@@ -199,8 +202,7 @@ function _startBlockEdit(strip, blockId, span) {
     const value = input.value.trim();
     input.replaceWith(span);
     if (value === currentValue) return; // no-op edit, don't send a Mutation for nothing
-    const positions = getActingPositions();
-    const actingPositionId = positions.includes(strip.ownerPositionId) ? strip.ownerPositionId : positions[0];
+    const actingPositionId = _resolveActingPositionId(strip);
     if (!actingPositionId) return;
     // Read the CURRENT Strip (for its rev) rather than the `strip` this
     // cell's DOM was built against — editing two different Blocks on the
@@ -312,6 +314,155 @@ function _appendDropButton(el, strip) {
   el.appendChild(btn);
 }
 
+// How many superseded entries a COMPACT chip shows before it gives up and
+// points at the expanded view. §3.7 rule 2 wants the superseded value in the
+// same Block, but history is append-only for the life of the Strip, so a
+// much-amended altitude would grow a chip without limit. Two, then the
+// overflow indicator the rule itself prescribes.
+const CHIP_HISTORY_LIMIT = 2;
+
+/**
+ * Renders §3.7's struck-through history into `container`, oldest first, above
+ * whatever current value the caller appends after it.
+ *
+ * This is the half of §3.7 that has never existed on screen. The server has
+ * kept, persisted and broadcast every superseded entry since Phase 1;
+ * resolveBlockValue collapsed each cell to its one ACTIVE entry and the rest
+ * was thrown away by the renderer. Rule 2:
+ *
+ *   "A superseded value MUST remain visible in the same Block, rendered
+ *    struck through, until the Strip is DROPPED. Where space does not permit,
+ *    the Block MUST render an overflow indicator and expose full history on
+ *    tap — modelled on ATOP's `*` convention."
+ *
+ * `limit` is Infinity in the expanded view and CHIP_HISTORY_LIMIT on a chip.
+ *
+ * Renders NOTHING when there is no prior entry — the common case is a Block
+ * written once or never, and it must not sprout an empty container.
+ */
+function _appendAnnotationHistory(container, strip, blockId, limit) {
+  if (typeof supersededAnnotationEntries !== 'function') return;
+  const prior = supersededAnnotationEntries(strip, blockId);
+  if (prior.length === 0) return;
+
+  const shown = Number.isFinite(limit) && prior.length > limit ? prior.slice(-limit) : prior;
+  const hidden = prior.length - shown.length;
+
+  const history = document.createElement('span');
+  history.className = 'efsp-annotation-history';
+
+  if (hidden > 0) {
+    // ATOP's own convention for state the strip cannot render. Clicking it
+    // opens the expanded view, which is the "full history on tap" the rule
+    // requires — the indicator is only legal because that surface exists.
+    const overflow = document.createElement('button');
+    overflow.className = 'efsp-annotation-overflow';
+    overflow.textContent = '*';
+    overflow.title = `${hidden} earlier ${hidden === 1 ? 'entry' : 'entries'} — open the full history`;
+    overflow.addEventListener('click', (e) => {
+      e.stopPropagation();
+      _expandedStripId = strip.stripId;
+      renderAllOpenEfspBays();
+    });
+    overflow.addEventListener('pointerdown', (e) => e.stopPropagation());
+    history.appendChild(overflow);
+  }
+
+  for (const entry of shown) {
+    const span = document.createElement('span');
+    // PREPLANNED gets its own muted state rather than being lumped in with
+    // SUPERSEDED: it is a distinct status the server can produce, and nothing
+    // has ever shown it.
+    const suffix = entry.status === 'STRUCK' ? 'struck'
+      : entry.status === 'PREPLANNED' ? 'preplanned'
+        : 'superseded';
+    span.className = 'efsp-annotation-entry efsp-annotation-entry-' + suffix;
+    span.textContent = entry.value == null ? '' : String(entry.value);
+    span.title = `${entry.status.toLowerCase()}${entry.by ? ' by ' + entry.by : ''}`;
+    history.appendChild(span);
+  }
+  container.appendChild(history);
+}
+
+// ONE Strip expanded at a time, and a single id rather than a Set.
+//
+// DEPARTURE's Block Map is ~30 entries. Several Strips expanded at once means
+// 30 x N rows rebuilt on every board delta, in a panel whose rendering rules
+// exist to keep Bays cheap — a plausible candidate for the first thing that
+// makes the board feel slow. Bounded by construction rather than by hoping.
+// It also matches the "detail view" mental model and removes any need for a
+// collapse-on-delta special case.
+//
+// Keyed by stripId, not by DOM state, so expansion SURVIVES a re-render —
+// board deltas rebuild Strips constantly. Deliberately not the popover
+// pattern: a popover has to be added to _isProtectedStripEl or a remote delta
+// destroys it mid-interaction, and this has no such requirement.
+let _expandedStripId = null;
+
+function _appendExpandButton(container, strip) {
+  const expanded = _expandedStripId === strip.stripId;
+  const btn = document.createElement('button');
+  btn.className = 'efsp-expand-btn';
+  btn.textContent = expanded ? '\u25b2' : '\u25bc';
+  btn.title = expanded ? 'Collapse' : 'Show every Block for this Strip';
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    _expandedStripId = expanded ? null : strip.stripId;
+    renderAllOpenEfspBays();
+  });
+  btn.addEventListener('pointerdown', (e) => e.stopPropagation());
+  container.appendChild(btn);
+}
+
+/**
+ * Every Block for this Strip's Role, with its full §3.7 history.
+ *
+ * The surface `DELIBERATELY_NOT_IN_COMPACT_VIEW` has been promising since it
+ * was written: its entries said "annotation editor" for a thing that did not
+ * exist, so a fully implemented, guide-required Block could be excused from
+ * the reachability test and reachable from nowhere.
+ *
+ * Rendered in BLOCK MAP ORDER, deliberately rather than by default: that is
+ * the order of the paper strip and of the guide's own §6.2/§6.3 tables, so it
+ * is learnable and stable — unlike any ordering derived from a property that
+ * changes as the Strip is worked.
+ *
+ * The editable cell is _buildBlockCell unchanged, so free text, the enum
+ * <select>, the boolean toggle and the confirmVacated button all arrive with
+ * their Enter-commits / Esc-reverts / never-on-blur contract intact rather
+ * than being reimplemented in a second surface.
+ */
+function _appendExpandedView(el, strip) {
+  if (_expandedStripId !== strip.stripId) return;
+  const map = (typeof BLOCK_MAPS === 'object' && BLOCK_MAPS[strip.role]) || null;
+  if (!map) return;
+
+  const panel = document.createElement('div');
+  panel.className = 'efsp-strip-expanded';
+
+  for (const blockId of Object.keys(map)) {
+    const row = document.createElement('div');
+    row.className = 'efsp-expanded-row';
+    row.dataset.expandedBlock = blockId;
+
+    const label = document.createElement('span');
+    label.className = 'efsp-expanded-label';
+    label.textContent = blockLabelFor(blockId, strip.role) || blockId;
+    row.appendChild(label);
+
+    const value = document.createElement('span');
+    value.className = 'efsp-expanded-value';
+    // The whole chain here, unbounded — this is the "expose full history on
+    // tap" half of §3.7 rule 2, and it is what makes capping the chip legal.
+    _appendAnnotationHistory(value, strip, blockId, Infinity);
+    value.appendChild(_buildBlockCell(strip, blockId));
+    row.appendChild(value);
+
+    panel.appendChild(row);
+  }
+  el.appendChild(panel);
+}
+
 function _buildStripEl(strip) {
   const fdr = getEfspFdr(strip.fdrId);
   const el = document.createElement('div');
@@ -390,9 +541,27 @@ function _buildStripEl(strip) {
         labelEl.textContent = label;
         chip.appendChild(labelEl);
       }
+      // §3.7 rule 2's "in the same Block", not one click away in the
+      // expanded view — bounded, with the overflow indicator the rule itself
+      // prescribes once it stops fitting.
+      _appendAnnotationHistory(chip, strip, id, CHIP_HISTORY_LIMIT);
       chip.appendChild(_buildBlockCell(strip, id));
       el.appendChild(chip);
     }
+
+    // Every trailing control lives on its OWN final row (`flex-basis: 100%`,
+    // the idiom the badges already use), rather than floating to wherever the
+    // chips happen to stop wrapping.
+    //
+    // This is load-bearing, not tidiness. `.efsp-nla-btn { margin-left: auto }`
+    // on a wrapping flex container puts the NLA button on whichever row it
+    // lands on — which differs between Strips in the SAME Bay, depending on
+    // callsign length and which optional Blocks are populated. NLA is the
+    // primary affordance: one input, double-tap guarded, reached for without
+    // looking. Making its position a function of chip count would have made
+    // adding chips a net loss.
+    const actions = document.createElement('div');
+    actions.className = 'efsp-strip-actions';
 
     // Offset (guide §7.3) — one input, a dedicated button so it's reachable
     // from keyboard/touch per §7.1 rule 4, not just a drag/dblclick gesture.
@@ -401,9 +570,10 @@ function _buildStripEl(strip) {
     offsetBtn.title = 'Offset (cock)';
     offsetBtn.textContent = '⇥';
     offsetBtn.addEventListener('click', (e) => { e.stopPropagation(); _dispatchGesture(strip, toggleOffset); });
-    el.appendChild(offsetBtn);
+    actions.appendChild(offsetBtn);
 
-    _appendDropButton(el, strip);
+    _appendExpandButton(actions, strip);
+    _appendDropButton(actions, strip);
 
     // WP4A (docs/adr/0014): a CENTER-facility INBOUND ARRIVAL Strip's real
     // next action is the Coordinate button below, never the ordinary
@@ -460,8 +630,9 @@ function _buildStripEl(strip) {
           _invokeNla(strip);
         });
       }
-      el.appendChild(btn);
+      actions.appendChild(btn);
     }
+    el.appendChild(actions);
 
     // ── WP4A coordination affordances ────────────────────────────────
     if (_isPendingCoordinationReplica(strip)) {
@@ -793,6 +964,10 @@ function _buildStripEl(strip) {
     // separating this flight, and whether the pre-rendezvous interlock is
     // armed. Same badge-not-Block reasoning as the correlation badge above.
     _appendMarsaBadge(el, strip);
+
+    // Last, so it sits below every chip, badge and control — a detail panel
+    // under the Strip rather than something threaded through it.
+    _appendExpandedView(el, strip);
   }
 
   // Flip: dblclick. Highlight: right-click (contextmenu) opens a 3-swatch
@@ -1588,11 +1763,47 @@ const AIRSPACE_ENTRY_POSITIONS = ['APP', 'CTR'];
 // blind spot the briefing's §6 names, so: a controller needs to see which
 // canned route a flight filed, not least because it is what decides whether
 // a standing release covers the flight.
+// Blocks the three ATC Roles all show, in render order. Everything a
+// controller reads at a glance on any Strip.
+const COMPACT_BLOCKS_SHARED = [
+  '1', '3', '3A', '3B', '3C', '3D', '3E', '3F', '3G', '4', '5', '5A', '7', '8', '8A', '8B', '9', '9F',
+  '14A', '14D', '22', '24A', 'IFR', 'RSVC', 'SREG', '25',
+];
+
+/**
+ * Which Blocks get a chip on the Strip, per Role.
+ *
+ * **The criterion is EDIT FREQUENCY, not interlock-ness.** Every Block is
+ * reachable from the expanded view now, so reachability cannot be why these
+ * earn a chip — what earns one is being edited on most Strips of that Role. A
+ * heading and an initial altitude are issued with every departure clearance; a
+ * radar vector is issued constantly. Interlock-ness was considered and
+ * rejected as the test: it describes what happens WHEN you edit a Block, not
+ * how often, and adopting it would have the next slice adding chips for the
+ * wrong reason.
+ *
+ * Per-Role because the same Block id means different things by Role — 20/21
+ * are guide §6.2's "Heading"/"Initial altitude" on DEPARTURE and §6.3's radar
+ * scratchpads on the airborne Roles, which is exactly why they could not live
+ * in the shared list.
+ *
+ * Every chip costs Strip height, and Strip height costs Strips-visible-per-Bay.
+ * Keep this list earned.
+ */
+const COMPACT_BLOCKS_BY_ROLE = {
+  // Heading and initial altitude: the two things a departure clearance issues
+  // beyond the route.
+  DEPARTURE:  [...COMPACT_BLOCKS_SHARED, '20', '21'],
+  // '7' is already shared and is the ASSIGNED altitude on this Role
+  // (annotation-routed, append-only); the vector is the other constant.
+  ARRIVAL:    [...COMPACT_BLOCKS_SHARED, '9A-VECTOR'],
+  // '7' stays as the FILED request here; '7A' is the assignment beside it.
+  OVERFLIGHT: [...COMPACT_BLOCKS_SHARED, '7A', '9A-VECTOR'],
+  MISSION:    ['M3', 'M1', 'M2', 'M4', 'M5', 'M6', 'M7', 'M25'],
+};
+
 function compactBlocksFor(role) {
-  return role === 'MISSION'
-    ? ['M3', 'M1', 'M2', 'M4', 'M5', 'M6', 'M7', 'M25']
-    : ['1', '3', '3A', '3B', '3C', '3D', '3E', '3F', '3G', '4', '5', '5A', '7', '8', '8A', '8B', '9', '9F',
-       '14A', '14D', '22', '24A', 'IFR', 'RSVC', 'SREG', '25'];
+  return COMPACT_BLOCKS_BY_ROLE[role] || COMPACT_BLOCKS_SHARED;
 }
 
 function _canApproveAirspaceEntry(strip) {
@@ -2171,6 +2382,16 @@ function _isProtectedStripEl(el) {
   // already gets above.
   if (_openTofiPopoverEl && el.contains(_openTofiPopoverEl)) return true;
   if (_openAirspacePopoverEl && el.contains(_openAirspacePopoverEl)) return true;
+  // The bind and MARSA popovers were BOTH missing, which is the third time
+  // this list has been found incomplete after the same bug — highlight,
+  // coordinate, TOFI and airspace were each added the same way. The rule is
+  // that interactive state survives a remote re-render; adding two more
+  // entries fixes two instances of a class, so the test that comes with this
+  // enumerates the class instead (efsp-ui-reachability.test.js opens each
+  // popover in turn and asserts its Strip is protected). A seventh cannot
+  // repeat this without failing.
+  if (_openBindPopoverEl && el.contains(_openBindPopoverEl)) return true;
+  if (_openMarsaPopoverEl && el.contains(_openMarsaPopoverEl)) return true;
   return false;
 }
 

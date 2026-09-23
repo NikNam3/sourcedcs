@@ -46,7 +46,16 @@ function makeElement(tag) {
     addEventListener(type, fn) { (this._listeners[type] = this._listeners[type] || []).push(fn); },
     removeEventListener() {},
     contains(other) { return this === other || this.children.some(c => c.contains && c.contains(other)); },
-    querySelector() { return null; },
+    querySelector(sel) {
+      // Enough for `.class` lookups, which is all the panel uses — notably
+      // _isProtectedStripEl's `.efsp-block-input` check, which silently could
+      // not fire while this returned null and so was untestable.
+      if (typeof sel !== 'string' || !sel.startsWith('.')) return null;
+      const want = sel.slice(1);
+      const hit = (n) => (n.className || '').split(/\s+/).includes(want)
+        ? n : n.children.reduce((found, c) => found || hit(c), null);
+      return this.children.reduce((found, c) => found || hit(c), null);
+    },
     getBoundingClientRect() { return { top: 0, bottom: 10, left: 0, right: 10, height: 10, width: 10 }; },
     focus() {}, select() {}, setAttribute() {}, removeAttribute() {},
     set innerHTML(v) { if (v === '') this.children = []; },

@@ -15,8 +15,8 @@ rework of the radar picture underneath it, §3B).
 
 ## 1. State of the tree
 
-Committed and green: **crc-sync 1067 tests, crc-desktop 372 tests** (`npm test` in each). ADRs run
-`0001`–`0054`.
+Committed and green: **crc-sync 1068 tests, crc-desktop 388 tests** (`npm test` in each). ADRs run
+`0001`–`0055`.
 
 **There is a written plan for the rest of WP6**, covering all five remaining deliverables plus the
 `[SOURCE-DEFINED]` audit, sequenced into phases that each land green with their own ADR. Phases 1
@@ -40,7 +40,7 @@ crc-sync/src/efsp/block-map.js            the Block Maps, the interlock tags, MI
 crc-desktop/app/public/js/panels/efsp/marsa-badge.js  the badge + the participant highlight
 crc-sync/src/state-paths.js               shipped defaults (config/) vs runtime state (state/)
 crc-desktop/app/public/js/panels/efsp/    the Strip panel, the airspace board, correlation-highlight
-docs/adr/                                 0001-0054, the reasoning behind every decision below
+docs/adr/                                 0001-0055, the reasoning behind every decision below
 docs/efsp-usage-guide.md                  how a controller actually drives it
 ```
 
@@ -211,6 +211,9 @@ every one in machinery that already existed and looked finished:
 | `.efsp-coordinate-submit` has had no CSS rule since WP5, so the bind picker's candidate rows render as default browser buttons inside a dark popover | `0051` |
 | **`DropStrip` had no affordance anywhere** — never state-gated server-side and OPS always held the permission, but the only way to ask was the `.drop` dot-command, so an OPS controller who proposed the wrong Strip had no visible way to undo it. `efsp-ui-reachability.test.js` held every writable *Block* to being reachable and said nothing about *ops* | — |
 | **The no-radar-coverage overlay was `position: fixed; inset: 0`**, so an empty scope washed out the entire application — Strip panel, radio, airport panel — when the only thing with nothing to show was the map | — |
+| **Five of six MARSA interlock Blocks could not be reached from the panel at all**, along with guide-REQUIRED Blocks including `9A-FUEL` — `_buildBlockCell` was only ever called from the compact list, and the "annotation editor" that `DELIBERATELY_NOT_IN_COMPACT_VIEW` excused them to was never built | `0055` |
+| **§3.7's append-only history had never been rendered** — the server kept, persisted and broadcast every superseded entry since Phase 1 and `resolveBlockValue` discarded all but the ACTIVE one before it reached the DOM. No strikethrough CSS existed anywhere; `PREPLANNED` appeared zero times in the repo | `0055` |
+| **The bind and MARSA popovers were missing from `_isProtectedStripEl`**, so another controller's board delta destroyed either one mid-interaction — the third time that list was found incomplete after the same bug | `0055` |
 | **A resync from a client AHEAD of the server was served a delta, not a snapshot** — `currentSeq - lastSeq` goes negative when the server restarts with a cleared or rolled-back Board, which passes the window check trivially, so the server replayed from an empty ring and answered "nothing changed" to a client holding a whole Board of Strips that no longer existed. They never went away, and reconnecting did not help | — |
 | **`efsp-block-map-parity.test.js` did not compare `interlock`** — adding the assertion failed immediately: the client had never carried the tag `0051` introduced, so the server could mark a Block and the panel could not know | `0052` |
 | …and it did not compare `target.field` either, so a `tofi`/`military` Block could route to the wrong key of the right object on one side only | `0052` |
@@ -443,8 +446,13 @@ is the one exception — it owns the regime (`0051`).
   not correctness.
 - **`crc-desktop/tests/helpers/dom-stub.js` now exists** (`0054`) and holds the shared `makeElement`.
   The two older hand-maintained copies in `efsp-ui-reachability.test.js` and
-  `efsp-stereo-panel.test.js` still stand and should migrate to it — mechanical, and the reachability
-  one has extra surface the helper already carries.
+  `efsp-stereo-panel.test.js` still stand and should migrate to it — mechanical, and both stubs now
+  need the same `querySelector` class support `0055` added, which is the second time one change has
+  had to be made twice.
+- **`efsp-coordination-client.test.js:77` still scrapes `AIRSPACE_ENTRY_POSITIONS` out of
+  `bay-view.js` with a regex.** `0055` replaced the equivalent scrape of the compact-Block list with
+  a vm-sandbox read and deliberately left this one; it breaks the same way the moment that constant's
+  shape changes.
 - **The Strip's layout is unverified by eye** (`0051`, `0052`). The reachability tests render the
   real `bay-view.js` against a DOM stub and prove the wiring, not the pixels. The Strip carries
   seven badge/indicator slots plus two more Block chips now (`HOOK`, `ORDNANCE`), and nobody has
