@@ -278,7 +278,7 @@ test('SCENARIO military round trip: Incirlik IFR departure -> CTR -> tactical co
   assert.equal(mission.role, 'MISSION');
   assert.equal(mission.fdrId, fdrId, 'the MISSION Strip shares the ATC-side FDR');
 
-  mission = mustAct(efsp, c.TAC_C2, 'TAC_C2', mission, { kind: 'TOFI', action: 'ACCEPT' });
+  mission = mustAct(efsp, c.TAC_C2, 'TAC_C2', mission, { kind: 'TOFI', action: 'ACCEPT', separationRegime: 'MARSA' });
   assert.equal(mission.tofiCoordination.state, 'ACTIVE');
   ctrStrip = efsp.boardStoreFor('CENTER').getStrip(ctrStrip.stripId);
   assert.equal(ctrStrip.tofiCoordination.state, 'ACTIVE', 'both sides see the exchange as live');
@@ -385,7 +385,7 @@ test('a TOFI EXIT that completes while the airspace is still booked to the using
   ctrStrip = mustAct(efsp, c.CTR, 'CTR', ctrStrip, { kind: 'SetBlock', blockId: '24A', value: 'USING_AGENCY' });
   ctrStrip = mustAct(efsp, c.CTR, 'CTR', ctrStrip, { kind: 'TOFI', action: 'PROPOSE', direction: 'ENTRY', toFacilityId: 'TACTICAL', toPositionId: 'TAC_C2' });
   let mission = efsp.boardStoreFor('TACTICAL').getStrip(ctrStrip.tofiCoordination.peerStripId);
-  mission = mustAct(efsp, c.TAC_C2, 'TAC_C2', mission, { kind: 'TOFI', action: 'ACCEPT' });
+  mission = mustAct(efsp, c.TAC_C2, 'TAC_C2', mission, { kind: 'TOFI', action: 'ACCEPT', separationRegime: 'MARSA' });
 
   ctrStrip = mustAct(efsp, c.CTR, 'CTR', efsp.boardStoreFor('CENTER').getStrip(ctrStrip.stripId), { kind: 'SetBlock', blockId: 'SREG', value: 'ATC' });
   ctrStrip = mustAct(efsp, c.CTR, 'CTR', ctrStrip, { kind: 'TOFI', action: 'PROPOSE', direction: 'EXIT' });

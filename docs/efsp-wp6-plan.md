@@ -554,7 +554,9 @@ Per phase, in order:
      than costly — confirm the refusal is *audited*, not returned early).
    - **a crc-sync restart mid-suspension.** This is the one the rule-5 design exists for: a
      controller reconnecting after a suspension must not see an `OPEN` runway.
-6. Note in the ADR that **browser automation was not available** in the prior session, so
-   anything layout-dependent is still unverified by eye unless it gets clicked this time. As of
-   Phase 2 the Strip carries seven badge/indicator slots plus `HOOK` and `ORDNANCE`, and the
-   field-state panel is a new dock surface nobody has seen.
+6. **Eyes on it, named.** Browser automation is not available to the agent, so a human has to:
+   the squadron member driving §5's stereo-table pass should click these in the same sitting, and
+   the ADR records what they saw rather than that it was unverified. Outstanding as of `0054`:
+   the mission-line bind picker and `.mission`, the separation-regime `<select>` beside "Accept
+   TOFI Entry", a Strip carrying `HOOK`/`ORDNANCE`/`+N` and its badge slots at once, and — when
+   Phase 3 lands — the field-state panel, which is a new dock surface nobody has seen.

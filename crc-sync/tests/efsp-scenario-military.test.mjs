@@ -46,7 +46,7 @@ test('SCENARIO tactical control handed to GCI, which is the other of Center\'s t
   assert.equal(mission.bayId, 'gci-coordination', 'lands in GCI\'s own Coordination Bay, not TAC_C2\'s');
   assert.equal(mission.role, 'MISSION');
 
-  const accepted = mustAct(efsp, c.GCI, 'GCI', mission, { kind: 'TOFI', action: 'ACCEPT' });
+  const accepted = mustAct(efsp, c.GCI, 'GCI', mission, { kind: 'TOFI', action: 'ACCEPT', separationRegime: 'MARSA' });
   assert.equal(accepted.tofiCoordination.state, 'ACTIVE');
 
   // And AIC, which works under TAC_C2's TOFI rather than holding one, is
@@ -69,7 +69,7 @@ test('SCENARIO a mission runs its own six states while the ATC side carries on',
     kind: 'TOFI', action: 'PROPOSE', direction: 'ENTRY', toFacilityId: 'TACTICAL', toPositionId: 'TAC_C2',
   });
   let mission = mustAct(efsp, c.TAC_C2, 'TAC_C2', tacticalStrip(efsp, ctrStrip.tofiCoordination.peerStripId), {
-    kind: 'TOFI', action: 'ACCEPT',
+    kind: 'TOFI', action: 'ACCEPT', separationRegime: 'MARSA',
   });
   assert.equal(mission.state, 'TASKED');
 
@@ -232,4 +232,158 @@ test('the deferred half of the military namespace has no write path at all (§12
   const fdr = efsp.fdrStore.getFdr(strip.fdrId);
   assert.equal(fdr.military.alertStatus, 'NONE');
   assert.equal(fdr.military.mtr.designator, null);
+});
+
+// ── 23. the mission line exists from tasking (docs/adr/0054) ─────────────
+
+/** TAC_C2 tasks a mission line bound to an existing flight. No TOFI involved. */
+function taskMissionLine(efsp, c, fdrId) {
+  return mustAct(efsp, c.TAC_C2, 'TAC_C2', null, {
+    kind: 'CreateStrip', bayId: 'tac-c2-tasked', rackId: 'main', role: 'MISSION', fdrId,
+  });
+}
+
+test('SCENARIO a mission line is fragged before the jet moves, and both Strips run in parallel', () => {
+  const efsp = createEfsp();
+  const c = crew(efsp, ALL);
+
+  // The jet is still on the ramp at OPS — nowhere near TOFI-eligible.
+  const dep = mustAct(efsp, c.OPS, 'OPS', null, {
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main',
+    fdr: { ...DEPARTURE_FDR, callsign: 'FRAG11' },
+  });
+  assert.equal(dep.state, 'PROPOSED');
+
+  const mission = taskMissionLine(efsp, c, dep.fdrId);
+  assert.equal(mission.state, 'TASKED', 'TASKED finally means something');
+  assert.equal(mission.bayId, 'tac-c2-tasked');
+  assert.equal(mission.fdrId, dep.fdrId, 'one flight, two Strips');
+
+  // One FDR, so one beacon code — guide §9.8's bridge field, not a copy.
+  const fdr = efsp.fdrStore.getFdr(dep.fdrId);
+  assert.ok(fdr.identity.beaconAssigned);
+  assert.equal(efsp.fdrStore.getAll().filter(f => f.identity.callsign === 'FRAG11').length, 1);
+
+  // The mission line advances on the MRU's own schedule while the departure
+  // is still sitting at PROPOSED. Nothing gates one on the other.
+  const airborne = mustAct(efsp, c.TAC_C2, 'TAC_C2', mission, { kind: 'SetState', toState: 'AIRBORNE' });
+  assert.equal(airborne.state, 'AIRBORNE');
+  assert.equal(efsp.boardStoreFor('INCIRLIK').getStrip(dep.stripId).state, 'PROPOSED',
+    'the ATC Strip is untouched — the lifecycles are independent by design');
+});
+
+test('SCENARIO TOFI later lands on the mission line that is already there', () => {
+  const efsp = createEfsp();
+  const c = crew(efsp, ALL);
+
+  const ctrStrip = atCenter(efsp, c, 'FRAG12');
+  const mission = taskMissionLine(efsp, c, ctrStrip.fdrId);
+
+  const proposed = mustAct(efsp, c.CTR, 'CTR', ctrStrip, {
+    kind: 'TOFI', action: 'PROPOSE', direction: 'ENTRY', toFacilityId: 'TACTICAL', toPositionId: 'TAC_C2',
+  });
+  assert.equal(proposed.tofiCoordination.peerStripId, mission.stripId,
+    'the exchange points at the Strip TAC_C2 already had');
+
+  const onTactical = efsp.boardStoreFor('TACTICAL').getAll()
+    .filter(s => s.fdrId === ctrStrip.fdrId && s.state !== 'DROPPED');
+  assert.equal(onTactical.length, 1, 'one airframe, one MRU record — never a second mission line');
+
+  const accepted = mustAct(efsp, c.TAC_C2, 'TAC_C2', tacticalStrip(efsp, mission.stripId), {
+    kind: 'TOFI', action: 'ACCEPT', separationRegime: 'MARSA',
+  });
+  assert.equal(accepted.tofiCoordination.state, 'ACTIVE');
+  assert.equal(efsp.fdrStore.getFdr(ctrStrip.fdrId).tofi.separationRegime, 'MARSA');
+});
+
+// ── the pilot-request axis, which is where the defects live ─────────────
+
+test('SCENARIO the flight cancels after it was fragged, and the beacon is not released early', () => {
+  const efsp = createEfsp();
+  const c = crew(efsp, ALL);
+
+  const dep = mustAct(efsp, c.OPS, 'OPS', null, {
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main',
+    fdr: { ...DEPARTURE_FDR, callsign: 'CNX11' },
+  });
+  const mission = taskMissionLine(efsp, c, dep.fdrId);
+  const code = efsp.fdrStore.getFdr(dep.fdrId).identity.beaconAssigned;
+
+  // OPS drops the departure. The mission line is still live, so the code the
+  // MRU is still looking at must not go back to the pool.
+  mustAct(efsp, c.OPS, 'OPS', dep, { kind: 'DropStrip' });
+  assert.equal(efsp.fdrStore.codeAllocator.holderOf(code), dep.fdrId,
+    'a live mission line keeps the flight alive');
+
+  mustAct(efsp, c.TAC_C2, 'TAC_C2', tacticalStrip(efsp, mission.stripId), { kind: 'DropStrip' });
+  assert.notEqual(efsp.fdrStore.codeAllocator.holderOf(code), dep.fdrId,
+    'and the last Strip out releases it');
+});
+
+test('SCENARIO a second mission line for one flight is refused, and a mis-bind is recoverable', () => {
+  const efsp = createEfsp();
+  const c = crew(efsp, ALL);
+
+  const right = atCenter(efsp, c, 'BIND11');
+  const wrong = atCenter(efsp, c, 'BIND12');
+
+  // The mis-pick this whole affordance has to survive: two adjacent callsigns
+  // in one package, and the controller takes the wrong one.
+  const mistake = taskMissionLine(efsp, c, wrong.fdrId);
+  assert.equal(efsp.fdrStore.getFdr(mistake.fdrId).identity.callsign, 'BIND12',
+    'the mission line renders the bound flight\'s callsign, so the error is visible at once');
+
+  const dupe = act(efsp, c.TAC_C2, 'TAC_C2', null, {
+    kind: 'CreateStrip', bayId: 'tac-c2-tasked', rackId: 'main', role: 'MISSION', fdrId: wrong.fdrId,
+  });
+  assert.equal(dupe.ok, false);
+  assert.match(dupe.detail, /already has a live MISSION Strip/);
+
+  // Unbind is Drop: nothing on a wrongly-bound mission line is worth keeping.
+  mustAct(efsp, c.TAC_C2, 'TAC_C2', tacticalStrip(efsp, mistake.stripId), { kind: 'DropStrip' });
+  const redone = taskMissionLine(efsp, c, right.fdrId);
+  assert.equal(efsp.fdrStore.getFdr(redone.fdrId).identity.callsign, 'BIND11');
+});
+
+test('SCENARIO a bound pair under ACTIVE tactical control cannot be dropped from either side, and the way out is EXIT', () => {
+  const efsp = createEfsp();
+  const c = crew(efsp, ALL);
+
+  let ctrStrip = atCenter(efsp, c, 'FRZ11');
+  const mission = taskMissionLine(efsp, c, ctrStrip.fdrId);
+  ctrStrip = mustAct(efsp, c.CTR, 'CTR', ctrStrip, {
+    kind: 'TOFI', action: 'PROPOSE', direction: 'ENTRY', toFacilityId: 'TACTICAL', toPositionId: 'TAC_C2',
+  });
+  mustAct(efsp, c.TAC_C2, 'TAC_C2', tacticalStrip(efsp, mission.stripId), {
+    kind: 'TOFI', action: 'ACCEPT', separationRegime: 'MARSA',
+  });
+
+  // Documented, pre-existing, and now reachable far more often: while the
+  // exchange is ACTIVE neither Strip can be retired. Written down here so it
+  // is a known property rather than a 0200 surprise.
+  assert.equal(act(efsp, c.CTR, 'CTR', centerStrip(efsp, ctrStrip.stripId), { kind: 'DropStrip' }).ok, false);
+  assert.equal(act(efsp, c.TAC_C2, 'TAC_C2', tacticalStrip(efsp, mission.stripId), { kind: 'DropStrip' }).ok, false);
+
+  // The way out. Note the EXIT gate needs SREG back at ATC — which is only
+  // answerable because accepting made somebody state it in the first place.
+  ctrStrip = mustAct(efsp, c.CTR, 'CTR', centerStrip(efsp, ctrStrip.stripId), { kind: 'SetBlock', blockId: 'SREG', value: 'ATC' });
+  ctrStrip = mustAct(efsp, c.CTR, 'CTR', ctrStrip, { kind: 'TOFI', action: 'PROPOSE', direction: 'EXIT' });
+  mustAct(efsp, c.TAC_C2, 'TAC_C2', tacticalStrip(efsp, mission.stripId), { kind: 'TOFI', action: 'ACCEPT' });
+  assert.equal(act(efsp, c.CTR, 'CTR', centerStrip(efsp, ctrStrip.stripId), { kind: 'DropStrip' }).ok, true);
+});
+
+test('SCENARIO a crc-sync restart leaves the two Strips still bound to one flight', () => {
+  const efsp = createEfsp();
+  const c = crew(efsp, ALL);
+  const ctrStrip = atCenter(efsp, c, 'RST11');
+  const mission = taskMissionLine(efsp, c, ctrStrip.fdrId);
+
+  const tac = efsp.boardStoreFor('TACTICAL');
+  const snapshot = JSON.parse(JSON.stringify(tac.snapshot()));
+  tac.restore(snapshot);
+
+  const back = tac.getStrip(mission.stripId);
+  assert.equal(back.fdrId, ctrStrip.fdrId, 'the binding is the shared fdrId, so it survives by construction');
+  assert.equal(back.role, 'MISSION');
+  assert.equal(back.state, 'TASKED');
 });

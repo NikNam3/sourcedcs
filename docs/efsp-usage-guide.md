@@ -18,6 +18,7 @@ Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green):
   - **Stereo routes** — file a flight by short name and the server expands the whole route. See §4A. (The table ships empty; nothing works until somebody writes one.)
   - **MARSA** — declaring that the military is separating its own aircraft, as a relation between flights rather than a flag on one, with the pre-rendezvous course/altitude interlock. See §8D.
   - **The military Block namespace** — `ORDNANCE` (Block 3G) and `HOOK` (Block 3F) on every ATC Strip. The fields are live and recorded; the behaviour that reads them (§9.5's hung-ordnance advisory, §9.7's arresting-gear gating) is not built yet. See §6.
+  - **The mission line exists from tasking** — `TAC_C2` frags a mission line against a filed flight before it moves, and TOFI later lands on the one that is already there. Accepting tactical control now requires stating the separation regime. See §8C1.
 
 Not built: the rest of WP6 — field state and arresting-gear gating (§9.7), alert/scramble (§9.6), the hung-ordnance advisory (§9.5), MTR fields (§9.4) — plus WP7 (ATO ingest), WP7A (carrier/PAR) and WP8 (instrumentation). `docs/efsp-briefing.md` is the current handoff note.
 
@@ -546,6 +547,59 @@ that no longer exists. A flight whose transponder is off will stay `NO TRK` unti
 The panel header shows a rate — `TRK 96% (24/25)` — of how many flights that could have a contact
 have one. It turns amber below 95%, which the guide treats as a defect rather than a fact of life. A
 flight still on the ramp is not counted.
+
+## 8C1. TOFI — handing a flight to the military, and the mission line
+
+Two records, one flight. The **ATC Strip** stays live and posted the whole time — the
+flight keeps its IFR clearance, keeps its ATC squawk, and ATC still separates
+non-participating traffic from it. The **mission line** is the MRU's own record of the
+same aircraft, worked by `TAC_C2` or `GCI`.
+
+### Fragging the mission line (`TAC_C2`)
+
+**Do this at tasking, not at the boundary.** Pick `TAC_C2 · Mission` in the New Strip
+toolbar and choose the flight from the **bind picker** beside it — rows read
+`VIPER11 · 4201 · LTAG DCT ALPHA`, so two jets in one package with adjacent callsigns
+are distinguishable. Or type `.mission VIPER11`.
+
+- The mission line lands in **Tasked** and shares the flight's FDR, so it shows that
+  flight's callsign and **its squawk** — one Mode 3/A, never a second. If the callsign
+  is wrong you picked the wrong jet: drop it and frag another. There is no re-bind.
+- Leave the picker blank for a mission that never touches ATC airspace at all — that
+  files a standalone mission line with its own flight, as before.
+- One flight gets **one** mission line. A second is refused, naming who holds it.
+- Both Strips show a blue **`+1`**. Hover it: it names the other Strip's Facility,
+  Position and Role, which is how the ATC controller spots a mis-bind.
+
+The mission line then advances on its own — Tasked → Airborne → On Station → … —
+**independently of what the departure is doing**. It is a plan, not a clearance; it is
+normal for it to run ahead of, or behind, the ATC side.
+
+### The handshake (`CTR` ⇄ `TAC_C2`/`GCI`)
+
+TOFI is the exchange that moves tactical control. It is **not** what creates the
+mission line, and it is deliberately only available once the flight is airborne and
+being worked enroute (`HANDED_OFF` / `INBOUND` / `TRANSITING`).
+
+1. `CTR` presses **TOFI…**, picks the counterpart, and sends. If the flight already
+   has a mission line the proposal lands **on it** — no second Strip appears, and it
+   does not move out of the Bay it is in.
+2. The MRU presses **Accept TOFI Entry** — and **must pick a separation regime** from
+   the `<select>` beside the button. This is what the FDR records as the answer to
+   "who is separating this aircraft", and it is asked rather than guessed because it
+   comes from the governing agreement. An accept without one is refused.
+3. **Transfer Comms** is a separate press, from either side.
+
+### Getting it back
+
+`CTR` presses **TOFI Exit**, then the MRU accepts. Exit is the safety-critical
+direction, so it is refused until **`SREG` is set back to `ATC`** — and only `CTR` can
+do that, because `SREG` lives on the ATC-side Strip. If the MRU's Accept is greyed
+out, that is why, and the tooltip says so.
+
+⚠️ **While tactical control is ACTIVE, neither Strip can be dropped.** That is
+deliberate — the flight is still flying and still yours. The way out is the exit above,
+not a drop.
 
 ## 8D. MARSA — when the military separates its own
 

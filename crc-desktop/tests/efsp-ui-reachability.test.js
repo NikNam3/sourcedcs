@@ -297,8 +297,16 @@ test('a controller can open tactical control, and the MRU side can accept it', (
     tofiCoordination: { direction: 'ENTRY', state: 'PROPOSED', peerFacilityId: 'CENTER', peerPositionId: 'CTR' },
   });
   const mru = renderStrip({ strip: mission, fdr: FDR, held: ['TAC_C2'] });
+  // Accepting an ENTRY now carries the separation regime (crc-sync's
+  // docs/adr/0053) — the server refuses an accept without one, so a bare
+  // button would render fine and fail on every click.
+  const regime = descendants(mru.el).find(c => (c.className || '').includes('efsp-tofi-regime-select'));
+  assert.ok(regime, 'no regime picker beside Accept — the accept would be refused');
+  assert.deepEqual(regime.children.map(o => o.value), ['MARSA', 'ATC', 'USING_AGENCY', 'DUE_REGARD', 'SEE_AND_AVOID']);
+  regime.value = 'USING_AGENCY';
   click(findByText(mru.el, 'Accept TOFI Entry'));
   assert.equal(mru.sent[0].op.action, 'ACCEPT');
+  assert.equal(mru.sent[0].op.separationRegime, 'USING_AGENCY');
 });
 
 test('a TOFI exit cannot be accepted early, and the Strip says whose job it is to fix', () => {

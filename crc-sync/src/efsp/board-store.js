@@ -30,7 +30,7 @@
 const crypto = require('crypto');
 const { keyBetween, rebalance } = require('./order-key');
 const { isValidAltitude } = require('./airspace-config');
-const { MAX_FREE_TEXT } = require('./fdr-store');
+const { MAX_FREE_TEXT, SEPARATION_REGIMES } = require('./fdr-store');
 
 const FLAG_KEYS = ['offset', 'flipped', 'removeIndicator', 'highlight', 'attention'];
 const APPLIED_MUTATIONS_CAP = 5000;
@@ -395,7 +395,48 @@ class BoardStore {
       return { ok: false, reason: 'PERMISSION_DENIED' };
     }
 
-    const created = this._fdrStore.createFdr(op.fdr, { by });
+    // BIND, rather than originate (docs/adr/0054). `op.fdrId` attaches this
+    // new Strip to a flight that already exists instead of minting a fresh
+    // FDR — which is how a mission line comes to be the SAME flight as the
+    // ATC Strip, at tasking time, long before any TOFI.
+    //
+    // A field on this op rather than an op of its own: every gate above
+    // (known Bay, valid Role, canCreateStripRole) and everything below
+    // (cid, orderKey, the Strip literal) applies identically, and ADR 0023's
+    // precedent is that ARRIVAL Strips already originate "both ways" through
+    // this one op. It also keeps the reverse direction free — WP7's ATO-first
+    // case is this same op with a different Role and acting Position.
+    let created;
+    if (op.fdrId !== undefined && op.fdrId !== null) {
+      if (op.fdr) {
+        return { ok: false, reason: 'VALIDATION_ERROR', detail: 'CreateStrip takes either fdr (a new flight) or fdrId (an existing one), not both' };
+      }
+      const bound = this._fdrStore.getFdr(op.fdrId);
+      // Same reason code and wording receiveTofiProposal already uses, so
+      // both binding paths fail identically.
+      if (!bound) return { ok: false, reason: 'NOT_FOUND', detail: 'referenced FDR not found' };
+
+      // Scanned LOCALLY, not through rules.liveStripsForFdr — that one is
+      // global and role-blind, and the 5 ATC<->ATC primitives legitimately put
+      // same-role Strips for one FDR on two Boards (docs/adr/0013). Within ONE
+      // Board, two same-role Strips on one FDR is §3.6's duplicate
+      // origination. Role-agnostic rather than MISSION-specific, so the
+      // ATO-first direction reuses this unchanged.
+      const clash = [...this._strips.values()].find(
+        s => s.fdrId === op.fdrId && s.role === role && s.state !== 'DROPPED');
+      if (clash) {
+        return {
+          ok: false, reason: 'VALIDATION_ERROR',
+          detail: `${bound.identity.callsign} already has a live ${role} Strip at ${clash.ownerPositionId}`,
+        };
+      }
+      // No createFdr, so NO BEACON CODE IS MINTED: the mission line shares the
+      // flight's Mode 3/A, which is guide §9.8's own "bridge field" and the
+      // strongest argument for a shared fdrId over copying fields across.
+      created = { ok: true, fdr: bound };
+    } else {
+      created = this._fdrStore.createFdr(op.fdr, { by });
+    }
     if (!created.ok) return { ok: false, reason: created.reason, detail: created.detail };
 
     const stripId = crypto.randomUUID();
@@ -1722,18 +1763,72 @@ class BoardStore {
       }
     }
 
+    // ENTRY — the MRU controller MUST say under which regime they are taking
+    // the aircraft (docs/adr/0053). Nothing required this before, and
+    // fdr.tofi.separationRegime starts as null, so the whole of tactical
+    // control could run with the FDR saying nothing at all about who was
+    // separating: §4.8.3's "a second controller takes TAC_C2 ten minutes later
+    // and inherits a lie", arriving by a route nobody was watching. It also
+    // failed the EXIT gate below twenty minutes later, with the cause long out
+    // of sight.
+    //
+    // ASKED FOR, never derived. §4.6.3 rule 1 and defect D14 are explicit that
+    // the regime comes from the governing agreement and is not computable from
+    // airspace type or anything else — so the fix is to make the controller
+    // state it, not to guess it.
+    if (tofi.direction === 'ENTRY') {
+      const activeMarsa = this._rules.activeMarsaFor ? this._rules.activeMarsaFor(strip.fdrId) : null;
+      if (activeMarsa) {
+        // The relation owns the regime while it is ACTIVE (docs/adr/0051), and
+        // _applySetBlock refuses a direct SREG write for the same reason.
+        // Accepting tactical control does not change who is separating, so
+        // asking here would offer a choice that cannot be honoured.
+        if (op.separationRegime !== undefined && op.separationRegime !== 'MARSA') {
+          return {
+            ok: false, reason: 'VALIDATION_ERROR',
+            detail: `this flight is in an active MARSA relation declared by ${activeMarsa.declaringCallsign} — it separates itself until that relation ends`,
+            strip,
+          };
+        }
+      } else {
+        if (!SEPARATION_REGIMES.has(op.separationRegime)) {
+          return {
+            ok: false, reason: 'VALIDATION_ERROR',
+            detail: `accepting tactical control requires a separation regime (${[...SEPARATION_REGIMES].join(', ')}) — it comes from the governing agreement and cannot be derived`,
+            strip,
+          };
+        }
+        const wrote = this._fdrStore.setTofi(strip.fdrId, { separationRegime: op.separationRegime }, { by });
+        if (!wrote.ok) return { ok: false, reason: wrote.reason, detail: wrote.detail, strip };
+      }
+    }
+
     const now = Date.now();
     tofi.state = tofi.direction === 'EXIT' ? 'COMPLETE' : 'ACTIVE';
     tofi.acceptedAt = now;
     tofi.acceptedBy = by || null;
 
-    // ENTRY only — relocate the MISSION Strip out of the Coordination Bay
-    // into its normal working Bay for its own (already-correct) state,
-    // mirroring _applyCoordinationAccept's exact relocation pattern. EXIT
-    // never moved the Strip into the Coordination Bay in the first place
-    // (receiveTofiExitProposal doesn't touch bayId/rackId at all), so
-    // there's nothing to relocate back.
-    if (tofi.direction === 'ENTRY') {
+    // ENTRY only, and only for a Strip THIS exchange minted — relocate the
+    // MISSION Strip out of the Coordination Bay into its normal working Bay
+    // for its own (already-correct) state, mirroring
+    // _applyCoordinationAccept's relocation pattern. EXIT never moved the
+    // Strip into the Coordination Bay in the first place
+    // (receiveTofiExitProposal doesn't touch bayId/rackId at all), so there's
+    // nothing to relocate back.
+    //
+    // `mintedForTofi` is what makes this safe now that a TOFI can land on a
+    // mission line that already existed (docs/adr/0054). Such a Strip is
+    // sitting in a real working Bay, and relocating it would be actively
+    // wrong: bayForImpliedState FALLS BACK TO bays[0] when no Bay implies the
+    // state (facility-config.js), TAC_C2's bays[0] is `tac-c2-tasked`, and
+    // TAC_C2 has no Bay implying OFF_STATION or RTB — so accepting a TOFI on a
+    // mission line at RTB would file it back under Tasked.
+    //
+    // Recorded at propose time rather than re-derived here by comparing
+    // strip.bayId against coordinationBayFor(): that derives the same answer
+    // until a controller drags the replica somewhere else in between, and then
+    // silently skips a relocation that should have happened.
+    if (tofi.direction === 'ENTRY' && tofi.mintedForTofi) {
       const targetBay = this._rules.bayForImpliedState ? this._rules.bayForImpliedState(strip.ownerPositionId, strip.state) : null;
       if (targetBay) {
         strip.bayId = targetBay.bayId;
@@ -1763,6 +1858,27 @@ class BoardStore {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no pending TOFI proposal on this Strip', strip };
     }
     tofi.state = 'REJECTED';
+    // A Strip this exchange minted has no life of its own, so a refused
+    // exchange leaves nothing behind (docs/adr/0054). Without this it lingers
+    // as residue: find-before-mint would then see a MISSION Strip at the
+    // Position that just said no, and refuse the ATC controller's perfectly
+    // reasonable retry to the OTHER counterpart — which
+    // efsp-scenario-military's "the MRU refuses, and the ATC side recovers"
+    // walks, and which caught this.
+    //
+    // A mission line TAC_C2 tasked itself is NOT residue: it existed before
+    // the exchange and outlives it, rejection or not. That is exactly what
+    // `mintedForTofi` distinguishes.
+    //
+    // Retired rather than deleted, so the Mutation log and any client that
+    // already has it see a normal DROPPED transition. The beacon is safe:
+    // _releaseFdrIfLastStrip only releases when no other live Strip shares the
+    // FDR, and the ATC-side Strip is still live by construction here.
+    if (tofi.mintedForTofi) {
+      strip.state = 'DROPPED';
+      strip.flags.removeIndicator = true;
+      this._releaseFdrIfLastStrip(strip, by);
+    }
     strip.rev += 1; strip.updatedAt = Date.now(); strip.updatedBy = by || null;
     this._touch(strip.stripId);
 
@@ -1833,6 +1949,48 @@ class BoardStore {
     const fdr = this._fdrStore.getFdr(fdrId);
     if (!fdr) return { ok: false, reason: 'NOT_FOUND', detail: 'referenced FDR not found' };
 
+    // FIND BEFORE MINT (docs/adr/0054). A mission line can now exist before
+    // any TOFI — TAC_C2 tasks it and binds it to the flight at fragging time —
+    // so this exchange must land on the Strip that is already there rather
+    // than create a second MRU record for one airframe. Two mission lines with
+    // independent lifecycles is docs/adr/0045's "two answers to one identity
+    // question" wearing a different hat.
+    const existing = [...this._strips.values()].find(
+      s => s.fdrId === fdrId && s.role === 'MISSION' && s.state !== 'DROPPED');
+
+    if (existing) {
+      if (existing.ownerPositionId !== toPositionId) {
+        // Do not silently re-own it. Ownership is per-Position (§4.8.1) and
+        // the sender picked the wrong counterpart — say so, rather than mint a
+        // duplicate beside the real one.
+        return {
+          ok: false, reason: 'VALIDATION_ERROR',
+          detail: `this flight already has a mission line at ${existing.ownerPositionId} — propose tactical control to them`,
+        };
+      }
+      const open = existing.tofiCoordination;
+      if (open && (open.state === 'PROPOSED' || open.state === 'ACTIVE')) {
+        return { ok: false, reason: 'VALIDATION_ERROR', detail: 'a TOFI exchange is already open on this mission line' };
+      }
+      // Reuse. Deliberately touches NOTHING but the exchange record: this
+      // Strip sits in a real working Bay at a real state, and both belong to
+      // the MRU controller, not to this exchange. `mintedForTofi` is absent,
+      // which is what stops _applyTofiAccept relocating it (see there).
+      const reusedAt = Date.now();
+      existing.tofiCoordination = {
+        direction: 'ENTRY', state: 'PROPOSED',
+        peerFacilityId: fromFacilityId, peerStripId: fromStripId, peerPositionId: fromPositionId,
+        commsTransferred: false, commsTransferredAt: null, commsTransferredBy: null,
+        note: note || null,
+        initiatedAt: reusedAt, initiatedBy: by || null, acceptedAt: null, acceptedBy: null,
+      };
+      existing.rev += 1;
+      existing.updatedAt = reusedAt;
+      existing.updatedBy = by || null;
+      this._touch(existing.stripId);
+      return { ok: true, strip: existing };
+    }
+
     const coordinationBay = this._rules.coordinationBayFor ? this._rules.coordinationBayFor(toPositionId) : null;
     if (!coordinationBay) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `no Coordination Bay configured for ${toPositionId}` };
@@ -1868,6 +2026,10 @@ class BoardStore {
         commsTransferred: false, commsTransferredAt: null, commsTransferredBy: null,
         note: note || null,
         initiatedAt: now, initiatedBy: by || null, acceptedAt: null, acceptedBy: null,
+        // This exchange put the Strip in a Coordination Bay, so this
+        // exchange is the one allowed to move it out again on ACCEPT.
+        // Absent on the reuse path above, deliberately.
+        mintedForTofi: true,
       },
       createdAt: now, updatedAt: now, updatedBy: by || null,
     };

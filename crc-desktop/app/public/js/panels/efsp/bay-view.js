@@ -441,6 +441,27 @@ function _buildStripEl(strip) {
         tofiAcceptBtn.disabled = true;
         tofiAcceptBtn.classList.add('efsp-nla-btn-denied');
         tofiAcceptBtn.title = `${strip.tofiCoordination.peerPositionId} must set separation regime back to ATC before this exit can be accepted`;
+      } else if (strip.tofiCoordination.direction === 'ENTRY') {
+        // ENTRY needs the regime stated as part of accepting (docs/adr/0053),
+        // so this is a picker rather than a bare button — the MRU controller
+        // says what they heard agreed, and the accept carries it. A <select>
+        // beside the button rather than a popover: it is one field, and the
+        // whole affordance is already a pair of buttons on the Strip.
+        const regimeSel = document.createElement('select');
+        regimeSel.className = 'efsp-tofi-regime-select';
+        regimeSel.title = 'under which regime is the MRU taking this aircraft (§4.6.3)';
+        for (const value of TOFI_ACCEPT_REGIMES) {
+          const opt = document.createElement('option');
+          opt.value = value;
+          opt.textContent = value;
+          regimeSel.appendChild(opt);
+        }
+        regimeSel.addEventListener('pointerdown', (e) => e.stopPropagation());
+        el.appendChild(regimeSel);
+        tofiAcceptBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          _dispatchTofi(strip, 'ACCEPT', undefined, { separationRegime: regimeSel.value });
+        });
       } else {
         tofiAcceptBtn.addEventListener('click', (e) => { e.stopPropagation(); _dispatchTofi(strip, 'ACCEPT'); });
       }
@@ -629,7 +650,13 @@ function _buildStripEl(strip) {
       const sharedBadge = document.createElement('span');
       sharedBadge.className = 'efsp-coordination-badge efsp-shared-fdr-badge';
       sharedBadge.textContent = `+${siblings.length}`;
-      sharedBadge.title = `this flight also has ${siblings.length === 1 ? 'a Strip' : `${siblings.length} Strips`} at ${siblings.map(s => `${s.facilityId || '?'}/${s.ownerPositionId}`).join(', ')}`;
+      // The Role is named, not just the Position. Since a mission line can be
+      // fragged against a flight at tasking time (crc-sync's docs/adr/0054),
+      // this badge is how the ATC controller sees that one exists — and they
+      // are the one best placed to catch it being bound to the wrong jet. A
+      // bare "TACTICAL/TAC_C2" does not distinguish a mission line from a
+      // coordination replica, which is the whole question being asked.
+      sharedBadge.title = `this flight also has ${siblings.length === 1 ? 'a Strip' : `${siblings.length} Strips`} at ${siblings.map(s => `${s.facilityId || '?'}/${s.ownerPositionId} (${s.role})`).join(', ')}`;
       el.appendChild(sharedBadge);
     }
 
@@ -1354,6 +1381,13 @@ function _canTransferTofiComms(strip) {
   return !!(strip.tofiCoordination && strip.tofiCoordination.acceptedAt && !strip.tofiCoordination.commsTransferred);
 }
 
+// The regimes offered when accepting tactical control (docs/adr/0053).
+// Mirrors fdr-store.js's SEPARATION_REGIMES; the server validates, this is
+// the picker so nobody types one of five exact strings by hand. MARSA is
+// first because it is the common military case — but it is a default nobody
+// can accept without seeing, which is the point.
+const TOFI_ACCEPT_REGIMES = ['MARSA', 'ATC', 'USING_AGENCY', 'DUE_REGARD', 'SEE_AND_AVOID'];
+
 function _dispatchTofi(strip, action, direction, overrides = {}) {
   const actingPositionId = _resolveActingPositionId(strip);
   if (!actingPositionId) return;
@@ -1367,7 +1401,13 @@ function _dispatchTofi(strip, action, direction, overrides = {}) {
     }
     sendEfspMutation(actingPositionId, strip, op);
   } else {
-    sendEfspMutation(actingPositionId, strip, { kind: 'TOFI', action });
+    const op = { kind: 'TOFI', action };
+    // docs/adr/0053 — accepting an ENTRY means saying under which regime the
+    // MRU is taking the aircraft. The server refuses an accept without one,
+    // deliberately: §4.6.3 rule 1 and defect D14 put the regime in the
+    // governing agreement, so it is asked for rather than derived.
+    if (overrides.separationRegime) op.separationRegime = overrides.separationRegime;
+    sendEfspMutation(actingPositionId, strip, op);
   }
 }
 

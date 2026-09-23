@@ -34,6 +34,7 @@ let _createStripBtnEl = null;
 let _createStripMsgEl = null;
 let _createStripRoleEl = null;
 let _createStripStereoEl = null;
+let _createStripBindEl = null;
 let _dotCommandInputEl = null;
 let _dotCommandPreviewEl = null;
 let _mutationErrorEl = null;
@@ -386,6 +387,99 @@ function _createStripOrigin() {
   return available.find(o => _createStripOriginKey(o) === selectedKey) || available[0];
 }
 
+/**
+ * Flights a mission line could be fragged against — every live Strip that is
+ * a flight rather than a mission line, minus any that already has one.
+ *
+ * Mirrors _marsaCandidates' shape in bay-view.js, including its rule that a
+ * candidate the server would refuse is not offered at all: a control that
+ * always fails is worse than no control.
+ */
+function _missionBindCandidates() {
+  const all = typeof getAllEfspStrips === 'function' ? getAllEfspStrips() : [];
+  const taken = new Set(all.filter(s => s.role === 'MISSION' && s.state !== 'DROPPED').map(s => s.fdrId));
+  const seen = new Set();
+  const out = [];
+  for (const s of all) {
+    if (s.role === 'MISSION' || s.state === 'DROPPED') continue;
+    if (taken.has(s.fdrId) || seen.has(s.fdrId)) continue;
+    seen.add(s.fdrId);
+    out.push(s);
+  }
+  return out;
+}
+
+/** The fdrId the operator picked, or '' for today's standalone-origination path. */
+function _selectedBindFdrId() {
+  return (_createStripBindEl && !_createStripBindEl.hidden && _createStripBindEl.value) || '';
+}
+
+/**
+ * The mission-line binding picker (crc-sync's docs/adr/0054) — how a mission
+ * line comes to be the SAME flight as the ATC Strip, at fragging time.
+ *
+ * TAC_C2 only. GCI has no Tasked or Airborne Bay (guide §4.2 gives those to
+ * TAC_C2 alone), so CREATE_STRIP_ORIGINS starts its mission lines already
+ * ON_STATION — binding there would frag a mission line on station for a jet
+ * still on the ramp.
+ */
+/**
+ * `.mission <CALLSIGN>` — frag a mission line bound to a live flight.
+ *
+ * Shares _createStripOrigin() with the toolbar so the two surfaces cannot
+ * disagree about who may originate what, exactly as _fileStereoByName does.
+ */
+function _fragMissionLine(callsign) {
+  const wanted = String(callsign || '').trim().toUpperCase();
+  if (!wanted) return _showDotCommandError('.mission needs a callsign');
+
+  const origin = _availableCreateStripOrigins().find(o => o.role === 'MISSION' && o.actingPositionId === 'TAC_C2');
+  if (!origin) return _showDotCommandError('only TAC_C2 can frag a mission line');
+
+  const candidate = _missionBindCandidates().find((s) => {
+    const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(s.fdrId) : null;
+    return fdr && fdr.identity && String(fdr.identity.callsign || '').toUpperCase() === wanted;
+  });
+  if (!candidate) return _showDotCommandError(`no live flight ${wanted} available to frag against`);
+
+  _pendingCreateStripMutationId = sendEfspCreateStrip(origin.actingPositionId, {
+    kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', role: 'MISSION',
+    fdrId: candidate.fdrId, initialState: origin.initialState || undefined,
+  }, origin.facilityId);
+  _setCreateStripMsg(`Fragging a mission line for ${wanted}…`, false);
+}
+
+function _refreshMissionBindPicker(origin) {
+  if (!_createStripBindEl) return;
+  const eligible = !!origin && origin.role === 'MISSION' && origin.actingPositionId === 'TAC_C2';
+  const candidates = eligible ? _missionBindCandidates() : [];
+  // Same "no empty picker to puzzle over" rule the stereo select follows.
+  _createStripBindEl.hidden = !eligible || candidates.length === 0;
+  if (_createStripBindEl.hidden) return;
+
+  const prev = _createStripBindEl.value;
+  _createStripBindEl.innerHTML = '';
+  // Blank first, so an unbound mission line stays the default and today's
+  // behaviour is never something you have to deselect into.
+  const none = document.createElement('option');
+  none.value = '';
+  none.textContent = '— not bound to a flight —';
+  _createStripBindEl.appendChild(none);
+  for (const s of candidates) {
+    const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(s.fdrId) : null;
+    const id = fdr && fdr.identity ? fdr.identity : {};
+    const opt = document.createElement('option');
+    opt.value = s.fdrId;
+    // Callsign ALONE is not enough. Four jets in one package with adjacent
+    // callsigns is exactly the mis-pick this has to survive, so the squawk
+    // and the route are on the row to tell them apart.
+    const route = (fdr && fdr.filed && fdr.filed.route) || '';
+    opt.textContent = [id.callsign || s.fdrId, id.beaconAssigned, route].filter(Boolean).join(' · ');
+    _createStripBindEl.appendChild(opt);
+  }
+  if (candidates.some(s => s.fdrId === prev)) _createStripBindEl.value = prev;
+}
+
 function _refreshCreateStripAvailability() {
   if (!_createStripInputEl || !_createStripBtnEl) return;
   if (_createStripLookupInFlight) return; // don't fight the "Looking up flight plan…" message or re-enable mid-lookup — _submitCreateStrip owns this window
@@ -439,6 +533,7 @@ function _refreshCreateStripAvailability() {
       if (_stereoRoutes.some(r => r.name === prevName)) _createStripStereoEl.value = prevName;
     }
   }
+  _refreshMissionBindPicker(origin);
   _createStripInputEl.disabled = !origin;
   _createStripBtnEl.disabled = !origin;
   if (!origin) {
@@ -500,7 +595,14 @@ async function _submitCreateStrip() {
   // its own beacon code and its own lifecycle for an aircraft that already
   // had both. Two presses, not a block: genuinely distinct flights do reuse
   // a callsign across a session, so this is the controller's call.
-  const existing = liveStripsForCallsign(callsign);
+  //
+  // SKIPPED in bind mode, deliberately. The warning's whole point is "you
+  // are about to mint a second beacon code and a second lifecycle for a
+  // flight that already has both" — binding is the precise opposite, the
+  // very thing the warning tells you to do instead. Leaving it in would
+  // make the good path harder than the bad one.
+  const bindFdrId = _selectedBindFdrId();
+  const existing = bindFdrId ? [] : liveStripsForCallsign(callsign);
   if (existing.length > 0 && _pendingDuplicateCallsign !== callsign) {
     _pendingDuplicateCallsign = callsign;
     const where = existing.map(s => `${s.facilityId || '?'}/${s.ownerPositionId}`).join(', ');
@@ -572,17 +674,23 @@ async function _submitCreateStrip() {
             ...seed, // overrides only the blanks above when the lookup actually found something
           };
 
-  _pendingCreateStripMutationId = sendEfspCreateStrip(origin.actingPositionId, {
-    kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', role: origin.role, fdr,
-    initialState: origin.initialState || undefined,
-  }, origin.facilityId);
+  // A bound mission line carries NO `fdr`: identity comes entirely from the
+  // flight it is fragged against, down to the Mode 3/A (guide §9.8's bridge
+  // field). The server refuses both keys together, so sending a blank one
+  // "just in case" would refuse the whole op.
+  const createOp = bindFdrId
+    ? { kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', role: origin.role, fdrId: bindFdrId, initialState: origin.initialState || undefined }
+    : { kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', role: origin.role, fdr, initialState: origin.initialState || undefined };
+  _pendingCreateStripMutationId = sendEfspCreateStrip(origin.actingPositionId, createOp, origin.facilityId);
   _createStripInputEl.value = '';
   if (_createStripStereoEl) _createStripStereoEl.value = '';
+  if (_createStripBindEl) _createStripBindEl.value = '';
   _pendingDuplicateCallsign = null;
   _setCreateStripMsg(
-    stereoRouteName ? `Creating (${stereoRouteName})…`
-      : seed.route ? 'Creating (flight plan found)…'
-        : 'Creating…',
+    bindFdrId ? 'Fragging a mission line for this flight…'
+      : stereoRouteName ? `Creating (${stereoRouteName})…`
+        : seed.route ? 'Creating (flight plan found)…'
+          : 'Creating…',
     false);
 }
 
@@ -708,6 +816,16 @@ function _dispatchDotCommand(parsed) {
   // spelled "PACK 1".
   if (parsed.verb === 'stereo') {
     _fileStereoByName(parsed.args[0], parsed.args[1]);
+    return;
+  }
+
+  // Above the selected-Strip guard below, alongside .find and .stereo, for
+  // the same reason those are: it CREATES a Strip, so nothing is selected —
+  // that is the point. Guide §7.1 rule 5 makes the dot-command surface a
+  // primary feature, and docs/adr/0049 found that shipping a create/bind
+  // affordance as pointer-only was a defect.
+  if (parsed.verb === 'mission') {
+    _fragMissionLine(parsed.args[0]);
     return;
   }
 
@@ -974,6 +1092,7 @@ function initEfspPanel() {
   _createStripMsgEl = document.getElementById('efsp-create-strip-msg');
   _createStripRoleEl = document.getElementById('efsp-create-strip-role');
   _createStripStereoEl = document.getElementById('efsp-create-strip-stereo');
+  _createStripBindEl = document.getElementById('efsp-create-strip-bind');
   _dotCommandInputEl = document.getElementById('efsp-dot-command-input');
   _dotCommandPreviewEl = document.getElementById('efsp-dot-command-preview');
   _mutationErrorEl = document.getElementById('efsp-mutation-error');

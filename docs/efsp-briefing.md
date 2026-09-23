@@ -6,15 +6,17 @@ plan before writing code. This is a handoff, not a build order.
 
 **This revision supersedes the previous one.** WP6 is **in progress**: MARSA and its course/
 altitude void interlock (§9.2) are built (§3F), and so is §6.4's military Block namespace (§3G) —
-the pass that settled, once, what the guide's `M`-numbers are called here. Four of WP6's eight
-deliverables remain and the next one is **§9.7 field state** — see §5. Before MARSA the
+the pass that settled, once, what the guide's `M`-numbers are called here. Since then the mission
+line was moved off TOFI so it exists from tasking, which turned up a regime nothing ever required
+anyone to declare (§3H). Four of WP6's eight deliverables remain and the next one is **§9.7 field
+state** — see §5. Before MARSA the
 recommendation was stereo routes (§3E, built), and before that WP5 (§3C, built, along with a
 rework of the radar picture underneath it, §3B).
 
 ## 1. State of the tree
 
-Committed and green: **crc-sync 1052 tests, crc-desktop 361 tests** (`npm test` in each). ADRs run
-`0001`–`0052`.
+Committed and green: **crc-sync 1067 tests, crc-desktop 372 tests** (`npm test` in each). ADRs run
+`0001`–`0054`.
 
 **There is a written plan for the rest of WP6**, covering all five remaining deliverables plus the
 `[SOURCE-DEFINED]` audit, sequenced into phases that each land green with their own ADR. Phases 1
@@ -38,7 +40,7 @@ crc-sync/src/efsp/block-map.js            the Block Maps, the interlock tags, MI
 crc-desktop/app/public/js/panels/efsp/marsa-badge.js  the badge + the participant highlight
 crc-sync/src/state-paths.js               shipped defaults (config/) vs runtime state (state/)
 crc-desktop/app/public/js/panels/efsp/    the Strip panel, the airspace board, correlation-highlight
-docs/adr/                                 0001-0052, the reasoning behind every decision below
+docs/adr/                                 0001-0054, the reasoning behind every decision below
 docs/efsp-usage-guide.md                  how a controller actually drives it
 ```
 
@@ -74,6 +76,8 @@ already meant shipped read-only reference data; `state-paths.js`'s header has th
 **MARSA, and the course/altitude void interlock** (`0051`). See §3F.
 
 **The military Block namespace** (`0052`). See §3G.
+
+**The mission line from tasking, and a regime that was never declared** (`0053`, `0054`). See §3H.
 
 **Hardening driven by end-to-end sorties** (`0027`–`0033`, `0039`–`0041`, `0049`). See §3D.
 
@@ -334,6 +338,49 @@ Four things to know before extending it:
 Both are visible half-features rather than silent ones, and both are the next deliverables' work.
 
 
+## 3H. The mission line exists from tasking — and one hole found on the way
+
+`TAC_C2` can frag a **mission line** against a filed flight before the jet moves
+(`0054`), instead of waiting for TOFI to mint one. `TASKED` finally means something:
+it used to be reachable only at the moment TOFI was proposed, by which time the
+aircraft had been airborne for twenty minutes, so the MRU's first action was pressing
+"Airborne" on a jet that already was.
+
+Five things to know before extending it:
+
+- **The shared `fdrId` IS the link.** No link object, no join table. That is already
+  how this codebase answers "same flight?" everywhere (TOFI replicas, coordination
+  replicas, correlation `0045`, refcounting `0028`, the `+N` badge), and it is what
+  makes the binding work in **both directions for free** — WP7's ATO-first case is the
+  same op run later, so it is a caller change rather than a mechanism change.
+- **`CreateStrip` takes an optional `op.fdrId`**, mutually exclusive with `op.fdr`,
+  deliberately **role-agnostic**. Its duplicate check scans the LOCAL Board only: the
+  global `liveStripsForFdr` is role-blind, and the coordination primitives legitimately
+  put same-role Strips for one FDR on two Boards.
+- **TOFI finds before it mints**, and `mintedForTofi` is what keeps that safe.
+  `bayForImpliedState` **falls back to `bays[0]`** when no Bay implies the state,
+  TAC_C2's `bays[0]` is `tac-c2-tasked`, and TAC_C2 has no Bay for `OFF_STATION` or
+  `RTB` — so a relocation copied blindly onto the reuse path files a working mission
+  line back under *Tasked*. The same flag decides that a rejected exchange retires the
+  Strip it minted but never one TAC_C2 tasked itself.
+- **Unbind is Drop, and there is no re-bind.** Mutating a Strip's `fdrId` would drag
+  correlation, MARSA membership and refcounting with it. A mis-bind is catchable
+  instead: `M3` renders the bound flight's callsign, so the wrong jet shows the wrong
+  callsign immediately.
+- **While a TOFI is ACTIVE neither Strip can be retired.** Pre-existing, now reachable
+  far more often, and walked in the scenario suite so it is a known property rather
+  than an 0200 surprise.
+
+**And the hole (`0053`).** Nothing ever required `fdr.tofi.separationRegime` to be set.
+`TOFI_EFFECTS`/`tofiEffect` in `coordination.js` **is dead code** — it looks like it
+applies the exchange's effects and has no runtime consumer at all — so the whole of
+tactical control could run with the FDR saying nothing about who was separating the
+aircraft, and the EXIT gate then failed twenty minutes downstream for a reason nobody
+could trace. Accepting an ENTRY now **requires** the regime, asked for and never
+derived (defect D14), with a picker beside the Accept button. An ACTIVE MARSA relation
+is the one exception — it owns the regime (`0051`).
+
+
 ## 4. What's left
 
 **Not started, in the guide's own order (§16):**
@@ -391,9 +438,10 @@ Both are visible half-features rather than silent ones, and both are the next de
   `ENUM_SELECT_BLOCKS` is a static client literal, so a dynamic-option `<select>` for it is the
   obvious small follow-on (`0050`). A typo is refused with a visible reason, so this is ergonomics,
   not correctness.
-- **`crc-desktop/tests/` has no `helpers/`**, so `efsp-stereo-panel.test.js` carries a trimmed copy
-  of `efsp-ui-reachability.test.js`'s `makeElement` DOM stub. Two copies is the point at which
-  lifting it out is worth doing; the third should not be written.
+- **`crc-desktop/tests/helpers/dom-stub.js` now exists** (`0054`) and holds the shared `makeElement`.
+  The two older hand-maintained copies in `efsp-ui-reachability.test.js` and
+  `efsp-stereo-panel.test.js` still stand and should migrate to it — mechanical, and the reachability
+  one has extra surface the helper already carries.
 - **The Strip's layout is unverified by eye** (`0051`, `0052`). The reachability tests render the
   real `bay-view.js` against a DOM stub and prove the wiring, not the pixels. The Strip carries
   seven badge/indicator slots plus two more Block chips now (`HOOK`, `ORDNANCE`), and nobody has
