@@ -1,19 +1,22 @@
 {
   "name": "crc-desktop",
   "version": "1.0.1",
-  "description": "CRC — SOURCE DCS's desktop GCI/datalink client for DCS: World",
+  "description": "CRC \u2014 SOURCE DCS's desktop GCI/datalink client for DCS: World",
   "author": "SOURCE DCS",
   "desktopName": "CRC.desktop",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "test": "node --test",
+    "test": "node --test 'tests/*.test.js'",
     "dev-check": "npm test && npm start",
     "release-check": "bash scripts/release-check.sh",
     "pack:linux": "electron-builder --linux AppImage --publish never",
-    "pack:win":   "electron-builder --win nsis --publish never"
+    "pack:win": "electron-builder --win nsis --publish never",
+    "e2e": "playwright test",
+    "e2e:headed": "playwright test --headed"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "electron": "^43.4.1",
     "electron-builder": "^26.15.3"
   },
@@ -50,7 +53,9 @@
         {
           "from": "python-pkg",
           "to": "python-pkg",
-          "filter": ["**/*"]
+          "filter": [
+            "**/*"
+          ]
         }
       ]
     },
