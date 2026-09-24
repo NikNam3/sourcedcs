@@ -51,10 +51,15 @@ const syncEnv = {
   // No DCS, no SRS. Both clients retry forever and neither blocks the EFSP
   // subsystem, so pointing them at a closed port keeps the run hermetic and
   // fails fast instead of hanging on a real host.
-  CRCSYNC_DCS_GRPC_HOST: '127.0.0.1',
-  CRCSYNC_DCS_GRPC_PORT: '1',
-  CRCSYNC_SRS_HOST: '127.0.0.1',
-  CRCSYNC_SRS_PORT: '1',
+  //
+  // The UNPREFIXED names, because that is what crc-sync's process reads
+  // (grpc-client.js / srs-client.js). The CRCSYNC_* names are only
+  // infra/docker-compose.yml's .env keys, which compose maps onto these.
+  // Setting CRCSYNC_* here was silently ignored, so every run connected to
+  // the production defaults (server.sourcedcs.page:50051 and :5002).
+  DCS_GRPC_HOST: '127.0.0.1:1',
+  SRS_HOST: '127.0.0.1',
+  SRS_PORT: '1',
 };
 
 fs.writeFileSync(syncEnv.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
