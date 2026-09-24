@@ -42,6 +42,9 @@ crc-sync/src/state-paths.js               shipped defaults (config/) vs runtime 
 crc-desktop/app/public/js/panels/efsp/    the Strip panel, the airspace board, correlation-highlight
 docs/adr/                                 0001-0055, the reasoning behind every decision below
 docs/efsp-usage-guide.md                  how a controller actually drives it
+docs/efsp-ui-catalogue-briefing.md        the UI-cataloguing role: harness, rules, traps
+docs/efsp-ui-findings.md                  UI defects found by driving the real panel
+crc-desktop/e2e/                          Playwright specs — the bugs the DOM stub cannot see
 ```
 
 ## 2. What's built
