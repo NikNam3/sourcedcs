@@ -23,14 +23,22 @@ const fs = require('fs');
 
 // Deliberately NOT 3000/3100: a developer almost always has the real pair
 // running while working on this, and an e2e run must never talk to it.
-const CRC_SYNC_PORT = 3010;
-const APP_PORT = 3110;
+//
+// E2E_LANE lets several cataloguing agents run at once without fighting over
+// ports or output directories. Lane 0 is the default, so anything that does
+// not set it behaves exactly as before.
+const LANE = Number(process.env.E2E_LANE || 0);
+if (!Number.isInteger(LANE) || LANE < 0 || LANE > 9) {
+  throw new Error(`E2E_LANE must be an integer 0-9, got ${process.env.E2E_LANE}`);
+}
+const CRC_SYNC_PORT = 3010 + LANE;
+const APP_PORT = 3110 + LANE;
 
 // Every piece of crc-sync's durable state is redirected into a throwaway
 // directory. state-paths.js's override short-circuits BOTH the read and the
 // write, so this also escapes the `config/` fallback — which is exactly what
 // made a "cleared" Board keep coming back during development.
-const STATE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'crc-e2e-'));
+const STATE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), `crc-e2e-lane${LANE}-`));
 const stateFile = (name) => path.join(STATE_DIR, name);
 
 const syncEnv = {
@@ -54,6 +62,9 @@ fs.writeFileSync(syncEnv.CRCSYNC_EFSP_STEREO_ROUTES_PATH, '[]');
 
 module.exports = {
   testDir: './e2e',
+  // Per-lane, or two concurrent runs overwrite each other's screenshots and
+  // traces — which is exactly the evidence a finding depends on.
+  outputDir: `./test-results/lane${LANE}`,
   // A Strip flow is a sequence — file, clear, taxi — so a spec is not a unit
   // test and retrying half of one proves nothing. One worker, no retries, and
   // a failure is a real failure.

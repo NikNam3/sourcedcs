@@ -18,6 +18,12 @@ The one exception: if the harness itself is broken or missing a capability you
 need to *observe* something, fix the harness. That is your tooling, not the
 subject under test. Say so clearly in your report when you do.
 
+> **Running alongside other agents?** `docs/efsp-ui-catalogue-parallel.md`
+> assigns you a lane and changes four things: which ports you use, which file
+> you write findings to, what you name your specs, and which id range is yours.
+> Read it before anything else — without it you will collide with another agent
+> in the same checkout.
+
 ## Why this role exists
 
 `crc-desktop`'s `npm test` suite (392 tests) renders `bay-view.js` against a DOM
