@@ -309,6 +309,11 @@ class BoardStore {
       return { ok: false, reason: 'NOT_OWNER', strip: deepClone(strip) };
     }
 
+    // F-303, the rest of it: a rejected replica is inert for every op, not
+    // just the NLA and the Bay-implied drag. See _rejectedReplicaOpRefusal.
+    const inert = this._rejectedReplicaOpRefusal(strip, op);
+    if (inert) return { ok: false, reason: inert.reason, detail: inert.detail, strip: deepClone(strip) };
+
     const before = deepClone(strip);
     let result;
     switch (op.kind) {
@@ -1170,10 +1175,36 @@ class BoardStore {
    */
   _rejectedReplicaRefusal(strip, toState) {
     if (toState === 'DROPPED' || !this._isRejectedReplica(strip)) return null;
-    return {
-      reason: 'VALIDATION_ERROR',
-      detail: `this ${strip.coordination.primitive} was rejected — the replica is inert, and ${strip.coordination.peerPositionId} still works the flight`,
-    };
+    return { reason: 'VALIDATION_ERROR', detail: this._rejectedReplicaDetail(strip) };
+  }
+
+  _rejectedReplicaDetail(strip) {
+    return `this ${strip.coordination.primitive} was rejected — the replica is inert, and ${strip.coordination.peerPositionId} still works the flight`;
+  }
+
+  /**
+   * The op-level half of F-303. _rejectedReplicaRefusal only ever guarded the
+   * NLA and the Bay-implied drag, so a controller who had just rejected a
+   * handoff could still open a TOFI on the dead replica (minting a MISSION
+   * Strip on TACTICAL for a flight the sender still controls), approve an
+   * airspace entry, convert it to an arrival, or write Blocks into the FDR it
+   * shares with the sender's live Strip.
+   *
+   * Three op kinds stay allowed, because each already enforces the rule
+   * itself and each is how a dead replica gets cleared away: DropStrip,
+   * InvokeNla (which _rejectedReplicaRefusal limits to DROPPED), and
+   * MoveStrip (which _validateBayImpliedTransition refuses into any Bay that
+   * would change the Strip's state — moving it aside is fine).
+   *
+   * MARSA and correlation are flight-level and never reach _dispatch; the
+   * client hides their controls on a rejected replica instead.
+   *
+   * @returns {{reason:string, detail:string}|null}
+   */
+  _rejectedReplicaOpRefusal(strip, op) {
+    if (!this._isRejectedReplica(strip)) return null;
+    if (op.kind === 'DropStrip' || op.kind === 'InvokeNla' || op.kind === 'MoveStrip') return null;
+    return { reason: 'VALIDATION_ERROR', detail: this._rejectedReplicaDetail(strip) };
   }
 
   /**
@@ -1824,6 +1855,12 @@ class BoardStore {
     }
     if (strip.tofiCoordination && strip.tofiCoordination.state === 'PROPOSED') {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'this Strip already has an open TOFI proposal', strip };
+    }
+    // The same open-link guard _nlaPrecheck and _applyConvertToArrival apply.
+    // Without it CTR could open tactical control from a handoff replica it had
+    // not yet accepted — on a flight APP still worked.
+    if (strip.coordination && strip.coordination.state === 'PROPOSED') {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'cannot open a TOFI exchange while a coordination proposal is open — accept or reject it first', strip };
     }
 
     const now = Date.now();

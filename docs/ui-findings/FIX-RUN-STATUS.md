@@ -58,9 +58,11 @@ layout change, which is a decision about what the panel must meet.
   44×44 targets had quietly made most of a Strip undraggable, and the obvious fix
   was wrong — capture retargets `click` too, so dropping the cell guards would
   have made Blocks uneditable.
-- **`flex: 1 1 0` on the Strip's reason/note sentences is load-bearing.** A
-  content-sized sentence would break the trailing row onto a second line and take
-  the NLA button with it.
+- ~~**`flex: 1 1 0` on the Strip's reason/note sentences is load-bearing.**~~
+  Superseded (F-006 in `docs/efsp-ui-findings.md`): on a crowded row it shrank
+  the sentence to one character wide. Each sentence is now a full-width line of
+  its own under the trailing row, which keeps the NLA button still for the same
+  reason — the sentence no longer competes for that row at all.
 - **The e2e suite shares one Board across spec files** and `ops-proposed` grows
   monotonically through a run. Several specs were failing on each other rather
   than on the behaviour they named. Four leaks were fixed; the underlying growth

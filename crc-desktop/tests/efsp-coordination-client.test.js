@@ -84,6 +84,20 @@ test('the Positions the client offers airspace entry to are exactly the ones the
   assert.deepEqual(clientPositions.sort(), granted.sort());
 });
 
+// Convert to Arrival needs both the op and the right to create an ARRIVAL
+// Strip. The client used to gate on "you hold any Position" alone, so TWR saw
+// the button on an APP-owned departure and the server refused every press.
+test('the Positions the client offers Convert to Arrival to are exactly the ones the server lets do it', () => {
+  const source = require('fs').readFileSync(require.resolve('../app/public/js/panels/efsp/bay-view.js'), 'utf8');
+  const match = source.match(/const CONVERT_TO_ARRIVAL_POSITIONS = (\[[^\]]*\])/);
+  assert.ok(match, 'CONVERT_TO_ARRIVAL_POSITIONS not found in bay-view.js');
+  const clientPositions = JSON.parse(match[1].replace(/'/g, '"'));
+
+  const granted = Object.keys(server.PERMISSIONS)
+    .filter(id => server.PERMISSIONS[id].has('ConvertToArrival') && server.canCreateStripRole(id, 'ARRIVAL'));
+  assert.deepEqual(clientPositions.sort(), granted.sort());
+});
+
 test('a range Position works no Strips — the class refusal is a rule, not an absent table entry', () => {
   assert.ok(server.NO_STRIP_OP_CLASSES.has('USING_AGENCY'));
 });

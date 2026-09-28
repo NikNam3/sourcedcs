@@ -117,6 +117,12 @@ behalf, correctly, and the only sign on the panel is a button coming back.
 ## F-303 — a rejected replica stays in the receiver's Coordination Bay, fully workable
 
 **Status:** FIXED (this run, uncommitted) — both halves. Server-side the NLA **and** the drag route now refuse a rejected replica; client-side it reports itself inhibited, so F-408's rendering covers it. **Drop stays available deliberately** — it is how a dead replica is cleared. Decided and recorded: the replica is left inert, **not reaped**, because it is the receiving controller's only record that they declined the flight.
+
+**Reopened and extended (strip-layout work, after `6d3c77b`).** The fix above covered the NLA and the drag route only. Live testing found CTR could still reject APP's handoff and then open a **TOFI** on the dead replica, which minted a MISSION Strip on TACTICAL for a flight APP still worked. Airspace entry, Convert to Arrival, SetBlock, SetFlag, SetState, TransferStrip and Undo were equally open. Now:
+- **Server:** `board-store.js`'s `_dispatch` refuses every op on a rejected replica (`_rejectedReplicaOpRefusal`) except `DropStrip`, `InvokeNla` (already limited to DROPPED) and `MoveStrip` (already refused into a state-implying Bay). One wording for all of them.
+- **Client:** the replica no longer offers TOFI…, TOFI Exit…, Airspace…/Leave airspace, Convert to Arrival, MARSA…, Bind…/Unbind or ⇥, and double-click/right-click/shift-click send nothing. MARSA and correlation are flight-level and never reach `_dispatch`, so for those two the client is the only guard.
+- **The earlier decision is reversed.** It read "✕ / Airspace… / Bind… / MARSA… are FDR-level facts about a real airframe… deliberately left alone". The airframe is real, but the controller who declined it has no business working it; only Drop stays.
+- **The related question below is answered too:** a *pending* replica may not open a TOFI (server and client) until it has been accepted.
 **Severity:** high. The facility that declined a flight can hand it to its own Tower, and the server accepts that.
 **SPEC:** `l3-coordination.spec.js`, "a rejected replica in the receiver's Coordination Bay cannot be worked"
 

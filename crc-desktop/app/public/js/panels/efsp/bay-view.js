@@ -904,12 +904,14 @@ function _buildStripEl(strip) {
 
     // Offset (guide §7.3) — one input, a dedicated button so it's reachable
     // from keyboard/touch per §7.1 rule 4, not just a drag/dblclick gesture.
-    const offsetBtn = document.createElement('button');
-    offsetBtn.className = 'efsp-offset-btn';
-    offsetBtn.title = 'Offset (cock)';
-    offsetBtn.textContent = '⇥';
-    offsetBtn.addEventListener('click', (e) => { e.stopPropagation(); _dispatchGesture(strip, toggleOffset); });
-    actions.appendChild(offsetBtn);
+    if (!_isRejectedCoordinationReplica(strip)) {
+      const offsetBtn = document.createElement('button');
+      offsetBtn.className = 'efsp-offset-btn';
+      offsetBtn.title = 'Offset (cock)';
+      offsetBtn.textContent = '⇥';
+      offsetBtn.addEventListener('click', (e) => { e.stopPropagation(); _dispatchGesture(strip, toggleOffset); });
+      actions.appendChild(offsetBtn);
+    }
 
     _appendExpandButton(actions, strip);
     _appendDropButton(actions, strip);
@@ -1057,6 +1059,7 @@ function _buildStripEl(strip) {
         // whole affordance is already a pair of buttons on the Strip.
         const regimeSel = document.createElement('select');
         regimeSel.className = 'efsp-tofi-regime-select';
+        regimeSel.dataset.stripAction = 'tofi-regime';
         regimeSel.title = 'under which regime is the MRU taking this aircraft (§4.6.3)';
         for (const value of TOFI_ACCEPT_REGIMES) {
           const opt = document.createElement('option');
@@ -1064,7 +1067,16 @@ function _buildStripEl(strip) {
           opt.textContent = value;
           regimeSel.appendChild(opt);
         }
+        // The choice outlives a rebuild. Clicking the select used to bubble to
+        // the Strip's own click handler, select the Strip, rebuild it, and hand
+        // back a fresh select reading MARSA — so no other regime could ever be
+        // picked. The click no longer bubbles (STRIP_CONTROL_SELECTOR), but any
+        // other rebuild (an FDR rev, an NLA status sweep) would do the same.
+        const remembered = _tofiRegimeChoice.get(strip.stripId);
+        if (remembered && TOFI_ACCEPT_REGIMES.includes(remembered)) regimeSel.value = remembered;
+        regimeSel.addEventListener('change', () => _tofiRegimeChoice.set(strip.stripId, regimeSel.value));
         regimeSel.addEventListener('pointerdown', (e) => e.stopPropagation());
+        regimeSel.addEventListener('click', (e) => e.stopPropagation());
         el.appendChild(regimeSel);
         tofiAcceptBtn.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -1221,7 +1233,7 @@ function _buildStripEl(strip) {
         : (strip.tofiCoordination && strip.tofiCoordination.state === 'ACTIVE')
           ? 'active tactical control'
           : null;
-    if (strip.role === 'DEPARTURE' && strip.state === 'HANDED_OFF' && _resolveActingPositionId(strip)) {
+    if (_canConvertToArrival(strip)) {
       const spawnBtn = document.createElement('button');
       spawnBtn.className = 'efsp-spawn-return-btn';
       spawnBtn.textContent = 'Convert to Arrival →';
@@ -1391,16 +1403,16 @@ function _buildStripEl(strip) {
   // isn't an editable Block cell — clicking IN a Block cell must never also
   // toggle Attention).
   el.addEventListener('click', (e) => {
-    if (e.target.closest('.efsp-block-editable, .efsp-block-input, button')) return;
+    if (e.target.closest(STRIP_CONTROL_SELECTOR)) return;
     if (e.shiftKey) { _dispatchGesture(strip, setAttention, 'red'); return; }
     _selectStrip(strip.stripId);
   });
   el.addEventListener('dblclick', (e) => {
-    if (e.target.closest('.efsp-block-editable, .efsp-block-input, button')) return;
+    if (e.target.closest(STRIP_CONTROL_SELECTOR)) return;
     _dispatchGesture(strip, toggleFlip);
   });
   el.addEventListener('contextmenu', (e) => {
-    if (e.target.closest('.efsp-block-editable, .efsp-block-input, button')) return;
+    if (e.target.closest(STRIP_CONTROL_SELECTOR)) return;
     e.preventDefault();
     _openHighlightPopover(strip, el);
   });
@@ -1427,11 +1439,12 @@ function _appendCorrelationBadge(el, strip) {
 
   if (badge.warned) el.classList.add('efsp-strip-correlation-warned');
 
-  const node = document.createElement(badge.ambiguous ? 'button' : 'span');
+  const inert = _isRejectedCoordinationReplica(strip);
+  const node = document.createElement(badge.ambiguous && !inert ? 'button' : 'span');
   node.className = badge.className;
   node.textContent = badge.text;
   node.title = badge.title;
-  if (badge.ambiguous) {
+  if (badge.ambiguous && !inert) {
     node.disabled = !_resolveActingPositionId(strip);
     node.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -1442,7 +1455,7 @@ function _appendCorrelationBadge(el, strip) {
 
   // A "Bind…" control for the uncorrelated case, and "Unbind" once bound.
   const record = typeof getEfspCorrelationForStrip === 'function' ? getEfspCorrelationForStrip(strip) : null;
-  if (!record || badge.ambiguous) return;
+  if (!record || badge.ambiguous || inert) return;
 
   if (record.binding) {
     const unbind = document.createElement('button');
@@ -1766,7 +1779,7 @@ function _appendMarsaBadge(el, strip) {
     // controller has to be able to start one from a Strip that has never been
     // in one. Left out entirely when nobody can act, rather than rendered
     // disabled — a Strip nobody holds should not grow a control.
-    if (!_resolveActingPositionId(strip)) return;
+    if (!_resolveActingPositionId(strip) || _isRejectedCoordinationReplica(strip)) return;
     const declare = document.createElement('button');
     declare.className = 'efsp-marsa-btn';
     declare.textContent = 'MARSA…';
@@ -1793,7 +1806,7 @@ function _appendMarsaBadge(el, strip) {
   // A button in every state, including VOIDED: rule 5 wants the relation
   // "visible as a link", and after a void the controller most needs to see who
   // else was in it.
-  node.disabled = !_resolveActingPositionId(strip);
+  node.disabled = !_resolveActingPositionId(strip) || _isRejectedCoordinationReplica(strip);
   node.addEventListener('click', (e) => {
     e.stopPropagation();
     _openMarsaPopover(strip, node);
@@ -2334,6 +2347,10 @@ const TOFI_COUNTERPARTS = {
 function _canProposeTofiEntry(strip) {
   if (!TOFI_COUNTERPARTS[strip.ownerPositionId]) return false;
   if (strip.role === 'MISSION') return false;
+  if (_isRejectedCoordinationReplica(strip)) return false;
+  // Not while a coordination is still open — a handoff replica CTR has not
+  // accepted is a flight APP still works (board-store.js's _applyTofiPropose).
+  if (strip.coordination && strip.coordination.state === 'PROPOSED') return false;
   // The (role, state) gate the 5 primitives have had since docs/adr/0022 and
   // TOFI never did — a flight has to actually be airborne and enroute before
   // it can enter tactically controlled airspace. Client mirror of
@@ -2347,6 +2364,7 @@ function _canProposeTofiEntry(strip) {
 /** EXIT is only ever proposed from the ATC-side Strip, and only while tactical control is genuinely ACTIVE. */
 function _canProposeTofiExit(strip) {
   if (strip.role === 'MISSION') return false;
+  if (_isRejectedCoordinationReplica(strip)) return false;
   return !!(strip.tofiCoordination && strip.tofiCoordination.state === 'ACTIVE');
 }
 
@@ -2367,6 +2385,16 @@ function _canTransferTofiComms(strip) {
 // can accept without seeing, which is the point.
 const TOFI_ACCEPT_REGIMES = ['MARSA', 'ATC', 'USING_AGENCY', 'DUE_REGARD', 'SEE_AND_AVOID'];
 
+// stripId -> the regime picked in that Strip's accept select, so a rebuild
+// shows what the controller chose rather than the default. Cleared when the
+// exchange is answered.
+const _tofiRegimeChoice = new Map();
+
+// Anything on a Strip that is a control of its own. A click, double-click or
+// right-click that lands on one of these belongs to the control, never to the
+// Strip's select / flip / highlight gestures underneath it.
+const STRIP_CONTROL_SELECTOR = '.efsp-block-editable, .efsp-block-input, button, select, option, label, input, textarea';
+
 function _dispatchTofi(strip, action, direction, overrides = {}) {
   strip = getEfspStrip(strip.stripId) || strip; // F-107 — see _dispatchCoordination
   const actingPositionId = _resolveActingPositionId(strip);
@@ -2376,6 +2404,7 @@ function _dispatchTofi(strip, action, direction, overrides = {}) {
   // Rack under the pointer. PROPOSE and TRANSFER_COMMS leave the Strip where
   // it is and take no control off it.
   if ((action === 'ACCEPT' || action === 'REJECT') && _swallowRepeatAdvance()) return;
+  if (action === 'ACCEPT' || action === 'REJECT') _tofiRegimeChoice.delete(strip.stripId);
   if (action === 'PROPOSE') {
     const op = { kind: 'TOFI', action: 'PROPOSE', direction, note: overrides.note || undefined };
     if (direction === 'ENTRY') {
@@ -2477,6 +2506,20 @@ let _pendingConvertStripId = null;
 
 const AIRSPACE_ENTRY_POSITIONS = ['APP', 'CTR'];
 
+// The Positions the server lets convert a DEPARTURE into its return ARRIVAL:
+// they need both the ConvertToArrival op (permission.js) and the right to
+// create an ARRIVAL Strip (canCreateStripRole). efsp-coordination-client.test.js
+// holds this to the server's tables.
+const CONVERT_TO_ARRIVAL_POSITIONS = ['APP', 'CTR'];
+
+/** Whether this client should offer Convert to Arrival at all (the button may still render disabled for an open link). */
+function _canConvertToArrival(strip) {
+  if (strip.role !== 'DEPARTURE' || strip.state !== 'HANDED_OFF') return false;
+  if (!CONVERT_TO_ARRIVAL_POSITIONS.includes(strip.ownerPositionId)) return false;
+  if (!getActingPositions().includes(strip.ownerPositionId)) return false;
+  return !_isRejectedCoordinationReplica(strip);
+}
+
 // Blocks a controller can reach on a Strip, by role. Deliberately exported:
 // a Block present in the Block Map but absent here is editable in principle
 // and invisible in practice, which is how §3.8's release model shipped
@@ -2528,11 +2571,17 @@ const COMPACT_BLOCKS_BY_ROLE = {
 };
 
 function compactBlocksFor(role) {
-  return COMPACT_BLOCKS_BY_ROLE[role] || COMPACT_BLOCKS_SHARED;
+  const list = COMPACT_BLOCKS_BY_ROLE[role] || COMPACT_BLOCKS_SHARED;
+  // Only Blocks the Role actually has. The shared list carries departure-only
+  // Blocks (9F, 14A, 14D — and OVERFLIGHT has no 8A), which drew as unlabelled
+  // chips on arrivals and overflights, 14A with a picker the server refused.
+  const map = (typeof BLOCK_MAPS === 'object' && BLOCK_MAPS[role]) || null;
+  return map ? list.filter(id => Object.prototype.hasOwnProperty.call(map, id)) : list;
 }
 
 function _canApproveAirspaceEntry(strip) {
   if (!AIRSPACE_ENTRY_POSITIONS.includes(strip.ownerPositionId)) return false;
+  if (_isRejectedCoordinationReplica(strip)) return false;
   return !!_resolveActingPositionId(strip);
 }
 
@@ -2626,6 +2675,18 @@ function _coordinationIsReplica(strip) {
   if (!co) return false;
   if (co.mintedForCoordination) return true;
   return strip.bayId.endsWith('-coordination');
+}
+
+/**
+ * F-303: the receiver's copy of a coordination it rejected. It is inert — the
+ * sender still works the flight — so it offers nothing but Drop and moving it
+ * aside. board-store.js's _rejectedReplicaOpRefusal refuses the rest; this
+ * keeps the controls that would only be refused off the Strip in the first
+ * place. MARSA and correlation are flight-level on the server, so for those
+ * two this is the only guard there is.
+ */
+function _isRejectedCoordinationReplica(strip) {
+  return !!strip.coordination && strip.coordination.state === 'REJECTED' && _coordinationIsReplica(strip);
 }
 
 /** Which Position asked. The replica's `peerPositionId` IS the proposer; on the sender's own Strip the proposer is its owner. */
@@ -2775,6 +2836,9 @@ function _dispatchGesture(strip, gestureFn, ...extraArgs) {
   // and setHighlight reads strip.flags to decide whether this colour clears or
   // replaces, so a stale capture gets that wrong as well as the rev.
   strip = getEfspStrip(strip.stripId) || strip;
+  // A dead replica refuses every Flag write (F-303) — say nothing rather than
+  // raise a refusal banner for a double-click.
+  if (_isRejectedCoordinationReplica(strip)) return;
   const actingPositionId = _resolveActingPositionId(strip);
   if (!actingPositionId) return;
   gestureFn(strip, ...extraArgs, (s, op) => sendEfspMutation(actingPositionId, s, op));
@@ -3356,6 +3420,13 @@ function _isProtectedStripEl(el) {
   // commits nor reverts.
   const editEl = el.querySelector('.efsp-block-input');
   if (editEl && document.activeElement === editEl) return true;
+  // Same for any other form control the controller is in — the TOFI regime
+  // select above all, whose open dropdown belongs to the element a rebuild
+  // would detach. Buttons deliberately do not count: a focused NLA button
+  // would otherwise freeze its Strip after every press.
+  const active = document.activeElement;
+  if (active && active !== editEl && typeof el.contains === 'function' && el.contains(active)
+      && /^(select|input|textarea)$/i.test(active.tagName || '')) return true;
   // An open popover holds its Strip still. This was six separate
   // `el.contains(_open*PopoverEl)` lines, and the list was found incomplete
   // three separate times after the same bug — highlight, coordinate, TOFI and

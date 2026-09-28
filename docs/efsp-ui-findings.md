@@ -154,3 +154,52 @@ it belongs to whoever owns §4.8, not to a fix run.
 _(New findings go below. Read upward before adding — F-001 in particular
 presents in many places and most "this control does nothing" reports will be
 instances of it until it is fixed.)_
+
+---
+
+## F-006 — reason sentences collapse to one character wide on a crowded Strip
+
+**Status:** FIXED (strip-layout work, after `6d3c77b`).
+**Severity:** medium — the text that says why a control is refused becomes unreadable exactly when the Strip is busiest
+**SPEC:** `l3-coordination.spec.js`, "a rejected replica in the receiver's Coordination Bay cannot be worked" (width assertion)
+
+**What a controller sees.** A tall, one-glyph-wide column of text beside the buttons: an NLA inhibit reason, the TOFI-exit blocked reason, a MARSA void alert or a proposer's note.
+
+**Measured.** Before the fix, the F-303 replica's inhibit reason was 271 px wide on a 784 px Strip with only three buttons beside it. With more controls on the row it went to a few pixels.
+
+**Mechanism.** `efsp-panel.css` gave the four sentence classes `flex: 1 1 0; min-width: 0; overflow-wrap: anywhere`. A zero basis always fits on the current line, so the sentence got whatever the badges and buttons left over. `min-width: 0` removed the floor, and `anywhere` let it break between every letter. Now each sentence is `order: 4; flex: 1 0 100%; max-width: 80ch; overflow-wrap: break-word`, a line of its own under the row.
+
+---
+
+## F-007 — a disabled Accept TOFI Exit looks exactly like a live one
+
+**Status:** FIXED (strip-layout work, after `6d3c77b`).
+**Severity:** high — combined with F-008 it made TOFI exit look broken: a bright green button that did nothing
+**SPEC:** `l3-coordination.spec.js`, "Accept TOFI Exit enables once CTR has set SEP REG back to ATC" (computed style)
+
+**Mechanism.** `.efsp-nla-btn-denied` is declared earlier in `efsp-panel.css` than `.efsp-coordinate-accept-btn`, with the same specificity, so the accept button's green won and `cursor: pointer` stayed. Explicit `:disabled` rules now follow every coordination button variant and Convert to Arrival: dashed border, dim text, `cursor: not-allowed`.
+
+---
+
+## F-008 — the TOFI regime picker cannot be changed from MARSA with a real click
+
+**Status:** FIXED (strip-layout work, after `6d3c77b`).
+**Severity:** high — every TOFI was accepted under MARSA, so every TOFI exit was then blocked on SEP REG (F-007)
+**SPEC:** `l3-coordination.spec.js`, "the regime picker can be opened with a real click and keeps what was chosen"
+
+**What a controller sees.** They open the SEP REG picker beside Accept TOFI Entry, choose ATC, and it reads MARSA again.
+
+**Mechanism.** The Strip's own click handler ignored clicks on Block cells and buttons, not on a `<select>`. Clicking the picker selected the Strip, which rebuilt it, and the new picker showed its default. The existing specs used `selectOption`, which sets the value without a click, so they never saw it. Now one `STRIP_CONTROL_SELECTOR` covers every form control, the chosen value is kept per Strip across rebuilds, and a focused select protects its Strip from being rebuilt.
+
+---
+
+## F-009 — three client gates offered what the server refuses
+
+**Status:** FIXED (strip-layout work, after `6d3c77b`).
+**Severity:** low–medium
+**SPEC:** unit tests in `tests/efsp-ui-reachability.test.js` and `tests/efsp-coordination-client.test.js`
+
+- **TOFI from an unanswered handoff.** CTR could open a TOFI on a handoff replica it had not accepted yet. The server now refuses a TOFI proposal while a coordination on the same Strip is `PROPOSED`, and the client stops offering it.
+- **Convert to Arrival for the wrong Position.** The button appeared for anyone holding any Position (TWR on an APP-owned departure). It now mirrors the server: `ConvertToArrival` permission plus the right to create an ARRIVAL Strip, held to the server tables by a drift test.
+- **Departure-only chips on arrivals and overflights.** The shared compact list carried 9F, 14A and 14D (and 8A for overflights), which those Roles do not have. They drew as unlabelled chips, 14A with a picker the server refused. The compact list is now filtered by the Role's Block Map.
+

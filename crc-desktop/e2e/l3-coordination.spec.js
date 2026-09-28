@@ -254,6 +254,20 @@ test('a rejected replica in the receiver\'s Coordination Bay cannot be worked', 
   await expect(replica.locator('.efsp-nla-inhibit-reason'),
     'disabled with no reason on the Strip is a control that refuses in silence')
     .toContainText(/rejected/i, { timeout: 2000 });
+
+  // The reason is a line of its own, not a sliver of the row. It used to take
+  // whatever the badges and buttons left and break between every letter.
+  const [reasonW, stripW] = await replica.evaluate((el) => [
+    el.querySelector('.efsp-nla-inhibit-reason').getBoundingClientRect().width,
+    el.getBoundingClientRect().width,
+  ]);
+  expect(reasonW, `the reason is ${Math.round(reasonW)} px wide on a ${Math.round(stripW)} px Strip`).toBeGreaterThan(stripW * 0.5);
+
+  // And nothing that works the flight is offered on it: the server refuses
+  // all of it, and MARSA / Bind are flight-level, so hiding them is the guard.
+  for (const name of ['Coordinate…', 'Airspace…', 'MARSA…', 'Bind…']) {
+    await expect(replica.getByRole('button', { name, exact: true }), `${name} on a dead replica`).toHaveCount(0);
+  }
 });
 
 // ── F-304 ─────────────────────────────────────────────────────────────────
@@ -320,6 +334,13 @@ test('Accept TOFI Exit enables once CTR has set SEP REG back to ATC', async ({ b
   await goBay(b, 'TAC_C2', 'tac-c2-tasked');
   const accept = mission.getByRole('button', { name: 'Accept TOFI Exit' });
   await expect(accept, 'SREG is not ATC yet, so disabled is right here').toBeDisabled();
+  // ...and it has to LOOK disabled. The accept button's own rule used to win
+  // over the denied style, so a refused Accept drew as a live green button.
+  const look = await accept.evaluate((el) => {
+    const cs = getComputedStyle(el);
+    return { cursor: cs.cursor, borderStyle: cs.borderTopStyle };
+  });
+  expect(look, 'a disabled Accept TOFI Exit is drawn as the live button').toEqual({ cursor: 'not-allowed', borderStyle: 'dashed' });
 
   await setSepReg(s, 'ATC');
   // The MRU page's own FDR store does get the change...
@@ -349,6 +370,37 @@ test('the regime stated when accepting TOFI shows in SEP REG on both sides', asy
   const fdrRegime = (page) => page.evaluate(() => [...efspFdrs.values()].find(f => f.identity && f.identity.callsign === 'SREG01').tofi.separationRegime);
   await expect.poll(() => fdrRegime(a), { message: 'the CTR page never learns the regime', timeout: 3000 }).toBe('DUE_REGARD');
   await expect.poll(() => fdrRegime(b), { message: 'the TAC_C2 page that set it never learns it either', timeout: 3000 }).toBe('DUE_REGARD');
+});
+
+// The picker used by a real pointer. Every other spec here uses selectOption,
+// which sets the value without clicking — and a real click was what reset it:
+// the click bubbled to the Strip, selected it, rebuilt it, and the new select
+// read MARSA again. No regime but MARSA could be chosen, so every TOFI exit
+// was then blocked on SEP REG.
+test('the regime picker can be opened with a real click and keeps what was chosen', async ({ browser }) => {
+  const a = await ctr(browser);
+  const b = await tacC2(browser);
+  const s = await seedCtrArrival(a, 'SREG02');
+  await proposeTofiEntry(a, s);
+  await goBay(b, 'TAC_C2', 'tac-c2-coordination');
+  const mission = strip(b, 'SREG02');
+  const select = mission.locator('select.efsp-tofi-regime-select');
+  await select.evaluate((el) => { el.dataset.probe = 'original'; });
+
+  await select.click();
+  await b.waitForTimeout(300);
+  await expect(select, 'clicking the picker rebuilt the Strip under it').toHaveAttribute('data-probe', 'original');
+  await expect(b.locator('.efsp-strip.efsp-strip-selected')).toHaveCount(0);
+
+  // Choose ATC from the keyboard, the way an open native dropdown is driven.
+  await b.keyboard.press('Escape');
+  await select.focus();
+  await select.press('ArrowDown');
+  await expect(select).toHaveValue('ATC');
+  await mission.getByRole('button', { name: 'Accept TOFI Entry' }).click({ timeout: 3000 });
+
+  const fdrRegime = (page) => page.evaluate(() => [...efspFdrs.values()].find(f => f.identity && f.identity.callsign === 'SREG02').tofi.separationRegime);
+  await expect.poll(() => fdrRegime(a), { timeout: 3000 }).toBe('ATC');
 });
 
 // ── F-307 ─────────────────────────────────────────────────────────────────

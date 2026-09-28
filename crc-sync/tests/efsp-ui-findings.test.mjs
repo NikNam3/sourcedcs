@@ -385,6 +385,88 @@ test('F-303: Drop is the one NLA a dead replica keeps — it is how it gets clea
   assert.equal(dropped.state, 'DROPPED');
 });
 
+// APP → CTR HANDOFF of a DEPARTURE, answered by CTR. Returns CENTER's replica.
+function handoffToCenter(efsp, c, callsign, answer) {
+  const created = mustAct(efsp, c.OPS, 'OPS', null, {
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE',
+    fdr: { callsign, ...FILED },
+  });
+  const handedOff = mustAct(efsp, c.OPS, 'OPS', created, { kind: 'SetState', toState: 'HANDED_OFF' });
+  const atApp = mustAct(efsp, c.OPS, 'OPS', handedOff, {
+    kind: 'TransferStrip', toPositionId: 'APP', bayId: 'app-departures', rackId: 'main',
+  });
+  const proposed = mustAct(efsp, c.APP, 'APP', atApp, {
+    kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR',
+  });
+  const replica = efsp.boardStoreFor('CENTER').getStrip(proposed.coordination.peerStripId);
+  if (!answer) return { sender: proposed, replica };
+  return { sender: proposed, replica: mustAct(efsp, c.CTR, 'CTR', replica, { kind: 'HANDOFF', action: answer }) };
+}
+
+test('F-303: a rejected replica refuses every op except the ones that clear it away', () => {
+  const efsp = createEfsp();
+  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL' });
+  const { replica } = handoffToCenter(efsp, c, 'INR303', 'REJECT');
+  assert.equal(replica.coordination.state, 'REJECTED');
+
+  // The user-reported case first: CTR rejected APP's handoff and could then
+  // open tactical control on the dead copy, minting a MISSION Strip on
+  // TACTICAL for a flight APP still worked.
+  const refusedOps = [
+    { kind: 'TOFI', action: 'PROPOSE', direction: 'ENTRY', toFacilityId: 'TACTICAL', toPositionId: 'TAC_C2' },
+    { kind: 'ConvertToArrival' },
+    { kind: 'ApproveAirspaceEntry', airspaceId: 'MOA-EAST' },
+    { kind: 'ClearAirspaceEntry' },
+    { kind: 'SetBlock', blockId: '22', value: '251.000' },
+    { kind: 'SetFlag', flag: 'highlight', value: 'RED' },
+    { kind: 'SetState', toState: 'INBOUND' },
+    { kind: 'TransferStrip', toPositionId: 'CTR', bayId: 'ctr-departures', rackId: 'main' },
+    { kind: 'Undo' },
+    { kind: 'POINT_OUT', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'APP' },
+  ];
+  for (const op of refusedOps) {
+    const ack = act(efsp, c.CTR, 'CTR', replica, op);
+    assert.equal(ack.ok, false, `${op.kind} must be refused`);
+    assert.equal(ack.reason, 'VALIDATION_ERROR', op.kind);
+    assert.match(ack.detail, /HANDOFF was rejected — the replica is inert, and APP still works the flight/, op.kind);
+  }
+  assert.equal(efsp.boardStoreFor('TACTICAL').getAll().length, 0, 'no MISSION Strip was minted');
+
+  // Moving it aside, and dropping it, both still work.
+  const moved = mustAct(efsp, c.CTR, 'CTR', replica, { kind: 'MoveStrip', bayId: 'ctr-app-coordination', rackId: 'main' });
+  const dropped = mustAct(efsp, c.CTR, 'CTR', moved, { kind: 'DropStrip' });
+  assert.equal(dropped.state, 'DROPPED');
+});
+
+test('F-303: the sender of a rejected handoff keeps working its own Strip', () => {
+  const efsp = createEfsp();
+  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' });
+  const { sender } = handoffToCenter(efsp, c, 'SND304', 'REJECT');
+  const own = efsp.boardStoreFor('INCIRLIK').getStrip(sender.stripId);
+  assert.equal(own.coordination.state, 'REJECTED');
+  mustAct(efsp, c.APP, 'APP', own, { kind: 'SetBlock', blockId: '22', value: '251.000' });
+});
+
+test('a TOFI cannot be opened while a coordination proposal on the same Strip is still open', () => {
+  const efsp = createEfsp();
+  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL' });
+  const { replica } = handoffToCenter(efsp, c, 'PND303');
+  assert.equal(replica.coordination.state, 'PROPOSED');
+
+  const ack = act(efsp, c.CTR, 'CTR', replica, {
+    kind: 'TOFI', action: 'PROPOSE', direction: 'ENTRY', toFacilityId: 'TACTICAL', toPositionId: 'TAC_C2',
+  });
+  assert.equal(ack.ok, false);
+  assert.match(ack.detail, /while a coordination proposal is open/);
+  assert.equal(efsp.boardStoreFor('TACTICAL').getAll().length, 0);
+
+  // Once accepted, the same proposal goes through.
+  const accepted = mustAct(efsp, c.CTR, 'CTR', replica, { kind: 'HANDOFF', action: 'ACCEPT' });
+  mustAct(efsp, c.CTR, 'CTR', accepted, {
+    kind: 'TOFI', action: 'PROPOSE', direction: 'ENTRY', toFacilityId: 'TACTICAL', toPositionId: 'TAC_C2',
+  });
+});
+
 // ── F-306 — the regime stated when accepting TOFI ─────────────────────────
 
 test('F-306: accepting a TOFI ENTRY carries the regime it wrote in the ack AND the broadcast', () => {

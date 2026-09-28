@@ -271,7 +271,8 @@
  *                                      the line break (see below)
  *   order 2   badges and coordination  left-aligned on the trailing row
  *   order 3   .efsp-strip-actions      right-aligned on that same row
- *   order 4   .efsp-strip-expanded     always last, always its own rows
+ *   order 4   reason sentences         a full-width line each, under the row
+ *   order 5   .efsp-strip-expanded     always last, always its own rows
  *
  * The break element replaces what `flex-basis: 100%` on .efsp-strip-actions
  * was actually there for, and that reason is unchanged: NLA is the primary
@@ -645,19 +646,15 @@
  * inhibit reason, the TOFI-exit precondition, §9.2 rule 2's void alert, and
  * the proposer's verbal-coordination note.
  *
- * `flex: 1 1 0` is the load-bearing part. A flex item's hypothetical main size
- * decides LINE BREAKING before any shrinking happens, so a sentence sized by
- * its content would push the whole trailing row onto a second line the moment
- * it got long — taking the NLA button with it, which is the one thing that row
- * exists to hold still. A basis of 0 always fits, so the sentence takes the
- * row's free space and wraps INSIDE its own box instead. `min-width: 0` and
- * `overflow-wrap: anywhere` finish the job for an unbroken token (a route
- * string, a callsign); without them a long word re-establishes a content
- * minimum and the row breaks anyway.
- *
- * The row is 44px tall for the buttons, so up to three wrapped lines of 10px
- * text are free — measured: a 78-character inhibit reason on an 800px panel
- * wraps to two lines and the Strip stays 134px.
+ * Each sentence is a full-width line of its own, UNDER the trailing row
+ * (`order: 4`, basis 100%). It used to share the row: `flex: 1 1 0` with
+ * `min-width: 0` and `overflow-wrap: anywhere`, so it took whatever the badges
+ * and buttons left over. On a crowded row that was a few pixels, and
+ * `anywhere` let the text break between every letter — a column one character
+ * wide and dozens of lines tall. Its own line cannot be squeezed, and it
+ * breaks between words only (`break-word` still breaks an unbroken route
+ * string rather than overflowing). The NLA button stays put, because the
+ * sentence no longer competes for its row at all.
  *
  * COLOUR, and a deliberate departure from what was specified: these were asked
  * for in #6a7580, the panel's existing muted grey. It measures 3.41:1 on the
@@ -669,13 +666,14 @@
 .efsp-coordination-blocked-reason,
 .efsp-marsa-void-reason,
 .efsp-coordination-note {
-  flex: 1 1 0;
-  min-width: 0;
+  order: 4;
+  flex: 1 0 100%;
+  max-width: 80ch;
   align-self: center;
   font-size: 10px;
   line-height: 1.3;
   letter-spacing: 0.02em;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .efsp-nla-inhibit-reason,
 .efsp-coordination-blocked-reason { color: #8c9aa6; }
@@ -702,7 +700,7 @@
 .efsp-expand-btn:hover { color: #d8e0e6; border-color: #7a8690; }
 
 .efsp-strip-expanded {
-  order: 4; /* always last, whatever else is on the Strip */
+  order: 5; /* always last, whatever else is on the Strip */
   flex-basis: 100%;
   display: flex;
   flex-direction: column;
@@ -929,6 +927,21 @@
   background: #2a3038;
   border: 1px solid #e0a83c;
   color: #ffe0a8;
+}
+/* A disabled action has to LOOK disabled. .efsp-nla-btn-denied is declared
+   earlier in this file with the same specificity, so every rule above won and
+   a blocked Accept TOFI Exit rendered as the bright green live button it
+   refused to be — pressed, it silently did nothing. Dashed and dim, the same
+   language as the NLA's denied state. */
+.efsp-coordinate-btn:disabled,
+.efsp-coordinate-accept-btn:disabled,
+.efsp-coordinate-reject-btn:disabled,
+.efsp-coordinate-standby-btn:disabled,
+.efsp-spawn-return-btn:disabled {
+  background: #1c2228;
+  border: 1px dashed #4a5560;
+  color: #6a7580;
+  cursor: not-allowed;
 }
 
 .efsp-coordinate-popover {

@@ -635,10 +635,106 @@ test("F-303: a rejected coordination replica's NLA reports itself inert", () => 
   for (const fn of btn._listeners.click || []) fn({ stopPropagation() {}, preventDefault() {} });
   assert.deepEqual(sent, []);
 
-  // Deliberately left alone (decided, not an oversight): ✕ / Airspace… /
-  // Bind… / MARSA… are FDR-level facts about a real airframe, and Drop is how
-  // a controller clears a dead replica off their Board.
+  // Drop is how a controller clears a dead replica off their Board, so it stays.
   assert.ok(findByText(el, '✕'), 'Drop is the deliberate exception');
+});
+
+// The decision recorded above used to end "✕ / Airspace… / Bind… / MARSA… are
+// FDR-level facts … deliberately left alone". Live testing reversed it: CTR
+// rejected APP's handoff and then opened a TOFI on the dead copy, minting a
+// MISSION Strip for a flight APP still worked. crc-sync now refuses every op on
+// a rejected replica except Drop / the Drop NLA / moving it aside, and the
+// Strip stops offering what would only be refused.
+test('F-303: a rejected replica offers nothing but Drop', () => {
+  const airspaces = [{
+    airspaceId: 'MOA-EAST', state: 'ACTIVE', rev: 1, transitions: [],
+    definition: { airspaceId: 'MOA-EAST', name: 'East MOA', type: 'MOA', controllingPositionId: 'CTR', workingFrequencyMhz: 134.25 },
+  }];
+  const replica = stripAt({
+    ownerPositionId: 'CTR', bayId: 'ctr-app-coordination',
+    coordination: { primitive: 'HANDOFF', state: 'REJECTED', mintedForCoordination: true, peerFacilityId: 'INCIRLIK', peerPositionId: 'APP' },
+    nla: { toState: 'DROPPED' },
+  });
+  const { el, sent } = renderStrip({ strip: replica, fdr: FDR, held: ['CTR'], airspaces, correlations: [correlationOf({ state: 'UNCORRELATED', trackId: null })] });
+  for (const label of ['TOFI…', 'Airspace…', 'Convert to Arrival →', 'MARSA…', 'Bind…', 'Coordinate…', '⇥']) {
+    assert.equal(findByText(el, label), undefined, `${label} is offered on a dead replica`);
+  }
+  assert.ok(findByText(el, 'Drop'), 'the Drop NLA stays');
+
+  // Double-click flip and the other gestures would each come back refused.
+  fire(el, 'dblclick', { target: { closest: () => null } });
+  assert.deepEqual(sent, [], 'a gesture on a dead replica sent a Mutation');
+});
+
+test('TOFI is not offered from a handoff replica that has not been answered yet', () => {
+  const pending = stripAt({
+    ownerPositionId: 'CTR', bayId: 'ctr-app-coordination',
+    coordination: { primitive: 'HANDOFF', state: 'PROPOSED', mintedForCoordination: true, peerFacilityId: 'INCIRLIK', peerPositionId: 'APP' },
+  });
+  const { el } = renderStrip({ strip: pending, fdr: FDR, held: ['CTR'] });
+  assert.ok(findByText(el, 'Accept Hand Off') || findByText(el, 'Accept HANDOFF') || findByText(el, 'Reject'), 'the answer buttons render');
+  assert.equal(findByText(el, 'TOFI…'), undefined, 'APP still works this flight until CTR accepts');
+});
+
+// ── The TOFI regime picker keeps what the controller chose ────────────────
+
+function pendingTofiEntry() {
+  return stripAt({
+    role: 'MISSION', state: 'TASKED', ownerPositionId: 'TAC_C2', bayId: 'tac-c2-coordination',
+    tofiCoordination: { direction: 'ENTRY', state: 'PROPOSED', peerFacilityId: 'CENTER', peerPositionId: 'CTR' },
+  });
+}
+const regimeSelectOf = (el) => descendants(el).find(c => (c.className || '').includes('efsp-tofi-regime-select'));
+
+test('clicking the regime picker does not select the Strip (the click that used to reset it to MARSA)', () => {
+  const { el, sandbox } = renderStrip({ strip: pendingTofiEntry(), fdr: FDR, held: ['TAC_C2'] });
+  sandbox.renderAllOpenEfspBays = () => {};
+  const select = regimeSelectOf(el);
+  // The Strip's click handler sees a target inside a <select>. A real click on
+  // the picker bubbles to it; the handler has to recognise the control.
+  const insideSelect = { closest: (sel) => (sel.split(',').map(x => x.trim()).includes('select') ? select : null) };
+  fire(el, 'click', { target: insideSelect });
+  assert.equal(sandbox.getSelectedEfspStripId(), null, 'the Strip was selected, which rebuilds it and loses the choice');
+});
+
+test('the chosen regime survives a rebuild, and is what Accept sends', () => {
+  const strip = pendingTofiEntry();
+  const { el, sandbox, sent } = renderStrip({ strip, fdr: FDR, held: ['TAC_C2'] });
+  const select = regimeSelectOf(el);
+  select.value = 'ATC';
+  fire(select, 'change');
+
+  const rebuilt = sandbox._buildStripEl(strip);
+  assert.equal(regimeSelectOf(rebuilt).value, 'ATC', 'a rebuild put MARSA back');
+  click(findByText(rebuilt, 'Accept TOFI Entry'));
+  assert.equal(sent[0].op.separationRegime, 'ATC');
+});
+
+test('a Strip whose regime picker has focus is protected from a rebuild', () => {
+  const { el, sandbox } = renderStrip({ strip: pendingTofiEntry(), fdr: FDR, held: ['TAC_C2'] });
+  assert.equal(sandbox._isProtectedStripEl(el), false);
+  focusStub(regimeSelectOf(el));
+  assert.equal(sandbox._isProtectedStripEl(el), true, 'the open dropdown would belong to a detached element');
+  // A focused button is not: the NLA keeps focus after every press.
+  focusStub(descendants(el).find(c => c.tagName === 'button'));
+  assert.equal(sandbox._isProtectedStripEl(el), false);
+});
+
+test('Convert to Arrival is only offered to the Positions the server lets convert', () => {
+  // TWR holds a Position, which was all the old gate asked for. The server
+  // refuses TWR's press (no ConvertToArrival, no ARRIVAL creation).
+  const { el } = renderStrip({ strip: stripAt({ ownerPositionId: 'APP' }), fdr: FDR, held: ['TWR'] });
+  assert.equal(findByText(el, 'Convert to Arrival →'), undefined);
+});
+
+test('an arrival or overflight Strip draws no chip for a Block its Role does not have', () => {
+  for (const [role, state, owner] of [['ARRIVAL', 'INBOUND', 'CTR'], ['OVERFLIGHT', 'TRANSITING', 'CTR']]) {
+    const { el } = renderStrip({ strip: stripAt({ role, state, ownerPositionId: owner, bayId: 'ctr-enroute' }), fdr: FDR, held: [owner] });
+    for (const blockId of ['9F', '14A', '14D']) {
+      assert.equal(blockCell(el, blockId), undefined, `${role} rendered departure-only Block ${blockId}`);
+    }
+  }
+  assert.equal(blockCell(renderStrip({ strip: stripAt({ role: 'OVERFLIGHT', state: 'TRANSITING', ownerPositionId: 'CTR' }), fdr: FDR, held: ['CTR'] }).el, '8A'), undefined);
 });
 
 test('Convert to Arrival is offered for the return leg, and refused mid-exchange', () => {
