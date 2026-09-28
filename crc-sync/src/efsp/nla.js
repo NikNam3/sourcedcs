@@ -92,9 +92,46 @@ function isValidState(state, role = 'DEPARTURE') {
 // not built in Phase 1).
 const REQUIRED_FOR_CLEARANCE = ['route', 'requestedAltitude', 'departureAirport', 'destinationAirport'];
 
+// The controller-facing Block label for each of those four, so the inhibit
+// reason names what the controller has to go and fill in rather than an
+// internal field path. A Strip shows 28 chips, most of them empty; "flight
+// plan invalid" told them nothing about which four mattered, and nothing on
+// the Strip marks them (docs/ui-findings/lane1.md F-104).
+//
+// These are Blocks 7/8/8B/9 of every Role's Block Map. block-map.js carries
+// the routing (`filed.requestedAltitude` &c) but deliberately not the labels
+// — those are the panel's rendering concern (crc-desktop's strip-template.js)
+// — so the mapping is spelled out here, in the one place a server-side reason
+// string needs to speak the controller's vocabulary. Listed in Block order,
+// which is also the order the chips appear in.
+const CLEARANCE_BLOCK_LABELS = {
+  requestedAltitude: 'ALT',       // Block 7
+  departureAirport: 'DEP',        // Block 8
+  destinationAirport: 'DEST',     // Block 8B
+  route: 'RTE',                   // Block 9
+};
+const CLEARANCE_LABEL_ORDER = ['requestedAltitude', 'departureAirport', 'destinationAirport', 'route'];
+
 function isFlightPlanValid(fdr) {
   if (!fdr) return false;
   return REQUIRED_FOR_CLEARANCE.every(k => !!fdr.filed[k]);
+}
+
+/**
+ * The Block labels of whatever CLEARED still needs, in Block order — [] when
+ * the plan is complete, and every label when there is no FDR at all (nothing
+ * is filed, so nothing is filled in).
+ * @returns {string[]}
+ */
+function missingForClearance(fdr) {
+  return CLEARANCE_LABEL_ORDER
+    .filter(k => !fdr || !fdr.filed[k])
+    .map(k => CLEARANCE_BLOCK_LABELS[k]);
+}
+
+/** The §3.5-rule-2 inhibit reason for an incomplete plan, naming the Blocks — same specific style as 'a hold is in force' / 'void time expired'. */
+function flightPlanInhibitReason(fdr) {
+  return `flight plan incomplete — ${missingForClearance(fdr).join(', ')} not filed`;
 }
 
 // The two release states whose gate is a derived WINDOW rather than a single
@@ -147,7 +184,7 @@ function computeDepartureNla(strip, fdr, now, ctx) {
     case 'PENDING_CLEARANCE':
       // CLEARED is still CD's own (DEPARTURE_STATE_OWNERS), so this stays
       // state-only — no Position boundary is crossed here.
-      if (!isFlightPlanValid(fdr)) return { inhibited: 'flight plan invalid' };
+      if (!isFlightPlanValid(fdr)) return { inhibited: flightPlanInhibitReason(fdr) };
       return { toState: 'CLEARED' };
 
     case 'CLEARED':
@@ -336,4 +373,5 @@ function computeNla(strip, fdr, now = Date.now(), ctx = {}) {
 module.exports = {
   STATES, DEPARTURE_STATES, ARRIVAL_STATES, OVERFLIGHT_STATES, MISSION_STATES, STATES_BY_ROLE,
   isValidState, isFlightPlanValid, isVoidExpired, computeNla, REQUIRED_FOR_CLEARANCE,
+  missingForClearance, flightPlanInhibitReason, CLEARANCE_BLOCK_LABELS,
 };

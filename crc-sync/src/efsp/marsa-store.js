@@ -112,6 +112,36 @@ class MarsaStore {
     this._relations = new Map(); // marsaId -> relation
     this._seq = 0;
     this._mutationLog = null;
+    // The FDRs _applyRegime wrote during the op currently being applied, for
+    // the caller to drain and broadcast. See drainRegimeWrites().
+    this._regimeWrites = [];
+  }
+
+  /**
+   * The FDRs whose `tofi.separationRegime` this store wrote during the op just
+   * applied, most recent value per FDR, and clears the list.
+   *
+   * It exists because the write was invisible. Declaring a relation writes
+   * MARSA on every participant and ending or voiding one writes ATC back, and
+   * none of that reached a single connected client: the marsa-delta carries the
+   * RELATION, and an FDR rides an efsp-board-delta. So SEP REG stayed blank on
+   * every already-connected page until it next took a full snapshot, and only
+   * someone who reconnected saw the truth — §4.8.3's "they inherit a lie", in
+   * the direction it warns about (docs/ui-findings/lane1.md F-111).
+   *
+   * Drained rather than returned from each op because a regime write happens
+   * six call sites deep in three different lifecycle paths (declare, add/remove
+   * participant, end/void, interlock void, participant retired), and threading
+   * a return value through all of them would be more bookkeeping than one
+   * journal that every public entry point clears on the way in.
+   *
+   * @returns {object[]} FDR records, deduplicated by fdrId
+   */
+  drainRegimeWrites() {
+    const byId = new Map();
+    for (const fdr of this._regimeWrites) if (fdr && fdr.fdrId) byId.set(fdr.fdrId, fdr);
+    this._regimeWrites = [];
+    return [...byId.values()];
   }
 
   /**
@@ -210,6 +240,8 @@ class MarsaStore {
    */
   apply(mutation, actingPositionId, by) {
     const op = mutation.op || {};
+    // Nothing from a previous op may ride out on this one's result.
+    this._regimeWrites = [];
 
     // DeclareMarsa mints the relation, so it has no marsaId to look up and no
     // baseRev to check — the same shape CreateStrip has in board-store.js's
@@ -222,6 +254,7 @@ class MarsaStore {
         console.error('[marsa-store] unexpected error declaring MARSA — rejecting it instead of crashing:', err);
         result = { ok: false, reason: 'VALIDATION_ERROR', detail: 'internal error processing MARSA declaration' };
       }
+      if (result.ok) result.fdrs = this.drainRegimeWrites();
       this._recordAudit(mutation, actingPositionId, by, null, result);
       return result;
     }
@@ -265,6 +298,9 @@ class MarsaStore {
     // nothing about current state leaves the client rendering its own guess
     // (airspace-store.js's stated reason).
     if (!result.relation) result.relation = this.getRelation(mutation.marsaId);
+    // The regime writes this op made, for efsp-ws.js to put on the wire beside
+    // the marsa-delta — see drainRegimeWrites().
+    if (result.ok) result.fdrs = this.drainRegimeWrites();
     this._recordAudit(mutation, actingPositionId, by, before, result);
     return result;
   }
@@ -486,6 +522,8 @@ class MarsaStore {
         console.warn(`[marsa-store] could not set separation regime ${regime} on ${fdrId}: ${result.reason}`);
         continue;
       }
+      // Journalled so the caller can broadcast it — see drainRegimeWrites().
+      if (result && result.fdr) this._regimeWrites.push(result.fdr);
       written.push(fdrId);
     }
     return written;
@@ -513,6 +551,7 @@ class MarsaStore {
    * @param {{cause:string, blockId?:string, clientMutationId?:string, actingPositionId?:string, by?:string}} ctx
    */
   voidForAssignment(fdrId, { cause, blockId, clientMutationId, actingPositionId, by } = {}) {
+    this._regimeWrites = [];
     const active = this.activeFor(fdrId);
     if (!active) return null;
     // Rendezvous has happened: the aircraft are joined up and the interlock is
@@ -551,6 +590,7 @@ class MarsaStore {
    * @returns {object[]} the relations that changed — broadcast by the caller
    */
   onFdrRetired(fdrId, by) {
+    this._regimeWrites = [];
     const changed = [];
     for (const relation of this._relations.values()) {
       if (relation.state !== 'ACTIVE' || !relation.participants.includes(fdrId)) continue;

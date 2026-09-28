@@ -415,7 +415,20 @@ const obligationMonitor = new ForwardingObligationMonitor({
   airspaceStore: efsp.airspaceStore,
   onAlert: (alert) => wsHub.broadcastEfspObligationAlert(alert),
 });
-setInterval(() => obligationMonitor.tick(), 15000);
+
+// The NLA inhibit status every Strip carries on the wire (F-408) has a
+// clock-driven half that no message covers — a release time passing, an EDCT
+// or call-for-release window opening or closing, a void deadline reached. This
+// sweep re-states only the Strips whose status actually moved; on a quiet
+// Board it sends nothing. See nla-status-monitor.js for why it shares the
+// obligation sweep's tick rather than taking one of its own — in short,
+// VOID_TIME_EXPIRED is raised as an alert there and rendered as an inhibit
+// reason here, and two cadences would let the two disagree.
+efsp.nlaStatusMonitor.setOnDelta((payload) => wsHub.broadcastEfspBoardDelta(payload));
+setInterval(() => {
+  obligationMonitor.tick();
+  efsp.nlaStatusMonitor.tick();
+}, 15000);
 
 // ── WP5 Strip<->track correlation (guide §6.6, docs/adr/0045/0046) ───────
 // Its own cadence again, and a much faster one: this is what keeps each

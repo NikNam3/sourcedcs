@@ -135,6 +135,19 @@ it up as a defect.
 
 ## Recording a finding
 
+**Write the entry the moment you have the reproduction — not at the end.**
+
+> A `test.fail()` spec proves a defect exists. It does not say what a controller
+> sees, what you measured, or whether you found one control or a class, and the
+> person who fixes it reads the findings file, not your spec directory. An
+> unfiled finding is not a finding yet.
+>
+> The loop is: reproduce it, file it, move to the next flow. Not: walk every
+> flow, then write everything up. Batching loses the whole session's work to a
+> crash or a context limit, it hides your progress from anyone coordinating
+> lanes, and it means duplicates across lanes are discovered at merge time
+> instead of avoided at write time.
+
 Everything goes in **`docs/efsp-ui-findings.md`**, newest last, in the format
 that file defines. One entry per defect. Read the existing entries first so you
 do not re-report a known one.

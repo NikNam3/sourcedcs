@@ -181,11 +181,38 @@ async function expectOnTop(page, locator, what) {
   expect(verdict.ok, `${what}: ${verdict.why}`).toBe(true);
 }
 
-/** Touch-target floor — WP3's acceptance criterion says 44x44 CSS px, MEASURED. Nobody has measured. */
+/**
+ * Touch-target floor — WP3's acceptance criterion, 44x44 CSS px, MEASURED.
+ *
+ * It used to assert 32, and only on height, while its own message quoted 44: a
+ * deliberately lenient tripwire, set while nothing in the panel had ever been
+ * measured and a 44 assert would have failed on nearly every control at once,
+ * which reports nothing useful. That was left for the pass that could see the
+ * whole picture, because raising it reclassifies findings rather than tidying
+ * a helper.
+ *
+ * F-105 has landed and the controls have real 44x44 border boxes, so this now
+ * enforces the criterion it names — BOTH dimensions, because 44x44 is two
+ * numbers and a 26px-wide control is no more hittable for being 44 tall.
+ *
+ * Two controls are still under it, deliberately: `⌿` (.efsp-confirm-vacated-btn,
+ * 32x44) and `*` (.efsp-annotation-overflow, 26x32), both of which sit 2px from
+ * an editable value cell that a full 44 would start stealing clicks from. Those
+ * two specs stay test.fail() and say so — see l2-block-editing.spec.js.
+ */
+const TOUCH_TARGET_FLOOR = 44;
 async function expectTouchTarget(locator, what) {
   const box = await locator.boundingBox();
   expect(box, `${what}: no box`).not.toBeNull();
-  expect(Math.round(box.height), `${what}: ${Math.round(box.width)}x${Math.round(box.height)} is under the 44px floor`).toBeGreaterThanOrEqual(32);
+  const measured = `${Math.round(box.width)}x${Math.round(box.height)}`;
+  expect(
+    Math.round(box.width),
+    `${what}: ${measured} — width is under WP3's ${TOUCH_TARGET_FLOOR}x${TOUCH_TARGET_FLOOR} floor`,
+  ).toBeGreaterThanOrEqual(TOUCH_TARGET_FLOOR);
+  expect(
+    Math.round(box.height),
+    `${what}: ${measured} — height is under WP3's ${TOUCH_TARGET_FLOOR}x${TOUCH_TARGET_FLOOR} floor`,
+  ).toBeGreaterThanOrEqual(TOUCH_TARGET_FLOOR);
 }
 
 module.exports = {

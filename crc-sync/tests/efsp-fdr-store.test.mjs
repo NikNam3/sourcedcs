@@ -863,3 +863,34 @@ test('restore seeds the military namespace onto an FDR written before it existed
   assert.equal(back.military.mtr.designator, null);
   assert.equal(restored.setMilitary(fdr.fdrId, { ordnanceState: 'HUNG' }, { by: 'OPS' }).ok, true);
 });
+
+// F-206 — both TOFI enum fields START as null, and null is a real, renderable
+// state ("no radar service", "the regime has not been stated"), so clearing one
+// is a meaningful controller action. A picker's "—" option sends the empty
+// string, which is the same intent spelled the way a <select> spells it.
+test('setTofi clears radar_service and separation_regime, whether the clear arrives as null or as an empty string', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  store.setTofi(fdr.fdrId, { radarService: 'ACTIVE', separationRegime: 'DUE_REGARD' }, { by: 'CTR' });
+
+  const byEmptyString = store.setTofi(fdr.fdrId, { separationRegime: '' }, { by: 'CTR' });
+  assert.equal(byEmptyString.ok, true);
+  assert.equal(byEmptyString.fdr.tofi.separationRegime, null);
+  assert.equal(byEmptyString.fdr.tofi.radarService, 'ACTIVE', 'the other field is untouched');
+
+  const byNull = store.setTofi(fdr.fdrId, { radarService: null }, { by: 'CTR' });
+  assert.equal(byNull.ok, true);
+  assert.equal(byNull.fdr.tofi.radarService, null);
+});
+
+// The four enum Blocks whose field has no "unset" value to return to. Their
+// cleared state is a member of the enum itself (NONE / CLEAN), or the field is
+// exhaustive — so the server refuses, and the picker must not offer "—".
+test('the enum fields with no null state refuse being cleared', () => {
+  const store = new FdrStore();
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  assert.equal(store.setField(fdr.fdrId, 'identity.trackDegradationFlag', '', { by: 'CTR' }).ok, false); // Block 5A — NONE is the clear
+  assert.equal(store.setField(fdr.fdrId, 'assigned.releaseState', '', { by: 'CTR' }).ok, false);         // Block 14A — §3.8's six states are exhaustive
+  assert.equal(store.setAirspaceOwner(fdr.fdrId, '', { by: 'CTR' }).ok, false);                          // Block 24A — a DIRECTION, never absent (D15)
+  assert.equal(store.setMilitary(fdr.fdrId, { ordnanceState: '' }, { by: 'CTR' }).ok, false);            // Block 3G — CLEAN is the clear
+});

@@ -720,6 +720,15 @@ class FdrStore {
   setTofi(fdrId, patch, { by } = {}) {
     const fdr = this._fdrs.get(fdrId);
     if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
+    // Both fields START as null and null is a real, renderable state — "no
+    // radar service", "the regime has not been stated" — so clearing one is a
+    // meaningful controller action, not an erasure. An enum picker's "—"
+    // option sends the empty string, which is the same intent spelled the way
+    // a <select> spells it; normalized here so there is one answer server-side
+    // rather than two spellings of "cleared" (docs/ui-findings/lane2.md F-206).
+    patch = { ...patch };
+    if (patch.radarService === '') patch.radarService = null;
+    if (patch.separationRegime === '') patch.separationRegime = null;
     if (patch.radarService !== undefined && patch.radarService !== null && !RADAR_SERVICE_STATES.has(patch.radarService)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `invalid radar_service: ${JSON.stringify(patch.radarService)}` };
     }

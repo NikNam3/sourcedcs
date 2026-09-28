@@ -137,10 +137,13 @@ test('the picker is hidden when there is no flight to bind against', async () =>
 
 // ── dispatch ─────────────────────────────────────────────────────────────
 
-test('picking a flight sends fdrId and no fdr at all', async () => {
+test('picking a flight sends fdrId and no fdr at all, with no callsign typed', async () => {
   const { els, sent } = await settled(mountPanel(TWO_FLIGHTS));
   els['efsp-create-strip-bind'].value = 'f2';
-  els['efsp-new-strip-callsign'].value = 'IGNORED';
+  // Deliberately empty. docs/ui-findings F-308: this test used to type
+  // 'IGNORED' here and assert the op was sent anyway, which is precisely the
+  // defect — a callsign demanded, accepted, and then thrown away.
+  els['efsp-new-strip-callsign'].value = '';
   for (const fn of els['efsp-create-strip-btn']._listeners.click || []) await fn({ preventDefault() {} });
 
   assert.equal(sent.length, 1, JSON.stringify(sent));
@@ -167,6 +170,45 @@ test('binding skips the duplicate-origination warning, which means the opposite 
   for (const fn of els['efsp-create-strip-btn']._listeners.click || []) await fn({ preventDefault() {} });
   assert.equal(sent.length, 1, 'the first press must go through');
   assert.equal(sent[0].op.fdrId, 'f1');
+});
+
+// ── F-308: the picker is the identity, so it is read first ───────────────
+
+test('a picked flight needs no callsign retyped', async () => {
+  // Measured before the fix: "Enter a callsign first", and no Strip created —
+  // _submitCreateStrip validated the typed callsign before it ever read the
+  // picker, for an op that carries no `fdr` at all.
+  const { els, sent } = await settled(mountPanel(TWO_FLIGHTS));
+  els['efsp-create-strip-bind'].value = 'f1';
+  els['efsp-new-strip-callsign'].value = '';
+  for (const fn of els['efsp-create-strip-btn']._listeners.click || []) await fn({ preventDefault() {} });
+  assert.equal(sent.length, 1, els['efsp-create-strip-msg'].textContent);
+  assert.equal(sent[0].op.fdrId, 'f1');
+  // And it says which flight, not "this flight" — the whole point of the picker.
+  assert.match(els['efsp-create-strip-msg'].textContent, /VIPER11/);
+});
+
+test('a typed callsign that agrees with the picked flight is accepted', async () => {
+  const { els, sent } = await settled(mountPanel(TWO_FLIGHTS));
+  els['efsp-create-strip-bind'].value = 'f2';
+  els['efsp-new-strip-callsign'].value = 'viper12';
+  for (const fn of els['efsp-create-strip-btn']._listeners.click || []) await fn({ preventDefault() {} });
+  assert.equal(sent.length, 1, els['efsp-create-strip-msg'].textContent);
+  assert.equal(sent[0].op.fdrId, 'f2');
+});
+
+test('a typed callsign that disagrees with the picked flight is refused, not discarded', async () => {
+  // The adjacent-callsign mis-pick the picker's own comment says it has to
+  // survive: measured before the fix, picking MSNA11 and typing MSNA12
+  // fragged MSNA11 with no word about the callsign that was typed.
+  const { els, sent } = await settled(mountPanel(TWO_FLIGHTS));
+  els['efsp-create-strip-bind'].value = 'f1';       // VIPER11
+  els['efsp-new-strip-callsign'].value = 'VIPER12'; // the neighbour
+  for (const fn of els['efsp-create-strip-btn']._listeners.click || []) await fn({ preventDefault() {} });
+  assert.equal(sent.length, 0, 'nothing is fragged while the two disagree');
+  const msg = els['efsp-create-strip-msg'].textContent;
+  assert.match(msg, /VIPER11/, 'names what was picked');
+  assert.match(msg, /VIPER12/, 'and what was typed — neither is thrown away');
 });
 
 test('leaving the picker blank still files a standalone mission line, exactly as before', async () => {
@@ -200,4 +242,28 @@ test('.mission is refused for a Position that cannot frag one', async () => {
   sandbox._dispatchDotCommand({ verb: 'mission', args: ['VIPER11'] });
   assert.equal(sent.length, 0);
   assert.match(els['efsp-dot-command-preview'].textContent, /only TAC_C2/);
+});
+
+// ── F-309: the right refusal, said for the right reason ──────────────────
+
+test('.mission on a flight that already has a mission line says so', async () => {
+  // Measured before the fix: "no live flight TWICE1 available to frag
+  // against", about a flight that is live and on screen —
+  // _missionBindCandidates() drops a flight that already has one, so the
+  // lookup missed and the generic message fired. The refusal itself is right
+  // (one mission line per flight, which crc-sync enforces); the wording was not.
+  const { els, sent, sandbox } = await settled(mountPanel({
+    strips: [...TWO_FLIGHTS.strips, stripFor('m1', 'f1', { role: 'MISSION', state: 'TASKED', ownerPositionId: 'TAC_C2', facilityId: 'TACTICAL', bayId: 'tac-c2-tasked' })],
+    fdrs: TWO_FLIGHTS.fdrs,
+  }));
+  sandbox._dispatchDotCommand({ verb: 'mission', args: ['VIPER11'] });
+  assert.equal(sent.length, 0);
+  assert.match(els['efsp-dot-command-preview'].textContent, /already has a mission line/);
+  assert.doesNotMatch(els['efsp-dot-command-preview'].textContent, /no live flight/);
+});
+
+test('.mission on a callsign nobody is flying still says the flight does not exist', async () => {
+  const { els, sandbox } = await settled(mountPanel(TWO_FLIGHTS));
+  sandbox._dispatchDotCommand({ verb: 'mission', args: ['NOBODY'] });
+  assert.match(els['efsp-dot-command-preview'].textContent, /no live flight NOBODY/);
 });

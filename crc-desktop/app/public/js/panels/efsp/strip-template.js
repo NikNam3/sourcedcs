@@ -432,6 +432,36 @@ function enumSelectOptionsFor(blockId) {
   return ENUM_SELECT_BLOCKS[blockId] || null;
 }
 
+// Which enum Blocks may offer the picker's "—" once they have a value (lane
+// 2's F-206: "—" was offered on all six and did nothing on any of them,
+// because bay-view.js's change handler returned early on an empty value — an
+// enabled choice that cannot be acted on, which is standing rule 1).
+//
+// This is the SERVER's answer to "which of the six accept a clear", not a
+// guess from reading the validators:
+//   RSVC / SREG  -> both start as null and null is a real, renderable state,
+//                   so clearing one is a meaningful action. fdr-store.js's
+//                   setTofi() normalizes the '' a <select> sends to null, so
+//                   "—" sends '' and there is one spelling of "cleared"
+//                   server-side.
+//   5A           -> 'NONE' IS this field's cleared value; offer that.
+//   3G           -> 'CLEAN' IS this field's cleared value; offer that.
+//   14A          -> §3.8's six release states are exhaustive. There is no
+//                   "no release state".
+//   24A          -> airspace ownership is a DIRECTION, and its record is
+//                   append-only precisely so a handover cannot be erased.
+//                   "Give it back" is CONTROLLING_AGENCY, not blank.
+// Clearing SREG is still refused while an ACTIVE MARSA relation holds the
+// flight (board-store.js names the declarer in the refusal). That is correct
+// and deliberately NOT pre-empted here: the refusal is legible and lands
+// attributed to the Strip.
+const ENUM_CLEARABLE_BLOCKS = new Set(['RSVC', 'SREG']);
+
+/** @returns {boolean} may this enum Block be cleared back to no value at all? */
+function isEnumBlockClearable(blockId) {
+  return ENUM_CLEARABLE_BLOCKS.has(blockId);
+}
+
 // WP4A second slice — Blocks edited via a click-to-toggle boolean
 // affordance (bay-view.js), reusing the existing ✓/blank rendering
 // convention rather than a 2-option <select> — the counterpart to
@@ -485,6 +515,6 @@ if (typeof module !== 'undefined' && module.exports) {
     DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP, BLOCK_MAPS, resolveBlockValue, requiredBlocksFor, formatBlock3,
     activeAnnotationValue, hasActiveAnnotationEntry, annotationHistory, supersededAnnotationEntries,
     isBlockEditable, CONFIRM_VACATED_ELIGIBLE_BLOCKS,
-    enumSelectOptionsFor, isBooleanToggleBlock, blockLabelFor,
+    enumSelectOptionsFor, ENUM_CLEARABLE_BLOCKS, isEnumBlockClearable, isBooleanToggleBlock, blockLabelFor,
   };
 }

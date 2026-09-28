@@ -44,6 +44,7 @@ const blockMap = require('./block-map');
 const facilityConfig = require('./facility-config');
 const coordination = require('./coordination');
 const { handleMessage, snapshotMessage } = require('./efsp-ws');
+const { NlaStatusMonitor } = require('./nla-status-monitor');
 const { statePaths, ensureDirFor } = require('../state-paths');
 
 // Overridable so tests exercise the restore/persist path against a temp
@@ -185,6 +186,12 @@ function createEfsp() {
       voidMarsaForAssignment:  (fdrId, ctx) => marsaStore.voidForAssignment(fdrId, ctx),
       activeMarsaFor:          (fdrId) => marsaStore.activeFor(fdrId),
       retireMarsaForFdr:       (fdrId, by) => marsaStore.onFdrRetired(fdrId, by),
+      // Ending or voiding a relation writes `tofi.separationRegime` back to
+      // ATC on every participant. Those FDR writes are real changes no
+      // marsa-delta can carry (a relation is not an FDR), so board-store drains
+      // them onto its own result and efsp-ws.js puts them in the board-delta's
+      // `fdrs.updated` — see marsa-store.js's drainRegimeWrites() (F-111).
+      drainMarsaRegimeWrites:  () => marsaStore.drainRegimeWrites(),
     };
 
     const boardStore = new BoardStore(fdrStore, rules);
@@ -200,6 +207,19 @@ function createEfsp() {
 
   const defaultFacility = facilities.get(facilityConfig.DEFAULT_FACILITY_ID);
 
+  // F-408's clock-driven half. Built here rather than in server.js, unlike the
+  // obligation monitor and the correlation reconciler, because efsp-ws.js has
+  // to tell it what it has already put on the wire (see its note()) — so it
+  // has to be reachable from `ctx`. server.js supplies the broadcast and the
+  // tick; see setOnDelta.
+  const nlaStatusMonitor = new NlaStatusMonitor({
+    boardStoreFor: (facilityId) => {
+      const f = facilities.get(facilityId);
+      return f ? f.boardStore : null;
+    },
+    facilityConfig,
+  });
+
   const ctx = {
     // Back-compat direct properties (INCIRLIK) — every pre-WP4A caller in
     // this package (server.js/ws-hub.js/tests) keeps working unmodified.
@@ -211,6 +231,7 @@ function createEfsp() {
     marsaStore,
     airspaceConfig,
     facilityConfig,
+    nlaStatusMonitor,
     // The real, Facility-aware accessors WP4A's wire protocol uses.
     boardStoreFor: (facilityId = facilityConfig.DEFAULT_FACILITY_ID) => {
       const f = facilities.get(facilityId);
@@ -224,7 +245,7 @@ function createEfsp() {
 
   return {
     boardStore: ctx.boardStore, fdrStore, positionStore: ctx.positionStore, mutationLog,
-    airspaceStore, correlationStore, marsaStore,
+    airspaceStore, correlationStore, marsaStore, nlaStatusMonitor,
     boardStoreFor: ctx.boardStoreFor, positionStoreFor: ctx.positionStoreFor,
 
     /**

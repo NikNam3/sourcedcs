@@ -229,15 +229,22 @@ function applyEfspDelta(msg) {
  * on BOTH success and rejection (board-store.js always returns the
  * authoritative current state) — apply it either way, so a rejected
  * optimistic edit snaps back to server truth rather than lingering.
- * @returns {{wasPending:boolean, ok:boolean, reason?:string, detail?:string, warning?:string}}
+ *
+ * `pending` is the original efsp-mutation message this ack answers, handed
+ * back rather than just dropped. An ack says only "no, STALE_REV" — which
+ * Strip and which typed value it refused live in the request, and nowhere
+ * else (docs/ui-findings F-103/F-207: "a refusal does not say which Strip it
+ * was about"). The entry is still deleted here exactly as before; the caller
+ * gets the last look at it.
+ * @returns {{wasPending:boolean, pending:?object, ok:boolean, reason?:string, detail?:string, warning?:string}}
  */
 function applyEfspMutationAck(msg) {
-  const wasPending = efspPendingMutations.has(msg.clientMutationId);
+  const pending = efspPendingMutations.get(msg.clientMutationId) || null;
   efspPendingMutations.delete(msg.clientMutationId);
   if (msg.strip) efspStrips.set(msg.strip.stripId, msg.strip);
   if (msg.fdr) efspFdrs.set(msg.fdr.fdrId, msg.fdr);
   if (Number.isFinite(msg.boardSeq)) efspBoardSeq = msg.boardSeq;
-  return { wasPending, ok: !!msg.ok, reason: msg.reason, detail: msg.detail, warning: msg.warning };
+  return { wasPending: !!pending, pending, ok: !!msg.ok, reason: msg.reason, detail: msg.detail, warning: msg.warning };
 }
 
 /** Registers a just-sent efsp-mutation message as pending its ack. */

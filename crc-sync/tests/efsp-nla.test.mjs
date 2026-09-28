@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const { STATES, ARRIVAL_STATES, isValidState, isFlightPlanValid, isVoidExpired, computeNla } =
+const { STATES, ARRIVAL_STATES, isValidState, isFlightPlanValid, isVoidExpired, computeNla, missingForClearance } =
   await import('../src/efsp/nla.js');
 
 function makeFdr(overrides = {}) {
@@ -80,12 +80,28 @@ test('PROPOSED with a null fdr (defensive) is inhibited on the beacon check, bef
 
 // ── PENDING_CLEARANCE -> CLEARED ─────────────────────────────────────────
 
-test('PENDING_CLEARANCE is inhibited when required filed fields are missing', () => {
-  for (const missing of ['route', 'requestedAltitude', 'departureAirport', 'destinationAirport']) {
+// The reason NAMES the Blocks now (F-104) — it used to be the bare string
+// 'flight plan invalid', which left a controller to guess among 28 chips.
+test('PENDING_CLEARANCE is inhibited when required filed fields are missing, naming the Block', () => {
+  const labelFor = { requestedAltitude: 'ALT', departureAirport: 'DEP', destinationAirport: 'DEST', route: 'RTE' };
+  for (const [missing, label] of Object.entries(labelFor)) {
     const fdr = makeFdr({ filed: { [missing]: '' } });
     const result = computeNla(makeStrip('PENDING_CLEARANCE'), fdr);
-    assert.deepEqual(result, { inhibited: 'flight plan invalid' }, missing);
+    assert.deepEqual(result, { inhibited: `flight plan incomplete \u2014 ${label} not filed` }, missing);
   }
+});
+
+test('an empty flight plan names all four Blocks, in Block order', () => {
+  const fdr = makeFdr({ filed: { route: '', requestedAltitude: '', departureAirport: '', destinationAirport: '' } });
+  assert.deepEqual(
+    computeNla(makeStrip('PENDING_CLEARANCE'), fdr),
+    { inhibited: 'flight plan incomplete \u2014 ALT, DEP, DEST, RTE not filed' },
+  );
+});
+
+test('missingForClearance treats a missing FDR as nothing filed at all', () => {
+  assert.deepEqual(missingForClearance(null), ['ALT', 'DEP', 'DEST', 'RTE']);
+  assert.deepEqual(missingForClearance(makeFdr()), []);
 });
 
 test('PENDING_CLEARANCE with a complete flight plan advances to CLEARED', () => {

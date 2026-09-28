@@ -7,9 +7,50 @@
 //
 // Guide §7.2 rule 5: "Insertion index MUST be computed from rects cached
 // at pointerdown, never from getBoundingClientRect() per move" — the DOM
-// wiring (efsp-panel.js) caches an array of {stripId, top, height} once at
-// pointerdown and calls computeInsertionIndex() against that same cached
-// array on every pointermove, never re-measuring layout mid-drag.
+// wiring (bay-view.js) caches an array of {stripId, top, height} ONCE and
+// calls computeInsertionIndex() against that same cached array on every
+// pointermove, never re-measuring layout mid-drag.
+//
+// Two things went wrong under that rule, and neither is the rule's fault
+// (lane 4's F-402 and F-404 — one mechanism, two causes):
+//
+//  1. The cache was taken at pointerdown, which is one layout change too
+//     early: .efsp-strip-dragging is `position: fixed`, so the moment the
+//     drag actually starts the dragged Strip leaves the flow and every
+//     Strip BELOW it moves up by one Strip height. Fixed by re-caching
+//     once, after the class is applied — still one measurement per drag,
+//     still no per-move getBoundingClientRect() over the Rack.
+//  2. The Bay scrolls under the cache — by the wheel, or by Chromium's own
+//     autoscroll while the button is held at the container's edge, which
+//     happens whether or not the app knows about it. No amount of
+//     re-caching at drag-start survives that, so the pointer is instead
+//     mapped INTO the cache's coordinate space on each query, by the one
+//     number that changed: the scroll container's scrollTop. That is an
+//     O(1) property read, not a re-measurement of the Rack.
+//
+// scrollCompensatedY/cachedTopToViewportY below are that mapping, kept
+// here (pure, unit-tested) rather than inline in the DOM wiring for the
+// same reason computeInsertionIndex is.
+
+/**
+ * A viewport Y, expressed in the coordinate space `rects` were cached in.
+ *
+ * Scrolling a container down by Δ moves everything inside it up by Δ, so a
+ * cached top is Δ too large. Rather than rewriting every cached rect on
+ * every scroll, move the single pointer coordinate the other way.
+ *
+ * @param {number} viewportY — a live pointer clientY
+ * @param {number} scrollTopAtCache — the container's scrollTop when the rects were measured
+ * @param {number} scrollTopNow — its scrollTop now
+ */
+function scrollCompensatedY(viewportY, scrollTopAtCache, scrollTopNow) {
+  return viewportY + (scrollTopNow - scrollTopAtCache);
+}
+
+/** The inverse — a cached top back in live viewport coordinates, for drawing the insertion line where the Strips actually are now rather than where they were when measured. */
+function cachedTopToViewportY(cachedY, scrollTopAtCache, scrollTopNow) {
+  return cachedY - (scrollTopNow - scrollTopAtCache);
+}
 
 /**
  * @param {{stripId:string, top:number, height:number}[]} rects — Strip
@@ -91,5 +132,8 @@ function computeRackReconciliation(existingIds, wantedIds, dirtyIds, protectedId
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { computeInsertionIndex, computeRackReconciliation, DRAG_THRESHOLD_PX, hasExceededDragThreshold };
+  module.exports = {
+    computeInsertionIndex, computeRackReconciliation, DRAG_THRESHOLD_PX, hasExceededDragThreshold,
+    scrollCompensatedY, cachedTopToViewportY,
+  };
 }

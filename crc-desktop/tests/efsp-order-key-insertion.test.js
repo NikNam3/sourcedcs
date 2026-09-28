@@ -6,7 +6,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { computeInsertionIndex, computeRackReconciliation, DRAG_THRESHOLD_PX, hasExceededDragThreshold } = require('../app/public/js/panels/efsp/strip-drag.js');
+const {
+  computeInsertionIndex, computeRackReconciliation, DRAG_THRESHOLD_PX, hasExceededDragThreshold,
+  scrollCompensatedY, cachedTopToViewportY,
+} = require('../app/public/js/panels/efsp/strip-drag.js');
 
 function rect(stripId, top, height = 40) { return { stripId, top, height }; }
 
@@ -120,4 +123,67 @@ test('diagonal movement is measured as total distance (hypotenuse), not per-axis
 test('negative deltas (movement up/left) are treated the same as positive ones', () => {
   assert.equal(hasExceededDragThreshold(-(DRAG_THRESHOLD_PX + 1), 0), true);
   assert.equal(hasExceededDragThreshold(0, -(DRAG_THRESHOLD_PX + 1)), true);
+});
+
+// ── scroll compensation — F-402 and F-404's shared mechanism ─────────────
+// The cache of Strip rects is taken once (guide §7.2 rule 5) and the Rack
+// then moves under it, so the pointer is mapped into the cache's coordinate
+// space rather than the rects being re-measured. These are the two halves of
+// that mapping: the query direction and the draw-the-line direction.
+
+test('with no scrolling at all, the pointer Y is untouched', () => {
+  assert.equal(scrollCompensatedY(300, 0, 0), 300);
+  assert.equal(scrollCompensatedY(300, 545, 545), 300);
+  assert.equal(cachedTopToViewportY(288, 120, 120), 288);
+});
+
+test('scrolling the Bay DOWN moves the pointer down in the cache\'s space by the same amount', () => {
+  // The rects were measured at scrollTop 0; the Bay is now 600px further down,
+  // so everything cached sits 600px higher than where it was measured. A
+  // pointer at y=400 is over whatever was cached at y=1000.
+  assert.equal(scrollCompensatedY(400, 0, 600), 1000);
+});
+
+test('scrolling the Bay UP moves it the other way', () => {
+  assert.equal(scrollCompensatedY(400, 600, 0), -200);
+});
+
+test('the two directions are exact inverses', () => {
+  const [atCache, now] = [120, 665];
+  assert.equal(cachedTopToViewportY(scrollCompensatedY(430, atCache, now), atCache, now), 430);
+  assert.equal(scrollCompensatedY(cachedTopToViewportY(430, atCache, now), atCache, now), 430);
+});
+
+test('F-404: a Strip dropped after a 600px scroll lands at the gap under the pointer, not where that gap used to be', () => {
+  // Ten 140px Strips cached at scrollTop 0 with the dragged one out of the
+  // flow; the Bay is wheeled down 600px mid-drag and released in the visible
+  // gap between the Strips cached at 1260 and 1400 (i.e. at viewport y=1260-600).
+  const rects = Array.from({ length: 9 }, (_, i) => ({ stripId: `c${i + 1}`, top: 280 + i * 140, height: 140 }));
+  const pointerY = 1260 - 600;
+  // Uncompensated, the drop lands near the top of the Rack — the measured bug.
+  assert.deepEqual(computeInsertionIndex(rects, pointerY), { index: 3, afterStripId: 'c3', beforeStripId: 'c4' });
+  // Compensated, it lands in the gap the controller was actually looking at.
+  assert.deepEqual(computeInsertionIndex(rects, scrollCompensatedY(pointerY, 0, 600)),
+    { index: 7, afterStripId: 'c7', beforeStripId: 'c8' });
+});
+
+test('F-402: rects measured AFTER the dragged Strip leaves the flow put it in the gap the insertion line is drawn in', () => {
+  // The four-Strip case from the finding, 140px Strips. Cached at pointerdown
+  // (A1 still in the flow) the answers are wrong by exactly one slot; cached
+  // once A1 is `position: fixed` and the Rack has closed up, they are right.
+  const pointerY = 572; // the midpoint of the VISIBLE A3|A4 gap, mid-drag
+  const staleCache = [{ stripId: 'A2', top: 430, height: 140 }, { stripId: 'A3', top: 572, height: 140 }, { stripId: 'A4', top: 714, height: 140 }];
+  assert.deepEqual(computeInsertionIndex(staleCache, pointerY), { index: 1, afterStripId: 'A2', beforeStripId: 'A3' });
+  const freshCache = [{ stripId: 'A2', top: 288, height: 140 }, { stripId: 'A3', top: 430, height: 140 }, { stripId: 'A4', top: 572, height: 140 }];
+  assert.deepEqual(computeInsertionIndex(freshCache, pointerY), { index: 2, afterStripId: 'A3', beforeStripId: 'A4' });
+});
+
+test('F-402: dragging UPWARD past Strips above the dragged one is unaffected by the re-cache', () => {
+  // A4 dragged up into the A1|A2 gap. Nothing ABOVE the dragged Strip moves
+  // when it leaves the flow, so the pointerdown cache and the post-class cache
+  // are the same array here — which is why the upward case was never wrong,
+  // and why re-caching must not change its answer either.
+  const pointerY = 430; // the midpoint of the A1|A2 gap, unmoved by A4 leaving the flow
+  const above = [{ stripId: 'A1', top: 288, height: 140 }, { stripId: 'A2', top: 430, height: 140 }, { stripId: 'A3', top: 572, height: 140 }];
+  assert.deepEqual(computeInsertionIndex(above, pointerY), { index: 1, afterStripId: 'A1', beforeStripId: 'A2' });
 });

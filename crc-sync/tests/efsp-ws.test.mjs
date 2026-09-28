@@ -445,3 +445,85 @@ test('efsp-resync has no correlation branch — a reconnecting client gets the s
   assert.equal(delta.type, 'efsp-board-delta');
   assert.equal(delta.correlations, undefined);
 });
+
+// ── F-103, the three op families the panel cannot attribute for itself ─────
+//
+// A refused Strip op is attributable client-side by recovering its pending
+// Mutation. Correlation, MARSA and airspace ops are not registered as pending,
+// so the only subject a refusal can have is what the ack carries back — and
+// every rejection raised BEFORE a store was consulted carried no record at
+// all. Each ack now echoes the id the client sent, refusals included.
+
+test('an efsp-mutation-ack echoes the stripId it was about, even when it is refused before the Board is touched', () => {
+  const ctx = makeCtx();
+  holding(ctx, SESSION, ['OPS']);
+  const strip = handleMessage(ctx, SESSION, createStripMsg(), noopPersist).ack.strip;
+  // A session holding nothing — refused at the wire boundary, so no Strip
+  // record comes back with it.
+  const refused = handleMessage(ctx, { controllerId: 'nobody', who: 'Nobody' }, {
+    version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(),
+    actingPositionId: 'OPS', stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'InvokeNla' },
+  }, noopPersist);
+  assert.equal(refused.ack.ok, false);
+  assert.equal(refused.ack.reason, 'NOT_HOLDING_POSITION');
+  assert.equal(refused.ack.strip, undefined, 'no Strip record — which is the whole problem');
+  assert.equal(refused.ack.stripId, strip.stripId);
+});
+
+test('an efsp-correlation-ack echoes the fdrId on every refusal path', () => {
+  const ctx = makeCtx();
+  const notPrimary = handleMessage(ctx, { controllerId: 'nobody', who: 'Nobody' }, {
+    version: 1, type: 'efsp-correlation-mutation', clientMutationId: crypto.randomUUID(),
+    actingPositionId: 'APP', fdrId: 'fdr-abc', baseRev: 0, op: { kind: 'BindTrack', trackId: 't-1' },
+  }, noopPersist);
+  assert.equal(notPrimary.ack.reason, 'NOT_HOLDING_POSITION');
+  assert.equal(notPrimary.ack.fdrId, 'fdr-abc');
+
+  // And on the store's own refusal, where the record it would have carried
+  // does not exist either.
+  holding(ctx, SESSION, ['APP']);
+  const unknownFdr = handleMessage(ctx, SESSION, {
+    version: 1, type: 'efsp-correlation-mutation', clientMutationId: crypto.randomUUID(),
+    actingPositionId: 'APP', fdrId: 'fdr-def', baseRev: 0, op: { kind: 'BindTrack', trackId: 't-1' },
+  }, noopPersist);
+  assert.equal(unknownFdr.ack.ok, false);
+  assert.equal(unknownFdr.ack.fdrId, 'fdr-def');
+});
+
+test('an efsp-marsa-ack echoes the marsaId and the flights the op names', () => {
+  const ctx = makeCtx(); // no marsaStore wired — the earliest refusal there is
+  const declare = handleMessage(ctx, SESSION, {
+    version: 1, type: 'efsp-marsa-mutation', clientMutationId: crypto.randomUUID(),
+    actingPositionId: 'APP',
+    op: { kind: 'DeclareMarsa', participants: ['fdr-tanker', 'fdr-receiver'], declaringCallsign: 'SHELL71' },
+  }, noopPersist);
+  assert.equal(declare.ack.ok, false);
+  assert.equal(declare.ack.marsa, undefined);
+  assert.deepEqual(declare.ack.fdrIds, ['fdr-tanker', 'fdr-receiver']);
+
+  const remove = handleMessage(ctx, SESSION, {
+    version: 1, type: 'efsp-marsa-mutation', clientMutationId: crypto.randomUUID(),
+    actingPositionId: 'APP', marsaId: 'marsa-77', baseRev: 3,
+    op: { kind: 'RemoveParticipant', fdrId: 'fdr-receiver' },
+  }, noopPersist);
+  assert.equal(remove.ack.marsaId, 'marsa-77');
+  assert.deepEqual(remove.ack.fdrIds, ['fdr-receiver']);
+});
+
+test('an efsp-airspace-ack echoes the airspaceId on refusal', () => {
+  const ctx = makeCtx(); // no airspaceStore wired
+  const refused = handleMessage(ctx, SESSION, {
+    version: 1, type: 'efsp-airspace-mutation', clientMutationId: crypto.randomUUID(),
+    actingPositionId: 'APP', airspaceId: 'MOA-EAST', baseRev: 0, op: { kind: 'ApproveActivation' },
+  }, noopPersist);
+  assert.equal(refused.ack.ok, false);
+  assert.equal(refused.ack.airspace, undefined);
+  assert.equal(refused.ack.airspaceId, 'MOA-EAST');
+});
+
+test('an efsp-positions-ack names the Facility it refused, not just that one was unknown', () => {
+  const ctx = makeCtx();
+  const refused = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', facilityId: 'ATLANTIS', held: ['OPS'] }, noopPersist);
+  assert.equal(refused.ack.reason, 'VALIDATION_ERROR');
+  assert.equal(refused.ack.facilityId, 'ATLANTIS');
+});

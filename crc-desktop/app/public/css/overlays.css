@@ -44,11 +44,22 @@
       transition: opacity 0.3s;
     }
     #disc-overlay.visible { opacity: 1; }
+    /* Contrast (lane 1's F-106). This was #6a3a3a, which against its own
+       rgba(13,13,13,.9) box composited on black — the kindest assumption,
+       since what is behind the box is an rgba(0,0,0,.5) scrim over a dark UI
+       — is 2.13:1. It is 13px body text, so the WCAG 4.5:1 floor applies, and
+       it is shown exactly when something has gone wrong. #d96a6a is 5.80:1.
+
+       Deliberately NOT one of base.css's --ui-text-* tokens: that set is the
+       interface's single green/neutral ramp, and the alarm hue is the signal
+       here — a green "GRD DISCONNECTED" would clear the floor and say the
+       wrong thing. The border is lifted with it (#3a1a1a was invisible
+       against the box) so the message still reads as a framed banner. */
     #disc-msg {
-      color: #6a3a3a;
+      color: #d96a6a;
       font-size: 13px;
       letter-spacing: 0.15em;
-      border: 1px solid #3a1a1a;
+      border: 1px solid #6a3a3a;
       padding: 10px 24px;
       background: rgba(13,13,13,0.9);
     }
@@ -72,11 +83,15 @@
       transition: opacity 0.3s;
     }
     #no-awacs-overlay.visible { opacity: 1; }
+    /* Same F-106 correction as #disc-msg above, same reasoning about the
+       tokens: #4a6a9a was 3.56:1 against its own box composited on black,
+       #6a9ad8 is 6.74:1. The hue is unchanged (214°) — this stays the blue
+       "no picture" state and never reads as the red alarm above it. */
     #no-awacs-msg {
-      color: #4a6a9a;
+      color: #6a9ad8;
       font-size: 13px;
       letter-spacing: 0.15em;
-      border: 1px solid #1a2a4a;
+      border: 1px solid #2f4a78;
       padding: 10px 24px;
       background: rgba(13,13,13,0.9);
     }

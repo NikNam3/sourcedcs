@@ -750,6 +750,15 @@ class BoardStore {
       return { ok: false, reason: 'PERMISSION_DENIED', detail: `${strip.state} is not ${strip.ownerPositionId}'s to advance` };
     }
 
+    // ...and, for the same reason, a declined replica stays inert on this
+    // path too (F-303): the drag IS the other way to make this transition, so
+    // gating only the NLA button would leave it reachable by dropping the
+    // replica into a state-implying Bay. Non-state-implying Bays returned
+    // above, so tidying a dead replica off to one side is unaffected, and no
+    // Bay implies DROPPED, so the Drop exception cannot arise here.
+    const inert = this._rejectedReplicaRefusal(strip, impliedState);
+    if (inert) return { ok: false, reason: inert.reason, detail: inert.detail };
+
     const fdr = this._fdrStore.getFdr(strip.fdrId);
     const nla = this._rules.computeNla ? this._rules.computeNla(strip, fdr, Date.now(), this._nlaCtx()) : null;
     if (!nla || nla.inhibited) {
@@ -786,6 +795,20 @@ class BoardStore {
     strip.updatedBy = by || null;
     this._touch(strip.stripId);
     return { ok: true, strip };
+  }
+
+  /**
+   * The FDRs a MARSA side effect just rewrote the separation regime on (ending
+   * or voiding a relation writes ATC back on every participant). A relation is
+   * not a Strip and its participants' Strips may sit in another Facility, so
+   * those FDR writes reach nobody unless they are collected here and put in the
+   * board-delta's own `fdrs.updated` — the same gap F-111 found on the declare
+   * side, arriving from the Strip-op direction. See marsa-store.js's
+   * drainRegimeWrites().
+   */
+  _drainMarsaRegimeWrites() {
+    const fdrs = this._rules.drainMarsaRegimeWrites ? this._rules.drainMarsaRegimeWrites() : [];
+    return fdrs && fdrs.length ? fdrs : undefined;
   }
 
   /**
@@ -879,9 +902,10 @@ class BoardStore {
       strip.updatedAt = Date.now();
       strip.updatedBy = by || null;
       this._touch(strip.stripId);
+      const marsaVoided = this._marsaVoidFor(strip, op, by, actingPositionId, clientMutationId);
       return {
         ok: true, strip, fdr: fdrResult.fdr, warning: fdrResult.warning,
-        marsaVoided: this._marsaVoidFor(strip, op, by, actingPositionId, clientMutationId),
+        marsaVoided, fdrs: marsaVoided ? this._drainMarsaRegimeWrites() : undefined,
       };
     }
 
@@ -892,7 +916,10 @@ class BoardStore {
     // because which routing a Block uses is a Block Map decision that can
     // change, and an interlock that silently stops covering a Block when its
     // target kind changes is the failure mode docs/adr/0041 is about.
-    if (result.ok) result.marsaVoided = this._marsaVoidFor(strip, op, by, actingPositionId, clientMutationId);
+    if (result.ok) {
+      result.marsaVoided = this._marsaVoidFor(strip, op, by, actingPositionId, clientMutationId);
+      if (result.marsaVoided) result.fdrs = this._drainMarsaRegimeWrites();
+    }
     return result;
   }
 
@@ -1001,11 +1028,54 @@ class BoardStore {
     return { ok: true, strip };
   }
 
+  /**
+   * The key that puts a Strip at the END of a Rack, the way _applyCreateStrip
+   * places a new one. keyBetween(null, null) is NOT this — it returns the
+   * seed key, which lands mid-Rack once anything else is in there.
+   */
+  _appendOrderKey(bayId, rackId, excludeStripId) {
+    const rackStrips = this.getRack(bayId, rackId).filter(s => s.stripId !== excludeStripId);
+    const last = rackStrips.length ? rackStrips[rackStrips.length - 1].stripId : null;
+    return this._resolveOrderKey(bayId, rackId, last, null, excludeStripId);
+  }
+
+  /**
+   * Moves a Strip into its owner's Bay for a state it has just reached, when
+   * that Position has one configured (guide §2, "Bay membership expresses
+   * operational state"; §3.5 rule 4).
+   *
+   * A state-only transition used to change `state` and nothing else, so Mark
+   * Cleared left the Strip in `cd-pending-clearance` reading CLEARED while
+   * `cd-cleared` stayed empty, and the same at GND (`gnd-taxi-out`) and TWR
+   * (`twr-airborne`) — the Bay name and the Strip contradicting each other
+   * (docs/ui-findings/lane1.md F-102). The config already asserts the
+   * equivalence in the other direction: dragging INTO one of these Bays
+   * changes the state (_validateBayImpliedTransition), so the Bay means the
+   * state whichever way the Strip got there.
+   *
+   * Nothing happens when this owner has no Bay for the state — LUAW is the
+   * live example, and TWR's Strip correctly stays in `twr-runway-queue`.
+   * `bayForImpliedState` FALLS BACK to the Position's first Bay when nothing
+   * matches (facility-config.js), which is what a transfer wants and is
+   * exactly wrong here: it would file a Strip reaching LUAW back under
+   * `twr-runway-queue`'s own implied RUNWAY_QUEUE. Hence the explicit
+   * `impliesState` re-check rather than trusting the lookup.
+   */
+  _relocateForImpliedState(strip, toState) {
+    if (!this._rules.bayForImpliedState) return;
+    const bay = this._rules.bayForImpliedState(strip.ownerPositionId, toState);
+    if (!bay || bay.impliesState !== toState || bay.bayId === strip.bayId) return;
+    strip.bayId = bay.bayId;
+    strip.rackId = bay.rackIds[0];
+    strip.orderKey = this._appendOrderKey(bay.bayId, bay.rackIds[0], strip.stripId);
+  }
+
   _applySetState(strip, toState, by) {
     if (this._rules.isValidState && !this._rules.isValidState(toState, strip.role)) {
       return { ok: false, reason: 'VALIDATION_ERROR', strip };
     }
     strip.state = toState;
+    this._relocateForImpliedState(strip, toState);
     strip.rev += 1;
     strip.updatedAt = Date.now();
     strip.updatedBy = by || null;
@@ -1013,17 +1083,38 @@ class BoardStore {
     return { ok: true, strip };
   }
 
-  _applyInvokeNla(strip, by) {
-    const now = Date.now();
-    const lastInvoke = this._nlaHistory.get(strip.stripId);
-    if (lastInvoke && now - lastInvoke.invokedAt < 400) {
-      // Idempotent double-tap guard (§3.5 rule 3): a second press within
-      // 400ms is discarded, not queued — the first tap already applied,
-      // so from the controller's perspective this is a no-op success, not
-      // an error and not a second transition.
-      return { ok: true, strip };
-    }
+  /**
+   * True when this Strip is a coordination replica the receiving Facility
+   * already DECLINED (docs/ui-findings/lane3.md F-303).
+   *
+   * The distinction matters because BOTH sides' records read REJECTED once
+   * the response is mirrored back (receiveCoordinationResponse) — and the
+   * sender's Strip is a real flight the sender must carry on working.
+   *
+   * `mintedForCoordination` is stamped by receiveCoordinationProposal and is
+   * the authoritative answer, for exactly the reason TOFI's own
+   * `mintedForTofi` exists (see _applyTofiAccept): the alternative — deriving
+   * it from the Strip still sitting in its owner's Coordination Bay, as
+   * _applyCoordinationPropose does — gives the same answer right up until
+   * somebody drags the replica somewhere else, and then silently stops
+   * applying. The Bay derivation is kept as the fallback so a replica minted
+   * before this field existed, and restored from a persisted Board
+   * (docs/adr/0002), is still recognized.
+   */
+  _isRejectedReplica(strip) {
+    if (!strip.coordination || strip.coordination.state !== 'REJECTED') return false;
+    if (strip.coordination.mintedForCoordination) return true;
+    const ownCoordinationBay = this._rules.coordinationBayFor ? this._rules.coordinationBayFor(strip.ownerPositionId) : null;
+    return !!ownCoordinationBay && strip.bayId === ownCoordinationBay.bayId;
+  }
 
+  /**
+   * Everything that refuses an NLA BEFORE the state table is consulted —
+   * shared by _applyInvokeNla (which decides) and nlaStatusFor (which only
+   * reports), so there is exactly one wording per reason.
+   * @returns {{reason:string, detail:string}|null}
+   */
+  _nlaPrecheck(strip) {
     // Per-State authority (guide §3.4's "normally owned by" column,
     // permission.js's canActOnState) — the acting Position (==
     // strip.ownerPositionId; _dispatch() already verified that above)
@@ -1034,7 +1125,7 @@ class BoardStore {
     // to invoke ANY NLA on a Strip you held, regardless of whose job that
     // state's action actually is.
     if (this._rules.canActOnState && !this._rules.canActOnState(strip.ownerPositionId, strip.role, strip.state)) {
-      return { ok: false, reason: 'PERMISSION_DENIED', detail: `${strip.state} is not ${strip.ownerPositionId}'s to advance`, strip };
+      return { reason: 'PERMISSION_DENIED', detail: `${strip.state} is not ${strip.ownerPositionId}'s to advance` };
     }
 
     // Bug found in live testing (docs/adr/0022's HANDOFF/HANDED_OFF case):
@@ -1048,21 +1139,111 @@ class BoardStore {
     // "a Strip cannot have two open coordination links at once" guard in
     // _applyCoordinationPropose — same open-link concept, different action.
     if (strip.coordination && strip.coordination.state === 'PROPOSED') {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'cannot advance a Strip with an open coordination proposal — accept, reject, or wait for a response first', strip };
+      return { reason: 'VALIDATION_ERROR', detail: 'cannot advance a Strip with an open coordination proposal — accept, reject, or wait for a response first' };
     }
     // Same open-link guard, extended to TOFI's own coordination record
     // (WP4A second slice) — a Strip with an open (unresolved) TOFI
     // proposal shouldn't silently advance its own lifecycle out from under
     // the pending exchange.
     if (strip.tofiCoordination && strip.tofiCoordination.state === 'PROPOSED') {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'cannot advance a Strip with an open TOFI proposal — accept, reject, or wait for a response first', strip };
+      return { reason: 'VALIDATION_ERROR', detail: 'cannot advance a Strip with an open TOFI proposal — accept, reject, or wait for a response first' };
     }
+    return null;
+  }
+
+  /**
+   * F-303: a declined replica is "left inert" — _applyCoordinationPropose's
+   * own comment has said so since WP4A, and nothing anywhere enforced it
+   * beyond stopping a re-propose. So APP could reject a Point Out from CTR and
+   * then hand that same flight to its own Tower, and the server took it:
+   * INCIRLIK Tower holding an arrival for a flight CENTER still owns and APP
+   * explicitly declined. The sender's own Strip is untouched — see
+   * _isRejectedReplica for how the two are told apart.
+   *
+   * Drop is the deliberate exception, and the only NLA a dead replica should
+   * have left: it is how the controller clears it off their Board, and a
+   * rejected HANDED_OFF replica having no way to be Dropped at all was itself
+   * a bug found in live testing (see efsp-board-store-coordination's own
+   * "CTR can Drop a HANDED_OFF DEPARTURE Strip it owns" test).
+   *
+   * @returns {{reason:string, detail:string}|null}
+   */
+  _rejectedReplicaRefusal(strip, toState) {
+    if (toState === 'DROPPED' || !this._isRejectedReplica(strip)) return null;
+    return {
+      reason: 'VALIDATION_ERROR',
+      detail: `this ${strip.coordination.primitive} was rejected — the replica is inert, and ${strip.coordination.peerPositionId} still works the flight`,
+    };
+  }
+
+  /**
+   * What pressing this Strip's NLA button would do RIGHT NOW, computed for
+   * its owner — who is the only Position ever offered it (guide §3.5's one
+   * NLA per State, _dispatch's NOT_OWNER gate).
+   *
+   * Advisory only: _applyInvokeNla still decides, and still refuses. This
+   * exists because §3.5 rule 2 requires the inhibit REASON to be rendered
+   * rather than the control merely greyed out, and until now every reason was
+   * computed on the press and never reached the client at all — an NLA the
+   * server would refuse looked exactly like one it would accept
+   * (docs/ui-findings/lane4.md F-408). efsp-ws.js stamps the result onto every
+   * Strip record it puts on the wire, beside `facilityId`.
+   *
+   * @returns {{toState:string, transferTo?:string}
+   *          |{inhibited:string, reason:'NLA_INHIBITED'|'PERMISSION_DENIED'|'VALIDATION_ERROR'}
+   *          |null} null means no NLA is defined for this State at all.
+   */
+  nlaStatusFor(strip, now = Date.now()) {
+    if (!strip || !this._rules.computeNla) return null;
+    const fdr = this._fdrStore.getFdr(strip.fdrId);
+    const result = this._rules.computeNla(strip, fdr, now, this._nlaCtx());
+    // No NLA at all for this State (every Role's terminal DROPPED) — null, not
+    // a reason. _applyInvokeNla runs the precheck FIRST and so answers a press
+    // on a terminal Strip with whichever precheck refusal comes up; that is
+    // right for a press, and wrong here, where reporting a reason would have
+    // the panel render an explanation for a button that does not exist.
+    if (!result) return null;
+
+    const blocked = this._nlaPrecheck(strip);
+    if (blocked) return { inhibited: blocked.detail, reason: blocked.reason };
+    if (result.inhibited) return { inhibited: result.inhibited, reason: 'NLA_INHIBITED' };
+
+    const inert = this._rejectedReplicaRefusal(strip, result.toState);
+    if (inert) return { inhibited: inert.detail, reason: inert.reason };
+
+    // The two refusals that live inside the apply path rather than in the
+    // state table, reproduced here with their exact wordings so the advisory
+    // never disagrees with the press.
+    if (result.transferTo) {
+      const targetBay = this._rules.bayForImpliedState ? this._rules.bayForImpliedState(result.transferTo, result.toState) : null;
+      if (!targetBay) return { inhibited: `no Bay configured for ${result.transferTo}/${result.toState}`, reason: 'NLA_INHIBITED' };
+    } else if (result.toState === 'DROPPED' && strip.tofiCoordination && strip.tofiCoordination.state === 'ACTIVE') {
+      return { inhibited: 'cannot drop a Strip under active tactical control — complete a TOFI exit first', reason: 'VALIDATION_ERROR' };
+    }
+    return result.transferTo ? { toState: result.toState, transferTo: result.transferTo } : { toState: result.toState };
+  }
+
+  _applyInvokeNla(strip, by) {
+    const now = Date.now();
+    const lastInvoke = this._nlaHistory.get(strip.stripId);
+    if (lastInvoke && now - lastInvoke.invokedAt < 400) {
+      // Idempotent double-tap guard (§3.5 rule 3): a second press within
+      // 400ms is discarded, not queued — the first tap already applied,
+      // so from the controller's perspective this is a no-op success, not
+      // an error and not a second transition.
+      return { ok: true, strip };
+    }
+
+    const blocked = this._nlaPrecheck(strip);
+    if (blocked) return { ok: false, reason: blocked.reason, detail: blocked.detail, strip };
 
     const fdr = this._fdrStore.getFdr(strip.fdrId);
     const result = this._rules.computeNla(strip, fdr, now, this._nlaCtx());
     if (!result || result.inhibited) {
       return { ok: false, reason: 'NLA_INHIBITED', detail: result ? result.inhibited : 'no NLA for this state', strip };
     }
+    const inert = this._rejectedReplicaRefusal(strip, result.toState);
+    if (inert) return { ok: false, reason: inert.reason, detail: inert.detail, strip };
 
     const prevState = strip.state;
     let applied;
@@ -1177,7 +1358,11 @@ class BoardStore {
     // thing. A tanker landing mid-AR leaves the relation `ENDED` with
     // `endedBy: 'PARTICIPANT_RETIRED'`; nothing went wrong and no alert is due.
     const marsaChanged = this._releaseFdrIfLastStrip(strip, by);
-    return { ok: true, strip, marsaChanged: marsaChanged && marsaChanged.length ? marsaChanged : undefined };
+    return {
+      ok: true, strip,
+      marsaChanged: marsaChanged && marsaChanged.length ? marsaChanged : undefined,
+      fdrs: marsaChanged && marsaChanged.length ? this._drainMarsaRegimeWrites() : undefined,
+    };
   }
 
   /**
@@ -1520,6 +1705,12 @@ class BoardStore {
       coordination: {
         primitive,
         state: 'PROPOSED',
+        // This Strip exists only because of this exchange — it is the
+        // receiver's replica, not a flight record with a life of its own.
+        // Read by _isRejectedReplica to keep a declined replica inert
+        // wherever it ends up on the Board (F-303); TOFI's `mintedForTofi`
+        // is the same field for the same reason.
+        mintedForCoordination: true,
         peerFacilityId: fromFacilityId,
         peerStripId: fromStripId,
         peerPositionId: fromPositionId,
@@ -1753,6 +1944,14 @@ class BoardStore {
     // (a MOA can stay hot after one flight leaves it), so this is the §4.6
     // verbal-path soft-interlock shape, not rule 3's hard precondition.
     let warning;
+    // The FDR this accept writes, carried out on the result so the ack and the
+    // board-delta actually take it to every connected client. Without it the
+    // regime the MRU controller stated on the accept landed server-side and
+    // reached nobody until they next took a full snapshot — SEP REG read blank
+    // on BOTH pages for the whole of tactical control, which is precisely what
+    // docs/adr/0053 was written to stop (docs/ui-findings/lane3.md F-306,
+    // lane1.md F-111's class).
+    let writtenFdr;
     if (tofi.direction === 'EXIT') {
       const fdr = this._fdrStore.getFdr(strip.fdrId);
       if (!fdr || !fdr.tofi || fdr.tofi.separationRegime !== 'ATC') {
@@ -1800,6 +1999,7 @@ class BoardStore {
         }
         const wrote = this._fdrStore.setTofi(strip.fdrId, { separationRegime: op.separationRegime }, { by });
         if (!wrote.ok) return { ok: false, reason: wrote.reason, detail: wrote.detail, strip };
+        writtenFdr = wrote.fdr;
       }
     }
 
@@ -1848,7 +2048,7 @@ class BoardStore {
         if (peerResult.ok) peerStrip = peerResult.strip;
       }
     }
-    return { ok: true, strip, peerFacilityId: tofi.peerFacilityId, peerStrip, warning };
+    return { ok: true, strip, fdr: writtenFdr, peerFacilityId: tofi.peerFacilityId, peerStrip, warning };
   }
 
   /** Always invoked on the MISSION-side Strip, mirroring _applyTofiAccept's own side. */

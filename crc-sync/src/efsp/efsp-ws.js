@@ -41,6 +41,87 @@ const VERSION = 1;
 // snapshot instead of a delta. Two paths only, per guide §5.6.
 const RESYNC_RING_WINDOW = 900;
 
+/**
+ * Every Strip record leaving this module — snapshot, delta, ack — is stamped
+ * here rather than spread with `{ ...s, facilityId }` at each of the six places
+ * one goes out.
+ *
+ * `facilityId` (WP4A): without it a client's local Map (efsp-state.js, which
+ * just Map.set()s whatever record arrives) would end up with delta-derived
+ * Strips missing it entirely, breaking every Facility-scoped filter downstream.
+ *
+ * `nla`: what pressing this Strip's NLA button would do right now, and the
+ * reason it would be refused when it would be — see BoardStore.nlaStatusFor.
+ * Guide §3.5 rule 2 requires the reason to be RENDERED, not the control merely
+ * greyed out, and until now every reason was computed on the press and never
+ * left the server: an NLA the server would refuse looked exactly like one it
+ * would accept (docs/ui-findings/lane4.md F-408). Computed per Strip for its
+ * OWNER, which is the only Position the button is ever offered to (guide §3.5,
+ * board-store's NOT_OWNER gate) — Strips are not otherwise scoped per client,
+ * so there is nothing per-connection to compute here.
+ *
+ * Derived at the wire boundary, never stored on the Strip: it is a function of
+ * Position occupancy and the clock as much as of the Strip, so persisting it
+ * would make the Board snapshot carry a value that is wrong the moment anyone
+ * takes or gives up a Position.
+ *
+ * Every stamp is reported to `ctx.nlaStatusMonitor`, which sweeps for the
+ * status changes no message causes — a release time passing, an EDCT window
+ * closing. Telling it what went out here is what stops it re-sending a status
+ * a Mutation's own ack and broadcast have just carried; see
+ * nla-status-monitor.js.
+ */
+function _stampStrip(boardStore, strip, facilityId, ctx) {
+  const nla = boardStore ? boardStore.nlaStatusFor(strip) : null;
+  if (ctx && ctx.nlaStatusMonitor) ctx.nlaStatusMonitor.note(strip.stripId, nla);
+  return { ...strip, facilityId, nla };
+}
+
+/** The FDRs a Mutation changed — the one it addressed, plus any it wrote as a side effect — deduplicated by fdrId, most recent value winning. */
+function _mergeFdrs(primary, extra) {
+  const byId = new Map();
+  for (const fdr of [primary, ...(extra || [])]) if (fdr && fdr.fdrId) byId.set(fdr.fdrId, fdr);
+  return [...byId.values()];
+}
+
+/**
+ * The flights a MARSA op names in its own body — the participants of a
+ * declaration, or the one flight being added or removed. Echoed on the ack so a
+ * refusal can be attributed even when it never reached the store and so has no
+ * relation to carry back (see _subject below).
+ */
+function _marsaFdrIds(op) {
+  if (!op) return undefined;
+  if (Array.isArray(op.participants)) return op.participants.map(String).filter(Boolean);
+  if (op.fdrId) return [String(op.fdrId)];
+  return undefined;
+}
+
+/**
+ * WHAT an op was about, echoed from the INBOUND message onto every ack —
+ * success and refusal alike.
+ *
+ * F-103's defect ("a refusal does not say which Strip it was about") survived
+ * on the correlation, MARSA and airspace paths. The panel attributes a refused
+ * Strip op by recovering its pending Mutation, but those three op families are
+ * not registered as pending client-side, so the only subject a refusal can have
+ * is whatever the ack carries — and a rejection raised BEFORE the store was
+ * consulted (NOT_HOLDING_POSITION, PERMISSION_DENIED, a missing store) carries
+ * no record at all. So the reason landed on screen attached to nothing.
+ *
+ * Echoed rather than looked up, deliberately: a refusal that never reached a
+ * store has nothing to look up, and the id the client needs is the id it sent.
+ */
+function _subject(msg) {
+  switch (msg.type) {
+    case 'efsp-mutation':             return { stripId: msg.stripId };
+    case 'efsp-airspace-mutation':    return { airspaceId: msg.airspaceId };
+    case 'efsp-correlation-mutation': return { fdrId: msg.fdrId };
+    case 'efsp-marsa-mutation':       return { marsaId: msg.marsaId, fdrIds: _marsaFdrIds(msg.op) };
+    default:                          return {};
+  }
+}
+
 function handleMessage(ctx, session, msg, persist) {
   switch (msg.type) {
     case 'efsp-mutation':      return _handleMutation(ctx, session, msg, persist);
@@ -57,7 +138,7 @@ function _handleMutation(ctx, session, msg, persist) {
   const facilityId = msg.facilityId || ctx.facilityConfig.DEFAULT_FACILITY_ID;
   const boardStore = ctx.boardStoreFor(facilityId);
   if (!boardStore) {
-    return { ack: { version: VERSION, type: 'efsp-mutation-ack', clientMutationId: msg.clientMutationId, ok: false, reason: 'VALIDATION_ERROR', detail: `unknown facilityId: ${msg.facilityId}` } };
+    return { ack: { version: VERSION, type: 'efsp-mutation-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'VALIDATION_ERROR', detail: `unknown facilityId: ${msg.facilityId}` } };
   }
   // `actingPositionId` arrives as an untrusted client claim, and every
   // per-Position authority rule downstream (permission.js's canMutate,
@@ -73,7 +154,7 @@ function _handleMutation(ctx, session, msg, persist) {
   // makes you an Observer (§4.8.2 rule 3, D18), and an Observer watches.
   const positionStore = ctx.positionStoreFor(facilityId);
   if (!positionStore || positionStore.primaryOf(msg.actingPositionId) !== session.controllerId) {
-    return { ack: { version: VERSION, type: 'efsp-mutation-ack', clientMutationId: msg.clientMutationId, facilityId, ok: false, reason: 'NOT_HOLDING_POSITION', detail: `you are not Primary at ${msg.actingPositionId} — select it before acting on its Strips` } };
+    return { ack: { version: VERSION, type: 'efsp-mutation-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), facilityId, ok: false, reason: 'NOT_HOLDING_POSITION', detail: `you are not Primary at ${msg.actingPositionId} — select it before acting on its Strips` } };
   }
 
   const mutation = { clientMutationId: msg.clientMutationId, stripId: msg.stripId, baseRev: msg.baseRev, op: msg.op };
@@ -81,17 +162,24 @@ function _handleMutation(ctx, session, msg, persist) {
   const result = boardStore.applyMutation(mutation, msg.actingPositionId, session.controllerId);
   if (result.ok) persist();
 
-  // Every Strip record leaving this function — ack or broadcast — is
-  // stamped with facilityId, matching _snapshotMessage's per-record
-  // stamping below. Without this, a client's local Map (efsp-state.js,
-  // which just Map.set()s whatever record arrives) would end up with
-  // delta-derived Strips missing facilityId entirely, breaking any
-  // Facility-scoped filtering downstream — a real bug this WP4A slice
-  // would otherwise introduce, not a style choice.
-  const stampedStrip = result.strip ? { ...result.strip, facilityId } : result.strip;
+  // Every Strip record leaving this function — ack or broadcast — goes through
+  // the one stamping helper, which is where the reasons for what it adds live.
+  const stampedStrip = result.strip ? _stampStrip(boardStore, result.strip, facilityId, ctx) : result.strip;
+
+  // Every FDR this Mutation changed, not just the one it was addressed to. A
+  // Strip op can write an FDR as a SIDE EFFECT — accepting a TOFI ENTRY writes
+  // the separation regime the MRU controller stated (F-306), and a clearance
+  // that voids a MARSA relation, or a flight ending that retires it, writes the
+  // regime back to ATC on every participant (F-111's other direction). Those
+  // writes landed server-side and reached nobody: the ack carries one `fdr` and
+  // the delta carried only that one, so a connected client held the stale value
+  // until it next took a full snapshot. board-store.js collects them as
+  // `result.fdrs`.
+  const updatedFdrs = _mergeFdrs(result.fdr, result.fdrs);
 
   const ack = {
     version: VERSION, type: 'efsp-mutation-ack', clientMutationId: msg.clientMutationId,
+    ..._subject(msg),
     facilityId,
     boardSeq: boardStore.currentSeq, ok: result.ok,
     strip: stampedStrip, fdr: result.fdr, reason: result.reason, detail: result.detail,
@@ -106,7 +194,7 @@ function _handleMutation(ctx, session, msg, persist) {
       version: VERSION, type: 'efsp-board-delta', boardSeq: boardStore.currentSeq,
       facilityId,
       strips: { updated: dropped ? [] : [stampedStrip], gone: dropped ? [stampedStrip.stripId] : [] },
-      fdrs: { updated: result.fdr ? [result.fdr] : [] },
+      fdrs: { updated: updatedFdrs },
       positions: { updated: [] },
     },
   };
@@ -127,7 +215,7 @@ function _handleMutation(ctx, session, msg, persist) {
     out.peerBroadcast = {
       version: VERSION, type: 'efsp-board-delta', boardSeq: peerBoardStore ? peerBoardStore.currentSeq : undefined,
       facilityId: result.peerFacilityId,
-      strips: { updated: [{ ...result.peerStrip, facilityId: result.peerFacilityId }], gone: [] },
+      strips: { updated: [_stampStrip(peerBoardStore, result.peerStrip, result.peerFacilityId, ctx)], gone: [] },
       fdrs: { updated: [] }, // one shared FdrStore (docs/adr/0013) — already covered by the primary broadcast's fdrs.updated
       positions: { updated: [] },
     };
@@ -190,7 +278,7 @@ function _handleResync(ctx, msg) {
       ack: {
         version: VERSION, type: 'efsp-board-delta', boardSeq: boardStore.currentSeq, facilityId,
         strips: {
-          updated: delta.updated.filter(s => s.state !== 'DROPPED').map(s => ({ ...s, facilityId })),
+          updated: delta.updated.filter(s => s.state !== 'DROPPED').map(s => _stampStrip(boardStore, s, facilityId, ctx)),
           gone: delta.updated.filter(s => s.state === 'DROPPED').map(s => s.stripId),
         },
         // FDRs/Positions are cheap enough at this scale to always send in
@@ -220,7 +308,7 @@ function _handleResync(ctx, msg) {
 function _handleAirspaceMutation(ctx, session, msg, persist) {
   const airspaceStore = ctx.airspaceStore;
   if (!airspaceStore) {
-    return { ack: { version: VERSION, type: 'efsp-airspace-ack', clientMutationId: msg.clientMutationId, ok: false, reason: 'VALIDATION_ERROR', detail: 'no airspace store' } };
+    return { ack: { version: VERSION, type: 'efsp-airspace-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'VALIDATION_ERROR', detail: 'no airspace store' } };
   }
 
   // The same session binding _handleMutation carries (docs/adr/0029), for the
@@ -238,7 +326,7 @@ function _handleAirspaceMutation(ctx, session, msg, persist) {
     return positionStore && positionStore.primaryOf(msg.actingPositionId) === session.controllerId;
   });
   if (!isPrimarySomewhere) {
-    return { ack: { version: VERSION, type: 'efsp-airspace-ack', clientMutationId: msg.clientMutationId, ok: false, reason: 'NOT_HOLDING_POSITION', detail: `you are not Primary at ${msg.actingPositionId} — select it before acting on airspace` } };
+    return { ack: { version: VERSION, type: 'efsp-airspace-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'NOT_HOLDING_POSITION', detail: `you are not Primary at ${msg.actingPositionId} — select it before acting on airspace` } };
   }
 
   const result = airspaceStore.apply(
@@ -249,6 +337,7 @@ function _handleAirspaceMutation(ctx, session, msg, persist) {
 
   const ack = {
     version: VERSION, type: 'efsp-airspace-ack', clientMutationId: msg.clientMutationId,
+    ..._subject(msg),
     ok: result.ok, airspace: result.airspace, reason: result.reason, detail: result.detail,
     warning: result.warning, occupied: result.occupied,
     airspaceSeq: airspaceStore.currentSeq,
@@ -283,7 +372,7 @@ function _handleAirspaceMutation(ctx, session, msg, persist) {
 function _handleCorrelationMutation(ctx, session, msg, persist) {
   const correlationStore = ctx.correlationStore;
   if (!correlationStore) {
-    return { ack: { version: VERSION, type: 'efsp-correlation-ack', clientMutationId: msg.clientMutationId, ok: false, reason: 'VALIDATION_ERROR', detail: 'no correlation store' } };
+    return { ack: { version: VERSION, type: 'efsp-correlation-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'VALIDATION_ERROR', detail: 'no correlation store' } };
   }
 
   // The same session binding the other two dispatch paths carry
@@ -305,14 +394,14 @@ function _handleCorrelationMutation(ctx, session, msg, persist) {
     return positionStore && positionStore.primaryOf(msg.actingPositionId) === session.controllerId;
   });
   if (!isPrimarySomewhere) {
-    return { ack: { version: VERSION, type: 'efsp-correlation-ack', clientMutationId: msg.clientMutationId, ok: false, reason: 'NOT_HOLDING_POSITION', detail: `you are not Primary at ${msg.actingPositionId} — select it before binding a contact` } };
+    return { ack: { version: VERSION, type: 'efsp-correlation-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'NOT_HOLDING_POSITION', detail: `you are not Primary at ${msg.actingPositionId} — select it before binding a contact` } };
   }
 
   // Refused by class, not by table: a range Position is the using agency, has
   // no flights to identify (§4.1 rule 2) and, under docs/adr/0042, no scope on
   // which to have seen anything.
   if (!permission.canCorrelate(msg.actingPositionId)) {
-    return { ack: { version: VERSION, type: 'efsp-correlation-ack', clientMutationId: msg.clientMutationId, ok: false, reason: 'PERMISSION_DENIED', detail: `${msg.actingPositionId} works no flights, so it identifies no contacts` } };
+    return { ack: { version: VERSION, type: 'efsp-correlation-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'PERMISSION_DENIED', detail: `${msg.actingPositionId} works no flights, so it identifies no contacts` } };
   }
 
   const result = correlationStore.apply(
@@ -323,6 +412,7 @@ function _handleCorrelationMutation(ctx, session, msg, persist) {
 
   const ack = {
     version: VERSION, type: 'efsp-correlation-ack', clientMutationId: msg.clientMutationId,
+    ..._subject(msg),
     ok: result.ok, correlation: result.correlation, reason: result.reason, detail: result.detail,
     correlationSeq: correlationStore.currentSeq,
   };
@@ -351,7 +441,7 @@ function _handleCorrelationMutation(ctx, session, msg, persist) {
 function _handleMarsaMutation(ctx, session, msg, persist) {
   const marsaStore = ctx.marsaStore;
   if (!marsaStore) {
-    return { ack: { version: VERSION, type: 'efsp-marsa-ack', clientMutationId: msg.clientMutationId, ok: false, reason: 'VALIDATION_ERROR', detail: 'no MARSA store' } };
+    return { ack: { version: VERSION, type: 'efsp-marsa-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'VALIDATION_ERROR', detail: 'no MARSA store' } };
   }
 
   // The same session binding the other three dispatch paths carry
@@ -372,13 +462,13 @@ function _handleMarsaMutation(ctx, session, msg, persist) {
     return positionStore && positionStore.primaryOf(msg.actingPositionId) === session.controllerId;
   });
   if (!isPrimarySomewhere) {
-    return { ack: { version: VERSION, type: 'efsp-marsa-ack', clientMutationId: msg.clientMutationId, ok: false, reason: 'NOT_HOLDING_POSITION', detail: `you are not Primary at ${msg.actingPositionId} — select it before acting on a MARSA relation` } };
+    return { ack: { version: VERSION, type: 'efsp-marsa-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'NOT_HOLDING_POSITION', detail: `you are not Primary at ${msg.actingPositionId} — select it before acting on a MARSA relation` } };
   }
 
   // Refused by class, not by table — a range Position is the using agency and
   // works no Strips (§4.1 rule 2), so it has no flights to put into a relation.
   if (!permission.canDeclareMarsa(msg.actingPositionId)) {
-    return { ack: { version: VERSION, type: 'efsp-marsa-ack', clientMutationId: msg.clientMutationId, ok: false, reason: 'PERMISSION_DENIED', detail: `${msg.actingPositionId} works no flights, so it declares no MARSA` } };
+    return { ack: { version: VERSION, type: 'efsp-marsa-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'PERMISSION_DENIED', detail: `${msg.actingPositionId} works no flights, so it declares no MARSA` } };
   }
 
   const result = marsaStore.apply(
@@ -389,6 +479,7 @@ function _handleMarsaMutation(ctx, session, msg, persist) {
 
   const ack = {
     version: VERSION, type: 'efsp-marsa-ack', clientMutationId: msg.clientMutationId,
+    ..._subject(msg),
     ok: result.ok, marsa: result.relation, reason: result.reason, detail: result.detail,
     marsaSeq: marsaStore.currentSeq,
   };
@@ -400,7 +491,35 @@ function _handleMarsaMutation(ctx, session, msg, persist) {
   // Strips can sit in different Facilities in front of different controllers —
   // pre-filtering server-side would mean working out that set here, twice
   // (once for the relation, once for its replicas), to save nothing.
-  return { ack, broadcast: _marsaDelta(marsaStore, [result.relation]) };
+  const out = { ack, marsaBroadcast: _marsaDelta(marsaStore, [result.relation]) };
+
+  // Declaring writes `tofi.separationRegime` = MARSA on every participant, and
+  // ending, voiding or leaving a relation writes ATC back. Those are FDR
+  // writes, and an FDR rides an efsp-board-delta — the marsa-delta above
+  // carries the RELATION and nothing else. So SEP REG stayed blank on every
+  // already-connected page and only a reconnect ever showed the truth: guide
+  // §4.8.3's "they inherit a lie", in the direction it warns about
+  // (docs/ui-findings/lane1.md F-111). marsa-store.js journals the writes; this
+  // is where they reach the wire.
+  //
+  // A board-delta with no Strips in it, because none changed. It is stamped
+  // with the default Facility's own boardSeq, unchanged for the same reason —
+  // fdrs are shared theater-wide (docs/adr/0013) and are not Facility-scoped,
+  // so there is no per-Facility delta to send N of.
+  const regimeFdrs = result.fdrs || [];
+  if (regimeFdrs.length > 0) {
+    const facilityId = ctx.facilityConfig.DEFAULT_FACILITY_ID;
+    const boardStore = ctx.boardStoreFor(facilityId);
+    out.broadcast = {
+      version: VERSION, type: 'efsp-board-delta',
+      boardSeq: boardStore ? boardStore.currentSeq : undefined,
+      facilityId,
+      strips: { updated: [], gone: [] },
+      fdrs: { updated: regimeFdrs },
+      positions: { updated: [] },
+    };
+  }
+  return out;
 }
 
 /** Its own delta type with its own seq, like efsp-airspace-delta and efsp-correlation-delta — a relation is not a Strip and rides no Board's sequence. */
@@ -417,7 +536,7 @@ function _handleSetPositions(ctx, session, msg) {
   const positionStore = ctx.positionStoreFor(facilityId);
   const boardStore = ctx.boardStoreFor(facilityId);
   if (!positionStore || !boardStore) {
-    return { ack: { version: VERSION, type: 'efsp-positions-ack', held: [], warnings: [], reason: 'VALIDATION_ERROR', detail: `unknown facilityId: ${facilityId}` } };
+    return { ack: { version: VERSION, type: 'efsp-positions-ack', facilityId, held: [], warnings: [], reason: 'VALIDATION_ERROR', detail: `unknown facilityId: ${facilityId}` } };
   }
   const held = Array.isArray(msg.held) ? msg.held : [];
   const { held: actuallyHeld, vacated } = positionStore.setHeldPositions(session.controllerId, session.who, held);
@@ -446,7 +565,16 @@ function _handleSetPositions(ctx, session, msg) {
     ack: { version: VERSION, type: 'efsp-positions-ack', facilityId, held: actuallyHeld, warnings },
     broadcast: {
       version: VERSION, type: 'efsp-board-delta', boardSeq: boardStore.currentSeq, facilityId,
-      strips: { updated: boardStore.getAll().filter(s => reassignedIds.includes(s.stripId)).map(s => ({ ...s, facilityId })), gone: [] },
+      // EVERY live Strip, not just the reassigned ones. Taking or giving up a
+      // Position changes who is there to receive a transfer, which changes the
+      // `nla` status _stampStrip computes for Strips this message never
+      // touched — a TWR Strip at DEPARTED becomes "no receiving Position
+      // present" the instant APP is released, and F-408's whole point is that
+      // the panel be told BEFORE the press. The Board is a few dozen Strips
+      // (board-store.js's module comment) and a Position change is a rare,
+      // deliberate act, so re-sending the set is cheaper than tracking which
+      // Strips' status actually moved.
+      strips: { updated: boardStore.getAll().filter(s => s.state !== 'DROPPED').map(s => _stampStrip(boardStore, s, facilityId, ctx)), gone: [] },
       fdrs: { updated: [] },
       positions: { updated: positionStore.getAll().map(p => ({ ...p, facilityId })) },
     },
@@ -479,7 +607,7 @@ function _snapshotMessage(ctx) {
     const positionStore = ctx.positionStoreFor(facilityId);
     boardSeqByFacility[facilityId] = boardStore.currentSeq;
     aitAuthorizedByFacility[facilityId] = !!facilityConfig.getFacilityConfig(facilityId).aitAuthorized;
-    for (const s of boardStore.getAll().filter(s => s.state !== 'DROPPED')) strips.push({ ...s, facilityId });
+    for (const s of boardStore.getAll().filter(s => s.state !== 'DROPPED')) strips.push(_stampStrip(boardStore, s, facilityId, ctx));
     for (const p of positionStore.getAll()) positions.push({ ...p, facilityId });
     bays.push(...facilityConfig.getAllBays(facilityId));
   }

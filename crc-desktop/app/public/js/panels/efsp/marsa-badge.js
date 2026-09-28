@@ -98,12 +98,21 @@ function marsaBadgeFor(strip) {
   const withText = others.length === 1 ? 'with 1 other flight' : `with ${others.length} other flights`;
 
   if (relation.state === 'VOIDED') {
+    const why = _voidSentence(relation);
     return {
       marsaId: relation.marsaId,
       text: 'MARSA ✕',
       className: 'efsp-marsa-badge efsp-marsa-voided',
-      title: `MARSA VOIDED — ${_voidSentence(relation)}. ATC is separating these aircraft again.`,
+      title: `MARSA VOIDED — ${why}. ATC is separating these aircraft again.`,
       voided: true,
+      // The alert as a SENTENCE, not only as a `title`. Rule 2 calls a void an
+      // alert and docs/efsp-wp6-plan.md §13's acceptance line is that "every
+      // participant Strip carries the alert" — a hover tooltip on a badge has
+      // no touch equivalent and is not one (the point lane 3's F-307 makes
+      // about the TOFI exit reason, and it applies harder here: the interlock
+      // fires on an ordinary INIT ALT edit, so the controller who caused the
+      // void is looking at the Block they just typed into, not at the badge).
+      voidReason: `MARSA VOIDED — ${why}. ATC is separating these aircraft again.`,
       participantFdrIds: relation.participants,
     };
   }

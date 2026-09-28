@@ -351,3 +351,78 @@ test('an op against an unknown relation is NOT_FOUND', () => {
   const { store } = makeStore();
   assert.equal(op(store, 'no-such-relation', { kind: 'EndMarsa' }).reason, 'NOT_FOUND');
 });
+
+// ── the regime writes this store makes, and who hears about them (F-111) ────
+//
+// Declaring writes MARSA on every participant and ending/voiding writes ATC
+// back. Those are FDR writes, and an FDR rides an efsp-board-delta — the
+// marsa-delta carries the relation and nothing else. So the writes reached no
+// connected client at all until the next full snapshot. This is the journal
+// efsp-ws.js drains to put them on the wire.
+
+/** A store whose injected setter returns the FDR it wrote, the way fdr-store.setTofi does. */
+function makeStoreWithFdrs() {
+  const fdrs = new Map([TANKER, RX1, RX2, OUTSIDER].map(id => [id, { fdrId: id, tofi: { separationRegime: null } }]));
+  const store = new MarsaStore({
+    fdrExists: (fdrId) => fdrs.has(fdrId),
+    setSeparationRegime: (fdrId, separationRegime) => {
+      const fdr = fdrs.get(fdrId);
+      fdr.tofi = { ...fdr.tofi, separationRegime };
+      return { ok: true, fdr };
+    },
+  });
+  return { store, fdrs };
+}
+
+test('DeclareMarsa reports the FDRs whose separation regime it wrote', () => {
+  const { store } = makeStoreWithFdrs();
+  const result = declare(store);
+  assert.deepEqual(result.fdrs.map(f => f.fdrId).sort(), [TANKER, RX1].sort());
+  for (const fdr of result.fdrs) assert.equal(fdr.tofi.separationRegime, 'MARSA');
+});
+
+test('EndMarsa reports every participant going back to ATC', () => {
+  const { store } = makeStoreWithFdrs();
+  const { marsaId } = declare(store).relation;
+  const ended = op(store, marsaId, { kind: 'EndMarsa' });
+  assert.deepEqual(ended.fdrs.map(f => f.fdrId).sort(), [TANKER, RX1].sort());
+  for (const fdr of ended.fdrs) assert.equal(fdr.tofi.separationRegime, 'ATC');
+});
+
+test('RemoveParticipant reports the flight that LEFT, which is no longer in the relation to be derived from it', () => {
+  const { store } = makeStoreWithFdrs();
+  const { marsaId } = declare(store, { participants: [TANKER, RX1, RX2] }).relation;
+  const removed = op(store, marsaId, { kind: 'RemoveParticipant', fdrId: RX2 });
+  assert.equal(removed.ok, true);
+  assert.deepEqual(removed.fdrs.map(f => f.fdrId), [RX2]);
+  assert.equal(removed.fdrs[0].tofi.separationRegime, 'ATC');
+});
+
+test('the journal is drained per op — one op never reports the writes of the one before it', () => {
+  const { store } = makeStoreWithFdrs();
+  const { marsaId } = declare(store).relation;
+  const marked = op(store, marsaId, { kind: 'MarkRendezvous' });
+  assert.equal(marked.ok, true);
+  assert.deepEqual(marked.fdrs, [], 'marking rendezvous writes no regime');
+});
+
+test('the interlock void leaves its regime writes for board-store to drain', () => {
+  const { store, fdrs } = makeStoreWithFdrs();
+  declare(store);
+  const voided = store.voidForAssignment(TANKER, { cause: 'CONTROLLER_ALTITUDE_CHANGE', blockId: '21' });
+  assert.equal(voided.state, 'VOIDED');
+  const drained = store.drainRegimeWrites();
+  assert.deepEqual(drained.map(f => f.fdrId).sort(), [TANKER, RX1].sort());
+  for (const fdr of drained) assert.equal(fdr.tofi.separationRegime, 'ATC');
+  assert.deepEqual(store.drainRegimeWrites(), [], 'and draining twice yields nothing');
+  assert.equal(fdrs.get(RX1).tofi.separationRegime, 'ATC');
+});
+
+test('a flight ending retires it from its relation, and the surviving participants\' regime writes are drainable too', () => {
+  const { store } = makeStoreWithFdrs();
+  declare(store);
+  const changed = store.onFdrRetired(RX1, 'ctrl-1');
+  assert.equal(changed.length, 1);
+  assert.equal(changed[0].endedBy, 'PARTICIPANT_RETIRED');
+  assert.deepEqual(store.drainRegimeWrites().map(f => f.fdrId), [TANKER]);
+});

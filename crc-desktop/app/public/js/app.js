@@ -702,7 +702,13 @@ async function connect() {
         updateMap();
         break;
       case 'efsp-correlation-ack':
-        if (!msg.ok) _showMutationError(msg);
+        // _showMutationError's signature is (reason, detail, context) — this
+        // passed the whole message object as `reason` and rendered
+        // "[object Object]" for every refused bind (docs/ui-findings F-103).
+        // A correlation op registers nothing pending (efsp-ws.js: the §5.6.3
+        // replay machinery is keyed on Strip identity), so the flight can only
+        // be named from whatever record the ack carries back.
+        if (!msg.ok) _showMutationError(msg.reason || 'Rejected', msg.detail, msg.correlation ? { fdrId: msg.correlation.fdrId } : null);
         applyEfspCorrelationDelta({ correlations: { updated: msg.correlation ? [msg.correlation] : [] } });
         if (typeof refreshCorrelatedHighlight === 'function') refreshCorrelatedHighlight();
         renderAllOpenEfspBays();
@@ -723,7 +729,10 @@ async function connect() {
         renderAllOpenEfspBays();
         break;
       case 'efsp-marsa-ack':
-        if (!msg.ok) _showMutationError(msg);
+        // Same one-argument bug as efsp-correlation-ack above, same fix. A
+        // relation is named by its participants, not by one Strip — §9.2's
+        // "model it as an edge, not a flag" applies to the refusal too.
+        if (!msg.ok) _showMutationError(msg.reason || 'Rejected', msg.detail, msg.marsa ? { fdrIds: msg.marsa.participants } : null);
         if (typeof applyEfspMarsaDelta === 'function') {
           applyEfspMarsaDelta({ marsa: { updated: msg.marsa ? [msg.marsa] : [] } });
         }
@@ -737,7 +746,13 @@ async function connect() {
       case 'efsp-airspace-ack':
         if (!msg.ok) {
           console.warn('[efsp] airspace op rejected:', msg.reason, msg);
-          if (typeof _showMutationError === 'function') _showMutationError(msg.reason || 'Rejected', msg.detail);
+          // An airspace op targets no Strip, so it is named by the block it
+          // was about rather than by a callsign (F-103's attribution rule,
+          // applied to the thing that actually was refused).
+          if (typeof _showMutationError === 'function') {
+            _showMutationError(msg.reason || 'Rejected', msg.detail,
+              msg.airspace ? { subject: (msg.airspace.definition && msg.airspace.definition.name) || msg.airspace.airspaceId } : null);
+          }
         } else if (msg.warning === 'AIRSPACE_STILL_OCCUPIED') {
           // Released with flights still in it. Allowed — the controller may
           // know they are clear — but they are on the block's frequency and

@@ -57,12 +57,20 @@ function nlaLabelFor(state, role = 'DEPARTURE') {
 // Per-State authority (guide §3.4's "normally owned by" column) — client
 // mirror of permission.js's STATE_OWNERS_BY_ROLE/canActOnState. The SERVER
 // check (board-store.js's _applyInvokeNla/_validateBayImpliedTransition,
-// docs/adr/0010) is what's actually authoritative and load-bearing; this
-// copy exists purely so the NLA button can render as disabled/grey BEFORE
-// a click, instead of only failing after one reaches the server. Per §7.9's
-// "local input -> visual feedback < 50ms" budget and the same reasoning as
-// the double-tap/Undo timers above — this is a UX convenience mirror, not
-// a second source of enforcement.
+// docs/adr/0010) is what's actually authoritative and load-bearing.
+//
+// This copy used to be what greyed the NLA button out before a click. It is
+// not any more: crc-sync now stamps every Strip it broadcasts with `nla` —
+// what pressing that button would do right now, and the reason it would be
+// refused when it would be — so the panel renders the server's own answer
+// with its own wording (bay-view.js's NLA block, docs/ui-findings/lane4.md
+// F-408). Keeping a local copy of three of the server's dozen-odd inhibit
+// rules would be two sources for one question, and the smaller source is the
+// one that drifts.
+//
+// So this is now drift-tested only, exactly like COORDINATION_OP_KINDS and
+// TOFI_OP_KINDS below — the tables are still worth holding to permission.js,
+// and the function is still what makes them testable.
 const DEPARTURE_STATE_OWNERS = {
   PROPOSED:          ['OPS'],
   PENDING_CLEARANCE: ['CD'],
@@ -146,7 +154,15 @@ function canActOnState(actingPositionId, role, state) {
 const DOUBLE_TAP_MS = 400;
 const UNDO_WINDOW_MS = 30000;
 
-/** @param {number|null} lastInvokedAt timestamp of the last InvokeNla for this Strip this session, or null */
+/**
+ * @param {number|null} lastInvokedAt timestamp of the last advancing press, or null
+ *
+ * bay-view.js's _swallowRepeatAdvance is the caller, and it keys this
+ * BOARD-WIDE rather than per Strip — deliberately unlike board-store.js's own
+ * 400ms guard. The bug this catches (lane 1's F-101) is the second tap landing
+ * on the neighbour that reflowed up under the pointer once the first Strip was
+ * transferred away, which no per-stripId key can see.
+ */
 function isWithinDoubleTapWindow(lastInvokedAt, now) {
   return lastInvokedAt != null && (now - lastInvokedAt) < DOUBLE_TAP_MS;
 }

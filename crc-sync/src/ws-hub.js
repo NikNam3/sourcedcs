@@ -98,6 +98,32 @@ class WsHub {
   broadcastEfspObligationAlert(alert) { this._broadcast({ version: VERSION, type: 'efsp-obligation-alert', ...alert }); }
 
   /**
+   * One changed-Strips-only board delta per NLA-status sweep, from
+   * nla-status-monitor.js's onDelta (docs/ui-findings/lane4.md F-408).
+   *
+   * The ORDINARY efsp-board-delta is request-driven — efsp-ws.js returns it
+   * from handleMessage and _onMessage below sends it. This is the one that is
+   * not: a Strip's NLA inhibit status can change with no message at all behind
+   * it, because a release time or an EDCT window passing is the clock's doing,
+   * not a controller's. Same justification broadcastEfspCorrelationDelta gives
+   * for being server-originated immediate state: the thing that changed is
+   * state, and nothing else was ever going to tell anyone about it.
+   *
+   * `strips.gone` is deliberately absent rather than empty-by-accident: this
+   * sweep never removes a Strip, it only re-states ones that are still there.
+   */
+  broadcastEfspBoardDelta(payload) {
+    this._broadcast({
+      version: VERSION, type: 'efsp-board-delta',
+      boardSeq: payload.boardSeq,
+      facilityId: payload.facilityId,
+      strips: { updated: payload.strips || [], gone: [] },
+      fdrs: { updated: [] },
+      positions: { updated: [] },
+    });
+  }
+
+  /**
    * WP5 (docs/adr/0045) — one changed-records-only correlation delta per
    * reconcile tick, from correlation-reconciler.js's onDelta.
    *
