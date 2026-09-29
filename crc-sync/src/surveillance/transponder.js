@@ -18,6 +18,14 @@
 // module only decides whether a radar could have received one.
 //
 // Ships and ground vehicles have none.
+//
+// Mode 4/5 is the military crypto mode (docs/adr/0066). A valid reply needs
+// our keys, so only our own side can give one: that, and only that, is why
+// this module reads the coalition — it stands for the crypto key, never for
+// the colour. A player answers when SRS says the transponder and its Mode 4
+// switch are on; own AI aircraft and ships are assumed keyed
+// (`transponder.mode4For`). Ground vehicles have no IFF. What an answer MEANS
+// on the scope is surveillance/iff.js's job, not this module's.
 
 const { SYNTHETIC_BLOCK_START, SYNTHETIC_BLOCK_SIZE } = require('../efsp/code-allocator');
 const { USER_COALITION } = require('./iff');
@@ -56,11 +64,12 @@ class Transponders {
   /**
    * @param {object} deps
    * @param {{getTransponder:(playerName:string)=>object|null}|null} deps.srs
-   * @param {{syntheticFor:string[]}} [deps.config] sensor-specs.json `transponder`
+   * @param {{syntheticFor:string[], mode4For:string[]}} [deps.config] sensor-specs.json `transponder`
    */
   constructor({ srs, config } = {}) {
     this._srs = srs || null;
     this._syntheticFor = new Set((config && config.syntheticFor) || ['own', 'neutral']);
+    this._mode4For = new Set((config && config.mode4For) || ['own']);
     this._synthetic = new Map(); // trackId -> code
     this._inUse = new Set();     // synthetic codes held
   }
@@ -82,6 +91,28 @@ class Transponders {
     if (!this._syntheticFor.has(coalitionClass(track.coalition))) return null;
     const code = this._syntheticCode(String(track.id));
     return code ? { code, ident: false, emergency: null } : null;
+  }
+
+  /**
+   * Would this contact give a VALID Mode 4/5 reply to one of our
+   * interrogators? Valid means our crypto, so only our own side can: an
+   * enemy player with the switch on still has the wrong keys. A player needs
+   * SRS with the transponder on and the Mode 4 switch on (SRS models no
+   * separate Mode 5). AI aircraft and ships of a `mode4For` class are assumed
+   * keyed. Vehicles have no IFF.
+   * @returns {boolean}
+   */
+  mode4Of(track) {
+    if (!track) return false;
+    const cat = track.category;
+    if (cat !== 1 && cat !== 2 && cat !== 4) return false;
+    if (coalitionClass(track.coalition) !== 'own') return false; // the crypto key, not the colour
+    if (track.player) {
+      const e = this._srs ? this._srs.getTransponder(track.player) : null;
+      // squawkStatus undefined (the legacy SRS block) is "on", as in transponderOf.
+      return !!(e && e.squawkStatus !== 0 && (e.mode4 === true || e.mode4 === 1));
+    }
+    return this._mode4For.has('own');
   }
 
   _syntheticCode(id) {

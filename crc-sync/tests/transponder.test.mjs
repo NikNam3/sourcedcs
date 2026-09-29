@@ -77,3 +77,46 @@ test('the allocator never hands out, and refuses, a code from the synthetic bloc
   assert.equal(refused.ok, false);
   assert.match(refused.detail, /uncontrolled/);
 });
+
+// docs/adr/0066 — a valid Mode 4/5 reply needs our crypto.
+test('mode4Of: an own player answers Mode 4 only with SRS on and the Mode 4 switch on', () => {
+  const t = new Transponders({ srs: srsWith({
+    On: { squawk: 4521, squawkStatus: 1, mode4: true },
+    Off: { squawk: 4522, squawkStatus: 1, mode4: false },
+    Dark: { squawk: 4523, squawkStatus: 0, mode4: true },
+    Legacy: { squawk: 4524, squawkStatus: undefined, mode4: true },
+    Numeric: { squawk: 4525, squawkStatus: 2, mode4: 1 },
+  }) });
+  assert.equal(t.mode4Of(air(1, { player: 'On' })), true);
+  assert.equal(t.mode4Of(air(2, { player: 'Off' })), false, 'Mode 4 switched off');
+  assert.equal(t.mode4Of(air(3, { player: 'Dark' })), false, 'transponder off');
+  assert.equal(t.mode4Of(air(4, { player: 'Nobody' })), false, 'no SRS client');
+  assert.equal(t.mode4Of(air(5, { player: 'Legacy' })), true, 'legacy SRS block: status undefined is on');
+  assert.equal(t.mode4Of(air(6, { player: 'Numeric' })), true);
+  assert.equal(new Transponders({ srs: null }).mode4Of(air(7, { player: 'On' })), false, 'no SRS at all');
+});
+
+test('mode4Of: a hostile or neutral player with every switch on has the wrong keys', () => {
+  const t = new Transponders({ srs: srsWith({ Red: { squawk: 1200, squawkStatus: 1, mode4: true } }) });
+  assert.equal(t.mode4Of(air(1, { player: 'Red', coalition: HOSTILE })), false);
+  assert.equal(t.mode4Of(air(2, { player: 'Red', coalition: 1 })), false);
+});
+
+test('mode4Of: own AI aircraft and ships answer (mode4For); neutral, hostile and vehicles do not', () => {
+  const t = new Transponders({ srs: null });
+  assert.equal(t.mode4Of(air(1)), true, 'own AI aircraft');
+  assert.equal(t.mode4Of(air(2, { category: 2 })), true, 'own AI helicopter');
+  assert.equal(t.mode4Of(air(3, { coalition: 1 })), false, 'neutral AI');
+  assert.equal(t.mode4Of(air(4, { coalition: HOSTILE })), false, 'hostile AI');
+  assert.equal(t.mode4Of(air(5, { category: 4 })), true, 'own ship');
+  assert.equal(t.mode4Of(air(6, { category: 4, coalition: HOSTILE })), false, 'hostile ship');
+  assert.equal(t.mode4Of(air(7, { category: 3 })), false, 'own ground vehicle: no IFF');
+  assert.equal(t.mode4Of(null), false);
+});
+
+test('mode4Of: mode4For [] takes Mode 4 away from own AI; a class other than own is never honoured', () => {
+  assert.equal(new Transponders({ config: { mode4For: [] } }).mode4Of(air(1)), false);
+  const t = new Transponders({ config: { mode4For: ['own', 'neutral', 'hostile'] } });
+  assert.equal(t.mode4Of(air(2, { coalition: 1 })), false, 'crypto check comes first');
+  assert.equal(t.mode4Of(air(3, { coalition: HOSTILE })), false);
+});
