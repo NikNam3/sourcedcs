@@ -301,7 +301,7 @@ function initColorSettings() {
   const $hideGroundUnits = document.getElementById('set-hide-ground-units');
 
   if ($declutter) {
-    $declutter.checked = settings.declutter ?? true;
+    $declutter.checked = settings.declutter ?? false; // H6: off by default
     $declutter.addEventListener('change', () => {
       settings.declutter = $declutter.checked;
       saveSettings();
