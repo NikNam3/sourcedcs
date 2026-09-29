@@ -235,3 +235,312 @@ test('missionKeyOf is stable for the same mission and differs for another', () =
   assert.notEqual(missionKeyOf(m), missionKeyOf({ ...m, drawings: [] }));
   assert.equal(missionKeyOf(null), null);
 });
+
+// ── step 2 — the store, driven directly ─────────────────────────────────────
+
+const { FieldStateStore } = await import('../src/efsp/field-state-store.js');
+const { MutationLog } = await import('../src/efsp/mutation-log.js');
+
+/** A facility-config stand-in over the SHIPPED INCIRLIK config (plus a runway-less CENTER), or an overridden inventory. */
+function fixtureConfig(fieldStateOverride) {
+  const incirlik = structuredClone(INCIRLIK);
+  if (fieldStateOverride) incirlik.fieldState = fieldStateOverride;
+  const center = facilityConfig.getFacilityConfig('CENTER');
+  return {
+    getFacilityIds: () => ['INCIRLIK', 'CENTER'],
+    getFacilityConfig: (id) => structuredClone(id === 'INCIRLIK' ? incirlik : center),
+  };
+}
+
+let logN = 0;
+function freshStore({ fieldStateOverride, deps } = {}) {
+  const logPath = path.join(tmpDir, `store-${++logN}.jsonl`);
+  const store = new FieldStateStore(fixtureConfig(fieldStateOverride), deps);
+  store.setMutationLog(new MutationLog(logPath));
+  const log = () => (fs.existsSync(logPath) ? fs.readFileSync(logPath, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)) : []);
+  return { store, log };
+}
+
+function op(store, positionId, kind, fields = {}, { by = `c-${positionId}`, baseRev } = {}) {
+  const rev = baseRev === undefined ? store.getFieldState('INCIRLIK').rev : baseRev;
+  return store.apply({ clientMutationId: `m-${Math.random()}`, facilityId: 'INCIRLIK', baseRev: rev, op: { kind, ...fields } }, positionId, by);
+}
+function mustOp(store, positionId, kind, fields, opts) {
+  const r = op(store, positionId, kind, fields, opts);
+  assert.equal(r.ok, true, `${kind} as ${positionId}: ${JSON.stringify({ reason: r.reason, detail: r.detail })}`);
+  return r.fieldState;
+}
+const rwy = (fs_) => fs_.runways.find(r => r.runwayId === '05/23');
+
+test('the store seeds one record per Facility with an inventory, every runway OPEN, no active runway yet', () => {
+  const { store } = freshStore();
+  assert.equal(store.getAll().length, 1);
+  assert.equal(store.getFieldState('CENTER'), null);
+  assert.equal(store.statusView('CENTER'), null);
+  const fsI = store.getFieldState('INCIRLIK');
+  assert.equal(fsI.rev, 0);
+  assert.equal(fsI.activeRunway, null);
+  assert.equal(rwy(fsI).status, 'OPEN');
+  assert.deepEqual(rwy(fsI).ends, ['05', '23']);
+  assert.deepEqual(rwy(fsI).rackIds, { '05': 'rwy-05', '23': 'rwy-23' });
+  assert.equal(fsI.runwayChange, null);
+  assert.equal(fsI.runwayChangeInProgress, false);
+  assert.deepEqual(fsI.hotCargoPad, { name: 'Hot cargo pad', occupied: false, occupantFdrId: null });
+  assert.deepEqual(fsI.alertPad, { name: 'Alert pad', occupied: false, occupantFdrId: null });
+});
+
+test('TWR begins a barrier change: the whole pavement is suspended in one rev, with the kind and who', () => {
+  const { store } = freshStore();
+  const seq = store.currentSeq;
+  const fsI = mustOp(store, 'TWR', 'BeginBarrierChange', { runwayId: '05/23', note: 'BAK-12 re-rig' });
+  assert.equal(fsI.rev, 1);
+  assert.equal(store.currentSeq, seq + 1);
+  assert.equal(rwy(fsI).status, 'SUSPENDED_BARRIER_CHANGE');
+  assert.equal(rwy(fsI).suspension.kind, 'BARRIER_CHANGE');
+  assert.equal(rwy(fsI).suspension.positionId, 'TWR');
+  assert.equal(rwy(fsI).suspension.by, 'c-TWR');
+  assert.equal(rwy(fsI).suspension.note, 'BAK-12 re-rig');
+});
+
+test('OPS cannot begin a barrier change or close a runway itself — only TWR (decisions.md H18)', () => {
+  const { store } = freshStore();
+  for (const kind of ['BeginBarrierChange', 'CloseRunway']) {
+    const r = op(store, 'OPS', kind, { runwayId: '05/23' });
+    assert.equal(r.reason, 'PERMISSION_DENIED', kind);
+    assert.equal(rwy(r.fieldState).status, 'OPEN');
+  }
+});
+
+test('CompleteBarrierChange moves to SUSPENDED_INSPECTION, never to OPEN, and keeps the suspension', () => {
+  const { store } = freshStore();
+  mustOp(store, 'TWR', 'BeginBarrierChange', { runwayId: '05/23' });
+  assert.equal(op(store, 'TWR', 'CompleteBarrierChange', { runwayId: '05/23' }).reason, 'PERMISSION_DENIED');
+  const fsI = mustOp(store, 'OPS', 'CompleteBarrierChange', { runwayId: '05/23' });
+  assert.equal(rwy(fsI).status, 'SUSPENDED_INSPECTION');
+  assert.equal(rwy(fsI).suspension.kind, 'BARRIER_CHANGE');
+});
+
+test('OpenRunway cannot reopen a suspended runway (rule 2 has no side door), nor can CloseRunway', () => {
+  const { store } = freshStore();
+  mustOp(store, 'TWR', 'BeginBarrierChange', { runwayId: '05/23' });
+  for (const kind of ['OpenRunway', 'CloseRunway']) {
+    const r = op(store, 'TWR', kind, { runwayId: '05/23' });
+    assert.equal(r.ok, false, kind);
+    assert.equal(rwy(r.fieldState).status, 'SUSPENDED_BARRIER_CHANGE');
+  }
+  mustOp(store, 'OPS', 'CompleteBarrierChange', { runwayId: '05/23' });
+  const r = op(store, 'TWR', 'OpenRunway', { runwayId: '05/23' });
+  assert.match(r.detail, /only through an inspection/);
+  assert.equal(rwy(r.fieldState).status, 'SUSPENDED_INSPECTION');
+});
+
+test('CompleteInspection reopens the runway and stamps lastInspection {by, positionId, at}', () => {
+  const { store } = freshStore();
+  mustOp(store, 'TWR', 'BeginBarrierChange', { runwayId: '05/23' });
+  mustOp(store, 'OPS', 'CompleteBarrierChange', { runwayId: '05/23' });
+  const fsI = mustOp(store, 'OPS', 'CompleteInspection', { runwayId: '05/23', note: 'cable tensioned, FOD walk done' });
+  assert.equal(rwy(fsI).status, 'OPEN');
+  assert.equal(rwy(fsI).suspension, null);
+  assert.equal(rwy(fsI).lastInspection.positionId, 'OPS');
+  assert.equal(rwy(fsI).lastInspection.by, 'c-OPS');
+  assert.ok(Number.isFinite(rwy(fsI).lastInspection.at));
+  assert.equal(rwy(fsI).lastInspection.note, 'cable tensioned, FOD walk done');
+});
+
+test('CompleteInspection is refused to a Position other than inspectionAuthorityPositionId, even one the table allows', () => {
+  // Shipped config: the table ceiling is OPS and the config says OPS, so every
+  // other Position is refused by the table.
+  const { store } = freshStore();
+  mustOp(store, 'TWR', 'BeginBarrierChange', { runwayId: '05/23' });
+  mustOp(store, 'OPS', 'CompleteBarrierChange', { runwayId: '05/23' });
+  for (const p of ['TWR', 'APP', 'GND', 'CD']) assert.equal(op(store, p, 'CompleteInspection', { runwayId: '05/23' }).reason, 'PERMISSION_DENIED', p);
+  // A config naming another Position narrows OPS out too — it never widens.
+  const narrowed = structuredClone(INVENTORY);
+  narrowed.inspectionAuthorityPositionId = 'APP';
+  const { store: s2 } = freshStore({ fieldStateOverride: narrowed });
+  mustOp(s2, 'TWR', 'BeginBarrierChange', { runwayId: '05/23' });
+  mustOp(s2, 'OPS', 'CompleteBarrierChange', { runwayId: '05/23' });
+  const r = op(s2, 'OPS', 'CompleteInspection', { runwayId: '05/23' });
+  assert.equal(r.reason, 'PERMISSION_DENIED');
+  assert.match(r.detail, /only APP/);
+  assert.equal(op(s2, 'APP', 'CompleteInspection', { runwayId: '05/23' }).reason, 'PERMISSION_DENIED'); // not widened
+});
+
+test('CloseRunway / OpenRunway round trip (TWR)', () => {
+  const { store } = freshStore();
+  let fsI = mustOp(store, 'TWR', 'CloseRunway', { runwayId: '05/23', reason: 'FOD' });
+  assert.equal(rwy(fsI).status, 'CLOSED');
+  assert.equal(rwy(fsI).closure.reason, 'FOD');
+  assert.equal(rwy(fsI).closure.positionId, 'TWR');
+  fsI = mustOp(store, 'TWR', 'OpenRunway', { runwayId: '05/23' });
+  assert.equal(rwy(fsI).status, 'OPEN');
+  assert.equal(rwy(fsI).closure, null);
+});
+
+test('OPS asks tower to close the runway; tower accepts and the closure names who asked (decisions.md H18)', () => {
+  const { store } = freshStore();
+  let fsI = mustOp(store, 'OPS', 'RequestRunwayStatus', { runwayId: '05/23', action: 'CLOSE', note: 'FOD reported' });
+  assert.equal(rwy(fsI).status, 'OPEN');
+  assert.equal(rwy(fsI).pendingRequest.action, 'CLOSE');
+  assert.equal(rwy(fsI).pendingRequest.requestedPositionId, 'OPS');
+  assert.equal(op(store, 'GND', 'RequestRunwayStatus', { runwayId: '05/23', action: 'CLOSE' }).detail, 'OPS already has a CLOSE request with tower for runway 05/23');
+  assert.equal(op(store, 'OPS', 'AcceptRunwayRequest', { runwayId: '05/23' }).reason, 'PERMISSION_DENIED');
+  fsI = mustOp(store, 'TWR', 'AcceptRunwayRequest', { runwayId: '05/23' });
+  assert.equal(rwy(fsI).status, 'CLOSED');
+  assert.equal(rwy(fsI).pendingRequest, null);
+  assert.equal(rwy(fsI).closure.positionId, 'TWR');
+  assert.equal(rwy(fsI).closure.requestedBy.positionId, 'OPS');
+  assert.equal(rwy(fsI).closure.reason, 'FOD reported');
+});
+
+test('tower rejects a request; a request for what the runway already is, or from TWR itself, is refused', () => {
+  const { store } = freshStore();
+  assert.match(op(store, 'OPS', 'RequestRunwayStatus', { runwayId: '05/23', action: 'OPEN' }).detail, /nothing to ask/);
+  assert.equal(op(store, 'OPS', 'RequestRunwayStatus', { runwayId: '05/23', action: 'PAINT' }).reason, 'VALIDATION_ERROR');
+  assert.equal(op(store, 'TWR', 'RequestRunwayStatus', { runwayId: '05/23', action: 'CLOSE' }).reason, 'PERMISSION_DENIED');
+  mustOp(store, 'APP', 'RequestRunwayStatus', { runwayId: '05/23', action: 'BARRIER_CHANGE' });
+  const fsI = mustOp(store, 'TWR', 'RejectRunwayRequest', { runwayId: '05/23', note: 'recovery in progress' });
+  assert.equal(rwy(fsI).status, 'OPEN');
+  assert.equal(rwy(fsI).pendingRequest, null);
+  const last = fsI.transitions.at(-1);
+  assert.equal(last.op, 'RejectRunwayRequest');
+  assert.equal(last.request.requestedPositionId, 'APP');
+  assert.equal(last.note, 'recovery in progress');
+});
+
+test('a request made moot by a direct tower op is settled in the same transition', () => {
+  const { store } = freshStore();
+  mustOp(store, 'OPS', 'RequestRunwayStatus', { runwayId: '05/23', action: 'CLOSE' });
+  const fsI = mustOp(store, 'TWR', 'BeginBarrierChange', { runwayId: '05/23' });
+  assert.equal(rwy(fsI).pendingRequest, null);
+  assert.equal(fsI.transitions.at(-1).settledRequest.action, 'CLOSE');
+});
+
+test('a stale baseRev is refused as STALE_REV, carries the record, and is audited', () => {
+  const { store, log } = freshStore();
+  mustOp(store, 'TWR', 'CloseRunway', { runwayId: '05/23' });
+  const r = op(store, 'TWR', 'OpenRunway', { runwayId: '05/23' }, { baseRev: 0 });
+  assert.equal(r.reason, 'STALE_REV');
+  assert.equal(rwy(r.fieldState).status, 'CLOSED');
+  const entry = log().at(-1);
+  assert.equal(entry.reason, 'STALE_REV');
+  assert.equal(entry.ok, false);
+  assert.equal(entry.fieldStateFacilityId, 'INCIRLIK');
+  assert.equal(entry.op, 'OpenRunway');
+});
+
+test('every refusal is audited (PERMISSION_DENIED, VALIDATION_ERROR, NOT_FOUND)', () => {
+  const { store, log } = freshStore();
+  op(store, 'OPS', 'CloseRunway', { runwayId: '05/23' });
+  op(store, 'TWR', 'OpenRunway', { runwayId: '05/23' });
+  op(store, 'TWR', 'CloseRunway', { runwayId: '17/35' });
+  store.apply({ facilityId: 'CENTER', op: { kind: 'CloseRunway', runwayId: '05/23' } }, 'TWR', 'c-TWR');
+  op(store, 'TWR', 'PaintRunway', { runwayId: '05/23' });
+  const reasons = log().map(e => [e.op, e.reason, e.fieldStateFacilityId]);
+  assert.deepEqual(reasons, [
+    ['CloseRunway', 'PERMISSION_DENIED', 'INCIRLIK'],
+    ['OpenRunway', 'VALIDATION_ERROR', 'INCIRLIK'],
+    ['CloseRunway', 'NOT_FOUND', 'INCIRLIK'],
+    ['CloseRunway', 'NOT_FOUND', 'CENTER'],
+    ['PaintRunway', 'VALIDATION_ERROR', 'INCIRLIK'],
+  ]);
+  assert.ok(log().every(e => e.ok === false));
+});
+
+test('every success appends to transitions[], bumps rev and currentSeq exactly once, and is audited with before/after', () => {
+  const { store, log } = freshStore();
+  const steps = [
+    ['TWR', 'BeginBarrierChange'], ['OPS', 'CompleteBarrierChange'], ['OPS', 'CompleteInspection'],
+    ['TWR', 'CloseRunway'], ['TWR', 'OpenRunway'],
+  ];
+  for (const [i, [p, kind]] of steps.entries()) {
+    const seq = store.currentSeq;
+    const fsI = mustOp(store, p, kind, { runwayId: '05/23' });
+    assert.equal(fsI.rev, i + 1);
+    assert.equal(store.currentSeq, seq + 1);
+    assert.equal(fsI.transitions.length, i + 1);
+    assert.equal(fsI.transitions.at(-1).op, kind);
+    assert.equal(fsI.transitions.at(-1).positionId, p);
+    const entry = log().at(-1);
+    assert.equal(entry.ok, true);
+    assert.equal(entry.runwayId, '05/23');
+    assert.equal(entry.before.rev, i);
+    assert.equal(entry.after.rev, i + 1);
+  }
+});
+
+test('the status view is cached and rebuilt only when the record changes; nothing reaches the store through it', () => {
+  const { store } = freshStore();
+  const v1 = store.statusView('INCIRLIK');
+  assert.equal(store.statusView('INCIRLIK'), v1);
+  assert.throws(() => { v1.runways[0].status = 'CLOSED'; });
+  mustOp(store, 'TWR', 'CloseRunway', { runwayId: '05/23' });
+  const v2 = store.statusView('INCIRLIK');
+  assert.notEqual(v2, v1);
+  assert.equal(v2.runways[0].status, 'CLOSED');
+  const copy = store.getFieldState('INCIRLIK');
+  copy.runways[0].status = 'OPEN';
+  assert.equal(store.getFieldState('INCIRLIK').runways[0].status, 'CLOSED');
+});
+
+test('the mission wind sets the active end once per mission; a reconnect keeps what is there (decisions.md H22)', () => {
+  const { store, log } = freshStore();
+  let r = store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 240, windKt: 12, missionKey: 'Syria:a' });
+  assert.deepEqual([r.ok, r.activeRunway], [true, '23']);
+  let fsI = store.getFieldState('INCIRLIK');
+  assert.equal(fsI.activeRunway, '23');
+  assert.equal(fsI.activeRunwaySource.kind, 'WIND');
+  assert.equal(fsI.activeRunwaySource.windFromTrue, 240);
+  assert.equal(log().at(-1).op, 'ActiveRunwayFromWind');
+  assert.equal(log().at(-1).actorId, 'crc-sync');
+  // Same mission again (a reconnect): nothing changes even if the wind reads differently.
+  r = store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, windKt: 3, missionKey: 'Syria:a' });
+  assert.deepEqual([r.changed, store.getFieldState('INCIRLIK').activeRunway], [false, '23']);
+  // A new mission re-derives.
+  r = store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, windKt: 8, missionKey: 'Syria:b' });
+  assert.equal(store.getFieldState('INCIRLIK').activeRunway, '05');
+  assert.equal(store.setActiveRunwayFromWind('CENTER', { windFromTrue: 60 }).reason, 'NOT_FOUND');
+});
+
+test('snapshot/restore round-trips a SUSPENDED_BARRIER_CHANGE runway intact', () => {
+  const { store } = freshStore();
+  store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, missionKey: 'k' });
+  mustOp(store, 'TWR', 'BeginBarrierChange', { runwayId: '05/23', note: 're-rig' });
+  const snap = JSON.parse(JSON.stringify(store.snapshot()));
+  const { store: reborn } = freshStore();
+  reborn.restore(snap);
+  const fsI = reborn.getFieldState('INCIRLIK');
+  assert.equal(rwy(fsI).status, 'SUSPENDED_BARRIER_CHANGE');
+  assert.equal(rwy(fsI).suspension.positionId, 'TWR');
+  assert.equal(rwy(fsI).suspension.note, 're-rig');
+  assert.equal(fsI.activeRunway, '05');
+  assert.equal(fsI.rev, store.getFieldState('INCIRLIK').rev);
+  assert.equal(reborn.statusView('INCIRLIK').runways[0].status, 'SUSPENDED_BARRIER_CHANGE');
+  // No inventory in the snapshot — the gear comes from config.
+  assert.ok(!('arrestingGear' in snap[0].runways[0]));
+});
+
+test('restore drops a runway no longer configured and seeds a newly configured one OPEN', () => {
+  const { store } = freshStore();
+  mustOp(store, 'TWR', 'CloseRunway', { runwayId: '05/23' });
+  const snap = store.snapshot();
+  const inv = structuredClone(INVENTORY);
+  inv.runways = [{ runwayId: '17/35', ends: ['17', '35'], endHeadingsTrue: { '17': 170, '35': 350 }, arrestingGear: [] }];
+  const { store: reborn } = freshStore({ fieldStateOverride: inv });
+  reborn.restore(snap);
+  const fsI = reborn.getFieldState('INCIRLIK');
+  assert.deepEqual(fsI.runways.map(r => [r.runwayId, r.status]), [['17/35', 'OPEN']]);
+  // A snapshot for a Facility with no inventory is skipped.
+  reborn.restore([{ facilityId: 'CENTER', runways: [] }]);
+  assert.equal(reborn.getFieldState('CENTER'), null);
+});
+
+test('apply never throws on garbage input', () => {
+  const { store } = freshStore();
+  for (const bad of [null, undefined, 7, {}, { facilityId: 'INCIRLIK' }, { facilityId: 'INCIRLIK', op: null },
+    { facilityId: 'INCIRLIK', op: { kind: 'CloseRunway' } }, { facilityId: 'INCIRLIK', op: { kind: 'RequestRunwayStatus', runwayId: '05/23', action: {} } }]) {
+    const r = store.apply(bad, 'TWR', 'c-TWR');
+    assert.equal(r.ok, false, JSON.stringify(bad));
+  }
+  assert.equal(rwy(store.getFieldState('INCIRLIK')).status, 'OPEN');
+});
