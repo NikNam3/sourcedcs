@@ -46,7 +46,7 @@ function mountPanel({ held = ['OPS'], stereoRoutes = ROUTES, lookupSpy = null, l
     'efsp-create-strip-role', 'efsp-create-strip-stereo', 'efsp-dot-command-input',
     'efsp-dot-command-preview', 'efsp-mutation-error', 'efsp-mutation-warning',
     'efsp-connection-banner']) {
-    els[id] = makeElement(id.endsWith('-btn') ? 'button' : id.includes('select') ? 'select' : 'input');
+    els[id] = makeElement(id.endsWith('-btn') ? 'button' : id.includes('role') || id.includes('stereo') ? 'select' : 'input');
   }
 
   const sandbox = {
