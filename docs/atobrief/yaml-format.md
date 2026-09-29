@@ -1182,7 +1182,66 @@ METAR LTAG 011900Z 22008KT 9999 SCT030 22/12 Q1015 NOSIG
 
 ---
 
+## USMTF export
+
+atobrief exports the ATO as a USMTF Air Tasking Order (**EXPORT → USMTF**, or
+`GET /api/rooms/:id/ato.usmtf` / `POST /api/usmtf`). The design and every choice behind it are in
+[ADR 0078](../adr/0078-atobrief-exports-usmtf-ato.md). Every DTG is in-game UTC built from
+`header.ato_date`, and the first line is always `UNCLAS`.
+
+| atobrief | USMTF |
+|---|---|
+| `header.operation` | `EXER`/`OPER` f1 |
+| `header.ato_date` + `ato.ingame_start_time` | `TIMEFRAM` (TO = FROM + 24 h − 1 min), `MSGID` month |
+| `ato.codewords` | `GENTEXT/CODEWORDS` |
+| `missions[].unit` | `TASKUNIT` (missions grouped by unit) |
+| `mission_number` (`MSN` stripped), `mission_type`, `deploy`/`takeoff_time`, `recovery`/`recovery_time` | `AMSNDAT` |
+| `aircraft.count`/`type`/`loadout`, `callsign`, SPINS C3 Mode 3 | `MSNACFT` |
+| targets with `tot_net`/`tot_nlt` | one `GTGTLOC` each (registry name, id, type, coords, elevation) |
+| otherwise `vul`, else the first target `tos`/`toffs`; the first orbit steerpoint's name and altitude | `AMSNLOC` |
+| `control.agency_id` → `registry.control_agencies` | `CONTROLA` (`AWACS`→`AWAC`, `CRC`, anything else `OTR`) |
+| `refuel[]` → `registry.tankers` | `ARINFO`, in `time_from` order |
+
+The derived `_vul_start`/`_vul_end` (IP/EP times) are never exported. Anything missing is written
+as `-` and reported as a warning in the export dialog.
+
+**Optional fields that exist for the export** (all optional; codes are quoted strings, so that
+leading zeros survive):
+
+```yaml
+header:
+  usmtf: { message_kind: EXER, originator: SOURCEDCS AOC, serial: ATO C,
+           asof: '2026-09-13 1800Z', country: US, service: F, default_unit: SOURCE DCS }
+ato:
+  missions:
+    - package_id: AB
+      package_commander: true          # AMSNDAT MC, 9PKGDAT; members get PKGCMD
+      iff: { mode1: '12', mode2: '0011', mode3: '4521' }   # mode3 wins over SPINS C3
+      datalink: { l16_callsign: VP11, tacan: 38Y, ju: '00011' }
+      alert_status: GH15
+      priority: 1
+      vul: { start: 1300Z, end: 1500Z }
+      narrative: PACKAGE AB PUSH FROM IP WEST AT 141445Z
+      control: { agency_id: MAGIC, report_in_point: ALPHA, check_in_time: 1300Z, secondary_freq_mhz: '305.5' }
+      refuel: [ { tanker_id: SHELL71, time_from: 1345Z, time_to: 1400Z, offload_klb: 12 } ]
+registry:
+  units: { SOURCE DCS 1: { base: OMAM, remarks: free text } }
+  tankers:   # + mission_number links the tanker to its own REFUELING mission
+    SHELL71: { mission_number: 1901T, arcp: ANCHOR BLUE, system: BOOM, offload_klb: 60,
+               alert_offload_klb: 10, fuel: JP8 }
+  control_agencies:   # + mission_number links the agency to its own AEW mission (7CONTROL)
+    MAGIC: { secondary_freq_mhz: '305.5', mission_number: 1801W }
+```
+
+Tankers and AWACS are ordinary missions (`REFUELING` / `AEW`). The registry entry names its
+mission through `mission_number`, and that gives `REFTSK`, `5REFUEL` and `7CONTROL`.
+
+---
+
 ## IFF Squawk Code Generation
+
+> **Stale:** the formula below is outdated. The editor and miztoyaml randomise Mode 3 codes today.
+> The USMTF export reads whatever the C3 table holds (or `missions[].iff.mode3`).
 
 When `miztoyaml` builds the SPINS sections, Mode 3 squawk codes are assigned
 automatically to each mission in ATO order using the following formula:
