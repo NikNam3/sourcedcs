@@ -24,8 +24,8 @@ const { openPanel, seedStrip, stripByCallsign } = require('./helpers/app');
 const BAY = 'ops-coordination';
 
 async function openBay(page, bayId, positionId = 'OPS') {
-  await page.locator('.efsp-position-tab', { hasText: new RegExp(`^${positionId}$`) }).click();
-  await page.locator('.efsp-bay-tab', { hasText: bayId }).click();
+  await page.locator(`#efsp-position-tabs .efsp-position-tab[data-position-id=\"${positionId}\"]`).click();
+  await page.locator(`#efsp-bay-tabs .efsp-bay-tab[data-bay-id=\"${bayId}\"]`).click();
   await page.waitForTimeout(200);
 }
 

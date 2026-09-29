@@ -27,8 +27,8 @@ let seq = 0;
 const uniqueCallsign = (prefix) => `${prefix}${(Date.now() + seq++) % 10000}`;
 
 async function goBay(page, positionId, bayId) {
-  await page.locator('#efsp-position-tabs .efsp-position-tab', { hasText: new RegExp(`^${positionId}$`) }).click();
-  await page.locator('#efsp-bay-tabs .efsp-bay-tab', { hasText: new RegExp(`^${bayId}$`) }).click();
+  await page.locator(`#efsp-position-tabs .efsp-position-tab[data-position-id=\"${positionId}\"]`).click();
+  await page.locator(`#efsp-bay-tabs .efsp-bay-tab[data-bay-id=\"${bayId}\"]`).click();
 }
 
 /** The server-side Strip for a callsign, as the page's own state has it. */

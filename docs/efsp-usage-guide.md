@@ -278,6 +278,25 @@ A Strip has three columns:
   MARSA…, Bind…, Convert to Arrival, Offset. Something you cannot do right now is still listed,
   greyed, with the reason. **▼** opens the rest of the Blocks. **✕** drops the Strip.
 
+### Strip counts and arrivals (docs/adr/0057)
+
+Every Bay tab shows how many Strips are in it, and each Position tab its total.
+
+A Strip that moves into one of your Bays is an **arrival**, whoever moved it:
+another controller handing it to you, a handoff or TOFI proposal landing in your
+coordination Bay, or your own NLA or drag when you work several Positions at once.
+
+- In a Bay you are **not** looking at: that Bay's tab turns amber with **+N**, the
+  Position tab gets an amber dot, and a line appears under the Bay tabs:
+  `VIPER11 → twr-runway-queue from GND`. Click it to open the Bay with the Strip
+  selected. Opening the Bay clears the tab and the line.
+- In the Bay you **are** looking at: the Strip flashes once and keeps an amber edge
+  and a **from GND** line in its tab until you touch it, or for 30 seconds.
+
+Not announced: a Strip you just created, a reorder within a Bay, or a change that
+leaves a Strip where it was. The "from" line names the Position it came from, or the
+Bay when it moved within one Position.
+
 ### The fields, and the `▼` button
 
 Each Position sees the fields it works, not all of them: Tower sees HOOK and ORDNANCE, APP and CTR

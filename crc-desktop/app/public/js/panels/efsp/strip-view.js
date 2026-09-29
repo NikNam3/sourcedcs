@@ -309,10 +309,13 @@ function _buildLifeBlock(strip) {
   return { life, inhibited };
 }
 
-function _buildStripTab(strip) {
+function _buildStripTab(strip, arrival) {
   const tab = _stripEl('div', 'efsp-strip-tab');
   tab.appendChild(_stripEl('div', 'efsp-strip-tab-role',
     `${ROLE_ABBR[strip.role] || strip.role} · ${String(strip.state).replace(/_/g, ' ')}`));
+  // Just arrived from another controller (docs/adr/0057): who from, in amber,
+  // until the controller touches the Strip or 30 s after they first saw it.
+  if (arrival) tab.appendChild(_stripEl('div', 'efsp-strip-from', `from ${arrival.from}`));
   const rows = [_coordinationExchange(strip), _tofiExchange(strip), _marsaExchange(strip), _trackExchange(strip)]
     .filter(Boolean);
   for (const row of rows) tab.appendChild(row);
@@ -664,7 +667,31 @@ function _buildStripLayout(el, strip, obligation) {
     el.classList.add('efsp-strip-marsa-participant');
   }
 
-  const { tab, rows, inhibited } = _buildStripTab(strip);
+  const arrival = typeof efspArrivalFor === 'function' ? efspArrivalFor(strip.stripId) : null;
+  if (arrival) {
+    el.classList.add('efsp-strip-arrived');
+    // The flash plays on the first build the controller can SEE, and never
+    // again: rebuilding for any other reason shows the steady amber edge.
+    const onScreen = typeof efspVisibleBayId !== 'function' || efspVisibleBayId() === strip.bayId;
+    if (onScreen && consumeEfspArrivalFlash(strip.stripId)) {
+      el.classList.add('efsp-strip-arrived-flash');
+      if (typeof noteEfspArrivalShown === 'function') noteEfspArrivalShown();
+    }
+    // Touching the Strip is noticing it. Cleared in place rather than by a
+    // re-render: this is also how a drag starts, and rebuilding the element
+    // under a starting drag would drop it.
+    const noticed = () => {
+      if (!efspArrivalFor(strip.stripId)) return;
+      clearEfspArrival(strip.stripId);
+      el.classList.remove('efsp-strip-arrived', 'efsp-strip-arrived-flash');
+      const from = el.querySelector && el.querySelector('.efsp-strip-from');
+      if (from && from.remove) from.remove();
+    };
+    el.addEventListener('pointerdown', noticed, true);
+    el.addEventListener('keydown', noticed, true);
+  }
+
+  const { tab, rows, inhibited } = _buildStripTab(strip, arrival);
   if (rows.some(r => r.classList.contains('efsp-x-in'))) el.classList.add('efsp-strip-needs');
 
   const main = _stripEl('div', 'efsp-strip-main');

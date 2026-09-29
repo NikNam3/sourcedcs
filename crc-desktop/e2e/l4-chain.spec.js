@@ -42,8 +42,8 @@ async function advance(page, cs, n) {
 
 async function show(page, cs) {
   const { owner, bay } = await info(page, cs);
-  await page.locator('#efsp-position-tabs .efsp-position-tab', { hasText: new RegExp(`^${owner}$`) }).click();
-  await page.locator('#efsp-bay-tabs .efsp-bay-tab', { hasText: new RegExp(`^${bay}$`) }).click();
+  await page.locator(`#efsp-position-tabs .efsp-position-tab[data-position-id=\"${owner}\"]`).click();
+  await page.locator(`#efsp-bay-tabs .efsp-bay-tab[data-bay-id=\"${bay}\"]`).click();
   await page.waitForTimeout(250);
 }
 
@@ -66,8 +66,8 @@ for (const [label, n, tag] of [['Approve Pushback', 2, 'P'], ['To Runway Queue',
 
     for (let attempt = 0; attempt < 3; attempt++) {
       const pair = [`L4${tag}${attempt}A`, `L4${tag}${attempt}B`];
-      await page.locator('#efsp-position-tabs .efsp-position-tab', { hasText: /^OPS$/ }).click();
-      await page.locator('#efsp-bay-tabs .efsp-bay-tab', { hasText: /^ops-proposed$/ }).click();
+      await page.locator('#efsp-position-tabs .efsp-position-tab[data-position-id="OPS"]').click();
+      await page.locator('#efsp-bay-tabs .efsp-bay-tab[data-bay-id="ops-proposed"]').click();
       for (const c of pair) { await seedStrip(page, { callsign: c, role: 'DEPARTURE', fdr: FDR }); await advance(page, c, n); }
       await show(page, pair[0]);
 

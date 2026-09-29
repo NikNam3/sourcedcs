@@ -166,7 +166,9 @@ function _renderPositionTabs() {
     tab.className = 'efsp-position-tab'
       + (positionId === _activePositionTab ? ' active' : '')
       + (held ? '' : ' efsp-position-tab-drop-only');
-    tab.textContent = positionId;
+    tab.dataset.positionId = positionId;
+    _fillTabLabel(tab, positionId, held ? _stripCountForPosition(positionId) : null,
+      held && typeof unseenEfspArrivalsForPosition === 'function' ? unseenEfspArrivalsForPosition(positionId) : 0, 'dot');
     // Doubles as a drag drop-zone (guide §4.2: "other Bays reachable
     // through header drop zones that double as drag targets") —
     // bay-view.js hit-tests for this attribute during a drag and issues a
@@ -201,13 +203,26 @@ function _renderBayTabs() {
   const bays = _positionsWithBays()[_activePositionTab] || [];
   if (!bays.some(b => b.bayId === _activeBayId)) _activeBayId = bays[0] ? bays[0].bayId : null;
 
+  // The Bay in front of the controller has been seen, before its tab is drawn,
+  // so it never shows "+N" for what is on screen.
+  if (_activeBayId && _isEfspPanelShowing() && typeof markEfspBaySeen === 'function') {
+    markEfspBaySeen(_activeBayId);
+    // Opening a Bay is a Bay-tab click, which redraws only the Bay tabs; the
+    // Position tab's dot has to follow or it stays lit for arrivals just seen.
+    _refreshPositionTabMarks();
+  }
+
   _bayTabsEl.innerHTML = '';
   for (const bay of bays) {
     const isSearchBay = bay.bayId.endsWith('-search');
     const isOpsFiledBay = bay.bayId === 'ops-filed';
     const tab = document.createElement('button');
-    tab.className = 'efsp-bay-tab' + (bay.bayId === _activeBayId ? ' active' : '') + (isSearchBay ? ' efsp-bay-tab-search' : '');
-    tab.textContent = isSearchBay ? `🔍 ${_searchQuery}` : bay.bayId;
+    const unseen = !isSearchBay && typeof unseenEfspArrivalsInBay === 'function' ? unseenEfspArrivalsInBay(bay.bayId) : 0;
+    tab.className = 'efsp-bay-tab' + (bay.bayId === _activeBayId ? ' active' : '') + (isSearchBay ? ' efsp-bay-tab-search' : '')
+      + (unseen ? ' efsp-tab-has-arrival' : '');
+    tab.dataset.bayId = bay.bayId;
+    _fillTabLabel(tab, isSearchBay ? `🔍 ${_searchQuery}` : bay.bayId,
+      isSearchBay || isOpsFiledBay ? null : _stripCountForBay(bay.bayId), unseen, 'pill');
     // A Bay-tab drop target picks the EXACT Bay (rather than the
     // Position's default one) — see bay-view.js's _finishDrag. Search is a
     // client-local pseudo-Bay (guide §4.3), so it deliberately does NOT
@@ -236,6 +251,8 @@ function _renderBayTabs() {
       _bayTabsEl.appendChild(closeBtn);
     }
   }
+
+  _renderArrivalsLine();
 
   if (_activeBayId) {
     setOpenEfspBays([{ containerEl: _bayContentEl, bayId: _activeBayId }]);
@@ -1287,6 +1304,143 @@ function _wireDotCommand() {
   });
 }
 
+// ── Tab counts and arrivals (docs/adr/0057) ───────────────────────────────
+
+/** A tab's text as spans, so a count or "+N" can sit beside the name without becoming part of it. */
+function _fillTabLabel(tab, name, count, unseen, unseenStyle) {
+  tab.textContent = '';
+  const nameEl = document.createElement('span');
+  nameEl.className = 'efsp-tab-name';
+  nameEl.textContent = name;
+  tab.appendChild(nameEl);
+  if (count !== null && count !== undefined) {
+    const c = document.createElement('span');
+    c.className = 'efsp-tab-count';
+    c.textContent = String(count);
+    c.title = `${count} Strip${count === 1 ? '' : 's'}`;
+    tab.appendChild(c);
+  }
+  if (unseen > 0) {
+    const mark = document.createElement('span');
+    mark.className = unseenStyle === 'pill' ? 'efsp-tab-new' : 'efsp-tab-new-dot';
+    if (unseenStyle === 'pill') mark.textContent = `+${unseen}`;
+    mark.title = `${unseen} Strip${unseen === 1 ? '' : 's'} arrived that you have not looked at yet`;
+    tab.appendChild(mark);
+  }
+}
+
+function _liveStrips() {
+  return typeof getAllEfspStrips === 'function' ? getAllEfspStrips().filter(s => s.state !== 'DROPPED') : [];
+}
+
+function _stripCountForBay(bayId) {
+  return _liveStrips().filter(s => s.bayId === bayId).length;
+}
+
+function _stripCountForPosition(positionId) {
+  return _liveStrips().filter(s => s.ownerPositionId === positionId && !String(s.bayId).endsWith('-search') && s.bayId !== 'ops-filed').length;
+}
+
+function _refreshPositionTabMarks() {
+  if (!_positionTabsEl || !_positionTabsEl.children) return;
+  for (const tab of _positionTabsEl.children) {
+    const positionId = tab.dataset && tab.dataset.positionId;
+    if (!positionId) continue;
+    const held = !String(tab.className).includes('efsp-position-tab-drop-only');
+    _fillTabLabel(tab, positionId, held ? _stripCountForPosition(positionId) : null,
+      held && typeof unseenEfspArrivalsForPosition === 'function' ? unseenEfspArrivalsForPosition(positionId) : 0, 'dot');
+  }
+}
+
+/** Whether the Strip panel is actually on screen (a docked tab behind another is not). */
+function _isEfspPanelShowing() {
+  if (!_bayContentEl) return false;
+  if (_bayContentEl.isConnected === false) return false;
+  return _bayContentEl.offsetParent !== null;
+}
+
+/** The Bay the controller is looking at right now, or null when the panel is hidden. */
+function efspVisibleBayId() {
+  return _activeBayId && _isEfspPanelShowing() ? _activeBayId : null;
+}
+
+/**
+ * The line under the Bay tabs: Strips that landed in a Bay the controller is
+ * NOT looking at, and where from. Clicking one opens that Bay and selects the
+ * Strip. An arrival in the Bay on screen is never listed — the Strip itself
+ * flashes and carries its "from" line.
+ */
+function _renderArrivalsLine() {
+  if (!_bayTabsEl || typeof efspArrivalLog !== 'function') return;
+  let line = document.getElementById('efsp-arrivals-line');
+  if (!line) {
+    line = document.createElement('div');
+    line.id = 'efsp-arrivals-line';
+    if (_bayTabsEl.parentNode && typeof _bayTabsEl.parentNode.insertBefore === 'function') {
+      _bayTabsEl.parentNode.insertBefore(line, _bayTabsEl.nextSibling);
+    }
+  }
+  const entries = efspArrivalLog();
+  line.innerHTML = '';
+  line.hidden = entries.length === 0;
+  for (const e of entries) {
+    const row = document.createElement('button');
+    row.className = 'efsp-arrival-row';
+    row.dataset.stripId = e.stripId;
+    row.title = `open ${e.bayId} and select ${e.callsign}`;
+    for (const [cls, text] of [['efsp-arrival-cs', e.callsign], ['efsp-arrival-bay', `→ ${e.bayId}`], ['efsp-arrival-from', `from ${e.from}`]]) {
+      const span = document.createElement('span');
+      span.className = cls;
+      span.textContent = text;
+      row.appendChild(span);
+    }
+    row.addEventListener('click', () => {
+      _activePositionTab = e.positionId;
+      _activeBayId = e.bayId;
+      _renderPositionTabs();
+      if (typeof selectEfspStripById === 'function') selectEfspStripById(e.stripId);
+    });
+    line.appendChild(row);
+  }
+}
+
+let _arrivalExpiryTimer = null;
+
+/** Redraw when the next seen arrival's amber edge runs out, so it fades on time on a quiet Board. */
+function _scheduleArrivalExpiry() {
+  if (typeof nextEfspArrivalExpiry !== 'function') return;
+  const next = nextEfspArrivalExpiry(Date.now());
+  if (_arrivalExpiryTimer) { clearTimeout(_arrivalExpiryTimer); _arrivalExpiryTimer = null; }
+  if (next === null) return;
+  _arrivalExpiryTimer = setTimeout(() => {
+    _arrivalExpiryTimer = null;
+    if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
+    _scheduleArrivalExpiry();
+  }, Math.max(50, next - Date.now() + 20));
+}
+
+/** app.js, after an efsp-board-delta is applied — see efsp-arrivals.js for the rule. */
+function noteEfspBoardArrivals(msg, placementBefore) {
+  if (typeof noteEfspArrivals !== 'function') return;
+  const held = typeof getActingPositions === 'function' ? getActingPositions() : [];
+  const mine = new Set();
+  for (const positionId of held) {
+    const p = typeof getEfspPosition === 'function' ? getEfspPosition(positionId) : null;
+    if (p && p.primary && p.primary.controllerId) mine.add(p.primary.controllerId);
+  }
+  noteEfspArrivals(placementBefore, (msg.strips && msg.strips.updated) || [], {
+    heldPositions: held, myControllerIds: mine, visibleBayId: efspVisibleBayId(), now: Date.now(),
+    callsignOf: (strip) => {
+      const fdr = getEfspFdr(strip.fdrId);
+      return (fdr && fdr.identity && fdr.identity.callsign) || strip.stripId;
+    },
+  });
+  if (typeof forgetEfspArrivals === 'function') forgetEfspArrivals(msg.strips && msg.strips.gone);
+}
+
+/** strip-view.js, once a new Strip's flash has played: start the fade-out clock. */
+function noteEfspArrivalShown() { _scheduleArrivalExpiry(); }
+
 /** Called from app.js after any efsp-snapshot/efsp-board-delta/efsp-positions-ack lands — safe to call even when the Strip panel has never been opened yet (every render function no-ops until initEfspPanel() has cached its elements) or is currently the inactive tab (cached element references stay valid while detached — see the module comment). */
 function refreshEfspPanel() {
   _renderPositionTabs();
@@ -1355,5 +1509,5 @@ function initEfspPanel() {
 // see efsp-nla.js). Everything else in this file touches the DOM directly and
 // stays browser-only.
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { computePositionTabs };
+  module.exports = { computePositionTabs, efspVisibleBayId };
 }

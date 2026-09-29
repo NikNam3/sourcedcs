@@ -13,6 +13,10 @@
   flex-direction: column;
   height: 100%;
   font-family: 'Consolas', 'DejaVu Sans Mono', monospace;
+  /* The panel's base size, the same 11px the track panel uses. Without it
+     every tab, the New Strip toolbar and every `font: inherit` control fell
+     through to the browser's 16px default (docs/adr/0057). */
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   background: #14181c;
   color: #d8e0e6;
@@ -49,7 +53,11 @@
    origins are simultaneously reachable (a combined-Position controller,
    e.g. holding OPS+APP+CTR at once); auto-resolved with no picker shown
    for the common single-Position case. */
-#efsp-create-strip-role {
+/* The stereo-route and mission-line pickers share it — both were unstyled,
+   and so drew as the browser's white default select at its own size. */
+#efsp-create-strip-role,
+#efsp-create-strip-stereo,
+#efsp-create-strip-bind {
   min-height: 32px;
   padding: 4px 8px;
   background: #0e1114;
@@ -66,7 +74,7 @@
    desaturation below is the "visual degradation", this text is the
    explicit "you MUST be able to tell" signal. */
 #efsp-connection-banner {
-  font-size: 12px;
+  font-size: 11px;
   color: #e0a83c;
   padding: 4px 8px;
   min-height: 16px;
@@ -109,7 +117,7 @@
  * it keys on, and efsp-panel.js clears both by setting textContent = ''. */
 #efsp-mutation-error {
   order: 1;
-  font-size: 12px;
+  font-size: 11px;
   color: #ff5c5c;
   padding: 4px 8px;
   min-height: 16px;
@@ -125,7 +133,7 @@
    7) must not read as a hard rejection. Amber, not red. */
 #efsp-mutation-warning {
   order: 1;
-  font-size: 12px;
+  font-size: 11px;
   color: #e0a83c;
   padding: 4px 8px;
   min-height: 16px;
@@ -218,7 +226,7 @@
 }
 
 .efsp-rack-header {
-  font-size: 11px;
+  font-size: 10px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: #6a7580;
@@ -321,10 +329,10 @@
 }
 
 .efsp-block {
-  font-size: 13px;
+  font-size: 12px;
   white-space: pre;
 }
-.efsp-block-1 { font-weight: bold; min-width: 60px; }
+.efsp-block-1 { font-weight: bold; font-size: 13px; min-width: 60px; }
 
 /* F-105, the in-chip half. Measured at 28x20; the floor is 44x44 and a chip
    row is 29px tall on a 35px pitch, so growing the box is not available —
@@ -424,7 +432,7 @@
    overhanging 2px into .efsp-strip's 6px row gap where nothing else is. */
 .efsp-block-input {
   font: inherit;
-  font-size: 13px;
+  font-size: 12px;
   width: 90px;
   background: #0e1114;
   border: 1px solid #4a7dbf;
@@ -717,7 +725,7 @@
 #efsp-dot-command-preview {
   padding: 8px;
   color: #6a7580;
-  font-size: 12px;
+  font-size: 11px;
 }
 /* F-401 — nothing to preview, nothing to reserve. Already downstream of the
    Bay, so it costs no Strip position when it does appear. */
@@ -830,7 +838,7 @@
   border: 1px solid #2a3038;
   color: #d8e0e6;
   font: inherit;
-  font-size: 12px;
+  font-size: 11px;
   padding: 4px;
 }
 .efsp-coordinate-note-required {
@@ -975,7 +983,7 @@
 }
 .efsp-filed-plan-summary {
   color: #a8b4bd;
-  font-size: 13px;
+  font-size: 12px;
 }
 .efsp-filed-plan-by {
   color: #6a7580;
@@ -1418,7 +1426,7 @@
   color: var(--efsp-text);
   border: 1px solid var(--efsp-line-2);
   font: inherit;
-  font-size: 12px;
+  font-size: 11px;
 }
 .efsp-strip-life { margin-top: auto; display: grid; }
 
@@ -1478,7 +1486,7 @@
   height: 22px;
   padding: 0 7px;
   border-radius: 2px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: bold;
   letter-spacing: 0.03em;
   white-space: nowrap;
@@ -1527,7 +1535,7 @@
   border: 1px solid var(--efsp-line-2);
   color: var(--efsp-text);
   font: inherit;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: bold;
   cursor: pointer;
   white-space: nowrap;
@@ -1576,7 +1584,7 @@
   min-height: var(--efsp-tap);
   padding: 0 10px;
   border-radius: 2px;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--efsp-text);
   cursor: pointer;
 }
@@ -1616,3 +1624,121 @@
 /* Below 320px nothing squeezes further; the Bay scrolls sideways instead. */
 .efsp-rack { min-width: 320px; }
 #efsp-bay-content { overflow-x: auto; }
+
+
+/* ══ Text scale and arrivals (docs/adr/0057) ════════════════════════════════
+ *
+ * Four steps, the range the rest of CRC already uses: 9px labels, 10px
+ * indicators and headers, 11px the panel base (tabs, toolbar, buttons,
+ * reasons), 12px field values; the callsign 13px bold.
+ */
+
+/* Portalled to <body> (F-001), which sets Courier New and no size, so every
+   popover and the ⋯ menu rendered in a different face at 16px. */
+.efsp-coordinate-popover,
+.efsp-highlight-popover,
+.efsp-strip-menu {
+  font-family: 'Consolas', 'DejaVu Sans Mono', monospace;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.efsp-coordinate-popover select,
+.efsp-coordinate-popover input,
+.efsp-coordinate-popover textarea,
+.efsp-coordinate-popover button { font: inherit; }
+
+/* Toolbar and tabs: the text is centred in the control, not left at the top
+   of its min-height (the + New Strip button did exactly that). */
+#efsp-new-strip-callsign,
+#efsp-create-strip-btn,
+#efsp-create-strip-role,
+#efsp-create-strip-stereo,
+#efsp-create-strip-bind,
+.efsp-position-tab,
+.efsp-bay-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1;
+}
+#efsp-create-strip-btn { justify-content: center; }
+
+/* Counts on the tabs, and the unseen-arrival marks. */
+.efsp-tab-count {
+  min-width: 1.8em;
+  padding: 1px 4px;
+  border-radius: 2px;
+  text-align: center;
+  font-size: 10px;
+  color: var(--efsp-muted);
+  background: #0e1114;
+  border: 1px solid #2a3038;
+}
+.efsp-position-tab.active .efsp-tab-count,
+.efsp-bay-tab.active .efsp-tab-count { color: var(--efsp-text); border-color: var(--efsp-line-2); }
+.efsp-bay-tab.efsp-tab-has-arrival { border-color: var(--efsp-attn); color: var(--efsp-attn-text); }
+.efsp-tab-new {
+  padding: 1px 5px;
+  border-radius: 2px;
+  font-size: 10px;
+  font-weight: bold;
+  color: #1a1204;
+  background: var(--efsp-attn);
+}
+.efsp-tab-new-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--efsp-attn);
+}
+
+/* The arrivals line: Strips that landed in a Bay you are not looking at. */
+#efsp-arrivals-line {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 8px 4px;
+  border-bottom: 1px solid #2a3038;
+}
+#efsp-arrivals-line[hidden] { display: none; }
+.efsp-arrival-row {
+  all: unset;
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  min-height: 22px;
+  cursor: pointer;
+  color: var(--efsp-muted);
+}
+.efsp-arrival-row:hover, .efsp-arrival-row:focus-visible { color: var(--efsp-text); }
+.efsp-arrival-row:focus-visible { outline: 2px solid var(--efsp-go); outline-offset: 1px; }
+.efsp-arrival-cs { color: var(--efsp-attn-text); font-weight: bold; }
+
+/* The Strip itself: an amber edge while it is new, a single flash when it is
+   first seen, and who it came from in the tab. */
+.efsp-strip.efsp-strip-arrived {
+  border-top-color: var(--efsp-attn);
+  border-right-color: var(--efsp-attn);
+  border-bottom-color: var(--efsp-attn);
+}
+.efsp-strip-arrived-flash .efsp-strip-grid { animation: efsp-arrived-flash 1.6s ease-out 1; }
+@keyframes efsp-arrived-flash {
+  0% { background-color: rgba(224, 168, 60, 0.28); }
+  100% { background-color: transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .efsp-strip-arrived-flash .efsp-strip-grid { animation: none; }
+}
+.efsp-strip-from { font-size: 10px; color: var(--efsp-attn-text); }
+
+/* Native controls (a <select>'s open list, scrollbars) follow the panel's dark
+   palette rather than the browser's light default. */
+#efsp-panel,
+.efsp-coordinate-popover,
+.efsp-highlight-popover,
+.efsp-strip-menu { color-scheme: dark; }
+
+/* `hidden` has to win. The toolbar pickers are hidden with the attribute when
+   they have nothing to offer, and the id rules above that set `display` would
+   otherwise outrank the browser's own [hidden] rule and draw them empty. */
+#efsp-panel [hidden] { display: none !important; }

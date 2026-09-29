@@ -2834,6 +2834,11 @@ function _stripRenderSignature(strip) {
   const refusal = _refusalForStrip(strip);
   parts.push('ref:' + (refusal ? `${refusal.at}/${refusal.blockId || ''}` : ''));
 
+  // Whether it carries the just-arrived edge (docs/adr/0057). Only the fact,
+  // never the flash: marking the flash played must not itself rebuild the
+  // Strip, or the next render would replay it.
+  parts.push('arr:' + (typeof efspArrivalFor === 'function' && efspArrivalFor(strip.stripId) ? 1 : 0));
+
   return parts.join('|');
 }
 

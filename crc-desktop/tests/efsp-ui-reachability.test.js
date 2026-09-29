@@ -388,7 +388,7 @@ function renderStrip({ strip, fdr, held, airspaces = [], correlations = [], trac
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
 
-  for (const file of ['efsp-nla.js', 'strip-template.js', 'efsp-state.js', 'efsp-gestures.js',
+  for (const file of ['efsp-nla.js', 'strip-template.js', 'efsp-state.js', 'efsp-arrivals.js', 'efsp-gestures.js',
     'annotation-editor.js', 'strip-drag.js', 'correlation-highlight.js', 'marsa-badge.js', 'strip-fields.js', 'bay-view.js', 'strip-view.js']) {
     vm.runInContext(fs.readFileSync(path.join(CLIENT, file), 'utf8'), sandbox, { filename: file });
   }
@@ -847,7 +847,7 @@ function renderAirspaceBoard({ airspaces, held, strips = [], fdrs = [] }) {
   };
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
-  for (const file of ['efsp-state.js', 'airspace-panel.js']) {
+  for (const file of ['efsp-state.js', 'efsp-arrivals.js', 'airspace-panel.js']) {
     vm.runInContext(fs.readFileSync(path.join(CLIENT, file), 'utf8'), sandbox, { filename: file });
   }
   sandbox.getActingPositions = () => held;
@@ -2045,4 +2045,37 @@ test('a voided MARSA carries the alert as a sentence on every participant Strip'
   const why = descendants(el).find(c => (c.className || '').includes('efsp-marsa-void-reason'));
   assert.ok(why, 'the void is an ALERT, not a tooltip');
   assert.match(why.textContent, /MARSA VOIDED — an altitude was assigned before rendezvous\. ATC is separating these aircraft again\./);
+});
+
+// ── Arrivals on the Strip (docs/adr/0057) ────────────────────────────────
+
+test('a Strip that just arrived flashes on its first build only, and keeps its amber edge and "from" line', () => {
+  const strip = stripAt({ ownerPositionId: 'TWR', state: 'RUNWAY_QUEUE', bayId: 'twr-runway-queue', updatedBy: 'c-gnd' });
+  const r = renderStrip({ strip, fdr: FDR, held: ['TWR'] });
+  r.sandbox.noteEfspArrivals(new Map([['s1', { bayId: 'gnd-taxi-out', ownerPositionId: 'GND' }]]), [strip],
+    { heldPositions: ['TWR'], myControllerIds: ['c-twr'], visibleBayId: 'twr-runway-queue', now: Date.now(), callsignOf: () => 'VIPER1' });
+
+  const first = r.sandbox._buildStripEl(strip);
+  assert.ok(first.classList.contains('efsp-strip-arrived'));
+  assert.ok(first.classList.contains('efsp-strip-arrived-flash'), 'the arrival flashes when first seen');
+  assert.ok(descendants(first).some(c => c.textContent === 'from GND'), 'and says who it came from');
+
+  // Something else changes and the Strip is rebuilt: no replay.
+  const second = r.sandbox._buildStripEl(strip);
+  assert.ok(second.classList.contains('efsp-strip-arrived'), 'still marked new');
+  assert.equal(second.classList.contains('efsp-strip-arrived-flash'), false, 'the flash played again on an unrelated rebuild');
+
+  // The controller touches it: noticed.
+  fire(second, 'pointerdown', { target: second, currentTarget: second, button: 0, pointerType: 'mouse' });
+  assert.equal(second.classList.contains('efsp-strip-arrived'), false);
+  assert.equal(r.sandbox.efspArrivalFor('s1'), null);
+});
+
+test('an arrival is part of the render signature, so it appears (and clears) without the Strip\'s rev moving', () => {
+  const strip = stripAt({ ownerPositionId: 'TWR', bayId: 'twr-runway-queue', updatedBy: 'c-gnd' });
+  const { sandbox, el } = renderStrip({ strip, fdr: FDR, held: ['TWR'] });
+  assert.equal(sandbox._stripElNeedsRebuild(el, strip, null, null), false);
+  sandbox.noteEfspArrivals(new Map([['s1', { bayId: 'gnd-taxi-out', ownerPositionId: 'GND' }]]), [strip],
+    { heldPositions: ['TWR'], myControllerIds: [], visibleBayId: 'twr-runway-queue', now: Date.now() });
+  assert.equal(sandbox._stripElNeedsRebuild(el, strip, null, null), true);
 });

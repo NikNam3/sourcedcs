@@ -662,11 +662,17 @@ async function connect() {
           });
         }
         break;
-      case 'efsp-board-delta':
+      case 'efsp-board-delta': {
+        // Where the changed Strips sat BEFORE this delta, so the panel can
+        // tell a Strip that just arrived in one of this controller's Bays
+        // from one that merely changed (efsp-arrivals.js, docs/adr/0057).
+        const placementBefore = typeof captureEfspPlacement === 'function' ? captureEfspPlacement(msg, getEfspStrip) : null;
         applyEfspDelta(msg);
+        if (placementBefore && typeof noteEfspBoardArrivals === 'function') noteEfspBoardArrivals(msg, placementBefore);
         if (typeof refreshEfspPanel === 'function') refreshEfspPanel();
         if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
         break;
+      }
       // Sent every 500ms unconditionally (ws-hub.js's _tick) — the genuine
       // periodic signal a staleness check needs, since "no message" on a
       // quiet Board is not itself evidence the connection died (guide §5.6
@@ -675,7 +681,17 @@ async function connect() {
         if (typeof noteEfspHeartbeat === 'function') noteEfspHeartbeat();
         break;
       case 'efsp-mutation-ack': {
+        // This controller's own move can land here BEFORE the board delta that
+        // also carries it, and by then the Strip already sits in its new Bay —
+        // so arrivals are noted from the ack too (docs/adr/0057). Whichever of
+        // the two comes second sees no Bay change and adds nothing.
+        const ackAsDelta = { strips: { updated: msg.strip ? [msg.strip] : [] } };
+        const ackPlacementBefore = typeof captureEfspPlacement === 'function' ? captureEfspPlacement(ackAsDelta, getEfspStrip) : null;
         const result = applyEfspMutationAck(msg);
+        if (ackPlacementBefore && typeof noteEfspBoardArrivals === 'function') {
+          noteEfspBoardArrivals(ackAsDelta, ackPlacementBefore);
+          if (typeof refreshEfspPanel === 'function') refreshEfspPanel(); // the tab counts and arrivals line
+        }
         if (!result.ok) console.warn('[efsp] Mutation rejected:', result.reason, msg);
         if (typeof notifyEfspMutationAck === 'function') notifyEfspMutationAck(msg.clientMutationId, result);
         if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();

@@ -59,8 +59,8 @@ function strip(page, callsign) {
 }
 
 async function goBay(page, positionId, bayId) {
-  await page.locator('#efsp-position-tabs .efsp-position-tab', { hasText: new RegExp(`^${positionId}$`) }).click();
-  await page.locator('#efsp-bay-tabs .efsp-bay-tab', { hasText: new RegExp(`^${bayId}$`) }).click();
+  await page.locator(`#efsp-position-tabs .efsp-position-tab[data-position-id=\"${positionId}\"]`).click();
+  await page.locator(`#efsp-bay-tabs .efsp-bay-tab[data-bay-id=\"${bayId}\"]`).click();
 }
 
 /** A CENTER ARRIVAL at INBOUND — the state every coordination primitive and TOFI ENTRY is eligible from. */
