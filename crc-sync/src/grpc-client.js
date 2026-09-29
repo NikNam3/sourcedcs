@@ -7,7 +7,14 @@ const path = require('path');
 const PROTO_ROOT = process.env.DCS_GRPC_PROTO_PATH ||
   path.join(__dirname, '../protos');
 const DCS_HOST  = process.env.DCS_GRPC_HOST || 'server.sourcedcs.page:50051';
-const POLL_RATE = parseInt(process.env.DCS_GRPC_POLL_RATE) || 0;
+// StreamUnits options, whole seconds. DCS-gRPC's stream_units() builds a
+// tokio interval from poll_rate, which panics on 0: the task dies after the
+// initial full sync and the stream ends with status OK, so a 0 here turns the
+// unit stream into a full re-sync every ~1.5 s (docs/parallel/research/
+// grpc-reconnect-loop.md). 1 is the floor. max_backoff caps how long DCS-gRPC
+// waits between polls of a unit that isn't changing.
+const POLL_RATE   = Math.max(1, parseInt(process.env.DCS_GRPC_POLL_RATE, 10) || 1);
+const MAX_BACKOFF = Math.max(POLL_RATE, parseInt(process.env.DCS_GRPC_MAX_BACKOFF, 10) || 5);
 
 // GroupCategory numeric values to include (AIRPLANE=1, HELICOPTER=2, GROUND=3, SHIP=4)
 const ALLOWED_CATS = new Set([1, 2, 3, 4]);
@@ -44,6 +51,7 @@ function loadSvc(protoFile) {
 class GrpcClient extends EventEmitter {
   constructor() {
     super();
+    this._closed       = false;
     this._state        = 'disconnected';
     this._missionSvc   = null;
     this._coalSvc      = null;
@@ -63,6 +71,7 @@ class GrpcClient extends EventEmitter {
     this._statusTimer        = null; // debounce for 'reconnecting' broadcasts
     this._icao               = null;
     this._missionFetchActive = false; // prevents duplicate retry loops
+    this._missionRetryTimer  = null;
     // ISA defaults — overwritten by live weather polls
     this._weather    = { pressurePa: ISA_P0, tempK: ISA_T0 };
     // Reference position for weather queries (sea level, theater center)
@@ -115,12 +124,14 @@ class GrpcClient extends EventEmitter {
   // Retry fetchMissionData every 5 s until airports are non-empty.
   // Always logs errors — airports are vital for CRC operation.
   _fetchMissionWithRetry(attempt = 0) {
+    if (this._closed) return;
     this._missionFetchActive = true;
     this.fetchMissionData()
       .then(data => {
+        if (this._closed) return;
         if (data.airports.length === 0) {
           console.warn(`[grpc] mission fetch returned no airports (attempt ${attempt + 1}), retrying in 5s`);
-          setTimeout(() => this._fetchMissionWithRetry(attempt + 1), 5000);
+          this._missionRetryTimer = setTimeout(() => this._fetchMissionWithRetry(attempt + 1), 5000);
           return;
         }
         this._missionFetchActive = false;
@@ -131,9 +142,28 @@ class GrpcClient extends EventEmitter {
         this.emit('mission-load', data);
       })
       .catch(err => {
+        if (this._closed) return;
         console.error(`[grpc] mission fetch error (attempt ${attempt + 1}): ${err.message}, retrying in 5s`);
-        setTimeout(() => this._fetchMissionWithRetry(attempt + 1), 5000);
+        this._missionRetryTimer = setTimeout(() => this._fetchMissionWithRetry(attempt + 1), 5000);
       });
+  }
+
+  // Stops every stream, poll and retry timer and closes the channels. The
+  // server never calls this (it runs for the process lifetime); the tests do.
+  close() {
+    this._closed = true;
+    for (const t of [this._unitTimer, this._eventTimer, this._missionRetryTimer, this._statusTimer]) clearTimeout(t);
+    for (const t of [this._weatherTimer, this._gameTimeTimer]) clearInterval(t);
+    this._unitTimer = this._eventTimer = this._missionRetryTimer = this._statusTimer = null;
+    this._weatherTimer = this._gameTimeTimer = null;
+    const streams = [this._unitStream, this._eventStream];
+    this._unitStream = this._eventStream = null; // their late events are now stale
+    for (const st of streams) { if (st) { try { st.cancel(); } catch (_) {} } }
+    for (const svc of [this._missionSvc, this._coalSvc, this._worldSvc, this._customSvc,
+                       this._atmSvc, this._timerSvc, this._srsSvc, this._unitSvc]) {
+      if (svc) { try { svc.close(); } catch (_) {} }
+    }
+    this._state = 'disconnected';
   }
 
   // ── Unit stream ───────────────────────────────────────────────────────────
@@ -142,7 +172,7 @@ class GrpcClient extends EventEmitter {
     // Cancel previous stream — its events will be ignored via the closure guard below
     if (this._unitStream) { try { this._unitStream.cancel(); } catch (_) {} }
 
-    const stream = this._missionSvc.StreamUnits({ poll_rate: POLL_RATE });
+    const stream = this._missionSvc.StreamUnits({ poll_rate: POLL_RATE, max_backoff: MAX_BACKOFF });
     this._unitStream = stream;
 
     stream.on('data', (res) => {
@@ -285,7 +315,7 @@ class GrpcClient extends EventEmitter {
   }
 
   _scheduleUnit() {
-    if (this._unitTimer) return;
+    if (this._closed || this._unitTimer) return;
     this._unitTimer = setTimeout(() => {
       this._unitTimer = null;
       this._startUnitStream();
@@ -321,7 +351,7 @@ class GrpcClient extends EventEmitter {
   }
 
   _scheduleEvent() {
-    if (this._eventTimer) return;
+    if (this._closed || this._eventTimer) return;
     this._eventTimer = setTimeout(() => {
       this._eventTimer = null;
       this._startEventStream();
