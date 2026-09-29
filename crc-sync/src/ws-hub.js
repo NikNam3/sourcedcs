@@ -50,8 +50,8 @@ class WsHub {
     this._srsStatus   = 'disconnected';
     this._atisActive  = []; // [{ frequency, ownerId }] — see setAtisActive()
     // trackId -> { fp, rev }: bumped when anything about who the contact is
-    // changes (its flight, tag or IFF), so every session relabels it on the
-    // next tick without waiting for a sweep. See _refreshLabels().
+    // changes (its flight, tag or IFF declaration), so every session relabels
+    // it on the next tick without waiting for a sweep. See _refreshLabels().
     this._labels = new Map();
     // trackId -> describe() output, rebuilt each tick.
     this._described = new Map();
@@ -236,21 +236,26 @@ class WsHub {
 
   /**
    * Re-describes every contact once per tick (docs/adr/0059): who it is, its
-   * IFF, its transponder. When who it is changes — correlated to a flight, a
-   * flight's callsign edited, tagged, declared — its label revision moves,
-   * and every session that can see it is sent the new label on this tick
-   * without waiting for a sweep. One pass here instead of a hook on each of
-   * the five places that can change it.
+   * IFF declaration, what its transponder would answer. When who it is
+   * changes — correlated to a flight, a flight's callsign edited, tagged,
+   * declared — its label revision moves, and every session that can see it
+   * is sent the new label on this tick without waiting for a sweep. One pass
+   * here instead of a hook on each of the five places that can change it.
+   *
+   * The AUTOMATIC IFF colour is not in the fingerprint: it depends on each
+   * session's own interrogators (docs/adr/0066), so it is worked out per
+   * session in presentTrack() and reaches the client with the next fresh
+   * return — which is when a real interrogation happens.
    */
   _refreshLabels() {
     this._surv.identity.indexTick();
     const described = new Map();
     for (const track of this._trackStore.getAll()) {
       const id = String(track.id);
-      const d = this._surv.describe(track, this._missionData);
+      const d = this._surv.describe(track);
       described.set(id, d);
       const w = d.who;
-      const fp = [d.iffState, d.iffOverride, w.fdrId, w.correlation, w.fdrCallsign, w.fdrType, w.tag].join('|');
+      const fp = [d.iffOverride, w.fdrId, w.correlation, w.fdrCallsign, w.fdrType, w.tag].join('|');
       const prev = this._labels.get(id);
       if (!prev) this._labels.set(id, { fp, rev: 1 });
       else if (prev.fp !== fp) this._labels.set(id, { fp, rev: prev.rev + 1 });
@@ -302,14 +307,14 @@ class WsHub {
   _present(trackId, hit, visible) {
     const track = this._trackStore.get(trackId);
     if (!track) return null;
-    const d = this._described.get(String(trackId)) || this._surv.describe(track, this._missionData);
+    const d = this._described.get(String(trackId)) || this._surv.describe(track);
     let dl = hit.dl;
     // A lock line only ever points at a contact this controller already has:
     // the datalink must not leak a position their own picture does not.
     if (dl && dl.lock && !visible.has(String(dl.lock))) dl = { ...dl, lock: null };
     return presentTrack(track, {
       at: hit.at, radars: hit.radars, dl,
-      who: d.who, iffState: d.iffState, iffOverride: d.iffOverride, transponder: d.transponder,
+      who: d.who, mode4: d.mode4, iffOverride: d.iffOverride, transponder: d.transponder,
       env: this._surv.env(), missionData: this._missionData,
     });
   }

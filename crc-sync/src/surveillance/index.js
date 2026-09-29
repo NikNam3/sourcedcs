@@ -7,7 +7,6 @@
 const { Transponders } = require('./transponder');
 const { TrackNumbers } = require('./track-numbers');
 const { Identity } = require('./identity');
-const { resolveIff } = require('./iff');
 
 const NO_CORRELATIONS = { trackIndex: () => new Map() };
 const NO_FDRS = { getFdr: () => null };
@@ -35,15 +34,19 @@ function createSurveillance({ collab, srs = null, sensorSpecs = null, correlatio
     transponders, trackNumbers, identity, datalink,
     env: env || (() => ({ weather: {}, transitionAltFt: 18000 })),
 
-    /** Everything about a contact that does not depend on which controller is looking. */
-    describe(track, missionData) {
+    /**
+     * Everything about a contact that does not depend on which controller is
+     * looking: what it would answer, not what anyone got. The automatic IFF
+     * colour depends on the session's own interrogators, so presentation.js
+     * works it out per session (docs/adr/0066); only a declaration is global.
+     */
+    describe(track) {
       const id = String(track.id);
-      const transponder = transponders.transponderOf(track);
       const entry = collab.get(id);
       return {
         who: identity.identify(id),
-        transponder,
-        iffState: resolveIff(track, entry, missionData, !!transponder),
+        transponder: transponders.transponderOf(track),
+        mode4: transponders.mode4Of(track),
         iffOverride: (entry && entry.iff) ? entry.iff.state : null,
       };
     },

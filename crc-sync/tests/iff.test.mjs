@@ -1,43 +1,41 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { computeAutoIff, resolveIff } from '../src/surveillance/iff.js';
+import { classifyIff, IFF_STATES } from '../src/surveillance/iff.js';
 import { checkOnGround } from '../src/geo.js';
 
-// Default server coalition is BLUE (3) unless CRCSYNC_COALITION=2 is set.
+// docs/adr/0066 — the colour is what the interrogation got back. classifyIff
+// takes answers, never a track, so it cannot read the DCS coalition.
 
-test('computeAutoIff: own-coalition AI unit is always friendly', () => {
-  const track = { coalition: 3, player: null, category: 1, lat: 0, lon: 0, alt: 3000 };
-  assert.equal(computeAutoIff(track, null, false), 'friendly');
+test("classifyIff: a controller's declaration beats every answer", () => {
+  assert.equal(classifyIff({ declared: 'hostile', datalink: true, mode4: true, mode3: true }), 'hostile');
+  assert.equal(classifyIff({ declared: 'friendly' }), 'friendly', 'declared friendly with no answer at all');
 });
 
-test('computeAutoIff: own-coalition player with transponder on is friendly', () => {
-  const track = { coalition: 3, player: 'Pilot', category: 1, lat: 0, lon: 0, alt: 3000 };
-  assert.equal(computeAutoIff(track, null, true), 'friendly');
+test('classifyIff: a datalink report is friendly', () => {
+  assert.equal(classifyIff({ datalink: true }), 'friendly');
 });
 
-test('computeAutoIff: own-coalition player without transponder, airborne, is bogey', () => {
-  const track = { coalition: 3, player: 'Pilot', category: 1, lat: 0, lon: 0, alt: 3000 };
-  assert.equal(computeAutoIff(track, null, false), 'bogey');
+test('classifyIff: a valid Mode 4 reply is friendly', () => {
+  assert.equal(classifyIff({ mode4: true }), 'friendly');
+  assert.equal(classifyIff({ mode4: true, mode3: true }), 'friendly');
 });
 
-test('computeAutoIff: enemy airborne is bogey, enemy on the ground is invisible', () => {
-  // checkOnGround skips an airport at exactly lat/lon 0 (a harmless quirk: no
-  // DCS theater airport sits there), so use real-looking coordinates.
-  const missionData = { airports: [{ lat: 36.0, lon: 35.0, elev: 0 }] };
-  const airborne = { coalition: 2, player: 'Pilot', category: 1, lat: 10, lon: 10, alt: 3000 };
-  assert.equal(computeAutoIff(airborne, missionData, false), 'bogey');
-  const onGround = { coalition: 2, player: 'Pilot', category: 1, lat: 36.001, lon: 35.001, alt: 10 };
-  assert.equal(computeAutoIff(onGround, missionData, false), 'invisible');
+test('classifyIff: a Mode 3/C reply without Mode 4 is neutral, not friendly', () => {
+  assert.equal(classifyIff({ mode3: true }), 'neutral');
 });
 
-test('computeAutoIff: neutral coalition is always neutral', () => {
-  assert.equal(computeAutoIff({ coalition: 1, player: null, category: 1, lat: 0, lon: 0, alt: 3000 }, null, false), 'neutral');
+test('classifyIff: no answer (interrogated and silent, or never asked) is a bogey', () => {
+  assert.equal(classifyIff({}), 'bogey');
+  assert.equal(classifyIff(), 'bogey');
+  assert.equal(classifyIff({ declared: null, datalink: false, mode4: false, mode3: false }), 'bogey');
 });
 
-test("resolveIff: a controller's declaration beats the automatic answer", () => {
-  const track = { coalition: 3, player: null, category: 1, lat: 0, lon: 0, alt: 3000 };
-  assert.equal(resolveIff(track, { iff: { state: 'hostile' } }, null, false), 'hostile');
-  assert.equal(resolveIff(track, null, null, false), 'friendly');
+test('classifyIff: automatic IFF never says bandit or hostile; every result is a known state', () => {
+  for (const datalink of [false, true]) for (const mode4 of [false, true]) for (const mode3 of [false, true]) {
+    const s = classifyIff({ datalink, mode4, mode3 });
+    assert.ok(IFF_STATES.includes(s), s);
+    assert.ok(s !== 'bandit' && s !== 'hostile', s);
+  }
 });
 
 test('checkOnGround requires both proximity and low AGL', () => {
