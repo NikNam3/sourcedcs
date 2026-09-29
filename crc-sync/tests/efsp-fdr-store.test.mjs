@@ -835,10 +835,10 @@ test('setMilitary refuses a field WP6 does not deliver, rather than growing one'
   }
 });
 
-test('setField cannot reach the military namespace at all — every path routes through setMilitary', () => {
+test('setField cannot reach the military namespace — every path but the six MTR leaves routes through setMilitary', () => {
   const store = new FdrStore();
   const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
-  for (const path of ['military', 'military.ordnanceState', 'military.hookRequired', 'military.alertStatus', 'military.mtr.designator']) {
+  for (const path of ['military', 'military.ordnanceState', 'military.hookRequired', 'military.alertStatus', 'military.mtr']) {
     const result = store.setField(fdr.fdrId, path, 'HUNG', { by: 'OPS' });
     assert.equal(result.ok, false, path);
     assert.equal(result.reason, 'VALIDATION_ERROR');
@@ -893,4 +893,156 @@ test('the enum fields with no null state refuse being cleared', () => {
   assert.equal(store.setField(fdr.fdrId, 'assigned.releaseState', '', { by: 'CTR' }).ok, false);         // Block 14A — §3.8's six states are exhaustive
   assert.equal(store.setAirspaceOwner(fdr.fdrId, '', { by: 'CTR' }).ok, false);                          // Block 24A — a DIRECTION, never absent (D15)
   assert.equal(store.setMilitary(fdr.fdrId, { ordnanceState: '' }, { by: 'CTR' }).ok, false);            // Block 3G — CLEAN is the clear
+});
+
+
+// ── §9.4 MTR fields (docs/adr/0062) — the six military.mtr.* leaves ──────────
+
+const { normalizeMtrValue } = await import('../src/efsp/fdr-store.js');
+const { resolveZuluHhmm, formatZuluHhmm, parseZuluHhmm } = await import('../src/efsp/zulu-time.js');
+
+// A mission clock fixed on a date nothing else uses, so a time resolved
+// against the WALL date would visibly land on the wrong day.
+const MISSION_NOW = Date.UTC(2016, 5, 21, 14, 0);
+const missionClock = { now: () => MISSION_NOW, source: 'MISSION' };
+const MTR_PATHS = ['designator', 'entryFix', 'entryTimeUtc', 'exitFix', 'exitEstimateUtc', 'requestedAltitudeAfterExit']
+  .map(k => `military.mtr.${k}`);
+
+test('each of the six MTR paths is writable through setField, and bumps rev and updatedAt', () => {
+  const store = new FdrStore(undefined, { clock: missionClock });
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  const values = { designator: 'ir107', entryFix: ' a ', entryTimeUtc: '1405', exitFix: 'f', exitEstimateUtc: '1432', requestedAltitudeAfterExit: 'fl190' };
+  for (const [key, value] of Object.entries(values)) {
+    const before = store.getFdr(fdr.fdrId).rev;
+    const result = store.setField(fdr.fdrId, `military.mtr.${key}`, value, { by: 'CTR' });
+    assert.equal(result.ok, true, key);
+    assert.equal(result.fdr.rev, before + 1, key);
+    assert.equal(result.fdr.updatedAt, MISSION_NOW, `${key}: an MTR write is a filed-plan amendment (updatedAt)`);
+  }
+  const mtr = store.getFdr(fdr.fdrId).military.mtr;
+  assert.deepEqual(mtr, {
+    designator: 'IR107', entryFix: 'A', entryTimeUtc: Date.UTC(2016, 5, 21, 14, 5),
+    exitFix: 'F', exitEstimateUtc: Date.UTC(2016, 5, 21, 14, 32), requestedAltitudeAfterExit: 'FL190',
+  });
+});
+
+test('MTR times are stored as epoch ms on the MISSION date, typed as HHMM / HH:MM / trailing Z', () => {
+  const store = new FdrStore(undefined, { clock: missionClock });
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  for (const typed of ['1432', '14:32', '1432Z', '14:32z']) {
+    const r = store.setField(fdr.fdrId, 'military.mtr.exitEstimateUtc', typed, { by: 'CTR' });
+    assert.equal(r.ok, true, typed);
+    assert.equal(r.fdr.military.mtr.exitEstimateUtc, Date.UTC(2016, 5, 21, 14, 32), typed);
+  }
+});
+
+test('MTR times refuse what is not a time of day, legibly, and leave the FDR byte-identical', () => {
+  const store = new FdrStore(undefined, { clock: missionClock });
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  store.setField(fdr.fdrId, 'military.mtr.exitEstimateUtc', '1432', { by: 'CTR' });
+  const before = JSON.stringify(store.getFdr(fdr.fdrId));
+  for (const bad of ['2460', '1260', 'abc', '143', '14320', '1472']) {
+    const r = store.setField(fdr.fdrId, 'military.mtr.exitEstimateUtc', bad, { by: 'CTR' });
+    assert.equal(r.ok, false, bad);
+    assert.equal(r.reason, 'VALIDATION_ERROR');
+    assert.match(r.detail, /MTR exit estimate must be a UTC time as HHMM/);
+  }
+  const entry = store.setField(fdr.fdrId, 'military.mtr.entryTimeUtc', '2400', { by: 'OPS' });
+  assert.match(entry.detail, /MTR entry time must be a UTC time as HHMM/);
+  assert.equal(JSON.stringify(store.getFdr(fdr.fdrId)), before);
+});
+
+test('the requested altitude after exit takes whatever parseAltitudeFt parses, and refuses the rest', () => {
+  const store = new FdrStore(undefined, { clock: missionClock });
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  for (const [typed, stored] of [['FL210', 'FL210'], ['080', '080'], ['8000', '8000'], [' fl 190 ', 'FL190'], ['A050', 'A050']]) {
+    const r = store.setField(fdr.fdrId, 'military.mtr.requestedAltitudeAfterExit', typed, { by: 'CTR' });
+    assert.equal(r.ok, true, typed);
+    assert.equal(r.fdr.military.mtr.requestedAltitudeAfterExit, stored, typed);
+  }
+  const rev = store.getFdr(fdr.fdrId).rev;
+  for (const bad of ['high', 'FL190B210']) {
+    const r = store.setField(fdr.fdrId, 'military.mtr.requestedAltitudeAfterExit', bad, { by: 'CTR' });
+    assert.equal(r.ok, false, bad);
+    assert.match(r.detail, /requested altitude after exit must be an altitude/);
+  }
+  assert.equal(store.getFdr(fdr.fdrId).rev, rev);
+});
+
+test('an empty MTR value clears to null, on every one of the six paths', () => {
+  const store = new FdrStore(undefined, { clock: missionClock });
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  const fill = ['IR107', 'A', '1405', 'F', '1432', 'FL190'];
+  MTR_PATHS.forEach((p, i) => store.setField(fdr.fdrId, p, fill[i], { by: 'CTR' }));
+  for (const p of MTR_PATHS) {
+    for (const empty of ['', '   ', null]) {
+      const r = store.setField(fdr.fdrId, p, empty, { by: 'CTR' });
+      assert.equal(r.ok, true, `${p} ${JSON.stringify(empty)}`);
+      assert.equal(r.fdr.military.mtr[p.split('.').pop()], null);
+    }
+  }
+});
+
+test('designator and fixes take no format rule (D11) — any text, trimmed and upper-cased', () => {
+  const store = new FdrStore(undefined, { clock: missionClock });
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  for (const typed of ['vr1203', 'sr 44', 'BAKER/10', 'x']) {
+    const r = store.setField(fdr.fdrId, 'military.mtr.designator', typed, { by: 'OPS' });
+    assert.equal(r.ok, true, typed);
+    assert.equal(r.fdr.military.mtr.designator, typed.trim().toUpperCase());
+  }
+  const long = store.setField(fdr.fdrId, 'military.mtr.exitFix', 'X'.repeat(2001), { by: 'CTR' });
+  assert.equal(long.ok, false, 'the ordinary free-text cap still applies');
+});
+
+test('setMilitary still refuses mtr, whole — the leaves go through setField only', () => {
+  const store = new FdrStore(undefined, { clock: missionClock });
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  const r = store.setMilitary(fdr.fdrId, { mtr: { designator: 'IR107' } }, { by: 'OPS' });
+  assert.equal(r.ok, false);
+  assert.equal(store.getFdr(fdr.fdrId).military.mtr.designator, null);
+});
+
+test('an FDR restored from before docs/adr/0052 (military: null) accepts an MTR write', () => {
+  const store = new FdrStore(undefined, { clock: missionClock });
+  const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
+  const legacy = JSON.parse(JSON.stringify(store.snapshot()));
+  legacy.fdrs[0].military = null;
+  const restored = new FdrStore(undefined, { clock: missionClock });
+  restored.restore(legacy);
+  const r = restored.setField(fdr.fdrId, 'military.mtr.exitFix', 'E', { by: 'CTR' });
+  assert.equal(r.ok, true);
+  assert.equal(r.fdr.military.mtr.exitFix, 'E');
+  // …and even one whose military was nulled after restore (setPath would throw).
+  restored.getFdr(fdr.fdrId).military = null;
+  assert.equal(restored.setField(fdr.fdrId, 'military.mtr.designator', 'IR107', { by: 'CTR' }).ok, true);
+});
+
+test('normalizeMtrValue takes an epoch number for a time as-is (an import or a scenario)', () => {
+  const ms = Date.UTC(2016, 5, 21, 14, 32);
+  assert.deepEqual(normalizeMtrValue('military.mtr.exitEstimateUtc', ms, MISSION_NOW), { ok: true, value: ms });
+  assert.equal(normalizeMtrValue('military.mtr.designator', 107, MISSION_NOW).value, '107');
+});
+
+// ── zulu-time.js — a typed HHMM dated by the mission clock ──────────────────
+
+test('resolveZuluHhmm dates a time on the mission clock\'s day, never the wall clock\'s', () => {
+  assert.equal(resolveZuluHhmm('1432', MISSION_NOW), Date.UTC(2016, 5, 21, 14, 32));
+  assert.equal(resolveZuluHhmm('0300', MISSION_NOW), Date.UTC(2016, 5, 21, 3, 0), '11 h back beats 13 h ahead');
+  assert.equal(resolveZuluHhmm('0100', MISSION_NOW), Date.UTC(2016, 5, 22, 1, 0), '11 h ahead beats 13 h back');
+});
+
+test('resolveZuluHhmm takes the occurrence nearest now, across Zulu midnight both ways', () => {
+  const lateEvening = Date.UTC(2016, 5, 21, 23, 50);
+  assert.equal(resolveZuluHhmm('0010', lateEvening), Date.UTC(2016, 5, 22, 0, 10), 'a time just after midnight is tomorrow');
+  const earlyMorning = Date.UTC(2016, 5, 22, 0, 5);
+  assert.equal(resolveZuluHhmm('2355', earlyMorning), Date.UTC(2016, 5, 21, 23, 55), 'a time just before midnight is yesterday');
+});
+
+test('parseZuluHhmm / formatZuluHhmm round-trip and refuse non-times', () => {
+  assert.deepEqual(parseZuluHhmm('14:32z'), { hh: 14, mm: 32 });
+  for (const bad of ['2460', '1260', '143', '', null, 'abcd', '14.32']) assert.equal(parseZuluHhmm(bad), null, String(bad));
+  assert.equal(formatZuluHhmm(Date.UTC(2016, 5, 21, 9, 5)), '0905');
+  assert.equal(formatZuluHhmm(null), '');
+  assert.equal(resolveZuluHhmm('1432', NaN), null);
 });
