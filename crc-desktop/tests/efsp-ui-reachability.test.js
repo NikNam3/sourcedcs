@@ -2131,3 +2131,105 @@ test('an arrival is part of the render signature, so it appears (and clears) wit
     { heldPositions: ['TWR'], myControllerIds: [], visibleBayId: 'twr-runway-queue', now: Date.now() });
   assert.equal(sandbox._stripElNeedsRebuild(el, strip, null, null), true);
 });
+
+// ── §9.4 MTR fields on the Strip (crc-sync's docs/adr/0062) ──────────────────
+//
+// Fixtures built here rather than in the shared FDR above: the MTR group is
+// drawn only when the flight has MTR data, so most tests must keep seeing a
+// flight without it.
+
+const MTR_IDS = ['9G-MTR', '9G-ENTRY', '9G-TIME', '9H-EXIT', '9H-TIME', '9H-ALT'];
+const mtrFdrWith = (mtr, extra = {}) => ({ ...FDR, military: { ...FDR.military, mtr }, ...extra });
+const inFields = (el, blockId) => {
+  const grid = descendants(el).find(c => (c.className || '').split(/\s+/).includes('efsp-strip-fields'));
+  return !!grid && descendants(grid).some(c => c.dataset && c.dataset.block === blockId);
+};
+function expandedWith(strip, fdr, held) {
+  const r = renderStrip({ strip, fdr, held });
+  r.sandbox.renderAllOpenEfspBays = () => {};
+  click(descendants(r.el).find(c => (c.className || '').includes('efsp-expand-btn')));
+  return { ...r, expandedEl: r.sandbox._buildStripEl(strip) };
+}
+
+test('an APP ARRIVAL with an exit fix shows the M11 group as fields; without MTR data, none of them — all six in ▼', () => {
+  const strip = stripAt({ role: 'ARRIVAL', state: 'INBOUND', ownerPositionId: 'APP' });
+  const withMtr = renderStrip({ strip, fdr: mtrFdrWith({ exitFix: 'E' }), held: ['APP'] });
+  for (const id of ['9G-MTR', '9H-EXIT', '9H-TIME', '9H-ALT']) assert.ok(inFields(withMtr.el, id), `${id} is not a field`);
+  for (const id of ['9G-ENTRY', '9G-TIME']) assert.equal(inFields(withMtr.el, id), false, `${id}: entry is history on an arrival`);
+
+  const { el, expandedEl } = expandedWith(strip, mtrFdrWith({}), ['APP']);
+  for (const id of MTR_IDS) assert.equal(inFields(el, id), false, `${id} drawn on a flight with no MTR`);
+  const rows = descendants(expandedEl).filter(c => c.dataset && c.dataset.expandedBlock).map(c => c.dataset.expandedBlock);
+  for (const id of MTR_IDS) assert.ok(rows.includes(id), `${id} is not in the expanded view`);
+});
+
+test('with MTR data, the expanded view still shows exactly what the face does not, in Block Map order', () => {
+  // Proves bay-view.js's _expandedBlockIdsFor got the FDR too: had only the
+  // face learned about the MTR group, its Blocks would be on both.
+  const fdr = mtrFdrWith({ designator: 'IR107' });
+  for (const [role, positionId, state] of [['DEPARTURE', 'CTR', 'HANDED_OFF'], ['ARRIVAL', 'APP', 'INBOUND'], ['OVERFLIGHT', 'CTR', 'TRANSITING'], ['DEPARTURE', 'OPS', 'PROPOSED']]) {
+    const strip = stripAt({ role, state, ownerPositionId: positionId });
+    const { expandedEl, sandbox } = expandedWith(strip, fdr, [positionId]);
+    const compact = Array.from(sandbox.compactBlocksFor(role, positionId, fdr));
+    const expanded = descendants(expandedEl).filter(c => c.dataset && c.dataset.expandedBlock).map(c => c.dataset.expandedBlock);
+    assert.ok(compact.includes('9G-MTR'), `${role} at ${positionId}: the MTR group is not on the face`);
+    assert.deepEqual(expanded, Object.keys(BLOCK_MAPS[role]).filter(id => !compact.includes(id)), `${role} at ${positionId}`);
+  }
+});
+
+test('the MTR times render as HHMM and edit through the ordinary click-to-edit cell', () => {
+  const strip = stripAt({ role: 'OVERFLIGHT', state: 'TRANSITING', ownerPositionId: 'CTR' });
+  const fdr = mtrFdrWith({ designator: 'IR107', exitEstimateUtc: Date.UTC(2016, 5, 21, 14, 32) });
+  const { el, sent } = renderStrip({ strip, fdr, held: ['CTR'] });
+  assert.equal(blockCell(el, '9H-TIME').textContent, '1432');
+
+  click(blockCell(el, '9H-EXIT'));
+  const input = openInputs(el)[0];
+  assert.ok(input, '9H-EXIT opened no editor');
+  input.value = 'E';
+  fire(input, 'keydown', { key: 'Enter' });
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].op.kind, 'SetBlock');
+  assert.equal(sent[0].op.blockId, '9H-EXIT');
+  assert.equal(sent[0].op.value, 'E');
+});
+
+test('the lost-comms advisory is a grey note in ▼ only — no reason line, no indicator on the face', () => {
+  const clearance = { altitude: { entries: [{ value: 'FL180', status: 'ACTIVE', at: 1, by: null }] }, heading: { entries: [] } };
+  const strip = stripAt({ role: 'OVERFLIGHT', state: 'TRANSITING', ownerPositionId: 'CTR' });
+  const cls = (c) => (c.className || '').split(/\s+/);
+
+  const quiet = renderStrip({ strip, fdr: mtrFdrWith({}, { clearance }), held: ['CTR'] }).el;
+  const withMtr = expandedWith(strip, mtrFdrWith({ exitFix: 'F', requestedAltitudeAfterExit: 'FL230' }, { clearance }), ['CTR']);
+  const count = (el, c) => descendants(el).filter(n => cls(n).includes(c)).length;
+  assert.equal(count(withMtr.el, 'efsp-strip-reason'), count(quiet, 'efsp-strip-reason'), 'MTR data added a reason line to the face');
+  assert.equal(count(withMtr.el, 'efsp-ind'), count(quiet, 'efsp-ind'), 'MTR data added an indicator');
+  assert.equal(count(withMtr.el, 'efsp-mtr-lostcomms'), 0, 'the advisory is on the collapsed face');
+
+  const note = descendants(withMtr.expandedEl).find(n => cls(n).includes('efsp-mtr-lostcomms'));
+  assert.ok(note, 'no lost-comms note in the expanded view');
+  assert.equal(cls(note).includes('efsp-strip-reason'), false);
+  assert.match(note.textContent, /FL180/);
+  assert.match(note.textContent, /not available in this system/);
+  assert.doesNotMatch(note.textContent, /FL230/, 'the pilot\'s request is not the last clearance');
+
+  const none = expandedWith(strip, mtrFdrWith({}, { clearance }), ['CTR']).expandedEl;
+  assert.equal(count(none, 'efsp-mtr-lostcomms'), 0, 'a flight with no MTR gets no advisory');
+});
+
+test('EXIT ALT\'s label carries the lost-comms rule as its hover title', () => {
+  const strip = stripAt({ role: 'OVERFLIGHT', state: 'TRANSITING', ownerPositionId: 'CTR' });
+  const { el } = renderStrip({ strip, fdr: mtrFdrWith({ designator: 'IR107' }), held: ['CTR'] });
+  const chip = descendants(el).find(c => c.children && c.children.some(k => k.dataset && k.dataset.block === '9H-ALT'));
+  const label = chip.children.find(k => (k.className || '').includes('efsp-block-label'));
+  assert.match(label.title, /Lost comms \(§9\.4\)/);
+});
+
+test('an MTR write reaches the Strip through the FDR\'s rev — the group appears without the Strip\'s rev moving', () => {
+  const strip = stripAt({ role: 'OVERFLIGHT', state: 'TRANSITING', ownerPositionId: 'CTR' });
+  const { sandbox, el } = renderStrip({ strip, fdr: FDR, held: ['CTR'] });
+  assert.equal(sandbox._stripElNeedsRebuild(el, strip, null, null), false);
+  sandbox.applyEfspDelta({ fdrs: { updated: [mtrFdrWith({ exitFix: 'E' }, { rev: 2 })] } });
+  assert.equal(sandbox._stripElNeedsRebuild(el, strip, null, null), true);
+  assert.ok(inFields(sandbox._buildStripEl(strip), '9H-EXIT'));
+});

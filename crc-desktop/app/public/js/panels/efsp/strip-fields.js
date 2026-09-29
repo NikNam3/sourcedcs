@@ -89,10 +89,14 @@ function _blockMapFor(role) {
  * order. The per-Position list if there is one, else the Role's; either way
  * only Blocks the Role's Block Map actually has.
  */
-function compactBlocksFor(role, positionId) {
+function compactBlocksFor(role, positionId, fdr) {
   const byPosition = COMPACT_BLOCKS_BY_POSITION[role];
-  const list = (byPosition && positionId && byPosition[positionId])
+  let list = (byPosition && positionId && byPosition[positionId])
     || COMPACT_BLOCKS_BY_ROLE[role] || COMPACT_BLOCKS_SHARED;
+  // §9.4 (docs/adr/0062): the flight's MTR group, only when it has MTR data.
+  const mtr = fdr && hasMtrData(fdr) && MTR_BLOCKS_BY_POSITION[role] && positionId
+    ? MTR_BLOCKS_BY_POSITION[role][positionId] : null;
+  if (mtr) list = [...list, ...mtr];
   const map = _blockMapFor(role);
   return map ? list.filter(id => Object.prototype.hasOwnProperty.call(map, id)) : list;
 }
@@ -101,10 +105,79 @@ function fieldSpanFor(blockId) {
   return FIELD_SPANS[blockId] || 1;
 }
 
+// ── §9.4 Military Training Routes (crc-sync's docs/adr/0062) ───────────────
+//
+// Drawn only when the flight has MTR data posted — most flights never fly one,
+// and a field every Strip pays for must be earned (the criterion above). The
+// group starts its own grid row (efsp-panel.css, keyed on 9G-MTR, which is
+// why every list begins with it), so it sits in the same columns on every MTR
+// Strip of a Bay. M11's exit fix and estimate come straight after it: §9.4's
+// one explicit instruction is that they are what a controller asks for by
+// voice and posts. Prominence is place, never colour (docs/adr/0056).
+//
+// [SOURCE-DEFINED] which Positions work MTR traffic (H24 took this default):
+//  - OPS files the flight: designator and entry.
+//  - CD reads the designator into the clearance, nothing else.
+//  - GND and TWR: none — ground movement and the runway do not use MTR data.
+//  - APP and CTR release the aircraft into the route and take the call on
+//    exit: the whole group, M11 first. An ARRIVAL is past the route, so its
+//    entry is history and stays in the expanded view.
+//  - MISSION: no MTR Blocks at all. Any Position not named: the expanded view.
+const MTR_BLOCKS_BY_POSITION = {
+  DEPARTURE: {
+    OPS: ['9G-MTR', '9G-ENTRY', '9G-TIME'],
+    CD:  ['9G-MTR'],
+    APP: ['9G-MTR', '9H-EXIT', '9H-TIME', '9H-ALT', '9G-ENTRY', '9G-TIME'],
+    CTR: ['9G-MTR', '9H-EXIT', '9H-TIME', '9H-ALT', '9G-ENTRY', '9G-TIME'],
+  },
+  ARRIVAL: {
+    APP: ['9G-MTR', '9H-EXIT', '9H-TIME', '9H-ALT'],
+    CTR: ['9G-MTR', '9H-EXIT', '9H-TIME', '9H-ALT'],
+  },
+  OVERFLIGHT: {
+    APP: ['9G-MTR', '9H-EXIT', '9H-TIME', '9H-ALT', '9G-ENTRY', '9G-TIME'],
+    CTR: ['9G-MTR', '9H-EXIT', '9H-TIME', '9H-ALT', '9G-ENTRY', '9G-TIME'],
+  },
+};
+
+const MTR_FIELDS = ['designator', 'entryFix', 'entryTimeUtc', 'exitFix', 'exitEstimateUtc', 'requestedAltitudeAfterExit'];
+
+/**
+ * True when ANY of the six MTR fields holds a value — not only the designator.
+ * A controller who clears the designator but leaves an exit fix must still see
+ * that exit fix on the Strip, rather than have it vanish into the expanded
+ * view while it still sits on the flight.
+ */
+function hasMtrData(fdr) {
+  const mtr = fdr && fdr.military && fdr.military.mtr;
+  if (!mtr) return false;
+  return MTR_FIELDS.some(k => mtr[k] != null && mtr[k] !== '');
+}
+
+/**
+ * §9.4's lost-comms rule as a sentence, for a flight with MTR data; null
+ * otherwise. An advisory, not a computation: it states the rule, shows the half
+ * this system holds (the ACTIVE assigned altitude, docs/adr/0058) and says the
+ * other half — the minimum IFR altitude for each remaining segment — is not
+ * here. It never reads 9H-ALT: that is the pilot's request, and the rule says
+ * "last clearance". [SOURCE-DEFINED] the wording; the rule is the guide's.
+ */
+function mtrLostCommsAdvisory(fdr) {
+  if (!hasMtrData(fdr)) return null;
+  const cell = fdr.clearance && fdr.clearance.altitude;
+  const active = cell && Array.isArray(cell.entries) ? cell.entries.find(e => e.status === 'ACTIVE') : null;
+  const cleared = active && active.value != null && active.value !== ''
+    ? String(active.value) : 'none posted (ALT is empty)';
+  return 'Lost comms (§9.4): separate assuming the higher of the minimum IFR altitude for each '
+    + 'remaining segment — not available in this system — or the altitude in the last clearance: '
+    + `${cleared}.`;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     COMPACT_BLOCKS_SHARED, COMPACT_BLOCKS_BY_ROLE, COMPACT_BLOCKS_BY_POSITION,
     FIELD_SPANS,
     compactBlocksFor, fieldSpanFor,
+    MTR_BLOCKS_BY_POSITION, hasMtrData, mtrLostCommsAdvisory,
   };
 }

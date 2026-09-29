@@ -718,7 +718,7 @@ function _appendExpandButton(container, strip) {
  * precisely because the chip is not telling the whole story.
  */
 function _expandedBlockIdsFor(strip, map) {
-  const onStrip = new Set(compactBlocksFor(strip.role, strip.ownerPositionId));
+  const onStrip = new Set(compactBlocksFor(strip.role, strip.ownerPositionId, getEfspFdr(strip.fdrId)));
   return Object.keys(map).filter((blockId) => {
     if (!onStrip.has(blockId)) return true;
     return typeof supersededAnnotationEntries === 'function'
@@ -732,10 +732,21 @@ function _appendExpandedView(el, strip) {
   if (!map) return;
 
   const blocks = _expandedBlockIdsFor(strip, map);
-  if (blocks.length === 0) return;
+  // §9.4's lost-comms rule (crc-sync's docs/adr/0062): a grey note, first in
+  // the expanded view, for a flight with MTR data. Not a reason line and not
+  // on the collapsed face — an MTR flight with working radios is not wrong
+  // (docs/adr/0058).
+  const advisory = typeof mtrLostCommsAdvisory === 'function' ? mtrLostCommsAdvisory(getEfspFdr(strip.fdrId)) : null;
+  if (blocks.length === 0 && !advisory) return;
 
   const panel = document.createElement('div');
   panel.className = 'efsp-strip-expanded';
+  if (advisory) {
+    const note = document.createElement('div');
+    note.className = 'efsp-expanded-note efsp-mtr-lostcomms';
+    note.textContent = advisory;
+    panel.appendChild(note);
+  }
 
   for (const blockId of blocks) {
     const row = document.createElement('div');

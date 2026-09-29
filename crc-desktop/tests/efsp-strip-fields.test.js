@@ -85,3 +85,78 @@ test('a Position no list names falls back to its Role, filtered to the Role\'s B
   assert.ok(list.includes('9A-VECTOR'));
   assert.equal(list.some(id => !(id in BLOCK_MAPS.ARRIVAL)), false);
 });
+
+// ── §9.4 MTR group (crc-sync's docs/adr/0062) ────────────────────────────────
+
+const { MTR_BLOCKS_BY_POSITION, hasMtrData, mtrLostCommsAdvisory } = sandbox.module.exports;
+const everyMtrList = () => Object.entries(MTR_BLOCKS_BY_POSITION)
+  .flatMap(([role, byPos]) => Object.entries(byPos).map(([positionId, list]) => ({ role, positionId, list })));
+const fdrWithMtr = (mtr) => ({ military: { mtr }, clearance: { altitude: { entries: [] } } });
+
+test('every MTR list names Blocks its Role has, and only 9G-*/9H-* ids', () => {
+  for (const { role, positionId, list } of everyMtrList()) {
+    for (const id of list) {
+      assert.ok(id in BLOCK_MAPS[role], `${role} at ${positionId}: ${id}`);
+      assert.match(id, /^9[GH]-/, `${role} at ${positionId}: ${id}`);
+    }
+  }
+});
+
+test('every MTR list starts with 9G-MTR — the CSS row start keys on it', () => {
+  for (const { role, positionId, list } of everyMtrList()) assert.equal(list[0], '9G-MTR', `${role} at ${positionId}`);
+});
+
+test('M11 is prominent: the exit fix and estimate come before the entry fields', () => {
+  for (const { role, positionId, list } of everyMtrList()) {
+    if (!list.includes('9G-ENTRY')) continue;
+    for (const m11 of ['9H-EXIT', '9H-TIME']) {
+      if (!list.includes(m11)) continue;
+      assert.ok(list.indexOf(m11) < list.indexOf('9G-ENTRY') && list.indexOf(m11) < list.indexOf('9G-TIME'), `${role} at ${positionId}`);
+    }
+  }
+});
+
+test('GND, TWR and MISSION get no MTR group', () => {
+  for (const role of Object.keys(MTR_BLOCKS_BY_POSITION)) {
+    assert.equal(MTR_BLOCKS_BY_POSITION[role].GND, undefined, `${role} GND`);
+    assert.equal(MTR_BLOCKS_BY_POSITION[role].TWR, undefined, `${role} TWR`);
+  }
+  assert.equal(MTR_BLOCKS_BY_POSITION.MISSION, undefined);
+});
+
+test('compactBlocksFor without an FDR, or with one that has no MTR, is exactly what it was', () => {
+  const noMtr = fdrWithMtr({ designator: null, exitFix: '' });
+  for (const { role, positionId } of everyList()) {
+    assert.deepEqual(Array.from(compactBlocksFor(role, positionId, noMtr)), Array.from(compactBlocksFor(role, positionId)), `${role} at ${positionId}`);
+    assert.equal(compactBlocksFor(role, positionId).some(id => /^9[GH]-/.test(id)), false);
+  }
+});
+
+test('any one MTR field brings the group — the trigger is not the designator', () => {
+  const list = Array.from(compactBlocksFor('DEPARTURE', 'CTR', fdrWithMtr({ exitFix: 'F' })));
+  assert.deepEqual(list.slice(-MTR_BLOCKS_BY_POSITION.DEPARTURE.CTR.length), Array.from(MTR_BLOCKS_BY_POSITION.DEPARTURE.CTR));
+  assert.deepEqual(Array.from(compactBlocksFor('DEPARTURE', 'TWR', fdrWithMtr({ exitFix: 'F' }))), Array.from(compactBlocksFor('DEPARTURE', 'TWR')));
+});
+
+test('hasMtrData: false for nothing, true for any one value', () => {
+  for (const fdr of [null, {}, { military: null }, fdrWithMtr({}), fdrWithMtr({ designator: null, exitFix: '', exitEstimateUtc: null })]) {
+    assert.equal(hasMtrData(fdr), false, JSON.stringify(fdr));
+  }
+  for (const key of ['designator', 'entryFix', 'entryTimeUtc', 'exitFix', 'exitEstimateUtc', 'requestedAltitudeAfterExit']) {
+    assert.equal(hasMtrData(fdrWithMtr({ [key]: key.endsWith('Utc') ? 1466519520000 : 'X' })), true, key);
+  }
+});
+
+test('mtrLostCommsAdvisory states the rule, shows the ACTIVE ALT, admits the missing half, never reads 9H-ALT', () => {
+  assert.equal(mtrLostCommsAdvisory(fdrWithMtr({})), null);
+  const fdr = {
+    military: { mtr: { designator: 'IR107', requestedAltitudeAfterExit: 'FL230' } },
+    clearance: { altitude: { entries: [{ value: 'FL120', status: 'SUPERSEDED' }, { value: 'FL180', status: 'ACTIVE' }] } },
+  };
+  const text = mtrLostCommsAdvisory(fdr);
+  assert.match(text, /§9\.4/);
+  assert.match(text, /FL180/);
+  assert.match(text, /not available in this system/);
+  assert.doesNotMatch(text, /FL230|FL120/);
+  assert.match(mtrLostCommsAdvisory(fdrWithMtr({ exitFix: 'E' })), /none posted \(ALT is empty\)/);
+});
