@@ -51,6 +51,13 @@ var REGISTRY_CATEGORIES = {
       { key: 'orbit_leg_nm',       label: 'Orbit Leg (NM)',    type: 'number', placeholder: '20' },
       { key: 'orbit_width_nm',     label: 'Orbit Width (NM)',  type: 'number', placeholder: '5' },
       { key: 'orbit_direction',    label: 'Orbit Direction',   type: 'select', options: [{ value: 'cw', label: 'Clockwise (CW)' }, { value: 'ccw', label: 'Counterclockwise (CCW)' }] },
+      // USMTF ATO (ADR 0078). Text, not number, where leading zeros matter.
+      { key: 'mission_number',     label: 'Tanker Mission No.', placeholder: 'e.g. 1901T', hint: 'Links to the tanker\'s own ATO mission (REFUELING)' },
+      { key: 'arcp',               label: 'ARCP / Track',      placeholder: 'e.g. ANCHOR BLUE' },
+      { key: 'system',             label: 'AR System',         type: 'select', options: [{ value: '', label: '— unknown —' }, 'BOOM', 'DROGUE'] },
+      { key: 'offload_klb',        label: 'Total Offload (klb)', type: 'number', placeholder: '60.0' },
+      { key: 'alert_offload_klb',  label: 'Alert Offload (klb)', type: 'number', placeholder: '10.0' },
+      { key: 'fuel',               label: 'Fuel Type',         placeholder: 'e.g. JP8' },
     ],
   },
   targets: {
@@ -80,6 +87,17 @@ var REGISTRY_CATEGORIES = {
       { key: 'type',             label: 'Type',            placeholder: 'AWACS / CRC' },
       { key: 'callsign',         label: 'Callsign',        placeholder: 'e.g. SCREWTOP' },
       { key: 'primary_freq_mhz', label: 'Primary Freq (MHz)', placeholder: '260.0' },
+      // USMTF ATO (ADR 0078)
+      { key: 'secondary_freq_mhz', label: 'Secondary Freq (MHz)', placeholder: '305.5' },
+      { key: 'mission_number',   label: 'Agency Mission No.', placeholder: 'e.g. 1801W', hint: 'Links to the agency\'s own ATO mission (AEW); it carries 7CONTROL' },
+    ],
+  },
+  units: {
+    label: 'UNITS', tab: 'UNITS',
+    idLabel: 'UNIT',
+    fields: [
+      { key: 'base',    label: 'Base (ICAO)', placeholder: 'e.g. LTAG', hint: 'USMTF TASKUNIT location' },
+      { key: 'remarks', label: 'Unit Remarks', type: 'textarea', placeholder: 'Free text (GENTEXT UNIT REMARKS)' },
     ],
   },
   frequencies: {
@@ -197,7 +215,7 @@ function editRegistryItem(catKey, id) {
         options:     f.options,
         coordPick:   f.coordPick || false,
         disabled:    isIdField,
-        hint:        isIdField ? (f.label + ' cannot be changed here') : undefined,
+        hint:        isIdField ? (f.label + ' cannot be changed here') : f.hint,
       });
     });
 

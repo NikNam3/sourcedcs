@@ -34,7 +34,21 @@ function openTimesEditor() {
     editorSectionTitle(body, 'INGAME START');
     var fIngame = editorField(body, 'Ingame Start Time (Zulu)', ato.ingame_start_time || ato.ingame_start_local, { placeholder: '2000', required: true, hint: 'Enter in Zulu \u2014 Z is added automatically' });
 
-    body._timesFields = { atoDate: fAtoDate, date: fDate, time: fTime, ingame: fIngame };
+    // USMTF ATO header (ADR 0078): all optional, defaults in usmtf-ato.js
+    var um = hdr.usmtf || {};
+    editorSectionTitle(body, 'USMTF ATO HEADER');
+    var fKind = editorField(body, 'Message Kind', um.message_kind || '', { type: 'select',
+      options: [{ value: '', label: '— default (EXER) —' }, 'EXER', 'OPER'] });
+    if (um.message_kind) fKind.value = String(um.message_kind).toUpperCase();
+    var fOrig = editorField(body, 'Originator', um.originator, { placeholder: 'SOURCEDCS AOC' });
+    var fSer  = editorField(body, 'Serial', um.serial, { placeholder: 'e.g. ATO C' });
+    var fAsof = editorField(body, 'As Of (in-game)', um.asof, { placeholder: '2026-09-13 1800Z' });
+    var fCtry = editorField(body, 'Tasked Country', um.country, { placeholder: 'US' });
+    var fSvc  = editorField(body, 'Tasked Service', um.service, { placeholder: 'F' });
+    var fUnit = editorField(body, 'Default Unit', um.default_unit, { placeholder: 'SOURCE DCS' });
+
+    body._timesFields = { atoDate: fAtoDate, date: fDate, time: fTime, ingame: fIngame,
+      usmtf: { message_kind: fKind, originator: fOrig, serial: fSer, asof: fAsof, country: fCtry, service: fSvc, default_unit: fUnit } };
   }, function () {
     var body = document.getElementById('editorBody');
     var f = body._timesFields;
@@ -45,6 +59,14 @@ function openTimesEditor() {
     ato.irl_date          = f.date.value || undefined;
     ato.irl_time_zulu     = _normalizeZulu(f.time.value);
     ato.ingame_start_time = _normalizeZulu(f.ingame.value);
+
+    var um = {};
+    Object.keys(f.usmtf).forEach(function (k) {
+      var v = (f.usmtf[k].value || '').trim();
+      if (v) um[k] = k === 'asof' ? v : v.toUpperCase();
+    });
+    if (Object.keys(um).length) STATE.pkg.header.usmtf = um;
+    else delete STATE.pkg.header.usmtf;
 
     editorReRender('ato');
   });
