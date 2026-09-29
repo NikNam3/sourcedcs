@@ -52,6 +52,7 @@ test('loadSensorSpecs: a missing file degrades to empty specs rather than throwi
   assert.deepEqual(specs.carrierRadar, {});
   assert.deepEqual(specs.datalink.participants, []);
   assert.deepEqual(specs.transponder.syntheticFor, ['own', 'neutral']);
+  assert.deepEqual(specs.transponder.mode4For, ['own']);
 });
 
 test('every radar says what it can measure: 2D + SSR on the ground, 3D in the air (docs/adr/0059)', () => {
@@ -64,12 +65,12 @@ test('every radar says what it can measure: 2D + SSR on the ground, 3D in the ai
     ],
     radarSpecs: SPECS,
   }));
-  assert.deepEqual(radars.get('apt:Incirlik').caps, { height: false, ssr: true });
-  assert.deepEqual(radars.get('app:Incirlik').caps, { height: false, ssr: true });
-  assert.deepEqual(radars.get('crc:1').caps, { height: true, ssr: true });
-  assert.deepEqual(radars.get('crc:2').caps, { height: true, ssr: true });
-  assert.deepEqual(radars.get('carrier:3').caps, { height: true, ssr: true });
-  assert.deepEqual(radars.get('cvapp:3').caps, { height: false, ssr: true });
+  assert.deepEqual(radars.get('apt:Incirlik').caps, { height: false, ssr: true, mode4: false });
+  assert.deepEqual(radars.get('app:Incirlik').caps, { height: false, ssr: true, mode4: false });
+  assert.deepEqual(radars.get('crc:1').caps, { height: true, ssr: true, mode4: true });
+  assert.deepEqual(radars.get('crc:2').caps, { height: true, ssr: true, mode4: true });
+  assert.deepEqual(radars.get('carrier:3').caps, { height: true, ssr: true, mode4: true });
+  assert.deepEqual(radars.get('cvapp:3').caps, { height: false, ssr: true, mode4: false });
   assert.ok(DEFAULT_CAPS.approach);
 });
 
@@ -80,7 +81,17 @@ test('a spec can override its kind: a fighter radar with no IFF interrogator', (
     tracks: [{ id: 9, callsign: 'OLD', type: 'F-5E-3', category: 1, lat: 37.5, lon: 35.5, alt: 6000, heading: 0 }],
     radarSpecs: specs,
   }));
-  assert.deepEqual(radars.get('crc:9').caps, { height: true, ssr: false });
+  assert.deepEqual(radars.get('crc:9').caps, { height: true, ssr: false, mode4: true });
+});
+
+test('a spec can take away the Mode 4 interrogator: a fighter with no IFF crypto (docs/adr/0066)', () => {
+  const specs = { ...SPECS, radar: { ...SPECS.radar, 'F-5E-3': { angleFromNose: 60, rangeNm: 20, sweepMs: 3000, caps: { mode4: false } } } };
+  const radars = byId(buildRadars({
+    missionData: null,
+    tracks: [{ id: 9, callsign: 'OLD', type: 'F-5E-3', category: 1, lat: 37.5, lon: 35.5, alt: 6000, heading: 0 }],
+    radarSpecs: specs,
+  }));
+  assert.deepEqual(radars.get('crc:9').caps, { height: true, ssr: true, mode4: false });
 });
 
 test('isRadarSite: helipads, FARPs, FOBs and the bare "H" are not radar sites', () => {

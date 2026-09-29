@@ -1,5 +1,5 @@
 {
-  "_comment": "What each sensor can know. THE single home for these numbers (docs/adr/0042, 0059). `radar`: DCS unit type -> airborne radar; angleFromNose is the total scan arc in degrees centred on the nose (360 = a full rotating dish), rangeNm the detection range against a fighter-size target, sweepMs one full rotation or scan cycle, and an optional `caps` ({height, ssr}) overrides the defaults for its kind (radars.js DEFAULT_CAPS). `carrierRadar`: ship type -> surface/air search radar. `datalink`: which types are network participants (PPLI) and how often they report. `transponder`: which coalitions' AI aircraft squawk a synthetic code. Every figure is [SOURCE-DEFINED] — DCS publishes none of it, and none of it should be presented as a real system's performance.",
+  "_comment": "What each sensor can know. THE single home for these numbers (docs/adr/0042, 0059). `radar`: DCS unit type -> airborne radar; angleFromNose is the total scan arc in degrees centred on the nose (360 = a full rotating dish), rangeNm the detection range against a fighter-size target, sweepMs one full rotation or scan cycle, and an optional `caps` ({height, ssr, mode4}; mode4 = carries a Mode 4/5 interrogator, docs/adr/0066) overrides the defaults for its kind (radars.js DEFAULT_CAPS). `carrierRadar`: ship type -> surface/air search radar. `datalink`: which types are network participants (PPLI) and how often they report. `transponder`: `syntheticFor` says which coalitions' AI aircraft squawk a synthetic Mode 3/C code; `mode4For` says which coalitions' AI aircraft and ships answer a Mode 4/5 interrogation (only `own` can ever be honoured: a valid reply needs our crypto keys). Every figure is [SOURCE-DEFINED] — DCS publishes none of it, and none of it should be presented as a real system's performance.",
   "radar": {
     "E-3A": {
       "angleFromNose": 360,
@@ -280,6 +280,9 @@
     "syntheticFor": [
       "own",
       "neutral"
+    ],
+    "mode4For": [
+      "own"
     ]
   }
 }

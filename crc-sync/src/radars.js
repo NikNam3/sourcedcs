@@ -55,15 +55,19 @@ const RADAR_TYPES = ['airport', 'approach', 'awacs', 'fighter', 'carrier'];
 //   ssr    — it interrogates transponders (SSR, or a military IFF
 //            interrogator), so a squawking aircraft gives its code and
 //            Mode C altitude.
+//   mode4  — it carries a Mode 4/5 interrogator: an own-side aircraft or
+//            ship with the right crypto keys answers it, and that answer is
+//            what makes a contact friendly (docs/adr/0066). Independent of
+//            `ssr`. Tactical radars carry one; ATC radars do not.
 // A radar-spec entry may override its kind's defaults with `caps`.
 // [SOURCE-DEFINED], like every figure here.
 const DEFAULT_CAPS = {
-  airport:         { height: false, ssr: true },
-  approach:        { height: false, ssr: true },
-  awacs:           { height: true,  ssr: true },
-  fighter:         { height: true,  ssr: true },
-  carrier:         { height: true,  ssr: true },
-  carrierApproach: { height: false, ssr: true },
+  airport:         { height: false, ssr: true, mode4: false },
+  approach:        { height: false, ssr: true, mode4: false },
+  awacs:           { height: true,  ssr: true, mode4: true },
+  fighter:         { height: true,  ssr: true, mode4: true },
+  carrier:         { height: true,  ssr: true, mode4: true },
+  carrierApproach: { height: false, ssr: true, mode4: false },
 };
 
 function capsFor(kind, spec) {
@@ -78,7 +82,7 @@ const SENSOR_SPECS_PATH = process.env.CRCSYNC_SENSOR_SPECS_PATH
 const EMPTY_SPECS = () => ({
   radar: {}, carrierRadar: {},
   datalink: { participants: [], pliPeriodMs: 4000, lockPollMs: 2000 },
-  transponder: { syntheticFor: ['own', 'neutral'] },
+  transponder: { syntheticFor: ['own', 'neutral'], mode4For: ['own'] },
 });
 
 // Helipads/FARPs/FOBs are not radar sites. Matches the original's own filter.
