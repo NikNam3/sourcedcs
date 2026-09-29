@@ -783,8 +783,8 @@ a flight going the opposite way alerts. Route conformance and terrain are not ch
 
 On the scope, an STCA conflict draws each aircraft's predicted path to the closest point and a line
 between them there. Aircraft in the same active MARSA relation never raise STCA against each
-other. Traffic without Strips still does. The tactical Positions get no STCA: military control
-does not do collision avoidance the way ATC does (`adr/0059`).
+other. Traffic without Strips still does. The tactical Positions get no STCA — a squadron
+decision (`adr/0059`, `[SOURCE-DEFINED]`), not a statement of real-world doctrine.
 
 Altitudes are compared as the controller reads them, on QNH below the transition altitude and as
 flight levels above it. The thresholds are in crc-sync's `config/alerting.json`.

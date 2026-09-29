@@ -129,3 +129,35 @@ This supersedes `0056`'s "indicators always drawn, dim when off":
   for a DCS server's traffic, and would need a spatial index long before it mattered.
 - The tests are `crc-sync/tests/conformance.test.mjs`, `stca.test.mjs` and
   `efsp-clearance.test.mjs`, plus the rendering tests in `crc-desktop/tests/efsp-ui-reachability.test.js`.
+
+## Notes
+
+### Convert to Arrival keeps the clearance, unlike the annotations `0040` archives
+
+`0040` archives a departure's annotations on Convert to Arrival rather than carrying them across,
+because the same Block id means something different on the return leg, and carrying the value
+would *"relabel it as a statement about the return leg that nobody made."*
+
+The assigned `ALT` and `HDG` are the exception, and deliberately so. They are not Strip annotations
+that change meaning with the Role; they are the flight's clearance, stored once on the FDR. An
+aircraft turning back toward Incirlik is still cleared to the altitude and heading it was last given,
+so the return leg showing them is the truth, not a relabelling. The controller confirmed this is the
+behaviour they want. Everything else `0040` archives is unchanged.
+
+### Thresholds change only on a restart
+
+`0043` and `0046` keep tuning values (tick rates, correlation affinities) as module constants,
+because *"persisting a tuning constant lets an old snapshot pin a value the code has since moved
+past."* `config/alerting.json` is shipped config with a hand-edited `state/` override, which looks
+like that risk and is not, for two reasons the controller confirmed:
+
+- **Nothing in the code ever writes it.** There is no setter and no API. The only way a value
+  reaches `state/alerting.json` is a person editing the file, so no snapshot can pin a value the
+  code chose. A missing key falls back to the shipped default, so a threshold added by a later image
+  still arrives.
+- **It is read once, at startup** (`server.js`: `loadAlertingConfig()`), and never re-read. A
+  change takes effect on the next restart and at no other time, so thresholds never shift under a
+  controller mid-session.
+
+`config/sensor-specs.json` (`0059`) follows the same two rules. Any future tuning file should too,
+or say why not.

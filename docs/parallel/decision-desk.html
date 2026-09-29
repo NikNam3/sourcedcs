@@ -1,0 +1,403 @@
+<title>EFSP Decision Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  --bg: #eef1f3;
+  --panel: #ffffff;
+  --panel-2: #f5f7f8;
+  --line: #d5dbe0;
+  --ink: #16202a;
+  --muted: #5d6b77;
+  --accent: #b7791f;
+  --accent-soft: #fbf1df;
+  --ok: #2f7d55;
+  --ok-soft: #e4f3ea;
+  --bad: #b3452d;
+  --focus: #2b6cb0;
+  --shadow: 0 1px 2px rgba(20, 32, 42, .06);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1318; --panel: #141c22; --panel-2: #19232b; --line: #27333d;
+    --ink: #dde5eb; --muted: #8796a2; --accent: #e0a83c; --accent-soft: #2c2412;
+    --ok: #6fbf8e; --ok-soft: #13271c; --bad: #ff8a4c; --focus: #6aa8ff;
+    --shadow: none; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1318; --panel: #141c22; --panel-2: #19232b; --line: #27333d;
+  --ink: #dde5eb; --muted: #8796a2; --accent: #e0a83c; --accent-soft: #2c2412;
+  --ok: #6fbf8e; --ok-soft: #13271c; --bad: #ff8a4c; --focus: #6aa8ff;
+  --shadow: none; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font: 15px/1.5 "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  padding-inline: 16px; padding-block: 0 48px;
+}
+.wrap { max-width: 880px; margin: 0 auto; }
+header {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  background: var(--bg); padding-block: 18px 12px; border-bottom: 1px solid var(--line);
+  display: grid; gap: 10px;
+}
+.brand { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+h1 {
+  margin: 0; font: 600 22px/1.2 "IBM Plex Sans Condensed", "IBM Plex Sans", sans-serif;
+  letter-spacing: .02em; text-wrap: balance;
+}
+.tally { font: 500 13px "IBM Plex Mono", ui-monospace, monospace; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tally b { color: var(--ink); font-weight: 500; }
+.bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button {
+  border: 0; background: var(--panel); color: var(--muted); padding: 6px 12px; cursor: pointer;
+  font: 500 13px "IBM Plex Sans", sans-serif;
+}
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+select {
+  background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 6px;
+  padding: 6px 8px; font: 13px "IBM Plex Sans", sans-serif;
+}
+.intro { color: var(--muted); font-size: 13px; margin: 14px 0 0; max-width: 65ch; }
+.notice {
+  margin-top: 16px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--panel-2); color: var(--muted); font-size: 14px;
+}
+main { display: grid; gap: 14px; margin-top: 16px; }
+.lane-head {
+  margin: 12px 0 0; font: 600 12px "IBM Plex Sans Condensed", sans-serif; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--muted);
+}
+.card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow);
+  padding: 14px 16px 16px; display: grid; gap: 10px;
+}
+.card.answered { border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); }
+.card.settled { opacity: .78; }
+.meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font: 500 12px "IBM Plex Mono", monospace; color: var(--muted); }
+.chip { padding: 1px 7px; border-radius: 4px; border: 1px solid var(--line); background: var(--panel-2); }
+.chip.block { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, var(--line)); }
+.chip.state-answered { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); background: var(--ok-soft); }
+.chip.state-settled { color: var(--ink); }
+.save { margin-left: auto; }
+.save.err { color: var(--bad); }
+h2 { margin: 0; font: 600 17px/1.35 "IBM Plex Sans", sans-serif; text-wrap: balance; }
+.ctx { margin: 0; color: var(--muted); font-size: 14px; max-width: 70ch; }
+.q { margin: 0; font-weight: 500; max-width: 70ch; }
+.opts { display: grid; gap: 6px; border: 0; margin: 0; padding: 0; }
+.opt {
+  display: grid; grid-template-columns: 18px 1fr; gap: 10px; align-items: start;
+  padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; background: var(--panel);
+}
+.opt:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.opt input { margin: 3px 0 0; accent-color: var(--accent); }
+.opt.picked { border-color: var(--accent); background: var(--accent-soft); }
+.opt .lbl { font-weight: 600; }
+.opt .rec {
+  margin-left: 6px; font: 500 11px "IBM Plex Mono", monospace; color: var(--accent);
+  text-transform: uppercase; letter-spacing: .06em;
+}
+.opt .desc { display: block; color: var(--muted); font-size: 13.5px; margin-top: 2px; }
+label.note { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.submit {
+  border: 1px solid var(--accent); background: var(--accent); color: #1a1206; border-radius: 6px;
+  padding: 7px 16px; font: 600 14px "IBM Plex Sans", sans-serif; cursor: pointer; min-height: 36px;
+}
+.submit:disabled { background: transparent; color: var(--muted); border-color: var(--line); border-style: dashed; cursor: default; }
+.draft-hint { font-size: 13px; color: var(--accent); }
+textarea {
+  width: 100%; min-height: 58px; resize: vertical; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--panel-2); color: var(--ink); padding: 8px 10px; font: 14px/1.45 "IBM Plex Sans", sans-serif;
+}
+.resolution {
+  border-left: 3px solid var(--ok); padding: 6px 10px; background: var(--ok-soft); border-radius: 0 6px 6px 0;
+  font-size: 14px;
+}
+.resolution b { font: 600 12px "IBM Plex Sans Condensed", sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--ok); margin-right: 6px; }
+details.settled-group > summary { cursor: pointer; color: var(--muted); font-size: 14px; padding: 6px 0; }
+details.settled-group > div { display: grid; gap: 14px; margin-top: 8px; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (max-width: 480px) { .save { margin-left: 0; width: 100%; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <h1>EFSP Decision Desk</h1>
+      <div class="tally" id="tally">connecting…</div>
+    </div>
+    <div class="bar">
+      <div class="seg" role="group" aria-label="Show">
+        <button type="button" id="f-open" aria-pressed="true">Needs you</button>
+        <button type="button" id="f-answered" aria-pressed="false">Answered</button>
+        <button type="button" id="f-all" aria-pressed="false">All</button>
+      </div>
+      <select id="lane" aria-label="Lane"><option value="">All lanes</option></select>
+    </div>
+  </header>
+  <p class="intro">Questions from the lane agents that only you can answer. Pick an option and add a note if you like, then press Submit on that question (Ctrl+Enter in the note works too). Nothing is sent until you submit. Claude reads your answers, settles them into the decision log, and adds new questions here as the agents raise them. Anything you skip takes the recommended option.</p>
+  <div id="notice" class="notice" hidden></div>
+  <main id="list" aria-live="polite"></main>
+</div>
+
+<script>
+(() => {
+  const state = { questions: [], answers: {}, drafts: {}, filter: "open", lane: "", saving: {} };
+  const $list = document.getElementById("list");
+  const $tally = document.getElementById("tally");
+  const $notice = document.getElementById("notice");
+  const $lane = document.getElementById("lane");
+  let db = null, readOnly = false;
+
+  function store(k, v) { try { localStorage.setItem(k, v); } catch (_) {} }
+  function load(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }
+  const savedFilter = load("dd.filter"); if (savedFilter) state.filter = savedFilter;
+  state.lane = load("dd.lane") || "";
+
+  function current(qid) {
+    const saved = state.answers[qid] || {};
+    const d = state.drafts[qid];
+    return d ? { choice: d.choice, note: d.note } : { choice: saved.choice || null, note: saved.note || "" };
+  }
+  function dirty(qid) {
+    const d = state.drafts[qid]; if (!d) return false;
+    const saved = state.answers[qid] || {};
+    return (d.choice || null) !== (saved.choice || null) || (d.note || "") !== (saved.note || "");
+  }
+  function setDraft(qid, patch) {
+    state.drafts[qid] = { ...current(qid), ...patch };
+    paintDirty(qid);
+  }
+  function paintDirty(qid) {
+    const btn = document.querySelector(`[data-submit="${qid}"]`);
+    const hint = document.querySelector(`[data-hint="${qid}"]`);
+    const d = dirty(qid);
+    if (btn) btn.disabled = !d || readOnly;
+    if (hint) hint.hidden = !d;
+  }
+
+  function statusOf(q) {
+    if (q.status === "settled") return "settled";
+    const a = state.answers[q.id];
+    return a && (a.choice || (a.note || "").trim()) ? "answered" : "open";
+  }
+
+  function showNotice(text) { $notice.textContent = text; $notice.hidden = !text; }
+
+  function setFilter(f) {
+    state.filter = f; store("dd.filter", f);
+    for (const id of ["open", "answered", "all"]) {
+      document.getElementById("f-" + id).setAttribute("aria-pressed", String(id === f));
+    }
+    render();
+  }
+  for (const id of ["open", "answered", "all"]) {
+    document.getElementById("f-" + id).addEventListener("click", () => setFilter(id));
+  }
+  $lane.addEventListener("change", () => { state.lane = $lane.value; store("dd.lane", state.lane); render(); });
+
+  async function submit(qid) {
+    if (!db || readOnly || !dirty(qid)) return;
+    const d = state.drafts[qid];
+    const next = { choice: d.choice || null, note: (d.note || "").trim(), updatedAt: new Date().toISOString() };
+    state.saving[qid] = "Submitting…"; paintSave(qid);
+    const btn = document.querySelector(`[data-submit="${qid}"]`); if (btn) btn.disabled = true;
+    try {
+      await db.collection("answers").doc(qid).set(next);
+      state.answers[qid] = next;
+      delete state.drafts[qid];
+      state.saving[qid] = "Submitted"; paintSave(qid); paintDirty(qid);
+      scheduleRender();
+    } catch (e) {
+      paintDirty(qid);
+      if (e && e.code === "invalid_argument") { readOnly = true; showNotice("You can read these questions but not answer them from this account."); }
+      state.saving[qid] = "Not saved, try again"; paintSave(qid, true);
+    }
+  }
+
+  function paintSave(qid, err) {
+    const el = document.querySelector(`[data-save="${qid}"]`);
+    if (!el) return;
+    el.textContent = state.saving[qid] || "";
+    el.classList.toggle("err", !!err);
+  }
+
+  function el(tag, cls, text) {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  }
+
+  function card(q) {
+    const st = statusOf(q);
+    const a = current(q.id);
+    const c = el("article", "card " + st);
+    c.id = "q-" + q.id;
+
+    const meta = el("div", "meta");
+    meta.append(el("span", "chip", q.id), el("span", "chip", q.laneName || q.lane));
+    if (q.blocking && st !== "settled") meta.append(el("span", "chip block", "blocks a lane"));
+    meta.append(el("span", "chip state-" + st, st === "open" ? "needs you" : st));
+    const save = el("span", "save"); save.dataset.save = q.id; save.textContent = state.saving[q.id] || "";
+    meta.append(save);
+    c.append(meta);
+
+    c.append(el("h2", null, q.title));
+    if (q.context) c.append(el("p", "ctx", q.context));
+    if (q.question) c.append(el("p", "q", q.question));
+
+    if (q.status === "settled" && q.resolution) {
+      const r = el("div", "resolution"); r.append(el("b", null, "Settled")); r.append(document.createTextNode(q.resolution));
+      c.append(r);
+    }
+
+    const fs = el("fieldset", "opts");
+    const legend = el("legend", null, ""); legend.hidden = true; fs.append(legend);
+    for (const o of q.options || []) {
+      const lab = el("label", "opt" + (a.choice === o.key ? " picked" : ""));
+      const inp = document.createElement("input");
+      inp.type = "radio"; inp.name = "q-" + q.id; inp.value = o.key; inp.id = `q-${q.id}-${o.key}`;
+      inp.checked = a.choice === o.key;
+      inp.disabled = readOnly || q.status === "settled";
+      inp.addEventListener("change", () => {
+        fs.querySelectorAll(".opt").forEach(x => x.classList.remove("picked"));
+        lab.classList.add("picked");
+        setDraft(q.id, { choice: o.key });
+      });
+      const body = el("span");
+      const l = el("span", "lbl", o.label); body.append(l);
+      if (o.key === q.recommended) body.append(el("span", "rec", "recommended"));
+      if (o.description) body.append(el("span", "desc", o.description));
+      lab.append(inp, body);
+      fs.append(lab);
+    }
+    c.append(fs);
+
+    const nl = el("label", "note");
+    nl.append(document.createTextNode("Your own answer, or a note on the option you picked"));
+    const ta = document.createElement("textarea");
+    ta.id = "note-" + q.id; ta.value = a.note || ""; ta.disabled = readOnly || q.status === "settled";
+    ta.placeholder = "Optional";
+    ta.addEventListener("input", () => setDraft(q.id, { note: ta.value }));
+    ta.addEventListener("keydown", (ev) => { if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); submit(q.id); } });
+    nl.append(ta);
+    c.append(nl);
+
+    if (q.status !== "settled") {
+      const act = el("div", "actions");
+      const btn = el("button", "submit", statusOf(q) === "answered" ? "Update answer" : "Submit");
+      btn.type = "button"; btn.dataset.submit = q.id; btn.id = "submit-" + q.id;
+      btn.disabled = !dirty(q.id) || readOnly;
+      btn.addEventListener("click", () => submit(q.id));
+      const hint = el("span", "draft-hint", "Not submitted yet");
+      hint.dataset.hint = q.id; hint.hidden = !dirty(q.id);
+      act.append(btn, hint);
+      c.append(act);
+    }
+    return c;
+  }
+
+  function render() {
+    const active = document.activeElement && document.activeElement.id;
+    const selStart = document.activeElement && document.activeElement.selectionStart;
+    const qs = state.questions.filter(q => q.status !== "withdrawn");
+    const lanes = [...new Map(qs.map(q => [q.lane, q.laneName || q.lane])).entries()];
+    const curLane = $lane.value || state.lane;
+    $lane.replaceChildren(new Option("All lanes", ""), ...lanes.map(([k, v]) => new Option(v, k)));
+    $lane.value = lanes.some(([k]) => k === curLane) ? curLane : "";
+
+    const counts = { open: 0, answered: 0, settled: 0 };
+    for (const q of qs) counts[statusOf(q)]++;
+    $tally.innerHTML = "";
+    $tally.append(
+      el("b", null, String(counts.open)), document.createTextNode(" need you · "),
+      el("b", null, String(counts.answered)), document.createTextNode(" answered · "),
+      el("b", null, String(counts.settled)), document.createTextNode(" settled"),
+    );
+
+    const lane = $lane.value;
+    const visible = qs.filter(q => !lane || q.lane === lane);
+    const want = visible.filter(q => {
+      const st = statusOf(q);
+      if (state.filter === "open") return st === "open" || dirty(q.id) || state.saving[q.id] === "Submitted";
+      if (state.filter === "answered") return st === "answered";
+      return st !== "settled";
+    });
+    want.sort((x, y) => (y.blocking ? 1 : 0) - (x.blocking ? 1 : 0) || (x.order || 0) - (y.order || 0));
+
+    const frag = document.createDocumentFragment();
+    let lastLane = null;
+    for (const q of want) {
+      if (q.lane !== lastLane) { frag.append(el("h3", "lane-head", q.laneName || q.lane)); lastLane = q.lane; }
+      frag.append(card(q));
+    }
+    if (!want.length) {
+      const empty = el("div", "notice", state.filter === "open"
+        ? "Nothing needs you right now. New questions appear here as the lanes raise them."
+        : "Nothing here yet.");
+      frag.append(empty);
+    }
+    if (state.filter === "all") {
+      const settled = visible.filter(q => statusOf(q) === "settled").sort((x, y) => (x.order || 0) - (y.order || 0));
+      if (settled.length) {
+        const d = el("details", "settled-group");
+        d.append(el("summary", null, `${settled.length} settled`));
+        const inner = el("div"); settled.forEach(q => inner.append(card(q))); d.append(inner);
+        frag.append(d);
+      }
+    }
+    $list.replaceChildren(frag);
+    if (active) {
+      const back = document.getElementById(active);
+      if (back) { back.focus(); if (selStart != null && back.setSelectionRange) back.setSelectionRange(selStart, selStart); }
+    }
+  }
+
+  function typingNow() {
+    const a = document.activeElement;
+    return a && a.tagName === "TEXTAREA";
+  }
+  window.addEventListener("beforeunload", (ev) => {
+    if (Object.keys(state.drafts).some(dirty)) { ev.preventDefault(); ev.returnValue = ""; }
+  });
+  let pending = false;
+  function scheduleRender() {
+    if (typingNow()) { pending = true; return; }
+    render();
+  }
+  document.addEventListener("focusout", () => { if (pending) { pending = false; setTimeout(render, 0); } });
+
+  async function start() {
+    render();
+    if (!window.claude || !window.claude.use) { showNotice("Open this page on claude.ai to answer the questions."); return; }
+    db = await window.claude.use("db");
+    if (!db) { showNotice("Sign in on claude.ai to see and answer the questions."); $tally.textContent = ""; return; }
+    try {
+      const user = await window.claude.use("user");
+      if (user && typeof user.can === "function") {
+        const can = await user.can("data.write");
+        if (can === false) { readOnly = true; showNotice("You can read these questions but not answer them from this account."); }
+      }
+    } catch (_) {}
+    db.collection("questions").onSnapshot(snap => {
+      state.questions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      scheduleRender();
+    }, () => showNotice("The question list stopped updating. Reload the page."));
+    db.collection("answers").onSnapshot(snap => {
+      const next = {};
+      for (const d of snap.docs) next[d.id] = d.data();
+      state.answers = next;
+      scheduleRender();
+    }, () => showNotice("Your saved answers stopped updating. Reload the page."));
+  }
+  start();
+})();
+</script>

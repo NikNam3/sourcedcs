@@ -3,7 +3,11 @@
 // Thresholds for conformance monitoring and short-term conflict alerting
 // (docs/adr/0058). Shipped defaults in config/alerting.json; a copy in
 // state/alerting.json overrides them key by key, so they can be tuned on the
-// server without a release. Read once at startup.
+// server without a release.
+//
+// Read ONCE, at startup, and never written by code: a change takes effect on
+// the next restart and never mid-session (docs/adr/0058 "Notes"). Do not add a
+// setter, an API or a re-read without revisiting that note.
 
 const fs = require('fs');
 const { readPath } = require('./state-paths');
