@@ -176,9 +176,8 @@ test('a manual void shows the note the controller gave', () => {
 });
 
 test('an ENDED relation renders NOTHING — a finished AR is not an alert', () => {
-  // The obligation badge cannot retract and sits on a Strip until the client
-  // reloads; that is a known outstanding defect in this codebase and growing a
-  // second instance of it would be worse than the first.
+  // A badge that outlives the condition behind it is a defect (the obligation
+  // badge had exactly that one until docs/adr/0067); an ENDED relation is over.
   load([relation({ state: 'ENDED', endedBy: 'END_CONDITION', endedAt: 4000 })]);
   assert.equal(marsaBadgeFor(stripOf('s-tanker')), null);
   assert.equal(marsaBadgeFor(stripOf('s-rx1')), null);

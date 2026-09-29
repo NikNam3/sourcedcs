@@ -729,21 +729,14 @@ async function connect() {
         }
         if (typeof renderAirspacePanel === 'function') renderAirspacePanel();
         break;
-      // WP4A (docs/adr/0021), guide §4.6.1 — a timed forwarding obligation
-      // came due. Unconditional broadcast (ws-hub.js), same as
-      // efsp-board-delta — every connected client applies it and re-renders
-      // whatever Bay currently shows the affected Strip.
       // docs/adr/0058 — the whole conformance + short-term conflict picture,
-      // sent when it changes and once on connect.
+      // and (docs/adr/0067) every forwarding obligation due right now, sent
+      // when it changes and once on connect; one no longer listed is cleared.
       case 'efsp-alerts':
         if (typeof applyEfspAlerts === 'function') applyEfspAlerts(msg);
         if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
         updateMap();
         if (typeof updateTrackPanel === 'function') updateTrackPanel();
-        break;
-      case 'efsp-obligation-alert':
-        if (typeof applyEfspObligationAlert === 'function') applyEfspObligationAlert(msg);
-        if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
         break;
     }
   };

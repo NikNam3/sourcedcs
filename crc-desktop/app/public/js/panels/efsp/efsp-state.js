@@ -28,11 +28,10 @@ let efspAitAuthorizedByFacility = {};
 // its ack arrives — replayed against a fresh baseline on reconnect (§5.6.3).
 const efspPendingMutations = new Map();
 
-// WP4A (docs/adr/0021) — stripId -> the most recent efsp-obligation-alert
-// for it (§4.6.1's timed forwarding obligations). One entry per Strip is
-// enough for this slice's rendering (a badge, not a log) — a Strip with
-// multiple simultaneously-due obligation types just shows its latest.
-const efspObligations = new Map();
+// §4.6.1's timed forwarding obligations (docs/adr/0021, 0067) — stripId ->
+// every obligation due on it right now. Full state from efsp-alerts, like
+// conformance: one that is no longer due is simply not in the next message.
+const efspObligations = new Map(); // stripId -> [{ facilityId, stripId, obligationType, severity, dueAt, since }]
 
 // The RANGE slice — airspaceId -> the airspace record (state, window, pending
 // request, history, plus its static definition). Theater-wide rather than
@@ -96,9 +95,8 @@ function applyEfspSnapshot(msg) {
  *
  * The record arrives whole, so a void needs nothing cleared here: `voidedBy`
  * simply comes back set, and a relation that a controller later re-declares is
- * a different record with a different marsaId. That is docs/adr/0045's shape —
- * deliberately unlike the obligation alerts, which the server cannot retract at
- * all.
+ * a different record with a different marsaId. That is docs/adr/0045's shape,
+ * and obligations now clear themselves too (full state in efsp-alerts).
  */
 function applyEfspMarsaDelta(msg) {
   for (const r of (msg.marsa && msg.marsa.updated) || []) efspMarsa.set(r.marsaId, r);
@@ -163,8 +161,7 @@ function marsaParticipantStripIds(strip) {
  *
  * Note what does NOT need to happen here: clearing a warning. The record
  * arrives whole, so a retracted warning simply comes back as `warning: null`.
- * That is deliberately unlike the obligation alerts above, which the server
- * cannot retract at all (see clearEfspObligation's comment).
+ * Obligations clear the same way in spirit: the next efsp-alerts omits them.
  */
 function applyEfspCorrelationDelta(msg) {
   for (const r of (msg.correlations && msg.correlations.updated) || []) {
@@ -258,17 +255,19 @@ function registerPendingMutation(msg) {
   efspPendingMutations.set(msg.clientMutationId, msg);
 }
 
-/** Applies an efsp-obligation-alert (WP4A, §4.6.1) — one entry per stripId, most recent wins. */
-function applyEfspObligationAlert(msg) {
-  efspObligations.set(msg.stripId, {
-    facilityId: msg.facilityId, obligationType: msg.obligationType, dueAt: msg.dueAt, severity: msg.severity,
-  });
+/**
+ * The one obligation a Strip's badge shows: OVERDUE before WARNING, then the
+ * earliest dueAt. null when nothing is due. See getEfspObligations for all.
+ */
+function getEfspObligation(stripId) {
+  const list = efspObligations.get(stripId);
+  if (!list || !list.length) return null;
+  return list.slice().sort((a, b) =>
+    ((b.severity === 'OVERDUE') - (a.severity === 'OVERDUE')) || (a.dueAt - b.dueAt))[0];
 }
 
-function getEfspObligation(stripId) { return efspObligations.get(stripId) || null; }
-
-/** Clears a Strip's obligation badge — called once its underlying condition is resolved client-side is NOT possible (the server never retracts an alert once raised this slice, docs/adr/0021's documented gap); exposed for completeness/tests and for efsp-panel.js to clear a DROPPED Strip's stale badge locally. */
-function clearEfspObligation(stripId) { efspObligations.delete(stripId); }
+/** Every obligation due on this Strip right now; [] when none. */
+function getEfspObligations(stripId) { return efspObligations.get(stripId) || []; }
 
 function getPendingMutations() {
   return [...efspPendingMutations.values()];
@@ -374,11 +373,16 @@ function _resetEfspStateForTest() {
   efspAitAuthorizedByFacility = {};
 }
 
-/** Applies an efsp-alerts message: the complete current conformance and conflict picture. */
+/** Applies an efsp-alerts message: the complete current conformance, conflict and obligation picture. */
 function applyEfspAlerts(msg) {
   efspConformance.clear();
   for (const r of (msg && msg.conformance) || []) if (r.alerts && r.alerts.length) efspConformance.set(r.fdrId, r.alerts);
   efspConflicts = (msg && msg.stca) || [];
+  efspObligations.clear();
+  for (const o of (msg && msg.obligations) || []) {
+    if (!efspObligations.has(o.stripId)) efspObligations.set(o.stripId, []);
+    efspObligations.get(o.stripId).push(o);
+  }
 }
 
 /** What is wrong with this flight's conformance right now; [] when it conforms. */
@@ -414,7 +418,7 @@ if (typeof module !== 'undefined' && module.exports) {
     activeMarsaForFdr, marsaForStrip, marsaParticipantStripIds,
     getEfspRack, searchEfspStrips, getEfspBoardSeq, getEfspFacility, getEfspBays,
     isAitAuthorizedFor,
-    applyEfspObligationAlert, getEfspObligation, clearEfspObligation,
+    getEfspObligation, getEfspObligations,
     _resetEfspStateForTest,
   };
 }
