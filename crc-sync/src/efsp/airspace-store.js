@@ -28,6 +28,8 @@
 // `airspace.owner` direction (docs/adr/0018) is a different fact, about a
 // flight rather than about the airspace, and is untouched by this store.
 
+const { WALL_CLOCK } = require('../mission-clock');
+
 const AIRSPACE_STATES = ['SCHEDULED', 'ACTIVE', 'RELEASED', 'RETURNED'];
 
 // The lifecycle, as a transition table rather than a switch: a reservation is
@@ -57,7 +59,10 @@ class AirspaceStore {
    *   business reaching into Boards, and the Boards do not exist yet when it
    *   is constructed. Optional, so a fixture can drive the store alone.
    */
-  constructor(airspaceConfig, { occupancyFor } = {}) {
+  constructor(airspaceConfig, { occupancyFor, clock = WALL_CLOCK } = {}) {
+    // The mission clock (docs/adr/0079) — a booking window and every
+    // timestamp here is read by a controller as a time of day.
+    this._clock = clock;
     this._occupancyFor = occupancyFor || (() => 0);
     this._config = airspaceConfig;
     this._records = new Map(); // airspaceId -> record
@@ -110,7 +115,7 @@ class AirspaceStore {
       airspaceId: mutation.airspaceId,
       actingPositionId,
       actorId: by || null,
-      at: Date.now(),
+      at: this._clock.now(),
       ok: result.ok,
       // A refusal is the interesting half of an authority model, so failures
       // are logged too — unlike BoardStore's, which records successes only.
@@ -134,7 +139,7 @@ class AirspaceStore {
 
   _touch(record, by, transition) {
     record.rev += 1;
-    record.updatedAt = Date.now();
+    record.updatedAt = this._clock.now();
     record.updatedBy = by || null;
     this._seq += 1;
     if (transition) record.transitions.push({ ...transition, at: record.updatedAt, by: by || null });
@@ -259,7 +264,7 @@ class AirspaceStore {
     }
     record.pendingRequest = {
       requestedBy: by || null, requestedPositionId: actingPositionId,
-      requestedAt: Date.now(), note: op.note || null,
+      requestedAt: this._clock.now(), note: op.note || null,
     };
     // Not a state transition — the airspace stays SCHEDULED until approved —
     // so this is deliberately not appended to `transitions`, which records
@@ -301,7 +306,7 @@ class AirspaceStore {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no activation request is outstanding', airspace: this.getAirspace(record.airspaceId) };
     }
     record.pendingRequest = null;
-    record.lastDenial = { deniedBy: by || null, deniedAt: Date.now(), reason: op.reason || null };
+    record.lastDenial = { deniedBy: by || null, deniedAt: this._clock.now(), reason: op.reason || null };
     this._touch(record, by, null);
     return { ok: true };
   }

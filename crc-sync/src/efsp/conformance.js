@@ -23,6 +23,7 @@
 // ground. It never moves or advances a Strip (guide §10.3).
 
 const { activeClearanceEntry } = require('./fdr-store');
+const { WALL_CLOCK } = require('../mission-clock');
 
 const MS_PER_KT = 0.514444;
 const FPM_PER_MS = 196.850394;
@@ -110,10 +111,14 @@ function evaluateConformance(input, mem, now, cfg) {
 class ConformanceMonitor {
   /**
    * @param {object} deps { trackStore, fdrStore, correlationStore, weather: () => {pressurePa,tempK},
-   *                        transitionAltFt: () => number, indicatedAltFt, config }
+   *                        transitionAltFt: () => number, indicatedAltFt, config, clock? }
    */
   constructor(deps) {
     this._d = deps;
+    // The mission clock (docs/adr/0079): the heading grace period runs from
+    // the clearance's own `at`, which is mission time, and an alert's `since`
+    // is shown to controllers.
+    this._clock = deps.clock || WALL_CLOCK;
     this._mem = new Map();    // fdrId -> memory
     this._alerts = new Map(); // fdrId -> alerts[]
   }
@@ -124,7 +129,7 @@ class ConformanceMonitor {
   }
 
   /** @returns {boolean} whether any flight's alerts changed */
-  tick(now = Date.now()) {
+  tick(now = this._clock.now()) {
     const { trackStore, fdrStore, correlationStore, config } = this._d;
     const seen = new Set();
     let changed = false;

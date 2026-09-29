@@ -154,7 +154,6 @@ const DEFAULTS = {
   declutter:       true,  // auto-hide labels for sequential-squawk formation flights
   showDatalinkLocks: true, // draw the datalink's radar-lock lines (geojson.js's buildDatalinkLines)
   transitionAltFt: 18000, // ft — how an ASSIGNED altitude is written; a contact's own comes from crc-sync
-  gameTimeOffset:  0,     // hours — theater UTC offset subtracted to display Zulu
   aprtManualWx:    {},    // per-airport manually-entered vis/cloud data, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
   aprtAtisFreq:    {},    // per-airport saved ATIS frequency, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
   aprtAtisRwy:     {},    // per-airport saved ATIS runway, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
@@ -487,7 +486,7 @@ async function connect() {
         weather = { pressurePa: msg.pressurePa, tempK: msg.tempK };
         break;
       case 'game-time':
-        updateGameTime(msg.datetime);
+        updateGameTime(msg);
         break;
       case 'status':
         grpcStatus = msg.grpc;
@@ -522,11 +521,10 @@ async function connect() {
       case 'theater-settings':
         // Squadron-wide config (crc-sync/src/theater-settings.js) — pushed
         // on connect and whenever any
-        // client edits transition alt / hdg correction / game-time offset
+        // client edits transition alt / hdg correction
         // from the Airport panel, authoritative over this client's cache.
         settings.transitionAltFt = msg.transitionAltFt;
         settings.hdgCorrection   = msg.hdgCorrection;
-        settings.gameTimeOffset  = msg.gameTimeOffset;
         saveSettings();
         updateMap();
         if (typeof _updateAprtRefCard === 'function') _updateAprtRefCard();

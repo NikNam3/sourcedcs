@@ -29,6 +29,8 @@ const { StcaMonitor } = require('./src/stca');
 const { loadAlertingConfig } = require('./src/alerting-config');
 const { indicatedAltFt } = require('./src/altimetry');
 const { getTheaterSettings } = require('./src/theater-settings');
+const { MissionClock } = require('./src/mission-clock');
+const { loadTheaters } = require('./src/theaters');
 const { lookupFlightPlan, toFdrFiledSeed, listFiledFlightPlans } = require('./src/efsp/flight-plan-lookup');
 const efspStereoRoutes = require('./src/efsp/stereo-routes');
 
@@ -125,7 +127,12 @@ const srsClient   = new SrsClient();
 // product and must survive a DCS mission reload, not just a crc-sync
 // restart. DO NOT add efsp.boardStore/fdrStore clear() calls to the
 // mission-reload handler below.
-const efsp        = createEfsp();
+// The mission clock (docs/adr/0079): in-game Zulu, fed by the gRPC game-time
+// poll below. Every EFSP time a controller reads — gates, deadlines, Strip
+// clocks, Mutation timestamps — comes from here, never from Date.now().
+const theaters     = loadTheaters();
+const missionClock = new MissionClock({ offsetHoursFor: (theatre) => theaters[theatre]?.utcOffsetHours ?? null });
+const efsp        = createEfsp({ clock: missionClock });
 
 // ── The radar picture (docs/adr/0042) ────────────────────────────────────
 // Radars, their sweep phase, terrain masking and who may look through what
@@ -196,7 +203,7 @@ const surveillance = createSurveillance({
 });
 const { transponders, identity } = surveillance;
 
-const wsHub       = new WsHub({ trackStore, collabStore, efsp, picture, surveillance });
+const wsHub       = new WsHub({ trackStore, collabStore, efsp, picture, surveillance, clock: missionClock });
 
 wsHub.attach(server);
 
@@ -266,8 +273,12 @@ grpcClient.on('mission-load', (missionData) => {
   // Strips are durably persisted and MUST survive a mission reload, unlike
   // tracks/the IFF overlay (see the `const efsp = createEfsp()` comment
   // above and docs/adr/0002-durable-board-persistence.md).
+  // A mission is running even when GetTheatre failed, so that is an unknown
+  // theater (offset 0, flagged), not "no theater yet" (the wall clock).
+  missionClock.setTheatre(missionData.theatre || 'UNKNOWN');
   wsHub.setMissionData(missionData);
-  console.log(`[crc-sync] mission init — ${missionData.airports.length} airports`);
+  wsHub.broadcastGameTime();
+  console.log(`[crc-sync] mission init — ${missionData.airports.length} airports, theater ${missionData.theatre || 'unknown'}`);
 
   // Which selectors found nothing in THIS theater — the only point at which
   // that question has an answer, since a selector naming an airfield the map
@@ -299,7 +310,15 @@ grpcClient.on('mission-load', (missionData) => {
 
 grpcClient.on('status', (state) => wsHub.setGrpcStatus(state));
 grpcClient.on('weather', (data) => wsHub.setWeather(data));
-grpcClient.on('game-time', (dt) => wsHub.setGameTime(dt));
+grpcClient.on('game-time', (dt) => { if (missionClock.sample(dt)) wsHub.broadcastGameTime(); });
+// With DCS gone there are no samples to broadcast on, and the clock has fallen
+// back to the wall clock — clients still need to hear that, and when.
+let lastClockSource = missionClock.source;
+setInterval(() => {
+  const source = missionClock.source;
+  if (source === 'WALL' || source !== lastClockSource) wsHub.broadcastGameTime();
+  lastClockSource = source;
+}, 5000);
 
 srsClient.on('status', (state) => wsHub.setSrsStatus(state));
 
@@ -434,6 +453,7 @@ setInterval(() => {
 // different subsystem, no reason to couple cadence. 15s is comfortably
 // fine-grained for minute-scale obligations. ─────────────────────────────
 const obligationMonitor = new ForwardingObligationMonitor({
+  clock: missionClock,
   boardStoreFor: efsp.boardStoreFor,
   fdrStore: efsp.fdrStore,
   facilityConfig: efspFacilityConfig,
@@ -463,6 +483,7 @@ setInterval(() => {
 // TrackStore — the same split airspaceStore and obligationMonitor already
 // have.
 const correlationReconciler = new CorrelationReconciler({
+  clock: missionClock,
   trackStore,
   // The code the aircraft is actually sending (docs/adr/0059).
   beaconOf: (t) => { const x = transponders.transponderOf(t); return x ? x.code : null; },
@@ -481,6 +502,7 @@ setInterval(() => correlationReconciler.tick(), CORRELATION_TICK_MS);
 // sent; the whole alert state goes out when it changes.
 const alertingConfig = loadAlertingConfig();
 const conformanceMonitor = new ConformanceMonitor({
+  clock: missionClock,
   trackStore,
   fdrStore: efsp.fdrStore,
   correlationStore: efsp.correlationStore,
@@ -497,10 +519,14 @@ const stcaMonitor = new StcaMonitor({
   // Alert text names each aircraft the way identity does (docs/adr/0059).
   callsignFor: (track) => identity.labelFor(track.id),
 });
+// Conformance runs on the mission clock — its grace period is measured from
+// the clearance's own timestamp, which is mission time, and the `since` it
+// reports is shown to controllers. STCA stays on the wall clock: it only
+// compares track ages, which tracks.js stamps in wall time, and shows no time
+// of day at all.
 setInterval(() => {
-  const now = Date.now();
-  const conformanceChanged = conformanceMonitor.tick(now);
-  const stcaChanged = stcaMonitor.tick(now);
+  const conformanceChanged = conformanceMonitor.tick();
+  const stcaChanged = stcaMonitor.tick(Date.now());
   if (conformanceChanged || stcaChanged) {
     wsHub.broadcastEfspAlerts({ conformance: conformanceMonitor.getAll(), stca: stcaMonitor.getAll() });
   }

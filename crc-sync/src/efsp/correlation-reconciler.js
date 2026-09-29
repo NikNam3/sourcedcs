@@ -28,6 +28,7 @@
 const {
   callsignAffinity, buildTrackIndices, AFFINITY_EXACT,
 } = require('./correlation-match');
+const { WALL_CLOCK } = require('../mission-clock');
 
 const CORRELATION_TICK_MS = 1000;
 
@@ -71,7 +72,11 @@ class CorrelationReconciler {
    * @param {(payload:object)=>void} [deps.onDelta] — called ONCE per tick with
    *   the records that changed plus the stats, or not at all on a quiet tick.
    */
-  constructor({ trackStore, fdrStore, correlationStore, boardStoreFor, facilityConfig, beaconOf, onDelta }) {
+  constructor({ trackStore, fdrStore, correlationStore, boardStoreFor, facilityConfig, beaconOf, onDelta, clock = WALL_CLOCK }) {
+    // The mission clock (docs/adr/0079) — what the correlation records are
+    // stamped with. The below-target warning's rate limit is a log throttle
+    // and stays on the wall clock (_warnIfBelowTarget).
+    this._clock = clock;
     if (typeof beaconOf !== 'function') throw new Error('CorrelationReconciler needs beaconOf');
     this._beaconOf = beaconOf;
     this._trackStore = trackStore;
@@ -132,7 +137,7 @@ class CorrelationReconciler {
    * would claim one contact at the SAME rung, neither gets it and both are
    * told it was ambiguous. One contact never correlates to two FDRs.
    */
-  tick(now = Date.now()) {
+  tick(now = this._clock.now()) {
     this._ticks += 1;
 
     const tracks = this._trackStore.getAll();
@@ -223,7 +228,7 @@ class CorrelationReconciler {
 
     const { changed } = this._store.reconcile(resolutions, now);
     this._writeObservedBeacons(resolutions);
-    const stats = this._accumulate(resolutions, now);
+    const stats = this._accumulate(resolutions);
 
     if (changed.length) this._onDelta({ correlations: changed, stats });
     return { changed, stats };
@@ -289,7 +294,7 @@ class CorrelationReconciler {
     }
   }
 
-  _accumulate(resolutions, now) {
+  _accumulate(resolutions) {
     const records = [...resolutions.keys()].map(id => this._store.getCorrelation(id)).filter(Boolean);
     const rate = computeCorrelationRate(records);
 
@@ -308,7 +313,7 @@ class CorrelationReconciler {
       this._matchedTickSum += rate.correlated + rate.provisional;
       this._eligibleTickSum += rate.eligible;
       if (this._minRateSeen == null || rate.rate < this._minRateSeen) this._minRateSeen = rate.rate;
-      this._warnIfBelowTarget(rate, now);
+      this._warnIfBelowTarget(rate, Date.now());
     }
     this._lastRate = rate.rate;
     this._lastEligible = rate.eligible;
@@ -325,7 +330,7 @@ class CorrelationReconciler {
   }
 
   /** Mission reload — every contact in the theater was re-minted. */
-  resetPicture(reason = 'MISSION_RELOAD', now = Date.now()) {
+  resetPicture(reason = 'MISSION_RELOAD', now = this._clock.now()) {
     const { changed } = this._store.resetPicture(reason, now);
     this._warningsRaised += changed.length;
     if (changed.length) this._onDelta({ correlations: changed, stats: this.getStats() });

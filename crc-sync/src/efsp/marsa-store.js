@@ -48,6 +48,7 @@
 const crypto = require('crypto');
 
 const { MAX_FREE_TEXT } = require('./fdr-store');
+const { WALL_CLOCK } = require('../mission-clock');
 
 const MARSA_STATES = ['ACTIVE', 'ENDED', 'VOIDED'];
 
@@ -106,7 +107,8 @@ class MarsaStore {
    *   The other half of keeping the two agreed is board-store.js refusing a
    *   direct SREG write while an ACTIVE relation holds the FDR.
    */
-  constructor({ fdrExists, setSeparationRegime } = {}) {
+  constructor({ fdrExists, setSeparationRegime, clock = WALL_CLOCK } = {}) {
+    this._clock = clock; // the mission clock, docs/adr/0079
     this._fdrExists = fdrExists || (() => true);
     this._setSeparationRegime = setSeparationRegime || (() => ({ ok: true }));
     this._relations = new Map(); // marsaId -> relation
@@ -188,7 +190,7 @@ class MarsaStore {
 
   _touch(relation, by, transition) {
     relation.rev += 1;
-    relation.updatedAt = Date.now();
+    relation.updatedAt = this._clock.now();
     relation.updatedBy = by || null;
     this._seq += 1;
     if (transition) {
@@ -216,7 +218,7 @@ class MarsaStore {
       marsaId: (result.relation && result.relation.marsaId) || mutation.marsaId || null,
       actingPositionId,
       actorId: by || null,
-      at: Date.now(),
+      at: this._clock.now(),
       ok: result.ok,
       reason: result.ok ? undefined : result.reason,
       detail: result.ok ? undefined : result.detail,
@@ -339,7 +341,7 @@ class MarsaStore {
       }
     }
 
-    const now = Date.now();
+    const now = this._clock.now();
     const relation = {
       marsaId: crypto.randomUUID(),
       // Its own rev, independent of every participant's fdr.rev and every
@@ -411,7 +413,7 @@ class MarsaStore {
     if (relation.rendezvousAt) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'rendezvous is already marked' };
     }
-    relation.rendezvousAt = Date.now();
+    relation.rendezvousAt = this._clock.now();
     relation.rendezvousBy = by || null;
     this._touch(relation, by, { reason: 'RENDEZVOUS', detail: capText(op.note) });
     return { ok: true };
@@ -485,7 +487,7 @@ class MarsaStore {
     relation.state = 'VOIDED';
     relation.voidedBy = cause;
     relation.voidedDetail = capText(detail);
-    relation.endedAt = Date.now();
+    relation.endedAt = this._clock.now();
     this._touch(relation, by, { reason: 'VOIDED', detail });
     // Whatever voided it, ATC is separating these aircraft again from this
     // instant. Writing the regime back is the half of the void that makes the
@@ -498,7 +500,7 @@ class MarsaStore {
   _finish(relation, cause, detail, by) {
     relation.state = 'ENDED';
     relation.endedBy = END_CAUSES.includes(cause) ? cause : 'END_CONDITION';
-    relation.endedAt = Date.now();
+    relation.endedAt = this._clock.now();
     this._touch(relation, by, { reason: 'ENDED', detail });
     this._applyRegime(relation.participants, 'ATC', by);
   }
@@ -647,7 +649,7 @@ class MarsaStore {
       if (relation.state === 'ACTIVE' && relation.participants.length < MIN_PARTICIPANTS) {
         relation.state = 'ENDED';
         relation.endedBy = 'PARTICIPANT_RETIRED';
-        relation.endedAt = relation.endedAt || Date.now();
+        relation.endedAt = relation.endedAt || this._clock.now();
       }
       this._relations.set(relation.marsaId, relation);
     }

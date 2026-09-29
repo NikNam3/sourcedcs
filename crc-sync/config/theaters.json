@@ -1,0 +1,19 @@
+{
+  "_comment": "Fixed per-theater facts, keyed by the name DCS-gRPC's GetTheatre returns (docs/adr/0079). utcOffsetHours: local = Z + offset, standard time, no daylight saving — which is how DCS itself keeps time. Syria +3 is a squadron decision (docs/parallel/decisions.md H11). Every other value is [SOURCE-DEFINED]: DCS does not publish these, and they follow the community-maintained table in MOOSE's UTILS.GMTToLocalTimeDifference(). Verify one against the mission editor before trusting it for a theater we have not flown. One object per theater so later facts (magnetic variation, decisions.md H15) sit beside the offset. Read once at startup, never written by code; a copy in state/theaters.json overrides it theater by theater, field by field. A theater missing here runs on offset 0 and says so (source MISSION_NO_OFFSET).",
+  "theaters": {
+    "Caucasus":           { "utcOffsetHours": 4 },
+    "Nevada":             { "utcOffsetHours": -8 },
+    "Normandy":           { "utcOffsetHours": 0 },
+    "PersianGulf":        { "utcOffsetHours": 4 },
+    "TheChannel":         { "utcOffsetHours": 2 },
+    "Syria":              { "utcOffsetHours": 3 },
+    "MarianaIslands":     { "utcOffsetHours": 10 },
+    "MarianaIslandsWWII": { "utcOffsetHours": 10 },
+    "Falklands":          { "utcOffsetHours": -3 },
+    "SinaiMap":           { "utcOffsetHours": 2 },
+    "Kola":               { "utcOffsetHours": 3 },
+    "Afghanistan":        { "utcOffsetHours": 4.5 },
+    "Iraq":               { "utcOffsetHours": 3 },
+    "GermanyCW":          { "utcOffsetHours": 1 }
+  }
+}

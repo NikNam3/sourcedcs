@@ -11,6 +11,7 @@
 
 const fs = require('fs');
 const { writePath, ensureDirFor } = require('../state-paths');
+const { WALL_CLOCK } = require('../mission-clock');
 
 // Overridable so tests exercise the append/read path against a temp file
 // instead of the real squadron-wide log — same pattern as theater-settings
@@ -20,19 +21,33 @@ const { writePath, ensureDirFor } = require('../state-paths');
 const MUTATION_LOG_PATH = writePath('efsp-mutations.jsonl', process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH);
 
 class MutationLog {
-  constructor(filePath) {
+  /**
+   * @param {string} [filePath]
+   * @param {{clock?:{now:()=>number, source:string}}} [deps] the mission clock
+   *   the stores stamp `at` with (docs/adr/0079), so each record can say which
+   *   clock that was.
+   */
+  constructor(filePath, { clock = WALL_CLOCK } = {}) {
     this._path = filePath || MUTATION_LOG_PATH;
+    this._clock = clock;
   }
 
   /**
    * Appends one audit entry (§4.8.1: stripId, actingPositionId, actorId,
    * timestamp, before/after, clientMutationId). Never throws — a logging
    * failure must not break the Mutation it's recording.
+   *
+   * The entry's own `at` is mission time (docs/adr/0079) — when the event
+   * happened in the scenario the controllers were working. Two fields are
+   * added here: `atSource`, 'WALL' if the mission clock had fallen back when
+   * it was stamped, and `wallAt`, the real time it was written, for reading
+   * the log against server logs and anything else outside the scenario.
    */
   record(entry) {
     try {
       ensureDirFor(this._path);
-      fs.appendFileSync(this._path, JSON.stringify(entry) + '\n');
+      const stamped = { ...entry, atSource: this._clock.source, wallAt: Date.now() };
+      fs.appendFileSync(this._path, JSON.stringify(stamped) + '\n');
     } catch (e) {
       console.warn('[efsp-mutation-log] failed to append:', e.message);
     }

@@ -21,12 +21,17 @@
 // crc-desktop calls setHeldPositions() with the controller's full
 // declared set each time it changes.
 
+const { WALL_CLOCK } = require('../mission-clock');
+
 class PositionStore {
   /**
    * @param {string[]} positionIds — the fixed Position set, e.g. ['OPS','CD','GND','TWR'] for Phase 1
    * @param {object} coveringChain — one-hop covering map, e.g. { CD:'GND', GND:'TWR' } (guide §4.8.6's default chain, Phase-1-truncated at TWR since APP doesn't exist yet). A Position absent from this map (like OPS, and TWR itself) has no covering Position — matches the guide's own chain table, which never lists one for OPS either.
    */
-  constructor(positionIds, coveringChain) {
+  constructor(positionIds, coveringChain, { clock = WALL_CLOCK } = {}) {
+    // The mission clock (docs/adr/0079) — `since` is who has held a Position
+    // from when, which a controller reads as a time of day.
+    this._clock = clock;
     this._positionIds = new Set(positionIds);
     this._coveringChain = coveringChain || {};
     this._state = new Map(); // positionId -> { primary, observers:[], pendingPrimaryRequest }
@@ -106,7 +111,7 @@ class PositionStore {
    *   Strip counts to build the "this would strand N Strips" warning
    *   (guide §4.8.6 rule 5 — warn, never block).
    */
-  setHeldPositions(controllerId, controllerName, heldPositionIds, now = Date.now()) {
+  setHeldPositions(controllerId, controllerName, heldPositionIds, now = this._clock.now()) {
     const valid = heldPositionIds.filter(id => this._positionIds.has(id));
     const before = this._sessions.get(controllerId) || new Set();
     const after = new Set(valid);
@@ -143,7 +148,7 @@ class PositionStore {
   }
 
   /** An Observer requests Primary (guide §4.8.2 rule 3) — delivered to the current Primary; requires their release via releasePrimaryTo(). Never auto-promotes. */
-  requestPrimary(controllerId, positionId, now = Date.now()) {
+  requestPrimary(controllerId, positionId, now = this._clock.now()) {
     const s = this._state.get(positionId);
     if (!s || !s.primary) return { ok: false, reason: 'NOT_OCCUPIED' };
     if (s.primary.controllerId === controllerId) return { ok: false, reason: 'ALREADY_PRIMARY' };
@@ -153,7 +158,7 @@ class PositionStore {
   }
 
   /** The current Primary explicitly releases Primary to a requesting Observer — a prompt, never automatic (guide §4.8.6 rule 1). */
-  releasePrimaryTo(positionId, toControllerId, now = Date.now()) {
+  releasePrimaryTo(positionId, toControllerId, now = this._clock.now()) {
     const s = this._state.get(positionId);
     if (!s || !s.primary) return { ok: false, reason: 'NOT_OCCUPIED' };
     const observer = s.observers.find(o => o.controllerId === toControllerId);
@@ -180,7 +185,7 @@ class PositionStore {
     if (s.primary && s.primary.controllerId === controllerId) {
       if (abrupt && s.observers.length > 0) {
         const next = s.observers.shift(); // longest-waiting = earliest added
-        s.primary = { controllerId: next.controllerId, controllerName: next.controllerName, since: Date.now() };
+        s.primary = { controllerId: next.controllerId, controllerName: next.controllerName, since: this._clock.now() };
       } else {
         s.primary = null;
       }

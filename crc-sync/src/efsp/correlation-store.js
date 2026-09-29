@@ -40,6 +40,7 @@
 // that here.
 
 const { MAX_FREE_TEXT } = require('./fdr-store');
+const { WALL_CLOCK } = require('../mission-clock');
 
 const CORRELATION_STATES = ['CORRELATED', 'PROVISIONAL', 'UNCORRELATED'];
 
@@ -77,7 +78,8 @@ class CorrelationStore {
    *   store has no business reaching into the FdrStore, and in index.js's
    *   composition root the stores it would need do not all exist yet.
    */
-  constructor({ fdrExists } = {}) {
+  constructor({ fdrExists, clock = WALL_CLOCK } = {}) {
+    this._clock = clock; // the mission clock, docs/adr/0079
     this._fdrExists = fdrExists || (() => true);
     this._records = new Map(); // fdrId -> record
     this._seq = 0;
@@ -170,7 +172,7 @@ class CorrelationStore {
 
   _touch(record, by, transition) {
     record.rev += 1;
-    record.updatedAt = Date.now();
+    record.updatedAt = this._clock.now();
     record.updatedBy = by || null;
     this._seq += 1;
     if (transition) {
@@ -200,7 +202,7 @@ class CorrelationStore {
       fdrId: mutation.fdrId,
       actingPositionId,
       actorId: by || null,
-      at: Date.now(),
+      at: this._clock.now(),
       ok: result.ok,
       reason: result.ok ? undefined : result.reason,
       detail: result.ok ? undefined : result.detail,
@@ -281,7 +283,7 @@ class CorrelationStore {
       trackId,
       boundBy: by || null,
       boundPositionId: actingPositionId || null,
-      boundAt: Date.now(),
+      boundAt: this._clock.now(),
       note: capText(op.note),
     };
     record.trackId = trackId;
@@ -289,7 +291,7 @@ class CorrelationStore {
     record.confidence = null;
     record.state = 'CORRELATED';
     record.warning = null;
-    record.lastMatchedAt = Date.now();
+    record.lastMatchedAt = this._clock.now();
     this._touch(record, by, { reason: 'EXPLICIT_BIND', fromTrackId });
     return { ok: true };
   }
@@ -325,7 +327,7 @@ class CorrelationStore {
    * @returns {{changed: object[]}} only the records that actually changed —
    *   what gets broadcast.
    */
-  reconcile(resolutions, now = Date.now()) {
+  reconcile(resolutions, now = this._clock.now()) {
     const changed = [];
 
     for (const [fdrId, resolution] of resolutions) {
@@ -448,7 +450,7 @@ class CorrelationStore {
    * two outcomes and this does both in sequence within one tick: warn
    * immediately, re-bind on the beacon next tick.
    */
-  resetPicture(reason, now = Date.now()) {
+  resetPicture(reason, now = this._clock.now()) {
     const changed = [];
     for (const record of this._records.values()) {
       const lostTrackId = record.trackId;

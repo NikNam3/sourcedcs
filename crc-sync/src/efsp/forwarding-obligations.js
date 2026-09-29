@@ -17,6 +17,7 @@
 // instrumentation hook, not a real dashboard).
 
 const { isVoidExpired } = require('./nla');
+const { WALL_CLOCK } = require('../mission-clock');
 
 const ADVANCE_FORWARDING_MINUTES = 15;   // §4.6.1
 const ETA_REVISION_THRESHOLD_MINUTES = 3; // §4.6.1
@@ -139,7 +140,10 @@ class ForwardingObligationMonitor {
   /**
    * @param {{boardStoreFor:(facilityId:string)=>object, fdrStore:object, facilityConfig:object, airspaceStore?:object, onAlert?:(alert:object)=>void}} deps
    */
-  constructor({ boardStoreFor, fdrStore, facilityConfig, airspaceStore, onAlert }) {
+  constructor({ boardStoreFor, fdrStore, facilityConfig, airspaceStore, onAlert, clock = WALL_CLOCK }) {
+    // The mission clock (docs/adr/0079) — every obligation here is due at an
+    // ETA, a proposed departure or a void deadline, all in mission time.
+    this._clock = clock;
     this._boardStoreFor = boardStoreFor;
     this._fdrStore = fdrStore;
     this._facilityConfig = facilityConfig;
@@ -149,7 +153,7 @@ class ForwardingObligationMonitor {
     this._compliance = new Map(); // obligationType -> {met, missed}
   }
 
-  tick(now = Date.now()) {
+  tick(now = this._clock.now()) {
     for (const facilityId of this._facilityConfig.getFacilityIds()) {
       const boardStore = this._boardStoreFor(facilityId);
       if (!boardStore) continue;

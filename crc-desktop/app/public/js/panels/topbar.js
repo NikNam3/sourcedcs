@@ -181,36 +181,48 @@ function updateMeasureLine(lng1, lat1, lng2, lat2) {
 }
 
 // ── Zulu clock (DCS in-game time) ─────────────────────────────────────────
-// Server pushes GetScenarioCurrentTime every 5 s as an ISO 8601 string.
-// We anchor that to a local timestamp and advance the display in real-time
-// between server updates.
+// crc-sync owns the mission clock (crc-sync/src/mission-clock.js, docs/adr/
+// 0079): it converts DCS's in-game local time to Zulu with the theater's fixed
+// offset and sends the result as `game-time` { zuluMs, source } after every
+// poll. This side only advances it in real time between messages — there is
+// no offset, and no clock arithmetic, here.
+//
+// missionNow() is the client's one answer to "what time is it" for anything a
+// controller reads as a time of day (a booking window, how long an exchange
+// has waited). Before the first message it is the wall clock, which is also
+// what the server answers before DCS does.
 
-let _gameTimeBaseMs  = null; // real Date.now() when the anchor was set
-let _gameTimeBaseSec = null; // game seconds-of-day at the anchor
+let _missionAnchorWallMs = null; // Date.now() when the last game-time arrived
+let _missionAnchorZuluMs = null; // what it said
+let _missionClockSource  = 'WALL';
 
-function updateGameTime(isoDatetime) {
-  // Parse HH:MM:SS directly from the ISO string — avoids browser local/UTC
-  // ambiguity with Date(). DCS returns theater local time, not UTC.
-  const m = isoDatetime.match(/T(\d{2}):(\d{2}):(\d{2})/);
-  if (!m) return;
-  _gameTimeBaseMs  = Date.now();
-  _gameTimeBaseSec = parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseInt(m[3]);
+function updateGameTime(msg) {
+  if (!Number.isFinite(msg.zuluMs)) return;
+  _missionAnchorWallMs = Date.now();
+  _missionAnchorZuluMs = msg.zuluMs;
+  _missionClockSource  = msg.source || 'WALL';
+}
+
+function missionNow() {
+  if (_missionAnchorZuluMs === null) return Date.now();
+  return _missionAnchorZuluMs + (Date.now() - _missionAnchorWallMs);
 }
 
 function initZuluClock() {
   const $el = document.getElementById('zulu-clock');
   if (!$el) return;
   setInterval(() => {
-    if (_gameTimeBaseSec === null) {
+    if (_missionAnchorZuluMs === null) {
       $el.textContent = '--:--:--Z';
       return;
     }
-    const elapsed    = Math.floor((Date.now() - _gameTimeBaseMs) / 1000);
-    const offsetSec  = (settings.gameTimeOffset || 0) * 3600;
-    const total      = ((_gameTimeBaseSec + elapsed - offsetSec) % 86400 + 86400) % 86400;
-    const hh = String(Math.floor(total / 3600)).padStart(2, '0');
-    const mm = String(Math.floor((total % 3600) / 60)).padStart(2, '0');
-    const ss = String(total % 60).padStart(2, '0');
-    $el.textContent = `${hh}:${mm}:${ss}Z`;
+    // WALL: DCS is not answering, so this is real time, not mission time.
+    // MISSION_NO_OFFSET: mission time on a theater crc-sync has no offset for.
+    // Either way the controller has to be able to tell.
+    const flag = _missionClockSource === 'WALL' ? ' WALL' : _missionClockSource === 'MISSION_NO_OFFSET' ? ' ?' : '';
+    $el.textContent = `${new Date(missionNow()).toISOString().slice(11, 19)}Z${flag}`;
+    $el.title = _missionClockSource === 'MISSION' ? 'DCS mission time (Zulu)'
+      : _missionClockSource === 'WALL' ? 'DCS is not reporting mission time — showing real UTC'
+        : 'DCS mission time — no UTC offset is configured for this theater, so this may be hours out';
   }, 1000);
 }

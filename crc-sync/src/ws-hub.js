@@ -6,6 +6,7 @@ const { createSurveillance } = require('./surveillance');
 const { getTheaterSettings, setTheaterSettings } = require('./theater-settings');
 const { getAptConfig, setAptConfig } = require('./apt-config');
 const { consumeTicket } = require('./auth');
+const { WALL_CLOCK } = require('./mission-clock');
 
 const VERSION  = 1;
 const TICK_MS  = 500; // delta broadcast rate, one timer for every session
@@ -29,8 +30,10 @@ class WsHub {
    *   nobody sees anything — there is no "send everything" mode any more.
    * @param {object} [deps.surveillance] src/surveillance/index.js — who each
    *   contact is and what its transponder sends (docs/adr/0059).
+   * @param {object} [deps.clock]        the mission clock (docs/adr/0079) —
+   *   what the topbar's Zulu clock shows, and the client's only source of it.
    */
-  constructor({ trackStore, collabStore, efsp = null, picture = null, surveillance = null }) {
+  constructor({ trackStore, collabStore, efsp = null, picture = null, surveillance = null, clock = WALL_CLOCK }) {
     this._trackStore  = trackStore;
     this._collabStore = collabStore;
     this._efsp        = efsp;
@@ -42,7 +45,7 @@ class WsHub {
     this._missionData = null;
     this._missionId   = null;
     this._weather     = null;
-    this._gameTime    = null;
+    this._clock       = clock;
     this._grpcStatus  = 'disconnected';
     this._srsStatus   = 'disconnected';
     this._atisActive  = []; // [{ frequency, ownerId }] — see setAtisActive()
@@ -85,7 +88,8 @@ class WsHub {
   }
 
   setWeather(data)    { this._weather = data; this._broadcast(this._weatherMsg()); }
-  setGameTime(dt)     { this._gameTime = dt; this._broadcast(this._gameTimeMsg()); }
+  /** Re-anchors every client's Zulu clock — after each mission-clock sample, and on a slow timer so a WALL-sourced clock still reaches them. */
+  broadcastGameTime() { this._broadcast(this._gameTimeMsg()); }
 
   /**
    * The radar list changed under everyone — a mission loaded, or an AWACS took
@@ -205,7 +209,11 @@ class WsHub {
 
   _statusMsg()  { return { version: VERSION, type: 'status', grpc: this._grpcStatus, srs: this._srsStatus }; }
   _weatherMsg() { return { version: VERSION, type: 'weather', pressurePa: this._weather.pressurePa, tempK: this._weather.tempK }; }
-  _gameTimeMsg(){ return { version: VERSION, type: 'game-time', datetime: this._gameTime }; }
+  // Already Zulu: the theater offset is applied here, server-side, from the
+  // shipped table — the client only advances it between messages.
+  _gameTimeMsg(){
+    return { version: VERSION, type: 'game-time', zuluMs: this._clock.now(), source: this._clock.source };
+  }
   _atisMsg()      { return { version: VERSION, type: 'atis', active: this._atisActive }; }
   _theaterSettingsMsg() { return { version: VERSION, type: 'theater-settings', ...getTheaterSettings() }; }
   _aptConfigMsg() { return { version: VERSION, type: 'apt-config', airports: getAptConfig() }; }
@@ -394,7 +402,7 @@ class WsHub {
     ws.send(JSON.stringify(this._statusMsg()));
     if (this._missionData) ws.send(JSON.stringify(this._initMsg()));
     if (this._weather)     ws.send(JSON.stringify(this._weatherMsg()));
-    if (this._gameTime)    ws.send(JSON.stringify(this._gameTimeMsg()));
+    ws.send(JSON.stringify(this._gameTimeMsg()));
     ws.send(JSON.stringify(this._theaterSettingsMsg()));
     ws.send(JSON.stringify(this._aptConfigMsg()));
     ws.send(JSON.stringify(this._atisMsg()));
@@ -529,7 +537,7 @@ class WsHub {
       }
     }
 
-    // Theater settings (transition alt / hdg correction / game-time offset)
+    // Theater settings (transition alt / hdg correction)
     // are squadron-wide config — any client
     // can push a patch and every client (including the sender) gets the
     // authoritative merged result back.

@@ -47,6 +47,7 @@ const coordination = require('./coordination');
 const { handleMessage, snapshotMessage } = require('./efsp-ws');
 const { NlaStatusMonitor } = require('./nla-status-monitor');
 const { statePaths, ensureDirFor } = require('../state-paths');
+const { WALL_CLOCK } = require('../mission-clock');
 
 // Overridable so tests exercise the restore/persist path against a temp
 // file — same pattern as every other config/*.json path in this package.
@@ -57,15 +58,24 @@ const { statePaths, ensureDirFor } = require('../state-paths');
 const { read: BOARD_SNAPSHOT_READ_PATH, write: BOARD_SNAPSHOT_PATH } =
   statePaths('efsp-board.json', process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH);
 
-function createEfsp() {
+/**
+ * @param {object} [deps]
+ * @param {{now:()=>number, source:string}} [deps.clock] the mission clock
+ *   (docs/adr/0079). Every store below takes it, so every time a controller
+ *   reads — a gate, a deadline, a Strip clock, a Mutation's `at` — is in-game
+ *   Zulu. server.js passes the real one; a fixture that omits it gets the wall
+ *   clock, which is what the mission clock itself answers before DCS does.
+ */
+function createEfsp({ clock = WALL_CLOCK } = {}) {
   const codeAllocator = new CodeAllocator();
-  const fdrStore = new FdrStore(codeAllocator);
-  const mutationLog = new MutationLog();
+  const fdrStore = new FdrStore(codeAllocator, { clock });
+  const mutationLog = new MutationLog(undefined, { clock });
   // One store for every Facility, like fdrStore — an airspace is a theater
   // entity that NAMES its controlling Facility rather than being replicated
   // into each one. There is no D13 replication question here because nothing
   // is ever handed across a boundary; the record has exactly one home.
   const airspaceStore = new AirspaceStore(airspaceConfig, {
+    clock,
     occupancyFor: (airspaceId) => {
       let n = 0;
       for (const { boardStore } of facilities.values()) {
@@ -83,6 +93,7 @@ function createEfsp() {
   // cross-Facility exchange are looking at the same one. There is no D13
   // replication question here either — the record has one home.
   const correlationStore = new CorrelationStore({
+    clock,
     fdrExists: (fdrId) => !!fdrStore.getFdr(fdrId),
   });
 
@@ -99,6 +110,7 @@ function createEfsp() {
   // block — "if a second controller takes TAC_C2 ten minutes later, the state
   // must already be correct, or they inherit a lie."
   const marsaStore = new MarsaStore({
+    clock,
     fdrExists: (fdrId) => !!fdrStore.getFdr(fdrId),
     setSeparationRegime: (fdrId, separationRegime, { by } = {}) =>
       fdrStore.setTofi(fdrId, { separationRegime }, { by }),
@@ -108,7 +120,7 @@ function createEfsp() {
   const facilities = new Map(); // facilityId -> { boardStore, positionStore, rules }
 
   for (const facilityId of facilityIds) {
-    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getCoveringChain(facilityId));
+    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getCoveringChain(facilityId), { clock });
 
     const rules = {
       resolveBlockTarget:  (blockId, role) => blockMap.resolveBlockTarget(role, blockId),
@@ -195,7 +207,7 @@ function createEfsp() {
       drainMarsaRegimeWrites:  () => marsaStore.drainRegimeWrites(),
     };
 
-    const boardStore = new BoardStore(fdrStore, rules);
+    const boardStore = new BoardStore(fdrStore, rules, { clock });
     boardStore.setMutationLog(mutationLog);
     facilities.set(facilityId, { boardStore, positionStore, rules });
   }
@@ -214,6 +226,7 @@ function createEfsp() {
   // has to be reachable from `ctx`. server.js supplies the broadcast and the
   // tick; see setOnDelta.
   const nlaStatusMonitor = new NlaStatusMonitor({
+    clock,
     boardStoreFor: (facilityId) => {
       const f = facilities.get(facilityId);
       return f ? f.boardStore : null;
@@ -245,7 +258,7 @@ function createEfsp() {
   };
 
   return {
-    boardStore: ctx.boardStore, fdrStore, positionStore: ctx.positionStore, mutationLog,
+    boardStore: ctx.boardStore, fdrStore, positionStore: ctx.positionStore, mutationLog, clock,
     airspaceStore, correlationStore, marsaStore, nlaStatusMonitor,
     boardStoreFor: ctx.boardStoreFor, positionStoreFor: ctx.positionStoreFor,
 

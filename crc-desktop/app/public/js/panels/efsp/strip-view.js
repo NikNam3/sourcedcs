@@ -58,7 +58,10 @@ function _stripButton(label, legacy, { go = false, disabled = false, title = '',
 
 function _waitingText(since) {
   if (!since) return '';
-  const s = Math.max(0, Math.floor((Date.now() - since) / 1000));
+  // `since` is crc-sync's mission clock (docs/adr/0079), so the elapsed time
+  // is measured against the same clock — topbar.js's missionNow().
+  const now = typeof missionNow === 'function' ? missionNow() : Date.now();
+  const s = Math.max(0, Math.floor((now - since) / 1000));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 

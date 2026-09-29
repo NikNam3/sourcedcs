@@ -26,6 +26,7 @@ const { isValidFrequency, MIN_FREQUENCY_MHZ, MAX_FREQUENCY_MHZ } = require('./ai
 // board-store.js's _applyCreateStrip instead would mean any second creation
 // path — or a test constructing an FdrStore directly — silently skips it.
 const stereoRoutes = require('./stereo-routes');
+const { WALL_CLOCK } = require('../mission-clock');
 
 const VOID_DEADLINE_MINUTES = 30; // §3.8 — derived, not stored input
 const EDCT_WINDOW_MINUTES = 5;              // §4.6.2 — EDCT ± 5 min
@@ -303,7 +304,13 @@ function activeClearanceEntry(fdr, field) {
 }
 
 class FdrStore {
-  constructor(codeAllocator) {
+  /**
+   * @param {CodeAllocator} [codeAllocator]
+   * @param {{clock?:{now:()=>number}}} [deps] the mission clock (docs/adr/0079)
+   *   — every timestamp on an FDR is a time a controller reads.
+   */
+  constructor(codeAllocator, { clock = WALL_CLOCK } = {}) {
+    this._clock = clock;
     this._codeAllocator = codeAllocator || new CodeAllocator();
     this._fdrs = new Map(); // fdrId -> FlightDataRecord
   }
@@ -369,7 +376,7 @@ class FdrStore {
     const filedFrom = (key) => seed[key] || stereoSeed[key] || '';
 
     const fdrId = crypto.randomUUID();
-    const now = Date.now();
+    const now = this._clock.now();
     const equipmentCodes = Array.isArray(seed.equipmentCodes) ? [...seed.equipmentCodes] : [];
 
     const minted = this._codeAllocator.allocate(fdrId);
@@ -642,7 +649,7 @@ class FdrStore {
 
     fdr.provenance[path] = 'CONTROLLER_ENTERED';
     fdr.rev += 1;
-    fdr.updatedAt = Date.now();
+    fdr.updatedAt = this._clock.now();
     fdr.updatedBy = by || null;
     return { ok: true, fdr };
   }
@@ -667,7 +674,7 @@ class FdrStore {
     fdr.identity.beaconAssigned = code;
     fdr.provenance['identity.beaconAssigned'] = 'CONTROLLER_ENTERED';
     fdr.rev += 1;
-    fdr.updatedAt = Date.now();
+    fdr.updatedAt = this._clock.now();
     fdr.updatedBy = by || null;
     return { ok: true, fdr, warning: check.warning };
   }
@@ -711,7 +718,7 @@ class FdrStore {
     fdr.identity.beaconObserved = code;
     fdr.provenance['identity.beaconObserved'] = source;
     fdr.rev += 1;
-    fdr.updatedAt = Date.now();
+    fdr.updatedAt = this._clock.now();
     // No updatedBy: surveillance is not a controller, and stamping a
     // controllerId here would attribute a machine observation to a person.
     return { ok: true, fdr, changed: true };
@@ -745,7 +752,7 @@ class FdrStore {
     // doctrinal fact is append-only for exactly this reason (§3.7, and JO
     // 7110.65 ¶2-3-1's "do not erase or overwrite any item"); `owner` stays
     // the current-value field so every existing reader is unaffected.
-    const now = Date.now();
+    const now = this._clock.now();
     fdr.airspace = {
       owner,
       changedAt: now,
@@ -754,7 +761,7 @@ class FdrStore {
     };
     fdr.provenance['airspace.owner'] = 'CONTROLLER_ENTERED';
     fdr.rev += 1;
-    fdr.updatedAt = Date.now();
+    fdr.updatedAt = this._clock.now();
     fdr.updatedBy = by || null;
     return { ok: true, fdr };
   }
@@ -795,10 +802,10 @@ class FdrStore {
     if (patch.separationRegime !== undefined && patch.separationRegime !== null && !SEPARATION_REGIMES.has(patch.separationRegime)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `invalid separation_regime: ${JSON.stringify(patch.separationRegime)}` };
     }
-    fdr.tofi = { ...fdr.tofi, ...patch, changedAt: Date.now(), changedBy: by || null };
+    fdr.tofi = { ...fdr.tofi, ...patch, changedAt: this._clock.now(), changedBy: by || null };
     fdr.provenance['tofi'] = 'CONTROLLER_ENTERED';
     fdr.rev += 1;
-    fdr.updatedAt = Date.now();
+    fdr.updatedAt = this._clock.now();
     fdr.updatedBy = by || null;
     return { ok: true, fdr };
   }
@@ -854,7 +861,7 @@ class FdrStore {
     // one of them is controller-entered.
     fdr.provenance['military'] = 'CONTROLLER_ENTERED';
     fdr.rev += 1;
-    fdr.updatedAt = Date.now();
+    fdr.updatedAt = this._clock.now();
     fdr.updatedBy = by || null;
     return { ok: true, fdr };
   }
@@ -881,7 +888,7 @@ class FdrStore {
     if (frequencyMhz !== null && !isValidFrequency(frequencyMhz)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `frequency must be a number between ${MIN_FREQUENCY_MHZ} and ${MAX_FREQUENCY_MHZ} MHz, not ${JSON.stringify(frequencyMhz)}` };
     }
-    const now = Date.now();
+    const now = this._clock.now();
     fdr.comms = {
       workingFrequencyMhz: frequencyMhz,
       airspaceId,
@@ -947,7 +954,7 @@ class FdrStore {
     if (!CLEARANCE_FIELDS.has(field)) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown clearance field ${field}` };
     const cell = ensureClearance(fdr)[field];
     const active = cell.entries.find(e => e.status === 'ACTIVE');
-    const now = Date.now();
+    const now = this._clock.now();
 
     if (confirmVacated) {
       if (field !== 'altitude') return { ok: false, reason: 'VALIDATION_ERROR', detail: 'only an altitude is vacated' };

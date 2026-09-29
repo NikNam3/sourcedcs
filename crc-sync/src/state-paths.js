@@ -12,7 +12,7 @@
 //   efsp-board.json       the whole Board — Strips, FDRs, airspace, correlation
 //   efsp-mutations.jsonl  the entire audit trail
 //   squawk-map.json       squadron squawk->callsign edits (since removed, docs/adr/0059)
-//   theater-settings.json transition altitude, heading correction, game-time offset
+//   theater-settings.json transition altitude, heading correction
 //   apt-config.json       per-airport ATIS frequency/runway/info/manual weather
 //   efsp-facility-*.json  facility config edits
 //   efsp-airspaces.json   the MOA and range definitions

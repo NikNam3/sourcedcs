@@ -41,7 +41,25 @@ test('record() preserves full entry shape including nested before/after objects'
     after: { state: 'PENDING_CLEARANCE' },
   };
   log.record(entry);
-  assert.deepEqual(log.readAll(), [entry]);
+  const [{ atSource, wallAt, ...rest }] = log.readAll();
+  assert.deepEqual(rest, entry);
+});
+
+test('record() says which clock `at` came from, and adds the real time it was written (docs/adr/0079)', () => {
+  const clock = { now: () => 1466476800000, source: 'MISSION' };
+  const log = new MutationLog(tmpLogPath(), { clock });
+  const before = Date.now();
+  log.record({ op: 'CreateStrip', at: clock.now() });
+  const [entry] = log.readAll();
+  assert.equal(entry.at, 1466476800000, 'the store-stamped mission time is kept as-is');
+  assert.equal(entry.atSource, 'MISSION');
+  assert.ok(entry.wallAt >= before && entry.wallAt <= Date.now());
+});
+
+test('record() marks `at` as WALL when the log was built without a mission clock', () => {
+  const log = new MutationLog(tmpLogPath());
+  log.record({ op: 'CreateStrip', at: 1 });
+  assert.equal(log.readAll()[0].atSource, 'WALL');
 });
 
 test('the log is append-only across multiple MutationLog instances pointed at the same file (simulates a restart)', () => {

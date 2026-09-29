@@ -142,8 +142,19 @@ const WINDOWED_RELEASE_STATES = {
   CALL_FOR_RELEASE: { startKey: 'callForReleaseWindowStartUtc', endKey: 'callForReleaseWindowEndUtc', label: 'call-for-release' },
 };
 
+/**
+ * `now` is required everywhere in this module, and is the mission clock's
+ * (docs/adr/0079): every gate here is a time of day a controller reads. It
+ * used to default to Date.now(), which is the one answer that is always
+ * plausible and, with a mission set at 0240Z and flown at 1900Z, always wrong.
+ */
+function _requireNow(now) {
+  if (!Number.isFinite(now)) throw new TypeError('nla: `now` (mission-clock ms) is required');
+}
+
 /** True at or after the derived 30-minute void deadline (guide §3.8). Alerting on this is a periodic job elsewhere (this is pure logic, no timers). */
-function isVoidExpired(fdr, now = Date.now()) {
+function isVoidExpired(fdr, now) {
+  _requireNow(now);
   return !!(fdr && fdr.assigned.voidDeadlineUtc && now >= fdr.assigned.voidDeadlineUtc);
 }
 
@@ -360,12 +371,13 @@ const COMPUTE_BY_ROLE = { DEPARTURE: computeDepartureNla, ARRIVAL: computeArriva
 /**
  * @param {object} strip
  * @param {object|null} fdr
- * @param {number} [now]
+ * @param {number} now  mission-clock ms (docs/adr/0079)
  * @param {object} [ctx]
  * @returns {{toState:string, transferTo?:string}|{inhibited:string}|null} null means no NLA is
  *   defined for this State at all (a terminal state).
  */
-function computeNla(strip, fdr, now = Date.now(), ctx = {}) {
+function computeNla(strip, fdr, now, ctx = {}) {
+  _requireNow(now);
   const compute = COMPUTE_BY_ROLE[strip.role] || computeDepartureNla;
   return compute(strip, fdr, now, _normalizeCtx(ctx));
 }

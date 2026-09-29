@@ -31,6 +31,7 @@ const crypto = require('crypto');
 const { keyBetween, rebalance } = require('./order-key');
 const { isValidAltitude } = require('./airspace-config');
 const { MAX_FREE_TEXT, SEPARATION_REGIMES } = require('./fdr-store');
+const { WALL_CLOCK } = require('../mission-clock');
 
 const FLAG_KEYS = ['offset', 'flipped', 'removeIndicator', 'highlight', 'attention'];
 const APPLIED_MUTATIONS_CAP = 5000;
@@ -120,7 +121,12 @@ class BoardStore {
    * @param {(positionId:string) => {bayId:string,rackIds:string[]}|null} [rules.coordinationBayFor] — WP4A
    * @param {(primitive:string) => object|null} [rules.coordinationEffect] — WP4A, guide §4.6's primitive table (coordination.js)
    */
-  constructor(fdrStore, rules) {
+  constructor(fdrStore, rules, { clock = WALL_CLOCK } = {}) {
+    // The mission clock (docs/adr/0079). Every Strip timestamp, every NLA gate
+    // and every Mutation-log `at` reads it. The one exception is the NLA
+    // double-tap/Undo latch below, which is a UI debounce measured in real
+    // seconds and never shown as a time of day — see _applyInvokeNla.
+    this._clock = clock;
     this._fdrStore = fdrStore;
     this._rules = rules;
     this._strips = new Map(); // stripId -> Strip
@@ -371,7 +377,7 @@ class BoardStore {
       stripId: result.strip.stripId,
       actingPositionId,
       actorId: by || null,
-      at: Date.now(),
+      at: this._clock.now(),
       before,
       after: deepClone(result.strip),
       // Distinguishes a self-coordinated boundary event from a two-party
@@ -451,7 +457,7 @@ class BoardStore {
       : (rackStrips.length ? rackStrips[rackStrips.length - 1].stripId : null);
     const orderKey = this._resolveOrderKey(op.bayId, op.rackId, afterStripId, op.beforeStripId || null, null);
 
-    const now = Date.now();
+    const now = this._clock.now();
     const strip = {
       stripId,
       cid: this._nextCid(),
@@ -613,7 +619,7 @@ class BoardStore {
       role: 'DEPARTURE',
       annotations: strip.annotations,
       flags: strip.flags,
-      convertedAt: Date.now(),
+      convertedAt: this._clock.now(),
       convertedBy: by || null,
     };
     strip.annotations = {};
@@ -630,7 +636,7 @@ class BoardStore {
     // to reset: the correlation is a fact about the airframe, and the airframe
     // did not change legs — the paperwork did.
     strip.rev += 1;
-    strip.updatedAt = Date.now();
+    strip.updatedAt = this._clock.now();
     strip.updatedBy = by || null;
     this._touch(strip.stripId);
     return { ok: true, strip, fdr: updatedFdr };
@@ -704,11 +710,11 @@ class BoardStore {
       // to exactly the airspace's limits" read the same on a Strip but mean
       // different things to the controller who has to deconflict later.
       altitudeBlock: op.altitudeBlock || null,
-      approvedAt: Date.now(),
+      approvedAt: this._clock.now(),
       approvedBy: by || null,
     };
     strip.rev += 1;
-    strip.updatedAt = Date.now();
+    strip.updatedAt = this._clock.now();
     strip.updatedBy = by || null;
     this._touch(strip.stripId);
 
@@ -725,7 +731,7 @@ class BoardStore {
     if (!fdrResult.ok) return { ok: false, reason: fdrResult.reason, detail: fdrResult.detail, strip };
     strip.airspaceEntry = null;
     strip.rev += 1;
-    strip.updatedAt = Date.now();
+    strip.updatedAt = this._clock.now();
     strip.updatedBy = by || null;
     this._touch(strip.stripId);
     return { ok: true, strip, fdr: fdrResult.fdr };
@@ -765,7 +771,7 @@ class BoardStore {
     if (inert) return { ok: false, reason: inert.reason, detail: inert.detail };
 
     const fdr = this._fdrStore.getFdr(strip.fdrId);
-    const nla = this._rules.computeNla ? this._rules.computeNla(strip, fdr, Date.now(), this._nlaCtx()) : null;
+    const nla = this._rules.computeNla ? this._rules.computeNla(strip, fdr, this._clock.now(), this._nlaCtx()) : null;
     if (!nla || nla.inhibited) {
       return { ok: false, reason: 'NLA_INHIBITED', detail: nla ? nla.inhibited : `no legal transition from ${strip.state}` };
     }
@@ -796,7 +802,7 @@ class BoardStore {
     if (check.impliedState && check.impliedState !== strip.state) strip.state = check.impliedState;
 
     strip.rev += 1;
-    strip.updatedAt = Date.now();
+    strip.updatedAt = this._clock.now();
     strip.updatedBy = by || null;
     this._touch(strip.stripId);
     return { ok: true, strip };
@@ -904,7 +910,7 @@ class BoardStore {
       // rather than building a fully separate FDR-level optimistic-
       // concurrency protocol on the wire. See the implementation plan.
       strip.rev += 1;
-      strip.updatedAt = Date.now();
+      strip.updatedAt = this._clock.now();
       strip.updatedBy = by || null;
       this._touch(strip.stripId);
       const marsaVoided = this._marsaVoidFor(strip, op, by, actingPositionId, clientMutationId);
@@ -922,7 +928,7 @@ class BoardStore {
         { value: op.value, confirmVacated: !!op.confirmVacated }, { by });
       if (!fdrResult.ok) return { ok: false, reason: fdrResult.reason, detail: fdrResult.detail, strip };
       strip.rev += 1;
-      strip.updatedAt = Date.now();
+      strip.updatedAt = this._clock.now();
       strip.updatedBy = by || null;
       this._touch(strip.stripId);
       const marsaVoided = this._marsaVoidFor(strip, op, by, actingPositionId, clientMutationId);
@@ -969,11 +975,11 @@ class BoardStore {
       active.status = 'STRUCK';
     } else {
       if (active) active.status = 'SUPERSEDED';
-      cell.entries.push({ value, status: 'ACTIVE', at: Date.now(), by: by || null });
+      cell.entries.push({ value, status: 'ACTIVE', at: this._clock.now(), by: by || null });
     }
 
     strip.rev += 1;
-    strip.updatedAt = Date.now();
+    strip.updatedAt = this._clock.now();
     strip.updatedBy = by || null;
     this._touch(strip.stripId);
     return { ok: true, strip };
@@ -1027,7 +1033,7 @@ class BoardStore {
     if (check.impliedState && check.impliedState !== strip.state) strip.state = check.impliedState;
 
     strip.rev += 1;
-    strip.updatedAt = Date.now();
+    strip.updatedAt = this._clock.now();
     strip.updatedBy = by || null;
     this._touch(strip.stripId);
     // A pending Undo window (§3.5 rule 5) is for reverting a STATE change —
@@ -1045,7 +1051,7 @@ class BoardStore {
     if (!FLAG_KEYS.includes(op.flag)) return { ok: false, reason: 'VALIDATION_ERROR', strip };
     strip.flags[op.flag] = op.value;
     strip.rev += 1;
-    strip.updatedAt = Date.now();
+    strip.updatedAt = this._clock.now();
     strip.updatedBy = by || null;
     this._touch(strip.stripId);
     return { ok: true, strip };
@@ -1100,7 +1106,7 @@ class BoardStore {
     strip.state = toState;
     this._relocateForImpliedState(strip, toState);
     strip.rev += 1;
-    strip.updatedAt = Date.now();
+    strip.updatedAt = this._clock.now();
     strip.updatedBy = by || null;
     this._touch(strip.stripId);
     return { ok: true, strip };
@@ -1242,7 +1248,7 @@ class BoardStore {
    *          |{inhibited:string, reason:'NLA_INHIBITED'|'PERMISSION_DENIED'|'VALIDATION_ERROR'}
    *          |null} null means no NLA is defined for this State at all.
    */
-  nlaStatusFor(strip, now = Date.now()) {
+  nlaStatusFor(strip, now = this._clock.now()) {
     if (!strip || !this._rules.computeNla) return null;
     const fdr = this._fdrStore.getFdr(strip.fdrId);
     const result = this._rules.computeNla(strip, fdr, now, this._nlaCtx());
@@ -1273,9 +1279,13 @@ class BoardStore {
   }
 
   _applyInvokeNla(strip, by) {
-    const now = Date.now();
+    // Two clocks, deliberately. The latch (400ms double tap, 30s Undo) is how
+    // long a person's finger took, in real time; the NLA gate is a release
+    // time or a void deadline, in mission time (docs/adr/0079).
+    const wallNow = Date.now();
+    const now = this._clock.now();
     const lastInvoke = this._nlaHistory.get(strip.stripId);
-    if (lastInvoke && now - lastInvoke.invokedAt < 400) {
+    if (lastInvoke && wallNow - lastInvoke.invokedAt < 400) {
       // Idempotent double-tap guard (§3.5 rule 3): a second press within
       // 400ms is discarded, not queued — the first tap already applied,
       // so from the controller's perspective this is a no-op success, not
@@ -1332,7 +1342,7 @@ class BoardStore {
     // this button, and _applyTransferStrip already clears any stale entry
     // here regardless of how the transfer happened.
     if (applied.ok && !result.transferTo) {
-      this._nlaHistory.set(strip.stripId, { invokedAt: now, prevState, expiresAt: now + 30000 });
+      this._nlaHistory.set(strip.stripId, { invokedAt: wallNow, prevState, expiresAt: wallNow + 30000 });
     }
     return applied;
   }
@@ -1340,7 +1350,7 @@ class BoardStore {
   /** Reverts the last NLA-driven transition, within its 30s window (guide §3.5 rule 5). */
   _applyUndo(strip, by) {
     const last = this._nlaHistory.get(strip.stripId);
-    if (!last || Date.now() > last.expiresAt) {
+    if (!last || Date.now() > last.expiresAt) { // the latch's real-time window, see _applyInvokeNla
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no Undo available', strip };
     }
     this._nlaHistory.delete(strip.stripId);
@@ -1399,7 +1409,7 @@ class BoardStore {
     strip.state = 'DROPPED';
     strip.flags.removeIndicator = true; // distinct from delete (§3.4) — Strip stays queryable, see getRack()
     strip.rev += 1;
-    strip.updatedAt = Date.now();
+    strip.updatedAt = this._clock.now();
     strip.updatedBy = by || null;
     this._touch(strip.stripId);
     // `marsaChanged` rather than `marsaVoided`: this is a flight ENDING, not a
@@ -1543,7 +1553,7 @@ class BoardStore {
       };
     }
 
-    const now = Date.now();
+    const now = this._clock.now();
     const proposal = peer.receiveCoordinationProposal({
       primitive, fromFacilityId: this._rules.facilityId, fromPositionId: actingPositionId,
       fromStripId: strip.stripId, toPositionId: op.toPositionId, fdrId: strip.fdrId,
@@ -1592,7 +1602,7 @@ class BoardStore {
     const effect = this._rules.coordinationEffect ? this._rules.coordinationEffect(strip.coordination.primitive) : null;
     if (!effect) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown coordination primitive: ${strip.coordination.primitive}`, strip };
 
-    const now = Date.now();
+    const now = this._clock.now();
     strip.coordination.state = 'ACTIVE';
     strip.coordination.radarIdTransferred = effect.radarIdTransfers;
     strip.coordination.commsTransferred = effect.commsTransfers;
@@ -1644,7 +1654,7 @@ class BoardStore {
     }
     strip.coordination.state = 'REJECTED';
     strip.rev += 1;
-    strip.updatedAt = Date.now();
+    strip.updatedAt = this._clock.now();
     strip.updatedBy = by || null;
     this._touch(strip.stripId);
 
@@ -1674,9 +1684,9 @@ class BoardStore {
     if (strip.coordination.primitive !== 'OPERATIONAL_REQUEST') {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'STAND_BY only applies to OPERATIONAL_REQUEST', strip };
     }
-    strip.coordination.lastStandByAt = Date.now();
+    strip.coordination.lastStandByAt = this._clock.now();
     strip.rev += 1;
-    strip.updatedAt = Date.now();
+    strip.updatedAt = this._clock.now();
     strip.updatedBy = by || null;
     this._touch(strip.stripId);
 
@@ -1722,7 +1732,7 @@ class BoardStore {
     }
 
     const stripId = crypto.randomUUID();
-    const now = Date.now();
+    const now = this._clock.now();
     const rackStrips = this.getRack(coordinationBay.bayId, coordinationBay.rackIds[0]);
     const afterStripId = rackStrips.length ? rackStrips[rackStrips.length - 1].stripId : null;
     const orderKey = this._resolveOrderKey(coordinationBay.bayId, coordinationBay.rackIds[0], afterStripId, null, null);
@@ -1791,7 +1801,7 @@ class BoardStore {
     const strip = this._strips.get(stripId);
     if (!strip || !strip.coordination) return { ok: false, reason: 'NOT_FOUND' };
 
-    const now = Date.now();
+    const now = this._clock.now();
     if (response === 'ACCEPT') {
       const effect = this._rules.coordinationEffect ? this._rules.coordinationEffect(strip.coordination.primitive) : null;
       strip.coordination.state = 'ACTIVE';
@@ -1881,7 +1891,7 @@ class BoardStore {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'cannot open a TOFI exchange while a coordination proposal is open — accept or reject it first', strip };
     }
 
-    const now = Date.now();
+    const now = this._clock.now();
 
     if (op.direction === 'ENTRY') {
       if (strip.tofiCoordination && strip.tofiCoordination.state === 'ACTIVE') {
@@ -2058,7 +2068,7 @@ class BoardStore {
       }
     }
 
-    const now = Date.now();
+    const now = this._clock.now();
     tofi.state = tofi.direction === 'EXIT' ? 'COMPLETE' : 'ACTIVE';
     tofi.acceptedAt = now;
     tofi.acceptedBy = by || null;
@@ -2134,7 +2144,7 @@ class BoardStore {
       strip.flags.removeIndicator = true;
       this._releaseFdrIfLastStrip(strip, by);
     }
-    strip.rev += 1; strip.updatedAt = Date.now(); strip.updatedBy = by || null;
+    strip.rev += 1; strip.updatedAt = this._clock.now(); strip.updatedBy = by || null;
     this._touch(strip.stripId);
 
     let peerStrip = null;
@@ -2169,7 +2179,7 @@ class BoardStore {
     if (tofi.commsTransferred) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'comms were already transferred for this exchange', strip };
     }
-    const now = Date.now();
+    const now = this._clock.now();
     tofi.commsTransferred = true;
     tofi.commsTransferredAt = now;
     tofi.commsTransferredBy = by || null;
@@ -2231,7 +2241,7 @@ class BoardStore {
       // Strip sits in a real working Bay at a real state, and both belong to
       // the MRU controller, not to this exchange. `mintedForTofi` is absent,
       // which is what stops _applyTofiAccept relocating it (see there).
-      const reusedAt = Date.now();
+      const reusedAt = this._clock.now();
       existing.tofiCoordination = {
         direction: 'ENTRY', state: 'PROPOSED',
         peerFacilityId: fromFacilityId, peerStripId: fromStripId, peerPositionId: fromPositionId,
@@ -2252,7 +2262,7 @@ class BoardStore {
     }
 
     const stripId = crypto.randomUUID();
-    const now = Date.now();
+    const now = this._clock.now();
     const rackStrips = this.getRack(coordinationBay.bayId, coordinationBay.rackIds[0]);
     const afterStripId = rackStrips.length ? rackStrips[rackStrips.length - 1].stripId : null;
     const orderKey = this._resolveOrderKey(coordinationBay.bayId, coordinationBay.rackIds[0], afterStripId, null, null);
@@ -2303,7 +2313,7 @@ class BoardStore {
     const strip = this._strips.get(stripId);
     if (!strip || !strip.tofiCoordination) return { ok: false, reason: 'NOT_FOUND' };
 
-    const now = Date.now();
+    const now = this._clock.now();
     strip.tofiCoordination.direction = 'EXIT';
     strip.tofiCoordination.state = 'PROPOSED';
     strip.tofiCoordination.commsTransferred = false;
@@ -2329,7 +2339,7 @@ class BoardStore {
     const strip = this._strips.get(stripId);
     if (!strip || !strip.tofiCoordination) return { ok: false, reason: 'NOT_FOUND' };
 
-    const now = Date.now();
+    const now = this._clock.now();
     const tofi = strip.tofiCoordination;
     if (response === 'ACCEPT') {
       tofi.state = tofi.direction === 'EXIT' ? 'COMPLETE' : 'ACTIVE';
@@ -2366,13 +2376,13 @@ class BoardStore {
       const before = deepClone(strip);
       strip.ownerPositionId = toPositionId;
       strip.rev += 1;
-      strip.updatedAt = Date.now();
+      strip.updatedAt = this._clock.now();
       strip.updatedBy = null;
       this._touch(strip.stripId);
       if (this._mutationLog) {
         this._mutationLog.record({
           clientMutationId: null, op: 'SystemReassign', stripId: strip.stripId,
-          actingPositionId: null, actorId: 'system', at: Date.now(),
+          actingPositionId: null, actorId: 'system', at: this._clock.now(),
           before, after: deepClone(strip), reason: 'position-vacated',
         });
       }

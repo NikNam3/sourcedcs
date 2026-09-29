@@ -15,20 +15,20 @@ process.env.CRCSYNC_THEATER_SETTINGS_PATH = tmpFile;
 const { getTheaterSettings, setTheaterSettings } = await import('../src/theater-settings.js');
 
 test('getTheaterSettings starts from defaults when no config file exists yet', () => {
-  assert.deepEqual(getTheaterSettings(), { transitionAltFt: 18000, hdgCorrection: 0, gameTimeOffset: 0 });
+  assert.deepEqual(getTheaterSettings(), { transitionAltFt: 18000, hdgCorrection: 0 });
 });
 
 test('setTheaterSettings applies a partial patch and persists it to disk', () => {
   assert.equal(setTheaterSettings({ transitionAltFt: 14000 }), true);
-  assert.deepEqual(getTheaterSettings(), { transitionAltFt: 14000, hdgCorrection: 0, gameTimeOffset: 0 });
+  assert.deepEqual(getTheaterSettings(), { transitionAltFt: 14000, hdgCorrection: 0 });
 
   const onDisk = JSON.parse(fs.readFileSync(tmpFile, 'utf8'));
   assert.equal(onDisk.transitionAltFt, 14000);
 });
 
 test('setTheaterSettings ignores unknown or non-finite fields without rejecting the rest', () => {
-  assert.equal(setTheaterSettings({ hdgCorrection: 5, bogus: 'x', gameTimeOffset: 'nope' }), true);
-  assert.deepEqual(getTheaterSettings(), { transitionAltFt: 14000, hdgCorrection: 5, gameTimeOffset: 0 });
+  assert.equal(setTheaterSettings({ hdgCorrection: 5, bogus: 'x', transitionAltFt: 'nope' }), true);
+  assert.deepEqual(getTheaterSettings(), { transitionAltFt: 14000, hdgCorrection: 5 });
 });
 
 test('setTheaterSettings returns false and does not persist when nothing actually changes', () => {

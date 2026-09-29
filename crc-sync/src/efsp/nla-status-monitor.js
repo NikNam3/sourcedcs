@@ -44,6 +44,8 @@
 // it. The two caches mean opposite things, and one class holding both would be
 // a class that is wrong about one of them.
 
+const { WALL_CLOCK } = require('../mission-clock');
+
 /** Stable identity for a status, for change detection only — never sent anywhere. */
 function statusKey(status) {
   if (!status) return 'none';
@@ -55,7 +57,8 @@ class NlaStatusMonitor {
   /**
    * @param {{boardStoreFor:(facilityId:string)=>object, facilityConfig:object, onDelta?:(payload:object)=>void}} deps
    */
-  constructor({ boardStoreFor, facilityConfig, onDelta } = {}) {
+  constructor({ boardStoreFor, facilityConfig, onDelta, clock = WALL_CLOCK } = {}) {
+    this._clock = clock; // the mission clock — every gate this re-states is a time of day (docs/adr/0079)
     this._boardStoreFor = boardStoreFor;
     this._facilityConfig = facilityConfig;
     this._onDelta = onDelta || (() => {});
@@ -80,7 +83,7 @@ class NlaStatusMonitor {
    *   payload per Facility that had anything change — also passed to onDelta.
    *   Empty when nothing moved, which is the ordinary case.
    */
-  tick(now = Date.now()) {
+  tick(now = this._clock.now()) {
     const payloads = [];
     const live = new Set();
 

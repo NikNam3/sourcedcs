@@ -87,8 +87,9 @@ function _dispatchAirspace(airspace, action) {
   if (action.kind === 'ScheduleAirspace') {
     // A default two-hour block from now. The window is a booking, and a
     // controller scheduling one in the moment is the common case; a real
-    // date picker is worth having once anyone books ahead.
-    const now = Date.now();
+    // date picker is worth having once anyone books ahead. "Now" is mission
+    // time (docs/adr/0079): the window is gated and shown against it.
+    const now = typeof missionNow === 'function' ? missionNow() : Date.now();
     op.fromUtc = now;
     op.toUtc = now + 2 * 60 * 60 * 1000;
   }

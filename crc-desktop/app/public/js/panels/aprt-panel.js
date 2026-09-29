@@ -5,7 +5,8 @@
 // this stays a plain script rather than an IIFE. This was the single
 // largest chunk of ui.js (~625 of its 2234 lines) — airport reference card,
 // manual weather entry, ATIS build/transmit/loop, and theater-wide settings
-// (transition altitude, heading correction, game-time offset).
+// (transition altitude, heading correction). The theater's UTC offset is not
+// here: crc-sync applies it from a fixed per-theater table (docs/adr/0079).
 
 let _aprtSelectedApt = null;
 
@@ -113,15 +114,13 @@ function _updateAprtRefCard() {
 // state — called from app.js when a 'theater-settings' broadcast arrives
 // from crc-sync (any client, including this one, having edited it) so every
 // controller's airport panel shows the same transition altitude / heading
-// correction / game-time offset instead of only whoever last edited it
+// correction instead of only whoever last edited it
 // locally. No-op if the panel has never been mounted (inputs don't exist).
 function refreshAprtTheaterInputs() {
   const $transAlt      = document.getElementById('aprt-transition-alt');
   const $hdgCorrection = document.getElementById('aprt-hdg-correction');
-  const $timeOffset    = document.getElementById('aprt-time-offset');
   if ($transAlt)      $transAlt.value      = settings.transitionAltFt ?? 18000;
   if ($hdgCorrection) $hdgCorrection.value = settings.hdgCorrection ?? 0;
-  if ($timeOffset)    $timeOffset.value    = settings.gameTimeOffset ?? 0;
 }
 
 function initAprtPanel() {
@@ -218,7 +217,6 @@ function initAprtPanel() {
   // everyone converged on whatever crc-sync ends up persisting).
   const $transAlt   = document.getElementById('aprt-transition-alt');
   const $hdgCorrection = document.getElementById('aprt-hdg-correction');
-  const $timeOffset = document.getElementById('aprt-time-offset');
 
   if ($transAlt) {
     $transAlt.value = settings.transitionAltFt ?? 18000;
@@ -240,14 +238,6 @@ function initAprtPanel() {
     });
     $hdgCorrection.addEventListener('change', () => {
       sendToSync({ type: 'theaterSettingsSet', hdgCorrection: settings.hdgCorrection });
-    });
-  }
-  if ($timeOffset) {
-    $timeOffset.value = settings.gameTimeOffset ?? 0;
-    $timeOffset.addEventListener('change', () => {
-      settings.gameTimeOffset = parseInt($timeOffset.value) || 0;
-      saveSettings();
-      sendToSync({ type: 'theaterSettingsSet', gameTimeOffset: settings.gameTimeOffset });
     });
   }
 

@@ -4,6 +4,9 @@ import assert from 'node:assert/strict';
 const { STATES, ARRIVAL_STATES, isValidState, isFlightPlanValid, isVoidExpired, computeNla, missingForClearance } =
   await import('../src/efsp/nla.js');
 
+// Mission-clock ms (docs/adr/0079) — the gates take `now` explicitly, never the wall clock.
+const NOW = Date.UTC(2016, 5, 21, 2, 40);
+
 function makeFdr(overrides = {}) {
   return {
     identity: { beaconAssigned: '1234', ...overrides.identity },
@@ -16,7 +19,7 @@ function makeStrip(state) { return { state }; }
 
 test('every declared State has exactly one NLA or a rendered inhibit reason — never undefined/unhandled', () => {
   for (const state of STATES) {
-    const result = computeNla(makeStrip(state), makeFdr());
+    const result = computeNla(makeStrip(state), makeFdr(), NOW);
     if (state === 'DROPPED') {
       assert.equal(result, null); // terminal — no NLA at all, and that's the one deliberate exception
     } else {
@@ -51,7 +54,7 @@ test('isValidState returns false for an unknown role entirely, never a throw', (
 // ── PROPOSED -> PENDING_CLEARANCE ───────────────────────────────────────────
 
 test('PROPOSED is inhibited until a beacon code is assigned (guide §3.5)', () => {
-  const result = computeNla(makeStrip('PROPOSED'), makeFdr({ identity: { beaconAssigned: null } }));
+  const result = computeNla(makeStrip('PROPOSED'), makeFdr({ identity: { beaconAssigned: null } }), NOW);
   assert.deepEqual(result, { inhibited: 'no beacon code assigned' });
 });
 
@@ -74,7 +77,7 @@ test('PROPOSED transitions when CD is unoccupied but covered by another Position
 });
 
 test('PROPOSED with a null fdr (defensive) is inhibited on the beacon check, before occupancy is even considered', () => {
-  const result = computeNla(makeStrip('PROPOSED'), null);
+  const result = computeNla(makeStrip('PROPOSED'), null, NOW);
   assert.deepEqual(result, { inhibited: 'no beacon code assigned' });
 });
 
@@ -86,7 +89,7 @@ test('PENDING_CLEARANCE is inhibited when required filed fields are missing, nam
   const labelFor = { requestedAltitude: 'ALT', departureAirport: 'DEP', destinationAirport: 'DEST', route: 'RTE' };
   for (const [missing, label] of Object.entries(labelFor)) {
     const fdr = makeFdr({ filed: { [missing]: '' } });
-    const result = computeNla(makeStrip('PENDING_CLEARANCE'), fdr);
+    const result = computeNla(makeStrip('PENDING_CLEARANCE'), fdr, NOW);
     assert.deepEqual(result, { inhibited: `flight plan incomplete \u2014 ${label} not filed` }, missing);
   }
 });
@@ -94,7 +97,7 @@ test('PENDING_CLEARANCE is inhibited when required filed fields are missing, nam
 test('an empty flight plan names all four Blocks, in Block order', () => {
   const fdr = makeFdr({ filed: { route: '', requestedAltitude: '', departureAirport: '', destinationAirport: '' } });
   assert.deepEqual(
-    computeNla(makeStrip('PENDING_CLEARANCE'), fdr),
+    computeNla(makeStrip('PENDING_CLEARANCE'), fdr, NOW),
     { inhibited: 'flight plan incomplete \u2014 ALT, DEP, DEST, RTE not filed' },
   );
 });
@@ -105,7 +108,7 @@ test('missingForClearance treats a missing FDR as nothing filed at all', () => {
 });
 
 test('PENDING_CLEARANCE with a complete flight plan advances to CLEARED', () => {
-  const result = computeNla(makeStrip('PENDING_CLEARANCE'), makeFdr());
+  const result = computeNla(makeStrip('PENDING_CLEARANCE'), makeFdr(), NOW);
   assert.deepEqual(result, { toState: 'CLEARED' });
 });
 
@@ -118,7 +121,7 @@ test('isFlightPlanValid is false for a null fdr', () => {
 test('CLEARED is inhibited when a hold is in force (releaseState !== RELEASED)', () => {
   for (const state of ['HOLD_FOR_RELEASE', 'RELEASE_TIME', 'CLEARANCE_VOID_TIME']) {
     const fdr = makeFdr({ assigned: { releaseState: state } });
-    const result = computeNla(makeStrip('CLEARED'), fdr);
+    const result = computeNla(makeStrip('CLEARED'), fdr, NOW);
     assert.deepEqual(result, { inhibited: 'a hold is in force' }, state);
   }
 });
@@ -214,13 +217,13 @@ test('isVoidExpired is true at exactly the deadline and after, false before', ()
 });
 
 test('isVoidExpired is false when no voidDeadlineUtc is set', () => {
-  assert.equal(isVoidExpired(makeFdr(), Date.now()), false);
+  assert.equal(isVoidExpired(makeFdr(), NOW), false);
 });
 
 // ── The rest of the straight-line lifecycle ─────────────────────────────
 
 test('PUSHBACK -> TAXI, state-only (still GND\'s own — no boundary crossed)', () => {
-  assert.deepEqual(computeNla(makeStrip('PUSHBACK'), makeFdr()), { toState: 'TAXI' });
+  assert.deepEqual(computeNla(makeStrip('PUSHBACK'), makeFdr(), NOW), { toState: 'TAXI' });
 });
 
 test('TAXI is inhibited when TWR is neither occupied nor covered', () => {
@@ -234,8 +237,8 @@ test('TAXI transitions to RUNWAY_QUEUE, transferring to TWR, once TWR is occupie
 });
 
 test('RUNWAY_QUEUE -> LUAW -> DEPARTED, state-only, unconditionally in Phase 2 (WP6 inhibits not yet built; both stay TWR\'s own)', () => {
-  assert.deepEqual(computeNla(makeStrip('RUNWAY_QUEUE'), makeFdr()), { toState: 'LUAW' });
-  assert.deepEqual(computeNla(makeStrip('LUAW'), makeFdr()), { toState: 'DEPARTED' });
+  assert.deepEqual(computeNla(makeStrip('RUNWAY_QUEUE'), makeFdr(), NOW), { toState: 'LUAW' });
+  assert.deepEqual(computeNla(makeStrip('LUAW'), makeFdr(), NOW), { toState: 'DEPARTED' });
 });
 
 // Phase 2 (docs/adr/0007, superseding ADR 0005's always-succeed stub) —
@@ -257,15 +260,15 @@ test('DEPARTED transitions when APP is unoccupied but covered by another Positio
 });
 
 test('DEPARTED with no ctx supplied at all defaults to inhibited, not a throw — a safe degrade, not a crash', () => {
-  assert.deepEqual(computeNla(makeStrip('DEPARTED'), makeFdr()), { inhibited: 'no receiving Position present' });
+  assert.deepEqual(computeNla(makeStrip('DEPARTED'), makeFdr(), NOW), { inhibited: 'no receiving Position present' });
 });
 
 test('HANDED_OFF advances to DROPPED', () => {
-  assert.deepEqual(computeNla(makeStrip('HANDED_OFF'), makeFdr()), { toState: 'DROPPED' });
+  assert.deepEqual(computeNla(makeStrip('HANDED_OFF'), makeFdr(), NOW), { toState: 'DROPPED' });
 });
 
 test('DROPPED has no NLA — a terminal state', () => {
-  assert.equal(computeNla(makeStrip('DROPPED'), makeFdr()), null);
+  assert.equal(computeNla(makeStrip('DROPPED'), makeFdr(), NOW), null);
 });
 
 // ── ARRIVAL lifecycle (Phase 2, docs/adr/0008 — [SOURCE-DEFINED]) ────────
@@ -275,7 +278,7 @@ function makeArrivalStrip(state) { return { state, role: 'ARRIVAL' }; }
 
 test('every declared ARRIVAL State has exactly one NLA or a rendered inhibit reason — never undefined/unhandled', () => {
   for (const state of ARRIVAL_STATES) {
-    const result = computeNla(makeArrivalStrip(state), makeFdr());
+    const result = computeNla(makeArrivalStrip(state), makeFdr(), NOW);
     if (state === 'DROPPED') {
       assert.equal(result, null);
     } else {
@@ -318,8 +321,8 @@ test('every pre-WP4A caller (ctx.facilityId omitted entirely) is completely unaf
 });
 
 test('HANDED_TO_TOWER -> FINAL -> LANDED, unconditionally (no WP6/WP7A machinery gates these in Phase 2)', () => {
-  assert.deepEqual(computeNla(makeArrivalStrip('HANDED_TO_TOWER'), makeFdr()), { toState: 'FINAL' });
-  assert.deepEqual(computeNla(makeArrivalStrip('FINAL'), makeFdr()), { toState: 'LANDED' });
+  assert.deepEqual(computeNla(makeArrivalStrip('HANDED_TO_TOWER'), makeFdr(), NOW), { toState: 'FINAL' });
+  assert.deepEqual(computeNla(makeArrivalStrip('FINAL'), makeFdr(), NOW), { toState: 'LANDED' });
 });
 
 test('LANDED is inhibited when GND is neither occupied nor covered', () => {
@@ -333,15 +336,15 @@ test('LANDED transitions to TAXI_IN, transferring to GND, once GND is occupied',
 });
 
 test('TAXI_IN advances to DROPPED, matching DEPARTURE\'s own HANDED_OFF -> DROPPED precedent', () => {
-  assert.deepEqual(computeNla(makeArrivalStrip('TAXI_IN'), makeFdr()), { toState: 'DROPPED' });
+  assert.deepEqual(computeNla(makeArrivalStrip('TAXI_IN'), makeFdr(), NOW), { toState: 'DROPPED' });
 });
 
 test('ARRIVAL\'s DROPPED has no NLA — a terminal state, same as DEPARTURE\'s', () => {
-  assert.equal(computeNla(makeArrivalStrip('DROPPED'), makeFdr()), null);
+  assert.equal(computeNla(makeArrivalStrip('DROPPED'), makeFdr(), NOW), null);
 });
 
 test('a Strip with no role at all (or role:DEPARTURE) is unaffected by ARRIVAL\'s table — dispatch is per-Strip, not global state', () => {
-  assert.deepEqual(computeNla(makeStrip('PUSHBACK'), makeFdr()), { toState: 'TAXI' });
+  assert.deepEqual(computeNla(makeStrip('PUSHBACK'), makeFdr(), NOW), { toState: 'TAXI' });
 });
 
 // ── OVERFLIGHT lifecycle (docs/adr/0023 — [SOURCE-DEFINED]) ──────────────
@@ -354,7 +357,7 @@ function makeOverflightStrip(state) { return { state, role: 'OVERFLIGHT' }; }
 test('every declared OVERFLIGHT State has exactly one NLA or a rendered inhibit reason — never undefined/unhandled', async () => {
   const { OVERFLIGHT_STATES } = await import('../src/efsp/nla.js');
   for (const state of OVERFLIGHT_STATES) {
-    const result = computeNla(makeOverflightStrip(state), makeFdr());
+    const result = computeNla(makeOverflightStrip(state), makeFdr(), NOW);
     if (state === 'DROPPED') {
       assert.equal(result, null);
     } else {
@@ -365,11 +368,11 @@ test('every declared OVERFLIGHT State has exactly one NLA or a rendered inhibit 
 });
 
 test('TRANSITING advances to DROPPED, unconditionally — no occupancy gating, unlike DEPARTURE/ARRIVAL\'s transfer-shaped transitions', () => {
-  assert.deepEqual(computeNla(makeOverflightStrip('TRANSITING'), makeFdr()), { toState: 'DROPPED' });
+  assert.deepEqual(computeNla(makeOverflightStrip('TRANSITING'), makeFdr(), NOW), { toState: 'DROPPED' });
 });
 
 test('OVERFLIGHT\'s DROPPED has no NLA — a terminal state, same as every other role\'s', () => {
-  assert.equal(computeNla(makeOverflightStrip('DROPPED'), makeFdr()), null);
+  assert.equal(computeNla(makeOverflightStrip('DROPPED'), makeFdr(), NOW), null);
 });
 
 // ── MISSION lifecycle (WP4A second slice) ────────────────────────────────
@@ -384,7 +387,7 @@ function makeMissionStrip(state) { return { state, role: 'MISSION' }; }
 test('every declared MISSION State has exactly one NLA or a rendered inhibit reason — never undefined/unhandled', async () => {
   const { MISSION_STATES } = await import('../src/efsp/nla.js');
   for (const state of MISSION_STATES) {
-    const result = computeNla(makeMissionStrip(state), makeFdr());
+    const result = computeNla(makeMissionStrip(state), makeFdr(), NOW);
     if (state === 'DROPPED') {
       assert.equal(result, null);
     } else {
@@ -395,15 +398,15 @@ test('every declared MISSION State has exactly one NLA or a rendered inhibit rea
 });
 
 test('MISSION advances linearly through its whole lifecycle, unconditionally — no occupancy gating', () => {
-  assert.deepEqual(computeNla(makeMissionStrip('TASKED'), makeFdr()), { toState: 'AIRBORNE' });
-  assert.deepEqual(computeNla(makeMissionStrip('AIRBORNE'), makeFdr()), { toState: 'ON_STATION' });
-  assert.deepEqual(computeNla(makeMissionStrip('ON_STATION'), makeFdr()), { toState: 'OFF_STATION' });
-  assert.deepEqual(computeNla(makeMissionStrip('OFF_STATION'), makeFdr()), { toState: 'RTB' });
-  assert.deepEqual(computeNla(makeMissionStrip('RTB'), makeFdr()), { toState: 'DROPPED' });
+  assert.deepEqual(computeNla(makeMissionStrip('TASKED'), makeFdr(), NOW), { toState: 'AIRBORNE' });
+  assert.deepEqual(computeNla(makeMissionStrip('AIRBORNE'), makeFdr(), NOW), { toState: 'ON_STATION' });
+  assert.deepEqual(computeNla(makeMissionStrip('ON_STATION'), makeFdr(), NOW), { toState: 'OFF_STATION' });
+  assert.deepEqual(computeNla(makeMissionStrip('OFF_STATION'), makeFdr(), NOW), { toState: 'RTB' });
+  assert.deepEqual(computeNla(makeMissionStrip('RTB'), makeFdr(), NOW), { toState: 'DROPPED' });
 });
 
 test('MISSION\'s DROPPED has no NLA — a terminal state, same as every other role\'s', () => {
-  assert.equal(computeNla(makeMissionStrip('DROPPED'), makeFdr()), null);
+  assert.equal(computeNla(makeMissionStrip('DROPPED'), makeFdr(), NOW), null);
 });
 
 // ── §9.10 stereo routes meet the standing release (docs/adr/0050) ────────
@@ -449,4 +452,9 @@ test('amending a stereo flight\'s route puts it back outside the envelope — th
   };
   assert.deepEqual(computeNla(makeStrip('HELD'), amended, Date.now(), ctx),
     { inhibited: 'outside standing release envelope — file OPERATIONAL_REQUEST' });
+});
+
+test('computeNla and isVoidExpired refuse to guess the time — `now` is the caller\'s mission clock (docs/adr/0079)', () => {
+  assert.throws(() => computeNla(makeStrip('HELD'), makeFdr()), TypeError);
+  assert.throws(() => isVoidExpired(makeFdr()), TypeError);
 });

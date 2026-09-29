@@ -222,6 +222,9 @@ class GrpcClient extends EventEmitter {
   }
 
   // ── Game time poll ────────────────────────────────────────────────────────
+  // `datetime` is an ISO 8601 string of the mission's in-game LOCAL time (the
+  // mission date plus timer.getAbsTime()), whatever its suffix says.
+  // mission-clock.js turns it into Zulu with the theater's fixed offset.
 
   _startGameTimePoll() {
     this._fetchGameTime();
