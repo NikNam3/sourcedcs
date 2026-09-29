@@ -24,7 +24,7 @@
  */
 
 const { test, expect } = require('@playwright/test');
-const { openPanel, seedStrip, stripByCallsign, expectTouchTarget } = require('./helpers/app');
+const { openPanel, seedStrip, stripByCallsign, expectTouchTarget, startAction } = require('./helpers/app');
 
 // Candidate for the shared helper: what has keyboard focus, as tag.class.
 const focused = (page) => page.evaluate(() => {
@@ -62,7 +62,7 @@ test('F-201: a space can be typed into a text input inside a Strip popover', asy
   await openPanel(page, { held: ['OPS'] });
   const s = await seedStrip(page, { callsign: 'SPC202' });
   await seedStrip(page, { callsign: 'SPC203' });
-  await s.getByRole('button', { name: 'MARSA…' }).click();
+  await startAction(s, 'MARSA…');
   const note = page.locator('.efsp-marsa-popover input').first();
   await note.focus();
   await page.keyboard.type('AR TRACK');
@@ -186,8 +186,9 @@ test('blur neither commits nor reverts a free-text Block', async ({ page }) => {
 // ── F-205 ────────────────────────────────────────────────────────────────
 
 test('F-205: arrowing through an enum Block does not commit until the controller chooses', async ({ page }) => {
-  await openPanel(page, { held: ['OPS'] });
-  const s = await seedStrip(page, { callsign: 'ENM201' });
+  // A CTR arrival: 5A and RADAR are CTR's fields, not OPS's (docs/adr/0056).
+  await openPanel(page, { held: ['CTR'], facilityId: 'CENTER', controller: 'ctr-controller' });
+  const s = await seedStrip(page, { callsign: 'ENM201', actingPositionId: 'CTR', bayId: 'ctr-enroute', role: 'ARRIVAL', facilityId: 'CENTER' });
   await page.evaluate(() => {
     window.__l2Sent = [];
     const orig = window.sendEfspMutation;
@@ -203,8 +204,9 @@ test('F-205: arrowing through an enum Block does not commit until the controller
 });
 
 test('F-205: Space opens the enum select rather than leaving it', async ({ page }) => {
-  await openPanel(page, { held: ['OPS'] });
-  const s = await seedStrip(page, { callsign: 'ENM202' });
+  // A CTR arrival: 5A and RADAR are CTR's fields, not OPS's (docs/adr/0056).
+  await openPanel(page, { held: ['CTR'], facilityId: 'CENTER', controller: 'ctr-controller' });
+  const s = await seedStrip(page, { callsign: 'ENM202', actingPositionId: 'CTR', bayId: 'ctr-enroute', role: 'ARRIVAL', facilityId: 'CENTER' });
   await s.locator('.efsp-block-5A').click();
   await expect(s.locator('select.efsp-block-enum-select')).toBeFocused();
   await page.keyboard.press('Space');
@@ -216,8 +218,9 @@ test('F-205: Space opens the enum select rather than leaving it', async ({ page 
 // ── F-206 ────────────────────────────────────────────────────────────────
 
 test('F-206: choosing "—" on a set enum Block clears it', async ({ page }) => {
-  await openPanel(page, { held: ['OPS'] });
-  const s = await seedStrip(page, { callsign: 'ENM203' });
+  // A CTR arrival: 5A and RADAR are CTR's fields, not OPS's (docs/adr/0056).
+  await openPanel(page, { held: ['CTR'], facilityId: 'CENTER', controller: 'ctr-controller' });
+  const s = await seedStrip(page, { callsign: 'ENM203', actingPositionId: 'CTR', bayId: 'ctr-enroute', role: 'ARRIVAL', facilityId: 'CENTER' });
   // RADAR, not 5A. The original walk used 5A and could never have passed:
   // strip-template.js's ENUM_CLEARABLE_BLOCKS carries the SERVER's per-Block
   // answer to "may this be cleared", and 5A's cleared value is the option

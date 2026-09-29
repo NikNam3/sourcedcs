@@ -22,7 +22,7 @@
  */
 
 const { test, expect } = require('@playwright/test');
-const { openPanel, seedStrip } = require('./helpers/app');
+const { openPanel, seedStrip, startAction } = require('./helpers/app');
 
 // Two controllers, a login each, and a Board that persists across tests in a
 // run — longer than the default budget, and every callsign below is unique.
@@ -78,7 +78,7 @@ function recordsFor(page, callsign) {
 
 /** Proposes a coordination primitive from CTR's Strip. See the file header for why the Send is dispatched. */
 async function propose(page, stripEl, primitive, note) {
-  await stripEl.getByRole('button', { name: 'Coordinate…' }).click();
+  await startAction(stripEl, 'Coordinate…');
   const popover = page.locator('.efsp-coordinate-popover');
   await popover.locator('select').selectOption(primitive);
   if (note) await popover.locator('textarea').fill(note);
@@ -87,7 +87,7 @@ async function propose(page, stripEl, primitive, note) {
 
 /** Proposes TOFI ENTRY from CTR's Strip to TAC_C2. */
 async function proposeTofiEntry(page, stripEl, note) {
-  await stripEl.getByRole('button', { name: 'TOFI…' }).click();
+  await startAction(stripEl, 'TOFI…');
   const popover = page.locator('.efsp-tofi-popover');
   await popover.locator('select').selectOption({ label: 'TAC_C2 (TACTICAL)' });
   if (note) await popover.locator('textarea').fill(note);
@@ -168,7 +168,7 @@ test('a double-tap on Accept Hand Off accepts only the replica that was tapped',
 test('the Coordinate popover can be reached on a lone Strip, even after scrolling the Bay', async ({ browser }) => {
   const a = await ctr(browser);
   const s = await seedCtrArrival(a, 'PLONE1');
-  await s.getByRole('button', { name: 'Coordinate…' }).click();
+  await startAction(s, 'Coordinate…');
   const popover = a.locator('.efsp-coordinate-popover');
   await expect(popover).toBeVisible();
   // Scroll the Bay as far as it goes — a controller's first move when a
@@ -183,7 +183,7 @@ test('the Coordinate popover can be reached on a lone Strip, even after scrollin
 test('the TOFI popover can be reached on a lone Strip', async ({ browser }) => {
   const a = await ctr(browser);
   const s = await seedCtrArrival(a, 'PLONE2');
-  await s.getByRole('button', { name: 'TOFI…' }).click();
+  await startAction(s, 'TOFI…');
   const popover = a.locator('.efsp-tofi-popover');
   await expect(popover).toBeVisible();
   await a.locator('#efsp-bay-content').evaluate((el) => { el.scrollTop = el.scrollHeight; });
@@ -330,7 +330,7 @@ test('Accept TOFI Exit enables once CTR has set SEP REG back to ATC', async ({ b
   await mission.getByRole('button', { name: 'Accept TOFI Entry' }).click({ timeout: 3000 });
   await expect.poll(async () => (await recordsFor(a, 'EXIT01')).find(r => r.role === 'MISSION').tofi).toBe('ACTIVE');
 
-  await s.getByRole('button', { name: 'TOFI Exit…' }).click({ timeout: 3000 });
+  await startAction(s, 'TOFI Exit…', { timeout: 3000 });
   await goBay(b, 'TAC_C2', 'tac-c2-tasked');
   const accept = mission.getByRole('button', { name: 'Accept TOFI Exit' });
   await expect(accept, 'SREG is not ATC yet, so disabled is right here').toBeDisabled();
@@ -416,8 +416,8 @@ test('CTR is told what is blocking the TOFI exit they proposed', async ({ browse
   await mission.getByRole('button', { name: 'Accept TOFI Entry' }).click({ timeout: 3000 });
   await expect.poll(async () => (await recordsFor(a, 'EXIT02')).find(r => r.role === 'ARRIVAL').tofi).toBe('ACTIVE');
 
-  await s.getByRole('button', { name: 'TOFI Exit…' }).click({ timeout: 3000 });
-  await expect(s.locator('.efsp-tofi-badge')).toHaveText(/EXIT: PROPOSED/);
+  await startAction(s, 'TOFI Exit…', { timeout: 3000 });
+  await expect(s.locator('.efsp-tofi-badge')).toContainText(/EXIT[\s\S]*PROPOSED/);
   await a.waitForTimeout(500);
   // Only CTR can fix it — SREG is on the ATC-side Strip alone — and only the
   // MRU side is told, in the title of a disabled button.

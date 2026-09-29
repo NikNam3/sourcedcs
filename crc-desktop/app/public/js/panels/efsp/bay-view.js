@@ -587,23 +587,24 @@ function _appendDropButton(el, strip) {
 // same Block, but history is append-only for the life of the Strip, so a
 // much-amended altitude would grow a chip without limit. Two, then the
 // overflow indicator the rule itself prescribes.
-const CHIP_HISTORY_LIMIT = 2;
+const CHIP_HISTORY_LIMIT = 1;
 
 /**
- * Renders §3.7's struck-through history into `container`, oldest first, above
- * whatever current value the caller appends after it.
+ * Renders §3.7's struck-through history into `container`.
  *
- * This is the half of §3.7 that has never existed on screen. The server has
- * kept, persisted and broadcast every superseded entry since Phase 1;
- * resolveBlockValue collapsed each cell to its one ACTIVE entry and the rest
- * was thrown away by the renderer. Rule 2:
+ * Rule 2:
  *
  *   "A superseded value MUST remain visible in the same Block, rendered
  *    struck through, until the Strip is DROPPED. Where space does not permit,
  *    the Block MUST render an overflow indicator and expose full history on
  *    tap — modelled on ATOP's `*` convention."
  *
- * `limit` is Infinity in the expanded view and CHIP_HISTORY_LIMIT on a chip.
+ * Two shapes. In the expanded view (`limit` Infinity) the whole chain, oldest
+ * first, above the current value. On a field (`limit` CHIP_HISTORY_LIMIT) it
+ * goes in the LABEL line instead: the latest superseded value, small and
+ * struck, then `+N` for the rest. The current value keeps the field to itself —
+ * it used to share it with two struck priors, which on a much-amended ALT
+ * pushed the altitude actually in force out of view.
  *
  * Renders NOTHING when there is no prior entry — the common case is a Block
  * written once or never, and it must not sprout an empty container.
@@ -613,19 +614,33 @@ function _appendAnnotationHistory(container, strip, blockId, limit) {
   const prior = supersededAnnotationEntries(strip, blockId);
   if (prior.length === 0) return;
 
-  const shown = Number.isFinite(limit) && prior.length > limit ? prior.slice(-limit) : prior;
+  const chip = Number.isFinite(limit);
+  // Newest first on a field, so the one shown is the value just replaced.
+  const shown = chip ? prior.slice(-limit).reverse() : prior;
   const hidden = prior.length - shown.length;
 
   const history = document.createElement('span');
   history.className = 'efsp-annotation-history';
 
+  for (const entry of shown) {
+    const span = document.createElement(chip ? 's' : 'span');
+    // PREPLANNED gets its own muted state rather than being lumped in with
+    // SUPERSEDED: it is a distinct status the server can produce.
+    const suffix = entry.status === 'STRUCK' ? 'struck'
+      : entry.status === 'PREPLANNED' ? 'preplanned'
+        : 'superseded';
+    span.className = 'efsp-annotation-entry efsp-annotation-entry-' + suffix;
+    span.textContent = entry.value == null ? '' : String(entry.value);
+    span.title = `${entry.status.toLowerCase()}${entry.by ? ' by ' + entry.by : ''}`;
+    history.appendChild(span);
+  }
+
   if (hidden > 0) {
-    // ATOP's own convention for state the strip cannot render. Clicking it
-    // opens the expanded view, which is the "full history on tap" the rule
-    // requires — the indicator is only legal because that surface exists.
+    // ATOP's convention for state the field cannot render. It opens the
+    // expanded view, which is the "full history on tap" the rule requires.
     const overflow = document.createElement('button');
     overflow.className = 'efsp-annotation-overflow';
-    overflow.textContent = '*';
+    overflow.textContent = `+${hidden}`;
     overflow.title = `${hidden} earlier ${hidden === 1 ? 'entry' : 'entries'} — open the full history`;
     overflow.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -634,20 +649,6 @@ function _appendAnnotationHistory(container, strip, blockId, limit) {
     });
     overflow.addEventListener('pointerdown', (e) => e.stopPropagation());
     history.appendChild(overflow);
-  }
-
-  for (const entry of shown) {
-    const span = document.createElement('span');
-    // PREPLANNED gets its own muted state rather than being lumped in with
-    // SUPERSEDED: it is a distinct status the server can produce, and nothing
-    // has ever shown it.
-    const suffix = entry.status === 'STRUCK' ? 'struck'
-      : entry.status === 'PREPLANNED' ? 'preplanned'
-        : 'superseded';
-    span.className = 'efsp-annotation-entry efsp-annotation-entry-' + suffix;
-    span.textContent = entry.value == null ? '' : String(entry.value);
-    span.title = `${entry.status.toLowerCase()}${entry.by ? ' by ' + entry.by : ''}`;
-    history.appendChild(span);
   }
   container.appendChild(history);
 }
@@ -717,7 +718,7 @@ function _appendExpandButton(container, strip) {
  * precisely because the chip is not telling the whole story.
  */
 function _expandedBlockIdsFor(strip, map) {
-  const onStrip = new Set(compactBlocksFor(strip.role));
+  const onStrip = new Set(compactBlocksFor(strip.role, strip.ownerPositionId));
   return Object.keys(map).filter((blockId) => {
     if (!onStrip.has(blockId)) return true;
     return typeof supersededAnnotationEntries === 'function'
@@ -838,561 +839,8 @@ function _buildStripEl(strip) {
     // through the UI at all — this is that fix.
     el.appendChild(_buildBlockCell(strip, '1'));
   } else {
-    // '9' (route) is included so the fields guide §8.5's flight-plan
-    // validation actually requires (route/altitude/departure/destination —
-    // nla.js's REQUIRED_FOR_CLEARANCE) are all reachable for editing
-    // directly on the Strip, not just at CreateStrip time.
-    //
-    // Reused unmodified for ARRIVAL Strips (Phase 2) rather than a separate
-    // per-role compact list: every one of these Block IDs is deliberately
-    // ALSO present in ARRIVAL_BLOCK_MAP (see strip-template.js), so
-    // _buildBlockCell resolves each one correctly per strip.role — '8'/'8A'/
-    // '8B'/'7' mean different fields on an ARRIVAL Strip, but the compact-
-    // view layout position is the same. A genuinely arrival-tailored compact
-    // layout (e.g. surfacing ETA/Block 6 here too) is a nice-to-have, not
-    // built in Phase 2.
-    // '5A'/'24A' (docs/adr/0022) — track-degradation flag and airspace
-    // ownership, both newly-editable enum Blocks; included so they're
-    // actually reachable somewhere in the compact view, not just present
-    // in the Block Map with no render path (the bug this closes).
-    // '3A'-'3E' (docs/adr/0023) — aircraft type/wake category/tail number/
-    // unit/home station: all five were already validated and writable
-    // server-side but had no Block anywhere routing a SetBlock at them,
-    // found live when "Spawn Return Strip" had nothing to actually copy.
-    // WP4A second slice — MISSION's fields (mission number/package/beacon/
-    // vul window) are structurally different from the callsign-runway-taxi
-    // shape every other role shares, so it gets its own compact-view list
-    // (the first role-conditional branch this array has ever needed —
-    // strip-template.js's MISSION_BLOCK_MAP uses an entirely M-prefixed
-    // namespace, none of which exists in the shared list below).
-    const blocks = compactBlocksFor(strip.role);
-    // docs/adr/0024 — a small muted label stacked above each Block's value so
-    // a bare '0001'/'LTAG' isn't left to memory. Wrapping happens HERE, at
-    // the call site, rather than inside _buildBlockCell itself, so its
-    // click-to-edit/enum-<select> internals need zero changes.
-    for (const id of blocks) {
-      const chip = document.createElement('span');
-      chip.className = 'efsp-block-chip';
-      const label = blockLabelFor(id, strip.role);
-      if (label) {
-        const labelEl = document.createElement('span');
-        labelEl.className = 'efsp-block-label';
-        labelEl.textContent = label;
-        chip.appendChild(labelEl);
-      }
-      // §3.7 rule 2's "in the same Block", not one click away in the
-      // expanded view — bounded, with the overflow indicator the rule itself
-      // prescribes once it stops fitting.
-      _appendAnnotationHistory(chip, strip, id, CHIP_HISTORY_LIMIT);
-      chip.appendChild(_buildBlockCell(strip, id));
-      el.appendChild(chip);
-    }
-
-    // Every trailing control lives on its OWN final row (`flex-basis: 100%`,
-    // the idiom the badges already use), rather than floating to wherever the
-    // chips happen to stop wrapping.
-    //
-    // This is load-bearing, not tidiness. `.efsp-nla-btn { margin-left: auto }`
-    // on a wrapping flex container puts the NLA button on whichever row it
-    // lands on — which differs between Strips in the SAME Bay, depending on
-    // callsign length and which optional Blocks are populated. NLA is the
-    // primary affordance: one input, double-tap guarded, reached for without
-    // looking. Making its position a function of chip count would have made
-    // adding chips a net loss.
-    const actions = document.createElement('div');
-    actions.className = 'efsp-strip-actions';
-
-    // Offset (guide §7.3) — one input, a dedicated button so it's reachable
-    // from keyboard/touch per §7.1 rule 4, not just a drag/dblclick gesture.
-    if (!_isRejectedCoordinationReplica(strip)) {
-      const offsetBtn = document.createElement('button');
-      offsetBtn.className = 'efsp-offset-btn';
-      offsetBtn.title = 'Offset (cock)';
-      offsetBtn.textContent = '⇥';
-      offsetBtn.addEventListener('click', (e) => { e.stopPropagation(); _dispatchGesture(strip, toggleOffset); });
-      actions.appendChild(offsetBtn);
-    }
-
-    _appendExpandButton(actions, strip);
-    _appendDropButton(actions, strip);
-
-    // The NLA, and whether the server would refuse it (lane 4's F-408).
-    //
-    // `strip.nla` is crc-sync's own answer to "what would pressing this do
-    // right now", carried on every Strip record it puts on the wire — the
-    // snapshot, every board delta, every Mutation ack, and a periodic sweep
-    // for the deadlines only the clock moves (nla-status-monitor.js). It is
-    // null when the State has no NLA at all, `{toState, transferTo?}` when the
-    // press would be accepted, and `{inhibited, reason}` when it would not.
-    //
-    // This REPLACES the three inhibit rules this file used to compute for
-    // itself (per-State authority, an open coordination/TOFI proposal, and a
-    // terminal Drop under active tactical control) rather than sitting beside
-    // them. All three are in `_nlaPrecheck`/`nlaStatusFor` server-side with
-    // the same wordings, and the server's set is far larger: no beacon, an
-    // incomplete flight plan, a hold in force, no receiving Position, a
-    // release time not yet reached, a standing-release envelope, an EDCT or
-    // call-for-release window, an expired void time, a cross-Facility HANDOFF
-    // (which is why this no longer special-cases a CENTER INBOUND ARRIVAL —
-    // computeArrivalNla already answers it, and now says so out loud instead
-    // of the button silently not existing), a rejected coordination replica
-    // (F-303's client half, which falls out of rendering this properly), and
-    // no configured Bay. Keeping a local copy of three of those would be two
-    // sources for one question, and the smaller source would be the one that
-    // drifts.
-    //
-    // `undefined` means the record predates the field — no advice, so nothing
-    // is claimed about the button either way.
-    const nlaStatus = strip.nla;
-    const nlaLabel = nlaStatus === null ? null : nlaLabelFor(strip.state, strip.role);
-    let nlaInhibited = null;
-    if (nlaLabel) {
-      const btn = document.createElement('button');
-      btn.className = 'efsp-nla-btn';
-      btn.textContent = nlaLabel;
-
-      nlaInhibited = (nlaStatus && nlaStatus.inhibited) || null;
-      if (nlaInhibited) {
-        btn.disabled = true;
-        btn.classList.add('efsp-nla-btn-denied');
-        btn.title = nlaInhibited;
-        btn.dataset.nlaReason = nlaStatus.reason || '';
-      } else {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          // §7.9's "local input -> visual feedback < 50ms, never waiting on
-          // the server": the button goes dead on the press rather than on the
-          // ack. It comes back with the rebuilt Strip either way.
-          if (_invokeNla(strip)) btn.disabled = true;
-        });
-      }
-      actions.appendChild(btn);
-    }
-    el.appendChild(actions);
-
-    if (nlaInhibited) {
-      // §3.5 rule 2 requires the reason to be RENDERED, not the control merely
-      // greyed out, and docs/efsp-wp6-plan.md §Verification 4 spells it
-      // "inhibited with the reason rendered on the Strip". A `title` on a
-      // disabled button is a hover tooltip with no touch equivalent — lane 3's
-      // F-307 makes that point about the TOFI exit, and it holds here.
-      //
-      // A sibling of .efsp-strip-actions rather than a child of it: the
-      // trailing row is badges-left / actions-right (efsp-panel.css's `order`
-      // block), so putting a sentence inside the right-aligned action group
-      // would push the NLA button around by the length of the reason — and NLA
-      // not moving is the whole point of that row.
-      const why = document.createElement('span');
-      why.className = 'efsp-nla-inhibit-reason';
-      why.textContent = nlaInhibited;
-      why.title = nlaInhibited;
-      el.appendChild(why);
-    }
-
-    // ── WP4A coordination affordances ────────────────────────────────
-    if (_isPendingCoordinationReplica(strip)) {
-      // This Strip IS a proposal awaiting response — accept/reject
-      // REPLACE the normal NLA slot conceptually (there is no ordinary
-      // NLA for a Strip still sitting in a Coordination Bay), rendered
-      // alongside whatever (if anything) nlaLabelFor returned above.
-      //
-      // OPERATIONAL_REQUEST gets a 3-way response (guide §4.6: APPROVED/
-      // UNABLE/STAND BY, docs/adr/0022) — ACCEPT/REJECT already carry that
-      // meaning for it (coordination.js's acceptPhrase:'APPROVED'), so only
-      // the label and the extra Stand By button differ; every other
-      // primitive keeps its original 2-button Accept/Reject wording.
-      const isOpsRequest = strip.coordination.primitive === 'OPERATIONAL_REQUEST';
-      const acceptBtn = document.createElement('button');
-      acceptBtn.className = 'efsp-coordinate-accept-btn';
-      acceptBtn.textContent = isOpsRequest ? 'Approve' : `Accept ${COORDINATION_PRIMITIVE_LABELS[strip.coordination.primitive] || strip.coordination.primitive}`;
-      acceptBtn.addEventListener('click', (e) => { e.stopPropagation(); _dispatchCoordination(strip, strip.coordination.primitive, 'ACCEPT'); });
-      el.appendChild(acceptBtn);
-
-      const rejectBtn = document.createElement('button');
-      rejectBtn.className = 'efsp-coordinate-reject-btn';
-      rejectBtn.textContent = isOpsRequest ? 'Unable' : 'Reject';
-      rejectBtn.addEventListener('click', (e) => { e.stopPropagation(); _dispatchCoordination(strip, strip.coordination.primitive, 'REJECT'); });
-      el.appendChild(rejectBtn);
-
-      if (isOpsRequest) {
-        const standByBtn = document.createElement('button');
-        standByBtn.className = 'efsp-coordinate-standby-btn';
-        standByBtn.textContent = 'Stand By';
-        standByBtn.addEventListener('click', (e) => { e.stopPropagation(); _dispatchCoordination(strip, strip.coordination.primitive, 'STAND_BY'); });
-        el.appendChild(standByBtn);
-      }
-    } else if (_canProposeCoordination(strip)) {
-      const coordBtn = document.createElement('button');
-      coordBtn.className = 'efsp-coordinate-btn';
-      coordBtn.textContent = 'Coordinate…';
-      coordBtn.title = `Propose a cross-Facility coordination to ${COORDINATION_TARGETS[strip.ownerPositionId].positionId}`;
-      coordBtn.addEventListener('click', (e) => { e.stopPropagation(); _openCoordinatePopover(strip, el); });
-      el.appendChild(coordBtn);
-    }
-
-    // ── WP4A second slice: TOFI affordances (guide §4.6.3) ──────────────
-    if (_isPendingTofiReplica(strip)) {
-      // Always the MISSION-side Strip — the receiving MRU controller's own
-      // record, for both ENTRY and EXIT (mirrors board-store.js's side
-      // split exactly).
-      const label = strip.tofiCoordination.direction === 'EXIT' ? 'Exit' : 'Entry';
-      const tofiAcceptBtn = document.createElement('button');
-      tofiAcceptBtn.className = 'efsp-coordinate-accept-btn';
-      tofiAcceptBtn.textContent = `Accept TOFI ${label}`;
-      // Guide rule 3 — exit is the safety-critical direction, so the server
-      // refuses ACCEPT until separation_regime is back to ATC. The MRU
-      // controller cannot fix it themselves (SREG lives on the ATC-side Strip
-      // alone, MISSION_BLOCK_MAP has no such Block), so the sentence is
-      // _tofiExitPrecondition's — the same one the badge puts in front of the
-      // ATC-side controller who CAN clear it (F-307). One wording for one
-      // fact; two would drift, and the MRU's would be the copy nobody updated.
-      const exitBlocked = _tofiExitPrecondition(strip, strip.tofiCoordination);
-      if (exitBlocked) {
-        tofiAcceptBtn.disabled = true;
-        tofiAcceptBtn.classList.add('efsp-nla-btn-denied');
-        tofiAcceptBtn.title = exitBlocked;
-      } else if (strip.tofiCoordination.direction === 'ENTRY') {
-        // ENTRY needs the regime stated as part of accepting (docs/adr/0053),
-        // so this is a picker rather than a bare button — the MRU controller
-        // says what they heard agreed, and the accept carries it. A <select>
-        // beside the button rather than a popover: it is one field, and the
-        // whole affordance is already a pair of buttons on the Strip.
-        const regimeSel = document.createElement('select');
-        regimeSel.className = 'efsp-tofi-regime-select';
-        regimeSel.dataset.stripAction = 'tofi-regime';
-        regimeSel.title = 'under which regime is the MRU taking this aircraft (§4.6.3)';
-        for (const value of TOFI_ACCEPT_REGIMES) {
-          const opt = document.createElement('option');
-          opt.value = value;
-          opt.textContent = value;
-          regimeSel.appendChild(opt);
-        }
-        // The choice outlives a rebuild. Clicking the select used to bubble to
-        // the Strip's own click handler, select the Strip, rebuild it, and hand
-        // back a fresh select reading MARSA — so no other regime could ever be
-        // picked. The click no longer bubbles (STRIP_CONTROL_SELECTOR), but any
-        // other rebuild (an FDR rev, an NLA status sweep) would do the same.
-        const remembered = _tofiRegimeChoice.get(strip.stripId);
-        if (remembered && TOFI_ACCEPT_REGIMES.includes(remembered)) regimeSel.value = remembered;
-        regimeSel.addEventListener('change', () => _tofiRegimeChoice.set(strip.stripId, regimeSel.value));
-        regimeSel.addEventListener('pointerdown', (e) => e.stopPropagation());
-        regimeSel.addEventListener('click', (e) => e.stopPropagation());
-        el.appendChild(regimeSel);
-        tofiAcceptBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          _dispatchTofi(strip, 'ACCEPT', undefined, { separationRegime: regimeSel.value });
-        });
-      } else {
-        tofiAcceptBtn.addEventListener('click', (e) => { e.stopPropagation(); _dispatchTofi(strip, 'ACCEPT'); });
-      }
-      el.appendChild(tofiAcceptBtn);
-
-      const tofiRejectBtn = document.createElement('button');
-      tofiRejectBtn.className = 'efsp-coordinate-reject-btn';
-      tofiRejectBtn.textContent = 'Reject';
-      tofiRejectBtn.addEventListener('click', (e) => { e.stopPropagation(); _dispatchTofi(strip, 'REJECT'); });
-      el.appendChild(tofiRejectBtn);
-    } else if (_canProposeTofiExit(strip)) {
-      // EXIT's target is already known (tofiCoordination.peerFacilityId/
-      // peerPositionId) — no picker needed, unlike ENTRY.
-      const tofiExitBtn = document.createElement('button');
-      tofiExitBtn.className = 'efsp-coordinate-btn';
-      tofiExitBtn.textContent = 'TOFI Exit…';
-      tofiExitBtn.title = `Propose returning separation to ${strip.tofiCoordination.peerPositionId}`;
-      tofiExitBtn.addEventListener('click', (e) => { e.stopPropagation(); _dispatchTofi(strip, 'PROPOSE', 'EXIT'); });
-      el.appendChild(tofiExitBtn);
-    } else if (_canProposeTofiEntry(strip)) {
-      const counterparts = TOFI_COUNTERPARTS[strip.ownerPositionId];
-      const tofiEntryBtn = document.createElement('button');
-      tofiEntryBtn.className = 'efsp-coordinate-btn';
-      tofiEntryBtn.textContent = 'TOFI…';
-      tofiEntryBtn.title = 'Propose a Transfer of Flight Information to a Military Radar Unit';
-      tofiEntryBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        // Single-candidate case (TAC_C2/GCI -> CTR) skips the picker
-        // entirely — behaves like today's deterministic COORDINATION_TARGETS
-        // stub. CTR's 2-candidate case always opens the popover.
-        if (counterparts.length === 1) _dispatchTofi(strip, 'PROPOSE', 'ENTRY', { target: counterparts[0] });
-        else _openTofiEntryPopover(strip, el, counterparts);
-      });
-      el.appendChild(tofiEntryBtn);
-    }
-
-    if (_canTransferTofiComms(strip)) {
-      const commsBtn = document.createElement('button');
-      commsBtn.className = 'efsp-coordinate-btn efsp-tofi-transfer-comms-btn';
-      commsBtn.textContent = 'Transfer Comms';
-      commsBtn.title = 'Guide §4.6.3 — a separate step from ACCEPT';
-      commsBtn.addEventListener('click', (e) => { e.stopPropagation(); _dispatchTofi(strip, 'TRANSFER_COMMS'); });
-      el.appendChild(commsBtn);
-    }
-
-    // ── The RANGE slice: working an airspace ────────────────────────────
-    //
-    // Approving a flight onto an airspace's frequency. Deliberately not a
-    // coordination affordance: nothing crosses a Facility boundary and no
-    // jurisdiction moves (§4.7 / D17 — "the frequency is an attribute of the
-    // Strip; the controller is what moves"), so the controller keeps the
-    // Strip throughout and this sits apart from the Coordinate/TOFI buttons.
-    if (strip.airspaceEntry) {
-      const airspace = getEfspAirspace(strip.airspaceEntry.airspaceId);
-      const name = (airspace && airspace.definition && airspace.definition.name) || strip.airspaceEntry.airspaceId;
-
-      const inBadge = document.createElement('span');
-      inBadge.className = 'efsp-coordination-badge efsp-airspace-badge';
-      const mhz = strip.airspaceEntry.frequencyMhz;
-      const block = strip.airspaceEntry.altitudeBlock;
-      // The altitude restriction belongs HERE, not only on the airspace
-      // board: two aircraft sharing one block are only safe if the
-      // controller working each of them can see who is held to what, and
-      // the Strip is what they are looking at.
-      inBadge.textContent = [name, mhz ? mhz.toFixed(3) : null,
-        block ? `${block.lowerFt}–${block.upperFt} ft` : null].filter(Boolean).join(' ');
-      // §9.11's alert condition, shown on the Strip itself rather than only
-      // as an obligation badge — the controller who approved it is the one
-      // who can do something about it.
-      if (airspace && airspace.state !== 'ACTIVE') {
-        inBadge.classList.add('efsp-airspace-badge-unactivated');
-        inBadge.title = `${name} is ${airspace.state}, not active`;
-      }
-      el.appendChild(inBadge);
-
-      if (_canApproveAirspaceEntry(strip)) {
-        const leaveBtn = document.createElement('button');
-        leaveBtn.className = 'efsp-coordinate-btn';
-        leaveBtn.textContent = 'Leave airspace';
-        leaveBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const actingPositionId = _resolveActingPositionId(strip);
-          if (actingPositionId) sendEfspMutation(actingPositionId, strip, { kind: 'ClearAirspaceEntry' });
-        });
-        el.appendChild(leaveBtn);
-      }
-    } else if (_canApproveAirspaceEntry(strip)) {
-      const airspaceBtn = document.createElement('button');
-      airspaceBtn.className = 'efsp-coordinate-btn';
-      airspaceBtn.textContent = 'Airspace…';
-      airspaceBtn.title = 'Approve this flight into an airspace, on its frequency';
-      airspaceBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        _openAirspaceEntryPopover(strip, el);
-      });
-      el.appendChild(airspaceBtn);
-    }
-
-    if (strip.tofiCoordination && strip.tofiCoordination.state !== 'REJECTED') {
-      const tofi = strip.tofiCoordination;
-      const tofiBadge = document.createElement('span');
-      tofiBadge.className = 'efsp-coordination-badge efsp-tofi-badge';
-      tofiBadge.textContent = `TOFI ${tofi.direction}: ${tofi.state}`;
-      // Who the exchange is WITH — the badge named neither side, and only
-      // POINT_OUT's DATA: chip has ever named a peer anywhere on a Strip
-      // (F-304's last note).
-      tofiBadge.title = `${_tofiProposerOf(strip, tofi)} proposed this TOFI ${tofi.direction.toLowerCase()}`;
-      // F-307 — CTR proposes the exit, TAC_C2 is told why it cannot be
-      // accepted, and CTR is the only one who can clear it: separation_regime
-      // lives on the ATC-side Strip alone (MISSION_BLOCK_MAP has no such
-      // Block). So the precondition goes on BOTH sides' badge, worded for the
-      // side reading it. "The only person who can clear the block is the one
-      // not told about it."
-      const blocking = _tofiExitPrecondition(strip, tofi);
-      if (blocking) {
-        tofiBadge.classList.add('efsp-coordination-badge-blocked');
-        tofiBadge.title = blocking;
-      }
-      el.appendChild(tofiBadge);
-      if (blocking) el.appendChild(_buildCoordinationReasonEl(blocking));
-      // F-304, TOFI's half — the note is mandatory on a degraded track (the
-      // popover says so and the server refuses without it) and was rendered
-      // nowhere at all, on either side.
-      if (tofi.note) el.appendChild(_buildCoordinationNoteEl(tofi.note, _tofiProposerOf(strip, tofi)));
-    }
-
-    // "Convert to Arrival" (docs/adr/0023) — a DEPARTURE Strip at its
-    // terminus (HANDED_OFF, whether still at APP or handed off further to
-    // CTR) turns into its return-leg ARRIVAL Strip IN PLACE: same stripId,
-    // same fdrId, throughout — never a second Strip. Two earlier versions
-    // of this button spawned a separate ARRIVAL Strip instead (per guide
-    // §3.6's turnaround rule); abandoned after live testing found that left
-    // a stale departure Strip behind, a duplicated beacon code, and needed
-    // every field copied by hand. board-store.js's _applyConvertToArrival
-    // is authoritative for the state/role/Bay/permission rules.
-    //
-    // Gated on an unresolved link as well as role/state, mirroring the
-    // server: the conversion discards both coordination records, and because
-    // TOFI never changes this Strip's own state, HANDED_OFF is exactly where
-    // a Strip sits for the whole of a tactical-control exchange — so this
-    // button was live mid-exchange and silently broke the link. An ACTIVE
-    // *coordination* link is fine (that handoff is complete; converting for
-    // the return leg is the normal next step) — only a pending one, or live
-    // tactical control, blocks it.
-    const convertBlockedBy = (strip.coordination && strip.coordination.state === 'PROPOSED')
-      ? 'an open coordination proposal'
-      : (strip.tofiCoordination && strip.tofiCoordination.state === 'PROPOSED')
-        ? 'an open TOFI proposal'
-        : (strip.tofiCoordination && strip.tofiCoordination.state === 'ACTIVE')
-          ? 'active tactical control'
-          : null;
-    if (_canConvertToArrival(strip)) {
-      const spawnBtn = document.createElement('button');
-      spawnBtn.className = 'efsp-spawn-return-btn';
-      spawnBtn.textContent = 'Convert to Arrival →';
-      if (convertBlockedBy) {
-        spawnBtn.disabled = true;
-        spawnBtn.classList.add('efsp-nla-btn-denied');
-        spawnBtn.title = `cannot convert this Strip while it has ${convertBlockedBy} — resolve it first`;
-      } else {
-        // Two presses, because this clears the live annotation set in one
-        // click and there is no undo for it (the archive keeps the values —
-        // see board-store's previousLeg — but the working Strip is reset).
-        const annotated = Object.keys(strip.annotations || {}).length > 0;
-        spawnBtn.title = annotated
-          ? `Turn this Strip into its return ARRIVAL leg at ${strip.ownerPositionId}. Its ${Object.keys(strip.annotations).length} annotation(s) are archived and cleared from the working Strip — press twice.`
-          : `Turn this Strip into its return ARRIVAL leg at ${strip.ownerPositionId} — same Strip, same FDR, no duplicate`;
-        if (annotated && _pendingConvertStripId !== strip.stripId) spawnBtn.classList.add('efsp-confirm-needed');
-        spawnBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          if (annotated && _pendingConvertStripId !== strip.stripId) {
-            _pendingConvertStripId = strip.stripId;
-            spawnBtn.textContent = 'Convert — press again';
-            spawnBtn.classList.add('efsp-confirm-needed');
-            return;
-          }
-          _pendingConvertStripId = null;
-          convertStripToArrival(strip);
-        });
-      }
-      el.appendChild(spawnBtn);
-    }
-
-    // A return leg carries its departure leg's annotations, archived. Shown
-    // as a chip rather than hidden in the Mutation log, because "what did
-    // Ground tell them on the way out" is a question asked at the Strip.
-    if (strip.previousLeg && Object.keys(strip.previousLeg.annotations || {}).length > 0) {
-      const priorBadge = document.createElement('span');
-      priorBadge.className = 'efsp-coordination-badge efsp-previous-leg-badge';
-      const count = Object.keys(strip.previousLeg.annotations).length;
-      priorBadge.textContent = `${strip.previousLeg.role} ×${count}`;
-      priorBadge.title = Object.entries(strip.previousLeg.annotations)
-        .map(([blockId, cell]) => `${blockId}: ${(cell.entries || []).map(e => e.value).join(' / ')}`)
-        .join('\n');
-      el.appendChild(priorBadge);
-    }
-
-    // Shared-FDR indicator. A sortie that crosses a Facility boundary leaves
-    // several live Strips on one flight — the sender keeps its own, the
-    // receiver gets a replica, TOFI adds a MISSION Strip — and each holder
-    // retires theirs on their own schedule (guide §4.6). That is the design,
-    // but nothing on screen said a Strip had siblings, so a sender-side one
-    // would sit stale indefinitely and its beacon code stay held. Advisory
-    // only: never blocks anything, and never suggests which one is "right."
-    const siblings = otherLiveStripsForFdr(strip.fdrId, strip.stripId);
-    if (siblings.length > 0) {
-      const sharedBadge = document.createElement('span');
-      sharedBadge.className = 'efsp-coordination-badge efsp-shared-fdr-badge';
-      sharedBadge.textContent = `+${siblings.length}`;
-      // The Role is named, not just the Position. Since a mission line can be
-      // fragged against a flight at tasking time (crc-sync's docs/adr/0054),
-      // this badge is how the ATC controller sees that one exists — and they
-      // are the one best placed to catch it being bound to the wrong jet. A
-      // bare "TACTICAL/TAC_C2" does not distinguish a mission line from a
-      // coordination replica, which is the whole question being asked.
-      sharedBadge.title = `this flight also has ${siblings.length === 1 ? 'a Strip' : `${siblings.length} Strips`} at ${siblings.map(s => `${s.facilityId || '?'}/${s.ownerPositionId} (${s.role})`).join(', ')}`;
-      el.appendChild(sharedBadge);
-    }
-
-    // ── F-302: the state of this Strip's own coordination ────────────────
-    //
-    // TOFI has had a badge since WP4A ("TOFI ENTRY: PROPOSED", above). The
-    // five coordination primitives had nothing equivalent, on either side. On
-    // the sender's Strip a pending HANDOFF looked exactly like no HANDOFF —
-    // the Coordinate… button simply disappeared and that was the whole of the
-    // change — and a REJECTED one looked exactly like a resolved one, the
-    // button coming back being the only sign. That last case is guide §3.10
-    // rule 2 precisely: the server refused on the controller's behalf,
-    // correctly, and nobody was told. "A refusal nobody sees is rule 2
-    // exactly. A pending handoff nobody sees is how one gets forgotten."
-    //
-    // Deliberately shaped like the TOFI badge rather than as a second idiom
-    // for one question. The POINT_OUT DATA:/SEP: chips below are NOT this —
-    // they are §4.6 rule 1's both-halves requirement and answer a different
-    // question, so both are rendered.
-    if (strip.coordination) {
-      const co = strip.coordination;
-      const proposer = _coordinationProposerOf(strip, co);
-      // `peerPositionId` is already the OTHER side from wherever it is read —
-      // the receiver on the sender's own Strip, the sender on the replica.
-      const badge = document.createElement('span');
-      badge.className = 'efsp-coordination-badge efsp-coordination-state-badge'
-        + (co.state === 'REJECTED' ? ' efsp-coordination-state-rejected' : '');
-      const primitiveLabel = (COORDINATION_PRIMITIVE_LABELS[co.primitive] || co.primitive).toUpperCase();
-      // "←" on the replica, "→" on the sender's own Strip, so which way the
-      // request points is readable without working it out from the Bay.
-      const arrow = _coordinationIsReplica(strip) ? '←' : '→';
-      badge.textContent = `${primitiveLabel} ${arrow} ${co.peerPositionId}: ${_coordinationStateWord(co)}`;
-      badge.title = `${proposer} proposed this ${primitiveLabel.toLowerCase()}`;
-      el.appendChild(badge);
-      // F-304 — the note is sent, stored on the replica, and was read by
-      // nothing: bay-view.js had no reference to coordination.note anywhere
-      // except the two popovers that WRITE one. On a degraded track the
-      // popover calls it "required" and the server refuses without it, so the
-      // system demanded the note and then never showed it to the person it
-      // was for.
-      if (co.note) el.appendChild(_buildCoordinationNoteEl(co.note, proposer));
-    }
-
-    // POINT_OUT dual-half rendering (guide §4.6 rule 1: "the UI MUST
-    // render both halves unambiguously") — two distinct, always-visible
-    // chips, never a toggle. Shown for any coordination primitive whose
-    // data-ownership and separation-responsibility refs can differ, but
-    // only POINT_OUT ever actually splits them (coordination.js's table).
-    if (strip.coordination && strip.coordination.primitive === 'POINT_OUT' && strip.coordination.state !== 'REJECTED') {
-      const badges = document.createElement('div');
-      badges.className = 'efsp-coordination-badges';
-      const dataChip = document.createElement('span');
-      dataChip.className = 'efsp-coordination-badge efsp-coordination-badge-data';
-      dataChip.textContent = `DATA: ${strip.coordination.dataOwnerPositionRef.positionId}`;
-      const sepChip = document.createElement('span');
-      sepChip.className = 'efsp-coordination-badge efsp-coordination-badge-sep';
-      sepChip.textContent = `SEP: ${strip.coordination.separationResponsibilityRef.positionId}`;
-      badges.appendChild(dataChip);
-      badges.appendChild(sepChip);
-      el.appendChild(badges);
-    }
-
-    // OPERATIONAL_REQUEST STAND BY indicator (docs/adr/0022) — on the
-    // REQUESTER's own Strip, so a still-open request doesn't read as
-    // silently ignored. Cleared the moment the request actually resolves
-    // (state leaves PROPOSED), same as the badges above.
-    if (strip.coordination && strip.coordination.primitive === 'OPERATIONAL_REQUEST'
-      && strip.coordination.state === 'PROPOSED' && strip.coordination.lastStandByAt) {
-      const standByBadge = document.createElement('span');
-      standByBadge.className = 'efsp-coordination-badge efsp-coordination-badge-standby';
-      standByBadge.textContent = 'STAND BY';
-      el.appendChild(standByBadge);
-    }
-
-    if (obligation) {
-      const badge = document.createElement('span');
-      badge.className = 'efsp-obligation-badge' + (obligation.severity === 'OVERDUE' ? ' efsp-obligation-badge-overdue' : '');
-      badge.textContent = obligation.obligationType.replace(/_/g, ' ');
-      badge.title = `${obligation.obligationType} — ${obligation.severity}`;
-      el.appendChild(badge);
-    }
-
-    // WP5 (guide §6.6 rule 5) — which surveillance contact this flight is,
-    // and on what evidence. A Strip-level badge rather than a Block: see
-    // correlation-highlight.js's correlationBadgeFor for the three reasons.
-    _appendCorrelationBadge(el, strip);
-
-    // WP6 (guide §9.2 rules 2, 5 and 6) — whether military authority is
-    // separating this flight, and whether the pre-rendezvous interlock is
-    // armed. Same badge-not-Block reasoning as the correlation badge above.
-    _appendMarsaBadge(el, strip);
-
-    // Last, so it sits below every chip, badge and control — a detail panel
-    // under the Strip rather than something threaded through it.
-    _appendExpandedView(el, strip);
+    // Layout C (docs/adr/0056): tab | fields | tools. strip-view.js.
+    _buildStripLayout(el, strip, obligation);
   }
 
   // Flip: dblclick. Highlight: right-click (contextmenu) opens a 3-swatch
@@ -1422,68 +870,6 @@ function _buildStripEl(strip) {
   return el;
 }
 
-/**
- * The correlation badge, plus the bind/unbind affordances that go with it.
- *
- * Ambiguity is the case worth the extra control: the server refuses to guess
- * between two contacts that match a flight equally well, so the badge becomes
- * a button that lists them and lets the controller settle it. That is guide
- * §6.6 rule 1's top rung — an explicit binding — becoming reachable, and it is
- * also the only route for an aircraft with its transponder off that nothing
- * matches by callsign.
- */
-function _appendCorrelationBadge(el, strip) {
-  if (typeof correlationBadgeFor !== 'function') return;
-  const badge = correlationBadgeFor(strip);
-  if (!badge) return;
-
-  if (badge.warned) el.classList.add('efsp-strip-correlation-warned');
-
-  const inert = _isRejectedCoordinationReplica(strip);
-  const node = document.createElement(badge.ambiguous && !inert ? 'button' : 'span');
-  node.className = badge.className;
-  node.textContent = badge.text;
-  node.title = badge.title;
-  if (badge.ambiguous && !inert) {
-    node.disabled = !_resolveActingPositionId(strip);
-    node.addEventListener('click', (e) => {
-      e.stopPropagation();
-      _openBindPopover(strip, node, badge.candidateTrackIds);
-    });
-  }
-  el.appendChild(node);
-
-  // A "Bind…" control for the uncorrelated case, and "Unbind" once bound.
-  const record = typeof getEfspCorrelationForStrip === 'function' ? getEfspCorrelationForStrip(strip) : null;
-  if (!record || badge.ambiguous || inert) return;
-
-  if (record.binding) {
-    const unbind = document.createElement('button');
-    unbind.className = 'efsp-correlation-btn';
-    unbind.textContent = 'Unbind';
-    unbind.title = 'give the contact back to the automatic matcher';
-    unbind.disabled = !_resolveActingPositionId(strip);
-    unbind.addEventListener('click', (e) => {
-      e.stopPropagation();
-      _dispatchCorrelation(strip, { kind: 'UnbindTrack' });
-    });
-    el.appendChild(unbind);
-    return;
-  }
-
-  if (record.state === 'UNCORRELATED') {
-    const bind = document.createElement('button');
-    bind.className = 'efsp-correlation-btn';
-    bind.textContent = 'Bind…';
-    bind.title = 'pick the contact this flight is';
-    bind.disabled = !_resolveActingPositionId(strip);
-    bind.addEventListener('click', (e) => {
-      e.stopPropagation();
-      _openBindPopover(strip, bind, null);
-    });
-    el.appendChild(bind);
-  }
-}
 
 // ── The popover portal (F-001, F-108, F-109) ─────────────────────────────
 //
@@ -1757,75 +1143,6 @@ function _openBindPopover(strip, anchorEl, candidateTrackIds) {
   setTimeout(() => document.addEventListener('pointerdown', _onDocPointerDownCloseBindPopover, true), 0);
 }
 
-/**
- * MARSA (§9.2) — the badge, the participant highlight, and the control that
- * opens the relation's actions.
- *
- * The highlight (rule 5, "selecting one participant MUST highlight the others")
- * is a class on the Strip rather than anything drawn here: the selected Strip's
- * participants are resolved once in _afterSelectionChanged and read back while
- * each Strip is built, which is the same shape the correlation ring uses.
- */
-function _appendMarsaBadge(el, strip) {
-  if (typeof marsaBadgeFor !== 'function') return;
-
-  if (typeof isMarsaHighlighted === 'function' && isMarsaHighlighted(strip.stripId)) {
-    el.classList.add('efsp-strip-marsa-participant');
-  }
-
-  const badge = marsaBadgeFor(strip);
-  if (!badge) {
-    // No relation and no history: offer the declaration itself, since a
-    // controller has to be able to start one from a Strip that has never been
-    // in one. Left out entirely when nobody can act, rather than rendered
-    // disabled — a Strip nobody holds should not grow a control.
-    if (!_resolveActingPositionId(strip) || _isRejectedCoordinationReplica(strip)) return;
-    const declare = document.createElement('button');
-    declare.className = 'efsp-marsa-btn';
-    declare.textContent = 'MARSA…';
-    declare.title = 'declare that military authority is separating this flight from another';
-    declare.addEventListener('click', (e) => {
-      e.stopPropagation();
-      _openMarsaPopover(strip, declare);
-    });
-    el.appendChild(declare);
-    return;
-  }
-
-  // A VOIDED relation flags the whole Strip, not just the badge — §9.2 rule 2
-  // calls it an ALERT, and an alert that reads as one more chip among six is
-  // not one.
-  if (badge.voided) el.classList.add('efsp-strip-marsa-voided');
-  if (badge.armed) el.classList.add('efsp-strip-marsa-armed');
-
-  const node = document.createElement('button');
-  node.className = badge.className;
-  node.textContent = badge.text;
-  node.title = badge.title;
-  node.dataset.marsaId = badge.marsaId;
-  // A button in every state, including VOIDED: rule 5 wants the relation
-  // "visible as a link", and after a void the controller most needs to see who
-  // else was in it.
-  node.disabled = !_resolveActingPositionId(strip) || _isRejectedCoordinationReplica(strip);
-  node.addEventListener('click', (e) => {
-    e.stopPropagation();
-    _openMarsaPopover(strip, node);
-  });
-  el.appendChild(node);
-
-  // The void, in words, on every participant Strip (§9.2 rule 2,
-  // docs/efsp-wp6-plan.md §13). Nothing anywhere said a void had happened: the
-  // interlock fires on an ordinary INIT ALT edit, the Strip came back reading
-  // "MARSA armed" from its own SetBlock ack, and the badge's explanation lived
-  // only in a hover `title`.
-  if (badge.voided && badge.voidReason) {
-    const why = document.createElement('span');
-    why.className = 'efsp-marsa-void-reason';
-    why.textContent = badge.voidReason;
-    why.title = badge.voidReason;
-    el.appendChild(why);
-  }
-}
 
 let _openMarsaPopoverEl = null;
 
@@ -2520,64 +1837,8 @@ function _canConvertToArrival(strip) {
   return !_isRejectedCoordinationReplica(strip);
 }
 
-// Blocks a controller can reach on a Strip, by role. Deliberately exported:
-// a Block present in the Block Map but absent here is editable in principle
-// and invisible in practice, which is how §3.8's release model shipped
-// unreachable. efsp-ui-reachability.test.js holds this to the Block Maps.
-//
-// '9F' (STEREO, docs/adr/0050) is here by choice rather than by that test's
-// insistence — the test holds only WRITABLE Blocks, and 9F is read-only, so
-// nothing would have failed had it been left out. That is precisely the
-// blind spot the briefing's §6 names, so: a controller needs to see which
-// canned route a flight filed, not least because it is what decides whether
-// a standing release covers the flight.
-// Blocks the three ATC Roles all show, in render order. Everything a
-// controller reads at a glance on any Strip.
-const COMPACT_BLOCKS_SHARED = [
-  '1', '3', '3A', '3B', '3C', '3D', '3E', '3F', '3G', '4', '5', '5A', '7', '8', '8A', '8B', '9', '9F',
-  '14A', '14D', '22', '24A', 'IFR', 'RSVC', 'SREG', '25',
-];
-
-/**
- * Which Blocks get a chip on the Strip, per Role.
- *
- * **The criterion is EDIT FREQUENCY, not interlock-ness.** Every Block is
- * reachable from the expanded view now, so reachability cannot be why these
- * earn a chip — what earns one is being edited on most Strips of that Role. A
- * heading and an initial altitude are issued with every departure clearance; a
- * radar vector is issued constantly. Interlock-ness was considered and
- * rejected as the test: it describes what happens WHEN you edit a Block, not
- * how often, and adopting it would have the next slice adding chips for the
- * wrong reason.
- *
- * Per-Role because the same Block id means different things by Role — 20/21
- * are guide §6.2's "Heading"/"Initial altitude" on DEPARTURE and §6.3's radar
- * scratchpads on the airborne Roles, which is exactly why they could not live
- * in the shared list.
- *
- * Every chip costs Strip height, and Strip height costs Strips-visible-per-Bay.
- * Keep this list earned.
- */
-const COMPACT_BLOCKS_BY_ROLE = {
-  // Heading and initial altitude: the two things a departure clearance issues
-  // beyond the route.
-  DEPARTURE:  [...COMPACT_BLOCKS_SHARED, '20', '21'],
-  // '7' is already shared and is the ASSIGNED altitude on this Role
-  // (annotation-routed, append-only); the vector is the other constant.
-  ARRIVAL:    [...COMPACT_BLOCKS_SHARED, '9A-VECTOR'],
-  // '7' stays as the FILED request here; '7A' is the assignment beside it.
-  OVERFLIGHT: [...COMPACT_BLOCKS_SHARED, '7A', '9A-VECTOR'],
-  MISSION:    ['M3', 'M1', 'M2', 'M4', 'M5', 'M6', 'M7', 'M25'],
-};
-
-function compactBlocksFor(role) {
-  const list = COMPACT_BLOCKS_BY_ROLE[role] || COMPACT_BLOCKS_SHARED;
-  // Only Blocks the Role actually has. The shared list carries departure-only
-  // Blocks (9F, 14A, 14D — and OVERFLIGHT has no 8A), which drew as unlabelled
-  // chips on arrivals and overflights, 14A with a picker the server refused.
-  const map = (typeof BLOCK_MAPS === 'object' && BLOCK_MAPS[role]) || null;
-  return map ? list.filter(id => Object.prototype.hasOwnProperty.call(map, id)) : list;
-}
+// The field lists (COMPACT_BLOCKS_*, compactBlocksFor) live in strip-fields.js,
+// loaded before this file. They are per-Position now, not only per-Role.
 
 function _canApproveAirspaceEntry(strip) {
   if (!AIRSPACE_ENTRY_POSITIONS.includes(strip.ownerPositionId)) return false;
@@ -3073,9 +2334,43 @@ function _findRackAt(clientX, clientY) {
   return rackEl;
 }
 
+// Holding a dragged Strip near the top or bottom edge of the Bay scrolls it.
+// This used to happen only by accident: Chromium's text-selection autoscroll,
+// when the press landed on a field's text. Layout C put the grab area in the
+// tab, which has no text there, and the Bay stopped scrolling at all — so a
+// slot below the fold could not be reached. Scroll changes are compensated
+// the same way a wheel scroll mid-drag is (F-404).
+const DRAG_AUTOSCROLL_EDGE_PX = 32;
+const DRAG_AUTOSCROLL_MAX_PX = 14;
+let _dragAutoscrollFrame = null;
+
+function _dragAutoscrollStep() {
+  _dragAutoscrollFrame = null;
+  const drag = _efspDrag;
+  if (!drag || !drag.hasMoved || !drag.scrollEl || typeof drag.lastClientX !== 'number') return;
+  const r = drag.scrollEl.getBoundingClientRect();
+  const y = drag.lastClientY;
+  let speed = 0;
+  if (y > r.bottom - DRAG_AUTOSCROLL_EDGE_PX) speed = Math.min(1, (y - (r.bottom - DRAG_AUTOSCROLL_EDGE_PX)) / DRAG_AUTOSCROLL_EDGE_PX);
+  else if (y < r.top + DRAG_AUTOSCROLL_EDGE_PX) speed = -Math.min(1, ((r.top + DRAG_AUTOSCROLL_EDGE_PX) - y) / DRAG_AUTOSCROLL_EDGE_PX);
+  if (speed === 0) return;
+  const before = drag.scrollEl.scrollTop;
+  drag.scrollEl.scrollTop = before + Math.max(1, Math.round(Math.abs(speed) * DRAG_AUTOSCROLL_MAX_PX)) * Math.sign(speed);
+  if (drag.scrollEl.scrollTop === before) return; // at the end of the Bay
+  // Redraw the insertion line against the new scroll position.
+  _onStripPointerMove({ clientX: drag.lastClientX, clientY: y });
+  _requestDragAutoscroll();
+}
+
+function _requestDragAutoscroll() {
+  if (_dragAutoscrollFrame || typeof requestAnimationFrame !== 'function') return;
+  _dragAutoscrollFrame = requestAnimationFrame(_dragAutoscrollStep);
+}
+
 function _onStripPointerMove(e) {
   if (!_efspDrag) return;
   _efspDrag.lastClientY = e.clientY;
+  _efspDrag.lastClientX = e.clientX;
   const dy = e.clientY - _efspDrag.startY;
 
   if (!_efspDrag.hasMoved) {
@@ -3100,6 +2395,7 @@ function _onStripPointerMove(e) {
 
   // transform-only movement (§7.2.4) — never top/left.
   _efspDrag.dragEl.style.transform = `translate3d(0, ${dy}px, 0)`;
+  _requestDragAutoscroll();
 
   const dropTargetEl = _findDropTargetAt(e.clientX, e.clientY);
   if (dropTargetEl !== _efspDrag.dropTargetEl) {
@@ -3147,6 +2443,8 @@ function _onStripPointerMove(e) {
 function _finishDrag(commit) {
   if (!_efspDrag) return;
   const { strip, rackEl, rects, dragEl, insertionEl, lastClientY, dropTargetEl, hasMoved, scrollEl, cacheScrollTop } = _efspDrag;
+  if (_dragAutoscrollFrame && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(_dragAutoscrollFrame);
+  _dragAutoscrollFrame = null;
   document.removeEventListener('pointermove', _onStripPointerMove);
   document.removeEventListener('pointerup', _onStripPointerUp);
   document.removeEventListener('pointercancel', _onStripPointerCancel);

@@ -21,7 +21,7 @@
  */
 
 const { test, expect } = require('@playwright/test');
-const { openPanel, seedStrip, stripByCallsign, expectOnTop } = require('./helpers/app');
+const { openPanel, seedStrip, stripByCallsign, expectOnTop, startAction, stripMenuItem } = require('./helpers/app');
 
 let seq = 0;
 const uniqueCallsign = (prefix) => `${prefix}${(Date.now() + seq++) % 10000}`;
@@ -61,21 +61,21 @@ const POPOVERS = {
   },
   MARSA: {
     facilityId: 'INCIRLIK', positionId: 'APP', bayId: 'app-inbound', selector: '.efsp-marsa-popover',
-    open: (strip) => strip.getByRole('button', { name: 'MARSA…' }).click({ timeout: 3000 }),
+    open: (strip) => startAction(strip, 'MARSA…', { timeout: 3000 }),
   },
   coordinate: {
     facilityId: 'INCIRLIK', positionId: 'APP', bayId: 'app-inbound', selector: '.efsp-coordinate-popover',
-    open: (strip) => strip.getByRole('button', { name: 'Coordinate…' }).click({ timeout: 3000 }),
+    open: (strip) => startAction(strip, 'Coordinate…', { timeout: 3000 }),
     act: (pop) => pop.getByRole('button', { name: 'Send' }),
   },
   airspace: {
     facilityId: 'INCIRLIK', positionId: 'APP', bayId: 'app-inbound', selector: '.efsp-coordinate-popover', inject: true,
-    open: (strip) => strip.getByRole('button', { name: 'Airspace…' }).click({ timeout: 3000 }),
+    open: (strip) => startAction(strip, 'Airspace…', { timeout: 3000 }),
     act: (pop) => pop.getByRole('button', { name: 'Approve entry' }),
   },
   TOFI: {
     facilityId: 'CENTER', positionId: 'CTR', bayId: 'ctr-enroute', selector: '.efsp-coordinate-popover',
-    open: (strip) => strip.getByRole('button', { name: 'TOFI…' }).click({ timeout: 3000 }),
+    open: (strip) => startAction(strip, 'TOFI…', { timeout: 3000 }),
     act: (pop) => pop.getByRole('button', { name: 'Send TOFI' }),
   },
   bind: {
@@ -91,8 +91,7 @@ const POPOVERS = {
         return r && r.state;
       }), { timeout: 10000 }).toBe('UNCORRELATED');
       await strip.click({ position: { x: 3, y: 3 } });
-      const button = strip.getByRole('button', { name: 'Bind…' });
-      await button.click({ timeout: 3000 });
+      await startAction(strip, 'Bind…');
     },
   },
 };
@@ -213,7 +212,7 @@ test('extends F-305: an uncorrelated flight shows NO TRK and Bind… on its own'
   }), { timeout: 10000 }).toBe('UNCORRELATED');
   // Nothing touches the Strip. The record says UNCORRELATED; the Strip must say so too.
   await expect(strip.locator('.efsp-correlation-badge'), 'NO TRK never drawn').toHaveText('NO TRK', { timeout: 3000 });
-  await expect(strip.getByRole('button', { name: 'Bind…' }), 'bind popover has no opener').toBeVisible();
+  await expect(await stripMenuItem(strip, 'Bind…'), 'bind popover has no opener').toBeEnabled();
 });
 
 // ── extends F-201 ────────────────────────────────────────────────────────

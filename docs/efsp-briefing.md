@@ -457,10 +457,11 @@ is the one exception — it owns the regime (`0051`).
   `bay-view.js` with a regex.** `0055` replaced the equivalent scrape of the compact-Block list with
   a vm-sandbox read and deliberately left this one; it breaks the same way the moment that constant's
   shape changes.
-- **The Strip's layout is unverified by eye** (`0051`, `0052`). The reachability tests render the
-  real `bay-view.js` against a DOM stub and prove the wiring, not the pixels. The Strip carries
-  seven badge/indicator slots plus two more Block chips now (`HOOK`, `ORDNANCE`), and nobody has
-  looked at one with all of them lit.
+- **The Strip was redesigned (`0056`)**: a tab for exchanges and the next step, per-Position fields
+  on a fixed grid, fixed indicator slots, and a ⋯ menu for everything a controller starts. New
+  controls go where `0056`'s zone rule puts them, not onto the Strip's face. It was checked by eye
+  in Playwright screenshots at full and narrow width; the all-lit worst cases from the mockup have
+  not been walked live with two controllers yet.
 
 ## 5. Where to start
 

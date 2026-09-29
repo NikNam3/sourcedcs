@@ -252,55 +252,6 @@
   min-height: 44px; /* §7.6 rule 4 — touch target floor */
 }
 
-/* ── One trailing row, not one row per badge (F-002, and lane 4's extension)
- *
- * .efsp-strip is a wrapping flex row and _buildStripEl appends into it in
- * three waves: the Block chips, then .efsp-strip-actions, then every
- * Strip-level badge and coordination control (airspace, TOFI, previous-leg,
- * shared-FDR, POINT_OUT, STAND BY, obligation, correlation, MARSA), then the
- * expanded view. Each of those badges carried `flex-basis: 100%` and so
- * claimed a whole line: one VOID TIME EXPIRED badge took a Strip from 140px
- * to 164px, and the MARSA button sat alone on a 15px line under the buttons,
- * aligned with nothing. Meanwhile the action row's entire left half was
- * empty, because its four buttons are right-aligned.
- *
- * So: one trailing row, badges on the left of it, actions on the right.
- *
- *   order 0   Block chips              as many rows as they need to wrap onto
- *   order 1   ::before                 a zero-height full-width flex item —
- *                                      the line break (see below)
- *   order 2   badges and coordination  left-aligned on the trailing row
- *   order 3   .efsp-strip-actions      right-aligned on that same row
- *   order 4   reason sentences         a full-width line each, under the row
- *   order 5   .efsp-strip-expanded     always last, always its own rows
- *
- * The break element replaces what `flex-basis: 100%` on .efsp-strip-actions
- * was actually there for, and that reason is unchanged: NLA is the primary
- * affordance, reached for without looking, so its position must not be a
- * function of how many chips happened to wrap. It still is not — the break
- * pins the trailing row regardless of chip count. What it no longer costs is
- * a line per badge.
- *
- * `order` here rather than reordering _buildStripEl: the DOM order is where
- * each badge's data becomes available, which is bay-view.js's business; which
- * row a thing lands on is this file's.
- *
- * Sequencing it in CSS also means anything appended to a Strip in future
- * lands on the trailing row by default (`.efsp-strip > *`) rather than
- * silently claiming a new one. */
-.efsp-strip > * { order: 2; }
-.efsp-strip::before {
-  content: '';
-  order: 1;
-  flex-basis: 100%;
-  height: 0;
-  /* The break opens a flex line of its own, and .efsp-strip's 6px row-gap is
-     charged on BOTH sides of it. -6px gives one of them back, so a Strip
-     carrying no badges at all is exactly the height it was before this
-     existed — this fix must not cost density (F-003/F-401) to buy tidiness. */
-  margin-top: -6px;
-}
-
 /* docs/adr/0024 — a small muted label stacked above each compact-view
    Block's value (chosen over inline "label: value" or hover-only after a
    preview comparison) so e.g. '0001' reads as SQUAWK without memorizing
@@ -308,7 +259,6 @@
    .efsp-strip's existing 44px touch-target floor above, no layout change
    needed there. */
 .efsp-block-chip {
-  order: 0; /* the chip rows, ahead of the trailing row — see .efsp-strip > * */
   display: inline-flex;
   flex-direction: column;
   align-items: flex-start;
@@ -551,103 +501,15 @@
   font: inherit;
 }
 
-/* The trailing controls sit at the right end of the trailing row rather than
-   floating to wherever the chips stop wrapping. `.efsp-nla-btn`'s old
-   `margin-left: auto` put the primary affordance on a different row from
-   Strip to Strip depending on callsign length and which optional Blocks were
-   populated — NLA is reached for without looking, so its position must not be
-   a function of chip count.
-
-   This used to be `flex-basis: 100%`, which claimed a whole line and pushed
-   every badge below it (F-002). The `::before` break above now pins the row,
-   and `margin-left: auto` pins these to its right end, so the badges get the
-   left half of a row that was empty anyway. */
-.efsp-strip-actions {
-  order: 3;
-  /* `margin-left: auto`, not `flex-grow`: the reason/note sentences below are
-     `flex: 1 1 0` and take the row's free space, and an auto margin yields to
-     them (auto margins absorb only what is left after flexing). Sharing the
-     free space with this box instead would halve the width a sentence has to
-     wrap into, for no gain — the sticky row's backdrop is painted by
-     .efsp-strip::before, not by this element. */
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-/* F-208's other half — the ▲ that collapses an expanded Strip lives in this
-   row, and an expanded DEPARTURE Strip is ~727px in a Bay viewport of ~269px,
-   so reading the last row leaves that ▲ 400-odd pixels above the top of the
-   Bay (measured at y=-169 before this). Sticking the trailing row to the top
-   of the Bay's scrollport keeps it reachable the whole way down. Escape and
-   .efsp-expanded-collapse are the other two ways out; this is the third, and
-   the one the spec measures.
- *
- * VERIFIED in Chromium rather than assumed: .efsp-strip carries
- * `contain: layout style`, which makes it a stacking context AND a containing
- * block, and it was genuinely not obvious that sticky would still resolve
- * against #efsp-bay-content through that. It does — computed `sticky`, and the
- * ▲ measures inside the Bay viewport after scrolling to the last row, and is
- * still clickable while held.
- *
- * The WHOLE trailing row sticks, not just .efsp-strip-actions. Sticking the
- * actions alone leaves the badges beside them to scroll away, and the ~85px
- * they occupied becomes a window with expanded rows sliding through it beside
- * a floating toolbar — which reads as a layout fault. The badges are also the
- * Strip's alert surface (VOID TIME EXPIRED and the like); holding them on
- * screen with the controls is the better answer anyway.
- *
- * Scoped to expanded Strips with `:has()`: an ordinary Strip has nothing to
- * scroll past, and a row that detached itself there would only be strange. */
-.efsp-strip:has(> .efsp-strip-expanded) > *:not(.efsp-block-chip):not(.efsp-strip-expanded) {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-}
-/* The row's own backdrop, so nothing shows between or beside its items: the
-   break element from F-002 above, which already spans the full width and
-   already sits exactly one line above the trailing row, grows to the row's
-   height and takes an equal negative bottom margin — so it paints a full-width
-   opaque slab over that row's first 44px and costs the layout nothing (its
-   flex line's cross size is 44 - 6 - 44 = -6px, the same -6px it contributes
-   when it is 0px tall). z-index 1, under the row's items at 2 and over the
-   expanded rows at auto. */
-.efsp-strip:has(> .efsp-strip-expanded)::before {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  height: 44px;
-  margin-bottom: -44px;
-  background: #1c2228;
-}
-/* The items themselves still have to be opaque where they overlap each other's
-   neighbours; only the ones transparent by design are named, so the buttons
-   with fills of their own keep them. */
-.efsp-strip:has(> .efsp-strip-expanded) > .efsp-strip-actions,
-.efsp-strip:has(> .efsp-strip-expanded) > .efsp-coordination-badge,
-.efsp-strip:has(> .efsp-strip-expanded) > .efsp-coordination-badges,
-.efsp-strip:has(> .efsp-strip-expanded) > .efsp-obligation-badge,
-.efsp-strip:has(> .efsp-strip-expanded) > .efsp-correlation-badge,
-.efsp-strip:has(> .efsp-strip-expanded) > .efsp-correlation-btn,
-.efsp-strip:has(> .efsp-strip-expanded) > .efsp-marsa-badge,
-.efsp-strip:has(> .efsp-strip-expanded) > .efsp-marsa-btn,
-.efsp-strip:has(> .efsp-strip-expanded) > .efsp-nla-inhibit-reason,
-.efsp-strip:has(> .efsp-strip-expanded) > .efsp-coordination-blocked-reason,
-.efsp-strip:has(> .efsp-strip-expanded) > .efsp-marsa-void-reason,
-.efsp-strip:has(> .efsp-strip-expanded) > .efsp-coordination-note {
-  background-color: #1c2228;
-}
-
-/* ── Reasons and notes: sentences on the trailing row ─────────────────────
+/* ── Reasons and notes ─────────────────────────────────────────────────────
  *
  * What the server said, rendered rather than left in a hover `title` (F-307's
  * point: a tooltip on a disabled control has no touch equivalent) — the NLA
  * inhibit reason, the TOFI-exit precondition, §9.2 rule 2's void alert, and
  * the proposer's verbal-coordination note.
  *
- * Each sentence is a full-width line of its own, UNDER the trailing row
- * (`order: 4`, basis 100%). It used to share the row: `flex: 1 1 0` with
+ * Each sentence is a full-width line of its own in the Strip's main column
+ * (Layout C, below). It used to share the badges' row: `flex: 1 1 0` with
  * `min-width: 0` and `overflow-wrap: anywhere`, so it took whatever the badges
  * and buttons left over. On a crowded row that was a few pixels, and
  * `anywhere` let the text break between every letter — a column one character
@@ -666,10 +528,7 @@
 .efsp-coordination-blocked-reason,
 .efsp-marsa-void-reason,
 .efsp-coordination-note {
-  order: 4;
-  flex: 1 0 100%;
   max-width: 80ch;
-  align-self: center;
   font-size: 10px;
   line-height: 1.3;
   letter-spacing: 0.02em;
@@ -700,7 +559,6 @@
 .efsp-expand-btn:hover { color: #d8e0e6; border-color: #7a8690; }
 
 .efsp-strip-expanded {
-  order: 5; /* always last, whatever else is on the Strip */
   flex-basis: 100%;
   display: flex;
   flex-direction: column;
@@ -1456,3 +1314,305 @@
     }
     .efsp-coordinate-submit:hover:not(:disabled) { border-color: var(--ui-text-bright); color: var(--ui-text-bright); }
     .efsp-coordinate-submit:disabled { opacity: 0.4; cursor: default; }
+
+/* ══ Layout C — the Strip (docs/adr/0056) ═══════════════════════════════════
+ *
+ *   tab (next step + exchanges) | fields + indicators + reasons | tools ⋯ ▼ ✕
+ *
+ * Declared last, and one class deeper than the rules it replaces
+ * (`.efsp-strip .efsp-…`), so it wins over the per-badge and per-button colours
+ * above without editing each one: those classes stay on the elements because
+ * tests and a few other surfaces select on them, but their look is decided here.
+ *
+ * Tokens are on :root, not #efsp-panel: popovers and the ⋯ menu are portalled
+ * to <body> (F-001) and have to read them too. The panel stays dark in both
+ * themes, deliberately, and no longer borrows base.css's green --ui-* ramp.
+ *
+ * Colour carries meaning or nothing. Everything is grey; amber is "waiting on
+ * you / blocked", orange-red is "something failed" (kept apart from #ff5c5c,
+ * which §7.7 rule 4 reserves for Attention); one blue for the one filled
+ * button a Strip may show. */
+:root {
+  --efsp-strip: #1c2228;
+  --efsp-strip-2: #232a32;
+  --efsp-tab: #20272e;
+  --efsp-line: #2e3740;
+  --efsp-line-2: #4a5560;
+  --efsp-text: #d8e0e6;
+  --efsp-muted: #8c9aa6;   /* 5.57:1 on --efsp-strip */
+  --efsp-faint: #56616c;   /* off / disabled only */
+  --efsp-attn: #e0a83c;
+  --efsp-attn-text: #ffe0a8;
+  --efsp-bad: #ff8a4c;
+  --efsp-bad-text: #ffd2bd;
+  --efsp-go: #4a7dbf;
+  --efsp-danger: #ff5c5c;
+  --efsp-tap: 44px;        /* F-105 */
+}
+
+.efsp-strip.efsp-strip-c {
+  display: block;
+  padding: 0;
+  /* The size container for the narrow layout below. The Strip already carries
+     `contain: layout style`, so this adds no new containing block for the drag
+     ghost (F-403/F-404) — which is why it is here and not on the Rack. */
+  container: efsp-strip / inline-size;
+}
+.efsp-strip-grid {
+  display: grid;
+  grid-template-columns: clamp(176px, 24%, 220px) minmax(0, 1fr) auto;
+}
+.efsp-strip-inert {
+  opacity: 0.72;
+  background: repeating-linear-gradient(135deg, var(--efsp-strip) 0 10px, #1a1f24 10px 20px);
+}
+.efsp-strip-needs { border-top-color: var(--efsp-attn); border-right-color: var(--efsp-attn); border-bottom-color: var(--efsp-attn); }
+
+/* ── The tab ── */
+.efsp-strip-tab {
+  background: var(--efsp-tab);
+  border-right: 1px solid var(--efsp-line);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.efsp-strip-tab-role {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--efsp-muted);
+}
+.efsp-x {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px solid var(--efsp-line);
+  padding-top: 6px;
+}
+.efsp-x-in { border-top-color: var(--efsp-attn); }
+.efsp-x-what { font-size: 11px; font-weight: bold; line-height: 1.25; overflow-wrap: break-word; }
+.efsp-x-meta { font-size: 11px; line-height: 1.25; color: var(--efsp-muted); overflow-wrap: break-word; }
+.efsp-x-meta-attn { color: var(--efsp-attn-text); }
+.efsp-strip .efsp-coordination-badges { display: flex; gap: 6px; font-size: 10px; color: var(--efsp-muted); }
+.efsp-strip .efsp-coordination-badge-data,
+.efsp-strip .efsp-coordination-badge-sep,
+.efsp-strip .efsp-coordination-badge-standby { all: unset; font-size: inherit; color: inherit; }
+.efsp-strip .efsp-coordination-badge-standby { color: var(--efsp-attn-text); }
+.efsp-strip .efsp-x .efsp-coordination-note { font-size: 11px; line-height: 1.3; }
+/* Buttons wrap onto their own line rather than shrink (Void + Rendezvous in a
+   176px tab). Never narrower than --efsp-tap. */
+.efsp-x-buttons { display: flex; flex-wrap: wrap; gap: 4px; }
+.efsp-x-buttons .efsp-sbtn { flex: 1 1 auto; }
+.efsp-x-regime {
+  display: grid;
+  gap: 2px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--efsp-muted);
+}
+.efsp-strip .efsp-tofi-regime-select {
+  min-height: 32px;
+  background: #0e1114;
+  color: var(--efsp-text);
+  border: 1px solid var(--efsp-line-2);
+  font: inherit;
+  font-size: 12px;
+}
+.efsp-strip-life { margin-top: auto; display: grid; }
+
+/* ── Main: fields, indicators, reasons, expanded view ── */
+.efsp-strip-main {
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+/* A fixed grid, so a field sits in the same place on every Strip in a Bay and
+   a column can be read down like the boxes on a paper strip. */
+.efsp-strip-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(66px, 1fr));
+  gap: 3px 10px;
+}
+.efsp-strip .efsp-field { display: flex; flex-direction: column; min-width: 0; align-self: stretch; }
+.efsp-field-w2 { grid-column: span 2; }
+.efsp-field-w3 { grid-column: span 3; }
+.efsp-strip .efsp-block-label {
+  display: flex;
+  gap: 5px;
+  align-items: baseline;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--efsp-muted);
+}
+.efsp-strip .efsp-field .efsp-block { overflow: hidden; text-overflow: ellipsis; }
+.efsp-strip .efsp-block-label .efsp-annotation-history { display: inline-flex; gap: 4px; align-items: baseline; }
+.efsp-strip .efsp-block-label .efsp-annotation-entry {
+  font-size: 10px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--efsp-faint);
+  text-decoration: line-through;
+  text-decoration-color: var(--efsp-muted);
+}
+.efsp-strip .efsp-block-label .efsp-annotation-overflow {
+  all: unset;
+  font-size: 10px;
+  color: var(--efsp-muted);
+  cursor: pointer;
+}
+.efsp-strip .efsp-block-label .efsp-annotation-overflow:hover { color: var(--efsp-text); }
+
+/* Indicators: fixed slots, always drawn, never interactive (a 22px chip cannot
+   also be a 44px target without its hit area landing on the fields above). */
+.efsp-strip-slots { display: flex; flex-wrap: wrap; gap: 4px; }
+.efsp-strip .efsp-ind {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 2px;
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  color: var(--efsp-text);
+  background: var(--efsp-strip-2);
+  border: 1px solid var(--efsp-line-2);
+}
+.efsp-strip .efsp-ind.efsp-ind-off { color: var(--efsp-faint); background: transparent; border-color: var(--efsp-line); font-weight: normal; }
+.efsp-strip .efsp-ind.efsp-ind-attn { color: var(--efsp-attn-text); border-color: var(--efsp-attn); background: rgba(224, 168, 60, 0.14); }
+.efsp-strip .efsp-ind.efsp-ind-bad { color: var(--efsp-bad-text); border-color: var(--efsp-bad); background: rgba(255, 138, 76, 0.14); }
+
+.efsp-strip .efsp-strip-reason {
+  font-size: 11px;
+  line-height: 1.35;
+  max-width: 80ch;
+  color: var(--efsp-attn-text);
+  font-style: normal;
+  font-weight: normal;
+  overflow-wrap: break-word;
+}
+.efsp-strip .efsp-strip-reason::before { content: '▲ '; font-size: 9px; color: var(--efsp-attn); }
+.efsp-strip .efsp-strip-reason-bad { color: var(--efsp-bad-text); }
+.efsp-strip .efsp-strip-reason-bad::before { color: var(--efsp-bad); }
+
+/* ── Tools ── */
+.efsp-strip-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border-left: 1px solid var(--efsp-line);
+  /* F-208: an expanded Strip is taller than the Bay; the ▲ stays on screen. */
+  position: sticky;
+  top: 0;
+  align-self: start;
+}
+
+/* ── One button style ── */
+.efsp-strip .efsp-sbtn {
+  min-width: var(--efsp-tap);
+  min-height: var(--efsp-tap);
+  margin: 0;
+  padding: 0 10px;
+  border-radius: 3px;
+  background: var(--efsp-strip-2);
+  border: 1px solid var(--efsp-line-2);
+  color: var(--efsp-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.efsp-strip .efsp-sbtn:hover { border-color: #7a8690; }
+.efsp-strip .efsp-sbtn:focus-visible { outline: 2px solid var(--efsp-go); outline-offset: 1px; }
+.efsp-strip .efsp-sbtn.efsp-sbtn-go { background: var(--efsp-go); border-color: var(--efsp-go); color: #fff; }
+.efsp-strip .efsp-sbtn:disabled,
+.efsp-strip .efsp-sbtn.efsp-nla-btn-denied {
+  background: transparent;
+  border: 1px dashed var(--efsp-line-2);
+  color: var(--efsp-faint);
+  cursor: not-allowed;
+}
+.efsp-strip .efsp-sbtn-icon { padding: 0; font-weight: normal; font-size: 16px; color: var(--efsp-muted); }
+.efsp-strip-tools .efsp-expand-btn,
+.efsp-strip-tools .efsp-drop-btn { border-radius: 3px; }
+
+/* ── The ⋯ menu (portalled to <body>, so not under .efsp-strip) ── */
+.efsp-strip-menu {
+  min-width: 210px;
+  max-width: 280px;
+  background: var(--efsp-strip-2);
+  border: 1px solid var(--efsp-line-2);
+  border-radius: 3px;
+  padding: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+  display: grid;
+  font-family: inherit;
+  color: var(--efsp-text);
+}
+.efsp-strip-menu-group {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--efsp-faint);
+  padding: 6px 10px 2px;
+}
+.efsp-strip-menu .efsp-strip-menu-item {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--efsp-tap);
+  padding: 0 10px;
+  border-radius: 2px;
+  font-size: 13px;
+  color: var(--efsp-text);
+  cursor: pointer;
+}
+.efsp-strip-menu .efsp-strip-menu-item:hover,
+.efsp-strip-menu .efsp-strip-menu-item:focus-visible { background: var(--efsp-line); }
+.efsp-strip-menu .efsp-strip-menu-item:disabled { color: var(--efsp-faint); cursor: not-allowed; }
+.efsp-strip-menu .efsp-strip-menu-item:disabled:hover { background: none; }
+.efsp-strip-menu-reason { font-size: 11px; color: var(--efsp-faint); text-align: right; }
+.efsp-strip-menu .efsp-confirm-needed { color: var(--efsp-attn-text); }
+
+/* ── Narrow Bays: the tab becomes a band across the top ── */
+@container efsp-strip (max-width: 479px) {
+  .efsp-strip-grid { grid-template-columns: minmax(0, 1fr) auto; }
+  .efsp-strip-tab {
+    grid-column: 1;
+    grid-row: 1;
+    border-right: 0;
+    border-bottom: 1px solid var(--efsp-line);
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    align-items: start;
+  }
+  .efsp-strip-tab-role { grid-column: 1 / -1; }
+  .efsp-strip-life { margin-top: 0; }
+  .efsp-strip-tools {
+    grid-column: 2;
+    grid-row: 1;
+    flex-direction: row;
+    border-left: 0;
+    border-bottom: 1px solid var(--efsp-line);
+    background: var(--efsp-tab);
+  }
+  .efsp-strip-main { grid-column: 1 / -1; grid-row: 2; }
+  .efsp-field-w3 { grid-column: span 2; }
+}
+
+/* Below 320px nothing squeezes further; the Bay scrolls sideways instead. */
+.efsp-rack { min-width: 320px; }
+#efsp-bay-content { overflow-x: auto; }

@@ -70,7 +70,7 @@ function mountPanel({ held = ['OPS'], stereoRoutes = ROUTES, lookupSpy = null, l
 
   for (const file of ['efsp-nla.js', 'strip-template.js', 'efsp-state.js', 'dot-command.js',
     'efsp-gestures.js', 'annotation-editor.js', 'strip-drag.js', 'correlation-highlight.js',
-    'bay-view.js', 'efsp-stereo-routes.js', 'efsp-panel.js']) {
+    'strip-fields.js', 'bay-view.js', 'strip-view.js', 'efsp-stereo-routes.js', 'efsp-panel.js']) {
     vm.runInContext(fs.readFileSync(path.join(CLIENT, file), 'utf8'), sandbox, { filename: file });
   }
 

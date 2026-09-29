@@ -260,20 +260,37 @@ resolution) → `fdr-store.js`'s `createFdr()` (the expansion, server-side) →
 
 ## 4B. Reading and amending Blocks
 
-### The chips, and the `▼` button
+### Reading a Strip (docs/adr/0056)
 
-A Strip shows the Blocks a controller edits on most Strips of that Role. Everything
-else is behind the **`▼`** button in the Strip's control row — and *only* the rest:
-the panel never repeats a Block that already has a chip, so it is the short list of
-what you cannot otherwise see. One Strip is expanded at a time, in Block Map order,
-which is the order of the paper strip.
+A Strip has three columns:
 
-(The one thing it does repeat is a Block whose history is too long for its chip —
-that is what the `*` opens.)
+- **The tab, on the left.** Its header says the Role and state (`DEP · HANDED OFF`). Under it is
+  one row for every exchange in progress — a handoff or other coordination, a TOFI, a MARSA
+  relation waiting for rendezvous, an ambiguous track — each with its own buttons and a line
+  saying how long it has waited or why it is blocked. At the bottom is the **next step** (the
+  NLA). A Strip with something waiting on *you* has an amber edge.
+- **The fields, in the middle**, then a row of **indicators** (`TRK`, `MARSA`, `TOFI`,
+  `AIRSPACE`, `TIMER`, `+N`). The indicators are always drawn and dim when off, so each is in the
+  same place on every Strip. Colour means something: amber is waiting on you or blocked, orange-red
+  is something failed; everything else is grey. Any reason the Strip owes you (why the next step
+  is refused, why a TOFI exit is blocked, a MARSA void) is a full line under them.
+- **⋯ ▼ ✕ on the right.** **⋯** holds everything you *start*: Coordinate…, TOFI…, Airspace…,
+  MARSA…, Bind…, Convert to Arrival, Offset. Something you cannot do right now is still listed,
+  greyed, with the reason. **▼** opens the rest of the Blocks. **✕** drops the Strip.
 
-Blocks that are chips now and were not before: **`HDG` (20)** and **`INIT ALT` (21)**
-on DEPARTURE, **`VECTOR`** on ARRIVAL and OVERFLIGHT, **`ASGN ALT` (7A)** on
-OVERFLIGHT. Those are the ones issued with nearly every clearance.
+### The fields, and the `▼` button
+
+Each Position sees the fields it works, not all of them: Tower sees HOOK and ORDNANCE, APP and CTR
+see FREQ, CTR sees the TOFI fields, the airfield Positions see the runway. TYPE already carries the
+aircraft and wake, so they have no fields of their own; CID and TAIL are on no Strip. The full
+table is in `docs/adr/0056`.
+
+Everything else is behind **`▼`** — and *only* the rest: the panel never repeats a Block that is
+already a field, so it is the short list of what you cannot otherwise see. One Strip is expanded
+at a time, in Block Map order, which is the order of the paper strip.
+
+(The one thing it does repeat is a Block whose history is too long for its field — that is what
+the `+N` opens.)
 
 ⚠️ **`INIT ALT` and `VECTOR` are the Blocks §9.2's MARSA interlock watches.** Writing
 one on a flight in an active MARSA relation, before rendezvous, voids the relation.
@@ -286,8 +303,9 @@ Amending an annotation Block does not overwrite it. The prior value stays in the
 Block, **struck through**, until the Strip is dropped — FAA JO 7110.65 ¶2-3-1's *"do
 not erase or overwrite any item."*
 
-- Up to **two** prior values show on the chip. Beyond that a **`*`** appears; click it
-  for the full chain in the expanded view.
+- The value in force keeps the field. The value it replaced shows small and struck beside the
+  field's label, and **`+N`** counts any older ones; click it for the full chain in the expanded
+  view.
 - A Block written once shows no history at all.
 - **`⌿` strikes a vacated altitude.** It marks the current value struck rather than
   removing it, and it is the controller's call: an altitude must not be struck until

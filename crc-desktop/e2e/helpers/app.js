@@ -215,7 +215,29 @@ async function expectTouchTarget(locator, what) {
   ).toBeGreaterThanOrEqual(TOUCH_TARGET_FLOOR);
 }
 
+/**
+ * A Strip's ⋯ menu item. Layout C (docs/adr/0056) moved everything a
+ * controller STARTS — Coordinate…, TOFI…, Airspace…, MARSA…, Bind…, Convert,
+ * Offset — off the Strip's face into that menu, which is portalled to <body>
+ * like every popover (F-001), so the item is NOT inside `strip`.
+ */
+async function stripMenuItem(strip, name) {
+  const page = strip.page();
+  const menu = page.locator('.efsp-strip-menu');
+  if (!(await menu.isVisible().catch(() => false))) {
+    await strip.locator('.efsp-strip-menu-btn').click({ timeout: 3000 });
+  }
+  return menu.getByRole('menuitem', { name, exact: true });
+}
+
+/** Presses a Strip's ⋯ menu item — the replacement for clicking the old on-Strip button. */
+async function startAction(strip, name, opts = {}) {
+  const item = await stripMenuItem(strip, name);
+  await item.click({ timeout: 3000, ...opts });
+}
+
 module.exports = {
   fakeToken, openPanel, openEfspPanel, seedStrip, stripByCallsign,
   expectDoesSomething, expectRefusalIsVisible, expectOnTop, expectTouchTarget,
+  stripMenuItem, startAction,
 };

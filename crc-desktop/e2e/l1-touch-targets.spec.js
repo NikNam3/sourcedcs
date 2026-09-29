@@ -10,10 +10,13 @@
  */
 
 const { test } = require('@playwright/test');
-const { openPanel, seedStrip, expectTouchTarget } = require('./helpers/app');
+const { openPanel, seedStrip, expectTouchTarget, stripMenuItem } = require('./helpers/app');
 
-test('the MARSA… button meets the touch-target floor', async ({ page }) => {
+// Layout C (docs/adr/0056): MARSA… is a ⋯ menu item now, so both the opener
+// and the item it leads to have to meet the floor.
+test('the ⋯ menu and its MARSA… item meet the touch-target floor', async ({ page }) => {
   await openPanel(page, { held: ['OPS'] });
   const strip = await seedStrip(page, { callsign: 'VIPER11', role: 'DEPARTURE' });
-  await expectTouchTarget(strip.getByRole('button', { name: 'MARSA…' }), 'MARSA…');
+  await expectTouchTarget(strip.locator('.efsp-strip-menu-btn'), '⋯');
+  await expectTouchTarget(await stripMenuItem(strip, 'MARSA…'), 'MARSA… (⋯ menu item)');
 });

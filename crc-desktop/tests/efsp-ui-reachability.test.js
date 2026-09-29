@@ -42,8 +42,17 @@ const { BLOCK_MAPS, isBlockEditable, enumSelectOptionsFor, isBooleanToggleBlock 
 // be excused by assertion.
 
 /** The compact Block list bay-view.js actually renders, read from the module rather than scraped out of its source. */
-function compactBlocksFor(role) {
-  return clientSandbox().compactBlocksFor(role);
+function compactBlocksFor(role, positionId) {
+  return clientSandbox().compactBlocksFor(role, positionId);
+}
+
+// Every (Role, owning Position) pair the field lists distinguish, plus one
+// Position no list names, so the per-Role fallback is held to the same rule.
+// strip-fields.js is a plain module; reading it directly is the source of truth.
+const { COMPACT_BLOCKS_BY_POSITION } = require('../app/public/js/panels/efsp/strip-fields.js');
+function positionsFor(role) {
+  if (role === 'MISSION') return ['TAC_C2'];
+  return [...Object.keys(COMPACT_BLOCKS_BY_POSITION[role] || {}), 'NOLIST'];
 }
 
 /**
@@ -56,9 +65,9 @@ function compactBlocksFor(role) {
  * reads. Clicking the button is both the only thing that works and the more
  * honest test: it exercises the path a controller takes.
  */
-function expandedBlocksFor(role) {
-  const strip = stripAt({ role, state: role === 'MISSION' ? 'TASKED' : 'PROPOSED', ownerPositionId: 'OPS' });
-  const r = renderStrip({ strip, fdr: FDR, held: ['OPS'] });
+function expandedBlocksFor(role, positionId = 'OPS') {
+  const strip = stripAt({ role, state: role === 'MISSION' ? 'TASKED' : 'PROPOSED', ownerPositionId: positionId });
+  const r = renderStrip({ strip, fdr: FDR, held: [positionId] });
   // The toggle re-renders every open Bay, which needs a real DOM; the state
   // it sets is what matters, so the rebuild is stubbed and done by hand below.
   r.sandbox.renderAllOpenEfspBays = () => {};
@@ -69,16 +78,20 @@ function expandedBlocksFor(role) {
   return descendants(expandedEl).filter(c => c.dataset && c.dataset.expandedBlock).map(c => c.dataset.expandedBlock);
 }
 
+// Per (Role, Position) now that the field lists are per Position: trimming a
+// Position's fields is only legal because the expanded view picks up the rest.
 for (const role of Object.keys(BLOCK_MAPS)) {
   test(`every writable ${role} Block is somewhere a controller can reach`, () => {
-    const compact = compactBlocksFor(role);
-    const expanded = expandedBlocksFor(role);
-    const unreachable = Object.keys(BLOCK_MAPS[role]).filter((blockId) => {
-      const writable = isBlockEditable(blockId, role) || enumSelectOptionsFor(blockId) || isBooleanToggleBlock(blockId);
-      if (!writable) return false;
-      return !compact.includes(blockId) && !expanded.includes(blockId);
-    });
-    assert.deepEqual(unreachable, [], `${role}: writable but nowhere a controller can reach`);
+    for (const positionId of positionsFor(role)) {
+      const compact = compactBlocksFor(role, positionId);
+      const expanded = expandedBlocksFor(role, positionId);
+      const unreachable = Object.keys(BLOCK_MAPS[role]).filter((blockId) => {
+        const writable = isBlockEditable(blockId, role) || enumSelectOptionsFor(blockId) || isBooleanToggleBlock(blockId);
+        if (!writable) return false;
+        return !compact.includes(blockId) && !expanded.includes(blockId);
+      });
+      assert.deepEqual(unreachable, [], `${role} at ${positionId}: writable but nowhere a controller can reach`);
+    }
   });
 }
 
@@ -92,11 +105,13 @@ test('the expanded view shows what the chips do NOT, in Block Map order', () => 
   // own §6.2/§6.3 tables, so it is learnable and stable rather than derived
   // from a property that changes as the Strip is worked.
   for (const role of Object.keys(BLOCK_MAPS)) {
-    const compact = compactBlocksFor(role);
-    const expanded = expandedBlocksFor(role);
-    const expected = Object.keys(BLOCK_MAPS[role]).filter(id => !compact.includes(id));
-    assert.deepEqual(expanded, expected, role);
-    assert.equal(expanded.some(id => compact.includes(id)), false, `${role}: duplicates a chip`);
+    for (const positionId of positionsFor(role)) {
+      const compact = compactBlocksFor(role, positionId);
+      const expanded = expandedBlocksFor(role, positionId);
+      const expected = Object.keys(BLOCK_MAPS[role]).filter(id => !compact.includes(id));
+      assert.deepEqual(expanded, expected, `${role} at ${positionId}`);
+      assert.equal(expanded.some(id => compact.includes(id)), false, `${role} at ${positionId}: duplicates a field`);
+    }
   }
 });
 
@@ -110,14 +125,16 @@ test('a chip whose history is truncated stays in the expanded view, so the * has
     state: 'PROPOSED', ownerPositionId: 'OPS',
     annotations: { 21: { blockId: '21', entries: [...many, { value: '6000', status: 'ACTIVE', at: 2, by: 'c-OPS' }] } },
   });
-  assert.ok(compactBlocksFor('DEPARTURE').includes('21'), 'precondition: 21 is a chip');
+  assert.ok(compactBlocksFor('DEPARTURE', 'OPS').includes('21') === false, 'precondition: OPS has no INIT ALT field');
+  assert.ok(compactBlocksFor('DEPARTURE', 'CD').includes('21'), 'precondition: CD does');
+  strip.ownerPositionId = 'CD';
 
-  const r = renderStrip({ strip, fdr: FDR, held: ['OPS'] });
+  const r = renderStrip({ strip, fdr: FDR, held: ['CD'] });
   r.sandbox.renderAllOpenEfspBays = () => {};
   click(descendants(r.el).find(c => (c.className || '').includes('efsp-expand-btn')));
   const expandedEl = r.sandbox._buildStripEl(strip);
   const ids = descendants(expandedEl).filter(c => c.dataset && c.dataset.expandedBlock).map(c => c.dataset.expandedBlock);
-  assert.ok(ids.includes('21'), 'a truncated chip must still be reachable in full');
+  assert.ok(ids.includes('21'), 'a truncated field must still be reachable in full');
 });
 
 test('an expansion toggle makes the reconciler rebuild the Strip', () => {
@@ -201,12 +218,17 @@ test('the clearance Blocks a controller edits on most Strips are chips, per Role
   assert.equal(compactBlocksFor('OVERFLIGHT').includes('20'), false);
 });
 
-test('the Blocks the release and airspace sorties depend on are all on the Strip', () => {
-  const compact = compactBlocksFor('DEPARTURE');
+test('the Blocks the release and airspace sorties depend on are on the Strips of the Positions that work them', () => {
   // Each of these gates a scenario: the release state and void time drive
-  // §3.8's holds, and 22 is the frequency a flight is approved onto.
-  for (const blockId of ['14A', '14D', '22', '24A', 'SREG', 'IFR', '5A']) {
-    assert.ok(compact.includes(blockId), `Block ${blockId} is not rendered on a Strip`);
+  // §3.8's holds at the airfield, and 22 is the frequency a flight is approved
+  // onto by APP or CTR, who also own the TOFI fields.
+  const want = {
+    CD: ['14A', '14D'], GND: ['14A', '14D'],
+    APP: ['22', 'SREG', '5A'], CTR: ['22', '24A', 'SREG', 'IFR', 'RSVC', '5A'],
+  };
+  for (const [positionId, blocks] of Object.entries(want)) {
+    const compact = compactBlocksFor('DEPARTURE', positionId);
+    for (const blockId of blocks) assert.ok(compact.includes(blockId), `Block ${blockId} is not on ${positionId}'s Strip`);
   }
 });
 
@@ -311,6 +333,23 @@ function click(el) {
 }
 
 /**
+ * The ⋯ menu item reading `text`, opening the menu first if it is not open.
+ * Layout C (docs/adr/0056) moved everything a controller STARTS — Coordinate,
+ * TOFI, Airspace, MARSA, Bind, Convert, Offset — off the Strip's face and into
+ * that menu, which is portalled like every popover. Undefined when the Strip
+ * has no menu at all, or the menu has no such item.
+ */
+function menuItem(el, text) {
+  const isItem = (c) => c.textContent === text && (c.className || '').includes('efsp-strip-menu-item');
+  const open = visible(el).find(isItem);
+  if (open) return open;
+  const more = descendants(el).find(c => (c.className || '').includes('efsp-strip-menu-btn'));
+  if (!more) return undefined;
+  click(more);
+  return visible(el).find(isItem);
+}
+
+/**
  * Loads the real client modules into one sandbox and renders a Strip,
  * capturing whatever it would have sent. Returns the rendered element and the
  * captured dispatches.
@@ -350,7 +389,7 @@ function renderStrip({ strip, fdr, held, airspaces = [], correlations = [], trac
   vm.createContext(sandbox);
 
   for (const file of ['efsp-nla.js', 'strip-template.js', 'efsp-state.js', 'efsp-gestures.js',
-    'annotation-editor.js', 'strip-drag.js', 'correlation-highlight.js', 'marsa-badge.js', 'bay-view.js']) {
+    'annotation-editor.js', 'strip-drag.js', 'correlation-highlight.js', 'marsa-badge.js', 'strip-fields.js', 'bay-view.js', 'strip-view.js']) {
     vm.runInContext(fs.readFileSync(path.join(CLIENT, file), 'utf8'), sandbox, { filename: file });
   }
 
@@ -438,7 +477,7 @@ test('a controller can advance a flight — the NLA button is there and sends In
 
 test('a controller can hand a flight to Center — the Coordinate button offers all five primitives', () => {
   const { el, sent } = renderStrip({ strip: stripAt(), fdr: FDR, held: ['APP'] });
-  click(findByText(el, 'Coordinate…'));
+  click(menuItem(el, 'Coordinate…'));
 
   const select = visible(el).find(c => c.tagName === 'select');
   assert.ok(select, 'the popover has no primitive picker');
@@ -483,7 +522,7 @@ test('the receiving controller can accept, reject or say stand by', () => {
 
 test('a controller can open tactical control, and the MRU side can accept it', () => {
   const ctr = renderStrip({ strip: stripAt({ ownerPositionId: 'CTR' }), fdr: FDR, held: ['CTR'] });
-  click(findByText(ctr.el, 'TOFI…'));
+  click(menuItem(ctr.el, 'TOFI…'));
   const picker = visible(ctr.el).find(c => c.tagName === 'select');
   assert.ok(picker, 'CTR has two counterparts, so it must offer a choice');
   assert.deepEqual(picker.children.map(o => JSON.parse(o.value).positionId), ['TAC_C2', 'GCI']);
@@ -550,7 +589,7 @@ test('a controller can put a flight into an airspace, and take it out again', ()
   }];
   const { el, sent } = renderStrip({ strip: stripAt({ ownerPositionId: 'CTR' }), fdr: FDR, held: ['CTR'], airspaces });
 
-  click(findByText(el, 'Airspace…'));
+  click(menuItem(el, 'Airspace…'));
   const picker = visible(el).find(c => c.tagName === 'select');
   assert.match(picker.children[0].textContent, /East MOA — ACTIVE/, 'the state is visible before committing');
   click(findByText(el, 'Approve entry'));
@@ -560,7 +599,7 @@ test('a controller can put a flight into an airspace, and take it out again', ()
   const inside = stripAt({ ownerPositionId: 'CTR', airspaceEntry: { airspaceId: 'MOA-EAST', frequencyMhz: 134.25, altitudeBlock: null } });
   const out = renderStrip({ strip: inside, fdr: FDR, held: ['CTR'], airspaces });
   assert.ok(findByText(out.el, 'East MOA 134.250'), 'the Strip names where the flight is working');
-  click(findByText(out.el, 'Leave airspace'));
+  click(menuItem(out.el, 'Leave airspace'));
   assert.equal(out.sent[0].op.kind, 'ClearAirspaceEntry');
 });
 
@@ -673,7 +712,8 @@ test('TOFI is not offered from a handoff replica that has not been answered yet'
   });
   const { el } = renderStrip({ strip: pending, fdr: FDR, held: ['CTR'] });
   assert.ok(findByText(el, 'Accept Hand Off') || findByText(el, 'Accept HANDOFF') || findByText(el, 'Reject'), 'the answer buttons render');
-  assert.equal(findByText(el, 'TOFI…'), undefined, 'APP still works this flight until CTR accepts');
+  const tofi = menuItem(el, 'TOFI…');
+  assert.ok(!tofi || tofi.disabled, 'APP still works this flight until CTR accepts');
 });
 
 // ── The TOFI regime picker keeps what the controller chose ────────────────
@@ -724,7 +764,7 @@ test('Convert to Arrival is only offered to the Positions the server lets conver
   // TWR holds a Position, which was all the old gate asked for. The server
   // refuses TWR's press (no ConvertToArrival, no ARRIVAL creation).
   const { el } = renderStrip({ strip: stripAt({ ownerPositionId: 'APP' }), fdr: FDR, held: ['TWR'] });
-  assert.equal(findByText(el, 'Convert to Arrival →'), undefined);
+  assert.equal(menuItem(el, 'Convert to Arrival →'), undefined);
 });
 
 test('an arrival or overflight Strip draws no chip for a Block its Role does not have', () => {
@@ -739,7 +779,7 @@ test('an arrival or overflight Strip draws no chip for a Block its Role does not
 
 test('Convert to Arrival is offered for the return leg, and refused mid-exchange', () => {
   const ready = renderStrip({ strip: stripAt({ ownerPositionId: 'CTR' }), fdr: FDR, held: ['CTR'] });
-  click(findByText(ready.el, 'Convert to Arrival →'));
+  click(menuItem(ready.el, 'Convert to Arrival →'));
   assert.equal(ready.sent[0].op.kind, 'ConvertToArrival');
 
   const midExchange = stripAt({
@@ -747,12 +787,12 @@ test('Convert to Arrival is offered for the return leg, and refused mid-exchange
     tofiCoordination: { direction: 'ENTRY', state: 'ACTIVE', peerFacilityId: 'TACTICAL', peerPositionId: 'TAC_C2' },
   });
   const blocked = renderStrip({ strip: midExchange, fdr: FDR, held: ['CTR'] });
-  assert.equal(findByText(blocked.el, 'Convert to Arrival →').disabled, true);
+  assert.equal(menuItem(blocked.el, 'Convert to Arrival →').disabled, true);
 });
 
 test('Convert to Arrival asks twice when it would clear annotations, and once when it would not', () => {
   const clean = renderStrip({ strip: stripAt({ ownerPositionId: 'CTR' }), fdr: FDR, held: ['CTR'] });
-  click(findByText(clean.el, 'Convert to Arrival →'));
+  click(menuItem(clean.el, 'Convert to Arrival →'));
   assert.equal(clean.sent[0].op.kind, 'ConvertToArrival', 'nothing to lose, so no ceremony');
 
   const annotated = stripAt({
@@ -760,11 +800,11 @@ test('Convert to Arrival asks twice when it would clear annotations, and once wh
     annotations: { 24: { entries: [{ value: 'MIT 10', at: 1, by: 'APP' }] } },
   });
   const careful = renderStrip({ strip: annotated, fdr: FDR, held: ['CTR'] });
-  const btn = findByText(careful.el, 'Convert to Arrival →');
+  const btn = menuItem(careful.el, 'Convert to Arrival →');
   assert.match(btn.title, /archived and cleared/);
   click(btn);
   assert.deepEqual(careful.sent, [], 'the first press only warns');
-  click(findByText(careful.el, 'Convert — press again'));
+  click(menuItem(careful.el, 'Convert — press again'));
   assert.equal(careful.sent[0].op.kind, 'ConvertToArrival');
 });
 
@@ -938,9 +978,9 @@ test('an ambiguous correlation offers its candidates, and picking one binds it',
     tracks: [{ id: '101', callsign: 'SOMEONE', squawk: 41, category: 1 }, { id: '102', callsign: 'SOMEONEELSE', squawk: 41, category: 1 }],
   });
 
-  const badge = findByText(el, 'TRK ×2');
-  assert.ok(badge, 'the ambiguity must be visible');
-  click(badge);
+  assert.ok(findByText(el, 'TRK ×2'), 'the ambiguity must be visible');
+  // Layout C: the indicator is not a control; the tab carries the exchange.
+  click(findByText(el, 'Pick…'));
   const choice = findByText(el, 'SOMEONEELSE · 0041');
   assert.ok(choice, 'both candidates must be offered, with enough to tell them apart');
   click(choice);
@@ -956,7 +996,7 @@ test('an uncorrelated Strip offers Bind, and a bound one offers Unbind', () => {
     correlations: [correlationOf({ state: 'UNCORRELATED', trackId: null, matchedBy: null })],
     tracks: [{ id: '303', callsign: 'MYSTERY', category: 1 }],
   });
-  const bindBtn = findByText(uncorrelated.el, 'Bind…');
+  const bindBtn = menuItem(uncorrelated.el, 'Bind…');
   assert.ok(bindBtn, 'an aircraft the controller can see but nothing matches needs a way in');
   click(bindBtn);
   click(findByText(uncorrelated.el, 'MYSTERY'));
@@ -968,7 +1008,7 @@ test('an uncorrelated Strip offers Bind, and a bound one offers Unbind', () => {
     correlations: [correlationOf({ matchedBy: 'BINDING', binding: { trackId: '101', boundPositionId: 'APP' } })],
     tracks: [{ id: '101', callsign: 'VIPER1' }],
   });
-  click(findByText(bound.el, 'Unbind'));
+  click(menuItem(bound.el, 'Unbind'));
   assert.equal(bound.sent[0].op.kind, 'UnbindTrack');
 });
 
@@ -978,7 +1018,7 @@ test('a controller holding no Position can see the correlation but not change it
     correlations: [correlationOf({ state: 'UNCORRELATED', trackId: null, matchedBy: null })],
   });
   assert.ok(findByText(el, 'NO TRK'), 'still legible');
-  assert.equal(findByText(el, 'Bind…').disabled, true, 'but not actionable');
+  assert.equal(menuItem(el, 'Bind…').disabled, true, 'but not actionable');
 });
 
 
@@ -1024,14 +1064,14 @@ test('a VOIDED relation flags the whole Strip — rule 2 calls it an alert', () 
 
 test('a flight in no relation is offered the declaration', () => {
   const { el } = renderStrip({ strip: stripAt({}), fdr: FDR, held: ['APP'], otherStrips: [PEER_STRIP] });
-  assert.ok(findByText(el, 'MARSA…'), 'a controller can start a relation from a Strip that has never been in one');
+  assert.ok(menuItem(el, 'MARSA…'), 'a controller can start a relation from a Strip that has never been in one');
 });
 
 test('declaring MARSA sends DeclareMarsa with both flights and the declaring callsign', () => {
   const { el, sent } = renderStrip({
     strip: stripAt({}), fdr: FDR, held: ['APP'], otherStrips: [PEER_STRIP],
   });
-  click(findByText(el, 'MARSA…'));
+  click(menuItem(el, 'MARSA…'));
   click(findByText(el, 'Declare'));
   assert.equal(sent.length, 1);
   assert.equal(sent[0].op.kind, 'DeclareMarsa');
@@ -1046,10 +1086,14 @@ test('an armed relation offers the rendezvous, and marking it sends MarkRendezvo
     strip: stripAt({}), fdr: FDR, held: ['APP'],
     marsa: [marsaRelation()], otherStrips: [PEER_STRIP],
   });
-  click(findByText(el, 'MARSA ⚠'));
-  click(findByText(el, 'Mark rendezvous'));
+  // Straight from the Strip's tab: the armed relation is an exchange in progress.
+  click(findByText(el, 'Rendezvous'));
   assert.equal(sent[0].op.kind, 'MarkRendezvous');
   assert.equal(sent[0].marsaId, 'm-1');
+  // And through the relation's own popover, from the ⋯ menu.
+  click(menuItem(el, 'MARSA…'));
+  click(findByText(el, 'Mark rendezvous'));
+  assert.equal(sent[1].op.kind, 'MarkRendezvous');
 });
 
 test('ending and voiding are both reachable, and carry the relation id', () => {
@@ -1058,7 +1102,7 @@ test('ending and voiding are both reachable, and carry the relation id', () => {
       strip: stripAt({}), fdr: FDR, held: ['APP'],
       marsa: [marsaRelation({ rendezvousAt: 2000 })], otherStrips: [PEER_STRIP],
     });
-    click(findByText(el, 'MARSA'));
+    click(menuItem(el, 'MARSA…'));
     click(findByText(el, label));
     assert.equal(sent[0].op.kind, kind, label);
     assert.equal(sent[0].marsaId, 'm-1', label);
@@ -1070,7 +1114,7 @@ test('a receiver breaking off sends RemoveParticipant naming ITS OWN flight', ()
     strip: stripAt({}), fdr: FDR, held: ['APP'],
     marsa: [marsaRelation({ rendezvousAt: 2000 })], otherStrips: [PEER_STRIP],
   });
-  click(findByText(el, 'MARSA'));
+  click(menuItem(el, 'MARSA…'));
   click(findByText(el, 'Remove this flight'));
   assert.equal(sent[0].op.kind, 'RemoveParticipant');
   assert.equal(sent[0].op.fdrId, 'f1', 'the Strip you pressed it on is the one leaving');
@@ -1081,7 +1125,7 @@ test('the popover names the other participants — rule 5\'s "visible as a link"
     strip: stripAt({}), fdr: FDR, held: ['APP'],
     marsa: [marsaRelation()], otherStrips: [PEER_STRIP],
   });
-  click(findByText(el, 'MARSA ⚠'));
+  click(menuItem(el, 'MARSA…'));
   assert.ok(findByText(el, 'SHELL71'), 'the other participant is named, not just counted');
 });
 
@@ -1090,9 +1134,9 @@ test('the badge is disabled when the controller holds no Position that can act',
     strip: stripAt({}), fdr: FDR, held: [],
     marsa: [marsaRelation()], otherStrips: [PEER_STRIP],
   });
-  const badge = findByText(el, 'MARSA ⚠');
-  assert.ok(badge, 'still rendered — the relation is a fact whoever is watching');
-  assert.equal(badge.disabled, true, 'but not actionable');
+  assert.ok(findByText(el, 'MARSA ⚠'), 'still rendered — the relation is a fact whoever is watching');
+  assert.equal(menuItem(el, 'MARSA…'), undefined, 'but not actionable from the menu');
+  assert.equal(findByText(el, 'Rendezvous').disabled, true, 'nor from the tab');
 });
 
 test('an ENDED relation leaves no badge and offers a fresh declaration', () => {
@@ -1102,7 +1146,7 @@ test('an ENDED relation leaves no badge and offers a fresh declaration', () => {
     otherStrips: [PEER_STRIP],
   });
   assert.equal(findByText(el, 'MARSA ⚠'), undefined);
-  assert.ok(findByText(el, 'MARSA…'), 'ready to declare a new one');
+  assert.ok(menuItem(el, 'MARSA…'), 'ready to declare a new one');
 });
 
 // ── the military extension namespace (crc-sync's docs/adr/0052) ───────────
@@ -1113,7 +1157,8 @@ test('an ENDED relation leaves no badge and offers a fresh declaration', () => {
 // for it.
 
 test('ordnance state is a picker on the Strip, and sends the Block the server routes', () => {
-  const { el, sent } = renderStrip({ strip: stripAt(), fdr: FDR, held: ['APP'] });
+  // Tower's Strip: HOOK and ORDNANCE are its fields alone (docs/adr/0056).
+  const { el, sent } = renderStrip({ strip: stripAt({ ownerPositionId: 'TWR', state: 'RUNWAY_QUEUE' }), fdr: FDR, held: ['TWR'] });
 
   const cell = blockCell(el, '3G');
   assert.ok(cell, 'Block 3G (ordnance state) is not rendered on the Strip at all');
@@ -1135,7 +1180,7 @@ test('ordnance state is a picker on the Strip, and sends the Block the server ro
 });
 
 test('the hook requirement toggles, and a blank cell sends true rather than clearing', () => {
-  const { el, sent } = renderStrip({ strip: stripAt(), fdr: FDR, held: ['APP'] });
+  const { el, sent } = renderStrip({ strip: stripAt({ ownerPositionId: 'TWR', state: 'RUNWAY_QUEUE' }), fdr: FDR, held: ['TWR'] });
 
   const cell = blockCell(el, '3F');
   assert.ok(cell, 'Block 3F (hook requirement) is not rendered on the Strip at all');
@@ -1153,7 +1198,7 @@ test('an FDR from before the military namespace existed still renders its Strip'
   // field held until docs/adr/0052. Rendering must degrade to a blank cell,
   // not throw and take the whole Bay down with it.
   const legacy = { ...FDR, military: null };
-  const { el } = renderStrip({ strip: stripAt(), fdr: legacy, held: ['APP'] });
+  const { el } = renderStrip({ strip: stripAt({ ownerPositionId: 'TWR', state: 'RUNWAY_QUEUE' }), fdr: legacy, held: ['TWR'] });
   assert.equal(blockCell(el, '3G').textContent, '');
   assert.equal(blockCell(el, '3F').textContent, '');
 });
@@ -1191,17 +1236,17 @@ const POPOVER_CASES = [
   {
     label: 'coordinate',
     render: () => renderStrip({ strip: stripAt(), fdr: FDR, held: ['APP'] }),
-    open: (r) => click(findByText(r.el, 'Coordinate…')),
+    open: (r) => click(menuItem(r.el, 'Coordinate…')),
   },
   {
     label: 'TOFI',
     render: () => renderStrip({ strip: stripAt({ ownerPositionId: 'CTR' }), fdr: FDR, held: ['CTR'] }),
-    open: (r) => click(findByText(r.el, 'TOFI…')),
+    open: (r) => click(menuItem(r.el, 'TOFI…')),
   },
   {
     label: 'MARSA',
     render: () => renderStrip({ strip: stripAt(), fdr: FDR, held: ['APP'], otherStrips: [PEER_STRIP] }),
-    open: (r) => click(findByText(r.el, 'MARSA…')),
+    open: (r) => click(menuItem(r.el, 'MARSA…')),
   },
   {
     label: 'airspace',
@@ -1212,7 +1257,7 @@ const POPOVER_CASES = [
         definition: { airspaceId: 'MOA-EAST', name: 'East MOA', type: 'MOA', controllingPositionId: 'CTR', workingFrequencyMhz: 134.25 },
       }],
     }),
-    open: (r) => click(findByText(r.el, 'Airspace…')),
+    open: (r) => click(menuItem(r.el, 'Airspace…')),
   },
   {
     label: 'bind',
@@ -1221,7 +1266,7 @@ const POPOVER_CASES = [
       correlations: [correlationOf({ state: 'UNCORRELATED', trackId: null, matchedBy: null })],
       tracks: [{ id: '303', callsign: 'MYSTERY', category: 1 }],
     }),
-    open: (r) => click(findByText(r.el, 'Bind…')),
+    open: (r) => click(menuItem(r.el, 'Bind…')),
   },
   {
     // The only one not opened by a button: right-click on the Strip body
@@ -1230,6 +1275,13 @@ const POPOVER_CASES = [
     label: 'highlight',
     render: () => renderStrip({ strip: stripAt(), fdr: FDR, held: ['APP'] }),
     open: (r) => fire(r.el, 'contextmenu', { target: r.el }),
+  },
+  {
+    // Layout C's ⋯ menu is a popover too: portalled, owned by its Strip, and
+    // holding it still while it is open (docs/adr/0056).
+    label: 'strip menu',
+    render: () => renderStrip({ strip: stripAt(), fdr: FDR, held: ['APP'] }),
+    open: (r) => click(descendants(r.el).find(c => (c.className || '').includes('efsp-strip-menu-btn'))),
   },
 ];
 
@@ -1373,7 +1425,7 @@ test('a click inside the MARSA popover does not rebuild it empty', async () => {
   // the mechanism is the same one: what matters is that the popover is not a
   // descendant of anything that reopens it.
   const r = renderStrip({ strip: stripAt(), fdr: FDR, held: ['APP'], otherStrips: [PEER_STRIP] });
-  click(findByText(r.el, 'MARSA…'));
+  click(menuItem(r.el, 'MARSA…'));
   const popover = openPopoverIn(r);
   const declaring = descendants(popover).find(c => c.tagName === 'input');
   assert.ok(declaring, 'no "who declared it" field — the declaration cannot be made');
@@ -1486,7 +1538,7 @@ test('Drop is not offered where the server would refuse it, or where the NLA alr
 
 function cellWithHistory(entries) {
   return stripAt({
-    state: 'PROPOSED', ownerPositionId: 'OPS', bayId: 'ops-proposed',
+    state: 'PENDING_CLEARANCE', ownerPositionId: 'CD', bayId: 'cd-pending-clearance',
     annotations: { 21: { blockId: '21', entries } },
   });
 }
@@ -1496,7 +1548,7 @@ const historyIn = (el) => descendants(el).filter(c => (c.className || '').includ
 test('a Block written once shows no history at all', () => {
   // The common case by far. It must not sprout an empty container on every
   // unamended Block of every Strip.
-  const { el } = renderStrip({ strip: cellWithHistory([entry('6000', 'ACTIVE')]), fdr: FDR, held: ['OPS'] });
+  const { el } = renderStrip({ strip: cellWithHistory([entry('6000', 'ACTIVE')]), fdr: FDR, held: ['CD'] });
   assert.deepEqual(historyIn(el), []);
   assert.equal(descendants(el).filter(c => (c.className || '').includes('efsp-annotation-history')).length, 0);
 });
@@ -1504,7 +1556,7 @@ test('a Block written once shows no history at all', () => {
 test('an amended Block shows the prior value struck through, on the Strip', () => {
   const { el } = renderStrip({
     strip: cellWithHistory([entry('4000', 'SUPERSEDED'), entry('6000', 'ACTIVE')]),
-    fdr: FDR, held: ['OPS'],
+    fdr: FDR, held: ['CD'],
   });
   const prior = historyIn(el);
   assert.equal(prior.length, 1);
@@ -1517,12 +1569,12 @@ test('an amended Block shows the prior value struck through, on the Strip', () =
 test('a struck entry renders as struck, not as superseded', () => {
   const { el } = renderStrip({
     strip: cellWithHistory([entry('4000', 'STRUCK'), entry('6000', 'ACTIVE')]),
-    fdr: FDR, held: ['OPS'],
+    fdr: FDR, held: ['CD'],
   });
   assert.ok(historyIn(el)[0].className.includes('efsp-annotation-entry-struck'));
 });
 
-test('a much-amended Block caps at two priors and offers the overflow indicator', () => {
+test('a much-amended Block shows its latest prior and counts the rest', () => {
   // §3.7 rule 2's own escape hatch — "where space does not permit, the Block
   // MUST render an overflow indicator and expose full history on tap",
   // modelled on ATOP's `*`. History is append-only for the life of the Strip,
@@ -1531,15 +1583,18 @@ test('a much-amended Block caps at two priors and offers the overflow indicator'
     entry('2000', 'SUPERSEDED'), entry('3000', 'SUPERSEDED'),
     entry('4000', 'SUPERSEDED'), entry('5000', 'SUPERSEDED'), entry('6000', 'ACTIVE'),
   ]);
-  const { el } = renderStrip({ strip, fdr: FDR, held: ['OPS'] });
+  const { el } = renderStrip({ strip, fdr: FDR, held: ['CD'] });
 
+  // One prior, beside the label, so the value in force keeps the field to
+  // itself — two struck priors used to push a much-amended ALT out of view.
   const shown = historyIn(el).map(c => c.textContent);
-  assert.deepEqual(shown, ['4000', '5000'], 'the two most recent priors, oldest of those first');
+  assert.deepEqual(shown, ['5000'], 'the value just replaced, and only that');
+  assert.equal(blockCell(el, '21').textContent, '6000');
 
   const overflow = descendants(el).find(c => (c.className || '').includes('efsp-annotation-overflow'));
   assert.ok(overflow, 'no overflow indicator');
-  assert.equal(overflow.textContent, '*');
-  assert.match(overflow.title, /2 earlier entries/);
+  assert.equal(overflow.textContent, '+3');
+  assert.match(overflow.title, /3 earlier entries/);
 });
 
 test('the expanded view shows the whole chain, which is what makes capping the chip legal', () => {
@@ -1547,7 +1602,7 @@ test('the expanded view shows the whole chain, which is what makes capping the c
     entry('2000', 'SUPERSEDED'), entry('3000', 'SUPERSEDED'),
     entry('4000', 'SUPERSEDED'), entry('5000', 'SUPERSEDED'), entry('6000', 'ACTIVE'),
   ]);
-  const r = renderStrip({ strip, fdr: FDR, held: ['OPS'] });
+  const r = renderStrip({ strip, fdr: FDR, held: ['CD'] });
   r.sandbox.renderAllOpenEfspBays = () => {};
   click(descendants(r.el).find(c => (c.className || '').includes('efsp-expand-btn')));
 
@@ -1563,7 +1618,7 @@ test('confirm-vacated is reachable on DEPARTURE 21, and strikes rather than clea
   // test has ever exercised it — stripAt() always set `annotations: {}`, and
   // Block 21 had no chip to render it on.
   const strip = cellWithHistory([entry('6000', 'ACTIVE')]);
-  const { el, sent } = renderStrip({ strip, fdr: FDR, held: ['OPS'] });
+  const { el, sent } = renderStrip({ strip, fdr: FDR, held: ['CD'] });
   const strike = descendants(el).find(c => (c.className || '').includes('efsp-confirm-vacated-btn'));
   assert.ok(strike, 'no confirm-vacated button on an ACTIVE altitude');
   click(strike);
@@ -1720,7 +1775,7 @@ test('arrowing through an enum picker chooses nothing — Enter does', () => {
   // Chromium fires 'change' for every arrow press on a closed <select>, so
   // committing on 'change' amended a clearance the instant a controller
   // pressed ↓ to see the options, and took the picker away with it (F-205).
-  const { el, sent } = renderStrip({ strip: stripAt({ ownerPositionId: 'OPS' }), fdr: FDR, held: ['OPS'] });
+  const { el, sent } = renderStrip({ strip: stripAt({ ownerPositionId: 'CTR' }), fdr: FDR, held: ['CTR'] });
   const select = openEnum(el, '5A');
 
   fire(select, 'keydown', { key: 'ArrowDown' });
@@ -1735,7 +1790,7 @@ test('arrowing through an enum picker chooses nothing — Enter does', () => {
 });
 
 test('a pointer pick still commits on change — that gesture IS the choice', () => {
-  const { el, sent } = renderStrip({ strip: stripAt({ ownerPositionId: 'OPS' }), fdr: FDR, held: ['OPS'] });
+  const { el, sent } = renderStrip({ strip: stripAt({ ownerPositionId: 'CTR' }), fdr: FDR, held: ['CTR'] });
   const select = openEnum(el, '5A');
   select.value = 'FAIL';
   fire(select, 'change');
@@ -1749,8 +1804,8 @@ test('"—" is offered only where the server accepts a clear, and clears with ""
   // SREG accept a clear; fdr-store.js's setTofi() normalizes the '' a <select>
   // sends to null, so "cleared" has one spelling server-side.
   // strip-template.js's ENUM_CLEARABLE_BLOCKS carries the per-Block answer.
-  const held = ['OPS'];
-  const strip = stripAt({ ownerPositionId: 'OPS' });
+  const held = ['CTR'];
+  const strip = stripAt({ ownerPositionId: 'CTR' });
   const blankOption = (select) => select.children.find(o => o.value === '');
 
   const set = renderStrip({ strip, fdr: { ...FDR, tofi: { ifrActive: true, separationRegime: 'MARSA' } }, held });
@@ -1910,15 +1965,18 @@ test("the sender's Strip says a coordination is pending, and then what became of
     coordination: { primitive: 'HANDOFF', state, peerFacilityId: 'INCIRLIK', peerPositionId: 'APP' },
   });
   const badgeOf = (el) => descendants(el).find(c => (c.className || '').includes('efsp-coordination-state-badge'));
+  // Layout C: a tab row — what and who on one line, the state under it.
+  const stateOf = (el) => descendants(el).find(c => (c.className || '').includes('efsp-x-meta')).textContent;
 
   const pending = renderStrip({ strip: sender('PROPOSED'), fdr: FDR, held: ['CTR'] });
-  assert.equal(badgeOf(pending.el).textContent, 'HAND OFF → APP: PROPOSED');
+  assert.equal(badgeOf(pending.el).textContent, 'HAND OFF → APP');
+  assert.equal(stateOf(pending.el), 'PROPOSED');
   const accepted = renderStrip({ strip: sender('ACTIVE'), fdr: FDR, held: ['CTR'] });
-  assert.equal(badgeOf(accepted.el).textContent, 'HAND OFF → APP: ACTIVE');
+  assert.equal(stateOf(accepted.el), 'ACTIVE');
   // The rejection is the case that breaks rule 2: the server refused on the
   // controller's behalf and the only sign was the Coordinate button coming back.
   const rejected = renderStrip({ strip: sender('REJECTED'), fdr: FDR, held: ['CTR'] });
-  assert.equal(badgeOf(rejected.el).textContent, 'HAND OFF → APP: REJECTED');
+  assert.equal(stateOf(rejected.el), 'REJECTED by APP');
   // className, not classList: the badge sets its classes as one string.
   assert.match(badgeOf(rejected.el).className, /efsp-coordination-state-rejected/);
 });
@@ -1933,7 +1991,8 @@ test('an operational request is reported in its own words, not accept/reject', (
   });
   const { el } = renderStrip({ strip, fdr: FDR, held: ['CTR'] });
   const badge = descendants(el).find(c => (c.className || '').includes('efsp-coordination-state-badge'));
-  assert.equal(badge.textContent, 'OPERATIONAL REQUEST → APP: UNABLE');
+  assert.equal(badge.textContent, 'OPERATIONAL REQUEST → APP');
+  assert.equal(descendants(el).find(c => (c.className || '').includes('efsp-x-meta')).textContent, 'UNABLE by APP');
 });
 
 test("the proposer's note, and who proposed, reach the receiver", () => {
@@ -1953,7 +2012,7 @@ test("the proposer's note, and who proposed, reach the receiver", () => {
   // "Accept Hand Off does not say from CTR" — only POINT_OUT's DATA: chip has
   // ever named the peer.
   const badge = descendants(el).find(c => (c.className || '').includes('efsp-coordination-state-badge'));
-  assert.equal(badge.textContent, 'HAND OFF ← CTR: PROPOSED');
+  assert.equal(badge.textContent, 'HAND OFF ← CTR');
   assert.match(badge.title, /CTR proposed this/);
 });
 

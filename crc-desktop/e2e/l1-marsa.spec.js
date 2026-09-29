@@ -26,7 +26,7 @@
  */
 
 const { test, expect } = require('@playwright/test');
-const { openPanel, seedStrip, stripByCallsign } = require('./helpers/app');
+const { openPanel, seedStrip, stripByCallsign, startAction } = require('./helpers/app');
 
 test.use({ viewport: { width: 1600, height: 2400 } });
 
@@ -77,7 +77,7 @@ test('F-110: clicking into the declarer field replaces the field', async ({ page
   await openPanel(page);
   const { b } = await seedPair(page);
 
-  await stripByCallsign(page, b).locator('.efsp-marsa-btn').click();
+  await startAction(stripByCallsign(page, b), 'MARSA…');
   const input = page.locator('.efsp-marsa-popover input.efsp-coordinate-note');
   await expect(input).toBeVisible();
 
@@ -96,7 +96,7 @@ test('F-110: typing the declarer leaves the field empty', async ({ page }) => {
   await openPanel(page);
   const { b } = await seedPair(page);
 
-  await stripByCallsign(page, b).locator('.efsp-marsa-btn').click();
+  await startAction(stripByCallsign(page, b), 'MARSA…');
   const input = page.locator('.efsp-marsa-popover input.efsp-coordinate-note');
   await input.click();
   await page.keyboard.type('SHELL71');

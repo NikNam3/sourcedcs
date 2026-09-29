@@ -25,7 +25,7 @@
  */
 
 const { test, expect } = require('@playwright/test');
-const { openPanel, seedStrip, stripByCallsign, expectOnTop, expectDoesSomething } = require('./helpers/app');
+const { openPanel, seedStrip, stripByCallsign, expectOnTop, expectDoesSomething, startAction } = require('./helpers/app');
 
 /** The stripIds THIS test seeded — what afterEach is allowed to retire. */
 let seeded = [];
@@ -67,7 +67,7 @@ test.afterEach(async ({ page }) => {
 
 test('the MARSA popover is on top of the Strips below it', async ({ page }) => {
   const tanker = stripByCallsign(page, 'SHELL71');
-  await tanker.getByRole('button', { name: 'MARSA…' }).click();
+  await startAction(tanker, 'MARSA…');
 
   const popover = page.locator('.efsp-marsa-popover');
   await expect(popover).toBeVisible();
@@ -79,7 +79,7 @@ test('the MARSA popover is on top of the Strips below it', async ({ page }) => {
 
 test('every control inside the MARSA popover is reachable, not just present', async ({ page }) => {
   const tanker = stripByCallsign(page, 'SHELL71');
-  await tanker.getByRole('button', { name: 'MARSA…' }).click();
+  await startAction(tanker, 'MARSA…');
   const popover = page.locator('.efsp-marsa-popover');
   await expect(popover).toBeVisible();
 
@@ -94,7 +94,7 @@ test('every control inside the MARSA popover is reachable, not just present', as
 
 test('declaring MARSA from the popover actually declares it', async ({ page }) => {
   const tanker = stripByCallsign(page, 'SHELL71');
-  await tanker.getByRole('button', { name: 'MARSA…' }).click();
+  await startAction(tanker, 'MARSA…');
   const popover = page.locator('.efsp-marsa-popover');
   await expect(popover).toBeVisible();
 

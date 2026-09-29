@@ -48,31 +48,58 @@ async function show(page, cs) {
 }
 
 // Extends F-101 — used to fail at every transfer-shaped step after Send to Clearance; fixed.
+//
+// The claim is about a second tap that lands INSIDE the 400 ms window
+// (DOUBLE_TAP_MS). Two `page.mouse.click`s with 150 ms between them reach the
+// page 220–370 ms apart on a typical run, and occasionally 400–700 ms apart when
+// the machine stalls — at which point it is not a double tap at all, and the
+// guard correctly lets it through. Measured the same on the old and new Strip
+// layouts. So the gap is measured page-side: an attempt whose taps landed
+// outside the window proves nothing and is retried with a fresh pair, and the
+// test fails loudly if the harness cannot produce a double tap at all.
+const DOUBLE_TAP_MS = 400;
 for (const [label, n, tag] of [['Approve Pushback', 2, 'P'], ['To Runway Queue', 4, 'Q'], ['Hand Off to APP', 7, 'H']]) {
   test(`a double-tap on ${label} moves only the Strip that was tapped`, async ({ page }) => {
-    test.setTimeout(60000);
+    test.setTimeout(120000);
     await page.setViewportSize({ width: 1600, height: 1600 });
     await openPanel(page, { held: ALL });
-    const pair = [`L4${tag}1`, `L4${tag}2`];
-    for (const c of pair) { await seedStrip(page, { callsign: c, role: 'DEPARTURE', fdr: FDR }); await advance(page, c, n); }
-    await show(page, pair[0]);
 
-    // Tap whichever of ours is higher, so the other is the one that slides up.
-    const order = await page.evaluate(() => [...document.querySelectorAll('#efsp-bay-content .efsp-block-1')].map((e) => e.textContent.trim()));
-    const tapped = order.find((c) => pair.includes(c));
-    const btn = stripByCallsign(page, tapped).locator('.efsp-nla-btn');
-    await expect(btn).toHaveText(label);
-    const before = await allStates(page);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const pair = [`L4${tag}${attempt}A`, `L4${tag}${attempt}B`];
+      await page.locator('#efsp-position-tabs .efsp-position-tab', { hasText: /^OPS$/ }).click();
+      await page.locator('#efsp-bay-tabs .efsp-bay-tab', { hasText: /^ops-proposed$/ }).click();
+      for (const c of pair) { await seedStrip(page, { callsign: c, role: 'DEPARTURE', fdr: FDR }); await advance(page, c, n); }
+      await show(page, pair[0]);
 
-    const box = await btn.boundingBox();
-    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-    await page.waitForTimeout(150);
-    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-    await page.waitForTimeout(800);
+      // Tap whichever of ours is higher, so the other is the one that slides up.
+      const order = await page.evaluate(() => [...document.querySelectorAll('#efsp-bay-content .efsp-block-1')].map((e) => e.textContent.trim()));
+      const tapped = order.find((c) => pair.includes(c));
+      const btn = stripByCallsign(page, tapped).locator('.efsp-nla-btn');
+      await expect(btn).toHaveText(label);
+      const before = await allStates(page);
 
-    const after = await allStates(page);
-    const changed = Object.keys(after).filter((c) => c !== tapped && before[c] !== after[c]).map((c) => `${c} ${before[c]} -> ${after[c]}`);
-    expect(changed, `tapped ${tapped} twice`).toEqual([]);
+      await page.evaluate(() => {
+        window.__tapTimes = [];
+        document.addEventListener('pointerdown', () => window.__tapTimes.push(performance.now()), true);
+      });
+      const box = await btn.boundingBox();
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+      await page.waitForTimeout(150);
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+      await page.waitForTimeout(800);
+
+      const taps = await page.evaluate(() => window.__tapTimes);
+      const gap = taps.length > 1 ? taps[1] - taps[0] : Infinity;
+      if (gap >= DOUBLE_TAP_MS) {
+        test.info().annotations.push({ type: 'retried', description: `attempt ${attempt}: taps landed ${Math.round(gap)} ms apart — not a double tap` });
+        continue;
+      }
+      const after = await allStates(page);
+      const changed = Object.keys(after).filter((c) => c !== tapped && before[c] !== after[c]).map((c) => `${c} ${before[c]} -> ${after[c]}`);
+      expect(changed, `tapped ${tapped} twice, ${Math.round(gap)} ms apart`).toEqual([]);
+      return;
+    }
+    throw new Error(`three attempts, and the harness never delivered two taps inside ${DOUBLE_TAP_MS} ms`);
   });
 }
 
