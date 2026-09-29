@@ -648,3 +648,81 @@ test('a handler with no field-state store answers, never throws (a hand-built ct
   assert.equal(out.ack.ok, false);
   assert.equal(out.ack.detail, 'no field-state store');
 });
+
+// ── step 4 — rule 1: NLA is inhibited on a runway that is not usable ────────
+
+const nla = await import('../src/efsp/nla.js');
+const NOW = Date.UTC(2026, 8, 30, 12, 0, 0);
+const everyoneHome = { isOccupied: () => true, coveringPositionFor: () => null };
+const ctxWith = (view, extra = {}) => ({ ...everyoneHome, fieldStateFor: () => view, ...extra });
+const readyFdr = (over = {}) => ({
+  identity: { beaconAssigned: '4001' },
+  filed: { route: 'DCT', requestedAltitude: '250', departureAirport: 'LTAG', destinationAirport: 'LTAG', departureRunway: '05', ...over.filed },
+  assigned: { releaseState: 'RELEASED', landingRunway: '05', ...over.assigned },
+});
+
+test('TAXI, RUNWAY_QUEUE and LUAW are inhibited on a suspended runway, with the runway named in the reason', () => {
+  const view = viewWith('SUSPENDED_BARRIER_CHANGE');
+  for (const [state, rackId] of [['TAXI', 'main'], ['RUNWAY_QUEUE', 'rwy-05'], ['LUAW', 'rwy-05']]) {
+    const r = nla.computeNla({ role: 'DEPARTURE', state, rackId }, readyFdr(), NOW, ctxWith(view));
+    assert.deepEqual(r, { inhibited: 'runway 05/23 suspended — barrier change' }, state);
+  }
+});
+
+test('HANDED_TO_TOWER -> FINAL is inhibited on a suspended runway', () => {
+  const r = nla.computeNla({ role: 'ARRIVAL', state: 'HANDED_TO_TOWER', rackId: 'main' }, readyFdr(), NOW, ctxWith(viewWith('SUSPENDED_INSPECTION')));
+  assert.deepEqual(r, { inhibited: 'runway 05/23 suspended — awaiting inspection' });
+});
+
+test('FINAL -> LANDED is never inhibited — touchdown is an observation, not a clearance', () => {
+  for (const status of ['SUSPENDED_BARRIER_CHANGE', 'SUSPENDED_INSPECTION', 'CLOSED']) {
+    const r = nla.computeNla({ role: 'ARRIVAL', state: 'FINAL', rackId: 'main' }, readyFdr(), NOW, ctxWith(viewWith(status)));
+    assert.deepEqual(r, { toState: 'LANDED' }, status);
+  }
+});
+
+test('a CLOSED runway inhibits too (decisions.md Q28)', () => {
+  const r = nla.computeNla({ role: 'DEPARTURE', state: 'LUAW', rackId: 'rwy-23' }, readyFdr(), NOW, ctxWith(viewWith('CLOSED')));
+  assert.deepEqual(r, { inhibited: 'runway 05/23 closed' });
+});
+
+test('an unresolvable runway, a runway not in the inventory, and a Facility with no field state all fail open', () => {
+  const noActive = viewWith('CLOSED', { activeRunway: null });
+  const fdrNoRunway = readyFdr({ filed: { departureRunway: null }, assigned: { landingRunway: null } });
+  assert.deepEqual(nla.computeNla({ role: 'DEPARTURE', state: 'RUNWAY_QUEUE', rackId: 'main' }, fdrNoRunway, NOW, ctxWith(noActive)), { toState: 'LUAW' });
+  const fdrOther = readyFdr({ filed: { departureRunway: '17' } });
+  assert.deepEqual(nla.computeNla({ role: 'DEPARTURE', state: 'RUNWAY_QUEUE', rackId: 'main' }, fdrOther, NOW, ctxWith(noActive)), { toState: 'LUAW' });
+  assert.deepEqual(nla.computeNla({ role: 'DEPARTURE', state: 'RUNWAY_QUEUE', rackId: 'rwy-05' }, readyFdr(), NOW, ctxWith(null)), { toState: 'LUAW' });
+});
+
+test('a ctx with no fieldStateFor at all behaves exactly as before (every pre-L1 caller)', () => {
+  assert.deepEqual(nla.computeNla({ role: 'DEPARTURE', state: 'TAXI', rackId: 'main' }, readyFdr(), NOW, everyoneHome), { toState: 'RUNWAY_QUEUE', transferTo: 'TWR' });
+  assert.deepEqual(nla.computeNla({ role: 'DEPARTURE', state: 'LUAW', rackId: 'rwy-05' }, readyFdr(), NOW, everyoneHome), { toState: 'DEPARTED' });
+  assert.deepEqual(nla.computeNla({ role: 'ARRIVAL', state: 'HANDED_TO_TOWER', rackId: 'main' }, readyFdr(), NOW, everyoneHome), { toState: 'FINAL' });
+});
+
+test('OVERFLIGHT and MISSION are never inhibited by field state', () => {
+  const view = viewWith('CLOSED');
+  assert.deepEqual(nla.computeNla({ role: 'OVERFLIGHT', state: 'TRANSITING', rackId: 'rwy-05' }, readyFdr(), NOW, ctxWith(view)), { toState: 'DROPPED' });
+  assert.deepEqual(nla.computeNla({ role: 'MISSION', state: 'TASKED', rackId: 'rwy-05' }, readyFdr(), NOW, ctxWith(view)), { toState: 'AIRBORNE' });
+});
+
+test('the inhibit follows the rack a Strip is in, at a field with two independent runways', () => {
+  // Two surfaces, not two ends of one: 05/23 closed, 17/35 open. A Strip
+  // queued at 17 goes; the same Strip queued at 05 does not; dragged onto 17's
+  // rack it is judged against 17 (decisions.md Q27).
+  const inv = {
+    runways: [
+      { runwayId: '05/23', ends: ['05', '23'], endHeadingsTrue: { '05': 56, '23': 236 }, rackIds: { '05': 'rwy-05', '23': 'rwy-23' }, arrestingGear: [] },
+      { runwayId: '17/35', ends: ['17', '35'], endHeadingsTrue: { '17': 175, '35': 355 }, rackIds: { '17': 'rwy-17', '35': 'rwy-35' }, arrestingGear: [] },
+    ],
+  };
+  const view = buildStatusView(inv, { activeRunway: '05', runways: [{ runwayId: '05/23', status: 'CLOSED' }, { runwayId: '17/35', status: 'OPEN' }] });
+  const at = (rackId) => nla.computeNla({ role: 'DEPARTURE', state: 'RUNWAY_QUEUE', rackId }, readyFdr(), NOW, ctxWith(view));
+  assert.deepEqual(at('rwy-17'), { toState: 'LUAW' });
+  assert.deepEqual(at('rwy-05'), { inhibited: 'runway 05/23 closed' });
+  const taxi = (targetRackId) => nla.computeNla({ role: 'DEPARTURE', state: 'TAXI', rackId: 'main' }, readyFdr(), NOW, ctxWith(view, { targetRackId }));
+  assert.deepEqual(taxi('rwy-35'), { toState: 'RUNWAY_QUEUE', transferTo: 'TWR' });
+  assert.deepEqual(taxi('rwy-23'), { inhibited: 'runway 05/23 closed' });
+  assert.deepEqual(taxi(undefined), { inhibited: 'runway 05/23 closed' }); // filed 8A = 05
+});

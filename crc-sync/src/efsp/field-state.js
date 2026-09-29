@@ -195,6 +195,15 @@ function resolveRunwayForStrip(strip, fdr, view, { targetRackId } = {}) {
   return null;
 }
 
+// The states whose entry uses the runway, per Role — rule 1's cases seen from
+// the arriving end. nla.js gates the NLA steps into them; board-store.js gates
+// a raw SetState into them the same way (decisions.md S-R2-14). ARRIVAL's
+// LANDED is absent on purpose: touchdown is an observation, not a clearance.
+const RUNWAY_GATED_STATES = Object.freeze({
+  DEPARTURE: Object.freeze(['RUNWAY_QUEUE', 'LUAW', 'DEPARTED']),
+  ARRIVAL: Object.freeze(['FINAL']),
+});
+
 // [SOURCE-DEFINED] inhibit wordings (decisions.md Q40): nla.js's lower-case
 // phrase style, naming the runway and what is wrong with it.
 const SUSPENSION_LABELS = {
@@ -415,7 +424,7 @@ module.exports = {
   GEAR_TYPES, GEAR_POSITIONS, GEAR_STATES,
   RUNWAY_CHANGE_STATES, RUNWAY_CHANGE_OPEN_STATES, isRunwayChangeInProgress, isRunwayChangeOpen,
   REQUEST_ACTIONS,
-  normalizeRunwayEnd, buildStatusView, resolveRunwayForStrip, runwayStatusReason, runwayInhibitFor,
+  RUNWAY_GATED_STATES, normalizeRunwayEnd, buildStatusView, resolveRunwayForStrip, runwayStatusReason, runwayInhibitFor,
   runwayAdvisoryFor, runwayRackFor, activeEndIntoWind, missionKeyOf,
   validateFieldStateInventory, runwayInventoryWarnings,
 };

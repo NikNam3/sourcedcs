@@ -25,10 +25,15 @@
 // LUAW->DEPARTED) is still state-only — no Position boundary, nothing to
 // transfer.
 //
-// Inhibits tied to machinery that doesn't exist yet — field state/
-// arresting gear (§9.7, WP6), alert-pad conflict (§9.6, WP6) — are simply
-// never triggered here (documented per state below), not fabricated as
-// always-true or always-false doctrine.
+// Field state (§9.7 rule 1, docs/adr/0061) now inhibits: a DEPARTURE's
+// TAXI/RUNWAY_QUEUE/LUAW steps and an ARRIVAL's HANDED_TO_TOWER -> FINAL are
+// refused while the Strip's runway is suspended or closed, with the runway and
+// the cause named — resolved through `ctx.fieldStateFor()` (field-state.js).
+// Runway OCCUPANCY is still not implemented: §9.7's schema has no occupancy
+// field and §3.5's RUNWAY_QUEUE row cites no section, so inventing one would
+// be D11. The alert-pad conflict (§9.6, WP6) is still never triggered here
+// (documented per state below), not fabricated as always-true or always-false
+// doctrine.
 //
 // WP4A (docs/adr/0014) migrates ARRIVAL's INBOUND origination from ADR
 // 0008's local APP self-creation stub to a real cross-Facility HANDOFF
@@ -40,6 +45,7 @@
 // primitive (still nowhere near DEPARTURE's own lifecycle this slice).
 
 const { matchesStandingRelease } = require('./release-envelope');
+const { runwayInhibitFor } = require('./field-state');
 
 const DEPARTURE_STATES = [
   'PROPOSED', 'PENDING_CLEARANCE', 'CLEARED', 'HELD', 'PUSHBACK', 'TAXI',
@@ -165,7 +171,19 @@ function _normalizeCtx(ctx) {
     coveringPositionFor: (ctx && ctx.coveringPositionFor) || (() => null),
     facilityId: ctx && ctx.facilityId,
     standingReleases: (ctx && ctx.standingReleases) || [],
+    // §9.7 (docs/adr/0061): this Facility's runway status view, or null. A
+    // caller that never passes it — every pre-L1 caller, a hand-built test
+    // ctx, a Facility with no runways — gets null, and null never inhibits.
+    fieldStateFor: (ctx && ctx.fieldStateFor) || (() => null),
+    // The rack a drag is dropping the Strip into (decisions.md Q27): judged
+    // against the runway it is about to use, not the one it came from.
+    targetRackId: ctx && ctx.targetRackId,
   };
+}
+
+/** Rule 1's inhibit for this Strip's runway, or null (fail open — see field-state.js). */
+function _runwayInhibit(strip, fdr, ctx) {
+  return runwayInhibitFor(strip, fdr, ctx.fieldStateFor(), { targetRackId: ctx.targetRackId });
 }
 
 /**
@@ -250,22 +268,35 @@ function computeDepartureNla(strip, fdr, now, ctx) {
       // TAXI is still GND's own — state-only.
       return { toState: 'TAXI' };
 
-    case 'TAXI':
-      // Runway-unavailable inhibit (§9.7 field state) is WP6 territory,
-      // not built in Phase 2 — never triggers here.
+    case 'TAXI': {
+      // §9.7 rule 1: a departure does not enter the queue for a runway that
+      // is suspended or closed — checked before the occupancy gate, because
+      // the runway is the reason it cannot go, whoever is in the tower.
+      const runway = _runwayInhibit(strip, fdr, ctx);
+      if (runway) return { inhibited: runway };
       if (!ctx.isOccupied('TWR') && !ctx.coveringPositionFor('TWR')) {
         return { inhibited: 'no receiving Position present' };
       }
       return { toState: 'RUNWAY_QUEUE', transferTo: 'TWR' };
+    }
 
-    case 'RUNWAY_QUEUE':
-      // Runway-occupied inhibit (§9.7) is WP6 territory — never triggers here.
+    case 'RUNWAY_QUEUE': {
+      // §9.7 rule 1: no line-up on a suspended or closed runway. Runway
+      // OCCUPANCY is not implemented (no §9.7 field for it — see the module
+      // comment); this is the field-state inhibit only.
+      const runway = _runwayInhibit(strip, fdr, ctx);
+      if (runway) return { inhibited: runway };
       return { toState: 'LUAW' };
+    }
 
-    case 'LUAW':
-      // Runway-occupied / arresting-gear-reconfiguration inhibits (§9.7)
-      // are WP6 territory — never trigger here.
+    case 'LUAW': {
+      // §9.7 rule 1: no takeoff from a suspended or closed runway — covers a
+      // barrier change begun while the aircraft sat lined up. Occupancy, again,
+      // is not implemented.
+      const runway = _runwayInhibit(strip, fdr, ctx);
+      if (runway) return { inhibited: runway };
       return { toState: 'DEPARTED' };
+    }
 
     case 'DEPARTED':
       // Real, occupancy-gated "Hand Off" to APP (docs/adr/0007) — an
@@ -305,10 +336,19 @@ function computeArrivalNla(strip, fdr, now, ctx) {
       }
       return { toState: 'HANDED_TO_TOWER', transferTo: 'TWR' };
 
-    case 'HANDED_TO_TOWER':
+    case 'HANDED_TO_TOWER': {
+      // §9.7 rule 1, the landing half: no clearance onto final for a runway
+      // that is suspended or closed. The Strip waits (decisions.md H19).
+      const runway = _runwayInhibit(strip, fdr, ctx);
+      if (runway) return { inhibited: runway };
       return { toState: 'FINAL' };
+    }
 
     case 'FINAL':
+      // Never inhibited by field state, deliberately: LANDED is an
+      // OBSERVATION that the aircraft touched down, not a clearance. Refusing
+      // it would make the board lie about something that already happened
+      // and strand a landed aircraft with no legal transition.
       return { toState: 'LANDED' };
 
     case 'LANDED':

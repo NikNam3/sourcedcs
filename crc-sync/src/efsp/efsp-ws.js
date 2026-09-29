@@ -690,7 +690,16 @@ function _handleFieldStateMutation(ctx, session, msg, persist) {
     { clientMutationId: msg.clientMutationId, facilityId, baseRev: msg.baseRev, op },
     msg.actingPositionId, session.controllerId,
   );
-  if (result.ok) persist();
+  if (result.ok) {
+    persist();
+    // A runway's status moves the `nla` stamp of Strips this op never touched
+    // — every Strip queued for, or landing on, that runway — the same problem
+    // _handleSetPositions has. The monitor re-stamps only the Strips whose
+    // status actually changed and sends them on the ordinary board-delta
+    // (server.js wires its onDelta), so "the reason shown" reaches every
+    // controller now rather than on the next 15 s sweep.
+    if (ctx.nlaStatusMonitor) ctx.nlaStatusMonitor.tick();
+  }
 
   const ack = {
     version: VERSION, type: 'efsp-field-state-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), facilityId,

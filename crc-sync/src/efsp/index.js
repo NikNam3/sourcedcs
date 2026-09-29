@@ -225,6 +225,10 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
       // them onto its own result and efsp-ws.js puts them in the board-delta's
       // `fdrs.updated` — see marsa-store.js's drainRegimeWrites() (F-111).
       drainMarsaRegimeWrites:  () => marsaStore.drainRegimeWrites(),
+      // WP6 (docs/adr/0061), §9.7 rule 1 — this Facility's runway status view
+      // (null where there are no runways, which never inhibits). Cached in the
+      // store, so every NLA stamp can afford to ask.
+      fieldStateFor:           () => fieldStateStore.statusView(facilityId),
     };
 
     const boardStore = new BoardStore(fdrStore, rules, { clock });
