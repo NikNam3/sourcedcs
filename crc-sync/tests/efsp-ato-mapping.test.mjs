@@ -70,8 +70,8 @@ test('ato mapping: the research fixture matches the research note\'s oracle', ()
 test('ato mapping: research fixture AR joins', () => {
   const r = ingest('iron-flag-26-3.txt');
   assert.deepEqual(r.arLinks, [
-    { tankerMissionNumber: '1901T', tankerCallsign: 'SHELL71', receiverMissionNumber: '1101A', receiverCallsign: 'VIPER11', arctUtc: Z(14, 13, 45), offloadKlb: 12, arcp: 'ANCHOR BLUE', sources: ['ARINFO', '5REFUEL'], tankerLineId: '1901T#0', receiverLineId: '1101A#0', resolved: 'BOTH' },
-    { tankerMissionNumber: '1901T', tankerCallsign: 'SHELL71', receiverMissionNumber: '1202S', receiverCallsign: 'DUDE21', arctUtc: Z(14, 14, 20), offloadKlb: 16, arcp: 'ANCHOR BLUE', sources: ['ARINFO', '5REFUEL'], tankerLineId: '1901T#0', receiverLineId: '1202S#0', resolved: 'BOTH' },
+    { tankerMissionNumber: '1901T', tankerCallsign: 'SHELL71', receiverMissionNumber: '1101A', receiverCallsign: 'VIPER11', arctUtc: Z(14, 13, 45), offloadKlb: 12, arcp: 'ANCHOR BLUE', windows: [{ arctUtc: Z(14, 13, 45), endArUtc: Z(14, 14, 0), offloadKlb: 12, source: 'ARINFO', line: 16 }], sources: ['ARINFO', '5REFUEL'], tankerLineId: '1901T#0', receiverLineId: '1101A#0', resolved: 'BOTH' },
+    { tankerMissionNumber: '1901T', tankerCallsign: 'SHELL71', receiverMissionNumber: '1202S', receiverCallsign: 'DUDE21', arctUtc: Z(14, 14, 20), offloadKlb: 16, arcp: 'ANCHOR BLUE', windows: [{ arctUtc: Z(14, 14, 20), endArUtc: Z(14, 14, 40), offloadKlb: 16, source: 'ARINFO', line: 27 }], sources: ['ARINFO', '5REFUEL'], tankerLineId: '1901T#0', receiverLineId: '1202S#0', resolved: 'BOTH' },
   ]);
   const L = lines(r);
   assert.equal(L['1901T#0'].military.arInfo.asTanker.totalOffloadKlb, 60);
@@ -260,4 +260,18 @@ test('ato mapping: a line has S-Q50\'s four keys plus the S-R2-8 metadata, and n
       assert.equal(typeof l.sourceLines.MSNACFT, 'number');
     }
   }
+});
+
+test('ato mapping: two ARINFOs for the same tanker are one link with two AR windows', () => {
+  const r = mapAtoDocument(parseStructure([
+    'TIMEFRAM/FROM:140000ZAPR2026/TO:142359ZAPR2026//',
+    'AMSNDAT/N/0001A/-/-/-/CAP//',
+    'MSNACFT/2/ACTYP:F16C/VIPER 11//',
+    'ARINFO/TEXACO11/-/-/-/120/ARCT:140345Z/NDAR:140405ZAPR//',
+    'ARINFO/TEXACO11/-/-/-/120/ARCT:140535Z/NDAR:140605ZAPR//',
+  ].join('\n')));
+  assert.equal(r.arLinks.length, 1);
+  assert.equal(r.arLinks[0].resolved, 'TANKER_NOT_A_MISSION');
+  assert.deepEqual(r.arLinks[0].windows.map((w) => [w.arctUtc, w.endArUtc, w.line]), [[A(3, 45), A(4, 5), 4], [A(5, 35), A(6, 5), 5]]);
+  assert.equal(lines(r)['0001A#0'].military.arInfo.asReceiver.length, 2);
 });

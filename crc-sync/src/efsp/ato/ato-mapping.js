@@ -386,13 +386,19 @@ function mapAtoDocument(doc) {
           `ARINFO gives tanker ${ar.tankerCallsign} Mode 3 ${ar.tankerModeThree}; its own MSNACFT says ${tl.extras.identityAto.modeThree}.`));
       }
     }
-    if (links.has(key)) continue; // a second ARINFO for the same pair adds nothing new
+    if (links.has(key)) {
+      // A second ARINFO for the same pair is a second AR window (L11 emits one
+      // per refuel), not a duplicate: keep it as another window.
+      links.get(key).windows.push({ arctUtc: ar.arctUtc, endArUtc: ar.endArUtc, offloadKlb: ar.offloadKlb, source: 'ARINFO', line: ar.line });
+      continue;
+    }
     links.set(key, {
       tankerMissionNumber: ar.tankerMissionNumber || (T ? T.missionNumber : null),
       tankerCallsign: ar.tankerCallsign || (T && T.aircraft[0] ? T.aircraft[0].callsign : null),
       receiverMissionNumber: R.missionNumber,
       receiverCallsign: rcs,
       arctUtc: ar.arctUtc, offloadKlb: ar.offloadKlb, arcp: ar.arcp,
+      windows: [{ arctUtc: ar.arctUtc, endArUtc: ar.endArUtc, offloadKlb: ar.offloadKlb, source: 'ARINFO', line: ar.line }],
       sources: ['ARINFO'],
       tankerLineId: lineIdFor(T, ar.tankerCallsign),
       receiverLineId: lineIdFor(R, rcs),
@@ -427,6 +433,7 @@ function mapAtoDocument(doc) {
       receiverMissionNumber: row.receiverMissionNumber || (R ? R.missionNumber : null),
       receiverCallsign: row.receiverCallsign,
       arctUtc: row.arctUtc, offloadKlb: row.offloadKlb, arcp: null,
+      windows: [{ arctUtc: row.arctUtc, endArUtc: null, offloadKlb: row.offloadKlb, source: '5REFUEL', line: row.line }],
       sources: ['5REFUEL'],
       tankerLineId: lineIdFor(T, tcs),
       receiverLineId: lineIdFor(R, row.receiverCallsign),
