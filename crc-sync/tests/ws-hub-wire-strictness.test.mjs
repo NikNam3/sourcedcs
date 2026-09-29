@@ -141,3 +141,49 @@ test('STCA reaches only an ATC Position, and only when both aircraft are in its 
   msg = sent.filter(m => m.type === 'efsp-alerts').pop();
   assert.deepEqual(msg.stca, [], 'a tactical Position gets no conflict alerts');
 });
+
+// docs/adr/0067 — obligations are state in efsp-alerts, beside conformance and STCA.
+
+test('obligations reach every session, including a tactical one that gets no STCA', () => {
+  const { hub, session } = setup();
+  const sent = [];
+  const ws = { readyState: 1, send: (raw) => sent.push(JSON.parse(raw)) };
+  hub._sessions.set(ws, session);
+  const obligation = { facilityId: 'INCIRLIK', stripId: 's1', obligationType: 'VOID_TIME_EXPIRED', severity: 'OVERDUE', dueAt: 1, since: 1 };
+  session.coverage = { ...session.coverage, stca: false };
+  hub.broadcastEfspAlerts({ conformance: [], stca: [], obligations: [obligation] });
+  const msg = sent.filter(m => m.type === 'efsp-alerts').pop();
+  assert.deepEqual(msg.obligations, [obligation]);
+  assert.deepEqual(msg.stca, []);
+});
+
+test('a fresh hub already has an efsp-alerts message with all three keys empty — what a connecting client is sent', () => {
+  const { hub, session } = setup();
+  const msg = hub._efspAlertsMsg(session);
+  assert.equal(msg.type, 'efsp-alerts');
+  assert.deepEqual([msg.conformance, msg.stca, msg.obligations], [[], [], []]);
+});
+
+test('setOnEfspChange fires after an EFSP message that broadcast, not after one that only acked, and a throw is contained', () => {
+  const { hub, session } = setup();
+  const ws = fakeWs();
+  let result = { ack: { type: 'efsp-ack' } };
+  hub._efsp = { handleMessage: () => result };
+  let fired = 0;
+  hub.setOnEfspChange(() => { fired += 1; });
+
+  hub._onMessage(ws, session, JSON.stringify({ type: 'efsp-mutation' }));
+  assert.equal(fired, 0, 'an ack alone changed nothing');
+
+  result = { ack: { type: 'efsp-ack' }, broadcast: { type: 'efsp-board-delta' } };
+  hub._onMessage(ws, session, JSON.stringify({ type: 'efsp-mutation' }));
+  assert.equal(fired, 1);
+
+  hub.setOnEfspChange(() => { throw new Error('monitor bug'); });
+  const origError = console.error;
+  console.error = () => {};
+  try {
+    assert.doesNotThrow(() => hub._onMessage(ws, session, JSON.stringify({ type: 'efsp-mutation' })));
+  } finally { console.error = origError; }
+  assert.equal(ws.sent.filter(m => m.type === 'efsp-ack').length, 3, 'the sender still got every ack');
+});

@@ -37,12 +37,12 @@
 //      whole subsystem exists to prevent (guide §4.8.3, "two answers to one
 //      question"). They move together because they have to.
 //
-// Deliberately NOT folded into ForwardingObligationMonitor despite sharing its
-// tick: that class de-duplicates so each obligation alerts at most once, ever.
-// This one has to fire every time a status changes, in both directions — a
-// release time passing must clear the reason as surely as it arriving raised
-// it. The two caches mean opposite things, and one class holding both would be
-// a class that is wrong about one of them.
+// Not folded into ForwardingObligationMonitor despite sharing its tick. Both
+// now raise and clear in both directions (docs/adr/0067), but this one
+// re-states Strips on the Board, while obligations are alert state that rides
+// efsp-alerts — two outputs, two classes. After a Mutation this one's half
+// rides the Mutation's own board delta; the obligation monitor is re-ticked
+// by ws-hub.js's setOnEfspChange hook, so the two still move together.
 
 const { WALL_CLOCK } = require('../mission-clock');
 

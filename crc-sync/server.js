@@ -448,17 +448,17 @@ setInterval(() => {
   wsHub.setAtisActive(atisStore.getActive());
 }, 5000);
 
-// ── WP4A forwarding-obligation alerts (guide §4.6.1, docs/adr/0021) — a
-// deliberately separate timer/cadence from the stale reaper above: a
-// different subsystem, no reason to couple cadence. 15s is comfortably
-// fine-grained for minute-scale obligations. ─────────────────────────────
+// ── WP4A forwarding obligations (guide §4.6.1, docs/adr/0021, 0067) — the
+// set due right now, sent as state in efsp-alerts (broadcastEfspAlerts below).
+// Re-evaluated on a 15s sweep for the clock (comfortably fine-grained for
+// minute-scale obligations) and right after any EFSP Mutation, so a
+// controller's fix clears its badge at once. ────────────────────────────
 const obligationMonitor = new ForwardingObligationMonitor({
   clock: missionClock,
   boardStoreFor: efsp.boardStoreFor,
   fdrStore: efsp.fdrStore,
   facilityConfig: efspFacilityConfig,
   airspaceStore: efsp.airspaceStore,
-  onAlert: (alert) => wsHub.broadcastEfspObligationAlert(alert),
 });
 
 // The NLA inhibit status every Strip carries on the wire (F-408) has a
@@ -471,9 +471,10 @@ const obligationMonitor = new ForwardingObligationMonitor({
 // reason here, and two cadences would let the two disagree.
 efsp.nlaStatusMonitor.setOnDelta((payload) => wsHub.broadcastEfspBoardDelta(payload));
 setInterval(() => {
-  obligationMonitor.tick();
+  if (obligationMonitor.tick()) broadcastEfspAlerts();
   efsp.nlaStatusMonitor.tick();
 }, 15000);
+wsHub.setOnEfspChange(() => { if (obligationMonitor.tick()) broadcastEfspAlerts(); });
 
 // ── WP5 Strip<->track correlation (guide §6.6, docs/adr/0045/0046) ───────
 // Its own cadence again, and a much faster one: this is what keeps each
@@ -519,6 +520,18 @@ const stcaMonitor = new StcaMonitor({
   // Alert text names each aircraft the way identity does (docs/adr/0059).
   callsignFor: (track) => identity.labelFor(track.id),
 });
+// The one place efsp-alerts is composed (docs/adr/0067). broadcastEfspAlerts
+// replaces the whole alert state, so every producer — the 1s conformance/STCA
+// tick, the 15s obligation sweep, the post-Mutation hook — must send all three
+// slices, or it would erase the others'. A function declaration: the 15s
+// interval above calls it, long after these consts exist.
+function broadcastEfspAlerts() {
+  wsHub.broadcastEfspAlerts({
+    conformance: conformanceMonitor.getAll(),
+    stca: stcaMonitor.getAll(),
+    obligations: obligationMonitor.getAll(),
+  });
+}
 // Conformance runs on the mission clock — its grace period is measured from
 // the clearance's own timestamp, which is mission time, and the `since` it
 // reports is shown to controllers. STCA stays on the wall clock: it only
@@ -528,7 +541,7 @@ setInterval(() => {
   const conformanceChanged = conformanceMonitor.tick();
   const stcaChanged = stcaMonitor.tick(Date.now());
   if (conformanceChanged || stcaChanged) {
-    wsHub.broadcastEfspAlerts({ conformance: conformanceMonitor.getAll(), stca: stcaMonitor.getAll() });
+    broadcastEfspAlerts();
   }
 }, 1000);
 

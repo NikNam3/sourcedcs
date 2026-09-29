@@ -33,11 +33,9 @@
 // at all — the next delta simply carries `warning: null`. Nothing is erased:
 // the raise AND the retraction both sit in transitions[].
 //
-// This is deliberately NOT the obligation-alert shape. ForwardingObligation-
-// Monitor cannot retract, because an alert is a fire-and-forget broadcast with
-// no record behind it to update — efsp-state.js's own comment admits as much
-// ("the server never retracts an alert once raised this slice"). Do not copy
-// that here.
+// Obligations (ForwardingObligationMonitor) once lacked exactly this — a
+// fire-and-forget alert nothing could retract — and now retract the same way:
+// state re-sent whole, cleared by omission (docs/adr/0067).
 
 const { MAX_FREE_TEXT } = require('./fdr-store');
 const { WALL_CLOCK } = require('../mission-clock');
