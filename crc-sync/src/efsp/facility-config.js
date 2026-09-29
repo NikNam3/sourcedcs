@@ -28,6 +28,7 @@
 
 const fs = require('fs');
 const blockMap = require('./block-map');
+const fieldState = require('./field-state'); // pure, requires nothing back (docs/adr/0061)
 // Required BEFORE this module builds its configs Map: the RANGES Facility's
 // Position set is derived from the airspace definitions (see
 // DEFAULT_RANGES_CONFIG). airspace-config.js deliberately does not require
@@ -133,7 +134,7 @@ const DEFAULT_CONFIG = {
       // would become invisible, so it must never be anyone's "default" Bay.
       { bayId: 'ops-proposed', rackIds: ['main'], impliesState: 'PROPOSED' },
       { bayId: 'ops-filed',    rackIds: ['main'] },
-      { bayId: 'ops-field-state',   rackIds: ['main'] }, // WP6 hook, inert
+      { bayId: 'ops-field-state',   rackIds: ['main'] }, // an inert Strip container: the field-state BOARD is not Strips, it is its own dock panel (docs/adr/0061)
       { bayId: 'ops-coordination',  rackIds: ['main'] }, // no cross-Facility primitive reaches OPS this slice — inert
     ],
     CD: [
@@ -189,6 +190,41 @@ const DEFAULT_CONFIG = {
   // AIT is configuration, not a default (guide §4.6 rule 7) — false until
   // a real written directive is on file (docs/adr/0022).
   aitAuthorized: false,
+  // Guide §9.7 field state — the runway INVENTORY only (docs/adr/0061). Which
+  // runways, ends and gear exist is config, read once at startup and never
+  // written by code (decisions.md P5); status, suspension, the active end and
+  // any runway change are runtime state in field-state-store.js. Shape checked
+  // by field-state.js's validateFieldStateInventory.
+  //
+  // [SOURCE-DEFINED] — every value below is squadron data, not doctrine:
+  fieldState: {
+    airportIcao: 'LTAG', // whose mission wind picks the active end at load (decisions.md H22)
+    runways: [
+      {
+        // One record per PHYSICAL runway (decisions.md S-Q23): a barrier
+        // change closes the pavement in both directions.
+        runwayId: '05/23',
+        ends: ['05', '23'],
+        // TRUE headings, because DCS reports wind in degrees true and an end's
+        // number is magnetic. Approximate — the squadron should verify.
+        endHeadingsTrue: { '05': 56, '23': 236 },
+        rackIds: { '05': 'rwy-05', '23': 'rwy-23' }, // twr-runway-queue's one Rack per end
+        // DCS does not simulate arresting wires (decisions.md H17): the gear is
+        // the §9.7 data shape and nothing more. None shipped.
+        arrestingGear: [],
+      },
+    ],
+    // Guide §9.7 rule 3; OPS stands in for the SOF. Coordination, not
+    // permission (decisions.md H20): an unmanned acknowledger reverts to the
+    // Position below, else it is skipped and audited — never a deadlock.
+    runwayChangeAcknowledgers: ['OPS', 'APP'],
+    acknowledgerReversion: { APP: { facilityId: 'CENTER', positionId: 'CTR' } }, // §4.1: APP reverts to CTR
+    // Narrows permission.js's CompleteInspection row; it can never widen it.
+    inspectionAuthorityPositionId: 'OPS',
+    // Named placeholders only, no geometry or preferred direction (decisions.md
+    // H21). L12 (hot cargo) and L13 (alert pad) give them meaning.
+    pads: { hotCargo: { name: 'Hot cargo pad' }, alert: { name: 'Alert pad' } },
+  },
 };
 
 // [SOURCE-DEFINED] WP4A (docs/adr/0013) — the guide gives no published
@@ -400,6 +436,13 @@ function validateConfig(candidate) {
       }
     }
   }
+  // The runway inventory (guide §9.7, docs/adr/0061): malformed can never work
+  // anywhere, so it is rejected like a malformed radar selector. How it lines
+  // up with the Bays only warns — see _loadOne.
+  if (candidate.fieldState !== undefined) {
+    const problem = fieldState.validateFieldStateInventory(candidate.fieldState, candidate.positions || []);
+    if (problem) return { ok: false, reason: 'VALIDATION_ERROR', detail: problem };
+  }
   return { ok: true };
 }
 
@@ -454,6 +497,10 @@ function _loadOne(facilityId) {
     }
   } catch (e) {
     console.warn(`[efsp-facility-config] failed to load ${facilityId} config, using defaults:`, e.message);
+  }
+  // After the merged config is chosen, so the shipped defaults are checked too.
+  for (const warning of fieldState.runwayInventoryWarnings(config)) {
+    console.warn(`[efsp-facility-config] ${facilityId}: ${warning}`);
   }
   return config;
 }
