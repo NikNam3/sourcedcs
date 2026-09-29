@@ -49,21 +49,25 @@ const COMPACT_BLOCKS_BY_ROLE = {
 //  - A runway field only for the airfield Positions: OPS, CD, GND, TWR, APP.
 //  - FREQ (22) only where a controller works more than one frequency: APP and
 //    CTR. OPS, CD, GND and TWR each sit on one.
+//  - The assigned altitude (ALT) wherever a clearance is issued or worked: CD,
+//    TWR, APP, CTR. The assigned heading (HDG) only where aircraft are
+//    vectored: APP and CTR (docs/adr/0058) — a departure clearance rarely
+//    carries one.
 //  - The TOFI fields (IFR, RSVC, SREG) and airspace ownership (24A) where TOFI
 //    and airspace entry happen: CTR. SREG stays at APP too, because MARSA —
 //    which APP can declare — writes it.
 const COMPACT_BLOCKS_BY_POSITION = {
   DEPARTURE: {
     OPS: ['1', '3', '5', '6', '7', '8', '8A', '8B', '9', '9F', '3D', '3E'],
-    CD:  ['1', '3', '5', '7', '8', '8A', '8B', '9', '9F', '10', '14A', '14D', '20', '21'],
+    CD:  ['1', '3', '5', '7', '8', '8A', '8B', '9', '9F', '10', '14A', '14D', '21'],
     GND: ['1', '3', '5', '8', '8A', '14A', '14D'],
-    TWR: ['1', '3', '5', '8A', '20', '21', '14D', '3F', '3G'],
+    TWR: ['1', '3', '5', '8A', '21', '14D', '3F', '3G'],
     APP: ['1', '3', '5', '7', '8A', '9', '20', '21', '22', '5A', 'SREG'],
-    CTR: ['1', '3', '5', '7', '8B', '9', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A'],
+    CTR: ['1', '3', '5', '7', '21', '20', '8B', '9', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A'],
   },
   ARRIVAL: {
     GND: ['1', '3', '5', '8B'],
-    TWR: ['1', '3', '5', '8B', '9A-FUEL', '3F', '3G'],
+    TWR: ['1', '3', '5', '7', '8B', '9A-FUEL', '3F', '3G'],
     APP: ['1', '3', '5', '6', '7', '8A', '8B', '9A-VECTOR', '9A-SPEED', '22', '5A', 'SREG'],
     CTR: ['1', '3', '5', '6', '7', '9A-VECTOR', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A'],
   },
@@ -75,10 +79,6 @@ const COMPACT_BLOCKS_BY_POSITION = {
 
 // Grid columns a field spans. Everything else takes one.
 const FIELD_SPANS = { '1': 2, '3': 2, '9': 3, '24A': 2, M1: 2, M3: 2, M5: 2 };
-
-// The Positions that work a flight on the airfield. Their Strips have no TOFI
-// and no airspace entry, so those two indicator slots would only ever be dim.
-const GROUND_POSITIONS = ['OPS', 'CD', 'GND', 'TWR'];
 
 function _blockMapFor(role) {
   return (typeof BLOCK_MAPS === 'object' && BLOCK_MAPS && BLOCK_MAPS[role]) || null;
@@ -101,21 +101,10 @@ function fieldSpanFor(blockId) {
   return FIELD_SPANS[blockId] || 1;
 }
 
-/**
- * The indicator slots a Strip draws, in order. Always drawn, lit or dim, so
- * each one sits in the same place on every Strip in a Bay.
- * @returns {string[]} slot keys: trk, marsa, tofi, airspace, timer, siblings
- */
-function indicatorSlotsFor(role, positionId) {
-  if (role === 'MISSION') return ['trk', 'marsa', 'tofi', 'siblings'];
-  if (GROUND_POSITIONS.includes(positionId)) return ['trk', 'marsa', 'timer', 'siblings'];
-  return ['trk', 'marsa', 'tofi', 'airspace', 'timer', 'siblings'];
-}
-
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     COMPACT_BLOCKS_SHARED, COMPACT_BLOCKS_BY_ROLE, COMPACT_BLOCKS_BY_POSITION,
-    FIELD_SPANS, GROUND_POSITIONS,
-    compactBlocksFor, fieldSpanFor, indicatorSlotsFor,
+    FIELD_SPANS,
+    compactBlocksFor, fieldSpanFor,
   };
 }

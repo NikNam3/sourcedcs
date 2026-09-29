@@ -1,13 +1,18 @@
 'use strict';
 
+// Every DCS unit crc-sync knows about, as DCS reports it: ground truth.
+//
+// None of this goes to a client as-is. What a controller is told about a
+// track is decided by surveillance/presentation.js from what their sensors
+// could know (docs/adr/0059); this store is what the server itself works
+// from — the radar sweep, correlation, conformance and conflict alerting.
+
 const STALE_MS = 12000; // remove tracks not updated within this window
 
 class TrackStore {
   constructor() {
     this._tracks   = new Map(); // id → track
     this._lastSeen = new Map(); // id → Date.now()
-    this._log      = [];        // [{seq, type:'update'|'gone', id, track?}]
-    this._seq      = 0;
   }
 
   // Remove tracks whose last update is older than STALE_MS.
@@ -24,89 +29,51 @@ class TrackStore {
     return count;
   }
 
-  update(unitData, transponder) {
+  update(unitData) {
+    const prev = this._tracks.get(unitData.id);
     const track = {
       id:        unitData.id,
       callsign:  unitData.callsign,
+      // The DCS unit name, which is what the mission scripting API finds a
+      // unit by (the datalink's lock poll).
+      name:      unitData.name || null,
       coalition: unitData.coalition,
       type:      unitData.type,
       lat:       unitData.lat,
       lon:       unitData.lon,
       alt:       unitData.alt,
       heading:   unitData.heading || 0,
+      // docs/adr/0058 — null when DCS sent no velocity for this unit.
+      course:        Number.isFinite(unitData.course) ? unitData.course : null,         // degrees, grid
+      groundSpeed:   Number.isFinite(unitData.groundSpeed) ? unitData.groundSpeed : null, // m/s
+      verticalSpeed: Number.isFinite(unitData.verticalSpeed) ? unitData.verticalSpeed : null, // m/s, + is up
+      // When this track first appeared — conflict alerting ignores a track too
+      // young to have a stable course.
+      firstSeenAt: (prev && prev.firstSeenAt) || Date.now(),
       player:    unitData.player,
       category:  unitData.category,
     };
-
-    if (transponder) {
-      if (transponder.squawk       !== undefined) track.squawk       = transponder.squawk;
-      if (transponder.squawkStatus !== undefined) track.squawkStatus = transponder.squawkStatus;
-      if (transponder.mode4        !== undefined) track.mode4        = transponder.mode4;
-    }
-
     this._tracks.set(unitData.id, track);
     this._lastSeen.set(unitData.id, Date.now());
-    this._log.push({ seq: ++this._seq, type: 'update', id: unitData.id, track });
-    this._pruneLog();
   }
 
   remove(id) {
-    if (!this._tracks.has(id)) return;
     this._tracks.delete(id);
     this._lastSeen.delete(id);
-    this._log.push({ seq: ++this._seq, type: 'gone', id });
-    this._pruneLog();
   }
 
-  // Called on mission reload — flush all tracks as gone
+  // Called on mission reload.
   clear() {
-    for (const id of this._tracks.keys()) {
-      this._log.push({ seq: ++this._seq, type: 'gone', id });
-    }
     this._tracks.clear();
     this._lastSeen.clear();
-    this._pruneLog();
   }
 
   getAll() { return [...this._tracks.values()]; }
 
-  // Added for crc-sync's ws-hub.js, which needs to join CollaborativeStore
-  // deltas (string ids) back against raw tracks (id type as emitted by
-  // grpc-client.js) — not present in the original crc-desktop version.
+  // Tolerates either id type: DCS emits numbers, everything keyed off the
+  // wire uses strings.
   get(id) {
     return this._tracks.get(id) || this._tracks.get(Number(id)) || this._tracks.get(String(id)) || null;
-  }
-
-  get currentSeq() { return this._seq; }
-
-  // Returns { updated: Track[], gone: string[], seq: number }
-  // All changes that occurred after `afterSeq`.
-  getDeltaSince(afterSeq) {
-    // Collect log entries newer than afterSeq (log is append-only, oldest first)
-    const entries = [];
-    for (let i = this._log.length - 1; i >= 0; i--) {
-      if (this._log[i].seq <= afterSeq) break;
-      entries.unshift(this._log[i]);
-    }
-
-    // Collapse per-id: only the last event per id matters
-    const byId = new Map();
-    for (const e of entries) byId.set(e.id, e);
-
-    const updated = [], gone = [];
-    for (const e of byId.values()) {
-      if (e.type === 'update' && this._tracks.has(e.id)) {
-        updated.push(this._tracks.get(e.id)); // always use latest version
-      } else if (e.type === 'gone' && !this._tracks.has(e.id)) {
-        gone.push(e.id);
-      }
-    }
-    return { updated, gone, seq: this._seq };
-  }
-
-  // Keep only the last 1000 log entries (oldest first)
-  _pruneLog() {
-    if (this._log.length > 2000) this._log.splice(0, this._log.length - 1000);
   }
 }
 

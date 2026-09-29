@@ -25,7 +25,7 @@ const facilityConfig = (await import('../src/efsp/facility-config.js')).default
   || await import('../src/efsp/facility-config.js');
 const { PositionStore } = await import('../src/efsp/position-store.js');
 const { StationCoverage, selectorMatches, resolveSelectors } = await import('../src/efsp/station-coverage.js');
-const { USER_COALITION } = await import('../src/resolve.js');
+const { USER_COALITION } = await import('../src/surveillance/iff.js');
 
 const ENEMY_COALITION = USER_COALITION === 3 ? 2 : 3;
 
@@ -230,6 +230,15 @@ test('the radar list is read live, so an AWACS taking off appears without rebuil
   assert.deepEqual(coverage.forController('c1').radars.map(r => r.id).sort(), ['crc:11', 'crc:12']);
 });
 
+test('the tactical Positions are on the datalink; the ATC Positions are not (docs/adr/0059)', () => {
+  const { coverage, stores } = build();
+  hold(stores, 'TACTICAL', 'c1', ['GCI']);
+  hold(stores, 'INCIRLIK', 'c2', ['APP']);
+  assert.equal(coverage.forController('c1').datalink, true);
+  assert.equal(coverage.forController('c2').datalink, false);
+  assert.equal(coverage.forController('nobody').datalink, false);
+});
+
 // ── config validation ──────────────────────────────────────────────────────
 
 test('the shipped configs all validate, and every Position with a scope exists', () => {
@@ -257,6 +266,7 @@ test('a malformed selector is refused, because it can never resolve in any theat
     [{ kind: 'airport', airport: 42 }, /must be an ICAO/],
     [{ kind: 'approach', coalition: 'blue' }, /coalition must be/],
     [{ kind: 'fighter', airport: 'LTAG' }, /airborne/],
+    [{ kind: 'datalink', airport: 'LTAG' }, /network/],
     ['app:Incirlik', /must be an object/],
   ];
   for (const [selector, pattern] of cases) {
@@ -289,4 +299,14 @@ test('radarBearingPositionIds names the Positions that have a scope at all', () 
   for (const positionId of ['OPS', 'CD', 'GND', 'JTAC']) {
     assert.ok(!ids.includes(positionId), `${positionId} should not be a radar Position`);
   }
+});
+
+test('conflict alerting is for the ATC Positions only (docs/adr/0059)', () => {
+  const { coverage, stores } = build();
+  hold(stores, 'TACTICAL', 'c1', ['GCI']);
+  hold(stores, 'INCIRLIK', 'c2', ['TWR']);
+  hold(stores, 'CENTER', 'c3', ['CTR']);
+  assert.equal(coverage.forController('c1').stca, false);
+  assert.equal(coverage.forController('c2').stca, true);
+  assert.equal(coverage.forController('c3').stca, true);
 });

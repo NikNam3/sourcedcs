@@ -19,8 +19,18 @@
 // A controller holding no radar-bearing Position gets an empty set, and the
 // client says so out loud rather than showing a blank map. A Ground controller
 // has no scope; that is the answer.
+//
+// The datalink rides the same selectors, as `{kind: 'datalink'}`
+// (docs/adr/0059). It is not a radar — it matches none — and a Position that
+// has it gets the datalink feed (surveillance/datalink.js) alongside whatever
+// radars it looks through.
 
-const { USER_COALITION } = require('../resolve');
+const { USER_COALITION } = require('../surveillance/iff');
+
+// The Position classes that separate traffic and so get short-term conflict
+// alerts (docs/adr/0059). The tactical side does not: military positions and
+// radars do not do collision avoidance the way ATC does.
+const ATC_CLASSES = new Set(['MILITARY_ATC', 'CIVIL_ATC']);
 
 /**
  * Does one radar match one selector?
@@ -107,7 +117,7 @@ class StationCoverage {
    * panel can answer "why am I seeing this".
    *
    * @returns {{radars:Array, radarIds:Set<string>, heldPositions:Array,
-   *            radarBearingPositions:Array<string>}}
+   *            radarBearingPositions:Array<string>, datalink:boolean, stca:boolean}}
    */
   forController(controllerId) {
     const radars = this._radars() || [];
@@ -117,10 +127,12 @@ class StationCoverage {
 
     const grantedBy = new Map(); // radarId -> [positionId]
     const radarBearingPositions = [];
+    let datalink = false;
 
     for (const { facilityId, positionId } of held) {
       const selectors = this._facilityConfig.getPositionRadars(positionId, facilityId);
       if (!selectors.length) continue;
+      if (selectors.some(s => s.kind === 'datalink')) datalink = true;
       radarBearingPositions.push(positionId);
       for (const radarId of resolveSelectors(selectors, radars, opts)) {
         const list = grantedBy.get(radarId);
@@ -143,6 +155,8 @@ class StationCoverage {
       radarIds: new Set(out.map(r => r.id)),
       heldPositions: held,
       radarBearingPositions,
+      datalink,
+      stca: held.some(p => ATC_CLASSES.has(this._facilityConfig.getPositionClass(p.positionId))),
     };
   }
 
@@ -210,6 +224,7 @@ function reportUnresolvedSelectors(facilityConfig, radars, opts) {
     const config = facilityConfig.getFacilityConfig(facilityId);
     for (const [positionId, selectors] of Object.entries(config.positionRadars || {})) {
       for (const selector of selectors) {
+        if (selector.kind === 'datalink') continue; // a network, not a radar in the theater
         if (resolveSelectors([selector], radars, opts).size > 0) continue;
         const where = selector.airport ? ` at ${selector.airport}` : '';
         unresolved.push(`${facilityId}/${positionId} wants ${selector.kind}${where}`);
@@ -223,6 +238,6 @@ function reportUnresolvedSelectors(facilityConfig, radars, opts) {
 }
 
 module.exports = {
-  StationCoverage, selectorMatches, resolveSelectors,
+  StationCoverage, selectorMatches, resolveSelectors, ATC_CLASSES,
   assignableRadars, reportUnresolvedSelectors,
 };

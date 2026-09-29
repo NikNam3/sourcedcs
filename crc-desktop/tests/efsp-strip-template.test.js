@@ -127,11 +127,42 @@ test('hasActiveAnnotationEntry is false for a Strip with no annotations at all',
 });
 
 test('hasActiveAnnotationEntry is true when an ACTIVE entry exists, false once it\'s STRUCK', () => {
-  const active = makeStrip({ annotations: { '21': { blockId: '21', entries: [{ value: '90', status: 'ACTIVE' }] } } });
-  assert.equal(hasActiveAnnotationEntry(active, '21'), true);
+  // Block 24 (MIT RMKS) is a Strip annotation; 21 is the flight's clearance now.
+  const active = makeStrip({ annotations: { '24': { blockId: '24', entries: [{ value: '90', status: 'ACTIVE' }] } } });
+  assert.equal(hasActiveAnnotationEntry(active, '24'), true);
 
-  const struck = makeStrip({ annotations: { '21': { blockId: '21', entries: [{ value: '90', status: 'STRUCK' }] } } });
-  assert.equal(hasActiveAnnotationEntry(struck, '21'), false);
+  const struck = makeStrip({ annotations: { '24': { blockId: '24', entries: [{ value: '90', status: 'STRUCK' }] } } });
+  assert.equal(hasActiveAnnotationEntry(struck, '24'), false);
+});
+
+test('the assigned altitude and heading read their history from the FLIGHT, not the Strip (docs/adr/0058)', () => {
+  const fdr = { fdrId: 'fX', clearance: {
+    altitude: { entries: [{ value: '050', status: 'SUPERSEDED' }, { value: 'FL180', status: 'ACTIVE' }] },
+    heading: { entries: [] },
+  } };
+  global.getEfspFdr = (id) => (id === 'fX' ? fdr : null);
+  try {
+    const strip = makeStrip({ fdrId: 'fX', annotations: { '21': { blockId: '21', entries: [{ value: 'stale', status: 'ACTIVE' }] } } });
+    assert.equal(activeAnnotationValue(strip, '21'), 'FL180', 'a leftover Strip note is ignored');
+    assert.equal(hasActiveAnnotationEntry(strip, '21'), true);
+    assert.deepEqual(supersededAnnotationEntries(strip, '21').map(x => x.value), ['050']);
+    assert.equal(resolveBlockValue('21', fdr, strip).value, 'FL180');
+    assert.equal(hasActiveAnnotationEntry(strip, '20'), false);
+  } finally {
+    delete global.getEfspFdr;
+  }
+});
+
+test('ALT is confirm-vacated on every Role that has one, and the filed altitude reads CRUS ALT', () => {
+  assert.deepEqual(CONFIRM_VACATED_ELIGIBLE_BLOCKS, { DEPARTURE: ['21'], ARRIVAL: ['7'], OVERFLIGHT: ['7A'] });
+  assert.equal(blockLabelFor('7', 'DEPARTURE'), 'CRUS ALT');
+  assert.equal(blockLabelFor('7', 'OVERFLIGHT'), 'CRUS ALT');
+  assert.equal(blockLabelFor('21', 'DEPARTURE'), 'ALT');
+  assert.equal(blockLabelFor('7', 'ARRIVAL'), 'ALT');
+  assert.equal(blockLabelFor('7A', 'OVERFLIGHT'), 'ALT');
+  for (const [role, id] of [['DEPARTURE', '20'], ['ARRIVAL', '9A-VECTOR'], ['OVERFLIGHT', '9A-VECTOR']]) {
+    assert.equal(blockLabelFor(id, role), 'HDG', `${role} ${id}`);
+  }
 });
 
 test('DEPARTURE Block 21 (Initial altitude) is confirmVacated-eligible, per guide §3.7 rule 3', () => {
@@ -213,11 +244,9 @@ test('resolveBlockValue routes to ARRIVAL_BLOCK_MAP when strip.role is ARRIVAL',
   assert.deepEqual(resolveBlockValue('8', fdr, strip), { value: 'LTAG', provenance: 'CONTROLLER_ENTERED' });
 });
 
-test('resolveBlockValue on ARRIVAL Block 7 (assigned/cleared altitude) reads the annotation cell, not an fdr field — unlike DEPARTURE\'s Block 7', () => {
-  const strip = makeArrivalStrip({
-    annotations: { '7': { blockId: '7', entries: [{ value: '4000', status: 'ACTIVE' }] } },
-  });
-  assert.equal(resolveBlockValue('7', makeArrivalFdr(), strip).value, '4000');
+test('resolveBlockValue on ARRIVAL Block 7 reads the flight\'s assigned altitude — unlike DEPARTURE\'s Block 7, the filed one', () => {
+  const fdr = { ...makeArrivalFdr(), clearance: { altitude: { entries: [{ value: '4000', status: 'ACTIVE' }] }, heading: { entries: [] } } };
+  assert.equal(resolveBlockValue('7', fdr, makeArrivalStrip()).value, '4000');
 });
 
 test('resolveBlockValue on a DEPARTURE Strip (no role, or role:DEPARTURE) still reads Block 7 from the fdr, unaffected by ARRIVAL\'s remapping', () => {
@@ -391,33 +420,34 @@ test('Block 9F is ordinary click-to-edit free text — typing a route name into 
 // ── §3.7 history, the half that never reached the DOM ────────────────────
 
 const e = (value, status) => ({ value, status, at: 1, by: 'c-OPS' });
-const withCell = (entries) => ({ annotations: { 21: { blockId: '21', entries } } });
+// Block 24 (MIT RMKS): an ordinary Strip annotation. 21 is the flight's clearance now.
+const withCell = (entries) => ({ annotations: { 24: { blockId: '24', entries } } });
 
 test('annotationHistory returns every entry in the order written', () => {
   const strip = withCell([e('2000', 'SUPERSEDED'), e('4000', 'STRUCK'), e('6000', 'ACTIVE')]);
-  assert.deepEqual(annotationHistory(strip, '21').map(x => x.value), ['2000', '4000', '6000']);
-  assert.deepEqual(annotationHistory(strip, '21').map(x => x.status), ['SUPERSEDED', 'STRUCK', 'ACTIVE']);
+  assert.deepEqual(annotationHistory(strip, '24').map(x => x.value), ['2000', '4000', '6000']);
+  assert.deepEqual(annotationHistory(strip, '24').map(x => x.status), ['SUPERSEDED', 'STRUCK', 'ACTIVE']);
 });
 
 test('annotationHistory is [] for a Block never written, and for one that is not an annotation', () => {
   // [] rather than null, so no caller needs a null check to ask the question.
   assert.deepEqual(annotationHistory(withCell([]), '20'), []);
-  assert.deepEqual(annotationHistory({ annotations: {} }, '21'), []);
-  assert.deepEqual(annotationHistory({}, '21'), []);
+  assert.deepEqual(annotationHistory({ annotations: {} }, '24'), []);
+  assert.deepEqual(annotationHistory({}, '24'), []);
   assert.deepEqual(annotationHistory(withCell([e('x', 'ACTIVE')]), '9'), [], 'Block 9 is fdr-routed');
 });
 
 test('supersededAnnotationEntries is everything the Block is no longer showing as current', () => {
   const strip = withCell([e('2000', 'SUPERSEDED'), e('4000', 'STRUCK'), e('5000', 'PREPLANNED'), e('6000', 'ACTIVE')]);
-  assert.deepEqual(supersededAnnotationEntries(strip, '21').map(x => x.value), ['2000', '4000', '5000']);
+  assert.deepEqual(supersededAnnotationEntries(strip, '24').map(x => x.value), ['2000', '4000', '5000']);
   // PREPLANNED is carried through as its own status rather than folded into
   // SUPERSEDED — it is a distinct thing the server can produce and nothing has
   // ever rendered it.
-  assert.equal(supersededAnnotationEntries(strip, '21')[2].status, 'PREPLANNED');
+  assert.equal(supersededAnnotationEntries(strip, '24')[2].status, 'PREPLANNED');
 });
 
 test('a Block with only an ACTIVE entry has no superseded entries', () => {
-  assert.deepEqual(supersededAnnotationEntries(withCell([e('6000', 'ACTIVE')]), '21'), []);
+  assert.deepEqual(supersededAnnotationEntries(withCell([e('6000', 'ACTIVE')]), '24'), []);
 });
 
 // ── labels have to tell Blocks apart ─────────────────────────────────────

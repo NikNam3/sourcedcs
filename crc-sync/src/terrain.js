@@ -27,7 +27,7 @@ const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
 
-const { haversineM } = require('./resolve');
+const { haversineM } = require('./geo');
 
 // Fixed sampling zoom, independent of anything a client is looking at.
 const LOS_DEM_ZOOM = 10;

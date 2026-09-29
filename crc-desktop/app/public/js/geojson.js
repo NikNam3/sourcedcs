@@ -13,20 +13,74 @@ function trackColor(track) {
   return iffColor(getIff(track));
 }
 
-function buildInfo(track, hist) {
+/** The data block's second line, from the track history's speed and climb. */
+function infoLine_(t, hist) {
   const { speedKt } = kinematics(hist);
-  const fpm         = verticalFpm(hist);
-  const fl          = Math.round(indicatedAltFt(track.alt) / 100).toString().padStart(3, '0');
-  const gs          = Math.round(speedKt).toString().padStart(3, '0');
-  let line;
-  if (Math.abs(fpm) > 100) {
-    const arrow = fpm > 0 ? '↑' : '↓';
-    const vv    = Math.min(99, Math.round(Math.abs(fpm) / 100)).toString().padStart(2, '0');
-    line = `${fl}${arrow}${vv} G${gs}`;
-  } else {
-    line = `${fl} G${gs}`;
+  return infoLine(t, speedKt, verticalFpm(hist));
+}
+
+// ── Assigned values and alerts in the data block (docs/adr/0058) ───────────
+const ALERT_COLOR_BAD = '#ff8a4c';
+const ALERT_COLOR_ATTN = '#e0a83c';
+
+/** The Strip-side flight record for a track, if it is correlated to one. */
+function _fdrForTrack(trackId) {
+  if (typeof stripIdsForTrackId !== 'function' || typeof getEfspStrip !== 'function') return null;
+  for (const stripId of stripIdsForTrackId(trackId)) {
+    const strip = getEfspStrip(stripId);
+    const fdr = strip && getEfspFdr(strip.fdrId);
+    if (fdr) return fdr;
   }
-  return line;
+  return null;
+}
+
+/** "A180 H050": the flight's assigned altitude (hundreds of feet) and heading, when it has them. */
+function buildAssignedLine(fdr) {
+  if (!fdr || !fdr.clearance) return '';
+  const active = (cell) => cell && cell.entries.find(e => e.status === 'ACTIVE');
+  const alt = active(fdr.clearance.altitude);
+  const hdg = active(fdr.clearance.heading);
+  const parts = [];
+  if (alt && Number.isFinite(alt.parsed)) parts.push('A' + String(Math.round(alt.parsed / 100)).padStart(3, '0'));
+  if (hdg && Number.isFinite(hdg.parsed)) parts.push('H' + String(hdg.parsed).padStart(3, '0'));
+  return parts.join(' ');
+}
+
+/** The one alert tag a data block leads with: a conflict first, then conformance. */
+function buildAlertTag(trackId, fdr) {
+  const conflicts = typeof stcaConflictsForTrack === 'function' ? stcaConflictsForTrack(trackId) : [];
+  if (conflicts.length) return { tag: 'STCA', color: ALERT_COLOR_BAD };
+  const alerts = fdr && typeof conformanceAlertsForFdr === 'function' ? conformanceAlertsForFdr(fdr.fdrId) : [];
+  const bad = alerts.find(a => a.kind !== 'HEADING');
+  if (bad && bad.kind === 'LEVEL_BUST') return { tag: `BUST${bad.deviationFt > 0 ? '+' : '−'}${Math.abs(bad.deviationFt)}`, color: ALERT_COLOR_BAD };
+  if (bad && bad.kind === 'WRONG_WAY') return { tag: `ALT${bad.fpm < 0 ? '↓' : '↑'}`, color: ALERT_COLOR_BAD };
+  const hdg = alerts.find(a => a.kind === 'HEADING');
+  if (hdg) return { tag: `HDG${String(hdg.actual).padStart(3, '0')}`, color: ALERT_COLOR_ATTN };
+  return { tag: '', color: ALERT_COLOR_ATTN };
+}
+
+/**
+ * Each short-term conflict drawn on the scope: both predicted paths, the line
+ * between their closest points, and a marker there with the countdown.
+ */
+function buildStcaOverlay() {
+  const features = [];
+  const conflicts = typeof getAllEfspConflicts === 'function' ? getAllEfspConflicts() : [];
+  const now = (id) => tracks.get(String(id)) || latestFromServer.get(String(id));
+  for (const c of conflicts) {
+    const a = now(c.a);
+    const b = now(c.b);
+    if (a) features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: [[a.lon, a.lat], [c.aAt.lon, c.aAt.lat]] }, properties: { kind: 'path' } });
+    if (b) features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: [[b.lon, b.lat], [c.bAt.lon, c.bAt.lat]] }, properties: { kind: 'path' } });
+    features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: [[c.aAt.lon, c.aAt.lat], [c.bAt.lon, c.bAt.lat]] }, properties: { kind: 'cpa-line' } });
+    const clock = `${Math.floor(c.timeToCpaSec / 60)}:${String(c.timeToCpaSec % 60).padStart(2, '0')}`;
+    features.push({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [(c.aAt.lon + c.bAt.lon) / 2, (c.aAt.lat + c.bAt.lat) / 2] },
+      properties: { kind: 'cpa', label: `${clock}  ${c.minNm} NM / ${c.vertFt} ft` },
+    });
+  }
+  return { type: 'FeatureCollection', features };
 }
 
 // Fade opacity for a track based on time since last radar sweep hit,
@@ -50,33 +104,27 @@ function buildDots() {
   const baseOp   = trackOpacity();
 
   for (const [id, t] of tracks) {
-    if (!settings.aiEnabled && !t.player) continue;
-    if (!settings.shipsEnabled && t.category === 4) continue;
-    if (settings.hideGroundUnits && t.category === 3) continue;
+    if (!settings.shipsEnabled && t.domain === 'SEA') continue;
+    if (settings.hideGroundUnits && t.domain === 'GROUND') continue;
     const iffState = getIff(t);
-    if (iffState === 'invisible') continue;
     const hist       = history.get(id) || [];
     const { heading } = kinematics(hist);
-    const onGround   = checkOnGround(t);
-    const emType     = squawkEmergency(t.squawk);
-    const isIdent    = t.squawkStatus === 2;
+    const emType     = trackEmergency(t);
     let   opacity    = sweepOpacity(id, baseOp);
-    if (isIdent) opacity = sweepOpacity(id, baseOp) * (_pulseBright ? 1.0 : 0.3);
+    if (trackIsIdent(t)) opacity = sweepOpacity(id, baseOp) * (_pulseBright ? 1.0 : 0.3);
     features.push({
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [t.lon, t.lat] },
       properties: {
         id,
-        callsign:       resolveCallsign(t),
         color:          trackColor(t),
-        coalition:      t.coalition,
-        category:       t.category,
+        domain:         t.domain,
         iff:            iffState,
         opacity,
-        onGround,
+        onGround:       !!t.onGround,
         heading:        Math.round(heading),
         emergency:      emType || '',
-        emergencyColor: emType ? EMERGENCY_COLOR[emType] : '',
+        emergencyColor: emType ? emergencyColor(emType) : '',
       },
     });
   }
@@ -105,11 +153,9 @@ function buildTrails() {
   };
 
   for (const [id, t] of tracks) {
-    if (!settings.aiEnabled && !t.player) continue;
-    if (!settings.shipsEnabled && t.category === 4) continue;
-    if (getIff(t) === 'invisible') continue;
-    if (t.category === 3) continue; // ground units have no trail
-    if (checkOnGround(t)) continue; // aircraft on ground have no trail
+    if (!settings.shipsEnabled && t.domain === 'SEA') continue;
+    if (t.domain === 'GROUND') continue; // ground units have no trail
+    if (t.onGround) continue; // aircraft on ground have no trail
     const hist = history.get(id);
     if (hist && hist.length > 1) addDots(hist, t, sweepOpacity(id, 1));
   }
@@ -124,11 +170,9 @@ function buildPPL() {
   const durS     = settings.pplDuration;
 
   for (const [id, t] of tracks) {
-    if (!settings.aiEnabled && !t.player) continue;
-    if (!settings.shipsEnabled && t.category === 4) continue;
-    if (getIff(t) === 'invisible') continue;
-    if (t.category === 3) continue; // ground units have no PPL
-    if (checkOnGround(t)) continue; // aircraft on ground have no PPL
+    if (!settings.shipsEnabled && t.domain === 'SEA') continue;
+    if (t.domain === 'GROUND') continue; // ground units have no PPL
+    if (t.onGround) continue; // aircraft on ground have no PPL
     const hist = history.get(id) || [];
     const { heading, speedMs, speedKt } = kinematics(hist);
     if (speedKt < MIN_SPD_KT_PPL) continue;
@@ -156,11 +200,10 @@ function buildLeaders() {
   const decluttered = getDeclutteredIds();
 
   for (const [id, t] of tracks) {
-    if (!settings.shipsEnabled && t.category === 4) continue;
-    if (settings.hideGroundUnits && t.category === 3) continue;
-    if (getIff(t) === 'invisible') continue;
+    if (!settings.shipsEnabled && t.domain === 'SEA') continue;
+    if (settings.hideGroundUnits && t.domain === 'GROUND') continue;
     if (decluttered.has(id)) continue;
-    if ((t.category === 3 || t.category === 4) && !groundLabels.has(id)) continue;
+    if (!shouldLabel(t)) continue;
 
     const relOff = labelOffsets.get(id);
     if (!relOff) continue;
@@ -199,28 +242,28 @@ function buildLeaders() {
 // Returns the Set of track IDs whose labels should be suppressed because they
 // are part of a sequential-squawk formation (e.g. 1101→1102→1103) where each
 // follower is within 0.5 nm horizontally and 1 000 ft vertically of the
-// previous squawk in the sequence.  Only labels are hidden; icons still show.
+// previous squawk in the sequence. Only labels are hidden; icons still show.
+// Needs what an SSR radar gives — a code and a Mode C altitude — so it only
+// ever applies to contacts that have both.
 
 function getDeclutteredIds() {
   if (!settings.declutter) return new Set();
 
-  // Build a map of squawk → track for all currently visible tracks
-  const bySquawk = new Map();
+  const byCode = new Map(); // numeric (octal) code -> track
   for (const [, t] of tracks) {
-    if (t.squawk == null) continue;
-    const sq = Number(t.squawk);
-    if (Number.isFinite(sq) && sq >= 0 && sq <= 7777) bySquawk.set(sq, t);
+    if (!t.ssr || !t.ssr.code || !t.altitude) continue;
+    byCode.set(parseInt(t.ssr.code, 8), t);
   }
 
   const hidden = new Set();
-  const HORIZ_M = 0.5 * 1852;   // 0.5 nm in metres
-  const VERT_M  = 304.8;        // 1 000 ft in metres
+  const HORIZ_M = 0.5 * 1852; // 0.5 nm in metres
+  const VERT_FT = 1000;
 
-  for (const [sq, t] of bySquawk) {
-    const prev = bySquawk.get(sq - 1);
+  for (const [code, t] of byCode) {
+    const prev = byCode.get(code - 1);
     if (!prev) continue;
     if (haversineM(t.lat, t.lon, prev.lat, prev.lon) > HORIZ_M) continue;
-    if (Math.abs((t.alt || 0) - (prev.alt || 0))    > VERT_M)  continue;
+    if (Math.abs(t.altitude.ft - prev.altitude.ft) > VERT_FT) continue;
     hidden.add(String(t.id));
   }
 
@@ -240,11 +283,10 @@ function buildLabels() {
   const decluttered = getDeclutteredIds();
 
   for (const [id, t] of tracks) {
-    if (!settings.aiEnabled && !t.player) continue;
-    if (!settings.shipsEnabled && t.category === 4) continue;
-    if (settings.hideGroundUnits && t.category === 3) continue;
-    if (getIff(t) === 'invisible') continue;
+    if (!settings.shipsEnabled && t.domain === 'SEA') continue;
+    if (settings.hideGroundUnits && t.domain === 'GROUND') continue;
     if (decluttered.has(id)) continue; // formation follower — suppress label
+    if (!shouldLabel(t)) continue;      // ships and vehicles only once named
 
     // Ensure every track has a stored geo offset (compute from em-offset if not yet set)
     if (!labelOffsets.has(id)) {
@@ -263,45 +305,26 @@ function buildLabels() {
     const color      = trackColor(t);
     const opacity    = sweepOpacity(id, baseOp);
 
-    // Ground vehicles and ships: only render if the user has assigned a label
-    if (t.category === 3 || t.category === 4) {
-      const customLabel = groundLabels.get(id);
-      if (!customLabel) continue;
-      features.push({
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates: coords },
-        properties: { id, callsign: customLabel, infoLine: '', sqTag: '', sqColor: color, color, opacity, textOffset },
-      });
-      continue;
-    }
-
+    // The data block. Every string in it comes from track-label.js.
+    const air      = isAir(t);
     const hist     = history.get(id) || [];
-    const csOnly   = checkOnGround(t);
-    const infoLine = csOnly ? '' : buildInfo(t, hist);
+    const csOnly   = !air || t.onGround;
+    const infoLine = csOnly ? '' : infoLine_(t, hist);
+    const code     = trackCodeTag(t);
 
-    // Squawk tag — shown on its own line below the info line.
-    // Suppressed when the squawk already resolves to a known callsign via squawkMap/squawkSeq.
-    const emType = squawkEmergency(t.squawk);
-    let sqTag = '', sqColor = color;
-    if (emType === 'hijack')     { sqTag = 'HIJ'; sqColor = settings.colEmergHijack || '#cc6600'; }
-    else if (emType === 'radio') { sqTag = 'RDF'; sqColor = settings.colEmergRadio  || '#b8a000'; }
-    else if (emType === 'gen')   { sqTag = 'EMR'; sqColor = settings.colEmergGen    || '#cc2222'; }
-    else if (t.squawk != null && Number(t.squawk) !== 0) {
-      // Only show raw squawk if it isn't already mapped to a callsign
-      const sq = Number(t.squawk);
-      const mappedByExact = settings.squawkMap && settings.squawkMap[String(sq)];
-      const mappedBySeq   = !mappedByExact && settings.squawkSeq &&
-        Object.entries(settings.squawkSeq).some(([base]) => {
-          const off = sq - parseInt(base, 10);
-          return off >= 0 && off <= 98;
-        });
-      if (!mappedByExact && !mappedBySeq) sqTag = String(t.squawk).padStart(4, '0');
-    }
+    // docs/adr/0058: what the flight was told, and anything it is doing wrong.
+    const fdr = air ? _fdrForTrack(id) : null;
+    const { tag: alertTag, color: alertColor } = buildAlertTag(id, fdr);
+    const asgnLine = csOnly ? '' : buildAssignedLine(fdr);
 
     features.push({
       type: 'Feature',
       geometry: { type: 'Point', coordinates: coords },
-      properties: { id, callsign: resolveCallsign(t), infoLine, sqTag, sqColor, color, opacity, textOffset },
+      properties: {
+        id, callsign: trackName(t) + trackNameSuffix(t), infoLine,
+        sqTag: code.text, sqColor: code.color || color,
+        color, opacity, textOffset, alertTag, alertColor, asgnLine,
+      },
     });
   }
 
@@ -386,20 +409,12 @@ function buildDrawings() {
   return { type: 'FeatureCollection', features };
 }
 
-// Parses an ICAO-style FPL message built by sourcedcs-web's form1801.js:
-//   line 2 (index 2): "-<DEP ICAO><HHMM>"                     e.g. "-UGKO1630"
-//   line 3 (index 3): "-<speed><level> <ROUTE>"               e.g. "-N0450F350 DCT DEVOL UL9 KONAN DCT"
-//   line 4 (index 4): "-<DEST ICAO><EET>[ <ALTN1>][ <ALTN2>]" e.g. "-UGTB0130"
-// The full filed route is dep → route waypoints → dest, not just field 15's
-// enroute string — a route of "DCT ERGEP DCT" is genuinely just one enroute
-// fix, but the plotted line still needs to start/end at the filed airports.
-// Each token is resolved against the mission's navpoints/airports by
-// name/ICAO; airway identifiers (e.g. "UL9") simply won't match anything and
-// are dropped — no special casing needed since there's no airway geometry to
-// plot them against.
-function parseFiledRouteWaypoints(fplMessage) {
-  if (!fplMessage) return { points: [], matched: 0, total: 0 };
-  const lines = fplMessage.split('\n');
+// The filed route of a flight record, as points on the map: departure →
+// route tokens → destination, each resolved against the mission's navpoints
+// and airports by name/ICAO. Airway identifiers (e.g. "UL9") simply match
+// nothing and are dropped — there is no airway geometry to plot them against.
+function parseFiledRouteWaypoints(filed) {
+  if (!filed) return { points: [], matched: 0, total: 0 };
 
   const byName = new Map();
   for (const w of (missionData && missionData.waypoints) || []) {
@@ -416,19 +431,11 @@ function parseFiledRouteWaypoints(fplMessage) {
   };
 
   const tokens = [];
-  // Dep/dest lines are "-<ICAO letters><digits...>" with no separator —
-  // the ICAO is the leading run of letters.
-  const depMatch  = (lines[2] || '').match(/^-([A-Za-z]+)/);
-  const destMatch = (lines[4] || '').match(/^-([A-Za-z]+)/);
-  if (depMatch) tokens.push(depMatch[1]);
-
-  const routeMatch = (lines[3] || '').match(/^-\S+\s+(.*)$/);
-  if (routeMatch) {
-    for (const t of routeMatch[1].trim().split(/\s+/)) {
-      if (t && t.toUpperCase() !== 'DCT') tokens.push(t);
-    }
+  if (filed.departureAirport) tokens.push(filed.departureAirport);
+  for (const t of String(filed.route || '').trim().split(/\s+/)) {
+    if (t && t.toUpperCase() !== 'DCT') tokens.push(t);
   }
-  if (destMatch) tokens.push(destMatch[1]);
+  if (filed.destinationAirport) tokens.push(filed.destinationAirport);
 
   const points = [];
   for (const tok of tokens) {
@@ -760,31 +767,26 @@ function buildRadarDebug(radars) {
   return { type: 'FeatureCollection', features };
 }
 
-// Datalink lock lines: dashed line from each friendly player unit to its radar lock.
-// Only drawn when settings.datalink is enabled.
+// Datalink lock lines: a dashed line from a datalink participant to the
+// contact its radar is locked on (crc-sync's docs/adr/0059). crc-sync only
+// sends a lock whose target is already in this controller's picture, so both
+// ends are always contacts on the scope.
 function buildDatalinkLines() {
   const features = [];
-  if (!settings.datalink || radarLocks.size === 0) return { type: 'FeatureCollection', features };
+  if (settings.showDatalinkLocks === false) return { type: 'FeatureCollection', features };
 
   const color = settings.colFriendly || '#4488cc';
-
-  for (const [unitId, lock] of radarLocks) {
-    const track = latestFromServer.get(unitId);
-    if (!track || !track.player) continue;
-
+  for (const [, t] of tracks) {
+    const lock = t.dl && t.dl.lock;
+    if (!lock) continue;
+    const target = tracks.get(String(lock));
+    if (!target) continue;
     features.push({
       type: 'Feature',
-      geometry: {
-        type: 'LineString',
-        coordinates: [
-          [track.lon, track.lat],
-          [lock.targetLon, lock.targetLat],
-        ],
-      },
+      geometry: { type: 'LineString', coordinates: [[t.lon, t.lat], [target.lon, target.lat]] },
       properties: { color },
     });
   }
-
   return { type: 'FeatureCollection', features };
 }
 
@@ -803,6 +805,7 @@ function _doUpdateMap() {
   map.getSource('range-ring').setData(buildRangeRing());
   map.getSource('ref-dot').setData(buildRefDot());
   map.getSource('efsp-correlation').setData(buildEfspCorrelationRing());
+  if (map.getSource('stca')) map.getSource('stca').setData(buildStcaOverlay());
   map.getSource('trails').setData(buildTrails());
   map.getSource('ppl').setData(buildPPL());
   // buildLabels first — it populates labelOffsets which buildLeaders depends on

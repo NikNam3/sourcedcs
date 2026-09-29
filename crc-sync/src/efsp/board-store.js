@@ -914,6 +914,24 @@ class BoardStore {
       };
     }
 
+    // docs/adr/0058 — the flight's assigned altitude or heading. On the FDR,
+    // not the Strip, so every Facility's copy reads the same value; history
+    // and confirmVacated work exactly as they do for a Strip annotation.
+    if (target.kind === 'clearance') {
+      const fdrResult = this._fdrStore.setClearance(strip.fdrId, target.field,
+        { value: op.value, confirmVacated: !!op.confirmVacated }, { by });
+      if (!fdrResult.ok) return { ok: false, reason: fdrResult.reason, detail: fdrResult.detail, strip };
+      strip.rev += 1;
+      strip.updatedAt = Date.now();
+      strip.updatedBy = by || null;
+      this._touch(strip.stripId);
+      const marsaVoided = this._marsaVoidFor(strip, op, by, actingPositionId, clientMutationId);
+      return {
+        ok: true, strip, fdr: fdrResult.fdr,
+        marsaVoided, fdrs: marsaVoided ? this._drainMarsaRegimeWrites() : undefined,
+      };
+    }
+
     const result = this._applyAnnotationSet(strip, op.blockId, op.value, op.confirmVacated, by);
     // Every Block the interlock tags is annotation-routed today (DEPARTURE's
     // 20/21, ARRIVAL's 7 and 9A-VECTOR, OVERFLIGHT's 7A and 9A-VECTOR), so in

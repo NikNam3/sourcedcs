@@ -10,9 +10,6 @@ const FADE_DURATION_MS = 10000;
 const STALE_MS         = 10000;
 const MIN_SPD_KT_PPL   = 30;
 
-const GROUND_RADIUS_M  = 5000;
-const GROUND_AGL_M     = 50;
-
 const CRC_RANGE_NM     = 200;
 const CRC_RANGE_M      = CRC_RANGE_NM * 1852;
 
@@ -23,9 +20,6 @@ const LEADER_ICON_GAP   = 7;
 const LABEL_HALF_W      = 30;
 const LABEL_HALF_H      = 13;
 const LABEL_EDGE_MARGIN = 2;
-
-const SQUAWK_EMERGENCY = { 7700: 'gen', 7600: 'radio', 7500: 'hijack' };
-const EMERGENCY_COLOR  = { gen: '#cc2222', radio: '#b8a000', hijack: '#cc6600' };
 
 // Radar sweep
 // Beam width for the debug overlay only. Detection is crc-sync's, and it
@@ -51,21 +45,20 @@ const SHIP_RADAR_HEIGHT_M    = 40;
 // renderer no longer derives radars, owns a sweep phase, or decides what it is
 // allowed to see: crc-sync sends only the contacts the Positions this
 // controller holds can actually see, each stamped with `illuminatedAt` — when
-// the beam last passed over it — and `seenBy`, which radars saw it.
+// the beam last passed over it. What each contact carries is only what those
+// sensors could know (crc-sync's docs/adr/0059); track-label.js reads it.
 //
 // Two maps, and the distinction between them is load-bearing:
-//   latestFromServer — every contact in this controller's coverage. The
-//     un-gated shared truth that IFF declarations, renames and track numbers
-//     read, so they reflect at once rather than waiting for a beam.
+//   latestFromServer — every contact in this controller's coverage, with
+//     who it is (label, IFF) updated at once rather than waiting for a beam.
 //   tracks — the contacts still inside the fade window, i.e. what is on the
-//     scope right now. Telemetry (alt/hdg/spd/vs) stays gated on illumination
-//     on purpose: that IS the radar simulation, it is simply computed once on
-//     the server now instead of once per client.
+//     scope right now. Position and altitude stay gated on illumination on
+//     purpose: that IS the radar simulation, computed once on the server.
 const latestFromServer = new Map(); // id → track (as delivered, incl. illuminatedAt)
 const tracks           = new Map(); // id → track (displayed)
 window.getAllTracks    = () => [...latestFromServer.values()];
 window.getLatestTrack   = (id) => latestFromServer.get(String(id)) || null;
-const history          = new Map(); // id → [{lat, lon, alt, timestamp}, ...]
+const history          = new Map(); // id → [{lat, lon, altFt, timestamp}, ...] — altFt null when no sensor gives one
 const labelOffsets     = new Map(); // id → [dLat, dLon] relative to track
 
 // When the server says each contact was last illuminated. Replaces the local
@@ -74,12 +67,6 @@ const labelOffsets     = new Map(); // id → [dLat, dLon] relative to track
 // decay together.
 const lastSweepMs      = new Map(); // trackId → illuminatedAt, from the server
 const zeroSpeedSinceMs = new Map(); // trackId → timestamp when 0-speed-airborne first detected
-
-// User-assigned labels for ground vehicles (persists across view switches)
-const groundLabels = new Map(); // trackId → string
-
-// Datalink radar locks received from server: unitId → { targetLat, targetLon, targetId }
-const radarLocks = new Map();
 
 // Static reference data loaded at startup
 let aircraftTypes = {};
@@ -113,6 +100,7 @@ let approachRwyCourse = null; // used for approach-vector line
 // quietly blank.
 let coverageRadars = [];          // [{id, type, label, lat, lon, elevM, rangeM, sweepMs, sweepStart, grantedBy, ...}]
 let coverageHeldPositions = [];   // [{facilityId, positionId, isPrimary}]
+let coverageDatalink = false;     // whether a held Position is on the datalink
 
 /** Every radar this controller is looking through. */
 function getActiveRadars() { return coverageRadars; }
@@ -149,7 +137,6 @@ const DEFAULTS = {
   pplDuration:   60,
   trailEnabled:  true,
   trailLength:   10,
-  aiEnabled:         true,
   shipsEnabled:      false,
   hideGroundUnits:   false,
   braColor:      '#4488cc',
@@ -157,8 +144,6 @@ const DEFAULTS = {
   radarDebug:    false,
   textMarksEnabled: false, // DCS mission-editor Text objects, shown as a map layer
   extCenterlineNm: 25, // extended APP-radar centerline length
-  squawkMap:     {},
-  squawkSeq:     {}, // sequential ranges: { "1101": "HAT1" } → 1101→HAT11, 1102→HAT12…
   scale:         1.0,
   lightMode:     false,
   showElevation: false, // computed contour lines + height labels (elevation.js), zoom-independent
@@ -167,8 +152,8 @@ const DEFAULTS = {
   navDeclutter5:   true,  // hide navpoints whose names are not exactly 5 letters
   trailIntervalMs: 5000, // minimum ms between trail dot recordings
   declutter:       true,  // auto-hide labels for sequential-squawk formation flights
-  datalink:        false, // draw datalink lock lines (geojson.js's buildDatalinkLines)
-  transitionAltFt: 18000, // ft — below this use QNH, at/above use standard (FL)
+  showDatalinkLocks: true, // draw the datalink's radar-lock lines (geojson.js's buildDatalinkLines)
+  transitionAltFt: 18000, // ft — how an ASSIGNED altitude is written; a contact's own comes from crc-sync
   gameTimeOffset:  0,     // hours — theater UTC offset subtracted to display Zulu
   aprtManualWx:    {},    // per-airport manually-entered vis/cloud data, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
   aprtAtisFreq:    {},    // per-airport saved ATIS frequency, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
@@ -217,39 +202,8 @@ function getBullseye() {
   return { blue: pick('blue'), red: pick('red') };
 }
 
-// DCS altimeter model (reverse-engineered from flight test data).
-// Atmosphere: full ISA piecewise (troposphere + isothermal stratosphere).
-// Altimeter inversion: troposphere formula only, with empirical T_REF_ALT.
-const ISA_T0 = 288.15, ISA_P0 = 101325, ISA_L = 0.0065;
-const ISA_G = 9.80665, ISA_R = 287.05287;
-const ISA_EXP = ISA_G / (ISA_R * ISA_L);   // G/(R*L) ≈ 5.2559
-const ISA_INV = (ISA_R * ISA_L) / ISA_G;   // R*L/G ≈ 0.19026
-const H_TROP = 11000.0;                     // m, tropopause
-const T_REF_ALT = 288.97;                   // K, empirical DCS altimeter reference
-
-function _pressureAtAlt(zM, seaPa, T0) {
-  if (zM <= H_TROP) {
-    return seaPa * Math.pow(1 - ISA_L * zM / T0, ISA_EXP);
-  }
-  const T_trop = T0 - ISA_L * H_TROP;
-  const P_trop = seaPa * Math.pow(1 - ISA_L * H_TROP / T0, ISA_EXP);
-  return P_trop * Math.exp(-ISA_G * (zM - H_TROP) / (ISA_R * T_trop));
-}
-
-function indicatedAltFt(trueAltM) {
-  const { pressurePa, tempK } = weather;
-  const trueAltFt = trueAltM / 0.3048;
-  const taFt = settings.transitionAltFt ?? 18000;
-
-  const P = _pressureAtAlt(trueAltM, pressurePa, tempK);
-  if (trueAltFt >= taFt) {
-    // FL: altimeter set to standard pressure (ISA_P0)
-    return ((T_REF_ALT / ISA_L) * (1 - Math.pow(P / ISA_P0, ISA_INV))) / 0.3048;
-  } else {
-    // QNH: altimeter set to live sea-level pressure
-    return ((T_REF_ALT / ISA_L) * (1 - Math.pow(P / pressurePa, ISA_INV))) / 0.3048;
-  }
-}
+// A contact's altitude is crc-sync's (its src/altimetry.js), and arrives only
+// when a sensor could know it (docs/adr/0059). Nothing here computes one.
 
 // `crc-desktop-enabled-radars` in localStorage, and the load/save pair that
 // owned it, are gone: coverage is not a per-client preference any more, so
@@ -286,7 +240,7 @@ function pushHistory(id, track) {
   const now      = Date.now();
   // Drop the new point if the last stored dot is too recent
   if (h.length > 0 && now - h[h.length - 1].timestamp < minGapMs) return;
-  h.push({ lat: track.lat, lon: track.lon, alt: track.alt, timestamp: now });
+  h.push({ lat: track.lat, lon: track.lon, altFt: track.altitude ? track.altitude.ft : null, timestamp: now });
   const max = settings.trailLength ?? HISTORY_MAX;
   if (h.length > max) h.splice(0, h.length - max);
 }
@@ -313,8 +267,8 @@ setInterval(() => {
   // almost always a despawn DCS has not reported, so it ages out even while
   // the beam keeps finding it.
   for (const [id, t] of tracks) {
-    if (t.category === 3 || t.category === 4) { zeroSpeedSinceMs.delete(id); continue; }
-    if (checkOnGround(t)) { zeroSpeedSinceMs.delete(id); continue; }
+    if (t.domain !== 'AIR') { zeroSpeedSinceMs.delete(id); continue; }
+    if (t.onGround) { zeroSpeedSinceMs.delete(id); continue; }
     const { speedKt } = kinematics(history.get(id) || []);
     if (speedKt < 1) {
       if (!zeroSpeedSinceMs.has(id)) zeroSpeedSinceMs.set(id, now);
@@ -375,7 +329,6 @@ function resetDisplayedTracks() {
  */
 function applySnapshot(trackList) {
   latestFromServer.clear();
-  radarLocks.clear();
   resetDisplayedTracks();
   for (const t of trackList) {
     latestFromServer.set(t.id, t);
@@ -404,28 +357,36 @@ function _receiveIllumination(t) {
   return true;
 }
 
-function applyDelta(updated, gone) {
+/**
+ * A `delta`: contacts newly returned by this controller's sensors, contacts
+ * whose identity changed (`relabeled` — their flight, tag or IFF; no new
+ * position, so they are not a radar return), and contacts that left.
+ */
+function applyDelta(updated, relabeled, gone) {
   let changed = false;
 
-  for (const id of gone) {
+  for (const id of gone || []) {
     latestFromServer.delete(id);
     // The displayed contact stays in `tracks` and fades out from its last
-    // illumination, the same as before — a contact leaving coverage should
-    // decay off the scope, not vanish mid-sweep.
+    // illumination — a contact leaving coverage should decay off the scope,
+    // not vanish mid-sweep.
   }
 
-  for (const t of updated) {
+  for (const t of updated || []) {
     latestFromServer.set(t.id, t);
-    if (_receiveIllumination(t)) { changed = true; continue; }
+    if (_receiveIllumination(t)) changed = true;
+  }
 
-    // No new illumination, so this is an overlay edit: a declaration, a
-    // rename or a track number. Those are the controller's own statements,
-    // not something a beam has to reveal, so they land on an already-displayed
-    // contact at once rather than waiting for the next sweep.
-    const displayed = tracks.get(t.id);
-    if (!displayed) continue;
-    for (const key of ['iffState', 'iffOverride', 'callsign', 'rename', 'trackNumber']) {
-      if (displayed[key] !== t[key]) { displayed[key] = t[key]; changed = true; }
+  // Who a contact is lands at once, on both the delivered and the displayed
+  // copy: it is shared state, not something a beam has to reveal.
+  for (const r of relabeled || []) {
+    for (const copy of [latestFromServer.get(r.id), tracks.get(r.id)]) {
+      if (!copy) continue;
+      copy.iffState = r.iffState;
+      copy.iffOverride = r.iffOverride;
+      copy.label = r.label;
+      copy.type = r.type;
+      changed = true;
     }
   }
 
@@ -441,8 +402,11 @@ function applyDelta(updated, gone) {
 function applyCoverage(msg) {
   coverageRadars = msg.radars || [];
   coverageHeldPositions = msg.heldPositions || [];
+  coverageDatalink = !!msg.datalink;
 
-  const nowNoRadars = coverageRadars.length === 0;
+  // The datalink is a picture too (crc-sync's docs/adr/0059): a tactical
+  // controller whose AWACS is still on the ground sees their own aircraft.
+  const nowNoRadars = coverageRadars.length === 0 && !coverageDatalink;
   if (nowNoRadars !== noRadarsActive) { noRadarsActive = nowNoRadars; updateNoAwacsUI(); }
 
   refreshRadarPanelData();
@@ -536,9 +500,6 @@ async function connect() {
         // On reconnect to the same running mission the missionId is unchanged, so we don't clear.
         const prevMissionId = localStorage.getItem('crc-desktop-mission-id');
         if (msg.missionId && msg.missionId !== prevMissionId) {
-          clearAllIffOverrides();
-          clearAllTrackRenames();
-          clearAllTrackNumbers();
           localStorage.setItem('crc-desktop-mission-id', msg.missionId);
         }
         missionData = msg;
@@ -558,19 +519,9 @@ async function connect() {
         refreshAprtAptList();
         break;
       }
-      case 'squawk-map':
-        // Squadron-wide config (crc-sync/config/squawk-map.json), pushed on
-        // connect and whenever anyone edits it from the SQWK C/S panel —
-        // authoritative, so it overwrites whatever this client had cached.
-        settings.squawkMap = msg.squawkMap || {};
-        settings.squawkSeq = msg.squawkSeq || {};
-        saveSettings();
-        refreshCallsPanel();
-        updateMap();
-        break;
       case 'theater-settings':
-        // Squadron-wide config (crc-sync/src/theater-settings.js), same
-        // deal as 'squawk-map' above — pushed on connect and whenever any
+        // Squadron-wide config (crc-sync/src/theater-settings.js) — pushed
+        // on connect and whenever any
         // client edits transition alt / hdg correction / game-time offset
         // from the Airport panel, authoritative over this client's cache.
         settings.transitionAltFt = msg.transitionAltFt;
@@ -620,8 +571,9 @@ async function connect() {
         break;
       case 'delta':
         applyDelta(
-          (msg.updated || []).map(normaliseTrack),
-          (msg.gone    || []).map(id => String(id)),
+          (msg.updated   || []).map(normaliseTrack),
+          (msg.relabeled || []).map(normaliseTrack),
+          (msg.gone      || []).map(id => String(id)),
         );
         break;
       // EFSP — sent once at connect (efsp-snapshot) plus immediately on
@@ -783,23 +735,18 @@ async function connect() {
       // came due. Unconditional broadcast (ws-hub.js), same as
       // efsp-board-delta — every connected client applies it and re-renders
       // whatever Bay currently shows the affected Strip.
+      // docs/adr/0058 — the whole conformance + short-term conflict picture,
+      // sent when it changes and once on connect.
+      case 'efsp-alerts':
+        if (typeof applyEfspAlerts === 'function') applyEfspAlerts(msg);
+        if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
+        updateMap();
+        if (typeof updateTrackPanel === 'function') updateTrackPanel();
+        break;
       case 'efsp-obligation-alert':
         if (typeof applyEfspObligationAlert === 'function') applyEfspObligationAlert(msg);
         if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
         break;
-      case 'radar-locks': {
-        radarLocks.clear();
-        for (const lock of (msg.locks || [])) {
-          if (lock.coalition !== userCoalition) continue;
-          radarLocks.set(lock.unitId, {
-            targetLat: lock.targetLat,
-            targetLon: lock.targetLon,
-            targetId:  lock.targetId || null,
-          });
-        }
-        updateMap();
-        break;
-      }
     }
   };
 
@@ -826,8 +773,8 @@ setInterval(() => {
   _pulseBright = !_pulseBright;
   let hasIdent = false, hasEmerg = false;
   for (const t of tracks.values()) {
-    if (t.squawkStatus === 2)       hasIdent = true;
-    if (squawkEmergency(t.squawk))  hasEmerg = true;
+    if (trackIsIdent(t))   hasIdent = true;
+    if (trackEmergency(t)) hasEmerg = true;
     if (hasIdent && hasEmerg) break;
   }
   if (hasIdent || hasEmerg) updateMap();
@@ -840,9 +787,6 @@ setInterval(() => {
 
 loadSettings();
 loadUserCoalition();
-loadIffOverrides();
-loadTrackRenames();
-loadTrackNumbers();
 loadStaticData();
 // Settings is now a lazily-mounted dockable panel (see dock.js) — it may
 // never mount if the user never opens it, but the light/dark theme it

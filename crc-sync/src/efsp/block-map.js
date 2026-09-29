@@ -148,8 +148,13 @@ const DEPARTURE_BLOCK_MAP = {
   // Block 7 above is deliberately NOT tagged. It is filed.requestedAltitude —
   // what the flight ASKED FOR, not what ATC assigned it. Amending a filed
   // request is not "issuing an altitude change".
-  '20': { required: false, target: { kind: 'annotation' }, interlock: 'COURSE' },
-  '21': { required: false, target: { kind: 'annotation' }, interlock: 'ALTITUDE' },
+  //
+  // docs/adr/0058: both are the FLIGHT's clearance now, not Strip notes —
+  // fdr.clearance.heading / .altitude, shared by every Position and both
+  // Facilities, so CTR's copy of a departure carries what APP assigned. Shown
+  // as HDG and ALT; Block 7 above reads CRUS ALT (what was filed).
+  '20': { required: false, target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' },
+  '21': { required: false, target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' },
   // Guide's own Block 22, "Frequency" — listed in §6.2 with an entirely
   // empty notes column. Structured rather than a free-text annotation so a
   // frequency can be validated as one unit and one type, and so approving a
@@ -236,7 +241,8 @@ const ARRIVAL_BLOCK_MAP = {
   // interlock ALTITUDE (docs/adr/0051): unlike DEPARTURE's Block 7 this one IS
   // the assigned altitude, which is exactly why it was annotation-routed in the
   // first place. See DEPARTURE_BLOCK_MAP's '20'/'21' comment.
-  '7':        { required: true,  target: { kind: 'annotation' }, interlock: 'ALTITUDE' },
+  // docs/adr/0058 — the flight's clearance altitude, shared with every Facility.
+  '7':        { required: true,  target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' },
   '8':        { required: true,  target: { kind: 'fdr', path: 'filed.originAirport' } },
   '8A':       { required: false, target: { kind: 'fdr', path: 'filed.arrivalFix' } },
   '8B':       { required: true,  target: { kind: 'fdr', path: 'assigned.landingRunway' } },
@@ -246,7 +252,7 @@ const ARRIVAL_BLOCK_MAP = {
   '9A-PTOUT': { required: false, target: { kind: 'annotation' } },
   // interlock COURSE (docs/adr/0051) — a radar vector IS a course assignment,
   // and it is the only Block on an ARRIVAL Strip that is one.
-  '9A-VECTOR':{ required: false, target: { kind: 'annotation' }, interlock: 'COURSE' },
+  '9A-VECTOR':{ required: false, target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' }, // docs/adr/0058
   '9A-SPEED': { required: false, target: { kind: 'annotation' } },
   '9E':       { required: true,  target: { kind: 'fdr', path: 'filed.remarks' } },
   '20':       { required: false, target: { kind: 'annotation' } }, // radar scratchpad — Strip-local until WP5, see module comment
@@ -314,8 +320,10 @@ const OVERFLIGHT_BLOCK_MAP = {
   // guide publishes no Overflight field table beyond the 20/21 scratchpad note,
   // so this mirrors ARRIVAL's structure rather than transcribing doctrine that
   // does not exist. MUST NOT be presented as real FAA numbering (§0.2).
-  '7A': { required: false, target: { kind: 'annotation' }, interlock: 'ALTITUDE' },
-  '9A-VECTOR': { required: false, target: { kind: 'annotation' }, interlock: 'COURSE' },
+  //
+  // docs/adr/0058 — both are the flight's clearance, shared across Facilities.
+  '7A': { required: false, target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' },
+  '9A-VECTOR': { required: false, target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' },
   '8':  { required: true,  target: { kind: 'fdr', path: 'filed.departureAirport' } },  // the flight's real origin, not Incirlik
   '8B': { required: true,  target: { kind: 'fdr', path: 'filed.destinationAirport' } }, // the flight's real destination, not Incirlik
   '9':  { required: true,  target: { kind: 'fdr', path: 'filed.route' }, provenance: 'COMPUTER_GENERATED' },
@@ -474,6 +482,9 @@ function resolveBlockTarget(role, blockId) {
   // setMilitary(). Shares the 'tofi' shape exactly: several Blocks, one target
   // kind, `field` carrying which key of one sub-object this Block writes.
   if (def.target.kind === 'military') return { kind: 'military', field: def.target.field };
+  // docs/adr/0058 — the flight's assigned altitude or heading, through
+  // fdr-store.js's setClearance(), which keeps §3.7's history on the FDR.
+  if (def.target.kind === 'clearance') return { kind: 'clearance', field: def.target.field };
   return null;
 }
 

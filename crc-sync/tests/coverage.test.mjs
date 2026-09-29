@@ -244,6 +244,26 @@ test('illuminationFor remembers a track between sweeps, which is what the client
   assert.equal(engine.illuminationFor('nobody'), null);
 });
 
+test('each radar keeps its own illumination: a second radar does not overwrite the first', () => {
+  // docs/adr/0059 §0. X sees the track, then it flies out of X's range into
+  // Y's. Y's return must be added beside X's, not replace it: a controller on
+  // X still has X's last return, and its time.
+  const engine = new CoverageEngine();
+  const far = { ...APPROACH, id: 'app:Y', lat: 40, lon: 35 }; // ~180 NM north of X
+  const tracks = [aircraft(1, 37.2, 35.2)];
+  sweepOnce(engine, [APPROACH, far], tracks);
+  const xAt = engine.illuminationFor('1').byRadar.get('app:X');
+  assert.ok(xAt, 'X saw it');
+  assert.equal(engine.illuminationFor('1').byRadar.has('app:Y'), false);
+
+  tracks[0] = aircraft(1, 39.5, 35);
+  for (let t = 4000; t <= 8000; t += 250) engine.tick([APPROACH, far], tracks, null, 1_000_000 + t);
+  const hit = engine.illuminationFor('1');
+  assert.ok(hit.byRadar.get('app:Y') > xAt, 'Y saw it later');
+  assert.equal(hit.byRadar.get('app:X'), xAt, "X's return is kept, with X's time");
+  assert.equal(engine.isVisibleThrough('1', new Set(['app:X'])), true);
+});
+
 test('isVisibleThrough answers whether a given set of radars has ever illuminated a track', () => {
   const engine = new CoverageEngine();
   sweepOnce(engine, [APPROACH], [aircraft(1, 37.2, 35.2)]);

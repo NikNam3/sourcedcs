@@ -22,7 +22,7 @@
 // docs/adr/0042 — two controllers at one board now see the same picture,
 // which is what lets a Strip's correlated track mean the same thing to both.
 
-const { checkOnGround, haversineM } = require('./resolve');
+const { checkOnGround, haversineM } = require('./geo');
 
 // Beam half-width, for the client's debug overlay only. Detection does not use
 // it — see this module's header.
@@ -115,9 +115,11 @@ class CoverageEngine {
     this._sweepStart = new Map(); // radarId -> ms. The one phase everybody shares.
     this._los = new Map();        // `${radarId}|${trackId}` -> { at, visible }
     this._lastTickAt = null;
-    // trackId -> { at, radarIds: Set } — the live picture, carried across
-    // ticks so a track illuminated two seconds ago is still known to have
-    // been illuminated (the client fades it out from `at`).
+    // trackId -> Map<radarId, at> — the live picture, carried across ticks
+    // so a track illuminated two seconds ago is still known to have been
+    // illuminated (the client fades it out from `at`). Per radar, because two
+    // controllers on different radars must each see their own radar's
+    // returns: one radar's sweep must not stand in for, or erase, another's.
     this._illuminated = new Map();
     this._stats = { ticks: 0, losCalls: 0, losUnknown: 0, illuminations: 0 };
   }
@@ -127,9 +129,10 @@ class CoverageEngine {
   }
 
   /**
-   * The live picture — every track any radar has illuminated, and when.
-   * Returned live rather than copied because the only reader (ws-hub.js) does
-   * one pass over it per client per tick and never holds it.
+   * The live picture — every track any radar has illuminated, and when, per
+   * radar: Map<trackId, Map<radarId, at>>. Returned live rather than copied
+   * because the only reader (ws-hub.js) does one pass over it per client per
+   * tick and never holds it.
    */
   get illuminatedNow() { return this._illuminated; }
 
@@ -174,11 +177,9 @@ class CoverageEngine {
    * A contact another manned radar also sees keeps that radar and stays.
    */
   _pruneUnsweptRadars(sweptIds) {
-    for (const [trackId, hit] of this._illuminated) {
-      const still = hit.radarIds.filter(id => sweptIds.has(id));
-      if (still.length === hit.radarIds.length) continue;
-      if (still.length === 0) this._illuminated.delete(trackId);
-      else this._illuminated.set(trackId, { at: hit.at, radarIds: still });
+    for (const [trackId, byRadar] of this._illuminated) {
+      for (const radarId of [...byRadar.keys()]) if (!sweptIds.has(radarId)) byRadar.delete(radarId);
+      if (byRadar.size === 0) this._illuminated.delete(trackId);
     }
   }
 
@@ -211,7 +212,7 @@ class CoverageEngine {
    *   costs nothing to skip and its phase is minted lazily anyway).
    * @param {Array} tracks — TrackStore.getAll()
    * @param {object|null} missionData — for the on-ground test
-   * @returns {{illuminatedNow: Map<string,{at:number, radarIds:string[]}>,
+   * @returns {{illuminatedNow: Map<string, Map<string, number>>,
    *            changed: Array<{trackId:string, at:number, radarIds:string[]}>}}
    *   `illuminatedNow` is the whole live picture; `changed` is only what this
    *   tick newly illuminated, which is what gets broadcast.
@@ -233,7 +234,7 @@ class CoverageEngine {
     // any more must not survive to be replayed.
     this._pruneUnsweptRadars(new Set((radars || []).filter(r => !r.onGround).map(r => r.id)));
 
-    const hits = new Map(); // trackId -> { at, radarIds:Set }
+    const hits = new Map(); // trackId -> { at, byRadar: Map<radarId, at> }
 
     for (const radar of radars) {
       // A radar sitting on the ramp is not a radar.
@@ -264,17 +265,18 @@ class CoverageEngine {
         if (track.category !== 3 && !this._lineOfSight(radar, track, now)) continue;
 
         let hit = hits.get(id);
-        if (!hit) { hit = { at, radarIds: new Set() }; hits.set(id, hit); }
-        hit.radarIds.add(radar.id);
+        if (!hit) { hit = { at, byRadar: new Map() }; hits.set(id, hit); }
+        hit.byRadar.set(radar.id, at);
         if (at > hit.at) hit.at = at;
       }
     }
 
     const changed = [];
     for (const [trackId, hit] of hits) {
-      const radarIds = [...hit.radarIds];
-      this._illuminated.set(trackId, { at: hit.at, radarIds });
-      changed.push({ trackId, at: hit.at, radarIds });
+      let byRadar = this._illuminated.get(trackId);
+      if (!byRadar) { byRadar = new Map(); this._illuminated.set(trackId, byRadar); }
+      for (const [radarId, at] of hit.byRadar) byRadar.set(radarId, at);
+      changed.push({ trackId, at: hit.at, radarIds: [...hit.byRadar.keys()] });
       this._stats.illuminations += 1;
     }
 
@@ -283,7 +285,9 @@ class CoverageEngine {
 
   /** The last illumination of one track, or null if this picture has never had it. */
   illuminationFor(trackId) {
-    return this._illuminated.get(String(trackId)) || null;
+    const byRadar = this._illuminated.get(String(trackId));
+    if (!byRadar) return null;
+    return { at: Math.max(...byRadar.values()), radarIds: [...byRadar.keys()], byRadar: new Map(byRadar) };
   }
 
   /**
@@ -292,9 +296,9 @@ class CoverageEngine {
    * all — distinct from whether their beam has just passed over it.
    */
   isVisibleThrough(trackId, radarIdSet) {
-    const hit = this._illuminated.get(String(trackId));
-    if (!hit) return false;
-    for (const id of hit.radarIds) if (radarIdSet.has(id)) return true;
+    const byRadar = this._illuminated.get(String(trackId));
+    if (!byRadar) return false;
+    for (const id of byRadar.keys()) if (radarIdSet.has(id)) return true;
     return false;
   }
 }

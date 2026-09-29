@@ -99,8 +99,19 @@ test('ARRIVAL\'s optional 9A-* sub-fields (destination/point-out/vector/speed) a
   }
 });
 
-test('ARRIVAL Block 7 (assigned/cleared altitude) is annotation-routed, not fdr-routed — confirmVacated-eligible per guide §3.7 rule 3', () => {
-  assert.deepEqual(resolveBlockTarget('ARRIVAL', '7'), { kind: 'annotation' });
+test('the assigned altitude and heading are the FLIGHT\'s clearance, on every Role (docs/adr/0058)', () => {
+  // One of each per flight, shared by every Facility, with §3.7 history kept on
+  // the FDR — so CTR's copy of a departure carries what APP assigned.
+  const alt = { kind: 'clearance', field: 'altitude' };
+  const hdg = { kind: 'clearance', field: 'heading' };
+  assert.deepEqual(resolveBlockTarget('DEPARTURE', '21'), alt);
+  assert.deepEqual(resolveBlockTarget('DEPARTURE', '20'), hdg);
+  assert.deepEqual(resolveBlockTarget('ARRIVAL', '7'), alt);
+  assert.deepEqual(resolveBlockTarget('ARRIVAL', '9A-VECTOR'), hdg);
+  assert.deepEqual(resolveBlockTarget('OVERFLIGHT', '7A'), alt);
+  assert.deepEqual(resolveBlockTarget('OVERFLIGHT', '9A-VECTOR'), hdg);
+  // And the filed request stays exactly what it was.
+  assert.deepEqual(resolveBlockTarget('DEPARTURE', '7'), { kind: 'fdr', path: 'filed.requestedAltitude' });
 });
 
 test('ARRIVAL resolveBlockTarget routes fdr-bound Blocks to their exact field path', () => {
@@ -340,13 +351,12 @@ test('every interlock Block is one a controller can actually write', () => {
   }
 });
 
-test('OVERFLIGHT\'s two new assignment Blocks are annotation-routed, so a clearance history survives', () => {
+test('OVERFLIGHT\'s two assignment Blocks keep a clearance history (on the flight, docs/adr/0058)', () => {
   // §3.7's append-only model: a transiting flight given three altitudes has to
   // be able to show all three afterwards, and confirmVacated has to be
-  // available — the same reason ARRIVAL's Block 7 is annotation-routed rather
-  // than an FDR field.
-  assert.deepEqual(resolveBlockTarget('OVERFLIGHT', '7A'), { kind: 'annotation' });
-  assert.deepEqual(resolveBlockTarget('OVERFLIGHT', '9A-VECTOR'), { kind: 'annotation' });
+  // available. The history now lives in the FDR's clearance cells.
+  assert.deepEqual(resolveBlockTarget('OVERFLIGHT', '7A'), { kind: 'clearance', field: 'altitude' });
+  assert.deepEqual(resolveBlockTarget('OVERFLIGHT', '9A-VECTOR'), { kind: 'clearance', field: 'heading' });
   // And neither is required — a flight that is never vectored needs neither.
   assert.equal(OVERFLIGHT_BLOCK_MAP['7A'].required, false);
   assert.equal(OVERFLIGHT_BLOCK_MAP['9A-VECTOR'].required, false);

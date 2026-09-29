@@ -17,10 +17,10 @@ npm test   # node --test tests/*.test.mjs
 
 - `server.js` — Express app: `/js/config.js` (Casdoor client config for the browser), `POST /api/auth/token` (Casdoor code exchange, cross-origin from crc-desktop's Electron renderer), `POST /api/ws-ticket` (mints a single-use, 30s-TTL WebSocket connect ticket from a valid bearer JWT — see `src/auth.js` for why: it keeps the long-lived JWT out of the `/feed` WebSocket URL, which would otherwise land in proxy/access logs), and a few on-demand RPC proxies (ATIS transmit, SRS client list, airport weather).
 - `src/grpc-client.js` / `src/srs-client.js` — upstream DCS-gRPC and SRS-transponder clients, configured via `DCS_GRPC_HOST` / `SRS_HOST` / `SRS_PORT`.
-- `src/tracks.js` — in-memory track store with delta tracking (`getDeltaSince`).
-- `src/collab-store.js` — the collaborative overlay: manual IFF declarations, renames, and enemy track-number auto-assignment, shared across every connected client.
-- `src/resolve.js` — merges a raw track + its collaborative overlay entry into what a client actually renders (`resolveTrack`). `CRCSYNC_COALITION` env var (`2`=RED, `3`=BLUE, default BLUE) sets which DCS coalition counts as "own" for auto-IFF.
-- `src/ws-hub.js` — the `/feed` WebSocket: ticket-gated connection (`verifyClient`), a 500ms per-client delta broadcast tick, and the message protocol (deliberately identical to crc-desktop's original local `ws-server.js` protocol, so the renderer's `connect()`/message-switch needed no changes when it moved from a same-origin local socket to this remote, ticket-authed one).
+- `src/tracks.js` — in-memory DCS ground truth. Never sent to a client as-is.
+- `src/collab-store.js` — the collaborative overlay: manual IFF declarations and tags, shared across every connected client.
+- `src/surveillance/` — what a controller is told about a contact (`docs/adr/0059`): the transponder model (`transponder.js`), who a contact is (`identity.js`, `track-numbers.js`), the datalink feed (`datalink.js`), IFF (`iff.js`), and `presentation.js`, the single function that builds the wire track from the sensors of one controller's Positions. `CRCSYNC_COALITION` env var (`2`=RED, `3`=BLUE, default BLUE) sets which DCS coalition counts as "own".
+- `src/ws-hub.js` — the `/feed` WebSocket: ticket-gated connection (`verifyClient`), one 500ms hub tick that sends each session what its sensors returned (`updated`), whose identity changed (`relabeled`) and what left (`gone`), and the rest of the message protocol.
 
 ## Deploy
 

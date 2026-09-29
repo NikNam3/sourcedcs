@@ -338,7 +338,7 @@ services:
     volumes:
       # EVERYTHING crc-sync writes, and nothing else. Mounted at /app/state,
       # deliberately NOT over /app/config (shipped squadron data: facility,
-      # airspace, squawk-map, radar specs) and NOT over /app/data (shipped
+      # airspace, sensor specs) and NOT over /app/data (shipped
       # reference tables: the airfield name-to-ICAO map). A named volume starts
       # empty, so mounting it over either would shadow those files and present
       # as every one of them having reset to defaults.

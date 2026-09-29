@@ -6,7 +6,7 @@
 // (app.js's settings.transitionAltFt/hdgCorrection/gameTimeOffset), which
 // meant every controller could be looking at a different transition
 // altitude for the same theater. Now squadron-wide and server-authoritative,
-// same pattern as config/squawk-map.json in resolve.js — editable live from
+// same pattern as apt-config.json — editable live from
 // any connected client (ws-hub.js's 'theaterSettingsSet' message) and
 // persisted so it survives a crc-sync restart.
 

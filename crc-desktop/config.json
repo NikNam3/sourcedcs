@@ -6,7 +6,6 @@
   "srsPort": 5002,
   "srsApiPort": 5003,
   "wsPort": 3100,
-  "sourcedcsWebUrl": "https://sourcedcs.page",
   "freqs": ["251.000", "305.500"],
   "txFreq": "251.000"
 }

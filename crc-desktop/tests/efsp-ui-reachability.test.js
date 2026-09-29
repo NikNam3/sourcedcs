@@ -349,6 +349,26 @@ function menuItem(el, text) {
   return visible(el).find(isItem);
 }
 
+// The same move crc-sync's clearance-migration.js makes: the assigned altitude
+// and heading used to be Strip annotations, and are the flight's now.
+const _CLEARANCE_BLOCKS = {
+  DEPARTURE: { '21': 'altitude', '20': 'heading' },
+  ARRIVAL: { '7': 'altitude', '9A-VECTOR': 'heading' },
+  OVERFLIGHT: { '7A': 'altitude', '9A-VECTOR': 'heading' },
+};
+function _clearanceFromAnnotations(strip, fdr) {
+  const blocks = _CLEARANCE_BLOCKS[strip.role];
+  if (!blocks || !strip.annotations) return { strip, fdr };
+  const annotations = { ...strip.annotations };
+  const clearance = { altitude: { entries: [] }, heading: { entries: [] }, ...(fdr.clearance || {}) };
+  for (const [blockId, field] of Object.entries(blocks)) {
+    if (!annotations[blockId]) continue;
+    clearance[field] = { entries: annotations[blockId].entries };
+    delete annotations[blockId];
+  }
+  return { strip: { ...strip, annotations }, fdr: { ...fdr, clearance } };
+}
+
 /**
  * Loads the real client modules into one sandbox and renders a Strip,
  * capturing whatever it would have sent. Returns the rendered element and the
@@ -388,6 +408,8 @@ function renderStrip({ strip, fdr, held, airspaces = [], correlations = [], trac
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
 
+  // Every name a contact is shown with comes from track-label.js (crc-sync's docs/adr/0059).
+  vm.runInContext(fs.readFileSync(path.join(CLIENT, '../../track-label.js'), 'utf8'), sandbox, { filename: 'track-label.js' });
   for (const file of ['efsp-nla.js', 'strip-template.js', 'efsp-state.js', 'efsp-arrivals.js', 'efsp-gestures.js',
     'annotation-editor.js', 'strip-drag.js', 'correlation-highlight.js', 'marsa-badge.js', 'strip-fields.js', 'bay-view.js', 'strip-view.js']) {
     vm.runInContext(fs.readFileSync(path.join(CLIENT, file), 'utf8'), sandbox, { filename: file });
@@ -419,6 +441,10 @@ function renderStrip({ strip, fdr, held, airspaces = [], correlations = [], trac
   sandbox.window.getLatestTrack = (id) => liveTracks.get(String(id)) || null;
   sandbox.window.getAllTracks = () => [...liveTracks.values()];
 
+  // Fixtures written before docs/adr/0058 put the assigned altitude/heading
+  // history on the Strip; crc-sync moves such notes onto the flight on
+  // restore (clearance-migration.js), and the harness does the same.
+  ({ strip, fdr } = _clearanceFromAnnotations(strip, fdr));
   sandbox.applyEfspSnapshot({
     strips: [strip, ...otherStrips], fdrs: [fdr, ...otherStrips.map(s => ({ ...FDR, fdrId: s.fdrId, identity: { ...FDR.identity, callsign: s._callsign || s.fdrId } }))],
     positions: [], bays: [], airspaces, correlations, marsa,
@@ -943,13 +969,39 @@ function correlationOf(over = {}) {
   };
 }
 
-test('a correlated Strip names its contact on its face', () => {
+test('a normally correlated Strip shows nothing — only a problem with its track is drawn (docs/adr/0058)', () => {
   const { el } = renderStrip({
     strip: stripAt(), fdr: FDR, held: ['APP'],
     correlations: [correlationOf()],
-    tracks: [{ id: '101', callsign: 'VIPER1' }],
+    tracks: [{ id: '101', domain: 'AIR', label: { callsign: 'VIPER1', source: 'FDR', trackNumber: 'TN00001' }, ssr: { code: '0041' } }],
   });
-  assert.ok(findByText(el, 'TRK VIPER1'), 'the badge must be on the Strip, not only in the record');
+  assert.equal(findByText(el, 'TRK 0041'), undefined, 'correlated is the normal case, and draws nothing');
+  assert.equal(descendants(el).some(c => (c.className || '').includes('efsp-strip-slots')), false,
+    'a Strip with nothing to say has no indicator row at all');
+});
+
+test('conformance and conflict alerts appear on the Strip only while they apply', () => {
+  const strip = stripAt({ ownerPositionId: 'APP' });
+  const r = renderStrip({ strip, fdr: FDR, held: ['APP'], correlations: [correlationOf()], tracks: [{ id: '101', domain: 'AIR', label: { callsign: 'VIPER1', source: 'FDR', trackNumber: 'TN00001' }, ssr: { code: '0041' } }] });
+  r.sandbox.applyEfspAlerts({
+    conformance: [{ fdrId: 'f1', alerts: [{ kind: 'HEADING', assigned: 50, actual: 72 }] }],
+    stca: [{ id: '101|202', a: '101', b: '202', aCallsign: 'VIPER1', bCallsign: 'SNAKE21', timeToCpaSec: 55, minNm: 1.8, vertFt: 400 }],
+  });
+  const el = r.sandbox._buildStripEl(strip);
+  assert.ok(findByText(el, 'HDG 072'));
+  assert.ok(findByText(el, 'STCA SNAKE21 0:55'));
+  assert.ok(findByText(el, 'Assigned heading 050, tracking 072.'));
+  assert.ok(findByText(el, 'Conflict with SNAKE21 in 0:55: closest 1.8 NM / 400 ft.'));
+  assert.ok(el.classList.contains('efsp-strip-alert'), 'a conflict gives the Strip its edge');
+  const stcaNode = findByText(el, 'STCA SNAKE21 0:55');
+  const confNode = findByText(el, 'HDG 072');
+  const row = descendants(el).find(c => (c.className || '').includes('efsp-strip-slots'));
+  assert.ok(row.children.indexOf(stcaNode) < row.children.indexOf(confNode), 'the conflict comes first');
+
+  r.sandbox.applyEfspAlerts({ conformance: [], stca: [] });
+  const quiet = r.sandbox._buildStripEl(strip);
+  assert.equal(findByText(quiet, 'HDG 072'), undefined);
+  assert.equal(quiet.classList.contains('efsp-strip-alert'), false);
 });
 
 test('a Strip whose contact went away says so, and is marked', () => {
@@ -975,13 +1027,13 @@ test('an ambiguous correlation offers its candidates, and picking one binds it',
       state: 'UNCORRELATED', trackId: null, matchedBy: null,
       warning: { kind: 'AMBIGUOUS_BEACON', candidateTrackIds: ['101', '102'], detail: '2 contacts are squawking 0041 — bind one' },
     })],
-    tracks: [{ id: '101', callsign: 'SOMEONE', squawk: 41, category: 1 }, { id: '102', callsign: 'SOMEONEELSE', squawk: 41, category: 1 }],
+    tracks: [{ id: '101', domain: 'AIR', label: { callsign: 'SOMEONE', source: 'TAG', trackNumber: 'TN00001' }, ssr: { code: '0041' } }, { id: '102', domain: 'AIR', label: { callsign: 'SOMEONEELSE', source: 'TAG', trackNumber: 'TN00002' }, ssr: { code: '0041' } }],
   });
 
   assert.ok(findByText(el, 'TRK ×2'), 'the ambiguity must be visible');
   // Layout C: the indicator is not a control; the tab carries the exchange.
   click(findByText(el, 'Pick…'));
-  const choice = findByText(el, 'SOMEONEELSE · 0041');
+  const choice = findByText(el, 'SOMEONEELSE · 0041 · TN00002');
   assert.ok(choice, 'both candidates must be offered, with enough to tell them apart');
   click(choice);
 
@@ -994,19 +1046,19 @@ test('an uncorrelated Strip offers Bind, and a bound one offers Unbind', () => {
   const uncorrelated = renderStrip({
     strip: stripAt(), fdr: FDR, held: ['APP'],
     correlations: [correlationOf({ state: 'UNCORRELATED', trackId: null, matchedBy: null })],
-    tracks: [{ id: '303', callsign: 'MYSTERY', category: 1 }],
+    tracks: [{ id: '303', domain: 'AIR', label: { callsign: 'MYSTERY', source: 'TAG', trackNumber: 'TN00303' }, ssr: null }],
   });
   const bindBtn = menuItem(uncorrelated.el, 'Bind…');
   assert.ok(bindBtn, 'an aircraft the controller can see but nothing matches needs a way in');
   click(bindBtn);
-  click(findByText(uncorrelated.el, 'MYSTERY'));
+  click(findByText(uncorrelated.el, 'MYSTERY · TN00303'));
   assert.equal(uncorrelated.sent[0].op.kind, 'BindTrack');
   assert.equal(uncorrelated.sent[0].op.trackId, '303');
 
   const bound = renderStrip({
     strip: stripAt(), fdr: FDR, held: ['APP'],
     correlations: [correlationOf({ matchedBy: 'BINDING', binding: { trackId: '101', boundPositionId: 'APP' } })],
-    tracks: [{ id: '101', callsign: 'VIPER1' }],
+    tracks: [{ id: '101', domain: 'AIR', label: { callsign: 'VIPER1', source: 'FDR', trackNumber: 'TN00001' }, ssr: { code: '0041' } }],
   });
   click(menuItem(bound.el, 'Unbind'));
   assert.equal(bound.sent[0].op.kind, 'UnbindTrack');
@@ -1264,7 +1316,7 @@ const POPOVER_CASES = [
     render: () => renderStrip({
       strip: stripAt(), fdr: FDR, held: ['APP'],
       correlations: [correlationOf({ state: 'UNCORRELATED', trackId: null, matchedBy: null })],
-      tracks: [{ id: '303', callsign: 'MYSTERY', category: 1 }],
+      tracks: [{ id: '303', domain: 'AIR', label: { callsign: 'MYSTERY', source: 'TAG', trackNumber: 'TN00303' }, ssr: null }],
     }),
     open: (r) => click(menuItem(r.el, 'Bind…')),
   },

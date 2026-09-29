@@ -106,8 +106,8 @@ Central backend crc-desktop instances connect to — replaces the old asacs_link
 
 - `server.js` — Express + `ws`. Casdoor OAuth code exchange (`POST /api/auth/token`), single-use short-TTL WebSocket connect tickets (`POST /api/ws-ticket`, `src/auth.js`) so a long-lived bearer JWT never rides in a `/feed` WebSocket URL.
 - `src/grpc-client.js` / `src/srs-client.js` — sole gRPC (DCS telemetry) and SRS-transponder client on behalf of every connected crc-desktop instance.
-- `src/tracks.js` / `src/collab-store.js` — in-memory track state + collaborative overlay (manual IFF declarations, renames, track numbers), delta-broadcast to clients every 500ms via `src/ws-hub.js`.
-- `src/resolve.js` — per-track IFF/callsign resolution (server-side now, was client-side in the original asacs_link/crc-desktop code); `CRCSYNC_COALITION` env var sets which DCS coalition is "own".
+- `src/tracks.js` / `src/collab-store.js` — in-memory DCS ground truth + the collaborative overlay (manual IFF declarations, tags). Truth never reaches a client.
+- `src/surveillance/` — **what a controller is told about a contact** (`docs/adr/0059`). `presentation.js`'s `presentTrack()` is the single choke point: a session gets a position, and a code/altitude/name only if one of *its own* sensors could know it (radar `caps.ssr`/`caps.height`, the transponder model in `transponder.js`, the datalink feed in `datalink.js`, identity in `identity.js`: correlated Strip callsign > datalink > tag > track number). Sent by `src/ws-hub.js` every 500ms. Client-side, `crc-desktop/app/public/js/track-label.js` is the only code that turns it into text. Change how a contact is named or shown in those two files, not in consumers. `CRCSYNC_COALITION` sets which DCS coalition is "own".
 
 Deployed as a Docker image (`ghcr.io/niknam3/sourcedcs/crc-sync`) via `.github/workflows/crc-sync-docker.yml` — see "How the docker-image services deploy" below.
 
@@ -156,7 +156,7 @@ docker compose up -d                                  #   NOT mariadb/casdoor/ce
 2. The `git pull` step is what actually gets a **non-image** config change (e.g. `infra/docker-compose.yml`, `nginx`'s embedded config, `.env.example`) onto the server. Before it existed, editing `docker-compose.yml` in the repo did nothing to the running stack until someone manually pulled on the server — `docker compose pull && up -d` alone only ever picks up new *images*.
 
 **`crc-sync` has three directories, and the distinction matters for deploys.** `config/` holds shipped
-squadron defaults (facility, airspace, squawk map, radar specs) and `data/` holds shipped read-only
+squadron defaults (facility, airspace, sensor specs, alerting thresholds) and `data/` holds shipped read-only
 reference tables (the airfield name-to-ICAO map) — both baked into the image. `state/` holds
 everything the service writes, and is the `crc-sync-state:/app/state` volume. A read prefers `state/`
 and falls back to the shipped default, so a new default added by an image update lands with no

@@ -36,6 +36,7 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
 const { createEfsp } = await import('../src/efsp/index.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
 const { CorrelationReconciler } = await import('../src/efsp/correlation-reconciler.js');
+const { octalCode } = await import('../src/surveillance/transponder.js');
 const {
   crew, mustAct, advance, airborneDeparture, handedToCenter, DEPARTURE_FDR,
 } = await import('./helpers/efsp-scenario.mjs');
@@ -67,6 +68,7 @@ function picture() {
 
 function reconcilerFor(efsp, trackStore, deltas = []) {
   return new CorrelationReconciler({
+    beaconOf: (t) => octalCode(t.squawk),
     trackStore,
     fdrStore: efsp.fdrStore,
     correlationStore: efsp.correlationStore,

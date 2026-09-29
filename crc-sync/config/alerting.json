@@ -1,0 +1,22 @@
+{
+  "_comment": "Conformance and short-term conflict alert thresholds (docs/adr/0058). Our own choices, not doctrine. Override by placing a copy in state/alerting.json; missing keys fall back to these.",
+  "conformance": {
+    "minGroundSpeedKt": 50,
+    "headingToleranceDeg": 5,
+    "headingGraceSec": 30,
+    "headingPersistSec": 10,
+    "atAltitudeBandFt": 400,
+    "levelBustFt": 500,
+    "levelBustPersistSec": 3,
+    "wrongWayFpm": 500,
+    "wrongWayPersistSec": 5
+  },
+  "stca": {
+    "lateralNm": 3,
+    "verticalFt": 1000,
+    "lookAheadSec": 120,
+    "stepSec": 2,
+    "minGroundSpeedKt": 50,
+    "minTrackAgeSec": 10
+  }
+}

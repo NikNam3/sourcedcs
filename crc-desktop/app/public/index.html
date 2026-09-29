@@ -20,7 +20,6 @@
   <link rel="stylesheet" href="./css/track-panel.css"/>
   <link rel="stylesheet" href="./css/settings-panel.css"/>
   <link rel="stylesheet" href="./css/overlays.css"/>
-  <link rel="stylesheet" href="./css/squawk-panel.css"/>
   <link rel="stylesheet" href="./css/srs-radio.css"/>
   <link rel="stylesheet" href="./css/efsp-panel.css"/>
 </head>
@@ -87,7 +86,11 @@
     <span class="tp-key">SPD</span>   <span class="tp-val" id="tp-spd">—</span>
     <span class="tp-key">SQWK</span>  <span class="tp-val" id="tp-sqwk">—</span>
     <span class="tp-key">IFF</span>   <span class="tp-val" id="tp-iff-state">—</span>
+    <!-- docs/adr/0058: what the flight was cleared to, from its Strip -->
+    <span class="tp-key" id="tp-asgn-key" hidden>ASGN</span> <span class="tp-val" id="tp-asgn" hidden></span>
   </div>
+  <!-- docs/adr/0058: conflict and conformance alerts; empty while nothing is wrong -->
+  <div id="tp-alerts"></div>
   <div class="tp-section">
     <div class="tp-section-label">Override IFF</div>
     <div class="tp-iff-btns">
@@ -100,7 +103,7 @@
     </div>
     <div class="tp-rename-row">
       <input type="text" class="tp-rename-input" id="tp-rename-input"
-             maxlength="20" placeholder="callsign override…"
+             maxlength="20" placeholder="tag…"
              autocomplete="off" spellcheck="false" />
       <button class="tp-rename-btn" id="tp-rename-set">SET</button>
       <button class="tp-rename-btn tp-rename-clr" id="tp-rename-clr">CLR</button>
@@ -168,21 +171,6 @@
      state with a real cause, so it says the cause rather than going blank. -->
 <div id="no-awacs-overlay">
   <div id="no-awacs-msg">NO RADAR COVERAGE — HOLD A RADAR POSITION</div>
-</div>
-
-<!-- Squawk → callsign mapping panel -->
-<div id="calls-panel" class="dock-unmounted">
-  <div class="calls-title">Squawk Callsign Map</div>
-  <div class="sqmap-add-row">
-    <input type="text" id="sqmap-code-input" maxlength="4" placeholder="1101" />
-    <input type="text" id="sqmap-name-input" placeholder="SHADOW11" />
-    <button id="sqmap-add">ADD</button>
-  </div>
-  <div class="sqmap-seq-row">
-    <input type="checkbox" id="sqmap-seq-toggle" />
-    <label class="sqmap-seq-label" for="sqmap-seq-toggle">Sequential (SEQ) — <span style="color:var(--ui-active)">1101→HAT11</span></label>
-  </div>
-  <div id="sqmap-list"></div>
 </div>
 
 <!-- Electronic Flight Strip Panel — see app/public/js/panels/efsp/. Which
@@ -680,13 +668,6 @@
     <div class="setting-label">Track Visibility</div>
     <div class="setting-group">
       <div class="setting-row">
-        <span>Show AI units</span>
-        <label class="toggle">
-          <input type="checkbox" id="set-ai-enabled" checked />
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="setting-row">
         <span>Show ships</span>
         <label class="toggle">
           <input type="checkbox" id="set-ships-enabled" />
@@ -904,7 +885,7 @@
      earlier ordering here put app.js before dock.js/panels and threw
      "Uncaught ReferenceError: applyLightMode is not defined" at boot,
      caught by actually launching Electron, not by any test.
-       1. sync.js / geo.js / iff.js / geojson.js / icons.js — data/geometry
+       1. sync.js / geo.js / iff.js / track-label.js / geojson.js / icons.js — data/geometry
           helpers with no dependency on app state.
        2. map-setup.js / elevation.js / los.js — MapLibre bootstrap + terrain.
        3. dock.js — the dockview panel shell (registry, open/close/toggle).
@@ -919,6 +900,7 @@
 <script src="./js/sync.js"></script>
 <script src="./js/geo.js"></script>
 <script src="./js/iff.js"></script>
+<script src="./js/track-label.js"></script>
 <script src="./js/geojson.js"></script>
 <script src="./js/icons.js"></script>
 <script src="./js/map-setup.js"></script>
@@ -930,7 +912,6 @@
 <script src="./js/panels/radar-panel.js"></script>
 <script src="./js/panels/los-panel.js"></script>
 <script src="./js/panels/airport-selector.js"></script>
-<script src="./js/panels/squawk-panel.js"></script>
 <script src="./js/panels/track-panel.js"></script>
 <script src="./js/panels/tools-panel.js"></script>
 <script src="./js/panels/aprt-panel.js"></script>

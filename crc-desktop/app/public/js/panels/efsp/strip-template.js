@@ -57,7 +57,7 @@ const DEPARTURE_BLOCK_MAP = {
   // comment for why this one needs no dedicated target kind, unlike 24A).
   '5A': { required: false, label: 'DEGR',     target: { kind: 'fdr', path: 'identity.trackDegradationFlag' } },
   '6':  { required: true,  label: 'PROP DEP', target: { kind: 'fdr', path: 'filed.proposedDepartureTimeUtc' } },
-  '7':  { required: true,  label: 'ALT',      target: { kind: 'fdr', path: 'filed.requestedAltitude' } },
+  '7':  { required: true,  label: 'CRUS ALT', target: { kind: 'fdr', path: 'filed.requestedAltitude' } }, // what was filed; the assigned altitude is the clearance (docs/adr/0058)
   '8':  { required: true,  label: 'DEP',      target: { kind: 'fdr', path: 'filed.departureAirport' } },
   '8A': { required: true,  label: 'RWY',      target: { kind: 'fdr', path: 'filed.departureRunway' } },
   '8B': { required: true,  label: 'DEST',     target: { kind: 'fdr', path: 'filed.destinationAirport' } },
@@ -107,8 +107,10 @@ const DEPARTURE_BLOCK_MAP = {
   // client had no way to know which Blocks §9.2 watches — fine while the only
   // use was a tooltip the client composes for itself, wrong the moment it
   // needs to say so per-Block. efsp-block-map-parity.test.js compares it now.
-  '20': { required: false, label: 'HDG',      target: { kind: 'annotation' }, interlock: 'COURSE' },
-  '21': { required: false, label: 'INIT ALT', target: { kind: 'annotation' }, interlock: 'ALTITUDE' },
+  // docs/adr/0058 — the flight's clearance, on the FDR and shared with every
+  // Facility: CD issues ALT with the clearance, APP/CTR amend it and vector.
+  '20': { required: false, label: 'HDG',      target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' },
+  '21': { required: false, label: 'ALT',      target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' },
   // The guide's own Block 22, "Frequency" — structured rather than a
   // free-text annotation since the RANGE slice, so approving a flight onto
   // an airspace's frequency can write it directly and it validates as one
@@ -155,7 +157,7 @@ const ARRIVAL_BLOCK_MAP = {
   '5':        { required: true,  label: 'SQUAWK',   target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
   '5A':       { required: false, label: 'DEGR',     target: { kind: 'fdr', path: 'identity.trackDegradationFlag' } }, // WP4A gap-closure — see DEPARTURE_BLOCK_MAP's '5A' comment
   '6':        { required: true,  label: 'ETA',      target: { kind: 'fdr', path: 'filed.estimatedArrivalTimeUtc' } },
-  '7':        { required: true,  label: 'ALT',      target: { kind: 'annotation' }, interlock: 'ALTITUDE' }, // §9.2 — see DEPARTURE_BLOCK_MAP's '20'/'21' comment
+  '7':        { required: true,  label: 'ALT',      target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' }, // docs/adr/0058
   '8':        { required: true,  label: 'ORIG',     target: { kind: 'fdr', path: 'filed.originAirport' } },
   '8A':       { required: false, label: 'FIX',      target: { kind: 'fdr', path: 'filed.arrivalFix' } },
   '8B':       { required: true,  label: 'RWY',      target: { kind: 'fdr', path: 'assigned.landingRunway' } },
@@ -163,7 +165,7 @@ const ARRIVAL_BLOCK_MAP = {
   '9A-FUEL':  { required: true,  label: 'MIN FUEL', target: { kind: 'annotation' } },
   '9A-DEST':  { required: false, label: 'DEST',     target: { kind: 'annotation' } },
   '9A-PTOUT': { required: false, label: 'PT OUT',   target: { kind: 'annotation' } },
-  '9A-VECTOR':{ required: false, label: 'VECTOR',   target: { kind: 'annotation' }, interlock: 'COURSE' }, // §9.2 — a radar vector IS a course assignment
+  '9A-VECTOR':{ required: false, label: 'HDG',      target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' }, // docs/adr/0058 — a radar vector IS the assigned heading
   '9A-SPEED': { required: false, label: 'SPEED',    target: { kind: 'annotation' } },
   '9E':       { required: true,  label: 'RMKS',     target: { kind: 'fdr', path: 'filed.remarks' } },
   '20':       { required: false, label: 'SCRATCH1',  target: { kind: 'annotation' } },
@@ -203,15 +205,16 @@ const OVERFLIGHT_BLOCK_MAP = {
   '4B': { required: true,  label: 'DATALINK', target: { kind: 'fdr', path: 'assigned.datalinkClearanceIndicator' } },
   '5':  { required: true,  label: 'SQUAWK',   target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
   '5A': { required: false, label: 'DEGR',     target: { kind: 'fdr', path: 'identity.trackDegradationFlag' } },
-  '7':  { required: true,  label: 'ALT',      target: { kind: 'fdr', path: 'filed.requestedAltitude' } },
+  '7':  { required: true,  label: 'CRUS ALT', target: { kind: 'fdr', path: 'filed.requestedAltitude' } }, // what was filed; the assigned altitude is the clearance (docs/adr/0058)
   // WP6 (crc-sync's docs/adr/0051) — OVERFLIGHT had no Block carrying an ATC
   // course or altitude ASSIGNMENT, only the filed request above, which left
   // §9.2's MARSA interlock unreachable on this one Role. Annotation-routed
   // like ARRIVAL's equivalents, so a transiting flight's clearance history is
   // append-only (§3.7) and confirmVacated works. See the server's copy for the
   // [SOURCE-DEFINED] note on the numbering.
-  '7A': { required: false, label: 'ASGN ALT', target: { kind: 'annotation' }, interlock: 'ALTITUDE' },
-  '9A-VECTOR': { required: false, label: 'VECTOR', target: { kind: 'annotation' }, interlock: 'COURSE' },
+  // docs/adr/0058: both are the flight's clearance now, on the FDR.
+  '7A': { required: false, label: 'ALT',      target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' },
+  '9A-VECTOR': { required: false, label: 'HDG', target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' },
   '8':  { required: true,  label: 'ORIG',     target: { kind: 'fdr', path: 'filed.departureAirport' } },
   '8B': { required: true,  label: 'DEST',     target: { kind: 'fdr', path: 'filed.destinationAirport' } },
   '9':  { required: true,  label: 'RTE',      target: { kind: 'fdr', path: 'filed.route' }, provenance: 'COMPUTER_GENERATED' },
@@ -256,9 +259,25 @@ function getPath(obj, path) {
   return path.split('.').reduce((o, k) => (o == null ? o : o[k]), obj);
 }
 
-/** The currently-ACTIVE entry's value for an annotation Block, or null if none has ever been set. */
+/**
+ * The history cell behind a Block: the Strip's own annotation, or — for the
+ * assigned altitude and heading (docs/adr/0058) — the FLIGHT's clearance cell,
+ * which every Facility's copy of the flight shares. Same shape either way.
+ */
+function _historyCellFor(strip, blockId) {
+  if (!strip) return null;
+  const map = BLOCK_MAPS[strip.role || 'DEPARTURE'];
+  const def = map && map[blockId];
+  if (def && def.target.kind === 'clearance') {
+    const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(strip.fdrId) : null;
+    return (fdr && fdr.clearance && fdr.clearance[def.target.field]) || null;
+  }
+  return (strip.annotations && strip.annotations[blockId]) || null;
+}
+
+/** The currently-ACTIVE entry's value for an annotation (or clearance) Block, or null if none has ever been set. */
 function activeAnnotationValue(strip, blockId) {
-  const cell = strip.annotations && strip.annotations[blockId];
+  const cell = _historyCellFor(strip, blockId);
   if (!cell) return null;
   const active = cell.entries.find(e => e.status === 'ACTIVE');
   return active ? active.value : null;
@@ -266,7 +285,7 @@ function activeAnnotationValue(strip, blockId) {
 
 /** True when this annotation Block currently has an ACTIVE entry — i.e. there's something a confirmVacated action (§3.7 rule 3) could actually strike. Checked by status directly rather than truthiness of activeAnnotationValue(), since an active value could itself be falsy-looking (e.g. "0"). */
 function hasActiveAnnotationEntry(strip, blockId) {
-  const cell = strip.annotations && strip.annotations[blockId];
+  const cell = _historyCellFor(strip, blockId);
   return !!(cell && cell.entries.some(e => e.status === 'ACTIVE'));
 }
 
@@ -291,7 +310,7 @@ function hasActiveAnnotationEntry(strip, blockId) {
  * are testable without rendering anything.
  */
 function annotationHistory(strip, blockId) {
-  const cell = strip && strip.annotations && strip.annotations[blockId];
+  const cell = _historyCellFor(strip, blockId);
   if (!cell || !Array.isArray(cell.entries)) return [];
   return cell.entries;
 }
@@ -308,7 +327,9 @@ function supersededAnnotationEntries(strip, blockId) {
 // role-keyed since eligibility is per-role: DEPARTURE's Block 21 ("Initial
 // altitude") vs ARRIVAL's Block 7 (assigned/cleared altitude — the field
 // that actually gets a sequence of clearances on a descending arrival).
-const CONFIRM_VACATED_ELIGIBLE_BLOCKS = { DEPARTURE: ['21'], ARRIVAL: ['7'] };
+// Every Role's assigned altitude now (docs/adr/0058) — OVERFLIGHT's 7A was
+// missing, so an overflight's altitude had no ⌿ at all.
+const CONFIRM_VACATED_ELIGIBLE_BLOCKS = { DEPARTURE: ['21'], ARRIVAL: ['7'], OVERFLIGHT: ['7A'] };
 
 // [SOURCE-DEFINED] composite format for Block 3, per the guide's own
 // example template (§6.5): count (if formation), wake category, type,
@@ -347,6 +368,11 @@ function resolveBlockValue(blockId, fdr, strip) {
   }
   if (t.kind === 'annotation') {
     return { value: activeAnnotationValue(strip, blockId), provenance: 'CONTROLLER_ENTERED' };
+  }
+  if (t.kind === 'clearance') {
+    const cell = fdr && fdr.clearance && fdr.clearance[t.field];
+    const active = cell && cell.entries.find(e => e.status === 'ACTIVE');
+    return { value: active ? active.value : null, provenance: 'CONTROLLER_ENTERED' };
   }
   if (t.kind === 'system') {
     return { value: strip ? strip[t.field] : null, provenance: 'SYSTEM_DERIVED' };
@@ -507,7 +533,7 @@ function isBlockEditable(blockId, role = 'DEPARTURE') {
   // are restricted enums with their own <select>, a frequency is a free
   // numeric entry — the ordinary click-to-edit path is right for it. The
   // server validates the band.
-  return !!def && (def.target.kind === 'fdr' || def.target.kind === 'annotation' || def.target.kind === 'frequency');
+  return !!def && (def.target.kind === 'fdr' || def.target.kind === 'annotation' || def.target.kind === 'frequency' || def.target.kind === 'clearance');
 }
 
 if (typeof module !== 'undefined' && module.exports) {

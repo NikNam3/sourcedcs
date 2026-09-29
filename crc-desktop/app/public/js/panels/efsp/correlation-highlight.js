@@ -123,10 +123,11 @@ function correlationBadgeFor(strip) {
     };
   }
 
-  // The contact's RESOLVED callsign, not the raw one the matcher compared
-  // against — so the controller reads the same name they see on the scope.
-  // The asymmetry is deliberate (crc-sync's docs/adr/0046): match on raw,
-  // display resolved.
+  // The badge names the CONTACT by its own reference — its code, else its
+  // track number (track-label.js's trackRef) — never by a callsign: once
+  // correlated, the contact's label IS this Strip's callsign (crc-sync's
+  // docs/adr/0059), and `TRK VIPER11` under a Strip reading VIPER11 says
+  // nothing.
   const track = typeof window !== 'undefined' && typeof window.getLatestTrack === 'function'
     ? window.getLatestTrack(record.trackId) : null;
 
@@ -158,7 +159,7 @@ function correlationBadgeFor(strip) {
   }
 
   return {
-    text: `TRK ${track.callsign || record.trackId}`,
+    text: `TRK ${typeof trackRef === 'function' ? trackRef(track) : record.trackId}`,
     className: 'efsp-correlation-badge efsp-correlation-correlated',
     title: _correlatedSentence(record),
   };

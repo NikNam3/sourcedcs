@@ -8,7 +8,7 @@
 // That meant one controller's ATIS setup for an airport was invisible to
 // everyone else, and a second controller listening on the same frequency
 // could easily be reading a stale runway. Now squadron-wide and
-// server-authoritative, same pattern as config/squawk-map.json — editable
+// server-authoritative, like theater-settings.json — editable
 // live from any connected client (ws-hub.js's 'aptConfigSet' message) and
 // persisted so it survives a crc-sync restart.
 
@@ -16,8 +16,7 @@ const fs = require('fs');
 const { statePaths, ensureDirFor } = require('./state-paths');
 
 // Overridable so tests can exercise the mutate/persist path against a temp
-// file instead of the real squadron-wide config (same pattern as
-// resolve.js's CRCSYNC_SQUAWK_MAP_PATH).
+// file instead of the real squadron-wide config.
 const { read: APT_CONFIG_READ_PATH, write: APT_CONFIG_PATH } =
   statePaths('apt-config.json', process.env.CRCSYNC_APT_CONFIG_PATH);
 

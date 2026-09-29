@@ -191,6 +191,40 @@ function initMap(container) {
       },
     });
 
+    // ── Short-term conflict overlay (docs/adr/0058) ──────────────────────
+    // Predicted paths to the closest point, the line between the two closest
+    // points, and the countdown there. Orange-red, the conflict colour on the
+    // Strips too; not the attention red §7.7 rule 4 reserves.
+    map.addSource('stca', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    map.addLayer({
+      id: 'stca-paths', type: 'line', source: 'stca',
+      filter: ['==', ['get', 'kind'], 'path'],
+      paint: { 'line-color': '#ff8a4c', 'line-width': 1.5, 'line-dasharray': [3, 2], 'line-opacity': 0.9 },
+    });
+    map.addLayer({
+      id: 'stca-cpa-line', type: 'line', source: 'stca',
+      filter: ['==', ['get', 'kind'], 'cpa-line'],
+      paint: { 'line-color': '#ff8a4c', 'line-width': 1 },
+    });
+    map.addLayer({
+      id: 'stca-cpa', type: 'circle', source: 'stca',
+      filter: ['==', ['get', 'kind'], 'cpa'],
+      paint: {
+        'circle-radius': 12, 'circle-color': 'rgba(255,138,76,0.12)',
+        'circle-stroke-color': '#ff8a4c', 'circle-stroke-width': 1,
+      },
+    });
+    map.addLayer({
+      id: 'stca-cpa-label', type: 'symbol', source: 'stca',
+      filter: ['==', ['get', 'kind'], 'cpa'],
+      layout: {
+        'text-field': ['get', 'label'], 'text-font': ['Roboto Regular', 'Noto Sans Regular'],
+        'text-size': TEXT_SIZE_PX, 'text-anchor': 'left', 'text-offset': [1.4, -0.8],
+        'text-allow-overlap': true, 'text-ignore-placement': true,
+      },
+      paint: { 'text-color': '#ffd2bd' },
+    });
+
     // ── Airport labels ───────────────────────────────────────────────────
     map.addSource('airports', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
     map.addLayer({
@@ -301,10 +335,10 @@ function initMap(container) {
           ['==', ['get', 'iff'], 'bandit'],  'tri-iff-bandit',
           ['==', ['get', 'iff'], 'hostile'], 'tri-iff-hostile',
           // Ground vehicles
-          ['==', ['get', 'category'], 3],
+          ['==', ['get', 'domain'], 'GROUND'],
           ['match', ['get', 'iff'], 'friendly','gnd-iff-friendly', 'bogey','gnd-iff-bogey', 'gnd-iff-neutral'],
           // Ships
-          ['==', ['get', 'category'], 4],
+          ['==', ['get', 'domain'], 'SEA'],
           ['match', ['get', 'iff'], 'friendly','ship-iff-friendly', 'bogey','ship-iff-bogey', 'ship-iff-neutral'],
           // Aircraft on ground
           ['get', 'onGround'],
@@ -353,6 +387,9 @@ function initMap(container) {
       id: 'unit-labels', type: 'symbol', source: 'labels',
       layout: {
         'text-field': ['format',
+          // docs/adr/0058: a conflict or conformance tag leads, in its own colour.
+          ['get', 'alertTag'], {'text-color': ['get', 'alertColor']},
+          ['case', ['!=', ['get', 'alertTag'], ''], ' ', ''], {},
           ['get', 'callsign'], {},
           // Add '\n' after callsign only when there's something on subsequent lines
           ['case', ['any', ['!=', ['get', 'infoLine'], ''], ['!=', ['get', 'sqTag'], '']], '\n', ''], {},
@@ -360,6 +397,9 @@ function initMap(container) {
           // Add '\n' between info and sqTag only when both are present
           ['case', ['all', ['!=', ['get', 'infoLine'], ''], ['!=', ['get', 'sqTag'], '']], '\n', ''], {},
           ['get', 'sqTag'], {'text-color': ['get', 'sqColor']},
+          // The assigned values, on their own line: "A180 H050".
+          ['case', ['!=', ['get', 'asgnLine'], ''], '\n', ''], {},
+          ['get', 'asgnLine'], {},
         ],
         'text-font': ['Roboto Regular', 'Noto Sans Regular'],
         'text-size': TEXT_SIZE_PX, 'text-anchor': 'center', 'text-justify': 'left',
@@ -449,16 +489,15 @@ function initMap(container) {
     }
 
     // ── Left-click on track icon ─────────────────────────────────────────
-    // Aircraft (cat 1/2) + ships (cat 4) → track info panel
-    // Ground vehicles (cat 3) → ground label popup
+    // Aircraft and ships → track info panel
+    // Ground vehicles → the tag popup
     map.on('click', 'unit-squares', (e) => {
       if (bullseyePickTarget) return;
       const feat = e.features && e.features[0];
       if (!feat) return;
       e.preventDefault();
       const id  = String(feat.properties.id);
-      const cat = feat.properties.category;
-      if (cat === 3) {
+      if (feat.properties.domain === 'GROUND') {
         showGroundLabelPopup(id, e.originalEvent.clientX, e.originalEvent.clientY);
       } else {
         showTrackPanel(id);

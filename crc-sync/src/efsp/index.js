@@ -27,6 +27,7 @@
 // back-compat — `efsp.boardStoreFor(facilityId)`/`positionStoreFor(...)`
 // are the real, general accessors everything WP4A-aware should use.
 
+const { migrateClearanceAnnotations } = require('./clearance-migration');
 const fs = require('fs');
 
 const { FdrStore } = require('./fdr-store');
@@ -396,6 +397,11 @@ function _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaSt
     // back up with every AR silently reverted to ATC separation would be
     // §4.8.3's "second controller inherits a lie", caused by us.
     if (marsaStore) marsaStore.restore(data.marsa);
+    // docs/adr/0058 — a Board saved before the clearance moved onto the FDR
+    // still holds the assigned altitude and heading as Strip annotations.
+    const moved = migrateClearanceAnnotations(
+      [...facilities.values()].flatMap(f => f.boardStore.getAll()), id => fdrStore.getFdr(id));
+    if (moved) console.log(`[efsp] moved ${moved} assigned altitude/heading history cell(s) from Strips onto their flights`);
     // After the Boards, not before — it has Strips to check against only now.
     _reconcileRestored(facilities, fdrStore, correlationStore, marsaStore);
   } catch (e) {

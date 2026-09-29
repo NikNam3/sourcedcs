@@ -3,7 +3,7 @@
 // EFSP WebSocket message handling — the boundary between ws-hub.js's
 // session/broadcast machinery and the EFSP stores. Kept as its own file
 // rather than inlined into ws-hub.js's existing message switch (the way
-// squawkMapSet/theaterSettingsSet/aptConfigSet are) because the EFSP
+// theaterSettingsSet/aptConfigSet are) because the EFSP
 // surface area — three message types, each with a distinct ack/broadcast
 // shape, one of which (mutation) now covers fourteen op kinds — is bigger
 // than those single-shot squadron-config messages.

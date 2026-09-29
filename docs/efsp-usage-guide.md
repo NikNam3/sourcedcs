@@ -269,11 +269,13 @@ A Strip has three columns:
   relation waiting for rendezvous, an ambiguous track — each with its own buttons and a line
   saying how long it has waited or why it is blocked. At the bottom is the **next step** (the
   NLA). A Strip with something waiting on *you* has an amber edge.
-- **The fields, in the middle**, then a row of **indicators** (`TRK`, `MARSA`, `TOFI`,
-  `AIRSPACE`, `TIMER`, `+N`). The indicators are always drawn and dim when off, so each is in the
-  same place on every Strip. Colour means something: amber is waiting on you or blocked, orange-red
-  is something failed; everything else is grey. Any reason the Strip owes you (why the next step
-  is refused, why a TOFI exit is blocked, a MARSA void) is a full line under them.
+- **The fields, in the middle**, then a row of **indicators**, but only when there is
+  something to say (`adr/0058`). A Strip where nothing is wrong has no indicator row at all. In
+  order: `STCA`, a conformance warning (`HDG 072`, `ALT ↓`, `BUST +600`, see §8E), `TRK` (only
+  when the flight is *not* normally correlated), `MARSA`, `TOFI`, `AIRSPACE`, `TIMER`, `+N`.
+  Colour means something: amber is waiting on you or blocked, orange-red is something wrong;
+  everything else is grey. Any reason the Strip owes you (a conflict, why the next step is
+  refused, why a TOFI exit is blocked, a MARSA void) is a full line under them.
 - **⋯ ▼ ✕ on the right.** **⋯** holds everything you *start*: Coordinate…, TOFI…, Airspace…,
   MARSA…, Bind…, Convert to Arrival, Offset. Something you cannot do right now is still listed,
   greyed, with the reason. **▼** opens the rest of the Blocks. **✕** drops the Strip.
@@ -311,7 +313,7 @@ at a time, in Block Map order, which is the order of the paper strip.
 (The one thing it does repeat is a Block whose history is too long for its field — that is what
 the `+N` opens.)
 
-⚠️ **`INIT ALT` and `VECTOR` are the Blocks §9.2's MARSA interlock watches.** Writing
+⚠️ **`ALT` and `HDG` are the Blocks §9.2's MARSA interlock watches.** Writing
 one on a flight in an active MARSA relation, before rendezvous, voids the relation.
 That is the interlock working — but it now fires from the panel, where before it could
 only be reached by a dot-command or the server.
@@ -328,8 +330,19 @@ not erase or overwrite any item."*
 - A Block written once shows no history at all.
 - **`⌿` strikes a vacated altitude.** It marks the current value struck rather than
   removing it, and it is the controller's call: an altitude must not be struck until
-  the aircraft has reported or is observed leaving it. Available on DEPARTURE's
-  `INIT ALT` and ARRIVAL's `ALT`.
+  the aircraft has reported or is observed leaving it. Available on the assigned `ALT`
+  of every Role.
+
+### `ALT` and `HDG` belong to the flight, not the Strip
+
+The assigned altitude (`ALT`) and assigned heading (`HDG`) are stored once per flight
+(`adr/0058`). Whatever the departure controller clears is what the arrival Strip shows, and
+every Strip of a flight shows the same value. The filed cruise altitude on a departure or
+overflight is `CRUS ALT`, and changing it is an amendment to the flight plan, not a clearance.
+
+Type an altitude as `FL180`, `A050`, `180` (hundreds of feet) or `5000` (feet). Type a heading as
+`050`. Anything else is refused. `HDG` is usually left empty: set it when you vector, and the
+conformance check (§8E) only watches a heading once one is assigned.
 
 ## 5. Strip fields
 
@@ -585,11 +598,11 @@ parked AWACS, not a fault. Which scope sits at which console is squadron configu
 
 ## 8C. Correlation — how a Strip finds its contact
 
-Every Strip carries a badge saying which surveillance contact it is:
+A Strip whose flight is correlated normally shows no badge at all. Anything else shows one:
 
 | Badge | Means | What to do |
 |---|---|---|
-| `TRK VIPER11` | **correlated.** Hover it to see how — its beacon code, its callsign, or a controller's binding | nothing |
+| *(nothing)* | **correlated**, by beacon code, callsign or a controller's binding. The contact on the scope now carries this Strip's callsign | nothing |
 | `TRK?` | **provisional.** Hover it: usually the contact is squawking a different code from the one you assigned, or the callsign only nearly matches | check the squawk; bind it if you are sure |
 | `NO TRK` | **uncorrelated.** Nothing on your scope matches this flight | `Bind…` it if you can see which one it is |
 | `TRK ×2` | **ambiguous.** Two contacts match equally well, and the system will not guess | click it and pick the right one |
@@ -721,11 +734,11 @@ The Blocks that trip it are the ones that mean *ATC assigned this*:
 
 | Strip | Heading | Altitude |
 |---|---|---|
-| Departure | `HDG` (Block 20) | `INIT ALT` (Block 21) |
-| Arrival | `VECTOR` | Block 7, the cleared altitude |
-| Overflight | `VECTOR` | `ASGN ALT` |
+| Every Role | `HDG` | `ALT` |
 
-Amending the **filed** requested altitude (a departure's `ALT` chip) is not an assignment and does not
+Both belong to the flight (§4B), so assigning either at *any* Position voids the relation.
+
+Amending the **filed** requested altitude (a departure's `CRUS ALT` chip) is not an assignment and does not
 void anything. Neither does confirming a vacated altitude — that records where the aircraft has
 *been*, not where you are sending it.
 
@@ -750,6 +763,57 @@ the thing you were reaching for anyway, and it sets the field back as part of do
 
 **A relation survives a crc-sync restart.** A tanker's declaration does not stop being true because
 the server bounced, so it comes back exactly as it was, rendezvous and all.
+
+## 8E. Conformance and short-term conflict alerts
+
+crc-sync compares every correlated flight with its `ALT` and `HDG` once a second, and every pair of
+airborne contacts with each other (`adr/0058`). **Nothing is shown when nothing is wrong.** When
+something is, the Strip gets an orange-red edge, an indicator and a reason line, the data block on
+the scope gets a coloured tag, and the track panel lists it.
+
+| Indicator | Means |
+|---|---|
+| `HDG 072` | more than 5° off the assigned heading for 10 s (after 30 s to make the turn). The number is where it is actually going |
+| `ALT ↓` / `ALT ↑` | going the wrong way: told to climb and descending, or the reverse, faster than 500 ft/min |
+| `BUST +600` | it reached its `ALT` and has since left it by more than 500 ft |
+| `STCA SNAKE21 0:55` | on present course and rate it will be within 3 NM and 1,000 ft of SNAKE21 in 55 s. Only at an ATC Position (TWR, APP, CTR…), and only when both aircraft are on your scope |
+
+Not a warning: a flight that has not started its climb or descent yet ("descend when ready"). Only
+a flight going the opposite way alerts. Route conformance and terrain are not checked yet.
+
+On the scope, an STCA conflict draws each aircraft's predicted path to the closest point and a line
+between them there. Aircraft in the same active MARSA relation never raise STCA against each
+other. Traffic without Strips still does. The tactical Positions get no STCA: military control
+does not do collision avoidance the way ATC does (`adr/0059`).
+
+Altitudes are compared as the controller reads them, on QNH below the transition altitude and as
+flight levels above it. The thresholds are in crc-sync's `config/alerting.json`.
+
+## 8F. Reading a contact — what your sensors can tell you
+
+A contact on the scope shows only what the radars and links of the Positions **you** hold could
+know (`adr/0059`). The same aircraft can read differently at two consoles.
+
+| You see | Because |
+|---|---|
+| `TN00042`, no altitude | a primary return only: your radar has it, but either it does not interrogate or the aircraft is not squawking |
+| `6123` / `080 G250` | it is squawking (code, Mode C altitude) and nothing identifies it yet. 6000–6777 is an AI aircraft's code |
+| `VIPER11` / `180 G450` / `4521` | correlated to a Strip: its callsign is the Strip's, and its code sits underneath |
+| `COLT31?` | correlated **provisionally** — check it |
+| `230*` | an altitude from a height-finding radar (AWACS, fighter, carrier), not from the aircraft |
+| `Enfield11` / `210L` | a datalink report from one of your own aircraft (tactical Positions) |
+| `EMR` / `RDF` / `HIJ` in colour | squawking 7700 / 7600 / 7500 |
+
+- **A player with no SRS client has no transponder.** Approach and tower radars see them as a track
+  number with no altitude until SRS is running.
+- **Airfield and approach radars are 2D with SSR.** Their altitude always comes from the aircraft.
+- **Tags** (the track panel's text box, or clicking a ground vehicle) name a contact nothing else
+  identifies, for everybody. A correlated flight's callsign takes over from a tag, and the box
+  is disabled while it does.
+- **The datalink** (TAC_C2, AIC, GCI) shows your own participating aircraft even with no radar
+  on them, with dashed lines to what their radars are locked on — but only to contacts your own
+  picture already has.
+- The track panel's *Flight Plan* is the correlated flight's filed plan. **OVERLAY ROUTE** plots it.
 
 ## 9. General controls — quick reference
 

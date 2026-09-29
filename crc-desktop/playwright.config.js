@@ -112,7 +112,6 @@ module.exports = {
         CRC_SYNC_URL: `ws://localhost:${CRC_SYNC_PORT}`,
         CASDOOR_CLIENT_ID: 'e2e',
         CASDOOR_ENDPOINT: 'http://localhost:1',
-        SOURCEDCS_WEB_URL: 'http://localhost:1',
         SRS_RADIO_API_PORT: '1',
       },
     },

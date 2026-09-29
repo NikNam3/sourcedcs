@@ -346,7 +346,51 @@ function _buildStripFields(strip) {
 
 // ── Indicators ─────────────────────────────────────────────────────────────
 
-const INDICATOR_OFF_LABELS = { trk: 'TRK', marsa: 'MARSA', tofi: 'TOFI', airspace: 'AIRSPACE', timer: 'TIMER', siblings: '+0' };
+// docs/adr/0058: nothing is drawn for what is normal. An indicator appears only
+// when it has something to say — a warning, or a situation that currently
+// applies (MARSA, TOFI, an airspace, other Strips on the flight). A quiet Strip
+// has no indicator row at all. Warnings first, so they are always in the same
+// place: the left end of the row.
+const INDICATOR_ORDER = ['stca', 'conf', 'trk', 'marsa', 'tofi', 'airspace', 'timer', 'siblings'];
+
+const _pad3 = (n) => String(Math.round(n)).padStart(3, '0');
+
+/** An altitude the way a controller reads it: a flight level at and above transition, feet below. */
+function _fmtAlt(ft) {
+  const ta = (typeof settings === 'object' && settings && settings.transitionAltFt) || 18000;
+  return ft >= ta ? `FL${_pad3(ft / 100)}` : `${Math.round(ft).toLocaleString('en-US')} ft`;
+}
+const _fmtClock = (sec) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`;
+
+/** This Strip's conformance alerts and conflicts, each as { key, text, tone, reason }. */
+function _stripAlerts(strip) {
+  const out = [];
+  const trackId = typeof correlatedTrackIdForStrip === 'function' ? correlatedTrackIdForStrip(strip) : null;
+  for (const c of (typeof stcaConflictsForTrack === 'function' ? stcaConflictsForTrack(trackId) : [])) {
+    // crc-sync names the other aircraft the way it is labelled: its flight's
+    // callsign when correlated, else its tag or track number (docs/adr/0059).
+    const other = c.otherCallsign;
+    out.push({
+      key: 'stca', tone: 'bad', legacy: 'efsp-stca-indicator',
+      text: `STCA ${other} ${_fmtClock(c.timeToCpaSec)}`,
+      reason: `Conflict with ${other} in ${_fmtClock(c.timeToCpaSec)}: closest ${c.minNm} NM / ${c.vertFt} ft.`,
+    });
+  }
+  for (const a of (typeof conformanceAlertsForFdr === 'function' ? conformanceAlertsForFdr(strip.fdrId) : [])) {
+    if (a.kind === 'HEADING') {
+      out.push({ key: 'conf', tone: 'attn', legacy: 'efsp-conf-indicator', text: `HDG ${_pad3(a.actual)}`,
+        reason: `Assigned heading ${_pad3(a.assigned)}, tracking ${_pad3(a.actual)}.` });
+    } else if (a.kind === 'WRONG_WAY') {
+      const down = a.fpm < 0;
+      out.push({ key: 'conf', tone: 'bad', legacy: 'efsp-conf-indicator', text: `ALT ${down ? '↓' : '↑'}`,
+        reason: `Assigned ${_fmtAlt(a.assigned)}, ${down ? 'descending' : 'climbing'} through ${_fmtAlt(a.altFt)} at ${Math.abs(a.fpm).toLocaleString('en-US')} ft/min.` });
+    } else if (a.kind === 'LEVEL_BUST') {
+      out.push({ key: 'conf', tone: 'bad', legacy: 'efsp-conf-indicator', text: `BUST ${a.deviationFt > 0 ? '+' : '−'}${Math.abs(a.deviationFt)}`,
+        reason: `Reached ${_fmtAlt(a.assigned)}, now at ${_fmtAlt(a.altFt)}.` });
+    }
+  }
+  return out;
+}
 
 function _indicator(key, text, tone, legacy, title) {
   const node = _stripEl('span', `efsp-ind efsp-ind-${tone}${legacy ? ' ' + legacy : ''}`, text);
@@ -360,6 +404,8 @@ function _litIndicator(strip, key, el, obligation, siblings) {
     const badge = typeof correlationBadgeFor === 'function' ? correlationBadgeFor(strip) : null;
     if (!badge) return null;
     if (badge.warned) el.classList.add('efsp-strip-correlation-warned');
+    // Correlated and nothing wrong is the normal case: say nothing.
+    if (/efsp-correlation-correlated/.test(badge.className) && !badge.warned) return null;
     const tone = /uncorrelated/.test(badge.className) ? 'bad' : (badge.ambiguous || badge.warned) ? 'attn' : 'on';
     return _indicator(key, badge.text, tone, badge.className, badge.title);
   }
@@ -409,12 +455,17 @@ function _litIndicator(strip, key, el, obligation, siblings) {
   return null;
 }
 
-function _buildIndicatorSlots(strip, el, obligation) {
+/** The indicator row, or null when there is nothing to say (docs/adr/0058). */
+function _buildIndicatorSlots(strip, el, obligation, alerts) {
   const slots = _stripEl('div', 'efsp-strip-slots');
   const siblings = otherLiveStripsForFdr(strip.fdrId, strip.stripId);
-  for (const key of indicatorSlotsFor(strip.role, strip.ownerPositionId)) {
-    slots.appendChild(_litIndicator(strip, key, el, obligation, siblings)
-      || _indicator(key, INDICATOR_OFF_LABELS[key], 'off', '', ''));
+  for (const key of INDICATOR_ORDER) {
+    if (key === 'stca' || key === 'conf') {
+      for (const a of alerts.filter(x => x.key === key)) slots.appendChild(_indicator(key, a.text, a.tone, a.legacy, a.reason));
+      continue;
+    }
+    const node = _litIndicator(strip, key, el, obligation, siblings);
+    if (node) slots.appendChild(node);
   }
   // A return leg's archived annotations: only drawn when there are some.
   if (strip.previousLeg && Object.keys(strip.previousLeg.annotations || {}).length > 0) {
@@ -423,14 +474,18 @@ function _buildIndicatorSlots(strip, el, obligation) {
       Object.entries(strip.previousLeg.annotations)
         .map(([blockId, cell]) => `${blockId}: ${(cell.entries || []).map(e => e.value).join(' / ')}`).join('\n')));
   }
-  return slots;
+  return slots.children && slots.children.length === 0 ? null : slots;
 }
 
 // ── Reasons ────────────────────────────────────────────────────────────────
 
 /** Every sentence the Strip owes the controller, each a full line (F-006). */
-function _buildReasonLines(strip, inhibited) {
+function _buildReasonLines(strip, inhibited, alerts = []) {
   const lines = [];
+  // Conflicts and conformance first: the most urgent thing on the Strip.
+  for (const a of alerts) {
+    lines.push(_stripEl('div', `efsp-strip-reason${a.tone === 'bad' ? ' efsp-strip-reason-bad' : ''} efsp-alert-reason`, a.reason));
+  }
   if (inhibited) {
     const why = _stripEl('div', 'efsp-strip-reason efsp-nla-inhibit-reason', inhibited);
     why.title = inhibited;
@@ -694,10 +749,15 @@ function _buildStripLayout(el, strip, obligation) {
   const { tab, rows, inhibited } = _buildStripTab(strip, arrival);
   if (rows.some(r => r.classList.contains('efsp-x-in'))) el.classList.add('efsp-strip-needs');
 
+  const alerts = _stripAlerts(strip);
+  if (alerts.some(a => a.tone === 'bad')) el.classList.add('efsp-strip-alert');
+  else if (alerts.length) el.classList.add('efsp-strip-alert-attn');
+
   const main = _stripEl('div', 'efsp-strip-main');
   main.appendChild(_buildStripFields(strip));
-  main.appendChild(_buildIndicatorSlots(strip, el, obligation));
-  for (const line of _buildReasonLines(strip, inhibited)) main.appendChild(line);
+  const slots = _buildIndicatorSlots(strip, el, obligation, alerts);
+  if (slots) main.appendChild(slots);
+  for (const line of _buildReasonLines(strip, inhibited, alerts)) main.appendChild(line);
   _appendExpandedView(main, strip);
 
   // The grid is one level down because the Strip itself is the size container
@@ -710,5 +770,5 @@ function _buildStripLayout(el, strip, obligation) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { ROLE_ABBR, INDICATOR_OFF_LABELS };
+  module.exports = { ROLE_ABBR, INDICATOR_ORDER };
 }

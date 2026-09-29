@@ -1,30 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-
-// The squawk-map test below really does edit the map, to prove the matcher is
-// unmoved by it — so point resolve.js at a temp file BEFORE it is imported.
-// Without this the test would rewrite the squadron's own
-// config/squawk-map.json, which is hand-edited data.
-process.env.CRCSYNC_SQUAWK_MAP_PATH = path.join(
-  fs.mkdtempSync(path.join(os.tmpdir(), 'crcsync-corrmatch-')), 'squawk-map.json',
-);
 
 /* The correlation key ladder's matching rules (guide §6.6 rule 1).
  *
- * The decision most worth pinning is negative: a squawk-map entry must not
- * change any correlation. resolveCallsign() rewrites display names from that
- * map, so matching on its output would turn the callsign rung into the beacon
- * rung with a config lookup in the middle — and would let any connected
- * client re-correlate flights by editing squadron config.
+ * The decision most worth pinning is negative: nothing a controller is SHOWN
+ * about a contact — its label, its tag — may change a correlation. The
+ * matcher reads only what the aircraft gives: its raw DCS callsign and the
+ * code its transponder is sending (docs/adr/0059).
  */
 
 const {
-  normaliseCallsign, splitCallsign, beaconFromTrack, callsignAffinity, buildTrackIndices,
+  normaliseCallsign, splitCallsign, callsignAffinity, buildTrackIndices,
   AFFINITY_EXACT, AFFINITY_FORMATION, AFFINITY_SUFFIXED, AFFINITY_SAME_STEM,
 } = await import('../src/efsp/correlation-match.js');
+const { octalCode } = await import('../src/surveillance/transponder.js');
+// The fixtures' `squawk` stands for the code the transponder is sending.
+const beaconFromTrack = (t) => (t ? octalCode(t.squawk) : null);
 
 // ── normalisation ──────────────────────────────────────────────────────────
 
@@ -141,7 +132,7 @@ const TRACKS = [
 ];
 
 test('buildTrackIndices keys tracks by observed code and by callsign stem', () => {
-  const { byBeacon, byStem, byId } = buildTrackIndices(TRACKS);
+  const { byBeacon, byStem, byId } = buildTrackIndices(TRACKS, beaconFromTrack);
   assert.deepEqual(byBeacon.get('0042'), ['2']);
   assert.deepEqual(byStem.get('MAGIC'), ['4']);
   assert.equal(byId.get('1').callsign, 'VIPER11');
@@ -150,17 +141,17 @@ test('buildTrackIndices keys tracks by observed code and by callsign stem', () =
 test('a duplicate beacon code lands both tracks under it rather than one winning silently', () => {
   // §3.10.2 rule 7: duplicates are structural and explicitly accepted. Picking
   // a winner here would hide the ambiguity the reconciler has to report.
-  const { byBeacon } = buildTrackIndices(TRACKS);
+  const { byBeacon } = buildTrackIndices(TRACKS, beaconFromTrack);
   assert.deepEqual(byBeacon.get('0041').sort(), ['1', '3']);
 });
 
 test('two tracks sharing a stem both land under it', () => {
-  const { byStem } = buildTrackIndices(TRACKS);
+  const { byStem } = buildTrackIndices(TRACKS, beaconFromTrack);
   assert.deepEqual(byStem.get('VIPER').sort(), ['1', '2']);
 });
 
 test('a track with no usable code is absent from the beacon index but present by stem', () => {
-  const { byBeacon, byStem } = buildTrackIndices(TRACKS);
+  const { byBeacon, byStem } = buildTrackIndices(TRACKS, beaconFromTrack);
   for (const ids of byBeacon.values()) {
     assert.ok(!ids.includes('4'), 'MAGIC has no squawk');
     assert.ok(!ids.includes('5'), 'BANDIT squawks something that is not octal');
@@ -169,43 +160,28 @@ test('a track with no usable code is absent from the beacon index but present by
 });
 
 test('buildTrackIndices copes with no tracks at all', () => {
-  const { byBeacon, byStem, byId } = buildTrackIndices([]);
+  const { byBeacon, byStem, byId } = buildTrackIndices([], beaconFromTrack);
   assert.equal(byBeacon.size, 0);
   assert.equal(byStem.size, 0);
   assert.equal(byId.size, 0);
-  assert.equal(buildTrackIndices(null).byId.size, 0);
+  assert.equal(buildTrackIndices(null, beaconFromTrack).byId.size, 0);
 });
 
 // ── the load-bearing negative ──────────────────────────────────────────────
 
-test('a squawk-map entry does not change any correlation', async () => {
-  // resolveCallsign rewrites display names from config/squawk-map.json, which
-  // any connected client can edit live (ws-hub.js's squawkMapSet). If matching
-  // read that output, a squadron config edit would silently re-correlate
-  // flights — and the callsign rung would stop being independent evidence from
-  // the beacon rung. The matcher must not consult it at all.
-  const resolve = await import('../src/resolve.js');
-
+test('the matcher never sees the label a controller is shown', () => {
+  // The label comes from correlation itself (the Strip's callsign) or from a
+  // controller's tag (docs/adr/0059). Matching on it would let a correlation
+  // confirm itself; the matcher is handed the raw DCS callsign only.
   const track = { id: 9, callsign: 'VIPER11', squawk: 41, coalition: 3 };
-  const before = resolve.resolveCallsign(track, null, () => 'TN00000');
-
-  assert.equal(resolve.setSquawkMapping('exact', 41, 'SOMETHINGELSE'), true);
-  const after = resolve.resolveCallsign(track, null, () => 'TN00000');
-  assert.notEqual(after, before, 'the squawk map really did change the display name');
-  assert.equal(after, 'SOMETHINGELSE');
-
-  // And the matcher is unmoved: it still matches the raw DCS callsign.
   assert.equal(callsignAffinity('VIPER11', track.callsign), AFFINITY_EXACT);
-  assert.equal(callsignAffinity('SOMETHINGELSE', track.callsign), null);
-  const { byStem } = buildTrackIndices([track]);
-  assert.deepEqual(byStem.get('VIPER'), ['9'], 'indexed by the raw callsign, not the resolved one');
-
-  resolve.deleteSquawkMapping('exact', 41);
+  const { byStem } = buildTrackIndices([track], beaconFromTrack);
+  assert.deepEqual(byStem.get('VIPER'), ['9'], 'indexed by the raw callsign');
 });
 
 test('a controller rename does not change any correlation either', () => {
-  // Renames come from collab-store.js and also flow through resolveCallsign.
-  // Renaming a target on the scope must not re-bind a flight strip.
+  // A tag comes from collab-store.js. Tagging a contact on the scope must not
+  // re-bind a flight strip.
   const track = { id: 9, callsign: 'VIPER11', squawk: 41 };
   assert.equal(callsignAffinity('VIPER11', track.callsign), AFFINITY_EXACT);
   // The matcher is handed the raw track; there is no path from a rename to it.

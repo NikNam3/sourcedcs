@@ -1111,7 +1111,7 @@ function _openBindPopover(strip, anchorEl, candidateTrackIds) {
   const ids = candidateTrackIds && candidateTrackIds.length
     ? candidateTrackIds
     : (typeof window !== 'undefined' && typeof window.getAllTracks === 'function'
-      ? window.getAllTracks().filter(t => t.category === 1 || t.category === 2).map(t => String(t.id))
+      ? window.getAllTracks().filter(t => t.domain === 'AIR').map(t => String(t.id))
       : []);
 
   if (ids.length === 0) {
@@ -1129,7 +1129,7 @@ function _openBindPopover(strip, anchorEl, candidateTrackIds) {
       ? window.getLatestTrack(trackId) : null;
     const row = document.createElement('button');
     row.className = 'efsp-coordinate-submit';
-    row.textContent = track ? `${track.callsign || trackId}${track.squawk != null ? ` · ${String(track.squawk).padStart(4, '0')}` : ''}` : String(trackId);
+    row.textContent = track ? pickerText(track) : String(trackId);
     row.addEventListener('click', (e) => {
       e.stopPropagation();
       _dispatchCorrelation(strip, { kind: 'BindTrack', trackId: String(trackId) });
@@ -2823,7 +2823,7 @@ function _stripRenderSignature(strip) {
       correlation.binding ? 1 : 0,
       (correlation.warning && correlation.warning.kind) || '',
       ((correlation.warning && correlation.warning.candidateTrackIds) || []).join('+'),
-      track ? (track.callsign || '') : '·',
+      track ? trackRef(track) : '·',
     ].join('/'));
   }
 
@@ -2838,6 +2838,15 @@ function _stripRenderSignature(strip) {
   // never the flash: marking the flash played must not itself rebuild the
   // Strip, or the next render would replay it.
   parts.push('arr:' + (typeof efspArrivalFor === 'function' && efspArrivalFor(strip.stripId) ? 1 : 0));
+
+  // Conformance and conflict alerts (docs/adr/0058). A conflict's countdown is
+  // part of what the Strip says, so it rebuilds each second while one lasts —
+  // only the Strips actually in a conflict.
+  const conf = typeof conformanceAlertsForFdr === 'function' ? conformanceAlertsForFdr(strip.fdrId) : [];
+  const trackId = typeof correlatedTrackIdForStrip === 'function' ? correlatedTrackIdForStrip(strip) : null;
+  const stca = typeof stcaConflictsForTrack === 'function' ? stcaConflictsForTrack(trackId) : [];
+  parts.push('alr:' + conf.map(a => `${a.kind}/${a.assigned}/${a.actual ?? ''}/${a.deviationFt ?? ''}/${a.fpm ?? ''}`).join(',')
+    + ';' + stca.map(c => `${c.id}/${c.timeToCpaSec}/${c.minNm}/${c.vertFt}`).join(','));
 
   return parts.join('|');
 }

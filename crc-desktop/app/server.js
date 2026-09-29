@@ -149,31 +149,6 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
-  // ── Flight plan lookup (proxy to sourcedcs-web) ──────────────────────────
-  if (req.url.startsWith('/api/fpl/')) {
-    const callsign = decodeURIComponent(req.url.slice('/api/fpl/'.length).split('?')[0]).toUpperCase().trim();
-    const webUrl   = (process.env.SOURCEDCS_WEB_URL || '').replace(/\/$/, '');
-    if (!webUrl || !callsign) {
-      res.writeHead(404, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ error: 'not found' }));
-    }
-    const target = new URL('/api/fpl1801/by-callsign/' + encodeURIComponent(callsign), webUrl);
-    const mod    = target.protocol === 'https:' ? require('https') : http;
-    const preq   = mod.get(target.href, pres => {
-      const chunks = [];
-      pres.on('data', c => chunks.push(c));
-      pres.on('end', () => {
-        res.writeHead(pres.statusCode, { 'Content-Type': 'application/json' });
-        res.end(Buffer.concat(chunks));
-      });
-    });
-    preq.on('error', () => {
-      res.writeHead(502, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'upstream error' }));
-    });
-    return;
-  }
-
   // Serve static data files (aircraft-types.json, airports.json, icao.json …)
   if (req.url.startsWith('/data/')) {
     const dataPath = path.normalize(path.join(DATA_DIR, req.url.slice(6).split('?')[0]));

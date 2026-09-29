@@ -146,6 +146,19 @@ class CorrelationStore {
     return [...this._records.values()].map(deepClone);
   }
 
+  /**
+   * trackId -> { fdrId, state } for every record bound to a contact, built in
+   * one pass with no copying. surveillance/identity.js calls it once per
+   * broadcast tick, where getAll()'s deep clone of every record would not do.
+   */
+  trackIndex() {
+    const index = new Map();
+    for (const record of this._records.values()) {
+      if (record.trackId) index.set(record.trackId, { fdrId: record.fdrId, state: record.state });
+    }
+    return index;
+  }
+
   /** The FDR bound to a contact, or null. Used by the client-side reverse lookup's server-side equivalent. */
   fdrForTrack(trackId) {
     const wanted = String(trackId);

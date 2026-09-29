@@ -18,7 +18,7 @@ vm.createContext(sandbox);
 for (const file of ['strip-template.js', 'strip-fields.js']) {
   vm.runInContext(fs.readFileSync(path.join(CLIENT, file), 'utf8'), sandbox, { filename: file });
 }
-const { COMPACT_BLOCKS_BY_POSITION, compactBlocksFor, indicatorSlotsFor } = sandbox.module.exports;
+const { COMPACT_BLOCKS_BY_POSITION, compactBlocksFor } = sandbox.module.exports;
 const BLOCK_MAPS = vm.runInContext('BLOCK_MAPS', sandbox);
 
 const everyList = () => Object.entries(COMPACT_BLOCKS_BY_POSITION)
@@ -84,14 +84,4 @@ test('a Position no list names falls back to its Role, filtered to the Role\'s B
   const list = compactBlocksFor('ARRIVAL', 'NOBODY');
   assert.ok(list.includes('9A-VECTOR'));
   assert.equal(list.some(id => !(id in BLOCK_MAPS.ARRIVAL)), false);
-});
-
-test('airfield Positions draw no TOFI or airspace slot; the airborne ones draw both', () => {
-  for (const positionId of ['OPS', 'CD', 'GND', 'TWR']) {
-    const slots = indicatorSlotsFor('DEPARTURE', positionId);
-    assert.equal(slots.includes('tofi') || slots.includes('airspace'), false, positionId);
-  }
-  for (const positionId of ['APP', 'CTR']) {
-    assert.deepEqual(Array.from(indicatorSlotsFor('ARRIVAL', positionId)), ['trk', 'marsa', 'tofi', 'airspace', 'timer', 'siblings']);
-  }
 });

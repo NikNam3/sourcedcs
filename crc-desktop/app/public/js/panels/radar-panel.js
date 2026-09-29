@@ -102,7 +102,6 @@ function panelControlRows() {
   return [
     { id: 'settings', label: PANEL_TITLES.settings },
     { id: 'airport',  label: PANEL_TITLES.airport },
-    { id: 'calls',    label: PANEL_TITLES.calls },
     { id: 'radio',    label: PANEL_TITLES.radio },
     { id: 'efsp',     label: PANEL_TITLES.efsp },
     { id: 'airspace', label: PANEL_TITLES.airspace },

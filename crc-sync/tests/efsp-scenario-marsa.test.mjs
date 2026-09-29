@@ -104,8 +104,8 @@ test('sortie 1: a heading assigned to a joining receiver voids MARSA and alerts 
 
   // The heading actually landed. A void that quietly ate the clearance would
   // be worse than no interlock at all.
-  const rx1After = fresh(rx1);
-  assert.equal(rx1After.annotations['20'].entries.find(e => e.status === 'ACTIVE').value, '270');
+  // The heading is the flight's clearance now (docs/adr/0058), on the FDR.
+  assert.equal(efsp.fdrStore.getFdr(rx1.fdrId).clearance.heading.entries.find(e => e.status === 'ACTIVE').value, '270');
 });
 
 test('sortie 1a: the same holds for an altitude, with its own cause', () => {

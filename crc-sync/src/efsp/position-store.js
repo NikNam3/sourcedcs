@@ -5,7 +5,7 @@
 // §4.8, WP1A). Net-new: WP0 reconnaissance this session confirmed no
 // Position/role concept exists anywhere in crc-sync today — auth.js is
 // pure per-user Casdoor OAuth with no role selection, and CRCSYNC_COALITION
-// is one global env var, not per-controller (see resolve.js).
+// is one global env var, not per-controller (see surveillance/iff.js).
 //
 // Deliberately ephemeral, like TrackStore/CollaborativeStore — NOT part of
 // the durable persistence this Phase adds for Board/FDR state (ADR 0002).

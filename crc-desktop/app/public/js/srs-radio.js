@@ -610,23 +610,9 @@
       _icUnitSel.appendChild(grp);
     }
 
-    // Live DCS tracks — blue coalition
-    if (typeof window.getAllTracks === 'function') {
-      const units = window.getAllTracks()
-        .filter(t => t.coalition === 3) // blue (coalition 3 = COALITION_BLUE)
-        .sort((a, b) => (a.callsign || '').localeCompare(b.callsign || ''));
-      if (units.length) {
-        const grp = document.createElement('optgroup');
-        grp.label = 'DCS units';
-        for (const t of units) {
-          const opt = document.createElement('option');
-          opt.value = String(t.id);
-          opt.textContent = `${t.callsign || t.type || '?'} (ID ${t.id})`;
-          grp.appendChild(opt);
-        }
-        _icUnitSel.appendChild(grp);
-      }
-    }
+    // No "DCS units" group: an intercom is joined through SRS, so the SRS
+    // clients above are the whole list — and the radar picture does not tell
+    // this controller which contacts are friendly units (docs/adr/0059).
 
     // Restore selection
     const target = String(currentUnitId || prev || '1');

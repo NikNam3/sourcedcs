@@ -109,7 +109,6 @@ test('every runtime-written file resolves under the state directory, and nothing
   const runtimeFiles = [
     'efsp-board.json',
     'efsp-mutations.jsonl',
-    'squawk-map.json',
     'theater-settings.json',
     'apt-config.json',
     'efsp-airspaces.json',

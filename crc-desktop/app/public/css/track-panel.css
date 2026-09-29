@@ -116,3 +116,12 @@
     #gnd-label-input:focus { border-color: var(--ui-text-bright); }
     #gnd-label-input::placeholder { color: var(--ui-text-dim); text-transform: none; }
 
+
+    /* docs/adr/0058 — conflict and conformance alerts; nothing while conforming */
+    #tp-alerts { display: flex; flex-direction: column; gap: 4px; padding: 0 12px; }
+    #tp-alerts:not(:empty) { padding: 8px 12px; border-bottom: 1px solid var(--ui-border-4); }
+    .tp-alert {
+      padding: 5px 8px; border: 1px solid #ff8a4c; border-radius: 2px;
+      color: #ffd2bd; background: rgba(255, 138, 76, 0.1); font-size: 11px; letter-spacing: 0.02em;
+    }
+    .tp-alert.tp-alert-attn { border-color: #e0a83c; color: #ffe0a8; background: rgba(224, 168, 60, 0.1); }

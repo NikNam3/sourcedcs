@@ -26,7 +26,7 @@
 // case of a contact that has only just appeared.
 
 const {
-  beaconFromTrack, callsignAffinity, buildTrackIndices, AFFINITY_EXACT,
+  callsignAffinity, buildTrackIndices, AFFINITY_EXACT,
 } = require('./correlation-match');
 
 const CORRELATION_TICK_MS = 1000;
@@ -66,10 +66,14 @@ class CorrelationReconciler {
    * @param {object} deps.correlationStore
    * @param {(facilityId:string)=>object|null} deps.boardStoreFor
    * @param {object} deps.facilityConfig
+   * @param {(track:object)=>string|null} deps.beaconOf — the Mode 3/A code the
+   *   aircraft's transponder is sending, or null (Transponders#transponderOf).
    * @param {(payload:object)=>void} [deps.onDelta] — called ONCE per tick with
    *   the records that changed plus the stats, or not at all on a quiet tick.
    */
-  constructor({ trackStore, fdrStore, correlationStore, boardStoreFor, facilityConfig, onDelta }) {
+  constructor({ trackStore, fdrStore, correlationStore, boardStoreFor, facilityConfig, beaconOf, onDelta }) {
+    if (typeof beaconOf !== 'function') throw new Error('CorrelationReconciler needs beaconOf');
+    this._beaconOf = beaconOf;
     this._trackStore = trackStore;
     this._fdrStore = fdrStore;
     this._store = correlationStore;
@@ -132,7 +136,7 @@ class CorrelationReconciler {
     this._ticks += 1;
 
     const tracks = this._trackStore.getAll();
-    const { byBeacon, byStem, byId } = buildTrackIndices(tracks);
+    const { byBeacon, byStem, byId } = buildTrackIndices(tracks, this._beaconOf);
     const stripsByFdr = this._liveStripsByFdr();
 
     // A flight with no live Strip anywhere is over, and its record goes with
@@ -163,7 +167,7 @@ class CorrelationReconciler {
       claimed.set(String(bound), fdr.fdrId);
       resolutions.set(fdr.fdrId, {
         trackId: String(bound), matchedBy: 'BINDING', state: 'CORRELATED',
-        observedBeacon: beaconFromTrack(track),
+        observedBeacon: this._beaconOf(track),
       });
     }
 
@@ -192,7 +196,7 @@ class CorrelationReconciler {
       claimed.set(trackId, fdr.fdrId);
       resolutions.set(fdr.fdrId, {
         trackId, matchedBy: 'BEACON', state: 'CORRELATED',
-        observedBeacon: beaconFromTrack(byId.get(trackId)),
+        observedBeacon: this._beaconOf(byId.get(trackId)),
       });
     }
 
@@ -256,7 +260,7 @@ class CorrelationReconciler {
 
     const trackId = top[0].id;
     const track = byId.get(trackId);
-    const observedBeacon = beaconFromTrack(track);
+    const observedBeacon = this._beaconOf(track);
     const assigned = fdr.identity.beaconAssigned;
     // An exact callsign match is CORRELATED — unless the contact is squawking
     // something other than the code we assigned it, which is real evidence

@@ -12,16 +12,23 @@ const TrackStore      = require('./src/tracks');
 const CollaborativeStore = require('./src/collab-store');
 const AtisStore       = require('./src/atis-store');
 const WsHub           = require('./src/ws-hub');
-const resolvePkg      = require('./src/resolve');
+const { haversineM }  = require('./src/geo');
+const { createSurveillance } = require('./src/surveillance');
+const { DatalinkFeed } = require('./src/surveillance/datalink');
 const auth            = require('./src/auth');
 const { createEfsp }  = require('./src/efsp');
 const efspFacilityConfig = require('./src/efsp/facility-config');
-const { buildRadars, loadRadarSpecs } = require('./src/radars');
+const { buildRadars, loadSensorSpecs } = require('./src/radars');
 const { TerrainStore } = require('./src/terrain');
 const { CoverageEngine } = require('./src/coverage');
 const { StationCoverage, assignableRadars, reportUnresolvedSelectors } = require('./src/efsp/station-coverage');
 const { ForwardingObligationMonitor } = require('./src/efsp/forwarding-obligations');
 const { CorrelationReconciler, CORRELATION_TICK_MS } = require('./src/efsp/correlation-reconciler');
+const { ConformanceMonitor } = require('./src/efsp/conformance');
+const { StcaMonitor } = require('./src/stca');
+const { loadAlertingConfig } = require('./src/alerting-config');
+const { indicatedAltFt } = require('./src/altimetry');
+const { getTheaterSettings } = require('./src/theater-settings');
 const { lookupFlightPlan, toFdrFiledSeed, listFiledFlightPlans } = require('./src/efsp/flight-plan-lookup');
 const efspStereoRoutes = require('./src/efsp/stereo-routes');
 
@@ -124,7 +131,7 @@ const efsp        = createEfsp();
 // Radars, their sweep phase, terrain masking and who may look through what
 // all live here now rather than in each renderer. The chain is:
 //
-//   radar-specs.json + missionData + tracks  ->  buildRadars()
+//   sensor-specs.json + missionData + tracks  ->  buildRadars()
 //   StationCoverage    which Positions grant which of those radars
 //   CoverageEngine     what each of those radars is illuminating, one phase
 //                      for everybody, terrain included
@@ -133,7 +140,7 @@ const efsp        = createEfsp();
 // The radar list is rebuilt per tick rather than cached: it depends on live
 // tracks (an AWACS taking off is a new radar) and the cost is a walk over the
 // airfield list plus the tracks, which the sweep does anyway.
-const radarSpecs   = loadRadarSpecs();
+const sensorSpecs  = loadSensorSpecs();
 const terrainStore = new TerrainStore();
 const coverageEngine = new CoverageEngine({ terrain: terrainStore });
 
@@ -141,12 +148,7 @@ function currentRadars() {
   return buildRadars({
     missionData: wsHub.getMissionData(),
     tracks: trackStore.getAll(),
-    radarSpecs,
-    // The resolved display callsign, so an AWACS's radar is labelled the way
-    // the controller sees it on the scope rather than by its raw unit name.
-    labelFor: (t) => resolvePkg.resolveCallsign(
-      t, collabStore.get(t.id), (id) => collabStore.getOrAssignTrackNumber(id),
-    ),
+    radarSpecs: sensorSpecs,
   });
 }
 
@@ -172,7 +174,29 @@ const picture = {
   radars: currentRadars,
 };
 
-const wsHub       = new WsHub(trackStore, collabStore, efsp, picture);
+// What a controller is told about a contact (docs/adr/0059): what its
+// transponder sends (SRS for players, a synthetic code for own/neutral AI),
+// who it is (its flight, a tag, or its track number), and the datalink.
+// The datalink feed: own participants report themselves, and what their
+// radar is locked on (docs/adr/0059). Ticked with the hub; locks polled from
+// the mission on their own, slower, rhythm.
+const datalink = new DatalinkFeed({
+  evalLua: (lua) => grpcClient.evalLua(lua), trackStore, config: sensorSpecs.datalink,
+});
+setInterval(() => datalink.pollLocks(), sensorSpecs.datalink.lockPollMs);
+
+const surveillance = createSurveillance({
+  datalink,
+  collab: collabStore,
+  srs: srsClient,
+  sensorSpecs,
+  correlationStore: efsp.correlationStore,
+  fdrStore: efsp.fdrStore,
+  env: () => ({ weather: grpcClient.getWeather(), transitionAltFt: getTheaterSettings().transitionAltFt ?? 18000 }),
+});
+const { transponders, identity } = surveillance;
+
+const wsHub       = new WsHub({ trackStore, collabStore, efsp, picture, surveillance });
 
 wsHub.attach(server);
 
@@ -204,9 +228,9 @@ setInterval(() => {
 }, COVERAGE_TICK_MS);
 
 grpcClient.on('unit', (unitData) => {
-  trackStore.update(unitData, srsClient.getTransponder(unitData.player));
+  trackStore.update(unitData);
 });
-grpcClient.on('gone', (id) => trackStore.remove(id));
+grpcClient.on('gone', (id) => { trackStore.remove(id); transponders.release(id); });
 
 let airportWeather = new Map(); // airport name -> { windFrom, windKt, tempC, pressureHpa, updatedAt }
 let weatherRefreshTimer = null;
@@ -225,6 +249,7 @@ async function refreshAirportWeather(missionData) {
 
 grpcClient.on('mission-load', (missionData) => {
   trackStore.clear();
+  surveillance.clear();
   collabStore.clear();
   // Every radar id, sweep phase and line-of-sight answer belonged to the
   // theater that just went away.
@@ -275,7 +300,6 @@ grpcClient.on('mission-load', (missionData) => {
 grpcClient.on('status', (state) => wsHub.setGrpcStatus(state));
 grpcClient.on('weather', (data) => wsHub.setWeather(data));
 grpcClient.on('game-time', (dt) => wsHub.setGameTime(dt));
-grpcClient.on('radar-locks', (locks) => wsHub.broadcastRadarLocks(locks));
 
 srsClient.on('status', (state) => wsHub.setSrsStatus(state));
 
@@ -320,7 +344,7 @@ function nearestAirport(lat, lon, missionData) {
   let best = null, bestDist = Infinity;
   for (const ap of missionData.airports) {
     if (ap.lat == null || ap.lon == null) continue;
-    const d = resolvePkg.haversineM(lat, lon, ap.lat, ap.lon);
+    const d = haversineM(lat, lon, ap.lat, ap.lon);
     if (d < bestDist) { bestDist = d; best = ap; }
   }
   return best;
@@ -400,6 +424,7 @@ setInterval(() => {
   const n = trackStore.expireStale();
   const activeIds = new Set(trackStore.getAll().map(t => String(t.id)));
   const evicted = collabStore.evictStale(activeIds);
+  surveillance.forget(activeIds);
   if (n > 0 || evicted > 0) console.log(`[crc-sync] expired ${n} stale track(s), evicted ${evicted} overlay entr(y/ies)`);
   wsHub.setAtisActive(atisStore.getActive());
 }, 5000);
@@ -439,6 +464,8 @@ setInterval(() => {
 // have.
 const correlationReconciler = new CorrelationReconciler({
   trackStore,
+  // The code the aircraft is actually sending (docs/adr/0059).
+  beaconOf: (t) => { const x = transponders.transponderOf(t); return x ? x.code : null; },
   fdrStore: efsp.fdrStore,
   correlationStore: efsp.correlationStore,
   boardStoreFor: efsp.boardStoreFor,
@@ -446,6 +473,38 @@ const correlationReconciler = new CorrelationReconciler({
   onDelta: (payload) => wsHub.broadcastEfspCorrelationDelta(payload),
 });
 setInterval(() => correlationReconciler.tick(), CORRELATION_TICK_MS);
+
+// ── Conformance and short-term conflict alerting (docs/adr/0058) ─────────
+// Server-side, because only this process sees every track: a client only
+// receives the ones inside its own coverage. Once a second, the same rhythm as
+// correlation (whose records conformance reads). Only what is WRONG is ever
+// sent; the whole alert state goes out when it changes.
+const alertingConfig = loadAlertingConfig();
+const conformanceMonitor = new ConformanceMonitor({
+  trackStore,
+  fdrStore: efsp.fdrStore,
+  correlationStore: efsp.correlationStore,
+  weather: () => grpcClient.getWeather(),
+  transitionAltFt: () => (getTheaterSettings().transitionAltFt ?? 18000),
+  indicatedAltFt,
+  config: alertingConfig.conformance,
+});
+const stcaMonitor = new StcaMonitor({
+  trackStore,
+  config: alertingConfig.stca,
+  fdrForTrack: (trackId) => efsp.correlationStore.fdrForTrack(trackId),
+  activeMarsaFor: (fdrId) => efsp.marsaStore.activeFor(fdrId),
+  // Alert text names each aircraft the way identity does (docs/adr/0059).
+  callsignFor: (track) => identity.labelFor(track.id),
+});
+setInterval(() => {
+  const now = Date.now();
+  const conformanceChanged = conformanceMonitor.tick(now);
+  const stcaChanged = stcaMonitor.tick(now);
+  if (conformanceChanged || stcaChanged) {
+    wsHub.broadcastEfspAlerts({ conformance: conformanceMonitor.getAll(), stca: stcaMonitor.getAll() });
+  }
+}, 1000);
 
 // ── Static hosting ───────────────────────────────────────────────────────
 app.use(express.static(PUBLIC_DIR));

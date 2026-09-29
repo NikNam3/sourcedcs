@@ -92,8 +92,13 @@ test('an obligation badge does not push the Strip onto another row', async ({ pa
   // click opened the Block editor, .efsp-block-1 became an <input> with no
   // text, and stripByCallsign() stopped resolving the Strip at all.
   await expect(strip.locator('.efsp-obligation-badge')).toHaveCount(1, { timeout: 2000 });
+  // Indicators are drawn only when there is something wrong (docs/adr/0058), so
+  // the first one adds the indicator row inside the body zone: the Strip may
+  // grow by that one row, never by a row under the actions column (F-002).
   const after = (await strip.boundingBox()).height;
-  expect(after, `Strip ${before}px -> ${after}px with one badge`).toBeLessThanOrEqual(before);
+  expect(after, `Strip ${before}px -> ${after}px with one badge`).toBeLessThanOrEqual(before + 28);
+  const inBody = await strip.locator('.efsp-obligation-badge').evaluate((b) => !!b.closest('.efsp-strip-slots'));
+  expect(inBody, 'the badge is in the indicator row').toBe(true);
 });
 
 // F-407 — was a catalogued finding, now fixed.

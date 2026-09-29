@@ -243,6 +243,65 @@ function ensureMilitary(fdr) {
   return fdr.military;
 }
 
+// ── The clearance as issued: assigned altitude and heading (docs/adr/0058) ──
+//
+// One of each per FLIGHT, not per Strip. They replace the per-Strip notes that
+// used to hold them (DEPARTURE's INIT ALT and HDG, ARRIVAL's ALT and VECTOR,
+// OVERFLIGHT's ASGN ALT and VECTOR), which never crossed a Facility boundary,
+// so CTR's copy of a departure started with neither.
+//
+// Each is a history cell shaped exactly like a Strip annotation cell
+// (`{ entries: [{ value, status, at, by }] }`, statuses ACTIVE / SUPERSEDED /
+// STRUCK), because §3.7 applies unchanged: an amendment supersedes, never
+// overwrites, and a vacated altitude is struck only by an explicit confirm.
+// `parsed` on each entry is the value as a number (feet, degrees) for the
+// conformance monitor; `value` is what the controller wrote.
+const CLEARANCE_FIELDS = new Set(['altitude', 'heading']);
+
+function defaultClearance() {
+  return { altitude: { entries: [] }, heading: { entries: [] } };
+}
+
+function ensureClearance(fdr) {
+  if (!fdr.clearance) fdr.clearance = defaultClearance();
+  if (!fdr.clearance.altitude) fdr.clearance.altitude = { entries: [] };
+  if (!fdr.clearance.heading) fdr.clearance.heading = { entries: [] };
+  return fdr.clearance;
+}
+
+/**
+ * An altitude as a strip carries it, in feet. "FL180" / "F180" is a flight
+ * level; "A050" and a bare three-or-fewer-digit number are hundreds of feet
+ * (the strip convention: "050" is 5,000 ft, "180" is FL180's 18,000 ft); four
+ * or more digits are feet. Null when it is not an altitude at all.
+ */
+function parseAltitudeFt(text) {
+  const t = String(text == null ? '' : text).trim().toUpperCase().replace(/\s+/g, '');
+  let m = /^F(?:L)?(\d{1,3})$/.exec(t);
+  if (m) return Number(m[1]) * 100;
+  m = /^A(\d{1,3})$/.exec(t);
+  if (m) return Number(m[1]) * 100;
+  m = /^(\d{1,5})$/.exec(t);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return m[1].length <= 3 ? n * 100 : n;
+}
+
+/** A heading in degrees, 1–360 ("000" is north, stored as 360). Null when it is not a heading. */
+function parseHeadingDeg(text) {
+  const t = String(text == null ? '' : text).trim();
+  if (!/^\d{1,3}$/.test(t)) return null;
+  const n = Number(t);
+  if (n > 360) return null;
+  return n === 0 ? 360 : n;
+}
+
+/** The value a clearance cell currently holds, or null. */
+function activeClearanceEntry(fdr, field) {
+  const cell = fdr && fdr.clearance && fdr.clearance[field];
+  return (cell && cell.entries.find(e => e.status === 'ACTIVE')) || null;
+}
+
 class FdrStore {
   constructor(codeAllocator) {
     this._codeAllocator = codeAllocator || new CodeAllocator();
@@ -373,6 +432,7 @@ class FdrStore {
         arrivalFix: seed.arrivalFix || null,                            // ARRIVAL-role field, Phase 2
         estimatedArrivalTimeUtc: seed.estimatedArrivalTimeUtc || null,  // ARRIVAL-role field, Phase 2
       },
+      clearance: defaultClearance(), // docs/adr/0058 — assigned altitude and heading
       assigned: {
         clearedRoute: null,
         clearedAltitude: null,
@@ -600,7 +660,7 @@ class FdrStore {
     if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
 
     const check = this._codeAllocator.validateAssignment(code, fdrId);
-    if (!check.ok) return { ok: false, reason: check.reason };
+    if (!check.ok) return { ok: false, reason: check.reason, detail: check.detail };
 
     const previous = fdr.identity.beaconAssigned;
     this._codeAllocator.reassign(fdrId, code, previous);
@@ -867,6 +927,58 @@ class FdrStore {
     return { ok: true };
   }
 
+  /**
+   * Assigns (or clears) the flight's altitude or heading, or confirms an
+   * altitude vacated (docs/adr/0058, guide §3.7).
+   *
+   * Bumps `rev` so every client redraws, but stamps `clearanceUpdatedAt`
+   * rather than `updatedAt`: the AMENDMENT_INSIDE_30MIN obligation reads
+   * `updatedAt` as "the flight plan was just amended", and issuing a
+   * clearance altitude is not a flight-plan amendment — it would otherwise
+   * fire on every clearance CD issues inside 30 minutes of departure.
+   *
+   * An empty value is allowed and means "no assignment" (resume own
+   * navigation, for a heading); it is recorded like any other amendment.
+   * @returns {{ok:true, fdr}|{ok:false, reason:'NOT_FOUND'|'VALIDATION_ERROR', detail?}}
+   */
+  setClearance(fdrId, field, { value, confirmVacated = false } = {}, { by } = {}) {
+    const fdr = this._fdrs.get(fdrId);
+    if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
+    if (!CLEARANCE_FIELDS.has(field)) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown clearance field ${field}` };
+    const cell = ensureClearance(fdr)[field];
+    const active = cell.entries.find(e => e.status === 'ACTIVE');
+    const now = Date.now();
+
+    if (confirmVacated) {
+      if (field !== 'altitude') return { ok: false, reason: 'VALIDATION_ERROR', detail: 'only an altitude is vacated' };
+      if (!active) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no assigned altitude to confirm vacated' };
+      active.status = 'STRUCK';
+    } else {
+      const text = String(value == null ? '' : value).trim().toUpperCase();
+      if (text.length > MAX_FREE_TEXT) return { ok: false, reason: 'VALIDATION_ERROR', detail: `limited to ${MAX_FREE_TEXT} characters` };
+      let parsed = null;
+      if (text !== '') {
+        parsed = field === 'altitude' ? parseAltitudeFt(text) : parseHeadingDeg(text);
+        if (parsed === null) {
+          return {
+            ok: false, reason: 'VALIDATION_ERROR',
+            detail: field === 'altitude'
+              ? `${JSON.stringify(text)} is not an altitude — write it like 5000, 050, A050 or FL180`
+              : `${JSON.stringify(text)} is not a heading — write it as 1 to 360, e.g. 050`,
+          };
+        }
+      }
+      if (active) active.status = 'SUPERSEDED';
+      cell.entries.push({ value: text, parsed, status: 'ACTIVE', at: now, by: by || null });
+    }
+
+    fdr.provenance[`clearance.${field}`] = 'CONTROLLER_ENTERED';
+    fdr.rev += 1;
+    fdr.clearanceUpdatedAt = now;
+    fdr.updatedBy = by || null;
+    return { ok: true, fdr };
+  }
+
   // ── Persistence (durable per ADR 0002) ──────────────────────────────────
   snapshot() {
     return { fdrs: this.getAll(), codes: this._codeAllocator.snapshot() };
@@ -878,6 +990,7 @@ class FdrStore {
       // knows about the old shape and nothing downstream has to — see
       // ensureMilitary() for why a null here is worse than it looks.
       ensureMilitary(f);
+      ensureClearance(f); // docs/adr/0058 — FDRs saved before the clearance cells existed
       return [f.fdrId, f];
     }));
     this._codeAllocator.restore(data?.codes);
@@ -889,4 +1002,5 @@ module.exports = {
   EDCT_WINDOW_MINUTES, CALL_FOR_RELEASE_BEFORE_MINUTES, CALL_FOR_RELEASE_AFTER_MINUTES,
   TRACK_DEGRADATION_FLAGS, AIRSPACE_OWNERS, RADAR_SERVICE_STATES, SEPARATION_REGIMES, MAX_FREE_TEXT,
   ORDNANCE_STATES, ALERT_STATUSES, MILITARY_WRITABLE_FIELDS, defaultMilitary,
+  CLEARANCE_FIELDS, defaultClearance, ensureClearance, parseAltitudeFt, parseHeadingDeg, activeClearanceEntry,
 };

@@ -100,58 +100,30 @@ function kinematics(hist) {
   return { heading, speedMs, speedKt: speedMs * 1.944 };
 }
 
+/**
+ * Climb or descent rate from the altitudes in the track history, or null
+ * when the history does not carry an altitude — a contact no sensor gives an
+ * altitude for has no vertical rate either (crc-sync's docs/adr/0059).
+ */
 function verticalFpm(hist) {
-  if (hist.length < 2) return 0;
+  if (hist.length < 2) return null;
   const curr   = hist[hist.length - 1];
   const target = curr.timestamp - 5000;
   let ref = hist[0];
   for (let i = 1; i < hist.length - 1; i++) {
     if (hist[i].timestamp <= target) ref = hist[i];
   }
+  if (curr.altFt == null || ref.altFt == null) return null;
   const dtS = (curr.timestamp - ref.timestamp) / 1000;
   if (dtS <= 0) return 0;
-  return (curr.alt - ref.alt) * 3.281 * 60 / dtS;
+  return (curr.altFt - ref.altFt) * 60 / dtS;
 }
 
-// Returns the emergency type string for a squawk code, or null.
-// Coerces squawk to number so both "7700" (string) and 7700 (number) match.
-function squawkEmergency(squawk) {
-  if (squawk == null) return null;
-  return SQUAWK_EMERGENCY[Number(squawk)] || null;
-}
-
-// Returns true if the track is on the ground:
-// within GROUND_RADIUS_M of any airport AND below airport elevation + GROUND_AGL_M.
-function checkOnGround(track) {
-  if (!missionData || !missionData.airports) return false;
-  if (track.category !== 1 && track.category !== 2) return false;
-  for (const ap of missionData.airports) {
-    if (!ap.lat || !ap.lon) continue;
-    const distM = haversineM(track.lat, track.lon, ap.lat, ap.lon);
-    if (distM < GROUND_RADIUS_M) {
-      const agl = track.alt - (ap.elev || 0);
-      if (agl < GROUND_AGL_M) return true;
-    }
-  }
-  return false;
-}
-
-// ── Track numbers & renames ─────────────────────────────────────────────────
-// Moved server-side (crc-sync's src/collab-store.js + resolve.js). Track
-// numbers are no longer a manual client action either — crc-sync assigns
-// TN##### automatically the moment an enemy track is first resolved for
-// anyone, exactly like this file used to do locally on-demand, just now
-// guaranteed identical for every viewer. These functions keep their
-// original names/signatures — every call site in ui.js/geojson.js/app.js
-// is unchanged.
-
-// No-ops: state now arrives from crc-sync on every (re)connect, and crc-sync
-// clears the shared overlay for everyone on mission-load — a client no
-// longer loads/clears its own local copy.
-function loadTrackNumbers() {}
-function clearAllTrackNumbers() {}
-function loadTrackRenames() {}
-function clearAllTrackRenames() {}
+// ── Tags ───────────────────────────────────────────────────────────────────
+// A tag names a contact nothing else identifies; crc-sync keeps it for
+// everybody (its collab-store.js). A correlated flight's callsign beats it
+// (docs/adr/0059). Every name a contact is shown with comes from
+// track-label.js.
 
 function setTrackRename(id, name) {
   const clean = (name || '').trim().toUpperCase();
@@ -161,13 +133,4 @@ function setTrackRename(id, name) {
 
 function clearTrackRename(id) {
   sendToSync({ type: 'clearRename', trackId: String(id) });
-}
-
-// Resolves the display callsign for a track. crc-sync resolves this
-// server-side (squawk map -> squawk range -> rename -> auto TN##### for
-// enemy tracks -> raw callsign, see crc-sync/src/resolve.js, ported from
-// what this function used to compute locally) and attaches the result
-// directly as `callsign` on every track it sends.
-function resolveCallsign(track) {
-  return (track && track.callsign) || '';
 }

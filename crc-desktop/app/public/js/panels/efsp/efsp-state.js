@@ -64,6 +64,12 @@ let efspCorrelationStats = null;
 // warning for whoever just reconnected.
 const efspMarsa = new Map();
 
+// docs/adr/0058 — what crc-sync's conformance and conflict monitors say is
+// WRONG right now. Sent whole on every change (efsp-alerts), so a flight that
+// conforms again simply is not in the next message.
+const efspConformance = new Map(); // fdrId -> [{ kind, assigned, actual?, altFt?, fpm?, deviationFt?, since }]
+let efspConflicts = [];            // [{ id, a, b, aCallsign, bCallsign, timeToCpaSec, minNm, vertFt, aAt, bAt }]
+
 function applyEfspSnapshot(msg) {
   efspStrips.clear();
   efspFdrs.clear();
@@ -360,10 +366,37 @@ function _resetEfspStateForTest() {
   efspCorrelations.clear();
   efspCorrelationStats = null;
   efspMarsa.clear();
+  efspConformance.clear();
+  efspConflicts = [];
   efspBoardSeq = 0;
   efspFacility = null;
   efspBays = [];
   efspAitAuthorizedByFacility = {};
+}
+
+/** Applies an efsp-alerts message: the complete current conformance and conflict picture. */
+function applyEfspAlerts(msg) {
+  efspConformance.clear();
+  for (const r of (msg && msg.conformance) || []) if (r.alerts && r.alerts.length) efspConformance.set(r.fdrId, r.alerts);
+  efspConflicts = (msg && msg.stca) || [];
+}
+
+/** What is wrong with this flight's conformance right now; [] when it conforms. */
+function conformanceAlertsForFdr(fdrId) { return efspConformance.get(fdrId) || []; }
+
+/** Every current short-term conflict. */
+function getAllEfspConflicts() { return efspConflicts; }
+
+/** The conflicts this track is in, each seen from its side: { other, otherCallsign, timeToCpaSec, minNm, vertFt, id }. */
+function stcaConflictsForTrack(trackId) {
+  if (trackId == null) return [];
+  const id = String(trackId);
+  return efspConflicts.filter(c => c.a === id || c.b === id).map(c => ({
+    id: c.id,
+    other: c.a === id ? c.b : c.a,
+    otherCallsign: c.a === id ? c.bCallsign : c.aCallsign,
+    timeToCpaSec: c.timeToCpaSec, minNm: c.minNm, vertFt: c.vertFt,
+  }));
 }
 
 if (typeof module !== 'undefined' && module.exports) {
@@ -377,6 +410,7 @@ if (typeof module !== 'undefined' && module.exports) {
     getEfspCorrelationForStrip, correlatedTrackIdForStrip, stripIdsForTrackId,
     getEfspCorrelationStats,
     applyEfspMarsaDelta, getEfspMarsa, getAllEfspMarsa,
+    applyEfspAlerts, conformanceAlertsForFdr, getAllEfspConflicts, stcaConflictsForTrack,
     activeMarsaForFdr, marsaForStrip, marsaParticipantStripIds,
     getEfspRack, searchEfspStrips, getEfspBoardSeq, getEfspFacility, getEfspBays,
     isAitAuthorizedFor,

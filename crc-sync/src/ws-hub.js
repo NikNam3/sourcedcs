@@ -1,35 +1,43 @@
 'use strict';
 
 const { WebSocketServer, WebSocket } = require('ws');
-const { resolveTrack, getSquawkConfig, setSquawkMapping, deleteSquawkMapping } = require('./resolve');
+const { presentTrack, labelPart } = require('./surveillance/presentation');
+const { createSurveillance } = require('./surveillance');
 const { getTheaterSettings, setTheaterSettings } = require('./theater-settings');
 const { getAptConfig, setAptConfig } = require('./apt-config');
 const { consumeTicket } = require('./auth');
 
 const VERSION  = 1;
-const TICK_MS  = 500; // per-client delta broadcast rate, matches crc-desktop's original ws-server.js
+const TICK_MS  = 500; // delta broadcast rate, one timer for every session
 
 const MAX_NAME_LEN = 40;
 
+const NO_PICTURE = {
+  coverageFor: () => ({ radars: [], radarIds: new Set(), heldPositions: [], radarBearingPositions: [], datalink: false }),
+  illuminated: () => new Map(),
+  radars: () => [],
+};
+
 class WsHub {
   /**
-   * @param {object} trackStore
-   * @param {object} collabStore
-   * @param {object} [efsp] — EFSP subsystem facade, src/efsp/index.js. Optional so existing callers/tests that only care about tracks/collab keep working.
-   * @param {object} [picture] — the radar picture (docs/adr/0042): what each
-   *   controller's Positions let them see. Also optional, and for a sharper
-   *   reason than back-compat: without it this hub sends every track to every
-   *   client, which is exactly what it did before the picture became
-   *   server-authoritative. Tests that care about tracks alone keep that
-   *   behaviour, and the real server always passes one.
-   *   Shape: { coverageFor(controllerId), illuminated(), radars() }.
+   * @param {object} deps
+   * @param {object} deps.trackStore
+   * @param {object} deps.collabStore
+   * @param {object} [deps.efsp]         EFSP facade, src/efsp/index.js
+   * @param {object} [deps.picture]      the radar picture (docs/adr/0042):
+   *   { coverageFor(controllerId), illuminated(), radars() }. Without one,
+   *   nobody sees anything — there is no "send everything" mode any more.
+   * @param {object} [deps.surveillance] src/surveillance/index.js — who each
+   *   contact is and what its transponder sends (docs/adr/0059).
    */
-  constructor(trackStore, collabStore, efsp, picture) {
+  constructor({ trackStore, collabStore, efsp = null, picture = null, surveillance = null }) {
     this._trackStore  = trackStore;
     this._collabStore = collabStore;
     this._efsp        = efsp;
-    this._picture     = picture || null;
+    this._picture     = picture || NO_PICTURE;
+    this._surv        = surveillance || createSurveillance({ collab: collabStore });
     this._wss         = null;
+    this._timer       = null;
     this._sessions    = new Map(); // ws -> session
     this._missionData = null;
     this._missionId   = null;
@@ -38,6 +46,12 @@ class WsHub {
     this._grpcStatus  = 'disconnected';
     this._srsStatus   = 'disconnected';
     this._atisActive  = []; // [{ frequency, ownerId }] — see setAtisActive()
+    // trackId -> { fp, rev }: bumped when anything about who the contact is
+    // changes (its flight, tag or IFF), so every session relabels it on the
+    // next tick without waiting for a sweep. See _refreshLabels().
+    this._labels = new Map();
+    // trackId -> describe() output, rebuilt each tick.
+    this._described = new Map();
   }
 
   attach(httpServer) {
@@ -54,6 +68,7 @@ class WsHub {
       },
     });
     this._wss.on('connection', (ws, req) => this._onConnect(ws, req));
+    this._timer = setInterval(() => this._tickAll(), TICK_MS);
     console.log('[ws-hub] /feed attached');
   }
 
@@ -86,12 +101,10 @@ class WsHub {
   }
   setGrpcStatus(s)    { this._grpcStatus = s; this._broadcastStatus(); }
   setSrsStatus(s)     { this._srsStatus = s; this._broadcastStatus(); }
-  broadcastRadarLocks(locks) { this._broadcast({ version: VERSION, type: 'radar-locks', locks }); }
 
   // WP4A (docs/adr/0021) — §4.6.1's timed forwarding-obligation alerts.
-  // Unconditional to every connected client, same as broadcastRadarLocks
-  // above — no per-client filtering by held Position/Facility exists
-  // anywhere in this hub yet (matches every other EFSP broadcast type).
+  // Unconditional to every connected client — no per-client filtering by
+  // held Position/Facility (matches every other EFSP broadcast type).
   // `alert` is one entry from forwarding-obligations.js's
   // ForwardingObligationMonitor onAlert callback: {facilityId, stripId,
   // obligationType, dueAt, severity}.
@@ -140,6 +153,35 @@ class WsHub {
    * because the record IS state, and it is the only EFSP state that changes
    * without a Mutation, because surveillance is not a controller.
    */
+  /**
+   * docs/adr/0058 — the WHOLE current alert state, conformance and short-term
+   * conflict, each time it changes. Full state rather than a delta: it is
+   * small (only flights with something wrong are in it), it clears itself by
+   * simply no longer listing a flight, and a connecting client needs exactly
+   * this message anyway.
+   *
+   * Scoped per session (docs/adr/0059). Conformance is about a flight and
+   * goes to everybody, like the correlation it rides on. A short-term
+   * conflict goes only to a controller at an ATC Position, and only when both
+   * aircraft are in their own picture: it names positions, and it is ATC's
+   * job, not the tactical side's.
+   */
+  broadcastEfspAlerts(alerts) {
+    this._efspAlerts = alerts;
+    for (const [ws, session] of this._sessions) {
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(this._efspAlertsMsg(session)));
+    }
+  }
+
+  _efspAlertsMsg(session) {
+    const a = this._efspAlerts || {};
+    const seen = (session && session.lastSent) || new Map();
+    const stca = session && session.coverage && session.coverage.stca
+      ? (a.stca || []).filter(c => seen.has(String(c.a)) && seen.has(String(c.b)))
+      : [];
+    return { version: VERSION, type: 'efsp-alerts', conformance: a.conformance || [], stca };
+  }
+
   broadcastEfspCorrelationDelta(payload) {
     this._broadcast({
       version: VERSION, type: 'efsp-correlation-delta',
@@ -164,7 +206,6 @@ class WsHub {
   _statusMsg()  { return { version: VERSION, type: 'status', grpc: this._grpcStatus, srs: this._srsStatus }; }
   _weatherMsg() { return { version: VERSION, type: 'weather', pressurePa: this._weather.pressurePa, tempK: this._weather.tempK }; }
   _gameTimeMsg(){ return { version: VERSION, type: 'game-time', datetime: this._gameTime }; }
-  _squawkMapMsg() { return { version: VERSION, type: 'squawk-map', ...getSquawkConfig() }; }
   _atisMsg()      { return { version: VERSION, type: 'atis', active: this._atisActive }; }
   _theaterSettingsMsg() { return { version: VERSION, type: 'theater-settings', ...getTheaterSettings() }; }
   _aptConfigMsg() { return { version: VERSION, type: 'apt-config', airports: getAptConfig() }; }
@@ -183,49 +224,102 @@ class WsHub {
 
   _broadcastStatus() { this._broadcast(this._statusMsg()); }
 
-  _resolveIds(ids, illuminated) {
-    const assign = (id) => this._collabStore.getOrAssignTrackNumber(id);
-    const out = [];
-    for (const id of ids) {
-      const track = this._trackStore.get(id);
-      if (!track) continue;
-      const resolved = resolveTrack(track, this._collabStore.get(id), this._missionData, assign);
-      // When the beam last passed over this contact. The client fades from
-      // this instead of timing its own sweep, which is what makes two
-      // controllers at one board see the same picture decay the same way
-      // (docs/adr/0042). Absent when this hub has no picture at all.
-      if (illuminated) {
-        const hit = illuminated.get(String(id));
-        if (hit) { resolved.illuminatedAt = hit.at; resolved.seenBy = hit.radarIds; }
-      }
-      out.push(resolved);
-    }
-    return out;
-  }
-
-  // ── the radar picture, per session ────────────────────────────────────────
+  // ── the picture, per session ───────────────────────────────────────────────
 
   /**
-   * Every track this session's radars have illuminated, as
-   * `Map<trackId, {at, radarIds}>`.
+   * Re-describes every contact once per tick (docs/adr/0059): who it is, its
+   * IFF, its transponder. When who it is changes — correlated to a flight, a
+   * flight's callsign edited, tagged, declared — its label revision moves,
+   * and every session that can see it is sent the new label on this tick
+   * without waiting for a sweep. One pass here instead of a hook on each of
+   * the five places that can change it.
+   */
+  _refreshLabels() {
+    this._surv.identity.indexTick();
+    const described = new Map();
+    for (const track of this._trackStore.getAll()) {
+      const id = String(track.id);
+      const d = this._surv.describe(track, this._missionData);
+      described.set(id, d);
+      const w = d.who;
+      const fp = [d.iffState, d.iffOverride, w.fdrId, w.correlation, w.fdrCallsign, w.fdrType, w.tag].join('|');
+      const prev = this._labels.get(id);
+      if (!prev) this._labels.set(id, { fp, rev: 1 });
+      else if (prev.fp !== fp) this._labels.set(id, { fp, rev: prev.rev + 1 });
+    }
+    for (const id of [...this._labels.keys()]) if (!described.has(id)) this._labels.delete(id);
+    this._described = described;
+  }
+
+  /**
+   * Every contact this session's sensors have: `Map<trackId, {at, radars, dl}>`.
    *
-   * With no picture configured this is every track in the store with no
-   * illumination stamp — the pre-docs/adr/0042 behaviour, kept for callers
-   * that only care about tracks.
+   * Only this session's own radars count, for both whether it sees the track
+   * and when — another controller's radar sweeping it must neither show it
+   * here nor refresh it. `radars` carries each of this session's radars that
+   * saw it, with its capabilities and its own last return, which is what
+   * decides whether the controller gets a code and an altitude. A datalink
+   * participant is visible to a datalink session with no radar at all.
    */
   _visibleTo(session) {
-    if (!this._picture) {
-      const all = new Map();
-      for (const t of this._trackStore.getAll()) all.set(String(t.id), null);
-      return all;
-    }
+    const byId = session.radarById || new Map();
     const visible = new Map();
-    for (const [trackId, hit] of this._picture.illuminated()) {
-      for (const radarId of hit.radarIds) {
-        if (session.radarIds.has(radarId)) { visible.set(trackId, hit); break; }
+    for (const [trackId, byRadar] of this._picture.illuminated()) {
+      let hit = null;
+      for (const [radarId, at] of byRadar) {
+        const radar = byId.get(radarId);
+        if (!radar) continue;
+        if (!hit) hit = { at, radars: [], dl: null };
+        hit.radars.push({ id: radarId, caps: radar.caps, sweepMs: radar.sweepMs, at });
+        if (at > hit.at) hit.at = at;
+      }
+      if (hit) visible.set(trackId, hit);
+    }
+    const datalink = this._surv.datalink;
+    if (datalink && session.coverage && session.coverage.datalink) {
+      for (const [trackId, report] of datalink.reports()) {
+        const hit = visible.get(trackId);
+        if (hit) {
+          hit.dl = report;
+          if (report.at > hit.at) hit.at = report.at;
+        } else {
+          visible.set(trackId, { at: report.at, radars: [], dl: report });
+        }
       }
     }
     return visible;
+  }
+
+  /** One wire track, or null when this controller must not be told about it. */
+  _present(trackId, hit, visible) {
+    const track = this._trackStore.get(trackId);
+    if (!track) return null;
+    const d = this._described.get(String(trackId)) || this._surv.describe(track, this._missionData);
+    let dl = hit.dl;
+    // A lock line only ever points at a contact this controller already has:
+    // the datalink must not leak a position their own picture does not.
+    if (dl && dl.lock && !visible.has(String(dl.lock))) dl = { ...dl, lock: null };
+    return presentTrack(track, {
+      at: hit.at, radars: hit.radars, dl,
+      who: d.who, iffState: d.iffState, iffOverride: d.iffOverride, transponder: d.transponder,
+      env: this._surv.env(), missionData: this._missionData,
+    });
+  }
+
+  /** A full track snapshot, scoped to what this session can see. */
+  _pictureSnapshot(session) {
+    const visible = this._visibleTo(session);
+    const tracks = [];
+    session.lastSent = new Map();
+    session.labelRevs = new Map();
+    for (const [id, hit] of visible) {
+      const wire = this._present(id, hit, visible);
+      if (!wire) continue;
+      tracks.push(wire);
+      session.lastSent.set(id, hit.at);
+      session.labelRevs.set(id, (this._labels.get(id) || {}).rev);
+    }
+    return { version: VERSION, type: 'snapshot', time: Date.now() / 1000, tracks };
   }
 
   _coverageMsg(session) {
@@ -234,6 +328,8 @@ class WsHub {
       radars: session.coverage.radars,
       heldPositions: session.coverage.heldPositions,
       radarBearingPositions: session.coverage.radarBearingPositions,
+      datalink: !!session.coverage.datalink,
+      stca: !!session.coverage.stca,
     };
   }
 
@@ -247,30 +343,25 @@ class WsHub {
    * and a snapshot says the same thing without the chance of getting it wrong.
    */
   _refreshCoverage(ws, session) {
-    if (!this._picture) return false;
     const next = this._picture.coverageFor(session.controllerId);
-    const before = [...session.radarIds].sort().join(',');
-    const after = next.radars.map(r => r.id).sort().join(',');
-    session.coverage = next;
-    session.radarIds = next.radarIds;
+    const key = (c) => [...c.radars.map(r => r.id)].sort().join(',') + (c.datalink ? '+DL' : '');
+    const before = key(session.coverage);
+    const after = key(next);
+    this._setCoverage(session, next);
     // Held Positions can change without the radar set changing (taking GND
     // adds no scope), and the client renders the held list too — so the
     // message goes out either way, and only the expensive re-send is gated.
     if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(this._coverageMsg(session)));
     if (before === after) return false;
 
-    session.lastSent = new Map();
     if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(this._pictureSnapshot(session)));
     return true;
   }
 
-  /** A full track snapshot, scoped to what this session can see. */
-  _pictureSnapshot(session) {
-    const visible = this._visibleTo(session);
-    const illuminated = this._picture ? visible : null;
-    const tracks = this._resolveIds([...visible.keys()], illuminated);
-    session.lastSent = new Map([...visible].map(([id, hit]) => [id, hit ? hit.at : 0]));
-    return { version: VERSION, type: 'snapshot', time: Date.now() / 1000, tracks };
+  _setCoverage(session, coverage) {
+    session.coverage = coverage;
+    session.radarIds = coverage.radarIds;
+    session.radarById = new Map(coverage.radars.map(r => [r.id, r]));
   }
 
   // ── Per-client lifecycle ─────────────────────────────────────────────────
@@ -284,23 +375,16 @@ class WsHub {
       // requirement) reuses this exact fallback chain rather than a second
       // identity scheme — see src/efsp/index.js's controllerIdFor().
       controllerId: user.name || user.preferred_username || user.sub || 'unknown',
-      lastTrackSeq:  this._trackStore.currentSeq,
-      lastCollabSeq: this._collabStore.currentSeq,
-      timer: null,
-      // The radar picture this session is entitled to (docs/adr/0042). Empty
-      // until they hold a radar-bearing Position, which is the whole point:
-      // a controller who has declared nothing sees nothing, and the client
-      // says so rather than showing a blank map.
-      coverage: { radars: [], radarIds: new Set(), heldPositions: [], radarBearingPositions: [] },
-      radarIds: new Set(),
-      // trackId -> the illuminatedAt we last sent, so a tick knows what is new
-      // and what has dropped out of coverage entirely.
+      // trackId -> the illuminatedAt / label revision we last sent, so a tick
+      // knows what is new, what was relabelled, and what has dropped out.
       lastSent: new Map(),
+      labelRevs: new Map(),
     };
-    if (this._picture) {
-      session.coverage = this._picture.coverageFor(session.controllerId);
-      session.radarIds = session.coverage.radarIds;
-    }
+    // The picture this session is entitled to (docs/adr/0042). Empty until
+    // they hold a radar-bearing Position, which is the whole point: a
+    // controller who has declared nothing sees nothing, and the client says
+    // so rather than showing a blank map.
+    this._setCoverage(session, this._picture.coverageFor(session.controllerId));
     this._sessions.set(ws, session);
 
     // Same send order as the original _onConnect: status, init (if a
@@ -311,103 +395,99 @@ class WsHub {
     if (this._missionData) ws.send(JSON.stringify(this._initMsg()));
     if (this._weather)     ws.send(JSON.stringify(this._weatherMsg()));
     if (this._gameTime)    ws.send(JSON.stringify(this._gameTimeMsg()));
-    ws.send(JSON.stringify(this._squawkMapMsg()));
     ws.send(JSON.stringify(this._theaterSettingsMsg()));
     ws.send(JSON.stringify(this._aptConfigMsg()));
     ws.send(JSON.stringify(this._atisMsg()));
     // Before the track snapshot, so a client knows what it is about to be
     // given a picture through — and, when that list is empty, why the picture
     // is empty too.
-    if (this._picture) ws.send(JSON.stringify(this._coverageMsg(session)));
+    ws.send(JSON.stringify(this._coverageMsg(session)));
+    this._refreshLabels();
     ws.send(JSON.stringify(this._pictureSnapshot(session)));
     if (this._efsp) ws.send(JSON.stringify(this._efsp.snapshotFor()));
-
-    session.timer = setInterval(() => this._tick(ws, session), TICK_MS);
+    // The current conformance and conflict alerts (docs/adr/0058), so a client
+    // that connects mid-conflict sees it without waiting for the next change.
+    if (this._efspAlerts) ws.send(JSON.stringify(this._efspAlertsMsg(session)));
 
     ws.on('message', (raw) => this._onMessage(ws, session, raw));
     ws.on('error', () => {});
     ws.on('close', () => {
-      clearInterval(session.timer);
       this._sessions.delete(ws);
       if (this._efsp) this._efsp.onDisconnect(session);
     });
   }
 
-  _tick(ws, session) {
+  /** One hub tick: describe every contact once, then serve each session. */
+  _tickAll() {
+    if (this._surv.datalink) this._surv.datalink.tick();
+    this._refreshLabels();
+    for (const [ws, session] of this._sessions) this._tick(ws, session, true);
+  }
+
+  /**
+   * One session's tick. `labelsFresh` is false when called on its own (tests),
+   * so the contacts are re-described first.
+   */
+  _tick(ws, session, labelsFresh = false) {
     if (ws.readyState !== WebSocket.OPEN) return;
+    if (!labelsFresh) this._refreshLabels();
 
     // EFSP heartbeat (guide §5.6 rule 5) — sent EVERY tick, unconditionally,
-    // unlike the track/collab delta below which early-returns on a quiet
-    // Board. A client needs a genuine periodic signal to detect staleness;
-    // "no message arrived" on an idle Board would otherwise be indistinguishable
-    // from a dead connection. Reuses this existing 500ms per-client timer
-    // rather than adding a second one.
+    // unlike the track delta below which early-returns on a quiet picture. A
+    // client needs a genuine periodic signal to detect staleness; "no message
+    // arrived" on an idle Board would otherwise be indistinguishable from a
+    // dead connection.
     if (this._efsp) {
       ws.send(JSON.stringify({ version: VERSION, type: 'efsp-heartbeat', boardSeq: this._efsp.boardStore.currentSeq }));
     }
 
-    const collabDelta = this._collabStore.getDeltaSince(session.lastCollabSeq);
-    session.lastCollabSeq = collabDelta.seq;
+    const lastSent = session.lastSent || (session.lastSent = new Map());
+    const labelRevs = session.labelRevs || (session.labelRevs = new Map());
 
-    // Without a picture, the old rule applies unchanged: whatever TrackStore
-    // says changed, scoped to nothing.
-    if (!this._picture) {
-      const trackDelta = this._trackStore.getDeltaSince(session.lastTrackSeq);
-      session.lastTrackSeq = trackDelta.seq;
-      const goneIds = trackDelta.gone.map(String);
-      const changedIds = new Set([...trackDelta.updated.map(t => String(t.id)), ...collabDelta.updatedIds]);
-      for (const id of goneIds) changedIds.delete(id);
-      if (changedIds.size === 0 && goneIds.length === 0) return;
-      ws.send(JSON.stringify({
-        version: VERSION, type: 'delta', time: Date.now() / 1000,
-        updated: this._resolveIds(changedIds, null), gone: goneIds,
-      }));
-      return;
-    }
-
-    // With one, the question is not "what changed in the store" but "what has
-    // my beam passed over since I last looked". A contact whose telemetry
-    // updated ten times between sweeps is sent once, when it is illuminated —
-    // which is the behaviour the renderer's own sweep loop used to produce
-    // locally, now produced once for everybody.
+    // Not "what changed in the store" but "what have my sensors returned
+    // since I last looked": a contact whose telemetry updated ten times
+    // between sweeps is sent once, when it is illuminated.
     const visible = this._visibleTo(session);
-    const updatedIds = new Set();
+    const updated = [];
+    const relabeled = [];
+    const gone = [];
 
     for (const [trackId, hit] of visible) {
-      if (session.lastSent.get(trackId) !== hit.at) updatedIds.add(trackId);
+      const rev = (this._labels.get(trackId) || {}).rev;
+      const fresh = lastSent.get(trackId) !== hit.at;
+      // Who the contact is — its flight, its tag, its IFF — is shared state,
+      // not a radar return: it shows at once rather than waiting for the next
+      // sweep. Only for contacts already in the picture, so it can never leak
+      // a track this controller cannot see.
+      const relabel = !fresh && lastSent.has(trackId) && labelRevs.get(trackId) !== rev;
+      if (!fresh && !relabel) continue;
+      const wire = this._present(trackId, hit, visible);
+      if (!wire) {
+        if (lastSent.has(trackId)) gone.push(trackId);
+        lastSent.delete(trackId);
+        labelRevs.delete(trackId);
+        continue;
+      }
+      if (fresh) { updated.push(wire); lastSent.set(trackId, hit.at); }
+      else relabeled.push(labelPart(wire));
+      labelRevs.set(trackId, rev);
     }
-    // A declaration, rename or track number is shared state, not a radar
-    // return: it should reflect at once rather than waiting for the next
-    // sweep. Only for contacts already in the picture, though — an overlay
-    // edit must never leak a track this controller cannot see.
-    for (const id of collabDelta.updatedIds) {
-      if (visible.has(String(id))) updatedIds.add(String(id));
+    for (const trackId of [...lastSent.keys()]) {
+      if (visible.has(trackId)) continue;
+      gone.push(trackId);
+      lastSent.delete(trackId);
+      labelRevs.delete(trackId);
     }
 
-    const goneIds = [];
-    for (const trackId of session.lastSent.keys()) {
-      if (!visible.has(trackId)) goneIds.push(trackId);
-    }
-
-    if (updatedIds.size === 0 && goneIds.length === 0) return;
-
-    for (const trackId of goneIds) session.lastSent.delete(trackId);
-    for (const trackId of updatedIds) session.lastSent.set(trackId, visible.get(trackId).at);
-
+    if (updated.length === 0 && relabeled.length === 0 && gone.length === 0) return;
     ws.send(JSON.stringify({
-      version: VERSION,
-      type:    'delta',
-      time:    Date.now() / 1000,
-      updated: this._resolveIds(updatedIds, visible),
-      gone:    goneIds,
+      version: VERSION, type: 'delta', time: Date.now() / 1000, updated, relabeled, gone,
     }));
   }
 
   // ── Client → server mutations ────────────────────────────────────────────
-  // No "assignTrackNumber" message: track numbers are auto-assigned the
-  // moment a track is first resolved (see resolve.js/collab-store.js),
-  // matching the original client-side behavior in geo.js — never a manual
-  // client action.
+  // No "assignTrackNumber" message: every contact has a track number from
+  // the moment it is described (surveillance/track-numbers.js).
 
   _onMessage(ws, session, raw) {
     let msg;
@@ -449,21 +529,8 @@ class WsHub {
       }
     }
 
-    // Squawk-map edits are global config, not track-scoped — handle them
-    // before the trackId-gated switch below and broadcast to everyone
-    // immediately (they don't ride the per-session 500ms track-delta tick,
-    // since they're not part of TrackStore/CollaborativeStore's delta log).
-    if (msg.type === 'squawkMapSet') {
-      if (setSquawkMapping(msg.kind, msg.code, msg.name)) this._broadcast(this._squawkMapMsg());
-      return;
-    }
-    if (msg.type === 'squawkMapDelete') {
-      if (deleteSquawkMapping(msg.kind, msg.code)) this._broadcast(this._squawkMapMsg());
-      return;
-    }
-
     // Theater settings (transition alt / hdg correction / game-time offset)
-    // are squadron-wide config too, same as squawk-map above — any client
+    // are squadron-wide config — any client
     // can push a patch and every client (including the sender) gets the
     // authoritative merged result back.
     if (msg.type === 'theaterSettingsSet') {
@@ -489,6 +556,8 @@ class WsHub {
       case 'clearDeclare':
         this._collabStore.clearDeclare(id);
         break;
+      // A tag: the name a controller gives a contact nothing else identifies.
+      // A correlated flight's callsign beats it (docs/adr/0059).
       case 'rename':
         if (typeof msg.name === 'string') {
           this._collabStore.rename(id, msg.name.slice(0, MAX_NAME_LEN), session.who);
@@ -505,6 +574,7 @@ class WsHub {
   }
 
   _broadcast(msg) {
+    if (!this._wss) return;
     const payload = JSON.stringify(msg);
     for (const client of this._wss.clients) {
       if (client.readyState === WebSocket.OPEN) client.send(payload);

@@ -13,6 +13,7 @@ import assert from 'node:assert/strict';
 
 const { CorrelationReconciler, computeCorrelationRate, INELIGIBLE_STATES } =
   await import('../src/efsp/correlation-reconciler.js');
+const { octalCode } = await import('../src/surveillance/transponder.js');
 const { CorrelationStore } = await import('../src/efsp/correlation-store.js');
 const { STATES_BY_ROLE } = await import('../src/efsp/nla.js');
 
@@ -50,6 +51,7 @@ function build({ fdrs = [], strips = [], tracks = [] } = {}) {
   const store = new CorrelationStore({ fdrExists: (id) => !!fdrStore.getFdr(id) });
   const deltas = [];
   const reconciler = new CorrelationReconciler({
+    beaconOf: (t) => octalCode(t.squawk),
     trackStore: fakeTrackStore(tracks),
     fdrStore,
     correlationStore: store,

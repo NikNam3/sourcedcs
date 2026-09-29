@@ -77,7 +77,7 @@ test('after each NLA the Strip sits in the Bay for its new state', async ({ page
 
   await goBay(page, 'CD', 'cd-pending-clearance');
   const strip = stripByCallsign(page, 'VPR102');
-  for (const [label, value] of [['ALT', 'FL250'], ['DEP', 'LTAG'], ['DEST', 'LTAG'], ['RTE', 'DCT']]) {
+  for (const [label, value] of [['CRUS ALT', 'FL250'], ['DEP', 'LTAG'], ['DEST', 'LTAG'], ['RTE', 'DCT']]) {
     await fillChip(page, strip, label, value);
   }
   await strip.getByRole('button', { name: 'Mark Cleared' }).click();

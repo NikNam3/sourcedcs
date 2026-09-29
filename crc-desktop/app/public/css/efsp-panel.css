@@ -1742,3 +1742,11 @@
    they have nothing to offer, and the id rules above that set `display` would
    otherwise outrank the browser's own [hidden] rule and draw them empty. */
 #efsp-panel [hidden] { display: none !important; }
+
+/* ══ Conformance and conflict alerts (docs/adr/0058) ══════════════════════
+ * Nothing is drawn while a flight conforms. A warning gives the Strip an edge
+ * in its own colour, on top of whatever else it carries: orange-red for a
+ * conflict, a wrong-way climb or descent, or a level bust; amber for a heading
+ * deviation. Declared after the arrival edge so an alert wins over "new". */
+.efsp-strip.efsp-strip-alert { border-color: var(--efsp-bad); box-shadow: inset 3px 0 0 var(--efsp-bad); }
+.efsp-strip.efsp-strip-alert-attn { border-top-color: var(--efsp-attn); border-right-color: var(--efsp-attn); border-bottom-color: var(--efsp-attn); }

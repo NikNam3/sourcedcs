@@ -1,8 +1,6 @@
 'use strict';
 
-// Beacon/squawk (Mode 3/A) code allocation for the EFSP. Nothing in
-// crc-sync minted codes before this — src/resolve.js's squawk-map is a
-// cosmetic observed-code-to-display-name lookup, not allocation. Per the
+// Beacon/squawk (Mode 3/A) code allocation for the EFSP. Per the
 // phase-1 design decision ("crc-sync mints, EFSP consumes"), this is new,
 // server-authoritative capability: the EFSP panel only displays, lets a
 // controller override, and applies the doctrine below — it never mints.
@@ -22,6 +20,10 @@
 //   - the "monitor set" (1200,1202,1203,1255,1277, and 4000 in restricted/
 //     warning/VR context) is recognisable on sight (isMonitorSet), not an
 //     allocation concern — display-layer doctrine, exposed here for reuse
+//   - 6000–6777 is the SYNTHETIC block (docs/adr/0059): the codes crc-sync
+//     gives AI aircraft, which have no SRS transponder. Never allocated and
+//     never assignable, so no FDR can hold one and an AI aircraft can never
+//     correlate on its beacon — it correlates on its callsign or not at all.
 
 const RESERVED_CODES = new Set(['0000', '7500', '7600', '7700', '7400', '7777']);
 const MONITOR_SET     = new Set(['1200', '1202', '1203', '1255', '1277']);
@@ -40,6 +42,16 @@ function isReserved(code) { return RESERVED_CODES.has(code); }
 // this checks the unconditional part of the set only.
 function isMonitorSet(code) { return MONITOR_SET.has(code); }
 
+const SYNTHETIC_BLOCK_START = 0o6000;
+const SYNTHETIC_BLOCK_SIZE = 0o1000;
+
+/** A code from the block crc-sync reserves for AI transponders. */
+function isSynthetic(code) {
+  if (!isValidCodeFormat(code)) return false;
+  const n = parseInt(code, 8);
+  return n >= SYNTHETIC_BLOCK_START && n < SYNTHETIC_BLOCK_START + SYNTHETIC_BLOCK_SIZE;
+}
+
 class CodeAllocator {
   constructor() {
     this._allocated = new Map(); // code -> fdrId — single INCIRLIK facility in Phase 1, no per-facility pooling yet
@@ -55,7 +67,7 @@ class CodeAllocator {
   allocate(fdrId) {
     for (let n = 1; n <= 0o7777; n++) {
       const code = n.toString(8).padStart(4, '0');
-      if (AUTO_ALLOCATE_EXCLUDED.has(code)) continue;
+      if (AUTO_ALLOCATE_EXCLUDED.has(code) || isSynthetic(code)) continue;
       if (this._allocated.has(code)) continue;
       this._allocated.set(code, fdrId);
       return { code, pool: 'DISCRETE' };
@@ -77,6 +89,7 @@ class CodeAllocator {
   validateAssignment(code, fdrId) {
     if (!isValidCodeFormat(code)) return { ok: false, reason: 'VALIDATION_ERROR' };
     if (isReserved(code))         return { ok: false, reason: 'VALIDATION_ERROR' };
+    if (isSynthetic(code))        return { ok: false, reason: 'VALIDATION_ERROR', detail: 'reserved for uncontrolled traffic' };
     const holder = this._allocated.get(code);
     if (holder && holder !== fdrId) return { ok: true, warning: 'DUPLICATE_IGNORED_WARNING' };
     return { ok: true };
@@ -101,4 +114,7 @@ class CodeAllocator {
   restore(entries) { this._allocated = new Map(entries || []); }
 }
 
-module.exports = { CodeAllocator, isReserved, isMonitorSet, isValidCodeFormat, RESERVED_CODES, MONITOR_SET };
+module.exports = {
+  CodeAllocator, isReserved, isMonitorSet, isValidCodeFormat, isSynthetic,
+  RESERVED_CODES, MONITOR_SET, SYNTHETIC_BLOCK_START, SYNTHETIC_BLOCK_SIZE,
+};

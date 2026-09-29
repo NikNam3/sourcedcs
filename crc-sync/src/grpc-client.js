@@ -25,8 +25,6 @@ const T_REF_ALT  = 288.97;
 
 const WEATHER_POLL_MS   = 60000; // poll atmosphere every 60 s
 const GAMETIME_POLL_MS  =  5000; // poll scenario current time every 5 s
-const RADAR_POLL_MS     =  1500; // poll GetRadar for all player units
-const RADAR_DEBUG_MS    = 30000; // log player unit list for debugging
 
 const PROTO_OPTS = { keepCase: true, includeDirs: [PROTO_ROOT] };
 
@@ -60,12 +58,8 @@ class GrpcClient extends EventEmitter {
     this._eventTimer     = null;
     this._weatherTimer   = null;
     this._gameTimeTimer  = null;
-    this._radarPollTimer  = null;
-    this._radarDebugTimer = null;
     this._unitSvc        = null;
-    this._hookSvc        = null;
-    this._hookProbed     = false;
-    this._playerUnits    = new Map(); // unitId → { name, coalition }
+    this._evalErrorLoggedAt = 0;
     this._statusTimer        = null; // debounce for 'reconnecting' broadcasts
     this._icao               = null;
     this._missionFetchActive = false; // prevents duplicate retry loops
@@ -86,7 +80,6 @@ class GrpcClient extends EventEmitter {
       const timerPkg   = loadSvc('dcs/timer/v0/timer.proto');
       const srsPkg     = loadSvc('dcs/srs/v0/srs.proto');
       const unitPkg    = loadSvc('dcs/unit/v0/unit.proto');
-      const hookPkg    = loadSvc('dcs/hook/v0/hook.proto');
       const creds      = grpc.credentials.createInsecure();
 
       this._missionSvc = new missionPkg.dcs.mission.v0.MissionService(DCS_HOST, creds, CHANNEL_OPTS);
@@ -97,7 +90,6 @@ class GrpcClient extends EventEmitter {
       this._timerSvc   = new timerPkg.dcs.timer.v0.TimerService(DCS_HOST, creds, CHANNEL_OPTS);
       this._srsSvc     = new srsPkg.dcs.srs.v0.SrsService(DCS_HOST, creds, CHANNEL_OPTS);
       this._unitSvc    = new unitPkg.dcs.unit.v0.UnitService(DCS_HOST, creds, CHANNEL_OPTS);
-      this._hookSvc    = new hookPkg.dcs.hook.v0.HookService(DCS_HOST, creds, CHANNEL_OPTS);
       this._icao       = require('../data/icao.json');
     } catch (e) {
       console.error('[grpc] proto load failed:', e.message);
@@ -109,7 +101,6 @@ class GrpcClient extends EventEmitter {
     this._startEventStream();
     this._startWeatherPoll();
     this._startGameTimePoll();
-    this._startRadarPoll();
 
     this._fetchMissionWithRetry();
   }
@@ -164,45 +155,29 @@ class GrpcClient extends EventEmitter {
         const catNum = this._catNum(u.group && u.group.category);
         if (!ALLOWED_CATS.has(catNum)) return;
 
-        // Track player-controlled units by DCS name for GetRadar polling
-        const uid  = String(u.id);
-        const coal = this._coalNum(u.coalition);
-        if (u.player_name) {
-          const prev = this._playerUnits.get(uid);
-          this._playerUnits.set(uid, { name: u.name, playerName: u.player_name, coalition: coal });
-          if (!prev) {
-            console.log(`[datalink] player joined  → id=${uid} unit="${u.name}" player="${u.player_name}" coal=${coal}`);
-            this._logPlayerUnits();
-          }
-        } else if (this._playerUnits.has(uid)) {
-          const prev = this._playerUnits.get(uid);
-          this._playerUnits.delete(uid);
-          console.log(`[datalink] player left    → id=${uid} unit="${prev.name}" player="${prev.playerName}" coal=${prev.coalition}`);
-          this._logPlayerUnits();
-        }
-
         this.emit('unit', {
           id:        u.id,
           callsign:  u.callsign || u.name,
+          name:      u.name || null,
           coalition: this._coalNum(u.coalition),
           type:      u.type || '',
           lat:       u.position    ? u.position.lat             : 0,
           lon:       u.position    ? u.position.lon             : 0,
           alt:       u.position    ? Math.round(u.position.alt) : 0,
           heading:   u.orientation ? u.orientation.heading      : 0,
+          // Where the aircraft is actually going, and how fast it climbs —
+          // what conformance and conflict alerting need (docs/adr/0058).
+          // DCS world axes: x north, y UP, z east; speeds in m/s. Course is
+          // grid-referenced on DCS's flat world, like `heading` above.
+          course:        u.velocity ? u.velocity.heading : null,
+          groundSpeed:   u.velocity ? u.velocity.speed   : null,
+          verticalSpeed: u.velocity && u.velocity.velocity ? u.velocity.velocity.y : null,
           player:    u.player_name || null,
           category:  catNum, // 1=airplane 2=helicopter 4=ship
         });
       }
 
       if (res.gone) {
-        const gid = String(res.gone.id);
-        if (this._playerUnits.has(gid)) {
-          const info = this._playerUnits.get(gid);
-          this._playerUnits.delete(gid);
-          console.log(`[datalink] player gone    → id=${gid} name="${info.name}" coal=${info.coalition}`);
-          this._logPlayerUnits();
-        }
         this.emit('gone', res.gone.id);
       }
     });
@@ -261,152 +236,36 @@ class GrpcClient extends EventEmitter {
     });
   }
 
-  // ── Radar lock poll ───────────────────────────────────────────────────────
+  // ── Mission scripting ─────────────────────────────────────────────────────
 
-  _startRadarPoll() {
-    this._radarPollTimer  = setInterval(() => this._pollRadarLocks(), RADAR_POLL_MS);
-    this._radarDebugTimer = setInterval(() => this._logPlayerUnits(), RADAR_DEBUG_MS);
-  }
-
-  _logPlayerUnits() {
-    if (this._playerUnits.size === 0) {
-      console.log('[datalink] player units: (none)');
-      return;
-    }
-    const lines = [...this._playerUnits.entries()]
-      .map(([id, info]) => `  ${id}  "${info.playerName}"  in  "${info.name}"  (coal ${info.coalition})`);
-    console.log(`[datalink] player units (${this._playerUnits.size}):\n${lines.join('\n')}`);
-  }
-
-  _extractTargetPos(target) {
-    if (!target) return null;
-    for (const key of ['unit', 'weapon', 'static', 'scenery', 'airbase']) {
-      const obj = target[key];
-      if (obj && obj.position && (obj.position.lat || obj.position.lon)) {
-        return {
-          lat:  obj.position.lat,
-          lon:  obj.position.lon,
-          id:   key === 'unit' ? String(obj.id) : null,
-          name: obj.name || obj.type || key,
-          kind: key,
-        };
-      }
-    }
-    return null;
-  }
-
-  _pollRadarLocks() {
-    if (!this._customSvc || this._playerUnits.size === 0) {
-      this.emit('radar-locks', []);
-      return;
-    }
-
-    const players = [...this._playerUnits.entries()];
-
-    // Escape unit names for safe embedding in Lua string literals
-    const namesLua = players
-      .map(([, info]) => `"${info.name.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`)
-      .join(', ');
-
-    // Probe hook env: try net.dostring_in('export',...) to reach the export Lua state
-    // where LoGet* functions live. Only runs once — stops after first meaningful result.
-    if (!this._hookProbed) {
-      this._hookProbed = true;
-      const hookLua = `
-local result = {}
-result.hasNet          = (type(net) == "table")
-result.hasDoStringIn   = (type(net) == "table" and type(net.dostring_in) == "function")
-if result.hasDoStringIn then
-  local ok, ret = pcall(function()
-    return net.dostring_in('export',
-      'local fns={"LoGetTargetInformations","LoGetLockedTarget","LoGetSensorData"} ' ..
-      'local t={} for _,f in ipairs(fns) do t[f]=(type(_G[f])=="function") end ' ..
-      'return require("lfs") and "lfs_ok" or "no_lfs",' ..
-      'tostring(t.LoGetTargetInformations),' ..
-      'tostring(t.LoGetLockedTarget),' ..
-      'tostring(t.LoGetSensorData)'
-    )
-  end)
-  result.exportProbe    = ok and ret or nil
-  result.exportProbeErr = not ok and tostring(ret) or nil
-end
-if net and net.lua2json then return net.lua2json(result) end
-return tostring(result)
-      `.trim();
-      this._hookSvc.Eval({ lua: hookLua }, (err, res) => {
-        if (err) {
-          console.log(`[datalink] hook Eval error: ${err.message}`);
-        } else {
-          let parsed;
-          try { parsed = JSON.parse(JSON.parse(res.json)); } catch (_) { parsed = res.json; }
-          console.log(`[datalink] hook Eval result: ${JSON.stringify(parsed)}`);
+  /**
+   * Runs Lua in the mission scripting environment and returns what it
+   * returned through net.lua2json, parsed. Rejects on a transport or parse
+   * error, logging at most once a minute so a poll against a server without
+   * the custom service cannot flood the log.
+   */
+  evalLua(lua) {
+    return new Promise((resolve, reject) => {
+      if (!this._customSvc) return reject(new Error('not connected'));
+      this._customSvc.Eval({ lua }, (err, res) => {
+        let parsed;
+        let failure = err;
+        if (!failure) {
+          try { parsed = JSON.parse(JSON.parse(res.json)); } catch (e) { failure = e; }
         }
+        if (!failure) return resolve(parsed);
+        const now = Date.now();
+        if (now - this._evalErrorLoggedAt > 60000) {
+          this._evalErrorLoggedAt = now;
+          console.warn('[grpc] Eval failed:', failure.message);
+        }
+        reject(failure);
       });
-    }
-
-    const lua = `
-local names = {${namesLua}}
-local results = {}
-for _, unitName in ipairs(names) do
-  local entry = {name = unitName}
-  local u = Unit.getByName(unitName)
-  if not u then
-    entry.err = "unit not found"
-  else
-    local rok, ractive, rtarget = pcall(function() return u:getRadar() end)
-    entry.getRadar    = rok and ractive or false
-    entry.getRadarErr = not rok and tostring(ractive) or nil
-  end
-  table.insert(results, entry)
-end
-return net.lua2json(results)
-    `.trim();
-
-    this._customSvc.Eval({ lua }, (err, res) => {
-      if (err) {
-        console.log(`[datalink] Eval error: ${err.message}`);
-        return;
-      }
-      let rows;
-      try {
-        rows = JSON.parse(JSON.parse(res.json));
-      } catch (e) {
-        console.log(`[datalink] Eval parse error: ${e.message} raw=${res.json && res.json.slice(0, 300)}`);
-        return;
-      }
-
-      console.log(`[datalink] raw results: ${JSON.stringify(rows)}`);
-
-      const locks = [];
-      for (const row of rows) {
-        const entry = players.find(([, info]) => info.name === row.name);
-        if (!entry) continue;
-        const [unitId, info] = entry;
-
-        if (!row.active || row.targetLat == null) continue;
-
-        locks.push({
-          unitId,
-          playerName: info.playerName,
-          unitName:   info.name,
-          coalition:  info.coalition,
-          targetLat:  row.targetLat,
-          targetLon:  row.targetLon,
-          targetId:   null,
-          targetName: row.targetName || '?',
-        });
-      }
-
-      if (locks.length > 0) {
-        const lines = locks.map(l =>
-          `  "${l.playerName}" in "${l.unitName}"  →  "${l.targetName}"  @ (${l.targetLat.toFixed(4)}, ${l.targetLon.toFixed(4)})`
-        );
-        console.log(`[datalink] radar locks (${locks.length}):\n${lines.join('\n')}`);
-      }
-
-      this.emit('radar-locks', locks);
     });
   }
+
+  /** The latest sea-level pressure (Pa) and temperature (K) DCS reported. */
+  getWeather() { return { ...this._weather }; }
 
   // Convert true MSL altitude (metres) to QNH-indicated altitude (metres).
   _toPressureAltM(trueAltM) {

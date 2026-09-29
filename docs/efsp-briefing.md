@@ -462,6 +462,23 @@ is the one exception — it owns the regime (`0051`).
   controls go where `0056`'s zone rule puts them, not onto the Strip's face. It was checked by eye
   in Playwright screenshots at full and narrow width; the all-lit worst cases from the mockup have
   not been walked live with two controllers yet.
+- **`0056`'s fixed indicator slots are gone (`0058`).** Indicators appear only when something is
+  wrong or in effect, and a normally correlated `TRK` is not drawn. A test that expects a slot to
+  be present on a quiet Strip is testing the old rule.
+- **Assigned `ALT`/`HDG` live on the FDR (`fdr.clearance`, `0058`)**, not on the Strip. Block Map
+  target kind `clearance`. Writing one bumps `clearanceUpdatedAt`, never `updatedAt`, so it is not
+  an amendment. Conformance (`src/efsp/conformance.js`) and STCA (`src/stca.js`) read them and
+  broadcast `efsp-alerts` as full state. Open: magnetic vs grid heading (course is grid, like the
+  track panel), filed-route conformance, and terrain/MSAW once AIRAC data exists.
+- **What a client is told about a contact is decided in one place (`0059`).**
+  - Server: `crc-sync/src/surveillance/presentation.js`, per session, from that controller's own
+    sensors.
+  - Client: `crc-desktop/app/public/js/track-label.js` is the only code that turns it into text.
+  - The wire carries no DCS truth: no raw callsign, type, coalition or true altitude.
+  - A new way of showing or naming a contact goes in those two files, and `presentation.test.mjs`
+    plus `ws-hub-wire-strictness.test.mjs` hold the line.
+  - Correlation still matches the RAW DCS callsign and the code the transponder is actually sending.
+  - The squawk map is gone.
 
 ## 5. Where to start
 

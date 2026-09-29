@@ -53,7 +53,7 @@ function initSettings() {
   els.lightMode.checked  = settings.lightMode;
   els.elevation.checked  = settings.showElevation;
   els.radarDebug.checked   = settings.radarDebug;
-  els.datalink.checked     = settings.datalink ?? false;
+  els.datalink.checked     = settings.showDatalinkLocks !== false;
   els.textMarks.checked    = settings.textMarksEnabled;
   applyLightMode();
 
@@ -103,7 +103,7 @@ function initSettings() {
     persist('radarDebug', els.radarDebug.checked);
     if (!els.radarDebug.checked) hideLosProfile();
   });
-  els.datalink.addEventListener('change', () => persist('datalink', els.datalink.checked));
+  els.datalink.addEventListener('change', () => persist('showDatalinkLocks', els.datalink.checked));
   els.textMarks.addEventListener('change', () => {
     settings.textMarksEnabled = els.textMarks.checked;
     saveSettings();
@@ -297,7 +297,6 @@ function initColorSettings() {
   const $declutter  = document.getElementById('set-declutter');
   const $navDecl    = document.getElementById('set-nav-declutter');
   const $navDecl5   = document.getElementById('set-nav-declutter-5');
-  const $aiEn            = document.getElementById('set-ai-enabled');
   const $shipsEn         = document.getElementById('set-ships-enabled');
   const $hideGroundUnits = document.getElementById('set-hide-ground-units');
 
@@ -326,11 +325,6 @@ function initColorSettings() {
       saveSettings();
       if (mapReady && missionData) map.getSource('navpoints').setData(buildNavpoints());
     });
-  }
-
-  if ($aiEn) {
-    $aiEn.checked = settings.aiEnabled;
-    $aiEn.addEventListener('change', () => { settings.aiEnabled = $aiEn.checked; saveSettings(); updateMap(); });
   }
 
   if ($shipsEn) {

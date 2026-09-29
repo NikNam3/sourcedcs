@@ -2,23 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import CollaborativeStore from '../src/collab-store.js';
 
-test('assignTrackNumber is idempotent for the same track', () => {
-  const store = new CollaborativeStore();
-  const tn1 = store.getOrAssignTrackNumber('100');
-  const tn2 = store.getOrAssignTrackNumber('100');
-  assert.equal(tn1, tn2);
-});
-
-test('assignTrackNumber never collides across tracks', () => {
-  const store = new CollaborativeStore();
-  const seen = new Set();
-  for (let i = 0; i < 500; i++) {
-    const tn = store.getOrAssignTrackNumber(String(i));
-    assert.ok(!seen.has(tn), `collision on ${tn}`);
-    seen.add(tn);
-  }
-});
-
 test('declare / clearDeclare round-trip and drop empty entries', () => {
   const store = new CollaborativeStore();
   store.declare('7', 'hostile', 'Alice');
@@ -53,22 +36,10 @@ test('evictStale removes entries for tracks no longer active, keeps active ones'
   assert.equal(store.get('2'), null);
 });
 
-test('clear() flushes every entry and logs gone events', () => {
+test('clear() empties the store: a mission reload wipes it for everybody', () => {
   const store = new CollaborativeStore();
   store.declare('1', 'hostile', 'Alice');
-  store.declare('2', 'bandit', 'Bob');
-  const seqBefore = store.currentSeq;
+  store.rename('2', 'tanker', 'Bob');
   store.clear();
   assert.equal(store.getAll().length, 0);
-  const delta = store.getDeltaSince(seqBefore);
-  assert.deepEqual(delta.goneIds.sort(), ['1', '2']);
-});
-
-test('getDeltaSince only reports entries changed after the given seq', () => {
-  const store = new CollaborativeStore();
-  store.declare('1', 'hostile', 'Alice');
-  const seq1 = store.currentSeq;
-  store.declare('2', 'bandit', 'Bob');
-  const delta = store.getDeltaSince(seq1);
-  assert.deepEqual(delta.updatedIds, ['2']);
 });

@@ -13,29 +13,18 @@
 // Two decisions live here rather than in the reconciler, because they are
 // properties of matching rather than of scheduling.
 //
-// FIRST: match against the RAW track callsign, never resolve.js's
-// resolveCallsign() output. Four reasons, and the first is decisive.
+// FIRST: the evidence is what the aircraft itself gives, never what a
+// controller sees on the scope.
 //
-//   1. resolveCallsign rewrites the display name FROM THE SQUAWK MAP
-//      (squawkMap[squawk], then squawkSeq base+offset). Matching on it would
-//      make the callsign rung a laundered restatement of the beacon rung — a
-//      squawk match with a config lookup in the middle. That collapses two
-//      rungs into one and destroys the point of a ladder, which is that when
-//      beacon evidence fails, callsign can still succeed on INDEPENDENT
-//      evidence.
-//   2. It would make surveillance identity depend on config/squawk-map.json,
-//      which any connected client can edit live (ws-hub.js's squawkMapSet). A
-//      squadron config edit silently re-correlating flights is indefensible.
-//   3. resolveCallsign also mints TN##### for non-friendly tracks and applies
-//      controller renames from collab-store.js. A controller renaming a target
-//      on the scope must not re-bind a flight strip.
-//   4. The raw track callsign is the DCS unit callsign, which is what a pilot
-//      files. That is the right thing to compare against identity.callsign.
-//
-// Match on raw; DISPLAY resolved. The Strip badge shows the track's resolved
-// callsign, so a controller reads the same name they see on the scope. The
-// asymmetry is deliberate — do not "fix" either half into the other.
-//
+//   - The beacon rung matches the code the transponder is SENDING
+//     (surveillance/transponder.js, injected as `beaconOf`): nothing when it
+//     is off, and never an AI's synthetic code, which no FDR can hold.
+//   - The callsign rungs match the RAW DCS unit callsign, which is what a
+//     pilot files, and never the label a controller sees. The label comes
+//     from correlation itself (the Strip's callsign) or from a controller's
+//     tag, so matching on it would let a correlation confirm itself, and let
+//     renaming a contact on the scope re-bind a Strip (docs/adr/0046, 0059).
+
 // SECOND: no edit distance, and no tunable threshold. A Levenshtein cutoff has
 // no doctrinal basis (defect D11's shape) and misfires exactly where it
 // matters: VIPER1 vs VIPER2 and VIPER1 vs a typo'd VIPER1 are both distance 1
@@ -66,25 +55,6 @@ function splitCallsign(cs) {
   const m = /^([A-Z]*)(\d*)([A-Z]*)$/.exec(normalised);
   if (!m) return { stem: normalised, digits: '', suffix: '' };
   return { stem: m[1], digits: m[2], suffix: m[3] };
-}
-
-/**
- * The observed Mode 3/A code from a track, as the 4-digit octal STRING the
- * rest of the EFSP uses.
- *
- * This bridges a real type gap: SRS reports `Mode3` as a NUMBER (srs-client.js
- * passes it straight through to TrackStore), while code-allocator.js mints and
- * validates 4-digit octal strings. A code containing an 8 or a 9 is not a
- * Mode 3/A code at all and yields null rather than a plausible-looking wrong
- * answer — a bogus observed code would sit next to the assigned one in §3.10.2
- * rule 1's mismatch display and read as a real disagreement.
- */
-function beaconFromTrack(track) {
-  if (!track || track.squawk == null) return null;
-  const n = Number(track.squawk);
-  if (!Number.isInteger(n) || n < 0) return null;
-  const code = String(n).padStart(4, '0');
-  return /^[0-7]{4}$/.test(code) ? code : null;
 }
 
 /**
@@ -129,7 +99,7 @@ function callsignAffinity(fdrCallsign, trackCallsign) {
  * either to one entry would silently pick a winner. Ambiguity is an outcome
  * the reconciler reports, not something to hide here.
  */
-function buildTrackIndices(tracks) {
+function buildTrackIndices(tracks, beaconOf) {
   const byBeacon = new Map(); // '0041' -> [trackId]
   const byStem = new Map();   // 'VIPER' -> [trackId]
   const byId = new Map();     // trackId -> track
@@ -138,7 +108,7 @@ function buildTrackIndices(tracks) {
     const id = String(track.id);
     byId.set(id, track);
 
-    const beacon = beaconFromTrack(track);
+    const beacon = beaconOf(track);
     if (beacon) {
       const list = byBeacon.get(beacon);
       if (list) list.push(id); else byBeacon.set(beacon, [id]);
@@ -155,6 +125,6 @@ function buildTrackIndices(tracks) {
 }
 
 module.exports = {
-  normaliseCallsign, splitCallsign, beaconFromTrack, callsignAffinity, buildTrackIndices,
+  normaliseCallsign, splitCallsign, callsignAffinity, buildTrackIndices,
   AFFINITY_EXACT, AFFINITY_FORMATION, AFFINITY_SUFFIXED, AFFINITY_SAME_STEM,
 };

@@ -36,7 +36,6 @@ const PANEL_TITLES = {
   radars:   'PANELS',
   settings: 'SETTINGS',
   airport:  'AIRPORT',
-  calls:    'SQWK C/S',
   radio:    'RADIO',
   efsp:     'FLIGHT STRIPS',
   airspace: 'AIRSPACE',
@@ -55,7 +54,6 @@ function initDock() {
       switch (options.name) {
         case 'map':      return createMapPanel();
         case 'track':    return mountExistingPanel('track-panel', initTrackPanel);
-        case 'calls':    return mountExistingPanel('calls-panel', initCallsPanel);
         case 'settings': return mountExistingPanel('settings-panel', initSettings);
         case 'airport':  return mountExistingPanel('aprt-panel', initAprtPanel);
         case 'radars':   return mountExistingPanel('radars-panel', initRadarPanel);
@@ -187,7 +185,7 @@ function addMissingRequiredPanels() {
 // (it lands wherever the active group happens to be, sometimes merging
 // into completely the wrong group — both reproduced firsthand while
 // building this). `excludeId` leaves out the panel currently being placed.
-const LEFT_CLUSTER = ['track', 'radars', 'airport', 'calls', 'efsp', 'airspace'];
+const LEFT_CLUSTER = ['track', 'radars', 'airport', 'efsp', 'airspace'];
 
 function leftGroupAnchor(excludeId) {
   return LEFT_CLUSTER.filter(id => id !== excludeId).find(id => dock.api.getPanel(id));
@@ -198,7 +196,7 @@ function leftGroupAnchor(excludeId) {
 // panel. `map` isn't listed: it never closes, so it never needs a
 // remembered size to come back to.
 const PANEL_SIDE = {
-  track: 'left', radars: 'left', airport: 'left', calls: 'left', efsp: 'left', airspace: 'left',
+  track: 'left', radars: 'left', airport: 'left', efsp: 'left', airspace: 'left',
   settings: 'right',
   radio: 'bottom',
 };
@@ -284,13 +282,6 @@ const DOCKABLE_PANELS = {
     const anchor = leftGroupAnchor('airport');
     return withRememberedPlacement('airport', {
       id: 'airport', component: 'airport', title: PANEL_TITLES.airport,
-      position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
-    }, !anchor);
-  },
-  calls: () => {
-    const anchor = leftGroupAnchor('calls');
-    return withRememberedPlacement('calls', {
-      id: 'calls', component: 'calls', title: PANEL_TITLES.calls,
       position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
     }, !anchor);
   },

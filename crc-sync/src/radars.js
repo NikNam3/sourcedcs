@@ -27,7 +27,7 @@
 const path = require('path');
 const fs = require('fs');
 
-const { checkOnGround } = require('./resolve');
+const { checkOnGround } = require('./geo');
 
 // DCS reports no radar-tower height, so a ground-based radar needs an assumed
 // offset or terrain masking would make it unrealistically easy to block.
@@ -43,27 +43,61 @@ const M_PER_NM = 1852;
 const AIRPORT_RADAR = { rangeNm: 40, sweepMs: 2000 };
 const APPROACH_RADAR = { rangeNm: 80, sweepMs: 3000 };
 const CVN_APPROACH_RADAR = { rangeNm: 50, sweepMs: 4000, heightM: 45 };
-// A ship type with no entry in radar-specs.json still has a surface-search
+// A ship type with no entry in sensor-specs.json still has a surface-search
 // radar — falling back is right, refusing to model it is not.
 const SHIP_RADAR_DEFAULT = { rangeNm: 40, sweepMs: 5000 };
 
 const RADAR_TYPES = ['airport', 'approach', 'awacs', 'fighter', 'carrier'];
 
+// What each kind of radar can measure beyond a position (docs/adr/0059).
+//   height — a height-finding (3D) radar gives an altitude with no help
+//            from the aircraft. A 2D surveillance radar does not.
+//   ssr    — it interrogates transponders (SSR, or a military IFF
+//            interrogator), so a squawking aircraft gives its code and
+//            Mode C altitude.
+// A radar-spec entry may override its kind's defaults with `caps`.
+// [SOURCE-DEFINED], like every figure here.
+const DEFAULT_CAPS = {
+  airport:         { height: false, ssr: true },
+  approach:        { height: false, ssr: true },
+  awacs:           { height: true,  ssr: true },
+  fighter:         { height: true,  ssr: true },
+  carrier:         { height: true,  ssr: true },
+  carrierApproach: { height: false, ssr: true },
+};
+
+function capsFor(kind, spec) {
+  return { ...DEFAULT_CAPS[kind], ...((spec && spec.caps) || {}) };
+}
+
 // Overridable so tests drive a fixture without touching disk — the same
 // env-var pattern every other config/*.json path in this package uses.
-const RADAR_SPECS_PATH = process.env.CRCSYNC_RADAR_SPECS_PATH
-  || path.join(__dirname, '../config/radar-specs.json');
+const SENSOR_SPECS_PATH = process.env.CRCSYNC_SENSOR_SPECS_PATH
+  || path.join(__dirname, '../config/sensor-specs.json');
+
+const EMPTY_SPECS = () => ({
+  radar: {}, carrierRadar: {},
+  datalink: { participants: [], pliPeriodMs: 4000, lockPollMs: 2000 },
+  transponder: { syntheticFor: ['own', 'neutral'] },
+});
 
 // Helipads/FARPs/FOBs are not radar sites. Matches the original's own filter.
 const HELIPAD_RE = /helipad|farp|fob/i;
 
-function loadRadarSpecs(specsPath = RADAR_SPECS_PATH) {
+/** config/sensor-specs.json, with every section present. */
+function loadSensorSpecs(specsPath = SENSOR_SPECS_PATH) {
+  const base = EMPTY_SPECS();
   try {
     const cfg = JSON.parse(fs.readFileSync(specsPath, 'utf8'));
-    return { radar: cfg.radar || {}, carrierRadar: cfg.carrierRadar || {} };
+    return {
+      radar: cfg.radar || {},
+      carrierRadar: cfg.carrierRadar || {},
+      datalink: { ...base.datalink, ...(cfg.datalink || {}) },
+      transponder: { ...base.transponder, ...(cfg.transponder || {}) },
+    };
   } catch (e) {
-    console.warn('[radars] failed to load config/radar-specs.json — airborne and ship radars will fall back to defaults:', e.message);
-    return { radar: {}, carrierRadar: {} };
+    console.warn('[radars] failed to load config/sensor-specs.json — every sensor falls back to defaults:', e.message);
+    return base;
   }
 }
 
@@ -82,15 +116,15 @@ function isRadarSite(apt) {
  * @param {{airports?:Array}|null} args.missionData
  * @param {Array} args.tracks — TrackStore.getAll()
  * @param {{radar:object, carrierRadar:object}} args.radarSpecs
- * @param {(track:object)=>string} [args.labelFor] — resolved display callsign
- *   for an airborne/ship radar. Injected rather than calling resolve.js's
- *   resolveCallsign directly, because that needs the collaborative overlay and
- *   this module has no business reaching for it. Defaults to the raw callsign.
  * @returns {Array<object>} radar records
+ *
+ * An airborne or ship radar is labelled with its unit's own DCS callsign. A
+ * radar is a sensor the controller is working through — their own AWACS,
+ * their own carrier — not a contact they are identifying.
  */
-function buildRadars({ missionData, tracks, radarSpecs, labelFor }) {
-  const specs = radarSpecs || { radar: {}, carrierRadar: {} };
-  const label = labelFor || ((t) => t.callsign);
+function buildRadars({ missionData, tracks, radarSpecs }) {
+  const specs = radarSpecs || EMPTY_SPECS();
+  const label = (t) => t.callsign;
   const radars = [];
   const airports = (missionData && missionData.airports) || [];
 
@@ -107,6 +141,7 @@ function buildRadars({ missionData, tracks, radarSpecs, labelFor }) {
       // The only radar that sees ground vehicles at all.
       seesGround: true, seesShips: false, noGroundAircraft: false,
       angleFromNose: 360, heading: 0,
+      caps: capsFor('airport'),
     });
 
     radars.push({
@@ -116,6 +151,7 @@ function buildRadars({ missionData, tracks, radarSpecs, labelFor }) {
       rangeM: APPROACH_RADAR.rangeNm * M_PER_NM, sweepMs: APPROACH_RADAR.sweepMs,
       seesGround: false, seesShips: false, noGroundAircraft: true,
       angleFromNose: 360, heading: 0,
+      caps: capsFor('approach'),
     });
   }
 
@@ -126,9 +162,11 @@ function buildRadars({ missionData, tracks, radarSpecs, labelFor }) {
     // A 360° dish is an AWACS; a forward-looking cone is a fighter. The split
     // is the scan arc, not the airframe, so an MPA with a 180° arc is a
     // "fighter" for coverage purposes and that is the right answer.
+    const kind = spec.angleFromNose === 360 ? 'awacs' : 'fighter';
     radars.push({
       id: `crc:${t.id}`,
-      type: spec.angleFromNose === 360 ? 'awacs' : 'fighter',
+      type: kind,
+      caps: capsFor(kind, spec),
       label: label(t), sublabel: t.type,
       lat: t.lat, lon: t.lon, elevM: t.alt,
       rangeM: spec.rangeNm * M_PER_NM, sweepMs: spec.sweepMs,
@@ -146,7 +184,7 @@ function buildRadars({ missionData, tracks, radarSpecs, labelFor }) {
     if (t.category !== 4) continue;
     const spec = specs.carrierRadar[t.type] || SHIP_RADAR_DEFAULT;
     radars.push({
-      id: `carrier:${t.id}`, type: 'carrier',
+      id: `carrier:${t.id}`, type: 'carrier', caps: capsFor('carrier', specs.carrierRadar[t.type]),
       label: label(t) || t.type, sublabel: t.type,
       lat: t.lat, lon: t.lon, elevM: t.alt + SHIP_RADAR_HEIGHT_M,
       rangeM: spec.rangeNm * M_PER_NM, sweepMs: spec.sweepMs,
@@ -158,7 +196,7 @@ function buildRadars({ missionData, tracks, radarSpecs, labelFor }) {
     if (isCarrier(t)) {
       radars.push({
         // `cvapp:`, not `app:` — see this module's header.
-        id: `cvapp:${t.id}`, type: 'carrier',
+        id: `cvapp:${t.id}`, type: 'carrier', caps: capsFor('carrierApproach'),
         label: `${label(t) || t.type} APP RDR`, sublabel: t.type,
         lat: t.lat, lon: t.lon, elevM: t.alt + CVN_APPROACH_RADAR.heightM,
         rangeM: CVN_APPROACH_RADAR.rangeNm * M_PER_NM, sweepMs: CVN_APPROACH_RADAR.sweepMs,
@@ -184,8 +222,8 @@ function isCarrier(track) {
 }
 
 module.exports = {
-  buildRadars, loadRadarSpecs, isRadarSite,
-  RADAR_TYPES, RADAR_SPECS_PATH,
+  buildRadars, loadSensorSpecs, isRadarSite, capsFor,
+  RADAR_TYPES, DEFAULT_CAPS, SENSOR_SPECS_PATH,
   AIRPORT_RADAR_HEIGHT_M, SHIP_RADAR_HEIGHT_M,
   AIRPORT_RADAR, APPROACH_RADAR, CVN_APPROACH_RADAR, SHIP_RADAR_DEFAULT,
   M_PER_NM,

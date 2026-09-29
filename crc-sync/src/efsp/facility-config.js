@@ -262,17 +262,16 @@ const DEFAULT_TACTICAL_CONFIG = {
   // §4.8.6 rule 5 ("warn, do not block"), not a silent gap.
   coveringChain: { AIC: 'TAC_C2', GCI: 'TAC_C2' },
   // [SOURCE-DEFINED] — a Military Radar Unit in DCS works off the airborne
-  // picture: own-coalition AWACS and fighter radars. This is the same set the
-  // renderer's DATALINK toggle used to switch on client-side for everybody at
-  // once; it is a property of the Position now, which is where it belongs.
+  // picture: own-coalition AWACS and fighter radars, and the datalink, which
+  // names its own aircraft without a radar return (docs/adr/0059).
   // `coalition: 'own'` resolves against CRCSYNC_COALITION.
   //
   // JTAC gets none: guide §4.1 makes it read-only and non-ATC, and nothing
   // about a JTAC implies a radar scope.
   positionRadars: {
-    TAC_C2: [{ kind: 'awacs', coalition: 'own' }, { kind: 'fighter', coalition: 'own' }],
-    AIC: [{ kind: 'awacs', coalition: 'own' }, { kind: 'fighter', coalition: 'own' }],
-    GCI: [{ kind: 'awacs', coalition: 'own' }, { kind: 'fighter', coalition: 'own' }],
+    TAC_C2: [{ kind: 'awacs', coalition: 'own' }, { kind: 'fighter', coalition: 'own' }, { kind: 'datalink' }],
+    AIC: [{ kind: 'awacs', coalition: 'own' }, { kind: 'fighter', coalition: 'own' }, { kind: 'datalink' }],
+    GCI: [{ kind: 'awacs', coalition: 'own' }, { kind: 'fighter', coalition: 'own' }, { kind: 'datalink' }],
     JTAC: [],
   },
   // Blocks this Facility hides, by Role (guide §8.2's "a facility MAY narrow
@@ -404,7 +403,8 @@ function validateConfig(candidate) {
   return { ok: true };
 }
 
-const RADAR_SELECTOR_KINDS = new Set(['airport', 'approach', 'awacs', 'fighter', 'carrier']);
+// `datalink` is not a radar: it grants the datalink feed (docs/adr/0059).
+const RADAR_SELECTOR_KINDS = new Set(['airport', 'approach', 'awacs', 'fighter', 'carrier', 'datalink']);
 
 /** Returns a human problem string, or null when the selector is well formed. */
 function validateRadarSelector(selector) {
@@ -420,8 +420,10 @@ function validateRadarSelector(selector) {
   }
   // An airport selector against an airborne kind cannot mean anything, and a
   // config that says it is confused about what it is asking for.
-  if (selector.airport && (selector.kind === 'awacs' || selector.kind === 'fighter')) {
-    return `${selector.kind} radars are airborne — an airport selector cannot match one`;
+  if (selector.airport && (selector.kind === 'awacs' || selector.kind === 'fighter' || selector.kind === 'datalink')) {
+    return selector.kind === 'datalink'
+      ? 'the datalink is a network — an airport selector cannot match it'
+      : `${selector.kind} radars are airborne — an airport selector cannot match one`;
   }
   return null;
 }

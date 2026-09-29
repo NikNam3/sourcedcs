@@ -90,7 +90,6 @@ app.on('ready', async () => {
     process.env.CASDOOR_ENDPOINT   = config.casdoorEndpoint || '';
     process.env.SRS_RADIO_API_PORT = String(config.srsApiPort);
     process.env.WS_PORT            = String(config.wsPort);
-    process.env.SOURCEDCS_WEB_URL  = config.sourcedcsWebUrl || '';
 
     require('./app/server.js');
 

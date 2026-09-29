@@ -13,7 +13,7 @@ import path from 'node:path';
  * it kept.
  */
 
-const specsPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'crcsync-radars-')), 'radar-specs.json');
+const specsPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'crcsync-radars-')), 'sensor-specs.json');
 fs.writeFileSync(specsPath, JSON.stringify({
   radar: {
     'E-3A': { angleFromNose: 360, rangeNm: 216, sweepMs: 10000 },
@@ -24,14 +24,14 @@ fs.writeFileSync(specsPath, JSON.stringify({
     LHA_Tarawa: { rangeNm: 100, sweepMs: 5000 },
   },
 }));
-process.env.CRCSYNC_RADAR_SPECS_PATH = specsPath;
+process.env.CRCSYNC_SENSOR_SPECS_PATH = specsPath;
 
 const {
-  buildRadars, loadRadarSpecs, isRadarSite, M_PER_NM,
+  buildRadars, loadSensorSpecs, isRadarSite, DEFAULT_CAPS, M_PER_NM,
   AIRPORT_RADAR, APPROACH_RADAR, SHIP_RADAR_DEFAULT, AIRPORT_RADAR_HEIGHT_M,
 } = await import('../src/radars.js');
 
-const SPECS = loadRadarSpecs(specsPath);
+const SPECS = loadSensorSpecs(specsPath);
 
 const MISSION = {
   airports: [
@@ -46,9 +46,41 @@ function byId(radars) {
   return new Map(radars.map(r => [r.id, r]));
 }
 
-test('loadRadarSpecs: a missing file degrades to empty specs rather than throwing', () => {
-  const specs = loadRadarSpecs('/nonexistent/radar-specs.json');
-  assert.deepEqual(specs, { radar: {}, carrierRadar: {} });
+test('loadSensorSpecs: a missing file degrades to empty specs rather than throwing', () => {
+  const specs = loadSensorSpecs('/nonexistent/sensor-specs.json');
+  assert.deepEqual(specs.radar, {});
+  assert.deepEqual(specs.carrierRadar, {});
+  assert.deepEqual(specs.datalink.participants, []);
+  assert.deepEqual(specs.transponder.syntheticFor, ['own', 'neutral']);
+});
+
+test('every radar says what it can measure: 2D + SSR on the ground, 3D in the air (docs/adr/0059)', () => {
+  const radars = byId(buildRadars({
+    missionData: MISSION,
+    tracks: [
+      { id: 1, callsign: 'DARKSTAR', type: 'E-3A', category: 1, lat: 37.5, lon: 35.5, alt: 9000, heading: 0 },
+      { id: 2, callsign: 'VIPER', type: 'F-16C_50', category: 1, lat: 37.5, lon: 35.5, alt: 6000, heading: 0 },
+      { id: 3, callsign: 'CVN', type: 'CVN_74', category: 4, lat: 36.5, lon: 35.0, alt: 0, heading: 0 },
+    ],
+    radarSpecs: SPECS,
+  }));
+  assert.deepEqual(radars.get('apt:Incirlik').caps, { height: false, ssr: true });
+  assert.deepEqual(radars.get('app:Incirlik').caps, { height: false, ssr: true });
+  assert.deepEqual(radars.get('crc:1').caps, { height: true, ssr: true });
+  assert.deepEqual(radars.get('crc:2').caps, { height: true, ssr: true });
+  assert.deepEqual(radars.get('carrier:3').caps, { height: true, ssr: true });
+  assert.deepEqual(radars.get('cvapp:3').caps, { height: false, ssr: true });
+  assert.ok(DEFAULT_CAPS.approach);
+});
+
+test('a spec can override its kind: a fighter radar with no IFF interrogator', () => {
+  const specs = { ...SPECS, radar: { ...SPECS.radar, 'F-5E-3': { angleFromNose: 60, rangeNm: 20, sweepMs: 3000, caps: { ssr: false } } } };
+  const radars = byId(buildRadars({
+    missionData: null,
+    tracks: [{ id: 9, callsign: 'OLD', type: 'F-5E-3', category: 1, lat: 37.5, lon: 35.5, alt: 6000, heading: 0 }],
+    radarSpecs: specs,
+  }));
+  assert.deepEqual(radars.get('crc:9').caps, { height: true, ssr: false });
 });
 
 test('isRadarSite: helipads, FARPs, FOBs and the bare "H" are not radar sites', () => {
@@ -157,10 +189,8 @@ test('no mission data yields no radars at all rather than throwing', () => {
   assert.deepEqual(buildRadars({ missionData: null, tracks: null, radarSpecs: null }), []);
 });
 
-test('labelFor is injected, so this module never reaches for the collaborative overlay itself', () => {
-  const tracks = [{ id: 11, callsign: 'RAW', type: 'E-3A', category: 1, lat: 37.5, lon: 35.5, alt: 9000 }];
-  const plain = byId(buildRadars({ missionData: MISSION, tracks, radarSpecs: SPECS }));
-  assert.equal(plain.get('crc:11').label, 'RAW');
-  const resolved = byId(buildRadars({ missionData: MISSION, tracks, radarSpecs: SPECS, labelFor: () => 'MAGIC 01' }));
-  assert.equal(resolved.get('crc:11').label, 'MAGIC 01');
+test('an airborne radar is labelled with its own unit callsign: it is the controller’s sensor, not a contact', () => {
+  const tracks = [{ id: 11, callsign: 'DARKSTAR', type: 'E-3A', category: 1, lat: 37.5, lon: 35.5, alt: 9000 }];
+  const radars = byId(buildRadars({ missionData: MISSION, tracks, radarSpecs: SPECS }));
+  assert.equal(radars.get('crc:11').label, 'DARKSTAR');
 });

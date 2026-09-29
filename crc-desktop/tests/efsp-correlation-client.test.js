@@ -27,6 +27,8 @@ global.getEfspFdr = state.getEfspFdr;
 global.getEfspCorrelationForStrip = state.getEfspCorrelationForStrip;
 global.correlatedTrackIdForStrip = state.correlatedTrackIdForStrip;
 global.stripIdsForTrackId = state.stripIdsForTrackId;
+// The badge names a contact through track-label.js, like every other surface.
+Object.assign(global, require(path.join(__dirname, '../app/public/js/track-label.js')));
 
 let mapUpdates = 0;
 global.updateMap = () => { mapUpdates += 1; };
@@ -196,14 +198,16 @@ test('a contact with several Strips prefers the one in a Bay that is open', () =
 
 // ── the badge ──────────────────────────────────────────────────────────────
 
-test('a correlated Strip shows the contact’s resolved callsign and how it matched', () => {
+test('a correlated Strip names the contact by its code, not by the callsign it already shows', () => {
+  // crc-sync's docs/adr/0059: once correlated, the contact's label IS this
+  // Strip's callsign, so the badge gives the contact's own reference.
   load({
     strips: [strip('s1', 'f1')], fdrs: [fdr('f1', 'VIPER1')],
     correlations: [correlation('f1')],
-    tracks: [{ id: '101', callsign: 'VIPER 11' }],
+    tracks: [{ id: '101', label: { callsign: 'VIPER1', source: 'FDR', trackNumber: 'TN00012' }, ssr: { code: '0041' } }],
   });
   const badge = correlationBadgeFor(state.getEfspStrip('s1'));
-  assert.equal(badge.text, 'TRK VIPER 11', 'the name the controller sees on the scope');
+  assert.equal(badge.text, 'TRK 0041', 'the code its transponder is sending');
   assert.match(badge.title, /beacon 0041/);
   assert.match(badge.className, /efsp-correlation-correlated/);
 });
@@ -265,10 +269,10 @@ test('the same record reads as a normal correlation once the contact enters cove
   });
   assert.equal(correlationBadgeFor(state.getEfspStrip('s1')).outsideCoverage, true);
 
-  liveTracks.set('101', { id: '101', callsign: 'VIPER1' });
+  liveTracks.set('101', { id: '101', label: { callsign: 'VIPER1', source: 'FDR', trackNumber: 'TN00012' }, ssr: null });
   const badge = correlationBadgeFor(state.getEfspStrip('s1'));
   assert.equal(badge.outsideCoverage, undefined);
-  assert.equal(badge.text, 'TRK VIPER1');
+  assert.equal(badge.text, 'TRK TN00012', 'no transponder: its track number');
 });
 
 test('a provisional match outside coverage also reads as outside, not as a mismatch', () => {
