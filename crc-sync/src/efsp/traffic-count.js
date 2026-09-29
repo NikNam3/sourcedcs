@@ -461,7 +461,11 @@ class TrafficCount {
     const facilityId = this._facilityOf(entry.stripId) || 'UNKNOWN';
     const identity = (fdr && fdr.identity) || {};
     const flightSize = Number.isInteger(identity.flightSize) && identity.flightSize > 0 ? identity.flightSize : 1;
-    const { locality, localityBasis } = classifyLocality(strip, fdr, this._homeAirports[facilityId]);
+    // An FDR that is gone (archived after the drop — wave 2's L24, S-R2-13)
+    // leaves nothing to classify by: UNKNOWN, and say why.
+    const { locality, localityBasis } = fdr
+      ? classifyLocality(strip, fdr, this._homeAirports[facilityId])
+      : { locality: 'UNKNOWN', localityBasis: 'ARCHIVED' };
     const scramble = this._scramble.has(entry.stripId) || !!(fdr && fdr.military && fdr.military.alertStatus === 'SCRAMBLE');
     return {
       type: 'COUNT',

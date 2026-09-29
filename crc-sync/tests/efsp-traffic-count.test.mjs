@@ -294,3 +294,23 @@ test('retention compaction at boot drops records older than retentionDays, atomi
   assert.deepEqual(onDisk, ['edge', 'new'], 'the void of an expired record goes with it');
   assert.equal(fs.existsSync(`${p}.tmp`), false);
 });
+
+test('a backfill whose FDR has since been archived is UNKNOWN, basis ARCHIVED (S-R2-13)', () => {
+  const archived = quiet(() => new TrafficCount({
+    mutationLog: efsp.mutationLog,
+    fdrStore: { getFdr: () => null }, // every FDR gone
+    boardStoreFor: efsp.boardStoreFor,
+    facilityIds: facilityConfig.getFacilityIds(),
+    config: { retentionDays: 400, homeAirports: HOME },
+    path: path.join(tmpDir, 'archived-backfill.jsonl'),
+  }));
+  archived.close();
+  const counted = archived.records().filter(r => r.counted);
+  assert.ok(counted.length > 0);
+  for (const r of counted) {
+    assert.equal(r.backfilled, true);
+    assert.equal(r.locality, 'UNKNOWN');
+    assert.equal(r.localityBasis, 'ARCHIVED');
+  }
+  assert.equal(archived.lastReconciliation().ok, true, 'the log-derivable fields still agree');
+});
