@@ -468,7 +468,7 @@ class WsHub {
     for (const [trackId, hit] of visible) {
       const rev = (this._labels.get(trackId) || {}).rev;
       const fresh = lastSent.get(trackId) !== hit.at;
-      // Who the contact is — its flight, its tag, its IFF — is shared state,
+      // Who the contact is — its flight, its tag, its IFF declaration — is shared state,
       // not a radar return: it shows at once rather than waiting for the next
       // sweep. Only for contacts already in the picture, so it can never leak
       // a track this controller cannot see.
