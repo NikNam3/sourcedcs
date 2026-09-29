@@ -105,3 +105,23 @@ test('server and client OVERFLIGHT_BLOCK_MAP agree on every Block ID, required f
 test('server and client MISSION_BLOCK_MAP agree on every Block ID, required flag, writability, fdr path, and provenance (WP4A second slice)', () => {
   assertBlockMapParity('MISSION', server.MISSION_BLOCK_MAP, client.MISSION_BLOCK_MAP);
 });
+
+// §9.4 MTR fields (crc-sync's docs/adr/0062) — held explicitly rather than
+// trusted to the per-Role sweeps above: six new Blocks on three Roles is
+// eighteen places for a path to be mistyped on one side only.
+test('the six MTR Blocks are on all three ATC Roles on both sides, with identical paths, and on neither MISSION map', () => {
+  const MTR = {
+    '9G-MTR': 'military.mtr.designator', '9G-ENTRY': 'military.mtr.entryFix', '9G-TIME': 'military.mtr.entryTimeUtc',
+    '9H-EXIT': 'military.mtr.exitFix', '9H-TIME': 'military.mtr.exitEstimateUtc', '9H-ALT': 'military.mtr.requestedAltitudeAfterExit',
+  };
+  for (const role of ['DEPARTURE', 'ARRIVAL', 'OVERFLIGHT']) {
+    for (const [id, path] of Object.entries(MTR)) {
+      assert.deepEqual(server.BLOCK_MAPS[role][id].target, { kind: 'fdr', path }, `server ${role}/${id}`);
+      assert.deepEqual(client.BLOCK_MAPS[role][id].target, { kind: 'fdr', path }, `client ${role}/${id}`);
+    }
+  }
+  for (const id of Object.keys(MTR)) {
+    assert.equal(server.MISSION_BLOCK_MAP[id], undefined, `server MISSION/${id}`);
+    assert.equal(client.MISSION_BLOCK_MAP[id], undefined, `client MISSION/${id}`);
+  }
+});

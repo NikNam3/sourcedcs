@@ -77,6 +77,15 @@ const DEPARTURE_BLOCK_MAP = {
   // The server refuses a name that is not in the table, and the rejection
   // now carries its detail to the controller.
   '9F': { required: false, label: 'STEREO',   target: { kind: 'fdr', path: 'filed.stereoRouteName' } },
+  // §9.4 MTR fields (crc-sync's docs/adr/0062): 9G-* is the guide's M10, 9H-*
+  // its M11. Plain fdr, no interlock (9H-ALT is the pilot's request, not a
+  // clearance). The two times display as HHMM (ZULU_HHMM_BLOCKS below).
+  '9G-MTR':   { required: false, label: 'MTR',      target: { kind: 'fdr', path: 'military.mtr.designator' } },
+  '9G-ENTRY': { required: false, label: 'ENTRY',    target: { kind: 'fdr', path: 'military.mtr.entryFix' } },
+  '9G-TIME':  { required: false, label: 'ENTRY TM', target: { kind: 'fdr', path: 'military.mtr.entryTimeUtc' } },
+  '9H-EXIT':  { required: false, label: 'EXIT',     target: { kind: 'fdr', path: 'military.mtr.exitFix' } },
+  '9H-TIME':  { required: false, label: 'EXIT EST', target: { kind: 'fdr', path: 'military.mtr.exitEstimateUtc' } },
+  '9H-ALT':   { required: false, label: 'EXIT ALT', target: { kind: 'fdr', path: 'military.mtr.requestedAltitudeAfterExit' } },
   '10': { required: true,  label: 'ATIS',     target: { kind: 'fdr', path: 'assigned.atisCode' } },
   '11': { required: true,  label: 'APREQ',    target: { kind: 'annotation' } },
   '14': { required: true,  label: 'RLS TIME', target: { kind: 'fdr', path: 'assigned.releaseTimeUtc' } },
@@ -167,6 +176,13 @@ const ARRIVAL_BLOCK_MAP = {
   '9A-PTOUT': { required: false, label: 'PT OUT',   target: { kind: 'annotation' } },
   '9A-VECTOR':{ required: false, label: 'HDG',      target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' }, // docs/adr/0058 — a radar vector IS the assigned heading
   '9A-SPEED': { required: false, label: 'SPEED',    target: { kind: 'annotation' } },
+  // §9.4 MTR fields — see DEPARTURE_BLOCK_MAP's '9G-*' comment
+  '9G-MTR':   { required: false, label: 'MTR',      target: { kind: 'fdr', path: 'military.mtr.designator' } },
+  '9G-ENTRY': { required: false, label: 'ENTRY',    target: { kind: 'fdr', path: 'military.mtr.entryFix' } },
+  '9G-TIME':  { required: false, label: 'ENTRY TM', target: { kind: 'fdr', path: 'military.mtr.entryTimeUtc' } },
+  '9H-EXIT':  { required: false, label: 'EXIT',     target: { kind: 'fdr', path: 'military.mtr.exitFix' } },
+  '9H-TIME':  { required: false, label: 'EXIT EST', target: { kind: 'fdr', path: 'military.mtr.exitEstimateUtc' } },
+  '9H-ALT':   { required: false, label: 'EXIT ALT', target: { kind: 'fdr', path: 'military.mtr.requestedAltitudeAfterExit' } },
   '9E':       { required: true,  label: 'RMKS',     target: { kind: 'fdr', path: 'filed.remarks' } },
   '20':       { required: false, label: 'SCRATCH1',  target: { kind: 'annotation' } },
   '21':       { required: false, label: 'SCRATCH2',  target: { kind: 'annotation' } },
@@ -218,6 +234,13 @@ const OVERFLIGHT_BLOCK_MAP = {
   '8':  { required: true,  label: 'ORIG',     target: { kind: 'fdr', path: 'filed.departureAirport' } },
   '8B': { required: true,  label: 'DEST',     target: { kind: 'fdr', path: 'filed.destinationAirport' } },
   '9':  { required: true,  label: 'RTE',      target: { kind: 'fdr', path: 'filed.route' }, provenance: 'COMPUTER_GENERATED' },
+  // §9.4 MTR fields — see DEPARTURE_BLOCK_MAP's '9G-*' comment
+  '9G-MTR':   { required: false, label: 'MTR',      target: { kind: 'fdr', path: 'military.mtr.designator' } },
+  '9G-ENTRY': { required: false, label: 'ENTRY',    target: { kind: 'fdr', path: 'military.mtr.entryFix' } },
+  '9G-TIME':  { required: false, label: 'ENTRY TM', target: { kind: 'fdr', path: 'military.mtr.entryTimeUtc' } },
+  '9H-EXIT':  { required: false, label: 'EXIT',     target: { kind: 'fdr', path: 'military.mtr.exitFix' } },
+  '9H-TIME':  { required: false, label: 'EXIT EST', target: { kind: 'fdr', path: 'military.mtr.exitEstimateUtc' } },
+  '9H-ALT':   { required: false, label: 'EXIT ALT', target: { kind: 'fdr', path: 'military.mtr.requestedAltitudeAfterExit' } },
   '9E': { required: true,  label: 'RMKS',     target: { kind: 'fdr', path: 'filed.remarks' } },
   '20': { required: false, label: 'SCRATCH1',  target: { kind: 'annotation' } },
   '21': { required: false, label: 'SCRATCH2',  target: { kind: 'annotation' } },
@@ -362,7 +385,8 @@ function resolveBlockValue(blockId, fdr, strip) {
   const t = def.target;
 
   if (t.kind === 'fdr') {
-    const value = fdr ? getPath(fdr, t.path) : null;
+    let value = fdr ? getPath(fdr, t.path) : null;
+    if (ZULU_HHMM_BLOCKS.has(blockId)) value = formatZuluHhmm(value) || null; // epoch ms → '1432'
     const provenance = (fdr && fdr.provenance && fdr.provenance[t.path]) || def.provenance || 'CONTROLLER_ENTERED';
     return { value: value ?? null, provenance };
   }
@@ -536,11 +560,51 @@ function isBlockEditable(blockId, role = 'DEPARTURE') {
   return !!def && (def.target.kind === 'fdr' || def.target.kind === 'annotation' || def.target.kind === 'frequency' || def.target.kind === 'clearance');
 }
 
+// ── Zulu time-of-day Blocks (crc-sync's docs/adr/0062) ──────────────────────
+//
+// Blocks whose FDR value is epoch ms (dated by crc-sync against the MISSION
+// clock, never the wall clock — H11) and which a controller reads and types
+// as a four-digit Zulu time. resolveBlockValue shows them as '1432', so the
+// click-to-edit cell opens on '1432' and sends back what the controller typed;
+// crc-sync's zulu-time.js resolves it to the instant again. Only the MTR times
+// for now — the other typed time Blocks (6, 14, 14B-D, 16-18, M6/M7) render the
+// raw number today, a known bug owned by the §10.5 time work.
+const ZULU_HHMM_BLOCKS = new Set(['9G-TIME', '9H-TIME']);
+
+/** Epoch ms as the four-digit Zulu time a Strip shows ('1432'), or '' for no time. Mirrors crc-sync's zulu-time.js. */
+function formatZuluHhmm(ms) {
+  if (ms == null || ms === '' || !Number.isFinite(Number(ms))) return '';
+  const d = new Date(Number(ms));
+  return String(d.getUTCHours()).padStart(2, '0') + String(d.getUTCMinutes()).padStart(2, '0');
+}
+
+// A hover title for a field's label, where the label alone does not say
+// enough. Only the MTR fields today (docs/adr/0062). EXIT ALT carries §9.4's
+// lost-comms rule (strip-fields.js's mtrLostCommsAdvisory) because it is the
+// field a controller is looking at when the question comes up.
+const BLOCK_TITLES = {
+  '9G-MTR': 'MTR designator (guide M10)',
+  '9G-ENTRY': 'MTR entry fix',
+  '9G-TIME': 'MTR entry time, UTC HHMM',
+  '9H-EXIT': 'MTR exit fix (guide §9.4)',
+  '9H-TIME': 'MTR exit estimate, UTC HHMM',
+  '9H-ALT': 'requested altitude after exit',
+};
+
+/** The label's hover title for this Block, or null. `fdr` adds the lost-comms rule to EXIT ALT. */
+function blockTitleFor(blockId, fdr) {
+  const base = BLOCK_TITLES[blockId] || null;
+  if (blockId !== '9H-ALT' || typeof mtrLostCommsAdvisory !== 'function') return base;
+  const advisory = mtrLostCommsAdvisory(fdr);
+  return advisory ? `${base}.\n${advisory}` : base;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP, BLOCK_MAPS, resolveBlockValue, requiredBlocksFor, formatBlock3,
     activeAnnotationValue, hasActiveAnnotationEntry, annotationHistory, supersededAnnotationEntries,
     isBlockEditable, CONFIRM_VACATED_ELIGIBLE_BLOCKS,
     enumSelectOptionsFor, ENUM_CLEARABLE_BLOCKS, isEnumBlockClearable, isBooleanToggleBlock, blockLabelFor,
+    ZULU_HHMM_BLOCKS, formatZuluHhmm, BLOCK_TITLES, blockTitleFor,
   };
 }

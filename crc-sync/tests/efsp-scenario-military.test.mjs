@@ -225,7 +225,7 @@ test('the deferred half of the military namespace has no write path at all (§12
   // No Block routes to any of these, so SetBlock cannot reach them — which is
   // what "present and unpopulated" has to mean in practice, not just at seed
   // time. The 9G/9H ids are RESERVED for §9.4 and must not resolve yet.
-  for (const blockId of ['9G', '9G-MTR', '9H', '9H-ALT', 'M16']) {
+  for (const blockId of ['9G', '9H', 'M16']) {
     const result = act(efsp, c.APP, 'APP', strip, { kind: 'SetBlock', blockId, value: 'X' });
     assert.equal(result.ok, false, blockId);
   }

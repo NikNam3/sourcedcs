@@ -108,6 +108,22 @@ const DEPARTURE_BLOCK_MAP = {
   // identity.trackDegradationFlag set, not a weaker guard than the read-only
   // kind was.
   '9F': { required: false, target: { kind: 'fdr', path: 'filed.stereoRouteName' } },
+  // §9.4 Military Training Routes (docs/adr/0062). 9G-* is the guide's M10
+  // (designator / entry fix / entry time), 9H-* its M11 (exit fix / exit
+  // estimate / requested altitude after exit — "the two items a controller
+  // asks for by voice"). Split per field like '9A-*', so a Facility can hide
+  // one (hiddenBlocks) without the others. Plain 'fdr', not the 'military'
+  // kind: these are free text, times and an altitude, not an enum or a
+  // boolean; fdr-store.js's normalizeMtrValue() says what each accepts. No
+  // interlock tag on any of them: 9H-ALT is the pilot's REQUEST, and posting a
+  // request issues nothing — the approval is written in ALT ('21'), which is
+  // tagged. On all three ATC Roles; none on MISSION (it shares the FDR).
+  '9G-MTR':   { required: false, target: { kind: 'fdr', path: 'military.mtr.designator' } },
+  '9G-ENTRY': { required: false, target: { kind: 'fdr', path: 'military.mtr.entryFix' } },
+  '9G-TIME':  { required: false, target: { kind: 'fdr', path: 'military.mtr.entryTimeUtc' } },
+  '9H-EXIT':  { required: false, target: { kind: 'fdr', path: 'military.mtr.exitFix' } },
+  '9H-TIME':  { required: false, target: { kind: 'fdr', path: 'military.mtr.exitEstimateUtc' } },
+  '9H-ALT':   { required: false, target: { kind: 'fdr', path: 'military.mtr.requestedAltitudeAfterExit' } },
   '10': { required: true,  target: { kind: 'fdr', path: 'assigned.atisCode' } },
   '11': { required: true,  target: { kind: 'annotation' } },
   '14': { required: true,  target: { kind: 'fdr', path: 'assigned.releaseTimeUtc' } },
@@ -254,6 +270,13 @@ const ARRIVAL_BLOCK_MAP = {
   // and it is the only Block on an ARRIVAL Strip that is one.
   '9A-VECTOR':{ required: false, target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' }, // docs/adr/0058
   '9A-SPEED': { required: false, target: { kind: 'annotation' } },
+  // §9.4 MTR fields (docs/adr/0062) — see DEPARTURE_BLOCK_MAP's '9G-*' comment
+  '9G-MTR':   { required: false, target: { kind: 'fdr', path: 'military.mtr.designator' } },
+  '9G-ENTRY': { required: false, target: { kind: 'fdr', path: 'military.mtr.entryFix' } },
+  '9G-TIME':  { required: false, target: { kind: 'fdr', path: 'military.mtr.entryTimeUtc' } },
+  '9H-EXIT':  { required: false, target: { kind: 'fdr', path: 'military.mtr.exitFix' } },
+  '9H-TIME':  { required: false, target: { kind: 'fdr', path: 'military.mtr.exitEstimateUtc' } },
+  '9H-ALT':   { required: false, target: { kind: 'fdr', path: 'military.mtr.requestedAltitudeAfterExit' } },
   '9E':       { required: true,  target: { kind: 'fdr', path: 'filed.remarks' } },
   '20':       { required: false, target: { kind: 'annotation' } }, // radar scratchpad — Strip-local until WP5, see module comment
   '21':       { required: false, target: { kind: 'annotation' } }, // radar scratchpad — Strip-local until WP5, see module comment
@@ -327,6 +350,13 @@ const OVERFLIGHT_BLOCK_MAP = {
   '8':  { required: true,  target: { kind: 'fdr', path: 'filed.departureAirport' } },  // the flight's real origin, not Incirlik
   '8B': { required: true,  target: { kind: 'fdr', path: 'filed.destinationAirport' } }, // the flight's real destination, not Incirlik
   '9':  { required: true,  target: { kind: 'fdr', path: 'filed.route' }, provenance: 'COMPUTER_GENERATED' },
+  // §9.4 MTR fields (docs/adr/0062) — see DEPARTURE_BLOCK_MAP's '9G-*' comment
+  '9G-MTR':   { required: false, target: { kind: 'fdr', path: 'military.mtr.designator' } },
+  '9G-ENTRY': { required: false, target: { kind: 'fdr', path: 'military.mtr.entryFix' } },
+  '9G-TIME':  { required: false, target: { kind: 'fdr', path: 'military.mtr.entryTimeUtc' } },
+  '9H-EXIT':  { required: false, target: { kind: 'fdr', path: 'military.mtr.exitFix' } },
+  '9H-TIME':  { required: false, target: { kind: 'fdr', path: 'military.mtr.exitEstimateUtc' } },
+  '9H-ALT':   { required: false, target: { kind: 'fdr', path: 'military.mtr.requestedAltitudeAfterExit' } },
   '9E': { required: true,  target: { kind: 'fdr', path: 'filed.remarks' } },
   '20': { required: false, target: { kind: 'annotation' } }, // radar scratchpad — Strip-local until WP5, see ARRIVAL_BLOCK_MAP's comment
   '21': { required: false, target: { kind: 'annotation' } }, // radar scratchpad — Strip-local until WP5, see ARRIVAL_BLOCK_MAP's comment
@@ -401,14 +431,19 @@ const BLOCK_MAPS = { DEPARTURE: DEPARTURE_BLOCK_MAP, ARRIVAL: ARRIVAL_BLOCK_MAP,
  * M-number in the comment so the next reader can find the section.
  *
  * `blockId: null` means RESERVED, not undecided — the id is spoken for and
- * lands with that field's own deliverable. Nothing reads this table at
+ * lands with that field's own deliverable. A row whose guide number covers
+ * several fields names them with `blocks` instead — `{ blockId: path }`, one
+ * plain 'fdr' Block per leaf, on every ATC Role (M10/M11, docs/adr/0062). A
+ * row has one or the other, never both, and never a wildcard. Nothing reads this table at
  * runtime; it is documentation that a test can assert against, which is what
  * stops it drifting the way a comment would.
  */
 const MILITARY_BLOCK_NAMESPACE = {
   M9:  { field: 'military.altrvRef',    blockId: null,   guide: '§9.3 ALTRV reference — WP7/ATO, §12 present-and-unpopulated' },
-  M10: { field: 'military.mtr',         blockId: '9G-*', guide: '§9.4 MTR designator / entry fix / entry time — reserved, lands with §9.4' },
-  M11: { field: 'military.mtr',         blockId: '9H-*', guide: '§9.4 MTR exit fix / exit estimate / altitude after exit — reserved, lands with §9.4' },
+  M10: { field: 'military.mtr', blocks: { '9G-MTR': 'military.mtr.designator', '9G-ENTRY': 'military.mtr.entryFix', '9G-TIME': 'military.mtr.entryTimeUtc' },
+         guide: '§9.4 MTR designator / entry fix / entry time — BUILT (docs/adr/0062)' },
+  M11: { field: 'military.mtr', blocks: { '9H-EXIT': 'military.mtr.exitFix', '9H-TIME': 'military.mtr.exitEstimateUtc', '9H-ALT': 'military.mtr.requestedAltitudeAfterExit' },
+         guide: '§9.4 MTR exit fix / exit estimate / altitude after exit — BUILT (docs/adr/0062); the two the guide says are asked for by voice' },
   M12: { field: 'military.arInfo',      blockId: null,   guide: '§9.2 AR track/anchor data — the MARSA RELATION is its own store (docs/adr/0051)' },
   M13: { field: 'military.scl',         blockId: null,   guide: '§9.5 standard conventional load — ATO-owned, §12' },
   M14: { field: 'military.ordnanceState', blockId: '3G', guide: '§9.5 ordnance state — BUILT' },
@@ -419,17 +454,12 @@ const MILITARY_BLOCK_NAMESPACE = {
   M19: { field: 'military.releaseAuthority', blockId: null, guide: '§9.5 weapons release authority — §12' },
 };
 
-// Why the 9G-*/9H- MTR Blocks are RESERVED rather than added here now: the
-// guide is explicit that M11's exit fix and exit estimate are "what a
-// controller asks for by voice and must post", so they want prominent
-// placement rather than a collapsed sub-field — and that placement is §9.4's
-// own design decision, made with §9.4 in hand. Adding six Blocks now would
-// mean either six more chips on every Strip or six entries on
-// efsp-ui-reachability.test.js's DELIBERATELY_NOT_IN_COMPACT_VIEW whose only
-// honest reason is "not designed yet", which is the promissory note that list
-// exists to refuse. The FIELDS are present and unpopulated per §12
-// (fdr-store.js's defaultMilitary), so the shape is settled in one pass even
-// though the surface is not.
+// The 9G-*/9H-* MTR Blocks (M10/M11) were reserved here until §9.4 landed;
+// docs/adr/0062 built them. They are plain 'fdr' Blocks, one per leaf of
+// fdr.military.mtr, written through setField() rather than setMilitary(), so
+// MILITARY_WRITABLE_FIELDS does not grow. Where they sit on the Strip — a
+// field-grid row drawn only when the flight has MTR data, M11 first — is the
+// client's strip-fields.js, and the reasons are in that ADR.
 //
 // Nothing on MISSION_BLOCK_MAP, and that is a decision too. An ordnance state
 // and a hook requirement are facts about the airframe, and a MISSION Strip
