@@ -172,6 +172,7 @@
     <div class="dialog-role-toggle" id="exportFormatToggle">
       <button class="dialog-role-btn active" data-format="yaml" onclick="selectExportFormat('yaml')">YAML</button>
       <button class="dialog-role-btn"        data-format="pdf"  onclick="selectExportFormat('pdf')">PDF</button>
+      <button class="dialog-role-btn"        data-format="usmtf" onclick="selectExportFormat('usmtf')">USMTF</button>
     </div>
 
     <div id="exportPdfOptions" style="display:none;margin-top:16px">
@@ -201,6 +202,22 @@
     <div class="dialog-actions">
       <button class="dialog-btn dialog-btn-cancel" onclick="closeExportDialog()">CANCEL</button>
       <button class="dialog-btn dialog-btn-join"   onclick="submitExportDialog()">EXPORT</button>
+    </div>
+  </div>
+</div>
+
+<!-- USMTF ATO preview (js/export-usmtf.js, ADR 0078) -->
+<div class="dialog-overlay" id="usmtfDialog" style="display:none">
+  <div class="dialog-box" style="max-width:820px;width:100%">
+    <div class="dialog-title">USMTF ATO</div>
+    <textarea class="dialog-input" id="usmtfText" readonly spellcheck="false" wrap="off"
+      style="height:46vh;box-sizing:border-box;font-size:11px;line-height:1.35;white-space:pre;resize:vertical"></textarea>
+    <label class="dialog-label" style="margin-top:12px">WARNINGS (<span id="usmtfWarnCount">0</span>)</label>
+    <ul id="usmtfWarnings" style="max-height:18vh;overflow:auto;margin:4px 0 0;padding-left:16px;font-size:10px;letter-spacing:.5px;line-height:1.5"></ul>
+    <div class="dialog-actions">
+      <button class="dialog-btn dialog-btn-cancel" onclick="closeUsmtfExport()">CLOSE</button>
+      <button class="dialog-btn dialog-btn-join"   onclick="copyUsmtfExport()">COPY</button>
+      <button class="dialog-btn dialog-btn-join"   onclick="downloadUsmtfExport()">DOWNLOAD</button>
     </div>
   </div>
 </div>
@@ -308,6 +325,8 @@
 <script src="js/editor/editor-comms.js"></script>
 <script src="js/editor/editor-weather.js"></script>
 <script src="js/editor/editor-steerpoints.js"></script>
+<script src="js/usmtf-ato.js"></script>
+<script src="js/export-usmtf.js"></script>
 <script src="js/export-pdf.js"></script>
 </body>
 </html>
