@@ -247,19 +247,24 @@ function runwayAdvisoryFor(strip, view) {
 }
 
 /**
- * The rack a Strip should be filed into when a transition lands it in a Bay
- * whose racks are runway ends (decisions.md Q26): the end its FDR names, else
- * the active end, else null (the caller falls back to the Bay's first rack).
+ * The rack a Strip is filed into when something other than a drag places it
+ * in `bay` — an NLA transfer, an implied-state relocation, an accepted
+ * coordination (decisions.md Q26, S-R2-1). In a Bay whose racks are runway
+ * ends: the end its FDR names, else the active end. Otherwise — no field
+ * state, no runway racks, nothing resolved — the Bay's first rack, which is
+ * what every placement site did before.
  */
-function runwayRackFor(bay, strip, fdr, view) {
-  if (!bay || !view) return null;
+function runwayRackFor(strip, fdr, view, bay) {
+  if (!bay) return null;
+  const first = (bay.rackIds || [])[0] || null;
+  if (!view || !strip) return first;
   const rackIdsByEnd = {};
   for (const [rackId, end] of Object.entries(view.rackEnds || {})) rackIdsByEnd[end] = rackId;
   const inBay = (rackId) => rackId && (bay.rackIds || []).includes(rackId);
   const filed = _resolveText(view, _fdrRunwayText(strip, fdr));
   if (filed && filed.end && inBay(rackIdsByEnd[filed.end])) return rackIdsByEnd[filed.end];
   if (view.activeRunway && inBay(rackIdsByEnd[view.activeRunway])) return rackIdsByEnd[view.activeRunway];
-  return null;
+  return first;
 }
 
 // ── the active runway from the mission wind (decisions.md H22) ─────────────
@@ -361,13 +366,6 @@ function validateFieldStateInventory(fieldState, positions = []) {
   if (acks !== undefined) {
     if (!Array.isArray(acks)) return 'fieldState.runwayChangeAcknowledgers must be an array of Positions';
     for (const p of acks) if (!positions.includes(p)) return `runwayChangeAcknowledgers names unknown Position ${p}`;
-  }
-  if (fieldState.acknowledgerReversion !== undefined) {
-    if (!_isObject(fieldState.acknowledgerReversion)) return 'fieldState.acknowledgerReversion must map an acknowledger to {facilityId, positionId}';
-    for (const [p, to] of Object.entries(fieldState.acknowledgerReversion)) {
-      if (!(acks || []).includes(p)) return `acknowledgerReversion names ${p}, which is not an acknowledger`;
-      if (!_isObject(to) || typeof to.facilityId !== 'string' || typeof to.positionId !== 'string') return `acknowledgerReversion.${p} must be {facilityId, positionId}`;
-    }
   }
   if (fieldState.inspectionAuthorityPositionId !== undefined && !positions.includes(fieldState.inspectionAuthorityPositionId)) {
     return `inspectionAuthorityPositionId names unknown Position ${fieldState.inspectionAuthorityPositionId}`;

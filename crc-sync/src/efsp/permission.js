@@ -298,8 +298,9 @@ function canDeclareMarsa(actingPositionId) {
  *   - OPS completes the barrier change and performs the inspection (guide §9.7
  *     rule 2: "by default OPS (AMOPS)").
  *   - TWR proposes, begins and completes a runway change; OPS and APP
- *     acknowledge it (rule 3; OPS stands in for the SOF). CTR appears only as
- *     APP's reversion when APP is unmanned (§4.1, decisions.md H20).
+ *     acknowledge it (rule 3; OPS stands in for the SOF). An acknowledger
+ *     nobody holds is skipped and audited by the store (decisions.md H20),
+ *     never answered from another Facility (S-R2-15).
  *
  * Two rows are CEILINGS the store narrows further from config, never widens:
  * CompleteInspection (to `fieldState.inspectionAuthorityPositionId`) and
@@ -322,8 +323,8 @@ const FIELD_STATE_OP_OWNERS = {
   WithdrawRunwayChange:       ['TWR'],
   BeginRunwayChange:          ['TWR'],
   CompleteRunwayChange:       ['TWR'],
-  AckRunwayChange:            ['OPS', 'APP', 'CTR'],
-  RejectRunwayChange:         ['OPS', 'APP', 'CTR'],
+  AckRunwayChange:            ['OPS', 'APP'],
+  RejectRunwayChange:         ['OPS', 'APP'],
 };
 
 /**

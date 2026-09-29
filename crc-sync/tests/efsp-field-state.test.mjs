@@ -115,7 +115,6 @@ test('validateConfig rejects a malformed runway inventory', () => {
   }), /state must be one of/);
   assert.match(bad(fs => { fs.runwayChangeAcknowledgers = ['OPS', 'SOF']; }), /unknown Position SOF/);
   assert.match(bad(fs => { fs.inspectionAuthorityPositionId = 'AMOPS'; }), /unknown Position AMOPS/);
-  assert.match(bad(fs => { fs.acknowledgerReversion = { TWR: { facilityId: 'CENTER', positionId: 'CTR' } }; }), /not an acknowledger/);
   assert.match(bad(fs => { fs.pads = { hotCargo: 7 }; }), /pads\.hotCargo/);
 });
 
@@ -207,14 +206,15 @@ test('runwayAdvisoryFor flags a Strip queued for the inactive end, and nothing e
   assert.equal(runwayAdvisoryFor(departure(), view), null);
 });
 
-test('runwayRackFor files a Strip under its filed end, else the active end, else leaves it to the caller (decisions.md Q26)', () => {
+test("runwayRackFor files a Strip under its filed end, else the active end, else the Bay's first rack (decisions.md Q26)", () => {
   const queue = INCIRLIK.bays.TWR.find(b => b.bayId === 'twr-runway-queue');
   const view = viewWith('OPEN', { activeRunway: '23' });
-  assert.equal(runwayRackFor(queue, departure(), fdrFiled('05'), view), 'rwy-05');
-  assert.equal(runwayRackFor(queue, departure(), fdrFiled(null), view), 'rwy-23');
-  assert.equal(runwayRackFor(queue, departure(), fdrFiled(null), viewWith('OPEN', { activeRunway: null })), null);
+  assert.equal(runwayRackFor(departure(), fdrFiled('05'), view, queue), 'rwy-05');
+  assert.equal(runwayRackFor(departure(), fdrFiled(null), view, queue), 'rwy-23');
+  assert.equal(runwayRackFor(departure(), fdrFiled(null), viewWith('OPEN', { activeRunway: null }), queue), 'rwy-05');
+  assert.equal(runwayRackFor(departure(), fdrFiled('23'), null, queue), 'rwy-05'); // no field state: as before
   const other = { bayId: 'twr-final', rackIds: ['main'] };
-  assert.equal(runwayRackFor(other, departure(), fdrFiled('05'), view), null);
+  assert.equal(runwayRackFor(departure(), fdrFiled('05'), view, other), 'main');
 });
 
 test('the active end is the one most into the TRUE wind (decisions.md H22)', () => {
@@ -543,4 +543,108 @@ test('apply never throws on garbage input', () => {
     assert.equal(r.ok, false, JSON.stringify(bad));
   }
   assert.equal(rwy(store.getFieldState('INCIRLIK')).status, 'OPEN');
+});
+
+// ── step 3 — the wire, permission and persistence ───────────────────────────
+
+const { createEfsp } = await import('../src/efsp/index.js');
+const { crew, hold } = await import('./helpers/efsp-scenario.mjs');
+
+const efsp = createEfsp();
+const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' });
+
+function fieldAct(e, member, positionId, op, { facilityId = 'INCIRLIK', baseRev } = {}) {
+  const current = e.fieldStateStore.getFieldState(facilityId);
+  return e.handleMessage(member.session, {
+    version: 1, type: 'efsp-field-state-mutation', clientMutationId: `fs-${Math.random()}`,
+    facilityId, baseRev: baseRev === undefined ? (current ? current.rev : undefined) : baseRev,
+    actingPositionId: positionId, op,
+  });
+}
+const mutationLog = () => fs.readFileSync(process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH, 'utf8').trim().split('\n').map(l => JSON.parse(l));
+
+test('efsp-field-state-mutation routes, applies, acks and broadcasts efsp-field-state-delta with its own fieldStateSeq', () => {
+  const boardSeq = efsp.boardStore.currentSeq;
+  const seq = efsp.fieldStateStore.currentSeq;
+  const out = fieldAct(efsp, c.TWR, 'TWR', { kind: 'CloseRunway', runwayId: '05/23', reason: 'FOD' });
+  assert.equal(out.ack.type, 'efsp-field-state-ack');
+  assert.equal(out.ack.ok, true);
+  assert.equal(out.ack.facilityId, 'INCIRLIK');
+  assert.equal(out.ack.runwayId, '05/23');
+  assert.equal(out.ack.fieldStateSeq, seq + 1);
+  assert.equal(rwy(out.ack.fieldState).status, 'CLOSED');
+  assert.equal(out.broadcast.type, 'efsp-field-state-delta');
+  assert.equal(out.broadcast.fieldStateSeq, seq + 1);
+  assert.equal(rwy(out.broadcast.fieldStates.updated[0]).status, 'CLOSED');
+  // Rule 5's deviation: the Board sequence does not move.
+  assert.equal(efsp.boardStore.currentSeq, boardSeq);
+  const back = fieldAct(efsp, c.TWR, 'TWR', { kind: 'OpenRunway', runwayId: '05/23' });
+  assert.equal(back.ack.ok, true);
+});
+
+test('a field-state op from a session not Primary at that Position AT THAT FACILITY is refused NOT_HOLDING_POSITION', () => {
+  // OPS's controller naming TWR.
+  let out = fieldAct(efsp, c.OPS, 'TWR', { kind: 'CloseRunway', runwayId: '05/23' });
+  assert.equal(out.ack.reason, 'NOT_HOLDING_POSITION');
+  // Primary at CTR at CENTER, naming OPS: not Primary at OPS at INCIRLIK.
+  out = fieldAct(efsp, c.CTR, 'OPS', { kind: 'CompleteInspection', runwayId: '05/23' });
+  assert.equal(out.ack.reason, 'NOT_HOLDING_POSITION');
+  // Primary at CTR, acting CTR, against INCIRLIK's field.
+  out = fieldAct(efsp, c.CTR, 'CTR', { kind: 'CloseRunway', runwayId: '05/23' });
+  assert.equal(out.ack.reason, 'NOT_HOLDING_POSITION');
+  assert.equal(out.broadcast, undefined);
+  assert.equal(rwy(out.ack.fieldState).status, 'OPEN');
+});
+
+test('a refused field-state op returns only an ack, with the current record, and does not persist', () => {
+  const before = fs.existsSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH) ? fs.readFileSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, 'utf8') : null;
+  const out = fieldAct(efsp, c.OPS, 'OPS', { kind: 'CloseRunway', runwayId: '05/23' });
+  assert.equal(out.ack.ok, false);
+  assert.equal(out.ack.reason, 'PERMISSION_DENIED');
+  assert.equal(out.broadcast, undefined);
+  assert.equal(rwy(out.ack.fieldState).status, 'OPEN');
+  const after = fs.existsSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH) ? fs.readFileSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, 'utf8') : null;
+  assert.equal(after, before);
+});
+
+test('the snapshot carries fieldStates; efsp-resync has no field-state branch', () => {
+  const snap = efsp.snapshotFor();
+  assert.equal(snap.fieldStates.length, 1);
+  assert.equal(snap.fieldStates[0].facilityId, 'INCIRLIK');
+  assert.equal(rwy(snap.fieldStates[0]).status, 'OPEN');
+  // A delta-served resync carries Strips only; field state comes with a snapshot.
+  const resync = efsp.handleMessage(c.TWR.session, { type: 'efsp-resync', facilityId: 'INCIRLIK', lastBoardSeq: efsp.boardStore.currentSeq });
+  assert.equal(resync.ack.type, 'efsp-board-delta');
+  assert.equal(JSON.stringify(resync).includes('fieldState'), false);
+});
+
+test('a field-state op writes the Mutation log with fieldStateFacilityId and runwayId', () => {
+  fieldAct(efsp, c.OPS, 'OPS', { kind: 'RequestRunwayStatus', runwayId: '05/23', action: 'CLOSE', note: 'bird strike debris' });
+  const entry = mutationLog().at(-1);
+  assert.equal(entry.op, 'RequestRunwayStatus');
+  assert.equal(entry.fieldStateFacilityId, 'INCIRLIK');
+  assert.equal(entry.runwayId, '05/23');
+  assert.equal(entry.actingPositionId, 'OPS');
+  assert.equal(entry.actorId, 'c-OPS');
+  assert.equal(entry.ok, true);
+  assert.equal(fieldAct(efsp, c.TWR, 'TWR', { kind: 'RejectRunwayRequest', runwayId: '05/23' }).ack.ok, true);
+});
+
+test('a suspension persists and a fresh createEfsp() restores it SUSPENDED_BARRIER_CHANGE', () => {
+  assert.equal(fieldAct(efsp, c.TWR, 'TWR', { kind: 'BeginBarrierChange', runwayId: '05/23' }).ack.ok, true);
+  const reborn = createEfsp();
+  const fsI = reborn.fieldStateStore.getFieldState('INCIRLIK');
+  assert.equal(rwy(fsI).status, 'SUSPENDED_BARRIER_CHANGE');
+  assert.equal(rwy(fsI).suspension.positionId, 'TWR');
+  // Drive the shared field back to OPEN for whoever runs next.
+  assert.equal(fieldAct(efsp, c.OPS, 'OPS', { kind: 'CompleteBarrierChange', runwayId: '05/23' }).ack.ok, true);
+  assert.equal(fieldAct(efsp, c.OPS, 'OPS', { kind: 'CompleteInspection', runwayId: '05/23' }).ack.ok, true);
+});
+
+test('a handler with no field-state store answers, never throws (a hand-built ctx)', async () => {
+  const { handleMessage } = await import('../src/efsp/efsp-ws.js');
+  const out = handleMessage({ facilityConfig: { DEFAULT_FACILITY_ID: 'INCIRLIK' } }, { controllerId: 'x' },
+    { type: 'efsp-field-state-mutation', actingPositionId: 'TWR', op: { kind: 'CloseRunway', runwayId: '05/23' } }, () => {});
+  assert.equal(out.ack.ok, false);
+  assert.equal(out.ack.detail, 'no field-state store');
 });

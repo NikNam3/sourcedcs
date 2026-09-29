@@ -215,10 +215,10 @@ const DEFAULT_CONFIG = {
       },
     ],
     // Guide §9.7 rule 3; OPS stands in for the SOF. Coordination, not
-    // permission (decisions.md H20): an unmanned acknowledger reverts to the
-    // Position below, else it is skipped and audited — never a deadlock.
+    // permission (decisions.md H20): an acknowledger nobody holds when the
+    // change is proposed is skipped and audited — never a deadlock. No
+    // cross-Facility reversion (decisions.md S-R2-15).
     runwayChangeAcknowledgers: ['OPS', 'APP'],
-    acknowledgerReversion: { APP: { facilityId: 'CENTER', positionId: 'CTR' } }, // §4.1: APP reverts to CTR
     // Narrows permission.js's CompleteInspection row; it can never widen it.
     inspectionAuthorityPositionId: 'OPS',
     // Named placeholders only, no geometry or preferred direction (decisions.md

@@ -31,7 +31,7 @@ const crypto = require('crypto');
 const { WALL_CLOCK } = require('../mission-clock');
 const permission = require('./permission');
 const {
-  canGo, buildStatusView, runwayRackFor, activeEndIntoWind, isRunwayChangeInProgress, isRunwayChangeOpen,
+  canGo, buildStatusView, activeEndIntoWind, isRunwayChangeInProgress, isRunwayChangeOpen,
   REQUEST_ACTIONS,
 } = require('./field-state');
 
@@ -175,12 +175,6 @@ class FieldStateStore {
       this._views.set(facilityId, view);
     }
     return view;
-  }
-
-  /** Which runway rack a Strip should land in when it enters `bay` (decisions.md Q26) — null leaves the caller's default. */
-  rackForStrip(facilityId, bay, strip, fdr) {
-    const view = this.statusView(facilityId);
-    return view ? runwayRackFor(bay, strip, fdr, view) : null;
   }
 
   // ── the audit trail ────────────────────────────────────────────────────

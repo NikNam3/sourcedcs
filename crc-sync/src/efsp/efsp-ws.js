@@ -118,6 +118,7 @@ function _subject(msg) {
     case 'efsp-airspace-mutation':    return { airspaceId: msg.airspaceId };
     case 'efsp-correlation-mutation': return { fdrId: msg.fdrId };
     case 'efsp-marsa-mutation':       return { marsaId: msg.marsaId, fdrIds: _marsaFdrIds(msg.op) };
+    case 'efsp-field-state-mutation': return { facilityId: msg.facilityId, runwayId: msg.op && msg.op.runwayId };
     default:                          return {};
   }
 }
@@ -130,6 +131,7 @@ function handleMessage(ctx, session, msg, persist) {
     case 'efsp-airspace-mutation': return _handleAirspaceMutation(ctx, session, msg, persist);
     case 'efsp-correlation-mutation': return _handleCorrelationMutation(ctx, session, msg, persist);
     case 'efsp-marsa-mutation': return _handleMarsaMutation(ctx, session, msg, persist);
+    case 'efsp-field-state-mutation': return _handleFieldStateMutation(ctx, session, msg, persist);
     default:                   return null; // not an EFSP message
   }
 }
@@ -641,6 +643,70 @@ function _snapshotMessage(ctx) {
     // one person who just missed it. No efsp-resync branch either, matching
     // correlation and airspace, so §5.6's "two paths only" holds.
     marsa: ctx.marsaStore ? ctx.marsaStore.getAll() : [],
+    // Field state (§9.7, docs/adr/0061), one record per Facility with runways,
+    // sent whole. No efsp-resync branch, matching airspace, correlation and
+    // MARSA: a reconnecting controller gets the current runway status here —
+    // which is the point of rule 5's own sequence (a reconnect after a
+    // suspension must not show an OPEN runway).
+    fieldStates: ctx.fieldStateStore ? ctx.fieldStateStore.getAll() : [],
+  };
+}
+
+/**
+ * Field state (guide §9.7, docs/adr/0061) — its own dispatch path, since a
+ * runway is not a Strip and rides no Board's sequence.
+ *
+ * The session binding (docs/adr/0029) is PER FACILITY, copied from
+ * _handleMutation — this is the fifth dispatch path to carry it, and the one
+ * where "Primary somewhere" (airspace, correlation, MARSA) would be wrong: a
+ * field has exactly one Facility, and OPS at INCIRLIK must not suspend a runway
+ * anywhere else.
+ *
+ * A refusal made here, before the store (no store, NOT_HOLDING_POSITION), is
+ * not written to the Mutation log — the store audits from its door onward
+ * (decisions.md S-R2-5).
+ */
+function _handleFieldStateMutation(ctx, session, msg, persist) {
+  const store = ctx.fieldStateStore;
+  const facilityId = msg.facilityId || ctx.facilityConfig.DEFAULT_FACILITY_ID;
+  const op = msg.op && typeof msg.op === 'object' ? msg.op : {};
+  const refuse = (reason, detail) => ({
+    ack: {
+      version: VERSION, type: 'efsp-field-state-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), facilityId,
+      ok: false, reason, detail, fieldState: store ? store.getFieldState(facilityId) : null,
+      fieldStateSeq: store ? store.currentSeq : undefined,
+    },
+  });
+  if (!store) return refuse('VALIDATION_ERROR', 'no field-state store');
+
+  const positionStore = ctx.positionStoreFor(facilityId);
+  if (!positionStore || positionStore.primaryOf(msg.actingPositionId) !== session.controllerId) {
+    return refuse('NOT_HOLDING_POSITION', `you are not Primary at ${msg.actingPositionId} at ${facilityId} — select it before acting on the field`);
+  }
+
+  // The permission table (and every refusal) is checked inside apply(), so a
+  // PERMISSION_DENIED is audited like any other outcome.
+  const result = store.apply(
+    { clientMutationId: msg.clientMutationId, facilityId, baseRev: msg.baseRev, op },
+    msg.actingPositionId, session.controllerId,
+  );
+  if (result.ok) persist();
+
+  const ack = {
+    version: VERSION, type: 'efsp-field-state-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), facilityId,
+    ok: result.ok, fieldState: result.fieldState, reason: result.reason, detail: result.detail,
+    fieldStateSeq: store.currentSeq,
+  };
+  if (!result.ok) return { ack };
+  return { ack, broadcast: _fieldStateDelta(store, [result.fieldState]) };
+}
+
+/** Its own delta type with its own seq (rule 5's deliberate deviation, docs/adr/0061). */
+function _fieldStateDelta(store, records) {
+  return {
+    version: VERSION, type: 'efsp-field-state-delta',
+    fieldStateSeq: store.currentSeq,
+    fieldStates: { updated: records.filter(Boolean) },
   };
 }
 
