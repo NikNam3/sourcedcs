@@ -182,3 +182,60 @@ test('unchanged units outlive the 12 s reaper, gone removes one at once, a lost 
   assert.equal(store.expireStale(), 2);
   assert.equal(store.getAll().length, 0);
 });
+
+// ── 4. Backoff, and one 'ended' line a minute ───────────────────────────────
+
+const intervals = (calls) => calls.slice(1).map((c, i) => c.at - calls[i].at);
+
+// Each interval sits in its jitter window [50 %, 100 %] of min(cap, base·2^k)
+// (plus a little for the round trip), and they never shrink before the cap.
+function assertBackoff(gaps, base, cap) {
+  gaps.forEach((gap, k) => {
+    const nominal = Math.min(cap, base * 2 ** k);
+    assert.ok(gap >= nominal / 2 - 5 && gap <= nominal + 80,
+      `retry ${k}: ${gap} ms outside [${nominal / 2}, ${nominal}]`);
+    if (k > 0 && nominal < cap) assert.ok(gap >= gaps[k - 1] - 20, `retry ${k} shrank: ${gaps.join(', ')}`);
+  });
+}
+
+test('a stream the server ends straight away is retried with growing, jittered delays and logged once', async (t) => {
+  const logged = quietConsole(t);
+  const base = 50, cap = 400;
+  // Data then an OK end every time, exactly what poll_rate 0 did: data on its
+  // own must not reset the backoff.
+  fake.reset(
+    (call) => { call.write(unitMsg(1)); call.end(); },
+    (call) => { call.end(); },
+  );
+  startClient(t, { keepaliveMs: 50, backoffBaseMs: base, backoffCapMs: cap });
+  await until(() => fake.unitCalls.length >= 8 && fake.eventCalls.length >= 8, 10000);
+
+  assertBackoff(intervals(fake.unitCalls).slice(0, 7), base, cap);
+  assertBackoff(intervals(fake.eventCalls).slice(0, 7), base, cap);
+
+  const ended = logged.filter(l => l.includes('unit stream ended'));
+  assert.equal(ended.length, 1, `one line in the first minute, got: ${ended.join(' | ')}`);
+});
+
+test('a stream that stayed up resets the backoff', async (t) => {
+  quietConsole(t);
+  const base = 50, cap = 400, stableMs = 300;
+  let n = 0;
+  // Four immediate ends, one stream that holds 400 ms, then immediate ends again.
+  fake.reset((call) => {
+    n++;
+    call.write(unitMsg(1));
+    if (n === 5) setTimeout(() => call.end(), stableMs + 100);
+    else call.end();
+  });
+  startClient(t, { backoffBaseMs: base, backoffCapMs: cap, stableMs });
+  await until(() => fake.unitCalls.length >= 7, 10000);
+  const gaps = intervals(fake.unitCalls);
+  // gaps[3] followed the 4th end (retry 3, nominal 400). gaps[4] is the
+  // healthy 5th stream's lifetime plus retry 0 (nominal 50), and gaps[5] is
+  // retry 1 (nominal 100); without the reset they'd be retries 4 and 5, at
+  // the 400 ms cap.
+  assert.ok(gaps[3] >= 200, `retry 3 backed off: ${gaps.join(', ')}`);
+  assert.ok(gaps[4] - (stableMs + 100) <= base + 30, `after a healthy stream the delay restarts at ${base} ms: ${gaps.join(', ')}`);
+  assert.ok(gaps[5] <= 2 * base + 40, `and grows from there: ${gaps.join(', ')}`);
+});
