@@ -31,6 +31,11 @@ const H_TROP     = 11000.0;
 const T_REF_ALT  = 288.97;
 
 const WEATHER_POLL_MS   = 60000; // poll atmosphere every 60 s
+// A healthy unit stream sends a unit only when it changes, and the track
+// reaper (tracks.js) drops anything not updated for 12 s. So while the stream
+// is up, every unit's last payload is re-emitted this often: a parked jet or a
+// SAM site stays on scope, and a lost stream still ages everything out.
+const UNIT_KEEPALIVE_MS = 5000;
 const GAMETIME_POLL_MS  =  5000; // poll scenario current time every 5 s
 
 const PROTO_OPTS = { keepCase: true, includeDirs: [PROTO_ROOT] };
@@ -49,8 +54,15 @@ function loadSvc(protoFile) {
 }
 
 class GrpcClient extends EventEmitter {
-  constructor() {
+  /**
+   * @param {object} [opts]  timing overrides, for tests
+   * @param {number} [opts.keepaliveMs]  how often cached units are re-emitted
+   */
+  constructor(opts = {}) {
     super();
+    this._keepaliveMs  = opts.keepaliveMs || UNIT_KEEPALIVE_MS;
+    this._lastUnits    = new Map(); // unit id → last 'unit' payload emitted
+    this._keepaliveTimer = null;
     this._closed       = false;
     this._state        = 'disconnected';
     this._missionSvc   = null;
@@ -108,6 +120,7 @@ class GrpcClient extends EventEmitter {
 
     this._startUnitStream();
     this._startEventStream();
+    this._startUnitKeepalive();
     this._startWeatherPoll();
     this._startGameTimePoll();
 
@@ -153,9 +166,10 @@ class GrpcClient extends EventEmitter {
   close() {
     this._closed = true;
     for (const t of [this._unitTimer, this._eventTimer, this._missionRetryTimer, this._statusTimer]) clearTimeout(t);
-    for (const t of [this._weatherTimer, this._gameTimeTimer]) clearInterval(t);
+    for (const t of [this._weatherTimer, this._gameTimeTimer, this._keepaliveTimer]) clearInterval(t);
     this._unitTimer = this._eventTimer = this._missionRetryTimer = this._statusTimer = null;
-    this._weatherTimer = this._gameTimeTimer = null;
+    this._weatherTimer = this._gameTimeTimer = this._keepaliveTimer = null;
+    this._lastUnits.clear();
     const streams = [this._unitStream, this._eventStream];
     this._unitStream = this._eventStream = null; // their late events are now stale
     for (const st of streams) { if (st) { try { st.cancel(); } catch (_) {} } }
@@ -185,7 +199,7 @@ class GrpcClient extends EventEmitter {
         const catNum = this._catNum(u.group && u.group.category);
         if (!ALLOWED_CATS.has(catNum)) return;
 
-        this.emit('unit', {
+        const payload = {
           id:        u.id,
           callsign:  u.callsign || u.name,
           name:      u.name || null,
@@ -204,10 +218,13 @@ class GrpcClient extends EventEmitter {
           verticalSpeed: u.velocity && u.velocity.velocity ? u.velocity.velocity.y : null,
           player:    u.player_name || null,
           category:  catNum, // 1=airplane 2=helicopter 4=ship
-        });
+        };
+        this._lastUnits.set(payload.id, payload);
+        this.emit('unit', payload);
       }
 
       if (res.gone) {
+        this._lastUnits.delete(res.gone.id);
         this.emit('gone', res.gone.id);
       }
     });
@@ -215,6 +232,7 @@ class GrpcClient extends EventEmitter {
     stream.on('error', (err) => {
       if (stream !== this._unitStream) return; // stale — ignore
       console.error('[grpc] unit stream error:', err.message);
+      this._lastUnits.clear(); // let the reaper age them out until the next full sync
       this._setState('reconnecting');
       this._scheduleUnit();
     });
@@ -222,9 +240,21 @@ class GrpcClient extends EventEmitter {
     stream.on('end', () => {
       if (stream !== this._unitStream) return; // stale — ignore
       console.log('[grpc] unit stream ended, reconnecting');
+      this._lastUnits.clear(); // let the reaper age them out until the next full sync
       this._setState('reconnecting');
       this._scheduleUnit();
     });
+  }
+
+  // Re-emit every live unit's last payload while the stream is up
+  // (UNIT_KEEPALIVE_MS). TrackStore.update is idempotent for an unchanged
+  // payload apart from refreshing its last-seen time, which is the point.
+  _startUnitKeepalive() {
+    clearInterval(this._keepaliveTimer);
+    this._keepaliveTimer = setInterval(() => {
+      if (this._state !== 'connected') return;
+      for (const payload of this._lastUnits.values()) this.emit('unit', payload);
+    }, this._keepaliveMs);
   }
 
   // ── Weather poll ──────────────────────────────────────────────────────────

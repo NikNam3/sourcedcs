@@ -137,3 +137,48 @@ test('a held-open unit stream is asked for exactly once', async (t) => {
   assert.equal(c.getStatus(), 'connected');
   assert.ok(units >= 3);
 });
+
+// ── 3. Stationary units survive; gone is delivered; a lost stream ages out ───
+
+test('unchanged units outlive the 12 s reaper, gone removes one at once, a lost stream lets them expire', async (t) => {
+  quietConsole(t);
+  const TrackStore = require('../src/tracks.js');
+  // The steady state: 3 units sent once, never again.
+  fake.reset(dcsStreamUnits([1, 2, 3]));
+  const c = startClient(t, { keepaliveMs: 50 });
+  const store = new TrackStore();
+  c.on('unit', (u) => store.update(u));
+  c.on('gone', (id) => store.remove(id));
+
+  // TrackStore dates everything with Date.now; move it by hand.
+  const realNow = Date.now;
+  let offset = 0;
+  t.mock.method(Date, 'now', () => realNow() + offset);
+
+  await until(() => store.getAll().length === 3);
+  const syncs = fake.unitCalls.length;
+
+  offset += 13000; // 13 s with no change from DCS
+  await sleep(200); // a few keepalive ticks
+  assert.equal(store.expireStale(), 0);
+  assert.deepEqual(store.getAll().map(u => u.id).sort(), [1, 2, 3]);
+  assert.equal(fake.unitCalls.length, syncs, 'kept alive without a re-sync');
+
+  // DCS-gRPC reports a unit gone: it leaves at once, not 12 s later.
+  fake.unitCall.write({ time: 2, gone: { id: 2, name: 'u2' } });
+  await until(() => !store.get(2));
+  offset += 13000;
+  await sleep(200);
+  assert.equal(store.expireStale(), 0);
+  assert.equal(store.get(2), null, 'a gone unit is not resurrected by the keepalive');
+
+  // The stream is lost, and the next one never comes back with data: nothing
+  // is kept alive, so the reaper takes the rest.
+  fake.onStreamUnits = () => {};
+  fake.unitCall.end();
+  await until(() => c.getStatus() !== 'connected');
+  offset += 13000;
+  await sleep(200);
+  assert.equal(store.expireStale(), 2);
+  assert.equal(store.getAll().length, 0);
+});
