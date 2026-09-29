@@ -21,6 +21,12 @@ const path = require('path');
 const vm = require('vm');
 
 const { makeElement } = require('./helpers/dom-stub.js');
+
+function unrefTimeout(fn, ms, ...args) {
+  const t = setTimeout(fn, ms, ...args);
+  if (t && typeof t.unref === 'function') t.unref();
+  return t;
+}
 const CLIENT = path.join(__dirname, '../app/public/js/panels/efsp');
 
 const TOOLBAR_IDS = [
@@ -60,7 +66,11 @@ function mountPanel() {
   for (const id of TOOLBAR_IDS) els[id] = makeElement(id.endsWith('-btn') ? 'button' : 'input');
 
   const sandbox = {
-    console, module: { exports: {} }, setTimeout, clearTimeout, setInterval: () => 0, clearInterval: () => {},
+    // Unref'd, so a panel timer — the refusal banner's 30 s auto-clear above
+    // all — never holds the test process open until it fires. That one timer
+    // kept `npm test` (and so `npm run dev-check`) waiting 30 s after the last
+    // assertion had passed.
+    console, module: { exports: {} }, setTimeout: unrefTimeout, clearTimeout, setInterval: () => 0, clearInterval: () => {},
     Date, JSON, Math, Number, Set, Map, Array, Object, String, Boolean, RegExp,
     isNaN, parseInt, parseFloat, Promise,
     document: { getElementById: (id) => els[id] || null, createElement: makeElement, addEventListener() {}, removeEventListener() {} },
