@@ -3,11 +3,13 @@
 /* Lane 4 — badges and chip layout. docs/ui-findings/lane4.md:
  * "Extends F-305", "Extends F-002", F-407.
  *
- * The obligation alert is delivered by calling the page's own handler pair,
- * exactly as app.js's `efsp-obligation-alert` case does
- * (applyEfspObligationAlert + renderAllOpenEfspBays). Getting crc-sync to
- * raise a real one needs a void time to expire; what is under test is the
- * render path after the message lands, and that is identical either way.
+ * The obligation is delivered by calling the page's own handler pair, exactly
+ * as app.js's `efsp-alerts` case does (applyEfspAlerts +
+ * renderAllOpenEfspBays). Getting crc-sync to raise a real one needs a void
+ * time to expire — obligation-retract.spec.js does that; what is under test
+ * here is the render path after the message lands. crc-sync does not know
+ * about an injected obligation, so the next real efsp-alerts replaces it:
+ * assert straight after injecting.
  */
 
 const { test, expect } = require('@playwright/test');
@@ -20,7 +22,9 @@ function stripIdOf(page, callsign) {
 async function raiseObligation(page, callsign) {
   const stripId = await stripIdOf(page, callsign);
   await page.evaluate((stripId) => {
-    applyEfspObligationAlert({ stripId, facilityId: 'INCIRLIK', obligationType: 'VOID_TIME_EXPIRED', dueAt: Date.now(), severity: 'OVERDUE' });
+    applyEfspAlerts({ conformance: [], stca: [], obligations: [
+      { facilityId: 'INCIRLIK', stripId, obligationType: 'VOID_TIME_EXPIRED', severity: 'OVERDUE', dueAt: Date.now(), since: Date.now() },
+    ] });
     renderAllOpenEfspBays();
   }, stripId);
 }
