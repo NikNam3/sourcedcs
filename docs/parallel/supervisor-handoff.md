@@ -46,20 +46,10 @@ Start here if you are the supervising session for the EFSP parallel lanes. Read,
 
 ### Open on the desk now
 
-- **Blocking:**
-  - **C1:** when to build coalition isolation (L21).
-  - **C2:** where a session's coalition comes from.
-  - The recommended defaults are "design ADR during wave 1, build solo right after it" and "from the
-    Facility/Position". Until answered, the wave-1 rule in H14 holds: no code reads a global own
-    coalition.
-- **Not blocking:**
-  - S2: hostiles on ATC scopes.
-  - S3: owner letter after TOFI.
-  - A1: atobrief's missing ATO fields.
-  - L11-2: classification line.
-  - L11-8: ABM/IC/RADAR agency types.
-  - Q76: soak traffic profile. It follows H12: 1–4 controllers, 3–20 aircraft.
-  - Lanes take the listed default until one is answered.
+- **L11-8 (not blocking):** how ABM/IC/RADAR control agencies map to USMTF. **The human asked you to
+  research real-world use** (atobrief's types are community-made). Research it, report the findings
+  to the human, and re-ask on the desk with informed options. L11 exports `OTR` meanwhile (H45).
+- Everything else from round 1 is settled (H1–H50).
 
 ## Things waiting on a lane or a later wave
 
@@ -68,10 +58,11 @@ Start here if you are the supervising session for the EFSP parallel lanes. Read,
 - **ATC scope:**
   - Approved as variant B of `docs/parallel/research/stars-mockups.html`
     (https://claude.ai/artifact/WX2iTcgENzLETakrdXLfDq), recorded as H41.
-  - Built by **L22**, after L10 and L1b. It includes a per-user "ATC map background" toggle for the
+  - Built by **L22**, after L10 and L1b, **starting with a mockup for approval (H49)**; the later ERAM lane too. It includes a per-user "ATC map background" toggle for the
     strict look.
   - ERAM for CTR is a later lane.
-- **L21 coalition isolation:** planned, with timing set by C1.
+- **Coalitions:** one crc-sync server per coalition (H42); L21 is dropped.
+- **L11 is bigger than its main briefing says:** H43 puts Appendix A (every missing ATO field) in scope.
 - **Bugs for later lanes:**
   - **L8:**
     - B1: a transfer to JTAC strands the Strip.

@@ -229,13 +229,12 @@ state its test counts, the ADR it wrote, and its `docs/wip/<lane>.md`.
   files.
 
 #### L11 — atobrief exports its ATO as USMTF (ADR 0078)
-- **Scope:** `atobrief` only. A pure `usmtf-ato.js` (renderer + mapper, browser and Node), `GET /api/rooms/:id/ato.usmtf`, stateless `POST /api/usmtf`, a USMTF option in the EXPORT dialog. Exports only fields atobrief stores today (A1 default); missing fields become `-` with a warning.
+- **Scope:** `atobrief` only. A pure `usmtf-ato.js` (renderer + mapper, browser and Node), `GET /api/rooms/:id/ato.usmtf`, stateless `POST /api/usmtf`, a USMTF option in the EXPORT dialog. **H43: also adds every missing ATO field to atobrief (briefing Appendix A: YAML, editor, mapper).** Classification always `UNCLAS` (H44).
 - **Owns:** everything new under `atobrief/`; the trimmed, anonymised `ojw1v5` fixture and its USMTF export for L3 (H16).
 - **Shared files:** none in crc-sync or crc-desktop.
 - **Acceptance:** semantic equality with the research fixture, exact equality with its own committed output; briefing `docs/parallel/wave1/L11.md`.
 
-#### L21 — coalition isolation (planned, H14; timing is Decision Desk C1)
-- Both coalitions controlled at once on one server, each unaware of the other: per-session coalition, and EFSP stores, alerts, tags, declarations, datalink and presence all scoped by it. Design ADR first. Default slot: solo, right after wave 1 merges.
+#### L21 — dropped (H42: one crc-sync server per coalition instead)
 
 ### Wave 2 — dispatch when L1 has merged (L13 also waits for L2, L14 for L3, L15 for L5, L16 for L2)
 
@@ -290,7 +289,7 @@ state its test counts, the ADR it wrote, and its `docs/wip/<lane>.md`.
 
 #### L22 — ATC scope in the STARS scheme (H5, H41)
 - Variant B of `docs/parallel/research/stars-mockups.html`: `scheme` per contact in `presentation.js` (radar types classified in `sensor-specs.json`), position letters in facility config, coast hold, FDB/PDB/LDB by relation to the viewer, handoff/point-out blink, and a per-user "ATC map background" toggle giving the strict (A) look. Client work lives in `track-label.js` plus the map layers.
-- Waits for L10 (both edit `presentation.js`/`ws-hub.js`) and L1b (strip-view). ERAM for CTR is a later lane.
+- Waits for L10 (both edit `presentation.js`/`ws-hub.js`) and L1b (strip-view). **Starts with a mockup for approval (H49).** ERAM for CTR is a later lane, also mockup first.
 
 ### Wave 3 — dispatch when wave 2 has merged
 
