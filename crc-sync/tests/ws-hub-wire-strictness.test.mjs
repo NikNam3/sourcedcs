@@ -233,5 +233,5 @@ test('no aircraft is hidden on the ground any more: a parked hostile is a bogey,
   assert.equal(byId.get('1').iffState, 'bogey');
   assert.equal(byId.get('1').onGround, true);
   assert.equal(byId.get('2').iffState, 'neutral', 'its synthetic squawk answers the SSR; the tower has no Mode 4');
-  assert.equal(JSON.stringify(snap).includes('invisible'), false);
+  for (const t of snap.tracks) assert.ok(['friendly', 'neutral', 'bogey'].includes(t.iffState), t.iffState);
 });
