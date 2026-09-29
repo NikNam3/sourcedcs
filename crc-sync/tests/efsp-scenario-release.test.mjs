@@ -86,6 +86,29 @@ test('SCENARIO a clearance goes void while the flight is still on the ground', a
   assert.equal(alert.severity, 'OVERDUE');
 });
 
+test('SCENARIO a void-expired flight re-cleared by CD loses its alert on the next tick (docs/adr/0067)', async () => {
+  const efsp = createEfsp();
+  const c = crew(efsp, ATC);
+  let strip = await cleared(efsp, c, 'VOID2');
+  strip = mustAct(efsp, c.CD, 'CD', strip, { kind: 'SetBlock', blockId: '14A', value: 'CLEARANCE_VOID_TIME' });
+  strip = mustAct(efsp, c.CD, 'CD', strip, { kind: 'SetBlock', blockId: '14D', value: Date.now() - 31 * MINUTE });
+  strip = jumpTo(efsp, c.CD, 'CD', strip, 'HELD');
+
+  const { ForwardingObligationMonitor } = await import('../src/efsp/forwarding-obligations.js');
+  const monitor = new ForwardingObligationMonitor({
+    boardStoreFor: efsp.boardStoreFor, fdrStore: efsp.fdrStore, facilityConfig, airspaceStore: efsp.airspaceStore,
+  });
+  assert.equal(monitor.tick(), true);
+  assert.ok(monitor.getAll().some(a => a.stripId === strip.stripId && a.obligationType === 'VOID_TIME_EXPIRED'));
+
+  // A fresh void time: the clearance is good again, so nothing is overdue.
+  mustAct(efsp, c.CD, 'CD', efsp.boardStore.getStrip(strip.stripId), {
+    kind: 'SetBlock', blockId: '14D', value: Date.now() + 10 * MINUTE,
+  });
+  assert.equal(monitor.tick(), true, 'the retraction is a change');
+  assert.equal(monitor.getAll().some(a => a.stripId === strip.stripId), false, JSON.stringify(monitor.getAll()));
+});
+
 // ── 3. EDCT ──────────────────────────────────────────────────────────────
 
 test('SCENARIO an EDCT slot: inside the window it goes, outside it waits', async () => {

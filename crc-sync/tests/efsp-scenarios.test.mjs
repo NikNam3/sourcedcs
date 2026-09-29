@@ -607,15 +607,14 @@ test('approving a flight into airspace nobody has activated is allowed, but warn
   assert.equal(ack.warning, 'AIRSPACE_NOT_ACTIVE');
 
   const { ForwardingObligationMonitor } = await import('../src/efsp/forwarding-obligations.js');
-  const alerts = [];
   const monitor = new ForwardingObligationMonitor({
     boardStoreFor: efsp.boardStoreFor,
     fdrStore: efsp.fdrStore,
     facilityConfig,
     airspaceStore: efsp.airspaceStore,
-    onAlert: (a) => alerts.push(a),
   });
   monitor.tick();
+  const alerts = monitor.getAll();
   assert.equal(alerts.some(a => a.obligationType === 'UNACTIVATED_AIRSPACE_ENTRY'), true);
 });
 
