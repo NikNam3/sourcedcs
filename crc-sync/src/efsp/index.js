@@ -47,6 +47,7 @@ const facilityConfig = require('./facility-config');
 const coordination = require('./coordination');
 const { handleMessage, snapshotMessage } = require('./efsp-ws');
 const { NlaStatusMonitor } = require('./nla-status-monitor');
+const { Archiver } = require('./archiver');
 const { statePaths, ensureDirFor } = require('../state-paths');
 const { WALL_CLOCK } = require('../mission-clock');
 
@@ -259,6 +260,18 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
     facilityConfig,
   });
 
+  // H36 (docs/adr/0082) — archives finished flights. server.js wires the
+  // traffic count (built outside this factory), the 60 s sweep and F3's
+  // mission-session roll-over; the Boards' own snapshots carry what it needs.
+  const archiver = new Archiver({
+    facilityIds: [...facilities.keys()],
+    boardStoreFor: (facilityId) => {
+      const f = facilities.get(facilityId);
+      return f ? f.boardStore : null;
+    },
+    fdrStore, correlationStore, marsaStore, mutationLog, clock,
+  });
+
   const ctx = {
     // Back-compat direct properties (INCIRLIK) — every pre-WP4A caller in
     // this package (server.js/ws-hub.js/tests) keeps working unmodified.
@@ -317,6 +330,8 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
 
     /** Sent once at connect, appended to ws-hub.js's existing connect-time send order. */
     snapshotFor: () => snapshotMessage(ctx),
+
+    archiver,
   };
 }
 

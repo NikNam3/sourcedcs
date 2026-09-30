@@ -142,4 +142,24 @@ function sweepChanged(r) {
   return !!r && (Object.keys(r.stripsByFacility).length > 0 || r.fdrIds.length > 0);
 }
 
-module.exports = { Archiver, ARCHIVE_AFTER_MS, sweepChanged };
+/**
+ * The board-deltas that tell clients about a sweep: one per Facility whose
+ * ring advanced, so every client's boardSeq stays continuous (T5), each
+ * carrying the archived FDR ids — the FdrStore is shared across Facilities
+ * and a client holds every FDR, whichever Facility it works. The archived
+ * Strips were already DROPPED, so their `gone` is a no-op on a client that
+ * saw the drop; it matters to one that missed it.
+ * @returns {{facilityId:string, boardSeq:number, gone:string[], fdrsGone:string[]}[]}
+ */
+function archiveDeltas(r, boardStoreFor) {
+  if (!sweepChanged(r)) return [];
+  const payloads = [];
+  for (const [facilityId, gone] of Object.entries(r.stripsByFacility)) {
+    const board = boardStoreFor(facilityId);
+    if (!board) continue;
+    payloads.push({ facilityId, boardSeq: board.currentSeq, gone, fdrsGone: r.fdrIds });
+  }
+  return payloads;
+}
+
+module.exports = { Archiver, ARCHIVE_AFTER_MS, sweepChanged, archiveDeltas };

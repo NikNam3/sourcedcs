@@ -486,3 +486,52 @@ test('F4: the idempotency cache holds no Strip object after archiving', { todo: 
   offset = 0;
   assert.equal(reachesStrip(incirlik()._appliedMutations, live), false);
 });
+
+// ── registration and the wire (§5.2, §5.5) ─────────────────────────────────
+
+test('createEfsp exposes the archiver, and hasCountFor answers from the traffic count', () => {
+  assert.ok(efsp.archiver instanceof Archiver);
+  const dropped = droppedFlight('REG1');
+  assert.equal(counter.hasCountFor(dropped.stripId), true);
+  const live = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'REG2' });
+  assert.equal(counter.hasCountFor(live.stripId), false);
+  // Its default retention is real wall time: nothing that just dropped goes.
+  efsp.archiver.setIsCounted((id) => counter.hasCountFor(id));
+  const r = efsp.archiver.sweep();
+  assert.equal((r.stripsByFacility.INCIRLIK || []).includes(dropped.stripId), false);
+});
+
+test('archiveDeltas + broadcastEfspBoardDelta: one delta per Facility, gone Strips and fdrs.gone, seq continuous', async () => {
+  const { archiveDeltas } = await import('../src/efsp/archiver.js');
+  const WsHub = (await import('../src/ws-hub.js')).default;
+  const TrackStore = (await import('../src/tracks.js')).default;
+  const CollaborativeStore = (await import('../src/collab-store.js')).default;
+  const hub = new WsHub({ trackStore: new TrackStore(), collabStore: new CollaborativeStore() });
+  const sent = [];
+  hub._broadcast = (m) => sent.push(m);
+
+  const a = droppedFlight('WIRE1');
+  const ctr = handedToCenter(efsp, c, airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'WIRE2' }));
+  const b = mustAct(efsp, c.CTR, 'CTR', ctr, { kind: 'DropStrip' });
+  offset = 3 * HOUR;
+  const r = archiverFor().sweep();
+  offset = 0;
+  assert.deepEqual(archiveDeltas({ stripsByFacility: {}, fdrIds: [] }, efsp.boardStoreFor), [], 'an empty sweep sends nothing');
+  for (const p of archiveDeltas(r, efsp.boardStoreFor)) hub.broadcastEfspBoardDelta(p);
+
+  const inc = sent.find(m => m.facilityId === 'INCIRLIK');
+  const cen = sent.find(m => m.facilityId === 'CENTER');
+  assert.ok(inc.strips.gone.includes(a.stripId));
+  assert.ok(cen.strips.gone.includes(b.stripId));
+  assert.equal(inc.boardSeq, incirlik().currentSeq, 'the ring advanced, and the delta says so');
+  assert.equal(cen.boardSeq, center().currentSeq);
+  assert.deepEqual(inc.strips.updated, []);
+  assert.ok(inc.fdrs.gone.includes(a.fdrId));
+  assert.deepEqual(inc.fdrs.updated, []);
+
+  // The NLA-status sweep's delta is unchanged: no gone, and no fdrs.gone key.
+  sent.length = 0;
+  hub.broadcastEfspBoardDelta({ facilityId: 'INCIRLIK', boardSeq: 1, strips: [] });
+  assert.deepEqual(sent[0].strips.gone, []);
+  assert.deepEqual(Object.keys(sent[0].fdrs), ['updated']);
+});

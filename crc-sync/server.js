@@ -523,6 +523,24 @@ app.get('/api/efsp/traffic-count', auth.requireAuth, (req, res) => {
 });
 setInterval(() => efspInstrumentation.tick(), 60000);
 
+// ── Archiving finished flights (H36, docs/adr/0082) ───────────────────────
+// A DROPPED Strip leaves memory and the Board snapshot 2 h after its drop, or
+// at the next mission session (F3), once the traffic count above has it; its
+// FDR goes with its last Strip. The Mutation log keeps the history.
+const { archiveDeltas } = require('./src/efsp/archiver');
+efsp.archiver.setIsCounted((stripId) => efspInstrumentation.trafficCount.hasCountFor(stripId));
+function _archive(r) {
+  const payloads = archiveDeltas(r, efsp.boardStoreFor);
+  if (!payloads.length) return;
+  efsp.persist();
+  for (const p of payloads) wsHub.broadcastEfspBoardDelta(p);
+  const n = payloads.reduce((sum, p) => sum + p.gone.length, 0);
+  console.log(`[efsp-archiver] archived ${n} Strip(s) and ${r.fdrIds.length} FDR(s)`);
+}
+setInterval(() => _archive(efsp.archiver.sweep()), 60 * 1000);
+missionSession.onNewSession((session) => _archive(efsp.archiver.onMissionSessionChange(session)));
+// ── end archiving ─────────────────────────────────────────────────────────
+
 // ── Stale reaper — mirrors crc-desktop's original 12s track eviction, now
 // also evicts orphaned CollaborativeStore entries in the same tick. Also
 // re-broadcasts AtisStore's active list so a client that crashed without
