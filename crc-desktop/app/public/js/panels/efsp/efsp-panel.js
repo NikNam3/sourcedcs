@@ -508,6 +508,56 @@ function _refreshMissionBindPicker(origin) {
   if (candidates.some(s => s.fdrId === prev)) _createStripBindEl.value = prev;
 }
 
+/**
+ * The ATO-first direction (crc-sync docs/adr/0071, docs/adr/0054's promised
+ * caller change). An ATO often arrives before the flight is filed: TAC_C2's
+ * import made the flight and its mission line, and when OPS then files it,
+ * the DEPARTURE must be the SAME flight — same fdrId, same Mode 3/A, no second
+ * code minted. So when OPS types a callsign that an ATO mission flight has
+ * and that flight has no ATC Strip yet, the bind picker offers "file against
+ * ATO mission <msn>", picked by default only when exactly one matches.
+ * Sending it is the existing bind path (`op.fdrId`), unchanged server-side.
+ */
+function _atoFirstCandidates(callsign) {
+  const wanted = String(callsign || '').trim().toUpperCase();
+  if (!wanted) return [];
+  const all = typeof getAllEfspStrips === 'function' ? getAllEfspStrips() : [];
+  const live = all.filter(s => s.state !== 'DROPPED');
+  const out = [];
+  const seen = new Set();
+  for (const s of live) {
+    if (s.role !== 'MISSION' || seen.has(s.fdrId)) continue;
+    seen.add(s.fdrId);
+    const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(s.fdrId) : null;
+    if (!fdr || !fdr.ato || !fdr.identity || fdr.identity.callsign !== wanted) continue;
+    if (live.some(o => o.fdrId === s.fdrId && o.role !== 'MISSION')) continue; // already filed
+    out.push(fdr);
+  }
+  return out;
+}
+
+function _refreshAtoFirstPicker(origin) {
+  if (!_createStripBindEl || !_createStripInputEl) return;
+  if (!origin || origin.actingPositionId !== 'OPS' || (origin.role || 'DEPARTURE') !== 'DEPARTURE') return;
+  const candidates = _atoFirstCandidates(_createStripInputEl.value);
+  _createStripBindEl.hidden = candidates.length === 0;
+  if (_createStripBindEl.hidden) { _createStripBindEl.value = ''; return; }
+  const prev = _createStripBindEl.value;
+  _createStripBindEl.innerHTML = '';
+  const none = document.createElement('option');
+  none.value = '';
+  none.textContent = '— a new flight —';
+  _createStripBindEl.appendChild(none);
+  for (const fdr of candidates) {
+    const opt = document.createElement('option');
+    opt.value = fdr.fdrId;
+    opt.textContent = `file against ATO mission ${fdr.ato.missionNumber || (fdr.mission && fdr.mission.missionNumber) || '?'} · ${fdr.identity.callsign} · ${fdr.identity.beaconAssigned}`;
+    _createStripBindEl.appendChild(opt);
+  }
+  if (candidates.some(f => f.fdrId === prev)) _createStripBindEl.value = prev;
+  else _createStripBindEl.value = candidates.length === 1 ? candidates[0].fdrId : '';
+}
+
 function _refreshCreateStripAvailability() {
   if (!_createStripInputEl || !_createStripBtnEl) return;
   if (_createStripLookupInFlight) return; // don't fight the "Looking up flight plan…" message or re-enable mid-lookup — _submitCreateStrip owns this window
@@ -563,6 +613,7 @@ function _refreshCreateStripAvailability() {
   }
   _refreshMissionBindPicker(origin);
   if (typeof refreshAtoImportButton === 'function') refreshAtoImportButton(); // docs/adr/0071
+  _refreshAtoFirstPicker(origin); // docs/adr/0071 — OPS files against an ATO mission
   _createStripInputEl.disabled = !origin;
   _createStripBtnEl.disabled = !origin;
   if (!origin) {
@@ -734,7 +785,7 @@ async function _submitCreateStrip() {
   if (_createStripBindEl) _createStripBindEl.value = '';
   _pendingDuplicateCallsign = null;
   _setCreateStripMsg(
-    bindFdrId ? `Fragging a mission line for ${boundCallsign || 'this flight'}…`
+    bindFdrId ? (origin.role === 'MISSION' ? `Fragging a mission line for ${boundCallsign || 'this flight'}…` : `Filing ${boundCallsign} against its ATO mission…`)
       : stereoRouteName ? `Creating (${stereoRouteName})…`
         : seed.route ? 'Creating (flight plan found)…'
           : 'Creating…',
@@ -1039,6 +1090,7 @@ function _wireCreateStrip() {
   if (!_createStripBtnEl || !_createStripInputEl) return;
   _createStripBtnEl.addEventListener('click', _submitCreateStrip);
   _createStripInputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') _submitCreateStrip(); });
+  _createStripInputEl.addEventListener('input', () => _refreshAtoFirstPicker(_createStripOrigin())); // docs/adr/0071
   _refreshCreateStripAvailability();
 }
 

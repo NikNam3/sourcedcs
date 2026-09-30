@@ -306,7 +306,16 @@ function analyseAto({ text, fdrs, liveStrips, nowUtc }) {
     const candidates = existing ? [] : bindCandidatesFor(line, fdrs, liveStrips);
     let action = 'CREATE';
     if (existing) action = 'UPDATE';
-    else if (candidates.length === 1) action = 'BIND';
+    else if (candidates.length === 1 && (candidates[0].key === 'CALLSIGN' || candidates[0].callsign === line.callsign)) action = 'BIND';
+    // A squawk match on a flight with ANOTHER callsign is offered, never
+    // preselected: it is as likely a code clash as the same flight, and only
+    // the controller can tell (ambiguity is an answer, docs/adr/0046).
+    for (const cand of candidates) {
+      if (cand.key === 'MODE3' && cand.callsign !== line.callsign) {
+        line.warnings.push({ code: 'MODE3_HELD_BY_OTHER', severity: 'warning', line: null,
+          message: `The ATO's Mode 3 ${modeThree} is already assigned to ${cand.callsign}; bind to it only if that is this flight.` });
+      }
+    }
     const missing = [...(l3.extras.ato.missingAcceptanceFields || [])].filter((f) => !(f === 'callsign' && callsign));
     line.existingFdrId = existing ? existing.fdrId : null;
     line.bindCandidates = candidates;

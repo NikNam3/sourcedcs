@@ -313,3 +313,52 @@ test('a restart keeps the ATO tasking and the AR group', () => {
   assert.equal(shell.military.arInfo.links.length, 2);
   assert.equal(reborn.boardStoreFor('TACTICAL').getAll().filter((s) => s.role === 'MISSION').length, 5);
 });
+
+test('DUDE 21 files late: OPS files against its ATO mission, sharing the flight and its code', () => {
+  const { efsp, c } = fresh();
+  importAto(efsp, c);
+  const dude = fdrOf(efsp, 'DUDE21');
+  const codes = efsp.fdrStore.codeAllocator.snapshot().length;
+  const dep = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdrId: dude.fdrId });
+  assert.equal(dep.fdrId, dude.fdrId);
+  assert.equal(efsp.fdrStore.getFdr(dude.fdrId).identity.beaconAssigned, '4531');
+  assert.equal(efsp.fdrStore.codeAllocator.snapshot().length, codes, 'no code minted');
+  assert.equal(efsp.fdrStore.getAll().length, 5, 'no second flight');
+});
+
+test('SHELL 71 is cancelled: its receivers keep their records, and nothing else changes', () => {
+  const { efsp, c } = fresh();
+  importAto(efsp, c);
+  const shell = fdrOf(efsp, 'SHELL71');
+  const viperBefore = JSON.stringify(fdrOf(efsp, 'VIPER11'));
+  const strip = missionStrips(efsp).find((s) => s.fdrId === shell.fdrId);
+  mustAct(efsp, c.TAC_C2, 'TAC_C2', strip, { kind: 'DropStrip' });
+  assert.equal(JSON.stringify(fdrOf(efsp, 'VIPER11')), viperBefore, 'the join is resolved at read time (the badge drops the peer)');
+  assert.deepEqual(efsp.marsaStore.getAll(), []);
+});
+
+test('VIPER 11 goes to a different tanker: a re-import with a changed ARINFO rewires the join', () => {
+  const { efsp, c } = fresh();
+  importAto(efsp, c);
+  const text = IRON
+    .replace('ARINFO/SHELL 71/1901T/34571/NAME:ANCHOR BLUE/220/ARCT:141345Z/', 'ARINFO/MAGIC 11/1801W/34501/NAME:ANCHOR BLUE/220/ARCT:141345Z/')
+    .replace('/1101A /VIPER 11 /2 /AC:F16C /KLB:12.0/141345Z /A:1 /A:JP8 /BOM\n', '');
+  importAto(efsp, c, text);
+  const viper = fdrOf(efsp, 'VIPER11');
+  assert.deepEqual(viper.military.arInfo.links.map((l) => [l.role, l.peerCallsign]), [['RECEIVER', 'MAGIC11']]);
+  assert.deepEqual(fdrOf(efsp, 'SHELL71').military.arInfo.links.map((l) => l.peerCallsign), ['DUDE21']);
+});
+
+test('the ATO\'s squawk is taken: the duplicate is adopted with a warning, never refused (D23)', () => {
+  const { efsp, c } = fresh();
+  let dep = fileDeparture(efsp, c, 'OTHER1');
+  dep = mustAct(efsp, c.OPS, 'OPS', dep, { kind: 'SetBlock', blockId: '5', value: '4541' });
+  const { preview: p, ack } = importAto(efsp, c);
+  const line = p.lines.find((l) => l.lineId === '1203S#0');
+  assert.deepEqual(line.bindCandidates.map((b) => [b.callsign, b.key]), [['OTHER1', 'MODE3']], 'offered');
+  assert.ok(line.warnings.some((w) => w.code === 'MODE3_HELD_BY_OTHER'), 'and why it is not picked');
+  const res = ack.results.find((r) => r.lineId === '1203S#0');
+  assert.equal(res.action, 'CREATE', 'a squawk match on another callsign is offered, not preselected');
+  assert.equal(res.beacon.adopted, true);
+  assert.equal(res.beacon.warning, 'DUPLICATE_IGNORED_WARNING');
+});
