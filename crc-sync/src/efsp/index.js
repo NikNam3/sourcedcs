@@ -281,6 +281,10 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
       const f = facilities.get(facilityId);
       return f ? f.positionStore : null;
     },
+    // WP7 (docs/adr/0071) — the ATO import dates the ATO against the mission
+    // clock (H11/H68) and audits the import itself in the Mutation log.
+    clock,
+    mutationLog,
   };
 
   return {
