@@ -79,9 +79,12 @@ def ato_callsign(name: str | None) -> str | None:
     Upper-cased, anything outside A–Z/0–9 dropped (so ``VIPER-1`` → ``VIPER1``,
     ``Mauler 6`` → ``MAULER6``), then — while longer than 7 characters — vowels
     are cut from back to front: ``ENFIELD11`` → ``ENFLD11``,
-    ``SHADOW11`` → ``SHADW11``.  The first character is never cut.  If the
-    name is still too long with every vowel gone, the letters are cut from the
-    back and the trailing digits kept (``STRWBRRY11`` → ``STRWB11``).
+    ``SHADOW11`` → ``SHADW11``.
+
+    The same rule as crc-sync's ATO import (L14, ``fitCallsign``), so the two
+    agree.  A name that still does not fit with every vowel gone is returned
+    normalised but uncut (``STRAWBERRY11``): nothing is invented, atobrief's
+    export flags it CALLSIGN_NOT_SEEDABLE and a planner shortens it.
     """
     if not name:
         return None
@@ -90,17 +93,11 @@ def ato_callsign(name: str | None) -> str | None:
         return None
     chars = list(cs)
     i = len(chars) - 1
-    while len(chars) > ATO_CALLSIGN_MAX and i > 0:
+    while len(chars) > ATO_CALLSIGN_MAX and i >= 0:
         if chars[i] in _VOWELS:
             del chars[i]
         i -= 1
-    cs = "".join(chars)
-    if len(cs) > ATO_CALLSIGN_MAX:
-        m = re.match(r'^(.*?)(\d*)$', cs)
-        letters, digits = m.group(1), m.group(2)
-        keep = max(ATO_CALLSIGN_MAX - len(digits), 1)
-        cs = (letters[:keep] + digits)[:ATO_CALLSIGN_MAX]
-    return cs
+    return "".join(chars) if len(chars) <= ATO_CALLSIGN_MAX else cs
 
 
 # ── Support missions (tankers, AWACS) ────────────────────────────────────────

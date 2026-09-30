@@ -163,14 +163,12 @@ class TestAtoCallsign:
         ("MAGIC",     "MAGIC"),
         ("TEXACO11",  "TEXAC11"),
         ("ARCO11",    "ARCO11"),
-        ("STRAWBERRY11", "STRWB11"),   # no vowel left to cut: letters cut, digits kept
-        ("ABCDEFGHIJKLMNOP", "ABCDFGH"),
+        ("EAGLEEYE1", "EAGLEY1"),      # back to front: the leading E survives
+        ("AEIOUBCDF", "AEIBCDF"),
+        ("STRAWBERRY11", "STRAWBERRY11"),  # cannot fit: left uncut for a planner
     ])
     def test_rule(self, name, expected):
         assert ato_callsign(name) == expected
-
-    def test_first_character_kept(self):
-        assert ato_callsign("EAGLEEYE11").startswith("E")
 
     def test_empty(self):
         assert ato_callsign("") is None
