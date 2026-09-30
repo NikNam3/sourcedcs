@@ -55,21 +55,42 @@ function isSynthetic(code) {
 class CodeAllocator {
   constructor() {
     this._allocated = new Map(); // code -> fdrId — single INCIRLIK facility in Phase 1, no per-facility pooling yet
+    // The last code allocate() handed out, as a number (docs/adr/0081). The
+    // next scan starts after it, so a released code is not handed out again
+    // until the whole discrete pool has cycled. 0 = nothing handed out yet.
+    this._cursor = 0;
+  }
+
+  /** The rotating cursor, persisted beside the allocated codes (fdr-store.js snapshot). */
+  get cursor() { return this._cursor; }
+  restoreCursor(cursor) {
+    this._cursor = Number.isInteger(cursor) && cursor >= 0 && cursor <= 0o7777 ? cursor : 0;
   }
 
   /**
    * Mints the next available discrete code for a newly created FDR.
-   * Sequential octal scan starting at 0001, skipping reserved/excluded and
-   * already-allocated codes — simple and auditable; the guide's fuller
-   * pool/search-order model (named pools, exclusion lists per facility) is
-   * WP6+-adjacent and not needed for a single-facility DEPARTURE-only slice.
+   *
+   * A ROTATING scan (docs/adr/0081, L6's F6): from the code after the last one
+   * handed out, wrapping past 7777 back to 0001, skipping reserved/excluded,
+   * synthetic and already-allocated codes. It used to take the LOWEST free
+   * code, so a flight that landed released its code and the very next
+   * CreateStrip got it back while the old aircraft was still squawking it on
+   * the ramp or in the pattern — and correlation bound the new flight plan to
+   * the old aircraft (46 misbindings in a four-hour soak). Now a released code
+   * comes back only after every other free discrete code has been used:
+   * thousands of flights at this squadron's scale. No clock, no tuning file.
+   * The guide's fuller pool/search-order model (named pools, exclusion lists
+   * per facility) is WP6+-adjacent and not needed here.
    */
   allocate(fdrId) {
-    for (let n = 1; n <= 0o7777; n++) {
+    const POOL = 0o7777;
+    for (let i = 1; i <= POOL; i++) {
+      const n = ((this._cursor + i - 1) % POOL) + 1; // 1..7777, starting after the cursor
       const code = n.toString(8).padStart(4, '0');
       if (AUTO_ALLOCATE_EXCLUDED.has(code) || isSynthetic(code)) continue;
       if (this._allocated.has(code)) continue;
       this._allocated.set(code, fdrId);
+      this._cursor = n;
       return { code, pool: 'DISCRETE' };
     }
     return { error: 'POOL_EXHAUSTED' };

@@ -1050,7 +1050,7 @@ class FdrStore {
 
   // ── Persistence (durable per ADR 0002) ──────────────────────────────────
   snapshot() {
-    return { fdrs: this.getAll(), codes: this._codeAllocator.snapshot() };
+    return { fdrs: this.getAll(), codes: this._codeAllocator.snapshot(), codeCursor: this._codeAllocator.cursor };
   }
   restore(data) {
     this._fdrs = new Map((data?.fdrs || []).map((f) => {
@@ -1063,6 +1063,7 @@ class FdrStore {
       return [f.fdrId, f];
     }));
     this._codeAllocator.restore(data?.codes);
+    this._codeAllocator.restoreCursor(data?.codeCursor); // docs/adr/0081: the rotating cursor survives a restart
   }
 }
 
