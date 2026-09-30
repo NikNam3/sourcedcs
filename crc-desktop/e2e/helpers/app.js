@@ -86,7 +86,31 @@ async function seedStrip(page, { callsign, actingPositionId = 'OPS', bayId = 'op
     facilityId,
   ]);
   await expect(page.locator('.efsp-strip')).toHaveCount(before + 1);
+  await settleCorrelation(page, callsign);
   return stripByCallsign(page, callsign);
+}
+
+// crc-sync's correlation-reconciler.js INELIGIBLE_STATES: a Strip in any other
+// state gets a correlation record on the next 1 s tick.
+const CORRELATION_INELIGIBLE = ['PROPOSED', 'PENDING_CLEARANCE', 'CLEARED', 'HELD', 'TASKED', 'DROPPED'];
+
+/**
+ * Waits until a just-seeded Strip has been redrawn with its correlation record.
+ *
+ * The record arrives on the reconciler's next tick (about 0.5 s idle, seconds
+ * on a loaded machine) and changes the Strip's render signature, so the
+ * element is REPLACED. A spec that grabbed the Strip before then clicks or
+ * screenshots a detached node — measured as "element was detached from the
+ * DOM" on the ⋯ button and on locator.screenshot, only under load.
+ */
+async function settleCorrelation(page, callsign) {
+  await expect.poll(() => page.evaluate(([cs, ineligible]) => {
+    const s = [...efspStrips.values()].find((x) => x.state !== 'DROPPED'
+      && (efspFdrs.get(x.fdrId) || {}).identity && efspFdrs.get(x.fdrId).identity.callsign === cs);
+    if (!s || ineligible.includes(s.state)) return true;
+    const el = document.querySelector(`.efsp-strip[data-strip-id="${s.stripId}"]`);
+    return !!el && /\|cor:\d/.test(el.dataset.sig || '');
+  }, [callsign, CORRELATION_INELIGIBLE]), { message: `${callsign} redrawn with its correlation record`, timeout: 10000 }).toBe(true);
 }
 
 /** The Strip element showing this callsign. */
