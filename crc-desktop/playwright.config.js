@@ -63,7 +63,9 @@ const syncEnv = {
 };
 
 fs.writeFileSync(syncEnv.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
-fs.writeFileSync(syncEnv.CRCSYNC_EFSP_STEREO_ROUTES_PATH, '[]');
+// Opt-in stereo table (crc-sync's docs/adr/0073): E2E_STEREO_ROUTES=<file> copies that table in
+// place of the empty one, for the specs that pick a route; every other run is unaffected (P5, T11).
+fs.writeFileSync(syncEnv.CRCSYNC_EFSP_STEREO_ROUTES_PATH, process.env.E2E_STEREO_ROUTES ? fs.readFileSync(process.env.E2E_STEREO_ROUTES) : '[]');
 
 module.exports = {
   testDir: './e2e',
