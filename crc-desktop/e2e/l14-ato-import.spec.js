@@ -59,9 +59,12 @@ test('TAC_C2 imports an ATO; the AR group highlights together; Mode 1/2 read in 
   await dialog.locator('.efsp-ato-import-go').click();
   await expect(page.locator('.efsp-ato-dialog')).toHaveCount(0);
 
-  const lines = await page.evaluate(() => getAllEfspStrips()
-    .filter(s => s.role === 'MISSION' && s.state !== 'DROPPED')
-    .map(s => { const f = getEfspFdr(s.fdrId); return { cs: f.identity.callsign, bay: s.bayId, m1: f.identity.modeOne, m2: f.identity.modeTwo, vul: [f.mission.vulWindowStartUtc, f.mission.vulWindowEndUtc], msn: f.mission.missionNumber }; }));
+  // Only the ATO's own callsigns: the Board is shared by the whole run, and an earlier spec file
+  // (l1-popovers' random L#### Strips) leaves MISSION Strips of its own that this import did not make.
+  const ATO_CALLSIGNS = ['DUDE21', 'MAGIC11', 'SHELL71', 'SNAKE41', 'VIPER11'];
+  const lines = await page.evaluate((own) => getAllEfspStrips()
+    .filter(s => s.role === 'MISSION' && s.state !== 'DROPPED' && own.includes(getEfspFdr(s.fdrId).identity.callsign))
+    .map(s => { const f = getEfspFdr(s.fdrId); return { cs: f.identity.callsign, bay: s.bayId, m1: f.identity.modeOne, m2: f.identity.modeTwo, vul: [f.mission.vulWindowStartUtc, f.mission.vulWindowEndUtc], msn: f.mission.missionNumber }; }), ATO_CALLSIGNS);
   expect(lines.map(l => l.cs).sort()).toEqual(['DUDE21', 'MAGIC11', 'SHELL71', 'SNAKE41', 'VIPER11']);
   expect(lines.every(l => l.bay === 'tac-c2-tasked')).toBe(true);
   const viper = lines.find(l => l.cs === 'VIPER11');

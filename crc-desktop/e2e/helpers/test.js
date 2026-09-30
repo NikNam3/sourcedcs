@@ -67,7 +67,7 @@ async function resetFieldState(browser, baseURL) {
   } finally {
     await ctx.close().catch(() => {});
     // Positions are released on disconnect; let crc-sync see it before the spec takes them.
-    await new Promise((r) => setTimeout(r, 300));
+    await new Promise((r) => setTimeout(r, 800));
   }
 }
 

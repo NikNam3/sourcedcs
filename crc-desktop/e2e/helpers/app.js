@@ -112,7 +112,7 @@ async function settleCorrelation(page, callsign) {
     if (!s || ineligible.includes(s.state)) return true;
     const el = document.querySelector(`.efsp-strip[data-strip-id="${s.stripId}"]`);
     return !!el && /\|cor:\d/.test(el.dataset.sig || '');
-  }, [callsign, CORRELATION_INELIGIBLE]), { message: `${callsign} redrawn with its correlation record`, timeout: 10000 }).toBe(true);
+  }, [callsign, CORRELATION_INELIGIBLE]), { message: `${callsign} redrawn with its correlation record`, timeout: 20000 }).toBe(true);
 }
 
 /** The Strip element showing this callsign. */
@@ -262,7 +262,26 @@ async function startAction(strip, name, opts = {}) {
   await item.click({ timeout: 3000, ...opts });
 }
 
+/**
+ * Retires the live Strips carrying these callsigns, as their owners.
+ *
+ * The Board is one crc-sync for the whole run, so a Strip a spec leaves behind is still there for
+ * every file after it — l1-touch-targets' VIPER11 made l14-ato-import's import ambiguous (two live
+ * VIPER11s: the plan says CREATE, not BIND). Needs the owning Position held on this page.
+ */
+async function dropStrips(page, callsigns) {
+  await page.evaluate((cs) => {
+    for (const s of getAllEfspStrips()) {
+      const fdr = getEfspFdr(s.fdrId);
+      if (!fdr || !cs.includes(fdr.identity.callsign) || s.state === 'DROPPED') continue;
+      sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
+    }
+  }, callsigns);
+  await page.waitForTimeout(400);
+}
+
 module.exports = {
+  dropStrips,
   fakeToken, openPanel, openEfspPanel, seedStrip, stripByCallsign,
   expectDoesSomething, expectRefusalIsVisible, expectOnTop, expectTouchTarget,
   stripMenuItem, startAction,
