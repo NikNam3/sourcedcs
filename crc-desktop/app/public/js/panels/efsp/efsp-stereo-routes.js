@@ -23,6 +23,21 @@
 
 const STEREO_ROUTES_CLIENT_TIMEOUT_MS = 4000;
 
+// The last list a fetch actually returned (docs/adr/0073). Block 9F's picker
+// (strip-template.js's enumSelectOptionsFor) renders synchronously and cannot
+// wait on a fetch, so it reads this. An ok response replaces it, including
+// with an empty list (the table was emptied on the server); a FAILED fetch
+// leaves it alone, because "crc-sync did not answer" says nothing about the
+// table and blanking the picker on a network blip would take a working
+// control away. efsp-panel.js already re-fetches on every snapshot, so this
+// follows a restarted crc-sync with no code of its own.
+let _stereoRoutesCache = [];
+
+/** The routes the last successful fetch returned, in table order. Never throws; [] before any fetch. */
+function cachedStereoRoutesClient() {
+  return _stereoRoutesCache;
+}
+
 /**
  * @param {{fetchImpl?:typeof fetch, timeoutMs?:number, authHeaders?:()=>object}} [opts] — injectable for tests
  * @returns {Promise<Array<{name:string, description?:string, departureAirport?:string, destinationAirport?:string, route:string, requestedAltitude?:string, remarks?:string}>>} never throws
@@ -43,7 +58,9 @@ async function listStereoRoutesClient(opts = {}) {
     // seed anything — drop rather than render an option that would only ever
     // be refused. The server validates both, so this is belt-and-braces
     // against a hand-edited table reaching an older client.
-    return data.routes.filter(r => r && r.name && r.route);
+    const routes = data.routes.filter(r => r && r.name && r.route);
+    _stereoRoutesCache = routes;
+    return routes;
   } catch (err) {
     console.warn('[efsp] stereo route list unavailable — filing by short name will just be unavailable:', err.message);
     return [];
@@ -69,6 +86,6 @@ function normalizeStereoNameClient(name) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
-    listStereoRoutesClient, normalizeStereoNameClient, STEREO_ROUTES_CLIENT_TIMEOUT_MS,
+    listStereoRoutesClient, cachedStereoRoutesClient, normalizeStereoNameClient, STEREO_ROUTES_CLIENT_TIMEOUT_MS,
   };
 }

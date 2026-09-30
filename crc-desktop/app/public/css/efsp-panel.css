@@ -1765,3 +1765,8 @@
  * deviation. Declared after the arrival edge so an alert wins over "new". */
 .efsp-strip.efsp-strip-alert { border-color: var(--efsp-bad); box-shadow: inset 3px 0 0 var(--efsp-bad); }
 .efsp-strip.efsp-strip-alert-attn { border-top-color: var(--efsp-attn); border-right-color: var(--efsp-attn); border-bottom-color: var(--efsp-attn); }
+
+/* docs/adr/0073 — §10.5: a time Block showing another source's time as an
+   estimate (TAXI/TAKEOFF before the actual). Italic only: colour means
+   something is wrong (docs/adr/0056), and an estimate is not. */
+.efsp-block-estimated { font-style: italic; }

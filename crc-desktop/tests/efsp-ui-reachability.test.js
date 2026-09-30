@@ -355,7 +355,7 @@ function renderStrip({ strip, fdr, held, airspaces = [], correlations = [], trac
   _activeElement = null; // every render starts with nothing focused
   const sandbox = {
     console, module: { exports: {} }, setTimeout, clearTimeout, Date, JSON, Math, Number, Set, Map,
-    Array, Object, String, Boolean, isNaN, parseInt, parseFloat, crypto: { randomUUID: () => 'test-id' },
+    Array, Object, String, Boolean, isNaN, parseInt, parseFloat, crypto: { randomUUID: () => 'test-id' }, AbortController,
     // Document-level listeners are RECORDED, not dropped. The dismiss-on-
     // outside-click popovers register here in the capture phase, and a stub
     // that swallowed them made a whole class of bug — a popover that closes on
@@ -384,7 +384,9 @@ function renderStrip({ strip, fdr, held, airspaces = [], correlations = [], trac
 
   // Every name a contact is shown with comes from track-label.js (crc-sync's docs/adr/0059).
   vm.runInContext(fs.readFileSync(path.join(CLIENT, '../../track-label.js'), 'utf8'), sandbox, { filename: 'track-label.js' });
-  for (const file of ['efsp-nla.js', 'strip-template.js', 'efsp-state.js', 'efsp-arrivals.js', 'efsp-gestures.js',
+  // time-chains.js and efsp-stereo-routes.js as index.html loads them: the
+  // Strip's time Blocks and Block 9F's picker read them (docs/adr/0073).
+  for (const file of ['efsp-nla.js', 'time-chains.js', 'efsp-stereo-routes.js', 'strip-template.js', 'efsp-state.js', 'efsp-arrivals.js', 'efsp-gestures.js',
     'annotation-editor.js', 'strip-drag.js', 'correlation-highlight.js', 'marsa-badge.js', 'strip-fields.js', 'bay-view.js', 'strip-view.js']) {
     vm.runInContext(fs.readFileSync(path.join(CLIENT, file), 'utf8'), sandbox, { filename: file });
   }
@@ -2221,4 +2223,124 @@ test('an MTR write reaches the Strip through the FDR\'s rev — the group appear
   sandbox.applyEfspDelta({ fdrs: { updated: [mtrFdrWith({ exitFix: 'E' }, { rev: 2 })] } });
   assert.equal(sandbox._stripElNeedsRebuild(el, strip, null, null), true);
   assert.ok(inFields(sandbox._buildStripEl(strip), '9H-EXIT'));
+});
+
+// ── Block 9F's picker and §10.5's times on a rendered Strip (docs/adr/0073) ─
+
+/** Fills the sandbox's stereo cache the way efsp-panel.js's snapshot re-fetch does. */
+async function withStereoRoutes(sandbox, routes) {
+  const res = { ok: true, json: async () => ({ ok: true, routes }) };
+  await sandbox.listStereoRoutesClient({ fetchImpl: async () => res, authHeaders: () => ({}) });
+}
+const PACKS = [{ name: 'PACK 1', route: 'LTAG DCT A' }, { name: 'PACK 2', route: 'LTAG DCT B' }];
+
+test('9F is a select of the configured stereo routes, never free text', async () => {
+  const strip = stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' });
+  const r = renderStrip({ strip, fdr: FDR, held: ['OPS'] });
+  await withStereoRoutes(r.sandbox, PACKS);
+  const el = r.sandbox._buildStripEl(strip);
+  const select = openEnum(el, '9F');
+  assert.deepEqual(select.children.map(o => o.value), ['', 'PACK 1', 'PACK 2']);
+  assert.equal(openInputs(el).length, 0, 'a free-text input opened as well');
+
+  // Arrowing is looking (F-205).
+  fire(select, 'keydown', { key: 'ArrowDown' });
+  select.value = 'PACK 1';
+  fire(select, 'change');
+  assert.equal(r.sent.length, 0, 'an arrow key re-filed the flight');
+  // A pick sends exactly one SetBlock with the canonical name.
+  fire(select, 'keydown', { key: 'Enter' });
+  assert.equal(r.sent.length, 1);
+  assert.deepEqual({ ...r.sent[0].op }, { kind: 'SetBlock', blockId: '9F', value: 'PACK 1' });
+});
+
+test('9F: "—" cancels the stereo by sending \'\', and a retired route stays shown and selected (T2, T3)', async () => {
+  const strip = stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' });
+  const fdr = { ...FDR, filed: { stereoRouteName: 'PACK 9', route: 'LTAG DCT OLD' } };
+  const r = renderStrip({ strip, fdr, held: ['OPS'] });
+  await withStereoRoutes(r.sandbox, PACKS);
+  const el = r.sandbox._buildStripEl(strip);
+  const select = openEnum(el, '9F');
+  assert.deepEqual(select.children.map(o => o.value), ['', 'PACK 1', 'PACK 2', 'PACK 9']);
+  assert.equal(select.value, 'PACK 9');
+  select.value = '';
+  fire(select, 'change');
+  assert.equal(r.sent.length, 1);
+  assert.deepEqual({ ...r.sent[0].op }, { kind: 'SetBlock', blockId: '9F', value: '' }, 'never a write to Block 9');
+});
+
+test('9F with no route table is a plain cell with a reason, not a control that cannot act (T1)', () => {
+  const strip = stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' });
+  const { el } = renderStrip({ strip, fdr: FDR, held: ['OPS'] });
+  const cell = blockCell(el, '9F');
+  assert.ok(cell, '9F is not on the OPS Strip');
+  assert.equal(cell.classList.contains('efsp-block-editable'), false);
+  assert.equal(cell.title, 'no stereo routes configured');
+  click(cell);
+  assert.equal(openInputs(el).length, 0);
+  assert.equal(descendants(el).some(c => c.tagName === 'select'), false);
+});
+
+test('every writable DEPARTURE Block is reachable with a stereo table too — 9F included', async () => {
+  for (const positionId of positionsFor('DEPARTURE')) {
+    const strip = stripAt({ state: 'PROPOSED', ownerPositionId: positionId });
+    const r = renderStrip({ strip, fdr: FDR, held: [positionId] });
+    await withStereoRoutes(r.sandbox, PACKS);
+    assert.ok(r.sandbox.enumSelectOptionsFor('9F', FDR), 'precondition: a table is cached');
+    const compact = r.sandbox.compactBlocksFor('DEPARTURE', positionId);
+    r.sandbox.renderAllOpenEfspBays = () => {};
+    click(descendants(r.el).find(c => (c.className || '').includes('efsp-expand-btn')));
+    const expanded = descendants(r.sandbox._buildStripEl(strip)).filter(c => c.dataset && c.dataset.expandedBlock).map(c => c.dataset.expandedBlock);
+    assert.ok(compact.includes('9F') || expanded.includes('9F'), `9F unreachable at ${positionId}`);
+    // Collapse again so the next Position's render starts closed.
+    click(descendants(r.sandbox._buildStripEl(strip)).find(c => (c.className || '').includes('efsp-expanded-collapse')));
+  }
+});
+
+test('§10.5: departure, off-block and takeoff time each follow an explicit ordered fallback, and the chosen source is visible on hover', () => {
+  const Z = (hh, mm) => Date.UTC(2016, 5, 21, hh, mm);
+  const strip = stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' });
+  const fdr = { ...FDR, filed: {}, assigned: {}, ato: { departure: { timeUtc: Z(13, 10) } } };
+  const r = renderStrip({ strip, fdr, held: ['OPS'] });
+
+  // P-time on the OPS face: the ATO's time, not italic, the source on the value.
+  const p = blockCell(r.el, '6');
+  assert.equal(p.textContent, '1310');
+  assert.equal(p.classList.contains('efsp-block-estimated'), false);
+  assert.match(p.title, /from the ATO/);
+
+  // TAXI and TAKEOFF live in ▼: italic estimates, with the source on the
+  // value AND on the row's label.
+  r.sandbox.renderAllOpenEfspBays = () => {};
+  click(descendants(r.el).find(c => (c.className || '').includes('efsp-expand-btn')));
+  const expanded = r.sandbox._buildStripEl(strip);
+  const row = (id) => descendants(expanded).find(c => c.dataset && c.dataset.expandedBlock === id);
+  for (const id of ['17', '18']) {
+    const cell = descendants(row(id)).find(c => c.dataset && c.dataset.block === id);
+    assert.equal(cell.textContent, '1310', id);
+    assert.equal(cell.classList.contains('efsp-block-estimated'), true, `${id} is an estimate and is not marked`);
+    const label = descendants(row(id)).find(c => (c.className || '').includes('efsp-expanded-label'));
+    assert.match(label.title, /estimate/, `${id}'s label has no source`);
+  }
+  assert.match(descendants(row('17')).find(c => c.dataset && c.dataset.block === '17').title, /~1310Z estimate: P-time, from the ATO/);
+
+  // Typing TAKEOFF 1402 (the server stores it as epoch ms): no italics, and the hover says who.
+  r.sandbox.applyEfspDelta({ fdrs: { updated: [{ ...fdr, rev: 2, assigned: { takeoffTimeUtc: Z(14, 2) }, provenance: { 'assigned.takeoffTimeUtc': 'CONTROLLER_ENTERED' } }] } });
+  const typed = descendants(r.sandbox._buildStripEl(strip)).find(c => c.dataset && c.dataset.block === '18');
+  assert.equal(typed.textContent, '1402');
+  assert.equal(typed.classList.contains('efsp-block-estimated'), false);
+  assert.match(typed.title, /entered by a controller/);
+
+  // Cleared: the estimate is back.
+  r.sandbox.applyEfspDelta({ fdrs: { updated: [{ ...fdr, rev: 3, assigned: { takeoffTimeUtc: null } }] } });
+  const cleared = descendants(r.sandbox._buildStripEl(strip)).find(c => c.dataset && c.dataset.block === '18');
+  assert.equal(cleared.textContent, '1310');
+  assert.equal(cleared.classList.contains('efsp-block-estimated'), true);
+});
+
+test('a refusal title on a time Block is not overwritten by its source', () => {
+  const strip = stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' });
+  const refusal = { stripId: 's1', blockId: '6', message: 'proposed departure time must be a UTC time as HHMM, e.g. 1432' };
+  const { el } = renderStrip({ strip, fdr: { ...FDR, ato: { departure: { timeUtc: 1 } } }, held: ['OPS'], refusal });
+  assert.equal(blockCell(el, '6').title, refusal.message);
 });

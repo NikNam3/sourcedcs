@@ -70,12 +70,12 @@ const DEPARTURE_BLOCK_MAP = {
   // §9.10 stereo route name (docs/adr/0050) — mirrors crc-sync's
   // block-map.js '9F' exactly; see that module's comment for why it is not
   // numbered M18 and why writing it re-files the flight rather than just
-  // relabelling it. Ordinary click-to-edit free text, deliberately NOT in
-  // ENUM_SELECT_BLOCKS despite being a restricted value set: that table is
-  // a static client-side literal and the route table is runtime config, so
-  // a picker there would need a dynamic option source it has no shape for.
-  // The server refuses a name that is not in the table, and the rejection
-  // now carries its detail to the controller.
+  // relabelling it. A picker of the configured routes, never free text
+  // (docs/adr/0073): 0050 left it free text because ENUM_SELECT_BLOCKS is a
+  // static literal and the route table is runtime config. The runtime option
+  // source is efsp-stereo-routes.js's cache of the last fetched list, read by
+  // enumSelectOptionsFor(blockId, fdr) below. The server still resolves every
+  // name and refuses one it does not have (a stale list).
   '9F': { required: false, label: 'STEREO',   target: { kind: 'fdr', path: 'filed.stereoRouteName' } },
   // §9.4 MTR fields (crc-sync's docs/adr/0062): 9G-* is the guide's M10, 9H-*
   // its M11. Plain fdr, no interlock (9H-ALT is the pilot's request, not a
@@ -385,6 +385,22 @@ function resolveBlockValue(blockId, fdr, strip) {
   const t = def.target;
 
   if (t.kind === 'fdr') {
+    // §10.5 (docs/adr/0073): P-time, TAXI and TAKEOFF on a DEPARTURE Strip
+    // show the first source in their chain that has a value, computed here and
+    // never written back. `timeSource` says which; `estimated` marks another
+    // source's time standing in for an actual that has not happened yet.
+    const chain = ((strip && strip.role) || 'DEPARTURE') === 'DEPARTURE' && typeof timeChainForBlock === 'function'
+      ? timeChainForBlock(blockId) : null;
+    if (chain) {
+      const r = resolveTimeChain(chain, fdr);
+      const stored = (fdr && fdr.provenance && fdr.provenance[t.path]) || 'CONTROLLER_ENTERED';
+      return {
+        value: formatZuluHhmm(r.valueUtc) || null,
+        provenance: r.source === 'CONTROLLER' ? stored : 'COMPUTER_GENERATED',
+        timeSource: r.source,
+        estimated: r.estimated,
+      };
+    }
     let value = fdr ? getPath(fdr, t.path) : null;
     if (ZULU_HHMM_BLOCKS.has(blockId)) value = formatZuluHhmm(value) || null; // epoch ms → '1432'
     const provenance = (fdr && fdr.provenance && fdr.provenance[t.path]) || def.provenance || 'CONTROLLER_ENTERED';
@@ -477,8 +493,32 @@ const ENUM_SELECT_BLOCKS = {
   '3G': ['CLEAN', 'LOADED', 'HUNG', 'EXPENDED'],
 };
 
-/** @returns {string[]|null} the option values for this Block if it's an enum-select Block, else null. */
-function enumSelectOptionsFor(blockId) {
+// Block 9F's options come from the stereo route table, which is runtime
+// config (docs/adr/0073): efsp-stereo-routes.js caches the last list crc-sync
+// returned. Guarded because the node tests load this module on its own.
+function _stereoRouteOptions() {
+  const routes = typeof cachedStereoRoutesClient === 'function' ? cachedStereoRoutesClient() : [];
+  return Array.isArray(routes) ? routes.filter(r => r && r.name && r.active !== false) : [];
+}
+
+/**
+ * @param {string} blockId
+ * @param {object} [fdr] — the flight, for Block 9F only: a route the squadron
+ *   has since retired stays on the flight flying it (ADR 0050: deactivation is
+ *   not retroactive), so the flight's current name is offered even when the
+ *   table no longer lists it.
+ * @returns {string[]|null} the option values for this Block if it's an
+ *   enum-select Block, else null. 9F is null when there is nothing to offer —
+ *   no routes cached and no stereo on the flight — so bay-view.js renders a
+ *   plain cell rather than a picker that can only fail.
+ */
+function enumSelectOptionsFor(blockId, fdr) {
+  if (blockId === '9F') {
+    const names = _stereoRouteOptions().map(r => r.name);
+    const current = fdr && fdr.filed ? fdr.filed.stereoRouteName : null;
+    if (current && !names.includes(current)) names.push(current);
+    return names.length ? names : null;
+  }
   return ENUM_SELECT_BLOCKS[blockId] || null;
 }
 
@@ -501,11 +541,15 @@ function enumSelectOptionsFor(blockId) {
 //   24A          -> airspace ownership is a DIRECTION, and its record is
 //                   append-only precisely so a handover cannot be erased.
 //                   "Give it back" is CONTROLLING_AGENCY, not blank.
+//   9F           -> fdr-store.js's setField('filed.stereoRouteName', '')
+//                   clears the LABEL and keeps the route (docs/adr/0050), so
+//                   "cancel the stereo" is meaningful and the route a flight
+//                   is taxiing on never goes blank (docs/adr/0073).
 // Clearing SREG is still refused while an ACTIVE MARSA relation holds the
 // flight (board-store.js names the declarer in the refusal). That is correct
 // and deliberately NOT pre-empted here: the refusal is legible and lands
 // attributed to the Strip.
-const ENUM_CLEARABLE_BLOCKS = new Set(['RSVC', 'SREG']);
+const ENUM_CLEARABLE_BLOCKS = new Set(['RSVC', 'SREG', '9F']);
 
 /** @returns {boolean} may this enum Block be cleared back to no value at all? */
 function isEnumBlockClearable(blockId) {
@@ -553,6 +597,10 @@ function requiredBlocksFor(role = 'DEPARTURE') {
 function isBlockEditable(blockId, role = 'DEPARTURE') {
   const map = BLOCK_MAPS[role];
   const def = map && map[blockId];
+  // 9F is a picker (docs/adr/0073) and editable only while there is a route
+  // table to pick from; with none it must not fall through to free text
+  // (bay-view.js tries the picker first, then this).
+  if (blockId === '9F') return !!def && _stereoRouteOptions().length > 0;
   // 'frequency' joins the editable kinds: unlike airspace-owner/tofi, which
   // are restricted enums with their own <select>, a frequency is a free
   // numeric entry — the ordinary click-to-edit path is right for it. The
@@ -569,11 +617,12 @@ function isBlockEditable(blockId, role = 'DEPARTURE') {
 // crc-sync's zulu-time.js resolves it to the instant again. The MTR times
 // (docs/adr/0062) and, since supervisor fix F4, every typed …TimeUtc Block:
 // 6 (PROP DEP on a DEPARTURE, ETA on an ARRIVAL), 14 and 14B-D (the release
-// times) and 16-18. Block ids, not paths: each id means one time on every
-// role map that has it. The vul window (M6/M7) is not here yet — its
-// storage belongs to the ATO lanes (L14/L16).
+// times) and 16-18; and since docs/adr/0073 the vul window, M6/M7 (S-F4).
+// Block ids, not paths: each id means one time on every role map that has it.
+// A test derives this set from the Block Maps, so a time Block added later
+// without it fails.
 const ZULU_HHMM_BLOCKS = new Set([
-  '6', '9G-TIME', '9H-TIME', '14', '14B', '14C', '14D', '16', '17', '18',
+  '6', '9G-TIME', '9H-TIME', '14', '14B', '14C', '14D', '16', '17', '18', 'M6', 'M7',
 ]);
 
 /** Epoch ms as the four-digit Zulu time a Strip shows ('1432'), or '' for no time. Mirrors crc-sync's zulu-time.js. */
@@ -596,8 +645,78 @@ const BLOCK_TITLES = {
   '9H-ALT': 'requested altitude after exit',
 };
 
-/** The label's hover title for this Block, or null. `fdr` adds the lost-comms rule to EXIT ALT. */
-function blockTitleFor(blockId, fdr) {
+// ── §10.5's source on hover (docs/adr/0073) ─────────────────────────────────
+//
+// What each chain source means, in the words a controller reads. An estimate
+// names the chain it borrowed from and that chain's own source.
+const TIME_SOURCE_TEXT = {
+  CONTROLLER: 'entered by a controller',
+  FLIGHT_PLAN: 'from the filed DD-1801 (item 13, EOBT)',
+  ATO: 'from the ATO (AMSNDAT departure time)',
+  EST_DEPARTURE: 'estimate: P-time',
+  EST_OFF_BLOCK: 'estimate: off-block',
+};
+const TIME_CHAIN_NAMES = { departure: 'Proposed departure (P-time)', offBlock: 'Off-block (taxi) time', takeoff: 'Takeoff time' };
+
+function _timeSourceSentence(source, via) {
+  const text = TIME_SOURCE_TEXT[source] || source;
+  return via ? `${text}, ${TIME_SOURCE_TEXT[via] || via}` : text;
+}
+
+/**
+ * The hover text for Block 6/17/18 on a DEPARTURE Strip: the Block's name, the
+ * value and where it came from, and what would apply if it were cleared.
+ * Null for any other Block or Role.
+ */
+function timeChainTitleFor(blockId, fdr, strip) {
+  if (((strip && strip.role) || 'DEPARTURE') !== 'DEPARTURE') return null;
+  const chain = typeof timeChainForBlock === 'function' ? timeChainForBlock(blockId) : null;
+  if (!chain) return null;
+  const r = resolveTimeChain(chain, fdr);
+  const lines = [TIME_CHAIN_NAMES[chain]];
+  if (r.source) {
+    lines.push(`${r.estimated ? '~' : ''}${formatZuluHhmm(r.valueUtc)}Z ${_timeSourceSentence(r.source, r.via)}`);
+  } else {
+    lines.push('no time from any source');
+  }
+  // What a controller clearing their entry would get back — only meaningful
+  // when a controller's entry is what is shown.
+  if (r.source === 'CONTROLLER') {
+    const next = r.candidates.find(c => c.source !== 'CONTROLLER' && c.valueUtc != null);
+    lines.push(next
+      ? `if cleared: ${_timeSourceSentence(next.source, next.via)}, ${formatZuluHhmm(next.valueUtc)}Z`
+      : 'if cleared: no other source');
+  }
+  return lines.join('\n');
+}
+
+/**
+ * What the VALUE cell of a Block adds to itself (bay-view.js's _buildBlockCell):
+ * a hover title and whether to set it in italics as an estimate. Null when
+ * the cell needs nothing. Block 9F with no route table says why it is not a
+ * picker, since there is nothing to pick.
+ */
+function blockValueHintFor(blockId, fdr, strip) {
+  if (blockId === '9F' && enumSelectOptionsFor('9F', fdr) == null) {
+    return { title: 'no stereo routes configured', estimated: false };
+  }
+  const title = timeChainTitleFor(blockId, fdr, strip);
+  if (!title) return null;
+  return { title, estimated: !!resolveBlockValue(blockId, fdr, strip).estimated };
+}
+
+/**
+ * The label's hover title for this Block, or null. `fdr` adds the lost-comms
+ * rule to EXIT ALT; with `strip`, Blocks 6/17/18 on a DEPARTURE carry §10.5's
+ * source (docs/adr/0073). Without the Strip (the collapsed face's label, which
+ * strip-view.js titles with the FDR alone) the chain title is left off: the
+ * same id is the ETA on an ARRIVAL, and the value cell carries it anyway.
+ */
+function blockTitleFor(blockId, fdr, strip) {
+  if (strip) {
+    const chainTitle = timeChainTitleFor(blockId, fdr, strip);
+    if (chainTitle) return chainTitle;
+  }
   const base = BLOCK_TITLES[blockId] || null;
   if (blockId !== '9H-ALT' || typeof mtrLostCommsAdvisory !== 'function') return base;
   const advisory = mtrLostCommsAdvisory(fdr);
@@ -611,5 +730,6 @@ if (typeof module !== 'undefined' && module.exports) {
     isBlockEditable, CONFIRM_VACATED_ELIGIBLE_BLOCKS,
     enumSelectOptionsFor, ENUM_CLEARABLE_BLOCKS, isEnumBlockClearable, isBooleanToggleBlock, blockLabelFor,
     ZULU_HHMM_BLOCKS, formatZuluHhmm, BLOCK_TITLES, blockTitleFor,
+    TIME_SOURCE_TEXT, timeChainTitleFor, blockValueHintFor,
   };
 }
