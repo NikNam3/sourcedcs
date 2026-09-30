@@ -185,6 +185,11 @@ class BoardStore {
     // Undo window across a restart is an acceptable Phase-1 UX gap, not a
     // correctness or safety concern.
     this._nlaHistory = new Map();
+    // stripId -> Date.now() at its drop: when a DROPPED Strip is archived
+    // (docs/adr/0082, H36). Wall time on purpose, like the latch above: a
+    // retention period is a storage lifetime, and the mission clock rewinds on
+    // a reload (H11). Not a Strip field, so the wire is unchanged. Persisted.
+    this._droppedWallAt = new Map();
   }
 
   setMutationLog(mutationLog) { this._mutationLog = mutationLog; }
@@ -241,7 +246,7 @@ class BoardStore {
     const byId = new Map();
     for (const e of entries) byId.set(e.id, e);
     const updated = [];
-    const gone = [];
+    const gone = []; // touched in the window and no longer on the Board: archived (docs/adr/0082)
     for (const e of byId.values()) {
       if (this._strips.has(e.id)) updated.push(this._strips.get(e.id));
       else gone.push(e.id);
@@ -1509,6 +1514,7 @@ class BoardStore {
     if (strip.state === 'DROPPED') {
       strip.flags.removeIndicator = false;
       this._fdrStore.reacquireFdr(strip.fdrId);
+      this._droppedWallAt.delete(strip.stripId);
     }
     return this._applySetState(strip, last.prevState, by);
   }
@@ -1553,6 +1559,7 @@ class BoardStore {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'cannot drop a Strip under active tactical control — complete a TOFI exit first', strip };
     }
     strip.state = 'DROPPED';
+    this._droppedWallAt.set(strip.stripId, Date.now()); // the archive's clock, docs/adr/0082
     strip.flags.removeIndicator = true; // distinct from delete (§3.4) — Strip stays queryable, see getRack()
     strip.rev += 1;
     strip.updatedAt = this._clock.now();
@@ -2536,6 +2543,55 @@ class BoardStore {
     return affected.map(s => s.stripId);
   }
 
+  /**
+   * When this DROPPED Strip dropped, in wall ms (docs/adr/0082). A Strip that
+   * reached DROPPED by a path other than _retireStrip (a refused TOFI's minted
+   * Strip, a SetState) is stamped the first time anyone asks, so it is
+   * archived at most one sweep late rather than never. Null for a live Strip.
+   */
+  droppedWallAtOf(stripId) {
+    const strip = this._strips.get(stripId);
+    if (!strip || strip.state !== 'DROPPED') {
+      this._droppedWallAt.delete(stripId);
+      return null;
+    }
+    if (!this._droppedWallAt.has(stripId)) this._droppedWallAt.set(stripId, Date.now());
+    return this._droppedWallAt.get(stripId);
+  }
+
+  /**
+   * Archives one DROPPED Strip (docs/adr/0082, H36): it leaves memory and the
+   * snapshot, and the Mutation log keeps its history. Nothing archived comes
+   * back — an Undo of its drop is NOT_FOUND, like any Mutation on it. The
+   * archiver (archiver.js) decides WHEN; this only does it.
+   *
+   * The ring gets a `gone` entry, so the archive advances the Board's seq and
+   * a resync from before it reports the Strip in getDeltaSince's `gone`.
+   * @param {string} stripId
+   * @param {string} reason 'AGE' | 'MISSION_CHANGE'
+   * @param {object} [extra] fields added to the audit line (e.g. the session)
+   * @returns {string|null} the Strip's fdrId, or null when it was not a DROPPED Strip here
+   */
+  archiveStrip(stripId, reason, extra = {}) {
+    const strip = this._strips.get(stripId);
+    if (!strip || strip.state !== 'DROPPED') return null;
+    this._strips.delete(stripId);
+    this._droppedWallAt.delete(stripId);
+    this._nlaHistory.delete(stripId);
+    this._log.push({ seq: ++this._seq, type: 'gone', id: stripId });
+    this._pruneLog();
+    if (this._mutationLog) {
+      this._mutationLog.record({
+        clientMutationId: null, op: 'Archive', stripId, fdrId: strip.fdrId || null,
+        // L26 (decisions.md S-L5) puts facilityId on every Board entry; this
+        // line carries it from the start.
+        facilityId: this._rules.facilityId || null,
+        actingPositionId: null, actorId: 'system', at: this._clock.now(), reason, ...extra,
+      });
+    }
+    return strip.fdrId || null;
+  }
+
   // ── Persistence (durable per ADR 0002 — mission reload must NOT clear this) ──
   snapshot() {
     // `replay`: the idempotency records of the last REPLAY_PERSIST_WINDOW_MS,
@@ -2546,7 +2602,7 @@ class BoardStore {
     for (const [cmid, record] of this._appliedMutations) {
       if (record.appliedWallAt >= horizon) replay.push([cmid, record]);
     }
-    return { strips: this.getAll(), cidSeq: this._cidSeq, replay };
+    return { strips: this.getAll(), cidSeq: this._cidSeq, replay, droppedWallAt: [...this._droppedWallAt] };
   }
   restore(data) {
     this._strips = new Map((data?.strips || []).map(s => [s.stripId, s]));
@@ -2570,6 +2626,17 @@ class BoardStore {
     this._appliedMutations = new Map();
     for (const [cmid, record] of (Array.isArray(data?.replay) ? data.replay : [])) {
       if (typeof cmid === 'string' && record && typeof record === 'object') this._appliedMutations.set(cmid, Object.freeze({ ...record }));
+    }
+    // docs/adr/0082 — when each DROPPED Strip dropped. One restored with no
+    // entry (a snapshot written before it) starts its 2 h now: it was counted
+    // before it was persisted (L5 backfills from the log at boot anyway).
+    const dropped = new Map(Array.isArray(data?.droppedWallAt) ? data.droppedWallAt : []);
+    this._droppedWallAt = new Map();
+    const restoredAt = Date.now();
+    for (const strip of this._strips.values()) {
+      if (strip.state !== 'DROPPED') continue;
+      const at = dropped.get(strip.stripId);
+      this._droppedWallAt.set(strip.stripId, Number.isFinite(at) ? at : restoredAt);
     }
   }
 }

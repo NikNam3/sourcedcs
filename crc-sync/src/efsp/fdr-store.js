@@ -1233,6 +1233,24 @@ class FdrStore {
     return { ok: true, fdr };
   }
 
+  /**
+   * Archives a finished flight's FDR (docs/adr/0082, H36): it leaves memory
+   * and the snapshot. Only archiver.js calls this, and only in the sweep that
+   * archived the FDR's last Strip — an FDR that never had a Strip is never
+   * passed here. The code should already be free (_releaseFdrIfLastStrip);
+   * it is released again only if this FDR still holds it, never when another
+   * flight has taken it since. Idempotent.
+   * @returns {boolean} whether there was an FDR to archive
+   */
+  archiveFdr(fdrId) {
+    const fdr = this._fdrs.get(fdrId);
+    if (!fdr) return false;
+    const code = fdr.identity && fdr.identity.beaconAssigned;
+    if (code && this._codeAllocator.holderOf(code) === fdrId) this._codeAllocator.release(code);
+    this._fdrs.delete(fdrId);
+    return true;
+  }
+
   // ── Persistence (durable per ADR 0002) ──────────────────────────────────
   snapshot() {
     return { fdrs: this.getAll(), codes: this._codeAllocator.snapshot(), codeCursor: this._codeAllocator.cursor };

@@ -127,8 +127,9 @@ class WsHub {
    * for being server-originated immediate state: the thing that changed is
    * state, and nothing else was ever going to tell anyone about it.
    *
-   * `strips.gone` is deliberately absent rather than empty-by-accident: this
-   * sweep never removes a Strip, it only re-states ones that are still there.
+   * `strips.gone` is empty for that sweep: it never removes a Strip, it only
+   * re-states ones that are still there. The archiver (docs/adr/0082) is the
+   * other caller, and the only sender of `gone` Strips and `fdrs.gone` here.
    */
   _boardEpochFor(facilityId) {
     const board = this._efsp && typeof this._efsp.boardStoreFor === 'function' ? this._efsp.boardStoreFor(facilityId) : null;
@@ -143,8 +144,8 @@ class WsHub {
       // caller's stamp wins; otherwise the Board's own current epoch.
       boardEpoch: payload.boardEpoch !== undefined ? payload.boardEpoch : this._boardEpochFor(payload.facilityId),
       facilityId: payload.facilityId,
-      strips: { updated: payload.strips || [], gone: [] },
-      fdrs: { updated: [] },
+      strips: { updated: payload.strips || [], gone: payload.gone || [] },
+      fdrs: payload.fdrsGone && payload.fdrsGone.length ? { updated: [], gone: payload.fdrsGone } : { updated: [] },
       positions: { updated: [] },
     });
   }

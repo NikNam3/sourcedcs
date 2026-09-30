@@ -11,7 +11,8 @@ const { ols, r2, r3 } = require('./metrics');
 // Thresholds (briefing §7 / §10 Q5), overridable by flag. Rationale beside each.
 const THRESHOLDS = {
   heapSlopeMBPerHour: 1.0,  // WP8 "no memory growth": a fixed-size Board should not grow a MB an hour
-  netGrowthPct: 10,         // ... nor end more than 10% above its post-warm-up baseline
+  netGrowthPct: 25,         // ... nor end more than 25% above its post-warm-up baseline: H72 — the 2 h archive
+                            // retention (H36) fills for 2 h before it plateaus, about +18% by itself
   maxKeyLen: 40,            // order-key.js REBALANCE_KEY_LENGTH: the length the module itself calls "needs rebalance"
   codePoolPct: 50,          // CodeAllocator's 4096-code pool must stay under half used
   p99WarnMs: 50,            // guide §7.9's remote-change budget is 200 ms; warn at a quarter of it
