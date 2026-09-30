@@ -383,6 +383,18 @@ function createHost(env, { stateDir }) {
           if (obligationsAreState && oChanged) broadcastAlerts();
           efsp.nlaStatusMonitor.tick();
           if (obligationsAreState) reply.obligations = obligationMonitor.getAll().length;
+          // H36 archiving (docs/adr/0082), as server.js runs it. No traffic
+          // count in the soak, so it archives unguarded (warned once). Its
+          // wall clock is the virtual Date.now.
+          if (efsp.archiver) {
+            const { archiveDeltas } = req('efsp/archiver.js');
+            const payloads = archiveDeltas(efsp.archiver.sweep(), efsp.boardStoreFor);
+            if (payloads.length) {
+              efsp.persist();
+              for (const p of payloads) hub.broadcastEfspBoardDelta(p);
+              reply.archived = payloads.reduce((n, p) => n + p.gone.length, 0);
+            }
+          }
         }
         if (what.has('heartbeat')) {
           for (const [ws, session] of hub._sessions) hub._tick(ws, session);
