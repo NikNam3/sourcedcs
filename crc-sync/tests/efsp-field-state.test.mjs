@@ -286,7 +286,7 @@ test('the store seeds one record per Facility with an inventory, every runway OP
   assert.equal(fsI.runwayChange, null);
   assert.equal(fsI.runwayChangeInProgress, false);
   assert.deepEqual(fsI.hotCargoPad, { name: 'Hot cargo pad', occupied: false, occupantFdrId: null });
-  assert.deepEqual(fsI.alertPad, { name: 'Alert pad', occupied: false, occupantFdrId: null });
+  assert.deepEqual(fsI.alertPad, { name: 'Alert pad', accessRoute: 'ALERT ACCESS TAXIWAY', occupied: false, occupantFdrId: null });
 });
 
 test('TWR begins a barrier change: the whole pavement is suspended in one rev, with the kind and who', () => {

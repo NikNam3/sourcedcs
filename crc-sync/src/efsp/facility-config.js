@@ -29,6 +29,7 @@
 const fs = require('fs');
 const blockMap = require('./block-map');
 const fieldState = require('./field-state'); // pure, requires nothing back (docs/adr/0061)
+const { validateAlertPadConfig } = require('./alert-scramble'); // pure (docs/adr/0070)
 // Required BEFORE this module builds its configs Map: the RANGES Facility's
 // Position set is derived from the airspace definitions (see
 // DEFAULT_RANGES_CONFIG). airspace-config.js deliberately does not require
@@ -223,7 +224,10 @@ const DEFAULT_CONFIG = {
     inspectionAuthorityPositionId: 'OPS',
     // Named placeholders only, no geometry or preferred direction (decisions.md
     // H21). L12 (hot cargo) and L13 (alert pad) give them meaning.
-    pads: { hotCargo: { name: 'Hot cargo pad' }, alert: { name: 'Alert pad' } },
+    // alert.accessRoute: the route §9.6 keeps clear for alert scrambles, marked
+    // constrained while one is active (docs/adr/0070). [SOURCE-DEFINED]
+    // placeholder name (H21) — squadron data, not doctrine.
+    pads: { hotCargo: { name: 'Hot cargo pad' }, alert: { name: 'Alert pad', accessRoute: 'ALERT ACCESS TAXIWAY' } },
   },
 };
 
@@ -441,6 +445,10 @@ function validateConfig(candidate) {
   // up with the Bays only warns — see _loadOne.
   if (candidate.fieldState !== undefined) {
     const problem = fieldState.validateFieldStateInventory(candidate.fieldState, candidate.positions || []);
+    if (problem) return { ok: false, reason: 'VALIDATION_ERROR', detail: problem };
+  }
+  if (candidate.fieldState && candidate.fieldState.pads) {
+    const problem = validateAlertPadConfig(candidate.fieldState.pads.alert);
     if (problem) return { ok: false, reason: 'VALIDATION_ERROR', detail: problem };
   }
   return { ok: true };
