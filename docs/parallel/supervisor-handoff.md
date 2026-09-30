@@ -144,3 +144,16 @@ L9-E1/E2/E3/E4/E7/E8, L1b-Q1, L12-Q2, L13-Q2, L23-Q6, L23-Q7, Q-L14-1, Q-L14-2, 
 - **U6** ALT doesn't accept block altitudes (e.g. `FL220-FL240`, `FL220B240`), which are common in military flying. Touches `parseAltitudeFt`, the ALT/HDG conformance of ADR 0058 (a block is conformant anywhere inside it), and STCA.
 - **U7 (bug, high: a stuck Strip)** The same for HANDOFF and POINT_OUT (every cross-Facility coordination primitive). E.g. a POINT_OUT from DEP to CTR: CTR accepts, then CTR drops its (replica/peer) Strip. DEP's Strip is left with an ACTIVE point-out it can't advance or clear, and CTR no longer has a Strip, so nobody can act on it. Fix: dropping or vacating the receiver's side of an ACTIVE point-out must end the coordination on the proposer's Strip (return it to no coordination, audited), and DEP must always have a way to cancel or close its own point-out. Add scenario tests for both HANDOFF and POINT_OUT (propose → accept → receiver drops → proposer can still act; and propose → receiver drops before answering). Likely in `coordination.js` / board-store's drop path. Owner: L23 (it holds the coordination/permission area) or the UI follow-up lane if L23 is already full.
 - **U8 (UI gap)** CTR's "TOFI Exit…" exists only inside the Strip's ⋯ menu (`strip-view.js:564`, enabled while TOFI is ACTIVE, `bay-view.js:1699`). Nothing surfaces it when the mission line goes OFF_STATION/RTB, so CTR sees no obvious exit button. Fix: when the paired mission Strip is OFF_STATION or RTB, CTR's Strip shows TOFI Exit as its primary (NLA-slot) action, or a quiet indicator + one-click button, without colour unless something is wrong (ADR 0056/0058). Needs the mission Strip's state visible to CTR's client (it already receives every Strip). Also check B2 (L23): EXIT can't be accepted while AIC holds the line. Owner: the UI follow-up lane (client), with L23 for B2.
+
+## State at the end of the session (2026-09-30)
+
+- `efsp-wp5-correlation` holds wave 1 plus F2/F3/F4, L22, L25, L1b, L12, L13, L16, L14, L15, L27 and L24. crc-sync 1795 pass / 8 todo; crc-desktop 707. Not pushed. (The "U1–U8" commits are handoff notes, not fixes.)
+- **Playwright on the merged branch (S-M-e2e9 in decisions.md): 13 consistent failures**, first job of the next session:
+  - stale tests: L12's field-state stand-in, L13's placeholder wording, L16's opt-in env;
+  - cross-spec state leak: no field-state reset between spec files (a suspended 05/23 leaks into l4-chain/l4-drag);
+  - a duplicate reason line once field-state, ordnance and scramble coexist;
+  - L14 Mode 1/2 in the expanded view;
+  - l4-badges height (30 > 28 px);
+  - 4 l5-arrivals assertions.
+  The E2E triage lane (`lane/E2E-triage`, worktree `sourcedcs-E2E`) was cut before wave 2 and may still be running. Merge its test hardening only if it's still relevant.
+- **Next session** (Sonnet 5.5 for code, Opus for design): E2E fixes, then L23 (+U7, B1–B7, F10, S-L13), L26, L28, the UI follow-up lane (U1–U6, U8, S-L15, S-L16, S-L1b findings), then waves 3–4.
