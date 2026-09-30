@@ -72,6 +72,11 @@ test('9F is a select of the configured stereo routes, never free text', async ({
   await expect(s.locator('.efsp-block-9F')).toHaveText('');
   await expect(s.locator('.efsp-block-9')).toHaveText('LTAG DCT BRAVO DCT LTAG');
   expect((await fdrOf(page, CS)).filed.route).toBe('LTAG DCT BRAVO DCT LTAG');
+
+  // A fresh page load: the Board renders before the route list lands, and the
+  // Strip must still become a picker once it does.
+  await openPanel(page, { held: ['OPS'] });
+  await expect(stripByCallsign(page, CS).locator('.efsp-block-9F')).toHaveClass(/efsp-block-enum/);
 });
 
 test('§10.5: departure, off-block and takeoff time each follow an explicit ordered fallback, and the chosen source is visible on hover', async ({ page }) => {

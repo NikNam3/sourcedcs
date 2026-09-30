@@ -2805,6 +2805,7 @@ function _stripRenderSignature(strip) {
 
   const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(strip.fdrId) : null;
   parts.push('fdr:' + (fdr ? fdr.rev : ''));
+  parts.push('stereo:' + (typeof stereoRoutesCacheKey === 'function' ? stereoRoutesCacheKey() : '')); // Block 9F's options (docs/adr/0073)
 
   const siblings = typeof otherLiveStripsForFdr === 'function' ? otherLiveStripsForFdr(strip.fdrId, strip.stripId) : [];
   // Not just the count: the badge's title names each sibling's Facility,

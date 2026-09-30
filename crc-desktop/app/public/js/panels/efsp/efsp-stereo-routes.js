@@ -39,6 +39,18 @@ function cachedStereoRoutesClient() {
 }
 
 /**
+ * What the cached list offers, as one string — part of every Strip's render
+ * signature (bay-view.js's _stripRenderSignature), so a Strip drawn before the
+ * list landed is rebuilt with the picker once it does. Without it the first
+ * render after a page load or a crc-sync restart, which always beats the
+ * fetch, left every Strip's 9F as "no stereo routes configured" until its FDR
+ * next changed.
+ */
+function stereoRoutesCacheKey() {
+  return _stereoRoutesCache.map(r => `${r.name}${r.active === false ? '!' : ''}`).join('|');
+}
+
+/**
  * @param {{fetchImpl?:typeof fetch, timeoutMs?:number, authHeaders?:()=>object}} [opts] — injectable for tests
  * @returns {Promise<Array<{name:string, description?:string, departureAirport?:string, destinationAirport?:string, route:string, requestedAltitude?:string, remarks?:string}>>} never throws
  */
@@ -59,7 +71,9 @@ async function listStereoRoutesClient(opts = {}) {
     // be refused. The server validates both, so this is belt-and-braces
     // against a hand-edited table reaching an older client.
     const routes = data.routes.filter(r => r && r.name && r.route);
+    const before = stereoRoutesCacheKey();
     _stereoRoutesCache = routes;
+    if (stereoRoutesCacheKey() !== before && typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
     return routes;
   } catch (err) {
     console.warn('[efsp] stereo route list unavailable — filing by short name will just be unavailable:', err.message);
@@ -86,6 +100,6 @@ function normalizeStereoNameClient(name) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
-    listStereoRoutesClient, cachedStereoRoutesClient, normalizeStereoNameClient, STEREO_ROUTES_CLIENT_TIMEOUT_MS,
+    listStereoRoutesClient, cachedStereoRoutesClient, stereoRoutesCacheKey, normalizeStereoNameClient, STEREO_ROUTES_CLIENT_TIMEOUT_MS,
   };
 }

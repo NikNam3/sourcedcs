@@ -2344,3 +2344,17 @@ test('a refusal title on a time Block is not overwritten by its source', () => {
   const { el } = renderStrip({ strip, fdr: { ...FDR, ato: { departure: { timeUtc: 1 } } }, held: ['OPS'], refusal });
   assert.equal(blockCell(el, '6').title, refusal.message);
 });
+
+test('a Strip drawn before the stereo list landed is rebuilt once it does — the first render always beats the fetch', async () => {
+  const strip = stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' });
+  const r = renderStrip({ strip, fdr: FDR, held: ['OPS'] });
+  let renders = 0;
+  r.sandbox.renderAllOpenEfspBays = () => { renders += 1; };
+  assert.equal(r.sandbox._stripElNeedsRebuild(r.el, strip, null, null), false, 'precondition');
+  await withStereoRoutes(r.sandbox, PACKS);
+  assert.equal(renders, 1, 'the list landed and nothing asked for a render');
+  assert.equal(r.sandbox._stripElNeedsRebuild(r.el, strip, null, null), true, '9F would stay "no stereo routes configured"');
+  // The same list again changes nothing and asks for nothing.
+  await withStereoRoutes(r.sandbox, PACKS);
+  assert.equal(renders, 1);
+});
