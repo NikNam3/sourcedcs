@@ -419,6 +419,48 @@ function runwayInventoryWarnings(config) {
   return warnings;
 }
 
+// ── hung ordnance (guide §9.5, docs/adr/0069) ──────────────────────────────
+
+/**
+ * Guide §9.5 (WP6 Phase 4, docs/adr/0069): hung ordnance as an ADVISORY on runway assignment and a
+ * routing constraint toward the hot cargo pad. Never an inhibit. [SOURCE-DEFINED]: the guide's basis
+ * is local practice at one base, not doctrine, and SOURCE's pads are placeholder names (H21) — so
+ * this states facts (the runway the Strip resolves to, the pad's name) and recommends no runway.
+ * Pure: derived from the FDR and the field-state record, both of which broadcast whole
+ * (docs/adr/0045's principle; the same argument as rule 4's hook check).
+ *
+ * `fieldState` is one Facility's record as the wire carries it (field-state-store.js
+ * getFieldState): its runway rows carry their ends and racks, so it is its own inventory.
+ * crc-desktop's panels/efsp/ordnance-advisory.js is a copy, held to this by a drift test.
+ *
+ * @returns {{kind:'HUNG_ORDNANCE', runway:string|null, end:string|null, runwaySource:string|null,
+ *   padName:string|null, text:'HUNG', reason:string}|null}
+ */
+function hungOrdnanceAdvisoryFor(strip, fdr, fieldState) {
+  if (!strip || !fieldState) return null;
+  if (!fdr || !fdr.military || fdr.military.ordnanceState !== 'HUNG') return null;
+  if (strip.role !== 'ARRIVAL' && strip.role !== 'DEPARTURE') return null;
+  if (strip.state === 'DROPPED') return null;
+  const resolved = resolveRunwayForStrip(strip, fdr, buildStatusView(fieldState, fieldState));
+  const pad = fieldState.hotCargoPad;
+  const padName = pad && typeof pad.name === 'string' && pad.name.trim() ? pad.name.trim() : null;
+  // [SOURCE-DEFINED] wording: one sentence per fact, no runway recommended (decisions.md H21).
+  const when = strip.role === 'DEPARTURE' ? 'if it returns' : 'after landing';
+  let reason = padName
+    ? `Hung ordnance. SOURCE practice: ${when}, taxi to ${padName}; the runway is the controller's call.`
+    : `Hung ordnance. No hot cargo pad is configured at ${fieldState.facilityId} (SOURCE practice).`;
+  if (resolved) reason += ` Runway ${resolved.runwayId}${resolved.end ? ` (${resolved.end})` : ''} assigned.`;
+  return {
+    kind: 'HUNG_ORDNANCE',
+    runway: resolved ? resolved.runwayId : null,
+    end: resolved ? resolved.end : null,
+    runwaySource: resolved ? resolved.source : null,
+    padName,
+    text: 'HUNG',
+    reason,
+  };
+}
+
 module.exports = {
   RUNWAY_STATUSES, LEGAL_TRANSITIONS, canGo, SUSPENSION_KINDS, SUSPENSION_LABELS,
   GEAR_TYPES, GEAR_POSITIONS, GEAR_STATES,
@@ -427,4 +469,5 @@ module.exports = {
   RUNWAY_GATED_STATES, normalizeRunwayEnd, buildStatusView, resolveRunwayForStrip, runwayStatusReason, runwayInhibitFor,
   runwayAdvisoryFor, runwayRackFor, activeEndIntoWind, missionKeyOf,
   validateFieldStateInventory, runwayInventoryWarnings,
+  hungOrdnanceAdvisoryFor,
 };
