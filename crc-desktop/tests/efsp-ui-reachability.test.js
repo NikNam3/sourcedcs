@@ -2479,10 +2479,10 @@ const _serverPermission = require('../../crc-sync/src/efsp/permission.js');
 const _serverFacilityConfig = require('../../crc-sync/src/efsp/facility-config.js');
 
 /** Renders a Strip with the real TACTICAL Bays loaded, the way the panel has them after a snapshot. */
-function renderTactical(strip, held) {
-  const r = renderStrip({ strip, fdr: FDR, held });
+function renderTactical(strip, held, fdr = FDR) {
+  const r = renderStrip({ strip, fdr, held });
   const bays = _serverFacilityConfig.getAllBays('TACTICAL');
-  r.sandbox.applyEfspSnapshot({ strips: [strip], fdrs: [FDR], positions: [], bays, airspaces: [], correlations: [], marsa: [] });
+  r.sandbox.applyEfspSnapshot({ strips: [strip], fdrs: [fdr], positions: [], bays, airspaces: [], correlations: [], marsa: [] });
   return { ...r, el: r.sandbox._buildStripEl(strip) };
 }
 const missionLine = (ownerPositionId, overrides = {}) => stripAt({
@@ -2542,4 +2542,25 @@ test('the proposer\'s Strip offers Cancel proposal while open and End coordinati
   assert.equal(menuItem(replica.el, 'Cancel proposal'), undefined);
   const none = renderStrip({ strip: stripAt(), fdr: FDR, held: ['APP'] });
   assert.equal(menuItem(none.el, 'End coordination'), undefined);
+});
+
+test('the client TOFI_ANSWERED_BY mirror equals the capability table in permission.js', () => {
+  const client = JSON.parse(JSON.stringify(vm.runInContext('TOFI_ANSWERED_BY', clientSandbox())));
+  const server = {};
+  for (const [id, row] of Object.entries(_serverPermission.TACTICAL_CAPABILITIES)) if (row.tofiAnsweredBy) server[id] = row.tofiAnsweredBy;
+  assert.deepEqual(client, server);
+});
+
+test('a controller holding TAC_C2 and AIC answers a TOFI exit on an AIC-held line as TAC_C2 (B2); holding only AIC it answers as AIC', () => {
+  const tofi = { direction: 'EXIT', state: 'PROPOSED', peerFacilityId: 'CENTER', peerStripId: 'c1', peerPositionId: 'CTR', initiatedAt: 1 };
+  const line = missionLine('AIC', { tofiCoordination: tofi });
+  const atc = { ...FDR, tofi: { ifrActive: true, separationRegime: 'ATC' } }; // CTR has set SEP REG back to ATC
+  const both = renderTactical(line, ['AIC', 'TAC_C2'], atc);
+  click(findByText(both.el, 'Accept TOFI Exit'));
+  assert.equal(both.sent.length, 1);
+  assert.equal(both.sent[0].actingPositionId, 'TAC_C2');
+  assert.deepEqual(JSON.parse(JSON.stringify(both.sent[0].op)), { kind: 'TOFI', action: 'ACCEPT' });
+  const only = renderTactical(line, ['AIC'], atc);
+  click(findByText(only.el, 'Accept TOFI Exit'));
+  assert.equal(only.sent[0].actingPositionId, 'AIC', 'the server refuses it, with a reason (AIC has no TOFI grant)');
 });

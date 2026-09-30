@@ -1757,9 +1757,21 @@ const _tofiRegimeChoice = new Map();
 // Strip's select / flip / highlight gestures underneath it.
 const STRIP_CONTROL_SELECTOR = '.efsp-block-editable, .efsp-block-input, button, select, option, label, input, textarea';
 
+// B2 (docs/adr/0080): AIC "works under TAC_C2's TOFI", so on an AIC-held line
+// the TOFI dialogue is TAC_C2's. Mirror of permission.js's TACTICAL_CAPABILITIES
+// `tofiAnsweredBy`, held to it by the drift test in efsp-ui-reachability.test.js.
+const TOFI_ANSWERED_BY = { AIC: 'TAC_C2' };
+
+/** The Position a TOFI answer is sent as: the owner's TOFI answerer when this controller holds it, else the usual resolution. */
+function _tofiActingPositionId(strip) {
+  const answerer = strip.role === 'MISSION' ? TOFI_ANSWERED_BY[strip.ownerPositionId] : null;
+  if (answerer && getActingPositions().includes(answerer)) return answerer;
+  return _resolveActingPositionId(strip);
+}
+
 function _dispatchTofi(strip, action, direction, overrides = {}) {
   strip = getEfspStrip(strip.stripId) || strip; // F-107 — see _dispatchCoordination
-  const actingPositionId = _resolveActingPositionId(strip);
+  const actingPositionId = action === 'PROPOSE' ? _resolveActingPositionId(strip) : _tofiActingPositionId(strip);
   if (!actingPositionId) return;
   // Same class as the coordination responses above (F-101) — accepting or
   // rejecting a TOFI takes the answer buttons off the Strip and reflows the
