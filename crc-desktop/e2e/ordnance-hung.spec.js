@@ -59,6 +59,14 @@ async function setOrdnance(strip, value) {
   await strip.locator('select.efsp-block-enum-select').selectOption(value);
 }
 
+/** Open ▼, pick a value in the expanded ORDNANCE row, close ▼ again. */
+async function recordFromExpanded(strip, value) {
+  await strip.locator('.efsp-expand-btn').click();
+  await setOrdnance(strip.locator('[data-expanded-block="3G"]'), value);
+  await expect(strip.locator('[data-slot="ord"]')).toHaveCount(value === 'HUNG' ? 1 : 0);
+  await strip.locator('.efsp-expand-btn').click();
+}
+
 /** L1b's contract, stood in: the INCIRLIK record as crc-sync's getFieldState shapes it. */
 async function standInFieldState(page) {
   await page.evaluate(() => {
@@ -88,8 +96,13 @@ test('HUNG: APP records it, TWR sees it, the flight lands normally, CLEAN clears
   const strip = await seedStrip(page, { callsign: CS, actingPositionId: 'APP', bayId: 'app-inbound', role: 'ARRIVAL', fdr: ARR_FDR });
   await expect(strip.locator('[data-slot="ord"]'), 'a CLEAN Strip draws nothing (docs/adr/0058)').toHaveCount(0);
 
-  // H55: the pilot reports it to approach, inbound — 3G is on APP's grid.
-  await setOrdnance(strip, 'HUNG');
+  // H55: the pilot reports it to approach, inbound. S-L12: while CLEAN, ORDNANCE
+  // is not on APP's face — it is one tap away in the expanded view.
+  await expect(strip.locator('.efsp-strip-fields .efsp-block-3G'), 'a CLEAN ORDNANCE costs APP no Strip height').toHaveCount(0);
+  await only(page, CS);
+  await strip.screenshot({ path: shot('02a-app-clean.png') });
+  await recordFromExpanded(strip, 'HUNG');
+  await expect(strip.locator('.efsp-strip-fields .efsp-block-3G'), 'once set, it is on the face').toHaveText('HUNG');
   await expect.poll(() => ordnanceOf(page, CS)).toBe('HUNG');
   const chip = strip.locator('[data-slot="ord"]');
   await expect(chip).toHaveText('HUNG');
@@ -143,7 +156,7 @@ test('pilot walks with field state: the pad by name, a runway request re-stated,
   const CS = 'HUNG21';
   await goBay(page, 'APP', 'app-inbound');
   let strip = await seedStrip(page, { callsign: CS, actingPositionId: 'APP', bayId: 'app-inbound', role: 'ARRIVAL', fdr: ARR_FDR });
-  await setOrdnance(strip, 'HUNG');
+  await recordFromExpanded(strip, 'HUNG');
   await expect(strip.locator('.efsp-strip-reason', { hasText: 'taxi to Hot cargo pad' }))
     .toHaveText('Hung ordnance. SOURCE practice: after landing, taxi to Hot cargo pad; the runway is the controller\'s call. Runway 05/23 (05) assigned.');
   await only(page, CS);
