@@ -48,6 +48,9 @@ test('SCENARIO Ground walks away holding strips, and they route down the coverin
   const ack = hold(efsp, c.GND.session, 'INCIRLIK', []).ack;
   assert.deepEqual(ack.warnings, [{ positionId: 'GND', count: 1, routedTo: 'TWR' }]);
   assert.equal(efsp.boardStore.getStrip(onGround.stripId).ownerPositionId, 'TWR');
+  // ...into one of TWR's own Bays, the only ones its panel builds (docs/adr/0080, B3).
+  const bayId = efsp.boardStore.getStrip(onGround.stripId).bayId;
+  assert.ok(['twr-runway-queue', 'twr-airborne', 'twr-arrivals', 'twr-final', 'twr-landed', 'twr-coordination'].includes(bayId), `TWR owns it but it sits in ${bayId}`);
 });
 
 // ── 22. nobody downstream to cover ──────────────────────────────────────
