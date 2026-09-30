@@ -1045,3 +1045,65 @@ test('restore() preserves the cid sequence so future CreateStrip calls do not re
 
   assert.notEqual(second.cid, first.cid);
 });
+
+// ── docs/adr/0081 (L27): one Board event, every touched Strip ─────────────
+
+function named(board, callsign) {
+  return createStrip(board, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign } } });
+}
+
+test('a forced exhaustion rebalance puts every re-keyed Strip in drainTouched()', () => {
+  const { board } = makeStore();
+  const a = named(board, 'AAA1111');
+  const b = named(board, 'BBB2222');
+  const c = named(board, 'CCC3333');
+  const d = named(board, 'DDD4444');
+  // "X" and "X0" have no key between them: ORDER_KEY_EXHAUSTED, so a rebalance.
+  board.getStrip(a.stripId).orderKey = 'X';
+  board.getStrip(b.stripId).orderKey = 'X0';
+  board.getStrip(c.stripId).orderKey = 'Y';
+  board.drainTouched();
+  const before = new Map(board.getAll().map(s => [s.stripId, s.rev]));
+
+  const r = board.applyMutation(mutation(board.getStrip(d.stripId), { kind: 'MoveStrip', bayId: 'proposed', rackId: 'main', afterStripId: a.stripId, beforeStripId: b.stripId }), 'OPS', 'OPS');
+  assert.equal(r.ok, true, JSON.stringify(r));
+  const touched = board.drainTouched();
+  for (const s of board.getAll()) {
+    if (s.rev !== before.get(s.stripId)) assert.ok(touched.includes(s.stripId), `${s.stripId} was re-keyed but not reported`);
+  }
+  assert.deepEqual(new Set(touched), new Set([a.stripId, b.stripId, c.stripId, d.stripId]));
+  assert.deepEqual(board.drainTouched(), [], 'a drain forgets what it returned');
+});
+
+test('a same-slot insert storm (400 pairs) never produces a key longer than 41', () => {
+  const { board } = makeStore();
+  const ids = [named(board, 'OKP0').stripId, named(board, 'OKP1').stripId, named(board, 'OKP2').stripId];
+  let maxLen = 0;
+  for (let p = 0; p < 400; p++) {
+    for (const mover of [ids[1], ids[2]]) {
+      const rack = board.getRack('proposed', 'main');
+      const rest = rack.filter(x => x.stripId !== mover);
+      const anchor = rest[0];
+      const next = rest[1] || null;
+      const r = board.applyMutation(mutation(board.getStrip(mover), { kind: 'MoveStrip', bayId: 'proposed', rackId: 'main', afterStripId: anchor.stripId, beforeStripId: next ? next.stripId : null }), 'OPS', 'OPS');
+      assert.equal(r.ok, true, JSON.stringify(r));
+      for (const s of board.getAll()) maxLen = Math.max(maxLen, s.orderKey.length);
+    }
+  }
+  assert.ok(maxLen <= 41, `max key length ${maxLen}`);
+  const keys = board.getRack('proposed', 'main').map(s => s.orderKey);
+  assert.deepEqual(keys, [...keys].sort());
+});
+
+test('a refused Mutation leaves drainTouched() empty', () => {
+  const { board } = makeStore();
+  const s = createStrip(board);
+  board.drainTouched();
+  const stale = board.applyMutation({ ...mutation(s, { kind: 'SetFlag', flag: 'offset', value: true }), baseRev: s.rev + 7 }, 'OPS', 'OPS');
+  assert.equal(stale.ok, false);
+  const notOwner = board.applyMutation(mutation(s, { kind: 'SetFlag', flag: 'offset', value: true }), 'GND', 'GND');
+  assert.equal(notOwner.ok, false);
+  const bad = board.applyMutation(mutation(s, { kind: 'SetFlag', flag: 'nope', value: true }), 'OPS', 'OPS');
+  assert.equal(bad.ok, false);
+  assert.deepEqual(board.drainTouched(), []);
+});

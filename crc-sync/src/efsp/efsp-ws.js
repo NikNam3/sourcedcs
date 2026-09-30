@@ -85,6 +85,44 @@ function _mergeFdrs(primary, extra) {
 }
 
 /**
+ * The `strips` section of a board-delta for the Strips a Board event touched
+ * (docs/adr/0081): `first` (the addressed Strip, already stamped) leads, then
+ * every other touched id, looked up now. DROPPED goes into `gone`, everything
+ * else is stamped into `updated` — through _stampStrip, never by hand.
+ */
+function _touchedStrips(ctx, boardStore, facilityId, touchedIds, first) {
+  const updated = [];
+  const gone = [];
+  const place = (s) => { if (s.state === 'DROPPED') gone.push(s.stripId); else updated.push(s); };
+  if (first) place(first);
+  for (const id of touchedIds) {
+    if (first && id === first.stripId) continue;
+    const s = boardStore ? boardStore.getStrip(id) : null;
+    if (!s) { gone.push(id); continue; }
+    if (s.state === 'DROPPED') gone.push(id);
+    else updated.push(_stampStrip(boardStore, s, facilityId, ctx));
+  }
+  return { updated, gone };
+}
+
+/**
+ * An efsp-board-delta for one Facility. Every one carries `boardEpoch` beside
+ * `boardSeq` (docs/adr/0081): a seq only means something within one Board
+ * lifetime, and the epoch names the lifetime.
+ */
+function _boardDelta(ctx, boardStore, facilityId, strips, fdrs, positions = []) {
+  return {
+    version: VERSION, type: 'efsp-board-delta',
+    boardSeq: boardStore ? boardStore.currentSeq : undefined,
+    boardEpoch: boardStore ? boardStore.epoch : undefined,
+    facilityId,
+    strips,
+    fdrs: { updated: fdrs },
+    positions: { updated: positions },
+  };
+}
+
+/**
  * The flights a MARSA op names in its own body — the participants of a
  * declaration, or the one flight being added or removed. Echoed on the ack so a
  * refusal can be attributed even when it never reached the store and so has no
@@ -127,7 +165,7 @@ function handleMessage(ctx, session, msg, persist) {
   switch (msg.type) {
     case 'efsp-mutation':      return _handleMutation(ctx, session, msg, persist);
     case 'efsp-resync':        return _handleResync(ctx, msg);
-    case 'efsp-set-positions': return _handleSetPositions(ctx, session, msg);
+    case 'efsp-set-positions': return _handleSetPositions(ctx, session, msg, persist);
     case 'efsp-airspace-mutation': return _handleAirspaceMutation(ctx, session, msg, persist);
     case 'efsp-correlation-mutation': return _handleCorrelationMutation(ctx, session, msg, persist);
     case 'efsp-marsa-mutation': return _handleMarsaMutation(ctx, session, msg, persist);
@@ -187,18 +225,26 @@ function _handleMutation(ctx, session, msg, persist) {
     strip: stampedStrip, fdr: result.fdr, reason: result.reason, detail: result.detail,
     warning: result.warning, routedTo: result.routedTo,
   };
-  if (!result.ok) return { ack };
+  // A replay answers from the idempotency cache (docs/adr/0081): the original
+  // outcome with the Strip as it is now. Its broadcasts went out the first
+  // time, so it sends none — a second one would only repeat a view.
+  if (result.replayed) return { ack };
 
-  const dropped = stampedStrip.state === 'DROPPED';
+  // One Board event, one broadcast (guide §5.4, docs/adr/0081). The Mutation
+  // may have touched Strips it never named — a rebalance re-keys a whole
+  // Rack — and every one of them goes out here, or no client hears of it and
+  // a later resync from this broadcast's boardSeq cannot heal it either (L6's
+  // F1). A refusal normally touched nothing; if one ever did (an exception
+  // part-way through an op), what it touched is broadcast rather than dropped.
+  const touched = boardStore.drainTouched();
+  if (!result.ok) {
+    if (touched.length === 0) return { ack };
+    return { ack, broadcast: _boardDelta(ctx, boardStore, facilityId, _touchedStrips(ctx, boardStore, facilityId, touched, null), []) };
+  }
+
   const out = {
     ack,
-    broadcast: {
-      version: VERSION, type: 'efsp-board-delta', boardSeq: boardStore.currentSeq,
-      facilityId,
-      strips: { updated: dropped ? [] : [stampedStrip], gone: dropped ? [stampedStrip.stripId] : [] },
-      fdrs: { updated: updatedFdrs },
-      positions: { updated: [] },
-    },
+    broadcast: _boardDelta(ctx, boardStore, facilityId, _touchedStrips(ctx, boardStore, facilityId, touched, stampedStrip), updatedFdrs),
   };
 
   // Bug found in live testing: a coordination primitive's PROPOSE/ACCEPT/
@@ -212,15 +258,18 @@ function _handleMutation(ctx, session, msg, persist) {
   // build a SECOND board-delta, scoped to the peer Facility, so a client
   // holding a Position there sees the new/updated replica immediately,
   // same <200ms budget as the primary broadcast (guide §7.9).
+  //
+  // Built from the peer Board's own drain (docs/adr/0081): placing a replica
+  // in a coordination Bay can rebalance that Rack, and those re-keyed Strips
+  // are the peer's side of the same Board event. The peer Board is drained
+  // only when this broadcast is built, so nothing it touched is discarded.
   if (result.peerStrip) {
     const peerBoardStore = ctx.boardStoreFor(result.peerFacilityId);
-    out.peerBroadcast = {
-      version: VERSION, type: 'efsp-board-delta', boardSeq: peerBoardStore ? peerBoardStore.currentSeq : undefined,
-      facilityId: result.peerFacilityId,
-      strips: { updated: [_stampStrip(peerBoardStore, result.peerStrip, result.peerFacilityId, ctx)], gone: [] },
-      fdrs: { updated: [] }, // one shared FdrStore (docs/adr/0013) — already covered by the primary broadcast's fdrs.updated
-      positions: { updated: [] },
-    };
+    const peerStamped = _stampStrip(peerBoardStore, result.peerStrip, result.peerFacilityId, ctx);
+    const peerTouched = peerBoardStore ? peerBoardStore.drainTouched() : [];
+    // fdrs: one shared FdrStore (docs/adr/0013) — already covered by the primary broadcast's fdrs.updated
+    out.peerBroadcast = _boardDelta(ctx, peerBoardStore, result.peerFacilityId,
+      _touchedStrips(ctx, peerBoardStore, result.peerFacilityId, peerTouched, peerStamped), []);
   }
 
   // WP6 (docs/adr/0051) — a Strip Mutation can change a MARSA relation without
@@ -533,7 +582,7 @@ function _marsaDelta(marsaStore, relations) {
   };
 }
 
-function _handleSetPositions(ctx, session, msg) {
+function _handleSetPositions(ctx, session, msg, persist) {
   const facilityId = msg.facilityId || ctx.facilityConfig.DEFAULT_FACILITY_ID;
   const positionStore = ctx.positionStoreFor(facilityId);
   const boardStore = ctx.boardStoreFor(facilityId);
@@ -563,23 +612,29 @@ function _handleSetPositions(ctx, session, msg) {
     }
   }
 
+  // The re-send below carries every live Strip, so whatever
+  // reassignPositionStrips touched is already in it. Drained so those touches
+  // do not ride again on the next Mutation's broadcast (docs/adr/0081).
+  boardStore.drainTouched();
+  // A covering-chain reassignment changes the Board, and it used to be the one
+  // Board change never persisted: a restart before the next Mutation restored
+  // the Strips to the Position that had left (docs/adr/0081, L6's F2/F5 tail).
+  if (reassignedIds.length > 0 && typeof persist === 'function') persist();
+
   return {
     ack: { version: VERSION, type: 'efsp-positions-ack', facilityId, held: actuallyHeld, warnings },
-    broadcast: {
-      version: VERSION, type: 'efsp-board-delta', boardSeq: boardStore.currentSeq, facilityId,
-      // EVERY live Strip, not just the reassigned ones. Taking or giving up a
-      // Position changes who is there to receive a transfer, which changes the
-      // `nla` status _stampStrip computes for Strips this message never
-      // touched — a TWR Strip at DEPARTED becomes "no receiving Position
-      // present" the instant APP is released, and F-408's whole point is that
-      // the panel be told BEFORE the press. The Board is a few dozen Strips
-      // (board-store.js's module comment) and a Position change is a rare,
-      // deliberate act, so re-sending the set is cheaper than tracking which
-      // Strips' status actually moved.
-      strips: { updated: boardStore.getAll().filter(s => s.state !== 'DROPPED').map(s => _stampStrip(boardStore, s, facilityId, ctx)), gone: [] },
-      fdrs: { updated: [] },
-      positions: { updated: positionStore.getAll().map(p => ({ ...p, facilityId })) },
-    },
+    // EVERY live Strip, not just the reassigned ones. Taking or giving up a
+    // Position changes who is there to receive a transfer, which changes the
+    // `nla` status _stampStrip computes for Strips this message never
+    // touched — a TWR Strip at DEPARTED becomes "no receiving Position
+    // present" the instant APP is released, and F-408's whole point is that
+    // the panel be told BEFORE the press. The Board is a few dozen Strips
+    // (board-store.js's module comment) and a Position change is a rare,
+    // deliberate act, so re-sending the set is cheaper than tracking which
+    // Strips' status actually moved.
+    broadcast: _boardDelta(ctx, boardStore, facilityId,
+      { updated: boardStore.getAll().filter(s => s.state !== 'DROPPED').map(s => _stampStrip(boardStore, s, facilityId, ctx)), gone: [] },
+      [], positionStore.getAll().map(p => ({ ...p, facilityId }))),
   };
 }
 

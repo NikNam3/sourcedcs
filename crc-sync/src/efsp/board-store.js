@@ -28,7 +28,7 @@
 // §5.4) taken literally.
 
 const crypto = require('crypto');
-const { keyBetween, rebalance } = require('./order-key');
+const { keyBetween, rebalance, needsRebalance } = require('./order-key');
 const { isValidAltitude } = require('./airspace-config');
 const { MAX_FREE_TEXT, SEPARATION_REGIMES } = require('./fdr-store');
 const { WALL_CLOCK } = require('../mission-clock');
@@ -135,6 +135,12 @@ class BoardStore {
     this._seq = 0;
     this._cidSeq = 0;
     this._appliedMutations = new Map(); // clientMutationId -> result, idempotency (§5.2)
+    // Every Strip a Board event touched since efsp-ws.js last drained it
+    // (docs/adr/0081, guide §5.4 "one Board event"). A rebalance re-keys
+    // Strips the Mutation never named, and a coordination op touches the PEER
+    // Board inside the sender's applyMutation; whoever broadcasts a Board's
+    // change drains this, so every touched Strip rides in that broadcast.
+    this._touchedSinceDrain = new Set();
     this._mutationLog = null; // optional collaborator, see setMutationLog()
     // stripId -> { invokedAt, prevState, expiresAt } — the 400ms double-tap
     // guard and the 30s Undo window for the last NLA transition (§3.5
@@ -160,7 +166,21 @@ class BoardStore {
 
   _touch(stripId) {
     this._log.push({ seq: ++this._seq, type: 'update', id: stripId });
+    this._touchedSinceDrain.add(stripId);
     this._pruneLog();
+  }
+
+  /**
+   * The ids of every Strip touched since the last drain, in first-touch
+   * order, and forgets them. Called by whoever puts this Board's change on the
+   * wire (efsp-ws.js), on this Board and on the peer Board a coordination op
+   * reached — never by board-store itself (docs/adr/0081).
+   * @returns {string[]}
+   */
+  drainTouched() {
+    const ids = [...this._touchedSinceDrain];
+    this._touchedSinceDrain.clear();
+    return ids;
   }
   _pruneLog() {
     if (this._log.length > 2000) this._log.splice(0, this._log.length - 1000);
@@ -187,31 +207,46 @@ class BoardStore {
   _resolveOrderKey(bayId, rackId, afterStripId, beforeStripId, excludeStripId) {
     const rackStrips = this.getRack(bayId, rackId).filter(s => s.stripId !== excludeStripId);
     const findKey = (id) => (id ? (rackStrips.find(s => s.stripId === id) || {}).orderKey ?? null : null);
+    let key;
     try {
-      return keyBetween(findKey(afterStripId), findKey(beforeStripId));
+      key = keyBetween(findKey(afterStripId), findKey(beforeStripId));
     } catch (err) {
       if (err.code !== 'ORDER_KEY_EXHAUSTED') throw err;
-      this._rebalanceRack(bayId, rackId, excludeStripId);
-      const refreshed = this.getRack(bayId, rackId).filter(s => s.stripId !== excludeStripId);
-      const findKey2 = (id) => (id ? (refreshed.find(s => s.stripId === id) || {}).orderKey ?? null : null);
-      let a = findKey2(afterStripId);
-      let b = findKey2(beforeStripId);
-      // The ONLY way this retry can still fail after a rebalance (which
-      // guarantees every Strip in the Rack gets a fresh, distinct key) is
-      // a > b — which can genuinely happen when afterStripId/beforeStripId
-      // were bounding two Strips that had COLLIDING keys before the
-      // rebalance (order-key.js's jitter tolerance): rebalance() preserves
-      // the Rack's own tie-broken order (by stripId), which can come out
-      // opposite to whatever the caller's after/before labels assumed.
-      // The caller's real intent — "insert between these two specific
-      // Strips" — doesn't actually depend on which one is labelled
-      // "after" vs "before" once already in this recovery path, so
-      // normalize direction here rather than let a second, unrecoverable
-      // throw reach applyMutation's catch-all and reject a perfectly
-      // resolvable Mutation.
-      if (a !== null && b !== null && a > b) { [a, b] = [b, a]; }
-      return keyBetween(a, b);
+      return this._keyAfterRebalance(bayId, rackId, afterStripId, beforeStripId, excludeStripId);
     }
+    // The proactive rebalance (docs/adr/0081, L6's F8). Same-slot inserts
+    // grow a key by about half a character each, without bound, and nothing
+    // ever called needsRebalance — keys reached 183 characters in 400 drags.
+    // Once a new key passes REBALANCE_KEY_LENGTH the Rack is re-keyed and the
+    // key recomputed between the neighbours' fresh keys, inside this same
+    // Board event: the re-keyed Strips are touched, so they leave in this
+    // Mutation's broadcast (drainTouched) like every other change it made.
+    if (needsRebalance([key])) return this._keyAfterRebalance(bayId, rackId, afterStripId, beforeStripId, excludeStripId);
+    return key;
+  }
+
+  /** Rebalances the Rack, then resolves the key between the named neighbours' fresh keys. */
+  _keyAfterRebalance(bayId, rackId, afterStripId, beforeStripId, excludeStripId) {
+    this._rebalanceRack(bayId, rackId, excludeStripId);
+    const refreshed = this.getRack(bayId, rackId).filter(s => s.stripId !== excludeStripId);
+    const findKey2 = (id) => (id ? (refreshed.find(s => s.stripId === id) || {}).orderKey ?? null : null);
+    let a = findKey2(afterStripId);
+    let b = findKey2(beforeStripId);
+    // The ONLY way this retry can still fail after a rebalance (which
+    // guarantees every Strip in the Rack gets a fresh, distinct key) is
+    // a > b — which can genuinely happen when afterStripId/beforeStripId
+    // were bounding two Strips that had COLLIDING keys before the
+    // rebalance (order-key.js's jitter tolerance): rebalance() preserves
+    // the Rack's own tie-broken order (by stripId), which can come out
+    // opposite to whatever the caller's after/before labels assumed.
+    // The caller's real intent — "insert between these two specific
+    // Strips" — doesn't actually depend on which one is labelled
+    // "after" vs "before" once already in this recovery path, so
+    // normalize direction here rather than let a second, unrecoverable
+    // throw reach applyMutation's catch-all and reject a perfectly
+    // resolvable Mutation.
+    if (a !== null && b !== null && a > b) { [a, b] = [b, a]; }
+    return keyBetween(a, b);
   }
 
   /** Rebalances one Rack — MUST run as one atomic Board event, never mid-drag (guide §5.4). */
