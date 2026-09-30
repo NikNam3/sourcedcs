@@ -309,14 +309,14 @@ test('7. a resync from before the archive reports the Strip in gone', () => {
   assert.equal(delta.updated.some(s => s.stripId === dropped.stripId), false);
 });
 
-test('7b. on the wire: efsp-resync puts the archived Strip in strips.gone', { todo: 'needs L27\'s `gone` seam in efsp-ws.js _handleResync (L27 §5.2); L24 does not edit it' }, () => {
+test('7b. on the wire: efsp-resync puts the archived Strip in strips.gone', () => {
   const dropped = droppedFlight('RESYNC2');
   // The ack of the drop names the seq just after it; resync from before the drop.
   const seqBefore = incirlik().currentSeq - 1;
   offset = 3 * HOUR;
   archiverFor().sweep();
   offset = 0;
-  const { ack } = efsp.handleMessage(c.APP.session, { type: 'efsp-resync', facilityId: 'INCIRLIK', lastBoardSeq: seqBefore });
+  const { ack } = efsp.handleMessage(c.APP.session, { type: 'efsp-resync', facilityId: 'INCIRLIK', lastBoardSeq: seqBefore, boardEpoch: incirlik().epoch });
   assert.equal(ack.type, 'efsp-board-delta');
   assert.ok(ack.strips.gone.includes(dropped.stripId));
 });
@@ -477,7 +477,7 @@ test('F4: after archiving, no Board, store or monitor structure references the S
   }
 });
 
-test('F4: the idempotency cache holds no Strip object after archiving', { todo: 'L27 rewrites _appliedMutations as compact records (decisions.md S-W3d); verify after L27 merges' }, () => {
+test('F4: the idempotency cache holds no Strip object after archiving', () => {
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'PIN2' });
   mustAct(efsp, c.APP, 'APP', strip, { kind: 'DropStrip' });
   const live = incirlik().getStrip(strip.stripId);
