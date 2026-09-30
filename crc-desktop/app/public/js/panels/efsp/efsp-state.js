@@ -223,6 +223,7 @@ function applyEfspDelta(msg) {
   for (const s of (msg.strips && msg.strips.updated) || []) efspStrips.set(s.stripId, s);
   for (const id of (msg.strips && msg.strips.gone) || []) efspStrips.delete(id);
   for (const f of (msg.fdrs && msg.fdrs.updated) || []) efspFdrs.set(f.fdrId, f);
+  for (const id of (msg.fdrs && msg.fdrs.gone) || []) efspFdrs.delete(id); // archived (docs/adr/0082)
   for (const p of (msg.positions && msg.positions.updated) || []) efspPositions.set(p.positionId, p);
   if (Number.isFinite(msg.boardSeq)) efspBoardSeq = msg.boardSeq;
 }
