@@ -623,7 +623,7 @@ function _stripMenuItems(strip) {
   // Strip
   if (acting) {
     items.push({ group: 'Strip', key: 'offset', label: strip.flags.offset ? 'Un-offset ⇤' : 'Offset ⇥', cls: 'efsp-offset-btn',
-      enabled: true, title: 'Offset (cock)', run: () => _dispatchGesture(strip, toggleOffset) });
+      enabled: true, title: 'Offset (cock)', run: () => { const acting = _dispatchGesture(strip, toggleOffset); if (typeof noteEfspGesture === 'function') noteEfspGesture('OFFSET', 'menu', acting); } });
   }
   return items;
 }
