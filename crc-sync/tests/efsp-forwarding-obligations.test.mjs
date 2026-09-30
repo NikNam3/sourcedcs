@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 const {
-  computeDueObligations, ForwardingObligationMonitor,
+  computeDueObligations, computePendingObligations, ForwardingObligationMonitor,
   ADVANCE_FORWARDING_MINUTES, ETA_REVISION_THRESHOLD_MINUTES, AMENDMENT_WINDOW_MINUTES, DATA_ONLY_VERIFICATION_MINUTES,
 } = await import('../src/efsp/forwarding-obligations.js');
 
@@ -135,49 +135,46 @@ function makeBoardStore(strips) {
   return { getAll: () => strips };
 }
 
-test('tick() alerts once per Strip+obligationType, even across repeated ticks', () => {
+function makeMonitor({ strips, fdr, facilities = ['INCIRLIK'], boardFor, dataOnly = false, airspaceStore, fdrFor } = {}) {
+  return new ForwardingObligationMonitor({
+    boardStoreFor: boardFor || (() => makeBoardStore(strips)),
+    fdrStore: { getFdr: fdrFor || (() => fdr) },
+    facilityConfig: { getFacilityIds: () => facilities, getFacilityConfig: () => ({ dataOnly }) },
+    airspaceStore,
+  });
+}
+
+test('tick() raises once per Strip+obligationType: true on the first raise, false on identical ticks, one entry', () => {
   const strip = makeArrivalStrip({ coordination: null });
-  const fdr = makeFdr({ filed: { estimatedArrivalTimeUtc: NOW - MIN } });
-  const alerts = [];
-  const monitor = new ForwardingObligationMonitor({
-    boardStoreFor: (facilityId) => (facilityId === 'CENTER' ? makeBoardStore([strip]) : makeBoardStore([])),
-    fdrStore: { getFdr: () => fdr },
-    facilityConfig: { getFacilityIds: () => ['INCIRLIK', 'CENTER'], getFacilityConfig: () => ({ dataOnly: false }) },
-    onAlert: (alert) => alerts.push(alert),
+  const fdr = makeFdr({ filed: { estimatedArrivalTimeUtc: NOW + MIN } });
+  const monitor = makeMonitor({
+    fdr, facilities: ['INCIRLIK', 'CENTER'],
+    boardFor: (facilityId) => (facilityId === 'CENTER' ? makeBoardStore([strip]) : makeBoardStore([])),
   });
 
-  monitor.tick(NOW);
-  monitor.tick(NOW + 1000);
-  monitor.tick(NOW + 2000);
+  assert.equal(monitor.tick(NOW), true);
+  assert.equal(monitor.tick(NOW + 1000), false);
+  assert.equal(monitor.tick(NOW + 2000), false);
 
-  assert.equal(alerts.length, 1);
-  assert.equal(alerts[0].facilityId, 'CENTER');
-  assert.equal(alerts[0].stripId, 's1');
-  assert.equal(alerts[0].obligationType, 'ADVANCE_FORWARDING');
+  assert.deepEqual(monitor.getAll(), [{
+    facilityId: 'CENTER', stripId: 's1', obligationType: 'ADVANCE_FORWARDING',
+    severity: 'WARNING', dueAt: NOW + MIN - ADVANCE_FORWARDING_MINUTES * MIN, since: NOW,
+  }]);
+  assert.equal(monitor.getComplianceStats().ADVANCE_FORWARDING.missed, 1);
 });
 
 test('tick() skips DROPPED Strips entirely', () => {
   const strip = makeArrivalStrip({ state: 'DROPPED', coordination: null });
   const fdr = makeFdr({ filed: { estimatedArrivalTimeUtc: NOW - MIN } });
-  const alerts = [];
-  const monitor = new ForwardingObligationMonitor({
-    boardStoreFor: () => makeBoardStore([strip]),
-    fdrStore: { getFdr: () => fdr },
-    facilityConfig: { getFacilityIds: () => ['INCIRLIK'], getFacilityConfig: () => ({ dataOnly: false }) },
-    onAlert: (alert) => alerts.push(alert),
-  });
-  monitor.tick(NOW);
-  assert.deepEqual(alerts, []);
+  const monitor = makeMonitor({ strips: [strip], fdr });
+  assert.equal(monitor.tick(NOW), false);
+  assert.deepEqual(monitor.getAll(), []);
 });
 
-test('a missed obligation is recorded in compliance stats; recordMet() is available for a caller to count the opposite', () => {
+test('a missed obligation is recorded in compliance stats; recordMet() counts the opposite', () => {
   const strip = makeArrivalStrip({ coordination: null });
   const fdr = makeFdr({ filed: { estimatedArrivalTimeUtc: NOW - MIN } });
-  const monitor = new ForwardingObligationMonitor({
-    boardStoreFor: () => makeBoardStore([strip]),
-    fdrStore: { getFdr: () => fdr },
-    facilityConfig: { getFacilityIds: () => ['INCIRLIK'], getFacilityConfig: () => ({ dataOnly: false }) },
-  });
+  const monitor = makeMonitor({ strips: [strip], fdr });
   monitor.tick(NOW);
   assert.deepEqual(monitor.getComplianceStats(), { ADVANCE_FORWARDING: { met: 0, missed: 1 } });
 
@@ -185,15 +182,175 @@ test('a missed obligation is recorded in compliance stats; recordMet() is availa
   assert.deepEqual(monitor.getComplianceStats(), { ADVANCE_FORWARDING: { met: 1, missed: 1 } });
 });
 
-test('tick() with no onAlert callback does not throw', () => {
+test('a stray onAlert passed to the constructor is ignored, never called and never a throw', () => {
   const strip = makeArrivalStrip({ coordination: null });
   const fdr = makeFdr({ filed: { estimatedArrivalTimeUtc: NOW - MIN } });
+  let called = 0;
   const monitor = new ForwardingObligationMonitor({
     boardStoreFor: () => makeBoardStore([strip]),
     fdrStore: { getFdr: () => fdr },
     facilityConfig: { getFacilityIds: () => ['INCIRLIK'], getFacilityConfig: () => ({ dataOnly: false }) },
+    onAlert: () => { called += 1; },
   });
   assert.doesNotThrow(() => monitor.tick(NOW));
+  assert.equal(called, 0);
+  assert.equal(monitor.getAll().length, 1);
+});
+
+test('an obligation retracts when its Strip becomes DROPPED, and when the Strip is gone from the Board', () => {
+  const strip = makeArrivalStrip({ coordination: null });
+  const fdr = makeFdr({ filed: { estimatedArrivalTimeUtc: NOW - MIN } });
+  let strips = [strip];
+  const monitor = makeMonitor({ boardFor: () => makeBoardStore(strips), fdr });
+  assert.equal(monitor.tick(NOW), true);
+  strip.state = 'DROPPED';
+  assert.equal(monitor.tick(NOW + 1000), true);
+  assert.deepEqual(monitor.getAll(), []);
+
+  strip.state = 'INBOUND';
+  assert.equal(monitor.tick(NOW + 2000), true);
+  strips = [];
+  assert.equal(monitor.tick(NOW + 3000), true);
+  assert.deepEqual(monitor.getAll(), []);
+});
+
+test('ADVANCE_FORWARDING WARNING -> OVERDUE is a change the client gets; since held, missed still 1', () => {
+  const strip = makeArrivalStrip({ coordination: null });
+  const fdr = makeFdr({ filed: { estimatedArrivalTimeUtc: NOW + MIN } });
+  const monitor = makeMonitor({ strips: [strip], fdr });
+  assert.equal(monitor.tick(NOW), true);
+  assert.equal(monitor.getAll()[0].severity, 'WARNING');
+  assert.equal(monitor.tick(NOW + 2 * MIN), true);
+  const [entry] = monitor.getAll();
+  assert.equal(entry.severity, 'OVERDUE');
+  assert.equal(entry.since, NOW);
+  assert.equal(monitor.getComplianceStats().ADVANCE_FORWARDING.missed, 1);
+  assert.equal(monitor.tick(NOW + 3 * MIN), false);
+});
+
+test('ETA_REVISION (dueAt: now) stays one unchanged entry across ticks at different now', () => {
+  const strip = makeArrivalStrip({ coordination: { state: 'ACTIVE', lastForwardedEtaUtc: NOW + 30 * MIN } });
+  const fdr = makeFdr({ filed: { estimatedArrivalTimeUtc: NOW + 40 * MIN } });
+  const monitor = makeMonitor({ strips: [strip], fdr });
+  assert.equal(monitor.tick(NOW), true);
+  assert.equal(monitor.tick(NOW + 15000), false);
+  assert.equal(monitor.tick(NOW + 30000), false);
+  assert.deepEqual(monitor.getAll().map(e => [e.obligationType, e.dueAt, e.since]), [['ETA_REVISION', NOW, NOW]]);
+});
+
+test('raise, clear, raise again counts two missed episodes', () => {
+  const strip = makeArrivalStrip({ coordination: { state: 'ACTIVE', lastForwardedEtaUtc: NOW + 30 * MIN } });
+  const fdr = makeFdr({ filed: { estimatedArrivalTimeUtc: NOW + 40 * MIN } });
+  const monitor = makeMonitor({ strips: [strip], fdr });
+  monitor.tick(NOW);
+  strip.coordination.lastForwardedEtaUtc = NOW + 40 * MIN; // re-forwarded
+  assert.equal(monitor.tick(NOW + MIN), true);
+  assert.deepEqual(monitor.getAll(), []);
+  fdr.filed.estimatedArrivalTimeUtc = NOW + 50 * MIN; // drifted again
+  assert.equal(monitor.tick(NOW + 2 * MIN), true);
+  assert.equal(monitor.getAll()[0].since, NOW + 2 * MIN);
+  assert.deepEqual(monitor.getComplianceStats(), { ETA_REVISION: { met: 0, missed: 2 } });
+});
+
+test('UNACTIVATED_AIRSPACE_ENTRY retracts when the airspace becomes active', () => {
+  let active = false;
+  const strip = makeArrivalStrip({ coordination: { state: 'ACTIVE' }, airspaceEntry: { airspaceId: 'R-1', approvedAt: NOW - MIN } });
+  const monitor = makeMonitor({ strips: [strip], fdr: makeFdr(), airspaceStore: { isActive: () => active } });
+  assert.equal(monitor.tick(NOW), true);
+  assert.equal(monitor.getAll()[0].obligationType, 'UNACTIVATED_AIRSPACE_ENTRY');
+  active = true;
+  assert.equal(monitor.tick(NOW + 1000), true);
+  assert.deepEqual(monitor.getAll(), []);
+});
+
+test('two Facilities\' replicas of one FDR hold independent entries', () => {
+  const a = makeArrivalStrip({ stripId: 'sA', fdrId: 'f1', coordination: null });
+  const b = makeArrivalStrip({ stripId: 'sB', fdrId: 'f1', coordination: null });
+  const fdr = makeFdr({ filed: { estimatedArrivalTimeUtc: NOW - MIN } });
+  const monitor = makeMonitor({
+    fdr, facilities: ['INCIRLIK', 'CENTER'],
+    boardFor: (facilityId) => makeBoardStore(facilityId === 'CENTER' ? [b] : [a]),
+  });
+  monitor.tick(NOW);
+  assert.deepEqual(monitor.getAll().map(e => [e.facilityId, e.stripId]), [['INCIRLIK', 'sA'], ['CENTER', 'sB']]);
+  b.coordination = { state: 'PROPOSED' }; // CENTER forwarded; INCIRLIK has not
+  assert.equal(monitor.tick(NOW + 1000), true);
+  assert.deepEqual(monitor.getAll().map(e => [e.facilityId, e.stripId]), [['INCIRLIK', 'sA']]);
+});
+
+// ── recordMet(): done before it was due (docs/adr/0067) ────────────────
+
+test('computePendingObligations: ADVANCE_FORWARDING is pending at dueAt - 1, not at dueAt', () => {
+  const eta = NOW + 20 * MIN;
+  const dueAt = eta - ADVANCE_FORWARDING_MINUTES * MIN;
+  const fdr = makeFdr({ filed: { estimatedArrivalTimeUtc: eta } });
+  assert.deepEqual(computePendingObligations(makeArrivalStrip(), fdr, dueAt - 1), [{ obligationType: 'ADVANCE_FORWARDING', dueAt }]);
+  assert.deepEqual(computePendingObligations(makeArrivalStrip(), fdr, dueAt), []);
+  assert.deepEqual(computePendingObligations(makeArrivalStrip({ coordination: { state: 'PROPOSED' } }), fdr, dueAt - 1), []);
+});
+
+test('computePendingObligations: VOID_TIME_EXPIRED is pending at dueAt - 1, not at dueAt', () => {
+  const fdr = makeVoidFdr(NOW);
+  assert.deepEqual(computePendingObligations(makeHeldStrip(), fdr, NOW - 1), [{ obligationType: 'VOID_TIME_EXPIRED', dueAt: NOW }]);
+  assert.deepEqual(computePendingObligations(makeHeldStrip(), fdr, NOW), []);
+  assert.deepEqual(computePendingObligations(makeHeldStrip({ state: 'CLEARED' }), fdr, NOW - 1), []);
+});
+
+test('coordination proposed at ETA - 20 min counts ADVANCE_FORWARDING met', () => {
+  const strip = makeArrivalStrip();
+  const fdr = makeFdr({ filed: { estimatedArrivalTimeUtc: NOW + 20 * MIN } });
+  const monitor = makeMonitor({ strips: [strip], fdr });
+  monitor.tick(NOW - MIN);
+  strip.coordination = { state: 'PROPOSED' };
+  assert.equal(monitor.tick(NOW), false);
+  assert.deepEqual(monitor.getComplianceStats(), { ADVANCE_FORWARDING: { met: 1, missed: 0 } });
+  monitor.tick(NOW + 30 * MIN);
+  assert.deepEqual(monitor.getComplianceStats(), { ADVANCE_FORWARDING: { met: 1, missed: 0 } });
+});
+
+test('a pending ADVANCE_FORWARDING whose Strip is dropped instead counts nothing', () => {
+  const strip = makeArrivalStrip();
+  const fdr = makeFdr({ filed: { estimatedArrivalTimeUtc: NOW + 20 * MIN } });
+  const monitor = makeMonitor({ strips: [strip], fdr });
+  monitor.tick(NOW - MIN);
+  strip.state = 'DROPPED';
+  monitor.tick(NOW);
+  assert.deepEqual(monitor.getComplianceStats(), {});
+});
+
+test('a VOID Strip leaving HELD before the deadline counts met; one left HELD past it counts missed', () => {
+  const got = makeHeldStrip();
+  const fdr = makeVoidFdr(NOW + MIN);
+  const m1 = makeMonitor({ strips: [got], fdr });
+  m1.tick(NOW);
+  got.state = 'PUSHBACK';
+  m1.tick(NOW + 30000);
+  assert.deepEqual(m1.getComplianceStats(), { VOID_TIME_EXPIRED: { met: 1, missed: 0 } });
+
+  const stuck = makeHeldStrip();
+  const m2 = makeMonitor({ strips: [stuck], fdr });
+  m2.tick(NOW);
+  m2.tick(NOW + 2 * MIN);
+  assert.deepEqual(m2.getComplianceStats(), { VOID_TIME_EXPIRED: { met: 0, missed: 1 } });
+});
+
+test('a VOID Strip put back to CLEARED before the deadline did not get away: counts nothing', () => {
+  const strip = makeHeldStrip();
+  const monitor = makeMonitor({ strips: [strip], fdr: makeVoidFdr(NOW + MIN) });
+  monitor.tick(NOW);
+  strip.state = 'CLEARED';
+  monitor.tick(NOW + 30000);
+  assert.deepEqual(monitor.getComplianceStats(), {});
+});
+
+test('the due-the-moment-they-exist types never count met', () => {
+  const strip = makeArrivalStrip({ coordination: { state: 'ACTIVE', lastForwardedEtaUtc: NOW + 30 * MIN } });
+  const fdr = makeFdr({ filed: { estimatedArrivalTimeUtc: NOW + 40 * MIN } });
+  const monitor = makeMonitor({ strips: [strip], fdr });
+  monitor.tick(NOW);
+  strip.coordination.lastForwardedEtaUtc = NOW + 40 * MIN;
+  monitor.tick(NOW + MIN);
+  assert.deepEqual(monitor.getComplianceStats(), { ETA_REVISION: { met: 0, missed: 1 } });
 });
 
 // ── VOID_TIME_EXPIRED ───────────────────────────────────────────────────
@@ -242,21 +399,19 @@ test('VOID_TIME_EXPIRED never fires for a non-DEPARTURE Role — void time is a 
   assert.equal(computeDueObligations(strip, fdr, NOW).some(o => o.obligationType === 'VOID_TIME_EXPIRED'), false);
 });
 
-test('the monitor raises a VOID_TIME_EXPIRED alert once, then de-duplicates it like every other obligation type', () => {
+test('the monitor raises VOID_TIME_EXPIRED once, and retracts it when the Strip leaves HELD', () => {
   const strip = makeHeldStrip();
   const fdr = makeVoidFdr(NOW - MIN);
-  const alerts = [];
-  const monitor = new ForwardingObligationMonitor({
-    boardStoreFor: () => ({ getAll: () => [strip] }),
-    fdrStore: { getFdr: () => fdr },
-    facilityConfig: { getFacilityIds: () => ['INCIRLIK'], getFacilityConfig: () => ({}) },
-    onAlert: (a) => alerts.push(a),
-  });
+  const monitor = makeMonitor({ strips: [strip], fdr });
 
-  monitor.tick(NOW);
-  monitor.tick(NOW + MIN);
-  assert.equal(alerts.length, 1);
-  assert.equal(alerts[0].obligationType, 'VOID_TIME_EXPIRED');
-  assert.equal(alerts[0].severity, 'OVERDUE');
+  assert.equal(monitor.tick(NOW), true);
+  assert.equal(monitor.tick(NOW + MIN), false);
+  assert.equal(monitor.getAll().length, 1);
+  assert.equal(monitor.getAll()[0].obligationType, 'VOID_TIME_EXPIRED');
+  assert.equal(monitor.getAll()[0].severity, 'OVERDUE');
   assert.equal(monitor.getComplianceStats().VOID_TIME_EXPIRED.missed, 1);
+
+  strip.state = 'CLEARED';
+  assert.equal(monitor.tick(NOW + 2 * MIN), true);
+  assert.deepEqual(monitor.getAll(), []);
 });

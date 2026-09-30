@@ -11,12 +11,13 @@
 // `computeDueObligations` is pure logic (mirrors nla.js's isVoidExpired
 // style) — no timers, just "given this Strip/FDR/now/ctx, what's due right
 // now." `ForwardingObligationMonitor` is the stateful scanner that ticks
-// over every Strip across every Facility, de-duplicates repeat alerts per
-// Strip+obligation, and keeps unpersisted compliance counters (mirrors
-// crc-desktop's efsp-panel.js `_searchInvocationCount` — a minimal §11.5
+// over every Strip across every Facility and holds the set of obligations
+// due right now — state, not events: one that stops being due leaves the
+// set, and clients learn it from the next `efsp-alerts` (docs/adr/0067). It
+// also keeps unpersisted compliance counters (a minimal §11.5
 // instrumentation hook, not a real dashboard).
 
-const { isVoidExpired } = require('./nla');
+const { isVoidExpired, DEPARTURE_STATES } = require('./nla');
 const { WALL_CLOCK } = require('../mission-clock');
 
 const ADVANCE_FORWARDING_MINUTES = 15;   // §4.6.1
@@ -128,19 +129,60 @@ function computeDueObligations(strip, fdr, now, ctx = {}) {
   return obligations;
 }
 
-const ALERTED_CAP = 20000; // safety cap, same shape as board-store.js's APPLIED_MUTATIONS_CAP
+/**
+ * The obligations a Strip is *heading towards* — clock running, not yet due
+ * — for the only two types whose lead window the monitor can observe
+ * (docs/adr/0067). Pure, like computeDueObligations; the monitor uses it to
+ * tell "done before it was due" (met) from "never came due for some other
+ * reason" (neither). The other four types are due the moment they exist, so
+ * they are never pending and can only ever be missed.
+ *
+ * @returns {Array<{obligationType:string, dueAt:number}>}
+ */
+function computePendingObligations(strip, fdr, now) {
+  const pending = [];
+  if (!strip || !fdr) return pending;
+  const eta = fdr.filed && fdr.filed.estimatedArrivalTimeUtc;
+  if (strip.role === 'ARRIVAL' && !strip.coordination && eta) {
+    const dueAt = eta - ADVANCE_FORWARDING_MINUTES * 60 * 1000;
+    if (now < dueAt) pending.push({ obligationType: 'ADVANCE_FORWARDING', dueAt });
+  }
+  const voidDeadline = fdr.assigned && fdr.assigned.voidDeadlineUtc;
+  if (strip.role === 'DEPARTURE' && strip.state === 'HELD' && voidDeadline && now < voidDeadline) {
+    pending.push({ obligationType: 'VOID_TIME_EXPIRED', dueAt: voidDeadline });
+  }
+  return pending;
+}
+
+// "Met": the condition that satisfies a pending obligation, checked against
+// the same live Strip on the tick its pending window ended. For VOID_TIME,
+// "got away" means moved on past HELD in the departure lifecycle — a Strip
+// put back to CLEARED did not get away, and one DROPPED is not live.
+const HELD_INDEX = DEPARTURE_STATES.indexOf('HELD');
+const MET_WHEN = {
+  ADVANCE_FORWARDING: (strip) => strip.role === 'ARRIVAL' && !!strip.coordination,
+  VOID_TIME_EXPIRED: (strip) => strip.role === 'DEPARTURE' && strip.state !== 'DROPPED'
+    && DEPARTURE_STATES.indexOf(strip.state) > HELD_INDEX,
+};
 
 /**
- * Stateful scanner — ticked periodically (server.js) over every Strip
- * across every Facility. De-duplicates: each Strip+obligationType pair
- * alerts at most once (a Strip's obligation, once raised, doesn't repeat
- * every tick — the alert already reached every connected client).
+ * Stateful scanner — ticked on the 15 s sweep and right after any EFSP
+ * Mutation that broadcast something (server.js) — over every live Strip
+ * across every Facility. It holds the set of obligations due *right now*
+ * (docs/adr/0067, superseding 0021's "alert at most once"): an obligation
+ * whose condition stops being true simply leaves the set, and the whole set
+ * rides the `efsp-alerts` full-state message beside conformance and STCA.
+ *
+ * Keyed per Strip replica, not per FDR: an obligation is a duty of the
+ * Facility holding the Strip, so two Facilities' replicas of one flight
+ * legitimately differ.
  */
 class ForwardingObligationMonitor {
   /**
-   * @param {{boardStoreFor:(facilityId:string)=>object, fdrStore:object, facilityConfig:object, airspaceStore?:object, onAlert?:(alert:object)=>void}} deps
+   * @param {{boardStoreFor:(facilityId:string)=>object, fdrStore:object, facilityConfig:object, airspaceStore?:object, clock?:object}} deps
+   *   A stray `onAlert` is ignored — obligations are state now, not events.
    */
-  constructor({ boardStoreFor, fdrStore, facilityConfig, airspaceStore, onAlert, clock = WALL_CLOCK }) {
+  constructor({ boardStoreFor, fdrStore, facilityConfig, airspaceStore, clock = WALL_CLOCK }) {
     // The mission clock (docs/adr/0079) — every obligation here is due at an
     // ETA, a proposed departure or a void deadline, all in mission time.
     this._clock = clock;
@@ -148,12 +190,27 @@ class ForwardingObligationMonitor {
     this._fdrStore = fdrStore;
     this._facilityConfig = facilityConfig;
     this._airspaceStore = airspaceStore || null;
-    this._onAlert = onAlert || (() => {});
-    this._alerted = new Set(); // `${stripId}:${obligationType}`
+    this._current = new Map(); // `${facilityId}:${stripId}:${obligationType}` -> entry
+    this._pending = new Map(); // same key -> { facilityId, stripId, obligationType, dueAt }
     this._compliance = new Map(); // obligationType -> {met, missed}
   }
 
+  /**
+   * Recompute the whole due set. Returns true iff it differs from the last
+   * one — a key appeared or disappeared, or a severity changed (the
+   * ADVANCE_FORWARDING WARNING -> OVERDUE escalation). `dueAt` and `since`
+   * are held from the tick an episode was first raised: ETA_REVISION and
+   * AMENDMENT_INSIDE_30MIN report `dueAt: now`, and comparing that would
+   * make every tick a change.
+   */
   tick(now = this._clock.now()) {
+    const next = new Map();
+    const nextPending = new Map();
+    const live = new Map(); // `${facilityId}:${stripId}` -> strip
+    const isAirspaceActive = this._airspaceStore
+      ? (airspaceId) => this._airspaceStore.isActive(airspaceId)
+      : null;
+
     for (const facilityId of this._facilityConfig.getFacilityIds()) {
       const boardStore = this._boardStoreFor(facilityId);
       if (!boardStore) continue;
@@ -163,27 +220,54 @@ class ForwardingObligationMonitor {
         if (strip.state === 'DROPPED') continue;
         const fdr = this._fdrStore.getFdr(strip.fdrId);
         if (!fdr) continue;
+        live.set(`${facilityId}:${strip.stripId}`, strip);
 
-        const isAirspaceActive = this._airspaceStore
-          ? (airspaceId) => this._airspaceStore.isActive(airspaceId)
-          : null;
-
-        for (const obligation of computeDueObligations(strip, fdr, now, { dataOnly, isAirspaceActive })) {
-          const key = `${strip.stripId}:${obligation.obligationType}`;
-          if (this._alerted.has(key)) continue;
-          this._alerted.add(key);
-          this._recordMissed(obligation.obligationType);
-          this._onAlert({ facilityId, stripId: strip.stripId, ...obligation });
+        for (const o of computeDueObligations(strip, fdr, now, { dataOnly, isAirspaceActive })) {
+          const key = `${facilityId}:${strip.stripId}:${o.obligationType}`;
+          const prev = this._current.get(key);
+          if (!prev) this._recordMissed(o.obligationType);
+          next.set(key, {
+            facilityId, stripId: strip.stripId, obligationType: o.obligationType,
+            severity: o.severity,
+            dueAt: prev ? prev.dueAt : o.dueAt,
+            since: prev ? prev.since : now,
+          });
+        }
+        for (const p of computePendingObligations(strip, fdr, now)) {
+          nextPending.set(`${facilityId}:${strip.stripId}:${p.obligationType}`,
+            { facilityId, stripId: strip.stripId, ...p });
         }
       }
     }
-    if (this._alerted.size > ALERTED_CAP) {
-      // Drop the oldest half — a long-running server will eventually
-      // outgrow this de-dup set; losing the very oldest entries risks a
-      // rare re-alert on an ancient, long-dropped Strip, never a missed one.
-      const toDrop = [...this._alerted].slice(0, this._alerted.size - ALERTED_CAP / 2);
-      for (const key of toDrop) this._alerted.delete(key);
+
+    // A pending window that ended this tick: met only if the satisfying
+    // condition holds on the same live Strip before the deadline. Anything
+    // else (dropped, ETA removed, release state changed) is forgotten.
+    for (const [key, p] of this._pending) {
+      if (nextPending.has(key) || next.has(key)) continue;
+      const strip = live.get(`${p.facilityId}:${p.stripId}`);
+      if (strip && now < p.dueAt && MET_WHEN[p.obligationType](strip)) this.recordMet(p.obligationType);
     }
+
+    let changed = next.size !== this._current.size;
+    if (!changed) {
+      for (const [key, entry] of next) {
+        const prev = this._current.get(key);
+        if (!prev || prev.severity !== entry.severity) { changed = true; break; }
+      }
+    }
+    this._current = next;
+    this._pending = nextPending;
+    return changed;
+  }
+
+  /** The obligations due right now, sorted by stripId then obligationType. */
+  getAll() {
+    return [...this._current.values()]
+      .map(e => ({ ...e }))
+      .sort((a, b) => (a.stripId < b.stripId ? -1 : a.stripId > b.stripId ? 1
+        : a.obligationType < b.obligationType ? -1 : a.obligationType > b.obligationType ? 1
+          : a.facilityId < b.facilityId ? -1 : a.facilityId > b.facilityId ? 1 : 0));
   }
 
   _recordMissed(obligationType) {
@@ -193,13 +277,10 @@ class ForwardingObligationMonitor {
   }
 
   /**
-   * A caller (board-store.js's coordination methods, once wired) can call
-   * this when a coordination Mutation lands BEFORE its deadline, to count
-   * it as compliant. Not automatically wired this slice — no dispatch-
-   * level signal yet distinguishes "this Mutation resolved a pending
-   * obligation" from "the controller was just doing their job anyway"
-   * (docs/adr/0021's documented gap). Exists so §11.5's compliance-rate
-   * instrumentation has a real place to plug into once that signal exists.
+   * Counts an obligation done before it was due. Its only caller is tick()
+   * itself, for the two types computePendingObligations can see coming
+   * (docs/adr/0067) — never "any coordination Mutation after an alert",
+   * which 0021 rightly rejected as overstating compliance.
    */
   recordMet(obligationType) {
     const stats = this._compliance.get(obligationType) || { met: 0, missed: 0 };
@@ -214,6 +295,6 @@ class ForwardingObligationMonitor {
 }
 
 module.exports = {
-  computeDueObligations, ForwardingObligationMonitor,
+  computeDueObligations, computePendingObligations, ForwardingObligationMonitor,
   ADVANCE_FORWARDING_MINUTES, ETA_REVISION_THRESHOLD_MINUTES, AMENDMENT_WINDOW_MINUTES, DATA_ONLY_VERIFICATION_MINUTES,
 };

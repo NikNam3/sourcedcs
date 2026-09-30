@@ -13,6 +13,7 @@ const {
   registerPendingMutation, getPendingMutations, rebaseForResend,
   getEfspStrip, getEfspFdr, getEfspPosition, getAllEfspStrips, getAllEfspPositions,
   getEfspRack, searchEfspStrips, getEfspBoardSeq, getEfspFacility, getEfspBays,
+  applyEfspAlerts, getEfspObligation, getEfspObligations,
   _resetEfspStateForTest,
 } = require('../app/public/js/panels/efsp/efsp-state.js');
 
@@ -195,4 +196,47 @@ test('searchEfspStrips finds a Strip regardless of which Bay/Rack it currently s
   });
   const [result] = searchEfspStrips('viper');
   assert.equal(result.bayId, 'cd-held'); // unchanged — search doesn't move anything
+});
+
+// ── Obligations: full state in efsp-alerts (docs/adr/0067) ──────────────
+
+function obligation(overrides = {}) {
+  return { facilityId: 'INCIRLIK', stripId: 's1', obligationType: 'VOID_TIME_EXPIRED', severity: 'OVERDUE', dueAt: 1000, since: 1000, ...overrides };
+}
+
+test('an obligation in efsp-alerts appears on its Strip', () => {
+  applyEfspAlerts({ conformance: [], stca: [], obligations: [obligation()] });
+  assert.equal(getEfspObligation('s1').obligationType, 'VOID_TIME_EXPIRED');
+  assert.deepEqual(getEfspObligations('s1'), [obligation()]);
+  assert.equal(getEfspObligation('s2'), null);
+  assert.deepEqual(getEfspObligations('s2'), []);
+});
+
+test('the next efsp-alerts without an obligation removes it — replace, never merge', () => {
+  applyEfspAlerts({ conformance: [], stca: [], obligations: [obligation(), obligation({ stripId: 's2' })] });
+  applyEfspAlerts({ conformance: [], stca: [], obligations: [obligation({ stripId: 's2' })] });
+  assert.equal(getEfspObligation('s1'), null);
+  assert.notEqual(getEfspObligation('s2'), null);
+});
+
+test('OVERDUE outranks WARNING on one Strip, then the earliest dueAt', () => {
+  applyEfspAlerts({ obligations: [
+    obligation({ obligationType: 'ETA_REVISION', severity: 'WARNING', dueAt: 10 }),
+    obligation({ obligationType: 'UNACTIVATED_AIRSPACE_ENTRY', severity: 'OVERDUE', dueAt: 500 }),
+    obligation({ obligationType: 'VOID_TIME_EXPIRED', severity: 'OVERDUE', dueAt: 200 }),
+  ] });
+  assert.equal(getEfspObligation('s1').obligationType, 'VOID_TIME_EXPIRED');
+  assert.equal(getEfspObligations('s1').length, 3);
+});
+
+test('an efsp-alerts with no obligations key clears them', () => {
+  applyEfspAlerts({ obligations: [obligation()] });
+  applyEfspAlerts({ conformance: [], stca: [] });
+  assert.equal(getEfspObligation('s1'), null);
+});
+
+test('_resetEfspStateForTest clears obligations', () => {
+  applyEfspAlerts({ obligations: [obligation()] });
+  _resetEfspStateForTest();
+  assert.equal(getEfspObligation('s1'), null);
 });

@@ -143,16 +143,15 @@ export function activate(efsp, c, airspaceId, window) {
   return mustAirspaceAct(efsp, c[definition.controllingPositionId], definition.controllingPositionId, airspaceId, { kind: 'ApproveActivation' });
 }
 
-/** Ticks the obligation monitor once and returns whatever it raised. */
+/** Ticks a fresh obligation monitor once and returns what is due (docs/adr/0067). */
 export async function obligationAlerts(efsp, facilityConfig) {
   const { ForwardingObligationMonitor } = await import('../../src/efsp/forwarding-obligations.js');
-  const alerts = [];
-  new ForwardingObligationMonitor({
+  const monitor = new ForwardingObligationMonitor({
     boardStoreFor: efsp.boardStoreFor,
     fdrStore: efsp.fdrStore,
     facilityConfig,
     airspaceStore: efsp.airspaceStore,
-    onAlert: (a) => alerts.push(a),
-  }).tick();
-  return alerts;
+  });
+  monitor.tick();
+  return monitor.getAll();
 }

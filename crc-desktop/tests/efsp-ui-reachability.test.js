@@ -192,9 +192,9 @@ test('a Strip rebuilds when something it RENDERS but does not own changes', () =
   unchanged();
 
   // An obligation alert, which lands in its own store and touches no Strip.
-  sandbox.applyEfspObligationAlert({ stripId: 's1', facilityId: 'INCIRLIK', obligationType: 'VOID_TIME_EXPIRED', dueAt: 1, severity: 'OVERDUE' });
+  sandbox.applyEfspAlerts({ conformance: [], stca: [], obligations: [{ facilityId: 'INCIRLIK', stripId: 's1', obligationType: 'VOID_TIME_EXPIRED', severity: 'OVERDUE', dueAt: 1, since: 1 }] });
   assert.equal(needsRebuild(el, strip, null, null), true, 'an alarm nobody is shown is not an alarm');
-  sandbox.clearEfspObligation('s1');
+  sandbox.applyEfspAlerts({ conformance: [], stca: [], obligations: [] });
   unchanged();
 
   // The FDR behind the Strip — every Block value, and the separation regime
@@ -1002,6 +1002,21 @@ test('conformance and conflict alerts appear on the Strip only while they apply'
   const quiet = r.sandbox._buildStripEl(strip);
   assert.equal(findByText(quiet, 'HDG 072'), undefined);
   assert.equal(quiet.classList.contains('efsp-strip-alert'), false);
+});
+
+test('an obligation badge shows while efsp-alerts lists it, and is gone after the next one does not (docs/adr/0067)', () => {
+  const strip = stripAt({ ownerPositionId: 'APP' });
+  const r = renderStrip({ strip, fdr: FDR, held: ['APP'], correlations: [correlationOf()], tracks: [{ id: '101', domain: 'AIR', label: { callsign: 'VIPER1', source: 'FDR', trackNumber: 'TN00001' }, ssr: { code: '0041' } }] });
+  const badge = (el) => descendants(el).find(c => (c.className || '').includes('efsp-obligation-badge'));
+  r.sandbox.applyEfspAlerts({ conformance: [], stca: [], obligations: [
+    { facilityId: 'INCIRLIK', stripId: 's1', obligationType: 'VOID_TIME_EXPIRED', severity: 'OVERDUE', dueAt: 1, since: 1 },
+  ] });
+  const raised = badge(r.sandbox._buildStripEl(strip));
+  assert.ok(raised, 'the badge is drawn while the obligation is due');
+  assert.ok((raised.className || '').includes('efsp-obligation-badge-overdue'));
+
+  r.sandbox.applyEfspAlerts({ conformance: [], stca: [], obligations: [] });
+  assert.equal(badge(r.sandbox._buildStripEl(strip)), undefined, 'the next efsp-alerts without it clears it');
 });
 
 test('a Strip whose contact went away says so, and is marked', () => {

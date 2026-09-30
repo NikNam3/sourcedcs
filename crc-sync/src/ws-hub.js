@@ -55,6 +55,11 @@ class WsHub {
     this._labels = new Map();
     // trackId -> describe() output, rebuilt each tick.
     this._described = new Map();
+    // The whole EFSP alert state (docs/adr/0058, 0067), empty until a
+    // monitor reports — so a client connecting to a freshly started server
+    // is told "nothing is wrong" rather than keeping what it had.
+    this._efspAlerts = { conformance: [], stca: [], obligations: [] };
+    this._onEfspChange = null;
   }
 
   attach(httpServer) {
@@ -106,14 +111,6 @@ class WsHub {
   setGrpcStatus(s)    { this._grpcStatus = s; this._broadcastStatus(); }
   setSrsStatus(s)     { this._srsStatus = s; this._broadcastStatus(); }
 
-  // WP4A (docs/adr/0021) — §4.6.1's timed forwarding-obligation alerts.
-  // Unconditional to every connected client — no per-client filtering by
-  // held Position/Facility (matches every other EFSP broadcast type).
-  // `alert` is one entry from forwarding-obligations.js's
-  // ForwardingObligationMonitor onAlert callback: {facilityId, stripId,
-  // obligationType, dueAt, severity}.
-  broadcastEfspObligationAlert(alert) { this._broadcast({ version: VERSION, type: 'efsp-obligation-alert', ...alert }); }
-
   /**
    * One changed-Strips-only board delta per NLA-status sweep, from
    * nla-status-monitor.js's onDelta (docs/ui-findings/lane4.md F-408).
@@ -152,8 +149,8 @@ class WsHub {
    * sends unconditionally.
    *
    * Worth naming plainly: this is server-originated immediate STATE with no
-   * ack and no Mutation behind it, which is new here — obligation alerts above
-   * are the only precedent and they are alerts, not state. It is justified
+   * ack and no Mutation behind it, which is new here (obligations, which ride
+   * efsp-alerts, are the other — docs/adr/0067). It is justified
    * because the record IS state, and it is the only EFSP state that changes
    * without a Mutation, because surveillance is not a controller.
    */
@@ -183,8 +180,17 @@ class WsHub {
     const stca = session && session.coverage && session.coverage.stca
       ? (a.stca || []).filter(c => seen.has(String(c.a)) && seen.has(String(c.b)))
       : [];
-    return { version: VERSION, type: 'efsp-alerts', conformance: a.conformance || [], stca };
+    // Obligations (docs/adr/0067) go to everybody for now, like conformance.
+    return { version: VERSION, type: 'efsp-alerts', conformance: a.conformance || [], stca, obligations: a.obligations || [] };
   }
+
+  /**
+   * Called after any EFSP message that broadcast something, so server.js can
+   * re-evaluate obligations at once rather than on the next 15 s sweep — a
+   * re-cleared Strip's badge clears with the Mutation that cleared it
+   * (docs/adr/0067).
+   */
+  setOnEfspChange(fn) { this._onEfspChange = fn; }
 
   broadcastEfspCorrelationDelta(payload) {
     this._broadcast({
@@ -413,9 +419,10 @@ class WsHub {
     this._refreshLabels();
     ws.send(JSON.stringify(this._pictureSnapshot(session)));
     if (this._efsp) ws.send(JSON.stringify(this._efsp.snapshotFor()));
-    // The current conformance and conflict alerts (docs/adr/0058), so a client
+    // The current conformance, conflict and obligation alerts (docs/adr/0058,
+    // 0067) — always, even when empty — so a client
     // that connects mid-conflict sees it without waiting for the next change.
-    if (this._efspAlerts) ws.send(JSON.stringify(this._efspAlertsMsg(session)));
+    ws.send(JSON.stringify(this._efspAlertsMsg(session)));
 
     ws.on('message', (raw) => this._onMessage(ws, session, raw));
     ws.on('error', () => {});
@@ -526,6 +533,12 @@ class WsHub {
         // waiting for the next MARSA op to carry it would be docs/adr/0022's
         // bug again — a correct server-side change no client ever hears about.
         if (result.marsaBroadcast) this._broadcast(result.marsaBroadcast);
+        // After the broadcasts, so a client sees the Strip change before the
+        // alert change. Guarded: a monitor bug must never cost the sender's
+        // round trip.
+        if (this._onEfspChange && (result.broadcast || result.peerBroadcast || result.marsaBroadcast)) {
+          try { this._onEfspChange(); } catch (err) { console.error('[crc-sync] onEfspChange failed:', err); }
+        }
         // Declaring a different held set is what changes a controller's
         // coverage (docs/adr/0042) — taking APP hands you the RAPCON's
         // scopes, giving it up takes them away again. Done here rather than

@@ -15,8 +15,7 @@
 // relation carries its own participant list and is broadcast whole, so every
 // participant Strip renders the same record, and the alert is a field on it
 // (`voidedBy`) rather than a message anybody has to route. That is
-// docs/adr/0045's shape, and deliberately not the obligation-alert shape, which
-// cannot retract.
+// docs/adr/0045's shape, and deliberately not the obligation-alert shape.
 //
 // A BADGE, NOT A BLOCK — the same three reasons correlation-highlight.js lists,
 // and they apply harder here. A relation is keyed by its own id and its
