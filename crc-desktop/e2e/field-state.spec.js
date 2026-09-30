@@ -139,6 +139,16 @@ async function setState(page, cs, toState) {
   await expect.poll(async () => (await stripOf(page, cs)).state, { message: `${cs} -> ${toState}` }).toBe(toState);
 }
 
+/** Presses the Strip's NLA `n` times through the page's own _invokeNla, as the real button does. */
+async function nla(page, cs, n = 1) {
+  for (let i = 0; i < n; i++) {
+    const before = (await stripOf(page, cs)).state;
+    await page.evaluate((cs) => _invokeNla(getAllEfspStrips().find((x) => getEfspFdr(x.fdrId).identity.callsign === cs && x.state !== 'DROPPED')), cs);
+    await expect.poll(async () => (await stripOf(page, cs)).state, { message: `${cs} NLA from ${before}` }).not.toBe(before);
+    await page.waitForTimeout(450); // the server's per-Strip 400 ms double-tap guard (T5)
+  }
+}
+
 async function goBay(page, positionId, bayId) {
   await front(page, 'efsp');
   await page.locator(`#efsp-position-tabs .efsp-position-tab[data-position-id="${positionId}"]`).click();
@@ -180,20 +190,22 @@ test('Phase 3 walk: OPS asks for runway works, TWR suspends, the Strips hold, FI
   // 2. The traffic: a departure taxiing for 05, one queued in 05's rack, an
   // arrival handed to tower for 05, and a hook-equipped arrival on final.
   const DEP_TAXI = `FST${RUN}`; const DEP_Q = `FSQ${RUN}`; const ARR_TWR = `FSA${RUN}`; const ARR_FIN = `FSF${RUN}`;
+  // Walked through the real NLA chain, so each Strip is owned and filed where
+  // the server would put it.
   await seed(ops, { callsign: DEP_TAXI, role: 'DEPARTURE', fdr: { departureRunway: '05' } });
-  await setState(ops, DEP_TAXI, 'TAXI');
+  await nla(ops, DEP_TAXI, 4); // -> TAXI (GND)
   await seed(ops, { callsign: DEP_Q, role: 'DEPARTURE', fdr: { departureRunway: '05' } });
-  await setState(ops, DEP_Q, 'TAXI');
-  await setState(ops, DEP_Q, 'RUNWAY_QUEUE');
+  await nla(ops, DEP_Q, 5); // -> RUNWAY_QUEUE (TWR)
   expect((await stripOf(ops, DEP_Q)).rackId, 'filed into 05\'s rack by its 8A (S-R2-1)').toBe('rwy-05');
   for (const cs of [ARR_TWR, ARR_FIN]) {
     await seed(ops, { callsign: cs, role: 'ARRIVAL', actingPositionId: 'APP', bayId: 'app-inbound', fdr: { departureAirport: 'LTAF', destinationAirport: 'LTAG' } });
     await stripOp(ops, cs, { kind: 'SetBlock', blockId: '8B', value: '05' }, 'APP');
   }
   await stripOp(ops, ARR_FIN, { kind: 'SetBlock', blockId: '3F', value: true }, 'APP');
-  await setState(ops, ARR_TWR, 'HANDED_TO_TOWER');
-  await setState(ops, ARR_FIN, 'HANDED_TO_TOWER');
-  await setState(ops, ARR_FIN, 'FINAL');
+  await expect.poll(async () => (await ops.evaluate((cs) => { const s = getAllEfspStrips().find((x) => getEfspFdr(x.fdrId).identity.callsign === cs); return getEfspFdr(s.fdrId).military.hookRequired; }, ARR_FIN))).toBe(true);
+  await nla(ops, ARR_TWR, 1); // -> HANDED_TO_TOWER (TWR)
+  await nla(ops, ARR_FIN, 1);
+  await nla(twr, ARR_FIN, 1); // -> FINAL
 
   // 3. OPS asks; TWR (another person) accepts, which suspends the runway.
   await press(ops, 'RequestRunwayStatus', { positionId: 'OPS', action: 'WORKS' });
@@ -225,8 +237,10 @@ test('Phase 3 walk: OPS asks for runway works, TWR suspends, the Strips hold, FI
   await goBay(ops, 'GND', 'gnd-taxi-out');
   const taxiing = stripByCallsign(ops, DEP_TAXI);
   await expect(chip(taxiing), 'proactive: TAXI shows the chip before its NLA is the gated one').toHaveText('RWY 05 SUSP');
-  await expect(taxiing.locator('.efsp-alert-reason')).toHaveText(/^Runway 05\/23 is suspended for works; it reopens when OPS completes the works and signs off the inspection\.$/);
-  await expect(nlaBtn(taxiing)).toBeDisabled(); // TAXI -> RUNWAY_QUEUE is itself held (rule 1)
+  // TAXI -> RUNWAY_QUEUE is itself held (rule 1), so the server's reason is the one line.
+  await expect(nlaBtn(taxiing)).toBeDisabled();
+  await expect(nlaReason(taxiing)).toHaveText('runway 05/23 suspended — works in progress');
+  await expect(taxiing.locator('.efsp-alert-reason:not(:empty)')).toHaveCount(0);
 
   // 4. An aircraft already on final still lands: touchdown is an observation.
   await goBay(twr, 'TWR', 'twr-final');
@@ -285,8 +299,7 @@ test('Phase 3 walk: a runway change needs OPS and APP (each a different person),
 
   const DEP = `FSR${RUN}`;
   await seed(ops, { callsign: DEP, role: 'DEPARTURE', fdr: { departureRunway: '05' } });
-  await setState(ops, DEP, 'TAXI');
-  await setState(ops, DEP, 'RUNWAY_QUEUE');
+  await nla(ops, DEP, 5);
   expect((await stripOf(ops, DEP)).rackId).toBe('rwy-05');
 
   // TWR proposes 05 -> 23 from the panel's end picker.

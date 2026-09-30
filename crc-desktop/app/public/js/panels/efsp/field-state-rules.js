@@ -288,6 +288,22 @@ function fieldStateAlertsFor(strip, lookups) {
   return out;
 }
 
+/**
+ * What the Strip's field-state chips depend on, as a string for bay-view.js's
+ * render signature: the Strip is rebuilt when it changes. Field state is not
+ * on the Strip, and the re-stamped `nla` board-delta reaches the client before
+ * the field-state delta, so without this the chip would lag a whole change.
+ */
+function fieldStateSignatureFor(strip) {
+  const record = strip && typeof getEfspFieldState === 'function' ? getEfspFieldState(strip.facilityId) : null;
+  // The Facility's runway facts any chip may read (status, suspension kind,
+  // active end, gear), plus this Strip's own derived alerts.
+  const field = record
+    ? `${record.activeRunway || '-'}:` + (record.runways || []).map(r => `${r.runwayId}=${r.status}/${(r.suspension && r.suspension.kind) || ''}/${(r.arrestingGear || []).map(g => g.state).join('+')}`).join(';')
+    : '';
+  return field + '#' + fieldStateAlertsFor(strip).map(a => `${a.key}/${a.tone}/${a.text}/${a.reason || ''}`).join(',');
+}
+
 // ── the panel's buttons ───────────────────────────────────────────────────
 
 function _fsOwns(positionId, kind) {
@@ -406,6 +422,6 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     FIELD_STATE_ACTION_OWNERS, FIELD_STATE_RUNWAY_STRIP_STATES, FIELD_STATE_GEAR_CHECK_STATES,
     normalizeRunwayEnd, fieldStateViewOf, runwayForStrip, runwayStatusReasonFor, runwayAdvisoryFor,
-    gearMismatchFor, fieldStateAlertsFor, fieldStateActionsFor, fieldStateSubjectFor,
+    gearMismatchFor, fieldStateAlertsFor, fieldStateSignatureFor, fieldStateActionsFor, fieldStateSubjectFor,
   };
 }

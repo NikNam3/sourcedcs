@@ -586,3 +586,22 @@ test('the server\'s field-state NLA inhibit still renders exactly one reason lin
   const nla = descendants(el).find(n => n.tagName === 'button' && /efsp-nla-btn/.test(n.className));
   assert.equal(nla.disabled, true);
 });
+
+test('fieldStateSignatureFor changes when the runway does, so bay-view.js rebuilds the Strip (S-L1b2)', () => {
+  state._resetEfspStateForTest();
+  global.getEfspFieldState = state.getEfspFieldState;
+  global.getEfspFdr = state.getEfspFdr;
+  try {
+    const strip = departure();
+    state.applyEfspSnapshot({ strips: [strip], fdrs: [fdrDep('05')], fieldStates: [record()] });
+    const open = rules.fieldStateSignatureFor(strip);
+    state.applyEfspFieldStateDelta({ fieldStates: { updated: [record({ status: 'SUSPENDED_WORKS', suspension: { kind: 'WORKS' } })] } });
+    const works = rules.fieldStateSignatureFor(strip);
+    assert.notEqual(works, open);
+    state.applyEfspFieldStateDelta({ fieldStates: { updated: [record({ activeRunway: '23' })] } });
+    assert.notEqual(rules.fieldStateSignatureFor(strip), open, 'the active end is in it too');
+  } finally {
+    delete global.getEfspFieldState;
+    delete global.getEfspFdr;
+  }
+});

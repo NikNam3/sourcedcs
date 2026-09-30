@@ -239,8 +239,11 @@ function _fsUpdateTitle(records) {
     waiting += fieldStateActionsFor(record, held).filter(a => a.kind === 'AcceptRunwayRequest').length;
   }
   const base = (typeof PANEL_TITLES === 'object' && PANEL_TITLES.fieldState) || 'FIELD STATE';
+  const title = waiting ? `${base} (${waiting})` : base;
   const panel = typeof dock !== 'undefined' && dock && dock.api ? dock.api.getPanel('fieldState') : null;
-  if (panel && panel.api && typeof panel.api.setTitle === 'function') panel.api.setTitle(waiting ? `${base} (${waiting})` : base);
+  // Only on a change: setting a dockview title re-lays the tab out, and doing
+  // that on every render would churn the panel under a controller's click.
+  if (panel && panel.api && typeof panel.api.setTitle === 'function' && panel.title !== title) panel.api.setTitle(title);
   return waiting;
 }
 
