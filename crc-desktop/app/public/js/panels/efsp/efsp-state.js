@@ -23,6 +23,10 @@ let efspBays = [];
 // option proactively instead of letting a PROPOSE submit-and-silently-fail
 // against the server-side check.
 let efspAitAuthorizedByFacility = {};
+// crc-sync's docs/adr/0088 — facilityId -> { positionId -> the one character
+// an ATC scope draws on a contact that Position owns }. Config, so it rides
+// the snapshot only.
+let efspPositionLetters = {};
 
 // clientMutationId -> the original efsp-mutation message sent, kept until
 // its ack arrives — replayed against a fresh baseline on reconnect (§5.6.3).
@@ -80,6 +84,7 @@ function applyEfspSnapshot(msg) {
   efspFacility = msg.facility;
   efspBays = msg.bays || [];
   efspAitAuthorizedByFacility = msg.aitAuthorizedByFacility || {};
+  efspPositionLetters = msg.positionLetters || {};
   efspAirspaces.clear();
   for (const a of msg.airspaces || []) efspAirspaces.set(a.airspaceId, a);
   efspCorrelations.clear();
@@ -298,6 +303,14 @@ function getEfspFacility() { return efspFacility; }
 function getEfspBays() { return efspBays; }
 function isAitAuthorizedFor(facilityId) { return !!efspAitAuthorizedByFacility[facilityId]; }
 
+/** The ATC-scope letter for a Position (docs/adr/0088), searched across Facilities; null when none is configured. */
+function getEfspPositionLetter(positionId) {
+  for (const letters of Object.values(efspPositionLetters)) {
+    if (letters && Object.prototype.hasOwnProperty.call(letters, positionId)) return letters[positionId];
+  }
+  return null;
+}
+
 /**
  * Other live Strips sharing this FDR, excluding one by id.
  *
@@ -371,6 +384,7 @@ function _resetEfspStateForTest() {
   efspFacility = null;
   efspBays = [];
   efspAitAuthorizedByFacility = {};
+  efspPositionLetters = {};
 }
 
 /** Applies an efsp-alerts message: the complete current conformance, conflict and obligation picture. */
@@ -417,7 +431,7 @@ if (typeof module !== 'undefined' && module.exports) {
     applyEfspAlerts, conformanceAlertsForFdr, getAllEfspConflicts, stcaConflictsForTrack,
     activeMarsaForFdr, marsaForStrip, marsaParticipantStripIds,
     getEfspRack, searchEfspStrips, getEfspBoardSeq, getEfspFacility, getEfspBays,
-    isAitAuthorizedFor,
+    isAitAuthorizedFor, getEfspPositionLetter,
     getEfspObligation, getEfspObligations,
     _resetEfspStateForTest,
   };
