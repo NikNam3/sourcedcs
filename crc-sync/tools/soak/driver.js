@@ -22,6 +22,12 @@ const { PROFILES, CREWS, POSITION_FACILITY, SCRIPT_WEIGHTS, SCRIPTS, NLA_FALLBAC
 const FACILITIES = ['INCIRLIK', 'CENTER', 'TACTICAL', 'RANGES'];
 const NLA_GUARD_MS = 400 + 10; // NLA_DOUBLE_TAP_MS + 10, briefing §5.2
 const EVENTS_CAP = 50;
+// Where a CD-owned departure goes back to when a covering Position was handed it.
+const RETURN_BAY = {
+  PENDING_CLEARANCE: { position: 'CD', bayId: 'cd-pending-clearance' },
+  CLEARED: { position: 'CD', bayId: 'cd-cleared' },
+  HELD: { position: 'CD', bayId: 'cd-held' },
+};
 const MIN = 60000;
 
 class Heap {
@@ -151,7 +157,7 @@ class Driver {
   }
 
   /** Delivers one reply's socket output to the clients' shadows. Returns per-command facts for M1/M8. */
-  deliver(out, { resyncFor = null } = {}) {
+  deliver(out, { resyncFor = null, sender = null } = {}) {
     const facts = { acks: new Map(), deltas: new Map(), otherDeltas: new Map(), resyncAnswer: null };
     for (const [clientId, payload] of out) {
       const c = this.clients.get(clientId);
@@ -170,9 +176,10 @@ class Driver {
           break;
         case 'efsp-board-delta': {
           this._learnDelta(msg);
-          if (this.injectShadowDrop && c.id === this._shadowDropTarget() && (msg.strips.updated.length || msg.strips.gone.length) && this.now > this.t0 + 3 * MIN) {
+          if (this.injectShadowDrop && sender && c.id === this._shadowDropTarget(sender) && msg.strips.gone.some(id => { const x = c.shadow._fac(msg.facilityId).get(id); return x && x.state !== 'DROPPED'; }) && this.now > this.t0 + 3 * MIN) {
             this.injectShadowDrop = false; this.stats.injectedShadowDrops++;
-            break; // selfcheck: the driver drops one delta on its side
+            this.event('injectedShadowDrop', { client: c.id, sender, facilityId: msg.facilityId, gone: msg.strips.gone, updated: msg.strips.updated.map(x => x.stripId) });
+            break; // selfcheck: the driver drops one delta on its side (a Drop, which nothing later repairs)
           }
           c.shadow.applyDelta(msg);
           let set = facts.deltas.get(clientId);
@@ -228,8 +235,9 @@ class Driver {
     return facts;
   }
 
-  _shadowDropTarget() {
-    for (const c of this.clients.values()) if (!c.passive && c.connected) return c.id;
+  /** A connected controller other than the sender (whose own ack would repair the dropped delta). */
+  _shadowDropTarget(sender) {
+    for (const c of this.clients.values()) if (!c.passive && c.connected && c.continuous && c.id !== sender) return c.id;
     return null;
   }
 
@@ -319,7 +327,7 @@ class Driver {
     if (reply.noSocket) throw new Error(`harness: send on a closed socket for ${client.id}`);
     const kind = msg.type === 'efsp-mutation' ? `mutation:${msg.op.kind}` : msg.type;
     this.latency.add(this.t0, this.now, kind, reply.serverMs);
-    const facts = this.deliver(reply.out);
+    const facts = this.deliver(reply.out, { sender: client.id });
     if (!msg.clientMutationId) return { reply, facts };
     const acks = (facts.acks.get(msg.clientMutationId) || []).filter(a => a.clientId === client.id);
     this.ledger.settle([msg.clientMutationId], new Map([[msg.clientMutationId, acks]]), { type: msg.type, op: msg.op && msg.op.kind, client: client.id, t: (this.now - this.t0) / 1000 });
@@ -583,6 +591,23 @@ class Driver {
         this.after(this.thinkMs(), () => this.execIntent(f), 'walk');
         return null;
       });
+    }
+    // A covering Position was handed a Strip it may not advance (the vacated
+    // Position's work, routed down the covering chain). A controller hands it
+    // back once its Position is manned again; until then the flight waits.
+    const notMine = ack.reason === 'PERMISSION_DENIED' && /is not (\w+)'s to advance/.exec(ack.detail || '');
+    if (notMine && s.role === 'DEPARTURE' && RETURN_BAY[s.state]) {
+      this.stats.coveringStranded = (this.stats.coveringStranded || 0) + 1;
+      const home = RETURN_BAY[s.state];
+      if (this.clientForPosition(home.position)) {
+        const cur = ack.strip || s;
+        const back = await this.send(client, { version: 1, type: 'efsp-mutation', facilityId: it.facilityId, actingPositionId: actor, stripId: it.stripId, baseRev: cur.rev, op: { kind: 'TransferStrip', toPositionId: home.position, bayId: home.bayId, rackId: 'main' } }, { label: `f${f.id}|handback` });
+        if (back && back.ok) { this.stats.coveringHandedBack = (this.stats.coveringHandedBack || 0) + 1; this.after(this.thinkMs(), () => this.execIntent(f), 'walk'); return null; }
+      }
+      f.attempts++;
+      if (f.attempts > 40) return this.resume(f, { ok: false, reason: ack.reason, ack });
+      this.after(this.rng.uniform(15000, 45000), () => this.execIntent(f), 'stranded');
+      return null;
     }
     if (ack.reason === 'NLA_INHIBITED') {
       f.inhibited++;
@@ -868,6 +893,7 @@ class Driver {
     c.connected = false; c.declared = false; c.continuous = false;
     this.stats.disconnects++;
     this.note(`close|${c.id}`);
+    this.event('disconnect', { client: c.id, waitSec: waitMs === null ? null : Math.round(waitMs / 1000) });
     if (waitMs !== null) this.after(waitMs, () => this.reconnect(c, opts), 'reconnect');
   }
 
@@ -1002,6 +1028,8 @@ class Driver {
       await this.declare(c);
     }
     await this.restorePrimaries();
+    // The selfcheck leak lives in the host process; a new process starts it again.
+    if (this.o.inject === 'leak') await this.call('inject', { fault: 'leak' });
     if (r2) await this.classifyR2(r2);
   }
 

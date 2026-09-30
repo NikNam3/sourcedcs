@@ -28,8 +28,16 @@ function build(d, meta) {
   const warmupMin = Math.max(runMin * 0.1, Math.min(20, runMin * 0.25));
 
   // ── memory ──────────────────────────────────────────────────────────
-  const heavy = d.samples.filter(x => x.heavy && x.tMin >= warmupMin);
-  const light = d.samples.filter(x => !x.heavy && x.tMin >= warmupMin);
+  // A restart is a new process with a new heap, so a fit across it is
+  // meaningless. The series is the post-warm-up part of the host lifetime that
+  // has the most samples (in a one-restart run, usually the one after it).
+  const lifeOf = new Map();
+  for (const x of d.samples) if (x.tMin >= warmupMin) lifeOf.set(x.lifetime, (lifeOf.get(x.lifetime) || 0) + 1);
+  const life = [...lifeOf.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0];
+  const lifetime = life ? life[0] : 1;
+  const inLife = d.samples.filter(x => x.tMin >= warmupMin && x.lifetime === lifetime);
+  const heavy = inLife.filter(x => x.heavy);
+  const light = inLife.filter(x => !x.heavy);
   const memSeries = heavy.length >= 4 ? heavy : light; // fall back to light samples in a very short run
   const xs = memSeries.map(x => x.tMin / 60);
   const heapMB = memSeries.map(x => x.mem.heapUsed / 1048576);
@@ -108,6 +116,7 @@ function build(d, meta) {
       refusals: { expected: L.expectedCount, unexpected: L.unexpectedCount, unexpectedExamples: L.unexpected },
       doubleTapNoop: s.doubleTapNoop, doubleTapNotGuarded: s.doubleTapNotGuarded, undo: s.undo,
       storms: s.storms, stormMoves: s.stormMoves, janitorDrops: s.janitorDrops,
+      coveringStranded: s.coveringStranded || 0, coveringHandedBack: s.coveringHandedBack || 0,
       orphans: [...s.orphans.values()].filter(o => !o.resolved).length, orphansEver: s.orphans.size,
       orphanExamples: [...s.orphans.entries()].slice(0, 10).map(([id, o]) => ({ stripId: id, ...o })),
       liveStrips: { min: s.liveStrips.min === Infinity ? 0 : s.liveStrips.min, max: s.liveStrips.max, end: s.liveStrips.end, slopePerHour: r2(ols(s.liveStrips.series.filter(p => p[0] / 60 >= warmupMin).map(p => p[0] / 3600), s.liveStrips.series.filter(p => p[0] / 60 >= warmupMin).map(p => p[1])).slope) },
@@ -130,7 +139,7 @@ function build(d, meta) {
     },
     orderKeys: { maxLen, p99Len: p99, threshold: meta.thresholds.maxKeyLen, rebalances, rebalancedStrips, exhaustedThrows: exhausted, histogram: hist, worstRack: worst, firstOverThresholdMin: overAt.length ? overAt[0] : null, series: 'timeline.ndjson#orderKeys' },
     memory: {
-      warmupMinutes: r2(warmupMin), series: memSeries === heavy ? 'post-GC heavy samples' : 'light samples (too few heavy samples)', points: memSeries.length,
+      warmupMinutes: r2(warmupMin), lifetime, fromMin: inLife.length ? inLife[0].tMin : null, toMin: inLife.length ? inLife[inLife.length - 1].tMin : null, series: memSeries === heavy ? 'post-GC heavy samples' : 'light samples (too few heavy samples)', points: memSeries.length,
       baselineHeapMB: r2(baseline), endHeapMB: r2(end), slopeMBPerHour: r2(fit.slope), r2: r3(fit.r2), netGrowthPct: r2(netGrowthPct),
       perDroppedStripKB: r2(perDroppedKB), residualSlopeMBPerHour: r2(residual),
       structures,
