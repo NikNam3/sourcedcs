@@ -79,7 +79,14 @@ test('what a controller does is measured and shown on METRICS', async ({ page })
   await expect(missionCell(page, 'staleness').locator('.metrics-value')).toHaveText('not instrumented (L19)');
   await expect(missionCell(page, 'staleness').locator('.metrics-verdict')).toHaveText('NOT INSTRUMENTED');
   await expect(page.locator('#metrics-panel .metrics-reconciliation')).toContainText('reconciles with the Mutation log ✓');
-  await expect(page.locator('#metrics-panel .metrics-partition')).toContainText('= 0 flights');
+  // The traffic count is the Board's for the whole run, and earlier spec files fly real departures
+  // (alert-scramble takes VIPER11 airborne), so "= 0 flights" is not this spec's to assert. What it
+  // owns is that the partition reconciles: local + transient + unknown = flights, drawn as such.
+  const partition = page.locator('#metrics-panel .metrics-partition');
+  await expect(partition).toContainText(/^local \d+ \+ transient \d+ \+ unknown \d+ = \d+ flights/);
+  const [, l, t, u, total] = (await partition.textContent()).match(/^local (\d+) \+ transient (\d+) \+ unknown (\d+) = (\d+) flights/).map(Number);
+  expect(l + t + u, 'the partition sums to the flight count').toBe(total);
+  await expect(partition).not.toHaveClass(/metrics-tone-bad/);
 
   // Only NOT MET is coloured: a met verdict is the plain text colour.
   const [plain, met] = await page.evaluate(() => {
