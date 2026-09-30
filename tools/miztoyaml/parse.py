@@ -34,14 +34,14 @@ def _strip_dcs_suffix(name: str) -> str:
     return re.sub(r'-\d+-\d+$', '', name)
 
 
-def _group_outer_name(gb: str) -> str | None:
+def _group_outer_text(gb: str) -> str:
     """
-    Extract the group's own ["name"] field, ignoring nested sub-blocks.
+    The group block with its 'route' and 'units' sub-blocks cut out, so a
+    flat key search sees only the group's own fields.
 
-    In DCS Lua, a plane group block contains 'route' (with waypoint names) and
-    'units' (with unit names and callsign names) BEFORE the group-level name.
-    A flat search picks up the wrong name; this function strips those sub-blocks
-    first to ensure we only search the group's outer fields.
+    In DCS Lua, a plane group block contains 'route' (with waypoint names and
+    task parameters such as a beacon's ["frequency"]) and 'units' (with unit
+    names and callsign names) BEFORE the group-level fields.
     """
     stripped = gb
     for key in ('route', 'units'):
@@ -49,7 +49,12 @@ def _group_outer_name(gb: str) -> str | None:
         if m:
             close = lua_block_end(stripped, m.end() - 1)
             stripped = stripped[:m.start()] + stripped[close + 1:]
-    return lua_str(stripped, 'name')
+    return stripped
+
+
+def _group_outer_name(gb: str) -> str | None:
+    """Extract the group's own ["name"] field, ignoring nested sub-blocks."""
+    return lua_str(_group_outer_text(gb), 'name')
 
 
 def parse_groups(coalition_block: str, theatre: str) -> list[Group]:

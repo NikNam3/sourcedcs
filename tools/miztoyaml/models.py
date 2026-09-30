@@ -35,6 +35,8 @@ class FlightUnit:
     loadout: list[str]  # condensed weapon list
     dtc_cartridge: str | None = None  # DTC cartridge name e.g. "Broomstick_F16"
     radio_channels: dict[int, dict[int, float]] | None = None  # {radio_idx: {ch_num: freq_mhz}} for non-DTC units
+    stn_l16: str | None = None         # AddPropAircraft STN_L16, 5 octal digits e.g. "07077"
+    voice_callsign: str | None = None  # AddPropAircraft VoiceCallsignLabel + Number e.g. "ED11"
 
 
 @dataclass
@@ -69,6 +71,7 @@ class Flight:
     is_tanker: bool = False
     is_awacs: bool = False
     dtc_cartridge: str | None = None  # primary DTC cartridge used by this flight
+    tacan: str | None = None          # first ActivateBeacon TACAN of the group, e.g. "39Y"
 
 
 @dataclass
