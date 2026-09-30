@@ -589,6 +589,18 @@
   text-transform: uppercase;
 }
 .efsp-expanded-value { display: inline-flex; align-items: center; gap: 4px; }
+/* §9.4's lost-comms advisory (docs/adr/0062). Grey and plain: an advisory, not
+   a warning — no ▲, never amber (docs/adr/0058). */
+.efsp-strip .efsp-expanded-note {
+  font-size: 11px;
+  line-height: 1.4;
+  max-width: 80ch;
+  color: var(--efsp-muted);
+  padding-bottom: 4px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid var(--efsp-line);
+  overflow-wrap: break-word;
+}
 
 /* The second way out of the expanded view (lane 2's F-208), at the END of the
    rows. It wears .efsp-expand-btn's look because it does the same job, but it
@@ -1448,6 +1460,9 @@
 .efsp-strip .efsp-field { display: flex; flex-direction: column; min-width: 0; align-self: stretch; }
 .efsp-field-w2 { grid-column: span 2; }
 .efsp-field-w3 { grid-column: span 3; }
+/* §9.4 (crc-sync's docs/adr/0062): the MTR group starts its own row, so it
+   lines up Strip to Strip. Every group begins with 9G-MTR (strip-fields.js). */
+.efsp-strip-fields > .efsp-field:has(> .efsp-block-9G-MTR) { grid-column-start: 1; }
 .efsp-strip .efsp-block-label {
   display: flex;
   gap: 5px;

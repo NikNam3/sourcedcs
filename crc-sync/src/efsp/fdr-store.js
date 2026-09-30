@@ -26,6 +26,7 @@ const { isValidFrequency, MIN_FREQUENCY_MHZ, MAX_FREQUENCY_MHZ } = require('./ai
 // board-store.js's _applyCreateStrip instead would mean any second creation
 // path — or a test constructing an FdrStore directly — silently skips it.
 const stereoRoutes = require('./stereo-routes');
+const { resolveZuluHhmm } = require('./zulu-time');
 const { WALL_CLOCK } = require('../mission-clock');
 
 const VOID_DEADLINE_MINUTES = 30; // §3.8 — derived, not stored input
@@ -84,7 +85,10 @@ const MAX_FREE_TEXT = 2000;
 // controller), trackRef (permanently null, see its own comment), every path
 // under military (guide §6.4's extension namespace — an object since
 // docs/adr/0052, whose two written fields route through setMilitary() and
-// whose rest is §12's present-and-unpopulated), and all structural/system fields
+// whose rest is §12's present-and-unpopulated — EXCEPT the six military.mtr.*
+// leaves (docs/adr/0062), which are plain controller free text / time /
+// altitude, go through setField() and are normalised by normalizeMtrValue();
+// the `mtr` object itself is not writable), and all structural/system fields
 // (fdrId, rev, provenance, createdAt/updatedAt/updatedBy). identity.
 // beaconAssigned is listed here but routed through a dedicated method
 // (setBeaconAssigned) rather than the generic path, since it needs
@@ -140,6 +144,11 @@ const WRITABLE_PATHS = new Set([
   // (Mode 1/2/datalink code, MARSA, ordnance, ROZ/ACM) stays WP6/WP7 scope.
   'mission.missionNumber', 'mission.packageId', 'mission.controllingAgency',
   'mission.vulWindowStartUtc', 'mission.vulWindowEndUtc',
+  // §9.4 MTR fields (docs/adr/0062), Blocks 9G-* (guide M10) and 9H-* (M11).
+  // Plain fdr fields, not setMilitary(): free text, times and an altitude,
+  // none an enum or a boolean. Normalised by normalizeMtrValue().
+  'military.mtr.designator', 'military.mtr.entryFix', 'military.mtr.entryTimeUtc',
+  'military.mtr.exitFix', 'military.mtr.exitEstimateUtc', 'military.mtr.requestedAltitudeAfterExit',
 ]);
 
 function getPath(obj, path) {
@@ -181,10 +190,12 @@ function deriveEquipmentSuffix(equipmentCodes) {
  *    The guide publishes the values; it publishes no parent Block to hang it
  *    on, and picking one is a §9.6 decision that wants §9.6 in hand. The
  *    setter validates it so the enum lives in exactly one place.
+ *  - WRITTEN through setField(), not setMilitary(): the six leaves of the
+ *    `mtr` sub-object (§9.4, guide M10/M11, Blocks 9G-* / 9H-*,
+ *    docs/adr/0062). Free text, clock times and an altitude — plain FDR
+ *    fields, so they share setField()'s refusal and provenance path.
  *  - PRESENT AND UNPOPULATED per §12, no setter and no Block at all, exactly
- *    like identity.modeOne/modeTwo already are: the `mtr` sub-object (§9.4,
- *    guide M10/M11 — the 9G- and 9H- Block ids are RESERVED for it, see
- *    block-map.js), `altrvRef` (M9), `arInfo` (M12), `scl` (M13),
+ *    like identity.modeOne/modeTwo already are: `altrvRef` (M9), `arInfo` (M12), `scl` (M13),
  *    `fuelState` (M17) and `releaseAuthority` (M19). WP6 does not deliver
  *    these; §12's rule is that a deferral leaves its fields in place rather
  *    than absent, and that is all this is.
@@ -198,10 +209,9 @@ function defaultMilitary() {
     ordnanceState: 'CLEAN',   // §9.5 / M14 — Block 3G
     hookRequired: false,      // §9.7 / M15 — Block 3F
     alertStatus: 'NONE',      // §9.6 / M16 — no Block yet, see above
-    // §9.4 / M10 + M11 — reserved as Blocks 9G-*/9H-*, unwritable until §9.4
-    // lands (the guide is explicit that M11's exit fix and exit estimate are
-    // what a controller asks for BY VOICE and must post, so their placement
-    // is that deliverable's design decision, not this one's).
+    // §9.4 / M10 + M11 — Blocks 9G-MTR/-ENTRY/-TIME and 9H-EXIT/-TIME/-ALT
+    // (docs/adr/0062). Written leaf by leaf through setField(), never
+    // setMilitary(); normalizeMtrValue() says what each leaf accepts.
     mtr: {
       designator: null,
       entryFix: null,
@@ -286,6 +296,51 @@ function parseAltitudeFt(text) {
   if (!m) return null;
   const n = Number(m[1]);
   return m[1].length <= 3 ? n * 100 : n;
+}
+
+// §9.4 MTR fields (docs/adr/0062). What each military.mtr.* path accepts.
+//
+// The two times arrive as the four-digit Zulu time a controller types ("1432",
+// "14:32Z") and are stored as epoch ms like every other …Utc field, resolved
+// against the MISSION clock's date (zulu-time.js, H11) — never the wall
+// clock's. A typed string stored as-is where readers expect epoch ms is the
+// known time-Block bug (questioner Q43); these two do not add to it. A finite
+// number is taken as epoch ms already (an import, a scenario).
+//
+// Designator and fixes take no format rule: there is no MTR route table in
+// this repo (H23: free text until the squadron's list arrives), so any grammar
+// would be invented (defect D11). Upper-casing is the strip convention, not
+// validation.
+const MTR_TIME_LABELS = {
+  'military.mtr.entryTimeUtc': 'MTR entry time',
+  'military.mtr.exitEstimateUtc': 'MTR exit estimate',
+};
+
+/**
+ * Normalise a value written to one of the six military.mtr.* paths.
+ * `nowMs` is the mission clock's now(), used only to date a typed time.
+ * Returns { ok: true, value } or { ok: false, detail }. Empty clears to null.
+ */
+function normalizeMtrValue(path, value, nowMs) {
+  if (MTR_TIME_LABELS[path] && typeof value === 'number' && Number.isFinite(value)) {
+    return { ok: true, value };
+  }
+  const text = value == null ? '' : String(value).trim().toUpperCase();
+  if (text === '') return { ok: true, value: null };
+  if (MTR_TIME_LABELS[path]) {
+    const ms = resolveZuluHhmm(text, nowMs);
+    if (ms == null) {
+      return { ok: false, detail: `${MTR_TIME_LABELS[path]} must be a UTC time as HHMM, e.g. 1432` };
+    }
+    return { ok: true, value: ms };
+  }
+  if (path === 'military.mtr.requestedAltitudeAfterExit') {
+    if (parseAltitudeFt(text) == null) {
+      return { ok: false, detail: 'requested altitude after exit must be an altitude, e.g. FL210 or 080' };
+    }
+    return { ok: true, value: text.replace(/\s+/g, '') };
+  }
+  return { ok: true, value: text };
 }
 
 /** A heading in degrees, 1–360 ("000" is north, stored as 360). Null when it is not a heading. */
@@ -551,6 +606,13 @@ class FdrStore {
     }
     if (path === 'identity.trackDegradationFlag' && !TRACK_DEGRADATION_FLAGS.has(value)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'invalid track degradation flag' };
+    }
+
+    if (path.startsWith('military.mtr.')) { // §9.4, docs/adr/0062
+      const mtr = normalizeMtrValue(path, value, this._clock.now());
+      if (!mtr.ok) return { ok: false, reason: 'VALIDATION_ERROR', detail: mtr.detail };
+      value = mtr.value;
+      ensureMilitary(fdr);
     }
 
     // §9.10 re-filing (docs/adr/0050). Resolved against the table BEFORE any
@@ -1010,4 +1072,5 @@ module.exports = {
   TRACK_DEGRADATION_FLAGS, AIRSPACE_OWNERS, RADAR_SERVICE_STATES, SEPARATION_REGIMES, MAX_FREE_TEXT,
   ORDNANCE_STATES, ALERT_STATUSES, MILITARY_WRITABLE_FIELDS, defaultMilitary,
   CLEARANCE_FIELDS, defaultClearance, ensureClearance, parseAltitudeFt, parseHeadingDeg, activeClearanceEntry,
+  normalizeMtrValue,
 };

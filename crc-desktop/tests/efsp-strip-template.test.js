@@ -11,6 +11,7 @@ const {
   activeAnnotationValue, hasActiveAnnotationEntry, annotationHistory, supersededAnnotationEntries,
   isBlockEditable, CONFIRM_VACATED_ELIGIBLE_BLOCKS,
   enumSelectOptionsFor, isBooleanToggleBlock, blockLabelFor,
+  ZULU_HHMM_BLOCKS, formatZuluHhmm, blockTitleFor,
 } = require('../app/public/js/panels/efsp/strip-template.js');
 
 const REQUIRED_DEPARTURE_BLOCKS = [
@@ -482,4 +483,59 @@ test('every label fits the compact chip', () => {
       assert.ok(def.label.length <= 8, `${role}/${id}: label "${def.label}" is ${def.label.length} characters`);
     }
   }
+});
+
+
+// ── §9.4 MTR fields (crc-sync's docs/adr/0062) ──────────────────────────────
+
+const MTR_LABELS = { '9G-MTR': 'MTR', '9G-ENTRY': 'ENTRY', '9G-TIME': 'ENTRY TM', '9H-EXIT': 'EXIT', '9H-TIME': 'EXIT EST', '9H-ALT': 'EXIT ALT' };
+const MTR_ROLES = ['DEPARTURE', 'ARRIVAL', 'OVERFLIGHT'];
+
+function mtrFdr(mtr) {
+  return { ...makeFdr(), military: { ordnanceState: 'CLEAN', hookRequired: false, alertStatus: 'NONE', mtr } };
+}
+
+test('resolveBlockValue reads each MTR field, the two times as a four-digit Zulu time', () => {
+  const fdr = mtrFdr({
+    designator: 'IR107', entryFix: 'A', entryTimeUtc: Date.UTC(2016, 5, 21, 14, 5),
+    exitFix: 'F', exitEstimateUtc: Date.UTC(2016, 5, 21, 14, 32), requestedAltitudeAfterExit: 'FL190',
+  });
+  const expected = { '9G-MTR': 'IR107', '9G-ENTRY': 'A', '9G-TIME': '1405', '9H-EXIT': 'F', '9H-TIME': '1432', '9H-ALT': 'FL190' };
+  for (const role of MTR_ROLES) {
+    for (const [id, value] of Object.entries(expected)) {
+      assert.equal(resolveBlockValue(id, fdr, { role }).value, value, `${role}/${id}`);
+    }
+  }
+});
+
+test('an MTR Block on an FDR with military: null (or no time) renders blank, not a throw', () => {
+  const fdr = { ...makeFdr(), military: null };
+  for (const id of Object.keys(MTR_LABELS)) assert.equal(resolveBlockValue(id, fdr, { role: 'ARRIVAL' }).value, null, id);
+  assert.equal(resolveBlockValue('9H-TIME', mtrFdr({ exitEstimateUtc: null }), { role: 'ARRIVAL' }).value, null);
+});
+
+test('the MTR labels are exactly the §9.4 set on every ATC Role', () => {
+  for (const role of MTR_ROLES) {
+    for (const [id, label] of Object.entries(MTR_LABELS)) assert.equal(blockLabelFor(id, role), label, `${role}/${id}`);
+  }
+});
+
+test('the MTR Blocks are ordinary click-to-edit cells — no picker, no toggle', () => {
+  for (const id of Object.keys(MTR_LABELS)) {
+    assert.equal(enumSelectOptionsFor(id), null, id);
+    assert.equal(isBooleanToggleBlock(id), false, id);
+    for (const role of MTR_ROLES) assert.equal(isBlockEditable(id, role), true, `${role}/${id}`);
+  }
+});
+
+test('ZULU_HHMM_BLOCKS holds the two MTR times, and formatZuluHhmm pads', () => {
+  assert.deepEqual([...ZULU_HHMM_BLOCKS].sort(), ['9G-TIME', '9H-TIME']);
+  assert.equal(formatZuluHhmm(Date.UTC(2016, 5, 21, 9, 5)), '0905');
+  assert.equal(formatZuluHhmm(null), '');
+  assert.equal(formatZuluHhmm('garbage'), '');
+});
+
+test('every MTR Block has a label title; others have none', () => {
+  for (const id of Object.keys(MTR_LABELS)) assert.ok(blockTitleFor(id, null), id);
+  assert.equal(blockTitleFor('9', null), null);
 });

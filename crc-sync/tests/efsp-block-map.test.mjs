@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 const { DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP, BLOCK_MAPS, isValidRole, requiredBlocksFor, resolveBlockTarget, validateFacilityConfig, interlockFor, interlockBlocks, MILITARY_BLOCK_NAMESPACE } =
   await import('../src/efsp/block-map.js');
-const { MILITARY_WRITABLE_FIELDS, defaultMilitary } = await import('../src/efsp/fdr-store.js');
+const { MILITARY_WRITABLE_FIELDS, defaultMilitary, WRITABLE_PATHS } = await import('../src/efsp/fdr-store.js');
 
 const REQUIRED_DEPARTURE_BLOCKS = [
   '1', '2', '3', '4', '4B', '5', '6', '7', '8', '8A', '8B', '9', '9D', '9E',
@@ -401,10 +401,28 @@ test('MILITARY_BLOCK_NAMESPACE agrees with the Block Maps it documents', () => {
   // The table is documentation, and documentation drifts. This is what stops
   // it: every entry claiming a concrete Block id must name one that exists and
   // routes where it says, and every `military`-kind Block on any Map must
-  // appear in the table.
+  // appear in the table. A row names its Blocks one of two ways: `blockId`
+  // (one Block) or `blocks` ({ id: path }, one plain 'fdr' Block per leaf, on
+  // every ATC Role — M10/M11, docs/adr/0062). Never both, never a wildcard.
   const claimed = new Map();
   for (const [m, entry] of Object.entries(MILITARY_BLOCK_NAMESPACE)) {
-    if (!entry.blockId || entry.blockId.endsWith('*')) continue; // RESERVED, no Block yet
+    assert.ok(!(entry.blockId && entry.blocks), `${m} has both blockId and blocks`);
+    assert.ok(!(entry.blockId && entry.blockId.includes('*')), `${m} is a wildcard row (${entry.blockId}) — name the real Blocks`);
+    if (entry.blocks) {
+      for (const [id, path] of Object.entries(entry.blocks)) {
+        assert.ok(!id.includes('*'), `${m} names a wildcard Block ${id}`);
+        assert.ok(path.startsWith(entry.field + '.'), `${m}/${id} writes ${path}, outside ${entry.field}`);
+        for (const role of ATC_ROLES) {
+          const def = BLOCK_MAPS[role][id];
+          assert.ok(def, `${m} claims Block ${id}, which does not exist on ${role}`);
+          assert.equal(def.target.kind, 'fdr', `${role}/${id}`);
+          assert.equal(def.target.path, path, `${role}/${id} writes a different path than the table says`);
+        }
+        claimed.set(id, entry);
+      }
+      continue;
+    }
+    if (!entry.blockId) continue; // RESERVED, no Block yet
     const def = DEPARTURE_BLOCK_MAP[entry.blockId];
     assert.ok(def, `${m} claims Block ${entry.blockId}, which does not exist`);
     claimed.set(entry.blockId, entry);
@@ -420,6 +438,20 @@ test('MILITARY_BLOCK_NAMESPACE agrees with the Block Maps it documents', () => {
   }
 });
 
+test('every fdr-routed Block writing under military. is claimed by exactly one namespace row', () => {
+  // The reverse drift: a new plain-fdr Block reaching into the military
+  // namespace without the table knowing would be the §9.4 reservation
+  // problem all over again, invisible to the check above.
+  for (const role of ATC_ROLES) {
+    for (const [id, def] of Object.entries(BLOCK_MAPS[role])) {
+      if (def.target.kind !== 'fdr' || !def.target.path.startsWith('military.')) continue;
+      const rows = Object.entries(MILITARY_BLOCK_NAMESPACE)
+        .filter(([, e]) => e.blocks && e.blocks[id] === def.target.path);
+      assert.equal(rows.length, 1, `${role}/${id} (${def.target.path}) is claimed by ${rows.length} rows`);
+    }
+  }
+});
+
 test('every field the namespace table calls RESERVED or deferred is one setMilitary refuses to write', () => {
   // §12's rule is that a deferral leaves its fields present and unpopulated.
   // The failure mode is a deferred field quietly becoming writable because a
@@ -428,8 +460,14 @@ test('every field the namespace table calls RESERVED or deferred is one setMilit
   for (const [m, entry] of Object.entries(MILITARY_BLOCK_NAMESPACE)) {
     if (!entry.field.startsWith('military.')) continue;
     const key = entry.field.slice('military.'.length);
-    const hasBlock = !!entry.blockId && !entry.blockId.endsWith('*');
-    if (hasBlock) {
+    if (entry.blocks) {
+      // Built as plain fdr leaves (docs/adr/0062): each leaf is setField's,
+      // and the object itself stays out of setMilitary's reach.
+      for (const path of Object.values(entry.blocks)) {
+        assert.ok(WRITABLE_PATHS.has(path), `${m}: ${path} has a Block but setField will not write it`);
+      }
+      assert.equal(MILITARY_WRITABLE_FIELDS.has(key), false, `${m}: setMilitary must not write ${entry.field} whole`);
+    } else if (entry.blockId) {
       assert.ok(MILITARY_WRITABLE_FIELDS.has(key), `${m}: ${entry.field} has Block ${entry.blockId} but setMilitary will not write it`);
     } else if (key !== 'alertStatus') {
       // alertStatus is the one deliberate middle case — validated by the
@@ -449,5 +487,36 @@ test('no military Block is tagged as a MARSA interlock', () => {
     for (const [id, def] of Object.entries(BLOCK_MAPS[role])) {
       if (def.target.kind === 'military') assert.equal(interlockFor(role, id), null, `${role}/${id}`);
     }
+  }
+});
+
+// ── §9.4 MTR Blocks (docs/adr/0062) ─────────────────────────────────────────
+
+const MTR_BLOCKS = {
+  '9G-MTR': 'military.mtr.designator', '9G-ENTRY': 'military.mtr.entryFix', '9G-TIME': 'military.mtr.entryTimeUtc',
+  '9H-EXIT': 'military.mtr.exitFix', '9H-TIME': 'military.mtr.exitEstimateUtc', '9H-ALT': 'military.mtr.requestedAltitudeAfterExit',
+};
+
+test('the six MTR Blocks exist on EVERY ATC Role, plain fdr, optional — and none on MISSION', () => {
+  for (const role of ATC_ROLES) {
+    for (const [id, path] of Object.entries(MTR_BLOCKS)) {
+      assert.deepEqual(resolveBlockTarget(role, id), { kind: 'fdr', path }, `${role}/${id}`);
+      assert.equal(BLOCK_MAPS[role][id].required, false, `${role}/${id}`);
+      assert.equal(BLOCK_MAPS[role][id].provenance, undefined, `${role}/${id} carries no provenance default`);
+    }
+  }
+  for (const id of Object.keys(MTR_BLOCKS)) assert.equal(MISSION_BLOCK_MAP[id], undefined, `MISSION/${id}`);
+});
+
+test('no MTR Block is a MARSA interlock — posting a pilot\'s request issues nothing', () => {
+  for (const role of ATC_ROLES) {
+    for (const id of Object.keys(MTR_BLOCKS)) assert.equal(interlockFor(role, id), null, `${role}/${id}`);
+  }
+});
+
+test('the bare 9G / 9H family ids do not resolve — only the six named Blocks do', () => {
+  for (const role of ATC_ROLES) {
+    assert.equal(resolveBlockTarget(role, '9G'), null);
+    assert.equal(resolveBlockTarget(role, '9H'), null);
   }
 });

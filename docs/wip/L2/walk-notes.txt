@@ -1,0 +1,13 @@
+1: CTR posted IR107/F/1432/FL190; APP's replica showed them without a reload. APP face: 1 3 5 6 7 8A 8B 9A-VECTOR 9A-SPEED 22 5A SREG 9G-MTR 9H-EXIT 9H-TIME 9H-ALT
+1b: APP accepted; its Strip is in app-inbound
+2: APP overwrote F/1432/FL190 -> E/14:40/FL210. Struck history entries on the face: 0 (expected 0 — §3.7 gap, H25). Old exit fix anywhere on the FDR: false
+2b: CTR's Strip showed E within the poll; nothing on either Strip says it was amended
+3: APP wrote ALT FL210; ▼ advisory reads: "Lost comms (§9.4): separate assuming the higher of the minimum IFR altitude for each remaining segment — not available in this system — or the altitude in the last clearance: FL210."
+4: MTR cleared; exit fields stayed on the face: 9G-MTR 9H-EXIT 9H-TIME 9H-ALT
+4b: after clearing all, the MTR row went
+5: IR109 posted over an exit fix E that belonged to IR107; warnings/indicators on the Strip: ["NO TRK","+1"]
+6: 1472 refused: "MTRW11 EXIT EST “1472” — MTR exit estimate must be a UTC time as HHMM, e.g. 1432"; cell marked refused
+7: APP ARRIVAL face MTR group: 9G-MTR 9H-EXIT 9H-ALT
+8: CTR (its Strip owned by CTR) sent EXIT EST 1445 while APP typed "D" in EXIT: APP input still open=true, draft="D"; APP's EXIT EST now ""; CTR refusal: ""
+8b: APP's copy of the FDR has exitEstimateUtc=14:45 while the edit is open
+8c: after APP pressed Enter: EXIT="D", EXIT EST="1445"
