@@ -49,6 +49,7 @@ const { handleMessage, snapshotMessage } = require('./efsp-ws');
 const { NlaStatusMonitor } = require('./nla-status-monitor');
 const { statePaths, ensureDirFor } = require('../state-paths');
 const { WALL_CLOCK } = require('../mission-clock');
+const { ReplayCache } = require('./replay-cache');
 
 // Overridable so tests exercise the restore/persist path against a temp
 // file — same pattern as every other config/*.json path in this package.
@@ -284,6 +285,10 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
       const f = facilities.get(facilityId);
       return f ? f.positionStore : null;
     },
+    // Idempotency for the airspace, correlation, MARSA and field-state paths
+    // (docs/adr/0081). Memory only: those ops are rev-checked and rarely
+    // retried across a restart.
+    replayCache: new ReplayCache(),
   };
 
   return {

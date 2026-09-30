@@ -123,6 +123,21 @@ function _boardDelta(ctx, boardStore, facilityId, strips, fdrs, positions = []) 
 }
 
 /**
+ * Idempotency for the four non-Board paths (docs/adr/0081, L6's F13). Asked
+ * AFTER a path's own session and class gates and BEFORE its store: a refusal
+ * made before the store is never cached, so a retry after selecting the
+ * Position goes through. A hit is answered with the original outcome and the
+ * record as it is now — no store call, no audit line, no persist, no
+ * broadcast.
+ */
+function _cachedOutcome(ctx, kind, msg) {
+  return ctx.replayCache ? ctx.replayCache.get(kind, msg.clientMutationId) : null;
+}
+function _rememberOutcome(ctx, kind, msg, result, id) {
+  if (ctx.replayCache) ctx.replayCache.set(kind, msg.clientMutationId, { ok: result.ok, reason: result.reason, detail: result.detail, warning: result.warning, id });
+}
+
+/**
  * The flights a MARSA op names in its own body — the participants of a
  * declaration, or the one flight being added or removed. Echoed on the ack so a
  * refusal can be attributed even when it never reached the store and so has no
@@ -401,10 +416,20 @@ function _handleAirspaceMutation(ctx, session, msg, persist) {
     return { ack: { version: VERSION, type: 'efsp-airspace-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'NOT_HOLDING_POSITION', detail: `you are not Primary at ${msg.actingPositionId} — select it before acting on airspace` } };
   }
 
+  const cached = _cachedOutcome(ctx, 'airspace', msg);
+  if (cached) {
+    return { ack: {
+      version: VERSION, type: 'efsp-airspace-ack', clientMutationId: msg.clientMutationId, ..._subject(msg),
+      ok: cached.ok, airspace: airspaceStore.getAirspace(cached.id), reason: cached.reason, detail: cached.detail,
+      warning: cached.warning, airspaceSeq: airspaceStore.currentSeq,
+    } };
+  }
+
   const result = airspaceStore.apply(
     { airspaceId: msg.airspaceId, baseRev: msg.baseRev, op: msg.op },
     msg.actingPositionId, session.controllerId,
   );
+  _rememberOutcome(ctx, 'airspace', msg, result, msg.airspaceId);
   if (result.ok) persist();
 
   const ack = {
@@ -476,10 +501,20 @@ function _handleCorrelationMutation(ctx, session, msg, persist) {
     return { ack: { version: VERSION, type: 'efsp-correlation-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'PERMISSION_DENIED', detail: `${msg.actingPositionId} works no flights, so it identifies no contacts` } };
   }
 
+  const cached = _cachedOutcome(ctx, 'correlation', msg);
+  if (cached) {
+    return { ack: {
+      version: VERSION, type: 'efsp-correlation-ack', clientMutationId: msg.clientMutationId, ..._subject(msg),
+      ok: cached.ok, correlation: correlationStore.getCorrelation(cached.id), reason: cached.reason, detail: cached.detail,
+      correlationSeq: correlationStore.currentSeq,
+    } };
+  }
+
   const result = correlationStore.apply(
     { clientMutationId: msg.clientMutationId, fdrId: msg.fdrId, baseRev: msg.baseRev, op: msg.op },
     msg.actingPositionId, session.controllerId,
   );
+  _rememberOutcome(ctx, 'correlation', msg, result, msg.fdrId);
   if (result.ok) persist();
 
   const ack = {
@@ -543,10 +578,22 @@ function _handleMarsaMutation(ctx, session, msg, persist) {
     return { ack: { version: VERSION, type: 'efsp-marsa-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'PERMISSION_DENIED', detail: `${msg.actingPositionId} works no flights, so it declares no MARSA` } };
   }
 
+  // DeclareMarsa is the case that matters: a retried declaration minted a
+  // second relation.
+  const cached = _cachedOutcome(ctx, 'marsa', msg);
+  if (cached) {
+    return { ack: {
+      version: VERSION, type: 'efsp-marsa-ack', clientMutationId: msg.clientMutationId, ..._subject(msg),
+      ok: cached.ok, marsa: cached.id ? marsaStore.getRelation(cached.id) : undefined, reason: cached.reason, detail: cached.detail,
+      marsaSeq: marsaStore.currentSeq,
+    } };
+  }
+
   const result = marsaStore.apply(
     { clientMutationId: msg.clientMutationId, marsaId: msg.marsaId, baseRev: msg.baseRev, op: msg.op },
     msg.actingPositionId, session.controllerId,
   );
+  _rememberOutcome(ctx, 'marsa', msg, result, result.relation ? result.relation.marsaId : (msg.marsaId || null));
   if (result.ok) persist();
 
   const ack = {
@@ -758,12 +805,22 @@ function _handleFieldStateMutation(ctx, session, msg, persist) {
     return refuse('NOT_HOLDING_POSITION', `you are not Primary at ${msg.actingPositionId} at ${facilityId} — select it before acting on the field`);
   }
 
+  const cached = _cachedOutcome(ctx, 'fieldState', msg);
+  if (cached) {
+    return { ack: {
+      version: VERSION, type: 'efsp-field-state-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), facilityId,
+      ok: cached.ok, fieldState: store.getFieldState(cached.id), reason: cached.reason, detail: cached.detail,
+      fieldStateSeq: store.currentSeq,
+    } };
+  }
+
   // The permission table (and every refusal) is checked inside apply(), so a
   // PERMISSION_DENIED is audited like any other outcome.
   const result = store.apply(
     { clientMutationId: msg.clientMutationId, facilityId, baseRev: msg.baseRev, op },
     msg.actingPositionId, session.controllerId,
   );
+  _rememberOutcome(ctx, 'fieldState', msg, result, facilityId);
   if (result.ok) {
     persist();
     // A runway's status moves the `nla` stamp of Strips this op never touched
