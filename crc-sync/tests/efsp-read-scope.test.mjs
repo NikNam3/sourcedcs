@@ -107,3 +107,14 @@ test('alerts: conformance by flight and obligations by Strip, for visible ones o
   assert.deepEqual(out.obligations.map(o => o.stripId), ['a']);
   assert.deepEqual(out.stca, alerts.stca);
 });
+
+test('board delta: the FDR of every visible updated Strip rides along (a handed line must not draw blank), once', () => {
+  const delta = {
+    type: 'efsp-board-delta', boardSeq: 9, facilityId: 'TACTICAL',
+    strips: { updated: [strip('a', 'JTAC', 'f1'), strip('a2', 'JTAC', 'f1')], gone: [] }, fdrs: { updated: [] }, positions: { updated: [] },
+  };
+  const out = rs.filterBoardDelta(delta, jtac, new Set(['f1']), (id) => ({ fdrId: id, callsign: 'X' }));
+  assert.deepEqual(out.fdrs.updated, [{ fdrId: 'f1', callsign: 'X' }]);
+  const already = rs.filterBoardDelta({ ...delta, fdrs: { updated: [{ fdrId: 'f1', callsign: 'MINE' }] } }, jtac, new Set(['f1']), () => ({ fdrId: 'f1', callsign: 'X' }));
+  assert.deepEqual(already.fdrs.updated, [{ fdrId: 'f1', callsign: 'MINE' }], 'the delta\'s own copy wins');
+});

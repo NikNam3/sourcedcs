@@ -45,7 +45,7 @@ const nla = require('./nla');
 const blockMap = require('./block-map');
 const facilityConfig = require('./facility-config');
 const coordination = require('./coordination');
-const { handleMessage, snapshotMessage, filterForSession, readScopeKey } = require('./efsp-ws');
+const { handleMessage, snapshotMessage, filterForSession, supplementFor, readScopeKey } = require('./efsp-ws');
 const { NlaStatusMonitor } = require('./nla-status-monitor');
 const { Archiver } = require('./archiver');
 const { statePaths, ensureDirFor } = require('../state-paths');
@@ -354,6 +354,7 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
      * what it owns, null to skip. And a key that changes when a session's scope does.
      */
     filterForSession: (session, msg) => filterForSession(ctx, session, msg),
+    supplementFor: (session, filtered) => supplementFor(ctx, session, filtered),
     readScopeKey: (session) => readScopeKey(ctx, session),
 
     archiver,

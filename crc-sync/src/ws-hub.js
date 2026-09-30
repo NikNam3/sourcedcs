@@ -223,6 +223,11 @@ class WsHub {
       let payload = encoded.get(out);
       if (payload === undefined) { payload = JSON.stringify(out); encoded.set(out, payload); }
       client.send(payload);
+      // A filtered board delta may carry a Strip that has only now become this
+      // session's: its correlation and MARSA records come with it.
+      if (out !== msg && msg.type === 'efsp-board-delta' && this._efsp && typeof this._efsp.supplementFor === 'function') {
+        for (const extra of this._efsp.supplementFor(this._sessions.get(client), out)) client.send(JSON.stringify(extra));
+      }
     }
   }
 

@@ -225,3 +225,22 @@ test('an OWNED session\'s resync is always a snapshot, even with a valid epoch a
   assert.deepEqual(jr.strips.map(s => s.stripId), [w.handed.stripId]);
   assert.equal(tc.ws.sent[0].type, 'efsp-board-delta');
 });
+
+test('a line handed to the JTAC after it connected arrives with its FDR, and its correlation and MARSA records', () => {
+  const w = world();
+  const jt = w.connect('c-JTAC', { TACTICAL: ['JTAC'] });
+  const tc = w.connect('c-TAC_C2', { TACTICAL: ['TAC_C2'] });
+  // A flight TAC_C2 keeps, with a correlation record and a MARSA relation naming it.
+  const line = mustAct(w.efsp, w.c.TAC_C2, 'TAC_C2', tacStrip(w, w.kept.stripId), { kind: 'SetBlock', blockId: 'M2', value: 'PKG' });
+  w.efsp.correlationStore.getCorrelation = (id) => (id === line.fdrId ? { fdrId: id, state: 'CORRELATED', rev: 3 } : null);
+  w.efsp.marsaStore.getAll = () => [{ marsaId: 'm1', participants: [line.fdrId, w.dep.fdrId], state: 'ACTIVE' }];
+  jt.ws.sent.length = 0;
+  w.send(tc, mut(w, 'TAC_C2', tacStrip(w, w.kept.stripId), { kind: 'TransferStrip', toPositionId: 'JTAC', bayId: 'jtac-mission', rackId: 'main' }));
+  const delta = jt.ws.of('efsp-board-delta')[0];
+  assert.deepEqual(delta.strips.updated.map(s => s.stripId), [w.kept.stripId]);
+  assert.deepEqual(delta.fdrs.updated.map(f => f.fdrId), [w.kept.fdrId], 'its FDR came with it');
+  assert.equal(delta.fdrs.updated[0].identity.callsign, 'KPT11');
+  assert.deepEqual(jt.ws.of('efsp-correlation-delta')[0].correlations.updated.map(c => c.fdrId), [w.kept.fdrId]);
+  assert.deepEqual(jt.ws.of('efsp-marsa-delta')[0].marsa.updated.map(r => r.marsaId), ['m1']);
+  assert.equal(tc.ws.of('efsp-correlation-delta').length, 0, 'a session that reads everything gets no extras');
+});

@@ -762,7 +762,7 @@ function filterForSession(ctx, session, msg) {
     case 'efsp-snapshot':
       return readScope.filterSnapshot(msg, scope);
     case 'efsp-board-delta':
-      return readScope.filterBoardDelta(msg, scope, readScope.visibleFdrIdsOf(scope, _liveStamped(ctx)));
+      return readScope.filterBoardDelta(msg, scope, readScope.visibleFdrIdsOf(scope, _liveStamped(ctx)), (id) => ctx.fdrStore.getFdr(id));
     case 'efsp-correlation-delta':
       return readScope.filterCorrelationDelta(msg, scope, readScope.visibleFdrIdsOf(scope, _liveStamped(ctx)));
     case 'efsp-marsa-delta':
@@ -776,6 +776,30 @@ function filterForSession(ctx, session, msg) {
     default:
       return msg;
   }
+}
+
+/**
+ * What else an OWNED session needs alongside a filtered board delta: the
+ * correlation record and the MARSA relations of the Strips in it, which the
+ * delta cannot carry. A Strip that has just become visible (handed to the
+ * session) has had its record filtered out of every earlier delta, and a
+ * record only changes when the flight does, so waiting for the next change
+ * would leave the handed line uncorrelated on screen. Empty for a session that
+ * reads everything, and for a delta with no visible Strip.
+ * @returns {object[]} messages to send after `filtered`
+ */
+function supplementFor(ctx, session, filtered) {
+  if (!filtered || filtered.type !== 'efsp-board-delta') return [];
+  const scope = readScopeOf(ctx, session);
+  if (scope.kind === readScope.ALL) return [];
+  const fdrIds = new Set(((filtered.strips || {}).updated || []).map(s => s.fdrId).filter(Boolean));
+  if (fdrIds.size === 0) return [];
+  const out = [];
+  const records = ctx.correlationStore ? [...fdrIds].map(id => ctx.correlationStore.getCorrelation(id)).filter(Boolean) : [];
+  if (records.length) out.push({ version: VERSION, type: 'efsp-correlation-delta', correlations: { updated: records } });
+  const relations = ctx.marsaStore ? ctx.marsaStore.getAll().filter(r => (r.participants || []).some(id => fdrIds.has(id))) : [];
+  if (relations.length) out.push(_marsaDelta(ctx.marsaStore, relations));
+  return out;
 }
 
 /** Changes exactly when what `session` may see of the flights changes. */
@@ -1068,4 +1092,4 @@ function _handleAtoMutation(ctx, session, msg, persist) {
   };
 }
 
-module.exports = { handleMessage, snapshotMessage: _snapshotMessage, filterForSession, readScopeKey, readScopeOf, RESYNC_RING_WINDOW };
+module.exports = { handleMessage, snapshotMessage: _snapshotMessage, filterForSession, supplementFor, readScopeKey, readScopeOf, RESYNC_RING_WINDOW };

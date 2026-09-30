@@ -78,9 +78,14 @@ function filterSnapshot(msg, scope) {
  * delta without any per-session memory (an unknown id in `gone` is a no-op on
  * the client). The message is always returned, even empty, so `boardSeq` stays
  * continuous (a skipped delta would make the next resync look like a gap).
+ * A Strip that has just BECOME visible (handed to this session) arrives as one
+ * updated Strip, and its FDR was filtered out of every delta until now, so the
+ * FDR of every visible updated Strip rides along (`fdrOf` supplies it). Without
+ * that a handed line drew with a blank callsign.
  * @param {Set<string>} fdrIds the FDRs of every Strip the scope can see now, on every Board
+ * @param {(fdrId:string) => object|null} [fdrOf]
  */
-function filterBoardDelta(msg, scope, fdrIds) {
+function filterBoardDelta(msg, scope, fdrIds, fdrOf = () => null) {
   if (scope.kind === ALL) return msg;
   const strips = msg.strips || {};
   const updated = [];
@@ -90,10 +95,17 @@ function filterBoardDelta(msg, scope, fdrIds) {
     else gone.push(s.stripId);
   }
   const fdrs = msg.fdrs || {};
+  const fdrsUpdated = (fdrs.updated || []).filter(f => fdrIds.has(f.fdrId));
+  const have = new Set(fdrsUpdated.map(f => f.fdrId));
+  for (const s of updated) {
+    if (!s.fdrId || have.has(s.fdrId)) continue;
+    const fdr = fdrOf(s.fdrId);
+    if (fdr) { fdrsUpdated.push(fdr); have.add(s.fdrId); }
+  }
   return {
     ...msg,
     strips: { ...strips, updated, gone },
-    fdrs: { ...fdrs, updated: (fdrs.updated || []).filter(f => fdrIds.has(f.fdrId)) },
+    fdrs: { ...fdrs, updated: fdrsUpdated },
   };
 }
 
