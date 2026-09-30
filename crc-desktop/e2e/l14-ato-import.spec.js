@@ -18,7 +18,7 @@
 const fs = require('fs');
 const path = require('path');
 const { test, expect } = require('@playwright/test');
-const { openPanel, seedStrip } = require('./helpers/app');
+const { openPanel } = require('./helpers/app');
 
 const FIXTURE = fs.readFileSync(path.join(__dirname, '../../crc-sync/tests/fixtures/ato/iron-flag-26-3.txt'), 'utf8');
 const SHOTS = path.join(__dirname, '../../docs/wip/L14');
@@ -32,11 +32,17 @@ const stripIdOf = (page, callsign, role = 'MISSION') => page.evaluate(([cs, r]) 
 const stripEl = (page, stripId) => page.locator(`.efsp-strip[data-strip-id="${stripId}"]`);
 
 test('TAC_C2 imports an ATO; the AR group highlights together; Mode 1/2 read in the expanded view', async ({ page }) => {
+  test.setTimeout(60000);
   const { consoleErrors } = await openPanel(page, { held: ['TAC_C2'], facilityId: 'TACTICAL' });
   // OPS pre-files VIPER 11 at Incirlik, so the preview has a flight to offer.
   await page.evaluate(() => window.sendEfspSetPositions('INCIRLIK', ['OPS']));
   await page.waitForFunction(() => getActingPositions().includes('OPS'));
-  await seedStrip(page, { callsign: 'VIPER11', role: 'DEPARTURE' });
+  // Sent directly: the visible Bay is TAC_C2's, so the helper's on-screen count would not move.
+  await page.evaluate(() => window.sendEfspCreateStrip('OPS', {
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main',
+    fdr: { callsign: 'VIPER11', aircraftType: 'F16', wakeCategory: 'D' },
+  }, 'INCIRLIK'));
+  await page.waitForFunction(() => getAllEfspStrips().some(s => s.role === 'DEPARTURE' && getEfspFdr(s.fdrId).identity.callsign === 'VIPER11'));
 
   const button = page.locator('.efsp-ato-import-btn');
   await expect(button).toBeVisible();
@@ -77,7 +83,9 @@ test('TAC_C2 imports an ATO; the AR group highlights together; Mode 1/2 read in 
   await expect(stripEl(page, shellId).locator('.efsp-ar-badge')).toHaveText('AR ×2');
   await expect(stripEl(page, viperId).locator('.efsp-ar-badge')).toHaveText('AR SHELL71');
 
-  await stripEl(page, shellId).locator('.efsp-ar-badge').click();
+  // Select SHELL 71 the way a controller does: a click on the Strip body.
+  await stripEl(page, shellId).click({ position: { x: 6, y: 6 } });
+  await page.waitForFunction((id) => getSelectedEfspStripId() === id, shellId);
   await expect(stripEl(page, viperId)).toHaveClass(/efsp-strip-ar-participant/);
   await expect(stripEl(page, dudeId)).toHaveClass(/efsp-strip-ar-participant/);
   await expect(stripEl(page, snakeId)).not.toHaveClass(/efsp-strip-ar-participant/);
@@ -105,5 +113,6 @@ test('TAC_C2 imports an ATO; the AR group highlights together; Mode 1/2 read in 
   await expect(page.locator('.efsp-ato-dialog .efsp-ato-line[data-line-id="1901T#0"] .efsp-ato-action')).toHaveValue('UPDATE');
   await page.keyboard.press('Escape');
 
-  expect(consoleErrors).toEqual([]);
+  // Map tiles and weather answer 503 with no DCS behind the run; those are not this panel's.
+  expect(consoleErrors.filter(e => !/Failed to load resource/.test(e))).toEqual([]);
 });

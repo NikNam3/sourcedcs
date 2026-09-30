@@ -334,7 +334,7 @@ function _atoLineRow(l) {
   }
   if (l.changes && l.changes.length) {
     row.appendChild(_atoEl('span', 'efsp-ato-changes', l.changes.map(ch =>
-      `${ch.path}: ${ch.from == null ? '—' : ch.from} → ${ch.to == null ? '—' : ch.to}${ch.ownedBy === 'CONTROLLER' ? ' (kept: typed by a controller)' : ''}`).join('; ')));
+      `${ch.path}: ${ch.from == null ? '—' : ch.from} → ${ch.to == null ? '—' : ch.to}${ch.ownedBy === 'CONTROLLER' ? ' (kept: typed by a controller)' : ch.ownedBy === 'FLIGHT' ? ' (kept: the filed flight\'s)' : ''}`).join('; ')));
   }
   if (l.warnings && l.warnings.length) {
     const w = _atoEl('details', 'efsp-ato-line-warnings');

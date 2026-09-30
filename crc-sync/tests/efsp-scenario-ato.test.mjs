@@ -153,6 +153,10 @@ test('import binds a pre-filed flight on its Mode 3/A', () => {
   assert.equal(fdr.mission.missionNumber, '1101A');
   assert.equal(fdr.identity.modeOne, '12');
   assert.equal(efsp.fdrStore.codeAllocator.snapshot().length, codesBefore + 4, 'four new flights, no code minted for the bound one');
+  // Re-previewed, the filed flight's own type is reported as kept, not as the ATO's to change.
+  const again = preview(efsp, c).lines.find((l) => l.lineId === '1101A#0');
+  assert.equal(again.action, 'UPDATE');
+  assert.equal(again.changes.find((ch) => ch.path === 'identity.aircraftType').ownedBy, 'FLIGHT');
 });
 
 test('a callsign-only match is offered, and two matches are offered with neither preselected', () => {

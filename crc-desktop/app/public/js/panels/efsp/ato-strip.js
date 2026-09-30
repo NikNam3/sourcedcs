@@ -104,6 +104,17 @@ function highlightArParticipants(stripId) {
   return true;
 }
 
+/**
+ * What bay-view.js's render signature needs to know about the join: it is
+ * resolved from OTHER flights' Strips (a peer dropped, a peer filed), which no
+ * part of this Strip's own record changes, plus whether it is highlighted.
+ */
+function arSignatureFor(strip) {
+  const join = arJoinFor(strip);
+  const peers = join ? join.peers.map(p => `${p.fdrId}:${p.stripIds.join(',')}`).join(';') : '';
+  return `${join ? join.text : ''}|${peers}|${isArHighlighted(strip.stripId) ? 1 : 0}`;
+}
+
 /** Re-resolves the highlight against the current records — after a snapshot. */
 function refreshArHighlight() {
   if (typeof getSelectedEfspStripId !== 'function') return false;
@@ -177,7 +188,7 @@ function appendAtoExpandedRows(panel, strip) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
-    arJoinFor, highlightArParticipants, refreshArHighlight, isArHighlighted, getArHighlightStripIds,
+    arJoinFor, arSignatureFor, highlightArParticipants, refreshArHighlight, isArHighlighted, getArHighlightStripIds,
     atoAlertsFor, atoExpandedRowsFor, appendAtoExpandedRows,
   };
 }

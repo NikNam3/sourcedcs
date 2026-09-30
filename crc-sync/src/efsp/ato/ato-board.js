@@ -260,7 +260,13 @@ function _changesFor(l3, fdr) {
     if ((from == null ? null : from) === (to == null ? null : to)) continue;
     if ((from === '' || from == null) && to == null) continue;
     const prov = fdr.provenance ? fdr.provenance[path] : undefined;
-    const ownedBy = SEED_PATH_OF_VALUES.has(path) && prov && prov !== 'ATO' ? 'CONTROLLER' : 'ATO';
+    // The same rule applyAtoTasking() applies: a seed path is the ATO's while
+    // its provenance says so (or the flight has nothing there yet); a
+    // controller's value, or the filed flight's own, is kept.
+    let ownedBy = 'ATO';
+    if (SEED_PATH_OF_VALUES.has(path) && prov !== 'ATO' && !(prov === undefined && (from == null || from === ''))) {
+      ownedBy = prov === 'CONTROLLER_ENTERED' ? 'CONTROLLER' : 'FLIGHT';
+    }
     out.push({ path, from: from == null ? null : from, to, ownedBy });
   }
   return out;
