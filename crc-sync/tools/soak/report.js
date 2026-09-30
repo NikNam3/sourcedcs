@@ -169,9 +169,9 @@ function build(d, meta) {
     H3: dropStart && dropStart.end > dropStart.start && report.memory.snapshotBytes.end > report.memory.snapshotBytes.start ? 'confirmed' : 'not-exercised',
     H4: s.resync.acrossRestartDivergence.count > 0 ? 'confirmed' : (s.resync.acrossRestartDivergence.probes > 0 ? 'refuted' : 'not-exercised'),
     H5: R2.some(x => x.op === 'CreateStrip' && x.outcome === 'appliedTwice') ? 'confirmed' : (R2.some(x => x.op === 'CreateStrip') ? 'refuted' : 'not-exercised'),
-    H6: nlaHistEnd['nlaHistory.dropped'] > 0 ? 'confirmed' : 'refuted',
+    H6: nlaHistEnd['nlaHistory.dropped'] > 0 ? 'confirmed' : (s.flightsCompleted > 0 ? 'refuted' : 'not-exercised'),
     H7: maxCid > 999 ? 'confirmed' : `not reached (max _cidSeq ${maxCid})`,
-    H8: s.misbinding.count > 0 ? ((s.misbinding.byCause.LINGERING_TRACK || 0) > 0 ? 'confirmed' : 'misbindings seen, none via a lingering track') : 'refuted',
+    H8: s.misbinding.count > 0 ? ((s.misbinding.byCause.LINGERING_TRACK || 0) > 0 ? 'confirmed' : 'misbindings seen, none via a lingering track') : (s.flightsCompleted > 0 ? 'refuted' : 'not-exercised'),
   };
 
   // ── verdict (§7) ─────────────────────────────────────────────────────
