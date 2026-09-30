@@ -412,6 +412,9 @@ class GrpcClient extends EventEmitter {
       if (stream !== this._eventStream) return; // stale — ignore
       if (event.mission_start) {
         console.log('[grpc] mission_start event');
+        // Before the fetch: a mission_start is a new mission even when the
+        // mission-load that follows looks the same (mission-session.js, ADR 0086).
+        this.emit('mission-start');
         this._fetchMissionWithRetry();
       }
     });
