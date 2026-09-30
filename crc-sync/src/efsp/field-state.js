@@ -302,26 +302,6 @@ function activeEndIntoWind(inventory, windFromTrue) {
   return best;
 }
 
-/**
- * A fingerprint of the loaded mission. crc-sync hears 'mission-load' on every
- * gRPC (re)connect, not only when a new mission starts, and DCS gives no
- * mission id — so "is this the mission whose wind already set the runway?" is
- * answered by what the mission contains. Same mission, same key: a reconnect
- * or a crc-sync restart keeps whatever TWR has since chosen.
- */
-function missionKeyOf(missionData) {
-  if (!missionData) return null;
-  const names = (list) => (list || []).map(x => (x && (x.name || x.id)) || '').join('|');
-  const text = `${missionData.theatre || ''}#${names(missionData.waypoints)}#${names(missionData.drawings)}`;
-  // FNV-1a, 32 bit — small, dependency-free, and only ever compared for equality.
-  let h = 0x811c9dc5;
-  for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i);
-    h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return `${missionData.theatre || '?'}:${h.toString(16)}`;
-}
-
 // ── the inventory's shape (read once at startup — decisions.md P5) ─────────
 
 function _isObject(x) { return !!x && typeof x === 'object' && !Array.isArray(x); }
@@ -425,6 +405,6 @@ module.exports = {
   RUNWAY_CHANGE_STATES, RUNWAY_CHANGE_OPEN_STATES, isRunwayChangeInProgress, isRunwayChangeOpen,
   REQUEST_ACTIONS,
   RUNWAY_GATED_STATES, normalizeRunwayEnd, buildStatusView, resolveRunwayForStrip, runwayStatusReason, runwayInhibitFor,
-  runwayAdvisoryFor, runwayRackFor, activeEndIntoWind, missionKeyOf,
+  runwayAdvisoryFor, runwayRackFor, activeEndIntoWind,
   validateFieldStateInventory, runwayInventoryWarnings,
 };

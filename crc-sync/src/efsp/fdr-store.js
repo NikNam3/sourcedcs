@@ -298,23 +298,62 @@ function parseAltitudeFt(text) {
   return m[1].length <= 3 ? n * 100 : n;
 }
 
+// Typed time Blocks (docs/adr/0062's rule, extended by supervisor fix F4).
+//
+// Every …TimeUtc path a controller writes is epoch ms, like every other …Utc
+// field that readers do arithmetic on: nla.js's HELD gates, the void deadline
+// and the EDCT/call-for-release windows derived below, and the obligation
+// monitor. A controller types a four-digit Zulu time ("1432", "14:32Z"), so a
+// string is resolved by zulu-time.js's resolveZuluHhmm against the MISSION
+// clock's now (H11) — the one rule, nearest occurrence within ±12 h (S-L2b).
+// Before F4 the typed string was stored as-is: "1432" + 30 min became the
+// string "14321800000", and `now < "1432"` was always false, so a typed void
+// time never expired and a typed release time never held (questioner Q43,
+// R2-17).
+//
+// A finite number is taken as epoch ms already (an import, a scenario).
+// Empty clears to null. Anything else is refused, never stored.
+//
+// The vul window (mission.vulWindowStartUtc/EndUtc, M6/M7) is deliberately
+// NOT here: it is the ATO's, and L14/L16 own how it is written (docs/wip/F4.md).
+const TYPED_TIME_LABELS = {
+  'filed.proposedDepartureTimeUtc': 'proposed departure time',
+  'filed.estimatedArrivalTimeUtc': 'estimated arrival time',
+  'assigned.releaseTimeUtc': 'release time',
+  'assigned.voidTimeUtc': 'void time',
+  'assigned.edctTimeUtc': 'EDCT',
+  'assigned.callForReleaseTimeUtc': 'call-for-release time',
+  'assigned.movementAreaEntryTimeUtc': 'movement area entry time',
+  'assigned.taxiTimeUtc': 'taxi time',
+  'assigned.takeoffTimeUtc': 'takeoff time',
+  'military.mtr.entryTimeUtc': 'MTR entry time',
+  'military.mtr.exitEstimateUtc': 'MTR exit estimate',
+};
+
+/**
+ * Normalise a value written to a typed time path (TYPED_TIME_LABELS).
+ * `nowMs` is the mission clock's now(), used only to date a typed time.
+ * Returns { ok: true, value } (epoch ms or null) or { ok: false, detail }.
+ */
+function normalizeTypedTime(path, value, nowMs) {
+  if (typeof value === 'number' && Number.isFinite(value)) return { ok: true, value };
+  const text = value == null ? '' : String(value).trim();
+  if (text === '') return { ok: true, value: null };
+  const ms = resolveZuluHhmm(text, nowMs);
+  if (ms == null) {
+    return { ok: false, detail: `${TYPED_TIME_LABELS[path]} must be a UTC time as HHMM, e.g. 1432` };
+  }
+  return { ok: true, value: ms };
+}
+
 // §9.4 MTR fields (docs/adr/0062). What each military.mtr.* path accepts.
 //
-// The two times arrive as the four-digit Zulu time a controller types ("1432",
-// "14:32Z") and are stored as epoch ms like every other …Utc field, resolved
-// against the MISSION clock's date (zulu-time.js, H11) — never the wall
-// clock's. A typed string stored as-is where readers expect epoch ms is the
-// known time-Block bug (questioner Q43); these two do not add to it. A finite
-// number is taken as epoch ms already (an import, a scenario).
+// The two times are typed time paths (normalizeTypedTime above).
 //
 // Designator and fixes take no format rule: there is no MTR route table in
 // this repo (H23: free text until the squadron's list arrives), so any grammar
 // would be invented (defect D11). Upper-casing is the strip convention, not
 // validation.
-const MTR_TIME_LABELS = {
-  'military.mtr.entryTimeUtc': 'MTR entry time',
-  'military.mtr.exitEstimateUtc': 'MTR exit estimate',
-};
 
 /**
  * Normalise a value written to one of the six military.mtr.* paths.
@@ -322,18 +361,9 @@ const MTR_TIME_LABELS = {
  * Returns { ok: true, value } or { ok: false, detail }. Empty clears to null.
  */
 function normalizeMtrValue(path, value, nowMs) {
-  if (MTR_TIME_LABELS[path] && typeof value === 'number' && Number.isFinite(value)) {
-    return { ok: true, value };
-  }
+  if (TYPED_TIME_LABELS[path]) return normalizeTypedTime(path, value, nowMs);
   const text = value == null ? '' : String(value).trim().toUpperCase();
   if (text === '') return { ok: true, value: null };
-  if (MTR_TIME_LABELS[path]) {
-    const ms = resolveZuluHhmm(text, nowMs);
-    if (ms == null) {
-      return { ok: false, detail: `${MTR_TIME_LABELS[path]} must be a UTC time as HHMM, e.g. 1432` };
-    }
-    return { ok: true, value: ms };
-  }
   if (path === 'military.mtr.requestedAltitudeAfterExit') {
     if (parseAltitudeFt(text) == null) {
       return { ok: false, detail: 'requested altitude after exit must be an altitude, e.g. FL210 or 080' };
@@ -406,6 +436,16 @@ class FdrStore {
     // wrong answer, and a Strip that claims a stereo it isn't flying is worse
     // than no Strip — it would also carry a name into release-envelope.js's
     // matcher that no configured route backs.
+    // F4: the two filed times take the same typed-time rule as setField(),
+    // checked before allocate() for the same no-side-effects reason as the
+    // stereo name below.
+    const seedTimes = {};
+    for (const key of ['proposedDepartureTimeUtc', 'estimatedArrivalTimeUtc']) {
+      const time = normalizeTypedTime(`filed.${key}`, seed[key], this._clock.now());
+      if (!time.ok) return { ok: false, reason: 'VALIDATION_ERROR', detail: time.detail };
+      seedTimes[key] = time.value;
+    }
+
     let stereoSeed = {};
     let stereoName = '';
     const requestedStereo = seed.stereoRouteName;
@@ -487,12 +527,12 @@ class FdrStore {
         // a standing-release envelope matches on. Not in WRITABLE_PATHS — see
         // that list's own comment for why.
         stereoRouteName: stereoName,
-        proposedDepartureTimeUtc: seed.proposedDepartureTimeUtc || null,
+        proposedDepartureTimeUtc: seedTimes.proposedDepartureTimeUtc,
         fullRouteClearance: !!seed.fullRouteClearance,
         remarks: filedFrom('remarks'),
         originAirport: seed.originAirport || '',                       // ARRIVAL-role field, Phase 2
         arrivalFix: seed.arrivalFix || null,                            // ARRIVAL-role field, Phase 2
-        estimatedArrivalTimeUtc: seed.estimatedArrivalTimeUtc || null,  // ARRIVAL-role field, Phase 2
+        estimatedArrivalTimeUtc: seedTimes.estimatedArrivalTimeUtc,  // ARRIVAL-role field, Phase 2
       },
       clearance: defaultClearance(), // docs/adr/0058 — assigned altitude and heading
       assigned: {
@@ -606,6 +646,12 @@ class FdrStore {
     }
     if (path === 'identity.trackDegradationFlag' && !TRACK_DEGRADATION_FLAGS.has(value)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'invalid track degradation flag' };
+    }
+
+    if (TYPED_TIME_LABELS[path] && !path.startsWith('military.mtr.')) { // F4: typed HHMM → epoch ms
+      const time = normalizeTypedTime(path, value, this._clock.now());
+      if (!time.ok) return { ok: false, reason: 'VALIDATION_ERROR', detail: time.detail };
+      value = time.value;
     }
 
     if (path.startsWith('military.mtr.')) { // §9.4, docs/adr/0062

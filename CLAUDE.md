@@ -25,6 +25,7 @@ Each service is independent — there is no root-level build script.
 ```bash
 cd atobrief && npm install
 PORT=4000 npm start
+npm test   # node --test test/*.test.js
 ```
 
 ### sourcedcs-web (Node.js, Express, port 7000)
@@ -39,7 +40,13 @@ npm test   # node --test test/*.test.js
 cd crc-sync && npm install
 npm start
 npm test   # node --test tests/*.test.mjs
+npm run soak:selfcheck   # proves every soak detector fires (~40 s); not part of npm test
+npm run soak:smoke       # 20 virtual minutes of simulated EFSP traffic; `npm run soak -- --minutes 240` for the §13 run
 ```
+The EFSP soak harness lives in `crc-sync/tools/soak/` (flags and profiles in its `run.js`). The literal four-hour
+run is the manual-dispatch workflow `.github/workflows/crc-sync-soak.yml` ("crc-sync EFSP soak (manual)"). Run
+`soak:selfcheck` after touching `board-store.js`, `efsp-ws.js` or `ws-hub.js`. The soak currently **fails** on
+known findings owned by wave-2 lanes; see `docs/efsp-briefing.md`.
 
 ### crc-desktop (Electron)
 ```bash
@@ -78,6 +85,7 @@ Per-service `nix build .#<name>` package definitions in `flake.nix` predate `crc
 
 Frontend structure under `public/js/`:
 - `app.js` — core app logic, YAML package state
+- `usmtf-ato.js` — exports the package as a USMTF ATO (`docs/adr/0078`), in the EXPORT dialog and at `GET /api/rooms/:id/ato.usmtf` / `POST /api/usmtf` (`usmtf-api.js`, service token `ATOBRIEF_USMTF_TOKEN` or a signed-in user's token). USMTF is the interface between systems; the YAML stays atobrief-internal
 - `auth.js` — Casdoor OAuth flow
 - `session.js` — Socket.IO session management (presenter broadcasts tab/scroll state to presentees)
 - `editor/` — per-section YAML editors (ACO, COMMS, SPINS, etc.)
@@ -107,7 +115,8 @@ Central backend crc-desktop instances connect to — replaces the old asacs_link
 - `server.js` — Express + `ws`. Casdoor OAuth code exchange (`POST /api/auth/token`), single-use short-TTL WebSocket connect tickets (`POST /api/ws-ticket`, `src/auth.js`) so a long-lived bearer JWT never rides in a `/feed` WebSocket URL.
 - `src/grpc-client.js` / `src/srs-client.js` — sole gRPC (DCS telemetry) and SRS-transponder client on behalf of every connected crc-desktop instance.
 - `src/tracks.js` / `src/collab-store.js` — in-memory DCS ground truth + the collaborative overlay (manual IFF declarations, tags). Truth never reaches a client.
-- `src/surveillance/` — **what a controller is told about a contact** (`docs/adr/0059`). `presentation.js`'s `presentTrack()` is the single choke point: a session gets a position, and a code/altitude/name only if one of *its own* sensors could know it (radar `caps.ssr`/`caps.height`, the transponder model in `transponder.js`, the datalink feed in `datalink.js`, identity in `identity.js`: correlated Strip callsign > datalink > tag > track number). Sent by `src/ws-hub.js` every 500ms. Client-side, `crc-desktop/app/public/js/track-label.js` is the only code that turns it into text. Change how a contact is named or shown in those two files, not in consumers. `CRCSYNC_COALITION` sets which DCS coalition is "own".
+- `src/surveillance/` — **what a controller is told about a contact** (`docs/adr/0059`). `presentation.js`'s `presentTrack()` is the single choke point: a session gets a position, and a code/altitude/name only if one of *its own* sensors could know it (radar `caps.ssr`/`caps.height`, the transponder model in `transponder.js`, the datalink feed in `datalink.js`, identity in `identity.js`: correlated Strip callsign > datalink > tag > track number). Sent by `src/ws-hub.js` every 500ms. Client-side, `crc-desktop/app/public/js/track-label.js` is the only code that turns it into text. Change how a contact is named or shown in those two files, not in consumers. **IFF colour comes from interrogation, not from the DCS coalition** (`docs/adr/0066`, `0084`): `iff.js`'s `classifyIff()` picks it per session from a declaration, the datalink, a valid Mode 4 reply (`transponder.js`'s `mode4Of()`) or a Mode 3/C reply, and automatic IFF never gives bandit/hostile. Radars carry `caps.mode4`; tactical radars and the military field radars (airport, approach, carrier approach) interrogate Mode 4. Nothing on the ground is hidden. `CRCSYNC_COALITION` sets which DCS coalition is "own" (it models the Mode 4 crypto key); two coalitions controlled at once means two crc-sync servers, one each.
+- `src/efsp/` — the Electronic Flight Strip Panel's server half (stores, rules, the wire handler). `docs/efsp-briefing.md` is its handoff note and `docs/efsp-usage-guide.md` the controller's guide; EFSP times come from the injected mission clock (in-game Zulu, `docs/adr/0079`), never `Date.now()`.
 
 Deployed as a Docker image (`ghcr.io/niknam3/sourcedcs/crc-sync`) via `.github/workflows/crc-sync-docker.yml` — see "How the docker-image services deploy" below.
 
@@ -203,3 +212,5 @@ See `.env.example` for all required variables. Key ones:
 | `FLIGHT_PLAN_SERVICE_TOKEN` | sourcedcs-web (accepts EFSP's filed-plan queries) + crc-sync (sends them) — must match |
 | `CRCSYNC_MAPTILER_KEY` | crc-sync (terrain masking for the radar picture — **optional**: without it every radar sees to its full range and nothing is masked, logged once at startup) |
 | `CRCSYNC_TERRAIN_CACHE_DIR` | crc-sync (DEM tile cache; the Docker stack points it at the `crc-sync-state` volume) |
+| `DCS_GRPC_POLL_RATE` / `DCS_GRPC_MAX_BACKOFF` | crc-sync (DCS-gRPC unit stream: seconds between polls, default 1, floor 1; longest re-poll wait for a unit that isn't changing, default 5). Leave unset |
+| `ATOBRIEF_USMTF_TOKEN` | atobrief (accepts USMTF ATO reads) + crc-sync (sends them, once L14's ATO import lands) — must match |

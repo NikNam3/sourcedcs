@@ -12,7 +12,7 @@ from .log import log
 from .models import Carrier, Flight
 from .build_missions import (
     AIRDROME_IDS, CVN_NAMES,
-    build_airfields_registry, build_lines_registry, build_missions,
+    ato_callsign, build_airfields_registry, build_lines_registry, build_missions,
 )
 from .projection import dms
 
@@ -37,20 +37,39 @@ def build_callsigns_registry(flights: list[Flight]) -> dict | None:
             continue
         ac_base = f.aircraft_type.split('_')[0]
         ac_type = re.sub(r'[^A-Z0-9]', '', ac_base.upper())
-        result[f.name] = {
+        result[ato_callsign(f.name) or f.name] = {
             "type":  ac_type,
             "role":  f.task + " flight lead" if not f.is_tanker else f.task,
         }
     return result or None
 
 
-def build_tankers_list(flights: list[Flight]) -> list[dict] | None:
+# DCS tanker unit type → the AR system it offers (registry.tankers[].system).
+# A fact of the airframe, so it is filled from the type; unknown types are left out.
+TANKER_AR_SYSTEM: dict[str, str] = {
+    "KC-135":           "BOOM",
+    "KC_10_Extender":   "BOOM",
+    "KC135MPRS":        "DROGUE",
+    "KC_10_Extender_D": "DROGUE",
+    "KC130":            "DROGUE",
+    "KC130J":           "DROGUE",
+    "S-3B Tanker":      "DROGUE",
+    "IL-78M":           "DROGUE",
+}
+
+
+def build_tankers_list(flights: list[Flight],
+                       mission_numbers: dict[str, str] | None = None) -> list[dict] | None:
     """
     Build a list of tanker entries for registry.tankers.
-    Each entry has: callsign, altitude, speed_kts, and orbit parameters
-    (anchor_coords, heading_deg, leg_nm, width_nm) extracted from the first
-    orbit waypoint.
+    Each entry has: callsign, the tanker's own REFUELING mission_number
+    (mission_numbers maps group name → mission number), altitude, speed_kts,
+    frequency, TACAN, AR system, ARCP (the orbit waypoint's name, when it has
+    one) and orbit parameters (anchor_coords, heading_deg, leg_nm, width_nm)
+    extracted from the first orbit waypoint.  Offload is not in the .miz and
+    is never emitted.
     """
+    mission_numbers = mission_numbers or {}
     result = []
     for f in flights:
         if not f.is_tanker:
@@ -63,8 +82,10 @@ def build_tankers_list(flights: list[Flight]) -> list[dict] | None:
         orbit_leg_nm: float | None = None
         orbit_width_nm: float | None = None
         orbit_direction: str = "ccw"  # Default counterclockwise
+        arcp: str | None = None
         for wp in f.waypoints:
             if wp.is_orbit:
+                arcp = wp.name.strip().upper() if wp.name and wp.name.strip() else None
                 alt_ft             = wp.orbit_alt_ft
                 speed_kts          = wp.orbit_speed_kts
                 orbit_leg_nm       = wp.orbit_leg_nm
@@ -73,7 +94,18 @@ def build_tankers_list(flights: list[Flight]) -> list[dict] | None:
                 orbit_anchor_coords = dms(wp.lat, wp.lon)
                 orbit_direction    = "cw" if wp.orbit_cw else "ccw"
                 break
-        entry: dict = {"callsign": f.name}
+        entry: dict = {"callsign": ato_callsign(f.name) or f.name}
+        if f.name in mission_numbers:
+            entry["mission_number"] = mission_numbers[f.name]
+        if f.freq_mhz:
+            entry["freq_mhz"] = f.freq_mhz
+        if f.tacan:
+            entry["tacan"] = f.tacan
+        system = TANKER_AR_SYSTEM.get(f.units[0].type if f.units else f.aircraft_type)
+        if system:
+            entry["system"] = system
+        if arcp:
+            entry["arcp"] = arcp
         if alt_ft is not None:
             entry["altitude_ft"] = alt_ft
         if speed_kts is not None:
@@ -92,22 +124,28 @@ def build_tankers_list(flights: list[Flight]) -> list[dict] | None:
     return result or None
 
 
-def build_control_agencies(flights: list[Flight]) -> dict | None:
+def build_control_agencies(flights: list[Flight],
+                           mission_numbers: dict[str, str] | None = None) -> dict | None:
     """
     Build registry.control_agencies from AWACS flights.
-    Each entry is keyed by the group name (the mission callsign).
+    Each entry is keyed by the ATO callsign (the mission callsign) and names
+    the agency's own AEW mission through mission_number (mission_numbers maps
+    group name → mission number).
     """
+    mission_numbers = mission_numbers or {}
     result: dict = {}
     for f in flights:
         if not f.is_awacs:
             continue
-        ac_base  = f.aircraft_type.split('_')[0]
-        platform = re.sub(r'[^A-Z0-9\-]', '', ac_base.upper())
-        result[f.name] = {
+        callsign = ato_callsign(f.name) or f.name
+        entry: dict = {
             "type":             "AWACS",
-            "callsign":         f.name,
+            "callsign":         callsign,
             "primary_freq_mhz": str(round(f.freq_mhz, 3)),
         }
+        if f.name in mission_numbers:
+            entry["mission_number"] = mission_numbers[f.name]
+        result[callsign] = entry
     return result or None
 
 
@@ -131,7 +169,7 @@ def build_flight_comms(flights: list[Flight], dtcs: dict[str, dict]) -> list[dic
             uhf, vhf = build_comms_from_dtc(dtcs[f.dtc_cartridge])
             entries.append({
                 "group":         f.name,
-                "callsign":      f.name,
+                "callsign":      ato_callsign(f.name) or f.name,
                 "dtc_cartridge": f.dtc_cartridge,
                 "uhf_presets":   uhf,
                 "vhf_presets":   vhf,
@@ -162,7 +200,7 @@ def build_flight_comms(flights: list[Flight], dtcs: dict[str, dict]) -> list[dic
                 continue
             entries.append({
                 "group":         f.name,
-                "callsign":      f.name,
+                "callsign":      ato_callsign(f.name) or f.name,
                 "dtc_cartridge": None,
                 "uhf_presets":   dict(sorted(uhf.items())) or None,
                 "vhf_presets":   dict(sorted(vhf.items())) or None,
@@ -191,11 +229,14 @@ def build_frequencies_registry(flight_comms: list[dict]) -> list[dict] | None:
 
 
 def _random_squawk(exclude: set[str]) -> str:
-    """Return a random 4-octal-digit Mode-3 squawk avoiding emergency codes and duplicates."""
+    """
+    Return a random 4-octal-digit Mode-3 squawk avoiding emergency codes,
+    duplicates, and the 6xxx block crc-sync hands to AI traffic (S-L3).
+    """
     forbidden = {"7500", "7600", "7700"}
     while True:
         code = "".join(str(random.randint(0, 7)) for _ in range(4))
-        if code not in forbidden and code not in exclude:
+        if code[0] != "6" and code not in forbidden and code not in exclude:
             return code
 
 
@@ -370,7 +411,7 @@ def build_doc(*, mission_name, mission_date, theatre,
     airfields = build_airfields_registry(flights, carriers, theatre)
 
     # Build missions — also mutates ref_pts to add marshal points found in routes.
-    # AWACS and tanker flights are excluded from missions.
+    # Tankers and AWACS are missions too (REFUELING / AEW, ADR 0089); one per flight.
     missions_result = build_missions(
         flights, msn_start,
         targets, carriers, airfields, ref_pts,
@@ -379,10 +420,14 @@ def build_doc(*, mission_name, mission_date, theatre,
     missions = missions_result[0] or None
     steerpoints = missions_result[1] or None
 
+    # build_missions emits one mission per flight, in flight order.
+    mission_numbers = {f.name: m["mission_number"]
+                       for f, m in zip(flights, missions or [])}
+
     flight_comms = build_flight_comms(flights, dtcs or {})
     frequencies = build_frequencies_registry(flight_comms or [])
 
-    control_agencies = build_control_agencies(flights)
+    control_agencies = build_control_agencies(flights, mission_numbers)
 
     return {
         "schema_version": "1.0",
@@ -397,7 +442,7 @@ def build_doc(*, mission_name, mission_date, theatre,
             "callsigns":        build_callsigns_registry(flights),
             "airfields":        airfields or None,
             "carriers":         build_carriers_registry(carriers) or None,
-            "tankers":          build_tankers_list(flights),
+            "tankers":          build_tankers_list(flights, mission_numbers),
             "targets":          targets or None,
             "reference_points": list(ref_pts.values()) or None,
             "steerpoints":      steerpoints,
@@ -444,7 +489,7 @@ def build_doc(*, mission_name, mission_date, theatre,
             "theatre":     theatre,
             "targets":     len(targets),
             "acm_zones":   len(acms),
-            "missions":    len([f for f in flights if not f.is_tanker and not f.is_awacs]),
+            "missions":    len(missions or []),
             "tankers":     len([f for f in flights if f.is_tanker]),
             "awacs":       len([f for f in flights if f.is_awacs]),
             "steerpoints": len(steerpoints) if steerpoints else 0,

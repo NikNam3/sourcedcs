@@ -1,3 +1,5 @@
+> Folded into the guide/briefing at `36a5cd5`.
+
 # LG: gRPC unit-stream reconnect loop
 
 Branch `lane/LG-grpc-stream`, cut from `efsp-wp5-correlation`. This is a bugfix lane outside the EFSP plan.

@@ -1236,6 +1236,37 @@ registry:
 Tankers and AWACS are ordinary missions (`REFUELING` / `AEW`). The registry entry names its
 mission through `mission_number`, and that gives `REFTSK`, `5REFUEL` and `7CONTROL`.
 
+What each export field means (every one is optional, and the mission editor has an input for all of
+them except `secondary_freq_mhz` on a tanker, which is YAML-only):
+
+| Field | Meaning |
+|---|---|
+| `missions[].package_id` | Package the mission belongs to. Missions sharing one form a package |
+| `missions[].package_commander` | `true` on the one mission that commands its package. None or several give a warning |
+| `missions[].iff.mode1` / `mode2` / `mode3` | IFF codes, quoted. `mode3` wins over the SPINS C3 table |
+| `missions[].datalink` | `l16_callsign`, `tacan` (e.g. `38Y`), `ju` (five digits, quoted) |
+| `missions[].alert_status` | Air alert status, free text upper-cased (e.g. `GH15`). Empty means not on alert |
+| `missions[].priority` | Mission priority, a number |
+| `missions[].vul` | `{start, end}` as `HHMMZ`. Fills `AMSNLOC` and wins over the first target's TOS/TOFFS; with timed targets, `GTGTLOC` wins |
+| `missions[].narrative` | Free text (one string or a list), exported as `NARR` |
+| `missions[].control.report_in_point`, `check_in_time`, `secondary_freq_mhz` | Where and when the flight checks in with its agency, and the agency's secondary frequency for this mission |
+| `missions[].refuel[].offload_klb` | Planned offload for that refuelling window, thousands of pounds |
+| `registry.tankers.*.mission_number`, `arcp`, `system`, `offload_klb`, `alert_offload_klb`, `fuel` | The tanker's own mission, its air refuelling control point, `BOOM` or `DROGUE`, total and alert offload (klb), fuel type |
+| `registry.control_agencies.*.mission_number`, `secondary_freq_mhz` | The agency's own AEW mission, and its secondary frequency |
+| `registry.units` | `{ <unit name>: { base, remarks } }`, for `TASKUNIT` |
+| `header.usmtf` | Message defaults: `message_kind` (`EXER`/`OPER`), `originator`, `serial`, `asof` (`YYYY-MM-DD HHMMZ`, in-game), `country`, `service`, `default_unit` |
+
+Mission numbers are exported without their `MSN` prefix, because crc-sync joins on the bare
+number. Do not give a mission a Mode 3 code in the `6xxx` block: crc-sync reserves it for AI
+aircraft.
+
+**Reading the export from another system.** `GET /api/rooms/:id/ato.usmtf` returns the live room's
+package as `text/plain` (`?report=1` returns `{text, warnings}` as JSON; `ETag`/`If-None-Match`
+work). `POST /api/usmtf` with the package YAML as a `text/yaml` body (1 MB at most) converts
+without a room. Both need `Authorization: Bearer <token>`: either the shared service secret
+`ATOBRIEF_USMTF_TOKEN`, or a signed-in user's token that carries a role. Rooms live in memory, so a
+room's export is gone once the room closes or atobrief restarts.
+
 ---
 
 ## IFF Squawk Code Generation
