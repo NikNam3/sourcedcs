@@ -270,6 +270,13 @@ class FieldStateStore {
       case 'RequestRunwayStatus':   return this._request(ctx);
       case 'AcceptRunwayRequest':   return this._acceptRequest(ctx);
       case 'RejectRunwayRequest':   return this._rejectRequest(ctx);
+      case 'ProposeRunwayChange':        return this._proposeChange(ctx, { selfCoordinate: false });
+      case 'SelfCoordinateRunwayChange': return this._proposeChange(ctx, { selfCoordinate: true });
+      case 'AckRunwayChange':            return this._ackChange(ctx);
+      case 'RejectRunwayChange':         return this._endChange(ctx, 'REJECTED');
+      case 'WithdrawRunwayChange':       return this._endChange(ctx, 'WITHDRAWN');
+      case 'BeginRunwayChange':          return this._beginChange(ctx);
+      case 'CompleteRunwayChange':       return this._completeChange(ctx);
       default:
         return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown field-state op: ${op.kind}` };
     }
@@ -382,8 +389,204 @@ class FieldStateStore {
     return { ok: true };
   }
 
-  /** Where rules 1–2 and rule 3 meet (step 5 fills this in). */
-  _drainPendingInspection(record, runwayId, transition) {} // eslint-disable-line no-unused-vars
+  /**
+   * Where rules 1–2 and rule 3 meet, and the only place: an inspection that
+   * signs off a runway a completed runway change was waiting on. When the last
+   * one is inspected the change is over — appended to the history in this
+   * same transition, and cleared.
+   */
+  _drainPendingInspection(record, runwayId, transition) {
+    const change = record.runwayChange;
+    if (!change || change.state !== 'PENDING_INSPECTION') return;
+    if (!change.pendingInspection.includes(runwayId)) return;
+    change.pendingInspection = change.pendingInspection.filter(id => id !== runwayId);
+    if (change.pendingInspection.length === 0) {
+      transition.runwayChangeCompleted = deepClone(change);
+      record.runwayChange = null;
+    }
+  }
+
+  // ── rule 3: the runway change ──────────────────────────────────────────
+  //
+  // Its own machine on the field-state record. board-store.js's coordination
+  // primitives cannot carry it: they are attached to a Strip, cross-Facility
+  // by construction (TWR, OPS and APP are all INCIRLIK), and one proposer /
+  // one responder with no way to say "OPS AND APP".
+  //
+  //   null ─Propose(TWR)→ PROPOSED ─(every acknowledger acked, any order)→ ACKNOWLEDGED
+  //        ─Begin(TWR)→ IN_PROGRESS ─Complete(TWR)→ PENDING_INSPECTION
+  //        ─(OPS CompleteInspection on each runway in the set)→ null
+  //   PROPOSED/ACKNOWLEDGED ─Reject(an acknowledger) | Withdraw(TWR)→ REJECTED (terminal)
+  //
+  // Acknowledgement is coordination, not permission (decisions.md H20): tower
+  // alone decides, so an acknowledger nobody holds when the change is proposed
+  // is SKIPPED and recorded as such, never a deadlock — and never answered from
+  // another Facility (S-R2-15). A controller holding TWR and every acknowledger
+  // self-coordinates in ONE input (SelfCoordinateRunwayChange, S-Q24).
+
+  _endOfRunway(ctx, end) {
+    return ctx.inventory.runways.find(d => (d.ends || []).includes(end)) || null;
+  }
+
+  _proposeChange(ctx, { selfCoordinate }) {
+    const { record, op, actingPositionId, by } = ctx;
+    if (isRunwayChangeOpen(record.runwayChange)) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `a runway change to ${record.runwayChange.toRunwayId} is already ${record.runwayChange.state}` };
+    }
+    const to = op.toRunwayId;
+    const def = typeof to === 'string' ? this._endOfRunway(ctx, to) : null;
+    if (!def) return { ok: false, reason: 'NOT_FOUND', detail: `no runway ${to} at ${record.facilityId}` };
+    if (to === record.activeRunway) return { ok: false, reason: 'VALIDATION_ERROR', detail: `runway ${to} is already the active runway` };
+    const target = this._runway(record, def.runwayId);
+    if (target.status === 'CLOSED') return { ok: false, reason: 'VALIDATION_ERROR', detail: `runway ${def.runwayId} is closed` };
+
+    const now = this._clock.now();
+    // The acknowledger set is FROZEN here, from config and from who is
+    // actually at the field right now.
+    const acknowledgers = [...(ctx.inventory.runwayChangeAcknowledgers || [])];
+    const acks = {};
+    for (const positionId of acknowledgers) {
+      acks[positionId] = this._isOccupied(record.facilityId, positionId)
+        ? null
+        : { skipped: true, reason: 'UNMANNED', at: now };
+    }
+    const required = acknowledgers.filter(p => acks[p] === null);
+
+    if (selfCoordinate) {
+      // One input, legal only when this controller is Primary on every
+      // acknowledger that is manned (TWR is checked at the wire).
+      const elsewhere = required.filter(p => this._primaryOf(record.facilityId, p) !== by);
+      if (elsewhere.length) {
+        return { ok: false, reason: 'PERMISSION_DENIED', detail: `a self-coordinated runway change needs you Primary at ${elsewhere.join(' and ')} — ask for the acknowledgement instead` };
+      }
+      for (const p of required) acks[p] = { by: by || null, positionId: p, at: now, selfCoordinated: true };
+    }
+
+    const previous = record.runwayChange; // a REJECTED one, if any — kept in the history below
+    record.runwayChange = {
+      changeId: crypto.randomUUID(),
+      state: required.length === 0 || selfCoordinate ? 'ACKNOWLEDGED' : 'PROPOSED',
+      fromRunwayId: record.activeRunway || null,
+      toRunwayId: to,
+      proposedBy: by || null, proposedPositionId: actingPositionId, proposedAt: now,
+      note: this._note(op.note),
+      acknowledgers,
+      acks,
+      selfCoordinated: !!selfCoordinate,
+      rejected: null,
+      beganAt: null, beganBy: null, completedAt: null, completedBy: null,
+      pendingInspection: [],
+    };
+    const skipped = acknowledgers.filter(p => acks[p] && acks[p].skipped);
+    this._touch(record, by, {
+      op: op.kind, positionId: actingPositionId, from: record.runwayChange.fromRunwayId, to,
+      state: record.runwayChange.state, changeId: record.runwayChange.changeId,
+      ...(skipped.length ? { skippedAcknowledgers: skipped } : {}),
+      ...(selfCoordinate ? { selfCoordinated: true, acknowledgedAs: required } : {}),
+      ...(previous ? { replaced: previous } : {}),
+    });
+    return { ok: true };
+  }
+
+  _ackChange(ctx) {
+    const { record, actingPositionId, by } = ctx;
+    const change = record.runwayChange;
+    if (!change || change.state !== 'PROPOSED') {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: change ? `the runway change is ${change.state}, not awaiting acknowledgement` : 'no runway change is proposed' };
+    }
+    if (!change.acknowledgers.includes(actingPositionId)) {
+      return { ok: false, reason: 'PERMISSION_DENIED', detail: `${actingPositionId} is not an acknowledger of this runway change` };
+    }
+    const existing = change.acks[actingPositionId];
+    if (existing) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: existing.skipped ? `${actingPositionId} was unmanned when the change was proposed and was skipped` : `${actingPositionId} has already acknowledged` };
+    }
+    // A boundary event between two Positions one controller holds is a
+    // self-coordination (§4.8.3): allowed, and recorded as such.
+    const selfCoordinated = !!change.proposedBy && change.proposedBy === (by || null);
+    change.acks[actingPositionId] = { by: by || null, positionId: actingPositionId, at: this._clock.now(), selfCoordinated };
+    const complete = change.acknowledgers.every(p => change.acks[p]);
+    if (complete) change.state = 'ACKNOWLEDGED';
+    this._touch(record, by, { op: 'AckRunwayChange', positionId: actingPositionId, changeId: change.changeId, selfCoordinated, state: change.state });
+    return { ok: true };
+  }
+
+  _endChange(ctx, cause) {
+    const { record, op, actingPositionId, by } = ctx;
+    const change = record.runwayChange;
+    if (!change || (change.state !== 'PROPOSED' && change.state !== 'ACKNOWLEDGED')) {
+      const what = cause === 'WITHDRAWN' ? 'withdrawn' : 'rejected';
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: change && isRunwayChangeOpen(change) ? `a runway change that is ${change.state} can no longer be ${what} — it is under way` : `no runway change to be ${what}` };
+    }
+    if (cause === 'REJECTED' && !change.acknowledgers.includes(actingPositionId)) {
+      return { ok: false, reason: 'PERMISSION_DENIED', detail: `${actingPositionId} is not an acknowledger of this runway change` };
+    }
+    change.state = 'REJECTED';
+    change.rejected = { by: by || null, positionId: actingPositionId, at: this._clock.now(), cause, note: this._note(op.note) };
+    this._touch(record, by, { op: op.kind, positionId: actingPositionId, changeId: change.changeId, cause, note: change.rejected.note });
+    return { ok: true };
+  }
+
+  _beginChange(ctx) {
+    const { record, actingPositionId, by } = ctx;
+    const change = record.runwayChange;
+    // §13: "A runway change cannot be initiated without OPS and APP
+    // acknowledgement." This single guard is that sentence.
+    if (!(change && change.state === 'ACKNOWLEDGED')) {
+      return {
+        ok: false, reason: 'VALIDATION_ERROR',
+        detail: change ? `the runway change is ${change.state} — it can begin only once acknowledged` : 'no runway change has been proposed',
+      };
+    }
+    change.state = 'IN_PROGRESS';
+    change.beganAt = this._clock.now();
+    change.beganBy = by || null;
+    this._touch(record, by, { op: 'BeginRunwayChange', positionId: actingPositionId, changeId: change.changeId });
+    return { ok: true };
+  }
+
+  _completeChange(ctx) {
+    const { record, actingPositionId, by } = ctx;
+    const change = record.runwayChange;
+    if (!change || change.state !== 'IN_PROGRESS') {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: change ? `the runway change is ${change.state}, not in progress` : 'no runway change is in progress' };
+    }
+    // The new direction is inspected before it is used (decisions.md Q29):
+    // the pavement it is on, and the old one if it is a different surface.
+    const toDef = this._endOfRunway(ctx, change.toRunwayId);
+    const fromDef = change.fromRunwayId ? this._endOfRunway(ctx, change.fromRunwayId) : null;
+    const set = [toDef, fromDef].filter(Boolean).map(d => d.runwayId).filter((id, i, a) => a.indexOf(id) === i);
+    for (const runwayId of set) {
+      const rwy = this._runway(record, runwayId);
+      if (rwy.status === 'SUSPENDED_BARRIER_CHANGE' || rwy.status === 'CLOSED') {
+        return { ok: false, reason: 'VALIDATION_ERROR', detail: `runway ${runwayId} is ${rwy.status} — finish that before completing the runway change` };
+      }
+    }
+    const now = this._clock.now();
+    const moved = [];
+    for (const runwayId of set) {
+      const rwy = this._runway(record, runwayId);
+      if (rwy.status === 'OPEN') {
+        rwy.status = 'SUSPENDED_INSPECTION';
+        rwy.suspension = { kind: 'RUNWAY_CHANGE', since: now, by: by || null, positionId: actingPositionId, note: null, changeId: change.changeId };
+        moved.push(runwayId);
+      }
+      // Already SUSPENDED_INSPECTION (a barrier change awaiting its
+      // inspection): the one inspection will cover both.
+    }
+    const from = record.activeRunway;
+    record.activeRunway = change.toRunwayId;
+    record.activeRunwaySource = { kind: 'RUNWAY_CHANGE', changeId: change.changeId, at: now };
+    change.state = 'PENDING_INSPECTION';
+    change.completedAt = now;
+    change.completedBy = by || null;
+    change.pendingInspection = set;
+    this._touch(record, by, {
+      op: 'CompleteRunwayChange', positionId: actingPositionId, changeId: change.changeId,
+      from, to: change.toRunwayId, suspendedForInspection: moved, pendingInspection: set,
+    });
+    return { ok: true };
+  }
 
   // ── requests to tower (decisions.md H18) ───────────────────────────────
 

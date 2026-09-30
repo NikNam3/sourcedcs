@@ -726,3 +726,269 @@ test('the inhibit follows the rack a Strip is in, at a field with two independen
   assert.deepEqual(taxi('rwy-23'), { inhibited: 'runway 05/23 closed' });
   assert.deepEqual(taxi(undefined), { inhibited: 'runway 05/23 closed' }); // filed 8A = 05
 });
+
+// ── step 5 — rule 3: the runway change and its acknowledgements ─────────────
+
+/** A store with every Position manned and a known active end (05). */
+function manned({ occupied = ['OPS', 'CD', 'GND', 'TWR', 'APP'], primaryOf = (f, p) => `c-${p}`, fieldStateOverride } = {}) {
+  const r = freshStore({ fieldStateOverride, deps: { isOccupied: (f, p) => f === 'INCIRLIK' && occupied.includes(p), primaryOf } });
+  r.store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, missionKey: 'm' });
+  return r;
+}
+const change = (store) => store.getFieldState('INCIRLIK').runwayChange;
+
+test('BeginRunwayChange is refused in every state but ACKNOWLEDGED', () => {
+  const { store } = manned();
+  const begin = () => op(store, 'TWR', 'BeginRunwayChange');
+  // null — no change at all
+  assert.equal(begin().ok, false);
+  assert.equal(change(store), null);
+  // PROPOSED, no acks
+  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  assert.equal(change(store).state, 'PROPOSED');
+  assert.equal(begin().ok, false);
+  // PROPOSED, one ack
+  mustOp(store, 'APP', 'AckRunwayChange');
+  assert.equal(change(store).state, 'PROPOSED');
+  assert.equal(begin().ok, false);
+  // ACKNOWLEDGED — the only state it goes from
+  mustOp(store, 'OPS', 'AckRunwayChange');
+  assert.equal(change(store).state, 'ACKNOWLEDGED');
+  mustOp(store, 'TWR', 'BeginRunwayChange');
+  // IN_PROGRESS
+  assert.equal(change(store).state, 'IN_PROGRESS');
+  assert.equal(begin().ok, false);
+  // PENDING_INSPECTION
+  mustOp(store, 'TWR', 'CompleteRunwayChange');
+  assert.equal(change(store).state, 'PENDING_INSPECTION');
+  assert.equal(begin().ok, false);
+  mustOp(store, 'OPS', 'CompleteInspection', { runwayId: '05/23' });
+  // REJECTED
+  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '05' });
+  mustOp(store, 'APP', 'RejectRunwayChange', { note: 'recovery inbound' });
+  assert.equal(change(store).state, 'REJECTED');
+  assert.equal(begin().ok, false);
+});
+
+test('acknowledgement order is irrelevant: APP then OPS, and OPS then APP, both reach ACKNOWLEDGED', () => {
+  for (const order of [['APP', 'OPS'], ['OPS', 'APP']]) {
+    const { store } = manned();
+    mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+    mustOp(store, order[0], 'AckRunwayChange');
+    assert.equal(change(store).state, 'PROPOSED');
+    mustOp(store, order[1], 'AckRunwayChange');
+    assert.equal(change(store).state, 'ACKNOWLEDGED', order.join(' then '));
+  }
+});
+
+test('a second ack from the same acknowledger is refused, not double-counted', () => {
+  const { store } = manned();
+  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  mustOp(store, 'APP', 'AckRunwayChange');
+  const again = op(store, 'APP', 'AckRunwayChange');
+  assert.equal(again.ok, false);
+  assert.match(again.detail, /already acknowledged/);
+  assert.equal(change(store).state, 'PROPOSED');
+});
+
+test('an ack sent as TWR never counts as an acknowledger (the D21 guard at the store)', () => {
+  const { store } = manned();
+  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  assert.equal(op(store, 'TWR', 'AckRunwayChange').reason, 'PERMISSION_DENIED');
+  assert.deepEqual(change(store).acks, { OPS: null, APP: null });
+});
+
+test("an acknowledger set of ['OPS'] (a Facility without APP) cannot deadlock", () => {
+  const inv = structuredClone(INVENTORY);
+  inv.runwayChangeAcknowledgers = ['OPS'];
+  const { store } = manned({ fieldStateOverride: inv });
+  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  mustOp(store, 'OPS', 'AckRunwayChange');
+  assert.equal(change(store).state, 'ACKNOWLEDGED');
+  // APP was never asked, so it cannot answer either.
+  assert.equal(op(store, 'APP', 'AckRunwayChange').reason, 'VALIDATION_ERROR');
+});
+
+test('an acknowledger nobody holds is skipped and recorded, never a deadlock (decisions.md H20)', () => {
+  const { store, log } = manned({ occupied: ['OPS', 'TWR'] });
+  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  const ch = change(store);
+  assert.equal(ch.acks.APP.skipped, true);
+  assert.equal(ch.acks.APP.reason, 'UNMANNED');
+  assert.equal(ch.state, 'PROPOSED');
+  assert.deepEqual(store.getFieldState('INCIRLIK').transitions.at(-1).skippedAcknowledgers, ['APP']);
+  assert.equal(log().at(-1).after.runwayChange.acks.APP.skipped, true);
+  mustOp(store, 'OPS', 'AckRunwayChange');
+  assert.equal(change(store).state, 'ACKNOWLEDGED');
+  // Nobody at all but tower: straight to ACKNOWLEDGED, both skips on record.
+  const { store: alone } = manned({ occupied: ['TWR'] });
+  mustOp(alone, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  assert.equal(change(alone).state, 'ACKNOWLEDGED');
+  assert.deepEqual(Object.keys(change(alone).acks).filter(p => change(alone).acks[p].skipped), ['OPS', 'APP']);
+});
+
+test('the acknowledger set is frozen at propose time', () => {
+  let occupied = ['OPS', 'TWR'];
+  const r = freshStore({ deps: { isOccupied: (f, p) => occupied.includes(p) } });
+  r.store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, missionKey: 'm' });
+  mustOp(r.store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  occupied = ['OPS', 'TWR', 'APP']; // APP arrives after the proposal
+  assert.match(op(r.store, 'APP', 'AckRunwayChange').detail, /skipped/);
+  mustOp(r.store, 'OPS', 'AckRunwayChange');
+  assert.equal(change(r.store).state, 'ACKNOWLEDGED');
+  assert.deepEqual(change(r.store).acknowledgers, ['OPS', 'APP']);
+});
+
+test('RejectRunwayChange ends the change REJECTED; a new proposal may replace it', () => {
+  const { store } = manned();
+  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  mustOp(store, 'OPS', 'AckRunwayChange');
+  const fsI = mustOp(store, 'APP', 'RejectRunwayChange', { note: 'recovery inbound on 05' });
+  assert.equal(fsI.runwayChange.state, 'REJECTED');
+  assert.deepEqual([fsI.runwayChange.rejected.positionId, fsI.runwayChange.rejected.cause, fsI.runwayChange.rejected.note], ['APP', 'REJECTED', 'recovery inbound on 05']);
+  assert.equal(fsI.runwayChangeInProgress, false);
+  const oldId = fsI.runwayChange.changeId;
+  const next = mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  assert.equal(next.runwayChange.state, 'PROPOSED');
+  assert.notEqual(next.runwayChange.changeId, oldId);
+  assert.equal(next.transitions.at(-1).replaced.changeId, oldId);
+});
+
+test('WithdrawRunwayChange lets TWR retract before Begin, recorded as WITHDRAWN — and not after', () => {
+  const { store } = manned();
+  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  assert.equal(op(store, 'OPS', 'WithdrawRunwayChange').reason, 'PERMISSION_DENIED');
+  const fsI = mustOp(store, 'TWR', 'WithdrawRunwayChange', { note: 'wind backed' });
+  assert.deepEqual([fsI.runwayChange.state, fsI.runwayChange.rejected.cause], ['REJECTED', 'WITHDRAWN']);
+  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  mustOp(store, 'OPS', 'AckRunwayChange');
+  mustOp(store, 'APP', 'AckRunwayChange');
+  mustOp(store, 'TWR', 'BeginRunwayChange');
+  assert.match(op(store, 'TWR', 'WithdrawRunwayChange').detail, /under way/);
+  assert.match(op(store, 'APP', 'RejectRunwayChange').detail, /under way/);
+});
+
+test('a second proposal while one is open is refused; a proposal for the active end, a closed runway or an unknown end is refused', () => {
+  const { store } = manned();
+  assert.match(op(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '05' }).detail, /already the active runway/);
+  assert.equal(op(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '17' }).reason, 'NOT_FOUND');
+  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  assert.match(op(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' }).detail, /already PROPOSED/);
+  mustOp(store, 'TWR', 'WithdrawRunwayChange');
+  mustOp(store, 'TWR', 'CloseRunway', { runwayId: '05/23' });
+  assert.match(op(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' }).detail, /closed/);
+});
+
+test('CompleteRunwayChange sets the active runway, suspends the pavement for inspection, and it inhibits until inspected', () => {
+  const { store } = manned();
+  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  mustOp(store, 'OPS', 'AckRunwayChange');
+  mustOp(store, 'APP', 'AckRunwayChange');
+  mustOp(store, 'TWR', 'BeginRunwayChange');
+  // IN_PROGRESS changes no runway status (decisions.md Q29).
+  assert.equal(rwy(store.getFieldState('INCIRLIK')).status, 'OPEN');
+  const fsI = mustOp(store, 'TWR', 'CompleteRunwayChange');
+  assert.equal(fsI.activeRunway, '23');
+  assert.equal(fsI.activeRunwaySource.kind, 'RUNWAY_CHANGE');
+  assert.equal(rwy(fsI).status, 'SUSPENDED_INSPECTION');
+  assert.equal(rwy(fsI).suspension.kind, 'RUNWAY_CHANGE');
+  assert.deepEqual(fsI.runwayChange.pendingInspection, ['05/23']);
+  assert.equal(runwayInhibitFor(departure({ rackId: 'rwy-23' }), fdrFiled('23'), store.statusView('INCIRLIK')), 'runway 05/23 suspended — awaiting inspection');
+});
+
+test('the change record clears only when every runway in pendingInspection has been inspected', () => {
+  // Two surfaces: a change from 05 to 17 has to inspect both.
+  const inv = structuredClone(INVENTORY);
+  inv.runways.push({ runwayId: '17/35', ends: ['17', '35'], endHeadingsTrue: { '17': 175, '35': 355 }, arrestingGear: [] });
+  const { store } = manned({ fieldStateOverride: inv });
+  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '17' });
+  mustOp(store, 'OPS', 'AckRunwayChange');
+  mustOp(store, 'APP', 'AckRunwayChange');
+  mustOp(store, 'TWR', 'BeginRunwayChange');
+  let fsI = mustOp(store, 'TWR', 'CompleteRunwayChange');
+  assert.deepEqual(fsI.runwayChange.pendingInspection.sort(), ['05/23', '17/35']);
+  fsI = mustOp(store, 'OPS', 'CompleteInspection', { runwayId: '17/35' });
+  assert.deepEqual(fsI.runwayChange.pendingInspection, ['05/23']);
+  assert.equal(fsI.runwayChangeInProgress, true);
+  fsI = mustOp(store, 'OPS', 'CompleteInspection', { runwayId: '05/23' });
+  assert.equal(fsI.runwayChange, null);
+  assert.equal(fsI.runwayChangeInProgress, false);
+  assert.equal(fsI.transitions.at(-1).runwayChangeCompleted.toRunwayId, '17');
+  assert.equal(fsI.activeRunway, '17');
+});
+
+test('CompleteRunwayChange is refused while a runway in the set is mid barrier change', () => {
+  const { store } = manned();
+  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  mustOp(store, 'OPS', 'AckRunwayChange');
+  mustOp(store, 'APP', 'AckRunwayChange');
+  mustOp(store, 'TWR', 'BeginRunwayChange');
+  mustOp(store, 'TWR', 'BeginBarrierChange', { runwayId: '05/23' });
+  const r = op(store, 'TWR', 'CompleteRunwayChange');
+  assert.match(r.detail, /runway 05\/23 is SUSPENDED_BARRIER_CHANGE/);
+  assert.equal(r.fieldState.activeRunway, '05');
+  // Once the gear work is done and awaiting its inspection, the change can
+  // complete, and one inspection signs off both.
+  mustOp(store, 'OPS', 'CompleteBarrierChange', { runwayId: '05/23' });
+  let fsI = mustOp(store, 'TWR', 'CompleteRunwayChange');
+  assert.equal(rwy(fsI).suspension.kind, 'BARRIER_CHANGE');
+  fsI = mustOp(store, 'OPS', 'CompleteInspection', { runwayId: '05/23' });
+  assert.equal(rwy(fsI).status, 'OPEN');
+  assert.equal(fsI.runwayChange, null);
+});
+
+test('runwayChangeInProgress is true exactly in IN_PROGRESS and PENDING_INSPECTION', () => {
+  const { store } = manned();
+  const inProgress = () => store.getFieldState('INCIRLIK').runwayChangeInProgress;
+  assert.equal(inProgress(), false);
+  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  assert.equal(inProgress(), false);
+  mustOp(store, 'OPS', 'AckRunwayChange');
+  mustOp(store, 'APP', 'AckRunwayChange');
+  assert.equal(inProgress(), false);
+  mustOp(store, 'TWR', 'BeginRunwayChange');
+  assert.equal(inProgress(), true);
+  mustOp(store, 'TWR', 'CompleteRunwayChange');
+  assert.equal(inProgress(), true);
+  mustOp(store, 'OPS', 'CompleteInspection', { runwayId: '05/23' });
+  assert.equal(inProgress(), false);
+});
+
+test('SelfCoordinateRunwayChange: one input from a controller Primary on TWR and every manned acknowledger (decisions.md S-Q24)', () => {
+  const solo = (f, p) => 'c-solo';
+  const { store } = manned({ primaryOf: solo });
+  const fsI = mustOp(store, 'TWR', 'SelfCoordinateRunwayChange', { toRunwayId: '23' }, { by: 'c-solo' });
+  assert.equal(fsI.runwayChange.state, 'ACKNOWLEDGED');
+  assert.equal(fsI.runwayChange.selfCoordinated, true);
+  for (const p of ['OPS', 'APP']) assert.deepEqual([fsI.runwayChange.acks[p].positionId, fsI.runwayChange.acks[p].selfCoordinated, fsI.runwayChange.acks[p].by], [p, true, 'c-solo']);
+  assert.deepEqual(fsI.transitions.at(-1).acknowledgedAs, ['OPS', 'APP']);
+  assert.equal(fsI.rev, 2); // wind + this: one input, one rev
+  // Not Primary on APP: refused, naming it.
+  const { store: s2 } = manned({ primaryOf: (f, p) => (p === 'APP' ? 'c-someone-else' : 'c-solo') });
+  const r = op(s2, 'TWR', 'SelfCoordinateRunwayChange', { toRunwayId: '23' }, { by: 'c-solo' });
+  assert.equal(r.reason, 'PERMISSION_DENIED');
+  assert.match(r.detail, /Primary at APP/);
+  assert.equal(r.fieldState.runwayChange, null);
+});
+
+test('the wind never moves the active runway while a change is open', () => {
+  const { store } = manned();
+  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  const r = store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 240, missionKey: 'next-mission' });
+  assert.equal(r.changed, false);
+  assert.equal(store.getFieldState('INCIRLIK').activeRunway, '05');
+});
+
+test('a runway change survives a restart mid-way (PROPOSED with one ack comes back PROPOSED with one ack)', () => {
+  const { store } = manned();
+  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  mustOp(store, 'APP', 'AckRunwayChange');
+  const { store: reborn } = manned();
+  reborn.restore(JSON.parse(JSON.stringify(store.snapshot())));
+  const ch = change(reborn);
+  assert.equal(ch.state, 'PROPOSED');
+  assert.equal(ch.acks.APP.positionId, 'APP');
+  assert.equal(ch.acks.OPS, null);
+  mustOp(reborn, 'OPS', 'AckRunwayChange');
+  assert.equal(change(reborn).state, 'ACKNOWLEDGED');
+});

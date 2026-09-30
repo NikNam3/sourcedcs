@@ -324,3 +324,175 @@ test('sortie 14: a closed runway holds its traffic too, and a Strip with nothing
   mustFieldStateAct(efsp, c.TWR, 'TWR', { kind: 'OpenRunway', runwayId: RWY });
   assert.equal(efsp.boardStore.nlaStatusFor(strip(taxi)).toState, 'RUNWAY_QUEUE');
 });
+
+// ── rule 3: the runway change ──────────────────────────────────────────────
+
+const runwayChange = (e = efsp) => fieldState(e).runwayChange;
+
+/** Walks a change through to the end, inspection included — used to put the field back. */
+function completeChange(e = efsp, crewOf = c) {
+  mustFieldStateAct(e, crewOf.TWR, 'TWR', { kind: 'BeginRunwayChange' });
+  mustFieldStateAct(e, crewOf.TWR, 'TWR', { kind: 'CompleteRunwayChange' });
+  mustFieldStateAct(e, crewOf.OPS, 'OPS', { kind: 'CompleteInspection', runwayId: RWY });
+  assert.equal(runwayChange(e), null);
+}
+
+test('sortie 2: A runway change cannot be initiated without `OPS` and `APP` acknowledgement.', () => {
+  assert.equal(fieldState().activeRunway, '05');
+  const walk = (to, order) => {
+    mustFieldStateAct(efsp, c.TWR, 'TWR', { kind: 'ProposeRunwayChange', toRunwayId: to, note: 'wind veered' });
+    // Neither has acknowledged: tower cannot begin.
+    let begin = fieldStateAct(efsp, c.TWR, 'TWR', { kind: 'BeginRunwayChange' });
+    assert.equal(begin.ok, false);
+    assert.equal(begin.fieldState.runwayChange.state, 'PROPOSED');
+    // Tower cannot acknowledge its own change on anyone's behalf.
+    assert.equal(fieldStateAct(efsp, c.TWR, 'TWR', { kind: 'AckRunwayChange' }).reason, 'PERMISSION_DENIED');
+    // One of the two: still not.
+    mustFieldStateAct(efsp, c[order[0]], order[0], { kind: 'AckRunwayChange' });
+    begin = fieldStateAct(efsp, c.TWR, 'TWR', { kind: 'BeginRunwayChange' });
+    assert.equal(begin.ok, false);
+    assert.match(begin.detail, /can begin only once acknowledged/);
+    // Both: now it can.
+    mustFieldStateAct(efsp, c[order[1]], order[1], { kind: 'AckRunwayChange' });
+    assert.equal(runwayChange().state, 'ACKNOWLEDGED');
+    assert.equal(runwayChange().acks.OPS.positionId, 'OPS');
+    assert.equal(runwayChange().acks.APP.positionId, 'APP');
+    completeChange();
+    assert.equal(fieldState().activeRunway, to);
+  };
+  walk('23', ['APP', 'OPS']);
+  walk('05', ['OPS', 'APP']); // the mirror order, and back where we started
+  // Every refused BeginRunwayChange is in the Mutation log.
+  const refused = mutations().filter(m => m.op === 'BeginRunwayChange' && !m.ok);
+  assert.ok(refused.length >= 4);
+  assert.ok(refused.every(m => m.fieldStateFacilityId === 'INCIRLIK' && m.actingPositionId === 'TWR'));
+});
+
+test('sortie 6: a runway change completes, the new runway is inspected, and only then released', async () => {
+  // A departure already queued for 05 before the change, and one taxiing with
+  // nothing filed.
+  const queuedFor05 = departure('RUNWAY_QUEUE', { runway: '05', rackId: 'rwy-05' });
+  const taxiing = departure('TAXI', { runway: null });
+  mustFieldStateAct(efsp, c.TWR, 'TWR', { kind: 'ProposeRunwayChange', toRunwayId: '23' });
+  mustFieldStateAct(efsp, c.OPS, 'OPS', { kind: 'AckRunwayChange' });
+  mustFieldStateAct(efsp, c.APP, 'APP', { kind: 'AckRunwayChange' });
+  mustFieldStateAct(efsp, c.TWR, 'TWR', { kind: 'BeginRunwayChange' });
+  // In progress: nothing is suspended yet (decisions.md Q29).
+  assert.equal(runway().status, 'OPEN');
+  assert.equal(fieldState().runwayChangeInProgress, true);
+  const done = mustFieldStateAct(efsp, c.TWR, 'TWR', { kind: 'CompleteRunwayChange' });
+  assert.equal(done.activeRunway, '23');
+  assert.equal(done.runwayChange.state, 'PENDING_INSPECTION');
+  // The pavement waits for its inspection, and holds its traffic meanwhile.
+  assert.equal(runway().status, 'SUSPENDED_INSPECTION');
+  assert.equal(efsp.boardStore.nlaStatusFor(strip(queuedFor05)).inhibited, 'runway 05/23 suspended — awaiting inspection');
+  assert.equal(act(efsp, c.GND, 'GND', strip(taxiing), { kind: 'InvokeNla' }).detail, 'runway 05/23 suspended — awaiting inspection');
+  // Only OPS may sign it off.
+  assert.equal(fieldStateAct(efsp, c.TWR, 'TWR', { kind: 'CompleteInspection', runwayId: RWY }).reason, 'PERMISSION_DENIED');
+  const inspected = mustFieldStateAct(efsp, c.OPS, 'OPS', { kind: 'CompleteInspection', runwayId: RWY });
+  assert.equal(inspected.runwayChange, null);
+  assert.equal(inspected.runwayChangeInProgress, false);
+  assert.equal(inspected.activeRunway, '23');
+  assert.equal(inspected.transitions.at(-1).runwayChangeCompleted.toRunwayId, '23');
+  // Released: the departure with nothing filed is queued for the ACTIVE end,
+  // not the Bay's first rack (decisions.md Q26).
+  const queued = await advance(efsp, c.GND, 'GND', strip(taxiing));
+  assert.equal(queued.state, 'RUNWAY_QUEUE');
+  assert.equal(queued.rackId, 'rwy-23');
+  // Put the field back to 05 for the sorties after this one.
+  mustFieldStateAct(efsp, c.TWR, 'TWR', { kind: 'ProposeRunwayChange', toRunwayId: '05' });
+  mustFieldStateAct(efsp, c.OPS, 'OPS', { kind: 'AckRunwayChange' });
+  mustFieldStateAct(efsp, c.APP, 'APP', { kind: 'AckRunwayChange' });
+  completeChange();
+});
+
+test("sortie 7: APP rejects the runway change, and tower's next proposal starts clean", () => {
+  mustFieldStateAct(efsp, c.TWR, 'TWR', { kind: 'ProposeRunwayChange', toRunwayId: '23' });
+  mustFieldStateAct(efsp, c.OPS, 'OPS', { kind: 'AckRunwayChange' });
+  const rejected = mustFieldStateAct(efsp, c.APP, 'APP', { kind: 'RejectRunwayChange', note: 'recovery of four inbound on 05' });
+  assert.deepEqual([rejected.runwayChange.state, rejected.runwayChange.rejected.positionId], ['REJECTED', 'APP']);
+  assert.equal(fieldStateAct(efsp, c.TWR, 'TWR', { kind: 'BeginRunwayChange' }).ok, false);
+  const oldId = rejected.runwayChange.changeId;
+  const again = mustFieldStateAct(efsp, c.TWR, 'TWR', { kind: 'ProposeRunwayChange', toRunwayId: '23' });
+  assert.notEqual(again.runwayChange.changeId, oldId);
+  assert.deepEqual(again.runwayChange.acks, { OPS: null, APP: null }); // OPS's earlier ack does not carry over
+  mustFieldStateAct(efsp, c.TWR, 'TWR', { kind: 'WithdrawRunwayChange' });
+});
+
+test('sortie 8: tower withdraws a proposal before it is begun', () => {
+  mustFieldStateAct(efsp, c.TWR, 'TWR', { kind: 'ProposeRunwayChange', toRunwayId: '23' });
+  mustFieldStateAct(efsp, c.APP, 'APP', { kind: 'AckRunwayChange' });
+  const withdrawn = mustFieldStateAct(efsp, c.TWR, 'TWR', { kind: 'WithdrawRunwayChange', note: 'wind backed' });
+  assert.deepEqual([withdrawn.runwayChange.state, withdrawn.runwayChange.rejected.cause, withdrawn.runwayChange.rejected.note], ['REJECTED', 'WITHDRAWN', 'wind backed']);
+  assert.equal(withdrawn.activeRunway, '05');
+  assert.equal(runway().status, 'OPEN');
+});
+
+test('sortie 12: a restart mid runway-change keeps the acknowledgements already given', () => {
+  mustFieldStateAct(efsp, c.TWR, 'TWR', { kind: 'ProposeRunwayChange', toRunwayId: '23' });
+  mustFieldStateAct(efsp, c.APP, 'APP', { kind: 'AckRunwayChange' });
+  efsp.persist();
+  const reborn = createEfsp();
+  const rc = crew(reborn, ATC);
+  const ch = runwayChange(reborn);
+  assert.equal(ch.state, 'PROPOSED');
+  assert.equal(ch.acks.APP.by, c.APP.session.controllerId);
+  assert.equal(ch.acks.OPS, null);
+  assert.equal(fieldStateAct(reborn, rc.TWR, 'TWR', { kind: 'BeginRunwayChange' }).ok, false);
+  mustFieldStateAct(reborn, rc.OPS, 'OPS', { kind: 'AckRunwayChange' });
+  assert.equal(runwayChange(reborn).state, 'ACKNOWLEDGED');
+  mustFieldStateAct(reborn, rc.TWR, 'TWR', { kind: 'WithdrawRunwayChange' });
+  reborn.persist();
+  efsp = reborn;
+  c = rc;
+});
+
+test('sortie 13: the D21 twin — an ack sent as TWR never counts as APP’s, and one person holding every Position self-coordinates in one input', () => {
+  // One controller takes TWR and APP (the others give them up first, or the
+  // newcomer would only be an Observer, §4.8.2).
+  hold(efsp, c.TWR.session, 'INCIRLIK', []);
+  hold(efsp, c.APP.session, 'INCIRLIK', []);
+  const dual = { session: { controllerId: 'c-dual', who: 'dual' }, facilityId: 'INCIRLIK' };
+  hold(efsp, dual.session, 'INCIRLIK', ['TWR', 'APP']);
+
+  mustFieldStateAct(efsp, dual, 'TWR', { kind: 'ProposeRunwayChange', toRunwayId: '23' });
+  // Acting TWR, the acknowledgement is refused — never counted as APP's.
+  assert.equal(fieldStateAct(efsp, dual, 'TWR', { kind: 'AckRunwayChange' }).reason, 'PERMISSION_DENIED');
+  // Acting APP it counts, recorded as self-coordinated (§4.8.3).
+  mustFieldStateAct(efsp, dual, 'APP', { kind: 'AckRunwayChange' });
+  assert.equal(runwayChange().acks.APP.selfCoordinated, true);
+  // OPS is somebody else, and has not answered: tower still cannot begin.
+  assert.equal(fieldStateAct(efsp, dual, 'TWR', { kind: 'BeginRunwayChange' }).ok, false);
+  // Nor can the dual controller skip OPS with the one-input form.
+  mustFieldStateAct(efsp, dual, 'TWR', { kind: 'WithdrawRunwayChange' });
+  const notOps = fieldStateAct(efsp, dual, 'TWR', { kind: 'SelfCoordinateRunwayChange', toRunwayId: '23' });
+  assert.equal(notOps.reason, 'PERMISSION_DENIED');
+  assert.match(notOps.detail, /Primary at OPS/);
+  mustFieldStateAct(efsp, dual, 'TWR', { kind: 'ProposeRunwayChange', toRunwayId: '23' });
+  mustFieldStateAct(efsp, dual, 'APP', { kind: 'AckRunwayChange' });
+  mustFieldStateAct(efsp, c.OPS, 'OPS', { kind: 'AckRunwayChange' });
+  assert.equal(fieldStateAct(efsp, dual, 'TWR', { kind: 'BeginRunwayChange' }).ok, true);
+  mustFieldStateAct(efsp, dual, 'TWR', { kind: 'CompleteRunwayChange' });
+  mustFieldStateAct(efsp, c.OPS, 'OPS', { kind: 'CompleteInspection', runwayId: RWY });
+  assert.equal(fieldState().activeRunway, '23');
+
+  // Low manning (H12): one person holds OPS, TWR and APP. One input takes the
+  // change straight to ACKNOWLEDGED, naming each Position.
+  hold(efsp, c.OPS.session, 'INCIRLIK', []);
+  hold(efsp, dual.session, 'INCIRLIK', ['OPS', 'TWR', 'APP']);
+  const solo = mustFieldStateAct(efsp, dual, 'TWR', { kind: 'SelfCoordinateRunwayChange', toRunwayId: '05', note: 'back to 05' });
+  assert.equal(solo.runwayChange.state, 'ACKNOWLEDGED');
+  assert.deepEqual(Object.values(solo.runwayChange.acks).map(a => [a.positionId, a.selfCoordinated]), [['OPS', true], ['APP', true]]);
+  const entry = mutations().at(-1);
+  assert.deepEqual([entry.op, entry.ok, entry.actingPositionId], ['SelfCoordinateRunwayChange', true, 'TWR']);
+  mustFieldStateAct(efsp, dual, 'TWR', { kind: 'BeginRunwayChange' });
+  mustFieldStateAct(efsp, dual, 'TWR', { kind: 'CompleteRunwayChange' });
+  mustFieldStateAct(efsp, dual, 'OPS', { kind: 'CompleteInspection', runwayId: RWY });
+  assert.equal(fieldState().activeRunway, '05');
+
+  // Everyone back to their own Position.
+  hold(efsp, dual.session, 'INCIRLIK', []);
+  c = { ...c, ...crew(efsp, { OPS: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK' }) };
+  assert.equal(runwayChange(), null);
+  assert.equal(runway().status, 'OPEN');
+});
