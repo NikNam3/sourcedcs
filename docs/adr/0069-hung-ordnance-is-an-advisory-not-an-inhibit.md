@@ -70,7 +70,10 @@ Each lane defines only its own function. The `ord` chip therefore sits with the 
 
 This **changes `0052`**, which put `3G` on the three ATC Roles and deliberately not on `MISSION_BLOCK_MAP` ("one aircraft's ordnance has one place to be declared"). Under H55:
 
-- `strip-fields.js` puts `3G` on APP's and CTR's grids for DEPARTURE, ARRIVAL and OVERFLIGHT. TWR already had it. `3G` also goes on the MISSION Role list, which is the grid every tactical Position (TAC_C2, AIC, GCI, JTAC) uses.
+- On the Strip face, following the MTR group's precedent (H51) and the supervisor's ruling **S-L12**:
+  - **TWR** keeps `3G` on its face unconditionally, as before H55.
+  - **APP and CTR** (DEPARTURE, ARRIVAL, OVERFLIGHT) and **every tactical Position** (the MISSION Role: TAC_C2, AIC, GCI, JTAC) get `3G` on the face **only while it is not `CLEAN` or empty**. `strip-fields.js`'s `compactBlocksFor(role, positionId, fdr)` appends it from the FDR, as it does the MTR group, and puts it ahead of that group because the MTR group starts its own grid row.
+  - While `CLEAN`, `3G` is one tap away in the expanded view (▼), where every Block off the face is. That is where the pilot's first report is recorded, and from then on the field is on the face until someone sets it back to `CLEAN`.
 - `MISSION_BLOCK_MAP` gains `'3G'` on both sides, onto the same `military.ordnanceState` target. It is appended as the map's last entry.
 - The hook requirement (`3F`) stays Tower's alone and off MISSION, because it gates a runway and a mission line uses none.
 
@@ -78,8 +81,8 @@ This **changes `0052`**, which put `3G` on the three ATC Roles and deliberately 
 
 - `efsp-block-map.test.mjs`: MISSION resolves `3G` and has no `3F`;
 - the client parity test: `3G` is on all four Roles on both sides;
-- `efsp-strip-fields.test.js`: `3G` is on exactly TWR, APP, CTR and MISSION;
-- the reachability test: each of those Positions reaches `3G` on its own Strip and sends `SetBlock 3G HUNG`.
+- `efsp-strip-fields.test.js`: `3G` is always on TWR's face; it is on APP's, CTR's and the tactical Positions' faces exactly when it is not `CLEAN`; it is never on OPS, CD or GND;
+- the reachability test: for a `CLEAN` flight, TWR sends `SetBlock 3G HUNG` from the face and every other of those Positions sends it from ▼. For a `HUNG` flight, each has `3G` on the face and clears it from there.
 
 The scenario has TAC_C2 record `HUNG` on a mission line and the ATC twin show the advisory.
 
@@ -90,12 +93,13 @@ The scenario has TAC_C2 record `HUNG` on a mission line and the ATC twin show th
 - **Store the advisory** (an FDR flag set when `3G` becomes HUNG). It is a derived value of two records that already broadcast whole. Storing it adds `rev` churn and a second copy that can disagree with the first.
 - **Client only, with no server function.** The plan names `field-state.js`. A server twin is where a later consumer (L19 metrics, an acknowledgement warning) would read it, and the drift test keeps the copy honest.
 - **Leave `3G` on TWR's grid only** (this lane's briefing default for Q2). The human overrode it with H55.
+- **`3G` always on APP's, CTR's and the tactical faces.** This was built first. It added a third field row to APP's ARRIVAL Strip for a value that is almost always `CLEAN` (`0056`'s criterion). S-L12 replaced it with the conditional face above.
 - **A hint line inside the 8A/8B editor** (Q6). Not done: the reason line is already on the Strip being edited, and `bay-view.js` is not this lane's file. This is a follow-up if controllers miss it.
 
 ## Consequences
 
 - `HUNG` now does something visible on every Position, and nothing it does can block a flight.
-- APP's and CTR's Strips grow a field. On APP's ARRIVAL Strip, `ORDNANCE` starts a third field row (screenshot `docs/wip/L12/02-app-sees-it.png`), which costs Strip height on every flight (`0056`'s criterion). H55 made that trade. A later layout pass may want `3G` to render only when it is not `CLEAN`.
+- A CLEAN flight costs APP, CTR and the tactical Positions no Strip height (`docs/wip/L12/02a-app-clean.png`). Once a flight's ordnance is set, `ORDNANCE` joins the face: on APP's ARRIVAL Strip it starts a third field row (`02-app-sees-it.png`). Recording the first report takes one extra tap (▼).
 - The `LOADED` and `EXPENDED` states still produce nothing (`0058`: nothing is drawn for what is normal).
 - Until L1b's `getEfspFieldState` merges, the client shows the generic sentence. After it merges, the pad name and runway appear with no change here.
 - Mutation-log entries for `SetBlock` record the Strip before and after but not the FDR value written. The `3G` write is auditable only by op and rev. This is L26's finding, recorded in `docs/wip/L12.md`.
