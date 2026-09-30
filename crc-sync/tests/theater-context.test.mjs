@@ -207,3 +207,32 @@ test('toMagneticDisplay rounds the server\'s true→magnetic, and shows 0 as 000
   assert.equal(client.magneticText(v, 35, 36), '000');
   assert.ok(client.toMagneticDisplay(90) != null, 'no position: the theater centre');
 });
+
+// ── wind (decisions.md H76) ──────────────────────────────────────────────
+
+test('airfield wind: magnetic for tower/ATIS, true for METAR-style text, both whole degrees', () => {
+  const ctx = syria();
+  const [lat, lon] = [37.0, 35.43];
+  const v = ctx.variationAt(lat, lon);
+  const w = ctx.windFrom(270, lat, lon);
+  assert.equal(w.windFromTrue, 270);
+  assert.equal(w.windFromMagnetic, Math.round(270 - v), 'about 265 over Incirlik');
+  assert.notEqual(w.windFromMagnetic, w.windFromTrue);
+  assert.equal(ctx.windFrom(2, lat, lon).windFromMagnetic, Math.round(362 - v) % 360, 'wraps through north');
+  assert.deepEqual(ctx.windFrom(null, lat, lon), { windFromTrue: null, windFromMagnetic: null });
+});
+
+test('airfield wind with no variation known: magnetic is null, never the true value relabelled', () => {
+  const ctx = new TheaterContext({ theaters: THEATERS, clock: { now: () => NaN, source: 'WALL' } });
+  const w = ctx.windFrom(270, 37, 35);
+  assert.equal(w.windFromTrue, 270);
+  assert.equal(w.windFromMagnetic, null);
+});
+
+test('/api/apt-weather sends the wind in both named frames and never the raw windFrom', async () => {
+  const fs = await import('fs');
+  const src = fs.readFileSync(path.join(import.meta.dirname, '../server.js'), 'utf8');
+  const route = src.slice(src.indexOf("app.get('/api/apt-weather'"), src.indexOf('\n});\n', src.indexOf("app.get('/api/apt-weather'")));
+  assert.match(route, /const \{ windFrom, \.\.\.rest \} = w;/);
+  assert.match(route, /\.\.\.theaterContext\.windFrom\(windFrom, airport\.lat, airport\.lon\)/);
+});

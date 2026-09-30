@@ -75,6 +75,7 @@ test('conformance measures the heading grace period from the clearance\'s missio
     fdrStore: { getFdr: () => fdr },
     correlationStore: { getAll: () => [{ fdrId: 'f1', trackId: 't1', state: 'CORRELATED' }] },
     weather: () => ({}), transitionAltFt: () => 18000, indicatedAltFt: () => 10000,
+    gridToMagnetic: (deg) => deg, // frames are conformance.test.mjs's concern
     config: { minGroundSpeedKt: 50, headingToleranceDeg: 5, headingGraceSec: 30, headingPersistSec: 10, atAltitudeBandFt: 400, levelBustFt: 500, levelBustPersistSec: 3, wrongWayFpm: 500, wrongWayPersistSec: 5 },
   });
   // With a wall-clock `now` this would be seven years past the grace period.

@@ -109,6 +109,7 @@ test('the monitor reads correlation, track and clearance, and reports a flight o
     weather: () => ({ pressurePa: 101325, tempK: 288.15 }),
     transitionAltFt: () => 18000,
     indicatedAltFt,
+    gridToMagnetic: (deg) => deg, // the frame conversion has its own tests below
     config: cfg,
   });
   assert.equal(monitor.tick(31 * S), false, 'deviating, but not for 10 s yet');
@@ -118,4 +119,70 @@ test('the monitor reads correlation, track and clearance, and reports a flight o
   assert.equal(monitor.tick(42 * S), true, 'back on heading: the flight drops off the list');
   assert.deepEqual(monitor.getAll(), []);
   assert.equal(monitor.tick(43 * S), false);
+});
+
+// ── frames (docs/adr/0085, S-F2) ─────────────────────────────────────────
+// The HDG is typed magnetic; DCS's course is grid. Over Syria the two differ
+// by about 7°, so comparing them raw alerts on a pilot flying the heading
+// exactly. The monitor converts the course with theater-context.js first.
+
+async function syriaMonitor(course, { theatre = 'Syria', at = [37.0, 35.43] } = {}) {
+  const path = await import('path');
+  const { ConformanceMonitor } = await import('../src/efsp/conformance.js');
+  const { TheaterContext } = await import('../src/theater-context.js');
+  const { loadTheaters } = await import('../src/theaters.js');
+  const theaters = loadTheaters(path.join(import.meta.dirname, '../config/theaters.json'));
+  const ctx = new TheaterContext({ theaters, clock: { now: () => Date.UTC(2026, 0, 15), source: 'MISSION' } });
+  ctx.setMission({ theatre, airports: [{ lat: at[0], lon: at[1] }] });
+  const fdr = { fdrId: 'f1', clearance: { heading: { entries: [{ value: '050', parsed: 50, status: 'ACTIVE', at: 0 }] }, altitude: { entries: [] } } };
+  const track = { id: 't1', lat: at[0], lon: at[1], alt: 3048, course, groundSpeed: FAST, verticalSpeed: 0 };
+  const monitor = new ConformanceMonitor({
+    trackStore: { get: () => track },
+    fdrStore: { getFdr: () => fdr },
+    correlationStore: { getAll: () => [{ fdrId: 'f1', trackId: 't1', state: 'CORRELATED' }] },
+    weather: () => ({ pressurePa: 101325, tempK: 288.15 }),
+    transitionAltFt: () => 10000,
+    indicatedAltFt,
+    gridToMagnetic: (deg, lat, lon) => ctx.gridToMagnetic(deg, lat, lon),
+    config: cfg,
+  });
+  // The grid course a pilot flying 050 magnetic at this spot actually shows.
+  const onHeadingGrid = 50 + ctx.variationAt(...at) - ctx.convergenceAt(...at);
+  return { monitor, track, onHeadingGrid };
+}
+
+test('a pilot flying the assigned heading exactly over Syria raises no alert (grid course ≠ magnetic by ~7°)', async () => {
+  const { monitor, track, onHeadingGrid } = await syriaMonitor(0);
+  track.course = onHeadingGrid;
+  assert.ok(headingDiff(onHeadingGrid, 50) > cfg.headingToleranceDeg, 'the raw grid course would have alerted');
+  for (let t = 0; t <= 120; t += 5) monitor.tick(t * S);
+  assert.deepEqual(monitor.getAll(), []);
+});
+
+test('a genuine 20° deviation still alerts, and the reported actual is magnetic', async () => {
+  const { monitor, track, onHeadingGrid } = await syriaMonitor(0);
+  track.course = onHeadingGrid + 20;
+  for (let t = 0; t <= 120; t += 5) monitor.tick(t * S);
+  const [{ alerts: [alert] }] = monitor.getAll();
+  assert.equal(alert.kind, 'HEADING');
+  assert.equal(alert.assigned, 50);
+  assert.equal(alert.actual, 70, 'magnetic, not the grid value');
+  assert.notEqual(alert.actual, Math.round(track.course));
+});
+
+test('unknown magnetic course (no projection for the theater, or no converter): no heading alert at all', async () => {
+  const { monitor, track } = await syriaMonitor(0, { theatre: 'Kola', at: [68, 33] });
+  track.course = 180; // way off 050 in any frame
+  for (let t = 0; t <= 120; t += 5) monitor.tick(t * S);
+  assert.deepEqual(monitor.getAll(), []);
+
+  const { ConformanceMonitor } = await import('../src/efsp/conformance.js');
+  const bare = new ConformanceMonitor({
+    trackStore: { get: () => track },
+    fdrStore: { getFdr: () => ({ fdrId: 'f1', clearance: { heading: { entries: [{ parsed: 50, status: 'ACTIVE', at: 0 }] }, altitude: { entries: [] } } }) },
+    correlationStore: { getAll: () => [{ fdrId: 'f1', trackId: 't1', state: 'CORRELATED' }] },
+    weather: () => ({}), transitionAltFt: () => 18000, indicatedAltFt, config: cfg,
+  });
+  for (let t = 0; t <= 120; t += 5) bare.tick(t * S);
+  assert.deepEqual(bare.getAll(), [], 'no converter injected: never a cross-frame compare');
 });

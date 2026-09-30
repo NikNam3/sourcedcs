@@ -159,6 +159,9 @@ function createHost(env, { stateDir }) {
     weather: () => ({}),
     transitionAltFt: () => 18000,
     indicatedAltFt,
+    // The soak's tracks are synthetic, with no theater: their course is taken
+    // as already magnetic, so heading conformance still runs under load.
+    gridToMagnetic: (deg) => deg,
     config: alerting.conformance,
   });
   const stca = new StcaMonitor({
