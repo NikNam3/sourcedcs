@@ -125,3 +125,11 @@ L9-E1/E2/E3/E4/E7/E8, L1b-Q1, L12-Q2, L13-Q2, L23-Q6, L23-Q7, Q-L14-1, Q-L14-2, 
 - **Safety net (P8):** `tools/checkpoint-worktrees.sh` snapshots every worktree into `refs/checkpoints/<branch>`. Restore with `git checkout refs/checkpoints/lane/<name> -- .` inside the worktree. The 10-minute loop dies with the session; re-start it.
 - **To resume a lane after a session loss:** its worktree and commits survive. Re-launch an agent with its briefing + lane-rules + "continue from your branch and `docs/wip/<LANE>.md`".
 - **Desk open:** F2-W1 (wind true vs magnetic), L11-8. **The human restarts crc-sync on :3000** after merges touching `crc-sync/src` (the supervisor's restarts are blocked).
+
+## Update (2026-09-30, ~90% session usage)
+
+- **Merged since the last update:** F2 + its follow-up (S-F2, S-F2b, H76), L22 (ADR 0088). crc-sync 1621 pass / 8 todo, crc-desktop 547.
+- **Done, unmerged, in merge order:** L27 (running) → L1b (running) → **L12** `c0887fe` → **L13** `6566dff` → **L16** `92d2a51` → **L14** `6fde891` → **L15** `e2a4ea8` → (L23) → (L26) → **L24** `14e0c1f` → (L28). Merge notes: S-L12 (F3 argument in the ordnance scenario), S-L13 (`pads:` line), S-L14 (keep both `_stripRenderSignature` lines), S-L16.
+- **Still running:** L27 (5 commits; also has persist cost + `delta.gone`, S-L24), L1b (6 commits), E2E triage (0 commits, 8 dirty files: check `refs/checkpoints/lane/E2E-triage`).
+- **Not started (new session, per the memory note: Sonnet 5.5 for code, Opus for design):** L23 (after L27; + S-L13 OPS-writes-14E, F10, B1–B7), L26 (after L23; + SetBlock id/value in the log, the cancelled-scramble count), L28 (last; H74/H75), a UI follow-up lane (S-L15, S-L16 W2/W3/W5, vul validation), wave 3 (L17/L18/L19), wave 4 (L20).
+- **Human:** restart crc-sync after merges; the live wind check (S-F2b); the live `mission_start` check (S-F3); the LG 10-minute live check; the 4-hour soak workflow; desk L11-8b.
