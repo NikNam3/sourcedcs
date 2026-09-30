@@ -318,7 +318,8 @@ function createHost(env, { stateDir }) {
       for (const s of bs._strips.values()) {
         if (s.state === 'DROPPED') dropped++; else strips.push(compactStrip(s));
       }
-      facilities[fid] = { currentSeq: bs.currentSeq, strips, dropped };
+      const positions = efsp.positionStoreFor(fid).getAll().map(p => ({ positionId: p.positionId, primary: p.primary ? p.primary.controllerId : null, observers: p.observers.map(o => o.controllerId) }));
+      facilities[fid] = { currentSeq: bs.currentSeq, strips, dropped, positions };
     }
     const correlations = efsp.correlationStore.getAll().map(r => ({ fdrId: r.fdrId, rev: r.rev, state: r.state, trackId: r.trackId }));
     const airspaces = efsp.airspaceStore.getAll().map(a => ({ airspaceId: a.airspaceId, rev: a.rev, state: a.state }));
@@ -427,6 +428,26 @@ function createHost(env, { stateDir }) {
         else if (cmd.fault === 'leak') inject.leakFrom = cmd.now;
         else if (cmd.fault === 'crash-before-persist') env.counters.crashBeforePersist = true;
         break;
+      case 'prune': {
+        // DIAGNOSTIC ONLY (--prune-retired): what the heap does without
+        // retention. Never a fix — see the report header.
+        let strips = 0; let fdrs = 0;
+        const liveFdrs = new Set();
+        for (const [, s] of liveStrips()) liveFdrs.add(s.fdrId);
+        for (const fid of facilityIds) {
+          const bs = efsp.boardStoreFor(fid);
+          for (const [id, s] of bs._strips) {
+            if (s.state !== 'DROPPED') continue;
+            bs._strips.delete(id); bs._nlaHistory.delete(id); strips++;
+          }
+        }
+        for (const id of [...efsp.fdrStore._fdrs.keys()]) {
+          if (liveFdrs.has(id)) continue;
+          efsp.fdrStore._fdrs.delete(id); efsp.correlationStore._records.delete(id); fdrs++;
+        }
+        reply.pruned = { strips, fdrs };
+        break;
+      }
       case 'console':
         reply.console = [...env.consoleStats.entries()].map(([prefix, s]) => ({ prefix, count: s.count, first: s.first.slice(0, 3) }));
         break;
