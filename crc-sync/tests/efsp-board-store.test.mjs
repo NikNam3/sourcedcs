@@ -673,9 +673,14 @@ test('InvokeNla is rejected PERMISSION_DENIED for a Position that owns the Strip
 
 test('the legitimate owner (CD) CAN advance a PENDING_CLEARANCE Strip it actually owns', () => {
   const { board } = makeStateOwnerStore();
-  const strip = createStrip(board, 'CD'); // created directly owned by CD for this focused test
-  board.applyMutation({ clientMutationId: crypto.randomUUID(), stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'SetState', toState: 'PENDING_CLEARANCE' } }, 'CD', 'CD');
+  // SetState is owner-checked (docs/adr/0080): OPS owns PROPOSED, so OPS sets
+  // the state and hands the Strip to CD, which then owns PENDING_CLEARANCE.
+  const strip = createStrip(board, 'OPS');
+  board.applyMutation({ clientMutationId: crypto.randomUUID(), stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'SetState', toState: 'PENDING_CLEARANCE' } }, 'OPS', 'OPS');
+  const setUp = board.getStrip(strip.stripId);
+  board.applyMutation(mutation(setUp, { kind: 'TransferStrip', toPositionId: 'CD', bayId: 'somewhere', rackId: 'main' }), 'OPS', 'OPS');
   const pending = board.getStrip(strip.stripId);
+  assert.equal(pending.ownerPositionId, 'CD');
 
   const result = board.applyMutation(mutation(pending, { kind: 'InvokeNla' }), 'CD', 'CD');
   assert.equal(result.ok, true);

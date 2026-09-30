@@ -139,6 +139,15 @@ function _worksNoStrips(positionId) {
   return NO_STRIP_OP_CLASSES.has(facilityConfig.getPositionClass(positionId));
 }
 
+// B5 (docs/adr/0080, decisions.md H40): a NON_ATC Position (JTAC) has no scope
+// either (`positionRadars.JTAC` is []), so it can neither say which blip a
+// flight is nor declare MARSA. Derived from the class, so a future non-ATC
+// Position is covered with no edit here.
+const NO_SCOPE_CLASSES = new Set(['NON_ATC']);
+function _hasNoScope(positionId) {
+  return NO_SCOPE_CLASSES.has(facilityConfig.getPositionClass(positionId));
+}
+
 // The coarse "may this Position class ever perform this KIND of op at
 // all" gate — CreateStrip is included here for OPS/APP (both originate
 // Strips, just for different roles) but the role itself is gated
@@ -179,11 +188,14 @@ const PERMISSIONS = {
   // mechanics only — no CreateStrip (doesn't originate MISSION Strips),
   // no TOFI, no coordination kinds.
   AIC: new Set(NON_CREATE_OPS),
-  // JTAC (class NON_ATC) — "MISSION (read-only)" (guide §4.1): granted
-  // nothing at all. Read access (snapshot/delta broadcast, efsp-ws.js) is
-  // unconditional and not gated by this table, so an empty grant set alone
-  // makes JTAC read-only with no separate mechanism needed.
-  JTAC: new Set([]),
+  // JTAC (class NON_ATC) — guide §4.1 "MISSION (read-only)", refined by
+  // decisions.md H40 (docs/adr/0080): a JTAC sees only the Strips TAC_C2 has
+  // handed it, and hands them back. So exactly ONE op kind, written as a
+  // literal (never a .filter(): the header's maximally-permissive trap), and
+  // TACTICAL_CAPABILITIES' `handBackTo` narrows its target to TAC_C2. What a
+  // JTAC is SENT is the read scope (read-scope.js, docs/adr/0080), no longer
+  // unconditional.
+  JTAC: new Set(['TransferStrip']),
 };
 
 // D12, enforced structurally rather than merely by careful hand-authoring
@@ -257,7 +269,7 @@ function canMutate(actingPositionId, opKind) {
  * "which blip is this" is not that.
  */
 function canCorrelate(actingPositionId) {
-  return !_worksNoStrips(actingPositionId);
+  return !_worksNoStrips(actingPositionId) && !_hasNoScope(actingPositionId);
 }
 
 /**
@@ -281,7 +293,7 @@ function canCorrelate(actingPositionId) {
  * maximally-permissive trap D21 exists to catch.
  */
 function canDeclareMarsa(actingPositionId) {
-  return !_worksNoStrips(actingPositionId);
+  return !_worksNoStrips(actingPositionId) && !_hasNoScope(actingPositionId);
 }
 
 /**
@@ -335,6 +347,43 @@ const FIELD_STATE_OP_OWNERS = {
 function canActOnFieldState(actingPositionId, opKind) {
   const owners = Object.prototype.hasOwnProperty.call(FIELD_STATE_OP_OWNERS, opKind) ? FIELD_STATE_OP_OWNERS[opKind] : null;
   return !!owners && owners.includes(actingPositionId);
+}
+
+/**
+ * H2 / H40 (docs/adr/0080): what each tactical working Position may do BEYOND
+ * its op grant. One row per Position, one column per capability, so the next
+ * capability (H2: "AIC gets an update in a future version") is a column, not a
+ * rewrite. A Position with no row gets the defaults (no hand-back limit, no
+ * TOFI answerer, 'ALL'). Static, like every other grant (P5).
+ *
+ *  handBackTo      the only Positions a line it owns may be transferred to
+ *  tofiAnsweredBy  who answers a TOFI exchange on a line this Position is working
+ *                  (AIC "works under TAC_C2's TOFI", guide §4.1 / ADR 0025)
+ *  readScope       'ALL' | 'OWNED' — what a session holding only such Positions is sent
+ */
+const READ_SCOPES = ['ALL', 'OWNED'];
+const TACTICAL_CAPABILITIES = {
+  AIC:  { handBackTo: ['TAC_C2'], tofiAnsweredBy: 'TAC_C2', readScope: 'ALL' },
+  JTAC: { handBackTo: ['TAC_C2'], tofiAnsweredBy: null,     readScope: 'OWNED' },
+};
+
+function _tacRow(positionId) {
+  return Object.prototype.hasOwnProperty.call(TACTICAL_CAPABILITIES, positionId) ? TACTICAL_CAPABILITIES[positionId] : null;
+}
+/** @returns {string[]|null} the only Positions `positionId` may transfer a line to, or null when unrestricted. */
+function handBackTargetsFor(positionId) {
+  const row = _tacRow(positionId);
+  return row && row.handBackTo ? row.handBackTo.slice() : null;
+}
+/** @returns {string|null} the Position that answers TOFI on a line `ownerPositionId` is working, or null. */
+function tofiAnswererFor(ownerPositionId) {
+  const row = _tacRow(ownerPositionId);
+  return (row && row.tofiAnsweredBy) || null;
+}
+/** @returns {'ALL'|'OWNED'} */
+function readScopeFor(positionId) {
+  const row = _tacRow(positionId);
+  return (row && row.readScope) || 'ALL';
 }
 
 /**
@@ -476,4 +525,5 @@ module.exports = {
   OP_KINDS, COORDINATION_OP_KINDS, APP_CTR_ONLY_OP_KINDS, TOFI_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_COUNTERPARTS,
   NO_STRIP_OP_CLASSES,
   canActOnFieldState, FIELD_STATE_OP_OWNERS,
+  TACTICAL_CAPABILITIES, READ_SCOPES, handBackTargetsFor, tofiAnswererFor, readScopeFor,
 };

@@ -442,7 +442,7 @@ class BoardStore {
       case 'SetBlock':      result = this._applySetBlock(strip, op, by, actingPositionId, mutation.clientMutationId); break;
       case 'TransferStrip': result = this._applyTransferStrip(strip, op, by); break;
       case 'SetFlag':       result = this._applySetFlag(strip, op, by); break;
-      case 'SetState':      result = this._setStateRunwayRefusal(strip, op.toState) || this._applySetState(strip, op.toState, by); break;
+      case 'SetState':      result = this._setStateOwnerRefusal(strip, op.toState, actingPositionId) || this._setStateRunwayRefusal(strip, op.toState) || this._applySetState(strip, op.toState, by); break;
       case 'InvokeNla':     result = this._applyInvokeNla(strip, by); break;
       case 'Undo':          result = this._applyUndo(strip, by); break;
       case 'DropStrip':     result = this._applyDropStrip(strip, op, by); break;
@@ -878,6 +878,26 @@ class BoardStore {
    */
   _placementRack(strip, bay) {
     return runwayRackFor(strip, this._fdrStore.getFdr(strip.fdrId), this._fieldStateView(), bay);
+  }
+
+  /**
+   * SetState is owner-checked (decisions.md S-R2-14, docs/adr/0080, B7). Until
+   * now it was ADR 0027's unchecked escape hatch: any Position holding the op
+   * and owning the Strip could put it in any state, which let AIC do the very
+   * thing H2 says it never does (advance a mission line) and leave the Strip in
+   * a Bay that implied another state. The acting Position must own the Strip's
+   * CURRENT state per STATE_OWNERS_BY_ROLE — the authority InvokeNla and the
+   * Bay-implied drag already apply — for every Role. Checked before the runway
+   * inhibit (authority before availability), and ONLY on the controller's
+   * SetState: the Undo / NLA paths that reach _applySetState carry their own.
+   */
+  _setStateOwnerRefusal(strip, toState, actingPositionId) {
+    if (!this._rules.canActOnState) return null;
+    if (this._rules.canActOnState(actingPositionId, strip.role, strip.state)) return null;
+    return {
+      ok: false, reason: 'PERMISSION_DENIED', strip,
+      detail: `${strip.state} is not ${actingPositionId}'s to change`,
+    };
   }
 
   /**

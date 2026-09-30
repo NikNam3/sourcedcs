@@ -347,7 +347,7 @@ test('SCENARIO A6 one controller holding CTR and AIC still gets no coordination 
     'NOT_HOLDING_POSITION', null, 'JTAC claiming AIC');
 });
 
-test('SCENARIO A7 AIC cannot move a line past its state with the SetState escape hatch (H2)', { todo: 'L8 B7 — see docs/wip/L8.md' }, () => {
+test('SCENARIO A7 AIC cannot move a line past its state with the SetState escape hatch (H2)', () => {
   const efsp = freshEfsp();
   const c = crew(efsp, ALL);
   const m = toAic(efsp, c, taskedLine(efsp, c, 'AIC14'));
@@ -418,7 +418,7 @@ test('SCENARIO J2 TAC_C2 hands a line to JTAC and JTAC hands it back (H40)', { t
   assert.equal(mustAct(efsp, c.TAC_C2, 'TAC_C2', tac(efsp, m.stripId), { kind: 'InvokeNla' }).state, 'OFF_STATION');
 });
 
-test('SCENARIO J3 a JTAC has no scope, so it neither binds a contact nor declares MARSA', { todo: 'L8 B5 — see docs/wip/L8.md' }, () => {
+test('SCENARIO J3 a JTAC has no scope, so it neither binds a contact nor declares MARSA', () => {
   const efsp = freshEfsp();
   const c = crew(efsp, ALL);
   const a = taskedLine(efsp, c, 'JT14');
