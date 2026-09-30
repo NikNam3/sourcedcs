@@ -9,7 +9,7 @@
  * exceptions and keep their annotations in l2-block-editing.spec.js.
  */
 
-const { test } = require('@playwright/test');
+const { test } = require('./helpers/test');
 const { openPanel, seedStrip, expectTouchTarget, stripMenuItem } = require('./helpers/app');
 
 // Layout C (docs/adr/0056): MARSA… is a ⋯ menu item now, so both the opener

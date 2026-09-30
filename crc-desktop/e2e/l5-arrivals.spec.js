@@ -9,7 +9,7 @@
  * announced.
  */
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./helpers/test');
 const { openPanel, seedStrip, stripByCallsign } = require('./helpers/app');
 
 test.describe.configure({ timeout: 90000 });

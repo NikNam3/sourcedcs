@@ -20,7 +20,7 @@
  * crc-sync per run), so a reused callsign finds an earlier test's Strip.
  */
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./helpers/test');
 const { openPanel, seedStrip, stripByCallsign, expectOnTop, startAction, stripMenuItem } = require('./helpers/app');
 
 let seq = 0;

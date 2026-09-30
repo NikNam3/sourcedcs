@@ -21,7 +21,7 @@
  * measures the defect it is named for rather than failing on F-001 first.
  */
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./helpers/test');
 const { openPanel, seedStrip, startAction } = require('./helpers/app');
 
 // Two controllers, a login each, and a Board that persists across tests in a

@@ -17,7 +17,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./helpers/test');
 const { openPanel } = require('./helpers/app');
 
 const FIXTURE = fs.readFileSync(path.join(__dirname, '../../crc-sync/tests/fixtures/ato/iron-flag-26-3.txt'), 'utf8');

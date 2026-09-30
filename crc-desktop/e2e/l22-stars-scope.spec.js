@@ -13,7 +13,7 @@
 
 const path = require('path');
 const fs = require('fs');
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./helpers/test');
 const { openPanel } = require('./helpers/app');
 
 const OUT = path.join(__dirname, '..', '..', 'docs', 'wip', 'L22');

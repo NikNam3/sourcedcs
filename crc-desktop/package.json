@@ -1,7 +1,7 @@
 {
   "name": "crc-desktop",
   "version": "1.0.1",
-  "description": "CRC \u2014 SOURCE DCS's desktop GCI/datalink client for DCS: World",
+  "description": "CRC — SOURCE DCS's desktop GCI/datalink client for DCS: World",
   "author": "SOURCE DCS",
   "desktopName": "CRC.desktop",
   "main": "main.js",
@@ -17,8 +17,10 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
+    "dockview-core": "5.1.0",
     "electron": "^43.4.1",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "maplibre-gl": "3.6.2"
   },
   "dependencies": {
     "electron-updater": "^6.3.9"

@@ -12,7 +12,7 @@
  * assert straight after injecting.
  */
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./helpers/test');
 const { openPanel, seedStrip } = require('./helpers/app');
 
 function stripIdOf(page, callsign) {

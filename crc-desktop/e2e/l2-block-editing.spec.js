@@ -23,7 +23,7 @@
  *     moved focus off the input onto the Strip.
  */
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./helpers/test');
 const { openPanel, seedStrip, stripByCallsign, expectTouchTarget, startAction } = require('./helpers/app');
 
 // Candidate for the shared helper: what has keyboard focus, as tag.class.

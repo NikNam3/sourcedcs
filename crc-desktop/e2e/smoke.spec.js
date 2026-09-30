@@ -8,7 +8,7 @@
  * is the one that says which.
  */
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./helpers/test');
 const { openPanel, seedStrip, stripByCallsign } = require('./helpers/app');
 
 test('the panel loads, connects, and a seeded Strip appears', async ({ page }) => {

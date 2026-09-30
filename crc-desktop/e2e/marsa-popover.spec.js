@@ -24,7 +24,7 @@
  * now (bay-view.js's _mountPopover).
  */
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./helpers/test');
 const { openPanel, seedStrip, stripByCallsign, expectOnTop, expectDoesSomething, startAction } = require('./helpers/app');
 
 /** The stripIds THIS test seeded — what afterEach is allowed to retire. */
