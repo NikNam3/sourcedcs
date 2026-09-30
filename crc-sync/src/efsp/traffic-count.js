@@ -559,6 +559,12 @@ class TrafficCount {
 
   lastReconciliation() { return this._lastReconciliation; }
 
+  /**
+   * Does this Strip's drop have an unvoided record? The archiver's guard
+   * (docs/adr/0082, T3): a DROPPED Strip is archived only once counted.
+   */
+  hasCountFor(stripId) { return this._liveByStrip.has(stripId); }
+
   /** Unvoided COUNT records. */
   records() {
     return [...this._records.values()].filter(r => !this._voided.has(r.countId));
