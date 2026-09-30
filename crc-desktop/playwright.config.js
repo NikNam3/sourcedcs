@@ -48,6 +48,13 @@ const syncEnv = {
   CRCSYNC_EFSP_AIRSPACES_PATH: stateFile('efsp-airspaces.json'),
   CRCSYNC_EFSP_STEREO_ROUTES_PATH: stateFile('efsp-stereo-routes.json'),
   CRCSYNC_TERRAIN_CACHE_DIR: stateFile('terrain'),
+  // WP8's durable files (crc-sync docs/adr/0065). Without these a run writes
+  // metrics into the worktree's crc-sync/state/ and reads old buckets back on
+  // the next run (L15, T11). The instrumentation config is read-only, so it
+  // points at a copy of the shipped default, never at a stale state/ override.
+  CRCSYNC_EFSP_METRICS_PATH: stateFile('efsp-metrics.json'),
+  CRCSYNC_EFSP_TRAFFIC_COUNT_PATH: stateFile('efsp-traffic-count.jsonl'),
+  CRCSYNC_EFSP_INSTRUMENTATION_CONFIG_PATH: stateFile('efsp-instrumentation.json'),
   // No DCS, no SRS. Both clients retry forever and neither blocks the EFSP
   // subsystem, so pointing them at a closed port keeps the run hermetic and
   // fails fast instead of hanging on a real host.
@@ -64,6 +71,7 @@ const syncEnv = {
 
 fs.writeFileSync(syncEnv.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
 fs.writeFileSync(syncEnv.CRCSYNC_EFSP_STEREO_ROUTES_PATH, '[]');
+fs.copyFileSync(path.join(__dirname, '..', 'crc-sync', 'config', 'efsp-instrumentation.json'), syncEnv.CRCSYNC_EFSP_INSTRUMENTATION_CONFIG_PATH);
 
 module.exports = {
   testDir: './e2e',
