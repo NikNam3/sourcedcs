@@ -5,12 +5,12 @@
 // crc-sync alone, not the driver's ledger, and a restart is a real SIGKILL
 // followed by a fresh process that restores from disk.
 //
-// argv: <stateDir> <seed> <startNow> <logPath>
+// argv: <stateDir> <seed> <startNow> <logPath> <lifetime>
 
 const { setupHostEnv } = require('./host-env');
 
-const [stateDir, seedArg, startArg, logPath] = process.argv.slice(2);
-const env = setupHostEnv({ stateDir, seed: Number(seedArg), startNow: Number(startArg), logPath });
+const [stateDir, seedArg, startArg, logPath, lifeArg] = process.argv.slice(2);
+const env = setupHostEnv({ stateDir, seed: Number(seedArg), startNow: Number(startArg), logPath, lifetime: Number(lifeArg) || 1 });
 
 // Only now may anything under src/ be required (T4).
 const { createHost } = require('./host-core');

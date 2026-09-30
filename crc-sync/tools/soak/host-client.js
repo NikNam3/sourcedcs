@@ -50,7 +50,7 @@ class ForkedHost {
     if (startNow !== undefined) this._args[2] = String(startNow);
     this.lifetime++;
     return new Promise((resolve, reject) => {
-      const child = fork(path.join(__dirname, 'host.js'), this._args, {
+      const child = fork(path.join(__dirname, 'host.js'), [...this._args, String(this.lifetime)], {
         execArgv: ['--expose-gc'],
         serialization: 'advanced',
         stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
@@ -123,6 +123,7 @@ class InprocHost {
       for (const k of Object.keys(require.cache)) if (k.startsWith(SRC)) delete require.cache[k];
       this._env.counters.crashBeforePersist = false;
       this._env.counters.crashed = false;
+      this._env.seedIds(this.lifetime);
     }
     const { createHost } = require('./host-core');
     this._host = createHost(this._env, { stateDir: this._opts.stateDir });

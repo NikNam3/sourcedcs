@@ -128,7 +128,7 @@ function build(d, meta) {
       auditExamples: lr.examples, systemAuditLines: lr.systemAuditLines, nullCmidLines: lr.nullCmidLines, nullCmidByOp: lr.nullCmidByOp,
       airspaceAudit: lr.airspace, logLines: lr.logLines, replayAuditLines: lr.replayAuditLines,
       internalErrors, storeInternalErrors: d.hostStoreInternalErrors || 0,
-      replays: L.replays.length, replayNotIdempotent: L.replayNotIdempotent,
+      replays: L.replays.length, replayNotIdempotent: L.replayNotIdempotent, replayStaleAck: L.replayStaleAck,
       broadcastMissing: L.broadcastMissing, broadcastMissingExamples: L.broadcastMissingExamples,
       silentStaleness: { count: s.silentStaleness.count, byCause: s.silentStaleness.byCause, maxPersistSec: r2(s.silentStaleness.maxPersistMs / 1000), examples: s.silentStaleness.examples },
       shadowRegressions: [...d.clients.values()].reduce((n, c) => n + c.shadow.regressions, 0),
@@ -205,6 +205,7 @@ function build(d, meta) {
   if (meta.profile !== 'smoke' && (s.resync.delta === 0 || s.resync.snapshot === 0)) warnings.push(`resync paths: delta ${s.resync.delta}, snapshot ${s.resync.snapshot} — both should be > 0`);
   if (L.replayNotIdempotent.examples.some(x => x.kind !== 'efsp-mutation')) warnings.push(`non-Board replays not idempotent: ${JSON.stringify(L.replayNotIdempotent.byKind)}`);
   if (lr.replayAuditLines && Object.keys(lr.replayAuditLines).length) warnings.push(`replays wrote extra audit lines: ${JSON.stringify(lr.replayAuditLines)}`);
+  if (L.replayStaleAck.count > 0) warnings.push(`replayStaleAck ${L.replayStaleAck.count}: a replayed refusal answered with an older Strip than the Board holds`);
   if (s.doubleTapNotGuarded > 0) failures.push(`doubleTapNotGuarded ${s.doubleTapNotGuarded} > 0`);
   report.verdict = { pass: failures.length === 0, failures, warnings, informational: { ambiguousReplay: R2 } };
   return report;

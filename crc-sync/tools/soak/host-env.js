@@ -51,12 +51,18 @@ function envFor(stateDir) {
  * @param {number} o.seed
  * @param {number} o.startNow   virtual epoch ms the clock starts at
  * @param {string} [o.logPath]  host.log
- * @param {boolean} [o.patchGlobals=true]  false only for the in-process order-key probe
+ * @param {boolean} [o.patchGlobals=true]
+ * @param {number} [o.lifetime=1]  host lifetime (restart count + 1), so seeded ids differ per process
  */
-function setupHostEnv({ stateDir, seed, startNow, logPath, patchGlobals = true }) {
+function setupHostEnv({ stateDir, seed, startNow, logPath, patchGlobals = true, lifetime = 1 }) {
   Object.assign(process.env, envFor(stateDir));
 
   const clock = { now: startNow };
+  function seedIds(life) {
+    const nextId = mulberry32(deriveSeed(seed, `host-uuid-${life}`));
+    const hex = (n) => Math.floor(nextId() * 16 ** n).toString(16).padStart(n, '0');
+    require('crypto').randomUUID = () => `${hex(8)}-${hex(4)}-4${hex(3)}-${(8 + Math.floor(nextId() * 4)).toString(16)}${hex(3)}-${hex(12)}`;
+  }
   const realDateNow = Date.now;
   if (patchGlobals) {
     // D2: the virtual clock. Every clock read under src/efsp, tracks.js and
@@ -69,6 +75,11 @@ function setupHostEnv({ stateDir, seed, startNow, logPath, patchGlobals = true }
     // between runs, which no criterion depends on. The report header says the
     // server's randomness was replaced so nobody mistakes it for production.
     Math.random = mulberry32(deriveSeed(seed, 'host-math-random'));
+    // crypto.randomUUID too, which the briefing (D5) left alone: getRack()
+    // breaks an order-key tie by stripId (board-store.js getRack), so random
+    // ids made a stress run's reorder storms diverge between two runs of one
+    // seed. Seeded per host lifetime so a restart never re-issues an id.
+    seedIds(lifetime);
   }
 
   // ── console capture (briefing §8 T5) ──────────────────────────────────
@@ -162,6 +173,7 @@ function setupHostEnv({ stateDir, seed, startNow, logPath, patchGlobals = true }
     consoleStats,
     realDateNow,
     wrapOrderKey,
+    seedIds,
     closeLog() { if (logFd !== null) { fs.closeSync(logFd); logFd = null; } },
   };
 }

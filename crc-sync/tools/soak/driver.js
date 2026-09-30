@@ -133,7 +133,11 @@ class Driver {
 
   at(t, fn, label) { if (t <= this.tEnd + 60000) this.heap.push(Math.round(t), fn, label); }
   after(ms, fn, label) { this.at(this.now + ms, fn, label); }
-  note(action) { this.digest.update(`${this.now - this.t0}|${action}\n`); }
+  note(action) {
+    const line = `${this.now - this.t0}|${action}\n`;
+    this.digest.update(line);
+    if (this.o.traceDigest) this.o.traceDigest.write(line);
+  }
   event(category, data) {
     const n = (this.eventCounts[category] = (this.eventCounts[category] || 0) + 1);
     if (n <= EVENTS_CAP) this.eventsOut.write(JSON.stringify({ t: (this.now - this.t0) / 1000, category, ...data }) + '\n');
@@ -373,13 +377,11 @@ class Driver {
   /** M7: re-send an earlier message verbatim, in the same server lifetime. */
   async replay(client, msg, originalAck, life) {
     if (life !== this.lifetime || !client.connected || !client.declared) return;
+    // The rev before the replay comes from server truth, not the oracle: H1
+    // (a rebalance bumping revs no broadcast carries) leaves the oracle behind.
     let revBefore = null;
-    if (msg.type === 'efsp-mutation' && msg.stripId) {
-      const k = `${msg.facilityId}|${msg.stripId}`;
-      const o = this.oracle.get(k); revBefore = o ? o.rev : null;
-    } else if (msg.type === 'efsp-mutation' && originalAck.strip) {
-      const o = this.oracle.get(`${msg.facilityId}|${originalAck.strip.stripId}`); revBefore = o ? o.rev : null;
-    }
+    const sid = msg.type === 'efsp-mutation' ? (msg.stripId || (originalAck.strip && originalAck.strip.stripId)) : null;
+    if (sid) { const t = await this.call('strip', { facilityId: msg.facilityId, stripId: sid }); revBefore = t.strip ? t.strip.rev : null; }
     const ack = await this.send(client, msg, { replay: true, label: 'M7' });
     if (!ack) return;
     let revAfter = null;
@@ -939,6 +941,11 @@ class Driver {
           this.event('resyncAcrossRestartDivergence', ex);
         } else {
           this.stats.resync.resyncDivergence++;
+          const causes = {};
+          for (const d of ds) { const cz = this.uncarriedHints.get(`${d.facilityId}|${d.stripId}`) || 'UNKNOWN'; causes[cz] = (causes[cz] || 0) + 1; }
+          ex.causes = causes;
+          const rb = this.stats.resync.divergenceByCause || (this.stats.resync.divergenceByCause = {});
+          for (const [cz, n] of Object.entries(causes)) rb[cz] = (rb[cz] || 0) + n;
           if (this.stats.resync.divergenceExamples.length < 10) this.stats.resync.divergenceExamples.push({ ...ex, sample: ds.slice(0, 3) });
           this.event('resyncDivergence', { ...ex, sample: ds.slice(0, 3) });
         }

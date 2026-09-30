@@ -72,7 +72,9 @@ async function main() {
   const startNow = Date.now();
   const hostOpts = { stateDir, seed: o.seed, startNow, logPath: path.join(outDir, 'host.log') };
   const host = o.inproc ? new InprocHost(hostOpts) : new ForkedHost(hostOpts);
-  const driver = new Driver({ ...o, host, startNow, outDir, stateDir, lightMs: lightS * 1000, heavyMs: heavyS * 1000 });
+  // SOAK_DIGEST_TRACE=<file>: write the action sequence the trafficDigest hashes (for diffing two runs).
+  const traceDigest = process.env.SOAK_DIGEST_TRACE ? fs.createWriteStream(process.env.SOAK_DIGEST_TRACE) : null;
+  const driver = new Driver({ ...o, traceDigest, host, startNow, outDir, stateDir, lightMs: lightS * 1000, heavyMs: heavyS * 1000 });
   await driver.run();
 
   const rep = report.build(driver, { ...o, commit, argv: process.argv.slice(2), stateDir });

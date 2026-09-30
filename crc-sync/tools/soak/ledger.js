@@ -40,6 +40,7 @@ class Ledger {
     this.broadcastMissingExamples = [];
     this.replays = [];        // { cmid, kind, originalOk, originalReason, replayOk, replayReason, revBefore, revAfter, lifetime }
     this.replayNotIdempotent = { count: 0, byKind: {}, examples: [] };
+    this.replayStaleAck = { count: 0, examples: [] };
     this.r2 = new Set();      // cmids used by the ambiguous-disconnect probe; judged separately
     this.messagesSent = 0;
     this.sentByType = {};
@@ -96,8 +97,17 @@ class Ledger {
 
   recordReplay(r) {
     this.replays.push(r);
+    const revKnown = r.kind === 'efsp-mutation' && r.revBefore !== null && r.revAfter !== null;
+    // A replay of a REFUSED Mutation answers from the idempotency cache with the
+    // Strip as it was at the original refusal — older than the Board now. The
+    // server did not change, so this is not a lack of idempotency; but the
+    // shipped client applies an ack's Strip on refusal too, and goes backwards.
+    if (revKnown && r.revAfter < r.revBefore) {
+      this.replayStaleAck.count++;
+      if (this.replayStaleAck.examples.length < EXAMPLE_CAP) this.replayStaleAck.examples.push(r);
+    }
     const bad = r.replayOk !== r.originalOk || (r.replayReason || null) !== (r.originalReason || null) ||
-      (r.kind === 'efsp-mutation' && r.revBefore !== null && r.revAfter !== null && r.revAfter !== r.revBefore);
+      (revKnown && r.revAfter > r.revBefore);
     if (bad) {
       this.replayNotIdempotent.byKind[r.kind] = (this.replayNotIdempotent.byKind[r.kind] || 0) + 1;
       if (r.kind === 'efsp-mutation') this.replayNotIdempotent.count++;
