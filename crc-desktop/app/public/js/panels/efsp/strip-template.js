@@ -566,10 +566,15 @@ function isBlockEditable(blockId, role = 'DEPARTURE') {
 // clock, never the wall clock — H11) and which a controller reads and types
 // as a four-digit Zulu time. resolveBlockValue shows them as '1432', so the
 // click-to-edit cell opens on '1432' and sends back what the controller typed;
-// crc-sync's zulu-time.js resolves it to the instant again. Only the MTR times
-// for now — the other typed time Blocks (6, 14, 14B-D, 16-18, M6/M7) render the
-// raw number today, a known bug owned by the §10.5 time work.
-const ZULU_HHMM_BLOCKS = new Set(['9G-TIME', '9H-TIME']);
+// crc-sync's zulu-time.js resolves it to the instant again. The MTR times
+// (docs/adr/0062) and, since supervisor fix F4, every typed …TimeUtc Block:
+// 6 (PROP DEP on a DEPARTURE, ETA on an ARRIVAL), 14 and 14B-D (the release
+// times) and 16-18. Block ids, not paths: each id means one time on every
+// role map that has it. The vul window (M6/M7) is not here yet — its
+// storage belongs to the ATO lanes (L14/L16).
+const ZULU_HHMM_BLOCKS = new Set([
+  '6', '9G-TIME', '9H-TIME', '14', '14B', '14C', '14D', '16', '17', '18',
+]);
 
 /** Epoch ms as the four-digit Zulu time a Strip shows ('1432'), or '' for no time. Mirrors crc-sync's zulu-time.js. */
 function formatZuluHhmm(ms) {

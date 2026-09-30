@@ -528,11 +528,30 @@ test('the MTR Blocks are ordinary click-to-edit cells — no picker, no toggle',
   }
 });
 
-test('ZULU_HHMM_BLOCKS holds the two MTR times, and formatZuluHhmm pads', () => {
-  assert.deepEqual([...ZULU_HHMM_BLOCKS].sort(), ['9G-TIME', '9H-TIME']);
+test('ZULU_HHMM_BLOCKS holds the MTR times and every typed …TimeUtc Block (F4), and formatZuluHhmm pads', () => {
+  assert.deepEqual([...ZULU_HHMM_BLOCKS].sort(), ['14', '14B', '14C', '14D', '16', '17', '18', '6', '9G-TIME', '9H-TIME']);
   assert.equal(formatZuluHhmm(Date.UTC(2016, 5, 21, 9, 5)), '0905');
   assert.equal(formatZuluHhmm(null), '');
   assert.equal(formatZuluHhmm('garbage'), '');
+});
+
+test('F4: every ZULU_HHMM Block is an epoch-ms …Utc FDR path on every role map that has it, and renders as HHMM', () => {
+  for (const id of ZULU_HHMM_BLOCKS) {
+    let seen = 0;
+    for (const [role, map] of Object.entries(BLOCK_MAPS)) {
+      if (!map[id]) continue;
+      seen += 1;
+      assert.equal(map[id].target.kind, 'fdr', `${role}/${id}`);
+      assert.match(map[id].target.path, /Utc$/, `${role}/${id}`);
+    }
+    assert.ok(seen > 0, id);
+  }
+  const voidAt = Date.UTC(2016, 5, 21, 14, 32);
+  const fdr = makeFdr({ assigned: { voidTimeUtc: voidAt, releaseTimeUtc: null } });
+  assert.equal(resolveBlockValue('14D', fdr, makeStrip()).value, '1432');
+  assert.equal(resolveBlockValue('14', fdr, makeStrip()).value, null, 'no time is blank, not 0000');
+  const eta = makeFdr({ filed: { estimatedArrivalTimeUtc: Date.UTC(2016, 5, 21, 9, 5) } });
+  assert.equal(resolveBlockValue('6', eta, makeStrip({ role: 'ARRIVAL' })).value, '0905');
 });
 
 test('every MTR Block has a label title; others have none', () => {
