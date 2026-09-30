@@ -359,3 +359,23 @@ test('the actual committed config/efsp-facility-incirlik.json seed is valid JSON
 
   process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = prevPath;
 });
+
+// ── Position letters (docs/adr/0088) ──────────────────────────────────────
+
+test('position letters: T/A/C for the ATC scopes, M for every tactical Position (H41 S5, H48)', async () => {
+  const { getPositionLetter, allPositionLetters } = await import('../src/efsp/facility-config.js');
+  assert.equal(getPositionLetter('TWR'), 'T');
+  assert.equal(getPositionLetter('APP'), 'A');
+  assert.equal(getPositionLetter('CTR'), 'C');
+  for (const p of ['TAC_C2', 'AIC', 'GCI', 'JTAC']) assert.equal(getPositionLetter(p), 'M');
+  assert.equal(getPositionLetter('NOPE'), null);
+  assert.equal(allPositionLetters().INCIRLIK.APP, 'A');
+});
+
+test('a position letter must be one character, on a known Position', () => {
+  const base = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+  assert.equal(validateConfig({ ...base, positionLetters: { APP: 'AP' } }).ok, false);
+  assert.equal(validateConfig({ ...base, positionLetters: { APP: 'a' } }).ok, false);
+  assert.equal(validateConfig({ ...base, positionLetters: { XXX: 'X' } }).ok, false);
+  assert.equal(validateConfig({ ...base, positionLetters: { APP: 'R' } }).ok, true);
+});

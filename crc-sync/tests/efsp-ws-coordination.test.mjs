@@ -196,6 +196,14 @@ test('docs/adr/0022: the snapshot carries aitAuthorizedByFacility for every Faci
   assert.deepEqual(snapshot.ack.aitAuthorizedByFacility, { INCIRLIK: false, CENTER: false, TACTICAL: false, RANGES: false });
 });
 
+test('docs/adr/0088: the snapshot carries every Facility\'s position letters for the ATC scope', () => {
+  const ctx = makeCtx();
+  const snapshot = handleMessage(ctx, CTR_SESSION, { type: 'efsp-resync', facilityId: 'CENTER', lastBoardSeq: -999999 }, noopPersist);
+  assert.equal(snapshot.ack.positionLetters.INCIRLIK.TWR, 'T');
+  assert.equal(snapshot.ack.positionLetters.CENTER.CTR, 'C');
+  assert.equal(snapshot.ack.positionLetters.TACTICAL.TAC_C2, 'M');
+});
+
 test('efsp-set-positions is facility-scoped — holding CTR at CENTER does not touch INCIRLIK\'s PositionStore', () => {
   const ctx = makeCtx();
   const result = handleMessage(ctx, CTR_SESSION, { type: 'efsp-set-positions', facilityId: 'CENTER', held: ['CTR'] }, noopPersist);
