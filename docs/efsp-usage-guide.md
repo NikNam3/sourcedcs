@@ -30,7 +30,7 @@ Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green):
 
 Not built: the rest of WP6 — the field-state panel and arresting-gear check (§9.7's client half), alert/scramble (§9.6), the hung-ordnance advisory (§9.5) — plus WP7's ATO import (the parser exists), WP7A's carrier Positions and PAR (the model exists), and WP8's dashboard. `docs/efsp-briefing.md` is the current handoff note.
 
-**Every time EFSP works with is in-game Zulu**: the DCS mission clock, never your PC's clock or real-world UTC. A typed MTR time is dated by the mission's date; the other typed time Blocks (release, void, EDCT…) still keep what you typed as text until a fix in progress lands.
+**Every time EFSP works with is in-game Zulu**: the DCS mission clock, never your PC's clock or real-world UTC. Every typed time (release, void, EDCT, MTR entry and exit, …) is typed as HHMM and dated by the mission's date: the nearest such time within 12 hours.
 
 Facility/Position map as it stands:
 
