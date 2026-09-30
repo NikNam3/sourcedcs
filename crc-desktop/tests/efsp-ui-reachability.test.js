@@ -2472,3 +2472,74 @@ test('a Strip drawn before the stereo list landed is rebuilt once it does — th
   await withStereoRoutes(r.sandbox, PACKS);
   assert.equal(renders, 1);
 });
+
+// ── L23: the tactical hand-back and the proposer's way out (docs/adr/0080) ──
+
+const _serverPermission = require('../../crc-sync/src/efsp/permission.js');
+const _serverFacilityConfig = require('../../crc-sync/src/efsp/facility-config.js');
+
+/** Renders a Strip with the real TACTICAL Bays loaded, the way the panel has them after a snapshot. */
+function renderTactical(strip, held) {
+  const r = renderStrip({ strip, fdr: FDR, held });
+  const bays = _serverFacilityConfig.getAllBays('TACTICAL');
+  r.sandbox.applyEfspSnapshot({ strips: [strip], fdrs: [FDR], positions: [], bays, airspaces: [], correlations: [], marsa: [] });
+  return { ...r, el: r.sandbox._buildStripEl(strip) };
+}
+const missionLine = (ownerPositionId, overrides = {}) => stripAt({
+  role: 'MISSION', state: 'ON_STATION', ownerPositionId, facilityId: 'TACTICAL', bayId: 'aic-on-station', ...overrides,
+});
+
+test('the client HAND_BACK_TO mirror equals the capability table in permission.js', () => {
+  const client = JSON.parse(JSON.stringify(vm.runInContext('HAND_BACK_TO', clientSandbox())));
+  const server = {};
+  for (const [id, row] of Object.entries(_serverPermission.TACTICAL_CAPABILITIES)) if (row.handBackTo) server[id] = row.handBackTo;
+  assert.deepEqual(client, server);
+});
+
+for (const owner of ['AIC', 'JTAC']) {
+  test(`an ${owner}-held line offers "Hand back to TAC_C2" in its menu and sends TransferStrip into TAC_C2's Bay for the state`, () => {
+    const r = renderTactical(missionLine(owner, { bayId: owner === 'AIC' ? 'aic-on-station' : 'jtac-mission' }), [owner]);
+    click(menuItem(r.el, 'Hand back to TAC_C2'));
+    assert.equal(r.sent.length, 1);
+    assert.equal(r.sent[0].actingPositionId, owner);
+    assert.deepEqual(JSON.parse(JSON.stringify(r.sent[0].op)), { kind: 'TransferStrip', toPositionId: 'TAC_C2', bayId: 'tac-c2-on-station', rackId: 'main' });
+  });
+
+  test(`an ${owner}-held line offers no Coordinate and no TOFI item (D12)`, () => {
+    const r = renderTactical(missionLine(owner), [owner]);
+    for (const label of ['Coordinate…', 'TOFI…', 'TOFI Exit…']) assert.equal(menuItem(r.el, label), undefined, label);
+  });
+}
+
+test('a state with no implying TAC_C2 Bay hands back into its first Bay implying none', () => {
+  const r = renderTactical(missionLine('AIC', { state: 'OFF_STATION', bayId: 'aic-committed' }), ['AIC']);
+  click(menuItem(r.el, 'Hand back to TAC_C2'));
+  assert.equal(r.sent[0].op.bayId, 'tac-c2-tanker');
+});
+
+test('a Position with no hand-back row (TAC_C2, GCI) is offered no hand-back item; a controller not holding the owner gets a disabled one', () => {
+  for (const owner of ['TAC_C2', 'GCI']) {
+    const r = renderTactical(missionLine(owner, { bayId: 'tac-c2-on-station' }), [owner]);
+    assert.equal(menuItem(r.el, 'Hand back to TAC_C2'), undefined, owner);
+  }
+  const r = renderTactical(missionLine('AIC'), ['TAC_C2']);
+  const item = menuItem(r.el, 'Hand back to TAC_C2');
+  assert.ok(!item || item.disabled, 'holding TAC_C2 does not act as AIC');
+});
+
+test('the proposer\'s Strip offers Cancel proposal while open and End coordination once accepted; the receiver\'s replica offers neither', () => {
+  const co = (state, extra = {}) => ({ primitive: 'POINT_OUT', state, peerFacilityId: 'CENTER', peerStripId: 'p1', peerPositionId: 'CTR', ...extra });
+  const open = renderStrip({ strip: stripAt({ coordination: co('PROPOSED') }), fdr: FDR, held: ['APP'] });
+  click(menuItem(open.el, 'Cancel proposal'));
+  assert.deepEqual(JSON.parse(JSON.stringify(open.sent.map(s => s.op))), [{ kind: 'POINT_OUT', action: 'CANCEL' }]);
+
+  const active = renderStrip({ strip: stripAt({ coordination: co('ACTIVE') }), fdr: FDR, held: ['APP'] });
+  click(menuItem(active.el, 'End coordination'));
+  assert.deepEqual(JSON.parse(JSON.stringify(active.sent.map(s => s.op))), [{ kind: 'POINT_OUT', action: 'CANCEL' }]);
+
+  const replica = renderStrip({ strip: stripAt({ ownerPositionId: 'CTR', coordination: co('ACTIVE', { mintedForCoordination: true }) }), fdr: FDR, held: ['CTR'] });
+  assert.equal(menuItem(replica.el, 'End coordination'), undefined);
+  assert.equal(menuItem(replica.el, 'Cancel proposal'), undefined);
+  const none = renderStrip({ strip: stripAt(), fdr: FDR, held: ['APP'] });
+  assert.equal(menuItem(none.el, 'End coordination'), undefined);
+});
