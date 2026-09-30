@@ -18,6 +18,7 @@ for (const [k, v] of Object.entries({
 
 const { EfspMetrics, percentile, duplicatePositionIds, TTF_SAMPLE_CAP } = await import('../src/efsp/metrics.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
+const { MissionSession } = await import('../src/mission-session.js');
 
 const HOUR = 3600000;
 const T0 = Date.UTC(2016, 5, 21, 13, 0, 0); // a mission in 2016 — the wall clock is not
@@ -49,6 +50,7 @@ function build(c, extra = {}) {
     path: extra.path || freshPath(), clock: c.clock, wallNow: c.wallNow, config: { retentionDays: 30 },
     facilityIds: ['INCIRLIK'], positionStoreFor: (f) => (f === 'INCIRLIK' ? store : null),
     correlationStats: extra.correlationStats || null, obligationStats: extra.obligationStats || null,
+    missionSession: extra.session || null,
   });
 }
 
@@ -184,42 +186,57 @@ test('gestures: count, mean, max and over-ceiling per gesture', () => {
   assert.deepEqual(g.OFFSET, { count: 0, meanInputs: null, maxInputs: null, overCeiling: 0 });
 });
 
+const SYRIA = { theatre: 'Syria', waypoints: [{ name: 'A' }], drawings: [] };
+const CAUCASUS = { theatre: 'Caucasus', waypoints: [{ name: 'A' }], drawings: [] };
+
+/** A metric store over its own in-memory mission session (src/mission-session.js). */
+function withSession(c) {
+  const session = new MissionSession({ path: null, clock: c.clock, wallNow: c.wallNow });
+  return { session, m: build(c, { session }) };
+}
+
 test('metrics sessions (H32): a mission load that is the same mission carrying on is NOT a new session', () => {
   const c = clocks();
-  const m = build(c);
-  m.noteMissionLoad({ theatre: 'Syria' });
+  const { session, m } = withSession(c);
+  session.noteMissionLoad(SYRIA);
   m.recordMutation({ type: 'efsp-mutation', ok: true });
   assert.equal(m.currentMissionSession(), 1, 'the pre-load session is adopted by the first load');
   c.advance(20 * 60000);
-  m.noteMissionLoad({ theatre: 'Syria' }); // a crc-sync restart or a gRPC reconnect
+  session.observeClock();
+  session.noteMissionLoad(SYRIA); // a crc-sync restart or a gRPC reconnect
   m.recordMutation({ type: 'efsp-mutation', ok: true });
   assert.equal(m.currentMissionSession(), 1);
+  assert.equal(m.buildMetricsBody().missionSession.theatre, 'Syria');
 });
 
-test('metrics sessions (H32): a new mission, a new theater, or the clock stepping back > 5 min opens a new session', () => {
+test('metrics sessions (H32) follow the mission session: mission_start, another mission, the clock stepping back', () => {
   const c = clocks();
-  const m = build(c);
-  m.noteMissionLoad({ theatre: 'Syria' });
+  const { session, m } = withSession(c);
+  session.noteMissionLoad(SYRIA);
   m.recordMutation({ type: 'efsp-mutation', ok: true });
   c.advance(HOUR);
-  m.tick(); // the 60 s tick keeps the session's clock current
-  c.m = T0; // the same mission file loaded again: back to its start time
-  m.noteMissionLoad({ theatre: 'Syria' });
+  session.observeClock();
+  c.m = T0; // the same mission file restarted: DCS says mission_start
+  session.noteMissionStart();
+  session.noteMissionLoad(SYRIA);
   m.recordMutation({ type: 'efsp-mutation', ok: true });
   assert.equal(m.currentMissionSession(), 2);
 
-  m.noteMissionLoad({ theatre: 'Caucasus' });
+  session.noteMissionLoad(CAUCASUS);
   m.recordMutation({ type: 'efsp-mutation', ok: true });
   assert.equal(m.currentMissionSession(), 3);
 
   c.advance(30 * 60000);
+  session.observeClock();
   m.recordMutation({ type: 'efsp-mutation', ok: true });
   c.m -= 10 * 60000; // no load event at all, but the mission clock went back
+  session.observeClock();
   m.recordMutation({ type: 'efsp-mutation', ok: true });
   assert.equal(m.currentMissionSession(), 4);
 
   const body = m.buildMetricsBody();
   assert.deepEqual(body.missionSessions.map(s => s.seq), [1, 2, 3, 4]);
+  assert.deepEqual(body.missionSessions.map(s => s.theatre), ['Syria', 'Syria', 'Caucasus', 'Caucasus']);
   assert.equal(body.missionSession.seq, 4);
   assert.equal(body.metrics.rejectedMutations.mutations, 1, 'the default view is the current session only');
   assert.equal(m.buildMetricsBody({ missionSession: 1 }).metrics.rejectedMutations.mutations, 1);
@@ -228,15 +245,19 @@ test('metrics sessions (H32): a new mission, a new theater, or the clock steppin
 
 test('a fallback to the wall clock (DCS gone) is not a new session when the mission comes back', () => {
   const c = clocks();
-  const m = build(c);
-  m.noteMissionLoad({ theatre: 'Syria' });
+  const { session, m } = withSession(c);
+  session.noteMissionLoad(SYRIA);
+  session.observeClock();
   m.recordMutation({ type: 'efsp-mutation', ok: true });
   c.source = 'WALL';
   const missionAt = c.m;
   c.m = c.w; // the clock now answers wall time, years ahead
+  session.observeClock();
   m.recordMutation({ type: 'efsp-mutation', ok: true });
   c.source = 'MISSION';
   c.m = missionAt + 60000;
+  session.observeClock();
+  session.noteMissionLoad(SYRIA);
   m.recordMutation({ type: 'efsp-mutation', ok: true });
   assert.equal(m.currentMissionSession(), 1);
 });
@@ -261,8 +282,9 @@ test('the rolling last hour sits beside the session (S-R2-4)', () => {
 test('persistence: a restart restores buckets, sessions and sources; nothing about who', () => {
   const c = clocks();
   const p = freshPath();
-  const m = build(c, { path: p, store: positions(['GND']) });
-  m.noteMissionLoad({ theatre: 'Syria' });
+  const session = new MissionSession({ path: null, clock: c.clock, wallNow: c.wallNow });
+  const m = build(c, { path: p, store: positions(['GND']), session });
+  session.noteMissionLoad(SYRIA);
   report(m, 'INCIRLIK', 'GND', [{ kind: 'SEARCH' }]);
   m.declareSource('staleness');
   m.recordTransfer({ kind: 'TRANSFER', ok: false, cause: 'NO_RECEIVING_POSITION' });
@@ -270,7 +292,7 @@ test('persistence: a restart restores buckets, sessions and sources; nothing abo
   const raw = fs.readFileSync(p, 'utf8');
   assert.ok(!raw.includes('c-GND'), 'no controller id is persisted');
 
-  const again = build(c, { path: p, store: positions(['GND']) });
+  const again = build(c, { path: p, store: positions(['GND']), session });
   const a = m.buildMetricsBody();
   const b = again.buildMetricsBody();
   assert.deepEqual(b.metrics.transfers, a.metrics.transfers);

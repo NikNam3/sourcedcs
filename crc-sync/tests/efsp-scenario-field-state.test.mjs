@@ -142,7 +142,7 @@ test('sortie 0: before the mission wind sets an active runway, a Strip with no r
   finishAndInspect();
   // The mission wind now sets the active end (decisions.md H22): 060 true
   // favours 05 (056 true).
-  const r = efsp.fieldStateStore.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, windKt: 10, missionKey: 'scenario' });
+  const r = efsp.fieldStateStore.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, windKt: 10, missionSession: 1 });
   assert.equal(r.activeRunway, '05');
 });
 
@@ -294,7 +294,7 @@ test('sortie 11: crc-sync restarts mid-suspension and the runway comes back SUSP
   assert.equal(rwy.suspension.requestedBy.positionId, 'OPS');
   assert.equal(fieldState(reborn).activeRunway, '05');
   // The same mission reconnecting does not re-derive the active runway.
-  assert.equal(reborn.fieldStateStore.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 240, missionKey: 'scenario' }).changed, false);
+  assert.equal(reborn.fieldStateStore.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 240, missionSession: 1 }).changed, false);
   // Occupancy is ephemeral (ADR 0029): the crew re-declares.
   const rc = crew(reborn, ATC);
   const restored = reborn.boardStore.getStrip(queued.stripId);

@@ -91,6 +91,10 @@ class FieldStateStore {
       // config default, and a restored value outranks a fresh derivation.
       activeRunway: null,
       activeRunwaySource: null,
+      // The mission session (docs/adr/0086) whose wind has been applied. Kept
+      // apart from activeRunwaySource, which a TWR runway change replaces: a
+      // reconnect after TWR's change must still see the wind as applied.
+      windDerivedSession: null,
       runways: inventory.runways.map(def => this._seedRunway(def)),
       runwayChange: null,
       // §12: a deferral leaves its fields present. L12 (hot cargo) and L13
@@ -648,22 +652,24 @@ class FieldStateStore {
 
   /**
    * Called on mission load with the Facility airfield's wind. Sets the active
-   * end to the one most into the wind — but only for a mission whose wind has
-   * not already set it: crc-sync hears 'mission-load' on every reconnect, and a
-   * reconnect (or a restart) must not undo what TWR has since chosen. Never
-   * while a runway change is open. Audited as a system change.
+   * end to the one most into the wind — once per mission SESSION
+   * (mission-session.js, docs/adr/0086): crc-sync hears 'mission-load' on every
+   * reconnect, and a reconnect (or a restart) onto the same session must not
+   * undo what TWR has since chosen. Never while a runway change is open (the
+   * wind then counts as applied: TWR is choosing). Audited as a system change.
    *
-   * @returns {{ok:boolean, changed?:boolean, activeRunway?:string, reason?:string}}
+   * @returns {{ok:boolean, changed?:boolean, skipped?:boolean, activeRunway?:string, reason?:string}}
+   *   skipped: this session's wind was already applied, nothing was touched
    */
-  setActiveRunwayFromWind(facilityId, { windFromTrue, windKt = null, missionKey = null } = {}) {
+  setActiveRunwayFromWind(facilityId, { windFromTrue, windKt = null, missionSession = null } = {}) {
     const record = this._records.get(facilityId);
     if (!record) return { ok: false, reason: 'NOT_FOUND' };
-    const source = record.activeRunwaySource;
-    if (record.activeRunway && source && missionKey && source.missionKey === missionKey) {
-      return { ok: true, changed: false, activeRunway: record.activeRunway };
+    if (missionSession !== null && record.windDerivedSession === missionSession) {
+      return { ok: true, changed: false, skipped: true, activeRunway: record.activeRunway };
     }
     if (isRunwayChangeOpen(record.runwayChange)) {
       console.warn(`[field-state] ${facilityId}: a runway change is open — leaving the active runway at ${record.activeRunway} rather than deriving it from the wind`);
+      record.windDerivedSession = missionSession;
       return { ok: true, changed: false, activeRunway: record.activeRunway };
     }
     const end = activeEndIntoWind(this._inventories.get(facilityId), windFromTrue);
@@ -671,8 +677,9 @@ class FieldStateStore {
     const before = deepClone(record);
     const from = record.activeRunway;
     record.activeRunway = end;
-    record.activeRunwaySource = { kind: 'WIND', windFromTrue, windKt, missionKey, at: this._clock.now() };
-    this._touch(record, SYSTEM_ACTOR, { op: 'ActiveRunwayFromWind', from, to: end, windFromTrue, windKt, missionKey, positionId: null });
+    record.activeRunwaySource = { kind: 'WIND', windFromTrue, windKt, missionSession, at: this._clock.now() };
+    record.windDerivedSession = missionSession;
+    this._touch(record, SYSTEM_ACTOR, { op: 'ActiveRunwayFromWind', from, to: end, windFromTrue, windKt, missionSession, positionId: null });
     this._recordAudit({ facilityId, op: { kind: 'ActiveRunwayFromWind' } }, null, SYSTEM_ACTOR, before, { ok: true });
     return { ok: true, changed: from !== end, activeRunway: end };
   }

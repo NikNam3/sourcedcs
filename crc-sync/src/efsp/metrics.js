@@ -11,7 +11,8 @@
 //                     ships, staleness until L19 declares its detector)
 //
 // Buckets are keyed by METRICS SESSION and UTC HOUR. A metrics session is one
-// DCS mission load to the next (decisions.md H32); the hour is the UTC hour of
+// mission to the next (decisions.md H32) — the mission session of
+// src/mission-session.js (docs/adr/0086), whose number it carries; the hour is the UTC hour of
 // the mission clock (H11 — "metrics buckets" are named there). The default view
 // is the current session, with a ROLLING last hour beside it (S-R2-4), kept in
 // one-minute buckets in memory only. Retention (default 30 days,
@@ -44,6 +45,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { writePath, ensureDirFor } = require('../state-paths');
 const { WALL_CLOCK } = require('../mission-clock');
+const { MissionSession } = require('../mission-session');
 const { getInstrumentationConfig } = require('./instrumentation-config');
 const { TrafficCount, hourKey } = require('./traffic-count');
 
@@ -69,13 +71,6 @@ const MUTATION_DEDUPE_CAP = 5000;           // board-store.js APPLIED_MUTATIONS_
 const REPORT_DEDUPE_CAP = 1000;
 const SESSIONS_LISTED = 50;
 const MAX_WINDOW_HOURS = 720;
-// A mission load that turns out to be the SAME mission (a crc-sync restart, a
-// gRPC reconnect) is not a new metrics session: same theater, and the mission
-// clock carried on from where it was, allowing this much slack either way.
-const MISSION_CONTINUATION_SLACK_MS = 5 * 60 * 1000;
-// How long a mission load waits for its first mission-clock sample before it
-// is resolved without one (DCS answering the load but not the time).
-const MISSION_LOAD_RESOLVE_MS = 60 * 1000;
 const MINUTE_MS = 60 * 1000;
 const ROLLING_WINDOW_MS = HOUR_MS;
 const SESSION_RECORDS_KEPT = 50;
@@ -161,12 +156,14 @@ class EfspMetrics {
    * @param {(facilityId:string) => object|null} [deps.positionStoreFor]
    * @param {() => object|null} [deps.correlationStats] CorrelationReconciler.getStats — NEVER called at construction (T12)
    * @param {() => object|null} [deps.obligationStats]  ForwardingObligationMonitor.getComplianceStats — likewise
+   * @param {MissionSession} [deps.missionSession] which mission we are in (docs/adr/0086); default an in-memory one
    */
-  constructor({ path: filePath, clock = WALL_CLOCK, wallNow = () => Date.now(), config, facilityIds = [], positionStoreFor = () => null, correlationStats = null, obligationStats = null } = {}) {
+  constructor({ path: filePath, clock = WALL_CLOCK, wallNow = () => Date.now(), config, facilityIds = [], positionStoreFor = () => null, correlationStats = null, obligationStats = null, missionSession = null } = {}) {
     const defaults = getInstrumentationConfig().metrics;
     this._path = filePath || METRICS_PATH;
     this._clock = clock;
     this._wallNow = wallNow;
+    this._session = missionSession || new MissionSession({ path: null, clock, wallNow });
     this._retentionDays = config && Number.isInteger(config.retentionDays) && config.retentionDays >= 1 ? config.retentionDays : defaults.retentionDays;
     this._facilityIds = [...facilityIds];
     this._positionStoreFor = positionStoreFor;
@@ -176,10 +173,9 @@ class EfspMetrics {
     this._tapInstalled = false;
 
     this._sources = { client: null, staleness: null };
-    this._missions = [];           // [{ seq, theatre, loadedWallAt, startedAt, lastAt, lastWallAt }]
+    this._missions = [];           // [{ seq, theatre, startedAt, lastAt, lastWallAt }] — the sessions this store has seen
     this._buckets = new Map();     // `${seq}|${hourUtc}` -> bucket (persisted)
     this._minutes = new Map();     // `${seq}|${minuteMs}` -> bucket, the rolling hour (memory only)
-    this._pendingLoad = null;
     this._dirty = false;
     this._writes = 0;
     this._reports = new BoundedSet(REPORT_DEDUPE_CAP);
@@ -250,46 +246,25 @@ class EfspMetrics {
 
   // ── metrics sessions (decisions.md H32) ──
 
-  /** Called on every DCS mission load (server.js's grpcClient 'mission-load'). */
-  noteMissionLoad({ theatre = null } = {}) {
-    this._pendingLoad = { theatre: theatre || null, wallAt: this._wallNow() };
-  }
-
+  /**
+   * The metrics-side record of the current mission session: opened the first
+   * time a session is seen here, its theater kept in step (a first load names
+   * the session it is already in), its lastAt the latest mission time seen.
+   */
   _mission() {
+    const session = this._session.current();
     const wall = this._wallNow();
-    const source = this._clock.source || 'WALL';
-    const missionTime = source !== 'WALL';
+    const missionTime = (this._clock.source || 'WALL') !== 'WALL';
     const nowM = this._clock.now();
-    const open = (theatre, loadedWallAt) => {
-      const prev = this._missions[this._missions.length - 1];
-      this._missions.push({
-        seq: (prev ? prev.seq : 0) + 1, theatre, loadedWallAt, startedAt: nowM,
-        lastAt: missionTime ? nowM : null, lastWallAt: missionTime ? wall : null,
-      });
-      this._dirty = true;
-    };
-    if (!this._missions.length) open(null, null);
     let cur = this._missions[this._missions.length - 1];
-
-    const p = this._pendingLoad;
-    if (p && (missionTime || wall - p.wallAt > MISSION_LOAD_RESOLVE_MS)) {
-      this._pendingLoad = null;
-      const continues = missionTime && cur.theatre === p.theatre && cur.lastAt !== null
-        && nowM >= cur.lastAt - MISSION_CONTINUATION_SLACK_MS
-        && nowM <= cur.lastAt + Math.max(0, wall - cur.lastWallAt) + MISSION_CONTINUATION_SLACK_MS;
-      if (cur.theatre === null && cur.loadedWallAt === null) {
-        // Everything before the first mission load belongs to it.
-        Object.assign(cur, { theatre: p.theatre, loadedWallAt: p.wallAt });
-        if (cur.lastAt === null) cur.startedAt = nowM;
-        this._dirty = true;
-      } else if (!continues) {
-        open(p.theatre, p.wallAt);
-      }
-    } else if (missionTime && cur.lastAt !== null && nowM < cur.lastAt - MISSION_CONTINUATION_SLACK_MS) {
-      // The mission clock stepped back: a different mission (S-R2-2).
-      open(cur.theatre, null);
+    if (!cur || cur.seq !== session.seq) {
+      cur = { seq: session.seq, theatre: session.theatre, startedAt: nowM, lastAt: missionTime ? nowM : null, lastWallAt: missionTime ? wall : null };
+      this._missions.push(cur);
+      this._dirty = true;
+    } else if (cur.theatre !== session.theatre) {
+      cur.theatre = session.theatre;
+      this._dirty = true;
     }
-    cur = this._missions[this._missions.length - 1];
     if (missionTime) {
       if (cur.lastAt === null || nowM > cur.lastAt) cur.lastAt = nowM;
       cur.lastWallAt = wall;
@@ -443,9 +418,8 @@ class EfspMetrics {
   /** The 60 s tick: sample, prune, write if anything changed. Never throws. */
   tick() {
     const at = this._clock.now();
-    // _mission() first: it resolves a pending mission load and keeps the
-    // session's lastAt current, which is what tells "the same mission carrying
-    // on" from "the same mission file loaded again".
+    // _mission() first: it opens the record of a session that started since
+    // the last tick, and keeps the session's lastAt current.
     for (const step of [() => this._mission(), () => this.sampleManning(at), () => this.sampleCorrelation(at), () => this.prune(), () => this._pruneMinutes(at), () => this.flush()]) {
       try { step(); } catch (e) { console.warn('[efsp-metrics] tick step failed:', e.message); }
     }
@@ -782,6 +756,7 @@ function createEfspInstrumentation({
   efsp, facilityConfig, correlationStats = null, obligationStats = null,
   clock = efsp.clock || WALL_CLOCK, wallNow = () => Date.now(),
   config = getInstrumentationConfig(), metricsPath, trafficCountPath,
+  missionSession = new MissionSession({ path: null, clock, wallNow }),
 }) {
   const facilityIds = facilityConfig.getFacilityIds();
   const dup = duplicatePositionIds(facilityConfig);
@@ -789,12 +764,12 @@ function createEfspInstrumentation({
 
   const metrics = new EfspMetrics({
     path: metricsPath, clock, wallNow, config: config.metrics, facilityIds,
-    positionStoreFor: efsp.positionStoreFor, correlationStats, obligationStats,
+    positionStoreFor: efsp.positionStoreFor, correlationStats, obligationStats, missionSession,
   });
   const trafficCount = new TrafficCount({
     mutationLog: efsp.mutationLog, fdrStore: efsp.fdrStore, boardStoreFor: efsp.boardStoreFor,
     facilityIds, config: config.trafficCount, path: trafficCountPath, clock, wallNow,
-    missionSessionOf: () => metrics.currentMissionSession(),
+    missionSessionOf: () => missionSession.currentSeq(),
   });
   efsp.mutationLog.onRecord((entry) => {
     if (entry && entry.ok !== false && entry.op === 'SystemReassign') metrics.recordSystemReassign({ at: entry.at });
@@ -992,7 +967,6 @@ function createEfspInstrumentation({
     metrics,
     trafficCount,
     tick: () => metrics.tick(),
-    noteMissionLoad: (missionData) => metrics.noteMissionLoad({ theatre: missionData && missionData.theatre }),
     metricsHttp,
     trafficCountHttp,
     /** Per-connection records, live first then the last 50 ended. In-process only — never serve these (H35). */
