@@ -105,3 +105,12 @@ L9-E1/E2/E3/E4/E7/E8, L1b-Q1, L12-Q2, L13-Q2, L23-Q6, L23-Q7, Q-L14-1, Q-L14-2, 
 - **Tuning files are read once at startup and never written by code** (P5).
 - No backwards compatibility (alpha). The wire carries only what sensors know (ADR 0059).
 - Declutter behaviours stay off until the end of the EFSP work (H6).
+
+## Update (2026-09-30, after the wave-1 merge)
+
+- **Wave 1 is merged** into `efsp-wp5-correlation` (merges up to `3b27390`, then `8feeca0` = H53 + H70, ADR 0084). crc-sync 1565 pass / 8 todo, crc-desktop 517, atobrief 77. Not pushed.
+- The full Playwright run (`E2E_LANE=9`) was started just before the session paused, and its result wasn't seen: **re-run it.**
+- **Restart the local crc-sync on :3000.** `crc-sync/src` changed with the merge.
+- Desk answers H51b–H70 are logged and settled. L11-8 is still open.
+- A drafter was writing `docs/parallel/wave2/L24.md`, `L26.md` and `L27.md` (ADRs 0081–0083). Check whether they exist; they're uncommitted.
+- Next steps: integrator doc fold (`docs/wip/*.md`), F2 (WMM + theaters.json incl. Syria TA 10,000 ft, H62/H69), F3, F4, then dispatch wave 2 (L1b, L12–L16, L23, L24, L26, L27, L28, L25; L22 mockup first). The lane worktrees `../sourcedcs-L*` can be removed.
