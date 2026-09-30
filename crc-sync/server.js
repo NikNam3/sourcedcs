@@ -243,7 +243,7 @@ grpcClient.on('unit', (unitData) => {
 });
 grpcClient.on('gone', (id) => { trackStore.remove(id); transponders.release(id); });
 
-let airportWeather = new Map(); // airport name -> { windFrom, windKt, tempC, pressureHpa, updatedAt }
+let airportWeather = new Map(); // airport name -> { windFrom (true, as DCS gives it), windKt, tempC, pressureHpa, updatedAt }
 let weatherRefreshTimer = null;
 
 async function refreshAirportWeather(missionData) {
@@ -519,7 +519,11 @@ app.get('/api/apt-weather', auth.requireAuth, (req, res) => {
   if (!airport) return res.status(404).json({ error: 'airport not found' });
   const w = airportWeather.get(airport.name);
   if (!w) return res.status(503).json({ error: 'weather not yet available for this airport' });
-  res.json({ airport: airport.name, ...w });
+  // The wind leaves here in both frames, named (decisions.md H76): tower and
+  // ATIS readouts use windFromMagnetic, METAR-style text windFromTrue. The raw
+  // `windFrom` is not sent, so no client can show it without saying which.
+  const { windFrom, ...rest } = w;
+  res.json({ airport: airport.name, ...rest, ...theaterContext.windFrom(windFrom, airport.lat, airport.lon) });
 });
 
 // ── WP8 instrumentation (docs/adr/0065) — the §11.5 metric set, the §11.4

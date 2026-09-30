@@ -101,6 +101,20 @@ class TheaterContext {
     return this.trueToMagnetic(gridDeg + gamma, lat, lon);
   }
 
+  /**
+   * An airfield's wind for display (decisions.md H76): MAGNETIC in ATIS and
+   * tower readouts, TRUE in METAR-style text. DCS's wind is taken as true
+   * (decisions S-L1c). Both are whole degrees; magnetic is null when the
+   * variation is unknown, and a readout then shows a dash, not the true value.
+   * @returns {{ windFromTrue:number|null, windFromMagnetic:number|null }}
+   */
+  windFrom(windFromTrue, lat, lon) {
+    if (!Number.isFinite(windFromTrue)) return { windFromTrue: null, windFromMagnetic: null };
+    const t = magnetic.normDeg(Math.round(windFromTrue));
+    const m = this.trueToMagnetic(windFromTrue, lat, lon);
+    return { windFromTrue: t, windFromMagnetic: m == null ? null : Math.round(m) % 360 };
+  }
+
   _buildGrid() {
     if (!this._airports.length) return null;
     let latMin = Infinity, latMax = -Infinity, lonMin = Infinity, lonMax = -Infinity;

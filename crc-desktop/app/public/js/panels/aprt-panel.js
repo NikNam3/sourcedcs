@@ -73,9 +73,14 @@ function _updateAprtRefCard() {
   const $qnh  = document.getElementById('aprt-ref-qnh');
   const $temp = document.getElementById('aprt-ref-temp');
   if (wx) {
-    const windDir = String(wx.windFrom).padStart(3, '0');
+    // Tower readout: magnetic wind, converted by crc-sync (decisions H76).
+    const windDir = wx.windFromMagnetic == null ? '---' : String(wx.windFromMagnetic).padStart(3, '0');
     const inhg    = (wx.pressureHpa / 33.8639).toFixed(2);
-    if ($wind) { $wind.textContent = `${windDir}° @ ${wx.windKt} kt`; $wind.className = 'aprt-ref-v'; }
+    if ($wind) {
+      $wind.textContent = `${windDir}°M @ ${wx.windKt} kt`;
+      $wind.title = wx.windFromTrue == null ? '' : `Magnetic. True: ${String(wx.windFromTrue).padStart(3, '0')}°T`;
+      $wind.className = 'aprt-ref-v';
+    }
     if ($qnh)  { $qnh.textContent  = `${wx.pressureHpa} hPa  /  ${inhg} inHg`; $qnh.className = 'aprt-ref-v'; }
     if ($temp) { $temp.textContent = `${wx.tempC > 0 ? '+' : ''}${wx.tempC}°C`; $temp.className = 'aprt-ref-v'; }
   } else {
@@ -478,7 +483,10 @@ function _buildAtisText() {
   const taFt       = settings.transitionAltFt ?? 18000;
 
   const aptName  = apt ? (apt.name || apt.icao) : 'THIS STATION';
-  const windDir  = wx ? String(wx.windFrom).padStart(3, '0') : '000';
+  // ATIS wind is magnetic (decisions H76), converted by crc-sync. Unknown
+  // variation: the ATIS says the wind is not available rather than read a
+  // true value as magnetic.
+  const windDir  = wx && wx.windFromMagnetic != null ? String(wx.windFromMagnetic).padStart(3, '0') : (wx ? null : '000');
   const windKt   = wx ? wx.windKt   : 0;
   const tempC    = wx ? wx.tempC    : 0;
   const qnhHpa   = wx ? wx.pressureHpa : 1013;
@@ -491,7 +499,7 @@ function _buildAtisText() {
   const infoPhon    = NATO[infoLetter] || infoLetter;
   const rwySpelled  = rwyRaw  ? spellRwy(rwyRaw)            : '—';
   const taSpelled   = spellDigits(taK)  + ' thousand';
-  const windDirSp   = spellDigits(windDir);
+  const windDirSp   = windDir == null ? null : spellDigits(windDir);
   const windKtSp    = spellNum(windKt);
   const tempSp      = spellNum(tempC);
   const qnhHpaSp    = spellDigits(qnhHpa);
@@ -515,7 +523,7 @@ function _buildAtisText() {
     `This is ${aptName} ATIS information ${infoPhon}.`,
     `Expect runway ${rwySpelled}.`,
     `Transition altitude ${taSpelled}.`,
-    `Wind ${windDirSp} degrees, ${windKtSp} knots.`,
+    windDirSp == null ? 'Wind not available.' : `Wind ${windDirSp} degrees, ${windKtSp} knots.`,
     `Visibility ${vis}.`,
     ...cloudLines,
     `Temperature ${tempSp} degrees.`,

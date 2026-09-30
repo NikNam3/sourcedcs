@@ -145,11 +145,12 @@ function showAptWeatherPanel(label, lat, lon, elevM, clientX, clientY) {
         return;
       }
       const inhg  = (d.pressureHpa / 33.8639).toFixed(2);
-      const windDir = String(d.windFrom).padStart(3, '0');
+      // Tower/ATIS wind: magnetic, converted by crc-sync (decisions H76).
+      const windDir = d.windFromMagnetic == null ? '---' : String(d.windFromMagnetic).padStart(3, '0');
       body.innerHTML =
         `<div class="awp-row"><span class="awp-k">QNH</span><span class="awp-v">${d.pressureHpa} hPa / ${inhg} inHg</span></div>` +
         `<div class="awp-row"><span class="awp-k">TEMP</span><span class="awp-v">${d.tempC}°C</span></div>` +
-        `<div class="awp-row"><span class="awp-k">WIND</span><span class="awp-v">${windDir}° @ ${d.windKt} kt</span></div>`;
+        `<div class="awp-row"><span class="awp-k">WIND</span><span class="awp-v">${windDir}°M @ ${d.windKt} kt</span></div>`;
     })
     .catch(() => {
       const body = document.getElementById('awp-body');

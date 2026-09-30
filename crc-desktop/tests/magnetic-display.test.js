@@ -99,3 +99,14 @@ test('magnetic.js: fixed variation, grid interpolation, unknown → null', () =>
   assert.equal(M.magneticVariationAt(), 5, 'no position: the centre');
   assert.equal(M.magneticText(95, 30.5, 30.5), '090');
 });
+
+test('wind: tower readout, weather popup and ATIS text show crc-sync\'s MAGNETIC wind, labelled (H76)', () => {
+  for (const [file, src] of clientJs()) {
+    assert.equal(/\.windFrom\b/.test(src), false, `${file} reads the raw, frame-less windFrom`);
+  }
+  const aprt = read('js/panels/aprt-panel.js');
+  assert.match(aprt, /\$\{windDir\}°M @ \$\{wx\.windKt\} kt/, 'tower readout says M');
+  assert.match(aprt, /wx && wx\.windFromMagnetic != null \? String\(wx\.windFromMagnetic\)/, 'ATIS uses magnetic');
+  assert.match(aprt, /'Wind not available\.'/, 'unknown variation: no true value read as magnetic');
+  assert.match(read('js/panels/airport-selector.js'), /\$\{windDir\}°M @ \$\{d\.windKt\} kt/);
+});
