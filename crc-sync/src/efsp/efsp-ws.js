@@ -645,6 +645,8 @@ function _marsaDelta(marsaStore, relations) {
   };
 }
 
+function facilityConfig_positionIds(ctx, facilityId) { return ctx.facilityConfig.getPositionSet(facilityId); }
+
 function _handleSetPositions(ctx, session, msg, persist) {
   const facilityId = msg.facilityId || ctx.facilityConfig.DEFAULT_FACILITY_ID;
   const positionStore = ctx.positionStoreFor(facilityId);
@@ -653,10 +655,18 @@ function _handleSetPositions(ctx, session, msg, persist) {
     return { ack: { version: VERSION, type: 'efsp-positions-ack', facilityId, held: [], warnings: [], reason: 'VALIDATION_ERROR', detail: `unknown facilityId: ${facilityId}` } };
   }
   const held = Array.isArray(msg.held) ? msg.held : [];
+  const occupiedBefore = new Set(facilityConfig_positionIds(ctx, facilityId).filter(id => positionStore.isOccupied(id)));
   const { held: actuallyHeld, vacated } = positionStore.setHeldPositions(session.controllerId, session.who, held);
 
   const warnings = [];
   const reassignedIds = [];
+  // F10: a Position that was empty and now has a Primary gets back the Strips
+  // that were routed away from it (docs/adr/0080).
+  for (const positionId of actuallyHeld) {
+    if (!occupiedBefore.has(positionId) && positionStore.isOccupied(positionId)) {
+      reassignedIds.push(...boardStore.returnCoveredStrips(positionId));
+    }
+  }
   for (const positionId of vacated) {
     if (positionStore.isOccupied(positionId)) continue; // another controller is now Primary — nothing to route
     const owned = boardStore.getAll().filter(s => s.ownerPositionId === positionId && s.state !== 'DROPPED');
@@ -664,8 +674,11 @@ function _handleSetPositions(ctx, session, msg, persist) {
 
     const covering = positionStore.coveringPositionFor(positionId);
     if (covering) {
-      reassignedIds.push(...boardStore.reassignPositionStrips(positionId, covering));
-      warnings.push({ positionId, count: owned.length, routedTo: covering });
+      const moved = boardStore.reassignPositionStrips(positionId, covering);
+      reassignedIds.push(...moved);
+      const warning = { positionId, count: owned.length, routedTo: covering };
+      if (moved.unplaced && moved.unplaced.length) warning.unplaced = moved.unplaced.length; // no Bay of the covering Position fits: they stay where they were
+      warnings.push(warning);
     } else {
       // Defect D19 boundary: the covering chain bottomed out with nobody
       // occupying any link. MUST be a visible, distinct condition — never

@@ -426,8 +426,14 @@ class BoardStore {
     // current Owner (guide §4.4 rule 2) — TransferStrip is itself an
     // owner-only action (the sender transfers away; the receiver doesn't
     // pull), so this gate covers it too.
-    if (strip.ownerPositionId !== actingPositionId) {
-      return { ok: false, reason: 'NOT_OWNER', strip: deepClone(strip) };
+    // Two narrow, table-driven exceptions cross it (permission.js's
+    // mayActBesideOwner, docs/adr/0080): the TOFI answer on a line a tactical
+    // Position is working, and OPS's alert status on a departure. Everything
+    // else is the owner's alone. The refusal names the owner (B1/B2 stayed
+    // invisible for want of it).
+    if (strip.ownerPositionId !== actingPositionId
+        && !(this._rules.mayActBesideOwner && this._rules.mayActBesideOwner(actingPositionId, strip, op))) {
+      return { ok: false, reason: 'NOT_OWNER', detail: `${strip.ownerPositionId} holds this Strip`, strip: deepClone(strip) };
     }
 
     // F-303, the rest of it: a rejected replica is inert for every op, not
@@ -442,7 +448,7 @@ class BoardStore {
       case 'SetBlock':      result = this._applySetBlock(strip, op, by, actingPositionId, mutation.clientMutationId); break;
       case 'TransferStrip': result = this._applyTransferStrip(strip, op, by); break;
       case 'SetFlag':       result = this._applySetFlag(strip, op, by); break;
-      case 'SetState':      result = this._setStateOwnerRefusal(strip, op.toState, actingPositionId) || this._setStateRunwayRefusal(strip, op.toState) || this._applySetState(strip, op.toState, by); break;
+      case 'SetState':      result = this._setStateOwnerRefusal(strip, op.toState, actingPositionId) || this._setStateRunwayRefusal(strip, op.toState) || this._applySetStateOp(strip, op.toState, by); break;
       case 'InvokeNla':     result = this._applyInvokeNla(strip, by); break;
       case 'Undo':          result = this._applyUndo(strip, by); break;
       case 'DropStrip':     result = this._applyDropStrip(strip, op, by); break;
@@ -1159,6 +1165,24 @@ class BoardStore {
   _applyTransferStrip(strip, op, by) {
     const bayCheck = this._requireKnownBay(op.bayId, strip);
     if (bayCheck) return bayCheck;
+    // H2 / H40 (docs/adr/0080): a working Position with a hand-back row may
+    // transfer a line only to the Positions the capability table names. The
+    // acting Position is the owner (_dispatch verified it).
+    const handBack = this._rules.handBackTargetsFor ? this._rules.handBackTargetsFor(strip.ownerPositionId) : null;
+    if (handBack && !handBack.includes(op.toPositionId)) {
+      return {
+        ok: false, reason: 'PERMISSION_DENIED', strip,
+        detail: `${strip.ownerPositionId} may only hand a line back to ${handBack.join(' or ')}`,
+      };
+    }
+    // B4: the Bay is one of the RECEIVING Position's, or the Strip's owner and
+    // its Bay disagree and it drops off both Positions' panels.
+    if (this._rules.baysFor) {
+      const own = this._rules.baysFor(op.toPositionId);
+      if (!own.some(b => b.bayId === op.bayId)) {
+        return { ok: false, reason: 'VALIDATION_ERROR', detail: `${op.bayId} is not a Bay of ${op.toPositionId}`, strip };
+      }
+    }
     // Same check _applyMoveStrip uses (§3.5 rule 4) — a Transfer landing in
     // a Bay configured with an implied EfspState is validated EXACTLY like
     // pressing that NLA button would be, before anything else about this
@@ -1174,6 +1198,7 @@ class BoardStore {
 
     let destPositionId = op.toPositionId;
     let routedTo = null;
+    let warning;
 
     if (!this._rules.isOccupied(op.toPositionId)) {
       const covering = this._rules.coveringPositionFor(op.toPositionId);
@@ -1198,10 +1223,21 @@ class BoardStore {
       : false;
 
     strip.ownerPositionId = destPositionId;
-    strip.bayId = op.bayId;
-    strip.rackId = op.rackId;
-    strip.orderKey = this._resolveOrderKey(op.bayId, op.rackId, op.afterStripId || null, op.beforeStripId || null, strip.stripId);
+    delete strip.coveredFrom; // it has a new owner by decision, not by cover (F10)
     if (check.impliedState && check.impliedState !== strip.state) strip.state = check.impliedState;
+    const routedBay = routedTo ? this._bayForNewOwner(destPositionId, strip.state, strip) : null;
+    if (routedBay) {
+      // B3: routed to the covering Position, so the line lands in ITS Bay, not
+      // the absent Position's (which no panel of the covering one builds).
+      strip.bayId = routedBay.bayId;
+      strip.rackId = routedBay.rackId;
+      strip.orderKey = this._appendOrderKey(strip.bayId, strip.rackId, strip.stripId);
+    } else {
+      strip.bayId = op.bayId;
+      strip.rackId = op.rackId;
+      strip.orderKey = this._resolveOrderKey(op.bayId, op.rackId, op.afterStripId || null, op.beforeStripId || null, strip.stripId);
+      if (routedTo) warning = `${routedTo} has no Bay for this Strip; it stays in ${op.bayId}`;
+    }
 
     strip.rev += 1;
     strip.updatedAt = this._clock.now();
@@ -1215,7 +1251,7 @@ class BoardStore {
     // regardless of whether this transfer came from a drag or an NLA-
     // driven transfer-shaped transition (board-store.js's own _applyInvokeNla).
     this._nlaHistory.delete(strip.stripId);
-    return { ok: true, strip, routedTo, selfCoordinated };
+    return { ok: true, strip, routedTo, selfCoordinated, warning };
   }
 
   _applySetFlag(strip, op, by) {
@@ -1237,6 +1273,21 @@ class BoardStore {
     const rackStrips = this.getRack(bayId, rackId).filter(s => s.stripId !== excludeStripId);
     const last = rackStrips.length ? rackStrips[rackStrips.length - 1].stripId : null;
     return this._resolveOrderKey(bayId, rackId, last, null, excludeStripId);
+  }
+
+  /**
+   * The Bay a Strip in `state` sits in when `positionId` becomes its owner
+   * without choosing one (docs/adr/0080, B3): the owner's Bay that implies the
+   * state; else its first Bay that implies none (its coordination-style Bay);
+   * else null, and the caller keeps the current Bay and says so. The rack is
+   * the placement rule's (a runway queue's end), as for every other placement.
+   * @returns {{bayId:string, rackId:string}|null}
+   */
+  _bayForNewOwner(positionId, state, strip = null) {
+    const bays = this._rules.baysFor ? this._rules.baysFor(positionId) : [];
+    const bay = bays.find(b => b.impliesState === state) || bays.find(b => !b.impliesState) || null;
+    if (!bay) return null;
+    return { bayId: bay.bayId, rackId: strip ? this._placementRack(strip, bay) : bay.rackIds[0] };
   }
 
   /**
@@ -1268,6 +1319,27 @@ class BoardStore {
     strip.bayId = bay.bayId;
     strip.rackId = this._placementRack(strip, bay);
     strip.orderKey = this._appendOrderKey(bay.bayId, strip.rackId, strip.stripId);
+  }
+
+  /**
+   * The controller's SetState (after the owner and runway checks): the state
+   * change, plus a warning when it leaves the Strip in a Bay that implies a
+   * different state because its owner has no Bay for the new one (B7's second
+   * defect, decisions Q5): nothing moves the Strip, and the ack says so.
+   */
+  _applySetStateOp(strip, toState, by) {
+    // DROPPED goes through the one retiring path (S-L24): the same open-proposal
+    // and active-TOFI guards, the remove indicator, the beacon release and the
+    // archive clock, not a bare state write that skips all four.
+    if (toState === 'DROPPED') return this._applyDropStrip(strip, {}, by);
+    const result = this._applySetState(strip, toState, by);
+    if (result.ok && this._rules.bayImpliesState) {
+      const implied = this._rules.bayImpliesState(strip.bayId);
+      if (implied && implied !== strip.state) {
+        result.warning = `no ${strip.ownerPositionId} Bay for ${strip.state}; the Strip stays in ${strip.bayId}`;
+      }
+    }
+    return result;
   }
 
   _applySetState(strip, toState, by) {
@@ -2312,13 +2384,16 @@ class BoardStore {
     // already has it see a normal DROPPED transition. The beacon is safe:
     // _releaseFdrIfLastStrip only releases when no other live Strip shares the
     // FDR, and the ATC-side Strip is still live by construction here.
+    let retired = null;
     if (tofi.mintedForTofi) {
-      strip.state = 'DROPPED';
-      strip.flags.removeIndicator = true;
-      this._releaseFdrIfLastStrip(strip, by);
+      // Through _retireStrip like every other route to DROPPED (S-L24): the
+      // archive clock, the remove indicator, the beacon release and the MARSA
+      // retirement. Its active-TOFI guard cannot fire (the state is REJECTED).
+      retired = this._retireStrip(strip, by);
+    } else {
+      strip.rev += 1; strip.updatedAt = this._clock.now(); strip.updatedBy = by || null;
+      this._touch(strip.stripId);
     }
-    strip.rev += 1; strip.updatedAt = this._clock.now(); strip.updatedBy = by || null;
-    this._touch(strip.stripId);
 
     let peerStrip = null;
     if (this._rules.peerBoard) {
@@ -2328,7 +2403,9 @@ class BoardStore {
         if (peerResult.ok) peerStrip = peerResult.strip;
       }
     }
-    return { ok: true, strip, peerFacilityId: tofi.peerFacilityId, peerStrip };
+    const out = { ok: true, strip, peerFacilityId: tofi.peerFacilityId, peerStrip };
+    if (retired && retired.marsaChanged) { out.marsaChanged = retired.marsaChanged; out.fdrs = retired.fdrs; }
+    return out;
   }
 
   /**
@@ -2545,9 +2622,23 @@ class BoardStore {
    */
   reassignPositionStrips(fromPositionId, toPositionId) {
     const affected = this.getAll().filter(s => s.ownerPositionId === fromPositionId && s.state !== 'DROPPED');
+    const unplaced = [];
     for (const strip of affected) {
       const before = deepClone(strip);
       strip.ownerPositionId = toPositionId;
+      // F10: remember whose it was, so it goes back when that Position is taken
+      // again (returnCoveredStrips). A Strip already covered keeps the first name.
+      if (!strip.coveredFrom) strip.coveredFrom = fromPositionId;
+      // B3: the Strip moves into the covering Position's own Bay, or (no Bay
+      // there fits) stays where it is and the caller says so.
+      const bay = this._bayForNewOwner(toPositionId, strip.state, strip);
+      if (bay) {
+        strip.bayId = bay.bayId;
+        strip.rackId = bay.rackId;
+        strip.orderKey = this._appendOrderKey(bay.bayId, bay.rackId, strip.stripId);
+      } else if (this._rules.baysFor) {
+        unplaced.push(strip.stripId);
+      }
       strip.rev += 1;
       strip.updatedAt = this._clock.now();
       strip.updatedBy = null;
@@ -2560,7 +2651,44 @@ class BoardStore {
         });
       }
     }
-    return affected.map(s => s.stripId);
+    // `unplaced` rides along without being an element or an enumerable key.
+    return Object.defineProperty(affected.map(s => s.stripId), 'unplaced', { value: unplaced });
+  }
+
+  /**
+   * F10 (docs/adr/0080): `positionId` is occupied again, so the Strips that were
+   * routed away from it to a covering Position — which may not advance them
+   * (PENDING_CLEARANCE is not GND's to advance) and which nothing ever returned
+   * — go back, each into a Bay of the returning Position. Only a Strip still
+   * owned by cover: a Strip anyone transferred on by decision has lost its
+   * `coveredFrom` (_applyTransferStrip). Recorded like the reassignment.
+   * @returns {string[]} stripIds returned
+   */
+  returnCoveredStrips(positionId) {
+    const back = this.getAll().filter(s => s.coveredFrom === positionId && s.ownerPositionId !== positionId && s.state !== 'DROPPED');
+    for (const strip of back) {
+      const before = deepClone(strip);
+      strip.ownerPositionId = positionId;
+      delete strip.coveredFrom;
+      const bay = this._bayForNewOwner(positionId, strip.state, strip);
+      if (bay) {
+        strip.bayId = bay.bayId;
+        strip.rackId = bay.rackId;
+        strip.orderKey = this._appendOrderKey(bay.bayId, bay.rackId, strip.stripId);
+      }
+      strip.rev += 1;
+      strip.updatedAt = this._clock.now();
+      strip.updatedBy = null;
+      this._touch(strip.stripId);
+      if (this._mutationLog) {
+        this._mutationLog.record({
+          clientMutationId: null, op: 'SystemReassign', stripId: strip.stripId,
+          actingPositionId: null, actorId: 'system', at: this._clock.now(),
+          before, after: deepClone(strip), reason: 'position-retaken',
+        });
+      }
+    }
+    return back.map(s => s.stripId);
   }
 
   /**

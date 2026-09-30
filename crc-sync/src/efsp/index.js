@@ -160,6 +160,11 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
       canCreateStripRole:  (actingPositionId, role) => permission.canCreateStripRole(actingPositionId, role),
       canActOnState:       (actingPositionId, role, state) => permission.canActOnState(actingPositionId, role, state),
       isSelfCoordinated:   (controllerId, positionId) => positionStore.isSelfCoordinated(controllerId, positionId),
+      // docs/adr/0080 — the tactical capability table and the Bay lookups the
+      // ownership, hand-back and covering rules read.
+      baysFor:             (positionId) => facilityConfig.getBaysFor(positionId, facilityId),
+      handBackTargetsFor:  (positionId) => permission.handBackTargetsFor(positionId),
+      mayActBesideOwner:   (actingPositionId, strip, op) => permission.mayActBesideOwner(actingPositionId, strip, op),
       // WP4A (docs/adr/0015) — this Facility's own id, and a lazy accessor
       // to the OTHER Facility's BoardStore instance for cross-Facility
       // coordination. Lazy (a closure over `facilities`, resolved at call

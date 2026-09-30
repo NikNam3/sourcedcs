@@ -387,6 +387,34 @@ function readScopeFor(positionId) {
 }
 
 /**
+ * The few ops a Position may perform on a Strip it does NOT own (docs/adr/0080).
+ * Ownership stays the rule (guide §4.4 rule 2); each row below is one narrow,
+ * named exception, and nothing else crosses it (T1: a general "TAC_C2 may act
+ * on AIC's lines" would undo H2).
+ *
+ *  - TOFI answer (B2): on a MISSION Strip, the Position `tofiAnsweredBy` names
+ *    for its owner (TAC_C2 for an AIC-held line; AIC "works under TAC_C2's
+ *    TOFI", guide §4.1, ADR 0025) may ACCEPT, REJECT or TRANSFER_COMMS.
+ *  - OPS alert status (S-L13, H56): OPS owns Block 14E on a DEPARTURE at every
+ *    state until it is DROPPED, whoever holds the Strip.
+ * The acting Position must still hold the op kind (canMutate runs first).
+ */
+const TOFI_ANSWER_ACTIONS = ['ACCEPT', 'REJECT', 'TRANSFER_COMMS'];
+const NON_OWNER_BLOCK_WRITES = [
+  { blockId: '14E', role: 'DEPARTURE', positions: ['OPS'] },
+];
+function mayActBesideOwner(actingPositionId, strip, op) {
+  if (!strip || !op) return false;
+  if (op.kind === 'TOFI' && strip.role === 'MISSION' && TOFI_ANSWER_ACTIONS.includes(op.action)) {
+    return tofiAnswererFor(strip.ownerPositionId) === actingPositionId;
+  }
+  if (op.kind === 'SetBlock' && strip.state !== 'DROPPED') {
+    return NON_OWNER_BLOCK_WRITES.some(r => r.blockId === op.blockId && r.role === strip.role && r.positions.includes(actingPositionId));
+  }
+  return false;
+}
+
+/**
  * The role-scoped half of CreateStrip permission (see the module comment).
  * Structurally the same D21 guard as canMutate() — exactly one
  * actingPositionId, never a held set.
@@ -525,5 +553,5 @@ module.exports = {
   OP_KINDS, COORDINATION_OP_KINDS, APP_CTR_ONLY_OP_KINDS, TOFI_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_COUNTERPARTS,
   NO_STRIP_OP_CLASSES,
   canActOnFieldState, FIELD_STATE_OP_OWNERS,
-  TACTICAL_CAPABILITIES, READ_SCOPES, handBackTargetsFor, tofiAnswererFor, readScopeFor,
+  TACTICAL_CAPABILITIES, READ_SCOPES, handBackTargetsFor, tofiAnswererFor, readScopeFor, mayActBesideOwner,
 };
