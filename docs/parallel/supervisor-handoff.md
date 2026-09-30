@@ -114,3 +114,14 @@ L9-E1/E2/E3/E4/E7/E8, L1b-Q1, L12-Q2, L13-Q2, L23-Q6, L23-Q7, Q-L14-1, Q-L14-2, 
 - Desk answers H51b–H70 are logged and settled. L11-8 is still open.
 - A drafter was writing `docs/parallel/wave2/L24.md`, `L26.md` and `L27.md` (ADRs 0081–0083). Check whether they exist; they're uncommitted.
 - Next steps: integrator doc fold (`docs/wip/*.md`), F2 (WMM + theaters.json incl. Syria TA 10,000 ft, H62/H69), F3, F4, then dispatch wave 2 (L1b, L12–L16, L23, L24, L26, L27, L28, L25; L22 mockup first). The lane worktrees `../sourcedcs-L*` can be removed.
+
+## Update (2026-09-30 ~12:00)
+
+- **Merged into `efsp-wp5-correlation`** (not pushed): wave 1, H53/H70, F4, L25, the DOC fold, F3, F2, plus small fixes. crc-sync 1601 pass / 8 todo; two timing tests flake under heavy load (`ato tokenize: pathological inputs`, `grpc backoff reset`) and pass alone. crc-desktop 525. atobrief 77. python 360.
+- **Running lanes** (worktree `../sourcedcs-<id>`; agent ids in `/home/nklx/.claude/jobs/142e4342/tmp/agents.txt`): L1b, L13, L14, L15, L16, L22 (build; approved H71), L24, L27, E2E (Playwright triage: 90/98 on the last full run), and F2's follow-up (conformance grid→magnetic, S-F2).
+- **Done, awaiting merge:** L12 (`c0887fe`; merge after L27 and L1b; fix the F3 argument `missionKey`→`missionSession` in its ordnance scenario sortie 3 at merge).
+- **Not started:** L23 (after L27), L26 (after L23), L28 (last; H74/H75 answered).
+- **Merge order:** L27 → L1b → L12 → L13 → L16 → L14 → L15 → L23 → L26 → L24 → L28; L22 whenever it's ready.
+- **Safety net (P8):** `tools/checkpoint-worktrees.sh` snapshots every worktree into `refs/checkpoints/<branch>`. Restore with `git checkout refs/checkpoints/lane/<name> -- .` inside the worktree. The 10-minute loop dies with the session; re-start it.
+- **To resume a lane after a session loss:** its worktree and commits survive. Re-launch an agent with its briefing + lane-rules + "continue from your branch and `docs/wip/<LANE>.md`".
+- **Desk open:** F2-W1 (wind true vs magnetic), L11-8. **The human restarts crc-sync on :3000** after merges touching `crc-sync/src` (the supervisor's restarts are blocked).
