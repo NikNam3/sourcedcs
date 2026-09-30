@@ -3,7 +3,6 @@
 const { WebSocketServer, WebSocket } = require('ws');
 const { presentTrack, labelPart } = require('./surveillance/presentation');
 const { createSurveillance } = require('./surveillance');
-const { getTheaterSettings, setTheaterSettings } = require('./theater-settings');
 const { getAptConfig, setAptConfig } = require('./apt-config');
 const { consumeTicket } = require('./auth');
 const { WALL_CLOCK } = require('./mission-clock');
@@ -32,8 +31,10 @@ class WsHub {
    *   contact is and what its transponder sends (docs/adr/0059).
    * @param {object} [deps.clock]        the mission clock (docs/adr/0079) —
    *   what the topbar's Zulu clock shows, and the client's only source of it.
+   * @param {object} [deps.theater]      src/theater-context.js (docs/adr/0085) —
+   *   the `theater` message: transition altitude and magnetic variation.
    */
-  constructor({ trackStore, collabStore, efsp = null, picture = null, surveillance = null, clock = WALL_CLOCK }) {
+  constructor({ trackStore, collabStore, efsp = null, picture = null, surveillance = null, clock = WALL_CLOCK, theater = null }) {
     this._trackStore  = trackStore;
     this._collabStore = collabStore;
     this._efsp        = efsp;
@@ -46,6 +47,7 @@ class WsHub {
     this._missionId   = null;
     this._weather     = null;
     this._clock       = clock;
+    this._theater     = theater;
     this._grpcStatus  = 'disconnected';
     this._srsStatus   = 'disconnected';
     this._atisActive  = []; // [{ frequency, ownerId }] — see setAtisActive()
@@ -95,6 +97,8 @@ class WsHub {
   setWeather(data)    { this._weather = data; this._broadcast(this._weatherMsg()); }
   /** Re-anchors every client's Zulu clock — after each mission-clock sample, and on a slow timer so a WALL-sourced clock still reaches them. */
   broadcastGameTime() { this._broadcast(this._gameTimeMsg()); }
+  /** The theater, or the date its magnetic variation is computed for, changed (docs/adr/0085). */
+  broadcastTheater()  { if (this._theater) this._broadcast(this._theaterMsg()); }
 
   /**
    * The radar list changed under everyone — a mission loaded, or an AWACS took
@@ -221,7 +225,11 @@ class WsHub {
     return { version: VERSION, type: 'game-time', zuluMs: this._clock.now(), source: this._clock.source };
   }
   _atisMsg()      { return { version: VERSION, type: 'atis', active: this._atisActive }; }
-  _theaterSettingsMsg() { return { version: VERSION, type: 'theater-settings', ...getTheaterSettings() }; }
+  // What the map is (docs/adr/0085): transition altitude, and the magnetic
+  // variation grid every true bearing is shown through. Its own message, not a
+  // field of `game-time`: it is a few hundred numbers that change once per
+  // mission load or mission day, and `game-time` goes out every 5 s.
+  _theaterMsg() { return { version: VERSION, type: 'theater', ...this._theater.wireBody() }; }
   _aptConfigMsg() { return { version: VERSION, type: 'apt-config', airports: getAptConfig() }; }
   _initMsg() {
     return {
@@ -408,13 +416,15 @@ class WsHub {
 
     // Same send order as the original _onConnect: status, init (if a
     // mission is loaded), weather, game-time, then a full track snapshot.
+    // `theater` (docs/adr/0085) follows game-time, before anything with a
+    // bearing in it is drawn.
     // The EFSP snapshot is appended at the end of this same connect-time
     // send order, not a separate/independent path.
     ws.send(JSON.stringify(this._statusMsg()));
     if (this._missionData) ws.send(JSON.stringify(this._initMsg()));
     if (this._weather)     ws.send(JSON.stringify(this._weatherMsg()));
     ws.send(JSON.stringify(this._gameTimeMsg()));
-    ws.send(JSON.stringify(this._theaterSettingsMsg()));
+    if (this._theater) ws.send(JSON.stringify(this._theaterMsg()));
     ws.send(JSON.stringify(this._aptConfigMsg()));
     ws.send(JSON.stringify(this._atisMsg()));
     // Before the track snapshot, so a client knows what it is about to be
@@ -553,15 +563,6 @@ class WsHub {
         if (msg.type === 'efsp-set-positions') this._refreshCoverage(ws, session);
         return;
       }
-    }
-
-    // Theater settings (transition alt / hdg correction)
-    // are squadron-wide config — any client
-    // can push a patch and every client (including the sender) gets the
-    // authoritative merged result back.
-    if (msg.type === 'theaterSettingsSet') {
-      if (setTheaterSettings(msg)) this._broadcast(this._theaterSettingsMsg());
-      return;
     }
 
     // Per-airport ATIS config (freq / runway / info letter / manual wx) —

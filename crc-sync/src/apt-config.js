@@ -8,7 +8,7 @@
 // That meant one controller's ATIS setup for an airport was invisible to
 // everyone else, and a second controller listening on the same frequency
 // could easily be reading a stale runway. Now squadron-wide and
-// server-authoritative, like theater-settings.json — editable
+// server-authoritative — editable
 // live from any connected client (ws-hub.js's 'aptConfigSet' message) and
 // persisted so it survives a crc-sync restart.
 
@@ -73,7 +73,7 @@ function getAptConfig() {
 // already-saved manual wx. manualWx itself is patched the same way (vis and
 // clouds independently), for the same reason.
 // Returns true if `key` was valid and something was actually applied
-// (caller broadcasts only then, same as theater-settings.js).
+// (caller broadcasts only then).
 function setAptConfig(key, patch) {
   const cleanKey = _clean(key, KEY_MAX_LEN);
   if (!cleanKey || !patch || typeof patch !== 'object') return false;

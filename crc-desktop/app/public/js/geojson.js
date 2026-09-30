@@ -485,7 +485,8 @@ function buildApproachVector() {
   if (!selectedApt || approachRwyCourse == null)
     return { type: 'FeatureCollection', features: [] };
 
-  const course     = approachRwyCourse;                    // aircraft heading TO runway
+  if (approachRwyCourseTrue == null) return { type: 'FeatureCollection', features: [] };
+  const course     = approachRwyCourseTrue;                // aircraft course TO runway, true (airport-selector.js)
   const reciprocal = (course + 180) % 360;                 // outbound from threshold
   const FAF_M      = 15 * 1852;
 
@@ -523,23 +524,16 @@ function _extCenterlineTickPlan(zoom) {
 }
 
 function buildExtendedCenterline() {
-  if (!_aprtSelectedApt || _aprtRwyHeading == null) return { type: 'FeatureCollection', features: [] };
+  if (!_aprtSelectedApt || _aprtRwyTrueDeg == null) return { type: 'FeatureCollection', features: [] };
   // Only drawn for an airfield whose approach radar we are actually looking
   // through. Asked by airport rather than by radar id, because the id used to
   // be built here as `'app:' + name` and crc-sync's CVN approach radars once
   // shared that prefix (its docs/adr/0042 renamed them `cvapp:`).
   if (!coverageApproachFor(_aprtSelectedApt.name)) return { type: 'FeatureCollection', features: [] };
 
-  // The runway number is a magnetic heading (real-world convention) — the
-  // map's geometry math (projectPos/bearingDeg) is all true-bearing, so it
-  // needs the reverse of the chain the BRA readout uses (ui.js: displayed
-  // = grid + hdgCorrection, where grid = true - gridConvergenceDeg):
-  // magnetic -> grid (subtract hdgCorrection) -> true (add convergence back).
-  const hdgCorrection = settings.hdgCorrection || 0;
-  const gridHeading = ((_aprtRwyHeading - hdgCorrection) % 360 + 360) % 360;
-  const conv        = gridConvergenceDeg(_aprtSelectedApt.lat, _aprtSelectedApt.lon);
-  const trueHeading = ((gridHeading + conv) % 360 + 360) % 360;
-  const reciprocal  = (trueHeading + 180) % 360;
+  // The runway number is magnetic; crc-sync has converted it to true for
+  // the map's true-bearing geometry (aprt-panel.js _updateAprtRwyHeading).
+  const reciprocal  = (_aprtRwyTrueDeg + 180) % 360;
 
   const lengthNm = settings.extCenterlineNm || 25;
   const lengthM  = lengthNm * 1852;

@@ -28,9 +28,9 @@ const { ConformanceMonitor } = require('./src/efsp/conformance');
 const { StcaMonitor } = require('./src/stca');
 const { loadAlertingConfig } = require('./src/alerting-config');
 const { indicatedAltFt } = require('./src/altimetry');
-const { getTheaterSettings } = require('./src/theater-settings');
 const { MissionClock } = require('./src/mission-clock');
 const { loadTheaters } = require('./src/theaters');
+const { TheaterContext } = require('./src/theater-context');
 const { lookupFlightPlan, toFdrFiledSeed, listFiledFlightPlans } = require('./src/efsp/flight-plan-lookup');
 const efspStereoRoutes = require('./src/efsp/stereo-routes');
 
@@ -132,6 +132,10 @@ const srsClient   = new SrsClient();
 // clocks, Mutation timestamps — comes from here, never from Date.now().
 const theaters     = loadTheaters();
 const missionClock = new MissionClock({ offsetHoursFor: (theatre) => theaters[theatre]?.utcOffsetHours ?? null });
+// The map the mission is on (docs/adr/0085): transition altitude, and what
+// "magnetic" means at a position on the mission date. The one place a typed
+// magnetic value becomes true, and the source of the `theater` message.
+const theaterContext = new TheaterContext({ theaters, clock: missionClock });
 const efsp        = createEfsp({ clock: missionClock });
 
 // ── The radar picture (docs/adr/0042) ────────────────────────────────────
@@ -199,11 +203,11 @@ const surveillance = createSurveillance({
   sensorSpecs,
   correlationStore: efsp.correlationStore,
   fdrStore: efsp.fdrStore,
-  env: () => ({ weather: grpcClient.getWeather(), transitionAltFt: getTheaterSettings().transitionAltFt ?? 18000 }),
+  env: () => ({ weather: grpcClient.getWeather(), transitionAltFt: theaterContext.transitionAltFt() }),
 });
 const { transponders, identity } = surveillance;
 
-const wsHub       = new WsHub({ trackStore, collabStore, efsp, picture, surveillance, clock: missionClock });
+const wsHub       = new WsHub({ trackStore, collabStore, efsp, picture, surveillance, clock: missionClock, theater: theaterContext });
 
 wsHub.attach(server);
 
@@ -297,6 +301,8 @@ grpcClient.on('mission-load', (missionData) => {
   missionClock.setTheatre(missionData.theatre || 'UNKNOWN');
   wsHub.setMissionData(missionData);
   wsHub.broadcastGameTime();
+  theaterContext.setMission(missionData);
+  wsHub.broadcastTheater();
   console.log(`[crc-sync] mission init — ${missionData.airports.length} airports, theater ${missionData.theatre || 'unknown'}`);
 
   // Which selectors found nothing in THIS theater — the only point at which
@@ -370,7 +376,13 @@ function deriveActiveRunwaysFromWind(missionData) {
 
 grpcClient.on('status', (state) => wsHub.setGrpcStatus(state));
 grpcClient.on('weather', (data) => wsHub.setWeather(data));
-grpcClient.on('game-time', (dt) => { if (missionClock.sample(dt)) wsHub.broadcastGameTime(); });
+grpcClient.on('game-time', (dt) => {
+  if (!missionClock.sample(dt)) return;
+  wsHub.broadcastGameTime();
+  // Variation depends on the mission date: a new day, or the first mission
+  // sample after the wall clock, moves it.
+  if (theaterContext.noteClock()) wsHub.broadcastTheater();
+});
 // F3: after the sample, so the step-back check reads this poll's time (ADR 0086).
 grpcClient.on('game-time', () => missionSession.observeClock());
 // With DCS gone there are no samples to broadcast on, and the clock has fallen
@@ -379,6 +391,7 @@ let lastClockSource = missionClock.source;
 setInterval(() => {
   const source = missionClock.source;
   if (source === 'WALL' || source !== lastClockSource) wsHub.broadcastGameTime();
+  if (theaterContext.noteClock()) wsHub.broadcastTheater();
   lastClockSource = source;
 }, 5000);
 
@@ -479,6 +492,19 @@ app.get('/api/stereo-routes', auth.requireAuth, (_req, res) => {
     console.error('[efsp-stereo-routes] unexpected error, responding 503 instead of crashing:', err);
     res.status(503).json({ ok: false, reason: 'stereo route lookup failed unexpectedly' });
   }
+});
+
+// A typed magnetic heading, course or radial → true, at a position, on the
+// mission date (docs/adr/0085). The client never converts a typed magnetic
+// value itself (decisions S-R2-12); it asks here, so what is typed and what
+// is shown go through the same model.
+app.get('/api/magnetic/to-true', auth.requireAuth, (req, res) => {
+  const magDeg = Number(req.query.magDeg), lat = Number(req.query.lat), lon = Number(req.query.lon);
+  if (![magDeg, lat, lon].every(Number.isFinite)) return res.status(400).json({ error: 'magDeg, lat and lon must be numbers' });
+  const variationDeg = theaterContext.variationAt(lat, lon);
+  const trueDeg = theaterContext.magneticToTrue(magDeg, lat, lon);
+  if (trueDeg == null) return res.status(503).json({ error: 'magnetic variation unknown here' });
+  res.json({ trueDeg, variationDeg });
 });
 
 app.get('/api/apt-weather', auth.requireAuth, (req, res) => {
@@ -597,7 +623,7 @@ const conformanceMonitor = new ConformanceMonitor({
   fdrStore: efsp.fdrStore,
   correlationStore: efsp.correlationStore,
   weather: () => grpcClient.getWeather(),
-  transitionAltFt: () => (getTheaterSettings().transitionAltFt ?? 18000),
+  transitionAltFt: () => theaterContext.transitionAltFt(),
   indicatedAltFt,
   config: alertingConfig.conformance,
 });

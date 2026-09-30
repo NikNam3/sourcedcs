@@ -140,7 +140,6 @@ const DEFAULTS = {
   shipsEnabled:      false,
   hideGroundUnits:   false,
   braColor:      '#4488cc',
-  hdgCorrection: 0, // manual true->grid heading fudge factor — NOT real-world magnetic variation, see geo.js
   radarDebug:    false,
   textMarksEnabled: false, // DCS mission-editor Text objects, shown as a map layer
   extCenterlineNm: 25, // extended APP-radar centerline length
@@ -157,7 +156,7 @@ const DEFAULTS = {
   // geojson.js's getDeclutteredIds() is kept — REVISIT then.
   declutter:       false,
   showDatalinkLocks: true, // draw the datalink's radar-lock lines (geojson.js's buildDatalinkLines)
-  transitionAltFt: 18000, // ft — how an ASSIGNED altitude is written; a contact's own comes from crc-sync
+  transitionAltFt: 18000, // ft — how an ASSIGNED altitude is written. The theater's, from crc-sync's `theater` message (its docs/adr/0085); not a setting
   aprtManualWx:    {},    // per-airport manually-entered vis/cloud data, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
   aprtAtisFreq:    {},    // per-airport saved ATIS frequency, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
   aprtAtisRwy:     {},    // per-airport saved ATIS runway, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
@@ -191,6 +190,8 @@ function loadSettings() {
   if (!settings.declutterOffH6) { settings.declutter = false; settings.declutterOffH6 = true; }
   // H70: navpoint declutter goes off too, once, until AIRAC data replaces it.
   if (!settings.navDeclutterOffH70) { settings.navDeclutter = false; settings.navDeclutter5 = false; settings.navDeclutterOffH70 = true; }
+  // H15: headings are magnetic from crc-sync's model; the manual correction is gone.
+  delete settings.hdgCorrection;
 }
 
 function saveSettings() {
@@ -527,17 +528,19 @@ async function connect() {
         refreshAprtAptList();
         break;
       }
-      case 'theater-settings':
-        // Squadron-wide config (crc-sync/src/theater-settings.js) — pushed
-        // on connect and whenever any
-        // client edits transition alt / hdg correction
-        // from the Airport panel, authoritative over this client's cache.
+      case 'theater':
+        // The map's fixed facts (crc-sync's theater-context.js, docs/adr/
+        // 0085): transition altitude and the magnetic variation grid every
+        // displayed bearing goes through. On connect, mission load and a new
+        // mission day. A typed magnetic value was converted with the old
+        // model, so both runway entries are converted again.
+        applyTheaterFacts(msg);
         settings.transitionAltFt = msg.transitionAltFt;
-        settings.hdgCorrection   = msg.hdgCorrection;
-        saveSettings();
+        if (typeof resolveApproachCourse === 'function') resolveApproachCourse();
+        if (typeof _updateAprtRwyHeading === 'function') _updateAprtRwyHeading();
         updateMap();
         if (typeof _updateAprtRefCard === 'function') _updateAprtRefCard();
-        if (typeof refreshAprtTheaterInputs === 'function') refreshAprtTheaterInputs();
+        if (typeof refreshAprtTheaterFacts === 'function') refreshAprtTheaterFacts();
         break;
       case 'atis':
         // Live "who's transmitting ATIS on which frequency" list — pushed
