@@ -84,6 +84,9 @@ const DEFAULT_CONFIG = {
   // today purely because they don't sit on a Facility boundary, a
   // different, pre-existing reason (see permission.js).
   positionClasses: { OPS: 'BASOPS', CD: 'MILITARY_ATC', GND: 'MILITARY_ATC', TWR: 'MILITARY_ATC', APP: 'MILITARY_ATC' },
+  // The one character an ATC scope draws on a contact this Position owns
+  // (docs/adr/0088, the STARS "position symbol"). [SOURCE-DEFINED].
+  positionLetters: { OPS: 'O', CD: 'D', GND: 'G', TWR: 'T', APP: 'A' },
   // Still ends at APP, deliberately NOT extended to CTR — the covering
   // chain (guide §4.5 rule 3, §4.8.6) is an INTRAFACILITY occupancy-
   // fallback mechanism ("route to the covering Position within this
@@ -240,6 +243,9 @@ const DEFAULT_CENTER_CONFIG = {
   facility: 'CENTER',
   positions: ['CTR'],
   positionClasses: { CTR: 'CIVIL_ATC' },
+  // The one character an ATC scope draws on a contact this Position owns
+  // (docs/adr/0088, the STARS "position symbol"). [SOURCE-DEFINED].
+  positionLetters: { CTR: 'C' },
   // CTR has no covering Position this slice — mirrors OPS's "absent from
   // the chain" precedent (there is no second civil ATC Position upstream
   // of CTR built yet).
@@ -286,6 +292,9 @@ const DEFAULT_TACTICAL_CONFIG = {
   facility: 'TACTICAL',
   positions: ['TAC_C2', 'AIC', 'GCI', 'JTAC'],
   positionClasses: { TAC_C2: 'MRU', GCI: 'MRU', AIC: 'MRU_POSITION', JTAC: 'NON_ATC' },
+  // One letter for the whole tactical side: an ATC scope shows `M` on a
+  // flight under tactical control after TOFI (docs/adr/0088, H48).
+  positionLetters: { TAC_C2: 'M', AIC: 'M', GCI: 'M', JTAC: 'M' },
   // AIC/GCI -> TAC_C2 is a legal INTRAFACILITY covering-chain entry (stays
   // inside this Facility's own PositionStore instance). TAC_C2 -> CTR is
   // deliberately NOT extended here, even though the guide's own §4.8.6
@@ -365,6 +374,7 @@ const DEFAULT_RANGES_CONFIG = {
     airspaceConfig.getRangePositionIds().map(id => [id, 'USING_AGENCY'])
   ),
   coveringChain: {},
+  positionLetters: {},
   // `hiddenBlocks`, not the `blockVisibility` inclusion list docs/adr/0041
   // replaced — this config is derived and never persisted, so the stale key
   // was inert, but leaving it here invited the next reader to copy it.
@@ -409,6 +419,14 @@ function validateConfig(candidate) {
   for (const positionId of Object.keys(candidate.bays || {})) {
     if (!(candidate.positions || []).includes(positionId)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `Bay set references unknown Position ${positionId}` };
+    }
+  }
+  for (const [positionId, letter] of Object.entries(candidate.positionLetters || {})) {
+    if (!(candidate.positions || []).includes(positionId)) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `positionLetters references unknown Position ${positionId}` };
+    }
+    if (typeof letter !== 'string' || !/^[A-Z0-9]$/.test(letter)) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `positionLetters.${positionId} must be one character A-Z or 0-9` };
     }
   }
   for (const positionId of Object.keys(candidate.positionClasses || {})) {
@@ -548,6 +566,22 @@ function getPositionClass(positionId) {
   return null;
 }
 
+/** The one character an ATC scope draws for a contact this Position owns (docs/adr/0088); null when none is configured. */
+function getPositionLetter(positionId) {
+  for (const config of configs.values()) {
+    const letters = config.positionLetters || {};
+    if (Object.prototype.hasOwnProperty.call(letters, positionId)) return letters[positionId];
+  }
+  return null;
+}
+
+/** Every Facility's position letters, `{ facilityId: { positionId: letter } }` — sent in the EFSP snapshot (docs/adr/0088). */
+function allPositionLetters() {
+  const out = {};
+  for (const [facilityId, config] of configs) out[facilityId] = { ...(config.positionLetters || {}) };
+  return out;
+}
+
 /**
  * A Position's radar selectors (docs/adr/0043). Empty for a Position with no
  * scope — Ground and Clearance Delivery genuinely have none, and that is the
@@ -674,7 +708,7 @@ function coordinationBayFor(positionId, facilityId = DEFAULT_FACILITY_ID) {
 
 module.exports = {
   DEFAULT_FACILITY_ID, getFacilityIds,
-  getFacilityConfig, getPositionSet, getPositionClass, getCoveringChain, getBaysFor, getAllBays, isBlockVisible,
+  getFacilityConfig, getPositionSet, getPositionClass, getPositionLetter, allPositionLetters, getCoveringChain, getBaysFor, getAllBays, isBlockVisible,
   getPositionRadars, radarBearingPositionIds, validateRadarSelector, RADAR_SELECTOR_KINDS,
   bayImpliesState, bayForImpliedState, bayExists, coordinationBayFor, setFacilityConfig, validateConfig,
   DEFAULT_CONFIG, DEFAULT_CENTER_CONFIG, DEFAULT_TACTICAL_CONFIG, DEFAULT_CONFIGS,

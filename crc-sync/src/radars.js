@@ -76,13 +76,29 @@ function capsFor(kind, spec) {
   return { ...DEFAULT_CAPS[kind], ...((spec && spec.caps) || {}) };
 }
 
+// Which draw scheme a contact seen by each kind of radar gets (docs/adr/0088,
+// decisions H5/H41/H50): 'ATC' is the STARS scheme, 'TACTICAL' today's GCI
+// scope. Overridable per kind in sensor-specs.json's `presentation`, read
+// once at startup (P5). [SOURCE-DEFINED].
+const DEFAULT_PRESENTATION = {
+  airport: 'ATC', approach: 'ATC', carrierApproach: 'ATC',
+  awacs: 'TACTICAL', fighter: 'TACTICAL', carrier: 'TACTICAL',
+};
+const PRESENTATIONS = new Set(['ATC', 'TACTICAL']);
+
+/** The draw scheme for one kind of radar: the spec table's, else the default. */
+function presentationFor(kind, specs) {
+  const configured = specs && specs.presentation && specs.presentation[kind];
+  return PRESENTATIONS.has(configured) ? configured : DEFAULT_PRESENTATION[kind];
+}
+
 // Overridable so tests drive a fixture without touching disk — the same
 // env-var pattern every other config/*.json path in this package uses.
 const SENSOR_SPECS_PATH = process.env.CRCSYNC_SENSOR_SPECS_PATH
   || path.join(__dirname, '../config/sensor-specs.json');
 
 const EMPTY_SPECS = () => ({
-  radar: {}, carrierRadar: {},
+  radar: {}, carrierRadar: {}, presentation: { ...DEFAULT_PRESENTATION },
   datalink: { participants: [], pliPeriodMs: 4000, lockPollMs: 2000 },
   transponder: { syntheticFor: ['own', 'neutral'], mode4For: ['own'] },
 });
@@ -98,6 +114,7 @@ function loadSensorSpecs(specsPath = SENSOR_SPECS_PATH) {
     return {
       radar: cfg.radar || {},
       carrierRadar: cfg.carrierRadar || {},
+      presentation: { ...base.presentation, ...(cfg.presentation || {}) },
       datalink: { ...base.datalink, ...(cfg.datalink || {}) },
       transponder: { ...base.transponder, ...(cfg.transponder || {}) },
     };
@@ -147,7 +164,7 @@ function buildRadars({ missionData, tracks, radarSpecs }) {
       // The only radar that sees ground vehicles at all.
       seesGround: true, seesShips: false, noGroundAircraft: false,
       angleFromNose: 360, heading: 0,
-      caps: capsFor('airport'),
+      caps: capsFor('airport'), presentation: presentationFor('airport', specs),
     });
 
     radars.push({
@@ -157,7 +174,7 @@ function buildRadars({ missionData, tracks, radarSpecs }) {
       rangeM: APPROACH_RADAR.rangeNm * M_PER_NM, sweepMs: APPROACH_RADAR.sweepMs,
       seesGround: false, seesShips: false, noGroundAircraft: true,
       angleFromNose: 360, heading: 0,
-      caps: capsFor('approach'),
+      caps: capsFor('approach'), presentation: presentationFor('approach', specs),
     });
   }
 
@@ -172,7 +189,7 @@ function buildRadars({ missionData, tracks, radarSpecs }) {
     radars.push({
       id: `crc:${t.id}`,
       type: kind,
-      caps: capsFor(kind, spec),
+      caps: capsFor(kind, spec), presentation: presentationFor(kind, specs),
       label: label(t), sublabel: t.type,
       lat: t.lat, lon: t.lon, elevM: t.alt,
       rangeM: spec.rangeNm * M_PER_NM, sweepMs: spec.sweepMs,
@@ -191,6 +208,7 @@ function buildRadars({ missionData, tracks, radarSpecs }) {
     const spec = specs.carrierRadar[t.type] || SHIP_RADAR_DEFAULT;
     radars.push({
       id: `carrier:${t.id}`, type: 'carrier', caps: capsFor('carrier', specs.carrierRadar[t.type]),
+      presentation: presentationFor('carrier', specs),
       label: label(t) || t.type, sublabel: t.type,
       lat: t.lat, lon: t.lon, elevM: t.alt + SHIP_RADAR_HEIGHT_M,
       rangeM: spec.rangeNm * M_PER_NM, sweepMs: spec.sweepMs,
@@ -203,6 +221,7 @@ function buildRadars({ missionData, tracks, radarSpecs }) {
       radars.push({
         // `cvapp:`, not `app:` — see this module's header.
         id: `cvapp:${t.id}`, type: 'carrier', caps: capsFor('carrierApproach'),
+        presentation: presentationFor('carrierApproach', specs),
         label: `${label(t) || t.type} APP RDR`, sublabel: t.type,
         lat: t.lat, lon: t.lon, elevM: t.alt + CVN_APPROACH_RADAR.heightM,
         rangeM: CVN_APPROACH_RADAR.rangeNm * M_PER_NM, sweepMs: CVN_APPROACH_RADAR.sweepMs,
@@ -228,7 +247,7 @@ function isCarrier(track) {
 }
 
 module.exports = {
-  buildRadars, loadSensorSpecs, isRadarSite, capsFor,
+  buildRadars, loadSensorSpecs, isRadarSite, capsFor, presentationFor, DEFAULT_PRESENTATION,
   RADAR_TYPES, DEFAULT_CAPS, SENSOR_SPECS_PATH,
   AIRPORT_RADAR_HEIGHT_M, SHIP_RADAR_HEIGHT_M,
   AIRPORT_RADAR, APPROACH_RADAR, CVN_APPROACH_RADAR, SHIP_RADAR_DEFAULT,
