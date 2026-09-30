@@ -70,9 +70,11 @@ const syncEnv = {
 };
 
 fs.writeFileSync(syncEnv.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
-// Opt-in stereo table (crc-sync's docs/adr/0073): E2E_STEREO_ROUTES=<file> copies that table in
-// place of the empty one, for the specs that pick a route; every other run is unaffected (P5, T11).
-fs.writeFileSync(syncEnv.CRCSYNC_EFSP_STEREO_ROUTES_PATH, process.env.E2E_STEREO_ROUTES ? fs.readFileSync(process.env.E2E_STEREO_ROUTES) : '[]');
+// The two-route stereo table (crc-sync's docs/adr/0073) l16-picker-and-times.spec.js picks from. The
+// harness installs it itself so a plain `npx playwright test` needs no environment; E2E_STEREO_ROUTES=<file>
+// substitutes another table, and E2E_STEREO_ROUTES=none starts with an empty one (P5, T11).
+const STEREO = process.env.E2E_STEREO_ROUTES || path.join(__dirname, 'e2e', 'fixtures', 'l16-stereo-routes.json');
+fs.writeFileSync(syncEnv.CRCSYNC_EFSP_STEREO_ROUTES_PATH, STEREO === 'none' ? '[]' : fs.readFileSync(STEREO));
 fs.copyFileSync(path.join(__dirname, '..', 'crc-sync', 'config', 'efsp-instrumentation.json'), syncEnv.CRCSYNC_EFSP_INSTRUMENTATION_CONFIG_PATH);
 
 module.exports = {

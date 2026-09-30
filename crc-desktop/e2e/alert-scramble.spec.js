@@ -72,6 +72,20 @@ const bayOrder = (page, bayId) => page.evaluate((b) => [...efspStrips.values()]
   .map(s => efspFdrs.get(s.fdrId).identity.callsign), bayId);
 const domOrder = (page) => page.locator('#efsp-bay-content .efsp-strip .efsp-block-1').allTextContents();
 
+// The Board lives for the whole run. A walk that fails while VIPER11 is SCRAMBLE would leave the
+// scramble line and a "keep clear of ..." reason on every ground Strip of every later spec file
+// (field-state's "the Strip never says it twice" then failed for it). Retire this walk's Strips.
+test.afterEach(async ({ page }) => {
+  await page.evaluate((cs) => {
+    for (const s of getAllEfspStrips()) {
+      const fdr = getEfspFdr(s.fdrId);
+      if (!fdr || !cs.includes(fdr.identity.callsign) || s.state === 'DROPPED') continue;
+      sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
+    }
+  }, ['VIPER11', 'HAWK31', 'HAWK32', 'EAGLE41', 'EAGLE42']).catch(() => {});
+  await page.waitForTimeout(400);
+});
+
 test('alert and scramble: ALERT is quiet, SCRAMBLE lights the Board and flags ground traffic, nothing reorders, airborne clears', async ({ page }) => {
   const { consoleErrors } = await openPanel(page, { held: ['OPS', 'CD', 'GND', 'TWR'] });
   await page.setViewportSize({ width: 1600, height: 1100 });
@@ -120,7 +134,7 @@ test('alert and scramble: ALERT is quiet, SCRAMBLE lights the Board and flags gr
   await expect(line).toBeVisible();
   await expect(line.locator('.efsp-scramble-row')).toHaveCount(1);
   await expect(line.locator('.efsp-scramble-cs')).toHaveText(CS);
-  await expect(line.locator('.efsp-scramble-detail')).toHaveText('INCIRLIK · CLEARED · the alert-pad access route constrained · 4 flagged');
+  await expect(line.locator('.efsp-scramble-detail')).toHaveText('INCIRLIK · CLEARED · ALERT ACCESS TAXIWAY constrained · 4 flagged');
   await expect(stripByCallsign(page, CS).locator('[data-slot="scram"]')).toHaveText('SCRAMBLE');
   await panelShot(page, '02-scramble-line-cd');
   // Board-wide: the same line on another Position's tab.
@@ -133,7 +147,7 @@ test('alert and scramble: ALERT is quiet, SCRAMBLE lights the Board and flags gr
   await goBay(page, 'GND', 'gnd-taxi-out');
   const hawk = stripByCallsign(page, 'HAWK31');
   await expect(hawk.locator('[data-slot="scram"]')).toHaveText('SCRAMBLE');
-  await expect(hawk.locator('.efsp-alert-reason')).toContainText('VIPER11 is scrambling from INCIRLIK. SOURCE practice: keep clear of the alert-pad access route.');
+  await expect(hawk.locator('.efsp-alert-reason')).toContainText('VIPER11 is scrambling from INCIRLIK. SOURCE practice: keep clear of ALERT ACCESS TAXIWAY.');
   await shot(hawk, '03-ground-flags');
 
   // ── 4. nothing reordered, moved or held. ─────────────────────────────────

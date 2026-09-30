@@ -4,11 +4,7 @@
  * in a real browser against a real crc-sync. Screenshots go to docs/wip/L12/
  * and are described in docs/wip/L12.md.
  *
- * Client field state (getEfspFieldState) is L1b's, built in the same wave.
- * The first test runs without it — what ships if L12 merges first: the chip
- * and the generic sentence. The pilot walks install a stand-in with L1b's
- * contract (the record crc-sync's getFieldState puts on the wire), so the
- * full sentence can be seen; that stand-in is the only thing faked.
+ * Client field state (getEfspFieldState) is L1b's real client; nothing is stubbed.
  */
 
 const path = require('path');
@@ -22,7 +18,8 @@ const SHOTS = path.join(__dirname, '..', '..', 'docs', 'wip', 'L12');
 fs.mkdirSync(SHOTS, { recursive: true });
 const shot = (name) => path.join(SHOTS, name);
 
-const GENERIC = 'Hung ordnance. The hot cargo pad is shown when field state is available.';
+// The real field-state client (L1b) is loaded, so the reason names the configured pad.
+const PAD_SENTENCE = 'Hung ordnance. SOURCE practice: after landing, taxi to Hot cargo pad';
 
 async function goBay(page, positionId, bayId) {
   await page.locator(`#efsp-position-tabs .efsp-position-tab[data-position-id="${positionId}"]`).click();
@@ -67,20 +64,6 @@ async function recordFromExpanded(strip, value) {
   await strip.locator('.efsp-expand-btn').click();
 }
 
-/** L1b's contract, stood in: the INCIRLIK record as crc-sync's getFieldState shapes it. */
-async function standInFieldState(page) {
-  await page.evaluate(() => {
-    const record = {
-      facilityId: 'INCIRLIK', activeRunway: '05',
-      runways: [{ runwayId: '05/23', ends: ['05', '23'], rackIds: { '05': 'rwy-05', '23': 'rwy-23' }, status: 'OPEN', arrestingGear: [] }],
-      hotCargoPad: { name: 'Hot cargo pad', occupied: false, occupantFdrId: null },
-      alertPad: { name: 'Alert pad', occupied: false, occupantFdrId: null },
-    };
-    window.getEfspFieldState = (id) => (id === 'INCIRLIK' ? record : null);
-    renderAllOpenEfspBays();
-  });
-}
-
 // The hermetic rig answers map/terrain fetches with 503s (no network, no DCS);
 // those are the rig's, not this feature's. Script errors stay a hard failure.
 const scriptErrors = (errors) => errors.filter((e) => !/Failed to load resource/.test(e));
@@ -107,7 +90,7 @@ test('HUNG: APP records it, TWR sees it, the flight lands normally, CLEAN clears
   const chip = strip.locator('[data-slot="ord"]');
   await expect(chip).toHaveText('HUNG');
   await expect(chip).toHaveClass(/efsp-ind-attn/);
-  await expect(strip.locator('.efsp-strip-reason', { hasText: GENERIC })).toBeVisible();
+  await expect(strip.locator('.efsp-strip-reason', { hasText: PAD_SENTENCE })).toBeVisible();
   await only(page, CS);
   await strip.screenshot({ path: shot('02-app-sees-it.png') });
 
@@ -150,7 +133,6 @@ test('HUNG: APP records it, TWR sees it, the flight lands normally, CLEAN clears
 test('pilot walks with field state: the pad by name, a runway request re-stated, an aborted departure', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1200 });
   const { consoleErrors } = await openPanel(page, { held: ['TWR', 'APP', 'GND', 'OPS'] });
-  await standInFieldState(page);
 
   // "Request runway 23 for hot cargo" — TWR edits 8B; the advisory re-states the runway, recommends none.
   const CS = 'HUNG21';

@@ -3,10 +3,9 @@
 /* L16 — Block 9F as a picker and §10.5's time fallbacks, in a real browser
  * (crc-sync's docs/adr/0073).
  *
- * Needs the two-route table: run with
- *   E2E_LANE=7 E2E_STEREO_ROUTES=e2e/fixtures/l16-stereo-routes.json \
- *     npx playwright test e2e/l16-picker-and-times.spec.js
- * The table is set before crc-sync starts and never changed at runtime (P5).
+ * Needs the two-route table, which playwright.config.js installs by default
+ * (e2e/fixtures/l16-stereo-routes.json). The table is set before crc-sync starts and never changed
+ * at runtime (P5). Started with E2E_STEREO_ROUTES=none the spec skips rather than fails.
  */
 
 const path = require('path');
@@ -36,7 +35,7 @@ async function only(page, callsign) {
 }
 
 test('9F is a select of the configured stereo routes, never free text', async ({ page }) => {
-  expect(process.env.E2E_STEREO_ROUTES, 'run with E2E_STEREO_ROUTES=e2e/fixtures/l16-stereo-routes.json').toBeTruthy();
+  test.skip(process.env.E2E_STEREO_ROUTES === 'none', 'needs the two-route stereo table');
   await openPanel(page, { held: ['OPS'] });
   await page.waitForFunction(() => typeof cachedStereoRoutesClient === 'function' && cachedStereoRoutesClient().length === 2);
   const CS = 'L16PK1';
