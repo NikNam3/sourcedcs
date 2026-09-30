@@ -1001,6 +1001,119 @@ class FdrStore {
   }
 
   /**
+   * WP7 (docs/adr/0071), guide §9.8/§9.9 — writes what an imported ATO says
+   * about this flight. The ONLY writer of `identity.modeOne`/`modeTwo`,
+   * `military.scl`, `military.arInfo` and `fdr.ato`, called only from the ATO
+   * import (efsp-ws.js _handleAtoMutation via ato/ato-board.js). Structurally
+   * outside WRITABLE_PATHS and MILITARY_WRITABLE_FIELDS on the setTofi /
+   * setBeaconObserved template: Mode 1/2 are "displayed, not edited" by ATC
+   * (§3.10.3 rule 1), so no Block, no setField() path and no setMilitary() key
+   * may ever reach them (defect D24, by construction).
+   *
+   * `tasking.mode` says how the flight met the ATO:
+   *  - CREATE: the import just made this FDR from the line's seed. Every seed
+   *    path is marked provenance 'ATO'; the ATO's Mode 3 is ADOPTED as the
+   *    assigned code when the allocator accepts it (decision H64, answering
+   *    docs/adr/0054's inherited question), releasing the code createFdr just
+   *    minted — else the minted code stays; an ATO alert status of ALERT is
+   *    written (the ATO never says SCRAMBLE).
+   *  - BIND: a flight already filed. The ATC code is authoritative (§3.10.3
+   *    rule 3) and is never touched; the ATO's code sits in `ato.iff.modeThree`.
+   *    A seed path is filled only where the flight has nothing yet.
+   *  - UPDATE: a re-import. A seed path is replaced only while its provenance
+   *    is still 'ATO' — a value a controller typed is kept and reported
+   *    (§10.2 rule 3). Everything else the ATO owns is replaced.
+   *
+   * Refuses unknown keys, validates everything before writing anything, and
+   * bumps `rev` once.
+   *
+   * @returns {{ok:true, fdr, kept:object[], beacon:object|null}|{ok:false, reason, detail?}}
+   */
+  applyAtoTasking(fdrId, tasking, { by } = {}) {
+    const TASKING_KEYS = new Set(['mode', 'identity', 'modeThree', 'military', 'seed', 'ato']);
+    const MODES = new Set(['CREATE', 'BIND', 'UPDATE']);
+    const SEED_PATHS = new Set(['mission.missionNumber', 'mission.packageId', 'mission.controllingAgency',
+      'mission.vulWindowStartUtc', 'mission.vulWindowEndUtc', 'identity.flightSize', 'identity.aircraftType',
+      'identity.unit', 'identity.homeStation']);
+    const refuse = (detail) => ({ ok: false, reason: 'VALIDATION_ERROR', detail });
+
+    const fdr = this._fdrs.get(fdrId);
+    if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
+    if (!tasking || typeof tasking !== 'object') return refuse('an ATO tasking is an object');
+    for (const key of Object.keys(tasking)) if (!TASKING_KEYS.has(key)) return refuse(`${key} is not part of an ATO tasking`);
+    const mode = tasking.mode;
+    if (!MODES.has(mode)) return refuse(`unknown ATO tasking mode ${JSON.stringify(mode)}`);
+    const identity = tasking.identity || {};
+    for (const key of Object.keys(identity)) if (key !== 'modeOne' && key !== 'modeTwo') return refuse(`identity.${key} is not ATO-owned`);
+    if (identity.modeOne != null && !/^[0-7]{2}$/.test(identity.modeOne)) return refuse(`Mode 1 must be two octal digits, not ${JSON.stringify(identity.modeOne)}`);
+    if (identity.modeTwo != null && !/^[0-7]{4}$/.test(identity.modeTwo)) return refuse(`Mode 2 must be four octal digits, not ${JSON.stringify(identity.modeTwo)}`);
+    if (tasking.modeThree != null && !isValidCodeFormat(tasking.modeThree)) return refuse(`Mode 3 must be four octal digits, not ${JSON.stringify(tasking.modeThree)}`);
+    const military = tasking.military || {};
+    for (const key of Object.keys(military)) if (!['scl', 'arInfo', 'alertStatus'].includes(key)) return refuse(`military.${key} is not ATO-owned`);
+    if (military.alertStatus !== undefined && military.alertStatus !== 'NONE' && military.alertStatus !== 'ALERT') {
+      return refuse(`an ATO alert status is NONE or ALERT, not ${JSON.stringify(military.alertStatus)}`);
+    }
+    const seed = tasking.seed || {};
+    for (const path of Object.keys(seed)) if (!SEED_PATHS.has(path)) return refuse(`${path} is not seeded by an ATO`);
+    if (!tasking.ato || typeof tasking.ato !== 'object') return refuse('an ATO tasking carries its ato record');
+
+    // ── validated; write ──
+    const kept = [];
+    const blank = (v) => v == null || v === '';
+    for (const [path, raw] of Object.entries(seed)) {
+      let value = raw;
+      if (path === 'identity.flightSize' && !(Number.isInteger(value) && value > 0)) continue;
+      if (path === 'identity.aircraftType' && typeof value !== 'string') continue;
+      const current = getPath(fdr, path);
+      const prov = fdr.provenance[path];
+      const owned = mode === 'CREATE' || prov === 'ATO' || (prov === undefined && blank(current));
+      if (!owned) {
+        if ((current == null ? null : current) !== (value == null ? null : value)) {
+          kept.push({ path, value: current, atoValue: value, ownedBy: prov === 'CONTROLLER_ENTERED' ? 'CONTROLLER' : 'FLIGHT' });
+        }
+        continue;
+      }
+      setPath(fdr, path, value === undefined ? null : value);
+      fdr.provenance[path] = 'ATO';
+    }
+    if (mode === 'CREATE') fdr.provenance['identity.callsign'] = 'ATO';
+
+    fdr.identity.modeOne = identity.modeOne == null ? null : identity.modeOne;
+    fdr.identity.modeTwo = identity.modeTwo == null ? null : identity.modeTwo;
+    fdr.provenance['identity.modeOne'] = 'ATO';
+    fdr.provenance['identity.modeTwo'] = 'ATO';
+
+    const mil = ensureMilitary(fdr);
+    mil.scl = military.scl == null ? null : military.scl;
+    mil.arInfo = military.arInfo == null ? null : military.arInfo;
+    if (mode === 'CREATE' && military.alertStatus === 'ALERT') mil.alertStatus = 'ALERT';
+    fdr.provenance['military.scl'] = 'ATO';
+    fdr.provenance['military.arInfo'] = 'ATO';
+
+    fdr.ato = { ...tasking.ato };
+    fdr.provenance['ato'] = 'ATO';
+
+    let beacon = null;
+    if (mode === 'CREATE' && tasking.modeThree) {
+      const check = this._codeAllocator.validateAssignment(tasking.modeThree, fdrId);
+      if (check.ok) {
+        const previous = fdr.identity.beaconAssigned;
+        this._codeAllocator.reassign(fdrId, tasking.modeThree, previous);
+        fdr.identity.beaconAssigned = tasking.modeThree;
+        fdr.provenance['identity.beaconAssigned'] = 'ATO';
+        beacon = { adopted: true, code: tasking.modeThree, released: previous !== tasking.modeThree ? previous : null, warning: check.warning };
+      } else {
+        beacon = { adopted: false, code: fdr.identity.beaconAssigned, atoCode: tasking.modeThree, detail: check.detail || 'reserved or malformed' };
+      }
+    }
+
+    fdr.rev += 1;
+    fdr.updatedAt = this._clock.now();
+    fdr.updatedBy = by || null;
+    return { ok: true, fdr, kept, beacon };
+  }
+
+  /**
    * Approves this flight onto a frequency, optionally tied to the airspace it
    * is working in (guide Block 22). Append-only, like airspace ownership: a
    * sortie that changes frequency three times has to be able to show all

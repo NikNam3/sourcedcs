@@ -383,6 +383,7 @@ function _stripAlerts(strip) {
       reason: `Conflict with ${other} in ${_fmtClock(c.timeToCpaSec)}: closest ${c.minNm} NM / ${c.vertFt} ft.`,
     });
   }
+  if (typeof atoAlertsFor === 'function') out.push(...atoAlertsFor(strip)); // docs/adr/0071, §3.10.3 rule 3
   for (const a of (typeof conformanceAlertsForFdr === 'function' ? conformanceAlertsForFdr(strip.fdrId) : [])) {
     if (a.kind === 'HEADING') {
       out.push({ key: 'conf', tone: 'attn', legacy: 'efsp-conf-indicator', text: `HDG ${_pad3(a.actual)}`,
@@ -402,6 +403,12 @@ function _stripAlerts(strip) {
   if (typeof scrambleAlertsFor === 'function') out.push(...scrambleAlertsFor(strip));
   return out;
 }
+
+// WP7 (crc-sync docs/adr/0071, ato-strip.js): the ATO's Mode 3 conflict is an
+// alert chip after the wave-2 advisories; the AR join a quiet badge after MARSA.
+INDICATOR_ORDER.splice(INDICATOR_ORDER.indexOf('trk'), 0, 'ato');
+INDICATOR_ORDER.splice(INDICATOR_ORDER.indexOf('marsa') + 1, 0, 'ar');
+ALERT_SLOT_KEYS.add('ato');
 
 function _indicator(key, text, tone, legacy, title) {
   const node = _stripEl('span', `efsp-ind efsp-ind-${tone}${legacy ? ' ' + legacy : ''}`, text);
@@ -455,6 +462,11 @@ function _litIndicator(strip, key, el, obligation, siblings) {
     return _indicator(key, obligation.obligationType.replace(/_/g, ' '), overdue ? 'bad' : 'attn',
       `efsp-obligation-badge${overdue ? ' efsp-obligation-badge-overdue' : ''}`,
       `${obligation.obligationType} — ${obligation.severity}`);
+  }
+  if (key === 'ar') {
+    // The AR join (docs/adr/0071): not MARSA, never a warning — tone 'on'.
+    const join = typeof arJoinFor === 'function' ? arJoinFor(strip) : null;
+    return join ? _indicator(key, join.text, 'on', 'efsp-ar-badge', join.title) : null;
   }
   if (key === 'siblings') {
     if (siblings.length === 0) return null;
@@ -732,6 +744,7 @@ function _buildStripLayout(el, strip, obligation) {
   if (typeof isMarsaHighlighted === 'function' && isMarsaHighlighted(strip.stripId)) {
     el.classList.add('efsp-strip-marsa-participant');
   }
+  if (typeof isArHighlighted === 'function' && isArHighlighted(strip.stripId)) el.classList.add('efsp-strip-ar-participant');
 
   const arrival = typeof efspArrivalFor === 'function' ? efspArrivalFor(strip.stripId) : null;
   if (arrival) {

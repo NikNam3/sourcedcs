@@ -789,6 +789,7 @@ function _appendExpandedView(el, strip) {
     renderAllOpenEfspBays();
   });
   collapse.addEventListener('pointerdown', (e) => e.stopPropagation());
+  if (typeof appendAtoExpandedRows === 'function') appendAtoExpandedRows(panel, strip); // docs/adr/0071 — read-only
   panel.appendChild(collapse);
 
   el.appendChild(panel);
@@ -1414,6 +1415,7 @@ function _afterSelectionChanged() {
   // way round would leave the highlight one selection behind, which is the kind
   // of off-by-one that looks like a race and is not.
   if (typeof highlightMarsaParticipants === 'function') highlightMarsaParticipants(_selectedStripId);
+  if (typeof highlightArParticipants === 'function') highlightArParticipants(_selectedStripId); // docs/adr/0071
   renderAllOpenEfspBays();
   // Ring the selected Strip's contact on the map (guide §6.6 rule 4). One Map
   // lookup plus the existing rAF-batched updateMap() — see
@@ -2820,6 +2822,7 @@ function _stripRenderSignature(strip) {
     ? `${relation.marsaId}/${relation.rev}/${relation.state}/${relation.rendezvousAt ? 1 : 0}/${relation.voidedBy || ''}`
     : ''));
   parts.push('mhl:' + (typeof isMarsaHighlighted === 'function' && isMarsaHighlighted(strip.stripId) ? 1 : 0));
+  parts.push('ar:' + (typeof arSignatureFor === 'function' ? arSignatureFor(strip) : '')); // docs/adr/0071 — the AR join lives on OTHER flights' Strips
 
   const correlation = typeof getEfspCorrelationForStrip === 'function' ? getEfspCorrelationForStrip(strip) : null;
   if (!correlation) {
