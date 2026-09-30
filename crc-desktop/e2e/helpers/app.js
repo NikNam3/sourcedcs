@@ -85,7 +85,9 @@ async function seedStrip(page, { callsign, actingPositionId = 'OPS', bayId = 'op
     },
     facilityId,
   ]);
-  await expect(page.locator('.efsp-strip')).toHaveCount(before + 1);
+  // 10 s, not the 5 s default: a CreateStrip round trip was measured over 5 s
+  // with the machine at load 30 (l3 'a rejected proposal…', full run).
+  await expect(page.locator('.efsp-strip')).toHaveCount(before + 1, { timeout: 10000 });
   await settleCorrelation(page, callsign);
   return stripByCallsign(page, callsign);
 }
