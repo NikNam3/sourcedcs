@@ -106,6 +106,7 @@ function panelControlRows() {
     { id: 'efsp',     label: PANEL_TITLES.efsp },
     { id: 'airspace', label: PANEL_TITLES.airspace },
     { id: 'fieldState', label: PANEL_TITLES.fieldState },
+    { id: 'metrics',  label: PANEL_TITLES.metrics },
   ];
 }
 

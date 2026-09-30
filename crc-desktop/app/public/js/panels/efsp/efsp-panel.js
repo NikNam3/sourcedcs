@@ -70,7 +70,6 @@ function _checkEfspStaleness() {
 // Position tab; switching Position tabs implicitly drops it (matches the
 // existing "Bay set recomposes on Position change" behavior elsewhere).
 let _searchQuery = null;
-let _searchInvocationCount = 0; // minimal §4.3 rule 3 / §11.5 instrumentation hook — WP8 builds a real dashboard on this later
 
 function _searchBayId(positionId) { return `${positionId}-search`; }
 
@@ -144,8 +143,7 @@ function _runEfspSearch(query) {
     _renderPositionTabs();
     return;
   }
-  _searchInvocationCount += 1;
-  console.log('[efsp] search #' + _searchInvocationCount + ':', trimmed);
+  if (typeof noteEfspSearch === 'function') noteEfspSearch(_activePositionTab, _activeBayId); // §11.5, docs/adr/0072 — before the Bay switches to the results
   _searchQuery = trimmed;
   if (_activePositionTab) _activeBayId = _searchBayId(_activePositionTab);
   _renderPositionTabs();
@@ -203,6 +201,7 @@ function _renderBayTabs() {
   const bays = _positionsWithBays()[_activePositionTab] || [];
   if (!bays.some(b => b.bayId === _activeBayId)) _activeBayId = bays[0] ? bays[0].bayId : null;
 
+  if (typeof noteEfspBayVisible === 'function') noteEfspBayVisible(efspVisibleBayId(), _activePositionTab); // time-to-find, docs/adr/0072
   // The Bay in front of the controller has been seen, before its tab is drawn,
   // so it never shows "+N" for what is on screen.
   if (_activeBayId && _isEfspPanelShowing() && typeof markEfspBaySeen === 'function') {

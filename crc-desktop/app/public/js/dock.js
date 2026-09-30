@@ -40,6 +40,7 @@ const PANEL_TITLES = {
   efsp:     'FLIGHT STRIPS',
   airspace: 'AIRSPACE',
   fieldState: 'FIELD STATE',
+  metrics:  'METRICS',
 };
 
 const DOCK_LAYOUT_KEY = 'crc-desktop-dock-layout';
@@ -62,6 +63,7 @@ function initDock() {
         case 'efsp':     return mountExistingPanel('efsp-panel', initEfspPanel);
         case 'airspace': return mountExistingPanel('airspace-panel', initAirspacePanel);
         case 'fieldState': return mountExistingPanel('field-state-panel', initFieldStatePanel);
+        case 'metrics':  return mountExistingPanel('metrics-panel', initMetricsPanel);
         default: throw new Error(`[dock] unknown panel component: ${options.name}`);
       }
     },
@@ -187,7 +189,7 @@ function addMissingRequiredPanels() {
 // (it lands wherever the active group happens to be, sometimes merging
 // into completely the wrong group — both reproduced firsthand while
 // building this). `excludeId` leaves out the panel currently being placed.
-const LEFT_CLUSTER = ['track', 'radars', 'airport', 'efsp', 'airspace', 'fieldState'];
+const LEFT_CLUSTER = ['track', 'radars', 'airport', 'efsp', 'airspace', 'fieldState', 'metrics'];
 
 function leftGroupAnchor(excludeId) {
   return LEFT_CLUSTER.filter(id => id !== excludeId).find(id => dock.api.getPanel(id));
@@ -199,7 +201,7 @@ function leftGroupAnchor(excludeId) {
 // remembered size to come back to.
 const PANEL_SIDE = {
   track: 'left', radars: 'left', airport: 'left', efsp: 'left', airspace: 'left',
-  fieldState: 'left',
+  fieldState: 'left', metrics: 'left',
   settings: 'right',
   radio: 'bottom',
 };
@@ -306,6 +308,14 @@ const DOCKABLE_PANELS = {
     const anchor = leftGroupAnchor('fieldState');
     return withRememberedPlacement('fieldState', {
       id: 'fieldState', component: 'fieldState', title: PANEL_TITLES.fieldState,
+      position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
+    }, !anchor);
+  },
+  // §11.5 metrics + §11.4 traffic count (docs/adr/0072). Needs no Position.
+  metrics: () => {
+    const anchor = leftGroupAnchor('metrics');
+    return withRememberedPlacement('metrics', {
+      id: 'metrics', component: 'metrics', title: PANEL_TITLES.metrics,
       position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
     }, !anchor);
   },

@@ -866,12 +866,12 @@ function _buildStripEl(strip) {
   // toggle Attention).
   el.addEventListener('click', (e) => {
     if (e.target.closest(STRIP_CONTROL_SELECTOR)) return;
-    if (e.shiftKey) { _dispatchGesture(strip, setAttention, 'red'); return; }
+    if (e.shiftKey) { const acting = _dispatchGesture(strip, setAttention, 'red'); if (typeof noteEfspGesture === 'function') noteEfspGesture('ATTENTION', 'shift-click', acting); return; }
     _selectStrip(strip.stripId);
   });
   el.addEventListener('dblclick', (e) => {
     if (e.target.closest(STRIP_CONTROL_SELECTOR)) return;
-    _dispatchGesture(strip, toggleFlip);
+    const acting = _dispatchGesture(strip, toggleFlip); if (typeof noteEfspGesture === 'function') noteEfspGesture('FLIP', 'dblclick', acting);
   });
   el.addEventListener('contextmenu', (e) => {
     if (e.target.closest(STRIP_CONTROL_SELECTOR)) return;
@@ -1388,6 +1388,7 @@ function _dispatchCorrelation(strip, op) {
 
 function _selectStrip(stripId) {
   _selectedStripId = _selectedStripId === stripId ? null : stripId;
+  if (typeof noteEfspStripSelected === 'function') noteEfspStripSelected(_selectedStripId); // docs/adr/0072
   _afterSelectionChanged();
 }
 
@@ -1400,6 +1401,7 @@ function _selectStrip(stripId) {
 function selectEfspStripById(stripId) {
   if (!getEfspStrip(stripId)) return false;
   _selectedStripId = stripId;
+  if (typeof noteEfspStripSelected === 'function') noteEfspStripSelected(_selectedStripId); // docs/adr/0072
   _afterSelectionChanged();
   const el = _stripElById(stripId);
   if (el && typeof el.scrollIntoView === 'function') {
@@ -2118,6 +2120,7 @@ function _dispatchGesture(strip, gestureFn, ...extraArgs) {
   const actingPositionId = _resolveActingPositionId(strip);
   if (!actingPositionId) return;
   gestureFn(strip, ...extraArgs, (s, op) => sendEfspMutation(actingPositionId, s, op));
+  return actingPositionId; // truthy only when dispatched — what the gesture metric counts (docs/adr/0072)
 }
 
 // Small, fixed swatch set for Highlight (guide §7.3) — deliberately NOT
@@ -2155,7 +2158,7 @@ function _openHighlightPopover(strip, anchorEl) {
     swatch.addEventListener('pointerdown', (e) => e.stopPropagation());
     swatch.addEventListener('click', (e) => {
       e.stopPropagation();
-      _dispatchGesture(strip, setHighlight, color);
+      const acting = _dispatchGesture(strip, setHighlight, color); if (typeof noteEfspGesture === 'function') noteEfspGesture('HIGHLIGHT', 'contextmenu+swatch', acting);
       _closeHighlightPopover();
     });
     popover.appendChild(swatch);
