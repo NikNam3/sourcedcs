@@ -45,7 +45,7 @@ const nla = require('./nla');
 const blockMap = require('./block-map');
 const facilityConfig = require('./facility-config');
 const coordination = require('./coordination');
-const { handleMessage, snapshotMessage } = require('./efsp-ws');
+const { handleMessage, snapshotMessage, filterForSession, readScopeKey } = require('./efsp-ws');
 const { NlaStatusMonitor } = require('./nla-status-monitor');
 const { Archiver } = require('./archiver');
 const { statePaths, ensureDirFor } = require('../state-paths');
@@ -346,7 +346,15 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
     },
 
     /** Sent once at connect, appended to ws-hub.js's existing connect-time send order. */
-    snapshotFor: () => snapshotMessage(ctx),
+    snapshotFor: (session = null) => snapshotMessage(ctx, session),
+
+    /**
+     * The message `session` is to be sent for an EFSP broadcast `msg` (docs/adr/0080):
+     * the same object when it reads everything, a filtered copy when it reads only
+     * what it owns, null to skip. And a key that changes when a session's scope does.
+     */
+    filterForSession: (session, msg) => filterForSession(ctx, session, msg),
+    readScopeKey: (session) => readScopeKey(ctx, session),
 
     archiver,
   };

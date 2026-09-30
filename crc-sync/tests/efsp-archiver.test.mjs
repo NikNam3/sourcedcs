@@ -508,7 +508,7 @@ test('archiveDeltas + broadcastEfspBoardDelta: one delta per Facility, gone Stri
   const CollaborativeStore = (await import('../src/collab-store.js')).default;
   const hub = new WsHub({ trackStore: new TrackStore(), collabStore: new CollaborativeStore() });
   const sent = [];
-  hub._broadcast = (m) => sent.push(m);
+  hub._broadcastEfsp = (m) => sent.push(m);
 
   const a = droppedFlight('WIRE1');
   const ctr = handedToCenter(efsp, c, airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'WIRE2' }));

@@ -32,6 +32,7 @@
 // Board, so there is no `rules` object on the path it takes, and threading one
 // through purely for a class check would be more indirection than it removes.
 const permission = require('./permission');
+const readScope = require('./read-scope');
 
 const VERSION = 1;
 
@@ -179,7 +180,7 @@ function _subject(msg) {
 function handleMessage(ctx, session, msg, persist) {
   switch (msg.type) {
     case 'efsp-mutation':      return _handleMutation(ctx, session, msg, persist);
-    case 'efsp-resync':        return _handleResync(ctx, msg);
+    case 'efsp-resync':        return _handleResync(ctx, session, msg);
     case 'efsp-set-positions': return _handleSetPositions(ctx, session, msg, persist);
     case 'efsp-airspace-mutation': return _handleAirspaceMutation(ctx, session, msg, persist);
     case 'efsp-correlation-mutation': return _handleCorrelationMutation(ctx, session, msg, persist);
@@ -320,16 +321,21 @@ function _handleMutation(ctx, session, msg, persist) {
  * in the middle step; retention removing Strips (L24) only changes what
  * getDeltaSince reports as `gone`.
  */
-function _handleResync(ctx, msg) {
+function _handleResync(ctx, session, msg) {
   // 1. Resolve the Board.
   const facilityId = msg.facilityId || ctx.facilityConfig.DEFAULT_FACILITY_ID;
   const boardStore = ctx.boardStoreFor(facilityId);
   const positionStore = ctx.positionStoreFor(facilityId);
-  if (!boardStore || !positionStore) return { ack: _snapshotMessage(ctx) };
+  if (!boardStore || !positionStore) return { ack: _snapshotMessage(ctx, session) };
+
+  // A session that reads only what it owns (docs/adr/0080) always gets the
+  // filtered SNAPSHOT: the ring replays unfiltered history, and a snapshot is
+  // the other of §5.6's two answers, so the rule of two paths still holds.
+  if (readScope.isOwned(readScopeOf(ctx, session))) return { ack: _snapshotMessage(ctx, session) };
 
   // 2. Decide: delta or snapshot.
   const lastSeq = Number.isFinite(msg.lastBoardSeq) ? msg.lastBoardSeq : -1;
-  if (!_deltaCanServe(boardStore, msg.boardEpoch, lastSeq)) return { ack: _snapshotMessage(ctx) };
+  if (!_deltaCanServe(boardStore, msg.boardEpoch, lastSeq)) return { ack: _snapshotMessage(ctx, session) };
 
   // 3. Build the delta.
   const delta = boardStore.getDeltaSince(lastSeq);
@@ -714,6 +720,67 @@ function _handleSetPositions(ctx, session, msg, persist) {
   };
 }
 
+// ── The read scope (docs/adr/0080) ───────────────────────────────────────────
+
+/**
+ * What `session` is sent of the flights, from what it holds NOW at every
+ * Facility (nothing is cached, so nothing goes stale). A pure function of the
+ * PositionStores and permission.js's capability table.
+ */
+function readScopeOf(ctx, session) {
+  if (!session || !session.controllerId) return { kind: readScope.ALL };
+  const held = [];
+  for (const facilityId of ctx.facilityConfig.getFacilityIds()) {
+    const positionStore = ctx.positionStoreFor(facilityId);
+    if (!positionStore) continue;
+    for (const positionId of positionStore.heldBy(session.controllerId)) held.push({ facilityId, positionId });
+  }
+  return readScope.scopeOf(held, permission.readScopeFor);
+}
+
+/** Every live Strip on every Board, stamped with its Facility (what the visibility sets are computed from). */
+function _liveStamped(ctx) {
+  const out = [];
+  for (const facilityId of ctx.facilityConfig.getFacilityIds()) {
+    const boardStore = ctx.boardStoreFor(facilityId);
+    if (!boardStore) continue;
+    for (const s of boardStore.getAll()) if (s.state !== 'DROPPED') out.push({ ...s, facilityId });
+  }
+  return out;
+}
+
+/**
+ * The message this session is to be sent for `msg`: the SAME object for a
+ * session that reads everything (the fast path), a filtered copy for one that
+ * reads only what it owns, or null when nothing is left to send.
+ */
+function filterForSession(ctx, session, msg) {
+  if (!msg) return msg;
+  const scope = readScopeOf(ctx, session);
+  if (scope.kind === readScope.ALL) return msg;
+  switch (msg.type) {
+    case 'efsp-snapshot':
+      return readScope.filterSnapshot(msg, scope);
+    case 'efsp-board-delta':
+      return readScope.filterBoardDelta(msg, scope, readScope.visibleFdrIdsOf(scope, _liveStamped(ctx)));
+    case 'efsp-correlation-delta':
+      return readScope.filterCorrelationDelta(msg, scope, readScope.visibleFdrIdsOf(scope, _liveStamped(ctx)));
+    case 'efsp-marsa-delta':
+      return readScope.filterMarsaDelta(msg, scope, readScope.visibleFdrIdsOf(scope, _liveStamped(ctx)));
+    case 'efsp-alerts': {
+      const live = _liveStamped(ctx);
+      const byKey = new Map(live.map(s => [`${s.facilityId}:${s.stripId}`, s]));
+      return readScope.filterAlerts(msg, scope, readScope.visibleFdrIdsOf(scope, live),
+        (facilityId, stripId) => readScope.isStripVisible(scope, byKey.get(`${facilityId}:${stripId}`)));
+    }
+    default:
+      return msg;
+  }
+}
+
+/** Changes exactly when what `session` may see of the flights changes. */
+function readScopeKey(ctx, session) { return readScope.scopeKey(readScopeOf(ctx, session)); }
+
 /**
  * WP4A: sends every Facility's strips/positions/bays in one message (each
  * record stamped with `facilityId`), since a client can now hold Positions
@@ -721,7 +788,12 @@ function _handleSetPositions(ctx, session, msg, persist) {
  * aliases for INCIRLIK specifically — `boardSeqByFacility`/`facilities` are
  * the real, general shape.
  */
-function _snapshotMessage(ctx) {
+function _snapshotMessage(ctx, session = null) {
+  const full = _fullSnapshotMessage(ctx);
+  return session ? readScope.filterSnapshot(full, readScopeOf(ctx, session)) : full;
+}
+
+function _fullSnapshotMessage(ctx) {
   const { fdrStore, facilityConfig } = ctx;
   const facilityIds = facilityConfig.getFacilityIds();
 
@@ -996,4 +1068,4 @@ function _handleAtoMutation(ctx, session, msg, persist) {
   };
 }
 
-module.exports = { handleMessage, snapshotMessage: _snapshotMessage, RESYNC_RING_WINDOW };
+module.exports = { handleMessage, snapshotMessage: _snapshotMessage, filterForSession, readScopeKey, readScopeOf, RESYNC_RING_WINDOW };

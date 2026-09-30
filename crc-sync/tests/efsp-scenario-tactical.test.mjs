@@ -435,7 +435,7 @@ test('SCENARIO J3 a JTAC has no scope, so it neither binds a contact nor declare
   assert.equal(marsa.ok, false, `JTAC declared MARSA: ${JSON.stringify(marsa)}`);
 });
 
-test('SCENARIO J4 a JTAC is sent only the Strips TAC_C2 has handed it (H40)', { todo: 'L8 B6 — see docs/wip/L8.md' }, () => {
+test('SCENARIO J4 a JTAC is sent only the Strips TAC_C2 has handed it (H40)', () => {
   const efsp = freshEfsp();
   const c = crew(efsp, ALL);
   const handed = handTo(efsp, c, taskedLine(efsp, c, 'JT16'), 'JTAC', 'jtac-mission');
