@@ -46,6 +46,22 @@ function resolveZuluHhmm(text, nowMs) {
   return best;
 }
 
+/**
+ * A typed Zulu time of day as epoch ms, on its FIRST occurrence strictly after
+ * `afterMs`. For the end of a window whose start is known (the vul window,
+ * S-F4): a 0200 end to a 2200 start is the next morning, and a window may run
+ * longer than the ±12 h resolveZuluHhmm reaches. Null when `text` is not a
+ * time of day.
+ */
+function resolveZuluHhmmAfter(text, afterMs) {
+  const t = parseZuluHhmm(text);
+  if (!t || !Number.isFinite(afterMs)) return null;
+  const after = new Date(afterMs);
+  let at = Date.UTC(after.getUTCFullYear(), after.getUTCMonth(), after.getUTCDate(), t.hh, t.mm);
+  while (at <= afterMs) at += DAY_MS;
+  return at;
+}
+
 /** Epoch ms as the four-digit Zulu time a Strip shows ("1432"), or '' for no time. */
 function formatZuluHhmm(ms) {
   if (ms == null || ms === '' || !Number.isFinite(Number(ms))) return '';
@@ -53,4 +69,4 @@ function formatZuluHhmm(ms) {
   return String(d.getUTCHours()).padStart(2, '0') + String(d.getUTCMinutes()).padStart(2, '0');
 }
 
-module.exports = { parseZuluHhmm, resolveZuluHhmm, formatZuluHhmm };
+module.exports = { parseZuluHhmm, resolveZuluHhmm, resolveZuluHhmmAfter, formatZuluHhmm };

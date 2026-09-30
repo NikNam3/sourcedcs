@@ -105,6 +105,7 @@ test('toFdrFiledSeed maps exactly the fields EFSP models, dropping everything DD
     departureAirport: 'LTAG', destinationAirport: 'LTAC',
     remarks: 'DOF/260101',
     aircraftType: 'F16', wakeCategory: 'M',
+    flightPlanDepartureTimeHhmm: '',
   });
   assert.equal('fplMessage' in seed, false);
   assert.equal('worldTour' in seed, false);
@@ -114,7 +115,7 @@ test('toFdrFiledSeed never throws on a missing field — falls back to empty str
   const seed = toFdrFiledSeed({});
   assert.deepEqual(seed, {
     route: '', requestedAltitude: '', departureAirport: '', destinationAirport: '', remarks: '',
-    aircraftType: '', wakeCategory: '',
+    aircraftType: '', wakeCategory: '', flightPlanDepartureTimeHhmm: '',
   });
 });
 
@@ -143,7 +144,7 @@ test('listFiledFlightPlans maps each raw plan into a lightweight {id, callsign, 
     id: 1, callsign: 'VIPER1', submittedByName: 'Alice', submittedAt: '2026-01-01T00:00:00.000Z',
     seed: {
       route: 'DCT', requestedAltitude: '250', departureAirport: 'LTAG', destinationAirport: 'LTAC', remarks: 'DOF/260101',
-      aircraftType: '', wakeCategory: '',
+      aircraftType: '', wakeCategory: '', flightPlanDepartureTimeHhmm: '',
     },
   }]);
 });
@@ -208,4 +209,11 @@ test('a plan with no submittedBy at all still maps cleanly (submittedByName null
   const result = await listFiledFlightPlans({ fetchImpl, serviceToken: 'x' });
   assert.equal(result.ok, true);
   assert.equal(result.plans[0].submittedByName, null);
+});
+
+// ── docs/adr/0073 — item 13's departure time reaches the seed ──────────────
+
+test('toFdrFiledSeed carries the DD1801 departure time (depTime) as typed, for the P-time chain', () => {
+  assert.equal(toFdrFiledSeed({ depTime: '1430' }).flightPlanDepartureTimeHhmm, '1430');
+  assert.equal(toFdrFiledSeed({ depTime: 'garbage' }).flightPlanDepartureTimeHhmm, 'garbage', 'createFdr drops it, not the mapping');
 });
