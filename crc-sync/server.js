@@ -254,6 +254,25 @@ async function refreshAirportWeather(missionData) {
   }
 }
 
+// ── F3 mission session (docs/adr/0086, decisions.md S-R2-2) ───────────────
+// Which mission we are in: H22's wind-derived runway, H32's metrics session and
+// H36's archiver all read it. Registered BEFORE the mission-load handler below,
+// so that handler already sees the session this load belongs to.
+const { MissionSession } = require('./src/mission-session');
+const missionSession = new MissionSession({ clock: missionClock });
+let lastMissionData = null;
+grpcClient.on('mission-start', () => missionSession.noteMissionStart());
+grpcClient.on('mission-load', (missionData) => {
+  lastMissionData = missionData;
+  missionSession.noteMissionLoad(missionData);
+});
+// A clock step back opens a session with no mission-load behind it: the wind
+// is re-read then too (a load-driven session is handled in the handler below).
+missionSession.onNewSession((session) => {
+  if (session.reason === 'CLOCK_STEP_BACK' && lastMissionData) deriveActiveRunwaysFromWind(lastMissionData);
+});
+// ── end F3 mission session ────────────────────────────────────────────────
+
 grpcClient.on('mission-load', (missionData) => {
   trackStore.clear();
   surveillance.clear();
@@ -308,46 +327,52 @@ grpcClient.on('mission-load', (missionData) => {
   weatherRefreshTimer = setInterval(() => refreshAirportWeather(missionData), 60000);
 
   // ── L1 field state: active runway from wind (H22) ─────────────────────────
-  // Each Facility with runways takes the end most into its airfield's wind as
-  // the active runway, once per mission (docs/adr/0061). The mission key is
-  // what stops a gRPC reconnect or a crc-sync restart from overriding the end
-  // TWR has since chosen; F3's mission-session.js replaces missionKeyOf here
-  // (decisions.md S-R2-2). DCS wind is TRUE and is compared with each end's
-  // true heading from the inventory, never with the magnetic end number.
-  {
-    const { missionKeyOf } = require('./src/efsp/field-state');
-    const missionKey = missionKeyOf(missionData);
-    for (const facilityId of efspFacilityConfig.getFacilityIds()) {
-      const icao = (efspFacilityConfig.getFacilityConfig(facilityId).fieldState || {}).airportIcao;
-      if (!icao || !efsp.fieldStateStore.hasFieldState(facilityId)) continue;
-      const airport = (missionData.airports || []).find(a => a.icao === icao);
-      if (!airport) { console.warn(`[field-state] ${facilityId}: no ${icao} in this mission — active runway left as it is`); continue; }
-      grpcClient.getAptWeather(airport.lat, airport.lon, airport.elev || 0)
-        .then((w) => {
-          const r = efsp.fieldStateStore.setActiveRunwayFromWind(facilityId, { windFromTrue: w.windFrom, windKt: w.windKt, missionKey });
-          if (r.ok && r.changed) {
-            efsp.persist();
-            // ws-hub.js has no field-state broadcaster and is not L1's to edit
-            // (serialised L7 -> L10); its generic _broadcast carries the same
-            // delta a field-state op sends. A public broadcastEfspFieldStateDelta
-            // is a follow-up for whoever next holds ws-hub.js.
-            wsHub._broadcast({
-              version: 1, type: 'efsp-field-state-delta', fieldStateSeq: efsp.fieldStateStore.currentSeq,
-              fieldStates: { updated: [efsp.fieldStateStore.getFieldState(facilityId)] },
-            });
-            efsp.nlaStatusMonitor.tick();
-            console.log(`[field-state] ${facilityId}: active runway ${r.activeRunway} from the mission wind (${w.windFrom}° true, ${w.windKt} kt)`);
-          }
-        })
-        .catch((e) => console.warn(`[field-state] ${facilityId}: wind fetch failed, active runway left as it is:`, e.message));
-    }
-  }
+  deriveActiveRunwaysFromWind(missionData);
   // ── end L1 field state ────────────────────────────────────────────────────
 });
+
+// Each Facility with runways takes the end most into its airfield's wind as the
+// active runway, once per mission SESSION (docs/adr/0061, 0086): the store
+// skips a Facility whose runway was already derived in the current session, so
+// a gRPC reconnect or a crc-sync restart keeps the end TWR has since chosen,
+// and the same .miz restarted for a new sortie reads the wind again. DCS wind
+// is TRUE and is compared with each end's true heading from the inventory,
+// never with the magnetic end number.
+function deriveActiveRunwaysFromWind(missionData) {
+  const missionSessionSeq = missionSession.currentSeq();
+  for (const facilityId of efspFacilityConfig.getFacilityIds()) {
+    const icao = (efspFacilityConfig.getFacilityConfig(facilityId).fieldState || {}).airportIcao;
+    if (!icao || !efsp.fieldStateStore.hasFieldState(facilityId)) continue;
+    const airport = (missionData.airports || []).find(a => a.icao === icao);
+    if (!airport) { console.warn(`[field-state] ${facilityId}: no ${icao} in this mission — active runway left as it is`); continue; }
+    grpcClient.getAptWeather(airport.lat, airport.lon, airport.elev || 0)
+      .then((w) => {
+        const r = efsp.fieldStateStore.setActiveRunwayFromWind(facilityId, { windFromTrue: w.windFrom, windKt: w.windKt, missionSession: missionSessionSeq });
+        // Persisted even when the end is unchanged: the store has recorded
+        // that this session's wind is applied (docs/adr/0086).
+        if (r.ok && !r.skipped) efsp.persist();
+        if (r.ok && r.changed) {
+          // ws-hub.js has no field-state broadcaster and is not L1's to edit
+          // (serialised L7 -> L10); its generic _broadcast carries the same
+          // delta a field-state op sends. A public broadcastEfspFieldStateDelta
+          // is a follow-up for whoever next holds ws-hub.js.
+          wsHub._broadcast({
+            version: 1, type: 'efsp-field-state-delta', fieldStateSeq: efsp.fieldStateStore.currentSeq,
+            fieldStates: { updated: [efsp.fieldStateStore.getFieldState(facilityId)] },
+          });
+          efsp.nlaStatusMonitor.tick();
+          console.log(`[field-state] ${facilityId}: active runway ${r.activeRunway} from the mission wind (${w.windFrom}° true, ${w.windKt} kt)`);
+        }
+      })
+      .catch((e) => console.warn(`[field-state] ${facilityId}: wind fetch failed, active runway left as it is:`, e.message));
+  }
+}
 
 grpcClient.on('status', (state) => wsHub.setGrpcStatus(state));
 grpcClient.on('weather', (data) => wsHub.setWeather(data));
 grpcClient.on('game-time', (dt) => { if (missionClock.sample(dt)) wsHub.broadcastGameTime(); });
+// F3: after the sample, so the step-back check reads this poll's time (ADR 0086).
+grpcClient.on('game-time', () => missionSession.observeClock());
 // With DCS gone there are no samples to broadcast on, and the clock has fallen
 // back to the wall clock — clients still need to hear that, and when.
 let lastClockSource = missionClock.source;
@@ -485,9 +510,9 @@ const efspInstrumentation = createEfspInstrumentation({
   clock: missionClock,
   correlationStats: () => correlationReconciler.getStats(),
   obligationStats: () => obligationMonitor.getComplianceStats(),
+  // A metrics session is one mission to the next (H32): F3's mission session.
+  missionSession,
 });
-// A metrics session is one mission load to the next (decisions.md H32).
-grpcClient.on('mission-load', (missionData) => efspInstrumentation.noteMissionLoad(missionData));
 app.get('/api/efsp/metrics', auth.requireAuth, (req, res) => {
   const { status, body } = efspInstrumentation.metricsHttp(req.query || {});
   res.status(status).json(body);

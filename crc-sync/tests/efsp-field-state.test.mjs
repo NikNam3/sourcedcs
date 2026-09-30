@@ -26,7 +26,7 @@ const facilityConfig = (await import('../src/efsp/facility-config.js')).default;
 const {
   LEGAL_TRANSITIONS, RUNWAY_STATUSES, canGo, normalizeRunwayEnd, buildStatusView,
   resolveRunwayForStrip, runwayInhibitFor, runwayAdvisoryFor, runwayRackFor, activeEndIntoWind,
-  missionKeyOf, validateFieldStateInventory, runwayInventoryWarnings,
+  validateFieldStateInventory, runwayInventoryWarnings,
 } = fieldState;
 
 const INCIRLIK = facilityConfig.getFacilityConfig('INCIRLIK');
@@ -227,13 +227,6 @@ test('the active end is the one most into the TRUE wind (decisions.md H22)', () 
   assert.equal(activeEndIntoWind(INVENTORY, 146), '05');
   assert.equal(activeEndIntoWind(INVENTORY, NaN), null);
   assert.equal(activeEndIntoWind({ runways: [] }, 60), null);
-});
-
-test('missionKeyOf is stable for the same mission and differs for another', () => {
-  const m = { theatre: 'Syria', waypoints: [{ name: 'A' }, { name: 'B' }], drawings: [{ name: 'X' }] };
-  assert.equal(missionKeyOf(m), missionKeyOf(structuredClone(m)));
-  assert.notEqual(missionKeyOf(m), missionKeyOf({ ...m, drawings: [] }));
-  assert.equal(missionKeyOf(null), null);
 });
 
 // ── step 2 — the store, driven directly ─────────────────────────────────────
@@ -485,7 +478,7 @@ test('the status view is cached and rebuilt only when the record changes; nothin
 
 test('the mission wind sets the active end once per mission; a reconnect keeps what is there (decisions.md H22)', () => {
   const { store, log } = freshStore();
-  let r = store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 240, windKt: 12, missionKey: 'Syria:a' });
+  let r = store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 240, windKt: 12, missionSession: 1 });
   assert.deepEqual([r.ok, r.activeRunway], [true, '23']);
   let fsI = store.getFieldState('INCIRLIK');
   assert.equal(fsI.activeRunway, '23');
@@ -494,17 +487,17 @@ test('the mission wind sets the active end once per mission; a reconnect keeps w
   assert.equal(log().at(-1).op, 'ActiveRunwayFromWind');
   assert.equal(log().at(-1).actorId, 'crc-sync');
   // Same mission again (a reconnect): nothing changes even if the wind reads differently.
-  r = store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, windKt: 3, missionKey: 'Syria:a' });
+  r = store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, windKt: 3, missionSession: 1 });
   assert.deepEqual([r.changed, store.getFieldState('INCIRLIK').activeRunway], [false, '23']);
   // A new mission re-derives.
-  r = store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, windKt: 8, missionKey: 'Syria:b' });
+  r = store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, windKt: 8, missionSession: 2 });
   assert.equal(store.getFieldState('INCIRLIK').activeRunway, '05');
   assert.equal(store.setActiveRunwayFromWind('CENTER', { windFromTrue: 60 }).reason, 'NOT_FOUND');
 });
 
 test('snapshot/restore round-trips a SUSPENDED_BARRIER_CHANGE runway intact', () => {
   const { store } = freshStore();
-  store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, missionKey: 'k' });
+  store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, missionSession: 1 });
   mustOp(store, 'TWR', 'BeginBarrierChange', { runwayId: '05/23', note: 're-rig' });
   const snap = JSON.parse(JSON.stringify(store.snapshot()));
   const { store: reborn } = freshStore();
@@ -732,7 +725,7 @@ test('the inhibit follows the rack a Strip is in, at a field with two independen
 /** A store with every Position manned and a known active end (05). */
 function manned({ occupied = ['OPS', 'CD', 'GND', 'TWR', 'APP'], primaryOf = (f, p) => `c-${p}`, fieldStateOverride } = {}) {
   const r = freshStore({ fieldStateOverride, deps: { isOccupied: (f, p) => f === 'INCIRLIK' && occupied.includes(p), primaryOf } });
-  r.store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, missionKey: 'm' });
+  r.store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, missionSession: 1 });
   return r;
 }
 const change = (store) => store.getFieldState('INCIRLIK').runwayChange;
@@ -830,7 +823,7 @@ test('an acknowledger nobody holds is skipped and recorded, never a deadlock (de
 test('the acknowledger set is frozen at propose time', () => {
   let occupied = ['OPS', 'TWR'];
   const r = freshStore({ deps: { isOccupied: (f, p) => occupied.includes(p) } });
-  r.store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, missionKey: 'm' });
+  r.store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, missionSession: 1 });
   mustOp(r.store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
   occupied = ['OPS', 'TWR', 'APP']; // APP arrives after the proposal
   assert.match(op(r.store, 'APP', 'AckRunwayChange').detail, /skipped/);
@@ -974,9 +967,28 @@ test('SelfCoordinateRunwayChange: one input from a controller Primary on TWR and
 test('the wind never moves the active runway while a change is open', () => {
   const { store } = manned();
   mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
-  const r = store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 240, missionKey: 'next-mission' });
+  const r = store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 240, missionSession: 2 });
   assert.equal(r.changed, false);
   assert.equal(store.getFieldState('INCIRLIK').activeRunway, '05');
+});
+
+test('a reconnect in the same mission session keeps the end TWR changed to; a new session is considered again (ADR 0086)', () => {
+  const { store } = manned(); // session 1's wind set 05
+  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  mustOp(store, 'OPS', 'AckRunwayChange');
+  mustOp(store, 'APP', 'AckRunwayChange');
+  mustOp(store, 'TWR', 'BeginRunwayChange');
+  mustOp(store, 'TWR', 'CompleteRunwayChange');
+  assert.equal(store.getFieldState('INCIRLIK').activeRunwaySource.kind, 'RUNWAY_CHANGE');
+  // A gRPC reconnect or crc-sync restart onto session 1: the wind (still from 060) is not re-applied.
+  const { store: reborn } = freshStore();
+  reborn.restore(JSON.parse(JSON.stringify(store.snapshot())));
+  const r = reborn.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, missionSession: 1 });
+  assert.deepEqual([r.ok, r.changed, r.skipped], [true, false, true]);
+  assert.equal(reborn.getFieldState('INCIRLIK').activeRunway, '23');
+  // Session 2 (the same .miz restarted) is considered afresh — here held by the
+  // change still pending its inspection; the H22 test above shows it re-deriving.
+  assert.notEqual(reborn.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, missionSession: 2 }).skipped, true);
 });
 
 test('a runway change survives a restart mid-way (PROPOSED with one ack comes back PROPOSED with one ack)', () => {
