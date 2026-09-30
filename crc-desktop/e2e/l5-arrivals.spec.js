@@ -41,7 +41,8 @@ async function taxiToTower(page, cs) {
   for (let i = 0; i < 5; i++) {
     const before = await stateOf(page, cs);
     await page.evaluate((cs) => _invokeNla(getAllEfspStrips().find((x) => getEfspFdr(x.fdrId).identity.callsign === cs)), cs);
-    await expect.poll(() => stateOf(page, cs), { timeout: 3000 }).not.toBe(before);
+    // 10 s: one Mutation round trip, measured over 3 s under load. The spec's budget is 90 s.
+    await expect.poll(() => stateOf(page, cs), { timeout: 10000 }).not.toBe(before);
     await page.waitForTimeout(450); // the server's per-Strip double-tap guard
   }
 }
