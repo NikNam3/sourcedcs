@@ -341,7 +341,10 @@ class Driver {
     if (!replay && !ack.ok && !['STALE_REV', 'NLA_INHIBITED', 'NOT_HOLDING_POSITION'].includes(ack.reason)) {
       this.event(`refusal:${msg.op ? msg.op.kind : msg.type}:${ack.reason}`, { detail: ack.detail, actingPositionId: msg.actingPositionId, strip: ack.strip ? { state: ack.strip.state, owner: ack.strip.ownerPositionId, role: ack.strip.role } : null });
     }
-    if (ack.ok) this._checkBroadcast(msg, ack, facts);
+    // M8 holds for a first send. A replay answers from the idempotency cache
+    // and broadcasts nothing by design (docs/adr/0081): its broadcast went out
+    // the first time.
+    if (ack.ok && !replay) this._checkBroadcast(msg, ack, facts);
     if (!replay && !this.o.noReplays && (ack.ok || !wireLevel(ack)) && this.rngNet.chance(0.01)) {
       const life = this.lifetime;
       const copy = JSON.parse(JSON.stringify(msg));

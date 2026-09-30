@@ -621,3 +621,29 @@ test('a refused Mutation broadcasts nothing and leaves nothing to drain', () => 
   assert.equal(r.broadcast, undefined);
   assert.deepEqual(ctx.boardStore.drainTouched(), []);
 });
+
+test('a replayed success returns the current Strip and produces no broadcast', () => {
+  const ctx = makeCtx();
+  holding(ctx, SESSION, ['OPS']);
+  const s = createNamed(ctx, SESSION, 'RPLY1');
+  const msg = {
+    version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(), actingPositionId: 'OPS',
+    stripId: s.stripId, baseRev: s.rev, op: { kind: 'SetFlag', flag: 'offset', value: true },
+  };
+  const first = handleMessage(ctx, SESSION, msg, noopPersist);
+  assert.equal(first.ack.ok, true);
+  assert.ok(first.broadcast);
+  const later = handleMessage(ctx, SESSION, {
+    version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(), actingPositionId: 'OPS',
+    stripId: s.stripId, baseRev: first.ack.strip.rev, op: { kind: 'SetFlag', flag: 'flipped', value: true },
+  }, noopPersist);
+  assert.equal(later.ack.ok, true);
+  let persisted = false;
+  const replay = handleMessage(ctx, SESSION, msg, () => { persisted = true; });
+  assert.equal(replay.ack.ok, true);
+  assert.equal(replay.ack.strip.rev, later.ack.strip.rev, 'the current Strip');
+  assert.equal(replay.broadcast, undefined);
+  assert.equal(replay.peerBroadcast, undefined);
+  assert.equal(replay.marsaBroadcast, undefined);
+  assert.equal(persisted, false, 'nothing changed, so nothing is written');
+});

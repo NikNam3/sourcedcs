@@ -43,6 +43,30 @@ const APPLIED_MUTATIONS_CAP = 5000;
 // nla.js owns — board-store.js only ever needs the ONE starting value.
 const DEFAULT_INITIAL_STATE_BY_ROLE = { DEPARTURE: 'PROPOSED', ARRIVAL: 'INBOUND', OVERFLIGHT: 'TRANSITING', MISSION: 'TASKED' };
 
+/**
+ * The compact, frozen record the idempotency cache keeps for one applied
+ * clientMutationId (docs/adr/0081): the outcome and the ids it concerned.
+ * Nothing live and nothing cloned — it is serialisable, which is what lets
+ * the last REPLAY_PERSIST_WINDOW_MS of it ride in the Board snapshot.
+ * `appliedWallAt` is WALL time (Date.now()): a retry window is a storage
+ * lifetime, like the NLA latch, not a time a controller reads (ADR 0079).
+ */
+function _replayRecord(result, appliedWallAt) {
+  return Object.freeze({
+    ok: !!result.ok,
+    reason: result.reason === undefined ? null : result.reason,
+    detail: result.detail === undefined ? null : result.detail,
+    warning: result.warning === undefined ? null : result.warning,
+    routedTo: result.routedTo === undefined ? null : result.routedTo,
+    selfCoordinated: result.selfCoordinated === undefined ? null : result.selfCoordinated,
+    stripId: result.strip ? result.strip.stripId : null,
+    fdrId: result.fdr ? result.fdr.fdrId : null,
+    peerFacilityId: result.peerFacilityId === undefined ? null : result.peerFacilityId,
+    peerStripId: result.peerStrip ? result.peerStrip.stripId : null,
+    appliedWallAt,
+  });
+}
+
 function newFlags() {
   return { offset: false, flipped: false, removeIndicator: false, highlight: null, attention: null };
 }
@@ -134,7 +158,7 @@ class BoardStore {
     this._log = [];           // [{seq, type:'update'|'gone', id}]
     this._seq = 0;
     this._cidSeq = 0;
-    this._appliedMutations = new Map(); // clientMutationId -> result, idempotency (§5.2)
+    this._appliedMutations = new Map(); // clientMutationId -> compact frozen replay record (_replayRecord), idempotency (§5.2, docs/adr/0081)
     // Every Strip a Board event touched since efsp-ws.js last drained it
     // (docs/adr/0081, guide §5.4 "one Board event"). A rebalance re-keys
     // Strips the Mutation never named, and a coordination op touches the PEER
@@ -278,8 +302,10 @@ class BoardStore {
    * Never throws for an ordinary rejection.
    */
   applyMutation(mutation, actingPositionId, by) {
-    if (this._appliedMutations.has(mutation.clientMutationId)) {
-      return this._appliedMutations.get(mutation.clientMutationId); // idempotent replay, §5.2
+    const cmid = mutation.clientMutationId;
+    const keyed = typeof cmid === 'string' && cmid !== '';
+    if (keyed && this._appliedMutations.has(cmid)) {
+      return this._replayResult(this._appliedMutations.get(cmid)); // idempotent replay, §5.2
     }
 
     // This is the ONE choke point every Mutation flows through (guide's
@@ -301,12 +327,34 @@ class BoardStore {
       result = { ok: false, reason: 'VALIDATION_ERROR', detail: 'internal error processing mutation' };
     }
 
-    this._appliedMutations.set(mutation.clientMutationId, result);
+    if (keyed) this._rememberApplied(cmid, _replayRecord(result, Date.now()));
+    return result;
+  }
+
+  _rememberApplied(cmid, record) {
+    this._appliedMutations.set(cmid, record);
     if (this._appliedMutations.size > APPLIED_MUTATIONS_CAP) {
       const oldestKey = this._appliedMutations.keys().next().value;
       this._appliedMutations.delete(oldestKey);
     }
-    return result;
+  }
+
+  /**
+   * A replay's answer (docs/adr/0081): the ORIGINAL outcome with the records
+   * as they are NOW. The cache holds ids, never a Strip or an FDR, so a replay
+   * of a refusal cannot send a client backwards (L6's F11) and an archived
+   * Strip is not kept alive by the cache (F4). `replayed: true` tells
+   * efsp-ws.js to ack only — the original broadcasts already went out, and
+   * marsaChanged/fdrs/peerStrip are deliberately not rebuilt.
+   */
+  _replayResult(record) {
+    const out = { ok: record.ok, replayed: true };
+    for (const k of ['reason', 'detail', 'warning', 'routedTo', 'selfCoordinated', 'peerFacilityId']) {
+      if (record[k] !== null) out[k] = record[k];
+    }
+    if (record.stripId) out.strip = this.getStrip(record.stripId);
+    if (record.fdrId) out.fdr = this._fdrStore.getFdr(record.fdrId);
+    return out;
   }
 
   _dispatch(mutation, actingPositionId, by) {

@@ -200,7 +200,7 @@ function _handleMutation(ctx, session, msg, persist) {
   const mutation = { clientMutationId: msg.clientMutationId, stripId: msg.stripId, baseRev: msg.baseRev, op: msg.op };
 
   const result = boardStore.applyMutation(mutation, msg.actingPositionId, session.controllerId);
-  if (result.ok) persist();
+  if (result.ok && !result.replayed) persist();
 
   // Every Strip record leaving this function — ack or broadcast — goes through
   // the one stamping helper, which is where the reasons for what it adds live.
