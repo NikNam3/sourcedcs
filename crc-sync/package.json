@@ -6,7 +6,10 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "soak": "node tools/soak/run.js",
+    "soak:smoke": "node tools/soak/run.js --profile smoke --minutes 20",
+    "soak:selfcheck": "node tools/soak/selfcheck.mjs"
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.10.0",

@@ -1,3 +1,5 @@
+> Folded into the guide/briefing at `36a5cd5`.
+
 # [SOURCE-DEFINED] inventory — L9
 
 Branch `lane/L9-sd-inventory`. Date 2026-09-30. Read-only report: nothing but this file was edited.
