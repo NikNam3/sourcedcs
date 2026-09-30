@@ -909,13 +909,15 @@ class Driver {
   async reconnect(c, { discard = this.rngNet.chance(0.5), probe = false } = {}) {
     if (c.connected) return;
     const lastSeqs = new Map(c.shadow.boardSeq);
+    const lastEpochs = new Map(c.shadow.boardEpoch);
     await this.connect(c, { discard });
     this.stats.reconnects++;
     const fids = c.passive ? FACILITIES : Object.keys(c.holds);
     const results = [];
     for (const fid of fids) {
       const lastBoardSeq = lastSeqs.get(fid);
-      const r = await this.call('send', { clientId: c.id, msg: { type: 'efsp-resync', facilityId: fid, lastBoardSeq } });
+      // The epoch echo (docs/adr/0081): without it every resync is a snapshot and the delta path goes untested.
+      const r = await this.call('send', { clientId: c.id, msg: { type: 'efsp-resync', facilityId: fid, lastBoardSeq, boardEpoch: lastEpochs.get(fid) } });
       this.ledger.onSent({ type: 'efsp-resync' }, c.id, this.now, this.lifetime);
       this.note(`resync|${c.id}|${fid}`);
       const facts = this.deliver(r.out, { resyncFor: c.id });

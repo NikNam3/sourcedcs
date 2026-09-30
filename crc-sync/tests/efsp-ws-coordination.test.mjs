@@ -218,7 +218,7 @@ test('a resync-within-window delta also stamps facilityId on every updated Strip
   const before = ctx.boardStoreFor('CENTER').currentSeq;
   handleMessage(ctx, CTR_SESSION, createCtrStripMsg(), noopPersist);
 
-  const result = handleMessage(ctx, CTR_SESSION, { type: 'efsp-resync', facilityId: 'CENTER', lastBoardSeq: before }, noopPersist);
+  const result = handleMessage(ctx, CTR_SESSION, { type: 'efsp-resync', facilityId: 'CENTER', lastBoardSeq: before, boardEpoch: ctx.boardStoreFor('CENTER').epoch }, noopPersist);
   assert.equal(result.ack.type, 'efsp-board-delta');
   assert.equal(result.ack.strips.updated.length, 1);
   assert.equal(result.ack.strips.updated[0].facilityId, 'CENTER');

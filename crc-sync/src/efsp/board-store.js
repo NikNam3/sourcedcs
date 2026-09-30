@@ -157,6 +157,12 @@ class BoardStore {
     this._strips = new Map(); // stripId -> Strip
     this._log = [];           // [{seq, type:'update'|'gone', id}]
     this._seq = 0;
+    // The Board lifetime a seq belongs to (docs/adr/0081, L6's F2). `_seq` and
+    // the `_log` ring are per process and deliberately not persisted, so a
+    // seq from before a restart means nothing after it — and once the new
+    // lifetime's seq overtakes a client's, nothing but a name for the lifetime
+    // can tell the two apart. Minted again by restore(); never persisted.
+    this._epoch = crypto.randomUUID();
     this._cidSeq = 0;
     this._appliedMutations = new Map(); // clientMutationId -> compact frozen replay record (_replayRecord), idempotency (§5.2, docs/adr/0081)
     // Every Strip a Board event touched since efsp-ws.js last drained it
@@ -178,6 +184,8 @@ class BoardStore {
   setMutationLog(mutationLog) { this._mutationLog = mutationLog; }
 
   get currentSeq() { return this._seq; }
+  /** This Board lifetime's name (docs/adr/0081). A delta is valid only within one epoch. */
+  get epoch() { return this._epoch; }
   getStrip(stripId) { return this._strips.get(stripId) || null; }
   getAll() { return [...this._strips.values()]; }
 
@@ -210,7 +218,14 @@ class BoardStore {
     if (this._log.length > 2000) this._log.splice(0, this._log.length - 1000);
   }
 
-  /** Delta resync (guide §5.6) — everything changed since `afterSeq`. */
+  /**
+   * Delta resync (guide §5.6) — everything changed since `afterSeq`, within
+   * this Board lifetime. `updated` holds the Strips still in `_strips`
+   * (DROPPED ones included — the caller turns those into `gone`); `gone` holds
+   * ids the window touched that are no longer in `_strips` at all. That is
+   * always empty until retention removes records (L24, S-R2-13); this is the
+   * seam it fills (docs/adr/0081).
+   */
   getDeltaSince(afterSeq) {
     const entries = [];
     for (let i = this._log.length - 1; i >= 0; i--) {
@@ -220,10 +235,12 @@ class BoardStore {
     const byId = new Map();
     for (const e of entries) byId.set(e.id, e);
     const updated = [];
+    const gone = [];
     for (const e of byId.values()) {
       if (this._strips.has(e.id)) updated.push(this._strips.get(e.id));
+      else gone.push(e.id);
     }
-    return { updated, seq: this._seq };
+    return { updated, gone, seq: this._seq };
   }
 
   // ── orderKey resolution ──────────────────────────────────────────────────
@@ -2516,6 +2533,9 @@ class BoardStore {
   }
   restore(data) {
     this._strips = new Map((data?.strips || []).map(s => [s.stripId, s]));
+    // A restored Board is a new lifetime: the ring and the seq did not come
+    // back, so no seq a client holds from before can be served a delta.
+    this._epoch = crypto.randomUUID();
     // A snapshot written before docs/adr/0045 carries a per-Strip
     // `correlation` field. Dropped rather than migrated: it was always the
     // inert `{ state: 'UNCORRELATED' }` placeholder, so there is nothing in it

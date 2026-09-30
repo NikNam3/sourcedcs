@@ -613,7 +613,7 @@ test('the snapshot carries fieldStates; efsp-resync has no field-state branch', 
   assert.equal(snap.fieldStates[0].facilityId, 'INCIRLIK');
   assert.equal(rwy(snap.fieldStates[0]).status, 'OPEN');
   // A delta-served resync carries Strips only; field state comes with a snapshot.
-  const resync = efsp.handleMessage(c.TWR.session, { type: 'efsp-resync', facilityId: 'INCIRLIK', lastBoardSeq: efsp.boardStore.currentSeq });
+  const resync = efsp.handleMessage(c.TWR.session, { type: 'efsp-resync', facilityId: 'INCIRLIK', lastBoardSeq: efsp.boardStore.currentSeq, boardEpoch: efsp.snapshotFor().boardEpochByFacility.INCIRLIK });
   assert.equal(resync.ack.type, 'efsp-board-delta');
   assert.equal(JSON.stringify(resync).includes('fieldState'), false);
 });

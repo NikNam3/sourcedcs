@@ -221,7 +221,7 @@ function _handleMutation(ctx, session, msg, persist) {
     version: VERSION, type: 'efsp-mutation-ack', clientMutationId: msg.clientMutationId,
     ..._subject(msg),
     facilityId,
-    boardSeq: boardStore.currentSeq, ok: result.ok,
+    boardSeq: boardStore.currentSeq, boardEpoch: boardStore.epoch, ok: result.ok,
     strip: stampedStrip, fdr: result.fdr, reason: result.reason, detail: result.detail,
     warning: result.warning, routedTo: result.routedTo,
   };
@@ -294,56 +294,77 @@ function _handleMutation(ctx, session, msg, persist) {
   return out;
 }
 
+/**
+ * efsp-resync (guide §5.6): exactly two answers, a delta or a snapshot.
+ *
+ * Three steps, kept in this order so each can grow on its own: resolve the
+ * Board, decide whether a delta can serve this client, build the answer. A
+ * rule that forces a snapshot for some sessions (L23) is one more early return
+ * in the middle step; retention removing Strips (L24) only changes what
+ * getDeltaSince reports as `gone`.
+ */
 function _handleResync(ctx, msg) {
-  const { fdrStore, facilityConfig } = ctx;
-  const facilityId = msg.facilityId || facilityConfig.DEFAULT_FACILITY_ID;
+  // 1. Resolve the Board.
+  const facilityId = msg.facilityId || ctx.facilityConfig.DEFAULT_FACILITY_ID;
   const boardStore = ctx.boardStoreFor(facilityId);
   const positionStore = ctx.positionStoreFor(facilityId);
   if (!boardStore || !positionStore) return { ack: _snapshotMessage(ctx) };
 
+  // 2. Decide: delta or snapshot.
   const lastSeq = Number.isFinite(msg.lastBoardSeq) ? msg.lastBoardSeq : -1;
-  // Two ways a delta cannot serve this client, and only one of them used to be
-  // checked.
-  //
-  // `currentSeq - lastSeq > WINDOW` is the client being too far BEHIND — it
-  // missed more than the ring holds, so replaying from there would skip
-  // changes.
-  //
-  // `lastSeq > currentSeq` is the server having gone BACKWARDS: it restarted
-  // with no snapshot, or was restored from an older one, so its sequence is
-  // lower than what the client already saw. The subtraction then goes NEGATIVE
-  // and sailed through the window check — the server replayed a delta from an
-  // empty ring, found nothing, and answered "no changes" to a client holding a
-  // whole Board of Strips that no longer exist. They stayed on screen forever,
-  // and no amount of reconnecting cleared them.
-  //
-  // Found by clearing the local Board during development and watching a Strip
-  // survive it. Same class as docs/adr/0049's five: not a mutation, a
-  // TRANSITION — here, the server's own lifetime.
-  const rewound = lastSeq > boardStore.currentSeq;
-  const withinWindow = lastSeq >= 0 && !rewound && boardStore.currentSeq - lastSeq <= RESYNC_RING_WINDOW;
+  if (!_deltaCanServe(boardStore, msg.boardEpoch, lastSeq)) return { ack: _snapshotMessage(ctx) };
 
-  if (withinWindow) {
-    const delta = boardStore.getDeltaSince(lastSeq);
-    return {
-      ack: {
-        version: VERSION, type: 'efsp-board-delta', boardSeq: boardStore.currentSeq, facilityId,
-        strips: {
-          updated: delta.updated.filter(s => s.state !== 'DROPPED').map(s => _stampStrip(boardStore, s, facilityId, ctx)),
-          gone: delta.updated.filter(s => s.state === 'DROPPED').map(s => s.stripId),
-        },
-        // FDRs/Positions are cheap enough at this scale to always send in
-        // full rather than building a second/third ring buffer — see
-        // board-store.js's module comment. fdrStore is shared across every
-        // Facility (docs/adr/0013), so this list is NOT facility-scoped —
-        // it's the same full set a snapshot would carry.
-        fdrs: { updated: fdrStore.getAll() },
-        positions: { updated: positionStore.getAll().map(p => ({ ...p, facilityId })) },
+  // 3. Build the delta.
+  const delta = boardStore.getDeltaSince(lastSeq);
+  const live = delta.updated.filter(s => s.state !== 'DROPPED');
+  const dropped = delta.updated.filter(s => s.state === 'DROPPED').map(s => s.stripId);
+  return {
+    ack: _boardDelta(ctx, boardStore, facilityId,
+      {
+        updated: live.map(s => _stampStrip(boardStore, s, facilityId, ctx)),
+        // DROPPED Strips still on the Board, then ids no longer on it at all
+        // (retention's archive, L24). Disjoint by construction.
+        gone: [...dropped, ...delta.gone],
       },
-    };
-  }
+      // FDRs/Positions are cheap enough at this scale to always send in
+      // full rather than building a second/third ring buffer — see
+      // board-store.js's module comment. fdrStore is shared across every
+      // Facility (docs/adr/0013), so this list is NOT facility-scoped —
+      // it's the same full set a snapshot would carry.
+      ctx.fdrStore.getAll(),
+      positionStore.getAll().map(p => ({ ...p, facilityId }))),
+  };
+}
 
-  return { ack: _snapshotMessage(ctx) };
+/**
+ * Whether a delta from `lastSeq` would leave this client right. Three ways it
+ * cannot, each found the hard way.
+ *
+ * A different Board LIFETIME (docs/adr/0081, L6's F2). `_seq` and the ring are
+ * per process, so after a restart a client's seq names a point in a Board that
+ * no longer exists. Once the new lifetime's seq overtakes it, the window and
+ * `rewound` checks below both pass and a delta from the wrong ring is served
+ * as if continuous: Strips dropped before the restart stay on screen, Strips
+ * created are missed. Only the epoch the client last saw can tell. A client
+ * that sends none (the shipped client never resyncs, briefing §3.10) gets the
+ * snapshot, which is always safe.
+ *
+ * The client too far BEHIND: `currentSeq - lastSeq > WINDOW` — it missed more
+ * than the ring holds, so replaying from there would skip changes.
+ *
+ * The server having gone BACKWARDS: `lastSeq > currentSeq`. It restarted with
+ * no snapshot, or was restored from an older one. The subtraction then went
+ * NEGATIVE and sailed through the window check — the server replayed a delta
+ * from an empty ring and told a client holding a whole Board of Strips that
+ * nothing had changed. Found by clearing the local Board during development
+ * and watching a Strip survive it. The epoch now covers this case too; the
+ * check stays because it is cheap and still true.
+ */
+function _deltaCanServe(boardStore, boardEpoch, lastSeq) {
+  if (boardEpoch !== boardStore.epoch) return false;
+  if (lastSeq < 0) return false;
+  if (lastSeq > boardStore.currentSeq) return false; // rewound
+  return boardStore.currentSeq - lastSeq <= RESYNC_RING_WINDOW;
 }
 
 /**
@@ -561,14 +582,7 @@ function _handleMarsaMutation(ctx, session, msg, persist) {
   if (regimeFdrs.length > 0) {
     const facilityId = ctx.facilityConfig.DEFAULT_FACILITY_ID;
     const boardStore = ctx.boardStoreFor(facilityId);
-    out.broadcast = {
-      version: VERSION, type: 'efsp-board-delta',
-      boardSeq: boardStore ? boardStore.currentSeq : undefined,
-      facilityId,
-      strips: { updated: [], gone: [] },
-      fdrs: { updated: regimeFdrs },
-      positions: { updated: [] },
-    };
+    out.broadcast = _boardDelta(ctx, boardStore, facilityId, { updated: [], gone: [] }, regimeFdrs);
   }
   return out;
 }
@@ -653,6 +667,9 @@ function _snapshotMessage(ctx) {
   const positions = [];
   const bays = [];
   const boardSeqByFacility = {};
+  // The lifetime each seq belongs to (docs/adr/0081): a client that resyncs
+  // sends back the epoch it read here, or it is answered with a snapshot.
+  const boardEpochByFacility = {};
   // WP4A gap-closure (docs/adr/0022) — lets the client proactively disable
   // the AIT option (rather than let the controller submit-and-silently-fail
   // against the server-side check in board-store.js's
@@ -663,6 +680,7 @@ function _snapshotMessage(ctx) {
     const boardStore = ctx.boardStoreFor(facilityId);
     const positionStore = ctx.positionStoreFor(facilityId);
     boardSeqByFacility[facilityId] = boardStore.currentSeq;
+    boardEpochByFacility[facilityId] = boardStore.epoch;
     aitAuthorizedByFacility[facilityId] = !!facilityConfig.getFacilityConfig(facilityId).aitAuthorized;
     for (const s of boardStore.getAll().filter(s => s.state !== 'DROPPED')) strips.push(_stampStrip(boardStore, s, facilityId, ctx));
     for (const p of positionStore.getAll()) positions.push({ ...p, facilityId });
@@ -676,6 +694,7 @@ function _snapshotMessage(ctx) {
     facility: facilityConfig.getFacilityConfig(defaultFacilityId).facility, // back-compat alias
     facilities: facilityIds,
     boardSeqByFacility,
+    boardEpochByFacility,
     aitAuthorizedByFacility,
     positions, bays, strips,
     fdrs: fdrStore.getAll(),
