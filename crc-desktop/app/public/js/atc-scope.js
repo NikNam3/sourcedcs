@@ -61,6 +61,7 @@ const _atcAcked = new Set();    // 'CA:<conflictId>', 'EM:<trackId>:<tag>', 'UN:
 const _atcSeen = new Map();     // stripId -> { state, from, changedAt } — coordination states as this scope saw them
 const _atcStage = new Map();    // 'HO:<stripId>' / 'PO:<stripId>' -> click-down stage
 const _atcExpanded = new Set(); // trackIds whose PDB this controller opened into an FDB
+const _atcOwnerSeen = new Map(); // trackId -> { mine, transferredAt } — for a same-Facility transfer, which has no PROPOSED step
 
 /**
  * Records a Strip's coordination state as this scope sees it, and when it
@@ -206,10 +207,10 @@ function atcView(t, rel, env) {
     // Handed off by me and accepted: blinks white for a few seconds, then
     // stays a white FDB until clicked green, then a PDB (stages 0, 1, 2).
     let hoStage = null;
-    if (rel.handoffDone) {
-      const accepted = _changedFrom(rel.handoffDone.strip, `${rel.handoffDone.strip.coordination.primitive}:PROPOSED`, now);
-      hoStage = accepted != null ? (_atcStage.get(`HO:${rel.handoffDone.strip.stripId}`) || 0) : 2;
-      if (hoStage === 0 && accepted != null && now - accepted < ATC_SENDER_BLINK_MS) blinkBlock = true;
+    const done = _handedOn(rel, now);
+    if (done) {
+      hoStage = done.at != null ? (_atcStage.get(done.key) || 0) : 2;
+      if (hoStage === 0 && done.at != null && now - done.at < ATC_SENDER_BLINK_MS) blinkBlock = true;
     }
 
     if (rel.handoffIn) { kind = 'FDB'; color = P.own; blinkBlock = true; }
@@ -244,6 +245,40 @@ function atcView(t, rel, env) {
     opacity: fdb ? 1 : P.otherOpacity,
     disc: !(env.coast && rel.associated),
   };
+}
+
+/**
+ * A flight I handed on that this scope saw go: a cross-Facility handoff
+ * accepted, or a same-Facility transfer (a Strip dragged TWR -> APP, which
+ * moves at once with no PROPOSED step, guide §8). `at` is when this scope saw
+ * it happen, or null when it was already so; `key` names its click-down stage.
+ */
+function _handedOn(rel, now) {
+  if (rel.handoffDone) {
+    const s = rel.handoffDone.strip;
+    return { key: `HO:${s.stripId}`, at: _changedFrom(s, `${s.coordination.primitive}:PROPOSED`, now) };
+  }
+  if (rel.transferredAt != null) return { key: `TR:${rel.trackId}`, at: rel.transferredAt };
+  return null;
+}
+
+/**
+ * Remembers whether each contact was mine, and stamps `rel.transferredAt`
+ * when this scope sees one stop being mine without a coordination exchange —
+ * the same-Facility transfer, which STARS shows with the sender's post-accept
+ * blink. Impure on purpose (local UI state); atcRelation stays pure.
+ */
+function atcNoteOwnership(id, rel, now) {
+  rel.trackId = String(id);
+  const seen = _atcOwnerSeen.get(rel.trackId);
+  if (seen && seen.mine && !rel.mine && rel.associated && !rel.tofi && !rel.handoffDone && seen.transferredAt == null) {
+    seen.transferredAt = now;
+  }
+  if (rel.mine) _atcOwnerSeen.set(rel.trackId, { mine: true, transferredAt: null });
+  else if (!seen) _atcOwnerSeen.set(rel.trackId, { mine: false, transferredAt: null });
+  const entry = _atcOwnerSeen.get(rel.trackId);
+  rel.transferredAt = entry.transferredAt;
+  return rel;
 }
 
 /** docs/adr/0058's conformance tag for a flight, without the conflict (the ATC block says `CA` for that). */
@@ -317,7 +352,7 @@ function atcCoastAfterMs() {
 function atcDisplay(id, t, now = Date.now()) {
   const palette = atcPalette();
   const strips = _stripsFor(id);
-  const rel = atcRelation(t, strips, _actingSet(), _letterOf);
+  const rel = atcNoteOwnership(id, atcRelation(t, strips, _actingSet(), _letterOf), now);
   const sinceReturn = now - ((typeof lastSweepMs !== 'undefined' && lastSweepMs.get(id)) || now);
   const coast = rel.associated && sinceReturn > atcCoastAfterMs();
 
@@ -350,7 +385,7 @@ function atcDisplay(id, t, now = Date.now()) {
 function atcTargetClick(id, now = Date.now()) {
   const t = typeof tracks !== 'undefined' ? tracks.get(String(id)) : null;
   if (!t) return 'NONE';
-  const rel = atcRelation(t, _stripsFor(id), _actingSet(), _letterOf);
+  const rel = atcNoteOwnership(id, atcRelation(t, _stripsFor(id), _actingSet(), _letterOf), now);
   return atcApplyClick(t, rel, now, {
     conflicts: typeof stcaConflictsForTrack === 'function' ? stcaConflictsForTrack(id).map(c => c.id) : [],
     accept: (strip) => {
@@ -374,12 +409,10 @@ function atcApplyClick(t, rel, now, { conflicts = [], accept = () => {} } = {}) 
     _atcAcked.add(`UN:${rel.poOut.strip.stripId}`); return 'ACK_UNABLE';
   }
 
-  if (rel.handoffDone) {
-    const key = `HO:${rel.handoffDone.strip.stripId}`;
-    const seen = _atcSeen.get(rel.handoffDone.strip.stripId);
-    const live = seen && seen.changedAt != null && /:PROPOSED$/.test(seen.from || '');
-    const stage = live ? (_atcStage.get(key) || 0) : 2;
-    if (stage < 2) { _atcStage.set(key, stage + 1); return stage === 0 ? 'HANDOFF_GREEN' : 'HANDOFF_PDB'; }
+  const done = _handedOn(rel, now);
+  if (done) {
+    const stage = done.at != null ? (_atcStage.get(done.key) || 0) : 2;
+    if (stage < 2) { _atcStage.set(done.key, stage + 1); return stage === 0 ? 'HANDOFF_GREEN' : 'HANDOFF_PDB'; }
   }
   if (rel.poIn && rel.poIn.state === 'ACTIVE') {
     const key = `PO:${rel.poIn.strip.stripId}`;
@@ -395,7 +428,7 @@ function atcApplyClick(t, rel, now, { conflicts = [], accept = () => {} } = {}) 
 }
 
 function _resetAtcScopeForTest() {
-  _atcAcked.clear(); _atcSeen.clear(); _atcStage.clear(); _atcExpanded.clear();
+  _atcAcked.clear(); _atcSeen.clear(); _atcStage.clear(); _atcExpanded.clear(); _atcOwnerSeen.clear();
 }
 
 // ── The redraw clock and the background ───────────────────────────────────
@@ -441,7 +474,7 @@ if (typeof window !== 'undefined' && typeof setInterval === 'function' && !(type
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     ATC_PALETTES, ATC_CONFORM_COLOR, ATC_DIM_GRAY, ATC_SENDER_BLINK_MS, ATC_TIMESHARE_MS,
-    atcRelation, atcView, atcConformTag, atcAssigned, atcApplyClick, atcOnlySession, atcBlackScope,
+    atcRelation, atcNoteOwnership, atcView, atcConformTag, atcAssigned, atcApplyClick, atcOnlySession, atcBlackScope,
     atcPalette, atcCoastAfterMs, _resetAtcScopeForTest,
   };
 }

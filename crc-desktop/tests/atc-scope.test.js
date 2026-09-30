@@ -255,3 +255,20 @@ test('the black scope needs the setting off AND an ATC-only session (H71 questio
   delete settings.atcMapBackground;
   global.coverageRadars = []; global.coverageDatalink = false;
 });
+
+test('a same-Facility transfer (TWR -> APP, no PROPOSED step) blinks at the sender like an accepted handoff', () => {
+  const TWR = new Set(['TWR']);
+  let rel = A.atcNoteOwnership('7', A.atcRelation(contact(), [strip({ ownerPositionId: 'TWR' })], TWR, letterOf), 1000);
+  assert.equal(A.atcView(contact(), rel, env({ now: 1000 })).color, P.own);
+  rel = A.atcNoteOwnership('7', A.atcRelation(contact(), [strip({ ownerPositionId: 'APP' })], TWR, letterOf), 2000);
+  let v = A.atcView(contact(), rel, env({ now: 2000 }));
+  assert.deepEqual([v.kind, v.color, v.blinkBlock, v.posChar], ['FDB', P.own, true, 'A']);
+  assert.equal(A.atcApplyClick(contact(), rel, 9000), 'HANDOFF_GREEN');
+  assert.equal(A.atcApplyClick(contact(), rel, 9500), 'HANDOFF_PDB');
+  v = A.atcView(contact(), rel, env({ now: 9600 }));
+  assert.equal(v.kind, 'PDB');
+  // First seen already APP's: no blink.
+  A._resetAtcScopeForTest();
+  rel = A.atcNoteOwnership('7', A.atcRelation(contact(), [strip({ ownerPositionId: 'APP' })], TWR, letterOf), 1000);
+  assert.equal(A.atcView(contact(), rel, env()).kind, 'PDB');
+});
