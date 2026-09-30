@@ -1291,7 +1291,12 @@ async function logLinesFor(logPath, cmid) {
   const needle = `"clientMutationId":"${cmid}"`;
   for await (const line of rl) {
     if (!line.includes(needle)) continue;
-    try { const e = JSON.parse(line); out.push({ stripId: e.stripId, op: e.op, afterRev: e.after && e.after.rev }); } catch { out.push({}); }
+    let e;
+    try { e = JSON.parse(line); } catch { out.push({}); continue; }
+    // A NotPersisted marker (docs/adr/0081) voids the line before it: the
+    // effective lines are what the classification counts, as the ledger does.
+    if (e.op === 'NotPersisted') { out.pop(); continue; }
+    out.push({ stripId: e.stripId, op: e.op, afterRev: e.after && e.after.rev });
   }
   return out;
 }
