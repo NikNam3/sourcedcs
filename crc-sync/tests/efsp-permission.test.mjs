@@ -413,11 +413,11 @@ test('no field-state op kind is in OP_KINDS — a new kind there would be picked
 });
 
 test('FIELD_STATE_OP_OWNERS: TWR alone closes, opens and suspends; OPS completes and inspects; TWR runs a runway change; OPS and APP acknowledge', () => {
-  for (const kind of ['CloseRunway', 'OpenRunway', 'BeginBarrierChange', 'AcceptRunwayRequest', 'RejectRunwayRequest',
+  for (const kind of ['CloseRunway', 'OpenRunway', 'BeginRunwayWorks', 'AcceptRunwayRequest', 'RejectRunwayRequest',
     'ProposeRunwayChange', 'SelfCoordinateRunwayChange', 'WithdrawRunwayChange', 'BeginRunwayChange', 'CompleteRunwayChange']) {
     assert.deepEqual(FIELD_STATE_OP_OWNERS[kind], ['TWR'], kind);
   }
-  assert.deepEqual(FIELD_STATE_OP_OWNERS.CompleteBarrierChange, ['OPS']);
+  assert.deepEqual(FIELD_STATE_OP_OWNERS.CompleteRunwayWorks, ['OPS']);
   assert.deepEqual(FIELD_STATE_OP_OWNERS.CompleteInspection, ['OPS']);
   assert.deepEqual(FIELD_STATE_OP_OWNERS.AckRunwayChange, ['OPS', 'APP']);
   assert.deepEqual(FIELD_STATE_OP_OWNERS.RejectRunwayChange, ['OPS', 'APP']);

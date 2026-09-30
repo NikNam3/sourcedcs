@@ -1,0 +1,125 @@
+/* The field-state board (guide §9.7, crc-sync docs/adr/0061, crc-desktop
+   docs/adr/0068). Its own panel, its own file. Colours are efsp-panel.css's
+   tokens: grey for normal, amber (--efsp-attn) for "waiting on someone",
+   orange-red (--efsp-bad) for "the runway cannot be used". */
+
+#field-state-panel {
+  overflow-y: auto;
+  padding: 8px;
+  color: var(--efsp-text, #d8e0e6);
+  font-size: 12px;
+}
+
+.field-state-facility { margin-bottom: 10px; }
+
+.field-state-facility-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.field-state-facility-id { font-weight: 600; letter-spacing: 0.05em; }
+.field-state-active { color: var(--efsp-text, #d8e0e6); font-weight: 600; }
+.field-state-rev { margin-left: auto; color: var(--efsp-faint, #56616c); font-size: 11px; }
+
+.field-state-line {
+  color: var(--efsp-muted, #8c9aa6);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.field-state-runway,
+.field-state-change {
+  border: 1px solid var(--efsp-line, #2e3740);
+  border-left-width: 3px;
+  background: var(--efsp-strip, #1c2228);
+  padding: 6px 8px;
+  margin-top: 6px;
+}
+
+.field-state-status-open                 { border-left-color: #4a5560; }
+.field-state-status-closed               { border-left-color: var(--efsp-bad, #ff8a4c); }
+.field-state-status-suspended-works      { border-left-color: var(--efsp-bad, #ff8a4c); }
+.field-state-status-suspended-inspection { border-left-color: var(--efsp-attn, #e0a83c); }
+
+.field-state-runway-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.field-state-runway-id { font-weight: 600; }
+.field-state-ends { display: flex; gap: 6px; color: var(--efsp-muted, #8c9aa6); }
+.field-state-end-active { color: var(--efsp-text, #d8e0e6); font-weight: 600; }
+
+.field-state-badge {
+  margin-left: auto;
+  padding: 0 6px;
+  border: 1px solid #4a5560;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
+.field-state-status-closed .field-state-badge,
+.field-state-status-suspended-works .field-state-badge {
+  border-color: var(--efsp-bad, #ff8a4c);
+  color: var(--efsp-bad-text, #ffd2bd);
+}
+.field-state-status-suspended-inspection .field-state-badge {
+  border-color: var(--efsp-attn, #e0a83c);
+  color: var(--efsp-attn-text, #ffe0a8);
+}
+
+.field-state-suspension,
+.field-state-closure { color: var(--efsp-bad-text, #ffd2bd); }
+.field-state-request,
+.field-state-change-pending,
+.field-state-ack-waiting { color: var(--efsp-attn-text, #ffe0a8); }
+.field-state-change-rejected { color: var(--efsp-bad-text, #ffd2bd); }
+.field-state-change[data-state="REJECTED"] { border-left-color: #4a5560; }
+.field-state-change[data-state="PROPOSED"],
+.field-state-change[data-state="ACKNOWLEDGED"],
+.field-state-change[data-state="IN_PROGRESS"],
+.field-state-change[data-state="PENDING_INSPECTION"] { border-left-color: var(--efsp-attn, #e0a83c); }
+.field-state-change-head { color: var(--efsp-text, #d8e0e6); }
+
+.field-state-acks { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.field-state-ack {
+  padding: 0 6px;
+  border: 1px solid #4a5560;
+  font-size: 11px;
+}
+.field-state-ack-done    { color: var(--efsp-text, #d8e0e6); }
+.field-state-ack-waiting { border-color: var(--efsp-attn, #e0a83c); }
+.field-state-ack-skipped { color: var(--efsp-faint, #56616c); font-style: italic; }
+
+.field-state-gear-down,
+.field-state-gear-out_of_service { color: var(--efsp-attn-text, #ffe0a8); }
+.field-state-gear-none { font-style: italic; }
+
+.field-state-pads { margin-top: 6px; }
+
+.field-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+}
+.field-state-action-btn,
+.field-state-to-end {
+  min-height: 26px;
+  padding: 2px 8px;
+  background: var(--efsp-strip, #1c2228);
+  border: 1px solid #4a5560;
+  color: var(--efsp-text, #d8e0e6);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+.field-state-action-btn:disabled { color: var(--efsp-faint, #56616c); cursor: default; }
+
+/* On a Strip (docs/adr/0068): the runway it will use is not open, it is queued
+   for the inactive end, or a hook arrival has no rigged gear. The chip's tone
+   comes from efsp-panel.css's .efsp-ind-bad / .efsp-ind-attn. When the server's
+   NLA inhibit already says why, the chip's own reason is left empty rather
+   than said twice — and an empty reason line takes no room. */
+.efsp-strip-reason.efsp-alert-reason:empty { display: none; }

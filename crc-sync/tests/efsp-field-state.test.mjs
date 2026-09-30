@@ -33,7 +33,7 @@ const INCIRLIK = facilityConfig.getFacilityConfig('INCIRLIK');
 const INVENTORY = INCIRLIK.fieldState;
 
 /** A view as the store would build it, with the pavement at `status`. */
-function viewWith(status, { activeRunway = '05', kind = 'BARRIER_CHANGE', inventory = INVENTORY } = {}) {
+function viewWith(status, { activeRunway = '05', kind = 'WORKS', inventory = INVENTORY } = {}) {
   return buildStatusView(inventory, {
     activeRunway,
     runways: inventory.runways.map(r => ({
@@ -50,19 +50,19 @@ const fdrLanding = (rwy) => ({ filed: { departureRunway: null }, assigned: { lan
 
 // ── step 1 — config and the pure module ─────────────────────────────────────
 
-test('LEGAL_TRANSITIONS has no SUSPENDED_BARRIER_CHANGE -> OPEN edge (rule 2, structurally)', () => {
-  assert.equal(canGo('SUSPENDED_BARRIER_CHANGE', 'OPEN'), false);
-  assert.deepEqual(LEGAL_TRANSITIONS.SUSPENDED_BARRIER_CHANGE, ['SUSPENDED_INSPECTION']);
+test('LEGAL_TRANSITIONS has no SUSPENDED_WORKS -> OPEN edge (rule 2, structurally)', () => {
+  assert.equal(canGo('SUSPENDED_WORKS', 'OPEN'), false);
+  assert.deepEqual(LEGAL_TRANSITIONS.SUSPENDED_WORKS, ['SUSPENDED_INSPECTION']);
 });
 
-test('every path from SUSPENDED_BARRIER_CHANGE to OPEN passes through SUSPENDED_INSPECTION', () => {
+test('every path from SUSPENDED_WORKS to OPEN passes through SUSPENDED_INSPECTION', () => {
   // Every simple path, by exhaustive search — the table is tiny.
   const paths = [];
   const walk = (at, seen) => {
     if (at === 'OPEN') { paths.push(seen); return; }
     for (const next of LEGAL_TRANSITIONS[at] || []) if (!seen.includes(next)) walk(next, [...seen, next]);
   };
-  walk('SUSPENDED_BARRIER_CHANGE', ['SUSPENDED_BARRIER_CHANGE']);
+  walk('SUSPENDED_WORKS', ['SUSPENDED_WORKS']);
   assert.ok(paths.length > 0);
   for (const p of paths) assert.ok(p.includes('SUSPENDED_INSPECTION'), `path ${p.join(' -> ')} skips the inspection`);
 });
@@ -193,7 +193,7 @@ test('runwayInhibitFor fails open: no field state, unknown runway, OPEN runway -
 });
 
 test('runwayInhibitFor names the runway and the cause for each unusable status', () => {
-  assert.equal(runwayInhibitFor(departure(), fdrFiled('05'), viewWith('SUSPENDED_BARRIER_CHANGE')), 'runway 05/23 suspended — barrier change');
+  assert.equal(runwayInhibitFor(departure(), fdrFiled('05'), viewWith('SUSPENDED_WORKS')), 'runway 05/23 suspended — works in progress');
   assert.equal(runwayInhibitFor(departure(), fdrFiled('05'), viewWith('SUSPENDED_INSPECTION')), 'runway 05/23 suspended — awaiting inspection');
   assert.equal(runwayInhibitFor(departure(), fdrFiled('05'), viewWith('SUSPENDED_INSPECTION', { kind: 'RUNWAY_CHANGE' })), 'runway 05/23 suspended — awaiting inspection');
   assert.equal(runwayInhibitFor(departure(), fdrFiled('05'), viewWith('CLOSED')), 'runway 05/23 closed');
@@ -282,46 +282,46 @@ test('the store seeds one record per Facility with an inventory, every runway OP
   assert.deepEqual(fsI.alertPad, { name: 'Alert pad', occupied: false, occupantFdrId: null });
 });
 
-test('TWR begins a barrier change: the whole pavement is suspended in one rev, with the kind and who', () => {
+test('TWR begins runway works: the whole pavement is suspended in one rev, with the kind and who', () => {
   const { store } = freshStore();
   const seq = store.currentSeq;
-  const fsI = mustOp(store, 'TWR', 'BeginBarrierChange', { runwayId: '05/23', note: 'BAK-12 re-rig' });
+  const fsI = mustOp(store, 'TWR', 'BeginRunwayWorks', { runwayId: '05/23', note: 'BAK-12 re-rig' });
   assert.equal(fsI.rev, 1);
   assert.equal(store.currentSeq, seq + 1);
-  assert.equal(rwy(fsI).status, 'SUSPENDED_BARRIER_CHANGE');
-  assert.equal(rwy(fsI).suspension.kind, 'BARRIER_CHANGE');
+  assert.equal(rwy(fsI).status, 'SUSPENDED_WORKS');
+  assert.equal(rwy(fsI).suspension.kind, 'WORKS');
   assert.equal(rwy(fsI).suspension.positionId, 'TWR');
   assert.equal(rwy(fsI).suspension.by, 'c-TWR');
   assert.equal(rwy(fsI).suspension.note, 'BAK-12 re-rig');
 });
 
-test('OPS cannot begin a barrier change or close a runway itself — only TWR (decisions.md H18)', () => {
+test('OPS cannot begin runway works or close a runway itself — only TWR (decisions.md H18)', () => {
   const { store } = freshStore();
-  for (const kind of ['BeginBarrierChange', 'CloseRunway']) {
+  for (const kind of ['BeginRunwayWorks', 'CloseRunway']) {
     const r = op(store, 'OPS', kind, { runwayId: '05/23' });
     assert.equal(r.reason, 'PERMISSION_DENIED', kind);
     assert.equal(rwy(r.fieldState).status, 'OPEN');
   }
 });
 
-test('CompleteBarrierChange moves to SUSPENDED_INSPECTION, never to OPEN, and keeps the suspension', () => {
+test('CompleteRunwayWorks moves to SUSPENDED_INSPECTION, never to OPEN, and keeps the suspension', () => {
   const { store } = freshStore();
-  mustOp(store, 'TWR', 'BeginBarrierChange', { runwayId: '05/23' });
-  assert.equal(op(store, 'TWR', 'CompleteBarrierChange', { runwayId: '05/23' }).reason, 'PERMISSION_DENIED');
-  const fsI = mustOp(store, 'OPS', 'CompleteBarrierChange', { runwayId: '05/23' });
+  mustOp(store, 'TWR', 'BeginRunwayWorks', { runwayId: '05/23' });
+  assert.equal(op(store, 'TWR', 'CompleteRunwayWorks', { runwayId: '05/23' }).reason, 'PERMISSION_DENIED');
+  const fsI = mustOp(store, 'OPS', 'CompleteRunwayWorks', { runwayId: '05/23' });
   assert.equal(rwy(fsI).status, 'SUSPENDED_INSPECTION');
-  assert.equal(rwy(fsI).suspension.kind, 'BARRIER_CHANGE');
+  assert.equal(rwy(fsI).suspension.kind, 'WORKS');
 });
 
 test('OpenRunway cannot reopen a suspended runway (rule 2 has no side door), nor can CloseRunway', () => {
   const { store } = freshStore();
-  mustOp(store, 'TWR', 'BeginBarrierChange', { runwayId: '05/23' });
+  mustOp(store, 'TWR', 'BeginRunwayWorks', { runwayId: '05/23' });
   for (const kind of ['OpenRunway', 'CloseRunway']) {
     const r = op(store, 'TWR', kind, { runwayId: '05/23' });
     assert.equal(r.ok, false, kind);
-    assert.equal(rwy(r.fieldState).status, 'SUSPENDED_BARRIER_CHANGE');
+    assert.equal(rwy(r.fieldState).status, 'SUSPENDED_WORKS');
   }
-  mustOp(store, 'OPS', 'CompleteBarrierChange', { runwayId: '05/23' });
+  mustOp(store, 'OPS', 'CompleteRunwayWorks', { runwayId: '05/23' });
   const r = op(store, 'TWR', 'OpenRunway', { runwayId: '05/23' });
   assert.match(r.detail, /only through an inspection/);
   assert.equal(rwy(r.fieldState).status, 'SUSPENDED_INSPECTION');
@@ -329,8 +329,8 @@ test('OpenRunway cannot reopen a suspended runway (rule 2 has no side door), nor
 
 test('CompleteInspection reopens the runway and stamps lastInspection {by, positionId, at}', () => {
   const { store } = freshStore();
-  mustOp(store, 'TWR', 'BeginBarrierChange', { runwayId: '05/23' });
-  mustOp(store, 'OPS', 'CompleteBarrierChange', { runwayId: '05/23' });
+  mustOp(store, 'TWR', 'BeginRunwayWorks', { runwayId: '05/23' });
+  mustOp(store, 'OPS', 'CompleteRunwayWorks', { runwayId: '05/23' });
   const fsI = mustOp(store, 'OPS', 'CompleteInspection', { runwayId: '05/23', note: 'cable tensioned, FOD walk done' });
   assert.equal(rwy(fsI).status, 'OPEN');
   assert.equal(rwy(fsI).suspension, null);
@@ -344,15 +344,15 @@ test('CompleteInspection is refused to a Position other than inspectionAuthority
   // Shipped config: the table ceiling is OPS and the config says OPS, so every
   // other Position is refused by the table.
   const { store } = freshStore();
-  mustOp(store, 'TWR', 'BeginBarrierChange', { runwayId: '05/23' });
-  mustOp(store, 'OPS', 'CompleteBarrierChange', { runwayId: '05/23' });
+  mustOp(store, 'TWR', 'BeginRunwayWorks', { runwayId: '05/23' });
+  mustOp(store, 'OPS', 'CompleteRunwayWorks', { runwayId: '05/23' });
   for (const p of ['TWR', 'APP', 'GND', 'CD']) assert.equal(op(store, p, 'CompleteInspection', { runwayId: '05/23' }).reason, 'PERMISSION_DENIED', p);
   // A config naming another Position narrows OPS out too — it never widens.
   const narrowed = structuredClone(INVENTORY);
   narrowed.inspectionAuthorityPositionId = 'APP';
   const { store: s2 } = freshStore({ fieldStateOverride: narrowed });
-  mustOp(s2, 'TWR', 'BeginBarrierChange', { runwayId: '05/23' });
-  mustOp(s2, 'OPS', 'CompleteBarrierChange', { runwayId: '05/23' });
+  mustOp(s2, 'TWR', 'BeginRunwayWorks', { runwayId: '05/23' });
+  mustOp(s2, 'OPS', 'CompleteRunwayWorks', { runwayId: '05/23' });
   const r = op(s2, 'OPS', 'CompleteInspection', { runwayId: '05/23' });
   assert.equal(r.reason, 'PERMISSION_DENIED');
   assert.match(r.detail, /only APP/);
@@ -391,7 +391,7 @@ test('tower rejects a request; a request for what the runway already is, or from
   assert.match(op(store, 'OPS', 'RequestRunwayStatus', { runwayId: '05/23', action: 'OPEN' }).detail, /nothing to ask/);
   assert.equal(op(store, 'OPS', 'RequestRunwayStatus', { runwayId: '05/23', action: 'PAINT' }).reason, 'VALIDATION_ERROR');
   assert.equal(op(store, 'TWR', 'RequestRunwayStatus', { runwayId: '05/23', action: 'CLOSE' }).reason, 'PERMISSION_DENIED');
-  mustOp(store, 'APP', 'RequestRunwayStatus', { runwayId: '05/23', action: 'BARRIER_CHANGE' });
+  mustOp(store, 'APP', 'RequestRunwayStatus', { runwayId: '05/23', action: 'WORKS' });
   const fsI = mustOp(store, 'TWR', 'RejectRunwayRequest', { runwayId: '05/23', note: 'recovery in progress' });
   assert.equal(rwy(fsI).status, 'OPEN');
   assert.equal(rwy(fsI).pendingRequest, null);
@@ -404,7 +404,7 @@ test('tower rejects a request; a request for what the runway already is, or from
 test('a request made moot by a direct tower op is settled in the same transition', () => {
   const { store } = freshStore();
   mustOp(store, 'OPS', 'RequestRunwayStatus', { runwayId: '05/23', action: 'CLOSE' });
-  const fsI = mustOp(store, 'TWR', 'BeginBarrierChange', { runwayId: '05/23' });
+  const fsI = mustOp(store, 'TWR', 'BeginRunwayWorks', { runwayId: '05/23' });
   assert.equal(rwy(fsI).pendingRequest, null);
   assert.equal(fsI.transitions.at(-1).settledRequest.action, 'CLOSE');
 });
@@ -443,7 +443,7 @@ test('every refusal is audited (PERMISSION_DENIED, VALIDATION_ERROR, NOT_FOUND)'
 test('every success appends to transitions[], bumps rev and currentSeq exactly once, and is audited with before/after', () => {
   const { store, log } = freshStore();
   const steps = [
-    ['TWR', 'BeginBarrierChange'], ['OPS', 'CompleteBarrierChange'], ['OPS', 'CompleteInspection'],
+    ['TWR', 'BeginRunwayWorks'], ['OPS', 'CompleteRunwayWorks'], ['OPS', 'CompleteInspection'],
     ['TWR', 'CloseRunway'], ['TWR', 'OpenRunway'],
   ];
   for (const [i, [p, kind]] of steps.entries()) {
@@ -495,20 +495,20 @@ test('the mission wind sets the active end once per mission; a reconnect keeps w
   assert.equal(store.setActiveRunwayFromWind('CENTER', { windFromTrue: 60 }).reason, 'NOT_FOUND');
 });
 
-test('snapshot/restore round-trips a SUSPENDED_BARRIER_CHANGE runway intact', () => {
+test('snapshot/restore round-trips a SUSPENDED_WORKS runway intact', () => {
   const { store } = freshStore();
   store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, missionSession: 1 });
-  mustOp(store, 'TWR', 'BeginBarrierChange', { runwayId: '05/23', note: 're-rig' });
+  mustOp(store, 'TWR', 'BeginRunwayWorks', { runwayId: '05/23', note: 're-rig' });
   const snap = JSON.parse(JSON.stringify(store.snapshot()));
   const { store: reborn } = freshStore();
   reborn.restore(snap);
   const fsI = reborn.getFieldState('INCIRLIK');
-  assert.equal(rwy(fsI).status, 'SUSPENDED_BARRIER_CHANGE');
+  assert.equal(rwy(fsI).status, 'SUSPENDED_WORKS');
   assert.equal(rwy(fsI).suspension.positionId, 'TWR');
   assert.equal(rwy(fsI).suspension.note, 're-rig');
   assert.equal(fsI.activeRunway, '05');
   assert.equal(fsI.rev, store.getFieldState('INCIRLIK').rev);
-  assert.equal(reborn.statusView('INCIRLIK').runways[0].status, 'SUSPENDED_BARRIER_CHANGE');
+  assert.equal(reborn.statusView('INCIRLIK').runways[0].status, 'SUSPENDED_WORKS');
   // No inventory in the snapshot — the gear comes from config.
   assert.ok(!('arrestingGear' in snap[0].runways[0]));
 });
@@ -623,14 +623,14 @@ test('a field-state op writes the Mutation log with fieldStateFacilityId and run
   assert.equal(fieldAct(efsp, c.TWR, 'TWR', { kind: 'RejectRunwayRequest', runwayId: '05/23' }).ack.ok, true);
 });
 
-test('a suspension persists and a fresh createEfsp() restores it SUSPENDED_BARRIER_CHANGE', () => {
-  assert.equal(fieldAct(efsp, c.TWR, 'TWR', { kind: 'BeginBarrierChange', runwayId: '05/23' }).ack.ok, true);
+test('a suspension persists and a fresh createEfsp() restores it SUSPENDED_WORKS', () => {
+  assert.equal(fieldAct(efsp, c.TWR, 'TWR', { kind: 'BeginRunwayWorks', runwayId: '05/23' }).ack.ok, true);
   const reborn = createEfsp();
   const fsI = reborn.fieldStateStore.getFieldState('INCIRLIK');
-  assert.equal(rwy(fsI).status, 'SUSPENDED_BARRIER_CHANGE');
+  assert.equal(rwy(fsI).status, 'SUSPENDED_WORKS');
   assert.equal(rwy(fsI).suspension.positionId, 'TWR');
   // Drive the shared field back to OPEN for whoever runs next.
-  assert.equal(fieldAct(efsp, c.OPS, 'OPS', { kind: 'CompleteBarrierChange', runwayId: '05/23' }).ack.ok, true);
+  assert.equal(fieldAct(efsp, c.OPS, 'OPS', { kind: 'CompleteRunwayWorks', runwayId: '05/23' }).ack.ok, true);
   assert.equal(fieldAct(efsp, c.OPS, 'OPS', { kind: 'CompleteInspection', runwayId: '05/23' }).ack.ok, true);
 });
 
@@ -655,10 +655,10 @@ const readyFdr = (over = {}) => ({
 });
 
 test('TAXI, RUNWAY_QUEUE and LUAW are inhibited on a suspended runway, with the runway named in the reason', () => {
-  const view = viewWith('SUSPENDED_BARRIER_CHANGE');
+  const view = viewWith('SUSPENDED_WORKS');
   for (const [state, rackId] of [['TAXI', 'main'], ['RUNWAY_QUEUE', 'rwy-05'], ['LUAW', 'rwy-05']]) {
     const r = nla.computeNla({ role: 'DEPARTURE', state, rackId }, readyFdr(), NOW, ctxWith(view));
-    assert.deepEqual(r, { inhibited: 'runway 05/23 suspended — barrier change' }, state);
+    assert.deepEqual(r, { inhibited: 'runway 05/23 suspended — works in progress' }, state);
   }
 });
 
@@ -668,7 +668,7 @@ test('HANDED_TO_TOWER -> FINAL is inhibited on a suspended runway', () => {
 });
 
 test('FINAL -> LANDED is never inhibited — touchdown is an observation, not a clearance', () => {
-  for (const status of ['SUSPENDED_BARRIER_CHANGE', 'SUSPENDED_INSPECTION', 'CLOSED']) {
+  for (const status of ['SUSPENDED_WORKS', 'SUSPENDED_INSPECTION', 'CLOSED']) {
     const r = nla.computeNla({ role: 'ARRIVAL', state: 'FINAL', rackId: 'main' }, readyFdr(), NOW, ctxWith(viewWith(status)));
     assert.deepEqual(r, { toState: 'LANDED' }, status);
   }
@@ -910,21 +910,21 @@ test('the change record clears only when every runway in pendingInspection has b
   assert.equal(fsI.activeRunway, '17');
 });
 
-test('CompleteRunwayChange is refused while a runway in the set is mid barrier change', () => {
+test('CompleteRunwayChange is refused while a runway in the set is mid runway works', () => {
   const { store } = manned();
   mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
   mustOp(store, 'OPS', 'AckRunwayChange');
   mustOp(store, 'APP', 'AckRunwayChange');
   mustOp(store, 'TWR', 'BeginRunwayChange');
-  mustOp(store, 'TWR', 'BeginBarrierChange', { runwayId: '05/23' });
+  mustOp(store, 'TWR', 'BeginRunwayWorks', { runwayId: '05/23' });
   const r = op(store, 'TWR', 'CompleteRunwayChange');
-  assert.match(r.detail, /runway 05\/23 is SUSPENDED_BARRIER_CHANGE/);
+  assert.match(r.detail, /runway 05\/23 is SUSPENDED_WORKS/);
   assert.equal(r.fieldState.activeRunway, '05');
   // Once the gear work is done and awaiting its inspection, the change can
   // complete, and one inspection signs off both.
-  mustOp(store, 'OPS', 'CompleteBarrierChange', { runwayId: '05/23' });
+  mustOp(store, 'OPS', 'CompleteRunwayWorks', { runwayId: '05/23' });
   let fsI = mustOp(store, 'TWR', 'CompleteRunwayChange');
-  assert.equal(rwy(fsI).suspension.kind, 'BARRIER_CHANGE');
+  assert.equal(rwy(fsI).suspension.kind, 'WORKS');
   fsI = mustOp(store, 'OPS', 'CompleteInspection', { runwayId: '05/23' });
   assert.equal(rwy(fsI).status, 'OPEN');
   assert.equal(fsI.runwayChange, null);

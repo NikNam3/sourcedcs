@@ -2858,6 +2858,8 @@ function _stripRenderSignature(strip) {
   const stca = typeof stcaConflictsForTrack === 'function' ? stcaConflictsForTrack(trackId) : [];
   parts.push('alr:' + conf.map(a => `${a.kind}/${a.assigned}/${a.actual ?? ''}/${a.deviationFt ?? ''}/${a.fpm ?? ''}`).join(',')
     + ';' + stca.map(c => `${c.id}/${c.timeToCpaSec}/${c.minNm}/${c.vertFt}`).join(','));
+  // Field state (docs/adr/0068): the RWY/HOOK chips read the Facility's runway record, not the Strip.
+  parts.push('fld:' + (typeof fieldStateSignatureFor === 'function' ? fieldStateSignatureFor(strip) : ''));
 
   return parts.join('|');
 }

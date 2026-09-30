@@ -291,7 +291,7 @@ function computeDepartureNla(strip, fdr, now, ctx) {
 
     case 'LUAW': {
       // §9.7 rule 1: no takeoff from a suspended or closed runway — covers a
-      // barrier change begun while the aircraft sat lined up. Occupancy, again,
+      // runway works begun while the aircraft sat lined up. Occupancy, again,
       // is not implemented.
       const runway = _runwayInhibit(strip, fdr, ctx);
       if (runway) return { inhibited: runway };

@@ -22,6 +22,7 @@
   <link rel="stylesheet" href="./css/overlays.css"/>
   <link rel="stylesheet" href="./css/srs-radio.css"/>
   <link rel="stylesheet" href="./css/efsp-panel.css"/>
+  <link rel="stylesheet" href="./css/field-state-panel.css"/>
 </head>
 <body>
 
@@ -221,6 +222,13 @@
 <div id="airspace-panel" class="dock-unmounted">
   <div id="airspace-empty" class="efsp-empty">No airspaces configured.</div>
   <div id="airspace-list"></div>
+</div>
+
+<!-- Field state (guide §9.7, crc-sync docs/adr/0061). Its own panel: runways and gear are
+     not Strips, so this is not the ops-field-state Bay (docs/adr/0068). -->
+<div id="field-state-panel" class="dock-unmounted">
+  <div id="field-state-empty" class="efsp-empty">No field state at any Facility you can see.</div>
+  <div id="field-state-list"></div>
 </div>
 
 <!-- Airport weather panel (floating, click on map airport) -->
@@ -943,6 +951,8 @@
 <script src="./js/panels/efsp/efsp-stereo-routes.js"></script>
 <script src="./js/panels/efsp/efsp-panel.js"></script>
 <script src="./js/panels/efsp/airspace-panel.js"></script>
+<script src="./js/panels/efsp/field-state-rules.js"></script>
+<script src="./js/panels/efsp/field-state-panel.js"></script>
 <script src="./js/app.js"></script>
 <script src="./js/srs-radio.js"></script>
 </body>

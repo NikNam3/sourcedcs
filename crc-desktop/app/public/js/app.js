@@ -612,6 +612,7 @@ async function connect() {
         if (typeof refreshCorrelatedHighlight === 'function') refreshCorrelatedHighlight();
         updateMap();
         if (typeof renderAirspacePanel === 'function') renderAirspacePanel();
+        if (typeof renderFieldStatePanel === 'function') renderFieldStatePanel();
         // §5.6.3 — replay every still-pending Mutation against this fresh
         // baseline. A no-op on the very first connect (nothing pending
         // yet); on a RECONNECT this is what stops a Mutation in flight at
@@ -749,6 +750,23 @@ async function connect() {
         if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
         updateMap();
         if (typeof updateTrackPanel === 'function') updateTrackPanel();
+        break;
+      // WP6 §9.7 (crc-sync docs/adr/0061, crc-desktop 0068). Its own delta with its own seq —
+      // field state is not Strips and rides no Board's sequence (0061's rule-5 deviation).
+      case 'efsp-field-state-delta':
+        if (typeof applyEfspFieldStateDelta === 'function') applyEfspFieldStateDelta(msg);
+        if (typeof renderFieldStatePanel === 'function') renderFieldStatePanel();
+        if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays(); // RWY / HOOK are derived from it
+        break;
+      case 'efsp-field-state-ack':
+        if (!msg.ok && typeof _showMutationError === 'function') {
+          _showMutationError(msg.reason || 'Rejected', msg.detail, { subject: fieldStateSubjectFor(msg) });
+        }
+        if (msg.fieldState && typeof applyEfspFieldStateDelta === 'function') {
+          applyEfspFieldStateDelta({ fieldStates: { updated: [msg.fieldState] } });
+        }
+        if (typeof renderFieldStatePanel === 'function') renderFieldStatePanel();
+        if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
         break;
     }
   };

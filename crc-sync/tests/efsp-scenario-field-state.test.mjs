@@ -24,7 +24,7 @@ import path from 'path';
  * the middle, a controller holding every Position alone.
  *
  * Tower is the sole authority over the runway (decisions.md H18): OPS asks for
- * the barrier change and TWR takes the runway out; OPS then signs off the
+ * runway works and TWR takes the runway out; OPS then signs off the
  * inspection. The gear itself is data only (H17).
  *
  * Its own durable board, like every scenario file (ADR 0002), so the tests
@@ -108,14 +108,14 @@ function arrival(state, { rwy = '05' } = {}) {
   return s;
 }
 
-/** Barrier change the way H18 has it: OPS asks, tower takes the runway out. */
-function suspendForBarrierChange(e = efsp, crewOf = c) {
-  mustFieldStateAct(e, crewOf.OPS, 'OPS', { kind: 'RequestRunwayStatus', runwayId: RWY, action: 'BARRIER_CHANGE', note: 'BAK-12 re-rig' });
+/** Runway works the way H18 has it: OPS asks, tower takes the runway out. */
+function suspendForRunwayWorks(e = efsp, crewOf = c) {
+  mustFieldStateAct(e, crewOf.OPS, 'OPS', { kind: 'RequestRunwayStatus', runwayId: RWY, action: 'WORKS', note: 'BAK-12 re-rig' });
   return mustFieldStateAct(e, crewOf.TWR, 'TWR', { kind: 'AcceptRunwayRequest', runwayId: RWY });
 }
 
 function finishAndInspect(e = efsp, crewOf = c) {
-  if (runway(e).status === 'SUSPENDED_BARRIER_CHANGE') mustFieldStateAct(e, crewOf.OPS, 'OPS', { kind: 'CompleteBarrierChange', runwayId: RWY });
+  if (runway(e).status === 'SUSPENDED_WORKS') mustFieldStateAct(e, crewOf.OPS, 'OPS', { kind: 'CompleteRunwayWorks', runwayId: RWY });
   return mustFieldStateAct(e, crewOf.OPS, 'OPS', { kind: 'CompleteInspection', runwayId: RWY });
 }
 
@@ -133,7 +133,7 @@ function captureDeltas(e = efsp) {
 
 test('sortie 0: before the mission wind sets an active runway, a Strip with no runway filed and in no runway rack is never inhibited', () => {
   assert.equal(fieldState().activeRunway, null);
-  suspendForBarrierChange();
+  suspendForRunwayWorks();
   const s = departure('TAXI', { runway: null });
   // Built before the suspension would have gated SetState? No — nothing
   // resolves it to a runway, so it was never gated at all.
@@ -153,11 +153,11 @@ test('sortie 1: A barrier reconfiguration suspends the runway, inhibits takeoff 
   const deltas = captureDeltas();
 
   // "suspends the runway" — OPS asks, tower takes the pavement out (H18).
-  const reason = 'runway 05/23 suspended — barrier change';
-  const fsI = suspendForBarrierChange();
+  const reason = 'runway 05/23 suspended — works in progress';
+  const fsI = suspendForRunwayWorks();
   const rwy = fsI.runways.find(r => r.runwayId === RWY);
-  assert.equal(rwy.status, 'SUSPENDED_BARRIER_CHANGE');
-  assert.equal(rwy.suspension.kind, 'BARRIER_CHANGE');
+  assert.equal(rwy.status, 'SUSPENDED_WORKS');
+  assert.equal(rwy.suspension.kind, 'WORKS');
   assert.equal(rwy.suspension.positionId, 'TWR');
   assert.equal(rwy.suspension.requestedBy.positionId, 'OPS');
 
@@ -181,7 +181,7 @@ test('sortie 1: A barrier reconfiguration suspends the runway, inhibits takeoff 
   }
 
   // "requires an attributable inspection-complete action to resume".
-  mustFieldStateAct(efsp, c.OPS, 'OPS', { kind: 'CompleteBarrierChange', runwayId: RWY });
+  mustFieldStateAct(efsp, c.OPS, 'OPS', { kind: 'CompleteRunwayWorks', runwayId: RWY });
   assert.equal(runway().status, 'SUSPENDED_INSPECTION');
   assert.equal(efsp.boardStore.nlaStatusFor(strip(queued)).inhibited, 'runway 05/23 suspended — awaiting inspection');
   // No way round the inspection: tower cannot simply reopen it, and tower is
@@ -213,16 +213,16 @@ test('sortie 1: A barrier reconfiguration suspends the runway, inhibits takeoff 
 
 test('sortie 3: a departure taxiing for the suspended runway is stopped at the hold-short, by button and by drag', () => {
   const taxiing = departure('TAXI', { runway: '05' });
-  suspendForBarrierChange();
+  suspendForRunwayWorks();
   const press = act(efsp, c.GND, 'GND', strip(taxiing), { kind: 'InvokeNla' });
   assert.equal(press.reason, 'NLA_INHIBITED');
-  assert.equal(press.detail, 'runway 05/23 suspended — barrier change');
+  assert.equal(press.detail, 'runway 05/23 suspended — works in progress');
   // §3.5 rule 4: the drag is the other path to the same transition — onto
   // either end's rack, since both ends are the one suspended pavement.
   for (const rackId of ['rwy-05', 'rwy-23']) {
     const drag = act(efsp, c.GND, 'GND', strip(taxiing), { kind: 'TransferStrip', toPositionId: 'TWR', bayId: 'twr-runway-queue', rackId });
     assert.equal(drag.reason, 'NLA_INHIBITED', rackId);
-    assert.equal(drag.detail, 'runway 05/23 suspended — barrier change');
+    assert.equal(drag.detail, 'runway 05/23 suspended — works in progress');
   }
   assert.equal(strip(taxiing).state, 'TAXI');
   assert.equal(strip(taxiing).bayId, 'gnd-taxi-out');
@@ -231,28 +231,28 @@ test('sortie 3: a departure taxiing for the suspended runway is stopped at the h
 
 test('sortie 4: moving a queued departure to the reciprocal rack does not escape a surface-wide suspension', () => {
   const queued = departure('RUNWAY_QUEUE', { rackId: 'rwy-05' });
-  suspendForBarrierChange();
+  suspendForRunwayWorks();
   // A same-state move inside the queue stays allowed — it is how a controller
   // re-sequences, and at a two-runway field how they send a Strip to the open
   // one — but 23 is the same pavement as 05, so the Strip is still held.
   const moved = mustAct(efsp, c.TWR, 'TWR', strip(queued), { kind: 'MoveStrip', bayId: 'twr-runway-queue', rackId: 'rwy-23' });
   assert.equal(moved.rackId, 'rwy-23');
-  assert.equal(efsp.boardStore.nlaStatusFor(strip(queued)).inhibited, 'runway 05/23 suspended — barrier change');
+  assert.equal(efsp.boardStore.nlaStatusFor(strip(queued)).inhibited, 'runway 05/23 suspended — works in progress');
   assert.equal(act(efsp, c.TWR, 'TWR', strip(queued), { kind: 'InvokeNla' }).reason, 'NLA_INHIBITED');
   finishAndInspect();
 });
 
-test('sortie 5: an aircraft on final when the barrier change begins still lands', async () => {
+test('sortie 5: an aircraft on final when runway works begins still lands', async () => {
   const onFinal = arrival('FINAL', { rwy: '05' });
   const handed = arrival('HANDED_TO_TOWER', { rwy: '05' });
-  suspendForBarrierChange();
+  suspendForRunwayWorks();
   // Touchdown is an observation, never a clearance: FINAL -> LANDED works.
   assert.equal(mustAct(efsp, c.TWR, 'TWR', strip(onFinal), { kind: 'InvokeNla' }).state, 'LANDED');
   // And the raw override honours the inhibit too (decisions.md S-R2-14):
   // SetState cannot clear a Strip onto final for the suspended runway…
   const jump = act(efsp, c.TWR, 'TWR', strip(handed), { kind: 'SetState', toState: 'FINAL' });
   assert.equal(jump.reason, 'NLA_INHIBITED');
-  assert.equal(jump.detail, 'runway 05/23 suspended — barrier change');
+  assert.equal(jump.detail, 'runway 05/23 suspended — works in progress');
   // …but it can record a landing, which is not a runway clearance.
   assert.equal(mustAct(efsp, c.TWR, 'TWR', strip(handed), { kind: 'SetState', toState: 'LANDED' }).state, 'LANDED');
   finishAndInspect();
@@ -275,7 +275,7 @@ test('sortie 10: two controllers reconfigure at once — the second is STALE_REV
   const rev = fieldState().rev;
   mustFieldStateAct(efsp, c.OPS, 'OPS', { kind: 'RequestRunwayStatus', runwayId: RWY, action: 'CLOSE', note: 'FOD' });
   // APP had the same idea, working from the rev before OPS's.
-  const late = fieldStateAct(efsp, c.APP, 'APP', { kind: 'RequestRunwayStatus', runwayId: RWY, action: 'BARRIER_CHANGE' }, { baseRev: rev });
+  const late = fieldStateAct(efsp, c.APP, 'APP', { kind: 'RequestRunwayStatus', runwayId: RWY, action: 'WORKS' }, { baseRev: rev });
   assert.equal(late.reason, 'STALE_REV');
   assert.equal(late.fieldState.runways[0].pendingRequest.requestedPositionId, 'OPS');
   const entry = mutations().at(-1);
@@ -285,11 +285,11 @@ test('sortie 10: two controllers reconfigure at once — the second is STALE_REV
 
 test('sortie 11: crc-sync restarts mid-suspension and the runway comes back SUSPENDED', async () => {
   const queued = departure('RUNWAY_QUEUE');
-  suspendForBarrierChange();
+  suspendForRunwayWorks();
   efsp.persist();
   const reborn = createEfsp();
   const rwy = runway(reborn);
-  assert.equal(rwy.status, 'SUSPENDED_BARRIER_CHANGE');
+  assert.equal(rwy.status, 'SUSPENDED_WORKS');
   assert.equal(rwy.suspension.positionId, 'TWR');
   assert.equal(rwy.suspension.requestedBy.positionId, 'OPS');
   assert.equal(fieldState(reborn).activeRunway, '05');
@@ -298,7 +298,7 @@ test('sortie 11: crc-sync restarts mid-suspension and the runway comes back SUSP
   // Occupancy is ephemeral (ADR 0029): the crew re-declares.
   const rc = crew(reborn, ATC);
   const restored = reborn.boardStore.getStrip(queued.stripId);
-  assert.equal(reborn.boardStore.nlaStatusFor(restored).inhibited, 'runway 05/23 suspended — barrier change');
+  assert.equal(reborn.boardStore.nlaStatusFor(restored).inhibited, 'runway 05/23 suspended — works in progress');
   assert.equal(act(reborn, rc.TWR, 'TWR', restored, { kind: 'InvokeNla' }).reason, 'NLA_INHIBITED');
   finishAndInspect(reborn, rc);
   assert.equal(runway(reborn).status, 'OPEN');

@@ -66,6 +66,7 @@ let efspCorrelationStats = null;
 // one is the alert §9.2 rule 2 requires, and dropping it would erase the
 // warning for whoever just reconnected.
 const efspMarsa = new Map();
+const efspFieldStates = new Map(); // facilityId -> field-state record (crc-sync docs/adr/0061)
 
 // docs/adr/0058 — what crc-sync's conformance and conflict monitors say is
 // WRONG right now. Sent whole on every change (efsp-alerts), so a flight that
@@ -91,6 +92,8 @@ function applyEfspSnapshot(msg) {
   for (const r of msg.correlations || []) efspCorrelations.set(r.fdrId, r);
   efspMarsa.clear();
   for (const r of msg.marsa || []) efspMarsa.set(r.marsaId, r);
+  efspFieldStates.clear();
+  for (const r of msg.fieldStates || []) efspFieldStates.set(r.facilityId, r);
 }
 
 /**
@@ -159,6 +162,22 @@ function marsaParticipantStripIds(strip) {
     .filter(s => s.state !== 'DROPPED' && others.has(s.fdrId))
     .map(s => s.stripId);
 }
+
+/**
+ * An efsp-field-state-delta (guide §9.7, crc-sync docs/adr/0061) — its own
+ * message type on its own seq, like MARSA and airspace: a runway is not a
+ * Strip and rides no Board's sequence. One record per Facility, sent whole, so
+ * a delta simply replaces it (docs/adr/0068).
+ */
+function applyEfspFieldStateDelta(msg) {
+  for (const r of (msg && msg.fieldStates && msg.fieldStates.updated) || []) {
+    if (r && r.facilityId) efspFieldStates.set(r.facilityId, r);
+  }
+}
+
+/** The Facility's field-state record exactly as the server sent it, or null (L12/L13 read this — do not rename). */
+function getEfspFieldState(facilityId) { return efspFieldStates.get(facilityId) || null; }
+function getAllEfspFieldStates() { return [...efspFieldStates.values()]; }
 
 /**
  * An efsp-correlation-delta — its own message type with its own seq, like the
@@ -378,6 +397,7 @@ function _resetEfspStateForTest() {
   efspCorrelations.clear();
   efspCorrelationStats = null;
   efspMarsa.clear();
+  efspFieldStates.clear();
   efspConformance.clear();
   efspConflicts = [];
   efspBoardSeq = 0;
@@ -434,5 +454,6 @@ if (typeof module !== 'undefined' && module.exports) {
     isAitAuthorizedFor, getEfspPositionLetter,
     getEfspObligation, getEfspObligations,
     _resetEfspStateForTest,
+    applyEfspFieldStateDelta, getEfspFieldState, getAllEfspFieldStates,
   };
 }

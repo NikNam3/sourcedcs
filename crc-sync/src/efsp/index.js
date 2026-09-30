@@ -437,7 +437,7 @@ function _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaSt
     // §4.8.3's "second controller inherits a lie", caused by us.
     if (marsaStore) marsaStore.restore(data.marsa);
     // Field state comes back INTACT for MARSA's reason (docs/adr/0061): a
-    // runway suspended for a barrier change is still suspended after a
+    // runway suspended for runway works is still suspended after a
     // crc-sync restart, and coming back OPEN would hand the next controller a
     // lie. Reconciled against the inventory, like the airspaces.
     if (fieldStateStore) fieldStateStore.restore(data.fieldStates);
