@@ -7,10 +7,8 @@
 
    efsp-ui-reachability.test.js's own harness renders a STRIP, with
    `document.getElementById: () => null`, so it cannot reach the toolbar at
-   all. This needs a getElementById backed by real stub elements. The
-   makeElement stub below is a trimmed copy of that file's — lifting the
-   shared one into tests/helpers/ is the obvious follow-up, and there is no
-   tests/helpers/ directory in this package yet to lift it into. */
+   all. This needs a getElementById backed by real stub elements, which are
+   the shared DOM stub's (tests/helpers/dom-stub.js, docs/adr/0054). */
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -31,20 +29,7 @@ const ROUTES = [
   { name: 'PACK 2', route: 'LTAG DCT BRAVO' },
 ];
 
-function makeElement(tag) {
-  return {
-    tagName: tag, className: '', textContent: '', value: '', disabled: false, hidden: false,
-    children: [], dataset: {}, style: {}, _listeners: {},
-    classList: { _set: new Set(), add(c) { this._set.add(c); }, remove(c) { this._set.delete(c); }, contains(c) { return this._set.has(c); }, toggle() {} },
-    appendChild(c) { this.children.push(c); c.parentNode = this; return c; },
-    removeChild(c) { this.children = this.children.filter(x => x !== c); return c; },
-    addEventListener(type, fn) { (this._listeners[type] = this._listeners[type] || []).push(fn); },
-    removeEventListener() {},
-    setAttribute() {}, removeAttribute() {}, focus() {}, select() {},
-    set innerHTML(v) { if (v === '') this.children = []; },
-    get innerHTML() { return ''; },
-  };
-}
+const { makeElement } = require('./helpers/dom-stub.js');
 
 /**
  * Loads the real efsp-panel.js against a stubbed toolbar and returns handles
@@ -61,7 +46,7 @@ function mountPanel({ held = ['OPS'], stereoRoutes = ROUTES, lookupSpy = null, l
     'efsp-create-strip-role', 'efsp-create-strip-stereo', 'efsp-dot-command-input',
     'efsp-dot-command-preview', 'efsp-mutation-error', 'efsp-mutation-warning',
     'efsp-connection-banner']) {
-    els[id] = makeElement(id.endsWith('-btn') ? 'button' : id.includes('select') ? 'select' : 'input');
+    els[id] = makeElement(id.endsWith('-btn') ? 'button' : id.includes('role') || id.includes('stereo') ? 'select' : 'input');
   }
 
   const sandbox = {

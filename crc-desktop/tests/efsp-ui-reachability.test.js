@@ -263,48 +263,22 @@ let _activeElement = null;
 /** Move the stub's focus, the way clicking elsewhere or pressing Tab would. */
 function focusStub(el) { _activeElement = el; }
 
-/** A DOM stub with just enough surface for bay-view.js's Strip rendering. */
+/**
+ * The shared DOM stub (tests/helpers/dom-stub.js, docs/adr/0054), plus the one
+ * behaviour this harness needs that the shared one leaves out: focus() moves
+ * _activeElement, which document.activeElement below reports. Without it the
+ * _isProtectedStripEl tests further down cannot tell a focused edit from an
+ * abandoned one.
+ */
+const domStub = require('./helpers/dom-stub.js');
 function makeElement(tag) {
-  const el = {
-    tagName: tag, className: '', textContent: '', title: '', value: '', disabled: false, hidden: false,
-    children: [], dataset: {}, style: {}, _listeners: {},
-    classList: { _set: new Set(), add(c) { this._set.add(c); }, remove(c) { this._set.delete(c); }, contains(c) { return this._set.has(c); }, toggle() {} },
-    appendChild(c) {
-      this.children.push(c); c.parentNode = this;
-      // A real <select> reports its first option's value until one is
-      // chosen; without that, every picker reads as empty here.
-      if (this.tagName === 'select' && c.tagName === 'option' && this.value === '') this.value = c.value;
-      return c;
-    },
-    removeChild(c) { this.children = this.children.filter(x => x !== c); return c; },
-    remove() { if (this.parentNode) this.parentNode.removeChild(this); },
-    replaceWith(next) { if (this.parentNode) { this.parentNode.children = this.parentNode.children.map(x => (x === this ? next : x)); next.parentNode = this.parentNode; } },
-    closest() { return null; },
-    addEventListener(type, fn) { (this._listeners[type] = this._listeners[type] || []).push(fn); },
-    removeEventListener() {},
-    contains(other) { return this === other || this.children.some(c => c.contains && c.contains(other)); },
-    querySelector(sel) {
-      // Enough for `.class` lookups, which is all the panel uses — notably
-      // _isProtectedStripEl's `.efsp-block-input` check, which silently could
-      // not fire while this returned null and so was untestable.
-      if (typeof sel !== 'string' || !sel.startsWith('.')) return null;
-      const want = sel.slice(1);
-      const hit = (n) => (n.className || '').split(/\s+/).includes(want)
-        ? n : n.children.reduce((found, c) => found || hit(c), null);
-      return this.children.reduce((found, c) => found || hit(c), null);
-    },
-    getBoundingClientRect() { return { top: 0, bottom: 10, left: 0, right: 10, height: 10, width: 10 }; },
-    focus() { _activeElement = this; }, select() {}, setAttribute() {}, removeAttribute() {},
-    set innerHTML(v) { if (v === '') this.children = []; },
-    get innerHTML() { return ''; },
-  };
+  const el = domStub.makeElement(tag);
+  el.focus = () => { _activeElement = el; };
   return el;
 }
 
 /** Every descendant, flattened — the rendered Strip is a small tree. */
-function descendants(el) {
-  return el.children.flatMap(c => [c, ...descendants(c)]);
-}
+function descendants(el) { return domStub.descendants(el); }
 
 // Where a popover goes. F-001 portals all six out of the Strip to
 // document.body, because `.efsp-strip`'s `contain: layout` creates a stacking

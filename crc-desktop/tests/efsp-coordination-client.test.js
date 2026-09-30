@@ -69,16 +69,37 @@ test('TOFI eligibility covers every airborne ATC-side Role, and never MISSION �
   assert.equal(TOFI_ELIGIBLE_STATES.MISSION, undefined);
 });
 
+/**
+ * bay-view.js's own module values, read by running it — the same move
+ * docs/adr/0055 made for the compact-Block list (efsp-ui-reachability.test.js's
+ * clientSandbox). Top-level `const`s are lexical bindings, not properties of
+ * the vm context, so they are read by evaluating the name in that context; and
+ * the arrays come from the sandbox's realm, so they are copied before a
+ * deepStrictEqual that compares prototypes.
+ */
+let _bayView = null;
+function bayViewValue(name) {
+  const vm = require('vm');
+  if (!_bayView) {
+    _bayView = {
+      console, module: { exports: {} },
+      document: { getElementById: () => null, createElement: () => ({}), addEventListener() {}, removeEventListener() {} },
+      window: {},
+    };
+    _bayView.globalThis = _bayView;
+    vm.createContext(_bayView);
+    const file = require.resolve('../app/public/js/panels/efsp/bay-view.js');
+    vm.runInContext(require('fs').readFileSync(file, 'utf8'), _bayView, { filename: 'bay-view.js' });
+  }
+  return JSON.parse(JSON.stringify(vm.runInContext(name, _bayView)));
+}
+
 // The RANGE slice — bay-view.js decides whether to offer the "Airspace…"
 // button from a hard-coded list of Positions, mirroring permission.js's
 // grant. Same drift risk as every other mirror here: a list that falls out
 // of step either offers a button the server refuses or hides one it allows.
 test('the Positions the client offers airspace entry to are exactly the ones the server grants it to', () => {
-  const source = require('fs').readFileSync(require.resolve('../app/public/js/panels/efsp/bay-view.js'), 'utf8');
-  const match = source.match(/const AIRSPACE_ENTRY_POSITIONS = (\[[^\]]*\])/);
-  assert.ok(match, 'AIRSPACE_ENTRY_POSITIONS not found in bay-view.js');
-  const clientPositions = JSON.parse(match[1].replace(/'/g, '"'));
-
+  const clientPositions = bayViewValue('AIRSPACE_ENTRY_POSITIONS');
   const granted = Object.keys(server.PERMISSIONS)
     .filter(id => server.AIRSPACE_ENTRY_OP_KINDS.every(k => server.PERMISSIONS[id].has(k)));
   assert.deepEqual(clientPositions.sort(), granted.sort());
@@ -88,14 +109,29 @@ test('the Positions the client offers airspace entry to are exactly the ones the
 // Strip. The client used to gate on "you hold any Position" alone, so TWR saw
 // the button on an APP-owned departure and the server refused every press.
 test('the Positions the client offers Convert to Arrival to are exactly the ones the server lets do it', () => {
-  const source = require('fs').readFileSync(require.resolve('../app/public/js/panels/efsp/bay-view.js'), 'utf8');
-  const match = source.match(/const CONVERT_TO_ARRIVAL_POSITIONS = (\[[^\]]*\])/);
-  assert.ok(match, 'CONVERT_TO_ARRIVAL_POSITIONS not found in bay-view.js');
-  const clientPositions = JSON.parse(match[1].replace(/'/g, '"'));
-
+  const clientPositions = bayViewValue('CONVERT_TO_ARRIVAL_POSITIONS');
   const granted = Object.keys(server.PERMISSIONS)
     .filter(id => server.PERMISSIONS[id].has('ConvertToArrival') && server.canCreateStripRole(id, 'ARRIVAL'));
   assert.deepEqual(clientPositions.sort(), granted.sort());
+});
+
+// D12, client side (guide §4.1 rule 1, §13 "audited in the UI"). bay-view.js's
+// D12 audit note under TOFI_COUNTERPARTS and docs/adr/0025 both say this guard
+// lives here; until now it did not. A key in COORDINATION_TARGETS is what makes
+// the Coordinate menu render for a Position at all.
+test('D12: no MRU or non-ATC Position is a key of the client\'s COORDINATION_TARGETS', () => {
+  const facilityConfig = require('../../crc-sync/src/efsp/facility-config.js');
+  for (const id of Object.keys(bayViewValue('COORDINATION_TARGETS'))) {
+    assert.ok(!['MRU', 'MRU_POSITION', 'NON_ATC'].includes(facilityConfig.getPositionClass(id)), id);
+    for (const k of server.COORDINATION_OP_KINDS) assert.ok(server.PERMISSIONS[id].has(k), `${id} ${k}`);
+  }
+});
+
+// The TOFI menu's counterpart list, mirrored from permission.js. A drift offers
+// a TOFI proposal the server refuses as "not a valid TOFI counterpart", or
+// hides one it would accept.
+test('the client TOFI_COUNTERPARTS mirror equals permission.js\'s', () => {
+  assert.deepEqual(bayViewValue('TOFI_COUNTERPARTS'), JSON.parse(JSON.stringify(server.TOFI_COUNTERPARTS)));
 });
 
 test('a range Position works no Strips — the class refusal is a rule, not an absent table entry', () => {
