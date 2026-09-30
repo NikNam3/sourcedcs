@@ -76,6 +76,7 @@ function _openMissionForm(title, m, onSave) {
     _buildIdentificationSection(body, m, f);
     _buildAircraftSection(body, m, f);
     _buildTimingSection(body, m, f);
+    _buildUsmtfMissionSections(body, m, f);   // editor-missions-usmtf.js (ADR 0078)
     _buildTargetSection(body, m, title, onSave);
     _buildControlSection(body, m, f);
     _buildRefuelSection(body, m);
@@ -95,7 +96,7 @@ function _buildIdentificationSection(body, m, f) {
   f.callsign       = editorField(body, 'Callsign',       m.callsign,       { placeholder: 'e.g. FALCON5', required: true });
   f.mission_type   = editorField(body, 'Mission Type',    m.mission_type,   {
     type: 'select',
-    options: ['CAP', 'BAI', 'CAS', 'SEAD', 'STRIKE', 'REFUELING',
+    options: ['CAP', 'BAI', 'CAS', 'SEAD', 'STRIKE', 'REFUELING', 'AEW',
               'OCA', 'DCA', 'DEAD', 'AI', 'ESCORT', 'FAC(A)',
               'RECCE', 'ANTISHIP', 'INTERCEPT', 'FERRY', 'TRANSPORT', 'OTHER'],
     required: true,
@@ -160,6 +161,8 @@ function _buildControlSection(body, m, f) {
     hint: resolvedPrimary ? 'Read from registry' : undefined,
   });
 
+  _buildUsmtfControlFields(body, ctrl, f);   // RIP, check-in, secondary freq
+
   // Update freq field when agency selection changes
   f.ctrl_agency_id.addEventListener('change', function () {
     var agId = this.value;
@@ -198,6 +201,8 @@ function _buildRefuelSection(body, m) {
         tanker_id: editorField(wrap, 'Tanker',     ref.tanker_id, { type: 'select', options: tnkOpts }),
         time_from: editorField(wrap, 'From (NET)', ref.time_from, { placeholder: '2143' }),
         time_to:   editorField(wrap, 'To (NLT)',   ref.time_to,   { placeholder: '2150' }),
+        offload_klb: editorField(wrap, 'Offload (klb)', ref.offload_klb, { type: 'number', placeholder: '12.0' }),
+        orig:      ref,
       };
       body._refuelEntriesMeta.push(meta);
       body._refuelEntriesEl.appendChild(wrap);
@@ -219,8 +224,13 @@ function _collectRefuel(body) {
     var tid  = meta.tanker_id.value || undefined;
     var from = meta.time_from.value || undefined;
     var to   = meta.time_to.value   || undefined;
+    var off  = parseFloat(meta.offload_klb.value);
     if (!tid && !from && !to) return null;
-    return { tanker_id: tid, time_from: from, time_to: to };
+    // Merge onto the original entry so YAML-only keys survive an edit.
+    var entry = Object.assign({}, meta.orig || {}, { tanker_id: tid, time_from: from, time_to: to });
+    if (isNaN(off)) delete entry.offload_klb; else entry.offload_klb = off;
+    Object.keys(entry).forEach(function (k) { if (entry[k] === undefined) delete entry[k]; });
+    return entry;
   }).filter(Boolean);
   return result.length ? result : undefined;
 }
@@ -320,6 +330,7 @@ function _collectMissionDraft() {
 
   // Refuel — v2.0 array; collect from dynamic list rendered in body
   m.refuel = _collectRefuel(body);
+  _collectUsmtfMissionFields(f, m);
 
   // Preserve live arrays so edits made in sub-dialogs are reflected
   m.targets      = body._targets || [];
@@ -372,8 +383,11 @@ function _saveMissionFromForm(onSave) {
     m.control.primary_freq_mhz = f.ctrl_primary.disabled ? undefined : (f.ctrl_primary.value || undefined);
   }
 
-  // Refuel — v2.0: array of {tanker_id, time_from, time_to}
+  // Refuel — v2.0: array of {tanker_id, time_from, time_to, offload_klb?}
   m.refuel = _collectRefuel(body);
+
+  // USMTF ATO fields (package, IFF, datalink, vul, control extras)
+  _collectUsmtfMissionFields(f, m);
 
   // Steer points: keep shared steerpoint refs as-is; keep regular pts that have
   // coordinates (named or unnamed).  Unnamed steerpoints (no name, has coords) are

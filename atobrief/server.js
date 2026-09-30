@@ -23,6 +23,7 @@ const http       = require('http');
 const path       = require('path');
 const rateLimit  = require('express-rate-limit');
 const { Server } = require('socket.io');
+const { mountUsmtfRoutes } = require('./usmtf-api');
 
 function hashPassword(pw) {
   const salt = crypto.randomBytes(16).toString('hex');
@@ -44,6 +45,9 @@ const io     = new Server(server);
 const CASDOOR_CLIENT_ID     = process.env.ATOBRIEF_CLIENT_ID     || '';
 const CASDOOR_CLIENT_SECRET = process.env.ATOBRIEF_CLIENT_SECRET || '';
 const CASDOOR_ENDPOINT      = process.env.CASDOOR_ENDPOINT       || '';
+// Shared secret for machine reads of the USMTF export (crc-sync, ADR 0078).
+// Read once at startup (P5); unset disables the service-token path.
+const USMTF_SERVICE_TOKEN   = process.env.ATOBRIEF_USMTF_TOKEN   || '';
 
 // ── Rate limiters ────────────────────────────────────────────
 const authLimiter = rateLimit({
@@ -263,6 +267,7 @@ io.on('connection', (socket) => {
     if (!session || session.presenterId !== socket.id) return;
 
     session.packageYaml = yamlText;
+    session.packageUpdatedAt = Date.now();   // HTTP Last-Modified only, never a DTG
     socket.to(currentSessionId).emit('package-loaded', yamlText);
   });
 
@@ -333,6 +338,9 @@ io.on('connection', (socket) => {
     }
   });
 });
+
+// ── USMTF ATO export (GET /api/rooms/:id/ato.usmtf, POST /api/usmtf) ──
+mountUsmtfRoutes(app, { sessions, serviceToken: USMTF_SERVICE_TOKEN });
 
 // ── Active rooms list ────────────────────────────────────────
 app.get('/api/rooms', (_req, res) => {
