@@ -207,12 +207,14 @@ test('D13 acceptance criterion, literally: each replica is independently removab
   assert.equal(dropped.ok, true);
   assert.equal(appBoard.getStrip(receiverStripId).state, 'DROPPED');
 
-  // The SENDER's Strip is completely untouched — still ACTIVE, still there,
-  // still on CTR's own Board. Structurally cannot have been reached by
-  // appBoard's _applyDropStrip, since it lives in a different _strips Map.
+  // The SENDER's Strip is not removed and not moved — still there, still in
+  // its state, still on CTR's own Board (appBoard's _applyDropStrip cannot
+  // reach a different _strips Map). Only its exchange ends: the replica that
+  // could answer it is gone, and a link nobody can answer strands the Strip
+  // (U7, docs/adr/0080). The criterion is about removal, and nothing is removed.
   const senderStill = ctrBoard.getStrip(senderStrip.stripId);
   assert.equal(senderStill.state, 'INBOUND');
-  assert.equal(senderStill.coordination.state, 'ACTIVE');
+  assert.equal(senderStill.coordination, null);
 
   // And the reverse holds too — dropping the sender doesn't touch the
   // (already-dropped) receiver's Board at all.

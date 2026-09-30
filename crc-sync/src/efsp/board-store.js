@@ -1662,10 +1662,19 @@ class BoardStore {
     // thing. A tanker landing mid-AR leaves the relation `ENDED` with
     // `endedBy: 'PARTICIPANT_RETIRED'`; nothing went wrong and no alert is due.
     const marsaChanged = this._releaseFdrIfLastStrip(strip, by);
+    // U7: a replica that ends takes the proposer's link with it.
+    let peerFacilityId; let peerStrip;
+    const link = strip.coordination;
+    if (link && link.mintedForCoordination && this._rules.peerBoard) {
+      const peer = this._rules.peerBoard(link.peerFacilityId);
+      const ended = peer ? peer.receiveCoordinationPeerGone({ stripId: link.peerStripId, goneStripId: strip.stripId }) : null;
+      if (ended && ended.ok) { peerFacilityId = link.peerFacilityId; peerStrip = ended.strip; }
+    }
     return {
       ok: true, strip,
       marsaChanged: marsaChanged && marsaChanged.length ? marsaChanged : undefined,
       fdrs: marsaChanged && marsaChanged.length ? this._drainMarsaRegimeWrites() : undefined,
+      peerFacilityId, peerStrip,
     };
   }
 
@@ -1734,6 +1743,8 @@ class BoardStore {
       // STAND_BY is the only genuinely new action, and only valid for that
       // one primitive (docs/adr/0022).
       case 'STAND_BY': return this._applyCoordinationStandBy(strip, op, by);
+      // The proposer's own way out of its own exchange (U7, docs/adr/0080).
+      case 'CANCEL':   return this._applyCoordinationCancel(strip, op, by);
       default:         return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown coordination action: ${op.action}`, strip };
     }
   }
@@ -1913,6 +1924,92 @@ class BoardStore {
       }
     }
     return { ok: true, strip, peerFacilityId, peerStrip };
+  }
+
+  /**
+   * The proposer cancels, or closes, its own exchange (U7, docs/adr/0080). A
+   * link on the proposer's Strip that the other side can no longer answer — the
+   * receiver dropped its replica, its Position is unmanned, a proposal nobody
+   * will get to — used to be unreachable: the guards that keep an open link
+   * honest (no Drop, no Convert, no second proposal, no NLA) also kept the
+   * proposer from ever leaving it. Legal for any state of the link, on the
+   * proposer's Strip only; the receiver answers with ACCEPT/REJECT instead.
+   * Returns the Strip to no coordination (audited, like any Mutation), and
+   * whatever the peer still holds of it: an unanswered or refused replica is
+   * retired, an accepted one simply loses its link.
+   */
+  _applyCoordinationCancel(strip, op, by) {
+    if (!strip.coordination) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no coordination link on this Strip to cancel', strip };
+    }
+    if (strip.coordination.mintedForCoordination) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'only the proposer can cancel; answer the proposal with ACCEPT or REJECT', strip };
+    }
+    const link = strip.coordination;
+    let peerStrip = null;
+    if (this._rules.peerBoard) {
+      const peer = this._rules.peerBoard(link.peerFacilityId);
+      if (peer) {
+        const r = peer.receiveCoordinationCancel({ stripId: link.peerStripId, by });
+        if (r.ok && r.strip) peerStrip = r.strip;
+      }
+    }
+    strip.coordination = null;
+    strip.rev += 1;
+    strip.updatedAt = this._clock.now();
+    strip.updatedBy = by || null;
+    this._touch(strip.stripId);
+    return { ok: true, strip, peerFacilityId: link.peerFacilityId, peerStrip };
+  }
+
+  /**
+   * The proposer cancelled (called through rules.peerBoard): whatever this
+   * side holds of the exchange ends. An unanswered or refused replica is a
+   * proposal artifact and is retired; an accepted one is the receiver's working
+   * Strip for the flight, so only its link goes.
+   * @returns {{ok:true, strip:object|null}} strip null when there was nothing left to change
+   */
+  receiveCoordinationCancel({ stripId, by }) {
+    const strip = this._strips.get(stripId);
+    if (!strip || strip.state === 'DROPPED' || !strip.coordination) return { ok: true, strip: null };
+    if (strip.coordination.state === 'ACTIVE') {
+      strip.coordination = null;
+      strip.rev += 1;
+      strip.updatedAt = this._clock.now();
+      strip.updatedBy = by || null;
+      this._touch(strip.stripId);
+    } else {
+      strip.coordination = null; // so the retire below does not try to tell the proposer back
+      this._retireStrip(strip, by);
+    }
+    return { ok: true, strip };
+  }
+
+  /**
+   * The receiver's replica reached DROPPED (called through rules.peerBoard):
+   * an exchange still PROPOSED or ACTIVE ends on the proposer's Strip, which
+   * would otherwise carry a link nobody can answer for good (U7). Audited as a
+   * system change, like a covering reassignment.
+   * @returns {{ok:boolean, strip?:object}}
+   */
+  receiveCoordinationPeerGone({ stripId, goneStripId }) {
+    const strip = this._strips.get(stripId);
+    const link = strip && strip.coordination;
+    if (!link || link.peerStripId !== goneStripId || (link.state !== 'PROPOSED' && link.state !== 'ACTIVE')) return { ok: false };
+    const before = deepClone(strip);
+    strip.coordination = null;
+    strip.rev += 1;
+    strip.updatedAt = this._clock.now();
+    strip.updatedBy = null;
+    this._touch(strip.stripId);
+    if (this._mutationLog) {
+      this._mutationLog.record({
+        clientMutationId: null, op: 'SystemCoordinationEnd', stripId: strip.stripId,
+        actingPositionId: null, actorId: 'system', at: this._clock.now(),
+        before, after: deepClone(strip), reason: 'peer-dropped',
+      });
+    }
+    return { ok: true, strip };
   }
 
   /**
