@@ -241,7 +241,7 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
   marsaStore.setMutationLog(mutationLog);
   fieldStateStore.setMutationLog(mutationLog);
   _validateAirspaceReferences(facilities);
-  _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore);
+  _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore, mutationLog, clock);
 
   const defaultFacility = facilities.get(facilityConfig.DEFAULT_FACILITY_ID);
 
@@ -385,6 +385,58 @@ function _reconcileRestored(facilities, fdrStore, correlationStore, marsaStore) 
   }
 }
 
+/**
+ * The boot half of "a Mutation survives a crash exactly once" (docs/adr/0081,
+ * L6's F5 mode B). The audit line is written inside applyMutation, before
+ * _persist; a crash between the two leaves a line for a change the restored
+ * Board does not have, and the client's retry then applies it and writes a
+ * second line — two lines for one effective change.
+ *
+ * Every successful Board line written since shortly before the snapshot whose
+ * clientMutationId is in no Board's restored replay window was never
+ * persisted (every persisted Mutation of the last ten minutes is in that
+ * window). Each gets one marker line:
+ *   { op: 'NotPersisted', clientMutationId, stripId, voids, reason: 'CRASH_BEFORE_PERSIST', ... }
+ * The log stays append-only: nothing is deleted or rewritten, and a reader
+ * that pairs a marker with the line it voids (the traffic count; the soak
+ * ledger) sees exactly one effective line per change. A line already voided by
+ * an earlier boot's marker is not marked again.
+ *
+ * Wall time (`wallAt`, `persistedWallAt`) because that is what the log's own
+ * retention and readSince use; the marker's `at` is mission time like every
+ * other entry.
+ * @returns {number} markers written
+ */
+const LOG_TAIL_SLACK_MS = 60 * 1000;
+function _reconcileLogTail(facilities, mutationLog, persistedWallAt, clock) {
+  if (!mutationLog || !Number.isFinite(persistedWallAt)) return 0;
+  const boards = [...facilities.values()].map(f => f.boardStore);
+  const lines = new Map();   // cmid -> [entry] successful Board lines
+  const markers = new Map(); // cmid -> count of NotPersisted markers already written
+  for (const e of mutationLog.readSince(persistedWallAt - LOG_TAIL_SLACK_MS)) {
+    const cmid = e && e.clientMutationId;
+    if (typeof cmid !== 'string' || cmid === '' || !e.stripId) continue;
+    if (e.op === 'NotPersisted') { markers.set(cmid, (markers.get(cmid) || 0) + 1); continue; }
+    if (e.ok === false || e.source === 'wire' || e.actorId === 'system') continue;
+    if (!lines.has(cmid)) lines.set(cmid, []);
+    lines.get(cmid).push(e);
+  }
+  let written = 0;
+  for (const [cmid, entries] of lines) {
+    if (boards.some(b => b.hasApplied(cmid))) continue;
+    const unmarked = entries.slice(markers.get(cmid) || 0);
+    for (const e of unmarked) {
+      mutationLog.record({
+        op: 'NotPersisted', clientMutationId: cmid, stripId: e.stripId, voids: e.op,
+        reason: 'CRASH_BEFORE_PERSIST', actorId: 'system', actingPositionId: null, at: clock.now(),
+      });
+      written += 1;
+    }
+  }
+  if (written) console.warn(`[efsp] ${written} audited Mutation(s) never reached the Board snapshot (a crash before persist) — marked NotPersisted`);
+  return written;
+}
+
 function _validateAirspaceReferences(facilities) {
   for (const airspace of airspaceConfig.getAirspaces()) {
     const facility = facilities.get(airspace.controllingFacilityId);
@@ -399,7 +451,7 @@ function _validateAirspaceReferences(facilities) {
   }
 }
 
-function _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore) {
+function _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore, mutationLog, clock) {
   try {
     const data = JSON.parse(fs.readFileSync(BOARD_SNAPSHOT_READ_PATH, 'utf8'));
     fdrStore.restore(data.fdr);
@@ -448,6 +500,9 @@ function _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaSt
     if (moved) console.log(`[efsp] moved ${moved} assigned altitude/heading history cell(s) from Strips onto their flights`);
     // After the Boards, not before — it has Strips to check against only now.
     _reconcileRestored(facilities, fdrStore, correlationStore, marsaStore);
+    // A Mutation audited but never persisted (a crash inside _persist) gets a
+    // NotPersisted marker, so the log says that line never took effect.
+    _reconcileLogTail(facilities, mutationLog, data.persistedWallAt, clock);
   } catch (e) {
     console.warn('[efsp] no prior Board snapshot to restore (first run, or it failed to load):', e.message);
   }
@@ -466,6 +521,9 @@ function _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaSt
     // Mutation to a crash is unavoidable; losing the entire session's Board
     // to one is not.
     const payload = JSON.stringify({
+      // Wall time of this write: the boot reconcile reads the log tail from
+      // here to find Mutations audited but never persisted (docs/adr/0081).
+      persistedWallAt: Date.now(),
       boards,
       fdr: fdrStore.snapshot(),
       airspaces: airspaceStore.snapshot(),

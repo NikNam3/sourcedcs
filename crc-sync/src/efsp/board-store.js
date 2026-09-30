@@ -36,6 +36,12 @@ const { runwayRackFor, runwayInhibitFor, RUNWAY_GATED_STATES } = require('./fiel
 
 const FLAG_KEYS = ['offset', 'flipped', 'removeIndicator', 'highlight', 'attention'];
 const APPLIED_MUTATIONS_CAP = 5000;
+// How much of the idempotency cache rides in the Board snapshot (docs/adr/0081,
+// L6's F5 mode A): a RETRY window, not a history. A client that lost its ack
+// to a crash retries within seconds of reconnecting; ten minutes covers a
+// restart and a slow reconnect. [SOURCE-DEFINED], a constant rather than a
+// tuning value. Wall time, like the NLA latch (ADR 0079's one exception).
+const REPLAY_PERSIST_WINDOW_MS = 10 * 60 * 1000;
 
 // Every Strip Role's own starting EfspState, used by _applyCreateStrip when
 // the caller doesn't pass an explicit op.initialState. Deliberately just
@@ -347,6 +353,9 @@ class BoardStore {
     if (keyed) this._rememberApplied(cmid, _replayRecord(result, Date.now()));
     return result;
   }
+
+  /** Whether this clientMutationId is in the idempotency cache — index.js's boot reconcile asks (docs/adr/0081). */
+  hasApplied(cmid) { return this._appliedMutations.has(cmid); }
 
   _rememberApplied(cmid, record) {
     this._appliedMutations.set(cmid, record);
@@ -2529,7 +2538,15 @@ class BoardStore {
 
   // ── Persistence (durable per ADR 0002 — mission reload must NOT clear this) ──
   snapshot() {
-    return { strips: this.getAll(), cidSeq: this._cidSeq };
+    // `replay`: the idempotency records of the last REPLAY_PERSIST_WINDOW_MS,
+    // so a retry after a restart answers from the cache instead of applying a
+    // second time (docs/adr/0081, L6's F5 mode A). Compact records only.
+    const horizon = Date.now() - REPLAY_PERSIST_WINDOW_MS;
+    const replay = [];
+    for (const [cmid, record] of this._appliedMutations) {
+      if (record.appliedWallAt >= horizon) replay.push([cmid, record]);
+    }
+    return { strips: this.getAll(), cidSeq: this._cidSeq, replay };
   }
   restore(data) {
     this._strips = new Map((data?.strips || []).map(s => [s.stripId, s]));
@@ -2544,11 +2561,17 @@ class BoardStore {
     // key change removes, preserved through a restore.
     for (const strip of this._strips.values()) delete strip.correlation;
     this._cidSeq = data?.cidSeq || 0;
-    // Idempotency cache (_appliedMutations) is deliberately NOT persisted —
-    // it only needs to survive a reconnect *within a session*, not a full
-    // server restart; a mutation replayed immediately after a restart would
-    // simply reapply, an acceptable Phase-1 edge case.
+    // The persisted slice of the idempotency cache (docs/adr/0081). It used to
+    // be dropped here, so a CreateStrip whose ack died with the process was
+    // created twice on retry (L6's F5). Loaded whole: the snapshot already cut
+    // it to the retry window, and index.js's boot reconcile needs every record
+    // that was persisted to tell a persisted Mutation from an unpersisted one.
+    // It ages out through the cap and the next snapshot's window.
+    this._appliedMutations = new Map();
+    for (const [cmid, record] of (Array.isArray(data?.replay) ? data.replay : [])) {
+      if (typeof cmid === 'string' && record && typeof record === 'object') this._appliedMutations.set(cmid, Object.freeze({ ...record }));
+    }
   }
 }
 
-module.exports = { BoardStore };
+module.exports = { BoardStore, REPLAY_PERSIST_WINDOW_MS };
