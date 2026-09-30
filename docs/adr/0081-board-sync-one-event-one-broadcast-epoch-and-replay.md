@@ -58,8 +58,9 @@ it, and that Mutation is audited.
 `REBALANCE_KEY_LENGTH` (40). It then recomputes the key between the named neighbours' fresh keys,
 using the same `a > b` normalisation the exhaustion path uses. This happens inside the same Board
 event, so the re-keyed Strips leave through the rule above. The threshold is a **placeholder, not
-researched**. It is left at 40 because the soak gates on it. After the change the probe's longest key
-is 40 at 400 pairs.
+researched**. It is left at 40 because the soak gates on it. With the change no key longer than 40
+survives a Mutation. The probe's longest key at its milestones is 23 after 400 pairs (it was 183), with
+4 rebalances.
 
 ### A Board epoch
 
@@ -187,7 +188,10 @@ serialising takes 17.3 ms pretty-printed and 7.3 ms compact on the same machine.
   not only the Board's. A replay's ack carries the current record, not the one at the time.
 - **Guide §5.4** ("a rebalance is one Board event"): now true on the wire as well as in the store.
 - **Guide §5.6**: the delta path is scoped to one Board lifetime.
-- The soak's sync checks pass. `silentStaleness`, `resyncDivergence`, `acrossRestartDivergence`, R2
-  and `misbinding` are all 0 in the default, 240-minute and stress runs (see `docs/wip/L27.md`).
+- The soak's sync checks pass. `silentStaleness`, `resyncDivergence` and `acrossRestartDivergence`
+  are 0, and R2 is clean, in the default, 240-minute and stress runs (see `docs/wip/L27.md`).
+  `misbinding` from code reuse (`matchedBy BEACON`) is 0. One `LINGERING_TRACK` remains in the
+  240-minute run, and it is a different mechanism: a new flight with no transponder matched
+  `CALLSIGN_EXACT` to the lingering aircraft of an earlier flight with the same callsign.
 - The last serialised snapshot body is held in memory for the dirty check. It is bounded by the
   snapshot size, which L24's retention bounds.
