@@ -53,4 +53,18 @@ only. Two full runs on lane 9 afterwards are green.
   depends on those CDNs; ~12 agents reloading at once is the likely trigger.
   Owner if it is to be fixed: whoever owns `crc-desktop/app/public/index.html`
   (vendor the two scripts, or a `page.route` in the e2e harness serving them
-  from `node_modules`). Not changed here.
+  from `node_modules`). Not changed here. **Confirmed**: a probe with
+  `page.route(/cdn\.jsdelivr\.net/, abort)` reproduces the exact error
+  (`toggleDockPanel`: "Cannot read properties of null (reading 'api')"). Seen
+  again in run 4 on `mtr-pilot-walk.spec.js:56`.
+
+## Third full run (load 26): 93/98
+
+- All five `l4-drag.spec.js` tests failed together. The failure screenshot shows
+  the top bar at RECONNECTING and the previous test's Strips (L4A2..4) still in
+  the Bay: the page lost its connection mid-spec, so cleanup and the drag
+  mutations never landed. **ENV/load**. Alone, twice: 5/5 and 5/5.
+
+## Fourth full run (load 19): 97/98
+
+- Only `mtr-pilot-walk.spec.js:56`, the CDN failure above.
