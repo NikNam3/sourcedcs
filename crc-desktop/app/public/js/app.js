@@ -747,6 +747,14 @@ async function connect() {
         updateMap();
         if (typeof updateTrackPanel === 'function') updateTrackPanel();
         break;
+      // WP8 (docs/adr/0065, 0072): the METRICS panel's answer, and the ack
+      // for the client measurements efsp-metrics-client.js reports.
+      case 'efsp-metrics':
+        if (typeof onEfspMetrics === 'function') onEfspMetrics(msg);
+        break;
+      case 'efsp-metrics-report-ack':
+        if (typeof onEfspMetricsReportAck === 'function') onEfspMetricsReportAck(msg);
+        break;
     }
   };
 

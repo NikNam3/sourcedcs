@@ -110,6 +110,10 @@ const httpServer = http.createServer((req, res) => {
   // §9.10's stereo route table (crc-sync/src/efsp/stereo-routes.js) — the
   // file-by-short-name picker's option source. Same shape again.
   if (req.url === '/api/stereo-routes')                            return proxyToSync(req, res, req.url);
+  // WP8's metrics and traffic count (crc-sync docs/adr/0065) — the METRICS
+  // panel reads them over the WebSocket; these are for curl and scripts.
+  if (req.url === '/api/efsp/metrics' || req.url.startsWith('/api/efsp/metrics?'))             return proxyToSync(req, res, req.url);
+  if (req.url === '/api/efsp/traffic-count' || req.url.startsWith('/api/efsp/traffic-count?')) return proxyToSync(req, res, req.url);
 
   // ── SRS radio API proxy → lxsrs_v2 HTTP API (local pilot audio, unrelated to crc-sync) ─
   if (req.url.startsWith('/srs-api/')) {

@@ -1,0 +1,98 @@
+/* METRICS panel (docs/adr/0072) — on efsp-panel.css's :root tokens, and dark in
+   both themes like the Strip panel. Colour carries meaning or nothing: only a
+   NOT MET verdict and a traffic count that does not reconcile use
+   --efsp-bad (docs/adr/0056). Grey (--efsp-muted) is "nothing to judge", said
+   in words too. */
+
+#metrics-panel {
+  height: 100%;
+  overflow-y: auto;
+  background: #14181c;
+  color: var(--efsp-text);
+  font-family: 'Consolas', 'DejaVu Sans Mono', monospace;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  container-type: inline-size; /* the dock decides the width, not the window */
+}
+#metrics-content { padding: 8px; }
+
+.metrics-head, .metrics-traffic-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-bottom: 8px;
+}
+.metrics-session-select, .metrics-facility-select {
+  min-height: 28px;
+  max-width: 100%;
+  background: #0e1114;
+  border: 1px solid var(--efsp-line);
+  color: var(--efsp-text);
+  font: inherit;
+}
+.metrics-asof { color: var(--efsp-muted); }
+.metrics-error { color: var(--efsp-attn); margin-bottom: 6px; }
+
+.metrics-grid { border-top: 1px solid var(--efsp-line); }
+.metrics-row {
+  display: grid;
+  grid-template-columns: minmax(130px, 1.2fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 4px 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--efsp-line);
+}
+.metrics-row-head { color: var(--efsp-muted); text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px; }
+.metrics-metric { color: var(--efsp-text); }
+.metrics-target { color: var(--efsp-muted); }
+.metrics-cell { min-width: 0; overflow-wrap: anywhere; }
+.metrics-value { color: var(--efsp-text); }
+.metrics-verdict { color: var(--efsp-text); font-size: 10px; letter-spacing: 0.04em; }
+.metrics-detail { color: var(--efsp-muted); }
+.metrics-tone-muted .metrics-value,
+.metrics-tone-muted .metrics-verdict { color: var(--efsp-muted); }
+.metrics-tone-bad .metrics-verdict { color: var(--efsp-bad); font-weight: bold; }
+
+.metrics-spark { display: block; margin-top: 3px; overflow: visible; }
+.metrics-spark polyline { fill: none; stroke: var(--efsp-muted); stroke-width: 1.2; }
+.metrics-spark circle { fill: var(--efsp-muted); }
+
+.metrics-toggle {
+  margin: 8px 0 4px;
+  min-height: 28px;
+  padding: 2px 8px;
+  background: transparent;
+  border: 1px solid var(--efsp-line);
+  color: var(--efsp-text);
+  font: inherit;
+  cursor: pointer;
+}
+.metrics-section-title {
+  margin: 10px 0 4px;
+  color: var(--efsp-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 10px;
+}
+.metrics-subtable { border-collapse: collapse; margin: 4px 0; max-width: 100%; }
+.metrics-subtable th, .metrics-subtable td {
+  padding: 2px 8px 2px 0;
+  text-align: left;
+  border-bottom: 1px solid var(--efsp-line);
+}
+.metrics-subtable th { color: var(--efsp-muted); font-weight: normal; }
+
+.metrics-traffic { margin-top: 12px; border-top: 1px solid var(--efsp-line-2); padding-top: 4px; }
+.metrics-partition { margin: 2px 0; }
+.metrics-tone-bad.metrics-partition,
+.metrics-tone-bad.metrics-reconciliation { color: var(--efsp-bad); }
+.metrics-tone-muted.metrics-reconciliation { color: var(--efsp-muted); }
+.metrics-reconciliation { margin: 4px 0; }
+.metrics-footnote, .metrics-footnotes { color: var(--efsp-muted); margin-top: 6px; font-size: 10px; }
+.metrics-footnotes div { margin-top: 2px; }
+
+/* Narrow dock: the two windows sit under the metric's name. */
+@container (max-width: 520px) {
+  .metrics-row { grid-template-columns: 1fr 1fr; }
+  .metrics-name { grid-column: 1 / -1; }
+}

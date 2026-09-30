@@ -22,6 +22,7 @@
   <link rel="stylesheet" href="./css/overlays.css"/>
   <link rel="stylesheet" href="./css/srs-radio.css"/>
   <link rel="stylesheet" href="./css/efsp-panel.css"/>
+  <link rel="stylesheet" href="./css/metrics-panel.css"/>
 </head>
 <body>
 
@@ -221,6 +222,12 @@
 <div id="airspace-panel" class="dock-unmounted">
   <div id="airspace-empty" class="efsp-empty">No airspaces configured.</div>
   <div id="airspace-list"></div>
+</div>
+
+<!-- METRICS (guide §11.5 + §11.4 traffic count, docs/adr/0072). Read-only;
+     open to anyone signed in, no Position needed. -->
+<div id="metrics-panel" class="dock-unmounted">
+  <div id="metrics-content"></div>
 </div>
 
 <!-- Airport weather panel (floating, click on map airport) -->
@@ -933,6 +940,7 @@
 <script src="./js/panels/efsp/efsp-stereo-routes.js"></script>
 <script src="./js/panels/efsp/efsp-panel.js"></script>
 <script src="./js/panels/efsp/airspace-panel.js"></script>
+<script src="./js/panels/metrics-panel.js"></script>
 <script src="./js/app.js"></script>
 <script src="./js/srs-radio.js"></script>
 </body>
