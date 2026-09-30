@@ -434,6 +434,33 @@ app.get('/api/apt-weather', auth.requireAuth, (req, res) => {
   res.json({ airport: airport.name, ...w });
 });
 
+// ── WP8 instrumentation (docs/adr/0065) — the §11.5 metric set, the §11.4
+// traffic count and Mutation-log retention, in one self-contained block. It
+// wraps efsp.handleMessage/onDisconnect (ws-hub.js looks them up per message,
+// and no socket connects before server.listen below). correlationReconciler
+// and obligationMonitor are consts declared further down: the getters are
+// closures, only ever called from the 60 s tick or a request, both of which
+// run after this file has finished loading.
+const { createEfspInstrumentation } = require('./src/efsp/metrics');
+const efspInstrumentation = createEfspInstrumentation({
+  efsp,
+  facilityConfig: efspFacilityConfig,
+  clock: missionClock,
+  correlationStats: () => correlationReconciler.getStats(),
+  obligationStats: () => obligationMonitor.getComplianceStats(),
+});
+// A metrics session is one mission load to the next (decisions.md H32).
+grpcClient.on('mission-load', (missionData) => efspInstrumentation.noteMissionLoad(missionData));
+app.get('/api/efsp/metrics', auth.requireAuth, (req, res) => {
+  const { status, body } = efspInstrumentation.metricsHttp(req.query || {});
+  res.status(status).json(body);
+});
+app.get('/api/efsp/traffic-count', auth.requireAuth, (req, res) => {
+  const { status, body } = efspInstrumentation.trafficCountHttp(req.query || {});
+  res.status(status).json(body);
+});
+setInterval(() => efspInstrumentation.tick(), 60000);
+
 // ── Stale reaper — mirrors crc-desktop's original 12s track eviction, now
 // also evicts orphaned CollaborativeStore entries in the same tick. Also
 // re-broadcasts AtisStore's active list so a client that crashed without
