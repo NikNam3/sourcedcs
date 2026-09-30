@@ -1,0 +1,9 @@
+{
+  "_note": "SOURCE policy choices, not doctrine (guide §11.3, §11.4; docs/adr/0065). Read once at startup; edit and restart.",
+  "mutationLog":  { "retentionDays": 30 },
+  "metrics":      { "retentionDays": 30 },
+  "trafficCount": {
+    "retentionDays": 400,
+    "homeAirports": { "INCIRLIK": ["LTAG"] }
+  }
+}

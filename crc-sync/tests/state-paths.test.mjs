@@ -115,6 +115,8 @@ test('every runtime-written file resolves under the state directory, and nothing
     'efsp-facility-incirlik.json',
     'efsp-facility-center.json',
     'efsp-facility-tactical.json',
+    'efsp-metrics.json',
+    'efsp-traffic-count.jsonl',
   ];
   for (const name of runtimeFiles) {
     assert.equal(writePath(name), path.join(STATE, name), `${name} must be written to state/`);
