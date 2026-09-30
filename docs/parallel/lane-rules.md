@@ -10,8 +10,13 @@
 3. Never edit shared docs (`docs/efsp-briefing.md`, `docs/efsp-usage-guide.md`, `CLAUDE.md`, READMEs)
    unless your briefing says you own them. Write `docs/wip/<LANE>.md` instead: what the guide/briefing
    should say, defaults taken, walks not done, findings for other lanes.
-4. Commit on your own branch only, small green commits, each message ending with
+4. Commit on your own branch only, each message ending with
    `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Never merge, rebase or push.
+   **Commit often: at every green step, and at least every ~15 minutes of work.** If the work isn't
+   green yet, make a checkpoint commit titled `wip(<LANE>): …` rather than carry an hour of edits
+   uncommitted; a network or machine loss must never cost more than a few minutes. (The supervisor
+   also snapshots every worktree every 10 min into `refs/checkpoints/<branch>`, but that is a safety
+   net, not a substitute.)
 5. ADRs are never edited once committed (P4); take only the ADR number you were given. Tuning files
    are read once at startup and never written by code (P5). No backwards compatibility. EFSP times
    come from the injected mission clock, never `Date.now()` (H11). Headings are magnetic (H15, H69).
