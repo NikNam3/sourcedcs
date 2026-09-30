@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import math
+import re
 
 from .lua import lua_bool, lua_get_block, lua_iter_array, lua_num, lua_num_map, lua_str, lua_xy
 from .models import Carrier, Flight, FlightUnit, Waypoint
-from .parse import _group_outer_name, _strip_dcs_suffix
+from .parse import _group_outer_name, _group_outer_text, _strip_dcs_suffix
 from .projection import dcs_to_latlon, dms
 from .weapons import CARRIER_TYPES, TASK_LABELS, condense_loadout, resolve_clsid
 
@@ -20,6 +21,49 @@ def _parse_callsign(cs_block: str | None) -> str:
     if not cs_block:
         return ""
     return lua_str(cs_block, 'name') or ""
+
+
+def _parse_datalink(unit_block: str) -> tuple[str | None, str | None]:
+    """
+    Return (stn_l16, voice_callsign) from a unit's ["AddPropAircraft"] block.
+
+    DCS stores the Link 16 source track number as ["STN_L16"] (5 octal digits,
+    a string) and the abbreviated voice callsign as ["VoiceCallsignLabel"]
+    ("ED") plus ["VoiceCallsignNumber"] ("11").  Either may be absent.
+    """
+    props = lua_get_block(unit_block, 'AddPropAircraft')
+    if not props:
+        return None, None
+    stn = lua_str(props, 'STN_L16')
+    stn = stn.strip() if stn and re.fullmatch(r'\s*[0-7]{5}\s*', stn) else None
+    label = (lua_str(props, 'VoiceCallsignLabel') or '').strip().upper()
+    number = (lua_str(props, 'VoiceCallsignNumber') or '').strip()
+    voice = label + number if label and number else None
+    return stn, voice
+
+
+_BEACON_RE = re.compile(r'\["id"\]\s*=\s*"ActivateBeacon"')
+_BEACON_TYPE_TACAN = 4
+
+
+def _parse_tacan(group_block: str) -> str | None:
+    """
+    Return the first TACAN a group activates (ActivateBeacon, type 4), as
+    channel + band, e.g. "39Y".  Scans the whole group, so a beacon set on
+    any waypoint's task list is found.  None when the group has no TACAN.
+    """
+    for m in _BEACON_RE.finditer(group_block):
+        params = lua_get_block(group_block[m.end():], 'params')
+        if not params:
+            continue
+        if lua_num(params, 'type') != _BEACON_TYPE_TACAN:
+            continue
+        channel = lua_num(params, 'channel')
+        band = (lua_str(params, 'modeChannel') or '').strip().upper()
+        if channel is None or band not in ('X', 'Y'):
+            continue
+        return f"{int(channel)}{band}"
+    return None
 
 
 def _project_position(x1: float, y1: float, x2: float, y2: float,
@@ -192,7 +236,9 @@ def parse_flights_and_carriers(
             gname    = _strip_dcs_suffix(raw_name)
             task_raw = lua_str(gb, 'task') or 'Nothing'
             task     = TASK_LABELS.get(task_raw, task_raw.upper())
-            freq_raw = lua_num(gb, 'frequency') or 0.0
+            # The group's own frequency: a flat search would hit a route
+            # task's ActivateBeacon ["frequency"] (Hz of the TACAN) first.
+            freq_raw = lua_num(_group_outer_text(gb), 'frequency') or 0.0
             freq_mhz = freq_raw / 1e6 if freq_raw > 1e6 else freq_raw
             is_tanker = (task == 'TANKER')
             is_awacs  = (task == 'AWACS')
@@ -247,11 +293,14 @@ def parse_flights_and_carriers(
                         if not unit_radio:
                             unit_radio = None
                     first_unit_radio = unit_radio  # capture once (may be None)
+                stn_l16, voice_cs = _parse_datalink(ub)
                 flight_units.append(FlightUnit(
                     type=utype, callsign=cs, onboard_num=onboard,
                     skill=skill, loadout=condense_loadout(weapons_raw),
                     dtc_cartridge=unit_dtc,
                     radio_channels=unit_radio,
+                    stn_l16=stn_l16,
+                    voice_callsign=voice_cs,
                 ))
 
             if not flight_units:
@@ -274,6 +323,7 @@ def parse_flights_and_carriers(
                 is_tanker=is_tanker,
                 is_awacs=is_awacs,
                 dtc_cartridge=flight_dtc,
+                tacan=_parse_tacan(gb),
             ))
             flt_seq += 1
 
