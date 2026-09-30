@@ -197,3 +197,27 @@ test('a covering-chain reassignment persists the Board', () => {
   const efsp2 = restart();
   assert.equal(efsp2.boardStore.getStrip(strip.stripId).ownerPositionId, moved.routedTo, 'the reassignment survives a restart');
 });
+
+test('the snapshot is written compact, and not rewritten when nothing changed', () => {
+  const realNow = Date.now;
+  try {
+    const efsp = createEfsp();
+    const c = crew(efsp, { OPS: 'INCIRLIK' });
+    assert.equal(efsp.handleMessage(c.OPS.session, createMsg('CMPCT1')).ack.ok, true);
+    const text = fs.readFileSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, 'utf8');
+    assert.ok(!text.includes('\n'), 'no pretty-printing');
+    const data = JSON.parse(text);
+    assert.ok(Number.isFinite(data.persistedWallAt));
+    assert.ok(data.boards.INCIRLIK.replay.length >= 1);
+    // Nothing changed: the file, persistedWallAt included, stays as it is.
+    let later = realNow() + 5000;
+    Date.now = () => later;
+    efsp.persist();
+    assert.equal(fs.readFileSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, 'utf8'), text);
+    // A change is written.
+    assert.equal(efsp.handleMessage(c.OPS.session, createMsg('CMPCT2')).ack.ok, true);
+    const after = JSON.parse(fs.readFileSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, 'utf8'));
+    assert.equal(after.persistedWallAt, later);
+    later += 1;
+  } finally { Date.now = realNow; }
+});

@@ -259,6 +259,9 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
     facilityConfig,
   });
 
+  // What _persist last wrote, so an unchanged Board is not written again (docs/adr/0081).
+  const persistState = { lastBody: null };
+
   const ctx = {
     // Back-compat direct properties (INCIRLIK) — every pre-WP4A caller in
     // this package (server.js/ws-hub.js/tests) keeps working unmodified.
@@ -298,7 +301,7 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
       return user.name || user.preferred_username || user.sub || 'unknown';
     },
 
-    handleMessage: (session, msg) => handleMessage(ctx, session, msg, () => _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore)),
+    handleMessage: (session, msg) => handleMessage(ctx, session, msg, () => _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore, persistState)),
 
     /**
      * Persist on demand. The correlation reconciler deliberately does NOT
@@ -308,7 +311,7 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
      * correlation history — the state itself recomputes within one tick of
      * boot. This exists so a caller that genuinely needs a flush has one.
      */
-    persist: () => _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore),
+    persist: () => _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore, persistState),
 
     /** Abrupt disconnect (guide §4.8.6) — releases every Position the controller held, across EVERY Facility (a controller may hold Positions in more than one, guide §4.8.5). */
     onDisconnect: (session) => {
@@ -508,10 +511,33 @@ function _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaSt
   }
 }
 
-function _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore) {
+function _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore, persistState = { lastBody: null }) {
   try {
     const boards = {};
     for (const [facilityId, { boardStore }] of facilities.entries()) boards[facilityId] = boardStore.snapshot();
+    // Compact, not pretty-printed: this runs after EVERY successful Mutation,
+    // and indenting a snapshot that grows with the session was the largest
+    // single cost in the soak (40% of self-time at four hours, L24's
+    // profile). A human reading the file pipes it through a formatter.
+    const body = JSON.stringify({
+      boards,
+      fdr: fdrStore.snapshot(),
+      airspaces: airspaceStore.snapshot(),
+      correlations: correlationStore ? correlationStore.snapshot() : [],
+      marsa: marsaStore ? marsaStore.snapshot() : [],
+      fieldStates: fieldStateStore ? fieldStateStore.snapshot() : [],
+    });
+    // Dirty-only: nothing changed since the last successful write (a caller
+    // that persists on a path which changed nothing), so there is nothing to
+    // make durable. Compared on the body, so `persistedWallAt` below stays the
+    // time of the write that produced what is on disk — which is what the boot
+    // reconcile reads the log tail from. Every Mutation that did change the
+    // Board is still written before its ack leaves (docs/adr/0081, F5): a
+    // deferred or batched write would let an acked change die with the process.
+    if (body === persistState.lastBody) return;
+    // Wall time of this write: the boot reconcile reads the log tail from
+    // here to find Mutations audited but never persisted (docs/adr/0081).
+    const payload = `{"persistedWallAt":${Date.now()},${body.slice(1)}`;
     // Written to a sibling and renamed, because rename is atomic on POSIX
     // and a plain write is not. This runs after EVERY successful Mutation,
     // so the process spends a meaningful fraction of a busy session inside
@@ -520,17 +546,6 @@ function _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaSt
     // and _restore's catch would come up with an empty Board. Losing one
     // Mutation to a crash is unavoidable; losing the entire session's Board
     // to one is not.
-    const payload = JSON.stringify({
-      // Wall time of this write: the boot reconcile reads the log tail from
-      // here to find Mutations audited but never persisted (docs/adr/0081).
-      persistedWallAt: Date.now(),
-      boards,
-      fdr: fdrStore.snapshot(),
-      airspaces: airspaceStore.snapshot(),
-      correlations: correlationStore ? correlationStore.snapshot() : [],
-      marsa: marsaStore ? marsaStore.snapshot() : [],
-      fieldStates: fieldStateStore ? fieldStateStore.snapshot() : [],
-    }, null, 2);
     const tmpPath = `${BOARD_SNAPSHOT_PATH}.tmp`;
     // Same directory as the target, so the rename below stays within one
     // filesystem — across a mount boundary it is not atomic, and the whole
@@ -538,6 +553,7 @@ function _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaSt
     ensureDirFor(BOARD_SNAPSHOT_PATH);
     fs.writeFileSync(tmpPath, payload);
     fs.renameSync(tmpPath, BOARD_SNAPSHOT_PATH);
+    persistState.lastBody = body;
   } catch (e) {
     console.warn('[efsp] failed to persist Board snapshot:', e.message);
   }
