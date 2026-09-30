@@ -11,7 +11,13 @@
 //   HEADING     only while an HDG is assigned. Course over ground more than
 //               `headingToleranceDeg` off it for `headingPersistSec`, after a
 //               grace of `headingGraceSec` for the turn (which ends early once
-//               the aircraft is on the heading).
+//               the aircraft is on the heading). Both sides are MAGNETIC
+//               (decisions H15, docs/adr/0085): the HDG is typed magnetic, and
+//               DCS's course is GRID, so the monitor converts it with the
+//               injected `gridToMagnetic` before comparing. Where that answer
+//               is unknown (no variation, or no projection for the theater)
+//               the heading is not checked at all — comparing across frames
+//               alerts on a pilot flying the heading exactly.
 //   WRONG_WAY   told to climb and descending, or told to descend and climbing,
 //               faster than `wrongWayFpm` for `wrongWayPersistSec`. Deliberately
 //               NOT "not yet climbing/descending": "descend when ready" is a
@@ -53,6 +59,7 @@ function evaluateConformance(input, mem, now, cfg) {
   }
 
   // ── heading ──
+  // input.course is magnetic here, or null when it could not be converted.
   const hdg = input.hdg && Number.isFinite(input.hdg.parsed) ? input.hdg : null;
   if (hdg && Number.isFinite(input.course)) {
     if (mem.hdgFor !== hdg.at) { mem.hdgFor = hdg.at; mem.hdgCaptured = false; mem.hdgDevSince = null; }
@@ -111,7 +118,11 @@ function evaluateConformance(input, mem, now, cfg) {
 class ConformanceMonitor {
   /**
    * @param {object} deps { trackStore, fdrStore, correlationStore, weather: () => {pressurePa,tempK},
-   *                        transitionAltFt: () => number, indicatedAltFt, config, clock? }
+   *                        transitionAltFt: () => number, indicatedAltFt, config, clock?,
+   *                        gridToMagnetic?: (gridDeg, lat, lon) => number|null }
+   * `gridToMagnetic` turns DCS's GRID course into magnetic (server.js passes
+   * theater-context.js's, docs/adr/0085). Without it every answer is
+   * "unknown", so no heading alert is raised — never a cross-frame compare.
    */
   constructor(deps) {
     this._d = deps;
@@ -119,6 +130,7 @@ class ConformanceMonitor {
     // the clearance's own `at`, which is mission time, and an alert's `since`
     // is shown to controllers.
     this._clock = deps.clock || WALL_CLOCK;
+    this._gridToMagnetic = deps.gridToMagnetic || (() => null);
     this._mem = new Map();    // fdrId -> memory
     this._alerts = new Map(); // fdrId -> alerts[]
   }
@@ -145,7 +157,8 @@ class ConformanceMonitor {
       const alerts = evaluateConformance({
         hdg: activeClearanceEntry(fdr, 'heading'),
         alt: activeClearanceEntry(fdr, 'altitude'),
-        course: track.course, groundSpeedMs: track.groundSpeed, verticalSpeedMs: track.verticalSpeed, altFt,
+        course: Number.isFinite(track.course) ? this._gridToMagnetic(track.course, track.lat, track.lon) : null,
+        groundSpeedMs: track.groundSpeed, verticalSpeedMs: track.verticalSpeed, altFt,
       }, mem, now, config);
       changed = this._set(record.fdrId, alerts) || changed;
     }

@@ -625,6 +625,8 @@ const conformanceMonitor = new ConformanceMonitor({
   weather: () => grpcClient.getWeather(),
   transitionAltFt: () => theaterContext.transitionAltFt(),
   indicatedAltFt,
+  // DCS's course is grid; the typed HDG is magnetic (docs/adr/0085).
+  gridToMagnetic: (deg, lat, lon) => theaterContext.gridToMagnetic(deg, lat, lon),
   config: alertingConfig.conformance,
 });
 const stcaMonitor = new StcaMonitor({
