@@ -133,3 +133,12 @@ L9-E1/E2/E3/E4/E7/E8, L1b-Q1, L12-Q2, L13-Q2, L23-Q6, L23-Q7, Q-L14-1, Q-L14-2, 
 - **Still running:** L27 (5 commits; also has persist cost + `delta.gone`, S-L24), L1b (6 commits), E2E triage (0 commits, 8 dirty files: check `refs/checkpoints/lane/E2E-triage`).
 - **Not started (new session, per the memory note: Sonnet 5.5 for code, Opus for design):** L23 (after L27; + S-L13 OPS-writes-14E, F10, B1–B7), L26 (after L23; + SetBlock id/value in the log, the cancelled-scramble count), L28 (last; H74/H75), a UI follow-up lane (S-L15, S-L16 W2/W3/W5, vul validation), wave 3 (L17/L18/L19), wave 4 (L20).
 - **Human:** restart crc-sync after merges; the live wind check (S-F2b); the live `mission_start` check (S-F3); the LG 10-minute live check; the 4-hour soak workflow; desk L11-8b.
+
+## Human-reported issues after the wave-2 merges (2026-09-30) — for the UI follow-up lane unless noted
+
+- **U1** OPS has no ORDNANCE (`3G`) field; OPS must be able to set CLEAN / HUNG. (Extends H55/S-L12: add OPS to who records HUNG.)
+- **U2** A HANDOFF proposal to CTR does not trigger the "new Strip" arrival notification at CTR (check L8/B4-adjacent transfer paths and the client's new-Strip announcement from cb96223).
+- **U3** The `IFR` field is unclear to the human. It is TOFI's `ifrActive` (guide §4.6.3: whether a flight under tactical control stays IFR, i.e. ATC keeps separation). Needs a clearer label/tooltip, or a question on the desk whether it belongs on the face at all.
+- **U4** TYPE cannot be edited.
+- **U5** A RELEASED field is missing on DEP/APP and CTR Strips.
+- **U6** ALT doesn't accept block altitudes (e.g. `FL220-FL240`, `FL220B240`), which are common in military flying. Touches `parseAltitudeFt`, the ALT/HDG conformance of ADR 0058 (a block is conformant anywhere inside it), and STCA.
