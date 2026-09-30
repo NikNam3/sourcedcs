@@ -65,12 +65,12 @@ test('every radar says what it can measure: 2D + SSR on the ground, 3D in the ai
     ],
     radarSpecs: SPECS,
   }));
-  assert.deepEqual(radars.get('apt:Incirlik').caps, { height: false, ssr: true, mode4: false });
-  assert.deepEqual(radars.get('app:Incirlik').caps, { height: false, ssr: true, mode4: false });
+  assert.deepEqual(radars.get('apt:Incirlik').caps, { height: false, ssr: true, mode4: true });
+  assert.deepEqual(radars.get('app:Incirlik').caps, { height: false, ssr: true, mode4: true });
   assert.deepEqual(radars.get('crc:1').caps, { height: true, ssr: true, mode4: true });
   assert.deepEqual(radars.get('crc:2').caps, { height: true, ssr: true, mode4: true });
   assert.deepEqual(radars.get('carrier:3').caps, { height: true, ssr: true, mode4: true });
-  assert.deepEqual(radars.get('cvapp:3').caps, { height: false, ssr: true, mode4: false });
+  assert.deepEqual(radars.get('cvapp:3').caps, { height: false, ssr: true, mode4: true });
   assert.ok(DEFAULT_CAPS.approach);
 });
 

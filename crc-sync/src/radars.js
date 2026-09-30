@@ -62,12 +62,14 @@ const RADAR_TYPES = ['airport', 'approach', 'awacs', 'fighter', 'carrier'];
 // A radar-spec entry may override its kind's defaults with `caps`.
 // [SOURCE-DEFINED], like every figure here.
 const DEFAULT_CAPS = {
-  airport:         { height: false, ssr: true, mode4: false },
-  approach:        { height: false, ssr: true, mode4: false },
+  // H53: the squadron's fields and the carrier are military, so their ATC radars
+  // carry a Mode 4/5 interrogator (docs/adr/0084).
+  airport:         { height: false, ssr: true, mode4: true },
+  approach:        { height: false, ssr: true, mode4: true },
   awacs:           { height: true,  ssr: true, mode4: true },
   fighter:         { height: true,  ssr: true, mode4: true },
   carrier:         { height: true,  ssr: true, mode4: true },
-  carrierApproach: { height: false, ssr: true, mode4: false },
+  carrierApproach: { height: false, ssr: true, mode4: true },
 };
 
 function capsFor(kind, spec) {

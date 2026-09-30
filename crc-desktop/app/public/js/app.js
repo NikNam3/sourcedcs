@@ -148,8 +148,8 @@ const DEFAULTS = {
   lightMode:     false,
   showElevation: false, // computed contour lines + height labels (elevation.js), zoom-independent
   fadeGraceMs:    10000, // ms at full brightness after last sweep before fading starts
-  navDeclutter:    true,  // hide navpoints whose names contain digits
-  navDeclutter5:   true,  // hide navpoints whose names are not exactly 5 letters
+  navDeclutter:    false, // hide navpoints whose names contain digits (off: H70)
+  navDeclutter5:   false, // hide navpoints whose names are not exactly 5 letters (off: H70)
   trailIntervalMs: 5000, // minimum ms between trail dot recordings
   // Auto-hide labels for sequential-squawk formation flights. OFF, and forced
   // off once for existing installs below: every declutter behaviour stays
@@ -189,6 +189,8 @@ function loadSettings() {
   // H6: a saved settings object carries the old `declutter: true` default;
   // switch it off once. A controller may still turn it back on by hand.
   if (!settings.declutterOffH6) { settings.declutter = false; settings.declutterOffH6 = true; }
+  // H70: navpoint declutter goes off too, once, until AIRAC data replaces it.
+  if (!settings.navDeclutterOffH70) { settings.navDeclutter = false; settings.navDeclutter5 = false; settings.navDeclutterOffH70 = true; }
 }
 
 function saveSettings() {
