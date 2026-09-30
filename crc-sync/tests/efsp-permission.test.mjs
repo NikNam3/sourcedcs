@@ -394,3 +394,52 @@ test('MARSA is NOT in OP_KINDS — a new op kind there would be picked up silent
     assert.ok(!/Marsa/i.test(kind), `${kind} should not be a Strip Mutation op kind`);
   }
 });
+
+// ── field state (guide §9.7, docs/adr/0061) ─────────────────────────────────
+
+const { canActOnFieldState, FIELD_STATE_OP_OWNERS } = await import('../src/efsp/permission.js');
+
+test('canActOnFieldState has exactly two parameters — never a held set (D21 by construction)', () => {
+  assert.equal(canActOnFieldState.length, 2);
+});
+
+test('no field-state op kind is in OP_KINDS — a new kind there would be picked up by every filtered grant', () => {
+  for (const kind of Object.keys(FIELD_STATE_OP_OWNERS)) {
+    assert.ok(!OP_KINDS.includes(kind), `${kind} must not be a Strip Mutation op kind`);
+    for (const positionId of Object.keys(PERMISSIONS)) {
+      assert.equal(canMutate(positionId, kind), false, `${positionId} must not get ${kind} through canMutate`);
+    }
+  }
+});
+
+test('FIELD_STATE_OP_OWNERS: TWR alone closes, opens and suspends; OPS completes and inspects; TWR runs a runway change; OPS and APP acknowledge', () => {
+  for (const kind of ['CloseRunway', 'OpenRunway', 'BeginBarrierChange', 'AcceptRunwayRequest', 'RejectRunwayRequest',
+    'ProposeRunwayChange', 'SelfCoordinateRunwayChange', 'WithdrawRunwayChange', 'BeginRunwayChange', 'CompleteRunwayChange']) {
+    assert.deepEqual(FIELD_STATE_OP_OWNERS[kind], ['TWR'], kind);
+  }
+  assert.deepEqual(FIELD_STATE_OP_OWNERS.CompleteBarrierChange, ['OPS']);
+  assert.deepEqual(FIELD_STATE_OP_OWNERS.CompleteInspection, ['OPS']);
+  assert.deepEqual(FIELD_STATE_OP_OWNERS.AckRunwayChange, ['OPS', 'APP']);
+  assert.deepEqual(FIELD_STATE_OP_OWNERS.RejectRunwayChange, ['OPS', 'APP']);
+  // Everyone at the field but tower ASKS (decisions.md H18).
+  assert.deepEqual(FIELD_STATE_OP_OWNERS.RequestRunwayStatus, ['OPS', 'CD', 'GND', 'APP']);
+});
+
+test('a range Position, an MRU, CTR and an unknown Position are refused every field-state op', () => {
+  for (const positionId of ['RANGE', 'R-2301', 'TAC_C2', 'GCI', 'AIC', 'JTAC', 'CTR', 'NOBODY', undefined]) {
+    for (const kind of Object.keys(FIELD_STATE_OP_OWNERS)) {
+      assert.equal(canActOnFieldState(positionId, kind), false, `${positionId} / ${kind}`);
+    }
+  }
+  assert.equal(canActOnFieldState('TWR', 'toString'), false);
+  assert.equal(canActOnFieldState('TWR', 'PaintRunway'), false);
+});
+
+test('D21 regression: a controller holding both TWR and APP cannot satisfy BeginRunwayChange from one acting Position', () => {
+  // Evaluated per acting Position, never a union of what is held: an
+  // acknowledgement sent as TWR never counts as APP's (decisions.md S-Q24).
+  assert.equal(canActOnFieldState('TWR', 'AckRunwayChange'), false);
+  assert.equal(canActOnFieldState('APP', 'BeginRunwayChange'), false);
+  assert.equal(canActOnFieldState('APP', 'AckRunwayChange'), true);
+  assert.equal(canActOnFieldState('TWR', 'BeginRunwayChange'), true);
+});

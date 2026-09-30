@@ -32,6 +32,7 @@ const { keyBetween, rebalance } = require('./order-key');
 const { isValidAltitude } = require('./airspace-config');
 const { MAX_FREE_TEXT, SEPARATION_REGIMES } = require('./fdr-store');
 const { WALL_CLOCK } = require('../mission-clock');
+const { runwayRackFor, runwayInhibitFor, RUNWAY_GATED_STATES } = require('./field-state');
 
 const FLAG_KEYS = ['offset', 'flipped', 'removeIndicator', 'highlight', 'attention'];
 const APPLIED_MUTATIONS_CAP = 5000;
@@ -327,7 +328,7 @@ class BoardStore {
       case 'SetBlock':      result = this._applySetBlock(strip, op, by, actingPositionId, mutation.clientMutationId); break;
       case 'TransferStrip': result = this._applyTransferStrip(strip, op, by); break;
       case 'SetFlag':       result = this._applySetFlag(strip, op, by); break;
-      case 'SetState':      result = this._applySetState(strip, op.toState, by); break;
+      case 'SetState':      result = this._setStateRunwayRefusal(strip, op.toState) || this._applySetState(strip, op.toState, by); break;
       case 'InvokeNla':     result = this._applyInvokeNla(strip, by); break;
       case 'Undo':          result = this._applyUndo(strip, by); break;
       case 'DropStrip':     result = this._applyDropStrip(strip, op, by); break;
@@ -601,8 +602,8 @@ class BoardStore {
     strip.role = 'ARRIVAL';
     strip.state = 'INBOUND';
     strip.bayId = targetBay.bayId;
-    strip.rackId = targetBay.rackIds[0];
-    strip.orderKey = this._resolveOrderKey(targetBay.bayId, targetBay.rackIds[0], null, null, strip.stripId);
+    strip.rackId = this._placementRack(strip, targetBay);
+    strip.orderKey = this._resolveOrderKey(targetBay.bayId, strip.rackId, null, null, strip.stripId);
     // The departure leg's annotations are ARCHIVED, not erased. Clearing the
     // live set is right — a DEPARTURE Strip's Block 9A means something
     // different on an ARRIVAL, so carrying the values across would mislabel
@@ -737,14 +738,50 @@ class BoardStore {
     return { ok: true, strip, fdr: fdrResult.fdr };
   }
 
-  _nlaCtx() {
+  _nlaCtx(target = null) {
     return {
       isOccupied: this._rules.isOccupied, coveringPositionFor: this._rules.coveringPositionFor,
       facilityId: this._rules.facilityId, standingReleases: this._rules.standingReleases,
+      // §9.7 rule 1 (docs/adr/0061) — the runway status view, on every
+      // computeNla call site at once: the button, the advisory stamp, and the
+      // drag. `targetRackId` is set only on the drag path (decisions.md Q27).
+      fieldStateFor: this._rules.fieldStateFor,
+      targetRackId: target ? target.rackId : undefined,
     };
   }
 
-  _validateBayImpliedTransition(strip, targetBayId) {
+  /** This Facility's runway status view, or null (no runways — nothing is runway-gated). */
+  _fieldStateView() {
+    return this._rules.fieldStateFor ? this._rules.fieldStateFor() : null;
+  }
+
+  /**
+   * The rack a Strip lands in when something other than a drag places it in
+   * `bay` (decisions.md Q26, S-R2-1): in a runway-queue Bay, the end its FDR
+   * names or else the active end; anywhere else, the Bay's first rack as
+   * always. Without it every NLA-queued departure sat in rwy-05 and was judged
+   * against 05, whatever the active runway was.
+   */
+  _placementRack(strip, bay) {
+    return runwayRackFor(strip, this._fdrStore.getFdr(strip.fdrId), this._fieldStateView(), bay);
+  }
+
+  /**
+   * SetState honours the runway inhibit (decisions.md S-R2-14, H19): the raw
+   * state override may not put a Strip into a runway-using state while its
+   * runway is suspended or closed — the Strip waits, whichever path is used.
+   * The only runway gate SetState carries; it still bypasses every other NLA
+   * gate (who may use SetState at all is L23's).
+   */
+  _setStateRunwayRefusal(strip, toState) {
+    if (!(RUNWAY_GATED_STATES[strip.role] || []).includes(toState)) return null;
+    const bay = this._rules.bayForImpliedState ? this._rules.bayForImpliedState(strip.ownerPositionId, toState) : null;
+    const targetRackId = bay && bay.impliesState === toState ? this._placementRack(strip, bay) : undefined;
+    const inhibit = runwayInhibitFor(strip, this._fdrStore.getFdr(strip.fdrId), this._fieldStateView(), { targetRackId });
+    return inhibit ? { ok: false, reason: 'NLA_INHIBITED', detail: inhibit, strip } : null;
+  }
+
+  _validateBayImpliedTransition(strip, targetBayId, targetRackId) {
     const impliedState = this._rules.bayImpliesState ? this._rules.bayImpliesState(targetBayId) : null;
     if (!impliedState || impliedState === strip.state) return { ok: true, impliedState }; // non-state-implying Bay, or already there — always fine
 
@@ -771,7 +808,7 @@ class BoardStore {
     if (inert) return { ok: false, reason: inert.reason, detail: inert.detail };
 
     const fdr = this._fdrStore.getFdr(strip.fdrId);
-    const nla = this._rules.computeNla ? this._rules.computeNla(strip, fdr, this._clock.now(), this._nlaCtx()) : null;
+    const nla = this._rules.computeNla ? this._rules.computeNla(strip, fdr, this._clock.now(), this._nlaCtx({ bayId: targetBayId, rackId: targetRackId })) : null;
     if (!nla || nla.inhibited) {
       return { ok: false, reason: 'NLA_INHIBITED', detail: nla ? nla.inhibited : `no legal transition from ${strip.state}` };
     }
@@ -793,7 +830,7 @@ class BoardStore {
   _applyMoveStrip(strip, op, by) {
     const bayCheck = this._requireKnownBay(op.bayId, strip);
     if (bayCheck) return bayCheck;
-    const check = this._validateBayImpliedTransition(strip, op.bayId);
+    const check = this._validateBayImpliedTransition(strip, op.bayId, op.rackId);
     if (!check.ok) return { ok: false, reason: check.reason, detail: check.detail, strip };
 
     strip.bayId = op.bayId;
@@ -998,7 +1035,7 @@ class BoardStore {
     // (e.g. PROPOSED directly into a CLEARED Bay with no flight plan and
     // no beacon code at all). Validated before the owner/occupancy checks
     // below too, so a rejected transfer never partially mutates the Strip.
-    const check = this._validateBayImpliedTransition(strip, op.bayId);
+    const check = this._validateBayImpliedTransition(strip, op.bayId, op.rackId);
     if (!check.ok) return { ok: false, reason: check.reason, detail: check.detail, strip };
 
     let destPositionId = op.toPositionId;
@@ -1095,8 +1132,8 @@ class BoardStore {
     const bay = this._rules.bayForImpliedState(strip.ownerPositionId, toState);
     if (!bay || bay.impliesState !== toState || bay.bayId === strip.bayId) return;
     strip.bayId = bay.bayId;
-    strip.rackId = bay.rackIds[0];
-    strip.orderKey = this._appendOrderKey(bay.bayId, bay.rackIds[0], strip.stripId);
+    strip.rackId = this._placementRack(strip, bay);
+    strip.orderKey = this._appendOrderKey(bay.bayId, strip.rackId, strip.stripId);
   }
 
   _applySetState(strip, toState, by) {
@@ -1321,7 +1358,7 @@ class BoardStore {
       if (!targetBay) {
         return { ok: false, reason: 'NLA_INHIBITED', detail: `no Bay configured for ${result.transferTo}/${result.toState}`, strip };
       }
-      applied = this._applyTransferStrip(strip, { toPositionId: result.transferTo, bayId: targetBay.bayId, rackId: targetBay.rackIds[0] }, by);
+      applied = this._applyTransferStrip(strip, { toPositionId: result.transferTo, bayId: targetBay.bayId, rackId: this._placementRack(strip, targetBay) }, by);
     } else if (result.toState === 'DROPPED') {
       // Every Role's terminal NLA is a Drop (DEPARTURE at HANDED_OFF,
       // ARRIVAL at TAXI_IN, OVERFLIGHT at TRANSITING, MISSION at RTB), and
@@ -1623,8 +1660,8 @@ class BoardStore {
     const targetBay = this._rules.bayForImpliedState ? this._rules.bayForImpliedState(strip.ownerPositionId, strip.state) : null;
     if (targetBay) {
       strip.bayId = targetBay.bayId;
-      strip.rackId = targetBay.rackIds[0];
-      strip.orderKey = this._resolveOrderKey(targetBay.bayId, targetBay.rackIds[0], null, null, strip.stripId);
+      strip.rackId = this._placementRack(strip, targetBay);
+      strip.orderKey = this._resolveOrderKey(targetBay.bayId, strip.rackId, null, null, strip.stripId);
     }
     strip.rev += 1;
     strip.updatedAt = now;

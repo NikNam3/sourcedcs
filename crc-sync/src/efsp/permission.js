@@ -285,6 +285,59 @@ function canDeclareMarsa(actingPositionId) {
 }
 
 /**
+ * Field state (guide §9.7, docs/adr/0061) — who may do what to a runway. An
+ * explicit table with its own predicate, NOT entries in OP_KINDS: every
+ * PERMISSIONS row built with a `.filter()` over OP_KINDS would pick a new kind
+ * up silently (this module's header, and D21). A Position absent from a row —
+ * a range Position, an MRU, anything unknown — is refused by that absence.
+ *
+ * [SOURCE-DEFINED] where the guide is silent:
+ *   - Tower is the sole authority over the runways (decisions.md H18): only TWR
+ *     closes, opens, or takes a runway out for a barrier change. Everyone else
+ *     ASKS (RequestRunwayStatus), and TWR accepts or rejects.
+ *   - OPS completes the barrier change and performs the inspection (guide §9.7
+ *     rule 2: "by default OPS (AMOPS)").
+ *   - TWR proposes, begins and completes a runway change; OPS and APP
+ *     acknowledge it (rule 3; OPS stands in for the SOF). An acknowledger
+ *     nobody holds is skipped and audited by the store (decisions.md H20),
+ *     never answered from another Facility (S-R2-15).
+ *
+ * Two rows are CEILINGS the store narrows further from config, never widens:
+ * CompleteInspection (to `fieldState.inspectionAuthorityPositionId`) and
+ * Ack/RejectRunwayChange (to the change's frozen acknowledger set). Inspection
+ * authority is therefore NOT configurable wider than OPS — widening it needs
+ * config-derived permissions (docs/adr/0035's shape), a bigger change than
+ * this deliverable.
+ */
+const FIELD_STATE_OP_OWNERS = {
+  CloseRunway:                ['TWR'],
+  OpenRunway:                 ['TWR'],
+  BeginBarrierChange:         ['TWR'],
+  CompleteBarrierChange:      ['OPS'],
+  CompleteInspection:         ['OPS'],
+  RequestRunwayStatus:        ['OPS', 'CD', 'GND', 'APP'],
+  AcceptRunwayRequest:        ['TWR'],
+  RejectRunwayRequest:        ['TWR'],
+  ProposeRunwayChange:        ['TWR'],
+  SelfCoordinateRunwayChange: ['TWR'],
+  WithdrawRunwayChange:       ['TWR'],
+  BeginRunwayChange:          ['TWR'],
+  CompleteRunwayChange:       ['TWR'],
+  AckRunwayChange:            ['OPS', 'APP'],
+  RejectRunwayChange:         ['OPS', 'APP'],
+};
+
+/**
+ * Exactly two parameters: ONE acting Position, never a held set — D21 by
+ * construction. A controller holding TWR and APP acts as one or the other, and
+ * an acknowledgement sent as TWR never counts as APP's.
+ */
+function canActOnFieldState(actingPositionId, opKind) {
+  const owners = Object.prototype.hasOwnProperty.call(FIELD_STATE_OP_OWNERS, opKind) ? FIELD_STATE_OP_OWNERS[opKind] : null;
+  return !!owners && owners.includes(actingPositionId);
+}
+
+/**
  * The role-scoped half of CreateStrip permission (see the module comment).
  * Structurally the same D21 guard as canMutate() — exactly one
  * actingPositionId, never a held set.
@@ -422,4 +475,5 @@ module.exports = {
   DEPARTURE_STATE_OWNERS, ARRIVAL_STATE_OWNERS, OVERFLIGHT_STATE_OWNERS, MISSION_STATE_OWNERS,
   OP_KINDS, COORDINATION_OP_KINDS, APP_CTR_ONLY_OP_KINDS, TOFI_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_COUNTERPARTS,
   NO_STRIP_OP_CLASSES,
+  canActOnFieldState, FIELD_STATE_OP_OWNERS,
 };

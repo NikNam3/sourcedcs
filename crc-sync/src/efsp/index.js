@@ -34,6 +34,7 @@ const { FdrStore } = require('./fdr-store');
 const { AirspaceStore } = require('./airspace-store');
 const { CorrelationStore } = require('./correlation-store');
 const { MarsaStore } = require('./marsa-store');
+const { FieldStateStore } = require('./field-state-store');
 const airspaceConfig = require('./airspace-config');
 const { CodeAllocator } = require('./code-allocator');
 const { BoardStore } = require('./board-store');
@@ -114,6 +115,25 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
     fdrExists: (fdrId) => !!fdrStore.getFdr(fdrId),
     setSeparationRegime: (fdrId, separationRegime, { by } = {}) =>
       fdrStore.setTofi(fdrId, { separationRegime }, { by }),
+  });
+
+  // WP6 (docs/adr/0061), §9.7 — a SIXTH store: field state. One instance with
+  // one record per Facility that has a runway inventory, for AirspaceStore's
+  // reason — nothing about a runway is ever handed across a boundary. Built
+  // before the facility loop so `rules.fieldStateFor` is a plain closure.
+  // Occupancy is read lazily through `facilities` (not built yet), the same
+  // shape airspaceStore's occupancyFor has: an unmanned acknowledger of a
+  // runway change reverts or is skipped (decisions.md H20).
+  const fieldStateStore = new FieldStateStore(facilityConfig, {
+    clock,
+    isOccupied: (facilityId, positionId) => {
+      const f = facilities.get(facilityId);
+      return !!f && f.positionStore.isOccupied(positionId);
+    },
+    primaryOf: (facilityId, positionId) => {
+      const f = facilities.get(facilityId);
+      return f ? f.positionStore.primaryOf(positionId) : null;
+    },
   });
 
   const facilityIds = facilityConfig.getFacilityIds();
@@ -205,6 +225,10 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
       // them onto its own result and efsp-ws.js puts them in the board-delta's
       // `fdrs.updated` — see marsa-store.js's drainRegimeWrites() (F-111).
       drainMarsaRegimeWrites:  () => marsaStore.drainRegimeWrites(),
+      // WP6 (docs/adr/0061), §9.7 rule 1 — this Facility's runway status view
+      // (null where there are no runways, which never inhibits). Cached in the
+      // store, so every NLA stamp can afford to ask.
+      fieldStateFor:           () => fieldStateStore.statusView(facilityId),
     };
 
     const boardStore = new BoardStore(fdrStore, rules, { clock });
@@ -215,8 +239,9 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
   airspaceStore.setMutationLog(mutationLog);
   correlationStore.setMutationLog(mutationLog);
   marsaStore.setMutationLog(mutationLog);
+  fieldStateStore.setMutationLog(mutationLog);
   _validateAirspaceReferences(facilities);
-  _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaStore);
+  _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore);
 
   const defaultFacility = facilities.get(facilityConfig.DEFAULT_FACILITY_ID);
 
@@ -246,6 +271,7 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
     airspaceConfig,
     facilityConfig,
     nlaStatusMonitor,
+    fieldStateStore,
     // The real, Facility-aware accessors WP4A's wire protocol uses.
     boardStoreFor: (facilityId = facilityConfig.DEFAULT_FACILITY_ID) => {
       const f = facilities.get(facilityId);
@@ -259,7 +285,7 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
 
   return {
     boardStore: ctx.boardStore, fdrStore, positionStore: ctx.positionStore, mutationLog, clock,
-    airspaceStore, correlationStore, marsaStore, nlaStatusMonitor,
+    airspaceStore, correlationStore, marsaStore, nlaStatusMonitor, fieldStateStore,
     boardStoreFor: ctx.boardStoreFor, positionStoreFor: ctx.positionStoreFor,
 
     /**
@@ -272,7 +298,7 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
       return user.name || user.preferred_username || user.sub || 'unknown';
     },
 
-    handleMessage: (session, msg) => handleMessage(ctx, session, msg, () => _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaStore)),
+    handleMessage: (session, msg) => handleMessage(ctx, session, msg, () => _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore)),
 
     /**
      * Persist on demand. The correlation reconciler deliberately does NOT
@@ -282,7 +308,7 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
      * correlation history — the state itself recomputes within one tick of
      * boot. This exists so a caller that genuinely needs a flush has one.
      */
-    persist: () => _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaStore),
+    persist: () => _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore),
 
     /** Abrupt disconnect (guide §4.8.6) — releases every Position the controller held, across EVERY Facility (a controller may hold Positions in more than one, guide §4.8.5). */
     onDisconnect: (session) => {
@@ -373,7 +399,7 @@ function _validateAirspaceReferences(facilities) {
   }
 }
 
-function _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaStore) {
+function _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore) {
   try {
     const data = JSON.parse(fs.readFileSync(BOARD_SNAPSHOT_READ_PATH, 'utf8'));
     fdrStore.restore(data.fdr);
@@ -410,6 +436,11 @@ function _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaSt
     // back up with every AR silently reverted to ATC separation would be
     // §4.8.3's "second controller inherits a lie", caused by us.
     if (marsaStore) marsaStore.restore(data.marsa);
+    // Field state comes back INTACT for MARSA's reason (docs/adr/0061): a
+    // runway suspended for a barrier change is still suspended after a
+    // crc-sync restart, and coming back OPEN would hand the next controller a
+    // lie. Reconciled against the inventory, like the airspaces.
+    if (fieldStateStore) fieldStateStore.restore(data.fieldStates);
     // docs/adr/0058 — a Board saved before the clearance moved onto the FDR
     // still holds the assigned altitude and heading as Strip annotations.
     const moved = migrateClearanceAnnotations(
@@ -422,7 +453,7 @@ function _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaSt
   }
 }
 
-function _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaStore) {
+function _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore) {
   try {
     const boards = {};
     for (const [facilityId, { boardStore }] of facilities.entries()) boards[facilityId] = boardStore.snapshot();
@@ -440,6 +471,7 @@ function _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaSt
       airspaces: airspaceStore.snapshot(),
       correlations: correlationStore ? correlationStore.snapshot() : [],
       marsa: marsaStore ? marsaStore.snapshot() : [],
+      fieldStates: fieldStateStore ? fieldStateStore.snapshot() : [],
     }, null, 2);
     const tmpPath = `${BOARD_SNAPSHOT_PATH}.tmp`;
     // Same directory as the target, so the rename below stays within one
