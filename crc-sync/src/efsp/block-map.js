@@ -406,6 +406,14 @@ const MISSION_BLOCK_MAP = {
   // stripIds (docs/adr/0045's key choice, reused), a void raised there IS a
   // void of this flight's relation. Tagging a MISSION Block would not add
   // coverage; it would add a second place the same aircraft can void from.
+  //
+  // Ordnance state on the mission line too (decisions.md H55, docs/adr/0069): a
+  // pilot reports hung ordnance to whoever they are talking to, and inbound from
+  // a tasking that is the tactical Position. It is the same field — the MISSION
+  // Strip and its ATC twin share one FDR — so this adds a second surface onto
+  // one fact, not a second fact. The hook requirement (3F) stays off: it gates
+  // a runway, which a mission line never uses.
+  '3G': { required: false, target: { kind: 'military', field: 'ordnanceState' } }, // guide M14, §9.5
 };
 
 const BLOCK_MAPS = { DEPARTURE: DEPARTURE_BLOCK_MAP, ARRIVAL: ARRIVAL_BLOCK_MAP, OVERFLIGHT: OVERFLIGHT_BLOCK_MAP, MISSION: MISSION_BLOCK_MAP };

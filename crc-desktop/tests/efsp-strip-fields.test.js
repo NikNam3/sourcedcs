@@ -44,10 +44,29 @@ test('CID and TAIL are on no Strip', () => {
   }
 });
 
-test('HOOK and ORDNANCE are Tower\'s alone', () => {
+test('HOOK is Tower\'s alone', () => {
   for (const { role, positionId, list } of everyList()) {
     if (positionId === 'TWR') continue;
-    assert.equal(list.includes('3F') || list.includes('3G'), false, `${role} at ${positionId}`);
+    assert.equal(list.includes('3F'), false, `${role} at ${positionId}`);
+  }
+});
+
+test('ORDNANCE is on every Position a pilot reports hung ordnance to, and on no other (H55)', () => {
+  // decisions.md H55 (crc-sync's docs/adr/0069): TWR, APP, CTR and every
+  // tactical Position — the tactical ones work MISSION Strips, whose list is
+  // the Role fallback.
+  const talksToPilot = new Set(['TWR', 'APP', 'CTR']);
+  for (const { role, positionId, list } of everyList()) {
+    const expected = role === 'MISSION' || talksToPilot.has(positionId);
+    assert.equal(list.includes('3G'), expected, `${role} at ${positionId}`);
+  }
+  for (const positionId of ['TAC_C2', 'AIC', 'GCI', 'JTAC']) {
+    assert.ok(compactBlocksFor('MISSION', positionId).includes('3G'), `MISSION at ${positionId}`);
+  }
+  for (const role of ['DEPARTURE', 'ARRIVAL', 'OVERFLIGHT']) {
+    for (const positionId of ['APP', 'CTR']) {
+      assert.ok(compactBlocksFor(role, positionId).includes('3G'), `${role} at ${positionId}`);
+    }
   }
 });
 

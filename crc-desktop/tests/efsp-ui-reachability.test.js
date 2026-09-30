@@ -2222,3 +2222,31 @@ test('an MTR write reaches the Strip through the FDR\'s rev — the group appear
   assert.equal(sandbox._stripElNeedsRebuild(el, strip, null, null), true);
   assert.ok(inFields(sandbox._buildStripEl(strip), '9H-EXIT'));
 });
+
+// ── hung ordnance: every Position the pilot talks to records it (H55) ─────
+//
+// decisions.md H55 (crc-sync's docs/adr/0069). The server half — that 3G
+// routes on every Role — is efsp-block-map.test.mjs and the parity test; this
+// is that each of those Positions can actually reach it from its own Strip.
+
+test('ordnance state is a field on TWR, APP, CTR and every tactical Position\'s Strip, and sends 3G HUNG', () => {
+  const cases = [
+    ['DEPARTURE', 'TWR', 'RUNWAY_QUEUE'], ['DEPARTURE', 'APP', 'HANDED_OFF'], ['DEPARTURE', 'CTR', 'HANDED_OFF'],
+    ['ARRIVAL', 'TWR', 'HANDED_TO_TOWER'], ['ARRIVAL', 'APP', 'INBOUND'], ['ARRIVAL', 'CTR', 'INBOUND'],
+    ['OVERFLIGHT', 'APP', 'ACTIVE'], ['OVERFLIGHT', 'CTR', 'ACTIVE'],
+    ['MISSION', 'TAC_C2', 'TASKED'], ['MISSION', 'AIC', 'ON_STATION'], ['MISSION', 'GCI', 'ON_STATION'], ['MISSION', 'JTAC', 'ON_STATION'],
+  ];
+  for (const [role, positionId, state] of cases) {
+    const { el, sent } = renderStrip({ strip: stripAt({ role, state, ownerPositionId: positionId }), fdr: FDR, held: [positionId] });
+    const cell = blockCell(el, '3G');
+    assert.ok(cell, `${role} at ${positionId}: no ORDNANCE field`);
+    click(cell);
+    const select = descendants(el).find(c => c.tagName === 'select');
+    assert.ok(select, `${role} at ${positionId}: 3G opened no picker`);
+    select.value = 'HUNG';
+    for (const fn of select._listeners.change || []) fn({ stopPropagation() {} });
+    assert.equal(sent.length, 1, `${role} at ${positionId}`);
+    assert.deepEqual([sent[0].actingPositionId, sent[0].op.kind, sent[0].op.blockId, sent[0].op.value],
+      [positionId, 'SetBlock', '3G', 'HUNG'], `${role} at ${positionId}`);
+  }
+});

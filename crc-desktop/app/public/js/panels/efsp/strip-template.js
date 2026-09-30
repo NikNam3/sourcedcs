@@ -274,6 +274,8 @@ const MISSION_BLOCK_MAP = {
   'M8': { required: false, label: 'RMKS',    target: { kind: 'fdr', path: 'filed.remarks' } },
   'M25': { required: true, label: 'STATE',   target: { kind: 'system', field: 'state' } },
   'M26': { required: true, label: 'NLA',     target: { kind: 'nla' } },
+  // decisions.md H55 (crc-sync's docs/adr/0069): whoever the pilot talks to records hung ordnance.
+  '3G': { required: false, label: 'ORDNANCE', target: { kind: 'military', field: 'ordnanceState' } }, // guide M14, §9.5
 };
 
 const BLOCK_MAPS = { DEPARTURE: DEPARTURE_BLOCK_MAP, ARRIVAL: ARRIVAL_BLOCK_MAP, OVERFLIGHT: OVERFLIGHT_BLOCK_MAP, MISSION: MISSION_BLOCK_MAP };

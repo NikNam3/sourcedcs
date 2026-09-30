@@ -33,7 +33,9 @@ const { hungOrdnanceAdvisoryFor } = await import('../src/efsp/field-state.js');
 const { crew, act, mustAct, jumpTo, advance, DEPARTURE_FDR } = await import('./helpers/efsp-scenario.mjs');
 
 const efsp = createEfsp();
-const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' });
+const c = crew(efsp, {
+  OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL',
+});
 
 const fresh = (s) => efsp.boardStoreFor(s.facilityId || 'INCIRLIK').getStrip(s.stripId);
 const fdrOf = (s) => efsp.fdrStore.getFdr(s.fdrId);
@@ -156,4 +158,23 @@ test('an invalid ordnance state is refused, and the advisory never appears for i
   assert.equal(fdrOf(s).military.ordnanceState, 'CLEAN');
   assert.equal(advisory(s), null);
   mustAct(efsp, c.APP, 'APP', fresh(s), { kind: 'SetState', toState: 'DROPPED' });
+});
+
+test('sortie: the tactical Position the pilot reports to records HUNG on the mission line, and the ATC twin is advised (H55)', () => {
+  const arr = inboundFromCenter();
+  const line = mustAct(efsp, c.TAC_C2, 'TAC_C2', null, {
+    kind: 'CreateStrip', bayId: 'tac-c2-tasked', rackId: 'main', role: 'MISSION', fdrId: arr.fdrId,
+  });
+  mustAct(efsp, c.TAC_C2, 'TAC_C2', line, { kind: 'SetBlock', blockId: '3G', value: 'HUNG' });
+  assert.equal(fdrOf(arr).military.ordnanceState, 'HUNG', 'one field, reached from the mission line');
+  // The MISSION Strip itself carries no advisory (it has no runway); its ATC twin does.
+  const tacLine = efsp.boardStoreFor('TACTICAL').getStrip(line.stripId);
+  assert.equal(hungOrdnanceAdvisoryFor(tacLine, fdrOf(arr), fieldState()), null);
+  assert.equal(hungOrdnanceAdvisoryFor(tacLine, fdrOf(arr), null), null, 'TACTICAL has no field state');
+  assert.equal(advisory(arr).padName, 'Hot cargo pad');
+  // Cleared the same way from the ATC side.
+  mustAct(efsp, c.APP, 'APP', fresh(arr), { kind: 'SetBlock', blockId: '3G', value: 'CLEAN' });
+  assert.equal(advisory(arr), null);
+  mustAct(efsp, c.TAC_C2, 'TAC_C2', efsp.boardStoreFor('TACTICAL').getStrip(line.stripId), { kind: 'DropStrip' });
+  mustAct(efsp, c.APP, 'APP', fresh(arr), { kind: 'SetState', toState: 'DROPPED' });
 });

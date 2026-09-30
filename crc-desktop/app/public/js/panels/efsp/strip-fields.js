@@ -35,7 +35,7 @@ const COMPACT_BLOCKS_BY_ROLE = {
   ARRIVAL:    [...COMPACT_BLOCKS_SHARED, '9A-VECTOR'],
   // '7' stays as the FILED request here; '7A' is the assignment beside it.
   OVERFLIGHT: [...COMPACT_BLOCKS_SHARED, '7A', '9A-VECTOR'],
-  MISSION:    ['M3', 'M1', 'M2', 'M4', 'M5', 'M6', 'M7'],
+  MISSION:    ['M3', 'M1', 'M2', 'M4', 'M5', 'M6', 'M7', '3G'],
 };
 
 // ── Per-Position lists ─────────────────────────────────────────────────────
@@ -45,7 +45,10 @@ const COMPACT_BLOCKS_BY_ROLE = {
 //  - TYPE (3) already reads count/type/wake, so ACFT (3A) and WAKE (3B) never
 //    get a field of their own.
 //  - CID (4) and TAIL (3C) are on no Strip: nothing reads either at a glance.
-//  - HOOK (3F) and ORDNANCE (3G) are Tower's alone (carrier control later).
+//  - HOOK (3F) is Tower's alone (carrier control later). ORDNANCE (3G) is on
+//    every Position a pilot talks to airborne or on the runway — TWR, APP, CTR
+//    and every tactical Position — because a pilot reports hung ordnance to
+//    whoever they are talking to (decisions.md H55, crc-sync's docs/adr/0069).
 //  - A runway field only for the airfield Positions: OPS, CD, GND, TWR, APP.
 //  - FREQ (22) only where a controller works more than one frequency: APP and
 //    CTR. OPS, CD, GND and TWR each sit on one.
@@ -62,18 +65,18 @@ const COMPACT_BLOCKS_BY_POSITION = {
     CD:  ['1', '3', '5', '7', '8', '8A', '8B', '9', '9F', '10', '14A', '14D', '21'],
     GND: ['1', '3', '5', '8', '8A', '14A', '14D'],
     TWR: ['1', '3', '5', '8A', '21', '14D', '3F', '3G'],
-    APP: ['1', '3', '5', '7', '8A', '9', '20', '21', '22', '5A', 'SREG'],
-    CTR: ['1', '3', '5', '7', '21', '20', '8B', '9', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A'],
+    APP: ['1', '3', '5', '7', '8A', '9', '20', '21', '22', '5A', 'SREG', '3G'],
+    CTR: ['1', '3', '5', '7', '21', '20', '8B', '9', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A', '3G'],
   },
   ARRIVAL: {
     GND: ['1', '3', '5', '8B'],
     TWR: ['1', '3', '5', '7', '8B', '9A-FUEL', '3F', '3G'],
-    APP: ['1', '3', '5', '6', '7', '8A', '8B', '9A-VECTOR', '9A-SPEED', '22', '5A', 'SREG'],
-    CTR: ['1', '3', '5', '6', '7', '9A-VECTOR', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A'],
+    APP: ['1', '3', '5', '6', '7', '8A', '8B', '9A-VECTOR', '9A-SPEED', '22', '5A', 'SREG', '3G'],
+    CTR: ['1', '3', '5', '6', '7', '9A-VECTOR', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A', '3G'],
   },
   OVERFLIGHT: {
-    APP: ['1', '3', '5', '7A', '8B', '9', '9A-VECTOR', '22', '5A', 'SREG'],
-    CTR: ['1', '3', '5', '7A', '8B', '9', '9A-VECTOR', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A'],
+    APP: ['1', '3', '5', '7A', '8B', '9', '9A-VECTOR', '22', '5A', 'SREG', '3G'],
+    CTR: ['1', '3', '5', '7A', '8B', '9', '9A-VECTOR', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A', '3G'],
   },
 };
 
