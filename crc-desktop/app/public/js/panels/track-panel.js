@@ -263,18 +263,10 @@ function updateTrackPanel() {
   document.getElementById('tp-alt').textContent = altitudeLong(t);
   document.getElementById('tp-vs').textContent  = fpm == null ? '—'
     : Math.abs(fpm) < 50 ? 'level' : `${fpm > 0 ? '+' : ''}${Math.round(fpm)} fpm`;
-  // heading here is a true bearing (kinematics() derives it from raw
-  // lat/lon deltas) — first correct true→grid (gridConvergenceDeg, see
-  // geo.js: DCS's cockpit heading tape is referenced to its flat internal
-  // grid, not true geodetic north — the two differ by the local convergence
-  // angle), then apply settings.hdgCorrection the same way every other
-  // displayed heading does (BRA/cursor bearing above, runway heading in
-  // geojson.js): displayed = grid + hdgCorrection. hdgCorrection is a manual
-  // fudge factor, not real-world magnetic variation — see app.js DEFAULTS.
-  const conv   = gridConvergenceDeg(t.lat, t.lon);
-  const hdgMag = (Math.round(heading - conv) + (settings.hdgCorrection || 0) + 360) % 360;
+  // kinematics() gives a TRUE course over the ground (from lat/lon deltas);
+  // shown magnetic, like every heading (magnetic.js, crc-sync docs/adr/0085).
   document.getElementById('tp-hdg').textContent  =
-    `${String(hdgMag).padStart(3,'0')}°`;
+    `${magneticText(heading, t.lat, t.lon)}°`;
   document.getElementById('tp-spd').textContent  =
     `${Math.round(speedKt)} kt`;
   document.getElementById('tp-sqwk').textContent = (t.ssr && t.ssr.code) || '—';

@@ -152,9 +152,9 @@ function updateBullseyeCursor(e) {
   const rect   = map.getCanvas().getBoundingClientRect();
   const cursor = map.unproject([e.clientX - rect.left, e.clientY - rect.top]);
   const distNm = haversineM(be.lat, be.lon, cursor.lat, cursor.lng) / 1852;
-  const hdg    = (Math.round(gridBearingDeg(be.lat, be.lon, cursor.lat, cursor.lng)) + (settings.hdgCorrection || 0) + 360) % 360;
+  const hdg    = magneticText(bearingDeg(be.lat, be.lon, cursor.lat, cursor.lng), be.lat, be.lon);
 
-  $cursorBra.textContent = `${hdg.toString().padStart(3, '0')}/${Math.round(distNm).toString().padStart(3, '0')}`;
+  $cursorBra.textContent = `${hdg}/${Math.round(distNm).toString().padStart(3, '0')}`;
   $cursorBra.style.color = settings.braColor;
   $cursorBra.classList.add('visible');
 
@@ -169,8 +169,8 @@ function updateBullseyeCursor(e) {
 function updateMeasureLine(lng1, lat1, lng2, lat2) {
   if (!mapReady) return;
   const distNm  = Math.round(haversineM(lat1, lng1, lat2, lng2) / 1852);
-  const bearing = (Math.round(gridBearingDeg(lat1, lng1, lat2, lng2)) + (settings.hdgCorrection || 0) + 360) % 360;
-  const label   = `${bearing.toString().padStart(3,'0')} / ${distNm.toString().padStart(3,'0')}`;
+  const bearing = magneticText(bearingDeg(lat1, lng1, lat2, lng2), lat1, lng1);
+  const label   = `${bearing} / ${distNm.toString().padStart(3,'0')}`;
   map.getSource('measure').setData({
     type: 'FeatureCollection',
     features: [

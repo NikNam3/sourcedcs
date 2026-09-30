@@ -6,7 +6,7 @@ import path from 'path';
 
 // facility-config.js reads its config paths once at module load — set both
 // override env vars before the first import, same pattern as
-// theater-settings.test.mjs. WP4A (docs/adr/0013) added a second Facility
+// apt-config.test.mjs. WP4A (docs/adr/0013) added a second Facility
 // with its own path/env var — omitting this one would let a test that
 // mutates CENTER's config (setFacilityConfig(..., 'CENTER')) write
 // straight to the real, committed config/efsp-facility-center.json.

@@ -44,6 +44,7 @@ function populateAptDropdown($dd) {
       $dd.classList.remove('open');
       updateAptDisplay();
       updateTopbarUI();
+      resolveApproachCourse();
       updateMap();
     });
     $list.appendChild(el);
@@ -79,6 +80,23 @@ function initAptSelector() {
 }
 
 // ── Approach vector (runway course input) ─────────────────────────────────
+// The course is typed MAGNETIC. The map draws in true, and a typed magnetic
+// value is converted by crc-sync, never here (its docs/adr/0085): until the
+// answer comes back, no approach vector is drawn.
+
+let approachRwyCourseTrue = null; // approachRwyCourse at selectedApt, in true
+let _approachCourseReq = 0;
+
+function resolveApproachCourse() {
+  const req = ++_approachCourseReq;
+  approachRwyCourseTrue = null;
+  if (approachRwyCourse == null || !selectedApt) return;
+  requestTrueFromMagnetic(approachRwyCourse, selectedApt.lat, selectedApt.lon).then((t) => {
+    if (req !== _approachCourseReq) return; // a newer entry replaced it
+    approachRwyCourseTrue = t;
+    updateMap();
+  });
+}
 
 function initRwyInput() {
   const $rwyInput = document.getElementById('rwy-input');
@@ -87,6 +105,7 @@ function initRwyInput() {
   $rwyInput.addEventListener('input', () => {
     const val = parseInt($rwyInput.value, 10);
     approachRwyCourse = (!isNaN(val) && val >= 0 && val <= 360) ? val % 360 : null;
+    resolveApproachCourse();
     updateMap();
   });
   $rwyInput.addEventListener('click', e => e.stopPropagation());

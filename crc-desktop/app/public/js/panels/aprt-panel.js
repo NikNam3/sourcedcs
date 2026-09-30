@@ -4,21 +4,37 @@
 // Split out of the former ui.js "god file" — see panels/topbar.js for why
 // this stays a plain script rather than an IIFE. This was the single
 // largest chunk of ui.js (~625 of its 2234 lines) — airport reference card,
-// manual weather entry, ATIS build/transmit/loop, and theater-wide settings
-// (transition altitude, heading correction). The theater's UTC offset is not
-// here: crc-sync applies it from a fixed per-theater table (docs/adr/0079).
+// manual weather entry, ATIS build/transmit/loop, and a read-only line of
+// theater facts. Nothing about the theater is a setting any more: crc-sync
+// applies the UTC offset (docs/adr/0079) and owns the transition altitude and
+// magnetic variation (docs/adr/0085), all from its config/theaters.json.
 
 let _aprtSelectedApt = null;
 
 // Numeric heading parsed from the APRT panel's runway field, for the
 // extended APP-radar centerline (geojson.js buildExtendedCenterline()).
-// Cached rather than read from the DOM every map-update tick.
-let _aprtRwyHeading = null;
+// Cached rather than read from the DOM every map-update tick. The runway
+// number is MAGNETIC; the map draws in true, and crc-sync does the
+// conversion (its docs/adr/0085 — a typed magnetic value is never converted
+// in the client). No centerline is drawn until it answers.
+let _aprtRwyHeading = null;  // magnetic, from the runway number
+let _aprtRwyTrueDeg = null;  // the same, in true, from crc-sync
+let _aprtRwyReq = 0;
 
 function _updateAprtRwyHeading() {
   const raw = ((document.getElementById('aprt-atis-rwy') || {}).value || '').toUpperCase().trim();
   const m = raw.match(/^(\d{1,2})([LRC]?)$/);
   _aprtRwyHeading = m ? parseInt(m[1], 10) * 10 : null;
+  _aprtRwyTrueDeg = null;
+  const req = ++_aprtRwyReq;
+  const apt = _aprtSelectedApt;
+  if (_aprtRwyHeading != null && apt) {
+    requestTrueFromMagnetic(_aprtRwyHeading, apt.lat, apt.lon).then((t) => {
+      if (req !== _aprtRwyReq) return; // a newer entry replaced it
+      _aprtRwyTrueDeg = t;
+      if (typeof updateMap === 'function') updateMap();
+    });
+  }
   if (typeof updateMap === 'function') updateMap();
 }
 
@@ -110,17 +126,25 @@ function _updateAprtRefCard() {
   if (_atisLiveRefresh) _atisLiveRefresh();
 }
 
-// Re-syncs the theater settings inputs' displayed values from `settings`
-// state — called from app.js when a 'theater-settings' broadcast arrives
-// from crc-sync (any client, including this one, having edited it) so every
-// controller's airport panel shows the same transition altitude / heading
-// correction instead of only whoever last edited it
-// locally. No-op if the panel has never been mounted (inputs don't exist).
-function refreshAprtTheaterInputs() {
-  const $transAlt      = document.getElementById('aprt-transition-alt');
-  const $hdgCorrection = document.getElementById('aprt-hdg-correction');
-  if ($transAlt)      $transAlt.value      = settings.transitionAltFt ?? 18000;
-  if ($hdgCorrection) $hdgCorrection.value = settings.hdgCorrection ?? 0;
+// Shows the theater facts crc-sync sent (app.js's 'theater' case): the
+// transition altitude, and the variation at the selected airfield (or the
+// theater's centre) with where it came from. No-op before the panel mounts.
+function refreshAprtTheaterFacts() {
+  const msg = currentTheaterFacts();
+  const $ta  = document.getElementById('aprt-theater-ta');
+  const $var = document.getElementById('aprt-theater-var');
+  if ($ta) $ta.textContent = `${(settings.transitionAltFt ?? 18000).toLocaleString('en-US')} ft`;
+  if (!$var) return;
+  const apt = _aprtSelectedApt;
+  const v = magneticVariationAt(apt ? apt.lat : undefined, apt ? apt.lon : undefined);
+  if (v == null) { $var.textContent = '—'; return; }
+  const m = (msg && msg.magnetic) || {};
+  const where = apt ? (apt.icao || apt.name) : 'centre';
+  const note = m.source === 'FIXED' ? 'fixed' : m.source === 'WMM2025+OFFSET' ? 'WMM + offset' : 'WMM';
+  $var.textContent = `${Math.abs(v).toFixed(1)}°${v >= 0 ? 'E' : 'W'} (${note}, ${where})`;
+  $var.title = m.modelDateValid === false
+    ? 'The mission date is outside WMM2025\'s 2025–2030 window, so the model is extrapolated.'
+    : 'World Magnetic Model 2025 at the mission date, unless crc-sync\'s theaters.json overrides it.';
 }
 
 function initAprtPanel() {
@@ -207,39 +231,7 @@ function initAprtPanel() {
     });
   }
 
-  // Theater settings — squadron-wide via crc-sync (src/theater-settings.js),
-  // same pattern as the SQWK C/S mapping in the Calls panel: update the
-  // local cache optimistically so this client feels instant, then push the
-  // change so every other connected controller's panel picks it up too
-  // (refreshAprtTheaterInputs(), called from app.js's 'theater-settings'
-  // case, re-syncs these inputs' displayed values on the resulting
-  // broadcast — including back to the client that made the edit, keeping
-  // everyone converged on whatever crc-sync ends up persisting).
-  const $transAlt   = document.getElementById('aprt-transition-alt');
-  const $hdgCorrection = document.getElementById('aprt-hdg-correction');
-
-  if ($transAlt) {
-    $transAlt.value = settings.transitionAltFt ?? 18000;
-    $transAlt.addEventListener('change', () => {
-      settings.transitionAltFt = parseInt($transAlt.value) || 18000;
-      saveSettings(); updateMap(); _updateAprtRefCard();
-      sendToSync({ type: 'theaterSettingsSet', transitionAltFt: settings.transitionAltFt });
-    });
-  }
-  if ($hdgCorrection) {
-    $hdgCorrection.value = settings.hdgCorrection ?? 0;
-    // 'input' fires on every keystroke — kept local-only (map redraw needs
-    // to feel instant while typing). The synced push waits for 'change'
-    // (blur/enter/spinner-commit) below so crc-sync isn't getting a
-    // WS message + a synchronous config-file write per keystroke.
-    $hdgCorrection.addEventListener('input', () => {
-      settings.hdgCorrection = parseInt($hdgCorrection.value) || 0;
-      saveSettings(); updateMap();
-    });
-    $hdgCorrection.addEventListener('change', () => {
-      sendToSync({ type: 'theaterSettingsSet', hdgCorrection: settings.hdgCorrection });
-    });
-  }
+  refreshAprtTheaterFacts();
 
   // ATIS BUILD button
   const $build = document.getElementById('aprt-atis-build');
@@ -418,6 +410,7 @@ function _renderAprtAptList(filter) {
       const $info = document.getElementById('aprt-atis-info');
       if ($info) $info.value = (settings.aprtAtisInfo || {})[key] || '';
       _updateAprtRwyHeading();
+      refreshAprtTheaterFacts();
       _fetchAndShowAprtWeather(a);
     });
     $list.appendChild(row);

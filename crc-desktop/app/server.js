@@ -102,6 +102,9 @@ const httpServer = http.createServer((req, res) => {
   if (req.url === '/api/atis-transmit' && req.method === 'POST')  return proxyToSync(req, res, '/api/atis-transmit');
   if (req.url === '/api/srs-clients')                              return proxyToSync(req, res, '/api/srs-clients');
   if (req.url.startsWith('/api/apt-weather'))                      return proxyToSync(req, res, req.url);
+  // A typed magnetic heading → true (crc-sync's docs/adr/0085): the client
+  // never converts a typed magnetic value itself.
+  if (req.url.startsWith('/api/magnetic/to-true'))                 return proxyToSync(req, res, req.url);
   // EFSP CreateStrip pre-fill (crc-sync/src/efsp/flight-plan-lookup.js) —
   // same reverse-proxy shape, so the renderer never needs crc-sync's
   // bearer token directly for this either.

@@ -331,16 +331,18 @@
 
     <div class="aprt-hr" style="margin:4px 0 8px"></div>
 
-    <!-- Theater settings -->
+    <!-- Theater facts: read-only, from crc-sync's config/theaters.json and
+         the World Magnetic Model (its docs/adr/0085). Nothing here is a
+         controller setting. -->
     <div style="padding:0 14px 14px">
       <div style="font-size:9px;letter-spacing:0.1em;color:var(--ui-text-dim);text-transform:uppercase;margin-bottom:6px">Theater</div>
       <div class="aprt-row">
-        <span class="aprt-k">Transition alt (ft)</span>
-        <input type="number" id="aprt-transition-alt" value="18000" min="0" max="60000" step="500" style="width:70px" />
+        <span class="aprt-k">Transition alt</span>
+        <span id="aprt-theater-ta" class="aprt-ref-v">—</span>
       </div>
       <div class="aprt-row">
-        <span class="aprt-k">HDG correction (°)</span>
-        <input type="number" id="aprt-hdg-correction" value="0" min="-30" max="30" step="1" style="width:54px" />
+        <span class="aprt-k">Mag variation</span>
+        <span id="aprt-theater-var" class="aprt-ref-v">—</span>
       </div>
     </div>
 
@@ -892,6 +894,7 @@
 <script src="/js/config.js"></script>
 <script src="./js/sync.js"></script>
 <script src="./js/geo.js"></script>
+<script src="./js/magnetic.js"></script>
 <script src="./js/iff.js"></script>
 <script src="./js/track-label.js"></script>
 <script src="./js/geojson.js"></script>
