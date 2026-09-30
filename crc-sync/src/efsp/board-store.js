@@ -28,7 +28,7 @@
 // §5.4) taken literally.
 
 const crypto = require('crypto');
-const { keyBetween, rebalance } = require('./order-key');
+const { keyBetween, rebalance, needsRebalance } = require('./order-key');
 const { isValidAltitude } = require('./airspace-config');
 const { MAX_FREE_TEXT, SEPARATION_REGIMES } = require('./fdr-store');
 const { WALL_CLOCK } = require('../mission-clock');
@@ -36,12 +36,42 @@ const { runwayRackFor, runwayInhibitFor, RUNWAY_GATED_STATES } = require('./fiel
 
 const FLAG_KEYS = ['offset', 'flipped', 'removeIndicator', 'highlight', 'attention'];
 const APPLIED_MUTATIONS_CAP = 5000;
+// How much of the idempotency cache rides in the Board snapshot (docs/adr/0081,
+// L6's F5 mode A): a RETRY window, not a history. A client that lost its ack
+// to a crash retries within seconds of reconnecting; ten minutes covers a
+// restart and a slow reconnect. [SOURCE-DEFINED], a constant rather than a
+// tuning value. Wall time, like the NLA latch (ADR 0079's one exception).
+const REPLAY_PERSIST_WINDOW_MS = 10 * 60 * 1000;
 
 // Every Strip Role's own starting EfspState, used by _applyCreateStrip when
 // the caller doesn't pass an explicit op.initialState. Deliberately just
 // each role's first lifecycle state, not the full STATES_BY_ROLE table
 // nla.js owns — board-store.js only ever needs the ONE starting value.
 const DEFAULT_INITIAL_STATE_BY_ROLE = { DEPARTURE: 'PROPOSED', ARRIVAL: 'INBOUND', OVERFLIGHT: 'TRANSITING', MISSION: 'TASKED' };
+
+/**
+ * The compact, frozen record the idempotency cache keeps for one applied
+ * clientMutationId (docs/adr/0081): the outcome and the ids it concerned.
+ * Nothing live and nothing cloned — it is serialisable, which is what lets
+ * the last REPLAY_PERSIST_WINDOW_MS of it ride in the Board snapshot.
+ * `appliedWallAt` is WALL time (Date.now()): a retry window is a storage
+ * lifetime, like the NLA latch, not a time a controller reads (ADR 0079).
+ */
+function _replayRecord(result, appliedWallAt) {
+  return Object.freeze({
+    ok: !!result.ok,
+    reason: result.reason === undefined ? null : result.reason,
+    detail: result.detail === undefined ? null : result.detail,
+    warning: result.warning === undefined ? null : result.warning,
+    routedTo: result.routedTo === undefined ? null : result.routedTo,
+    selfCoordinated: result.selfCoordinated === undefined ? null : result.selfCoordinated,
+    stripId: result.strip ? result.strip.stripId : null,
+    fdrId: result.fdr ? result.fdr.fdrId : null,
+    peerFacilityId: result.peerFacilityId === undefined ? null : result.peerFacilityId,
+    peerStripId: result.peerStrip ? result.peerStrip.stripId : null,
+    appliedWallAt,
+  });
+}
 
 function newFlags() {
   return { offset: false, flipped: false, removeIndicator: false, highlight: null, attention: null };
@@ -133,8 +163,20 @@ class BoardStore {
     this._strips = new Map(); // stripId -> Strip
     this._log = [];           // [{seq, type:'update'|'gone', id}]
     this._seq = 0;
+    // The Board lifetime a seq belongs to (docs/adr/0081, L6's F2). `_seq` and
+    // the `_log` ring are per process and deliberately not persisted, so a
+    // seq from before a restart means nothing after it — and once the new
+    // lifetime's seq overtakes a client's, nothing but a name for the lifetime
+    // can tell the two apart. Minted again by restore(); never persisted.
+    this._epoch = crypto.randomUUID();
     this._cidSeq = 0;
-    this._appliedMutations = new Map(); // clientMutationId -> result, idempotency (§5.2)
+    this._appliedMutations = new Map(); // clientMutationId -> compact frozen replay record (_replayRecord), idempotency (§5.2, docs/adr/0081)
+    // Every Strip a Board event touched since efsp-ws.js last drained it
+    // (docs/adr/0081, guide §5.4 "one Board event"). A rebalance re-keys
+    // Strips the Mutation never named, and a coordination op touches the PEER
+    // Board inside the sender's applyMutation; whoever broadcasts a Board's
+    // change drains this, so every touched Strip rides in that broadcast.
+    this._touchedSinceDrain = new Set();
     this._mutationLog = null; // optional collaborator, see setMutationLog()
     // stripId -> { invokedAt, prevState, expiresAt } — the 400ms double-tap
     // guard and the 30s Undo window for the last NLA transition (§3.5
@@ -148,6 +190,8 @@ class BoardStore {
   setMutationLog(mutationLog) { this._mutationLog = mutationLog; }
 
   get currentSeq() { return this._seq; }
+  /** This Board lifetime's name (docs/adr/0081). A delta is valid only within one epoch. */
+  get epoch() { return this._epoch; }
   getStrip(stripId) { return this._strips.get(stripId) || null; }
   getAll() { return [...this._strips.values()]; }
 
@@ -160,13 +204,34 @@ class BoardStore {
 
   _touch(stripId) {
     this._log.push({ seq: ++this._seq, type: 'update', id: stripId });
+    this._touchedSinceDrain.add(stripId);
     this._pruneLog();
+  }
+
+  /**
+   * The ids of every Strip touched since the last drain, in first-touch
+   * order, and forgets them. Called by whoever puts this Board's change on the
+   * wire (efsp-ws.js), on this Board and on the peer Board a coordination op
+   * reached — never by board-store itself (docs/adr/0081).
+   * @returns {string[]}
+   */
+  drainTouched() {
+    const ids = [...this._touchedSinceDrain];
+    this._touchedSinceDrain.clear();
+    return ids;
   }
   _pruneLog() {
     if (this._log.length > 2000) this._log.splice(0, this._log.length - 1000);
   }
 
-  /** Delta resync (guide §5.6) — everything changed since `afterSeq`. */
+  /**
+   * Delta resync (guide §5.6) — everything changed since `afterSeq`, within
+   * this Board lifetime. `updated` holds the Strips still in `_strips`
+   * (DROPPED ones included — the caller turns those into `gone`); `gone` holds
+   * ids the window touched that are no longer in `_strips` at all. That is
+   * always empty until retention removes records (L24, S-R2-13); this is the
+   * seam it fills (docs/adr/0081).
+   */
   getDeltaSince(afterSeq) {
     const entries = [];
     for (let i = this._log.length - 1; i >= 0; i--) {
@@ -176,10 +241,12 @@ class BoardStore {
     const byId = new Map();
     for (const e of entries) byId.set(e.id, e);
     const updated = [];
+    const gone = [];
     for (const e of byId.values()) {
       if (this._strips.has(e.id)) updated.push(this._strips.get(e.id));
+      else gone.push(e.id);
     }
-    return { updated, seq: this._seq };
+    return { updated, gone, seq: this._seq };
   }
 
   // ── orderKey resolution ──────────────────────────────────────────────────
@@ -187,31 +254,46 @@ class BoardStore {
   _resolveOrderKey(bayId, rackId, afterStripId, beforeStripId, excludeStripId) {
     const rackStrips = this.getRack(bayId, rackId).filter(s => s.stripId !== excludeStripId);
     const findKey = (id) => (id ? (rackStrips.find(s => s.stripId === id) || {}).orderKey ?? null : null);
+    let key;
     try {
-      return keyBetween(findKey(afterStripId), findKey(beforeStripId));
+      key = keyBetween(findKey(afterStripId), findKey(beforeStripId));
     } catch (err) {
       if (err.code !== 'ORDER_KEY_EXHAUSTED') throw err;
-      this._rebalanceRack(bayId, rackId, excludeStripId);
-      const refreshed = this.getRack(bayId, rackId).filter(s => s.stripId !== excludeStripId);
-      const findKey2 = (id) => (id ? (refreshed.find(s => s.stripId === id) || {}).orderKey ?? null : null);
-      let a = findKey2(afterStripId);
-      let b = findKey2(beforeStripId);
-      // The ONLY way this retry can still fail after a rebalance (which
-      // guarantees every Strip in the Rack gets a fresh, distinct key) is
-      // a > b — which can genuinely happen when afterStripId/beforeStripId
-      // were bounding two Strips that had COLLIDING keys before the
-      // rebalance (order-key.js's jitter tolerance): rebalance() preserves
-      // the Rack's own tie-broken order (by stripId), which can come out
-      // opposite to whatever the caller's after/before labels assumed.
-      // The caller's real intent — "insert between these two specific
-      // Strips" — doesn't actually depend on which one is labelled
-      // "after" vs "before" once already in this recovery path, so
-      // normalize direction here rather than let a second, unrecoverable
-      // throw reach applyMutation's catch-all and reject a perfectly
-      // resolvable Mutation.
-      if (a !== null && b !== null && a > b) { [a, b] = [b, a]; }
-      return keyBetween(a, b);
+      return this._keyAfterRebalance(bayId, rackId, afterStripId, beforeStripId, excludeStripId);
     }
+    // The proactive rebalance (docs/adr/0081, L6's F8). Same-slot inserts
+    // grow a key by about half a character each, without bound, and nothing
+    // ever called needsRebalance — keys reached 183 characters in 400 drags.
+    // Once a new key passes REBALANCE_KEY_LENGTH the Rack is re-keyed and the
+    // key recomputed between the neighbours' fresh keys, inside this same
+    // Board event: the re-keyed Strips are touched, so they leave in this
+    // Mutation's broadcast (drainTouched) like every other change it made.
+    if (needsRebalance([key])) return this._keyAfterRebalance(bayId, rackId, afterStripId, beforeStripId, excludeStripId);
+    return key;
+  }
+
+  /** Rebalances the Rack, then resolves the key between the named neighbours' fresh keys. */
+  _keyAfterRebalance(bayId, rackId, afterStripId, beforeStripId, excludeStripId) {
+    this._rebalanceRack(bayId, rackId, excludeStripId);
+    const refreshed = this.getRack(bayId, rackId).filter(s => s.stripId !== excludeStripId);
+    const findKey2 = (id) => (id ? (refreshed.find(s => s.stripId === id) || {}).orderKey ?? null : null);
+    let a = findKey2(afterStripId);
+    let b = findKey2(beforeStripId);
+    // The ONLY way this retry can still fail after a rebalance (which
+    // guarantees every Strip in the Rack gets a fresh, distinct key) is
+    // a > b — which can genuinely happen when afterStripId/beforeStripId
+    // were bounding two Strips that had COLLIDING keys before the
+    // rebalance (order-key.js's jitter tolerance): rebalance() preserves
+    // the Rack's own tie-broken order (by stripId), which can come out
+    // opposite to whatever the caller's after/before labels assumed.
+    // The caller's real intent — "insert between these two specific
+    // Strips" — doesn't actually depend on which one is labelled
+    // "after" vs "before" once already in this recovery path, so
+    // normalize direction here rather than let a second, unrecoverable
+    // throw reach applyMutation's catch-all and reject a perfectly
+    // resolvable Mutation.
+    if (a !== null && b !== null && a > b) { [a, b] = [b, a]; }
+    return keyBetween(a, b);
   }
 
   /** Rebalances one Rack — MUST run as one atomic Board event, never mid-drag (guide §5.4). */
@@ -243,8 +325,10 @@ class BoardStore {
    * Never throws for an ordinary rejection.
    */
   applyMutation(mutation, actingPositionId, by) {
-    if (this._appliedMutations.has(mutation.clientMutationId)) {
-      return this._appliedMutations.get(mutation.clientMutationId); // idempotent replay, §5.2
+    const cmid = mutation.clientMutationId;
+    const keyed = typeof cmid === 'string' && cmid !== '';
+    if (keyed && this._appliedMutations.has(cmid)) {
+      return this._replayResult(this._appliedMutations.get(cmid)); // idempotent replay, §5.2
     }
 
     // This is the ONE choke point every Mutation flows through (guide's
@@ -266,12 +350,37 @@ class BoardStore {
       result = { ok: false, reason: 'VALIDATION_ERROR', detail: 'internal error processing mutation' };
     }
 
-    this._appliedMutations.set(mutation.clientMutationId, result);
+    if (keyed) this._rememberApplied(cmid, _replayRecord(result, Date.now()));
+    return result;
+  }
+
+  /** Whether this clientMutationId is in the idempotency cache — index.js's boot reconcile asks (docs/adr/0081). */
+  hasApplied(cmid) { return this._appliedMutations.has(cmid); }
+
+  _rememberApplied(cmid, record) {
+    this._appliedMutations.set(cmid, record);
     if (this._appliedMutations.size > APPLIED_MUTATIONS_CAP) {
       const oldestKey = this._appliedMutations.keys().next().value;
       this._appliedMutations.delete(oldestKey);
     }
-    return result;
+  }
+
+  /**
+   * A replay's answer (docs/adr/0081): the ORIGINAL outcome with the records
+   * as they are NOW. The cache holds ids, never a Strip or an FDR, so a replay
+   * of a refusal cannot send a client backwards (L6's F11) and an archived
+   * Strip is not kept alive by the cache (F4). `replayed: true` tells
+   * efsp-ws.js to ack only — the original broadcasts already went out, and
+   * marsaChanged/fdrs/peerStrip are deliberately not rebuilt.
+   */
+  _replayResult(record) {
+    const out = { ok: record.ok, replayed: true };
+    for (const k of ['reason', 'detail', 'warning', 'routedTo', 'selfCoordinated', 'peerFacilityId']) {
+      if (record[k] !== null) out[k] = record[k];
+    }
+    if (record.stripId) out.strip = this.getStrip(record.stripId);
+    if (record.fdrId) out.fdr = this._fdrStore.getFdr(record.fdrId);
+    return out;
   }
 
   _dispatch(mutation, actingPositionId, by) {
@@ -2429,10 +2538,21 @@ class BoardStore {
 
   // ── Persistence (durable per ADR 0002 — mission reload must NOT clear this) ──
   snapshot() {
-    return { strips: this.getAll(), cidSeq: this._cidSeq };
+    // `replay`: the idempotency records of the last REPLAY_PERSIST_WINDOW_MS,
+    // so a retry after a restart answers from the cache instead of applying a
+    // second time (docs/adr/0081, L6's F5 mode A). Compact records only.
+    const horizon = Date.now() - REPLAY_PERSIST_WINDOW_MS;
+    const replay = [];
+    for (const [cmid, record] of this._appliedMutations) {
+      if (record.appliedWallAt >= horizon) replay.push([cmid, record]);
+    }
+    return { strips: this.getAll(), cidSeq: this._cidSeq, replay };
   }
   restore(data) {
     this._strips = new Map((data?.strips || []).map(s => [s.stripId, s]));
+    // A restored Board is a new lifetime: the ring and the seq did not come
+    // back, so no seq a client holds from before can be served a delta.
+    this._epoch = crypto.randomUUID();
     // A snapshot written before docs/adr/0045 carries a per-Strip
     // `correlation` field. Dropped rather than migrated: it was always the
     // inert `{ state: 'UNCORRELATED' }` placeholder, so there is nothing in it
@@ -2441,11 +2561,17 @@ class BoardStore {
     // key change removes, preserved through a restore.
     for (const strip of this._strips.values()) delete strip.correlation;
     this._cidSeq = data?.cidSeq || 0;
-    // Idempotency cache (_appliedMutations) is deliberately NOT persisted —
-    // it only needs to survive a reconnect *within a session*, not a full
-    // server restart; a mutation replayed immediately after a restart would
-    // simply reapply, an acceptable Phase-1 edge case.
+    // The persisted slice of the idempotency cache (docs/adr/0081). It used to
+    // be dropped here, so a CreateStrip whose ack died with the process was
+    // created twice on retry (L6's F5). Loaded whole: the snapshot already cut
+    // it to the retry window, and index.js's boot reconcile needs every record
+    // that was persisted to tell a persisted Mutation from an unpersisted one.
+    // It ages out through the cap and the next snapshot's window.
+    this._appliedMutations = new Map();
+    for (const [cmid, record] of (Array.isArray(data?.replay) ? data.replay : [])) {
+      if (typeof cmid === 'string' && record && typeof record === 'object') this._appliedMutations.set(cmid, Object.freeze({ ...record }));
+    }
   }
 }
 
-module.exports = { BoardStore };
+module.exports = { BoardStore, REPLAY_PERSIST_WINDOW_MS };

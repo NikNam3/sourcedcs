@@ -145,7 +145,7 @@ test('SCENARIO a client that missed a few updates gets a delta, not a whole snap
   const first = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'LAG1' });
   airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'LAG2' });
 
-  const resync = efsp.handleMessage(c.APP.session, { type: 'efsp-resync', lastBoardSeq: before });
+  const resync = efsp.handleMessage(c.APP.session, { type: 'efsp-resync', lastBoardSeq: before, boardEpoch: efsp.snapshotFor().boardEpochByFacility.INCIRLIK });
   assert.equal(resync.ack.type, 'efsp-board-delta', 'inside the ring buffer, so a delta');
   const ids = resync.ack.strips.updated.map(s => s.stripId);
   assert.ok(ids.includes(first.stripId));

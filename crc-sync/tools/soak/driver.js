@@ -341,7 +341,10 @@ class Driver {
     if (!replay && !ack.ok && !['STALE_REV', 'NLA_INHIBITED', 'NOT_HOLDING_POSITION'].includes(ack.reason)) {
       this.event(`refusal:${msg.op ? msg.op.kind : msg.type}:${ack.reason}`, { detail: ack.detail, actingPositionId: msg.actingPositionId, strip: ack.strip ? { state: ack.strip.state, owner: ack.strip.ownerPositionId, role: ack.strip.role } : null });
     }
-    if (ack.ok) this._checkBroadcast(msg, ack, facts);
+    // M8 holds for a first send. A replay answers from the idempotency cache
+    // and broadcasts nothing by design (docs/adr/0081): its broadcast went out
+    // the first time.
+    if (ack.ok && !replay) this._checkBroadcast(msg, ack, facts);
     if (!replay && !this.o.noReplays && (ack.ok || !wireLevel(ack)) && this.rngNet.chance(0.01)) {
       const life = this.lifetime;
       const copy = JSON.parse(JSON.stringify(msg));
@@ -906,13 +909,15 @@ class Driver {
   async reconnect(c, { discard = this.rngNet.chance(0.5), probe = false } = {}) {
     if (c.connected) return;
     const lastSeqs = new Map(c.shadow.boardSeq);
+    const lastEpochs = new Map(c.shadow.boardEpoch);
     await this.connect(c, { discard });
     this.stats.reconnects++;
     const fids = c.passive ? FACILITIES : Object.keys(c.holds);
     const results = [];
     for (const fid of fids) {
       const lastBoardSeq = lastSeqs.get(fid);
-      const r = await this.call('send', { clientId: c.id, msg: { type: 'efsp-resync', facilityId: fid, lastBoardSeq } });
+      // The epoch echo (docs/adr/0081): without it every resync is a snapshot and the delta path goes untested.
+      const r = await this.call('send', { clientId: c.id, msg: { type: 'efsp-resync', facilityId: fid, lastBoardSeq, boardEpoch: lastEpochs.get(fid) } });
       this.ledger.onSent({ type: 'efsp-resync' }, c.id, this.now, this.lifetime);
       this.note(`resync|${c.id}|${fid}`);
       const facts = this.deliver(r.out, { resyncFor: c.id });
@@ -1286,7 +1291,12 @@ async function logLinesFor(logPath, cmid) {
   const needle = `"clientMutationId":"${cmid}"`;
   for await (const line of rl) {
     if (!line.includes(needle)) continue;
-    try { const e = JSON.parse(line); out.push({ stripId: e.stripId, op: e.op, afterRev: e.after && e.after.rev }); } catch { out.push({}); }
+    let e;
+    try { e = JSON.parse(line); } catch { out.push({}); continue; }
+    // A NotPersisted marker (docs/adr/0081) voids the line before it: the
+    // effective lines are what the classification counts, as the ledger does.
+    if (e.op === 'NotPersisted') { out.pop(); continue; }
+    out.push({ stripId: e.stripId, op: e.op, afterRev: e.after && e.after.rev });
   }
   return out;
 }

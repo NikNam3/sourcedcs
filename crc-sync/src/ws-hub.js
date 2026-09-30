@@ -130,10 +130,18 @@ class WsHub {
    * `strips.gone` is deliberately absent rather than empty-by-accident: this
    * sweep never removes a Strip, it only re-states ones that are still there.
    */
+  _boardEpochFor(facilityId) {
+    const board = this._efsp && typeof this._efsp.boardStoreFor === 'function' ? this._efsp.boardStoreFor(facilityId) : null;
+    return board ? board.epoch : undefined;
+  }
+
   broadcastEfspBoardDelta(payload) {
     this._broadcast({
       version: VERSION, type: 'efsp-board-delta',
       boardSeq: payload.boardSeq,
+      // Every board-delta names its Board lifetime (docs/adr/0081). The
+      // caller's stamp wins; otherwise the Board's own current epoch.
+      boardEpoch: payload.boardEpoch !== undefined ? payload.boardEpoch : this._boardEpochFor(payload.facilityId),
       facilityId: payload.facilityId,
       strips: { updated: payload.strips || [], gone: [] },
       fdrs: { updated: [] },

@@ -77,6 +77,16 @@ function isUndoOfDrop(entry) {
 }
 
 /**
+ * A boot marker saying an earlier line never took effect (docs/adr/0081): the
+ * process died between writing it and persisting the Board. It voids the drop
+ * record that line made, if that line was a drop — matched by stripId and
+ * clientMutationId, since the marker does not repeat the before/after.
+ */
+function isNotPersistedDrop(entry) {
+  return !!(entry && entry.op === 'NotPersisted' && entry.stripId && entry.clientMutationId);
+}
+
+/**
  * Is this drop traffic? A pure function of the log entry's own before/after
  * Strip records, so the reconciliation can decide it from the log alone.
  * @returns {{counted:boolean, excludedReason:string|null}}
@@ -181,6 +191,9 @@ function expectedFromLog(logEntries) {
     } else if (isUndoOfDrop(e)) {
       const id = lastByStrip.get(e.stripId);
       if (id) { pending.delete(id); lastByStrip.delete(e.stripId); }
+    } else if (isNotPersistedDrop(e)) {
+      const id = lastByStrip.get(e.stripId);
+      if (id && pending.get(id).entry.clientMutationId === e.clientMutationId) { pending.delete(id); lastByStrip.delete(e.stripId); }
     }
   }
   return pending;
@@ -188,9 +201,18 @@ function expectedFromLog(logEntries) {
 
 /** COUNT lines with their VOIDs applied, in file order. */
 function liveCountRecords(countEntries) {
+  // In file order: a COUNT written AFTER a VOID of its countId revives it. The
+  // one way that happens is a drop voided by a NotPersisted marker and then
+  // applied by the client's retry, which carries the same clientMutationId and
+  // so the same countId (docs/adr/0081).
   const voided = new Set();
-  for (const e of countEntries || []) if (e && e.type === 'VOID') voided.add(e.countId);
-  return (countEntries || []).filter(e => e && e.type === 'COUNT' && !voided.has(e.countId));
+  const live = new Map();
+  for (const e of countEntries || []) {
+    if (!e) continue;
+    if (e.type === 'VOID') { voided.add(e.countId); live.delete(e.countId); }
+    else if (e.type === 'COUNT') { voided.delete(e.countId); live.set(e.countId, e); }
+  }
+  return [...live.values()];
 }
 
 function _sameValue(a, b) {
@@ -373,6 +395,7 @@ class TrafficCount {
     this._entries.push(e);
     if (e.type === 'COUNT') {
       this._records.set(e.countId, e);
+      this._voided.delete(e.countId); // a retried drop revives its voided countId (liveCountRecords)
       this._liveByStrip.set(e.stripId, e.countId);
     } else if (e.type === 'VOID') {
       this._voided.add(e.countId);
@@ -446,6 +469,20 @@ class TrafficCount {
       // The Strip is live again: what it had latched before the drop still holds.
       for (const a of (rec && rec.suaTraversal) || []) this._latchSua(entry.stripId, a);
       if (rec && rec.alertScramble) this._scramble.add(entry.stripId);
+    } else if (isNotPersistedDrop(entry)) {
+      // The drop this COUNT recorded never reached the Board (a crash before
+      // persist); the Strip came back live. VOID it — the retry, if one comes,
+      // writes the COUNT again (docs/adr/0081).
+      const countId = this._liveByStrip.get(entry.stripId);
+      const rec = countId ? this._records.get(countId) : null;
+      if (!rec || rec.dropClientMutationId !== entry.clientMutationId) return;
+      // Only a COUNT written before the marker: the retry's COUNT (same
+      // countId, written after it) is the drop that did take effect.
+      if (Number.isFinite(rec.dropWallAt) && Number.isFinite(entry.wallAt) && rec.dropWallAt > entry.wallAt) return;
+      this._append({
+        type: 'VOID', countId, at: entry.at, wallAt: Number.isFinite(entry.wallAt) ? entry.wallAt : this._wallNow(),
+        clientMutationId: entry.clientMutationId, actorId: entry.actorId || null, reason: 'NOT_PERSISTED',
+      });
     }
   }
 
@@ -537,6 +574,11 @@ class TrafficCount {
    */
   reconcile({ backfill = false } = {}) {
     const logEntries = this._log ? this._log.readAll() : [];
+    // The NotPersisted markers are written at boot, before this instance
+    // subscribes to the log, so the live branch never saw them. Replayed here;
+    // _onLogEntry only voids a COUNT still live for that clientMutationId, so
+    // a marker already applied is a no-op (docs/adr/0081).
+    if (backfill) for (const e of logEntries) if (isNotPersistedDrop(e)) this._onLogEntry(e);
     let result = reconcileTrafficCount(logEntries, this._entries, {});
     let backfilled = 0;
     if (backfill && result.missing.length > 0) {
@@ -638,6 +680,7 @@ module.exports = {
   hourKey,
   isDropTransition,
   isUndoOfDrop,
+  isNotPersistedDrop,
   countability,
   classifyLocality,
   normalizeAircraftType,

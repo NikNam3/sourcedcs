@@ -1,0 +1,42 @@
+SOAK FAIL stress 60m seed=1 in 135.23s
+crew=solo mode=fork clock=virtual digest=3ffa2f469e18a24a
+
+check                         actual                     threshold
+lost / duplicateAck           0 / 0                      0
+audit missing/dup/refusal/orph0/0/0/0                    0
+internalErrors                0                          0
+replays / notIdempotent       53 / 0                     0
+broadcastMissing              0                          0
+silentStaleness               32 {"REBALANCE_SIDE_EFFECT":32}0
+resync delta/snapshot/diverge 20/0/1                     div 0
+acrossRestartDivergence (H4)  3 (probes 1)               0
+boardLostOnRestart            0                          0
+R2 ambiguous replay           SetFlag:lost CreateStrip:appliedTwicereported
+orderKeys max / p99           26 / 26 (INCIRLIK/app-departures/main)<= 40
+rebalances / exhausted throws 23 / 23                    info
+heap slope (post-GC)          4.01 MB/h R²=0.969         <= 1
+heap net growth               13.38% (9.16->10.38 MB)    <= 10%
+per-DROPPED-Strip / residual  6.49 KB / 0.01 MB/h        attribution
+snapshot bytes start->end     54783->678291              info
+codes allocated (max)         33                         <= 2048
+latency worst p99 / persist   75.699 / 11.229 ms         <= 200 (warn 50)
+flights started/done/aborted  274/260/9                  info
+live Strips min/max/end       4/37/7                     stationary
+orphans                       0                          warn > 0
+messages sent                 6399                       info
+correlation rate min/mean     0/0.446                    info
+misbinding (H8)               84 {"LINGERING_TRACK":84}  info
+
+hypotheses: H1=confirmed; H2=partially (keys grow, threshold not reached); H3=confirmed; H4=confirmed; H5=confirmed; H6=confirmed; H7=not reached (max _cidSeq 354); H8=confirmed
+
+FAILURES:
+  - mutations.silentStaleness 32 > 0 (REBALANCE_SIDE_EFFECT:32)
+  - mutations.resync.resyncDivergence 1 > 0
+  - mutations.resync.acrossRestartDivergence 3 > 0 (H4)
+  - memory.slope 4.01 MB/h > 1 (R² 0.969; per-DROPPED-Strip 6.49 KB, residual 0.01 MB/h)
+  - memory.netGrowth 13.38% > 10%
+WARNINGS:
+  - latency p99 75.699 ms > 50 ms
+  - resync paths: delta 20, snapshot 0 — both should be > 0
+
+output: /tmp/L27base/s60

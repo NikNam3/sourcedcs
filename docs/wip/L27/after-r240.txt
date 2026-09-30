@@ -1,0 +1,35 @@
+SOAK FAIL realistic 240m seed=1 in 61.13s
+crew=three mode=fork clock=virtual digest=e45fe6881f6854f7
+
+check                         actual                     threshold
+lost / duplicateAck           0 / 0                      0
+audit missing/dup/refusal/orph0/0/0/0                    0
+internalErrors                0                          0
+replays / notIdempotent       30 / 0                     0
+broadcastMissing              0                          0
+silentStaleness               0 {}                       0
+resync delta/snapshot/diverge 19/4/0                     div 0
+acrossRestartDivergence (H4)  0 (probes 1)               0
+boardLostOnRestart            0                          0
+R2 ambiguous replay           CreateStrip:appliedOnce    reported
+orderKeys max / p99           14 / 14 (INCIRLIK/twr-airborne/main)<= 40
+rebalances / exhausted throws 10 / 10                    info
+heap slope (post-GC)          0.16 MB/h R²=0.066         <= 1
+heap net growth               11.53% (9.6->10.71 MB)     <= 10%
+per-DROPPED-Strip / residual  1.95 KB / -0.01 MB/h       attribution
+snapshot bytes start->end     24015->435350              info
+codes allocated (max)         13                         <= 2048
+latency worst p99 / persist   38.136 / 10.207 ms         <= 200 (warn 50)
+flights started/done/aborted  166/136/20                 info
+live Strips min/max/end       2/23/16                    stationary
+orphans                       0                          warn > 0
+messages sent                 3552                       info
+correlation rate min/mean     0/0.792                    info
+misbinding (H8)               1 {"LINGERING_TRACK":1}    info
+
+hypotheses: H1=refuted; H2=refuted; H3=confirmed; H4=refuted; H5=refuted; H6=confirmed; H7=not reached (max _cidSeq 223); H8=confirmed
+
+FAILURES:
+  - memory.netGrowth 11.53% > 10%
+
+output: /tmp/L27final/r240

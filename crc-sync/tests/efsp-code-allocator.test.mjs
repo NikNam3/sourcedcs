@@ -148,3 +148,52 @@ test('restore() with no prior data (empty/undefined) yields a clean allocator', 
   alloc.restore(undefined);
   assert.equal(alloc.snapshot().length, 0);
 });
+
+// ── docs/adr/0081 (L27): the rotating cursor (L6's F6) ───────────────────
+
+const { isSynthetic } = await import('../src/efsp/code-allocator.js');
+const { FdrStore } = await import('../src/efsp/fdr-store.js');
+
+test('a released code is not re-issued by the next allocate', () => {
+  const a = new CodeAllocator();
+  const first = a.allocate('f1').code;
+  a.release(first);
+  const second = a.allocate('f2').code;
+  assert.notEqual(second, first, 'the landed flight\'s code stays out of circulation');
+  assert.equal(second, '0002');
+});
+
+test('the cursor wraps and still skips reserved, 4000 and the synthetic block', () => {
+  const a = new CodeAllocator();
+  a.restoreCursor(0o7773); // last handed out 7773
+  const got = [];
+  for (let i = 0; i < 6; i++) got.push(a.allocate(`f${i}`).code);
+  // 7774, 7775, 7776 (7777 reserved), then wrap: 0000 reserved, 0001, 0002, 0003.
+  assert.deepEqual(got, ['7774', '7775', '7776', '0001', '0002', '0003']);
+  a.restoreCursor(0o3776);
+  assert.deepEqual([a.allocate('x').code, a.allocate('y').code], ['3777', '4001'], '4000 is never auto-allocated');
+  a.restoreCursor(0o5776);
+  assert.deepEqual([a.allocate('p').code, a.allocate('q').code], ['5777', '7000'], 'the synthetic 6000-6777 block is skipped');
+  const all = new CodeAllocator();
+  let n = 0;
+  while (!all.allocate(`z${n}`).error) n++;
+  for (const code of all._allocated.keys()) {
+    assert.ok(!RESERVED_CODES.has(code) && code !== '4000' && !isSynthetic(code), code);
+  }
+});
+
+test('the cursor survives snapshot/restore', () => {
+  const fdrs = new FdrStore();
+  const a = fdrs.codeAllocator;
+  a.allocate('f1'); a.allocate('f2');
+  const released = a.allocate('f3').code;
+  a.release(released);
+  const snap = JSON.parse(JSON.stringify(fdrs.snapshot()));
+  const restored = new FdrStore();
+  restored.restore(snap);
+  assert.equal(restored.codeAllocator.cursor, a.cursor);
+  assert.notEqual(restored.codeAllocator.allocate('f4').code, released);
+  const noCursor = new FdrStore();
+  noCursor.restore({ fdrs: [], codes: [] });
+  assert.equal(noCursor.codeAllocator.cursor, 0, 'a snapshot without a cursor starts at 0000');
+});

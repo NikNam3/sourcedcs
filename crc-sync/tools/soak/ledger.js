@@ -124,6 +124,7 @@ class Ledger {
     const base = path.basename(logPath);
     const files = fs.readdirSync(dir).filter(f => f.startsWith(base.replace(/\.jsonl$/, ''))).map(f => path.join(dir, f)).sort();
     const lines = new Map(); // cmid -> count
+    const notPersisted = new Map(); // cmid -> NotPersisted markers
     let total = 0; let nullCmid = 0; let systemLines = 0; let airspaceLines = 0; let parseErrors = 0;
     const nullByOp = {};
     for (const file of files) {
@@ -141,8 +142,15 @@ class Ledger {
           nullByOp[e.op] = (nullByOp[e.op] || 0) + 1;
           continue;
         }
+        // A boot NotPersisted marker (docs/adr/0081) says one earlier line for
+        // this cmid never took effect: it and the line it voids count as none.
+        if (e.op === 'NotPersisted') { notPersisted.set(cmid, (notPersisted.get(cmid) || 0) + 1); continue; }
         lines.set(cmid, (lines.get(cmid) || 0) + 1);
       }
+    }
+    for (const [cmid, k] of notPersisted) {
+      const n = (lines.get(cmid) || 0) - k;
+      if (n > 0) lines.set(cmid, n); else lines.delete(cmid);
     }
 
     const res = {

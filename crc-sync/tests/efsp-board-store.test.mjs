@@ -132,7 +132,11 @@ test('replaying a Mutation with the same clientMutationId does not double-apply'
   const r1 = board.applyMutation(mut, 'OPS', 'OPS');
   const r2 = board.applyMutation(mut, 'OPS', 'OPS'); // exact same clientMutationId, replayed
   assert.equal(r1.ok, true);
-  assert.deepEqual(r2, r1); // cached result returned verbatim, not reapplied
+  // The original outcome, answered from the cache (docs/adr/0081): same
+  // result, the Strip as it is now, flagged so efsp-ws.js broadcasts nothing.
+  assert.equal(r2.ok, r1.ok);
+  assert.equal(r2.replayed, true);
+  assert.equal(r2.strip, board.getStrip(strip.stripId));
   assert.equal(board.getStrip(strip.stripId).rev, revAtCreation + 1); // only bumped once
 });
 
@@ -143,7 +147,10 @@ test('idempotent replay works even for a Mutation that originally failed', () =>
   const r1 = board.applyMutation(badMut, 'OPS', 'OPS');
   const r2 = board.applyMutation(badMut, 'OPS', 'OPS');
   assert.equal(r1.ok, false);
-  assert.deepEqual(r2, r1);
+  assert.equal(r2.ok, false);
+  assert.equal(r2.reason, r1.reason);
+  assert.equal(r2.detail, r1.detail);
+  assert.equal(r2.replayed, true);
 });
 
 // ── Ownership (guide §4.4 rule 2) ───────────────────────────────────────────
@@ -1044,4 +1051,110 @@ test('restore() preserves the cid sequence so future CreateStrip calls do not re
   const second = createStrip(freshBoard, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'ZZZ9999' } } });
 
   assert.notEqual(second.cid, first.cid);
+});
+
+// ── docs/adr/0081 (L27): one Board event, every touched Strip ─────────────
+
+function named(board, callsign) {
+  return createStrip(board, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign } } });
+}
+
+test('a forced exhaustion rebalance puts every re-keyed Strip in drainTouched()', () => {
+  const { board } = makeStore();
+  const a = named(board, 'AAA1111');
+  const b = named(board, 'BBB2222');
+  const c = named(board, 'CCC3333');
+  const d = named(board, 'DDD4444');
+  // "X" and "X0" have no key between them: ORDER_KEY_EXHAUSTED, so a rebalance.
+  board.getStrip(a.stripId).orderKey = 'X';
+  board.getStrip(b.stripId).orderKey = 'X0';
+  board.getStrip(c.stripId).orderKey = 'Y';
+  board.drainTouched();
+  const before = new Map(board.getAll().map(s => [s.stripId, s.rev]));
+
+  const r = board.applyMutation(mutation(board.getStrip(d.stripId), { kind: 'MoveStrip', bayId: 'proposed', rackId: 'main', afterStripId: a.stripId, beforeStripId: b.stripId }), 'OPS', 'OPS');
+  assert.equal(r.ok, true, JSON.stringify(r));
+  const touched = board.drainTouched();
+  for (const s of board.getAll()) {
+    if (s.rev !== before.get(s.stripId)) assert.ok(touched.includes(s.stripId), `${s.stripId} was re-keyed but not reported`);
+  }
+  assert.deepEqual(new Set(touched), new Set([a.stripId, b.stripId, c.stripId, d.stripId]));
+  assert.deepEqual(board.drainTouched(), [], 'a drain forgets what it returned');
+});
+
+test('a same-slot insert storm (400 pairs) never produces a key longer than 41', () => {
+  const { board } = makeStore();
+  const ids = [named(board, 'OKP0').stripId, named(board, 'OKP1').stripId, named(board, 'OKP2').stripId];
+  let maxLen = 0;
+  for (let p = 0; p < 400; p++) {
+    for (const mover of [ids[1], ids[2]]) {
+      const rack = board.getRack('proposed', 'main');
+      const rest = rack.filter(x => x.stripId !== mover);
+      const anchor = rest[0];
+      const next = rest[1] || null;
+      const r = board.applyMutation(mutation(board.getStrip(mover), { kind: 'MoveStrip', bayId: 'proposed', rackId: 'main', afterStripId: anchor.stripId, beforeStripId: next ? next.stripId : null }), 'OPS', 'OPS');
+      assert.equal(r.ok, true, JSON.stringify(r));
+      for (const s of board.getAll()) maxLen = Math.max(maxLen, s.orderKey.length);
+    }
+  }
+  assert.ok(maxLen <= 41, `max key length ${maxLen}`);
+  const keys = board.getRack('proposed', 'main').map(s => s.orderKey);
+  assert.deepEqual(keys, [...keys].sort());
+});
+
+test('a refused Mutation leaves drainTouched() empty', () => {
+  const { board } = makeStore();
+  const s = createStrip(board);
+  board.drainTouched();
+  const stale = board.applyMutation({ ...mutation(s, { kind: 'SetFlag', flag: 'offset', value: true }), baseRev: s.rev + 7 }, 'OPS', 'OPS');
+  assert.equal(stale.ok, false);
+  const notOwner = board.applyMutation(mutation(s, { kind: 'SetFlag', flag: 'offset', value: true }), 'GND', 'GND');
+  assert.equal(notOwner.ok, false);
+  const bad = board.applyMutation(mutation(s, { kind: 'SetFlag', flag: 'nope', value: true }), 'OPS', 'OPS');
+  assert.equal(bad.ok, false);
+  assert.deepEqual(board.drainTouched(), []);
+});
+
+// ── docs/adr/0081 (L27): the replay record ──────────────────────────────────
+
+test('a replayed STALE_REV refusal returns the current Strip, not the one at refusal time', () => {
+  const { board } = makeStore();
+  const strip = createStrip(board);
+  const staleMut = { ...mutation(strip, { kind: 'SetFlag', flag: 'offset', value: true }), baseRev: strip.rev - 1 };
+  const r1 = board.applyMutation(staleMut, 'OPS', 'OPS');
+  assert.equal(r1.reason, 'STALE_REV');
+  const revAtRefusal = r1.strip.rev;
+  // The Board moves on.
+  assert.equal(board.applyMutation(mutation(board.getStrip(strip.stripId), { kind: 'SetFlag', flag: 'flipped', value: true }), 'OPS', 'OPS').ok, true);
+  const r2 = board.applyMutation(staleMut, 'OPS', 'OPS');
+  assert.equal(r2.ok, false);
+  assert.equal(r2.reason, 'STALE_REV');
+  assert.equal(r2.strip.rev, revAtRefusal + 1, 'the replica is handed today\'s Strip, never an older one');
+});
+
+test('the cache holds no Strip or FDR object', () => {
+  const { board } = makeStore();
+  const strip = createStrip(board);
+  board.applyMutation(mutation(strip, { kind: 'SetFlag', flag: 'offset', value: true }), 'OPS', 'OPS');
+  board.applyMutation({ ...mutation(strip, { kind: 'SetFlag', flag: 'offset', value: true }), baseRev: 0 }, 'OPS', 'OPS');
+  board.applyMutation(mutation(board.getStrip(strip.stripId), { kind: 'SetBlock', blockId: '9E', value: 'x' }), 'OPS', 'OPS');
+  assert.ok(board._appliedMutations.size >= 4);
+  for (const record of board._appliedMutations.values()) {
+    assert.ok(Object.isFrozen(record));
+    for (const v of Object.values(record)) {
+      assert.ok(v === null || typeof v !== 'object', `a cached value is an object: ${JSON.stringify(v)}`);
+    }
+    assert.doesNotThrow(() => JSON.stringify(record));
+  }
+});
+
+test('a Mutation without a clientMutationId is never answered from the cache', () => {
+  const { board } = makeStore();
+  const strip = createStrip(board);
+  const r1 = board.applyMutation({ stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'SetFlag', flag: 'offset', value: true } }, 'OPS', 'OPS');
+  const r2 = board.applyMutation({ stripId: strip.stripId, baseRev: board.getStrip(strip.stripId).rev, op: { kind: 'SetFlag', flag: 'flipped', value: true } }, 'OPS', 'OPS');
+  assert.equal(r1.ok, true);
+  assert.equal(r2.ok, true);
+  assert.equal(r2.replayed, undefined);
+  assert.equal(board.getStrip(strip.stripId).flags.flipped, true);
 });

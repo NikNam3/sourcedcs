@@ -1,0 +1,35 @@
+SOAK FAIL realistic 10m seed=1 in 1.68s
+crew=three mode=fork clock=virtual digest=cea43bf86cb784df
+
+check                         actual                     threshold
+lost / duplicateAck           0 / 0                      0
+audit missing/dup/refusal/orph0/0/0/0                    0
+internalErrors                0                          0
+replays / notIdempotent       2 / 0                      0
+broadcastMissing              0                          0
+silentStaleness               0 {}                       0
+resync delta/snapshot/diverge 2/4/0                      div 0
+acrossRestartDivergence (H4)  0 (probes 1)               0
+boardLostOnRestart            0                          0
+R2 ambiguous replay           CreateStrip:appliedOnce    reported
+orderKeys max / p99           6 / 6 (INCIRLIK/cd-cleared/main)<= 40
+rebalances / exhausted throws 0 / 0                      info
+heap slope (post-GC)          4.84 MB/h R²=0.967         <= 1
+heap net growth               4.15% (7.88->8.21 MB)      <= 10%
+per-DROPPED-Strip / residual  0 KB / 4.84 MB/h           attribution
+snapshot bytes start->end     10371->51312               info
+codes allocated (max)         12                         <= 2048
+latency worst p99 / persist   5.463 / 1.046 ms           <= 200 (warn 50)
+flights started/done/aborted  12/0/0                     info
+live Strips min/max/end       2/14/14                    stationary
+orphans                       0                          warn > 0
+messages sent                 127                        info
+correlation rate min/mean     0.125/0.287                info
+misbinding (H8)               0 {}                       info
+
+hypotheses: H1=not-exercised; H2=refuted; H3=confirmed; H4=refuted; H5=refuted; H6=not-exercised; H7=not reached (max _cidSeq 13); H8=not-exercised
+
+FAILURES:
+  - memory.slope 4.84 MB/h > 1 (R² 0.967; per-DROPPED-Strip 0 KB, residual 4.84 MB/h)
+
+output: /tmp/L27final/r10

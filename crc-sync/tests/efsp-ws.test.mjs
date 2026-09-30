@@ -198,7 +198,7 @@ test('resync within the ring-buffer window returns an efsp-board-delta, not a sn
   const before = ctx.boardStore.currentSeq;
   handleMessage(ctx, SESSION, createStripMsg(), noopPersist);
 
-  const result = handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq: before }, noopPersist);
+  const result = handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq: before, boardEpoch: ctx.boardStore.epoch }, noopPersist);
   assert.equal(result.ack.type, 'efsp-board-delta');
 });
 
@@ -441,7 +441,7 @@ test('efsp-resync has no correlation branch — a reconnecting client gets the s
   holding(ctx, session, ['OPS']);
   createOpsStrip(ctx, session);
 
-  const delta = handleMessage(ctx, session, { type: 'efsp-resync', lastBoardSeq: 0 }, noopPersist).ack;
+  const delta = handleMessage(ctx, session, { type: 'efsp-resync', lastBoardSeq: 0, boardEpoch: ctx.boardStore.epoch }, noopPersist).ack;
   assert.equal(delta.type, 'efsp-board-delta');
   assert.equal(delta.correlations, undefined);
 });
@@ -526,4 +526,216 @@ test('an efsp-positions-ack names the Facility it refused, not just that one was
   const refused = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', facilityId: 'ATLANTIS', held: ['OPS'] }, noopPersist);
   assert.equal(refused.ack.reason, 'VALIDATION_ERROR');
   assert.equal(refused.ack.facilityId, 'ATLANTIS');
+});
+
+// ── docs/adr/0081 (L27): one Board event, one broadcast ──────────────────
+
+function createNamed(ctx, session, callsign) {
+  const r = handleMessage(ctx, session, createStripMsg({ op: { ...createStripMsg().op, fdr: { ...createStripMsg().op.fdr, callsign } } }), noopPersist);
+  assert.equal(r.ack.ok, true, JSON.stringify(r.ack));
+  return r.ack.strip;
+}
+
+/** A client replica with efsp-state.js's semantics, the way tools/soak/shadow.js builds one. */
+function replica() {
+  const strips = new Map();
+  let boardSeq = -1; let boardEpoch = null;
+  return {
+    strips,
+    get boardSeq() { return boardSeq; },
+    get boardEpoch() { return boardEpoch; },
+    snapshot(msg) {
+      strips.clear();
+      for (const s of msg.strips) strips.set(s.stripId, { ...s });
+      boardSeq = msg.boardSeqByFacility.INCIRLIK; boardEpoch = msg.boardEpochByFacility.INCIRLIK;
+    },
+    delta(msg) {
+      for (const s of msg.strips.updated) strips.set(s.stripId, { ...s });
+      for (const id of msg.strips.gone) strips.delete(id);
+      if (Number.isFinite(msg.boardSeq)) boardSeq = msg.boardSeq;
+      if (msg.boardEpoch) boardEpoch = msg.boardEpoch;
+    },
+    ack(msg) {
+      if (msg.strip) strips.set(msg.strip.stripId, { ...msg.strip });
+      if (Number.isFinite(msg.boardSeq)) boardSeq = msg.boardSeq;
+      if (msg.boardEpoch) boardEpoch = msg.boardEpoch;
+    },
+    diff(board) {
+      const out = [];
+      const live = board.getAll().filter(s => s.state !== 'DROPPED');
+      for (const t of live) {
+        const m = strips.get(t.stripId);
+        if (!m) out.push(`missing ${t.stripId}`);
+        else if (m.rev !== t.rev || m.orderKey !== t.orderKey) out.push(`stale ${t.stripId}`);
+      }
+      for (const id of strips.keys()) if (!live.some(t => t.stripId === id)) out.push(`extra ${id}`);
+      return out;
+    },
+  };
+}
+
+/** Four OPS Strips with keys forced so a MoveStrip between the first two exhausts and rebalances the Rack. */
+function exhaustedRack(ctx) {
+  holding(ctx, SESSION, ['OPS']);
+  const a = createNamed(ctx, SESSION, 'AAA1111');
+  const b = createNamed(ctx, SESSION, 'BBB2222');
+  const c = createNamed(ctx, SESSION, 'CCC3333');
+  const d = createNamed(ctx, SESSION, 'DDD4444');
+  ctx.boardStore.getStrip(a.stripId).orderKey = 'X';
+  ctx.boardStore.getStrip(b.stripId).orderKey = 'X0';
+  ctx.boardStore.getStrip(c.stripId).orderKey = 'Y';
+  const move = {
+    version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(), actingPositionId: 'OPS',
+    stripId: d.stripId, baseRev: ctx.boardStore.getStrip(d.stripId).rev,
+    op: { kind: 'MoveStrip', bayId: 'ops-proposed', rackId: 'main', afterStripId: a.stripId, beforeStripId: b.stripId },
+  };
+  return { a, b, c, d, move };
+}
+
+test('a Mutation that rebalances a Rack broadcasts every Strip it re-keyed', () => {
+  const ctx = makeCtx();
+  const { a, b, c, d, move } = exhaustedRack(ctx);
+  const result = handleMessage(ctx, SESSION, move, noopPersist);
+  assert.equal(result.ack.ok, true, JSON.stringify(result.ack));
+  const sent = new Map(result.broadcast.strips.updated.map(s => [s.stripId, s]));
+  assert.equal(result.broadcast.strips.updated[0].stripId, d.stripId, 'the addressed Strip leads');
+  for (const id of [a.stripId, b.stripId, c.stripId, d.stripId]) {
+    const truth = ctx.boardStore.getStrip(id);
+    assert.ok(sent.has(id), `${id} was re-keyed but not broadcast`);
+    assert.equal(sent.get(id).orderKey, truth.orderKey);
+    assert.equal(sent.get(id).rev, truth.rev);
+    assert.equal(sent.get(id).facilityId, 'INCIRLIK', 'stamped like every other record');
+  }
+  assert.equal(new Set(result.broadcast.strips.updated.map(s => s.stripId)).size, result.broadcast.strips.updated.length, 'no Strip twice');
+});
+
+test('a refused Mutation broadcasts nothing and leaves nothing to drain', () => {
+  const ctx = makeCtx();
+  holding(ctx, SESSION, ['OPS']);
+  const s = createNamed(ctx, SESSION, 'REF1');
+  const r = handleMessage(ctx, SESSION, {
+    version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(), actingPositionId: 'OPS',
+    stripId: s.stripId, baseRev: s.rev + 3, op: { kind: 'SetFlag', flag: 'offset', value: true },
+  }, noopPersist);
+  assert.equal(r.ack.ok, false);
+  assert.equal(r.broadcast, undefined);
+  assert.deepEqual(ctx.boardStore.drainTouched(), []);
+});
+
+test('a replayed success returns the current Strip and produces no broadcast', () => {
+  const ctx = makeCtx();
+  holding(ctx, SESSION, ['OPS']);
+  const s = createNamed(ctx, SESSION, 'RPLY1');
+  const msg = {
+    version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(), actingPositionId: 'OPS',
+    stripId: s.stripId, baseRev: s.rev, op: { kind: 'SetFlag', flag: 'offset', value: true },
+  };
+  const first = handleMessage(ctx, SESSION, msg, noopPersist);
+  assert.equal(first.ack.ok, true);
+  assert.ok(first.broadcast);
+  const later = handleMessage(ctx, SESSION, {
+    version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(), actingPositionId: 'OPS',
+    stripId: s.stripId, baseRev: first.ack.strip.rev, op: { kind: 'SetFlag', flag: 'flipped', value: true },
+  }, noopPersist);
+  assert.equal(later.ack.ok, true);
+  let persisted = false;
+  const replay = handleMessage(ctx, SESSION, msg, () => { persisted = true; });
+  assert.equal(replay.ack.ok, true);
+  assert.equal(replay.ack.strip.rev, later.ack.strip.rev, 'the current Strip');
+  assert.equal(replay.broadcast, undefined);
+  assert.equal(replay.peerBroadcast, undefined);
+  assert.equal(replay.marsaBroadcast, undefined);
+  assert.equal(persisted, false, 'nothing changed, so nothing is written');
+});
+
+// ── docs/adr/0081 (L27): the Board epoch ─────────────────────────────────
+
+test('a resync with the current epoch and a seq inside the window gets a delta', () => {
+  const ctx = makeCtx();
+  holding(ctx, SESSION, ['OPS']);
+  const before = ctx.boardStore.currentSeq;
+  const epoch = handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq: -1 }, noopPersist).ack.boardEpochByFacility.INCIRLIK;
+  createNamed(ctx, SESSION, 'EPOCH1');
+  const r = handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq: before, boardEpoch: epoch }, noopPersist);
+  assert.equal(r.ack.type, 'efsp-board-delta');
+  assert.equal(r.ack.boardEpoch, epoch);
+  assert.equal(r.ack.strips.updated.length, 1);
+});
+
+test('a resync with no epoch gets a snapshot', () => {
+  const ctx = makeCtx();
+  holding(ctx, SESSION, ['OPS']);
+  const before = ctx.boardStore.currentSeq;
+  createNamed(ctx, SESSION, 'EPOCH2');
+  const r = handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq: before }, noopPersist);
+  assert.equal(r.ack.type, 'efsp-snapshot');
+});
+
+test('a resync carrying the previous lifetime\'s epoch gets a snapshot, even when its seq is inside the new lifetime\'s window', () => {
+  // L6's F2 exactly: the process restarts, the new lifetime's seq overtakes
+  // the client's, and the window and rewound checks both pass.
+  const ctx = makeCtx();
+  holding(ctx, SESSION, ['OPS']);
+  const doomed = createNamed(ctx, SESSION, 'GONE1');
+  const oldEpoch = ctx.boardStore.epoch;
+  const oldSeq = ctx.boardStore.currentSeq;
+
+  // A new process restores the snapshot: a fresh ring, seq from zero.
+  const ctx2 = makeCtx();
+  ctx2.fdrStore.restore(ctx.fdrStore.snapshot());
+  const snap = ctx.boardStore.snapshot();
+  snap.strips = snap.strips.filter(s => s.stripId !== doomed.stripId); // dropped and gone before the restart
+  ctx2.boardStore.restore(JSON.parse(JSON.stringify(snap)));
+  assert.notEqual(ctx2.boardStore.epoch, oldEpoch, 'a restore is a new lifetime');
+  holding(ctx2, SESSION, ['OPS']);
+  while (ctx2.boardStore.currentSeq <= oldSeq + 1) createNamed(ctx2, SESSION, `NEW${ctx2.boardStore.currentSeq}`);
+
+  const r = handleMessage(ctx2, SESSION, { type: 'efsp-resync', lastBoardSeq: oldSeq, boardEpoch: oldEpoch }, noopPersist);
+  assert.equal(r.ack.type, 'efsp-snapshot');
+  assert.ok(!r.ack.strips.some(s => s.stripId === doomed.stripId), 'the snapshot, not a delta, clears what the client should no longer show');
+  // The same seq with the new lifetime's epoch is a delta.
+  const ok = handleMessage(ctx2, SESSION, { type: 'efsp-resync', lastBoardSeq: oldSeq, boardEpoch: ctx2.boardStore.epoch }, noopPersist);
+  assert.equal(ok.ack.type, 'efsp-board-delta');
+});
+
+test('resync from the seq the rebalancing broadcast advertised returns an empty delta and the client is correct', () => {
+  const ctx = makeCtx();
+  const client = replica();
+  const { move } = exhaustedRack(ctx);
+  client.snapshot(handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq: -1 }, noopPersist).ack);
+  assert.deepEqual(client.diff(ctx.boardStore), []);
+
+  const result = handleMessage(ctx, SESSION, move, noopPersist);
+  client.ack(result.ack);
+  client.delta(result.broadcast);
+  assert.deepEqual(client.diff(ctx.boardStore), [], 'the broadcast alone leaves the replica right');
+
+  const r = handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq: client.boardSeq, boardEpoch: client.boardEpoch }, noopPersist);
+  assert.equal(r.ack.type, 'efsp-board-delta');
+  assert.deepEqual(r.ack.strips.updated, []);
+  assert.deepEqual(r.ack.strips.gone, []);
+  client.delta(r.ack);
+  assert.deepEqual(client.diff(ctx.boardStore), []);
+});
+
+test('a resync delta reports a Strip no longer on the Board as gone, once (the seam retention fills)', () => {
+  const ctx = makeCtx();
+  holding(ctx, SESSION, ['OPS']);
+  const before = ctx.boardStore.currentSeq;
+  const archived = createNamed(ctx, SESSION, 'ARCH1');
+  const dropped = createNamed(ctx, SESSION, 'DROP1');
+  const kept = createNamed(ctx, SESSION, 'KEEP1');
+  const d = handleMessage(ctx, SESSION, {
+    version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(), actingPositionId: 'OPS',
+    stripId: dropped.stripId, baseRev: ctx.boardStore.getStrip(dropped.stripId).rev, op: { kind: 'DropStrip' },
+  }, noopPersist);
+  assert.equal(d.ack.ok, true, JSON.stringify(d.ack));
+  ctx.boardStore._strips.delete(archived.stripId); // what L24's archive will do
+
+  const delta = ctx.boardStore.getDeltaSince(before);
+  assert.deepEqual(delta.gone, [archived.stripId]);
+  const r = handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq: before, boardEpoch: ctx.boardStore.epoch }, noopPersist);
+  assert.equal(r.ack.type, 'efsp-board-delta');
+  assert.deepEqual(r.ack.strips.gone.slice().sort(), [archived.stripId, dropped.stripId].sort());
+  assert.deepEqual(r.ack.strips.updated.map(s => s.stripId), [kept.stripId]);
 });

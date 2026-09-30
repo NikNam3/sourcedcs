@@ -85,6 +85,59 @@ function _mergeFdrs(primary, extra) {
 }
 
 /**
+ * The `strips` section of a board-delta for the Strips a Board event touched
+ * (docs/adr/0081): `first` (the addressed Strip, already stamped) leads, then
+ * every other touched id, looked up now. DROPPED goes into `gone`, everything
+ * else is stamped into `updated` — through _stampStrip, never by hand.
+ */
+function _touchedStrips(ctx, boardStore, facilityId, touchedIds, first) {
+  const updated = [];
+  const gone = [];
+  const place = (s) => { if (s.state === 'DROPPED') gone.push(s.stripId); else updated.push(s); };
+  if (first) place(first);
+  for (const id of touchedIds) {
+    if (first && id === first.stripId) continue;
+    const s = boardStore ? boardStore.getStrip(id) : null;
+    if (!s) { gone.push(id); continue; }
+    if (s.state === 'DROPPED') gone.push(id);
+    else updated.push(_stampStrip(boardStore, s, facilityId, ctx));
+  }
+  return { updated, gone };
+}
+
+/**
+ * An efsp-board-delta for one Facility. Every one carries `boardEpoch` beside
+ * `boardSeq` (docs/adr/0081): a seq only means something within one Board
+ * lifetime, and the epoch names the lifetime.
+ */
+function _boardDelta(ctx, boardStore, facilityId, strips, fdrs, positions = []) {
+  return {
+    version: VERSION, type: 'efsp-board-delta',
+    boardSeq: boardStore ? boardStore.currentSeq : undefined,
+    boardEpoch: boardStore ? boardStore.epoch : undefined,
+    facilityId,
+    strips,
+    fdrs: { updated: fdrs },
+    positions: { updated: positions },
+  };
+}
+
+/**
+ * Idempotency for the four non-Board paths (docs/adr/0081, L6's F13). Asked
+ * AFTER a path's own session and class gates and BEFORE its store: a refusal
+ * made before the store is never cached, so a retry after selecting the
+ * Position goes through. A hit is answered with the original outcome and the
+ * record as it is now — no store call, no audit line, no persist, no
+ * broadcast.
+ */
+function _cachedOutcome(ctx, kind, msg) {
+  return ctx.replayCache ? ctx.replayCache.get(kind, msg.clientMutationId) : null;
+}
+function _rememberOutcome(ctx, kind, msg, result, id) {
+  if (ctx.replayCache) ctx.replayCache.set(kind, msg.clientMutationId, { ok: result.ok, reason: result.reason, detail: result.detail, warning: result.warning, id });
+}
+
+/**
  * The flights a MARSA op names in its own body — the participants of a
  * declaration, or the one flight being added or removed. Echoed on the ack so a
  * refusal can be attributed even when it never reached the store and so has no
@@ -127,7 +180,7 @@ function handleMessage(ctx, session, msg, persist) {
   switch (msg.type) {
     case 'efsp-mutation':      return _handleMutation(ctx, session, msg, persist);
     case 'efsp-resync':        return _handleResync(ctx, msg);
-    case 'efsp-set-positions': return _handleSetPositions(ctx, session, msg);
+    case 'efsp-set-positions': return _handleSetPositions(ctx, session, msg, persist);
     case 'efsp-airspace-mutation': return _handleAirspaceMutation(ctx, session, msg, persist);
     case 'efsp-correlation-mutation': return _handleCorrelationMutation(ctx, session, msg, persist);
     case 'efsp-marsa-mutation': return _handleMarsaMutation(ctx, session, msg, persist);
@@ -164,7 +217,7 @@ function _handleMutation(ctx, session, msg, persist) {
   const mutation = { clientMutationId: msg.clientMutationId, stripId: msg.stripId, baseRev: msg.baseRev, op: msg.op };
 
   const result = boardStore.applyMutation(mutation, msg.actingPositionId, session.controllerId);
-  if (result.ok) persist();
+  if (result.ok && !result.replayed) persist();
 
   // Every Strip record leaving this function — ack or broadcast — goes through
   // the one stamping helper, which is where the reasons for what it adds live.
@@ -185,22 +238,30 @@ function _handleMutation(ctx, session, msg, persist) {
     version: VERSION, type: 'efsp-mutation-ack', clientMutationId: msg.clientMutationId,
     ..._subject(msg),
     facilityId,
-    boardSeq: boardStore.currentSeq, ok: result.ok,
+    boardSeq: boardStore.currentSeq, boardEpoch: boardStore.epoch, ok: result.ok,
     strip: stampedStrip, fdr: result.fdr, reason: result.reason, detail: result.detail,
     warning: result.warning, routedTo: result.routedTo,
   };
-  if (!result.ok) return { ack };
+  // A replay answers from the idempotency cache (docs/adr/0081): the original
+  // outcome with the Strip as it is now. Its broadcasts went out the first
+  // time, so it sends none — a second one would only repeat a view.
+  if (result.replayed) return { ack };
 
-  const dropped = stampedStrip.state === 'DROPPED';
+  // One Board event, one broadcast (guide §5.4, docs/adr/0081). The Mutation
+  // may have touched Strips it never named — a rebalance re-keys a whole
+  // Rack — and every one of them goes out here, or no client hears of it and
+  // a later resync from this broadcast's boardSeq cannot heal it either (L6's
+  // F1). A refusal normally touched nothing; if one ever did (an exception
+  // part-way through an op), what it touched is broadcast rather than dropped.
+  const touched = boardStore.drainTouched();
+  if (!result.ok) {
+    if (touched.length === 0) return { ack };
+    return { ack, broadcast: _boardDelta(ctx, boardStore, facilityId, _touchedStrips(ctx, boardStore, facilityId, touched, null), []) };
+  }
+
   const out = {
     ack,
-    broadcast: {
-      version: VERSION, type: 'efsp-board-delta', boardSeq: boardStore.currentSeq,
-      facilityId,
-      strips: { updated: dropped ? [] : [stampedStrip], gone: dropped ? [stampedStrip.stripId] : [] },
-      fdrs: { updated: updatedFdrs },
-      positions: { updated: [] },
-    },
+    broadcast: _boardDelta(ctx, boardStore, facilityId, _touchedStrips(ctx, boardStore, facilityId, touched, stampedStrip), updatedFdrs),
   };
 
   // Bug found in live testing: a coordination primitive's PROPOSE/ACCEPT/
@@ -214,15 +275,18 @@ function _handleMutation(ctx, session, msg, persist) {
   // build a SECOND board-delta, scoped to the peer Facility, so a client
   // holding a Position there sees the new/updated replica immediately,
   // same <200ms budget as the primary broadcast (guide §7.9).
+  //
+  // Built from the peer Board's own drain (docs/adr/0081): placing a replica
+  // in a coordination Bay can rebalance that Rack, and those re-keyed Strips
+  // are the peer's side of the same Board event. The peer Board is drained
+  // only when this broadcast is built, so nothing it touched is discarded.
   if (result.peerStrip) {
     const peerBoardStore = ctx.boardStoreFor(result.peerFacilityId);
-    out.peerBroadcast = {
-      version: VERSION, type: 'efsp-board-delta', boardSeq: peerBoardStore ? peerBoardStore.currentSeq : undefined,
-      facilityId: result.peerFacilityId,
-      strips: { updated: [_stampStrip(peerBoardStore, result.peerStrip, result.peerFacilityId, ctx)], gone: [] },
-      fdrs: { updated: [] }, // one shared FdrStore (docs/adr/0013) — already covered by the primary broadcast's fdrs.updated
-      positions: { updated: [] },
-    };
+    const peerStamped = _stampStrip(peerBoardStore, result.peerStrip, result.peerFacilityId, ctx);
+    const peerTouched = peerBoardStore ? peerBoardStore.drainTouched() : [];
+    // fdrs: one shared FdrStore (docs/adr/0013) — already covered by the primary broadcast's fdrs.updated
+    out.peerBroadcast = _boardDelta(ctx, peerBoardStore, result.peerFacilityId,
+      _touchedStrips(ctx, peerBoardStore, result.peerFacilityId, peerTouched, peerStamped), []);
   }
 
   // WP6 (docs/adr/0051) — a Strip Mutation can change a MARSA relation without
@@ -247,56 +311,77 @@ function _handleMutation(ctx, session, msg, persist) {
   return out;
 }
 
+/**
+ * efsp-resync (guide §5.6): exactly two answers, a delta or a snapshot.
+ *
+ * Three steps, kept in this order so each can grow on its own: resolve the
+ * Board, decide whether a delta can serve this client, build the answer. A
+ * rule that forces a snapshot for some sessions (L23) is one more early return
+ * in the middle step; retention removing Strips (L24) only changes what
+ * getDeltaSince reports as `gone`.
+ */
 function _handleResync(ctx, msg) {
-  const { fdrStore, facilityConfig } = ctx;
-  const facilityId = msg.facilityId || facilityConfig.DEFAULT_FACILITY_ID;
+  // 1. Resolve the Board.
+  const facilityId = msg.facilityId || ctx.facilityConfig.DEFAULT_FACILITY_ID;
   const boardStore = ctx.boardStoreFor(facilityId);
   const positionStore = ctx.positionStoreFor(facilityId);
   if (!boardStore || !positionStore) return { ack: _snapshotMessage(ctx) };
 
+  // 2. Decide: delta or snapshot.
   const lastSeq = Number.isFinite(msg.lastBoardSeq) ? msg.lastBoardSeq : -1;
-  // Two ways a delta cannot serve this client, and only one of them used to be
-  // checked.
-  //
-  // `currentSeq - lastSeq > WINDOW` is the client being too far BEHIND — it
-  // missed more than the ring holds, so replaying from there would skip
-  // changes.
-  //
-  // `lastSeq > currentSeq` is the server having gone BACKWARDS: it restarted
-  // with no snapshot, or was restored from an older one, so its sequence is
-  // lower than what the client already saw. The subtraction then goes NEGATIVE
-  // and sailed through the window check — the server replayed a delta from an
-  // empty ring, found nothing, and answered "no changes" to a client holding a
-  // whole Board of Strips that no longer exist. They stayed on screen forever,
-  // and no amount of reconnecting cleared them.
-  //
-  // Found by clearing the local Board during development and watching a Strip
-  // survive it. Same class as docs/adr/0049's five: not a mutation, a
-  // TRANSITION — here, the server's own lifetime.
-  const rewound = lastSeq > boardStore.currentSeq;
-  const withinWindow = lastSeq >= 0 && !rewound && boardStore.currentSeq - lastSeq <= RESYNC_RING_WINDOW;
+  if (!_deltaCanServe(boardStore, msg.boardEpoch, lastSeq)) return { ack: _snapshotMessage(ctx) };
 
-  if (withinWindow) {
-    const delta = boardStore.getDeltaSince(lastSeq);
-    return {
-      ack: {
-        version: VERSION, type: 'efsp-board-delta', boardSeq: boardStore.currentSeq, facilityId,
-        strips: {
-          updated: delta.updated.filter(s => s.state !== 'DROPPED').map(s => _stampStrip(boardStore, s, facilityId, ctx)),
-          gone: delta.updated.filter(s => s.state === 'DROPPED').map(s => s.stripId),
-        },
-        // FDRs/Positions are cheap enough at this scale to always send in
-        // full rather than building a second/third ring buffer — see
-        // board-store.js's module comment. fdrStore is shared across every
-        // Facility (docs/adr/0013), so this list is NOT facility-scoped —
-        // it's the same full set a snapshot would carry.
-        fdrs: { updated: fdrStore.getAll() },
-        positions: { updated: positionStore.getAll().map(p => ({ ...p, facilityId })) },
+  // 3. Build the delta.
+  const delta = boardStore.getDeltaSince(lastSeq);
+  const live = delta.updated.filter(s => s.state !== 'DROPPED');
+  const dropped = delta.updated.filter(s => s.state === 'DROPPED').map(s => s.stripId);
+  return {
+    ack: _boardDelta(ctx, boardStore, facilityId,
+      {
+        updated: live.map(s => _stampStrip(boardStore, s, facilityId, ctx)),
+        // DROPPED Strips still on the Board, then ids no longer on it at all
+        // (retention's archive, L24). Disjoint by construction.
+        gone: [...dropped, ...delta.gone],
       },
-    };
-  }
+      // FDRs/Positions are cheap enough at this scale to always send in
+      // full rather than building a second/third ring buffer — see
+      // board-store.js's module comment. fdrStore is shared across every
+      // Facility (docs/adr/0013), so this list is NOT facility-scoped —
+      // it's the same full set a snapshot would carry.
+      ctx.fdrStore.getAll(),
+      positionStore.getAll().map(p => ({ ...p, facilityId }))),
+  };
+}
 
-  return { ack: _snapshotMessage(ctx) };
+/**
+ * Whether a delta from `lastSeq` would leave this client right. Three ways it
+ * cannot, each found the hard way.
+ *
+ * A different Board LIFETIME (docs/adr/0081, L6's F2). `_seq` and the ring are
+ * per process, so after a restart a client's seq names a point in a Board that
+ * no longer exists. Once the new lifetime's seq overtakes it, the window and
+ * `rewound` checks below both pass and a delta from the wrong ring is served
+ * as if continuous: Strips dropped before the restart stay on screen, Strips
+ * created are missed. Only the epoch the client last saw can tell. A client
+ * that sends none (the shipped client never resyncs, briefing §3.10) gets the
+ * snapshot, which is always safe.
+ *
+ * The client too far BEHIND: `currentSeq - lastSeq > WINDOW` — it missed more
+ * than the ring holds, so replaying from there would skip changes.
+ *
+ * The server having gone BACKWARDS: `lastSeq > currentSeq`. It restarted with
+ * no snapshot, or was restored from an older one. The subtraction then went
+ * NEGATIVE and sailed through the window check — the server replayed a delta
+ * from an empty ring and told a client holding a whole Board of Strips that
+ * nothing had changed. Found by clearing the local Board during development
+ * and watching a Strip survive it. The epoch now covers this case too; the
+ * check stays because it is cheap and still true.
+ */
+function _deltaCanServe(boardStore, boardEpoch, lastSeq) {
+  if (boardEpoch !== boardStore.epoch) return false;
+  if (lastSeq < 0) return false;
+  if (lastSeq > boardStore.currentSeq) return false; // rewound
+  return boardStore.currentSeq - lastSeq <= RESYNC_RING_WINDOW;
 }
 
 /**
@@ -333,10 +418,20 @@ function _handleAirspaceMutation(ctx, session, msg, persist) {
     return { ack: { version: VERSION, type: 'efsp-airspace-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'NOT_HOLDING_POSITION', detail: `you are not Primary at ${msg.actingPositionId} — select it before acting on airspace` } };
   }
 
+  const cached = _cachedOutcome(ctx, 'airspace', msg);
+  if (cached) {
+    return { ack: {
+      version: VERSION, type: 'efsp-airspace-ack', clientMutationId: msg.clientMutationId, ..._subject(msg),
+      ok: cached.ok, airspace: airspaceStore.getAirspace(cached.id), reason: cached.reason, detail: cached.detail,
+      warning: cached.warning, airspaceSeq: airspaceStore.currentSeq,
+    } };
+  }
+
   const result = airspaceStore.apply(
     { airspaceId: msg.airspaceId, baseRev: msg.baseRev, op: msg.op },
     msg.actingPositionId, session.controllerId,
   );
+  _rememberOutcome(ctx, 'airspace', msg, result, msg.airspaceId);
   if (result.ok) persist();
 
   const ack = {
@@ -408,10 +503,20 @@ function _handleCorrelationMutation(ctx, session, msg, persist) {
     return { ack: { version: VERSION, type: 'efsp-correlation-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'PERMISSION_DENIED', detail: `${msg.actingPositionId} works no flights, so it identifies no contacts` } };
   }
 
+  const cached = _cachedOutcome(ctx, 'correlation', msg);
+  if (cached) {
+    return { ack: {
+      version: VERSION, type: 'efsp-correlation-ack', clientMutationId: msg.clientMutationId, ..._subject(msg),
+      ok: cached.ok, correlation: correlationStore.getCorrelation(cached.id), reason: cached.reason, detail: cached.detail,
+      correlationSeq: correlationStore.currentSeq,
+    } };
+  }
+
   const result = correlationStore.apply(
     { clientMutationId: msg.clientMutationId, fdrId: msg.fdrId, baseRev: msg.baseRev, op: msg.op },
     msg.actingPositionId, session.controllerId,
   );
+  _rememberOutcome(ctx, 'correlation', msg, result, msg.fdrId);
   if (result.ok) persist();
 
   const ack = {
@@ -475,10 +580,22 @@ function _handleMarsaMutation(ctx, session, msg, persist) {
     return { ack: { version: VERSION, type: 'efsp-marsa-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'PERMISSION_DENIED', detail: `${msg.actingPositionId} works no flights, so it declares no MARSA` } };
   }
 
+  // DeclareMarsa is the case that matters: a retried declaration minted a
+  // second relation.
+  const cached = _cachedOutcome(ctx, 'marsa', msg);
+  if (cached) {
+    return { ack: {
+      version: VERSION, type: 'efsp-marsa-ack', clientMutationId: msg.clientMutationId, ..._subject(msg),
+      ok: cached.ok, marsa: cached.id ? marsaStore.getRelation(cached.id) : undefined, reason: cached.reason, detail: cached.detail,
+      marsaSeq: marsaStore.currentSeq,
+    } };
+  }
+
   const result = marsaStore.apply(
     { clientMutationId: msg.clientMutationId, marsaId: msg.marsaId, baseRev: msg.baseRev, op: msg.op },
     msg.actingPositionId, session.controllerId,
   );
+  _rememberOutcome(ctx, 'marsa', msg, result, result.relation ? result.relation.marsaId : (msg.marsaId || null));
   if (result.ok) persist();
 
   const ack = {
@@ -514,14 +631,7 @@ function _handleMarsaMutation(ctx, session, msg, persist) {
   if (regimeFdrs.length > 0) {
     const facilityId = ctx.facilityConfig.DEFAULT_FACILITY_ID;
     const boardStore = ctx.boardStoreFor(facilityId);
-    out.broadcast = {
-      version: VERSION, type: 'efsp-board-delta',
-      boardSeq: boardStore ? boardStore.currentSeq : undefined,
-      facilityId,
-      strips: { updated: [], gone: [] },
-      fdrs: { updated: regimeFdrs },
-      positions: { updated: [] },
-    };
+    out.broadcast = _boardDelta(ctx, boardStore, facilityId, { updated: [], gone: [] }, regimeFdrs);
   }
   return out;
 }
@@ -535,7 +645,7 @@ function _marsaDelta(marsaStore, relations) {
   };
 }
 
-function _handleSetPositions(ctx, session, msg) {
+function _handleSetPositions(ctx, session, msg, persist) {
   const facilityId = msg.facilityId || ctx.facilityConfig.DEFAULT_FACILITY_ID;
   const positionStore = ctx.positionStoreFor(facilityId);
   const boardStore = ctx.boardStoreFor(facilityId);
@@ -565,23 +675,29 @@ function _handleSetPositions(ctx, session, msg) {
     }
   }
 
+  // The re-send below carries every live Strip, so whatever
+  // reassignPositionStrips touched is already in it. Drained so those touches
+  // do not ride again on the next Mutation's broadcast (docs/adr/0081).
+  boardStore.drainTouched();
+  // A covering-chain reassignment changes the Board, and it used to be the one
+  // Board change never persisted: a restart before the next Mutation restored
+  // the Strips to the Position that had left (docs/adr/0081, L6's F2/F5 tail).
+  if (reassignedIds.length > 0 && typeof persist === 'function') persist();
+
   return {
     ack: { version: VERSION, type: 'efsp-positions-ack', facilityId, held: actuallyHeld, warnings },
-    broadcast: {
-      version: VERSION, type: 'efsp-board-delta', boardSeq: boardStore.currentSeq, facilityId,
-      // EVERY live Strip, not just the reassigned ones. Taking or giving up a
-      // Position changes who is there to receive a transfer, which changes the
-      // `nla` status _stampStrip computes for Strips this message never
-      // touched — a TWR Strip at DEPARTED becomes "no receiving Position
-      // present" the instant APP is released, and F-408's whole point is that
-      // the panel be told BEFORE the press. The Board is a few dozen Strips
-      // (board-store.js's module comment) and a Position change is a rare,
-      // deliberate act, so re-sending the set is cheaper than tracking which
-      // Strips' status actually moved.
-      strips: { updated: boardStore.getAll().filter(s => s.state !== 'DROPPED').map(s => _stampStrip(boardStore, s, facilityId, ctx)), gone: [] },
-      fdrs: { updated: [] },
-      positions: { updated: positionStore.getAll().map(p => ({ ...p, facilityId })) },
-    },
+    // EVERY live Strip, not just the reassigned ones. Taking or giving up a
+    // Position changes who is there to receive a transfer, which changes the
+    // `nla` status _stampStrip computes for Strips this message never
+    // touched — a TWR Strip at DEPARTED becomes "no receiving Position
+    // present" the instant APP is released, and F-408's whole point is that
+    // the panel be told BEFORE the press. The Board is a few dozen Strips
+    // (board-store.js's module comment) and a Position change is a rare,
+    // deliberate act, so re-sending the set is cheaper than tracking which
+    // Strips' status actually moved.
+    broadcast: _boardDelta(ctx, boardStore, facilityId,
+      { updated: boardStore.getAll().filter(s => s.state !== 'DROPPED').map(s => _stampStrip(boardStore, s, facilityId, ctx)), gone: [] },
+      [], positionStore.getAll().map(p => ({ ...p, facilityId }))),
   };
 }
 
@@ -600,6 +716,9 @@ function _snapshotMessage(ctx) {
   const positions = [];
   const bays = [];
   const boardSeqByFacility = {};
+  // The lifetime each seq belongs to (docs/adr/0081): a client that resyncs
+  // sends back the epoch it read here, or it is answered with a snapshot.
+  const boardEpochByFacility = {};
   // WP4A gap-closure (docs/adr/0022) — lets the client proactively disable
   // the AIT option (rather than let the controller submit-and-silently-fail
   // against the server-side check in board-store.js's
@@ -610,6 +729,7 @@ function _snapshotMessage(ctx) {
     const boardStore = ctx.boardStoreFor(facilityId);
     const positionStore = ctx.positionStoreFor(facilityId);
     boardSeqByFacility[facilityId] = boardStore.currentSeq;
+    boardEpochByFacility[facilityId] = boardStore.epoch;
     aitAuthorizedByFacility[facilityId] = !!facilityConfig.getFacilityConfig(facilityId).aitAuthorized;
     for (const s of boardStore.getAll().filter(s => s.state !== 'DROPPED')) strips.push(_stampStrip(boardStore, s, facilityId, ctx));
     for (const p of positionStore.getAll()) positions.push({ ...p, facilityId });
@@ -623,6 +743,7 @@ function _snapshotMessage(ctx) {
     facility: facilityConfig.getFacilityConfig(defaultFacilityId).facility, // back-compat alias
     facilities: facilityIds,
     boardSeqByFacility,
+    boardEpochByFacility,
     aitAuthorizedByFacility,
     // The character each Position's owned contacts carry on an ATC scope
     // (docs/adr/0088). Config, so it rides the snapshot only.
@@ -689,12 +810,22 @@ function _handleFieldStateMutation(ctx, session, msg, persist) {
     return refuse('NOT_HOLDING_POSITION', `you are not Primary at ${msg.actingPositionId} at ${facilityId} — select it before acting on the field`);
   }
 
+  const cached = _cachedOutcome(ctx, 'fieldState', msg);
+  if (cached) {
+    return { ack: {
+      version: VERSION, type: 'efsp-field-state-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), facilityId,
+      ok: cached.ok, fieldState: store.getFieldState(cached.id), reason: cached.reason, detail: cached.detail,
+      fieldStateSeq: store.currentSeq,
+    } };
+  }
+
   // The permission table (and every refusal) is checked inside apply(), so a
   // PERMISSION_DENIED is audited like any other outcome.
   const result = store.apply(
     { clientMutationId: msg.clientMutationId, facilityId, baseRev: msg.baseRev, op },
     msg.actingPositionId, session.controllerId,
   );
+  _rememberOutcome(ctx, 'fieldState', msg, result, facilityId);
   if (result.ok) {
     persist();
     // A runway's status moves the `nla` stamp of Strips this op never touched

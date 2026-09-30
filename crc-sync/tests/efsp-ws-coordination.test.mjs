@@ -226,7 +226,7 @@ test('a resync-within-window delta also stamps facilityId on every updated Strip
   const before = ctx.boardStoreFor('CENTER').currentSeq;
   handleMessage(ctx, CTR_SESSION, createCtrStripMsg(), noopPersist);
 
-  const result = handleMessage(ctx, CTR_SESSION, { type: 'efsp-resync', facilityId: 'CENTER', lastBoardSeq: before }, noopPersist);
+  const result = handleMessage(ctx, CTR_SESSION, { type: 'efsp-resync', facilityId: 'CENTER', lastBoardSeq: before, boardEpoch: ctx.boardStoreFor('CENTER').epoch }, noopPersist);
   assert.equal(result.ack.type, 'efsp-board-delta');
   assert.equal(result.ack.strips.updated.length, 1);
   assert.equal(result.ack.strips.updated[0].facilityId, 'CENTER');
@@ -245,4 +245,38 @@ test('a snapshot includes every Facility\'s Bays, each correctly stamped', async
   assert.equal(typeof snap.boardSeqByFacility.INCIRLIK, 'number');
   assert.equal(typeof snap.boardSeqByFacility.CENTER, 'number');
   assert.equal(typeof snap.boardSeqByFacility.TACTICAL, 'number');
+});
+
+// ── docs/adr/0081 (L27): the peer's side of one Board event ──────────────
+
+test('a coordination proposal that rebalances the peer\'s coordination Rack puts the re-keyed peer Strips in peerBroadcast', () => {
+  const ctx = makeCtx();
+  holding(ctx, CTR_SESSION, 'CENTER', ['CTR']);
+  holding(ctx, APP_SESSION, 'INCIRLIK', ['APP']);
+  const propose = (strip) => handleMessage(ctx, CTR_SESSION, {
+    version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(),
+    facilityId: 'CENTER', actingPositionId: 'CTR', stripId: strip.stripId, baseRev: strip.rev,
+    op: { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'APP' },
+  }, noopPersist);
+
+  const first = handleMessage(ctx, CTR_SESSION, createCtrStripMsg(), noopPersist).ack.strip;
+  const p1 = propose(first);
+  assert.equal(p1.ack.ok, true, JSON.stringify(p1.ack));
+  const replica1 = p1.ack.strip.coordination.peerStripId;
+  // A key past REBALANCE_KEY_LENGTH: the next replica placed after it forces a proactive rebalance.
+  const incirlik = ctx.boardStoreFor('INCIRLIK');
+  incirlik.getStrip(replica1).orderKey = 'z'.repeat(45);
+  const revBefore = incirlik.getStrip(replica1).rev;
+
+  const second = handleMessage(ctx, CTR_SESSION, createCtrStripMsg({ op: { ...createCtrStripMsg().op, fdr: { ...createCtrStripMsg().op.fdr, callsign: 'SECND22' } } }), noopPersist).ack.strip;
+  const p2 = propose(second);
+  assert.equal(p2.ack.ok, true, JSON.stringify(p2.ack));
+  assert.ok(incirlik.getStrip(replica1).rev > revBefore, 'the first replica was re-keyed');
+  const peerSent = new Map(p2.peerBroadcast.strips.updated.map(s => [s.stripId, s]));
+  assert.equal(p2.peerBroadcast.strips.updated[0].stripId, p2.ack.strip.coordination.peerStripId, 'the new replica leads');
+  assert.ok(peerSent.has(replica1), 'the re-keyed peer Strip rides in peerBroadcast');
+  assert.equal(peerSent.get(replica1).orderKey, incirlik.getStrip(replica1).orderKey);
+  assert.equal(peerSent.get(replica1).rev, incirlik.getStrip(replica1).rev);
+  assert.ok(incirlik.getStrip(replica1).orderKey.length <= 40);
+  assert.deepEqual(incirlik.drainTouched(), [], 'the peer Board was drained by the broadcast');
 });

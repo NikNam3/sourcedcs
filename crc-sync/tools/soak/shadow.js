@@ -25,6 +25,8 @@ class Shadow {
     this.facilityIds = facilityIds;
     this.strips = new Map(); // facilityId -> Map(stripId -> compared)
     this.boardSeq = new Map(); // facilityId -> number
+    // facilityId -> the Board lifetime boardSeq belongs to (docs/adr/0081). Sent back on efsp-resync.
+    this.boardEpoch = new Map();
     for (const f of facilityIds) { this.strips.set(f, new Map()); this.boardSeq.set(f, -1); }
     // Every stripId -> rev regression a delta tried to apply (a delta carrying an OLDER rev than the replica holds).
     this.regressions = 0;
@@ -45,6 +47,8 @@ class Shadow {
     }
     const seqs = msg.boardSeqByFacility || {};
     for (const f of fids) if (Number.isFinite(seqs[f])) this.boardSeq.set(f, seqs[f]);
+    const epochs = msg.boardEpochByFacility || {};
+    for (const f of fids) if (epochs[f] !== undefined) this.boardEpoch.set(f, epochs[f]);
   }
 
   applyDelta(msg) {
@@ -57,6 +61,7 @@ class Shadow {
     }
     for (const id of (msg.strips && msg.strips.gone) || []) m.delete(id);
     if (Number.isFinite(msg.boardSeq)) this.boardSeq.set(fid, msg.boardSeq);
+    if (msg.boardEpoch !== undefined) this.boardEpoch.set(fid, msg.boardEpoch);
   }
 
   applyAck(msg) {
@@ -64,6 +69,7 @@ class Shadow {
     const fid = msg.facilityId || msg.strip.facilityId || 'INCIRLIK';
     this._fac(fid).set(msg.strip.stripId, compared(msg.strip));
     if (Number.isFinite(msg.boardSeq)) this.boardSeq.set(fid, msg.boardSeq);
+    if (msg.boardEpoch !== undefined) this.boardEpoch.set(fid, msg.boardEpoch);
   }
 
   /**
