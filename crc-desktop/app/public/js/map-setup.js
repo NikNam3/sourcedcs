@@ -328,6 +328,7 @@ function initMap(container) {
     map.addSource('units', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
     map.addLayer({
       id: 'unit-squares', type: 'symbol', source: 'units',
+      filter: ['!=', ['get', 'scheme'], 'ATC'],
       layout: {
         'icon-image': [
           'case',
@@ -361,7 +362,7 @@ function initMap(container) {
     // no per-frame source rebuild required.
     map.addLayer({
       id: 'unit-emerg-square', type: 'symbol', source: 'units',
-      filter: ['!=', ['get', 'emergency'], ''],
+      filter: ['all', ['!=', ['get', 'emergency'], ''], ['!=', ['get', 'scheme'], 'ATC']],
       layout: {
         'icon-image': ['match', ['get', 'emergency'],
           'gen',    'emerg-gen',
@@ -375,6 +376,30 @@ function initMap(container) {
       paint: { 'icon-opacity': 0.9 },
     });
 
+    // ── ATC targets (crc-sync's docs/adr/0088) ───────────────────────────
+    // STARS draws every track as a blue fused-target disc with one character
+    // on it: the owner's letter, `*` for an uncorrelated beacon, `+` for
+    // primary only. A coasting track keeps the character and loses the disc.
+    map.addLayer({
+      id: 'atc-targets', type: 'circle', source: 'units',
+      filter: ['all', ['==', ['get', 'scheme'], 'ATC'], ['get', 'disc']],
+      paint: {
+        'circle-radius': 6, 'circle-color': ['get', 'targetColor'],
+        'circle-opacity': ['get', 'targetOpacity'], 'circle-stroke-width': 0,
+      },
+    });
+    map.addLayer({
+      id: 'atc-symbols', type: 'symbol', source: 'units',
+      filter: ['==', ['get', 'scheme'], 'ATC'],
+      layout: {
+        'text-field': ['get', 'posChar'],
+        'text-font': ['Roboto Mono Medium', 'Noto Sans Regular'],
+        'text-size': TEXT_SIZE_PX, 'text-anchor': 'center',
+        'text-allow-overlap': true, 'text-ignore-placement': true,
+      },
+      paint: { 'text-color': ['get', 'posColor'], 'text-opacity': ['get', 'posOpacity'] },
+    });
+
     // ── Labels ───────────────────────────────────────────────────────────
     // text-offset is data-driven: default labels use TEXT_OFFSET_EM (em-based,
     // pixel-stable); dragged labels are placed at their geographic position
@@ -385,6 +410,7 @@ function initMap(container) {
     // blinking square icon layer above.
     map.addLayer({
       id: 'unit-labels', type: 'symbol', source: 'labels',
+      filter: ['!=', ['get', 'scheme'], 'ATC'],
       layout: {
         'text-field': ['format',
           // docs/adr/0058: a conflict or conformance tag leads, in its own colour.
@@ -412,6 +438,32 @@ function initMap(container) {
       },
     });
 
+    // ── ATC data blocks (crc-sync's docs/adr/0088) ───────────────────────
+    // Monospace, because a STARS block is read in fixed columns. Its text
+    // arrives as up to ATC_MAX_SEGMENTS coloured pieces (geojson.js
+    // _atcSegmentProps), which lets one line carry `EM` in red beside a
+    // conformance tag in amber, and a blinking piece go transparent.
+    const atcFormat = ['format'];
+    for (let i = 0; i < ATC_MAX_SEGMENTS; i++) {
+      atcFormat.push(['get', `s${i}`], { 'text-color': ['get', `c${i}`] });
+    }
+    map.addLayer({
+      id: 'atc-labels', type: 'symbol', source: 'labels',
+      filter: ['==', ['get', 'scheme'], 'ATC'],
+      layout: {
+        'text-field': atcFormat,
+        'text-font': ['Roboto Mono Regular', 'Noto Sans Regular'],
+        'text-size': TEXT_SIZE_PX, 'text-anchor': 'center', 'text-justify': 'left',
+        'text-offset': ['get', 'textOffset'],
+        'text-allow-overlap': true, 'text-ignore-placement': true,
+      },
+      paint: {
+        'text-opacity': ['get', 'opacity'],
+        'text-halo-color': '#000000',
+        'text-halo-width': ['get', 'halo'],
+      },
+    });
+
     // ── Cursor ───────────────────────────────────────────────────────────
     map.getCanvas().style.cursor = 'crosshair';
 
@@ -422,7 +474,7 @@ function initMap(container) {
     // distinguish a real click from a drag.
     let _labelDragged = false;
 
-    map.on('mousedown', 'unit-labels', (e) => {
+    const _onLabelMouseDown = (e) => {
       if (e.originalEvent.button !== 0) return;
       // No e.preventDefault() here — we need the click event to fire later.
 
@@ -452,18 +504,41 @@ function initMap(container) {
         startRelLat, startRelLon, moved: false,
       };
       map.dragPan.disable();
-    });
+    };
 
     // Click on a label — open track panel unless the mouse was dragged.
     // e.preventDefault() stops the map-level click from closing the panel.
-    map.on('click', 'unit-labels', (e) => {
+    const _onLabelClick = (e) => {
       if (bullseyePickTarget) return;
       e.preventDefault();
       if (_labelDragged) { _labelDragged = false; return; }
       const id = String(e.features[0].properties.id);
       showTrackPanel(id);
       _selectStripForTrackIfAny(id);
-    });
+    };
+    // An ATC block drags and opens the track panel exactly like a tactical one.
+    for (const layer of ['unit-labels', 'atc-labels']) {
+      map.on('mousedown', layer, _onLabelMouseDown);
+      map.on('click', layer, _onLabelClick);
+    }
+
+    // A click on an ATC TARGET is STARS's own gesture (docs/adr/0088): accept
+    // a handoff or point-out offered to me, acknowledge what blinks, step a
+    // finished exchange down, else open a PDB into an FDB and back.
+    // The disc and its character are two layers; one click is one gesture.
+    let _atcLastClick = null;
+    const _onAtcTargetClick = (e) => {
+      if (bullseyePickTarget) return;
+      const feat = e.features && e.features[0];
+      if (!feat) return;
+      e.preventDefault();
+      if (_atcLastClick === e.originalEvent) return;
+      _atcLastClick = e.originalEvent;
+      atcTargetClick(String(feat.properties.id));
+      updateMap();
+    };
+    map.on('click', 'atc-targets', _onAtcTargetClick);
+    map.on('click', 'atc-symbols', _onAtcTargetClick);
 
     // ── Left-click on airport label → weather panel ──────────────────────
     map.on('click', 'airport-labels', (e) => {
@@ -682,4 +757,35 @@ function applyMapTheme() {
   if (missionData) map.getSource('text-marks').setData(buildTextMarks());
   // Re-register coalition icons with theme-correct colors
   updateIcons(light);
+  // The black ATC scope, if it is on, sits over whatever theme this painted.
+  if (typeof atcBackgroundDirty === 'function') atcBackgroundDirty();
+}
+
+// ── The black ATC scope (crc-sync's docs/adr/0088, H41) ───────────────────
+// The personal "ATC map background" setting, off, in an ATC-only session:
+// STARS's black background with the video map in dim gray (7210.3 §3-9-1a1,
+// a3). The land and water fills go black; the coastline survives as the
+// water fill's outline and the runways as dim-gray lines; contours, rivers
+// and place names are hidden. `black: false` puts the normal theme back.
+function applyAtcBackground(black) {
+  if (!mapReady) return;
+  if (!black) {
+    for (const id of ['River', 'Country labels', 'Taxiway labels', 'Airport gate', 'elevation-contours-lines', 'elevation-contours-labels']) {
+      if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'visible');
+    }
+    map.setPaintProperty('Water', 'fill-outline-color', undefined);
+    applyMapTheme();
+    return;
+  }
+  const gray = typeof ATC_DIM_GRAY !== 'undefined' ? ATC_DIM_GRAY : '#8C8C8C';
+  map.setPaintProperty('Background', 'background-color', '#000000');
+  map.setPaintProperty('Water', 'fill-color', '#000000');
+  map.setPaintProperty('Water', 'fill-outline-color', gray);
+  map.setPaintProperty('Airport zone', 'fill-color', '#000000');
+  map.setPaintProperty('Country border', 'line-color', '#3a3a3a');
+  map.setPaintProperty('Aeroway', 'line-color', ['match', ['get', 'class'], 'runway', gray, '#000000']);
+  for (const id of ['River', 'Country labels', 'Taxiway labels', 'Airport gate', 'elevation-contours-lines', 'elevation-contours-labels']) {
+    if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'none');
+  }
+  updateMap();
 }

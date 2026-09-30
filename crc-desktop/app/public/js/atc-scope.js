@@ -411,8 +411,19 @@ function atcTick() {
   if (typeof mapReady === 'undefined' || !mapReady) return;
   const black = atcBlackScope();
   if (black !== _atcBlackApplied) {
-    _atcBlackApplied = black;
+    // Set after applying: restoring the theme marks the background dirty
+    // (applyMapTheme -> atcBackgroundDirty), and that must not loop.
     if (typeof applyAtcBackground === 'function') applyAtcBackground(black);
+    _atcBlackApplied = black;
+  }
+  // The block follows the app's label scale (applyScale sets it on the
+  // tactical label layer only).
+  if (typeof map !== 'undefined' && map.getLayer && map.getLayer('atc-labels') && map.getLayer('unit-labels')) {
+    const size = map.getLayoutProperty('unit-labels', 'text-size');
+    if (size !== map.getLayoutProperty('atc-labels', 'text-size')) {
+      map.setLayoutProperty('atc-labels', 'text-size', size);
+      map.setLayoutProperty('atc-symbols', 'text-size', size);
+    }
   }
   if (typeof tracks === 'undefined') return;
   for (const t of tracks.values()) {

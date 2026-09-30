@@ -98,6 +98,41 @@ function sweepOpacity(id, baseOp) {
   return baseOp * Math.max(0, 1 - (effective - grace) / FADE_DURATION_MS);
 }
 
+// ── ATC scheme (crc-sync's docs/adr/0088) ────────────────────────────────
+// A contact sent with `scheme: 'ATC'` is drawn in the STARS layout. What it
+// shows is atc-scope.js's; this only turns it into features. One display per
+// contact per frame, shared by the dots, the block and its leader.
+const ATC_MAX_SEGMENTS = 16;
+const ATC_TRANSPARENT = 'rgba(0,0,0,0)';
+let _atcFrame = null;
+
+function _isAtc(t) { return !!t && t.scheme === 'ATC' && typeof atcDisplay === 'function'; }
+
+function _atcDisplayFor(id, t) {
+  const now = Date.now();
+  if (!_atcFrame || now - _atcFrame.at > 50) _atcFrame = { at: now, byId: new Map() };
+  let d = _atcFrame.byId.get(id);
+  if (!d) { d = atcDisplay(id, t, now); _atcFrame.byId.set(id, d); }
+  return d;
+}
+
+/** The block's segments as flat properties s0..sN / c0..cN, blink applied: MapLibre's `format` needs a fixed shape. */
+function _atcSegmentProps(d) {
+  const props = {};
+  const flat = [];
+  d.lines.forEach((line, i) => {
+    if (i > 0) flat.push({ text: '\n', color: null, blink: false });
+    for (const seg of line) flat.push(seg);
+  });
+  for (let i = 0; i < ATC_MAX_SEGMENTS; i++) {
+    const seg = flat[i];
+    props[`s${i}`] = seg ? seg.text : '';
+    const color = seg && seg.color ? seg.color : d.view.color;
+    props[`c${i}`] = seg && seg.blink && !_pulseBright ? ATC_TRANSPARENT : color;
+  }
+  return props;
+}
+
 // Track dots
 function buildDots() {
   const features = [];
@@ -111,12 +146,27 @@ function buildDots() {
     const { heading } = kinematics(hist);
     const emType     = trackEmergency(t);
     let   opacity    = sweepOpacity(id, baseOp);
+    if (_isAtc(t)) {
+      const d = _atcDisplayFor(id, t);
+      features.push({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [d.lon, d.lat] },
+        properties: {
+          id, scheme: 'ATC', domain: t.domain, emergency: '',
+          disc: d.view.disc, targetColor: d.palette.target, targetOpacity: d.palette.targetOpacity * opacity,
+          posChar: d.view.posChar, posColor: d.view.posColor, posOpacity: d.view.opacity * opacity,
+          opacity,
+        },
+      });
+      continue;
+    }
     if (trackIsIdent(t)) opacity = sweepOpacity(id, baseOp) * (_pulseBright ? 1.0 : 0.3);
     features.push({
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [t.lon, t.lat] },
       properties: {
         id,
+        scheme:         'TACTICAL',
         color:          trackColor(t),
         domain:         t.domain,
         iff:            iffState,
@@ -157,7 +207,24 @@ function buildTrails() {
     if (t.domain === 'GROUND') continue; // ground units have no trail
     if (t.onGround) continue; // aircraft on ground have no trail
     const hist = history.get(id);
-    if (hist && hist.length > 1) addDots(hist, t, sweepOpacity(id, 1));
+    if (!hist || hist.length < 2) continue;
+    if (_isAtc(t)) {
+      // STARS history: five blues, newest to oldest, the same for every
+      // track — the trail never says who it is (docs/adr/0088).
+      const P = typeof atcPalette === 'function' ? atcPalette() : null;
+      if (!P) continue;
+      const fade = sweepOpacity(id, 1) * baseOp;
+      for (let age = 1; age <= P.history.length && age < hist.length; age++) {
+        const pt = hist[hist.length - 1 - age];
+        features.push({
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [pt.lon, pt.lat] },
+          properties: { color: P.history[age - 1], opacity: P.historyOpacity * fade },
+        });
+      }
+      continue;
+    }
+    addDots(hist, t, sweepOpacity(id, 1));
   }
 
   return { type: 'FeatureCollection', features };
@@ -173,6 +240,7 @@ function buildPPL() {
     if (!settings.shipsEnabled && t.domain === 'SEA') continue;
     if (t.domain === 'GROUND') continue; // ground units have no PPL
     if (t.onGround) continue; // aircraft on ground have no PPL
+    if (_isAtc(t)) continue; // a STARS scope draws no projected line (docs/adr/0088)
     const hist = history.get(id) || [];
     const { heading, speedMs, speedKt } = kinematics(hist);
     if (speedKt < MIN_SPD_KT_PPL) continue;
@@ -211,8 +279,12 @@ function buildLeaders() {
     const [dLat, dLon] = relOff;
     if (Math.abs(dLat) < 1e-7 && Math.abs(dLon) < 1e-7) continue;
 
-    const iconPx  = map.project([t.lon, t.lat]);
-    const labelPx = map.project([t.lon + dLon, t.lat + dLat]);
+    // An ATC block has its own colour and may sit at a coasting position.
+    const atc = _isAtc(t) ? _atcDisplayFor(id, t) : null;
+    if (atc && atc.lines.length === 0) continue;
+    const at = atc ? { lat: atc.lat, lon: atc.lon } : t;
+    const iconPx  = map.project([at.lon, at.lat]);
+    const labelPx = map.project([at.lon + dLon, at.lat + dLat]);
     const dx  = labelPx.x - iconPx.x;
     const dy  = labelPx.y - iconPx.y;
     const len = Math.hypot(dx, dy);
@@ -231,7 +303,9 @@ function buildLeaders() {
         type: 'LineString',
         coordinates: [[start.lng, start.lat], [end.lng, end.lat]],
       },
-      properties: { color: trackColor(t), opacity: sweepOpacity(id, baseOp) },
+      properties: atc
+        ? { color: atc.view.color, opacity: sweepOpacity(id, baseOp) * atc.view.opacity * (atc.view.blinkBlock && !_pulseBright ? 0.15 : 1) }
+        : { color: trackColor(t), opacity: sweepOpacity(id, baseOp) },
     });
   }
 
@@ -286,7 +360,8 @@ function buildLabels() {
     if (!settings.shipsEnabled && t.domain === 'SEA') continue;
     if (settings.hideGroundUnits && t.domain === 'GROUND') continue;
     if (decluttered.has(id)) continue; // formation follower — suppress label
-    if (!shouldLabel(t)) continue;      // ships and vehicles only once named
+    const atc = _isAtc(t) ? _atcDisplayFor(id, t) : null;
+    if (atc ? atc.lines.length === 0 : !shouldLabel(t)) continue; // ships and vehicles only once named; ATC: no block
 
     // Ensure every track has a stored geo offset (compute from em-offset if not yet set)
     if (!labelOffsets.has(id)) {
@@ -300,8 +375,23 @@ function buildLabels() {
     }
 
     const relOff     = labelOffsets.get(id);
-    const coords     = [t.lon + relOff[1], t.lat + relOff[0]];
     const textOffset = [0, 0]; // label is placed at its geo coordinate
+    if (atc) {
+      // docs/adr/0088: the STARS block, from atc-scope.js / track-label.js.
+      const blink = atc.view.blinkBlock && !_pulseBright ? 0.15 : 1;
+      features.push({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [atc.lon + relOff[1], atc.lat + relOff[0]] },
+        properties: {
+          id, scheme: 'ATC', textOffset,
+          opacity: sweepOpacity(id, baseOp) * atc.view.opacity * blink,
+          halo: atc.palette.halo,
+          ..._atcSegmentProps(atc),
+        },
+      });
+      continue;
+    }
+    const coords     = [t.lon + relOff[1], t.lat + relOff[0]];
     const color      = trackColor(t);
     const opacity    = sweepOpacity(id, baseOp);
 
@@ -321,7 +411,7 @@ function buildLabels() {
       type: 'Feature',
       geometry: { type: 'Point', coordinates: coords },
       properties: {
-        id, callsign: trackName(t) + trackNameSuffix(t), infoLine,
+        id, scheme: 'TACTICAL', callsign: trackName(t) + trackNameSuffix(t), infoLine,
         sqTag: code.text, sqColor: code.color || color,
         color, opacity, textOffset, alertTag, alertColor, asgnLine,
       },
