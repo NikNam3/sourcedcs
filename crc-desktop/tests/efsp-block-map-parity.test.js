@@ -140,3 +140,14 @@ test('Block 3G is on all four Roles on both sides, onto military.ordnanceState, 
   assert.equal(server.MISSION_BLOCK_MAP['3F'], undefined);
   assert.equal(client.MISSION_BLOCK_MAP['3F'], undefined);
 });
+
+// §9.6 alert status (crc-sync's docs/adr/0070): one Block, DEPARTURE only.
+test('14E is the alert status on DEPARTURE on both sides, and on no other Role', () => {
+  assert.deepEqual(server.DEPARTURE_BLOCK_MAP['14E'].target, { kind: 'military', field: 'alertStatus' });
+  assert.deepEqual(client.DEPARTURE_BLOCK_MAP['14E'].target, { kind: 'military', field: 'alertStatus' });
+  assert.equal(server.DEPARTURE_BLOCK_MAP['14E'].required, client.DEPARTURE_BLOCK_MAP['14E'].required);
+  for (const role of ['ARRIVAL', 'OVERFLIGHT', 'MISSION']) {
+    assert.equal(server.BLOCK_MAPS[role]['14E'], undefined, `server ${role}`);
+    assert.equal(client.BLOCK_MAPS[role]['14E'], undefined, `client ${role}`);
+  }
+});

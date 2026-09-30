@@ -145,6 +145,12 @@ const DEPARTURE_BLOCK_MAP = {
   '14D': { required: false, target: { kind: 'fdr', path: 'assigned.voidTimeUtc' } },
   '14B': { required: false, target: { kind: 'fdr', path: 'assigned.edctTimeUtc' } },
   '14C': { required: false, target: { kind: 'fdr', path: 'assigned.callForReleaseTimeUtc' } },
+  // Guide M16, §9.6 alert status (docs/adr/0070). A 14-family sub-letter
+  // because a scramble is a release decision, and DEPARTURE only because only a
+  // departure sits on an alert pad: an ARRIVAL/OVERFLIGHT alert status means
+  // nothing. A 'military' target, so it is written through setMilitary()'s
+  // enum check by the ordinary SetBlock — a logged Strip Mutation.
+  '14E': { required: false, target: { kind: 'military', field: 'alertStatus' } }, // WP6, guide M16 §9.6 — docs/adr/0070
   '16': { required: false, target: { kind: 'fdr', path: 'assigned.movementAreaEntryTimeUtc' } }, // metering deferred, §12
   '17': { required: false, target: { kind: 'fdr', path: 'assigned.taxiTimeUtc' } },
   '18': { required: true,  target: { kind: 'fdr', path: 'assigned.takeoffTimeUtc' } },
@@ -435,7 +441,7 @@ const BLOCK_MAPS = { DEPARTURE: DEPARTURE_BLOCK_MAP, ARRIVAL: ARRIVAL_BLOCK_MAP,
  *
  * The convention that replaces it is this codebase's own and has won every
  * time it has been asked: **sub-letter the field onto its parent Block**
- * ('3A'-'3E', '8A'/'8B', '9A'-'9F', '5A', '14A'-'14D'), and name the guide's
+ * ('3A'-'3E', '8A'/'8B', '9A'-'9F', '5A', '14A'-'14E'), and name the guide's
  * M-number in the comment so the next reader can find the section.
  *
  * `blockId: null` means RESERVED, not undecided — the id is spoken for and
@@ -456,7 +462,7 @@ const MILITARY_BLOCK_NAMESPACE = {
   M13: { field: 'military.scl',         blockId: null,   guide: '§9.5 standard conventional load — ATO-owned, §12' },
   M14: { field: 'military.ordnanceState', blockId: '3G', guide: '§9.5 ordnance state — BUILT' },
   M15: { field: 'military.hookRequired',  blockId: '3F', guide: '§9.7 arresting-gear / hook requirement — BUILT' },
-  M16: { field: 'military.alertStatus',   blockId: null, guide: '§9.6 alert status — field present and validated; its Block is §9.6\'s own decision' },
+  M16: { field: 'military.alertStatus',   blockId: '14E', guide: '§9.6 alert status — BUILT (docs/adr/0070)' },
   M17: { field: 'military.fuelState',     blockId: null, guide: '§9.6 fuel state — §12' },
   M18: { field: 'filed.stereoRouteName',  blockId: '9F', guide: '§9.10 stereo route — BUILT (docs/adr/0050; the guide mis-cites this as §9.9)' },
   M19: { field: 'military.releaseAuthority', blockId: null, guide: '§9.5 weapons release authority — §12' },

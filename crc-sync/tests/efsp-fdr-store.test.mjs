@@ -103,7 +103,7 @@ test('createFdr seeds guide §6.4\'s military namespace, with every undelivered 
   const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
   assert.equal(fdr.military.ordnanceState, 'CLEAN');   // M14, §9.5
   assert.equal(fdr.military.hookRequired, false);      // M15, §9.7
-  assert.equal(fdr.military.alertStatus, 'NONE');      // M16, §9.6 — no Block yet
+  assert.equal(fdr.military.alertStatus, 'NONE');      // M16, §9.6 — Block 14E (docs/adr/0070)
   for (const key of ['altrvRef', 'arInfo', 'scl', 'fuelState', 'releaseAuthority']) {
     assert.equal(fdr.military[key], null, `military.${key} must be present and null, not absent (§12)`);
   }

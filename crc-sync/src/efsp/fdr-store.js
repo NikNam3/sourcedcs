@@ -186,9 +186,8 @@ function deriveEquipmentSuffix(equipmentCodes) {
  *  - WRITTEN, with a Block and a setter: `ordnanceState` (§9.5, guide M14,
  *    Block 3G), `hookRequired` (§9.7, guide M15, Block 3F). Both go through
  *    setMilitary(), never setField().
- *  - PRESENT, enum settled, NO Block yet: `alertStatus` (§9.6, guide M16).
- *    The guide publishes the values; it publishes no parent Block to hang it
- *    on, and picking one is a §9.6 decision that wants §9.6 in hand. The
+ *  - WRITTEN, with a Block and a setter, DEPARTURE only: `alertStatus`
+ *    (§9.6, guide M16, Block 14E — docs/adr/0070 picked the parent). The
  *    setter validates it so the enum lives in exactly one place.
  *  - WRITTEN through setField(), not setMilitary(): the six leaves of the
  *    `mtr` sub-object (§9.4, guide M10/M11, Blocks 9G-* / 9H-*,
@@ -208,7 +207,7 @@ function defaultMilitary() {
   return {
     ordnanceState: 'CLEAN',   // §9.5 / M14 — Block 3G
     hookRequired: false,      // §9.7 / M15 — Block 3F
-    alertStatus: 'NONE',      // §9.6 / M16 — no Block yet, see above
+    alertStatus: 'NONE',      // §9.6 / M16 — Block 14E, DEPARTURE only (docs/adr/0070)
     // §9.4 / M10 + M11 — Blocks 9G-MTR/-ENTRY/-TIME and 9H-EXIT/-TIME/-ALT
     // (docs/adr/0062). Written leaf by leaf through setField(), never
     // setMilitary(); normalizeMtrValue() says what each leaf accepts.

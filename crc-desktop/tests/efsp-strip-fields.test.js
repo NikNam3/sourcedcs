@@ -197,3 +197,14 @@ test('mtrLostCommsAdvisory states the rule, shows the ACTIVE ALT, admits the mis
   assert.doesNotMatch(text, /FL230|FL120/);
   assert.match(mtrLostCommsAdvisory(fdrWithMtr({ exitFix: 'E' })), /none posted \(ALT is empty\)/);
 });
+
+// §9.6 alert status (crc-sync docs/adr/0070, decisions.md H56).
+test('ALERT (14E) is on OPS, CD, GND and TWR — the ground Positions — and nowhere else', () => {
+  for (const { role, positionId, list } of everyList()) {
+    const expected = role === 'DEPARTURE' && ['OPS', 'CD', 'GND', 'TWR'].includes(positionId);
+    assert.equal(list.includes('14E'), expected, `${role} at ${positionId}`);
+  }
+  assert.equal(BLOCK_MAPS.ARRIVAL['14E'], undefined);
+  assert.equal(BLOCK_MAPS.OVERFLIGHT['14E'], undefined);
+  assert.equal(BLOCK_MAPS.DEPARTURE['14E'].label, 'ALERT');
+});

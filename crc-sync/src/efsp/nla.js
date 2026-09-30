@@ -31,9 +31,10 @@
 // the cause named — resolved through `ctx.fieldStateFor()` (field-state.js).
 // Runway OCCUPANCY is still not implemented: §9.7's schema has no occupancy
 // field and §3.5's RUNWAY_QUEUE row cites no section, so inventing one would
-// be D11. The alert-pad conflict (§9.6, WP6) is still never triggered here
-// (documented per state below), not fabricated as always-true or always-false
-// doctrine.
+// be D11. The alert-pad conflict (§9.6) is a FLAG, never an inhibit: a
+// SCRAMBLE is raised client-side from alert-scramble.js (docs/adr/0070) and
+// nothing in this module reads the alert status. The guide's [GAP] forbids a
+// scramble priority ordering until FAA JO 7110.65 §2-1-4 and §9-2-7 are read.
 //
 // WP4A (docs/adr/0014) migrates ARRIVAL's INBOUND origination from ADR
 // 0008's local APP self-creation stub to a real cross-Facility HANDOFF
@@ -218,8 +219,8 @@ function computeDepartureNla(strip, fdr, now, ctx) {
 
     case 'CLEARED':
       if (fdr && fdr.assigned.releaseState !== 'RELEASED') return { inhibited: 'a hold is in force' };
-      // Alert-pad conflict (§9.6) is WP6/field-state territory, not built
-      // in Phase 2 — never triggers here.
+      // Alert-pad conflict (§9.6) is a flag from alert-scramble.js, never an
+      // inhibit here — the guide's [GAP] (docs/adr/0070).
       if (!ctx.isOccupied('GND') && !ctx.coveringPositionFor('GND')) {
         return { inhibited: 'no receiving Position present' };
       }
