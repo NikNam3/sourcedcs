@@ -355,7 +355,10 @@ function _buildStripFields(strip) {
 // applies (MARSA, TOFI, an airspace, other Strips on the flight). A quiet Strip
 // has no indicator row at all. Warnings first, so they are always in the same
 // place: the left end of the row.
-const INDICATOR_ORDER = ['stca', 'conf', 'trk', 'marsa', 'tofi', 'airspace', 'timer', 'siblings'];
+const INDICATOR_ORDER = ['stca', 'conf', 'rwy', 'gear', 'ord', 'scram', 'trk', 'marsa', 'tofi', 'airspace', 'timer', 'siblings'];
+// Keys whose chips come from _stripAlerts (warnings first, left end of the row). rwy/gear:
+// field state (docs/adr/0068); ord: hung ordnance (0069); scram: alert/scramble (0070).
+const ALERT_SLOT_KEYS = new Set(['stca', 'conf', 'rwy', 'gear', 'ord', 'scram']);
 
 const _pad3 = (n) => String(Math.round(n)).padStart(3, '0');
 
@@ -393,6 +396,10 @@ function _stripAlerts(strip) {
         reason: `Reached ${_fmtAlt(a.assigned)}, now at ${_fmtAlt(a.altFt)}.` });
     }
   }
+  // Wave-2 advisories, each defined in its own file (docs/adr/0068, 0069, 0070).
+  if (typeof fieldStateAlertsFor === 'function') out.push(...fieldStateAlertsFor(strip));
+  if (typeof ordnanceAlertsFor === 'function') out.push(...ordnanceAlertsFor(strip));
+  if (typeof scrambleAlertsFor === 'function') out.push(...scrambleAlertsFor(strip));
   return out;
 }
 
@@ -464,7 +471,7 @@ function _buildIndicatorSlots(strip, el, obligation, alerts) {
   const slots = _stripEl('div', 'efsp-strip-slots');
   const siblings = otherLiveStripsForFdr(strip.fdrId, strip.stripId);
   for (const key of INDICATOR_ORDER) {
-    if (key === 'stca' || key === 'conf') {
+    if (ALERT_SLOT_KEYS.has(key)) {
       for (const a of alerts.filter(x => x.key === key)) slots.appendChild(_indicator(key, a.text, a.tone, a.legacy, a.reason));
       continue;
     }

@@ -39,6 +39,7 @@ const PANEL_TITLES = {
   radio:    'RADIO',
   efsp:     'FLIGHT STRIPS',
   airspace: 'AIRSPACE',
+  fieldState: 'FIELD STATE',
 };
 
 const DOCK_LAYOUT_KEY = 'crc-desktop-dock-layout';
@@ -60,6 +61,7 @@ function initDock() {
         case 'radio':    return mountExistingPanel('srs-radio-panel', null);
         case 'efsp':     return mountExistingPanel('efsp-panel', initEfspPanel);
         case 'airspace': return mountExistingPanel('airspace-panel', initAirspacePanel);
+        case 'fieldState': return mountExistingPanel('field-state-panel', initFieldStatePanel);
         default: throw new Error(`[dock] unknown panel component: ${options.name}`);
       }
     },
@@ -185,7 +187,7 @@ function addMissingRequiredPanels() {
 // (it lands wherever the active group happens to be, sometimes merging
 // into completely the wrong group — both reproduced firsthand while
 // building this). `excludeId` leaves out the panel currently being placed.
-const LEFT_CLUSTER = ['track', 'radars', 'airport', 'efsp', 'airspace'];
+const LEFT_CLUSTER = ['track', 'radars', 'airport', 'efsp', 'airspace', 'fieldState'];
 
 function leftGroupAnchor(excludeId) {
   return LEFT_CLUSTER.filter(id => id !== excludeId).find(id => dock.api.getPanel(id));
@@ -197,6 +199,7 @@ function leftGroupAnchor(excludeId) {
 // remembered size to come back to.
 const PANEL_SIDE = {
   track: 'left', radars: 'left', airport: 'left', efsp: 'left', airspace: 'left',
+  fieldState: 'left',
   settings: 'right',
   radio: 'bottom',
 };
@@ -296,6 +299,13 @@ const DOCKABLE_PANELS = {
     const anchor = leftGroupAnchor('airspace');
     return withRememberedPlacement('airspace', {
       id: 'airspace', component: 'airspace', title: PANEL_TITLES.airspace,
+      position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
+    }, !anchor);
+  },
+  fieldState: () => {
+    const anchor = leftGroupAnchor('fieldState');
+    return withRememberedPlacement('fieldState', {
+      id: 'fieldState', component: 'fieldState', title: PANEL_TITLES.fieldState,
       position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
     }, !anchor);
   },
