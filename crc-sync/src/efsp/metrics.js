@@ -473,7 +473,9 @@ class EfspMetrics {
     const store = this._positionStoreFor(msg.facilityId);
     const controllerId = session && session.controllerId;
     const holds = !!store && !!controllerId
-      && (store.primaryOf(msg.positionId) === controllerId || store.observersOf(msg.positionId).includes(controllerId));
+      && (store.primaryOf(msg.positionId) === controllerId
+        // observersOf() lists { controllerId, controllerName, since } records
+        || store.observersOf(msg.positionId).some(o => (o && typeof o === 'object' ? o.controllerId : o) === controllerId));
     if (!holds) {
       return ack({ ok: false, reason: 'NOT_HOLDING_POSITION', detail: `you do not hold ${msg.positionId} at ${msg.facilityId}` });
     }
