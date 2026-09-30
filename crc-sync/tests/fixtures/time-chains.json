@@ -1,0 +1,513 @@
+{
+  "_comment": "docs/adr/0073 — shared by crc-sync/tests/efsp-time-chains.test.mjs and crc-desktop/tests/efsp-time-chains.test.js. Every case goes here, never in one side's test (T6). Times are 2016-06-21 Zulu (a mission date, H11).",
+  "cases": [
+    {
+      "name": "null FDR: every chain has no value and no source",
+      "fdr": null,
+      "expect": {
+        "departure": {
+          "valueUtc": null,
+          "source": null,
+          "via": null,
+          "estimated": false
+        },
+        "offBlock": {
+          "valueUtc": null,
+          "source": null,
+          "via": null,
+          "estimated": false
+        },
+        "takeoff": {
+          "valueUtc": null,
+          "source": null,
+          "via": null,
+          "estimated": false
+        }
+      }
+    },
+    {
+      "name": "nothing known: timeInputs null, no fdr.ato",
+      "fdr": {
+        "filed": {
+          "proposedDepartureTimeUtc": null
+        },
+        "assigned": {
+          "taxiTimeUtc": null,
+          "takeoffTimeUtc": null
+        },
+        "timeInputs": {
+          "flightPlanDepartureUtc": null
+        }
+      },
+      "expect": {
+        "departure": {
+          "valueUtc": null,
+          "source": null,
+          "via": null,
+          "estimated": false
+        },
+        "offBlock": {
+          "valueUtc": null,
+          "source": null,
+          "via": null,
+          "estimated": false
+        },
+        "takeoff": {
+          "valueUtc": null,
+          "source": null,
+          "via": null,
+          "estimated": false
+        }
+      }
+    },
+    {
+      "name": "timeInputs absent (an FDR restored from before 0073) reads as null, not a throw",
+      "fdr": {
+        "filed": {
+          "proposedDepartureTimeUtc": null
+        },
+        "assigned": {
+          "taxiTimeUtc": null,
+          "takeoffTimeUtc": null
+        }
+      },
+      "expect": {
+        "departure": {
+          "valueUtc": null,
+          "source": null,
+          "via": null,
+          "estimated": false
+        },
+        "offBlock": {
+          "valueUtc": null,
+          "source": null,
+          "via": null,
+          "estimated": false
+        },
+        "takeoff": {
+          "valueUtc": null,
+          "source": null,
+          "via": null,
+          "estimated": false
+        }
+      }
+    },
+    {
+      "name": "controller P-time alone; TAXI and TAKEOFF estimate from it through two levels",
+      "fdr": {
+        "filed": {
+          "proposedDepartureTimeUtc": 1466519400000
+        },
+        "assigned": {
+          "taxiTimeUtc": null,
+          "takeoffTimeUtc": null
+        },
+        "timeInputs": {
+          "flightPlanDepartureUtc": null
+        }
+      },
+      "expect": {
+        "departure": {
+          "valueUtc": 1466519400000,
+          "source": "CONTROLLER",
+          "via": null,
+          "estimated": false
+        },
+        "offBlock": {
+          "valueUtc": 1466519400000,
+          "source": "EST_DEPARTURE",
+          "via": "CONTROLLER",
+          "estimated": true
+        },
+        "takeoff": {
+          "valueUtc": 1466519400000,
+          "source": "EST_OFF_BLOCK",
+          "via": "EST_DEPARTURE",
+          "estimated": true
+        }
+      }
+    },
+    {
+      "name": "flight plan alone",
+      "fdr": {
+        "filed": {
+          "proposedDepartureTimeUtc": null
+        },
+        "assigned": {
+          "taxiTimeUtc": null,
+          "takeoffTimeUtc": null
+        },
+        "timeInputs": {
+          "flightPlanDepartureUtc": 1466519100000
+        }
+      },
+      "expect": {
+        "departure": {
+          "valueUtc": 1466519100000,
+          "source": "FLIGHT_PLAN",
+          "via": null,
+          "estimated": false
+        },
+        "offBlock": {
+          "valueUtc": 1466519100000,
+          "source": "EST_DEPARTURE",
+          "via": "FLIGHT_PLAN",
+          "estimated": true
+        },
+        "takeoff": {
+          "valueUtc": 1466519100000,
+          "source": "EST_OFF_BLOCK",
+          "via": "EST_DEPARTURE",
+          "estimated": true
+        }
+      }
+    },
+    {
+      "name": "ATO alone",
+      "fdr": {
+        "filed": {
+          "proposedDepartureTimeUtc": null
+        },
+        "assigned": {
+          "taxiTimeUtc": null,
+          "takeoffTimeUtc": null
+        },
+        "timeInputs": {
+          "flightPlanDepartureUtc": null
+        },
+        "ato": {
+          "departure": {
+            "timeUtc": 1466514600000
+          }
+        }
+      },
+      "expect": {
+        "departure": {
+          "valueUtc": 1466514600000,
+          "source": "ATO",
+          "via": null,
+          "estimated": false
+        },
+        "offBlock": {
+          "valueUtc": 1466514600000,
+          "source": "EST_DEPARTURE",
+          "via": "ATO",
+          "estimated": true
+        },
+        "takeoff": {
+          "valueUtc": 1466514600000,
+          "source": "EST_OFF_BLOCK",
+          "via": "EST_DEPARTURE",
+          "estimated": true
+        }
+      }
+    },
+    {
+      "name": "fdr.ato present with a null departure time falls through",
+      "fdr": {
+        "filed": {
+          "proposedDepartureTimeUtc": null
+        },
+        "assigned": {
+          "taxiTimeUtc": null,
+          "takeoffTimeUtc": null
+        },
+        "timeInputs": {
+          "flightPlanDepartureUtc": null
+        },
+        "ato": {
+          "departure": {
+            "timeUtc": null
+          }
+        }
+      },
+      "expect": {
+        "departure": {
+          "valueUtc": null,
+          "source": null,
+          "via": null,
+          "estimated": false
+        },
+        "offBlock": {
+          "valueUtc": null,
+          "source": null,
+          "via": null,
+          "estimated": false
+        },
+        "takeoff": {
+          "valueUtc": null,
+          "source": null,
+          "via": null,
+          "estimated": false
+        }
+      }
+    },
+    {
+      "name": "controller beats flight plan",
+      "fdr": {
+        "filed": {
+          "proposedDepartureTimeUtc": 1466520600000
+        },
+        "assigned": {
+          "taxiTimeUtc": null,
+          "takeoffTimeUtc": null
+        },
+        "timeInputs": {
+          "flightPlanDepartureUtc": 1466519100000
+        }
+      },
+      "expect": {
+        "departure": {
+          "valueUtc": 1466520600000,
+          "source": "CONTROLLER",
+          "via": null,
+          "estimated": false
+        },
+        "offBlock": {
+          "valueUtc": 1466520600000,
+          "source": "EST_DEPARTURE",
+          "via": "CONTROLLER",
+          "estimated": true
+        },
+        "takeoff": {
+          "valueUtc": 1466520600000,
+          "source": "EST_OFF_BLOCK",
+          "via": "EST_DEPARTURE",
+          "estimated": true
+        }
+      }
+    },
+    {
+      "name": "controller beats ATO",
+      "fdr": {
+        "filed": {
+          "proposedDepartureTimeUtc": 1466520600000
+        },
+        "assigned": {
+          "taxiTimeUtc": null,
+          "takeoffTimeUtc": null
+        },
+        "timeInputs": {
+          "flightPlanDepartureUtc": null
+        },
+        "ato": {
+          "departure": {
+            "timeUtc": 1466514600000
+          }
+        }
+      },
+      "expect": {
+        "departure": {
+          "valueUtc": 1466520600000,
+          "source": "CONTROLLER",
+          "via": null,
+          "estimated": false
+        },
+        "offBlock": {
+          "valueUtc": 1466520600000,
+          "source": "EST_DEPARTURE",
+          "via": "CONTROLLER",
+          "estimated": true
+        },
+        "takeoff": {
+          "valueUtc": 1466520600000,
+          "source": "EST_OFF_BLOCK",
+          "via": "EST_DEPARTURE",
+          "estimated": true
+        }
+      }
+    },
+    {
+      "name": "flight plan beats ATO (Q-L16-6)",
+      "fdr": {
+        "filed": {
+          "proposedDepartureTimeUtc": null
+        },
+        "assigned": {
+          "taxiTimeUtc": null,
+          "takeoffTimeUtc": null
+        },
+        "timeInputs": {
+          "flightPlanDepartureUtc": 1466519100000
+        },
+        "ato": {
+          "departure": {
+            "timeUtc": 1466514600000
+          }
+        }
+      },
+      "expect": {
+        "departure": {
+          "valueUtc": 1466519100000,
+          "source": "FLIGHT_PLAN",
+          "via": null,
+          "estimated": false
+        },
+        "offBlock": {
+          "valueUtc": 1466519100000,
+          "source": "EST_DEPARTURE",
+          "via": "FLIGHT_PLAN",
+          "estimated": true
+        },
+        "takeoff": {
+          "valueUtc": 1466519100000,
+          "source": "EST_OFF_BLOCK",
+          "via": "EST_DEPARTURE",
+          "estimated": true
+        }
+      }
+    },
+    {
+      "name": "controller P-time cleared (null) resumes the chain at the flight plan",
+      "fdr": {
+        "filed": {
+          "proposedDepartureTimeUtc": null
+        },
+        "assigned": {
+          "taxiTimeUtc": null,
+          "takeoffTimeUtc": null
+        },
+        "timeInputs": {
+          "flightPlanDepartureUtc": 1466519100000
+        },
+        "ato": {
+          "departure": {
+            "timeUtc": 1466514600000
+          }
+        }
+      },
+      "expect": {
+        "departure": {
+          "valueUtc": 1466519100000,
+          "source": "FLIGHT_PLAN",
+          "via": null,
+          "estimated": false
+        },
+        "offBlock": {
+          "valueUtc": 1466519100000,
+          "source": "EST_DEPARTURE",
+          "via": "FLIGHT_PLAN",
+          "estimated": true
+        },
+        "takeoff": {
+          "valueUtc": 1466519100000,
+          "source": "EST_OFF_BLOCK",
+          "via": "EST_DEPARTURE",
+          "estimated": true
+        }
+      }
+    },
+    {
+      "name": "a typed off-block time stops TAXI's fallback and becomes TAKEOFF's estimate",
+      "fdr": {
+        "filed": {
+          "proposedDepartureTimeUtc": null
+        },
+        "assigned": {
+          "taxiTimeUtc": 1466519100000,
+          "takeoffTimeUtc": null
+        },
+        "timeInputs": {
+          "flightPlanDepartureUtc": null
+        },
+        "ato": {
+          "departure": {
+            "timeUtc": 1466514600000
+          }
+        }
+      },
+      "expect": {
+        "departure": {
+          "valueUtc": 1466514600000,
+          "source": "ATO",
+          "via": null,
+          "estimated": false
+        },
+        "offBlock": {
+          "valueUtc": 1466519100000,
+          "source": "CONTROLLER",
+          "via": null,
+          "estimated": false
+        },
+        "takeoff": {
+          "valueUtc": 1466519100000,
+          "source": "EST_OFF_BLOCK",
+          "via": "CONTROLLER",
+          "estimated": true
+        }
+      }
+    },
+    {
+      "name": "a typed takeoff time is an actual, not an estimate",
+      "fdr": {
+        "filed": {
+          "proposedDepartureTimeUtc": null
+        },
+        "assigned": {
+          "taxiTimeUtc": null,
+          "takeoffTimeUtc": 1466517720000
+        },
+        "timeInputs": {
+          "flightPlanDepartureUtc": null
+        },
+        "ato": {
+          "departure": {
+            "timeUtc": 1466514600000
+          }
+        }
+      },
+      "expect": {
+        "departure": {
+          "valueUtc": 1466514600000,
+          "source": "ATO",
+          "via": null,
+          "estimated": false
+        },
+        "offBlock": {
+          "valueUtc": 1466514600000,
+          "source": "EST_DEPARTURE",
+          "via": "ATO",
+          "estimated": true
+        },
+        "takeoff": {
+          "valueUtc": 1466517720000,
+          "source": "CONTROLLER",
+          "via": null,
+          "estimated": false
+        }
+      }
+    },
+    {
+      "name": "a non-numeric stored time (a string persisted before F4) is not a value",
+      "fdr": {
+        "filed": {
+          "proposedDepartureTimeUtc": "1430"
+        },
+        "assigned": {},
+        "timeInputs": {
+          "flightPlanDepartureUtc": 1466519100000
+        }
+      },
+      "expect": {
+        "departure": {
+          "valueUtc": 1466519100000,
+          "source": "FLIGHT_PLAN",
+          "via": null,
+          "estimated": false
+        },
+        "offBlock": {
+          "valueUtc": 1466519100000,
+          "source": "EST_DEPARTURE",
+          "via": "FLIGHT_PLAN",
+          "estimated": true
+        },
+        "takeoff": {
+          "valueUtc": 1466519100000,
+          "source": "EST_OFF_BLOCK",
+          "via": "EST_DEPARTURE",
+          "estimated": true
+        }
+      }
+    }
+  ]
+}

@@ -97,21 +97,21 @@ test('a refusal names the Strip it refused', async ({ page }) => {
   // refusal this test needs can never be raised — the press never happens, and
   // the spec sat on a 20 s timeout, which test.fail() does not convert.
   //
-  // A free-text Block is the refusal a controller can still walk into: nothing
-  // client-side knows which stereo route names crc-sync has configured, so
-  // typing one it does not have is refused on arrival. The finding is
-  // unchanged — ATTRIBUTION. Two Strips on screen, one of them refused, and
-  // the panel has to say which.
+  // A free-text Block is the refusal a controller can still walk into: a
+  // P-time that is not a time is refused on arrival (F4). It was a stereo
+  // name typed into 9F until 9F became a picker (crc-sync's docs/adr/0073).
+  // The finding is unchanged — ATTRIBUTION. Two Strips on screen, one of
+  // them refused, and the panel has to say which.
   await openPanel(page, { held: ['OPS'] });
   await seedStrip(page, { callsign: 'RFA103', role: 'DEPARTURE' });
   await seedStrip(page, { callsign: 'RFB103', role: 'DEPARTURE' });
   const refused = stripByCallsign(page, 'RFB103');
-  await refused.locator('.efsp-block-9F').click();
+  await refused.locator('.efsp-block-6').click();
   await page.keyboard.type('NOSUCH');
   await page.keyboard.press('Enter');
 
   await expect(page.locator('#efsp-mutation-error')).not.toBeEmpty();
-  const said = await expectRefusalIsVisible(page, 'a STEREO route crc-sync does not have');
+  const said = await expectRefusalIsVisible(page, 'a PROP DEP that is not a time');
   expect(said, 'two Strips on screen, and the refusal does not say which').toContain('RFB103');
   // And on the Board itself, not only in the banner: matching a banner to a
   // Strip by reading callsigns back off the Rack is the work the mark removes.

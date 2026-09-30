@@ -91,6 +91,11 @@ function toFdrFiledSeed(plan) {
     remarks: plan.otherInfo || '',
     aircraftType: plan.aircraftType || '',
     wakeCategory: plan.wtc || '',
+    // Item 13's departure time, HHMM Zulu as the pilot typed it. createFdr()
+    // dates it by the mission clock into fdr.timeInputs, one source of the
+    // P-time fallback chain (docs/adr/0073) — never into the controller's
+    // filed.proposedDepartureTimeUtc.
+    flightPlanDepartureTimeHhmm: plan.depTime || '',
   };
 }
 

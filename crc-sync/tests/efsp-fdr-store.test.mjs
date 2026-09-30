@@ -1046,3 +1046,82 @@ test('parseZuluHhmm / formatZuluHhmm round-trip and refuse non-times', () => {
   assert.equal(formatZuluHhmm(null), '');
   assert.equal(resolveZuluHhmm('1432', NaN), null);
 });
+
+// ── docs/adr/0073 — §10.5's stored input, and the vul window's typed times ──
+//
+// A mission clock years from the wall clock (T7, H11): a time dated by the
+// wall date would land visibly on the wrong day.
+const MISSION_DAY = (hh, mm, day = 21) => Date.UTC(2016, 5, day, hh, mm);
+function missionStore(nowMs) {
+  return new FdrStore(undefined, { clock: { now: () => nowMs, source: 'MISSION' } });
+}
+
+test('0073: createFdr dates the DD1801 departure time by the mission clock into fdr.timeInputs', () => {
+  const store = missionStore(MISSION_DAY(13, 50));
+  const { fdr } = store.createFdr(makeSeed({ flightPlanDepartureTimeHhmm: '1430' }), { by: 'c-OPS' });
+  assert.deepEqual(fdr.timeInputs, { flightPlanDepartureUtc: MISSION_DAY(14, 30) });
+  // Not the controller's field: a cleared P-time falls back to the plan instead of losing it.
+  assert.equal(fdr.filed.proposedDepartureTimeUtc, null);
+});
+
+test('0073: a DD1801 departure time that is not a time is dropped, never a refusal', () => {
+  const store = missionStore(MISSION_DAY(13, 50));
+  for (const junk of ['garbage', '2561', '', undefined]) {
+    const r = store.createFdr(makeSeed({ flightPlanDepartureTimeHhmm: junk }), { by: 'c-OPS' });
+    assert.equal(r.ok, true, String(junk));
+    assert.deepEqual(r.fdr.timeInputs, { flightPlanDepartureUtc: null }, String(junk));
+  }
+});
+
+test('0073: restore() seeds timeInputs onto an FDR persisted before it, so a reader never throws (T9)', () => {
+  const store = missionStore(MISSION_DAY(13, 50));
+  const { fdr } = store.createFdr(makeSeed(), { by: 'c-OPS' });
+  const old = JSON.parse(JSON.stringify(fdr));
+  delete old.timeInputs;
+  const restored = missionStore(MISSION_DAY(13, 50));
+  restored.restore({ fdrs: [old], codes: store.snapshot().codes });
+  assert.deepEqual(restored.getFdr(fdr.fdrId).timeInputs, { flightPlanDepartureUtc: null });
+});
+
+test('S-F4: a typed vul start resolves like any typed time; a typed end to the first occurrence after the start', () => {
+  const store = missionStore(MISSION_DAY(20, 0));
+  const { fdr } = store.createFdr(makeSeed(), { by: 'c-TAC_C2' });
+  assert.equal(store.setField(fdr.fdrId, 'mission.vulWindowStartUtc', '2200', { by: 'c-TAC_C2' }).ok, true);
+  assert.equal(store.getFdr(fdr.fdrId).mission.vulWindowStartUtc, MISSION_DAY(22, 0));
+  // 0200 is nearer to now (2000Z) on the SAME day, 18 h back — but an end is after its start.
+  store.setField(fdr.fdrId, 'mission.vulWindowEndUtc', '0200', { by: 'c-TAC_C2' });
+  assert.equal(store.getFdr(fdr.fdrId).mission.vulWindowEndUtc, MISSION_DAY(2, 0, 22));
+  // And a window may run longer than 12 h: 2130 after a 2200 start is the next evening.
+  store.setField(fdr.fdrId, 'mission.vulWindowEndUtc', '2130', { by: 'c-TAC_C2' });
+  assert.equal(store.getFdr(fdr.fdrId).mission.vulWindowEndUtc, MISSION_DAY(21, 30, 22));
+});
+
+test('S-F4: a typed vul end with no start resolves to the nearest occurrence; junk is refused with no write', () => {
+  const store = missionStore(MISSION_DAY(23, 50));
+  const { fdr } = store.createFdr(makeSeed(), { by: 'c-TAC_C2' });
+  store.setField(fdr.fdrId, 'mission.vulWindowEndUtc', '0030', { by: 'c-TAC_C2' });
+  assert.equal(store.getFdr(fdr.fdrId).mission.vulWindowEndUtc, MISSION_DAY(0, 30, 22));
+  const rev = store.getFdr(fdr.fdrId).rev;
+  const r = store.setField(fdr.fdrId, 'mission.vulWindowStartUtc', 'NOSUCH', { by: 'c-TAC_C2' });
+  assert.deepEqual(r, { ok: false, reason: 'VALIDATION_ERROR', detail: 'vul window start must be a UTC time as HHMM, e.g. 1432' });
+  assert.equal(store.getFdr(fdr.fdrId).rev, rev);
+  store.setField(fdr.fdrId, 'mission.vulWindowEndUtc', '', { by: 'c-TAC_C2' });
+  assert.equal(store.getFdr(fdr.fdrId).mission.vulWindowEndUtc, null);
+});
+
+test('S-F4: the ATO\'s epoch-ms vul window passes createFdr untouched, and a typed seed is resolved', () => {
+  const store = missionStore(MISSION_DAY(20, 0));
+  const ato = store.createFdr(makeSeed({ vulWindowStartUtc: MISSION_DAY(6, 0), vulWindowEndUtc: MISSION_DAY(5, 0) }), { by: 'ato' }).fdr;
+  assert.deepEqual([ato.mission.vulWindowStartUtc, ato.mission.vulWindowEndUtc], [MISSION_DAY(6, 0), MISSION_DAY(5, 0)]);
+  const typed = store.createFdr(makeSeed({ vulWindowStartUtc: '2200', vulWindowEndUtc: '0100' }), { by: 'c-TAC_C2' }).fdr;
+  assert.deepEqual([typed.mission.vulWindowStartUtc, typed.mission.vulWindowEndUtc], [MISSION_DAY(22, 0), MISSION_DAY(1, 0, 22)]);
+});
+
+test('0073: resolveZuluHhmmAfter is the first occurrence strictly after its anchor', async () => {
+  const { resolveZuluHhmmAfter } = await import('../src/efsp/zulu-time.js');
+  assert.equal(resolveZuluHhmmAfter('2300', MISSION_DAY(22, 0)), MISSION_DAY(23, 0));
+  assert.equal(resolveZuluHhmmAfter('2200', MISSION_DAY(22, 0)), MISSION_DAY(22, 0, 22), 'equal to the anchor is the next day');
+  assert.equal(resolveZuluHhmmAfter('0100', MISSION_DAY(22, 0)), MISSION_DAY(1, 0, 22));
+  assert.equal(resolveZuluHhmmAfter('2561', MISSION_DAY(22, 0)), null);
+  assert.equal(resolveZuluHhmmAfter('1432', NaN), null);
+});

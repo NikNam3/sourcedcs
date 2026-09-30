@@ -1804,3 +1804,8 @@
 @media (prefers-reduced-motion: reduce) {
   .efsp-scramble-row-new { animation: none; }
 }
+
+/* docs/adr/0073 — §10.5: a time Block showing another source's time as an
+   estimate (TAXI/TAKEOFF before the actual). Italic only: colour means
+   something is wrong (docs/adr/0056), and an estimate is not. */
+.efsp-block-estimated { font-style: italic; }

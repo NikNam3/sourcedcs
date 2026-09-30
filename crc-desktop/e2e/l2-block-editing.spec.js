@@ -246,10 +246,14 @@ test('F-206: choosing "—" on a set enum Block clears it', async ({ page }) => 
 test('F-207: a refused Block edit keeps what was typed and marks the Block', async ({ page }) => {
   await openPanel(page, { held: ['OPS'] });
   const s = await seedStrip(page, { callsign: 'REF201' });
-  await s.locator('.efsp-block-9F').click();
+  // Block 6 (PROP DEP), not 9F: 9F became a picker of the configured routes
+  // (crc-sync's docs/adr/0073), so nothing can be typed into it. Since F4 a
+  // time Block refuses anything that is not HHMM, which keeps this finding's
+  // meaning — a refused free-text edit on the OPS face.
+  await s.locator('.efsp-block-6').click();
   await page.keyboard.type('NOSUCH');
   await page.keyboard.press('Enter');
-  await expect(page.locator('#efsp-mutation-error')).toContainText('not a configured stereo route');
+  await expect(page.locator('#efsp-mutation-error')).toContainText('proposed departure time must be a UTC time as HHMM');
   // Measured before the fix: the input closed on Enter before the reply; the
   // Block read "" with no marker, and NOSUCH existed nowhere on screen.
   //
@@ -258,10 +262,10 @@ test('F-207: a refused Block edit keeps what was typed and marks the Block', asy
   // textContent. Asking the input for its value is the same claim ("NOSUCH is
   // still on screen where the controller left it") measured where it now is.
   //
-  // The chip is found by its LABEL, not by `has: .efsp-block-9F`: the reopened
+  // The chip is found by its LABEL, not by `has: .efsp-block-6`: the reopened
   // editor replaces that span with the <input>, so a locator that filters on
   // the span matches no chip at all once the fix works.
-  const chip = s.locator('.efsp-block-chip', { has: page.locator('.efsp-block-label', { hasText: /^STEREO$/ }) });
+  const chip = s.locator('.efsp-block-chip', { has: page.locator('.efsp-block-label', { hasText: /^PROP DEP$/ }) });
   await expect(chip.locator('input.efsp-block-input')).toHaveValue('NOSUCH', { timeout: 1000 });
   // And the Strip carries the refusal, so the banner does not have to be
   // matched to a Rack by eye (F-103). The CELL mark lives on the span the

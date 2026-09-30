@@ -6,12 +6,18 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
+// In the browser these are globals from their own <script>s; strip-template.js
+// reads them at call time (docs/adr/0073). The stereo cache is swapped per test.
+Object.assign(globalThis, require('../app/public/js/panels/efsp/time-chains.js'));
+let _stereoCache = [];
+globalThis.cachedStereoRoutesClient = () => _stereoCache;
+
 const {
   DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP, BLOCK_MAPS, resolveBlockValue, requiredBlocksFor, formatBlock3,
   activeAnnotationValue, hasActiveAnnotationEntry, annotationHistory, supersededAnnotationEntries,
   isBlockEditable, CONFIRM_VACATED_ELIGIBLE_BLOCKS,
   enumSelectOptionsFor, isBooleanToggleBlock, blockLabelFor,
-  ZULU_HHMM_BLOCKS, formatZuluHhmm, blockTitleFor,
+  ZULU_HHMM_BLOCKS, formatZuluHhmm, blockTitleFor, isEnumBlockClearable, blockValueHintFor,
 } = require('../app/public/js/panels/efsp/strip-template.js');
 
 const REQUIRED_DEPARTURE_BLOCKS = [
@@ -409,13 +415,34 @@ test('a flight filed without a stereo renders Block 9F as blank, not as a broken
   assert.equal(resolveBlockValue('9F', null, makeStrip()).value, null);
 });
 
-test('Block 9F is ordinary click-to-edit free text — typing a route name into it re-files the flight', () => {
-  assert.equal(isBlockEditable('9F', 'DEPARTURE'), true);
-  // Not a picker: the valid set is runtime config, and ENUM_SELECT_BLOCKS is
-  // a static literal. The create-strip dropdown is where discovery happens;
-  // the server refuses a name that is not in the table.
-  assert.equal(enumSelectOptionsFor('9F'), null);
-  assert.equal(isBooleanToggleBlock('9F'), false);
+test('9F is a select of the configured stereo routes, never free text', () => {
+  // docs/adr/0073 replaces 0050's free text: the options are the last list
+  // crc-sync returned, in table order, and a pick re-files exactly as typing
+  // the name did (the server path is unchanged).
+  _stereoCache = [{ name: 'PACK 1', route: 'A' }, { name: 'PACK 2', route: 'B', description: 'south' }];
+  try {
+    assert.deepEqual(enumSelectOptionsFor('9F', makeFdr()), ['PACK 1', 'PACK 2']);
+    assert.deepEqual(enumSelectOptionsFor('9F'), ['PACK 1', 'PACK 2'], 'no FDR is no current route, not a throw');
+    assert.equal(isBlockEditable('9F', 'DEPARTURE'), true);
+    assert.equal(isEnumBlockClearable('9F'), true, '"—" clears the label and keeps the route (0050)');
+    assert.equal(isBooleanToggleBlock('9F'), false);
+    // T3: a route retired since the flight filed stays on it and selected.
+    assert.deepEqual(enumSelectOptionsFor('9F', makeFdr({ filed: { stereoRouteName: 'PACK 9' } })), ['PACK 1', 'PACK 2', 'PACK 9']);
+    assert.deepEqual(enumSelectOptionsFor('9F', makeFdr({ filed: { stereoRouteName: 'PACK 2' } })), ['PACK 1', 'PACK 2']);
+    // An inactive record (never sent today, but the flag exists) is not offered.
+    _stereoCache = [{ name: 'PACK 1', route: 'A' }, { name: 'OLD', route: 'C', active: false }];
+    assert.deepEqual(enumSelectOptionsFor('9F', makeFdr()), ['PACK 1']);
+  } finally { _stereoCache = []; }
+});
+
+test('9F with no route table is a plain cell, never a control that cannot act (T1)', () => {
+  _stereoCache = [];
+  assert.equal(enumSelectOptionsFor('9F', makeFdr()), null);
+  assert.equal(isBlockEditable('9F', 'DEPARTURE'), false, 'null options with an editable 9F would fall back to free text');
+  assert.deepEqual(blockValueHintFor('9F', makeFdr(), makeStrip()), { title: 'no stereo routes configured', estimated: false });
+  // A flight already on a stereo can still have it cleared.
+  assert.deepEqual(enumSelectOptionsFor('9F', makeFdr({ filed: { stereoRouteName: 'PACK 1' } })), ['PACK 1']);
+  assert.equal(blockValueHintFor('9F', makeFdr({ filed: { stereoRouteName: 'PACK 1' } }), makeStrip()), null);
 });
 
 // ── §3.7 history, the half that never reached the DOM ────────────────────
@@ -529,7 +556,7 @@ test('the MTR Blocks are ordinary click-to-edit cells — no picker, no toggle',
 });
 
 test('ZULU_HHMM_BLOCKS holds the MTR times and every typed …TimeUtc Block (F4), and formatZuluHhmm pads', () => {
-  assert.deepEqual([...ZULU_HHMM_BLOCKS].sort(), ['14', '14B', '14C', '14D', '16', '17', '18', '6', '9G-TIME', '9H-TIME']);
+  assert.deepEqual([...ZULU_HHMM_BLOCKS].sort(), ['14', '14B', '14C', '14D', '16', '17', '18', '6', '9G-TIME', '9H-TIME', 'M6', 'M7']);
   assert.equal(formatZuluHhmm(Date.UTC(2016, 5, 21, 9, 5)), '0905');
   assert.equal(formatZuluHhmm(null), '');
   assert.equal(formatZuluHhmm('garbage'), '');
@@ -552,6 +579,90 @@ test('F4: every ZULU_HHMM Block is an epoch-ms …Utc FDR path on every role map
   assert.equal(resolveBlockValue('14', fdr, makeStrip()).value, null, 'no time is blank, not 0000');
   const eta = makeFdr({ filed: { estimatedArrivalTimeUtc: Date.UTC(2016, 5, 21, 9, 5) } });
   assert.equal(resolveBlockValue('6', eta, makeStrip({ role: 'ARRIVAL' })).value, '0905');
+});
+
+test('every epoch time Block of every Role renders HHMM — the set is derived from the Block Maps (§11.2 rule 1)', () => {
+  // Every fdr target path ending in Utc is an epoch time. A time Block added
+  // to a map later without ZULU_HHMM_BLOCKS fails here, not on a Strip.
+  const derived = new Set();
+  for (const map of Object.values(BLOCK_MAPS)) {
+    for (const [id, def] of Object.entries(map)) if (def.target.kind === 'fdr' && /Utc$/.test(def.target.path)) derived.add(id);
+  }
+  assert.deepEqual([...derived].sort(), [...ZULU_HHMM_BLOCKS].sort());
+  const at = Date.UTC(2016, 5, 21, 14, 32);
+  for (const [role, map] of Object.entries(BLOCK_MAPS)) {
+    for (const [id, def] of Object.entries(map)) {
+      if (!derived.has(id)) continue;
+      const fdr = makeFdr();
+      const parts = def.target.path.split('.');
+      fdr[parts[0]] = { ...(fdr[parts[0]] || {}) };
+      let o = fdr; for (const k of parts.slice(0, -1)) o = (o[k] = o[k] || {});
+      o[parts[parts.length - 1]] = at;
+      assert.equal(resolveBlockValue(id, fdr, makeStrip({ role })).value, '1432', `${role}/${id}`);
+    }
+  }
+});
+
+test('S-F4: a MISSION Strip reads its vul window as HHMM, and M6/M7 open for editing on it', () => {
+  const fdr = makeFdr();
+  fdr.mission = { vulWindowStartUtc: Date.UTC(2016, 5, 21, 22, 0), vulWindowEndUtc: Date.UTC(2016, 5, 22, 1, 30) };
+  assert.equal(resolveBlockValue('M6', fdr, makeStrip({ role: 'MISSION' })).value, '2200');
+  assert.equal(resolveBlockValue('M7', fdr, makeStrip({ role: 'MISSION' })).value, '0130');
+  assert.equal(isBlockEditable('M6', 'MISSION'), true);
+});
+
+// ── §10.5 fallback chains on the Strip (docs/adr/0073) ────────────────────
+
+const Z = (hh, mm) => Date.UTC(2016, 5, 21, hh, mm);
+
+test('§10.5: departure, off-block and takeoff time each follow an explicit ordered fallback, and the chosen source is visible on hover', () => {
+  // Only an ATO departure: P-time shows it, TAXI and TAKEOFF estimate from it.
+  const fdr = makeFdr({ assigned: { taxiTimeUtc: null, takeoffTimeUtc: null } });
+  fdr.ato = { departure: { timeUtc: Z(13, 10) } };
+  const strip = makeStrip();
+  const p = resolveBlockValue('6', fdr, strip);
+  assert.deepEqual(p, { value: '1310', provenance: 'COMPUTER_GENERATED', timeSource: 'ATO', estimated: false });
+  assert.match(blockTitleFor('6', fdr, strip), /1310Z from the ATO/);
+  for (const id of ['17', '18']) {
+    const v = resolveBlockValue(id, fdr, strip);
+    assert.equal(v.value, '1310', id);
+    assert.equal(v.estimated, true, id);
+    assert.equal(blockValueHintFor(id, fdr, strip).estimated, true, id);
+  }
+  assert.match(blockTitleFor('17', fdr, strip), /~1310Z estimate: P-time, from the ATO/);
+  assert.match(blockTitleFor('18', fdr, strip), /~1310Z estimate: off-block, estimate: P-time/);
+
+  // A controller types TAKEOFF 1402: an actual, no italics, and the hover says so.
+  fdr.assigned.takeoffTimeUtc = Z(14, 2);
+  fdr.provenance = { 'assigned.takeoffTimeUtc': 'CONTROLLER_ENTERED' };
+  const tko = resolveBlockValue('18', fdr, strip);
+  assert.deepEqual(tko, { value: '1402', provenance: 'CONTROLLER_ENTERED', timeSource: 'CONTROLLER', estimated: false });
+  const hover = blockValueHintFor('18', fdr, strip);
+  assert.equal(hover.estimated, false);
+  assert.match(hover.title, /1402Z entered by a controller/);
+  assert.match(hover.title, /if cleared: estimate: off-block, estimate: P-time, 1310Z/);
+
+  // Cleared (the server stores null): the estimate is back.
+  fdr.assigned.takeoffTimeUtc = null;
+  assert.equal(resolveBlockValue('18', fdr, strip).estimated, true);
+});
+
+test('§10.5: the chains are DEPARTURE-only — an ARRIVAL Block 6 is the ETA, shown as stored', () => {
+  const fdr = makeFdr({ filed: { estimatedArrivalTimeUtc: Z(9, 5) } });
+  fdr.ato = { departure: { timeUtc: Z(13, 10) } };
+  const arrival = makeStrip({ role: 'ARRIVAL' });
+  assert.deepEqual(resolveBlockValue('6', fdr, arrival), { value: '0905', provenance: 'CONTROLLER_ENTERED' });
+  assert.equal(blockTitleFor('6', fdr, arrival), null);
+  assert.equal(blockValueHintFor('6', fdr, arrival), null);
+  // And the collapsed face's label, which strip-view.js titles with the FDR
+  // alone, gets no chain title — it cannot tell a P-time from an ETA.
+  assert.equal(blockTitleFor('6', fdr), null);
+});
+
+test('§10.5: with no source at all a time Block is blank, and says so on hover', () => {
+  const fdr = makeFdr();
+  assert.equal(resolveBlockValue('6', fdr, makeStrip()).value, null);
+  assert.match(blockValueHintFor('17', fdr, makeStrip()).title, /no time from any source/);
 });
 
 test('every MTR Block has a label title; others have none', () => {

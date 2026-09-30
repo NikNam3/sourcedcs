@@ -165,6 +165,7 @@ function _buildBlockCell(strip, blockId) {
     span.classList.add('efsp-block-refused');
     span.title = refusal.message;
   }
+  const hint = typeof blockValueHintFor === 'function' ? blockValueHintFor(blockId, fdr, strip) : null; if (hint) { if (hint.estimated) span.classList.add('efsp-block-estimated'); if (hint.title && !span.title) span.title = hint.title; } // docs/adr/0073: §10.5's source on hover, an estimate in italics
 
   // WP4A gap-closure (docs/adr/0022) — restricted-enum Blocks (airspace
   // ownership, track-degradation flag) get a <select>, never the generic
@@ -173,7 +174,7 @@ function _buildBlockCell(strip, blockId) {
   // reach it). Checked before isBlockEditable() since these Blocks are
   // deliberately excluded from that generic path (see strip-template.js's
   // isBlockEditable comment).
-  const enumOptions = enumSelectOptionsFor(blockId);
+  const enumOptions = enumSelectOptionsFor(blockId, fdr); // the FDR: 9F offers a retired route its flight still flies (docs/adr/0073)
   if (enumOptions) return _buildEnumSelectCell(strip, blockId, span, enumOptions);
 
   // WP4A second slice — IFR (a boolean, not a restricted-value string enum)
@@ -756,6 +757,7 @@ function _appendExpandedView(el, strip) {
     const label = document.createElement('span');
     label.className = 'efsp-expanded-label';
     label.textContent = blockLabelFor(blockId, strip.role) || blockId;
+    const labelTitle = typeof blockTitleFor === 'function' ? blockTitleFor(blockId, getEfspFdr(strip.fdrId), strip) : null; if (labelTitle) label.title = labelTitle; // docs/adr/0073
     row.appendChild(label);
 
     const value = document.createElement('span');
@@ -2803,6 +2805,7 @@ function _stripRenderSignature(strip) {
 
   const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(strip.fdrId) : null;
   parts.push('fdr:' + (fdr ? fdr.rev : ''));
+  parts.push('stereo:' + (typeof stereoRoutesCacheKey === 'function' ? stereoRoutesCacheKey() : '')); // Block 9F's options (docs/adr/0073)
 
   const siblings = typeof otherLiveStripsForFdr === 'function' ? otherLiveStripsForFdr(strip.fdrId, strip.stripId) : [];
   // Not just the count: the badge's title names each sibling's Facility,

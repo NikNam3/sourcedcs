@@ -26,7 +26,7 @@ const { isValidFrequency, MIN_FREQUENCY_MHZ, MAX_FREQUENCY_MHZ } = require('./ai
 // board-store.js's _applyCreateStrip instead would mean any second creation
 // path — or a test constructing an FdrStore directly — silently skips it.
 const stereoRoutes = require('./stereo-routes');
-const { resolveZuluHhmm } = require('./zulu-time');
+const { resolveZuluHhmm, resolveZuluHhmmAfter } = require('./zulu-time');
 const { WALL_CLOCK } = require('../mission-clock');
 
 const VOID_DEADLINE_MINUTES = 30; // §3.8 — derived, not stored input
@@ -313,8 +313,12 @@ function parseAltitudeFt(text) {
 // A finite number is taken as epoch ms already (an import, a scenario).
 // Empty clears to null. Anything else is refused, never stored.
 //
-// The vul window (mission.vulWindowStartUtc/EndUtc, M6/M7) is deliberately
-// NOT here: it is the ATO's, and L14/L16 own how it is written (docs/wip/F4.md).
+// The vul window (mission.vulWindowStartUtc/EndUtc, M6/M7) joined in
+// docs/adr/0073 (S-F4). Its START is an ordinary typed time. Its END is
+// resolved to the first occurrence AFTER the start (WINDOW_END_OF below), not
+// the nearest to now, because a window may run longer than 12 h and an end is
+// only ever after its start. The ATO already writes both as epoch ms (L3/L14),
+// which pass through untouched.
 const TYPED_TIME_LABELS = {
   'filed.proposedDepartureTimeUtc': 'proposed departure time',
   'filed.estimatedArrivalTimeUtc': 'estimated arrival time',
@@ -327,18 +331,28 @@ const TYPED_TIME_LABELS = {
   'assigned.takeoffTimeUtc': 'takeoff time',
   'military.mtr.entryTimeUtc': 'MTR entry time',
   'military.mtr.exitEstimateUtc': 'MTR exit estimate',
+  'mission.vulWindowStartUtc': 'vul window start',
+  'mission.vulWindowEndUtc': 'vul window end',
 };
+
+// A typed time that ends a window: the path of the start it follows.
+const WINDOW_END_OF = { 'mission.vulWindowEndUtc': 'mission.vulWindowStartUtc' };
 
 /**
  * Normalise a value written to a typed time path (TYPED_TIME_LABELS).
  * `nowMs` is the mission clock's now(), used only to date a typed time.
+ * `startMs` is the window start, for a WINDOW_END_OF path only: when it is a
+ * number the end resolves to the first occurrence after it; with no start the
+ * end falls back to the nearest occurrence like any typed time.
  * Returns { ok: true, value } (epoch ms or null) or { ok: false, detail }.
  */
-function normalizeTypedTime(path, value, nowMs) {
+function normalizeTypedTime(path, value, nowMs, startMs = null) {
   if (typeof value === 'number' && Number.isFinite(value)) return { ok: true, value };
   const text = value == null ? '' : String(value).trim();
   if (text === '') return { ok: true, value: null };
-  const ms = resolveZuluHhmm(text, nowMs);
+  const ms = WINDOW_END_OF[path] && Number.isFinite(startMs)
+    ? resolveZuluHhmmAfter(text, startMs)
+    : resolveZuluHhmm(text, nowMs);
   if (ms == null) {
     return { ok: false, detail: `${TYPED_TIME_LABELS[path]} must be a UTC time as HHMM, e.g. 1432` };
   }
@@ -444,6 +458,16 @@ class FdrStore {
       if (!time.ok) return { ok: false, reason: 'VALIDATION_ERROR', detail: time.detail };
       seedTimes[key] = time.value;
     }
+    // docs/adr/0073 (S-F4): the vul window, the start first so a typed end
+    // can follow it. The ATO's epoch ms pass through untouched.
+    const vulStart = normalizeTypedTime('mission.vulWindowStartUtc', seed.vulWindowStartUtc, this._clock.now());
+    if (!vulStart.ok) return { ok: false, reason: 'VALIDATION_ERROR', detail: vulStart.detail };
+    const vulEnd = normalizeTypedTime('mission.vulWindowEndUtc', seed.vulWindowEndUtc, this._clock.now(), vulStart.value);
+    if (!vulEnd.ok) return { ok: false, reason: 'VALIDATION_ERROR', detail: vulEnd.detail };
+    // docs/adr/0073: the filed DD-1801's departure time, one source of §10.5's
+    // P-time chain. Best-effort like the lookup that supplies it: a value that
+    // is not a time is dropped, never a refusal.
+    const flightPlanDepartureUtc = resolveZuluHhmm(seed.flightPlanDepartureTimeHhmm, this._clock.now());
 
     let stereoSeed = {};
     let stereoName = '';
@@ -589,12 +613,15 @@ class FdrStore {
       // role. Written through the generic setField() path (WRITABLE_PATHS
       // above) — these are plain controller-entered values, unlike the
       // separation-model fields below.
+      // docs/adr/0073 — stored INPUTS of §10.5's time chains (time-chains.js
+      // computes the answer at read). Present and null when unknown (§12).
+      timeInputs: { flightPlanDepartureUtc },
       mission: {
         missionNumber: seed.missionNumber || null,
         packageId: seed.packageId || null,
         controllingAgency: seed.controllingAgency || null,
-        vulWindowStartUtc: seed.vulWindowStartUtc || null,
-        vulWindowEndUtc: seed.vulWindowEndUtc || null,
+        vulWindowStartUtc: vulStart.value,
+        vulWindowEndUtc: vulEnd.value,
       },
       // WP4A second slice (docs/adr/0025), §4.6.3 — the three-field
       // separation model. Only ever written via setTofi() below, never the
@@ -648,7 +675,7 @@ class FdrStore {
     }
 
     if (TYPED_TIME_LABELS[path] && !path.startsWith('military.mtr.')) { // F4: typed HHMM → epoch ms
-      const time = normalizeTypedTime(path, value, this._clock.now());
+      const time = normalizeTypedTime(path, value, this._clock.now(), WINDOW_END_OF[path] ? getPath(fdr, WINDOW_END_OF[path]) : null);
       if (!time.ok) return { ok: false, reason: 'VALIDATION_ERROR', detail: time.detail };
       value = time.value;
     }
@@ -1105,6 +1132,7 @@ class FdrStore {
       // ensureMilitary() for why a null here is worse than it looks.
       ensureMilitary(f);
       ensureClearance(f); // docs/adr/0058 — FDRs saved before the clearance cells existed
+      if (!f.timeInputs) f.timeInputs = { flightPlanDepartureUtc: null }; // docs/adr/0073 — FDRs saved before the time chains
       return [f.fdrId, f];
     }));
     this._codeAllocator.restore(data?.codes);
