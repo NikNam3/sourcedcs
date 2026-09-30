@@ -183,3 +183,11 @@ made it (`human` or `supervisor`), and the lanes affected.
 | H68 | R2-9 — ATO date vs mission date | **Ignore the ATO's date; use the mission's date.** The ATO's date is the real-world date, while its timings are in-game | human | L14 |
 | H69 | R2-11 — magnetic variation | **(c) World Magnetic Model by position and mission date**, with a per-theater override in `theaters.json` (F2) | human | F2 |
 | H70 | R2-16 — navpoint declutter | **(b) Turn it off too**, forced off once like the formation declutter. It will be overhauled once AIRAC data lands | human | integrator |
+
+## Between waves and wave-2 dispatch (2026-09-30)
+
+| Id | Question | Decision | By | Lanes |
+|---|---|---|---|---|
+| S-W3a | ADR numbers from here on | 0080 L23, 0081 L27, 0082 L24, 0083 L26, 0084 taken (H53/H70), **0085 F2** magnetic, **0086 F3** mission session, **0087 L28** OVERFLIGHT lifecycle, **0088 L22** STARS, **0089 L25** miztoyaml. F4 is a bugfix with no ADR | supervisor | all |
+| S-W3b | What starts now | The fixes between waves F2, F3 and F4 and the doc fold (**DOC**) run as lanes in worktrees `sourcedcs-<id>`. Wave-2 lanes whose inputs are merged start **now, alongside them**: L1b, L12, L13, L14, L15, plus L25 (miztoyaml) and the L22 **mockup only** (H49). L16 waits for F4; L23 waits for L27; L24 waits for F3; L26, L27 and L28 wait for their briefings. A lane that needs F3's mission session keeps an injected seam until F3 merges | supervisor | all |
+| S-W3c | Magnetic conversion during wave 2 | Until F2 merges, wave-2 lanes that display a heading call one client function, `toMagneticDisplay(trueDeg)`; F2 owns and provides it. They never apply `hdgCorrection` themselves | supervisor | F2, L1b, L12–L15 |
