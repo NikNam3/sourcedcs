@@ -1446,6 +1446,7 @@ function refreshEfspPanel() {
   _renderPositionTabs();
   _refreshCreateStripAvailability();
   _renderCorrelationRate();
+  if (typeof renderEfspScrambleLine === 'function') renderEfspScrambleLine();
 }
 
 /**

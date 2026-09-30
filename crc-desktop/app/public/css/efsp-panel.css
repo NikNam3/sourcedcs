@@ -1765,3 +1765,42 @@
  * deviation. Declared after the arrival edge so an alert wins over "new". */
 .efsp-strip.efsp-strip-alert { border-color: var(--efsp-bad); box-shadow: inset 3px 0 0 var(--efsp-bad); }
 .efsp-strip.efsp-strip-alert-attn { border-top-color: var(--efsp-attn); border-right-color: var(--efsp-attn); border-bottom-color: var(--efsp-attn); }
+
+/* §9.6 scramble line (docs/adr/0070) — the Board-wide priority indication at
+   the top of the Strip panel, on every Position tab. One row per scramble; it
+   never collapses (H6). A new row flashes once; no sound. */
+#efsp-scramble-line {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 8px 4px;
+  border-bottom: 1px solid var(--efsp-bad);
+  background: rgba(255, 138, 76, 0.10);
+}
+#efsp-scramble-line[hidden] { display: none; }
+.efsp-scramble-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  min-height: 22px;
+  font-size: 12px;
+  color: var(--efsp-bad-text);
+}
+.efsp-scramble-tag { font-weight: bold; letter-spacing: 0.04em; color: var(--efsp-bad); }
+.efsp-scramble-cs {
+  all: unset;
+  cursor: pointer;
+  font-weight: bold;
+  color: var(--efsp-bad-text);
+  text-decoration: underline dotted;
+}
+.efsp-scramble-cs:focus-visible { outline: 2px solid var(--efsp-go); outline-offset: 1px; }
+.efsp-scramble-detail { color: var(--efsp-bad-text); }
+.efsp-scramble-row-new { animation: efsp-scramble-flash 1.6s ease-out 1; }
+@keyframes efsp-scramble-flash {
+  0% { background-color: rgba(255, 138, 76, 0.35); }
+  100% { background-color: transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .efsp-scramble-row-new { animation: none; }
+}

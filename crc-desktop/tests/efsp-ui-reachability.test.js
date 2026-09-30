@@ -2248,3 +2248,31 @@ test('OPS, which orders the scramble, has the alert status on its grid (decision
   const { el } = renderStrip({ strip: stripAt({ ownerPositionId: 'OPS', state: 'PROPOSED', bayId: 'ops-proposed' }), fdr: FDR, held: ['OPS'] });
   assert.ok(blockCell(el, '14E'), 'Block 14E is not on the OPS departure');
 });
+
+test('a scramble lights the Strip: a red SCRAMBLE chip in the alert slots and its reason line; a taxiing Strip gets the amber one', () => {
+  // T10: the reachability harness does not see indicators, so the wave-2 hook
+  // in strip-view.js is proved here with scramble.js loaded beside it.
+  const scrambler = stripAt({ ownerPositionId: 'CD', state: 'CLEARED', bayId: 'cd-cleared', facilityId: 'INCIRLIK' });
+  const taxiing = { ...stripAt({ ownerPositionId: 'GND', state: 'TAXI', bayId: 'gnd-taxi-out', facilityId: 'INCIRLIK' }), stripId: 's2', fdrId: 'f2', _callsign: 'HAWK31' };
+  const fdr = { ...FDR, identity: { ...FDR.identity, callsign: 'VIPER11' }, military: { ...FDR.military, alertStatus: 'SCRAMBLE' } };
+  const r = renderStrip({ strip: scrambler, fdr, held: ['CD', 'GND'], otherStrips: [taxiing] });
+  vm.runInContext(fs.readFileSync(path.join(CLIENT, 'scramble.js'), 'utf8'), r.sandbox, { filename: 'scramble.js' });
+
+  const el = r.sandbox._buildStripEl(scrambler);
+  const chip = descendants(el).find(c => c.dataset && c.dataset.slot === 'scram');
+  assert.ok(chip, 'no scram chip on the scrambling Strip');
+  assert.equal(chip.textContent, 'SCRAMBLE');
+  assert.match(chip.className, /efsp-ind-bad/);
+  assert.ok(descendants(el).some(c => (c.className || '').includes('efsp-alert-reason') && /Alert scramble\. SOURCE practice/.test(c.textContent)));
+
+  const other = r.sandbox._buildStripEl(r.sandbox.getEfspStrip('s2'));
+  const amber = descendants(other).find(c => c.dataset && c.dataset.slot === 'scram');
+  assert.ok(amber, 'no scram chip on the taxiing Strip');
+  assert.match(amber.className, /efsp-ind-attn/);
+  assert.ok(descendants(other).some(c => /VIPER11 is scrambling from INCIRLIK/.test(c.textContent || '')));
+});
+
+test('the wave-2 indicator order puts the alert-slot chips first (docs/adr/0068–0070)', () => {
+  const { INDICATOR_ORDER } = require(path.join(CLIENT, 'strip-view.js'));
+  assert.deepEqual(INDICATOR_ORDER.slice(0, 6), ['stca', 'conf', 'rwy', 'gear', 'ord', 'scram']);
+});
