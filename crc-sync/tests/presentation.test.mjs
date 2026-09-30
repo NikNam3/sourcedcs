@@ -190,3 +190,40 @@ test('THE coalition test: with every sensor answer fixed, coalition and player f
     for (const w of wires.slice(1)) assert.deepEqual(w, wires[0], JSON.stringify(over));
   }
 });
+
+// ── The draw scheme, per session (docs/adr/0088, decisions H41 S1 and H50) ──
+
+const { schemeOf, SCHEME_HOLD_SWEEPS } = await import('../src/surveillance/presentation.js');
+const APP_ATC = { ...APP, presentation: 'ATC' };
+const AWACS_TAC = { ...AWACS, presentation: 'TACTICAL' };
+
+test('a session holding no ATC Position sees every contact in the tactical scheme', () => {
+  assert.equal(present({ radars: [APP_ATC] }).scheme, 'TACTICAL');
+  assert.equal(present({ radars: [APP_ATC], atcSession: false }).scheme, 'TACTICAL');
+});
+
+test('an ATC session: only ATC radars see it -> ATC; a current tactical radar sees it -> TACTICAL', () => {
+  assert.equal(present({ radars: [APP_ATC], atcSession: true }).scheme, 'ATC');
+  assert.equal(present({ radars: [APP_ATC, AWACS_TAC], atcSession: true }).scheme, 'TACTICAL', 'tactical wins (H5)');
+  assert.equal(present({ radars: [AWACS_TAC], atcSession: true }).scheme, 'TACTICAL');
+});
+
+test('the datalink makes a contact TACTICAL on an ATC session too', () => {
+  const wire = present({ radars: [APP_ATC], atcSession: true, dl: { callsign: 'Enfield11', type: 'F-16C_50', lock: null } });
+  assert.equal(wire.scheme, 'TACTICAL');
+});
+
+test('hysteresis: a tactical radar holds the contact TACTICAL for two of its sweeps after its last return', () => {
+  assert.equal(SCHEME_HOLD_SWEEPS, 2);
+  const lastAwacs = { ...AWACS_TAC, at: 1000 }; // 10 s sweeps
+  const at = (t) => schemeOf([{ ...APP_ATC, at: t }, lastAwacs], t, false, true);
+  assert.equal(at(1000), 'TACTICAL');
+  assert.equal(at(11000), 'TACTICAL', 'one missed sweep: held');
+  assert.equal(at(21000), 'TACTICAL', 'exactly two sweeps: still held');
+  assert.equal(at(21001), 'ATC', 'past two sweeps: flips to ATC');
+  assert.equal(schemeOf([{ ...APP_ATC, at: 30000 }, { ...AWACS_TAC, at: 30000 }], 30000, false, true), 'TACTICAL', 'and back at once on a fresh tactical return');
+});
+
+test('a radar with no presentation class never makes a contact TACTICAL', () => {
+  assert.equal(schemeOf([{ ...AWACS, at: 1000 }], 1000, false, true), 'ATC');
+});

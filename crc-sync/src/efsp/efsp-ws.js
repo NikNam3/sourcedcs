@@ -622,6 +622,9 @@ function _snapshotMessage(ctx) {
     facilities: facilityIds,
     boardSeqByFacility,
     aitAuthorizedByFacility,
+    // The character each Position's owned contacts carry on an ATC scope
+    // (docs/adr/0088). Config, so it rides the snapshot only.
+    positionLetters: facilityConfig.allPositionLetters ? facilityConfig.allPositionLetters() : {},
     positions, bays, strips,
     fdrs: fdrStore.getAll(),
     // The airspace board (guide §4.2 — "not a strip rack"), sent whole: the

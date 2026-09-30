@@ -36,6 +36,7 @@ function initSettings() {
     scaleVal:       document.getElementById('set-scale-val'),
     lightMode:      document.getElementById('set-light-mode'),
     elevation:      document.getElementById('set-elevation'),
+    atcMapBackground: document.getElementById('set-atc-map-background'),
   };
 
   els.pplEnabled.checked = settings.pplEnabled;
@@ -52,6 +53,8 @@ function initSettings() {
   els.scaleVal.textContent = parseFloat(settings.scale).toFixed(1) + '×';
   els.lightMode.checked  = settings.lightMode;
   els.elevation.checked  = settings.showElevation;
+  // crc-sync's docs/adr/0088: on unless turned off (an older install has no key).
+  if (els.atcMapBackground) els.atcMapBackground.checked = settings.atcMapBackground !== false;
   els.radarDebug.checked   = settings.radarDebug;
   els.datalink.checked     = settings.showDatalinkLocks !== false;
   els.textMarks.checked    = settings.textMarksEnabled;
@@ -99,6 +102,11 @@ function initSettings() {
     if (settings.showElevation) updateElevationContours();
     else clearElevationContours();
   });
+  if (els.atcMapBackground) {
+    // Off: the black strict-STARS scope, in an ATC-only session. atc-scope.js
+    // applies it on its next beat.
+    els.atcMapBackground.addEventListener('change', () => persist('atcMapBackground', els.atcMapBackground.checked));
+  }
   els.radarDebug.addEventListener('change',   () => {
     persist('radarDebug', els.radarDebug.checked);
     if (!els.radarDebug.checked) hideLosProfile();

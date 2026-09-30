@@ -24,6 +24,11 @@
 //
 // Only the sensors of THIS controller's Positions count, which is why this
 // runs per session — two controllers can see one contact in two colours.
+//
+// Which scheme draws the contact is per session too (docs/adr/0088, H50): a
+// controller holding no ATC Position sees only the tactical scheme; one
+// holding ATC Positions sees a contact TACTICAL while any of its current
+// tactical radars (or the datalink) sees it, and ATC (STARS) otherwise.
 
 const { checkOnGround } = require('../geo');
 const { indicatedAltFt } = require('../altimetry');
@@ -33,8 +38,14 @@ const { classifyIff } = require('./iff');
 // sent track to it.
 const WIRE_KEYS = [
   'id', 'lat', 'lon', 'domain', 'onGround', 'illuminatedAt', 'sources',
-  'iffState', 'iffOverride', 'label', 'type', 'ssr', 'altitude', 'dl',
+  'iffState', 'iffOverride', 'label', 'type', 'ssr', 'altitude', 'dl', 'scheme',
 ];
+
+// How long a tactical radar's last return keeps a contact TACTICAL after the
+// radar has lost it, in that radar's own sweeps (H41 S1's hysteresis). Two,
+// the same look currentRadars() uses, so a contact at the edge of AWACS cover
+// does not flip scheme on every missed sweep.
+const SCHEME_HOLD_SWEEPS = 2;
 
 function domainOf(track) {
   if (track.category === 1 || track.category === 2) return 'AIR';
@@ -53,6 +64,23 @@ function currentRadars(radars, at) {
 }
 
 /**
+ * The draw scheme for one contact, for one session (docs/adr/0088).
+ *
+ * @param {Array<{presentation?:string, sweepMs:number, at:number}>} radars this session's radars that saw it
+ * @param {number|null} at  the newest return from this session's sensors
+ * @param {boolean} datalink  the contact reports on this session's datalink
+ * @param {boolean} atcSession  the session holds at least one ATC Position
+ * @returns {'TACTICAL'|'ATC'}
+ */
+function schemeOf(radars, at, datalink, atcSession) {
+  if (!atcSession) return 'TACTICAL';
+  if (datalink) return 'TACTICAL';
+  const held = (radars || []).some(r => r.presentation === 'TACTICAL' && r.at != null
+    && at - r.at <= SCHEME_HOLD_SWEEPS * (r.sweepMs || 0));
+  return held ? 'TACTICAL' : 'ATC';
+}
+
+/**
  * @param {object} track  raw TrackStore track (DCS truth — never sent)
  * @param {object} ctx
  * @param {number|null} ctx.at            newest return from this session's sensors
@@ -66,6 +94,7 @@ function currentRadars(radars, at) {
  * @param {{code:string|null, ident:boolean, emergency:string|null}|null} ctx.transponder
  * @param {{weather:object, transitionAltFt:number}} ctx.env
  * @param {object|null} ctx.missionData
+ * @param {boolean} [ctx.atcSession]  the session holds an ATC Position (docs/adr/0088)
  * @returns {object|null} the wire track, or null when the controller must not be told about it
  */
 function presentTrack(track, ctx) {
@@ -120,6 +149,7 @@ function presentTrack(track, ctx) {
     ssr: squawking ? { code: ctx.transponder.code, ident: ctx.transponder.ident, emergency: ctx.transponder.emergency } : null,
     altitude,
     dl: dl ? { lock: dl.lock || null } : null,
+    scheme: schemeOf(ctx.radars, ctx.at, !!dl, !!ctx.atcSession),
   };
 }
 
@@ -128,4 +158,4 @@ function labelPart(wire) {
   return { id: wire.id, iffState: wire.iffState, iffOverride: wire.iffOverride, label: wire.label, type: wire.type };
 }
 
-module.exports = { presentTrack, labelPart, domainOf, WIRE_KEYS };
+module.exports = { presentTrack, labelPart, domainOf, schemeOf, WIRE_KEYS, SCHEME_HOLD_SWEEPS };

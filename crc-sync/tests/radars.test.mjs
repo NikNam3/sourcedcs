@@ -205,3 +205,41 @@ test('an airborne radar is labelled with its own unit callsign: it is the contro
   const radars = byId(buildRadars({ missionData: MISSION, tracks, radarSpecs: SPECS }));
   assert.equal(radars.get('crc:11').label, 'DARKSTAR');
 });
+
+test('every radar carries its draw scheme: airfield and CVN approach radars ATC, the rest TACTICAL (docs/adr/0088)', () => {
+  const radars = byId(buildRadars({
+    missionData: MISSION,
+    tracks: [
+      { id: 1, callsign: 'DARKSTAR', type: 'E-3A', category: 1, lat: 37.5, lon: 35.5, alt: 9000, heading: 0 },
+      { id: 2, callsign: 'VIPER', type: 'F-16C_50', category: 1, lat: 37.5, lon: 35.5, alt: 6000, heading: 0 },
+      { id: 3, callsign: 'CVN', type: 'CVN_74', category: 4, lat: 36.5, lon: 35.0, alt: 0, heading: 0 },
+    ],
+    radarSpecs: SPECS,
+  }));
+  assert.equal(radars.get('apt:Incirlik').presentation, 'ATC');
+  assert.equal(radars.get('app:Incirlik').presentation, 'ATC');
+  assert.equal(radars.get('cvapp:3').presentation, 'ATC', 'the CVN approach radar, though its type is carrier');
+  assert.equal(radars.get('carrier:3').presentation, 'TACTICAL');
+  assert.equal(radars.get('crc:1').presentation, 'TACTICAL');
+  assert.equal(radars.get('crc:2').presentation, 'TACTICAL');
+});
+
+test('sensor-specs.json `presentation` overrides a kind, and an unknown value is ignored', () => {
+  const p = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'crcsync-radars-pres-')), 'sensor-specs.json');
+  fs.writeFileSync(p, JSON.stringify({ presentation: { carrier: 'ATC', airport: 'BOGUS' } }));
+  const specs = loadSensorSpecs(p);
+  const radars = byId(buildRadars({
+    missionData: MISSION,
+    tracks: [{ id: 3, callsign: 'CVN', type: 'CVN_74', category: 4, lat: 36.5, lon: 35.0, alt: 0, heading: 0 }],
+    radarSpecs: specs,
+  }));
+  assert.equal(radars.get('carrier:3').presentation, 'ATC');
+  assert.equal(radars.get('apt:Incirlik').presentation, 'ATC', 'BOGUS falls back to the default');
+});
+
+test('the shipped sensor-specs.json classifies every radar kind', async () => {
+  const shipped = loadSensorSpecs(path.join(path.dirname(new URL(import.meta.url).pathname), '../config/sensor-specs.json'));
+  assert.deepEqual(shipped.presentation, {
+    airport: 'ATC', approach: 'ATC', carrierApproach: 'ATC', awacs: 'TACTICAL', fighter: 'TACTICAL', carrier: 'TACTICAL',
+  });
+});

@@ -154,10 +154,130 @@ function tagEditable(t) {
   return !source || source === 'TAG';
 }
 
+// ── The ATC (STARS) data block — crc-sync's docs/adr/0088 ────────────────
+//
+// A contact crc-sync sends with `scheme: 'ATC'` is drawn in the STARS layout:
+// what it says depends on the controller's relation to it (atc-scope.js
+// works that out), and the text itself is written here, like every other
+// string a contact is shown with. Differences from the tactical block, all
+// deliberate (STARS's own conventions):
+//   - altitude is Mode C only, three digits, with no `*`/`L` mark and no climb
+//     digits (a STARS `*` means pilot-reported);
+//   - ground speed is in tens of knots (`28`, not `G280`), time-shared with
+//     the aircraft type;
+//   - emergencies are two letters (`EM`/`RF`/`HJ`);
+//   - an assigned altitude carries a trend arrow toward it: `A060↓ H250`.
+
+const ATC_EMERGENCY_TAG = { HIJACK: 'HJ', RADIO: 'RF', GENERAL: 'EM' };
+
+/** The ATC scheme's emergency text for a contact, or '' (two letters, red on line 0). */
+function atcEmergencyTag(t) {
+  const em = trackEmergency(t);
+  return em ? ATC_EMERGENCY_TAG[em] || '' : '';
+}
+
+/** '120' — Mode C in hundreds of feet. '' for anything a transponder did not report. */
+function atcAltitude(t) {
+  const a = t && t.altitude;
+  if (!a || a.source !== 'MODE_C' || !Number.isFinite(a.ft)) return '';
+  return String(Math.max(0, Math.round(a.ft / 100))).padStart(3, '0');
+}
+
+/** '28' — ground speed in tens of knots. */
+function atcSpeed(speedKt) {
+  return String(Math.max(0, Math.round((speedKt || 0) / 10))).padStart(2, '0');
+}
+
+/**
+ * 'A060↓ H250' — the flight's assigned altitude, with a trend arrow from its
+ * current altitude toward it (7110.65 §5-14-4d), and its assigned heading.
+ * The heading is what the controller typed, already magnetic; nothing here
+ * converts a bearing. '' when nothing is assigned.
+ * @param {{altFt:number|null, hdg:number|null}} assigned
+ * @param {number|null} currentFt
+ */
+function atcAssignedText(assigned, currentFt) {
+  if (!assigned) return '';
+  const parts = [];
+  if (Number.isFinite(assigned.altFt)) {
+    let trend = '';
+    if (Number.isFinite(currentFt) && Math.abs(assigned.altFt - currentFt) > 200) trend = assigned.altFt > currentFt ? '↑' : '↓';
+    parts.push('A' + String(Math.round(assigned.altFt / 100)).padStart(3, '0') + trend);
+  }
+  if (Number.isFinite(assigned.hdg)) parts.push('H' + String(Math.round(assigned.hdg) % 360).padStart(3, '0'));
+  return parts.join(' ');
+}
+
+/** The type as a STARS block writes it: the flight plan's own designator (`F16`), never a display label. */
+function atcType(t) {
+  return (t && t.type) || '';
+}
+
+/**
+ * The lines of an ATC data block, each a list of segments `{text, color, blink}`.
+ * `color: null` means the block's own colour. The caller (geojson.js) flattens
+ * them into the map layer; nothing here knows about MapLibre.
+ *
+ * @param {object} t  the wire track
+ * @param {object} v  atc-scope.js's view: { kind: 'FDB'|'PDB'|'LDB'|'NONE',
+ *   line0: [{text,color,blink}], l1Suffix: [{text,color,blink}], recipient: string, coast: boolean }
+ * @param {{speedKt:number, assigned?:object, typePhase?:boolean}} info
+ *   typePhase: the half of the time-share that shows the type instead of the speed
+ * @returns {Array<Array<{text:string,color:string|null,blink:boolean}>>}
+ */
+function atcBlockLines(t, v, info = {}) {
+  const seg = (text, color = null, blink = false) => ({ text, color, blink });
+  const lines = [];
+  const line0 = [];
+  for (const item of v.line0 || []) {
+    if (line0.length) line0.push(seg(' '));
+    line0.push(seg(item.text, item.color || null, !!item.blink));
+  }
+  if (line0.length) lines.push(line0);
+  if (v.kind === 'NONE') return lines;
+
+  const ident = trackIsIdent(t);
+  const alt = v.coast ? 'CST' : atcAltitude(t);
+  const gs = atcSpeed(info.speedKt);
+
+  if (v.kind === 'LDB') {
+    const label = t.label || {};
+    const first = label.source === 'TAG' && label.tag ? label.tag : ((t.ssr && t.ssr.code) || '');
+    const l1 = [seg(first)];
+    if (ident) l1.push(seg(' '), seg('ID', null, true));
+    lines.push(l1);
+    if (alt) lines.push([seg(alt)]);
+    return lines;
+  }
+
+  if (v.kind === 'PDB') {
+    const l = [seg(`${alt || '   '} ${gs}`)];
+    if (ident) l.push(seg(' '), seg('ID', null, true));
+    lines.push(l);
+    return lines;
+  }
+
+  // FDB
+  const l1 = [seg(trackName(t) + trackNameSuffix(t))];
+  for (const item of v.l1Suffix || []) l1.push(seg(' '), seg(item.text, item.color || null, !!item.blink));
+  lines.push(l1);
+  const l2 = [seg(`${alt || '   '} `)];
+  if (v.recipient) l2.push(seg(`${v.recipient} `));
+  const type = atcType(t);
+  if (ident) l2.push(seg('ID', null, true));
+  else l2.push(seg(info.typePhase && type ? type : gs));
+  lines.push(l2);
+  const currentFt = t.altitude && t.altitude.source === 'MODE_C' ? t.altitude.ft : null;
+  const asg = atcAssignedText(info.assigned, currentFt);
+  if (asg) lines.push([seg(asg)]);
+  return lines;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     isAir, isSea, isGround, trackName, trackNameSuffix, trackRef, trackEmergency, trackIsIdent,
     trackCodeTag, altitudeShort, altitudeLong, altitudeText, assignedAltText, typeText, infoLine,
     pickerText, shouldLabel, tagEditable, emergencyColor,
+    ATC_EMERGENCY_TAG, atcEmergencyTag, atcAltitude, atcSpeed, atcAssignedText, atcType, atcBlockLines,
   };
 }

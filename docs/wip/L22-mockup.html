@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ATC Scope Mockup</title>
+<meta name="description" content="L22 build target: the STARS-style ATC draw scheme on the crc-desktop map (H41 variant B, H47, H48, H50), for approval under H49.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Page chrome follows the app's dark UI. Scope colours are the design itself and live in PAL below. */
+:root{
+  color-scheme: dark;
+  --bg:#0f1214; --panel:#161b1f; --panel2:#1c2228; --line:#262e35; --line2:#34404a;
+  --text:#d8e0e6; --dim:#8c9aa6; --faint:#5d6973; --accent:#8ec7ff;
+  --badge:#d6a8ff; --badge-bg:#1b1030; --new:#ffb86b; --ok:#8aca8a;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#0f1214; } }
+:root[data-theme="dark"]{ --bg:#0f1214; }
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--text);font:15px/1.5 Roboto,system-ui,sans-serif;overflow-x:hidden}
+.wrap{max-width:1360px;margin:0 auto;padding:20px 16px 64px}
+h1{font-size:23px;font-weight:500;margin:4px 0 4px}
+h2{font-size:19px;font-weight:500;margin:0 0 4px}
+h3{font-size:12.5px;font-weight:500;margin:14px 0 6px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+p{margin:6px 0 10px;max-width:96ch}
+code,.mono{font-family:"Roboto Mono",ui-monospace,monospace;font-size:.86em}
+code{background:#1d252b;padding:0 4px;border-radius:3px;color:#d3e4f0;overflow-wrap:anywhere}
+a{color:var(--accent)}
+.lede{color:var(--dim)}
+.pill{display:inline-block;font-size:11.5px;padding:0 7px;border-radius:10px;border:1px solid var(--line2);color:var(--dim);vertical-align:1px;white-space:nowrap}
+.pill.new{border-color:var(--new);color:var(--new)}
+.pill.ok{border-color:#4f8a4f;color:var(--ok)}
+.bar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;margin:12px 0 4px;padding:8px 12px;background:rgba(22,27,31,.96);border:1px solid var(--line);border-radius:6px;font-size:13.5px}
+.bar label{display:flex;gap:6px;align-items:center;cursor:pointer}
+.bar nav{display:flex;flex-wrap:wrap;gap:5px;margin-left:auto}
+.bar nav a{padding:1px 8px;border:1px solid var(--line2);border-radius:12px;text-decoration:none;font-size:12.5px}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:2px 24px;font-size:14px;margin:10px 0}
+.facts div{padding:3px 0;border-bottom:1px dashed var(--line)}
+section.s{margin:30px 0 0;padding:16px 0 0;border-top:1px solid var(--line2)}
+.tagline{color:var(--dim);margin:2px 0 12px;font-size:14px}
+.grid{display:grid;grid-template-columns:minmax(0,1.75fr) minmax(0,1fr);gap:18px;align-items:start}
+.grid > .sc{position:sticky;top:54px}
+@media (max-width:980px){.grid{grid-template-columns:minmax(0,1fr)} .grid > .sc{position:static}}
+svg.scope{width:100%;height:auto;display:block;border:1px solid var(--line2);border-radius:4px;background:#000}
+ol.co{list-style:none;margin:0;padding:0;font-size:13.5px;line-height:1.45}
+ol.co li{display:grid;grid-template-columns:24px minmax(0,1fr);gap:8px;padding:6px 0;border-bottom:1px solid var(--line)}
+ol.co li .n{width:20px;height:20px;border-radius:50%;background:var(--badge-bg);border:1.2px solid var(--badge);color:#e9d5ff;font:700 11px/18px Roboto;text-align:center;margin-top:1px}
+ol.co b{font-weight:500;color:#fff}
+ol.co .f{display:block;color:var(--dim);font-size:12.5px}
+.tblwrap{overflow-x:auto;max-width:100%}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+td{overflow-wrap:anywhere}
+th{color:var(--dim);font-weight:500;font-size:12px}
+.note{font-size:13px;color:var(--dim);border-left:2px solid var(--line2);padding:2px 0 2px 10px;margin:10px 0}
+/* two-scope sequences */
+.seq{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+@media (max-width:760px){.seq{grid-template-columns:minmax(0,1fr)}}
+.seqhead{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin:14px 0 8px}
+.seqhead h3{margin:0}
+.seqhead button{background:var(--panel2);color:var(--text);border:1px solid var(--line2);border-radius:4px;font:13px Roboto;padding:2px 10px;cursor:pointer;min-width:34px}
+.steps{display:flex;flex-wrap:wrap;gap:4px}
+.steps span{font:12px "Roboto Mono";padding:0 6px;border:1px solid var(--line2);border-radius:3px;color:var(--faint);cursor:pointer}
+.steps span.on{color:#fff;border-color:var(--accent)}
+.cap{font-size:13.5px;margin:8px 0 0;min-height:3em}
+.cap b{font-weight:500;color:#fff}
+/* settings mock: copies the app's .setting-row look */
+.setmock{max-width:360px;background:#1a1f24;border:1px solid var(--line2);border-radius:6px;padding:10px 12px;font-size:13px}
+.setmock .lbl{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin:4px 0 6px}
+.setmock .row{display:flex;justify-content:space-between;align-items:center;padding:5px 0}
+.tg{width:30px;height:16px;border-radius:8px;background:#3a444c;position:relative;flex:none}
+.tg::after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#aab4bc}
+.tg.on{background:#2f6aa8}.tg.on::after{left:16px;background:#fff}
+.setmock .hint{color:var(--dim);font-size:11.5px;margin-top:4px}
+ul.dc{padding-left:0;list-style:none;counter-reset:d;margin:6px 0}
+ul.dc li{counter-increment:d;padding:6px 0 6px 40px;position:relative;border-bottom:1px solid var(--line);font-size:14px;max-width:110ch}
+ul.dc li::before{content:"D" counter(d);position:absolute;left:0;top:6px;font:500 12px "Roboto Mono";color:var(--accent)}
+.sw{display:inline-block;width:13px;height:13px;border:1px solid #555;vertical-align:-2px;margin-right:4px;border-radius:2px}
+.lgsym{width:54px;height:24px;display:block}
+/* animation: 1 Hz blink = the app's 500 ms _pulseBright; 4 s time-share (2 s each field) is an approximation */
+.blink{animation:blink 1s steps(1,end) infinite}
+@keyframes blink{0%{opacity:1}50%{opacity:.15}}
+.ts1{animation:ts 4s steps(1,end) infinite}
+.ts2{animation:ts 4s steps(1,end) infinite -2s}
+@keyframes ts{0%{opacity:1}50%{opacity:0}}
+body.still .blink,body.still .ts1,body.still .ts2{animation:none}
+body.still .ts2{opacity:0}
+body.nobadge .bdg{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>L22 · ATC scope in the STARS scheme: build target</h1>
+<p class="lede">Mockup for approval (H49) before any product code. It draws variant B, which H41 approved: the STARS layout on the app's dark map. It adds H47 (a yellow <code>SA</code> for hostiles), H48 (a tactical owner letter after TOFI), H50 (the scheme is chosen per track from the Positions you hold), and the personal "ATC map background" setting. Everything is hard-coded. Violet numbered badges are callouts and are not part of the design. Items marked <span class="pill new">new</span> are not on the wire today.</p>
+
+<div class="facts">
+  <div><b>You</b> are acting as <b>APP</b> (LTAG RAPCON), letter <code>A</code>. Scene 3 adds <b>TAC_C2</b>.</div>
+  <div><b>Letters:</b> TWR <code>T</code>, APP <code>A</code>, CTR <code>C</code>, and any tactical Position after TOFI <code>M</code> (H48)</div>
+  <div><b>"Mine"</b> means correlated (<code>label.source 'FDR'</code>) to a live Strip whose owning Position is one you act as</div>
+  <div><b>Font:</b> Roboto Mono 11 px (the app's <code>TEXT_SIZE_PX</code>) for ATC blocks, and Roboto Regular 11 px for tactical ones, as today</div>
+</div>
+
+<div class="bar">
+  <label><input type="checkbox" id="bgToggle" checked> ATC map background</label>
+  <label><input type="checkbox" id="still"> freeze blinking</label>
+  <label><input type="checkbox" id="nob"> hide callouts</label>
+  <nav><a href="#s1">1 APP scope</a><a href="#s2">2 Handoff / PO</a><a href="#s3">3 Mixed</a><a href="#s4">4 Black scope</a><a href="#legend">Legend</a><a href="#choices">Choices</a><a href="#wire">Wire</a></nav>
+</div>
+
+<!-- ─────────────────────────── 1 ─────────────────────────── -->
+<section class="s" id="s1">
+<h2>1 · APP scope, ATC-only session</h2>
+<p class="tagline">Every track here is <code>scheme: 'ATC'</code> because you hold only an ATC Position (H50). Relation to you picks the block: FDB (white = yours; yellow = pointed out to you), PDB (green, someone else's), LDB (green, nobody's), or none (primary only). The "ATC map background" toggle in the bar redraws this scope live. Scene 4 shows the result with it off.</p>
+<div class="grid"><div class="sc" id="svg-1"></div><ol class="co" id="co-1"></ol></div>
+</section>
+
+<!-- ─────────────────────────── 2 ─────────────────────────── -->
+<section class="s" id="s2">
+<h2>2 · Handoff and point-out, both ends</h2>
+<p class="tagline">Each step shows the sender's scope and the receiver's scope side by side. The steps play automatically every 3.5 s. Click a step to hold it. Blinks and click-downs are <b>local UI state</b> on each scope, never synced, as on STARS. Handoffs with a pending state exist only between APP and CTR (guide §8). A same-Facility drag, such as TWR→APP, is immediate and shows only the post-accept blink.</p>
+<div class="seqhead"><h3>Handoff CTR → APP: COLT31</h3><button data-seq="ho" data-act="prev" aria-label="previous">◀</button><button data-seq="ho" data-act="play" aria-label="play or pause">❚❚</button><button data-seq="ho" data-act="next" aria-label="next">▶</button><div class="steps" id="st-ho"></div></div>
+<div class="seq"><div id="ho-l"></div><div id="ho-r"></div></div>
+<p class="cap" id="cap-ho"></p>
+<div class="seqhead"><h3>Point-out TWR → APP: SNAKE21</h3><button data-seq="po" data-act="prev" aria-label="previous">◀</button><button data-seq="po" data-act="play" aria-label="play or pause">❚❚</button><button data-seq="po" data-act="next" aria-label="next">▶</button><div class="steps" id="st-po"></div></div>
+<div class="seq"><div id="po-l"></div><div id="po-r"></div></div>
+<p class="cap" id="cap-po"></p>
+</section>
+
+<!-- ─────────────────────────── 3 ─────────────────────────── -->
+<section class="s" id="s3">
+<h2>3 · Mixed session: TAC_C2 + APP</h2>
+<p class="tagline">You hold <b>TAC_C2</b> (it sees the E-3's radar and the datalink) and <b>APP</b> (the LTAG approach radar). Per H50, each track is drawn by the scheme of the radars that currently see it. Where a tactical radar sees it, the tactical scheme wins, with today's IFF colour, diamond or triangle, and Roboto block. A track only the approach radar sees is drawn STARS. Tactical tracks keep the basemap, so the ATC map background setting is ignored in a mixed session (see question 1).</p>
+<div class="grid"><div class="sc" id="svg-3"></div><ol class="co" id="co-3"></ol></div>
+</section>
+
+<!-- ─────────────────────────── 4 ─────────────────────────── -->
+<section class="s" id="s4">
+<h2>4 · "ATC map background" off: black strict-STARS scope</h2>
+<p class="tagline">This is the same instant as scene 1 with the personal setting off. The background is black and the palette is strict STARS (variant A): pure white, <code>#00FF00</code>, <code>#FF0000</code>, no text halo, and dim-gray video map and range rings. <b>The conformance tag and the CPA overlay stay</b>, as H41 requires either way. The setting is per user and client-only, and sits next to Elevation Contours.</p>
+<div class="grid"><div class="sc" id="svg-4"></div>
+<div>
+  <div class="setmock" role="img" aria-label="Settings panel mock">
+    <div class="lbl">Map Overlays</div>
+    <div class="row"><span>Elevation Contours</span><span class="tg"></span></div>
+    <div class="row"><span>ATC Map Background</span><span class="tg"></span></div>
+    <div class="hint">Off: a black scope with strict-STARS colours on ATC tracks. It applies only while every Position you hold is ATC.</div>
+  </div>
+  <ol class="co" id="co-4" style="margin-top:12px"></ol>
+</div></div>
+</section>
+
+<!-- ─────────────────────────── LEGEND ─────────────────────────── -->
+<section class="s" id="legend">
+<h2>Legend</h2>
+<div class="tblwrap"><table id="lg"></table></div>
+</section>
+
+<!-- ─────────────────────────── CHOICES ─────────────────────────── -->
+<section class="s" id="choices">
+<h2>Design choices</h2>
+<p class="tagline">These are the build rules the mockup follows. The approved decisions are cited, and the rest are defaults this lane took. Anything with an open question is marked <span class="pill new">Q</span>.</p>
+<ul class="dc">
+<li><b>One scheme per track.</b> crc-sync sends <code>scheme: 'TACTICAL'|'ATC'</code> per contact, per session. It is <code>TACTICAL</code> when a current radar of a tactical type, or the datalink, sees the contact, and it stays so for about 2 of that radar's sweeps after the last tactical return. Otherwise it is <code>ATC</code>. A session holding only tactical Positions gets only <code>TACTICAL</code>, and one holding only ATC Positions gets only <code>ATC</code> (H41 S1, H50). A flip counts as a label revision, so it draws at once.</li>
+<li><b>Fused targets only.</b> Every ATC track gets a blue disc (<code>#1E78FF</code>) carrying one position character. The disc is never text (7210 §3-9-1d). A coasting track loses the disc.</li>
+<li><b>Position character.</b> Your letter or the owner's letter (<code>T</code>/<code>A</code>/<code>C</code>) comes from new per-Position config. <code>M</code> marks any tactical Position while TOFI is ACTIVE (H48). An unassociated beacon gets <code>*</code>, and primary-only gets <code>+</code> (H41 S5, S7). <span class="pill new">Q4</span></li>
+<li><b>Block by relation.</b> You get an FDB when the track is yours, when it is being handed to you, when it is pointed out to you, when it has an emergency code, when it is in a CA, or when you clicked its PDB. It is a PDB (<code>alt  gs</code>) when it is correlated to someone else's Strip, and an LDB (<code>code / alt</code>) when it is squawking but uncorrelated. Primary-only gets no block. A tag, if set, replaces the code on LDB line 1.</li>
+<li><b>Colours by relation, never affiliation.</b> White means yours or being handed to you. Green means everything else. Yellow means pointed out to you, and <code>SA</code>. Red means <code>CA</code> and <code>EM</code>/<code>RF</code>/<code>HJ</code>. <code>iffState</code> is not drawn on ATC tracks. The one exception is a declared hostile (D9).</li>
+<li><b>FDB lines.</b> Line 0 carries indicators. Line 1 is the callsign plus <code>PO</code> or the recipient. Line 2 is the Mode C altitude in hundreds of feet (no <code>*</code>/<code>L</code> marks and no climb digits), then ground speed in tens of knots, time-shared every 2 s with the type. Line 3 is <code>A###</code> with an ↑/↓ trend toward it, then <code>H###</code> (ADR 0058's assigned values).</li>
+<li><b>Line 0 stacks by severity</b>, left to right, each item in its own colour: <code>EM</code>/<code>RF</code>/<code>HJ</code>, then <code>CA</code>, then <code>SA</code>, then the conformance tag (<code>BUST±</code> / <code>ALT↑↓</code> / <code>HDG###</code>, app colours). <span class="pill new">Q6</span></li>
+<li><b>Blink</b> at 1 Hz, reusing the app's <code>_pulseBright</code>. Blinking lasts until you acknowledge a handoff to you, a point-out to you, <code>CA</code>, <code>EM</code> or <code>UN</code>. An accepted handoff blinks for about 5 s on the sender's scope, and so does the <code>PO</code> of an accepted point-out. Every colour-coded state also carries text or blinks (7210 §3-9-1b).</li>
+<li><b>Hostiles (H47).</b> A contact whose shared declaration is <code>hostile</code> (<code>iffOverride</code>) gets a steady yellow <code>SA</code> on line 0. If it has no block, as with primary-only, it gets a one-line block holding just <code>SA</code>. Nothing else about the track changes. <span class="pill new">Q2</span> <span class="pill new">Q3</span></li>
+<li><b>Coast (H41 S6).</b> This is client-only. A <b>correlated</b> contact that stops arriving is held at its dead-reckoned position for the existing fade window (<code>fadeGraceMs</code> + fade, 20 s, about 2 sweeps). It shows <code>CST</code> in the altitude field and has no disc. Uncorrelated contacts fade as they do today. <span class="pill new">Q5</span></li>
+<li><b>History:</b> five blue dots per track, newest to oldest (TC-08/15). The trail colour never encodes identity.</li>
+<li><b>Kept from ADR 0058 (H41 S10).</b> The conformance tag and the CPA overlay are drawn in the app's orange <code>#FF8A4C</code> and amber <code>#E0A83C</code> on both backgrounds. <code>CA</code> replaces the <code>STCA</code> word on ATC tracks.</li>
+<li><b>Gestures.</b> A click on the <b>target</b> acknowledges, and then cycles FDB ↔ PDB. A click on the <b>block</b> opens the track panel, as today. A drag moves the block, as today, with the same geo-anchored offsets and the leader in the block's colour. <span class="pill new">Q7</span></li>
+<li><b>Map background off.</b> It hides the basemap fill, land and water, and elevation contours. Coastline, runways, airspace lines and range rings are drawn dim gray <code>#8C8C8C</code>. ATC text switches to the strict palette with no halo. It is per user and client-only, and is ignored while any held Position is tactical. <span class="pill new">Q1</span></li>
+<li><b>Font.</b> Roboto Mono Regular 11 px, and Medium for the position character. MapTiler's glyph endpoint (the one in <code>crc-desktop-scope-style.json</code>) serves both. I checked: it returns the real font and not its Noto Sans fallback.</li>
+<li><b>Not drawn in v1</b> (stars.md §5.4): scratchpads, CWT letters, MSAW <code>LA</code>, PTL, altitude filters, beacon-select, <code>WHO</code>, Quick Look, Dwell, and ships and vehicles beyond a disc with <code>*</code>/<code>+</code>.</li>
+</ul>
+</section>
+
+<!-- ─────────────────────────── WIRE ─────────────────────────── -->
+<section class="s" id="wire">
+<h2>What drives each element</h2>
+<p class="tagline">The track wire comes from <code>presentation.js</code>'s <code>presentTrack()</code>, which carries only what the session's sensors know (ADR 0059). "EFSP" means the Board snapshot and deltas every client already receives. The client filters that by what it holds, so it has every Strip, including mission lines. "Client" means state the renderer derives itself.</p>
+<div class="tblwrap"><table id="wt"></table></div>
+</section>
+</div>
+
+<script>
+(function(){
+'use strict';
+const RAD=Math.PI/180, f=n=>Math.round(n*10)/10;
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const MONO='Roboto Mono, ui-monospace, monospace', SANS='Roboto, sans-serif';
+const FS=11, CW=FS*0.6, LH=13;
+const CONF={bad:'#FF8A4C', attn:'#E0A83C'};
+
+// ── Palettes: B = ATC map background on (H41 variant B), A = off (strict STARS) ──
+const PAL={
+  B:{name:'B', own:'#E6E6E6', oth:'#3CE63C', po:'#FFFF00', al:'#FF3C3C', sa:'#FFFF00', tgt:'#1E78FF', pri:.8, ldbOp:.8, othOp:.8,
+     hist:['#1E50C8','#4646AA','#323282','#34347A','#2A2A6A'], histOp:.7, halo:true, ring:'#8C8C8C', ringOp:.55},
+  A:{name:'A', own:'#FFFFFF', oth:'#00FF00', po:'#FFFF00', al:'#FF0000', sa:'#FFFF00', tgt:'#1E78FF', pri:1, ldbOp:1, othOp:1,
+     hist:['#1E50C8','#4646AA','#323282','#28286E','#1E1E5A'], histOp:1, halo:false, ring:'#8C8C8C', ringOp:.85},
+};
+const TAC={friendly:'#4488cc', neutral:'#888888', bogey:'#ccaa00', bandit:'#cc6600', hostile:'#cc2222'};
+
+// ── Geometry helpers ──
+function behind(t,i,s){const dx=Math.sin(t.h*RAD),dy=-Math.cos(t.h*RAD);return [t.x-i*s*dx,t.y-i*s*dy];}
+function geom(x,y,dir,n,wPx,L){
+  const h=n*LH; let left,top,ax,ay;
+  switch(dir){
+    case 'NE':left=x+L;top=y-L-h+4;ax=left-2;ay=top+h-3;break;
+    case 'E': left=x+L+4;top=y-h/2;ax=left-3;ay=y;break;
+    case 'SE':left=x+L;top=y+L-4;ax=left-2;ay=top+3;break;
+    case 'NW':left=x-L-wPx;top=y-L-h+4;ax=left+wPx+2;ay=top+h-3;break;
+    case 'W': left=x-L-4-wPx;top=y-h/2;ax=left+wPx+3;ay=y;break;
+    case 'SW':left=x-L-wPx;top=y+L-4;ax=left+wPx+2;ay=top+3;break;
+  }
+  return {left,top,ax,ay,base:top+LH*.78};
+}
+function leader(x,y,ax,ay,c,op,r0){const d=Math.hypot(ax-x,ay-y);if(d<r0+2)return '';const ux=(ax-x)/d,uy=(ay-y)/d;
+  return `<line x1="${f(x+ux*r0)}" y1="${f(y+uy*r0)}" x2="${f(ax)}" y2="${f(ay)}" stroke="${c}" stroke-width="1" opacity="${op}"/>`;}
+const segLen=sg=>typeof sg==='string'?[...sg].length:Math.max([...sg.t].length,sg.alt?[...sg.alt].length:0);
+const lineLen=l=>l.reduce((a,s)=>a+segLen(s),0);
+
+// A STARS block in monospace. lines = [[seg…]], seg = 'text' | {t, c, cls, alt (time-shared)}
+function monoBlock(t,dir,lines,o){
+  const wPx=Math.max(...lines.map(lineLen))*CW, g=geom(t.x,t.y,dir,lines.length,wPx,o.L??14);
+  let s=leader(t.x,t.y,g.ax,g.ay,o.lc||o.c,1,7);
+  lines.forEach((ln,i)=>{let col=0;const y=f(g.base+i*LH);
+    ln.forEach(sg=>{if(typeof sg==='string')sg={t:sg};const x=f(g.left+col*CW),c=sg.c||o.c,cls=sg.cls||'';
+      if(sg.alt!=null)s+=`<text x="${x}" y="${y}" fill="${c}" class="ts1 ${cls}">${esc(sg.t)}</text><text x="${x}" y="${y}" fill="${c}" class="ts2 ${cls}">${esc(sg.alt)}</text>`;
+      else if(sg.t.trim())s+=`<text x="${x}" y="${y}" fill="${c}" class="${cls}" xml:space="preserve">${esc(sg.t)}</text>`;
+      col+=segLen(sg);});});
+  const halo=o.halo?'stroke="#000" stroke-width="2.2" paint-order="stroke" stroke-linejoin="round"':'';
+  return `<g font-family="${MONO}" font-size="${FS}" opacity="${o.op??1}" class="${o.cls||''}" ${halo}>${s}</g>`;
+}
+// Today's tactical block (map-setup.js unit-labels: Roboto Regular 11, colour = IFF)
+function propBlock(t,dir,lines,c,op=1){
+  const wPx=Math.max(...lines.map(l=>l.reduce((a,[tx])=>a+[...tx].length,0)))*6.1, g=geom(t.x,t.y,dir,lines.length,wPx,10);
+  let s=leader(t.x,t.y,g.ax,g.ay,c,op,7)+`<text font-family="${SANS}" font-size="${FS}" stroke="#000" stroke-width="2" paint-order="stroke" stroke-linejoin="round">`;
+  lines.forEach((ln,i)=>{s+=`<tspan x="${f(g.left)}" y="${f(g.base+i*LH)}">`+ln.map(([tx,cc])=>`<tspan fill="${cc||c}">${esc(tx)}</tspan>`).join('')+'</tspan>';});
+  return `<g opacity="${op}">${s}</text></g>`;
+}
+function tacTrack(t,iff,lines,dir,op=1){
+  const c=TAC[iff];let s='';
+  for(let i=1;i<=8;i++){const [x,y]=behind(t,i,7);s+=`<circle cx="${f(x)}" cy="${f(y)}" r="1.6" fill="${c}" opacity="${f((1-i/9)*.55*op*100)/100}"/>`;}
+  if(iff==='hostile'||iff==='bandit') s+=`<path d="M${t.x},${t.y-6} L${t.x+6},${t.y+5} L${t.x-6},${t.y+5} Z" fill="${c}" opacity="${op}"/>`;
+  else s+=`<rect x="-4" y="-4" width="8" height="8" fill="none" stroke="${c}" stroke-width="1" transform="translate(${t.x} ${t.y}) rotate(45)" opacity="${op}"/>`;
+  return s+propBlock(t,dir,lines,c,op);
+}
+function badges(list){return '<g class="bdg">'+list.map(([k,x,y])=>`<circle cx="${x}" cy="${y}" r="8.5" fill="#1b1030" stroke="#d6a8ff" stroke-width="1.2"/><text x="${x}" y="${y+3.6}" text-anchor="middle" font-family="Roboto" font-size="10.5" font-weight="700" fill="#e9d5ff">${k}</text>`).join('')+'</g>';}
+const svgWrap=(inner,w,h,label)=>`<svg class="scope" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(label)}">${inner}</svg>`;
+
+// ── Map ──
+const W=900,H=560, AP={x:430,y:330};
+const COAST='M0,372 C60,380 110,400 160,418 S250,470 300,505 S360,545 380,560';
+function baseMap(P,w=W,h=H,ap=AP,coast=COAST,rings=[100,200,300,400]){
+  const on=P.name==='B';
+  let s=`<rect width="${w}" height="${h}" fill="${on?'#141414':'#000'}"/>`;
+  if(on){ s+=`<path d="${coast} L0,${h} Z" fill="#07111a"/>`;
+    s+=`<path d="M120,0 C150,120 110,220 170,330 M520,0 C560,70 600,120 700,160 S820,200 900,190" fill="none" stroke="#1f2420" stroke-width="1"/>`; }
+  s+=`<path d="${coast}" fill="none" stroke="${P.ring}" stroke-width="1" opacity="${P.ringOp}"/>`;
+  for(const r of rings) s+=`<circle cx="${ap.x}" cy="${ap.y}" r="${r}" fill="none" stroke="${P.ring}" stroke-width=".8" opacity="${P.ringOp*.7}"/>`;
+  if(rings.length>1) s+=`<text x="${ap.x+rings[0]+3}" y="${ap.y-4}" font-family="${MONO}" font-size="9" fill="${P.ring}" opacity="${P.ringOp}">10</text><text x="${ap.x+rings[1]+3}" y="${ap.y-4}" font-family="${MONO}" font-size="9" fill="${P.ring}" opacity="${P.ringOp}">20</text>`;
+  s+=`<line x1="${ap.x-13}" y1="${ap.y+8}" x2="${ap.x+13}" y2="${ap.y-8}" stroke="${P.ring}" stroke-width="3" opacity="${on?.8:1}"/>`;
+  s+=`<text x="${ap.x+14}" y="${ap.y+16}" font-family="${MONO}" font-size="10" fill="${P.ring}" opacity="${P.ringOp+.1}">LTAG</text>`;
+  return s;
+}
+
+// ── ATC drawing ──
+function trail(t,P){let r='';for(let i=1;i<=5;i++){const [x,y]=behind(t,i,9);r+=`<circle cx="${f(x)}" cy="${f(y)}" r="2" fill="${P.hist[i-1]}" opacity="${P.histOp}"/>`;}return r;}
+function target(t,ch,cc,P,{disc=true,op=1,cls=''}={}){
+  return (disc?`<circle cx="${t.x}" cy="${t.y}" r="6" fill="${P.tgt}" opacity="${P.pri}"/>`:'')+
+    `<text x="${t.x}" y="${f(t.y+3.6)}" text-anchor="middle" font-family="${MONO}" font-weight="500" font-size="10.5" fill="${cc}" opacity="${op}" class="${cls}">${esc(ch)}</text>`;
+}
+function cpaOverlay(d,h,a,b){const m=[(a[0]+b[0])/2,(a[1]+b[1])/2];
+  return `<g><line x1="${d.x}" y1="${d.y}" x2="${a[0]}" y2="${a[1]}" stroke="${CONF.bad}" stroke-width="1.5" stroke-dasharray="3 2" opacity=".9"/>
+  <line x1="${h.x}" y1="${h.y}" x2="${b[0]}" y2="${b[1]}" stroke="${CONF.bad}" stroke-width="1.5" stroke-dasharray="3 2" opacity=".9"/>
+  <line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${CONF.bad}"/>
+  <circle cx="${m[0]}" cy="${m[1]}" r="12" fill="rgba(255,138,76,.12)" stroke="${CONF.bad}"/>
+  <text x="${m[0]-8}" y="${m[1]-16}" font-family="${SANS}" font-size="11" fill="#ffd2bd" stroke="#000" stroke-width="2" paint-order="stroke">0:55  1.8 NM / 500 ft</text></g>`;}
+
+// Scene 1 / 4 traffic (identical instant)
+const T={
+  viper:{x:640,y:250,h:230}, sq:{x:210,y:120,h:90}, prim:{x:150,y:330,h:45}, colt:{x:690,y:92,h:250},
+  snake:{x:330,y:420,h:40}, enf:{x:590,y:470,h:20}, dude:{x:380,y:170,h:100}, hawg:{x:490,y:185,h:280},
+  rage:{x:120,y:490,h:200}, boar:{x:805,y:320,h:350}, mojo:{x:790,y:200,h:60}, bad:{x:270,y:255,h:110},
+};
+function atcScene(P,bdg){
+  let s=baseMap(P);
+  s+=cpaOverlay(T.dude,T.hawg,[429,179],[436,176]);
+  const o=(c,x={})=>Object.assign({c,halo:P.halo},x), dim={op:P.ldbOp};
+  for(const k of Object.keys(T)) if(k!=='rage') s+=trail(T[k],P);
+  // 1 owned FDB with conformance tag
+  s+=target(T.viper,'A',P.own,P)+monoBlock(T.viper,'SE',[[{t:'HDG230',c:CONF.attn}],['VIPER11'],['120 ',{t:'28',alt:'F16'}],['A060↓ H250']],o(P.own));
+  // 2 LDB
+  s+=target(T.sq,'*',P.oth,P,{op:P.othOp})+monoBlock(T.sq,'NE',[['6123'],['042']],o(P.oth,dim));
+  // 3 primary only
+  s+=target(T.prim,'+',P.oth,P,{op:P.othOp});
+  // 4 handoff to me: flashing white FDB, target still C
+  s+=`<g class="blink">`+monoBlock(T.colt,'SW',[['COLT31'],['150 ',{t:'32',alt:'F18'}]],o(P.own))+`</g>`+target(T.colt,'C',P.own,P);
+  // 5 point-out to me: flashing yellow FDB
+  s+=`<g class="blink">`+monoBlock(T.snake,'SE',[['SNAKE21 PO'],['025 ',{t:'22',alt:'F16'}]],o(P.po))+`</g>`+target(T.snake,'T',P.po,P);
+  // 6 emergency: forced FDB, owned by CTR so green
+  s+=target(T.enf,'C',P.oth,P)+monoBlock(T.enf,'E',[[{t:'EM',c:P.al,cls:'blink'}],['ENFLD11'],['090 ',{t:'25',alt:'C130'}]],o(P.oth));
+  // 7 CA pair
+  s+=target(T.dude,'A',P.own,P)+monoBlock(T.dude,'NW',[[{t:'CA',c:P.al,cls:'blink'}],['DUDE41'],['070 ',{t:'24',alt:'F16'}]],o(P.own));
+  s+=target(T.hawg,'T',P.oth,P)+monoBlock(T.hawg,'SE',[[{t:'CA',c:P.al,cls:'blink'}],['HAWG61'],['065 ',{t:'21',alt:'A10'}]],o(P.oth));
+  // 8 coast
+  s+=target(T.rage,'A',P.own,P,{disc:false})+monoBlock(T.rage,'E',[['RAGE51'],['CST 23']],o(P.own));
+  // 9 PDB owned by CTR
+  s+=target(T.boar,'C',P.oth,P,{op:P.othOp})+monoBlock(T.boar,'NE',[['210 45']],o(P.oth,dim));
+  // 10 TOFI ACTIVE: tactical owner M (H48)
+  s+=target(T.mojo,'M',P.oth,P,{op:P.othOp})+monoBlock(T.mojo,'NE',[['180 42']],o(P.oth,dim));
+  // 11 declared hostile, primary only: SA one-line block (H47)
+  s+=target(T.bad,'+',P.oth,P,{op:P.othOp})+monoBlock(T.bad,'E',[[{t:'SA',c:P.sa}]],o(P.sa));
+  s+=badges(bdg||[[1,622,272],[2,190,140],[3,132,350],[4,712,112],[5,312,440],[6,572,492],[7,440,212],[8,100,510],[9,787,340],[10,772,220],[11,252,276],[12,694,208],[13,402,312]]);
+  return svgWrap(s,W,H,'APP scope, STARS scheme');
+}
+
+// ── Scene 2: two-scope sequences ──
+const SW=440,SH=190;
+function mini(P,title,tr,dir,lines,ch,chc,blinkBlock,blinkCh){
+  const ap={x:250,y:120};
+  let s=baseMap(P,SW,SH,ap,'M0,160 C80,165 160,175 240,190',[80,160]);
+  s+=`<text x="10" y="18" font-family="${SANS}" font-size="12" fill="#c9d3da" stroke="#000" stroke-width="2" paint-order="stroke">${esc(title)}</text>`;
+  s+=trail(tr,P);
+  const blk=monoBlock(tr,dir,lines,{c:chc.block,halo:P.halo,op:chc.op??1});
+  s+=(blinkBlock?`<g class="blink">${blk}</g>`:blk)+target(tr,ch,chc.ch,P,{cls:blinkCh?'blink':''});
+  return svgWrap(s,SW,SH,title);
+}
+const P2=PAL.B, TRH={x:150,y:95,h:250}, TRP={x:150,y:95,h:40};
+const LN=(cs,x)=>[[cs],['150 ',...(x?[x+' ']:[]),{t:'32',alt:'F18'}]];
+const SEQ={
+ ho:{ tr:TRH, dir:'E', steps:[
+  {k:'PROPOSED', cap:'<b>CTR presses Handoff to APP</b> (Strip coordination <code>HANDOFF</code>, <code>PROPOSED</code>). On the sender\'s scope the FDB stays steady white, with the recipient\'s letter <code>A</code> in the middle of line 2. On yours it is a <b>flashing white FDB</b> and the target still shows <code>C</code>.',
+   l:['CTR · sender','C',{block:P2.own,ch:P2.own},LN('COLT31','A'),0], r:['APP · you, receiver','C',{block:P2.own,ch:P2.own},LN('COLT31'),1]},
+  {k:'ACCEPTED', cap:'<b>You click the target to accept</b> (<code>ACTIVE</code>). Your FDB goes steady and the target becomes <code>A</code>. The sender\'s FDB <b>blinks white for about 5 s</b> and shows your letter.',
+   l:['CTR · sender','A',{block:P2.own,ch:P2.own},LN('COLT31'),1], r:['APP · you, owner','A',{block:P2.own,ch:P2.own},LN('COLT31'),0]},
+  {k:'+5 s', cap:'<b>The sender\'s blink stops</b>, by itself or on a click, and the FDB stays white.',
+   l:['CTR · sender','A',{block:P2.own,ch:P2.own},LN('COLT31'),0], r:['APP · you, owner','A',{block:P2.own,ch:P2.own},LN('COLT31'),0]},
+  {k:'CLICK', cap:'<b>CTR clicks the target:</b> its FDB turns green (someone else\'s).',
+   l:['CTR · sender','A',{block:P2.oth,ch:P2.oth},LN('COLT31'),0], r:['APP · you, owner','A',{block:P2.own,ch:P2.own},LN('COLT31'),0]},
+  {k:'CLICK', cap:'<b>CTR clicks again:</b> the FDB becomes a green PDB, <code>150 32</code> with owner <code>A</code>. This is what every other scope already shows.',
+   l:['CTR · sender','A',{block:P2.oth,ch:P2.oth,op:P2.ldbOp},[['150 32']],0], r:['APP · you, owner','A',{block:P2.own,ch:P2.own},LN('COLT31'),0]},
+ ]},
+ po:{ tr:TRP, dir:'SE', steps:[
+  {k:'PROPOSED', cap:'<b>TWR points SNAKE21 out to APP</b> (<code>POINT_OUT</code>, <code>PROPOSED</code>). The sender shows <code>PO</code> plus the recipient letter (<code>POA</code>). You get a <b>flashing yellow FDB</b> with <code>PO</code>. The target shows <code>T</code> because TWR owns it.',
+   l:['TWR · sender, owner','T',{block:P2.own,ch:P2.own},[['SNAKE21 POA'],['025 ',{t:'22',alt:'F16'}]],0], r:['APP · you, receiver','T',{block:P2.po,ch:P2.po},[['SNAKE21 PO'],['025 ',{t:'22',alt:'F16'}]],1]},
+  {k:'ACCEPTED', cap:'<b>You click to accept</b> (<code>ACTIVE</code>). Your FDB stays <b>steady yellow</b>. On the sender\'s scope the recipient letter goes and <code>PO</code> <b>blinks for about 5 s</b>. TWR keeps the white FDB as the data owner.',
+   l:['TWR · sender, owner','T',{block:P2.own,ch:P2.own},[['SNAKE21 ',{t:'PO',cls:'blink'}],['025 ',{t:'22',alt:'F16'}]],0], r:['APP · you, receiver','T',{block:P2.po,ch:P2.po},[['SNAKE21 PO'],['025 ',{t:'22',alt:'F16'}]],0]},
+  {k:'CLICK', cap:'<b>You click again:</b> it turns into a green FDB, and <code>PO</code> has cleared at TWR.',
+   l:['TWR · sender, owner','T',{block:P2.own,ch:P2.own},[['SNAKE21'],['025 ',{t:'22',alt:'F16'}]],0], r:['APP · you','T',{block:P2.oth,ch:P2.oth},[['SNAKE21'],['025 ',{t:'22',alt:'F16'}]],0]},
+  {k:'CLICK', cap:'<b>One more click:</b> it becomes a green PDB, <code>025 22</code>.',
+   l:['TWR · sender, owner','T',{block:P2.own,ch:P2.own},[['SNAKE21'],['025 ',{t:'22',alt:'F16'}]],0], r:['APP · you','T',{block:P2.oth,ch:P2.oth,op:P2.ldbOp},[['025 22']],0]},
+  {k:'REJECTED', cap:'<b>Alternative: you reject</b> (<code>REJECTED</code>). On the sender\'s scope a <b>flashing <code>UN</code></b> stays until TWR clicks it. Yours drops back to the green PDB.',
+   l:['TWR · sender, owner','T',{block:P2.own,ch:P2.own},[['SNAKE21 ',{t:'UN',cls:'blink'}],['025 ',{t:'22',alt:'F16'}]],0], r:['APP · you','T',{block:P2.oth,ch:P2.oth,op:P2.ldbOp},[['025 22']],0]},
+ ]},
+};
+const state={ho:{i:0,play:true},po:{i:0,play:true}};
+function drawSeq(id){
+  const S=SEQ[id], st=S.steps[state[id].i];
+  const side=a=>mini(P2,a[0],S.tr,S.dir,a[3],a[1],a[2],!!a[4],false);
+  document.getElementById(id+'-l').innerHTML=side(st.l);
+  document.getElementById(id+'-r').innerHTML=side(st.r);
+  document.getElementById('cap-'+id).innerHTML=`<span class="pill">${state[id].i+1}/${S.steps.length}</span> `+st.cap;
+  document.getElementById('st-'+id).innerHTML=S.steps.map((x,i)=>`<span data-seq="${id}" data-i="${i}" class="${i===state[id].i?'on':''}">${i+1} ${esc(x.k)}</span>`).join('');
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-seq]'); if(!b) return; const id=b.dataset.seq, S=SEQ[id], st=state[id];
+  if(b.dataset.i!=null){st.i=+b.dataset.i;st.play=false;}
+  else if(b.dataset.act==='prev'){st.i=(st.i+S.steps.length-1)%S.steps.length;st.play=false;}
+  else if(b.dataset.act==='next'){st.i=(st.i+1)%S.steps.length;st.play=false;}
+  else if(b.dataset.act==='play'){st.play=!st.play;}
+  document.querySelectorAll(`button[data-seq="${id}"][data-act="play"]`).forEach(x=>x.textContent=st.play?'❚❚':'▶︎▶︎');
+  drawSeq(id);
+});
+setInterval(()=>{ if(document.body.classList.contains('still')) return;
+  for(const id of ['ho','po']) if(state[id].play){state[id].i=(state[id].i+1)%SEQ[id].steps.length;drawSeq(id);} },3500);
+
+// ── Scene 3: mixed TAC_C2 + APP ──
+function mixedScene(){
+  const w=900,h=480,P=PAL.B,ap={x:600,y:270};
+  let s=`<rect width="${w}" height="${h}" fill="#141414"/><path d="M0,360 C80,362 160,392 230,410 S330,450 370,480 L0,480Z" fill="#07111a"/>`;
+  s+=`<defs><clipPath id="clipAw"><circle cx="150" cy="110" r="390"/></clipPath></defs>`;
+  s+=`<circle cx="150" cy="110" r="390" fill="none" stroke="#6a9a6a" stroke-width="1.2" stroke-dasharray="7 5"/>`;
+  s+=`<circle cx="${ap.x}" cy="${ap.y}" r="250" fill="none" stroke="#8C8C8C" stroke-width="1.2" opacity=".75"/>`;
+  s+=`<circle cx="${ap.x}" cy="${ap.y}" r="250" fill="rgba(106,154,106,.07)" clip-path="url(#clipAw)"/>`;
+  s+=`<circle cx="${ap.x}" cy="${ap.y}" r="100" fill="none" stroke="#8C8C8C" stroke-width=".8" opacity=".38"/>`;
+  s+=`<text x="14" y="22" font-family="${SANS}" font-size="12" fill="#8aba8a">E-3 radar + datalink: TAC_C2</text>`;
+  s+=`<text x="${w-14}" y="22" text-anchor="end" font-family="${SANS}" font-size="12" fill="#b0b0b0">LTAG approach radar: APP</text>`;
+  s+=`<text x="410" y="300" font-family="${SANS}" font-size="11" fill="#6a9a6a">both see this area</text>`;
+  s+=`<line x1="${ap.x-13}" y1="${ap.y+8}" x2="${ap.x+13}" y2="${ap.y-8}" stroke="#8C8C8C" stroke-width="3" opacity=".8"/><text x="${ap.x+14}" y="${ap.y+16}" font-family="${MONO}" font-size="10" fill="#8C8C8C">LTAG</text>`;
+  // TACTICAL tracks (an E-3 sees them now)
+  const V={x:470,y:200,h:250}; s+=tacTrack(V,'friendly',[[['VIPER11']],[['120↓15 G280']],[['4521']],[['A060 H250']]],'E');
+  const M={x:260,y:130,h:60};  s+=tacTrack(M,'friendly',[[['MOJO21']],[['180 G420']],[['4633']]],'E');
+  const B={x:150,y:250,h:100}; s+=tacTrack(B,'hostile',[[['TN00031']],[['250* G480']]],'E');
+  const S={x:545,y:95,h:70};   s+=`<circle cx="${S.x}" cy="${S.y}" r="15" fill="none" stroke="#bbb" stroke-dasharray="2 3" opacity=".7"/>`+tacTrack(S,'friendly',[[['SNAKE21']],[['080↑10 G300']],[['4561']]],'NE',.8);
+  // ATC tracks (only the approach radar sees them)
+  const o=(c,x={})=>Object.assign({c,halo:true},x);
+  const C={x:770,y:300,h:280}; s+=trail(C,P)+monoBlock(C,'NE',[['COLT31'],['150 ',{t:'32',alt:'F18'}],['A080↓ H280']],o(P.own))+target(C,'A',P.own,P);
+  const L={x:700,y:420,h:330}; s+=trail(L,P)+monoBlock(L,'E',[['6123'],['042']],o(P.oth,{op:P.ldbOp}))+target(L,'*',P.oth,P,{op:P.othOp});
+  const X={x:820,y:170,h:250}; s+=trail(X,P)+monoBlock(X,'SW',[[{t:'SA',c:P.sa}]],o(P.sa))+target(X,'+',P.oth,P,{op:P.othOp});
+  s+=badges([[1,452,222],[2,242,150],[3,132,272],[4,545,122],[5,752,322],[6,682,440],[7,840,190],[8,40,40],[9,860,40]]);
+  return svgWrap(s,w,h,'Mixed TAC_C2 and APP scope');
+}
+
+// ── Callouts ──
+const CO={
+ 1:[
+  [1,'VIPER11: yours → white FDB','Target <code>A</code> is your letter. Line 0 <code>HDG230</code> is the ADR 0058 conformance tag, kept (H41 S10). Line 2 is Mode C <code>120</code>, then GS in tens of knots <code>28</code>, time-shared with the type <code>F16</code>. Line 3 is the assigned <code>A060</code> with the ↓ trend, then <code>H250</code>.'],
+  [2,'6123: squawking, no flight plan → green LDB','<code>*</code> on the target. Line 1 is <code>ssr.code</code> and line 2 is the Mode C altitude. LDB brightness is 0.8.'],
+  [3,'Primary only → <code>+</code>, no block','<code>sources</code> has no <code>SSR</code> (H41 S7). A click opens the track panel, where the track number lives.'],
+  [4,'COLT31: handoff to you → flashing white FDB','The target keeps <code>C</code> until you accept. The full exchange, both ends, is in scene 2.'],
+  [5,'SNAKE21: pointed out to you → flashing yellow FDB, <code>PO</code>','<code>T</code>: TWR owns it. Scene 2 shows the full exchange.'],
+  [6,'ENFLD11: 7700 → red <code>EM</code>, forced FDB','It blinks until you click it. The block is green because CTR owns it. 7600 is <code>RF</code> and 7500 is <code>HJ</code>.'],
+  [7,'DUDE41 (yours) vs HAWG61 (TWR\'s) → red <code>CA</code> + CPA overlay','Both get a forced FDB. You acknowledge locally by clicking either target. The CPA geometry is kept (H41 S10).'],
+  [8,'RAGE51: yours, lost → <code>CST</code>, no disc','The letter sits at the dead-reckoned position and <code>CST</code> replaces the altitude (H41 S6). After the fade window it is gone. The Strip shows <code>NO TRK</code> as today.'],
+  [9,'BOAR05: CTR\'s → green PDB','Altitude <code>210</code> and GS <code>45</code>, with owner <code>C</code>. A click on the target expands it to an FDB.'],
+  [10,'MOJO21: under tactical control → <code>M</code> (H48)','TOFI is ACTIVE on its CTR Strip, and the mission line is worked by TAC_C2, so the owner letter is <code>M</code> even though the ATC Strip stays live. It is a green PDB. APP still has to separate traffic from it.'],
+  [11,'TN00031: declared hostile → yellow <code>SA</code> (H47)','Primary only, so the block is just <code>SA</code> (steady). If it squawked, its LDB would read <code>SA</code> / <code>code</code> / <code>alt</code>. The trigger is the shared declaration <code>iffOverride: \'hostile\'</code>. Nothing else of IFF is drawn.'],
+  [12,'History → five fading blues','The same for every track (HST 0.7).'],
+  [13,'Map → basemap kept, dim-gray rings and video map','The range rings are 10 NM apart at 0.55 opacity.'],
+ ],
+ 3:[
+  [1,'VIPER11: E-3 and APP both see it → TACTICAL','Drawn exactly as today, blue because its Mode 4 answered (ADR 0066/0084), even though you own its Strip as APP. The STARS cues come back when the E-3 loses it.'],
+  [2,'MOJO21: TOFI flight, E-3 sees it → TACTICAL','Your TAC_C2 half is working it, so the tactical scheme is right. An APP-only colleague sees it as the <code>M</code> PDB of scene 1.'],
+  [3,'TN00031: declared hostile inside E-3 cover → tactical red triangle','Height-finder altitude <code>250*</code>. No <code>SA</code>: that is the ATC-scheme cue only.'],
+  [4,'SNAKE21: just left E-3 cover → held TACTICAL','It stays tactical for about 2 E-3 sweeps (hysteresis, H41 S1), then flips to ATC. The flip redraws at once.'],
+  [5,'COLT31: only the approach radar → ATC, yours','White FDB, letter <code>A</code>.'],
+  [6,'6123: only the approach radar → ATC LDB','Green, <code>*</code>.'],
+  [7,'TN00036: declared hostile, only the approach radar → <code>SA</code>','The same hostile cue as scene 1, because no tactical radar sees it.'],
+  [8,'E-3 coverage (tactical type)','Radar types are classified once in <code>sensor-specs.json</code> (P5: read once).'],
+  [9,'Approach radar (ATC type)','A mixed session keeps the basemap, whatever the "ATC map background" setting says.'],
+ ],
+ 4:[
+  [1,'Black background','7210 §3-9-1a1. The basemap, land and water fills, and elevation contours are hidden. The coastline, runway and rings are dim gray <code>#8C8C8C</code>.'],
+  [2,'Strict palette','<code>#FFFFFF</code> / <code>#00FF00</code> / <code>#FFFF00</code> / <code>#FF0000</code> are the measured STARS values (TC-08/15). There is no text halo, and brightness is 1.0.'],
+  [3,'Still drawn: conformance tag and CPA overlay','In the app colours <code>#FF8A4C</code> / <code>#E0A83C</code>, as H41 says: "stay either way".'],
+  [4,'SA and M unchanged','Yellow <code>SA</code> and the <code>M</code> letter read the same on both backgrounds.'],
+ ],
+};
+const coHtml=l=>l.map(([n,t,d])=>`<li><span class="n">${n}</span><div><b>${t}</b>${d?`<span class="f">${d}</span>`:''}</div></li>`).join('');
+
+// ── Legend ──
+function lgSym(inner){return `<svg class="lgsym" viewBox="0 0 54 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="54" height="24" fill="#141414"/>${inner}</svg>`;}
+const disc=(ch,c)=>`<circle cx="12" cy="12" r="6" fill="#1E78FF" opacity=".8"/><text x="12" y="15.6" text-anchor="middle" font-family="${MONO}" font-weight="500" font-size="10.5" fill="${c}">${ch}</text>`;
+const txt=(t,c,x=24)=>`<text x="${x}" y="16" font-family="${MONO}" font-size="11" fill="${c}" stroke="#000" stroke-width="2" paint-order="stroke">${esc(t)}</text>`;
+const B=PAL.B, A=PAL.A;
+const LG=[
+  [lgSym(disc('A',B.own)),'Fused target (blue disc) with your letter','<span class="sw" style="background:#1E78FF"></span><code>#1E78FF</code> at 0.8, never used for text'],
+  [lgSym(disc('T',B.oth)+disc('C',B.oth).replace(/cx="12"/,'cx="36"').replace(/x="12"/,'x="36"')),'Owner letters T / A / C, and M after TOFI','New per-Position config'],
+  [lgSym(disc('*',B.oth)+`<circle cx="38" cy="12" r="6" fill="#1E78FF" opacity=".8"/><text x="38" y="15.6" text-anchor="middle" font-family="${MONO}" font-size="10.5" fill="${B.oth}">+</text>`),'<code>*</code> uncorrelated beacon · <code>+</code> primary only','H41 S5, S7'],
+  [lgSym(`<text x="12" y="15.6" text-anchor="middle" font-family="${MONO}" font-size="10.5" fill="${B.own}">A</text>`+txt('CST',B.own)),'Coasting: letter with no disc, <code>CST</code> in the altitude field','H41 S6'],
+  [lgSym(txt('VIP',B.own,4)),'Owned FDB (or handed to you)','<span class="sw" style="background:#E6E6E6"></span>on · <span class="sw" style="background:#FFFFFF"></span>off'],
+  [lgSym(txt('042',B.oth,4)),'PDB / LDB / someone else\'s FDB','<span class="sw" style="background:#3CE63C"></span>on, 0.8 · <span class="sw" style="background:#00FF00"></span>off'],
+  [lgSym(txt('PO',B.po,4)+txt('SA',B.sa,30)),'Pointed out to you · declared hostile','<span class="sw" style="background:#FFFF00"></span><code>#FFFF00</code> both'],
+  [lgSym(txt('CA',B.al,4)+txt('EM',B.al,30)),'Conflict · emergency (<code>RF</code>, <code>HJ</code>)','<span class="sw" style="background:#FF3C3C"></span>on · <span class="sw" style="background:#FF0000"></span>off'],
+  [lgSym(txt('HDG',CONF.attn,2)+`<rect x="26" y="4" width="0" height="0"/>`+txt('B+',CONF.bad,32)),'Conformance tag (app, not STARS)','<span class="sw" style="background:#E0A83C"></span>HDG · <span class="sw" style="background:#FF8A4C"></span>BUST/ALT, CPA'],
+  [lgSym(B.hist.map((c,i)=>`<circle cx="${6+i*10}" cy="12" r="2.4" fill="${c}"/>`).join('')),'History, newest → oldest','Five blues (TC-08/15), 4–5 lifted on the basemap'],
+  [lgSym(`<rect x="-4" y="-4" width="8" height="8" fill="none" stroke="#4488cc" transform="translate(12 12) rotate(45)"/><path d="M38,6 L44,17 L32,17 Z" fill="#cc2222"/>`),'Tactical scheme (unchanged): IFF colour, diamond / triangle','Only where a tactical radar sees the track'],
+  [lgSym(`<text x="4" y="16" font-family="${MONO}" font-size="11" fill="${B.own}" class="blink">COL</text>`),'Blink 1 Hz: handoff, PO, CA, EM, UN, until acknowledged','The app\'s <code>_pulseBright</code>'],
+];
+
+// ── Wire table ──
+const NEW='<span class="pill new">new</span>', OK='<span class="pill ok">today</span>';
+const WT=[
+ ['Scheme per track (ATC vs TACTICAL)', `wire <code>scheme: 'TACTICAL'|'ATC'</code>, from which radar <i>types</i> currently see it, plus the datalink, with ~2-sweep hysteresis. Radar type classified in <code>sensor-specs.json</code> (<code>presentation: 'ATC'</code>)`, NEW, '<code>sources</code> cannot tell an E-3 without height from an approach radar. Add to <code>WIRE_KEYS</code> and the wire-strictness test'],
+ ['Blue target, its position', 'wire <code>lat</code>/<code>lon</code>, <code>sources</code> ∋ <code>PRIMARY</code>', OK, ''],
+ ['<code>*</code> vs <code>+</code>', 'wire <code>sources</code> ∋ <code>SSR</code> (then <code>*</code>) or not (<code>+</code>)', OK, ''],
+ ['Owner letter T/A/C', 'EFSP Strip <code>ownerPositionId</code> via <code>stripIdsForTrackId()</code>, when wire <code>label.source === \'FDR\'</code>; then a letter per Position', NEW, 'The letter table is new facility config (ATC Positions only)'],
+ ['<code>M</code> after TOFI (H48)', 'EFSP: the flight\'s TOFI coordination <code>ACTIVE</code> / mission-line Strip (TACTICAL Facility) owning tactical control', OK, 'Every client already gets every Strip. Only the letter itself is new config'],
+ ['FDB / PDB / LDB choice', 'wire <code>label.source</code> + EFSP owner vs your acting-as set + coordination state + <code>ssr.emergency</code> + STCA membership + local click state', OK, 'All client-side'],
+ ['Callsign (FDB line 1)', 'wire <code>label.callsign</code>', OK, ''],
+ ['LDB line 1: code / tag', 'wire <code>ssr.code</code>; <code>label.tag</code> when <code>label.source \'TAG\'</code>', OK, ''],
+ ['Altitude <code>120</code>', 'wire <code>altitude.ft</code> when <code>altitude.source === \'MODE_C\'</code>', OK, 'In ATC scheme <code>RADAR</code>/<code>DATALINK</code> cannot occur (those sensors make it TACTICAL). Assert that, and never draw <code>*</code>'],
+ ['GS in tens <code>28</code>', 'client <code>kinematics(history)</code>', OK, 'As <code>infoLine</code> does today'],
+ ['Type time-share <code>F16</code>', 'wire <code>type</code> (the FDR\'s, only when correlated)', OK, ''],
+ ['<code>A060↓ H250</code>', 'EFSP <code>fdr.clearance</code> ALT/HDG ACTIVE (ADR 0058, <code>buildAssignedLine</code>); the arrow is current vs assigned', OK, ''],
+ ['Handoff: blink, recipient char', 'EFSP <code>coordination.primitive HANDOFF</code>, <code>state PROPOSED/ACTIVE</code>, peer Position', OK, 'Post-accept 5 s blink and click-downs are local UI'],
+ ['Point-out: <code>PO</code>, <code>POA</code>, <code>UN</code>', 'EFSP <code>POINT_OUT</code> <code>PROPOSED/ACTIVE/REJECTED</code>', OK, ''],
+ ['<code>EM</code> / <code>RF</code> / <code>HJ</code>', 'wire <code>ssr.emergency</code> GENERAL / RADIO / HIJACK', OK, '<code>trackCodeTag</code> gets an ATC variant'],
+ ['<code>ID</code> (ident, not shown)', 'wire <code>ssr.ident</code>', OK, 'Replaces the whole-icon pulse on ATC tracks'],
+ ['<code>CA</code>', '<code>efsp-alerts.stca</code> (ADR 0058; ATC sessions only)', OK, ''],
+ ['CPA overlay', '<code>buildStcaOverlay</code> from the same conflicts', OK, 'Unchanged'],
+ ['Conformance tag', '<code>conformanceAlertsForFdr</code> (ADR 0058)', OK, 'Unchanged, moved onto line 0'],
+ ['<code>SA</code> (H47)', 'wire <code>iffOverride === \'hostile\'</code>', OK, 'Auto-IFF never says hostile (ADR 0066), so this is only ever a controller\'s declaration'],
+ ['<code>CST</code> coast', 'client: a correlated track that stopped arriving (<code>lastSweepMs</code>), dead-reckoned from <code>history</code>', NEW, 'Nothing on the wire says "coasting". A server-side <code>coast</code> flag would be the alternative (Q5)'],
+ ['History dots', 'client <code>history</code>', OK, ''],
+ ['Map background off', 'client setting (per user, like Elevation Contours) + the held Positions\' kinds', NEW, 'New setting only; no server work'],
+ ['Tactical tracks in a mixed view', 'unchanged: <code>iffState</code>, <code>domain</code>, <code>altitude.source</code> marks, <code>dl</code>', OK, 'IFF colour with H53: military field radars answer Mode 4 (ADR 0084)'],
+];
+
+// ── Render ──
+const bgT=document.getElementById('bgToggle');
+function draw1(){ document.getElementById('svg-1').innerHTML=atcScene(bgT.checked?PAL.B:PAL.A);
+ }
+draw1();
+document.getElementById('svg-4').innerHTML=atcScene(PAL.A,[[1,30,30],[2,622,272],[3,440,212],[4,252,276],[4,772,220]]);
+document.getElementById('svg-3').innerHTML=mixedScene();
+document.getElementById('co-1').innerHTML=coHtml(CO[1]);
+document.getElementById('co-3').innerHTML=coHtml(CO[3]);
+document.getElementById('co-4').innerHTML=coHtml(CO[4]);
+document.getElementById('lg').innerHTML='<tr><th>Symbol</th><th>Meaning</th><th>Colour / source</th></tr>'+LG.map(([a,b,c])=>`<tr><td>${a}</td><td>${b}</td><td>${c}</td></tr>`).join('');
+document.getElementById('wt').innerHTML='<tr><th>Element</th><th>Driven by</th><th>Status</th><th>Note</th></tr>'+WT.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join('');
+drawSeq('ho'); drawSeq('po');
+bgT.addEventListener('change',draw1);
+const still=document.getElementById('still'), nob=document.getElementById('nob');
+still.addEventListener('change',()=>document.body.classList.toggle('still',still.checked));
+nob.addEventListener('change',()=>document.body.classList.toggle('nobadge',nob.checked));
+})();
+</script>
+</body>
+</html>

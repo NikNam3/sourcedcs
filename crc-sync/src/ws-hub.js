@@ -297,7 +297,7 @@ class WsHub {
         const radar = byId.get(radarId);
         if (!radar) continue;
         if (!hit) hit = { at, radars: [], dl: null };
-        hit.radars.push({ id: radarId, caps: radar.caps, sweepMs: radar.sweepMs, at });
+        hit.radars.push({ id: radarId, caps: radar.caps, presentation: radar.presentation, sweepMs: radar.sweepMs, at });
         if (at > hit.at) hit.at = at;
       }
       if (hit) visible.set(trackId, hit);
@@ -318,7 +318,7 @@ class WsHub {
   }
 
   /** One wire track, or null when this controller must not be told about it. */
-  _present(trackId, hit, visible) {
+  _present(trackId, hit, visible, session) {
     const track = this._trackStore.get(trackId);
     if (!track) return null;
     const d = this._described.get(String(trackId)) || this._surv.describe(track);
@@ -330,6 +330,7 @@ class WsHub {
       at: hit.at, radars: hit.radars, dl,
       who: d.who, mode4: d.mode4, iffOverride: d.iffOverride, transponder: d.transponder,
       env: this._surv.env(), missionData: this._missionData,
+      atcSession: !!(session && session.coverage && session.coverage.stca),
     });
   }
 
@@ -340,7 +341,7 @@ class WsHub {
     session.lastSent = new Map();
     session.labelRevs = new Map();
     for (const [id, hit] of visible) {
-      const wire = this._present(id, hit, visible);
+      const wire = this._present(id, hit, visible, session);
       if (!wire) continue;
       tracks.push(wire);
       session.lastSent.set(id, hit.at);
@@ -371,7 +372,9 @@ class WsHub {
    */
   _refreshCoverage(ws, session) {
     const next = this._picture.coverageFor(session.controllerId);
-    const key = (c) => [...c.radars.map(r => r.id)].sort().join(',') + (c.datalink ? '+DL' : '');
+    // `stca` is whether an ATC Position is held, which decides the draw scheme
+    // of every contact (docs/adr/0088) — a change of it re-sends the picture too.
+    const key = (c) => [...c.radars.map(r => r.id)].sort().join(',') + (c.datalink ? '+DL' : '') + (c.stca ? '+ATC' : '');
     const before = key(session.coverage);
     const after = key(next);
     this._setCoverage(session, next);
@@ -491,7 +494,7 @@ class WsHub {
       // a track this controller cannot see.
       const relabel = !fresh && lastSent.has(trackId) && labelRevs.get(trackId) !== rev;
       if (!fresh && !relabel) continue;
-      const wire = this._present(trackId, hit, visible);
+      const wire = this._present(trackId, hit, visible, session);
       if (!wire) {
         if (lastSent.has(trackId)) gone.push(trackId);
         lastSent.delete(trackId);

@@ -281,3 +281,49 @@ test('setOnEfspChange fires after an EFSP message that broadcast, not after one 
   } finally { console.error = origError; }
   assert.equal(ws.sent.filter(m => m.type === 'efsp-ack').length, 3, 'the sender still got every ack');
 });
+
+// ── The draw scheme on the wire (docs/adr/0088) ────────────────────────────
+
+test('scheme is on every wire track, and follows the session: ATC Positions + a tactical radar per track (H50)', () => {
+  const E3 = { ...CRC, presentation: 'TACTICAL' };
+  const AP = { ...APP, presentation: 'ATC' };
+  const trackStore = new TrackStore();
+  for (const id of [1, 2]) trackStore.update({ id, callsign: 'X', name: `U${id}`, coalition: 3, type: 'F-16C_50', category: 1, lat: 37, lon: 35, alt: 3000 });
+  const collabStore = new CollaborativeStore();
+  const surveillance = createSurveillance({ collab: collabStore });
+  const lit = { 1: new Map([['app:X', 5000], ['crc:A', 5000]]), 2: new Map([['app:X', 5000]]) };
+  const cov = (stca) => ({ radars: [AP, E3], radarIds: new Set(['app:X', 'crc:A']), heldPositions: [], radarBearingPositions: [], stca });
+  const picture = { coverageFor: () => cov(true), illuminated: () => new Map(Object.entries(lit)), radars: () => [AP, E3] };
+  const hub = new WsHub({ trackStore, collabStore, picture, surveillance });
+
+  const mixed = { controllerId: 'c1', lastSent: new Map(), labelRevs: new Map() };
+  hub._setCoverage(mixed, cov(true));
+  const snap = hub._pictureSnapshot(mixed);
+  const scheme = Object.fromEntries(snap.tracks.map(t => [t.id, t.scheme]));
+  assert.deepEqual(scheme, { 1: 'TACTICAL', 2: 'ATC' });
+
+  const tactical = { controllerId: 'c2', lastSent: new Map(), labelRevs: new Map() };
+  hub._setCoverage(tactical, cov(false));
+  assert.deepEqual(hub._pictureSnapshot(tactical).tracks.map(t => t.scheme), ['TACTICAL', 'TACTICAL'], 'no ATC Position: tactical only');
+});
+
+test('taking or releasing an ATC Position re-sends the picture even when the radars are unchanged', () => {
+  const AP = { ...APP, presentation: 'ATC' };
+  const trackStore = new TrackStore();
+  trackStore.update({ id: 7, callsign: 'X', name: 'U7', coalition: 3, type: 'F-16C_50', category: 1, lat: 37, lon: 35, alt: 3000 });
+  const collabStore = new CollaborativeStore();
+  let stca = false;
+  const picture = {
+    coverageFor: () => ({ radars: [AP], radarIds: new Set(['app:X']), heldPositions: [], radarBearingPositions: [], stca }),
+    illuminated: () => new Map([['7', new Map([['app:X', 5000]])]]),
+    radars: () => [AP],
+  };
+  const hub = new WsHub({ trackStore, collabStore, picture, surveillance: createSurveillance({ collab: collabStore }) });
+  const session = { controllerId: 'c1', lastSent: new Map(), labelRevs: new Map() };
+  hub._setCoverage(session, picture.coverageFor());
+  const ws = fakeWs();
+  stca = true;
+  assert.equal(hub._refreshCoverage(ws, session), true);
+  const snap = ws.sent.find(m => m.type === 'snapshot');
+  assert.equal(snap.tracks[0].scheme, 'ATC');
+});
