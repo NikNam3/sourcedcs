@@ -147,6 +147,22 @@ function sendEfspMarsaMutation(actingPositionId, marsaId, baseRev, op) {
   });
 }
 
+/**
+ * A field-state op (guide §9.7, crc-sync docs/adr/0061): a runway's status,
+ * a request to tower, a runway change. Its own message type because it
+ * targets a Facility's field, not a Strip: `baseRev` is the Facility record's
+ * rev. Not registered as a pending mutation, for the reason the airspace,
+ * correlation and MARSA sends give: §5.6.3's replay machinery is keyed on
+ * Strip identity, and a field-state op is cheap to reissue by hand.
+ */
+function sendEfspFieldStateMutation(actingPositionId, facilityId, baseRev, op) {
+  _sendEfsp({
+    version: 1, type: 'efsp-field-state-mutation',
+    clientMutationId: efspClientMutationId(),
+    facilityId, baseRev, actingPositionId, op,
+  });
+}
+
 /** Resync after reconnect (guide §5.6) — server replies with efsp-board-delta or efsp-snapshot, never a third path. */
 function sendEfspResync(lastBoardSeq) {
   _sendEfsp({ version: 1, type: 'efsp-resync', lastBoardSeq });
