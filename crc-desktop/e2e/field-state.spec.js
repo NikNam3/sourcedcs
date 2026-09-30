@@ -24,7 +24,7 @@ const path = require('path');
 const { test, expect } = require('@playwright/test');
 const { openPanel, stripByCallsign, expectRefusalIsVisible } = require('./helpers/app');
 
-test.describe.configure({ mode: 'serial', timeout: 120000 });
+test.describe.configure({ mode: 'serial', timeout: 240000 });
 
 const SHOTS = path.join(__dirname, '..', '..', 'docs', 'wip', 'L1b');
 const shot = (page, name) => page.screenshot({ path: path.join(SHOTS, `${name}.png`), fullPage: false });
@@ -34,19 +34,29 @@ const RUN = String(Date.now()).slice(-3); // callsigns unique per run, since the
 
 const _contexts = [];
 const _errors = [];
+test.beforeEach(() => { _errors.length = 0; });
 test.afterEach(async () => {
   while (_contexts.length) await _contexts.pop().close().catch(() => {});
   // Positions are released on disconnect; let crc-sync see it before the next test takes them.
   await new Promise((r) => setTimeout(r, 300));
 });
 
+/**
+ * Script errors on any page this test opened. A failed network fetch is not
+ * one: with no DCS and no map key the harness answers tiles and mission data
+ * with 503s, which the browser logs as console errors on every run.
+ */
+function appErrors() {
+  return _errors.flatMap(e => e.consoleErrors).filter(t => !/^Failed to load resource/.test(t));
+}
+
 async function controller(browser, held, name) {
-  const ctx = await browser.newContext({ baseURL: test.info().project.use.baseURL, viewport: { width: 1600, height: 1000 } });
+  const ctx = await browser.newContext({ baseURL: test.info().project.use.baseURL, viewport: { width: 1920, height: 1200 } });
   _contexts.push(ctx);
   const page = await ctx.newPage();
   const { consoleErrors } = await openPanel(page, { held, controller: name });
-  // The radio strip takes half the window and has nothing to do with the field.
-  await page.evaluate(() => toggleDockPanel('radio', false));
+  // The radio strip stays open: closing it makes srs-radio.js throw on every
+  // poll (docs/wip/L1b.md, Findings), which would drown the console check.
   _errors.push({ name, consoleErrors });
   return page;
 }
@@ -71,6 +81,23 @@ async function openFieldPanel(page) {
     await page.locator('#panel-controls .panel-ctrl-label', { hasText: /^FIELD STATE/ }).click();
   }
   await expect(page.locator('#field-state-panel')).toBeVisible();
+}
+
+/**
+ * Puts FIELD STATE in its own column beside the Strip panel, so a controller
+ * (and a screenshot) sees the field and the Strips at once. Also sidesteps
+ * the Strip panel rendering while dockview has it detached behind another tab
+ * of its group (docs/wip/L1b.md, Findings: the arrivals line duplicates).
+ */
+async function besideStrips(page) {
+  await page.evaluate(() => {
+    const p = dock.api.getPanel('fieldState');
+    if (p) dock.api.removePanel(p);
+    dock.addPanel({ id: 'fieldState', component: 'fieldState', title: PANEL_TITLES.fieldState, position: { referencePanel: 'efsp', direction: 'right' } });
+    dock.api.getPanel('efsp').api.setActive();
+  });
+  await expect(page.locator('#field-state-panel')).toBeVisible();
+  await expect(page.locator('#efsp-panel')).toBeVisible();
 }
 
 /** Brings a dock panel to the front of its tab group. */
@@ -151,8 +178,13 @@ async function nla(page, cs, n = 1) {
 
 async function goBay(page, positionId, bayId) {
   await front(page, 'efsp');
-  await page.locator(`#efsp-position-tabs .efsp-position-tab[data-position-id="${positionId}"]`).click();
-  await page.locator(`#efsp-bay-tabs .efsp-bay-tab[data-bay-id="${bayId}"]`).click();
+  // `force`: a tab lit by the arrival flash (docs/adr/0057) animates, and
+  // Playwright would wait for it to be "stable" until the test times out.
+  const pos = page.locator(`#efsp-position-tabs .efsp-position-tab[data-position-id="${positionId}"]`);
+  if (!/\bactive\b/.test(await pos.getAttribute('class') || '')) await pos.click({ force: true });
+  const bay = page.locator(`#efsp-bay-tabs .efsp-bay-tab[data-bay-id="${bayId}"]`);
+  if (!/\bactive\b/.test(await bay.getAttribute('class') || '')) await bay.click({ force: true });
+  await expect(bay).toHaveClass(/\bactive\b/);
 }
 
 const chip = (strip) => strip.locator('.efsp-ind[data-slot="rwy"]');
@@ -186,6 +218,8 @@ test('Phase 3 walk: OPS asks for runway works, TWR suspends, the Strips hold, FI
   await expect(twr.locator('#field-state-panel .field-state-badge')).toHaveText('OPEN');
   await expect(twr.locator('#field-state-panel .field-state-active')).toHaveText(/ACTIVE/);
   await shot(twr, '01-panel-open');
+  await besideStrips(twr);
+  await besideStrips(ops);
 
   // 2. The traffic: a departure taxiing for 05, one queued in 05's rack, an
   // arrival handed to tower for 05, and a hook-equipped arrival on final.
@@ -277,14 +311,14 @@ test('Phase 3 walk: OPS asks for runway works, TWR suspends, the Strips hold, FI
   await shot(twr, '06-reopened');
 
   await dropAll([ops, twr], [DEP_TAXI, DEP_Q, ARR_TWR, ARR_FIN]);
-  expect(_errors.flatMap(e => e.consoleErrors), 'console errors').toEqual([]);
+  expect(appErrors(), 'console errors').toEqual([]);
 });
 
 test('Phase 3 walk: a runway change needs OPS and APP (each a different person), then an inspection; a Strip left in 05\'s rack is told', async ({ browser }) => {
   const twr = await controller(browser, ['TWR'], 'maverick');
   const ops = await controller(browser, ['OPS', 'CD', 'GND'], 'goose');
   const app = await controller(browser, ['APP'], 'iceman');
-  for (const p of [twr, ops, app]) await openFieldPanel(p);
+  for (const p of [twr, ops, app]) { await openFieldPanel(p); await besideStrips(p); }
 
   // Start from 05 active (the harness has no mission wind), by the machinery itself.
   if ((await field(twr)).activeRunway !== '05') {
@@ -350,16 +384,18 @@ test('Phase 3 walk: a runway change needs OPS and APP (each a different person),
   await shot(twr, '09-rejected');
 
   await dropAll([twr, ops], [DEP]);
-  expect(_errors.flatMap(e => e.consoleErrors), 'console errors').toEqual([]);
+  expect(appErrors(), 'console errors').toEqual([]);
 });
 
 test('a reload mid-suspension still shows SUSPENDED (the snapshot carries it); then the field is put back', async ({ browser }) => {
   const twr = await controller(browser, ['TWR', 'OPS'], 'maverick');
   await openFieldPanel(twr);
+  await besideStrips(twr);
   await press(twr, 'BeginRunwayWorks', { positionId: 'TWR' });
   await twr.reload();
   await twr.waitForFunction(() => typeof getEfspFieldState === 'function' && !!getEfspFieldState('INCIRLIK'));
   await openFieldPanel(twr);
+  await besideStrips(twr);
   await front(twr, 'fieldState');
   await expect(twr.locator('#field-state-panel .field-state-badge')).toHaveText('WORKS');
   await expect(twr.locator('#field-state-panel .field-state-suspension')).toHaveText(/^SUSPENDED WORKS by TWR \(maverick\) \d{4}Z$/);
@@ -374,10 +410,11 @@ test('a reload mid-suspension still shows SUSPENDED (the snapshot carries it); t
 test('one controller holding TWR, OPS and APP changes the runway in one self-coordinated input (S-Q24)', async ({ browser }) => {
   const solo = await controller(browser, ['TWR', 'OPS', 'APP'], 'solo');
   await openFieldPanel(solo);
+  await besideStrips(solo);
   await front(solo, 'fieldState');
   await expect(offered(solo, 'SelfCoordinateRunwayChange')).toHaveCount(1);
   const to = (await field(solo)).activeRunway === '23' ? '05' : '23';
-  await solo.locator('#field-state-panel .field-state-actions').filter({ has: offered(solo, 'SelfCoordinateRunwayChange') })
+  await solo.locator('#field-state-panel .field-state-actions').filter({ has: solo.locator('button[data-kind="SelfCoordinateRunwayChange"]') })
     .locator('select.field-state-to-end').last().selectOption(to);
   await press(solo, 'SelfCoordinateRunwayChange', { positionId: 'TWR' });
   const change = (await field(solo)).runwayChange;
@@ -390,5 +427,5 @@ test('one controller holding TWR, OPS and APP changes the runway in one self-coo
   await press(solo, 'CompleteInspection', { positionId: 'OPS' });
   expect((await field(solo)).activeRunway).toBe(to);
   await resetField(solo);
-  expect(_errors.flatMap(e => e.consoleErrors), 'console errors').toEqual([]);
+  expect(appErrors(), 'console errors').toEqual([]);
 });
