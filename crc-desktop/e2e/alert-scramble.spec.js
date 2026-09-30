@@ -20,6 +20,11 @@ test.describe.configure({ timeout: 120000 });
 const SHOTS = path.join(__dirname, '..', '..', 'docs', 'wip', 'L13');
 fs.mkdirSync(SHOTS, { recursive: true });
 const shot = (target, name) => target.screenshot({ path: path.join(SHOTS, `${name}.png`) });
+/** The whole Strip panel, clipped from a page screenshot: the panel re-renders on every delta, so an element screenshot can lose its node mid-capture. */
+async function panelShot(page, name) {
+  const box = await page.locator('#efsp-panel').boundingBox();
+  await page.screenshot({ path: path.join(SHOTS, `${name}.png`), clip: box });
+}
 
 async function goBay(page, positionId, bayId) {
   await page.locator(`#efsp-position-tabs .efsp-position-tab[data-position-id="${positionId}"]`).click();
@@ -76,9 +81,6 @@ test('alert and scramble: ALERT is quiet, SCRAMBLE lights the Board and flags gr
   await goBay(page, 'OPS', 'ops-proposed');
   const viper = await seedStrip(page, { callsign: CS, role: 'DEPARTURE', fdr: { departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' } });
   await pickAlert(viper, 'ALERT');
-  page.on('dialog', d => console.log('DIALOG', d.message()));
-  console.log('DEBUG0');
-  console.log('DEBUG', await page.evaluate(() => JSON.stringify([...efspFdrs.values()].map(f => [f.identity && f.identity.callsign, f.military]))));
   await expect.poll(() => alertOf(page, CS)).toBe('ALERT');
   await expect(viper.locator('.efsp-strip-fields .efsp-block-14E')).toHaveText('ALERT');
   // ADR 0058: nothing lit for ALERT beyond the field itself.
@@ -120,12 +122,12 @@ test('alert and scramble: ALERT is quiet, SCRAMBLE lights the Board and flags gr
   await expect(line.locator('.efsp-scramble-cs')).toHaveText(CS);
   await expect(line.locator('.efsp-scramble-detail')).toHaveText('INCIRLIK · CLEARED · the alert-pad access route constrained · 4 flagged');
   await expect(stripByCallsign(page, CS).locator('[data-slot="scram"]')).toHaveText('SCRAMBLE');
-  await shot(page.locator('#efsp-panel'), '02-scramble-line-cd');
+  await panelShot(page, '02-scramble-line-cd');
   // Board-wide: the same line on another Position's tab.
   await goBay(page, 'TWR', 'twr-runway-queue');
   await expect(line).toBeVisible();
   await expect(line.locator('.efsp-scramble-cs')).toHaveText(CS);
-  await shot(page.locator('#efsp-panel'), '02-scramble-line-twr');
+  await panelShot(page, '02-scramble-line-twr');
 
   // ── 3. the ground flags. ───────────────────────────────────────────────
   await goBay(page, 'GND', 'gnd-taxi-out');
@@ -138,7 +140,7 @@ test('alert and scramble: ALERT is quiet, SCRAMBLE lights the Board and flags gr
   expect(await bayOrder(page, 'gnd-taxi-out')).toEqual(beforeData.taxi);
   expect(await bayOrder(page, 'twr-runway-queue')).toEqual(beforeData.queue);
   expect(await domOrder(page)).toEqual(beforeGndDom);
-  await shot(page.locator('#efsp-panel'), '04-nothing-reordered');
+  await panelShot(page, '04-nothing-reordered');
   await goBay(page, 'TWR', 'twr-runway-queue');
   expect(await domOrder(page)).toEqual(beforeTwrDom);
 
@@ -157,7 +159,9 @@ test('alert and scramble: ALERT is quiet, SCRAMBLE lights the Board and flags gr
   await goBay(page, 'GND', 'gnd-taxi-out');
   await expect(page.locator('#efsp-bay-content [data-slot="scram"]')).toHaveCount(0);
   expect(await alertOf(page, CS)).toBe('SCRAMBLE'); // nothing resets the field (T5)
-  await shot(page.locator('#efsp-panel'), '05-airborne-clears');
+  await panelShot(page, '05-airborne-clears');
 
-  expect(consoleErrors).toEqual([]);
+  // The map's tile/terrain fetches 503 with no DCS behind the e2e server; any
+  // script error from the panel would be a finding.
+  expect(consoleErrors.filter(e => !/Failed to load resource/.test(e))).toEqual([]);
 });
