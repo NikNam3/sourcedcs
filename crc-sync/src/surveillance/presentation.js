@@ -12,15 +12,22 @@
 //     (caps.ssr)                  when it is squawking (SSR)
 //   a height-finding radar     -> an altitude with no help from the aircraft
 //     (caps.height)               (HEIGHT)
+//   a Mode 4/5 interrogator    -> friendly, when the contact gives a valid
+//     (caps.mode4)                (crypto) reply
 //   the datalink               -> an own participant's callsign, type and
 //                                 altitude (DATALINK)
 //   correlation                -> the flight's callsign and type, from its FDR
 //
+// IFF is what the interrogation got back (docs/adr/0066): a declaration,
+// else datalink or a valid Mode 4 reply -> friendly, a Mode 3/C reply ->
+// neutral, nothing -> bogey. Never the DCS coalition.
+//
 // Only the sensors of THIS controller's Positions count, which is why this
-// runs per session.
+// runs per session — two controllers can see one contact in two colours.
 
 const { checkOnGround } = require('../geo');
 const { indicatedAltFt } = require('../altimetry');
+const { classifyIff } = require('./iff');
 
 // The wire track, as a list — ws-hub-wire-strictness.test.mjs holds every
 // sent track to it.
@@ -49,12 +56,12 @@ function currentRadars(radars, at) {
  * @param {object} track  raw TrackStore track (DCS truth — never sent)
  * @param {object} ctx
  * @param {number|null} ctx.at            newest return from this session's sensors
- * @param {Array<{caps:{height:boolean,ssr:boolean}, sweepMs:number, at:number}>} ctx.radars
+ * @param {Array<{caps:{height:boolean,ssr:boolean,mode4:boolean}, sweepMs:number, at:number}>} ctx.radars
  *        this session's radars that have seen the contact, each with its own last return
  * @param {{callsign:string, type:string, lock:string|null}|null} ctx.dl
  *        the contact's datalink report, when it is a participant and this session has datalink
  * @param {object} ctx.who               Identity#identify()
- * @param {string} ctx.iffState
+ * @param {boolean} ctx.mode4           the contact would give a valid Mode 4 reply (Transponders#mode4Of)
  * @param {string|null} ctx.iffOverride
  * @param {{code:string|null, ident:boolean, emergency:string|null}|null} ctx.transponder
  * @param {{weather:object, transitionAltFt:number}} ctx.env
@@ -62,7 +69,6 @@ function currentRadars(radars, at) {
  * @returns {object|null} the wire track, or null when the controller must not be told about it
  */
 function presentTrack(track, ctx) {
-  if (ctx.iffState === 'invisible') return null;
   const radars = currentRadars(ctx.radars, ctx.at);
   if (radars.length === 0 && !ctx.dl) return null;
 
@@ -72,6 +78,10 @@ function presentTrack(track, ctx) {
   const squawking = interrogated && !!ctx.transponder;
   const heightFinding = air && radars.some(r => r.caps && r.caps.height);
   const dl = air || domain === 'SEA' ? ctx.dl : null;
+  // Mode 3/C is AIR only; a warship answers Mode 4 too. Only a CURRENT radar
+  // of this session asks: a stale one lends no colour, as it lends no height.
+  const mode4 = (air || domain === 'SEA') && !!ctx.mode4 && radars.some(r => r.caps && r.caps.mode4);
+  const iffState = classifyIff({ declared: ctx.iffOverride || null, datalink: !!dl, mode4, mode3: squawking });
 
   const sources = [];
   if (radars.length) sources.push('PRIMARY');
@@ -103,7 +113,7 @@ function presentTrack(track, ctx) {
     onGround: air ? checkOnGround(track, ctx.missionData) : false,
     illuminatedAt: ctx.at,
     sources,
-    iffState: ctx.iffState,
+    iffState,
     iffOverride: ctx.iffOverride || null,
     label: { callsign, source, tag: who.tag || null, trackNumber: who.trackNumber },
     type: (who.correlation && who.fdrType) || (dl && dl.type) || null,

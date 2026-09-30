@@ -12,14 +12,14 @@ const TRACK = {
 const ENV = { weather: { pressurePa: 101325, tempK: 288.15 }, transitionAltFt: 18000 };
 const NOBODY = { fdrId: null, correlation: null, fdrCallsign: null, fdrType: null, tag: null, trackNumber: 'TN00007' };
 
-const APP = { caps: { height: false, ssr: true }, sweepMs: 3000, at: 1000 };
-const PSR_ONLY = { caps: { height: false, ssr: false }, sweepMs: 3000, at: 1000 };
-const AWACS = { caps: { height: true, ssr: true }, sweepMs: 10000, at: 1000 };
+const APP = { caps: { height: false, ssr: true, mode4: false }, sweepMs: 3000, at: 1000 };
+const PSR_ONLY = { caps: { height: false, ssr: false, mode4: false }, sweepMs: 3000, at: 1000 };
+const AWACS = { caps: { height: true, ssr: true, mode4: true }, sweepMs: 10000, at: 1000 };
 const SQUAWK = { code: '4521', ident: false, emergency: null };
 
 function present(over = {}) {
   return presentTrack(over.track || TRACK, {
-    at: 1000, radars: [APP], dl: null, who: NOBODY, iffState: 'friendly', iffOverride: null,
+    at: 1000, radars: [APP], dl: null, who: NOBODY, mode4: false, iffOverride: null,
     transponder: SQUAWK, env: ENV, missionData: null, ...over,
   });
 }
@@ -114,10 +114,79 @@ test('ships and ground vehicles: a position, never a code or an altitude', () =>
   assert.equal(present({ track: { ...TRACK, category: 3 } }).domain, 'GROUND');
 });
 
-test('an enemy on the ground is not presented at all', () => {
-  assert.equal(present({ iffState: 'invisible' }), null);
-});
 
 test('no current sensor at all: not presented', () => {
   assert.equal(present({ radars: [] }), null);
+});
+
+// ── IFF from interrogation (docs/adr/0066) ─────────────────────────────────
+
+test('IFF: an ATC radar has no Mode 4 interrogator — a squawking own aircraft is neutral there', () => {
+  assert.equal(present({ radars: [APP], mode4: true }).iffState, 'neutral');
+});
+
+test('IFF: a Mode 4 radar makes a valid reply friendly; Mode 3 alone is neutral; silence is a bogey', () => {
+  assert.equal(present({ radars: [AWACS], mode4: true }).iffState, 'friendly');
+  assert.equal(present({ radars: [AWACS], mode4: false }).iffState, 'neutral');
+  assert.equal(present({ radars: [AWACS], mode4: false, transponder: null }).iffState, 'bogey');
+  assert.equal(present({ radars: [APP], transponder: null }).iffState, 'bogey');
+});
+
+test('IFF: a primary-only radar asks nothing, so even a keyed, squawking aircraft is a bogey', () => {
+  assert.equal(present({ radars: [PSR_ONLY], mode4: true }).iffState, 'bogey');
+});
+
+test('IFF: a datalink report is friendly, with or without a radar', () => {
+  const dl = { callsign: 'Enfield11', type: 'F-16C_50', lock: null };
+  assert.equal(present({ radars: [], transponder: null, dl }).iffState, 'friendly');
+  assert.equal(present({ radars: [AWACS], transponder: null, mode4: false, dl }).iffState, 'friendly');
+});
+
+test('IFF: a stale Mode 4 radar lends no colour; the current 2D radar gives neutral', () => {
+  const wire = present({ at: 40000, radars: [{ ...APP, at: 40000 }, { ...AWACS, at: 10000 }], mode4: true });
+  assert.equal(wire.iffState, 'neutral');
+});
+
+test('IFF: a declaration beats a Mode 4 reply, and is echoed', () => {
+  const wire = present({ radars: [AWACS], mode4: true, iffOverride: 'hostile' });
+  assert.equal(wire.iffState, 'hostile');
+  assert.equal(wire.iffOverride, 'hostile');
+});
+
+test('IFF: a ship answers Mode 4 but not Mode 3; a ground vehicle answers nothing', () => {
+  assert.equal(present({ track: { ...TRACK, category: 4 }, radars: [AWACS], mode4: true }).iffState, 'friendly');
+  assert.equal(present({ track: { ...TRACK, category: 4 }, radars: [AWACS], mode4: false }).iffState, 'bogey',
+    'a ship never answers Mode 3, even with a transponder object passed');
+  assert.equal(present({ track: { ...TRACK, category: 3 }, radars: [AWACS], mode4: true }).iffState, 'bogey');
+});
+
+test('an aircraft on the ground is presented like any other contact (no ground hiding, decision H6)', () => {
+  const missionData = { airports: [{ lat: 36.0, lon: 35.0, elev: 0 }] };
+  const parked = { ...TRACK, lat: 36.001, lon: 35.001, alt: 10 };
+  const silent = present({ track: parked, missionData, transponder: null });
+  assert.ok(silent, 'a silent parked aircraft is still sent');
+  assert.equal(silent.onGround, true);
+  assert.equal(silent.iffState, 'bogey');
+  const squawking = present({ track: parked, missionData });
+  assert.equal(squawking.onGround, true);
+  assert.equal(squawking.iffState, 'neutral');
+});
+
+test('THE coalition test: with every sensor answer fixed, coalition and player flag change nothing on the wire', () => {
+  const dl = { callsign: 'Enfield11', type: 'F-16C_50', lock: null };
+  const cases = [
+    { radars: [APP] },
+    { radars: [AWACS], mode4: true },
+    { radars: [AWACS], mode4: false, transponder: null },
+    { radars: [PSR_ONLY] },
+    { radars: [], transponder: null, dl },
+    { radars: [APP], iffOverride: 'bandit' },
+  ];
+  for (const over of cases) {
+    const wires = [];
+    for (const coalition of [1, 2, 3]) for (const player of ['Maverick', null]) {
+      wires.push(present({ ...over, track: { ...TRACK, coalition, player } }));
+    }
+    for (const w of wires.slice(1)) assert.deepEqual(w, wires[0], JSON.stringify(over));
+  }
 });

@@ -16,7 +16,7 @@ const { WIRE_KEYS } = await import('../src/surveillance/presentation.js');
 
 const OPEN = 1;
 const fakeWs = () => { const sent = []; return { readyState: OPEN, send: (r) => sent.push(JSON.parse(r)), sent }; };
-const APP = { id: 'app:X', sweepMs: 3000, caps: { height: false, ssr: true } };
+const APP = { id: 'app:X', sweepMs: 3000, caps: { height: false, ssr: true, mode4: false } };
 
 function setup() {
   const trackStore = new TrackStore();
@@ -140,6 +140,100 @@ test('STCA reaches only an ATC Position, and only when both aircraft are in its 
   hub.broadcastEfspAlerts(alerts);
   msg = sent.filter(m => m.type === 'efsp-alerts').pop();
   assert.deepEqual(msg.stca, [], 'a tactical Position gets no conflict alerts');
+});
+
+// ── IFF from interrogation, per session (docs/adr/0066) ────────────────────
+
+const CRC = { id: 'crc:A', sweepMs: 10000, caps: { height: true, ssr: true, mode4: true } };
+const APT = { id: 'apt:X', sweepMs: 2000, caps: { height: false, ssr: true, mode4: false } };
+
+/** One hub, contacts lit by the radars given, a session per radar list. */
+function iffSetup({ tracks, lit, srs = null, missionData = null }) {
+  const trackStore = new TrackStore();
+  for (const t of tracks) {
+    trackStore.update({ callsign: 'X', name: `U${t.id}`, type: 'F-16C_50', player: null, category: 1, lat: 37.1, lon: 35.2, alt: 3048, heading: 90, coalition: 3, ...t });
+  }
+  const collabStore = new CollaborativeStore();
+  const surveillance = createSurveillance({ collab: collabStore, srs });
+  const all = [APP, CRC, APT];
+  const coverageFor = (ids) => ({ radars: all.filter(r => ids.includes(r.id)), radarIds: new Set(ids), heldPositions: [], radarBearingPositions: [] });
+  const picture = {
+    coverageFor: () => coverageFor([]),
+    illuminated: () => new Map(Object.entries(lit)),
+    radars: () => all,
+  };
+  const hub = new WsHub({ trackStore, collabStore, picture, surveillance });
+  hub._missionData = missionData;
+  const sessionWith = (ids) => {
+    const session = { controllerId: ids.join('+'), lastSent: new Map(), labelRevs: new Map() };
+    hub._setCoverage(session, coverageFor(ids));
+    return session;
+  };
+  return { hub, collabStore, sessionWith };
+}
+
+test('two sessions, two colours: one own aircraft is neutral on APP and friendly on a Mode 4 radar', () => {
+  const { hub, sessionWith } = iffSetup({
+    tracks: [{ id: 7 }],
+    lit: { 7: new Map([['app:X', 5000], ['crc:A', 5000]]) },
+  });
+  const app = hub._pictureSnapshot(sessionWith(['app:X']));
+  const gci = hub._pictureSnapshot(sessionWith(['crc:A']));
+  assert.equal(app.tracks[0].iffState, 'neutral');
+  assert.equal(gci.tracks[0].iffState, 'friendly');
+  const both = hub._pictureSnapshot(sessionWith(['app:X', 'crc:A']));
+  assert.equal(both.tracks[0].iffState, 'friendly', 'holding both, the Mode 4 radar answers (decision H5)');
+});
+
+test('an automatic IFF change waits for the next fresh return; it is never a relabel', () => {
+  const entry = { squawk: 4521, squawkStatus: 1, mode4: false };
+  const srs = { getTransponder: (name) => (name === 'Maverick' ? entry : null) };
+  const lit = { 7: new Map([['crc:A', 5000]]) };
+  const { hub, sessionWith } = iffSetup({ tracks: [{ id: 7, player: 'Maverick' }], lit, srs });
+  const session = sessionWith(['crc:A']);
+  const ws = fakeWs();
+  hub._tick(ws, session);
+  assert.equal(ws.sent[0].updated[0].iffState, 'neutral', 'Mode 4 off: answers Mode 3 only');
+
+  entry.mode4 = true;
+  hub._tick(ws, session);
+  assert.equal(ws.sent.length, 1, 'no new return, so no interrogation, so nothing sent');
+
+  lit[7] = new Map([['crc:A', 15000]]);
+  hub._tick(ws, session);
+  assert.equal(ws.sent[1].updated[0].iffState, 'friendly');
+  assert.deepEqual(ws.sent[1].relabeled, []);
+});
+
+test('clearing a declaration relabels back to the automatic colour without a sweep', () => {
+  const { hub, collabStore, sessionWith } = iffSetup({ tracks: [{ id: 7 }], lit: { 7: new Map([['crc:A', 5000]]) } });
+  const session = sessionWith(['crc:A']);
+  const ws = fakeWs();
+  hub._tick(ws, session);
+  collabStore.declare('7', 'hostile', 'c1');
+  hub._tick(ws, session);
+  assert.equal(ws.sent[1].relabeled[0].iffState, 'hostile');
+  collabStore.clearDeclare('7');
+  hub._tick(ws, session);
+  assert.deepEqual(ws.sent[2].updated, []);
+  assert.equal(ws.sent[2].relabeled[0].iffState, 'friendly');
+  assert.equal(ws.sent[2].relabeled[0].iffOverride, null);
+});
+
+test('no aircraft is hidden on the ground any more: a parked hostile is a bogey, a parked own AI neutral (H6)', () => {
+  const missionData = { airports: [{ lat: 36.0, lon: 35.0, elev: 0 }] };
+  const parked = { lat: 36.001, lon: 35.001, alt: 10 };
+  const { hub, sessionWith } = iffSetup({
+    tracks: [{ id: 1, coalition: 2, ...parked }, { id: 2, coalition: 3, ...parked }],
+    lit: { 1: new Map([['apt:X', 5000]]), 2: new Map([['apt:X', 5000]]) },
+    missionData,
+  });
+  const snap = hub._pictureSnapshot(sessionWith(['apt:X']));
+  const byId = new Map(snap.tracks.map(t => [t.id, t]));
+  assert.equal(byId.get('1').iffState, 'bogey');
+  assert.equal(byId.get('1').onGround, true);
+  assert.equal(byId.get('2').iffState, 'neutral', 'its synthetic squawk answers the SSR; the tower has no Mode 4');
+  for (const t of snap.tracks) assert.ok(['friendly', 'neutral', 'bogey'].includes(t.iffState), t.iffState);
 });
 
 // docs/adr/0067 — obligations are state in efsp-alerts, beside conformance and STCA.

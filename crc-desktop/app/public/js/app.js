@@ -151,7 +151,11 @@ const DEFAULTS = {
   navDeclutter:    true,  // hide navpoints whose names contain digits
   navDeclutter5:   true,  // hide navpoints whose names are not exactly 5 letters
   trailIntervalMs: 5000, // minimum ms between trail dot recordings
-  declutter:       true,  // auto-hide labels for sequential-squawk formation flights
+  // Auto-hide labels for sequential-squawk formation flights. OFF, and forced
+  // off once for existing installs below: every declutter behaviour stays
+  // disabled until the end of the EFSP work (decision H6). The code path in
+  // geojson.js's getDeclutteredIds() is kept — REVISIT then.
+  declutter:       false,
   showDatalinkLocks: true, // draw the datalink's radar-lock lines (geojson.js's buildDatalinkLines)
   transitionAltFt: 18000, // ft — how an ASSIGNED altitude is written; a contact's own comes from crc-sync
   aprtManualWx:    {},    // per-airport manually-entered vis/cloud data, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
@@ -182,6 +186,9 @@ function loadSettings() {
     const raw = localStorage.getItem('crc-desktop-settings');
     if (raw) settings = { ...DEFAULTS, ...JSON.parse(raw) };
   } catch (_) {}
+  // H6: a saved settings object carries the old `declutter: true` default;
+  // switch it off once. A controller may still turn it back on by hand.
+  if (!settings.declutterOffH6) { settings.declutter = false; settings.declutterOffH6 = true; }
 }
 
 function saveSettings() {
