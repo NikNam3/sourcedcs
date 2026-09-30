@@ -469,10 +469,8 @@ test('every field the namespace table calls RESERVED or deferred is one setMilit
       assert.equal(MILITARY_WRITABLE_FIELDS.has(key), false, `${m}: setMilitary must not write ${entry.field} whole`);
     } else if (entry.blockId) {
       assert.ok(MILITARY_WRITABLE_FIELDS.has(key), `${m}: ${entry.field} has Block ${entry.blockId} but setMilitary will not write it`);
-    } else if (key !== 'alertStatus') {
-      // alertStatus is the one deliberate middle case — validated by the
-      // setter, no Block until §9.6 picks one. Everything else with no Block
-      // must be unwritable outright.
+    } else {
+      // Everything with no Block must be unwritable outright.
       assert.equal(MILITARY_WRITABLE_FIELDS.has(key), false, `${m}: ${entry.field} has no Block but setMilitary would write it`);
     }
     assert.ok(key in defaultMilitary(), `${m}: ${entry.field} is not seeded on a new FDR (§12 wants it present, not absent)`);
@@ -519,4 +517,27 @@ test('the bare 9G / 9H family ids do not resolve — only the six named Blocks d
     assert.equal(resolveBlockTarget(role, '9G'), null);
     assert.equal(resolveBlockTarget(role, '9H'), null);
   }
+});
+
+// ── §9.6 alert status (docs/adr/0070) ───────────────────────────────────────
+
+test('M16 is Block 14E on DEPARTURE and on no other Role', () => {
+  // The namespace drift test above looks only at DEPARTURE_BLOCK_MAP, so the
+  // "no other Role" half is held here: an ARRIVAL/OVERFLIGHT alert status
+  // means nothing, and only a departure sits on an alert pad.
+  assert.equal(MILITARY_BLOCK_NAMESPACE.M16.blockId, '14E');
+  assert.equal(MILITARY_BLOCK_NAMESPACE.M16.field, 'military.alertStatus');
+  assert.ok(DEPARTURE_BLOCK_MAP['14E']);
+  assert.equal(DEPARTURE_BLOCK_MAP['14E'].required, false);
+  for (const map of [ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP]) {
+    assert.equal(map['14E'], undefined);
+    assert.equal(map.M16, undefined);
+  }
+  assert.equal(DEPARTURE_BLOCK_MAP.M16, undefined, 'never an M-id on an ATC map (docs/adr/0052)');
+});
+
+test('14E routes to military.alertStatus', () => {
+  assert.deepEqual(resolveBlockTarget('DEPARTURE', '14E'), { kind: 'military', field: 'alertStatus' });
+  assert.equal(resolveBlockTarget('ARRIVAL', '14E'), null);
+  assert.equal(interlockFor('DEPARTURE', '14E'), null);
 });

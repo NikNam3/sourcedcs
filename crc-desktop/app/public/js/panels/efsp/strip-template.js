@@ -96,6 +96,7 @@ const DEPARTURE_BLOCK_MAP = {
   '14D': { required: false, label: 'VOID',      target: { kind: 'fdr', path: 'assigned.voidTimeUtc' } },
   '14B': { required: false, label: 'EDCT',    target: { kind: 'fdr', path: 'assigned.edctTimeUtc' } },
   '14C': { required: false, label: 'CFR',     target: { kind: 'fdr', path: 'assigned.callForReleaseTimeUtc' } },
+  '14E': { required: false, label: 'ALERT',   target: { kind: 'military', field: 'alertStatus' } }, // WP6, guide M16 §9.6 — crc-sync docs/adr/0070
   '16': { required: false, label: 'MVMT',     target: { kind: 'fdr', path: 'assigned.movementAreaEntryTimeUtc' } },
   '17': { required: false, label: 'TAXI',     target: { kind: 'fdr', path: 'assigned.taxiTimeUtc' } },
   '18': { required: true,  label: 'TAKEOFF',  target: { kind: 'fdr', path: 'assigned.takeoffTimeUtc' } },
@@ -475,6 +476,10 @@ const ENUM_SELECT_BLOCKS = {
   // Block 9F's route table, because these four values are the guide's own and
   // are not runtime config.
   '3G': ['CLEAN', 'LOADED', 'HUNG', 'EXPENDED'],
+  // WP6 §9.6 (guide M16) — alert status, the guide's own three values;
+  // fdr-store.js's ALERT_STATUSES is the authority. 'NONE' is its cleared
+  // value and is in the list, as 3G's 'CLEAN' is (crc-sync docs/adr/0070).
+  '14E': ['NONE', 'ALERT', 'SCRAMBLE'],
 };
 
 /** @returns {string[]|null} the option values for this Block if it's an enum-select Block, else null. */

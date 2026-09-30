@@ -2222,3 +2222,29 @@ test('an MTR write reaches the Strip through the FDR\'s rev — the group appear
   assert.equal(sandbox._stripElNeedsRebuild(el, strip, null, null), true);
   assert.ok(inFields(sandbox._buildStripEl(strip), '9H-EXIT'));
 });
+
+// ── §9.6 alert status (crc-sync's docs/adr/0070) ─────────────────────────
+
+test('alert status is a NONE/ALERT/SCRAMBLE picker on a TWR departure, and SCRAMBLE sends SetBlock 14E', () => {
+  const { el, sent } = renderStrip({ strip: stripAt({ ownerPositionId: 'TWR', state: 'RUNWAY_QUEUE' }), fdr: FDR, held: ['TWR'] });
+
+  const cell = blockCell(el, '14E');
+  assert.ok(cell, 'Block 14E (alert status) is not rendered on a TWR departure');
+  click(cell);
+  const select = descendants(el).find(c => c.tagName === 'select');
+  assert.ok(select, '14E opened no picker');
+  // 'NONE' is the cleared value and is in the list, as 3G's 'CLEAN' is.
+  assert.deepEqual(select.children.map(o => o.value), ['NONE', 'ALERT', 'SCRAMBLE']);
+
+  select.value = 'SCRAMBLE';
+  for (const fn of select._listeners.change || []) fn({ stopPropagation() {} });
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].op.kind, 'SetBlock');
+  assert.equal(sent[0].op.blockId, '14E');
+  assert.equal(sent[0].op.value, 'SCRAMBLE');
+});
+
+test('OPS, which orders the scramble, has the alert status on its grid (decisions.md H56)', () => {
+  const { el } = renderStrip({ strip: stripAt({ ownerPositionId: 'OPS', state: 'PROPOSED', bayId: 'ops-proposed' }), fdr: FDR, held: ['OPS'] });
+  assert.ok(blockCell(el, '14E'), 'Block 14E is not on the OPS departure');
+});
