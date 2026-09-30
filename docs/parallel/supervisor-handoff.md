@@ -10,18 +10,32 @@ Start here if you are the supervising session for the EFSP parallel lanes. Read,
 3. `docs/parallel/wave1/L1.md` … `L11.md`: the wave-1 briefings. Each ends with a supervisor addendum
    that points back at `decisions.md`.
 
-## State (2026-09-30)
+## State (2026-09-30, end of wave 1)
 
-- **Integration branch:** `efsp-wp5-correlation`. Cut lane worktrees from it (P1: `lane/L<n>-<slug>`).
-- **Pre-wave work is done and committed**:
-  - F1 mission clock (ADR 0079);
-  - ADR 0060, the ADR corrections;
-  - the 0058 Notes;
-  - the plan and every briefing.
-- **Wave 1 is ready to dispatch:** L1–L11, with up to 11 agents at once. Launch a **questioning
-  agent** alongside, as P-roles in plan §1 describe.
-- The local crc-sync on :3000 runs the committed code. **Restart it after any change under
-  `crc-sync/src/`** (Node doesn't hot-reload).
+- **Integration branch:** `efsp-wp5-correlation` @ `cfcf344`. **Nothing merged yet: waits for the human's go-ahead.**
+- **Wave 1 is finished.** Every lane is committed on its branch, in worktree `/home/nklx/dev/personal/sourcedcs-L<n>` (S-W1):
+
+  | Lane | Branch @ head | Notes |
+  |---|---|---|
+  | L1 | `lane/L1-field-state` @ `9db3fc3` | ADR 0061 (H8 read); S-L1a–d, S-R2-1 |
+  | L2 | `lane/L2-mtr` @ `21111a3` | ADR 0062 (H8); mockup approved H51; S-L2b |
+  | L3 | `lane/L3-ato-parser` @ `9b08805` | ADR 0063; S-L3 |
+  | L4 | `lane/L4-carrier-model` @ `07ecfd5` | ADR 0064 (H8); S-L4 |
+  | L5 | `lane/L5-metrics` @ `21e54e6` | ADR 0065; S-L5 |
+  | L6 | `lane/L6-soak` @ `de6db8b` | soak FAILs as expected; S-L6 |
+  | L7 | `lane/L7-obligations` @ `fbd154e` | ADR 0067; S-L7 |
+  | L8 | `lane/L8-test-debt` @ `3f252e7` | B1–B7 as todo tests; S-L8 |
+  | L9 | `lane/L9-sd-inventory` @ `74dcf4d` | report only; S-L9 |
+  | L10 | `lane/L10-iff` @ `b23bdc0` | ADR 0066 (H8), colour table in wip; desk L10-W1 |
+  | L11 | `lane/L11-atobrief-usmtf` @ `6057bf1` | ADR 0078; S-L11 |
+  | LG | `lane/LG-grpc-stream` @ `48a0014` | gRPC poll_rate 0 loop; needs a live 10-min DCS check (`docs/wip/LG.md`) |
+
+- **Dry-run integration passed (S-DRY1):** merge order L1, L2, L3, L4, L7, L5, L8, L9, L10, L11, LG (+ L6, which is tools-only and conflict-free). The one conflict and its resolution are in S-DRY1. crc-sync 1565 pass / 8 todo, crc-desktop 517, atobrief 77. The scratch worktree is `/home/nklx/.claude/jobs/142e4342/tmp/integ` (detached; remove with `git worktree remove`).
+- **At merge:** H8 ADRs to the human first; full Playwright suite; fold `docs/wip/*.md` into the guide and briefing; wire `ATOBRIEF_USMTF_TOKEN` (L11 wip); L6's npm scripts; `.env.example` gains `DCS_GRPC_POLL_RATE`/`DCS_GRPC_MAX_BACKOFF` (LG); apply the L10-W1 answer (a one-line `DEFAULT_CAPS` flip).
+- **Between waves, supervisor fixes:** F2 magnetic module (S-R2-12, variation source per desk R2-11), F3 mission-session module (S-R2-2), F4 typed time Blocks via `zulu-time.js` (S-R2-17).
+- **Wave 2 briefings are drafted** in `docs/parallel/wave2/`: L1b, L12, L13, L14, L15, L16, L23. **Still to write:** L24 (H36 archiving + L6 F3/F4), L26 (audit completeness, S-L5 + F12), L27 (Board sync correctness, S-L6; before L23 on `board-store.js`/`efsp-ws.js`). L22 (STARS) waits for L10 and L1b and starts with a mockup (H49). L25 (miztoyaml H43 fields) can run any time after L11.
+- **Merge order in wave 2:** L16 before L14 (S-W2B), L27 before L23.
+- **The local crc-sync on :3000 was killed** by L11's `pkill` (P7). The supervisor's restart was blocked by the permission classifier; the human restarts it.
 
 ## The Decision Desk (how questions reach the human)
 
@@ -44,12 +58,10 @@ Start here if you are the supervising session for the EFSP parallel lanes. Read,
 - Put new questions from the lanes or the questioner here, with options and a recommendation.
   Rule on anything that isn't genuinely the human's call yourself (P2), and log it.
 
-### Open on the desk now
+### Open on the desk now (none blocking)
 
-- **L11-8 (not blocking):** how ABM/IC/RADAR control agencies map to USMTF. **The human asked you to
-  research real-world use** (atobrief's types are community-made). Research it, report the findings
-  to the human, and re-ask on the desk with informed options. L11 exports `OTR` meanwhile (H45).
-- Everything else from round 1 is settled (H1–H50).
+L1-W1, L10-W1, L11-8 (re-asked with `research/usmtf-control-agency.md`), L3-W1, R2-9, R2-11, R2-16,
+L9-E1/E2/E3/E4/E7/E8, L1b-Q1, L12-Q2, L13-Q2, L23-Q6, L23-Q7, Q-L14-1, Q-L14-2, Q-L15-1, Q-L16-5.
 
 ## Things waiting on a lane or a later wave
 
