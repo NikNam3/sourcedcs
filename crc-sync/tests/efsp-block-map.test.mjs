@@ -380,10 +380,14 @@ test('the hook and ordnance Blocks exist on EVERY ATC Role, not just the one a t
   }
 });
 
-test('MISSION gets neither, so one aircraft\'s ordnance has exactly one place to be declared', () => {
-  assert.equal(MISSION_BLOCK_MAP['3F'], undefined);
-  assert.equal(MISSION_BLOCK_MAP['3G'], undefined);
-  assert.equal(resolveBlockTarget('MISSION', '3G'), null);
+test('MISSION gets ordnance (H55) onto the same FDR field, and never the hook', () => {
+  // decisions.md H55 (docs/adr/0069) overrides docs/adr/0052's "MISSION gets
+  // neither": a pilot reports hung ordnance to whoever they are talking to,
+  // which may be a tactical Position. It is still one fact in one place — the
+  // MISSION Strip and its ATC twin share one FDR — reached from two surfaces.
+  assert.deepEqual(resolveBlockTarget('MISSION', '3G'), { kind: 'military', field: 'ordnanceState' });
+  assert.equal(MISSION_BLOCK_MAP['3G'].required, false);
+  assert.equal(MISSION_BLOCK_MAP['3F'], undefined, 'the hook gates a runway; a mission line uses none');
 });
 
 test('the guide\'s M-prefix is never used as a Block id outside MISSION_BLOCK_MAP', () => {

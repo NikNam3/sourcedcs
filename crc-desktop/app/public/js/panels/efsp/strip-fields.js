@@ -45,7 +45,11 @@ const COMPACT_BLOCKS_BY_ROLE = {
 //  - TYPE (3) already reads count/type/wake, so ACFT (3A) and WAKE (3B) never
 //    get a field of their own.
 //  - CID (4) and TAIL (3C) are on no Strip: nothing reads either at a glance.
-//  - HOOK (3F) and ORDNANCE (3G) are Tower's alone (carrier control later).
+//  - HOOK (3F) is Tower's alone (carrier control later). ORDNANCE (3G) is on
+//    Tower's face always; on APP, CTR and every tactical Position it is on the
+//    face only once it is set to something other than CLEAN — see
+//    ORDNANCE_WHEN_SET below (decisions.md H55 and S-L12, crc-sync's
+//    docs/adr/0069).
 //  - A runway field only for the airfield Positions: OPS, CD, GND, TWR, APP.
 //  - FREQ (22) only where a controller works more than one frequency: APP and
 //    CTR. OPS, CD, GND and TWR each sit on one.
@@ -93,12 +97,36 @@ function compactBlocksFor(role, positionId, fdr) {
   const byPosition = COMPACT_BLOCKS_BY_POSITION[role];
   let list = (byPosition && positionId && byPosition[positionId])
     || COMPACT_BLOCKS_BY_ROLE[role] || COMPACT_BLOCKS_SHARED;
+  // Hung ordnance (crc-sync's docs/adr/0069): ORDNANCE, only once it says something —
+  // before the MTR group, which starts its own grid row.
+  if (_ordnanceWhenSet(role, positionId) && isOrdnanceSet(fdr) && !list.includes('3G')) list = [...list, '3G'];
   // §9.4 (docs/adr/0062): the flight's MTR group, only when it has MTR data.
   const mtr = fdr && hasMtrData(fdr) && MTR_BLOCKS_BY_POSITION[role] && positionId
     ? MTR_BLOCKS_BY_POSITION[role][positionId] : null;
   if (mtr) list = [...list, ...mtr];
   const map = _blockMapFor(role);
   return map ? list.filter(id => Object.prototype.hasOwnProperty.call(map, id)) : list;
+}
+
+// ── Ordnance (guide §9.5, crc-sync's docs/adr/0069) ────────────────────────
+//
+// A pilot reports hung ordnance to whoever they are talking to, so APP, CTR and
+// every tactical Position may record it (decisions.md H55). A field on every
+// Strip those Positions work would cost Strip height on every flight for a value
+// that is almost always CLEAN, so — as the MTR group does (H51) — ORDNANCE goes
+// on their face only while it says something other than CLEAN (S-L12). Before
+// that it is one tap away in the expanded view (▼), where every Block off the
+// face is. Tower keeps it on its face unconditionally (COMPACT_BLOCKS_BY_POSITION).
+const ORDNANCE_WHEN_SET = { positions: ['APP', 'CTR'], roles: ['MISSION'] };
+
+function _ordnanceWhenSet(role, positionId) {
+  return ORDNANCE_WHEN_SET.roles.includes(role) || (!!positionId && ORDNANCE_WHEN_SET.positions.includes(positionId));
+}
+
+/** True when the flight's ordnance state is anything but CLEAN or empty. */
+function isOrdnanceSet(fdr) {
+  const state = fdr && fdr.military ? fdr.military.ordnanceState : null;
+  return !!state && state !== 'CLEAN';
 }
 
 function fieldSpanFor(blockId) {
@@ -179,5 +207,6 @@ if (typeof module !== 'undefined' && module.exports) {
     FIELD_SPANS,
     compactBlocksFor, fieldSpanFor,
     MTR_BLOCKS_BY_POSITION, hasMtrData, mtrLostCommsAdvisory,
+    ORDNANCE_WHEN_SET, isOrdnanceSet,
   };
 }

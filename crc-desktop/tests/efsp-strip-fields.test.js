@@ -44,11 +44,48 @@ test('CID and TAIL are on no Strip', () => {
   }
 });
 
-test('HOOK and ORDNANCE are Tower\'s alone', () => {
+test('HOOK is Tower\'s alone', () => {
   for (const { role, positionId, list } of everyList()) {
     if (positionId === 'TWR') continue;
-    assert.equal(list.includes('3F') || list.includes('3G'), false, `${role} at ${positionId}`);
+    assert.equal(list.includes('3F'), false, `${role} at ${positionId}`);
   }
+});
+
+test('ORDNANCE: always on Tower\'s face; on APP, CTR and the tactical Positions only once it is not CLEAN (H55, S-L12)', () => {
+  // decisions.md H55 and S-L12 (crc-sync's docs/adr/0069), after H51's MTR
+  // precedent: a field that is almost always CLEAN earns its place on the face
+  // only while it says something. Everywhere else it is in the expanded view.
+  const fdr = (ordnanceState) => ({ military: { ordnanceState } });
+  for (const { role, positionId, list } of everyList()) {
+    assert.equal(list.includes('3G'), positionId === 'TWR', `static list ${role} at ${positionId}`);
+  }
+  const whenSet = [
+    ...['DEPARTURE', 'ARRIVAL', 'OVERFLIGHT'].flatMap(role => ['APP', 'CTR'].map(p => [role, p])),
+    ...['TAC_C2', 'AIC', 'GCI', 'JTAC'].map(p => ['MISSION', p]),
+  ];
+  for (const [role, positionId] of whenSet) {
+    for (const quiet of [undefined, null, { military: null }, fdr('CLEAN'), fdr(null), fdr('')]) {
+      assert.equal(compactBlocksFor(role, positionId, quiet).includes('3G'), false, `${role} at ${positionId}, ${JSON.stringify(quiet)}`);
+    }
+    for (const state of ['HUNG', 'LOADED', 'EXPENDED']) {
+      assert.ok(compactBlocksFor(role, positionId, fdr(state)).includes('3G'), `${role} at ${positionId}, ${state}`);
+    }
+  }
+  for (const role of ['DEPARTURE', 'ARRIVAL']) {
+    assert.ok(compactBlocksFor(role, 'TWR', fdr('CLEAN')).includes('3G'), `${role} at TWR, CLEAN`);
+    assert.ok(compactBlocksFor(role, 'TWR').includes('3G'), `${role} at TWR, no FDR`);
+  }
+  for (const positionId of ['OPS', 'CD', 'GND']) {
+    for (const role of ['DEPARTURE', 'ARRIVAL']) {
+      assert.equal(compactBlocksFor(role, positionId, fdr('HUNG')).includes('3G'), false, `${role} at ${positionId}`);
+    }
+  }
+});
+
+test('a set ORDNANCE goes before the MTR group, which starts its own row', () => {
+  const list = compactBlocksFor('ARRIVAL', 'APP', { military: { ordnanceState: 'HUNG', mtr: { designator: 'IR107' } } });
+  assert.ok(list.includes('9G-MTR'), 'MTR group drawn');
+  assert.ok(list.indexOf('3G') < list.indexOf('9G-MTR'));
 });
 
 test('a runway field only on the airfield Positions', () => {

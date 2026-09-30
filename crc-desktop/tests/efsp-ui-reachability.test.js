@@ -2222,3 +2222,63 @@ test('an MTR write reaches the Strip through the FDR\'s rev — the group appear
   assert.equal(sandbox._stripElNeedsRebuild(el, strip, null, null), true);
   assert.ok(inFields(sandbox._buildStripEl(strip), '9H-EXIT'));
 });
+
+// ── hung ordnance: every Position the pilot talks to records it (H55, S-L12) ──
+//
+// decisions.md H55 and S-L12 (crc-sync's docs/adr/0069). The server half — that
+// 3G routes on every Role — is efsp-block-map.test.mjs and the parity test; this
+// is that each of those Positions can reach it from its own Strip: on the face
+// at TWR always, and at APP, CTR and the tactical Positions in ▼ while CLEAN and
+// on the face once set.
+
+const ORDNANCE_CASES = [
+  ['DEPARTURE', 'TWR', 'RUNWAY_QUEUE'], ['DEPARTURE', 'APP', 'HANDED_OFF'], ['DEPARTURE', 'CTR', 'HANDED_OFF'],
+  ['ARRIVAL', 'TWR', 'HANDED_TO_TOWER'], ['ARRIVAL', 'APP', 'INBOUND'], ['ARRIVAL', 'CTR', 'INBOUND'],
+  ['OVERFLIGHT', 'APP', 'ACTIVE'], ['OVERFLIGHT', 'CTR', 'ACTIVE'],
+  ['MISSION', 'TAC_C2', 'TASKED'], ['MISSION', 'AIC', 'ON_STATION'], ['MISSION', 'GCI', 'ON_STATION'], ['MISSION', 'JTAC', 'ON_STATION'],
+];
+
+function pickOrdnance(el, sent, value, where) {
+  const select = descendants(el).find(c => c.tagName === 'select');
+  assert.ok(select, `${where}: 3G opened no picker`);
+  select.value = value;
+  for (const fn of select._listeners.change || []) fn({ stopPropagation() {} });
+  assert.equal(sent.length, 1, where);
+  assert.deepEqual([sent[0].op.kind, sent[0].op.blockId, sent[0].op.value], ['SetBlock', '3G', value], where);
+}
+
+test('a CLEAN flight: ORDNANCE is on Tower\'s face, and in ▼ at APP, CTR and every tactical Position, which record HUNG from there', () => {
+  for (const [role, positionId, state] of ORDNANCE_CASES) {
+    const where = `${role} at ${positionId}`;
+    const strip = stripAt({ role, state, ownerPositionId: positionId });
+    const r = renderStrip({ strip, fdr: FDR, held: [positionId] });
+    const onFace = blockCell(r.el, '3G');
+    if (positionId === 'TWR') {
+      assert.ok(onFace, `${where}: Tower keeps ORDNANCE on its face`);
+      click(onFace);
+      pickOrdnance(r.el, r.sent, 'HUNG', where);
+      continue;
+    }
+    assert.equal(onFace, undefined, `${where}: a CLEAN ORDNANCE costs no Strip height (S-L12)`);
+    r.sandbox.renderAllOpenEfspBays = () => {};
+    click(descendants(r.el).find(c => (c.className || '').includes('efsp-expand-btn')));
+    const expanded = r.sandbox._buildStripEl(strip);
+    const row = descendants(expanded).find(c => c.dataset && c.dataset.expandedBlock === '3G');
+    assert.ok(row, `${where}: ORDNANCE is not in the expanded view`);
+    click(descendants(row).find(c => c.dataset && c.dataset.block === '3G'));
+    pickOrdnance(expanded, r.sent, 'HUNG', where);
+  }
+});
+
+test('a set ORDNANCE is on the face at APP, CTR and every tactical Position, and can be cleared from there', () => {
+  const hung = { ...FDR, rev: 2, military: { ...FDR.military, ordnanceState: 'HUNG' } };
+  for (const [role, positionId, state] of ORDNANCE_CASES) {
+    const where = `${role} at ${positionId}`;
+    const { el, sent } = renderStrip({ strip: stripAt({ role, state, ownerPositionId: positionId }), fdr: hung, held: [positionId] });
+    const cell = blockCell(el, '3G');
+    assert.ok(cell, `${where}: a HUNG ORDNANCE is not on the face`);
+    assert.equal(cell.textContent, 'HUNG', where);
+    click(cell);
+    pickOrdnance(el, sent, 'CLEAN', where);
+  }
+});

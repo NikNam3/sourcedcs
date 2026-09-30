@@ -125,3 +125,18 @@ test('the six MTR Blocks are on all three ATC Roles on both sides, with identica
     assert.equal(client.MISSION_BLOCK_MAP[id], undefined, `client MISSION/${id}`);
   }
 });
+
+// decisions.md H55 (crc-sync's docs/adr/0069): ordnance state is recorded by
+// whoever the pilot is talking to, tactical Positions included, so Block 3G is
+// on every Role — MISSION too — on both sides, onto the one FDR field. The hook
+// (3F) stays on the three ATC Roles only.
+test('Block 3G is on all four Roles on both sides, onto military.ordnanceState, and 3F never on MISSION', () => {
+  for (const role of ['DEPARTURE', 'ARRIVAL', 'OVERFLIGHT', 'MISSION']) {
+    assert.deepEqual(server.BLOCK_MAPS[role]['3G'].target, { kind: 'military', field: 'ordnanceState' }, `server ${role}/3G`);
+    assert.deepEqual(client.BLOCK_MAPS[role]['3G'].target, { kind: 'military', field: 'ordnanceState' }, `client ${role}/3G`);
+    assert.equal(server.BLOCK_MAPS[role]['3G'].required, false, `server ${role}/3G`);
+    assert.equal(client.BLOCK_MAPS[role]['3G'].required, false, `client ${role}/3G`);
+  }
+  assert.equal(server.MISSION_BLOCK_MAP['3F'], undefined);
+  assert.equal(client.MISSION_BLOCK_MAP['3F'], undefined);
+});
