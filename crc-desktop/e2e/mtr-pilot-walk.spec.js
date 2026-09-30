@@ -56,7 +56,7 @@ async function only(page, callsign) {
 test('pilot walk: "VIPER11 request a different exit fix", CTR and APP at once', async ({ browser }) => {
   const ctr = await controller(browser, { held: ['CTR'], facilityId: 'CENTER', controller: 'ctr-walk' });
   const app = await controller(browser, { held: ['APP'], facilityId: 'INCIRLIK', controller: 'app-walk' });
-  const CS = 'VIPER11';
+  const CS = 'MTRW11'; // plays "VIPER11"; unique because the Board persists across specs in a run
 
   // An inbound at Center, coordinated to APP so both Facilities hold a Strip.
   await goBay(ctr, 'CTR', 'ctr-enroute');
