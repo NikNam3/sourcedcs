@@ -200,6 +200,22 @@ class WsHub {
     });
   }
 
+  /**
+   * Field state (guide §9.7, docs/adr/0061) changed with no controller's op
+   * behind it — today only the active end derived from the mission wind at
+   * load (decisions.md H22). The same efsp-field-state-delta a field-state op
+   * returns from handleMessage, on field state's own sequence (0061's rule-5
+   * deviation), so a client needs one handler for both (docs/adr/0068,
+   * decisions.md S-L1d).
+   */
+  broadcastEfspFieldStateDelta(payload) {
+    this._broadcast({
+      version: VERSION, type: 'efsp-field-state-delta',
+      fieldStateSeq: payload.fieldStateSeq,
+      fieldStates: { updated: (payload.fieldStates || []).filter(Boolean) },
+    });
+  }
+
   // Live "who's transmitting ATIS on which frequency" list, from
   // AtisStore.getActive() — called by server.js after every
   // /api/atis-transmit mutation and on a periodic tick, so every connected

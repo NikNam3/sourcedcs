@@ -327,13 +327,10 @@ grpcClient.on('mission-load', (missionData) => {
           const r = efsp.fieldStateStore.setActiveRunwayFromWind(facilityId, { windFromTrue: w.windFrom, windKt: w.windKt, missionKey });
           if (r.ok && r.changed) {
             efsp.persist();
-            // ws-hub.js has no field-state broadcaster and is not L1's to edit
-            // (serialised L7 -> L10); its generic _broadcast carries the same
-            // delta a field-state op sends. A public broadcastEfspFieldStateDelta
-            // is a follow-up for whoever next holds ws-hub.js.
-            wsHub._broadcast({
-              version: 1, type: 'efsp-field-state-delta', fieldStateSeq: efsp.fieldStateStore.currentSeq,
-              fieldStates: { updated: [efsp.fieldStateStore.getFieldState(facilityId)] },
+            // The same delta a field-state op sends (decisions.md S-L1d).
+            wsHub.broadcastEfspFieldStateDelta({
+              fieldStateSeq: efsp.fieldStateStore.currentSeq,
+              fieldStates: [efsp.fieldStateStore.getFieldState(facilityId)],
             });
             efsp.nlaStatusMonitor.tick();
             console.log(`[field-state] ${facilityId}: active runway ${r.activeRunway} from the mission wind (${w.windFrom}° true, ${w.windKt} kt)`);

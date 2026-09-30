@@ -293,9 +293,9 @@ function canDeclareMarsa(actingPositionId) {
  *
  * [SOURCE-DEFINED] where the guide is silent:
  *   - Tower is the sole authority over the runways (decisions.md H18): only TWR
- *     closes, opens, or takes a runway out for a barrier change. Everyone else
+ *     closes, opens, or takes a runway out for runway works. Everyone else
  *     ASKS (RequestRunwayStatus), and TWR accepts or rejects.
- *   - OPS completes the barrier change and performs the inspection (guide §9.7
+ *   - OPS completes the runway works and performs the inspection (guide §9.7
  *     rule 2: "by default OPS (AMOPS)").
  *   - TWR proposes, begins and completes a runway change; OPS and APP
  *     acknowledge it (rule 3; OPS stands in for the SOF). An acknowledger
@@ -312,8 +312,8 @@ function canDeclareMarsa(actingPositionId) {
 const FIELD_STATE_OP_OWNERS = {
   CloseRunway:                ['TWR'],
   OpenRunway:                 ['TWR'],
-  BeginBarrierChange:         ['TWR'],
-  CompleteBarrierChange:      ['OPS'],
+  BeginRunwayWorks:           ['TWR'],
+  CompleteRunwayWorks:        ['OPS'],
   CompleteInspection:         ['OPS'],
   RequestRunwayStatus:        ['OPS', 'CD', 'GND', 'APP'],
   AcceptRunwayRequest:        ['TWR'],

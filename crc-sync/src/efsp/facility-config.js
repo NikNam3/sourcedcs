@@ -201,8 +201,8 @@ const DEFAULT_CONFIG = {
     airportIcao: 'LTAG', // whose mission wind picks the active end at load (decisions.md H22)
     runways: [
       {
-        // One record per PHYSICAL runway (decisions.md S-Q23): a barrier
-        // change closes the pavement in both directions.
+        // One record per PHYSICAL runway (decisions.md S-Q23): runway works
+        // close the pavement in both directions.
         runwayId: '05/23',
         ends: ['05', '23'],
         // TRUE headings, because DCS reports wind in degrees true and an end's

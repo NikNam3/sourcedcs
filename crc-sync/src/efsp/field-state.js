@@ -21,16 +21,16 @@
 //
 // Shape (docs/parallel/decisions.md S-Q23): one record per PHYSICAL runway,
 // `{ runwayId: '05/23', ends: ['05', '23'], status, arrestingGear: [...] }`.
-// Status belongs to the pavement — a barrier change closes it in both
+// Status belongs to the pavement — runway works close it in both
 // directions — and the Facility holds which END is active.
 
 // ── the status machine (rules 1–2) ─────────────────────────────────────────
 
-const RUNWAY_STATUSES = ['OPEN', 'CLOSED', 'SUSPENDED_BARRIER_CHANGE', 'SUSPENDED_INSPECTION'];
+const RUNWAY_STATUSES = ['OPEN', 'CLOSED', 'SUSPENDED_WORKS', 'SUSPENDED_INSPECTION'];
 
 // airspace-store.js's shape. Two entries are absent ON PURPOSE, and each
 // absence is a rule:
-//   - SUSPENDED_BARRIER_CHANGE -> OPEN. That missing edge IS rule 2
+//   - SUSPENDED_WORKS -> OPEN. That missing edge IS rule 2
 //     ("resumption MUST require an explicit inspection-complete action"),
 //     enforced by the table rather than by a check somebody can forget.
 //   - SUSPENDED_* -> CLOSED. With it, suspend -> close -> open would reopen a
@@ -38,9 +38,9 @@ const RUNWAY_STATUSES = ['OPEN', 'CLOSED', 'SUSPENDED_BARRIER_CHANGE', 'SUSPENDE
 // OPEN -> SUSPENDED_INSPECTION is reached only by CompleteRunwayChange (the
 // new direction is inspected before it is used, decisions.md Q29).
 const LEGAL_TRANSITIONS = {
-  OPEN:                     ['CLOSED', 'SUSPENDED_BARRIER_CHANGE', 'SUSPENDED_INSPECTION'],
+  OPEN:                     ['CLOSED', 'SUSPENDED_WORKS', 'SUSPENDED_INSPECTION'],
   CLOSED:                   ['OPEN'],
-  SUSPENDED_BARRIER_CHANGE: ['SUSPENDED_INSPECTION'],
+  SUSPENDED_WORKS:          ['SUSPENDED_INSPECTION'],
   SUSPENDED_INSPECTION:     ['OPEN'],
 };
 
@@ -49,10 +49,11 @@ function canGo(from, to) {
 }
 
 // Why a runway is suspended. Kept as a field rather than folded into the
-// status name, because the human may yet make the barrier change a generic
-// "runway works" suspension (decisions.md S-L1b): a new kind is then one entry
-// here and one label below, not a new status.
-const SUSPENSION_KINDS = ['BARRIER_CHANGE', 'RUNWAY_CHANGE'];
+// status name. WORKS is the generic "runway works + inspection" suspension
+// (decisions.md H52, docs/adr/0068): the barrier change L1 built is one kind
+// of works, and DCS simulates no arresting wires to make it special (H17).
+// A new kind is one entry here and one label below, not a new status.
+const SUSPENSION_KINDS = ['WORKS', 'RUNWAY_CHANGE'];
 
 // ── the arresting gear (data only — decisions.md H17) ──────────────────────
 //
@@ -80,7 +81,7 @@ function isRunwayChangeOpen(runwayChange) {
 
 // What a Position other than TWR may ASK tower to do to a runway (decisions.md
 // H18: tower is the sole authority over the runways; everyone else requests).
-const REQUEST_ACTIONS = ['CLOSE', 'OPEN', 'BARRIER_CHANGE'];
+const REQUEST_ACTIONS = ['CLOSE', 'OPEN', 'WORKS'];
 
 // ── runway designators ─────────────────────────────────────────────────────
 
@@ -207,14 +208,14 @@ const RUNWAY_GATED_STATES = Object.freeze({
 // [SOURCE-DEFINED] inhibit wordings (decisions.md Q40): nla.js's lower-case
 // phrase style, naming the runway and what is wrong with it.
 const SUSPENSION_LABELS = {
-  BARRIER_CHANGE: 'barrier change',
+  WORKS: 'works in progress',
 };
 
 /** The inhibit reason a runway's status produces, or null when it is usable. */
 function runwayStatusReason(runway) {
   if (!runway) return null;
   switch (runway.status) {
-    case 'SUSPENDED_BARRIER_CHANGE': {
+    case 'SUSPENDED_WORKS': {
       const kind = runway.suspension && runway.suspension.kind;
       return `runway ${runway.runwayId} suspended — ${SUSPENSION_LABELS[kind] || 'works in progress'}`;
     }

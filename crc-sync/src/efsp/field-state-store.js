@@ -43,8 +43,10 @@ function deepClone(obj) { return obj === undefined ? undefined : JSON.parse(JSON
 const REQUEST_EFFECTS = {
   CLOSE:          { from: 'OPEN',   op: 'CloseRunway' },
   OPEN:           { from: 'CLOSED', op: 'OpenRunway' },
-  BARRIER_CHANGE: { from: 'OPEN',   op: 'BeginBarrierChange' },
+  WORKS:          { from: 'OPEN',   op: 'BeginRunwayWorks' },
 };
+
+const REQUEST_VERBS = { CLOSE: 'close', OPEN: 'open', WORKS: 'suspend for works' };
 
 // The system actor for changes no controller made (the active end derived
 // from the mission wind). Audited under this id, never a Position.
@@ -264,8 +266,8 @@ class FieldStateStore {
     switch (op.kind) {
       case 'CloseRunway':           return this._close(ctx);
       case 'OpenRunway':            return this._open(ctx);
-      case 'BeginBarrierChange':    return this._beginBarrierChange(ctx);
-      case 'CompleteBarrierChange': return this._completeBarrierChange(ctx);
+      case 'BeginRunwayWorks':      return this._beginRunwayWorks(ctx);
+      case 'CompleteRunwayWorks':   return this._completeRunwayWorks(ctx);
       case 'CompleteInspection':    return this._completeInspection(ctx);
       case 'RequestRunwayStatus':   return this._request(ctx);
       case 'AcceptRunwayRequest':   return this._acceptRequest(ctx);
@@ -316,7 +318,7 @@ class FieldStateStore {
     return transition;
   }
 
-  // ── rules 1–2: close, open, the barrier change and the inspection ──────
+  // ── rules 1–2: close, open, runway works and the inspection ──────
 
   _close(ctx, requestedBy = null) {
     const { runway, refusal } = this._needRunway(ctx);
@@ -344,23 +346,23 @@ class FieldStateStore {
     return { ok: true };
   }
 
-  _beginBarrierChange(ctx, requestedBy = null) {
+  _beginRunwayWorks(ctx, requestedBy = null) {
     const { runway, refusal } = this._needRunway(ctx);
     if (refusal) return refusal;
-    if (!canGo(runway.status, 'SUSPENDED_BARRIER_CHANGE')) return this._illegal(runway, 'SUSPENDED_BARRIER_CHANGE');
+    if (!canGo(runway.status, 'SUSPENDED_WORKS')) return this._illegal(runway, 'SUSPENDED_WORKS');
     runway.suspension = {
-      kind: 'BARRIER_CHANGE', since: this._clock.now(), by: ctx.by || null, positionId: ctx.actingPositionId,
+      kind: 'WORKS', since: this._clock.now(), by: ctx.by || null, positionId: ctx.actingPositionId,
       note: this._note(ctx.op.note), requestedBy,
     };
-    this._touch(ctx.record, ctx.by, this._setStatus(ctx, runway, 'SUSPENDED_BARRIER_CHANGE', requestedBy ? { requestedBy } : {}));
+    this._touch(ctx.record, ctx.by, this._setStatus(ctx, runway, 'SUSPENDED_WORKS', requestedBy ? { requestedBy } : {}));
     return { ok: true };
   }
 
-  _completeBarrierChange(ctx) {
+  _completeRunwayWorks(ctx) {
     const { runway, refusal } = this._needRunway(ctx);
     if (refusal) return refusal;
-    if (runway.status !== 'SUSPENDED_BARRIER_CHANGE') {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: `runway ${runway.runwayId} is ${runway.status}, not in a barrier change` };
+    if (runway.status !== 'SUSPENDED_WORKS') {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `runway ${runway.runwayId} is ${runway.status}, not in runway works` };
     }
     // Still suspended, now awaiting the inspection; the suspension (and why)
     // is kept, so the inhibit keeps naming the runway until OPS signs it off.
@@ -558,7 +560,7 @@ class FieldStateStore {
     const set = [toDef, fromDef].filter(Boolean).map(d => d.runwayId).filter((id, i, a) => a.indexOf(id) === i);
     for (const runwayId of set) {
       const rwy = this._runway(record, runwayId);
-      if (rwy.status === 'SUSPENDED_BARRIER_CHANGE' || rwy.status === 'CLOSED') {
+      if (rwy.status === 'SUSPENDED_WORKS' || rwy.status === 'CLOSED') {
         return { ok: false, reason: 'VALIDATION_ERROR', detail: `runway ${runwayId} is ${rwy.status} — finish that before completing the runway change` };
       }
     }
@@ -571,7 +573,7 @@ class FieldStateStore {
         rwy.suspension = { kind: 'RUNWAY_CHANGE', since: now, by: by || null, positionId: actingPositionId, note: null, changeId: change.changeId };
         moved.push(runwayId);
       }
-      // Already SUSPENDED_INSPECTION (a barrier change awaiting its
+      // Already SUSPENDED_INSPECTION (works awaiting their
       // inspection): the one inspection will cover both.
     }
     const from = record.activeRunway;
@@ -601,7 +603,7 @@ class FieldStateStore {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `${runway.pendingRequest.requestedPositionId} already has a ${runway.pendingRequest.action} request with tower for runway ${runway.runwayId}` };
     }
     if (runway.status !== REQUEST_EFFECTS[action].from) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: `runway ${runway.runwayId} is ${runway.status} — nothing to ask tower to ${action.toLowerCase().replace('_', ' ')}` };
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `runway ${runway.runwayId} is ${runway.status} — nothing to ask tower to ${REQUEST_VERBS[action]}` };
     }
     runway.pendingRequest = {
       requestId: crypto.randomUUID(), action,
@@ -626,7 +628,7 @@ class FieldStateStore {
     let result;
     if (effect.op === 'CloseRunway') result = this._close(inner, asked);
     else if (effect.op === 'OpenRunway') result = this._open(inner, asked);
-    else result = this._beginBarrierChange(inner, asked);
+    else result = this._beginRunwayWorks(inner, asked);
     if (!result.ok) runway.pendingRequest = request; // nothing changed; the ask still stands
     return result;
   }
@@ -701,10 +703,10 @@ class FieldStateStore {
         const stored = (saved.runways || []).find(r => r && r.runwayId === def.runwayId);
         if (!stored) return this._seedRunway(def);
         const runway = { ...this._seedRunway(def), ...deepClone(stored) };
-        if (!['OPEN', 'CLOSED', 'SUSPENDED_BARRIER_CHANGE', 'SUSPENDED_INSPECTION'].includes(runway.status)) {
+        if (!['OPEN', 'CLOSED', 'SUSPENDED_WORKS', 'SUSPENDED_INSPECTION'].includes(runway.status)) {
           console.warn(`[field-state] ${saved.facilityId}: restored runway ${def.runwayId} had unknown status ${runway.status} — keeping it SUSPENDED_INSPECTION so it is inspected before use`);
           runway.status = 'SUSPENDED_INSPECTION';
-          runway.suspension = runway.suspension || { kind: 'BARRIER_CHANGE', since: null, by: null, positionId: null, note: 'restored from an unreadable state' };
+          runway.suspension = runway.suspension || { kind: 'WORKS', since: null, by: null, positionId: null, note: 'restored from an unreadable state' };
         }
         delete runway.arrestingGear; // gear is config, never state
         return runway;
