@@ -157,3 +157,4 @@ L9-E1/E2/E3/E4/E7/E8, L1b-Q1, L12-Q2, L13-Q2, L23-Q6, L23-Q7, Q-L14-1, Q-L14-2, 
   - 4 l5-arrivals assertions.
   The E2E triage lane (`lane/E2E-triage`, worktree `sourcedcs-E2E`) was cut before wave 2 and may still be running. Merge its test hardening only if it's still relevant.
 - **Next session** (Sonnet 5.5 for code, Opus for design): E2E fixes, then L23 (+U7, B1–B7, F10, S-L13), L26, L28, the UI follow-up lane (U1–U6, U8, S-L15, S-L16, S-L1b findings), then waves 3–4.
+- **E2E triage merged:** `seedStrip` now waits for the correlation redraw (the main race). Wave-1-era failures were flaky/ENV. **Open for the next session:** `index.html` loads dockview-core (jsdelivr) and maplibre-gl (unpkg) from CDNs; vendor them or serve them from node_modules in the harness (`page.route`), otherwise CDN hiccups keep producing ENV failures. The 13 consistent post-wave-2 failures above are separate and still open.
