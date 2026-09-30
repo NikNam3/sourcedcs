@@ -601,6 +601,7 @@ async function connect() {
         // down. Resolved first, rendered second: the highlight is a class each
         // Strip reads while being built.
         if (typeof refreshMarsaHighlight === 'function') refreshMarsaHighlight();
+        if (typeof refreshArHighlight === 'function') refreshArHighlight(); // docs/adr/0071
         if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
         // A reconnect brings correlations back with the rest of the snapshot,
         // so a Strip that was selected before the drop needs its ring redrawn
@@ -746,6 +747,13 @@ async function connect() {
         if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
         updateMap();
         if (typeof updateTrackPanel === 'function') updateTrackPanel();
+        break;
+      // WP7 (crc-sync docs/adr/0071) — the ATO import's two answers, sender only.
+      case 'efsp-ato-preview-result':
+        if (typeof onAtoPreviewResult === 'function') onAtoPreviewResult(msg);
+        break;
+      case 'efsp-ato-ack':
+        if (typeof onAtoAck === 'function') onAtoAck(msg);
         break;
     }
   };

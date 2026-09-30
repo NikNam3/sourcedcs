@@ -787,6 +787,7 @@ function _appendExpandedView(el, strip) {
     renderAllOpenEfspBays();
   });
   collapse.addEventListener('pointerdown', (e) => e.stopPropagation());
+  if (typeof appendAtoExpandedRows === 'function') appendAtoExpandedRows(panel, strip); // docs/adr/0071 — read-only
   panel.appendChild(collapse);
 
   el.appendChild(panel);
@@ -1412,6 +1413,7 @@ function _afterSelectionChanged() {
   // way round would leave the highlight one selection behind, which is the kind
   // of off-by-one that looks like a race and is not.
   if (typeof highlightMarsaParticipants === 'function') highlightMarsaParticipants(_selectedStripId);
+  if (typeof highlightArParticipants === 'function') highlightArParticipants(_selectedStripId); // docs/adr/0071
   renderAllOpenEfspBays();
   // Ring the selected Strip's contact on the map (guide §6.6 rule 4). One Map
   // lookup plus the existing rAF-batched updateMap() — see

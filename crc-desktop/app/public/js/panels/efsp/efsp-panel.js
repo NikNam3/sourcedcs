@@ -562,6 +562,7 @@ function _refreshCreateStripAvailability() {
     }
   }
   _refreshMissionBindPicker(origin);
+  if (typeof refreshAtoImportButton === 'function') refreshAtoImportButton(); // docs/adr/0071
   _createStripInputEl.disabled = !origin;
   _createStripBtnEl.disabled = !origin;
   if (!origin) {
@@ -1496,6 +1497,7 @@ function initEfspPanel() {
 
   _wireCreateStrip();
   _wireDotCommand();
+  if (typeof initAtoImport === 'function') initAtoImport(_efspPanelRootEl); // docs/adr/0071
   _loadStereoRoutes();
   _renderPositionTabs();
   // One check per second is plenty for a 10s-default threshold — no need to

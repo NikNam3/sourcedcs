@@ -1765,3 +1765,30 @@
  * deviation. Declared after the arrival edge so an alert wins over "new". */
 .efsp-strip.efsp-strip-alert { border-color: var(--efsp-bad); box-shadow: inset 3px 0 0 var(--efsp-bad); }
 .efsp-strip.efsp-strip-alert-attn { border-top-color: var(--efsp-attn); border-right-color: var(--efsp-attn); border-bottom-color: var(--efsp-attn); }
+
+/* WP7 (crc-sync docs/adr/0071) — the AR join and the ATO import dialog.
+ * The AR highlight is deliberately NOT the MARSA colour: a join is not a
+ * separation regime, and the two must never be mistaken for each other. */
+.efsp-strip.efsp-strip-ar-participant { box-shadow: inset 0 0 0 2px var(--efsp-go); }
+.efsp-ato-readonly { color: var(--efsp-muted); font-style: italic; }
+.efsp-ato-dialog {
+  position: fixed; left: 50%; top: 8vh; transform: translateX(-50%); width: min(820px, calc(100vw - 32px));
+  max-height: 84vh; overflow: auto; z-index: 1000; box-sizing: border-box;
+  background: var(--efsp-strip); border: 1px solid var(--efsp-line-2); padding: 8px; color: var(--efsp-text);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.efsp-ato-head { display: flex; justify-content: space-between; align-items: center; font-weight: 600; }
+.efsp-ato-text { width: 100%; min-height: 90px; box-sizing: border-box; font-family: monospace; font-size: 11px; }
+.efsp-ato-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.efsp-ato-msg { color: var(--efsp-attn-text); }
+.efsp-ato-warning { font-size: 11px; color: var(--efsp-muted); }
+.efsp-ato-lines { display: flex; flex-direction: column; gap: 4px; }
+.efsp-ato-line { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; padding: 4px; border: 1px solid var(--efsp-line); font-size: 12px; }
+.efsp-ato-cell { white-space: nowrap; }
+.efsp-ato-missing { color: var(--efsp-attn-text); font-size: 11px; }
+.efsp-ato-changes { flex-basis: 100%; font-size: 11px; color: var(--efsp-muted); overflow-wrap: anywhere; }
+.efsp-ato-line-warnings { flex-basis: 100%; }
+.efsp-ato-subhead { font-weight: 600; margin-top: 4px; }
+.efsp-ato-ar-row, .efsp-ato-gone-row, .efsp-ato-result { font-size: 12px; }
+.efsp-ato-result-bad { color: var(--efsp-bad-text); }
+.efsp-ato-import-go { align-self: flex-start; }
