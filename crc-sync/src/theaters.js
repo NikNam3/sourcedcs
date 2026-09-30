@@ -1,9 +1,9 @@
 'use strict';
 
-// Fixed per-theater facts (docs/adr/0079): today each theater's local-time
-// offset from Zulu, and later whatever else is a property of the map rather
-// than a preference (magnetic variation, decisions.md H15 — hence one object
-// per theater, not a bare number). Shipped in config/theaters.json; a copy in
+// Fixed per-theater facts: each theater's local-time offset from Zulu
+// (docs/adr/0079), its transition altitude (decisions.md H62), the central
+// meridian of its DCS projection and an optional magnetic-variation override
+// (docs/adr/0085). Shipped in config/theaters.json; a copy in
 // state/theaters.json overrides it theater by theater, field by field, so a
 // wrong value can be corrected on the server without a release.
 //
@@ -26,9 +26,19 @@ function _read(file) {
   }
 }
 
+// An override is one of { fixedDeg } or { offsetDeg }, never both: which one
+// wins would otherwise be a silent rule nobody wrote down.
+function _validVariationOverride(v) {
+  if (!v || typeof v !== 'object') return false;
+  const fixed = Number.isFinite(v.fixedDeg), offset = Number.isFinite(v.offsetDeg);
+  return fixed !== offset;
+}
+
 /**
  * @param {string} [override] one file to read instead of config/ + state/ (tests)
- * @returns {Record<string, {utcOffsetHours:number}>} only entries with a finite offset
+ * @returns {Record<string, {utcOffsetHours:number, transitionAltFt?:number, tmCentralMeridianDeg?:number,
+ *   magneticVariation?:{fixedDeg?:number, offsetDeg?:number}}>} only entries with a finite offset;
+ *   an invalid optional field is dropped with a warning, the rest of the entry kept
  */
 function loadTheaters(override) {
   const layers = override
@@ -43,8 +53,24 @@ function loadTheaters(override) {
   }
   const out = {};
   for (const [name, entry] of Object.entries(merged)) {
-    if (Number.isFinite(entry.utcOffsetHours)) out[name] = entry;
-    else console.warn(`[theaters] ${name} has no numeric utcOffsetHours — ignored`);
+    if (!Number.isFinite(entry.utcOffsetHours)) {
+      console.warn(`[theaters] ${name} has no numeric utcOffsetHours — ignored`);
+      continue;
+    }
+    const clean = { ...entry };
+    if ('transitionAltFt' in clean && !(Number.isFinite(clean.transitionAltFt) && clean.transitionAltFt > 0)) {
+      console.warn(`[theaters] ${name}: transitionAltFt is not a positive number — ignored`);
+      delete clean.transitionAltFt;
+    }
+    if ('tmCentralMeridianDeg' in clean && !Number.isFinite(clean.tmCentralMeridianDeg)) {
+      console.warn(`[theaters] ${name}: tmCentralMeridianDeg is not a number — ignored`);
+      delete clean.tmCentralMeridianDeg;
+    }
+    if ('magneticVariation' in clean && !_validVariationOverride(clean.magneticVariation)) {
+      console.warn(`[theaters] ${name}: magneticVariation must be exactly one of {fixedDeg} or {offsetDeg} — ignored, the model applies`);
+      delete clean.magneticVariation;
+    }
+    out[name] = clean;
   }
   return out;
 }

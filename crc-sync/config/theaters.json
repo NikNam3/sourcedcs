@@ -1,19 +1,19 @@
 {
-  "_comment": "Fixed per-theater facts, keyed by the name DCS-gRPC's GetTheatre returns (docs/adr/0079). utcOffsetHours: local = Z + offset, standard time, no daylight saving — which is how DCS itself keeps time. Syria +3 is a squadron decision (docs/parallel/decisions.md H11). Every other value is [SOURCE-DEFINED]: DCS does not publish these, and they follow the community-maintained table in MOOSE's UTILS.GMTToLocalTimeDifference(). Verify one against the mission editor before trusting it for a theater we have not flown. One object per theater so later facts (magnetic variation, decisions.md H15) sit beside the offset. Read once at startup, never written by code; a copy in state/theaters.json overrides it theater by theater, field by field. A theater missing here runs on offset 0 and says so (source MISSION_NO_OFFSET).",
+  "_comment": "Fixed per-theater facts, keyed by the name DCS-gRPC's GetTheatre returns (docs/adr/0079, 0085). Read once at startup, never written by code (P5); a copy in state/theaters.json overrides it theater by theater, field by field. utcOffsetHours: local = Z + offset, standard time, no daylight saving, which is how DCS keeps time. Syria +3 is a squadron decision (decisions.md H11); every other offset is [SOURCE-DEFINED] from MOOSE's UTILS.GMTToLocalTimeDifference(). transitionAltFt: below it altitudes read QNH, at and above it flight levels. Syria 10000 is a squadron decision (H62); every other value is [SOURCE-DEFINED], kept at the 18000 every theater used before, and should be checked against that region's AIP. tmCentralMeridianDeg: the central meridian of the theater's DCS Transverse Mercator projection, for grid convergence (true = grid + convergence); mirrors tools/miztoyaml/projection.py. A theater without it has unknown convergence, so DCS grid headings there cannot be turned into true or magnetic. magneticVariation (optional, none shipped): {\"fixedDeg\": n} replaces the World Magnetic Model with one value for the whole map, {\"offsetDeg\": n} adds a squadron correction to the model. East positive. Without it, variation is WMM2025 at the position and mission date (H69).",
   "theaters": {
-    "Caucasus":           { "utcOffsetHours": 4 },
-    "Nevada":             { "utcOffsetHours": -8 },
-    "Normandy":           { "utcOffsetHours": 0 },
-    "PersianGulf":        { "utcOffsetHours": 4 },
-    "TheChannel":         { "utcOffsetHours": 2 },
-    "Syria":              { "utcOffsetHours": 3 },
-    "MarianaIslands":     { "utcOffsetHours": 10 },
-    "MarianaIslandsWWII": { "utcOffsetHours": 10 },
-    "Falklands":          { "utcOffsetHours": -3 },
-    "SinaiMap":           { "utcOffsetHours": 2 },
-    "Kola":               { "utcOffsetHours": 3 },
-    "Afghanistan":        { "utcOffsetHours": 4.5 },
-    "Iraq":               { "utcOffsetHours": 3 },
-    "GermanyCW":          { "utcOffsetHours": 1 }
+    "Caucasus":           { "utcOffsetHours": 4, "transitionAltFt": 18000, "tmCentralMeridianDeg": 33 },
+    "Nevada":             { "utcOffsetHours": -8, "transitionAltFt": 18000, "tmCentralMeridianDeg": -117 },
+    "Normandy":           { "utcOffsetHours": 0, "transitionAltFt": 18000, "tmCentralMeridianDeg": -3 },
+    "PersianGulf":        { "utcOffsetHours": 4, "transitionAltFt": 18000, "tmCentralMeridianDeg": 57 },
+    "TheChannel":         { "utcOffsetHours": 2, "transitionAltFt": 18000 },
+    "Syria":              { "utcOffsetHours": 3, "transitionAltFt": 10000, "tmCentralMeridianDeg": 39 },
+    "MarianaIslands":     { "utcOffsetHours": 10, "transitionAltFt": 18000, "tmCentralMeridianDeg": 147 },
+    "MarianaIslandsWWII": { "utcOffsetHours": 10, "transitionAltFt": 18000 },
+    "Falklands":          { "utcOffsetHours": -3, "transitionAltFt": 18000, "tmCentralMeridianDeg": -57 },
+    "SinaiMap":           { "utcOffsetHours": 2, "transitionAltFt": 18000, "tmCentralMeridianDeg": 33 },
+    "Kola":               { "utcOffsetHours": 3, "transitionAltFt": 18000 },
+    "Afghanistan":        { "utcOffsetHours": 4.5, "transitionAltFt": 18000 },
+    "Iraq":               { "utcOffsetHours": 3, "transitionAltFt": 18000 },
+    "GermanyCW":          { "utcOffsetHours": 1, "transitionAltFt": 18000 }
   }
 }
