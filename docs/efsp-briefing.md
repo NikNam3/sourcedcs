@@ -348,7 +348,10 @@ waiting):
 
 Four things to know before extending it:
 
-- **Both new Blocks are on all three ATC Roles, and neither is on MISSION.** `0051`'s lesson
+- **Both new Blocks are on all three ATC Roles, and neither was on MISSION.** (**Amended by H55,
+  `0069`: `3G` is now also on `MISSION`**, appended as `MISSION_BLOCK_MAP`'s last row, because a pilot
+  reports hung ordnance to whoever they talk to; it is still the same FDR field, so one fact with a
+  second surface. `3F` stays off.) `0051`'s lesson
   applied rather than remembered. MISSION is left out deliberately: it shares its `fdrId` with the
   ATC Strip it is TOFI-linked to, so a Block there would be a *second place* to declare one
   aircraft's ordnance — `0045`'s "two answers to one question" again.
@@ -366,8 +369,8 @@ Four things to know before extending it:
   were airborne when the service restarted. The client guards the same case, because nothing
   reseeds an FDR already in a connected client's cache.
 
-**`3G` accepts `HUNG` and nothing acts on it yet, and `alertStatus` is unreachable from the UI.**
-Both are visible half-features rather than silent ones; L12 and L13 finish them in wave 2.
+**`3G` `HUNG` is an advisory now (L12, `0069`) and `alertStatus` is Block `14E` (L13, `0070`)**; see
+§3J.
 
 
 ## 3H. The mission line exists from tasking — and one hole found on the way
@@ -589,6 +592,20 @@ is done (`SUSPENDED_WORKS`, `WORKS`, `BeginRunwayWorks`, `CompleteRunwayWorks`, 
 - Walks not done: a 3F divert onto DOWN gear (no gear exists; the HOOK chip is proved by fixtures and a
   rendered-Strip test), a crc-sync restart mid-suspension (a page reload was walked), the wind-derived
   active end (no DCS in the harness), two physical screens.
+
+**Hung ordnance (L12, `0069`).** `hungOrdnanceAdvisoryFor(strip, fdr, wireRecord)` in
+`field-state.js` (pure; the wire record is its own inventory, `buildStatusView(record, record)`) and a
+client mirror `panels/efsp/ordnance-advisory.js`, held together by the drift test in
+`tests/efsp-ordnance-client.test.js`: **change both together**. It is a chip plus one reason line,
+never an inhibit, and it deliberately recommends no runway (the pad is a placeholder name, H21). It
+reads field state through `getEfspFieldState(strip.facilityId)` and expects `null` for CENTER/TACTICAL.
+H55 put `3G` on `MISSION` and S-L12 settled the faces: always on TWR's, on APP/CTR/mission lines only
+when not CLEAN (`ORDNANCE_WHEN_SET`, `isOrdnanceSet` in `strip-fields.js`), always in ▼.
+- The advisory function has the three hook lines in `strip-view.js`, byte-identical to L1b's and
+  L13's (S-W2A); `ord` sits before `scram` in `INDICATOR_ORDER`.
+- Walks not done: HOOK + HUNG together (needs configured gear, which does not exist), the pad name
+  with real client state is covered by L1b's merge (the Playwright spec's `standInFieldState` is now
+  redundant and should be deleted), pad occupancy is not read (Q3), no hint in the 8A/8B editor (Q6).
 
 ## 4. What's left, and the known bugs
 

@@ -17,7 +17,7 @@ Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green):
 - **WP6, in progress** — the military layer, landing a deliverable at a time:
   - **Stereo routes** — file a flight by short name and the server expands the whole route. See §4A. (The table ships empty; nothing works until somebody writes one.)
   - **MARSA** — declaring that the military is separating its own aircraft, as a relation between flights rather than a flag on one, with the pre-rendezvous course/altitude interlock. See §8D.
-  - **The military Block namespace** — `ORDNANCE` (Block 3G) and `HOOK` (Block 3F) on every ATC Strip. The fields are live and recorded; the behaviour that reads them (§9.5's hung-ordnance advisory, §9.7's arresting-gear gating) is not built yet. See §6.
+  - **The military Block namespace** — `ORDNANCE` (Block 3G) and `HOOK` (Block 3F) on every ATC Strip. `HUNG` ordnance raises an advisory chip on every Position's Strip for the flight (§6); arresting-gear gating (§9.7) reads a gear inventory Incirlik does not have, so it never fires. See §6.
   - **The mission line exists from tasking** — `TAC_C2` frags a mission line against a filed flight before it moves, and TOFI later lands on the one that is already there. Accepting tactical control now requires stating the separation regime. See §8C1.
   - **Every Block is reachable, and amendments are visible** — the `▼` button on a Strip opens the Blocks that have no chip, and a superseded value now shows struck through in the Block itself (§3.7). Heading and initial altitude are chips on a DEPARTURE Strip; the radar vector is one on ARRIVAL/OVERFLIGHT. See §4B.
   - **MTR fields** — the military training route a flight is on, where it enters and leaves, and the altitude it wants after exit. See §4C.
@@ -311,7 +311,9 @@ Bay when it moved within one Position.
 
 ### The fields, and the `▼` button
 
-Each Position sees the fields it works, not all of them: Tower sees HOOK and ORDNANCE, APP and CTR
+Each Position sees the fields it works, not all of them: Tower sees HOOK and ORDNANCE (ORDNANCE is always on Tower's face; on APP, CTR and mission lines it joins the
+face only once it is not CLEAN, and is always one `▼` away: a pilot reports hung ordnance to whoever they
+are talking to, H55), APP and CTR
 see FREQ, CTR sees the TOFI fields, the airfield Positions see the runway. TYPE already carries the
 aircraft and wake, so they have no fields of their own; CID and TAIL are on no Strip. The full
 table is in `docs/adr/0056`.
@@ -466,7 +468,7 @@ FDR {
     landingRunway                                                   — ARRIVAL-role field
   }
   military: {                                                       — WP6, guide §6.4's military extension namespace (docs/adr/0052)
-    ordnanceState ('CLEAN'|'LOADED'|'HUNG'|'EXPENDED')              — Block 3G, a picker. Recorded now; §9.5's hung-ordnance advisory is not built yet
+    ordnanceState ('CLEAN'|'LOADED'|'HUNG'|'EXPENDED')              — Block 3G, a picker. Setting HUNG raises the advisory chip (below)
     hookRequired (bool)                                             — Block 3F, a ✓ toggle. Means this aircraft REQUIRES arresting gear, not merely that it has a tailhook
     alertStatus ('NONE'|'ALERT'|'SCRAMBLE')                         — no Block yet; §9.6 picks one
     mtr: { designator, entryFix, entryTimeUtc,
@@ -487,8 +489,9 @@ FDR {
 - **`assigned`** — "what ATC has actually granted" (clearance, release state/timing, ATIS code, movement times). This is the bucket that changes as a flight progresses through the departure sequence.
 - **`airspace`** — WP4A only, a delegated-airspace direction, orthogonal to everything else.
 - **`military`** — guide §6.4's military extension namespace. Two single fields are live and enterable from the Strip: **Block 3G (`ORDNANCE`)**, a four-value picker, and **Block 3F (`HOOK`)**, a ✓ toggle; so are the six MTR fields (§4C). Both sit in the 3-family beside aircraft type and tail number, because they are facts about the airframe, and both are on DEPARTURE, ARRIVAL and OVERFLIGHT Strips. Everything else in the object is present but unwritable — the field exists so its arrival later is not a schema change, and the server refuses a write to it by name rather than ignoring one.
-  - **`HOOK` ✓ means the aircraft requires arresting gear.** It is not "has a tailhook". §9.7's gear check will read it that way. DCS does not simulate arresting wires, so the runway's gear is kept as data only and nothing compares `HOOK` with it yet.
-  - **Setting `ORDNANCE` to `HUNG` raises no advisory yet.** It is recorded, audited and broadcast; the runway-selection advisory the guide asks for is §9.5's deliverable and is not built. Tell the tower by voice, as now.
+  - **`HOOK` ✓ means the aircraft requires arresting gear.** It is not "has a tailhook". The `HOOK` chip (§8G) reads it that way, and only when a runway has configured gear. DCS does not simulate arresting wires, so the runway's gear is kept as data only, and Incirlik has none configured.
+  - **Setting `ORDNANCE` to `HUNG` raises an amber `HUNG` chip on every Position's Strip for that flight** (and on the mission line, which shares the FDR), with one reason line: *"Hung ordnance. SOURCE practice: after landing, taxi to Hot cargo pad; the runway is the controller's call. Runway 05/23 (05) assigned."* On a departure it says "if it returns". The runway named is whatever the Strip resolves to (its runway Rack, then 8A/8B, then the active end); the line never recommends one, and the pad is a name with no position. **It is advice only: it never disables the next-step button, never reorders a queue, and the flight lands, taxis and drops as usual.** Set `CLEAN` or `EXPENDED` when the pilot reports the store safe and the chip goes. Nothing is raised for `LOADED`. With no field state (a Facility with no inventory) the line reads "The hot cargo pad is shown when field state is available."
+  - **ORDNANCE is on the mission line too** (`3G` on `MISSION`, H55) because it is the same field as on the ATC twin. HOOK is not: it gates a runway, which a mission line never uses.
   - The guide numbers these `M14`/`M15` in its §6.4 table. **Those numbers are not used as Block ids here** — the `M`-prefix belongs to the MISSION Strip's own Block Map, which uses `M1`–`M8` with different meanings. The mapping between the guide's numbers and this system's Block ids is in `docs/adr/0052`.
 - **`trackRef`** — permanently null, and kept only so its absence isn't a schema change later. The correlation lives in its own store keyed by `fdrId`, because one flight can have several Strips and they are all the same aircraft — see §8C.
 
