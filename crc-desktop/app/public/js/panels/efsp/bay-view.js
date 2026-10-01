@@ -3104,3 +3104,7 @@ export function renderAllOpenEfspBays() {
     for (const { containerEl, bayId } of _openBayContainers) renderBay(containerEl, bayId);
   });
 }
+
+// ESM-1 (S-ESM1b): the unit tests replaced these globals to count calls; these are those seams.
+export function _setRenderAllOpenEfspBaysForTest(fn) { renderAllOpenEfspBays = fn; }
+export function _setSelectEfspStripByIdForTest(fn) { selectEfspStripById = fn; }

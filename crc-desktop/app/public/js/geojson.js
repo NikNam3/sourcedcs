@@ -935,3 +935,6 @@ function _doUpdateMap() {
   updateRadarBadge();
   if (typeof updateTrackPanel === 'function') updateTrackPanel();
 }
+
+// ESM-1 (S-ESM1b): the unit tests replaced the global updateMap to count calls; this is that seam.
+export function _setUpdateMapForTest(fn) { updateMap = fn; }
