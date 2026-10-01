@@ -32,6 +32,7 @@
 // Board, so there is no `rules` object on the path it takes, and threading one
 // through purely for a class check would be more indirection than it removes.
 const permission = require('./permission');
+const readScope = require('./read-scope');
 
 const VERSION = 1;
 
@@ -179,7 +180,7 @@ function _subject(msg) {
 function handleMessage(ctx, session, msg, persist) {
   switch (msg.type) {
     case 'efsp-mutation':      return _handleMutation(ctx, session, msg, persist);
-    case 'efsp-resync':        return _handleResync(ctx, msg);
+    case 'efsp-resync':        return _handleResync(ctx, session, msg);
     case 'efsp-set-positions': return _handleSetPositions(ctx, session, msg, persist);
     case 'efsp-airspace-mutation': return _handleAirspaceMutation(ctx, session, msg, persist);
     case 'efsp-correlation-mutation': return _handleCorrelationMutation(ctx, session, msg, persist);
@@ -320,16 +321,21 @@ function _handleMutation(ctx, session, msg, persist) {
  * in the middle step; retention removing Strips (L24) only changes what
  * getDeltaSince reports as `gone`.
  */
-function _handleResync(ctx, msg) {
+function _handleResync(ctx, session, msg) {
   // 1. Resolve the Board.
   const facilityId = msg.facilityId || ctx.facilityConfig.DEFAULT_FACILITY_ID;
   const boardStore = ctx.boardStoreFor(facilityId);
   const positionStore = ctx.positionStoreFor(facilityId);
-  if (!boardStore || !positionStore) return { ack: _snapshotMessage(ctx) };
+  if (!boardStore || !positionStore) return { ack: _snapshotMessage(ctx, session) };
+
+  // A session that reads only what it owns (docs/adr/0080) always gets the
+  // filtered SNAPSHOT: the ring replays unfiltered history, and a snapshot is
+  // the other of §5.6's two answers, so the rule of two paths still holds.
+  if (readScope.isOwned(readScopeOf(ctx, session))) return { ack: _snapshotMessage(ctx, session) };
 
   // 2. Decide: delta or snapshot.
   const lastSeq = Number.isFinite(msg.lastBoardSeq) ? msg.lastBoardSeq : -1;
-  if (!_deltaCanServe(boardStore, msg.boardEpoch, lastSeq)) return { ack: _snapshotMessage(ctx) };
+  if (!_deltaCanServe(boardStore, msg.boardEpoch, lastSeq)) return { ack: _snapshotMessage(ctx, session) };
 
   // 3. Build the delta.
   const delta = boardStore.getDeltaSince(lastSeq);
@@ -645,6 +651,8 @@ function _marsaDelta(marsaStore, relations) {
   };
 }
 
+function facilityConfig_positionIds(ctx, facilityId) { return ctx.facilityConfig.getPositionSet(facilityId); }
+
 function _handleSetPositions(ctx, session, msg, persist) {
   const facilityId = msg.facilityId || ctx.facilityConfig.DEFAULT_FACILITY_ID;
   const positionStore = ctx.positionStoreFor(facilityId);
@@ -653,10 +661,18 @@ function _handleSetPositions(ctx, session, msg, persist) {
     return { ack: { version: VERSION, type: 'efsp-positions-ack', facilityId, held: [], warnings: [], reason: 'VALIDATION_ERROR', detail: `unknown facilityId: ${facilityId}` } };
   }
   const held = Array.isArray(msg.held) ? msg.held : [];
+  const occupiedBefore = new Set(facilityConfig_positionIds(ctx, facilityId).filter(id => positionStore.isOccupied(id)));
   const { held: actuallyHeld, vacated } = positionStore.setHeldPositions(session.controllerId, session.who, held);
 
   const warnings = [];
   const reassignedIds = [];
+  // F10: a Position that was empty and now has a Primary gets back the Strips
+  // that were routed away from it (docs/adr/0080).
+  for (const positionId of actuallyHeld) {
+    if (!occupiedBefore.has(positionId) && positionStore.isOccupied(positionId)) {
+      reassignedIds.push(...boardStore.returnCoveredStrips(positionId));
+    }
+  }
   for (const positionId of vacated) {
     if (positionStore.isOccupied(positionId)) continue; // another controller is now Primary — nothing to route
     const owned = boardStore.getAll().filter(s => s.ownerPositionId === positionId && s.state !== 'DROPPED');
@@ -664,8 +680,11 @@ function _handleSetPositions(ctx, session, msg, persist) {
 
     const covering = positionStore.coveringPositionFor(positionId);
     if (covering) {
-      reassignedIds.push(...boardStore.reassignPositionStrips(positionId, covering));
-      warnings.push({ positionId, count: owned.length, routedTo: covering });
+      const moved = boardStore.reassignPositionStrips(positionId, covering);
+      reassignedIds.push(...moved);
+      const warning = { positionId, count: owned.length, routedTo: covering };
+      if (moved.unplaced && moved.unplaced.length) warning.unplaced = moved.unplaced.length; // no Bay of the covering Position fits: they stay where they were
+      warnings.push(warning);
     } else {
       // Defect D19 boundary: the covering chain bottomed out with nobody
       // occupying any link. MUST be a visible, distinct condition — never
@@ -701,6 +720,91 @@ function _handleSetPositions(ctx, session, msg, persist) {
   };
 }
 
+// ── The read scope (docs/adr/0080) ───────────────────────────────────────────
+
+/**
+ * What `session` is sent of the flights, from what it holds NOW at every
+ * Facility (nothing is cached, so nothing goes stale). A pure function of the
+ * PositionStores and permission.js's capability table.
+ */
+function readScopeOf(ctx, session) {
+  if (!session || !session.controllerId) return { kind: readScope.ALL };
+  const held = [];
+  for (const facilityId of ctx.facilityConfig.getFacilityIds()) {
+    const positionStore = ctx.positionStoreFor(facilityId);
+    if (!positionStore) continue;
+    for (const positionId of positionStore.heldBy(session.controllerId)) held.push({ facilityId, positionId });
+  }
+  return readScope.scopeOf(held, permission.readScopeFor);
+}
+
+/** Every live Strip on every Board, stamped with its Facility (what the visibility sets are computed from). */
+function _liveStamped(ctx) {
+  const out = [];
+  for (const facilityId of ctx.facilityConfig.getFacilityIds()) {
+    const boardStore = ctx.boardStoreFor(facilityId);
+    if (!boardStore) continue;
+    for (const s of boardStore.getAll()) if (s.state !== 'DROPPED') out.push({ ...s, facilityId });
+  }
+  return out;
+}
+
+/**
+ * The message this session is to be sent for `msg`: the SAME object for a
+ * session that reads everything (the fast path), a filtered copy for one that
+ * reads only what it owns, or null when nothing is left to send.
+ */
+function filterForSession(ctx, session, msg) {
+  if (!msg) return msg;
+  const scope = readScopeOf(ctx, session);
+  if (scope.kind === readScope.ALL) return msg;
+  switch (msg.type) {
+    case 'efsp-snapshot':
+      return readScope.filterSnapshot(msg, scope);
+    case 'efsp-board-delta':
+      return readScope.filterBoardDelta(msg, scope, readScope.visibleFdrIdsOf(scope, _liveStamped(ctx)), (id) => ctx.fdrStore.getFdr(id));
+    case 'efsp-correlation-delta':
+      return readScope.filterCorrelationDelta(msg, scope, readScope.visibleFdrIdsOf(scope, _liveStamped(ctx)));
+    case 'efsp-marsa-delta':
+      return readScope.filterMarsaDelta(msg, scope, readScope.visibleFdrIdsOf(scope, _liveStamped(ctx)));
+    case 'efsp-alerts': {
+      const live = _liveStamped(ctx);
+      const byKey = new Map(live.map(s => [`${s.facilityId}:${s.stripId}`, s]));
+      return readScope.filterAlerts(msg, scope, readScope.visibleFdrIdsOf(scope, live),
+        (facilityId, stripId) => readScope.isStripVisible(scope, byKey.get(`${facilityId}:${stripId}`)));
+    }
+    default:
+      return msg;
+  }
+}
+
+/**
+ * What else an OWNED session needs alongside a filtered board delta: the
+ * correlation record and the MARSA relations of the Strips in it, which the
+ * delta cannot carry. A Strip that has just become visible (handed to the
+ * session) has had its record filtered out of every earlier delta, and a
+ * record only changes when the flight does, so waiting for the next change
+ * would leave the handed line uncorrelated on screen. Empty for a session that
+ * reads everything, and for a delta with no visible Strip.
+ * @returns {object[]} messages to send after `filtered`
+ */
+function supplementFor(ctx, session, filtered) {
+  if (!filtered || filtered.type !== 'efsp-board-delta') return [];
+  const scope = readScopeOf(ctx, session);
+  if (scope.kind === readScope.ALL) return [];
+  const fdrIds = new Set(((filtered.strips || {}).updated || []).map(s => s.fdrId).filter(Boolean));
+  if (fdrIds.size === 0) return [];
+  const out = [];
+  const records = ctx.correlationStore ? [...fdrIds].map(id => ctx.correlationStore.getCorrelation(id)).filter(Boolean) : [];
+  if (records.length) out.push({ version: VERSION, type: 'efsp-correlation-delta', correlations: { updated: records } });
+  const relations = ctx.marsaStore ? ctx.marsaStore.getAll().filter(r => (r.participants || []).some(id => fdrIds.has(id))) : [];
+  if (relations.length) out.push(_marsaDelta(ctx.marsaStore, relations));
+  return out;
+}
+
+/** Changes exactly when what `session` may see of the flights changes. */
+function readScopeKey(ctx, session) { return readScope.scopeKey(readScopeOf(ctx, session)); }
+
 /**
  * WP4A: sends every Facility's strips/positions/bays in one message (each
  * record stamped with `facilityId`), since a client can now hold Positions
@@ -708,7 +812,12 @@ function _handleSetPositions(ctx, session, msg, persist) {
  * aliases for INCIRLIK specifically — `boardSeqByFacility`/`facilities` are
  * the real, general shape.
  */
-function _snapshotMessage(ctx) {
+function _snapshotMessage(ctx, session = null) {
+  const full = _fullSnapshotMessage(ctx);
+  return session ? readScope.filterSnapshot(full, readScopeOf(ctx, session)) : full;
+}
+
+function _fullSnapshotMessage(ctx) {
   const { fdrStore, facilityConfig } = ctx;
   const facilityIds = facilityConfig.getFacilityIds();
 
@@ -983,4 +1092,4 @@ function _handleAtoMutation(ctx, session, msg, persist) {
   };
 }
 
-module.exports = { handleMessage, snapshotMessage: _snapshotMessage, RESYNC_RING_WINDOW };
+module.exports = { handleMessage, snapshotMessage: _snapshotMessage, filterForSession, supplementFor, readScopeKey, readScopeOf, RESYNC_RING_WINDOW };

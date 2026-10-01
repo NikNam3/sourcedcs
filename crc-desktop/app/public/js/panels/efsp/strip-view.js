@@ -549,6 +549,27 @@ function _stripMenuItems(strip) {
   const answerFirst = 'answer the pending proposal first';
 
   // Start
+  // H2 / H40 (docs/adr/0080): an AIC- or JTAC-held line goes back to TAC_C2
+  // from here, since a controller holding only that Position has no TAC_C2 tab
+  // to drag it to. One item per target.
+  for (const to of HAND_BACK_TO[strip.ownerPositionId] || []) {
+    const bay = _handBackBayFor(strip, to);
+    const holdsOwner = acting === strip.ownerPositionId; // acting as another Position cannot transfer this line
+    const ok = holdsOwner && !!bay && !pendingIn;
+    items.push({ group: 'Start', key: `hand-back-${to}`, label: `Hand back to ${to}`, cls: 'efsp-hand-back-btn', enabled: ok,
+      reason: !holdsOwner ? `you do not hold ${strip.ownerPositionId}` : !bay ? `${to} has no Bay for this line` : pendingIn ? answerFirst : '',
+      title: `Transfer this line back to ${to}`,
+      run: () => _dispatchHandBack(strip, to) });
+  }
+  // U7 (docs/adr/0080): the proposer can always leave its own exchange — a link
+  // the other side can no longer answer must not strand the Strip.
+  if (acting === strip.ownerPositionId && strip.coordination && !strip.coordination.mintedForCoordination
+      && (strip.coordination.state === 'PROPOSED' || strip.coordination.state === 'ACTIVE')) {
+    const open = strip.coordination.state === 'PROPOSED';
+    items.push({ group: 'Start', key: 'coordination-cancel', label: open ? 'Cancel proposal' : 'End coordination', cls: 'efsp-coordinate-btn', enabled: true,
+      title: open ? 'Withdraw the open proposal' : 'Close this exchange on your Strip (the other side keeps its own)',
+      run: () => _dispatchCoordination(strip, strip.coordination.primitive, 'CANCEL') });
+  }
   if (COORDINATION_TARGETS[strip.ownerPositionId]) {
     const ok = _canProposeCoordination(strip) && !!acting;
     let reason = '';

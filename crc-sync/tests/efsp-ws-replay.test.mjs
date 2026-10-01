@@ -190,7 +190,7 @@ test('every efsp-board-delta carries boardEpoch', () => {
   // ws-hub's broadcastEfspBoardDelta (the NLA-status monitor, and L24's archiver).
   const hub = new WsHub({ trackStore: { getAll: () => [] }, collabStore: {}, efsp });
   const sent = [];
-  hub._broadcast = (m) => sent.push(m);
+  hub._broadcastEfsp = (m) => sent.push(m);
   hub.broadcastEfspBoardDelta({ facilityId: 'INCIRLIK', boardSeq: efsp.boardStoreFor('INCIRLIK').currentSeq, strips: [] });
   cases.push(['ws-hub broadcastEfspBoardDelta', sent[0], 'INCIRLIK']);
 

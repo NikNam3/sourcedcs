@@ -1668,6 +1668,34 @@ const TOFI_COUNTERPARTS = {
   TAC_C2: [{ facilityId: 'CENTER', positionId: 'CTR' }],
   GCI:    [{ facilityId: 'CENTER', positionId: 'CTR' }],
 };
+// H2 / H40 (docs/adr/0080): the Positions a working tactical Position may hand
+// a line back to — the only place it may transfer one. A mirror of
+// permission.js's TACTICAL_CAPABILITIES[*].handBackTo, held to it by
+// efsp-tactical-client.test.js (the efsp-nla-client.test.js precedent). A
+// holder of only JTAC has no TAC_C2 tab to drag to, so the ⋯ menu offers it.
+const HAND_BACK_TO = { AIC: ['TAC_C2'], JTAC: ['TAC_C2'] };
+
+/**
+ * The Bay a hand-back lands in: the receiving Position's Bay implying the
+ * Strip's state, else its first Bay implying none — the client mirror of
+ * board-store.js's _bayForNewOwner (the server rule is authoritative).
+ * @returns {{bayId:string, rackId:string}|null}
+ */
+function _handBackBayFor(strip, toPositionId) {
+  const bays = getEfspBays().filter(b => b.positionId === toPositionId && (!b.facilityId || b.facilityId === strip.facilityId));
+  const bay = bays.find(b => b.impliesState === strip.state) || bays.find(b => !b.impliesState) || null;
+  return bay ? { bayId: bay.bayId, rackId: (bay.rackIds && bay.rackIds[0]) || 'main' } : null;
+}
+
+function _dispatchHandBack(strip, toPositionId) {
+  strip = getEfspStrip(strip.stripId) || strip; // F-107 — see _dispatchCoordination
+  const actingPositionId = _resolveActingPositionId(strip);
+  if (actingPositionId !== strip.ownerPositionId) return; // only its owner hands a line on
+  const bay = _handBackBayFor(strip, toPositionId);
+  if (!bay) return;
+  sendEfspMutation(actingPositionId, strip, { kind: 'TransferStrip', toPositionId, bayId: bay.bayId, rackId: bay.rackId });
+}
+
 // D12 audit note: TAC_C2/AIC/GCI/JTAC must NEVER appear as keys in
 // COORDINATION_TARGETS above — that's what structurally prevents a
 // HANDOFF/POINT_OUT/TRAFFIC/OPERATIONAL_REQUEST/AIT button from ever
@@ -1729,9 +1757,21 @@ const _tofiRegimeChoice = new Map();
 // Strip's select / flip / highlight gestures underneath it.
 const STRIP_CONTROL_SELECTOR = '.efsp-block-editable, .efsp-block-input, button, select, option, label, input, textarea';
 
+// B2 (docs/adr/0080): AIC "works under TAC_C2's TOFI", so on an AIC-held line
+// the TOFI dialogue is TAC_C2's. Mirror of permission.js's TACTICAL_CAPABILITIES
+// `tofiAnsweredBy`, held to it by the drift test in efsp-ui-reachability.test.js.
+const TOFI_ANSWERED_BY = { AIC: 'TAC_C2' };
+
+/** The Position a TOFI answer is sent as: the owner's TOFI answerer when this controller holds it, else the usual resolution. */
+function _tofiActingPositionId(strip) {
+  const answerer = strip.role === 'MISSION' ? TOFI_ANSWERED_BY[strip.ownerPositionId] : null;
+  if (answerer && getActingPositions().includes(answerer)) return answerer;
+  return _resolveActingPositionId(strip);
+}
+
 function _dispatchTofi(strip, action, direction, overrides = {}) {
   strip = getEfspStrip(strip.stripId) || strip; // F-107 — see _dispatchCoordination
-  const actingPositionId = _resolveActingPositionId(strip);
+  const actingPositionId = action === 'PROPOSE' ? _resolveActingPositionId(strip) : _tofiActingPositionId(strip);
   if (!actingPositionId) return;
   // Same class as the coordination responses above (F-101) — accepting or
   // rejecting a TOFI takes the answer buttons off the Strip and reflows the

@@ -309,7 +309,9 @@ const DEFAULT_TACTICAL_CONFIG = {
   // it and was reverted). An unoccupied TAC_C2 with no successor is an
   // accepted "warn the controller, route nowhere" stranding case per guide
   // §4.8.6 rule 5 ("warn, do not block"), not a silent gap.
-  coveringChain: { AIC: 'TAC_C2', GCI: 'TAC_C2' },
+  // JTAC -> TAC_C2 too (docs/adr/0080): a JTAC who walks away leaves the line
+  // with the Position that handed it over, not stranded with nobody.
+  coveringChain: { AIC: 'TAC_C2', GCI: 'TAC_C2', JTAC: 'TAC_C2' },
   // [SOURCE-DEFINED] — a Military Radar Unit in DCS works off the airborne
   // picture: own-coalition AWACS and fighter radars, and the datalink, which
   // names its own aircraft without a radar return (docs/adr/0059).

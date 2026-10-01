@@ -137,7 +137,7 @@ class WsHub {
   }
 
   broadcastEfspBoardDelta(payload) {
-    this._broadcast({
+    this._broadcastEfsp({
       version: VERSION, type: 'efsp-board-delta',
       boardSeq: payload.boardSeq,
       // Every board-delta names its Board lifetime (docs/adr/0081). The
@@ -193,8 +193,42 @@ class WsHub {
     const stca = session && session.coverage && session.coverage.stca
       ? (a.stca || []).filter(c => seen.has(String(c.a)) && seen.has(String(c.b)))
       : [];
-    // Obligations (docs/adr/0067) go to everybody for now, like conformance.
-    return { version: VERSION, type: 'efsp-alerts', conformance: a.conformance || [], stca, obligations: a.obligations || [] };
+    // Obligations (docs/adr/0067) and conformance are about flights, so a
+    // session that reads only what it owns (docs/adr/0080) gets its own
+    // flights' alerts and nobody else's.
+    const msg = { version: VERSION, type: 'efsp-alerts', conformance: a.conformance || [], stca, obligations: a.obligations || [] };
+    return this._efspFilter(session, msg) || msg;
+  }
+
+  /** What `session` is sent for an EFSP message: the same object, a filtered copy, or null (docs/adr/0080). */
+  _efspFilter(session, msg) {
+    return session && this._efsp && typeof this._efsp.filterForSession === 'function'
+      ? this._efsp.filterForSession(session, msg)
+      : msg;
+  }
+
+  /**
+   * Every EFSP broadcast goes through here rather than `_broadcast`, so a
+   * session that reads only what it owns is sent its own flights only. A
+   * session that reads everything is sent the very same object, and the JSON is
+   * built once per distinct message however many sessions share it.
+   */
+  _broadcastEfsp(msg) {
+    if (!this._wss) return;
+    const encoded = new Map(); // message object -> its JSON
+    for (const client of this._wss.clients) {
+      if (client.readyState !== WebSocket.OPEN) continue;
+      const out = this._efspFilter(this._sessions.get(client), msg);
+      if (!out) continue;
+      let payload = encoded.get(out);
+      if (payload === undefined) { payload = JSON.stringify(out); encoded.set(out, payload); }
+      client.send(payload);
+      // A filtered board delta may carry a Strip that has only now become this
+      // session's: its correlation and MARSA records come with it.
+      if (out !== msg && msg.type === 'efsp-board-delta' && this._efsp && typeof this._efsp.supplementFor === 'function') {
+        for (const extra of this._efsp.supplementFor(this._sessions.get(client), out)) client.send(JSON.stringify(extra));
+      }
+    }
   }
 
   /**
@@ -206,7 +240,7 @@ class WsHub {
   setOnEfspChange(fn) { this._onEfspChange = fn; }
 
   broadcastEfspCorrelationDelta(payload) {
-    this._broadcast({
+    this._broadcastEfsp({
       version: VERSION, type: 'efsp-correlation-delta',
       correlations: { updated: payload.correlations || [] },
       stats: payload.stats,
@@ -461,7 +495,7 @@ class WsHub {
     ws.send(JSON.stringify(this._coverageMsg(session)));
     this._refreshLabels();
     ws.send(JSON.stringify(this._pictureSnapshot(session)));
-    if (this._efsp) ws.send(JSON.stringify(this._efsp.snapshotFor()));
+    if (this._efsp) ws.send(JSON.stringify(this._efsp.snapshotFor(session)));
     // The current conformance, conflict and obligation alerts (docs/adr/0058,
     // 0067) — always, even when empty — so a client
     // that connects mid-conflict sees it without waiting for the next change.
@@ -557,17 +591,20 @@ class WsHub {
     // immediately, not on the 500ms track-delta tick (see efsp-ws.js's
     // module comment / docs/adr/0004-immediate-board-broadcast.md).
     if (this._efsp) {
+      // What this session may see of the flights before and after: declaring a
+      // different held set can change it (docs/adr/0080).
+      const scopeBefore = msg.type === 'efsp-set-positions' && this._efsp.readScopeKey ? this._efsp.readScopeKey(session) : null;
       const result = this._efsp.handleMessage(session, msg);
       if (result) {
         if (result.ack) ws.send(JSON.stringify(result.ack));
-        if (result.broadcast) this._broadcast(result.broadcast);
+        if (result.broadcast) this._broadcastEfsp(result.broadcast);
         // WP4A gap-closure (docs/adr/0022) — a coordination primitive can
         // touch a Strip in the PEER Facility's own Board (a brand-new
         // replica on PROPOSE, an existing one's coordination state on
         // ACCEPT/REJECT/STAND_BY); that needs its own board-delta, scoped
         // to the peer facilityId, same immediate-broadcast treatment as
         // the primary one above — see efsp-ws.js's own comment.
-        if (result.peerBroadcast) this._broadcast(result.peerBroadcast);
+        if (result.peerBroadcast) this._broadcastEfsp(result.peerBroadcast);
         // WP6 (docs/adr/0051) — a Strip Mutation can void or retire a MARSA
         // relation as a side effect (§9.2 rule 2's interlock, or a flight
         // ending). A relation is not a Strip and rides no Board's sequence, so
@@ -575,7 +612,7 @@ class WsHub {
         // §9.2 rule 2 requires the void to "alert every participant Strip", and
         // waiting for the next MARSA op to carry it would be docs/adr/0022's
         // bug again — a correct server-side change no client ever hears about.
-        if (result.marsaBroadcast) this._broadcast(result.marsaBroadcast);
+        if (result.marsaBroadcast) this._broadcastEfsp(result.marsaBroadcast);
         // After the broadcasts, so a client sees the Strip change before the
         // alert change. Guarded: a monitor bug must never cost the sender's
         // round trip.
@@ -588,7 +625,17 @@ class WsHub {
         // inside efsp-ws.js because coverage is a property of the connection,
         // not of the Board, and efsp-ws.js has no session concept beyond the
         // controllerId it is handed.
-        if (msg.type === 'efsp-set-positions') this._refreshCoverage(ws, session);
+        if (msg.type === 'efsp-set-positions') {
+          this._refreshCoverage(ws, session);
+          // Giving up TAC_C2 while keeping JTAC narrows what this session may
+          // see, and taking it back widens it: the Board it already holds is
+          // wrong either way, so it gets a fresh snapshot of what it may see
+          // now (and the alerts scoped the same way).
+          if (scopeBefore !== null && this._efsp.readScopeKey(session) !== scopeBefore && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(this._efsp.snapshotFor(session)));
+            ws.send(JSON.stringify(this._efspAlertsMsg(session)));
+          }
+        }
         return;
       }
     }

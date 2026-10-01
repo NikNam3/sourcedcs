@@ -45,7 +45,7 @@ const nla = require('./nla');
 const blockMap = require('./block-map');
 const facilityConfig = require('./facility-config');
 const coordination = require('./coordination');
-const { handleMessage, snapshotMessage } = require('./efsp-ws');
+const { handleMessage, snapshotMessage, filterForSession, supplementFor, readScopeKey } = require('./efsp-ws');
 const { NlaStatusMonitor } = require('./nla-status-monitor');
 const { Archiver } = require('./archiver');
 const { statePaths, ensureDirFor } = require('../state-paths');
@@ -160,6 +160,11 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
       canCreateStripRole:  (actingPositionId, role) => permission.canCreateStripRole(actingPositionId, role),
       canActOnState:       (actingPositionId, role, state) => permission.canActOnState(actingPositionId, role, state),
       isSelfCoordinated:   (controllerId, positionId) => positionStore.isSelfCoordinated(controllerId, positionId),
+      // docs/adr/0080 — the tactical capability table and the Bay lookups the
+      // ownership, hand-back and covering rules read.
+      baysFor:             (positionId) => facilityConfig.getBaysFor(positionId, facilityId),
+      handBackTargetsFor:  (positionId) => permission.handBackTargetsFor(positionId),
+      mayActBesideOwner:   (actingPositionId, strip, op) => permission.mayActBesideOwner(actingPositionId, strip, op),
       // WP4A (docs/adr/0015) — this Facility's own id, and a lazy accessor
       // to the OTHER Facility's BoardStore instance for cross-Facility
       // coordination. Lazy (a closure over `facilities`, resolved at call
@@ -341,7 +346,16 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
     },
 
     /** Sent once at connect, appended to ws-hub.js's existing connect-time send order. */
-    snapshotFor: () => snapshotMessage(ctx),
+    snapshotFor: (session = null) => snapshotMessage(ctx, session),
+
+    /**
+     * The message `session` is to be sent for an EFSP broadcast `msg` (docs/adr/0080):
+     * the same object when it reads everything, a filtered copy when it reads only
+     * what it owns, null to skip. And a key that changes when a session's scope does.
+     */
+    filterForSession: (session, msg) => filterForSession(ctx, session, msg),
+    supplementFor: (session, filtered) => supplementFor(ctx, session, filtered),
+    readScopeKey: (session) => readScopeKey(ctx, session),
 
     archiver,
   };

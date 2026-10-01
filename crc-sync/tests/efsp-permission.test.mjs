@@ -7,7 +7,9 @@ const {
   DEPARTURE_STATE_OWNERS, ARRIVAL_STATE_OWNERS, MISSION_STATE_OWNERS,
   OP_KINDS, COORDINATION_OP_KINDS, APP_CTR_ONLY_OP_KINDS, TOFI_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS,
   NO_STRIP_OP_CLASSES,
+  TACTICAL_CAPABILITIES, READ_SCOPES, handBackTargetsFor, tofiAnswererFor, readScopeFor,
 } = await import('../src/efsp/permission.js');
+const facilityConfig = (await import('../src/efsp/facility-config.js')).default;
 
 test('canMutate has exactly two parameters — structurally cannot accept a "held set" (guards defect D21 by construction)', () => {
   assert.equal(canMutate.length, 2);
@@ -103,8 +105,8 @@ test('TAC_C2 and GCI may CreateStrip (they originate MISSION Strips); AIC and JT
   assert.equal(canMutate('JTAC', 'CreateStrip'), false);
 });
 
-test('JTAC is granted no op kind at all — "MISSION (read-only)" is enforced by an empty grant set, not a separate mechanism', () => {
-  for (const op of OP_KINDS) assert.equal(canMutate('JTAC', op), false, op);
+test('JTAC is granted exactly one op kind, TransferStrip (H40, docs/adr/0080): it hands a line back and does nothing else', () => {
+  for (const op of OP_KINDS) assert.equal(canMutate('JTAC', op), op === 'TransferStrip', op);
 });
 
 test('tofiCounterparts resolves CTR to both TAC_C2 and GCI, and each of those back to CTR only', () => {
@@ -377,7 +379,7 @@ test('an MRU may declare MARSA — D12 is about ATC service, and MARSA is its op
   // authority saying it will separate its OWN aircraft, which is precisely the
   // MRU's assertion to make — and §9.2 rule 1 puts the declaration with the
   // tanker, verbally, so whichever Position takes that call records it.
-  for (const id of ['TAC_C2', 'GCI', 'AIC', 'JTAC']) {
+  for (const id of ['TAC_C2', 'GCI', 'AIC']) {
     assert.equal(canDeclareMarsa(id), true, id);
     for (const opKind of COORDINATION_OP_KINDS) {
       assert.equal(canMutate(id, opKind), false, `${id} must still be refused ${opKind}`);
@@ -442,4 +444,39 @@ test('D21 regression: a controller holding both TWR and APP cannot satisfy Begin
   assert.equal(canActOnFieldState('APP', 'BeginRunwayChange'), false);
   assert.equal(canActOnFieldState('APP', 'AckRunwayChange'), true);
   assert.equal(canActOnFieldState('TWR', 'BeginRunwayChange'), true);
+});
+
+// ── L23: the tactical capability table and B5 (docs/adr/0080) ───────────────
+
+test('TACTICAL_CAPABILITIES: every row names a Position of TACTICAL, values are in their enums, hand-back targets are TACTICAL Positions', () => {
+  const tactical = new Set(facilityConfig.getPositionSet('TACTICAL'));
+  for (const [positionId, row] of Object.entries(TACTICAL_CAPABILITIES)) {
+    assert.ok(tactical.has(positionId), `${positionId} is a TACTICAL Position`);
+    assert.ok(READ_SCOPES.includes(row.readScope), `${positionId} readScope`);
+    for (const target of row.handBackTo) assert.ok(tactical.has(target), `${positionId} hands back to ${target}`);
+    if (row.tofiAnsweredBy) assert.ok(tactical.has(row.tofiAnsweredBy), `${positionId} tofiAnsweredBy`);
+  }
+});
+
+test('the accessors read the table; a Position with no row gets the defaults', () => {
+  assert.deepEqual(handBackTargetsFor('JTAC'), ['TAC_C2']);
+  assert.deepEqual(handBackTargetsFor('AIC'), ['TAC_C2']);
+  assert.equal(handBackTargetsFor('TAC_C2'), null);
+  assert.equal(handBackTargetsFor('OPS'), null);
+  assert.equal(tofiAnswererFor('AIC'), 'TAC_C2');
+  assert.equal(tofiAnswererFor('JTAC'), null);
+  assert.equal(tofiAnswererFor('GCI'), null, 'GCI has its own TOFI grant and no row');
+  assert.equal(readScopeFor('JTAC'), 'OWNED');
+  for (const id of ['AIC', 'TAC_C2', 'GCI', 'OPS', 'CTR', 'NOBODY']) assert.equal(readScopeFor(id), 'ALL', id);
+});
+
+test('B5: a JTAC has no scope, so it correlates nothing and declares no MARSA; every other Position is unchanged', () => {
+  assert.equal(canCorrelate('JTAC'), false);
+  assert.equal(canDeclareMarsa('JTAC'), false);
+  for (const id of ['OPS', 'CD', 'GND', 'TWR', 'APP', 'CTR', 'TAC_C2', 'GCI', 'AIC']) {
+    assert.equal(canCorrelate(id), true, id);
+    assert.equal(canDeclareMarsa(id), true, id);
+  }
+  assert.equal(canCorrelate.length, 1);
+  assert.equal(canDeclareMarsa.length, 1);
 });

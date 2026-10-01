@@ -176,7 +176,7 @@ test('SCENARIO A1 AIC works a mission line it is handed, and nothing more (H2)',
   assert.equal(efsp.fdrStore.getFdr(off.fdrId).mission.packageId, 'PKG-A', 'AIC\'s annotation travels with the line');
 });
 
-test('SCENARIO A2 CTR asks for the exit while AIC holds the line — today only a hand-back unblocks it (B2)', () => {
+test('SCENARIO A2 CTR asks for the exit while AIC holds the line — AIC cannot answer it, and the TOFI exception is TAC_C2\'s only (B2)', () => {
   const efsp = freshEfsp();
   const c = crew(efsp, ALL);
   let { ctr, mission } = onStationUnderTofi(efsp, c, 'AIC12');
@@ -188,22 +188,16 @@ test('SCENARIO A2 CTR asks for the exit while AIC holds the line — today only 
   assert.equal(tac(efsp, m.stripId).tofiCoordination.direction, 'EXIT');
   assert.equal(tac(efsp, m.stripId).tofiCoordination.state, 'PROPOSED');
 
-  // Pinned as it is today (B2): nobody can answer the safety-critical
-  // direction (§4.6.3 rule 3) while AIC holds the line.
+  // AIC holds no TOFI grant (ADR 0025): the exchange is not its to answer.
   refused(act(efsp, c.AIC, 'AIC', tac(efsp, m.stripId), { kind: 'TOFI', action: 'ACCEPT' }),
     'PERMISSION_DENIED', null, 'AIC accepts the EXIT');
-  refused(act(efsp, c.TAC_C2, 'TAC_C2', tac(efsp, m.stripId), { kind: 'TOFI', action: 'ACCEPT' }),
-    'NOT_OWNER', null, 'TAC_C2 accepts the EXIT on an AIC-held line');
-
-  // The only way out: AIC hands it back, then TAC_C2 accepts.
-  mustAct(efsp, c.AIC, 'AIC', tac(efsp, m.stripId), {
-    kind: 'TransferStrip', toPositionId: 'TAC_C2', bayId: 'tac-c2-on-station', rackId: 'main',
-  });
-  mustAct(efsp, c.TAC_C2, 'TAC_C2', tac(efsp, m.stripId), { kind: 'TOFI', action: 'ACCEPT' });
-  assert.equal(ctrOf(efsp, ctr.stripId).tofiCoordination.state, 'COMPLETE');
+  // And the exception that lets TAC_C2 answer is TOFI-only: everything else on
+  // an AIC-held line is still AIC's, and the refusal says whose (Q9).
+  refused(act(efsp, c.TAC_C2, 'TAC_C2', tac(efsp, m.stripId), { kind: 'SetBlock', blockId: 'M2', value: 'PKG-X' }),
+    'NOT_OWNER', /AIC holds this Strip/, 'TAC_C2 SetBlock on an AIC-held line');
 });
 
-test('SCENARIO A2\' TAC_C2, whose TOFI it is, answers CTR\'s EXIT on a line AIC is working', { todo: 'L8 B2 — see docs/wip/L8.md' }, () => {
+test('SCENARIO A2\' TAC_C2, whose TOFI it is, answers CTR\'s EXIT on a line AIC is working', () => {
   const efsp = freshEfsp();
   const c = crew(efsp, ALL);
   let { ctr, mission } = onStationUnderTofi(efsp, c, 'AIC13');
@@ -230,12 +224,12 @@ test('SCENARIO A3 AIC walks away and the line routes to TAC_C2 (§4.8.6 rule 2)'
   assert.equal(mustAct(efsp, c.TAC_C2, 'TAC_C2', tac(efsp, m.stripId), { kind: 'InvokeNla' }).state, 'OFF_STATION',
     'the covering controller can work it');
 
-  // Pinned as it is today (B3): the owner moved, the Bay did not. TAC_C2 now
-  // owns a Strip sitting in AIC's Bay, which is not one TAC_C2's panel builds.
-  assert.equal(tac(efsp, m.stripId).bayId, 'aic-on-station');
+  // The Bay moves with the owner (B3, docs/adr/0080): the line was ON_STATION,
+  // so it lands in TAC_C2's On Station Bay.
+  assert.equal(tac(efsp, m.stripId).bayId, 'tac-c2-on-station');
 });
 
-test('SCENARIO A3\' a covering reassignment lands the line in a Bay the covering Position has', { todo: 'L8 B3 — see docs/wip/L8.md' }, () => {
+test('SCENARIO A3\' a covering reassignment lands the line in a Bay the covering Position has', () => {
   const efsp = freshEfsp();
   const c = crew(efsp, ALL);
   const m = toAic(efsp, c, taskedLine(efsp, c, 'VAC13'));
@@ -245,7 +239,7 @@ test('SCENARIO A3\' a covering reassignment lands the line in a Bay the covering
   assert.ok(baysOf('TAC_C2').includes(after.bayId), `TAC_C2 owns it but it sits in ${after.bayId}`);
 });
 
-test('SCENARIO A3\'\' the same holds at Incirlik: GND walks away and TWR gets the Strip in a TWR Bay', { todo: 'L8 B3 — see docs/wip/L8.md' }, () => {
+test('SCENARIO A3\'\' the same holds at Incirlik: GND walks away and TWR gets the Strip in a TWR Bay', () => {
   const efsp = freshEfsp();
   const c = crew(efsp, { OPS: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK' });
   const strip = mustAct(efsp, c.OPS, 'OPS', null, {
@@ -287,11 +281,11 @@ test('SCENARIO A5 a hand-off to an empty AIC is caught by TAC_C2, and the ack sa
   assert.equal(ack.ok, true, JSON.stringify(ack));
   assert.equal(ack.routedTo, 'TAC_C2', 'the sender is told the line came back to it');
   assert.equal(tac(efsp, line.stripId).ownerPositionId, 'TAC_C2');
-  // B3 again, by the other path: TAC_C2's line, in AIC's Bay.
-  assert.equal(tac(efsp, line.stripId).bayId, 'aic-on-station');
+  // B3 by the other path: the routed transfer lands in TAC_C2's own Bay.
+  assert.equal(tac(efsp, line.stripId).bayId, 'tac-c2-on-station');
 });
 
-test('SCENARIO A5\' a transfer is refused into a Bay that is not the receiving Position\'s', { todo: 'L8 B4 — see docs/wip/L8.md' }, () => {
+test('SCENARIO A5\' a transfer is refused into a Bay that is not the receiving Position\'s', () => {
   const efsp = freshEfsp();
   const c = crew(efsp, ALL);
   const line = taskedLine(efsp, c, 'BAY11');
@@ -347,7 +341,7 @@ test('SCENARIO A6 one controller holding CTR and AIC still gets no coordination 
     'NOT_HOLDING_POSITION', null, 'JTAC claiming AIC');
 });
 
-test('SCENARIO A7 AIC cannot move a line past its state with the SetState escape hatch (H2)', { todo: 'L8 B7 — see docs/wip/L8.md' }, () => {
+test('SCENARIO A7 AIC cannot move a line past its state with the SetState escape hatch (H2)', () => {
   const efsp = freshEfsp();
   const c = crew(efsp, ALL);
   const m = toAic(efsp, c, taskedLine(efsp, c, 'AIC14'));
@@ -401,7 +395,7 @@ test('SCENARIO J1 JTAC writes nothing on a line it has not been handed', () => {
   }), 'VALIDATION_ERROR', /not a valid TOFI counterpart/, 'TOFI to JTAC');
 });
 
-test('SCENARIO J2 TAC_C2 hands a line to JTAC and JTAC hands it back (H40)', { todo: 'L8 B1 — see docs/wip/L8.md' }, () => {
+test('SCENARIO J2 TAC_C2 hands a line to JTAC and JTAC hands it back (H40)', () => {
   const efsp = freshEfsp();
   const c = crew(efsp, ALL);
   const line = taskedLine(efsp, c, 'JT13');
@@ -418,7 +412,7 @@ test('SCENARIO J2 TAC_C2 hands a line to JTAC and JTAC hands it back (H40)', { t
   assert.equal(mustAct(efsp, c.TAC_C2, 'TAC_C2', tac(efsp, m.stripId), { kind: 'InvokeNla' }).state, 'OFF_STATION');
 });
 
-test('SCENARIO J3 a JTAC has no scope, so it neither binds a contact nor declares MARSA', { todo: 'L8 B5 — see docs/wip/L8.md' }, () => {
+test('SCENARIO J3 a JTAC has no scope, so it neither binds a contact nor declares MARSA', () => {
   const efsp = freshEfsp();
   const c = crew(efsp, ALL);
   const a = taskedLine(efsp, c, 'JT14');
@@ -441,7 +435,7 @@ test('SCENARIO J3 a JTAC has no scope, so it neither binds a contact nor declare
   assert.equal(marsa.ok, false, `JTAC declared MARSA: ${JSON.stringify(marsa)}`);
 });
 
-test('SCENARIO J4 a JTAC is sent only the Strips TAC_C2 has handed it (H40)', { todo: 'L8 B6 — see docs/wip/L8.md' }, () => {
+test('SCENARIO J4 a JTAC is sent only the Strips TAC_C2 has handed it (H40)', () => {
   const efsp = freshEfsp();
   const c = crew(efsp, ALL);
   const handed = handTo(efsp, c, taskedLine(efsp, c, 'JT16'), 'JTAC', 'jtac-mission');

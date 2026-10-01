@@ -202,7 +202,7 @@ test('sortie: two scramblers at once — both listed, each ground Strip flagged 
   await clearBoard();
 });
 
-test('OPS sets ALERT while it holds the Strip; once CD owns it, 14E is CD\'s like every Block (H56 finding)', async () => {
+test('OPS owns 14E on a departure at every state, whoever holds the Strip (H56, S-L13)', async () => {
   let s = mustAct(efsp, c.OPS, 'OPS', null, {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE',
     fdr: { ...DEPARTURE_FDR, callsign: 'COLT41' },
@@ -210,9 +210,15 @@ test('OPS sets ALERT while it holds the Strip; once CD owns it, 14E is CD\'s lik
   s = setAlert('OPS', s, 'ALERT');
   assert.equal(fdrOf(s.fdrId).military.alertStatus, 'ALERT');
   s = await advance(efsp, c.OPS, 'OPS', s);
-  const refused = act(efsp, c.OPS, 'OPS', fresh(s), { kind: 'SetBlock', blockId: '14E', value: 'SCRAMBLE' });
-  assert.equal(refused.ok, false);
-  assert.equal(refused.reason, 'NOT_OWNER');
+  // CD holds it now, and OPS still sets the alert status.
+  const scrambled = act(efsp, c.OPS, 'OPS', fresh(s), { kind: 'SetBlock', blockId: '14E', value: 'SCRAMBLE' });
+  assert.equal(scrambled.ok, true, JSON.stringify(scrambled));
+  assert.equal(fdrOf(s.fdrId).military.alertStatus, 'SCRAMBLE');
+  // Any other Block is still the owner's: the exception is 14E only.
+  const other = act(efsp, c.OPS, 'OPS', fresh(s), { kind: 'SetBlock', blockId: '8A', value: 'X' });
+  assert.equal(other.reason, 'NOT_OWNER');
+  assert.match(other.detail, /CD holds this Strip/);
+  // The exception is for OPS: CD's own write, and no other Position's.
   const bad = act(efsp, c.CD, 'CD', fresh(s), { kind: 'SetBlock', blockId: '14E', value: 'LAUNCH' });
   assert.equal(bad.ok, false, 'setMilitary validates the enum');
   setAlert('CD', s, 'NONE');
