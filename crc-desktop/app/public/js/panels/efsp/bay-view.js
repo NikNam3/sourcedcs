@@ -1456,7 +1456,7 @@ function getOpenEfspBayIds() {
 // Non-drag move path (WCAG 2.2 SC 2.5.7): select a Strip, then click a
 // Rack's header to move the selection there — no pointer drag required.
 function _onRackHeaderClick(bayId, rackId) {
-  if (bayId.endsWith('-search')) return; // the search pseudo-Bay isn't a real destination server-side (guide §4.3) — nothing to move "into"
+  if (_isPseudoBayId(bayId)) return; // the search / with-others pseudo-Bay isn't a real destination server-side (guide §4.3) — nothing to move "into"
   if (!_selectedStripId) return;
   const strip = getEfspStrip(_selectedStripId);
   if (!strip) return;
@@ -2556,7 +2556,7 @@ function _finishDrag(commit) {
       const targetBay = explicitBayId ? { bayId: explicitBayId, rackIds: [_defaultRackFor(explicitBayId)] } : _defaultBayFor(toPositionId);
       if (targetBay) _transferStrip(strip, toPositionId, targetBay.bayId, targetBay.rackIds[0]);
     }
-  } else if (commit && hasMoved && !rackEl.dataset.bayId.endsWith('-search')) {
+  } else if (commit && hasMoved && !_isPseudoBayId(rackEl.dataset.bayId)) {
     // Use the last known pointer Y directly, captured on every pointermove
     // above — NOT parsed back out of the CSS transform string, which is
     // already cleared by the time we'd read it here.
@@ -2703,6 +2703,11 @@ function _refreshOpsFiledIfStale(container) {
   });
 }
 
+/** The client-local Bays (search results, "with AIC/JTAC"): views onto live Strips, never a destination. */
+function _isPseudoBayId(bayId) {
+  return bayId.endsWith('-search') || (typeof isWithOthersBayId === 'function' && isWithOthersBayId(bayId));
+}
+
 function renderBay(container, bayId) {
   if (!container) return;
   if (bayId === 'ops-filed') {
@@ -2714,7 +2719,7 @@ function renderBay(container, bayId) {
   // synthesizes it, it's never in getEfspBays()'s server-driven list, so
   // it needs its own lookup instead of falling through to "unknown bayId,
   // clear the container".
-  const bay = bayId.endsWith('-search')
+  const bay = _isPseudoBayId(bayId)
     ? { bayId, rackIds: ['results'] }
     : getEfspBays().find(b => b.bayId === bayId);
   if (!bay) { container.innerHTML = ''; return; }
@@ -2971,7 +2976,9 @@ function _stripElNeedsRebuild(el, wanted, selectedStripId, expandedStripId) {
 }
 
 function _reconcileRackStrips(rackEl, bayId, rackId) {
-  const wanted = bayId.endsWith('-search') ? searchEfspStrips(getActiveEfspSearchQuery()) : getEfspRack(bayId, rackId);
+  const wanted = bayId.endsWith('-search') ? searchEfspStrips(getActiveEfspSearchQuery())
+    : isWithOthersBayId(bayId) ? efspLinesWithOthers(bayId.slice(0, -'-with'.length))
+      : getEfspRack(bayId, rackId);
   const wantedById = new Map(wanted.map(s => [s.stripId, s]));
   const existingEls = new Map(
     [...rackEl.children].filter(el => el.classList.contains('efsp-strip')).map(el => [el.dataset.stripId, el])

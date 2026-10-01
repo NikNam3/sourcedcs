@@ -61,3 +61,14 @@ test('S-L16 W3/W5: a typed TAXI behind a later P-time is flagged; an estimate sa
   assert.match(est.title, /Type it again to accept it as the actual/);
   assert.equal(est.behindPlan, false, 'an estimate follows the P-time by construction');
 });
+
+test('S-L23 finding: TAC_C2 lists the live lines AIC and JTAC hold, and no one else gets the list', () => {
+  const st = require('../app/public/js/panels/efsp/efsp-state.js');
+  st._resetEfspStateForTest();
+  const mk = (stripId, over) => ({ stripId, fdrId: stripId, role: 'MISSION', state: 'ON_STATION', ownerPositionId: 'AIC', bayId: 'aic-on-station', rackId: 'main', orderKey: stripId, updatedAt: 1, flags: {}, ...over });
+  st.applyEfspSnapshot({ strips: [mk('a'), mk('b', { ownerPositionId: 'JTAC' }), mk('c', { ownerPositionId: 'TAC_C2' }), mk('d', { state: 'DROPPED' }), mk('e', { role: 'ARRIVAL' })], fdrs: [], positions: [], bays: [] });
+  assert.deepEqual(st.efspLinesWithOthers('TAC_C2').map(s => s.stripId).sort(), ['a', 'b']);
+  assert.deepEqual(st.efspLinesWithOthers('CTR'), []);
+  assert.equal(st.isWithOthersBayId(st.withOthersBayId('TAC_C2')), true);
+  assert.equal(st.isWithOthersBayId('TAC_C2-search'), false);
+});

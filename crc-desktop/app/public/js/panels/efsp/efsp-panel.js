@@ -87,6 +87,13 @@ function _positionsWithBays() {
       bayId: _searchBayId(positionId), positionId, rackIds: ['results'],
     });
   }
+  // UI-A: the "with AIC/JTAC" pseudo-Bay on a held TAC_C2's tab, only while there is a line in it.
+  if (typeof efspLinesWithOthers === 'function') {
+    for (const positionId of Object.keys(byPosition)) {
+      if (efspLinesWithOthers(positionId).length === 0) continue;
+      byPosition[positionId].push({ bayId: withOthersBayId(positionId), positionId, rackIds: ['results'], withOthers: true });
+    }
+  }
   return byPosition;
 }
 
@@ -113,15 +120,30 @@ function _positionsWithBays() {
  * @param {string[]} heldPositionIds
  * @returns {Array<{positionId:string, facilityId:string, held:boolean, bays:Array}>} held Positions first
  */
+// UI-A (S-L23 finding, H59): the JTAC's UI shows only what a JTAC knows, i.e. the lines TAC_C2 has
+// handed it. A drop-only tab for TAC_C2, AIC or GCI shows those Positions exist, so a controller
+// holding nothing but these Positions at a Facility gets no drop-only tabs there. (A JTAC hands a
+// line back from the Strip's menu, which needs no tab.)
+const HOLDS_ONLY_NO_DROP_TABS = ['JTAC'];
+
 function computePositionTabs(bays, heldPositionIds) {
   const held = new Set(heldPositionIds || []);
   const heldFacilities = new Set();
-  for (const b of bays || []) if (held.has(b.positionId)) heldFacilities.add(b.facilityId);
+  for (const b of bays || []) {
+    if (!held.has(b.positionId)) continue;
+    heldFacilities.add(b.facilityId);
+  }
+  // A Facility where every held Position is a "no drop tabs" one offers no other Position's tab.
+  for (const facilityId of [...heldFacilities]) {
+    const heldHere = [...new Set((bays || []).filter(b => b.facilityId === facilityId && held.has(b.positionId)).map(b => b.positionId))];
+    if (heldHere.length > 0 && heldHere.every(p => HOLDS_ONLY_NO_DROP_TABS.includes(p))) heldFacilities.delete(facilityId);
+  }
+  const heldFacilitiesWithTabs = heldFacilities;
 
   const byPosition = new Map();
   for (const b of bays || []) {
     const isHeld = held.has(b.positionId);
-    if (!isHeld && !heldFacilities.has(b.facilityId)) continue;
+    if (!isHeld && !heldFacilitiesWithTabs.has(b.facilityId)) continue;
     let entry = byPosition.get(b.positionId);
     if (!entry) {
       entry = { positionId: b.positionId, facilityId: b.facilityId, held: isHeld, bays: [] };
@@ -215,13 +237,15 @@ function _renderBayTabs() {
   for (const bay of bays) {
     const isSearchBay = bay.bayId.endsWith('-search');
     const isOpsFiledBay = bay.bayId === 'ops-filed';
+    const isWithBay = !!bay.withOthers;
     const tab = document.createElement('button');
     const unseen = !isSearchBay && typeof unseenEfspArrivalsInBay === 'function' ? unseenEfspArrivalsInBay(bay.bayId) : 0;
     tab.className = 'efsp-bay-tab' + (bay.bayId === _activeBayId ? ' active' : '') + (isSearchBay ? ' efsp-bay-tab-search' : '')
       + (unseen ? ' efsp-tab-has-arrival' : '');
     tab.dataset.bayId = bay.bayId;
-    _fillTabLabel(tab, isSearchBay ? `🔍 ${_searchQuery}` : bay.bayId,
-      isSearchBay || isOpsFiledBay ? null : _stripCountForBay(bay.bayId), unseen, 'pill');
+    _fillTabLabel(tab, isSearchBay ? `🔍 ${_searchQuery}` : isWithBay ? 'with AIC/JTAC' : bay.bayId,
+      isSearchBay || isOpsFiledBay ? null : isWithBay ? efspLinesWithOthers(bay.positionId).length : _stripCountForBay(bay.bayId), unseen, 'pill');
+    if (isWithBay) tab.title = 'Lines you have handed to AIC or JTAC. You answer CTR\'s TOFI exit for them here.';
     // A Bay-tab drop target picks the EXACT Bay (rather than the
     // Position's default one) — see bay-view.js's _finishDrag. Search is a
     // client-local pseudo-Bay (guide §4.3), so it deliberately does NOT
@@ -231,7 +255,7 @@ function _renderBayTabs() {
     // special-case) — a Strip dropped here would render nowhere, so this
     // tab must never accept drops either (facility-config.js's OPS bay
     // order was also fixed so it's never anyone's *default* Bay either).
-    if (!isSearchBay && !isOpsFiledBay) {
+    if (!isSearchBay && !isOpsFiledBay && !isWithBay) {
       tab.dataset.efspDropPosition = bay.positionId;
       tab.dataset.efspDropBay = bay.bayId;
     }

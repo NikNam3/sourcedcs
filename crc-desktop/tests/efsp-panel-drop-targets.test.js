@@ -58,3 +58,16 @@ test('missing inputs are tolerated rather than thrown on — the snapshot may no
   assert.deepEqual(computePositionTabs(undefined, undefined), []);
   assert.deepEqual(computePositionTabs(BAYS, undefined), []);
 });
+
+test('UI-A H59: a controller holding only JTAC gets no drop-only tab for TAC_C2, AIC or GCI', () => {
+  const tactical = [
+    { bayId: 'tac-c2-tasked', positionId: 'TAC_C2', facilityId: 'TACTICAL' },
+    { bayId: 'aic-on-station', positionId: 'AIC', facilityId: 'TACTICAL' },
+    { bayId: 'gci-tasked', positionId: 'GCI', facilityId: 'TACTICAL' },
+    { bayId: 'jtac-tasked', positionId: 'JTAC', facilityId: 'TACTICAL' },
+  ];
+  assert.deepEqual(computePositionTabs(tactical, ['JTAC']).map(t => t.positionId), ['JTAC']);
+  const withAic = computePositionTabs(tactical, ['AIC']);
+  assert.deepEqual(withAic.map(t => t.positionId), ['AIC', 'TAC_C2', 'GCI', 'JTAC'], 'AIC still drags to TAC_C2');
+  assert.deepEqual(computePositionTabs(tactical, ['JTAC', 'AIC']).map(t => t.positionId).sort(), ['AIC', 'GCI', 'JTAC', 'TAC_C2']);
+});

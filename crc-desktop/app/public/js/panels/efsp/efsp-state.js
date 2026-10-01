@@ -387,6 +387,25 @@ function searchEfspStrips(query) {
   });
 }
 
+// UI-A (S-L23 finding): a controller holding TAC_C2 and not AIC/JTAC cannot see the lines TAC_C2 has
+// handed down, so cannot answer CTR's TOFI exit on one (the server lets TAC_C2 answer for AIC,
+// ADR 0080; the panel had nowhere to show the line). The Position tab gets one client-local
+// pseudo-Bay, "WITH AIC/JTAC", listing those lines. Like the search Bay it is not Board state and
+// not a destination: nothing can be dropped on it.
+const LINES_WITH_OTHERS = { TAC_C2: ['AIC', 'JTAC'] };
+
+function withOthersBayId(positionId) { return `${positionId}-with`; }
+function isWithOthersBayId(bayId) { return typeof bayId === 'string' && bayId.endsWith('-with'); }
+
+/** Live MISSION lines held by the Positions `positionId` has handed lines to, newest first. */
+function efspLinesWithOthers(positionId) {
+  const owners = LINES_WITH_OTHERS[positionId];
+  if (!owners) return [];
+  return getAllEfspStrips()
+    .filter(s => s.role === 'MISSION' && s.state !== 'DROPPED' && owners.includes(s.ownerPositionId))
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+}
+
 // Test-only reset — this module holds top-level mutable state (matching
 // app.js's own plain-globals style), so tests need a way to isolate runs.
 function _resetEfspStateForTest() {
@@ -444,6 +463,7 @@ if (typeof module !== 'undefined' && module.exports) {
     registerPendingMutation, getPendingMutations, rebaseForResend,
     getEfspStrip, getEfspFdr, getEfspPosition, getAllEfspStrips, getAllEfspPositions,
     otherLiveStripsForFdr, liveStripsForCallsign,
+    LINES_WITH_OTHERS, withOthersBayId, isWithOthersBayId, efspLinesWithOthers,
     applyEfspAirspaceDelta, getEfspAirspace, getAllEfspAirspaces, stripsInAirspace,
     applyEfspCorrelationDelta, getEfspCorrelation, getAllEfspCorrelations,
     getEfspCorrelationForStrip, correlatedTrackIdForStrip, stripIdsForTrackId,
