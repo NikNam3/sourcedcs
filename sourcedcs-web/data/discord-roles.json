@@ -1,9 +1,0 @@
-{
-  "_comment": "Map Discord role names to roster squadron IDs and/or display role labels. A member's squadron can come from one Discord role and their role label from another — or both from a single role. At least one field (squadron or role) is required per entry. Only members with at least one matching role will appear in the roster.",
-  "Example Squadron Role": {
-    "squadron": "example-squadron-id"
-  },
-  "Example Rank Role": {
-    "role": "Example Role"
-  }
-}
