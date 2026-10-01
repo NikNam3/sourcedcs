@@ -108,9 +108,9 @@ export class Recorder {
 }
 
 export class World extends Recorder {
-  constructor({ seed = 1, startNow = START_NOW, full = true } = {}) {
+  constructor({ seed = 1, startNow = START_NOW, full = true, checkpointEvery } = {}) {
     const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'freeze-hub-'));
-    super({ stateDir, startNow, full });
+    super({ stateDir, startNow, full, ...(checkpointEvery ? { checkpointEvery } : {}) });
     const { writeFixtures } = require(path.join(SOAK, 'host-client.js'));
     writeFixtures(this.stateDir);
     const { setupHostEnv } = require(path.join(SOAK, 'host-env.js'));

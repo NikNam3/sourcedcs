@@ -12,7 +12,7 @@ import { HERE, canonical, checkGolden } from './freeze-lib.mjs';
 // appended, and the persisted Board file (hash; whole summarised state at checkpoints and after restarts).
 // Each trace runs twice and the two recordings must be byte-identical.
 
-const TRACE_NAMES = ['op-matrix', 'walk-civil', 'walk-manning', 'walk-tactical', 'crash-replay', 'monitors', 'random-seed1', 'random-seed2', 'random-seed3'];
+const TRACE_NAMES = ['op-matrix', 'walk-civil', 'walk-manning', 'walk-tactical', 'crash-replay', 'monitors', 'order-keys', 'random-seed1', 'random-seed2', 'random-seed3'];
 const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'freeze-hub-out-'));
 
 function run(trace, tag) {

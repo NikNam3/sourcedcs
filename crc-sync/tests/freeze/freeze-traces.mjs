@@ -419,6 +419,25 @@ function walkTactical() {
   const out = w.finish(); w.dispose(); return out;
 }
 
+
+// ---- order keys: repeated inserts into one slot until the Rack is re-keyed (REBALANCE_KEY_LENGTH) -------------
+function orderKeys() {
+  const w = new World({ seed: 71, full: false, checkpointEvery: 100 });
+  w.connect('ops', { holds: CREW.ops });
+  const rackOf = () => w._call({ type: 'rack', facilityId: 'INCIRLIK', bayId: 'ops-proposed', rackId: 'main' }).rack;
+  for (const n of ['KEY1', 'KEY2', 'KEY3', 'KEY4']) newDeparture(w, n);
+  // Always move the LAST Strip into the slot right after the first: the gap it lands in halves every time,
+  // so the key grows until the Rack is re-keyed once it passes REBALANCE_KEY_LENGTH.
+  for (let i = 0; i < 300; i++) {
+    const rack = rackOf();
+    const mover = rack[rack.length - 1];
+    const cur = w.strip('INCIRLIK', mover.stripId);
+    w.mut('ops', 'INCIRLIK', 'OPS', cur, { kind: 'MoveStrip', bayId: 'ops-proposed', rackId: 'main', afterStripId: rack[0].stripId, beforeStripId: rack[1].stripId });
+    if (i % 25 === 24) w.steps[w.steps.length - 1].rack = rackOf().map(r => `${r.orderKey.length}:${r.orderKey}`);
+  }
+  const out = w.finish(); w.dispose(); return out;
+}
+
 // ---- T4: crash and restart ---------------------------------------------------------------------------------
 function crashReplay() {
   const w = crewWorld(51);
@@ -487,6 +506,7 @@ function monitors() {
 }
 
 export const TRACES = {
+  'order-keys': async () => orderKeys(),
   'walk-civil': async () => walkCivil(),
   'walk-manning': async () => walkManning(),
   'walk-tactical': async () => walkTactical(),
