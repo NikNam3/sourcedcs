@@ -68,7 +68,8 @@ test('freeze tables: NLA state sets, coordination effects, block maps, facility 
   for (const [role, map] of Object.entries(blockMap.BLOCK_MAPS)) {
     rows.push({ id: `blockMap.${role}`, v: { blocks: Object.keys(plain(map)).length, h: digest(canonical(plain(map))), ids: Object.keys(plain(map)) } });
   }
-  for (const [name, cfg] of Object.entries(facilityConfig.DEFAULT_CONFIGS)) {
+  for (const name of facilityConfig.getFacilityIds()) {
+    const cfg = facilityConfig.getFacilityConfig(name);
     const c = canonical(plain(cfg));
     rows.push({ id: `facility.${name}`, v: { positions: c.positions, coveringChain: c.coveringChain, positionClasses: c.positionClasses,
       bays: Object.fromEntries(Object.entries(c.bays || {}).map(([p, list]) => [p, (Array.isArray(list) ? list : []).map(b => `${b.bayId || b.id}:${b.impliesState || ''}`)])), h: digest(c) } });

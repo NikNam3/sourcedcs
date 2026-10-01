@@ -10,6 +10,26 @@
     "SFA",
     "PAR"
   ],
+  "positionClasses": {
+    "OPS": "BASOPS",
+    "CD": "MILITARY_ATC",
+    "GND": "MILITARY_ATC",
+    "TWR": "MILITARY_ATC",
+    "RSU": "MILITARY_ATC",
+    "APP": "MILITARY_ATC",
+    "SFA": "MILITARY_ATC",
+    "PAR": "MILITARY_ATC"
+  },
+  "positionLetters": {
+    "OPS": "O",
+    "CD": "D",
+    "GND": "G",
+    "TWR": "T",
+    "RSU": "R",
+    "APP": "A",
+    "SFA": "S",
+    "PAR": "P"
+  },
   "coveringChain": {
     "CD": "GND",
     "GND": "TWR",
@@ -17,6 +37,50 @@
     "SFA": "APP",
     "PAR": "APP"
   },
+  "positionRadars": {
+    "OPS": [],
+    "CD": [],
+    "GND": [],
+    "TWR": [
+      {
+        "kind": "airport",
+        "airport": "LTAG"
+      }
+    ],
+    "RSU": [
+      {
+        "kind": "airport",
+        "airport": "LTAG"
+      }
+    ],
+    "APP": [
+      {
+        "kind": "approach",
+        "airport": "LTAG"
+      },
+      {
+        "kind": "airport",
+        "airport": "LTAG"
+      }
+    ],
+    "SFA": [
+      {
+        "kind": "approach",
+        "airport": "LTAG"
+      },
+      {
+        "kind": "airport",
+        "airport": "LTAG"
+      }
+    ],
+    "PAR": [
+      {
+        "kind": "approach",
+        "airport": "LTAG"
+      }
+    ]
+  },
+  "hiddenBlocks": {},
   "bays": {
     "OPS": [
       {
@@ -224,5 +288,73 @@
       }
     ]
   },
-  "hiddenBlocks": {}
+  "singleFrequencyApproach": {
+    "jurisdiction": "APP",
+    "rotationSize": 3,
+    "pool": [
+      {
+        "rackId": "freq-1",
+        "mhz": 232.1
+      },
+      {
+        "rackId": "freq-2",
+        "mhz": 233.1
+      },
+      {
+        "rackId": "freq-3",
+        "mhz": 234.1
+      },
+      {
+        "rackId": "freq-4",
+        "mhz": 235.1
+      },
+      {
+        "rackId": "freq-5",
+        "mhz": 236.1
+      }
+    ],
+    "initialRotation": {
+      "freq-1": "APP",
+      "freq-2": "SFA",
+      "freq-3": "PAR"
+    }
+  },
+  "dataOnly": false,
+  "standingReleases": [],
+  "aitAuthorized": false,
+  "fieldState": {
+    "airportIcao": "LTAG",
+    "runways": [
+      {
+        "runwayId": "05/23",
+        "ends": [
+          "05",
+          "23"
+        ],
+        "endHeadingsTrue": {
+          "23": 236,
+          "05": 56
+        },
+        "rackIds": {
+          "23": "rwy-23",
+          "05": "rwy-05"
+        },
+        "arrestingGear": []
+      }
+    ],
+    "runwayChangeAcknowledgers": [
+      "OPS",
+      "APP"
+    ],
+    "inspectionAuthorityPositionId": "OPS",
+    "pads": {
+      "hotCargo": {
+        "name": "Hot cargo pad"
+      },
+      "alert": {
+        "name": "Alert pad",
+        "accessRoute": "ALERT ACCESS TAXIWAY"
+      }
+    }
+  }
 }

@@ -3,7 +3,22 @@
   "positions": [
     "CTR"
   ],
+  "positionClasses": {
+    "CTR": "CIVIL_ATC"
+  },
+  "positionLetters": {
+    "CTR": "C"
+  },
   "coveringChain": {},
+  "positionRadars": {
+    "CTR": [
+      {
+        "kind": "approach",
+        "airport": "*"
+      }
+    ]
+  },
+  "hiddenBlocks": {},
   "bays": {
     "CTR": [
       {
@@ -37,6 +52,5 @@
   },
   "dataOnly": false,
   "standingReleases": [],
-  "aitAuthorized": false,
-  "hiddenBlocks": {}
+  "aitAuthorized": false
 }
