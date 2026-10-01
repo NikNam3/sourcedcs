@@ -46,7 +46,6 @@ const { CarrierTick } = require('./efsp/carrier-tick');
 const { carrierDelta } = require('./efsp/efsp-ws');
 const { USER_COALITION } = require('./surveillance/iff');
 const { wireCollabSession } = require('./collab-wiring');
-const { mountTestReset } = require('./test-reset');
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
@@ -617,7 +616,9 @@ function createApp(deps = {}) {
   });
 
   // Test-only (Playwright harness); mounts nothing unless CRCSYNC_TEST_RESET=1, see src/test-reset.js.
-  mountTestReset(app, { env });
+  // Required only here: test-reset.js mints its boot id (crypto.randomUUID) when loaded, and the soak's
+  // seeded id stream must not be consumed before createEfsp.
+  if (env.CRCSYNC_TEST_RESET === '1') require('./test-reset').mountTestReset(app, { env });
 
   // ── Static hosting ───────────────────────────────────────────────────────
   app.use(express.static(PUBLIC_DIR));
