@@ -38,11 +38,8 @@ const { VERSION, stampStrip, mergeFdrs, touchedStrips, boardDelta, marsaDelta, c
 const skeleton = require('./wire/skeleton');
 const families = require('./wire/families');
 
-// board-store.js's own _log ring buffer is pruned back to ~1000 entries
-// once it exceeds 2000 (see _pruneLog) — stay comfortably inside that
-// before declaring a reconnecting client TOO_OLD and sending a full
-// snapshot instead of a delta. Two paths only, per guide §5.6.
-const RESYNC_RING_WINDOW = 900;
+// The resync window and the delta-or-snapshot decision live with the ring (sync/sync-log.js).
+const { canServeDelta, RESYNC_RING_WINDOW } = require('./sync/sync-log');
 
 function handleMessage(ctx, session, msg, persist) {
   const family = families.byType[msg.type];
@@ -245,35 +242,9 @@ function _resyncAnswer(ctx, session, msg) {
   };
 }
 
-/**
- * Whether a delta from `lastSeq` would leave this client right. Three ways it
- * cannot, each found the hard way.
- *
- * A different Board LIFETIME (docs/adr/0081, L6's F2). `_seq` and the ring are
- * per process, so after a restart a client's seq names a point in a Board that
- * no longer exists. Once the new lifetime's seq overtakes it, the window and
- * `rewound` checks below both pass and a delta from the wrong ring is served
- * as if continuous: Strips dropped before the restart stay on screen, Strips
- * created are missed. Only the epoch the client last saw can tell. A client
- * that sends none (the shipped client never resyncs, briefing §3.10) gets the
- * snapshot, which is always safe.
- *
- * The client too far BEHIND: `currentSeq - lastSeq > WINDOW` — it missed more
- * than the ring holds, so replaying from there would skip changes.
- *
- * The server having gone BACKWARDS: `lastSeq > currentSeq`. It restarted with
- * no snapshot, or was restored from an older one. The subtraction then went
- * NEGATIVE and sailed through the window check — the server replayed a delta
- * from an empty ring and told a client holding a whole Board of Strips that
- * nothing had changed. Found by clearing the local Board during development
- * and watching a Strip survive it. The epoch now covers this case too; the
- * check stays because it is cheap and still true.
- */
+/** Whether a delta from `lastSeq` would leave this client right (sync/sync-log.js canServeDelta). */
 function _deltaCanServe(boardStore, boardEpoch, lastSeq) {
-  if (boardEpoch !== boardStore.epoch) return false;
-  if (lastSeq < 0) return false;
-  if (lastSeq > boardStore.currentSeq) return false; // rewound
-  return boardStore.currentSeq - lastSeq <= RESYNC_RING_WINDOW;
+  return canServeDelta({ seq: boardStore.currentSeq, epoch: boardStore.epoch }, boardEpoch, lastSeq);
 }
 
 function facilityConfig_positionIds(ctx, facilityId) { return ctx.facilityConfig.getPositionSet(facilityId); }

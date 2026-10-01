@@ -534,7 +534,50 @@ function peerMarsaOrder() {
   return w;
 }
 
+// ---- T6: the messages the hub answers with an ack alone (S-WIREfix) ---------------------------------------
+// The metrics tap's efsp-metrics-report / efsp-metrics-request and the Board resync answers return `{ ack }` with no
+// broadcasts; the merged branch once crashed the hub on exactly that. Also the replay caches (a Board Mutation and a
+// family Mutation sent twice) and every resync decision short of "too old" (that needs 900 seq; tests/efsp-ws.test.mjs).
+function resyncMetrics() {
+  const w = crewWorld(91);
+  const report = (id, extra, label) => w.send(id, { version: 1, type: 'efsp-metrics-report', ...extra }, label);
+  report('app', { reportId: 'rep-1', facilityId: 'INCIRLIK', positionId: 'APP', events: [{ kind: 'SEARCH' }, { kind: 'TIME_TO_FIND', latencyMs: 1200 }, { kind: 'GESTURE', gesture: 'FLIP', inputs: 2 }, { kind: 'BOGUS' }] }, 'metrics-report');
+  report('app', { reportId: 'rep-1', facilityId: 'INCIRLIK', positionId: 'APP', events: [{ kind: 'SEARCH' }] }, 'metrics-report-duplicate');
+  report('ctr', { reportId: 'rep-2', facilityId: 'INCIRLIK', positionId: 'APP', events: [] }, 'metrics-report-not-holding');
+  report('app', { reportId: '', facilityId: 'INCIRLIK', positionId: 'APP', events: [] }, 'metrics-report-invalid');
+  w.send('app', { version: 1, type: 'efsp-metrics-request', requestId: 'req-1', hours: 1 }, 'metrics-request');
+  w.send('app', { version: 1, type: 'efsp-metrics-request', requestId: 'req-2', hours: 1, trafficCount: {} }, 'metrics-request-traffic');
+
+  // Replays: the Board's cache (before dispatch) and a family's cache (after the gates).
+  const a = newDeparture(w, 'RSM1');
+  const cmid = w.nextCmid();
+  w.mut('ops', 'INCIRLIK', 'OPS', a, { kind: 'SetFlag', flag: 'highlight', value: 'yellow' }, { cmid });
+  w.mut('ops', 'INCIRLIK', 'OPS', a, { kind: 'SetFlag', flag: 'highlight', value: 'yellow' }, { cmid });
+  w.mut('ops', 'INCIRLIK', 'OPS', a, { kind: 'SetFlag', flag: 'highlight', value: 'yellow' }, { cmid: '' });
+  const op = { kind: 'RequestRunwayStatus', runwayId: '05/23', action: 'WORKS' };
+  const probe = w.send('ops', { version: 1, type: 'efsp-field-state-mutation', clientMutationId: w.nextCmid(), facilityId: 'INCIRLIK', baseRev: -1, actingPositionId: 'OPS', op }, 'field-state-stale');
+  const fsRev = probe.ack && probe.ack.fieldState ? probe.ack.fieldState.rev : 0;
+  const fsm = { version: 1, type: 'efsp-field-state-mutation', clientMutationId: w.nextCmid(), facilityId: 'INCIRLIK', baseRev: fsRev, actingPositionId: 'OPS', op };
+  w.send('ops', fsm, 'field-state');
+  w.send('ops', fsm, 'field-state-replay');
+  w.send('gnd', fsm, 'field-state-replay-not-holding');
+
+  // Resync decisions on the Board.
+  const ack = w.mut('ops', 'INCIRLIK', 'OPS', w.strip('INCIRLIK', a.stripId), { kind: 'SetFlag', flag: 'attention', value: true }).ack || {};
+  const seq = ack.boardSeq, epoch = ack.boardEpoch;
+  const resync = (lastBoardSeq, boardEpoch, label) => w.send('app', { version: 1, type: 'efsp-resync', facilityId: 'INCIRLIK', lastBoardSeq, boardEpoch }, label);
+  resync(seq, epoch, 'resync-current');
+  resync(seq - 2, epoch, 'resync-delta');
+  resync(seq + 5, epoch, 'resync-rewound');
+  resync(-1, epoch, 'resync-negative');
+  resync('7', epoch, 'resync-not-a-number');
+  resync(seq - 2, undefined, 'resync-no-epoch');
+  w.tick(['heartbeat']);
+  return w;
+}
+
 export const TRACES = {
+  'resync-metrics': async () => { const w = resyncMetrics(); const out = w.finish(); w.dispose(); return out; },
   'peer-marsa-order': async () => { const w = peerMarsaOrder(); const out = w.finish(); w.dispose(); return out; },
   'order-keys': async () => orderKeys(),
   'walk-civil': async () => walkCivil(),

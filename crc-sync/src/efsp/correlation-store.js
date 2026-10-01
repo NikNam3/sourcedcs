@@ -20,7 +20,7 @@
 // airframe, and the FDR is the airframe (§3.1).
 //
 // Built on airspace-store.js throughout: own _records Map, per-record rev, own
-// _seq, setMutationLog, a _recordAudit that logs refusals too, append-only
+// _sync seq, setMutationLog, a _recordAudit that logs refusals too, append-only
 // transitions[], one never-throwing entry point, and snapshot/restore that
 // skip records which no longer resolve.
 //
@@ -39,6 +39,7 @@
 
 const { MAX_FREE_TEXT } = require('./fdr-store');
 const { WALL_CLOCK } = require('../mission-clock');
+const { SyncLog } = require('./sync/sync-log');
 const log = require('../log').logger('efsp:correlation-store');
 
 const CORRELATION_STATES = ['CORRELATED', 'PROVISIONAL', 'UNCORRELATED'];
@@ -81,7 +82,7 @@ class CorrelationStore {
     this._clock = clock; // the mission clock, docs/adr/0079
     this._fdrExists = fdrExists || (() => true);
     this._records = new Map(); // fdrId -> record
-    this._seq = 0;
+    this._sync = new SyncLog(); // the store's sequence: a counter only, no ring, no epoch (sync/sync-log.js, S3-1)
     this._mutationLog = null;
   }
 
@@ -96,7 +97,7 @@ class CorrelationStore {
    */
   setMutationLog(mutationLog) { this._mutationLog = mutationLog; }
 
-  get currentSeq() { return this._seq; }
+  get currentSeq() { return this._sync.seq; }
 
   _seed(fdrId) {
     const record = {
@@ -179,7 +180,7 @@ class CorrelationStore {
     record.rev += 1;
     record.updatedAt = this._clock.now();
     record.updatedBy = by || null;
-    this._seq += 1;
+    this._sync.advance();
     if (transition) {
       record.transitions.push({
         at: record.updatedAt,
@@ -385,7 +386,7 @@ class CorrelationStore {
           } else {
             record.rev += 1;
             record.updatedAt = now;
-            this._seq += 1;
+            this._sync.advance();
           }
           changed.push(this.getCorrelation(fdrId));
         }
@@ -417,7 +418,7 @@ class CorrelationStore {
         } else {
           record.rev += 1;
           record.updatedAt = now;
-          this._seq += 1;
+          this._sync.advance();
         }
         changed.push(this.getCorrelation(fdrId));
       }

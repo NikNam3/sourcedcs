@@ -41,7 +41,7 @@
 // lists that unretractable badge as an outstanding defect). Do not copy it.
 //
 // Built on airspace-store.js and correlation-store.js throughout: own
-// _relations Map, per-record rev, own _seq, setMutationLog, a _recordAudit
+// _relations Map, per-record rev, own _sync seq, setMutationLog, a _recordAudit
 // that logs refusals too, append-only transitions[], one never-throwing entry
 // point, and snapshot/restore that skip records which no longer resolve.
 
@@ -49,6 +49,7 @@ const crypto = require('crypto');
 
 const { MAX_FREE_TEXT } = require('./fdr-store');
 const { WALL_CLOCK } = require('../mission-clock');
+const { SyncLog } = require('./sync/sync-log');
 const log = require('../log').logger('efsp:marsa-store');
 
 const MARSA_STATES = ['ACTIVE', 'ENDED', 'VOIDED'];
@@ -113,7 +114,7 @@ class MarsaStore {
     this._fdrExists = fdrExists || (() => true);
     this._setSeparationRegime = setSeparationRegime || (() => ({ ok: true }));
     this._relations = new Map(); // marsaId -> relation
-    this._seq = 0;
+    this._sync = new SyncLog(); // the store's sequence: a counter only, no ring, no epoch (sync/sync-log.js, S3-1)
     this._mutationLog = null;
     // The FDRs _applyRegime wrote during the op currently being applied, for
     // the caller to drain and broadcast. See drainRegimeWrites().
@@ -159,7 +160,7 @@ class MarsaStore {
    */
   setMutationLog(mutationLog) { this._mutationLog = mutationLog; }
 
-  get currentSeq() { return this._seq; }
+  get currentSeq() { return this._sync.seq; }
 
   getRelation(marsaId) {
     const relation = this._relations.get(marsaId);
@@ -193,7 +194,7 @@ class MarsaStore {
     relation.rev += 1;
     relation.updatedAt = this._clock.now();
     relation.updatedBy = by || null;
-    this._seq += 1;
+    this._sync.advance();
     if (transition) {
       relation.transitions.push({
         at: relation.updatedAt,

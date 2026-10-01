@@ -24,6 +24,7 @@
 const permission = require('./permission');
 const { validateSfaRotationRecord } = require('./facility-config');
 const { WALL_CLOCK } = require('../mission-clock');
+const { SyncLog } = require('./sync/sync-log');
 const log = require('../log').logger('efsp:sfa-store');
 
 const TRANSITIONS_CAP = 100;
@@ -46,7 +47,7 @@ class SfaStore {
     this._facilityId = facilityId;
     this._clock = clock;
     this._record = this._fresh();
-    this._seq = 0;
+    this._sync = new SyncLog(); // the store's sequence: a counter only, no ring, no epoch (sync/sync-log.js, S3-1)
     this._mutationLog = null;
   }
 
@@ -57,7 +58,7 @@ class SfaStore {
   }
 
   setMutationLog(mutationLog) { this._mutationLog = mutationLog; }
-  get currentSeq() { return this._seq; }
+  get currentSeq() { return this._sync.seq; }
   get jurisdiction() { return this._config.jurisdiction; }
 
   /** The wire view: the record plus the config the client needs to draw the pool, sent whole (it is small). */
@@ -145,7 +146,7 @@ class SfaStore {
     if (same) return { ok: true, changed: false, record: deepClone(this._record) };
     this._record.rotation = next;
     this._record.rev += 1;
-    this._seq += 1;
+    this._sync.advance();
     this._record.transitions.push({
       at: this._clock.now(), by: by || null, rackId: op.rackId, positionId: op.positionId,
     });

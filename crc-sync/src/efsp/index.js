@@ -48,7 +48,7 @@ const { NlaStatusMonitor } = require('./nla-status-monitor');
 const { Archiver } = require('./archiver');
 const { statePaths, ensureDirFor } = require('../state-paths');
 const { WALL_CLOCK } = require('../mission-clock');
-const { ReplayCache } = require('./replay-cache');
+const { ReplayCache } = require('./sync/replay-cache');
 const { REGISTRY, RESTORE_ORDER } = require('./stores');
 const log = require('../log').logger('efsp');
 

@@ -35,41 +35,11 @@ const { Placement } = require('./board/placement');
 const { Coordination } = require('./board/coordination');
 const { Tofi } = require('./board/tofi');
 const { StripOps } = require('./board/strip-ops');
+const { BoardPersistence } = require('./board/persistence');
 const OPS = require('./board/ops');
 const { initialStateFor, replicaStateOnReceipt, senderStateOnAccept } = require('./authority');
+const { ReplayCache, replayRecord, REPLAY_PERSIST_WINDOW_MS } = require('./sync/replay-cache');
 const log = require('../log').logger('efsp:board-store');
-
-const APPLIED_MUTATIONS_CAP = 5000;
-// How much of the idempotency cache rides in the Board snapshot (docs/adr/0081,
-// L6's F5 mode A): a RETRY window, not a history. A client that lost its ack
-// to a crash retries within seconds of reconnecting; ten minutes covers a
-// restart and a slow reconnect. [SOURCE-DEFINED], a constant rather than a
-// tuning value. Wall time, like the NLA latch (ADR 0079's one exception).
-const REPLAY_PERSIST_WINDOW_MS = 10 * 60 * 1000;
-
-/**
- * The compact, frozen record the idempotency cache keeps for one applied
- * clientMutationId (docs/adr/0081): the outcome and the ids it concerned.
- * Nothing live and nothing cloned — it is serialisable, which is what lets
- * the last REPLAY_PERSIST_WINDOW_MS of it ride in the Board snapshot.
- * `appliedWallAt` is WALL time (Date.now()): a retry window is a storage
- * lifetime, like the NLA latch, not a time a controller reads (ADR 0079).
- */
-function _replayRecord(result, appliedWallAt) {
-  return Object.freeze({
-    ok: !!result.ok,
-    reason: result.reason === undefined ? null : result.reason,
-    detail: result.detail === undefined ? null : result.detail,
-    warning: result.warning === undefined ? null : result.warning,
-    routedTo: result.routedTo === undefined ? null : result.routedTo,
-    selfCoordinated: result.selfCoordinated === undefined ? null : result.selfCoordinated,
-    stripId: result.strip ? result.strip.stripId : null,
-    fdrId: result.fdr ? result.fdr.fdrId : null,
-    peerFacilityId: result.peerFacilityId === undefined ? null : result.peerFacilityId,
-    peerStripId: result.peerStrip ? result.peerStrip.stripId : null,
-    appliedWallAt,
-  });
-}
 
 class BoardStore {
   /**
@@ -99,29 +69,30 @@ class BoardStore {
     this._fdrStore = fdrStore;
     this._rules = rules;
     // The kernel (docs/adr/0095): the Strip map, the seq/log ring, the epoch,
-    // the touched set and the cid counter. `touch` is late-bound to this._touch
-    // so a patched _touch (tools/soak/host-core.js) sees every touch.
-    this._state = new BoardState({ clock, touch: (id) => this._touch(id) });
-    this._appliedMutations = new Map(); // clientMutationId -> compact frozen replay record (_replayRecord), idempotency (§5.2, docs/adr/0081)
+    // the touched set and the cid counter. Every touch goes through its recordTouch;
+    // observeTouches(fn) sees them all (tools/soak/host-core.js).
+    this._state = new BoardState({ clock });
+    const touch = (id) => this._state.recordTouch(id);
+    this._replay = ReplayCache.forBoard(); // clientMutationId -> compact frozen replay record (replayRecord), idempotency (§5.2, docs/adr/0081)
     this._mutationLog = null; // optional collaborator, see setMutationLog()
     // The Mutation-log entries for a client Mutation and a peer write (board/audit.js).
     // `mutationLog` is read late: setMutationLog() can come after construction.
     this._audit = new BoardAudit({ rules, clock, mutationLog: () => this._mutationLog });
-    // Order keys and Bays (board/placement.js). touch and rebalanceRack are late-bound to the
-    // facade (host-core patches both); rejectedReplicaRefusal is the NLA cluster's, still here.
+    // Order keys and Bays (board/placement.js). touch is the kernel's recordTouch; rebalanceRack is late-bound to the
+    // facade (host-core wraps it); rejectedReplicaRefusal is the NLA cluster's, still here.
     this._placement = new Placement({
       state: this._state, rules, clock, fdrStore,
-      touch: (id) => this._touch(id),
+      touch,
       rebalanceRack: (bayId, rackId, excludeStripId) => this._rebalanceRack(bayId, rackId, excludeStripId),
       rejectedReplicaRefusal: (strip, toState) => this._stripOps.rejectedReplicaRefusal(strip, toState),
     });
     this._activeCmid = null;  // the clientMutationId being applied, while applyMutation runs
-    // Cross-Facility coordination and TOFI (board/coordination.js, board/tofi.js). touch and retire are late-bound
-    // to the facade (host-core patches _touch; retire is StripOps'), activeCmid and mutationLog are read late,
+    // Cross-Facility coordination and TOFI (board/coordination.js, board/tofi.js). touch is the kernel's
+    // recordTouch; retire is late-bound to the facade (it is StripOps'), activeCmid and mutationLog are read late,
     // and the per-Role tables are the authority registry's accessors (authority/index.js), passed in.
     this._coordination = new Coordination({
       rules, state: this._state, audit: this._audit, placement: this._placement, clock, fdrStore,
-      touch: (id) => this._touch(id),
+      touch,
       activeCmid: () => this._activeCmid,
       retire: (strip, by) => this._stripOps.retire(strip, by),
       mutationLog: () => this._mutationLog,
@@ -130,7 +101,7 @@ class BoardStore {
     });
     this._tofi = new Tofi({
       rules, state: this._state, audit: this._audit, placement: this._placement, clock, fdrStore,
-      touch: (id) => this._touch(id),
+      touch,
       activeCmid: () => this._activeCmid,
       retire: (strip, by) => this._stripOps.retire(strip, by),
       initialStateFor,
@@ -142,20 +113,21 @@ class BoardStore {
     // Undo window across a restart is an acceptable Phase-1 UX gap, not a
     // correctness or safety concern.
     this._nlaHistory = new Map();
-    // stripId -> Date.now() at its drop: when a DROPPED Strip is archived
-    // (docs/adr/0082, H36). Wall time on purpose, like the latch above: a
-    // retention period is a storage lifetime, and the mission clock rewinds on
-    // a reload (H11). Not a Strip field, so the wire is unchanged. Persisted.
-    this._droppedWallAt = new Map();
+    // Snapshot, restore, archive and when each DROPPED Strip dropped (board/persistence.js), which owns that Map.
+    this._persistence = new BoardPersistence({
+      rules, state: this._state, replay: this._replay, clock,
+      mutationLog: () => this._mutationLog,
+      nlaHistory: () => this._nlaHistory,
+    });
     // The Strip operations (board/strip-ops.js): the op table, NLA and retirement. The two Maps above stay
     // here (snapshot, restore and archiveStrip use them) and are read late, because restore replaces them.
     this._stripOps = new StripOps({
       rules, state: this._state, audit: this._audit, placement: this._placement, clock, fdrStore,
       coordination: this._coordination, tofi: this._tofi, ops: OPS,
-      touch: (id) => this._touch(id),
+      touch,
       activeCmid: () => this._activeCmid,
       nlaHistory: () => this._nlaHistory,
-      droppedWallAt: () => this._droppedWallAt,
+      droppedWallAt: () => this._persistence.droppedWallAt,
       initialStateFor,
     });
   }
@@ -174,10 +146,16 @@ class BoardStore {
   /** Rebalances one Rack (board/placement.js). Kept on the facade: tools/soak/host-core.js wraps it by name. */
   _rebalanceRack(bayId, rackId, excludeStripId) { return this._placement.rebalanceRack(bayId, rackId, excludeStripId); }
 
-  // Kept on the facade for tools and tests until SYNC replaces them (docs/adr/0095):
-  // tools/soak/host-core.js patches _touch and reads _log, _strips and _cidSeq.
-  _touch(stripId) { this._state.recordTouch(stripId); }
-  get _log() { return this._state.log; }
+  /**
+   * `fn(stripId)` after every touch on this Board, synchronously, after its ring entry, in registration order
+   * (sync/sync-log.js). Never for an archive's `gone` entry. Returns a function that removes the observer.
+   */
+  observeTouches(fn) { return this._state.observeTouches(fn); }
+
+  /** How many entries the Board's ring holds now (sync/sync-log.js prunes it past 2,000 to 1,000). */
+  get ringLength() { return this._state.log.length; }
+
+  // Kept on the facade for tools and tests (docs/adr/0095): tools/soak/host-core.js reads _strips and _cidSeq.
   get _strips() { return this._state.strips; }
   get _cidSeq() { return this._state.cidSeq; }
 
@@ -199,8 +177,9 @@ class BoardStore {
   applyMutation(mutation, actingPositionId, by) {
     const cmid = mutation.clientMutationId;
     const keyed = typeof cmid === 'string' && cmid !== '';
-    if (keyed && this._appliedMutations.has(cmid)) {
-      return this._replayResult(this._appliedMutations.get(cmid)); // idempotent replay, §5.2
+    const cached = keyed ? this._replay.get(null, cmid) : null;
+    if (cached) {
+      return this._replayResult(cached); // idempotent replay, §5.2
     }
 
     // This is the ONE choke point every Mutation flows through (guide's
@@ -225,20 +204,15 @@ class BoardStore {
       this._activeCmid = null;
     }
 
-    if (keyed) this._rememberApplied(cmid, _replayRecord(result, Date.now()));
+    if (keyed) this._replay.set(null, cmid, replayRecord(result, Date.now()));
     return result;
   }
 
   /** Whether this clientMutationId is in the idempotency cache — index.js's boot reconcile asks (docs/adr/0081). */
-  hasApplied(cmid) { return this._appliedMutations.has(cmid); }
+  hasApplied(cmid) { return this._replay.has(null, cmid); }
 
-  _rememberApplied(cmid, record) {
-    this._appliedMutations.set(cmid, record);
-    if (this._appliedMutations.size > APPLIED_MUTATIONS_CAP) {
-      const oldestKey = this._appliedMutations.keys().next().value;
-      this._appliedMutations.delete(oldestKey);
-    }
-  }
+  /** The idempotency cache's Map (sync/replay-cache.js), for tools and tests that measure it. */
+  get _appliedMutations() { return this._replay.map; }
 
   /**
    * A replay's answer (docs/adr/0081): the ORIGINAL outcome with the records
@@ -374,101 +348,18 @@ class BoardStore {
     return back.map(s => s.stripId);
   }
 
-  /**
-   * When this DROPPED Strip dropped, in wall ms (docs/adr/0082). A Strip that
-   * reached DROPPED by a path other than _retireStrip (a refused TOFI's minted
-   * Strip, a SetState) is stamped the first time anyone asks, so it is
-   * archived at most one sweep late rather than never. Null for a live Strip.
-   */
-  droppedWallAtOf(stripId) {
-    const strip = this._state.strips.get(stripId);
-    if (!strip || strip.state !== 'DROPPED') {
-      this._droppedWallAt.delete(stripId);
-      return null;
-    }
-    if (!this._droppedWallAt.has(stripId)) this._droppedWallAt.set(stripId, Date.now());
-    return this._droppedWallAt.get(stripId);
-  }
+  /** When this DROPPED Strip dropped, in wall ms (board/persistence.js). Null for a live Strip. */
+  droppedWallAtOf(stripId) { return this._persistence.droppedWallAtOf(stripId); }
 
-  /**
-   * Archives one DROPPED Strip (docs/adr/0082, H36): it leaves memory and the
-   * snapshot, and the Mutation log keeps its history. Nothing archived comes
-   * back — an Undo of its drop is NOT_FOUND, like any Mutation on it. The
-   * archiver (archiver.js) decides WHEN; this only does it.
-   *
-   * The ring gets a `gone` entry, so the archive advances the Board's seq and
-   * a resync from before it reports the Strip in getDeltaSince's `gone`.
-   * @param {string} stripId
-   * @param {string} reason 'AGE' | 'MISSION_CHANGE'
-   * @param {object} [extra] fields added to the audit line (e.g. the session)
-   * @returns {string|null} the Strip's fdrId, or null when it was not a DROPPED Strip here
-   */
-  archiveStrip(stripId, reason, extra = {}) {
-    const strip = this._state.strips.get(stripId);
-    if (!strip || strip.state !== 'DROPPED') return null;
-    this._state.strips.delete(stripId);
-    this._droppedWallAt.delete(stripId);
-    this._nlaHistory.delete(stripId);
-    this._state.logGone(stripId);
-    if (this._mutationLog) {
-      this._mutationLog.record({
-        clientMutationId: null, op: 'Archive', stripId, fdrId: strip.fdrId || null,
-        // L26 (decisions.md S-L5) puts facilityId on every Board entry; this
-        // line carries it from the start.
-        facilityId: this._rules.facilityId || null,
-        actingPositionId: null, actorId: 'system', at: this._clock.now(), reason, ...extra,
-      });
-    }
-    return strip.fdrId || null;
-  }
+  /** Archives one DROPPED Strip (board/persistence.js, docs/adr/0082). */
+  archiveStrip(stripId, reason, extra = {}) { return this._persistence.archiveStrip(stripId, reason, extra); }
 
-  // ── Persistence (durable per ADR 0002 — mission reload must NOT clear this) ──
-  snapshot() {
-    // `replay`: the idempotency records of the last REPLAY_PERSIST_WINDOW_MS,
-    // so a retry after a restart answers from the cache instead of applying a
-    // second time (docs/adr/0081, L6's F5 mode A). Compact records only.
-    const horizon = Date.now() - REPLAY_PERSIST_WINDOW_MS;
-    const replay = [];
-    for (const [cmid, record] of this._appliedMutations) {
-      if (record.appliedWallAt >= horizon) replay.push([cmid, record]);
-    }
-    return { strips: this.getAll(), cidSeq: this._state.cidSeq, replay, droppedWallAt: [...this._droppedWallAt] };
-  }
-  restore(data) {
-    this._state.replaceStrips(new Map((data?.strips || []).map(s => [s.stripId, s])));
-    // A restored Board is a new lifetime: the ring and the seq did not come
-    // back, so no seq a client holds from before can be served a delta.
-    this._state.newEpoch();
-    // A snapshot written before docs/adr/0045 carries a per-Strip
-    // `correlation` field. Dropped rather than migrated: it was always the
-    // inert `{ state: 'UNCORRELATED' }` placeholder, so there is nothing in it
-    // to carry forward, and leaving it would put a second, stale answer to
-    // "which contact is this" next to the real one — which is the defect the
-    // key change removes, preserved through a restore.
-    for (const strip of this._state.strips.values()) delete strip.correlation;
-    this._state.setCidSeq(data?.cidSeq || 0);
-    // The persisted slice of the idempotency cache (docs/adr/0081). It used to
-    // be dropped here, so a CreateStrip whose ack died with the process was
-    // created twice on retry (L6's F5). Loaded whole: the snapshot already cut
-    // it to the retry window, and index.js's boot reconcile needs every record
-    // that was persisted to tell a persisted Mutation from an unpersisted one.
-    // It ages out through the cap and the next snapshot's window.
-    this._appliedMutations = new Map();
-    for (const [cmid, record] of (Array.isArray(data?.replay) ? data.replay : [])) {
-      if (typeof cmid === 'string' && record && typeof record === 'object') this._appliedMutations.set(cmid, Object.freeze({ ...record }));
-    }
-    // docs/adr/0082 — when each DROPPED Strip dropped. One restored with no
-    // entry (a snapshot written before it) starts its 2 h now: it was counted
-    // before it was persisted (L5 backfills from the log at boot anyway).
-    const dropped = new Map(Array.isArray(data?.droppedWallAt) ? data.droppedWallAt : []);
-    this._droppedWallAt = new Map();
-    const restoredAt = Date.now();
-    for (const strip of this._state.strips.values()) {
-      if (strip.state !== 'DROPPED') continue;
-      const at = dropped.get(strip.stripId);
-      this._droppedWallAt.set(strip.stripId, Number.isFinite(at) ? at : restoredAt);
-    }
-  }
+  /** The Board snapshot (board/persistence.js; durable per ADR 0002). */
+  snapshot() { return this._persistence.snapshot(); }
+  restore(data) { return this._persistence.restore(data); }
+
+  /** stripId -> wall ms of its drop (board/persistence.js), for tests. */
+  get _droppedWallAt() { return this._persistence.droppedWallAt; }
 }
 
 module.exports = { BoardStore, REPLAY_PERSIST_WINDOW_MS };

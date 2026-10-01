@@ -740,3 +740,33 @@ test('a resync delta reports a Strip no longer on the Board as gone, once (the s
   assert.deepEqual(r.ack.strips.gone.slice().sort(), [archived.stripId, dropped.stripId].sort());
   assert.deepEqual(r.ack.strips.updated.map(s => s.stripId), [kept.stripId]);
 });
+
+// ── the resync window, pinned (SYNC W5-4: no golden reaches seq 900) ─────────
+
+test('a resync from exactly RESYNC_RING_WINDOW (900) behind is a delta; one further behind is a snapshot', () => {
+  assert.equal(RESYNC_RING_WINDOW, 900);
+  const ctx = makeCtx();
+  holding(ctx, SESSION, ['OPS']);
+  const created = handleMessage(ctx, SESSION, createStripMsg(), noopPersist);
+  assert.equal(created.ack.ok, true);
+  const stripId = created.ack.strip.stripId;
+  const epoch = created.ack.boardEpoch;
+  for (let i = 0; i < 905; i++) {
+    const strip = ctx.boardStore.getStrip(stripId);
+    const r = ctx.boardStore.applyMutation({ clientMutationId: `w-${i}`, stripId, baseRev: strip.rev, op: { kind: 'SetFlag', flag: 'attention', value: i % 2 === 0 } }, 'OPS', 'controller-1');
+    assert.equal(r.ok, true);
+  }
+  ctx.boardStore.drainTouched();
+  const current = ctx.boardStore.currentSeq;
+  assert.ok(current > 905);
+  const answer = (lastBoardSeq, boardEpoch = epoch) => handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq, boardEpoch }, noopPersist).ack;
+  const atEdge = answer(current - RESYNC_RING_WINDOW);
+  assert.equal(atEdge.answer, 'delta');
+  assert.deepEqual(atEdge.strips.updated.map(s => s.stripId), [stripId], 'a Strip touched many times in the window is sent once');
+  assert.equal(answer(current - RESYNC_RING_WINDOW - 1).answer, 'snapshot');
+  assert.equal(answer(current).answer, 'delta');
+  assert.deepEqual(answer(current).strips.updated, []);
+  assert.equal(answer(current + 1).answer, 'snapshot', 'rewound');
+  assert.equal(answer(current - 1, 'another-lifetime').answer, 'snapshot', 'epoch mismatch');
+  assert.equal(answer(-1).answer, 'snapshot');
+});
