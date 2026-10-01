@@ -4,6 +4,7 @@
 // Reachability — everything left off is still in the expanded view — is held
 // by efsp-ui-reachability.test.js, per (Role, Position).
 
+import './helpers/client-env.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 

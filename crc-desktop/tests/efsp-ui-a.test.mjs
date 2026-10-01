@@ -1,5 +1,6 @@
 // UI-A follow-up: the pure halves of the U1-U8 / S-L15 / S-L16 client fixes.
 
+import './helpers/client-env.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 

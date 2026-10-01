@@ -5,6 +5,7 @@
    tab-set computation; the DOM render around it stays untested, as the rest
    of this file's UI does. */
 
+import './helpers/client-env.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
