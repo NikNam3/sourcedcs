@@ -528,7 +528,7 @@ function _litIndicator(strip, key, el, obligation, siblings) {
         if (e && e.stopPropagation) e.stopPropagation();
         if (typeof _swallowRepeatAdvance === 'function' && _swallowRepeatAdvance()) return;
         const live = (typeof getEfspStrip === 'function' && getEfspStrip(strip.stripId)) || strip;
-        sendEfspMutation(_resolveActingPositionId(live), live, { kind: 'SetState', toState: h.toState });
+        sendEfspMutation(_resolveActingPositionId(live), live, { kind: 'SetState', toState: h.toState, observedAirborne: true });
       };
       node.addEventListener('click', accept);
       node.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') accept(e); });

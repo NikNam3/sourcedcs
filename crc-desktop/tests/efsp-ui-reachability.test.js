@@ -2654,7 +2654,7 @@ test('the suggestion chip: one click sends the controller\'s own SetState to Air
   for (const fn of chip._listeners.click || []) fn({ stopPropagation() {} });
   assert.equal(sent.length, 1, 'one input');
   assert.equal(sent[0].actingPositionId, 'TWR');
-  assert.deepEqual(JSON.parse(JSON.stringify(sent[0].op)), { kind: 'SetState', toState: 'DEPARTED' });
+  assert.deepEqual(JSON.parse(JSON.stringify(sent[0].op)), { kind: 'SetState', toState: 'DEPARTED', observedAirborne: true });
   assert.deepEqual(strip, before, 'the Strip record itself is untouched');
 });
 

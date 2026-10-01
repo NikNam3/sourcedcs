@@ -688,6 +688,13 @@ const surveillanceHints = new SurveillanceHintMonitor({
   onStaleness: (e) => efspInstrumentation.metrics.recordStaleness(e),
 });
 efspInstrumentation.metrics.declareSource('staleness');
+// docs/wip/UI-B.md: the chip's SetState to DEPARTED may pass the runway gate only when the
+// server itself agrees the chip is on (its own AIRBORNE_ADVANCE hint): the client's
+// observedAirborne flag is a claim, this is the evidence.
+for (const facilityId of efspFacilityConfig.getFacilityIds()) {
+  const board = efsp.boardStoreFor(facilityId);
+  if (board) board.setAirborneObserver((s) => surveillanceHints.getAll().some(h => h.stripId === s.stripId && h.kind === 'AIRBORNE_ADVANCE'));
+}
 const stcaMonitor = new StcaMonitor({
   trackStore,
   config: alertingConfig.stca,
