@@ -1,9 +1,11 @@
+> Amended for H100 (2026-10-01): the questions below are settled (see decisions.md H100). Q-U2 changed: (b), panel message only, no `undoNotice` on the Strip.
+
 # 0100: Undo for every one-click Strip move, 10 s, restoring the state before the action
 
 **Status.** Draft (DES-SPLIT, 2026-10-01). The UNDO lane copies it to `docs/adr/0100-undo-every-one-click-move.md` at
 its first commit, edits only what its "Code as found" step proves wrong, and marks it Built at the end. It supersedes
 ADR 0009 (Undo scoped to state-only NLA transitions) and replaces guide §3.5 rule 5's 30 s window; neither is edited
-(P4). Defaults marked **[desk]** stand until the human answers (`docs/wip/DES-SPLIT.md`).
+(P4). Questions marked **settled H100** were answered by the human (decisions.md H100, `docs/wip/DES-SPLIT.md`).
 
 Vocabulary is post-RENAME (H96, H98): flight data (today FDR), strip type (Role), staffed (occupied), consolidation
 (covering), **CarrierHandoff** (today `CarrierTransfer`), Interfacility (today `Peer*`), beacon code.
@@ -38,7 +40,7 @@ kinds (H95: "routes them through the same undo history rather than renaming them
 Every op module (ADR 0095's op table, `board/ops/<op>.js`) declares `undo` explicitly: `'none'` or an undo scope (§3).
 A module without the key fails a table test, so a new op forces the decision (as `COUNTABLE_PRE_DROP_STATES` does).
 
-Undoable **[desk Q-U1]**, default = every op that moves a Strip in one gesture:
+Undoable **settled H100 (Q-U1 b)**, every op that moves a Strip in one gesture:
 
 | Op | Scope (what is restored) |
 |---|---|
@@ -54,7 +56,8 @@ Undoable **[desk Q-U1]**, default = every op that moves a Strip in one gesture:
 
 Not undoable: `CreateStrip` (drop it), `SetBlock`, `SetFlag` (edits, corrected by editing), the coordination
 primitives (they have `CANCEL`), TOFI `ACCEPT`/`REJECT`/`TRANSFER_COMMS` (answers to another party, said on frequency),
-airspace entry approval, the control-release ops of H94, and `Undo` itself (no redo).
+airspace entry approval, the `ControlRelease` ops of H94, and `Undo` itself (no redo). Exceptions settled in ADR 0101
+(DR-5 a, H100): HANDOFF `TRANSFER_COMMS` and `TRANSFER_CONTROL` and TOFI `MARK_ENTERED` are one-click marks and are undoable.
 
 ### 2. One undo history, one record per action, 10 s
 
@@ -89,7 +92,7 @@ airspace entry approval, the control-release ops of H94, and `Undo` itself (no r
     `OBSERVED_PATHS`) are never restored.
   - **Append-only cells** (clearance and Strip annotations, guide §3.7; JO 7110.65 2-3-1 forbids erasing an item) are
     not truncated: entries added by the action or by a voided Mutation get status **`VOIDED`** (with `voidedBy`
-    `actionId`), and the entry they superseded is `ACTIVE` again **[desk Q-U4]**.
+    `actionId`), and the entry they superseded is `ACTIVE` again **settled H100 (Q-U4 a)**.
   - **Side stores** through one compensator each, owned by that store and audited there with `causedBy`: the code
     allocator (`reacquire`, D23: a code another flight took meanwhile warns, never steals), the carrier store
     (`UnmarkPushed`, `Reinsert` at the vacated index; refused if the index was refilled), the MARSA store
@@ -100,6 +103,10 @@ airspace entry approval, the control-release ops of H94, and `Undo` itself (no r
   valid a few seconds ago. It does check what can have changed underneath it, and refuses with the reason:
   the restored owner Position is no longer staffed (`NOT_STAFFED`); a restored Bay is now full (`BAY_FULL`); a scoped
   Strip was archived (ADR 0082 rule 4: `NOT_FOUND`).
+  It also refuses when the restore would break the **control invariant** of ADR 0101 (settled H100 DR-6): a restored
+  HANDOFF record that names a communications or control holder whose Strip has since been retired (for example the
+  transferring side dropped its Strip after the marked step, which moved control to the receiver) is refused with
+  `UNDO_BLOCKED`, because restoring it would leave a live flight with no live holder of communications or control.
 
 ### 4. Later changes: voided inside the Facility, blocking across it
 
@@ -114,7 +121,7 @@ flight-data store's write hook). Order-key-only touches from a rebalance are ign
   the action **not undoable**: Undo is refused with `UNDO_BLOCKED` naming that Mutation. Restoring the scope alone
   would leave the third record inconsistent, and voiding it would widen the undo beyond what A did.
 - **A later change from another Facility** to a scoped record (an Interfacility response, a coordination or TOFI
-  answer, a flight data write through another Facility's Strip) **blocks** the undo **[desk Q-U3]**. Coordination in
+  answer, a flight data write through another Facility's Strip) **blocks** the undo **settled H100 (Q-U3 a)**. Coordination in
   flight is the case that matters: an undo may withdraw A's own unanswered proposal (TOFI Exit pressed by mistake, before
   the MRU answers: both Strips go back to `ACTIVE ENTRY`), but once the other Facility has answered, the exchange is
   undone through the protocol, not by voiding another Facility's controller.
@@ -125,22 +132,31 @@ flight-data store's write hook). Order-key-only touches from a rebalance are ign
 
 ### 5. Who may undo
 
-Only **the Position that performed the action** **[desk Q-U5]**, whoever owns the Strip now (after a handoff the
+Only **the Position that performed the action** **settled H100 (Q-U5 a)**, whoever owns the Strip now (after a handoff the
 receiver owns it; the sender is the one who mis-clicked). The `Undo` op has its own `authorize` (the record's acting
 Position equals the acting Position), and is no longer an op-kind grant, so a Position whose only op is a hand-back
 (JTAC) can still undo it. The session must be signed on to that Position (efsp-ws's existing binding).
 
-### 6. The voided controller is told
+### 6. The voided controller is told by a panel message only
 
-**[desk Q-U2]** default: a notice carried on the Strip, plus a toast.
+**settled H100 (Q-U2 b)**: a message on the voided controller's panel, nothing on the Strip. The Strip carries **no**
+`undoNotice`, no UNDONE indicator and no acknowledge op (`AckUndoNotice` does not exist); nothing about an undo is
+persisted on a Strip or in the Board snapshot.
 
-- Each restored Strip carries `undoNotice = { actionId, undoneOp, undoneLabel, undoneBy: <Position>, at,
-  voided: [{ op, positionId, at, summary }] }`. Positions only, never people (H35).
-- It rides the ordinary board delta and every snapshot and resync, so a controller who was disconnected sees it on
-  reconnect. The Strip shows an **UNDONE** indicator (tone attention) whose title lists what was voided. A client signed
-  on to a Position named in `voided` also shows a one-line toast.
-- It clears on the next Mutation on that Strip, or when a Position named in it (or the owner) clicks the indicator,
-  which sends `AckUndoNotice` (not undoable, not audited as a Strip change beyond its own entry).
+- When an Undo voids another Position's Mutations, the server sends **one targeted message** `efsp-undo-voided
+  { actionId, undoneOp, undoneLabel, undoneBy: <Position>, at, voided: [{ op, positionId, at, summary }] }` to every
+  session currently signed on to a Position named in `voided` (one message per Position, listing only that Position's
+  voided Mutations). Positions only, never people (H35). It is sent after the Board event of the Undo (§7). Step 0
+  checks whether a generic per-Position panel notification already exists (the CMSG message path); if so the voided
+  list rides it instead of a new message type.
+- The client shows it as a one-line message in the panel's message area ("TWR undid LC's hand-off VIPER1; your
+  annotation was voided") that the controller dismisses. It is not stored on the client beyond the session.
+- **Not delivered to a session that is not signed on at that moment**: the message is lost, by the human's choice. The
+  audit still records what was voided: the `Undo` entry's `voided` list (§8) names every voided Mutation with its
+  Position and actor, so a supervisor can always read it. A voided clearance entry is also still visible in the
+  clearance cell as `VOIDED` (§3), so what the controller told the pilot is never silently gone.
+- No Strip field is added, no snapshot or resync carries a notice, and a restored Strip is byte-for-byte the
+  before-image (plus the new `rev`, `updatedAt`, `updatedBy`).
 
 ### 7. Wire
 
@@ -189,7 +205,7 @@ Position equals the acting Position), and is no longer an op-kind grant, so a Po
 - **Ctrl+Z** with focus in the EFSP panel and **`.undo`** both send the slot's `actionId` (`.undo` no longer means "the
   selected Strip").
 - After an Undo the slot shows the outcome for 3 s ("Undone; voided 1 change by TWR", or the refusal's detail).
-- The voided controller sees the **UNDONE** indicator and the toast (§6).
+- A voided controller who is signed on sees the panel message of §6 (no Strip marker).
 
 ## Alternatives considered
 
@@ -201,8 +217,9 @@ Position equals the acting Position), and is no longer an op-kind grant, so a Po
   (L17 Q4), and routing through one undo history gives the same fix without renaming.
 - **Undo voids another Facility's later changes too** (option (b) of Q-U3). Possible with `receiveUndoRestore`, but it
   silently reverses a second controller's handshake answer at another Facility.
-- **Tell the voided controller with a targeted message only.** Rejected as the default: it is lost when that session is
-  disconnected, and a Strip notice needs no new wire family.
+- **Tell the voided controller with a Strip notice (`undoNotice`, UNDONE indicator, `AckUndoNotice`).** Rejected by the
+  human (H100, Q-U2 b): the panel message is enough, and nothing about an undo is kept on the Strip. The price is that
+  a session that is disconnected at that moment never hears of it; the audit and the `VOIDED` clearance entries remain.
 - **Persist the history.** Rejected: 10 s across a restart is not worth a store (ADR 0009's reasoning, unchanged).
 
 ## Consequences
@@ -210,6 +227,6 @@ Position equals the acting Position), and is no longer an op-kind grant, so a Po
 - ADR 0009 is superseded; guide §3.5 rule 5 (30 s, last NLA per Strip) is replaced by this ADR (L20 or the guide's next
   sweep notes it; the usage guide's "Undo" line changes in the lane).
 - New: `UndoHistory`, the `undo` key on every op module, `receiveUndoRestore` on the Board facade, three side-store
-  compensators, `OBSERVED_PATHS` in the flight-data store, `VOIDED` cell status, `undoNotice` and `AckUndoNotice`, ack
+  compensators, `OBSERVED_PATHS` in the flight-data store, `VOIDED` cell status, the `efsp-undo-voided` panel message, ack
   `undoable`, metrics counters, the client slot.
 - Every later op (the release lane's, AIRSP's) declares `undo` and lists any system-written field as observed.

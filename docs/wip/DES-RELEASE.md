@@ -1,3 +1,6 @@
+> Amended for H100 (2026-10-01): DR-6 (a) with the control invariant, DR-11 (b) no SPEED axis; all other DR answers as
+> recommended (decisions.md H100). Lane sizing: CONTROL-RELEASE 2.5 lanes.
+
 # DES-RELEASE: control release on HANDOFF (H94) and the TOFI regime at airspace entry (H97)
 
 Post-refactor design agent, docs only. Branch `lane/DES-RELEASE-release-tofi` from `165a517`.
@@ -8,16 +11,18 @@ Post-refactor design agent, docs only. Branch `lane/DES-RELEASE-release-tofi` fr
   `docs/wip/DES-RELEASE-adr-0102.md` (TOFI regime effective at airspace entry or manual mark),
   `docs/parallel/post-refactor/CONTROL-RELEASE.md`, `docs/parallel/post-refactor/TOFI-REGIME.md`, this file.
 - **Key decisions:** ACCEPT moves radar ID and ownership only; `TRANSFER_COMMS` and `TRANSFER_CONTROL` are HANDOFF
-  actions; `ControlRelease` is one op kind `GRANT|REQUEST|REFUSE|WITHDRAW` (scopes TURNS/CLIMB/DESCENT/FULL, altitude
+  actions; `ControlRelease` is one op kind `GRANT|REQUEST|REFUSE|WITHDRAW` (scopes TURNS/CLIMB/DESCENT/FULL (no speed scope, H100 DR-11 b), altitude
   limit, condition, mission-time `effectiveAt`); control = the existing `separationResponsibilityRef`, moving at
-  comms+FULL, at a manual boundary mark, or when the transferring side retires its Strip; control-axis `SetBlock`s
+  comms+FULL, at a manual boundary mark, or when the transferring side retires its Strip; control-axis `SetBlock`s (heading and altitude only)
   are checked through a `controlAxisFor` sibling of `interlockFor`, with a "coordinated with" attestation outside the
   release. AIT, POINT_OUT, intrafacility moves unchanged. HANDOFF into CV_MARSHAL added. TOFI: picked regime is
   pending until a monitor sees the flight inside an airspace ACTIVE for the MRU (0098 query) or the MRU marks
   Entered; leaving/deactivation raises an alert, never auto-reverts.
-- **Questions for the human:** DR-1 … DR-11 below (each with a recommendation the drafts use).
+- **Questions for the human:** DR-1 … DR-11 below, all answered in decisions.md H100. Changed by the answers: DR-6 (a) with a
+  new **control invariant** (ADR 0101: a path-by-path table and tests, no live flight with nobody holding comms and control),
+  DR-11 (b) (no SPEED axis, no speed check). The rest as recommended.
 - **Interface asked of 0098:** I1–I4 below; relayed via "main" and accepted by DES-AIRSP with three precisions (built by AIRSP-2S-A, which merges before TOFI-REGIME).
-- **Lane sizing:** CONTROL-RELEASE ≈ 2.25 lanes (server 1.25 + client 1, Sonnet); TOFI-REGIME ≈ 1 lane (Sonnet),
+- **Lane sizing:** CONTROL-RELEASE ≈ 2.5 lanes (server 1.5 + client 1, Sonnet; +0.25 for the invariant paths and tests); TOFI-REGIME ≈ 1 lane (Sonnet),
   after AIRSP phase 2's registry merges.
 
 ## Sources read
@@ -52,23 +57,23 @@ Findings while reading (no action, for the lanes):
 - F3 TOFI's `TRANSFER_COMMS` is only allowed on the MISSION side; HANDOFF's will be allowed on either side (DR text in
   ADR 0101 decision 2). Not a contradiction: the receiving side recording check-in is the common case on HANDOFF.
 
-## Questions for the human
+## Questions for the human (answered, decisions.md H100)
 
-Each recommendation is the drafts' default (marked **[default, DR-n]** there).
+The Recommendation column is what was proposed; **Settled H100** is the human's answer, which the ADR drafts follow.
 
-| Id | Question | Options | Recommendation |
-|---|---|---|---|
-| DR-1 | Before release, a receiver's heading/altitude/speed entry outside the release: | (a) hard refusal; (b) allowed after a "coordinated with <Position>" attestation, audited; (c) allowed with a warning only | **(b)**: verbal coordination is the real path (2-1-14 "coordination has been completed"); the same shape as ADR 0019's degraded-track note |
-| DR-2 | How is "control transfers at the boundary" detected? | (a) manual "Control" mark by either side; (b) geometric, needs APP/CTR sector polygons in the 0098 registry (not planned there); (c) both, (b) later | **(a) now, (c) later**: no sector geometry exists; the mark is what happens on the frequency |
-| DR-3 | Carrier: build an interfacility HANDOFF APP/CTR → CV_MARSHAL (replica minted MARSHAL at IN_STACK, next free stack slot on accept)? And CV → CTR for carrier departures? | (a) inbound only; (b) both directions; (c) neither (Marshal keeps creating recovery Strips by hand) | **(a)**: H94 says the hand-over to Marshal happens in the EFSP; outbound is a new capability (H78/H93 spirit: defer) |
-| DR-4 | Do intrafacility moves (APP → TWR transfer NLA, `TransferStrip`, `CarrierHandoff`, `SfaRotation`) get ControlRelease? | (a) no, control moves with ownership (facility directive, 2-1-15 b); (b) yes | **(a)**: H94 names HANDOFF; intrafacility moves are one-click by design (H95) |
-| DR-5 | Undo (H95): | (a) `TRANSFER_COMMS`, `TRANSFER_CONTROL`, TOFI `MARK_ENTERED` undoable in 10 s; `ControlRelease` not undoable, `WITHDRAW` instead; (b) everything undoable; (c) nothing | **(a)**: a release may already have been acted on by the other controller |
-| DR-6 | The transferring side drops/retires its Strip while it still holds control: | (a) control transfers implicitly (trigger `TRANSFERRING_RETIRED`), warning if comms not transferred; (b) refused until comms+control moved | **(a)**: refusing a Drop strands Strips; the audit records it |
-| DR-7 | TOFI: the flight leaves the ACTIVE airspace, or the airspace deactivates, while a non-ATC regime is effective: | (a) regime stays, alert `REGIME_OUTSIDE_AIRSPACE` on both Strips until back inside or SREG→ATC; (b) auto-revert to ATC; (c) nothing | **(a)**: (b) would tell ATC it separates without anyone telling ATC (7610.14 8-1-7/8-1-11) |
-| DR-8 | Manual "Entered" mark: who, and only inside an ACTIVE airspace? | (a) MRU side only, always allowed, warning when not inside; (b) either side; (c) MRU only and only when inside | **(a)**: geometry may be missing (`unknown`) and the MRU hears "entering" on its frequency |
-| DR-9 | AIT keeps everything at accept? | (a) yes (requires a written directive = 2-1-15 b); (b) AIT also gets the steps | **(a)** |
-| DR-10 | After ACCEPT, the transferring side's own heading/altitude/speed entries before control transfers: | (a) need the same attestation (5-4-5 b: approval of the receiver); (b) free | **(a)** |
-| DR-11 | Speed: | (a) a `SPEED` control axis on 9A-SPEED, covered only by FULL; (b) speed not checked | **(a)**: 2-1-14 lists speed; no ICAO/FAA "released for speed" scope exists |
+| Id | Question | Options | Recommendation | Settled H100 |
+|---|---|---|---|---|
+| DR-1 | Before release, a receiver's heading/altitude entry outside the release (speed is never checked, DR-11 b): | (a) hard refusal; (b) allowed after a "coordinated with <Position>" attestation, audited; (c) allowed with a warning only | **(b)**: verbal coordination is the real path (2-1-14 "coordination has been completed"); the same shape as ADR 0019's degraded-track note | (b) attestation |
+| DR-2 | How is "control transfers at the boundary" detected? | (a) manual "Control" mark by either side; (b) geometric, needs APP/CTR sector polygons in the 0098 registry (not planned there); (c) both, (b) later | **(a) now, (c) later**: no sector geometry exists; the mark is what happens on the frequency | (c): manual mark now, geometric detection later |
+| DR-3 | Carrier: build an interfacility HANDOFF APP/CTR → CV_MARSHAL (replica minted MARSHAL at IN_STACK, next free stack slot on accept)? And CV → CTR for carrier departures? | (a) inbound only; (b) both directions; (c) neither (Marshal keeps creating recovery Strips by hand) | **(a)**: H94 says the hand-over to Marshal happens in the EFSP; outbound is a new capability (H78/H93 spirit: defer) | (a) |
+| DR-4 | Do intrafacility moves (APP → TWR transfer NLA, `TransferStrip`, `CarrierHandoff`, `SfaRotation`) get ControlRelease? | (a) no, control moves with ownership (facility directive, 2-1-15 b); (b) yes | **(a)**: H94 names HANDOFF; intrafacility moves are one-click by design (H95) | (a) |
+| DR-5 | Undo (H95): | (a) `TRANSFER_COMMS`, `TRANSFER_CONTROL`, TOFI `MARK_ENTERED` undoable in 10 s; `ControlRelease` not undoable, `WITHDRAW` instead; (b) everything undoable; (c) nothing | **(a)**: a release may already have been acted on by the other controller | (a) |
+| DR-6 | The transferring side drops/retires its Strip while it still holds control: | (a) control transfers implicitly (trigger `TRANSFERRING_RETIRED`), warning if comms not transferred; (b) refused until comms+control moved | **(a)**: refusing a Drop strands Strips; the audit records it | **(a), plus the invariant "no aircraft can get stuck where nobody has comms and control"**: ADR 0101 § "The control invariant" (rule, path table, `RECEIVING_RETIRED`, repair net) and the invariant tests |
+| DR-7 | TOFI: the flight leaves the ACTIVE airspace, or the airspace deactivates, while a non-ATC regime is effective: | (a) regime stays, alert `REGIME_OUTSIDE_AIRSPACE` on both Strips until back inside or SREG→ATC; (b) auto-revert to ATC; (c) nothing | **(a)**: (b) would tell ATC it separates without anyone telling ATC (7610.14 8-1-7/8-1-11) | (a) |
+| DR-8 | Manual "Entered" mark: who, and only inside an ACTIVE airspace? | (a) MRU side only, always allowed, warning when not inside; (b) either side; (c) MRU only and only when inside | **(a)**: geometry may be missing (`unknown`) and the MRU hears "entering" on its frequency | (a) |
+| DR-9 | AIT keeps everything at accept? | (a) yes (requires a written directive = 2-1-15 b); (b) AIT also gets the steps | **(a)** | (a) |
+| DR-10 | After ACCEPT, the transferring side's own heading/altitude entries before control transfers: | (a) need the same attestation (5-4-5 b: approval of the receiver); (b) free | **(a)** | (a) |
+| DR-11 | Speed: | (a) a `SPEED` control axis on 9A-SPEED, covered only by FULL; (b) speed not checked | **(a)**: 2-1-14 lists speed; no ICAO/FAA "released for speed" scope exists | **(b)**: the aircraft is released, not its speed. Speed restrictions (200 kt until 5 DME) are rare; no SPEED axis, no conformance, no attestation. Removed from the ADR, this file and the briefing |
 
 ## Interface asked of 0098
 
@@ -105,7 +110,7 @@ HANDOFF, receiving side (APP's Strip after ACCEPT):
 - `Request release ▾`: chips TURNS / CLIMB / DESCENT / FULL + note → `ControlRelease REQUEST`; the row then reads
   "release requested 1414 · TURNS" until answered; a refusal shows "UNABLE (CTR): traffic" in the attention colour.
 - `Checked in` = `TRANSFER_COMMS`; `Control` = `TRANSFER_CONTROL` (title: "control at the boundary").
-- Editing Block 7/7A/20/21/9A-VECTOR/9A-SPEED outside the release opens a one-line prompt in the Block editor:
+- Editing Block 7/7A/20/21/9A-VECTOR outside the release (9A-SPEED never prompts, H100 DR-11 b) opens a one-line prompt in the Block editor:
   "Not released for DESCENT. Coordinated with CTR? [Coordinated] [Cancel]" → resends with `coordinatedWith`.
 - After control transfers the row collapses to the ordinary "HANDOFF ← CTR · ACTIVE" (control: APP), as today.
 
@@ -130,9 +135,9 @@ TOFI (both Strips): SEP REG Block shows the effective regime; while pending it r
 ## Test plan (summary; details in the briefings)
 
 Server unit tests (`node --test` on the touched files): the effect table; accept leaves comms/control; each action's
-permission and state guards; mirror on the peer Board with `causedBy`; the four control-transfer triggers; the
-control-axis check matrix (scope × side × climb/descent × limit × `effectiveAt` before/after on a fake mission
-clock); AIT unchanged; audit one entry per outcome; undo of the marks within/after 10 s on a fake wall clock; snapshot
+permission and state guards; mirror on the peer Board with `causedBy`; the four control-transfer triggers; the **control invariant** (H100 DR-6: a scenario per path of ADR 0101's invariant table and a bounded exhaustive walk of every drop/vacate/undo/withdraw/mark/carrier sequence, asserting after each step that comms and control are each held by a live side); the
+control-axis check matrix (scope × side × turns/climb/descent × limit × `effectiveAt` before/after on a fake mission
+clock; speed Blocks never checked); AIT unchanged; audit one entry per outcome; undo of the marks within/after 10 s on a fake wall clock; snapshot
 round-trip; CV_MARSHAL inbound HANDOFF minting MARSHAL/IN_STACK into the stack. TOFI: pending vs effective; monitor
 entry with 2-tick debounce, already-inside-at-accept, leave/deactivate alert with grace, unknown geometry, MARSA
 precedence, EXIT with pending, manual mark with/without containment. `soak:selfcheck` (board files touched). Client:
