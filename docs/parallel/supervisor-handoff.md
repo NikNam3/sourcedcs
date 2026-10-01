@@ -1,5 +1,28 @@
 # Supervisor handoff
 
+## START HERE: state at the end of session 2 (2026-10-01)
+
+Everything older in this file is history; `docs/parallel/decisions.md` (rows H78, S-M-wave3 and the S-* rows above it) is the record.
+
+**Rules in force.** Never push or merge without the human's go (the human said "merge what's finished" once; the merges below used it). **H78: no new agents until the running ones finish; the architecture refactor takes priority after them (and maybe L20).** Auth hardening is out of scope (memory `project_auth_out_of_scope`). Questions to the human go to the Decision Desk (https://claude.ai/artifact/A3gizEgbwfqCnnU831G4Y7); answers are read back with ArtifactData (`answers` collection) and logged as `H<n>` rows.
+
+**Branches.** `efsp-wp5-correlation` (local only: nothing is on GitHub; 345+ commits over `origin/main`; **back it up first, needs the human's go**) now holds waves 1 to 3: `integ/wave3-dry` (GRPC, SOAK, DOCFOLD, TA, HYG, PARITY, L17, L19, UI-A) plus L18-server, SOAKW, QAC, INFRA2, S13, DOCS2, L28, FREEZE, ARCH, AIRSP, L20-prep. Tests on it: crc-sync 2006 pass, crc-desktop 825 pass / 2 todo. A full Playwright run (`E2E_LANE=7`, log `scratchpad/pw-real.log`, may be gone) was in progress. Branch map and merge forecast: https://claude.ai/artifact/DCTL7FNCx7jqvGiTaTRAtw (written before the last merges; the merged part is now done).
+
+**Not merged yet.**
+- `lane/QA-sync-cleanup` (QAS): conflicts with L18-server in `facility-config.js`; do not hand-merge, re-run its dead-export scan on the merged tree.
+- `lane/UI-B-followup`: conflicts in 5 files (client `efsp-ws.js`, `board-store.js`, 3 test files); it cherry-picked PARITY's four test commits. After merging it, add the two one-liners in `docs/wip/UI-B.md` (the chip's `observedAirborne: true`, and `setAirborneObserver(...)` where L19's hint monitor is built).
+- `lane/E2E-harden` (E2EH): may still be running; it also fixed `l15-metrics` (expects `NO DATA`) differently from the merge-time fix (`nothing in this window`): reconcile when merging. It conflicts only in `final-panel.js` (take the merged version).
+- Phase 2 of AIRSP (airspaces panel build) waits for the refactor's registry phase and the desk answers.
+
+**Unverified by the merge.** The INFRA2/nginx resolution (a 12-hourly cert-reload loop moved to `infra/nginx/entrypoint.d/30-reload-certs.sh`, never run against a real nginx); commit `e398dc6` ("docs(parallel): S-UIA...") also swept the human's uncommitted edit of that reload loop into history under a wrong message (not rewritten).
+
+**Next, in order.** 1) Read the Playwright result and fix real failures (known flake classes: `tactical-positions`, `l17-carrier`, `l4-drag` under load; a worktree without `npm ci` shows exactly 10 crc-sync failures). 2) Merge QAS, UI-B, E2E-harden (each needs the human's go to push, not to merge). 3) Remove DOCS2's "on a branch" markers (grep `lane/L18-server` and `SOAKW` in CLAUDE.md, briefing, guide). 4) Read the desk answers (99 new questions: S3-1..10, AIRSP-1..7, ARCH-D1..D7, R3-1..82); the blocking ones are R3-1/2/3 (merge), R3-6/7 (S13), R3-8/9/10 and ARCH-D1/D2 (refactor), R3-11/12 and AIRSP-1 (airspace panel). 5) Decide L20 before the freeze window, then the refactor per `docs/wip/ARCH-plan.md` (phase 0 = the FREEZE lane, merged; refactor rule: golden diffs must be empty except by an explicit approved change). 6) Human actions: push a backup; `docker run` check of the nginx changes; the MariaDB init path and the O-9 server checks in `docs/wip/INFRA2.md`; check the live `state/` for a persisted `efsp-facility-*.json` lacking `holdsRole` (L28); live DCS checks (wind, `mission_start`, 10-minute gRPC, carrier ship, FINAL panel, the L19 chip during a runway suspension); the 4-hour soak workflow.
+
+**Artifacts.** Feature map and concern triage (the human's fix/later/wontfix decisions live in its database): https://claude.ai/artifact/X4WHNNk45QQXCDyiranAxE; "How CRC works" walkthrough (20 levels): https://claude.ai/artifact/P2MMksGLE9ATgP7FBWx6jv; airspace panel mockup: https://claude.ai/artifact/JH2NYvGPM1zcrqRaEzgiqv; git story: https://claude.ai/artifact/DCTL7FNCx7jqvGiTaTRAtw. Worktrees: `../sourcedcs-<lane>` (about 30; remove after the merges), checkpoint loop `tools/checkpoint-worktrees.sh` (dies with the session).
+
+---
+
+
 Start here if you are the supervising session for the EFSP parallel lanes. Read, in order:
 
 1. `docs/efsp-parallel-plan.md`: the lanes, the waves, the shared-file rules (§2), and your role (§1).
