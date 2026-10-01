@@ -267,3 +267,5 @@ export function isSyncOpen() { return !!(_syncSocket && _syncSocket.readyState =
 // ESM-1: replaces sendToSync for every importer (live binding). The classic page let a caller assign the global
 // `sendToSync`; the Playwright specs still do, through js/classic-globals-bridge.js, and unit tests may too.
 export function setSendToSync(fn) { sendToSync = fn; }
+// ESM-1 (S-ESM1b): the unit tests replaced the global isSyncOpen; this is that seam.
+export function setIsSyncOpen(fn) { isSyncOpen = fn; }
