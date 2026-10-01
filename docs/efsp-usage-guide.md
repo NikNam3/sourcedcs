@@ -26,9 +26,10 @@ Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green):
 - **Contact colours come from IFF interrogation**, not from the game's idea of a side, and nothing on the ground is hidden any more. See §8F.
 - **All declutter is off** until the EFSP work is finished: formation labels and navpoint names both show. See §8F.
 - **Metrics and a traffic count** exist on the server, as two read endpoints. There is no dashboard yet. See §10.
-- **Built but not usable from the panel yet:** an ATO parser that reads USMTF (atobrief can now export its package as USMTF), and a carrier model (Marshal stack, recovery Case, ship banner). Neither is wired into the Board: ATO import and the carrier Positions arrive in later waves.
+- **ATO import** — `TAC_C2` pastes or drops a USMTF ATO (atobrief exports one) and it becomes mission lines on the Board, with the air-refuelling tanker/receiver join shown on the Strips. See §8I.
+- **Built but not usable from the panel yet:** a carrier model (Marshal stack, recovery Case, ship banner). It is not wired into the Board: the carrier Positions arrive in a later wave.
 
-Not built: WP6's arresting-gear data (DCS has no wires), plus WP7's ATO import (the parser exists), WP7A's carrier Positions and PAR (the model exists), and WP8's dashboard. `docs/efsp-briefing.md` is the current handoff note.
+Not built: WP6's arresting-gear data (DCS has no wires), plus WP7A's carrier Positions and PAR (the model exists). `docs/efsp-briefing.md` is the current handoff note.
 
 **Every time EFSP works with is in-game Zulu**: the DCS mission clock, never your PC's clock or real-world UTC. Every typed time (release, void, EDCT, MTR entry and exit, …) is typed as HHMM and dated by the mission's date: the nearest such time within 12 hours.
 
@@ -447,7 +448,7 @@ FDR {
     degradation ('NONE'|'TRANSPONDER_FAILED'|'MODE_C_FAILED')      — equipment failure
     beaconAssigned (Block 5, controller/system-set)
     beaconObserved                                                  — what the aircraft is ACTUALLY squawking, from its correlated contact
-    modeOne, modeTwo                                                — WP7/ATO-owned, no setter exists (defect D24 guard)
+    modeOne, modeTwo                                                — WP7/ATO-owned: written only by the ATO import (§8I), never by a controller (defect D24 guard)
     tailNumber, unit, homeStation
     trackDegradationFlag ('NONE'|'CST'|'FAIL'|'IF'|'NT'|'TRK')      — WP4A, radar-track quality (NOT equipment — see `degradation` above)
   }
@@ -1078,6 +1079,45 @@ practice, not FAA doctrine. The indication ends by itself when the scrambler is 
 To cancel on the ground, set `14E` back to `ALERT` or `NONE`: the field is never reset automatically.
 The access route's name is a placeholder (`ALERT ACCESS TAXIWAY`) for the squadron to rename; the
 "ground" set is Facility-wide because there is no taxi-route model.
+
+## 8I. The ATO and the air-refuelling join (guide §9.8)
+
+**Who imports.** `TAC_C2` (Primary at `TACTICAL`). The **Import ATO…** button in the Strip panel's
+toolbar appears only while `TAC_C2` is held. Paste the USMTF text (atobrief's EXPORT dialog makes it),
+or drop or choose a `.txt` file. Nothing is fetched from atobrief: it is paste or drop only (H65).
+
+**The preview.** One row per mission line: mission number, callsign, package, vul window (Z), agency,
+IFF Mode 1/2/3, missing fields and warnings, and an action per line: *Bind to <flight>* (showing why:
+Mode 3 or callsign), *New flight*, *Update the tasked flight*, *Skip*. **Nothing happens until you press
+Import N lines** (Enter previews/imports, Esc closes). Each line then reports its own result; one bad
+line does not stop the others.
+
+- **Binding.** A line binds to a flight already filed when its squawk matches the ATO's Mode 3 *and* the
+  callsign agrees, or when only the callsign matches. Two possible flights, or a squawk held by a flight
+  with a different callsign, are offered but never picked for you.
+- **Callsigns** longer than 7 characters lose their vowels from the back (`ENFIELD11` becomes
+  `ENFLD11`, H60). One that still does not fit needs a callsign typed in the preview first.
+- **Squawks.** A new flight squawks the ATO's Mode 3 when crc-sync's allocator accepts it (H64);
+  otherwise it gets crc-sync's own code and a warning. A flight that was already filed keeps its ATC
+  code; if the ATO says another, every Strip of the flight shows `M3 ATO <code>` until the two agree.
+- **Dates.** The ATO's date is ignored: its times go onto the mission's calendar (H68), and a note says
+  so.
+- **Mode 1 and 2** are read-only. See them, with the ATO's Mode 3, datalink, SCL, mission type, agency,
+  frequencies, on-station time and AR detail, in the `▼` view of any Strip of the flight.
+- **Re-import** an amended ATO: lines already on the Board become *Update*. ATO values are replaced and
+  anything a controller typed is kept (the preview says which). Flights the new ATO no longer mentions
+  are listed and left alone: nothing is torn down. Only one ATO is active at a time.
+- **ATO first, filed later.** When `OPS` types the callsign of an ATO flight that has no ATC Strip, the
+  toolbar offers "file against ATO mission <msn>"; the DEPARTURE is then the same flight with the same
+  code.
+
+**The AR badge.** `AR SHELL71` on a receiver, `AR ×2` on the tanker. Select any of them and the others
+are highlighted (per client). **It is not MARSA** and declares nothing, separates nothing and changes no
+`separationRegime`. If the tanker's Strip is dropped, the receivers keep their records and their badge
+loses that peer. A re-import with a changed tanker rewires the join.
+
+*What is ours, not doctrine:* the USMTF set layouts come from a community wiki
+(`docs/parallel/research/usmtf-ato.md`), the vowel-cut rule and the one-ATO-at-a-time rule.
 
 ## 9. General controls — quick reference
 

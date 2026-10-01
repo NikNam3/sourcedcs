@@ -624,6 +624,28 @@ nothing needs resetting. `nla.js` never reads it (a test holds that). The access
   `scrambleAlertsFor` rescans the live Strips once per rendered Strip (O(n²) per render); fine at
   squadron scale, cache it per render if Boards grow.
 
+**The ATO on the Board (L14, `0071`).** `crc-sync/src/efsp/ato/ato-board.js` (preview, bind
+candidates, plan, tasking, AR links, execution, the H68 whole-day date shift), `ato/callsign-fit.js`
+(H60: every vowel, leading one included, back to front; unfittable returns `null`, which differs from
+miztoyaml on that one edge), `efsp-ato-preview` / `efsp-ato-mutation` on the wire, and on the client
+`ato-import.js`, `ato-strip.js` and the OPS "file against ATO mission" picker in `efsp-panel.js`.
+- **The ATO's values live on the FDR through one setter, `fdrStore.applyAtoTasking`**, never through
+  `WRITABLE_PATHS`/`setField`: that would reopen D24 and mark ATO values as controller-typed. It may
+  write only `scl`, `arInfo` and `alertStatus` (`NONE`/`ALERT`) under `military`.
+- Bind preselection is narrowed: a unique Mode 3 match is preselected only if the callsign agrees;
+  otherwise it is offered with `MODE3_HELD_BY_OTHER`. UPDATE matches on the line id
+  (`<missionNumber>#<n>`) of a flight with a live MISSION Strip on TACTICAL. A re-import bumps `rev` on
+  unchanged flights (the `atoRef` changes): harmless.
+- **Trap: cross-Strip render state must be in the Strip's signature** (`bay-view.js`, the `ar:` part).
+  The AR highlight was invisible in the browser while every unit test passed. Same rule as L1b's.
+- `_handleAtoMutation` logs its own refusals except `NOT_HOLDING_POSITION`, so L5's tap never logs one
+  twice.
+- Not built or not walked: the coordination-instrument capture for a Mode 3 conflict (Q-L14-9, only a
+  warning exists); the pilot requests by hand against a live DCS clock (the e2e runs on the wall-clock
+  fallback); a second controller watching the AR highlight; the duplicate `MODE3_SYNTHETIC` +
+  `MODE3_NOT_ADOPTED` warning pair is cosmetic. atobrief handing out colliding Mode 3 codes now shows as
+  duplicate warnings on the Board (H64). M6/M7 display waited for L16 (done, below).
+
 ## 4. What's left, and the known bugs
 
 **Not built, in the guide's order.** WP6: the field-state panel and the hook-mismatch check (L1b),
