@@ -166,7 +166,8 @@ services:
           proxy_set_header X-Forwarded-Proto https; }
       }
       ' > /etc/nginx/conf.d/default.conf
-      && nginx -g 'daemon off;'"
+      && { (while :; do sleep 12h; nginx -s reload; done) & }
+      && exec nginx -g 'daemon off;'"
     depends_on:
       - mediawiki
       - casdoor
