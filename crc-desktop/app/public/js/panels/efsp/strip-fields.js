@@ -59,7 +59,7 @@ const COMPACT_BLOCKS_BY_ROLE = {
 //    face only once it is set to something other than CLEAN — see
 //    ORDNANCE_WHEN_SET below (decisions.md H55 and S-L12, crc-sync's
 //    docs/adr/0069).
-//  - A runway field only for the airfield Positions: OPS, CD, GND, TWR, APP.
+//  - A runway field only for the airfield Positions: OPS, CD, GND, TWR, APP, and SFA (an approach controller).
 //  - FREQ (22) only where a controller works more than one frequency: APP and
 //    CTR. OPS, CD, GND and TWR each sit on one.
 //  - The assigned altitude (ALT) wherever a clearance is issued or worked: CD,

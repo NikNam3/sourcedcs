@@ -93,7 +93,7 @@ test('a runway field only on the airfield Positions', () => {
   const runwayBlock = { DEPARTURE: '8A', ARRIVAL: '8B' };
   for (const { role, positionId, list } of everyList()) {
     const rwy = runwayBlock[role];
-    if (!rwy || ['OPS', 'CD', 'GND', 'TWR', 'APP'].includes(positionId)) continue;
+    if (!rwy || ['OPS', 'CD', 'GND', 'TWR', 'APP', 'SFA'].includes(positionId)) continue;
     assert.equal(list.includes(rwy), false, `${role} at ${positionId} shows a runway`);
   }
 });
