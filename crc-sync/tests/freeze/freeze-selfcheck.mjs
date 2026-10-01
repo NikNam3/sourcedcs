@@ -31,7 +31,7 @@ function buildCopy() {
   const dest = path.join(root, 'crc-sync');
   fs.cpSync(CRC_SYNC, dest, { recursive: true, filter: (p) => !/(^|\/)(node_modules|out|\.git)(\/|$)/.test(path.relative(CRC_SYNC, p)) });
   fs.symlinkSync(path.join(CRC_SYNC, 'node_modules'), path.join(dest, 'node_modules'));
-  for (const sib of ['atobrief', 'docs']) if (fs.existsSync(path.join(REPO, sib))) fs.symlinkSync(path.join(REPO, sib), path.join(root, sib));
+  for (const sib of ['atobrief', 'docs', 'crc-desktop']) if (fs.existsSync(path.join(REPO, sib))) fs.symlinkSync(path.join(REPO, sib), path.join(root, sib));
   return { root, dest };
 }
 
