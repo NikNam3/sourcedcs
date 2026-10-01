@@ -65,8 +65,8 @@ test('D-9: the client owner tables name exactly the states nla.js has for each R
   }
 });
 
-test('the 400 ms double-tap guard and the 30 s Undo window equal board-store.js\'s literals', () => {
-  const src = readServer('efsp/board-store.js');
+test('the 400 ms double-tap guard and the 30 s Undo window equal board/ops/invoke-nla.js\'s literals', () => {
+  const src = readServer('efsp/board/ops/invoke-nla.js');
   assert.match(src, new RegExp(`wallNow - lastInvoke\\.invokedAt < ${DOUBLE_TAP_MS}\\b`), 'board-store double-tap guard differs from DOUBLE_TAP_MS');
   assert.match(src, new RegExp(`expiresAt: wallNow \\+ ${UNDO_WINDOW_MS}\\b`), 'board-store undo window differs from UNDO_WINDOW_MS');
 });

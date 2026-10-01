@@ -18,10 +18,10 @@ class Coordination {
    * @param {object} deps.fdrStore
    * @param {(stripId:string) => void} deps.touch late-bound to the facade's _touch (the soak host patches it)
    * @param {() => string|null} deps.activeCmid the clientMutationId being applied, read late
-   * @param {(strip:object, by:string) => object|null} deps.retire late-bound to the facade's _retireStrip (BOARD-3 moves it)
+   * @param {(strip:object, by:string) => object|null} deps.retire late-bound to StripOps' retire
    * @param {() => object|null} deps.mutationLog the facade's current Mutation log, read late (setMutationLog)
-   * @param {object} deps.replicaStateOnReceipt facade table, passed as a value (docs/adr/0087)
-   * @param {object} deps.senderStateOnAccept facade table, passed as a value (docs/adr/0087)
+   * @param {(role:string, senderState:string) => string} deps.replicaStateOnReceipt the authority registry's accessor (docs/adr/0087)
+   * @param {(primitive:string, role:string, senderState:string) => string|undefined} deps.senderStateOnAccept the authority registry's accessor (docs/adr/0087)
    */
   constructor({ rules, state, audit, placement, clock, fdrStore, touch, activeCmid, retire, mutationLog, replicaStateOnReceipt, senderStateOnAccept }) {
     this._rules = rules;
@@ -415,7 +415,7 @@ class Coordination {
       // _applyCoordinationPropose before this is ever called), so the
       // receiving Facility is guaranteed to have a Bay configured for it.
       role: fromRole,
-      state: (this._replicaStateOnReceipt[fromRole] || {})[fromState] || fromState,
+      state: this._replicaStateOnReceipt(fromRole, fromState),
       ownerPositionId: toPositionId,
       bayId: coordinationBay.bayId,
       rackId: coordinationBay.rackIds[0],
@@ -471,7 +471,7 @@ class Coordination {
     if (response === 'ACCEPT') {
       const effect = this._rules.coordinationEffect ? this._rules.coordinationEffect(strip.coordination.primitive) : null;
       // docs/adr/0087: a HANDed-OFF overflight has left this sector.
-      const afterAccept = ((this._senderStateOnAccept[strip.coordination.primitive] || {})[strip.role] || {})[strip.state];
+      const afterAccept = this._senderStateOnAccept(strip.coordination.primitive, strip.role, strip.state);
       if (afterAccept) strip.state = afterAccept;
       strip.coordination.state = 'ACTIVE';
       strip.coordination.acceptedAt = now;
