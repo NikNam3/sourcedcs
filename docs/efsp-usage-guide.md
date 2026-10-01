@@ -236,10 +236,13 @@ table is simply wrong.
 
 ### Switching, and cancelling
 
-The short name shows on the Strip as Block **`STEREO`** (`9F`), next to `RTE`, and you edit it the
-ordinary way — click, type, enter.
+The short name shows on the Strip as Block **`STEREO`** (`9F`), next to `RTE`. **It is a picker**:
+click it and choose a route from the installed table, in table order. On `OPS` and `CD` it is on the
+face; on `GND`, `TWR` and `APP` it is one `▼` away. A route the squadron has retired stays in the list
+for a flight already filed with it. With no table installed (and no stereo on the flight) the cell is
+plain text and says "no stereo routes configured" on hover.
 
-**Typing a route name into `STEREO` re-files the flight.** *"VIPER11, request change to PACK 2"* is
+**Choosing a route in `STEREO` re-files the flight.** *"VIPER11, request change to PACK 2"* is
 one edit: the route, altitude, departure and destination are all rewritten from the table, and the
 aircraft keeps the squawk and the CID it was already given. This works in both directions — a flight
 that filed a plain route the normal way and then asks for the standard route on first contact is the
@@ -249,9 +252,10 @@ Two things a re-file deliberately leaves alone: **Block 9E (remarks)**, which is
 has nothing to do with the route, and **any clearance you have already issued** — amending what was
 *filed* is not the same as re-clearing the aircraft, and that is still a conversation with the pilot.
 
-**Clearing `STEREO` cancels the stereo without touching the route.** The flight keeps flying what it
-was flying, it just stops being labelled as a canned route. If you want the route gone too, edit
-Block 9.
+**Choosing "—" in `STEREO` cancels the stereo without touching the route.** The flight keeps flying
+what it was flying, it just stops being labelled as a canned route. "—" is only for "keep this route
+but it is not PACK 2 any more": to file a different route, just edit Block 9, which clears the label by
+itself.
 
 **Editing Block 9 (the route) also clears the `STEREO` label**, in the other direction. An amended
 route is no longer the canned one, and leaving the label would make the Strip claim a route it is not
@@ -356,6 +360,33 @@ overflight is `CRUS ALT`, and changing it is an amendment to the flight plan, no
 Type an altitude as `FL180`, `A050`, `180` (hundreds of feet) or `5000` (feet). Type a heading as
 `050`. Anything else is refused. `HDG` is usually left empty: set it when you vector, and the
 conformance check (§8E) only watches a heading once one is assigned.
+
+### Times: typed as HHMM, and italic estimates
+
+Every time Block (`6`, `14`, `14B`–`14D`, `16`–`18`, the MTR times, and the mission line's vul window
+`M6`/`M7`) is **typed as `HHMM`** and shown as `HHMM`; it is stored as an instant on the mission's
+calendar. Something that is not a time is refused with the Block's name ("proposed departure time must be
+a UTC time as HHMM, e.g. 1432"). The vul window's end is always *after* its start, so `2200`–`0130` runs
+overnight; a typed end equal to the start means the next day.
+
+Three times fall back to an estimate until a controller types the actual (§10.5):
+
+| Block | Chain, first wins |
+|---|---|
+| `6` P-time (departure) | what a controller typed, then the filed DD-1801's item 13 (EOBT), then the ATO |
+| `17` TAXI (off-block) | what a controller typed, then an estimate from the P-time |
+| `18` TAKEOFF | what a controller typed, then an estimate from the off-block time |
+
+- **An italic time is an estimate.** P-time is never italic. Type the actual (`1432`) over an estimate to
+  replace it; clear your entry to get the estimate back.
+- **Hover the value, or the label in `▼`,** to see where it came from, e.g. *"~1430Z estimate: P-time,
+  from the filed DD-1801 (item 13, EOBT)"*. After you have typed one, the hover also says what you would
+  get back if you cleared it.
+- **Gotchas.** `TAXI` and `TAKEOFF` are on no Position's face, so `GND` opens `▼` to type an off-block
+  time. A `TAXI` a controller already typed does **not** move when the P-time later changes (a
+  controller's entry stops the chain), and nothing flags the mismatch. Typing the same `HHMM` an estimate
+  shows does nothing: you cannot "confirm" an estimate without typing a different value. No state change
+  (TWR pressing Airborne) stamps a time yet.
 
 ## 4C. MTR fields — a flight on a military training route
 

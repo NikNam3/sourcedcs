@@ -668,6 +668,29 @@ be `null`. `_dispatchGesture` now returns the acting Position (truthy only on di
 - Flaky under load, not L15's: `grpc-client-stream.test.mjs` "a stream that stayed up resets the
   backoff" and several `e2e/l1-popovers.spec.js` tests at the 20 s budget.
 
+**`9F` picker and the §10.5 time chains (L16, `0073`).** The `9F` options come from the last
+successful fetch of the stereo table (`efsp-stereo-routes.js`'s `cachedStereoRoutesClient()`); the cache
+key is in the Strip render signature (`stereo:` in `_stripRenderSignature`) and a changed cache asks for
+a render, because the first render after a load always beat the fetch and every `9F` stayed "no stereo
+routes configured". The chains are computed at read, never stored: `time-chains.js` has **two
+byte-identical copies, one per package** (crc-sync and `panels/efsp/`; they never share code, `0001`),
+held equal by `crc-sync/tests/fixtures/time-chains.json` plus a byte-equality test on each side;
+`resolveTimeChain(name, fdr)` returns `.estimated`, so anything bucketing by takeoff time must check it.
+The one new stored input is `fdr.timeInputs.flightPlanDepartureUtc` (from the DD-1801's `depTime`, dated
+by the mission clock; `restore()` seeds `timeInputs`). `fdr.ato.departure.timeUtc` feeds the P-time
+chain. `ZULU_HHMM_BLOCKS` now covers `M6`/`M7` (the set is derived from the Block Maps by a test), and
+`resolveZuluHhmmAfter` dates the vul end. `time-chains.js` loads before `strip-template.js`.
+- Opt-in `E2E_STEREO_ROUTES` makes the e2e harness install a stereo table (fixture
+  `e2e/fixtures/l16-stereo-routes.json`).
+- Open: the state-transition source for takeoff (needs a `board-store.js` hook and an FDR broadcast on
+  a state-only Mutation, would be the takeoff chain's next source); **W2** TAXI/TAKEOFF are on no face
+  (a GND controller must expand the Strip; owner: the field lists); **W3** a typed TAXI does not follow
+  a later P-time change and nothing flags it (a conformance-style hint, whoever takes §10.2 next); **W5**
+  an estimate cannot be accepted as the actual without retyping a different value (left open in `0073`);
+  the route `description` is not shown as the option's title; editing a vul start does not move a stored
+  end, and a start moved past its end is not refused (MISSION validation); a stale MTR exit fix after a
+  designator change is still not warned (H23 keeps MTRs free text).
+
 ## 4. What's left, and the known bugs
 
 **Not built, in the guide's order.** WP6: the field-state panel and the hook-mismatch check (L1b),
@@ -704,7 +727,6 @@ the `[SOURCE-DEFINED]` audit fixes (L20), which is a WP6 acceptance criterion in
 | Airspace STALE_REV/NOT_FOUND, class-based PERMISSION_DENIED and "no store" refusals are not logged | audit gap | L26 | L5 |
 | An MTR (any plain `fdr` Block) amendment overwrites: no history, no `op.value` in the log | known gap | later slice (H25) | `docs/wip/L2.md` |
 | Changing only the MTR designator leaves the old exit fix with no warning | low | L16, with the route table (H23) | L2 |
-| Typed time Blocks `6`, `14`, `14B`–`14D`, `16`–`18`, `M6`/`M7` store the raw string where epoch ms is expected | correctness | F4 (storage), L16 (display) | L2, S-R2-17 |
 | `marsa-store.js:37–41` still says obligations cannot retract; ADR `0042` names `radar-specs.json` (it is `sensor-specs.json`); `correlation-reconciler.js:50–52` claims a test forces an eligibility decision it doesn't | stale text | L20 | L4, S-L7 |
 | `NOT_OWNER` acks carry no detail, so B1/B2's controller is told nothing | ergonomics | L23 (O4) | L8 |
 | `_cidSeq` passes 999 after ~3 h at stress rate | low | unowned | L6 F9 |
@@ -739,7 +761,7 @@ cross-test (a crc-sync test parsing `ojw1v5-export.txt` and `research-render.txt
 - `positionRadars`' shipped defaults are SOURCE's model of which scope sits at which console (H61
   keeps them, labelled as such). The real assignment is squadron data.
 - **Stereo routes have never run against real routes** (`0050`). The table ships empty on purpose.
-  Block `9F` becoming a picker is L16's.
+  Block `9F` is a picker now (L16).
 - Incirlik's shipped field data (true headings 056/236, acknowledgers, pad names) is
   `[SOURCE-DEFINED]` and approximate; L20's list.
 - **The Strip layout (`0056`)** was checked by eye in Playwright screenshots; the all-lit worst
