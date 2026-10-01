@@ -38,6 +38,7 @@ const { Coordination } = require('./board/coordination');
 const { Tofi } = require('./board/tofi');
 const { runwayInhibitFor, RUNWAY_GATED_STATES } = require('./field-state');
 const { CARRIER_TRANSFER_EFFECTS } = require('./carrier/transfer-effects'); // pure (docs/adr/0074)
+const log = require('../log').logger('efsp:board-store');
 
 // A DEPARTURE in these states has left the ground (docs/adr/0076).
 const DEPARTURE_AIRBORNE_STATES = ['DEPARTED', 'HANDED_OFF'];
@@ -227,7 +228,7 @@ class BoardStore {
     try {
       result = this._dispatch(mutation, actingPositionId, by);
     } catch (err) {
-      console.error('[board-store] unexpected error applying Mutation — rejecting it instead of crashing:', err);
+      log.error('unexpected error applying Mutation — rejecting it instead of crashing', { err });
       result = { ok: false, reason: 'VALIDATION_ERROR', detail: 'internal error processing mutation' };
     } finally {
       this._activeCmid = null;
