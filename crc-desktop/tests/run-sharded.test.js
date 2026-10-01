@@ -13,7 +13,13 @@ test('split: every file lands in exactly one shard', () => {
   assert.deepEqual(shards.flatMap((s) => s.files).sort(), files);
 });
 
-test('split: without timings it balances by file count', () => {
+test('split: without timings it balances by test count', () => {
+  const counts = { 'a.spec.js': 9, 'b.spec.js': 3, 'c.spec.js': 3, 'd.spec.js': 3 };
+  const shards = splitShards(Object.keys(counts), 2, {}, counts);
+  assert.deepEqual(shards.map((s) => s.weight).sort(), [9, 9]);
+});
+
+test('split: with neither timings nor counts it balances by file count', () => {
   const files = Array.from({ length: 10 }, (_, i) => `s${i}.spec.js`);
   const sizes = splitShards(files, 3, {}).map((s) => s.files.length).sort();
   assert.deepEqual(sizes, [3, 3, 4]);
@@ -27,9 +33,9 @@ test('split: measured durations balance by time, not count', () => {
   assert.deepEqual(shards.find((s) => s.files.includes('big.spec.js')).files, ['big.spec.js']);
 });
 
-test('split: a spec without a timing counts as the median of the others', () => {
-  const shards = splitShards(['a.spec.js', 'b.spec.js', 'new.spec.js'], 2, { 'a.spec.js': 10, 'b.spec.js': 30 });
-  assert.equal(shards.reduce((a, s) => a + s.weight, 0), 10 + 30 + 20);
+test('split: a spec without a timing is weighted by its tests at the median seconds-per-test', () => {
+  const shards = splitShards(['a.spec.js', 'b.spec.js', 'new.spec.js'], 2, { 'a.spec.js': 10, 'b.spec.js': 30 }, { 'a.spec.js': 1, 'b.spec.js': 3, 'new.spec.js': 4 });
+  assert.equal(shards.reduce((a, s) => a + s.weight, 0), 10 + 30 + 40);
 });
 
 test('split: more shards than files drops the empty ones; bad n throws', () => {

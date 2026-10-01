@@ -15,7 +15,7 @@
  *
  * Split: longest-processing-time first onto the least-loaded shard, by the measured seconds per spec in
  * e2e/tools/spec-timings.json (rewritten after every run for the files that ran); with no timing for
- * any spec it balances by file count, and a spec with no timing counts as the median of the others.
+ * a spec it balances by that spec's test count (`playwright test --list`).
  *
  * Processes: every child is started in its own process group and stopped by PID (the group, so the
  * browser and the two servers Playwright started go with it), on exit, Ctrl-C, SIGTERM and a crashed
@@ -26,7 +26,7 @@
  * The exit code is 1 only for a failure that is consistent, or for any failure when --rerun-failed is off.
  */
 
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
@@ -43,13 +43,18 @@ function median(xs) {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
 
-/* files: spec file names. timings: { file: seconds }. Returns an array of `n` shards:
+/* files: spec file names. timings: { file: seconds }. counts: { file: number of tests }. Returns an array of `n` shards:
  * [{ files: [...], weight }], each file list in name order (Playwright runs files in name order anyway). */
-function splitShards(files, n, timings = {}) {
+function splitShards(files, n, timings = {}, counts = {}) {
   if (!Number.isInteger(n) || n < 1) throw new Error(`shards must be a positive integer, got ${n}`);
-  const known = files.map((f) => timings[f]).filter((x) => Number.isFinite(x) && x > 0);
-  const fallback = known.length ? median(known) : 1;
-  const weightOf = (f) => (Number.isFinite(timings[f]) && timings[f] > 0 ? timings[f] : fallback);
+  const has = (f) => Number.isFinite(timings[f]) && timings[f] > 0;
+  const known = files.filter(has);
+  // A spec with no timing is weighted by its test count: at the median seconds-per-test of the specs
+  // that have one, or at one unit per test when nothing has a timing (a split by test count; a split by
+  // file count when counts are missing too: a spec counts as one test).
+  const n_ = (f) => (Number.isFinite(counts[f]) && counts[f] > 0 ? counts[f] : 1);
+  const perTest = known.length ? median(known.map((f) => timings[f] / n_(f))) : 1;
+  const weightOf = (f) => (has(f) ? timings[f] : n_(f) * perTest);
   const shards = Array.from({ length: n }, () => ({ files: [], weight: 0 }));
   const order = [...files].sort((a, b) => weightOf(b) - weightOf(a) || (a < b ? -1 : 1));
   for (const f of order) {
@@ -210,6 +215,14 @@ function runPlaywright(lane, targets, tag, logDir) {
   });
 }
 
+/* Tests per spec file, from `playwright test --list` (no servers start; ~4 s). {} if it fails. */
+function listCounts() {
+  const r = spawnSync('npx', ['playwright', 'test', '--list', '--reporter=json'], { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  const counts = {};
+  try { for (const row of parseReport(JSON.parse(r.stdout))) counts[row.file] = (counts[row.file] || 0) + 1; } catch (_) { /* by file count */ }
+  return counts;
+}
+
 const flag = (a, n) => a.includes(n);
 const val = (a, n, d) => { const i = a.indexOf(n); return i >= 0 ? a[i + 1] : d; };
 const fmt = (s) => `${Math.floor(s / 60)}m${String(Math.round(s % 60)).padStart(2, '0')}s`;
@@ -233,10 +246,11 @@ async function main() {
   let timings = {};
   try { timings = JSON.parse(fs.readFileSync(timingsFile, 'utf8')); } catch (_) { /* by file count */ }
 
-  const shards = splitShards(files, Math.min(nShards, files.length), timings);
+  const counts = listCounts();
+  const shards = splitShards(files, Math.min(nShards, files.length), timings, counts);
   const haveTimings = files.some((f) => timings[f] > 0);
-  console.log(`${files.length} specs, ${shards.length} shards on lanes ${lanes.slice(0, shards.length).join(',')} (${haveTimings ? 'balanced by measured time' : 'balanced by file count'})`);
-  shards.forEach((s, i) => console.log(`  lane ${lanes[i]}: ${s.files.length} specs${haveTimings ? `, ~${fmt(s.weight)}` : ''}`));
+  console.log(`${files.length} specs, ${shards.length} shards on lanes ${lanes.slice(0, shards.length).join(',')} (${haveTimings ? 'balanced by measured time' : 'balanced by test count'})`);
+  shards.forEach((s, i) => console.log(`  lane ${lanes[i]}: ${s.files.length} specs, ${s.files.reduce((a, f) => a + (counts[f] || 1), 0)} tests${haveTimings ? `, ~${fmt(s.weight)}` : ''}`));
 
   for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
     process.on(sig, () => { console.error(`\n${sig}: stopping shards`); stopAll(); setTimeout(() => process.exit(130), 1500); });
