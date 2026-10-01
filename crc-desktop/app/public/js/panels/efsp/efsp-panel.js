@@ -1623,3 +1623,4 @@ export function initEfspPanel() {
 
 // ESM-1 (S-ESM1c): the unit tests set the refusal on screen directly in the old shared scope; this is that seam.
 export function _setCurrentRefusalForTest(r) { _currentRefusal = r; }
+export function _setBayContentElForTest(el) { _bayContentEl = el; }

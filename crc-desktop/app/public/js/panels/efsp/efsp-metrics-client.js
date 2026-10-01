@@ -270,10 +270,15 @@ export function createEfspMetricsClient(deps) {
 // ── the browser singleton and the global hooks ─────────────────────────────
 
 let _efspMetricsClient = null;
+// ESM-1 (S-ESM1d): replaces the singleton for a test; null restores lazy creation by _efspMetrics().
+export function _setEfspMetricsClientForTest(client) { _efspMetricsClient = client; }
 
 function _efspMetrics() {
   if (_efspMetricsClient) return _efspMetricsClient;
-  const has = (name) => typeof globalThis[name] === 'function';
+  // ESM-1 (S-ESM1d): the hooks are imports now, not globals; `has` reads the imported bindings (always present in the
+  // page, as the globals were) instead of globalThis, which no module writes.
+  const hooks = { isSyncOpen, getEfspBays, getActingPositions, getEfspStrip, getAllEfspStrips, efspVisibleBayId, missionNow };
+  const has = (name) => typeof hooks[name] === 'function';
   _efspMetricsClient = createEfspMetricsClient({
     send: (msg) => _sendEfsp(msg),
     isOpen: () => (has('isSyncOpen') ? isSyncOpen() : false),
