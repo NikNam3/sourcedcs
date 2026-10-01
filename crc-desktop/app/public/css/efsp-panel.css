@@ -1864,7 +1864,7 @@
 .carrier-stack-title { font-weight: 700; color: #cfd8df; margin-right: auto; }
 .carrier-stack-empty { padding: 6px; color: #6a7580; }
 .carrier-stack-warning { padding: 4px 6px; color: #ffb347; }
-.carrier-slot { display: flex; gap: 10px; align-items: center; padding: 3px 6px; min-height: 28px; border-bottom: 1px solid #20262c; font-variant-numeric: tabular-nums; }
+.carrier-slot { display: flex; gap: 10px; align-items: center; padding: 1px 6px; min-height: 24px; user-select: none; border-bottom: 1px solid #20262c; font-variant-numeric: tabular-nums; }
 .carrier-slot-vacant { color: #5a6570; border-style: dashed; }
 .carrier-slot-occupied { color: #cfd8df; }
 .carrier-slot.efsp-drop-target { background: #2a4d33; outline: 1px solid #39ff7a; }
@@ -1877,3 +1877,5 @@
 .efsp-carrier-trigger-radar-acquisition { border-style: double; }
 .efsp-carrier-trigger-pilot-ball-call { border-style: dashed; }
 .efsp-carrier-trigger-pilot-see-you { border-style: dotted; }
+.carrier-slot-draggable { cursor: grab; }
+.carrier-slot-dragging { opacity: 0.6; cursor: grabbing; }

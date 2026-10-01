@@ -315,7 +315,11 @@ function _handleMutation(ctx, session, msg, persist) {
   // stack (Commence marks a flight pushed, a hand-over to PriFly leaves a
   // vacancy). The record is not a Strip, so it rides its own delta on the same
   // round trip, MARSA's shape.
-  if (result.carrierChanged && ctx.carrierStore) out.carrierBroadcast = carrierDelta(ctx.carrierStore);
+  if (result.carrierChanged && ctx.carrierStore) {
+    out.carrierBroadcast = carrierDelta(ctx.carrierStore);
+    // A push re-numbers nothing but changes which lane the next flight feeds.
+    if (ctx.nlaStatusMonitor) ctx.nlaStatusMonitor.tick();
+  }
   return out;
 }
 
@@ -681,6 +685,10 @@ function _handleCarrierMutation(ctx, session, msg, persist) {
     changed: result.ok ? result.changed : undefined, carrierSeq: store.currentSeq,
   };
   if (!result.ok) return { ack };
+  // The Case and the stack decide every carrier Strip's NLA (Commence or To
+  // pattern, and which lane): re-state the ones whose status moved, as
+  // the sweep does for a clock-driven change (nla-status-monitor.js).
+  if (ctx.nlaStatusMonitor) ctx.nlaStatusMonitor.tick();
   // One delta carrying the whole hull record: a Case change reaches every
   // client as ONE message and each re-renders every carrier Strip from it
   // (WP7A bullet 3, "at once").

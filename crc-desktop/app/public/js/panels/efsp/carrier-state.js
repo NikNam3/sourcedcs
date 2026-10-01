@@ -104,7 +104,7 @@ function carrierBannerParts(view = getEfspCarrier()) {
   if (!s) return { text: 'hull not found', problem: 'hull not found', parts: {} };
   const parts = {};
   parts.hull = (view.hullId || '');
-  if (!s.found) return { text: `${parts.hull} — ${s.hullProblem || 'hull not found'}`, problem: s.hullProblem || 'hull not found', parts };
+  if (!s.found) return { text: s.hullProblem || 'hull not found', problem: s.hullProblem || 'hull not found', parts };
   parts.brc = s.brcDisplay && s.brcDisplay.value != null ? carrierBearingText(s.brcDisplay) : '';
   parts.finalBearing = s.finalBearingDisplay && s.finalBearingDisplay.value != null ? carrierBearingText(s.finalBearingDisplay) : '';
   parts.speed = s.speedKt != null ? `${s.speedKt} KT` : '';

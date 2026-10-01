@@ -138,11 +138,11 @@ class CarrierStore {
     }
     // What each slot WOULD read if a flight stood in it, so a drag-to-slot can
     // preview the new angels, DME and push time without the client doing any
-    // arithmetic. The slots run from 0 to two above the top of the stack.
+    // arithmetic. The slots run from 0 to one above the top of the stack (a drop higher would leave a gap, which the model refuses).
     const slots = {};
     for (const [stackId, stack] of Object.entries(r.stacks)) {
       const top = stack.entries.reduce((m, e) => Math.max(m, e.stackIndex), -1);
-      const last = Math.min(carrier.STACK_DEFAULTS.maxIndex, top + 2);
+      const last = Math.min(carrier.STACK_DEFAULTS.maxIndex, top + 1); // one open slot above the stack: a drop there appends
       slots[stackId] = [];
       for (let i = 0; i <= last; i++) {
         const d = carrier.deriveEntry({ fdrId: null, stackIndex: i, status: 'HOLDING', caseIAngels: null }, {

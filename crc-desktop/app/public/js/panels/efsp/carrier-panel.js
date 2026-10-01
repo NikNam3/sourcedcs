@@ -72,7 +72,7 @@ function renderCarrierBanner() {
   text.dataset.carrierBanner = 'text';
   line.appendChild(text);
   root.appendChild(line);
-  if (banner.problem) {
+  if (banner.problem && !banner.text.includes(banner.problem)) {
     const p = _cel('div', 'carrier-banner-problem', banner.problem);
     p.dataset.carrierBanner = 'problem';
     root.appendChild(p);
@@ -161,9 +161,50 @@ function carrierMoveToSlot(strip, toIndex) {
   return _sendCarrier('sequencesStack', { kind: 'Move', fdrId: strip.fdrId, toIndex });
 }
 
+/**
+ * Dragging a row of the board to another slot: ONE gesture, ONE `Move`. The board
+ * is the whole stack in a few lines, so re-sequencing never needs the Strip below
+ * it in view. (Dragging the Strip itself onto a slot works too: bay-view.js's
+ * drop-target lookup knows `data-efsp-drop-slot`.)
+ */
+function _wireSlotDrag(el, row) {
+  el.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || e.target.closest('input, button, select')) return;
+    e.preventDefault(); // no text selection while dragging
+    const start = { x: e.clientX, y: e.clientY };
+    let moved = false;
+    let over = null;
+    const slotAt = (x, y) => { const t = document.elementFromPoint(x, y); return t ? t.closest('.carrier-slot[data-slot-index]') : null; };
+    const move = (ev) => {
+      if (!moved && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < 4) return;
+      moved = true;
+      el.classList.add('carrier-slot-dragging');
+      const target = slotAt(ev.clientX, ev.clientY);
+      if (target !== over) {
+        if (over) over.classList.remove('efsp-drop-target');
+        if (target && target !== el) target.classList.add('efsp-drop-target');
+        over = target;
+      }
+    };
+    const up = (ev) => {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', up);
+      el.classList.remove('carrier-slot-dragging');
+      if (over) over.classList.remove('efsp-drop-target');
+      const target = moved ? slotAt(ev.clientX, ev.clientY) : null;
+      if (target && target !== el) {
+        _sendCarrier('sequencesStack', { kind: 'Move', fdrId: row.entry.fdrId, toIndex: Number(target.dataset.slotIndex) });
+      }
+    };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+  });
+}
+
 function _slotRowEl(row, caseValue, sequenced, canSequence) {
   const el = _cel('div', 'carrier-slot' + (row.entry ? ' carrier-slot-occupied' : ' carrier-slot-vacant'));
   el.dataset.slotIndex = String(row.stackIndex);
+  if (row.entry && canSequence) { el.classList.add('carrier-slot-draggable'); el.title = 'Drag to another slot to re-sequence'; _wireSlotDrag(el, row); }
   // Same attribute the Position/Bay tabs carry: the Strip drag hit-tests for it.
   if (canSequence) el.dataset.efspDropSlot = String(row.stackIndex);
   el.appendChild(_cel('span', 'carrier-slot-index', String(row.stackIndex)));

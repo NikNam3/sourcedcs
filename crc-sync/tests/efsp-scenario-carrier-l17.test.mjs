@@ -314,3 +314,16 @@ test('typed values are what a controller reads: EEAT and Charlie time as Zulu HH
   const d = view(efsp).derived.MAIN[0];
   assert.deepEqual(d.marshalRadialDisplay, { value: 180, ref: 'M' });
 });
+
+test('a Case change re-states every carrier Strip\'s NLA: Commence becomes To pattern at once', () => {
+  const { efsp, c } = fresh();
+  const deltas = [];
+  efsp.nlaStatusMonitor.setOnDelta((p) => deltas.push(p));
+  const a = checkIn(efsp, c, 'AAA11');
+  efsp.nlaStatusMonitor.tick(); deltas.length = 0;
+  assert.equal(efsp.boardStoreFor('CARRIER').nlaStatusFor(strip(efsp, a.stripId)).carrierTransfer, 'MARSHAL_TO_APPROACH');
+  mustCarrierAct(efsp, c.CV_PRIFLY, 'CV_PRIFLY', { kind: 'SetCase', to: 'I' });
+  const restated = deltas.flatMap(d => d.strips).filter(s => s.stripId === a.stripId);
+  assert.equal(restated.length, 1, 'the Strip was re-sent with its new NLA');
+  assert.equal(restated[0].nla.carrierTransfer, 'MARSHAL_TO_PATTERN_CASE_I');
+});
