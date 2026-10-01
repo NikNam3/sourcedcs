@@ -1,5 +1,3 @@
-'use strict';
-
 /* Can a controller actually DO the things the sorties test?
  *
  * The server-side scenario suite proves the ops work. It says nothing about
@@ -17,11 +15,11 @@
  *     op. Not a browser, so it proves the wiring rather than the pixels.
  */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('fs');
-const vm = require('vm');
-const path = require('path');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import path from 'node:path';
 
 const CLIENT = path.join(__dirname, '../app/public/js/panels/efsp');
 const { BLOCK_MAPS, isBlockEditable, enumSelectOptionsFor, isBooleanToggleBlock } = require(path.join(CLIENT, 'strip-template.js'));

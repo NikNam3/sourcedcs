@@ -1,10 +1,8 @@
-'use strict';
-
 /* Unit tests for the pure Block Map binding/resolution logic in
    strip-template.js — no DOM involved, matching los-math.test.js's style. */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
 // In the browser these are globals from their own <script>s; strip-template.js
 // reads them at call time (docs/adr/0073). The stereo cache is swapped per test.

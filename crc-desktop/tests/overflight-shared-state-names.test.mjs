@@ -1,5 +1,3 @@
-'use strict';
-
 // docs/adr/0087 (questions-round3 Q3-35, lane brief T1): INBOUND and HANDED_OFF
 // are state names of three Roles now (ARRIVAL/OVERFLIGHT, DEPARTURE/OVERFLIGHT).
 // Any code that compares a bare state without its Role is wrong for one of them.
@@ -7,10 +5,13 @@
 // is safe; a NEW file naming one (a scope label, a geojson layer, a conformance
 // rule) fails here until someone decides it is Role-aware.
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('fs');
-const path = require('path');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const REPO = path.join(__dirname, '..', '..');
 const ROOTS = ['crc-sync/src', 'crc-desktop/app/public/js', 'crc-desktop/app/server.js', 'crc-desktop/main.js'];

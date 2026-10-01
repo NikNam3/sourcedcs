@@ -1,5 +1,3 @@
-'use strict';
-
 // The WebSocket message-type contract between crc-sync (ws-hub.js, efsp-ws.js,
 // metrics.js) and crc-desktop (app.js's onmessage switch, the send helpers).
 // Nothing compiles the two sides against each other: a type the server starts
@@ -11,9 +9,9 @@
 // Read-only on production code. Does not depend on nla.js, block-map.js or
 // permission.js (L17).
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { readClient, readServer, matchAll } = require('./helpers/mirror-source.js');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readClient, readServer, matchAll } from './helpers/mirror-source.mjs';
 
 // ── server -> client ────────────────────────────────────────────────────────
 // Every wire envelope the server builds is `{ version: VERSION, type: '...' }`.

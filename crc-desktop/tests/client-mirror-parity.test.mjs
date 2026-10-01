@@ -1,5 +1,3 @@
-'use strict';
-
 // Hand-mirrored server tables with no parity test before this file
 // (docs/wip/PARITY.md has the full inventory and which test holds which).
 // Same pattern as efsp-block-map-parity.test.js: require the crc-sync module
@@ -10,12 +8,12 @@
 // nla.js / permission.js / block-map.js (lane L17) shows up as a failure that
 // names the table to update, not as a stale copy of the old answer.
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('fs');
-const path = require('path');
-const vm = require('vm');
-const { readClient, readServer, constLiteral, CLIENT_JS } = require('./helpers/mirror-source.js');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import vm from 'node:vm';
+import { readClient, readServer, constLiteral, CLIENT_JS } from './helpers/mirror-source.mjs';
 
 const serverIff = require('../../crc-sync/src/surveillance/iff.js');
 const serverNla = require('../../crc-sync/src/efsp/nla.js');
