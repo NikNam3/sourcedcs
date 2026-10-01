@@ -4,12 +4,16 @@ Entry point for the next agent or session. Read this, then the part of `EFSPImpl
 your work names, then write a plan before writing code. This is a handoff, not a build order.
 
 **This revision supersedes the previous one.** The remaining EFSP work is being finished by many
-agents at once, in waves of parallel lanes (`docs/efsp-parallel-plan.md`). **Wave 1 is merged**:
-eleven lanes plus a bugfix lane landed field state (server), MTR fields, the USMTF ATO parser, the
-carrier model, WP8 metrics and the soak harness, retracting obligation alerts, test debt and the
-AIC/JTAC walks, the `[SOURCE-DEFINED]` inventory, IFF from interrogation, atobrief's USMTF export
-and a fix for the gRPC reconnect loop (§3I). **Wave 2 is next** (§5), and the known bugs each have an
-owning lane (§4).
+agents at once, in waves of parallel lanes (`docs/efsp-parallel-plan.md`). **Waves 1 and 2 and part of
+wave 3 are merged.** Wave 1 (§3I) landed field state (server), MTR fields, the USMTF ATO parser, the
+carrier model, WP8 metrics and the soak harness, retracting obligation alerts, IFF from interrogation,
+atobrief's USMTF export and the gRPC reconnect fix. Wave 2 and the fixes between waves (§3J) landed the
+field-state panel, hung ordnance, alert/scramble, the ATO on the Board and the AR join, the METRICS panel,
+the `9F` picker and the time fallback chains, the STARS scope, magnetic headings, mission sessions,
+archiving, Board sync correctness, the tactical Positions' fixes, audit completeness and block altitudes,
+and the client half of Incirlik's pattern board and FINAL component. **Still running or not started:**
+UI-A, L17 (carrier Positions), L19 (suggestion chip, staleness), L28 (OVERFLIGHT lifecycle), the server
+half of L18, then L20 (§5). The known bugs each have an owning lane (§4).
 
 If you are a lane agent, your own briefing in `docs/parallel/wave2/` and
 `docs/parallel/lane-rules.md` come first, and **`docs/parallel/decisions.md` overrides both**. If you
@@ -17,17 +21,25 @@ are the supervising session, start at `docs/parallel/supervisor-handoff.md`.
 
 ## 1. State of the tree
 
-Integration branch `efsp-wp5-correlation`. Wave 1 merged up to `3b27390`, then `8feeca0` (the human's
-answers H53 and H70, ADR `0084`). Not pushed.
+Integration branch `efsp-wp5-correlation`. Merged through `c12cd7c` (wave 3a: L26, U6 and L18's client
+half); the GRPC lane's one-line reconnect-delay fix (S-GRPC) is accepted but may not be merged yet. Not
+pushed.
 
-Green: **crc-sync 1565 pass / 8 todo** (1573 tests; the 8 todos are L8's B1–B7, owned by L23),
-**crc-desktop 517**, **atobrief 77** (`npm test` in each; atobrief had no tests before wave 1). The
-full Playwright suite was started at the merge and its result was never seen: **re-run it**
-(`E2E_LANE=9`). Restart the local crc-sync on :3000 after any `crc-sync/src` change.
+Green, last recorded (S-M-wave3a, S-GRPC): **crc-sync 1874 pass / 0 fail / 0 todo** (1875 with the GRPC
+fix), **crc-desktop 736 pass**, atobrief 77. (`npm test` in each; the one crc-desktop failure a fresh
+worktree shows is the packaging test's missing `app/node_modules`: run `npm ci` inside
+`crc-desktop/app`.) **Playwright was not re-run after the wave-3a merges**: UI-A, L17 and L19 were still
+running, so run the full suite once they merge (`E2E_LANE=N`). At the last full run (S-M-e2e9) 13 failures
+were consistent: stale specs (L12's field-state stand-in, L13's placeholder wording, L16's opt-in env), a
+suspended 05/23 leaking between spec files, a duplicate reason line once field-state, ordnance and
+scramble coexist, L14's Mode 1/2 in the expanded view, an `l4-badges` height (30 > 28 px) and four
+`l5-arrivals` assertions; E2E-fix then cleared 13, and every spec must now `require('./helpers/test')` and
+leave no Strips on the Board. Restart the local crc-sync on :3000 after any `crc-sync/src` change.
 
-ADRs: `0001`–`0067`, `0078`, `0079`, `0084`. The gaps are reserved: `0068`–`0077` for the plan's
-lanes L1b–L20, `0080`–`0089` for wave 2 and the fixes between waves (`decisions.md` S-W3a). `0060`
-is the errata ADR. **An ADR is never edited once committed (P4)**: a correction is a new ADR.
+ADRs: `0001`–`0073`, `0075`, `0078`–`0086`, `0088`, `0089`, `0091`. The gaps are reserved: `0074`, `0076`,
+`0077` for the plan's remaining lanes (L17, L19, L20), `0087` for L28, `0090` unassigned
+(`decisions.md`). `0060` is the errata ADR. **An ADR is never edited once committed (P4)**: a correction
+is a new ADR.
 
 ```
 crc-sync/src/efsp/                        the subsystem — stores, rules, the wire handler
@@ -59,7 +71,7 @@ atobrief/public/js/usmtf-ato.js           atobrief's USMTF ATO export (0078)
 docs/adr/                                 the reasoning behind every decision below
 docs/efsp-usage-guide.md                  how a controller actually drives it
 docs/parallel/                            the lanes: decisions.md (the record), briefings, research
-docs/wip/                                 each wave-1 lane's notes (folded into this file and the guide)
+docs/wip/                                 each lane's notes (waves 1 to 3a folded into this file and the guide; the integrator removes them at the end)
 crc-desktop/e2e/                          Playwright specs — the bugs the DOM stub cannot see
 ```
 
@@ -109,6 +121,13 @@ buckets take it **by injection**, never `Date.now()` (H11). The theater's local 
 `config/theaters.json` (Syria Z+3), not a controller setting.
 
 **Wave 1 of the parallel lanes** (`0061`–`0067`, `0078`, `0084`). See §3I.
+
+**Waves 2 and 3a and the fixes between them** (`0068`–`0073`, `0075`, `0080`–`0086`, `0088`, `0089`,
+`0091`). See §3J: the field-state panel (L1b), hung ordnance (L12), alert/scramble (L13), the ATO on the
+Board (L14), the METRICS panel (L15), the `9F` picker and time chains (L16), the STARS scope (L22),
+archiving (L24), Board sync correctness (L27), the tactical Positions (L23), audit completeness (L26),
+block altitudes (U6), magnetic headings (F2), mission sessions (F3), typed time Blocks (F4) and the
+client half of Incirlik's pattern board and FINAL component (L18).
 
 ## 3A. The RANGE station
 
@@ -848,6 +867,7 @@ and `efsp-ws.js`'s `readScopeOf`/`filterForSession`/`supplementFor`/`readScopeKe
 (`snapshotFor(session)`, `_snapshotMessage(ctx, session)`); `broadcastEfspFieldStateDelta` and the
 heartbeat stay unfiltered (not flights). A Strip that becomes visible to a session arrives with its FDR,
 correlation and MARSA records. Any new EFSP broadcast must go through `_broadcastEfsp`.
+- U7: `receiveCoordinationPeerGone` ends only a PROPOSED or ACTIVE link (S-L23: a completed handoff is not a live link, so the receiver's later drop leaves the sender's Strip alone; tested).
 - Open: the two UI follow-ups above (a TAC_C2-only controller cannot Accept an AIC-held exit from the
   panel; the JTAC's drop-only tabs); GCI has no hand-back row (unchanged); `permission.js`'s module
   header still says "no coordination primitives are built" (stale since WP4A, L20); the 4-hour soak was not
@@ -918,48 +938,48 @@ Landed (`RECOVERED`) and Drop (`DROPPED`).
 
 ## 4. What's left, and the known bugs
 
-**Not built, in the guide's order.** WP6: the field-state panel and the hook-mismatch check (L1b),
-the `HUNG` advisory (§9.5, L12), alert/scramble (§9.6, L13). WP7: the ATO import into the Board and
-the AR join (L14). WP7A: the carrier Positions, Roles and Facility (L17), Incirlik's RSU/SFA/PAR
-(L18). WP8: the metrics dashboard (L15), the §10.3 suggestion chip and §10.4 staleness (L19). Then
-the `[SOURCE-DEFINED]` audit fixes (L20), which is a WP6 acceptance criterion in its own right.
+**Not built, in the guide's order.** WP7A: the carrier Positions, Roles and Facility (L17), and the
+server half of Incirlik's RSU/SFA/PAR (L18, a second run after L17 merges; spec in `docs/wip/L18.md`).
+WP8: the §10.3 suggestion chip and §10.4 staleness (L19; the METRICS panel reads staleness as
+`not instrumented (L19)`). OVERFLIGHT's four-state lifecycle (L28, H63; H74/H75 answered). Then the
+`[SOURCE-DEFINED]` audit fixes (L20), which is a WP6 acceptance criterion in its own right. Everything
+else in WP6 to WP8 that the guide names is built: the field-state panel, `HUNG`, alert/scramble, the ATO
+import and AR join, the metrics dashboard. UI-A (the human-reported UI items below) is running.
 
-**Known bugs, each with its owner.** Line numbers are in the wip notes named.
+**Known bugs and open items, each with its owner.** Fixed since wave 1 and removed from this table:
+B1–B7, F10 (L23); F1, F2, F5, F6, F8, F11, F13 and the replay cache holding live references (L27); F3,
+F4, F7 (L24; F7's `_nlaHistory` entry is deleted by `archiveStrip`, I did not test it separately);
+every audit gap, F12 included (L26); typed time Blocks storing raw strings (F4, L16); `NOT_OWNER` acks
+without detail (L23).
 
-| Bug | Severity | Owner | Source |
+| Item | Severity | Owner | Source |
 |---|---|---|---|
-| **B1** A JTAC handed a mission line can never hand it back (JTAC's grant is empty; TAC_C2 gets `NOT_OWNER`) | stranding | L23 | `docs/wip/L8.md` |
-| **B2** TOFI EXIT cannot be answered while AIC holds the line; TAC_C2 gets `NOT_OWNER` with no detail. Fix (ii): TAC_C2 answers it | safety-critical | L23 | L8 |
-| **B3** A covering reassignment or routed `TransferStrip` moves the owner but not the Bay (AIC→TAC_C2, and GND→TWR at Incirlik) | stranding | L23 | L8 |
-| **B4** `TransferStrip` accepts a Bay that isn't the receiving Position's | data integrity | L23 | L8 |
-| **B5** A JTAC can bind a contact and declare MARSA | doctrinal | L23 | L8, H40 |
-| **B6** A JTAC session is sent every Strip on every Board. Per-session read filter, ADR `0080` (connect snapshot, resync and deltas) | doctrinal | L23 | L8, H40, H59 |
-| **B7** AIC advances a line with the `SetState` escape hatch, and leaves it in a Bay that contradicts its state | doctrinal | L23 (with `SetState` owner-checking) | L8, H2 |
-| **L6 F10** A covering Position is handed Strips it may not advance (CD Strips at GND), and retaking CD doesn't return them | medium | L23 | `docs/wip/L6.md` |
-| **L6 F1** A rebalance changes other Strips' `orderKey`/`rev` and broadcasts only the moved Strip; clients stay stale up to 22 min and a resync cannot heal it | high | L27 | L6 |
-| **L6 F2** `efsp-resync` after a crc-sync restart serves a delta from the new lifetime as if continuous (needs a Board epoch). Latent: the shipped client never sends a resync | high | L27 | L6 |
-| **L6 F5** A crash between the audit line and `persist()`: a retried CreateStrip applies twice, or one change gets two audit lines | medium | L27 | L6 |
-| **L6 F6** Lowest-free code reuse binds a new flight to the previous flight's still-airborne aircraft (`code-allocator.js`) | high for correlation | L27 | L6 |
-| **L6 F11** Replaying a refused Mutation returns the older cached Strip, and the client's replica goes backwards | low | L27 | L6 |
-| **L6 F13** Correlation, airspace and MARSA ops are not idempotent by `clientMutationId` | low | L27 | L6 |
-| **L6 F8** Order keys grow without bound under same-slot inserts; only the exhaustion throw rebalances | low | L27 | L6, handoff |
-| **L6 F3** Retained DROPPED Strips and FDRs drive heap, snapshot size and latency (H36) | expected | L24 | L6 |
-| **L6 F4** `_appliedMutations` holds live Strip/FDR references, so archiving alone frees nothing still in the last 5000 results | medium | L24 | L6 |
-| **L6 F7** `_nlaHistory` keeps NLA-dropped Strips | small | L24 | L6 |
-| Peer replica writes (`receive*`, TOFI receive) are not logged | audit gap | L26 | `docs/wip/L5.md` |
-| Log entries carry no `facilityId` or FDR, so a backfill can't recover the Facility once a Strip is archived | audit gap | L26 | L5 |
-| **L6 F12** Airspace audit lines carry no `clientMutationId` (`efsp-ws.js` doesn't pass it); check correlation/MARSA too | audit gap | L26 | L5, L6 |
-| Airspace STALE_REV/NOT_FOUND, class-based PERMISSION_DENIED and "no store" refusals are not logged | audit gap | L26 | L5 |
-| An MTR (any plain `fdr` Block) amendment overwrites: no history, no `op.value` in the log | known gap | later slice (H25) | `docs/wip/L2.md` |
-| Changing only the MTR designator leaves the old exit fix with no warning | low | L16, with the route table (H23) | L2 |
-| `marsa-store.js:37–41` still says obligations cannot retract; ADR `0042` names `radar-specs.json` (it is `sensor-specs.json`); `correlation-reconciler.js:50–52` claims a test forces an eligibility decision it doesn't | stale text | L20 | L4, S-L7 |
-| `NOT_OWNER` acks carry no detail, so B1/B2's controller is told nothing | ergonomics | L23 (O4) | L8 |
+| **Gestures over the one-input ceiling**: HIGHLIGHT (right-click + swatch) and OFFSET (`⋯` + item) cost 2 inputs; accept 2, or give each a one-input entry point and a `GESTURE_INPUT_COST` row | decision | supervisor | L15 |
+| A trend `↑` in METRICS is not coloured (an observation, not a threshold failure) | decision | supervisor | L15 |
+| The client still derives runway-change acknowledgers and the inspection authority from the permission table's owners; the record now carries `runwayChangeAcknowledgers` and `inspectionAuthorityPositionId` (L26). Agrees for Incirlik, wrong for any other config | low | UI-A | L1b, L26 |
+| `strip-view.js`'s conformance reason line reads `a.assigned` (the nearest edge), so a block-altitude bust says "from FL240" without the block; use `a.block` | low | UI-A | U6 |
+| A `TAC_C2`-only controller cannot see an AIC-held line, so it cannot Accept `CTR`'s TOFI exit from the panel (the server allows it); a "with AIC / with JTAC" list on its tab closes it. A JTAC's panel draws drop-only tabs for `TAC_C2`, `AIC` and `GCI` | medium | UI-A | L23, S-L23 |
+| TAXI (17) and TAKEOFF (18) are on no Position's face (GND opens `▼` to type an off-block time); a typed TAXI does not follow a later P-time change and nothing flags it; an estimate cannot be accepted as the actual without retyping a different value; no state change stamps a time; vul start edits do not move a stored end and a start past its end is not refused | medium | UI-A (W2, W3, W5, vul validation) | L16, S-L16 |
+| **U1** OPS has no ORDNANCE (`3G`) field on its face and must be able to set HUNG (it is one `▼` away); **U2** a HANDOFF to CTR does not raise the new-Strip arrival notification at CTR; **U3** the `IFR` field (TOFI's `ifrActive`) is unclear; **U4** TYPE cannot be edited; **U5** a RELEASED field is missing on DEP/APP and CTR Strips; **U8** CTR's "TOFI Exit…" exists only in the `⋯` menu and nothing surfaces it when the mission line goes OFF_STATION/RTB | medium | UI-A | `docs/parallel/supervisor-handoff.md` (U1–U8; U6 and U7 are fixed) |
+| `efsp-panel.js`'s `_renderArrivalsLine` finds its line with `document.getElementById`: while dockview has the Strip panel detached, a new line is inserted on every render (the arrivals list stacks up). `srs-radio.js`'s `_renderSlots` throws on every poll once RADIO is closed (same cause). `e2e/helpers/app.js` `openPanel` can race `initDock` on the first test | medium | unowned | L1b |
+| One `LINGERING_TRACK` in the 240-minute soak: exact-callsign correlation (`matchedBy CALLSIGN_EXACT`) binds a no-transponder flight to the previous flight with the same (recycled) callsign whose aircraft is still lingering. Real correlation behaviour, not code reuse | medium | L19 | L27, S-L27 |
+| The 4-hour soak's heap gates (net growth now 25%, H72) still need the human's workflow run; the unloaded p50 <= 3 ms was only measured as a proxy | acceptance | human | L24, L27 |
+| `tools/soak/selfcheck.mjs`'s `drop-broadcast` check fails with and without L26 (silentStaleness 0, expected >= 1), contradicting CLAUDE.md's claim that `soak:selfcheck` proves every detector fires; CLAUDE.md also still says the soak fails on known wave-2 findings | stale claim | L20 / soak owner | L26, S-L26, L27 |
+| `grpc-client.js:764` `windFrom = heading·180/π + 270` is unexplained and the DCS wind vector may be grid, not true (about -2° at Incirlik): needs a live check against the mission editor's wind. The ATIS-wind frame follows it | needs a live check | human | F2, S-F2b |
+| Six theaters have no `tmCentralMeridianDeg` (TheChannel, MarianaIslandsWWII, Kola, Afghanistan, Iraq, GermanyCW): their grid headings cannot be converted; `tools/miztoyaml/projection.py` needs the same table and a test keeping the two equal | theater work | unowned | F2 |
+| Whether DCS-gRPC sends `mission_start` to a stream that connects *after* the mission started (if so every crc-sync restart rolls the mission session); a real `.miz` restart through DCS | needs a live check | human | F3, S-F3 |
+| An MTR (any plain `fdr` Block) amendment overwrites: no history, no `op.value` in the log (`SetBlock` now records `blockId`/`value`, which narrows it) | known gap | later slice (H25) | L2 |
+| Changing only the MTR designator leaves the old exit fix with no warning (H23 keeps MTRs free text) | low | with an MTR route table | L2, L16 |
+| Stale text: `marsa-store.js:37–41` says obligations cannot retract; ADR `0042` names `radar-specs.json` (it is `sensor-specs.json`); `correlation-reconciler.js:50–52` claims a test forces an eligibility decision it doesn't; `permission.js`'s module header says "no coordination primitives are built"; comments in `efsp-ws.js:6`, `facility-config.js:5,42`, `mutation-log.js:5,41` still name the deleted `theater-settings.js`; ADRs `0048` (table) and `0079` ("`gameTimeOffset` is gone") describe a `theater-settings.json` that no longer exists, which belongs in the next errata ADR | stale text | L20 | L4, S-L7, L23, F2 |
 | `_cidSeq` passes 999 after ~3 h at stress rate | low | unowned | L6 F9 |
+| Merging L3 and L11: a crc-sync test parsing `ojw1v5-export.txt` and `research-render.txt` against research §3's oracle (S-R2-7) has not been written | test debt | integrator | wave 1 |
 
-**Human actions outstanding.** The LG 10-minute live check; one run of the four-hour soak workflow;
-the H8 read of the product ADRs is done for wave 1. **Integrator actions outstanding:** the L3↔L11
-cross-test (a crc-sync test parsing `ojw1v5-export.txt` and `research-render.txt` against research
-§3's oracle, S-R2-7) has not been written; the Playwright re-run (§1).
+**Human actions outstanding.** The LG 10-minute live check; one run of the four-hour soak workflow; the
+live wind check (S-F2b) and the live `mission_start` check (S-F3); desk L11-8b. **On a machine with state,
+clear `efsp-metrics.json` and `efsp-traffic-count.jsonl` (or accept repeated numbers)** when F3 reaches
+it: its session counter restarts at 1. **Integrator actions outstanding:** the L3↔L11 cross-test above;
+the full Playwright re-run (§1), once UI-A, L17 and L19 merge; the unloaded crc-sync run at that merge
+(S-U6); fold the notes of UI-A, L17, L19, L25, L28 and the E2E lanes, then remove `docs/wip/*.md`.
 
 **Deferred with reasons, not forgotten:**
 
@@ -980,9 +1000,9 @@ cross-test (a crc-sync test parsing `ojw1v5-export.txt` and `research-render.txt
   so it has the non-atomic-write problem `0041` fixed in crc-sync's `_persist`.
 - Airspace ops are not replayed on reconnect, unlike Strip mutations. Deliberate and tested
   (`efsp-scenario-manning.test.mjs`); correlation is the same.
-- The D12 audit `0020` asked for is structural in `permission.js` and tested server-side, but has
-  never been walked against the rendered UI for a controller holding `TAC_C2` and `CTR` at once.
-  L8 lists the client walks for AIC/JTAC that nobody has done.
+- The D12 audit `0020` asked for is structural in `permission.js` and tested server-side; L23 walked a
+  JTAC, an AIC and a combined CTR+AIC controller in Playwright, but a `TAC_C2`-only controller answering
+  an AIC-held exit and GCI's hand-back (no row) were not walked.
 - `positionRadars`' shipped defaults are SOURCE's model of which scope sits at which console (H61
   keeps them, labelled as such). The real assignment is squadron data.
 - **Stereo routes have never run against real routes** (`0050`). The table ships empty on purpose.
@@ -999,52 +1019,28 @@ cross-test (a crc-sync test parsing `ojw1v5-export.txt` and `research-render.txt
   `surveillance/presentation.js`, client `track-label.js`. The wire carries no DCS truth.
   `presentation.test.mjs` plus `ws-hub-wire-strictness.test.mjs` hold the line.
 
-## 5. Where to start: wave 2
+## 5. Where to start: what is left of waves 3 and 4
 
-The plan is `docs/efsp-parallel-plan.md` §3–§4, the per-lane briefings are in
-`docs/parallel/wave2/`, and `docs/parallel/decisions.md` (S-W3a–c) is what is actually dispatched.
-Each lane works in its own worktree `/home/nklx/dev/personal/sourcedcs-<lane>` on
-`lane/<lane>-…`, reads `docs/parallel/lane-rules.md`, and leaves `docs/wip/<lane>.md` for the next
-fold.
+The plan is `docs/efsp-parallel-plan.md` §3–§4, the per-lane briefings are in `docs/parallel/wave2/`
+(and the later ones beside them), and `docs/parallel/decisions.md` is what is actually dispatched. Each
+lane works in its own worktree `/home/nklx/dev/personal/sourcedcs-<lane>` on `lane/<lane>-…`, reads
+`docs/parallel/lane-rules.md`, and leaves `docs/wip/<lane>.md` for the next fold. Lanes **L1b, L12–L16,
+L22–L27, F2–F4, U6 and L18's client half are merged** (§3J); L25 (miztoyaml: tankers and AWACS as
+missions, TACAN, datalink, `0089`) and the E2E-fix lane are merged too and their notes are not yet folded.
 
-**Fixes between waves, running now:**
-
-- **F2 — magnetic** (ADR `0085`): `crc-sync/src/magnetic.js` (`variationAt`, `convergenceAt`) from
-  the World Magnetic Model by position and mission date, with a per-theater override in
-  `theaters.json` (H69), carried on `game-time`. `hdgCorrection` and its APRT field go; typed
-  magnetic inputs are converted on the server. Also Syria's transition altitude, 10,000 ft (H62).
-  Until F2 merges, wave-2 lanes that show a heading call `toMagneticDisplay(trueDeg)` and never
-  apply `hdgCorrection` themselves (S-W3c).
-- **F3 — mission session** (ADR `0086`): one `mission-session.js` under `state/`, a new session on
-  `mission_start`, a changed mission fingerprint, or the clock stepping back more than 5 min
-  (S-R2-2). It hoists L1's `missionKeyOf` and replaces L5's `_mission()` seam.
-- **F4 — typed time Blocks** (bugfix): `setField` runs `resolveZuluHhmm` on every `…TimeUtc` path,
-  plus a scenario test that a typed void time expires (S-R2-17).
-
-**Wave-2 lanes** (ADR, e2e lane):
-
-| Lane | What | ADR | Starts |
+| Lane | What | ADR | State |
 |---|---|---|---|
-| L1b | field-state dock panel, inhibit reason on the Strip, hook mismatch (only when gear is configured, H57), the H52 "runway works" rename, public `broadcastEfspFieldStateDelta` | 0068 | now |
-| L12 | ordnance `HUNG` advisory; any Position the pilot talks to records it (H55) | 0069 | now |
-| L13 | alert/scramble: Block `14E` on DEPARTURE for M16, OPS sets it, every ground Position shows it (H56); no inhibit, no reordering | 0070 | now |
-| L14 | ATO into the Board: paste/drop only, one active ATO (H65), callsigns cut to 7 (H60), the mission's date (H68), adopt the ATO squawk if the allocator accepts it (H64), the AR join | 0071 | now; merges after L16 |
-| L15 | metrics dashboard and client-side measurements; per-Position numbers behind a toggle (H66) | 0072 | now |
-| L16 | Block `9F` picker, §10.5 fallback chains, estimated times italic with source on hover (H67) | 0073 | after F4 |
-| L22 | ATC scope in the STARS scheme (H41, H47–H50) | 0088 | mockup first (H49) |
-| L23 | tactical Positions: B1–B7, F10 | 0080 | after L27 |
-| L24 | archiving finished flights (H36, S-R2-13), F3/F4/F7 | 0082 | after F3 |
-| L25 | miztoyaml: tankers/AWACS as missions, TACAN, datalink (S-R2-10) | 0089 | now |
-| L26 | audit completeness (S-L5's gaps, F12) | 0083 | after its briefing |
-| L27 | Board sync correctness: F1, F2, F5, F6, F11, F13, order-key growth | 0081 | after its briefing; before L23 |
-| L28 | OVERFLIGHT's four-state lifecycle (H63) | 0087 | after its briefing |
-
-Wave 3 (L17 carrier, L18 RSU/SFA/PAR, L19 suggestion chip and staleness) and wave 4 (L20
-`[SOURCE-DEFINED]` fixes) follow as the plan says.
+| UI-A | the human-reported UI items U1–U5, U8, S-L15, S-L16 W2/W3/W5, vul validation, the L23 tab follow-ups and the S-L1b findings (§4) | open | running |
+| L17 | carrier Positions, Roles and Facility; explicit `INELIGIBLE_STATES` decisions for `IN_PATTERN`, `RECOVERED`, `ON_FINAL`, `BALL`, `BOLTER_WAVEOFF`; names the Bay descriptor flag L18 reuses | 0074 | running |
+| L19 | the §10.3 suggestion chip, §10.4 staleness (declare `sources.staleness` so METRICS stops saying `not instrumented`), the exact-callsign misbinding | 0076 | running |
+| L18 (server half) | RSU/SFA/PAR Positions, Bays, `singleFrequencyApproach`, `SFA_ROTATION`, permissions; client wiring | 0075 (Part B proposed) | after L17 merges, cut from the post-L17 branch |
+| L28 | OVERFLIGHT's four-state lifecycle (H63, H74, H75) | 0087 | not started |
+| L20 | the `[SOURCE-DEFINED]` fixes and stale-text sweep (§4) | 0077 | wave 4 |
 
 **The integrator, after every wave:** merge in order, run both unit suites and the full Playwright
 suite, restart the local crc-sync, fold `docs/wip/*.md` into the guide and this file, and walk the
-sorties and pilot requests by hand.
+sorties and pilot requests by hand. A standing rule since `S-M-e2efix-l23`: every e2e spec must
+`require('./helpers/test')` and leave no Strips on the Board.
 
 ## 6. Habits this codebase has earned
 

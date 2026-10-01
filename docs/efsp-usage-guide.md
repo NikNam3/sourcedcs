@@ -4,7 +4,7 @@ A working reference for the Electronic Flight Strip Panel — what's built, how 
 
 ## 1. Status right now
 
-Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green):
+Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green; the Playwright suite was not re-run after the latest merges, see the briefing):
 
 - **WP0-WP4** (guide): domain model, Mutation protocol, Position occupancy/combination, Block Map, Bays/Racks/drag, States/NLA/transfer, 30s Undo.
 - **WP4A first slice**: a second Facility (`CENTER`/`CTR`) alongside `INCIRLIK`'s five Positions; the 5 cross-Facility coordination primitives (`HANDOFF`/`POINT_OUT`/`TRAFFIC`/`OPERATIONAL_REQUEST`/`AIT`) between `APP` and `CTR`; per-Facility Strip replication (two independent Strips linked by `coordination`, not one moved Strip); `EDCT`/`CALL_FOR_RELEASE` release states + standing-release envelopes; airspace ownership as a direction; track-degradation soft interlock; timed forwarding-obligation alerts — see §8.
@@ -14,8 +14,8 @@ Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green):
 - **`ops-filed` queue**: `OPS`'s `ops-filed` Bay now shows every currently-filed DD1801 plan as a card, each with a one-click "Create Strip" — see §4. ⚠️ **Requires a deployment step to actually work** — see the callout at the end of §4.
 - **Radar coverage follows the Positions you hold** — the radar selector is gone. See §8B.
 - **WP5: correlation** — every Strip says which contact on the scope it is, clicking a Strip rings its contact, and clicking a contact selects its Strip. See §8C.
-- **WP6, in progress** — the military layer, landing a deliverable at a time:
-  - **Stereo routes** — file a flight by short name and the server expands the whole route. See §4A. (The table ships empty; nothing works until somebody writes one.)
+- **WP6** — the military layer:
+  - **Stereo routes** — file a flight by short name (a picker in Block `9F`) and the server expands the whole route. See §4A. (The table ships empty; nothing works until somebody writes one.)
   - **MARSA** — declaring that the military is separating its own aircraft, as a relation between flights rather than a flag on one, with the pre-rendezvous course/altitude interlock. See §8D.
   - **The military Block namespace** — `ORDNANCE` (Block 3G) and `HOOK` (Block 3F) on every ATC Strip. `HUNG` ordnance raises an advisory chip on every Position's Strip for the flight (§6); arresting-gear gating (§9.7) reads a gear inventory Incirlik does not have, so it never fires. See §6.
   - **The mission line exists from tasking** — `TAC_C2` frags a mission line against a filed flight before it moves, and TOFI later lands on the one that is already there. Accepting tactical control now requires stating the separation regime. See §8C1.
@@ -25,11 +25,17 @@ Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green):
 - **Forwarding-obligation alerts clear themselves** once the obligation is met or no longer due. Nothing to acknowledge. See §8.
 - **Contact colours come from IFF interrogation**, not from the game's idea of a side, and nothing on the ground is hidden any more. See §8F.
 - **All declutter is off** until the EFSP work is finished: formation labels and navpoint names both show. See §8F.
+- **Alert and scramble** — Block `14E`; a scramble raises a red line on every tab and amber chips on ground traffic that must keep clear, and never reorders or holds anything. See §8H.
+- **ATC scopes draw STARS-style blocks** at `TWR`, `APP` and `CTR`: white for yours, flashing for a handoff to you, green for someone else's. See §8F.
+- **Headings are magnetic** (World Magnetic Model), and the transition altitude is per theater. See §8J.
+- **Time Blocks and altitude blocks** — estimated times show in italics with their source on hover (§4B), and `ALT` takes a block such as `FL220-FL240`.
+- **Finished flights are archived** after 2 hours or at the next mission, and a mission session decides which mission is current. See §8J. Every Mutation and refusal has exactly one audit entry (§10).
+- **The tactical Positions are fenced**: a JTAC is sent only the lines it was handed, `AIC` hands back and cannot advance a line, and `TAC_C2` answers the TOFI exit on an AIC-held line. See §8C1.
 - **Metrics and a traffic count**: the METRICS panel (PANELS → METRICS) and, behind it, two read endpoints on crc-sync. See §10.
 - **ATO import** — `TAC_C2` pastes or drops a USMTF ATO (atobrief exports one) and it becomes mission lines on the Board, with the air-refuelling tanker/receiver join shown on the Strips. See §8I.
 - **Built but not usable from the panel yet:** a carrier model (Marshal stack, recovery Case, ship banner), and the client halves of Incirlik's pattern board (RSU/PriFly legs) and the FINAL component (PAR and the carrier Final lane). Neither is mounted anywhere and no Strip can reach those Positions: the carrier Positions, RSU, SFA and PAR arrive in a later wave.
 
-Not built: WP6's arresting-gear data (DCS has no wires), plus WP7A's carrier Positions and PAR (the model exists). `docs/efsp-briefing.md` is the current handoff note.
+Not built: WP6's arresting-gear data (DCS has no wires), WP7A's carrier Positions, RSU, SFA and PAR (the models and panels exist), WP8's suggestion chip and staleness detector (§10.3, §10.4), and OVERFLIGHT's four-state lifecycle. `docs/efsp-briefing.md` is the current handoff note.
 
 **Every time EFSP works with is in-game Zulu**: the DCS mission clock, never your PC's clock or real-world UTC. Every typed time (release, void, EDCT, MTR entry and exit, …) is typed as `HHMM` (`1432` or `14:32Z`) and dated by the mission's date: the nearest such time within 12 hours. Anything that is not a time is refused at the cell.
 
@@ -39,7 +45,7 @@ Facility/Position map as it stands:
 |---|---|---|
 | `INCIRLIK` | `OPS`, `CD`, `GND`, `TWR`, `APP` | Covering chain `CD→GND→TWR→APP` |
 | `CENTER` | `CTR` | No covering chain (mirrors `OPS`) |
-| `TACTICAL` | `TAC_C2`, `AIC`, `GCI`, `JTAC` | `AIC`/`GCI` covered by `TAC_C2`; `AIC` and `JTAC` work only lines `TAC_C2` hands them (§8C1) |
+| `TACTICAL` | `TAC_C2`, `AIC`, `GCI`, `JTAC` | `AIC`/`GCI`/`JTAC` covered by `TAC_C2`; `AIC` and `JTAC` work only lines `TAC_C2` hands them (§8C1) |
 | `RANGES` | derived from the airspace config | One Position per range that has control of its own; works no Strips — see §8A |
 
 ## 2. How to mark a Strip CLEARED
@@ -833,7 +839,8 @@ AIC's to change`).
   Position with Strips and no cover still warns `routedTo: null`.
 - **Coordination.** The proposer can **Cancel** an open proposal, or **End** an accepted exchange, from the
   `⋯` menu. If the receiver drops its side, the exchange ends on the proposer's Strip too (the link is
-  cleared, not marked with a new state), including after a completed handoff.
+  cleared, not marked with a new state). Only a live (PROPOSED or ACTIVE) link ends: a completed handoff has
+  moved ownership, so a later ordinary drop by the receiver does not touch the sender's Strip.
 - **OPS alert status** is set by `OPS` at every state until the Strip is dropped (§8H).
 - A `SetState` to `DROPPED` is a Drop, and is refused under an open proposal or active TOFI like one.
 
@@ -1143,7 +1150,7 @@ active runway. A Strip that resolves to none of these is never held.
 5. After the inspection, departures sent to the queue go to the new end's Rack. Strips already
    queued for the old end are not moved: move them yourself.
 
-**At the start of a mission** (a new *mission session*, below) the active runway is the end most into
+**At the start of a mission** (a new *mission session*, §8J) the active runway is the end most into
 the mission's wind (a pure crosswind picks 05). A reconnect or a crc-sync restart onto the same mission
 keeps whatever Tower has chosen since. Restarting the same `.miz` is a new session, so it re-reads the
 wind and starts a new metrics session.
@@ -1215,18 +1222,7 @@ loses that peer. A re-import with a changed tanker rewires the join.
 *What is ours, not doctrine:* the USMTF set layouts come from a community wiki
 (`docs/parallel/research/usmtf-ato.md`), the vowel-cut rule and the one-ATO-at-a-time rule.
 
-### Archiving finished flights (§8J)
-
-A dropped flight stays on the server for **2 hours** after its drop, or until the **next mission** (a new
-mission session, below), whichever comes first. Then it is *archived*: gone from every screen, from the
-server's memory and from the Board snapshot. Its history is the **Mutation log**
-(`state/efsp-mutations*.jsonl`), which gets one `Archive` line per Strip and one `ArchiveFdr` line per
-flight record; there is **no lookup in the app** (H73). Consequences: an archived drop cannot be undone
-(Undo answers "not found"), live Strips are never touched by archiving (a mission change included), and
-the traffic count is unaffected because every drop is counted before it can be archived. The sweep runs
-once a minute; a Strip dropped by an unusual route (a `SetState` to `DROPPED`, a refused TOFI) may be
-archived one sweep late, and a drop that was not counted at a mission change waits for the age sweep, so
-it may stay up to 2 h.
+## 8J. Mission sessions, archiving and magnetic headings
 
 ### Mission sessions
 
@@ -1235,6 +1231,19 @@ crc-sync decides which mission it is in (`state/mission-session.json`). A **new 
 minutes. A reconnect, or a crc-sync restart onto the same mission, stays in the same session. The
 session number is what the metrics (§10) and the traffic count are bucketed by, and what the wind-derived
 active runway and the archiving of finished flights (§8J) key off.
+
+### Archiving finished flights
+
+A dropped flight stays on the server for **2 hours** after its drop, or until the **next mission** (a new
+mission session, above), whichever comes first. Then it is *archived*: gone from every screen, from the
+server's memory and from the Board snapshot. Its history is the **Mutation log**
+(`state/efsp-mutations*.jsonl`), which gets one `Archive` line per Strip and one `ArchiveFdr` line per
+flight record; there is **no lookup in the app** (H73). Consequences: an archived drop cannot be undone
+(Undo answers "not found"), live Strips are never touched by archiving (a mission change included), and
+the traffic count is unaffected because every drop is counted before it can be archived. The sweep runs
+once a minute; a Strip dropped by an unusual route (a `SetState` to `DROPPED`, a refused TOFI) may be
+archived one sweep late, and a drop that was not counted at a mission change waits for the age sweep, so
+it may stay up to 2 h.
 
 ### Headings are magnetic, and the transition altitude
 
