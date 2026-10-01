@@ -217,17 +217,34 @@ const SCRIPTS = {
   },
 
   * overflight(f, x) {
-    // An OVERFLIGHT may not propose coordination at all (coordination.js:65
-    // lists only ARRIVAL/INBOUND and DEPARTURE/HANDED_OFF), so the briefing's
-    // POINT_OUT leg moved to popupArrival's CTR-originated variant.
+    // The guide's four states (docs/adr/0087): INBOUND -> IN_SECTOR -> HANDED_OFF
+    // -> DROPPED. Half the flights are handed CTR -> APP by HANDOFF (F14 is
+    // fixed: an IN_SECTOR overflight may propose coordination, and arrives
+    // INBOUND at APP); the rest leave our airspace by NLA and are dropped.
     const r = yield create('CTR', {
       kind: 'CreateStrip', bayId: 'ctr-overflight', rackId: 'main', role: 'OVERFLIGHT',
       fdr: { callsign: f.callsign, aircraftType: 'A320', wakeCategory: 'M', originAirport: 'LTBA', destinationAirport: 'OJAI' },
     });
     if (!r.ok) return;
+    const ctr = r.strip.stripId;
     yield think();
+    yield walk('CENTER', ctr, s => s.state === 'IN_SECTOR', 2);
     yield think();
-    yield walk('CENTER', r.strip.stripId, s => s.state === 'DROPPED', 2);
+    if (x.rng.chance(0.5)) {
+      const h = yield act('CENTER', ctr, { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'APP' });
+      if (h.ok && h.strip.coordination) {
+        const replica = h.strip.coordination.peerStripId;
+        f.own(replica, 'INCIRLIK');
+        yield think();
+        const a = yield act('INCIRLIK', replica, { kind: 'HANDOFF', action: 'ACCEPT' });
+        if (a.ok) {
+          yield think();
+          yield walk('INCIRLIK', replica, s => s.state === 'DROPPED', 4);
+        }
+      }
+    }
+    yield think();
+    yield walk('CENTER', ctr, s => s.state === 'DROPPED', 3);
   },
 
   * militarySortie(f, x) {
