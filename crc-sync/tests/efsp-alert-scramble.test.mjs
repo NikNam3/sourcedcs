@@ -184,8 +184,12 @@ test('a scramble changes no NLA', () => {
   // proof that no other flight's scramble can reach it is that nothing in
   // the module reads alertStatus at all. The Strip's OWN alert status is
   // toggled through every value and must change nothing either.
-  const source = fs.readFileSync(path.join(here, '../src/efsp/nla.js'), 'utf8');
-  assert.ok(!/alertStatus/.test(source), 'nla.js reads alertStatus');
+  // AUTH: the per-Role NLA tables live in the authority registry's Role families.
+  const roleDir = path.join(here, '../src/efsp/authority/roles');
+  for (const f of ['../src/efsp/nla.js', ...fs.readdirSync(roleDir).map(n => path.join('../src/efsp/authority/roles', n))]) {
+    const source = fs.readFileSync(path.join(here, f), 'utf8');
+    assert.ok(!/alertStatus/.test(source), `${f} reads alertStatus`);
+  }
   const ctx = { isOccupied: () => true, coveringPositionFor: () => null, facilityId: 'INCIRLIK' };
   const now = Date.UTC(2026, 8, 30, 12);
   for (const [role, states] of [['DEPARTURE', nla.DEPARTURE_STATES], ['ARRIVAL', nla.ARRIVAL_STATES]]) {

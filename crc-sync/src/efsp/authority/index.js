@@ -55,6 +55,51 @@ registerRoleFamily(require('./roles/marshal').family);
 registerRoleFamily(require('./roles/final').family);
 registerRoleFamily(require('./roles/pattern').family);
 
+const positionFamilies = [];
+const positionOwner = new Map(); // positionId -> family name
+
+/**
+ * @param {{family:string, positions:string[], extends?:string[], permissions:object, createRoles?:object,
+ *   ownsStates?:object, fieldStateOwners?:object, fieldStateGrants?:object, nonOwnerBlockWrites?:object[],
+ *   tofiCounterparts?:object, capabilities?:object}} def
+ */
+function registerPositionFamily(def) {
+  if (sealed) _fail(`Position family ${def && def.family} registered after the registry was sealed; list it in authority/index.js`);
+  if (!def || typeof def.family !== 'string' || !def.family) _fail('a Position family needs a `family` name');
+  if (positionFamilies.some(f => f.family === def.family)) _fail(`Position family ${def.family} is registered twice`);
+  if (!Array.isArray(def.positions) || def.positions.length === 0) _fail(`${def.family}: \`positions\` must list its Position ids`);
+  for (const id of def.positions) {
+    if (positionOwner.has(id)) _fail(`${def.family}: Position ${id} already belongs to ${positionOwner.get(id)}`);
+  }
+  const ext = def.extends || [];
+  for (const id of ext) if (!positionOwner.has(id)) _fail(`${def.family}: extends ${id}, which no earlier family registered`);
+  const mine = new Set([...def.positions, ...ext]);
+  for (const key of ['permissions', 'createRoles', 'ownsStates', 'tofiCounterparts', 'capabilities']) {
+    for (const id of Object.keys(def[key] || {})) if (!mine.has(id)) _fail(`${def.family}: ${key} names ${id}, which is not its Position`);
+  }
+  for (const id of def.positions) if (!(def.permissions[id] instanceof Set)) _fail(`${def.family}: ${id} has no op grant`);
+  for (const [id, roles] of Object.entries(def.createRoles || {})) {
+    for (const r of roles) if (!roleFamilies.has(r)) _fail(`${def.family}: ${id} creates unknown Role ${r}`);
+  }
+  for (const [id, byRole] of Object.entries(def.ownsStates || {})) {
+    for (const [role, states] of Object.entries(byRole)) {
+      const f = roleFamilies.get(role);
+      if (!f) _fail(`${def.family}: ${id} owns states of unknown Role ${role}`);
+      for (const s of states) if (!f.states.includes(s)) _fail(`${def.family}: ${id} owns ${role}.${s}, which is not a ${role} state`);
+    }
+  }
+  for (const id of def.positions) positionOwner.set(id, def.family);
+  positionFamilies.push(def);
+}
+
+// ── Position families. incirlik-military is last: it extends civil-atc's APP
+// and the Role families' owner tables. This order also reproduces the key and
+// array order every composed table below had when it was one file. ──────────
+registerPositionFamily(require('./positions/civil-atc').family);
+registerPositionFamily(require('./positions/tactical').family);
+registerPositionFamily(require('./positions/carrier').family);
+registerPositionFamily(require('./positions/incirlik-military').family);
+
 sealed = true;
 
 // ── Role tables, composed once ─────────────────────────────────────────────
@@ -132,8 +177,117 @@ function replicaStateOnReceipt(role, senderState) { return ((REPLICA_STATE_ON_RE
 /** @returns {string|undefined} the sender's state once the receiver ACCEPTs `primitive`, or undefined (unchanged). */
 function senderStateOnAccept(primitive, role, senderState) { return ((SENDER_STATE_ON_ACCEPT[primitive] || {})[role] || {})[senderState]; }
 
+// ── Position tables, composed once ─────────────────────────────────────────
+const { COORDINATION_OP_KINDS } = require('./op-kinds');
+const { _isMruOrNonAtc } = require('./classes');
+
+// The coarse "may this Position class ever perform this KIND of op at
+// all" gate — CreateStrip is included here for OPS/APP (both originate
+// Strips, just for different roles) but the role itself is gated
+// separately by canCreateStripRole(), which board-store.js's
+// _applyCreateStrip calls in addition to this. The 5 COORDINATION_OP_KINDS
+// are included only for APP/CTR (guide §4.6: only ATC⇄ATC Positions that
+// actually sit on a Facility boundary get these — WP4A's deferred MRU
+// Positions, docs/adr/0020, get none at all, which is D12's refusal case).
+// ConvertToArrival is restricted the same way, for the same underlying
+// reason (only APP/CTR ever hold a DEPARTURE Strip at its HANDED_OFF
+// terminus in a position to convert it).
+const PERMISSIONS = {};
+const CREATE_ROLE_PERMISSIONS = {};
+for (const f of positionFamilies) {
+  Object.assign(PERMISSIONS, f.permissions);
+  Object.assign(CREATE_ROLE_PERMISSIONS, f.createRoles || {});
+}
+
+// D12, enforced structurally rather than merely by careful hand-authoring
+// above (docs/adr/0020's own directive — see MRU_OR_NON_ATC_CLASSES'
+// comment). Any Position whose facility-config class is MRU/MRU_POSITION/
+// NON_ATC loses every one of the 5 COORDINATION_OP_KINDS here, regardless
+// of what PERMISSIONS[positionId] was constructed with above.
+for (const [positionId, ops] of Object.entries(PERMISSIONS)) {
+  if (_isMruOrNonAtc(positionId)) {
+    for (const opKind of COORDINATION_OP_KINDS) ops.delete(opKind);
+  }
+}
+
+// A family's `ownsStates` column (incirlik-military.js: RSU, SFA and PAR),
+// merged here with FRESH arrays: FINAL's rows share CV_LANES, so a push would
+// also hand PAR the carrier Marshal's COMMENCED.
+for (const f of positionFamilies) {
+  for (const [positionId, byRole] of Object.entries(f.ownsStates || {})) {
+    for (const [role, byState] of Object.entries(byRole)) {
+      const table = STATE_OWNERS_BY_ROLE[role];
+      for (const state of byState) {
+        const owners = table[state] || [];
+        if (!owners.includes(positionId)) table[state] = [...owners, positionId];
+      }
+    }
+  }
+}
+
+/** Field state (guide §9.7): the owning family's rows, then each later family's grants appended. */
+const FIELD_STATE_OP_OWNERS = {};
+for (const f of positionFamilies) Object.assign(FIELD_STATE_OP_OWNERS, f.fieldStateOwners || {});
+for (const f of positionFamilies) {
+  for (const [opKind, ids] of Object.entries(f.fieldStateGrants || {})) {
+    if (!FIELD_STATE_OP_OWNERS[opKind]) _fail(`${f.family}: grants ${opKind}, which no family owns`);
+    FIELD_STATE_OP_OWNERS[opKind] = [...FIELD_STATE_OP_OWNERS[opKind], ...ids];
+  }
+}
+
+/** permission.js's mayActBesideOwner: every family's non-owner Block writes. */
+const NON_OWNER_BLOCK_WRITES = positionFamilies.flatMap(f => f.nonOwnerBlockWrites || []);
+
+// WP4A second slice — TOFI's target resolution (guide §4.6.3, ATC<->MRU).
+// Per guide §4.1's own Position table, TOFI is listed only for CTR among
+// the ATC Positions built so far (not APP) — so the ATC side is CTR only,
+// but the MRU side has two candidates (TAC_C2, GCI), and this table
+// resolves which counterpart(s) are valid for a given acting Position
+// rather than assuming a fixed 1:1 pair the way the older, narrower
+// COORDINATION_TARGETS-style stub could. Small and static (not full
+// dynamic discovery) — board-store.js's _applyTofiPropose validates a
+// proposal's target against this for defense in depth, and
+// crc-desktop's TOFI popover mirrors it to build its target picker.
+const TOFI_COUNTERPARTS = {};
+for (const f of positionFamilies) Object.assign(TOFI_COUNTERPARTS, f.tofiCounterparts || {});
+
+// ── Position accessors ─────────────────────────────────────────────────────
+
+/** @returns {string|null} the family a Position id belongs to, or null when none registered it. */
+function positionFamilyOf(positionId) { return positionOwner.get(positionId) || null; }
+/** @returns {object|null} a registered Position family by name. */
+function positionFamily(name) { return positionFamilies.find(f => f.family === name) || null; }
+/** @returns {string[]} every registered Position id, in registration order. */
+function positionIds() { return [...positionOwner.keys()]; }
+/**
+ * Everything the registry knows a Position may do, for reading (never for a
+ * gate: permission.js's one-Position predicates are the gates, D21).
+ * @returns {{family:string, ops:Set<string>, createsRoles:Set<string>|null, capabilities:object}|null}
+ */
+function capabilitiesFor(positionId) {
+  const family = positionFamilyOf(positionId);
+  if (!family) return null;
+  const capabilities = {};
+  for (const f of positionFamilies) {
+    const row = f.capabilities && _own(f.capabilities, positionId) ? f.capabilities[positionId] : null;
+    if (row) Object.assign(capabilities, row);
+  }
+  return {
+    family,
+    ops: PERMISSIONS[positionId] || new Set(),
+    createsRoles: CREATE_ROLE_PERMISSIONS[positionId] || null,
+    capabilities,
+  };
+}
+/** @returns {string[]} the Positions that may CreateStrip a `role` Strip, in registration order. */
+function creatorsOf(role) {
+  return Object.keys(CREATE_ROLE_PERMISSIONS).filter(p => CREATE_ROLE_PERMISSIONS[p].has(role));
+}
+
 module.exports = {
-  registerRoleFamily,
+  registerRoleFamily, registerPositionFamily,
+  positionFamilyOf, positionFamily, positionIds, capabilitiesFor, creatorsOf,
+  PERMISSIONS, CREATE_ROLE_PERMISSIONS, FIELD_STATE_OP_OWNERS, NON_OWNER_BLOCK_WRITES, TOFI_COUNTERPARTS,
   roleFamily, roleNames, stateOwners, initialStateFor, replicaStateOnReceipt, senderStateOnAccept,
   STATES_BY_ROLE, STATE_OWNERS_BY_ROLE, DEFAULT_INITIAL_STATE_BY_ROLE, REPLICA_STATE_ON_RECEIPT, SENDER_STATE_ON_ACCEPT,
   COUNTABLE_PRE_DROP_STATES, EXCLUDED_WHEN_NOT_COUNTABLE, COORDINATION_ELIGIBLE_STATES, TOFI_ELIGIBLE_STATES,
