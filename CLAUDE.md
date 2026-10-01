@@ -51,8 +51,7 @@ again (`docs/wip/SOAK.md`). `memory.slope` and `memory.netGrowth` are judged onl
 warm-up covers the 2 h finished-Strip retention (ADR 0082): the heap keeps filling until the archiver starts removing
 DROPPED Strips, so a shorter run (including `soak:smoke`) reports them as **not judged**, which is neither a failure
 nor a pass. `--warmup-min <m>` overrides the warm-up and `--judge-memory` forces the gate (the selfcheck `leak` case
-uses it). The not-judged rule is `lane/SOAKW-warmup-default` (`memoryPolicy()` in `tools/soak/report.js`,
-`docs/wip/SOAKW.md`) and applies once that lane is merged; `--warmup-min` alone is already in the tree.
+uses it). The not-judged rule is `memoryPolicy()` in `tools/soak/report.js` (`docs/wip/SOAKW.md`).
 
 ### crc-desktop (Electron)
 ```bash

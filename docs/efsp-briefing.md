@@ -4,8 +4,8 @@ Entry point for the next agent or session. Read this, then the part of `EFSPImpl
 your work names, then write a plan before writing code. This is a handoff, not a build order.
 
 **This revision supersedes the previous one.** The remaining EFSP work is being finished by many
-agents at once, in waves of parallel lanes (`docs/efsp-parallel-plan.md`). **Waves 1 and 2 and most of
-wave 3 are merged**, the last of them on the dry-run integration branch `integ/wave3-dry` (§1). Wave 1
+agents at once, in waves of parallel lanes (`docs/efsp-parallel-plan.md`). **Waves 1 and 2 and wave 3
+are merged** into `efsp-wp5-correlation` (§1), except UI-B. Wave 1
 (§3I) landed field state (server), MTR fields, the USMTF ATO parser, the carrier model, WP8 metrics and
 the soak harness, retracting obligation alerts, IFF from interrogation, atobrief's USMTF export and the
 gRPC reconnect fix. Wave 2 and the fixes between waves (§3J) landed the field-state panel, hung
@@ -15,10 +15,9 @@ correctness, the tactical Positions' fixes, audit completeness and block altitud
 the carrier Positions and Facility (L17), the suggestion chip and staleness (L19), the UI follow-up
 (UI-A), the per-theater transition altitude (TA), the client-mirror parity tests (PARITY), the soak
 fixes (SOAK) and the infra hygiene lane (HYG); the client half of Incirlik's pattern board and FINAL
-component (L18) was already in. **Built but not on that branch:** L18's server half (RSU/SFA/PAR,
-`lane/L18-server`, ADR `0093`) and SOAKW (the soak's not-judged memory rule,
-`lane/SOAKW-warmup-default`). **Not started:** L28 (OVERFLIGHT lifecycle), UI-B (resync wiring and the
-follow-ups listed in §4), L20 (the `[SOURCE-DEFINED]` sweep, §5). The known bugs each have an owning
+component (L18) was already in, and now its server half (RSU/SFA/PAR, ADR `0093`), SOAKW (the soak's
+not-judged memory rule) and L28 (OVERFLIGHT lifecycle, ADR `0087`). **Not merged:** UI-B (resync wiring and
+the follow-ups listed in §4). **Not started:** L20 (the `[SOURCE-DEFINED]` sweep, §5; its prep inventory is in). The known bugs each have an owning
 lane (§4).
 
 If you are a lane agent, your own briefing in `docs/parallel/wave2/` and
@@ -27,31 +26,27 @@ are the supervising session, start at `docs/parallel/supervisor-handoff.md`.
 
 ## 1. State of the tree
 
-Integration branch `efsp-wp5-correlation`, merged through `c12cd7c` (wave 3a: L26, U6 and L18's client
-half). **The dry-run branch `integ/wave3-dry` (worktree `../sourcedcs-INTEG`) sits on top of it** and
-carries, in merge order, GRPC, SOAK, DOCFOLD, TA, HYG, PARITY, L17, L19 and UI-A (`0935ee5`); the real
-`efsp-wp5-correlation` waits for the human's go. Neither is pushed. **Not on `integ/wave3-dry`:** L18's
-server half (`lane/L18-server`, `395c0f7`, built on L17 plus L18's client half, so it merges after L17 and
-PARITY, and PARITY's tests are to be re-run then), SOAKW (`lane/SOAKW-warmup-default`, `ac3eb39`, merges
-after SOAK), and the DOCS2 lane's doc fixes (this file and the guide). L28 and L20 have not started; UI-B
-has not merged.
+Integration branch `efsp-wp5-correlation`. It carries wave 3a (L26, U6, L18's client half) and, merged on
+top, GRPC, SOAK, DOCFOLD, TA, HYG, PARITY, L17, L19, UI-A, L18's server half, SOAKW, L28, QAC, INFRA2, S13,
+DOCS2, FREEZE, ARCH (plan), AIRSP (mockup) and L20-prep. Not pushed. **Not merged:** UI-B, QAS
+(`lane/QA-sync-cleanup`) and E2E-harden. L20 has not started. PARITY's tests are still to be re-run on the
+merged tree.
 
-Green, last recorded per lane (no integrated run is recorded for `integ/wave3-dry`: the unit suites
-have to be re-run unloaded at the real merge, S-U6): **crc-sync** 1887 (L17), 1884 (TA), 1878 (PARITY), 1873 (L19), 1879 (SOAKW, with the soak fixes), 1922 on `lane/L18-server`; **crc-desktop** 736
-(L17), 737 (TA), 764 with one todo (PARITY), 771 on `lane/L18-server`; atobrief 77; Python
+Green, last recorded per lane (no integrated run is recorded: the unit suites
+have to be re-run unloaded on the merged tree, S-U6): **crc-sync** 1887 (L17), 1884 (TA), 1878 (PARITY), 1873 (L19), 1879 (SOAKW, with the soak fixes), 1922 (L18 server); **crc-desktop** 736
+(L17), 737 (TA), 764 with one todo (PARITY), 771 (L18 server); atobrief 77; Python
 `tools/tests` 360 (L25). (`npm test` in each; the one crc-desktop failure a fresh worktree shows is
 the packaging test's missing `app/node_modules`: run `npm ci` inside `crc-desktop/app`.)
-**Playwright:** the full suite has not been run on the integrated branch. Per lane: E2E-fix left the
+**Playwright:** the full suite has not been recorded on the merged branch. Per lane: E2E-fix left the
 whole suite at 115 passed, 0 failed; UI-A's full run was 124 passed and 2 flaky (both pass alone);
-`l17-carrier` 5/5 and `l19-surveillance-hints` 2/2 alone, and `l18-incirlik` 3/3 on its branch. L17 saw
+`l17-carrier` 5/5 and `l19-surveillance-hints` 2/2 alone, and `l18-incirlik` 3/3 alone. L17 saw
 three `l17-carrier` and two `tactical-positions` failures when five spec files ran together, passing
 alone: the integrator's full run decides whether that is load or a leak. Every spec must
 `require('./helpers/test')` and leave no Strips on the Board (E2E-fix, §3J). `ordnance-hung`'s "pilot
 walks" test needs `field-state.spec.js` to have run first (it relies on the active runway), as on the
 baseline. Restart the local crc-sync on :3000 after any `crc-sync/src` change.
 
-ADRs on `integ/wave3-dry`: `0001`–`0076`, `0078`–`0086`, `0088`, `0089`, `0091`; `0093` is on
-`lane/L18-server`. The gaps: `0077` and `0087` are reserved for L20 and L28, `0090` and `0092` were not
+ADRs: `0001`–`0076`, `0078`–`0089`, `0091`, `0093`, `0094`. The gaps: `0077` is reserved for L20, `0090` and `0092` were not
 used (TA took none: it applies `0085`/H62), `0060` is the errata ADR. **An ADR is never edited once
 committed (P4)**: a correction is a new ADR.
 
@@ -148,7 +143,7 @@ archiving (L24), Board sync correctness (L27), the tactical Positions (L23), aud
 block altitudes (U6), magnetic headings (F2), mission sessions (F3), typed time Blocks (F4), the carrier
 Positions and Facility (L17), the suggestion chip and staleness (L19), the UI follow-up (UI-A), the
 per-theater transition altitude (TA), the client-mirror parity tests (PARITY), the soak fixes (SOAK), and
-Incirlik's pattern board and FINAL component (L18; the server half is on a branch).
+Incirlik's pattern board and FINAL component (L18, both halves).
 
 ## 3A. The RANGE station
 
@@ -613,8 +608,8 @@ OVERFLIGHT to the guide's own four-state lifecycle (L28), which is where that ge
 ## 3J. Waves 2 and 3 — what each lane left, and the traps
 
 Same convention as §3I: full notes are in `docs/wip/<lane>.md`. Folded here: L1b, L12, L13, L14,
-L15, L16, L22, L24, L27, F2, F3, F4, L23, L26, U6, L18 (both halves; the server half is on a branch), UI-A,
-L17, L19, TA, PARITY, GRPC, SOAK, SOAKW, HYG, L25 and E2E-fix. Not yet folded: L28 and UI-B (not merged), L20.
+L15, L16, L22, L24, L27, F2, F3, F4, L23, L26, U6, L18 (both halves), UI-A,
+L17, L19, TA, PARITY, GRPC, SOAK, SOAKW, HYG, L25 and E2E-fix. Not yet folded: L28 (merged, notes in `docs/wip/L28.md`), UI-B (not merged), L20.
 
 **Field state, client (L1b, `0068`).** Three files: `field-state-rules.js` (the pure mirror of the
 server rules: `fieldStateActionsFor` offers a button only for what Tower or OPS would accept,
@@ -933,8 +928,8 @@ in the ADR for later); a block on a datalink/atobrief import path is not walked 
 no clearance altitude). Pre-existing `crc-sync npm test` failures at U6's base are listed in
 `docs/wip/U6.md`.
 
-**Incirlik RSU / SFA / PAR (L18, `0075`).** The client half is on `integ/wave3-dry`, standalone,
-unit-tested and **mounted nowhere there**; the server half and the mounting are on `lane/L18-server`
+**Incirlik RSU / SFA / PAR (L18, `0075`).** The client half was built standalone and
+unit-tested; the server half and the mounting came with `lane/L18-server`, now merged
 (below): `panels/efsp/final-panel.js` (the FINAL component, shared by PAR and the carrier Final lane:
 pure model `finalCallsDue`, `createFinalTracker`, `finalViewModel`, `terminalActionsFor` plus
 `renderFinalPanel`; zero input elements, a test holds it; a free-running 5 s cadence bar off the mission
@@ -948,8 +943,8 @@ PAR's terminal events reuse the FINAL Role's states (Landing assured, Ball to `B
 Waveoff to `BOLTER_WAVEOFF`; no new state, `nla.js` is L17's); glidepath tolerance 0.3 deg, trend step
 0.1 deg, prompt hold 4 s, long-in-pattern 10 min, more than one on the last leg advised; chip actions
 Landed (`RECOVERED`) and Drop (`DROPPED`).
-- **Server half, built on `lane/L18-server` (`395c0f7`, ADR `0093`, not on `integ/wave3-dry`).** Based on L17
-  plus this client half, so it merges after L17 and PARITY (re-run PARITY's tests then). `facility-config.js`
+- **Server half (L18 server, ADR `0093`, merged).** Built on L17
+  plus this client half (re-run PARITY's tests on the merged tree). `facility-config.js`
   gives INCIRLIK eight Positions (`RSU`, `SFA`, `PAR` all `MILITARY_ATC`: a new class would silently drop STCA,
   the `0041` inclusion-list trap), covering `SFA`/`PAR` to `APP` and **none for RSU**, Bays `rsu-pattern`,
   an SFA frequencies Bay (implies `INBOUND`, an existing ARRIVAL state), `par-final` (one Strip) and a second
@@ -1122,14 +1117,14 @@ expects **exactly one audit line per answered Mutation from the right writer** (
 `auditForRefusal`; the gate got stricter). **The heap slope is not fleet ramp-up**: a finished Strip stays 2 h
 before the archiver removes it (`0082`), so `strips.dropped` climbs until then (about 42/h, 26-37 KB each);
 10 min gives 5.8 MB/h, 240 min gives -0.3 and passes; a 130-minute warm-up on a 180-minute run passes.
-`--warmup-min <m>` overrides the warm-up. **SOAKW** (`lane/SOAKW-warmup-default`, not on `integ/wave3-dry`):
+`--warmup-min <m>` overrides the warm-up. **SOAKW** (merged):
 `memoryPolicy()` in `tools/soak/report.js` judges `memory.slope` and `memory.netGrowth` only on runs of 3 h or
 more with a warm-up of at least the retention (`ARCHIVE_AFTER_MS`, read from `archiver.js`); the default
 warm-up on such runs is `max(10 %..25 % rule, retention)`; shorter runs print `NOT JUDGED` (a pass, with the
 per-DROPPED-Strip KB and residual rows kept and `report.json` carrying `memory.judged: false` and
 `notJudgedReason`); `--judge-memory` forces the gate and the selfcheck `leak` case uses it, so a 20-minute run
-still has to fail the slope. Tests: `tests/soak-memory-policy.test.mjs`. Until SOAKW merges, `soak:smoke`
-reports a memory failure on every short run.
+still has to fail the slope. Tests: `tests/soak-memory-policy.test.mjs`. `soak:smoke` reports the memory gates as
+not judged.
 
 **gRPC reconnect (GRPC, no ADR).** The "unit stream ended, reconnecting" loop was the `poll_rate: 0` bug LG
 already fixed (the logs counted in the research note came from the pre-LG client). The one change: the
@@ -1172,13 +1167,12 @@ correlation redraw are load-sensitive.
 
 ## 4. What's left, and the known bugs
 
-**Not built, in the guide's order.** WP7A: the server half of Incirlik's RSU/SFA/PAR is built but not merged
-(`lane/L18-server`, §3J); the carrier Positions are on `integ/wave3-dry` (L17) and have never met a real DCS
-ship. WP8's §10.3 suggestion chip and §10.4 staleness are built (L19). Not started: OVERFLIGHT's four-state
-lifecycle (L28, H63; H74/H75 answered), UI-B (below), and the `[SOURCE-DEFINED]` audit fixes (L20), which is a
+**Not built, in the guide's order.** WP7A: Incirlik's RSU/SFA/PAR is built (§3J); the carrier Positions (L17) have never met a real DCS
+ship. WP8's §10.3 suggestion chip and §10.4 staleness are built (L19). OVERFLIGHT's four-state
+lifecycle is built (L28, `0087`). Not merged: UI-B (below). Not started: the `[SOURCE-DEFINED]` audit fixes (L20), which is a
 WP6 acceptance criterion in its own right and runs last. Everything else in WP6 to WP8 that the guide names is
 built: the field-state panel, `HUNG`, alert/scramble, the ATO import and AR join, the metrics dashboard.
-**UI-B** is the follow-up lane that starts from `integ/wave3-dry`: wire `sendEfspResync()` (S-12, with the
+**UI-B** is the follow-up lane (not merged): wire `sendEfspResync()` (S-12, with the
 open question of the other sequence numbers: carrier, field state, ATO and metrics have their own and no
 resync, Q3-3), the `RUNWAY_CHANGE` suspension label, the L19 chip against a suspended runway, and the
 items in the table marked UI-B.
@@ -1205,9 +1199,9 @@ the hard-coded 18,000 ft (TA); the `tools/miztoyaml` frequency bug (L25).
 | `strip-view.js`'s conformance reason line reads `a.assigned` (the nearest edge), so a block-altitude bust says "from FL240" without the block; use `a.block` | low | UI-B | U6 |
 | GCI-held lines are not in `TAC_C2`'s "with AIC/JTAC" tab (GCI is not a delegate); the metrics `time-to-find` counts that tab as a Bay; `srs-radio.js` has no unit test | low | UI-B | UI-A |
 | **Carrier, never seen live:** the Marshal holds approach Strips it cannot advance when the chain ends at it (`0064`'s design, kept); the banner reads "hull not found" without a real ship; the weather advisory knows only night; the carrier's final Bays have no `capacity: 1`; two hulls, the deck-state board (`0064` B8) and the in-browser final-bearing line are not walked | medium | human live check / L17 owner | L17, S-L17, L18S |
-| **Incirlik RSU/SFA/PAR (on `lane/L18-server`):** a PAR vacated with an aircraft on final leaves the Strip with APP where APP cannot advance it; an airspace approval that rewrites a flight's frequency desyncs its SFA Rack; the FINAL panel has never seen a live DCS track; its thresholds and the placeholder frequencies are `[SOURCE-DEFINED]` | medium | human live check / L20 | L18S |
+| **Incirlik RSU/SFA/PAR:** a PAR vacated with an aircraft on final leaves the Strip with APP where APP cannot advance it; an airspace approval that rewrites a flight's frequency desyncs its SFA Rack; the FINAL panel has never seen a live DCS track; its thresholds and the placeholder frequencies are `[SOURCE-DEFINED]` | medium | human live check / L20 | L18S |
 | One `LINGERING_TRACK` in the 240-minute soak at wave 2: it did not reproduce for L19 (20 seeds at 240 min, 6 at 480), so the fix is unit-tested only. Known limit: a DCS re-mint of a lingering aircraft under a new track id is a new contact to the reconciler; a callsign memory with a position test is not built | watch | next soak run | L27, L19 |
-| The 4-hour soak's heap gates (net growth 25%, H72) need the human's workflow run; with SOAKW they are judged only on runs of 3 h or more with a 2 h warm-up; the unloaded p50 <= 3 ms was only measured as a proxy | acceptance | human | L24, L27, SOAKW |
+| The 4-hour soak's heap gates (net growth 25%, H72) need the human's workflow run; they are judged only on runs of 3 h or more with a 2 h warm-up; the unloaded p50 <= 3 ms was only measured as a proxy | acceptance | human | L24, L27, SOAKW |
 | **Merge-time decisions in the questions file** (`docs/parallel/questions-round3.md`): the 2 h archive against 1.5–3 h sorties (a returning flight loses its FDR, ATO line, MARSA and `military` Blocks; Q3-2), a DCS crash or mission restart with live Strips (Q3-4), carrier flights with no path into the ATO, traffic count or home-airport rule (Q3-6) | decision | human | L24, F3, L17 |
 | `grpc-client.js:764` `windFrom = heading·180/π + 270` is unexplained and the DCS wind vector may be grid, not true (about -2° at Incirlik): needs a live check against the mission editor's wind. The ATIS-wind frame follows it | needs a live check | human | F2, S-F2b |
 | Six theaters have no `tmCentralMeridianDeg` (TheChannel, MarianaIslandsWWII, Kola, Afghanistan, Iraq, GermanyCW): their grid headings cannot be converted; `tools/miztoyaml/projection.py` needs the same table and a test keeping the two equal | theater work | unowned | F2 |
@@ -1224,8 +1218,7 @@ four-hour soak workflow; the live wind check (S-F2b) and the live `mission_start
 a real DCS ship against the carrier banner and of a real FINAL track; L19's taxi/line-up/take-off-without-Airborne
 walk; desk L11-8b; the `.env` and MariaDB `init.sh` items from HYG (CLAUDE.md). **On a machine with state,
 clear `efsp-metrics.json` and `efsp-traffic-count.jsonl` (or accept repeated numbers)** when F3 reaches
-it: its session counter restarts at 1. **Integrator actions outstanding:** merge `lane/L18-server` and
-`lane/SOAKW-warmup-default`; re-run PARITY's tests then; the L3↔L11 cross-test above; the full Playwright
+it: its session counter restarts at 1. **Integrator actions outstanding:** re-run PARITY's tests on the merged tree; the L3↔L11 cross-test above; the full Playwright
 re-run and the unloaded crc-sync run (§1); then remove `docs/wip/*.md` (L28's and UI-B's notes still need
 folding when they land).
 
@@ -1273,16 +1266,16 @@ The plan is `docs/efsp-parallel-plan.md` §3–§4, the per-lane briefings are i
 (and the later ones beside them), and `docs/parallel/decisions.md` is what is actually dispatched. Each
 lane works in its own worktree `/home/nklx/dev/personal/sourcedcs-<lane>` on `lane/<lane>-…`, reads
 `docs/parallel/lane-rules.md`, and leaves `docs/wip/<lane>.md` for the next fold. **Merged into
-`integ/wave3-dry`** (and so folded in §3J): GRPC, SOAK, DOCFOLD, TA, HYG, PARITY, L17, L19 and UI-A, on top
-of L1b, L12–L16, L22–L27, F2–F4, U6 and L18's client half; L25 and E2E-fix are in too. **Built, not yet
-merged:** L18's server half and SOAKW.
+`efsp-wp5-correlation`** (folded in §3J except L28): GRPC, SOAK, DOCFOLD, TA, HYG, PARITY, L17, L19, UI-A, L18's
+server half, SOAKW and L28, on top of L1b, L12–L16, L22–L27, F2–F4, U6 and L18's client half; L25, E2E-fix,
+QAC, INFRA2, S13, DOCS2, FREEZE, ARCH, AIRSP and L20-prep are in too. **Not merged:** UI-B, QAS, E2E-harden.
 
 | Lane | What | ADR | State |
 |---|---|---|---|
-| L18 (server half) | RSU/SFA/PAR Positions, Bays, `singleFrequencyApproach`, `SfaRotation`, the Bay `view`/`replacesRacks`/`capacity` flags, client mounting | 0093 (0075 Part B) | built on `lane/L18-server`; merges after L17 and PARITY, re-run PARITY then |
-| SOAKW | `memory.slope` judged only on 3 h+ runs with a retention-length warm-up | none | built on `lane/SOAKW-warmup-default`; merges after SOAK |
-| UI-B | wire `sendEfspResync()` (and decide the other stores' resync, Q3-3), the `RUNWAY_CHANGE` label, the L19 chip against a suspended runway, the `a.block` reason line, the runway-change owners fallback, the GCI "with" tab (§4) | open | starts from `integ/wave3-dry` |
-| L28 | OVERFLIGHT's four-state lifecycle (H63, H74, H75), and the E2E hardening for `ordnance-hung`'s order dependence | 0087 | not started; starts from `integ/wave3-dry` |
+| L18 (server half) | RSU/SFA/PAR Positions, Bays, `singleFrequencyApproach`, `SfaRotation`, the Bay `view`/`replacesRacks`/`capacity` flags, client mounting | 0093 (0075 Part B) | merged; re-run PARITY's tests |
+| SOAKW | `memory.slope` judged only on 3 h+ runs with a retention-length warm-up | none | merged |
+| UI-B | wire `sendEfspResync()` (and decide the other stores' resync, Q3-3), the `RUNWAY_CHANGE` label, the L19 chip against a suspended runway, the `a.block` reason line, the runway-change owners fallback, the GCI "with" tab (§4) | open | not merged |
+| L28 | OVERFLIGHT's four-state lifecycle (H63, H74, H75), and the E2E hardening for `ordnance-hung`'s order dependence (the latter is E2E-harden, not merged) | 0087 | L28 merged |
 | L20 | the `[SOURCE-DEFINED]` fixes and stale-text sweep (§4); the L19 thresholds, L18's FINAL/placeholder values, non-Syria transition altitudes | 0077 | wave 4, last |
 
 **The integrator, after every wave:** merge in order, run both unit suites and the full Playwright

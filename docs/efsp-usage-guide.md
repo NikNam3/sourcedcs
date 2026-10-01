@@ -4,7 +4,7 @@ A working reference for the Electronic Flight Strip Panel — what's built, how 
 
 ## 1. Status right now
 
-Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green per lane; the Playwright suite has not been run on the integrated branch, see the briefing). This reflects `integ/wave3-dry`; **the server half of Incirlik's RSU/SFA/PAR is built on `lane/L18-server` and not on that branch yet**, so §8L is marked:
+Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green per lane; the Playwright suite has not been recorded on the merged branch, see the briefing). This reflects `efsp-wp5-correlation`, including Incirlik's RSU/SFA/PAR (§8L) and OVERFLIGHT's four-state lifecycle (`adr/0087`):
 
 - **WP0-WP4** (guide): domain model, Mutation protocol, Position occupancy/combination, Block Map, Bays/Racks/drag, States/NLA/transfer, 30s Undo.
 - **WP4A first slice**: a second Facility (`CENTER`/`CTR`) alongside `INCIRLIK`'s five Positions; the 5 cross-Facility coordination primitives (`HANDOFF`/`POINT_OUT`/`TRAFFIC`/`OPERATIONAL_REQUEST`/`AIT`) between `APP` and `CTR`; per-Facility Strip replication (two independent Strips linked by `coordination`, not one moved Strip); `EDCT`/`CALL_FOR_RELEASE` release states + standing-release envelopes; airspace ownership as a direction; track-degradation soft interlock; timed forwarding-obligation alerts — see §8.
@@ -35,9 +35,9 @@ Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green per lan
 - **ATO import** — `TAC_C2` pastes or drops a USMTF ATO (atobrief exports one) and it becomes mission lines on the Board, with the air-refuelling tanker/receiver join shown on the Strips. See §8I.
 - **The carrier** — a `CARRIER` Facility with four Positions (`CV_MARSHAL`, `CV_PRIFLY`, `CV_APP1`, `CV_APP2`): a ship banner, PriFly's recovery Case, the Marshal stack board and four hand-over buttons, from launch to recovery. See §8K. Not yet seen against a real DCS ship.
 - **Suggestions from surveillance** — a quiet `AIRBORNE? ▸` chip when a departure Strip still says it is on the ground but the aircraft is flying, a `STALE` badge when it was ignored, and a takeoff time stamped when a Strip enters Airborne. Surveillance informs; nothing moves by itself. See §8F.
-- **Incirlik's pattern board and FINAL component** (RSU, SFA, PAR): the panels are built on `integ/wave3-dry` but mounted nowhere there; the Positions that use them are on `lane/L18-server`. See §8L.
+- **Incirlik's pattern board and FINAL component** (RSU, SFA, PAR): the panels are mounted on the RSU and PAR Positions. See §8L.
 
-Not built: WP6's arresting-gear data (DCS has no wires), the carrier's deck-state board and weather beyond night (`adr/0064` B8), and OVERFLIGHT's four-state lifecycle. `docs/efsp-briefing.md` is the current handoff note.
+Not built: WP6's arresting-gear data (DCS has no wires), the carrier's deck-state board and weather beyond night (`adr/0064` B8). `docs/efsp-briefing.md` is the current handoff note.
 
 **Every time EFSP works with is in-game Zulu**: the DCS mission clock, never your PC's clock or real-world UTC. Every typed time (release, void, EDCT, MTR entry and exit, …) is typed as `HHMM` (`1432` or `14:32Z`) and dated by the mission's date: the nearest such time within 12 hours. Anything that is not a time is refused at the cell.
 
@@ -45,7 +45,7 @@ Facility/Position map as it stands:
 
 | Facility | Positions | Notes |
 |---|---|---|
-| `INCIRLIK` | `OPS`, `CD`, `GND`, `TWR`, `APP` (+ `RSU`, `SFA`, `PAR` on `lane/L18-server`, §8L) | Covering chain `CD→GND→TWR→APP` (`SFA`, `PAR` → `APP` on the branch; `RSU` has none) |
+| `INCIRLIK` | `OPS`, `CD`, `GND`, `TWR`, `APP` (+ `RSU`, `SFA`, `PAR`, §8L) | Covering chain `CD→GND→TWR→APP` (`SFA`, `PAR` → `APP`; `RSU` has none) |
 | `CENTER` | `CTR` | No covering chain (mirrors `OPS`) |
 | `CARRIER` | `CV_MARSHAL`, `CV_PRIFLY`, `CV_APP1`, `CV_APP2` | Covering chain `CV_APP2→CV_APP1→CV_MARSHAL`; `CV_PRIFLY` is outside it (§8K) |
 | `TACTICAL` | `TAC_C2`, `AIC`, `GCI`, `JTAC` | `AIC`/`GCI`/`JTAC` covered by `TAC_C2`; `AIC` and `JTAC` work only lines `TAC_C2` hands them (§8C1) |
@@ -1357,11 +1357,7 @@ and **PATTERN** (in the visual pattern, then recovered). The covering chain is `
 - **Not walked against a real DCS ship**: the banner reads "hull not found" until a hull track exists; the
   deck-state board (`cv-prifly-deck`) is inert; two hulls were not tried.
 
-## 8L. Incirlik: RSU, SFA and PAR (client panels on `integ/wave3-dry`; Positions on `lane/L18-server`, `adr/0075`, `0093`)
-
-> **Status.** The pattern board and the FINAL panel exist on `integ/wave3-dry` but are mounted nowhere there,
-> and no Strip can reach RSU, SFA or PAR. The Positions, Bays and the SFA rotation described below are
-> built on `lane/L18-server` and appear when it merges.
+## 8L. Incirlik: RSU, SFA and PAR (`adr/0075`, `0093`)
 
 - **Eight Positions** at `INCIRLIK`: `OPS`, `CD`, `GND`, `TWR`, `RSU`, `APP`, `SFA`, `PAR`.
 - **RSU** (runway supervisory unit): the **pattern board** (closed, initial, base, final as columns). Each
