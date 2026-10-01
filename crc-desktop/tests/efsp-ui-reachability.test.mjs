@@ -15,14 +15,53 @@
  *     op. Not a browser, so it proves the wiring rather than the pixels.
  */
 
+import './helpers/client-env.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import vm from 'node:vm';
 import path from 'node:path';
+import { createRequire } from 'node:module';
+import { freshGraph } from './helpers/fresh-graph.mjs';
+import { BLOCK_MAPS, isBlockEditable, enumSelectOptionsFor, isBooleanToggleBlock } from '../app/public/js/panels/efsp/strip-template.js';
+import { COMPACT_BLOCKS_BY_POSITION, compactBlocksFor as _compactBlocksFor } from '../app/public/js/panels/efsp/strip-fields.js';
+import { INDICATOR_ORDER } from '../app/public/js/panels/efsp/strip-view.js';
+import { HAND_BACK_TO, TOFI_ANSWERED_BY } from '../app/public/js/panels/efsp/bay-view.js';
+import * as domStub from './helpers/dom-stub.js';
 
-const CLIENT = path.join(__dirname, '../app/public/js/panels/efsp');
-const { BLOCK_MAPS, isBlockEditable, enumSelectOptionsFor, isBooleanToggleBlock } = require(path.join(CLIENT, 'strip-template.js'));
+const require = createRequire(import.meta.url);
+
+/**
+ * One fresh generation of the client module graph per render (tests/helpers/fresh-graph.mjs), the
+ * module equivalent of the old per-render vm sandbox. `sandbox` is a facade over that generation's
+ * module namespaces: a read finds the exported name in any of them, a write goes through the module's
+ * explicit test setter (a module cannot have an imported function replaced from outside).
+ */
+const SANDBOX_MODULES = [
+  'panels/efsp/bay-view.js', 'panels/efsp/strip-view.js', 'panels/efsp/efsp-state.js', 'panels/efsp/efsp-arrivals.js',
+  'panels/efsp/efsp-stereo-routes.js', 'panels/efsp/strip-template.js', 'panels/efsp/strip-fields.js', 'panels/efsp/efsp-ws.js',
+  'panels/efsp/efsp-panel.js', 'panels/efsp/carrier-state.js', 'panels/efsp/carrier-panel.js', 'panels/efsp/scramble.js',
+  'panels/efsp/airspace-panel.js',
+];
+async function loadSandbox() {
+  const g = freshGraph();
+  const namespaces = [];
+  for (const m of SANDBOX_MODULES) namespaces.push(await g.import(m));
+  const bayView = namespaces[0];
+  const find = (name) => namespaces.find(ns => name in ns);
+  return new Proxy({}, {
+    get(_, name) {
+      if (name === 'document') return globalThis.document;
+      const ns = find(name);
+      return ns ? ns[name] : undefined;
+    },
+    set(_, name, value) {
+      if (name === 'renderAllOpenEfspBays') bayView._setRenderAllOpenEfspBaysForTest(value);
+      else throw new TypeError(`sandbox.${String(name)} has no test setter`);
+      return true;
+    },
+  });
+}
+
+const CLIENT = path.join(import.meta.dirname, '../app/public/js/panels/efsp');
 
 // ── 1. reachability ──────────────────────────────────────────────────────
 //
@@ -41,13 +80,12 @@ const { BLOCK_MAPS, isBlockEditable, enumSelectOptionsFor, isBooleanToggleBlock 
 
 /** The compact Block list bay-view.js actually renders, read from the module rather than scraped out of its source. */
 function compactBlocksFor(role, positionId) {
-  return clientSandbox().compactBlocksFor(role, positionId);
+  return _compactBlocksFor(role, positionId);
 }
 
 // Every (Role, owning Position) pair the field lists distinguish, plus one
 // Position no list names, so the per-Role fallback is held to the same rule.
 // strip-fields.js is a plain module; reading it directly is the source of truth.
-const { COMPACT_BLOCKS_BY_POSITION } = require('../app/public/js/panels/efsp/strip-fields.js');
 function positionsFor(role) {
   if (role === 'MISSION') return ['TAC_C2'];
   return [...Object.keys(COMPACT_BLOCKS_BY_POSITION[role] || {}), 'NOLIST'];
@@ -63,9 +101,9 @@ function positionsFor(role) {
  * reads. Clicking the button is both the only thing that works and the more
  * honest test: it exercises the path a controller takes.
  */
-function expandedBlocksFor(role, positionId = 'OPS') {
+async function expandedBlocksFor(role, positionId = 'OPS') {
   const strip = stripAt({ role, state: role === 'MISSION' ? 'TASKED' : 'PROPOSED', ownerPositionId: positionId });
-  const r = renderStrip({ strip, fdr: FDR, held: [positionId] });
+  const r = await renderStrip({ strip, fdr: FDR, held: [positionId] });
   // The toggle re-renders every open Bay, which needs a real DOM; the state
   // it sets is what matters, so the rebuild is stubbed and done by hand below.
   r.sandbox.renderAllOpenEfspBays = () => {};
@@ -79,10 +117,10 @@ function expandedBlocksFor(role, positionId = 'OPS') {
 // Per (Role, Position) now that the field lists are per Position: trimming a
 // Position's fields is only legal because the expanded view picks up the rest.
 for (const role of Object.keys(BLOCK_MAPS)) {
-  test(`every writable ${role} Block is somewhere a controller can reach`, () => {
+  test(`every writable ${role} Block is somewhere a controller can reach`, async () => {
     for (const positionId of positionsFor(role)) {
       const compact = compactBlocksFor(role, positionId);
-      const expanded = expandedBlocksFor(role, positionId);
+      const expanded = await expandedBlocksFor(role, positionId);
       const unreachable = Object.keys(BLOCK_MAPS[role]).filter((blockId) => {
         const writable = isBlockEditable(blockId, role) || enumSelectOptionsFor(blockId) || isBooleanToggleBlock(blockId);
         if (!writable) return false;
@@ -93,7 +131,7 @@ for (const role of Object.keys(BLOCK_MAPS)) {
   });
 }
 
-test('the expanded view shows what the chips do NOT, in Block Map order', () => {
+test('the expanded view shows what the chips do NOT, in Block Map order', async () => {
   // It listed every Block at first, which made it mostly a second copy of what
   // the controller was already looking at — 26 of ~30 rows saying nothing new,
   // with the few that mattered buried among them. The panel's job is reaching
@@ -105,7 +143,7 @@ test('the expanded view shows what the chips do NOT, in Block Map order', () => 
   for (const role of Object.keys(BLOCK_MAPS)) {
     for (const positionId of positionsFor(role)) {
       const compact = compactBlocksFor(role, positionId);
-      const expanded = expandedBlocksFor(role, positionId);
+      const expanded = await expandedBlocksFor(role, positionId);
       const expected = Object.keys(BLOCK_MAPS[role]).filter(id => !compact.includes(id));
       assert.deepEqual(expanded, expected, `${role} at ${positionId}`);
       assert.equal(expanded.some(id => compact.includes(id)), false, `${role} at ${positionId}: duplicates a field`);
@@ -113,7 +151,7 @@ test('the expanded view shows what the chips do NOT, in Block Map order', () => 
   }
 });
 
-test('a chip whose history is truncated stays in the expanded view, so the * has somewhere to land', () => {
+test('a chip whose history is truncated stays in the expanded view, so the * has somewhere to land', async () => {
   // §3.7 rule 2's overflow indicator promises "full history on tap". Filtering
   // a Block out just because it has a chip would make that promise point at
   // nothing — so a Block the chip cannot fully show is the one exception to
@@ -127,7 +165,7 @@ test('a chip whose history is truncated stays in the expanded view, so the * has
   assert.ok(compactBlocksFor('DEPARTURE', 'CD').includes('21'), 'precondition: CD does');
   strip.ownerPositionId = 'CD';
 
-  const r = renderStrip({ strip, fdr: FDR, held: ['CD'] });
+  const r = await renderStrip({ strip, fdr: FDR, held: ['CD'] });
   r.sandbox.renderAllOpenEfspBays = () => {};
   click(descendants(r.el).find(c => (c.className || '').includes('efsp-expand-btn')));
   const expandedEl = r.sandbox._buildStripEl(strip);
@@ -135,7 +173,7 @@ test('a chip whose history is truncated stays in the expanded view, so the * has
   assert.ok(ids.includes('21'), 'a truncated field must still be reachable in full');
 });
 
-test('an expansion toggle makes the reconciler rebuild the Strip', () => {
+test('an expansion toggle makes the reconciler rebuild the Strip', async () => {
   // The bug this exists for: the toggle set its state and asked for a
   // re-render, but the reconciler reuses an element unless something marks it
   // dirty, and it only ever compared `rev` and selection. Expansion is
@@ -146,7 +184,7 @@ test('an expansion toggle makes the reconciler rebuild the Strip', () => {
   // reconciler ever reads it, which is exactly how the first version of this
   // test let the bug back through.
   const wanted = stripAt({ stripId: 's1' });
-  const { sandbox, el } = renderStrip({ strip: wanted, fdr: FDR, held: ['APP'] });
+  const { sandbox, el } = await renderStrip({ strip: wanted, fdr: FDR, held: ['APP'] });
   const needsRebuild = sandbox._stripElNeedsRebuild;
 
   assert.equal(el.dataset.expanded, '0', 'the element records what it was built as');
@@ -156,7 +194,7 @@ test('an expansion toggle makes the reconciler rebuild the Strip', () => {
   assert.equal(needsRebuild(el, { ...wanted, rev: wanted.rev + 1 }, null, null), true, 'rev moved — must rebuild');
 });
 
-test('a Strip rebuilds when something it RENDERS but does not own changes', () => {
+test('a Strip rebuilds when something it RENDERS but does not own changes', async () => {
   // F-305. `rev` is the Strip's own concurrency counter and moves only when a
   // Mutation changes that Strip; _buildStripEl reads a great deal that lives
   // elsewhere and moves independently. Six surfaces were measured stale across
@@ -168,7 +206,7 @@ test('a Strip rebuilds when something it RENDERS but does not own changes', () =
   // element, for the same reason the expansion test above is: a test that only
   // checks the stamp passes whether or not the reconciler ever reads it.
   const strip = stripAt({ stripId: 's1', state: 'DEPARTED', ownerPositionId: 'TWR' });
-  const { sandbox, el } = renderStrip({ strip, fdr: FDR, held: ['TWR'] });
+  const { sandbox, el } = await renderStrip({ strip, fdr: FDR, held: ['TWR'] });
   const needsRebuild = sandbox._stripElNeedsRebuild;
   const unchanged = () => assert.equal(needsRebuild(el, strip, null, null), false, 'precondition: nothing changed yet');
 
@@ -235,27 +273,13 @@ test('the release state is a picker, not free text — six exact strings nobody 
     ['RELEASED', 'HOLD_FOR_RELEASE', 'RELEASE_TIME', 'CLEARANCE_VOID_TIME', 'EDCT', 'CALL_FOR_RELEASE']);
 });
 
-/**
- * One sandbox, built lazily, for reading bay-view.js's own module values.
- *
- * This replaces a regex that scraped the compact-Block list out of the source
- * (`body.match(/\['1',[\s\S]*?\]/)`) and assumed exactly two array literals,
- * the ordinary one starting `['1',`. Making the list per-Role broke it
- * instantly. Reading the real function from the real module cannot drift.
- */
-let _readSandbox = null;
-function clientSandbox() {
-  if (!_readSandbox) _readSandbox = renderStrip({ strip: stripAt(), fdr: FDR, held: ['APP'] }).sandbox;
-  return _readSandbox;
-}
-
 // ── 2. dispatch ──────────────────────────────────────────────────────────
 
 // Which stub element has "focus". The stub used to drop focus() on the floor,
 // which made a whole rule untestable: an open Block edit protects its Strip
 // from reconciliation only WHILE the controller is in it (bay-view.js's
 // _isProtectedStripEl — leaving that unconditional is what froze a Strip
-// somebody clicked away from, lane 2's F-204). Reset per renderStrip().
+// somebody clicked away from, lane 2's F-204). Reset per await renderStrip().
 let _activeElement = null;
 
 /** Move the stub's focus, the way clicking elsewhere or pressing Tab would. */
@@ -268,7 +292,6 @@ function focusStub(el) { _activeElement = el; }
  * _isProtectedStripEl tests further down cannot tell a focused edit from an
  * abandoned one.
  */
-const domStub = require('./helpers/dom-stub.js');
 function makeElement(tag) {
   const el = domStub.makeElement(tag);
   el.focus = () => { _activeElement = el; };
@@ -282,7 +305,7 @@ function descendants(el) { return domStub.descendants(el); }
 // document.body, because `.efsp-strip`'s `contain: layout` creates a stacking
 // context and turns everything that overflows a Strip into ink overflow — a
 // popover inside one is painted underneath the panel and is unreachable by
-// scrolling. Set per renderStrip(), since each render builds its own sandbox.
+// scrolling. Set per await renderStrip(), since each render builds its own sandbox.
 let _portalRoot = null;
 
 /**
@@ -346,74 +369,59 @@ function _clearanceFromAnnotations(strip, fdr) {
  * capturing whatever it would have sent. Returns the rendered element and the
  * captured dispatches.
  */
-function renderStrip({ strip, fdr, held, airspaces = [], correlations = [], tracks = [], marsa = [], otherStrips = [], refusal = null }) {
+async function renderStrip({ strip, fdr, held, airspaces = [], correlations = [], tracks = [], marsa = [], otherStrips = [], refusal = null }) {
   const sent = [];
   const docListeners = {};
   const winListeners = {};
   _activeElement = null; // every render starts with nothing focused
-  const sandbox = {
-    console, module: { exports: {} }, setTimeout, clearTimeout, Date, JSON, Math, Number, Set, Map,
-    Array, Object, String, Boolean, isNaN, parseInt, parseFloat, crypto: { randomUUID: () => 'test-id' }, AbortController,
-    // Document-level listeners are RECORDED, not dropped. The dismiss-on-
-    // outside-click popovers register here in the capture phase, and a stub
-    // that swallowed them made a whole class of bug — a popover that closes on
-    // its own controls — structurally invisible to every test in this file.
-    document: {
-      getElementById: () => null, createElement: makeElement, body: makeElement('body'),
-      get activeElement() { return _activeElement; },
-      addEventListener(type, fn) { (docListeners[type] = docListeners[type] || []).push(fn); },
-      removeEventListener(type, fn) { docListeners[type] = (docListeners[type] || []).filter(f => f !== fn); },
-    },
-    // The viewport a portalled popover is placed against, and the scroll/resize
-    // listeners it keeps itself in place with. The numbers are a viewport, not
-    // a layout: this stub reports the same 10x10 rect for every element, so
-    // nothing here can say where a popover ENDED UP — that is what the
-    // Playwright specs are for. What these prove is the wiring: portalled,
-    // owned by a Strip, and taken down again.
-    window: {
-      prompt: () => 'a note', getSelection: () => ({ removeAllRanges() {} }),
-      innerWidth: 1600, innerHeight: 1000,
-      addEventListener(type, fn) { (winListeners[type] = winListeners[type] || []).push(fn); },
-      removeEventListener(type, fn) { winListeners[type] = (winListeners[type] || []).filter(f => f !== fn); },
-    },
+  // Document-level listeners are RECORDED, not dropped. The dismiss-on-
+  // outside-click popovers register here in the capture phase, and a stub
+  // that swallowed them made a whole class of bug — a popover that closes on
+  // its own controls — structurally invisible to every test in this file.
+  globalThis.document = {
+    getElementById: () => null, createElement: makeElement, body: makeElement('body'),
+    get activeElement() { return _activeElement; },
+    addEventListener(type, fn) { (docListeners[type] = docListeners[type] || []).push(fn); },
+    removeEventListener(type, fn) { docListeners[type] = (docListeners[type] || []).filter(f => f !== fn); },
   };
-  sandbox.globalThis = sandbox;
-  vm.createContext(sandbox);
+  // The viewport a portalled popover is placed against, and the scroll/resize
+  // listeners it keeps itself in place with. The numbers are a viewport, not
+  // a layout: this stub reports the same 10x10 rect for every element, so
+  // nothing here can say where a popover ENDED UP — that is what the
+  // Playwright specs are for. What these prove is the wiring: portalled,
+  // owned by a Strip, and taken down again. (`window` is globalThis.)
+  Object.assign(globalThis, {
+    prompt: () => 'a note', getSelection: () => ({ removeAllRanges() {} }),
+    innerWidth: 1600, innerHeight: 1000,
+    addEventListener(type, fn) { (winListeners[type] = winListeners[type] || []).push(fn); },
+    removeEventListener(type, fn) { winListeners[type] = (winListeners[type] || []).filter(f => f !== fn); },
+  });
+  const sandbox = await loadSandbox();
 
-  // Every name a contact is shown with comes from track-label.js (crc-sync's docs/adr/0059).
-  vm.runInContext(fs.readFileSync(path.join(CLIENT, '../../track-label.js'), 'utf8'), sandbox, { filename: 'track-label.js' });
-  // time-chains.js and efsp-stereo-routes.js as index.html loads them: the
-  // Strip's time Blocks and Block 9F's picker read them (docs/adr/0073).
-  for (const file of ['efsp-nla.js', 'time-chains.js', 'efsp-stereo-routes.js', 'strip-template.js', 'efsp-state.js', 'efsp-arrivals.js', 'efsp-gestures.js',
-    'annotation-editor.js', 'strip-drag.js', 'correlation-highlight.js', 'marsa-badge.js', 'strip-fields.js', 'bay-view.js', 'strip-view.js']) {
-    vm.runInContext(fs.readFileSync(path.join(CLIENT, file), 'utf8'), sandbox, { filename: file });
-  }
-
-  // Stand in for the pieces the Strip dispatches through.
-  sandbox.getActingPositions = () => held;
+  // Stand in for the pieces the Strip dispatches through: the real held Positions, and the senders
+  // replaced through efsp-ws.js's setEfspSender.
+  const facilities = new Set(['INCIRLIK', 'TACTICAL', 'CENTER', 'CARRIER', strip.facilityId, ...otherStrips.map(s => s.facilityId)].filter(Boolean));
+  sandbox.setEfspSender('_sendEfsp', () => {});
+  for (const f of facilities) sandbox.sendEfspSetPositions(f, held);
   // `strip` is recorded as well as the op: it carries the `rev` that
   // sendEfspMutation sends as the optimistic-concurrency base, which is the
   // whole of F-107.
-  sandbox.sendEfspMutation = (actingPositionId, s, op) => { sent.push({ actingPositionId, strip: s, op }); return 'mid'; };
-  sandbox.sendEfspAirspaceMutation = (actingPositionId, airspaceId, rev, op) => { sent.push({ actingPositionId, airspaceId, op }); };
-  sandbox.convertStripToArrival = (s) => { sent.push({ op: { kind: 'ConvertToArrival' } }); };
-  sandbox.getActiveEfspSearchQuery = () => null;
-  sandbox.sendEfspCorrelationMutation = (actingPositionId, fdrId, rev, op) => { sent.push({ actingPositionId, fdrId, op }); };
-  sandbox.sendEfspMarsaMutation = (actingPositionId, marsaId, rev, op) => { sent.push({ actingPositionId, marsaId, op }); };
-  sandbox.updateMap = () => {};
+  sandbox.setEfspSender('sendEfspMutation', (actingPositionId, s, op) => { sent.push({ actingPositionId, strip: s, op }); return 'mid'; });
+  sandbox.setEfspSender('sendEfspAirspaceMutation', (actingPositionId, airspaceId, rev, op) => { sent.push({ actingPositionId, airspaceId, op }); });
+  sandbox.setEfspSender('sendEfspCorrelationMutation', (actingPositionId, fdrId, rev, op) => { sent.push({ actingPositionId, fdrId, op }); });
+  sandbox.setEfspSender('sendEfspMarsaMutation', (actingPositionId, marsaId, rev, op) => { sent.push({ actingPositionId, marsaId, op }); });
   // The real one walks the open Bays and needs requestAnimationFrame and a
   // document that has Bays in it. Stubbed by default rather than in each test
   // that happens to trigger a render — closing a popover now asks for one
   // (F-108), so that is most of them. Tests that care about the render count
   // replace this with their own counter.
   sandbox.renderAllOpenEfspBays = () => {};
-  // efsp-panel.js's accessor, stubbed the same way the senders are. bay-view.js
-  // only ever READS it — the panel populates it before the render that follows
-  // a refusal and nulls it before the render that follows a dismissal.
-  sandbox.getCurrentEfspRefusal = () => refusal;
+  // efsp-panel.js owns the refusal record; bay-view.js only ever READS it — the panel populates it
+  // before the render that follows a refusal and nulls it before the render that follows a dismissal.
+  sandbox._setCurrentRefusalForTest(refusal);
   const liveTracks = new Map(tracks.map(t => [String(t.id), t]));
-  sandbox.window.getLatestTrack = (id) => liveTracks.get(String(id)) || null;
-  sandbox.window.getAllTracks = () => [...liveTracks.values()];
+  globalThis.getLatestTrack = (id) => liveTracks.get(String(id)) || null;
+  globalThis.getAllTracks = () => [...liveTracks.values()];
 
   // Fixtures written before docs/adr/0058 put the assigned altitude/heading
   // history on the Strip; crc-sync moves such notes onto the flight on
@@ -469,14 +477,14 @@ function stripAt(overrides) {
   };
 }
 
-test('a controller can advance a flight — the NLA button is there and sends InvokeNla', () => {
-  const { el, sent } = renderStrip({ strip: stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' }), fdr: FDR, held: ['OPS'] });
+test('a controller can advance a flight — the NLA button is there and sends InvokeNla', async () => {
+  const { el, sent } = await renderStrip({ strip: stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' }), fdr: FDR, held: ['OPS'] });
   click(findByText(el, 'Send to Clearance'));
   assert.deepEqual(sent.map(s => s.op.kind), ['InvokeNla']);
 });
 
-test('a controller can hand a flight to Center — the Coordinate button offers all five primitives', () => {
-  const { el, sent } = renderStrip({ strip: stripAt(), fdr: FDR, held: ['APP'] });
+test('a controller can hand a flight to Center — the Coordinate button offers all five primitives', async () => {
+  const { el, sent } = await renderStrip({ strip: stripAt(), fdr: FDR, held: ['APP'] });
   click(menuItem(el, 'Coordinate…'));
 
   const select = visible(el).find(c => c.tagName === 'select');
@@ -490,7 +498,7 @@ test('a controller can hand a flight to Center — the Coordinate button offers 
   assert.equal(sent[0].op.action, 'PROPOSE');
 });
 
-test('the receiving controller can accept, reject or say stand by', () => {
+test('the receiving controller can accept, reject or say stand by', async () => {
   const replica = stripAt({
     bayId: 'ctr-app-coordination', ownerPositionId: 'CTR',
     coordination: { primitive: 'OPERATIONAL_REQUEST', state: 'PROPOSED', mintedForCoordination: true, peerFacilityId: 'INCIRLIK', peerPositionId: 'APP' },
@@ -500,7 +508,7 @@ test('the receiving controller can accept, reject or say stand by', () => {
   // three synchronous clicks are exactly what that window exists to discard.
   // Three renders is also the honest shape: these are three different answers
   // to one proposal, only one of which is ever actually given.
-  const approve = renderStrip({ strip: replica, fdr: FDR, held: ['CTR'] });
+  const approve = await renderStrip({ strip: replica, fdr: FDR, held: ['CTR'] });
   // An operational request is answered in the words a controller uses —
   // approve / unable / stand by (§4.6) — not generic accept/reject.
   click(findByText(approve.el, 'Approve'));
@@ -508,20 +516,20 @@ test('the receiving controller can accept, reject or say stand by', () => {
 
   // An operational request's refusal is "Unable", not "Reject" — the word a
   // controller actually says.
-  const unable = renderStrip({ strip: replica, fdr: FDR, held: ['CTR'] });
+  const unable = await renderStrip({ strip: replica, fdr: FDR, held: ['CTR'] });
   click(findByText(unable.el, 'Unable'));
   assert.equal(unable.sent[0].op.action, 'REJECT');
 
   // Stand by is OPERATIONAL_REQUEST's alone — the sortie relies on it. It is
   // deliberately OUTSIDE the double-tap window: it moves nothing and takes no
   // control off the Strip, so it is not in F-101's class.
-  const standBy = renderStrip({ strip: replica, fdr: FDR, held: ['CTR'] });
+  const standBy = await renderStrip({ strip: replica, fdr: FDR, held: ['CTR'] });
   click(findByText(standBy.el, 'Stand By'));
   assert.equal(standBy.sent[0].op.action, 'STAND_BY');
 });
 
-test('a controller can open tactical control, and the MRU side can accept it', () => {
-  const ctr = renderStrip({ strip: stripAt({ ownerPositionId: 'CTR' }), fdr: FDR, held: ['CTR'] });
+test('a controller can open tactical control, and the MRU side can accept it', async () => {
+  const ctr = await renderStrip({ strip: stripAt({ ownerPositionId: 'CTR' }), fdr: FDR, held: ['CTR'] });
   click(menuItem(ctr.el, 'TOFI…'));
   const picker = visible(ctr.el).find(c => c.tagName === 'select');
   assert.ok(picker, 'CTR has two counterparts, so it must offer a choice');
@@ -534,7 +542,7 @@ test('a controller can open tactical control, and the MRU side can accept it', (
     role: 'MISSION', state: 'TASKED', ownerPositionId: 'TAC_C2', bayId: 'tac-c2-coordination',
     tofiCoordination: { direction: 'ENTRY', state: 'PROPOSED', peerFacilityId: 'CENTER', peerPositionId: 'CTR' },
   });
-  const mru = renderStrip({ strip: mission, fdr: FDR, held: ['TAC_C2'] });
+  const mru = await renderStrip({ strip: mission, fdr: FDR, held: ['TAC_C2'] });
   // Accepting an ENTRY now carries the separation regime (crc-sync's
   // docs/adr/0053) — the server refuses an accept without one, so a bare
   // button would render fine and fail on every click.
@@ -547,13 +555,13 @@ test('a controller can open tactical control, and the MRU side can accept it', (
   assert.equal(mru.sent[0].op.separationRegime, 'USING_AGENCY');
 });
 
-test('a TOFI exit cannot be accepted early, and the Strip says whose job it is to fix', () => {
+test('a TOFI exit cannot be accepted early, and the Strip says whose job it is to fix', async () => {
   const mission = stripAt({
     role: 'MISSION', state: 'ON_STATION', ownerPositionId: 'TAC_C2', bayId: 'tac-c2-coordination',
     tofiCoordination: { direction: 'EXIT', state: 'PROPOSED', peerFacilityId: 'CENTER', peerPositionId: 'CTR' },
   });
   const notYet = { ...FDR, tofi: { ifrActive: true, separationRegime: 'MARSA' } };
-  const { el } = renderStrip({ strip: mission, fdr: notYet, held: ['TAC_C2'] });
+  const { el } = await renderStrip({ strip: mission, fdr: notYet, held: ['TAC_C2'] });
 
   const accept = findByText(el, 'Accept TOFI Exit');
   assert.equal(accept.disabled, true, 'rule 3 — separation has to be back with ATC first');
@@ -569,7 +577,7 @@ test('a TOFI exit cannot be accepted early, and the Strip says whose job it is t
     ownerPositionId: 'CTR', role: 'ARRIVAL', state: 'INBOUND',
     tofiCoordination: { direction: 'EXIT', state: 'PROPOSED', peerFacilityId: 'TACTICAL', peerPositionId: 'TAC_C2' },
   });
-  const proposer = renderStrip({ strip: ctrSide, fdr: notYet, held: ['CTR'] });
+  const proposer = await renderStrip({ strip: ctrSide, fdr: notYet, held: ['CTR'] });
   const badge = descendants(proposer.el).find(c => (c.className || '').includes('efsp-tofi-badge'));
   assert.match(badge.title, /SEP REG is MARSA — set it back to ATC before TAC_C2 can accept/);
   const rendered = descendants(proposer.el).find(c => (c.className || '').includes('efsp-coordination-blocked-reason'));
@@ -577,17 +585,17 @@ test('a TOFI exit cannot be accepted early, and the Strip says whose job it is t
   assert.match(rendered.textContent, /SEP REG is MARSA/);
 
   const ready = { ...FDR, tofi: { ifrActive: true, separationRegime: 'ATC' } };
-  const { el: el2, sent } = renderStrip({ strip: mission, fdr: ready, held: ['TAC_C2'] });
+  const { el: el2, sent } = await renderStrip({ strip: mission, fdr: ready, held: ['TAC_C2'] });
   click(findByText(el2, 'Accept TOFI Exit'));
   assert.equal(sent[0].op.action, 'ACCEPT');
 });
 
-test('a controller can put a flight into an airspace, and take it out again', () => {
+test('a controller can put a flight into an airspace, and take it out again', async () => {
   const airspaces = [{
     airspaceId: 'MOA-EAST', state: 'ACTIVE', rev: 1, transitions: [],
     definition: { airspaceId: 'MOA-EAST', name: 'East MOA', type: 'MOA', controllingPositionId: 'CTR', workingFrequencyMhz: 134.25 },
   }];
-  const { el, sent } = renderStrip({ strip: stripAt({ ownerPositionId: 'CTR' }), fdr: FDR, held: ['CTR'], airspaces });
+  const { el, sent } = await renderStrip({ strip: stripAt({ ownerPositionId: 'CTR' }), fdr: FDR, held: ['CTR'], airspaces });
 
   click(menuItem(el, 'Airspace…'));
   const picker = visible(el).find(c => c.tagName === 'select');
@@ -597,26 +605,26 @@ test('a controller can put a flight into an airspace, and take it out again', ()
   assert.equal(sent[0].op.airspaceId, 'MOA-EAST');
 
   const inside = stripAt({ ownerPositionId: 'CTR', airspaceEntry: { airspaceId: 'MOA-EAST', frequencyMhz: 134.25, altitudeBlock: null } });
-  const out = renderStrip({ strip: inside, fdr: FDR, held: ['CTR'], airspaces });
+  const out = await renderStrip({ strip: inside, fdr: FDR, held: ['CTR'], airspaces });
   assert.ok(findByText(out.el, 'East MOA 134.250'), 'the Strip names where the flight is working');
   click(menuItem(out.el, 'Leave airspace'));
   assert.equal(out.sent[0].op.kind, 'ClearAirspaceEntry');
 });
 
-test('a Strip working an airspace nobody activated says so on its face', () => {
+test('a Strip working an airspace nobody activated says so on its face', async () => {
   const airspaces = [{
     airspaceId: 'MOA-COLD', state: 'RETURNED', rev: 1, transitions: [],
     definition: { airspaceId: 'MOA-COLD', name: 'Cold MOA', type: 'MOA', controllingPositionId: 'CTR' },
   }];
   const inside = stripAt({ ownerPositionId: 'CTR', airspaceEntry: { airspaceId: 'MOA-COLD', frequencyMhz: null, altitudeBlock: null } });
-  const { el } = renderStrip({ strip: inside, fdr: FDR, held: ['CTR'], airspaces });
+  const { el } = await renderStrip({ strip: inside, fdr: FDR, held: ['CTR'], airspaces });
 
   const badge = findByText(el, 'Cold MOA');
   assert.ok(badge.classList.contains('efsp-airspace-badge-unactivated'));
   assert.match(badge.title, /RETURNED, not active/);
 });
 
-test('the Drop button refuses while a flight is under tactical control', () => {
+test('the Drop button refuses while a flight is under tactical control', async () => {
   // The inhibit is the SERVER's answer now (F-408's `strip.nla`), not a rule
   // this file keeps a second copy of — board-store.js's nlaStatusFor puts this
   // exact sentence on every Strip record it broadcasts. The fixture carries it
@@ -626,7 +634,7 @@ test('the Drop button refuses while a flight is under tactical control', () => {
     tofiCoordination: { direction: 'ENTRY', state: 'ACTIVE', peerFacilityId: 'TACTICAL', peerPositionId: 'TAC_C2' },
     nla: { inhibited: 'cannot drop a Strip under active tactical control — complete a TOFI exit first', reason: 'VALIDATION_ERROR' },
   });
-  const { el } = renderStrip({ strip: underControl, fdr: FDR, held: ['CTR'] });
+  const { el } = await renderStrip({ strip: underControl, fdr: FDR, held: ['CTR'] });
   const drop = findByText(el, 'Drop');
   assert.equal(drop.disabled, true, '§4.6.3 rule 2 — and the button must not look pressable');
   assert.match(drop.title, /active tactical control/);
@@ -637,7 +645,7 @@ test('the Drop button refuses while a flight is under tactical control', () => {
   assert.match(why.textContent, /active tactical control/);
 });
 
-test('an NLA the server will refuse says so before it is pressed, and cannot be pressed', () => {
+test('an NLA the server will refuse says so before it is pressed, and cannot be pressed', async () => {
   // F-408: "before the press, button.efsp-nla-btn enabled, title=null, and the
   // Strip text contains no reason; after it, #efsp-mutation-error reads
   // NLA_INHIBITED: no receiving Position present and the state is unchanged."
@@ -646,7 +654,7 @@ test('an NLA the server will refuse says so before it is pressed, and cannot be 
     state: 'DEPARTED', ownerPositionId: 'TWR',
     nla: { inhibited: 'no receiving Position present', reason: 'NLA_INHIBITED' },
   });
-  const { el, sent } = renderStrip({ strip, fdr: FDR, held: ['TWR'] });
+  const { el, sent } = await renderStrip({ strip, fdr: FDR, held: ['TWR'] });
   const btn = findByText(el, 'Hand Off to APP');
   assert.equal(btn.disabled, true);
   assert.equal(btn.dataset.nlaReason, 'NLA_INHIBITED', 'the machine code stays greppable against crc-sync');
@@ -656,7 +664,7 @@ test('an NLA the server will refuse says so before it is pressed, and cannot be 
   assert.deepEqual(sent, [], 'a disabled NLA has no handler to fire at all');
 });
 
-test("F-303: a rejected coordination replica's NLA reports itself inert", () => {
+test("F-303: a rejected coordination replica's NLA reports itself inert", async () => {
   // The server half landed in crc-sync (_applyInvokeNla and the drag route
   // both refuse a rejected replica); this is the whole of the client half.
   // Nothing here knows what a rejected replica is — rendering `strip.nla`
@@ -667,7 +675,7 @@ test("F-303: a rejected coordination replica's NLA reports itself inert", () => 
     coordination: { primitive: 'POINT_OUT', state: 'REJECTED', mintedForCoordination: true, peerFacilityId: 'CENTER', peerPositionId: 'CTR', dataOwnerPositionRef: { facilityId: 'CENTER', positionId: 'CTR' }, separationResponsibilityRef: { facilityId: 'CENTER', positionId: 'CTR' } },
     nla: { inhibited: inert, reason: 'VALIDATION_ERROR' },
   });
-  const { el, sent } = renderStrip({ strip: replica, fdr: FDR, held: ['APP'] });
+  const { el, sent } = await renderStrip({ strip: replica, fdr: FDR, held: ['APP'] });
   const btn = findByText(el, 'Hand to Tower');
   assert.equal(btn.disabled, true, 'APP declined this flight; its NLA must not now hand it to Tower');
   assert.ok(descendants(el).some(c => c.textContent === inert), 'and the reason is on the Strip, not only in a title');
@@ -684,7 +692,7 @@ test("F-303: a rejected coordination replica's NLA reports itself inert", () => 
 // MISSION Strip for a flight APP still worked. crc-sync now refuses every op on
 // a rejected replica except Drop / the Drop NLA / moving it aside, and the
 // Strip stops offering what would only be refused.
-test('F-303: a rejected replica offers nothing but Drop', () => {
+test('F-303: a rejected replica offers nothing but Drop', async () => {
   const airspaces = [{
     airspaceId: 'MOA-EAST', state: 'ACTIVE', rev: 1, transitions: [],
     definition: { airspaceId: 'MOA-EAST', name: 'East MOA', type: 'MOA', controllingPositionId: 'CTR', workingFrequencyMhz: 134.25 },
@@ -694,7 +702,7 @@ test('F-303: a rejected replica offers nothing but Drop', () => {
     coordination: { primitive: 'HANDOFF', state: 'REJECTED', mintedForCoordination: true, peerFacilityId: 'INCIRLIK', peerPositionId: 'APP' },
     nla: { toState: 'DROPPED' },
   });
-  const { el, sent } = renderStrip({ strip: replica, fdr: FDR, held: ['CTR'], airspaces, correlations: [correlationOf({ state: 'UNCORRELATED', trackId: null })] });
+  const { el, sent } = await renderStrip({ strip: replica, fdr: FDR, held: ['CTR'], airspaces, correlations: [correlationOf({ state: 'UNCORRELATED', trackId: null })] });
   for (const label of ['TOFI…', 'Airspace…', 'Convert to Arrival →', 'MARSA…', 'Bind…', 'Coordinate…', '⇥']) {
     assert.equal(findByText(el, label), undefined, `${label} is offered on a dead replica`);
   }
@@ -705,12 +713,12 @@ test('F-303: a rejected replica offers nothing but Drop', () => {
   assert.deepEqual(sent, [], 'a gesture on a dead replica sent a Mutation');
 });
 
-test('TOFI is not offered from a handoff replica that has not been answered yet', () => {
+test('TOFI is not offered from a handoff replica that has not been answered yet', async () => {
   const pending = stripAt({
     ownerPositionId: 'CTR', bayId: 'ctr-app-coordination',
     coordination: { primitive: 'HANDOFF', state: 'PROPOSED', mintedForCoordination: true, peerFacilityId: 'INCIRLIK', peerPositionId: 'APP' },
   });
-  const { el } = renderStrip({ strip: pending, fdr: FDR, held: ['CTR'] });
+  const { el } = await renderStrip({ strip: pending, fdr: FDR, held: ['CTR'] });
   assert.ok(findByText(el, 'Accept Hand Off') || findByText(el, 'Accept HANDOFF') || findByText(el, 'Reject'), 'the answer buttons render');
   const tofi = menuItem(el, 'TOFI…');
   assert.ok(!tofi || tofi.disabled, 'APP still works this flight until CTR accepts');
@@ -726,8 +734,8 @@ function pendingTofiEntry() {
 }
 const regimeSelectOf = (el) => descendants(el).find(c => (c.className || '').includes('efsp-tofi-regime-select'));
 
-test('clicking the regime picker does not select the Strip (the click that used to reset it to MARSA)', () => {
-  const { el, sandbox } = renderStrip({ strip: pendingTofiEntry(), fdr: FDR, held: ['TAC_C2'] });
+test('clicking the regime picker does not select the Strip (the click that used to reset it to MARSA)', async () => {
+  const { el, sandbox } = await renderStrip({ strip: pendingTofiEntry(), fdr: FDR, held: ['TAC_C2'] });
   sandbox.renderAllOpenEfspBays = () => {};
   const select = regimeSelectOf(el);
   // The Strip's click handler sees a target inside a <select>. A real click on
@@ -737,9 +745,9 @@ test('clicking the regime picker does not select the Strip (the click that used 
   assert.equal(sandbox.getSelectedEfspStripId(), null, 'the Strip was selected, which rebuilds it and loses the choice');
 });
 
-test('the chosen regime survives a rebuild, and is what Accept sends', () => {
+test('the chosen regime survives a rebuild, and is what Accept sends', async () => {
   const strip = pendingTofiEntry();
-  const { el, sandbox, sent } = renderStrip({ strip, fdr: FDR, held: ['TAC_C2'] });
+  const { el, sandbox, sent } = await renderStrip({ strip, fdr: FDR, held: ['TAC_C2'] });
   const select = regimeSelectOf(el);
   select.value = 'ATC';
   fire(select, 'change');
@@ -750,8 +758,8 @@ test('the chosen regime survives a rebuild, and is what Accept sends', () => {
   assert.equal(sent[0].op.separationRegime, 'ATC');
 });
 
-test('a Strip whose regime picker has focus is protected from a rebuild', () => {
-  const { el, sandbox } = renderStrip({ strip: pendingTofiEntry(), fdr: FDR, held: ['TAC_C2'] });
+test('a Strip whose regime picker has focus is protected from a rebuild', async () => {
+  const { el, sandbox } = await renderStrip({ strip: pendingTofiEntry(), fdr: FDR, held: ['TAC_C2'] });
   assert.equal(sandbox._isProtectedStripEl(el), false);
   focusStub(regimeSelectOf(el));
   assert.equal(sandbox._isProtectedStripEl(el), true, 'the open dropdown would belong to a detached element');
@@ -760,25 +768,25 @@ test('a Strip whose regime picker has focus is protected from a rebuild', () => 
   assert.equal(sandbox._isProtectedStripEl(el), false);
 });
 
-test('Convert to Arrival is only offered to the Positions the server lets convert', () => {
+test('Convert to Arrival is only offered to the Positions the server lets convert', async () => {
   // TWR holds a Position, which was all the old gate asked for. The server
   // refuses TWR's press (no ConvertToArrival, no ARRIVAL creation).
-  const { el } = renderStrip({ strip: stripAt({ ownerPositionId: 'APP' }), fdr: FDR, held: ['TWR'] });
+  const { el } = await renderStrip({ strip: stripAt({ ownerPositionId: 'APP' }), fdr: FDR, held: ['TWR'] });
   assert.equal(menuItem(el, 'Convert to Arrival →'), undefined);
 });
 
-test('an arrival or overflight Strip draws no chip for a Block its Role does not have', () => {
+test('an arrival or overflight Strip draws no chip for a Block its Role does not have', async () => {
   for (const [role, state, owner] of [['ARRIVAL', 'INBOUND', 'CTR'], ['OVERFLIGHT', 'IN_SECTOR', 'CTR']]) {
-    const { el } = renderStrip({ strip: stripAt({ role, state, ownerPositionId: owner, bayId: 'ctr-enroute' }), fdr: FDR, held: [owner] });
+    const { el } = await renderStrip({ strip: stripAt({ role, state, ownerPositionId: owner, bayId: 'ctr-enroute' }), fdr: FDR, held: [owner] });
     for (const blockId of ['9F', '14A', '14D']) {
       assert.equal(blockCell(el, blockId), undefined, `${role} rendered departure-only Block ${blockId}`);
     }
   }
-  assert.equal(blockCell(renderStrip({ strip: stripAt({ role: 'OVERFLIGHT', state: 'IN_SECTOR', ownerPositionId: 'CTR' }), fdr: FDR, held: ['CTR'] }).el, '8A'), undefined);
+  assert.equal(blockCell((await renderStrip({ strip: stripAt({ role: 'OVERFLIGHT', state: 'IN_SECTOR', ownerPositionId: 'CTR' }), fdr: FDR, held: ['CTR'] })).el, '8A'), undefined);
 });
 
-test('Convert to Arrival is offered for the return leg, and refused mid-exchange', () => {
-  const ready = renderStrip({ strip: stripAt({ ownerPositionId: 'CTR' }), fdr: FDR, held: ['CTR'] });
+test('Convert to Arrival is offered for the return leg, and refused mid-exchange', async () => {
+  const ready = await renderStrip({ strip: stripAt({ ownerPositionId: 'CTR' }), fdr: FDR, held: ['CTR'] });
   click(menuItem(ready.el, 'Convert to Arrival →'));
   assert.equal(ready.sent[0].op.kind, 'ConvertToArrival');
 
@@ -786,12 +794,12 @@ test('Convert to Arrival is offered for the return leg, and refused mid-exchange
     ownerPositionId: 'CTR',
     tofiCoordination: { direction: 'ENTRY', state: 'ACTIVE', peerFacilityId: 'TACTICAL', peerPositionId: 'TAC_C2' },
   });
-  const blocked = renderStrip({ strip: midExchange, fdr: FDR, held: ['CTR'] });
+  const blocked = await renderStrip({ strip: midExchange, fdr: FDR, held: ['CTR'] });
   assert.equal(menuItem(blocked.el, 'Convert to Arrival →').disabled, true);
 });
 
-test('Convert to Arrival asks twice when it would clear annotations, and once when it would not', () => {
-  const clean = renderStrip({ strip: stripAt({ ownerPositionId: 'CTR' }), fdr: FDR, held: ['CTR'] });
+test('Convert to Arrival asks twice when it would clear annotations, and once when it would not', async () => {
+  const clean = await renderStrip({ strip: stripAt({ ownerPositionId: 'CTR' }), fdr: FDR, held: ['CTR'] });
   click(menuItem(clean.el, 'Convert to Arrival →'));
   assert.equal(clean.sent[0].op.kind, 'ConvertToArrival', 'nothing to lose, so no ceremony');
 
@@ -799,7 +807,7 @@ test('Convert to Arrival asks twice when it would clear annotations, and once wh
     ownerPositionId: 'CTR',
     annotations: { 24: { entries: [{ value: 'MIT 10', at: 1, by: 'APP' }] } },
   });
-  const careful = renderStrip({ strip: annotated, fdr: FDR, held: ['CTR'] });
+  const careful = await renderStrip({ strip: annotated, fdr: FDR, held: ['CTR'] });
   const btn = menuItem(careful.el, 'Convert to Arrival →');
   assert.match(btn.title, /archived and cleared/);
   click(btn);
@@ -808,18 +816,18 @@ test('Convert to Arrival asks twice when it would clear annotations, and once wh
   assert.equal(careful.sent[0].op.kind, 'ConvertToArrival');
 });
 
-test('a return leg shows that it has a departure leg behind it', () => {
+test('a return leg shows that it has a departure leg behind it', async () => {
   const returned = stripAt({
     role: 'ARRIVAL', state: 'INBOUND', ownerPositionId: 'CTR', bayId: 'ctr-enroute',
     previousLeg: { role: 'DEPARTURE', annotations: { 24: { entries: [{ value: 'MIT 10', at: 1, by: 'APP' }] } }, convertedAt: 1, convertedBy: 'CTR' },
   });
-  const { el } = renderStrip({ strip: returned, fdr: FDR, held: ['CTR'] });
+  const { el } = await renderStrip({ strip: returned, fdr: FDR, held: ['CTR'] });
   const badge = findByText(el, 'DEPARTURE ×1');
   assert.ok(badge, 'the archived leg is not surfaced anywhere');
   assert.match(badge.title, /24: MIT 10/);
 });
 
-test('a flight sharing a block by altitude shows its restriction, not just the airspace', () => {
+test('a flight sharing a block by altitude shows its restriction, not just the airspace', async () => {
   const airspaces = [{
     airspaceId: 'D-12', state: 'ACTIVE', rev: 1, transitions: [],
     definition: { airspaceId: 'D-12', name: 'Danger 12', type: 'DANGER', controllingPositionId: 'CTR', workingFrequencyMhz: 135.5 },
@@ -828,7 +836,7 @@ test('a flight sharing a block by altitude shows its restriction, not just the a
     ownerPositionId: 'CTR',
     airspaceEntry: { airspaceId: 'D-12', frequencyMhz: 135.5, altitudeBlock: { lowerFt: 5000, upperFt: 15000 } },
   });
-  const { el } = renderStrip({ strip: restricted, fdr: FDR, held: ['CTR'], airspaces });
+  const { el } = await renderStrip({ strip: restricted, fdr: FDR, held: ['CTR'], airspaces });
   // Two aircraft in one block are only safe if you can see who is where.
   assert.ok(findByText(el, 'Danger 12 135.500 5000–15000 ft'),
     'the Strip must name the block, the frequency and the altitude restriction together');
@@ -837,21 +845,15 @@ test('a flight sharing a block by altitude shows its restriction, not just the a
 // ── 3. the airspace board ────────────────────────────────────────────────
 
 /** Renders the real airspace panel against the DOM stub, capturing dispatches. */
-function renderAirspaceBoard({ airspaces, held, strips = [], fdrs = [] }) {
+async function renderAirspaceBoard({ airspaces, held, strips = [], fdrs = [] }) {
   const sent = [];
   const nodes = { 'airspace-list': makeElement('div'), 'airspace-empty': makeElement('div') };
-  const sandbox = {
-    console, module: { exports: {} }, setTimeout, Date, JSON, Math, Number, Set, Map, Array, Object, String,
-    document: { getElementById: (id) => nodes[id] || null, createElement: makeElement, addEventListener() {}, removeEventListener() {} },
-    window: { prompt: () => 'inbound traffic' },
-  };
-  sandbox.globalThis = sandbox;
-  vm.createContext(sandbox);
-  for (const file of ['efsp-state.js', 'efsp-arrivals.js', 'airspace-panel.js']) {
-    vm.runInContext(fs.readFileSync(path.join(CLIENT, file), 'utf8'), sandbox, { filename: file });
-  }
-  sandbox.getActingPositions = () => held;
-  sandbox.sendEfspAirspaceMutation = (actingPositionId, airspaceId, rev, op) => sent.push({ actingPositionId, airspaceId, op });
+  globalThis.document = { getElementById: (id) => nodes[id] || null, createElement: makeElement, body: makeElement('body'), addEventListener() {}, removeEventListener() {} };
+  globalThis.prompt = () => 'inbound traffic';
+  const sandbox = await loadSandbox();
+  sandbox.setEfspSender('_sendEfsp', () => {});
+  for (const f of new Set(['INCIRLIK', ...strips.map(s => s.facilityId)].filter(Boolean))) sandbox.sendEfspSetPositions(f, held);
+  sandbox.setEfspSender('sendEfspAirspaceMutation', (actingPositionId, airspaceId, rev, op) => sent.push({ actingPositionId, airspaceId, op }));
 
   sandbox.applyEfspSnapshot({ strips, fdrs, positions: [], bays: [], airspaces });
   sandbox.initAirspacePanel();
@@ -866,29 +868,29 @@ function moa(state, extra = {}) {
   };
 }
 
-test('a controller can run a block through its whole life from the board', () => {
+test('a controller can run a block through its whole life from the board', async () => {
   // RETURNED -> schedule.
-  const available = renderAirspaceBoard({ airspaces: [moa('RETURNED')], held: ['CTR'] });
+  const available = await renderAirspaceBoard({ airspaces: [moa('RETURNED')], held: ['CTR'] });
   click(findByText(available.list, 'Schedule'));
   assert.equal(available.sent[0].op.kind, 'ScheduleAirspace');
   assert.ok(available.sent[0].op.toUtc > available.sent[0].op.fromUtc, 'a booking needs a window');
 
   // SCHEDULED -> activate (a MOA has no second party, so no request step).
-  const booked = renderAirspaceBoard({ airspaces: [moa('SCHEDULED')], held: ['CTR'] });
+  const booked = await renderAirspaceBoard({ airspaces: [moa('SCHEDULED')], held: ['CTR'] });
   click(findByText(booked.list, 'Approve activation'));
   assert.equal(booked.sent[0].op.kind, 'ApproveActivation');
 
   // ACTIVE -> release, RELEASED -> take back.
-  const hot = renderAirspaceBoard({ airspaces: [moa('ACTIVE')], held: ['CTR'] });
+  const hot = await renderAirspaceBoard({ airspaces: [moa('ACTIVE')], held: ['CTR'] });
   click(findByText(hot.list, 'Release'));
   assert.equal(hot.sent[0].op.kind, 'ReleaseAirspace');
 
-  const given = renderAirspaceBoard({ airspaces: [moa('RELEASED')], held: ['CTR'] });
+  const given = await renderAirspaceBoard({ airspaces: [moa('RELEASED')], held: ['CTR'] });
   click(findByText(given.list, 'Take back'));
   assert.equal(given.sent[0].op.kind, 'ReturnAirspace');
 });
 
-test('a range asks and the controlling Position answers, each seeing only their own half', () => {
+test('a range asks and the controlling Position answers, each seeing only their own half', async () => {
   const range = (state, extra = {}) => ({
     airspaceId: 'RANGE-SOUTH', state, rev: 2, window: null, pendingRequest: null, transitions: [],
     definition: {
@@ -898,32 +900,32 @@ test('a range asks and the controlling Position answers, each seeing only their 
     ...extra,
   });
 
-  const asking = renderAirspaceBoard({ airspaces: [range('SCHEDULED')], held: ['SOUTH_RANGE'] });
+  const asking = await renderAirspaceBoard({ airspaces: [range('SCHEDULED')], held: ['SOUTH_RANGE'] });
   click(findByText(asking.list, 'Request activation'));
   assert.equal(asking.sent[0].op.kind, 'RequestActivation');
   assert.equal(asking.sent[0].actingPositionId, 'SOUTH_RANGE');
   assert.equal(findByText(asking.list, 'Approve activation'), undefined, 'a range cannot activate its own airspace');
 
   const pending = range('SCHEDULED', { pendingRequest: { requestedPositionId: 'SOUTH_RANGE', requestedAt: Date.now() } });
-  const answering = renderAirspaceBoard({ airspaces: [pending], held: ['APP'] });
+  const answering = await renderAirspaceBoard({ airspaces: [pending], held: ['APP'] });
   assert.ok(findByText(answering.list, 'activation requested by SOUTH_RANGE'), 'the asking is visible');
   click(findByText(answering.list, 'Deny'));
   assert.equal(answering.sent[0].op.kind, 'DenyActivation');
   assert.equal(answering.sent[0].op.reason, 'inbound traffic', 'a refusal carries a reason');
 });
 
-test('the board shows who is in a block, and at what altitude', () => {
+test('the board shows who is in a block, and at what altitude', async () => {
   const strips = [{
     stripId: 's1', cid: '001', fdrId: 'f1', state: 'HANDED_OFF', ownerPositionId: 'CTR',
     airspaceEntry: { airspaceId: 'MOA-EAST', frequencyMhz: 134.25, altitudeBlock: { lowerFt: 5000, upperFt: 15000 } },
   }];
-  const { list } = renderAirspaceBoard({ airspaces: [moa('ACTIVE')], held: ['CTR'], strips, fdrs: [FDR] });
+  const { list } = await renderAirspaceBoard({ airspaces: [moa('ACTIVE')], held: ['CTR'], strips, fdrs: [FDR] });
   assert.ok(findByText(list, 'VIPER1 (134.250, 5000–15000 ft)'),
     'a range controller has to be able to see who is in their block and where');
 });
 
-test('with nothing configured the board says so rather than rendering blank', () => {
-  const { list, empty } = renderAirspaceBoard({ airspaces: [], held: ['CTR'] });
+test('with nothing configured the board says so rather than rendering blank', async () => {
+  const { list, empty } = await renderAirspaceBoard({ airspaces: [], held: ['CTR'] });
   assert.equal(list.children.length, 0);
   assert.equal(empty.hidden, false);
 });
@@ -943,8 +945,8 @@ function correlationOf(over = {}) {
   };
 }
 
-test('a normally correlated Strip shows nothing — only a problem with its track is drawn (docs/adr/0058)', () => {
-  const { el } = renderStrip({
+test('a normally correlated Strip shows nothing — only a problem with its track is drawn (docs/adr/0058)', async () => {
+  const { el } = await renderStrip({
     strip: stripAt(), fdr: FDR, held: ['APP'],
     correlations: [correlationOf()],
     tracks: [{ id: '101', domain: 'AIR', label: { callsign: 'VIPER1', source: 'FDR', trackNumber: 'TN00001' }, ssr: { code: '0041' } }],
@@ -954,9 +956,9 @@ test('a normally correlated Strip shows nothing — only a problem with its trac
     'a Strip with nothing to say has no indicator row at all');
 });
 
-test('conformance and conflict alerts appear on the Strip only while they apply', () => {
+test('conformance and conflict alerts appear on the Strip only while they apply', async () => {
   const strip = stripAt({ ownerPositionId: 'APP' });
-  const r = renderStrip({ strip, fdr: FDR, held: ['APP'], correlations: [correlationOf()], tracks: [{ id: '101', domain: 'AIR', label: { callsign: 'VIPER1', source: 'FDR', trackNumber: 'TN00001' }, ssr: { code: '0041' } }] });
+  const r = await renderStrip({ strip, fdr: FDR, held: ['APP'], correlations: [correlationOf()], tracks: [{ id: '101', domain: 'AIR', label: { callsign: 'VIPER1', source: 'FDR', trackNumber: 'TN00001' }, ssr: { code: '0041' } }] });
   r.sandbox.applyEfspAlerts({
     conformance: [{ fdrId: 'f1', alerts: [{ kind: 'HEADING', assigned: 50, actual: 72 }] }],
     stca: [{ id: '101|202', a: '101', b: '202', aCallsign: 'VIPER1', bCallsign: 'SNAKE21', timeToCpaSec: 55, minNm: 1.8, vertFt: 400 }],
@@ -978,9 +980,9 @@ test('conformance and conflict alerts appear on the Strip only while they apply'
   assert.equal(quiet.classList.contains('efsp-strip-alert'), false);
 });
 
-test('an obligation badge shows while efsp-alerts lists it, and is gone after the next one does not (docs/adr/0067)', () => {
+test('an obligation badge shows while efsp-alerts lists it, and is gone after the next one does not (docs/adr/0067)', async () => {
   const strip = stripAt({ ownerPositionId: 'APP' });
-  const r = renderStrip({ strip, fdr: FDR, held: ['APP'], correlations: [correlationOf()], tracks: [{ id: '101', domain: 'AIR', label: { callsign: 'VIPER1', source: 'FDR', trackNumber: 'TN00001' }, ssr: { code: '0041' } }] });
+  const r = await renderStrip({ strip, fdr: FDR, held: ['APP'], correlations: [correlationOf()], tracks: [{ id: '101', domain: 'AIR', label: { callsign: 'VIPER1', source: 'FDR', trackNumber: 'TN00001' }, ssr: { code: '0041' } }] });
   const badge = (el) => descendants(el).find(c => (c.className || '').includes('efsp-obligation-badge'));
   r.sandbox.applyEfspAlerts({ conformance: [], stca: [], obligations: [
     { facilityId: 'INCIRLIK', stripId: 's1', obligationType: 'VOID_TIME_EXPIRED', severity: 'OVERDUE', dueAt: 1, since: 1 },
@@ -993,8 +995,8 @@ test('an obligation badge shows while efsp-alerts lists it, and is gone after th
   assert.equal(badge(r.sandbox._buildStripEl(strip)), undefined, 'the next efsp-alerts without it clears it');
 });
 
-test('a Strip whose contact went away says so, and is marked', () => {
-  const { el } = renderStrip({
+test('a Strip whose contact went away says so, and is marked', async () => {
+  const { el } = await renderStrip({
     strip: stripAt(), fdr: FDR, held: ['APP'],
     correlations: [correlationOf({
       state: 'UNCORRELATED', trackId: null, matchedBy: null,
@@ -1006,11 +1008,11 @@ test('a Strip whose contact went away says so, and is marked', () => {
     'a binding that broke has to be visible without reading the badge');
 });
 
-test('an ambiguous correlation offers its candidates, and picking one binds it', () => {
+test('an ambiguous correlation offers its candidates, and picking one binds it', async () => {
   // The server refuses to guess between two contacts that match equally well
   // (§3.10.2 rule 7 for codes), so the way out has to be reachable — this is
   // §6.6 rule 1's top rung becoming a control.
-  const { el, sent } = renderStrip({
+  const { el, sent } = await renderStrip({
     strip: stripAt(), fdr: FDR, held: ['APP'],
     correlations: [correlationOf({
       state: 'UNCORRELATED', trackId: null, matchedBy: null,
@@ -1031,8 +1033,8 @@ test('an ambiguous correlation offers its candidates, and picking one binds it',
   assert.equal(sent[0].fdrId, 'f1');
 });
 
-test('an uncorrelated Strip offers Bind, and a bound one offers Unbind', () => {
-  const uncorrelated = renderStrip({
+test('an uncorrelated Strip offers Bind, and a bound one offers Unbind', async () => {
+  const uncorrelated = await renderStrip({
     strip: stripAt(), fdr: FDR, held: ['APP'],
     correlations: [correlationOf({ state: 'UNCORRELATED', trackId: null, matchedBy: null })],
     tracks: [{ id: '303', domain: 'AIR', label: { callsign: 'MYSTERY', source: 'TAG', trackNumber: 'TN00303' }, ssr: null }],
@@ -1044,7 +1046,7 @@ test('an uncorrelated Strip offers Bind, and a bound one offers Unbind', () => {
   assert.equal(uncorrelated.sent[0].op.kind, 'BindTrack');
   assert.equal(uncorrelated.sent[0].op.trackId, '303');
 
-  const bound = renderStrip({
+  const bound = await renderStrip({
     strip: stripAt(), fdr: FDR, held: ['APP'],
     correlations: [correlationOf({ matchedBy: 'BINDING', binding: { trackId: '101', boundPositionId: 'APP' } })],
     tracks: [{ id: '101', domain: 'AIR', label: { callsign: 'VIPER1', source: 'FDR', trackNumber: 'TN00001' }, ssr: { code: '0041' } }],
@@ -1053,8 +1055,8 @@ test('an uncorrelated Strip offers Bind, and a bound one offers Unbind', () => {
   assert.equal(bound.sent[0].op.kind, 'UnbindTrack');
 });
 
-test('a controller holding no Position can see the correlation but not change it', () => {
-  const { el } = renderStrip({
+test('a controller holding no Position can see the correlation but not change it', async () => {
+  const { el } = await renderStrip({
     strip: stripAt(), fdr: FDR, held: [],
     correlations: [correlationOf({ state: 'UNCORRELATED', trackId: null, matchedBy: null })],
   });
@@ -1083,8 +1085,8 @@ function marsaRelation(over = {}) {
 
 const PEER_STRIP = { ...stripAt({}), stripId: 's2', fdrId: 'f2', _callsign: 'SHELL71' };
 
-test('a MARSA participant Strip carries the badge, and it says the interlock is armed', () => {
-  const { el } = renderStrip({
+test('a MARSA participant Strip carries the badge, and it says the interlock is armed', async () => {
+  const { el } = await renderStrip({
     strip: stripAt({}), fdr: FDR, held: ['APP'],
     marsa: [marsaRelation()], otherStrips: [PEER_STRIP],
   });
@@ -1092,8 +1094,8 @@ test('a MARSA participant Strip carries the badge, and it says the interlock is 
   assert.ok(el.classList._set.has('efsp-strip-marsa-armed'));
 });
 
-test('a VOIDED relation flags the whole Strip — rule 2 calls it an alert', () => {
-  const { el } = renderStrip({
+test('a VOIDED relation flags the whole Strip — rule 2 calls it an alert', async () => {
+  const { el } = await renderStrip({
     strip: stripAt({}), fdr: FDR, held: ['APP'],
     marsa: [marsaRelation({ state: 'VOIDED', voidedBy: 'CONTROLLER_COURSE_CHANGE', endedAt: 2000 })],
     otherStrips: [PEER_STRIP],
@@ -1103,13 +1105,13 @@ test('a VOIDED relation flags the whole Strip — rule 2 calls it an alert', () 
   assert.ok(el.classList._set.has('efsp-strip-marsa-voided'));
 });
 
-test('a flight in no relation is offered the declaration', () => {
-  const { el } = renderStrip({ strip: stripAt({}), fdr: FDR, held: ['APP'], otherStrips: [PEER_STRIP] });
+test('a flight in no relation is offered the declaration', async () => {
+  const { el } = await renderStrip({ strip: stripAt({}), fdr: FDR, held: ['APP'], otherStrips: [PEER_STRIP] });
   assert.ok(menuItem(el, 'MARSA…'), 'a controller can start a relation from a Strip that has never been in one');
 });
 
-test('declaring MARSA sends DeclareMarsa with both flights and the declaring callsign', () => {
-  const { el, sent } = renderStrip({
+test('declaring MARSA sends DeclareMarsa with both flights and the declaring callsign', async () => {
+  const { el, sent } = await renderStrip({
     strip: stripAt({}), fdr: FDR, held: ['APP'], otherStrips: [PEER_STRIP],
   });
   click(menuItem(el, 'MARSA…'));
@@ -1122,8 +1124,8 @@ test('declaring MARSA sends DeclareMarsa with both flights and the declaring cal
   assert.equal(sent[0].actingPositionId, 'APP');
 });
 
-test('an armed relation offers the rendezvous, and marking it sends MarkRendezvous', () => {
-  const { el, sent } = renderStrip({
+test('an armed relation offers the rendezvous, and marking it sends MarkRendezvous', async () => {
+  const { el, sent } = await renderStrip({
     strip: stripAt({}), fdr: FDR, held: ['APP'],
     marsa: [marsaRelation()], otherStrips: [PEER_STRIP],
   });
@@ -1137,9 +1139,9 @@ test('an armed relation offers the rendezvous, and marking it sends MarkRendezvo
   assert.equal(sent[1].op.kind, 'MarkRendezvous');
 });
 
-test('ending and voiding are both reachable, and carry the relation id', () => {
+test('ending and voiding are both reachable, and carry the relation id', async () => {
   for (const [label, kind] of [['End MARSA', 'EndMarsa'], ['Void MARSA', 'VoidMarsa']]) {
-    const { el, sent } = renderStrip({
+    const { el, sent } = await renderStrip({
       strip: stripAt({}), fdr: FDR, held: ['APP'],
       marsa: [marsaRelation({ rendezvousAt: 2000 })], otherStrips: [PEER_STRIP],
     });
@@ -1150,8 +1152,8 @@ test('ending and voiding are both reachable, and carry the relation id', () => {
   }
 });
 
-test('a receiver breaking off sends RemoveParticipant naming ITS OWN flight', () => {
-  const { el, sent } = renderStrip({
+test('a receiver breaking off sends RemoveParticipant naming ITS OWN flight', async () => {
+  const { el, sent } = await renderStrip({
     strip: stripAt({}), fdr: FDR, held: ['APP'],
     marsa: [marsaRelation({ rendezvousAt: 2000 })], otherStrips: [PEER_STRIP],
   });
@@ -1161,8 +1163,8 @@ test('a receiver breaking off sends RemoveParticipant naming ITS OWN flight', ()
   assert.equal(sent[0].op.fdrId, 'f1', 'the Strip you pressed it on is the one leaving');
 });
 
-test('the popover names the other participants — rule 5\'s "visible as a link"', () => {
-  const { el } = renderStrip({
+test('the popover names the other participants — rule 5\'s "visible as a link"', async () => {
+  const { el } = await renderStrip({
     strip: stripAt({}), fdr: FDR, held: ['APP'],
     marsa: [marsaRelation()], otherStrips: [PEER_STRIP],
   });
@@ -1170,8 +1172,8 @@ test('the popover names the other participants — rule 5\'s "visible as a link"
   assert.ok(findByText(el, 'SHELL71'), 'the other participant is named, not just counted');
 });
 
-test('the badge is disabled when the controller holds no Position that can act', () => {
-  const { el } = renderStrip({
+test('the badge is disabled when the controller holds no Position that can act', async () => {
+  const { el } = await renderStrip({
     strip: stripAt({}), fdr: FDR, held: [],
     marsa: [marsaRelation()], otherStrips: [PEER_STRIP],
   });
@@ -1180,8 +1182,8 @@ test('the badge is disabled when the controller holds no Position that can act',
   assert.equal(findByText(el, 'Rendezvous').disabled, true, 'nor from the tab');
 });
 
-test('an ENDED relation leaves no badge and offers a fresh declaration', () => {
-  const { el } = renderStrip({
+test('an ENDED relation leaves no badge and offers a fresh declaration', async () => {
+  const { el } = await renderStrip({
     strip: stripAt({}), fdr: FDR, held: ['APP'],
     marsa: [marsaRelation({ state: 'ENDED', endedBy: 'END_CONDITION', endedAt: 4000 })],
     otherStrips: [PEER_STRIP],
@@ -1197,9 +1199,9 @@ test('an ENDED relation leaves no badge and offers a fresh declaration', () => {
 // server does the right thing and nothing about whether a controller can ask
 // for it.
 
-test('ordnance state is a picker on the Strip, and sends the Block the server routes', () => {
+test('ordnance state is a picker on the Strip, and sends the Block the server routes', async () => {
   // Tower's Strip: HOOK and ORDNANCE are its fields alone (docs/adr/0056).
-  const { el, sent } = renderStrip({ strip: stripAt({ ownerPositionId: 'TWR', state: 'RUNWAY_QUEUE' }), fdr: FDR, held: ['TWR'] });
+  const { el, sent } = await renderStrip({ strip: stripAt({ ownerPositionId: 'TWR', state: 'RUNWAY_QUEUE' }), fdr: FDR, held: ['TWR'] });
 
   const cell = blockCell(el, '3G');
   assert.ok(cell, 'Block 3G (ordnance state) is not rendered on the Strip at all');
@@ -1220,8 +1222,8 @@ test('ordnance state is a picker on the Strip, and sends the Block the server ro
   assert.equal(sent[0].op.value, 'HUNG');
 });
 
-test('the hook requirement toggles, and a blank cell sends true rather than clearing', () => {
-  const { el, sent } = renderStrip({ strip: stripAt({ ownerPositionId: 'TWR', state: 'RUNWAY_QUEUE' }), fdr: FDR, held: ['TWR'] });
+test('the hook requirement toggles, and a blank cell sends true rather than clearing', async () => {
+  const { el, sent } = await renderStrip({ strip: stripAt({ ownerPositionId: 'TWR', state: 'RUNWAY_QUEUE' }), fdr: FDR, held: ['TWR'] });
 
   const cell = blockCell(el, '3F');
   assert.ok(cell, 'Block 3F (hook requirement) is not rendered on the Strip at all');
@@ -1233,13 +1235,13 @@ test('the hook requirement toggles, and a blank cell sends true rather than clea
   assert.equal(sent[0].op.value, true, 'a blank hook cell must SET the requirement, not clear it');
 });
 
-test('an FDR from before the military namespace existed still renders its Strip', () => {
+test('an FDR from before the military namespace existed still renders its Strip', async () => {
   // Nothing reseeds an FDR already in a connected client's cache, so a Strip
   // can legitimately arrive with `military: null` — the literal value this
   // field held until docs/adr/0052. Rendering must degrade to a blank cell,
   // not throw and take the whole Bay down with it.
   const legacy = { ...FDR, military: null };
-  const { el } = renderStrip({ strip: stripAt({ ownerPositionId: 'TWR', state: 'RUNWAY_QUEUE' }), fdr: legacy, held: ['TWR'] });
+  const { el } = await renderStrip({ strip: stripAt({ ownerPositionId: 'TWR', state: 'RUNWAY_QUEUE' }), fdr: legacy, held: ['TWR'] });
   assert.equal(blockCell(el, '3G').textContent, '');
   assert.equal(blockCell(el, '3F').textContent, '');
 });
@@ -1276,22 +1278,22 @@ const tick = () => new Promise(r => setTimeout(r, 0));
 const POPOVER_CASES = [
   {
     label: 'coordinate',
-    render: () => renderStrip({ strip: stripAt(), fdr: FDR, held: ['APP'] }),
+    render: async () => await renderStrip({ strip: stripAt(), fdr: FDR, held: ['APP'] }),
     open: (r) => click(menuItem(r.el, 'Coordinate…')),
   },
   {
     label: 'TOFI',
-    render: () => renderStrip({ strip: stripAt({ ownerPositionId: 'CTR' }), fdr: FDR, held: ['CTR'] }),
+    render: async () => await renderStrip({ strip: stripAt({ ownerPositionId: 'CTR' }), fdr: FDR, held: ['CTR'] }),
     open: (r) => click(menuItem(r.el, 'TOFI…')),
   },
   {
     label: 'MARSA',
-    render: () => renderStrip({ strip: stripAt(), fdr: FDR, held: ['APP'], otherStrips: [PEER_STRIP] }),
+    render: async () => await renderStrip({ strip: stripAt(), fdr: FDR, held: ['APP'], otherStrips: [PEER_STRIP] }),
     open: (r) => click(menuItem(r.el, 'MARSA…')),
   },
   {
     label: 'airspace',
-    render: () => renderStrip({
+    render: async () => await renderStrip({
       strip: stripAt({ ownerPositionId: 'CTR' }), fdr: FDR, held: ['CTR'],
       airspaces: [{
         airspaceId: 'MOA-EAST', state: 'ACTIVE', rev: 1, transitions: [],
@@ -1302,7 +1304,7 @@ const POPOVER_CASES = [
   },
   {
     label: 'bind',
-    render: () => renderStrip({
+    render: async () => await renderStrip({
       strip: stripAt(), fdr: FDR, held: ['APP'],
       correlations: [correlationOf({ state: 'UNCORRELATED', trackId: null, matchedBy: null })],
       tracks: [{ id: '303', domain: 'AIR', label: { callsign: 'MYSTERY', source: 'TAG', trackNumber: 'TN00303' }, ssr: null }],
@@ -1314,14 +1316,14 @@ const POPOVER_CASES = [
     // (guide §7.3). It has no anchor of its own, so it is also the case that
     // proves _mountPopover works from the Strip element itself.
     label: 'highlight',
-    render: () => renderStrip({ strip: stripAt(), fdr: FDR, held: ['APP'] }),
+    render: async () => await renderStrip({ strip: stripAt(), fdr: FDR, held: ['APP'] }),
     open: (r) => fire(r.el, 'contextmenu', { target: r.el }),
   },
   {
     // Layout C's ⋯ menu is a popover too: portalled, owned by its Strip, and
     // holding it still while it is open (docs/adr/0056).
     label: 'strip menu',
-    render: () => renderStrip({ strip: stripAt(), fdr: FDR, held: ['APP'] }),
+    render: async () => await renderStrip({ strip: stripAt(), fdr: FDR, held: ['APP'] }),
     open: (r) => click(descendants(r.el).find(c => (c.className || '').includes('efsp-strip-menu-btn'))),
   },
 ];
@@ -1331,7 +1333,7 @@ function openPopoverIn(r) {
   return descendants(r.portal).find(c => (c.className || '').includes('popover'));
 }
 
-test('every popover is portalled out of its Strip, and still knows which Strip it belongs to', () => {
+test('every popover is portalled out of its Strip, and still knows which Strip it belongs to', async () => {
   // F-001. `.efsp-strip` carries `contain: layout style`, and `contain:
   // layout` creates a stacking context — so a popover inside a Strip is
   // painted underneath everything drawn after that Strip, and what overflows
@@ -1340,7 +1342,7 @@ test('every popover is portalled out of its Strip, and still knows which Strip i
   // up on screen it structurally cannot, and that half is proved in
   // e2e/l1-popovers.spec.js against a real browser.
   for (const c of POPOVER_CASES) {
-    const r = c.render();
+    const r = await c.render();
     c.open(r);
     const popover = openPopoverIn(r);
     assert.ok(popover, `${c.label}: no popover opened`);
@@ -1353,7 +1355,7 @@ test('every popover is portalled out of its Strip, and still knows which Strip i
   }
 });
 
-test('every popover protects its Strip from reconciliation', () => {
+test('every popover protects its Strip from reconciliation', async () => {
   // Enumerates the CLASS, not the instances. _isProtectedStripEl's list was
   // found incomplete three times after the same bug — a controller losing a
   // half-filled form to somebody else's board delta. It used to ask
@@ -1361,7 +1363,7 @@ test('every popover protects its Strip from reconciliation', () => {
   // every time, so F-001 would have silently deleted the protection for all
   // six had it not been re-established by Strip id.
   for (const c of POPOVER_CASES) {
-    const r = c.render();
+    const r = await c.render();
     assert.equal(r.sandbox._isProtectedStripEl(r.el), false, `${c.label}: protected before anything is open`);
     c.open(r);
     assert.equal(r.sandbox._isProtectedStripEl(r.el), true,
@@ -1369,13 +1371,13 @@ test('every popover protects its Strip from reconciliation', () => {
   }
 });
 
-test('Escape closes any popover, and does not reach the Strip behind it', () => {
+test('Escape closes any popover, and does not reach the Strip behind it', async () => {
   // F-109. Not doctrine — no rule asks for Escape on a popover — but in this
   // same panel Escape reverts a Block edit and an enum <select> (§7.4 rule 2)
   // and collapses the expanded view, so a controller who has learned "Esc
   // backs out" found it worked on a Block and not on the popover beside it.
   for (const c of POPOVER_CASES) {
-    const r = c.render();
+    const r = await c.render();
     c.open(r);
     assert.ok(openPopoverIn(r), `${c.label}: precondition — a popover is open`);
 
@@ -1387,8 +1389,8 @@ test('Escape closes any popover, and does not reach the Strip behind it', () => 
   }
 });
 
-test('a key that is not Escape leaves the popover alone', () => {
-  const r = POPOVER_CASES[0].render();
+test('a key that is not Escape leaves the popover alone', async () => {
+  const r = await POPOVER_CASES[0].render();
   POPOVER_CASES[0].open(r);
   r.keyDownOnDocument('a');
   assert.ok(openPopoverIn(r), 'typing into a popover closed it');
@@ -1401,7 +1403,7 @@ test('closing a popover without acting asks for the render its Strip has been wa
   // acting kept showing what it showed when the popover opened, indefinitely.
   // Acting hid the defect, because the ack's own render caught the Strip up.
   for (const c of POPOVER_CASES) {
-    const r = c.render();
+    const r = await c.render();
     let renders = 0;
     r.sandbox.renderAllOpenEfspBays = () => { renders += 1; };
     c.open(r);
@@ -1420,7 +1422,7 @@ test('re-opening a popover does not trigger the render that would tear out its a
   // to be deferred and then skipped when something is open again by the time
   // it runs — otherwise opening a popover re-renders the Strip mid-open and
   // destroys the very element the popover is anchored to.
-  const r = POPOVER_CASES[0].render();
+  const r = await POPOVER_CASES[0].render();
   let renders = 0;
   r.sandbox.renderAllOpenEfspBays = () => { renders += 1; };
   POPOVER_CASES[0].open(r);
@@ -1437,7 +1439,7 @@ test('every popover survives a press on its own controls, and closes on one outs
   // was true of four of the six, and it is invisible to every other test in
   // this file because those call click handlers directly.
   for (const c of POPOVER_CASES) {
-    const r = c.render();
+    const r = await c.render();
     c.open(r);
     await tick(); // the listener is registered in a deferred setTimeout(…, 0)
 
@@ -1465,7 +1467,7 @@ test('a click inside the MARSA popover does not rebuild it empty', async () => {
   // The click handler is on the Strip element here rather than the button, but
   // the mechanism is the same one: what matters is that the popover is not a
   // descendant of anything that reopens it.
-  const r = renderStrip({ strip: stripAt(), fdr: FDR, held: ['APP'], otherStrips: [PEER_STRIP] });
+  const r = await renderStrip({ strip: stripAt(), fdr: FDR, held: ['APP'], otherStrips: [PEER_STRIP] });
   click(menuItem(r.el, 'MARSA…'));
   const popover = openPopoverIn(r);
   const declaring = descendants(popover).find(c => c.tagName === 'input');
@@ -1483,7 +1485,7 @@ test('a click inside the MARSA popover does not rebuild it empty', async () => {
   assert.equal(r.sent[0].op.declaringCallsign, 'SHELL71');
 });
 
-test('acting from a popover uses the Strip as it is NOW, not as it was when the popover opened', () => {
+test('acting from a popover uses the Strip as it is NOW, not as it was when the popover opened', async () => {
   // F-107. The four dispatch helpers below all passed the `strip` object
   // CAPTURED when the popover opened, and sendEfspMutation sends its `rev` as
   // the optimistic-concurrency base. _isProtectedStripEl deliberately stops
@@ -1501,7 +1503,7 @@ test('acting from a popover uses the Strip as it is NOW, not as it was when the 
     { ...POPOVER_CASES[5], act: (r) => click(descendants(openPopoverIn(r))[0]) },
   ];
   for (const c of cases) {
-    const r = c.render();
+    const r = await c.render();
     c.open(r);
     // Somebody else works the same Strip. The element is deliberately left
     // alone — it is protected — so only the store moves.
@@ -1522,9 +1524,9 @@ test('acting from a popover uses the Strip as it is NOW, not as it was when the 
 // button reads "Send to Clearance" at PROPOSED — "Drop" is every Role's
 // TERMINAL transition and appears nowhere else.
 
-test('a Strip proposed in error can be dropped from the Strip itself, in two presses', () => {
+test('a Strip proposed in error can be dropped from the Strip itself, in two presses', async () => {
   const strip = stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS', bayId: 'ops-proposed' });
-  const { el, sent } = renderStrip({ strip, fdr: FDR, held: ['OPS'] });
+  const { el, sent } = await renderStrip({ strip, fdr: FDR, held: ['OPS'] });
 
   const drop = descendants(el).find(c => (c.className || '').includes('efsp-drop-btn'));
   assert.ok(drop, 'no Drop affordance on a PROPOSED Strip — OPS would have to know `.drop` exists');
@@ -1544,30 +1546,30 @@ test('a Strip proposed in error can be dropped from the Strip itself, in two pre
   assert.equal(sent[0].actingPositionId, 'OPS');
 });
 
-test('Drop is not offered where the server would refuse it, or where the NLA already says Drop', () => {
-  const hasDrop = (strip, held) =>
-    !!descendants(renderStrip({ strip, fdr: FDR, held }).el).find(c => (c.className || '').includes('efsp-drop-btn'));
+test('Drop is not offered where the server would refuse it, or where the NLA already says Drop', async () => {
+  const hasDrop = async (strip, held) =>
+    !!descendants((await renderStrip({ strip, fdr: FDR, held })).el).find(c => (c.className || '').includes('efsp-drop-btn'));
 
   // The terminal state's own NLA is "Drop" — one question, one control.
-  assert.equal(hasDrop(stripAt({ state: 'HANDED_OFF', ownerPositionId: 'APP' }), ['APP']), false);
+  assert.equal(await hasDrop(stripAt({ state: 'HANDED_OFF', ownerPositionId: 'APP' }), ['APP']), false);
 
   // An open coordination proposal: _applyDropStrip refuses these outright, so
   // offering the control would be offering a button that always fails.
-  assert.equal(hasDrop(stripAt({
+  assert.equal(await hasDrop(stripAt({
     state: 'INBOUND', ownerPositionId: 'CTR',
     coordination: { primitive: 'HANDOFF', state: 'PROPOSED', peerFacilityId: 'INCIRLIK', peerPositionId: 'APP' },
   }), ['CTR']), false);
 
   // And a live TOFI — guide §4.6.3 rule 2, the Strip stays posted throughout
   // tactical control.
-  assert.equal(hasDrop(stripAt({
+  assert.equal(await hasDrop(stripAt({
     state: 'INBOUND', ownerPositionId: 'CTR',
     tofiCoordination: { direction: 'ENTRY', state: 'ACTIVE', peerFacilityId: 'TACTICAL', peerPositionId: 'TAC_C2' },
   }), ['CTR']), false);
 
   // Nobody holding the Position means no control at all, not a disabled one —
   // a Strip nobody holds should not grow an affordance.
-  assert.equal(hasDrop(stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' }), []), false);
+  assert.equal(await hasDrop(stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' }), []), false);
 });
 
 // ── §3.7 on the Strip itself ─────────────────────────────────────────────
@@ -1586,16 +1588,16 @@ function cellWithHistory(entries) {
 const entry = (value, status) => ({ value, status, at: Date.now(), by: 'c-OPS' });
 const historyIn = (el) => descendants(el).filter(c => (c.className || '').includes('efsp-annotation-entry'));
 
-test('a Block written once shows no history at all', () => {
+test('a Block written once shows no history at all', async () => {
   // The common case by far. It must not sprout an empty container on every
   // unamended Block of every Strip.
-  const { el } = renderStrip({ strip: cellWithHistory([entry('6000', 'ACTIVE')]), fdr: FDR, held: ['CD'] });
+  const { el } = await renderStrip({ strip: cellWithHistory([entry('6000', 'ACTIVE')]), fdr: FDR, held: ['CD'] });
   assert.deepEqual(historyIn(el), []);
   assert.equal(descendants(el).filter(c => (c.className || '').includes('efsp-annotation-history')).length, 0);
 });
 
-test('an amended Block shows the prior value struck through, on the Strip', () => {
-  const { el } = renderStrip({
+test('an amended Block shows the prior value struck through, on the Strip', async () => {
+  const { el } = await renderStrip({
     strip: cellWithHistory([entry('4000', 'SUPERSEDED'), entry('6000', 'ACTIVE')]),
     fdr: FDR, held: ['CD'],
   });
@@ -1607,15 +1609,15 @@ test('an amended Block shows the prior value struck through, on the Strip', () =
   assert.equal(blockCell(el, '21').textContent, '6000');
 });
 
-test('a struck entry renders as struck, not as superseded', () => {
-  const { el } = renderStrip({
+test('a struck entry renders as struck, not as superseded', async () => {
+  const { el } = await renderStrip({
     strip: cellWithHistory([entry('4000', 'STRUCK'), entry('6000', 'ACTIVE')]),
     fdr: FDR, held: ['CD'],
   });
   assert.ok(historyIn(el)[0].className.includes('efsp-annotation-entry-struck'));
 });
 
-test('a much-amended Block shows its latest prior and counts the rest', () => {
+test('a much-amended Block shows its latest prior and counts the rest', async () => {
   // §3.7 rule 2's own escape hatch — "where space does not permit, the Block
   // MUST render an overflow indicator and expose full history on tap",
   // modelled on ATOP's `*`. History is append-only for the life of the Strip,
@@ -1624,7 +1626,7 @@ test('a much-amended Block shows its latest prior and counts the rest', () => {
     entry('2000', 'SUPERSEDED'), entry('3000', 'SUPERSEDED'),
     entry('4000', 'SUPERSEDED'), entry('5000', 'SUPERSEDED'), entry('6000', 'ACTIVE'),
   ]);
-  const { el } = renderStrip({ strip, fdr: FDR, held: ['CD'] });
+  const { el } = await renderStrip({ strip, fdr: FDR, held: ['CD'] });
 
   // One prior, beside the label, so the value in force keeps the field to
   // itself — two struck priors used to push a much-amended ALT out of view.
@@ -1638,12 +1640,12 @@ test('a much-amended Block shows its latest prior and counts the rest', () => {
   assert.match(overflow.title, /3 earlier entries/);
 });
 
-test('the expanded view shows the whole chain, which is what makes capping the chip legal', () => {
+test('the expanded view shows the whole chain, which is what makes capping the chip legal', async () => {
   const strip = cellWithHistory([
     entry('2000', 'SUPERSEDED'), entry('3000', 'SUPERSEDED'),
     entry('4000', 'SUPERSEDED'), entry('5000', 'SUPERSEDED'), entry('6000', 'ACTIVE'),
   ]);
-  const r = renderStrip({ strip, fdr: FDR, held: ['CD'] });
+  const r = await renderStrip({ strip, fdr: FDR, held: ['CD'] });
   r.sandbox.renderAllOpenEfspBays = () => {};
   click(descendants(r.el).find(c => (c.className || '').includes('efsp-expand-btn')));
 
@@ -1654,12 +1656,12 @@ test('the expanded view shows the whole chain, which is what makes capping the c
     ['2000', '3000', '4000', '5000'], 'unbounded here');
 });
 
-test('confirm-vacated is reachable on DEPARTURE 21, and strikes rather than clears', () => {
+test('confirm-vacated is reachable on DEPARTURE 21, and strikes rather than clears', async () => {
   // §3.7 rule 3's explicit action. The button has existed since Phase 2 and no
   // test has ever exercised it — stripAt() always set `annotations: {}`, and
   // Block 21 had no chip to render it on.
   const strip = cellWithHistory([entry('6000', 'ACTIVE')]);
-  const { el, sent } = renderStrip({ strip, fdr: FDR, held: ['CD'] });
+  const { el, sent } = await renderStrip({ strip, fdr: FDR, held: ['CD'] });
   const strike = descendants(el).find(c => (c.className || '').includes('efsp-confirm-vacated-btn'));
   assert.ok(strike, 'no confirm-vacated button on an ACTIVE altitude');
   click(strike);
@@ -1674,8 +1676,8 @@ test('confirm-vacated is reachable on DEPARTURE 21, and strikes rather than clea
 // The popover half of this section moved up to POPOVER_CASES, which
 // enumerates all six rather than the three this used to name.
 
-test('an open Block edit protects its Strip too — but only while it has focus', () => {
-  const { el, sandbox } = renderStrip({ strip: stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' }), fdr: FDR, held: ['OPS'] });
+test('an open Block edit protects its Strip too — but only while it has focus', async () => {
+  const { el, sandbox } = await renderStrip({ strip: stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' }), fdr: FDR, held: ['OPS'] });
   assert.equal(sandbox._isProtectedStripEl(el), false, 'nothing open yet');
   click(blockCell(el, '9'));
   assert.equal(sandbox._isProtectedStripEl(el), true, 'somebody is typing into this Strip');
@@ -1701,19 +1703,19 @@ function openInputs(el) {
   return descendants(el).filter(c => (c.className || '').split(/\s+/).includes('efsp-block-input') && c.tagName === 'input');
 }
 
-test('starting a second Block edit closes the first — one open input on the Board, not several', () => {
+test('starting a second Block edit closes the first — one open input on the Board, not several', async () => {
   // _buildBlockCell's comment claimed this for a long time and nothing
   // implemented it: clicking ALT and then DEP left TWO open inputs on one
   // Strip, each of which froze it (F-204's second half).
-  const { el } = renderStrip({ strip: stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' }), fdr: FDR, held: ['OPS'] });
+  const { el } = await renderStrip({ strip: stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' }), fdr: FDR, held: ['OPS'] });
   click(blockCell(el, '9'));
   click(blockCell(el, '8'));
   assert.equal(openInputs(el).length, 1, 'two Blocks are open for editing at once');
 });
 
-test('an abandoned Block edit survives a rebuild with what was typed still in it', () => {
+test('an abandoned Block edit survives a rebuild with what was typed still in it', async () => {
   const strip = stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' });
-  const { el, sandbox } = renderStrip({ strip, fdr: FDR, held: ['OPS'] });
+  const { el, sandbox } = await renderStrip({ strip, fdr: FDR, held: ['OPS'] });
   click(blockCell(el, '9'));
   const input = openInputs(el)[0];
   input.value = 'DCT ALPHA DCT';
@@ -1727,14 +1729,14 @@ test('an abandoned Block edit survives a rebuild with what was typed still in it
   assert.equal(restored[0].value, 'DCT ALPHA DCT');
 });
 
-test('an abandoned edit is restored into exactly one cell, not into both the chip and the expanded row', () => {
+test('an abandoned edit is restored into exactly one cell, not into both the chip and the expanded row', async () => {
   // A Block with more history than its chip can show appears in BOTH surfaces
   // (see _expandedBlockIdsFor), which is the one way a single edit could come
   // back twice.
   const entries = ['1000', '2000', '3000'].map(v => ({ value: v, status: 'SUPERSEDED', at: 1, by: null }));
   entries.push({ value: '4000', status: 'ACTIVE', at: 2, by: null });
   const strip = stripAt({ ownerPositionId: 'OPS', annotations: { 21: { blockId: '21', entries } } });
-  const { el, sandbox } = renderStrip({ strip, fdr: FDR, held: ['OPS'] });
+  const { el, sandbox } = await renderStrip({ strip, fdr: FDR, held: ['OPS'] });
   sandbox.renderAllOpenEfspBays = () => {};
   click(descendants(el).find(c => (c.className || '').includes('efsp-expand-btn')));
   const expanded = sandbox._buildStripEl(strip);
@@ -1755,13 +1757,13 @@ function stripKeydown(el, key, target) {
   return defaultPrevented;
 }
 
-test('Space and Enter inside a Block input never reach the Strip\'s selection toggle', () => {
+test('Space and Enter inside a Block input never reach the Strip\'s selection toggle', async () => {
   // One mechanism behind four findings: a Space typed into a Block was
   // preventDefault()ed and toggled selection instead of being typed (F-201),
   // and Enter committed the Block AND moved the selection that the Rack-header
   // move acts on (F-203). The enum <select> lost its picker to the same
   // handler (F-205).
-  const { el, sandbox } = renderStrip({ strip: stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' }), fdr: FDR, held: ['OPS'] });
+  const { el, sandbox } = await renderStrip({ strip: stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' }), fdr: FDR, held: ['OPS'] });
   sandbox.renderAllOpenEfspBays = () => {};
   click(blockCell(el, '9'));
   const input = openInputs(el)[0];
@@ -1783,11 +1785,11 @@ test('Space and Enter inside a Block input never reach the Strip\'s selection to
   assert.equal(sandbox.getSelectedEfspStripId(), 's1');
 });
 
-test('Escape collapses the expanded view, which is otherwise only closable from above it', () => {
+test('Escape collapses the expanded view, which is otherwise only closable from above it', async () => {
   // F-208: 22 rows in a ~200px Bay, and the ▲ that closes them sits in the
   // actions row ABOVE them all.
   const strip = stripAt({ ownerPositionId: 'OPS' });
-  const { el, sandbox } = renderStrip({ strip, fdr: FDR, held: ['OPS'] });
+  const { el, sandbox } = await renderStrip({ strip, fdr: FDR, held: ['OPS'] });
   sandbox.renderAllOpenEfspBays = () => {};
   click(descendants(el).find(c => (c.className || '').includes('efsp-expand-btn')));
   const expanded = sandbox._buildStripEl(strip);
@@ -1812,11 +1814,11 @@ function openEnum(el, blockId) {
   return select;
 }
 
-test('arrowing through an enum picker chooses nothing — Enter does', () => {
+test('arrowing through an enum picker chooses nothing — Enter does', async () => {
   // Chromium fires 'change' for every arrow press on a closed <select>, so
   // committing on 'change' amended a clearance the instant a controller
   // pressed ↓ to see the options, and took the picker away with it (F-205).
-  const { el, sent } = renderStrip({ strip: stripAt({ ownerPositionId: 'CTR' }), fdr: FDR, held: ['CTR'] });
+  const { el, sent } = await renderStrip({ strip: stripAt({ ownerPositionId: 'CTR' }), fdr: FDR, held: ['CTR'] });
   const select = openEnum(el, '5A');
 
   fire(select, 'keydown', { key: 'ArrowDown' });
@@ -1830,8 +1832,8 @@ test('arrowing through an enum picker chooses nothing — Enter does', () => {
   assert.equal(sent[0].op.value, 'CST');
 });
 
-test('a pointer pick still commits on change — that gesture IS the choice', () => {
-  const { el, sent } = renderStrip({ strip: stripAt({ ownerPositionId: 'CTR' }), fdr: FDR, held: ['CTR'] });
+test('a pointer pick still commits on change — that gesture IS the choice', async () => {
+  const { el, sent } = await renderStrip({ strip: stripAt({ ownerPositionId: 'CTR' }), fdr: FDR, held: ['CTR'] });
   const select = openEnum(el, '5A');
   select.value = 'FAIL';
   fire(select, 'change');
@@ -1839,7 +1841,7 @@ test('a pointer pick still commits on change — that gesture IS the choice', ()
   assert.equal(sent[0].op.value, 'FAIL');
 });
 
-test('"—" is offered only where the server accepts a clear, and clears with ""', () => {
+test('"—" is offered only where the server accepts a clear, and clears with ""', async () => {
   // F-206: "—" was offered on all six enum Blocks and did nothing on any of
   // them — the change handler returned early on an empty value. Only RSVC and
   // SREG accept a clear; fdr-store.js's setTofi() normalizes the '' a <select>
@@ -1849,7 +1851,7 @@ test('"—" is offered only where the server accepts a clear, and clears with ""
   const strip = stripAt({ ownerPositionId: 'CTR' });
   const blankOption = (select) => select.children.find(o => o.value === '');
 
-  const set = renderStrip({ strip, fdr: { ...FDR, tofi: { ifrActive: true, separationRegime: 'MARSA' } }, held });
+  const set = await renderStrip({ strip, fdr: { ...FDR, tofi: { ifrActive: true, separationRegime: 'MARSA' } }, held });
   const sreg = openEnum(set.el, 'SREG');
   assert.ok(blankOption(sreg), 'SREG can be cleared, so "—" must be there to clear it with');
   sreg.value = '';
@@ -1860,7 +1862,7 @@ test('"—" is offered only where the server accepts a clear, and clears with ""
 
   // 5A's cleared value is 'NONE', already one of its own options, so there is
   // nothing for "—" to do once the Block is set.
-  const fixed = renderStrip({ strip, fdr: FDR, held });
+  const fixed = await renderStrip({ strip, fdr: FDR, held });
   const degr = openEnum(fixed.el, '5A');
   assert.equal(blankOption(degr), undefined, '"—" is offered on a Block it can never clear');
   degr.value = '';
@@ -1870,14 +1872,14 @@ test('"—" is offered only where the server accepts a clear, and clears with ""
   // But an UNSET Block keeps it: the picker has to be able to show "no value",
   // and without a blank the first real pick would not move selectedIndex and
   // so would fire no 'change' at all.
-  const unset = renderStrip({ strip, fdr: FDR, held });
+  const unset = await renderStrip({ strip, fdr: FDR, held });
   assert.ok(blankOption(openEnum(unset.el, '24A')),
     'an unset Block with no "—" reads as its first option, and cannot be set to it');
 });
 
 // ── F-101: the double-tap that advances the NEXT Strip ───────────────────
 
-test('a second advancing press inside the double-tap window is discarded, whichever Strip it lands on', () => {
+test('a second advancing press inside the double-tap window is discarded, whichever Strip it lands on', async () => {
   // F-101, and the class lanes 3 and 4 widened it to. The first press
   // transfers the Strip away, the Rack reflows, and the NEIGHBOUR's button is
   // now exactly where the pointer is — so the second tap is an ordinary FIRST
@@ -1889,7 +1891,7 @@ test('a second advancing press inside the double-tap window is discarded, whiche
   // the module state a real page shares.
   const tapped = stripAt({ stripId: 's1', state: 'DEPARTED', ownerPositionId: 'TWR' });
   const neighbour = stripAt({ stripId: 's2', fdrId: 'f2', state: 'RUNWAY_QUEUE', ownerPositionId: 'TWR' });
-  const r = renderStrip({ strip: tapped, fdr: FDR, held: ['TWR'], otherStrips: [neighbour] });
+  const r = await renderStrip({ strip: tapped, fdr: FDR, held: ['TWR'], otherStrips: [neighbour] });
 
   click(findByText(r.el, 'Hand Off to APP'));
   assert.deepEqual(r.sent.map(s => s.op.kind), ['InvokeNla']);
@@ -1900,7 +1902,7 @@ test('a second advancing press inside the double-tap window is discarded, whiche
   assert.deepEqual(r.sent.length, 1, 'a runway clearance nobody gave');
 });
 
-test('the double-tap window covers the Drop and the coordination/TOFI answers too', () => {
+test('the double-tap window covers the Drop and the coordination/TOFI answers too', async () => {
   // "Any control whose success removes its Strip from the Bay you are looking
   // at" — lane 3's general rule. A Drop, an Accept and a TOFI Accept all do.
   const replica = stripAt({
@@ -1909,7 +1911,7 @@ test('the double-tap window covers the Drop and the coordination/TOFI answers to
   });
   const second = stripAt({ stripId: 's2', fdrId: 'f2', bayId: 'app-coordination', ownerPositionId: 'APP', role: 'ARRIVAL', state: 'INBOUND',
     coordination: { primitive: 'HANDOFF', state: 'PROPOSED', mintedForCoordination: true, peerFacilityId: 'CENTER', peerPositionId: 'CTR' } });
-  const r = renderStrip({ strip: replica, fdr: FDR, held: ['APP'], otherStrips: [second] });
+  const r = await renderStrip({ strip: replica, fdr: FDR, held: ['APP'], otherStrips: [second] });
 
   click(findByText(r.el, 'Accept Hand Off'));
   assert.equal(r.sent.length, 1);
@@ -1919,11 +1921,11 @@ test('the double-tap window covers the Drop and the coordination/TOFI answers to
   assert.equal(r.sent.length, 1, 'the second replica was accepted by a tap nobody meant');
 });
 
-test('the NLA button goes dead on the press, without waiting for the ack', () => {
+test('the NLA button goes dead on the press, without waiting for the ack', async () => {
   // §7.9's "local input -> visual feedback < 50ms, never waiting on the
   // server" — the other half of what efsp-nla.js's double-tap exports were
   // written for, and never wired up either.
-  const { el, sent } = renderStrip({ strip: stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' }), fdr: FDR, held: ['OPS'] });
+  const { el, sent } = await renderStrip({ strip: stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' }), fdr: FDR, held: ['OPS'] });
   const btn = findByText(el, 'Send to Clearance');
   click(btn);
   assert.equal(sent.length, 1);
@@ -1932,34 +1934,34 @@ test('the NLA button goes dead on the press, without waiting for the ack', () =>
 
 // ── F-103 / F-207: a refusal, attributed ─────────────────────────────────
 
-test('a refusal marks the Strip it was about, and only that Strip', () => {
+test('a refusal marks the Strip it was about, and only that Strip', async () => {
   // F-103: "BBB22's Strip className was plain efsp-strip." Two Strips on
   // screen and nothing said which one the banner was about.
   const refusal = { stripId: 's1', blockId: null, reason: 'NO_RECEIVING_POSITION', detail: null, value: null, message: 'RFB103 — Nobody is holding the Position this would go to', at: 1 };
-  const marked = renderStrip({ strip: stripAt({ stripId: 's1' }), fdr: FDR, held: ['APP'], refusal });
+  const marked = await renderStrip({ strip: stripAt({ stripId: 's1' }), fdr: FDR, held: ['APP'], refusal });
   assert.equal(marked.el.classList.contains('efsp-strip-refused'), true);
   assert.equal(marked.el.dataset.refusedReason, 'NO_RECEIVING_POSITION');
   assert.equal(marked.el.title, refusal.message);
 
-  const bystander = renderStrip({ strip: stripAt({ stripId: 's2' }), fdr: FDR, held: ['APP'], refusal });
+  const bystander = await renderStrip({ strip: stripAt({ stripId: 's2' }), fdr: FDR, held: ['APP'], refusal });
   assert.equal(bystander.el.classList.contains('efsp-strip-refused'), false);
 });
 
-test('a refusal that named no Strip marks NOTHING — not whatever is selected', () => {
+test('a refusal that named no Strip marks NOTHING — not whatever is selected', async () => {
   // The null-stripId case: a refused CreateStrip (there is no Strip yet), an
   // airspace op. getCurrentEfspRefusal's contract is explicit that this means
   // mark nothing, and marking the selection would be a false accusation.
   const refusal = { stripId: null, blockId: null, reason: 'VALIDATION_ERROR', detail: 'callsign already in use', value: null, message: 'callsign already in use', at: 1 };
-  const { el } = renderStrip({ strip: stripAt({ stripId: 's1' }), fdr: FDR, held: ['APP'], refusal });
+  const { el } = await renderStrip({ strip: stripAt({ stripId: 's1' }), fdr: FDR, held: ['APP'], refusal });
   assert.equal(el.classList.contains('efsp-strip-refused'), false);
 });
 
-test('a refused Block edit marks its cell and gives the typed text back', () => {
+test('a refused Block edit marks its cell and gives the typed text back', async () => {
   // F-207: the input closes on Enter, BEFORE the server replies, so the Block
   // reverts and the typed text exists nowhere on screen. "To correct a long
   // route, the controller retypes all of it from memory."
   const refusal = { stripId: 's1', blockId: '9', reason: 'VALIDATION_ERROR', detail: 'no such fix', value: 'LTAG DCT ELVAN DCT LTAF', message: 'VIPER1 RTE “LTAG DCT ELVAN DCT LTAF” — no such fix', at: 7 };
-  const { el } = renderStrip({ strip: stripAt({ stripId: 's1', ownerPositionId: 'OPS' }), fdr: FDR, held: ['OPS'], refusal });
+  const { el } = await renderStrip({ strip: stripAt({ stripId: 's1', ownerPositionId: 'OPS' }), fdr: FDR, held: ['OPS'], refusal });
 
   const reopened = descendants(el).find(c => (c.className || '').includes('efsp-block-input'));
   assert.ok(reopened, 'the editor was not re-opened, so the text is gone');
@@ -1970,22 +1972,22 @@ test('a refused Block edit marks its cell and gives the typed text back', () => 
   assert.equal(descendants(el).filter(c => (c.className || '').includes('efsp-block-input')).length, 1);
 });
 
-test('a refused confirmVacated marks the cell and seeds nothing', () => {
+test('a refused confirmVacated marks the cell and seeds nothing', async () => {
   // {blockId: '7', value: null} is a legitimate combination — which cell was
   // refused and whether there is text to put back are separate questions.
   const refusal = { stripId: 's1', blockId: '7', reason: 'STALE_REV', detail: null, value: null, message: 'VIPER1 — Somebody else changed this Strip', at: 3 };
-  const { el } = renderStrip({ strip: stripAt({ stripId: 's1', ownerPositionId: 'OPS' }), fdr: FDR, held: ['OPS'], refusal });
+  const { el } = await renderStrip({ strip: stripAt({ stripId: 's1', ownerPositionId: 'OPS' }), fdr: FDR, held: ['OPS'], refusal });
   const cell = blockCell(el, '7');
   assert.equal(cell.classList.contains('efsp-block-refused'), true);
   assert.equal(descendants(el).some(c => (c.className || '').includes('efsp-block-input')), false, 'nothing to put back, so nothing opened');
 });
 
-test('the refused text is seeded once, not on every rebuild', () => {
+test('the refused text is seeded once, not on every rebuild', async () => {
   // The banner stands for 30s and the Strip rebuilds repeatedly underneath it
   // — re-seeding would overwrite the correction being typed.
   const refusal = { stripId: 's1', blockId: '9', reason: 'VALIDATION_ERROR', detail: null, value: 'FIRST', message: 'x', at: 11 };
   const strip = stripAt({ stripId: 's1', ownerPositionId: 'OPS' });
-  const r = renderStrip({ strip, fdr: FDR, held: ['OPS'], refusal });
+  const r = await renderStrip({ strip, fdr: FDR, held: ['OPS'], refusal });
   const input = descendants(r.el).find(c => (c.className || '').includes('efsp-block-input'));
   input.value = 'CORRECTED';
   for (const fn of input._listeners.input || []) fn({});
@@ -1997,7 +1999,7 @@ test('the refused text is seeded once, not on every rebuild', () => {
 
 // ── F-302 / F-304: the coordination a controller cannot see ──────────────
 
-test("the sender's Strip says a coordination is pending, and then what became of it", () => {
+test("the sender's Strip says a coordination is pending, and then what became of it", async () => {
   // F-302. TOFI has had "TOFI ENTRY: PROPOSED" since WP4A; the five
   // primitives had nothing on either side. "A refusal nobody sees is rule 2
   // exactly. A pending handoff nobody sees is how one gets forgotten."
@@ -2009,20 +2011,20 @@ test("the sender's Strip says a coordination is pending, and then what became of
   // Layout C: a tab row — what and who on one line, the state under it.
   const stateOf = (el) => descendants(el).find(c => (c.className || '').includes('efsp-x-meta')).textContent;
 
-  const pending = renderStrip({ strip: sender('PROPOSED'), fdr: FDR, held: ['CTR'] });
+  const pending = await renderStrip({ strip: sender('PROPOSED'), fdr: FDR, held: ['CTR'] });
   assert.equal(badgeOf(pending.el).textContent, 'HAND OFF → APP');
   assert.equal(stateOf(pending.el), 'PROPOSED');
-  const accepted = renderStrip({ strip: sender('ACTIVE'), fdr: FDR, held: ['CTR'] });
+  const accepted = await renderStrip({ strip: sender('ACTIVE'), fdr: FDR, held: ['CTR'] });
   assert.equal(stateOf(accepted.el), 'ACTIVE');
   // The rejection is the case that breaks rule 2: the server refused on the
   // controller's behalf and the only sign was the Coordinate button coming back.
-  const rejected = renderStrip({ strip: sender('REJECTED'), fdr: FDR, held: ['CTR'] });
+  const rejected = await renderStrip({ strip: sender('REJECTED'), fdr: FDR, held: ['CTR'] });
   assert.equal(stateOf(rejected.el), 'REJECTED by APP');
   // className, not classList: the badge sets its classes as one string.
   assert.match(badgeOf(rejected.el).className, /efsp-coordination-state-rejected/);
 });
 
-test('an operational request is reported in its own words, not accept/reject', () => {
+test('an operational request is reported in its own words, not accept/reject', async () => {
   // The buttons say Approve/Unable (§4.6, coordination.js's acceptPhrase); a
   // chip saying REJECTED beside a button saying Unable would be two names for
   // one outcome.
@@ -2030,13 +2032,13 @@ test('an operational request is reported in its own words, not accept/reject', (
     ownerPositionId: 'CTR', role: 'ARRIVAL', state: 'INBOUND',
     coordination: { primitive: 'OPERATIONAL_REQUEST', state: 'REJECTED', peerFacilityId: 'INCIRLIK', peerPositionId: 'APP' },
   });
-  const { el } = renderStrip({ strip, fdr: FDR, held: ['CTR'] });
+  const { el } = await renderStrip({ strip, fdr: FDR, held: ['CTR'] });
   const badge = descendants(el).find(c => (c.className || '').includes('efsp-coordination-state-badge'));
   assert.equal(badge.textContent, 'OPERATIONAL REQUEST → APP');
   assert.equal(descendants(el).find(c => (c.className || '').includes('efsp-x-meta')).textContent, 'UNABLE by APP');
 });
 
-test("the proposer's note, and who proposed, reach the receiver", () => {
+test("the proposer's note, and who proposed, reach the receiver", async () => {
   // F-304: the note is sent, stored on the replica, and read by nothing —
   // bay-view.js had no reference to coordination.note anywhere except the two
   // popovers that WRITE one. On a degraded track the popover calls it
@@ -2046,7 +2048,7 @@ test("the proposer's note, and who proposed, reach the receiver", () => {
     role: 'ARRIVAL', state: 'INBOUND', ownerPositionId: 'APP', bayId: 'app-coordination',
     coordination: { primitive: 'HANDOFF', state: 'PROPOSED', mintedForCoordination: true, note, peerFacilityId: 'CENTER', peerPositionId: 'CTR' },
   });
-  const { el } = renderStrip({ strip: replica, fdr: FDR, held: ['APP'] });
+  const { el } = await renderStrip({ strip: replica, fdr: FDR, held: ['APP'] });
   const noteEl = descendants(el).find(c => (c.className || '').includes('efsp-coordination-note'));
   assert.ok(noteEl, 'the note is nowhere on the Strip it was written for');
   assert.match(noteEl.textContent, /CTR: “climbing FL200 on request, verbal done”/);
@@ -2057,13 +2059,13 @@ test("the proposer's note, and who proposed, reach the receiver", () => {
   assert.match(badge.title, /CTR proposed this/);
 });
 
-test("a TOFI note reaches the MRU controller, attributed", () => {
+test("a TOFI note reaches the MRU controller, attributed", async () => {
   const note = 'MOA 3 hot, block FL180-FL220';
   const mission = stripAt({
     role: 'MISSION', state: 'TASKED', ownerPositionId: 'TAC_C2', bayId: 'tac-c2-coordination',
     tofiCoordination: { direction: 'ENTRY', state: 'PROPOSED', note, peerFacilityId: 'CENTER', peerPositionId: 'CTR' },
   });
-  const { el } = renderStrip({ strip: mission, fdr: FDR, held: ['TAC_C2'] });
+  const { el } = await renderStrip({ strip: mission, fdr: FDR, held: ['TAC_C2'] });
   const noteEl = descendants(el).find(c => (c.className || '').includes('efsp-coordination-note'));
   assert.ok(noteEl, 'the TOFI note is rendered nowhere on the MRU side');
   assert.match(noteEl.textContent, /CTR: “MOA 3 hot, block FL180-FL220”/);
@@ -2071,7 +2073,7 @@ test("a TOFI note reaches the MRU controller, attributed", () => {
 
 // ── §9.2 rule 2: the void, said out loud ─────────────────────────────────
 
-test('a voided MARSA carries the alert as a sentence on every participant Strip', () => {
+test('a voided MARSA carries the alert as a sentence on every participant Strip', async () => {
   // docs/efsp-wp6-plan.md §13's acceptance line. Measured: after the interlock
   // fired on an INIT ALT edit, no message anywhere said a void had happened —
   // the explanation lived only in the badge's hover `title`, and the
@@ -2081,7 +2083,7 @@ test('a voided MARSA carries the alert as a sentence on every participant Strip'
     declaringCallsign: 'TEXACO1', rendezvousAt: null, endedAt: 5,
     voidedBy: 'CONTROLLER_ALTITUDE_CHANGE', voidedDetail: null,
   }];
-  const { el } = renderStrip({ strip: stripAt({ ownerPositionId: 'CTR' }), fdr: FDR, held: ['CTR'], marsa });
+  const { el } = await renderStrip({ strip: stripAt({ ownerPositionId: 'CTR' }), fdr: FDR, held: ['CTR'], marsa });
   assert.equal(el.classList.contains('efsp-strip-marsa-voided'), true);
   const why = descendants(el).find(c => (c.className || '').includes('efsp-marsa-void-reason'));
   assert.ok(why, 'the void is an ALERT, not a tooltip');
@@ -2090,9 +2092,9 @@ test('a voided MARSA carries the alert as a sentence on every participant Strip'
 
 // ── Arrivals on the Strip (docs/adr/0057) ────────────────────────────────
 
-test('a Strip that just arrived flashes on its first build only, and keeps its amber edge and "from" line', () => {
+test('a Strip that just arrived flashes on its first build only, and keeps its amber edge and "from" line', async () => {
   const strip = stripAt({ ownerPositionId: 'TWR', state: 'RUNWAY_QUEUE', bayId: 'twr-runway-queue', updatedBy: 'c-gnd' });
-  const r = renderStrip({ strip, fdr: FDR, held: ['TWR'] });
+  const r = await renderStrip({ strip, fdr: FDR, held: ['TWR'] });
   r.sandbox.noteEfspArrivals(new Map([['s1', { bayId: 'gnd-taxi-out', ownerPositionId: 'GND' }]]), [strip],
     { heldPositions: ['TWR'], myControllerIds: ['c-twr'], visibleBayId: 'twr-runway-queue', now: Date.now(), callsignOf: () => 'VIPER1' });
 
@@ -2112,9 +2114,9 @@ test('a Strip that just arrived flashes on its first build only, and keeps its a
   assert.equal(r.sandbox.efspArrivalFor('s1'), null);
 });
 
-test('an arrival is part of the render signature, so it appears (and clears) without the Strip\'s rev moving', () => {
+test('an arrival is part of the render signature, so it appears (and clears) without the Strip\'s rev moving', async () => {
   const strip = stripAt({ ownerPositionId: 'TWR', bayId: 'twr-runway-queue', updatedBy: 'c-gnd' });
-  const { sandbox, el } = renderStrip({ strip, fdr: FDR, held: ['TWR'] });
+  const { sandbox, el } = await renderStrip({ strip, fdr: FDR, held: ['TWR'] });
   assert.equal(sandbox._stripElNeedsRebuild(el, strip, null, null), false);
   sandbox.noteEfspArrivals(new Map([['s1', { bayId: 'gnd-taxi-out', ownerPositionId: 'GND' }]]), [strip],
     { heldPositions: ['TWR'], myControllerIds: [], visibleBayId: 'twr-runway-queue', now: Date.now() });
@@ -2133,32 +2135,32 @@ const inFields = (el, blockId) => {
   const grid = descendants(el).find(c => (c.className || '').split(/\s+/).includes('efsp-strip-fields'));
   return !!grid && descendants(grid).some(c => c.dataset && c.dataset.block === blockId);
 };
-function expandedWith(strip, fdr, held) {
-  const r = renderStrip({ strip, fdr, held });
+async function expandedWith(strip, fdr, held) {
+  const r = await renderStrip({ strip, fdr, held });
   r.sandbox.renderAllOpenEfspBays = () => {};
   click(descendants(r.el).find(c => (c.className || '').includes('efsp-expand-btn')));
   return { ...r, expandedEl: r.sandbox._buildStripEl(strip) };
 }
 
-test('an APP ARRIVAL with an exit fix shows the M11 group as fields; without MTR data, none of them — all six in ▼', () => {
+test('an APP ARRIVAL with an exit fix shows the M11 group as fields; without MTR data, none of them — all six in ▼', async () => {
   const strip = stripAt({ role: 'ARRIVAL', state: 'INBOUND', ownerPositionId: 'APP' });
-  const withMtr = renderStrip({ strip, fdr: mtrFdrWith({ exitFix: 'E' }), held: ['APP'] });
+  const withMtr = await renderStrip({ strip, fdr: mtrFdrWith({ exitFix: 'E' }), held: ['APP'] });
   for (const id of ['9G-MTR', '9H-EXIT', '9H-TIME', '9H-ALT']) assert.ok(inFields(withMtr.el, id), `${id} is not a field`);
   for (const id of ['9G-ENTRY', '9G-TIME']) assert.equal(inFields(withMtr.el, id), false, `${id}: entry is history on an arrival`);
 
-  const { el, expandedEl } = expandedWith(strip, mtrFdrWith({}), ['APP']);
+  const { el, expandedEl } = await expandedWith(strip, mtrFdrWith({}), ['APP']);
   for (const id of MTR_IDS) assert.equal(inFields(el, id), false, `${id} drawn on a flight with no MTR`);
   const rows = descendants(expandedEl).filter(c => c.dataset && c.dataset.expandedBlock).map(c => c.dataset.expandedBlock);
   for (const id of MTR_IDS) assert.ok(rows.includes(id), `${id} is not in the expanded view`);
 });
 
-test('with MTR data, the expanded view still shows exactly what the face does not, in Block Map order', () => {
+test('with MTR data, the expanded view still shows exactly what the face does not, in Block Map order', async () => {
   // Proves bay-view.js's _expandedBlockIdsFor got the FDR too: had only the
   // face learned about the MTR group, its Blocks would be on both.
   const fdr = mtrFdrWith({ designator: 'IR107' });
   for (const [role, positionId, state] of [['DEPARTURE', 'CTR', 'HANDED_OFF'], ['ARRIVAL', 'APP', 'INBOUND'], ['OVERFLIGHT', 'CTR', 'IN_SECTOR'], ['DEPARTURE', 'OPS', 'PROPOSED']]) {
     const strip = stripAt({ role, state, ownerPositionId: positionId });
-    const { expandedEl, sandbox } = expandedWith(strip, fdr, [positionId]);
+    const { expandedEl, sandbox } = await expandedWith(strip, fdr, [positionId]);
     const compact = Array.from(sandbox.compactBlocksFor(role, positionId, fdr));
     const expanded = descendants(expandedEl).filter(c => c.dataset && c.dataset.expandedBlock).map(c => c.dataset.expandedBlock);
     assert.ok(compact.includes('9G-MTR'), `${role} at ${positionId}: the MTR group is not on the face`);
@@ -2166,10 +2168,10 @@ test('with MTR data, the expanded view still shows exactly what the face does no
   }
 });
 
-test('the MTR times render as HHMM and edit through the ordinary click-to-edit cell', () => {
+test('the MTR times render as HHMM and edit through the ordinary click-to-edit cell', async () => {
   const strip = stripAt({ role: 'OVERFLIGHT', state: 'IN_SECTOR', ownerPositionId: 'CTR' });
   const fdr = mtrFdrWith({ designator: 'IR107', exitEstimateUtc: Date.UTC(2016, 5, 21, 14, 32) });
-  const { el, sent } = renderStrip({ strip, fdr, held: ['CTR'] });
+  const { el, sent } = await renderStrip({ strip, fdr, held: ['CTR'] });
   assert.equal(blockCell(el, '9H-TIME').textContent, '1432');
 
   click(blockCell(el, '9H-EXIT'));
@@ -2183,13 +2185,13 @@ test('the MTR times render as HHMM and edit through the ordinary click-to-edit c
   assert.equal(sent[0].op.value, 'E');
 });
 
-test('the lost-comms advisory is a grey note in ▼ only — no reason line, no indicator on the face', () => {
+test('the lost-comms advisory is a grey note in ▼ only — no reason line, no indicator on the face', async () => {
   const clearance = { altitude: { entries: [{ value: 'FL180', status: 'ACTIVE', at: 1, by: null }] }, heading: { entries: [] } };
   const strip = stripAt({ role: 'OVERFLIGHT', state: 'IN_SECTOR', ownerPositionId: 'CTR' });
   const cls = (c) => (c.className || '').split(/\s+/);
 
-  const quiet = renderStrip({ strip, fdr: mtrFdrWith({}, { clearance }), held: ['CTR'] }).el;
-  const withMtr = expandedWith(strip, mtrFdrWith({ exitFix: 'F', requestedAltitudeAfterExit: 'FL230' }, { clearance }), ['CTR']);
+  const quiet = (await renderStrip({ strip, fdr: mtrFdrWith({}, { clearance }), held: ['CTR'] })).el;
+  const withMtr = await expandedWith(strip, mtrFdrWith({ exitFix: 'F', requestedAltitudeAfterExit: 'FL230' }, { clearance }), ['CTR']);
   const count = (el, c) => descendants(el).filter(n => cls(n).includes(c)).length;
   assert.equal(count(withMtr.el, 'efsp-strip-reason'), count(quiet, 'efsp-strip-reason'), 'MTR data added a reason line to the face');
   assert.equal(count(withMtr.el, 'efsp-ind'), count(quiet, 'efsp-ind'), 'MTR data added an indicator');
@@ -2202,21 +2204,21 @@ test('the lost-comms advisory is a grey note in ▼ only — no reason line, no 
   assert.match(note.textContent, /not available in this system/);
   assert.doesNotMatch(note.textContent, /FL230/, 'the pilot\'s request is not the last clearance');
 
-  const none = expandedWith(strip, mtrFdrWith({}, { clearance }), ['CTR']).expandedEl;
+  const none = (await expandedWith(strip, mtrFdrWith({}, { clearance }), ['CTR'])).expandedEl;
   assert.equal(count(none, 'efsp-mtr-lostcomms'), 0, 'a flight with no MTR gets no advisory');
 });
 
-test('EXIT ALT\'s label carries the lost-comms rule as its hover title', () => {
+test('EXIT ALT\'s label carries the lost-comms rule as its hover title', async () => {
   const strip = stripAt({ role: 'OVERFLIGHT', state: 'IN_SECTOR', ownerPositionId: 'CTR' });
-  const { el } = renderStrip({ strip, fdr: mtrFdrWith({ designator: 'IR107' }), held: ['CTR'] });
+  const { el } = await renderStrip({ strip, fdr: mtrFdrWith({ designator: 'IR107' }), held: ['CTR'] });
   const chip = descendants(el).find(c => c.children && c.children.some(k => k.dataset && k.dataset.block === '9H-ALT'));
   const label = chip.children.find(k => (k.className || '').includes('efsp-block-label'));
   assert.match(label.title, /Lost comms \(§9\.4\)/);
 });
 
-test('an MTR write reaches the Strip through the FDR\'s rev — the group appears without the Strip\'s rev moving', () => {
+test('an MTR write reaches the Strip through the FDR\'s rev — the group appears without the Strip\'s rev moving', async () => {
   const strip = stripAt({ role: 'OVERFLIGHT', state: 'IN_SECTOR', ownerPositionId: 'CTR' });
-  const { sandbox, el } = renderStrip({ strip, fdr: FDR, held: ['CTR'] });
+  const { sandbox, el } = await renderStrip({ strip, fdr: FDR, held: ['CTR'] });
   assert.equal(sandbox._stripElNeedsRebuild(el, strip, null, null), false);
   sandbox.applyEfspDelta({ fdrs: { updated: [mtrFdrWith({ exitFix: 'E' }, { rev: 2 })] } });
   assert.equal(sandbox._stripElNeedsRebuild(el, strip, null, null), true);
@@ -2247,11 +2249,11 @@ function pickOrdnance(el, sent, value, where) {
   assert.deepEqual([sent[0].op.kind, sent[0].op.blockId, sent[0].op.value], ['SetBlock', '3G', value], where);
 }
 
-test('a CLEAN flight: ORDNANCE is on Tower\'s face, and in ▼ at APP, CTR and every tactical Position, which record HUNG from there', () => {
+test('a CLEAN flight: ORDNANCE is on Tower\'s face, and in ▼ at APP, CTR and every tactical Position, which record HUNG from there', async () => {
   for (const [role, positionId, state] of ORDNANCE_CASES) {
     const where = `${role} at ${positionId}`;
     const strip = stripAt({ role, state, ownerPositionId: positionId });
-    const r = renderStrip({ strip, fdr: FDR, held: [positionId] });
+    const r = await renderStrip({ strip, fdr: FDR, held: [positionId] });
     const onFace = blockCell(r.el, '3G');
     if (positionId === 'TWR') {
       assert.ok(onFace, `${where}: Tower keeps ORDNANCE on its face`);
@@ -2270,11 +2272,11 @@ test('a CLEAN flight: ORDNANCE is on Tower\'s face, and in ▼ at APP, CTR and e
   }
 });
 
-test('a set ORDNANCE is on the face at APP, CTR and every tactical Position, and can be cleared from there', () => {
+test('a set ORDNANCE is on the face at APP, CTR and every tactical Position, and can be cleared from there', async () => {
   const hung = { ...FDR, rev: 2, military: { ...FDR.military, ordnanceState: 'HUNG' } };
   for (const [role, positionId, state] of ORDNANCE_CASES) {
     const where = `${role} at ${positionId}`;
-    const { el, sent } = renderStrip({ strip: stripAt({ role, state, ownerPositionId: positionId }), fdr: hung, held: [positionId] });
+    const { el, sent } = await renderStrip({ strip: stripAt({ role, state, ownerPositionId: positionId }), fdr: hung, held: [positionId] });
     const cell = blockCell(el, '3G');
     assert.ok(cell, `${where}: a HUNG ORDNANCE is not on the face`);
     assert.equal(cell.textContent, 'HUNG', where);
@@ -2285,8 +2287,8 @@ test('a set ORDNANCE is on the face at APP, CTR and every tactical Position, and
 
 // ── §9.6 alert status (crc-sync's docs/adr/0070) ─────────────────────────
 
-test('alert status is a NONE/ALERT/SCRAMBLE picker on a TWR departure, and SCRAMBLE sends SetBlock 14E', () => {
-  const { el, sent } = renderStrip({ strip: stripAt({ ownerPositionId: 'TWR', state: 'RUNWAY_QUEUE' }), fdr: FDR, held: ['TWR'] });
+test('alert status is a NONE/ALERT/SCRAMBLE picker on a TWR departure, and SCRAMBLE sends SetBlock 14E', async () => {
+  const { el, sent } = await renderStrip({ strip: stripAt({ ownerPositionId: 'TWR', state: 'RUNWAY_QUEUE' }), fdr: FDR, held: ['TWR'] });
 
   const cell = blockCell(el, '14E');
   assert.ok(cell, 'Block 14E (alert status) is not rendered on a TWR departure');
@@ -2304,19 +2306,18 @@ test('alert status is a NONE/ALERT/SCRAMBLE picker on a TWR departure, and SCRAM
   assert.equal(sent[0].op.value, 'SCRAMBLE');
 });
 
-test('OPS, which orders the scramble, has the alert status on its grid (decisions.md H56)', () => {
-  const { el } = renderStrip({ strip: stripAt({ ownerPositionId: 'OPS', state: 'PROPOSED', bayId: 'ops-proposed' }), fdr: FDR, held: ['OPS'] });
+test('OPS, which orders the scramble, has the alert status on its grid (decisions.md H56)', async () => {
+  const { el } = await renderStrip({ strip: stripAt({ ownerPositionId: 'OPS', state: 'PROPOSED', bayId: 'ops-proposed' }), fdr: FDR, held: ['OPS'] });
   assert.ok(blockCell(el, '14E'), 'Block 14E is not on the OPS departure');
 });
 
-test('a scramble lights the Strip: a red SCRAMBLE chip in the alert slots and its reason line; a taxiing Strip gets the amber one', () => {
+test('a scramble lights the Strip: a red SCRAMBLE chip in the alert slots and its reason line; a taxiing Strip gets the amber one', async () => {
   // T10: the reachability harness does not see indicators, so the wave-2 hook
   // in strip-view.js is proved here with scramble.js loaded beside it.
   const scrambler = stripAt({ ownerPositionId: 'CD', state: 'CLEARED', bayId: 'cd-cleared', facilityId: 'INCIRLIK' });
   const taxiing = { ...stripAt({ ownerPositionId: 'GND', state: 'TAXI', bayId: 'gnd-taxi-out', facilityId: 'INCIRLIK' }), stripId: 's2', fdrId: 'f2', _callsign: 'HAWK31' };
   const fdr = { ...FDR, identity: { ...FDR.identity, callsign: 'VIPER11' }, military: { ...FDR.military, alertStatus: 'SCRAMBLE' } };
-  const r = renderStrip({ strip: scrambler, fdr, held: ['CD', 'GND'], otherStrips: [taxiing] });
-  vm.runInContext(fs.readFileSync(path.join(CLIENT, 'scramble.js'), 'utf8'), r.sandbox, { filename: 'scramble.js' });
+  const r = await renderStrip({ strip: scrambler, fdr, held: ['CD', 'GND'], otherStrips: [taxiing] });
 
   const el = r.sandbox._buildStripEl(scrambler);
   const chip = descendants(el).find(c => c.dataset && c.dataset.slot === 'scram');
@@ -2333,7 +2334,6 @@ test('a scramble lights the Strip: a red SCRAMBLE chip in the alert slots and it
 });
 
 test('the wave-2 indicator order puts the alert-slot chips first (docs/adr/0068–0070)', () => {
-  const { INDICATOR_ORDER } = require(path.join(CLIENT, 'strip-view.js'));
   assert.deepEqual(INDICATOR_ORDER.slice(0, 6), ['stca', 'conf', 'rwy', 'gear', 'ord', 'scram']);
 });
 
@@ -2348,7 +2348,7 @@ const PACKS = [{ name: 'PACK 1', route: 'LTAG DCT A' }, { name: 'PACK 2', route:
 
 test('9F is a select of the configured stereo routes, never free text', async () => {
   const strip = stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' });
-  const r = renderStrip({ strip, fdr: FDR, held: ['OPS'] });
+  const r = await renderStrip({ strip, fdr: FDR, held: ['OPS'] });
   await withStereoRoutes(r.sandbox, PACKS);
   const el = r.sandbox._buildStripEl(strip);
   const select = openEnum(el, '9F');
@@ -2369,7 +2369,7 @@ test('9F is a select of the configured stereo routes, never free text', async ()
 test('9F: "—" cancels the stereo by sending \'\', and a retired route stays shown and selected (T2, T3)', async () => {
   const strip = stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' });
   const fdr = { ...FDR, filed: { stereoRouteName: 'PACK 9', route: 'LTAG DCT OLD' } };
-  const r = renderStrip({ strip, fdr, held: ['OPS'] });
+  const r = await renderStrip({ strip, fdr, held: ['OPS'] });
   await withStereoRoutes(r.sandbox, PACKS);
   const el = r.sandbox._buildStripEl(strip);
   const select = openEnum(el, '9F');
@@ -2381,9 +2381,9 @@ test('9F: "—" cancels the stereo by sending \'\', and a retired route stays sh
   assert.deepEqual({ ...r.sent[0].op }, { kind: 'SetBlock', blockId: '9F', value: '' }, 'never a write to Block 9');
 });
 
-test('9F with no route table is a plain cell with a reason, not a control that cannot act (T1)', () => {
+test('9F with no route table is a plain cell with a reason, not a control that cannot act (T1)', async () => {
   const strip = stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' });
-  const { el } = renderStrip({ strip, fdr: FDR, held: ['OPS'] });
+  const { el } = await renderStrip({ strip, fdr: FDR, held: ['OPS'] });
   const cell = blockCell(el, '9F');
   assert.ok(cell, '9F is not on the OPS Strip');
   assert.equal(cell.classList.contains('efsp-block-editable'), false);
@@ -2396,7 +2396,7 @@ test('9F with no route table is a plain cell with a reason, not a control that c
 test('every writable DEPARTURE Block is reachable with a stereo table too — 9F included', async () => {
   for (const positionId of positionsFor('DEPARTURE')) {
     const strip = stripAt({ state: 'PROPOSED', ownerPositionId: positionId });
-    const r = renderStrip({ strip, fdr: FDR, held: [positionId] });
+    const r = await renderStrip({ strip, fdr: FDR, held: [positionId] });
     await withStereoRoutes(r.sandbox, PACKS);
     assert.ok(r.sandbox.enumSelectOptionsFor('9F', FDR), 'precondition: a table is cached');
     const compact = r.sandbox.compactBlocksFor('DEPARTURE', positionId);
@@ -2409,11 +2409,11 @@ test('every writable DEPARTURE Block is reachable with a stereo table too — 9F
   }
 });
 
-test('§10.5: departure, off-block and takeoff time each follow an explicit ordered fallback, and the chosen source is visible on hover', () => {
+test('§10.5: departure, off-block and takeoff time each follow an explicit ordered fallback, and the chosen source is visible on hover', async () => {
   const Z = (hh, mm) => Date.UTC(2016, 5, 21, hh, mm);
   const strip = stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' });
   const fdr = { ...FDR, filed: {}, assigned: {}, ato: { departure: { timeUtc: Z(13, 10) } } };
-  const r = renderStrip({ strip, fdr, held: ['OPS'] });
+  const r = await renderStrip({ strip, fdr, held: ['OPS'] });
 
   // P-time on the OPS face: the ATO's time, not italic, the source on the value.
   const p = blockCell(r.el, '6');
@@ -2450,16 +2450,16 @@ test('§10.5: departure, off-block and takeoff time each follow an explicit orde
   assert.equal(cleared.classList.contains('efsp-block-estimated'), true);
 });
 
-test('a refusal title on a time Block is not overwritten by its source', () => {
+test('a refusal title on a time Block is not overwritten by its source', async () => {
   const strip = stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' });
   const refusal = { stripId: 's1', blockId: '6', message: 'proposed departure time must be a UTC time as HHMM, e.g. 1432' };
-  const { el } = renderStrip({ strip, fdr: { ...FDR, ato: { departure: { timeUtc: 1 } } }, held: ['OPS'], refusal });
+  const { el } = await renderStrip({ strip, fdr: { ...FDR, ato: { departure: { timeUtc: 1 } } }, held: ['OPS'], refusal });
   assert.equal(blockCell(el, '6').title, refusal.message);
 });
 
 test('a Strip drawn before the stereo list landed is rebuilt once it does — the first render always beats the fetch', async () => {
   const strip = stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' });
-  const r = renderStrip({ strip, fdr: FDR, held: ['OPS'] });
+  const r = await renderStrip({ strip, fdr: FDR, held: ['OPS'] });
   let renders = 0;
   r.sandbox.renderAllOpenEfspBays = () => { renders += 1; };
   assert.equal(r.sandbox._stripElNeedsRebuild(r.el, strip, null, null), false, 'precondition');
@@ -2477,8 +2477,8 @@ const _serverPermission = require('../../crc-sync/src/efsp/permission.js');
 const _serverFacilityConfig = require('../../crc-sync/src/efsp/facility-config.js');
 
 /** Renders a Strip with the real TACTICAL Bays loaded, the way the panel has them after a snapshot. */
-function renderTactical(strip, held, fdr = FDR) {
-  const r = renderStrip({ strip, fdr, held });
+async function renderTactical(strip, held, fdr = FDR) {
+  const r = await renderStrip({ strip, fdr, held });
   const bays = _serverFacilityConfig.getAllBays('TACTICAL');
   r.sandbox.applyEfspSnapshot({ strips: [strip], fdrs: [fdr], positions: [], bays, airspaces: [], correlations: [], marsa: [] });
   return { ...r, el: r.sandbox._buildStripEl(strip) };
@@ -2488,77 +2488,77 @@ const missionLine = (ownerPositionId, overrides = {}) => stripAt({
 });
 
 test('the client HAND_BACK_TO mirror equals the capability table in permission.js', () => {
-  const client = JSON.parse(JSON.stringify(vm.runInContext('HAND_BACK_TO', clientSandbox())));
+  const client = JSON.parse(JSON.stringify(HAND_BACK_TO));
   const server = {};
   for (const [id, row] of Object.entries(_serverPermission.TACTICAL_CAPABILITIES)) if (row.handBackTo) server[id] = row.handBackTo;
   assert.deepEqual(client, server);
 });
 
 for (const owner of ['AIC', 'JTAC']) {
-  test(`an ${owner}-held line offers "Hand back to TAC_C2" in its menu and sends TransferStrip into TAC_C2's Bay for the state`, () => {
-    const r = renderTactical(missionLine(owner, { bayId: owner === 'AIC' ? 'aic-on-station' : 'jtac-mission' }), [owner]);
+  test(`an ${owner}-held line offers "Hand back to TAC_C2" in its menu and sends TransferStrip into TAC_C2's Bay for the state`, async () => {
+    const r = await renderTactical(missionLine(owner, { bayId: owner === 'AIC' ? 'aic-on-station' : 'jtac-mission' }), [owner]);
     click(menuItem(r.el, 'Hand back to TAC_C2'));
     assert.equal(r.sent.length, 1);
     assert.equal(r.sent[0].actingPositionId, owner);
     assert.deepEqual(JSON.parse(JSON.stringify(r.sent[0].op)), { kind: 'TransferStrip', toPositionId: 'TAC_C2', bayId: 'tac-c2-on-station', rackId: 'main' });
   });
 
-  test(`an ${owner}-held line offers no Coordinate and no TOFI item (D12)`, () => {
-    const r = renderTactical(missionLine(owner), [owner]);
+  test(`an ${owner}-held line offers no Coordinate and no TOFI item (D12)`, async () => {
+    const r = await renderTactical(missionLine(owner), [owner]);
     for (const label of ['Coordinate…', 'TOFI…', 'TOFI Exit…']) assert.equal(menuItem(r.el, label), undefined, label);
   });
 }
 
-test('a state with no implying TAC_C2 Bay hands back into its first Bay implying none', () => {
-  const r = renderTactical(missionLine('AIC', { state: 'OFF_STATION', bayId: 'aic-committed' }), ['AIC']);
+test('a state with no implying TAC_C2 Bay hands back into its first Bay implying none', async () => {
+  const r = await renderTactical(missionLine('AIC', { state: 'OFF_STATION', bayId: 'aic-committed' }), ['AIC']);
   click(menuItem(r.el, 'Hand back to TAC_C2'));
   assert.equal(r.sent[0].op.bayId, 'tac-c2-tanker');
 });
 
-test('a Position with no hand-back row (TAC_C2, GCI) is offered no hand-back item; a controller not holding the owner gets a disabled one', () => {
+test('a Position with no hand-back row (TAC_C2, GCI) is offered no hand-back item; a controller not holding the owner gets a disabled one', async () => {
   for (const owner of ['TAC_C2', 'GCI']) {
-    const r = renderTactical(missionLine(owner, { bayId: 'tac-c2-on-station' }), [owner]);
+    const r = await renderTactical(missionLine(owner, { bayId: 'tac-c2-on-station' }), [owner]);
     assert.equal(menuItem(r.el, 'Hand back to TAC_C2'), undefined, owner);
   }
-  const r = renderTactical(missionLine('AIC'), ['TAC_C2']);
+  const r = await renderTactical(missionLine('AIC'), ['TAC_C2']);
   const item = menuItem(r.el, 'Hand back to TAC_C2');
   assert.ok(!item || item.disabled, 'holding TAC_C2 does not act as AIC');
 });
 
-test('the proposer\'s Strip offers Cancel proposal while open and End coordination once accepted; the receiver\'s replica offers neither', () => {
+test('the proposer\'s Strip offers Cancel proposal while open and End coordination once accepted; the receiver\'s replica offers neither', async () => {
   const co = (state, extra = {}) => ({ primitive: 'POINT_OUT', state, peerFacilityId: 'CENTER', peerStripId: 'p1', peerPositionId: 'CTR', ...extra });
-  const open = renderStrip({ strip: stripAt({ coordination: co('PROPOSED') }), fdr: FDR, held: ['APP'] });
+  const open = await renderStrip({ strip: stripAt({ coordination: co('PROPOSED') }), fdr: FDR, held: ['APP'] });
   click(menuItem(open.el, 'Cancel proposal'));
   assert.deepEqual(JSON.parse(JSON.stringify(open.sent.map(s => s.op))), [{ kind: 'POINT_OUT', action: 'CANCEL' }]);
 
-  const active = renderStrip({ strip: stripAt({ coordination: co('ACTIVE') }), fdr: FDR, held: ['APP'] });
+  const active = await renderStrip({ strip: stripAt({ coordination: co('ACTIVE') }), fdr: FDR, held: ['APP'] });
   click(menuItem(active.el, 'End coordination'));
   assert.deepEqual(JSON.parse(JSON.stringify(active.sent.map(s => s.op))), [{ kind: 'POINT_OUT', action: 'CANCEL' }]);
 
-  const replica = renderStrip({ strip: stripAt({ ownerPositionId: 'CTR', coordination: co('ACTIVE', { mintedForCoordination: true }) }), fdr: FDR, held: ['CTR'] });
+  const replica = await renderStrip({ strip: stripAt({ ownerPositionId: 'CTR', coordination: co('ACTIVE', { mintedForCoordination: true }) }), fdr: FDR, held: ['CTR'] });
   assert.equal(menuItem(replica.el, 'End coordination'), undefined);
   assert.equal(menuItem(replica.el, 'Cancel proposal'), undefined);
-  const none = renderStrip({ strip: stripAt(), fdr: FDR, held: ['APP'] });
+  const none = await renderStrip({ strip: stripAt(), fdr: FDR, held: ['APP'] });
   assert.equal(menuItem(none.el, 'End coordination'), undefined);
 });
 
 test('the client TOFI_ANSWERED_BY mirror equals the capability table in permission.js', () => {
-  const client = JSON.parse(JSON.stringify(vm.runInContext('TOFI_ANSWERED_BY', clientSandbox())));
+  const client = JSON.parse(JSON.stringify(TOFI_ANSWERED_BY));
   const server = {};
   for (const [id, row] of Object.entries(_serverPermission.TACTICAL_CAPABILITIES)) if (row.tofiAnsweredBy) server[id] = row.tofiAnsweredBy;
   assert.deepEqual(client, server);
 });
 
-test('a controller holding TAC_C2 and AIC answers a TOFI exit on an AIC-held line as TAC_C2 (B2); holding only AIC it answers as AIC', () => {
+test('a controller holding TAC_C2 and AIC answers a TOFI exit on an AIC-held line as TAC_C2 (B2); holding only AIC it answers as AIC', async () => {
   const tofi = { direction: 'EXIT', state: 'PROPOSED', peerFacilityId: 'CENTER', peerStripId: 'c1', peerPositionId: 'CTR', initiatedAt: 1 };
   const line = missionLine('AIC', { tofiCoordination: tofi });
   const atc = { ...FDR, tofi: { ifrActive: true, separationRegime: 'ATC' } }; // CTR has set SEP REG back to ATC
-  const both = renderTactical(line, ['AIC', 'TAC_C2'], atc);
+  const both = await renderTactical(line, ['AIC', 'TAC_C2'], atc);
   click(findByText(both.el, 'Accept TOFI Exit'));
   assert.equal(both.sent.length, 1);
   assert.equal(both.sent[0].actingPositionId, 'TAC_C2');
   assert.deepEqual(JSON.parse(JSON.stringify(both.sent[0].op)), { kind: 'TOFI', action: 'ACCEPT' });
-  const only = renderTactical(line, ['AIC'], atc);
+  const only = await renderTactical(line, ['AIC'], atc);
   click(findByText(only.el, 'Accept TOFI Exit'));
   assert.equal(only.sent[0].actingPositionId, 'AIC', 'the server refuses it, with a reason (AIC has no TOFI grant)');
 });
@@ -2568,11 +2568,8 @@ test('a controller holding TAC_C2 and AIC answers a TOFI exit on an AIC-held lin
 // derived is editable. The harness above loads no carrier scripts, so this test loads them into
 // the sandbox it built.
 
-function carrierRender(strip, { held, caseValue = 'II' }) {
-  const r = renderStrip({ strip, fdr: { ...FDR, military: { ...FDR.military, carrier: { eeatUtc: null, approachType: null, approachButton: null } } }, held });
-  for (const file of ['carrier-state.js', 'carrier-panel.js']) {
-    vm.runInContext(fs.readFileSync(path.join(CLIENT, file), 'utf8'), r.sandbox, { filename: file });
-  }
+async function carrierRender(strip, { held, caseValue = 'II' }) {
+  const r = await renderStrip({ strip, fdr: { ...FDR, military: { ...FDR.military, carrier: { eeatUtc: null, approachType: null, approachButton: null } } }, held });
   const { CarrierStore } = require('../../crc-sync/src/efsp/carrier-store.js');
   const hullConfig = require('../../crc-sync/src/efsp/carrier/hull-config.js');
   const store = new CarrierStore({ hulls: hullConfig.getHulls(), clock: { now: () => Date.UTC(2026, 5, 1, 9, 0), source: 'T' } });
@@ -2587,8 +2584,8 @@ const marshalStrip = (extra = {}) => stripAt({
   nla: { toState: 'COMMENCED', transferTo: 'CV_APP1', carrierTransfer: 'MARSHAL_TO_APPROACH' }, ...extra,
 });
 
-test('a MARSHAL Strip in Case II: Commence is the NLA, See you is its own button, each carrying its own trigger type', () => {
-  const r = carrierRender(marshalStrip(), { held: ['CV_MARSHAL'] });
+test('a MARSHAL Strip in Case II: Commence is the NLA, See you is its own button, each carrying its own trigger type', async () => {
+  const r = await carrierRender(marshalStrip(), { held: ['CV_MARSHAL'] });
   const buttons = descendants(r.el).filter(c => c.dataset && c.dataset.carrierTransfer);
   assert.deepEqual(buttons.map(b => [b.textContent, b.dataset.carrierTransfer, b.dataset.carrierTrigger]), [
     ['Commence', 'MARSHAL_TO_APPROACH', 'CONTROLLER_INITIATED'],
@@ -2601,15 +2598,15 @@ test('a MARSHAL Strip in Case II: Commence is the NLA, See you is its own button
   assert.deepEqual(JSON.parse(JSON.stringify(r.sent[1].op)), { kind: 'CarrierTransfer', transfer: 'MARSHAL_TO_PRIFLY' });
 });
 
-test('"See you" is Case II only, and only for the Marshal who owns the Strip', () => {
-  const caseIII = carrierRender(marshalStrip(), { held: ['CV_MARSHAL'], caseValue: 'III' });
+test('"See you" is Case II only, and only for the Marshal who owns the Strip', async () => {
+  const caseIII = await carrierRender(marshalStrip(), { held: ['CV_MARSHAL'], caseValue: 'III' });
   assert.equal(descendants(caseIII.el).filter(c => c.dataset && c.dataset.carrierTransfer === 'MARSHAL_TO_PRIFLY').length, 0);
-  const notMine = carrierRender(marshalStrip(), { held: ['CV_PRIFLY'] });
+  const notMine = await carrierRender(marshalStrip(), { held: ['CV_PRIFLY'] });
   assert.equal(descendants(notMine.el).filter(c => c.dataset && c.dataset.carrierTransfer === 'MARSHAL_TO_PRIFLY').length, 0);
 });
 
-test('the derived carrier Blocks are read-only cells showing the server\'s values; the flight\'s own Blocks are editable', () => {
-  const r = carrierRender(marshalStrip(), { held: ['CV_MARSHAL'] });
+test('the derived carrier Blocks are read-only cells showing the server\'s values; the flight\'s own Blocks are editable', async () => {
+  const r = await carrierRender(marshalStrip(), { held: ['CV_MARSHAL'] });
   for (const id of ['C3', 'C5', 'C6', 'C7', 'C8', 'C9']) {
     const cell = blockCell(r.el, id);
     if (!cell) continue; // C5/C8/C9 may be blank and still drawn; a cell that exists must not be editable
@@ -2622,9 +2619,9 @@ test('the derived carrier Blocks are read-only cells showing the server\'s value
   assert.ok(blockCell(r.el, 'C4'), 'the approach type picker is on the Strip');
 });
 
-test('a FINAL Strip has no editable cell and no input at all', () => {
+test('a FINAL Strip has no editable cell and no input at all', async () => {
   const strip = stripAt({ role: 'FINAL', state: 'ON_FINAL', ownerPositionId: 'CV_APP1', bayId: 'cv-app1-final', nla: { toState: 'BALL', carrierTransfer: 'FINAL_TO_LSO' } });
-  const r = carrierRender(strip, { held: ['CV_APP1'] });
+  const r = await carrierRender(strip, { held: ['CV_APP1'] });
   assert.equal(descendants(r.el).filter(c => c.classList && c.classList.contains('efsp-block-editable')).length, 0);
   assert.equal(descendants(r.el).filter(c => c.tagName === 'INPUT' || c.tagName === 'SELECT').length, 0);
   const ball = descendants(r.el).find(c => c.dataset && c.dataset.carrierTransfer === 'FINAL_TO_LSO');
@@ -2639,9 +2636,9 @@ const SURV_HINT = { stripId: 's1', fdrId: 'f1', facilityId: 'INCIRLIK', stripSta
 function chipOf(el) { return descendants(el).find(c => c.dataset && c.dataset.slot === 'hint'); }
 function staleOf(el) { return descendants(el).find(c => c.dataset && c.dataset.slot === 'stale'); }
 
-test('the suggestion chip: one click sends the controller\'s own SetState to Airborne, and nothing moves by itself', () => {
+test('the suggestion chip: one click sends the controller\'s own SetState to Airborne, and nothing moves by itself', async () => {
   const strip = stripAt({ state: 'LUAW', ownerPositionId: 'TWR', bayId: 'twr-runway-queue' });
-  const { sandbox, sent } = renderStrip({ strip, fdr: FDR, held: ['TWR'] });
+  const { sandbox, sent } = await renderStrip({ strip, fdr: FDR, held: ['TWR'] });
   const before = JSON.parse(JSON.stringify(strip));
   sandbox.applyEfspAlerts({ conformance: [], stca: [], obligations: [], surveillance: [{ ...SURV_HINT, kind: 'AIRBORNE_ADVANCE', toState: 'DEPARTED' }] });
   const el = sandbox._buildStripEl(strip);
@@ -2656,9 +2653,9 @@ test('the suggestion chip: one click sends the controller\'s own SetState to Air
   assert.deepEqual(strip, before, 'the Strip record itself is untouched');
 });
 
-test('the chip is information, not a control, for a Position that does not hold the Strip', () => {
+test('the chip is information, not a control, for a Position that does not hold the Strip', async () => {
   const strip = stripAt({ state: 'LUAW', ownerPositionId: 'TWR', bayId: 'twr-runway-queue' });
-  const { sandbox, sent } = renderStrip({ strip, fdr: FDR, held: ['OPS'] });
+  const { sandbox, sent } = await renderStrip({ strip, fdr: FDR, held: ['OPS'] });
   sandbox.applyEfspAlerts({ surveillance: [{ ...SURV_HINT, kind: 'AIRBORNE_ADVANCE', toState: 'DEPARTED' }] });
   const chip = chipOf(sandbox._buildStripEl(strip));
   assert.ok(chip);
@@ -2666,16 +2663,16 @@ test('the chip is information, not a control, for a Position that does not hold 
   assert.deepEqual(sent, []);
 });
 
-test('a hint written against a state the Strip has since left is not drawn', () => {
+test('a hint written against a state the Strip has since left is not drawn', async () => {
   const strip = stripAt({ state: 'DEPARTED', ownerPositionId: 'TWR', bayId: 'twr-airborne' });
-  const { sandbox } = renderStrip({ strip, fdr: FDR, held: ['TWR'] });
+  const { sandbox } = await renderStrip({ strip, fdr: FDR, held: ['TWR'] });
   sandbox.applyEfspAlerts({ surveillance: [{ ...SURV_HINT, kind: 'AIRBORNE_ADVANCE', toState: 'DEPARTED' }] });
   assert.equal(chipOf(sandbox._buildStripEl(strip)), undefined);
 });
 
-test('staleness is a quiet, low-severity badge that explains itself and does not mark the Strip as an alert', () => {
+test('staleness is a quiet, low-severity badge that explains itself and does not mark the Strip as an alert', async () => {
   const strip = stripAt({ state: 'DEPARTED', ownerPositionId: 'APP' });
-  const { sandbox } = renderStrip({ strip, fdr: FDR, held: ['APP'] });
+  const { sandbox } = await renderStrip({ strip, fdr: FDR, held: ['APP'] });
   sandbox.applyEfspAlerts({ surveillance: [{ ...SURV_HINT, stripState: 'DEPARTED', contactPhase: 'ON_GROUND', kind: 'STALE', afterSec: 120 }] });
   const el = sandbox._buildStripEl(strip);
   const badge = staleOf(el);
@@ -2685,9 +2682,9 @@ test('staleness is a quiet, low-severity badge that explains itself and does not
   assert.doesNotMatch(el.className, /efsp-strip-alert/);
 });
 
-test('the render signature changes when a hint appears, so the Strip is rebuilt for it (S-L14)', () => {
+test('the render signature changes when a hint appears, so the Strip is rebuilt for it (S-L14)', async () => {
   const strip = stripAt({ state: 'LUAW', ownerPositionId: 'TWR', bayId: 'twr-runway-queue' });
-  const { sandbox } = renderStrip({ strip, fdr: FDR, held: ['TWR'] });
+  const { sandbox } = await renderStrip({ strip, fdr: FDR, held: ['TWR'] });
   const sig = () => sandbox._stripRenderSignature(strip);
   const none = sig();
   sandbox.applyEfspAlerts({ surveillance: [{ ...SURV_HINT, kind: 'AIRBORNE_ADVANCE', toState: 'DEPARTED' }] });
