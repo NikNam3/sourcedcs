@@ -178,6 +178,7 @@ class BoardStore {
     // change drains this, so every touched Strip rides in that broadcast.
     this._touchedSinceDrain = new Set();
     this._mutationLog = null; // optional collaborator, see setMutationLog()
+    this._activeCmid = null;  // the clientMutationId being applied, while applyMutation runs
     // stripId -> { invokedAt, prevState, expiresAt } — the 400ms double-tap
     // guard and the 30s Undo window for the last NLA transition (§3.5
     // rules 3 and 5). Deliberately NOT part of the Strip's public shape
@@ -323,6 +324,25 @@ class BoardStore {
   // ── Mutation application ─────────────────────────────────────────────────
 
   /**
+   * The entry a PEER write leaves on THIS Board (docs/adr/0083): coordination and
+   * TOFI change the receiving Facility's Board from inside the sender's Mutation.
+   * `clientMutationId` stays null so no reader takes it for a second application
+   * of the sender's Mutation; `causedBy` names that Mutation. `after` of a peer
+   * entry is never a drop the traffic count would count (traffic-count.js).
+   */
+  _recordPeer(op, strip, before, { causedBy, fromFacilityId, by, action }) {
+    if (!this._mutationLog) return;
+    this._mutationLog.record({
+      clientMutationId: null, causedBy: causedBy || null, op,
+      ...(action ? { action } : {}),
+      stripId: strip.stripId, fdrId: strip.fdrId || null,
+      facilityId: this._rules.facilityId || null, fromFacilityId: fromFacilityId || null,
+      actingPositionId: null, actorId: by || null, at: this._clock.now(),
+      before, after: deepClone(strip), source: 'peer',
+    });
+  }
+
+  /**
    * Applies a client Mutation (guide §5.2). Returns
    *   { ok:true, strip, fdr?, warning?, routedTo? }
    * or
@@ -348,11 +368,14 @@ class BoardStore {
     // backstop for whatever the NEXT one turns out to be. Still logged
     // loudly, since reaching here at all means a real bug exists somewhere.
     let result;
+    this._activeCmid = keyed ? cmid : null; // what a peer Board's entry names as its cause (docs/adr/0083)
     try {
       result = this._dispatch(mutation, actingPositionId, by);
     } catch (err) {
       console.error('[board-store] unexpected error applying Mutation — rejecting it instead of crashing:', err);
       result = { ok: false, reason: 'VALIDATION_ERROR', detail: 'internal error processing mutation' };
+    } finally {
+      this._activeCmid = null;
     }
 
     if (keyed) this._rememberApplied(cmid, _replayRecord(result, Date.now()));
@@ -1675,7 +1698,7 @@ class BoardStore {
     const link = strip.coordination;
     if (link && link.mintedForCoordination && this._rules.peerBoard) {
       const peer = this._rules.peerBoard(link.peerFacilityId);
-      const ended = peer ? peer.receiveCoordinationPeerGone({ stripId: link.peerStripId, goneStripId: strip.stripId }) : null;
+      const ended = peer ? peer.receiveCoordinationPeerGone({ causedBy: this._activeCmid, stripId: link.peerStripId, goneStripId: strip.stripId }) : null;
       if (ended && ended.ok) { peerFacilityId = link.peerFacilityId; peerStrip = ended.strip; }
     }
     return {
@@ -1819,7 +1842,7 @@ class BoardStore {
 
     const now = this._clock.now();
     const proposal = peer.receiveCoordinationProposal({
-      primitive, fromFacilityId: this._rules.facilityId, fromPositionId: actingPositionId,
+      causedBy: this._activeCmid, primitive, fromFacilityId: this._rules.facilityId, fromPositionId: actingPositionId,
       fromStripId: strip.stripId, toPositionId: op.toPositionId, fdrId: strip.fdrId,
       fromRole: strip.role, fromState: strip.state,
       note: op.note || null, by,
@@ -1905,7 +1928,7 @@ class BoardStore {
     if (this._rules.peerBoard) {
       const peer = this._rules.peerBoard(peerFacilityId);
       if (peer) {
-        const peerResult = peer.receiveCoordinationResponse({ stripId: strip.coordination.peerStripId, response: 'ACCEPT', by });
+        const peerResult = peer.receiveCoordinationResponse({ causedBy: this._activeCmid, stripId: strip.coordination.peerStripId, response: 'ACCEPT', by });
         if (peerResult.ok) peerStrip = peerResult.strip;
       }
     }
@@ -1927,7 +1950,7 @@ class BoardStore {
     if (this._rules.peerBoard) {
       const peer = this._rules.peerBoard(peerFacilityId);
       if (peer) {
-        const peerResult = peer.receiveCoordinationResponse({ stripId: strip.coordination.peerStripId, response: 'REJECT', by });
+        const peerResult = peer.receiveCoordinationResponse({ causedBy: this._activeCmid, stripId: strip.coordination.peerStripId, response: 'REJECT', by });
         if (peerResult.ok) peerStrip = peerResult.strip;
       }
     }
@@ -1958,7 +1981,7 @@ class BoardStore {
     if (this._rules.peerBoard) {
       const peer = this._rules.peerBoard(link.peerFacilityId);
       if (peer) {
-        const r = peer.receiveCoordinationCancel({ stripId: link.peerStripId, by });
+        const r = peer.receiveCoordinationCancel({ causedBy: this._activeCmid, stripId: link.peerStripId, by });
         if (r.ok && r.strip) peerStrip = r.strip;
       }
     }
@@ -1977,9 +2000,11 @@ class BoardStore {
    * Strip for the flight, so only its link goes.
    * @returns {{ok:true, strip:object|null}} strip null when there was nothing left to change
    */
-  receiveCoordinationCancel({ stripId, by }) {
+  receiveCoordinationCancel({ stripId, by, causedBy }) {
     const strip = this._strips.get(stripId);
     if (!strip || strip.state === 'DROPPED' || !strip.coordination) return { ok: true, strip: null };
+    const before = deepClone(strip);
+    const fromFacilityId = strip.coordination.peerFacilityId;
     if (strip.coordination.state === 'ACTIVE') {
       strip.coordination = null;
       strip.rev += 1;
@@ -1990,6 +2015,7 @@ class BoardStore {
       strip.coordination = null; // so the retire below does not try to tell the proposer back
       this._retireStrip(strip, by);
     }
+    this._recordPeer('PeerCoordinationCancel', strip, before, { causedBy, fromFacilityId, by });
     return { ok: true, strip };
   }
 
@@ -2000,7 +2026,7 @@ class BoardStore {
    * system change, like a covering reassignment.
    * @returns {{ok:boolean, strip?:object}}
    */
-  receiveCoordinationPeerGone({ stripId, goneStripId }) {
+  receiveCoordinationPeerGone({ stripId, goneStripId, causedBy }) {
     const strip = this._strips.get(stripId);
     const link = strip && strip.coordination;
     if (!link || link.peerStripId !== goneStripId || (link.state !== 'PROPOSED' && link.state !== 'ACTIVE')) return { ok: false };
@@ -2015,7 +2041,7 @@ class BoardStore {
         clientMutationId: null, op: 'SystemCoordinationEnd', stripId: strip.stripId,
         facilityId: this._rules.facilityId || null, fdrId: strip.fdrId || null,
         actingPositionId: null, actorId: 'system', at: this._clock.now(),
-        before, after: deepClone(strip), reason: 'peer-dropped',
+        before, after: deepClone(strip), reason: 'peer-dropped', causedBy: causedBy || null,
       });
     }
     return { ok: true, strip };
@@ -2046,7 +2072,7 @@ class BoardStore {
     if (this._rules.peerBoard) {
       const peer = this._rules.peerBoard(peerFacilityId);
       if (peer) {
-        const peerResult = peer.receiveCoordinationResponse({ stripId: strip.coordination.peerStripId, response: 'STAND_BY', by });
+        const peerResult = peer.receiveCoordinationResponse({ causedBy: this._activeCmid, stripId: strip.coordination.peerStripId, response: 'STAND_BY', by });
         if (peerResult.ok) peerStrip = peerResult.strip;
       }
     }
@@ -2073,7 +2099,7 @@ class BoardStore {
    * combos, so nothing further to check here.
    * @returns {{ok:true, strip}|{ok:false, reason, detail}}
    */
-  receiveCoordinationProposal({ primitive, fromFacilityId, fromPositionId, fromStripId, toPositionId, fdrId, fromRole, fromState, note, by }) {
+  receiveCoordinationProposal({ primitive, fromFacilityId, fromPositionId, fromStripId, toPositionId, fdrId, fromRole, fromState, note, by, causedBy }) {
     const fdr = this._fdrStore.getFdr(fdrId);
     if (!fdr) return { ok: false, reason: 'NOT_FOUND', detail: 'referenced FDR not found' };
 
@@ -2138,6 +2164,7 @@ class BoardStore {
     };
     this._strips.set(stripId, strip);
     this._touch(stripId);
+    this._recordPeer('PeerCoordinationProposal', strip, null, { causedBy, fromFacilityId, by });
     return { ok: true, strip };
   }
 
@@ -2148,9 +2175,10 @@ class BoardStore {
    * replicas agree on the outcome. Bypasses the ordinary Mutation gates
    * for the same reason receiveCoordinationProposal does.
    */
-  receiveCoordinationResponse({ stripId, response, by }) {
+  receiveCoordinationResponse({ stripId, response, by, causedBy }) {
     const strip = this._strips.get(stripId);
     if (!strip || !strip.coordination) return { ok: false, reason: 'NOT_FOUND' };
+    const before = deepClone(strip);
 
     const now = this._clock.now();
     if (response === 'ACCEPT') {
@@ -2180,6 +2208,7 @@ class BoardStore {
     strip.updatedAt = now;
     strip.updatedBy = by || null;
     this._touch(strip.stripId);
+    this._recordPeer('PeerCoordinationResponse', strip, before, { causedBy, fromFacilityId: strip.coordination.peerFacilityId, by, action: response });
     return { ok: true, strip };
   }
 
@@ -2290,7 +2319,7 @@ class BoardStore {
       }
 
       const proposal = peer.receiveTofiProposal({
-        fromFacilityId: this._rules.facilityId, fromPositionId: actingPositionId,
+        causedBy: this._activeCmid, fromFacilityId: this._rules.facilityId, fromPositionId: actingPositionId,
         fromStripId: strip.stripId, toPositionId: op.toPositionId, fdrId: strip.fdrId, note: op.note || null, by,
       });
       if (!proposal.ok) return { ok: false, reason: proposal.reason || 'VALIDATION_ERROR', detail: proposal.detail, strip };
@@ -2325,7 +2354,7 @@ class BoardStore {
       };
     }
 
-    const exitResult = peer.receiveTofiExitProposal({ stripId: prior.peerStripId, note: op.note || null, by });
+    const exitResult = peer.receiveTofiExitProposal({ causedBy: this._activeCmid, stripId: prior.peerStripId, note: op.note || null, by });
     if (!exitResult.ok) return { ok: false, reason: exitResult.reason || 'VALIDATION_ERROR', detail: exitResult.detail, strip };
 
     strip.tofiCoordination = {
@@ -2460,7 +2489,7 @@ class BoardStore {
     if (this._rules.peerBoard) {
       const peer = this._rules.peerBoard(tofi.peerFacilityId);
       if (peer) {
-        const peerResult = peer.receiveTofiResponse({ stripId: tofi.peerStripId, response: 'ACCEPT', by });
+        const peerResult = peer.receiveTofiResponse({ causedBy: this._activeCmid, stripId: tofi.peerStripId, response: 'ACCEPT', by });
         if (peerResult.ok) peerStrip = peerResult.strip;
       }
     }
@@ -2505,7 +2534,7 @@ class BoardStore {
     if (this._rules.peerBoard) {
       const peer = this._rules.peerBoard(tofi.peerFacilityId);
       if (peer) {
-        const peerResult = peer.receiveTofiResponse({ stripId: tofi.peerStripId, response: 'REJECT', by });
+        const peerResult = peer.receiveTofiResponse({ causedBy: this._activeCmid, stripId: tofi.peerStripId, response: 'REJECT', by });
         if (peerResult.ok) peerStrip = peerResult.strip;
       }
     }
@@ -2546,7 +2575,7 @@ class BoardStore {
     if (this._rules.peerBoard) {
       const peer = this._rules.peerBoard(tofi.peerFacilityId);
       if (peer) {
-        const peerResult = peer.receiveTofiResponse({ stripId: tofi.peerStripId, response: 'TRANSFER_COMMS', by });
+        const peerResult = peer.receiveTofiResponse({ causedBy: this._activeCmid, stripId: tofi.peerStripId, response: 'TRANSFER_COMMS', by });
         if (peerResult.ok) peerStrip = peerResult.strip;
       }
     }
@@ -2566,7 +2595,7 @@ class BoardStore {
    * (the ATC-side role, and MISSION) to one shared FDR.
    * @returns {{ok:true, strip}|{ok:false, reason, detail}}
    */
-  receiveTofiProposal({ fromFacilityId, fromPositionId, fromStripId, toPositionId, fdrId, note, by }) {
+  receiveTofiProposal({ fromFacilityId, fromPositionId, fromStripId, toPositionId, fdrId, note, by, causedBy }) {
     const fdr = this._fdrStore.getFdr(fdrId);
     if (!fdr) return { ok: false, reason: 'NOT_FOUND', detail: 'referenced FDR not found' };
 
@@ -2598,6 +2627,7 @@ class BoardStore {
       // the MRU controller, not to this exchange. `mintedForTofi` is absent,
       // which is what stops _applyTofiAccept relocating it (see there).
       const reusedAt = this._clock.now();
+      const existingBefore = deepClone(existing);
       existing.tofiCoordination = {
         direction: 'ENTRY', state: 'PROPOSED',
         peerFacilityId: fromFacilityId, peerStripId: fromStripId, peerPositionId: fromPositionId,
@@ -2609,6 +2639,7 @@ class BoardStore {
       existing.updatedAt = reusedAt;
       existing.updatedBy = by || null;
       this._touch(existing.stripId);
+      this._recordPeer('PeerTofiProposal', existing, existingBefore, { causedBy, fromFacilityId, by });
       return { ok: true, strip: existing };
     }
 
@@ -2656,6 +2687,7 @@ class BoardStore {
     };
     this._strips.set(stripId, strip);
     this._touch(stripId);
+    this._recordPeer('PeerTofiProposal', strip, null, { causedBy, fromFacilityId, by });
     return { ok: true, strip };
   }
 
@@ -2665,9 +2697,10 @@ class BoardStore {
    * rather than minting a new one (the mission has been live in TACTICAL's
    * own Board throughout ENTRY's ACTIVE window).
    */
-  receiveTofiExitProposal({ stripId, note, by }) {
+  receiveTofiExitProposal({ stripId, note, by, causedBy }) {
     const strip = this._strips.get(stripId);
     if (!strip || !strip.tofiCoordination) return { ok: false, reason: 'NOT_FOUND' };
+    const before = deepClone(strip);
 
     const now = this._clock.now();
     strip.tofiCoordination.direction = 'EXIT';
@@ -2682,6 +2715,7 @@ class BoardStore {
     strip.tofiCoordination.acceptedBy = null;
     strip.rev += 1; strip.updatedAt = now; strip.updatedBy = by || null;
     this._touch(strip.stripId);
+    this._recordPeer('PeerTofiExitProposal', strip, before, { causedBy, fromFacilityId: strip.tofiCoordination.peerFacilityId, by });
     return { ok: true, strip };
   }
 
@@ -2691,9 +2725,10 @@ class BoardStore {
    * the ATC-side Strip's own tofiCoordination record to match, so both
    * sides agree on the outcome. Mirrors receiveCoordinationResponse exactly.
    */
-  receiveTofiResponse({ stripId, response, by }) {
+  receiveTofiResponse({ stripId, response, by, causedBy }) {
     const strip = this._strips.get(stripId);
     if (!strip || !strip.tofiCoordination) return { ok: false, reason: 'NOT_FOUND' };
+    const before = deepClone(strip);
 
     const now = this._clock.now();
     const tofi = strip.tofiCoordination;
@@ -2712,6 +2747,7 @@ class BoardStore {
     strip.updatedAt = now;
     strip.updatedBy = by || null;
     this._touch(strip.stripId);
+    this._recordPeer('PeerTofiResponse', strip, before, { causedBy, fromFacilityId: tofi.peerFacilityId, by, action: response });
     return { ok: true, strip };
   }
 

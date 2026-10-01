@@ -67,7 +67,9 @@ function hourKey(ms) {
 
 /** A log entry that took a Strip INTO DROPPED. Refusals (`ok:false`) never are (T7). */
 function isDropTransition(entry) {
-  return !!(entry && entry.ok !== false && entry.after && entry.after.state === 'DROPPED'
+  // A peer entry (docs/adr/0083) is a replica's change made from another Facility's
+  // Mutation, never a flight leaving this Facility's traffic.
+  return !!(entry && entry.ok !== false && entry.source !== 'peer' && entry.after && entry.after.state === 'DROPPED'
     && (!entry.before || entry.before.state !== 'DROPPED'));
 }
 
