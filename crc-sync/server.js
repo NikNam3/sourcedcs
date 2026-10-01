@@ -136,7 +136,7 @@ const missionClock = new MissionClock({ offsetHoursFor: (theatre) => theaters[th
 // "magnetic" means at a position on the mission date. The one place a typed
 // magnetic value becomes true, and the source of the `theater` message.
 const theaterContext = new TheaterContext({ theaters, clock: missionClock });
-const efsp        = createEfsp({ clock: missionClock });
+const efsp        = createEfsp({ clock: missionClock, transitionAltFt: () => theaterContext.transitionAltFt() });
 
 // ── The radar picture (docs/adr/0042) ────────────────────────────────────
 // Radars, their sweep phase, terrain masking and who may look through what

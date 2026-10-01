@@ -28,6 +28,7 @@ const { isValidFrequency, MIN_FREQUENCY_MHZ, MAX_FREQUENCY_MHZ } = require('./ai
 const stereoRoutes = require('./stereo-routes');
 const { resolveZuluHhmm, resolveZuluHhmmAfter } = require('./zulu-time');
 const { WALL_CLOCK } = require('../mission-clock');
+const { DEFAULT_TRANSITION_ALT_FT } = require('../theaters');
 
 const VOID_DEADLINE_MINUTES = 30; // §3.8 — derived, not stored input
 const EDCT_WINDOW_MINUTES = 5;              // §4.6.2 — EDCT ± 5 min
@@ -297,15 +298,19 @@ function parseAltitudeFt(text) {
   return m[1].length <= 3 ? n * 100 : n;
 }
 
-/** A flight level and below-FL feet, as the canonical block text writes an end. */
-const BLOCK_FL_FROM_FT = 18000;
-function formatAltitudeEnd(ft) {
-  return ft >= BLOCK_FL_FROM_FT && ft % 100 === 0 ? `FL${String(ft / 100).padStart(3, '0')}` : String(ft);
+/**
+ * A flight level at and above the theater's transition altitude, feet below it,
+ * as the canonical block text writes an end. Only the text depends on the
+ * transition altitude (docs/wip/TA.md): a stored band is always feet, and
+ * parseAltitudeFt() reads "FL100" as 10,000 ft in every theater.
+ */
+function formatAltitudeEnd(ft, transitionAltFt) {
+  return ft >= transitionAltFt && ft % 100 === 0 ? `FL${String(ft / 100).padStart(3, '0')}` : String(ft);
 }
 
-/** A block in its one canonical text, `FL220-FL240` / `5000-8000` (docs/adr/0091). */
-function formatAltitudeBlock(band) {
-  return `${formatAltitudeEnd(band.lowFt)}-${formatAltitudeEnd(band.highFt)}`;
+/** A block in its one canonical text, `FL220-FL240` / `5000-8000` (docs/adr/0091). `transitionAltFt` is the theater's. */
+function formatAltitudeBlock(band, transitionAltFt) {
+  return `${formatAltitudeEnd(band.lowFt, transitionAltFt)}-${formatAltitudeEnd(band.highFt, transitionAltFt)}`;
 }
 
 /** Splits "FL220B240" / "FL220-FL240" / "220TO240" into its two ends in feet, unordered; null when it is not one. */
@@ -419,10 +424,11 @@ function normalizeTypedTime(path, value, nowMs, startMs = null) {
 
 /**
  * Normalise a value written to one of the six military.mtr.* paths.
- * `nowMs` is the mission clock's now(), used only to date a typed time.
+ * `nowMs` is the mission clock's now(), used only to date a typed time;
+ * `transitionAltFt` is the theater's, used only to write a block's text.
  * Returns { ok: true, value } or { ok: false, detail }. Empty clears to null.
  */
-function normalizeMtrValue(path, value, nowMs) {
+function normalizeMtrValue(path, value, nowMs, transitionAltFt = DEFAULT_TRANSITION_ALT_FT) {
   if (TYPED_TIME_LABELS[path]) return normalizeTypedTime(path, value, nowMs);
   const text = value == null ? '' : String(value).trim().toUpperCase();
   if (text === '') return { ok: true, value: null };
@@ -431,7 +437,7 @@ function normalizeMtrValue(path, value, nowMs) {
     if (band == null) {
       return { ok: false, detail: 'requested altitude after exit must be an altitude or a block, e.g. FL210, 080 or FL210-FL230' };
     }
-    return { ok: true, value: band.lowFt === band.highFt ? text.replace(/\s+/g, '') : formatAltitudeBlock(band) };
+    return { ok: true, value: band.lowFt === band.highFt ? text.replace(/\s+/g, '') : formatAltitudeBlock(band, transitionAltFt) };
   }
   return { ok: true, value: text };
 }
@@ -454,11 +460,14 @@ function activeClearanceEntry(fdr, field) {
 class FdrStore {
   /**
    * @param {CodeAllocator} [codeAllocator]
-   * @param {{clock?:{now:()=>number}}} [deps] the mission clock (docs/adr/0079)
-   *   — every timestamp on an FDR is a time a controller reads.
+   * @param {{clock?:{now:()=>number}, transitionAltFt?:()=>number}} [deps] the mission clock (docs/adr/0079)
+   *   — every timestamp on an FDR is a time a controller reads — and the
+   *   theater's transition altitude, which decides how a block's text writes
+   *   an end (FL or feet). A fixture that omits it gets 18,000 ft.
    */
-  constructor(codeAllocator, { clock = WALL_CLOCK } = {}) {
+  constructor(codeAllocator, { clock = WALL_CLOCK, transitionAltFt = () => DEFAULT_TRANSITION_ALT_FT } = {}) {
     this._clock = clock;
+    this._transitionAltFt = transitionAltFt;
     this._codeAllocator = codeAllocator || new CodeAllocator();
     this._fdrs = new Map(); // fdrId -> FlightDataRecord
   }
@@ -731,7 +740,7 @@ class FdrStore {
     }
 
     if (path.startsWith('military.mtr.')) { // §9.4, docs/adr/0062
-      const mtr = normalizeMtrValue(path, value, this._clock.now());
+      const mtr = normalizeMtrValue(path, value, this._clock.now(), this._transitionAltFt());
       if (!mtr.ok) return { ok: false, reason: 'VALIDATION_ERROR', detail: mtr.detail };
       value = mtr.value;
       ensureMilitary(fdr);
@@ -1275,7 +1284,7 @@ class FdrStore {
             };
           }
           if (band.lowFt === band.highFt) parsed = band.lowFt;
-          else { block = band; shown = formatAltitudeBlock(band); }
+          else { block = band; shown = formatAltitudeBlock(band, this._transitionAltFt()); }
         } else {
           parsed = parseHeadingDeg(text);
           if (parsed === null) {

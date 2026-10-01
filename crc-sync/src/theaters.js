@@ -75,4 +75,8 @@ function loadTheaters(override) {
   return out;
 }
 
-module.exports = { loadTheaters };
+// What a theater the table does not list gets (and what a test fixture that
+// injects no theater gets): the 18,000 ft every theater used before H62.
+const DEFAULT_TRANSITION_ALT_FT = 18000;
+
+module.exports = { loadTheaters, DEFAULT_TRANSITION_ALT_FT };

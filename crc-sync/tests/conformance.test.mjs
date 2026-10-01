@@ -90,12 +90,12 @@ test('a new clearance starts over: reached / captured state belongs to the entry
 
 test('altitudes are compared as the controller reads them: QNH below transition, flight level above', () => {
   // ISA day: indicated equals true (within rounding) below and above transition.
-  assert.ok(Math.abs(indicatedAltFt(3048, { pressurePa: 101325, tempK: 288.15 }) - 10000) < 60);
+  assert.ok(Math.abs(indicatedAltFt(3048, { pressurePa: 101325, tempK: 288.15 }, 18000) - 10000) < 60);
   // Below transition the altimeter is set to QNH, so it reads true altitude whatever the QNH.
-  assert.ok(Math.abs(indicatedAltFt(3048, { pressurePa: 99000, tempK: 288.15 }) - indicatedAltFt(3048, { pressurePa: 101325, tempK: 288.15 })) < 1);
+  assert.ok(Math.abs(indicatedAltFt(3048, { pressurePa: 99000, tempK: 288.15 }, 18000) - indicatedAltFt(3048, { pressurePa: 101325, tempK: 288.15 }, 18000)) < 1);
   // Above it the altimeter is on standard pressure: on a low-pressure day the
   // same true altitude reads as a HIGHER flight level.
-  assert.ok(indicatedAltFt(7000, { pressurePa: 99000, tempK: 288.15 }) > indicatedAltFt(7000, { pressurePa: 101325, tempK: 288.15 }) + 300);
+  assert.ok(indicatedAltFt(7000, { pressurePa: 99000, tempK: 288.15 }, 18000) > indicatedAltFt(7000, { pressurePa: 101325, tempK: 288.15 }, 18000) + 300);
 });
 
 test('the monitor reads correlation, track and clearance, and reports a flight only while it is wrong', async () => {
