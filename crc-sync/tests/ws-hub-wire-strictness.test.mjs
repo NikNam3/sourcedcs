@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import WsHub from '../src/ws-hub.js';
 import TrackStore from '../src/tracks.js';
 import CollaborativeStore from '../src/collab-store.js';
+import crcLog from '../src/log.js';
 
 /* docs/adr/0059: the client is told what its sensors know, and nothing else.
  *
@@ -274,11 +275,11 @@ test('setOnEfspChange fires after an EFSP message that broadcast, not after one 
   assert.equal(fired, 1);
 
   hub.setOnEfspChange(() => { throw new Error('monitor bug'); });
-  const origError = console.error;
-  console.error = () => {};
+  const cap = crcLog.capture();
   try {
     assert.doesNotThrow(() => hub._onMessage(ws, session, JSON.stringify({ type: 'efsp-mutation' })));
-  } finally { console.error = origError; }
+  } finally { cap.stop(); }
+  assert.deepEqual(cap.records.map((r) => [r.level, r.name, r.message]), [['error', 'ws-hub', 'onEfspChange failed']]);
   assert.equal(ws.sent.filter(m => m.type === 'efsp-ack').length, 3, 'the sender still got every ack');
 });
 

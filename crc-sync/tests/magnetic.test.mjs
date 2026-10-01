@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import crcLog from '../src/log.js';
 
 /* docs/adr/0085: what "magnetic" means in crc-sync.
  *
@@ -135,7 +136,7 @@ test('the central meridians are miztoyaml projection.py\'s, theater for theater'
 });
 
 test('the loader keeps a valid override and drops a malformed one (both kinds at once is ambiguous), with a warning', (t) => {
-  const warn = t.mock.method(console, 'warn', () => {});
+  const cap = crcLog.capture(); t.after(() => cap.stop());
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'theaters-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const file = path.join(dir, 'theaters.json');
@@ -151,5 +152,5 @@ test('the loader keeps a valid override and drops a malformed one (both kinds at
   assert.equal('magneticVariation' in th.C, false);
   assert.equal('transitionAltFt' in th.D, false);
   assert.equal('tmCentralMeridianDeg' in th.D, false);
-  assert.equal(warn.mock.callCount(), 3);
+  assert.equal(cap.records.filter(r => r.level === 'warn').length, 3);
 });

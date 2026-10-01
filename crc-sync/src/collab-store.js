@@ -16,6 +16,7 @@
 const fs = require('fs');
 const { statePaths, ensureDirFor } = require('./state-paths');
 const { IFF_STATES } = require('./surveillance/iff');
+const log = require('./log').logger('collab-store');
 
 const FILE_NAME = 'collab-overlay.json';
 const VERSION = 1;
@@ -266,7 +267,7 @@ class CollaborativeStore {
     } catch (err) {
       const aside = `${this._paths.read}.corrupt-${this._wallNow()}`;
       try { fs.renameSync(this._paths.read, aside); } catch { /* nothing more to do */ }
-      console.warn(`[collab-store] ${this._paths.read} was unreadable (${err.message}) — moved to ${aside}, starting empty`);
+      log.warn('state file was unreadable — moved aside, starting empty', { file: this._paths.read, error: err.message, movedTo: aside });
     }
   }
 
@@ -284,7 +285,7 @@ class CollaborativeStore {
       fs.renameSync(tmp, this._paths.write);
       this._persistedSeq = seq;
     } catch (e) {
-      console.warn('[collab-store] failed to persist:', e.message);
+      log.warn('failed to persist', { error: e.message });
     }
   }
 }

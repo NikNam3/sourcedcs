@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import crcLog from '../src/log.js';
 
 // Which mission are we in (docs/adr/0086, decisions.md S-R2-2).
 
@@ -29,9 +30,8 @@ let n = 0;
 const freshPath = () => path.join(tmpDir, `s-${++n}.json`);
 
 function quiet(fn) {
-  const { log, warn } = console;
-  console.log = () => {}; console.warn = () => {};
-  try { return fn(); } finally { console.log = log; console.warn = warn; }
+  const cap = crcLog.capture();
+  try { return fn(); } finally { cap.stop(); }
 }
 
 function build(c, p = freshPath()) {

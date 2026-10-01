@@ -30,6 +30,7 @@ const fs = require('fs');
 const { checkOnGround } = require('./geo');
 const { CONFIG_DIR } = require('./state-paths');
 const { readShipped } = require('./tuning-file');
+const log = require('./log').logger('radars');
 
 // DCS reports no radar-tower height, so a ground-based radar needs an assumed
 // offset or terrain masking would make it unrealistically easy to block.
@@ -98,7 +99,7 @@ function loadSensorSpecs(specsPath = SENSOR_SPECS_PATH) {
     try {
       cfg = JSON.parse(fs.readFileSync(specsPath, 'utf8'));
     } catch (e) {
-      console.warn(`[radars] could not read ${specsPath} (${e.message}), using the shipped sensor-specs.json`);
+      log.warn('could not read sensor specs, using the shipped sensor-specs.json', { file: specsPath, error: e.message });
     }
   }
   const presentation = { ...shipped.presentation };

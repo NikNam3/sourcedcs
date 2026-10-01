@@ -2,6 +2,7 @@
 const EventEmitter = require('events');
 const net = require('net');
 const crypto = require('crypto');
+const log = require('./log').logger('srs');
 
 const SRS_HOST    = process.env.SRS_HOST || 'server.sourcedcs.page';
 const SRS_PORT    = parseInt(process.env.SRS_PORT) || 5002;
@@ -64,7 +65,7 @@ class SrsClient extends EventEmitter {
     this._socket = sock;
 
     sock.on('connect', () => {
-      console.log('[srs] connected');
+      log.info('connected');
       this._setState('connected');
       // Identify ourselves so the server sends client list updates
       sock.write(JSON.stringify({
@@ -93,11 +94,11 @@ class SrsClient extends EventEmitter {
     });
 
     sock.on('error', (err) => {
-      console.warn('[srs] error:', err.message);
+      log.warn('error', { error: err.message });
     });
 
     sock.on('close', () => {
-      console.log('[srs] disconnected');
+      log.info('disconnected');
       this._transponders.clear();
       this._identLatch.clear();
       this._setState('reconnecting');
@@ -174,7 +175,7 @@ class SrsClient extends EventEmitter {
     if (this._reconnTimer) return;
     this._reconnTimer = setTimeout(() => {
       this._reconnTimer = null;
-      console.log('[srs] reconnecting...');
+      log.info('reconnecting');
       this._doConnect();
     }, 5000);
   }

@@ -10,6 +10,7 @@ import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import crcLog from '../src/log.js';
 
 const require = createRequire(import.meta.url);
 const grpc = require('@grpc/grpc-js');
@@ -75,7 +76,7 @@ function boot(t, dir, { grace = 150, clockT = 1_000_000 } = {}) {
   });
   const session = new MissionSession({ path: path.join(dir, 'session.json'), clock });
   const grpcClient = new GrpcClient({ backoffBaseMs: 50, backoffCapMs: 50 });
-  for (const k of ['log', 'warn', 'error']) t.mock.method(console, k, () => {});
+  { const cap = crcLog.capture(); t.after(() => cap.stop()); }
   grpcClient.on('unit', (u) => trackStore.update(u));
   grpcClient.on('mission-start', () => session.noteMissionStart());
   grpcClient.on('mission-load', (m) => session.noteMissionLoad(m));

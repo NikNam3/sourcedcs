@@ -32,6 +32,7 @@
 const fs = require('fs');
 const { statePaths, ensureDirFor } = require('./state-paths');
 const { WALL_CLOCK } = require('./mission-clock');
+const log = require('./log').logger('mission-session');
 
 const FILE_NAME = 'mission-session.json';
 const VERSION = 1;
@@ -177,10 +178,10 @@ class MissionSession {
     const previous = this.current();
     this._state = this._fresh(previous.seq + 1, reason, fingerprint, theatre, lastAt);
     this._persist();
-    console.log(`[mission-session] session ${this._state.seq} (${reason}) — ${theatre || 'unknown theater'}, mission ${fingerprint || 'unknown'}`);
+    log.info('session', { seq: this._state.seq, reason, theater: theatre || 'unknown', mission: fingerprint || 'unknown' });
     const session = this.current();
     for (const fn of this._listeners) {
-      try { fn(session, previous); } catch (e) { console.warn('[mission-session] onNewSession listener failed:', e.message); }
+      try { fn(session, previous); } catch (e) { log.warn('onNewSession listener failed', { error: e.message }); }
     }
   }
 
@@ -213,7 +214,7 @@ class MissionSession {
       // Kept for inspection rather than overwritten.
       const aside = `${this._paths.read}.corrupt-${this._wallNow()}`;
       try { fs.renameSync(this._paths.read, aside); } catch { /* nothing more to do */ }
-      console.warn(`[mission-session] ${this._paths.read} was unreadable (${e.message}) — moved to ${aside}, starting a new session`);
+      log.warn('state file was unreadable — moved aside, starting a new session', { file: this._paths.read, error: e.message, movedTo: aside });
       return null;
     }
   }
@@ -227,7 +228,7 @@ class MissionSession {
       fs.renameSync(tmp, this._paths.write);
       this._persistedLastAt = this._state.lastAt;
     } catch (e) {
-      console.warn('[mission-session] failed to persist:', e.message);
+      log.warn('failed to persist', { error: e.message });
     }
   }
 }
