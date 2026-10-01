@@ -284,9 +284,39 @@ function _trackExchange(strip) {
   return row;
 }
 
+/** The mission Strip this ATC-side Strip's TOFI is with (its tofiCoordination.peerStripId), or null. */
+function _pairedMissionStrip(strip) {
+  const tofi = strip && strip.tofiCoordination;
+  return tofi && tofi.peerStripId && typeof getEfspStrip === 'function' ? (getEfspStrip(tofi.peerStripId) || null) : null;
+}
+
+/** UI-A U8: should this Strip's NLA slot be TOFI Exit right now? (the mission line is OFF_STATION or RTB.) */
+function _tofiExitIsPrimary(strip) {
+  if (typeof tofiExitDueFor !== 'function' || typeof _canProposeTofiExit !== 'function') return false;
+  if (!TOFI_COUNTERPARTS[strip.ownerPositionId] || !_canProposeTofiExit(strip)) return false;
+  return tofiExitDueFor(strip, _pairedMissionStrip(strip));
+}
+
+/** For bay-view.js's render signature: the mission line's state, which this Strip's primary action now depends on (S-L14). */
+function tofiExitSignatureFor(strip) {
+  const m = strip && strip.tofiCoordination ? _pairedMissionStrip(strip) : null;
+  return m ? m.state : '';
+}
+
 /** The NLA (§3.5), and the reason it is refused, from the server's own `strip.nla` (F-408). */
 function _buildLifeBlock(strip) {
   const life = _stripEl('div', 'efsp-strip-life');
+  // UI-A U8: the mission line is leaving, so the next step on CTR's Strip is the TOFI Exit, not the NLA.
+  if (_tofiExitIsPrimary(strip)) {
+    const mission = _pairedMissionStrip(strip);
+    life.appendChild(_stripButton('TOFI Exit', 'efsp-tofi-exit-btn', {
+      go: true, action: 'tofi-exit-primary',
+      disabled: !_resolveActingPositionId(strip),
+      title: `The mission line is ${String(mission.state).replace(/_/g, ' ')}: propose returning separation to ${strip.tofiCoordination.peerPositionId}`,
+      onClick: (e, btn) => { btn.disabled = true; _dispatchTofi(strip, 'PROPOSE', 'EXIT'); },
+    }));
+    return { life, inhibited: null };
+  }
   const nlaStatus = strip.nla;
   const nlaLabel = nlaStatus === null ? null : nlaLabelFor(strip.state, strip.role);
   let inhibited = null;

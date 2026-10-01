@@ -2874,6 +2874,7 @@ function _stripRenderSignature(strip) {
     ? `${relation.marsaId}/${relation.rev}/${relation.state}/${relation.rendezvousAt ? 1 : 0}/${relation.voidedBy || ''}`
     : ''));
   parts.push('mhl:' + (typeof isMarsaHighlighted === 'function' && isMarsaHighlighted(strip.stripId) ? 1 : 0));
+  parts.push('tx:' + (typeof tofiExitSignatureFor === 'function' ? tofiExitSignatureFor(strip) : '')); // UI-A U8 — the mission line's state decides CTR's primary action
   parts.push('ar:' + (typeof arSignatureFor === 'function' ? arSignatureFor(strip) : '')); // docs/adr/0071 — the AR join lives on OTHER flights' Strips
 
   const correlation = typeof getEfspCorrelationForStrip === 'function' ? getEfspCorrelationForStrip(strip) : null;

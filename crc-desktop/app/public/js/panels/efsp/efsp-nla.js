@@ -184,8 +184,24 @@ function isEfspBoardStale(lastHeartbeatAt, now, thresholdSeconds = DEFAULT_STALE
   return (now - lastHeartbeatAt) >= thresholdSeconds * 1000;
 }
 
+// UI-A U8: once the mission line a TOFI exchange is with has gone OFF_STATION or RTB, the
+// flight is leaving tactical control, so the ATC side's next step is the TOFI Exit. The Strip
+// shows it in the NLA slot (strip-view.js's _buildLifeBlock). Pure: the caller looks the mission
+// Strip up (the ATC Strip's tofiCoordination.peerStripId).
+const TOFI_EXIT_DUE_MISSION_STATES = ['OFF_STATION', 'RTB'];
+
+/** True when `strip` (an ATC-side Strip in ACTIVE TOFI) should offer TOFI Exit as its primary action. */
+function tofiExitDueFor(strip, missionStrip) {
+  if (!strip || strip.role === 'MISSION') return false;
+  const tofi = strip.tofiCoordination;
+  if (!tofi || tofi.state !== 'ACTIVE') return false;
+  return !!missionStrip && missionStrip.role === 'MISSION'
+    && TOFI_EXIT_DUE_MISSION_STATES.includes(missionStrip.state);
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
+    TOFI_EXIT_DUE_MISSION_STATES, tofiExitDueFor,
     NLA_LABELS, nlaLabelFor, DOUBLE_TAP_MS, UNDO_WINDOW_MS, isWithinDoubleTapWindow, isUndoAvailable,
     DEFAULT_STALE_THRESHOLD_SECONDS, isEfspBoardStale,
     STATE_OWNERS_BY_ROLE, DEPARTURE_STATE_OWNERS, ARRIVAL_STATE_OWNERS, OVERFLIGHT_STATE_OWNERS, MISSION_STATE_OWNERS, canActOnState,
