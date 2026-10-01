@@ -429,7 +429,7 @@ function _buildStripFields(strip) {
 export const INDICATOR_ORDER = ['stca', 'conf', 'rwy', 'gear', 'ord', 'scram', 'trk', 'marsa', 'tofi', 'airspace', 'timer', 'siblings'];
 // Keys whose chips come from _stripAlerts (warnings first, left end of the row). rwy/gear:
 // field state (docs/adr/0068); ord: hung ordnance (0069); scram: alert/scramble (0070).
-const ALERT_SLOT_KEYS = new Set(['stca', 'conf', 'rwy', 'gear', 'ord', 'scram']);
+export const ALERT_SLOT_KEYS = new Set(['stca', 'conf', 'rwy', 'gear', 'ord', 'scram']);
 
 const _pad3 = (n) => String(Math.round(n)).padStart(3, '0');
 

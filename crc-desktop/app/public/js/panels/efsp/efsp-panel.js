@@ -184,7 +184,7 @@ export function computePositionTabs(bays, heldPositionIds) {
 }
 
 /** Runs (or clears, on an empty query) a search — one input, guide §4.3. Activates the search Bay for the current Position tab. */
-function _runEfspSearch(query) {
+export function _runEfspSearch(query) {
   const trimmed = (query || '').trim();
   if (!trimmed) {
     _searchQuery = null;
@@ -1148,7 +1148,7 @@ function _wireCreateStrip() {
 // Phase 1's minimal dot-command vocabulary (guide §7.1 rule 5 specifies
 // the input surface, not a fixed verb set for DEPARTURE strips) — grows
 // here without changing dot-command.js's parser.
-function _dispatchDotCommand(parsed) {
+export function _dispatchDotCommand(parsed) {
   // .find doesn't target a selected Strip at all — handle it before the
   // strip-selection-dependent verbs below need one.
   if (parsed.verb === 'find') {

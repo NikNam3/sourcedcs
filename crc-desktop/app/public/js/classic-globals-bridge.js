@@ -5,7 +5,8 @@
 // intercepted sends by assigning window.sendToSync / window.sendEfsp*. Modules have no shared global scope, so this
 // file puts a live getter on window for every name a module exports. Assigning one is an error, except for the
 // seven senders the specs replace, which go through the owning module's setter so every importer sees the
-// replacement. A name the browser already defines on window (history, ...) is left alone and listed in SKIPPED.
+// replacement. A name the browser already defines on window is left alone, listed in SKIPPED and reported with
+// console.error, unless it is SHADOWED (history) or an EXPECTED_SKIP (none).
 //
 // Remove this file when the specs move to imports or a test hook. The name list is frozen in
 // crc-desktop/tests/fixtures/module-graph-exports.json (bridge), so the debt stays visible.
@@ -77,12 +78,23 @@ const SETTERS = {
   sendEfspMarsaMutation: (fn) => setEfspSender('sendEfspMarsaMutation', fn),
 };
 
+// Bridged although the browser defines it: the classic page's top-level `const history` (app.js) shadowed
+// window.history for every bare reference, nothing in the client or its libraries uses the History API (maplibre's
+// hash handler is off: initMap passes no `hash` option), and l22-stars-scope.spec.js calls history.set(...) (S-ESM1c).
+const SHADOWED = new Set(['history']);
+// Browser names an export may collide with and stay unbridged. None today: a new collision is reported loudly.
+const EXPECTED_SKIPS = new Set();
+
 export const BRIDGED = [];
 export const SKIPPED = [];
 if (typeof window !== 'undefined') {
   for (const ns of MODULES) {
     for (const name of Object.keys(ns)) {
-      if (name in window) { SKIPPED.push(name); continue; }
+      if (name in window && !SHADOWED.has(name)) {
+        SKIPPED.push(name);
+        if (!EXPECTED_SKIPS.has(name)) console.error(`classic-globals-bridge: ${name} is already defined on window and was not bridged`);
+        continue;
+      }
       const set = SETTERS[name] || (() => { throw new TypeError(`classic-globals-bridge: ${name} is read-only (a module binding)`); });
       Object.defineProperty(window, name, { configurable: true, enumerable: true, get: () => ns[name], set });
       BRIDGED.push(name);

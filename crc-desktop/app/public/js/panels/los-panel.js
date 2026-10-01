@@ -146,3 +146,6 @@ function drawLosProfile() {
   ctx.arc(xOf(0), yOf(radar.elevM), 3, 0, Math.PI * 2);
   ctx.fill();
 }
+
+// ESM-1 (S-ESM1c): the unit tests replaced the global showLosProfile to count calls; this is that seam.
+export function _setShowLosProfileForTest(fn) { showLosProfile = fn; }

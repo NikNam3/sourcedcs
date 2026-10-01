@@ -311,7 +311,7 @@ export function noteEfspGesture(gesture, entryPoint, positionId) {
 /** app.js: `efsp-metrics-report-ack`. */
 export function onEfspMetricsReportAck(msg) { _efspMetricsSafely('ack', m => m.onAck(msg)); }
 /** Sends what is queued now rather than at the next flush (tests, and beforeunload). */
-function flushEfspMetricsNow() { let n = 0; _efspMetricsSafely('flush', m => { n = m.flush(); }); return n; }
+export function flushEfspMetricsNow() { let n = 0; _efspMetricsSafely('flush', m => { n = m.flush(); }); return n; }
 /** Local counters — drops, abandons, samples — for a log or the e2e walk. */
 export function efspMetricsClientStats() { let s = null; _efspMetricsSafely('stats', m => { s = m.stats(); }); return s; }
 
