@@ -26,7 +26,11 @@ function build(d, meta) {
   const lr = d.logRecon;
   const s = d.stats;
   const runMin = meta.minutes;
-  const warmupMin = Math.max(runMin * 0.1, Math.min(20, runMin * 0.25));
+  // Default: the first tenth of the run, up to a quarter (<= 20 min). `--warmup-min`
+  // overrides it: a DROPPED Strip stays 2 h before the archiver takes it
+  // (docs/adr/0082), so the heap only plateaus after ~2 h and a run judged
+  // before that fits the retention fill-up, not a leak (docs/wip/SOAK.md).
+  const warmupMin = Number.isFinite(meta.warmupMin) && meta.warmupMin !== null ? meta.warmupMin : Math.max(runMin * 0.1, Math.min(20, runMin * 0.25));
 
   // ── memory ──────────────────────────────────────────────────────────
   // A restart is a new process with a new heap, so a fit across it is
