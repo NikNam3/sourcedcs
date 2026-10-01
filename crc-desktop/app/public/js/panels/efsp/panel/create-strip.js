@@ -1,0 +1,531 @@
+'use strict';
+import { _callsignOfFdr } from './refusal.js';
+import { _resolveActingPositionId } from '../bay-view.js';
+import { createState, els } from './state.js';
+import { getActingPositions, sendEfspCreateStrip, sendEfspMutation } from '../efsp-ws.js';
+import { getAllEfspStrips, getEfspFdr, liveStripsForCallsign } from '../efsp-state.js';
+import { listStereoRoutesClient } from '../efsp-stereo-routes.js';
+import { lookupFlightPlanClient } from '../efsp-flight-plan-lookup.js';
+import { refreshAtoImportButton } from '../ato-import.js';
+
+// Deliberately NOT window.prompt() — it's the only blocking native dialog
+// anywhere in this codebase (grepped: zero other uses of prompt/alert/
+// confirm), Electron's support for it is inconsistent across versions/
+// webPreferences, and every other input flow here already uses an inline
+// form (see squawk-panel.js's sqmap-code-input/sqmap-add for the exact
+// pattern this mirrors). A silent no-op from a dialog that doesn't fire is
+// indistinguishable from a broken button — this doesn't have that failure
+// mode, and every rejection path is now visible instead of silent too.
+
+// Guards the flight-plan lookup in _submitCreateStrip() against a double-
+// submit while it's in flight (up to a few seconds — a real window a
+// second Enter/click could land in, unlike the near-instant validation
+// that runs before it).
+let _createStripLookupInFlight = false;
+
+// §9.10's canned-route table (docs/adr/0050). Static squadron configuration:
+// it only changes when somebody edits a file and restarts crc-sync, so this
+// is not polled the way `ops-filed`'s queue is (that queue is other people's
+// live filings, which is a different kind of thing).
+//
+// But it IS refetched on every snapshot, not just at panel init, and that
+// distinction cost a bug: the table changing implies a crc-sync restart,
+// which drops every socket, and the reconnect delivers a fresh
+// efsp-snapshot. Fetching only at init meant a squadron could edit the
+// table, restart the service, and have every controller keep the OLD
+// picker until they reloaded the whole app. A snapshot is exactly the event
+// that means "the server you were talking to may not be the one you are
+// talking to now", so it is the right trigger — and it is free, because
+// _refreshStereoRoutes is a no-op re-render when nothing changed.
+let _stereoRoutesInFlight = false;
+
+export function _loadStereoRoutes() {
+  if (typeof listStereoRoutesClient !== 'function') return;
+  // Fire and forget: the picker appears when the list lands. Nothing waits
+  // on it, and the failure case is identical to the (shipped) empty-table
+  // case — no picker, file by hand exactly as before. The in-flight latch
+  // stops a burst of snapshots (a flapping connection) stacking fetches.
+  if (_stereoRoutesInFlight) return;
+  _stereoRoutesInFlight = true;
+  listStereoRoutesClient().then((routes) => {
+    _stereoRoutesInFlight = false;
+    createState.stereoRoutes = Array.isArray(routes) ? routes : [];
+    _refreshCreateStripAvailability();
+  });
+}
+
+/**
+ * Called from app.js when an efsp-snapshot lands — see _loadStereoRoutes.
+ * Safe before initEfspPanel() has run: the fetch just populates the cache
+ * and the render inside no-ops until the elements are cached.
+ */
+export function reloadEfspStereoRoutes() { _loadStereoRoutes(); }
+
+/** The stereo name currently picked in the toolbar, or '' for none. */
+function _selectedStereoName() {
+  if (!els.createStripStereo || els.createStripStereo.hidden) return '';
+  return els.createStripStereo.value || '';
+}
+
+/**
+ * Roles a canned route can seed. DEPARTURE only, matching Block 9F's own
+ * Block-Map placement: ARRIVAL's filed shape is originAirport/arrivalFix/
+ * estimatedArrivalTimeUtc, MISSION has no filed route at all, and an
+ * OVERFLIGHT by definition did not depart here, so a locally-defined route
+ * out of this base is not what it filed.
+ *
+ * Takes the ORIGIN rather than the role string on purpose: OPS's entry in
+ * CREATE_STRIP_ORIGINS carries `role: undefined` to mean DEPARTURE (the
+ * server's own default), so a bare `role === 'DEPARTURE'` would exclude the
+ * one Position that files these. _createStripOriginKey already normalises
+ * the same way.
+ */
+export function _stereoEligibleOrigin(origin) {
+  return !!origin && (origin.role || 'DEPARTURE') === 'DEPARTURE';
+}
+
+export function _setCreateStripMsg(text, isError) {
+  if (!els.createStripMsg) return;
+  els.createStripMsg.textContent = text || '';
+  els.createStripMsg.classList.toggle('efsp-msg-error', !!isError);
+}
+
+// WP4A (docs/adr/0014) started this as CTR self-originating ARRIVAL Strips
+// — the same "no Facility further upstream is built yet" terminus stub
+// OPS/DEPARTURE always had. docs/adr/0023 opens the same right to APP (for
+// ARRIVAL, matching guide §4.1's "all" Strip Roles for APP) and adds
+// OVERFLIGHT for both — real pop-up ATC scenarios (a VFR aircraft picking
+// up an IFR clearance airborne, an aircraft transiting Center's airspace
+// without landing at Incirlik) have no sending Facility to HANDOFF from,
+// so whichever Position takes the call originates the Strip directly.
+//
+// Every (Position, Role) origin this app can ever originate a Strip from —
+// a flat, exhaustive list rather than a priority order. An earlier version
+// of this picked OPS unconditionally whenever it was held, silently
+// ignoring APP/CTR even if ALSO held — wrong per guide §4.8.1's own
+// framing: "under low manning the combined case is the NORMAL case," not
+// an edge case to deprioritize. A controller holding OPS+APP+CTR at once
+// (entirely plausible under low manning) must be able to originate any of
+// the three, not just whichever this list happened to check first.
+const CREATE_STRIP_ORIGINS = [
+  { actingPositionId: 'OPS', facilityId: 'INCIRLIK', bayId: 'ops-proposed',    role: undefined,     label: 'OPS · Departure' },
+  { actingPositionId: 'APP', facilityId: 'INCIRLIK', bayId: 'app-inbound',     role: 'ARRIVAL',     label: 'APP · Arrival' },
+  { actingPositionId: 'APP', facilityId: 'INCIRLIK', bayId: 'app-overflight',  role: 'OVERFLIGHT',  label: 'APP · Overflight' },
+  { actingPositionId: 'CTR', facilityId: 'CENTER',   bayId: 'ctr-enroute',     role: 'ARRIVAL',     label: 'CTR · Arrival' },
+  { actingPositionId: 'CTR', facilityId: 'CENTER',   bayId: 'ctr-overflight',  role: 'OVERFLIGHT',  label: 'CTR · Overflight' },
+  // WP4A second slice — TAC_C2/GCI self-originate a standalone MISSION
+  // Strip (guide §9.8), for a mission that never needs to touch ATC-
+  // controlled airspace at all. Distinct from a MISSION Strip minted as a
+  // TOFI ENTRY exchange's byproduct (crc-sync's board-store.js
+  // receiveTofiProposal), which shares its FDR with the ATC-side Strip
+  // instead — both paths coexist, same "origin OR replica" duality
+  // DEPARTURE/ARRIVAL Strips already have. GCI has no Tasked/Airborne Bay
+  // of its own (guide §4.2 only gives those to TAC_C2 — AIC/GCI get the
+  // narrower On Station/Committed/Coordination set), so its origin starts
+  // already ON_STATION rather than at MISSION's default TASKED, matching
+  // the one Bay it actually has to land in.
+  { actingPositionId: 'TAC_C2', facilityId: 'TACTICAL', bayId: 'tac-c2-tasked', role: 'MISSION', label: 'TAC_C2 · Mission' },
+  { actingPositionId: 'GCI', facilityId: 'TACTICAL',   bayId: 'gci-on-station', role: 'MISSION', label: 'GCI · Mission', initialState: 'ON_STATION' },
+];
+
+function _createStripOriginKey(o) { return `${o.actingPositionId}:${o.role || 'DEPARTURE'}`; }
+
+/** Every origin CURRENTLY reachable, given the Positions actually held right now — not a fixed list, since held Positions change live during a session (guide §4.1: "the set changes live during a session"). */
+export function _availableCreateStripOrigins() {
+  const held = getActingPositions();
+  return CREATE_STRIP_ORIGINS.filter(o => held.includes(o.actingPositionId));
+}
+
+export function _createStripOrigin() {
+  const available = _availableCreateStripOrigins();
+  if (available.length === 0) return null;
+  if (available.length === 1) return available[0]; // the common single-Position case — no picker was shown, nothing to read
+  const selectedKey = els.createStripRole && els.createStripRole.value;
+  return available.find(o => _createStripOriginKey(o) === selectedKey) || available[0];
+}
+
+/**
+ * Flights a mission line could be fragged against — every live Strip that is
+ * a flight rather than a mission line, minus any that already has one.
+ *
+ * Mirrors _marsaCandidates' shape in bay-view.js, including its rule that a
+ * candidate the server would refuse is not offered at all: a control that
+ * always fails is worse than no control.
+ */
+export function _missionBindCandidates() {
+  const all = typeof getAllEfspStrips === 'function' ? getAllEfspStrips() : [];
+  const taken = new Set(all.filter(s => s.role === 'MISSION' && s.state !== 'DROPPED').map(s => s.fdrId));
+  const seen = new Set();
+  const out = [];
+  for (const s of all) {
+    if (s.role === 'MISSION' || s.state === 'DROPPED') continue;
+    if (taken.has(s.fdrId) || seen.has(s.fdrId)) continue;
+    seen.add(s.fdrId);
+    out.push(s);
+  }
+  return out;
+}
+
+/** The fdrId the operator picked, or '' for today's standalone-origination path. */
+function _selectedBindFdrId() {
+  return (els.createStripBind && !els.createStripBind.hidden && els.createStripBind.value) || '';
+}
+
+/**
+ * The mission-line binding picker (crc-sync's docs/adr/0054) — how a mission
+ * line comes to be the SAME flight as the ATC Strip, at fragging time.
+ *
+ * TAC_C2 only. GCI has no Tasked or Airborne Bay (guide §4.2 gives those to
+ * TAC_C2 alone), so CREATE_STRIP_ORIGINS starts its mission lines already
+ * ON_STATION — binding there would frag a mission line on station for a jet
+ * still on the ramp.
+ */
+function _refreshMissionBindPicker(origin) {
+  if (!els.createStripBind) return;
+  const eligible = !!origin && origin.role === 'MISSION' && origin.actingPositionId === 'TAC_C2';
+  const candidates = eligible ? _missionBindCandidates() : [];
+  // Same "no empty picker to puzzle over" rule the stereo select follows.
+  els.createStripBind.hidden = !eligible || candidates.length === 0;
+  if (els.createStripBind.hidden) return;
+
+  const prev = els.createStripBind.value;
+  els.createStripBind.innerHTML = '';
+  // Blank first, so an unbound mission line stays the default and today's
+  // behaviour is never something you have to deselect into.
+  const none = document.createElement('option');
+  none.value = '';
+  none.textContent = '— not bound to a flight —';
+  els.createStripBind.appendChild(none);
+  for (const s of candidates) {
+    const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(s.fdrId) : null;
+    const id = fdr && fdr.identity ? fdr.identity : {};
+    const opt = document.createElement('option');
+    opt.value = s.fdrId;
+    // Callsign ALONE is not enough. Four jets in one package with adjacent
+    // callsigns is exactly the mis-pick this has to survive, so the squawk
+    // and the route are on the row to tell them apart.
+    const route = (fdr && fdr.filed && fdr.filed.route) || '';
+    opt.textContent = [id.callsign || s.fdrId, id.beaconAssigned, route].filter(Boolean).join(' · ');
+    els.createStripBind.appendChild(opt);
+  }
+  if (candidates.some(s => s.fdrId === prev)) els.createStripBind.value = prev;
+}
+
+/**
+ * The ATO-first direction (crc-sync docs/adr/0071, docs/adr/0054's promised
+ * caller change). An ATO often arrives before the flight is filed: TAC_C2's
+ * import made the flight and its mission line, and when OPS then files it,
+ * the DEPARTURE must be the SAME flight — same fdrId, same Mode 3/A, no second
+ * code minted. So when OPS types a callsign that an ATO mission flight has
+ * and that flight has no ATC Strip yet, the bind picker offers "file against
+ * ATO mission <msn>", picked by default only when exactly one matches.
+ * Sending it is the existing bind path (`op.fdrId`), unchanged server-side.
+ */
+function _atoFirstCandidates(callsign) {
+  const wanted = String(callsign || '').trim().toUpperCase();
+  if (!wanted) return [];
+  const all = typeof getAllEfspStrips === 'function' ? getAllEfspStrips() : [];
+  const live = all.filter(s => s.state !== 'DROPPED');
+  const out = [];
+  const seen = new Set();
+  for (const s of live) {
+    if (s.role !== 'MISSION' || seen.has(s.fdrId)) continue;
+    seen.add(s.fdrId);
+    const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(s.fdrId) : null;
+    if (!fdr || !fdr.ato || !fdr.identity || fdr.identity.callsign !== wanted) continue;
+    if (live.some(o => o.fdrId === s.fdrId && o.role !== 'MISSION')) continue; // already filed
+    out.push(fdr);
+  }
+  return out;
+}
+
+export function _refreshAtoFirstPicker(origin) {
+  if (!els.createStripBind || !els.createStripInput) return;
+  if (!origin || origin.actingPositionId !== 'OPS' || (origin.role || 'DEPARTURE') !== 'DEPARTURE') return;
+  const candidates = _atoFirstCandidates(els.createStripInput.value);
+  els.createStripBind.hidden = candidates.length === 0;
+  if (els.createStripBind.hidden) { els.createStripBind.value = ''; return; }
+  const prev = els.createStripBind.value;
+  els.createStripBind.innerHTML = '';
+  const none = document.createElement('option');
+  none.value = '';
+  none.textContent = '— a new flight —';
+  els.createStripBind.appendChild(none);
+  for (const fdr of candidates) {
+    const opt = document.createElement('option');
+    opt.value = fdr.fdrId;
+    opt.textContent = `file against ATO mission ${fdr.ato.missionNumber || (fdr.mission && fdr.mission.missionNumber) || '?'} · ${fdr.identity.callsign} · ${fdr.identity.beaconAssigned}`;
+    els.createStripBind.appendChild(opt);
+  }
+  if (candidates.some(f => f.fdrId === prev)) els.createStripBind.value = prev;
+  else els.createStripBind.value = candidates.length === 1 ? candidates[0].fdrId : '';
+}
+
+export function _refreshCreateStripAvailability() {
+  if (!els.createStripInput || !els.createStripBtn) return;
+  if (_createStripLookupInFlight) return; // don't fight the "Looking up flight plan…" message or re-enable mid-lookup — _submitCreateStrip owns this window
+  const available = _availableCreateStripOrigins();
+  if (els.createStripRole) {
+    // Only actually a CHOICE when 2+ origins are simultaneously reachable
+    // (a combined-Position controller) — the common single-Position case
+    // keeps today's minimal toolbar, nothing to pick.
+    els.createStripRole.hidden = available.length <= 1;
+    if (!els.createStripRole.hidden) {
+      const prevKey = els.createStripRole.value;
+      els.createStripRole.innerHTML = '';
+      for (const o of available) {
+        const opt = document.createElement('option');
+        opt.value = _createStripOriginKey(o);
+        opt.textContent = o.label;
+        els.createStripRole.appendChild(opt);
+      }
+      // Preserve the operator's prior choice across a Position-set change
+      // (e.g. picking up a third Position) when it's still valid; default
+      // to the first option otherwise — never silently reset a deliberate
+      // choice out from under them.
+      if (available.some(o => _createStripOriginKey(o) === prevKey)) els.createStripRole.value = prevKey;
+    }
+  }
+  const origin = _createStripOrigin();
+  if (els.createStripStereo) {
+    // Hidden unless a table is actually installed AND the selected origin
+    // could use one. The shipped table is empty, so for a squadron that has
+    // not written one this control never appears at all — no empty picker
+    // to puzzle over, and the toolbar is byte-identical to before.
+    const usable = createState.stereoRoutes.length > 0 && _stereoEligibleOrigin(origin);
+    els.createStripStereo.hidden = !usable;
+    if (usable) {
+      const prevName = els.createStripStereo.value;
+      els.createStripStereo.innerHTML = '';
+      // Blank first, so "no stereo" stays the default and the existing
+      // hand-filing path is never something you have to deselect into.
+      const none = document.createElement('option');
+      none.value = '';
+      none.textContent = '— no stereo —';
+      els.createStripStereo.appendChild(none);
+      for (const r of createState.stereoRoutes) {
+        const opt = document.createElement('option');
+        opt.value = r.name;
+        opt.textContent = r.description ? `${r.name} — ${r.description}` : r.name;
+        els.createStripStereo.appendChild(opt);
+      }
+      // Same "never silently reset a deliberate choice" rule the role
+      // select above follows.
+      if (createState.stereoRoutes.some(r => r.name === prevName)) els.createStripStereo.value = prevName;
+    }
+  }
+  _refreshMissionBindPicker(origin);
+  if (typeof refreshAtoImportButton === 'function') refreshAtoImportButton(); // docs/adr/0071
+  _refreshAtoFirstPicker(origin); // docs/adr/0071 — OPS files against an ATO mission
+  els.createStripInput.disabled = !origin;
+  els.createStripBtn.disabled = !origin;
+  if (!origin) {
+    _setCreateStripMsg('OPS, APP or CTR only — select one in Panels to create Strips', true);
+  } else if (!createState.pendingMutationId) {
+    // Clear a stale "OPS/APP/CTR only"/validation message once one is
+    // selected — but never stomp "Creating…" while an attempt is still in
+    // flight.
+    _setCreateStripMsg('', false);
+  }
+}
+
+/**
+ * docs/adr/0023 — converts this DEPARTURE Strip into its return-leg
+ * ARRIVAL Strip IN PLACE: one Mutation (`ConvertToArrival`), same stripId,
+ * same fdrId, throughout. Two earlier versions of this feature spawned a
+ * SECOND Strip/FDR instead (per guide §3.6's turnaround rule) — abandoned
+ * after live testing found that approach left a stale departure Strip
+ * behind and needed every field copied by hand, including a beacon code
+ * that can't even be copied cleanly (fdr-store.js's createFdr always
+ * auto-allocates a fresh one). Reusing the same FDR makes both problems
+ * structurally impossible — there's nothing to copy, because nothing new
+ * is created. `board-store.js`'s `_applyConvertToArrival` is authoritative
+ * for the state/role/Bay/permission rules; this just sends the Mutation.
+ */
+export function convertStripToArrival(strip) {
+  // _resolveActingPositionId (bay-view.js), like every other dispatch helper
+  // — not strip.ownerPositionId unconditionally. The server now requires the
+  // acting Position to be one this session is actually Primary at, so naming
+  // the owner regardless of whether this controller holds it is a guaranteed
+  // rejection rather than the silent pass it used to get.
+  const actingPositionId = _resolveActingPositionId(strip);
+  if (!actingPositionId) return;
+  sendEfspMutation(actingPositionId, strip, { kind: 'ConvertToArrival' });
+}
+
+async function _submitCreateStrip() {
+  if (!els.createStripInput || _createStripLookupInFlight) return;
+
+  const origin = _createStripOrigin();
+  if (!origin) {
+    _setCreateStripMsg('OPS, APP or CTR only — select one in Panels to create Strips', true);
+    return;
+  }
+  // docs/ui-findings F-308 — the picker is read BEFORE the typed callsign is
+  // validated, not after. A bound CreateStrip carries no `fdr` at all:
+  // identity comes entirely from the flight it is fragged against. Demanding
+  // a callsign here therefore asked for a value that was then thrown away,
+  // and typing the NEIGHBOURING callsign fragged the picked flight without a
+  // word — the adjacent-callsign mis-pick _refreshMissionBindPicker's own
+  // comment says this has to survive. `.mission <CALLSIGN>` never had the
+  // problem because it has no second source of identity to disagree with.
+  const bindFdrId = _selectedBindFdrId();
+  const boundCallsign = bindFdrId ? _callsignOfFdr(bindFdrId) : '';
+  const callsign = els.createStripInput.value.trim().toUpperCase();
+  if (bindFdrId) {
+    // Not demanded — and not silently discarded either. Only the controller
+    // knows which of the two flights they meant.
+    if (callsign && boundCallsign && callsign !== boundCallsign) {
+      _setCreateStripMsg(`${boundCallsign} is picked in the list but ${callsign} is typed — clear the callsign, or pick ${callsign} in the list`, true);
+      return;
+    }
+  } else {
+    if (!callsign) {
+      _setCreateStripMsg('Enter a callsign first', true);
+      return;
+    }
+    if (!/^[A-Z0-9]{1,7}$/.test(callsign)) {
+      _setCreateStripMsg('Callsign must be 1-7 alphanumeric characters', true);
+      return;
+    }
+  }
+
+  // Duplicate-origination warning (§3.6). A flight handed off across a
+  // Facility boundary is meant to be picked up by ACCEPTing the replica that
+  // already exists for it — but nothing stopped a controller originating a
+  // fresh, unlinked Strip for the same callsign instead, which then carries
+  // its own beacon code and its own lifecycle for an aircraft that already
+  // had both. Two presses, not a block: genuinely distinct flights do reuse
+  // a callsign across a session, so this is the controller's call.
+  //
+  // SKIPPED in bind mode, deliberately. The warning's whole point is "you
+  // are about to mint a second beacon code and a second lifecycle for a
+  // flight that already has both" — binding is the precise opposite, the
+  // very thing the warning tells you to do instead. Leaving it in would
+  // make the good path harder than the bad one.
+  const existing = bindFdrId ? [] : liveStripsForCallsign(callsign);
+  if (existing.length > 0 && createState.pendingDuplicateCallsign !== callsign) {
+    createState.pendingDuplicateCallsign = callsign;
+    const where = existing.map(s => `${s.facilityId || '?'}/${s.ownerPositionId}`).join(', ');
+    _setCreateStripMsg(`${callsign} already has a live Strip at ${where} — press again to create another anyway`, true);
+    return;
+  }
+  createState.pendingDuplicateCallsign = null;
+
+  // Flight-plan pre-fill (guide §10.1 "auto-population — do it
+  // aggressively", §10.5 provenance fallback chains) — DEPARTURE-role
+  // only: the DD1801 lookup maps onto route/altitude/departure+destination
+  // airport/remarks (crc-sync's toFdrFiledSeed), which line up with
+  // DEPARTURE's filed shape, not ARRIVAL's (originAirport/arrivalFix/
+  // estimatedArrivalTimeUtc — a genuinely different set of fields),
+  // OVERFLIGHT's (docs/adr/0023 — the fields it reuses mean the flight's
+  // real origin/destination, not a plan filed FROM Incirlik, so a lookup
+  // keyed on "departed Incirlik" would be actively wrong here), or
+  // MISSION's (WP4A second slice — a mission line has no DD1801 flight
+  // plan at all; its fields are mission number/package/controlling agency,
+  // nothing a civil flight-plan lookup could ever populate). Bounded by
+  // the lookup's own client-side timeout; ANY failure (unreachable, no
+  // plan on file, malformed response) just leaves every field blank,
+  // exactly like today's behavior — Strip creation is never blocked on
+  // this succeeding, only delayed by a few seconds while it's tried.
+  // §9.10 / docs/adr/0050 — filing by short name. A picked stereo SKIPS the
+  // DD1801 lookup below entirely, rather than racing it: filing a canned
+  // route is an explicit choice a controller just made, where the lookup is
+  // a best-effort background guess, and §9.10's whole premise is the path
+  // taken *without* the international form. Spending up to four seconds
+  // fetching a plan whose fields the stereo would mostly supply anyway is
+  // latency for nothing — and it keeps the server's seed-wins-over-stereo
+  // precedence rule out of the one place a real controller could hit it.
+  const stereoRouteName = _stereoEligibleOrigin(origin) ? _selectedStereoName() : '';
+
+  let seed = {};
+  if (!stereoRouteName && origin.role !== 'ARRIVAL' && origin.role !== 'OVERFLIGHT' && origin.role !== 'MISSION' && typeof lookupFlightPlanClient === 'function') {
+    _createStripLookupInFlight = true;
+    if (els.createStripInput) els.createStripInput.disabled = true;
+    if (els.createStripBtn) els.createStripBtn.disabled = true;
+    _setCreateStripMsg('Looking up flight plan…', false);
+    try {
+      const result = await lookupFlightPlanClient(callsign);
+      if (result.found) seed = result.seed;
+    } finally {
+      // lookupFlightPlanClient is designed to never throw (see its own
+      // header comment) — this finally is a defense-in-depth backstop, not
+      // an expected path, so the form can never get stuck disabled.
+      _createStripLookupInFlight = false;
+      if (els.createStripInput) els.createStripInput.disabled = false;
+      if (els.createStripBtn) els.createStripBtn.disabled = false;
+    }
+  }
+
+  const fdr = origin.role === 'ARRIVAL'
+    ? { callsign, aircraftType: '', wakeCategory: '', originAirport: '', estimatedArrivalTimeUtc: null }
+    : origin.role === 'MISSION'
+      ? { callsign, missionNumber: '', packageId: '', controllingAgency: '', vulWindowStartUtc: null, vulWindowEndUtc: null }
+      : stereoRouteName
+        // Only the callsign and the short name go over the wire — route,
+        // altitude and airports are left ABSENT rather than blank so the
+        // server's table fills them (an empty string would count as an
+        // explicit value and win over the expansion). The server resolves
+        // the name again and refuses one it doesn't know, so this client
+        // list is the picker's option source, never the authority.
+        ? { callsign, aircraftType: '', wakeCategory: '', stereoRouteName }
+        : {
+            callsign, aircraftType: '', wakeCategory: '',
+            departureAirport: '', destinationAirport: '', route: '', requestedAltitude: '',
+            ...seed, // overrides only the blanks above when the lookup actually found something
+          };
+
+  // A bound mission line carries NO `fdr`: identity comes entirely from the
+  // flight it is fragged against, down to the Mode 3/A (guide §9.8's bridge
+  // field). The server refuses both keys together, so sending a blank one
+  // "just in case" would refuse the whole op.
+  const createOp = bindFdrId
+    ? { kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', role: origin.role, fdrId: bindFdrId, initialState: origin.initialState || undefined }
+    : { kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', role: origin.role, fdr, initialState: origin.initialState || undefined };
+  createState.pendingMutationId = sendEfspCreateStrip(origin.actingPositionId, createOp, origin.facilityId);
+  els.createStripInput.value = '';
+  if (els.createStripStereo) els.createStripStereo.value = '';
+  if (els.createStripBind) els.createStripBind.value = '';
+  createState.pendingDuplicateCallsign = null;
+  _setCreateStripMsg(
+    bindFdrId ? (origin.role === 'MISSION' ? `Fragging a mission line for ${boundCallsign || 'this flight'}…` : `Filing ${boundCallsign} against its ATO mission…`)
+      : stereoRouteName ? `Creating (${stereoRouteName})…`
+        : seed.route ? 'Creating (flight plan found)…'
+          : 'Creating…',
+    false);
+}
+
+/**
+ * Called from bay-view.js's ops-filed card "Create Strip" button — the
+ * plan's data is already in hand (it came from the same list fetch that
+ * rendered the card), so this skips lookupFlightPlanClient's network round
+ * trip entirely and goes straight to CreateStrip. DEPARTURE/OPS only, same
+ * scope restriction _submitCreateStrip's own lookup has — see
+ * docs/efsp-usage-guide.md §4 for why ARRIVAL/CTR is out of scope for this
+ * seed shape.
+ * @param {{callsign:string, seed:object}} plan
+ */
+export function createStripFromFiledPlan(plan) {
+  if (!plan || !plan.callsign) return;
+  if (!getActingPositions().includes('OPS')) {
+    _setCreateStripMsg('OPS only — select OPS in Panels to create Strips', true);
+    return;
+  }
+  const fdr = {
+    callsign: plan.callsign, aircraftType: '', wakeCategory: '',
+    departureAirport: '', destinationAirport: '', route: '', requestedAltitude: '',
+    ...(plan.seed || {}),
+  };
+  createState.pendingMutationId = sendEfspCreateStrip('OPS', {
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', fdr,
+  }, 'INCIRLIK');
+  _setCreateStripMsg('Creating ' + plan.callsign + ' (flight plan found)…', false);
+}
+
+export function _wireCreateStrip() {
+  if (!els.createStripBtn || !els.createStripInput) return;
+  els.createStripBtn.addEventListener('click', _submitCreateStrip);
+  els.createStripInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') _submitCreateStrip(); });
+  els.createStripInput.addEventListener('input', () => _refreshAtoFirstPicker(_createStripOrigin())); // docs/adr/0071
+  _refreshCreateStripAvailability();
+}

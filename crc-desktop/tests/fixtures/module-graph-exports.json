@@ -582,6 +582,61 @@
    "hungOrdnanceAdvisoryFor",
    "ordnanceAlertsFor"
   ],
+  "panels/efsp/panel/arrivals.js": [
+   "_renderArrivalsLine",
+   "noteEfspArrivalShown",
+   "noteEfspBoardArrivals"
+  ],
+  "panels/efsp/panel/create-strip.js": [
+   "_availableCreateStripOrigins",
+   "_createStripOrigin",
+   "_loadStereoRoutes",
+   "_missionBindCandidates",
+   "_refreshAtoFirstPicker",
+   "_refreshCreateStripAvailability",
+   "_setCreateStripMsg",
+   "_stereoEligibleOrigin",
+   "_wireCreateStrip",
+   "convertStripToArrival",
+   "createStripFromFiledPlan",
+   "reloadEfspStereoRoutes"
+  ],
+  "panels/efsp/panel/dot-commands.js": [
+   "_dispatchDotCommand",
+   "_wireDotCommand"
+  ],
+  "panels/efsp/panel/refusal.js": [
+   "MUTATION_ERROR_MESSAGES",
+   "MUTATION_ERROR_VISIBLE_MS",
+   "_callsignOfFdr",
+   "_setCurrentRefusalForTest",
+   "_showMutationError",
+   "_showMutationWarning",
+   "dismissEfspRefusal",
+   "getCurrentEfspRefusal",
+   "notifyEfspMutationAck",
+   "notifyEfspOrphanedMutation"
+  ],
+  "panels/efsp/panel/staleness.js": [
+   "noteEfspHeartbeat",
+   "startEfspStalenessCheck"
+  ],
+  "panels/efsp/panel/state.js": [
+   "_activeBayId",
+   "_activePositionTab",
+   "_setActiveBayId",
+   "_setActivePositionTab",
+   "_setBayContentElForTest",
+   "createState",
+   "els"
+  ],
+  "panels/efsp/panel/tabs.js": [
+   "_renderPositionTabs",
+   "_runEfspSearch",
+   "computePositionTabs",
+   "efspVisibleBayId",
+   "getActiveEfspSearchQuery"
+  ],
   "panels/efsp/pattern-board.js": [
    "INTENT_LABELS",
    "PATTERN_ACTIONS",
