@@ -79,7 +79,11 @@ test('every field applyEfspDelta reads is on a real efsp-board-delta (broadcast 
 test('every field applyEfspMutationAck and the efsp-mutation-ack case read is on a real ack (success) or a rejection', () => {
   const read = fieldsReadBy(CLIENT_STATE, 'applyEfspMutationAck');
   const caseFrom = CLIENT_APP.indexOf("registerEfspMessage('efsp-mutation-ack'");
-  const caseBody = CLIENT_APP.slice(caseFrom, CLIENT_APP.indexOf("registerEfspMessage('efsp-positions-ack'"));
+  const caseTo = CLIENT_APP.indexOf("registerEfspMessage('efsp-positions-ack'");
+  // a handler that moved again must fail here, not scan an empty body (indexOf -1 slices to '')
+  assert.ok(caseFrom >= 0 && caseTo > caseFrom, 'the efsp-mutation-ack handler moved: update this scan');
+  const caseBody = CLIENT_APP.slice(caseFrom, caseTo);
+  assert.ok(caseBody.length > 100, 'the efsp-mutation-ack handler body scanned empty');
   const inCase = [...new Set([...caseBody.matchAll(/\bmsg\.([A-Za-z_]\w*)/g)].map(m => m[1]))];
   const wanted = [...new Set([...read, ...inCase])].sort();
   assert.ok(wanted.length >= 6, `scan found ${wanted}`);
