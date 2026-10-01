@@ -887,6 +887,35 @@ in the ADR for later); a block on a datalink/atobrief import path is not walked 
 no clearance altitude). Pre-existing `crc-sync npm test` failures at U6's base are listed in
 `docs/wip/U6.md`.
 
+**Incirlik RSU / SFA / PAR, client half only (L18, `0075`).** Standalone, unit-tested and **mounted
+nowhere**: `panels/efsp/final-panel.js` (the FINAL component, shared by PAR and the carrier Final lane:
+pure model `finalCallsDue`, `createFinalTracker`, `finalViewModel`, `terminalActionsFor` plus
+`renderFinalPanel`; zero input elements, a test holds it; a free-running 5 s cadence bar off the mission
+clock, because a voice call cannot be observed and a tap per call is data entry, guide 7.10; required calls
+(mile, glidepath intercept, decision altitude, trend) prompt from sample crossings and clear after 4 s) and
+`pattern-board.js` (RSU: closed, initial, base, final; PriFly: initial, break, downwind, groove; configured
+by leg list; advisories only, nothing refuses; a "Next leg" button is the touch alternative to drag; a
+Strip whose Rack is not a leg shows in an UNPLACED column). `css/efsp-pattern-final.css` and the tags in
+`index.html`; `tests/efsp-final-panel.test.js` (18 tests, stand-in data). Defaults, all `[SOURCE-DEFINED]`:
+PAR's terminal events reuse the FINAL Role's states (Landing assured, Ball to `BALL`; Missed approach,
+Waveoff to `BOLTER_WAVEOFF`; no new state, `nla.js` is L17's); glidepath tolerance 0.3 deg, trend step
+0.1 deg, prompt hold 4 s, long-in-pattern 10 min, more than one on the last leg advised; chip actions
+Landed (`RECOVERED`) and Drop (`DROPPED`).
+- **The server half is specified in `docs/wip/L18.md` ("Server half: exact spec") and NOT built**,
+  waiting for L17's Roles: `facility-config.js` positions `RSU`/`SFA`/`PAR` (all `MILITARY_ATC`: a new
+  class would silently drop STCA, the `0041` inclusion-list trap), `positionLetters` `R`/`S`/`P`, covering
+  `SFA`/`PAR` to `APP` and **none for RSU** (a supervisory Position strands Strips, PriFly's reasoning),
+  radars, Bays (`rsu-pattern`, an SFA frequencies Bay with the state ARRIVAL Strips carry, `par-final` one
+  Strip at a time), a validated `singleFrequencyApproach: { jurisdiction: 'APP', rotationSize: 3, pool }`
+  config with at least 5 frequencies, the `SFA_ROTATION` transfer kind (controller-initiated, so the four
+  trigger types stay four; Role ARRIVAL to FINAL in place, state `ON_FINAL`, frequency Block and Rack
+  unchanged; only the jurisdiction Position may change the rotation record; persist under `state/`,
+  snapshot key `sfaRotation`, audited), `permission.js` rows (PAR the FINAL rows; RSU PATTERN rows and no
+  closure rights, H18), tests, then client wiring through a Bay descriptor `view: 'pattern' | 'final' |
+  'sfa-freqs'` read by `bay-view.js`, agreed with L17 so the carrier's Bays use one mechanism.
+- Not walked: no pilot-request walk (no Strip can reach these Positions). `npm test` in crc-desktop
+  fails one environment test in a fresh worktree until `npm ci` runs inside `crc-desktop/app`.
+
 ## 4. What's left, and the known bugs
 
 **Not built, in the guide's order.** WP6: the field-state panel and the hook-mismatch check (L1b),

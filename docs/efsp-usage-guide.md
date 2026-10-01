@@ -27,7 +27,7 @@ Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green):
 - **All declutter is off** until the EFSP work is finished: formation labels and navpoint names both show. See §8F.
 - **Metrics and a traffic count**: the METRICS panel (PANELS → METRICS) and, behind it, two read endpoints on crc-sync. See §10.
 - **ATO import** — `TAC_C2` pastes or drops a USMTF ATO (atobrief exports one) and it becomes mission lines on the Board, with the air-refuelling tanker/receiver join shown on the Strips. See §8I.
-- **Built but not usable from the panel yet:** a carrier model (Marshal stack, recovery Case, ship banner). It is not wired into the Board: the carrier Positions arrive in a later wave.
+- **Built but not usable from the panel yet:** a carrier model (Marshal stack, recovery Case, ship banner), and the client halves of Incirlik's pattern board (RSU/PriFly legs) and the FINAL component (PAR and the carrier Final lane). Neither is mounted anywhere and no Strip can reach those Positions: the carrier Positions, RSU, SFA and PAR arrive in a later wave.
 
 Not built: WP6's arresting-gear data (DCS has no wires), plus WP7A's carrier Positions and PAR (the model exists). `docs/efsp-briefing.md` is the current handoff note.
 
