@@ -71,9 +71,69 @@ Machine load average ~90 during the runs (other agents).
   dependency; neither reads `state` nor `_activeCmid` (callers pass `causedBy`), so those are not passed.
 - `Placement({ state, rules, clock, fdrStore, touch, rebalanceRack, rejectedReplicaRefusal })`.
 
+## How to copy the pattern (BOARD-2, BOARD-3, SYNC)
+
+1. New file under `src/efsp/board/`, one class, `constructor({ rules, ...deps })`. Put **`rules` first** in the
+   destructure: the seam test's rule 4 only treats `{ rules,` as a declaration, and `, rules,` mid-list is flagged.
+   Store it with exactly `this._rules = rules;` (the S-BOARD1-1 exemption); read it as `this._rules.X` only.
+2. Store each dependency as `this._<name>`. If the moved code called `this._foo(...)` on the facade and `foo` stays on
+   the facade (or a tool patches it), pass `foo: (...a) => this._foo(...a)` and store it as `this._foo`: the moved
+   body then stays verbatim. Do the same for `touch`, always.
+3. Methods become public names (drop the leading `_`); the facade calls `this._<collab>.name(...)`. A sibling
+   collaborator is passed in by the facade, never required (seam rule 1); its methods are public, so the call passes
+   rule 2.
+4. Kernel access: `this._state.get(id)` / `.strips` / `.all()` / `.rack(b, r)` / `.bump(strip, by)` /
+   `.insert(strip)` / `.nextCid()`. Never `this._state._x`.
+5. Update the tests that reached a moved private (`board._placement.bayForNewOwner`), re-record
+   `guard-board-surface.json` with `UPDATE_GOLDEN=1 node --test tests/freeze/freeze-guards.test.mjs`, and list the
+   row change. Retarget any M-file whose `find` moved (check with `grep -cF` in both files).
+
+## Bump sites (step 2)
+
+`bump()` replaced 20 blocks: 17 exact (`_applyConvertToArrival`, `_applyApproveAirspaceEntry`,
+`_applyClearAirspaceEntry`, `_applyMoveStrip`, `_applySetBlock` ×3, `_applyAnnotationSet`, `_applyTransferStrip`,
+`_applySetFlag`, `_applySetState`, `_retireStrip`, `_applyCoordinationReject`, `_applyCoordinationCancel`,
+`receiveCoordinationCancel`, `_applyCoordinationStandBy`, `_applyTofiReject`'s else branch) and 3 with
+`updatedBy = null` (`receiveCoordinationPeerGone`, `reassignPositionStrips`, `returnCoveredStrips` →
+`bump(strip, null)`; `null || null` is `null`, so identical). Kept as written because they reuse a `now` read earlier:
+`_applyCarrierTransfer`, `_applySfaRotation`, `_applyCoordinationPropose`, `_applyCoordinationAccept`,
+`receiveCoordinationResponse`, `_applyTofiPropose` (×2), `_applyTofiAccept`, `_applyTofiTransferComms`,
+`receiveTofiProposal` (`reusedAt`), `receiveTofiExitProposal`, `receiveTofiResponse`. `rebalanceRack` keeps its own
+`rev += 1` + touch (no updatedAt). `insert()` at CreateStrip, `receiveCoordinationProposal`, `receiveTofiProposal`.
+
+## Questioner points
+
+- **W1-W2-2 (M6):** M6 moved with Placement and is retargeted to `src/efsp/board/placement.js`. M1, M2, M8, M15 stay in
+  `board-store.js` and still match once (M15's `  getDeltaSince(` is now the facade's one-line delegation, and renaming
+  it is still caught).
+- **W1-W2-3 (BoardState's underscored fields):** settled as recommended. BoardState keeps `_strips` etc. internally
+  and exposes public `strips`, `log`, `seq`, `epoch`, `cidSeq`, `get`, `all`, `rack`, `bump`, `insert`, `nextCid`,
+  `recordTouch`, `logGone`, `drainTouched`, `getDeltaSince` and the restore setters. No collaborator reads `_x` off
+  anything but `this`. `board-seam` passes strictly on all four files.
+
 ## Defaults taken (P2)
+
+- The collaborators' methods got public names (`placement.resolveOrderKey`, `audit.recordAudit`), not the briefing's
+  `this._placement._x`. Seam rule 2 would flag the underscored form as soon as a sibling (BOARD-2's Coordination) calls
+  it.
+- BoardState takes `{ clock, touch }` and BoardAudit takes `{ rules, clock, mutationLog }`, not the briefing's
+  signatures. See Design.
+- The `updatedBy = null` blocks use `bump(strip, null)`. They are value-identical to the exact block.
+- CreateStrip uses `insert()` as well as the two replica mints, because its code is the same `set` + touch.
+- Two orphaned doc comments (the Bay-implied-transition explainer and the `_nlaCtx` one-liner, which sat before
+  `_applyApproveAirspaceEntry`) moved to sit above the methods they describe in `placement.js`. The text is unchanged.
+- I asked main for one edit outside Owns, and main approved it as S-BOARD1-1: `tests/board-seam.test.mjs` rule 4
+  now exempts exactly `this._rules = rules;`, with three self-tests.
 
 ## Findings for other lanes
 
-- `tools/soak/host-core.js:122` wraps `bs._rebalanceRack` by name (not in the briefing's list next to `_touch` and
-  `_log`). Whoever replaces `_touch` with `observeTouches` (APP/SYNC) should replace this one too.
+- `tools/soak/host-core.js:122` wraps `bs._rebalanceRack` by name. The briefing's list next to `_touch` and `_log`
+  does not include it. Whoever replaces `_touch` with `observeTouches` (APP/SYNC) should replace this one too, and
+  then the facade's `_rebalanceRack` shim and Placement's `rebalanceRack` callback can go.
+- Seam-test quirk: in rule 4, `{ a, rules, b }` counts as "rules used as a whole value". `{ rules, a }` does not.
+  BOARD-2/3: put `rules` first.
+- Four `_mutationLog.record` calls stay inline in the facade: PeerGone, SystemReassign ×2 and Archive. They are not
+  `_recordAudit`/`_recordPeer`, so they were not moved. BOARD-2/3 or SYNC could route them through `BoardAudit`.
+- Comments in files outside my Owns still name the old private methods: `facility-config.js:438` names
+  `_bayForNewOwner`, `permission.js:581` and several tests name `_validateBayImpliedTransition`, and
+  `efsp-ws.js:40` names `_pruneLog`. They are L20's to fix.
