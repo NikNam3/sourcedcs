@@ -13,6 +13,7 @@ process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL = path.join(tmpDir, 'tact
 
 const { handleMessage } = await import('../src/efsp/efsp-ws.js');
 const { BoardStore } = await import('../src/efsp/board-store.js');
+import { fullRules } from "./helpers/full-rules.mjs";
 const { FdrStore } = await import('../src/efsp/fdr-store.js');
 const { PositionStore } = await import('../src/efsp/position-store.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
@@ -50,7 +51,7 @@ function makeCtx() {
       coordinationEffect: (primitive) => coordination.coordinationEffect(primitive),
       tofiCounterparts: (actingPositionId) => permission.tofiCounterparts(actingPositionId),
     };
-    const boardStore = new BoardStore(fdrStore, rules);
+    const boardStore = new BoardStore(fdrStore, fullRules(rules));
     facilities.set(facilityId, { boardStore, positionStore });
   }
 

@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { fullRules } from './helpers/full-rules.mjs';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -108,7 +109,7 @@ test('the drop time survives snapshot/restore, and a pre-L24 DROPPED Strip gets 
   const at = incirlik().droppedWallAtOf(dropped.stripId);
   assert.ok(snap.droppedWallAt.some(([id, ms]) => id === dropped.stripId && ms === at));
 
-  const fresh = new BoardStore(efsp.fdrStore, {}, { clock: efsp.clock });
+  const fresh = new BoardStore(efsp.fdrStore, fullRules(), { clock: efsp.clock });
   fresh.restore(snap);
   assert.equal(fresh.droppedWallAtOf(dropped.stripId), at);
 
@@ -116,7 +117,7 @@ test('the drop time survives snapshot/restore, and a pre-L24 DROPPED Strip gets 
   const old = { ...snap };
   delete old.droppedWallAt;
   const t0 = Date.now();
-  const restored = new BoardStore(efsp.fdrStore, {}, { clock: efsp.clock });
+  const restored = new BoardStore(efsp.fdrStore, fullRules(), { clock: efsp.clock });
   restored.restore(old);
   assert.ok(restored.droppedWallAtOf(dropped.stripId) >= t0, 'its 2 h start at the restore');
   const live = snap.strips.find(s => s.state !== 'DROPPED');

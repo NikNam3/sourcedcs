@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import crypto from 'crypto';
 
 const { BoardStore } = await import('../src/efsp/board-store.js');
+import { fullRules } from "./helpers/full-rules.mjs";
 const { FdrStore } = await import('../src/efsp/fdr-store.js');
 
 // A minimal, deterministic `rules` fixture standing in for block-map.js /
@@ -38,7 +39,7 @@ function makeRules(overrides = {}) {
 
 function makeStore(rulesOverrides) {
   const fdrStore = new FdrStore();
-  const board = new BoardStore(fdrStore, makeRules(rulesOverrides));
+  const board = new BoardStore(fdrStore, fullRules(makeRules(rulesOverrides)));
   return { board, fdrStore };
 }
 
@@ -283,9 +284,9 @@ test('MoveStrip between two Strips whose orderKeys already collide (a real, if r
 
 test('applyMutation never propagates an unexpected exception — it rejects the one Mutation instead of crashing the process, regardless of where the exception originates', () => {
   const fdrStore = new FdrStore();
-  const board = new BoardStore(fdrStore, makeRules({
+  const board = new BoardStore(fdrStore, fullRules(makeRules({
     resolveBlockTarget: () => { throw new Error('boom — simulated unexpected failure deep in a rule'); },
-  }));
+  })));
   const strip = createStrip(board);
   const result = board.applyMutation(mutation(strip, { kind: 'SetBlock', blockId: '9E', value: 'x' }), 'OPS', 'OPS');
   assert.equal(result.ok, false);
@@ -554,7 +555,7 @@ function makeTransferNlaRules(overrides = {}) {
 
 test('a transfer-shaped InvokeNla changes owner, Bay, and state atomically, in one Mutation', () => {
   const fdrStore = new FdrStore();
-  const board = new BoardStore(fdrStore, makeTransferNlaRules());
+  const board = new BoardStore(fdrStore, fullRules(makeTransferNlaRules()));
   const strip = createStrip(board, 'TWR', { op: { ...createMutation().op, bayId: 'twr-airborne', rackId: 'main' } });
   board.applyMutation({ clientMutationId: crypto.randomUUID(), stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'SetState', toState: 'DEPARTED' } }, 'TWR', 'TWR');
   const departed = board.getStrip(strip.stripId);
@@ -568,7 +569,7 @@ test('a transfer-shaped InvokeNla changes owner, Bay, and state atomically, in o
 
 test('a transfer-shaped InvokeNla to an unoccupied, uncovered Position is rejected via _applyTransferStrip\'s own occupancy gate, and the Strip stays with the sender — defense in depth even when computeNla itself doesn\'t pre-check occupancy (the real nla.js does; this fixture deliberately doesn\'t, to exercise board-store.js\'s own gate)', () => {
   const fdrStore = new FdrStore();
-  const board = new BoardStore(fdrStore, makeTransferNlaRules({ isOccupied: () => false, coveringPositionFor: () => null }));
+  const board = new BoardStore(fdrStore, fullRules(makeTransferNlaRules({ isOccupied: () => false, coveringPositionFor: () => null })));
   const strip = createStrip(board, 'TWR', { op: { ...createMutation().op, bayId: 'twr-airborne', rackId: 'main' } });
   board.applyMutation({ clientMutationId: crypto.randomUUID(), stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'SetState', toState: 'DEPARTED' } }, 'TWR', 'TWR');
   const departed = board.getStrip(strip.stripId);
@@ -581,7 +582,7 @@ test('a transfer-shaped InvokeNla to an unoccupied, uncovered Position is reject
 
 test('a transfer-shaped InvokeNla is NOT recorded into the Undo window (docs/adr/0009) — Undo reports unavailable right after', () => {
   const fdrStore = new FdrStore();
-  const board = new BoardStore(fdrStore, makeTransferNlaRules());
+  const board = new BoardStore(fdrStore, fullRules(makeTransferNlaRules()));
   const strip = createStrip(board, 'TWR', { op: { ...createMutation().op, bayId: 'twr-airborne', rackId: 'main' } });
   board.applyMutation({ clientMutationId: crypto.randomUUID(), stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'SetState', toState: 'DEPARTED' } }, 'TWR', 'TWR');
   const departed = board.getStrip(strip.stripId);
@@ -640,7 +641,7 @@ function makeStateOwnerRules(overrides = {}) {
 
 function makeStateOwnerStore(rulesOverrides) {
   const fdrStore = new FdrStore();
-  const board = new BoardStore(fdrStore, makeStateOwnerRules(rulesOverrides));
+  const board = new BoardStore(fdrStore, fullRules(makeStateOwnerRules(rulesOverrides)));
   return { board, fdrStore };
 }
 
@@ -1036,7 +1037,7 @@ test('a Strip snapshot/restore round-trip resolves to exactly one owner, unchang
   // Simulate an actual restart: a brand-new BoardStore/FdrStore instance,
   // as would happen on process restart, restoring only from persisted data.
   const freshFdrStore = new FdrStore();
-  const freshBoard = new BoardStore(freshFdrStore, makeRules());
+  const freshBoard = new BoardStore(freshFdrStore, fullRules(makeRules()));
   freshBoard.restore(snap);
 
   const restored = freshBoard.getStrip(strip.stripId);
@@ -1051,7 +1052,7 @@ test('restore() preserves the cid sequence so future CreateStrip calls do not re
   const snap = board.snapshot();
 
   const freshFdrStore = new FdrStore();
-  const freshBoard = new BoardStore(freshFdrStore, makeRules());
+  const freshBoard = new BoardStore(freshFdrStore, fullRules(makeRules()));
   freshBoard.restore(snap);
   const second = createStrip(freshBoard, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'ZZZ9999' } } });
 

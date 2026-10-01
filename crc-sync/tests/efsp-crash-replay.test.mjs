@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { fullRules } from './helpers/full-rules.mjs';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -161,7 +162,7 @@ test('the replay window forgets entries older than 10 minutes', () => {
   let now = 1_800_000_000_000;
   Date.now = () => now;
   try {
-    const board = new BoardStore(new FdrStore(), {});
+    const board = new BoardStore(new FdrStore(), fullRules());
     const create = (callsign) => board.applyMutation({
       clientMutationId: `cm-${callsign}`,
       op: { kind: 'CreateStrip', bayId: 'proposed', rackId: 'main', fdr: { ...DEPARTURE_FDR, callsign } },
@@ -173,7 +174,7 @@ test('the replay window forgets entries older than 10 minutes', () => {
     assert.deepEqual(snap.replay.map(([cmid]) => cmid), ['cm-NEW1']);
     assert.equal(REPLAY_PERSIST_WINDOW_MS, 10 * 60 * 1000);
 
-    const restored = new BoardStore(new FdrStore(), {});
+    const restored = new BoardStore(new FdrStore(), fullRules());
     restored.restore(JSON.parse(JSON.stringify(snap)));
     assert.equal(restored.hasApplied('cm-NEW1'), true);
     assert.equal(restored.hasApplied('cm-OLD1'), false);

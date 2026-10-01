@@ -16,6 +16,7 @@ process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH = path.join(tmpDir, 'mutations.jsonl'
 
 const { createEfsp } = await import('../src/efsp/index.js');
 const { BoardStore } = await import('../src/efsp/board-store.js');
+import { fullRules } from "./helpers/full-rules.mjs";
 const { FdrStore } = await import('../src/efsp/fdr-store.js');
 const { ConformanceMonitor } = await import('../src/efsp/conformance.js');
 
@@ -58,9 +59,9 @@ test('createEfsp stamps Strips, FDRs, Position occupancy and the Mutation log wi
 test('the NLA status every Strip carries is computed at mission time', () => {
   const clock = fakeClock();
   let seen = null;
-  const board = new BoardStore(new FdrStore(undefined, { clock }), {
+  const board = new BoardStore(new FdrStore(undefined, { clock }), fullRules({
     computeNla: (_strip, _fdr, now) => { seen = now; return null; },
-  }, { clock });
+  }), { clock });
   board.nlaStatusFor({ stripId: 's1', fdrId: 'f1', state: 'HELD' });
   assert.equal(seen, MISSION_0240Z);
 });

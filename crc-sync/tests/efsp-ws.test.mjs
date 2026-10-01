@@ -12,6 +12,7 @@ process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = path.join(tmpDir, 'facility.json
 
 const { handleMessage, RESYNC_RING_WINDOW } = await import('../src/efsp/efsp-ws.js');
 const { BoardStore } = await import('../src/efsp/board-store.js');
+import { fullRules } from "./helpers/full-rules.mjs";
 const { FdrStore } = await import('../src/efsp/fdr-store.js');
 const { CorrelationStore } = await import('../src/efsp/correlation-store.js');
 const { PositionStore } = await import('../src/efsp/position-store.js');
@@ -48,6 +49,7 @@ function makeCtx() {
       canCreateStripRole: (actingPositionId, role) => permission.canCreateStripRole(actingPositionId, role),
       canActOnState: (actingPositionId, role, state) => permission.canActOnState(actingPositionId, role, state),
       isSelfCoordinated: (controllerId, id) => positionStore.isSelfCoordinated(controllerId, id),
+      baysFor: (positionId) => facilityConfig.getBaysFor(positionId, facilityId),
       facilityId,
       peerBoard: (otherFacilityId) => {
         const other = facilities.get(otherFacilityId);
@@ -55,7 +57,7 @@ function makeCtx() {
       },
       coordinationEffect: (primitive) => coordination.coordinationEffect(primitive),
     };
-    const boardStore = new BoardStore(fdrStore, rules);
+    const boardStore = new BoardStore(fdrStore, fullRules(rules));
     facilities.set(facilityId, { boardStore, positionStore });
   }
 

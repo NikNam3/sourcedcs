@@ -12,6 +12,7 @@ process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = path.join(tmpDir, 'incirlik.json
 process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER = path.join(tmpDir, 'center.json');
 
 const { BoardStore } = await import('../src/efsp/board-store.js');
+import { fullRules } from "./helpers/full-rules.mjs";
 const { FdrStore } = await import('../src/efsp/fdr-store.js');
 const { PositionStore } = await import('../src/efsp/position-store.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
@@ -56,7 +57,7 @@ function makeFacilities({ aitAuthorized = {} } = {}) {
       coordinationEffect: (primitive) => coordination.coordinationEffect(primitive),
       coordinationEligibleState: (role) => coordination.coordinationEligibleState(role),
     };
-    const boardStore = new BoardStore(fdrStore, rules);
+    const boardStore = new BoardStore(fdrStore, fullRules(rules));
     facilities.set(facilityId, { boardStore, positionStore });
   }
   return facilities;
