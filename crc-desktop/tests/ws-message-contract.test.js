@@ -90,12 +90,9 @@ test('every message type a client send helper emits is accepted by a server disp
 });
 
 // The server accepts a few types the shipped client never sends. Listed so a NEW one
-// has to be acknowledged here (and the reason kept honest).
-const ACCEPTED_BUT_NEVER_SENT_BY_UI = {
-  // S-12 / briefing L6 F1: sendEfspResync() exists but nothing calls it, the reconnect path
-  // relies on the fresh snapshot instead. The server half is built, tested and unreachable.
-  'efsp-resync': 'sendEfspResync is defined and never called',
-};
+// has to be acknowledged here (and the reason kept honest). Empty since S-12 was
+// wired (efsp-resync is sent on reconnect, on a Board epoch change and on a heartbeat gap).
+const ACCEPTED_BUT_NEVER_SENT_BY_UI = {};
 
 test('every type the server accepts is either sent by the client or a known unreachable path', () => {
   const orphan = ACCEPTED_BY_SERVER.filter(t => !SENT_BY_CLIENT.includes(t) && !(t in ACCEPTED_BUT_NEVER_SENT_BY_UI));
@@ -114,4 +111,19 @@ test('efsp-resync has no ack type of its own; its reply is a snapshot or a board
   assert.match(body, /_snapshot|snapshotMessage|efsp-snapshot|efsp-board-delta/, '_handleResync no longer replies with a snapshot or delta');
 });
 
-test.todo('S-12: the shipped client never sends efsp-resync (sendEfspResync has no caller); wire it or delete the dead path (supervisor decision)');
+// S-12 (ruling in decisions.md): the resync path is reachable from the shipped UI. A sender
+// that nothing calls is the dead path the todo here used to name.
+test('S-12: efsp-resync is wired: sendEfspResync is reached from app.js through the three triggers', () => {
+  const WS = readClient('panels/efsp/efsp-ws.js');
+  assert.match(WS, /type:\s*'efsp-resync'/);
+  // each trigger is called from app.js's socket handlers ...
+  for (const trigger of ['resyncHeldEfspBoardsOnOpen', 'noteEfspBoardMessageForSync', 'noteEfspHeartbeatForSync']) {
+    assert.ok(APP.includes(`${trigger}(`), `app.js never calls ${trigger}`);
+    // ... and each reaches requestEfspResync -> sendEfspResync inside efsp-ws.js
+    const from = WS.indexOf(`function ${trigger}(`);
+    assert.ok(from > 0, `${trigger} missing from efsp-ws.js`);
+    assert.match(WS.slice(from, WS.indexOf('\n}\n', from)), /requestEfspResync\(/, `${trigger} does not request a resync`);
+  }
+  const req = WS.indexOf('function requestEfspResync(');
+  assert.match(WS.slice(req, WS.indexOf('\n}\n', req)), /sendEfspResync\(/);
+});

@@ -56,7 +56,8 @@ test('every field applyEfspSnapshot reads is on a real efsp-snapshot', () => {
 });
 
 test('every field applyEfspDelta reads is on a real efsp-board-delta (broadcast of an accepted Mutation)', () => {
-  const read = fieldsReadBy(CLIENT_STATE, 'applyEfspDelta');
+  // the seq/epoch/facility reads moved into the two helpers applyEfspDelta calls (S-12 resync wiring)
+  const read = [...new Set(['applyEfspDelta', '_boardSyncOf', '_adoptBoardSeq'].flatMap(f => fieldsReadBy(CLIENT_STATE, f)))].sort();
   assert.ok(read.length >= 4, `scan found ${read}`);
   const result = efsp.handleMessage(c.OPS.session, {
     version: 1, type: 'efsp-mutation', clientMutationId: 'wire-1', facilityId: 'INCIRLIK', actingPositionId: 'OPS',
