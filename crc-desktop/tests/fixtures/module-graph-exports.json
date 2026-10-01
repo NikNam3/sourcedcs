@@ -276,6 +276,7 @@
    "_setExpandedStripId",
    "_setPendingConvertStripId",
    "_setRenderAllOpenEfspBaysForTest",
+   "_setRenderBayForTest",
    "_setSelectEfspStripByIdForTest",
    "_setSelectedStripIdForTest",
    "_stripElNeedsRebuild",
@@ -782,7 +783,7 @@
   ]
  },
  "bridge": {
-  "count": 667,
+  "count": 668,
   "skipped": [],
   "names": [
    "$aptDisplay",
@@ -975,6 +976,7 @@
    "_setMeasure",
    "_setPendingConvertStripId",
    "_setRenderAllOpenEfspBaysForTest",
+   "_setRenderBayForTest",
    "_setSelectEfspStripByIdForTest",
    "_setSelectedApt",
    "_setSelectedStripIdForTest",
