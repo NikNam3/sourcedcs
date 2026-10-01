@@ -54,7 +54,7 @@ const FIELD_STATE_GEAR_CHECK_STATES = ['INBOUND', 'HANDED_TO_TOWER', 'FINAL'];
 
 // The mirror of field-state.js's SUSPENSION_LABELS (decisions.md H52: the
 // generic "runway works + inspection" suspension).
-const FIELD_STATE_SUSPENSION_LABELS = { WORKS: 'works in progress' };
+const FIELD_STATE_SUSPENSION_LABELS = { WORKS: 'works in progress', RUNWAY_CHANGE: 'runway change in progress' };
 
 const FIELD_STATE_GEAR_TYPE_LABELS = { BAK_12: 'BAK-12', E_5: 'E-5', OTHER: 'Gear' };
 

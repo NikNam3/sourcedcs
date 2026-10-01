@@ -209,6 +209,7 @@ const RUNWAY_GATED_STATES = Object.freeze({
 // phrase style, naming the runway and what is wrong with it.
 const SUSPENSION_LABELS = {
   WORKS: 'works in progress',
+  RUNWAY_CHANGE: 'runway change in progress',
 };
 
 /** The inhibit reason a runway's status produces, or null when it is usable. */
