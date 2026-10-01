@@ -27,6 +27,7 @@ const { isValidFrequency, MIN_FREQUENCY_MHZ, MAX_FREQUENCY_MHZ } = require('./ai
 // path — or a test constructing an FdrStore directly — silently skips it.
 const stereoRoutes = require('./stereo-routes');
 const { resolveZuluHhmm, resolveZuluHhmmAfter } = require('./zulu-time');
+const { setCarrierFlightField } = require('./carrier/flight-record');
 const { WALL_CLOCK } = require('../mission-clock');
 
 const VOID_DEADLINE_MINUTES = 30; // §3.8 — derived, not stored input
@@ -993,6 +994,29 @@ class FdrStore {
     // One provenance key for the whole sub-object, as `tofi` already does —
     // these are filled in incrementally from separate Block edits and every
     // one of them is controller-entered.
+    fdr.provenance['military'] = 'CONTROLLER_ENTERED';
+    fdr.rev += 1;
+    fdr.updatedAt = this._clock.now();
+    fdr.updatedBy = by || null;
+    return { ok: true, fdr };
+  }
+
+  /**
+   * docs/adr/0074 (ADR 0064) — one carrier field of this flight
+   * (`fdr.military.carrier`: EEAT, approach type, approach button, bingo field
+   * and fuel, low state). On the FDR because the FDR outlives every Strip: the
+   * launch Strip is dropped at launch and the recovery Strip is a new one on the
+   * same flight, so an EEAT held on a Strip would die exactly when it is needed
+   * (§9.12 rule 7). Validated by carrier/flight-record.js, which refuses a
+   * frequency where a button belongs (rule 6). `null` clears.
+   */
+  setCarrier(fdrId, field, value, { by } = {}) {
+    const fdr = this._fdrs.get(fdrId);
+    if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
+    const military = ensureMilitary(fdr);
+    const r = setCarrierFlightField(military.carrier, field, value);
+    if (!r.ok) return r;
+    fdr.military = { ...military, carrier: r.flight };
     fdr.provenance['military'] = 'CONTROLLER_ENTERED';
     fdr.rev += 1;
     fdr.updatedAt = this._clock.now();

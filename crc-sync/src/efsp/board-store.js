@@ -33,6 +33,7 @@ const { isValidAltitude } = require('./airspace-config');
 const { MAX_FREE_TEXT, SEPARATION_REGIMES } = require('./fdr-store');
 const { WALL_CLOCK } = require('../mission-clock');
 const { runwayRackFor, runwayInhibitFor, RUNWAY_GATED_STATES } = require('./field-state');
+const { CARRIER_TRANSFER_EFFECTS } = require('./carrier/transfer-effects'); // pure (docs/adr/0074)
 
 const FLAG_KEYS = ['offset', 'flipped', 'removeIndicator', 'highlight', 'attention'];
 const APPLIED_MUTATIONS_CAP = 5000;
@@ -408,7 +409,14 @@ class BoardStore {
     // ownership answers "does this Position own THIS Strip", permission
     // answers "may this Position class perform this op kind at all"
     // (e.g. only OPS may CreateStrip — guide §4.1 rule 3).
-    if (this._rules.canMutate && !this._rules.canMutate(actingPositionId, op.kind)) {
+    // CarrierTransfer (docs/adr/0074) is not an OP_KINDS grant: which Position
+    // may record WHICH of the four hand-overs is the model's own `from` list
+    // (permission.js's canRecordCarrierTransfer), one acting Position and one kind.
+    if (op.kind === 'CarrierTransfer') {
+      if (!(this._rules.canRecordCarrierTransfer && this._rules.canRecordCarrierTransfer(actingPositionId, op.transfer))) {
+        return { ok: false, reason: 'PERMISSION_DENIED', detail: `${actingPositionId} may not record ${op.transfer || 'that transfer'}` };
+      }
+    } else if (this._rules.canMutate && !this._rules.canMutate(actingPositionId, op.kind)) {
       return { ok: false, reason: 'PERMISSION_DENIED' };
     }
 
@@ -484,6 +492,11 @@ class BoardStore {
         result = this._applyApproveAirspaceEntry(strip, op, by); break;
       case 'ClearAirspaceEntry':
         result = this._applyClearAirspaceEntry(strip, by); break;
+      // docs/adr/0074 — the carrier's four hand-overs, each its own button with
+      // its own trigger type recorded (guide §9.12). One implementation: the NLA
+      // button reaches the same method.
+      case 'CarrierTransfer':
+        result = this._applyCarrierTransfer(strip, op.transfer, op.toPositionId, by, actingPositionId, mutation.clientMutationId); break;
       default:              result = { ok: false, reason: 'VALIDATION_ERROR', strip: deepClone(strip) };
     }
     this._recordAudit(mutation, actingPositionId, by, before, result);
@@ -505,6 +518,10 @@ class BoardStore {
       // one (guide §4.8.3 rule 4) — undefined for every op except a
       // successful TransferStrip, where board-store computes it above.
       selfCoordinated: result.selfCoordinated,
+      // The carrier hand-over kind and its trigger type (guide §9.12: "four
+      // different trigger types"), so an after-action review can tell them apart.
+      carrierTransfer: result.carrierTransfer ? result.carrierTransfer.kind : undefined,
+      carrierTrigger: result.carrierTransfer ? result.carrierTransfer.trigger : undefined,
     });
   }
 
@@ -616,7 +633,17 @@ class BoardStore {
     };
     this._strips.set(stripId, strip);
     this._touch(stripId);
-    return { ok: true, strip, fdr: created.fdr };
+    // docs/adr/0074: a recovery check-in (a MARSHAL Strip in IN_STACK) joins the
+    // Marshal stack at the next free slot. The Marshal re-sequences with one
+    // Move; a full stack is a warning, not a refusal of the check-in.
+    let warning;
+    let carrierChanged;
+    if (role === 'MARSHAL' && strip.state === 'IN_STACK' && this._rules.carrierAppendFlight) {
+      const a = this._rules.carrierAppendFlight(strip.fdrId, { by, actingPositionId });
+      if (a && a.ok === false) warning = `not in the Marshal stack: ${a.detail || a.reason}`;
+      else if (a && a.changed && a.changed.length) carrierChanged = true;
+    }
+    return { ok: true, strip, fdr: created.fdr, warning, carrierChanged };
   }
 
   /**
@@ -867,6 +894,11 @@ class BoardStore {
       // drag. `targetRackId` is set only on the drag path (decisions.md Q27).
       fieldStateFor: this._rules.fieldStateFor,
       targetRackId: target ? target.rackId : undefined,
+      // docs/adr/0074 — the recovery Case, the manned lane the stack feeds, and
+      // whether the flight is in the stack, for the carrier's NLA tables.
+      carrierCase: this._rules.carrierCase,
+      carrierLaneFor: this._rules.carrierLaneFor,
+      carrierInStack: this._rules.carrierInStack,
     };
   }
 
@@ -951,6 +983,17 @@ class BoardStore {
     const nla = this._rules.computeNla ? this._rules.computeNla(strip, fdr, this._clock.now(), this._nlaCtx({ bayId: targetBayId, rackId: targetRackId })) : null;
     if (!nla || nla.inhibited) {
       return { ok: false, reason: 'NLA_INHIBITED', detail: nla ? nla.inhibited : `no legal transition from ${strip.state}` };
+    }
+    // docs/adr/0074: the four carrier hand-overs are four buttons and each
+    // records its own trigger type (guide §9.12), so a drag into the Bay that
+    // implies the NLA's own state is refused with the button's name rather than
+    // moving the Strip without the stack effect and the tag.
+    if (nla.carrierTransfer && nla.toState === impliedState) {
+      const t = this._rules.carrierTransfers && this._rules.carrierTransfers[nla.carrierTransfer];
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `use the ${t ? t.label : nla.carrierTransfer} button — a carrier hand-over is recorded, not dragged` };
+    }
+    if (nla.toState !== impliedState && (nla.alsoLegal || []).includes(impliedState)) {
+      return { ok: true, impliedState };
     }
     if (nla.toState !== impliedState) {
       return {
@@ -1095,6 +1138,21 @@ class BoardStore {
         ok: true, strip, fdr: fdrResult.fdr, warning: fdrResult.warning,
         marsaVoided, fdrs: marsaVoided ? this._drainMarsaRegimeWrites() : undefined,
       };
+    }
+
+    // docs/adr/0074 — a flight's own carrier fields, written to the FDR
+    // (`fdr.military.carrier`) so they survive from the launch Strip to the
+    // recovery Strip. A `carrier-derived` Block never reaches here: its target
+    // resolves to null above, so SetBlock on CASE, DME, ANGELS, EAT/PUSH or the
+    // expected final bearing is a VALIDATION_ERROR (WP7A bullets 2 and 5).
+    if (target.kind === 'carrier') {
+      const fdrResult = this._fdrStore.setCarrier(strip.fdrId, target.field, op.value, { by });
+      if (!fdrResult.ok) return { ok: false, reason: fdrResult.reason, detail: fdrResult.detail, strip };
+      strip.rev += 1;
+      strip.updatedAt = this._clock.now();
+      strip.updatedBy = by || null;
+      this._touch(strip.stripId);
+      return { ok: true, strip, fdr: fdrResult.fdr };
     }
 
     // docs/adr/0058 — the flight's assigned altitude or heading. On the FDR,
@@ -1252,6 +1310,101 @@ class BoardStore {
     // driven transfer-shaped transition (board-store.js's own _applyInvokeNla).
     this._nlaHistory.delete(strip.stripId);
     return { ok: true, strip, routedTo, selfCoordinated, warning };
+  }
+
+  /**
+   * The carrier's four hand-overs, as one operation (docs/adr/0064, 0074; guide
+   * §9.12: "MUST NOT be unified behind one button"). Reached by the dedicated
+   * CarrierTransfer op and by the NLA button (computeNla's `carrierTransfer`),
+   * so there is exactly one implementation of what each does.
+   *
+   * Each kind carries its own TRIGGER TYPE, recorded on the Strip
+   * (`carrierTransfer`) and on the audit line, and rendered distinctly. Every
+   * trigger is a controller gesture: "radar contact", "ball" and "see you" are
+   * the controller recording what they saw or the pilot said, never a
+   * surveillance advance (guide §10.3, D5).
+   *
+   * Order: validate everything, then the stack effect (the one step that can
+   * refuse after validation), then the Strip. Nothing is half applied.
+   */
+  _applyCarrierTransfer(strip, kind, toPositionId, by, actingPositionId, clientMutationId) {
+    const fx = typeof kind === 'string' && Object.prototype.hasOwnProperty.call(CARRIER_TRANSFER_EFFECTS, kind) ? CARRIER_TRANSFER_EFFECTS[kind] : null;
+    if (!fx) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown carrier transfer '${kind}'`, strip };
+    const row = this._rules.carrierTransfers && this._rules.carrierTransfers[kind];
+    const label = row ? row.label : kind;
+    if (strip.role !== fx.role || strip.state !== fx.state) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `${label} applies to a ${fx.role} Strip in ${fx.state}, not ${strip.role} in ${strip.state}`, strip };
+    }
+    const blocked = this._nlaPrecheck(strip);
+    if (blocked) return { ok: false, reason: blocked.reason, detail: blocked.detail, strip };
+
+    let dest = strip.ownerPositionId;
+    if (fx.owner === 'TO') {
+      dest = toPositionId || fx.defaultTo || (this._rules.carrierLaneFor ? this._rules.carrierLaneFor(strip) : null);
+      if (!dest) return { ok: false, reason: 'NO_RECEIVING_POSITION', detail: 'no receiving Position present', strip };
+    }
+    const caseValue = this._rules.carrierCase ? this._rules.carrierCase() : null;
+    if (this._rules.validateCarrierTransfer) {
+      const v = this._rules.validateCarrierTransfer(kind, {
+        caseValue, fromPositionId: actingPositionId, toPositionId: fx.owner === 'TO' ? dest : (kind === 'FINAL_TO_LSO' ? null : undefined),
+      });
+      if (!v.ok) return { ok: false, reason: v.reason || 'VALIDATION_ERROR', detail: v.detail, strip };
+    }
+
+    let routedTo = null;
+    if (fx.owner === 'TO' && !this._rules.isOccupied(dest)) {
+      const covering = this._rules.coveringPositionFor(dest);
+      if (!covering || !this._rules.isOccupied(covering)) return { ok: false, reason: 'NO_RECEIVING_POSITION', strip };
+      dest = covering;
+      routedTo = covering;
+    }
+
+    // The stack effect: Commence marks the flight pushed (nobody renumbers, the
+    // drift defect D16 names); a hand-over to PriFly removes it leaving a
+    // vacancy (H28). A flight that was never in the stack has nothing to remove.
+    let carrierChanged = false;
+    const effect = row ? row.stackEffect : null;
+    if (effect && this._rules.carrierApplyEffect) {
+      const r = this._rules.carrierApplyEffect(effect, strip.fdrId, { by, actingPositionId, clientMutationId });
+      if (!r.ok && !(effect === 'REMOVE_NO_CLOSE_UP' && r.reason === 'NOT_FOUND')) {
+        return { ok: false, reason: r.reason || 'VALIDATION_ERROR', detail: r.detail, strip };
+      }
+      carrierChanged = !!(r.ok && r.changed && r.changed.length);
+    }
+
+    const now = this._clock.now();
+    const from = { role: strip.role, state: strip.state, ownerPositionId: strip.ownerPositionId };
+    strip.role = fx.toRole;
+    strip.state = fx.toState;
+    strip.ownerPositionId = dest;
+    delete strip.coveredFrom; // a new owner by decision, not by cover (F10)
+    let warning;
+    if (dest !== from.ownerPositionId) {
+      const bay = this._bayForNewOwner(dest, strip.state, strip);
+      if (bay) {
+        strip.bayId = bay.bayId;
+        strip.rackId = bay.rackId;
+        strip.orderKey = this._appendOrderKey(bay.bayId, bay.rackId, strip.stripId);
+      } else {
+        warning = `${dest} has no Bay for this Strip; it stays in ${strip.bayId}`;
+      }
+    } else {
+      this._relocateForImpliedState(strip, strip.state);
+    }
+    strip.carrierTransfer = {
+      kind, trigger: row ? row.trigger : null, label, at: now, by: by || null,
+      from: from.ownerPositionId, to: dest, fromRole: from.role, toRole: strip.role,
+    };
+    strip.rev += 1;
+    strip.updatedAt = now;
+    strip.updatedBy = by || null;
+    this._touch(strip.stripId);
+    this._nlaHistory.delete(strip.stripId);
+    return {
+      ok: true, strip, routedTo: routedTo || undefined, warning,
+      carrierTransfer: { kind, trigger: strip.carrierTransfer.trigger },
+      carrierChanged: carrierChanged || undefined,
+    };
   }
 
   _applySetFlag(strip, op, by) {
@@ -1518,7 +1671,13 @@ class BoardStore {
     } else if (result.toState === 'DROPPED' && strip.tofiCoordination && strip.tofiCoordination.state === 'ACTIVE') {
       return { inhibited: 'cannot drop a Strip under active tactical control — complete a TOFI exit first', reason: 'VALIDATION_ERROR' };
     }
-    return result.transferTo ? { toState: result.toState, transferTo: result.transferTo } : { toState: result.toState };
+    const status = result.transferTo ? { toState: result.toState, transferTo: result.transferTo } : { toState: result.toState };
+    // docs/adr/0074: which carrier hand-over this NLA button records, and the
+    // Role it changes the Strip to, so the panel labels it from the model's own
+    // table (and renders "See you" beside it in Case II).
+    if (result.carrierTransfer) status.carrierTransfer = result.carrierTransfer;
+    if (result.roleChange) status.roleChange = result.roleChange;
+    return status;
   }
 
   _applyInvokeNla(strip, by) {
@@ -1546,6 +1705,12 @@ class BoardStore {
     }
     const inert = this._rejectedReplicaRefusal(strip, result.toState);
     if (inert) return { ok: false, reason: inert.reason, detail: inert.detail, strip };
+
+    // docs/adr/0074: a carrier hand-over is one implementation whichever way it
+    // is reached. Not the undoable state-only NLA path: it moves the stack.
+    if (result.carrierTransfer) {
+      return this._applyCarrierTransfer(strip, result.carrierTransfer, result.transferTo || null, by, strip.ownerPositionId, null);
+    }
 
     const prevState = strip.state;
     let applied;
@@ -1662,6 +1827,13 @@ class BoardStore {
     // thing. A tanker landing mid-AR leaves the relation `ENDED` with
     // `endedBy: 'PARTICIPANT_RETIRED'`; nothing went wrong and no alert is due.
     const marsaChanged = this._releaseFdrIfLastStrip(strip, by);
+    // docs/adr/0074: a flight that leaves the recovery leaves the stack, with a
+    // vacancy and no close-up (H28). A LAUNCH Strip is not in the stack; the
+    // removal is a no-op for it.
+    let carrierChanged;
+    if (this._rules.carrierRetireFlight && ['MARSHAL', 'FINAL', 'PATTERN'].includes(strip.role)) {
+      carrierChanged = this._rules.carrierRetireFlight(strip.fdrId, by) || undefined;
+    }
     // U7: a replica that ends takes the proposer's link with it.
     let peerFacilityId; let peerStrip;
     const link = strip.coordination;
@@ -1674,7 +1846,7 @@ class BoardStore {
       ok: true, strip,
       marsaChanged: marsaChanged && marsaChanged.length ? marsaChanged : undefined,
       fdrs: marsaChanged && marsaChanged.length ? this._drainMarsaRegimeWrites() : undefined,
-      peerFacilityId, peerStrip,
+      peerFacilityId, peerStrip, carrierChanged,
     };
   }
 

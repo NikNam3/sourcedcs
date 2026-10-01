@@ -35,6 +35,9 @@ const { AirspaceStore } = require('./airspace-store');
 const { CorrelationStore } = require('./correlation-store');
 const { MarsaStore } = require('./marsa-store');
 const { FieldStateStore } = require('./field-state-store');
+const { CarrierStore } = require('./carrier-store');
+const carrierModel = require('./carrier');
+const carrierHulls = require('./carrier/hull-config');
 const airspaceConfig = require('./airspace-config');
 const { CodeAllocator } = require('./code-allocator');
 const { BoardStore } = require('./board-store');
@@ -138,6 +141,20 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
     },
   });
 
+  // docs/adr/0074 (ADR 0064 B6) — a SEVENTH store: the carrier's Case, Marshal
+  // stack and altimeter input, one record per hull. Shared across Facilities
+  // like fdrStore (there is exactly one CARRIER Facility; nothing is replicated).
+  // Lane feeding reads CARRIER occupancy lazily through `facilities`.
+  const carrierStore = new CarrierStore({
+    hulls: carrierHulls.getHulls(),
+    clock,
+    fdrExists: (fdrId) => !!fdrStore.getFdr(fdrId),
+    isOccupied: (positionId) => {
+      const f = facilities.get('CARRIER');
+      return !!f && f.positionStore.isOccupied(positionId);
+    },
+  });
+
   const facilityIds = facilityConfig.getFacilityIds();
   const facilities = new Map(); // facilityId -> { boardStore, positionStore, rules }
 
@@ -236,6 +253,17 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
       // (null where there are no runways, which never inhibits). Cached in the
       // store, so every NLA stamp can afford to ask.
       fieldStateFor:           () => fieldStateStore.statusView(facilityId),
+      // docs/adr/0074 — the carrier hooks board-store.js reads. The NLA out of
+      // IN_STACK depends on the Case and on the manned lane the stack feeds.
+      carrierCase:             () => carrierStore.caseValue(),
+      carrierLaneFor:          (strip) => carrierStore.laneFor(strip.fdrId),
+      carrierInStack:          (strip) => carrierStore.inStack(strip.fdrId),
+      canRecordCarrierTransfer: (actingPositionId, kind) => permission.canRecordCarrierTransfer(actingPositionId, kind),
+      validateCarrierTransfer: (kind, args) => carrierModel.validateCarrierTransfer(kind, args),
+      carrierTransfers:        carrierModel.CARRIER_TRANSFERS,
+      carrierApplyEffect:      (effect, fdrId, meta) => carrierStore.applyEffect(effect, fdrId, meta),
+      carrierAppendFlight:     (fdrId, meta) => carrierStore.appendFlight(fdrId, meta),
+      carrierRetireFlight:     (fdrId, by) => carrierStore.onFdrRetired(fdrId, by),
     };
 
     const boardStore = new BoardStore(fdrStore, rules, { clock });
@@ -247,8 +275,9 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
   correlationStore.setMutationLog(mutationLog);
   marsaStore.setMutationLog(mutationLog);
   fieldStateStore.setMutationLog(mutationLog);
+  carrierStore.setMutationLog(mutationLog);
   _validateAirspaceReferences(facilities);
-  _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore, mutationLog, clock);
+  _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore, mutationLog, clock, carrierStore);
 
   const defaultFacility = facilities.get(facilityConfig.DEFAULT_FACILITY_ID);
 
@@ -290,6 +319,7 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
     airspaceStore,
     correlationStore,
     marsaStore,
+    carrierStore,
     airspaceConfig,
     facilityConfig,
     nlaStatusMonitor,
@@ -315,7 +345,7 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
 
   return {
     boardStore: ctx.boardStore, fdrStore, positionStore: ctx.positionStore, mutationLog, clock,
-    airspaceStore, correlationStore, marsaStore, nlaStatusMonitor, fieldStateStore,
+    airspaceStore, correlationStore, marsaStore, nlaStatusMonitor, fieldStateStore, carrierStore,
     boardStoreFor: ctx.boardStoreFor, positionStoreFor: ctx.positionStoreFor,
 
     /**
@@ -328,7 +358,7 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
       return user.name || user.preferred_username || user.sub || 'unknown';
     },
 
-    handleMessage: (session, msg) => handleMessage(ctx, session, msg, () => _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore, persistState)),
+    handleMessage: (session, msg) => handleMessage(ctx, session, msg, () => _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore, persistState, carrierStore)),
 
     /**
      * Persist on demand. The correlation reconciler deliberately does NOT
@@ -338,7 +368,7 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
      * correlation history — the state itself recomputes within one tick of
      * boot. This exists so a caller that genuinely needs a flush has one.
      */
-    persist: () => _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore, persistState),
+    persist: () => _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore, persistState, carrierStore),
 
     /** Abrupt disconnect (guide §4.8.6) — releases every Position the controller held, across EVERY Facility (a controller may hold Positions in more than one, guide §4.8.5). */
     onDisconnect: (session) => {
@@ -492,7 +522,7 @@ function _validateAirspaceReferences(facilities) {
   }
 }
 
-function _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore, mutationLog, clock) {
+function _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore, mutationLog, clock, carrierStore) {
   try {
     const data = JSON.parse(fs.readFileSync(BOARD_SNAPSHOT_READ_PATH, 'utf8'));
     fdrStore.restore(data.fdr);
@@ -534,6 +564,15 @@ function _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaSt
     // crc-sync restart, and coming back OPEN would hand the next controller a
     // lie. Reconciled against the inventory, like the airspaces.
     if (fieldStateStore) fieldStateStore.restore(data.fieldStates);
+    // The carrier's Case and stack come back INTACT, MARSA's reasoning: they are
+    // controller declarations, and a restart does not change what PriFly set.
+    // The banner is derived, so it is not restored; a stack entry whose FDR is
+    // gone is dropped without closing up (docs/adr/0074).
+    if (carrierStore) {
+      carrierStore.restore(data.carriers);
+      const gone = carrierStore.evictMissingFdrs();
+      if (gone) console.warn(`[efsp] dropped ${gone} restored Marshal stack entr(y/ies) whose FDR is gone`);
+    }
     // docs/adr/0058 — a Board saved before the clearance moved onto the FDR
     // still holds the assigned altitude and heading as Strip annotations.
     const moved = migrateClearanceAnnotations(
@@ -549,7 +588,7 @@ function _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaSt
   }
 }
 
-function _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore, persistState = { lastBody: null }) {
+function _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore, persistState = { lastBody: null }, carrierStore = null) {
   try {
     const boards = {};
     for (const [facilityId, { boardStore }] of facilities.entries()) boards[facilityId] = boardStore.snapshot();
@@ -564,6 +603,7 @@ function _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaSt
       correlations: correlationStore ? correlationStore.snapshot() : [],
       marsa: marsaStore ? marsaStore.snapshot() : [],
       fieldStates: fieldStateStore ? fieldStateStore.snapshot() : [],
+      carriers: carrierStore ? carrierStore.snapshot() : [],
     });
     // Dirty-only: nothing changed since the last successful write (a caller
     // that persists on a path which changed nothing), so there is nothing to
