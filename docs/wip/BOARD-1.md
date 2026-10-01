@@ -1,6 +1,27 @@
 # BOARD-1 working file
 
-(Report goes here at the end.)
+## Report (lane BOARD-1, branch `lane/BOARD-1-facade`, base `b0f273f`)
+
+```
+80b0b35 test(BOARD-1): overflight-shared-state-names ALLOWED lists board/placement.js (S-BOARD1-2, approved by main)
+a328423 wip(BOARD-1): pattern notes, bump sites, questioner answers, defaults, findings
+ffbf288 refactor(BOARD-1): retarget M4 onto SetFlag's bump; two comment pointers follow the moved method names
+fc8e16d refactor(BOARD-1): board/placement.js, Placement holds the order keys and the Bays (moved verbatim)
+c0114ca test(BOARD-1): board-seam rule 4 exempts exactly 'this._rules = rules;' (S-BOARD1-1, approved by main)
+bc51c0b refactor(BOARD-1): board/audit.js, BoardAudit.recordAudit/recordPeer moved verbatim
+bf1f294 refactor(BOARD-1): board/board-state.js is the Board kernel (...) with bump/insert
+41d1881 refactor(BOARD-1): board/strip-util.js holds deepClone, newFlags, _validateAltitudeBlock, _frequencyFromBlockValue
+9bef25b docs(BOARD-1): ADR 0095, EFSP and CRC code structure
+630f2f6 docs(BOARD-1): step 0, base counts, code as found, collaborator design
+```
+
+- **Suites.** crc-sync: 2092 → 2092, all passing at the end. The base had 3 timing failures, all from load. crc-desktop: 866 → 866, 865 pass and 1 todo. The end run had 1 failure, the INBOUND allow-list, fixed in 80b0b35 and re-run alone. The freeze suite was 47/47 at every commit.
+- **Golden:** identical in every structural commit. There is no behaviour commit. `soak:selfcheck`: PASS, every detector fired. `freeze:selfcheck`: 18/18 applied and caught. I retargeted M3, M7 (`board/audit.js`), M6 (`board/placement.js`) and M4 (SetFlag's `bump`). `board-seam` passes strictly on all four `board/*` files.
+- **board-store.js:** 3359 → 2861 lines. New files: board-state 142, placement 314, audit 79, strip-util 69.
+- **Structure fixture `guard-board-surface.json`:** private-member rows lost `_seq`, `_recordAudit` and `_bayForNewOwner`. They gained `_state` (src, a name collision), `_audit` (src, a name collision) and `_placement` (tests).
+- **Outside Owns, both approved by main:** `tests/board-seam.test.mjs` rule 4 exemption (S-BOARD1-1), and `crc-desktop/tests/overflight-shared-state-names.test.js` ALLOWED entry for placement.js (S-BOARD1-2). I also changed the tests `efsp-role-bay-fallback` and `efsp-scenario-tactical-l23`, which reached `_bayForNewOwner`.
+- **Defaults taken and findings:** see below. They include the public method names on collaborators, the extra deps (`touch` on BoardState, `rules` on BoardAudit), `bump(strip, null)` at 3 sites, and host-core's `_rebalanceRack` wrap.
+- **Supervisor decides:** nothing open.
 
 ## Step 0: base check
 
