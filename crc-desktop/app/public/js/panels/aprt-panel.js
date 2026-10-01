@@ -116,7 +116,7 @@ function _updateAprtRefCard() {
   const rwyRaw  = ((document.getElementById('aprt-atis-rwy')  || {}).value || '').toUpperCase().trim();
   const info    = ((document.getElementById('aprt-atis-info') || {}).value || '').toUpperCase().charAt(0);
   const freq    = (document.getElementById('aprt-atis-freq')  || {}).value || '';
-  const taFt    = settings.transitionAltFt ?? 18000;
+  const taFt    = settings.transitionAltFt;
 
   const $rwy  = document.getElementById('aprt-ref-rwy');
   const $info = document.getElementById('aprt-ref-info');
@@ -138,7 +138,7 @@ function refreshAprtTheaterFacts() {
   const msg = currentTheaterFacts();
   const $ta  = document.getElementById('aprt-theater-ta');
   const $var = document.getElementById('aprt-theater-var');
-  if ($ta) $ta.textContent = `${(settings.transitionAltFt ?? 18000).toLocaleString('en-US')} ft`;
+  if ($ta) $ta.textContent = `${settings.transitionAltFt.toLocaleString('en-US')} ft`;
   if (!$var) return;
   const apt = _aprtSelectedApt;
   const v = magneticVariationAt(apt ? apt.lat : undefined, apt ? apt.lon : undefined);
@@ -480,7 +480,7 @@ function _buildAtisText() {
   const infoLetter = ((document.getElementById('aprt-atis-info')    || {}).value || 'A').toUpperCase().charAt(0);
   const rwyRaw     = ((document.getElementById('aprt-atis-rwy')     || {}).value || '').toUpperCase().trim();
   const comment    = ((document.getElementById('aprt-atis-comment') || {}).value || '').trim();
-  const taFt       = settings.transitionAltFt ?? 18000;
+  const taFt       = settings.transitionAltFt;
 
   const aptName  = apt ? (apt.name || apt.icao) : 'THIS STATION';
   // ATIS wind is magnetic (decisions H76), converted by crc-sync. Unknown

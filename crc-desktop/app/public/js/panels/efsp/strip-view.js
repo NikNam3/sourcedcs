@@ -20,7 +20,7 @@
 // gates (_canProposeTofiEntry and friends) and state at call time, and those
 // gates stay where efsp-coordination-client.test.js's drift checks find them.
 
-const ROLE_ABBR = { DEPARTURE: 'DEP', ARRIVAL: 'ARR', OVERFLIGHT: 'OVF', MISSION: 'MSN' };
+const ROLE_ABBR = { DEPARTURE: 'DEP', ARRIVAL: 'ARR', OVERFLIGHT: 'OVF', MISSION: 'MSN', MARSHAL: 'MAR', FINAL: 'FNL', PATTERN: 'PAT' };
 
 function _stripEl(tag, className, text) {
   const node = document.createElement(tag);
@@ -284,11 +284,41 @@ function _trackExchange(strip) {
   return row;
 }
 
+/** The mission Strip this ATC-side Strip's TOFI is with (its tofiCoordination.peerStripId), or null. */
+function _pairedMissionStrip(strip) {
+  const tofi = strip && strip.tofiCoordination;
+  return tofi && tofi.peerStripId && typeof getEfspStrip === 'function' ? (getEfspStrip(tofi.peerStripId) || null) : null;
+}
+
+/** UI-A U8: should this Strip's NLA slot be TOFI Exit right now? (the mission line is OFF_STATION or RTB.) */
+function _tofiExitIsPrimary(strip) {
+  if (typeof tofiExitDueFor !== 'function' || typeof _canProposeTofiExit !== 'function') return false;
+  if (!TOFI_COUNTERPARTS[strip.ownerPositionId] || !_canProposeTofiExit(strip)) return false;
+  return tofiExitDueFor(strip, _pairedMissionStrip(strip));
+}
+
+/** For bay-view.js's render signature: the mission line's state, which this Strip's primary action now depends on (S-L14). */
+function tofiExitSignatureFor(strip) {
+  const m = strip && strip.tofiCoordination ? _pairedMissionStrip(strip) : null;
+  return m ? m.state : '';
+}
+
 /** The NLA (§3.5), and the reason it is refused, from the server's own `strip.nla` (F-408). */
 function _buildLifeBlock(strip) {
   const life = _stripEl('div', 'efsp-strip-life');
+  // UI-A U8: the mission line is leaving, so the next step on CTR's Strip is the TOFI Exit, not the NLA.
+  if (_tofiExitIsPrimary(strip)) {
+    const mission = _pairedMissionStrip(strip);
+    life.appendChild(_stripButton('TOFI Exit', 'efsp-tofi-exit-btn', {
+      go: true, action: 'tofi-exit-primary',
+      disabled: !_resolveActingPositionId(strip),
+      title: `The mission line is ${String(mission.state).replace(/_/g, ' ')}: propose returning separation to ${strip.tofiCoordination.peerPositionId}`,
+      onClick: (e, btn) => { btn.disabled = true; _dispatchTofi(strip, 'PROPOSE', 'EXIT'); },
+    }));
+    return { life, inhibited: null };
+  }
   const nlaStatus = strip.nla;
-  const nlaLabel = nlaStatus === null ? null : nlaLabelFor(strip.state, strip.role);
+  const nlaLabel = nlaStatus === null ? null : (typeof nlaButtonLabel === 'function' ? nlaButtonLabel(strip) : nlaLabelFor(strip.state, strip.role)); // a carrier hand-over is labelled by its own name (docs/adr/0074)
   let inhibited = null;
   if (nlaLabel) {
     // Drop is the terminal step, not the one filled "go" button.
@@ -307,8 +337,11 @@ function _buildLifeBlock(strip) {
       });
     }
     btn.addEventListener('pointerdown', (e) => e.stopPropagation());
+    if (typeof carrierDecorateNlaButton === 'function') carrierDecorateNlaButton(btn, strip);
     life.appendChild(btn);
   }
+  // The carrier's second hand-over, beside the NLA (crc-sync docs/adr/0074): "See you" in Case II.
+  if (typeof carrierExtraNlaButtons === 'function') for (const extra of carrierExtraNlaButtons(strip)) life.appendChild(extra);
   return { life, inhibited };
 }
 
@@ -364,7 +397,7 @@ const _pad3 = (n) => String(Math.round(n)).padStart(3, '0');
 
 /** An altitude the way a controller reads it: a flight level at and above transition, feet below. */
 function _fmtAlt(ft) {
-  const ta = (typeof settings === 'object' && settings && settings.transitionAltFt) || 18000;
+  const ta = settings.transitionAltFt;
   return ft >= ta ? `FL${_pad3(ft / 100)}` : `${Math.round(ft).toLocaleString('en-US')} ft`;
 }
 const _fmtClock = (sec) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`;
@@ -408,6 +441,11 @@ function _stripAlerts(strip) {
 // alert chip after the wave-2 advisories; the AR join a quiet badge after MARSA.
 INDICATOR_ORDER.splice(INDICATOR_ORDER.indexOf('trk'), 0, 'ato');
 INDICATOR_ORDER.splice(INDICATOR_ORDER.indexOf('marsa') + 1, 0, 'ar');
+// docs/adr/0076 (guide §10.3, §10.4): surveillance informs, the controller advances.
+// 'hint' is the suggestion chip, 'stale' the low-severity staleness indication.
+// Both are quiet badges beside the correlation one, not alert chips: neither
+// raises the Strip's attention styling or a reason line, and neither moves it.
+INDICATOR_ORDER.splice(INDICATOR_ORDER.indexOf('trk') + 1, 0, 'hint', 'stale');
 ALERT_SLOT_KEYS.add('ato');
 
 function _indicator(key, text, tone, legacy, title) {
@@ -462,6 +500,39 @@ function _litIndicator(strip, key, el, obligation, siblings) {
     return _indicator(key, obligation.obligationType.replace(/_/g, ' '), overdue ? 'bad' : 'attn',
       `efsp-obligation-badge${overdue ? ' efsp-obligation-badge-overdue' : ''}`,
       `${obligation.obligationType} — ${obligation.severity}`);
+  }
+  if (key === 'hint' || key === 'stale') {
+    const hints = typeof surveillanceHintsForStrip === 'function' ? surveillanceHintsForStrip(strip) : [];
+    const h = hints.find(x => x.kind === (key === 'hint' ? 'AIRBORNE_ADVANCE' : 'STALE'));
+    if (!h) return null;
+    const seen = h.contactPhase === 'AIRBORNE' ? 'detected airborne' : 'detected on the ground';
+    if (key === 'stale') {
+      const mins = Math.max(1, Math.round((h.afterSec || 120) / 60));
+      return _indicator(key, 'STALE', 'on', 'efsp-stale-indicator',
+        `This Strip says ${h.stripState}, but the aircraft is ${seen}, and has been for over ${mins} min. Surveillance informs; update the Strip if it is wrong.`);
+    }
+    // The suggestion chip: one input, and the input is the controller's own
+    // SetState — the ordinary path, every rule on it applying. Only a Position
+    // that holds the Strip can accept; for anyone else it is information.
+    const acting = typeof getActingPositions === 'function' ? getActingPositions() : [];
+    const mine = acting.includes(strip.ownerPositionId);
+    const node = _indicator(key, 'AIRBORNE? ▸', 'attn', 'efsp-surveillance-chip',
+      `Aircraft ${seen}; the Strip says ${h.stripState}. ${mine ? 'Click to advance it to Airborne.' : `${strip.ownerPositionId} holds this Strip.`}`);
+    if (mine) {
+      node.setAttribute('role', 'button');
+      node.tabIndex = 0;
+      node.dataset.toState = h.toState;
+      const accept = (e) => {
+        if (e && e.stopPropagation) e.stopPropagation();
+        if (typeof _swallowRepeatAdvance === 'function' && _swallowRepeatAdvance()) return;
+        const live = (typeof getEfspStrip === 'function' && getEfspStrip(strip.stripId)) || strip;
+        sendEfspMutation(_resolveActingPositionId(live), live, { kind: 'SetState', toState: h.toState });
+      };
+      node.addEventListener('click', accept);
+      node.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') accept(e); });
+      node.addEventListener('pointerdown', (e) => e.stopPropagation()); // not the start of a drag
+    }
+    return node;
   }
   if (key === 'ar') {
     // The AR join (docs/adr/0071): not MARSA, never a warning — tone 'on'.

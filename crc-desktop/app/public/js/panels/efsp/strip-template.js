@@ -92,7 +92,7 @@ const DEPARTURE_BLOCK_MAP = {
   // WP4A (docs/adr/0017), §4.6.2 — mirrors crc-sync's block-map.js exactly.
   // See crc-sync's block-map.js for why these two exist and why they are
   // numbered in the 14-family.
-  '14A': { required: false, label: 'RLS ST', target: { kind: 'fdr', path: 'assigned.releaseState' } },
+  '14A': { required: false, label: 'RELEASE', target: { kind: 'fdr', path: 'assigned.releaseState' } },
   '14D': { required: false, label: 'VOID',      target: { kind: 'fdr', path: 'assigned.voidTimeUtc' } },
   '14B': { required: false, label: 'EDCT',    target: { kind: 'fdr', path: 'assigned.edctTimeUtc' } },
   '14C': { required: false, label: 'CFR',     target: { kind: 'fdr', path: 'assigned.callForReleaseTimeUtc' } },
@@ -137,7 +137,7 @@ const DEPARTURE_BLOCK_MAP = {
   // WP4A second slice, §4.6.3 — the three-field separation model. See
   // resolveBlockValue's 'tofi' branch and _buildBlockCell's IFR toggle for
   // why IFR isn't in ENUM_SELECT_BLOCKS the way RSVC/SREG are.
-  'IFR':  { required: false, label: 'IFR',     target: { kind: 'tofi', field: 'ifrActive' } },
+  'IFR':  { required: false, label: 'KEEP IFR',     target: { kind: 'tofi', field: 'ifrActive' } },
   'RSVC': { required: false, label: 'RADAR',   target: { kind: 'tofi', field: 'radarService' } },
   'SREG': { required: false, label: 'SEP REG', target: { kind: 'tofi', field: 'separationRegime' } },
   '25': { required: true,  label: 'STATE',    target: { kind: 'system', field: 'state' } },
@@ -189,7 +189,7 @@ const ARRIVAL_BLOCK_MAP = {
   '21':       { required: false, label: 'SCRATCH2',  target: { kind: 'annotation' } },
   '24':       { required: true,  label: 'MIT RMKS',     target: { kind: 'annotation' } },
   '24A':      { required: false, label: 'ARSPC',    target: { kind: 'airspace-owner' } }, // WP4A, §4.6.4 — see DEPARTURE_BLOCK_MAP's '24A' comment
-  'IFR':      { required: false, label: 'IFR',      target: { kind: 'tofi', field: 'ifrActive' } },       // WP4A second slice, §4.6.3 — see DEPARTURE_BLOCK_MAP's comment
+  'IFR':      { required: false, label: 'KEEP IFR',      target: { kind: 'tofi', field: 'ifrActive' } },       // WP4A second slice, §4.6.3 — see DEPARTURE_BLOCK_MAP's comment
   'RSVC':     { required: false, label: 'RADAR',    target: { kind: 'tofi', field: 'radarService' } },
   'SREG':     { required: false, label: 'SEP REG',  target: { kind: 'tofi', field: 'separationRegime' } },
   '25':       { required: true,  label: 'STATE',    target: { kind: 'system', field: 'state' } },
@@ -247,7 +247,7 @@ const OVERFLIGHT_BLOCK_MAP = {
   '21': { required: false, label: 'SCRATCH2',  target: { kind: 'annotation' } },
   '24': { required: true,  label: 'MIT RMKS',     target: { kind: 'annotation' } },
   '24A':{ required: false, label: 'ARSPC',    target: { kind: 'airspace-owner' } },
-  'IFR':  { required: false, label: 'IFR',     target: { kind: 'tofi', field: 'ifrActive' } },      // WP4A second slice, §4.6.3 — see DEPARTURE_BLOCK_MAP's comment
+  'IFR':  { required: false, label: 'KEEP IFR',     target: { kind: 'tofi', field: 'ifrActive' } },      // WP4A second slice, §4.6.3 — see DEPARTURE_BLOCK_MAP's comment
   'RSVC': { required: false, label: 'RADAR',   target: { kind: 'tofi', field: 'radarService' } },
   'SREG': { required: false, label: 'SEP REG', target: { kind: 'tofi', field: 'separationRegime' } },
   '25': { required: true,  label: 'STATE',    target: { kind: 'system', field: 'state' } },
@@ -279,7 +279,63 @@ const MISSION_BLOCK_MAP = {
   '3G': { required: false, label: 'ORDNANCE', target: { kind: 'military', field: 'ordnanceState' } }, // guide M14, §9.5
 };
 
-const BLOCK_MAPS = { DEPARTURE: DEPARTURE_BLOCK_MAP, ARRIVAL: ARRIVAL_BLOCK_MAP, OVERFLIGHT: OVERFLIGHT_BLOCK_MAP, MISSION: MISSION_BLOCK_MAP };
+// The carrier's three Block Maps (crc-sync's docs/adr/0064 B3, docs/adr/0074;
+// guide §9.12) — a literal duplicate of crc-sync's block-map.js, held by
+// efsp-block-map-parity.test.js. `carrier-derived` Blocks are DISPLAY ONLY:
+// the server derives them (angels from the stack index, DME from angels, push
+// time from the Charlie time, the final bearing from the ship's heading) and
+// refuses any write, so nothing here is editable and nothing here computes
+// (carrier-state.js formats what the server sent). `carrier` Blocks are the
+// flight's own fields, on the FDR so they survive launch to recovery.
+const _CARRIER_CHROME = {
+  '2':  { required: true,  label: 'REV',    target: { kind: 'system', field: 'rev' } },
+  '4':  { required: true,  label: 'CID',    target: { kind: 'system', field: 'cid' } },
+  '4A': { required: false, label: 'RMV',    target: { kind: 'flag', flag: 'removeIndicator' } },
+  '5':  { required: false, label: 'SQUAWK', target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
+  '25': { required: true,  label: 'STATE',  target: { kind: 'system', field: 'state' } },
+  '26': { required: true,  label: 'NLA',    target: { kind: 'nla' } },
+};
+
+const MARSHAL_BLOCK_MAP = {
+  'C1':  { required: true,  label: 'CALLSIGN', target: { kind: 'fdr', path: 'identity.callsign' } },
+  'C2':  { required: true,  label: 'TYPE',     target: { kind: 'fdr', path: 'identity.aircraftType' } },
+  'C3':  { required: false, label: 'CASE',     target: { kind: 'carrier-derived', field: 'case' } },
+  'C4':  { required: false, label: 'APPR',     target: { kind: 'carrier', field: 'approachType' } },
+  'C5':  { required: false, label: 'RADIAL',   target: { kind: 'carrier-derived', field: 'marshalRadial' } },
+  'C6':  { required: false, label: 'DME',      target: { kind: 'carrier-derived', field: 'marshalDme' } },
+  'C7':  { required: false, label: 'ANGELS',   target: { kind: 'carrier-derived', field: 'angels' } },
+  'C8':  { required: false, label: 'EAT/PUSH', target: { kind: 'carrier-derived', field: 'eatPush' } },
+  'C9':  { required: false, label: 'FNL BRG',  target: { kind: 'carrier-derived', field: 'expectedFinalBearing' } },
+  'C10': { required: false, label: 'BUTTON',   target: { kind: 'carrier', field: 'approachButton' } },
+  'C12': { required: false, label: 'LOW ST',   target: { kind: 'carrier', field: 'lowStateLb' } },
+  'C13': { required: false, label: 'BINGO',    target: { kind: 'carrier', field: 'bingoField' } },
+  'C14': { required: false, label: 'BNG FUEL', target: { kind: 'carrier', field: 'bingoFuelLb' } },
+  'C15': { required: false, label: 'EEAT',     target: { kind: 'carrier', field: 'eeatUtc' } },
+  'C24': { required: false, label: 'NOTE',     target: { kind: 'annotation' } },
+  ..._CARRIER_CHROME,
+};
+
+const FINAL_BLOCK_MAP = {
+  'C1':  { required: true,  label: 'CALLSIGN', target: { kind: 'carrier-derived', field: 'callsign' } },
+  'C2':  { required: true,  label: 'TYPE',     target: { kind: 'carrier-derived', field: 'aircraftType' } },
+  'C9':  { required: false, label: 'FNL BRG',  target: { kind: 'carrier-derived', field: 'expectedFinalBearing' } },
+  'C16': { required: false, label: 'DECK',     target: { kind: 'carrier-derived', field: 'deck' } },
+  'C17': { required: false, label: 'DIST',     target: { kind: 'carrier-derived', field: 'finalDistance' } },
+  '2':  _CARRIER_CHROME['2'], '4': _CARRIER_CHROME['4'], '4A': _CARRIER_CHROME['4A'],
+  '25': _CARRIER_CHROME['25'], '26': _CARRIER_CHROME['26'],
+};
+
+const PATTERN_BLOCK_MAP = {
+  'C1':  { required: true,  label: 'CALLSIGN', target: { kind: 'fdr', path: 'identity.callsign' } },
+  'C2':  { required: true,  label: 'TYPE',     target: { kind: 'fdr', path: 'identity.aircraftType' } },
+  'C24': { required: false, label: 'NOTE',     target: { kind: 'annotation' } },
+  ..._CARRIER_CHROME,
+};
+
+const BLOCK_MAPS = {
+  DEPARTURE: DEPARTURE_BLOCK_MAP, ARRIVAL: ARRIVAL_BLOCK_MAP, OVERFLIGHT: OVERFLIGHT_BLOCK_MAP, MISSION: MISSION_BLOCK_MAP,
+  MARSHAL: MARSHAL_BLOCK_MAP, FINAL: FINAL_BLOCK_MAP, PATTERN: PATTERN_BLOCK_MAP,
+};
 
 function getPath(obj, path) {
   return path.split('.').reduce((o, k) => (o == null ? o : o[k]), obj);
@@ -456,6 +512,26 @@ function resolveBlockValue(blockId, fdr, strip) {
   // The RANGE slice — Block 22, the frequency this flight has been approved
   // onto. Lives in fdr.comms for the same reason airspace ownership lives in
   // fdr.airspace: a dedicated setter, not a generic writable path.
+  // crc-sync docs/adr/0074 — a flight's own carrier fields, off the FDR.
+  if (t.kind === 'carrier') {
+    const raw = fdr && fdr.military && fdr.military.carrier ? fdr.military.carrier[t.field] : null;
+    const value = t.field === 'eeatUtc' && raw != null ? formatZuluHhmm(raw) : raw;
+    return { value: value ?? null, provenance: (fdr && fdr.provenance && fdr.provenance.military) || 'CONTROLLER_ENTERED' };
+  }
+  // ...and the values the server DERIVES (angels, DME, push time, the bearings,
+  // the Case). Formatted by carrier-state.js from what the server sent; nothing
+  // is computed here, and nothing here is editable.
+  if (t.kind === 'carrier-derived') {
+    let text = '';
+    if (t.field === 'finalDistance') text = typeof carrierFinalDistanceText === 'function' ? carrierFinalDistanceText(strip) : '';
+    else if (t.field === 'callsign') text = fdr && fdr.identity ? (fdr.identity.callsign || '') : '';
+    else if (t.field === 'aircraftType') text = fdr && fdr.identity ? (fdr.identity.aircraftType || '') : '';
+    else if (typeof carrierDerivedText === 'function') {
+      const c = typeof getEfspCarrier === 'function' ? getEfspCarrier() : null;
+      text = carrierDerivedText(t.field, strip ? strip.fdrId : null, c ? c.shipState : null);
+    }
+    return { value: text === '' ? null : text, provenance: 'SYSTEM_DERIVED' };
+  }
   if (t.kind === 'frequency') {
     const mhz = (fdr && fdr.comms) ? fdr.comms.workingFrequencyMhz : null;
     return {
@@ -498,6 +574,7 @@ const ENUM_SELECT_BLOCKS = {
   // fdr-store.js's ALERT_STATUSES is the authority. 'NONE' is its cleared
   // value and is in the list, as 3G's 'CLEAN' is (crc-sync docs/adr/0070).
   '14E': ['NONE', 'ALERT', 'SCRAMBLE'],
+  'C4': ['TACAN', 'ICLS', 'ACLS', 'PAR', 'VISUAL'], // crc-sync carrier/flight-record.js APPROACH_TYPES
 };
 
 // Block 9F's options come from the stereo route table, which is runtime
@@ -556,7 +633,7 @@ function enumSelectOptionsFor(blockId, fdr) {
 // flight (board-store.js names the declarer in the refusal). That is correct
 // and deliberately NOT pre-empted here: the refusal is legible and lands
 // attributed to the Strip.
-const ENUM_CLEARABLE_BLOCKS = new Set(['RSVC', 'SREG', '9F']);
+const ENUM_CLEARABLE_BLOCKS = new Set(['RSVC', 'SREG', '9F', 'C4']);
 
 /** @returns {boolean} may this enum Block be cleared back to no value at all? */
 function isEnumBlockClearable(blockId) {
@@ -612,7 +689,24 @@ function isBlockEditable(blockId, role = 'DEPARTURE') {
   // are restricted enums with their own <select>, a frequency is a free
   // numeric entry — the ordinary click-to-edit path is right for it. The
   // server validates the band.
-  return !!def && (def.target.kind === 'fdr' || def.target.kind === 'annotation' || def.target.kind === 'frequency' || def.target.kind === 'clearance');
+  return !!def && (def.target.kind === 'fdr' || def.target.kind === 'annotation' || def.target.kind === 'frequency' || def.target.kind === 'clearance' || def.target.kind === 'carrier');
+}
+
+/**
+ * UI-A U4: the TYPE field (Block 3) is a read-only composite (count, wake, type,
+ * suffix), so it cannot be written itself. Editing it edits the one part a
+ * controller means by "type", the aircraft type (3A, identity.aircraftType), which
+ * is a plain fdr field every airframe Role already has. The wake category (3B)
+ * stays in the expanded view: nothing derives it from the type, and guessing it
+ * would put a made-up value on a Strip.
+ * @returns {{blockId:string, value:string}|null} null when the Block is not redirected
+ */
+function editRedirectFor(blockId, role, fdr) {
+  if (blockId !== '3') return null;
+  const map = BLOCK_MAPS[role || 'DEPARTURE'];
+  const def = map && map['3A'];
+  if (!def || def.target.kind !== 'fdr') return null;
+  return { blockId: '3A', value: (fdr && fdr.identity && fdr.identity.aircraftType) || '' };
 }
 
 // ── Zulu time-of-day Blocks (crc-sync's docs/adr/0062) ──────────────────────
@@ -650,6 +744,8 @@ const BLOCK_TITLES = {
   '9H-EXIT': 'MTR exit fix (guide §9.4)',
   '9H-TIME': 'MTR exit estimate, UTC HHMM',
   '9H-ALT': 'requested altitude after exit',
+  // UI-A U3: the field is TOFI's ifrActive (guide §4.6.3), not the filed flight rules.
+  'IFR': 'Keeps IFR under tactical control (TOFI, guide §4.6.3): ✓ means ATC keeps separating this flight while the mission line works it. Click to toggle.',
 };
 
 // ── §10.5's source on hover (docs/adr/0073) ─────────────────────────────────
@@ -660,6 +756,7 @@ const TIME_SOURCE_TEXT = {
   CONTROLLER: 'entered by a controller',
   FLIGHT_PLAN: 'from the filed DD-1801 (item 13, EOBT)',
   ATO: 'from the ATO (AMSNDAT departure time)',
+  STATE_CHANGE: 'stamped when the Strip entered Airborne',
   EST_DEPARTURE: 'estimate: P-time',
   EST_OFF_BLOCK: 'estimate: off-block',
 };
@@ -698,6 +795,23 @@ function timeChainTitleFor(blockId, fdr, strip) {
 }
 
 /**
+ * S-L16 W3: a typed TAXI (17) or TAKEOFF (18) that now sits BEFORE the proposed departure. A
+ * controller's entry stops the chain (§10.2 rule 3), so a later P-time does not move it, and
+ * the Strip would otherwise show TAXI 1425 ahead of a P-time of 1450 with nothing saying why.
+ * @returns {{typedUtc:number, planUtc:number}|null}
+ */
+function typedTimeBehindPlan(blockId, fdr, strip) {
+  if (((strip && strip.role) || 'DEPARTURE') !== 'DEPARTURE') return null;
+  const chain = typeof timeChainForBlock === 'function' ? timeChainForBlock(blockId) : null;
+  if (chain !== 'offBlock' && chain !== 'takeoff') return null;
+  const own = resolveTimeChain(chain, fdr);
+  if (own.source !== 'CONTROLLER' || own.valueUtc == null) return null;
+  const plan = resolveTimeChain('departure', fdr);
+  if (plan.valueUtc == null || own.valueUtc >= plan.valueUtc) return null;
+  return { typedUtc: own.valueUtc, planUtc: plan.valueUtc };
+}
+
+/**
  * What the VALUE cell of a Block adds to itself (bay-view.js's _buildBlockCell):
  * a hover title and whether to set it in italics as an estimate. Null when
  * the cell needs nothing. Block 9F with no route table says why it is not a
@@ -707,9 +821,16 @@ function blockValueHintFor(blockId, fdr, strip) {
   if (blockId === '9F' && enumSelectOptionsFor('9F', fdr) == null) {
     return { title: 'no stereo routes configured', estimated: false };
   }
-  const title = timeChainTitleFor(blockId, fdr, strip);
+  let title = timeChainTitleFor(blockId, fdr, strip);
   if (!title) return null;
-  return { title, estimated: !!resolveBlockValue(blockId, fdr, strip).estimated };
+  const resolved = resolveBlockValue(blockId, fdr, strip);
+  if (resolved.estimated) title += '\nType it again to accept it as the actual.'; // S-L16 W5
+  const behind = typedTimeBehindPlan(blockId, fdr, strip);
+  if (behind) {
+    title += `\n${formatZuluHhmm(behind.typedUtc)}Z was typed before the proposed departure moved to ${formatZuluHhmm(behind.planUtc)}Z: `
+      + 'a typed time does not follow a new P-time. Clear it to follow, or retype it.'; // S-L16 W3
+  }
+  return { title, estimated: !!resolved.estimated, behindPlan: !!behind };
 }
 
 /**
@@ -732,11 +853,11 @@ function blockTitleFor(blockId, fdr, strip) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
-    DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP, BLOCK_MAPS, resolveBlockValue, requiredBlocksFor, formatBlock3,
+    DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP, MARSHAL_BLOCK_MAP, FINAL_BLOCK_MAP, PATTERN_BLOCK_MAP, BLOCK_MAPS, resolveBlockValue, requiredBlocksFor, formatBlock3,
     activeAnnotationValue, hasActiveAnnotationEntry, annotationHistory, supersededAnnotationEntries,
-    isBlockEditable, CONFIRM_VACATED_ELIGIBLE_BLOCKS,
+    isBlockEditable, editRedirectFor, CONFIRM_VACATED_ELIGIBLE_BLOCKS,
     enumSelectOptionsFor, ENUM_CLEARABLE_BLOCKS, isEnumBlockClearable, isBooleanToggleBlock, blockLabelFor,
     ZULU_HHMM_BLOCKS, formatZuluHhmm, BLOCK_TITLES, blockTitleFor,
-    TIME_SOURCE_TEXT, timeChainTitleFor, blockValueHintFor,
+    TIME_SOURCE_TEXT, timeChainTitleFor, blockValueHintFor, typedTimeBehindPlan,
   };
 }

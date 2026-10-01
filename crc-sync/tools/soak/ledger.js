@@ -16,7 +16,11 @@ const EXAMPLE_CAP = 20;
 // explains (briefing §5.5 "Refusals are data").
 const EXPECTED_REASONS = new Set(['STALE_REV', 'NLA_INHIBITED', 'NOT_HOLDING_POSITION']);
 
-/** A refusal raised at the wire boundary, before any store was consulted — it is never audited (efsp-ws.js). */
+/**
+ * A refusal raised at the wire boundary, before any store was consulted. With
+ * the metrics tap installed (host-core.js) the tap writes its audit line,
+ * `source: 'wire'` (docs/adr/0083).
+ */
 function wireLevel(ack) {
   if (ack.ok) return false;
   if (ack.reason === 'NOT_HOLDING_POSITION') return true;
@@ -124,6 +128,7 @@ class Ledger {
     const base = path.basename(logPath);
     const files = fs.readdirSync(dir).filter(f => f.startsWith(base.replace(/\.jsonl$/, ''))).map(f => path.join(dir, f)).sort();
     const lines = new Map(); // cmid -> count
+    const sources = new Map(); // cmid -> [source, ...] of the counted lines
     const notPersisted = new Map(); // cmid -> NotPersisted markers
     let total = 0; let nullCmid = 0; let systemLines = 0; let airspaceLines = 0; let parseErrors = 0;
     const nullByOp = {};
@@ -146,6 +151,7 @@ class Ledger {
         // this cmid never took effect: it and the line it voids count as none.
         if (e.op === 'NotPersisted') { notPersisted.set(cmid, (notPersisted.get(cmid) || 0) + 1); continue; }
         lines.set(cmid, (lines.get(cmid) || 0) + 1);
+        (sources.get(cmid) || sources.set(cmid, []).get(cmid)).push(e.source || null);
       }
     }
     for (const [cmid, k] of notPersisted) {
@@ -155,8 +161,8 @@ class Ledger {
 
     const res = {
       logLines: total, parseErrors, systemAuditLines: systemLines, nullCmidLines: nullCmid, nullCmidByOp: nullByOp,
-      auditMissing: 0, auditDuplicate: 0, auditForRefusal: 0, auditOrphan: 0,
-      examples: { auditMissing: [], auditDuplicate: [], auditForRefusal: [], auditOrphan: [] },
+      auditMissing: 0, auditDuplicate: 0, auditWrongSource: 0, auditOrphan: 0,
+      examples: { auditMissing: [], auditDuplicate: [], auditWrongSource: [], auditOrphan: [] },
       airspace: { logLinesWithoutCmid: airspaceLines }, // must stay 0 now (L6's F12)
       replayAuditLines: {},
     };
@@ -171,17 +177,23 @@ class Ledger {
       // Airspace reconciles per message like the rest: efsp-ws.js hands the store
       // the clientMutationId and the store audits every answer (docs/adr/0083).
       const extraFromReplay = e.type !== 'efsp-mutation' ? (replayed.get(cmid) || 0) : 0;
-      let expectLines;
-      if (e.type === 'efsp-mutation') expectLines = e.ok ? 1 : 0;           // M2 / M3
-      else expectLines = e.ok ? 1 : (e.storeReached ? 1 : 0);             // M4
+      // Production (docs/adr/0083): every answered Mutation leaves exactly one
+      // line. A success: its store. A refusal: the store that refused it, or,
+      // when none was reached (and for every efsp-mutation refusal, which the
+      // board store never logs), the metrics tap, `source: 'wire'`. Anything
+      // else — a missing line, two lines, a line from the wrong writer — is a
+      // finding; nothing is excused because it is a refusal.
+      const expectLines = 1;
+      const expectWire = !e.ok && (e.type === 'efsp-mutation' || !e.storeReached);
       if (extraFromReplay && n > expectLines) {
         res.replayAuditLines[e.type] = (res.replayAuditLines[e.type] || 0) + (n - expectLines);
         continue;
       }
       if (n < expectLines) { res.auditMissing++; ex('auditMissing', { cmid, type: e.type, op: e.opKind, ok: e.ok, reason: e.reason, lines: n }); }
-      else if (n > expectLines) {
-        if (expectLines === 0) { res.auditForRefusal++; ex('auditForRefusal', { cmid, type: e.type, op: e.opKind, reason: e.reason, lines: n }); }
-        else { res.auditDuplicate++; ex('auditDuplicate', { cmid, type: e.type, op: e.opKind, lines: n }); }
+      else if (n > expectLines) { res.auditDuplicate++; ex('auditDuplicate', { cmid, type: e.type, op: e.opKind, ok: e.ok, reason: e.reason, lines: n }); }
+      else {
+        const src = (sources.get(cmid) || [])[0];
+        if ((src === 'wire') !== expectWire) { res.auditWrongSource++; ex('auditWrongSource', { cmid, type: e.type, op: e.opKind, ok: e.ok, reason: e.reason, source: src, expectedWire: expectWire }); }
       }
     }
     for (const cmid of lines.keys()) {

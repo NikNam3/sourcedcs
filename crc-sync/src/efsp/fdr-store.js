@@ -26,8 +26,10 @@ const { isValidFrequency, MIN_FREQUENCY_MHZ, MAX_FREQUENCY_MHZ } = require('./ai
 // board-store.js's _applyCreateStrip instead would mean any second creation
 // path — or a test constructing an FdrStore directly — silently skips it.
 const stereoRoutes = require('./stereo-routes');
-const { resolveZuluHhmm, resolveZuluHhmmAfter } = require('./zulu-time');
+const { resolveZuluHhmm, resolveZuluHhmmAfter, formatZuluHhmm } = require('./zulu-time');
+const { setCarrierFlightField } = require('./carrier/flight-record');
 const { WALL_CLOCK } = require('../mission-clock');
+const { DEFAULT_TRANSITION_ALT_FT } = require('../theaters');
 
 const VOID_DEADLINE_MINUTES = 30; // §3.8 — derived, not stored input
 const EDCT_WINDOW_MINUTES = 5;              // §4.6.2 — EDCT ± 5 min
@@ -297,15 +299,19 @@ function parseAltitudeFt(text) {
   return m[1].length <= 3 ? n * 100 : n;
 }
 
-/** A flight level and below-FL feet, as the canonical block text writes an end. */
-const BLOCK_FL_FROM_FT = 18000;
-function formatAltitudeEnd(ft) {
-  return ft >= BLOCK_FL_FROM_FT && ft % 100 === 0 ? `FL${String(ft / 100).padStart(3, '0')}` : String(ft);
+/**
+ * A flight level at and above the theater's transition altitude, feet below it,
+ * as the canonical block text writes an end. Only the text depends on the
+ * transition altitude (docs/wip/TA.md): a stored band is always feet, and
+ * parseAltitudeFt() reads "FL100" as 10,000 ft in every theater.
+ */
+function formatAltitudeEnd(ft, transitionAltFt) {
+  return ft >= transitionAltFt && ft % 100 === 0 ? `FL${String(ft / 100).padStart(3, '0')}` : String(ft);
 }
 
-/** A block in its one canonical text, `FL220-FL240` / `5000-8000` (docs/adr/0091). */
-function formatAltitudeBlock(band) {
-  return `${formatAltitudeEnd(band.lowFt)}-${formatAltitudeEnd(band.highFt)}`;
+/** A block in its one canonical text, `FL220-FL240` / `5000-8000` (docs/adr/0091). `transitionAltFt` is the theater's. */
+function formatAltitudeBlock(band, transitionAltFt) {
+  return `${formatAltitudeEnd(band.lowFt, transitionAltFt)}-${formatAltitudeEnd(band.highFt, transitionAltFt)}`;
 }
 
 /** Splits "FL220B240" / "FL220-FL240" / "220TO240" into its two ends in feet, unordered; null when it is not one. */
@@ -419,10 +425,11 @@ function normalizeTypedTime(path, value, nowMs, startMs = null) {
 
 /**
  * Normalise a value written to one of the six military.mtr.* paths.
- * `nowMs` is the mission clock's now(), used only to date a typed time.
+ * `nowMs` is the mission clock's now(), used only to date a typed time;
+ * `transitionAltFt` is the theater's, used only to write a block's text.
  * Returns { ok: true, value } or { ok: false, detail }. Empty clears to null.
  */
-function normalizeMtrValue(path, value, nowMs) {
+function normalizeMtrValue(path, value, nowMs, transitionAltFt = DEFAULT_TRANSITION_ALT_FT) {
   if (TYPED_TIME_LABELS[path]) return normalizeTypedTime(path, value, nowMs);
   const text = value == null ? '' : String(value).trim().toUpperCase();
   if (text === '') return { ok: true, value: null };
@@ -431,7 +438,7 @@ function normalizeMtrValue(path, value, nowMs) {
     if (band == null) {
       return { ok: false, detail: 'requested altitude after exit must be an altitude or a block, e.g. FL210, 080 or FL210-FL230' };
     }
-    return { ok: true, value: band.lowFt === band.highFt ? text.replace(/\s+/g, '') : formatAltitudeBlock(band) };
+    return { ok: true, value: band.lowFt === band.highFt ? text.replace(/\s+/g, '') : formatAltitudeBlock(band, transitionAltFt) };
   }
   return { ok: true, value: text };
 }
@@ -454,11 +461,14 @@ function activeClearanceEntry(fdr, field) {
 class FdrStore {
   /**
    * @param {CodeAllocator} [codeAllocator]
-   * @param {{clock?:{now:()=>number}}} [deps] the mission clock (docs/adr/0079)
-   *   — every timestamp on an FDR is a time a controller reads.
+   * @param {{clock?:{now:()=>number}, transitionAltFt?:()=>number}} [deps] the mission clock (docs/adr/0079)
+   *   — every timestamp on an FDR is a time a controller reads — and the
+   *   theater's transition altitude, which decides how a block's text writes
+   *   an end (FL or feet). A fixture that omits it gets 18,000 ft.
    */
-  constructor(codeAllocator, { clock = WALL_CLOCK } = {}) {
+  constructor(codeAllocator, { clock = WALL_CLOCK, transitionAltFt = () => DEFAULT_TRANSITION_ALT_FT } = {}) {
     this._clock = clock;
+    this._transitionAltFt = transitionAltFt;
     this._codeAllocator = codeAllocator || new CodeAllocator();
     this._fdrs = new Map(); // fdrId -> FlightDataRecord
   }
@@ -665,7 +675,7 @@ class FdrStore {
       // separation-model fields below.
       // docs/adr/0073 — stored INPUTS of §10.5's time chains (time-chains.js
       // computes the answer at read). Present and null when unknown (§12).
-      timeInputs: { flightPlanDepartureUtc },
+      timeInputs: { flightPlanDepartureUtc, takeoffStampedUtc: null }, // docs/adr/0076: stamped by the DEPARTED state change
       mission: {
         missionNumber: seed.missionNumber || null,
         packageId: seed.packageId || null,
@@ -696,6 +706,18 @@ class FdrStore {
    * void-time changes (§3.8). identity.beaconAssigned is NOT handled here
    * — use setBeaconAssigned(), which needs code-allocator validation.
    */
+  /** UI-A: why writing `value` to a vul-window path would leave the window ending before it starts, or null. */
+  _vulWindowRefusal(fdr, path, value) {
+    if (path !== 'mission.vulWindowStartUtc' && path !== 'mission.vulWindowEndUtc') return null;
+    if (!Number.isFinite(value)) return null;
+    const start = path === 'mission.vulWindowStartUtc' ? value : getPath(fdr, 'mission.vulWindowStartUtc');
+    const end = path === 'mission.vulWindowEndUtc' ? value : getPath(fdr, 'mission.vulWindowEndUtc');
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start < end) return null;
+    return path === 'mission.vulWindowStartUtc'
+      ? `the vul window would start at ${formatZuluHhmm(start)}Z, not before its end ${formatZuluHhmm(end)}Z: move the end first`
+      : `the vul window end ${formatZuluHhmm(end)}Z must be after its start ${formatZuluHhmm(start)}Z`;
+  }
+
   setField(fdrId, path, value, { by } = {}) {
     const fdr = this._fdrs.get(fdrId);
     if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
@@ -728,10 +750,15 @@ class FdrStore {
       const time = normalizeTypedTime(path, value, this._clock.now(), WINDOW_END_OF[path] ? getPath(fdr, WINDOW_END_OF[path]) : null);
       if (!time.ok) return { ok: false, reason: 'VALIDATION_ERROR', detail: time.detail };
       value = time.value;
+      // UI-A (S-L16): a vul window never ends before it starts. Moving the start past the end, or
+      // typing an end that is not after the start, is refused and names the way out, instead of
+      // leaving a window that is already over (the end does not move with the start).
+      const vulMsg = this._vulWindowRefusal(fdr, path, value);
+      if (vulMsg) return { ok: false, reason: 'VALIDATION_ERROR', detail: vulMsg };
     }
 
     if (path.startsWith('military.mtr.')) { // §9.4, docs/adr/0062
-      const mtr = normalizeMtrValue(path, value, this._clock.now());
+      const mtr = normalizeMtrValue(path, value, this._clock.now(), this._transitionAltFt());
       if (!mtr.ok) return { ok: false, reason: 'VALIDATION_ERROR', detail: mtr.detail };
       value = mtr.value;
       ensureMilitary(fdr);
@@ -1051,6 +1078,40 @@ class FdrStore {
   }
 
   /**
+   * docs/adr/0074 (ADR 0064) — one carrier field of this flight
+   * (`fdr.military.carrier`: EEAT, approach type, approach button, bingo field
+   * and fuel, low state). On the FDR because the FDR outlives every Strip: the
+   * launch Strip is dropped at launch and the recovery Strip is a new one on the
+   * same flight, so an EEAT held on a Strip would die exactly when it is needed
+   * (§9.12 rule 7). Validated by carrier/flight-record.js, which refuses a
+   * frequency where a button belongs (rule 6). `null` clears.
+   */
+  setCarrier(fdrId, field, value, { by } = {}) {
+    const fdr = this._fdrs.get(fdrId);
+    if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
+    const military = ensureMilitary(fdr);
+    // EEAT is typed as Zulu HHMM like every other time on a Strip, resolved
+    // against the mission clock (ADR 0079); the model holds epoch ms.
+    if (field === 'eeatUtc' && typeof value === 'string') {
+      const at = resolveZuluHhmm(value, this._clock.now());
+      if (at == null) return { ok: false, reason: 'VALIDATION_ERROR', detail: `EEAT must be a Zulu time, HHMM (not ${JSON.stringify(value)})` };
+      value = at;
+    }
+    // A cell types text: a fuel state is pounds, so "1800" is read as the number it is.
+    // The approach button is NOT coerced here: the model reads "251.000" as a frequency and refuses it (§9.12 rule 6).
+    if ((field === 'bingoFuelLb' || field === 'lowStateLb') && typeof value === 'string' && /^\d+(\.\d+)?$/.test(value.trim())) value = Number(value);
+    if (typeof value === 'string' && value.trim() === '') value = null; // an emptied cell clears
+    const r = setCarrierFlightField(military.carrier, field, value);
+    if (!r.ok) return r;
+    fdr.military = { ...military, carrier: r.flight };
+    fdr.provenance['military'] = 'CONTROLLER_ENTERED';
+    fdr.rev += 1;
+    fdr.updatedAt = this._clock.now();
+    fdr.updatedBy = by || null;
+    return { ok: true, fdr };
+  }
+
+  /**
    * WP7 (docs/adr/0071), guide §9.8/§9.9 — writes what an imported ATO says
    * about this flight. The ONLY writer of `identity.modeOne`/`modeTwo`,
    * `military.scl`, `military.arInfo` and `fdr.ato`, called only from the ATO
@@ -1213,6 +1274,27 @@ class FdrStore {
   }
 
   /**
+   * Stamps (or clears) the takeoff time the state change gives
+   * (docs/adr/0076, Q-L16-3): the mission-clock time a DEPARTURE Strip entered
+   * DEPARTED. An INPUT of §10.5's takeoff chain, never the controller's own
+   * `assigned.takeoffTimeUtc`, so a typed time still wins and an Undo knows
+   * what to take back. Bumps `rev` so every client redraws, and leaves
+   * `updatedAt` alone: this is not a flight-plan amendment (the same reason
+   * setClearance leaves it). Writes only on change.
+   * @returns {{ok:true, fdr, changed:boolean}|{ok:false, reason:'NOT_FOUND'}}
+   */
+  setTakeoffStamp(fdrId, utc) {
+    const fdr = this._fdrs.get(fdrId);
+    if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
+    const value = Number.isFinite(utc) ? utc : null;
+    if (!fdr.timeInputs) fdr.timeInputs = { flightPlanDepartureUtc: null, takeoffStampedUtc: null };
+    if (fdr.timeInputs.takeoffStampedUtc === value) return { ok: true, fdr, changed: false };
+    fdr.timeInputs.takeoffStampedUtc = value;
+    fdr.rev += 1;
+    return { ok: true, fdr, changed: true };
+  }
+
+  /**
    * Re-claims a code released by releaseFdr, for Undo of a terminal NLA Drop
    * within its 30s window (§3.5 rule 5). No-op when the code has already gone
    * to a different FDR in the meantime — that flight is now squawking it, and
@@ -1275,7 +1357,7 @@ class FdrStore {
             };
           }
           if (band.lowFt === band.highFt) parsed = band.lowFt;
-          else { block = band; shown = formatAltitudeBlock(band); }
+          else { block = band; shown = formatAltitudeBlock(band, this._transitionAltFt()); }
         } else {
           parsed = parseHeadingDeg(text);
           if (parsed === null) {
@@ -1326,7 +1408,8 @@ class FdrStore {
       // ensureMilitary() for why a null here is worse than it looks.
       ensureMilitary(f);
       ensureClearance(f); // docs/adr/0058 — FDRs saved before the clearance cells existed
-      if (!f.timeInputs) f.timeInputs = { flightPlanDepartureUtc: null }; // docs/adr/0073 — FDRs saved before the time chains
+      if (!f.timeInputs) f.timeInputs = { flightPlanDepartureUtc: null, takeoffStampedUtc: null };
+      if (f.timeInputs.takeoffStampedUtc === undefined) f.timeInputs.takeoffStampedUtc = null; // docs/adr/0076 // docs/adr/0073 — FDRs saved before the time chains
       return [f.fdrId, f];
     }));
     this._codeAllocator.restore(data?.codes);

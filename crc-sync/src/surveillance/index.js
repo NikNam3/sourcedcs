@@ -4,6 +4,7 @@
 // transponder sends, who each contact is, and the datalink feed. ws-hub.js
 // asks it about a contact; presentation.js turns the answers into the wire.
 
+const { DEFAULT_TRANSITION_ALT_FT } = require('../theaters');
 const { Transponders } = require('./transponder');
 const { TrackNumbers } = require('./track-numbers');
 const { Identity } = require('./identity');
@@ -32,7 +33,7 @@ function createSurveillance({ collab, srs = null, sensorSpecs = null, correlatio
   });
   return {
     transponders, trackNumbers, identity, datalink,
-    env: env || (() => ({ weather: {}, transitionAltFt: 18000 })),
+    env: env || (() => ({ weather: {}, transitionAltFt: DEFAULT_TRANSITION_ALT_FT })),
 
     /**
      * Everything about a contact that does not depend on which controller is

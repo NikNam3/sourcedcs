@@ -48,7 +48,45 @@ const NLA_LABELS = {
     OFF_STATION: 'RTB',
     RTB:         'Drop',
   },
+  // The carrier's Roles (crc-sync's docs/adr/0074, nla.js's computeMarshalNla,
+  // computeFinalNla, computePatternNla). IN_STACK's label is Case-dependent
+  // ('Commence' in Case II and III, 'To pattern' in Case I): the server's own
+  // `strip.nla.carrierTransfer` names the hand-over and nlaButtonLabel() below
+  // reads its label from CARRIER_TRANSFERS; this is the fallback.
+  MARSHAL: {
+    LAUNCH:    'Launched',
+    IN_STACK:  'Commence',
+    COMMENCED: 'Radar contact',
+  },
+  FINAL: {
+    ON_FINAL:       'Ball',
+    BALL:           'Trapped',
+    BOLTER_WAVEOFF: 'Back on final',
+  },
+  PATTERN: {
+    IN_PATTERN: 'Recovered',
+    RECOVERED:  'Drop',
+  },
 };
+
+// The carrier's hand-overs (guide §9.12: four different buttons, four trigger
+// types, "MUST NOT be unified behind one button"). A client mirror of
+// crc-sync's carrier/transfers.js, drift-tested like the tables below. `seeYou`
+// (MARSHAL_TO_PRIFLY) is the Case II second button beside the NLA.
+const CARRIER_TRANSFERS = {
+  MARSHAL_TO_APPROACH:       { label: 'Commence',      trigger: 'CONTROLLER_INITIATED', from: ['CV_MARSHAL'], cases: ['II', 'III'] },
+  APPROACH_TO_FINAL:         { label: 'Radar contact', trigger: 'RADAR_ACQUISITION',    from: ['CV_APP1', 'CV_APP2'], cases: ['II', 'III'] },
+  FINAL_TO_LSO:              { label: 'Ball',          trigger: 'PILOT_BALL_CALL',      from: ['CV_APP1', 'CV_APP2'], cases: ['I', 'II', 'III'] },
+  MARSHAL_TO_PRIFLY:         { label: 'See you',       trigger: 'PILOT_SEE_YOU',        from: ['CV_MARSHAL'], cases: ['II'] },
+  MARSHAL_TO_PATTERN_CASE_I: { label: 'To pattern',    trigger: 'CONTROLLER_INITIATED', from: ['CV_MARSHAL'], cases: ['I'] },
+};
+
+/** The label on a Strip's NLA button: the hand-over's own name when the server says the NLA is one, else the Role's state table. */
+function nlaButtonLabel(strip) {
+  const t = strip && strip.nla && strip.nla.carrierTransfer;
+  if (t && CARRIER_TRANSFERS[t]) return CARRIER_TRANSFERS[t].label;
+  return strip ? nlaLabelFor(strip.state, strip.role) : null;
+}
 
 function nlaLabelFor(state, role = 'DEPARTURE') {
   return (NLA_LABELS[role] || {})[state] || null;
@@ -138,7 +176,15 @@ const COORDINATION_ELIGIBLE_STATES = { ARRIVAL: 'INBOUND', DEPARTURE: 'HANDED_OF
 // it is ever on the ground. Read by bay-view.js's _canProposeTofiEntry.
 const TOFI_ELIGIBLE_STATES = { DEPARTURE: 'HANDED_OFF', ARRIVAL: 'INBOUND', OVERFLIGHT: 'TRANSITING' };
 
-const STATE_OWNERS_BY_ROLE = { DEPARTURE: DEPARTURE_STATE_OWNERS, ARRIVAL: ARRIVAL_STATE_OWNERS, OVERFLIGHT: OVERFLIGHT_STATE_OWNERS, MISSION: MISSION_STATE_OWNERS };
+// The carrier's three Roles — mirrors permission.js exactly (crc-sync docs/adr/0074).
+const MARSHAL_STATE_OWNERS = { LAUNCH: ['CV_MARSHAL'], IN_STACK: ['CV_MARSHAL'], COMMENCED: ['CV_APP1', 'CV_APP2'] };
+const FINAL_STATE_OWNERS = { ON_FINAL: ['CV_APP1', 'CV_APP2'], BALL: ['CV_APP1', 'CV_APP2'], BOLTER_WAVEOFF: ['CV_APP1', 'CV_APP2'] };
+const PATTERN_STATE_OWNERS = { IN_PATTERN: ['CV_PRIFLY'], RECOVERED: ['CV_PRIFLY'] };
+
+const STATE_OWNERS_BY_ROLE = {
+  DEPARTURE: DEPARTURE_STATE_OWNERS, ARRIVAL: ARRIVAL_STATE_OWNERS, OVERFLIGHT: OVERFLIGHT_STATE_OWNERS, MISSION: MISSION_STATE_OWNERS,
+  MARSHAL: MARSHAL_STATE_OWNERS, FINAL: FINAL_STATE_OWNERS, PATTERN: PATTERN_STATE_OWNERS,
+};
 
 /**
  * @param {string} actingPositionId
@@ -184,11 +230,28 @@ function isEfspBoardStale(lastHeartbeatAt, now, thresholdSeconds = DEFAULT_STALE
   return (now - lastHeartbeatAt) >= thresholdSeconds * 1000;
 }
 
+// UI-A U8: once the mission line a TOFI exchange is with has gone OFF_STATION or RTB, the
+// flight is leaving tactical control, so the ATC side's next step is the TOFI Exit. The Strip
+// shows it in the NLA slot (strip-view.js's _buildLifeBlock). Pure: the caller looks the mission
+// Strip up (the ATC Strip's tofiCoordination.peerStripId).
+const TOFI_EXIT_DUE_MISSION_STATES = ['OFF_STATION', 'RTB'];
+
+/** True when `strip` (an ATC-side Strip in ACTIVE TOFI) should offer TOFI Exit as its primary action. */
+function tofiExitDueFor(strip, missionStrip) {
+  if (!strip || strip.role === 'MISSION') return false;
+  const tofi = strip.tofiCoordination;
+  if (!tofi || tofi.state !== 'ACTIVE') return false;
+  return !!missionStrip && missionStrip.role === 'MISSION'
+    && TOFI_EXIT_DUE_MISSION_STATES.includes(missionStrip.state);
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
+    TOFI_EXIT_DUE_MISSION_STATES, tofiExitDueFor,
     NLA_LABELS, nlaLabelFor, DOUBLE_TAP_MS, UNDO_WINDOW_MS, isWithinDoubleTapWindow, isUndoAvailable,
     DEFAULT_STALE_THRESHOLD_SECONDS, isEfspBoardStale,
     STATE_OWNERS_BY_ROLE, DEPARTURE_STATE_OWNERS, ARRIVAL_STATE_OWNERS, OVERFLIGHT_STATE_OWNERS, MISSION_STATE_OWNERS, canActOnState,
+    MARSHAL_STATE_OWNERS, FINAL_STATE_OWNERS, PATTERN_STATE_OWNERS, CARRIER_TRANSFERS, nlaButtonLabel,
     COORDINATION_OP_KINDS, COORDINATION_ELIGIBLE_STATES, TOFI_OP_KINDS, TOFI_ELIGIBLE_STATES,
   };
 }

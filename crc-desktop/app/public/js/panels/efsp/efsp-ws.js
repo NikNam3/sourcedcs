@@ -14,7 +14,7 @@
 // CTR never collide), which is what lets getActingPositions() below still
 // return one flat, facility-agnostic list for every pre-WP4A call site.
 const DEFAULT_EFSP_FACILITY_ID = 'INCIRLIK';
-let _actingPositionsByFacility = { INCIRLIK: [], CENTER: [], TACTICAL: [], RANGES: [] };
+let _actingPositionsByFacility = { INCIRLIK: [], CENTER: [], TACTICAL: [], CARRIER: [], RANGES: [] };
 
 function efspClientMutationId() {
   // crypto.randomUUID() is available in Electron's Chromium renderer (and
@@ -160,6 +160,22 @@ function sendEfspFieldStateMutation(actingPositionId, facilityId, baseRev, op) {
     version: 1, type: 'efsp-field-state-mutation',
     clientMutationId: efspClientMutationId(),
     facilityId, baseRev, actingPositionId, op,
+  });
+}
+
+/**
+ * A carrier op (crc-sync's docs/adr/0074): the recovery Case, a Marshal stack
+ * op or the altimeter. Its own message type because it targets the ship's
+ * record, not a Strip: no stripId, no Strip baseRev. `baseRev` may be omitted
+ * (the server then does not check it: the ops are small and the record is
+ * resent whole on every change). Not registered as a pending mutation, for the
+ * reason the airspace and MARSA sends give.
+ */
+function sendEfspCarrierMutation(actingPositionId, hullId, baseRev, op) {
+  _sendEfsp({
+    version: 1, type: 'efsp-carrier-mutation',
+    clientMutationId: efspClientMutationId(),
+    hullId, baseRev, actingPositionId, op,
   });
 }
 

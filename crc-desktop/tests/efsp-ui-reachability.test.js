@@ -224,7 +224,7 @@ test('the Blocks the release and airspace sorties depend on are on the Strips of
   // onto by APP or CTR, who also own the TOFI fields.
   const want = {
     CD: ['14A', '14D'], GND: ['14A', '14D'],
-    APP: ['22', 'SREG', '5A'], CTR: ['22', '24A', 'SREG', 'IFR', 'RSVC', '5A'],
+    APP: ['22', 'SREG', '5A', '14A'], CTR: ['22', '24A', 'SREG', 'IFR', 'RSVC', '5A', '14A'], // 14A at APP/CTR: UI-A U5
   };
   for (const [positionId, blocks] of Object.entries(want)) {
     const compact = compactBlocksFor('DEPARTURE', positionId);
@@ -2563,4 +2563,137 @@ test('a controller holding TAC_C2 and AIC answers a TOFI exit on an AIC-held lin
   const only = renderTactical(line, ['AIC'], atc);
   click(findByText(only.el, 'Accept TOFI Exit'));
   assert.equal(only.sent[0].actingPositionId, 'AIC', 'the server refuses it, with a reason (AIC has no TOFI grant)');
+});
+
+// ── crc-sync's docs/adr/0074: the carrier ─────────────────────────────────
+// Every carrier control a controller needs is on the Strip and sends the right op, and nothing
+// derived is editable. The harness above loads no carrier scripts, so this test loads them into
+// the sandbox it built.
+
+function carrierRender(strip, { held, caseValue = 'II' }) {
+  const r = renderStrip({ strip, fdr: { ...FDR, military: { ...FDR.military, carrier: { eeatUtc: null, approachType: null, approachButton: null } } }, held });
+  for (const file of ['carrier-state.js', 'carrier-panel.js']) {
+    vm.runInContext(fs.readFileSync(path.join(CLIENT, file), 'utf8'), r.sandbox, { filename: file });
+  }
+  const { CarrierStore } = require('../../crc-sync/src/efsp/carrier-store.js');
+  const hullConfig = require('../../crc-sync/src/efsp/carrier/hull-config.js');
+  const store = new CarrierStore({ hulls: hullConfig.getHulls(), clock: { now: () => Date.UTC(2026, 5, 1, 9, 0), source: 'T' } });
+  if (caseValue !== 'III') store.apply({ clientMutationId: 'c', op: { kind: 'SetCase', to: caseValue } }, 'CV_PRIFLY', 'p');
+  store.apply({ clientMutationId: 'a', op: { kind: 'Append', fdrId: 'f1' } }, 'CV_MARSHAL', 'm');
+  r.sandbox.applyEfspCarrierSnapshot({ carriers: [JSON.parse(JSON.stringify(store.view()))] });
+  r.el = r.sandbox._buildStripEl(strip);
+  return r;
+}
+const marshalStrip = (extra = {}) => stripAt({
+  role: 'MARSHAL', state: 'IN_STACK', ownerPositionId: 'CV_MARSHAL', bayId: 'cv-marshal-stack',
+  nla: { toState: 'COMMENCED', transferTo: 'CV_APP1', carrierTransfer: 'MARSHAL_TO_APPROACH' }, ...extra,
+});
+
+test('a MARSHAL Strip in Case II: Commence is the NLA, See you is its own button, each carrying its own trigger type', () => {
+  const r = carrierRender(marshalStrip(), { held: ['CV_MARSHAL'] });
+  const buttons = descendants(r.el).filter(c => c.dataset && c.dataset.carrierTransfer);
+  assert.deepEqual(buttons.map(b => [b.textContent, b.dataset.carrierTransfer, b.dataset.carrierTrigger]), [
+    ['Commence', 'MARSHAL_TO_APPROACH', 'CONTROLLER_INITIATED'],
+    ['See you', 'MARSHAL_TO_PRIFLY', 'PILOT_SEE_YOU'],
+  ]);
+  click(buttons[0]);
+  assert.deepEqual(JSON.parse(JSON.stringify(r.sent[0].op)), { kind: 'InvokeNla' });
+  click(buttons[1]);
+  assert.equal(r.sent[1].actingPositionId, 'CV_MARSHAL');
+  assert.deepEqual(JSON.parse(JSON.stringify(r.sent[1].op)), { kind: 'CarrierTransfer', transfer: 'MARSHAL_TO_PRIFLY' });
+});
+
+test('"See you" is Case II only, and only for the Marshal who owns the Strip', () => {
+  const caseIII = carrierRender(marshalStrip(), { held: ['CV_MARSHAL'], caseValue: 'III' });
+  assert.equal(descendants(caseIII.el).filter(c => c.dataset && c.dataset.carrierTransfer === 'MARSHAL_TO_PRIFLY').length, 0);
+  const notMine = carrierRender(marshalStrip(), { held: ['CV_PRIFLY'] });
+  assert.equal(descendants(notMine.el).filter(c => c.dataset && c.dataset.carrierTransfer === 'MARSHAL_TO_PRIFLY').length, 0);
+});
+
+test('the derived carrier Blocks are read-only cells showing the server\'s values; the flight\'s own Blocks are editable', () => {
+  const r = carrierRender(marshalStrip(), { held: ['CV_MARSHAL'] });
+  for (const id of ['C3', 'C5', 'C6', 'C7', 'C8', 'C9']) {
+    const cell = blockCell(r.el, id);
+    if (!cell) continue; // C5/C8/C9 may be blank and still drawn; a cell that exists must not be editable
+    assert.equal(cell.classList.contains('efsp-block-editable'), false, `${id} must not be editable`);
+  }
+  assert.equal(blockCell(r.el, 'C7').textContent, '6');
+  assert.equal(blockCell(r.el, 'C6').textContent, '21');
+  assert.equal(blockCell(r.el, 'C10').classList.contains('efsp-block-editable'), true, 'the approach button is typed by the Marshal');
+  assert.equal(blockCell(r.el, 'C15').classList.contains('efsp-block-editable'), true, 'EEAT is typed on the Strip');
+  assert.ok(blockCell(r.el, 'C4'), 'the approach type picker is on the Strip');
+});
+
+test('a FINAL Strip has no editable cell and no input at all', () => {
+  const strip = stripAt({ role: 'FINAL', state: 'ON_FINAL', ownerPositionId: 'CV_APP1', bayId: 'cv-app1-final', nla: { toState: 'BALL', carrierTransfer: 'FINAL_TO_LSO' } });
+  const r = carrierRender(strip, { held: ['CV_APP1'] });
+  assert.equal(descendants(r.el).filter(c => c.classList && c.classList.contains('efsp-block-editable')).length, 0);
+  assert.equal(descendants(r.el).filter(c => c.tagName === 'INPUT' || c.tagName === 'SELECT').length, 0);
+  const ball = descendants(r.el).find(c => c.dataset && c.dataset.carrierTransfer === 'FINAL_TO_LSO');
+  assert.equal(ball.textContent, 'Ball');
+  assert.equal(ball.dataset.carrierTrigger, 'PILOT_BALL_CALL');
+});
+
+// ── docs/adr/0076: surveillance informs, the controller advances (§10.3, §10.4) ──
+
+const SURV_HINT = { stripId: 's1', fdrId: 'f1', facilityId: 'INCIRLIK', stripState: 'LUAW', contactPhase: 'AIRBORNE', since: 1000 };
+
+function chipOf(el) { return descendants(el).find(c => c.dataset && c.dataset.slot === 'hint'); }
+function staleOf(el) { return descendants(el).find(c => c.dataset && c.dataset.slot === 'stale'); }
+
+test('the suggestion chip: one click sends the controller\'s own SetState to Airborne, and nothing moves by itself', () => {
+  const strip = stripAt({ state: 'LUAW', ownerPositionId: 'TWR', bayId: 'twr-runway-queue' });
+  const { sandbox, sent } = renderStrip({ strip, fdr: FDR, held: ['TWR'] });
+  const before = JSON.parse(JSON.stringify(strip));
+  sandbox.applyEfspAlerts({ conformance: [], stca: [], obligations: [], surveillance: [{ ...SURV_HINT, kind: 'AIRBORNE_ADVANCE', toState: 'DEPARTED' }] });
+  const el = sandbox._buildStripEl(strip);
+  const chip = chipOf(el);
+  assert.ok(chip, 'the chip is on the Strip');
+  assert.match(chip.textContent, /AIRBORNE/);
+  assert.deepEqual(sent, [], 'drawing the chip sends nothing: surveillance informs');
+  for (const fn of chip._listeners.click || []) fn({ stopPropagation() {} });
+  assert.equal(sent.length, 1, 'one input');
+  assert.equal(sent[0].actingPositionId, 'TWR');
+  assert.deepEqual(JSON.parse(JSON.stringify(sent[0].op)), { kind: 'SetState', toState: 'DEPARTED' });
+  assert.deepEqual(strip, before, 'the Strip record itself is untouched');
+});
+
+test('the chip is information, not a control, for a Position that does not hold the Strip', () => {
+  const strip = stripAt({ state: 'LUAW', ownerPositionId: 'TWR', bayId: 'twr-runway-queue' });
+  const { sandbox, sent } = renderStrip({ strip, fdr: FDR, held: ['OPS'] });
+  sandbox.applyEfspAlerts({ surveillance: [{ ...SURV_HINT, kind: 'AIRBORNE_ADVANCE', toState: 'DEPARTED' }] });
+  const chip = chipOf(sandbox._buildStripEl(strip));
+  assert.ok(chip);
+  assert.equal((chip._listeners.click || []).length, 0);
+  assert.deepEqual(sent, []);
+});
+
+test('a hint written against a state the Strip has since left is not drawn', () => {
+  const strip = stripAt({ state: 'DEPARTED', ownerPositionId: 'TWR', bayId: 'twr-airborne' });
+  const { sandbox } = renderStrip({ strip, fdr: FDR, held: ['TWR'] });
+  sandbox.applyEfspAlerts({ surveillance: [{ ...SURV_HINT, kind: 'AIRBORNE_ADVANCE', toState: 'DEPARTED' }] });
+  assert.equal(chipOf(sandbox._buildStripEl(strip)), undefined);
+});
+
+test('staleness is a quiet, low-severity badge that explains itself and does not mark the Strip as an alert', () => {
+  const strip = stripAt({ state: 'DEPARTED', ownerPositionId: 'APP' });
+  const { sandbox } = renderStrip({ strip, fdr: FDR, held: ['APP'] });
+  sandbox.applyEfspAlerts({ surveillance: [{ ...SURV_HINT, stripState: 'DEPARTED', contactPhase: 'ON_GROUND', kind: 'STALE', afterSec: 120 }] });
+  const el = sandbox._buildStripEl(strip);
+  const badge = staleOf(el);
+  assert.ok(badge);
+  assert.equal(badge.textContent, 'STALE');
+  assert.match(badge.title, /DEPARTED.*on the ground.*2 min/);
+  assert.doesNotMatch(el.className, /efsp-strip-alert/);
+});
+
+test('the render signature changes when a hint appears, so the Strip is rebuilt for it (S-L14)', () => {
+  const strip = stripAt({ state: 'LUAW', ownerPositionId: 'TWR', bayId: 'twr-runway-queue' });
+  const { sandbox } = renderStrip({ strip, fdr: FDR, held: ['TWR'] });
+  const sig = () => sandbox._stripRenderSignature(strip);
+  const none = sig();
+  sandbox.applyEfspAlerts({ surveillance: [{ ...SURV_HINT, kind: 'AIRBORNE_ADVANCE', toState: 'DEPARTED' }] });
+  assert.notEqual(sig(), none);
+  sandbox.applyEfspAlerts({ surveillance: [] });
+  assert.equal(sig(), none);
 });

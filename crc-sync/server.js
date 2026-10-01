@@ -24,6 +24,8 @@ const { CoverageEngine } = require('./src/coverage');
 const { StationCoverage, assignableRadars, reportUnresolvedSelectors } = require('./src/efsp/station-coverage');
 const { ForwardingObligationMonitor } = require('./src/efsp/forwarding-obligations');
 const { CorrelationReconciler, CORRELATION_TICK_MS } = require('./src/efsp/correlation-reconciler');
+const { SurveillanceHintMonitor } = require('./src/efsp/surveillance-hints');
+const { getHintsConfig } = require('./src/efsp/surveillance-hints-config');
 const { ConformanceMonitor } = require('./src/efsp/conformance');
 const { StcaMonitor } = require('./src/stca');
 const { loadAlertingConfig } = require('./src/alerting-config');
@@ -38,6 +40,9 @@ const PORT       = parseInt(process.env.PORT, 10) || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
 const app    = express();
+/* Behind nginx (one hop): key req.ip / rate limiters on the real client from
+   X-Forwarded-For, not on the nginx container's address. */
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 
 // ── CORS, scoped — only /api/auth/token is ever called cross-origin, from
@@ -136,7 +141,7 @@ const missionClock = new MissionClock({ offsetHoursFor: (theatre) => theaters[th
 // "magnetic" means at a position on the mission date. The one place a typed
 // magnetic value becomes true, and the source of the `theater` message.
 const theaterContext = new TheaterContext({ theaters, clock: missionClock });
-const efsp        = createEfsp({ clock: missionClock });
+const efsp        = createEfsp({ clock: missionClock, transitionAltFt: () => theaterContext.transitionAltFt() });
 
 // ── The radar picture (docs/adr/0042) ────────────────────────────────────
 // Radars, their sweep phase, terrain masking and who may look through what
@@ -630,6 +635,25 @@ const correlationReconciler = new CorrelationReconciler({
 });
 setInterval(() => correlationReconciler.tick(), CORRELATION_TICK_MS);
 
+// ── The carrier's ship banner (docs/adr/0074, ADR 0064 B6) — matched to the
+// live ship track once a second, republished only when it changed enough to
+// matter. Own coalition, grid convergence and magnetic variation are injected:
+// the model owns none of them (decisions H15, H42).
+const { CarrierTick } = require('./src/efsp/carrier-tick');
+const { carrierDelta } = require('./src/efsp/efsp-ws');
+const { USER_COALITION } = require('./src/surveillance/iff');
+const carrierTick = new CarrierTick({
+  carrierStore: efsp.carrierStore,
+  tracks: () => trackStore.getAll(),
+  ownCoalition: () => USER_COALITION,
+  clock: missionClock,
+  convergenceAt: (lat, lon) => theaterContext.convergenceAt(lat, lon),
+  variationAt: (lat, lon) => theaterContext.variationAt(lat, lon),
+  weatherPa: () => { const w = grpcClient.getWeather(); return w && Number.isFinite(w.pressurePa) ? w.pressurePa : null; },
+  onChange: () => wsHub.broadcastEfspCarrierDelta(carrierDelta(efsp.carrierStore)),
+});
+setInterval(() => carrierTick.tick(), 1000);
+
 // ── Conformance and short-term conflict alerting (docs/adr/0058) ─────────
 // Server-side, because only this process sees every track: a client only
 // receives the ones inside its own coverage. Once a second, the same rhythm as
@@ -648,6 +672,20 @@ const conformanceMonitor = new ConformanceMonitor({
   gridToMagnetic: (deg, lat, lon) => theaterContext.gridToMagnetic(deg, lat, lon),
   config: alertingConfig.conformance,
 });
+// docs/adr/0076 — "detected airborne" and staleness. It reads the Boards and
+// the correlation records and writes nothing: surveillance informs, the
+// controller advances (§10.3).
+const surveillanceHints = new SurveillanceHintMonitor({
+  clock: missionClock,
+  trackStore,
+  correlationStore: efsp.correlationStore,
+  boardStoreFor: efsp.boardStoreFor,
+  facilityConfig: efspFacilityConfig,
+  getMissionData: () => wsHub.getMissionData(),
+  config: getHintsConfig(),
+  onStaleness: (e) => efspInstrumentation.metrics.recordStaleness(e),
+});
+efspInstrumentation.metrics.declareSource('staleness');
 const stcaMonitor = new StcaMonitor({
   trackStore,
   config: alertingConfig.stca,
@@ -666,6 +704,7 @@ function broadcastEfspAlerts() {
     conformance: conformanceMonitor.getAll(),
     stca: stcaMonitor.getAll(),
     obligations: obligationMonitor.getAll(),
+    surveillance: surveillanceHints.getAll(), // docs/adr/0076: the suggestion chip and staleness
   });
 }
 // Conformance runs on the mission clock — its grace period is measured from
@@ -675,8 +714,9 @@ function broadcastEfspAlerts() {
 // of day at all.
 setInterval(() => {
   const conformanceChanged = conformanceMonitor.tick();
+  const hintsChanged = surveillanceHints.tick();
   const stcaChanged = stcaMonitor.tick(Date.now());
-  if (conformanceChanged || stcaChanged) {
+  if (conformanceChanged || stcaChanged || hintsChanged) {
     broadcastEfspAlerts();
   }
 }, 1000);

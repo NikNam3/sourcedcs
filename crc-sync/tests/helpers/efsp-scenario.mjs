@@ -155,3 +155,21 @@ export async function obligationAlerts(efsp, facilityConfig) {
   monitor.tick();
   return monitor.getAll();
 }
+
+/**
+ * A carrier op (docs/adr/0074) — the Case, a Marshal stack op or the altimeter:
+ * its own message type, since it targets the ship's record and no Strip.
+ * Returns the whole handleMessage result (ack and carrierBroadcast).
+ */
+export function carrierAct(efsp, crewMember, positionId, op, { hullId, baseRev } = {}) {
+  return efsp.handleMessage(crewMember.session, {
+    version: 1, type: 'efsp-carrier-mutation', clientMutationId: crypto.randomUUID(),
+    hullId, baseRev, actingPositionId: positionId, op,
+  });
+}
+
+export function mustCarrierAct(efsp, crewMember, positionId, op, opts) {
+  const result = carrierAct(efsp, crewMember, positionId, op, opts);
+  assert.equal(result.ack.ok, true, `${op.kind} as ${positionId}: ${JSON.stringify(result.ack)}`);
+  return result;
+}

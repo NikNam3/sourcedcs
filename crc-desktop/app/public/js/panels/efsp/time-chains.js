@@ -34,8 +34,13 @@
 const TIME_CHAINS = {
   departure: { blockId: '6',  path: 'filed.proposedDepartureTimeUtc', sources: ['CONTROLLER', 'FLIGHT_PLAN', 'ATO'] },
   offBlock:  { blockId: '17', path: 'assigned.taxiTimeUtc',           sources: ['CONTROLLER', 'EST_DEPARTURE'] },
-  takeoff:   { blockId: '18', path: 'assigned.takeoffTimeUtc',        sources: ['CONTROLLER', 'EST_OFF_BLOCK'] },
+  takeoff:   { blockId: '18', path: 'assigned.takeoffTimeUtc',        sources: ['CONTROLLER', 'STATE_CHANGE', 'EST_OFF_BLOCK'] },
 };
+
+// STATE_CHANGE is the takeoff chain's observed source (docs/adr/0076, Q-L16-3):
+// the mission-clock time a DEPARTURE Strip entered DEPARTED, stamped by
+// board-store.js into fdr.timeInputs.takeoffStampedUtc. It is an actual, so it
+// is never `estimated`, and it sits below CONTROLLER so a typed time still wins.
 
 // Which chain an EST_* source reads.
 const ESTIMATE_SOURCES = { EST_DEPARTURE: 'departure', EST_OFF_BLOCK: 'offBlock' };
@@ -53,6 +58,7 @@ function _timeChainSourceValue(source, chain, fdr) {
   if (!fdr) return { valueUtc: null, via: null };
   if (source === 'CONTROLLER') return { valueUtc: _timeChainEpoch(_timeChainRead(fdr, chain.path)), via: null };
   if (source === 'FLIGHT_PLAN') return { valueUtc: _timeChainEpoch(fdr.timeInputs && fdr.timeInputs.flightPlanDepartureUtc), via: null };
+  if (source === 'STATE_CHANGE') return { valueUtc: _timeChainEpoch(fdr.timeInputs && fdr.timeInputs.takeoffStampedUtc), via: null };
   if (source === 'ATO') return { valueUtc: _timeChainEpoch(fdr.ato && fdr.ato.departure && fdr.ato.departure.timeUtc), via: null };
   if (ESTIMATE_SOURCES[source]) {
     const upstream = resolveTimeChain(ESTIMATE_SOURCES[source], fdr);

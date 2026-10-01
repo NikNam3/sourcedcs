@@ -68,6 +68,22 @@ function createHost(env, { stateDir }) {
   const trackStore = new TrackStore();
   const collabStore = new CollaborativeStore();
   const squawks = new Map(); // String(trackId) -> code | null  (TrackStore drops unknown fields, briefing §3.8)
+  // The metrics tap, as server.js installs it (docs/adr/0065): it reassigns
+  // efsp.handleMessage, and the hub looks that up per message, so it must be
+  // in place before the hub dispatches anything. Beyond the metrics themselves
+  // it is what writes the audit line for a refusal that never reached a store
+  // (docs/adr/0083), so a soak without it models a different log than production.
+  const { createEfspInstrumentation } = req('efsp/metrics.js');
+  const instrumentation = createEfspInstrumentation({
+    efsp,
+    facilityConfig,
+    clock,
+    wallNow: () => Date.now(),
+    metricsPath: path.join(stateDir, 'efsp-metrics.json'),
+    trafficCountPath: path.join(stateDir, 'efsp-traffic-count.jsonl'),
+  });
+  // server.js: an archived Strip must already be counted.
+  if (efsp.archiver) efsp.archiver.setIsCounted((stripId) => instrumentation.trafficCount.hasCountFor(stripId));
   const hub = new WsHub({ trackStore, collabStore, efsp, clock });
   hub._wss = { clients: new Set() }; // never attach(): no timer, no real server (T3)
 
@@ -386,9 +402,8 @@ function createHost(env, { stateDir }) {
           if (obligationsAreState && oChanged) broadcastAlerts();
           efsp.nlaStatusMonitor.tick();
           if (obligationsAreState) reply.obligations = obligationMonitor.getAll().length;
-          // H36 archiving (docs/adr/0082), as server.js runs it. No traffic
-          // count in the soak, so it archives unguarded (warned once). Its
-          // wall clock is the virtual Date.now.
+          // H36 archiving (docs/adr/0082), as server.js runs it, guarded by
+          // the traffic count. Its wall clock is the virtual Date.now.
           if (efsp.archiver) {
             const { archiveDeltas } = req('efsp/archiver.js');
             const payloads = archiveDeltas(efsp.archiver.sweep(), efsp.boardStoreFor);
@@ -399,6 +414,7 @@ function createHost(env, { stateDir }) {
             }
           }
         }
+        if (what.has('metrics')) instrumentation.tick(); // server.js: setInterval 60 s
         if (what.has('heartbeat')) {
           for (const [ws, session] of hub._sessions) hub._tick(ws, session);
         }

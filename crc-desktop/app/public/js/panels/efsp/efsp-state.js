@@ -72,6 +72,10 @@ const efspFieldStates = new Map(); // facilityId -> field-state record (crc-sync
 // WRONG right now. Sent whole on every change (efsp-alerts), so a flight that
 // conforms again simply is not in the next message.
 const efspConformance = new Map(); // fdrId -> [{ kind, assigned, actual?, altFt?, fpm?, deviationFt?, since }]
+// docs/adr/0076 (crc-sync) — surveillance informs, the controller advances: the
+// suggestion chip and the staleness indication, stripId -> hints. Full state in
+// efsp-alerts, so one that no longer applies is simply not in the next message.
+const efspSurveillanceHints = new Map(); // stripId -> [{ kind: 'AIRBORNE_ADVANCE'|'STALE', stripState, toState?, since, afterSec? }]
 let efspConflicts = [];            // [{ id, a, b, aCallsign, bCallsign, timeToCpaSec, minNm, vertFt, aAt, bAt }]
 
 function applyEfspSnapshot(msg) {
@@ -94,6 +98,8 @@ function applyEfspSnapshot(msg) {
   for (const r of msg.marsa || []) efspMarsa.set(r.marsaId, r);
   efspFieldStates.clear();
   for (const r of msg.fieldStates || []) efspFieldStates.set(r.facilityId, r);
+  // crc-sync's docs/adr/0074 — the carrier's hull record (carrier-state.js).
+  if (typeof applyEfspCarrierSnapshot === 'function') applyEfspCarrierSnapshot(msg);
 }
 
 /**
@@ -387,6 +393,25 @@ function searchEfspStrips(query) {
   });
 }
 
+// UI-A (S-L23 finding): a controller holding TAC_C2 and not AIC/JTAC cannot see the lines TAC_C2 has
+// handed down, so cannot answer CTR's TOFI exit on one (the server lets TAC_C2 answer for AIC,
+// ADR 0080; the panel had nowhere to show the line). The Position tab gets one client-local
+// pseudo-Bay, "WITH AIC/JTAC", listing those lines. Like the search Bay it is not Board state and
+// not a destination: nothing can be dropped on it.
+const LINES_WITH_OTHERS = { TAC_C2: ['AIC', 'JTAC'] };
+
+function withOthersBayId(positionId) { return `${positionId}-with`; }
+function isWithOthersBayId(bayId) { return typeof bayId === 'string' && bayId.endsWith('-with'); }
+
+/** Live MISSION lines held by the Positions `positionId` has handed lines to, newest first. */
+function efspLinesWithOthers(positionId) {
+  const owners = LINES_WITH_OTHERS[positionId];
+  if (!owners) return [];
+  return getAllEfspStrips()
+    .filter(s => s.role === 'MISSION' && s.state !== 'DROPPED' && owners.includes(s.ownerPositionId))
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+}
+
 // Test-only reset — this module holds top-level mutable state (matching
 // app.js's own plain-globals style), so tests need a way to isolate runs.
 function _resetEfspStateForTest() {
@@ -395,6 +420,7 @@ function _resetEfspStateForTest() {
   efspPositions.clear();
   efspPendingMutations.clear();
   efspObligations.clear();
+  efspSurveillanceHints.clear();
   efspCorrelations.clear();
   efspCorrelationStats = null;
   efspMarsa.clear();
@@ -413,11 +439,26 @@ function applyEfspAlerts(msg) {
   efspConformance.clear();
   for (const r of (msg && msg.conformance) || []) if (r.alerts && r.alerts.length) efspConformance.set(r.fdrId, r.alerts);
   efspConflicts = (msg && msg.stca) || [];
+  efspSurveillanceHints.clear();
+  for (const h of (msg && msg.surveillance) || []) {
+    if (!efspSurveillanceHints.has(h.stripId)) efspSurveillanceHints.set(h.stripId, []);
+    efspSurveillanceHints.get(h.stripId).push(h);
+  }
   efspObligations.clear();
   for (const o of (msg && msg.obligations) || []) {
     if (!efspObligations.has(o.stripId)) efspObligations.set(o.stripId, []);
     efspObligations.get(o.stripId).push(o);
   }
+}
+
+/**
+ * The surveillance hints standing on this Strip right now (docs/adr/0076).
+ * A hint written against another state of the Strip is stale itself — the
+ * Strip moved since the server looked — and is not returned.
+ */
+function surveillanceHintsForStrip(strip) {
+  if (!strip) return [];
+  return (efspSurveillanceHints.get(strip.stripId) || []).filter(h => h.stripState === strip.state);
 }
 
 /** What is wrong with this flight's conformance right now; [] when it conforms. */
@@ -444,12 +485,13 @@ if (typeof module !== 'undefined' && module.exports) {
     registerPendingMutation, getPendingMutations, rebaseForResend,
     getEfspStrip, getEfspFdr, getEfspPosition, getAllEfspStrips, getAllEfspPositions,
     otherLiveStripsForFdr, liveStripsForCallsign,
+    LINES_WITH_OTHERS, withOthersBayId, isWithOthersBayId, efspLinesWithOthers,
     applyEfspAirspaceDelta, getEfspAirspace, getAllEfspAirspaces, stripsInAirspace,
     applyEfspCorrelationDelta, getEfspCorrelation, getAllEfspCorrelations,
     getEfspCorrelationForStrip, correlatedTrackIdForStrip, stripIdsForTrackId,
     getEfspCorrelationStats,
     applyEfspMarsaDelta, getEfspMarsa, getAllEfspMarsa,
-    applyEfspAlerts, conformanceAlertsForFdr, getAllEfspConflicts, stcaConflictsForTrack,
+    applyEfspAlerts, surveillanceHintsForStrip, conformanceAlertsForFdr, getAllEfspConflicts, stcaConflictsForTrack,
     activeMarsaForFdr, marsaForStrip, marsaParticipantStripIds,
     getEfspRack, searchEfspStrips, getEfspBoardSeq, getEfspFacility, getEfspBays,
     isAitAuthorizedFor, getEfspPositionLetter,

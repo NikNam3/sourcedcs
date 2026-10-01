@@ -5,13 +5,16 @@ const path = require('path');
 const fs = require('fs');
 const voiceGateway = require('./discord-gateway');
 const activityDailyJob = require('./activity-daily-job');
-const { parseReleaseManifest } = require('./releases.js');
+const { parseReleaseManifest, pruneReleases } = require('./releases.js');
 const store = require('./store');
 const auth = require('./auth');
 const discordClient = require('./discord-client');
 const rateLimiters = require('./rate-limiters');
 
 const app = express();
+/* Behind nginx (one hop): key req.ip / rate limiters on the real client from
+   X-Forwarded-For, not on the nginx container's address. */
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
 
 /* ─── Discord bot config (see discord-client.js) ─────────── */
@@ -156,6 +159,7 @@ api.get('/health', (_req, res) => {
    public download page. */
 api.post('/releases/upload', rateLimiters.writeOpsLimiter, auth.requireReleaseUpload, store.uploadRelease.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  try { pruneReleases(store.RELEASES_DIR, { keep: 3 }); } catch (e) { console.warn('[releases] prune failed:', e.message); }
   res.json({ ok: true, filename: req.file.filename, size: req.file.size });
 });
 

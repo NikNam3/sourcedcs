@@ -329,6 +329,8 @@ test('every gesture entry point has a declared cost; a missing row throws rather
   assert.equal(efspGestureInputCost('HIGHLIGHT', 'contextmenu+swatch'), 2);
   assert.equal(efspGestureInputCost('OFFSET', 'menu'), 2);
   assert.throws(() => efspGestureInputCost('FLIP', 'keyboard'), /no GESTURE_INPUT_COST row/);
-  assert.deepEqual(Object.keys(GESTURE_INPUT_COST).map(k => k.split(':')[0]).sort(), ['ATTENTION', 'FLIP', 'HIGHLIGHT', 'OFFSET']);
+  assert.equal(efspGestureInputCost('OFFSET', 'alt-click'), 1); // UI-A S-L15: the one-input entry points
+  assert.equal(efspGestureInputCost('HIGHLIGHT', 'ctrl-click'), 1);
+  assert.deepEqual([...new Set(Object.keys(GESTURE_INPUT_COST).map(k => k.split(':')[0]))].sort(), ['ATTENTION', 'FLIP', 'HIGHLIGHT', 'OFFSET']);
   for (const v of Object.values(GESTURE_INPUT_COST)) assert.ok(Number.isInteger(v) && v >= 1 && v <= 50, 'inside crc-sync\'s 1..50');
 });

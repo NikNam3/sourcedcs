@@ -27,7 +27,7 @@ for (const c of cases) {
 test('time chains: the three chains, their Blocks and their order', () => {
   assert.deepEqual(TIME_CHAINS.departure.sources, ['CONTROLLER', 'FLIGHT_PLAN', 'ATO']);
   assert.deepEqual(TIME_CHAINS.offBlock.sources, ['CONTROLLER', 'EST_DEPARTURE']);
-  assert.deepEqual(TIME_CHAINS.takeoff.sources, ['CONTROLLER', 'EST_OFF_BLOCK']);
+  assert.deepEqual(TIME_CHAINS.takeoff.sources, ['CONTROLLER', 'STATE_CHANGE', 'EST_OFF_BLOCK']);
   assert.deepEqual(['6', '17', '18', '16', '9'].map(timeChainForBlock), ['departure', 'offBlock', 'takeoff', null, null]);
   assert.equal(resolveTimeChain('nosuch', {}).source, null);
 });

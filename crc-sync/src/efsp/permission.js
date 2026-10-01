@@ -1,6 +1,7 @@
 'use strict';
 
 const facilityConfig = require('./facility-config');
+const { CARRIER_TRANSFERS } = require('./carrier/transfers'); // pure (docs/adr/0064)
 
 // Per-acting-Position permission evaluation (EFSPImplementationGuide.md
 // §4.8.4) — table-driven, evaluated for the SINGLE acting Position on a
@@ -196,6 +197,19 @@ const PERMISSIONS = {
   // JTAC is SENT is the read scope (read-scope.js, docs/adr/0080), no longer
   // unconditional.
   JTAC: new Set(['TransferStrip']),
+  // The CARRIER Facility (docs/adr/0064 B4, docs/adr/0074; guide §4.1: "Military
+  // ATC afloat"). Written as literals over NON_CREATE_OPS, which already excludes
+  // every coordination primitive, TOFI, ConvertToArrival and the airspace-entry
+  // ops: "the carrier does not talk to the centre" (§9.13) holds by construction,
+  // not by a list that has to stay current. Only the Marshal originates Strips
+  // (launch and recovery check-in); FINAL and PATTERN Strips come only by a
+  // carrier transfer. CarrierTransfer is NOT in OP_KINDS (it is not a `.filter()`
+  // grant anyone could pick up silently): board-store.js's dispatch asks
+  // canRecordCarrierTransfer below, one acting Position and one transfer kind.
+  CV_MARSHAL: new Set([...NON_CREATE_OPS, 'CreateStrip']),
+  CV_PRIFLY:  new Set(NON_CREATE_OPS),
+  CV_APP1:    new Set(NON_CREATE_OPS),
+  CV_APP2:    new Set(NON_CREATE_OPS),
 };
 
 // D12, enforced structurally rather than merely by careful hand-authoring
@@ -240,6 +254,10 @@ const CREATE_ROLE_PERMISSIONS = {
   // which shares its FDR with the ATC-side Strip instead.
   TAC_C2: new Set(['MISSION']),
   GCI: new Set(['MISSION']),
+  // Launch and recovery check-in are both a MARSHAL Strip (ADR 0064: a launch is
+  // a MARSHAL Strip in LAUNCH). FINAL and PATTERN are never created, only
+  // converted to by a carrier transfer, so no Position may CreateStrip them.
+  CV_MARSHAL: new Set(['MARSHAL']),
 };
 
 /**
@@ -294,6 +312,41 @@ function canCorrelate(actingPositionId) {
  */
 function canDeclareMarsa(actingPositionId) {
   return !_worksNoStrips(actingPositionId) && !_hasNoScope(actingPositionId);
+}
+
+/**
+ * The carrier's ship-level capabilities (docs/adr/0064 B4, docs/adr/0074), in
+ * the capability-table shape docs/adr/0080 gave the tactical Positions: one row
+ * per Position, one column per capability, static (P5), so the next capability
+ * is a column. Read through the one-parameter predicates below (D21: exactly one
+ * acting Position, never a held set). They are predicates and not OP_KINDS
+ * entries because the Case, the stack and the ship input are not Strip ops: they
+ * go to the CarrierStore (carrier-store.js), which asks these.
+ *
+ *  setsCase        the recovery Case is PriFly's alone (guide §4.1); Marshal may not
+ *  sequencesStack  every stack op, including the marshal radial (H27) and Charlie time
+ *  editsShipInput  the one thing a controller may enter on the banner: the altimeter
+ *
+ * A carrier transfer's sender is read from CARRIER_TRANSFERS[kind].from (the
+ * model's own data), not repeated here.
+ */
+const CARRIER_CAPABILITIES = {
+  CV_MARSHAL: { setsCase: false, sequencesStack: true,  editsShipInput: true },
+  CV_PRIFLY:  { setsCase: true,  sequencesStack: false, editsShipInput: true },
+  CV_APP1:    { setsCase: false, sequencesStack: false, editsShipInput: false },
+  CV_APP2:    { setsCase: false, sequencesStack: false, editsShipInput: false },
+};
+
+function _carrierCap(positionId, key) {
+  return Object.prototype.hasOwnProperty.call(CARRIER_CAPABILITIES, positionId) && CARRIER_CAPABILITIES[positionId][key] === true;
+}
+function canSetRecoveryCase(actingPositionId) { return _carrierCap(actingPositionId, 'setsCase'); }
+function canSequenceMarshalStack(actingPositionId) { return _carrierCap(actingPositionId, 'sequencesStack'); }
+function canEditShipStateInput(actingPositionId) { return _carrierCap(actingPositionId, 'editsShipInput'); }
+/** May this Position record this carrier transfer (the model's `from` list)? */
+function canRecordCarrierTransfer(actingPositionId, kind) {
+  const row = typeof kind === 'string' && Object.prototype.hasOwnProperty.call(CARRIER_TRANSFERS, kind) ? CARRIER_TRANSFERS[kind] : null;
+  return !!row && row.from.includes(actingPositionId);
 }
 
 /**
@@ -396,12 +449,14 @@ function readScopeFor(positionId) {
  *    for its owner (TAC_C2 for an AIC-held line; AIC "works under TAC_C2's
  *    TOFI", guide §4.1, ADR 0025) may ACCEPT, REJECT or TRANSFER_COMMS.
  *  - OPS alert status (S-L13, H56): OPS owns Block 14E on a DEPARTURE at every
- *    state until it is DROPPED, whoever holds the Strip.
+ *    state until it is DROPPED, whoever holds the Strip. Likewise 3G ORDNANCE (UI-A U1).
  * The acting Position must still hold the op kind (canMutate runs first).
  */
 const TOFI_ANSWER_ACTIONS = ['ACCEPT', 'REJECT', 'TRANSFER_COMMS'];
 const NON_OWNER_BLOCK_WRITES = [
   { blockId: '14E', role: 'DEPARTURE', positions: ['OPS'] },
+  // UI-A U1 (H55): OPS records the ordnance state (CLEAN / HUNG ...) on a departure whoever holds it.
+  { blockId: '3G', role: 'DEPARTURE', positions: ['OPS'] },
 ];
 function mayActBesideOwner(actingPositionId, strip, op) {
   if (!strip || !op) return false;
@@ -512,7 +567,32 @@ const MISSION_STATE_OWNERS = {
   // DROPPED is terminal — no NLA exists for it, so no entry is needed.
 };
 
-const STATE_OWNERS_BY_ROLE = { DEPARTURE: DEPARTURE_STATE_OWNERS, ARRIVAL: ARRIVAL_STATE_OWNERS, OVERFLIGHT: OVERFLIGHT_STATE_OWNERS, MISSION: MISSION_STATE_OWNERS };
+// The carrier's three Roles (docs/adr/0064 B2, docs/adr/0074), [SOURCE-DEFINED]
+// like every state table here: guide §4.1 names the Positions and §9.12 the
+// hand-overs, and neither publishes "normally owned by". The Marshal owns a
+// flight until Commence; then the lane controller owns COMMENCED, ON_FINAL,
+// BALL and BOLTER_WAVEOFF; PriFly owns the pattern. Case I and Case II Strips
+// reach PriFly by their own transfer (carrier/transfers.js).
+const CV_LANES = ['CV_APP1', 'CV_APP2'];
+const MARSHAL_STATE_OWNERS = {
+  LAUNCH:    ['CV_MARSHAL'],
+  IN_STACK:  ['CV_MARSHAL'],
+  COMMENCED: CV_LANES,
+};
+const FINAL_STATE_OWNERS = {
+  ON_FINAL:       CV_LANES,
+  BALL:           CV_LANES,
+  BOLTER_WAVEOFF: CV_LANES,
+};
+const PATTERN_STATE_OWNERS = {
+  IN_PATTERN: ['CV_PRIFLY'],
+  RECOVERED:  ['CV_PRIFLY'],
+};
+
+const STATE_OWNERS_BY_ROLE = {
+  DEPARTURE: DEPARTURE_STATE_OWNERS, ARRIVAL: ARRIVAL_STATE_OWNERS, OVERFLIGHT: OVERFLIGHT_STATE_OWNERS, MISSION: MISSION_STATE_OWNERS,
+  MARSHAL: MARSHAL_STATE_OWNERS, FINAL: FINAL_STATE_OWNERS, PATTERN: PATTERN_STATE_OWNERS,
+};
 
 // WP4A second slice — TOFI's target resolution (guide §4.6.3, ATC<->MRU).
 // Per guide §4.1's own Position table, TOFI is listed only for CTR among
@@ -554,4 +634,6 @@ module.exports = {
   NO_STRIP_OP_CLASSES,
   canActOnFieldState, FIELD_STATE_OP_OWNERS,
   TACTICAL_CAPABILITIES, READ_SCOPES, handBackTargetsFor, tofiAnswererFor, readScopeFor, mayActBesideOwner,
+  CARRIER_CAPABILITIES, canSetRecoveryCase, canSequenceMarshalStack, canEditShipStateInput, canRecordCarrierTransfer,
+  MARSHAL_STATE_OWNERS, FINAL_STATE_OWNERS, PATTERN_STATE_OWNERS,
 };

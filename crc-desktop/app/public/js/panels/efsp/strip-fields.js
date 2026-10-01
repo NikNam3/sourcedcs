@@ -36,6 +36,15 @@ const COMPACT_BLOCKS_BY_ROLE = {
   // '7' stays as the FILED request here; '7A' is the assignment beside it.
   OVERFLIGHT: [...COMPACT_BLOCKS_SHARED, '7A', '9A-VECTOR'],
   MISSION:    ['M3', 'M1', 'M2', 'M4', 'M5', 'M6', 'M7'],
+  // The carrier (crc-sync's docs/adr/0074, guide §9.12). MARSHAL shows the
+  // marshal message: the derived stack fields first (CASE, ANGELS, DME,
+  // EAT/PUSH, RADIAL, FINAL BEARING: read, never typed), then what the Marshal
+  // enters for the flight (approach, button, low state, bingo, EEAT). EEAT is on
+  // the face because it is "the field most likely to be missed" (§9.12 rule 7).
+  // FINAL has nothing to type: callsign, type, final bearing, deck, distance.
+  MARSHAL:    ['C1', 'C2', 'C3', 'C7', 'C6', 'C8', 'C5', 'C9', 'C4', 'C10', 'C12', 'C13', 'C14', 'C15'],
+  FINAL:      ['C1', 'C2', 'C9', 'C16', 'C17'],
+  PATTERN:    ['C1', 'C2', 'C24'],
 };
 
 // ── Per-Position lists ─────────────────────────────────────────────────────
@@ -46,7 +55,7 @@ const COMPACT_BLOCKS_BY_ROLE = {
 //    get a field of their own.
 //  - CID (4) and TAIL (3C) are on no Strip: nothing reads either at a glance.
 //  - HOOK (3F) is Tower's alone (carrier control later). ORDNANCE (3G) is on
-//    Tower's face always; on APP, CTR and every tactical Position it is on the
+//    Tower's and OPS's face always (OPS records the load state, UI-A U1); on APP, CTR and every tactical Position it is on the
 //    face only once it is set to something other than CLEAN — see
 //    ORDNANCE_WHEN_SET below (decisions.md H55 and S-L12, crc-sync's
 //    docs/adr/0069).
@@ -60,17 +69,21 @@ const COMPACT_BLOCKS_BY_ROLE = {
 //  - The TOFI fields (IFR, RSVC, SREG) and airspace ownership (24A) where TOFI
 //    and airspace entry happen: CTR. SREG stays at APP too, because MARSA —
 //    which APP can declare — writes it.
+//  - TAXI (17) on GND's face and TAKEOFF (18) on TWR's: the off-block call and the takeoff call are
+//    what those two Positions receive and type (S-L16 W2, ADR 0073), and neither was on any face.
+//  - RELEASE (14A, the release state) on a DEPARTURE at APP and CTR, because the release
+//    travels CTR -> APP -> TWR (guide §4.6.2) and each of them reads and passes it (UI-A U5).
 //  - ALERT (14E) where an alert aircraft is ordered and moved: OPS sets it
 //    (decisions.md H56), and every ground Position shows it: CD, GND, TWR
 //    (crc-sync docs/adr/0070).
 const COMPACT_BLOCKS_BY_POSITION = {
   DEPARTURE: {
-    OPS: ['1', '3', '5', '6', '7', '8', '8A', '8B', '9', '9F', '3D', '3E', '14E'],
+    OPS: ['1', '3', '5', '6', '7', '8', '8A', '8B', '9', '9F', '3D', '3E', '3G', '14E'],
     CD:  ['1', '3', '5', '7', '8', '8A', '8B', '9', '9F', '10', '14A', '14D', '21', '14E'],
-    GND: ['1', '3', '5', '8', '8A', '14A', '14D', '14E'],
-    TWR: ['1', '3', '5', '8A', '21', '14D', '3F', '3G', '14E'],
-    APP: ['1', '3', '5', '7', '8A', '9', '20', '21', '22', '5A', 'SREG'],
-    CTR: ['1', '3', '5', '7', '21', '20', '8B', '9', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A'],
+    GND: ['1', '3', '5', '8', '8A', '14A', '14D', '17', '14E'],
+    TWR: ['1', '3', '5', '8A', '21', '14D', '18', '3F', '3G', '14E'],
+    APP: ['1', '3', '5', '7', '8A', '9', '20', '21', '14A', '22', '5A', 'SREG'],
+    CTR: ['1', '3', '5', '7', '21', '20', '8B', '9', '14A', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A'],
   },
   ARRIVAL: {
     GND: ['1', '3', '5', '8B'],
@@ -85,7 +98,7 @@ const COMPACT_BLOCKS_BY_POSITION = {
 };
 
 // Grid columns a field spans. Everything else takes one.
-const FIELD_SPANS = { '1': 2, '3': 2, '9': 3, '24A': 2, M1: 2, M3: 2, M5: 2 };
+const FIELD_SPANS = { '1': 2, '3': 2, '9': 3, '24A': 2, M1: 2, M3: 2, M5: 2, C1: 2, C2: 1, C24: 2 };
 
 function _blockMapFor(role) {
   return (typeof BLOCK_MAPS === 'object' && BLOCK_MAPS && BLOCK_MAPS[role]) || null;

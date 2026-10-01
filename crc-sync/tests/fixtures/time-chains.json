@@ -1,5 +1,5 @@
 {
-  "_comment": "docs/adr/0073 — shared by crc-sync/tests/efsp-time-chains.test.mjs and crc-desktop/tests/efsp-time-chains.test.js. Every case goes here, never in one side's test (T6). Times are 2016-06-21 Zulu (a mission date, H11).",
+  "_comment": "docs/adr/0073 \u2014 shared by crc-sync/tests/efsp-time-chains.test.mjs and crc-desktop/tests/efsp-time-chains.test.js. Every case goes here, never in one side's test (T6). Times are 2016-06-21 Zulu (a mission date, H11).",
   "cases": [
     {
       "name": "null FDR: every chain has no value and no source",
@@ -506,6 +506,78 @@
           "source": "EST_OFF_BLOCK",
           "via": "EST_DEPARTURE",
           "estimated": true
+        }
+      }
+    },
+    {
+      "name": "a state-change stamp is the takeoff, an actual, and beats the off-block estimate",
+      "fdr": {
+        "filed": {
+          "proposedDepartureTimeUtc": null
+        },
+        "assigned": {
+          "taxiTimeUtc": 1466517120000,
+          "takeoffTimeUtc": null
+        },
+        "timeInputs": {
+          "flightPlanDepartureUtc": null,
+          "takeoffStampedUtc": 1466517720000
+        }
+      },
+      "expect": {
+        "departure": {
+          "valueUtc": null,
+          "source": null,
+          "via": null,
+          "estimated": false
+        },
+        "offBlock": {
+          "valueUtc": 1466517120000,
+          "source": "CONTROLLER",
+          "via": null,
+          "estimated": false
+        },
+        "takeoff": {
+          "valueUtc": 1466517720000,
+          "source": "STATE_CHANGE",
+          "via": null,
+          "estimated": false
+        }
+      }
+    },
+    {
+      "name": "a typed takeoff time still beats the state-change stamp",
+      "fdr": {
+        "filed": {
+          "proposedDepartureTimeUtc": null
+        },
+        "assigned": {
+          "taxiTimeUtc": null,
+          "takeoffTimeUtc": 1466517780000
+        },
+        "timeInputs": {
+          "flightPlanDepartureUtc": null,
+          "takeoffStampedUtc": 1466517720000
+        }
+      },
+      "expect": {
+        "departure": {
+          "valueUtc": null,
+          "source": null,
+          "via": null,
+          "estimated": false
+        },
+        "offBlock": {
+          "valueUtc": null,
+          "source": null,
+          "via": null,
+          "estimated": false
+        },
+        "takeoff": {
+          "valueUtc": 1466517780000,
+          "source": "CONTROLLER",
+          "via": null,
+          "estimated": false
         }
       }
     }

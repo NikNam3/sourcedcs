@@ -124,7 +124,7 @@ function filterMarsaDelta(msg, scope, fdrIds) {
 }
 
 /**
- * efsp-alerts: conformance (by fdrId) and obligations (by Facility and Strip)
+ * efsp-alerts: conformance (by fdrId), obligations and surveillance hints (by Facility and Strip)
  * for visible flights only. `stca` is scoped per session elsewhere (ATC only).
  * @param {(facilityId:string, stripId:string) => boolean} stripVisible
  */
@@ -134,6 +134,7 @@ function filterAlerts(msg, scope, fdrIds, stripVisible) {
     ...msg,
     conformance: (msg.conformance || []).filter(a => fdrIds.has(a.fdrId)),
     obligations: (msg.obligations || []).filter(o => stripVisible(o.facilityId, o.stripId)),
+    surveillance: (msg.surveillance || []).filter(h => stripVisible(h.facilityId, h.stripId)),
   };
 }
 

@@ -156,7 +156,7 @@ const DEFAULTS = {
   // geojson.js's getDeclutteredIds() is kept — REVISIT then.
   declutter:       false,
   showDatalinkLocks: true, // draw the datalink's radar-lock lines (geojson.js's buildDatalinkLines)
-  transitionAltFt: 18000, // ft — how an ASSIGNED altitude is written. The theater's, from crc-sync's `theater` message (its docs/adr/0085); not a setting
+  transitionAltFt: 18000, // ft — how an ASSIGNED altitude is written. The theater's, from crc-sync's `theater` message (its docs/adr/0085); not a setting. This is only the placeholder until the first `theater` message (sent on connect); the other client files read it with no fallback of their own
   aprtManualWx:    {},    // per-airport manually-entered vis/cloud data, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
   aprtAtisFreq:    {},    // per-airport saved ATIS frequency, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
   aprtAtisRwy:     {},    // per-airport saved ATIS runway, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
@@ -754,6 +754,20 @@ async function connect() {
         break;
       // WP6 §9.7 (crc-sync docs/adr/0061, crc-desktop 0068). Its own delta with its own seq —
       // field state is not Strips and rides no Board's sequence (0061's rule-5 deviation).
+      // crc-sync's docs/adr/0074 — the carrier's hull record (Case, Marshal
+      // stack with its derived fields, ship banner), sent whole on every change.
+      // A Case change is ONE of these and every carrier Strip re-renders from it.
+      case 'efsp-carrier-delta':
+        if (typeof applyEfspCarrierDelta === 'function') applyEfspCarrierDelta(msg);
+        if (typeof renderCarrierBanner === 'function') renderCarrierBanner();
+        if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
+        break;
+      case 'efsp-carrier-ack':
+        if (!msg.ok && typeof _showMutationError === 'function') _showMutationError(msg.reason || 'Rejected', msg.detail, { subject: 'carrier' });
+        if (msg.carrier && typeof applyEfspCarrierDelta === 'function') applyEfspCarrierDelta({ carriers: { updated: [msg.carrier] } });
+        if (typeof renderCarrierBanner === 'function') renderCarrierBanner();
+        if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
+        break;
       case 'efsp-field-state-delta':
         if (typeof applyEfspFieldStateDelta === 'function') applyEfspFieldStateDelta(msg);
         if (typeof renderFieldStatePanel === 'function') renderFieldStatePanel();

@@ -99,7 +99,7 @@ function altitudeLong(t) {
 
 /** An assigned altitude (feet) as a controller writes it: FL above transition, feet below. */
 function assignedAltText(ft) {
-  const ta = _settings().transitionAltFt ?? 18000;
+  const ta = _settings().transitionAltFt;
   return ft >= ta ? `FL${String(Math.round(ft / 100)).padStart(3, '0')}` : Number(ft).toLocaleString('en-US');
 }
 

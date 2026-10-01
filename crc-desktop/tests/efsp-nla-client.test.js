@@ -164,3 +164,35 @@ test('this client mirror stays in lockstep with the real, authoritative server t
   assert.deepEqual(OVERFLIGHT_STATE_OWNERS, server.OVERFLIGHT_STATE_OWNERS);
   assert.deepEqual(MISSION_STATE_OWNERS, server.MISSION_STATE_OWNERS);
 });
+
+// crc-sync's docs/adr/0074: the carrier's Roles. The server tables are authoritative; these are the mirrors.
+test('the carrier state owners and hand-over table mirror the server exactly', () => {
+  const server = require('../../crc-sync/src/efsp/permission.js');
+  const transfers = require('../../crc-sync/src/efsp/carrier/transfers.js');
+  const c = require('../app/public/js/panels/efsp/efsp-nla.js');
+  assert.deepEqual(c.MARSHAL_STATE_OWNERS, server.MARSHAL_STATE_OWNERS);
+  assert.deepEqual(c.FINAL_STATE_OWNERS, server.FINAL_STATE_OWNERS);
+  assert.deepEqual(c.PATTERN_STATE_OWNERS, server.PATTERN_STATE_OWNERS);
+  assert.deepEqual(Object.keys(c.CARRIER_TRANSFERS).sort(), Object.keys(transfers.CARRIER_TRANSFERS).sort());
+  for (const [kind, row] of Object.entries(transfers.CARRIER_TRANSFERS)) {
+    const m = c.CARRIER_TRANSFERS[kind];
+    assert.equal(m.label, row.label, kind);
+    assert.equal(m.trigger, row.trigger, kind);
+    assert.deepEqual(m.from, [...row.from], kind);
+    assert.deepEqual(m.cases, [...row.cases], kind);
+  }
+});
+
+test('every carrier state has an NLA label (or is terminal), and a Case I hand-over names itself', () => {
+  const nlaServer = require('../../crc-sync/src/efsp/nla.js');
+  const c = require('../app/public/js/panels/efsp/efsp-nla.js');
+  for (const role of ['MARSHAL', 'FINAL', 'PATTERN']) {
+    for (const state of nlaServer.STATES_BY_ROLE[role]) {
+      if (state === 'DROPPED') continue;
+      assert.ok(c.nlaLabelFor(state, role), `${role}/${state}`);
+    }
+  }
+  assert.equal(c.nlaButtonLabel({ role: 'MARSHAL', state: 'IN_STACK', nla: { toState: 'IN_PATTERN', carrierTransfer: 'MARSHAL_TO_PATTERN_CASE_I' } }), 'To pattern');
+  assert.equal(c.nlaButtonLabel({ role: 'MARSHAL', state: 'IN_STACK', nla: { toState: 'COMMENCED', carrierTransfer: 'MARSHAL_TO_APPROACH' } }), 'Commence');
+  assert.equal(c.nlaButtonLabel({ role: 'DEPARTURE', state: 'CLEARED', nla: { toState: 'PUSHBACK' } }), 'Approve Pushback');
+});

@@ -90,3 +90,17 @@ test('an assigned altitude block (docs/adr/0091) is written FL220-FL240, and A22
   assert.equal(L.atcAssignedText({ altFt: null, altBlock: block, hdg: null }, 26000), 'A220B240↓');
   assert.equal(L.atcAssignedText({ altFt: null, altBlock: block, hdg: null }, 24100), 'A220B240', 'edge tolerance');
 });
+
+test('an assigned altitude follows the theater transition altitude (lane TA)', () => {
+  const saved = global.settings.transitionAltFt;
+  try {
+    global.settings.transitionAltFt = 10000; // Syria
+    assert.equal(L.assignedAltText(10000), 'FL100');
+    assert.equal(L.assignedAltText(9000), '9,000');
+    assert.equal(L.assignedBlockText({ lowFt: 22000, highFt: 24000 }), 'FL220-FL240');
+    assert.equal(L.assignedBlockText({ lowFt: 8000, highFt: 12000 }), '8,000-FL120');
+    global.settings.transitionAltFt = 18000;
+    assert.equal(L.assignedAltText(10000), '10,000');
+    assert.equal(L.assignedBlockText({ lowFt: 16000, highFt: 20000 }), '16,000-FL200');
+  } finally { global.settings.transitionAltFt = saved; }
+});

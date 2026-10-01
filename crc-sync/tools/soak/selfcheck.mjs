@@ -31,7 +31,7 @@ function run(name, extra) {
 const quiet = (rep) => {
   const m = rep.mutations;
   const bad = [];
-  for (const k of ['lost', 'duplicateAck', 'auditMissing', 'auditDuplicate', 'auditForRefusal', 'auditOrphan', 'internalErrors', 'broadcastMissing']) if (m[k] > 0) bad.push(`${k}=${m[k]}`);
+  for (const k of ['lost', 'duplicateAck', 'auditMissing', 'auditDuplicate', 'auditWrongSource', 'auditOrphan', 'internalErrors', 'broadcastMissing']) if (m[k] > 0) bad.push(`${k}=${m[k]}`);
   if (m.replayNotIdempotent.count > 0) bad.push(`replayNotIdempotent=${m.replayNotIdempotent.count}`);
   if (m.resync.resyncDivergence > 0) bad.push(`resyncDivergence=${m.resync.resyncDivergence}`);
   if (m.restart.boardLostOnRestart > 0) bad.push(`boardLostOnRestart=${m.restart.boardLostOnRestart}`);

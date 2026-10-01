@@ -27,10 +27,11 @@ function pressureAtAlt(zM, seaPa, T0) {
 /**
  * @param {number} trueAltM  DCS altitude, metres MSL
  * @param {{pressurePa?:number, tempK?:number}} weather  sea-level pressure and temperature
- * @param {number} [transitionAltFt=18000]
+ * @param {number} transitionAltFt  the theater's: at and above it the standard pressure is the reference
  * @returns {number} feet
  */
-function indicatedAltFt(trueAltM, weather = {}, transitionAltFt = 18000) {
+function indicatedAltFt(trueAltM, weather, transitionAltFt) {
+  weather = weather || {};
   const pressurePa = weather.pressurePa || ISA_P0;
   const tempK = weather.tempK || 288.15;
   const p = pressureAtAlt(trueAltM, pressurePa, tempK);

@@ -146,6 +146,12 @@ class CorrelationStore {
     return [...this._records.values()].map(deepClone);
   }
 
+  /** The contact a flight is CORRELATED to (not PROVISIONAL, not lost), or null. A read with no copy: docs/adr/0076's monitor asks per Strip per tick. */
+  correlatedTrackId(fdrId) {
+    const record = this._records.get(fdrId);
+    return record && record.state === 'CORRELATED' && record.trackId ? String(record.trackId) : null;
+  }
+
   /**
    * trackId -> { fdrId, state } for every record bound to a contact, built in
    * one pass with no copying. surveillance/identity.js calls it once per

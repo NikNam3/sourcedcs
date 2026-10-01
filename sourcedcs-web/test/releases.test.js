@@ -115,3 +115,52 @@ test('checkReleaseUploadToken: length mismatch does not throw (crypto.timingSafe
   assert.doesNotThrow(() => checkReleaseUploadToken('short', 'a-much-longer-secret-token'));
   assert.equal(checkReleaseUploadToken('short', 'a-much-longer-secret-token'), false);
 });
+
+/* ══════════════════════════════════════════════════════════
+   pruneReleases
+══════════════════════════════════════════════════════════ */
+
+const fs = require('fs'), os = require('os'), path = require('path');
+const { pruneReleases } = require('../releases.js');
+
+function releasesDir(files) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rel-'));
+  for (const f of files) fs.writeFileSync(path.join(dir, f), 'x');
+  return dir;
+}
+
+test('pruneReleases: keeps the newest 3 versions per platform (numeric order), deletes older + blockmaps', () => {
+  const files = ['latest.yml', 'latest-linux.yml'];
+  for (const v of ['1.0.2', '1.0.9', '1.0.10', '1.0.11', '1.1.0']) {
+    files.push(`CRC Setup ${v}.exe`, `CRC Setup ${v}.exe.blockmap`, `CRC-${v}.AppImage`);
+  }
+  const dir = releasesDir(files);
+  fs.writeFileSync(path.join(dir, 'latest.yml'), 'version: 1.1.0\npath: CRC Setup 1.1.0.exe\n');
+  fs.writeFileSync(path.join(dir, 'latest-linux.yml'), 'version: 1.1.0\npath: CRC-1.1.0.AppImage\n');
+  pruneReleases(dir, { keep: 3 });
+  const left = fs.readdirSync(dir).sort();
+  assert.ok(left.includes('CRC Setup 1.1.0.exe') && left.includes('CRC Setup 1.0.11.exe') && left.includes('CRC Setup 1.0.10.exe'));
+  assert.ok(left.includes('CRC Setup 1.0.10.exe.blockmap'));
+  assert.ok(!left.some(n => n.includes('1.0.9') || n.includes('1.0.2')), left.join(','));
+  assert.ok(left.includes('latest.yml') && left.includes('latest-linux.yml'));
+  assert.ok(left.includes('CRC-1.0.10.AppImage') && !left.includes('CRC-1.0.9.AppImage'));
+  fs.rmSync(dir, { recursive: true });
+});
+
+test('pruneReleases: never deletes the version the latest manifest points to, even if old', () => {
+  const dir = releasesDir(['CRC-1.0.1.AppImage', 'CRC-1.0.1.AppImage.blockmap', 'CRC-1.0.2.AppImage', 'CRC-1.0.3.AppImage', 'CRC-1.0.4.AppImage', 'CRC-1.0.5.AppImage']);
+  fs.writeFileSync(path.join(dir, 'latest-linux.yml'), 'version: 1.0.1\npath: CRC-1.0.1.AppImage\n');
+  pruneReleases(dir, { keep: 3 });
+  const left = fs.readdirSync(dir);
+  assert.ok(left.includes('CRC-1.0.1.AppImage') && left.includes('CRC-1.0.1.AppImage.blockmap'));
+  assert.ok(!left.includes('CRC-1.0.2.AppImage'));
+  fs.rmSync(dir, { recursive: true });
+});
+
+test('pruneReleases: platforms are independent, unrelated files untouched, missing dir is a no-op', () => {
+  const dir = releasesDir(['CRC Setup 1.0.1.exe', 'CRC-1.0.1.AppImage', 'CRC-1.0.2.AppImage', 'notes.txt']);
+  assert.deepEqual(pruneReleases(dir, { keep: 3 }), []);
+  assert.equal(fs.readdirSync(dir).length, 4);
+  fs.rmSync(dir, { recursive: true });
+  assert.deepEqual(pruneReleases(path.join(dir, 'nope')), []);
+});

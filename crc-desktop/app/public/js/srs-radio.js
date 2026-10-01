@@ -95,6 +95,10 @@
   // ── DOM refs ───────────────────────────────────────────────────────────────
 
   const _radioList   = document.getElementById('srs-radio-list');
+  // Cached with the rest: looked up live in _renderSlots they were null once dockview had the
+  // RADIO panel closed (detached), and every poll threw (S-L1b finding).
+  const _addRadioBtn = document.getElementById('srs-add-radio');
+  const _addIcomBtn  = document.getElementById('srs-add-intercom');
   const _pttBtn      = document.getElementById('srs-ptt-btn');
   const _dot         = document.getElementById('srs-dot');
   // Settings tab elements
@@ -199,9 +203,10 @@
   function _renderSlots() {
     const active = (_state.radios || []).filter(r => r.modulation !== 'DISABLED');
     const vols   = _state.radio_volumes || [];
-    const addBtn = document.getElementById('srs-add-radio');
+    const addBtn = _addRadioBtn;
+    if (!_radioList || !addBtn) return; // panel not in the DOM right now
     addBtn.style.display = active.length >= MAX_RADIOS ? 'none' : '';
-    const addIcBtn = document.getElementById('srs-add-intercom');
+    const addIcBtn = _addIcomBtn;
     if (addIcBtn) {
       const hasIntercom = active.some(r => r.modulation === 'INTERCOM');
       addIcBtn.classList.toggle('srs-intercom-active', hasIntercom);

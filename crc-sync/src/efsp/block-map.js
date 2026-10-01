@@ -422,7 +422,86 @@ const MISSION_BLOCK_MAP = {
   '3G': { required: false, target: { kind: 'military', field: 'ordnanceState' } }, // guide M14, §9.5
 };
 
-const BLOCK_MAPS = { DEPARTURE: DEPARTURE_BLOCK_MAP, ARRIVAL: ARRIVAL_BLOCK_MAP, OVERFLIGHT: OVERFLIGHT_BLOCK_MAP, MISSION: MISSION_BLOCK_MAP };
+// The carrier's three Block Maps (docs/adr/0064 B3, docs/adr/0074; guide §9.12).
+// [SOURCE-DEFINED] numbering: the Block ids are `C`-prefixed because `M` is
+// frozen for MISSION and a bare number would look like a guide Block it is not.
+// The whole point of §9.12 is in the `target.kind`s:
+//
+//  - `carrier-derived` Blocks are DISPLAY ONLY. resolveBlockTarget returns null
+//    for the kind, so SetBlock on one is a VALIDATION_ERROR by the same route as
+//    a `system` Block: CASE, MARSHAL DME, ANGELS, EAT/PUSH and EXPECTED FINAL
+//    BEARING cannot be typed (WP7A bullets 2 and 5, D16). The marshal radial
+//    (C5) is set through the stack op SetMarshalRadial, and a Case I altitude
+//    through SetCaseIAngels, never through SetBlock.
+//  - `carrier` Blocks write fdr.military.carrier.<field> through
+//    fdr-store.js's setCarrier(): EEAT, approach, button, bingo and low state
+//    belong to the FLIGHT, which outlives every Strip, so an EEAT set on the
+//    launch Strip is on the recovery Strip by construction.
+//
+// ALTIMETER and SHIP WX are the ship banner, not Blocks (§9.12 rule 5). Block 11
+// does not exist on purpose: there is no gap to fill.
+//
+// The client keeps the same ids and kinds in strip-template.js, held by the
+// parity test.
+const _CARRIER_CHROME = {
+  '2':  { required: true,  target: { kind: 'system' } },
+  '4':  { required: true,  target: { kind: 'system' } },
+  '4A': { required: false, target: { kind: 'flag' } },
+  '5':  { required: false, target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
+  '25': { required: true,  target: { kind: 'system' } },
+  '26': { required: true,  target: { kind: 'system' } },
+};
+
+const MARSHAL_BLOCK_MAP = {
+  'C1':  { required: true,  target: { kind: 'fdr', path: 'identity.callsign' } },
+  'C2':  { required: true,  target: { kind: 'fdr', path: 'identity.aircraftType' } },
+  'C3':  { required: false, target: { kind: 'carrier-derived', field: 'case' } },
+  'C4':  { required: false, target: { kind: 'carrier', field: 'approachType' } },
+  'C5':  { required: false, target: { kind: 'carrier-derived', field: 'marshalRadial' } },
+  'C6':  { required: false, target: { kind: 'carrier-derived', field: 'marshalDme' } },
+  'C7':  { required: false, target: { kind: 'carrier-derived', field: 'angels' } },
+  'C8':  { required: false, target: { kind: 'carrier-derived', field: 'eatPush' } },
+  'C9':  { required: false, target: { kind: 'carrier-derived', field: 'expectedFinalBearing' } },
+  'C10': { required: false, target: { kind: 'carrier', field: 'approachButton' } },
+  'C12': { required: false, target: { kind: 'carrier', field: 'lowStateLb' } },
+  'C13': { required: false, target: { kind: 'carrier', field: 'bingoField' } },
+  'C14': { required: false, target: { kind: 'carrier', field: 'bingoFuelLb' } },
+  'C15': { required: false, target: { kind: 'carrier', field: 'eeatUtc' } }, // writable on the LAUNCH Strip too
+  // Free note, annotation-routed like every Role's remarks cell.
+  'C24': { required: false, target: { kind: 'annotation' } },
+  ..._CARRIER_CHROME,
+};
+
+// FINAL has NOTHING writable on the talk-down (§7.10, WP7A bullet 6): the
+// controller is talking, not typing. Deck, final bearing and distance are
+// derived, drawn by the client from the ship state and the track. Shared with
+// PAR (L18).
+// Structural, not conventional: every Block of this map is either `system`,
+// `flag` or `carrier-derived`, none of which resolveBlockTarget lets SetBlock
+// write, so there is nothing a Final controller could type even by hand-crafting
+// a Mutation. (Block 5, the squawk, is the one chrome Block left off.)
+const FINAL_BLOCK_MAP = {
+  'C1':  { required: true,  target: { kind: 'carrier-derived', field: 'callsign' } },
+  'C2':  { required: true,  target: { kind: 'carrier-derived', field: 'aircraftType' } },
+  'C9':  { required: false, target: { kind: 'carrier-derived', field: 'expectedFinalBearing' } },
+  'C16': { required: false, target: { kind: 'carrier-derived', field: 'deck' } },
+  'C17': { required: false, target: { kind: 'carrier-derived', field: 'finalDistance' } },
+  '2':  _CARRIER_CHROME['2'], '4': _CARRIER_CHROME['4'], '4A': _CARRIER_CHROME['4A'],
+  '25': _CARRIER_CHROME['25'], '26': _CARRIER_CHROME['26'],
+};
+
+// PATTERN: identity and a free annotation. Shared with RSU (L18).
+const PATTERN_BLOCK_MAP = {
+  'C1':  { required: true,  target: { kind: 'fdr', path: 'identity.callsign' } },
+  'C2':  { required: true,  target: { kind: 'fdr', path: 'identity.aircraftType' } },
+  'C24': { required: false, target: { kind: 'annotation' } },
+  ..._CARRIER_CHROME,
+};
+
+const BLOCK_MAPS = {
+  DEPARTURE: DEPARTURE_BLOCK_MAP, ARRIVAL: ARRIVAL_BLOCK_MAP, OVERFLIGHT: OVERFLIGHT_BLOCK_MAP, MISSION: MISSION_BLOCK_MAP,
+  MARSHAL: MARSHAL_BLOCK_MAP, FINAL: FINAL_BLOCK_MAP, PATTERN: PATTERN_BLOCK_MAP,
+};
 
 /**
  * WP6 (docs/adr/0052) — the guide's §6.4 military-extension `M`-numbers, and
@@ -529,6 +608,11 @@ function resolveBlockTarget(role, blockId) {
   // docs/adr/0058 — the flight's assigned altitude or heading, through
   // fdr-store.js's setClearance(), which keeps §3.7's history on the FDR.
   if (def.target.kind === 'clearance') return { kind: 'clearance', field: def.target.field };
+  // docs/adr/0074 — a flight's own carrier fields (EEAT, approach, button,
+  // bingo, low state), through fdr-store.js's setCarrier(). The kind
+  // `carrier-derived` falls through to null on purpose: derived values cannot
+  // be written by any Block (§9.12 rule 1).
+  if (def.target.kind === 'carrier') return { kind: 'carrier', field: def.target.field };
   return null;
 }
 
@@ -580,7 +664,8 @@ function validateFacilityConfig(config) {
 }
 
 module.exports = {
-  DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP, BLOCK_MAPS,
+  DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP,
+  MARSHAL_BLOCK_MAP, FINAL_BLOCK_MAP, PATTERN_BLOCK_MAP, BLOCK_MAPS,
   isValidRole, requiredBlocksFor, resolveBlockTarget, validateFacilityConfig,
   interlockFor, interlockBlocks, MILITARY_BLOCK_NAMESPACE,
 };

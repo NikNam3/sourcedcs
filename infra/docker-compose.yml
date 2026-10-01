@@ -123,6 +123,7 @@ services:
           proxy_pass http://\$$upstream:7000;
           proxy_set_header Host $$host;
           proxy_set_header X-Real-IP $$remote_addr;
+          proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
           proxy_set_header X-Forwarded-Proto https; }
       }
       server {
@@ -141,6 +142,7 @@ services:
           proxy_pass http://\$$upstream:4000;
           proxy_set_header Host $$host;
           proxy_set_header X-Real-IP $$remote_addr;
+          proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
           proxy_set_header Upgrade \$$http_upgrade;
           proxy_set_header Connection \$$connection_upgrade;
           proxy_set_header X-Forwarded-Proto https; }
@@ -161,6 +163,7 @@ services:
           proxy_pass http://\$$upstream:3000;
           proxy_set_header Host $$host;
           proxy_set_header X-Real-IP $$remote_addr;
+          proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
           proxy_set_header Upgrade \$$http_upgrade;
           proxy_set_header Connection \$$connection_upgrade;
           proxy_set_header X-Forwarded-Proto https; }
@@ -268,7 +271,6 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=7000
-      - LOG_LEVEL=${LOG_LEVEL:-warn}
       - CASDOOR_CLIENT_ID=${CASDOOR_CLIENT_ID}
       - CASDOOR_ENDPOINT=${CASDOOR_ENDPOINT}
       - DISCORD_URL=${DISCORD_URL}
@@ -300,7 +302,6 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=4000
-      - LOG_LEVEL=${LOG_LEVEL:-warn}
       - CASDOOR_ENDPOINT=${CASDOOR_ENDPOINT}
       - ATOBRIEF_CLIENT_ID=${ATOBRIEF_CLIENT_ID}
       - ATOBRIEF_CLIENT_SECRET=${ATOBRIEF_CLIENT_SECRET}
@@ -322,7 +323,6 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - LOG_LEVEL=${LOG_LEVEL:-warn}
       - CASDOOR_ENDPOINT=${CASDOOR_ENDPOINT}
       - CRCSYNC_CLIENT_ID=${CRCSYNC_CLIENT_ID}
       - CRCSYNC_CLIENT_SECRET=${CRCSYNC_CLIENT_SECRET}
@@ -331,6 +331,7 @@ services:
       - DCS_GRPC_MAX_BACKOFF=${DCS_GRPC_MAX_BACKOFF:-5}
       - SRS_HOST=${CRCSYNC_SRS_HOST:-server.sourcedcs.page}
       - SRS_PORT=${CRCSYNC_SRS_PORT:-5002}
+      - CRCSYNC_COALITION=${CRCSYNC_COALITION:-3}
       - CRCSYNC_SOURCEDCS_WEB_URL=${CRCSYNC_SOURCEDCS_WEB_URL:-http://main-website:7000}
       - FLIGHT_PLAN_SERVICE_TOKEN=${FLIGHT_PLAN_SERVICE_TOKEN}
       # Terrain masking for the radar picture is server-side now (crc-sync's

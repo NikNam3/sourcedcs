@@ -26,6 +26,7 @@
 // radars it looks through.
 
 const { USER_COALITION } = require('../surveillance/iff');
+const { radarIsHull } = require('./carrier/hull-config');
 
 // The Position classes that separate traffic and so get short-term conflict
 // alerts (docs/adr/0059). The tactical side does not: military positions and
@@ -56,6 +57,14 @@ function selectorMatches(selector, radar, { ownCoalition = USER_COALITION } = {}
   }
 
   if (selector.coalition === 'own' && radar.coalition !== ownCoalition) return false;
+
+  // docs/adr/0074: a carrier selector may name which of the ship's two radars
+  // (`radar: 'search' | 'approach'`) and which hull (`hull: 'CVN-72'`), so an
+  // Approach Position sees the CVN's approach radar and not every ship's.
+  if (selector.kind === 'carrier') {
+    if (selector.radar && radar.carrierRadar !== selector.radar) return false;
+    if (selector.hull && !radarIsHull(selector.hull, radar)) return false;
+  }
 
   return true;
 }
