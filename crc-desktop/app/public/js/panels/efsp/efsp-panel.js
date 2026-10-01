@@ -894,7 +894,7 @@ export function createStripFromFiledPlan(plan) {
 // the auto-clear stays rather than being decided here unilaterally — it is
 // just made long enough to read a full route back off, and the banner is
 // click-to-dismiss (initEfspPanel) for the controller who is done with it.
-const MUTATION_ERROR_VISIBLE_MS = 30000;
+export const MUTATION_ERROR_VISIBLE_MS = 30000;
 
 // Reason codes as something a controller can act on. Enumerated from every
 // `ok: false, reason:` in crc-sync's src/efsp/ rather than guessed. The code
@@ -904,7 +904,7 @@ const MUTATION_ERROR_VISIBLE_MS = 30000;
 // `null` means "the server always writes the whole sentence into `detail` for
 // this one" — VALIDATION_ERROR's detail IS the message ("NOSUCH is not a
 // configured stereo route"), and a canned prefix would only talk over it.
-const MUTATION_ERROR_MESSAGES = {
+export const MUTATION_ERROR_MESSAGES = {
   VALIDATION_ERROR: null,
   STALE_REV: 'Somebody else changed this Strip while you were working on it — it has been reloaded, check it and try again',
   NOT_FOUND: 'That record is no longer on the Board',

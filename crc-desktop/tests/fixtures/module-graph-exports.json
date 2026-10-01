@@ -414,6 +414,8 @@
    "tofiExitDueFor"
   ],
   "panels/efsp/efsp-panel.js": [
+   "MUTATION_ERROR_MESSAGES",
+   "MUTATION_ERROR_VISIBLE_MS",
    "_activeBayId",
    "_activePositionTab",
    "_callsignOfFdr",
@@ -777,7 +779,7 @@
   ]
  },
  "bridge": {
-  "count": 662,
+  "count": 664,
   "skipped": [],
   "names": [
    "$aptDisplay",
@@ -857,6 +859,8 @@
    "MISSION_BLOCK_MAP",
    "MISSION_STATE_OWNERS",
    "MTR_BLOCKS_BY_POSITION",
+   "MUTATION_ERROR_MESSAGES",
+   "MUTATION_ERROR_VISIBLE_MS",
    "NLA_LABELS",
    "ORDNANCE_NO_FIELD_STATE_REASON",
    "ORDNANCE_WHEN_SET",
