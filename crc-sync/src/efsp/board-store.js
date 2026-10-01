@@ -152,6 +152,7 @@ class BoardStore {
    * @param {import('./fdr-store').FdrStore} fdrStore
    * @param {object} rules
    * @param {(blockId:string, role:string) => {kind:'fdr',path:string}|{kind:'annotation'}|null} rules.resolveBlockTarget
+   * @param {(bayId:string) => string|null} [rules.bayHoldsRole] the Role a Bay is reserved for (docs/adr/0087), or null
    * @param {(bayId:string) => string|null} [rules.bayImpliesState]
    * @param {(positionId:string, state:string) => {bayId:string,rackIds:string[]}|null} [rules.bayForImpliedState]
    * @param {(strip:object, fdr:object, now:number, ctx:object) => {toState:string,transferTo?:string}|{inhibited:string}|null} rules.computeNla
@@ -1110,6 +1111,11 @@ class BoardStore {
   }
 
   _validateBayImpliedTransition(strip, targetBayId, targetRackId) {
+    // A Role Bay (`holdsRole`, docs/adr/0087) takes only its own Role's Strips.
+    const holds = this._rules.bayHoldsRole ? this._rules.bayHoldsRole(targetBayId) : null;
+    if (holds && holds !== strip.role) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `${targetBayId} holds ${holds} Strips only; a ${strip.role} Strip cannot be placed there` };
+    }
     const roleBay = this._roleBayFor(strip);
     if (roleBay) {
       // Another Role's state-implying Bay is not somewhere this Role goes.
@@ -1701,7 +1707,9 @@ class BoardStore {
     const bays = this._rules.baysFor ? this._rules.baysFor(positionId) : [];
     const roleBay = strip ? bays.find(b => b.holdsRole === strip.role) : null;
     if (roleBay) return { bayId: roleBay.bayId, rackId: this._placementRack(strip, roleBay) };
-    const bay = bays.find(b => b.impliesState === state) || bays.find(b => !b.impliesState) || null;
+    // Never another Role's Bay (`holdsRole`, docs/adr/0087): a Role Bay implies no state, so the
+    // "first Bay implying none" fallback used to pick app-overflight for a DEPARTURE.
+    const bay = bays.find(b => b.impliesState === state) || bays.find(b => !b.impliesState && !b.holdsRole) || null;
     if (!bay) return null;
     return { bayId: bay.bayId, rackId: strip ? this._placementRack(strip, bay) : bay.rackIds[0] };
   }

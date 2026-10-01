@@ -179,6 +179,7 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt } = {}) {
       resolveBlockTarget:  (blockId, role) => blockMap.resolveBlockTarget(role, blockId),
       isBlockVisible:      (role, blockId) => facilityConfig.isBlockVisible(role, blockId, facilityId),
       bayImpliesState:     (bayId) => facilityConfig.bayImpliesState(bayId, facilityId),
+      bayHoldsRole:        (bayId) => facilityConfig.bayHoldsRole(bayId, facilityId),
       bayExists:           (bayId) => facilityConfig.bayExists(bayId, facilityId),
       bayForImpliedState:  (positionId, state) => facilityConfig.bayForImpliedState(positionId, state, facilityId),
       coordinationBayFor:  (positionId) => facilityConfig.coordinationBayFor(positionId, facilityId),

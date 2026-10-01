@@ -922,7 +922,15 @@ function setFacilityConfig(next, facilityId = DEFAULT_FACILITY_ID) {
 /** The Bay whose configured impliesState matches `state` for a Position, or that Position's first Bay as a defensive fallback (guide §3.5 rule 4 accelerator target). */
 function bayForImpliedState(positionId, state, facilityId = DEFAULT_FACILITY_ID) {
   const bays = getBaysFor(positionId, facilityId);
-  return bays.find(b => b.impliesState === state) || bays[0] || null;
+  // The fallback never lands on a Role Bay (`holdsRole`, docs/adr/0087): that Bay belongs to one Role, and a caller
+  // that gets it back for another Role's Strip files the Strip under the wrong Role.
+  return bays.find(b => b.impliesState === state) || bays.find(b => !b.holdsRole) || null;
+}
+
+/** The Role a Bay is reserved for (`holdsRole`, docs/adr/0087), or null for an ordinary Bay. */
+function bayHoldsRole(bayId, facilityId = DEFAULT_FACILITY_ID) {
+  const bay = getAllBays(facilityId).find(b => b.bayId === bayId);
+  return (bay && bay.holdsRole) || null;
 }
 
 /**
@@ -943,7 +951,7 @@ module.exports = {
   DEFAULT_FACILITY_ID, getFacilityIds,
   getFacilityConfig, getPositionSet, getPositionClass, getPositionLetter, allPositionLetters, getCoveringChain, getBaysFor, getAllBays, isBlockVisible,
   getPositionRadars, radarBearingPositionIds, validateRadarSelector,
-  bayImpliesState, bayForImpliedState, bayExists, coordinationBayFor, setFacilityConfig, validateConfig,
+  bayImpliesState, bayHoldsRole, bayForImpliedState, bayExists, coordinationBayFor, setFacilityConfig, validateConfig,
   getBay, getSingleFrequencyApproach, validateSfaRotationRecord, BAY_VIEWS,
   DEFAULT_CONFIG, DEFAULT_CENTER_CONFIG, DEFAULT_TACTICAL_CONFIG, DEFAULT_CARRIER_CONFIG, DEFAULT_CONFIGS,
 };
