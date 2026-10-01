@@ -9,9 +9,11 @@ import path from 'node:path';
 // Every path points into a temp dir BEFORE anything under src/ is required.
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'app-boot-'));
 fs.mkdirSync(path.join(tmpDir, 'config-empty'));
-// The Facilities' own data is the shipped JSON (docs/wip/DATA-1.md): the only files copied in.
-for (const id of ['incirlik', 'center', 'tactical', 'carrier']) {
-  fs.copyFileSync(new URL(`../config/efsp-facility-${id}.json`, import.meta.url), path.join(tmpDir, 'config-empty', `efsp-facility-${id}.json`));
+// The Facilities' data and the tuning files are the shipped JSON (DATA-1, DATA-2): no code defaults remain,
+// so every shipped .json is copied in.
+const SHIPPED = new URL('../config/', import.meta.url);
+for (const f of fs.readdirSync(SHIPPED).filter(f => f.endsWith('.json'))) {
+  fs.copyFileSync(new URL(f, SHIPPED), path.join(tmpDir, 'config-empty', f));
 }
 for (const [k, v] of Object.entries({
   CRCSYNC_STATE_DIR: '',

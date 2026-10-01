@@ -352,12 +352,13 @@ const CHILD_CWD = path.join(new URL('.', import.meta.url).pathname, '..');
 const REAL_CONFIG = path.join(CHILD_CWD, 'config');
 const FILES = ['incirlik', 'center', 'tactical', 'carrier'].map(id => `efsp-facility-${id}.json`);
 
-/** A temp config dir holding the four shipped files, so a case can break or remove one. */
+/** A temp config dir holding the four shipped files, so a case can break or remove one. The shipped tuning
+ *  files are copied too: since DATA-2 they have no code defaults, and a missing one is a startup error. */
 function scratchConfigDir() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-facility-load-'));
   const config = path.join(dir, 'config');
   fs.mkdirSync(config);
-  for (const f of FILES) fs.copyFileSync(path.join(REAL_CONFIG, f), path.join(config, f));
+  for (const f of fs.readdirSync(REAL_CONFIG).filter(f => f.endsWith('.json'))) fs.copyFileSync(path.join(REAL_CONFIG, f), path.join(config, f));
   return { dir, config, state: path.join(dir, 'state') };
 }
 
