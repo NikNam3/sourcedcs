@@ -97,7 +97,8 @@ export class Recorder {
     const log = this._readLogTail();
     const step = { i, t: this.now - this.startNow, ...input };
     step.frames = this._frames(reply.out || []);
-    if (reply.uncarried) step.uncarried = canonical(reply.uncarried);
+    // `reply.uncarried` (the soak host's own accounting of deltas it could not attribute) is deliberately not
+    // recorded: it is a host artefact, not wire behaviour (plan §3.2).
     if (log.length) step.log = this.full ? summarize(log) : log.map(e => `${e.op || '?'} ${e.stripId || ''} h=${digest(canonical(e))}`);
     step.snap = this._snap(checkpoint);
     this.steps.push(step);
