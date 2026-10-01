@@ -92,7 +92,7 @@ const DEPARTURE_BLOCK_MAP = {
   // WP4A (docs/adr/0017), §4.6.2 — mirrors crc-sync's block-map.js exactly.
   // See crc-sync's block-map.js for why these two exist and why they are
   // numbered in the 14-family.
-  '14A': { required: false, label: 'RLS ST', target: { kind: 'fdr', path: 'assigned.releaseState' } },
+  '14A': { required: false, label: 'RELEASE', target: { kind: 'fdr', path: 'assigned.releaseState' } },
   '14D': { required: false, label: 'VOID',      target: { kind: 'fdr', path: 'assigned.voidTimeUtc' } },
   '14B': { required: false, label: 'EDCT',    target: { kind: 'fdr', path: 'assigned.edctTimeUtc' } },
   '14C': { required: false, label: 'CFR',     target: { kind: 'fdr', path: 'assigned.callForReleaseTimeUtc' } },
@@ -137,7 +137,7 @@ const DEPARTURE_BLOCK_MAP = {
   // WP4A second slice, §4.6.3 — the three-field separation model. See
   // resolveBlockValue's 'tofi' branch and _buildBlockCell's IFR toggle for
   // why IFR isn't in ENUM_SELECT_BLOCKS the way RSVC/SREG are.
-  'IFR':  { required: false, label: 'IFR',     target: { kind: 'tofi', field: 'ifrActive' } },
+  'IFR':  { required: false, label: 'KEEP IFR',     target: { kind: 'tofi', field: 'ifrActive' } },
   'RSVC': { required: false, label: 'RADAR',   target: { kind: 'tofi', field: 'radarService' } },
   'SREG': { required: false, label: 'SEP REG', target: { kind: 'tofi', field: 'separationRegime' } },
   '25': { required: true,  label: 'STATE',    target: { kind: 'system', field: 'state' } },
@@ -189,7 +189,7 @@ const ARRIVAL_BLOCK_MAP = {
   '21':       { required: false, label: 'SCRATCH2',  target: { kind: 'annotation' } },
   '24':       { required: true,  label: 'MIT RMKS',     target: { kind: 'annotation' } },
   '24A':      { required: false, label: 'ARSPC',    target: { kind: 'airspace-owner' } }, // WP4A, §4.6.4 — see DEPARTURE_BLOCK_MAP's '24A' comment
-  'IFR':      { required: false, label: 'IFR',      target: { kind: 'tofi', field: 'ifrActive' } },       // WP4A second slice, §4.6.3 — see DEPARTURE_BLOCK_MAP's comment
+  'IFR':      { required: false, label: 'KEEP IFR',      target: { kind: 'tofi', field: 'ifrActive' } },       // WP4A second slice, §4.6.3 — see DEPARTURE_BLOCK_MAP's comment
   'RSVC':     { required: false, label: 'RADAR',    target: { kind: 'tofi', field: 'radarService' } },
   'SREG':     { required: false, label: 'SEP REG',  target: { kind: 'tofi', field: 'separationRegime' } },
   '25':       { required: true,  label: 'STATE',    target: { kind: 'system', field: 'state' } },
@@ -247,7 +247,7 @@ const OVERFLIGHT_BLOCK_MAP = {
   '21': { required: false, label: 'SCRATCH2',  target: { kind: 'annotation' } },
   '24': { required: true,  label: 'MIT RMKS',     target: { kind: 'annotation' } },
   '24A':{ required: false, label: 'ARSPC',    target: { kind: 'airspace-owner' } },
-  'IFR':  { required: false, label: 'IFR',     target: { kind: 'tofi', field: 'ifrActive' } },      // WP4A second slice, §4.6.3 — see DEPARTURE_BLOCK_MAP's comment
+  'IFR':  { required: false, label: 'KEEP IFR',     target: { kind: 'tofi', field: 'ifrActive' } },      // WP4A second slice, §4.6.3 — see DEPARTURE_BLOCK_MAP's comment
   'RSVC': { required: false, label: 'RADAR',   target: { kind: 'tofi', field: 'radarService' } },
   'SREG': { required: false, label: 'SEP REG', target: { kind: 'tofi', field: 'separationRegime' } },
   '25': { required: true,  label: 'STATE',    target: { kind: 'system', field: 'state' } },
@@ -692,6 +692,23 @@ function isBlockEditable(blockId, role = 'DEPARTURE') {
   return !!def && (def.target.kind === 'fdr' || def.target.kind === 'annotation' || def.target.kind === 'frequency' || def.target.kind === 'clearance' || def.target.kind === 'carrier');
 }
 
+/**
+ * UI-A U4: the TYPE field (Block 3) is a read-only composite (count, wake, type,
+ * suffix), so it cannot be written itself. Editing it edits the one part a
+ * controller means by "type", the aircraft type (3A, identity.aircraftType), which
+ * is a plain fdr field every airframe Role already has. The wake category (3B)
+ * stays in the expanded view: nothing derives it from the type, and guessing it
+ * would put a made-up value on a Strip.
+ * @returns {{blockId:string, value:string}|null} null when the Block is not redirected
+ */
+function editRedirectFor(blockId, role, fdr) {
+  if (blockId !== '3') return null;
+  const map = BLOCK_MAPS[role || 'DEPARTURE'];
+  const def = map && map['3A'];
+  if (!def || def.target.kind !== 'fdr') return null;
+  return { blockId: '3A', value: (fdr && fdr.identity && fdr.identity.aircraftType) || '' };
+}
+
 // ── Zulu time-of-day Blocks (crc-sync's docs/adr/0062) ──────────────────────
 //
 // Blocks whose FDR value is epoch ms (dated by crc-sync against the MISSION
@@ -727,6 +744,8 @@ const BLOCK_TITLES = {
   '9H-EXIT': 'MTR exit fix (guide §9.4)',
   '9H-TIME': 'MTR exit estimate, UTC HHMM',
   '9H-ALT': 'requested altitude after exit',
+  // UI-A U3: the field is TOFI's ifrActive (guide §4.6.3), not the filed flight rules.
+  'IFR': 'Keeps IFR under tactical control (TOFI, guide §4.6.3): ✓ means ATC keeps separating this flight while the mission line works it. Click to toggle.',
 };
 
 // ── §10.5's source on hover (docs/adr/0073) ─────────────────────────────────
@@ -776,6 +795,23 @@ function timeChainTitleFor(blockId, fdr, strip) {
 }
 
 /**
+ * S-L16 W3: a typed TAXI (17) or TAKEOFF (18) that now sits BEFORE the proposed departure. A
+ * controller's entry stops the chain (§10.2 rule 3), so a later P-time does not move it, and
+ * the Strip would otherwise show TAXI 1425 ahead of a P-time of 1450 with nothing saying why.
+ * @returns {{typedUtc:number, planUtc:number}|null}
+ */
+function typedTimeBehindPlan(blockId, fdr, strip) {
+  if (((strip && strip.role) || 'DEPARTURE') !== 'DEPARTURE') return null;
+  const chain = typeof timeChainForBlock === 'function' ? timeChainForBlock(blockId) : null;
+  if (chain !== 'offBlock' && chain !== 'takeoff') return null;
+  const own = resolveTimeChain(chain, fdr);
+  if (own.source !== 'CONTROLLER' || own.valueUtc == null) return null;
+  const plan = resolveTimeChain('departure', fdr);
+  if (plan.valueUtc == null || own.valueUtc >= plan.valueUtc) return null;
+  return { typedUtc: own.valueUtc, planUtc: plan.valueUtc };
+}
+
+/**
  * What the VALUE cell of a Block adds to itself (bay-view.js's _buildBlockCell):
  * a hover title and whether to set it in italics as an estimate. Null when
  * the cell needs nothing. Block 9F with no route table says why it is not a
@@ -785,9 +821,16 @@ function blockValueHintFor(blockId, fdr, strip) {
   if (blockId === '9F' && enumSelectOptionsFor('9F', fdr) == null) {
     return { title: 'no stereo routes configured', estimated: false };
   }
-  const title = timeChainTitleFor(blockId, fdr, strip);
+  let title = timeChainTitleFor(blockId, fdr, strip);
   if (!title) return null;
-  return { title, estimated: !!resolveBlockValue(blockId, fdr, strip).estimated };
+  const resolved = resolveBlockValue(blockId, fdr, strip);
+  if (resolved.estimated) title += '\nType it again to accept it as the actual.'; // S-L16 W5
+  const behind = typedTimeBehindPlan(blockId, fdr, strip);
+  if (behind) {
+    title += `\n${formatZuluHhmm(behind.typedUtc)}Z was typed before the proposed departure moved to ${formatZuluHhmm(behind.planUtc)}Z: `
+      + 'a typed time does not follow a new P-time. Clear it to follow, or retype it.'; // S-L16 W3
+  }
+  return { title, estimated: !!resolved.estimated, behindPlan: !!behind };
 }
 
 /**
@@ -812,9 +855,9 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP, MARSHAL_BLOCK_MAP, FINAL_BLOCK_MAP, PATTERN_BLOCK_MAP, BLOCK_MAPS, resolveBlockValue, requiredBlocksFor, formatBlock3,
     activeAnnotationValue, hasActiveAnnotationEntry, annotationHistory, supersededAnnotationEntries,
-    isBlockEditable, CONFIRM_VACATED_ELIGIBLE_BLOCKS,
+    isBlockEditable, editRedirectFor, CONFIRM_VACATED_ELIGIBLE_BLOCKS,
     enumSelectOptionsFor, ENUM_CLEARABLE_BLOCKS, isEnumBlockClearable, isBooleanToggleBlock, blockLabelFor,
     ZULU_HHMM_BLOCKS, formatZuluHhmm, BLOCK_TITLES, blockTitleFor,
-    TIME_SOURCE_TEXT, timeChainTitleFor, blockValueHintFor,
+    TIME_SOURCE_TEXT, timeChainTitleFor, blockValueHintFor, typedTimeBehindPlan,
   };
 }

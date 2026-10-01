@@ -44,6 +44,12 @@ function _arrivalSource(strip, prev) {
   return strip.updatedBy ? 'another controller' : '?';
 }
 
+/** A Strip a cross-Facility exchange minted at the receiver (HANDOFF/POINT_OUT/... or a TOFI entry). */
+function _isMintedReplica(strip) {
+  return !!((strip.coordination && strip.coordination.mintedForCoordination)
+    || (strip.tofiCoordination && strip.tofiCoordination.mintedForTofi));
+}
+
 /**
  * Records the arrivals in one applied delta.
  * @param {Map} before   captureEfspPlacement's result, taken before the delta was applied
@@ -63,7 +69,10 @@ function noteEfspArrivals(before, updated, ctx) {
     if (strip.state === 'DROPPED') continue;
     if (!held.has(strip.ownerPositionId)) continue;
     if (prev && prev.bayId === strip.bayId) continue;           // it did not move
-    if (!prev && (!strip.updatedBy || mine.has(strip.updatedBy))) continue; // a Strip this controller just made
+    // A Strip this controller just made. NOT a coordination/TOFI replica, though: the exchange
+    // mints it at the receiving Position, and a controller who holds both ends (UI-A U2: one
+    // person on APP and CTR) is still being told that a proposal has arrived there.
+    if (!prev && !_isMintedReplica(strip) && (!strip.updatedBy || mine.has(strip.updatedBy))) continue;
     const inView = ctx.visibleBayId === strip.bayId;
     const entry = {
       bayId: strip.bayId, positionId: strip.ownerPositionId,

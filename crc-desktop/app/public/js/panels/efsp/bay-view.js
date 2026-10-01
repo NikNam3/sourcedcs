@@ -79,9 +79,9 @@ let _seededRefusalAt = null;
  * the input with the draft and WITHOUT stealing focus, exactly as it does for
  * an edit somebody walked away from.
  */
-function _maybeSeedRefusedBlockEdit(strip, blockId) {
+function _maybeSeedRefusedBlockEdit(strip, refusedBlockId, blockId = refusedBlockId) {
   const refusal = _refusalForStrip(strip);
-  if (!refusal || refusal.blockId !== blockId || refusal.value == null) return;
+  if (!refusal || refusal.blockId !== refusedBlockId || refusal.value == null) return;
   if (_seededRefusalAt === refusal.at) return;
   // Never over the top of an edit the controller has open somewhere else —
   // one open edit on the Board is the standing rule (_openBlockEdit).
@@ -160,12 +160,13 @@ function _buildBlockCell(strip, blockId) {
   // banner to be matched against a Strip by eye. Marked whether or not there
   // is text to put back: a refused confirmVacated carries no value, and which
   // cell was refused is a separate question from what was in it.
+  const redirect = typeof editRedirectFor === 'function' ? editRedirectFor(blockId, strip.role, fdr) : null; // UI-A U4
   const refusal = _refusalForStrip(strip);
-  if (refusal && refusal.blockId === blockId) {
+  if (refusal && refusal.blockId === (redirect ? redirect.blockId : blockId)) {
     span.classList.add('efsp-block-refused');
     span.title = refusal.message;
   }
-  const hint = typeof blockValueHintFor === 'function' ? blockValueHintFor(blockId, fdr, strip) : null; if (hint) { if (hint.estimated) span.classList.add('efsp-block-estimated'); if (hint.title && !span.title) span.title = hint.title; } // docs/adr/0073: §10.5's source on hover, an estimate in italics
+  const hint = typeof blockValueHintFor === 'function' ? blockValueHintFor(blockId, fdr, strip) : null; if (hint) { if (hint.estimated) span.classList.add('efsp-block-estimated'); if (hint.behindPlan) span.classList.add('efsp-block-behind-plan'); if (hint.title && !span.title) span.title = hint.title; } // docs/adr/0073: §10.5's source on hover, an estimate in italics
 
   // WP4A gap-closure (docs/adr/0022) — restricted-enum Blocks (airspace
   // ownership, track-degradation flag) get a <select>, never the generic
@@ -182,13 +183,19 @@ function _buildBlockCell(strip, blockId) {
   // isBlockEditable()" reasoning as the enum-<select> case above.
   if (isBooleanToggleBlock(blockId)) return _buildBooleanToggleCell(strip, blockId, span);
 
-  if (!isBlockEditable(blockId, strip.role)) return span;
+  // UI-A U4: TYPE (3) is a composite; editing it edits the aircraft type (3A).
+  if (redirect) {
+    span.dataset.editBlock = redirect.blockId;
+    span.dataset.editValue = redirect.value;
+    span.title = span.title || 'Aircraft type (3A). Click to edit.';
+  }
+  if (!redirect && !isBlockEditable(blockId, strip.role)) return span;
 
   span.classList.add('efsp-block-editable');
   span.tabIndex = 0;
   // F-207 — if this is the cell a refusal just emptied, put the text back into
   // an open editor before either _shouldRestoreBlockEdit call below.
-  _maybeSeedRefusedBlockEdit(strip, blockId);
+  _maybeSeedRefusedBlockEdit(strip, redirect ? redirect.blockId : blockId, blockId);
   const startEdit = (e) => {
     e.stopPropagation(); // never trigger _selectStrip/drag on the parent Strip
     _startBlockEdit(strip, blockId, span);
@@ -433,7 +440,9 @@ function _startBlockEdit(strip, blockId, span, draft) {
   const restoring = draft !== undefined;
   if (!restoring) _closeOpenBlockEdit(); // one open edit on the Board, never two
 
-  const currentValue = span.textContent;
+  // UI-A U4: a redirected cell (TYPE) edits another Block's value.
+  const sendBlockId = span.dataset.editBlock || blockId;
+  const currentValue = span.dataset.editValue != null ? span.dataset.editValue : span.textContent;
   const input = document.createElement('input');
   input.type = 'text';
   input.className = 'efsp-block-input';
@@ -460,7 +469,8 @@ function _startBlockEdit(strip, blockId, span, draft) {
     if (closed) return;
     const value = input.value.trim();
     revert();
-    if (value === currentValue) return; // no-op edit, don't send a Mutation for nothing
+    // S-L16 W5: retyping a SHOWN ESTIMATE is not a no-op, it accepts the estimate as the actual.
+    if (value === currentValue && !span.classList.contains('efsp-block-estimated')) return; // no-op edit, don't send a Mutation for nothing
     const actingPositionId = _resolveActingPositionId(strip);
     if (!actingPositionId) return;
     // Read the CURRENT Strip (for its rev) rather than the `strip` this
@@ -470,7 +480,7 @@ function _startBlockEdit(strip, blockId, span, draft) {
     // moved past, and it comes back rejected as STALE_REV even though
     // nothing else touched the Strip in between.
     const currentStrip = getEfspStrip(strip.stripId) || strip;
-    sendEfspMutation(actingPositionId, currentStrip, { kind: 'SetBlock', blockId, value });
+    sendEfspMutation(actingPositionId, currentStrip, { kind: 'SetBlock', blockId: sendBlockId, value });
   };
 
   // Keeps the draft where a rebuild can find it. Enter/Esc are handled on the
@@ -858,7 +868,7 @@ function _buildStripEl(strip) {
   }
 
   // Flip: dblclick. Highlight: right-click (contextmenu) opens a 3-swatch
-  // popover. Attention: Shift+click. All three guarded the same way the
+  // popover, or Ctrl+click steps the colour. Offset: Alt+click. Attention: Shift+click. All three guarded the same way the
   // NLA/offset buttons are guarded against drag-start (_onStripPointerDown
   // already ignores pointerdown on interactive children; these fire on the
   // Strip body itself, so they're gated here instead by checking e.target
@@ -867,6 +877,10 @@ function _buildStripEl(strip) {
   el.addEventListener('click', (e) => {
     if (e.target.closest(STRIP_CONTROL_SELECTOR)) return;
     if (e.shiftKey) { const acting = _dispatchGesture(strip, setAttention, 'red'); if (typeof noteEfspGesture === 'function') noteEfspGesture('ATTENTION', 'shift-click', acting); return; }
+    // S-L15 (§7.3 one-input ceiling): OFFSET and HIGHLIGHT each get a one-input entry point.
+    // The ⋯ menu item and the right-click swatches stay for whoever prefers them (2 inputs).
+    if (e.altKey) { e.preventDefault(); const acting = _dispatchGesture(strip, toggleOffset); if (typeof noteEfspGesture === 'function') noteEfspGesture('OFFSET', 'alt-click', acting); return; }
+    if (e.ctrlKey || e.metaKey) { e.preventDefault(); const acting = _cycleHighlight(strip); if (typeof noteEfspGesture === 'function') noteEfspGesture('HIGHLIGHT', 'ctrl-click', acting); return; }
     _selectStrip(strip.stripId);
   });
   el.addEventListener('dblclick', (e) => {
@@ -1442,7 +1456,7 @@ function getOpenEfspBayIds() {
 // Non-drag move path (WCAG 2.2 SC 2.5.7): select a Strip, then click a
 // Rack's header to move the selection there — no pointer drag required.
 function _onRackHeaderClick(bayId, rackId) {
-  if (bayId.endsWith('-search')) return; // the search pseudo-Bay isn't a real destination server-side (guide §4.3) — nothing to move "into"
+  if (_isPseudoBayId(bayId)) return; // the search / with-others pseudo-Bay isn't a real destination server-side (guide §4.3) — nothing to move "into"
   if (!_selectedStripId) return;
   const strip = getEfspStrip(_selectedStripId);
   if (!strip) return;
@@ -2167,11 +2181,25 @@ function _dispatchGesture(strip, gestureFn, ...extraArgs) {
 // red, which §7.7 rule 4 reserves for Attention alone ("reserve saturated
 // colour for exceptions" — if both gestures could paint the same colour,
 // a controller scanning the Board couldn't tell which one they're looking
-// at). One click on a swatch is the ENTIRE interaction (setHighlight
-// itself replaces a different active colour in one Mutation, and clears
-// on a repeat click of the same colour — see efsp-gestures.test.js) so
-// this satisfies the one-input cost ceiling even though it's a popover.
+// at). setHighlight replaces a different active colour in one Mutation and
+// clears on a repeat of the same colour (see efsp-gestures.test.js).
+//
+// Inputs, counted honestly (S-L15; the comment here used to say the swatch met the
+// one-input ceiling, which it does not: right-click + swatch is TWO). The one-input
+// entry point is Ctrl+click on the Strip, which steps the colour through the swatches
+// and then off (_cycleHighlight). The popover remains for choosing a colour directly.
 const HIGHLIGHT_SWATCHES = ['yellow', 'cyan', 'lime'];
+
+/** The colour one Ctrl+click moves a Strip to: the next swatch, or (past the last) the last again, which clears it. */
+function _nextHighlightColor(current) {
+  const i = HIGHLIGHT_SWATCHES.indexOf(current);
+  return i < 0 ? HIGHLIGHT_SWATCHES[0] : HIGHLIGHT_SWATCHES[Math.min(i + 1, HIGHLIGHT_SWATCHES.length - 1)];
+}
+
+function _cycleHighlight(strip) {
+  const live = getEfspStrip(strip.stripId) || strip;
+  return _dispatchGesture(strip, setHighlight, _nextHighlightColor(live.flags.highlight));
+}
 
 let _openHighlightPopoverEl = null;
 
@@ -2531,7 +2559,7 @@ function _finishDrag(commit) {
       const targetBay = explicitBayId ? { bayId: explicitBayId, rackIds: [_defaultRackFor(explicitBayId)] } : _defaultBayFor(toPositionId);
       if (targetBay) _transferStrip(strip, toPositionId, targetBay.bayId, targetBay.rackIds[0]);
     }
-  } else if (commit && hasMoved && !rackEl.dataset.bayId.endsWith('-search')) {
+  } else if (commit && hasMoved && !_isPseudoBayId(rackEl.dataset.bayId)) {
     // Use the last known pointer Y directly, captured on every pointermove
     // above — NOT parsed back out of the CSS transform string, which is
     // already cleared by the time we'd read it here.
@@ -2678,6 +2706,11 @@ function _refreshOpsFiledIfStale(container) {
   });
 }
 
+/** The client-local Bays (search results, "with AIC/JTAC"): views onto live Strips, never a destination. */
+function _isPseudoBayId(bayId) {
+  return bayId.endsWith('-search') || (typeof isWithOthersBayId === 'function' && isWithOthersBayId(bayId));
+}
+
 function renderBay(container, bayId) {
   if (!container) return;
   if (bayId === 'ops-filed') {
@@ -2689,7 +2722,7 @@ function renderBay(container, bayId) {
   // synthesizes it, it's never in getEfspBays()'s server-driven list, so
   // it needs its own lookup instead of falling through to "unknown bayId,
   // clear the container".
-  const bay = bayId.endsWith('-search')
+  const bay = _isPseudoBayId(bayId)
     ? { bayId, rackIds: ['results'] }
     : getEfspBays().find(b => b.bayId === bayId);
   if (!bay) { container.innerHTML = ''; return; }
@@ -2872,6 +2905,7 @@ function _stripRenderSignature(strip) {
     : ''));
   parts.push('mhl:' + (typeof isMarsaHighlighted === 'function' && isMarsaHighlighted(strip.stripId) ? 1 : 0));
   parts.push('car:' + (typeof carrierSignatureFor === 'function' ? carrierSignatureFor(strip) : '')); // crc-sync docs/adr/0074 — a Case change moves every carrier Strip's derived fields
+  parts.push('tx:' + (typeof tofiExitSignatureFor === 'function' ? tofiExitSignatureFor(strip) : '')); // UI-A U8 — the mission line's state decides CTR's primary action
   parts.push('ar:' + (typeof arSignatureFor === 'function' ? arSignatureFor(strip) : '')); // docs/adr/0071 — the AR join lives on OTHER flights' Strips
 
   const correlation = typeof getEfspCorrelationForStrip === 'function' ? getEfspCorrelationForStrip(strip) : null;
@@ -2955,7 +2989,8 @@ function _stripElNeedsRebuild(el, wanted, selectedStripId, expandedStripId) {
 
 function _reconcileRackStrips(rackEl, bayId, rackId) {
   const wanted = bayId.endsWith('-search') ? searchEfspStrips(getActiveEfspSearchQuery())
-    : (typeof carrierOrderRack === 'function' ? carrierOrderRack(bayId, getEfspRack(bayId, rackId)) : getEfspRack(bayId, rackId)); // the Marshal stack Bay is ordered by slot (docs/adr/0074)
+    : isWithOthersBayId(bayId) ? efspLinesWithOthers(bayId.slice(0, -'-with'.length))
+      : (typeof carrierOrderRack === 'function' ? carrierOrderRack(bayId, getEfspRack(bayId, rackId)) : getEfspRack(bayId, rackId)); // the Marshal stack Bay is ordered by slot (docs/adr/0074)
   const wantedById = new Map(wanted.map(s => [s.stripId, s]));
   const existingEls = new Map(
     [...rackEl.children].filter(el => el.classList.contains('efsp-strip')).map(el => [el.dataset.stripId, el])

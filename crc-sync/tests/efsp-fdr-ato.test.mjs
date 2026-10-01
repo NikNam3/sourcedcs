@@ -143,14 +143,15 @@ test('alert status: ALERT only on a new flight; never on a bind or an update', (
 test('the seed provenance guard: an update replaces ATO-owned values and keeps what a controller typed', () => {
   const { store, fdr } = fresh();
   store.applyAtoTasking(fdr.fdrId, tasking(), { by: 'c1' });
-  store.setField(fdr.fdrId, 'mission.vulWindowStartUtc', 99, { by: 'c2' });
+  // (a typed start must still lie before the end, S-L16 / UI-A: end is 2 here, so 1.5)
+  store.setField(fdr.fdrId, 'mission.vulWindowStartUtc', 1.5, { by: 'c2' });
   const t = tasking({ mode: 'UPDATE' });
   t.seed['mission.vulWindowStartUtc'] = 5;
   t.seed['mission.vulWindowEndUtc'] = 6;
   const r = store.applyAtoTasking(fdr.fdrId, t, { by: 'c1' });
-  assert.equal(r.fdr.mission.vulWindowStartUtc, 99, 'the controller\'s value stands');
+  assert.equal(r.fdr.mission.vulWindowStartUtc, 1.5, 'the controller\'s value stands');
   assert.equal(r.fdr.mission.vulWindowEndUtc, 6, 'the ATO\'s own value is replaced');
-  assert.deepEqual(r.kept, [{ path: 'mission.vulWindowStartUtc', value: 99, atoValue: 5, ownedBy: 'CONTROLLER' }]);
+  assert.deepEqual(r.kept, [{ path: 'mission.vulWindowStartUtc', value: 1.5, atoValue: 5, ownedBy: 'CONTROLLER' }]);
 });
 
 test('a bind fills only what the flight has nothing for', () => {

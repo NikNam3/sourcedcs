@@ -1813,6 +1813,8 @@
    estimate (TAXI/TAKEOFF before the actual). Italic only: colour means
    something is wrong (docs/adr/0056), and an estimate is not. */
 .efsp-block-estimated { font-style: italic; }
+/* S-L16 W3: a typed time left behind a later P-time. Not colour (ADR 0056): the hover says why. */
+.efsp-block-behind-plan { text-decoration: underline dotted; text-underline-offset: 2px; }
 
 /* WP7 (crc-sync docs/adr/0071) — the AR join and the ATO import dialog.
  * The AR highlight is deliberately NOT the MARSA colour: a join is not a

@@ -42,6 +42,8 @@ const GESTURE_INPUT_COST = Object.freeze({
   'ATTENTION:shift-click': 1,
   'HIGHLIGHT:contextmenu+swatch': 2, // right-click opens the swatches, a click picks one
   'OFFSET:menu': 2,                  // open ⋯, click Offset
+  'OFFSET:alt-click': 1,             // UI-A S-L15: one modified click on the Strip
+  'HIGHLIGHT:ctrl-click': 1,         // UI-A S-L15: each press steps the colour (yellow, cyan, lime, off)
 });
 
 /** The inputs a gesture cost at `entryPoint`. Throws for a pair with no row. */

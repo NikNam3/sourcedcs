@@ -449,12 +449,14 @@ function readScopeFor(positionId) {
  *    for its owner (TAC_C2 for an AIC-held line; AIC "works under TAC_C2's
  *    TOFI", guide §4.1, ADR 0025) may ACCEPT, REJECT or TRANSFER_COMMS.
  *  - OPS alert status (S-L13, H56): OPS owns Block 14E on a DEPARTURE at every
- *    state until it is DROPPED, whoever holds the Strip.
+ *    state until it is DROPPED, whoever holds the Strip. Likewise 3G ORDNANCE (UI-A U1).
  * The acting Position must still hold the op kind (canMutate runs first).
  */
 const TOFI_ANSWER_ACTIONS = ['ACCEPT', 'REJECT', 'TRANSFER_COMMS'];
 const NON_OWNER_BLOCK_WRITES = [
   { blockId: '14E', role: 'DEPARTURE', positions: ['OPS'] },
+  // UI-A U1 (H55): OPS records the ordnance state (CLEAN / HUNG ...) on a departure whoever holds it.
+  { blockId: '3G', role: 'DEPARTURE', positions: ['OPS'] },
 ];
 function mayActBesideOwner(actingPositionId, strip, op) {
   if (!strip || !op) return false;
