@@ -17,6 +17,7 @@ const nla = require('../../src/efsp/nla.js');
 const coordination = require('../../src/efsp/coordination.js');
 const blockMap = require('../../src/efsp/block-map.js');
 const facilityConfig = require('../../src/efsp/facility-config.js');
+const wireFamilies = require('../../src/efsp/wire/families');
 
 const plain = (v) => {
   if (v instanceof Set) return [...v].map(plain).sort();
@@ -67,7 +68,8 @@ test('freeze tables: NLA state sets, coordination effects, block maps, facility 
   for (const [role, map] of Object.entries(blockMap.BLOCK_MAPS)) {
     rows.push({ id: `blockMap.${role}`, v: { blocks: Object.keys(plain(map)).length, h: digest(canonical(plain(map))), ids: Object.keys(plain(map)) } });
   }
-  for (const [name, cfg] of Object.entries(facilityConfig.DEFAULT_CONFIGS)) {
+  for (const name of facilityConfig.getFacilityIds()) {
+    const cfg = facilityConfig.getFacilityConfig(name);
     const c = canonical(plain(cfg));
     rows.push({ id: `facility.${name}`, v: { positions: c.positions, coveringChain: c.coveringChain, positionClasses: c.positionClasses,
       bays: Object.fromEntries(Object.entries(c.bays || {}).map(([p, list]) => [p, (Array.isArray(list) ? list : []).map(b => `${b.bayId || b.id}:${b.impliesState || ''}`)])), h: digest(c) } });
@@ -82,10 +84,13 @@ test('freeze tables: wire message-type set', () => {
   const ws = fs.readFileSync(path.join(SRC, 'efsp/efsp-ws.js'), 'utf8');
   const start = ws.indexOf('function handleMessage(');
   const dispatch = ws.slice(start, ws.indexOf('\n}\n', start));
-  const clientToServer = [...new Set(grabCases(dispatch))].sort();
+  // The families' types come from the registry (src/efsp/wire/families); what efsp-ws.js still dispatches itself is read from its text.
+  const clientToServer = [...new Set([...grabCases(dispatch), ...wireFamilies.FAMILIES.map(f => f.type)])].sort();
   const outbound = new Set();
-  const files = [...fs.readdirSync(path.join(SRC, 'efsp')).filter(f => f.endsWith('.js')).map(f => path.join(SRC, 'efsp', f)), path.join(SRC, 'ws-hub.js')];
+  const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(path.join(dir, e.name)) : e.name.endsWith('.js') ? [path.join(dir, e.name)] : []);
+  const files = [...fs.readdirSync(path.join(SRC, 'efsp')).filter(f => f.endsWith('.js')).map(f => path.join(SRC, 'efsp', f)), ...walk(path.join(SRC, 'efsp/wire')), path.join(SRC, 'ws-hub.js')];
   for (const f of files) for (const t of grabTypes(fs.readFileSync(f, 'utf8'))) outbound.add(t);
+  for (const f of wireFamilies.FAMILIES) { outbound.delete(f.type); for (const t of [f.ackType, f.deltaType]) if (t) outbound.add(t); } // a family's own `type:` is what clients send
   const hub = fs.readFileSync(path.join(SRC, 'ws-hub.js'), 'utf8');
   const hubHandles = [...new Set([...hub.matchAll(/'(efsp-[a-z-]+)'/g)].map(m => m[1]))].sort();
   checkGolden(assert, 'tables-wire-message-types', { rows: [

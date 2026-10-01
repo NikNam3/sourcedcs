@@ -16,6 +16,7 @@
 const path = require('path');
 const fs = require('fs');
 const v8 = require('v8');
+const { EventEmitter } = require('events');
 const { SRC } = require('./host-env');
 
 const req = (rel) => require(path.join(SRC, rel));
@@ -42,7 +43,9 @@ function compactStrip(s) {
  */
 function createHost(env, { stateDir }) {
   env.wrapOrderKey();
-  const { createEfsp, BOARD_SNAPSHOT_PATH } = req('efsp/index.js');
+  const { statePaths } = req('state-paths.js');
+  const boardPaths = statePaths('efsp-board.json', process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH);
+  const BOARD_SNAPSHOT_PATH = boardPaths.write;
   // T4: refuse to run unless the snapshot the host will write every Mutation
   // is inside the temp dir. A mistake here overwrites the human's live Board.
   if (!path.resolve(BOARD_SNAPSHOT_PATH).startsWith(path.resolve(stateDir) + path.sep)) {
@@ -53,38 +56,33 @@ function createHost(env, { stateDir }) {
     throw new Error(`soak: MUTATION_LOG_PATH ${MUTATION_LOG_PATH} is not inside the temp state dir — refusing to run`);
   }
   const facilityConfig = req('efsp/facility-config.js');
-  const TrackStore = req('tracks.js');
-  const CollaborativeStore = req('collab-store.js');
-  const WsHub = req('ws-hub.js');
-  const { ForwardingObligationMonitor } = req('efsp/forwarding-obligations.js');
-  const { CorrelationReconciler } = req('efsp/correlation-reconciler.js');
-  const { ConformanceMonitor } = req('efsp/conformance.js');
-  const { StcaMonitor } = req('stca.js');
-  const { loadAlertingConfig } = req('alerting-config.js');
-  const { indicatedAltFt } = req('altimetry.js');
+  const { createApp } = req('app.js');
+  const { MissionSession } = req('mission-session.js');
 
   const clock = { now: () => Date.now(), source: 'SOAK_VIRTUAL' };
-  const efsp = createEfsp({ clock });
-  const trackStore = new TrackStore();
-  const collabStore = new CollaborativeStore();
   const squawks = new Map(); // String(trackId) -> code | null  (TrackStore drops unknown fields, briefing §3.8)
-  // The metrics tap, as server.js installs it (docs/adr/0065): it reassigns
-  // efsp.handleMessage, and the hub looks that up per message, so it must be
-  // in place before the hub dispatches anything. Beyond the metrics themselves
-  // it is what writes the audit line for a refusal that never reached a store
-  // (docs/adr/0083), so a soak without it models a different log than production.
-  const { createEfspInstrumentation } = req('efsp/metrics.js');
-  const instrumentation = createEfspInstrumentation({
-    efsp,
-    facilityConfig,
+  // The service itself, as server.js builds it (src/app.js), with no DCS, no SRS and no listening socket.
+  // Three seams say what the soak's synthetic tracks are: no transponder model (the squawk map is the beacon),
+  // no identity model (the track's own callsign), no theater (a course is taken as already magnetic). The
+  // soak has no sensors, so no hint monitor and no airborne observer (docs/wip/APP.md, Findings), and its
+  // MissionSession lives in memory. Time comes from `clock`; nothing is started, the driver calls the tickers.
+  const app = createApp({
+    env: {},
+    paths: boardPaths,
+    grpcClient: Object.assign(new EventEmitter(), { getWeather: () => ({}), evalLua: async () => null, getAptWeather: async () => ({}) }),
+    srsClient: Object.assign(new EventEmitter(), { getTransponder: () => null }),
     clock,
-    wallNow: () => Date.now(),
-    metricsPath: path.join(stateDir, 'efsp-metrics.json'),
-    trafficCountPath: path.join(stateDir, 'efsp-traffic-count.jsonl'),
+    missionSession: new MissionSession({ path: null, clock }),
+    surveillanceHints: null,
+    trackSeams: {
+      beacon: (t) => { const c = squawks.get(String(t.id)); return c === undefined ? null : c; },
+      callsign: (track) => track.callsign,
+      gridToMagnetic: (deg) => deg,
+    },
   });
-  // server.js: an archived Strip must already be counted.
-  if (efsp.archiver) efsp.archiver.setIsCounted((stripId) => instrumentation.trafficCount.hasCountFor(stripId));
-  const hub = new WsHub({ trackStore, collabStore, efsp, clock });
+  const { efsp, trackStore, collabStore, wsHub: hub, monitors } = app;
+  const { correlation: reconciler, conformance, stca, obligation: obligationMonitor } = monitors;
+  const ticker = Object.fromEntries(app.tickers.map((t) => [t.name, t.tick]));
   hub._wss = { clients: new Set() }; // never attach(): no timer, no real server (T3)
 
   const facilityIds = facilityConfig.getFacilityIds();
@@ -129,64 +127,7 @@ function createHost(env, { stateDir }) {
     }
   }
 
-  // ── monitors, as server.js builds them, ticked by the driver (§3.8) ────
-  const alerting = loadAlertingConfig();
-  let obligationAlerts = 0;
-  const obligationMonitor = new ForwardingObligationMonitor({
-    clock,
-    boardStoreFor: efsp.boardStoreFor,
-    fdrStore: efsp.fdrStore,
-    facilityConfig,
-    airspaceStore: efsp.airspaceStore,
-    // T11: L7 reshapes this broadcast. Optional, counted, gates nothing.
-    onAlert: (alert) => {
-      obligationAlerts++;
-      if (typeof hub.broadcastEfspObligationAlert === 'function') hub.broadcastEfspObligationAlert(alert);
-    },
-  });
-  // After L7 (ADR 0067) obligations are state carried inside efsp-alerts and
-  // the monitor exposes getAll(); before it they were one-shot alerts. Both
-  // shapes are supported so the soak runs on either side of that merge (T11).
-  const obligationsAreState = typeof obligationMonitor.getAll === 'function';
-  function broadcastAlerts() {
-    const alerts = { conformance: conformance.getAll(), stca: stca.getAll() };
-    if (obligationsAreState) alerts.obligations = obligationMonitor.getAll();
-    hub.broadcastEfspAlerts(alerts);
-  }
-  if (obligationsAreState && typeof hub.setOnEfspChange === 'function') {
-    hub.setOnEfspChange(() => { if (obligationMonitor.tick()) broadcastAlerts(); });
-  }
-  efsp.nlaStatusMonitor.setOnDelta((payload) => hub.broadcastEfspBoardDelta(payload));
-  const reconciler = new CorrelationReconciler({
-    clock,
-    trackStore,
-    beaconOf: (t) => { const c = squawks.get(String(t.id)); return c === undefined ? null : c; },
-    fdrStore: efsp.fdrStore,
-    correlationStore: efsp.correlationStore,
-    boardStoreFor: efsp.boardStoreFor,
-    facilityConfig,
-    onDelta: (payload) => hub.broadcastEfspCorrelationDelta(payload),
-  });
-  const conformance = new ConformanceMonitor({
-    clock,
-    trackStore,
-    fdrStore: efsp.fdrStore,
-    correlationStore: efsp.correlationStore,
-    weather: () => ({}),
-    transitionAltFt: () => 18000,
-    indicatedAltFt,
-    // The soak's tracks are synthetic, with no theater: their course is taken
-    // as already magnetic, so heading conformance still runs under load.
-    gridToMagnetic: (deg) => deg,
-    config: alerting.conformance,
-  });
-  const stca = new StcaMonitor({
-    trackStore,
-    config: alerting.stca,
-    fdrForTrack: (trackId) => efsp.correlationStore.fdrForTrack(trackId),
-    activeMarsaFor: (fdrId) => efsp.marsaStore.activeFor(fdrId),
-    callsignFor: (track) => track.callsign,
-  });
+  const obligationAlerts = 0; // the monitor's onAlert hook is gone (obligations are state, ADR 0067); the field keeps the sample's shape
 
   // ── fake sockets (tests/ws-hub-heartbeat.test.mjs:11-15's precedent) ───
   const sockets = new Map(); // clientId -> { ws, handlers, session }
@@ -384,37 +325,24 @@ function createHost(env, { stateDir }) {
       case 'tick': {
         const what = new Set(cmd.what || []);
         if (what.has('expireTracks')) {
-          trackStore.expireStale();
+          ticker['stale-reaper']();
           const active = new Set(trackStore.getAll().map(t => String(t.id)));
-          collabStore.evictStale(active);
-          if (hub._surv && typeof hub._surv.forget === 'function') hub._surv.forget(active);
           for (const id of [...squawks.keys()]) if (!active.has(id)) squawks.delete(id);
         }
-        if (what.has('reconcile')) reply.correlation = reconciler.tick();
+        if (what.has('reconcile')) reply.correlation = ticker.correlation();
         if (what.has('conformanceStca')) {
-          const cChanged = conformance.tick();
-          const sChanged = stca.tick(Date.now());
-          if (cChanged || sChanged) broadcastAlerts();
+          ticker['conformance-stca']();
           reply.alerts = { conformance: conformance._alerts.size, stca: stca.getAll().length };
         }
         if (what.has('obligationsNla')) {
-          const oChanged = obligationMonitor.tick();
-          if (obligationsAreState && oChanged) broadcastAlerts();
-          efsp.nlaStatusMonitor.tick();
-          if (obligationsAreState) reply.obligations = obligationMonitor.getAll().length;
+          ticker['obligations-nla']();
+          reply.obligations = obligationMonitor.getAll().length;
           // H36 archiving (docs/adr/0082), as server.js runs it, guarded by
           // the traffic count. Its wall clock is the virtual Date.now.
-          if (efsp.archiver) {
-            const { archiveDeltas } = req('efsp/archiver.js');
-            const payloads = archiveDeltas(efsp.archiver.sweep(), efsp.boardStoreFor);
-            if (payloads.length) {
-              efsp.persist();
-              for (const p of payloads) hub.broadcastEfspBoardDelta(p);
-              reply.archived = payloads.reduce((n, p) => n + p.gone.length, 0);
-            }
-          }
+          const archived = ticker['efsp-archiver']();
+          if (archived !== undefined) reply.archived = archived;
         }
-        if (what.has('metrics')) instrumentation.tick(); // server.js: setInterval 60 s
+        if (what.has('metrics')) ticker['efsp-metrics']();
         if (what.has('heartbeat')) {
           for (const [ws, session] of hub._sessions) hub._tick(ws, session);
         }

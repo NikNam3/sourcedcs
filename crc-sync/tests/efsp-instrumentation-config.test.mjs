@@ -15,6 +15,9 @@ fs.mkdirSync(STATE);
 process.env.CRCSYNC_CONFIG_DIR = CONFIG;
 process.env.CRCSYNC_STATE_DIR = STATE;
 delete process.env.CRCSYNC_EFSP_INSTRUMENTATION_CONFIG_PATH;
+// The shipped file is the only source of defaults (DATA-2): give the temp config/ a copy.
+const SHIPPED_TEXT = fs.readFileSync(new URL('../config/efsp-instrumentation.json', import.meta.url), 'utf8');
+fs.writeFileSync(path.join(CONFIG, 'efsp-instrumentation.json'), SHIPPED_TEXT);
 
 // The module loads at import — with writeFileSync stubbed to throw, so a load
 // that writes anything fails the import itself.
@@ -38,15 +41,15 @@ function quietly(fn) {
   try { return { value: fn(), warns }; } finally { console.warn = orig; }
 }
 
-test('with no file anywhere the defaults apply: 30-day log, 30-day metrics, 400-day count, INCIRLIK -> LTAG', () => {
-  // The module-level load happened with both dirs empty.
+test('with only the shipped file the defaults apply: 30-day log, 30-day metrics, 400-day count, INCIRLIK -> LTAG', () => {
+  // The module-level load happened with only the shipped copy in config/.
   const c = getInstrumentationConfig();
   assert.deepEqual(c, {
     mutationLog: { retentionDays: 30 },
     metrics: { retentionDays: 30 },
     trafficCount: { retentionDays: 400, homeAirports: { INCIRLIK: ['LTAG'] } },
   });
-  assert.equal(c, DEFAULT_INSTRUMENTATION_CONFIG);
+  assert.deepEqual(c, DEFAULT_INSTRUMENTATION_CONFIG);
 });
 
 test('the shipped default is read from config/, and a state/ copy wins over it', () => {
@@ -58,7 +61,7 @@ test('the shipped default is read from config/, and a state/ copy wins over it',
   assert.equal(resolveInstrumentationConfigPath(), path.join(STATE, 'efsp-instrumentation.json'));
   assert.equal(loadInstrumentationConfig().mutationLog.retentionDays, 60);
   fs.unlinkSync(path.join(STATE, 'efsp-instrumentation.json'));
-  fs.unlinkSync(path.join(CONFIG, 'efsp-instrumentation.json'));
+  fs.writeFileSync(path.join(CONFIG, 'efsp-instrumentation.json'), SHIPPED_TEXT);
 });
 
 test('an invalid retentionDays falls back PER FIELD, with a warning — never "keep forever"', () => {
@@ -102,4 +105,20 @@ test('the shipped config file parses to exactly the defaults', () => {
   const shipped = new URL('../config/efsp-instrumentation.json', import.meta.url);
   const value = loadInstrumentationConfig(shipped.pathname);
   assert.deepEqual(value, DEFAULT_INSTRUMENTATION_CONFIG);
+});
+
+test('a missing or invalid shipped file is a startup error that names the file', async () => {
+  const { spawnSync } = await import('child_process');
+  const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-instr-empty-'));
+  const r = spawnSync(process.execPath, ['-e', "require('./src/efsp/instrumentation-config')"], {
+    cwd: new URL('..', import.meta.url).pathname, env: { ...process.env, CRCSYNC_CONFIG_DIR: empty, CRCSYNC_STATE_DIR: empty }, encoding: 'utf8',
+  });
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /efsp-instrumentation\.json/);
+  fs.writeFileSync(path.join(empty, 'efsp-instrumentation.json'), JSON.stringify({ mutationLog: { retentionDays: 30 } }));
+  const r2 = spawnSync(process.execPath, ['-e', "require('./src/efsp/instrumentation-config')"], {
+    cwd: new URL('..', import.meta.url).pathname, env: { ...process.env, CRCSYNC_CONFIG_DIR: empty, CRCSYNC_STATE_DIR: empty }, encoding: 'utf8',
+  });
+  assert.notEqual(r2.status, 0, 'a gap in the shipped file is an error too');
+  assert.match(r2.stderr, /metrics\.retentionDays is missing/);
 });

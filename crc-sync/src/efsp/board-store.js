@@ -28,11 +28,15 @@
 // §5.4) taken literally.
 
 const crypto = require('crypto');
-const { keyBetween, rebalance, needsRebalance } = require('./order-key');
-const { isValidAltitude } = require('./airspace-config');
-const { MAX_FREE_TEXT, SEPARATION_REGIMES } = require('./fdr-store');
+const { newFlags, _validateAltitudeBlock, deepClone, _frequencyFromBlockValue } = require('./board/strip-util');
+const { MAX_FREE_TEXT } = require('./fdr-store');
 const { WALL_CLOCK } = require('../mission-clock');
-const { runwayRackFor, runwayInhibitFor, RUNWAY_GATED_STATES } = require('./field-state');
+const { BoardState } = require('./board/board-state');
+const { BoardAudit } = require('./board/audit');
+const { Placement } = require('./board/placement');
+const { Coordination } = require('./board/coordination');
+const { Tofi } = require('./board/tofi');
+const { runwayInhibitFor, RUNWAY_GATED_STATES } = require('./field-state');
 const { CARRIER_TRANSFER_EFFECTS } = require('./carrier/transfer-effects'); // pure (docs/adr/0074)
 
 // A DEPARTURE in these states has left the ground (docs/adr/0076).
@@ -86,67 +90,6 @@ function _replayRecord(result, appliedWallAt) {
   });
 }
 
-function newFlags() {
-  return { offset: false, flipped: false, removeIndicator: false, highlight: null, attention: null };
-}
-
-/**
- * An altitude block a flight is restricted to inside an airspace. Feet,
- * whole numbers, upper above lower, and — when the airspace publishes its
- * own vertical limits — inside them, since a controller cannot assign a
- * block the airspace does not contain.
- */
-function _validateAltitudeBlock(block, definition) {
-  if (block === undefined || block === null) return { ok: true };
-  if (typeof block !== 'object') return { ok: false, detail: 'altitudeBlock must be {lowerFt, upperFt}' };
-  const { lowerFt, upperFt } = block;
-  if (!isValidAltitude(lowerFt) || !isValidAltitude(upperFt)) {
-    return { ok: false, detail: 'altitudeBlock needs whole-foot lowerFt and upperFt' };
-  }
-  if (upperFt <= lowerFt) return { ok: false, detail: 'altitudeBlock upperFt must be above lowerFt' };
-  if (isValidAltitude(definition.altLowerFt) && lowerFt < definition.altLowerFt) {
-    return { ok: false, detail: `${definition.name} starts at ${definition.altLowerFt} ft — ${lowerFt} is below it` };
-  }
-  if (isValidAltitude(definition.altUpperFt) && upperFt > definition.altUpperFt) {
-    return { ok: false, detail: `${definition.name} tops at ${definition.altUpperFt} ft — ${upperFt} is above it` };
-  }
-  return { ok: true };
-}
-
-function deepClone(obj) {
-  return obj == null ? obj : JSON.parse(JSON.stringify(obj));
-}
-
-/**
- * Block 22's value, as a frequency.
- *
- * Every Block a controller types into arrives as a STRING — the panel's
- * click-to-edit cell is an <input type="text"> and always has been — while
- * isValidFrequency() requires a number, deliberately, so that a configured
- * airspace frequency and a flight's approved frequency can never validate
- * differently (airspace-config.js's own header says so).
- *
- * Nothing bridged the two, so typing into Block 22 was refused with
- * `frequency must be a number between 30 and 400 MHz, not "360.200"` — a
- * message naming a value that looks perfectly valid, which is the worst kind.
- * The Block has been reachable since the RANGE slice and the only writer that
- * ever worked was ApproveAirspaceEntry, which passes a real number from config.
- *
- * Parsed here rather than coerced in the client because this is the one
- * boundary every writer crosses; a client-side fix would leave the dot-command
- * surface and any second client to make the same mistake again. Strict on
- * purpose: Number('') is 0 and Number('  ') is 0, so a blank must be caught
- * first, and anything that is not a plain decimal is left alone to be refused
- * by the validator with its own message.
- */
-function _frequencyFromBlockValue(value) {
-  if (value === '' || value === undefined || value === null) return null;
-  if (typeof value !== 'string') return value;
-  const trimmed = value.trim();
-  if (trimmed === '') return null;
-  return /^\d+(\.\d+)?$/.test(trimmed) ? Number(trimmed) : value;
-}
-
 class BoardStore {
   /**
    * @param {import('./fdr-store').FdrStore} fdrStore
@@ -174,25 +117,43 @@ class BoardStore {
     this._clock = clock;
     this._fdrStore = fdrStore;
     this._rules = rules;
-    this._strips = new Map(); // stripId -> Strip
-    this._log = [];           // [{seq, type:'update'|'gone', id}]
-    this._seq = 0;
-    // The Board lifetime a seq belongs to (docs/adr/0081, L6's F2). `_seq` and
-    // the `_log` ring are per process and deliberately not persisted, so a
-    // seq from before a restart means nothing after it — and once the new
-    // lifetime's seq overtakes a client's, nothing but a name for the lifetime
-    // can tell the two apart. Minted again by restore(); never persisted.
-    this._epoch = crypto.randomUUID();
-    this._cidSeq = 0;
+    // The kernel (docs/adr/0095): the Strip map, the seq/log ring, the epoch,
+    // the touched set and the cid counter. `touch` is late-bound to this._touch
+    // so a patched _touch (tools/soak/host-core.js) sees every touch.
+    this._state = new BoardState({ clock, touch: (id) => this._touch(id) });
     this._appliedMutations = new Map(); // clientMutationId -> compact frozen replay record (_replayRecord), idempotency (§5.2, docs/adr/0081)
-    // Every Strip a Board event touched since efsp-ws.js last drained it
-    // (docs/adr/0081, guide §5.4 "one Board event"). A rebalance re-keys
-    // Strips the Mutation never named, and a coordination op touches the PEER
-    // Board inside the sender's applyMutation; whoever broadcasts a Board's
-    // change drains this, so every touched Strip rides in that broadcast.
-    this._touchedSinceDrain = new Set();
     this._mutationLog = null; // optional collaborator, see setMutationLog()
+    // The Mutation-log entries for a client Mutation and a peer write (board/audit.js).
+    // `mutationLog` is read late: setMutationLog() can come after construction.
+    this._audit = new BoardAudit({ rules, clock, mutationLog: () => this._mutationLog });
+    // Order keys and Bays (board/placement.js). touch and rebalanceRack are late-bound to the
+    // facade (host-core patches both); rejectedReplicaRefusal is the NLA cluster's, still here.
+    this._placement = new Placement({
+      state: this._state, rules, clock, fdrStore,
+      touch: (id) => this._touch(id),
+      rebalanceRack: (bayId, rackId, excludeStripId) => this._rebalanceRack(bayId, rackId, excludeStripId),
+      rejectedReplicaRefusal: (strip, toState) => this._rejectedReplicaRefusal(strip, toState),
+    });
     this._activeCmid = null;  // the clientMutationId being applied, while applyMutation runs
+    // Cross-Facility coordination and TOFI (board/coordination.js, board/tofi.js). touch and retire are late-bound
+    // to the facade (host-core patches _touch; _retireStrip moves in BOARD-3), activeCmid and mutationLog are read
+    // late, and the per-Role tables stay here and are passed as values.
+    this._coordination = new Coordination({
+      rules, state: this._state, audit: this._audit, placement: this._placement, clock, fdrStore,
+      touch: (id) => this._touch(id),
+      activeCmid: () => this._activeCmid,
+      retire: (strip, by) => this._retireStrip(strip, by),
+      mutationLog: () => this._mutationLog,
+      replicaStateOnReceipt: REPLICA_STATE_ON_RECEIPT,
+      senderStateOnAccept: SENDER_STATE_ON_ACCEPT,
+    });
+    this._tofi = new Tofi({
+      rules, state: this._state, audit: this._audit, placement: this._placement, clock, fdrStore,
+      touch: (id) => this._touch(id),
+      activeCmid: () => this._activeCmid,
+      retire: (strip, by) => this._retireStrip(strip, by),
+      defaultInitialStateByRole: DEFAULT_INITIAL_STATE_BY_ROLE,
+    });
     // stripId -> { invokedAt, prevState, expiresAt } — the 400ms double-tap
     // guard and the 30s Undo window for the last NLA transition (§3.5
     // rules 3 and 5). Deliberately NOT part of the Strip's public shape
@@ -209,152 +170,32 @@ class BoardStore {
 
   setMutationLog(mutationLog) { this._mutationLog = mutationLog; }
 
-  get currentSeq() { return this._seq; }
+  get currentSeq() { return this._state.seq; }
   /** This Board lifetime's name (docs/adr/0081). A delta is valid only within one epoch. */
-  get epoch() { return this._epoch; }
-  getStrip(stripId) { return this._strips.get(stripId) || null; }
-  getAll() { return [...this._strips.values()]; }
+  get epoch() { return this._state.epoch; }
+  getStrip(stripId) { return this._state.strips.get(stripId) || null; }
+  getAll() { return this._state.all(); }
 
-  /** Strips currently placed in a Bay/Rack, in order, excluding DROPPED — a DROPPED Strip stays queryable via getStrip()/getAll() but leaves the visible Board (guide §3.4). */
-  getRack(bayId, rackId) {
-    return this.getAll()
-      .filter(s => s.bayId === bayId && s.rackId === rackId && s.state !== 'DROPPED')
-      .sort((a, b) => (a.orderKey < b.orderKey ? -1 : a.orderKey > b.orderKey ? 1 : (a.stripId < b.stripId ? -1 : 1)));
-  }
+  /** Strips currently placed in a Bay/Rack, in order, excluding DROPPED (board/board-state.js rack()). */
+  getRack(bayId, rackId) { return this._state.rack(bayId, rackId); }
 
-  _touch(stripId) {
-    this._log.push({ seq: ++this._seq, type: 'update', id: stripId });
-    this._touchedSinceDrain.add(stripId);
-    this._pruneLog();
-  }
+  /** Rebalances one Rack (board/placement.js). Kept on the facade: tools/soak/host-core.js wraps it by name. */
+  _rebalanceRack(bayId, rackId, excludeStripId) { return this._placement.rebalanceRack(bayId, rackId, excludeStripId); }
 
-  /**
-   * The ids of every Strip touched since the last drain, in first-touch
-   * order, and forgets them. Called by whoever puts this Board's change on the
-   * wire (efsp-ws.js), on this Board and on the peer Board a coordination op
-   * reached — never by board-store itself (docs/adr/0081).
-   * @returns {string[]}
-   */
-  drainTouched() {
-    const ids = [...this._touchedSinceDrain];
-    this._touchedSinceDrain.clear();
-    return ids;
-  }
-  _pruneLog() {
-    if (this._log.length > 2000) this._log.splice(0, this._log.length - 1000);
-  }
+  // Kept on the facade for tools and tests until SYNC replaces them (docs/adr/0095):
+  // tools/soak/host-core.js patches _touch and reads _log, _strips and _cidSeq.
+  _touch(stripId) { this._state.recordTouch(stripId); }
+  get _log() { return this._state.log; }
+  get _strips() { return this._state.strips; }
+  get _cidSeq() { return this._state.cidSeq; }
 
-  /**
-   * Delta resync (guide §5.6) — everything changed since `afterSeq`, within
-   * this Board lifetime. `updated` holds the Strips still in `_strips`
-   * (DROPPED ones included — the caller turns those into `gone`); `gone` holds
-   * ids the window touched that are no longer in `_strips` at all. That is
-   * always empty until retention removes records (L24, S-R2-13); this is the
-   * seam it fills (docs/adr/0081).
-   */
-  getDeltaSince(afterSeq) {
-    const entries = [];
-    for (let i = this._log.length - 1; i >= 0; i--) {
-      if (this._log[i].seq <= afterSeq) break;
-      entries.unshift(this._log[i]);
-    }
-    const byId = new Map();
-    for (const e of entries) byId.set(e.id, e);
-    const updated = [];
-    const gone = []; // touched in the window and no longer on the Board: archived (docs/adr/0082)
-    for (const e of byId.values()) {
-      if (this._strips.has(e.id)) updated.push(this._strips.get(e.id));
-      else gone.push(e.id);
-    }
-    return { updated, gone, seq: this._seq };
-  }
+  /** The ids of every Strip touched since the last drain (board/board-state.js). */
+  drainTouched() { return this._state.drainTouched(); }
 
-  // ── orderKey resolution ──────────────────────────────────────────────────
-
-  _resolveOrderKey(bayId, rackId, afterStripId, beforeStripId, excludeStripId) {
-    const rackStrips = this.getRack(bayId, rackId).filter(s => s.stripId !== excludeStripId);
-    const findKey = (id) => (id ? (rackStrips.find(s => s.stripId === id) || {}).orderKey ?? null : null);
-    let key;
-    try {
-      key = keyBetween(findKey(afterStripId), findKey(beforeStripId));
-    } catch (err) {
-      if (err.code !== 'ORDER_KEY_EXHAUSTED') throw err;
-      return this._keyAfterRebalance(bayId, rackId, afterStripId, beforeStripId, excludeStripId);
-    }
-    // The proactive rebalance (docs/adr/0081, L6's F8). Same-slot inserts
-    // grow a key by about half a character each, without bound, and nothing
-    // ever called needsRebalance — keys reached 183 characters in 400 drags.
-    // Once a new key passes REBALANCE_KEY_LENGTH the Rack is re-keyed and the
-    // key recomputed between the neighbours' fresh keys, inside this same
-    // Board event: the re-keyed Strips are touched, so they leave in this
-    // Mutation's broadcast (drainTouched) like every other change it made.
-    if (needsRebalance([key])) return this._keyAfterRebalance(bayId, rackId, afterStripId, beforeStripId, excludeStripId);
-    return key;
-  }
-
-  /** Rebalances the Rack, then resolves the key between the named neighbours' fresh keys. */
-  _keyAfterRebalance(bayId, rackId, afterStripId, beforeStripId, excludeStripId) {
-    this._rebalanceRack(bayId, rackId, excludeStripId);
-    const refreshed = this.getRack(bayId, rackId).filter(s => s.stripId !== excludeStripId);
-    const findKey2 = (id) => (id ? (refreshed.find(s => s.stripId === id) || {}).orderKey ?? null : null);
-    let a = findKey2(afterStripId);
-    let b = findKey2(beforeStripId);
-    // The ONLY way this retry can still fail after a rebalance (which
-    // guarantees every Strip in the Rack gets a fresh, distinct key) is
-    // a > b — which can genuinely happen when afterStripId/beforeStripId
-    // were bounding two Strips that had COLLIDING keys before the
-    // rebalance (order-key.js's jitter tolerance): rebalance() preserves
-    // the Rack's own tie-broken order (by stripId), which can come out
-    // opposite to whatever the caller's after/before labels assumed.
-    // The caller's real intent — "insert between these two specific
-    // Strips" — doesn't actually depend on which one is labelled
-    // "after" vs "before" once already in this recovery path, so
-    // normalize direction here rather than let a second, unrecoverable
-    // throw reach applyMutation's catch-all and reject a perfectly
-    // resolvable Mutation.
-    if (a !== null && b !== null && a > b) { [a, b] = [b, a]; }
-    return keyBetween(a, b);
-  }
-
-  /** Rebalances one Rack — MUST run as one atomic Board event, never mid-drag (guide §5.4). */
-  _rebalanceRack(bayId, rackId, excludeStripId) {
-    const ordered = this.getRack(bayId, rackId).filter(s => s.stripId !== excludeStripId);
-    const fresh = rebalance(ordered.map(s => s.stripId));
-    for (const s of ordered) {
-      s.orderKey = fresh.get(s.stripId);
-      s.rev += 1;
-      this._touch(s.stripId);
-    }
-  }
-
-  _nextCid() {
-    this._cidSeq += 1;
-    // 3-digit, zero-padded, sequential for this store's lifetime —
-    // [SOURCE-DEFINED] format for Block 4 (guide §6.2); no real-world
-    // format is published. See the implementation plan.
-    return String(this._cidSeq).padStart(3, '0');
-  }
+  /** Delta resync (guide §5.6), within this Board lifetime (board/board-state.js). */
+  getDeltaSince(afterSeq) { return this._state.getDeltaSince(afterSeq); }
 
   // ── Mutation application ─────────────────────────────────────────────────
-
-  /**
-   * The entry a PEER write leaves on THIS Board (docs/adr/0083): coordination and
-   * TOFI change the receiving Facility's Board from inside the sender's Mutation.
-   * `clientMutationId` stays null so no reader takes it for a second application
-   * of the sender's Mutation; `causedBy` names that Mutation. `after` of a peer
-   * entry is never a drop the traffic count would count (traffic-count.js).
-   */
-  _recordPeer(op, strip, before, { causedBy, fromFacilityId, by, action }) {
-    if (!this._mutationLog) return;
-    this._mutationLog.record({
-      clientMutationId: null, causedBy: causedBy || null, op,
-      ...(action ? { action } : {}),
-      stripId: strip.stripId, fdrId: strip.fdrId || null,
-      facilityId: this._rules.facilityId || null, fromFacilityId: fromFacilityId || null,
-      actingPositionId: null, actorId: by || null, at: this._clock.now(),
-      before, after: deepClone(strip), source: 'peer',
-    });
-  }
 
   /**
    * Applies a client Mutation (guide §5.2). Returns
@@ -464,11 +305,11 @@ class BoardStore {
 
     if (op.kind === 'CreateStrip') {
       const result = this._applyCreateStrip(op, actingPositionId, by);
-      this._recordAudit(mutation, actingPositionId, by, null, result);
+      this._audit.recordAudit(mutation, actingPositionId, by, null, result);
       return result;
     }
 
-    const strip = this._strips.get(mutation.stripId);
+    const strip = this._state.strips.get(mutation.stripId);
     if (!strip) return { ok: false, reason: 'NOT_FOUND' };
     if (strip.rev !== mutation.baseRev) return { ok: false, reason: 'STALE_REV', strip: deepClone(strip) };
 
@@ -504,22 +345,22 @@ class BoardStore {
       case 'DropStrip':     result = this._applyDropStrip(strip, op, by); break;
       // WP4A cross-Facility coordination primitives (guide §4.6,
       // docs/adr/0015) — all 5 share one handler; op.kind IS the primitive,
-      // op.action selects PROPOSE/ACCEPT/REJECT. See _applyCoordinationOp.
+      // op.action selects PROPOSE/ACCEPT/REJECT. See board/coordination.js applyOp.
       case 'HANDOFF':
       case 'POINT_OUT':
       case 'TRAFFIC':
       case 'OPERATIONAL_REQUEST':
       case 'AIT':
-        result = this._applyCoordinationOp(strip, op, by, actingPositionId); break;
+        result = this._coordination.applyOp(strip, op, by, actingPositionId); break;
       // WP4A second slice (docs/adr/0025) — TOFI (guide §4.6.3), the
       // ATC<->MRU sub-protocol. Kept structurally separate from the 5
       // primitives above (own strip.tofiCoordination field, own dispatcher)
-      // rather than folded into _applyCoordinationOp — TOFI is a two-step
+      // rather than folded into Coordination.applyOp — TOFI is a two-step
       // exchange (ENTRY and EXIT) plus a distinct comms-transfer action,
       // none of which the single-shot PROPOSE/ACCEPT/REJECT shape above
-      // was built to express. See _applyTofiOp.
+      // was built to express. See board/tofi.js applyOp.
       case 'TOFI':
-        result = this._applyTofiOp(strip, op, by, actingPositionId); break;
+        result = this._tofi.applyOp(strip, op, by, actingPositionId); break;
       // docs/adr/0023 — converts this Strip's role IN PLACE, same Strip/
       // FDR throughout, for a returning flight at the same Facility.
       case 'ConvertToArrival':
@@ -555,7 +396,7 @@ class BoardStore {
         else result.fdrs = [...(result.fdrs || []), stamped];
       }
     }
-    this._recordAudit(mutation, actingPositionId, by, before, result);
+    this._audit.recordAudit(mutation, actingPositionId, by, before, result);
     return result;
   }
 
@@ -581,47 +422,11 @@ class BoardStore {
     return r && r.ok && r.changed ? r.fdr : null;
   }
 
-  _recordAudit(mutation, actingPositionId, by, before, result) {
-    if (!this._mutationLog || !result.ok) return;
-    this._mutationLog.record({
-      clientMutationId: mutation.clientMutationId,
-      op: mutation.op.kind,
-      stripId: result.strip.stripId,
-      // Who the entry concerns (docs/adr/0083): the Facility and the flight, so a
-      // reader never has to look them up on a Board that may have archived the Strip.
-      facilityId: this._rules.facilityId || null,
-      fdrId: result.strip.fdrId || null,
-      // The op kind alone names neither the Block written nor a coordination
-      // action (PROPOSE/ACCEPT/REJECT/CANCEL...); the entry says which.
-      ...(mutation.op.kind === 'SetBlock' ? { blockId: mutation.op.blockId, value: mutation.op.value } : {}),
-      ...(typeof mutation.op.action === 'string' ? { action: mutation.op.action } : {}),
-      actingPositionId,
-      actorId: by || null,
-      at: this._clock.now(),
-      before,
-      after: deepClone(result.strip),
-      // Distinguishes a self-coordinated boundary event from a two-party
-      // one (guide §4.8.3 rule 4) — undefined for every op except a
-      // successful TransferStrip, where board-store computes it above.
-      selfCoordinated: result.selfCoordinated,
-      // The carrier hand-over kind and its trigger type (guide §9.12: "four
-      // different trigger types"), so an after-action review can tell them apart.
-      carrierTransfer: result.carrierTransfer ? result.carrierTransfer.kind : undefined,
-      carrierTrigger: result.carrierTransfer ? result.carrierTransfer.trigger : undefined,
-      // The SFA rotation transfer and its trigger type (guide §4.7).
-      sfaTransfer: result.sfaTransfer ? result.sfaTransfer.kind : undefined,
-      sfaTrigger: result.sfaTransfer ? result.sfaTransfer.trigger : undefined,
-      // A gate this Mutation was let past, and why (S-L19 open point, decided in
-      // docs/wip/UI-B.md). Undefined, so absent from the line, otherwise.
-      bypass: result.bypass,
-    });
-  }
-
   _applyCreateStrip(op, actingPositionId, by) {
     // A Strip in a Bay this Facility does not have is invisible on every
     // Board — every read path goes through a Bay — while still holding a
     // beacon code. Cheaper to refuse than to hunt for later.
-    const bayCheck = this._requireKnownBay(op.bayId);
+    const bayCheck = this._placement.requireKnownBay(op.bayId);
     if (bayCheck) return bayCheck;
     const role = op.role || 'DEPARTURE';
     if (this._rules.isValidRole && !this._rules.isValidRole(role)) {
@@ -663,7 +468,7 @@ class BoardStore {
       // Board, two same-role Strips on one FDR is §3.6's duplicate
       // origination. Role-agnostic rather than MISSION-specific, so the
       // ATO-first direction reuses this unchanged.
-      const clash = [...this._strips.values()].find(
+      const clash = [...this._state.strips.values()].find(
         s => s.fdrId === op.fdrId && s.role === role && s.state !== 'DROPPED');
       if (clash) {
         return {
@@ -691,12 +496,12 @@ class BoardStore {
     const afterStripId = op.afterStripId !== undefined
       ? op.afterStripId
       : (rackStrips.length ? rackStrips[rackStrips.length - 1].stripId : null);
-    const orderKey = this._resolveOrderKey(op.bayId, op.rackId, afterStripId, op.beforeStripId || null, null);
+    const orderKey = this._placement.resolveOrderKey(op.bayId, op.rackId, afterStripId, op.beforeStripId || null, null);
 
     const now = this._clock.now();
     const strip = {
       stripId,
-      cid: this._nextCid(),
+      cid: this._state.nextCid(),
       fdrId: created.fdr.fdrId,
       rev: 1,
       role,
@@ -729,8 +534,7 @@ class BoardStore {
       previousLeg: null,   // set by ConvertToArrival — the departure leg's archived annotations
       createdAt: now, updatedAt: now, updatedBy: by || null,
     };
-    this._strips.set(stripId, strip);
-    this._touch(stripId);
+    this._state.insert(strip);
     // docs/adr/0074: a recovery check-in (a MARSHAL Strip in IN_STACK) joins the
     // Marshal stack at the next free slot. The Marshal re-sequences with one
     // Move; a full stack is a warning, not a refusal of the check-in.
@@ -847,8 +651,8 @@ class BoardStore {
     strip.role = 'ARRIVAL';
     strip.state = 'INBOUND';
     strip.bayId = targetBay.bayId;
-    strip.rackId = this._placementRack(strip, targetBay);
-    strip.orderKey = this._resolveOrderKey(targetBay.bayId, strip.rackId, null, null, strip.stripId);
+    strip.rackId = this._placement.placementRack(strip, targetBay);
+    strip.orderKey = this._placement.resolveOrderKey(targetBay.bayId, strip.rackId, null, null, strip.stripId);
     // The departure leg's annotations are ARCHIVED, not erased. Clearing the
     // live set is right — a DEPARTURE Strip's Block 9A means something
     // different on an ARRIVAL, so carrying the values across would mislabel
@@ -881,30 +685,10 @@ class BoardStore {
     // instead of a track-id change. Under the fdrId key there is nothing here
     // to reset: the correlation is a fact about the airframe, and the airframe
     // did not change legs — the paperwork did.
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
     return { ok: true, strip, fdr: updatedFdr };
   }
 
-  /**
-   * A Bay configured with an implied EfspState (facility-config.js) is
-   * treated as EXACTLY EQUIVALENT to pressing the NLA button for that
-   * transition (guide §3.5 rule 4: "every NLA transition MUST also be
-   * reachable by drag-and-drop... NLA is an accelerator, not the only
-   * path" — accelerator for a specific transition, not an unrestricted
-   * teleport to any state). Dropping into a Bay whose implied state isn't
-   * the CURRENT state's one legal next step — or IS that step but it's
-   * presently inhibited (no beacon code, incomplete flight plan, a hold in
-   * force, ...) — is rejected exactly like invoking that NLA would be.
-   * Without this, a drag (or a same-controller self-coordinated Transfer,
-   * guide §4.8.3) could silently skip a Strip past every doctrine check
-   * NLA enforces — e.g. straight from PROPOSED into a CLEARED Bay with no
-   * flight plan at all, which is exactly the bug this closes.
-   * @returns {{ok:true, impliedState:string|null}|{ok:false, reason:string, detail:string}}
-   */
-  /** {isOccupied, coveringPositionFor, facilityId} bound from this._rules — computeNla()'s occupancy context (guide §4.5, e.g. DEPARTED's real Hand-Off-to-APP inhibit). `facilityId` (WP4A, docs/adr/0014) lets nla.js distinguish a CENTER-held ARRIVAL Strip's INBOUND state (whose next step is the Coordinate/HANDOFF button, not an intrafacility NLA transfer) from an INCIRLIK one. Built once per call site rather than inline so both computeNla() call sites below stay in lockstep. */
   /**
    * Approves this flight to work inside an airspace, on a frequency.
    *
@@ -959,10 +743,7 @@ class BoardStore {
       approvedAt: this._clock.now(),
       approvedBy: by || null,
     };
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
 
     const warning = airspace.state !== 'ACTIVE' ? 'AIRSPACE_NOT_ACTIVE' : undefined;
     return { ok: true, strip, fdr: fdrResult.fdr, warning };
@@ -976,52 +757,8 @@ class BoardStore {
     const fdrResult = this._fdrStore.setWorkingFrequency(strip.fdrId, null, { airspaceId: null, by });
     if (!fdrResult.ok) return { ok: false, reason: fdrResult.reason, detail: fdrResult.detail, strip };
     strip.airspaceEntry = null;
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
     return { ok: true, strip, fdr: fdrResult.fdr };
-  }
-
-  _nlaCtx(target = null) {
-    return {
-      isOccupied: this._rules.isOccupied, coveringPositionFor: this._rules.coveringPositionFor,
-      facilityId: this._rules.facilityId, standingReleases: this._rules.standingReleases,
-      // §9.7 rule 1 (docs/adr/0061) — the runway status view, on every
-      // computeNla call site at once: the button, the advisory stamp, and the
-      // drag. `targetRackId` is set only on the drag path (decisions.md Q27).
-      fieldStateFor: this._rules.fieldStateFor,
-      targetRackId: target ? target.rackId : undefined,
-      // docs/adr/0074 — the recovery Case, the manned lane the stack feeds, and
-      // whether the flight is in the stack, for the carrier's NLA tables.
-      carrierCase: this._rules.carrierCase,
-      carrierLaneFor: this._rules.carrierLaneFor,
-      carrierInStack: this._rules.carrierInStack,
-    };
-  }
-
-  /** This Facility's runway status view, or null (no runways — nothing is runway-gated). */
-  _fieldStateView() {
-    return this._rules.fieldStateFor ? this._rules.fieldStateFor() : null;
-  }
-
-  /**
-   * The rack a Strip lands in when something other than a drag places it in
-   * `bay` (decisions.md Q26, S-R2-1): in a runway-queue Bay, the end its FDR
-   * names or else the active end; anywhere else, the Bay's first rack as
-   * always. Without it every NLA-queued departure sat in rwy-05 and was judged
-   * against 05, whatever the active runway was.
-   */
-  _placementRack(strip, bay) {
-    // An SFA frequency Bay is placed by the flight's own frequency, so a Strip put
-    // back by a system move (a Position retaken, a covering hand-back) returns to
-    // the Rack that IS its frequency, not the first one (guide §4.2, D17).
-    if (this._rules.sfaRackFor && bay && bay.view === 'sfa-freqs') {
-      const fdr = this._fdrStore.getFdr(strip.fdrId);
-      const rack = fdr && fdr.comms ? this._rules.sfaRackFor(bay.bayId, fdr.comms.workingFrequencyMhz) : null;
-      if (rack) return rack;
-    }
-    return runwayRackFor(strip, this._fdrStore.getFdr(strip.fdrId), this._fieldStateView(), bay);
   }
 
   /**
@@ -1092,130 +829,27 @@ class BoardStore {
   _setStateRunwayRefusal(strip, toState) {
     if (!(RUNWAY_GATED_STATES[strip.role] || []).includes(toState)) return null;
     const bay = this._rules.bayForImpliedState ? this._rules.bayForImpliedState(strip.ownerPositionId, toState) : null;
-    const targetRackId = bay && bay.impliesState === toState ? this._placementRack(strip, bay) : undefined;
-    const inhibit = runwayInhibitFor(strip, this._fdrStore.getFdr(strip.fdrId), this._fieldStateView(), { targetRackId });
+    const targetRackId = bay && bay.impliesState === toState ? this._placement.placementRack(strip, bay) : undefined;
+    const inhibit = runwayInhibitFor(strip, this._fdrStore.getFdr(strip.fdrId), this._placement.fieldStateView(), { targetRackId });
     return inhibit ? { ok: false, reason: 'NLA_INHIBITED', detail: inhibit, strip } : null;
   }
 
-  /**
-   * The owner's Bay that holds this Strip's Role whatever its state (Bay
-   * `holdsRole`, docs/adr/0087), or null. A Role with such a Bay keeps its state
-   * on the Strip: no Bay implies it, so a drag never changes it, and a state
-   * change never moves it — which also stops an OVERFLIGHT `INBOUND` being filed
-   * under ARRIVAL's `INBOUND` Bay, the one thing the shared state names would
-   * otherwise do.
-   */
-  _roleBayFor(strip, positionId = strip.ownerPositionId) {
-    const bays = this._rules.baysFor ? this._rules.baysFor(positionId) : [];
-    return bays.find(b => b.holdsRole === strip.role) || null;
-  }
-
-  _validateBayImpliedTransition(strip, targetBayId, targetRackId) {
-    // A Role Bay (`holdsRole`, docs/adr/0087) takes only its own Role's Strips.
-    const holds = this._rules.bayHoldsRole ? this._rules.bayHoldsRole(targetBayId) : null;
-    if (holds && holds !== strip.role) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: `${targetBayId} holds ${holds} Strips only; a ${strip.role} Strip cannot be placed there` };
-    }
-    const roleBay = this._roleBayFor(strip);
-    if (roleBay) {
-      // Another Role's state-implying Bay is not somewhere this Role goes.
-      if (this._rules.bayImpliesState && this._rules.bayImpliesState(targetBayId)) {
-        return { ok: false, reason: 'VALIDATION_ERROR', detail: `a ${strip.role} Strip stays in ${roleBay.bayId}; ${targetBayId} is another Role's Bay` };
-      }
-      return { ok: true, impliedState: null };
-    }
-    const impliedState = this._rules.bayImpliesState ? this._rules.bayImpliesState(targetBayId) : null;
-    if (!impliedState || impliedState === strip.state) return { ok: true, impliedState }; // non-state-implying Bay, or already there — always fine
-
-    // Per-State authority (guide §3.4's "normally owned by" column,
-    // permission.js's canActOnState) — checked here too, not just in
-    // _applyInvokeNla, because dragging into an implied-state Bay is the
-    // OTHER path to the exact same transition (§3.5 rule 4: NLA is an
-    // accelerator, never the only path). Gating only the NLA button would
-    // leave this reachable by drag regardless of who "should" be advancing
-    // the Strip. strip.ownerPositionId is the acting Position here —
-    // _dispatch() already verified actingPositionId === strip.ownerPositionId
-    // before any _apply* method runs.
-    if (this._rules.canActOnState && !this._rules.canActOnState(strip.ownerPositionId, strip.role, strip.state)) {
-      return { ok: false, reason: 'PERMISSION_DENIED', detail: `${strip.state} is not ${strip.ownerPositionId}'s to advance` };
-    }
-
-    // ...and, for the same reason, a declined replica stays inert on this
-    // path too (F-303): the drag IS the other way to make this transition, so
-    // gating only the NLA button would leave it reachable by dropping the
-    // replica into a state-implying Bay. Non-state-implying Bays returned
-    // above, so tidying a dead replica off to one side is unaffected, and no
-    // Bay implies DROPPED, so the Drop exception cannot arise here.
-    const inert = this._rejectedReplicaRefusal(strip, impliedState);
-    if (inert) return { ok: false, reason: inert.reason, detail: inert.detail };
-
-    const fdr = this._fdrStore.getFdr(strip.fdrId);
-    const nla = this._rules.computeNla ? this._rules.computeNla(strip, fdr, this._clock.now(), this._nlaCtx({ bayId: targetBayId, rackId: targetRackId })) : null;
-    if (!nla || nla.inhibited) {
-      return { ok: false, reason: 'NLA_INHIBITED', detail: nla ? nla.inhibited : `no legal transition from ${strip.state}` };
-    }
-    // docs/adr/0074: the four carrier hand-overs are four buttons and each
-    // records its own trigger type (guide §9.12), so a drag into the Bay that
-    // implies the NLA's own state is refused with the button's name rather than
-    // moving the Strip without the stack effect and the tag.
-    if (nla.carrierTransfer && nla.toState === impliedState) {
-      const t = this._rules.carrierTransfers && this._rules.carrierTransfers[nla.carrierTransfer];
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: `use the ${t ? t.label : nla.carrierTransfer} button — a carrier hand-over is recorded, not dragged` };
-    }
-    if (nla.toState !== impliedState && (nla.alsoLegal || []).includes(impliedState)) {
-      return { ok: true, impliedState };
-    }
-    if (nla.toState !== impliedState) {
-      return {
-        ok: false, reason: 'VALIDATION_ERROR',
-        detail: `dropping here would set state to ${impliedState}, but the only valid next state from ${strip.state} is ${nla.toState}`,
-      };
-    }
-    return { ok: true, impliedState };
-  }
-
-  /** @returns {object|null} a rejection when this Facility has no such Bay, else null. */
-  _requireKnownBay(bayId, strip) {
-    if (!this._rules.bayExists || this._rules.bayExists(bayId)) return null;
-    return { ok: false, reason: 'VALIDATION_ERROR', detail: `no such Bay here: ${bayId}`, strip };
-  }
-
   _applyMoveStrip(strip, op, by) {
-    const bayCheck = this._requireKnownBay(op.bayId, strip);
+    const bayCheck = this._placement.requireKnownBay(op.bayId, strip);
     if (bayCheck) return bayCheck;
-    const check = this._validateBayImpliedTransition(strip, op.bayId, op.rackId);
+    const check = this._placement.validateBayImpliedTransition(strip, op.bayId, op.rackId);
     if (!check.ok) return { ok: false, reason: check.reason, detail: check.detail, strip };
-    const full = this._bayFullRefusal(op.bayId, strip);
+    const full = this._placement.bayFullRefusal(op.bayId, strip);
     if (full) return { ok: false, reason: full.reason, detail: full.detail, strip };
 
     strip.bayId = op.bayId;
     strip.rackId = op.rackId;
-    strip.orderKey = this._resolveOrderKey(op.bayId, op.rackId, op.afterStripId || null, op.beforeStripId || null, strip.stripId);
+    strip.orderKey = this._placement.resolveOrderKey(op.bayId, op.rackId, op.afterStripId || null, op.beforeStripId || null, strip.stripId);
     if (check.impliedState && check.impliedState !== strip.state) strip.state = check.impliedState;
     const fdrResult = this._assignSfaFrequency(strip, by);
 
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
     return { ok: true, strip, fdr: fdrResult ? fdrResult.fdr : undefined };
-  }
-
-  /**
-   * A Bay with a `capacity` (facility-config.js's Bay descriptor flag; PAR's final
-   * Bay holds one, §7.10) refuses one more Strip. Returns a refusal or null. A
-   * DROPPED Strip does not count (it has left the Board), nor does `strip` itself,
-   * so re-ordering inside the Bay is never refused.
-   */
-  _bayFullRefusal(bayId, strip) {
-    const bay = this._rules.bayDescriptor ? this._rules.bayDescriptor(bayId) : null;
-    if (!bay || !Number.isInteger(bay.capacity)) return null;
-    const held = this.getAll().filter(s => s.bayId === bayId && s.state !== 'DROPPED' && s.stripId !== strip.stripId);
-    if (held.length < bay.capacity) return null;
-    return {
-      reason: 'VALIDATION_ERROR',
-      detail: `${bayId} holds ${bay.capacity} Strip${bay.capacity === 1 ? '' : 's'} at a time and ${held[0].callsign || held[0].stripId} is in it`,
-    };
   }
 
   /**
@@ -1337,10 +971,7 @@ class BoardStore {
       // ack/broadcast cycle has one consistent rev to key off per Strip,
       // rather than building a fully separate FDR-level optimistic-
       // concurrency protocol on the wire. See the implementation plan.
-      strip.rev += 1;
-      strip.updatedAt = this._clock.now();
-      strip.updatedBy = by || null;
-      this._touch(strip.stripId);
+      this._state.bump(strip, by);
       const marsaVoided = this._marsaVoidFor(strip, op, by, actingPositionId, clientMutationId);
       return {
         ok: true, strip, fdr: fdrResult.fdr, warning: fdrResult.warning,
@@ -1356,10 +987,7 @@ class BoardStore {
     if (target.kind === 'carrier') {
       const fdrResult = this._fdrStore.setCarrier(strip.fdrId, target.field, op.value, { by });
       if (!fdrResult.ok) return { ok: false, reason: fdrResult.reason, detail: fdrResult.detail, strip };
-      strip.rev += 1;
-      strip.updatedAt = this._clock.now();
-      strip.updatedBy = by || null;
-      this._touch(strip.stripId);
+      this._state.bump(strip, by);
       return { ok: true, strip, fdr: fdrResult.fdr };
     }
 
@@ -1370,10 +998,7 @@ class BoardStore {
       const fdrResult = this._fdrStore.setClearance(strip.fdrId, target.field,
         { value: op.value, confirmVacated: !!op.confirmVacated }, { by });
       if (!fdrResult.ok) return { ok: false, reason: fdrResult.reason, detail: fdrResult.detail, strip };
-      strip.rev += 1;
-      strip.updatedAt = this._clock.now();
-      strip.updatedBy = by || null;
-      this._touch(strip.stripId);
+      this._state.bump(strip, by);
       const marsaVoided = this._marsaVoidFor(strip, op, by, actingPositionId, clientMutationId);
       return {
         ok: true, strip, fdr: fdrResult.fdr,
@@ -1421,15 +1046,12 @@ class BoardStore {
       cell.entries.push({ value, status: 'ACTIVE', at: this._clock.now(), by: by || null });
     }
 
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
     return { ok: true, strip };
   }
 
   _applyTransferStrip(strip, op, by) {
-    const bayCheck = this._requireKnownBay(op.bayId, strip);
+    const bayCheck = this._placement.requireKnownBay(op.bayId, strip);
     if (bayCheck) return bayCheck;
     // H2 / H40 (docs/adr/0080): a working Position with a hand-back row may
     // transfer a line only to the Positions the capability table names. The
@@ -1459,9 +1081,9 @@ class BoardStore {
     // (e.g. PROPOSED directly into a CLEARED Bay with no flight plan and
     // no beacon code at all). Validated before the owner/occupancy checks
     // below too, so a rejected transfer never partially mutates the Strip.
-    const check = this._validateBayImpliedTransition(strip, op.bayId, op.rackId);
+    const check = this._placement.validateBayImpliedTransition(strip, op.bayId, op.rackId);
     if (!check.ok) return { ok: false, reason: check.reason, detail: check.detail, strip };
-    const full = this._bayFullRefusal(op.bayId, strip);
+    const full = this._placement.bayFullRefusal(op.bayId, strip);
     if (full) return { ok: false, reason: full.reason, detail: full.detail, strip };
 
     let destPositionId = op.toPositionId;
@@ -1493,26 +1115,23 @@ class BoardStore {
     strip.ownerPositionId = destPositionId;
     delete strip.coveredFrom; // it has a new owner by decision, not by cover (F10)
     if (check.impliedState && check.impliedState !== strip.state) strip.state = check.impliedState;
-    const routedBay = routedTo ? this._bayForNewOwner(destPositionId, strip.state, strip) : null;
+    const routedBay = routedTo ? this._placement.bayForNewOwner(destPositionId, strip.state, strip) : null;
     if (routedBay) {
       // B3: routed to the covering Position, so the line lands in ITS Bay, not
       // the absent Position's (which no panel of the covering one builds).
       strip.bayId = routedBay.bayId;
       strip.rackId = routedBay.rackId;
-      strip.orderKey = this._appendOrderKey(strip.bayId, strip.rackId, strip.stripId);
+      strip.orderKey = this._placement.appendOrderKey(strip.bayId, strip.rackId, strip.stripId);
     } else {
       strip.bayId = op.bayId;
       strip.rackId = op.rackId;
-      strip.orderKey = this._resolveOrderKey(op.bayId, op.rackId, op.afterStripId || null, op.beforeStripId || null, strip.stripId);
+      strip.orderKey = this._placement.resolveOrderKey(op.bayId, op.rackId, op.afterStripId || null, op.beforeStripId || null, strip.stripId);
       if (routedTo) warning = `${routedTo} has no Bay for this Strip; it stays in ${op.bayId}`;
     }
 
     const sfaFdr = routedBay ? null : this._assignSfaFrequency(strip, by);
 
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
     // A pending Undo window (§3.5 rule 5) is for reverting a STATE change —
     // once ownership has also moved, "revert the state" no longer means
     // what it did when it was recorded (the Strip may now be under a
@@ -1592,16 +1211,16 @@ class BoardStore {
     delete strip.coveredFrom; // a new owner by decision, not by cover (F10)
     let warning;
     if (dest !== from.ownerPositionId) {
-      const bay = this._bayForNewOwner(dest, strip.state, strip);
+      const bay = this._placement.bayForNewOwner(dest, strip.state, strip);
       if (bay) {
         strip.bayId = bay.bayId;
         strip.rackId = bay.rackId;
-        strip.orderKey = this._appendOrderKey(bay.bayId, bay.rackId, strip.stripId);
+        strip.orderKey = this._placement.appendOrderKey(bay.bayId, bay.rackId, strip.stripId);
       } else {
         warning = `${dest} has no Bay for this Strip; it stays in ${strip.bayId}`;
       }
     } else {
-      this._relocateForImpliedState(strip, strip.state);
+      this._placement.relocateForImpliedState(strip, strip.state);
     }
     strip.carrierTransfer = {
       kind, trigger: row ? row.trigger : null, label, at: now, by: by || null,
@@ -1650,7 +1269,7 @@ class BoardStore {
     if (!bay || bay.impliesState !== fx.toState) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `${dest} has no Bay for ${fx.toState}`, strip };
     }
-    const full = this._bayFullRefusal(bay.bayId, strip);
+    const full = this._placement.bayFullRefusal(bay.bayId, strip);
     if (full) return { ok: false, reason: full.reason, detail: full.detail, strip };
 
     const now = this._clock.now();
@@ -1660,8 +1279,8 @@ class BoardStore {
     strip.ownerPositionId = dest;
     delete strip.coveredFrom; // a new owner by decision, not by cover (F10)
     strip.bayId = bay.bayId;
-    strip.rackId = this._placementRack(strip, bay);
-    strip.orderKey = this._appendOrderKey(strip.bayId, strip.rackId, strip.stripId);
+    strip.rackId = this._placement.placementRack(strip, bay);
+    strip.orderKey = this._placement.appendOrderKey(strip.bayId, strip.rackId, strip.stripId);
     strip.sfaTransfer = {
       kind: 'SFA_ROTATION', trigger: fx.trigger, label: fx.label, at: now, by: by || null,
       from: from.ownerPositionId, to: dest, fromRole: from.role, toRole: strip.role, frequencyRackId: from.rackId,
@@ -1677,73 +1296,8 @@ class BoardStore {
   _applySetFlag(strip, op, by) {
     if (!FLAG_KEYS.includes(op.flag)) return { ok: false, reason: 'VALIDATION_ERROR', strip };
     strip.flags[op.flag] = op.value;
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
     return { ok: true, strip };
-  }
-
-  /**
-   * The key that puts a Strip at the END of a Rack, the way _applyCreateStrip
-   * places a new one. keyBetween(null, null) is NOT this — it returns the
-   * seed key, which lands mid-Rack once anything else is in there.
-   */
-  _appendOrderKey(bayId, rackId, excludeStripId) {
-    const rackStrips = this.getRack(bayId, rackId).filter(s => s.stripId !== excludeStripId);
-    const last = rackStrips.length ? rackStrips[rackStrips.length - 1].stripId : null;
-    return this._resolveOrderKey(bayId, rackId, last, null, excludeStripId);
-  }
-
-  /**
-   * The Bay a Strip in `state` sits in when `positionId` becomes its owner
-   * without choosing one (docs/adr/0080, B3): the owner's Bay that implies the
-   * state; else its first Bay that implies none (its coordination-style Bay);
-   * else null, and the caller keeps the current Bay and says so. The rack is
-   * the placement rule's (a runway queue's end), as for every other placement.
-   * @returns {{bayId:string, rackId:string}|null}
-   */
-  _bayForNewOwner(positionId, state, strip = null) {
-    const bays = this._rules.baysFor ? this._rules.baysFor(positionId) : [];
-    const roleBay = strip ? bays.find(b => b.holdsRole === strip.role) : null;
-    if (roleBay) return { bayId: roleBay.bayId, rackId: this._placementRack(strip, roleBay) };
-    // Never another Role's Bay (`holdsRole`, docs/adr/0087): a Role Bay implies no state, so the
-    // "first Bay implying none" fallback used to pick app-overflight for a DEPARTURE.
-    const bay = bays.find(b => b.impliesState === state) || bays.find(b => !b.impliesState && !b.holdsRole) || null;
-    if (!bay) return null;
-    return { bayId: bay.bayId, rackId: strip ? this._placementRack(strip, bay) : bay.rackIds[0] };
-  }
-
-  /**
-   * Moves a Strip into its owner's Bay for a state it has just reached, when
-   * that Position has one configured (guide §2, "Bay membership expresses
-   * operational state"; §3.5 rule 4).
-   *
-   * A state-only transition used to change `state` and nothing else, so Mark
-   * Cleared left the Strip in `cd-pending-clearance` reading CLEARED while
-   * `cd-cleared` stayed empty, and the same at GND (`gnd-taxi-out`) and TWR
-   * (`twr-airborne`) — the Bay name and the Strip contradicting each other
-   * (docs/ui-findings/lane1.md F-102). The config already asserts the
-   * equivalence in the other direction: dragging INTO one of these Bays
-   * changes the state (_validateBayImpliedTransition), so the Bay means the
-   * state whichever way the Strip got there.
-   *
-   * Nothing happens when this owner has no Bay for the state — LUAW is the
-   * live example, and TWR's Strip correctly stays in `twr-runway-queue`.
-   * `bayForImpliedState` FALLS BACK to the Position's first Bay when nothing
-   * matches (facility-config.js), which is what a transfer wants and is
-   * exactly wrong here: it would file a Strip reaching LUAW back under
-   * `twr-runway-queue`'s own implied RUNWAY_QUEUE. Hence the explicit
-   * `impliesState` re-check rather than trusting the lookup.
-   */
-  _relocateForImpliedState(strip, toState) {
-    if (!this._rules.bayForImpliedState) return;
-    if (this._roleBayFor(strip)) return; // its Bay holds it in every state (docs/adr/0087)
-    const bay = this._rules.bayForImpliedState(strip.ownerPositionId, toState);
-    if (!bay || bay.impliesState !== toState || bay.bayId === strip.bayId) return;
-    strip.bayId = bay.bayId;
-    strip.rackId = this._placementRack(strip, bay);
-    strip.orderKey = this._appendOrderKey(bay.bayId, strip.rackId, strip.stripId);
   }
 
   /**
@@ -1775,15 +1329,12 @@ class BoardStore {
     // back on final while another aircraft is on it) is refused, not silently doubled.
     const into = this._rules.bayForImpliedState ? this._rules.bayForImpliedState(strip.ownerPositionId, toState) : null;
     if (into && into.impliesState === toState && into.bayId !== strip.bayId) {
-      const full = this._bayFullRefusal(into.bayId, strip);
+      const full = this._placement.bayFullRefusal(into.bayId, strip);
       if (full) return { ok: false, reason: full.reason, detail: full.detail, strip };
     }
     strip.state = toState;
-    this._relocateForImpliedState(strip, toState);
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._placement.relocateForImpliedState(strip, toState);
+    this._state.bump(strip, by);
     return { ok: true, strip };
   }
 
@@ -1892,7 +1443,7 @@ class BoardStore {
    * Three op kinds stay allowed, because each already enforces the rule
    * itself and each is how a dead replica gets cleared away: DropStrip,
    * InvokeNla (which _rejectedReplicaRefusal limits to DROPPED), and
-   * MoveStrip (which _validateBayImpliedTransition refuses into any Bay that
+   * MoveStrip (which Placement.validateBayImpliedTransition refuses into any Bay that
    * would change the Strip's state — moving it aside is fine).
    *
    * MARSA and correlation are flight-level and never reach _dispatch; the
@@ -1926,7 +1477,7 @@ class BoardStore {
   nlaStatusFor(strip, now = this._clock.now()) {
     if (!strip || !this._rules.computeNla) return null;
     const fdr = this._fdrStore.getFdr(strip.fdrId);
-    const result = this._rules.computeNla(strip, fdr, now, this._nlaCtx());
+    const result = this._rules.computeNla(strip, fdr, now, this._placement.nlaCtx());
     // No NLA at all for this State (every Role's terminal DROPPED) — null, not
     // a reason. _applyInvokeNla runs the precheck FIRST and so answers a press
     // on a terminal Strip with whichever precheck refusal comes up; that is
@@ -1978,7 +1529,7 @@ class BoardStore {
     if (blocked) return { ok: false, reason: blocked.reason, detail: blocked.detail, strip };
 
     const fdr = this._fdrStore.getFdr(strip.fdrId);
-    const result = this._rules.computeNla(strip, fdr, now, this._nlaCtx());
+    const result = this._rules.computeNla(strip, fdr, now, this._placement.nlaCtx());
     if (!result || result.inhibited) {
       return { ok: false, reason: 'NLA_INHIBITED', detail: result ? result.inhibited : 'no NLA for this state', strip };
     }
@@ -2008,7 +1559,7 @@ class BoardStore {
       if (!targetBay) {
         return { ok: false, reason: 'NLA_INHIBITED', detail: `no Bay configured for ${result.transferTo}/${result.toState}`, strip };
       }
-      applied = this._applyTransferStrip(strip, { toPositionId: result.transferTo, bayId: targetBay.bayId, rackId: this._placementRack(strip, targetBay) }, by);
+      applied = this._applyTransferStrip(strip, { toPositionId: result.transferTo, bayId: targetBay.bayId, rackId: this._placement.placementRack(strip, targetBay) }, by);
     } else if (result.toState === 'DROPPED') {
       // Every Role's terminal NLA is a Drop (DEPARTURE at HANDED_OFF,
       // ARRIVAL at TAXI_IN, OVERFLIGHT at HANDED_OFF, MISSION at RTB), and
@@ -2097,10 +1648,7 @@ class BoardStore {
     strip.state = 'DROPPED';
     this._droppedWallAt.set(strip.stripId, Date.now()); // the archive's clock, docs/adr/0082
     strip.flags.removeIndicator = true; // distinct from delete (§3.4) — Strip stays queryable, see getRack()
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
     // `marsaChanged` rather than `marsaVoided`: this is a flight ENDING, not a
     // clearance voiding a relation, and the two must not render as the same
     // thing. A tanker landing mid-AR leaves the relation `ENDED` with
@@ -2159,1020 +1707,30 @@ class BoardStore {
     return this._rules.retireMarsaForFdr ? this._rules.retireMarsaForFdr(strip.fdrId, by) : null;
   }
 
-  // ── WP4A: cross-Facility coordination (guide §4.6, docs/adr/0013-0018) ──
-  //
-  // "The Strip does not cross the Facility boundary... one logical FDR, N
-  // per-Facility Strip replicas" (guide §4.6, defect D13 if built as a
-  // move). Concretely: this BoardStore instance is one Facility's Board
-  // (index.js's composition root now constructs one {BoardStore,
-  // PositionStore} pair PER Facility — see docs/adr/0013). A coordination
-  // primitive's PROPOSE action mutates the SENDER's own existing Strip
-  // (ownership-gated exactly like every other op — _dispatch's existing
-  // NOT_OWNER check already covers it) and, on success, calls a public
-  // method on the RECEIVING Facility's own BoardStore instance
-  // (`rules.peerBoard(facilityId)`) to mint a brand-new, independent Strip
-  // object there. From that point the two replicas are two rows in two
-  // separate `_strips` Maps, linked only by `coordination.peerStripId`/
-  // `peerFacilityId` — never a shared identity, never one object moved.
-  // Independent removability (a WP4A acceptance criterion) falls out of
-  // this for free: _applyDropStrip on one instance structurally cannot
-  // reach the other instance's Map at all.
+  // ── Peer calls (rules.peerBoard) ────────────────────────────────────────
+  // A peer Facility's Board calls these on THIS facade; the work is board/coordination.js and board/tofi.js.
+  // They stay own methods because the soak host wraps them by name (tools/soak/host-core.js).
 
-  /**
-   * @param {object} strip — the Strip this Mutation targets (already
-   *   verified by _dispatch to be owned by actingPositionId)
-   * @param {{kind:string, action:'PROPOSE'|'ACCEPT'|'REJECT', toFacilityId?:string, toPositionId?:string, note?:string}} op
-   */
-  _applyCoordinationOp(strip, op, by, actingPositionId) {
-    switch (op.action) {
-      case 'PROPOSE':  return this._applyCoordinationPropose(strip, op, by, actingPositionId);
-      case 'ACCEPT':   return this._applyCoordinationAccept(strip, op, by, actingPositionId);
-      case 'REJECT':   return this._applyCoordinationReject(strip, op, by, actingPositionId);
-      // OPERATIONAL_REQUEST's 3-way response (guide §4.6: APPROVED/UNABLE/
-      // STAND BY) — ACCEPT/REJECT already cover APPROVED/UNABLE
-      // semantically (coordination.js's acceptPhrase:'APPROVED'), so
-      // STAND_BY is the only genuinely new action, and only valid for that
-      // one primitive (docs/adr/0022).
-      case 'STAND_BY': return this._applyCoordinationStandBy(strip, op, by);
-      // The proposer's own way out of its own exchange (U7, docs/adr/0080).
-      case 'CANCEL':   return this._applyCoordinationCancel(strip, op, by);
-      default:         return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown coordination action: ${op.action}`, strip };
-    }
-  }
+  /** Proposer cancelled (board/coordination.js). */
+  receiveCoordinationCancel(args) { return this._coordination.receiveCoordinationCancel(args); }
 
-  _applyCoordinationPropose(strip, op, by, actingPositionId) {
-    const primitive = op.kind;
-    const effect = this._rules.coordinationEffect ? this._rules.coordinationEffect(primitive) : null;
-    if (!effect) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown coordination primitive: ${primitive}`, strip };
+  /** The receiver's replica reached DROPPED (board/coordination.js). */
+  receiveCoordinationPeerGone(args) { return this._coordination.receiveCoordinationPeerGone(args); }
 
-    // AIT is configuration, not a default (guide §4.6 rule 7, docs/adr/0022)
-    // — every other primitive is always available to APP/CTR; AIT alone
-    // additionally requires a written directive on file for this Facility.
-    if (primitive === 'AIT' && !this._rules.aitAuthorized) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: "AIT requires a written directive — not authorized in this Facility's configuration", strip };
-    }
+  /** A coordination primitive was PROPOSEd against this Facility (board/coordination.js). */
+  receiveCoordinationProposal(args) { return this._coordination.receiveCoordinationProposal(args); }
 
-    // Which (role, state) a Strip must be in to propose ANY of the 5
-    // primitives (docs/adr/0022) — the mirror of this check the client
-    // performs proactively in bay-view.js's _canProposeCoordination; this
-    // is the authoritative half, since the client's is only a convenience
-    // gate. Only the (role, state) combos a receiving Facility actually has
-    // a landing Bay configured for are eligible — see coordination.js.
-    if (this._rules.coordinationEligibleState && this._rules.coordinationEligibleState(strip.role) !== strip.state) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: `a ${strip.role} Strip may not propose coordination from state ${strip.state}`, strip };
-    }
+  /** The receiver ACCEPTed, REJECTed or stood by (board/coordination.js). */
+  receiveCoordinationResponse(args) { return this._coordination.receiveCoordinationResponse(args); }
 
-    if (strip.coordination && (strip.coordination.state === 'PROPOSED' || strip.coordination.state === 'ACTIVE')) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'this Strip already has an open coordination link', strip };
-    }
-    // A Strip currently sitting in ITS OWNER'S Coordination Bay is always
-    // the RECEIVER-side replica/proposal artifact, never a legitimate
-    // flight record to propose FROM — accept relocates a Strip OUT of the
-    // Coordination Bay (_applyCoordinationAccept), so one still there is
-    // either awaiting a response (already caught above) or REJECTED and
-    // left inert. Bug found in live testing: without this, a rejected
-    // receiver-side replica could re-propose right back to its own
-    // sender, minting a spurious third replica. Authoritative half of
-    // bay-view.js's _canProposeCoordination client-side gate.
-    const ownCoordinationBay = this._rules.coordinationBayFor ? this._rules.coordinationBayFor(strip.ownerPositionId) : null;
-    if (ownCoordinationBay && strip.bayId === ownCoordinationBay.bayId) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'this Strip is a coordination replica, not a flight record you can propose coordination from', strip };
-    }
-    if (!op.toFacilityId || !op.toPositionId) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'toFacilityId and toPositionId are required', strip };
-    }
-    if (op.toFacilityId === this._rules.facilityId) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'coordination target must be a different Facility', strip };
-    }
-    const peer = this._rules.peerBoard ? this._rules.peerBoard(op.toFacilityId) : null;
-    if (!peer) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown Facility: ${op.toFacilityId}`, strip };
+  /** A TOFI ENTRY was proposed against this Facility (board/tofi.js). */
+  receiveTofiProposal(args) { return this._tofi.receiveTofiProposal(args); }
 
-    // Track-degradation soft interlock (guide §4.6 rule 5): CST/FAIL/IF/NT/
-    // TRK force verbal coordination; a non-empty note is the electronic
-    // stand-in for "verbal coordination occurred" (docs/adr/0019).
-    const fdr = this._fdrStore.getFdr(strip.fdrId);
-    const degraded = fdr && fdr.identity.trackDegradationFlag && fdr.identity.trackDegradationFlag !== 'NONE';
-    if (degraded && !op.note) {
-      return {
-        ok: false, reason: 'VALIDATION_ERROR',
-        detail: `track degradation (${fdr.identity.trackDegradationFlag}) forces verbal coordination — a note is required`,
-        strip,
-      };
-    }
+  /** A TOFI EXIT was proposed against this Facility (board/tofi.js). */
+  receiveTofiExitProposal(args) { return this._tofi.receiveTofiExitProposal(args); }
 
-    const now = this._clock.now();
-    const proposal = peer.receiveCoordinationProposal({
-      causedBy: this._activeCmid, primitive, fromFacilityId: this._rules.facilityId, fromPositionId: actingPositionId,
-      fromStripId: strip.stripId, toPositionId: op.toPositionId, fdrId: strip.fdrId,
-      fromRole: strip.role, fromState: strip.state,
-      note: op.note || null, by,
-    });
-    if (!proposal.ok) return { ok: false, reason: proposal.reason || 'VALIDATION_ERROR', detail: proposal.detail, strip };
-
-    strip.coordination = {
-      primitive,
-      state: 'PROPOSED',
-      peerFacilityId: op.toFacilityId,
-      peerStripId: proposal.strip.stripId,
-      peerPositionId: op.toPositionId,
-      // Jurisdiction stays with the initiator until (and unless) ACCEPT
-      // moves it — guide §4.6's table, modelled as two independent refs
-      // because POINT_OUT is the one primitive where they split (rule 1).
-      dataOwnerPositionRef: { facilityId: this._rules.facilityId, positionId: actingPositionId },
-      separationResponsibilityRef: { facilityId: this._rules.facilityId, positionId: actingPositionId },
-      radarIdTransferred: false,
-      commsTransferred: false,
-      lastForwardedEtaUtc: fdr ? fdr.filed.estimatedArrivalTimeUtc : null,
-      note: op.note || null,
-      initiatedAt: now, initiatedBy: by || null,
-      acceptedAt: null, acceptedBy: null,
-      lastStandByAt: null, // OPERATIONAL_REQUEST-only (docs/adr/0022) — stamped by _applyCoordinationStandBy
-    };
-    strip.rev += 1;
-    strip.updatedAt = now;
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
-    // Bug found in live testing: receiveCoordinationProposal mints a real
-    // Strip in the PEER Facility's own BoardStore (a live-in-memory side
-    // effect, correct), but nothing surfaced that to efsp-ws.js — meaning
-    // no connected client was ever told about it over the wire. Only a
-    // full resync (reconnect) would ever pick it up. peerFacilityId/
-    // peerStrip let _handleMutation broadcast a SECOND efsp-board-delta,
-    // scoped to the peer Facility, alongside the normal one for this side.
-    return { ok: true, strip, peerFacilityId: op.toFacilityId, peerStrip: proposal.strip };
-  }
-
-  _applyCoordinationAccept(strip, op, by, actingPositionId) {
-    if (!strip.coordination || strip.coordination.state !== 'PROPOSED') {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no pending coordination proposal on this Strip', strip };
-    }
-    const effect = this._rules.coordinationEffect ? this._rules.coordinationEffect(strip.coordination.primitive) : null;
-    if (!effect) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown coordination primitive: ${strip.coordination.primitive}`, strip };
-
-    const now = this._clock.now();
-    strip.coordination.state = 'ACTIVE';
-    strip.coordination.radarIdTransferred = effect.radarIdTransfers;
-    strip.coordination.commsTransferred = effect.commsTransfers;
-    strip.coordination.acceptedAt = now;
-    strip.coordination.acceptedBy = by || null;
-    if (effect.dataOwnershipMoves) {
-      strip.coordination.dataOwnerPositionRef = { facilityId: this._rules.facilityId, positionId: actingPositionId };
-    }
-    if (effect.separationResponsibilityMoves) {
-      strip.coordination.separationResponsibilityRef = { facilityId: this._rules.facilityId, positionId: actingPositionId };
-    }
-
-    // Move the Strip out of the Coordination Bay into the receiving
-    // Position's normal working Bay for whatever (role, state) it was
-    // already minted with (docs/adr/0022) — the replica's state was set
-    // correctly by receiveCoordinationProposal already; accept only
-    // relocates it, it never advances the state itself.
-    const targetBay = this._roleBayFor(strip) || (this._rules.bayForImpliedState ? this._rules.bayForImpliedState(strip.ownerPositionId, strip.state) : null);
-    if (targetBay) {
-      strip.bayId = targetBay.bayId;
-      strip.rackId = this._placementRack(strip, targetBay);
-      strip.orderKey = this._resolveOrderKey(targetBay.bayId, strip.rackId, null, null, strip.stripId);
-    }
-    strip.rev += 1;
-    strip.updatedAt = now;
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
-
-    // Tell the peer their sender-side Strip is now ACTIVE too — both
-    // replicas agree the exchange is live; each proceeds independently
-    // from here (D13's "independently removable" acceptance criterion).
-    // Its return value is captured (previously discarded) for the same
-    // reason _applyCoordinationPropose's is — see that method's comment.
-    const peerFacilityId = strip.coordination.peerFacilityId;
-    let peerStrip = null;
-    if (this._rules.peerBoard) {
-      const peer = this._rules.peerBoard(peerFacilityId);
-      if (peer) {
-        const peerResult = peer.receiveCoordinationResponse({ causedBy: this._activeCmid, stripId: strip.coordination.peerStripId, response: 'ACCEPT', by });
-        if (peerResult.ok) peerStrip = peerResult.strip;
-      }
-    }
-    return { ok: true, strip, peerFacilityId, peerStrip };
-  }
-
-  _applyCoordinationReject(strip, op, by) {
-    if (!strip.coordination || strip.coordination.state !== 'PROPOSED') {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no pending coordination proposal on this Strip', strip };
-    }
-    strip.coordination.state = 'REJECTED';
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
-
-    const peerFacilityId = strip.coordination.peerFacilityId;
-    let peerStrip = null;
-    if (this._rules.peerBoard) {
-      const peer = this._rules.peerBoard(peerFacilityId);
-      if (peer) {
-        const peerResult = peer.receiveCoordinationResponse({ causedBy: this._activeCmid, stripId: strip.coordination.peerStripId, response: 'REJECT', by });
-        if (peerResult.ok) peerStrip = peerResult.strip;
-      }
-    }
-    return { ok: true, strip, peerFacilityId, peerStrip };
-  }
-
-  /**
-   * The proposer cancels, or closes, its own exchange (U7, docs/adr/0080). A
-   * link on the proposer's Strip that the other side can no longer answer — the
-   * receiver dropped its replica, its Position is unmanned, a proposal nobody
-   * will get to — used to be unreachable: the guards that keep an open link
-   * honest (no Drop, no Convert, no second proposal, no NLA) also kept the
-   * proposer from ever leaving it. Legal for any state of the link, on the
-   * proposer's Strip only; the receiver answers with ACCEPT/REJECT instead.
-   * Returns the Strip to no coordination (audited, like any Mutation), and
-   * whatever the peer still holds of it: an unanswered or refused replica is
-   * retired, an accepted one simply loses its link.
-   */
-  _applyCoordinationCancel(strip, op, by) {
-    if (!strip.coordination) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no coordination link on this Strip to cancel', strip };
-    }
-    if (strip.coordination.mintedForCoordination) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'only the proposer can cancel; answer the proposal with ACCEPT or REJECT', strip };
-    }
-    const link = strip.coordination;
-    let peerStrip = null;
-    if (this._rules.peerBoard) {
-      const peer = this._rules.peerBoard(link.peerFacilityId);
-      if (peer) {
-        const r = peer.receiveCoordinationCancel({ causedBy: this._activeCmid, stripId: link.peerStripId, by });
-        if (r.ok && r.strip) peerStrip = r.strip;
-      }
-    }
-    strip.coordination = null;
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
-    return { ok: true, strip, peerFacilityId: link.peerFacilityId, peerStrip };
-  }
-
-  /**
-   * The proposer cancelled (called through rules.peerBoard): whatever this
-   * side holds of the exchange ends. An unanswered or refused replica is a
-   * proposal artifact and is retired; an accepted one is the receiver's working
-   * Strip for the flight, so only its link goes.
-   * @returns {{ok:true, strip:object|null}} strip null when there was nothing left to change
-   */
-  receiveCoordinationCancel({ stripId, by, causedBy }) {
-    const strip = this._strips.get(stripId);
-    if (!strip || strip.state === 'DROPPED' || !strip.coordination) return { ok: true, strip: null };
-    const before = deepClone(strip);
-    const fromFacilityId = strip.coordination.peerFacilityId;
-    if (strip.coordination.state === 'ACTIVE') {
-      strip.coordination = null;
-      strip.rev += 1;
-      strip.updatedAt = this._clock.now();
-      strip.updatedBy = by || null;
-      this._touch(strip.stripId);
-    } else {
-      strip.coordination = null; // so the retire below does not try to tell the proposer back
-      this._retireStrip(strip, by);
-    }
-    this._recordPeer('PeerCoordinationCancel', strip, before, { causedBy, fromFacilityId, by });
-    return { ok: true, strip };
-  }
-
-  /**
-   * The receiver's replica reached DROPPED (called through rules.peerBoard):
-   * an exchange still PROPOSED or ACTIVE ends on the proposer's Strip, which
-   * would otherwise carry a link nobody can answer for good (U7). Audited as a
-   * system change, like a covering reassignment.
-   * @returns {{ok:boolean, strip?:object}}
-   */
-  receiveCoordinationPeerGone({ stripId, goneStripId, causedBy }) {
-    const strip = this._strips.get(stripId);
-    const link = strip && strip.coordination;
-    if (!link || link.peerStripId !== goneStripId || (link.state !== 'PROPOSED' && link.state !== 'ACTIVE')) return { ok: false };
-    const before = deepClone(strip);
-    strip.coordination = null;
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = null;
-    this._touch(strip.stripId);
-    if (this._mutationLog) {
-      this._mutationLog.record({
-        clientMutationId: null, op: 'SystemCoordinationEnd', stripId: strip.stripId,
-        facilityId: this._rules.facilityId || null, fdrId: strip.fdrId || null,
-        actingPositionId: null, actorId: 'system', at: this._clock.now(),
-        before, after: deepClone(strip), reason: 'peer-dropped', causedBy: causedBy || null,
-      });
-    }
-    return { ok: true, strip };
-  }
-
-  /**
-   * OPERATIONAL_REQUEST's third response (guide §4.6, docs/adr/0022) — the
-   * request is still under consideration, not resolved either way.
-   * Deliberately does NOT touch strip.coordination.state (stays PROPOSED);
-   * only stamps a timestamp both sides can show so the requester sees the
-   * request wasn't silently dropped.
-   */
-  _applyCoordinationStandBy(strip, op, by) {
-    if (!strip.coordination || strip.coordination.state !== 'PROPOSED') {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no pending coordination proposal on this Strip', strip };
-    }
-    if (strip.coordination.primitive !== 'OPERATIONAL_REQUEST') {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'STAND_BY only applies to OPERATIONAL_REQUEST', strip };
-    }
-    strip.coordination.lastStandByAt = this._clock.now();
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
-
-    const peerFacilityId = strip.coordination.peerFacilityId;
-    let peerStrip = null;
-    if (this._rules.peerBoard) {
-      const peer = this._rules.peerBoard(peerFacilityId);
-      if (peer) {
-        const peerResult = peer.receiveCoordinationResponse({ causedBy: this._activeCmid, stripId: strip.coordination.peerStripId, response: 'STAND_BY', by });
-        if (peerResult.ok) peerStrip = peerResult.strip;
-      }
-    }
-    return { ok: true, strip, peerFacilityId, peerStrip };
-  }
-
-  /**
-   * Called by the SENDING Facility's BoardStore (via rules.peerBoard) when
-   * a coordination primitive is PROPOSEd against it — mints a brand-new,
-   * independent Strip in THIS Facility's own `_strips` Map, landing in the
-   * receiving Position's Coordination Bay. This is the actual "two
-   * replicas" mechanism (guide §4.6/D13): a new object, a new stripId, a
-   * new orderKey within this Board — never the sender's Strip relocated.
-   * Bypasses the normal ownership/baseRev/ordinary-permission gates
-   * entirely, same justification as reassignPositionStrips(): there is no
-   * controller "sending into" this Board from the inside to check against;
-   * the only gate that matters is which Bay the receiving Position has
-   * configured to accept it (coordinationBayFor — absent means refused).
-   *
-   * `fromRole`/`fromState` (docs/adr/0022) — the replica is minted with the
-   * SENDER's own Strip Role/EfspState, not a hardcoded ARRIVAL/INBOUND
-   * shape. `_applyCoordinationPropose` already validated the sender's
-   * (role, state) is one of coordination.js's COORDINATION_ELIGIBLE_STATES
-   * combos, so nothing further to check here.
-   * @returns {{ok:true, strip}|{ok:false, reason, detail}}
-   */
-  receiveCoordinationProposal({ primitive, fromFacilityId, fromPositionId, fromStripId, toPositionId, fdrId, fromRole, fromState, note, by, causedBy }) {
-    const fdr = this._fdrStore.getFdr(fdrId);
-    if (!fdr) return { ok: false, reason: 'NOT_FOUND', detail: 'referenced FDR not found' };
-
-    const coordinationBay = this._rules.coordinationBayFor ? this._rules.coordinationBayFor(toPositionId) : null;
-    if (!coordinationBay) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: `no Coordination Bay configured for ${toPositionId}` };
-    }
-
-    const stripId = crypto.randomUUID();
-    const now = this._clock.now();
-    const rackStrips = this.getRack(coordinationBay.bayId, coordinationBay.rackIds[0]);
-    const afterStripId = rackStrips.length ? rackStrips[rackStrips.length - 1].stripId : null;
-    const orderKey = this._resolveOrderKey(coordinationBay.bayId, coordinationBay.rackIds[0], afterStripId, null, null);
-
-    const strip = {
-      stripId,
-      cid: this._nextCid(),
-      fdrId,
-      rev: 1,
-      // The replica carries the SENDER's own Role/EfspState (docs/adr/0022)
-      // from the moment it's minted, not a separate "not yet accepted"
-      // pseudo-state — coordination.state is what actually tracks
-      // PROPOSED/ACTIVE/REJECTED. fromState is guaranteed to be one of
-      // coordination.js's COORDINATION_ELIGIBLE_STATES combos (checked by
-      // _applyCoordinationPropose before this is ever called), so the
-      // receiving Facility is guaranteed to have a Bay configured for it.
-      role: fromRole,
-      state: (REPLICA_STATE_ON_RECEIPT[fromRole] || {})[fromState] || fromState,
-      ownerPositionId: toPositionId,
-      bayId: coordinationBay.bayId,
-      rackId: coordinationBay.rackIds[0],
-      orderKey,
-      annotations: {},
-      flags: newFlags(),
-      // No `correlation` — it is keyed by fdrId, and a replica shares the
-      // originator's FDR (docs/adr/0013), so it shares the correlation too.
-      // That is the case a per-Strip field got wrong: both halves of a
-      // cross-Facility exchange are looking at one airframe.
-      coordination: {
-        primitive,
-        state: 'PROPOSED',
-        // This Strip exists only because of this exchange — it is the
-        // receiver's replica, not a flight record with a life of its own.
-        // Read by _isRejectedReplica to keep a declined replica inert
-        // wherever it ends up on the Board (F-303); TOFI's `mintedForTofi`
-        // is the same field for the same reason.
-        mintedForCoordination: true,
-        peerFacilityId: fromFacilityId,
-        peerStripId: fromStripId,
-        peerPositionId: fromPositionId,
-        dataOwnerPositionRef: { facilityId: fromFacilityId, positionId: fromPositionId },
-        separationResponsibilityRef: { facilityId: fromFacilityId, positionId: fromPositionId },
-        radarIdTransferred: false,
-        commsTransferred: false,
-        lastForwardedEtaUtc: fdr.filed.estimatedArrivalTimeUtc || null,
-        note: note || null,
-        initiatedAt: now, initiatedBy: by || null,
-        acceptedAt: null, acceptedBy: null,
-        lastStandByAt: null,
-      },
-      createdAt: now, updatedAt: now, updatedBy: by || null,
-    };
-    this._strips.set(stripId, strip);
-    this._touch(stripId);
-    this._recordPeer('PeerCoordinationProposal', strip, null, { causedBy, fromFacilityId, by });
-    return { ok: true, strip };
-  }
-
-  /**
-   * Called by the RECEIVING Facility's BoardStore (via rules.peerBoard)
-   * once its controller has ACCEPTed or REJECTed a proposal — updates the
-   * SENDER's original Strip's coordination record to match, so both
-   * replicas agree on the outcome. Bypasses the ordinary Mutation gates
-   * for the same reason receiveCoordinationProposal does.
-   */
-  receiveCoordinationResponse({ stripId, response, by, causedBy }) {
-    const strip = this._strips.get(stripId);
-    if (!strip || !strip.coordination) return { ok: false, reason: 'NOT_FOUND' };
-    const before = deepClone(strip);
-
-    const now = this._clock.now();
-    if (response === 'ACCEPT') {
-      const effect = this._rules.coordinationEffect ? this._rules.coordinationEffect(strip.coordination.primitive) : null;
-      // docs/adr/0087: a HANDed-OFF overflight has left this sector.
-      const afterAccept = ((SENDER_STATE_ON_ACCEPT[strip.coordination.primitive] || {})[strip.role] || {})[strip.state];
-      if (afterAccept) strip.state = afterAccept;
-      strip.coordination.state = 'ACTIVE';
-      strip.coordination.acceptedAt = now;
-      strip.coordination.acceptedBy = by || null;
-      if (effect) {
-        strip.coordination.radarIdTransferred = effect.radarIdTransfers;
-        strip.coordination.commsTransferred = effect.commsTransfers;
-        if (effect.dataOwnershipMoves) {
-          strip.coordination.dataOwnerPositionRef = { facilityId: strip.coordination.peerFacilityId, positionId: strip.coordination.peerPositionId };
-        }
-        if (effect.separationResponsibilityMoves) {
-          strip.coordination.separationResponsibilityRef = { facilityId: strip.coordination.peerFacilityId, positionId: strip.coordination.peerPositionId };
-        }
-      }
-    } else if (response === 'STAND_BY') {
-      // Doesn't resolve anything — just lets the requester's own Strip
-      // show the request wasn't dropped (docs/adr/0022). state stays
-      // whatever it already was (PROPOSED).
-      strip.coordination.lastStandByAt = now;
-    } else {
-      strip.coordination.state = 'REJECTED';
-    }
-    strip.rev += 1;
-    strip.updatedAt = now;
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
-    this._recordPeer('PeerCoordinationResponse', strip, before, { causedBy, fromFacilityId: strip.coordination.peerFacilityId, by, action: response });
-    return { ok: true, strip };
-  }
-
-  // ── WP4A second slice: TOFI (guide §4.6.3, docs/adr/0025) ───────────────
-  //
-  // A genuinely different sub-protocol from the 5 primitives above, not a
-  // 6th row in the same table — deliberately kept structurally separate:
-  //
-  //  1. TWO independent exchanges over one Strip's life (ENTRY, then EXIT),
-  //     not one-shot — the ATC-side Strip's tofiCoordination re-enters
-  //     PROPOSED for EXIT after ENTRY's already resolved, which the 5
-  //     primitives' "already has an open link, ever" guard would forbid.
-  //  2. Jurisdiction (data ownership, separation responsibility) NEVER
-  //     transfers — the ATC-side Strip stays live and posted throughout
-  //     (rule 2). There is nothing analogous to dataOwnerPositionRef/
-  //     separationResponsibilityRef to move.
-  //  3. A distinct, separate comms-transfer ACTION (guide: "followed by a
-  //     SEPARATE transfer of communications") — not a boolean baked into
-  //     ACCEPT's effect the way commsTransfers is for the 5 primitives.
-  //  4. The receiving side's Strip is a different Strip ROLE (MISSION),
-  //     not a same-role mirror — and it shares the ATC-side Strip's own
-  //     fdrId rather than getting a fresh one (guide §9.8's "bind it to
-  //     the same FDR as any tower Strip for that flight," realized now
-  //     rather than deferred to WP7).
-  //
-  // Both sides of an active exchange carry their own `tofiCoordination`
-  // record (symmetric to `coordination`'s peerFacilityId/peerStripId/
-  // peerPositionId naming) — PROPOSE always originates on the ATC-side
-  // Strip; ACCEPT/REJECT/TRANSFER_COMMS are always invoked on the
-  // MISSION-side Strip (the receiving MRU controller's own record),
-  // mirroring exactly which side acts in the real-world exchange.
-
-  _applyTofiOp(strip, op, by, actingPositionId) {
-    switch (op.action) {
-      case 'PROPOSE':        return this._applyTofiPropose(strip, op, by, actingPositionId);
-      case 'ACCEPT':         return this._applyTofiAccept(strip, op, by);
-      case 'REJECT':         return this._applyTofiReject(strip, op, by);
-      case 'TRANSFER_COMMS': return this._applyTofiTransferComms(strip, op, by);
-      default:                return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown TOFI action: ${op.action}`, strip };
-    }
-  }
-
-  /**
-   * Always invoked on the ATC-side Strip. ENTRY mints a brand-new MISSION
-   * Strip on the target MRU Facility's own Board (receiveTofiProposal,
-   * sharing this Strip's fdrId); EXIT re-enters the SAME already-existing
-   * link (receiveTofiExitProposal), minting nothing new.
-   */
-  _applyTofiPropose(strip, op, by, actingPositionId) {
-    if (op.direction !== 'ENTRY' && op.direction !== 'EXIT') {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'direction must be ENTRY or EXIT', strip };
-    }
-    if (strip.tofiCoordination && strip.tofiCoordination.state === 'PROPOSED') {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'this Strip already has an open TOFI proposal', strip };
-    }
-    // The same open-link guard _nlaPrecheck and _applyConvertToArrival apply.
-    // Without it CTR could open tactical control from a handoff replica it had
-    // not yet accepted — on a flight APP still worked.
-    if (strip.coordination && strip.coordination.state === 'PROPOSED') {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'cannot open a TOFI exchange while a coordination proposal is open — accept or reject it first', strip };
-    }
-
-    const now = this._clock.now();
-
-    if (op.direction === 'ENTRY') {
-      if (strip.tofiCoordination && strip.tofiCoordination.state === 'ACTIVE') {
-        return { ok: false, reason: 'VALIDATION_ERROR', detail: 'tactical control is already active on this Strip', strip };
-      }
-      if (!op.toFacilityId || !op.toPositionId) {
-        return { ok: false, reason: 'VALIDATION_ERROR', detail: 'toFacilityId and toPositionId are required', strip };
-      }
-      if (op.toFacilityId === this._rules.facilityId) {
-        return { ok: false, reason: 'VALIDATION_ERROR', detail: 'TOFI target must be a different Facility', strip };
-      }
-      // TOFI's own (role, state) gate — the 5 primitives have had one since
-      // docs/adr/0022 and TOFI never did, so a controller could open tactical
-      // control on a Strip that was not yet airborne, or on a MISSION Strip
-      // (the Role TOFI itself creates). See coordination.js.
-      if (this._rules.tofiEligibleState) {
-        const required = this._rules.tofiEligibleState(strip.role);
-        if (!required || strip.state !== required) {
-          return { ok: false, reason: 'VALIDATION_ERROR', detail: required
-            ? `a ${strip.role} Strip must be at ${required} to enter tactical control, not ${strip.state}`
-            : `a ${strip.role} Strip can never open a TOFI exchange`, strip };
-        }
-      }
-      if (this._rules.tofiCounterparts) {
-        const allowed = this._rules.tofiCounterparts(actingPositionId) || [];
-        if (!allowed.some(c => c.facilityId === op.toFacilityId && c.positionId === op.toPositionId)) {
-          return { ok: false, reason: 'VALIDATION_ERROR', detail: `${op.toPositionId} is not a valid TOFI counterpart for ${actingPositionId}`, strip };
-        }
-      }
-      const peer = this._rules.peerBoard ? this._rules.peerBoard(op.toFacilityId) : null;
-      if (!peer) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown Facility: ${op.toFacilityId}`, strip };
-
-      // Track-degradation soft interlock (guide §4.6 rule 5), same as the 5
-      // ATC<->ATC primitives (docs/adr/0019) — TOFI is named in the same
-      // §4.6 primitive table this rule sits directly under, so it applies
-      // here too, for both directions.
-      const entryFdr = this._fdrStore.getFdr(strip.fdrId);
-      const entryDegraded = entryFdr && entryFdr.identity.trackDegradationFlag && entryFdr.identity.trackDegradationFlag !== 'NONE';
-      if (entryDegraded && !op.note) {
-        return {
-          ok: false, reason: 'VALIDATION_ERROR',
-          detail: `track degradation (${entryFdr.identity.trackDegradationFlag}) forces verbal coordination — a note is required`,
-          strip,
-        };
-      }
-
-      const proposal = peer.receiveTofiProposal({
-        causedBy: this._activeCmid, fromFacilityId: this._rules.facilityId, fromPositionId: actingPositionId,
-        fromStripId: strip.stripId, toPositionId: op.toPositionId, fdrId: strip.fdrId, note: op.note || null, by,
-      });
-      if (!proposal.ok) return { ok: false, reason: proposal.reason || 'VALIDATION_ERROR', detail: proposal.detail, strip };
-
-      strip.tofiCoordination = {
-        direction: 'ENTRY', state: 'PROPOSED',
-        peerFacilityId: op.toFacilityId, peerStripId: proposal.strip.stripId, peerPositionId: op.toPositionId,
-        commsTransferred: false, commsTransferredAt: null, commsTransferredBy: null,
-        note: op.note || null,
-        initiatedAt: now, initiatedBy: by || null, acceptedAt: null, acceptedBy: null,
-      };
-      strip.rev += 1; strip.updatedAt = now; strip.updatedBy = by || null;
-      this._touch(strip.stripId);
-      return { ok: true, strip, peerFacilityId: op.toFacilityId, peerStrip: proposal.strip };
-    }
-
-    // EXIT — re-enters the existing link; never mints a new Strip.
-    const prior = strip.tofiCoordination;
-    if (!prior || prior.state !== 'ACTIVE') {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no active tactical control to exit', strip };
-    }
-    const peer = this._rules.peerBoard ? this._rules.peerBoard(prior.peerFacilityId) : null;
-    if (!peer) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown Facility: ${prior.peerFacilityId}`, strip };
-
-    const exitFdr = this._fdrStore.getFdr(strip.fdrId);
-    const exitDegraded = exitFdr && exitFdr.identity.trackDegradationFlag && exitFdr.identity.trackDegradationFlag !== 'NONE';
-    if (exitDegraded && !op.note) {
-      return {
-        ok: false, reason: 'VALIDATION_ERROR',
-        detail: `track degradation (${exitFdr.identity.trackDegradationFlag}) forces verbal coordination — a note is required`,
-        strip,
-      };
-    }
-
-    const exitResult = peer.receiveTofiExitProposal({ causedBy: this._activeCmid, stripId: prior.peerStripId, note: op.note || null, by });
-    if (!exitResult.ok) return { ok: false, reason: exitResult.reason || 'VALIDATION_ERROR', detail: exitResult.detail, strip };
-
-    strip.tofiCoordination = {
-      ...prior, direction: 'EXIT', state: 'PROPOSED',
-      commsTransferred: false, commsTransferredAt: null, commsTransferredBy: null,
-      note: op.note || null,
-      initiatedAt: now, initiatedBy: by || null, acceptedAt: null, acceptedBy: null,
-    };
-    strip.rev += 1; strip.updatedAt = now; strip.updatedBy = by || null;
-    this._touch(strip.stripId);
-    return { ok: true, strip, peerFacilityId: prior.peerFacilityId, peerStrip: exitResult.strip };
-  }
-
-  /**
-   * Always invoked on the MISSION-side Strip (the receiving MRU
-   * controller's own record) — ENTRY's accept transitions to ACTIVE; EXIT's
-   * accept transitions to COMPLETE (rule 3: exit is the safety-critical
-   * direction, ATC separation MUST be re-established BEFORE the exchange
-   * completes — enforced here as a hard precondition, not derived as a
-   * side effect of accepting).
-   */
-  _applyTofiAccept(strip, op, by) {
-    const tofi = strip.tofiCoordination;
-    if (!tofi || tofi.state !== 'PROPOSED') {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no pending TOFI proposal on this Strip', strip };
-    }
-    // A soft warning, deliberately NOT a second hard gate beside
-    // separation_regime's. Both fields describe authority over the same
-    // real-world moment, and nothing cross-checked them before — a flight
-    // could return to ATC control with the airspace still booked out to the
-    // using agency. But the two are genuinely separable in real operations
-    // (a MOA can stay hot after one flight leaves it), so this is the §4.6
-    // verbal-path soft-interlock shape, not rule 3's hard precondition.
-    let warning;
-    // The FDR this accept writes, carried out on the result so the ack and the
-    // board-delta actually take it to every connected client. Without it the
-    // regime the MRU controller stated on the accept landed server-side and
-    // reached nobody until they next took a full snapshot — SEP REG read blank
-    // on BOTH pages for the whole of tactical control, which is precisely what
-    // docs/adr/0053 was written to stop (docs/ui-findings/lane3.md F-306,
-    // lane1.md F-111's class).
-    let writtenFdr;
-    if (tofi.direction === 'EXIT') {
-      const fdr = this._fdrStore.getFdr(strip.fdrId);
-      if (!fdr || !fdr.tofi || fdr.tofi.separationRegime !== 'ATC') {
-        return { ok: false, reason: 'VALIDATION_ERROR', detail: 'separation_regime must be set back to ATC before completing a TOFI exit', strip };
-      }
-      if (fdr.airspace && fdr.airspace.owner === 'USING_AGENCY') {
-        warning = 'AIRSPACE_STILL_WITH_USING_AGENCY';
-      }
-    }
-
-    // ENTRY — the MRU controller MUST say under which regime they are taking
-    // the aircraft (docs/adr/0053). Nothing required this before, and
-    // fdr.tofi.separationRegime starts as null, so the whole of tactical
-    // control could run with the FDR saying nothing at all about who was
-    // separating: §4.8.3's "a second controller takes TAC_C2 ten minutes later
-    // and inherits a lie", arriving by a route nobody was watching. It also
-    // failed the EXIT gate below twenty minutes later, with the cause long out
-    // of sight.
-    //
-    // ASKED FOR, never derived. §4.6.3 rule 1 and defect D14 are explicit that
-    // the regime comes from the governing agreement and is not computable from
-    // airspace type or anything else — so the fix is to make the controller
-    // state it, not to guess it.
-    if (tofi.direction === 'ENTRY') {
-      const activeMarsa = this._rules.activeMarsaFor ? this._rules.activeMarsaFor(strip.fdrId) : null;
-      if (activeMarsa) {
-        // The relation owns the regime while it is ACTIVE (docs/adr/0051), and
-        // _applySetBlock refuses a direct SREG write for the same reason.
-        // Accepting tactical control does not change who is separating, so
-        // asking here would offer a choice that cannot be honoured.
-        if (op.separationRegime !== undefined && op.separationRegime !== 'MARSA') {
-          return {
-            ok: false, reason: 'VALIDATION_ERROR',
-            detail: `this flight is in an active MARSA relation declared by ${activeMarsa.declaringCallsign} — it separates itself until that relation ends`,
-            strip,
-          };
-        }
-      } else {
-        if (!SEPARATION_REGIMES.has(op.separationRegime)) {
-          return {
-            ok: false, reason: 'VALIDATION_ERROR',
-            detail: `accepting tactical control requires a separation regime (${[...SEPARATION_REGIMES].join(', ')}) — it comes from the governing agreement and cannot be derived`,
-            strip,
-          };
-        }
-        const wrote = this._fdrStore.setTofi(strip.fdrId, { separationRegime: op.separationRegime }, { by });
-        if (!wrote.ok) return { ok: false, reason: wrote.reason, detail: wrote.detail, strip };
-        writtenFdr = wrote.fdr;
-      }
-    }
-
-    const now = this._clock.now();
-    tofi.state = tofi.direction === 'EXIT' ? 'COMPLETE' : 'ACTIVE';
-    tofi.acceptedAt = now;
-    tofi.acceptedBy = by || null;
-
-    // ENTRY only, and only for a Strip THIS exchange minted — relocate the
-    // MISSION Strip out of the Coordination Bay into its normal working Bay
-    // for its own (already-correct) state, mirroring
-    // _applyCoordinationAccept's relocation pattern. EXIT never moved the
-    // Strip into the Coordination Bay in the first place
-    // (receiveTofiExitProposal doesn't touch bayId/rackId at all), so there's
-    // nothing to relocate back.
-    //
-    // `mintedForTofi` is what makes this safe now that a TOFI can land on a
-    // mission line that already existed (docs/adr/0054). Such a Strip is
-    // sitting in a real working Bay, and relocating it would be actively
-    // wrong: bayForImpliedState FALLS BACK TO bays[0] when no Bay implies the
-    // state (facility-config.js), TAC_C2's bays[0] is `tac-c2-tasked`, and
-    // TAC_C2 has no Bay implying OFF_STATION or RTB — so accepting a TOFI on a
-    // mission line at RTB would file it back under Tasked.
-    //
-    // Recorded at propose time rather than re-derived here by comparing
-    // strip.bayId against coordinationBayFor(): that derives the same answer
-    // until a controller drags the replica somewhere else in between, and then
-    // silently skips a relocation that should have happened.
-    if (tofi.direction === 'ENTRY' && tofi.mintedForTofi) {
-      const targetBay = this._rules.bayForImpliedState ? this._rules.bayForImpliedState(strip.ownerPositionId, strip.state) : null;
-      if (targetBay) {
-        strip.bayId = targetBay.bayId;
-        strip.rackId = targetBay.rackIds[0];
-        strip.orderKey = this._resolveOrderKey(targetBay.bayId, targetBay.rackIds[0], null, null, strip.stripId);
-      }
-    }
-
-    strip.rev += 1; strip.updatedAt = now; strip.updatedBy = by || null;
-    this._touch(strip.stripId);
-
-    let peerStrip = null;
-    if (this._rules.peerBoard) {
-      const peer = this._rules.peerBoard(tofi.peerFacilityId);
-      if (peer) {
-        const peerResult = peer.receiveTofiResponse({ causedBy: this._activeCmid, stripId: tofi.peerStripId, response: 'ACCEPT', by });
-        if (peerResult.ok) peerStrip = peerResult.strip;
-      }
-    }
-    return { ok: true, strip, fdr: writtenFdr, peerFacilityId: tofi.peerFacilityId, peerStrip, warning };
-  }
-
-  /** Always invoked on the MISSION-side Strip, mirroring _applyTofiAccept's own side. */
-  _applyTofiReject(strip, op, by) {
-    const tofi = strip.tofiCoordination;
-    if (!tofi || tofi.state !== 'PROPOSED') {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no pending TOFI proposal on this Strip', strip };
-    }
-    tofi.state = 'REJECTED';
-    // A Strip this exchange minted has no life of its own, so a refused
-    // exchange leaves nothing behind (docs/adr/0054). Without this it lingers
-    // as residue: find-before-mint would then see a MISSION Strip at the
-    // Position that just said no, and refuse the ATC controller's perfectly
-    // reasonable retry to the OTHER counterpart — which
-    // efsp-scenario-military's "the MRU refuses, and the ATC side recovers"
-    // walks, and which caught this.
-    //
-    // A mission line TAC_C2 tasked itself is NOT residue: it existed before
-    // the exchange and outlives it, rejection or not. That is exactly what
-    // `mintedForTofi` distinguishes.
-    //
-    // Retired rather than deleted, so the Mutation log and any client that
-    // already has it see a normal DROPPED transition. The beacon is safe:
-    // _releaseFdrIfLastStrip only releases when no other live Strip shares the
-    // FDR, and the ATC-side Strip is still live by construction here.
-    let retired = null;
-    if (tofi.mintedForTofi) {
-      // Through _retireStrip like every other route to DROPPED (S-L24): the
-      // archive clock, the remove indicator, the beacon release and the MARSA
-      // retirement. Its active-TOFI guard cannot fire (the state is REJECTED).
-      retired = this._retireStrip(strip, by);
-    } else {
-      strip.rev += 1; strip.updatedAt = this._clock.now(); strip.updatedBy = by || null;
-      this._touch(strip.stripId);
-    }
-
-    let peerStrip = null;
-    if (this._rules.peerBoard) {
-      const peer = this._rules.peerBoard(tofi.peerFacilityId);
-      if (peer) {
-        const peerResult = peer.receiveTofiResponse({ causedBy: this._activeCmid, stripId: tofi.peerStripId, response: 'REJECT', by });
-        if (peerResult.ok) peerStrip = peerResult.strip;
-      }
-    }
-    const out = { ok: true, strip, peerFacilityId: tofi.peerFacilityId, peerStrip };
-    if (retired && retired.marsaChanged) { out.marsaChanged = retired.marsaChanged; out.fdrs = retired.fdrs; }
-    return out;
-  }
-
-  /**
-   * Guide §4.6.3's own "separate transfer of communications" — a distinct
-   * action from ACCEPT, invocable on EITHER side of an accepted exchange
-   * (whoever currently holds the frequency initiates handing it off).
-   * Mirrored to the peer's own record so both sides agree comms have moved.
-   */
-  _applyTofiTransferComms(strip, op, by) {
-    const tofi = strip.tofiCoordination;
-    // Three distinct causes, previously one shared message — split out so
-    // the ack's `detail` actually says which one happened, rather than
-    // leaving a live-testing session to guess from "no accepted TOFI
-    // exchange awaiting a comms transfer" alone.
-    if (!tofi) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'this Strip has no TOFI exchange at all', strip };
-    }
-    if (!tofi.acceptedAt) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: `TOFI ${tofi.direction} has not been accepted yet (state: ${tofi.state})`, strip };
-    }
-    if (tofi.commsTransferred) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'comms were already transferred for this exchange', strip };
-    }
-    const now = this._clock.now();
-    tofi.commsTransferred = true;
-    tofi.commsTransferredAt = now;
-    tofi.commsTransferredBy = by || null;
-    strip.rev += 1; strip.updatedAt = now; strip.updatedBy = by || null;
-    this._touch(strip.stripId);
-
-    let peerStrip = null;
-    if (this._rules.peerBoard) {
-      const peer = this._rules.peerBoard(tofi.peerFacilityId);
-      if (peer) {
-        const peerResult = peer.receiveTofiResponse({ causedBy: this._activeCmid, stripId: tofi.peerStripId, response: 'TRANSFER_COMMS', by });
-        if (peerResult.ok) peerStrip = peerResult.strip;
-      }
-    }
-    return { ok: true, strip, peerFacilityId: tofi.peerFacilityId, peerStrip };
-  }
-
-  /**
-   * Called by the ATC-side Facility's BoardStore (via rules.peerBoard) on a
-   * TOFI ENTRY PROPOSE — mints a brand-new, independent MISSION Strip in
-   * THIS Facility's own `_strips` Map, landing in the receiving Position's
-   * Coordination Bay. Shares the ATC-side Strip's own fdrId (guide §9.8's
-   * binding, realized now) rather than minting a fresh FDR — the one
-   * genuinely new piece of D13-style replication this slice adds: every
-   * one of the 5 ATC<->ATC primitives already does this (their replica
-   * shares the sender's fdrId too), but always with the SAME Strip Role on
-   * both sides; TOFI is the first primitive to bind two DIFFERENT roles
-   * (the ATC-side role, and MISSION) to one shared FDR.
-   * @returns {{ok:true, strip}|{ok:false, reason, detail}}
-   */
-  receiveTofiProposal({ fromFacilityId, fromPositionId, fromStripId, toPositionId, fdrId, note, by, causedBy }) {
-    const fdr = this._fdrStore.getFdr(fdrId);
-    if (!fdr) return { ok: false, reason: 'NOT_FOUND', detail: 'referenced FDR not found' };
-
-    // FIND BEFORE MINT (docs/adr/0054). A mission line can now exist before
-    // any TOFI — TAC_C2 tasks it and binds it to the flight at fragging time —
-    // so this exchange must land on the Strip that is already there rather
-    // than create a second MRU record for one airframe. Two mission lines with
-    // independent lifecycles is docs/adr/0045's "two answers to one identity
-    // question" wearing a different hat.
-    const existing = [...this._strips.values()].find(
-      s => s.fdrId === fdrId && s.role === 'MISSION' && s.state !== 'DROPPED');
-
-    if (existing) {
-      if (existing.ownerPositionId !== toPositionId) {
-        // Do not silently re-own it. Ownership is per-Position (§4.8.1) and
-        // the sender picked the wrong counterpart — say so, rather than mint a
-        // duplicate beside the real one.
-        return {
-          ok: false, reason: 'VALIDATION_ERROR',
-          detail: `this flight already has a mission line at ${existing.ownerPositionId} — propose tactical control to them`,
-        };
-      }
-      const open = existing.tofiCoordination;
-      if (open && (open.state === 'PROPOSED' || open.state === 'ACTIVE')) {
-        return { ok: false, reason: 'VALIDATION_ERROR', detail: 'a TOFI exchange is already open on this mission line' };
-      }
-      // Reuse. Deliberately touches NOTHING but the exchange record: this
-      // Strip sits in a real working Bay at a real state, and both belong to
-      // the MRU controller, not to this exchange. `mintedForTofi` is absent,
-      // which is what stops _applyTofiAccept relocating it (see there).
-      const reusedAt = this._clock.now();
-      const existingBefore = deepClone(existing);
-      existing.tofiCoordination = {
-        direction: 'ENTRY', state: 'PROPOSED',
-        peerFacilityId: fromFacilityId, peerStripId: fromStripId, peerPositionId: fromPositionId,
-        commsTransferred: false, commsTransferredAt: null, commsTransferredBy: null,
-        note: note || null,
-        initiatedAt: reusedAt, initiatedBy: by || null, acceptedAt: null, acceptedBy: null,
-      };
-      existing.rev += 1;
-      existing.updatedAt = reusedAt;
-      existing.updatedBy = by || null;
-      this._touch(existing.stripId);
-      this._recordPeer('PeerTofiProposal', existing, existingBefore, { causedBy, fromFacilityId, by });
-      return { ok: true, strip: existing };
-    }
-
-    const coordinationBay = this._rules.coordinationBayFor ? this._rules.coordinationBayFor(toPositionId) : null;
-    if (!coordinationBay) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: `no Coordination Bay configured for ${toPositionId}` };
-    }
-
-    const stripId = crypto.randomUUID();
-    const now = this._clock.now();
-    const rackStrips = this.getRack(coordinationBay.bayId, coordinationBay.rackIds[0]);
-    const afterStripId = rackStrips.length ? rackStrips[rackStrips.length - 1].stripId : null;
-    const orderKey = this._resolveOrderKey(coordinationBay.bayId, coordinationBay.rackIds[0], afterStripId, null, null);
-
-    const strip = {
-      stripId,
-      cid: this._nextCid(),
-      fdrId, // shared with the ATC-side Strip — guide §9.8's binding
-      rev: 1,
-      role: 'MISSION',
-      state: DEFAULT_INITIAL_STATE_BY_ROLE.MISSION,
-      ownerPositionId: toPositionId,
-      bayId: coordinationBay.bayId,
-      rackId: coordinationBay.rackIds[0],
-      orderKey,
-      annotations: {},
-      flags: newFlags(),
-      // No `correlation` — it is keyed by fdrId, and a replica shares the
-      // originator's FDR (docs/adr/0013), so it shares the correlation too.
-      // That is the case a per-Strip field got wrong: both halves of a
-      // cross-Facility exchange are looking at one airframe.
-      coordination: null,
-      tofiCoordination: {
-        direction: 'ENTRY', state: 'PROPOSED',
-        peerFacilityId: fromFacilityId, peerStripId: fromStripId, peerPositionId: fromPositionId,
-        commsTransferred: false, commsTransferredAt: null, commsTransferredBy: null,
-        note: note || null,
-        initiatedAt: now, initiatedBy: by || null, acceptedAt: null, acceptedBy: null,
-        // This exchange put the Strip in a Coordination Bay, so this
-        // exchange is the one allowed to move it out again on ACCEPT.
-        // Absent on the reuse path above, deliberately.
-        mintedForTofi: true,
-      },
-      createdAt: now, updatedAt: now, updatedBy: by || null,
-    };
-    this._strips.set(stripId, strip);
-    this._touch(stripId);
-    this._recordPeer('PeerTofiProposal', strip, null, { causedBy, fromFacilityId, by });
-    return { ok: true, strip };
-  }
-
-  /**
-   * Called by the ATC-side Facility's BoardStore on a TOFI EXIT PROPOSE —
-   * re-enters the ALREADY-EXISTING MISSION Strip's tofiCoordination record
-   * rather than minting a new one (the mission has been live in TACTICAL's
-   * own Board throughout ENTRY's ACTIVE window).
-   */
-  receiveTofiExitProposal({ stripId, note, by, causedBy }) {
-    const strip = this._strips.get(stripId);
-    if (!strip || !strip.tofiCoordination) return { ok: false, reason: 'NOT_FOUND' };
-    const before = deepClone(strip);
-
-    const now = this._clock.now();
-    strip.tofiCoordination.direction = 'EXIT';
-    strip.tofiCoordination.state = 'PROPOSED';
-    strip.tofiCoordination.commsTransferred = false;
-    strip.tofiCoordination.commsTransferredAt = null;
-    strip.tofiCoordination.commsTransferredBy = null;
-    strip.tofiCoordination.note = note || null;
-    strip.tofiCoordination.initiatedAt = now;
-    strip.tofiCoordination.initiatedBy = by || null;
-    strip.tofiCoordination.acceptedAt = null;
-    strip.tofiCoordination.acceptedBy = null;
-    strip.rev += 1; strip.updatedAt = now; strip.updatedBy = by || null;
-    this._touch(strip.stripId);
-    this._recordPeer('PeerTofiExitProposal', strip, before, { causedBy, fromFacilityId: strip.tofiCoordination.peerFacilityId, by });
-    return { ok: true, strip };
-  }
-
-  /**
-   * Called by the MISSION-side Facility's BoardStore once its controller
-   * has ACCEPTed/REJECTed a TOFI proposal, or TRANSFER_COMMS'd — updates
-   * the ATC-side Strip's own tofiCoordination record to match, so both
-   * sides agree on the outcome. Mirrors receiveCoordinationResponse exactly.
-   */
-  receiveTofiResponse({ stripId, response, by, causedBy }) {
-    const strip = this._strips.get(stripId);
-    if (!strip || !strip.tofiCoordination) return { ok: false, reason: 'NOT_FOUND' };
-    const before = deepClone(strip);
-
-    const now = this._clock.now();
-    const tofi = strip.tofiCoordination;
-    if (response === 'ACCEPT') {
-      tofi.state = tofi.direction === 'EXIT' ? 'COMPLETE' : 'ACTIVE';
-      tofi.acceptedAt = now;
-      tofi.acceptedBy = by || null;
-    } else if (response === 'REJECT') {
-      tofi.state = 'REJECTED';
-    } else if (response === 'TRANSFER_COMMS') {
-      tofi.commsTransferred = true;
-      tofi.commsTransferredAt = now;
-      tofi.commsTransferredBy = by || null;
-    }
-    strip.rev += 1;
-    strip.updatedAt = now;
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
-    this._recordPeer('PeerTofiResponse', strip, before, { causedBy, fromFacilityId: tofi.peerFacilityId, by, action: response });
-    return { ok: true, strip };
-  }
+  /** The MISSION side ACCEPTed, REJECTed or TRANSFER_COMMS'd (board/tofi.js). */
+  receiveTofiResponse(args) { return this._tofi.receiveTofiResponse(args); }
 
   /**
    * System-initiated bulk reassignment of every non-DROPPED Strip owned by
@@ -3196,18 +1754,15 @@ class BoardStore {
       if (!strip.coveredFrom) strip.coveredFrom = fromPositionId;
       // B3: the Strip moves into the covering Position's own Bay, or (no Bay
       // there fits) stays where it is and the caller says so.
-      const bay = this._bayForNewOwner(toPositionId, strip.state, strip);
+      const bay = this._placement.bayForNewOwner(toPositionId, strip.state, strip);
       if (bay) {
         strip.bayId = bay.bayId;
         strip.rackId = bay.rackId;
-        strip.orderKey = this._appendOrderKey(bay.bayId, bay.rackId, strip.stripId);
+        strip.orderKey = this._placement.appendOrderKey(bay.bayId, bay.rackId, strip.stripId);
       } else if (this._rules.baysFor) {
         unplaced.push(strip.stripId);
       }
-      strip.rev += 1;
-      strip.updatedAt = this._clock.now();
-      strip.updatedBy = null;
-      this._touch(strip.stripId);
+      this._state.bump(strip, null);
       if (this._mutationLog) {
         this._mutationLog.record({
           clientMutationId: null, op: 'SystemReassign', stripId: strip.stripId,
@@ -3236,16 +1791,13 @@ class BoardStore {
       const before = deepClone(strip);
       strip.ownerPositionId = positionId;
       delete strip.coveredFrom;
-      const bay = this._bayForNewOwner(positionId, strip.state, strip);
+      const bay = this._placement.bayForNewOwner(positionId, strip.state, strip);
       if (bay) {
         strip.bayId = bay.bayId;
         strip.rackId = bay.rackId;
-        strip.orderKey = this._appendOrderKey(bay.bayId, bay.rackId, strip.stripId);
+        strip.orderKey = this._placement.appendOrderKey(bay.bayId, bay.rackId, strip.stripId);
       }
-      strip.rev += 1;
-      strip.updatedAt = this._clock.now();
-      strip.updatedBy = null;
-      this._touch(strip.stripId);
+      this._state.bump(strip, null);
       if (this._mutationLog) {
         this._mutationLog.record({
           clientMutationId: null, op: 'SystemReassign', stripId: strip.stripId,
@@ -3265,7 +1817,7 @@ class BoardStore {
    * archived at most one sweep late rather than never. Null for a live Strip.
    */
   droppedWallAtOf(stripId) {
-    const strip = this._strips.get(stripId);
+    const strip = this._state.strips.get(stripId);
     if (!strip || strip.state !== 'DROPPED') {
       this._droppedWallAt.delete(stripId);
       return null;
@@ -3288,13 +1840,12 @@ class BoardStore {
    * @returns {string|null} the Strip's fdrId, or null when it was not a DROPPED Strip here
    */
   archiveStrip(stripId, reason, extra = {}) {
-    const strip = this._strips.get(stripId);
+    const strip = this._state.strips.get(stripId);
     if (!strip || strip.state !== 'DROPPED') return null;
-    this._strips.delete(stripId);
+    this._state.strips.delete(stripId);
     this._droppedWallAt.delete(stripId);
     this._nlaHistory.delete(stripId);
-    this._log.push({ seq: ++this._seq, type: 'gone', id: stripId });
-    this._pruneLog();
+    this._state.logGone(stripId);
     if (this._mutationLog) {
       this._mutationLog.record({
         clientMutationId: null, op: 'Archive', stripId, fdrId: strip.fdrId || null,
@@ -3317,21 +1868,21 @@ class BoardStore {
     for (const [cmid, record] of this._appliedMutations) {
       if (record.appliedWallAt >= horizon) replay.push([cmid, record]);
     }
-    return { strips: this.getAll(), cidSeq: this._cidSeq, replay, droppedWallAt: [...this._droppedWallAt] };
+    return { strips: this.getAll(), cidSeq: this._state.cidSeq, replay, droppedWallAt: [...this._droppedWallAt] };
   }
   restore(data) {
-    this._strips = new Map((data?.strips || []).map(s => [s.stripId, s]));
+    this._state.replaceStrips(new Map((data?.strips || []).map(s => [s.stripId, s])));
     // A restored Board is a new lifetime: the ring and the seq did not come
     // back, so no seq a client holds from before can be served a delta.
-    this._epoch = crypto.randomUUID();
+    this._state.newEpoch();
     // A snapshot written before docs/adr/0045 carries a per-Strip
     // `correlation` field. Dropped rather than migrated: it was always the
     // inert `{ state: 'UNCORRELATED' }` placeholder, so there is nothing in it
     // to carry forward, and leaving it would put a second, stale answer to
     // "which contact is this" next to the real one — which is the defect the
     // key change removes, preserved through a restore.
-    for (const strip of this._strips.values()) delete strip.correlation;
-    this._cidSeq = data?.cidSeq || 0;
+    for (const strip of this._state.strips.values()) delete strip.correlation;
+    this._state.setCidSeq(data?.cidSeq || 0);
     // The persisted slice of the idempotency cache (docs/adr/0081). It used to
     // be dropped here, so a CreateStrip whose ack died with the process was
     // created twice on retry (L6's F5). Loaded whole: the snapshot already cut
@@ -3348,7 +1899,7 @@ class BoardStore {
     const dropped = new Map(Array.isArray(data?.droppedWallAt) ? data.droppedWallAt : []);
     this._droppedWallAt = new Map();
     const restoredAt = Date.now();
-    for (const strip of this._strips.values()) {
+    for (const strip of this._state.strips.values()) {
       if (strip.state !== 'DROPPED') continue;
       const at = dropped.get(strip.stripId);
       this._droppedWallAt.set(strip.stripId, Number.isFinite(at) ? at : restoredAt);

@@ -10,31 +10,34 @@
 // config path in this package.
 //
 // `{ "hulls": [ HullConfig ] }`. A hull that fails validateHullConfig is dropped
-// with a warning; an empty or unreadable file falls back to DEFAULT_HULL (the
-// CVN-72 `UNION`, decisions H13/H26), so the carrier is never silently absent.
+// with a warning; an unreadable file, or one with no valid hull, is a startup
+// error naming the file (DATA-2, H88: no code copy of the CVN-72 `UNION` hull,
+// decisions H13/H26, is kept).
 // v1 has one hull and one stack (H29); the keys allow more.
 
 const fs = require('fs');
 const { readPath } = require('../../state-paths');
-const { DEFAULT_HULL, validateHullConfig } = require('./ship-state');
+const { validateHullConfig } = require('./ship-state');
 
 const CARRIERS_FILE = 'efsp-carriers.json';
 
 function _load() {
-  let list = null;
+  const file = readPath(CARRIERS_FILE, process.env.CRCSYNC_EFSP_CARRIERS_PATH);
+  let list;
   try {
-    const raw = JSON.parse(fs.readFileSync(readPath(CARRIERS_FILE, process.env.CRCSYNC_EFSP_CARRIERS_PATH), 'utf8'));
-    if (Array.isArray(raw.hulls)) list = raw.hulls;
+    const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (!Array.isArray(raw.hulls)) throw new Error('no "hulls" array');
+    list = raw.hulls;
   } catch (e) {
-    console.warn(`[efsp-carriers] no usable ${CARRIERS_FILE}, using the default hull:`, e.message);
+    throw new Error(`[efsp-carriers] cannot read ${file}: ${e.message}`);
   }
   const hulls = [];
-  for (const h of list || []) {
+  for (const h of list) {
     const v = validateHullConfig(h);
     if (v.ok) hulls.push(JSON.parse(JSON.stringify(h)));
     else console.warn(`[efsp-carriers] dropping a hull: ${v.detail}`);
   }
-  if (!hulls.length) hulls.push(JSON.parse(JSON.stringify(DEFAULT_HULL)));
+  if (!hulls.length) throw new Error(`[efsp-carriers] ${file} has no valid hull`);
   return hulls;
 }
 
@@ -59,4 +62,4 @@ function radarIsHull(hullId, radar) {
   return !!hull.match.type && radar.shipType === hull.match.type;
 }
 
-module.exports = { getHulls, getHull, radarIsHull, };
+module.exports = { getHulls, getHull, getDefaultHull, radarIsHull };

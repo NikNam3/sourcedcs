@@ -12,22 +12,17 @@
 // written by code. A change applies on restart only. There is deliberately no
 // endpoint that sets any of it.
 //
+// The defaults are the shipped config/efsp-instrumentation.json (read by
+// tuning-file.js, strictly: a missing or invalid shipped file is a startup
+// error naming it; no literal copy lives in code, H88 / DATA-2).
 // Invalid values warn and fall back to the default PER FIELD: a typo in one
 // retention must neither stop the server nor silently mean "keep forever".
 
 const fs = require('fs');
 const { readPath } = require('../state-paths');
+const { readShipped } = require('../tuning-file');
 
 const CONFIG_NAME = 'efsp-instrumentation.json';
-
-const DEFAULT_INSTRUMENTATION_CONFIG = deepFreeze({
-  mutationLog: { retentionDays: 30 },
-  metrics: { retentionDays: 30 },
-  trafficCount: {
-    retentionDays: 400,
-    homeAirports: { INCIRLIK: ['LTAG'] },
-  },
-});
 
 function deepFreeze(o) {
   if (o && typeof o === 'object' && !Object.isFrozen(o)) {
@@ -42,16 +37,24 @@ function resolveInstrumentationConfigPath() {
   return readPath(CONFIG_NAME, process.env.CRCSYNC_EFSP_INSTRUMENTATION_CONFIG_PATH);
 }
 
+// Strict mode (validating the shipped file itself): no fallback, so a gap is an error.
+function _missing(what, fallback, source) {
+  if (fallback === undefined) throw new Error(`[efsp-instrumentation] ${source}: ${what} is missing`);
+  return fallback;
+}
+
 function _retention(section, raw, fallback, source) {
-  if (raw === undefined) return fallback;
+  if (raw === undefined) return _missing(`${section}.retentionDays`, fallback, source);
   if (Number.isInteger(raw) && raw >= 1) return raw;
+  if (fallback === undefined) throw new Error(`[efsp-instrumentation] ${source}: ${section}.retentionDays must be an integer >= 1, got ${JSON.stringify(raw)}`);
   console.warn(`[efsp-instrumentation] ${source}: ${section}.retentionDays must be an integer >= 1, got ${JSON.stringify(raw)} — using ${fallback}`);
   return fallback;
 }
 
 function _homeAirports(raw, fallback, source) {
-  if (raw === undefined) return fallback;
+  if (raw === undefined) return _missing('trafficCount.homeAirports', fallback, source);
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    if (fallback === undefined) throw new Error(`[efsp-instrumentation] ${source}: trafficCount.homeAirports must be an object of facilityId -> [ICAO]`);
     console.warn(`[efsp-instrumentation] ${source}: trafficCount.homeAirports must be an object of facilityId -> [ICAO], using the default`);
     return fallback;
   }
@@ -74,8 +77,8 @@ function _homeAirports(raw, fallback, source) {
  * Validates a parsed config object field by field against the defaults.
  * Pure apart from console.warn; exported so tests need no file.
  */
-function normalizeInstrumentationConfig(raw, source = 'config') {
-  const d = DEFAULT_INSTRUMENTATION_CONFIG;
+function normalizeInstrumentationConfig(raw, source = 'config', d = DEFAULT_INSTRUMENTATION_CONFIG) {
+  d = d || { mutationLog: {}, metrics: {}, trafficCount: {} }; // strict: validating the shipped file
   const obj = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
   const section = (name) => (obj[name] && typeof obj[name] === 'object' ? obj[name] : {});
   return deepFreeze({
@@ -88,13 +91,16 @@ function normalizeInstrumentationConfig(raw, source = 'config') {
   });
 }
 
-/** Reads and validates one file. A missing or unparseable file is the defaults, with a warning. */
+/** The shipped defaults, validated strictly. Throws (naming the file) when it is missing or has a gap. */
+const DEFAULT_INSTRUMENTATION_CONFIG = normalizeInstrumentationConfig(readShipped(CONFIG_NAME), `config/${CONFIG_NAME}`, null);
+
+/** Reads and validates one file. A missing or unparseable file is the shipped defaults, with a warning. */
 function loadInstrumentationConfig(filePath = resolveInstrumentationConfigPath()) {
   let raw;
   try {
     raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
   } catch (e) {
-    console.warn(`[efsp-instrumentation] could not read ${filePath} (${e.message}) — using the built-in defaults`);
+    console.warn(`[efsp-instrumentation] could not read ${filePath} (${e.message}) — using the shipped defaults`);
     return DEFAULT_INSTRUMENTATION_CONFIG;
   }
   return normalizeInstrumentationConfig(raw, filePath);

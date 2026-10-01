@@ -1,0 +1,151 @@
+{
+  "facility": "CARRIER",
+  "positions": [
+    "CV_MARSHAL",
+    "CV_PRIFLY",
+    "CV_APP1",
+    "CV_APP2"
+  ],
+  "positionClasses": {
+    "CV_MARSHAL": "MILITARY_ATC",
+    "CV_PRIFLY": "MILITARY_ATC",
+    "CV_APP1": "MILITARY_ATC",
+    "CV_APP2": "MILITARY_ATC"
+  },
+  "positionLetters": {
+    "CV_MARSHAL": "V",
+    "CV_PRIFLY": "P",
+    "CV_APP1": "1",
+    "CV_APP2": "2"
+  },
+  "coveringChain": {
+    "CV_APP2": "CV_APP1",
+    "CV_APP1": "CV_MARSHAL"
+  },
+  "positionRadars": {
+    "CV_MARSHAL": [
+      {
+        "kind": "carrier",
+        "coalition": "own",
+        "hull": "CVN-72"
+      }
+    ],
+    "CV_PRIFLY": [
+      {
+        "kind": "carrier",
+        "coalition": "own",
+        "hull": "CVN-72",
+        "radar": "search"
+      }
+    ],
+    "CV_APP1": [
+      {
+        "kind": "carrier",
+        "coalition": "own",
+        "hull": "CVN-72"
+      }
+    ],
+    "CV_APP2": [
+      {
+        "kind": "carrier",
+        "coalition": "own",
+        "hull": "CVN-72"
+      }
+    ]
+  },
+  "hiddenBlocks": {},
+  "bays": {
+    "CV_MARSHAL": [
+      {
+        "bayId": "cv-marshal-stack",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "IN_STACK"
+      },
+      {
+        "bayId": "cv-marshal-departures",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "LAUNCH"
+      },
+      {
+        "bayId": "cv-marshal-coordination",
+        "rackIds": [
+          "main"
+        ]
+      }
+    ],
+    "CV_PRIFLY": [
+      {
+        "bayId": "cv-prifly-pattern",
+        "rackIds": [
+          "initial",
+          "break",
+          "downwind",
+          "groove"
+        ],
+        "impliesState": "IN_PATTERN",
+        "view": "pattern"
+      },
+      {
+        "bayId": "cv-prifly-deck",
+        "rackIds": [
+          "main"
+        ]
+      }
+    ],
+    "CV_APP1": [
+      {
+        "bayId": "cv-app1-lane",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "COMMENCED"
+      },
+      {
+        "bayId": "cv-app1-final",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "ON_FINAL",
+        "view": "final"
+      },
+      {
+        "bayId": "cv-app1-bolter",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "BOLTER_WAVEOFF"
+      }
+    ],
+    "CV_APP2": [
+      {
+        "bayId": "cv-app2-lane",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "COMMENCED"
+      },
+      {
+        "bayId": "cv-app2-final",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "ON_FINAL",
+        "view": "final"
+      },
+      {
+        "bayId": "cv-app2-bolter",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "BOLTER_WAVEOFF"
+      }
+    ]
+  },
+  "dataOnly": false,
+  "standingReleases": [],
+  "aitAuthorized": false
+}

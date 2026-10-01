@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { slot } from './helpers/wire-slots.mjs';
 
 /* L18's walks (docs/adr/0075, 0093): Incirlik's RSU, SFA and PAR on the wire.
  *
@@ -116,14 +117,14 @@ test('only the jurisdiction Position changes the rotation record; the others get
   for (const id of ['SFA', 'PAR', 'RSU', 'TWR', 'OPS']) {
     const r = sfaAct(efsp, c[id], id, { kind: 'SetSfaRotation', rackId: 'freq-4', positionId: id });
     refused(r.ack, 'PERMISSION_DENIED', /APP holds jurisdiction/, id);
-    assert.equal(r.sfaBroadcast, undefined);
+    assert.equal(slot(r, 'sfa'), undefined);
   }
   assert.deepEqual(efsp.sfaStore.view().rotation, before.rotation);
 
   const r = mustSfaAct(efsp, c.APP, 'APP', { kind: 'SetSfaRotation', rackId: 'freq-4', positionId: 'PAR' });
-  assert.equal(r.sfaBroadcast.type, 'efsp-sfa-delta');
-  assert.deepEqual(r.sfaBroadcast.sfaRotation.rotation, { 'freq-1': 'APP', 'freq-2': 'SFA', 'freq-4': 'PAR' }, 'PAR moved off freq-3 onto freq-4: one Position, one frequency');
-  assert.equal(r.sfaBroadcast.sfaRotation.pool.length, 5);
+  assert.equal(slot(r, 'sfa').type, 'efsp-sfa-delta');
+  assert.deepEqual(slot(r, 'sfa').sfaRotation.rotation, { 'freq-1': 'APP', 'freq-2': 'SFA', 'freq-4': 'PAR' }, 'PAR moved off freq-3 onto freq-4: one Position, one frequency');
+  assert.equal(slot(r, 'sfa').sfaRotation.pool.length, 5);
   assert.equal(r.ack.sfaRotation.rev, 1);
   // audited
   const line = mutations().filter(m => m.op === 'SetSfaRotation').pop();
@@ -143,7 +144,7 @@ test('the rotation record refuses what cannot be: an unknown frequency, an unkno
   refused(sfaAct(efsp, c.APP, 'APP', { kind: 'SetSfaRotation', rackId: 'freq-1', positionId: 'APP' }, { baseRev: 0 }).ack, 'STALE_REV');
   // setting what is already true changes nothing and says so
   const same = sfaAct(efsp, c.APP, 'APP', { kind: 'SetSfaRotation', rackId: 'freq-1', positionId: 'APP' });
-  assert.equal(same.ack.ok, true); assert.equal(same.sfaBroadcast, undefined);
+  assert.equal(same.ack.ok, true); assert.equal(slot(same, 'sfa'), undefined);
 });
 
 test('a controller must be Primary at the acting Position to touch the rotation (docs/adr/0029)', () => {

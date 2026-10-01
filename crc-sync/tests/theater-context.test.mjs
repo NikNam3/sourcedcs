@@ -233,8 +233,8 @@ test('airfield wind with no variation known: magnetic is null, never the true va
 
 test('/api/apt-weather sends the wind in both named frames and never the raw windFrom', async () => {
   const fs = await import('fs');
-  const src = fs.readFileSync(path.join(import.meta.dirname, '../server.js'), 'utf8');
-  const route = src.slice(src.indexOf("app.get('/api/apt-weather'"), src.indexOf('\n});\n', src.indexOf("app.get('/api/apt-weather'")));
+  const src = fs.readFileSync(path.join(import.meta.dirname, '../src/app.js'), 'utf8');
+  const route = src.slice(src.indexOf("app.get('/api/apt-weather'"), src.indexOf('\n  });\n', src.indexOf("app.get('/api/apt-weather'")));
   assert.match(route, /const \{ windFrom, \.\.\.rest \} = w;/);
   assert.match(route, /\.\.\.theaterContext\.windFrom\(windFrom, airport\.lat, airport\.lon\)/);
 });

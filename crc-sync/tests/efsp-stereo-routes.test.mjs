@@ -216,22 +216,29 @@ function loadInChildProcess(fileContents) {
   const modulePath = path.join(import.meta.dirname, '../src/efsp/stereo-routes.js');
   const out = execFileSync(process.execPath, [
     '-e', `process.stdout.write(JSON.stringify(require(${JSON.stringify(modulePath)}).getStereoRoutes()))`,
-  ], { env: { ...process.env, CRCSYNC_EFSP_STEREO_ROUTES_PATH: file }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  ], { env: { ...process.env, CRCSYNC_EFSP_STEREO_ROUTES_PATH: file }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
   return JSON.parse(out);
 }
 
-test('a table that is not valid JSON falls back to an empty one rather than throwing at require time', () => {
-  assert.deepEqual(loadInChildProcess('{ not json'), []);
+// DATA-2 (H88): there is no code copy of the empty table, so an unusable file is a
+// startup error that names the file, not a silent fall back to [].
+function loadFails(fileContents) {
+  try { loadInChildProcess(fileContents); } catch (e) { return String(e.message); }
+  return null;
+}
+
+test('a table that is not valid JSON is a startup error naming the file', () => {
+  assert.match(loadFails('{ not json'), /efsp-stereo-routes\.json/);
 });
 
-test('a table that is valid JSON but fails validation falls back to an empty one', () => {
-  assert.deepEqual(loadInChildProcess(JSON.stringify([{ name: 'PACK 1' }])), []); // no route
+test('a table that is valid JSON but fails validation is a startup error naming the file', () => {
+  assert.match(loadFails(JSON.stringify([{ name: 'PACK 1' }])), /efsp-stereo-routes\.json/); // no route
 });
 
-test('a missing table file is the shipped state, not an error', () => {
-  assert.deepEqual(loadInChildProcess(null), []);
+test('a missing table file is a startup error naming the file', () => {
+  assert.match(loadFails(null), /efsp-stereo-routes\.json/);
 });
 
-test('a valid table loads in a fresh process — the fallback cases above are failing, not just defaulting', () => {
+test('a valid table loads in a fresh process ', () => {
   assert.deepEqual(loadInChildProcess(JSON.stringify(FIXTURE)).map(r => r.name), ['PACK 1', 'PACK 2']);
 });

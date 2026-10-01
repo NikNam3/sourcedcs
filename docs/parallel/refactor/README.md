@@ -14,7 +14,7 @@ merged code wins over a briefing's line numbers.** Lane rules: `docs/parallel/la
 | W4 | [BOARD-3](BOARD-3.md) · [LOG-2](LOG-2.md) · [TIME-B](TIME-B.md) | BOARD-2, AUTH, LOG-1 merged | BOARD-3 → LOG-2 → TIME-B |
 | W5 | [SYNC](SYNC.md) | W4 merged | alone |
 | W6 | [BACKCOMPAT](BACKCOMPAT.md) | W5 merged | alone |
-| W7 | RENAME (briefing to be written from `docs/parallel/research/vocabulary.md`, H96/H98) | W6 merged | alone, tree-wide; golden replay proves it; wire/snapshot renames in a separately listed commit; then the window closes and L20 starts |
+| W7 | [RENAME-A](RENAME-A.md) · [RENAME-B](RENAME-B.md) · [RENAME-C](RENAME-C.md), one shared map [rename-map.md](rename-map.md) (H96/H98, desk RP-1..6) | W6 merged | alone, tree-wide; golden replay proves it; wire/snapshot renames in a separately listed commit; then the window closes and L20 starts |
 
 Every wave also runs **one questioner** (Opus). It reads each lane's step-0 report ("Code as found" plus the design
 notes) and challenges its assumptions against the plan, decisions.md and the code, before the lane writes production
@@ -109,8 +109,8 @@ keeps it moving first and fills the remaining slots in this priority order:
 
 ## E2E lanes
 
-ESM-1 `E2E_LANE=1` (the ESM-1T lanes run no Playwright; the unit's full run is ESM-1's), ESM-2a `2`, ESM-2b `3`,
-CMSG `4`. The supervisor's post-wave full run uses lane `7`. Server lanes need no Playwright run of their own.
+ESM-1 `E2E_LANE=1` (the ESM-1T lanes run no Playwright; the unit's full run is the supervisor's, S-TEST), ESM-2a `2`, ESM-2b `3`,
+CMSG `4`, RENAME-A `5`, RENAME-B `6`. The supervisor's post-wave full run uses lane `7`. Server lanes need no Playwright run of their own.
 
 ## The approved-change queue
 

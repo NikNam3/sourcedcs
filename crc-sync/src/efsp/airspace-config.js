@@ -138,24 +138,19 @@ function validateAirspaces(candidate) {
   return { ok: true };
 }
 
-// Ships empty. The real MOAs, ranges, owning authorities and frequencies are
-// squadron data the project owner supplies; an invented default would be
-// exactly the [SOURCE-DEFINED]-presented-as-doctrine trap D11 names.
-const DEFAULT_AIRSPACES = [];
-
+// Ships empty as config/efsp-airspaces.json (see this module's header for why an
+// invented default would be defect D11). No code copy of that `[]` exists (DATA-2, H88): an
+// unreadable or invalid file is a startup error naming it.
 function _load() {
+  let onDisk;
   try {
-    const onDisk = JSON.parse(fs.readFileSync(AIRSPACES_PATH, 'utf8'));
-    const check = validateAirspaces(onDisk);
-    if (!check.ok) {
-      console.warn('[efsp-airspace-config] on-disk airspaces failed validation, using defaults:', check.detail);
-      return deepClone(DEFAULT_AIRSPACES);
-    }
-    return onDisk;
+    onDisk = JSON.parse(fs.readFileSync(AIRSPACES_PATH, 'utf8'));
   } catch (e) {
-    console.warn('[efsp-airspace-config] no airspaces config loaded, using defaults:', e.message);
-    return deepClone(DEFAULT_AIRSPACES);
+    throw new Error(`[efsp-airspace-config] cannot read ${AIRSPACES_PATH}: ${e.message}`);
   }
+  const check = validateAirspaces(onDisk);
+  if (!check.ok) throw new Error(`[efsp-airspace-config] ${AIRSPACES_PATH} failed validation: ${check.detail}`);
+  return onDisk;
 }
 
 let airspaces = _load();

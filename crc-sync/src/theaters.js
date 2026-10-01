@@ -15,6 +15,7 @@
 const fs = require('fs');
 const path = require('path');
 const { CONFIG_DIR, STATE_DIR } = require('./state-paths');
+const { readShipped } = require('./tuning-file');
 
 function _read(file) {
   try {
@@ -76,7 +77,14 @@ function loadTheaters(override) {
 }
 
 // What a theater the table does not list gets (and what a test fixture that
-// injects no theater gets): the 18,000 ft every theater used before H62.
-const DEFAULT_TRANSITION_ALT_FT = 18000;
+// injects no theater gets): config/theaters.json `defaultTransitionAltFt`, the
+// 18,000 ft every theater used before H62. Read strictly at load (DATA-2, H88):
+// a missing file or a non-positive value is a startup error naming the file.
+function _readDefaultTransitionAltFt() {
+  const v = readShipped('theaters.json').defaultTransitionAltFt;
+  if (!(Number.isFinite(v) && v > 0)) throw new Error('[theaters] config/theaters.json: defaultTransitionAltFt must be a positive number');
+  return v;
+}
+const DEFAULT_TRANSITION_ALT_FT = _readDefaultTransitionAltFt();
 
 module.exports = { loadTheaters, DEFAULT_TRANSITION_ALT_FT };

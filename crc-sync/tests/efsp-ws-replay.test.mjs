@@ -4,6 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import crypto from 'crypto';
+import { slot } from './helpers/wire-slots.mjs';
 
 // docs/adr/0081 (L27): the non-Board paths are idempotent by clientMutationId
 // (L6's F13), and every efsp-board-delta names its Board lifetime (F2).
@@ -56,8 +57,8 @@ test('a retried DeclareMarsa returns the first relation and mints no second one'
   assert.equal(retry.ack.ok, true);
   assert.equal(retry.ack.marsa.marsaId, first.ack.marsa.marsaId, 'the first relation, as it is now');
   assert.equal(efsp.marsaStore.getAll().length, before + 1, 'one relation, not two');
-  assert.equal(retry.marsaBroadcast, undefined);
-  assert.equal(retry.broadcast, undefined);
+  assert.equal(slot(retry, 'marsa'), undefined);
+  assert.equal(slot(retry, 'primary'), undefined);
   assert.equal(logLines(msg.clientMutationId).length, 1, 'audited once');
 });
 
@@ -78,7 +79,7 @@ test('a retried BindTrack is acked once, audited once', () => {
   assert.equal(retry.ack.correlation.fdrId, strip.fdrId);
   assert.equal(retry.ack.correlation.rev, efsp.correlationStore.getCorrelation(strip.fdrId).rev);
   assert.equal(efsp.correlationStore.currentSeq, seq, 'not applied again');
-  assert.equal(retry.broadcast, undefined);
+  assert.equal(slot(retry, 'primary'), undefined);
   assert.equal(logLines(msg.clientMutationId).length, 1);
 });
 
@@ -97,7 +98,7 @@ test('a retried airspace op is not re-applied', () => {
   assert.equal(retry.ack.ok, true, JSON.stringify(retry.ack));
   assert.equal(retry.ack.airspace.rev, efsp.airspaceStore.getAirspace('MOA-RPLY').rev);
   assert.equal(efsp.airspaceStore.currentSeq, seq, 'not applied again');
-  assert.equal(retry.broadcast, undefined);
+  assert.equal(slot(retry, 'primary'), undefined);
 });
 
 test('a retried field-state op is not re-applied', () => {
@@ -115,7 +116,7 @@ test('a retried field-state op is not re-applied', () => {
   assert.equal(retry.ack.ok, true, JSON.stringify(retry.ack));
   assert.equal(retry.ack.fieldState.rev, efsp.fieldStateStore.getFieldState('INCIRLIK').rev);
   assert.equal(efsp.fieldStateStore.currentSeq, seq, 'not applied again');
-  assert.equal(retry.broadcast, undefined);
+  assert.equal(slot(retry, 'primary'), undefined);
   assert.equal(logLines(msg.clientMutationId).length, 1);
   // Leave the runway open for whoever shares this file's durable state.
   const back = send(efsp, c.TWR, { type: 'efsp-field-state-mutation', facilityId: 'INCIRLIK', actingPositionId: 'TWR', baseRev: efsp.fieldStateStore.getFieldState('INCIRLIK').rev, op: { kind: 'OpenRunway', runwayId: '05/23' } });
@@ -170,18 +171,18 @@ test('every efsp-board-delta carries boardEpoch', () => {
   const proposed = send(efsp, c.CTR, { type: 'efsp-mutation', facilityId: 'CENTER', actingPositionId: 'CTR', stripId: arr.stripId, baseRev: arr.rev, op: { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'APP' } });
   assert.equal(proposed.ack.ok, true, JSON.stringify(proposed.ack));
   assert.equal(proposed.ack.boardEpoch, epochOf('CENTER'), 'the ack too');
-  cases.push(['mutation broadcast', proposed.broadcast, 'CENTER']);
-  cases.push(['peerBroadcast', proposed.peerBroadcast, 'INCIRLIK']);
+  cases.push(['mutation broadcast', slot(proposed, 'primary'), 'CENTER']);
+  cases.push(['peerBroadcast', slot(proposed, 'peer'), 'INCIRLIK']);
 
   // _handleMarsaMutation's FDR-only delta.
   const tanker = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'SHELL3' });
   const rx = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'VIPER3' });
   const declared = send(efsp, c.APP, { type: 'efsp-marsa-mutation', actingPositionId: 'APP', op: { kind: 'DeclareMarsa', participants: [tanker.fdrId, rx.fdrId], startEvent: 'TANKER_ACCEPTED', endCondition: 'VERTICALLY_POSITIONED', declaringCallsign: 'SHELL3' } });
   assert.equal(declared.ack.ok, true, JSON.stringify(declared.ack));
-  cases.push(['MARSA regime delta', declared.broadcast, 'INCIRLIK']);
+  cases.push(['MARSA regime delta', slot(declared, 'primary'), 'INCIRLIK']);
 
   // _handleSetPositions.
-  cases.push(['set-positions', hold(efsp, c.CD.session, 'INCIRLIK', ['CD']) && efsp.handleMessage(c.CD.session, { type: 'efsp-set-positions', facilityId: 'INCIRLIK', held: ['CD'] }).broadcast, 'INCIRLIK']);
+  cases.push(['set-positions', hold(efsp, c.CD.session, 'INCIRLIK', ['CD']) && slot(efsp.handleMessage(c.CD.session, { type: 'efsp-set-positions', facilityId: 'INCIRLIK', held: ['CD'] }), 'primary'), 'INCIRLIK']);
 
   // _handleResync's delta.
   const resync = efsp.handleMessage(c.APP.session, { type: 'efsp-resync', facilityId: 'INCIRLIK', lastBoardSeq: efsp.boardStoreFor('INCIRLIK').currentSeq, boardEpoch: epochOf('INCIRLIK') });

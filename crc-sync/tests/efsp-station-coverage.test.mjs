@@ -20,6 +20,7 @@ process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = path.join(tmpDir, 'incirlik.json
 process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER = path.join(tmpDir, 'center.json');
 process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL = path.join(tmpDir, 'tactical.json');
 process.env.CRCSYNC_EFSP_AIRSPACES_PATH = path.join(tmpDir, 'airspaces.json');
+fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '[]'); // no code default for the empty table (DATA-2)
 
 const facilityConfig = (await import('../src/efsp/facility-config.js')).default
   || await import('../src/efsp/facility-config.js');

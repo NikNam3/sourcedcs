@@ -12,21 +12,21 @@ import CollaborativeStore from '../src/collab-store.js';
  * obligations every 15 s and after a Mutation — and WsHub.broadcastEfspAlerts
  * replaces the whole state. So server.js must compose the message in exactly
  * one place, from all three monitors, or one producer erases another's slice.
- * server.js cannot be imported (it listens), so this reads it.
+ * createApp builds a whole service, so this reads src/app.js.
  */
 
-const SERVER = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'server.js'), 'utf8');
+const SERVER = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'app.js'), 'utf8');
 
-test('server.js calls wsHub.broadcastEfspAlerts in exactly one place, the compose function', () => {
+test('app.js calls wsHub.broadcastEfspAlerts in exactly one place, the compose function', () => {
   assert.equal(SERVER.match(/wsHub\.broadcastEfspAlerts\(/g).length, 1);
-  const fn = SERVER.match(/\nfunction broadcastEfspAlerts\(\) \{[\s\S]*?\n\}\n/);
+  const fn = SERVER.match(/\n *function broadcastEfspAlerts\(\) \{[\s\S]*?\n  \}\n/);
   assert.ok(fn, 'the compose function exists');
   assert.match(fn[0], /wsHub\.broadcastEfspAlerts\(/);
   for (const key of ['conformance', 'stca', 'obligations', 'surveillance']) assert.match(fn[0], new RegExp(`${key}:`));
 });
 
 test('a conformance-only tick does not clear obligations', () => {
-  const body = SERVER.match(/\nfunction broadcastEfspAlerts\(\) \{[\s\S]*?\n\}\n/)[0];
+  const body = SERVER.match(/\n *function broadcastEfspAlerts\(\) \{[\s\S]*?\n  \}\n/)[0];
   const compose = new Function('wsHub', 'conformanceMonitor', 'stcaMonitor', 'obligationMonitor', 'surveillanceHints',
     `${body}; return broadcastEfspAlerts;`);
 

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { slot } from './helpers/wire-slots.mjs';
 
 // L23's own walks (docs/adr/0080), beside L8's efsp-scenario-tactical.test.mjs:
 // the capability table's rules on the wire, the Bay that follows an owner (B3/
@@ -153,9 +154,9 @@ test('B3 with no Bay to fit, the Strip keeps its Bay and the reassignment says s
     isValidState: () => true,
   };
   const board = new BoardStore(new FdrStore(), rules);
-  assert.equal(board._bayForNewOwner('B', 'PROPOSED'), null);
-  assert.deepEqual(board._bayForNewOwner('B', 'OTHER'), { bayId: 'b-only', rackId: 'main' });
-  assert.deepEqual(board._bayForNewOwner('A', 'ANY'), { bayId: 'a-1', rackId: 'main' });
+  assert.equal(board._placement.bayForNewOwner('B', 'PROPOSED'), null);
+  assert.deepEqual(board._placement.bayForNewOwner('B', 'OTHER'), { bayId: 'b-only', rackId: 'main' });
+  assert.deepEqual(board._placement.bayForNewOwner('A', 'ANY'), { bayId: 'a-1', rackId: 'main' });
   const made = board.applyMutation({
     clientMutationId: '00000000-0000-4000-8000-000000000001', op: { kind: 'CreateStrip', bayId: 'a-1', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FDR, callsign: 'L23B3' } },
   }, 'A', 'A');
@@ -292,7 +293,7 @@ test('F10 Strips routed to a covering Position go back, into the returning Posit
   assert.equal(after.ownerPositionId, 'CD', 'returned');
   assert.equal(after.bayId, 'cd-pending-clearance');
   assert.equal(after.coveredFrom, undefined);
-  assert.ok(back.broadcast.strips.updated.some(x => x.stripId === s.stripId), 'the return is broadcast');
+  assert.ok(slot(back, 'primary').strips.updated.some(x => x.stripId === s.stripId), 'the return is broadcast');
 });
 
 test('F10 a Strip the covering Position transferred on by decision does not come back', () => {
@@ -343,8 +344,8 @@ for (const primitive of ['POINT_OUT', 'HANDOFF']) {
       actingPositionId: 'CTR', stripId: accepted.stripId, baseRev: accepted.rev, op: { kind: 'DropStrip' },
     });
     assert.equal(res.ack.ok, true);
-    assert.ok(res.peerBroadcast, 'the proposer\'s Board is told');
-    const seen = res.peerBroadcast.strips.updated.find(x => x.stripId === dep.stripId);
+    assert.ok(slot(res, 'peer'), 'the proposer\'s Board is told');
+    const seen = slot(res, 'peer').strips.updated.find(x => x.stripId === dep.stripId);
     assert.equal(seen.coordination, null);
     const log = fs.readFileSync(process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH, 'utf8');
     assert.match(log, /SystemCoordinationEnd/);

@@ -13,10 +13,10 @@
 // (F11's lesson), and nothing here keeps a retired record alive (F4's).
 //
 // Memory only (decisions S-W3d, L27-Q3 (a)): these ops are rev-checked and
-// rarely retried across a restart. Pure: no requires.
+// rarely retried across a restart. Pure: its only require is the wire family registry, which names the kinds.
 
 const REPLAY_CACHE_CAP = 5000;
-const KINDS = new Set(['airspace', 'correlation', 'marsa', 'fieldState', 'carrier', 'sfa']);
+const KINDS = new Set(require('./wire/families').REPLAY_KINDS);
 
 class ReplayCache {
   constructor({ cap = REPLAY_CACHE_CAP } = {}) {

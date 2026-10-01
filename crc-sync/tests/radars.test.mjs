@@ -27,11 +27,12 @@ fs.writeFileSync(specsPath, JSON.stringify({
 process.env.CRCSYNC_SENSOR_SPECS_PATH = specsPath;
 
 const {
-  buildRadars, loadSensorSpecs, isRadarSite, DEFAULT_CAPS, M_PER_NM,
-  AIRPORT_RADAR, APPROACH_RADAR, SHIP_RADAR_DEFAULT, AIRPORT_RADAR_HEIGHT_M,
+  buildRadars, loadSensorSpecs, isRadarSite, M_PER_NM,
+  AIRPORT_RADAR, APPROACH_RADAR, AIRPORT_RADAR_HEIGHT_M,
 } = await import('../src/radars.js');
 
 const SPECS = loadSensorSpecs(specsPath);
+const SHIP_RADAR_DEFAULT = SPECS.shipRadarDefault; // from config/sensor-specs.json (DATA-2)
 
 const MISSION = {
   airports: [
@@ -46,13 +47,13 @@ function byId(radars) {
   return new Map(radars.map(r => [r.id, r]));
 }
 
-test('loadSensorSpecs: a missing file degrades to empty specs rather than throwing', () => {
+test('loadSensorSpecs: an unreadable layer file falls back to the shipped sensor-specs.json', () => {
   const specs = loadSensorSpecs('/nonexistent/sensor-specs.json');
-  assert.deepEqual(specs.radar, {});
-  assert.deepEqual(specs.carrierRadar, {});
-  assert.deepEqual(specs.datalink.participants, []);
+  assert.ok(specs.radar['E-3A']);
+  assert.ok(specs.datalink.participants.length > 0);
   assert.deepEqual(specs.transponder.syntheticFor, ['own', 'neutral']);
   assert.deepEqual(specs.transponder.mode4For, ['own']);
+  assert.deepEqual(specs.shipRadarDefault, { rangeNm: 40, sweepMs: 5000 });
 });
 
 test('every radar says what it can measure: 2D + SSR on the ground, 3D in the air (docs/adr/0059)', () => {
@@ -71,7 +72,7 @@ test('every radar says what it can measure: 2D + SSR on the ground, 3D in the ai
   assert.deepEqual(radars.get('crc:2').caps, { height: true, ssr: true, mode4: true });
   assert.deepEqual(radars.get('carrier:3').caps, { height: true, ssr: true, mode4: true });
   assert.deepEqual(radars.get('cvapp:3').caps, { height: false, ssr: true, mode4: true });
-  assert.ok(DEFAULT_CAPS.approach);
+  assert.ok(SPECS.defaultCaps.approach);
 });
 
 test('a spec can override its kind: a fighter radar with no IFF interrogator', () => {

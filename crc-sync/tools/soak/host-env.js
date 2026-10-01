@@ -21,8 +21,8 @@ function envFor(stateDir) {
   return {
     CRCSYNC_STATE_DIR: stateDir,
     // An empty config dir: nothing shipped in crc-sync/config/ is read, so the
-    // soak cannot drift with a squadron config edit. facility-config falls back
-    // to its in-code DEFAULT_CONFIG exactly as the tests do (briefing §3.6).
+    // soak cannot drift with a squadron config edit. The only files in it are the
+    // four facility JSONs, copied in by host-client.js's writeFixtures().
     CRCSYNC_CONFIG_DIR: p('config-empty'),
     CRCSYNC_EFSP_FACILITY_CONFIG_PATH: p('facility-incirlik.json'),
     CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER: p('facility-center.json'),

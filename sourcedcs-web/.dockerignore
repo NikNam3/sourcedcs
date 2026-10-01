@@ -5,10 +5,9 @@ node_modules
 
 # Local dev data -- production data lives entirely in the
 # sourcedcs-web-data Docker volume, mounted at /app/data. This directory
-# contains real, git-tracked squadron data (pilot-registry.json,
-# applications.json, roster.json, ...); baking it into the image would ship
-# it in every pushed GHCR layer regardless of the volume mount masking it
-# at runtime.
+# is gitignored runtime data (pilot-registry.json, applications.json, roster.json, ...);
+# baking it into the image would ship it in every pushed GHCR layer regardless of the
+# volume mount masking it at runtime. First-boot defaults live in data-seed/, which DOES ship.
 data
 
 # Not needed at runtime

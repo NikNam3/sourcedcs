@@ -9,42 +9,22 @@
 // the next restart and never mid-session (docs/adr/0058 "Notes"). Do not add a
 // setter, an API or a re-read without revisiting that note.
 
-const fs = require('fs');
-const { readPath } = require('./state-paths');
+const { readShipped, readLayer } = require('./tuning-file');
 
-const DEFAULTS = {
-  conformance: {
-    minGroundSpeedKt: 50,
-    headingToleranceDeg: 5,
-    headingGraceSec: 30,
-    headingPersistSec: 10,
-    atAltitudeBandFt: 400,
-    levelBustFt: 500,
-    levelBustPersistSec: 3,
-    wrongWayFpm: 500,
-    wrongWayPersistSec: 5,
-  },
-  stca: {
-    lateralNm: 3,
-    verticalFt: 1000,
-    lookAheadSec: 120,
-    stepSec: 2,
-    minGroundSpeedKt: 50,
-    minTrackAgeSec: 10,
-  },
-};
+const NAME = 'alerting.json';
 
+/**
+ * config/alerting.json is the only source of the numbers; a state/ copy (or the
+ * `override` path a test passes) overrides it key by key. A missing shipped file
+ * is a startup error naming it.
+ */
 function loadAlertingConfig(override) {
-  let file = {};
-  try {
-    file = JSON.parse(fs.readFileSync(readPath('alerting.json', override), 'utf8'));
-  } catch (e) {
-    console.warn('[alerting] no alerting.json, using built-in thresholds:', e.message);
-  }
+  const shipped = readShipped(NAME);
+  const layer = readLayer(NAME, override) || {};
   return {
-    conformance: { ...DEFAULTS.conformance, ...(file.conformance || {}) },
-    stca: { ...DEFAULTS.stca, ...(file.stca || {}) },
+    conformance: { ...shipped.conformance, ...(layer.conformance || {}) },
+    stca: { ...shipped.stca, ...(layer.stca || {}) },
   };
 }
 
-module.exports = { DEFAULTS, loadAlertingConfig };
+module.exports = { loadAlertingConfig };

@@ -82,6 +82,11 @@ class WsHub {
     console.log('[ws-hub] /feed attached');
   }
 
+  /** Stops the tick `attach()` started, so a process (or a test) holding a hub can end. Idempotent. */
+  stop() {
+    if (this._timer) { clearInterval(this._timer); this._timer = null; }
+  }
+
   getMissionData() { return this._missionData; }
 
   setMissionData(data) {
@@ -600,30 +605,15 @@ class WsHub {
       const result = this._efsp.handleMessage(session, msg);
       if (result) {
         if (result.ack) ws.send(JSON.stringify(result.ack));
-        if (result.broadcast) this._broadcastEfsp(result.broadcast);
-        // WP4A gap-closure (docs/adr/0022) — a coordination primitive can
-        // touch a Strip in the PEER Facility's own Board (a brand-new
-        // replica on PROPOSE, an existing one's coordination state on
-        // ACCEPT/REJECT/STAND_BY); that needs its own board-delta, scoped
-        // to the peer facilityId, same immediate-broadcast treatment as
-        // the primary one above — see efsp-ws.js's own comment.
-        if (result.peerBroadcast) this._broadcastEfsp(result.peerBroadcast);
-        // WP6 (docs/adr/0051) — a Strip Mutation can void or retire a MARSA
-        // relation as a side effect (§9.2 rule 2's interlock, or a flight
-        // ending). A relation is not a Strip and rides no Board's sequence, so
-        // it needs its own delta beside the board one, on the same round trip:
-        // §9.2 rule 2 requires the void to "alert every participant Strip", and
-        // waiting for the next MARSA op to carry it would be docs/adr/0022's
-        // bug again — a correct server-side change no client ever hears about.
-        if (result.marsaBroadcast) this._broadcastEfsp(result.marsaBroadcast);
-        // docs/adr/0074 — the carrier's Case, stack or banner: one delta carrying the whole hull record.
-        if (result.carrierBroadcast) this._broadcastEfsp(result.carrierBroadcast);
-        // docs/adr/0093 — the SFA rotation record: one delta carrying the whole record.
-        if (result.sfaBroadcast) this._broadcastEfsp(result.sfaBroadcast);
+        // One round trip's frames, in the order efsp-ws.js's skeleton fixed (wire/skeleton.js SLOT_ORDER): the
+        // primary delta, the PEER Facility's, the MARSA relation's, the carrier's, the SFA's. Each is a delta a
+        // different store owns and no Board sequence can carry (docs/adr/0022 peer replica, 0051 MARSA void,
+        // 0074 carrier, 0093 SFA rotation), sent immediately on the same round trip, never left for the next op.
+        for (const frame of result.broadcasts) this._broadcastEfsp(frame);
         // After the broadcasts, so a client sees the Strip change before the
         // alert change. Guarded: a monitor bug must never cost the sender's
         // round trip.
-        if (this._onEfspChange && (result.broadcast || result.peerBroadcast || result.marsaBroadcast || result.carrierBroadcast || result.sfaBroadcast)) {
+        if (this._onEfspChange && result.broadcasts.length > 0) {
           try { this._onEfspChange(); } catch (err) { console.error('[crc-sync] onEfspChange failed:', err); }
         }
         // Declaring a different held set is what changes a controller's

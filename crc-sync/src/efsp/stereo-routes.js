@@ -122,23 +122,19 @@ function validateStereoRoutes(candidate) {
   return { ok: true };
 }
 
-// Ships empty — see this module's header for why an invented default would be
-// defect D11 rather than a convenience.
-const DEFAULT_STEREO_ROUTES = [];
-
+// Ships empty as config/efsp-stereo-routes.json (see this module's header for why an
+// invented default would be defect D11). No code copy of that `[]` exists (DATA-2, H88): an
+// unreadable or invalid file is a startup error naming it.
 function _load() {
+  let onDisk;
   try {
-    const onDisk = JSON.parse(fs.readFileSync(STEREO_ROUTES_PATH, 'utf8'));
-    const check = validateStereoRoutes(onDisk);
-    if (!check.ok) {
-      console.warn('[efsp-stereo-routes] on-disk stereo routes failed validation, using defaults:', check.detail);
-      return deepClone(DEFAULT_STEREO_ROUTES);
-    }
-    return onDisk;
+    onDisk = JSON.parse(fs.readFileSync(STEREO_ROUTES_PATH, 'utf8'));
   } catch (e) {
-    console.warn('[efsp-stereo-routes] no stereo routes config loaded, using defaults:', e.message);
-    return deepClone(DEFAULT_STEREO_ROUTES);
+    throw new Error(`[efsp-stereo-routes] cannot read ${STEREO_ROUTES_PATH}: ${e.message}`);
   }
+  const check = validateStereoRoutes(onDisk);
+  if (!check.ok) throw new Error(`[efsp-stereo-routes] ${STEREO_ROUTES_PATH} failed validation: ${check.detail}`);
+  return onDisk;
 }
 
 let stereoRoutes = _load();

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { slot } from './helpers/wire-slots.mjs';
 
 /* Field state (guide §9.7, docs/adr/0061) — the pure module, the store driven
  * directly, and the wire. The two §13 acceptance lines are walked end to end in
@@ -566,9 +567,9 @@ test('efsp-field-state-mutation routes, applies, acks and broadcasts efsp-field-
   assert.equal(out.ack.runwayId, '05/23');
   assert.equal(out.ack.fieldStateSeq, seq + 1);
   assert.equal(rwy(out.ack.fieldState).status, 'CLOSED');
-  assert.equal(out.broadcast.type, 'efsp-field-state-delta');
-  assert.equal(out.broadcast.fieldStateSeq, seq + 1);
-  assert.equal(rwy(out.broadcast.fieldStates.updated[0]).status, 'CLOSED');
+  assert.equal(slot(out, 'primary').type, 'efsp-field-state-delta');
+  assert.equal(slot(out, 'primary').fieldStateSeq, seq + 1);
+  assert.equal(rwy(slot(out, 'primary').fieldStates.updated[0]).status, 'CLOSED');
   // Rule 5's deviation: the Board sequence does not move.
   assert.equal(efsp.boardStore.currentSeq, boardSeq);
   const back = fieldAct(efsp, c.TWR, 'TWR', { kind: 'OpenRunway', runwayId: '05/23' });
@@ -585,7 +586,7 @@ test('a field-state op from a session not Primary at that Position AT THAT FACIL
   // Primary at CTR, acting CTR, against INCIRLIK's field.
   out = fieldAct(efsp, c.CTR, 'CTR', { kind: 'CloseRunway', runwayId: '05/23' });
   assert.equal(out.ack.reason, 'NOT_HOLDING_POSITION');
-  assert.equal(out.broadcast, undefined);
+  assert.equal(slot(out, 'primary'), undefined);
   assert.equal(rwy(out.ack.fieldState).status, 'OPEN');
 });
 
@@ -594,7 +595,7 @@ test('a refused field-state op returns only an ack, with the current record, and
   const out = fieldAct(efsp, c.OPS, 'OPS', { kind: 'CloseRunway', runwayId: '05/23' });
   assert.equal(out.ack.ok, false);
   assert.equal(out.ack.reason, 'PERMISSION_DENIED');
-  assert.equal(out.broadcast, undefined);
+  assert.equal(slot(out, 'primary'), undefined);
   assert.equal(rwy(out.ack.fieldState).status, 'OPEN');
   const after = fs.existsSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH) ? fs.readFileSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, 'utf8') : null;
   assert.equal(after, before);

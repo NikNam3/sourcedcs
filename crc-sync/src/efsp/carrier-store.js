@@ -55,7 +55,8 @@ class CarrierStore {
     this._clock = clock;
     this._fdrExists = fdrExists || (() => true);
     this._isOccupied = isOccupied || (() => false);
-    this._hulls = (hulls && hulls.length ? hulls : [carrier.DEFAULT_HULL]).map(deepClone);
+    if (!hulls || !hulls.length) throw new Error('CarrierStore needs at least one hull (config/efsp-carriers.json)');
+    this._hulls = hulls.map(deepClone);
     this._records = new Map();
     for (const h of this._hulls) this._records.set(h.hullId, this._fresh(h.hullId));
     this._shipStates = new Map(); // hullId -> banner (derived, never persisted)

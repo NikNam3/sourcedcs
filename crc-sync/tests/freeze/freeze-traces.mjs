@@ -505,7 +505,37 @@ function monitors() {
   const out = w.finish(); w.dispose(); return out;
 }
 
+// ---- T5: one Mutation that yields both a peer delta and a MARSA delta (R0 step 1, S-FREEZE) ----------------
+// Dropping the LAST Strip of a flight that is in a MARSA relation and whose Strip is a minted coordination
+// replica: _retireStrip returns marsaChanged and peerStrip together, so the hub sends the primary, peer and MARSA
+// deltas for one Mutation, in that order.
+function peerMarsaOrder() {
+  const w = crewWorld(81);
+  const app = at(w, 'app'), ctr = at(w, 'ctr');
+  const live = (f, s) => w.strip(f, s.stripId);
+  const m1 = airborne(w, 'PMO1'), m2 = airborne(w, 'PMO2');
+  const fdrOf = (s) => w.truth().facilities.INCIRLIK.strips.find(x => x.stripId === s.stripId).fdrId;
+  const fd1 = fdrOf(m1), fd2 = fdrOf(m2);
+  const dm = w.family('app', 'efsp-marsa-mutation', { actingPositionId: 'APP', op: { kind: 'DeclareMarsa', participants: [fd1, fd2], startEvent: 'TANKER_ACCEPTED', endCondition: 'VERTICALLY_POSITIONED', declaringCallsign: 'SHELL1' } });
+  void dm;
+  const replicaOf = (s) => w.truth().facilities.CENTER.strips.find(x => x.coord && x.coord.peerStripId === s.stripId);
+  // Flight 1: the proposer's Strip is dropped first, so the replica is the last live Strip of the FDR.
+  app({ kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' }, m1);
+  const r1 = replicaOf(m1);
+  if (r1) ctr({ kind: 'HANDOFF', action: 'ACCEPT' }, r1);
+  at(w, 'app')({ kind: 'DropStrip' }, live('INCIRLIK', m1));
+  if (r1) ctr({ kind: 'DropStrip' }, live('CENTER', r1));                    // last Strip + minted replica: peer and MARSA
+  // Flight 2: the replica goes first, the proposer's Strip is then the last one (no peer to tell).
+  app({ kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' }, live('INCIRLIK', m2));
+  const r2 = replicaOf(m2);
+  if (r2) ctr({ kind: 'HANDOFF', action: 'ACCEPT' }, r2);
+  if (r2) ctr({ kind: 'DropStrip' }, live('CENTER', r2));
+  at(w, 'app')({ kind: 'DropStrip' }, live('INCIRLIK', m2));
+  return w;
+}
+
 export const TRACES = {
+  'peer-marsa-order': async () => { const w = peerMarsaOrder(); const out = w.finish(); w.dispose(); return out; },
   'order-keys': async () => orderKeys(),
   'walk-civil': async () => walkCivil(),
   'walk-manning': async () => walkManning(),
