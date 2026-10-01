@@ -1014,6 +1014,13 @@ class FdrStore {
     const fdr = this._fdrs.get(fdrId);
     if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
     const military = ensureMilitary(fdr);
+    // EEAT is typed as Zulu HHMM like every other time on a Strip, resolved
+    // against the mission clock (ADR 0079); the model holds epoch ms.
+    if (field === 'eeatUtc' && typeof value === 'string') {
+      const at = resolveZuluHhmm(value, this._clock.now());
+      if (at == null) return { ok: false, reason: 'VALIDATION_ERROR', detail: `EEAT must be a Zulu time, HHMM (not ${JSON.stringify(value)})` };
+      value = at;
+    }
     const r = setCarrierFlightField(military.carrier, field, value);
     if (!r.ok) return r;
     fdr.military = { ...military, carrier: r.flight };

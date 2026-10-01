@@ -296,3 +296,21 @@ test('the audit log carries the carrier ops and the trigger of each hand-over', 
   assert.ok(lines.some(l => l.op === 'InvokeNla' && l.carrierTransfer === 'MARSHAL_TO_APPROACH' && l.carrierTrigger === 'CONTROLLER_INITIATED'));
   assert.ok(lines.some(l => l.op === 'Stack:MarkPushed'));
 });
+
+test('typed values are what a controller reads: EEAT and Charlie time as Zulu HHMM, the marshal radial magnetic', () => {
+  const { efsp, c } = fresh();
+  const a = checkIn(efsp, c, 'AAA11');
+  mustAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', a, { kind: 'SetBlock', blockId: 'C15', value: '1432' });
+  const eeat = efsp.fdrStore.getFdr(a.fdrId).military.carrier.eeatUtc;
+  assert.equal(new Date(eeat).getUTCHours() * 100 + new Date(eeat).getUTCMinutes(), 1432);
+  refused(act(efsp, c.CV_MARSHAL, 'CV_MARSHAL', strip(efsp, a.stripId), { kind: 'SetBlock', blockId: 'C15', value: '2561' }), 'VALIDATION_ERROR', /Zulu/);
+  mustCarrierAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', { kind: 'SetCharlieTime', hhmm: '1500' });
+  assert.ok(Number.isFinite(efsp.carrierStore.getRecord().stacks.MAIN.charlieTimeUtc));
+  // no variation known (no ship yet): a magnetic radial cannot be converted, and says so
+  refused(carrierAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', { kind: 'SetMarshalRadial', marshalRadialMagDeg: 180 }).ack, 'VALIDATION_ERROR', /variation/);
+  efsp.carrierStore.setShipState('CVN-72', { hullId: 'CVN-72', found: true, stale: false, headingRef: 'TRUE', brcDeg: 10, finalBearingDeg: 1, magneticVariationDeg: 5, altimeterInHg: null, altimeterSource: null });
+  mustCarrierAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', { kind: 'SetMarshalRadial', marshalRadialMagDeg: 180 });
+  assert.equal(efsp.carrierStore.getRecord().stacks.MAIN.marshalRadialDeg, 185, 'true = magnetic + easterly variation');
+  const d = view(efsp).derived.MAIN[0];
+  assert.deepEqual(d.marshalRadialDisplay, { value: 180, ref: 'M' });
+});

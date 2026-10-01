@@ -34,6 +34,7 @@
 
 const permission = require('./permission');
 const carrier = require('./carrier');
+const { resolveZuluHhmm } = require('./zulu-time');
 const { WALL_CLOCK } = require('../mission-clock');
 
 const TRANSITIONS_CAP = 200;
@@ -123,7 +124,15 @@ class CarrierStore {
     const derived = {};
     const consistency = {};
     for (const [stackId, stack] of Object.entries(r.stacks)) {
-      derived[stackId] = carrier.deriveStack(stack, { caseValue, shipState }).map(e => ({ ...e }));
+      // One implementation of every bearing's magnetic display (H15): the
+      // client draws `display`, it never converts.
+      const ref = shipState && shipState.headingRef === 'GRID' ? 'GRID' : 'TRUE';
+      const mv = shipState && Number.isFinite(shipState.magneticVariationDeg) ? shipState.magneticVariationDeg : null;
+      derived[stackId] = carrier.deriveStack(stack, { caseValue, shipState }).map(e => ({
+        ...e,
+        marshalRadialDisplay: carrier.displayBearing(e.marshalRadialDeg, { ref, magneticVariationDeg: mv }),
+        expectedFinalBearingDisplay: carrier.displayBearing(e.expectedFinalBearingDeg, { ref, magneticVariationDeg: mv }),
+      }));
       // §9.12's "SHOULD validate": non-empty only when something is wrong (ADR 0058).
       consistency[stackId] = carrier.checkConsistency(derived[stackId]);
     }
@@ -132,9 +141,16 @@ class CarrierStore {
       const d = carrier.deriveStack(stack, { caseValue, shipState });
       lanes[stackId] = carrier.assignLanes(d, { isOccupied: this._isOccupied });
     }
+    let banner = deepClone(shipState);
+    if (banner) {
+      const ref = banner.headingRef === 'GRID' ? 'GRID' : 'TRUE';
+      const mv = Number.isFinite(banner.magneticVariationDeg) ? banner.magneticVariationDeg : null;
+      banner.brcDisplay = carrier.displayBearing(banner.brcDeg, { ref, magneticVariationDeg: mv });
+      banner.finalBearingDisplay = carrier.displayBearing(banner.finalBearingDeg, { ref, magneticVariationDeg: mv });
+    }
     return {
       ...deepClone(r),
-      shipState: deepClone(shipState),
+      shipState: banner,
       derived, lanes, consistency,
       advisory: this._advisory(hullId),
       hull: this.hull(hullId),
@@ -264,11 +280,37 @@ class CarrierStore {
       if (!permission.canSequenceMarshalStack(actingPositionId)) {
         return { ok: false, reason: 'PERMISSION_DENIED', detail: `${actingPositionId} does not sequence the Marshal stack` };
       }
-      return this._stackOp(record, op, by, false);
+      const prepared = this._prepare(record, op);
+      if (!prepared.ok) return prepared;
+      return this._stackOp(record, prepared.op, by, false);
     }
     // SetAngels, SetDme and anything else: say why (WP7A bullet 2, D16).
     const r = carrier.applyStackOp(this._stackOf(record, op.stackId), op);
     return r.ok ? { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown carrier op '${op.kind}'` } : r;
+  }
+
+  /**
+   * A controller types what a controller reads: a Charlie time as Zulu HHMM and
+   * a marshal radial MAGNETIC (decisions H15). Both are converted here, on the
+   * server, once (the client never converts a typed magnetic value), and the
+   * model only ever holds epoch ms and a TRUE bearing.
+   */
+  _prepare(record, op) {
+    if (op.kind === 'SetCharlieTime' && typeof op.hhmm === 'string') {
+      const at = resolveZuluHhmm(op.hhmm, this._clock.now());
+      if (at == null) return { ok: false, reason: 'VALIDATION_ERROR', detail: `Charlie time must be a Zulu time, HHMM (not ${JSON.stringify(op.hhmm)})` };
+      return { ok: true, op: { ...op, charlieTimeUtc: at } };
+    }
+    if (op.kind === 'SetMarshalRadial' && op.marshalRadialMagDeg !== undefined) {
+      const ship = this._shipStates.get(record.hullId);
+      const variation = ship && Number.isFinite(ship.magneticVariationDeg) ? ship.magneticVariationDeg : null;
+      if (op.marshalRadialMagDeg === null) return { ok: true, op: { ...op, marshalRadialDeg: null } };
+      if (variation == null) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'the magnetic variation at the ship is not known, so a magnetic radial cannot be converted' };
+      const mag = Number(op.marshalRadialMagDeg);
+      if (!Number.isFinite(mag)) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'the marshal radial must be a magnetic bearing, 0 to 360' };
+      return { ok: true, op: { ...op, marshalRadialDeg: carrier.normDeg(mag + variation) } };
+    }
+    return { ok: true, op };
   }
 
   _stackOf(record, stackId) {
