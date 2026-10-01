@@ -1,5 +1,3 @@
-'use strict';
-
 /* The ATO import dialog (crc-sync docs/adr/0071, guide §9.8).
  *
  * Wiring, not layout: the button exists only while TAC_C2 is held, the preview
@@ -9,36 +7,36 @@
  * imported until one is typed (H60 has already shortened what it could).
  */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('fs');
-const path = require('path');
-const vm = require('vm');
-const { makeElement, descendants } = require('./helpers/dom-stub.js');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import './helpers/client-env.mjs';
+import domStub from './helpers/dom-stub.js';
+import { freshGraph } from './helpers/fresh-graph.mjs';
 
-const FILE = path.join(__dirname, '../app/public/js/panels/efsp/ato-import.js');
+const { makeElement, descendants } = domStub;
 
-function mount({ held = ['TAC_C2'] } = {}) {
+// A timer that cannot keep the test process alive (the refusal banner schedules its own clear).
+const realSetTimeout = globalThis.setTimeout;
+globalThis.setTimeout = (fn, ms, ...a) => { const t = realSetTimeout(fn, ms, ...a); if (t.unref) t.unref(); return t; };
+
+async function mount({ held = ['TAC_C2'] } = {}) {
   const sent = [];
-  const errors = [];
-  let n = 0;
-  const sandbox = {
-    console, module: { exports: {} }, Date, JSON, Math, Number, Set, Map, Array, Object, String, RegExp,
-    document: { createElement: makeElement },
-    crypto: { randomUUID: () => `id-${++n}` },
-    getActingPositions: () => held,
-    _sendEfsp: (msg) => sent.push(msg),
-    _showMutationError: (reason, detail) => errors.push({ reason, detail }),
-  };
-  vm.createContext(sandbox);
-  vm.runInContext(fs.readFileSync(FILE, 'utf8'), sandbox, { filename: 'ato-import.js' });
+  const g = freshGraph(); // a new instance of the client modules per mount, as the old vm context was
+  const ws = await g.import('panels/efsp/efsp-ws.js');
+  const panel = await g.import('panels/efsp/efsp-panel.js');
+  const api = await g.import('panels/efsp/ato-import.js');
+  ws.setEfspSender('_sendEfsp', () => {});
+  ws.sendEfspSetPositions('TACTICAL', held); // what getActingPositions() reads
+  ws.setEfspSender('_sendEfsp', (msg) => sent.push(msg));
+  // _showMutationError records the refusal; read it back as the old stub's list.
+  const errors = { map: (fn) => { const r = panel.getCurrentEfspRefusal(); return (r ? [{ reason: r.reason, detail: r.detail }] : []).map(fn); } };
   const root = makeElement('div');
   const toolbar = makeElement('div');
   toolbar.className = 'efsp-toolbar';
   root.appendChild(toolbar);
-  sandbox.initAtoImport(root);
+  api.initAtoImport(root);
   const button = toolbar.children.find(c => c.className === 'efsp-ato-import-btn');
-  return { sandbox, sent, errors, root, toolbar, button, api: sandbox.module.exports };
+  return { sent, errors, root, toolbar, button, api };
 }
 
 const PREVIEW = {
@@ -66,22 +64,22 @@ function previewed(m) {
   return req;
 }
 
-test('the Import ATO button is there only while TAC_C2 is held', () => {
-  assert.equal(mount().button.hidden, false);
-  const gci = mount({ held: ['GCI'] });
+test('the Import ATO button is there only while TAC_C2 is held', async () => {
+  assert.equal((await mount()).button.hidden, false);
+  const gci = await mount({ held: ['GCI'] });
   assert.equal(gci.button.hidden, true);
   gci.api.openAtoImportDialog();
   assert.equal(gci.api.getAtoImportState().open, false, 'no dialog for a Position that cannot import');
 });
 
-test('the dialog mounts under the panel root, not in Bay content (T15)', () => {
-  const m = mount();
+test('the dialog mounts under the panel root, not in Bay content (T15)', async () => {
+  const m = await mount();
   m.api.openAtoImportDialog();
   assert.ok(m.root.children.some(c => c.className === 'efsp-ato-dialog'));
 });
 
-test('Preview sends the text as a read-only efsp-ato-preview, and the preview renders warnings and missing fields', () => {
-  const m = mount();
+test('Preview sends the text as a read-only efsp-ato-preview, and the preview renders warnings and missing fields', async () => {
+  const m = await mount();
   const req = previewed(m);
   assert.equal(req.type, 'efsp-ato-preview');
   assert.equal(req.actingPositionId, 'TAC_C2');
@@ -96,8 +94,8 @@ test('Preview sends the text as a read-only efsp-ato-preview, and the preview re
   assert.match(text, /1300Z–1500Z/);
 });
 
-test('a stale preview answer is ignored', () => {
-  const m = mount();
+test('a stale preview answer is ignored', async () => {
+  const m = await mount();
   m.api.openAtoImportDialog();
   m.api.setAtoImportText('x');
   m.api.requestAtoPreview();
@@ -105,8 +103,8 @@ test('a stale preview answer is ignored', () => {
   assert.equal(m.api.getAtoImportState().preview, null);
 });
 
-test('an unseedable line cannot be imported until a callsign is typed', () => {
-  const m = mount();
+test('an unseedable line cannot be imported until a callsign is typed', async () => {
+  const m = await mount();
   previewed(m);
   const before = m.sent.length;
   assert.equal(m.api.sendAtoImport(), null);
@@ -121,8 +119,8 @@ test('an unseedable line cannot be imported until a callsign is typed', () => {
   assert.ok(m.api.sendAtoImport());
 });
 
-test('Import sends exactly one efsp-ato-mutation carrying the preview\'s textSha1 and the chosen actions', () => {
-  const m = mount();
+test('Import sends exactly one efsp-ato-mutation carrying the preview\'s textSha1 and the chosen actions', async () => {
+  const m = await mount();
   previewed(m);
   m.api.setAtoLineChoice('1901T#0', { action: 'SKIP' });
   const before = m.sent.length;
@@ -144,15 +142,15 @@ test('Import sends exactly one efsp-ato-mutation carrying the preview\'s textSha
   assert.equal(m.sent.length, before + 1);
 });
 
-test('the ack closes the dialog when every line imported, and lists the refusals otherwise', () => {
-  const ok = mount();
+test('the ack closes the dialog when every line imported, and lists the refusals otherwise', async () => {
+  const ok = await mount();
   previewed(ok);
   ok.api.setAtoLineChoice('1901T#0', { action: 'SKIP' });
   const id = ok.api.sendAtoImport();
   ok.api.onAtoAck({ clientMutationId: id, ok: true, results: [{ lineId: '1101A#0', ok: true, action: 'BIND' }, { lineId: '1901T#0', ok: true, action: 'SKIP' }] });
   assert.equal(ok.api.getAtoImportState().open, false);
 
-  const bad = mount();
+  const bad = await mount();
   previewed(bad);
   bad.api.setAtoLineChoice('1901T#0', { action: 'SKIP' });
   const id2 = bad.api.sendAtoImport();
@@ -161,7 +159,7 @@ test('the ack closes the dialog when every line imported, and lists the refusals
   assert.equal(state.open, true);
   assert.match(state.message, /1 line/);
 
-  const refused = mount();
+  const refused = await mount();
   previewed(refused);
   refused.api.setAtoLineChoice('1901T#0', { action: 'SKIP' });
   const id3 = refused.api.sendAtoImport();
@@ -170,8 +168,8 @@ test('the ack closes the dialog when every line imported, and lists the refusals
   assert.equal(refused.api.getAtoImportState().preview, null, 'preview again before importing');
 });
 
-test('Esc closes; Enter previews, then imports; Enter in the paste area is a newline', () => {
-  const m = mount();
+test('Esc closes; Enter previews, then imports; Enter in the paste area is a newline', async () => {
+  const m = await mount();
   m.api.openAtoImportDialog();
   m.api.setAtoImportText('x');
   const dialog = m.root.children.find(c => c.className === 'efsp-ato-dialog');

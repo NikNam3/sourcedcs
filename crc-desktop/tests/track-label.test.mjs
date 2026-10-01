@@ -1,16 +1,16 @@
-'use strict';
-
 /* How a contact reads (crc-sync's docs/adr/0059). track-label.js is the only
  * code that turns what crc-sync sends into text, so the data block, the track
  * panel, the bind picker and the correlation badge all agree by construction.
  */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const path = require('path');
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-global.settings = { transitionAltFt: 18000 };
-const L = require(path.join(__dirname, '../app/public/js/track-label.js'));
+import './helpers/client-env.mjs';
+import * as L from '../app/public/js/track-label.js';
+import { settings } from '../app/public/js/app.js';
+
+settings.transitionAltFt = 18000;
 
 function contact(over = {}) {
   return {
@@ -92,15 +92,15 @@ test('an assigned altitude block (docs/adr/0091) is written FL220-FL240, and A22
 });
 
 test('an assigned altitude follows the theater transition altitude (lane TA)', () => {
-  const saved = global.settings.transitionAltFt;
+  const saved = settings.transitionAltFt;
   try {
-    global.settings.transitionAltFt = 10000; // Syria
+    settings.transitionAltFt = 10000; // Syria
     assert.equal(L.assignedAltText(10000), 'FL100');
     assert.equal(L.assignedAltText(9000), '9,000');
     assert.equal(L.assignedBlockText({ lowFt: 22000, highFt: 24000 }), 'FL220-FL240');
     assert.equal(L.assignedBlockText({ lowFt: 8000, highFt: 12000 }), '8,000-FL120');
-    global.settings.transitionAltFt = 18000;
+    settings.transitionAltFt = 18000;
     assert.equal(L.assignedAltText(10000), '10,000');
     assert.equal(L.assignedBlockText({ lowFt: 16000, highFt: 20000 }), '16,000-FL200');
-  } finally { global.settings.transitionAltFt = saved; }
+  } finally { settings.transitionAltFt = saved; }
 });

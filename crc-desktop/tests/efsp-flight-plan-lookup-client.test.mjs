@@ -1,16 +1,15 @@
-'use strict';
-
 /* Client-side counterpart to crc-sync's efsp-flight-plan-lookup.test.mjs —
    same "never throws, resolves {found:false} on any failure" contract,
    verified the same way: an injectable fetchImpl, no real network or DOM. */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import './helpers/client-env.mjs';
 
-const {
+import {
   lookupFlightPlanClient, FLIGHT_PLAN_LOOKUP_CLIENT_TIMEOUT_MS,
   listFiledFlightPlansClient, FLIGHT_PLAN_LIST_CLIENT_TIMEOUT_MS,
-} = require('../app/public/js/panels/efsp/efsp-flight-plan-lookup.js');
+} from '../app/public/js/panels/efsp/efsp-flight-plan-lookup.js';
 
 function fakeFetch(status, body) {
   return async () => ({ ok: status >= 200 && status < 300, json: async () => body });

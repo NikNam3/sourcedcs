@@ -1,5 +1,3 @@
-'use strict';
-
 /* The ATO on the Strip (crc-sync docs/adr/0071): the AR join, the Mode 3
  * conflict and the read-only ▼ rows, rendered through the REAL strip-view.js /
  * bay-view.js against the shared DOM stub.
@@ -8,14 +6,13 @@
  * warning, docs/adr/0058), and nothing on it dispatches anything.
  */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('fs');
-const path = require('path');
-const vm = require('vm');
-const { makeElement, descendants } = require('./helpers/dom-stub.js');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import './helpers/client-env.mjs';
+import domStub from './helpers/dom-stub.js';
+import { freshGraph } from './helpers/fresh-graph.mjs';
 
-const CLIENT = path.join(__dirname, '../app/public/js/panels/efsp');
+const { makeElement, descendants } = domStub;
 
 function strip(stripId, fdrId, over = {}) {
   return {
@@ -63,42 +60,38 @@ const STRIPS = [
   strip('s-plain', 'f-plain', { role: 'DEPARTURE', state: 'PROPOSED', ownerPositionId: 'OPS', facilityId: 'INCIRLIK', bayId: 'ops-proposed' }),
 ];
 
-function mount({ strips = STRIPS, fdrs = FDRS } = {}) {
+async function mount({ strips = STRIPS, fdrs = FDRS } = {}) {
   const sent = [];
-  let selected = null;
-  const sandbox = {
-    console, module: { exports: {} }, setTimeout, clearTimeout, Date, JSON, Math, Number, Set, Map,
-    Array, Object, String, Boolean, isNaN, parseInt, parseFloat, crypto: { randomUUID: () => 'id' },
-    document: { getElementById: () => null, createElement: makeElement, body: makeElement('body'), addEventListener() {}, removeEventListener() {} },
-    window: { innerWidth: 1600, innerHeight: 1000, addEventListener() {}, removeEventListener() {}, getLatestTrack: () => null, getAllTracks: () => [] },
-  };
-  sandbox.globalThis = sandbox;
-  vm.createContext(sandbox);
-  vm.runInContext(fs.readFileSync(path.join(CLIENT, '../../track-label.js'), 'utf8'), sandbox);
-  for (const file of ['efsp-nla.js', 'strip-template.js', 'efsp-state.js', 'efsp-arrivals.js', 'efsp-gestures.js',
-    'annotation-editor.js', 'strip-drag.js', 'correlation-highlight.js', 'marsa-badge.js', 'strip-fields.js', 'bay-view.js', 'strip-view.js', 'ato-strip.js']) {
-    vm.runInContext(fs.readFileSync(path.join(CLIENT, file), 'utf8'), sandbox, { filename: file });
-  }
-  sandbox.getActingPositions = () => ['TAC_C2', 'APP', 'OPS'];
+  globalThis.document.getElementById = () => null;
+  globalThis.getLatestTrack = () => null; // window.getLatestTrack / getAllTracks, as app.js's startApp() sets them
+  globalThis.getAllTracks = () => [];
+  const g = freshGraph();
+  const state = await g.import('panels/efsp/efsp-state.js');
+  const ws = await g.import('panels/efsp/efsp-ws.js');
+  const bay = await g.import('panels/efsp/bay-view.js');
+  const stripView = await g.import('panels/efsp/strip-view.js');
+  const ato = await g.import('panels/efsp/ato-strip.js');
+  ws.setEfspSender('_sendEfsp', () => {});
+  ws.sendEfspSetPositions('TACTICAL', ['TAC_C2']);
+  ws.sendEfspSetPositions('INCIRLIK', ['APP', 'OPS']); // getActingPositions() = ['TAC_C2', 'APP', 'OPS'] in union
   for (const name of ['sendEfspMutation', 'sendEfspAirspaceMutation', 'sendEfspCorrelationMutation', 'sendEfspMarsaMutation', '_sendEfsp', 'sendEfspCreateStrip']) {
-    sandbox[name] = (...args) => { sent.push({ name, args }); return 'mid'; };
+    ws.setEfspSender(name, (...args) => { sent.push({ name, args }); return 'mid'; });
   }
-  sandbox.convertStripToArrival = () => sent.push({ name: 'convert' });
-  sandbox.getActiveEfspSearchQuery = () => null;
-  sandbox.updateMap = () => {};
-  sandbox.renderAllOpenEfspBays = () => {};
-  sandbox.getCurrentEfspRefusal = () => null;
-  sandbox.getSelectedEfspStripId = () => selected;
-  sandbox.applyEfspSnapshot({ strips, fdrs, positions: [], bays: [], airspaces: [], correlations: [], marsa: [] });
-  const build = (stripId) => sandbox._buildStripEl(sandbox.getEfspStrip(stripId));
-  const select = (stripId) => { selected = stripId; sandbox.highlightArParticipants(stripId); };
-  return { sandbox, sent, build, select };
+  bay._setRenderAllOpenEfspBaysForTest(() => {});
+  state.applyEfspSnapshot({ strips, fdrs, positions: [], bays: [], airspaces: [], correlations: [], marsa: [] });
+  const build = (stripId) => bay._buildStripEl(state.getEfspStrip(stripId));
+  const select = (stripId) => {
+    const cur = bay.getSelectedEfspStripId();
+    if (stripId === null) { if (cur) bay._selectStrip(cur); } else if (cur !== stripId) bay._selectStrip(stripId);
+    ato.highlightArParticipants(stripId);
+  };
+  return { sandbox: { ...ato, ...stripView }, bay, sent, build, select };
 }
 
 const slot = (el, key) => descendants(el).find(c => c.dataset && c.dataset.slot === key);
 
-test('WP7: A tanker\'s AR line and its receivers\' Strips render as a joined group.', () => {
-  const m = mount();
+test('WP7: A tanker\'s AR line and its receivers\' Strips render as a joined group.', async () => {
+  const m = await mount();
   const shell = slot(m.build('s-shell'), 'ar');
   const viper = slot(m.build('s-viper'), 'ar');
   const dude = slot(m.build('s-dude'), 'ar');
@@ -126,8 +119,8 @@ test('WP7: A tanker\'s AR line and its receivers\' Strips render as a joined gro
   assert.equal(m.sent.length, 0, 'the join dispatches nothing');
 });
 
-test('the highlight survives a re-render and clears with the selection', () => {
-  const m = mount();
+test('the highlight survives a re-render and clears with the selection', async () => {
+  const m = await mount();
   m.select('s-shell');
   m.build('s-viper'); m.build('s-viper');
   assert.equal(m.sandbox.refreshArHighlight(), false, 'unchanged');
@@ -136,17 +129,17 @@ test('the highlight survives a re-render and clears with the selection', () => {
   assert.equal(m.sandbox.isArHighlighted('s-viper'), false);
 });
 
-test('a dropped peer leaves the group; a receiver whose tanker is gone has no badge', () => {
+test('a dropped peer leaves the group; a receiver whose tanker is gone has no badge', async () => {
   const strips = STRIPS.map(s => (s.stripId === 's-shell' ? { ...s, state: 'DROPPED' } : s.stripId === 's-dude' ? { ...s } : s));
-  const m = mount({ strips: strips.filter(s => s.state !== 'DROPPED') });
+  const m = await mount({ strips: strips.filter(s => s.state !== 'DROPPED') });
   assert.equal(slot(m.build('s-viper'), 'ar'), undefined);
-  const m2 = mount({ strips: STRIPS.filter(s => s.stripId !== 's-dude') });
+  const m2 = await mount({ strips: STRIPS.filter(s => s.stripId !== 's-dude') });
   assert.equal(slot(m2.build('s-shell'), 'ar').textContent, 'AR ×1');
 });
 
-test('the Mode 3 conflict shows only when the ATO\'s code and the assigned code differ', () => {
+test('the Mode 3 conflict shows only when the ATO\'s code and the assigned code differ', async () => {
   const fdrs = FDRS.map(f => (f.fdrId === 'f-viper' ? { ...f, identity: { ...f.identity, beaconAssigned: '4533' } } : f));
-  const m = mount({ fdrs });
+  const m = await mount({ fdrs });
   for (const id of ['s-viper', 's-viper-dep']) {
     const chip = slot(m.build(id), 'ato');
     assert.ok(chip, `${id}: every Strip of the flight`);
@@ -159,10 +152,10 @@ test('the Mode 3 conflict shows only when the ATO\'s code and the assigned code 
   assert.equal(slot(m.build('s-plain'), 'ato'), undefined, 'no ATO, nothing');
 });
 
-test('the ▼ rows are on the DEPARTURE and MISSION Strips of a bound flight, read-only, and absent without an ATO', () => {
-  const m = mount();
+test('the ▼ rows are on the DEPARTURE and MISSION Strips of a bound flight, read-only, and absent without an ATO', async () => {
+  const m = await mount();
   for (const id of ['s-viper', 's-viper-dep']) {
-    vm.runInContext(`_expandedStripId = ${JSON.stringify(id)}`, m.sandbox);
+    m.bay._setExpandedStripId(id);
     const el = m.build(id);
     const rows = descendants(el).filter(e => (e.className || '').includes('efsp-ato-row'));
     const byLabel = Object.fromEntries(rows.map(r => [r.dataset.atoRow, r.children[1].textContent]));
@@ -176,14 +169,14 @@ test('the ▼ rows are on the DEPARTURE and MISSION Strips of a bound flight, re
     assert.equal(byLabel['ATO missing'], 'packageId');
     for (const r of rows) assert.equal(descendants(r).some(e => e.tagName === 'input' || e.tagName === 'select'), false, 'no editor');
   }
-  vm.runInContext('_expandedStripId = "s-plain"', m.sandbox);
+  m.bay._setExpandedStripId('s-plain');
   assert.equal(descendants(m.build('s-plain')).some(e => (e.className || '').includes('efsp-ato-row')), false);
 });
 
-test('INDICATOR_ORDER carries the ATO alert after the wave-2 advisories and the AR badge after MARSA', () => {
-  const m = mount();
-  const order = vm.runInContext('INDICATOR_ORDER', m.sandbox);
+test('INDICATOR_ORDER carries the ATO alert after the wave-2 advisories and the AR badge after MARSA', async () => {
+  const m = await mount();
+  const order = m.sandbox.INDICATOR_ORDER;
   assert.equal(order.indexOf('ato'), order.indexOf('trk') - 1);
   assert.equal(order.indexOf('ar'), order.indexOf('marsa') + 1);
-  assert.ok(vm.runInContext('ALERT_SLOT_KEYS.has("ato")', m.sandbox));
+  assert.ok(m.sandbox.ALERT_SLOT_KEYS.has('ato'));
 });

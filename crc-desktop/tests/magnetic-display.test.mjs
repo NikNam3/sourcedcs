@@ -1,5 +1,3 @@
-'use strict';
-
 /* Headings are magnetic, from crc-sync's model (crc-sync docs/adr/0085,
  * decisions H15). The manual `hdgCorrection` setting and its Airport-panel
  * field are gone, every heading display goes through magnetic.js, and a typed
@@ -8,11 +6,18 @@
  * tests/theater-context.test.mjs, against this same file.
  */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('fs');
-const path = require('path');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 
+import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+import './helpers/client-env.mjs';
+import * as M from '../app/public/js/magnetic.js';
+
+const require = createRequire(import.meta.url);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(__dirname, '../app/public');
 const read = (rel) => fs.readFileSync(path.join(PUBLIC, rel), 'utf8');
 
@@ -76,15 +81,15 @@ test('typed magnetic runway courses are converted by crc-sync, and the map draws
 });
 
 test('magnetic.js loads after geo.js and before any panel', () => {
-  const html = read('index.html');
-  const at = (s) => html.indexOf(`<script src="./js/${s}"></script>`);
+  // ESM-1: index.html loads js/main.js, whose import list is the load order the <script> tags used to be.
+  const html = read('js/main.js');
+  const at = (s) => html.indexOf(`import './${s}';`);
   assert.ok(at('magnetic.js') > at('geo.js') && at('geo.js') > 0);
   assert.ok(at('magnetic.js') < at('geojson.js'));
   assert.ok(at('magnetic.js') < at('panels/topbar.js'));
 });
 
 test('magnetic.js: fixed variation, grid interpolation, unknown → null', () => {
-  const M = require(path.join(PUBLIC, 'js/magnetic.js'));
   M.applyTheaterFacts(null);
   assert.equal(M.toMagneticDisplay(90, 35, 36), null);
   M.applyTheaterFacts({ magnetic: { fixedDeg: 5, grid: null }, convergence: { tmCentralMeridianDeg: null } });

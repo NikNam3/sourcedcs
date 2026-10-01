@@ -1,15 +1,16 @@
-'use strict';
-
 // Every Playwright spec must import test/expect from ./helpers/test. That module is what serves the
 // CDN scripts from node_modules and what gives each spec file a fresh crc-sync (the reset hook);
 // a spec that requires '@playwright/test' directly silently gets neither and depends on whatever
 // ran before it (docs/wip/E2EH.md). A new spec that forgets fails here, in `npm test`.
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('fs');
-const path = require('path');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const E2E = path.join(__dirname, '..', 'e2e');
 const specs = fs.readdirSync(E2E).filter((f) => f.endsWith('.spec.js'));
 

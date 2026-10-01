@@ -1,5 +1,3 @@
-'use strict';
-
 /* The coverage list, rendered by the real radar-panel.js.
  *
  * Coverage follows the Positions a controller holds (crc-sync's
@@ -13,13 +11,11 @@
  * same reason: it proves the wiring, not the pixels.
  */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('fs');
-const vm = require('vm');
-const path = require('path');
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const PANEL = path.join(__dirname, '../app/public/js/panels/radar-panel.js');
+import './helpers/client-env.mjs';
+import { freshGraph } from './helpers/fresh-graph.mjs';
 
 function makeElement(tag) {
   return {
@@ -42,50 +38,36 @@ function makeElement(tag) {
 }
 
 /** Loads radar-panel.js against stubs, with the coverage state the app would hold. */
-function load({ radars = [], heldPositions = [] } = {}) {
+async function load({ radars = [], heldPositions = [] } = {}) {
   const list = makeElement('div');
   const nodes = { 'radar-active-list': list };
+  globalThis.document.getElementById = (id) => nodes[id] || null;
+  globalThis.document.createElement = makeElement;
 
-  const sandbox = {
-    console,
-    document: {
-      getElementById: (id) => nodes[id] || null,
-      createElement: makeElement,
-      addEventListener() {}, removeEventListener() {},
-    },
-    // What app.js exposes once a `coverage` message has landed.
-    getActiveRadars: () => radars,
-    coverageRadars: radars,
-    coverageHeldPositions: heldPositions,
-    coverageRadarPositions: radars.length ? ['APP'] : [],
-    // Everything else radar-panel.js reaches for, stubbed to nothing.
-    showLosProfile() {}, hideLosProfile() {},
-    PANEL_TITLES: {}, settings: {},
-    isPanelPinned: () => false, setPanelPinned() {}, toggleDockPanel() {},
-    getAllEfspPositions: () => [], getEfspPosition: () => null,
-    sendEfspSetPositions() {}, getActingPositions: () => ({}),
-    updateTopbarUI() {}, updateMap() {}, updateZoomLimits() {}, saveSettings() {},
-  };
-  sandbox.window = sandbox;
-  vm.createContext(sandbox);
-  vm.runInContext(fs.readFileSync(PANEL, 'utf8'), sandbox, { filename: 'radar-panel.js' });
-  return { sandbox, list };
+  const g = freshGraph();
+  const app = await g.import('app.js');
+  const radarPanel = await g.import('panels/radar-panel.js');
+  const losPanel = await g.import('panels/los-panel.js');
+  // What app.js holds once a `coverage` message has landed.
+  app._setCoverageRadars(radars);
+  app._setCoverageHeldPositions(heldPositions);
+  return { sandbox: radarPanel, list, losPanel };
 }
 
 function rowTexts(list) {
   return list.children.map(row => row.children.map(c => c.textContent).join('|') || row.textContent);
 }
 
-test('a controller holding nothing is told to select a Position, not shown an empty box', () => {
-  const { sandbox, list } = load({ radars: [], heldPositions: [] });
+test('a controller holding nothing is told to select a Position, not shown an empty box', async () => {
+  const { sandbox, list } = await load({ radars: [], heldPositions: [] });
   sandbox.renderCoverageList();
   assert.equal(list.children.length, 1);
   assert.match(list.children[0].textContent, /No radar coverage/);
   assert.match(list.children[0].textContent, /ACTING AS/i);
 });
 
-test('a controller holding only scopeless Positions is told which ones work no scope', () => {
-  const { sandbox, list } = load({
+test('a controller holding only scopeless Positions is told which ones work no scope', async () => {
+  const { sandbox, list } = await load({
     radars: [],
     heldPositions: [
       { facilityId: 'INCIRLIK', positionId: 'GND', isPrimary: true },
@@ -99,8 +81,8 @@ test('a controller holding only scopeless Positions is told which ones work no s
   assert.match(text, /work no scope/, 'two Positions read as plural');
 });
 
-test('one scopeless Position reads as singular', () => {
-  const { sandbox, list } = load({
+test('one scopeless Position reads as singular', async () => {
+  const { sandbox, list } = await load({
     radars: [],
     heldPositions: [{ facilityId: 'INCIRLIK', positionId: 'GND', isPrimary: true }],
   });
@@ -108,8 +90,8 @@ test('one scopeless Position reads as singular', () => {
   assert.match(list.children[0].textContent, /GND works no scope/);
 });
 
-test('each radar is listed with its range and the Position that granted it', () => {
-  const { sandbox, list } = load({
+test('each radar is listed with its range and the Position that granted it', async () => {
+  const { sandbox, list } = await load({
     radars: [
       { id: 'app:Incirlik', type: 'approach', label: 'LTAG APP', rangeM: 148160, grantedBy: ['APP'] },
       { id: 'apt:Incirlik', type: 'airport', label: 'LTAG', rangeM: 74080, grantedBy: ['APP', 'TWR'] },
@@ -124,8 +106,8 @@ test('each radar is listed with its range and the Position that granted it', () 
   assert.deepEqual(rows, ['LTAG|APP/TWR|40nm', 'LTAG APP|APP|80nm']);
 });
 
-test('a radar whose aircraft is on the ground is marked, not hidden', () => {
-  const { sandbox, list } = load({
+test('a radar whose aircraft is on the ground is marked, not hidden', async () => {
+  const { sandbox, list } = await load({
     radars: [{ id: 'crc:11', type: 'awacs', label: 'MAGIC', rangeM: 400000, grantedBy: ['GCI'], onGround: true }],
     heldPositions: [{ facilityId: 'TACTICAL', positionId: 'GCI', isPrimary: true }],
   });
@@ -134,8 +116,8 @@ test('a radar whose aircraft is on the ground is marked, not hidden', () => {
   assert.ok(list.children[0].className.includes('disabled'));
 });
 
-test('the list is replaced rather than appended to on a re-render', () => {
-  const { sandbox, list } = load({
+test('the list is replaced rather than appended to on a re-render', async () => {
+  const { sandbox, list } = await load({
     radars: [{ id: 'apt:X', type: 'airport', label: 'X', rangeM: 74080, grantedBy: ['TWR'] }],
     heldPositions: [{ facilityId: 'INCIRLIK', positionId: 'TWR', isPrimary: true }],
   });
@@ -144,20 +126,20 @@ test('the list is replaced rather than appended to on a re-render', () => {
   assert.equal(list.children.length, 1);
 });
 
-test('hovering a radar row opens its line-of-sight profile', () => {
+test('hovering a radar row opens its line-of-sight profile', async () => {
   let hovered = null;
-  const { sandbox, list } = load({
+  const { sandbox, list, losPanel } = await load({
     radars: [{ id: 'app:X', type: 'approach', label: 'X APP', rangeM: 148160, grantedBy: ['APP'] }],
     heldPositions: [{ facilityId: 'INCIRLIK', positionId: 'APP', isPrimary: true }],
   });
-  sandbox.showLosProfile = (radar) => { hovered = radar.id; };
+  losPanel._setShowLosProfileForTest((radar) => { hovered = radar.id; });
   sandbox.renderCoverageList();
   list.children[0]._listeners.mouseenter[0]();
   assert.equal(hovered, 'app:X');
 });
 
-test('refreshRadarPanelData renders the coverage list — the entry point app.js calls', () => {
-  const { sandbox, list } = load({
+test('refreshRadarPanelData renders the coverage list — the entry point app.js calls', async () => {
+  const { sandbox, list } = await load({
     radars: [{ id: 'apt:X', type: 'airport', label: 'X', rangeM: 74080, grantedBy: ['TWR'] }],
     heldPositions: [{ facilityId: 'INCIRLIK', positionId: 'TWR', isPrimary: true }],
   });
@@ -165,8 +147,8 @@ test('refreshRadarPanelData renders the coverage list — the entry point app.js
   assert.equal(list.children.length, 1);
 });
 
-test('nothing in the panel can enable or disable a radar any more', () => {
-  const { sandbox } = load();
+test('nothing in the panel can enable or disable a radar any more', async () => {
+  const { sandbox } = await load();
   // The selector is gone, not hidden: a leftover setter would be a way for a
   // client to put itself back in charge of its own picture.
   assert.equal(sandbox.setRadarEnabled, undefined);
