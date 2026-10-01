@@ -38,6 +38,9 @@ function verifyPassword(pw, stored) {
 }
 
 const app    = express();
+/* Behind nginx (one hop): key req.ip / rate limiters on the real client from
+   X-Forwarded-For, not on the nginx container's address. */
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 const io     = new Server(server);
 

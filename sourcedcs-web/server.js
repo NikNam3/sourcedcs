@@ -12,6 +12,9 @@ const discordClient = require('./discord-client');
 const rateLimiters = require('./rate-limiters');
 
 const app = express();
+/* Behind nginx (one hop): key req.ip / rate limiters on the real client from
+   X-Forwarded-For, not on the nginx container's address. */
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
 
 /* ─── Discord bot config (see discord-client.js) ─────────── */
