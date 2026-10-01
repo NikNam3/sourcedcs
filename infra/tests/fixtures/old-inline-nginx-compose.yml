@@ -20,19 +20,156 @@ services:
     volumes:
       - certbot-webroot:/var/www/certbot:ro
       - certbot-certs:/etc/letsencrypt:ro
-      - ./nginx/templates:/etc/nginx/templates:ro
-      - ./nginx/snippets:/etc/nginx/snippets:ro
-      - ./nginx/entrypoint.d/30-reload-certs.sh:/docker-entrypoint.d/30-reload-certs.sh:ro
     environment:
       - WIKI_DOMAIN=${WIKI_DOMAIN}
       - AUTH_DOMAIN=${AUTH_DOMAIN}
       - DOMAIN=${DOMAIN}
       - ATOBRIEF_DOMAIN=${ATOBRIEF_DOMAIN}
-      # Neutral name for the crc-sync vhost. ASACS_DOMAIN is the retired asacs_link
-      # name; it is still honoured as a fallback so an existing infra/.env keeps working.
-      - CRCSYNC_DOMAIN=${CRCSYNC_DOMAIN:-${ASACS_DOMAIN}}
-    # No `command:`: the nginx image's entrypoint renders templates/*.template with
-    # envsubst into conf.d/ (only the variables set in `environment` above).
+      - ASACS_DOMAIN=${ASACS_DOMAIN}
+    command: >
+      /bin/sh -c "
+      echo 'resolver 127.0.0.11 valid=10s ipv6=off;
+      client_max_body_size 350M;
+      map \$$http_upgrade \$$connection_upgrade {
+        default upgrade;
+        \"\" close;
+      }
+      map \$$http_user_agent \$$bad_bot {
+        default 0;
+        \"~*GPTBot\" 1;
+        \"~*Amazonbot\" 1;
+        \"~*MJ12bot\" 1;
+        \"~*DotBot\" 1;
+        \"~*Bytespider\" 1;
+        \"~*l9scan\" 1;
+        \"~*RootEvidence\" 1;
+        \"~*crusader-worker\" 1;
+        \"~*Dataprovider\" 1;
+      }
+      map \$$args \$$scraper_sig {
+        default 0;
+        \"~*tagfilter=visualeditor\" 1;
+        \"~*tagfilter%3Dvisualeditor\" 1;
+        \"~*action=feedrecentchanges\" 1;
+      }
+      limit_req_zone \$$binary_remote_addr zone=wiki:10m rate=5r/s;
+      limit_req_zone \$$binary_remote_addr zone=wikiauth:5m rate=1r/s;
+      server {
+        listen 80;
+        server_name '$$WIKI_DOMAIN';
+        location /.well-known/acme-challenge/ { root /var/www/certbot; }
+        location / { return 301 https://\$$host\$$request_uri; }
+      }
+      server {
+        listen 443 ssl;
+        server_name '$$WIKI_DOMAIN';
+        ssl_certificate /etc/letsencrypt/live/'$$WIKI_DOMAIN'/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/'$$WIKI_DOMAIN'/privkey.pem;
+        deny 74.7.227.48;
+        deny 74.7.243.248;
+        if (\$$bad_bot) { return 403; }
+        if (\$$scraper_sig) { return 403; }
+        location = /robots.txt {
+          add_header Content-Type text/plain;
+          return 200 \"User-agent: GPTBot\\nDisallow: /\\nUser-agent: Amazonbot\\nDisallow: /\\n\\nUser-agent: *\\nDisallow: /index.php?\\nDisallow: /api.php\\n\";
+        }
+        location = /index.php/Special:PluggableAuthLogin {
+          limit_req zone=wikiauth burst=3 nodelay;
+          set \$$upstream mediawiki;
+          proxy_pass http://\$$upstream:80;
+          proxy_set_header Host $$host;
+          proxy_set_header X-Real-IP $$remote_addr;
+          proxy_set_header X-Forwarded-Proto https;
+        }
+        location / {
+          limit_req zone=wiki burst=30 nodelay;
+          set \$$upstream mediawiki;
+          proxy_pass http://\$$upstream:80;
+          proxy_set_header Host $$host;
+          proxy_set_header X-Real-IP $$remote_addr;
+          proxy_set_header X-Forwarded-Proto https; }
+      }
+      server {
+        listen 80;
+        server_name '$$AUTH_DOMAIN';
+        location /.well-known/acme-challenge/ { root /var/www/certbot; }
+        location / { return 301 https://\$$host\$$request_uri; }
+      }
+      server {
+        listen 443 ssl;
+        server_name '$$AUTH_DOMAIN';
+        ssl_certificate /etc/letsencrypt/live/'$$AUTH_DOMAIN'/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/'$$AUTH_DOMAIN'/privkey.pem;
+        location / {
+          set \$$upstream casdoor;
+          proxy_pass http://\$$upstream:8000;
+          proxy_set_header Host $$host;
+          proxy_set_header X-Real-IP $$remote_addr;
+          proxy_set_header X-Forwarded-Proto https; }
+      }
+      server {
+        listen 80;
+        server_name '$$DOMAIN';
+        location /.well-known/acme-challenge/ { root /var/www/certbot; }
+        location / { return 301 https://\$$host\$$request_uri; }
+      }
+      server {
+        listen 443 ssl;
+        server_name '$$DOMAIN';
+        ssl_certificate /etc/letsencrypt/live/'$$DOMAIN'/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/'$$DOMAIN'/privkey.pem;
+        location / {
+          set \$$upstream main-website;
+          proxy_pass http://\$$upstream:7000;
+          proxy_set_header Host $$host;
+          proxy_set_header X-Real-IP $$remote_addr;
+          proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto https; }
+      }
+      server {
+        listen 80;
+        server_name '$$ATOBRIEF_DOMAIN';
+        location /.well-known/acme-challenge/ { root /var/www/certbot; }
+        location / { return 301 https://\$$host\$$request_uri; }
+      }
+      server {
+        listen 443 ssl;
+        server_name '$$ATOBRIEF_DOMAIN';
+        ssl_certificate /etc/letsencrypt/live/'$$ATOBRIEF_DOMAIN'/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/'$$ATOBRIEF_DOMAIN'/privkey.pem;
+        location / {
+          set \$$upstream atobrief;
+          proxy_pass http://\$$upstream:4000;
+          proxy_set_header Host $$host;
+          proxy_set_header X-Real-IP $$remote_addr;
+          proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+          proxy_set_header Upgrade \$$http_upgrade;
+          proxy_set_header Connection \$$connection_upgrade;
+          proxy_set_header X-Forwarded-Proto https; }
+      }
+      server {
+        listen 80;
+        server_name '$$ASACS_DOMAIN';
+        location /.well-known/acme-challenge/ { root /var/www/certbot; }
+        location / { return 301 https://\$$host\$$request_uri; }
+      }
+      server {
+        listen 443 ssl;
+        server_name '$$ASACS_DOMAIN';
+        ssl_certificate /etc/letsencrypt/live/'$$ASACS_DOMAIN'/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/'$$ASACS_DOMAIN'/privkey.pem;
+        location / {
+          set \$$upstream crc-sync;
+          proxy_pass http://\$$upstream:3000;
+          proxy_set_header Host $$host;
+          proxy_set_header X-Real-IP $$remote_addr;
+          proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+          proxy_set_header Upgrade \$$http_upgrade;
+          proxy_set_header Connection \$$connection_upgrade;
+          proxy_set_header X-Forwarded-Proto https; }
+      }
+      ' > /etc/nginx/conf.d/default.conf
+      && nginx -g 'daemon off;'"
     depends_on:
       - mediawiki
       - casdoor
@@ -133,14 +270,13 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=7000
-      - LOG_LEVEL=${LOG_LEVEL:-info}
       - CASDOOR_CLIENT_ID=${CASDOOR_CLIENT_ID}
       - CASDOOR_ENDPOINT=${CASDOOR_ENDPOINT}
       - DISCORD_URL=${DISCORD_URL}
       - WIKI_URL=${WIKI_URL}
       - ATO_URL=${ATO_URL}
       - OLYMPUS_URL=${OLYMPUS_URL}
-      - CRCSYNC_URL=${CRCSYNC_URL:-${ASACS_URL}}
+      - ASACS_URL=${ASACS_URL}
       - GITHUB_URL=${GITHUB_URL}
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
       - DISCORD_GUILD_ID=${DISCORD_GUILD_ID}
@@ -165,7 +301,6 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=4000
-      - LOG_LEVEL=${LOG_LEVEL:-info}
       - CASDOOR_ENDPOINT=${CASDOOR_ENDPOINT}
       - ATOBRIEF_CLIENT_ID=${ATOBRIEF_CLIENT_ID}
       - ATOBRIEF_CLIENT_SECRET=${ATOBRIEF_CLIENT_SECRET}
@@ -187,7 +322,6 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - LOG_LEVEL=${LOG_LEVEL:-info}
       - CASDOOR_ENDPOINT=${CASDOOR_ENDPOINT}
       - CRCSYNC_CLIENT_ID=${CRCSYNC_CLIENT_ID}
       - CRCSYNC_CLIENT_SECRET=${CRCSYNC_CLIENT_SECRET}

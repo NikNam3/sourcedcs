@@ -1,4 +1,5 @@
 'use strict';
+const log = require('../logger');
 
 /* DD Form 1801 (ICAO IFR Flight Plan). Config reuses fpConfig /
    fpIsControllerUser / fpIsAdminUser from the DD 175 (flight-plans)
@@ -31,7 +32,7 @@ function cleanupExpiredFpl1801() {
   const removed = before - store.state.fpl1801Plans.length;
   if (removed > 0) {
     store.saveJSON(store.FPL1801_FILE, store.state.fpl1801Plans);
-    console.debug('[fpl1801] Removed ' + removed + ' expired plan(s)');
+    log.debug('[fpl1801] Removed ' + removed + ' expired plan(s)');
   }
 }
 
@@ -47,7 +48,7 @@ async function sendFpl1801ToDiscord(plan) {
   const msg = (plan.fplMessage || '').trim();
   if (!msg) return;
   await discordClient.discordPost('/channels/' + chId + '/messages', { content: '```\n' + msg + '\n```' });
-  console.debug('[fpl1801] FPL-' + plan.id + ' posted to Discord channel ' + chId);
+  log.debug('[fpl1801] FPL-' + plan.id + ' posted to Discord channel ' + chId);
 }
 
 /* GET /api/fpl1801/by-callsign/:callsign — public, returns active plan for a callsign */
@@ -133,11 +134,11 @@ router.post('/fpl1801', writeOpsLimiter, auth.requireAuth, (req, res) => {
 
   store.state.fpl1801Plans.push(plan);
   store.saveJSON(store.FPL1801_FILE, store.state.fpl1801Plans);
-  console.debug('[fpl1801] Plan ' + plan.id + ' submitted by ' + plan.submittedBy.name);
+  log.debug('[fpl1801] Plan ' + plan.id + ' submitted by ' + plan.submittedBy.name);
   res.status(201).json(plan);
 
   sendFpl1801ToDiscord(plan).catch(err =>
-    console.error('[fpl1801] Discord notify failed:', err.message)
+    log.error('[fpl1801] Discord notify failed:', err.message)
   );
 });
 
@@ -153,7 +154,7 @@ router.delete('/fpl1801/:id', writeOpsLimiter, auth.requireAuth, (req, res) => {
   }
   store.state.fpl1801Plans.splice(idx, 1);
   store.saveJSON(store.FPL1801_FILE, store.state.fpl1801Plans);
-  console.debug('[fpl1801] Plan ' + id + ' deleted by ' + (req.user.name || req.user.sub));
+  log.debug('[fpl1801] Plan ' + id + ' deleted by ' + (req.user.name || req.user.sub));
   res.json({ ok: true });
 });
 
