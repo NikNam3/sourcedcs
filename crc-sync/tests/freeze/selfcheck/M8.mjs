@@ -3,7 +3,7 @@
 export default {
   id: "M8",
   what: "the persisted replay window set to 0",
-  file: "src/efsp/board-store.js",
+  file: "src/efsp/sync/replay-cache.js",
   find: "const REPLAY_PERSIST_WINDOW_MS = 10 * 60 * 1000;",
   replace: "const REPLAY_PERSIST_WINDOW_MS = 0;",
   detect: ["freeze-hub","freeze-scenarios"],

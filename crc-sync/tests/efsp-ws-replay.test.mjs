@@ -25,7 +25,7 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify([
 ]));
 
 const { createEfsp } = await import('../src/efsp/index.js');
-const { ReplayCache } = await import('../src/efsp/replay-cache.js');
+const { ReplayCache } = await import('../src/efsp/sync/replay-cache.js');
 const WsHub = (await import('../src/ws-hub.js')).default;
 const { crew, hold, mustAct, DEPARTURE_FDR, airborneDeparture } = await import('./helpers/efsp-scenario.mjs');
 

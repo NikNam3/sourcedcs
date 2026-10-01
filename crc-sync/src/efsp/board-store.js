@@ -37,39 +37,8 @@ const { Tofi } = require('./board/tofi');
 const { StripOps } = require('./board/strip-ops');
 const OPS = require('./board/ops');
 const { initialStateFor, replicaStateOnReceipt, senderStateOnAccept } = require('./authority');
+const { ReplayCache, replayRecord, REPLAY_PERSIST_WINDOW_MS } = require('./sync/replay-cache');
 const log = require('../log').logger('efsp:board-store');
-
-const APPLIED_MUTATIONS_CAP = 5000;
-// How much of the idempotency cache rides in the Board snapshot (docs/adr/0081,
-// L6's F5 mode A): a RETRY window, not a history. A client that lost its ack
-// to a crash retries within seconds of reconnecting; ten minutes covers a
-// restart and a slow reconnect. [SOURCE-DEFINED], a constant rather than a
-// tuning value. Wall time, like the NLA latch (ADR 0079's one exception).
-const REPLAY_PERSIST_WINDOW_MS = 10 * 60 * 1000;
-
-/**
- * The compact, frozen record the idempotency cache keeps for one applied
- * clientMutationId (docs/adr/0081): the outcome and the ids it concerned.
- * Nothing live and nothing cloned — it is serialisable, which is what lets
- * the last REPLAY_PERSIST_WINDOW_MS of it ride in the Board snapshot.
- * `appliedWallAt` is WALL time (Date.now()): a retry window is a storage
- * lifetime, like the NLA latch, not a time a controller reads (ADR 0079).
- */
-function _replayRecord(result, appliedWallAt) {
-  return Object.freeze({
-    ok: !!result.ok,
-    reason: result.reason === undefined ? null : result.reason,
-    detail: result.detail === undefined ? null : result.detail,
-    warning: result.warning === undefined ? null : result.warning,
-    routedTo: result.routedTo === undefined ? null : result.routedTo,
-    selfCoordinated: result.selfCoordinated === undefined ? null : result.selfCoordinated,
-    stripId: result.strip ? result.strip.stripId : null,
-    fdrId: result.fdr ? result.fdr.fdrId : null,
-    peerFacilityId: result.peerFacilityId === undefined ? null : result.peerFacilityId,
-    peerStripId: result.peerStrip ? result.peerStrip.stripId : null,
-    appliedWallAt,
-  });
-}
 
 class BoardStore {
   /**
@@ -102,7 +71,7 @@ class BoardStore {
     // the touched set and the cid counter. `touch` is late-bound to this._touch
     // so a patched _touch (tools/soak/host-core.js) sees every touch.
     this._state = new BoardState({ clock, touch: (id) => this._touch(id) });
-    this._appliedMutations = new Map(); // clientMutationId -> compact frozen replay record (_replayRecord), idempotency (§5.2, docs/adr/0081)
+    this._replay = ReplayCache.forBoard(); // clientMutationId -> compact frozen replay record (replayRecord), idempotency (§5.2, docs/adr/0081)
     this._mutationLog = null; // optional collaborator, see setMutationLog()
     // The Mutation-log entries for a client Mutation and a peer write (board/audit.js).
     // `mutationLog` is read late: setMutationLog() can come after construction.
@@ -199,8 +168,9 @@ class BoardStore {
   applyMutation(mutation, actingPositionId, by) {
     const cmid = mutation.clientMutationId;
     const keyed = typeof cmid === 'string' && cmid !== '';
-    if (keyed && this._appliedMutations.has(cmid)) {
-      return this._replayResult(this._appliedMutations.get(cmid)); // idempotent replay, §5.2
+    const cached = keyed ? this._replay.get(null, cmid) : null;
+    if (cached) {
+      return this._replayResult(cached); // idempotent replay, §5.2
     }
 
     // This is the ONE choke point every Mutation flows through (guide's
@@ -225,20 +195,15 @@ class BoardStore {
       this._activeCmid = null;
     }
 
-    if (keyed) this._rememberApplied(cmid, _replayRecord(result, Date.now()));
+    if (keyed) this._replay.set(null, cmid, replayRecord(result, Date.now()));
     return result;
   }
 
   /** Whether this clientMutationId is in the idempotency cache — index.js's boot reconcile asks (docs/adr/0081). */
-  hasApplied(cmid) { return this._appliedMutations.has(cmid); }
+  hasApplied(cmid) { return this._replay.has(null, cmid); }
 
-  _rememberApplied(cmid, record) {
-    this._appliedMutations.set(cmid, record);
-    if (this._appliedMutations.size > APPLIED_MUTATIONS_CAP) {
-      const oldestKey = this._appliedMutations.keys().next().value;
-      this._appliedMutations.delete(oldestKey);
-    }
-  }
+  /** The idempotency cache's Map (sync/replay-cache.js), for tools and tests that measure it. */
+  get _appliedMutations() { return this._replay.map; }
 
   /**
    * A replay's answer (docs/adr/0081): the ORIGINAL outcome with the records
@@ -428,10 +393,7 @@ class BoardStore {
     // so a retry after a restart answers from the cache instead of applying a
     // second time (docs/adr/0081, L6's F5 mode A). Compact records only.
     const horizon = Date.now() - REPLAY_PERSIST_WINDOW_MS;
-    const replay = [];
-    for (const [cmid, record] of this._appliedMutations) {
-      if (record.appliedWallAt >= horizon) replay.push([cmid, record]);
-    }
+    const replay = this._replay.windowSince(horizon);
     return { strips: this.getAll(), cidSeq: this._state.cidSeq, replay, droppedWallAt: [...this._droppedWallAt] };
   }
   restore(data) {
@@ -453,10 +415,7 @@ class BoardStore {
     // it to the retry window, and index.js's boot reconcile needs every record
     // that was persisted to tell a persisted Mutation from an unpersisted one.
     // It ages out through the cap and the next snapshot's window.
-    this._appliedMutations = new Map();
-    for (const [cmid, record] of (Array.isArray(data?.replay) ? data.replay : [])) {
-      if (typeof cmid === 'string' && record && typeof record === 'object') this._appliedMutations.set(cmid, Object.freeze({ ...record }));
-    }
+    this._replay.load(data?.replay);
     // docs/adr/0082 — when each DROPPED Strip dropped. One restored with no
     // entry (a snapshot written before it) starts its 2 h now: it was counted
     // before it was persisted (L5 backfills from the log at boot anyway).

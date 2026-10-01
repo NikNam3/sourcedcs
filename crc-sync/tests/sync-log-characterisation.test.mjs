@@ -145,7 +145,7 @@ test('the Board idempotency cache: 5,000 records, oldest out first; cmid-less ne
 });
 
 test('the families\' replay cache: kind|cmid keys, unknown kind throws, absent fields stay undefined, id null, cap evicts oldest', () => {
-  const { ReplayCache } = require('../src/efsp/replay-cache.js');
+  const { ReplayCache } = require('../src/efsp/sync/replay-cache.js');
   const cache = new ReplayCache({ cap: 2 });
   assert.equal(cache.get('nonsense', ''), null, 'an empty cmid returns before the kind check');
   cache.set('nonsense', '', { ok: true });
