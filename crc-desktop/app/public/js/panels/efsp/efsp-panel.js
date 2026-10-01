@@ -1620,3 +1620,6 @@ export function initEfspPanel() {
 // Node-only export for the pure helpers above (the repo's dual-use pattern —
 // see efsp-nla.js). Everything else in this file touches the DOM directly and
 // stays browser-only.
+
+// ESM-1 (S-ESM1c): the unit tests set the refusal on screen directly in the old shared scope; this is that seam.
+export function _setCurrentRefusalForTest(r) { _currentRefusal = r; }
