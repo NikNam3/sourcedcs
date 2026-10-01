@@ -147,6 +147,7 @@ function runMatrix() {
   resetDeterminism(); cmidN = 0;
   const cells = [];
   const roundTrips = [];
+  const nlas = [];
   for (const spec of ROLES) {
     const actors = facilityConfig.getPositionSet(spec.facilityId);
     for (const state of nla.STATES_BY_ROLE[spec.role]) {
@@ -158,6 +159,7 @@ function runMatrix() {
         const sigOf = (s) => `${s.rev}|${s.state}|${s.ownerPositionId}`;
         let sig = strip.refused ? null : sigOf(strip);
         if (strip.refused) { cells.push({ cell: `${tag} SEED`, seeded: false, why: strip.refused }); continue; }
+        nlas.push({ cell: tag, nla: canonical(bs.getStrip(strip.stripId).nla === undefined ? null : bs.getStrip(strip.stripId).nla), nlaStatus: canonical(bs.nlaStatusFor ? bs.nlaStatusFor(bs.getStrip(strip.stripId)) : null) });
         const kinds = opsFor(spec, strip, actors[0]).map(o => o.kind);
         for (const actor of [...actors, 'GHOST']) {
           for (let k = 0; k < kinds.length; k++) {
@@ -194,7 +196,7 @@ function runMatrix() {
       }
     }
   }
-  return { cells, roundTrips };
+  return { cells, roundTrips, nlas };
 }
 
 function createMatrix() {
@@ -230,6 +232,10 @@ test('freeze table: snapshot()/restore() reproduces the Board and FDRs', () => {
     assert.ok(r.fdrEqual, `${r.id}: restored FDRs differ from the persisted ones`);
   }
   checkGolden(assert, 'table-roundtrip', { cells: matrix.roundTrips.map(r => ({ ...r, cell: r.id })) }, (d) => d.cells.map(c => [c.cell, c]));
+});
+
+test('freeze table: what the NLA button offers per Role x state x owner', () => {
+  checkGolden(assert, 'table-nla', { cells: matrix.nlas }, (d) => d.cells.map(c => [c.cell, c]));
 });
 
 test('freeze table: the matrix is deterministic (second run is byte-identical)', () => {
