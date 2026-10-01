@@ -44,7 +44,7 @@ export function summarize(v, depth = 0) {
   const r = summarizeInner(v, depth);
   // A big nested record (a runway/field-state view, a whole Position list) would dominate the file;
   // keep its shape and a hash of the full content instead.
-  if (depth >= 3 && r && typeof r === 'object') {
+  if (depth === 3 && r && typeof r === 'object') {
     const len = JSON.stringify(r).length;
     if (len > BIG) return { '~big': digest(r), chars: len, keys: Array.isArray(r) ? `array[${r.length}]` : Object.keys(r).slice(0, 8) };
   }
