@@ -96,3 +96,25 @@ test('the Marshal stack Bay is ordered by slot, and no other Bay is touched', ()
   assert.deepEqual(panel.carrierOrderRack('cv-marshal-stack', strips).map(s => s.stripId), ['s2', 's1']);
   assert.deepEqual(panel.carrierOrderRack('ops-proposed', strips).map(s => s.stripId), ['s1', 's2']);
 });
+
+test('the final-bearing line: from the ship along the reciprocal of the final bearing, only for a tracked ship on a TRUE bearing', () => {
+  state._resetEfspCarrierStateForTest();
+  globalThis.getActingPositions = (f) => (f === 'CARRIER' ? ['CV_APP1'] : []);
+  globalThis.projectPos = (lat, lon, brg, m) => [lat + (m / 111320) * Math.cos(brg * Math.PI / 180), lon + (m / 111320) * Math.sin(brg * Math.PI / 180)];
+  const v = viewWith();
+  state.applyEfspCarrierSnapshot({ carriers: [v] });
+  const line = panel.buildCarrierFinalLine();
+  assert.equal(line.features[0].properties.kind, 'carrier-final');
+  assert.deepEqual(line.features[0].geometry.coordinates[0], [36, 35], 'starts at the ship');
+  const [lon, lat] = line.features[0].geometry.coordinates[1];
+  assert.ok(lat < 35 && Math.abs(lon - 36) < 0.1, 'final bearing 003 true: the line runs south of the ship (reciprocal 183)');
+  assert.equal(line.features.filter(f => f.properties.kind === 'carrier-final-tick').length, 2);
+  for (const bad of [{ stale: true }, { headingRef: 'GRID' }, { found: false }, { finalBearingDeg: null }]) {
+    state.applyEfspCarrierSnapshot({ carriers: [{ ...v, shipState: { ...v.shipState, ...bad } }] });
+    assert.equal(panel.buildCarrierFinalLine().features.length, 0, JSON.stringify(bad));
+  }
+  globalThis.getActingPositions = (f) => (f === 'CARRIER' ? [] : ['OPS']);
+  state.applyEfspCarrierSnapshot({ carriers: [v] });
+  assert.equal(panel.buildCarrierFinalLine().features.length, 0, 'a controller with no carrier Position gets no line');
+  delete globalThis.getActingPositions; delete globalThis.projectPos;
+});

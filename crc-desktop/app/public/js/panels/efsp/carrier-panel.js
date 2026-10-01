@@ -363,6 +363,42 @@ function carrierFinalDistanceText(strip) {
   return `${(2 * R * Math.asin(Math.sqrt(a))).toFixed(1)} NM`;
 }
 
+// ── The final-bearing line on the map ───────────────────────────────────
+
+const CARRIER_FINAL_LINE_NM = 15;
+
+/**
+ * The line aircraft fly in on: from the ship out along the RECIPROCAL of the
+ * final bearing, with a crossbar every 5 NM. It mirrors geojson.js's extended
+ * airport centreline but is keyed by hull, not by radar-id prefix (the `app:` /
+ * `cvapp:` lesson, crc-sync docs/adr/0042). Drawn only for a controller holding a
+ * carrier Position, and only from a TRUE bearing on a ship that is being tracked:
+ * a grid or stale bearing would put the line in the wrong place, and a line in
+ * the wrong place on a scope is worse than none.
+ */
+function buildCarrierFinalLine() {
+  const empty = { type: 'FeatureCollection', features: [] };
+  if (typeof getActingPositions !== 'function' || !getActingPositions('CARRIER').length) return empty;
+  const view = getEfspCarrier();
+  const s = view && view.shipState;
+  if (!s || !s.found || s.stale || s.headingRef !== 'TRUE' || !Number.isFinite(s.finalBearingDeg)
+      || !Number.isFinite(s.lat) || !Number.isFinite(s.lon) || typeof projectPos !== 'function') return empty;
+  const out = (s.finalBearingDeg + 180) % 360;
+  const [endLat, endLon] = projectPos(s.lat, s.lon, out, CARRIER_FINAL_LINE_NM * 1852);
+  const features = [{
+    type: 'Feature',
+    geometry: { type: 'LineString', coordinates: [[s.lon, s.lat], [endLon, endLat]] },
+    properties: { kind: 'carrier-final', color: '#9ad1ff' },
+  }];
+  for (let nm = 5; nm < CARRIER_FINAL_LINE_NM; nm += 5) {
+    const [tLat, tLon] = projectPos(s.lat, s.lon, out, nm * 1852);
+    const [aLat, aLon] = projectPos(tLat, tLon, (out + 90) % 360, 600);
+    const [bLat, bLon] = projectPos(tLat, tLon, (out + 270) % 360, 600);
+    features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: [[aLon, aLat], [bLon, bLat]] }, properties: { kind: 'carrier-final-tick', color: '#9ad1ff' } });
+  }
+  return { type: 'FeatureCollection', features };
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { CARRIER_CAPABILITIES, CARRIER_POSITION_IDS, carrierActingFor, carrierStackRows, carrierOrderRack };
+  module.exports = { buildCarrierFinalLine, CARRIER_CAPABILITIES, CARRIER_POSITION_IDS, carrierActingFor, carrierStackRows, carrierOrderRack };
 }

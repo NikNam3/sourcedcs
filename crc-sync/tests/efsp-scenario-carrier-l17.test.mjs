@@ -327,3 +327,19 @@ test('a Case change re-states every carrier Strip\'s NLA: Commence becomes To pa
   assert.equal(restated.length, 1, 'the Strip was re-sent with its new NLA');
   assert.equal(restated[0].nla.carrierTransfer, 'MARSHAL_TO_PATTERN_CASE_I');
 });
+
+test('the recovery Strip keeps the flight\'s squawk: dropping the launch Strip must not hand its code to another flight', async () => {
+  const { efsp, c } = fresh();
+  const launch = mustAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', null, {
+    kind: 'CreateStrip', bayId: 'cv-marshal-departures', rackId: 'main', role: 'MARSHAL', initialState: 'LAUNCH', fdr: { callsign: 'VIPER11', aircraftType: 'F-18C' },
+  });
+  const code = efsp.fdrStore.getFdr(launch.fdrId).identity.beaconAssigned;
+  assert.ok(code, 'the launch minted a squawk');
+  await advance(efsp, c.CV_MARSHAL, 'CV_MARSHAL', strip(efsp, launch.stripId)); // launched: the Strip drops
+  const recovery = checkIn(efsp, c, null, { fdrId: launch.fdrId });
+  assert.equal(efsp.fdrStore.getFdr(recovery.fdrId).identity.beaconAssigned, code);
+  assert.equal(efsp.fdrStore.codeAllocator.isAllocated(code), true, 'the code is held again, not free in the pool');
+  // and another flight created now does not get the same code
+  const other = checkIn(efsp, c, 'OTHER22');
+  assert.notEqual(efsp.fdrStore.getFdr(other.fdrId).identity.beaconAssigned, code, 'a duplicate Mode 3/A');
+});

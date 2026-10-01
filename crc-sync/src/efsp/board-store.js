@@ -583,6 +583,12 @@ class BoardStore {
       // flight's Mode 3/A, which is guide §9.8's own "bridge field" and the
       // strongest argument for a shared fdrId over copying fields across.
       created = { ok: true, fdr: bound };
+      // docs/adr/0074: the recovery Strip binds to the flight whose launch Strip
+      // was dropped, and that drop released the flight's squawk once no Strip
+      // referenced it. Re-claim it, or the next CreateStrip is handed a code a
+      // live aircraft is squawking (D23: reacquireFdr never steals a code another
+      // flight took in the meantime, and is a no-op for a flight still holding it).
+      if (this._fdrStore.reacquireFdr) this._fdrStore.reacquireFdr(op.fdrId);
     } else {
       created = this._fdrStore.createFdr(op.fdr, { by });
     }
