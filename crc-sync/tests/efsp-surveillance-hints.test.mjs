@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import crcLog from '../src/log.js';
 
 /* docs/adr/0076: what "detected airborne" means, the suggestion chip (§10.3)
  * and staleness (§10.4). The monitor reads and states; nothing here moves a
@@ -191,17 +192,16 @@ test('every occurrence reaches L5 metric 6 as a staleness count', () => {
 // ── the tuning file ────────────────────────────────────────────────────────
 
 test('the tuning file validates per field and falls back with a warning', () => {
-  const warn = console.warn; const warnings = [];
-  console.warn = (m) => warnings.push(m);
+  const cap = crcLog.capture();
   try {
     const c = normalizeHintsConfig({ airborne: { minGroundSpeedKt: 'fast', minAglFt: 300 }, staleness: { afterSec: 0 } }, 'x');
     assert.equal(c.airborne.minGroundSpeedKt, 60);
     assert.equal(c.airborne.minAglFt, 300);
     assert.equal(c.airborne.holdSec, 5);
     assert.equal(c.staleness.afterSec, 120);
-    assert.equal(warnings.length, 2);
+    assert.equal(cap.records.filter(r => r.level === 'warn').length, 2);
     assert.equal(loadHintsConfig('/nonexistent/x.json'), DEFAULT_HINTS_CONFIG);
-  } finally { console.warn = warn; }
+  } finally { cap.stop(); }
 });
 
 test('the shipped tuning file holds the defaults', async () => {

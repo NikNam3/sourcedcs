@@ -29,6 +29,7 @@ const path = require('path');
 const { writePath, ensureDirFor } = require('../state-paths');
 const { WALL_CLOCK } = require('../mission-clock');
 const { getInstrumentationConfig } = require('./instrumentation-config');
+const log = require('../log').logger('efsp:mutation-log');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -108,11 +109,11 @@ class MutationLog {
       fs.appendFileSync(this._path, JSON.stringify(stamped) + '\n');
       this._activeDay = utcDay(wallAt);
     } catch (e) {
-      console.warn('[efsp-mutation-log] failed to append:', e.message);
+      log.warn('failed to append', { error: e.message });
       return;
     }
     for (const fn of this._listeners) {
-      try { fn(stamped); } catch (e) { console.warn('[efsp-mutation-log] a record listener threw:', e.message); }
+      try { fn(stamped); } catch (e) { log.warn('a record listener threw', { error: e.message }); }
     }
   }
 
@@ -137,7 +138,7 @@ class MutationLog {
     } catch (e) {
       // Nothing lost: the entry still goes to the live file, which simply
       // stays unrotated until the next day's first append tries again.
-      console.warn('[efsp-mutation-log] failed to rotate:', e.message);
+      log.warn('failed to rotate', { error: e.message });
       return;
     }
     this._activeDay = null;
@@ -171,7 +172,7 @@ class MutationLog {
     let deleted = 0;
     for (const seg of this._segments()) {
       if (seg.day >= cutoff) continue;
-      try { fs.unlinkSync(seg.file); deleted++; } catch (e) { console.warn('[efsp-mutation-log] failed to prune', seg.file, e.message); }
+      try { fs.unlinkSync(seg.file); deleted++; } catch (e) { log.warn('failed to prune', { file: seg.file, error: e.message }); }
     }
     return deleted;
   }

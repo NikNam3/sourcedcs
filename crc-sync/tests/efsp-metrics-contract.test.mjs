@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import crcLog from '../src/log.js';
 
 // The wire/HTTP bodies L15 (ADR 0072) builds against — docs/adr/0065. Keys may
 // be ADDED freely; renaming or removing one needs a new ADR, and fails here.
@@ -177,10 +178,9 @@ test('a getter that throws does not take the report down', () => {
     trafficCountPath: path.join(tmpDir, 'throwing-count.jsonl'),
   });
   other.trafficCount.close();
-  const orig = console.warn;
-  console.warn = () => {};
+  const cap = crcLog.capture();
   let r;
-  try { r = other.metricsHttp({}); other.tick(); } finally { console.warn = orig; }
+  try { r = other.metricsHttp({}); other.tick(); } finally { cap.stop(); }
   assert.equal(r.status, 200);
   assert.equal(r.body.metrics.correlation.live, null);
   assert.equal(r.body.metrics.obligations.live, null);

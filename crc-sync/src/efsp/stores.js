@@ -31,6 +31,7 @@ const { SfaStore } = require('./sfa-store');
 const airspaceConfig = require('./airspace-config');
 const carrierHulls = require('./carrier/hull-config');
 const facilityConfig = require('./facility-config');
+const log = require('../log').logger('efsp:stores');
 
 const REGISTRY = [
   {
@@ -188,7 +189,7 @@ const REGISTRY = [
     restore: (s, data) => {
       s.restore(data);
       const gone = s.evictMissingFdrs();
-      if (gone) console.warn(`[efsp] dropped ${gone} restored Marshal stack entr(y/ies) whose FDR is gone`);
+      if (gone) log.warn('dropped restored Marshal stack entries whose FDR is gone', { dropped: gone });
     },
   },
   {

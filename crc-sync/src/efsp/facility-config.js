@@ -37,6 +37,7 @@ const { validateConfig, validateRadarSelector, validateSfaRotationRecord, BAY_VI
 const airspaceConfig = require('./airspace-config');
 const path = require('path');
 const { CONFIG_DIR, readPath, writePath, ensureDirFor } = require('../state-paths');
+const log = require('../log').logger('efsp:facility-config');
 
 const DEFAULT_FACILITY_ID = 'INCIRLIK';
 
@@ -152,13 +153,13 @@ function _loadOne(facilityId) {
   // which is the bug. Any genuine narrowing has to be restated as
   // `hiddenBlocks`, and the warning says so.
   if (config && config.blockVisibility) {
-    console.warn(`[efsp-facility-config] ${facilityId}: ignoring a legacy blockVisibility list — express any narrowing as hiddenBlocks instead`);
+    log.warn('ignoring a legacy blockVisibility list — express any narrowing as hiddenBlocks instead', { facilityId });
     delete config.blockVisibility;
   }
   const check = schema.validateFacilityConfig(config, facilityId);
   if (!check.ok) throw new Error(`[efsp-facility-config] ${facilityId}: ${file} is not a valid facility config: ${check.detail}`);
   for (const warning of fieldState.runwayInventoryWarnings(config)) {
-    console.warn(`[efsp-facility-config] ${facilityId}: ${warning}`);
+    log.warn(warning, { facilityId });
   }
   return config;
 }
@@ -198,7 +199,7 @@ function _persist(facilityId) {
     ensureDirFor(target);
     fs.writeFileSync(target, JSON.stringify(_configs().get(facilityId), null, 2));
   } catch (e) {
-    console.warn(`[efsp-facility-config] failed to persist ${facilityId} config:`, e.message);
+    log.warn('failed to persist facility config', { facilityId, error: e.message });
   }
 }
 

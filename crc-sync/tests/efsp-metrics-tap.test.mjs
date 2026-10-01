@@ -4,6 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import crypto from 'crypto';
+import crcLog from '../src/log.js';
 
 // The tap (docs/adr/0065): createEfspInstrumentation() reassigns the facade's
 // handleMessage/onDisconnect, and every EFSP message, its session and its ack
@@ -31,9 +32,8 @@ const { createEfspInstrumentation } = await import('../src/efsp/metrics.js');
 const { crew, hold, act, mustAct, jumpTo, advance, DEPARTURE_FDR, airborneDeparture } = await import('./helpers/efsp-scenario.mjs');
 
 function quiet(fn) {
-  const orig = console.warn;
-  console.warn = () => {};
-  try { return fn(); } finally { console.warn = orig; }
+  const cap = crcLog.capture();
+  try { return fn(); } finally { cap.stop(); }
 }
 
 const efsp = createEfsp();

@@ -49,6 +49,7 @@ const crypto = require('crypto');
 
 const { MAX_FREE_TEXT } = require('./fdr-store');
 const { WALL_CLOCK } = require('../mission-clock');
+const log = require('../log').logger('efsp:marsa-store');
 
 const MARSA_STATES = ['ACTIVE', 'ENDED', 'VOIDED'];
 
@@ -268,7 +269,7 @@ class MarsaStore {
       try {
         result = this._declare(op, actingPositionId, by);
       } catch (err) {
-        console.error('[marsa-store] unexpected error declaring MARSA — rejecting it instead of crashing:', err);
+        log.error('unexpected error declaring MARSA — rejecting it instead of crashing', { err });
         result = { ok: false, reason: 'VALIDATION_ERROR', detail: 'internal error processing MARSA declaration' };
       }
       if (result.ok) result.fdrs = this.drainRegimeWrites();
@@ -307,7 +308,7 @@ class MarsaStore {
     } catch (err) {
       // Same backstop every other store has: one bad op must never take the
       // process down for every connected client.
-      console.error('[marsa-store] unexpected error applying a MARSA op — rejecting it instead of crashing:', err);
+      log.error('unexpected error applying a MARSA op — rejecting it instead of crashing', { err });
       result = { ok: false, reason: 'VALIDATION_ERROR', detail: 'internal error processing MARSA op' };
     }
 
@@ -536,7 +537,7 @@ class MarsaStore {
       if (!this._fdrExists(fdrId)) continue;
       const result = this._setSeparationRegime(fdrId, regime, { by });
       if (result && result.ok === false) {
-        console.warn(`[marsa-store] could not set separation regime ${regime} on ${fdrId}: ${result.reason}`);
+        log.warn('could not set separation regime', { regime, fdrId, reason: result.reason });
         continue;
       }
       // Journalled so the caller can broadcast it — see drainRegimeWrites().

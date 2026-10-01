@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import crcLog from '../src/log.js';
 
 // Archiving finished flights (docs/adr/0082; decisions.md H36, S-R2-13) —
 // one test per rule, on a real createEfsp(). Every path is overridden BEFORE
@@ -38,9 +39,8 @@ const ALL = {
 };
 
 function quiet(fn) {
-  const orig = console.warn;
-  console.warn = () => {};
-  try { return fn(); } finally { console.warn = orig; }
+  const cap = crcLog.capture();
+  try { return fn(); } finally { cap.stop(); }
 }
 
 // One Board, one counter for the whole file (the traffic-count test's T11):
@@ -222,12 +222,11 @@ test('4. an uncounted Strip is skipped and retried', () => {
   const dropped = droppedFlight('UNCNT1');
   let counted = false;
   const archiver = archiverFor({ isCounted: (id) => (id === dropped.stripId ? counted : counter.hasCountFor(id)) });
-  const warnings = [];
-  const orig = console.warn;
-  console.warn = (m) => warnings.push(String(m));
+  const cap = crcLog.capture();
   offset = 3 * HOUR;
   let r;
-  try { r = archiver.sweep(); } finally { console.warn = orig; }
+  try { r = archiver.sweep(); } finally { cap.stop(); }
+  const warnings = cap.records.filter(x => x.level === 'warn').map(x => x.line);
   assert.ok(r.skipped.includes(dropped.stripId));
   assert.ok(incirlik().getStrip(dropped.stripId), 'kept');
   assert.ok(efsp.fdrStore.getFdr(dropped.fdrId));
@@ -242,14 +241,13 @@ test('4. an uncounted Strip is skipped and retried', () => {
 test('4b. with no traffic count wired, a sweep archives anyway and warns once', () => {
   const dropped = droppedFlight('NOCNT1');
   const archiver = archiverFor({ isCounted: null });
-  const warnings = [];
-  const orig = console.warn;
-  console.warn = (m) => warnings.push(String(m));
+  const cap = crcLog.capture();
   try {
     offset = 3 * HOUR;
     archiver.sweep();
     archiver.sweep();
-  } finally { console.warn = orig; offset = 0; }
+  } finally { cap.stop(); offset = 0; }
+  const warnings = cap.records.filter(x => x.level === 'warn').map(x => x.line);
   assert.equal(incirlik().getStrip(dropped.stripId), null);
   assert.equal(warnings.filter(w => w.includes('no traffic count wired')).length, 1);
 });

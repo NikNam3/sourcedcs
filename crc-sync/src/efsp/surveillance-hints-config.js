@@ -10,6 +10,7 @@
 const fs = require('fs');
 const { readPath } = require('../state-paths');
 const { readShipped } = require('../tuning-file');
+const log = require('../log').logger('efsp:surveillance-hints-config');
 
 const CONFIG_NAME = 'efsp-surveillance-hints.json';
 
@@ -20,7 +21,7 @@ function _num(section, key, raw, fallback, source, { min }) {
   }
   if (typeof raw === 'number' && Number.isFinite(raw) && raw >= min) return raw;
   if (fallback === undefined) throw new Error(`[efsp-surveillance-hints] ${source}: ${section}.${key} must be a number >= ${min}, got ${JSON.stringify(raw)}`);
-  console.warn(`[efsp-surveillance-hints] ${source}: ${section}.${key} must be a number >= ${min}, got ${JSON.stringify(raw)} — using ${fallback}`);
+  log.warn('value must be a number >= min — using the fallback', { source, key: `${section}.${key}`, got: raw, min, fallback });
   return fallback;
 }
 
@@ -48,7 +49,7 @@ function loadHintsConfig(filePath = readPath(CONFIG_NAME, process.env.CRCSYNC_EF
   try {
     raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
   } catch (e) {
-    console.warn(`[efsp-surveillance-hints] could not read ${filePath} (${e.message}) — using the shipped defaults`);
+    log.warn('could not read file — using the shipped defaults', { file: filePath, error: e.message });
     return DEFAULT_HINTS_CONFIG;
   }
   return normalizeHintsConfig(raw, filePath);

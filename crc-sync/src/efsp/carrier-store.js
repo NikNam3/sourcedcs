@@ -36,6 +36,7 @@ const permission = require('./permission');
 const carrier = require('./carrier');
 const { resolveZuluHhmm } = require('./zulu-time');
 const { WALL_CLOCK } = require('../mission-clock');
+const log = require('../log').logger('efsp:carrier-store');
 
 const TRANSITIONS_CAP = 200;
 const SHIP_OP = 'SetShipInput';
@@ -260,7 +261,7 @@ class CarrierStore {
     try {
       result = this._dispatch(record, op, actingPositionId, by);
     } catch (err) {
-      console.error('[carrier-store] unexpected error applying a carrier op — rejecting it instead of crashing:', err);
+      log.error('unexpected error applying a carrier op — rejecting it instead of crashing', { err });
       result = { ok: false, reason: 'VALIDATION_ERROR', detail: 'internal error processing carrier op' };
     }
     if (!result.record) result.record = deepClone(record);

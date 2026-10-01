@@ -39,6 +39,7 @@
 
 const { MAX_FREE_TEXT } = require('./fdr-store');
 const { WALL_CLOCK } = require('../mission-clock');
+const log = require('../log').logger('efsp:correlation-store');
 
 const CORRELATION_STATES = ['CORRELATED', 'PROVISIONAL', 'UNCORRELATED'];
 
@@ -267,7 +268,7 @@ class CorrelationStore {
     } catch (err) {
       // Same backstop BoardStore and AirspaceStore have: one bad op must never
       // take the process down for every connected client.
-      console.error('[correlation-store] unexpected error applying a correlation op — rejecting it instead of crashing:', err);
+      log.error('unexpected error applying a correlation op — rejecting it instead of crashing', { err });
       result = { ok: false, reason: 'VALIDATION_ERROR', detail: 'internal error processing correlation op' };
     }
 

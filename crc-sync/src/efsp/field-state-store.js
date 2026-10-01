@@ -34,6 +34,7 @@ const {
   canGo, buildStatusView, activeEndIntoWind, isRunwayChangeInProgress, isRunwayChangeOpen,
   REQUEST_ACTIONS,
 } = require('./field-state');
+const log = require('../log').logger('efsp:field-state-store');
 
 function deepClone(obj) { return obj === undefined ? undefined : JSON.parse(JSON.stringify(obj)); }
 
@@ -263,7 +264,7 @@ class FieldStateStore {
     } catch (err) {
       // The backstop every EFSP store has: one bad op must never take the
       // process down for every connected client.
-      console.error('[field-state-store] unexpected error applying a field-state op — rejecting it instead of crashing:', err);
+      log.error('unexpected error applying a field-state op — rejecting it instead of crashing', { err });
       result = { ok: false, reason: 'VALIDATION_ERROR', detail: 'internal error processing field-state op' };
     }
     result.fieldState = this.getFieldState(mutation && mutation.facilityId);
@@ -676,7 +677,7 @@ class FieldStateStore {
       return { ok: true, changed: false, skipped: true, activeRunway: record.activeRunway };
     }
     if (isRunwayChangeOpen(record.runwayChange)) {
-      console.warn(`[field-state] ${facilityId}: a runway change is open — leaving the active runway at ${record.activeRunway} rather than deriving it from the wind`);
+      log.warn('a runway change is open — leaving the active runway as it is rather than deriving it from the wind', { facilityId, activeRunway: record.activeRunway });
       record.windDerivedSession = missionSession;
       return { ok: true, changed: false, activeRunway: record.activeRunway };
     }
@@ -717,7 +718,7 @@ class FieldStateStore {
         if (!stored) return this._seedRunway(def);
         const runway = { ...this._seedRunway(def), ...deepClone(stored) };
         if (!['OPEN', 'CLOSED', 'SUSPENDED_WORKS', 'SUSPENDED_INSPECTION'].includes(runway.status)) {
-          console.warn(`[field-state] ${saved.facilityId}: restored runway ${def.runwayId} had unknown status ${runway.status} — keeping it SUSPENDED_INSPECTION so it is inspected before use`);
+          log.warn('restored runway had an unknown status — keeping it SUSPENDED_INSPECTION so it is inspected before use', { facilityId: saved.facilityId, runwayId: def.runwayId, status: runway.status });
           runway.status = 'SUSPENDED_INSPECTION';
           runway.suspension = runway.suspension || { kind: 'WORKS', since: null, by: null, positionId: null, note: 'restored from an unreadable state' };
         }
@@ -726,13 +727,13 @@ class FieldStateStore {
       });
       const ends = inventory.runways.flatMap(d => d.ends);
       if (record.activeRunway && !ends.includes(record.activeRunway)) {
-        console.warn(`[field-state] ${saved.facilityId}: restored active runway ${record.activeRunway} is no longer configured — unset until the wind or TWR sets it`);
+        log.warn('restored active runway is no longer configured — unset until the wind or TWR sets it', { facilityId: saved.facilityId, activeRunway: record.activeRunway });
         record.activeRunway = null;
         record.activeRunwaySource = null;
       }
       const change = record.runwayChange;
       if (change && ![change.fromRunwayId, change.toRunwayId].filter(Boolean).every(e => ends.includes(e))) {
-        console.warn(`[field-state] ${saved.facilityId}: restored runway change names a runway end no longer configured — cleared`);
+        log.warn('restored runway change names a runway end no longer configured — cleared', { facilityId: saved.facilityId });
         record.runwayChange = null;
       }
       if (!Array.isArray(record.transitions)) record.transitions = [];
