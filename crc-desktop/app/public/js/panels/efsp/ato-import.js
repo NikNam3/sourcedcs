@@ -1,4 +1,6 @@
 'use strict';
+import { _sendEfsp, getActingPositions } from './efsp-ws.js';
+import { _showMutationError } from './efsp-panel.js';
 
 // Importing a USMTF ATO into TACTICAL's Board (crc-sync's docs/adr/0071, guide
 // §9.8). TAC_C2 pastes or drops the text (decision H65: paste/drop only), sees
@@ -51,7 +53,7 @@ function _atoZ(ms) {
 function _atoId() { return typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `ato-${Date.now()}-${Math.random()}`; }
 
 /** Called once from initEfspPanel: the toolbar button, shown only while TAC_C2 is held. */
-function initAtoImport(rootEl) {
+export function initAtoImport(rootEl) {
   _atoRootEl = rootEl || null;
   if (!_atoRootEl) return;
   const toolbar = _atoRootEl.querySelector ? _atoRootEl.querySelector('.efsp-toolbar') : null;
@@ -63,12 +65,12 @@ function initAtoImport(rootEl) {
 }
 
 /** "No control that always fails" (efsp-panel.js): hidden unless TAC_C2 is held. */
-function refreshAtoImportButton() {
+export function refreshAtoImportButton() {
   if (_atoButtonEl) _atoButtonEl.hidden = !_atoHeld();
   if (_atoDialogEl && !_atoHeld()) closeAtoImportDialog();
 }
 
-function openAtoImportDialog() {
+export function openAtoImportDialog() {
   if (!_atoRootEl || !_atoHeld()) return;
   if (!_atoDialogEl) {
     _atoDialogEl = _atoEl('div', 'efsp-ato-dialog');
@@ -81,7 +83,7 @@ function openAtoImportDialog() {
   _renderAtoDialog();
 }
 
-function closeAtoImportDialog() {
+export function closeAtoImportDialog() {
   if (_atoDialogEl) { _atoDialogEl.hidden = true; if (_atoDialogEl.remove) _atoDialogEl.remove(); }
   _atoDialogEl = null;
   _atoText = ''; _atoPreview = null; _atoPreviewRequestId = null; _atoChoices = new Map();
@@ -116,13 +118,13 @@ function _onAtoDrop(e) {
 }
 
 /** New text invalidates any preview: the server checks the text is the one previewed. */
-function setAtoImportText(text) {
+export function setAtoImportText(text) {
   _atoText = String(text || '');
   _atoPreview = null; _atoChoices = new Map(); _atoResults = null; _atoMessage = '';
   _renderAtoDialog();
 }
 
-function requestAtoPreview() {
+export function requestAtoPreview() {
   if (!_atoText.trim()) { _atoMessage = 'Paste or drop the ATO text first.'; _renderAtoDialog(); return; }
   _atoPreviewRequestId = _atoId();
   _atoMessage = 'Reading the ATO…';
@@ -131,7 +133,7 @@ function requestAtoPreview() {
 }
 
 /** app.js: case 'efsp-ato-preview-result'. */
-function onAtoPreviewResult(msg) {
+export function onAtoPreviewResult(msg) {
   if (!msg || msg.requestId !== _atoPreviewRequestId) return; // a stale answer
   _atoPreviewRequestId = null;
   if (!msg.ok) {
@@ -152,7 +154,7 @@ function onAtoPreviewResult(msg) {
 }
 
 /** Lines that stop the import: a CREATE with no callsign that fits (T10). */
-function atoImportBlockers(preview, choices) {
+export function atoImportBlockers(preview, choices) {
   if (!preview) return [];
   return preview.lines.filter((l) => {
     const c = choices.get(l.lineId) || { action: l.action };
@@ -163,7 +165,7 @@ function atoImportBlockers(preview, choices) {
 }
 
 /** The choices exactly as the wire carries them. */
-function atoImportChoices(preview, choices) {
+export function atoImportChoices(preview, choices) {
   return preview.lines.map((l) => {
     const c = choices.get(l.lineId) || { action: l.action };
     const out = { lineId: l.lineId, action: c.action };
@@ -173,7 +175,7 @@ function atoImportChoices(preview, choices) {
   });
 }
 
-function sendAtoImport() {
+export function sendAtoImport() {
   if (!_atoPreview || _atoPendingImportId) return null;
   const blockers = atoImportBlockers(_atoPreview, _atoChoices);
   if (blockers.length) {
@@ -193,7 +195,7 @@ function sendAtoImport() {
 }
 
 /** app.js: case 'efsp-ato-ack'. Closes on all-ok; otherwise shows each line's result. */
-function onAtoAck(msg) {
+export function onAtoAck(msg) {
   if (!msg || msg.clientMutationId !== _atoPendingImportId) return;
   _atoPendingImportId = null;
   if (!msg.ok) {
@@ -346,17 +348,9 @@ function _atoLineRow(l) {
 }
 
 /** For tests and the e2e: the dialog's state without reading the DOM. */
-function getAtoImportState() {
+export function getAtoImportState() {
   return { open: !!_atoDialogEl, preview: _atoPreview, choices: [..._atoChoices.entries()], pending: _atoPendingImportId, message: _atoMessage, results: _atoResults };
 }
 
 /** For the toolbar's ATO-first path (efsp-panel.js step 8). */
-function setAtoLineChoice(lineId, choice) { _atoChoices.set(lineId, choice); _renderAtoDialog(); }
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    initAtoImport, refreshAtoImportButton, openAtoImportDialog, closeAtoImportDialog, setAtoImportText,
-    requestAtoPreview, onAtoPreviewResult, sendAtoImport, onAtoAck, atoImportBlockers, atoImportChoices,
-    getAtoImportState, setAtoLineChoice,
-  };
-}
+export function setAtoLineChoice(lineId, choice) { _atoChoices.set(lineId, choice); _renderAtoDialog(); }

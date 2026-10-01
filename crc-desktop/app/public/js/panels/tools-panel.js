@@ -1,4 +1,5 @@
 'use strict';
+import { showConnWidget } from '../sync.js';
 
 // ── Tools tab: DCS altitude calculator ────────────────────────────────────
 // Split out of the former ui.js "god file" — see panels/topbar.js for why
@@ -14,7 +15,7 @@
 // indicated→true altitude, only true→indicated for track display), so it
 // stays local.
 
-function initToolsTab() {
+export function initToolsTab() {
   // Was a small floating "SYNC ⚙" tab pinned above the SRS radio bar
   // (sync.js's _initConnTab) — moved here now that both panels involved
   // are normal dockview panels rather than fixed-position divs with a

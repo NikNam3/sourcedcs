@@ -16,6 +16,8 @@
 //     altitude: { ft, ref: 'QNH'|'STD', source: 'MODE_C'|'RADAR'|'DATALINK' } | null,
 //     dl: { lock } | null }
 
+import { aircraftTypes, settings } from './app.js';
+
 const EMERGENCY_TAG = { HIJACK: 'HIJ', RADIO: 'RDF', GENERAL: 'EMR' };
 
 function _settings() {
@@ -23,7 +25,7 @@ function _settings() {
 }
 
 /** Emergency colours, from the user's settings. */
-function emergencyColor(kind) {
+export function emergencyColor(kind) {
   const s = _settings();
   if (kind === 'HIJACK')  return s.colEmergHijack || '#cc6600';
   if (kind === 'RADIO')   return s.colEmergRadio  || '#b8a000';
@@ -31,30 +33,30 @@ function emergencyColor(kind) {
   return '';
 }
 
-function isAir(t)    { return !!t && t.domain === 'AIR'; }
-function isSea(t)    { return !!t && t.domain === 'SEA'; }
-function isGround(t) { return !!t && t.domain === 'GROUND'; }
+export function isAir(t)    { return !!t && t.domain === 'AIR'; }
+export function isSea(t)    { return !!t && t.domain === 'SEA'; }
+export function isGround(t) { return !!t && t.domain === 'GROUND'; }
 
 /** The contact's name: its flight, datalink name or tag; else its code; else its track number. */
-function trackName(t) {
+export function trackName(t) {
   if (!t) return '';
   const label = t.label || {};
   return label.callsign || (t.ssr && t.ssr.code) || label.trackNumber || '';
 }
 
 /** `?` after a name that came from a provisional correlation, so doubt still looks like doubt. */
-function trackNameSuffix(t) {
+export function trackNameSuffix(t) {
   return t && t.label && t.label.source === 'FDR_PROVISIONAL' ? '?' : '';
 }
 
 /** The contact's own reference, never its flight's callsign: its code, else its track number. */
-function trackRef(t) {
+export function trackRef(t) {
   if (!t) return '';
   return (t.ssr && t.ssr.code) || (t.label && t.label.trackNumber) || String(t.id);
 }
 
-function trackEmergency(t) { return (t && t.ssr && t.ssr.emergency) || null; }
-function trackIsIdent(t)   { return !!(t && t.ssr && t.ssr.ident); }
+export function trackEmergency(t) { return (t && t.ssr && t.ssr.emergency) || null; }
+export function trackIsIdent(t)   { return !!(t && t.ssr && t.ssr.ident); }
 
 /**
  * The code line of the data block: an emergency always; otherwise the code,
@@ -62,7 +64,7 @@ function trackIsIdent(t)   { return !!(t && t.ssr && t.ssr.ident); }
  * name, on the first line).
  * @returns {{text:string, color:string|null}}
  */
-function trackCodeTag(t) {
+export function trackCodeTag(t) {
   const em = trackEmergency(t);
   if (em) return { text: EMERGENCY_TAG[em], color: emergencyColor(em) };
   if (t && t.ssr && t.ssr.code && t.label && t.label.callsign) return { text: t.ssr.code, color: null };
@@ -75,14 +77,14 @@ const ALT_MARK = { MODE_C: '', RADAR: '*', DATALINK: 'L' };
 const ALT_SOURCE_WORD = { MODE_C: 'Mode C', RADAR: 'radar height', DATALINK: 'datalink' };
 
 /** '180' — hundreds of feet, as a data block writes it. '' when no sensor gives one. */
-function altitudeShort(t) {
+export function altitudeShort(t) {
   const a = t && t.altitude;
   if (!a) return '';
   return String(Math.round(a.ft / 100)).padStart(3, '0') + ALT_MARK[a.source];
 }
 
 /** 'FL180' or '4,500 ft', for the track panel. */
-function altitudeText(ft, ref) {
+export function altitudeText(ft, ref) {
   if (!Number.isFinite(ft)) return '—';
   return ref === 'STD'
     ? `FL${String(Math.round(ft / 100)).padStart(3, '0')}`
@@ -90,7 +92,7 @@ function altitudeText(ft, ref) {
 }
 
 /** The track panel's altitude: value and where it came from, or '—'. */
-function altitudeLong(t) {
+export function altitudeLong(t) {
   const a = t && t.altitude;
   if (!a) return '—';
   const word = ALT_SOURCE_WORD[a.source];
@@ -98,18 +100,18 @@ function altitudeLong(t) {
 }
 
 /** An assigned altitude (feet) as a controller writes it: FL above transition, feet below. */
-function assignedAltText(ft) {
+export function assignedAltText(ft) {
   const ta = _settings().transitionAltFt;
   return ft >= ta ? `FL${String(Math.round(ft / 100)).padStart(3, '0')}` : Number(ft).toLocaleString('en-US');
 }
 
 /** An assigned altitude block ({lowFt, highFt}, docs/adr/0091) as 'FL220-FL240'. */
-function assignedBlockText(block) {
+export function assignedBlockText(block) {
   return `${assignedAltText(block.lowFt)}-${assignedAltText(block.highFt)}`;
 }
 
 /** The type the contact is known as (its flight plan's, or the datalink's), with its display label. */
-function typeText(t) {
+export function typeText(t) {
   if (!t || !t.type) return '';
   const spec = typeof aircraftTypes !== 'undefined' && aircraftTypes && aircraftTypes[t.type];
   return (spec && spec.label) || t.type;
@@ -121,7 +123,7 @@ function typeText(t) {
  * @param {number} speedKt  from kinematics()
  * @param {number|null} fpm from verticalFpm(); null when no altitude history
  */
-function infoLine(t, speedKt, fpm) {
+export function infoLine(t, speedKt, fpm) {
   const gs = `G${String(Math.round(speedKt || 0)).padStart(3, '0')}`;
   const alt = altitudeShort(t);
   if (!alt) return gs;
@@ -137,7 +139,7 @@ function infoLine(t, speedKt, fpm) {
  * enough to tell two contacts apart when they share a code, which is exactly
  * when a controller is asked to pick.
  */
-function pickerText(t) {
+export function pickerText(t) {
   if (!t) return '';
   const name = trackName(t);
   const code = t.ssr && t.ssr.code;
@@ -147,14 +149,14 @@ function pickerText(t) {
 }
 
 /** Whether the contact gets a data block at all: aircraft always; ships and vehicles once named. */
-function shouldLabel(t) {
+export function shouldLabel(t) {
   if (!t) return false;
   if (isAir(t)) return true;
   return !!(t.label && t.label.callsign);
 }
 
 /** A tag can name a contact only while nothing better does. */
-function tagEditable(t) {
+export function tagEditable(t) {
   const source = t && t.label && t.label.source;
   return !source || source === 'TAG';
 }
@@ -173,23 +175,23 @@ function tagEditable(t) {
 //   - emergencies are two letters (`EM`/`RF`/`HJ`);
 //   - an assigned altitude carries a trend arrow toward it: `A060↓ H250`.
 
-const ATC_EMERGENCY_TAG = { HIJACK: 'HJ', RADIO: 'RF', GENERAL: 'EM' };
+export const ATC_EMERGENCY_TAG = { HIJACK: 'HJ', RADIO: 'RF', GENERAL: 'EM' };
 
 /** The ATC scheme's emergency text for a contact, or '' (two letters, red on line 0). */
-function atcEmergencyTag(t) {
+export function atcEmergencyTag(t) {
   const em = trackEmergency(t);
   return em ? ATC_EMERGENCY_TAG[em] || '' : '';
 }
 
 /** '120' — Mode C in hundreds of feet. '' for anything a transponder did not report. */
-function atcAltitude(t) {
+export function atcAltitude(t) {
   const a = t && t.altitude;
   if (!a || a.source !== 'MODE_C' || !Number.isFinite(a.ft)) return '';
   return String(Math.max(0, Math.round(a.ft / 100))).padStart(3, '0');
 }
 
 /** '28' — ground speed in tens of knots. */
-function atcSpeed(speedKt) {
+export function atcSpeed(speedKt) {
   return String(Math.max(0, Math.round((speedKt || 0) / 10))).padStart(2, '0');
 }
 
@@ -201,7 +203,7 @@ function atcSpeed(speedKt) {
  * @param {{altFt:number|null, hdg:number|null}} assigned
  * @param {number|null} currentFt
  */
-function atcAssignedText(assigned, currentFt) {
+export function atcAssignedText(assigned, currentFt) {
   if (!assigned) return '';
   const parts = [];
   if (assigned.altBlock) {
@@ -222,7 +224,7 @@ function atcAssignedText(assigned, currentFt) {
 }
 
 /** The type as a STARS block writes it: the flight plan's own designator (`F16`), never a display label. */
-function atcType(t) {
+export function atcType(t) {
   return (t && t.type) || '';
 }
 
@@ -238,7 +240,7 @@ function atcType(t) {
  *   typePhase: the half of the time-share that shows the type instead of the speed
  * @returns {Array<Array<{text:string,color:string|null,blink:boolean}>>}
  */
-function atcBlockLines(t, v, info = {}) {
+export function atcBlockLines(t, v, info = {}) {
   const seg = (text, color = null, blink = false) => ({ text, color, blink });
   const lines = [];
   const line0 = [];
@@ -284,13 +286,4 @@ function atcBlockLines(t, v, info = {}) {
   const asg = atcAssignedText(info.assigned, currentFt);
   if (asg) lines.push([seg(asg)]);
   return lines;
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    isAir, isSea, isGround, trackName, trackNameSuffix, trackRef, trackEmergency, trackIsIdent,
-    trackCodeTag, altitudeShort, altitudeLong, altitudeText, assignedAltText, assignedBlockText, typeText, infoLine,
-    pickerText, shouldLabel, tagEditable, emergencyColor,
-    ATC_EMERGENCY_TAG, atcEmergencyTag, atcAltitude, atcSpeed, atcAssignedText, atcType, atcBlockLines,
-  };
 }

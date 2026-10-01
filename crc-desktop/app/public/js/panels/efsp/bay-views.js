@@ -1,4 +1,18 @@
 'use strict';
+import { haversineM } from '../../geo.js';
+import { missionNow } from '../topbar.js';
+import {
+  correlatedTrackIdForStrip, getEfspBays, getEfspFdr, getEfspFieldState, getEfspRack, getEfspStrip
+} from './efsp-state.js';
+import { getEfspCarrier } from './carrier-state.js';
+import {
+  SFA_ROTATION_LABEL, getEfspSfa, sfaRotatingPosition, sfaRotationOffered, sfaRotationRows
+} from './sfa-state.js';
+import { getActingPositions, sendEfspMutation, sendEfspSfaMutation } from './efsp-ws.js';
+import { patternBoardModel, renderPatternBoard } from './pattern-board.js';
+import { createFinalTracker, renderFinalPanel } from './final-panel.js';
+import { runwayForStrip } from './field-state-rules.js';
+import { getActiveRadars } from '../../app.js';
 
 // Bay descriptor views (crc-sync docs/adr/0075, 0093): a Bay whose descriptor says
 // `view: 'pattern' | 'final' | 'sfa-freqs'` mounts a component, instead of (or
@@ -23,8 +37,8 @@
 //
 // Pure model builders first (unit-tested), DOM second.
 
-const FINAL_GLIDEPATH_NOMINAL_DEG = 3.0;  // [SOURCE-DEFINED] nominal glidepath; no runway geometry exists client-side
-const FINAL_DECISION_HEIGHT_FT = 200;     // [SOURCE-DEFINED] decision height above the field when the Strip gives none
+export const FINAL_GLIDEPATH_NOMINAL_DEG = 3.0;  // [SOURCE-DEFINED] nominal glidepath; no runway geometry exists client-side
+export const FINAL_DECISION_HEIGHT_FT = 200;     // [SOURCE-DEFINED] decision height above the field when the Strip gives none
 const FINAL_REFRESH_MS = 1000;            // the cadence bar and the mile calls are read off the clock, not an event
 const NM_FT = 6076.12;
 const NM_M = 1852;
@@ -32,14 +46,14 @@ const NM_M = 1852;
 const _fin = (v) => typeof v === 'number' && Number.isFinite(v);
 
 /** The Bay's descriptor, from the snapshot's Bay list, or null. */
-function bayDescriptorFor(bayId, bays = (typeof getEfspBays === 'function' ? getEfspBays() : [])) {
+export function bayDescriptorFor(bayId, bays = (typeof getEfspBays === 'function' ? getEfspBays() : [])) {
   return (bays || []).find(b => b.bayId === bayId) || null;
 }
 
 // ── pattern ─────────────────────────────────────────────────────────────────
 
 /** The Bay's racks as legs, in rack order. */
-function patternLegsFor(bay) {
+export function patternLegsFor(bay) {
   return (bay && bay.rackIds ? bay.rackIds : []).map(id => ({ id, label: String(id).toUpperCase() }));
 }
 
@@ -51,7 +65,7 @@ function patternLegsFor(bay) {
  * @param {(bayId:string, rackId:string)=>object[]} rackOf  getEfspRack
  * @param {(fdrId:string)=>object|null} fdrOf               getEfspFdr
  */
-function patternStripsFor(bay, rackOf, fdrOf) {
+export function patternStripsFor(bay, rackOf, fdrOf) {
   const out = [];
   let order = 0;
   for (const rackId of bay.rackIds || []) {
@@ -69,7 +83,7 @@ function patternStripsFor(bay, rackOf, fdrOf) {
 }
 
 /** What a chip action or a Move asks the server for, as a plain op, or null. The Position that acts is the Strip's owner, if held. */
-function patternOpFor(desc) {
+export function patternOpFor(desc) {
   if (!desc) return null;
   if (desc.kind === 'MoveToLeg') return { kind: 'MoveStrip', rackId: desc.rackId };
   if (desc.toState === 'DROPPED') return { kind: 'DropStrip' };
@@ -87,7 +101,7 @@ function patternOpFor(desc) {
  * missing input leaves its field undefined, which final-panel.js shows as `--` and never prompts on.
  * @param {object} i { kind, strip, callsign, runway, track, ref:{lat,lon,elevM?}, nowS }
  */
-function finalSampleFor({ kind, strip, callsign, runway, track, ref, nowS } = {}) {
+export function finalSampleFor({ kind, strip, callsign, runway, track, ref, nowS } = {}) {
   const sample = { kind, stripId: strip ? strip.stripId : null, callsign: callsign || '', runway: runway || '--', nowS, decisionAltFt: undefined };
   const elevFt = ref && _fin(ref.elevM) ? ref.elevM * 3.28084 : null;
   if (kind === 'PAR' && elevFt !== null) sample.decisionAltFt = elevFt + FINAL_DECISION_HEIGHT_FT;
@@ -111,7 +125,7 @@ function finalSampleFor({ kind, strip, callsign, runway, track, ref, nowS } = {}
  * by the owner (ADR 0075). The carrier's "Ball" is its recorded FINAL_TO_LSO hand-over, so the trigger type
  * is kept (ADR 0074); its "Waveoff" is the state change.
  */
-function finalTerminalOp(kind, terminal) {
+export function finalTerminalOp(kind, terminal) {
   if (kind === 'CARRIER' && terminal && terminal.toState === 'BALL') return { kind: 'CarrierTransfer', transfer: 'FINAL_TO_LSO' };
   return terminal ? { kind: 'SetState', toState: terminal.toState } : null;
 }
@@ -318,7 +332,7 @@ function _renderSfaHeader(container, bay) {
 }
 
 /** Called by bay-view.js's renderBay() after the racks are reconciled. A Bay with no `view` is left exactly as it was. */
-function renderBayDescriptorView(container, bay) {
+export function renderBayDescriptorView(container, bay) {
   if (!container || !bay || typeof document === 'undefined') return;
   const stale = [...container.children].find(_isViewEl);
   if (!bay.view) { if (stale) stale.remove(); _setRacksHidden(container, false); _finalMounts.delete(container); return; }
@@ -330,7 +344,7 @@ function renderBayDescriptorView(container, bay) {
 }
 
 /** The second button beside the NLA on a Strip on an SFA frequency: Rotate to PAR (ADR 0075). */
-function sfaExtraNlaButtons(strip) {
+export function sfaExtraNlaButtons(strip) {
   if (typeof getEfspSfa !== 'function' || typeof getActingPositions !== 'function') return [];
   const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(strip.fdrId) : null;
   if (!sfaRotationOffered(strip, fdr, getActingPositions(strip.facilityId || undefined))) return [];
@@ -346,12 +360,4 @@ function sfaExtraNlaButtons(strip) {
     btn.disabled = true;
   });
   return [btn];
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    FINAL_GLIDEPATH_NOMINAL_DEG, FINAL_DECISION_HEIGHT_FT,
-    bayDescriptorFor, patternLegsFor, patternStripsFor, patternOpFor, finalSampleFor, finalTerminalOp,
-    renderBayDescriptorView, sfaExtraNlaButtons,
-  };
 }

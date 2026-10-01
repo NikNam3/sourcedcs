@@ -1,4 +1,5 @@
 'use strict';
+import { sendToSync } from './sync.js';
 
 // ── Geo / kinematic math ───────────────────────────────────────────────────
 // Pure functions — no globals, no side effects. Unchanged: these run
@@ -6,7 +7,7 @@
 // alike) purely for trail/heading rendering, independent of the shared
 // multiplayer state below.
 
-function haversineM(lat1, lon1, lat2, lon2) {
+export function haversineM(lat1, lon1, lat2, lon2) {
   const R  = 6371000;
   const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180;
   const Δφ = (lat2 - lat1) * Math.PI / 180;
@@ -15,7 +16,7 @@ function haversineM(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function bearingDeg(lat1, lon1, lat2, lon2) {
+export function bearingDeg(lat1, lon1, lat2, lon2) {
   const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180;
   const Δλ = (lon2 - lon1) * Math.PI / 180;
   const y  = Math.sin(Δλ) * Math.cos(φ2);
@@ -27,7 +28,7 @@ function bearingDeg(lat1, lon1, lat2, lon2) {
 // docs/adr/0085): bearings here are TRUE, and a display shows them through
 // toMagneticDisplay().
 
-function projectPos(lat, lon, headingDeg, distM) {
+export function projectPos(lat, lon, headingDeg, distM) {
   const R  = 6371000;
   const d  = distM / R;
   const θ  = headingDeg * Math.PI / 180;
@@ -38,7 +39,7 @@ function projectPos(lat, lon, headingDeg, distM) {
   return [φ2 * 180 / Math.PI, ((λ2 * 180 / Math.PI) + 540) % 360 - 180];
 }
 
-function kinematics(hist) {
+export function kinematics(hist) {
   if (hist.length < 2) return { heading: 0, speedMs: 0, speedKt: 0 };
 
   // Heading: last two points — most recent direction.
@@ -64,7 +65,7 @@ function kinematics(hist) {
  * when the history does not carry an altitude — a contact no sensor gives an
  * altitude for has no vertical rate either (crc-sync's docs/adr/0059).
  */
-function verticalFpm(hist) {
+export function verticalFpm(hist) {
   if (hist.length < 2) return null;
   const curr   = hist[hist.length - 1];
   const target = curr.timestamp - 5000;
@@ -84,12 +85,12 @@ function verticalFpm(hist) {
 // (docs/adr/0059). Every name a contact is shown with comes from
 // track-label.js.
 
-function setTrackRename(id, name) {
+export function setTrackRename(id, name) {
   const clean = (name || '').trim().toUpperCase();
   if (clean) sendToSync({ type: 'rename', trackId: String(id), name: clean });
   else       sendToSync({ type: 'clearRename', trackId: String(id) });
 }
 
-function clearTrackRename(id) {
+export function clearTrackRename(id) {
   sendToSync({ type: 'clearRename', trackId: String(id) });
 }

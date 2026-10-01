@@ -1,11 +1,18 @@
 'use strict';
+import { buildBullseye, buildNavpoints, buildTextMarks, updateMap } from '../geojson.js';
+import { applyColors, applyMapTheme } from '../map-setup.js';
+import { clearElevationContours, updateElevationContours } from '../elevation.js';
+import { hideLosProfile } from './los-panel.js';
+import { initToolsTab } from './tools-panel.js';
+import { applyScale, bullseyePickTarget, history, map, mapReady, missionData, saveSettings, settings } from '../app.js';
+import { _setBullseyePickTarget } from '../app.js';
 
 // ── Settings panel: tab switching, per-tab wiring (map display, bullseye
 // override, colours, tools) and the bullseye pick-on-map mode. Split out of
 // the former ui.js "god file" — see panels/topbar.js for why this stays a
 // plain script rather than an IIFE (dock.js/app.js call these by name).
 
-function initSettings() {
+export function initSettings() {
   const panel   = document.getElementById('settings-panel');
 
   // ── Tab switching ─────────────────────────────────────────────────────
@@ -137,7 +144,7 @@ function initSettings() {
 const $pickBanner = document.getElementById('pick-banner');
 
 function startBullseyePick(side) {
-  bullseyePickTarget = side;
+  _setBullseyePickTarget(side);
   document.querySelectorAll('[id^="set-be-"][id$="-pick"]').forEach(b => b.classList.remove('active-pick'));
   const $btn = document.getElementById(`set-be-${side}-pick`);
   if ($btn) { $btn.textContent = 'CLICK MAP…'; $btn.classList.add('active-pick'); }
@@ -151,7 +158,7 @@ function startBullseyePick(side) {
 }
 
 function cancelBullseyePick() {
-  bullseyePickTarget = null;
+  _setBullseyePickTarget(null);
   document.querySelectorAll('[id^="set-be-"][id$="-pick"]').forEach(b => {
     b.textContent = 'PICK ON MAP';
     b.classList.remove('active-pick');
@@ -160,7 +167,7 @@ function cancelBullseyePick() {
 }
 
 // Called from map-setup.js when a map click lands while pick mode is active.
-function applyBullseyePick(side, lat, lon) {
+export function applyBullseyePick(side, lat, lon) {
   settings.bullseyeOverride[side].enabled = true;
   settings.bullseyeOverride[side].lat = lat;
   settings.bullseyeOverride[side].lon = lon;
@@ -357,7 +364,7 @@ function initColorSettings() {
   }
 }
 
-function applyLightMode() {
+export function applyLightMode() {
   document.body.classList.toggle('light', !!settings.lightMode);
   applyMapTheme();
 }

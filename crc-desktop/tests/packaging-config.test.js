@@ -124,3 +124,20 @@ test('linux.syncDesktopName is paired with a top-level desktopName', () => {
     assert.ok(pkg.desktopName, 'syncDesktopName is set but no top-level desktopName exists for it to sync');
   }
 });
+
+test('build.files packs app/public/js/package.json (the client is ES modules)', () => {
+  // ESM-1: app/public/js/package.json ({"type":"module"}) is what makes Node treat the client files as ES modules
+  // for the unit tests. The browser does not need it (index.html loads js/main.js with type="module"), but it
+  // must still ship, so the packaged tree is the tested tree. `app/**/*` packs it; `!app/package.json` excludes
+  // only the top one.
+  const rel = 'app/public/js/package.json';
+  assert.ok(fs.existsSync(path.join(__dirname, '..', rel)), `${rel} is missing`);
+  const toRe = (glob) => new RegExp('^' + glob.split('**/').map(part => part.split('*').map(s => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('[^/]*')).join('(?:.*/)?') + '$');
+  const files = (pkg.build && pkg.build.files) || [];
+  let included = false;
+  for (const f of files) {
+    if (f.startsWith('!')) { if (toRe(f.slice(1)).test(rel)) included = false; }
+    else if (toRe(f).test(rel)) included = true;
+  }
+  assert.ok(included, `build.files does not pack ${rel}`);
+});

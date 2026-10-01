@@ -1,4 +1,7 @@
 'use strict';
+import { missionNow } from '../topbar.js';
+import { getAllEfspAirspaces, getEfspFdr, stripsInAirspace } from './efsp-state.js';
+import { getActingPositions, sendEfspAirspaceMutation } from './efsp-ws.js';
 
 // The airspace board — guide §4.2: "Airspace board (not a strip rack)", and
 // §4.1 rule 2: the `RANGE` Position "works no Strips. It owns airspace state
@@ -31,7 +34,7 @@ let _airspaceEmptyEl = null;
  * Proactive only. The server decides; this exists so a controller is not
  * offered a button that will be refused.
  */
-function airspaceActionsFor(airspace, heldPositionIds) {
+export function airspaceActionsFor(airspace, heldPositionIds) {
   const held = new Set(heldPositionIds || []);
   const definition = (airspace && airspace.definition) || {};
   const isControlling = held.has(definition.controllingPositionId);
@@ -179,7 +182,7 @@ function _buildAirspaceCard(airspace, heldPositionIds) {
   return card;
 }
 
-function renderAirspacePanel() {
+export function renderAirspacePanel() {
   if (!_airspaceListEl) return; // not initialized yet
   const airspaces = getAllEfspAirspaces();
   const held = getActingPositions();
@@ -197,13 +200,9 @@ function renderAirspacePanel() {
   }
 }
 
-function initAirspacePanel() {
+export function initAirspacePanel() {
   _airspaceListEl = document.getElementById('airspace-list');
   _airspaceEmptyEl = document.getElementById('airspace-empty');
   renderAirspacePanel();
   return { onShow: () => renderAirspacePanel() };
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { airspaceActionsFor };
 }

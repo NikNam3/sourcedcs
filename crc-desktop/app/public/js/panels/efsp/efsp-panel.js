@@ -1,4 +1,28 @@
 'use strict';
+import {
+  efspLinesWithOthers, getAllEfspStrips, getEfspBays, getEfspCorrelationForStrip, getEfspCorrelationStats,
+  getEfspFdr, getEfspPosition, getEfspStrip, liveStripsForCallsign, marsaForStrip, withOthersBayId
+} from './efsp-state.js';
+import {
+  efspArrivalLog, forgetEfspArrivals, markEfspBaySeen, nextEfspArrivalExpiry, noteEfspArrivals,
+  unseenEfspArrivalsForPosition, unseenEfspArrivalsInBay
+} from './efsp-arrivals.js';
+import { blockLabelFor } from './strip-template.js';
+import { isEfspBoardStale } from './efsp-nla.js';
+import { parseDotCommand } from './dot-command.js';
+import {
+  getActingPositions, sendEfspCorrelationMutation, sendEfspCreateStrip, sendEfspMarsaMutation, sendEfspMutation
+} from './efsp-ws.js';
+import { noteEfspBayVisible, noteEfspSearch } from './efsp-metrics-client.js';
+import { renderCarrierBanner } from './carrier-panel.js';
+import {
+  _resolveActingPositionId, getSelectedEfspStripId, renderAllOpenEfspBays, renderBay, selectEfspStripById,
+  setOpenEfspBays
+} from './bay-view.js';
+import { lookupFlightPlanClient } from './efsp-flight-plan-lookup.js';
+import { listStereoRoutesClient, normalizeStereoNameClient } from './efsp-stereo-routes.js';
+import { renderEfspScrambleLine } from './scramble.js';
+import { initAtoImport, refreshAtoImportButton } from './ato-import.js';
 
 // Top-level EFSP panel — mounted via dock.js's mountExistingPanel('efsp-
 // panel', initEfspPanel). Owns the position-tab / Bay-tab chrome (guide
@@ -21,8 +45,11 @@
 // render after the Strip panel tab lost focus silently no-op'd — the
 // "held OPS but panel still says no Position" bug.
 
-let _activePositionTab = null;
-let _activeBayId = null;
+export let _activePositionTab = null;
+export let _activeBayId = null;
+// ESM-1: scramble.js assigns both; an imported binding is read-only.
+export function _setActivePositionTab(v) { _activePositionTab = v; }
+export function _setActiveBayId(v) { _activeBayId = v; }
 
 // Cached once in initEfspPanel() — see the module comment above for why
 // this can't be a fresh document.getElementById() per render.
@@ -52,7 +79,7 @@ let _efspPanelRootEl = null; // cached, not document.getElementById() per check 
 let _lastEfspHeartbeatAt = null;
 let _staleCheckInterval = null;
 
-function noteEfspHeartbeat() {
+export function noteEfspHeartbeat() {
   _lastEfspHeartbeatAt = Date.now();
 }
 
@@ -126,7 +153,7 @@ function _positionsWithBays() {
 // line back from the Strip's menu, which needs no tab.)
 const HOLDS_ONLY_NO_DROP_TABS = ['JTAC'];
 
-function computePositionTabs(bays, heldPositionIds) {
+export function computePositionTabs(bays, heldPositionIds) {
   const held = new Set(heldPositionIds || []);
   const heldFacilities = new Set();
   for (const b of bays || []) {
@@ -157,7 +184,7 @@ function computePositionTabs(bays, heldPositionIds) {
 }
 
 /** Runs (or clears, on an empty query) a search — one input, guide §4.3. Activates the search Bay for the current Position tab. */
-function _runEfspSearch(query) {
+export function _runEfspSearch(query) {
   const trimmed = (query || '').trim();
   if (!trimmed) {
     _searchQuery = null;
@@ -172,9 +199,9 @@ function _runEfspSearch(query) {
 }
 
 /** Read by bay-view.js's renderBay() when asked to render a search pseudo-Bay — see its `-search` bayId branch. */
-function getActiveEfspSearchQuery() { return _searchQuery; }
+export function getActiveEfspSearchQuery() { return _searchQuery; }
 
-function _renderPositionTabs() {
+export function _renderPositionTabs() {
   if (!_positionTabsEl) return; // not initialized yet — initEfspPanel() hasn't run
   const byPosition = _positionsWithBays();
   const heldPositionIds = Object.keys(byPosition);
@@ -343,7 +370,7 @@ function _loadStereoRoutes() {
  * Safe before initEfspPanel() has run: the fetch just populates the cache
  * and the render inside no-ops until the elements are cached.
  */
-function reloadEfspStereoRoutes() { _loadStereoRoutes(); }
+export function reloadEfspStereoRoutes() { _loadStereoRoutes(); }
 
 /** The stereo name currently picked in the toolbar, or '' for none. */
 function _selectedStereoName() {
@@ -663,7 +690,7 @@ function _refreshCreateStripAvailability() {
  * is created. `board-store.js`'s `_applyConvertToArrival` is authoritative
  * for the state/role/Bay/permission rules; this just sends the Mutation.
  */
-function convertStripToArrival(strip) {
+export function convertStripToArrival(strip) {
   // _resolveActingPositionId (bay-view.js), like every other dispatch helper
   // — not strip.ownerPositionId unconditionally. The server now requires the
   // acting Position to be one this session is actually Primary at, so naming
@@ -826,7 +853,7 @@ async function _submitCreateStrip() {
  * seed shape.
  * @param {{callsign:string, seed:object}} plan
  */
-function createStripFromFiledPlan(plan) {
+export function createStripFromFiledPlan(plan) {
   if (!plan || !plan.callsign) return;
   if (!getActingPositions().includes('OPS')) {
     _setCreateStripMsg('OPS only — select OPS in Panels to create Strips', true);
@@ -867,7 +894,7 @@ function createStripFromFiledPlan(plan) {
 // the auto-clear stays rather than being decided here unilaterally — it is
 // just made long enough to read a full route back off, and the banner is
 // click-to-dismiss (initEfspPanel) for the controller who is done with it.
-const MUTATION_ERROR_VISIBLE_MS = 30000;
+export const MUTATION_ERROR_VISIBLE_MS = 30000;
 
 // Reason codes as something a controller can act on. Enumerated from every
 // `ok: false, reason:` in crc-sync's src/efsp/ rather than guessed. The code
@@ -877,7 +904,7 @@ const MUTATION_ERROR_VISIBLE_MS = 30000;
 // `null` means "the server always writes the whole sentence into `detail` for
 // this one" — VALIDATION_ERROR's detail IS the message ("NOSUCH is not a
 // configured stereo route"), and a canned prefix would only talk over it.
-const MUTATION_ERROR_MESSAGES = {
+export const MUTATION_ERROR_MESSAGES = {
   VALIDATION_ERROR: null,
   STALE_REV: 'Somebody else changed this Strip while you were working on it — it has been reloaded, check it and try again',
   NOT_FOUND: 'That record is no longer on the Board',
@@ -901,7 +928,7 @@ function _refusalSentence(reason, detail) {
 }
 
 /** The callsign on an FDR — what a controller reads off the Strip, and so how a refusal has to name it. */
-function _callsignOfFdr(fdrId) {
+export function _callsignOfFdr(fdrId) {
   const fdr = fdrId && typeof getEfspFdr === 'function' ? getEfspFdr(fdrId) : null;
   return (fdr && fdr.identity && fdr.identity.callsign) || '';
 }
@@ -962,7 +989,7 @@ function _refusalSubject(context) {
 // The refusal currently on screen, or null. Read by getCurrentEfspRefusal().
 let _currentRefusal = null;
 
-function _showMutationError(reason, detail, context) {
+export function _showMutationError(reason, detail, context) {
   const subject = _refusalSubject(context);
   const sentence = _refusalSentence(reason, detail);
   _currentRefusal = {
@@ -1056,7 +1083,7 @@ function dismissEfspRefusal() {
  * Board state: it is exactly as local as which Bay is in view, and it is
  * cleared by the same timer and the same click that clear the banner.
  */
-function getCurrentEfspRefusal() { return _currentRefusal; }
+export function getCurrentEfspRefusal() { return _currentRefusal; }
 
 // A warning is NOT a rejection — the Mutation was accepted (guide §3.10.2
 // rule 7: a duplicate beacon code "raise[s] an alert, never a hard block").
@@ -1066,7 +1093,7 @@ const MUTATION_WARNING_MESSAGES = {
   DUPLICATE_IGNORED_WARNING: 'Duplicate beacon code — assigned anyway, per policy',
 };
 
-function _showMutationWarning(warning) {
+export function _showMutationWarning(warning) {
   if (!_mutationWarningEl) return;
   clearTimeout(_mutationWarningClearTimer);
   _mutationWarningEl.textContent = MUTATION_WARNING_MESSAGES[warning] || warning;
@@ -1089,12 +1116,12 @@ function _showMutationWarning(warning) {
  * fresh post-reconnect snapshot (guide §5.6.3). This is the orphaned case
  * — surfaced, never silently dropped, per defect D6.
  */
-function notifyEfspOrphanedMutation(original) {
+export function notifyEfspOrphanedMutation(original) {
   const label = original.op && original.op.kind ? original.op.kind : 'change';
   _showMutationError('Could not resync', `a pending ${label} could not be replayed — its target Strip no longer exists`, { pending: original });
 }
 
-function notifyEfspMutationAck(clientMutationId, result) {
+export function notifyEfspMutationAck(clientMutationId, result) {
   // `result.pending` is the request this ack answers (efsp-state.js) — the
   // only place the refused Strip and the refused value exist. F-103/F-207.
   if (!result.ok) _showMutationError(result.reason || 'Rejected', result.detail, { pending: result.pending });
@@ -1121,7 +1148,7 @@ function _wireCreateStrip() {
 // Phase 1's minimal dot-command vocabulary (guide §7.1 rule 5 specifies
 // the input surface, not a fixed verb set for DEPARTURE strips) — grows
 // here without changing dot-command.js's parser.
-function _dispatchDotCommand(parsed) {
+export function _dispatchDotCommand(parsed) {
   // .find doesn't target a selected Strip at all — handle it before the
   // strip-selection-dependent verbs below need one.
   if (parsed.verb === 'find') {
@@ -1437,7 +1464,7 @@ function _isEfspPanelShowing() {
 }
 
 /** The Bay the controller is looking at right now, or null when the panel is hidden. */
-function efspVisibleBayId() {
+export function efspVisibleBayId() {
   return _activeBayId && _isEfspPanelShowing() ? _activeBayId : null;
 }
 
@@ -1503,7 +1530,7 @@ function _scheduleArrivalExpiry() {
 }
 
 /** app.js, after an efsp-board-delta is applied — see efsp-arrivals.js for the rule. */
-function noteEfspBoardArrivals(msg, placementBefore) {
+export function noteEfspBoardArrivals(msg, placementBefore) {
   if (typeof noteEfspArrivals !== 'function') return;
   const held = typeof getActingPositions === 'function' ? getActingPositions() : [];
   const mine = new Set();
@@ -1522,10 +1549,10 @@ function noteEfspBoardArrivals(msg, placementBefore) {
 }
 
 /** strip-view.js, once a new Strip's flash has played: start the fade-out clock. */
-function noteEfspArrivalShown() { _scheduleArrivalExpiry(); }
+export function noteEfspArrivalShown() { _scheduleArrivalExpiry(); }
 
 /** Called from app.js after any efsp-snapshot/efsp-board-delta/efsp-positions-ack lands — safe to call even when the Strip panel has never been opened yet (every render function no-ops until initEfspPanel() has cached its elements) or is currently the inactive tab (cached element references stay valid while detached — see the module comment). */
-function refreshEfspPanel() {
+export function refreshEfspPanel() {
   _renderPositionTabs();
   _refreshCreateStripAvailability();
   _renderCorrelationRate();
@@ -1553,7 +1580,7 @@ function _renderCorrelationRate() {
     + (stats.sessionRate != null ? ` \u00b7 session ${Math.round(stats.sessionRate * 100)}%` : '');
 }
 
-function initEfspPanel() {
+export function initEfspPanel() {
   _efspPanelRootEl = document.getElementById('efsp-panel');
   _positionTabsEl = document.getElementById('efsp-position-tabs');
   _bayTabsEl = document.getElementById('efsp-bay-tabs');
@@ -1593,6 +1620,7 @@ function initEfspPanel() {
 // Node-only export for the pure helpers above (the repo's dual-use pattern —
 // see efsp-nla.js). Everything else in this file touches the DOM directly and
 // stays browser-only.
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { computePositionTabs, efspVisibleBayId };
-}
+
+// ESM-1 (S-ESM1c): the unit tests set the refusal on screen directly in the old shared scope; this is that seam.
+export function _setCurrentRefusalForTest(r) { _currentRefusal = r; }
+export function _setBayContentElForTest(el) { _bayContentEl = el; }

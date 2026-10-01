@@ -36,7 +36,7 @@ function syncHttpUrl() {
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
-  '.js':   'application/javascript',
+  '.js':   'text/javascript; charset=utf-8',
   '.json': 'application/json',
   '.css':  'text/css',
   '.png':  'image/png',

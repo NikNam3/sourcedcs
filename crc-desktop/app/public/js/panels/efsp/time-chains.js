@@ -31,7 +31,7 @@
 // A controller's entry always wins and stops the fallback (§10.2 rule 3);
 // clearing it resumes the chain. Departure: the pilot's own filing is the
 // later and more specific document than the tasking (Q-L16-6).
-const TIME_CHAINS = {
+export const TIME_CHAINS = {
   departure: { blockId: '6',  path: 'filed.proposedDepartureTimeUtc', sources: ['CONTROLLER', 'FLIGHT_PLAN', 'ATO'] },
   offBlock:  { blockId: '17', path: 'assigned.taxiTimeUtc',           sources: ['CONTROLLER', 'EST_DEPARTURE'] },
   takeoff:   { blockId: '18', path: 'assigned.takeoffTimeUtc',        sources: ['CONTROLLER', 'STATE_CHANGE', 'EST_OFF_BLOCK'] },
@@ -43,7 +43,7 @@ const TIME_CHAINS = {
 // is never `estimated`, and it sits below CONTROLLER so a typed time still wins.
 
 // Which chain an EST_* source reads.
-const ESTIMATE_SOURCES = { EST_DEPARTURE: 'departure', EST_OFF_BLOCK: 'offBlock' };
+export const ESTIMATE_SOURCES = { EST_DEPARTURE: 'departure', EST_OFF_BLOCK: 'offBlock' };
 
 function _timeChainEpoch(v) {
   return typeof v === 'number' && Number.isFinite(v) ? v : null;
@@ -77,7 +77,7 @@ function _timeChainSourceValue(source, chain, fdr) {
  *   `candidates` is every source in order with what it gives, so a reader can
  *   say what would apply next. Never throws.
  */
-function resolveTimeChain(name, fdr) {
+export function resolveTimeChain(name, fdr) {
   const chain = TIME_CHAINS[name];
   const none = { valueUtc: null, source: null, via: null, estimated: false, candidates: [] };
   if (!chain) return none;
@@ -96,10 +96,6 @@ function resolveTimeChain(name, fdr) {
 }
 
 /** The chain name whose Block this is on a DEPARTURE Strip, or null. */
-function timeChainForBlock(blockId) {
+export function timeChainForBlock(blockId) {
   return Object.keys(TIME_CHAINS).find(n => TIME_CHAINS[n].blockId === blockId) || null;
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { TIME_CHAINS, ESTIMATE_SOURCES, resolveTimeChain, timeChainForBlock };
 }

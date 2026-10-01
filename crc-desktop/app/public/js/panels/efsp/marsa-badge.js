@@ -1,4 +1,6 @@
 'use strict';
+import { getEfspStrip, marsaForStrip, marsaParticipantStripIds } from './efsp-state.js';
+import { getSelectedEfspStripId } from './bay-view.js';
 
 // MARSA on the Strip (EFSPImplementationGuide.md §9.2 rules 2, 5 and 6) —
 // crc-sync's docs/adr/0051.
@@ -31,9 +33,9 @@
 // building each Strip, so it survives a re-render with no extra bookkeeping.
 let _marsaHighlightStripIds = new Set();
 
-function getMarsaHighlightStripIds() { return [..._marsaHighlightStripIds]; }
+export function getMarsaHighlightStripIds() { return [..._marsaHighlightStripIds]; }
 
-function isMarsaHighlighted(stripId) { return _marsaHighlightStripIds.has(stripId); }
+export function isMarsaHighlighted(stripId) { return _marsaHighlightStripIds.has(stripId); }
 
 /**
  * Selecting a participant highlights the others (rule 5). Called from
@@ -46,7 +48,7 @@ function isMarsaHighlighted(stripId) { return _marsaHighlightStripIds.has(stripI
  *
  * @returns {boolean} whether the set changed — the caller re-renders only then.
  */
-function highlightMarsaParticipants(stripId) {
+export function highlightMarsaParticipants(stripId) {
   const strip = stripId && typeof getEfspStrip === 'function' ? getEfspStrip(stripId) : null;
   const next = new Set(
     strip && typeof marsaParticipantStripIds === 'function' ? marsaParticipantStripIds(strip) : [],
@@ -59,7 +61,7 @@ function highlightMarsaParticipants(stripId) {
 }
 
 /** Re-resolves the highlight against the current records — called when a MARSA delta lands. */
-function refreshMarsaHighlight() {
+export function refreshMarsaHighlight() {
   if (typeof getSelectedEfspStripId !== 'function') return false;
   return highlightMarsaParticipants(getSelectedEfspStripId());
 }
@@ -70,7 +72,7 @@ function refreshMarsaHighlight() {
 // other by test rather than by being imported across the package boundary (the
 // Block Map parity precedent — crc-sync and crc-desktop are separately
 // deployed).
-const MARSA_EXPANSION = 'Military Authority Assumes Responsibility for Separation of Aircraft';
+export const MARSA_EXPANSION = 'Military Authority Assumes Responsibility for Separation of Aircraft';
 
 /**
  * The badge for a Strip, from whichever relation its flight is in.
@@ -89,7 +91,7 @@ const MARSA_EXPANSION = 'Military Authority Assumes Responsibility for Separatio
  *                            this codebase already has once and should not
  *                            grow a second instance of.
  */
-function marsaBadgeFor(strip) {
+export function marsaBadgeFor(strip) {
   const relation = typeof marsaForStrip === 'function' ? marsaForStrip(strip) : null;
   if (!relation) return null;
 
@@ -147,7 +149,7 @@ function _voidSentence(relation) {
  * Proactive only: the server still decides, and a control offered here can
  * still be refused.
  */
-function marsaActionsFor(strip) {
+export function marsaActionsFor(strip) {
   const relation = typeof marsaForStrip === 'function' ? marsaForStrip(strip) : null;
   const active = relation && relation.state === 'ACTIVE' ? relation : null;
   if (!active) {
@@ -160,13 +162,4 @@ function marsaActionsFor(strip) {
   actions.push({ kind: 'EndMarsa', label: 'End MARSA', marsaId: active.marsaId });
   actions.push({ kind: 'VoidMarsa', label: 'Void MARSA', marsaId: active.marsaId });
   return actions;
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    marsaBadgeFor, marsaActionsFor,
-    highlightMarsaParticipants, refreshMarsaHighlight,
-    getMarsaHighlightStripIds, isMarsaHighlighted,
-    MARSA_EXPANSION,
-  };
 }

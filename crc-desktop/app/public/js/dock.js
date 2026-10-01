@@ -1,4 +1,14 @@
 'use strict';
+import { initMap } from './map-setup.js';
+import { initSettings } from './panels/settings-panel.js';
+import { initRadarPanel, renderPanelControls } from './panels/radar-panel.js';
+import { initTrackPanel } from './panels/track-panel.js';
+import { initAprtPanel } from './panels/aprt-panel.js';
+import { initEfspPanel } from './panels/efsp/efsp-panel.js';
+import { initAirspacePanel } from './panels/efsp/airspace-panel.js';
+import { initFieldStatePanel } from './panels/efsp/field-state-panel.js';
+import { initMetricsPanel } from './panels/metrics-panel.js';
+import { getActiveRadars, map } from './app.js';
 
 // ── Dockview bootstrap ────────────────────────────────────────────────────
 // Owns the dockview grid that replaces individually hand-positioned
@@ -31,7 +41,7 @@ const DockviewCore = window['dockview-core'];
 // here in dock.js). `map` has no entry — it uses dockview's own default
 // (the tab shows its id) via createNoCloseTab, and nothing has asked for
 // that to change.
-const PANEL_TITLES = {
+export const PANEL_TITLES = {
   track:    'TRACK INFO',
   radars:   'PANELS',
   settings: 'SETTINGS',
@@ -45,9 +55,9 @@ const PANEL_TITLES = {
 
 const DOCK_LAYOUT_KEY = 'crc-desktop-dock-layout';
 
-let dock = null;
+export let dock = null;
 
-function initDock() {
+export function initDock() {
   const root = document.getElementById('dock-root');
 
   dock = new DockviewCore.DockviewComponent(root, {
@@ -209,7 +219,7 @@ const PANEL_SIDE = {
 // Track Info's reopen path: clicking a track on the map (showTrackPanel, in
 // panels/track-panel.js) calls this to get-or-create the panel before activating it, rather
 // than relying on a permanent required-panel restore.
-function ensureTrackPanel() {
+export function ensureTrackPanel() {
   const existing = dock.api.getPanel('track');
   if (existing) return existing;
   const anchor = leftGroupAnchor('track');
@@ -335,7 +345,7 @@ const DOCKABLE_PANELS = {
   }, true),
 };
 
-function isDockPanelOpen(id) {
+export function isDockPanelOpen(id) {
   return !!(dock && dock.api.getPanel(id));
 }
 
@@ -346,7 +356,7 @@ function isDockPanelOpen(id) {
 // airport radar yanked focus away from the panel the user was working in to
 // the newly-opened Airport panel. It matters more now, not less — coverage can
 // change because a colleague took a Position, i.e. with no local input at all.
-function toggleDockPanel(id, open, { preserveFocus } = {}) {
+export function toggleDockPanel(id, open, { preserveFocus } = {}) {
   const optionsFn = DOCKABLE_PANELS[id];
   if (!optionsFn) return;
   const existing = dock.api.getPanel(id);
@@ -532,11 +542,11 @@ function _loadPinnedPanels() {
 
 let _pinnedPanels = _loadPinnedPanels();
 
-function isPanelPinned(id) {
+export function isPanelPinned(id) {
   return !!_pinnedPanels[id];
 }
 
-function setPanelPinned(id, pinned) {
+export function setPanelPinned(id, pinned) {
   _pinnedPanels[id] = pinned;
   try {
     localStorage.setItem(PINNED_PANELS_KEY, JSON.stringify(_pinnedPanels));
@@ -562,7 +572,7 @@ function isPanelImplied(panelId) {
 // property the old hook had for the same reason.
 const _impliedPanelState = new Map(); // panelId -> was implied
 
-function notifyCoverageChanged() {
+export function notifyCoverageChanged() {
   for (const panelId of new Set(Object.values(RADAR_TYPE_TO_PANEL))) {
     const implied = isPanelImplied(panelId);
     if (implied === _impliedPanelState.get(panelId)) continue;

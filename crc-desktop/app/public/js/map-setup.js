@@ -1,15 +1,31 @@
 'use strict';
+import { ATC_DIM_GRAY, atcBackgroundDirty, atcTargetClick } from './atc-scope.js';
+import {
+  ATC_MAX_SEGMENTS, buildAirports, buildBullseye, buildDrawings, buildNavpoints, buildTextMarks, updateMap
+} from './geojson.js';
+import { createNavpointIcon, initIcons, updateIcons, updateIffIcons } from './icons.js';
+import { initElevationContours } from './elevation.js';
+import { updateBullseyeCursor, updateMeasureLine } from './panels/topbar.js';
+import { applyBullseyePick } from './panels/settings-panel.js';
+import { closeAptWeatherPanel, showAptWeatherPanel } from './panels/airport-selector.js';
+import { closeTrackPanel, showGroundLabelPopup, showTrackPanel } from './panels/track-panel.js';
+import { selectStripForTrack } from './panels/efsp/correlation-highlight.js';
+import {
+  TEXT_OFFSET_EM, TEXT_SIZE_PX, _drag, _measure, applyScale, bullseyePickTarget, getTextSizePx, labelOffsets, map,
+  mapReady, missionData, settings, tracks
+} from './app.js';
+import { _setDrag, _setMap, _setMapReady, _setMeasure } from './app.js';
 
 // ── Map initialisation ────────────────────────────────────────────────────
 // Sets up all MapLibre sources, layers, and event handlers.
 
-function initMap(container) {
-  map = new maplibregl.Map({
+export function initMap(container) {
+  _setMap(new maplibregl.Map({
     container,
     style: '/crc-desktop-scope-style.json',
     center: [35.4258, 37.0021],
     zoom: 7,
-  });
+  }));
 
   map.dragRotate.disable();
   map.touchZoomRotate.disableRotation();
@@ -511,11 +527,11 @@ function initMap(container) {
       }
 
       const startMouse = map.unproject([e.point.x, e.point.y]);
-      _drag = {
+      _setDrag({
         id, startX: e.point.x, startY: e.point.y,
         startMouseLat: startMouse.lat, startMouseLon: startMouse.lng,
         startRelLat, startRelLon, moved: false,
-      };
+      });
       map.dragPan.disable();
     };
 
@@ -639,7 +655,7 @@ function initMap(container) {
 
     map.getCanvas().addEventListener('mouseup', () => {
       if (!_drag) return;
-      _drag = null;
+      _setDrag(null);
       map.dragPan.enable();
       map.getCanvas().style.cursor = 'crosshair';
     });
@@ -650,7 +666,7 @@ function initMap(container) {
       e.preventDefault();
       const rect   = map.getCanvas().getBoundingClientRect();
       const point  = map.unproject([e.clientX - rect.left, e.clientY - rect.top]);
-      _measure = { startLng: point.lng, startLat: point.lat };
+      _setMeasure({ startLng: point.lng, startLat: point.lat });
       map.dragPan.disable();
     });
 
@@ -658,12 +674,12 @@ function initMap(container) {
 
     map.getCanvas().addEventListener('mouseup', (e) => {
       if (e.button !== 2 || !_measure) return;
-      _measure = null;
+      _setMeasure(null);
       map.dragPan.enable();
       map.getSource('measure').setData({ type: 'FeatureCollection', features: [] });
     });
 
-    mapReady = true;
+    _setMapReady(true);
     applyScale();
     applyMapTheme();
     initElevationContours();
@@ -681,7 +697,7 @@ function initMap(container) {
 // Called whenever colour settings change (colour-picker input events).
 // Re-registers all colour-sensitive icon images and updates layer paint props.
 
-function applyColors() {
+export function applyColors() {
   if (!mapReady) return;
   const ring = settings.colRangeRing || '#8aaa6a';
   const nav  = settings.colNavpoint  || '#3a5a3a';
@@ -707,7 +723,7 @@ function applyColors() {
 // Switches base-layer colors between dark (radar scope) and light without
 // reloading the style (which would destroy all custom GeoJSON layers).
 
-function applyMapTheme() {
+export function applyMapTheme() {
   if (!mapReady) return;
   const light = settings.lightMode;
 
@@ -780,7 +796,7 @@ function applyMapTheme() {
 // a3). The land and water fills go black; the coastline survives as the
 // water fill's outline and the runways as dim-gray lines; contours, rivers
 // and place names are hidden. `black: false` puts the normal theme back.
-function applyAtcBackground(black) {
+export function applyAtcBackground(black) {
   if (!mapReady) return;
   if (!black) {
     for (const id of ['River', 'Country labels', 'Taxiway labels', 'Airport gate', 'elevation-contours-lines', 'elevation-contours-labels']) {

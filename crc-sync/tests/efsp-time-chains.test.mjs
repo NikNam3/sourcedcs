@@ -11,6 +11,7 @@ import { fileURLToPath } from 'url';
  * are held to the same answers by the same table (T6). */
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+const { moduleBody, exportedNames } = await import('../../crc-desktop/tests/helpers/module-body.mjs');
 const { TIME_CHAINS, resolveTimeChain, timeChainForBlock } = await import('../src/efsp/time-chains.js');
 const { cases } = JSON.parse(fs.readFileSync(path.join(here, 'fixtures/time-chains.json'), 'utf8'));
 
@@ -46,5 +47,8 @@ test('time chains: no clock of its own (H11) and no requires', () => {
 test('time chains: crc-desktop\'s copy is byte-identical (docs/adr/0001, T6)', () => {
   const ours = fs.readFileSync(path.join(here, '../src/efsp/time-chains.js'), 'utf8');
   const theirs = fs.readFileSync(path.join(here, '../../crc-desktop/app/public/js/panels/efsp/time-chains.js'), 'utf8');
-  assert.equal(theirs, ours);
+  // The client copy is an ES module (ESM-1): it exports with the `export` keyword where this one ends in a guarded
+  // module.exports. The bodies must be identical; the export syntax is the one allowed difference.
+  assert.equal(moduleBody(theirs), moduleBody(ours));
+  assert.deepEqual(exportedNames(theirs), ['ESTIMATE_SOURCES', 'TIME_CHAINS', 'resolveTimeChain', 'timeChainForBlock']);
 });

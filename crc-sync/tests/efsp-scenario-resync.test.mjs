@@ -3,13 +3,12 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import vm from 'vm';
 import { slot } from './helpers/wire-slots.mjs';
 
 // Scenario: a client that misses a Board delta (or meets a restarted server)
 // asks for a resync and converges (S-12, docs/adr/0081). The server is a real
-// createEfsp(); the client is the shipped efsp-state.js + efsp-ws.js run in a
-// vm with sendToSync wired straight into handleMessage.
+// createEfsp(); the client is the shipped efsp-state.js + efsp-ws.js, a fresh
+// module graph per client (ESM-1), with sendToSync wired straight into an outbox.
 
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'resync-scn-'));
 for (const [k, v] of Object.entries({
@@ -28,17 +27,20 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
 const { createEfsp } = await import('../src/efsp/index.js');
 const { crew, mustAct, DEPARTURE_FDR } = await import('./helpers/efsp-scenario.mjs');
 
-const CLIENT_DIR = path.join(import.meta.dirname, '../../crc-desktop/app/public/js/panels/efsp');
+// The client is ES modules (ESM-1): its browser-ish globals first, then a fresh module graph per client.
+await import('../../crc-desktop/tests/helpers/client-env.mjs');
+const { freshGraph } = await import('../../crc-desktop/tests/helpers/fresh-graph.mjs');
 
 /** The shipped client sync code, its network replaced by an outbox. */
-function makeClient() {
+async function makeClient() {
   const outbox = [];
-  const ctx = vm.createContext({
-    console: { warn() {}, log() {}, error() {} }, crypto: { randomUUID: () => 'x' },
-    isSyncOpen: () => true, sendToSync: (m) => outbox.push(m),
-  });
-  for (const f of ['efsp-state.js', 'efsp-ws.js']) vm.runInContext(fs.readFileSync(path.join(CLIENT_DIR, f), 'utf8'), ctx, { filename: f });
-  const run = (code) => vm.runInContext(code, ctx);
+  const g = freshGraph();
+  const sync = await g.import('sync.js');
+  sync.setSendToSync((m) => outbox.push(m));
+  sync.setIsSyncOpen(() => true);
+  const ctx = { ...(await g.import('panels/efsp/efsp-state.js')), ...(await g.import('panels/efsp/efsp-ws.js')) };
+  // Evaluates a snippet against the two modules' exports, as the old vm context did against their globals.
+  const run = (code) => new Function('__ctx', `with (__ctx) { return eval(${JSON.stringify(code)}); }`)(ctx);
   return {
     outbox, run,
     /** app.js's efsp cases, in the order it runs them. */
@@ -76,10 +78,10 @@ function serveResyncs(efsp, session, client) {
   return replies;
 }
 
-test('a client that misses a delta sees the gap at the heartbeat, resyncs, and converges on a delta', () => {
+test('a client that misses a delta sees the gap at the heartbeat, resyncs, and converges on a delta', async () => {
   const efsp = createEfsp();
   const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK' });
-  const b = makeClient();
+  const b = await makeClient();
   b.deliver(efsp.snapshotFor(c.CD.session));
   assert.deepEqual(b.stripIds(), serverStrips(efsp));
 
@@ -109,11 +111,11 @@ test('a client that misses a delta sees the gap at the heartbeat, resyncs, and c
   assert.equal(b.outbox.length, 0, 'converged: no more resyncs');
 });
 
-test('a delta from another Board lifetime (server restarted) triggers a resync that is answered with a snapshot', () => {
+test('a delta from another Board lifetime (server restarted) triggers a resync that is answered with a snapshot', async () => {
   const efsp1 = createEfsp();
   const c1 = crew(efsp1, { OPS: 'INCIRLIK', CD: 'INCIRLIK' });
   create(efsp1, c1, 'EPOCH1');
-  const b = makeClient();
+  const b = await makeClient();
   b.deliver(efsp1.snapshotFor(c1.CD.session));
 
   const efsp2 = createEfsp(); // a new lifetime restoring the same snapshot
@@ -129,10 +131,10 @@ test('a delta from another Board lifetime (server restarted) triggers a resync t
   assert.equal(b.seq('INCIRLIK'), efsp2.boardStoreFor('INCIRLIK').currentSeq);
 });
 
-test('a reconnect sends no resync: the connect-time snapshot is the recovery (R3-47)', () => {
+test('a reconnect sends no resync: the connect-time snapshot is the recovery (R3-47)', async () => {
   const efsp = createEfsp();
   const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK' });
-  const b = makeClient();
+  const b = await makeClient();
   b.deliver(efsp.snapshotFor(c.CD.session));
   create(efsp, c, 'RECON1'); // missed while the socket was down
   assert.notDeepEqual(b.stripIds(), serverStrips(efsp));

@@ -22,7 +22,7 @@ function getSyncToken() {
 // only forwards an Authorization header if the browser's own request to it
 // already had one; callers that skip this get "Authentication required"
 // back from crc-sync even though the user is fully logged in.
-function _syncAuthHeaders() {
+export function _syncAuthHeaders() {
   const token = getSyncToken();
   return token ? { Authorization: 'Bearer ' + token } : {};
 }
@@ -139,7 +139,7 @@ function _connFieldRow(label, id, value) {
   </label>`;
 }
 
-function showConnWidget() {
+export function showConnWidget() {
   if (document.getElementById('crc-conn-widget')) return;
   const eff = getEffectiveConn();
 
@@ -233,7 +233,7 @@ async function fetchSyncTicket() {
   }
 }
 
-async function getSyncFeedUrl() {
+export async function getSyncFeedUrl() {
   await applyConnOverrides();
   const ticket = await fetchSyncTicket();
   if (!ticket) {
@@ -251,8 +251,8 @@ async function getSyncFeedUrl() {
 // without app.js exposing its module-scoped `_ws`.
 
 let _syncSocket = null;
-function _setSyncSocket(ws) { _syncSocket = ws; }
-function sendToSync(msg) {
+export function _setSyncSocket(ws) { _syncSocket = ws; }
+export function sendToSync(msg) {
   if (_syncSocket && _syncSocket.readyState === WebSocket.OPEN) {
     _syncSocket.send(JSON.stringify(msg));
   }
@@ -262,4 +262,10 @@ function sendToSync(msg) {
 // implicitly by the next state sync), but EFSP callers need to be able to
 // tell "silently dropped" apart from "sent, waiting on a reply" to avoid
 // looking identically broken either way. See efsp-ws.js.
-function isSyncOpen() { return !!(_syncSocket && _syncSocket.readyState === WebSocket.OPEN); }
+export function isSyncOpen() { return !!(_syncSocket && _syncSocket.readyState === WebSocket.OPEN); }
+
+// ESM-1: replaces sendToSync for every importer (live binding). The classic page let a caller assign the global
+// `sendToSync`; the Playwright specs still do, through js/classic-globals-bridge.js, and unit tests may too.
+export function setSendToSync(fn) { sendToSync = fn; }
+// ESM-1 (S-ESM1b): the unit tests replaced the global isSyncOpen; this is that seam.
+export function setIsSyncOpen(fn) { isSyncOpen = fn; }

@@ -1,4 +1,5 @@
 'use strict';
+import { _syncAuthHeaders } from '../../sync.js';
 
 // Client-side glue for the CreateStrip flight-plan pre-fill — calls
 // crc-sync's GET /api/flight-plan-lookup/:callsign (crc-sync/src/efsp/
@@ -13,14 +14,14 @@
 // side timeout below) resolves {found:false}, mirroring the server-side
 // module's own "never blocks Strip creation" contract exactly.
 
-const FLIGHT_PLAN_LOOKUP_CLIENT_TIMEOUT_MS = 4000;
+export const FLIGHT_PLAN_LOOKUP_CLIENT_TIMEOUT_MS = 4000;
 
 /**
  * @param {string} callsign
  * @param {{fetchImpl?:typeof fetch, timeoutMs?:number, authHeaders?:()=>object}} [opts] — injectable for tests
  * @returns {Promise<{found:true, seed:object}|{found:false}>} never throws
  */
-async function lookupFlightPlanClient(callsign, opts = {}) {
+export async function lookupFlightPlanClient(callsign, opts = {}) {
   const fetchImpl = opts.fetchImpl || fetch;
   const timeoutMs = opts.timeoutMs ?? FLIGHT_PLAN_LOOKUP_CLIENT_TIMEOUT_MS;
   const authHeaders = opts.authHeaders || (typeof _syncAuthHeaders === 'function' ? _syncAuthHeaders : () => ({}));
@@ -45,7 +46,7 @@ async function lookupFlightPlanClient(callsign, opts = {}) {
   }
 }
 
-const FLIGHT_PLAN_LIST_CLIENT_TIMEOUT_MS = 4000;
+export const FLIGHT_PLAN_LIST_CLIENT_TIMEOUT_MS = 4000;
 
 /**
  * Fetches the ops-filed queue — every currently-filed DD1801 plan
@@ -59,7 +60,7 @@ const FLIGHT_PLAN_LIST_CLIENT_TIMEOUT_MS = 4000;
  * @param {{fetchImpl?:typeof fetch, timeoutMs?:number, authHeaders?:()=>object}} [opts] — injectable for tests
  * @returns {Promise<Array<{id, callsign, submittedByName, submittedAt, seed}>>} never throws
  */
-async function listFiledFlightPlansClient(opts = {}) {
+export async function listFiledFlightPlansClient(opts = {}) {
   const fetchImpl = opts.fetchImpl || fetch;
   const timeoutMs = opts.timeoutMs ?? FLIGHT_PLAN_LIST_CLIENT_TIMEOUT_MS;
   const authHeaders = opts.authHeaders || (typeof _syncAuthHeaders === 'function' ? _syncAuthHeaders : () => ({}));
@@ -78,11 +79,4 @@ async function listFiledFlightPlansClient(opts = {}) {
   } finally {
     clearTimeout(timer);
   }
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    lookupFlightPlanClient, FLIGHT_PLAN_LOOKUP_CLIENT_TIMEOUT_MS,
-    listFiledFlightPlansClient, FLIGHT_PLAN_LIST_CLIENT_TIMEOUT_MS,
-  };
 }

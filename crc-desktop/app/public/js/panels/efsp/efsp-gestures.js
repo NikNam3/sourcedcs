@@ -10,22 +10,18 @@
 // without a DOM. Each toggles: a second invocation clears the flag rather
 // than stacking a second state.
 
-function toggleOffset(strip, sendMutation) {
+export function toggleOffset(strip, sendMutation) {
   sendMutation(strip, { kind: 'SetFlag', flag: 'offset', value: !strip.flags.offset });
 }
 
-function toggleFlip(strip, sendMutation) {
+export function toggleFlip(strip, sendMutation) {
   sendMutation(strip, { kind: 'SetFlag', flag: 'flipped', value: !strip.flags.flipped });
 }
 
-function setHighlight(strip, color, sendMutation) {
+export function setHighlight(strip, color, sendMutation) {
   sendMutation(strip, { kind: 'SetFlag', flag: 'highlight', value: strip.flags.highlight === color ? null : color });
 }
 
-function setAttention(strip, color, sendMutation) {
+export function setAttention(strip, color, sendMutation) {
   sendMutation(strip, { kind: 'SetFlag', flag: 'attention', value: strip.flags.attention === color ? null : color });
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { toggleOffset, toggleFlip, setHighlight, setAttention };
 }

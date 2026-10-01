@@ -1,4 +1,6 @@
 'use strict';
+import { sendToSync } from './sync.js';
+import { settings } from './app.js';
 
 // ── IFF state constants ────────────────────────────────────────────────────
 // Keep this list byte-identical to crc-sync/src/surveillance/iff.js's IFF_STATES
@@ -26,7 +28,7 @@ const IFF_COLOR_DEFAULTS = {
 
 let userCoalition = 3;
 
-function loadUserCoalition() {
+export function loadUserCoalition() {
   try {
     const v = parseInt(localStorage.getItem('crc-desktop-user-coalition'), 10);
     if (v === 2 || v === 3) userCoalition = v;
@@ -37,23 +39,23 @@ function saveUserCoalition() {
   localStorage.setItem('crc-desktop-user-coalition', String(userCoalition));
 }
 
-function toggleUserCoalition() {
+export function toggleUserCoalition() {
   userCoalition = userCoalition === 3 ? 2 : 3;
   saveUserCoalition();
 }
 
-function getUserCoalition() { return userCoalition; }
+export function getUserCoalition() { return userCoalition; }
 
 // ── IFF declarations ───────────────────────────────────────────────────────
 // Shared by every controller: a declaration is a mutation to crc-sync
 // (its collab-store.js), sent via sync.js's sendToSync.
 
-function setIffOverride(id, state) {
+export function setIffOverride(id, state) {
   if (!IFF_STATES.includes(state)) return;
   sendToSync({ type: 'declare', trackId: String(id), state });
 }
 
-function clearIffOverride(id) {
+export function clearIffOverride(id) {
   sendToSync({ type: 'clearDeclare', trackId: String(id) });
 }
 
@@ -62,13 +64,13 @@ function clearIffOverride(id) {
 // override merged) and attaches it to each contact as `iffState` — see
 // crc-sync/src/surveillance/iff.js.
 
-function getIff(track) {
+export function getIff(track) {
   return (track && track.iffState) || 'neutral';
 }
 
 // CSS colour for an IFF state — reads live from settings so colour picker
 // changes take effect immediately without a page reload.
-function iffColor(state) {
+export function iffColor(state) {
   // settings is defined in app.js; safe to read here because iffColor is
   // only ever called at runtime (never at parse time).
   const col = {

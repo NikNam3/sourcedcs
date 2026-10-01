@@ -1,4 +1,9 @@
 'use strict';
+import { getAllEfspStrips, getEfspFdr, getEfspFieldState, getEfspStrip } from './efsp-state.js';
+import { getActingPositions } from './efsp-ws.js';
+import { selectEfspStripById } from './bay-view.js';
+import { _activeBayId, _activePositionTab, _renderPositionTabs } from './efsp-panel.js';
+import { _setActiveBayId, _setActivePositionTab } from './efsp-panel.js';
 
 // Guide §9.6 — alert and scramble, on the client (crc-sync's docs/adr/0070).
 //
@@ -25,11 +30,11 @@
 
 // ── the pure half (mirrors crc-sync's alert-scramble.js) ──────────────────
 
-const SCRAMBLE_PRE_AIRBORNE = Object.freeze({
+export const SCRAMBLE_PRE_AIRBORNE = Object.freeze({
   DEPARTURE: Object.freeze(['PROPOSED', 'PENDING_CLEARANCE', 'CLEARED', 'HELD', 'PUSHBACK', 'TAXI', 'RUNWAY_QUEUE', 'LUAW']),
 });
 
-const GROUND_STATES = Object.freeze({
+export const GROUND_STATES = Object.freeze({
   DEPARTURE: Object.freeze(['PUSHBACK', 'TAXI', 'RUNWAY_QUEUE', 'LUAW']),
   ARRIVAL: Object.freeze(['LANDED', 'TAXI_IN']),
 });
@@ -44,7 +49,7 @@ function _isScrambling(strip, fdr) {
   return !!(fdr && fdr.military && fdr.military.alertStatus === 'SCRAMBLE');
 }
 
-function activeScrambles(strips, fdrOf, facilityId) {
+export function activeScrambles(strips, fdrOf, facilityId) {
   const out = [];
   for (const strip of strips || []) {
     if (facilityId !== undefined && facilityId !== null && strip.facilityId !== facilityId) continue;
@@ -55,7 +60,7 @@ function activeScrambles(strips, fdrOf, facilityId) {
   return out.sort((a, b) => (a.callsign < b.callsign ? -1 : a.callsign > b.callsign ? 1 : (a.stripId < b.stripId ? -1 : 1)));
 }
 
-function conflictingGroundStrips(strips, fdrOf, facilityId) {
+export function conflictingGroundStrips(strips, fdrOf, facilityId) {
   const scrambles = activeScrambles(strips, fdrOf, facilityId);
   if (scrambles.length === 0) return [];
   const scramblingFdrs = new Set(scrambles.map(s => s.fdrId));
@@ -71,14 +76,14 @@ function conflictingGroundStrips(strips, fdrOf, facilityId) {
   return out;
 }
 
-function accessRouteText(fieldState) {
+export function accessRouteText(fieldState) {
   if (!fieldState) return 'the alert-pad access route';
   const pad = fieldState.alertPad;
   if (pad && typeof pad.accessRoute === 'string' && pad.accessRoute) return pad.accessRoute;
   return 'the alert-pad access route (not configured)';
 }
 
-function alertPadConstraint(fieldState, scrambles) {
+export function alertPadConstraint(fieldState, scrambles) {
   if (!scrambles || scrambles.length === 0) return null;
   const pad = fieldState && fieldState.alertPad;
   const route = pad && typeof pad.accessRoute === 'string' && pad.accessRoute ? pad.accessRoute : null;
@@ -110,7 +115,7 @@ function _joinCallsigns(list) {
  * [{ key, tone, legacy, text, reason }], or [] when it has nothing to do with
  * a scramble. ALERT alone shows nothing beyond its 14E field (ADR 0058).
  */
-function scrambleAlertsFor(strip) {
+export function scrambleAlertsFor(strip) {
   if (!strip || !strip.facilityId) return [];
   const strips = _scrambleLiveStrips();
   const scrambles = activeScrambles(strips, _scrambleFdrOf, strip.facilityId);
@@ -133,7 +138,7 @@ function scrambleAlertsFor(strip) {
 }
 
 /** L1b's field-state panel hook: the constrained-route line for a Facility, or null. */
-function alertPadConstraintFor(facilityId) {
+export function alertPadConstraintFor(facilityId) {
   const scrambles = activeScrambles(_scrambleLiveStrips(), _scrambleFdrOf, facilityId);
   const c = alertPadConstraint(_scrambleFieldStateFor(facilityId), scrambles);
   return c ? c.text : null;
@@ -153,8 +158,8 @@ function _revealScrambleStrip(stripId) {
   const held = typeof getActingPositions === 'function' ? getActingPositions() : [];
   if (strip && held.includes(strip.ownerPositionId)
       && typeof _renderPositionTabs === 'function' && typeof _activePositionTab !== 'undefined') {
-    _activePositionTab = strip.ownerPositionId; // eslint-disable-line no-global-assign
-    _activeBayId = strip.bayId; // eslint-disable-line no-global-assign
+    _setActivePositionTab(strip.ownerPositionId); // eslint-disable-line no-global-assign
+    _setActiveBayId(strip.bayId); // eslint-disable-line no-global-assign
     _renderPositionTabs();
   }
   if (typeof selectEfspStripById === 'function') selectEfspStripById(stripId);
@@ -165,7 +170,7 @@ function _revealScrambleStrip(stripId) {
  * scramble at any Facility, at the top of the Strip panel, on every Position
  * tab. Hidden when nothing is scrambling. A row never collapses (H6).
  */
-function renderEfspScrambleLine() {
+export function renderEfspScrambleLine() {
   const line = typeof document !== 'undefined' ? document.getElementById('efsp-scramble-line') : null;
   if (!line) return;
   const strips = _scrambleLiveStrips();
@@ -204,12 +209,4 @@ function renderEfspScrambleLine() {
     row.appendChild(detail);
     line.appendChild(row);
   }
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    SCRAMBLE_PRE_AIRBORNE, GROUND_STATES,
-    activeScrambles, conflictingGroundStrips, accessRouteText, alertPadConstraint,
-    scrambleAlertsFor, alertPadConstraintFor, renderEfspScrambleLine,
-  };
 }

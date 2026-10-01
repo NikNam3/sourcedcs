@@ -1,4 +1,6 @@
 'use strict';
+import { bearingDeg, haversineM, projectPos } from './geo.js';
+import { elevDecodeTileMeters, elevLonLatToTile } from './elevation.js';
 
 // ── Radar line-of-sight (terrain masking) ───────────────────────────────────
 // Reuses elevation.js's MapTiler terrain-RGB tile machinery (elevDecodeTileMeters,
@@ -14,12 +16,12 @@
 
 const LOS_DEM_ZOOM      = 10;   // fixed zoom for terrain sampling, independent of map viewport zoom
 const LOS_CACHE_MAX     = 300;  // max decoded tiles kept in memory
-const LOS_SAMPLE_COUNT  = 24;   // terrain samples taken along a radar→target path
+export const LOS_SAMPLE_COUNT  = 24;   // terrain samples taken along a radar→target path
 
 // Standard radar-horizon approximation: earth curvature + typical atmospheric
 // refraction bend the ray back down slightly, modeled as line-of-sight over
 // an effective earth 4/3 the true radius.
-const EFFECTIVE_EARTH_RADIUS_M = (4 / 3) * 6371000;
+export const EFFECTIVE_EARTH_RADIUS_M = (4 / 3) * 6371000;
 
 const losGridCache      = new Map(); // "z/x/y" → { grid, n, min, max } (meters)
 const losFetchInFlight  = new Set();
@@ -69,7 +71,7 @@ function losElevationAt(lon, lat) {
 
 // Straight sight-line height at distance d along a path of total length D,
 // between two points at radarAltM/targetAltM, minus the earth-curvature bulge.
-function losSightLineHeightM(radarAltM, targetAltM, d, D) {
+export function losSightLineHeightM(radarAltM, targetAltM, d, D) {
   if (D <= 0) return radarAltM;
   const straight = radarAltM + (targetAltM - radarAltM) * (d / D);
   const bulge = (d * (D - d)) / (2 * EFFECTIVE_EARTH_RADIUS_M);
@@ -78,7 +80,7 @@ function losSightLineHeightM(radarAltM, targetAltM, d, D) {
 
 // samples: [{ d, terrainM }, ...]. True if any sample's terrain pokes above
 // the sight line at that point.
-function losProfileBlocked(samples, radarAltM, targetAltM, D) {
+export function losProfileBlocked(samples, radarAltM, targetAltM, D) {
   for (const { d, terrainM } of samples) {
     if (terrainM > losSightLineHeightM(radarAltM, targetAltM, d, D)) return true;
   }
@@ -107,7 +109,7 @@ function losHasLineOfSight(radarLat, radarLon, radarAltM, targetLat, targetLon, 
 // overlay: how far out can this radar see anything at ground level before
 // terrain blocks the rest of the beam? Reuses losHasLineOfSight against the
 // terrain height at each candidate distance as the "target".
-function losVisibleRangeM(radar, bearing, maxRangeM) {
+export function losVisibleRangeM(radar, bearing, maxRangeM) {
   for (let i = 1; i <= LOS_SAMPLE_COUNT; i++) {
     const d = (maxRangeM * i) / LOS_SAMPLE_COUNT;
     const [lat, lon] = projectPos(radar.lat, radar.lon, bearing, d);
@@ -124,7 +126,7 @@ function losVisibleRangeM(radar, bearing, maxRangeM) {
 // answers "could this radar graze the ground all the way to its nominal
 // range," the same question losVisibleRangeM answers for the map beam, just
 // rendered as one continuous curve instead of a single truncation point.
-function losBeamProfile(radar, bearing, maxRangeM, steps = 40) {
+export function losBeamProfile(radar, bearing, maxRangeM, steps = 40) {
   const [farLat, farLon] = projectPos(radar.lat, radar.lon, bearing, maxRangeM);
   const farTerrainM = losElevationAt(farLon, farLat);
   const targetAltM = farTerrainM == null ? radar.elevM : farTerrainM;
@@ -141,13 +143,4 @@ function losBeamProfile(radar, bearing, maxRangeM, steps = 40) {
   }
 
   return { points, targetAltM, blockedAtM: losVisibleRangeM(radar, bearing, maxRangeM) };
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    EFFECTIVE_EARTH_RADIUS_M,
-    LOS_SAMPLE_COUNT,
-    losSightLineHeightM,
-    losProfileBlocked,
-  };
 }

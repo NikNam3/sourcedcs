@@ -1,4 +1,10 @@
 'use strict';
+import { getEfspFdr } from './efsp-state.js';
+import { resolveTimeChain, timeChainForBlock } from './time-chains.js';
+import { carrierDerivedText, getEfspCarrier } from './carrier-state.js';
+import { mtrLostCommsAdvisory } from './strip-fields.js';
+import { carrierFinalDistanceText } from './carrier-panel.js';
+import { cachedStereoRoutesClient } from './efsp-stereo-routes.js';
 
 // The Departure Block Map as data (EFSPImplementationGuide.md §6.2, §6.5)
 // — client-side copy. Deliberately a literal duplicate of crc-sync's
@@ -25,7 +31,7 @@
 // wording from the guide's own §6.2/§6.3 field column rather than inventing
 // one; several of those seven were wrong, not just ambiguous.
 // efsp-strip-template.test.js holds both rules.
-const DEPARTURE_BLOCK_MAP = {
+export const DEPARTURE_BLOCK_MAP = {
   '1':  { required: true,  label: 'CALLSIGN', target: { kind: 'fdr', path: 'identity.callsign' } },
   '2':  { required: true,  label: 'REV',      target: { kind: 'system', field: 'rev' } },
   '2A': { required: false, label: 'VOICE',     target: { kind: 'annotation' } },
@@ -149,7 +155,7 @@ const DEPARTURE_BLOCK_MAP = {
 // for the full design rationale (why Block 7 is annotation-routed, the
 // 9A-* split, the 20/21 scratchpad simplification). Kept in sync by
 // efsp-block-map-parity.test.js, same as DEPARTURE_BLOCK_MAP.
-const ARRIVAL_BLOCK_MAP = {
+export const ARRIVAL_BLOCK_MAP = {
   '1':        { required: true,  label: 'CALLSIGN', target: { kind: 'fdr', path: 'identity.callsign' } },
   '2':        { required: true,  label: 'REV',      target: { kind: 'system', field: 'rev' } },
   '2A':       { required: false, label: 'VOICE',     target: { kind: 'annotation' } },
@@ -206,7 +212,7 @@ const ARRIVAL_BLOCK_MAP = {
 // full design rationale (why '8'/'8B' mean the flight's real origin/
 // destination, never Incirlik, and why there are no ground/runway/taxi
 // Blocks). Kept in sync by efsp-block-map-parity.test.js.
-const OVERFLIGHT_BLOCK_MAP = {
+export const OVERFLIGHT_BLOCK_MAP = {
   '1':  { required: true,  label: 'CALLSIGN', target: { kind: 'fdr', path: 'identity.callsign' } },
   '2':  { required: true,  label: 'REV',      target: { kind: 'system', field: 'rev' } },
   '3':  { required: true,  label: 'TYPE',     target: { kind: 'composite' } },
@@ -264,7 +270,7 @@ const OVERFLIGHT_BLOCK_MAP = {
 // rationale (why this is its own M-prefixed namespace, not a DEPARTURE/
 // ARRIVAL field-reuse the way OVERFLIGHT's was). Kept in sync by
 // efsp-block-map-parity.test.js.
-const MISSION_BLOCK_MAP = {
+export const MISSION_BLOCK_MAP = {
   'M1': { required: true,  label: 'MSN #',   target: { kind: 'fdr', path: 'mission.missionNumber' } },
   'M2': { required: false, label: 'PKG',     target: { kind: 'fdr', path: 'mission.packageId' } },
   'M3': { required: true,  label: 'CALLSIGN',target: { kind: 'fdr', path: 'identity.callsign' } },
@@ -296,7 +302,7 @@ const _CARRIER_CHROME = {
   '26': { required: true,  label: 'NLA',    target: { kind: 'nla' } },
 };
 
-const MARSHAL_BLOCK_MAP = {
+export const MARSHAL_BLOCK_MAP = {
   'C1':  { required: true,  label: 'CALLSIGN', target: { kind: 'fdr', path: 'identity.callsign' } },
   'C2':  { required: true,  label: 'TYPE',     target: { kind: 'fdr', path: 'identity.aircraftType' } },
   'C3':  { required: false, label: 'CASE',     target: { kind: 'carrier-derived', field: 'case' } },
@@ -315,7 +321,7 @@ const MARSHAL_BLOCK_MAP = {
   ..._CARRIER_CHROME,
 };
 
-const FINAL_BLOCK_MAP = {
+export const FINAL_BLOCK_MAP = {
   'C1':  { required: true,  label: 'CALLSIGN', target: { kind: 'carrier-derived', field: 'callsign' } },
   'C2':  { required: true,  label: 'TYPE',     target: { kind: 'carrier-derived', field: 'aircraftType' } },
   'C9':  { required: false, label: 'FNL BRG',  target: { kind: 'carrier-derived', field: 'expectedFinalBearing' } },
@@ -325,14 +331,14 @@ const FINAL_BLOCK_MAP = {
   '25': _CARRIER_CHROME['25'], '26': _CARRIER_CHROME['26'],
 };
 
-const PATTERN_BLOCK_MAP = {
+export const PATTERN_BLOCK_MAP = {
   'C1':  { required: true,  label: 'CALLSIGN', target: { kind: 'fdr', path: 'identity.callsign' } },
   'C2':  { required: true,  label: 'TYPE',     target: { kind: 'fdr', path: 'identity.aircraftType' } },
   'C24': { required: false, label: 'NOTE',     target: { kind: 'annotation' } },
   ..._CARRIER_CHROME,
 };
 
-const BLOCK_MAPS = {
+export const BLOCK_MAPS = {
   DEPARTURE: DEPARTURE_BLOCK_MAP, ARRIVAL: ARRIVAL_BLOCK_MAP, OVERFLIGHT: OVERFLIGHT_BLOCK_MAP, MISSION: MISSION_BLOCK_MAP,
   MARSHAL: MARSHAL_BLOCK_MAP, FINAL: FINAL_BLOCK_MAP, PATTERN: PATTERN_BLOCK_MAP,
 };
@@ -358,7 +364,7 @@ function _historyCellFor(strip, blockId) {
 }
 
 /** The currently-ACTIVE entry's value for an annotation (or clearance) Block, or null if none has ever been set. */
-function activeAnnotationValue(strip, blockId) {
+export function activeAnnotationValue(strip, blockId) {
   const cell = _historyCellFor(strip, blockId);
   if (!cell) return null;
   const active = cell.entries.find(e => e.status === 'ACTIVE');
@@ -366,7 +372,7 @@ function activeAnnotationValue(strip, blockId) {
 }
 
 /** True when this annotation Block currently has an ACTIVE entry — i.e. there's something a confirmVacated action (§3.7 rule 3) could actually strike. Checked by status directly rather than truthiness of activeAnnotationValue(), since an active value could itself be falsy-looking (e.g. "0"). */
-function hasActiveAnnotationEntry(strip, blockId) {
+export function hasActiveAnnotationEntry(strip, blockId) {
   const cell = _historyCellFor(strip, blockId);
   return !!(cell && cell.entries.some(e => e.status === 'ACTIVE'));
 }
@@ -391,14 +397,14 @@ function hasActiveAnnotationEntry(strip, blockId) {
  * Pure and DOM-free, like its two neighbours, so the ordering and status rules
  * are testable without rendering anything.
  */
-function annotationHistory(strip, blockId) {
+export function annotationHistory(strip, blockId) {
   const cell = _historyCellFor(strip, blockId);
   if (!cell || !Array.isArray(cell.entries)) return [];
   return cell.entries;
 }
 
 /** The entries a Block shows ABOVE its current value — everything that is no longer ACTIVE, oldest first. */
-function supersededAnnotationEntries(strip, blockId) {
+export function supersededAnnotationEntries(strip, blockId) {
   return annotationHistory(strip, blockId).filter(e => e.status !== 'ACTIVE');
 }
 
@@ -411,13 +417,13 @@ function supersededAnnotationEntries(strip, blockId) {
 // that actually gets a sequence of clearances on a descending arrival).
 // Every Role's assigned altitude now (docs/adr/0058) — OVERFLIGHT's 7A was
 // missing, so an overflight's altitude had no ⌿ at all.
-const CONFIRM_VACATED_ELIGIBLE_BLOCKS = { DEPARTURE: ['21'], ARRIVAL: ['7'], OVERFLIGHT: ['7A'] };
+export const CONFIRM_VACATED_ELIGIBLE_BLOCKS = { DEPARTURE: ['21'], ARRIVAL: ['7'], OVERFLIGHT: ['7A'] };
 
 // [SOURCE-DEFINED] composite format for Block 3, per the guide's own
 // example template (§6.5): count (if formation), wake category, type,
 // equipment suffix — degradation (§3.3) overrides the rendered suffix
 // independently of the derived equipmentSuffix, never touching it.
-function formatBlock3(fdr) {
+export function formatBlock3(fdr) {
   if (!fdr) return '';
   const id = fdr.identity;
   const count = id.flightSize > 1 ? String(id.flightSize) : '';
@@ -437,7 +443,7 @@ function formatBlock3(fdr) {
  * stored value.
  * @returns {{value:*, provenance:string}}
  */
-function resolveBlockValue(blockId, fdr, strip) {
+export function resolveBlockValue(blockId, fdr, strip) {
   const map = BLOCK_MAPS[(strip && strip.role) || 'DEPARTURE'] || DEPARTURE_BLOCK_MAP;
   const def = map[blockId];
   if (!def) return { value: null, provenance: 'SYSTEM_DERIVED' };
@@ -596,7 +602,7 @@ function _stereoRouteOptions() {
  *   no routes cached and no stereo on the flight — so bay-view.js renders a
  *   plain cell rather than a picker that can only fail.
  */
-function enumSelectOptionsFor(blockId, fdr) {
+export function enumSelectOptionsFor(blockId, fdr) {
   if (blockId === '9F') {
     const names = _stereoRouteOptions().map(r => r.name);
     const current = fdr && fdr.filed ? fdr.filed.stereoRouteName : null;
@@ -633,10 +639,10 @@ function enumSelectOptionsFor(blockId, fdr) {
 // flight (board-store.js names the declarer in the refusal). That is correct
 // and deliberately NOT pre-empted here: the refusal is legible and lands
 // attributed to the Strip.
-const ENUM_CLEARABLE_BLOCKS = new Set(['RSVC', 'SREG', '9F', 'C4']);
+export const ENUM_CLEARABLE_BLOCKS = new Set(['RSVC', 'SREG', '9F', 'C4']);
 
 /** @returns {boolean} may this enum Block be cleared back to no value at all? */
-function isEnumBlockClearable(blockId) {
+export function isEnumBlockClearable(blockId) {
   return ENUM_CLEARABLE_BLOCKS.has(blockId);
 }
 
@@ -654,18 +660,18 @@ function isEnumBlockClearable(blockId) {
 const BOOLEAN_TOGGLE_BLOCKS = new Set(['IFR', '3F']);
 
 /** @returns {boolean} whether this Block is edited via a click-to-toggle boolean affordance rather than free text or an enum <select>. */
-function isBooleanToggleBlock(blockId) {
+export function isBooleanToggleBlock(blockId) {
   return BOOLEAN_TOGGLE_BLOCKS.has(blockId);
 }
 
 /** @returns {string|null} this Block's display label for the given role, or null if the Block doesn't exist for that role. */
-function blockLabelFor(blockId, role = 'DEPARTURE') {
+export function blockLabelFor(blockId, role = 'DEPARTURE') {
   const map = BLOCK_MAPS[role] || DEPARTURE_BLOCK_MAP;
   const def = map[blockId];
   return def ? def.label || null : null;
 }
 
-function requiredBlocksFor(role = 'DEPARTURE') {
+export function requiredBlocksFor(role = 'DEPARTURE') {
   const map = BLOCK_MAPS[role];
   if (!map) return [];
   return Object.entries(map).filter(([, def]) => def.required).map(([id]) => id);
@@ -678,7 +684,7 @@ function requiredBlocksFor(role = 'DEPARTURE') {
  * are managed by their own dedicated mechanisms (board-store-derived,
  * gesture toggles, the NLA button) and are never free-text editable here.
  */
-function isBlockEditable(blockId, role = 'DEPARTURE') {
+export function isBlockEditable(blockId, role = 'DEPARTURE') {
   const map = BLOCK_MAPS[role];
   const def = map && map[blockId];
   // 9F is a picker (docs/adr/0073) and editable only while there is a route
@@ -701,7 +707,7 @@ function isBlockEditable(blockId, role = 'DEPARTURE') {
  * would put a made-up value on a Strip.
  * @returns {{blockId:string, value:string}|null} null when the Block is not redirected
  */
-function editRedirectFor(blockId, role, fdr) {
+export function editRedirectFor(blockId, role, fdr) {
   if (blockId !== '3') return null;
   const map = BLOCK_MAPS[role || 'DEPARTURE'];
   const def = map && map['3A'];
@@ -722,12 +728,12 @@ function editRedirectFor(blockId, role, fdr) {
 // Block ids, not paths: each id means one time on every role map that has it.
 // A test derives this set from the Block Maps, so a time Block added later
 // without it fails.
-const ZULU_HHMM_BLOCKS = new Set([
+export const ZULU_HHMM_BLOCKS = new Set([
   '6', '9G-TIME', '9H-TIME', '14', '14B', '14C', '14D', '16', '17', '18', 'M6', 'M7',
 ]);
 
 /** Epoch ms as the four-digit Zulu time a Strip shows ('1432'), or '' for no time. Mirrors crc-sync's zulu-time.js. */
-function formatZuluHhmm(ms) {
+export function formatZuluHhmm(ms) {
   if (ms == null || ms === '' || !Number.isFinite(Number(ms))) return '';
   const d = new Date(Number(ms));
   return String(d.getUTCHours()).padStart(2, '0') + String(d.getUTCMinutes()).padStart(2, '0');
@@ -737,7 +743,7 @@ function formatZuluHhmm(ms) {
 // enough. Only the MTR fields today (docs/adr/0062). EXIT ALT carries §9.4's
 // lost-comms rule (strip-fields.js's mtrLostCommsAdvisory) because it is the
 // field a controller is looking at when the question comes up.
-const BLOCK_TITLES = {
+export const BLOCK_TITLES = {
   '9G-MTR': 'MTR designator (guide M10)',
   '9G-ENTRY': 'MTR entry fix',
   '9G-TIME': 'MTR entry time, UTC HHMM',
@@ -752,7 +758,7 @@ const BLOCK_TITLES = {
 //
 // What each chain source means, in the words a controller reads. An estimate
 // names the chain it borrowed from and that chain's own source.
-const TIME_SOURCE_TEXT = {
+export const TIME_SOURCE_TEXT = {
   CONTROLLER: 'entered by a controller',
   FLIGHT_PLAN: 'from the filed DD-1801 (item 13, EOBT)',
   ATO: 'from the ATO (AMSNDAT departure time)',
@@ -772,7 +778,7 @@ function _timeSourceSentence(source, via) {
  * value and where it came from, and what would apply if it were cleared.
  * Null for any other Block or Role.
  */
-function timeChainTitleFor(blockId, fdr, strip) {
+export function timeChainTitleFor(blockId, fdr, strip) {
   if (((strip && strip.role) || 'DEPARTURE') !== 'DEPARTURE') return null;
   const chain = typeof timeChainForBlock === 'function' ? timeChainForBlock(blockId) : null;
   if (!chain) return null;
@@ -800,7 +806,7 @@ function timeChainTitleFor(blockId, fdr, strip) {
  * the Strip would otherwise show TAXI 1425 ahead of a P-time of 1450 with nothing saying why.
  * @returns {{typedUtc:number, planUtc:number}|null}
  */
-function typedTimeBehindPlan(blockId, fdr, strip) {
+export function typedTimeBehindPlan(blockId, fdr, strip) {
   if (((strip && strip.role) || 'DEPARTURE') !== 'DEPARTURE') return null;
   const chain = typeof timeChainForBlock === 'function' ? timeChainForBlock(blockId) : null;
   if (chain !== 'offBlock' && chain !== 'takeoff') return null;
@@ -817,7 +823,7 @@ function typedTimeBehindPlan(blockId, fdr, strip) {
  * the cell needs nothing. Block 9F with no route table says why it is not a
  * picker, since there is nothing to pick.
  */
-function blockValueHintFor(blockId, fdr, strip) {
+export function blockValueHintFor(blockId, fdr, strip) {
   if (blockId === '9F' && enumSelectOptionsFor('9F', fdr) == null) {
     return { title: 'no stereo routes configured', estimated: false };
   }
@@ -840,7 +846,7 @@ function blockValueHintFor(blockId, fdr, strip) {
  * strip-view.js titles with the FDR alone) the chain title is left off: the
  * same id is the ETA on an ARRIVAL, and the value cell carries it anyway.
  */
-function blockTitleFor(blockId, fdr, strip) {
+export function blockTitleFor(blockId, fdr, strip) {
   if (strip) {
     const chainTitle = timeChainTitleFor(blockId, fdr, strip);
     if (chainTitle) return chainTitle;
@@ -849,15 +855,4 @@ function blockTitleFor(blockId, fdr, strip) {
   if (blockId !== '9H-ALT' || typeof mtrLostCommsAdvisory !== 'function') return base;
   const advisory = mtrLostCommsAdvisory(fdr);
   return advisory ? `${base}.\n${advisory}` : base;
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP, MARSHAL_BLOCK_MAP, FINAL_BLOCK_MAP, PATTERN_BLOCK_MAP, BLOCK_MAPS, resolveBlockValue, requiredBlocksFor, formatBlock3,
-    activeAnnotationValue, hasActiveAnnotationEntry, annotationHistory, supersededAnnotationEntries,
-    isBlockEditable, editRedirectFor, CONFIRM_VACATED_ELIGIBLE_BLOCKS,
-    enumSelectOptionsFor, ENUM_CLEARABLE_BLOCKS, isEnumBlockClearable, isBooleanToggleBlock, blockLabelFor,
-    ZULU_HHMM_BLOCKS, formatZuluHhmm, BLOCK_TITLES, blockTitleFor,
-    TIME_SOURCE_TEXT, timeChainTitleFor, blockValueHintFor, typedTimeBehindPlan,
-  };
 }

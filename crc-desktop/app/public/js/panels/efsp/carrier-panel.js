@@ -1,4 +1,14 @@
 'use strict';
+import { projectPos } from '../../geo.js';
+import { correlatedTrackIdForStrip, getEfspFdr, getEfspStrip } from './efsp-state.js';
+import { CARRIER_TRANSFERS } from './efsp-nla.js';
+import {
+  carrierBannerParts, carrierCaseValue, carrierDerivedFor, carrierDerivedStack, carrierHhmm, getEfspCarrier
+} from './carrier-state.js';
+import { getActingPositions, sendEfspCarrierMutation, sendEfspMutation } from './efsp-ws.js';
+// ESM-1: today efsp-panel.js's _callsignOfFdr (fallback '') silently won over this file's own copy (fallback fdrId);
+// the import keeps that effective behaviour (S-ARCH2 item 3, plan §6 queue item 3).
+import { _callsignOfFdr } from './efsp-panel.js';
 
 // The carrier's surfaces on the Strip panel (crc-sync's docs/adr/0074, ADR 0064
 // B7; guide §4.1, §9.12): the ship banner, the Case selector, the Marshal stack
@@ -14,17 +24,17 @@
 
 // Client mirror of permission.js's CARRIER_CAPABILITIES (drift-tested). A UX
 // convenience: the server's predicates are the authority.
-const CARRIER_CAPABILITIES = {
+export const CARRIER_CAPABILITIES = {
   CV_MARSHAL: { setsCase: false, sequencesStack: true,  editsShipInput: true },
   CV_PRIFLY:  { setsCase: true,  sequencesStack: false, editsShipInput: true },
   CV_APP1:    { setsCase: false, sequencesStack: false, editsShipInput: false },
   CV_APP2:    { setsCase: false, sequencesStack: false, editsShipInput: false },
 };
-const CARRIER_POSITION_IDS = Object.keys(CARRIER_CAPABILITIES);
+export const CARRIER_POSITION_IDS = Object.keys(CARRIER_CAPABILITIES);
 const CARRIER_CASES = ['I', 'II', 'III'];
 
 /** The held CV Position that has this capability, or null. Pure over `heldIds`. */
-function carrierActingFor(capability, heldIds) {
+export function carrierActingFor(capability, heldIds) {
   for (const id of heldIds || []) {
     if (CARRIER_CAPABILITIES[id] && CARRIER_CAPABILITIES[id][capability]) return id;
   }
@@ -53,7 +63,7 @@ function _sendCarrier(capability, op) {
 // ── The ship banner and the Case selector ─────────────────────────────────
 
 /** Draws the banner into #efsp-carrier-banner when this controller holds a carrier Position; hides it otherwise. */
-function renderCarrierBanner() {
+export function renderCarrierBanner() {
   const root = typeof document !== 'undefined' ? document.getElementById('efsp-carrier-banner') : null;
   if (!root) return;
   const held = _heldCarrierIds();
@@ -132,7 +142,7 @@ function renderCarrierBanner() {
 let _carrierDragSlot = null;
 
 /** Slot rows for the board: every slot 0..top+2, each either a flight's derived entry or a vacancy with the server's preview of what it WOULD read. */
-function carrierStackRows(view = getEfspCarrier(), stackId = 'MAIN') {
+export function carrierStackRows(view = getEfspCarrier(), stackId = 'MAIN') {
   if (!view) return [];
   const byIndex = new Map(((view.derived && view.derived[stackId]) || []).map(e => [e.stackIndex, e]));
   const slots = (view.slots && view.slots[stackId]) || [];
@@ -143,20 +153,15 @@ function carrierStackRows(view = getEfspCarrier(), stackId = 'MAIN') {
   });
 }
 
-function _callsignOfFdr(fdrId) {
-  const fdr = fdrId && typeof getEfspFdr === 'function' ? getEfspFdr(fdrId) : null;
-  return (fdr && fdr.identity && fdr.identity.callsign) || fdrId || '';
-}
-
 /** Orders the Strips of the stack Bay by stack slot (the Bay is "ordered by stackIndex"); every other Bay is left alone. */
-function carrierOrderRack(bayId, strips) {
+export function carrierOrderRack(bayId, strips) {
   if (bayId !== 'cv-marshal-stack') return strips;
   const idx = new Map(carrierDerivedStack().map(e => [e.fdrId, e.stackIndex]));
   return strips.slice().sort((a, b) => (idx.has(a.fdrId) ? idx.get(a.fdrId) : 1e9) - (idx.has(b.fdrId) ? idx.get(b.fdrId) : 1e9));
 }
 
 /** Moves a Strip's flight to a slot: ONE gesture, ONE `Move` (§9.12 rule 2). Called by the drag's drop and by the slot's own hand. */
-function carrierMoveToSlot(strip, toIndex) {
+export function carrierMoveToSlot(strip, toIndex) {
   if (!strip || !Number.isInteger(toIndex)) return false;
   return _sendCarrier('sequencesStack', { kind: 'Move', fdrId: strip.fdrId, toIndex });
 }
@@ -248,7 +253,7 @@ function _slotRowEl(row, caseValue, sequenced, canSequence) {
  * above the ordinary Rack of Strips: vacancies as empty slots, the derived
  * fields per slot, Charlie time and marshal radial for the Marshal.
  */
-function renderCarrierStackBoard(container) {
+export function renderCarrierStackBoard(container) {
   if (!container) return;
   let board = container.querySelector(':scope > .carrier-stack-board');
   const view = getEfspCarrier();
@@ -304,7 +309,7 @@ function renderCarrierStackBoard(container) {
 // ── Hand-over buttons ────────────────────────────────────────────────────
 
 /** Gives the NLA button its hand-over's identity: four trigger types, four looks (WP7A bullet 4). */
-function carrierDecorateNlaButton(btn, strip) {
+export function carrierDecorateNlaButton(btn, strip) {
   const key = strip && strip.nla && strip.nla.carrierTransfer;
   const t = key && CARRIER_TRANSFERS[key];
   if (!t) return;
@@ -315,7 +320,7 @@ function carrierDecorateNlaButton(btn, strip) {
 }
 
 /** The second hand-over button a Strip may carry: "See you" beside Commence, Case II only (a Strip has one NLA, §3.5 rule 1). */
-function carrierExtraNlaButtons(strip) {
+export function carrierExtraNlaButtons(strip) {
   if (!strip || strip.role !== 'MARSHAL' || strip.state !== 'IN_STACK' || carrierCaseValue() !== 'II') return [];
   if (!getActingPositions('CARRIER').includes(strip.ownerPositionId)) return [];
   const t = CARRIER_TRANSFERS.MARSHAL_TO_PRIFLY;
@@ -335,7 +340,7 @@ function carrierExtraNlaButtons(strip) {
 }
 
 /** A signature of everything derived that a carrier Strip draws, for the keyed reconciler (bay-view.js's _stripRenderSignature). */
-function carrierSignatureFor(strip) {
+export function carrierSignatureFor(strip) {
   if (!strip || !['MARSHAL', 'FINAL', 'PATTERN'].includes(strip.role)) return '';
   const view = getEfspCarrier();
   if (!view) return '';
@@ -348,7 +353,7 @@ function carrierSignatureFor(strip) {
 // ── FINAL's distance, from the ship and the contact ──────────────────────
 
 /** Nautical miles from the ship to the flight's correlated contact; '' when either is unknown. The two positions are the server's; this only measures between them for display. */
-function carrierFinalDistanceText(strip) {
+export function carrierFinalDistanceText(strip) {
   const view = getEfspCarrier();
   const s = view && view.shipState;
   if (!s || !Number.isFinite(s.lat) || !Number.isFinite(s.lon) || !strip) return '';
@@ -376,7 +381,7 @@ const CARRIER_FINAL_LINE_NM = 15;
  * a grid or stale bearing would put the line in the wrong place, and a line in
  * the wrong place on a scope is worse than none.
  */
-function buildCarrierFinalLine() {
+export function buildCarrierFinalLine() {
   const empty = { type: 'FeatureCollection', features: [] };
   if (typeof getActingPositions !== 'function' || !getActingPositions('CARRIER').length) return empty;
   const view = getEfspCarrier();
@@ -397,8 +402,4 @@ function buildCarrierFinalLine() {
     features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: [[aLon, aLat], [bLon, bLat]] }, properties: { kind: 'carrier-final-tick', color: '#9ad1ff' } });
   }
   return { type: 'FeatureCollection', features };
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { buildCarrierFinalLine, CARRIER_CAPABILITIES, CARRIER_POSITION_IDS, carrierActingFor, carrierStackRows, carrierOrderRack };
 }

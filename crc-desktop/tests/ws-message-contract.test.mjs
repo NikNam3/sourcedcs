@@ -1,0 +1,145 @@
+// The WebSocket message-type contract between crc-sync (ws-hub.js, efsp-ws.js,
+// metrics.js) and crc-desktop (app.js's onmessage switch, the send helpers).
+// Nothing compiles the two sides against each other: a type the server starts
+// sending that app.js has no `case` for is dropped silently, and a type a
+// client send helper emits that no server dispatcher knows is a dead button.
+// Source-scanning on purpose: it needs no sockets, and a renamed type fails
+// here on the spot (docs/wip/PARITY.md, concern S-12 / D-9).
+//
+// Read-only on production code. Does not depend on nla.js, block-map.js or
+// permission.js (L17).
+
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import { createRequire } from 'node:module';
+import { readClient, readServer, matchAll, SERVER_SRC } from './helpers/mirror-source.mjs';
+
+const require = createRequire(import.meta.url);
+// The wire families (efsp-ws.js's skeleton dispatches them): their request, ack and delta types come from the registry.
+const { FAMILIES } = require(path.join(SERVER_SRC, 'efsp/wire/families'));
+
+// ── server -> client ────────────────────────────────────────────────────────
+// Every wire envelope the server builds is `{ version: VERSION, type: '...' }`.
+const SERVER_FILES = ['ws-hub.js', 'efsp/efsp-ws.js', 'efsp/metrics.js', 'efsp/wire/frames.js'];
+const FAMILY_FILES = ['airspace', 'correlation', 'marsa', 'field-state', 'carrier', 'sfa', 'ato'].map(n => `efsp/wire/families/${n}.js`);
+const SENT_BY_SERVER = [...new Set([
+  ...matchAll([...SERVER_FILES, ...FAMILY_FILES].map(readServer).join('\n'), /version:\s*VERSION,\s*type:\s*'([^']+)'/g),
+  ...FAMILIES.flatMap(f => [f.ackType, f.deltaType].filter(Boolean)),
+])].sort();
+
+// The client's single dispatcher.
+const APP = readClient('app.js');
+const SWITCH_FROM = APP.indexOf('switch (msg.type)');
+const HANDLED_BY_CLIENT = (() => {
+  assert.ok(SWITCH_FROM > 0, 'app.js no longer has `switch (msg.type)`');
+  const rest = APP.slice(SWITCH_FROM);
+  // the switch ends at the first line that closes it at its own indent
+  const end = rest.search(/\n    \}\n/);
+  return matchAll(rest.slice(0, end > 0 ? end : rest.length), /case '([a-z][a-z-]*)':/g);
+})();
+
+// Server types the client deliberately does not switch on. Must stay empty
+// unless a reason is written next to the entry.
+const SERVER_ONLY_OK = {};
+
+test('the scans find the wire at all (guards against a regex that silently matches nothing)', () => {
+  assert.ok(SENT_BY_SERVER.length >= 15, `only found ${SENT_BY_SERVER.join(', ')}`);
+  assert.ok(HANDLED_BY_CLIENT.length >= 15, `only found ${HANDLED_BY_CLIENT.join(', ')}`);
+  for (const t of ['snapshot', 'delta', 'init', 'efsp-snapshot', 'efsp-mutation-ack']) {
+    assert.ok(SENT_BY_SERVER.includes(t), `server scan missed ${t}`);
+    assert.ok(HANDLED_BY_CLIENT.includes(t), `client scan missed ${t}`);
+  }
+});
+
+test('every message type the server sends is handled by app.js', () => {
+  const unhandled = SENT_BY_SERVER.filter(t => !HANDLED_BY_CLIENT.includes(t) && !(t in SERVER_ONLY_OK));
+  assert.deepEqual(unhandled, [], `server sends type(s) app.js has no case for: ${unhandled.join(', ')}`);
+});
+
+test('every case in app.js\'s dispatcher is a type the server actually sends', () => {
+  const dead = HANDLED_BY_CLIENT.filter(t => !SENT_BY_SERVER.includes(t));
+  assert.deepEqual(dead, [], `app.js handles type(s) no server file sends: ${dead.join(', ')}`);
+});
+
+// ── client -> server ────────────────────────────────────────────────────────
+const CLIENT_SEND_FILES = [
+  'panels/efsp/efsp-ws.js', 'panels/efsp/ato-import.js', 'panels/efsp/efsp-metrics-client.js',
+  'panels/metrics-panel.js', 'panels/aprt-panel.js', 'geo.js', 'iff.js',
+];
+const SENT_BY_CLIENT = matchAll(CLIENT_SEND_FILES.map(readClient).join('\n'),
+  /(?:version:\s*1,\s*type|sendToSync\(\{\s*type):\s*'([^']+)'/g);
+
+// What the server accepts: efsp-ws.js's dispatcher, metrics.js's tap, ws-hub.js's own types.
+const EFSP_DISPATCH = readServer('efsp/efsp-ws.js');
+const ACCEPTED_BY_SERVER = (() => {
+  const from = EFSP_DISPATCH.indexOf('function handleMessage(');
+  assert.ok(from > 0, 'efsp-ws.js no longer has handleMessage()');
+  const body = EFSP_DISPATCH.slice(from, EFSP_DISPATCH.indexOf('\n}\n', from));
+  const efsp = [...matchAll(body, /case '([^']+)':/g), ...FAMILIES.map(f => f.type)];
+  const metrics = matchAll(readServer('efsp/metrics.js'), /msg\.type === '(efsp-[^']+)'/g);
+  const hub = readServer('ws-hub.js');
+  const hubSwitch = hub.slice(hub.indexOf('switch (msg.type)'));
+  return [...new Set([
+    ...efsp, ...metrics,
+    ...matchAll(hubSwitch.slice(0, hubSwitch.indexOf('default:')), /case '([^']+)':/g),
+    ...matchAll(hub, /msg\.type === '(aptConfigSet)'/g),
+  ])].sort();
+})();
+
+test('the send scan finds the client\'s sends', () => {
+  assert.ok(SENT_BY_CLIENT.length >= 15, `only found ${SENT_BY_CLIENT.join(', ')}`);
+  assert.ok(ACCEPTED_BY_SERVER.length >= 15, `only found ${ACCEPTED_BY_SERVER.join(', ')}`);
+});
+
+test('every message type a client send helper emits is accepted by a server dispatcher', () => {
+  const dead = SENT_BY_CLIENT.filter(t => !ACCEPTED_BY_SERVER.includes(t));
+  assert.deepEqual(dead, [], `client sends type(s) no server dispatcher accepts: ${dead.join(', ')}`);
+});
+
+// The server accepts a few types the shipped client never sends. Listed so a NEW one
+// has to be acknowledged here (and the reason kept honest). Empty since S-12 was
+// wired (efsp-resync is sent on a Board epoch change and on a heartbeat gap, not on a reconnect: R3-47).
+const ACCEPTED_BUT_NEVER_SENT_BY_UI = {};
+
+test('every type the server accepts is either sent by the client or a known unreachable path', () => {
+  const orphan = ACCEPTED_BY_SERVER.filter(t => !SENT_BY_CLIENT.includes(t) && !(t in ACCEPTED_BUT_NEVER_SENT_BY_UI));
+  assert.deepEqual(orphan, [], `server accepts type(s) no client file sends: ${orphan.join(', ')}`);
+});
+
+// S-12 / R3-47: efsp-resync has no `-ack` type; its answer is an `efsp-resync-reply`, a snapshot or a
+// delta tagged `answer`. Pin that, so a third kind of answer cannot appear without app.js hearing of it.
+test('efsp-resync is answered with an efsp-resync-reply (answer: snapshot | delta), which app.js handles', () => {
+  assert.equal(SENT_BY_SERVER.includes('efsp-resync-ack'), false);
+  const from = EFSP_DISPATCH.indexOf('function _asResyncReply(');
+  assert.ok(from > 0, '_asResyncReply moved');
+  const body = EFSP_DISPATCH.slice(from, EFSP_DISPATCH.indexOf('\n}\n', from));
+  assert.match(body, /type:\s*'efsp-resync-reply'/);
+  assert.match(body, /'snapshot'/);
+  assert.match(body, /'delta'/);
+  assert.ok(HANDLED_BY_CLIENT.includes('efsp-resync-reply'), 'app.js has no case for efsp-resync-reply');
+  // _handleResync answers through it, and only through it
+  const h = EFSP_DISPATCH.indexOf('function _handleResync(');
+  assert.ok(h > 0, '_handleResync moved');
+  assert.match(EFSP_DISPATCH.slice(h, EFSP_DISPATCH.indexOf('\n}\n', h)), /_asResyncReply\(/);
+});
+
+// S-12 (ruling in decisions.md): the resync path is reachable from the shipped UI. A sender
+// that nothing calls is the dead path the todo here used to name.
+test('S-12: efsp-resync is wired: sendEfspResync is reached from app.js through the two triggers (no reconnect trigger, R3-47)', () => {
+  const WS = readClient('panels/efsp/efsp-ws.js');
+  assert.match(WS, /type:\s*'efsp-resync'/);
+  // each trigger is called from app.js's socket handlers ...
+  for (const trigger of ['noteEfspBoardMessageForSync', 'noteEfspHeartbeatForSync']) {
+    assert.ok(APP.includes(`${trigger}(`), `app.js never calls ${trigger}`);
+    // ... and each reaches requestEfspResync -> sendEfspResync inside efsp-ws.js
+    const from = WS.indexOf(`function ${trigger}(`);
+    assert.ok(from > 0, `${trigger} missing from efsp-ws.js`);
+    assert.match(WS.slice(from, WS.indexOf('\n}\n', from)), /requestEfspResync\(/, `${trigger} does not request a resync`);
+  }
+  // R3-47: a reconnect is recovered by the connect snapshot, so nothing resyncs on open
+  assert.equal(APP.includes('resyncHeldEfspBoardsOnOpen'), false, 'app.js resyncs on reconnect again');
+  assert.equal(WS.includes('function resyncHeldEfspBoardsOnOpen('), false);
+  const req = WS.indexOf('function requestEfspResync(');
+  assert.match(WS.slice(req, WS.indexOf('\n}\n', req)), /sendEfspResync\(/);
+});

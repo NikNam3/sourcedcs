@@ -1,4 +1,7 @@
 'use strict';
+import { isSyncOpen, sendToSync } from '../sync.js';
+import { getEfspBays } from './efsp/efsp-state.js';
+import { getActingPositions } from './efsp/efsp-ws.js';
 
 // The METRICS dock panel — guide §11.5 "instrument from day one", and the
 // §11.4 traffic count (docs/adr/0072; the server half is docs/adr/0065).
@@ -23,11 +26,11 @@
 //
 // Polls only while the panel is on screen: on show, then every 30 s.
 
-const METRICS_POLL_MS = 30 * 1000;
+export const METRICS_POLL_MS = 30 * 1000;
 const METRICS_VISIBILITY_TICK_MS = 5 * 1000;
 
 // The §11.5 table, in the guide's order.
-const METRICS_ROWS = Object.freeze([
+export const METRICS_ROWS = Object.freeze([
   { id: 'searchInvocations', name: 'Search invocations per Position per hour' },
   { id: 'timeToFind', name: 'Time-to-find (selection after Bay entry)' },
   { id: 'gestureInputs', name: 'Inputs per paper gesture' },
@@ -97,7 +100,7 @@ function _statusCell(block, notInstrumentedValue = 'not instrumented') {
  * [SOURCE-DEFINED] (Q-L15-8): the last three complete hours with a value.
  * Fewer than two: no trend yet.
  */
-function metricsTrend(values) {
+export function metricsTrend(values) {
   const pts = values.filter(v => Number.isFinite(v)).slice(-3);
   if (pts.length < 2) return null;
   const steps = pts.slice(1).map((v, i) => v - pts[i]);
@@ -255,7 +258,7 @@ function _cleanCell(c) {
  * The metrics body (`efsp-metrics`' `metrics`, or GET /api/efsp/metrics) →
  * what the panel shows. Pure; tested without a DOM.
  */
-function renderMetricsModel(body) {
+export function renderMetricsModel(body) {
   if (!body || body.ok === false || !body.metrics) {
     return { ok: false, error: (body && (body.detail || body.reason)) || 'no metrics yet' };
   }
@@ -332,7 +335,7 @@ function renderMetricsModel(body) {
 }
 
 /** The traffic body → the §11.4 section. `facilityId` picks one Facility of those in the body. */
-function renderTrafficModel(body, facilityId) {
+export function renderTrafficModel(body, facilityId) {
   if (!body || body.ok === false || !body.facilities) {
     return { ok: false, error: (body && (body.detail || body.reason)) || 'no traffic count yet' };
   }
@@ -586,7 +589,7 @@ function _metricsSelectedSession() {
 }
 
 /** Asks crc-sync for the metrics and the traffic count. The answer arrives as `efsp-metrics` (onEfspMetrics). */
-function requestEfspMetrics() {
+export function requestEfspMetrics() {
   if (typeof isSyncOpen === 'function' && !isSyncOpen()) {
     _metricsPanel.error = 'Not connected to crc-sync — showing the last answer.';
     renderMetricsPanel();
@@ -607,7 +610,7 @@ function requestEfspMetrics() {
 }
 
 /** app.js: `efsp-metrics`. Only the latest request's answer is shown. */
-function onEfspMetrics(msg) {
+export function onEfspMetrics(msg) {
   if (!msg || msg.requestId !== _metricsPanel.latestRequestId) return;
   if (msg.ok === false) {
     if (msg.reason === 'NOT_FOUND' && _metricsPanel.missionSession !== null) {
@@ -625,7 +628,7 @@ function onEfspMetrics(msg) {
   renderMetricsPanel();
 }
 
-function _metricsPollTick() {
+export function _metricsPollTick() {
   const showing = _metricsPanelShowing();
   const now = typeof performance !== 'undefined' ? performance.now() : null;
   const due = _metricsPanel.lastRequestAt === null || now === null || now - _metricsPanel.lastRequestAt >= METRICS_POLL_MS;
@@ -633,7 +636,7 @@ function _metricsPollTick() {
   _metricsPanel.wasVisible = showing;
 }
 
-function initMetricsPanel() {
+export function initMetricsPanel() {
   _metricsPanel.root = document.getElementById('metrics-panel');
   _metricsPanel.content = document.getElementById('metrics-content');
   renderMetricsPanel();
@@ -643,8 +646,4 @@ function initMetricsPanel() {
     onShow: () => { _metricsPanel.wasVisible = true; requestEfspMetrics(); },
     onClose: () => { _metricsPanel.wasVisible = false; },
   };
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { renderMetricsModel, renderTrafficModel, metricsTrend, METRICS_ROWS, METRICS_POLL_MS };
 }

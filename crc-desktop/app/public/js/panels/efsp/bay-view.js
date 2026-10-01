@@ -1,4 +1,38 @@
 'use strict';
+import { pickerText, trackRef } from '../../track-label.js';
+import {
+  activeMarsaForFdr, conformanceAlertsForFdr, correlatedTrackIdForStrip, efspLinesWithOthers, getAllEfspAirspaces,
+  getAllEfspStrips, getEfspAirspace, getEfspBays, getEfspCorrelationForStrip, getEfspFdr, getEfspMarsa,
+  getEfspObligation, getEfspRack, getEfspStrip, isAitAuthorizedFor, isWithOthersBayId, marsaForStrip,
+  otherLiveStripsForFdr, searchEfspStrips, stcaConflictsForTrack, surveillanceHintsForStrip
+} from './efsp-state.js';
+import { efspArrivalFor } from './efsp-arrivals.js';
+import {
+  BLOCK_MAPS, CONFIRM_VACATED_ELIGIBLE_BLOCKS, blockLabelFor, blockTitleFor, blockValueHintFor, editRedirectFor,
+  enumSelectOptionsFor, hasActiveAnnotationEntry, isBlockEditable, isBooleanToggleBlock, isEnumBlockClearable,
+  resolveBlockValue, supersededAnnotationEntries
+} from './strip-template.js';
+import {
+  cachedTopToViewportY, computeInsertionIndex, computeRackReconciliation, hasExceededDragThreshold,
+  scrollCompensatedY
+} from './strip-drag.js';
+import {
+  COORDINATION_ELIGIBLE_STATES, TOFI_ELIGIBLE_STATES, isWithinDoubleTapWindow, nlaLabelFor
+} from './efsp-nla.js';
+import { setAttention, setHighlight, toggleFlip, toggleOffset } from './efsp-gestures.js';
+import { getActingPositions, sendEfspCorrelationMutation, sendEfspMarsaMutation, sendEfspMutation } from './efsp-ws.js';
+import { noteEfspGesture, noteEfspStripSelected } from './efsp-metrics-client.js';
+import { highlightCorrelatedTrack } from './correlation-highlight.js';
+import { MARSA_EXPANSION, highlightMarsaParticipants, isMarsaHighlighted, marsaActionsFor } from './marsa-badge.js';
+import { compactBlocksFor, mtrLostCommsAdvisory } from './strip-fields.js';
+import { carrierMoveToSlot, carrierOrderRack, carrierSignatureFor, renderCarrierStackBoard } from './carrier-panel.js';
+import { renderBayDescriptorView } from './bay-views.js';
+import { _buildStripLayout, tofiExitSignatureFor } from './strip-view.js';
+import { listFiledFlightPlansClient } from './efsp-flight-plan-lookup.js';
+import { stereoRoutesCacheKey } from './efsp-stereo-routes.js';
+import { createStripFromFiledPlan, getActiveEfspSearchQuery, getCurrentEfspRefusal } from './efsp-panel.js';
+import { appendAtoExpandedRows, arSignatureFor, highlightArParticipants } from './ato-strip.js';
+import { fieldStateSignatureFor } from './field-state-rules.js';
 
 // Bay/Rack rendering + Pointer Events drag (guide §7.1-7.2, §7.5). DOM-only
 // — not unit tested (crc-desktop's test suite has no DOM harness; see the
@@ -33,7 +67,7 @@
 
 let _selectedStripId = null; // click-to-select state for the non-drag move path
 
-function getSelectedEfspStripId() { return _selectedStripId; }
+export function getSelectedEfspStripId() { return _selectedStripId; }
 
 /**
  * The refusal currently on screen, if it is about THIS Strip (lane 1's F-103).
@@ -118,7 +152,7 @@ function _maybeSeedRefusedBlockEdit(strip, refusedBlockId, blockId = refusedBloc
 let _lastAdvancingPressAt = null;
 
 /** @returns {boolean} true when this press is the tail of a double tap and must be dropped. */
-function _swallowRepeatAdvance() {
+export function _swallowRepeatAdvance() {
   const now = Date.now();
   if (typeof isWithinDoubleTapWindow === 'function' && isWithinDoubleTapWindow(_lastAdvancingPressAt, now)) return true;
   _lastAdvancingPressAt = now;
@@ -148,7 +182,7 @@ function _blockLabel(fdr, strip, blockId) {
  * rebuilt in place of the span carrying whatever had been typed — the edit
  * survives the rebuild rather than blocking it (see _isProtectedStripEl).
  */
-function _buildBlockCell(strip, blockId) {
+export function _buildBlockCell(strip, blockId) {
   const fdr = getEfspFdr(strip.fdrId);
   const span = document.createElement('span');
   span.className = 'efsp-block efsp-block-' + blockId;
@@ -546,7 +580,7 @@ function _canDropStrip(strip) {
   return true;
 }
 
-function _appendDropButton(el, strip) {
+export function _appendDropButton(el, strip) {
   if (!_canDropStrip(strip)) return;
   const armed = _pendingDropStripId === strip.stripId;
   const btn = document.createElement('button');
@@ -598,7 +632,7 @@ function _appendDropButton(el, strip) {
 // same Block, but history is append-only for the life of the Strip, so a
 // much-amended altitude would grow a chip without limit. Two, then the
 // overflow indicator the rule itself prescribes.
-const CHIP_HISTORY_LIMIT = 1;
+export const CHIP_HISTORY_LIMIT = 1;
 
 /**
  * Renders §3.7's struck-through history into `container`.
@@ -620,7 +654,7 @@ const CHIP_HISTORY_LIMIT = 1;
  * Renders NOTHING when there is no prior entry — the common case is a Block
  * written once or never, and it must not sprout an empty container.
  */
-function _appendAnnotationHistory(container, strip, blockId, limit) {
+export function _appendAnnotationHistory(container, strip, blockId, limit) {
   if (typeof supersededAnnotationEntries !== 'function') return;
   const prior = supersededAnnotationEntries(strip, blockId);
   if (prior.length === 0) return;
@@ -677,9 +711,9 @@ function _appendAnnotationHistory(container, strip, blockId, limit) {
 // board deltas rebuild Strips constantly. Deliberately not the popover
 // pattern: a popover has to be added to _isProtectedStripEl or a remote delta
 // destroys it mid-interaction, and this has no such requirement.
-let _expandedStripId = null;
+export let _expandedStripId = null;
 
-function _appendExpandButton(container, strip) {
+export function _appendExpandButton(container, strip) {
   const expanded = _expandedStripId === strip.stripId;
   const btn = document.createElement('button');
   btn.className = 'efsp-expand-btn';
@@ -737,7 +771,7 @@ function _expandedBlockIdsFor(strip, map) {
   });
 }
 
-function _appendExpandedView(el, strip) {
+export function _appendExpandedView(el, strip) {
   if (_expandedStripId !== strip.stripId) return;
   const map = (typeof BLOCK_MAPS === 'object' && BLOCK_MAPS[strip.role]) || null;
   if (!map) return;
@@ -805,7 +839,7 @@ function _appendExpandedView(el, strip) {
   el.appendChild(panel);
 }
 
-function _buildStripEl(strip) {
+export function _buildStripEl(strip) {
   _restoredEditInThisStrip = false; // an open Block edit is restored into exactly one cell of this Strip
   const fdr = getEfspFdr(strip.fdrId);
   const el = document.createElement('div');
@@ -999,7 +1033,7 @@ function _placePopover(popover, anchorEl) {
   popover.style.top = `${Math.round(top)}px`;
 }
 
-function _mountPopover(popover, anchorEl, strip, close) {
+export function _mountPopover(popover, anchorEl, strip, close) {
   popover.style.zIndex = POPOVER_Z_INDEX;
   _popoverRoot(anchorEl).appendChild(popover);
   _openPopovers.set(popover, { stripId: strip && strip.stripId, anchorEl, close });
@@ -1007,7 +1041,7 @@ function _mountPopover(popover, anchorEl, strip, close) {
   _startPopoverTracking();
 }
 
-function _unmountPopover(popover) {
+export function _unmountPopover(popover) {
   if (!popover) return;
   if (popover.parentNode) popover.parentNode.removeChild(popover);
   _openPopovers.delete(popover);
@@ -1016,7 +1050,7 @@ function _unmountPopover(popover) {
 }
 
 /** Does any open popover belong to this Strip? The portalled replacement for six `el.contains(...)` checks. */
-function _stripHasOpenPopover(stripId) {
+export function _stripHasOpenPopover(stripId) {
   if (!stripId) return false;
   for (const entry of _openPopovers.values()) if (entry.stripId === stripId) return true;
   return false;
@@ -1130,7 +1164,7 @@ function _onDocPointerDownCloseBindPopover(e) {
  * which is the uncorrelated case where the controller knows something the
  * matcher cannot.
  */
-function _openBindPopover(strip, anchorEl, candidateTrackIds) {
+export function _openBindPopover(strip, anchorEl, candidateTrackIds) {
   _closeBindPopover();
   const popover = document.createElement('div');
   popover.className = 'efsp-coordinate-popover';
@@ -1197,7 +1231,7 @@ function _onDocPointerDownCloseMarsaPopover(e) {
  * verbal — the EFSP records it, it does not decide it." So the form asks who
  * said it rather than guessing from the Strip.
  */
-function _openMarsaPopover(strip, anchorEl) {
+export function _openMarsaPopover(strip, anchorEl) {
   _closeMarsaPopover();
   const popover = document.createElement('div');
   popover.className = 'efsp-coordinate-popover efsp-marsa-popover';
@@ -1386,21 +1420,21 @@ function _buildMarsaAddForm(strip, active) {
   return wrap;
 }
 
-function _dispatchMarsa(strip, marsaId, op) {
+export function _dispatchMarsa(strip, marsaId, op) {
   const actingPositionId = _resolveActingPositionId(strip);
   if (!actingPositionId) return;
   const relation = marsaId && typeof getEfspMarsa === 'function' ? getEfspMarsa(marsaId) : null;
   sendEfspMarsaMutation(actingPositionId, marsaId, relation ? relation.rev : undefined, op);
 }
 
-function _dispatchCorrelation(strip, op) {
+export function _dispatchCorrelation(strip, op) {
   const actingPositionId = _resolveActingPositionId(strip);
   if (!actingPositionId) return;
   const record = typeof getEfspCorrelationForStrip === 'function' ? getEfspCorrelationForStrip(strip) : null;
   sendEfspCorrelationMutation(actingPositionId, strip.fdrId, record ? record.rev : 0, op);
 }
 
-function _selectStrip(stripId) {
+export function _selectStrip(stripId) {
   _selectedStripId = _selectedStripId === stripId ? null : stripId;
   if (typeof noteEfspStripSelected === 'function') noteEfspStripSelected(_selectedStripId); // docs/adr/0072
   _afterSelectionChanged();
@@ -1412,7 +1446,7 @@ function _selectStrip(stripId) {
  * contact twice must not deselect its Strip, which is what _selectStrip's
  * toggle would do.
  */
-function selectEfspStripById(stripId) {
+export function selectEfspStripById(stripId) {
   if (!getEfspStrip(stripId)) return false;
   _selectedStripId = stripId;
   if (typeof noteEfspStripSelected === 'function') noteEfspStripSelected(_selectedStripId); // docs/adr/0072
@@ -1449,7 +1483,7 @@ function _stripElById(stripId) {
 }
 
 /** The Bays currently on screen — correlation-highlight.js prefers a Strip in one. */
-function getOpenEfspBayIds() {
+export function getOpenEfspBayIds() {
   return (_openBayContainers || []).map(entry => entry.bayId).filter(Boolean);
 }
 
@@ -1529,7 +1563,7 @@ function _keyTargetIsStripControl(e) {
 // The Position a controller acts as for a Mutation on this Strip — its
 // current Owner if held, else whichever held Position happens to be first.
 // Shared by every dispatch helper below (NLA, move, transfer, gestures).
-function _resolveActingPositionId(strip) {
+export function _resolveActingPositionId(strip) {
   const positions = getActingPositions();
   return positions.includes(strip.ownerPositionId) ? strip.ownerPositionId : positions[0];
 }
@@ -1539,7 +1573,7 @@ function _resolveActingPositionId(strip) {
  *   to give the press its <50ms feedback (§7.9) without lying about a press
  *   that went nowhere.
  */
-function _invokeNla(strip) {
+export function _invokeNla(strip) {
   const actingPositionId = _resolveActingPositionId(strip);
   if (!actingPositionId) return false;
   // F-101 — board-wide, because the Strip this press lands on after a reflow
@@ -1549,7 +1583,7 @@ function _invokeNla(strip) {
   return true;
 }
 
-function _moveStrip(strip, bayId, rackId, afterStripId, beforeStripId) {
+export function _moveStrip(strip, bayId, rackId, afterStripId, beforeStripId) {
   const actingPositionId = _resolveActingPositionId(strip);
   if (!actingPositionId) return;
   sendEfspMutation(actingPositionId, strip, { kind: 'MoveStrip', bayId, rackId, afterStripId, beforeStripId });
@@ -1578,7 +1612,7 @@ function _transferStrip(strip, toPositionId, bayId, rackId) {
 // two Facilities, and each of APP/CTR has exactly one counterpart on the
 // other side. A real multi-Facility topology would need a picker; this
 // slice deliberately doesn't build one it can't yet exercise.
-const COORDINATION_TARGETS = {
+export const COORDINATION_TARGETS = {
   APP: { facilityId: 'CENTER', positionId: 'CTR' },
   CTR: { facilityId: 'INCIRLIK', positionId: 'APP' },
 };
@@ -1592,7 +1626,7 @@ const COORDINATION_TARGETS = {
  * its normal working Bay. Accepting/rejecting your own just-sent proposal
  * makes no sense, so this check is load-bearing, not decorative.
  */
-function _isPendingCoordinationReplica(strip) {
+export function _isPendingCoordinationReplica(strip) {
   return !!(strip.coordination && strip.coordination.state === 'PROPOSED' && strip.bayId.endsWith('-coordination'));
 }
 
@@ -1620,7 +1654,7 @@ function _isPendingCoordinationReplica(strip) {
  * dead copy of a flight back to the very Position that sent it in the
  * first place, an entirely spurious third replica.
  */
-function _canProposeCoordination(strip) {
+export function _canProposeCoordination(strip) {
   if (!COORDINATION_TARGETS[strip.ownerPositionId]) return false;
   if (COORDINATION_ELIGIBLE_STATES[strip.role] !== strip.state) return false;
   if (strip.bayId.endsWith('-coordination')) return false;
@@ -1645,7 +1679,7 @@ function _canProposeCoordination(strip) {
  * _dispatchMarsa/_dispatchCorrelation: those two send their own relation's or
  * correlation record's current rev, not the Strip's.
  */
-function _dispatchCoordination(strip, primitive, action, note) {
+export function _dispatchCoordination(strip, primitive, action, note) {
   strip = getEfspStrip(strip.stripId) || strip;
   const actingPositionId = _resolveActingPositionId(strip);
   if (!actingPositionId) return;
@@ -1677,7 +1711,7 @@ function _dispatchCoordination(strip, primitive, action, note) {
 // TWO candidates (TAC_C2, GCI) — CTR-initiated TOFI must let the controller
 // choose. TAC_C2/GCI-initiated TOFI has exactly one candidate (CTR) and
 // skips the picker, behaving like today's deterministic stub.
-const TOFI_COUNTERPARTS = {
+export const TOFI_COUNTERPARTS = {
   CTR:    [{ facilityId: 'TACTICAL', positionId: 'TAC_C2' }, { facilityId: 'TACTICAL', positionId: 'GCI' }],
   TAC_C2: [{ facilityId: 'CENTER', positionId: 'CTR' }],
   GCI:    [{ facilityId: 'CENTER', positionId: 'CTR' }],
@@ -1687,7 +1721,7 @@ const TOFI_COUNTERPARTS = {
 // permission.js's TACTICAL_CAPABILITIES[*].handBackTo, held to it by
 // efsp-tactical-client.test.js (the efsp-nla-client.test.js precedent). A
 // holder of only JTAC has no TAC_C2 tab to drag to, so the ⋯ menu offers it.
-const HAND_BACK_TO = { AIC: ['TAC_C2'], JTAC: ['TAC_C2'] };
+export const HAND_BACK_TO = { AIC: ['TAC_C2'], JTAC: ['TAC_C2'] };
 
 /**
  * The Bay a hand-back lands in: the receiving Position's Bay implying the
@@ -1695,13 +1729,13 @@ const HAND_BACK_TO = { AIC: ['TAC_C2'], JTAC: ['TAC_C2'] };
  * board-store.js's _bayForNewOwner (the server rule is authoritative).
  * @returns {{bayId:string, rackId:string}|null}
  */
-function _handBackBayFor(strip, toPositionId) {
+export function _handBackBayFor(strip, toPositionId) {
   const bays = getEfspBays().filter(b => b.positionId === toPositionId && (!b.facilityId || b.facilityId === strip.facilityId));
   const bay = bays.find(b => b.impliesState === strip.state) || bays.find(b => !b.impliesState) || null;
   return bay ? { bayId: bay.bayId, rackId: (bay.rackIds && bay.rackIds[0]) || 'main' } : null;
 }
 
-function _dispatchHandBack(strip, toPositionId) {
+export function _dispatchHandBack(strip, toPositionId) {
   strip = getEfspStrip(strip.stripId) || strip; // F-107 — see _dispatchCoordination
   const actingPositionId = _resolveActingPositionId(strip);
   if (actingPositionId !== strip.ownerPositionId) return; // only its owner hands a line on
@@ -1720,7 +1754,7 @@ function _dispatchHandBack(strip, toPositionId) {
 // structurally incapable of offering one of the 5 forbidden primitives.
 
 /** ENTRY may be proposed from a fresh Strip, or retried after a REJECTED one — always from the ATC-side Strip, never the MISSION-side replica. */
-function _canProposeTofiEntry(strip) {
+export function _canProposeTofiEntry(strip) {
   if (!TOFI_COUNTERPARTS[strip.ownerPositionId]) return false;
   if (strip.role === 'MISSION') return false;
   if (_isRejectedCoordinationReplica(strip)) return false;
@@ -1738,19 +1772,19 @@ function _canProposeTofiEntry(strip) {
 }
 
 /** EXIT is only ever proposed from the ATC-side Strip, and only while tactical control is genuinely ACTIVE. */
-function _canProposeTofiExit(strip) {
+export function _canProposeTofiExit(strip) {
   if (strip.role === 'MISSION') return false;
   if (_isRejectedCoordinationReplica(strip)) return false;
   return !!(strip.tofiCoordination && strip.tofiCoordination.state === 'ACTIVE');
 }
 
 /** Accept/Reject always render on the MISSION-side Strip — the receiving MRU controller's own record — for BOTH ENTRY and EXIT (mirrors board-store.js's own side-split exactly). */
-function _isPendingTofiReplica(strip) {
+export function _isPendingTofiReplica(strip) {
   return strip.role === 'MISSION' && !!strip.tofiCoordination && strip.tofiCoordination.state === 'PROPOSED';
 }
 
 /** Transfer Comms is invocable on EITHER side of an accepted exchange that hasn't transferred comms yet. */
-function _canTransferTofiComms(strip) {
+export function _canTransferTofiComms(strip) {
   return !!(strip.tofiCoordination && strip.tofiCoordination.acceptedAt && !strip.tofiCoordination.commsTransferred);
 }
 
@@ -1759,12 +1793,12 @@ function _canTransferTofiComms(strip) {
 // the picker so nobody types one of five exact strings by hand. MARSA is
 // first because it is the common military case — but it is a default nobody
 // can accept without seeing, which is the point.
-const TOFI_ACCEPT_REGIMES = ['MARSA', 'ATC', 'USING_AGENCY', 'DUE_REGARD', 'SEE_AND_AVOID'];
+export const TOFI_ACCEPT_REGIMES = ['MARSA', 'ATC', 'USING_AGENCY', 'DUE_REGARD', 'SEE_AND_AVOID'];
 
 // stripId -> the regime picked in that Strip's accept select, so a rebuild
 // shows what the controller chose rather than the default. Cleared when the
 // exchange is answered.
-const _tofiRegimeChoice = new Map();
+export const _tofiRegimeChoice = new Map();
 
 // Anything on a Strip that is a control of its own. A click, double-click or
 // right-click that lands on one of these belongs to the control, never to the
@@ -1774,7 +1808,7 @@ const STRIP_CONTROL_SELECTOR = '.efsp-block-editable, .efsp-block-input, button,
 // B2 (docs/adr/0080): AIC "works under TAC_C2's TOFI", so on an AIC-held line
 // the TOFI dialogue is TAC_C2's. Mirror of permission.js's TACTICAL_CAPABILITIES
 // `tofiAnsweredBy`, held to it by the drift test in efsp-ui-reachability.test.js.
-const TOFI_ANSWERED_BY = { AIC: 'TAC_C2' };
+export const TOFI_ANSWERED_BY = { AIC: 'TAC_C2' };
 
 /** The Position a TOFI answer is sent as: the owner's TOFI answerer when this controller holds it, else the usual resolution. */
 function _tofiActingPositionId(strip) {
@@ -1783,7 +1817,7 @@ function _tofiActingPositionId(strip) {
   return _resolveActingPositionId(strip);
 }
 
-function _dispatchTofi(strip, action, direction, overrides = {}) {
+export function _dispatchTofi(strip, action, direction, overrides = {}) {
   strip = getEfspStrip(strip.stripId) || strip; // F-107 — see _dispatchCoordination
   const actingPositionId = action === 'PROPOSE' ? _resolveActingPositionId(strip) : _tofiActingPositionId(strip);
   if (!actingPositionId) return;
@@ -1835,7 +1869,7 @@ function _onDocPointerDownCloseTofiPopover(e) {
  * note pattern as the Coordinate popover (guide §4.6 rule 5 applies to
  * TOFI too — crc-sync's board-store.js enforces this identically for both).
  */
-function _openTofiEntryPopover(strip, anchorEl, counterparts) {
+export function _openTofiEntryPopover(strip, anchorEl, counterparts) {
   _closeTofiPopover();
   const fdr = getEfspFdr(strip.fdrId);
   const degraded = !!(fdr && fdr.identity && fdr.identity.trackDegradationFlag && fdr.identity.trackDegradationFlag !== 'NONE');
@@ -1890,18 +1924,20 @@ function _openTofiEntryPopover(strip, anchorEl, counterparts) {
 // grant. A range Position never appears here: it works no Strips at all.
 // The Strip awaiting a second press on Convert to Arrival. Module-level
 // rather than per-render, since a re-render rebuilds the button.
-let _pendingConvertStripId = null;
+export let _pendingConvertStripId = null;
+// ESM-1: strip-view.js assigns it; an imported binding is read-only.
+export function _setPendingConvertStripId(v) { _pendingConvertStripId = v; }
 
-const AIRSPACE_ENTRY_POSITIONS = ['APP', 'CTR'];
+export const AIRSPACE_ENTRY_POSITIONS = ['APP', 'CTR'];
 
 // The Positions the server lets convert a DEPARTURE into its return ARRIVAL:
 // they need both the ConvertToArrival op (permission.js) and the right to
 // create an ARRIVAL Strip (canCreateStripRole). efsp-coordination-client.test.js
 // holds this to the server's tables.
-const CONVERT_TO_ARRIVAL_POSITIONS = ['APP', 'CTR'];
+export const CONVERT_TO_ARRIVAL_POSITIONS = ['APP', 'CTR'];
 
 /** Whether this client should offer Convert to Arrival at all (the button may still render disabled for an open link). */
-function _canConvertToArrival(strip) {
+export function _canConvertToArrival(strip) {
   if (strip.role !== 'DEPARTURE' || strip.state !== 'HANDED_OFF') return false;
   if (!CONVERT_TO_ARRIVAL_POSITIONS.includes(strip.ownerPositionId)) return false;
   if (!getActingPositions().includes(strip.ownerPositionId)) return false;
@@ -1911,7 +1947,7 @@ function _canConvertToArrival(strip) {
 // The field lists (COMPACT_BLOCKS_*, compactBlocksFor) live in strip-fields.js,
 // loaded before this file. They are per-Position now, not only per-Role.
 
-function _canApproveAirspaceEntry(strip) {
+export function _canApproveAirspaceEntry(strip) {
   if (!AIRSPACE_ENTRY_POSITIONS.includes(strip.ownerPositionId)) return false;
   if (_isRejectedCoordinationReplica(strip)) return false;
   return !!_resolveActingPositionId(strip);
@@ -1932,7 +1968,7 @@ function _onDocPointerDownCloseAirspacePopover(e) {
   if (_openAirspacePopoverEl && !_openAirspacePopoverEl.contains(e.target)) _closeAirspacePopover();
 }
 
-function _openAirspaceEntryPopover(strip, anchorEl) {
+export function _openAirspaceEntryPopover(strip, anchorEl) {
   _closeAirspacePopover();
   const airspaces = getAllEfspAirspaces();
 
@@ -1986,7 +2022,7 @@ function _openAirspaceEntryPopover(strip, anchorEl) {
   setTimeout(() => document.addEventListener('pointerdown', _onDocPointerDownCloseAirspacePopover, true), 0);
 }
 
-const COORDINATION_PRIMITIVE_LABELS = {
+export const COORDINATION_PRIMITIVE_LABELS = {
   HANDOFF: 'Hand Off', POINT_OUT: 'Point Out', TRAFFIC: 'Traffic',
   OPERATIONAL_REQUEST: 'Operational Request', AIT: 'AIT',
 };
@@ -2002,7 +2038,7 @@ const COORDINATION_PRIMITIVE_LABELS = {
  * the server keeps (_isRejectedReplica) for a replica minted before the field
  * existed and restored from a persisted Board.
  */
-function _coordinationIsReplica(strip) {
+export function _coordinationIsReplica(strip) {
   const co = strip.coordination;
   if (!co) return false;
   if (co.mintedForCoordination) return true;
@@ -2017,12 +2053,12 @@ function _coordinationIsReplica(strip) {
  * place. MARSA and correlation are flight-level on the server, so for those
  * two this is the only guard there is.
  */
-function _isRejectedCoordinationReplica(strip) {
+export function _isRejectedCoordinationReplica(strip) {
   return !!strip.coordination && strip.coordination.state === 'REJECTED' && _coordinationIsReplica(strip);
 }
 
 /** Which Position asked. The replica's `peerPositionId` IS the proposer; on the sender's own Strip the proposer is its owner. */
-function _coordinationProposerOf(strip, co) {
+export function _coordinationProposerOf(strip, co) {
   return _coordinationIsReplica(strip) ? co.peerPositionId : strip.ownerPositionId;
 }
 
@@ -2034,7 +2070,7 @@ function _coordinationProposerOf(strip, co) {
  * already renders) — a status chip that said REJECTED next to a button that
  * said Unable would be two names for one outcome.
  */
-function _coordinationStateWord(co) {
+export function _coordinationStateWord(co) {
   if (co.primitive !== 'OPERATIONAL_REQUEST') return co.state;
   if (co.state === 'ACTIVE') return 'APPROVED';
   if (co.state === 'REJECTED') return 'UNABLE';
@@ -2042,7 +2078,7 @@ function _coordinationStateWord(co) {
 }
 
 /** Which Position proposed a TOFI. The MISSION-side Strip is always the receiving MRU's record, for both directions — _isPendingTofiReplica's own split. */
-function _tofiProposerOf(strip, tofi) {
+export function _tofiProposerOf(strip, tofi) {
   return strip.role === 'MISSION' ? tofi.peerPositionId : strip.ownerPositionId;
 }
 
@@ -2055,7 +2091,7 @@ function _tofiProposerOf(strip, tofi) {
  * Strip alone), and until now only the MRU side was told, in the `title` of a
  * disabled button they could do nothing about.
  */
-function _tofiExitPrecondition(strip, tofi) {
+export function _tofiExitPrecondition(strip, tofi) {
   if (!tofi || tofi.direction !== 'EXIT' || tofi.state !== 'PROPOSED') return null;
   const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(strip.fdrId) : null;
   const regime = (fdr && fdr.tofi && fdr.tofi.separationRegime) || null;
@@ -2067,7 +2103,7 @@ function _tofiExitPrecondition(strip, tofi) {
 }
 
 /** A coordination note, attributed. Rendered rather than hidden in a `title`: with a degraded track it is the mandatory record of the verbal coordination. */
-function _buildCoordinationNoteEl(note, proposer) {
+export function _buildCoordinationNoteEl(note, proposer) {
   const el = document.createElement('span');
   el.className = 'efsp-coordination-note';
   el.textContent = `${proposer}: “${note}”`;
@@ -2076,7 +2112,7 @@ function _buildCoordinationNoteEl(note, proposer) {
 }
 
 /** A blocking precondition, on the Strip rather than only on a hover `title` — a tooltip has no touch equivalent (F-307). */
-function _buildCoordinationReasonEl(text) {
+export function _buildCoordinationReasonEl(text) {
   const el = document.createElement('span');
   el.className = 'efsp-coordination-blocked-reason';
   el.textContent = text;
@@ -2098,7 +2134,7 @@ function _onDocPointerDownCloseCoordinatePopover(e) {
 }
 
 /** Opens the primitive-choice popover — mirrors _openHighlightPopover's exact pattern (anchor, outside-click close, deferred listener). */
-function _openCoordinatePopover(strip, anchorEl) {
+export function _openCoordinatePopover(strip, anchorEl) {
   _closeCoordinatePopover();
   const fdr = getEfspFdr(strip.fdrId);
   const degraded = !!(fdr && fdr.identity && fdr.identity.trackDegradationFlag && fdr.identity.trackDegradationFlag !== 'NONE');
@@ -2163,7 +2199,7 @@ function _openCoordinatePopover(strip, anchorEl) {
 // point that resolves actingPositionId and hands them a bound
 // sendMutation(strip, op), matching _invokeNla/_moveStrip/_transferStrip's
 // own pattern. `extraArgs` covers setHighlight/setAttention's `color` param.
-function _dispatchGesture(strip, gestureFn, ...extraArgs) {
+export function _dispatchGesture(strip, gestureFn, ...extraArgs) {
   // F-107 — see _dispatchCoordination. Highlight is dispatched from a popover,
   // and setHighlight reads strip.flags to decide whether this colour clears or
   // replaces, so a stale capture gets that wrong as well as the rev.
@@ -2711,7 +2747,7 @@ function _isPseudoBayId(bayId) {
   return bayId.endsWith('-search') || (typeof isWithOthersBayId === 'function' && isWithOthersBayId(bayId));
 }
 
-function renderBay(container, bayId) {
+export function renderBay(container, bayId) {
   if (!container) return;
   if (bayId === 'ops-filed') {
     _renderOpsFiledCards(container);
@@ -2802,7 +2838,7 @@ function _buildRackShell(bayId, rackId) {
 }
 
 /** A Strip element is protected from removal/rebuild while it's mid-drag, is being typed into, or has any of the six popovers open — reconciling around it (never through it) is what actually fixes defect D6 here. */
-function _isProtectedStripEl(el) {
+export function _isProtectedStripEl(el) {
   if (_efspDrag && _efspDrag.strip.stripId === el.dataset.stripId) return true;
   // An open Block edit or picker holds the Strip still — but only while the
   // controller is actually IN it. Unconditional, this froze a Strip for good
@@ -2881,7 +2917,7 @@ function _isProtectedStripEl(el) {
  * is a field read or a Map lookup bar the sibling walk, which _buildStripEl
  * already does once per Strip anyway.
  */
-function _stripRenderSignature(strip) {
+export function _stripRenderSignature(strip) {
   const parts = [];
 
   // `undefined` (a record from a server that does not compute it) and `null`
@@ -2982,7 +3018,7 @@ function _stripRenderSignature(strip) {
  *    a refusal, or `strip.nla`. See _stripRenderSignature; this was the same
  *    omission as expansion, six more times over (F-305).
  */
-function _stripElNeedsRebuild(el, wanted, selectedStripId, expandedStripId) {
+export function _stripElNeedsRebuild(el, wanted, selectedStripId, expandedStripId) {
   const id = el.dataset.stripId;
   if (el.dataset.rev !== String(wanted.rev)) return true;
   if (el.classList.contains('efsp-strip-selected') !== (id === selectedStripId)) return true;
@@ -3058,9 +3094,9 @@ function _reconcileRackStrips(rackEl, bayId, rackId) {
 let _renderScheduled = false;
 let _openBayContainers = []; // [{containerEl, bayId}] — element references, not ids; set by efsp-panel.js as the user switches Bay tabs
 
-function setOpenEfspBays(containers) { _openBayContainers = containers; }
+export function setOpenEfspBays(containers) { _openBayContainers = containers; }
 
-function renderAllOpenEfspBays() {
+export function renderAllOpenEfspBays() {
   if (_renderScheduled) return;
   _renderScheduled = true;
   requestAnimationFrame(() => {
@@ -3068,3 +3104,12 @@ function renderAllOpenEfspBays() {
     for (const { containerEl, bayId } of _openBayContainers) renderBay(containerEl, bayId);
   });
 }
+
+// ESM-1 (S-ESM1b): the unit tests replaced these globals to count calls; these are those seams.
+export function _setRenderAllOpenEfspBaysForTest(fn) { renderAllOpenEfspBays = fn; }
+export function _setSelectEfspStripByIdForTest(fn) { selectEfspStripById = fn; }
+
+// ESM-1 (S-ESM1c): test seams for state the unit tests set directly in the old shared scope.
+export function _setExpandedStripId(v) { _expandedStripId = v; }
+export function _setSelectedStripIdForTest(id) { _selectedStripId = id; }
+export function _setRenderBayForTest(fn) { renderBay = fn; }

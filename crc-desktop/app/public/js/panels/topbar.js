@@ -1,4 +1,10 @@
 'use strict';
+import { bearingDeg, haversineM } from '../geo.js';
+import { magneticText } from '../magnetic.js';
+import { buildRangeRing, updateMap } from '../geojson.js';
+import {
+  STALE_MS, getBullseye, grpcStatus, lastUpdateMs, map, mapReady, noRadarsActive, selectedApt, settings, srsStatus
+} from '../app.js';
 
 // ── Topbar chrome: status dots, update banner, patch notes, Zulu clock,
 // bullseye cursor readout and measure-line labels. Split out of the former
@@ -9,9 +15,9 @@
 
 // ── Topbar display elements ────────────────────────────────────────────────
 
-const $aptDisplay = document.getElementById('apt-display');
+export const $aptDisplay = document.getElementById('apt-display');
 
-function updateAptDisplay() {
+export function updateAptDisplay() {
   if (!selectedApt) {
     $aptDisplay.textContent = 'APT: NONE';
     $aptDisplay.classList.remove('active');
@@ -25,7 +31,7 @@ function updateAptDisplay() {
 }
 
 // Update topbar visibility based on active radar types.
-function updateTopbarUI() {
+export function updateTopbarUI() {
   const $aptSep = document.getElementById('apt-sep');
   const $rwySep = document.getElementById('rwy-sep');
   const $rwyRow = document.getElementById('rwy-row');
@@ -46,7 +52,7 @@ const $lblGrpc  = document.getElementById('lbl-grpc');
 const $discOver = document.getElementById('disc-overlay');
 const $stale    = document.getElementById('stale-banner');
 
-function updateStatusUI() {
+export function updateStatusUI() {
   $dotGrpc.className   = 'dot ' + grpcStatus;
   $dotSrs.className    = 'dot ' + srsStatus;
   $lblGrpc.textContent = grpcStatus === 'connected' ? 'GRPC' : grpcStatus.toUpperCase();
@@ -54,7 +60,7 @@ function updateStatusUI() {
 }
 
 const $noAwacsOver = document.getElementById('no-awacs-overlay');
-function updateNoAwacsUI() {
+export function updateNoAwacsUI() {
   $noAwacsOver.classList.toggle('visible', !!noRadarsActive);
 }
 
@@ -87,7 +93,7 @@ function renderUpdateStatus(status) {
   }
 }
 
-function initUpdateStatus() {
+export function initUpdateStatus() {
   if (!window.crcUpdate) return; // defensive: absent if preload failed to load
   $statusUpdate.addEventListener('click', () => {
     if ($statusUpdate.classList.contains('clickable')) window.crcUpdate.restartNow();
@@ -131,7 +137,7 @@ function initPatchNotesButton() {
   }).catch(() => {});
 }
 
-function checkStale() {
+export function checkStale() {
   const isStale  = grpcStatus === 'reconnecting'
     && lastUpdateMs != null
     && Date.now() - lastUpdateMs > STALE_MS;
@@ -144,7 +150,7 @@ function checkStale() {
 
 const $cursorBra = document.getElementById('cursor-bra');
 
-function updateBullseyeCursor(e) {
+export function updateBullseyeCursor(e) {
   const bulls = getBullseye();
   const be = bulls.blue || bulls.red;
   if (!be) { $cursorBra.classList.remove('visible'); return; }
@@ -166,7 +172,7 @@ function updateBullseyeCursor(e) {
 
 // ── Measure line ──────────────────────────────────────────────────────────
 
-function updateMeasureLine(lng1, lat1, lng2, lat2) {
+export function updateMeasureLine(lng1, lat1, lng2, lat2) {
   if (!mapReady) return;
   const distNm  = Math.round(haversineM(lat1, lng1, lat2, lng2) / 1852);
   const bearing = magneticText(bearingDeg(lat1, lng1, lat2, lng2), lat1, lng1);
@@ -196,19 +202,19 @@ let _missionAnchorWallMs = null; // Date.now() when the last game-time arrived
 let _missionAnchorZuluMs = null; // what it said
 let _missionClockSource  = 'WALL';
 
-function updateGameTime(msg) {
+export function updateGameTime(msg) {
   if (!Number.isFinite(msg.zuluMs)) return;
   _missionAnchorWallMs = Date.now();
   _missionAnchorZuluMs = msg.zuluMs;
   _missionClockSource  = msg.source || 'WALL';
 }
 
-function missionNow() {
+export function missionNow() {
   if (_missionAnchorZuluMs === null) return Date.now();
   return _missionAnchorZuluMs + (Date.now() - _missionAnchorWallMs);
 }
 
-function initZuluClock() {
+export function initZuluClock() {
   const $el = document.getElementById('zulu-clock');
   if (!$el) return;
   setInterval(() => {

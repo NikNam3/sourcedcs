@@ -1,4 +1,10 @@
 'use strict';
+import { toMagneticDisplay } from '../../magnetic.js';
+import { PANEL_TITLES, dock } from '../../dock.js';
+import { getAllEfspFieldStates } from './efsp-state.js';
+import { getActingPositions, sendEfspFieldStateMutation } from './efsp-ws.js';
+import { alertPadConstraintFor } from './scramble.js';
+import { fieldStateActionsFor } from './field-state-rules.js';
 
 // The field-state board — guide §9.7, crc-sync docs/adr/0061, crc-desktop
 // docs/adr/0068. Per Facility with a runway inventory: each runway's status
@@ -240,7 +246,7 @@ function _fsUpdateTitle(records) {
   return waiting;
 }
 
-function renderFieldStatePanel() {
+export function renderFieldStatePanel() {
   const records = getAllEfspFieldStates();
   _fsUpdateTitle(records);
   if (!_fieldStateListEl) return; // not initialized yet
@@ -253,7 +259,7 @@ function renderFieldStatePanel() {
   if (_fieldStateEmptyEl) _fieldStateEmptyEl.hidden = records.length > 0;
 }
 
-function initFieldStatePanel() {
+export function initFieldStatePanel() {
   _fieldStateListEl = document.getElementById('field-state-list');
   _fieldStateEmptyEl = document.getElementById('field-state-empty');
   renderFieldStatePanel();
