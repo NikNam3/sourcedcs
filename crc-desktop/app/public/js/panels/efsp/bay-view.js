@@ -711,7 +711,7 @@ export function _appendAnnotationHistory(container, strip, blockId, limit) {
 // board deltas rebuild Strips constantly. Deliberately not the popover
 // pattern: a popover has to be added to _isProtectedStripEl or a remote delta
 // destroys it mid-interaction, and this has no such requirement.
-let _expandedStripId = null;
+export let _expandedStripId = null;
 
 export function _appendExpandButton(container, strip) {
   const expanded = _expandedStripId === strip.stripId;
@@ -839,7 +839,7 @@ export function _appendExpandedView(el, strip) {
   el.appendChild(panel);
 }
 
-function _buildStripEl(strip) {
+export function _buildStripEl(strip) {
   _restoredEditInThisStrip = false; // an open Block edit is restored into exactly one cell of this Strip
   const fdr = getEfspFdr(strip.fdrId);
   const el = document.createElement('div');
@@ -1050,7 +1050,7 @@ export function _unmountPopover(popover) {
 }
 
 /** Does any open popover belong to this Strip? The portalled replacement for six `el.contains(...)` checks. */
-function _stripHasOpenPopover(stripId) {
+export function _stripHasOpenPopover(stripId) {
   if (!stripId) return false;
   for (const entry of _openPopovers.values()) if (entry.stripId === stripId) return true;
   return false;
@@ -1434,7 +1434,7 @@ export function _dispatchCorrelation(strip, op) {
   sendEfspCorrelationMutation(actingPositionId, strip.fdrId, record ? record.rev : 0, op);
 }
 
-function _selectStrip(stripId) {
+export function _selectStrip(stripId) {
   _selectedStripId = _selectedStripId === stripId ? null : stripId;
   if (typeof noteEfspStripSelected === 'function') noteEfspStripSelected(_selectedStripId); // docs/adr/0072
   _afterSelectionChanged();
@@ -1583,7 +1583,7 @@ export function _invokeNla(strip) {
   return true;
 }
 
-function _moveStrip(strip, bayId, rackId, afterStripId, beforeStripId) {
+export function _moveStrip(strip, bayId, rackId, afterStripId, beforeStripId) {
   const actingPositionId = _resolveActingPositionId(strip);
   if (!actingPositionId) return;
   sendEfspMutation(actingPositionId, strip, { kind: 'MoveStrip', bayId, rackId, afterStripId, beforeStripId });
@@ -1808,7 +1808,7 @@ const STRIP_CONTROL_SELECTOR = '.efsp-block-editable, .efsp-block-input, button,
 // B2 (docs/adr/0080): AIC "works under TAC_C2's TOFI", so on an AIC-held line
 // the TOFI dialogue is TAC_C2's. Mirror of permission.js's TACTICAL_CAPABILITIES
 // `tofiAnsweredBy`, held to it by the drift test in efsp-ui-reachability.test.js.
-const TOFI_ANSWERED_BY = { AIC: 'TAC_C2' };
+export const TOFI_ANSWERED_BY = { AIC: 'TAC_C2' };
 
 /** The Position a TOFI answer is sent as: the owner's TOFI answerer when this controller holds it, else the usual resolution. */
 function _tofiActingPositionId(strip) {
@@ -1934,7 +1934,7 @@ export const AIRSPACE_ENTRY_POSITIONS = ['APP', 'CTR'];
 // they need both the ConvertToArrival op (permission.js) and the right to
 // create an ARRIVAL Strip (canCreateStripRole). efsp-coordination-client.test.js
 // holds this to the server's tables.
-const CONVERT_TO_ARRIVAL_POSITIONS = ['APP', 'CTR'];
+export const CONVERT_TO_ARRIVAL_POSITIONS = ['APP', 'CTR'];
 
 /** Whether this client should offer Convert to Arrival at all (the button may still render disabled for an open link). */
 export function _canConvertToArrival(strip) {
@@ -2838,7 +2838,7 @@ function _buildRackShell(bayId, rackId) {
 }
 
 /** A Strip element is protected from removal/rebuild while it's mid-drag, is being typed into, or has any of the six popovers open — reconciling around it (never through it) is what actually fixes defect D6 here. */
-function _isProtectedStripEl(el) {
+export function _isProtectedStripEl(el) {
   if (_efspDrag && _efspDrag.strip.stripId === el.dataset.stripId) return true;
   // An open Block edit or picker holds the Strip still — but only while the
   // controller is actually IN it. Unconditional, this froze a Strip for good
@@ -2917,7 +2917,7 @@ function _isProtectedStripEl(el) {
  * is a field read or a Map lookup bar the sibling walk, which _buildStripEl
  * already does once per Strip anyway.
  */
-function _stripRenderSignature(strip) {
+export function _stripRenderSignature(strip) {
   const parts = [];
 
   // `undefined` (a record from a server that does not compute it) and `null`
@@ -3018,7 +3018,7 @@ function _stripRenderSignature(strip) {
  *    a refusal, or `strip.nla`. See _stripRenderSignature; this was the same
  *    omission as expansion, six more times over (F-305).
  */
-function _stripElNeedsRebuild(el, wanted, selectedStripId, expandedStripId) {
+export function _stripElNeedsRebuild(el, wanted, selectedStripId, expandedStripId) {
   const id = el.dataset.stripId;
   if (el.dataset.rev !== String(wanted.rev)) return true;
   if (el.classList.contains('efsp-strip-selected') !== (id === selectedStripId)) return true;
@@ -3108,3 +3108,7 @@ export function renderAllOpenEfspBays() {
 // ESM-1 (S-ESM1b): the unit tests replaced these globals to count calls; these are those seams.
 export function _setRenderAllOpenEfspBaysForTest(fn) { renderAllOpenEfspBays = fn; }
 export function _setSelectEfspStripByIdForTest(fn) { selectEfspStripById = fn; }
+
+// ESM-1 (S-ESM1c): test seams for state the unit tests set directly in the old shared scope.
+export function _setExpandedStripId(v) { _expandedStripId = v; }
+export function _setSelectedStripIdForTest(id) { _selectedStripId = id; }

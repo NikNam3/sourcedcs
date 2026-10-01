@@ -398,7 +398,7 @@ function resetDisplayedTracks() {
  * every contact only those radars could see has to go with them, which a
  * snapshot says without any chance of getting the diff wrong.
  */
-function applySnapshot(trackList) {
+export function applySnapshot(trackList) {
   latestFromServer.clear();
   resetDisplayedTracks();
   for (const t of trackList) {
@@ -470,7 +470,7 @@ function applyDelta(updated, relabeled, gone) {
  * nothing to toggle, and an empty list is the correct answer for a Ground or
  * Clearance Delivery controller rather than a fault.
  */
-function applyCoverage(msg) {
+export function applyCoverage(msg) {
   coverageRadars = msg.radars || [];
   coverageHeldPositions = msg.heldPositions || [];
   coverageDatalink = !!msg.datalink;
@@ -968,3 +968,9 @@ function _updateCoalitionBtn($btn) {
   $btn.textContent = blue ? 'BLUE' : 'RED';
   $btn.classList.toggle('coalition-red', !blue);
 }
+
+// ESM-1 (S-ESM1c): test seams for the app state the unit tests set directly in the old shared scope.
+export function _setSettingsForTest(v) { settings = v; }
+export function _setCoverageRadars(v) { coverageRadars = v; }
+export function _setCoverageDatalink(v) { coverageDatalink = v; }
+export function _setCoverageHeldPositions(v) { coverageHeldPositions = v; }

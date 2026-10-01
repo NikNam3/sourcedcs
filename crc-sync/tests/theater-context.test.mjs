@@ -14,8 +14,10 @@ const { TheaterContext, DEFAULT_TRANSITION_ALT_FT } = await import('../src/theat
 const { loadTheaters } = await import('../src/theaters.js');
 const M = await import('../src/magnetic.js');
 
-const require = createRequire(import.meta.url);
-const client = require(path.join(import.meta.dirname, '../../crc-desktop/app/public/js/magnetic.js'));
+// The client is ES modules (ESM-1): magnetic.js imports sync.js, which assigns config.js's globals at load, so the
+// browser-ish globals go in first.
+await import('../../crc-desktop/tests/helpers/client-env.mjs');
+const client = await import('../../crc-desktop/app/public/js/magnetic.js');
 
 const THEATERS = loadTheaters(path.join(import.meta.dirname, '../config/theaters.json'));
 const JAN_2026 = Date.UTC(2026, 0, 15, 10);

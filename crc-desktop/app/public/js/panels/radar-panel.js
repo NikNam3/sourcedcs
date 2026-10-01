@@ -46,7 +46,7 @@ export function refreshRadarPanelData() {
  * scope, and saying which Position would give them one is more use than an
  * empty box.
  */
-function renderCoverageList() {
+export function renderCoverageList() {
   const $list = document.getElementById('radar-active-list');
   if (!$list) return;
   $list.innerHTML = '';
