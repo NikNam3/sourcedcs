@@ -8,65 +8,23 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CRC_SYNC = path.resolve(HERE, '../..');
 const REPO = path.resolve(CRC_SYNC, '..');
 
-const MUTATIONS = [
-  { id: 'M1', what: 'an ack reason: NOT_OWNER -> NOT_YOURS', file: 'src/efsp/board-store.js',
-    find: "reason: 'NOT_OWNER', detail: `${strip.ownerPositionId} holds this Strip`", replace: "reason: 'NOT_YOURS', detail: `${strip.ownerPositionId} holds this Strip`",
-    detect: ['freeze-table', 'freeze-scenarios', 'freeze-hub'] },
-  { id: 'M2', what: 'a state transition: ConvertToArrival lands in HANDED_TO_TOWER, not INBOUND', file: 'src/efsp/board-store.js',
-    find: "    strip.state = 'INBOUND';", replace: "    strip.state = 'HANDED_TO_TOWER';",
-    detect: ['freeze-table', 'freeze-scenarios', 'freeze-hub'] },
-  { id: 'M3', what: 'an audit field: actorId dropped from the Mutation-log entry', file: 'src/efsp/board-store.js',
-    find: "      actorId: by || null,\n      at: this._clock.now(),\n      before,", replace: "      actorId: null,\n      at: this._clock.now(),\n      before,",
-    detect: ['freeze-table', 'freeze-scenarios', 'freeze-hub'] },
-  { id: 'M4', what: 'a missing _touch in SetFlag (the Strip is not in the next delta)', file: 'src/efsp/board-store.js',
-    find: "    strip.flags[op.flag] = op.value;\n    strip.rev += 1;\n    strip.updatedAt = this._clock.now();\n    strip.updatedBy = by || null;\n    this._touch(strip.stripId);\n", replace: "    strip.flags[op.flag] = op.value;\n    strip.rev += 1;\n    strip.updatedAt = this._clock.now();\n    strip.updatedBy = by || null;\n",
-    detect: ['freeze-table', 'freeze-scenarios', 'freeze-hub'] },
-  { id: 'M5', what: 'frame order: ws-hub sends the peer delta before the primary delta', file: 'src/ws-hub.js',
-    find: "        if (result.broadcast) this._broadcastEfsp(result.broadcast);", replace: "        if (result.peerBroadcast) this._broadcastEfsp(result.peerBroadcast);",
-    detect: ['freeze-hub'], also: { find: "        if (result.peerBroadcast) this._broadcastEfsp(result.peerBroadcast);\n        // WP6 (docs/adr/0051)", replace: "        if (result.broadcast) this._broadcastEfsp(result.broadcast);\n        // WP6 (docs/adr/0051)" } },
-  { id: 'M5b', what: 'frame order: ws-hub sends the MARSA delta before the primary delta', file: 'src/ws-hub.js',
-    find: "        if (result.broadcast) this._broadcastEfsp(result.broadcast);", replace: "        if (result.marsaBroadcast) this._broadcastEfsp(result.marsaBroadcast);",
-    detect: ['freeze-hub'], also: { find: "        if (result.marsaBroadcast) this._broadcastEfsp(result.marsaBroadcast);\n        // docs/adr/0074", replace: "        if (result.broadcast) this._broadcastEfsp(result.broadcast);\n        // docs/adr/0074" } },
-  { id: 'M6', what: 'a refusal detail string', file: 'src/efsp/board-store.js',
-    find: "detail: `no such Bay here: ${bayId}`", replace: "detail: `no such bay: ${bayId}`",
-    detect: ['freeze-table', 'freeze-scenarios', 'freeze-hub'] },
-  { id: 'M7', what: 'causedBy dropped from a peer-write audit entry', file: 'src/efsp/board-store.js',
-    find: "clientMutationId: null, causedBy: causedBy || null, op,", replace: "clientMutationId: null, op,",
-    detect: ['freeze-scenarios', 'freeze-hub'] },
-  { id: 'M8', what: 'the persisted replay window set to 0', file: 'src/efsp/board-store.js',
-    find: "const REPLAY_PERSIST_WINDOW_MS = 10 * 60 * 1000;", replace: "const REPLAY_PERSIST_WINDOW_MS = 0;",
-    detect: ['freeze-hub', 'freeze-scenarios'] },
-  { id: 'M9', what: 'the persisted body\'s key order: fdr before boards', file: 'src/efsp/index.js',
-    find: "      boards,\n      fdr: fdrStore.snapshot(),", replace: "      fdr: fdrStore.snapshot(),\n      boards,",
-    detect: ['freeze-hub'] },
-  { id: 'M10', what: 'a rule dropped from createEfsp()\'s per-Facility wiring (liveStripsForFdr)', file: 'src/efsp/index.js',
-    find: "      liveStripsForFdr: (fdrId, excludeStripId) => {", replace: "      _notWired_liveStripsForFdr: (fdrId, excludeStripId) => {",
-    detect: ['freeze-guards'] },
-  { id: 'M11', what: 'the order-key rebalance threshold 40 -> 400', file: 'src/efsp/order-key.js',
-    find: "const REBALANCE_KEY_LENGTH = 40;", replace: "const REBALANCE_KEY_LENGTH = 400;",
-    detect: ['freeze-hub'] },
-  { id: 'M12', what: 'a permission table row: HELD is also CTR\'s to act on', file: 'src/efsp/permission.js',
-    find: "  HELD:              ['CD', 'GND'],", replace: "  HELD:              ['CD', 'GND', 'CTR'],",
-    detect: ['freeze-tables', 'freeze-table'] },
-  { id: 'M13', what: 'the wire dispatch loses efsp-resync', file: 'src/efsp/efsp-ws.js',
-    find: "    case 'efsp-resync':        return _handleResync(ctx, session, msg);\n", replace: "",
-    detect: ['freeze-tables', 'freeze-hub'] },
-  { id: 'M14', what: 'a new Date.now() site in nla.js', file: 'src/efsp/nla.js',
-    find: "module.exports = {", replace: "const _freezeProbe = () => Date.now();\nmodule.exports = {",
-    detect: ['freeze-guards'] },
-  { id: 'M15', what: 'a Board method outside code uses is renamed (getDeltaSince)', file: 'src/efsp/board-store.js',
-    find: "  getDeltaSince(", replace: "  getDeltaSinceRenamed(",
-    detect: ['freeze-guards', 'freeze-hub', 'freeze-scenarios'] },
-  { id: 'M16', what: 'the allocator hands out a different first beacon code', file: 'src/efsp/fdr-store.js',
-    find: "const fdrId = crypto.randomUUID();", replace: "const fdrId = crypto.randomUUID(); crypto.randomUUID();",
-    detect: ['freeze-hub', 'freeze-table', 'freeze-scenarios'] },
-];
+/** One file per mutation under tests/freeze/selfcheck/: export default {id, what, file, find, replace, detect, also?}. */
+async function loadMutations() {
+  const dir = path.join(HERE, 'selfcheck');
+  const names = fs.readdirSync(dir).filter(f => /^M\d+[a-z]?\.mjs$/.test(f));
+  const num = (id) => { const m = /^M(\d+)([a-z]?)$/.exec(id); return [Number(m[1]), m[2]]; };
+  const loaded = [];
+  for (const f of names) loaded.push((await import(pathToFileURL(path.join(dir, f)).href)).default);
+  for (const m of loaded) for (const k of ['id', 'what', 'file', 'find', 'replace', 'detect']) if (m[k] === undefined) throw new Error(`selfcheck mutation ${m.id || '?'} lacks ${k}`);
+  return loaded.sort((x, y) => { const [a, as] = num(x.id), [b, bs] = num(y.id); return a - b || as.localeCompare(bs); });
+}
+const MUTATIONS = await loadMutations();
 
 function buildCopy() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'freeze-selfcheck-'));
