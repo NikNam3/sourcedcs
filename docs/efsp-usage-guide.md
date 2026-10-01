@@ -905,7 +905,7 @@ the scope gets a coloured tag, and the track panel lists it.
 
 | Indicator | Means |
 |---|---|
-| `HDG 072` | more than 5° off the assigned heading for 10 s (after 30 s to make the turn). The number is where it is actually going |
+| `HDG 072` | more than 5° off the assigned heading for 10 s (after 30 s to make the turn). The number is where it is actually going, **magnetic**; where the variation is unknown the heading is not checked at all |
 | `ALT ↓` / `ALT ↑` | going the wrong way: told to climb and descending, or the reverse, faster than 500 ft/min |
 | `BUST +600` | it reached its `ALT` and has since left it by more than 500 ft |
 | `STCA SNAKE21 0:55` | on present course and rate it will be within 3 NM and 1,000 ft of SNAKE21 in 55 s. Only at an ATC Position (TWR, APP, CTR…), and only when both aircraft are on your scope |
@@ -1159,6 +1159,22 @@ crc-sync decides which mission it is in (`state/mission-session.json`). A **new 
 minutes. A reconnect, or a crc-sync restart onto the same mission, stays in the same session. The
 session number is what the metrics (§10) and the traffic count are bucketed by, and what the wind-derived
 active runway and the archiving of finished flights (§8J) key off.
+
+### Headings are magnetic, and the transition altitude
+
+Every heading and course you read or type is **magnetic**, from the World Magnetic Model (WMM2025) at
+the aircraft's position and the mission's date. There is no manual "HDG correction" and the Airport
+(APRT) panel's theater inputs are gone: it shows a read-only transition altitude and variation line. A
+heading you type is converted by crc-sync; where the variation is unknown (no mission loaded) a bearing
+shows `---` rather than a true value dressed up as magnetic. Mission dates outside 2025–2030 are
+extrapolated and flagged. The topbar approach course and the APRT centreline are magnetic too.
+
+The **transition altitude** is per theater (Syria 10,000 ft; every other theater 18,000 ft, a
+`[SOURCE-DEFINED]` placeholder) and lives in crc-sync's `config/theaters.json`. A squadron correction to
+the variation goes in that file's `magneticVariation` (`fixedDeg` or `offsetDeg`) or in
+`state/theaters.json`, and applies on restart. The airport weather popup, the APRT reference card and
+the ATIS text give the wind **magnetic** (`NNN°M`; the reference card's tooltip shows the true value, and
+the ATIS says "Wind not available." when the variation is unknown, H76).
 
 ## 9. General controls — quick reference
 

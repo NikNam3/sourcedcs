@@ -32,7 +32,10 @@ is the errata ADR. **An ADR is never edited once committed (P4)**: a correction 
 ```
 crc-sync/src/efsp/                        the subsystem — stores, rules, the wire handler
 crc-sync/src/mission-clock.js             in-game Zulu, injected into every EFSP time (F1, 0079)
-crc-sync/config/theaters.json             per-theater table (local offset today; variation, TA next)
+crc-sync/src/mission-session.js           which mission we are in: new session on start/other mission/clock step-back (F3, 0086)
+crc-sync/src/magnetic.js                  WMM2025 variation + grid convergence, per-theater override (F2, 0085)
+crc-sync/src/theater-context.js           the one conversion point: variationAt, trueToMagnetic, gridToMagnetic, transitionAltFt
+crc-sync/config/theaters.json             per-theater table: local offset, transitionAltFt, tmCentralMeridianDeg, magneticVariation override
 crc-sync/src/radars.js                    the radar list, derived from mission data + tracks
 crc-sync/src/coverage.js                  what each radar is illuminating, one phase for everybody
 crc-sync/src/terrain.js                   DEM fetch/decode and radar line of sight
@@ -727,6 +730,36 @@ formatted date. **Persisted FDRs that hold a string time are not migrated**; a l
 before until the Block is retyped. `efsp-scenario-typed-times.test.mjs` is the sortie (a typed void time
 expires; a typed release holds the NLA until reached).
 
+**Magnetic (F2, `0085`).** `magnetic.js` evaluates WMM2025 (`data/wmm/WMM2025.COF`, verbatim from NCEI,
+tested against both NCEI tables) at a position and the mission date, snapped to the UTC day.
+`theater-context.js` is the server's single conversion point (`variationAt`, `convergenceAt`,
+`trueToMagnetic`, `magneticToTrue`, `gridToMagnetic`, `transitionAltFt`, `windFrom`) and builds the
+`theater` wire message: **its own message** (a 1° grid covering the airfields' box plus 3°, values to
+0.01°, a few hundred numbers that change once a day), not a field on `game-time`. `theater-settings.js`,
+its messages and `hdgCorrection` are deleted. Client: `app/public/js/magnetic.js` (`toMagneticDisplay`,
+`magneticText`, `magneticVariationAt`, `gridConvergenceDeg`, `requestTrueFromMagnetic`);
+`GET /api/magnetic/to-true` is proxied by crc-desktop's local server and is for local drawing only.
+**Rules for any lane:** show a true bearing with `magneticText(trueDeg, lat, lon)` (`"045"` / `"---"`);
+never apply a variation or convergence yourself; a typed magnetic value goes to the server as typed and
+`theaterContext.magneticToTrue` converts it; a DCS grid heading (`track.course`,
+`orientation.heading`) goes through `gridToMagnetic`.
+- **Conformance** (follow-up, S-F2 finding 1): `ConformanceMonitor` takes an injected
+  `gridToMagnetic`, compares magnetic with magnetic, reports `actual` in magnetic and does not check
+  heading when the answer is unknown. The soak host and the mission-clock test inject the identity
+  function because their courses are synthetic.
+- **Wind (H76):** `/api/apt-weather` sends `windFromMagnetic` and `windFromTrue` (via
+  `theaterContext.windFrom()`), no raw `windFrom`; no client surface shows METAR-style text yet.
+- **Open:** non-Syria `transitionAltFt` is 18000 `[SOURCE-DEFINED]`; **six theaters have no
+  `tmCentralMeridianDeg`** (TheChannel, MarianaIslandsWWII, Kola, Afghanistan, Iraq, GermanyCW), so their
+  grid headings cannot be converted, and `tools/miztoyaml/projection.py` needs the same additions (a test
+  should keep the two tables equal); stale comments still name `theater-settings.js`
+  (`efsp-ws.js:6`, `facility-config.js:5,42`, `mutation-log.js:5,41`); ADR `0048`'s table and `0079`'s
+  "`gameTimeOffset` is gone" paragraph describe a `theater-settings.json` that no longer exists (belongs in
+  the next errata ADR); **`grpc-client.js:764` `windFrom = heading·180/π + 270` is unexplained** (the proto
+  says `heading` is already the from-direction, and the DCS wind vector is probably grid, not true,
+  about -2° at Incirlik): it needs a live check against the mission editor's wind before anything changes;
+  the APRT read-only line layout was never checked in a browser; no live DCS run.
+
 ## 4. What's left, and the known bugs
 
 **Not built, in the guide's order.** WP6: the field-state panel and the hook-mismatch check (L1b),
@@ -805,7 +838,7 @@ cross-test (a crc-sync test parsing `ojw1v5-export.txt` and `research-render.txt
   when something is wrong (`0058`).
 - **Assigned `ALT`/`HDG` live on the FDR (`fdr.clearance`, `0058`)**, not on the Strip. Writing one
   bumps `clearanceUpdatedAt`, never `updatedAt`. Open: filed-route conformance, and terrain/MSAW
-  once AIRAC data exists. Headings become magnetic everywhere with F2 (H15, H69).
+  once AIRAC data exists. Headings are magnetic everywhere (F2, H15, H69).
 - **What a client is told about a contact is decided in one place (`0059`)**: server
   `surveillance/presentation.js`, client `track-label.js`. The wire carries no DCS truth.
   `presentation.test.mjs` plus `ws-hub-wire-strictness.test.mjs` hold the line.
