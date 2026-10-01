@@ -1,6 +1,6 @@
 'use strict';
+import { _bayTabsEl, _setActiveBayId, _setActivePositionTab } from './state.js';
 import { _renderPositionTabs, efspVisibleBayId } from './tabs.js';
-import { _setActiveBayId, _setActivePositionTab, els } from './state.js';
 import { efspArrivalLog, forgetEfspArrivals, nextEfspArrivalExpiry, noteEfspArrivals } from '../efsp-arrivals.js';
 import { getActingPositions } from '../efsp-ws.js';
 import { getEfspFdr, getEfspPosition } from '../efsp-state.js';
@@ -18,15 +18,15 @@ import { renderAllOpenEfspBays, selectEfspStripById } from '../bay-view.js';
 let _arrivalsLineEl = null;
 
 export function _renderArrivalsLine() {
-  if (!els.bayTabs || typeof efspArrivalLog !== 'function') return;
+  if (!_bayTabsEl || typeof efspArrivalLog !== 'function') return;
   let line = _arrivalsLineEl;
   if (!line) {
     line = document.createElement('div');
     line.id = 'efsp-arrivals-line';
     _arrivalsLineEl = line;
   }
-  if (els.bayTabs.parentNode && line.parentNode !== els.bayTabs.parentNode && typeof els.bayTabs.parentNode.insertBefore === 'function') {
-    els.bayTabs.parentNode.insertBefore(line, els.bayTabs.nextSibling);
+  if (_bayTabsEl.parentNode && line.parentNode !== _bayTabsEl.parentNode && typeof _bayTabsEl.parentNode.insertBefore === 'function') {
+    _bayTabsEl.parentNode.insertBefore(line, _bayTabsEl.nextSibling);
   }
   const entries = efspArrivalLog();
   line.innerHTML = '';

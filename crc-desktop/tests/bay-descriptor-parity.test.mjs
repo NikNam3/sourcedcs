@@ -14,8 +14,7 @@ const require = createRequire(import.meta.url);
 const facilities = require('../../crc-sync/src/efsp/facility-config.js');
 const nla = require('../../crc-sync/src/efsp/nla.js');
 
-const CLIENT_FILES = ['bay-view.js', 'efsp-panel.js', 'efsp-state.js', 'efsp-arrivals.js', 'strip-drag.js'].map(f => 'panels/efsp/' + f)
-  .concat(['tabs.js', 'arrivals.js', 'create-strip.js', 'refusal.js', 'dot-commands.js', 'staleness.js', 'state.js'].map(f => 'panels/efsp/panel/' + f));
+const CLIENT_FILES = ['bay-view.js', 'efsp-panel.js', 'efsp-state.js', 'efsp-arrivals.js', 'strip-drag.js'].map(f => 'panels/efsp/' + f);
 // `bay.rackId` is the {bayId, rackId} landing spot _handBackBayFor builds, not a descriptor.
 // `bay.withOthers` marks the client-synthesised "with AIC/JTAC" tab Bay (UI-A, efsp-panel.js), which has no server descriptor.
 const NOT_DESCRIPTOR_FIELDS = new Set(['rackId', 'withOthers']);

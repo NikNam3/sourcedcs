@@ -1,9 +1,8 @@
 'use strict';
 
 // The panel's shared state, split out of efsp-panel.js (ESM-2b). A module cannot assign another module's `let`,
-// so what more than one feature module writes lives here: the live exports below (assigned through their
-// setters), the cached elements, and the create-Strip latches. Cached ONCE in initEfspPanel() — see the
-// module comment in efsp-panel.js for why this can't be a fresh document.getElementById() per render.
+// so what more than one feature module writes lives here, assigned through the setters (live exports for
+// everyone who reads it).
 
 export let _activePositionTab = null;
 export let _activeBayId = null;
@@ -11,31 +10,41 @@ export let _activeBayId = null;
 export function _setActivePositionTab(v) { _activePositionTab = v; }
 export function _setActiveBayId(v) { _activeBayId = v; }
 
-export const els = {
-  positionTabs: null,
-  bayTabs: null,
-  bayContent: null,
-  createStripInput: null,
-  createStripBtn: null,
-  createStripMsg: null,
-  createStripRole: null,
-  createStripStereo: null,
-  createStripBind: null,
-  dotCommandInput: null,
-  dotCommandPreview: null,
-  mutationError: null,
-  mutationWarning: null,
-  connectionBanner: null,
-  efspPanelRoot: null, // cached, not document.getElementById() per check — same detached-DOM reasoning as every other element
-};
+// Cached once in initEfspPanel() — see the module comment above for why
+// this can't be a fresh document.getElementById() per render.
+export let _positionTabsEl = null;
+export let _bayTabsEl = null;
+export let _bayContentEl = null;
+export let _createStripInputEl = null;
+export let _createStripBtnEl = null;
+export let _createStripMsgEl = null;
+export let _createStripRoleEl = null;
+export let _createStripStereoEl = null;
+export let _createStripBindEl = null;
+export let _dotCommandInputEl = null;
+export let _dotCommandPreviewEl = null;
+export let _mutationErrorEl = null;
+export let _mutationWarningEl = null;
+export let _connectionBannerEl = null;
+export let _efspPanelRootEl = null; // cached, not document.getElementById() per check — same detached-DOM reasoning as every other element above
 
-// The create-Strip box, the toolbar's pickers and the dot commands share these.
-export const createState = {
-  pendingMutationId: null,
-  // Callsign the duplicate-origination warning has already been shown for, so
-  // a second press goes through. Cleared on any successful create.
-  pendingDuplicateCallsign: null,
-  stereoRoutes: [],
-};
+export function _setBayContentElForTest(el) { _bayContentEl = el; }
 
-export function _setBayContentElForTest(el) { els.bayContent = el; }
+/** initEfspPanel()'s element lookups, here because only this module can assign these bindings. */
+export function _cachePanelElements() {
+  _efspPanelRootEl = document.getElementById('efsp-panel');
+  _positionTabsEl = document.getElementById('efsp-position-tabs');
+  _bayTabsEl = document.getElementById('efsp-bay-tabs');
+  _bayContentEl = document.getElementById('efsp-bay-content');
+  _createStripInputEl = document.getElementById('efsp-new-strip-callsign');
+  _createStripBtnEl = document.getElementById('efsp-create-strip-btn');
+  _createStripMsgEl = document.getElementById('efsp-create-strip-msg');
+  _createStripRoleEl = document.getElementById('efsp-create-strip-role');
+  _createStripStereoEl = document.getElementById('efsp-create-strip-stereo');
+  _createStripBindEl = document.getElementById('efsp-create-strip-bind');
+  _dotCommandInputEl = document.getElementById('efsp-dot-command-input');
+  _dotCommandPreviewEl = document.getElementById('efsp-dot-command-preview');
+  _mutationErrorEl = document.getElementById('efsp-mutation-error');
+  _mutationWarningEl = document.getElementById('efsp-mutation-warning');
+  _connectionBannerEl = document.getElementById('efsp-connection-banner');
+}

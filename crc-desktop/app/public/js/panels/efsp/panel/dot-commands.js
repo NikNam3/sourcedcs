@@ -1,7 +1,7 @@
 'use strict';
-import { _availableCreateStripOrigins, _createStripOrigin, _missionBindCandidates, _setCreateStripMsg, _stereoEligibleOrigin } from './create-strip.js';
+import { _availableCreateStripOrigins, _createStripOrigin, _missionBindCandidates, _pendingDuplicateCallsign, _setCreateStripMsg, _setPendingCreateStripMutationId, _setPendingDuplicateCallsign, _stereoEligibleOrigin, _stereoRoutes } from './create-strip.js';
+import { _dotCommandInputEl, _dotCommandPreviewEl } from './state.js';
 import { _runEfspSearch } from './tabs.js';
-import { createState, els } from './state.js';
 import { getActingPositions, sendEfspCorrelationMutation, sendEfspCreateStrip, sendEfspMarsaMutation, sendEfspMutation } from '../efsp-ws.js';
 import { getAllEfspStrips, getEfspCorrelationForStrip, getEfspFdr, getEfspStrip, liveStripsForCallsign, marsaForStrip } from '../efsp-state.js';
 import { getSelectedEfspStripId } from '../bay-view.js';
@@ -38,10 +38,10 @@ function _fragMissionLine(callsign) {
     return _showDotCommandError(`no live flight ${wanted} available to frag against`);
   }
 
-  createState.pendingMutationId = sendEfspCreateStrip(origin.actingPositionId, {
+  _setPendingCreateStripMutationId(sendEfspCreateStrip(origin.actingPositionId, {
     kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', role: 'MISSION',
     fdrId: candidate.fdrId, initialState: origin.initialState || undefined,
-  }, origin.facilityId);
+  }, origin.facilityId));
   _setCreateStripMsg(`Fragging a mission line for ${wanted}…`, false);
 }
 
@@ -243,7 +243,7 @@ function _fileStereoByName(rawName, rawCallsign) {
   // resolves the name again and refuses an unknown one regardless. Same
   // standing as .bind's "needs a track id" precheck: catch the typo where
   // the controller is looking instead of making them wait for a rejection.
-  const known = createState.stereoRoutes.find(r =>
+  const known = _stereoRoutes.find(r =>
     typeof normalizeStereoNameClient === 'function'
       ? normalizeStereoNameClient(r.name) === normalizeStereoNameClient(name)
       : r.name === name);
@@ -254,22 +254,22 @@ function _fileStereoByName(rawName, rawCallsign) {
 
   // §3.6 duplicate origination, shared with the button rather than skipped.
   // Re-entering the same command confirms, the same way pressing + New Strip
-  // twice does; createState.pendingDuplicateCallsign is the same latch, so confirming
+  // twice does; _pendingDuplicateCallsign is the same latch, so confirming
   // on one surface confirms on both.
   const existing = liveStripsForCallsign(callsign);
-  if (existing.length > 0 && createState.pendingDuplicateCallsign !== callsign) {
-    createState.pendingDuplicateCallsign = callsign;
+  if (existing.length > 0 && _pendingDuplicateCallsign !== callsign) {
+    _setPendingDuplicateCallsign(callsign);
     const where = existing.map(s => `${s.facilityId || '?'}/${s.ownerPositionId}`).join(', ');
     _showDotCommandError(`${callsign} already has a live Strip at ${where} — repeat the command to create another anyway`);
     return;
   }
-  createState.pendingDuplicateCallsign = null;
+  _setPendingDuplicateCallsign(null);
 
-  createState.pendingMutationId = sendEfspCreateStrip(origin.actingPositionId, {
+  _setPendingCreateStripMutationId(sendEfspCreateStrip(origin.actingPositionId, {
     kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', role: origin.role,
     fdr: { callsign, aircraftType: '', wakeCategory: '', stereoRouteName: known.name },
     initialState: origin.initialState || undefined,
-  }, origin.facilityId);
+  }, origin.facilityId));
   _setCreateStripMsg(`Creating ${callsign} (${known.name})…`, false);
 }
 
@@ -284,26 +284,26 @@ let _dotCommandErrorShown = false;
 
 /** Surfaces a dot-command problem where the preview already draws the eye. */
 function _showDotCommandError(message) {
-  if (!els.dotCommandPreview) return;
-  els.dotCommandPreview.textContent = message;
+  if (!_dotCommandPreviewEl) return;
+  _dotCommandPreviewEl.textContent = message;
   _dotCommandErrorShown = true;
 }
 
 export function _wireDotCommand() {
-  if (!els.dotCommandInput) return;
-  els.dotCommandInput.addEventListener('input', () => {
-    const parsed = parseDotCommand(els.dotCommandInput.value);
-    if (els.dotCommandPreview) els.dotCommandPreview.textContent = parsed ? `${parsed.verb} ${parsed.args.join(' ')}`.trim() : '';
+  if (!_dotCommandInputEl) return;
+  _dotCommandInputEl.addEventListener('input', () => {
+    const parsed = parseDotCommand(_dotCommandInputEl.value);
+    if (_dotCommandPreviewEl) _dotCommandPreviewEl.textContent = parsed ? `${parsed.verb} ${parsed.args.join(' ')}`.trim() : '';
   });
-  els.dotCommandInput.addEventListener('keydown', (e) => {
+  _dotCommandInputEl.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
-    const parsed = parseDotCommand(els.dotCommandInput.value);
+    const parsed = parseDotCommand(_dotCommandInputEl.value);
     if (!parsed) return;
     _dotCommandErrorShown = false;
     _dispatchDotCommand(parsed);
-    els.dotCommandInput.value = '';
+    _dotCommandInputEl.value = '';
     // Clear the echoed command, but NOT a message the dispatch just wrote
     // there — see _dotCommandErrorShown for the bug that was.
-    if (els.dotCommandPreview && !_dotCommandErrorShown) els.dotCommandPreview.textContent = '';
+    if (_dotCommandPreviewEl && !_dotCommandErrorShown) _dotCommandPreviewEl.textContent = '';
   });
 }

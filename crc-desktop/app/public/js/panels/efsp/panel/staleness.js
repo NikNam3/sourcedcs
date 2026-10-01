@@ -1,5 +1,5 @@
 'use strict';
-import { els } from './state.js';
+import { _connectionBannerEl, _efspPanelRootEl } from './state.js';
 import { isEfspBoardStale } from '../efsp-nla.js';
 
 // Board staleness (guide §5.6 rule 5) — lastEfspHeartbeatAt is set on every
@@ -15,10 +15,10 @@ export function noteEfspHeartbeat() {
 }
 
 function _checkEfspStaleness() {
-  if (!els.connectionBanner) return;
+  if (!_connectionBannerEl) return;
   const stale = isEfspBoardStale(_lastEfspHeartbeatAt, Date.now());
-  if (els.efspPanelRoot) els.efspPanelRoot.classList.toggle('efsp-board-stale', stale);
-  els.connectionBanner.textContent = stale ? 'Board may be out of date — no update received' : '';
+  if (_efspPanelRootEl) _efspPanelRootEl.classList.toggle('efsp-board-stale', stale);
+  _connectionBannerEl.textContent = stale ? 'Board may be out of date — no update received' : '';
 }
 
 export function startEfspStalenessCheck() {

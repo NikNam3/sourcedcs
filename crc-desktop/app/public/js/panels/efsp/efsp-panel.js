@@ -1,13 +1,13 @@
 'use strict';
-import { getEfspCorrelationStats } from './efsp-state.js';
-import { renderEfspScrambleLine } from './scramble.js';
-import { initAtoImport } from './ato-import.js';
-import { els } from './panel/state.js';
-import { startEfspStalenessCheck } from './panel/staleness.js';
+import { _cachePanelElements, _efspPanelRootEl, _mutationErrorEl } from './panel/state.js';
+import { _loadStereoRoutes, _refreshCreateStripAvailability, _wireCreateStrip } from './panel/create-strip.js';
 import { _renderPositionTabs } from './panel/tabs.js';
-import { _refreshCreateStripAvailability, _loadStereoRoutes, _wireCreateStrip } from './panel/create-strip.js';
 import { _wireDotCommand } from './panel/dot-commands.js';
 import { dismissEfspRefusal } from './panel/refusal.js';
+import { getEfspCorrelationStats } from './efsp-state.js';
+import { initAtoImport } from './ato-import.js';
+import { renderEfspScrambleLine } from './scramble.js';
+import { startEfspStalenessCheck } from './panel/staleness.js';
 
 // The feature modules live in panel/ (ESM-2b): state.js (shared state), staleness.js, tabs.js (Position and Bay
 // tabs, search), arrivals.js, create-strip.js, refusal.js (refusal banner, warning, mutation acks) and
@@ -74,33 +74,19 @@ function _renderCorrelationRate() {
 }
 
 export function initEfspPanel() {
-  els.efspPanelRoot = document.getElementById('efsp-panel');
-  els.positionTabs = document.getElementById('efsp-position-tabs');
-  els.bayTabs = document.getElementById('efsp-bay-tabs');
-  els.bayContent = document.getElementById('efsp-bay-content');
-  els.createStripInput = document.getElementById('efsp-new-strip-callsign');
-  els.createStripBtn = document.getElementById('efsp-create-strip-btn');
-  els.createStripMsg = document.getElementById('efsp-create-strip-msg');
-  els.createStripRole = document.getElementById('efsp-create-strip-role');
-  els.createStripStereo = document.getElementById('efsp-create-strip-stereo');
-  els.createStripBind = document.getElementById('efsp-create-strip-bind');
-  els.dotCommandInput = document.getElementById('efsp-dot-command-input');
-  els.dotCommandPreview = document.getElementById('efsp-dot-command-preview');
-  els.mutationError = document.getElementById('efsp-mutation-error');
-  els.mutationWarning = document.getElementById('efsp-mutation-warning');
-  els.connectionBanner = document.getElementById('efsp-connection-banner');
-  if (els.mutationError) {
+  _cachePanelElements();
+  if (_mutationErrorEl) {
     // Dismissible (F-103). The banner is its own dismiss target rather than
     // growing a ✕ child, because everything that reads it — the e2e helpers,
     // the Strip-level marker — reads its textContent, and a control inside it
     // would end up in that text.
-    els.mutationError.style.cursor = 'pointer';
-    els.mutationError.addEventListener('click', dismissEfspRefusal);
+    _mutationErrorEl.style.cursor = 'pointer';
+    _mutationErrorEl.addEventListener('click', dismissEfspRefusal);
   }
 
   _wireCreateStrip();
   _wireDotCommand();
-  if (typeof initAtoImport === 'function') initAtoImport(els.efspPanelRoot); // docs/adr/0071
+  if (typeof initAtoImport === 'function') initAtoImport(_efspPanelRootEl); // docs/adr/0071
   _loadStereoRoutes();
   _renderPositionTabs();
   startEfspStalenessCheck();

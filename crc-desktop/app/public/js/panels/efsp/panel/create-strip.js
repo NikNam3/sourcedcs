@@ -1,7 +1,7 @@
 'use strict';
 import { _callsignOfFdr } from './refusal.js';
+import { _createStripBindEl, _createStripBtnEl, _createStripInputEl, _createStripMsgEl, _createStripRoleEl, _createStripStereoEl } from './state.js';
 import { _resolveActingPositionId } from '../bay-view.js';
-import { createState, els } from './state.js';
 import { getActingPositions, sendEfspCreateStrip, sendEfspMutation } from '../efsp-ws.js';
 import { getAllEfspStrips, getEfspFdr, liveStripsForCallsign } from '../efsp-state.js';
 import { listStereoRoutesClient } from '../efsp-stereo-routes.js';
@@ -17,11 +17,15 @@ import { refreshAtoImportButton } from '../ato-import.js';
 // indistinguishable from a broken button — this doesn't have that failure
 // mode, and every rejection path is now visible instead of silent too.
 
+export let _pendingCreateStripMutationId = null;
 // Guards the flight-plan lookup in _submitCreateStrip() against a double-
 // submit while it's in flight (up to a few seconds — a real window a
 // second Enter/click could land in, unlike the near-instant validation
 // that runs before it).
 let _createStripLookupInFlight = false;
+// Callsign the duplicate-origination warning has already been shown for, so
+// a second press goes through. Cleared on any successful create.
+export let _pendingDuplicateCallsign = null;
 
 // §9.10's canned-route table (docs/adr/0050). Static squadron configuration:
 // it only changes when somebody edits a file and restarts crc-sync, so this
@@ -37,6 +41,7 @@ let _createStripLookupInFlight = false;
 // that means "the server you were talking to may not be the one you are
 // talking to now", so it is the right trigger — and it is free, because
 // _refreshStereoRoutes is a no-op re-render when nothing changed.
+export let _stereoRoutes = [];
 let _stereoRoutesInFlight = false;
 
 export function _loadStereoRoutes() {
@@ -49,7 +54,7 @@ export function _loadStereoRoutes() {
   _stereoRoutesInFlight = true;
   listStereoRoutesClient().then((routes) => {
     _stereoRoutesInFlight = false;
-    createState.stereoRoutes = Array.isArray(routes) ? routes : [];
+    _stereoRoutes = Array.isArray(routes) ? routes : [];
     _refreshCreateStripAvailability();
   });
 }
@@ -63,8 +68,8 @@ export function reloadEfspStereoRoutes() { _loadStereoRoutes(); }
 
 /** The stereo name currently picked in the toolbar, or '' for none. */
 function _selectedStereoName() {
-  if (!els.createStripStereo || els.createStripStereo.hidden) return '';
-  return els.createStripStereo.value || '';
+  if (!_createStripStereoEl || _createStripStereoEl.hidden) return '';
+  return _createStripStereoEl.value || '';
 }
 
 /**
@@ -85,9 +90,9 @@ export function _stereoEligibleOrigin(origin) {
 }
 
 export function _setCreateStripMsg(text, isError) {
-  if (!els.createStripMsg) return;
-  els.createStripMsg.textContent = text || '';
-  els.createStripMsg.classList.toggle('efsp-msg-error', !!isError);
+  if (!_createStripMsgEl) return;
+  _createStripMsgEl.textContent = text || '';
+  _createStripMsgEl.classList.toggle('efsp-msg-error', !!isError);
 }
 
 // WP4A (docs/adr/0014) started this as CTR self-originating ARRIVAL Strips
@@ -140,7 +145,7 @@ export function _createStripOrigin() {
   const available = _availableCreateStripOrigins();
   if (available.length === 0) return null;
   if (available.length === 1) return available[0]; // the common single-Position case — no picker was shown, nothing to read
-  const selectedKey = els.createStripRole && els.createStripRole.value;
+  const selectedKey = _createStripRoleEl && _createStripRoleEl.value;
   return available.find(o => _createStripOriginKey(o) === selectedKey) || available[0];
 }
 
@@ -168,7 +173,7 @@ export function _missionBindCandidates() {
 
 /** The fdrId the operator picked, or '' for today's standalone-origination path. */
 function _selectedBindFdrId() {
-  return (els.createStripBind && !els.createStripBind.hidden && els.createStripBind.value) || '';
+  return (_createStripBindEl && !_createStripBindEl.hidden && _createStripBindEl.value) || '';
 }
 
 /**
@@ -181,21 +186,21 @@ function _selectedBindFdrId() {
  * still on the ramp.
  */
 function _refreshMissionBindPicker(origin) {
-  if (!els.createStripBind) return;
+  if (!_createStripBindEl) return;
   const eligible = !!origin && origin.role === 'MISSION' && origin.actingPositionId === 'TAC_C2';
   const candidates = eligible ? _missionBindCandidates() : [];
   // Same "no empty picker to puzzle over" rule the stereo select follows.
-  els.createStripBind.hidden = !eligible || candidates.length === 0;
-  if (els.createStripBind.hidden) return;
+  _createStripBindEl.hidden = !eligible || candidates.length === 0;
+  if (_createStripBindEl.hidden) return;
 
-  const prev = els.createStripBind.value;
-  els.createStripBind.innerHTML = '';
+  const prev = _createStripBindEl.value;
+  _createStripBindEl.innerHTML = '';
   // Blank first, so an unbound mission line stays the default and today's
   // behaviour is never something you have to deselect into.
   const none = document.createElement('option');
   none.value = '';
   none.textContent = '— not bound to a flight —';
-  els.createStripBind.appendChild(none);
+  _createStripBindEl.appendChild(none);
   for (const s of candidates) {
     const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(s.fdrId) : null;
     const id = fdr && fdr.identity ? fdr.identity : {};
@@ -206,9 +211,9 @@ function _refreshMissionBindPicker(origin) {
     // and the route are on the row to tell them apart.
     const route = (fdr && fdr.filed && fdr.filed.route) || '';
     opt.textContent = [id.callsign || s.fdrId, id.beaconAssigned, route].filter(Boolean).join(' · ');
-    els.createStripBind.appendChild(opt);
+    _createStripBindEl.appendChild(opt);
   }
-  if (candidates.some(s => s.fdrId === prev)) els.createStripBind.value = prev;
+  if (candidates.some(s => s.fdrId === prev)) _createStripBindEl.value = prev;
 }
 
 /**
@@ -240,88 +245,88 @@ function _atoFirstCandidates(callsign) {
 }
 
 export function _refreshAtoFirstPicker(origin) {
-  if (!els.createStripBind || !els.createStripInput) return;
+  if (!_createStripBindEl || !_createStripInputEl) return;
   if (!origin || origin.actingPositionId !== 'OPS' || (origin.role || 'DEPARTURE') !== 'DEPARTURE') return;
-  const candidates = _atoFirstCandidates(els.createStripInput.value);
-  els.createStripBind.hidden = candidates.length === 0;
-  if (els.createStripBind.hidden) { els.createStripBind.value = ''; return; }
-  const prev = els.createStripBind.value;
-  els.createStripBind.innerHTML = '';
+  const candidates = _atoFirstCandidates(_createStripInputEl.value);
+  _createStripBindEl.hidden = candidates.length === 0;
+  if (_createStripBindEl.hidden) { _createStripBindEl.value = ''; return; }
+  const prev = _createStripBindEl.value;
+  _createStripBindEl.innerHTML = '';
   const none = document.createElement('option');
   none.value = '';
   none.textContent = '— a new flight —';
-  els.createStripBind.appendChild(none);
+  _createStripBindEl.appendChild(none);
   for (const fdr of candidates) {
     const opt = document.createElement('option');
     opt.value = fdr.fdrId;
     opt.textContent = `file against ATO mission ${fdr.ato.missionNumber || (fdr.mission && fdr.mission.missionNumber) || '?'} · ${fdr.identity.callsign} · ${fdr.identity.beaconAssigned}`;
-    els.createStripBind.appendChild(opt);
+    _createStripBindEl.appendChild(opt);
   }
-  if (candidates.some(f => f.fdrId === prev)) els.createStripBind.value = prev;
-  else els.createStripBind.value = candidates.length === 1 ? candidates[0].fdrId : '';
+  if (candidates.some(f => f.fdrId === prev)) _createStripBindEl.value = prev;
+  else _createStripBindEl.value = candidates.length === 1 ? candidates[0].fdrId : '';
 }
 
 export function _refreshCreateStripAvailability() {
-  if (!els.createStripInput || !els.createStripBtn) return;
+  if (!_createStripInputEl || !_createStripBtnEl) return;
   if (_createStripLookupInFlight) return; // don't fight the "Looking up flight plan…" message or re-enable mid-lookup — _submitCreateStrip owns this window
   const available = _availableCreateStripOrigins();
-  if (els.createStripRole) {
+  if (_createStripRoleEl) {
     // Only actually a CHOICE when 2+ origins are simultaneously reachable
     // (a combined-Position controller) — the common single-Position case
     // keeps today's minimal toolbar, nothing to pick.
-    els.createStripRole.hidden = available.length <= 1;
-    if (!els.createStripRole.hidden) {
-      const prevKey = els.createStripRole.value;
-      els.createStripRole.innerHTML = '';
+    _createStripRoleEl.hidden = available.length <= 1;
+    if (!_createStripRoleEl.hidden) {
+      const prevKey = _createStripRoleEl.value;
+      _createStripRoleEl.innerHTML = '';
       for (const o of available) {
         const opt = document.createElement('option');
         opt.value = _createStripOriginKey(o);
         opt.textContent = o.label;
-        els.createStripRole.appendChild(opt);
+        _createStripRoleEl.appendChild(opt);
       }
       // Preserve the operator's prior choice across a Position-set change
       // (e.g. picking up a third Position) when it's still valid; default
       // to the first option otherwise — never silently reset a deliberate
       // choice out from under them.
-      if (available.some(o => _createStripOriginKey(o) === prevKey)) els.createStripRole.value = prevKey;
+      if (available.some(o => _createStripOriginKey(o) === prevKey)) _createStripRoleEl.value = prevKey;
     }
   }
   const origin = _createStripOrigin();
-  if (els.createStripStereo) {
+  if (_createStripStereoEl) {
     // Hidden unless a table is actually installed AND the selected origin
     // could use one. The shipped table is empty, so for a squadron that has
     // not written one this control never appears at all — no empty picker
     // to puzzle over, and the toolbar is byte-identical to before.
-    const usable = createState.stereoRoutes.length > 0 && _stereoEligibleOrigin(origin);
-    els.createStripStereo.hidden = !usable;
+    const usable = _stereoRoutes.length > 0 && _stereoEligibleOrigin(origin);
+    _createStripStereoEl.hidden = !usable;
     if (usable) {
-      const prevName = els.createStripStereo.value;
-      els.createStripStereo.innerHTML = '';
+      const prevName = _createStripStereoEl.value;
+      _createStripStereoEl.innerHTML = '';
       // Blank first, so "no stereo" stays the default and the existing
       // hand-filing path is never something you have to deselect into.
       const none = document.createElement('option');
       none.value = '';
       none.textContent = '— no stereo —';
-      els.createStripStereo.appendChild(none);
-      for (const r of createState.stereoRoutes) {
+      _createStripStereoEl.appendChild(none);
+      for (const r of _stereoRoutes) {
         const opt = document.createElement('option');
         opt.value = r.name;
         opt.textContent = r.description ? `${r.name} — ${r.description}` : r.name;
-        els.createStripStereo.appendChild(opt);
+        _createStripStereoEl.appendChild(opt);
       }
       // Same "never silently reset a deliberate choice" rule the role
       // select above follows.
-      if (createState.stereoRoutes.some(r => r.name === prevName)) els.createStripStereo.value = prevName;
+      if (_stereoRoutes.some(r => r.name === prevName)) _createStripStereoEl.value = prevName;
     }
   }
   _refreshMissionBindPicker(origin);
   if (typeof refreshAtoImportButton === 'function') refreshAtoImportButton(); // docs/adr/0071
   _refreshAtoFirstPicker(origin); // docs/adr/0071 — OPS files against an ATO mission
-  els.createStripInput.disabled = !origin;
-  els.createStripBtn.disabled = !origin;
+  _createStripInputEl.disabled = !origin;
+  _createStripBtnEl.disabled = !origin;
   if (!origin) {
     _setCreateStripMsg('OPS, APP or CTR only — select one in Panels to create Strips', true);
-  } else if (!createState.pendingMutationId) {
+  } else if (!_pendingCreateStripMutationId) {
     // Clear a stale "OPS/APP/CTR only"/validation message once one is
     // selected — but never stomp "Creating…" while an attempt is still in
     // flight.
@@ -354,7 +359,7 @@ export function convertStripToArrival(strip) {
 }
 
 async function _submitCreateStrip() {
-  if (!els.createStripInput || _createStripLookupInFlight) return;
+  if (!_createStripInputEl || _createStripLookupInFlight) return;
 
   const origin = _createStripOrigin();
   if (!origin) {
@@ -371,7 +376,7 @@ async function _submitCreateStrip() {
   // problem because it has no second source of identity to disagree with.
   const bindFdrId = _selectedBindFdrId();
   const boundCallsign = bindFdrId ? _callsignOfFdr(bindFdrId) : '';
-  const callsign = els.createStripInput.value.trim().toUpperCase();
+  const callsign = _createStripInputEl.value.trim().toUpperCase();
   if (bindFdrId) {
     // Not demanded — and not silently discarded either. Only the controller
     // knows which of the two flights they meant.
@@ -404,13 +409,13 @@ async function _submitCreateStrip() {
   // very thing the warning tells you to do instead. Leaving it in would
   // make the good path harder than the bad one.
   const existing = bindFdrId ? [] : liveStripsForCallsign(callsign);
-  if (existing.length > 0 && createState.pendingDuplicateCallsign !== callsign) {
-    createState.pendingDuplicateCallsign = callsign;
+  if (existing.length > 0 && _pendingDuplicateCallsign !== callsign) {
+    _pendingDuplicateCallsign = callsign;
     const where = existing.map(s => `${s.facilityId || '?'}/${s.ownerPositionId}`).join(', ');
     _setCreateStripMsg(`${callsign} already has a live Strip at ${where} — press again to create another anyway`, true);
     return;
   }
-  createState.pendingDuplicateCallsign = null;
+  _pendingDuplicateCallsign = null;
 
   // Flight-plan pre-fill (guide §10.1 "auto-population — do it
   // aggressively", §10.5 provenance fallback chains) — DEPARTURE-role
@@ -441,8 +446,8 @@ async function _submitCreateStrip() {
   let seed = {};
   if (!stereoRouteName && origin.role !== 'ARRIVAL' && origin.role !== 'OVERFLIGHT' && origin.role !== 'MISSION' && typeof lookupFlightPlanClient === 'function') {
     _createStripLookupInFlight = true;
-    if (els.createStripInput) els.createStripInput.disabled = true;
-    if (els.createStripBtn) els.createStripBtn.disabled = true;
+    if (_createStripInputEl) _createStripInputEl.disabled = true;
+    if (_createStripBtnEl) _createStripBtnEl.disabled = true;
     _setCreateStripMsg('Looking up flight plan…', false);
     try {
       const result = await lookupFlightPlanClient(callsign);
@@ -452,8 +457,8 @@ async function _submitCreateStrip() {
       // header comment) — this finally is a defense-in-depth backstop, not
       // an expected path, so the form can never get stuck disabled.
       _createStripLookupInFlight = false;
-      if (els.createStripInput) els.createStripInput.disabled = false;
-      if (els.createStripBtn) els.createStripBtn.disabled = false;
+      if (_createStripInputEl) _createStripInputEl.disabled = false;
+      if (_createStripBtnEl) _createStripBtnEl.disabled = false;
     }
   }
 
@@ -482,11 +487,11 @@ async function _submitCreateStrip() {
   const createOp = bindFdrId
     ? { kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', role: origin.role, fdrId: bindFdrId, initialState: origin.initialState || undefined }
     : { kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', role: origin.role, fdr, initialState: origin.initialState || undefined };
-  createState.pendingMutationId = sendEfspCreateStrip(origin.actingPositionId, createOp, origin.facilityId);
-  els.createStripInput.value = '';
-  if (els.createStripStereo) els.createStripStereo.value = '';
-  if (els.createStripBind) els.createStripBind.value = '';
-  createState.pendingDuplicateCallsign = null;
+  _pendingCreateStripMutationId = sendEfspCreateStrip(origin.actingPositionId, createOp, origin.facilityId);
+  _createStripInputEl.value = '';
+  if (_createStripStereoEl) _createStripStereoEl.value = '';
+  if (_createStripBindEl) _createStripBindEl.value = '';
+  _pendingDuplicateCallsign = null;
   _setCreateStripMsg(
     bindFdrId ? (origin.role === 'MISSION' ? `Fragging a mission line for ${boundCallsign || 'this flight'}…` : `Filing ${boundCallsign} against its ATO mission…`)
       : stereoRouteName ? `Creating (${stereoRouteName})…`
@@ -516,16 +521,19 @@ export function createStripFromFiledPlan(plan) {
     departureAirport: '', destinationAirport: '', route: '', requestedAltitude: '',
     ...(plan.seed || {}),
   };
-  createState.pendingMutationId = sendEfspCreateStrip('OPS', {
+  _pendingCreateStripMutationId = sendEfspCreateStrip('OPS', {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', fdr,
   }, 'INCIRLIK');
   _setCreateStripMsg('Creating ' + plan.callsign + ' (flight plan found)…', false);
 }
 
 export function _wireCreateStrip() {
-  if (!els.createStripBtn || !els.createStripInput) return;
-  els.createStripBtn.addEventListener('click', _submitCreateStrip);
-  els.createStripInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') _submitCreateStrip(); });
-  els.createStripInput.addEventListener('input', () => _refreshAtoFirstPicker(_createStripOrigin())); // docs/adr/0071
+  if (!_createStripBtnEl || !_createStripInputEl) return;
+  _createStripBtnEl.addEventListener('click', _submitCreateStrip);
+  _createStripInputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') _submitCreateStrip(); });
+  _createStripInputEl.addEventListener('input', () => _refreshAtoFirstPicker(_createStripOrigin())); // docs/adr/0071
   _refreshCreateStripAvailability();
 }
+
+export function _setPendingCreateStripMutationId(v) { _pendingCreateStripMutationId = v; }
+export function _setPendingDuplicateCallsign(v) { _pendingDuplicateCallsign = v; }

@@ -1,7 +1,7 @@
 'use strict';
-import { _setCreateStripMsg } from './create-strip.js';
+import { _mutationErrorEl, _mutationWarningEl } from './state.js';
+import { _pendingCreateStripMutationId, _setCreateStripMsg, _setPendingCreateStripMutationId } from './create-strip.js';
 import { blockLabelFor } from '../strip-template.js';
-import { createState, els } from './state.js';
 import { getEfspFdr, getEfspStrip } from '../efsp-state.js';
 import { renderAllOpenEfspBays } from '../bay-view.js';
 
@@ -143,14 +143,14 @@ export function _showMutationError(reason, detail, context) {
   // otherwise stand forever with nothing to clear it.
   clearTimeout(_mutationErrorClearTimer);
   _mutationErrorClearTimer = setTimeout(dismissEfspRefusal, MUTATION_ERROR_VISIBLE_MS);
-  if (!els.mutationError) return;
-  els.mutationError.textContent = _currentRefusal.message;
+  if (!_mutationErrorEl) return;
+  _mutationErrorEl.textContent = _currentRefusal.message;
   // The machine code stays reachable — still greppable against crc-sync's
   // src/efsp/, just not the thing a controller has to read first.
-  els.mutationError.title = `${reason || 'Rejected'}${detail ? `: ${detail}` : ''} · click to dismiss`;
-  els.mutationError.dataset.reason = reason || '';
-  if (subject.stripId) els.mutationError.dataset.stripId = subject.stripId;
-  else delete els.mutationError.dataset.stripId;
+  _mutationErrorEl.title = `${reason || 'Rejected'}${detail ? `: ${detail}` : ''} · click to dismiss`;
+  _mutationErrorEl.dataset.reason = reason || '';
+  if (subject.stripId) _mutationErrorEl.dataset.stripId = subject.stripId;
+  else delete _mutationErrorEl.dataset.stripId;
 }
 
 /**
@@ -163,11 +163,11 @@ export function dismissEfspRefusal() {
   _mutationErrorClearTimer = null;
   const had = _currentRefusal;
   _currentRefusal = null;
-  if (els.mutationError) {
-    els.mutationError.textContent = '';
-    els.mutationError.title = '';
-    els.mutationError.dataset.reason = '';
-    delete els.mutationError.dataset.stripId;
+  if (_mutationErrorEl) {
+    _mutationErrorEl.textContent = '';
+    _mutationErrorEl.title = '';
+    _mutationErrorEl.dataset.reason = '';
+    delete _mutationErrorEl.dataset.stripId;
   }
   if (had && had.stripId && typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
 }
@@ -231,10 +231,10 @@ const MUTATION_WARNING_MESSAGES = {
 };
 
 export function _showMutationWarning(warning) {
-  if (!els.mutationWarning) return;
+  if (!_mutationWarningEl) return;
   clearTimeout(_mutationWarningClearTimer);
-  els.mutationWarning.textContent = MUTATION_WARNING_MESSAGES[warning] || warning;
-  _mutationWarningClearTimer = setTimeout(() => { els.mutationWarning.textContent = ''; }, 6000);
+  _mutationWarningEl.textContent = MUTATION_WARNING_MESSAGES[warning] || warning;
+  _mutationWarningClearTimer = setTimeout(() => { _mutationWarningEl.textContent = ''; }, 6000);
 }
 
 /**
@@ -263,8 +263,8 @@ export function notifyEfspMutationAck(clientMutationId, result) {
   // only place the refused Strip and the refused value exist. F-103/F-207.
   if (!result.ok) _showMutationError(result.reason || 'Rejected', result.detail, { pending: result.pending });
   else if (result.warning) _showMutationWarning(result.warning);
-  if (clientMutationId !== createState.pendingMutationId) return;
-  createState.pendingMutationId = null;
+  if (clientMutationId !== _pendingCreateStripMutationId) return;
+  _setPendingCreateStripMutationId(null);
   // `detail` carries the only part worth reading for a whole class of
   // rejection — "VALIDATION_ERROR" alone doesn't distinguish a malformed
   // callsign from "PACK9 is not a configured stereo route". It was being

@@ -1,5 +1,5 @@
 'use strict';
-import { _activeBayId, _activePositionTab, _setActiveBayId, _setActivePositionTab, els } from './state.js';
+import { _activeBayId, _activePositionTab, _bayContentEl, _bayTabsEl, _positionTabsEl, _setActiveBayId, _setActivePositionTab } from './state.js';
 import { _renderArrivalsLine } from './arrivals.js';
 import { efspLinesWithOthers, getAllEfspStrips, getEfspBays, withOthersBayId } from '../efsp-state.js';
 import { getActingPositions } from '../efsp-ws.js';
@@ -120,12 +120,12 @@ export function _runEfspSearch(query) {
 export function getActiveEfspSearchQuery() { return _searchQuery; }
 
 export function _renderPositionTabs() {
-  if (!els.positionTabs) return; // not initialized yet — initEfspPanel() hasn't run
+  if (!_positionTabsEl) return; // not initialized yet — initEfspPanel() hasn't run
   const byPosition = _positionsWithBays();
   const heldPositionIds = Object.keys(byPosition);
   if (!heldPositionIds.includes(_activePositionTab)) _setActivePositionTab(heldPositionIds[0] || null);
 
-  els.positionTabs.innerHTML = '';
+  _positionTabsEl.innerHTML = '';
   for (const { positionId, held } of computePositionTabs(getEfspBays(), getActingPositions())) {
     const tab = document.createElement('button');
     tab.className = 'efsp-position-tab'
@@ -150,14 +150,14 @@ export function _renderPositionTabs() {
       // at a Position they do not hold. It exists to be dropped on.
       tab.title = `${positionId} — drop a Strip here to hand it off (you are not holding this Position)`;
     }
-    els.positionTabs.appendChild(tab);
+    _positionTabsEl.appendChild(tab);
   }
 
   if (heldPositionIds.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'efsp-empty';
     empty.textContent = 'No Position held — select one in Panels.';
-    els.positionTabs.appendChild(empty);
+    _positionTabsEl.appendChild(empty);
   }
 
   _renderBayTabs();
@@ -165,7 +165,7 @@ export function _renderPositionTabs() {
 }
 
 function _renderBayTabs() {
-  if (!els.bayTabs || !els.bayContent) return;
+  if (!_bayTabsEl || !_bayContentEl) return;
   const bays = _positionsWithBays()[_activePositionTab] || [];
   if (!bays.some(b => b.bayId === _activeBayId)) _setActiveBayId(bays[0] ? bays[0].bayId : null);
 
@@ -179,7 +179,7 @@ function _renderBayTabs() {
     _refreshPositionTabMarks();
   }
 
-  els.bayTabs.innerHTML = '';
+  _bayTabsEl.innerHTML = '';
   for (const bay of bays) {
     const isSearchBay = bay.bayId.endsWith('-search');
     const isOpsFiledBay = bay.bayId === 'ops-filed';
@@ -209,7 +209,7 @@ function _renderBayTabs() {
       _setActiveBayId(bay.bayId);
       _renderBayTabs();
     });
-    els.bayTabs.appendChild(tab);
+    _bayTabsEl.appendChild(tab);
 
     if (isSearchBay) {
       const closeBtn = document.createElement('button');
@@ -217,17 +217,17 @@ function _renderBayTabs() {
       closeBtn.textContent = '×';
       closeBtn.title = 'Close search';
       closeBtn.addEventListener('click', (e) => { e.stopPropagation(); _runEfspSearch(''); });
-      els.bayTabs.appendChild(closeBtn);
+      _bayTabsEl.appendChild(closeBtn);
     }
   }
 
   _renderArrivalsLine();
 
   if (_activeBayId) {
-    setOpenEfspBays([{ containerEl: els.bayContent, bayId: _activeBayId }]);
-    renderBay(els.bayContent, _activeBayId);
+    setOpenEfspBays([{ containerEl: _bayContentEl, bayId: _activeBayId }]);
+    renderBay(_bayContentEl, _activeBayId);
   } else {
-    els.bayContent.innerHTML = '<div class="efsp-empty">No Bay available.</div>';
+    _bayContentEl.innerHTML = '<div class="efsp-empty">No Bay available.</div>';
     setOpenEfspBays([]);
   }
 }
@@ -270,8 +270,8 @@ function _stripCountForPosition(positionId) {
 }
 
 function _refreshPositionTabMarks() {
-  if (!els.positionTabs || !els.positionTabs.children) return;
-  for (const tab of els.positionTabs.children) {
+  if (!_positionTabsEl || !_positionTabsEl.children) return;
+  for (const tab of _positionTabsEl.children) {
     const positionId = tab.dataset && tab.dataset.positionId;
     if (!positionId) continue;
     const held = !String(tab.className).includes('efsp-position-tab-drop-only');
@@ -282,9 +282,9 @@ function _refreshPositionTabMarks() {
 
 /** Whether the Strip panel is actually on screen (a docked tab behind another is not). */
 function _isEfspPanelShowing() {
-  if (!els.bayContent) return false;
-  if (els.bayContent.isConnected === false) return false;
-  return els.bayContent.offsetParent !== null;
+  if (!_bayContentEl) return false;
+  if (_bayContentEl.isConnected === false) return false;
+  return _bayContentEl.offsetParent !== null;
 }
 
 /** The Bay the controller is looking at right now, or null when the panel is hidden. */
