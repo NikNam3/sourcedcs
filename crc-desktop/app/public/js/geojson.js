@@ -41,7 +41,9 @@ function buildAssignedLine(fdr) {
   const alt = active(fdr.clearance.altitude);
   const hdg = active(fdr.clearance.heading);
   const parts = [];
-  if (alt && Number.isFinite(alt.parsed)) parts.push('A' + String(Math.round(alt.parsed / 100)).padStart(3, '0'));
+  const h = (ft) => String(Math.round(ft / 100)).padStart(3, '0');
+  if (alt && alt.block) parts.push(`A${h(alt.block.lowFt)}B${h(alt.block.highFt)}`);
+  else if (alt && Number.isFinite(alt.parsed)) parts.push('A' + h(alt.parsed));
   if (hdg && Number.isFinite(hdg.parsed)) parts.push('H' + String(hdg.parsed).padStart(3, '0'));
   return parts.join(' ');
 }

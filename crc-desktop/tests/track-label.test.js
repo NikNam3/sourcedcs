@@ -80,3 +80,13 @@ test('an assigned altitude is written the way a controller writes it', () => {
   assert.equal(L.assignedAltText(18000), 'FL180');
   assert.equal(L.assignedAltText(5000), '5,000');
 });
+
+test('an assigned altitude block (docs/adr/0091) is written FL220-FL240, and A220B240 in a STARS block', () => {
+  const block = { lowFt: 22000, highFt: 24000 };
+  assert.equal(L.assignedBlockText(block), 'FL220-FL240');
+  assert.equal(L.assignedBlockText({ lowFt: 5000, highFt: 8000 }), '5,000-8,000');
+  assert.equal(L.atcAssignedText({ altFt: null, altBlock: block, hdg: 250 }, 23000), 'A220B240 H250', 'inside the block: no arrow');
+  assert.equal(L.atcAssignedText({ altFt: null, altBlock: block, hdg: null }, 15000), 'A220B240↑');
+  assert.equal(L.atcAssignedText({ altFt: null, altBlock: block, hdg: null }, 26000), 'A220B240↓');
+  assert.equal(L.atcAssignedText({ altFt: null, altBlock: block, hdg: null }, 24100), 'A220B240', 'edge tolerance');
+});

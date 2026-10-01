@@ -210,7 +210,8 @@ function _refreshTrackAlerts(trackId) {
   const alt = fdr && fdr.clearance && active(fdr.clearance.altitude);
   const hdg = fdr && fdr.clearance && active(fdr.clearance.heading);
   const parts = [];
-  if (alt && Number.isFinite(alt.parsed)) parts.push(`ALT ${assignedAltText(alt.parsed)}`);
+  if (alt && alt.block) parts.push(`ALT ${assignedBlockText(alt.block)}`);
+  else if (alt && Number.isFinite(alt.parsed)) parts.push(`ALT ${assignedAltText(alt.parsed)}`);
   if (hdg && Number.isFinite(hdg.parsed)) parts.push(`HDG ${String(hdg.parsed).padStart(3, '0')}`);
   const $key = document.getElementById('tp-asgn-key');
   const $val = document.getElementById('tp-asgn');
