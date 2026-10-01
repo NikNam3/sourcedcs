@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
+// Tests drive tick(t) with a virtual instant; the wall clock (docs/adr/0096) follows it, so only the
+// divergence tests below separate the two.
+const wallFollows = (m) => { const raw = m.tick.bind(m); m.tick = (t, w = t) => raw(t, w); return m; };
+
 // docs/adr/0058 — conformance: only what is wrong is ever reported.
 const { evaluateConformance, headingDiff, FPM_PER_MS, MS_PER_KT } = await import('../src/efsp/conformance.js');
 const { loadAlertingConfig } = await import('../src/alerting-config.js');
@@ -113,6 +117,8 @@ test('the monitor reads correlation, track and clearance, and reports a flight o
     gridToMagnetic: (deg) => deg, // the frame conversion has its own tests below
     config: cfg,
   });
+  wallFollows(monitor);
+  monitor.tick(0); // first sight of the clearance: the wall-clock grace starts here (docs/adr/0096)
   assert.equal(monitor.tick(31 * S), false, 'deviating, but not for 10 s yet');
   assert.equal(monitor.tick(41 * S), true);
   assert.deepEqual(monitor.getAll().map(r => [r.fdrId, r.alerts[0].kind]), [['f1', 'HEADING']]);
@@ -147,6 +153,7 @@ async function syriaMonitor(course, { theatre = 'Syria', at = [37.0, 35.43] } = 
     gridToMagnetic: (deg, lat, lon) => ctx.gridToMagnetic(deg, lat, lon),
     config: cfg,
   });
+  wallFollows(monitor);
   // The grid course a pilot flying 050 magnetic at this spot actually shows.
   const onHeadingGrid = 50 + ctx.variationAt(...at) - ctx.convergenceAt(...at);
   return { monitor, track, onHeadingGrid };
@@ -184,6 +191,7 @@ test('unknown magnetic course (no projection for the theater, or no converter): 
     correlationStore: { getAll: () => [{ fdrId: 'f1', trackId: 't1', state: 'CORRELATED' }] },
     weather: () => ({}), transitionAltFt: () => 18000, indicatedAltFt, config: cfg,
   });
+  wallFollows(bare);
   for (let t = 0; t <= 120; t += 5) bare.tick(t * S);
   assert.deepEqual(bare.getAll(), [], 'no converter injected: never a cross-frame compare');
 });

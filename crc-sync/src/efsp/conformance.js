@@ -47,12 +47,18 @@ function headingDiff(a, b) {
  * @param {object} input  { hdg: {parsed, at}|null, alt: {parsed, block?: {lowFt, highFt}, at}|null,
  *                          course, groundSpeedMs, verticalSpeedMs, altFt }
  * @param {object} mem    per-flight memory (mutated)
- * @param {number} now    ms
+ * @param {number} now    ms, mission time (stamps, `since`)
+ * @param {number} [wallNow] ms, wall time (docs/adr/0096): only the heading grace is measured on it; defaults to `now`
  * @param {object} cfg    thresholds (alerting-config.js)
  * @returns {object[]} the alerts that apply now, [] when conforming
  */
-function evaluateConformance(input, mem, now, cfg) {
+function evaluateConformance(input, mem, now, cfg, wallNow = now) {
   const alerts = [];
+  // The grace is a pure duration, so it runs on the wall clock from the moment the
+  // monitor first sees this clearance (its own `at` is mission time, docs/adr/0096).
+  if (input.hdg && Number.isFinite(input.hdg.parsed) && mem.hdgWallFor !== input.hdg.at) {
+    mem.hdgWallFor = input.hdg.at; mem.hdgSeenWall = wallNow;
+  }
   if (!Number.isFinite(input.groundSpeedMs) || input.groundSpeedMs < cfg.minGroundSpeedKt * MS_PER_KT) {
     mem.hdgDevSince = null; mem.wrongSince = null; mem.bustSince = null;
     return alerts;
@@ -65,7 +71,7 @@ function evaluateConformance(input, mem, now, cfg) {
     if (mem.hdgFor !== hdg.at) { mem.hdgFor = hdg.at; mem.hdgCaptured = false; mem.hdgDevSince = null; }
     const off = headingDiff(input.course, hdg.parsed);
     if (off <= cfg.headingToleranceDeg) mem.hdgCaptured = true;
-    const inGrace = !mem.hdgCaptured && now - hdg.at < cfg.headingGraceSec * 1000;
+    const inGrace = !mem.hdgCaptured && wallNow - mem.hdgSeenWall < cfg.headingGraceSec * 1000;
     if (off > cfg.headingToleranceDeg && !inGrace) {
       if (mem.hdgDevSince == null) mem.hdgDevSince = now;
       if (now - mem.hdgDevSince >= cfg.headingPersistSec * 1000) {
@@ -127,7 +133,7 @@ function evaluateConformance(input, mem, now, cfg) {
 class ConformanceMonitor {
   /**
    * @param {object} deps { trackStore, fdrStore, correlationStore, weather: () => {pressurePa,tempK},
-   *                        transitionAltFt: () => number, indicatedAltFt, config, clock?,
+   *                        transitionAltFt: () => number, indicatedAltFt, config, clock?, wallClock?,
    *                        gridToMagnetic?: (gridDeg, lat, lon) => number|null }
    * `gridToMagnetic` turns DCS's GRID course into magnetic (server.js passes
    * theater-context.js's, docs/adr/0085). Without it every answer is
@@ -135,10 +141,11 @@ class ConformanceMonitor {
    */
   constructor(deps) {
     this._d = deps;
-    // The mission clock (docs/adr/0079): the heading grace period runs from
-    // the clearance's own `at`, which is mission time, and an alert's `since`
-    // is shown to controllers.
+    // The mission clock (docs/adr/0079): an alert's `since` is shown to
+    // controllers. The heading grace is a pure duration and runs on the wall
+    // clock (docs/adr/0096).
     this._clock = deps.clock || WALL_CLOCK;
+    this._wallClock = deps.wallClock || WALL_CLOCK; // docs/adr/0096
     this._gridToMagnetic = deps.gridToMagnetic || (() => null);
     this._mem = new Map();    // fdrId -> memory
     this._alerts = new Map(); // fdrId -> alerts[]
@@ -150,7 +157,7 @@ class ConformanceMonitor {
   }
 
   /** @returns {boolean} whether any flight's alerts changed */
-  tick(now = this._clock.now()) {
+  tick(now = this._clock.now(), wallNow = this._wallClock.now()) {
     const { trackStore, fdrStore, correlationStore, config } = this._d;
     const seen = new Set();
     let changed = false;
@@ -168,7 +175,7 @@ class ConformanceMonitor {
         alt: activeClearanceEntry(fdr, 'altitude'),
         course: Number.isFinite(track.course) ? this._gridToMagnetic(track.course, track.lat, track.lon) : null,
         groundSpeedMs: track.groundSpeed, verticalSpeedMs: track.verticalSpeed, altFt,
-      }, mem, now, config);
+      }, mem, now, config, wallNow);
       changed = this._set(record.fdrId, alerts) || changed;
     }
     for (const fdrId of [...this._alerts.keys()]) {

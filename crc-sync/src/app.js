@@ -35,7 +35,7 @@ const { ConformanceMonitor } = require('./efsp/conformance');
 const { StcaMonitor } = require('./stca');
 const { loadAlertingConfig } = require('./alerting-config');
 const { indicatedAltFt } = require('./altimetry');
-const { MissionClock } = require('./mission-clock');
+const { MissionClock, WALL_CLOCK } = require('./mission-clock');
 const { MissionSession } = require('./mission-session');
 const { loadTheaters } = require('./theaters');
 const { TheaterContext } = require('./theater-context');
@@ -444,6 +444,7 @@ function createApp(deps = {}) {
   const alertingConfig = loadAlertingConfig();
   const conformanceMonitor = new ConformanceMonitor({
     clock: missionClock,
+    wallClock: WALL_CLOCK,
     trackStore,
     fdrStore: efsp.fdrStore,
     correlationStore: efsp.correlationStore,
@@ -459,6 +460,7 @@ function createApp(deps = {}) {
   // controller advances (§10.3).
   const surveillanceHints = deps.surveillanceHints === null ? null : (deps.surveillanceHints || new SurveillanceHintMonitor({
     clock: missionClock,
+    wallClock: WALL_CLOCK,
     trackStore,
     correlationStore: efsp.correlationStore,
     boardStoreFor: efsp.boardStoreFor,
@@ -678,9 +680,9 @@ function createApp(deps = {}) {
     } },
     { name: 'correlation', periodMs: CORRELATION_TICK_MS, tick: () => correlationReconciler.tick() },
     { name: 'carrier', periodMs: 1000, tick: () => carrierTick.tick() },
-    // Conformance runs on the mission clock — its grace period is measured from
-    // the clearance's own timestamp, which is mission time, and the `since` it
-    // reports is shown to controllers. STCA stays on the wall clock: it only
+    // Conformance and the hints stamp mission time (the `since` they report is shown to
+    // controllers); their pure durations (the heading grace, the airborne hold, staleness)
+    // run on the injected wall clock (docs/adr/0096). STCA stays on the wall clock: it only
     // compares track ages, which tracks.js stamps in wall time, and shows no time
     // of day at all.
     { name: 'conformance-stca', periodMs: 1000, tick: () => {

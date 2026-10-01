@@ -74,11 +74,13 @@ class SurveillanceHintMonitor {
    * @param {()=>object|null} deps.getMissionData
    * @param {{airborne:object, staleness:object}} deps.config  surveillance-hints-config.js
    * @param {object} [deps.clock]  the mission clock (docs/adr/0079)
+   * @param {object} [deps.wallClock]  the wall clock (docs/adr/0096): the hold and the staleness duration
    * @param {(episode:object)=>void} [deps.onStaleness]
    */
   constructor(deps) {
     this._d = deps;
     this._clock = deps.clock || WALL_CLOCK;
+    this._wallClock = deps.wallClock || WALL_CLOCK;
     this._cfg = deps.config;
     this._onStaleness = deps.onStaleness || (() => {});
     this._mem = new Map();   // stripId -> { phase: {instant, since}, episode }
@@ -90,7 +92,8 @@ class SurveillanceHintMonitor {
   getAll() { return [...this._hints.values()]; }
 
   /** Runs one pass. @returns {boolean} true when the hints changed. */
-  tick(now = this._clock.now()) {
+  tick(now = this._clock.now(), wallNow = this._wallClock.now()) {
+    // docs/adr/0096: `now` (mission) is what gets stamped and shown; `wallNow` only measures how long.
     const d = this._d;
     const missionData = d.getMissionData ? d.getMissionData() : null;
     const seen = new Set();
@@ -103,13 +106,13 @@ class SurveillanceHintMonitor {
         const expected = (EXPECTS[strip.role] || {})[strip.state];
         if (!expected) continue;
         seen.add(strip.stripId);
-        const mem = this._mem.get(strip.stripId) || { phase: { instant: null, since: now }, episode: null };
+        const mem = this._mem.get(strip.stripId) || { phase: { instant: null, since: wallNow }, episode: null };
         this._mem.set(strip.stripId, mem);
 
         const trackId = d.correlationStore.correlatedTrackId(strip.fdrId);
         const track = trackId ? d.trackStore.get(trackId) : null;
         const observed = track
-          ? debouncedPhase(mem.phase, instantPhase(track, missionData, this._cfg.airborne), now, this._cfg.airborne).phase
+          ? debouncedPhase(mem.phase, instantPhase(track, missionData, this._cfg.airborne), wallNow, this._cfg.airborne).phase
           : PHASES.UNKNOWN;
         if (!track) { mem.phase.instant = null; }
 
@@ -117,7 +120,7 @@ class SurveillanceHintMonitor {
         if (!contradicts) { mem.episode = null; continue; }
 
         if (!mem.episode || mem.episode.stripState !== strip.state || mem.episode.observed !== observed) {
-          mem.episode = { stripState: strip.state, observed, since: now, logged: false };
+          mem.episode = { stripState: strip.state, observed, since: now, wallSince: wallNow, logged: false };
         }
         const base = {
           stripId: strip.stripId, fdrId: strip.fdrId, facilityId, positionId: strip.ownerPositionId,
@@ -129,7 +132,7 @@ class SurveillanceHintMonitor {
           hints.set(`${strip.stripId}|chip`, { ...base, kind: 'AIRBORNE_ADVANCE', toState: ADVANCE_TO[strip.role] });
         }
 
-        const durationMs = now - mem.episode.since;
+        const durationMs = wallNow - mem.episode.wallSince;
         if (durationMs >= this._cfg.staleness.afterSec * 1000) {
           hints.set(`${strip.stripId}|stale`, { ...base, kind: 'STALE', afterSec: this._cfg.staleness.afterSec });
           if (!mem.episode.logged) {
