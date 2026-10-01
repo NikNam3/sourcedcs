@@ -126,7 +126,7 @@ strip type shows the three assignments: DEPARTURE gains `9A-VECTOR` and `9A-SPEE
 ### 4. Eligibility and permissions (authority registry, ADR 0095's AUTH families)
 
 - **Eligible states** live in each strip-type family file as `splitEligibleStates` / `joinEligibleStates`
-  **[desk Q-SJ2]**. Default: DEPARTURE `DEPARTED`; ARRIVAL `INBOUND`; OVERFLIGHT `INBOUND`, `IN_SECTOR`; MISSION none
+  **[desk Q-SJ2]**. Default: DEPARTURE `DEPARTED`, `HANDED_OFF` (APP works an airborne departure at `HANDED_OFF`); ARRIVAL `INBOUND`; OVERFLIGHT `INBOUND`, `IN_SECTOR`; MISSION none
   (the MRU side is MARSA: it records nothing, H89); MARSHAL, FINAL, PATTERN none (carrier control is its own regime,
   H92/H93). A family without the key refuses (no silent default; a test holds every family to declaring it, as
   `COUNTABLE_PRE_DROP_STATES` does). Join additionally requires both Strips' types to be join-eligible; they need not be
