@@ -467,12 +467,12 @@ affected chain is cut after it (the supervisor merges it between lanes).
 |---|---|---|---|---|
 | 1 | L19 airborne hold and staleness, conformance heading grace on the wall clock | R3-16, S3-3 | TIME-B | **given** (human); re-record in the commit |
 | 2 | Back-compat removal; a missing rule is a loud startup error | ARCH-D5 | BACKCOMPAT | **given** (human) |
-| 3 | `_callsignOfFdr` / `_el`: which variant each panel uses once they are module-private | none yet | ESM-1 keeps today's effective behaviour; any change waits for the human | **ask** (§9 point 3) |
-| 4 | Extend sync, epoch and delta resync to every store that has none (beyond SYNC's structural unification) | S3-1 says "one mechanism", not "every store resyncs" | SYNC-B, a follow-up after W5 | **ask** |
-| 5 | Per-Facility heartbeat (today only the default Facility's seq is named) | S-UIB limit ("for the refactor's wire phase") | WIRE-B, a follow-up after W2 | **ask** (the supervisor proposes; no human ruling) |
-| 6 | A missing or invalid facility JSON is a startup error, not a silent fallback to literals | S3-6 + ARCH-D5 spirit | DATA-1 (separate commit) | supervisor; the human is told |
-| 7 | A `state/` facility copy no longer inherits keys it lacks (no shallow merge) | S3-6 | DATA-1 (same commit as 6) | supervisor; R3-2 (clean prod) makes it safe |
-| 8 | The restore migrations (`clearance-migration.js`, `overflight-migration.js`) go | R3-2 vs S-L28 | BACKCOMPAT | **ask** (§9 point 7) |
+| 3 | `_callsignOfFdr` / `_el`: which variant each panel uses once they are module-private | none yet | ESM-1 keeps today's effective behaviour | **settled** (S-ARCH2: keep as is) |
+| 4 | Extend sync, epoch and delta resync to every store that has none (beyond SYNC's structural unification) | S3-1 says "one mechanism", not "every store resyncs" | SYNC-B, a follow-up after W5 | **given** (H88) |
+| 5 | Per-Facility heartbeat (today only the default Facility's seq is named) | S-UIB limit ("for the refactor's wire phase") | WIRE-B, a follow-up after W2 | **given** (H88) |
+| 6 | A missing or invalid facility JSON is a startup error, not a silent fallback to literals | S3-6 + ARCH-D5 spirit | DATA-1 (separate commit) | **given** (S-ARCH2) |
+| 7 | A `state/` facility copy no longer inherits keys it lacks (no shallow merge) | S3-6 | DATA-1 (same commit as 6) | **given** (S-ARCH2) |
+| 8 | The restore migrations (`clearance-migration.js`, `overflight-migration.js`) go | R3-2 vs S-L28 | BACKCOMPAT | **given** (H88: delete) |
 
 ---
 
