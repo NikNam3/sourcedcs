@@ -161,6 +161,10 @@ class FieldStateStore {
     out.hotCargoPad = { ...(pads.hotCargo || {}), ...out.hotCargoPad };
     out.alertPad = { ...(pads.alert || {}), ...out.alertPad };
     out.runwayChangeInProgress = isRunwayChangeInProgress(record.runwayChange);
+    // The Facility's configured authorities, so a client mirrors the rule from the
+    // wire instead of falling back to the owners table (S-L1b, docs/adr/0083).
+    out.runwayChangeAcknowledgers = [...(inventory.runwayChangeAcknowledgers || [])];
+    out.inspectionAuthorityPositionId = inventory.inspectionAuthorityPositionId ?? null;
     return out;
   }
 

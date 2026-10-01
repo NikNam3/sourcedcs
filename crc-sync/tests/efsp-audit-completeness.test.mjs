@@ -264,3 +264,11 @@ test('a backfilled drop of a Strip no Board still holds keeps its Facility from 
   assert.ok(rec, 'the drop is backfilled');
   assert.equal(rec.facilityId, 'INCIRLIK');
 });
+
+test('the field state on the wire carries the configured acknowledgers and inspection authority (S-L1b)', () => {
+  const state = efsp.fieldStateStore.getFieldState('INCIRLIK');
+  assert.deepEqual(state.runwayChangeAcknowledgers, ['OPS', 'APP']);
+  assert.equal(state.inspectionAuthorityPositionId, 'OPS');
+  state.runwayChangeAcknowledgers.push('X');
+  assert.deepEqual(efsp.fieldStateStore.getFieldState('INCIRLIK').runwayChangeAcknowledgers, ['OPS', 'APP'], 'a copy');
+});
