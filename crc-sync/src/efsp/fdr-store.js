@@ -615,7 +615,7 @@ class FdrStore {
       // separation-model fields below.
       // docs/adr/0073 — stored INPUTS of §10.5's time chains (time-chains.js
       // computes the answer at read). Present and null when unknown (§12).
-      timeInputs: { flightPlanDepartureUtc },
+      timeInputs: { flightPlanDepartureUtc, takeoffStampedUtc: null }, // docs/adr/0076: stamped by the DEPARTED state change
       mission: {
         missionNumber: seed.missionNumber || null,
         packageId: seed.packageId || null,
@@ -1163,6 +1163,27 @@ class FdrStore {
   }
 
   /**
+   * Stamps (or clears) the takeoff time the state change gives
+   * (docs/adr/0076, Q-L16-3): the mission-clock time a DEPARTURE Strip entered
+   * DEPARTED. An INPUT of §10.5's takeoff chain, never the controller's own
+   * `assigned.takeoffTimeUtc`, so a typed time still wins and an Undo knows
+   * what to take back. Bumps `rev` so every client redraws, and leaves
+   * `updatedAt` alone: this is not a flight-plan amendment (the same reason
+   * setClearance leaves it). Writes only on change.
+   * @returns {{ok:true, fdr, changed:boolean}|{ok:false, reason:'NOT_FOUND'}}
+   */
+  setTakeoffStamp(fdrId, utc) {
+    const fdr = this._fdrs.get(fdrId);
+    if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
+    const value = Number.isFinite(utc) ? utc : null;
+    if (!fdr.timeInputs) fdr.timeInputs = { flightPlanDepartureUtc: null, takeoffStampedUtc: null };
+    if (fdr.timeInputs.takeoffStampedUtc === value) return { ok: true, fdr, changed: false };
+    fdr.timeInputs.takeoffStampedUtc = value;
+    fdr.rev += 1;
+    return { ok: true, fdr, changed: true };
+  }
+
+  /**
    * Re-claims a code released by releaseFdr, for Undo of a terminal NLA Drop
    * within its 30s window (§3.5 rule 5). No-op when the code has already gone
    * to a different FDR in the meantime — that flight is now squawking it, and
@@ -1263,7 +1284,8 @@ class FdrStore {
       // ensureMilitary() for why a null here is worse than it looks.
       ensureMilitary(f);
       ensureClearance(f); // docs/adr/0058 — FDRs saved before the clearance cells existed
-      if (!f.timeInputs) f.timeInputs = { flightPlanDepartureUtc: null }; // docs/adr/0073 — FDRs saved before the time chains
+      if (!f.timeInputs) f.timeInputs = { flightPlanDepartureUtc: null, takeoffStampedUtc: null };
+      if (f.timeInputs.takeoffStampedUtc === undefined) f.timeInputs.takeoffStampedUtc = null; // docs/adr/0076 // docs/adr/0073 — FDRs saved before the time chains
       return [f.fdrId, f];
     }));
     this._codeAllocator.restore(data?.codes);

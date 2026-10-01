@@ -660,6 +660,7 @@ const TIME_SOURCE_TEXT = {
   CONTROLLER: 'entered by a controller',
   FLIGHT_PLAN: 'from the filed DD-1801 (item 13, EOBT)',
   ATO: 'from the ATO (AMSNDAT departure time)',
+  STATE_CHANGE: 'stamped when the Strip entered Airborne',
   EST_DEPARTURE: 'estimate: P-time',
   EST_OFF_BLOCK: 'estimate: off-block',
 };

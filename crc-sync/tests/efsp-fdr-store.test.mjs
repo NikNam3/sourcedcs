@@ -1059,7 +1059,7 @@ function missionStore(nowMs) {
 test('0073: createFdr dates the DD1801 departure time by the mission clock into fdr.timeInputs', () => {
   const store = missionStore(MISSION_DAY(13, 50));
   const { fdr } = store.createFdr(makeSeed({ flightPlanDepartureTimeHhmm: '1430' }), { by: 'c-OPS' });
-  assert.deepEqual(fdr.timeInputs, { flightPlanDepartureUtc: MISSION_DAY(14, 30) });
+  assert.deepEqual(fdr.timeInputs, { flightPlanDepartureUtc: MISSION_DAY(14, 30), takeoffStampedUtc: null });
   // Not the controller's field: a cleared P-time falls back to the plan instead of losing it.
   assert.equal(fdr.filed.proposedDepartureTimeUtc, null);
 });
@@ -1069,7 +1069,7 @@ test('0073: a DD1801 departure time that is not a time is dropped, never a refus
   for (const junk of ['garbage', '2561', '', undefined]) {
     const r = store.createFdr(makeSeed({ flightPlanDepartureTimeHhmm: junk }), { by: 'c-OPS' });
     assert.equal(r.ok, true, String(junk));
-    assert.deepEqual(r.fdr.timeInputs, { flightPlanDepartureUtc: null }, String(junk));
+    assert.deepEqual(r.fdr.timeInputs, { flightPlanDepartureUtc: null, takeoffStampedUtc: null }, String(junk));
   }
 });
 
@@ -1080,7 +1080,7 @@ test('0073: restore() seeds timeInputs onto an FDR persisted before it, so a rea
   delete old.timeInputs;
   const restored = missionStore(MISSION_DAY(13, 50));
   restored.restore({ fdrs: [old], codes: store.snapshot().codes });
-  assert.deepEqual(restored.getFdr(fdr.fdrId).timeInputs, { flightPlanDepartureUtc: null });
+  assert.deepEqual(restored.getFdr(fdr.fdrId).timeInputs, { flightPlanDepartureUtc: null, takeoffStampedUtc: null });
 });
 
 test('S-F4: a typed vul start resolves like any typed time; a typed end to the first occurrence after the start', () => {
