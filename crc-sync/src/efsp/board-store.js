@@ -35,6 +35,7 @@ const { Placement } = require('./board/placement');
 const { Coordination } = require('./board/coordination');
 const { Tofi } = require('./board/tofi');
 const { StripOps } = require('./board/strip-ops');
+const { BoardPersistence } = require('./board/persistence');
 const OPS = require('./board/ops');
 const { initialStateFor, replicaStateOnReceipt, senderStateOnAccept } = require('./authority');
 const { ReplayCache, replayRecord, REPLAY_PERSIST_WINDOW_MS } = require('./sync/replay-cache');
@@ -111,11 +112,12 @@ class BoardStore {
     // Undo window across a restart is an acceptable Phase-1 UX gap, not a
     // correctness or safety concern.
     this._nlaHistory = new Map();
-    // stripId -> Date.now() at its drop: when a DROPPED Strip is archived
-    // (docs/adr/0082, H36). Wall time on purpose, like the latch above: a
-    // retention period is a storage lifetime, and the mission clock rewinds on
-    // a reload (H11). Not a Strip field, so the wire is unchanged. Persisted.
-    this._droppedWallAt = new Map();
+    // Snapshot, restore, archive and when each DROPPED Strip dropped (board/persistence.js), which owns that Map.
+    this._persistence = new BoardPersistence({
+      rules, state: this._state, replay: this._replay, clock,
+      mutationLog: () => this._mutationLog,
+      nlaHistory: () => this._nlaHistory,
+    });
     // The Strip operations (board/strip-ops.js): the op table, NLA and retirement. The two Maps above stay
     // here (snapshot, restore and archiveStrip use them) and are read late, because restore replaces them.
     this._stripOps = new StripOps({
@@ -124,7 +126,7 @@ class BoardStore {
       touch: (id) => this._touch(id),
       activeCmid: () => this._activeCmid,
       nlaHistory: () => this._nlaHistory,
-      droppedWallAt: () => this._droppedWallAt,
+      droppedWallAt: () => this._persistence.droppedWallAt,
       initialStateFor,
     });
   }
@@ -339,95 +341,18 @@ class BoardStore {
     return back.map(s => s.stripId);
   }
 
-  /**
-   * When this DROPPED Strip dropped, in wall ms (docs/adr/0082). A Strip that
-   * reached DROPPED by a path other than _retireStrip (a refused TOFI's minted
-   * Strip, a SetState) is stamped the first time anyone asks, so it is
-   * archived at most one sweep late rather than never. Null for a live Strip.
-   */
-  droppedWallAtOf(stripId) {
-    const strip = this._state.strips.get(stripId);
-    if (!strip || strip.state !== 'DROPPED') {
-      this._droppedWallAt.delete(stripId);
-      return null;
-    }
-    if (!this._droppedWallAt.has(stripId)) this._droppedWallAt.set(stripId, Date.now());
-    return this._droppedWallAt.get(stripId);
-  }
+  /** When this DROPPED Strip dropped, in wall ms (board/persistence.js). Null for a live Strip. */
+  droppedWallAtOf(stripId) { return this._persistence.droppedWallAtOf(stripId); }
 
-  /**
-   * Archives one DROPPED Strip (docs/adr/0082, H36): it leaves memory and the
-   * snapshot, and the Mutation log keeps its history. Nothing archived comes
-   * back — an Undo of its drop is NOT_FOUND, like any Mutation on it. The
-   * archiver (archiver.js) decides WHEN; this only does it.
-   *
-   * The ring gets a `gone` entry, so the archive advances the Board's seq and
-   * a resync from before it reports the Strip in getDeltaSince's `gone`.
-   * @param {string} stripId
-   * @param {string} reason 'AGE' | 'MISSION_CHANGE'
-   * @param {object} [extra] fields added to the audit line (e.g. the session)
-   * @returns {string|null} the Strip's fdrId, or null when it was not a DROPPED Strip here
-   */
-  archiveStrip(stripId, reason, extra = {}) {
-    const strip = this._state.strips.get(stripId);
-    if (!strip || strip.state !== 'DROPPED') return null;
-    this._state.strips.delete(stripId);
-    this._droppedWallAt.delete(stripId);
-    this._nlaHistory.delete(stripId);
-    this._state.logGone(stripId);
-    if (this._mutationLog) {
-      this._mutationLog.record({
-        clientMutationId: null, op: 'Archive', stripId, fdrId: strip.fdrId || null,
-        // L26 (decisions.md S-L5) puts facilityId on every Board entry; this
-        // line carries it from the start.
-        facilityId: this._rules.facilityId || null,
-        actingPositionId: null, actorId: 'system', at: this._clock.now(), reason, ...extra,
-      });
-    }
-    return strip.fdrId || null;
-  }
+  /** Archives one DROPPED Strip (board/persistence.js, docs/adr/0082). */
+  archiveStrip(stripId, reason, extra = {}) { return this._persistence.archiveStrip(stripId, reason, extra); }
 
-  // ── Persistence (durable per ADR 0002 — mission reload must NOT clear this) ──
-  snapshot() {
-    // `replay`: the idempotency records of the last REPLAY_PERSIST_WINDOW_MS,
-    // so a retry after a restart answers from the cache instead of applying a
-    // second time (docs/adr/0081, L6's F5 mode A). Compact records only.
-    const horizon = Date.now() - REPLAY_PERSIST_WINDOW_MS;
-    const replay = this._replay.windowSince(horizon);
-    return { strips: this.getAll(), cidSeq: this._state.cidSeq, replay, droppedWallAt: [...this._droppedWallAt] };
-  }
-  restore(data) {
-    this._state.replaceStrips(new Map((data?.strips || []).map(s => [s.stripId, s])));
-    // A restored Board is a new lifetime: the ring and the seq did not come
-    // back, so no seq a client holds from before can be served a delta.
-    this._state.newEpoch();
-    // A snapshot written before docs/adr/0045 carries a per-Strip
-    // `correlation` field. Dropped rather than migrated: it was always the
-    // inert `{ state: 'UNCORRELATED' }` placeholder, so there is nothing in it
-    // to carry forward, and leaving it would put a second, stale answer to
-    // "which contact is this" next to the real one — which is the defect the
-    // key change removes, preserved through a restore.
-    for (const strip of this._state.strips.values()) delete strip.correlation;
-    this._state.setCidSeq(data?.cidSeq || 0);
-    // The persisted slice of the idempotency cache (docs/adr/0081). It used to
-    // be dropped here, so a CreateStrip whose ack died with the process was
-    // created twice on retry (L6's F5). Loaded whole: the snapshot already cut
-    // it to the retry window, and index.js's boot reconcile needs every record
-    // that was persisted to tell a persisted Mutation from an unpersisted one.
-    // It ages out through the cap and the next snapshot's window.
-    this._replay.load(data?.replay);
-    // docs/adr/0082 — when each DROPPED Strip dropped. One restored with no
-    // entry (a snapshot written before it) starts its 2 h now: it was counted
-    // before it was persisted (L5 backfills from the log at boot anyway).
-    const dropped = new Map(Array.isArray(data?.droppedWallAt) ? data.droppedWallAt : []);
-    this._droppedWallAt = new Map();
-    const restoredAt = Date.now();
-    for (const strip of this._state.strips.values()) {
-      if (strip.state !== 'DROPPED') continue;
-      const at = dropped.get(strip.stripId);
-      this._droppedWallAt.set(strip.stripId, Number.isFinite(at) ? at : restoredAt);
-    }
-  }
+  /** The Board snapshot (board/persistence.js; durable per ADR 0002). */
+  snapshot() { return this._persistence.snapshot(); }
+  restore(data) { return this._persistence.restore(data); }
+
+  /** stripId -> wall ms of its drop (board/persistence.js), for tests. */
+  get _droppedWallAt() { return this._persistence.droppedWallAt; }
 }
 
 module.exports = { BoardStore, REPLAY_PERSIST_WINDOW_MS };
