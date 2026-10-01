@@ -2,7 +2,33 @@
 
 ## Report
 
-(written at the end)
+Branch `lane/SYNC-one-mechanism`, base `2b055d4`. `git log --oneline 2b055d4..HEAD`:
+
+```
+(see the list in the final message; 15 commits: 1 wip step 0, 2 test(SYNC), 10 refactor(SYNC), 2 wip/docs)
+```
+
+- **What changed:** `src/efsp/sync/sync-log.js`: one seq/ring/epoch/touched mechanism, counter-only by default (W5-2).
+  `BoardState` uses it with ring+touched+epoch, and all six other stores use counter-only (airspace in Owns; correlation, MARSA,
+  field state, carrier and SFA approved, S-SYNC0 Q2). `src/efsp/sync/replay-cache.js`: one `ReplayCache` class. Its
+  default is the families' shape, and `forBoard()` gives one instance per Board. `src/efsp/replay-cache.js` is deleted.
+  `src/efsp/board/persistence.js` holds snapshot/restore/archive/droppedWallAtOf and the replay window.
+  `BoardStore.observeTouches(fn)` replaces host-core's `_touch` patch (the `_rebalanceRack` wrap stays, W5-11). The
+  `_touch`/`_log` shims are gone, and the facade gains `ringLength`.
+- **Suites:** crc-sync 2143 (2142 + 1 todo) -> 2153 (2152 + 1 todo, 0 fail). crc-desktop 866 -> 866 (865 + 1 todo).
+- **Golden:** identical in every structural commit (no UPDATE_GOLDEN, no behaviour commit). The freeze suite went 47 -> 48 because of the
+  new hub trace `resync-metrics` (S-WIREfix/W5-14, `b7a5cbf`, new golden only).
+- **Selfchecks:** `soak:selfcheck` PASS (5/5 fire). `soak:smoke` PASS (memory not judged, as designed).
+  `freeze:selfcheck` 18/18 caught after retargeting M8 (`src/efsp/sync/replay-cache.js`). M13 and M15 were not moved.
+  `board-seam` is strict on `board/persistence.js`. clock-policy is green.
+- **Structure fixtures:** clock allow-list: `droppedWallAtOf`/`snapshot`/`restore` file -> `board/persistence.js`.
+  `guard-board-surface.json`: public rows gain `observeTouches` and `ringLength`; private rows lose `_log` and `_touch`;
+  `_state` gains usedBy tests; `_rebalanceRack` is listed (usedBy tests).
+- **Outside Owns (all approved by main):** `src/efsp/index.js:51` (S-SYNC0 Q1); five store files (Q2); the
+  freeze-traces/freeze-hub/new golden (W5-14).
+- **Defaults, findings and the SYNC-B proposal:** below. Main findings: ATO's whole-ack cache (after the window);
+  report.js copies 2000/5000 by hand; L20 comment pointers.
+- **Supervisor decides:** nothing open.
 
 ## Step 0: base check
 
