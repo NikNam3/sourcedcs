@@ -74,8 +74,10 @@ test('freeze guard 2: the Board\'s external surface', () => {
   const efsp = createEfsp();
   const instance = efsp.boardStoreFor('INCIRLIK');
   const members = new Set([...proto.filter(n => n.startsWith('_')), ...Object.getOwnPropertyNames(instance).filter(n => n.startsWith('_'))]);
+  // The structure policies quote private names in their own bad-snippet self-tests; they are not users of the Board.
+  const STRUCTURE_POLICIES = new Set(['clock-policy.test.mjs', 'board-seam.test.mjs']);
   const testsDir = path.join(CRC_SYNC, 'tests');
-  const seekers = [...outside, ...fs.readdirSync(testsDir).filter(f => /\.(test\.)?m?js$/.test(f)).map(f => path.join(testsDir, f))];
+  const seekers = [...outside, ...fs.readdirSync(testsDir).filter(f => /\.(test\.)?m?js$/.test(f) && !STRUCTURE_POLICIES.has(f)).map(f => path.join(testsDir, f))];
   const reached = new Map();
   for (const f of seekers) {
     const t = outsideText.get(f) || stripComments(fs.readFileSync(f, 'utf8'));
