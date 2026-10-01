@@ -282,8 +282,33 @@ async function dropStrips(page, callsigns) {
   await page.waitForTimeout(400);
 }
 
+/**
+ * Makes `end` ('05' or '23') INCIRLIK's active runway, through the real field-state machinery.
+ *
+ * A fresh crc-sync has NO active runway (the harness has no mission wind, and the active runway is
+ * what the weather feed sets). A spec that asserts text naming the runway must establish it itself
+ * rather than rely on an earlier spec file having done so (ordnance-hung did, and failed alone).
+ * `page` must hold TWR, OPS and APP: one controller holding all three self-coordinates the change.
+ */
+async function ensureActiveRunway(page, end = '05') {
+  await page.waitForFunction(() => typeof getEfspFieldState === 'function' && !!getEfspFieldState('INCIRLIK'));
+  const step = async (positionId, op) => {
+    const before = await page.evaluate(() => getEfspFieldState('INCIRLIK').rev);
+    await page.evaluate(([p, o]) => sendEfspFieldStateMutation(p, 'INCIRLIK', getEfspFieldState('INCIRLIK').rev, o), [positionId, op]);
+    await expect.poll(() => page.evaluate(() => getEfspFieldState('INCIRLIK').rev), { timeout: 5000 }).toBeGreaterThan(before);
+  };
+  const active = () => page.evaluate(() => getEfspFieldState('INCIRLIK').activeRunway);
+  if ((await active()) === end) return;
+  await step('TWR', { kind: 'SelfCoordinateRunwayChange', toRunwayId: end });
+  await step('TWR', { kind: 'BeginRunwayChange' });
+  await step('TWR', { kind: 'CompleteRunwayChange' });
+  const needsInspection = await page.evaluate(() => getEfspFieldState('INCIRLIK').runways[0].status === 'SUSPENDED_INSPECTION');
+  if (needsInspection) await step('OPS', { kind: 'CompleteInspection', runwayId: '05/23' });
+  await expect.poll(active, { timeout: 5000 }).toBe(end);
+}
+
 module.exports = {
-  dropStrips,
+  ensureActiveRunway, dropStrips,
   fakeToken, openPanel, openEfspPanel, seedStrip, stripByCallsign,
   expectDoesSomething, expectRefusalIsVisible, expectOnTop, expectTouchTarget,
   stripMenuItem, startAction,
