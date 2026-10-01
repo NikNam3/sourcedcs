@@ -760,6 +760,24 @@ never apply a variation or convergence yourself; a typed magnetic value goes to 
   about -2° at Incirlik): it needs a live check against the mission editor's wind before anything changes;
   the APRT read-only line layout was never checked in a browser; no live DCS run.
 
+**The ATC scope in the STARS scheme (L22, `0088`).** crc-sync's `presentation.js` sends
+`scheme: 'TACTICAL'|'ATC'` per contact per session (in `WIRE_KEYS`; `ws-hub-wire-strictness.test.mjs`
+covers it), with a hold of 2 tactical sweeps (`SCHEME_HOLD_SWEEPS`) so it does not flip on a missed
+sweep. `sensor-specs.json`'s new `presentation` section classes each radar kind (airport, approach,
+carrierApproach = ATC; awacs, fighter, carrier = TACTICAL) and `radars.js` stamps it. Every Facility
+config has `positionLetters` (validated, sent in the EFSP snapshot); `ws-hub.js` tells the picture
+whether the session holds an ATC Position and re-sends it when that changes. Client: `atc-scope.js`
+(relation, view, local acknowledgements and click-downs, coast state, palette), `atcBlockLines` in
+`track-label.js` (still the only code that turns a track into text), an ATC branch in `geojson.js`
+(ATC tracks draw no PPL), the `atc-targets`/`atc-symbols`/`atc-labels` layers and `applyAtcBackground`
+in `map-setup.js`. **Do not decide a block's text or colour anywhere else.**
+- ATC text size copies the tactical label layer (so `applyScale` in `app.js` is untouched). A third
+  scheme value (or a client-side choice) would be needed for an ERAM-style CTR scope in a later lane; the
+  relation and click logic in `atc-scope.js` can be reused.
+- Not walked: live DCS (the e2e injects the picture); a real handoff accept end to end against real
+  Strips (the unit test pins the dispatched op, the e2e shows the picture); the black background in
+  light mode. The spec is `crc-desktop/e2e/l22-stars-scope.spec.js`, writing into `docs/wip/L22/`.
+
 ## 4. What's left, and the known bugs
 
 **Not built, in the guide's order.** WP6: the field-state panel and the hook-mismatch check (L1b),

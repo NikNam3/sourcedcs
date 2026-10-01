@@ -970,6 +970,46 @@ the game's idea of which side it is on:
 - **Nothing on the ground is hidden.** The tower sees every aircraft on the ground within its
   radar's reach, enemy ramps included. That is on purpose for now.
 
+### The ATC scope: STARS-style blocks (TWR, APP, CTR)
+
+If you hold an ATC Position, contacts that only an airfield, approach or carrier-approach radar sees are
+drawn the way a STARS scope draws them. A contact is still drawn the tactical way while any tactical
+radar (AWACS, fighter, ship) or the datalink sees it, and a controller who holds no ATC Position sees the
+tactical scheme only. What a block shows depends on **your relation to the flight**, not on whose side it
+is:
+
+| You see | Means |
+|---|---|
+| white block, your letter | **yours** (a Full Data Block) |
+| flashing white block | being handed **to you** (click the blue disc to accept) |
+| flashing yellow block with `PO` | a point-out **to you**; steady yellow once accepted, then a click turns it green, a second click makes it a green partial block |
+| green `alt gs` (e.g. `120 28`) | **someone else's** (a Partial Data Block). The letter on the blue disc says whose: `T` Tower, `A` Approach, `C` Center, `M` a tactical Position (all tactical Positions, JTAC included) |
+| green `code` / `alt` with `*` | squawking, **no flight plan** |
+| `+` alone | primary return only |
+
+Altitude is Mode C in hundreds of feet; ground speed is in tens of knots and alternates with the aircraft
+type every 2 s; an assigned altitude shows with a trend arrow (`A060↓ H250`, or a block `A060B080`) and
+an assigned heading (magnetic, as you typed it). Line 0, above the block, stacks by severity: `EM`/`RF`/
+`HJ` (emergency), `CA` (a conflict alert), `SA` (a contact someone has declared **hostile**), then the
+conformance tag (§8E, drawn in the app's own orange, not STARS's). A provisional correlation keeps its
+`?`. `CST` means your correlated flight has stopped returning (after two sweeps of the slowest ATC radar,
+6 s if none says how often).
+
+- **Click the disc** to accept a handoff or point-out (it sends the same `ACCEPT` the Strip's button
+  does), to acknowledge `EM` or `CA`, or to step a block down or expand it. **Click the block** for the
+  track panel. Acknowledgements and click-downs are local to your scope and are not synced, as on STARS.
+- A handoff you sent blinks for 5 s once accepted, then stays white until you click it green, then
+  partial. It blinks only for something *this scope saw happen*: a reconnect shows the settled picture.
+  A same-Facility transfer (TWR drags a Strip to APP) blinks at the sender too. `UN` blinks when a
+  point-out you sent was rejected.
+- **Settings → Map Overlays → "ATC Map Background"** off gives a strict black STARS scope, **only** when
+  every radar you see is an ATC radar and there is no datalink.
+- `M` means the flight is under tactical control after TOFI (§8C1). Letters for non-radar Positions:
+  `OPS` `O`, `CD` `D`, `GND` `G`.
+
+*What is ours, not doctrine:* `SA` on a hostile declaration, the single `M` for every tactical Position,
+the colours (the approved mockup's) and the coast timing.
+
 ### Declutter is off
 
 Every declutter behaviour is off until the EFSP work is finished, and was switched off once on
