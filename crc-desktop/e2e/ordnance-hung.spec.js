@@ -10,7 +10,7 @@
 const path = require('path');
 const fs = require('fs');
 const { test, expect } = require('./helpers/test');
-const { openPanel, seedStrip, stripByCallsign } = require('./helpers/app');
+const { openPanel, seedStrip, stripByCallsign, ensureActiveRunway } = require('./helpers/app');
 
 test.describe.configure({ timeout: 120000 });
 
@@ -133,6 +133,8 @@ test('HUNG: APP records it, TWR sees it, the flight lands normally, CLEAN clears
 test('pilot walks with field state: the pad by name, a runway request re-stated, an aborted departure', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1200 });
   const { consoleErrors } = await openPanel(page, { held: ['TWR', 'APP', 'GND', 'OPS'] });
+  // Runway 05 active, established here: a fresh crc-sync has none, and this walk names it.
+  await ensureActiveRunway(page, '05');
 
   // "Request runway 23 for hot cargo" — TWR edits 8B; the advisory re-states the runway, recommends none.
   const CS = 'HUNG21';
