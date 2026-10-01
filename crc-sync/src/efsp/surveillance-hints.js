@@ -27,6 +27,7 @@
 
 const { instantPhase, debouncedPhase, PHASES } = require('./airborne');
 const { WALL_CLOCK } = require('../mission-clock');
+const log = require('../log').logger('efsp:surveillance-hints');
 
 // What a Strip's State says about where the aircraft is. A state not listed
 // expects nothing: pre-movement states have no aircraft yet (and correlation
@@ -140,7 +141,7 @@ class SurveillanceHintMonitor {
             try {
               this._onStaleness({ at: now, facilityId, positionId: strip.ownerPositionId, stripId: strip.stripId, fdrId: strip.fdrId, stripState: strip.state, trackState: observed, durationMs });
             } catch (e) {
-              console.error('[efsp-surveillance-hints] staleness log failed:', e);
+              log.error('staleness log failed', { err: e });
             }
           }
         }
