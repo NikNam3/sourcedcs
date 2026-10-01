@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 // docs/adr/0091 — block altitudes in the ALT field.
 const { FdrStore, parseAltitudeFt, parseAltitude, formatAltitudeBlock } = await import('../src/efsp/fdr-store.js');
 const { evaluateConformance, FPM_PER_MS, MS_PER_KT } = await import('../src/efsp/conformance.js');
-const { DEFAULTS } = await import('../src/alerting-config.js');
+const { loadAlertingConfig } = await import('../src/alerting-config.js');
+const DEFAULTS = loadAlertingConfig();
 const { findConflicts } = await import('../src/stca.js');
 
 const blk = (lowFt, highFt) => ({ lowFt, highFt });

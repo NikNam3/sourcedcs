@@ -10,9 +10,12 @@ import assert from 'node:assert/strict';
 
 import {
   emptyStack, insertAt, deriveStack, deriveEntry, validateStack, normalizeStack, applyStackOp, STACK_OP_KINDS,
-  buildShipState, applyShipStateInput, defaultShipInputs, normDeg, DEFAULT_HULL,
+  buildShipState, applyShipStateInput, defaultShipInputs, normDeg,
   defaultCarrierFlight, setCarrierFlightField, normalizeCarrierFlight, marshalMessage,
 } from '../src/efsp/carrier/index.js';
+import { getDefaultHull } from '../src/efsp/carrier/hull-config.js';
+
+const DEFAULT_HULL = Object.freeze(getDefaultHull());
 
 const CHARLIE = Date.UTC(2026, 8, 30, 14, 30, 0);
 const SHIP = Object.freeze({ finalBearingDeg: 115, headingRef: 'TRUE' });

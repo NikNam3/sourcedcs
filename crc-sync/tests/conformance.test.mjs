@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 
 // docs/adr/0058 — conformance: only what is wrong is ever reported.
 const { evaluateConformance, headingDiff, FPM_PER_MS, MS_PER_KT } = await import('../src/efsp/conformance.js');
-const { DEFAULTS } = await import('../src/alerting-config.js');
+const { loadAlertingConfig } = await import('../src/alerting-config.js');
+const DEFAULTS = loadAlertingConfig();
 const { indicatedAltFt } = await import('../src/altimetry.js');
 
 const cfg = DEFAULTS.conformance;

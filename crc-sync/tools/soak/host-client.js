@@ -27,15 +27,24 @@ const AIRSPACES = [
   },
 ];
 
+const TUNING_FILES = ['alerting.json', 'efsp-instrumentation.json', 'efsp-surveillance-hints.json', 'efsp-carriers.json', 'sensor-specs.json'];
+
 function writeFixtures(stateDir) {
   fs.mkdirSync(path.join(stateDir, 'config-empty'), { recursive: true });
   // The Facilities' own data is the shipped JSON (docs/wip/DATA-1.md): the only files copied in.
   for (const id of ['incirlik', 'center', 'tactical', 'carrier']) {
     fs.copyFileSync(path.join(SRC, `../config/efsp-facility-${id}.json`), path.join(stateDir, 'config-empty', `efsp-facility-${id}.json`));
   }
+  // Tuning files have no code defaults any more (DATA-2, H88): a missing one is a
+  // startup error, so the otherwise-empty config dir carries the shipped copies.
+  for (const f of TUNING_FILES) fs.copyFileSync(path.join(__dirname, '../../config', f), path.join(stateDir, 'config-empty', f));
   fs.mkdirSync(path.join(stateDir, 'terrain'), { recursive: true });
   fs.writeFileSync(path.join(stateDir, 'airspaces.json'), JSON.stringify(AIRSPACES, null, 2));
   fs.writeFileSync(path.join(stateDir, 'stereo-routes.json'), '[]');
+  // No theater table (offset 0, as before), but the default transition altitude is read from this file.
+  fs.writeFileSync(path.join(stateDir, 'config-empty', 'theaters.json'), JSON.stringify({ defaultTransitionAltFt: 18000, theaters: {} }));
+  // The soak's sensor layer: no airborne or ship radar types, as when the file was absent.
+  fs.writeFileSync(path.join(stateDir, 'sensor-specs.json'), JSON.stringify({ radar: {}, carrierRadar: {}, datalink: { participants: [] } }));
   // The three facility overrides are deliberately NOT written: a missing file
   // makes facility-config read the shipped copy above, as the tests rely on (briefing §3.6).
 }

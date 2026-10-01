@@ -9,23 +9,23 @@
 
 const fs = require('fs');
 const { readPath } = require('../state-paths');
+const { readShipped } = require('../tuning-file');
 
 const CONFIG_NAME = 'efsp-surveillance-hints.json';
 
-const DEFAULT_HINTS_CONFIG = Object.freeze({
-  airborne: Object.freeze({ minGroundSpeedKt: 60, minAglFt: 200, holdSec: 5 }),
-  staleness: Object.freeze({ afterSec: 120 }),
-});
-
 function _num(section, key, raw, fallback, source, { min }) {
-  if (raw === undefined) return fallback;
+  if (raw === undefined) {
+    if (fallback === undefined) throw new Error(`[efsp-surveillance-hints] ${source}: ${section}.${key} is missing`);
+    return fallback;
+  }
   if (typeof raw === 'number' && Number.isFinite(raw) && raw >= min) return raw;
+  if (fallback === undefined) throw new Error(`[efsp-surveillance-hints] ${source}: ${section}.${key} must be a number >= ${min}, got ${JSON.stringify(raw)}`);
   console.warn(`[efsp-surveillance-hints] ${source}: ${section}.${key} must be a number >= ${min}, got ${JSON.stringify(raw)} — using ${fallback}`);
   return fallback;
 }
 
-function normalizeHintsConfig(raw, source = 'config') {
-  const d = DEFAULT_HINTS_CONFIG;
+function normalizeHintsConfig(raw, source = 'config', d = DEFAULT_HINTS_CONFIG) {
+  d = d || { airborne: {}, staleness: {} }; // strict: validating the shipped file
   const obj = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
   const sec = (n) => (obj[n] && typeof obj[n] === 'object' ? obj[n] : {});
   return Object.freeze({
@@ -40,12 +40,15 @@ function normalizeHintsConfig(raw, source = 'config') {
   });
 }
 
+// The defaults are the shipped JSON, validated strictly; no literal copy in code (H88).
+const DEFAULT_HINTS_CONFIG = normalizeHintsConfig(readShipped(CONFIG_NAME), `config/${CONFIG_NAME}`, null);
+
 function loadHintsConfig(filePath = readPath(CONFIG_NAME, process.env.CRCSYNC_EFSP_SURVEILLANCE_HINTS_PATH)) {
   let raw;
   try {
     raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
   } catch (e) {
-    console.warn(`[efsp-surveillance-hints] could not read ${filePath} (${e.message}) — using the built-in defaults`);
+    console.warn(`[efsp-surveillance-hints] could not read ${filePath} (${e.message}) — using the shipped defaults`);
     return DEFAULT_HINTS_CONFIG;
   }
   return normalizeHintsConfig(raw, filePath);

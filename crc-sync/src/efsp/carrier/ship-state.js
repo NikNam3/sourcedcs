@@ -13,7 +13,7 @@
 //   §9.12 (binding)   — final bearing is computed from ship heading; ship state
 //                       is shared by every carrier Position.
 //   decisions H13/H26 — the squadron's carrier is CVN-72, DCS unit `UNION`, one
-//                       hull (DEFAULT_HULL).
+//                       hull (config/efsp-carriers.json, hull-config.js).
 //   decisions H15     — every bearing is computed in TRUE and converted to
 //                       magnetic only at display, with an injected variation
 //                       (displayBearing). DCS-gRPC's orientation.heading is a
@@ -43,15 +43,6 @@ const ALTIMETER_MAX_INHG = 32.0; // [SOURCE-DEFINED]
 // L4 briefing Q2. Any type not listed (CV_59, LHA_Tarawa, Kuznetsov, anything
 // new) has no offset and therefore no final bearing — never a guess (D11).
 const ANGLED_DECK_BY_TYPE = Object.freeze({ CVN_71: 9, CVN_72: 9, CVN_73: 9, CVN_74: 9, CVN_75: 9 });
-
-// decisions H13/H26 — the one hull the squadron flies. L17 ships it as the
-// config/efsp-carriers.json default; this constant is that file's seed.
-const DEFAULT_HULL = Object.freeze({
-  hullId: 'CVN-72',
-  label: 'CVN-72',
-  match: Object.freeze({ unitName: 'UNION', type: 'CVN_72', coalition: 'own' }),
-  angledDeckDeg: null, // null → ANGLED_DECK_BY_TYPE for the matched type
-});
 
 const SHIP_INPUT_KEYS = Object.freeze(['altimeterInHg']);
 
@@ -317,7 +308,6 @@ function displayBearing(deg, { ref = 'TRUE', magneticVariationDeg = null } = {})
 module.exports = {
   SHIP_CATEGORY,
   ANGLED_DECK_BY_TYPE,
-  DEFAULT_HULL,
   SHIP_INPUT_KEYS,
   ALTIMETER_MIN_INHG,
   ALTIMETER_MAX_INHG,
