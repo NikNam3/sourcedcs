@@ -22,7 +22,7 @@
  * shard. Nothing is found by name and nothing on :3000 is touched.
  *
  * --rerun-failed: after the shards finish, each failed test is re-run ALONE, serially, on the first lane
- * (`e2e/<file>:<line>`), and reported as consistent (fails again) or flaky/load-sensitive (passes alone).
+ * (`e2e/<file> -g <title>`), and reported as consistent (fails again) or flaky/load-sensitive (passes alone).
  * The exit code is 1 only for a failure that is consistent, or for any failure when --rerun-failed is off.
  */
 
@@ -121,9 +121,12 @@ function updateTimings(previous, perSpec) {
   return out;
 }
 
-const rerunCommand = (lane, row) => `E2E_LANE=${lane} npx playwright test e2e/${row.file}:${row.line}`;
+// By title, not file:line: tests generated in a loop (the popover specs) share one line, and a line selects them all.
+const escapeRe = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const rerunTargets = (row) => [`e2e/${row.file}`, '-g', escapeRe(row.title)];
+const rerunCommand = (lane, row) => `E2E_LANE=${lane} npx playwright test e2e/${row.file} -g '${escapeRe(row.title)}'`;
 
-module.exports = { splitShards, parseReport, mergeSummary, updateTimings, rerunCommand, median, DEFAULT_LANES };
+module.exports = { rerunTargets, splitShards, parseReport, mergeSummary, updateTimings, rerunCommand, median, DEFAULT_LANES };
 
 /* ---------- process handling ---------- */
 
@@ -278,9 +281,12 @@ async function main() {
   // re-run each failure alone, serially, on the first lane
   const reruns = [];
   if (flag(args, '--rerun-failed')) {
+    const seen = new Set();
     for (const row of summary.failures) {
-      console.log(`re-running alone: ${row.file}:${row.line} (${row.title})`);
-      const r = await runPlaywright(lanes[0], [`e2e/${row.file}:${row.line}`], `rerun-${reruns.length}`, logDir);
+      if (seen.has(row.file + '\0' + row.title)) continue;
+      seen.add(row.file + '\0' + row.title);
+      console.log(`re-running alone: ${row.file} (${row.title})`);
+      const r = await runPlaywright(lanes[0], rerunTargets(row), `rerun-${reruns.length}`, logDir);
       const again = r.report ? parseReport(r.report) : [];
       const consistent = !r.report || again.some((x) => x.status === 'failed');
       reruns.push({ ...row, rerunLane: lanes[0], consistent });
@@ -307,7 +313,7 @@ function printSummary(sum, results, wall, reruns, rerunOn, lanes) {
   if (sum.failures.length) {
     console.log('\n=== failures ===');
     for (const f of sum.failures) {
-      const rr = reruns.find((r) => r.file === f.file && r.line === f.line);
+      const rr = reruns.find((r) => r.file === f.file && r.title === f.title);
       const verdict = rr ? (rr.consistent ? '  -> consistent (fails alone too)' : '  -> PASSED ALONE (load-sensitive, does not count)') : '';
       console.log(`${f.file}:${f.line} ${f.title}${verdict}\n    ${f.error}\n    re-run: ${rerunCommand(lanes[0], f)}`);
     }

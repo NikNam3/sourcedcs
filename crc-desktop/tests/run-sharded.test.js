@@ -5,7 +5,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { splitShards, parseReport, mergeSummary, updateTimings, rerunCommand } = require('../e2e/tools/run-sharded');
+const { splitShards, parseReport, mergeSummary, updateTimings, rerunCommand, rerunTargets } = require('../e2e/tools/run-sharded');
 
 test('split: every file lands in exactly one shard', () => {
   const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((x) => x + '.spec.js');
@@ -73,7 +73,11 @@ test('mergeSummary counts, lists failures and finds files that never reported', 
   assert.equal(sum.failures.length, 1);
   assert.deepEqual(sum.missing, [{ file: 'z.spec.js', lane: 8 }]);
   assert.deepEqual(sum.crashedLanes, [8]);
-  assert.equal(rerunCommand(7, sum.failures[0]), 'E2E_LANE=7 npx playwright test e2e/x.spec.js:9');
+  assert.equal(rerunCommand(7, sum.failures[0]), "E2E_LANE=7 npx playwright test e2e/x.spec.js -g 't2'");
+});
+
+test('rerun selects by title, regex-escaped', () => {
+  assert.deepEqual(rerunTargets({ file: 'a.spec.js', title: 'x (y) [z]' }), ['e2e/a.spec.js', '-g', 'x \\(y\\) \\[z\\]']);
 });
 
 test('updateTimings overlays fresh durations and keeps the rest', () => {
