@@ -27,7 +27,7 @@ const AIRSPACES = [
   },
 ];
 
-const TUNING_FILES = ['alerting.json', 'efsp-instrumentation.json', 'efsp-surveillance-hints.json', 'efsp-carriers.json'];
+const TUNING_FILES = ['alerting.json', 'efsp-instrumentation.json', 'efsp-surveillance-hints.json', 'efsp-carriers.json', 'sensor-specs.json'];
 
 function writeFixtures(stateDir) {
   fs.mkdirSync(path.join(stateDir, 'config-empty'), { recursive: true });
@@ -37,6 +37,8 @@ function writeFixtures(stateDir) {
   fs.mkdirSync(path.join(stateDir, 'terrain'), { recursive: true });
   fs.writeFileSync(path.join(stateDir, 'airspaces.json'), JSON.stringify(AIRSPACES, null, 2));
   fs.writeFileSync(path.join(stateDir, 'stereo-routes.json'), '[]');
+  // The soak's sensor layer: no airborne or ship radar types, as when the file was absent.
+  fs.writeFileSync(path.join(stateDir, 'sensor-specs.json'), JSON.stringify({ radar: {}, carrierRadar: {}, datalink: { participants: [] } }));
   // The three facility overrides are deliberately NOT written: a missing file
   // makes facility-config fall back to its in-code DEFAULT_CONFIG, as the
   // tests rely on (briefing §3.6).
