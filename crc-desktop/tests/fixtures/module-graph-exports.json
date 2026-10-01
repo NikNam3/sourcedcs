@@ -424,6 +424,7 @@
    "_runEfspSearch",
    "_setActiveBayId",
    "_setActivePositionTab",
+   "_setCurrentRefusalForTest",
    "_showMutationError",
    "_showMutationWarning",
    "computePositionTabs",
@@ -779,7 +780,7 @@
   ]
  },
  "bridge": {
-  "count": 664,
+  "count": 665,
   "skipped": [],
   "names": [
    "$aptDisplay",
@@ -962,6 +963,7 @@
    "_setCoverageDatalink",
    "_setCoverageHeldPositions",
    "_setCoverageRadars",
+   "_setCurrentRefusalForTest",
    "_setDrag",
    "_setExpandedStripId",
    "_setMap",
