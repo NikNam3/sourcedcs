@@ -98,11 +98,11 @@ test('the bypass never skips the owner check, and a Strip that waits for no inhi
   assert.equal(entry.bypass, undefined);
 });
 
-// The integration wiring (docs/wip/UI-B.md): server.js vouches through the surveillance hint
+// The integration wiring (docs/wip/UI-B.md): app.js vouches through the surveillance hint
 // monitor, for every Facility's Board, and the chip sends the flag. Static, as server.js boots a
 // whole service; the Board half is tested above.
-test('server.js wires every Board\'s airborne observer to the chip\'s own AIRBORNE_ADVANCE hint', () => {
-  const server = fs.readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+test('app.js wires every Board\'s airborne observer to the chip\'s own AIRBORNE_ADVANCE hint', () => {
+  const server = fs.readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
   assert.match(server, /getFacilityIds\(\)\)\s*\{[^}]*setAirborneObserver\(.*surveillanceHints\.getAll\(\).*AIRBORNE_ADVANCE/s);
   const chip = fs.readFileSync(new URL('../../crc-desktop/app/public/js/panels/efsp/strip-view.js', import.meta.url), 'utf8');
   assert.match(chip, /toState: h\.toState, observedAirborne: true/);
