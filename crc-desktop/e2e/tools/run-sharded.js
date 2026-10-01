@@ -132,35 +132,43 @@ function killGroup(c, sig) {
  * killing the shard's group misses them once Playwright dies first. So the descendants of every shard are
  * recorded while it runs (pid + start time, so a reused PID is never hit) and swept by PID afterwards.
  * Linux /proc only, like the rest of this machine's tooling. */
-const descendants = new Map(); // pid -> start time
+const descendants = new Map(); // shard child pid -> Map(descendant pid -> start time)
 function procTable() {
   const t = new Map();
   for (const d of fs.readdirSync('/proc')) {
     if (!/^\d+$/.test(d)) continue;
     try {
       const st = fs.readFileSync(`/proc/${d}/stat`, 'utf8');
-      const f = st.slice(st.lastIndexOf(')') + 2).split(' '); // state ppid pgrp ... starttime is field 20 here
+      const f = st.slice(st.lastIndexOf(')') + 2).split(' '); // state ppid pgrp ... starttime is index 19 here
       t.set(Number(d), { ppid: Number(f[1]), start: f[19] });
     } catch (_) { /* exited */ }
   }
   return t;
 }
-function recordDescendants() {
+// Descendants are tracked per shard: sweeping one shard's leftovers must never touch another shard's servers.
+function recordDescendants(only) {
   const t = procTable();
-  const roots = new Set([...live].map((c) => c.pid));
-  let grew = true;
-  while (grew) {
-    grew = false;
-    for (const [pid, e] of t) if (!roots.has(pid) && roots.has(e.ppid)) { roots.add(pid); grew = true; }
+  for (const c of only ? [only] : [...live]) {
+    const set = descendants.get(c.pid) || new Map();
+    descendants.set(c.pid, set);
+    const roots = new Set([c.pid]);
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const [pid, e] of t) if (!roots.has(pid) && roots.has(e.ppid)) { roots.add(pid); grew = true; }
+    }
+    for (const pid of roots) if (t.has(pid)) set.set(pid, t.get(pid).start);
   }
-  for (const pid of roots) if (t.has(pid)) descendants.set(pid, t.get(pid).start);
 }
-function sweepDescendants(sig) {
+function sweepDescendants(sig, only) {
   const t = procTable();
-  for (const [pid, start] of [...descendants]) {
-    const e = t.get(pid);
-    if (!e || e.start !== start) { descendants.delete(pid); continue; }
-    try { process.kill(pid, sig); } catch (_) { /* gone */ }
+  for (const [root, set] of [...descendants]) {
+    if (only && root !== only.pid) continue;
+    for (const [pid, start] of [...set]) {
+      const e = t.get(pid);
+      if (!e || e.start !== start) { set.delete(pid); continue; }
+      try { process.kill(pid, sig); } catch (_) { /* gone */ }
+    }
   }
 }
 function stopAll() {
@@ -185,14 +193,15 @@ function runPlaywright(lane, targets, tag, logDir) {
       env: { ...process.env, E2E_LANE: String(lane), E2E_REUSE_SERVERS: '0', PLAYWRIGHT_JSON_OUTPUT_NAME: jsonFile },
     });
     live.add(c);
-    const tick = setInterval(recordDescendants, 2000);
+    const tick = setInterval(() => recordDescendants(c), 2000);
     let spawnErr = null;
     c.on('error', (e) => { spawnErr = e; });
     c.on('close', (code, signal) => {
       clearInterval(tick);
       fs.closeSync(log);
       killGroup(c, 'SIGTERM'); // stragglers of this group
-      sweepDescendants('SIGTERM'); // servers Playwright did not stop (crash, Ctrl-C)
+      sweepDescendants('SIGTERM', c); // this shard's servers Playwright did not stop (crash, Ctrl-C)
+      descendants.delete(c.pid);
       live.delete(c);
       let report = null;
       try { report = JSON.parse(fs.readFileSync(jsonFile, 'utf8')); } catch (_) { /* crashed before reporting */ }
@@ -227,7 +236,7 @@ async function main() {
   const shards = splitShards(files, Math.min(nShards, files.length), timings);
   const haveTimings = files.some((f) => timings[f] > 0);
   console.log(`${files.length} specs, ${shards.length} shards on lanes ${lanes.slice(0, shards.length).join(',')} (${haveTimings ? 'balanced by measured time' : 'balanced by file count'})`);
-  shards.forEach((s, i) => console.log(`  lane ${lanes[i]}: ${s.files.length} specs, ~${fmt(s.weight)}`));
+  shards.forEach((s, i) => console.log(`  lane ${lanes[i]}: ${s.files.length} specs${haveTimings ? `, ~${fmt(s.weight)}` : ''}`));
 
   for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
     process.on(sig, () => { console.error(`\n${sig}: stopping shards`); stopAll(); setTimeout(() => process.exit(130), 1500); });
