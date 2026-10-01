@@ -40,7 +40,7 @@ const FINAL_TERMINALS = {
   ],
 };
 
-const finite = (v) => typeof v === 'number' && Number.isFinite(v);
+const finiteNum = (v) => typeof v === 'number' && Number.isFinite(v);
 
 /**
  * Required calls that fall due between two samples.
@@ -53,21 +53,21 @@ const finite = (v) => typeof v === 'number' && Number.isFinite(v);
  */
 function finalCallsDue(prev, cur, opts = {}) {
   if (!prev || !cur) return [];
-  const tol = finite(opts.glidepathTolDeg) ? opts.glidepathTolDeg : FINAL_GLIDEPATH_TOL_DEG;
-  const step = finite(opts.trendStepDeg) ? opts.trendStepDeg : FINAL_TREND_STEP_DEG;
+  const tol = finiteNum(opts.glidepathTolDeg) ? opts.glidepathTolDeg : FINAL_GLIDEPATH_TOL_DEG;
+  const step = finiteNum(opts.trendStepDeg) ? opts.trendStepDeg : FINAL_TREND_STEP_DEG;
   const due = [];
 
-  if (finite(cur.altitudeFt) && finite(prev.altitudeFt) && finite(opts.decisionAltFt)
+  if (finiteNum(cur.altitudeFt) && finiteNum(prev.altitudeFt) && finiteNum(opts.decisionAltFt)
       && prev.altitudeFt > opts.decisionAltFt && cur.altitudeFt <= opts.decisionAltFt) {
     due.push({ kind: 'DECISION_ALTITUDE' });
   }
-  if (finite(cur.glidepathDevDeg) && finite(prev.glidepathDevDeg)) {
+  if (finiteNum(cur.glidepathDevDeg) && finiteNum(prev.glidepathDevDeg)) {
     const was = Math.abs(prev.glidepathDevDeg);
     const now = Math.abs(cur.glidepathDevDeg);
     if (now > tol && now >= was + step) due.push({ kind: 'TREND_DEVIATION' });
     if (was > tol && now <= tol) due.push({ kind: 'GLIDEPATH_INTERCEPT' });
   }
-  if (finite(cur.distanceNm) && finite(prev.distanceNm)) {
+  if (finiteNum(cur.distanceNm) && finiteNum(prev.distanceNm)) {
     const crossed = Math.floor(prev.distanceNm);
     if (crossed >= 1 && Math.floor(cur.distanceNm) < crossed) due.push({ kind: 'MILE', miles: crossed });
   }
@@ -85,11 +85,11 @@ function promptText(call) {
 }
 
 function formatDistance(nm) {
-  return finite(nm) ? `${Math.max(0, nm).toFixed(1)} nm` : '--';
+  return finiteNum(nm) ? `${Math.max(0, nm).toFixed(1)} nm` : '--';
 }
 
 function formatDeviation(dev, tol = FINAL_GLIDEPATH_TOL_DEG) {
-  if (!finite(dev)) return '--';
+  if (!finiteNum(dev)) return '--';
   const mag = Math.abs(dev).toFixed(1);
   if (Math.abs(dev) <= tol) return `ON (${dev >= 0 ? '+' : '-'}${mag}°)`;
   return `${dev > 0 ? 'ABOVE' : 'BELOW'} ${mag}°`;
@@ -100,8 +100,8 @@ function formatDeviation(dev, tol = FINAL_GLIDEPATH_TOL_DEG) {
  * Both read the injected mission clock; a clock that has not started gives a stalled bar, not NaN.
  */
 function cadenceAt(nowS, originS) {
-  if (!finite(nowS)) return { phase: 0, nextInS: FINAL_CADENCE_S };
-  const t = finite(originS) ? nowS - originS : nowS;
+  if (!finiteNum(nowS)) return { phase: 0, nextInS: FINAL_CADENCE_S };
+  const t = finiteNum(originS) ? nowS - originS : nowS;
   const into = ((t % FINAL_CADENCE_S) + FINAL_CADENCE_S) % FINAL_CADENCE_S;
   return { phase: into / FINAL_CADENCE_S, nextInS: FINAL_CADENCE_S - into };
 }
@@ -125,9 +125,9 @@ function createFinalTracker(opts = {}) {
     update(sample) {
       const s = sample || {};
       const calls = finalCallsDue(prev, s, { ...opts, decisionAltFt: s.decisionAltFt });
-      if (calls.length && finite(s.nowS)) {
+      if (calls.length && finiteNum(s.nowS)) {
         prompt = { kind: calls[0].kind, text: promptText(calls[0]), untilS: s.nowS + FINAL_PROMPT_HOLD_S };
-      } else if (prompt && finite(s.nowS) && s.nowS >= prompt.untilS) {
+      } else if (prompt && finiteNum(s.nowS) && s.nowS >= prompt.untilS) {
         prompt = null;
       }
       prev = s;
@@ -145,7 +145,7 @@ function finalViewModel(sample, prompt) {
     stripId: s.stripId || null,
     callsign: s.callsign || '',
     runway: s.runway || '--',
-    decisionAlt: finite(s.decisionAltFt) ? Math.round(s.decisionAltFt).toLocaleString('en-US') : '--',
+    decisionAlt: finiteNum(s.decisionAltFt) ? Math.round(s.decisionAltFt).toLocaleString('en-US') : '--',
     distance: formatDistance(s.distanceNm),
     deviation: formatDeviation(s.glidepathDevDeg),
     cadencePhase: cad.phase,
