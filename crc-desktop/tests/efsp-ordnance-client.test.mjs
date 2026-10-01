@@ -1,5 +1,3 @@
-'use strict';
-
 /* Hung ordnance on the Strip (guide §9.5, crc-sync's docs/adr/0069).
  *
  *  1. Drift — the client's hungOrdnanceAdvisoryFor is a copy of crc-sync's
@@ -12,16 +10,19 @@
  *     (docs/adr/0058).
  */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('fs');
-const vm = require('vm');
-const path = require('path');
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const CLIENT = path.join(__dirname, '../app/public/js/panels/efsp');
+import { createRequire } from 'node:module';
+import './helpers/client-env.mjs';
+import domStub from './helpers/dom-stub.js';
+import { freshGraph } from './helpers/fresh-graph.mjs';
+import * as client from '../app/public/js/panels/efsp/ordnance-advisory.js';
+import * as efspState from '../app/public/js/panels/efsp/efsp-state.js';
+
+const require = createRequire(import.meta.url);
 const server = require('../../crc-sync/src/efsp/field-state.js');
-const client = require(path.join(CLIENT, 'ordnance-advisory.js'));
-const { makeElement, descendants } = require('./helpers/dom-stub.js');
+const { makeElement, descendants } = domStub;
 
 // ── fixtures ─────────────────────────────────────────────────────────────
 
@@ -95,11 +96,13 @@ test('drift: the client copy and crc-sync\'s hungOrdnanceAdvisoryFor agree on ev
 // ── 2. ordnanceAlertsFor ─────────────────────────────────────────────────
 
 function alertsSandbox({ fdr, fieldState }) {
-  const sandbox = { module: { exports: {} }, getEfspFdr: () => fdr };
-  if (fieldState !== undefined) sandbox.getEfspFieldState = (facilityId) => (fieldState && fieldState.facilityId === facilityId ? fieldState : null);
-  vm.createContext(sandbox);
-  vm.runInContext(fs.readFileSync(path.join(CLIENT, 'ordnance-advisory.js'), 'utf8'), sandbox, { filename: 'ordnance-advisory.js' });
-  return sandbox;
+  // The real state module holds the FDR and the field-state record the advisory reads.
+  efspState._resetEfspStateForTest();
+  efspState.applyEfspSnapshot({
+    strips: [], fdrs: fdr ? [fdr] : [], positions: [], bays: [], boardSeq: 1,
+    fieldStates: fieldState ? [fieldState] : [],
+  });
+  return client;
 }
 
 const arrivalStrip = (over = {}) => ({ stripId: 's1', fdrId: 'f1', facilityId: 'INCIRLIK', role: 'ARRIVAL', state: 'HANDED_TO_TOWER', rackId: 'main', ...over });
@@ -117,7 +120,7 @@ test('ordnanceAlertsFor: one amber HUNG chip with the pad sentence when field st
 
 test('ordnanceAlertsFor: the chip still shows with no client field state at all (L1b not loaded)', () => {
   const sb = alertsSandbox({ fdr: fdrWith('HUNG'), fieldState: undefined });
-  assert.equal(typeof sb.getEfspFieldState, 'undefined');
+  assert.equal(efspState.getEfspFieldState('INCIRLIK'), null, 'no client field state loaded');
   const alerts = sb.ordnanceAlertsFor(arrivalStrip());
   assert.equal(alerts.length, 1);
   assert.equal(alerts[0].text, 'HUNG');
@@ -145,38 +148,24 @@ test('ordnanceAlertsFor: nothing for CLEAN/LOADED/EXPENDED, a DROPPED Strip, an 
 // A loader of its own, copied from efsp-ui-reachability.test.js's renderStrip
 // rather than shared (that harness is not this lane's to change).
 
-function renderStrip({ strip, fdr, held, fieldState }) {
-  const sandbox = {
-    console, module: { exports: {} }, setTimeout, clearTimeout, Date, JSON, Math, Number, Set, Map,
-    Array, Object, String, Boolean, isNaN, parseInt, parseFloat, crypto: { randomUUID: () => 'test-id' },
-    document: {
-      getElementById: () => null, createElement: makeElement, body: makeElement('body'),
-      activeElement: null, addEventListener() {}, removeEventListener() {},
-    },
-    window: {
-      prompt: () => null, getSelection: () => ({ removeAllRanges() {} }), innerWidth: 1600, innerHeight: 1000,
-      addEventListener() {}, removeEventListener() {},
-    },
-  };
-  sandbox.globalThis = sandbox;
-  vm.createContext(sandbox);
-  vm.runInContext(fs.readFileSync(path.join(CLIENT, '../../track-label.js'), 'utf8'), sandbox, { filename: 'track-label.js' });
-  for (const file of ['efsp-nla.js', 'strip-template.js', 'efsp-state.js', 'efsp-arrivals.js', 'efsp-gestures.js',
-    'annotation-editor.js', 'strip-drag.js', 'correlation-highlight.js', 'marsa-badge.js', 'ordnance-advisory.js',
-    'strip-fields.js', 'bay-view.js', 'strip-view.js']) {
-    vm.runInContext(fs.readFileSync(path.join(CLIENT, file), 'utf8'), sandbox, { filename: file });
-  }
-  sandbox.getActingPositions = () => held;
-  sandbox.sendEfspMutation = () => 'mid';
-  sandbox.getActiveEfspSearchQuery = () => null;
-  sandbox.updateMap = () => {};
-  sandbox.renderAllOpenEfspBays = () => {};
-  sandbox.getCurrentEfspRefusal = () => null;
-  sandbox.window.getLatestTrack = () => null;
-  sandbox.window.getAllTracks = () => [];
-  if (fieldState !== undefined) sandbox.getEfspFieldState = (id) => (fieldState && fieldState.facilityId === id ? fieldState : null);
-  sandbox.applyEfspSnapshot({ strips: [strip], fdrs: [fdr], positions: [], bays: [], airspaces: [], correlations: [], marsa: [] });
-  return { el: sandbox._buildStripEl(strip), sandbox };
+async function renderStrip({ strip, fdr, held, fieldState }) {
+  globalThis.document.getElementById = () => null;
+  globalThis.document.createElement = makeElement;
+  globalThis.getLatestTrack = () => null; // window.getLatestTrack / getAllTracks, set by app.js's startApp()
+  globalThis.getAllTracks = () => [];
+  const g = freshGraph();
+  const state = await g.import('panels/efsp/efsp-state.js');
+  const ws = await g.import('panels/efsp/efsp-ws.js');
+  const bay = await g.import('panels/efsp/bay-view.js');
+  const template = await g.import('panels/efsp/strip-fields.js');
+  await g.import('panels/efsp/strip-view.js');
+  ws.setEfspSender('_sendEfsp', () => {});
+  ws.sendEfspSetPositions('INCIRLIK', held);
+  ws.setEfspSender('sendEfspMutation', () => 'mid');
+  bay._setRenderAllOpenEfspBaysForTest(() => {});
+  state.applyEfspSnapshot({ strips: [strip], fdrs: [fdr], positions: [], bays: [], airspaces: [], correlations: [], marsa: [],
+    fieldStates: fieldState ? [fieldState] : [] });
+  return { el: bay._buildStripEl(strip), sandbox: template };
 }
 
 const appArrival = () => ({
@@ -188,10 +177,10 @@ const appArrival = () => ({
 
 const byClass = (el, cls) => descendants(el).filter(c => (c.className || '').split(/\s+/).includes(cls));
 
-test('a HUNG arrival shows the HUNG chip and its reason line on every Position\'s Strip, whether or not 3G is on its grid', () => {
+test('a HUNG arrival shows the HUNG chip and its reason line on every Position\'s Strip, whether or not 3G is on its grid', async () => {
   for (const positionId of ['APP', 'GND', 'TWR', 'CTR']) {
     const strip = { ...appArrival(), ownerPositionId: positionId };
-    const { el, sandbox } = renderStrip({ strip, fdr: fdrWith('HUNG', { arr: '23' }), held: [positionId], fieldState: record() });
+    const { el, sandbox } = await renderStrip({ strip, fdr: fdrWith('HUNG', { arr: '23' }), held: [positionId], fieldState: record() });
     const chip = descendants(el).find(c => c.dataset && c.dataset.slot === 'ord');
     assert.ok(chip, `${positionId}: no ord chip`);
     assert.equal(chip.textContent, 'HUNG');
@@ -208,24 +197,24 @@ test('a HUNG arrival shows the HUNG chip and its reason line on every Position\'
   }
 });
 
-test('the chip shows with no client field state loaded, with the generic sentence', () => {
-  const { el } = renderStrip({ strip: appArrival(), fdr: fdrWith('HUNG'), held: ['APP'], fieldState: undefined });
+test('the chip shows with no client field state loaded, with the generic sentence', async () => {
+  const { el } = await renderStrip({ strip: appArrival(), fdr: fdrWith('HUNG'), held: ['APP'], fieldState: undefined });
   assert.ok(descendants(el).find(c => c.dataset && c.dataset.slot === 'ord'));
   assert.ok(byClass(el, 'efsp-strip-reason').some(r => r.textContent === client.ORDNANCE_NO_FIELD_STATE_REASON));
 });
 
-test('the advisory never disables the NLA button', () => {
+test('the advisory never disables the NLA button', async () => {
   const strip = { ...appArrival(), ownerPositionId: 'TWR', state: 'HANDED_TO_TOWER', bayId: 'twr-arrivals' };
-  const clean = renderStrip({ strip, fdr: fdrWith('CLEAN', { arr: '05' }), held: ['TWR'], fieldState: record() });
-  const hung = renderStrip({ strip, fdr: fdrWith('HUNG', { arr: '05' }), held: ['TWR'], fieldState: record() });
+  const clean = await renderStrip({ strip, fdr: fdrWith('CLEAN', { arr: '05' }), held: ['TWR'], fieldState: record() });
+  const hung = await renderStrip({ strip, fdr: fdrWith('HUNG', { arr: '05' }), held: ['TWR'], fieldState: record() });
   const buttons = (el) => descendants(el).filter(c => c.tagName === 'button').map(b => [b.textContent, b.disabled]);
   assert.deepEqual(buttons(hung.el), buttons(clean.el));
   assert.ok(buttons(hung.el).some(([label, disabled]) => /Cleared to Land|Final|Land/i.test(label) && !disabled), JSON.stringify(buttons(hung.el)));
   assert.equal(byClass(hung.el, 'efsp-nla-inhibit-reason').length, 0);
 });
 
-test('a CLEAN arrival shows no indicator row at all (docs/adr/0058)', () => {
-  const { el } = renderStrip({ strip: appArrival(), fdr: fdrWith('CLEAN'), held: ['APP'], fieldState: record() });
+test('a CLEAN arrival shows no indicator row at all (docs/adr/0058)', async () => {
+  const { el } = await renderStrip({ strip: appArrival(), fdr: fdrWith('CLEAN'), held: ['APP'], fieldState: record() });
   assert.equal(byClass(el, 'efsp-strip-slots').length, 0);
   assert.equal(byClass(el, 'efsp-strip-reason').length, 0);
 });
