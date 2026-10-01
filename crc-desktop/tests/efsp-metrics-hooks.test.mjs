@@ -1,5 +1,3 @@
-'use strict';
-
 // The measurement hooks, wired into the real Strip panel (docs/adr/0072):
 // efsp-panel.js's search and Bay tabs, bay-view.js's selection and gesture
 // entry points, strip-view.js's Offset menu item. Mounted against the shared
@@ -7,15 +5,14 @@
 // efsp-metrics-client.js loaded — so the last test can prove a hook never
 // changes what the Strip panel dispatches (T4).
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('fs');
-const path = require('path');
-const vm = require('vm');
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const { makeElement, descendants } = require('./helpers/dom-stub.js');
+import './helpers/client-env.mjs';
+import domStub from './helpers/dom-stub.js';
+import { freshGraph } from './helpers/fresh-graph.mjs';
 
-const CLIENT = path.join(__dirname, '../app/public/js/panels/efsp');
+const { makeElement, descendants } = domStub;
 const IDS = [
   'efsp-panel', 'efsp-position-tabs', 'efsp-bay-tabs', 'efsp-bay-content',
   'efsp-new-strip-callsign', 'efsp-create-strip-btn', 'efsp-create-strip-msg',
@@ -24,11 +21,11 @@ const IDS = [
   'efsp-mutation-error', 'efsp-mutation-warning', 'efsp-connection-banner',
 ];
 
-function unrefTimeout(fn, ms, ...args) {
-  const t = setTimeout(fn, ms, ...args);
-  if (t && typeof t.unref === 'function') t.unref();
-  return t;
-}
+// Unref'd timers, so the metrics client's flush timer never holds the test process open.
+const realSetTimeout = globalThis.setTimeout;
+globalThis.setTimeout = (fn, ms, ...args) => { const t = realSetTimeout(fn, ms, ...args); if (t && typeof t.unref === 'function') t.unref(); return t; };
+const realSetInterval = globalThis.setInterval;
+globalThis.setInterval = (fn, ms, ...args) => { const t = realSetInterval(fn, ms, ...args); if (t && typeof t.unref === 'function') t.unref(); return t; };
 
 const BAYS = [
   { bayId: 'gnd-pending', positionId: 'GND', facilityId: 'INCIRLIK', rackIds: ['main'] },
@@ -52,53 +49,51 @@ function fdrFor(fdrId, callsign) {
   };
 }
 
-function mount({ metrics = true } = {}) {
+/** What "efsp-metrics-client.js not loaded" leaves the hooks calling: nothing. */
+const NO_METRICS = { noteSearch() {}, noteBayVisible() {}, noteStripSelected() {}, noteGesture() {}, flush() { return 0; } };
+
+async function mount({ metrics = true } = {}) {
   const mutations = [];
   const reports = [];
   const els = {};
   for (const id of IDS) {
     els[id] = makeElement(id.endsWith('-btn') ? 'button' : /role|stereo|bind/.test(id) ? 'select' : 'input');
   }
-  let uuid = 0;
-  const sandbox = {
-    console: { ...console, log() {}, warn() {} },
-    module: { exports: {} }, setTimeout: unrefTimeout, clearTimeout, setInterval: () => 0, clearInterval: () => {},
-    Date, JSON, Math, Number, Set, Map, Array, Object, String, Boolean, RegExp, Promise,
-    isNaN, parseInt, parseFloat, crypto: { randomUUID: () => `id-${++uuid}` },
-    document: {
-      getElementById: (id) => els[id] || null, createElement: makeElement, body: makeElement('body'),
-      addEventListener() {}, removeEventListener() {},
-    },
-    window: { innerWidth: 1600, innerHeight: 1000, addEventListener() {}, removeEventListener() {}, getSelection: () => ({ removeAllRanges() {} }) },
-  };
-  sandbox.globalThis = sandbox;
-  vm.createContext(sandbox);
-  const files = ['efsp-nla.js', 'strip-template.js', 'efsp-state.js', 'efsp-arrivals.js', 'dot-command.js',
-    'efsp-gestures.js', 'annotation-editor.js', 'strip-drag.js', 'correlation-highlight.js', 'marsa-badge.js',
-    'strip-fields.js', 'bay-view.js', 'strip-view.js', 'efsp-stereo-routes.js', 'efsp-panel.js'];
-  if (metrics) files.splice(files.indexOf('bay-view.js'), 0, 'efsp-metrics-client.js');
-  for (const file of files) vm.runInContext(fs.readFileSync(path.join(CLIENT, file), 'utf8'), sandbox, { filename: file });
+  const d = globalThis.document;
+  d.getElementById = (id) => els[id] || null;
+  d.createElement = makeElement;
+  d.body = makeElement('body'); // a fresh body per mount: the menus and swatches land here
+  globalThis.getSelection = () => ({ removeAllRanges() {} });
 
-  sandbox.getActingPositions = () => ['GND'];
-  sandbox.sendEfspMutation = (actingPositionId, s, op) => { mutations.push({ actingPositionId, stripId: s.stripId, rev: s.rev, op }); return 'mid'; };
-  sandbox.sendEfspCreateStrip = () => 'mid';
-  sandbox.updateMap = () => {};
-  sandbox.renderAllOpenEfspBays = () => {};
-  // Rendering a Rack needs more DOM than the stub has; the Bay's content is not what is measured.
-  sandbox.renderBay = () => {};
-  sandbox.lookupFlightPlanClient = async () => ({ found: false });
-  sandbox.listStereoRoutesClient = async () => [];
-  sandbox.isSyncOpen = () => true;
-  sandbox._sendEfsp = (msg) => reports.push(msg);
+  const g = freshGraph();
+  const state = await g.import('panels/efsp/efsp-state.js');
+  const ws = await g.import('panels/efsp/efsp-ws.js');
+  const sync = await g.import('sync.js');
+  const geojson = await g.import('geojson.js');
+  const bay = await g.import('panels/efsp/bay-view.js');
+  await g.import('panels/efsp/strip-view.js');
+  const metricsClient = await g.import('panels/efsp/efsp-metrics-client.js');
+  const panel = await g.import('panels/efsp/efsp-panel.js');
+  if (!metrics) metricsClient._setEfspMetricsClientForTest(NO_METRICS);
 
-  sandbox.applyEfspSnapshot({
+  ws.setEfspSender('_sendEfsp', () => {});
+  ws.sendEfspSetPositions('INCIRLIK', ['GND']); // getActingPositions() = ['GND']
+  ws.setEfspSender('sendEfspMutation', (actingPositionId, s, op) => { mutations.push({ actingPositionId, stripId: s.stripId, rev: s.rev, op }); return 'mid'; });
+  ws.setEfspSender('sendEfspCreateStrip', () => 'mid');
+  geojson._setUpdateMapForTest(() => {});
+  bay._setRenderAllOpenEfspBaysForTest(() => {});
+  sync.setIsSyncOpen(() => true);
+  // The metrics reports; positions frames from the test's own sendEfspSetPositions are not reports.
+  ws.setEfspSender('_sendEfsp', (msg) => { if (msg && msg.events) reports.push(msg); });
+
+  state.applyEfspSnapshot({
     strips: [stripFor('s1', 'f1', 'gnd-pending'), stripFor('s2', 'f2', 'gnd-taxi-out')],
     fdrs: [fdrFor('f1', 'VIPER11'), fdrFor('f2', 'VIPER12')],
     positions: [], bays: BAYS, airspaces: [], correlations: [], marsa: [],
   });
-  sandbox.initEfspPanel();
-  const flush = () => { if (metrics) sandbox.flushEfspMetricsNow(); return reports.flatMap(r => r.events.map(e => ({ positionId: r.positionId, facilityId: r.facilityId, ...e }))); };
-  return { els, sandbox, mutations, reports, flush };
+  panel.initEfspPanel();
+  const flush = () => { if (metrics) metricsClient.flushEfspMetricsNow(); return reports.flatMap(r => r.events.map(e => ({ positionId: r.positionId, facilityId: r.facilityId, ...e }))); };
+  return { els, sandbox: { ...panel, ...bay, getEfspStrip: state.getEfspStrip, document: d }, ws, metricsClient, mutations, reports, flush };
 }
 
 const nextTask = () => new Promise(resolve => setImmediate(resolve));
@@ -108,7 +103,7 @@ const clickEl = (el) => fire(el, 'click');
 const strip = (m, id) => m.sandbox.getEfspStrip(id);
 
 test('a search sends one SEARCH for the active Position and the Bay it was run from — never the text', async () => {
-  const m = mount();
+  const m = await mount();
   await nextTask();
   m.sandbox._runEfspSearch('VIPER');
   m.sandbox._runEfspSearch('   '); // clearing is not a search
@@ -122,7 +117,7 @@ test('a search sends one SEARCH for the active Position and the Bay it was run f
 });
 
 test('a Bay tab click, then a Strip click in it, yields one TIME_TO_FIND', async () => {
-  const m = mount();
+  const m = await mount();
   await nextTask();
   clickEl(bayTab(m, 'gnd-taxi-out'));
   await nextTask(); // a controller's click is a later task
@@ -137,7 +132,7 @@ test('a Bay tab click, then a Strip click in it, yields one TIME_TO_FIND', async
 });
 
 test('a map click selecting a Strip in the Bay on screen stops the clock too', async () => {
-  const m = mount();
+  const m = await mount();
   await nextTask();
   clickEl(bayTab(m, 'gnd-taxi-out'));
   await nextTask();
@@ -146,7 +141,7 @@ test('a map click selecting a Strip in the Bay on screen stops the clock too', a
 });
 
 test('each gesture entry point yields one GESTURE with its declared cost', async () => {
-  const m = mount();
+  const m = await mount();
   await nextTask();
   const el = m.sandbox._buildStripEl(strip(m, 's1'));
   fire(el, 'dblclick');
@@ -164,13 +159,13 @@ test('each gesture entry point yields one GESTURE with its declared cost', async
 });
 
 test('a gesture that does not dispatch is not counted', async () => {
-  const m = mount();
+  const m = await mount();
   await nextTask();
-  m.sandbox.getActingPositions = () => []; // nothing held: _dispatchGesture declines
+  m.ws.sendEfspSetPositions('INCIRLIK', []); // nothing held: _dispatchGesture declines
   const el = m.sandbox._buildStripEl(strip(m, 's1'));
   fire(el, 'dblclick');
   assert.equal(m.mutations.length, 0);
-  m.sandbox.getActingPositions = () => ['GND'];
+  m.ws.sendEfspSetPositions('INCIRLIK', ['GND']);
   assert.equal(m.flush().length, 0);
 });
 
@@ -192,8 +187,8 @@ test('no hook changes what the Strip panel dispatches (T4)', async () => {
     clickEl(descendants(m.sandbox.document.body).find(c => (c.className || '').includes('efsp-strip-menu-item') && /Offset/.test(c.textContent)));
     return JSON.stringify(m.mutations);
   };
-  const withMetrics = mount({ metrics: true });
-  const without = mount({ metrics: false });
+  const withMetrics = await mount({ metrics: true });
+  const without = await mount({ metrics: false });
   const a = await drive(withMetrics);
   const b = await drive(without);
   assert.ok(withMetrics.mutations.length >= 4);
@@ -202,9 +197,9 @@ test('no hook changes what the Strip panel dispatches (T4)', async () => {
 });
 
 test('a metrics client that throws cannot break a Strip click', async () => {
-  const m = mount();
+  const m = await mount();
   await nextTask();
-  m.sandbox.getEfspBays = () => { throw new Error('boom'); };
+  m.metricsClient._setEfspMetricsClientForTest({ ...NO_METRICS, noteGesture() { throw new Error('boom'); } });
   const el = m.sandbox._buildStripEl(strip(m, 's1'));
   assert.doesNotThrow(() => fire(el, 'dblclick'));
   assert.equal(m.mutations.length, 1);
