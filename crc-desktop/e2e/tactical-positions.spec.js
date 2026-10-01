@@ -10,7 +10,7 @@
  */
 
 const path = require('path');
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./helpers/test');
 const { openPanel, startAction, stripMenuItem } = require('./helpers/app');
 
 /** A mission line's callsign is not in Block 1 (that is the ATC Strips'), so find the Strip by its text. */

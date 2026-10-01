@@ -101,15 +101,17 @@ module.exports = {
   },
   webServer: [
     {
-      command: 'npm start',
-      cwd: path.join(__dirname, '..', 'crc-sync'),
+      // The supervisor restarts crc-sync on a clean state directory when the test reset hook ends it
+      // (crc-sync/src/test-reset.js, e2e/helpers/test.js). It adds CRCSYNC_TEST_RESET=1 itself.
+      command: 'node e2e/helpers/sync-supervisor.js',
+      cwd: __dirname,
       // `port`, not `url`: crc-sync serves no `/` route, so polling for a 2xx
       // there waits forever on a server that is up and working. This just
       // asks whether it is listening, which is the actual question.
       port: CRC_SYNC_PORT,
       reuseExistingServer: false,
       timeout: 60000,
-      env: syncEnv,
+      env: { ...syncEnv, E2E_STATE_DIR: STATE_DIR },
     },
     {
       // app/server.js is what main.js requires; these are the env vars it sets
