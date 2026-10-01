@@ -344,7 +344,21 @@ class Driver {
     // M8 holds for a first send. A replay answers from the idempotency cache
     // and broadcasts nothing by design (docs/adr/0081): its broadcast went out
     // the first time.
-    if (ack.ok && !replay) this._checkBroadcast(msg, ack, facts);
+    if (ack.ok && !replay) {
+      const missingBefore = this.ledger.broadcastMissing;
+      this._checkBroadcast(msg, ack, facts);
+      // selfcheck: a Strip's next delta repairs a dropped one, and a busy
+      // Strip is superseded within seconds, so waiting for the next 60 s
+      // checkpoint can miss the staleness entirely (drop-broadcast stopped
+      // firing after the Board moved faster). Judge the clients that missed
+      // it right now, while the withheld delta is still the newest truth.
+      if (this.o.inject === 'drop-broadcast' && this.ledger.broadcastMissing > missingBefore) {
+        const truth = (await this.call('truth')).truth;
+        for (const c of this.clients.values()) {
+          if (c.connected && c.continuous && !c.discard && !(facts.deltas.get(c.id) || new Set()).has(`${ack.facilityId}|${ack.strip.stripId}`)) this.judgeShadow(c, truth, 'post-drop');
+        }
+      }
+    }
     if (!replay && !this.o.noReplays && (ack.ok || !wireLevel(ack)) && this.rngNet.chance(0.01)) {
       const life = this.lifetime;
       const copy = JSON.parse(JSON.stringify(msg));
@@ -1127,6 +1141,7 @@ class Driver {
       if (tickN % 5 === 0) what.push('expireTracks');
       if (tickN % 15 === 0) what.push('obligationsNla');
       if (tickN % 10 === 0) what.push('heartbeat');
+      if (tickN % 60 === 0) what.push('metrics');
       const r = await this.call('tick', { what });
       if (r.correlation) this._learnCorrelationStats(r.correlation);
       if (r.alerts) {
@@ -1162,7 +1177,7 @@ class Driver {
     // Log reconciliation every 30 virtual minutes (early failure).
     const recon = async () => {
       const r = await this.ledger.reconcileLog(path.join(this.o.stateDir, 'mutations.jsonl'));
-      this.event('logReconcile', { auditMissing: r.auditMissing, auditDuplicate: r.auditDuplicate, auditForRefusal: r.auditForRefusal, auditOrphan: r.auditOrphan, logLines: r.logLines });
+      this.event('logReconcile', { auditMissing: r.auditMissing, auditDuplicate: r.auditDuplicate, auditWrongSource: r.auditWrongSource, auditOrphan: r.auditOrphan, logLines: r.logLines });
       this.after(30 * MIN, recon, 'recon');
     };
     this.at(this.t0 + 30 * MIN, recon, 'recon');

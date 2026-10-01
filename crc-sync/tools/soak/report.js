@@ -26,7 +26,11 @@ function build(d, meta) {
   const lr = d.logRecon;
   const s = d.stats;
   const runMin = meta.minutes;
-  const warmupMin = Math.max(runMin * 0.1, Math.min(20, runMin * 0.25));
+  // Default: the first tenth of the run, up to a quarter (<= 20 min). `--warmup-min`
+  // overrides it: a DROPPED Strip stays 2 h before the archiver takes it
+  // (docs/adr/0082), so the heap only plateaus after ~2 h and a run judged
+  // before that fits the retention fill-up, not a leak (docs/wip/SOAK.md).
+  const warmupMin = Number.isFinite(meta.warmupMin) && meta.warmupMin !== null ? meta.warmupMin : Math.max(runMin * 0.1, Math.min(20, runMin * 0.25));
 
   // ── memory ──────────────────────────────────────────────────────────
   // A restart is a new process with a new heap, so a fit across it is
@@ -125,7 +129,7 @@ function build(d, meta) {
     },
     mutations: {
       lost: L.lost, lostExamples: L.lostExamples, duplicateAck: L.duplicateAck,
-      auditMissing: lr.auditMissing, auditDuplicate: lr.auditDuplicate, auditForRefusal: lr.auditForRefusal, auditOrphan: lr.auditOrphan,
+      auditMissing: lr.auditMissing, auditDuplicate: lr.auditDuplicate, auditWrongSource: lr.auditWrongSource, auditOrphan: lr.auditOrphan,
       auditExamples: lr.examples, systemAuditLines: lr.systemAuditLines, nullCmidLines: lr.nullCmidLines, nullCmidByOp: lr.nullCmidByOp,
       airspaceAudit: lr.airspace, logLines: lr.logLines, replayAuditLines: lr.replayAuditLines,
       internalErrors, storeInternalErrors: d.hostStoreInternalErrors || 0,
@@ -183,7 +187,7 @@ function build(d, meta) {
   gate(L.duplicateAck > 0, `mutations.duplicateAck ${L.duplicateAck} > 0`);
   gate(lr.auditMissing > 0, `mutations.auditMissing ${lr.auditMissing} > 0`);
   gate(lr.auditDuplicate > 0, `mutations.auditDuplicate ${lr.auditDuplicate} > 0`);
-  gate(lr.auditForRefusal > 0, `mutations.auditForRefusal ${lr.auditForRefusal} > 0`);
+  gate(lr.auditWrongSource > 0, `mutations.auditWrongSource ${lr.auditWrongSource} > 0`);
   gate(lr.auditOrphan > 0, `mutations.auditOrphan ${lr.auditOrphan} > 0`);
   gate(internalErrors > 0, `mutations.internalErrors ${internalErrors} > 0 (order-key exhaustion or another store catch-all)`);
   gate(L.replayNotIdempotent.count > 0, `mutations.replayNotIdempotent ${L.replayNotIdempotent.count} > 0`);
@@ -222,7 +226,7 @@ function summary(rep, outDir) {
   L.push('check                         actual                     threshold');
   const row = (a, b, c) => L.push(`${a.padEnd(30)}${String(b).padEnd(27)}${c}`);
   row('lost / duplicateAck', `${m.lost} / ${m.duplicateAck}`, '0');
-  row('audit missing/dup/refusal/orph', `${m.auditMissing}/${m.auditDuplicate}/${m.auditForRefusal}/${m.auditOrphan}`, '0');
+  row('audit missing/dup/source/orph', `${m.auditMissing}/${m.auditDuplicate}/${m.auditWrongSource}/${m.auditOrphan}`, '0');
   row('internalErrors', m.internalErrors, '0');
   row('replays / notIdempotent', `${m.replays} / ${m.replayNotIdempotent.count}`, '0');
   row('broadcastMissing', m.broadcastMissing, '0');
