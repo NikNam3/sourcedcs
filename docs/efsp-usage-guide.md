@@ -1291,6 +1291,14 @@ are not traffic. `CENTER` and `TACTICAL` show locality `UNKNOWN` by design, beca
 home airport. Obligation figures are counts, not rates: only `ADVANCE_FORWARDING` and
 `VOID_TIME_EXPIRED` can ever be "met".
 
+**Retries and reconnects.** A retried Mutation is answered with its original outcome and the record as it
+is now, on every path (Board ops, airspace, correlation, MARSA), and for 10 minutes across a crc-sync
+restart (Board ops only). A resync is served as a delta only within one Board lifetime: the client sends
+back the `boardEpoch` from its last snapshot, delta or ack, and without it (or after a restart) it gets a
+snapshot. A change that moves other Strips (a rebalance of a Rack) now broadcasts every Strip it touched,
+not only the one you addressed. Beacon codes rotate: a released code comes back only after the whole pool
+has cycled, so a new flight is not handed the previous flight's still-airborne code.
+
 **The audit trail.** Every Mutation, and every refusal, is logged in
 `crc-sync/state/efsp-mutations.jsonl`, plus day segments `efsp-mutations.YYYY-MM-DD[.n].jsonl` named
 by their newest entry. Read the segments in day order, then the live file. `ok:false` entries are

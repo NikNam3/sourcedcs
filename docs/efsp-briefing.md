@@ -505,9 +505,11 @@ reconciling acks, broadcasts and the Mutation log. `npm run soak:selfcheck` (~40
 detector fires), `npm run soak:smoke`, `npm run soak -- --minutes 240 --seed 1`, profiles
 `realistic|stress|smoke` (H46, S-R2-6). None is in `npm test`. The literal four-hour run is the
 manual workflow `crc-sync-soak.yml` and **has not been run**: the human runs it once before WP8 is
-declared done. **The soak fails, with evidence**: no lost Mutations, but F1 (rebalance side
-effects never broadcast) and F2 (resync across a restart) fail, and retention drives memory (F3).
-Owners in §4. Run `soak:selfcheck` after touching `board-store.js`, `efsp-ws.js` or `ws-hub.js`;
+declared done. **State after wave 2** (L27, L24): F1, F2, F5, F6 and F13 are fixed, every sync check
+reads 0, and the 10-minute run fails on one gate only, heap slope (expected on a short run; memory is
+judged on the four-hour run, H72, 25% net growth). One `LINGERING_TRACK` (exact-callsign correlation
+onto an earlier flight's still-airborne aircraft; the soak reuses callsigns every 90 flights) remains
+and goes to L19. Run `soak:selfcheck` after touching `board-store.js`, `efsp-ws.js` or `ws-hub.js`;
 after a new mutation type, add it to `driver.js`'s cmid list and `_checkBroadcast`.
 
 **Obligations retract (L7, `0067`).** Forwarding obligations are state now, sent whole in
@@ -802,6 +804,33 @@ live Strip and no un-archived DROPPED one). The wire carries `gone` and `fdrs.go
   copes either way.
 - The soak host does not wire L5's instrumentation, so there the archiver runs unguarded (no traffic
   count) and warns once.
+
+**Board sync correctness (L27, `0081`).** One event, one broadcast: `BoardStore.drainTouched()` returns
+every Strip a Mutation touched (`_touch` is followed by a `rev` bump) and `efsp-ws.js`'s `_boardDelta`
+broadcasts all of them, including a rebalanced Rack and the peer Board's. **Every `efsp-board-delta`
+carries `boardEpoch`** (`_boardEpochFor` in `ws-hub.js`; the heartbeat carries `boardSeq` and no epoch).
+`_handleResync` is resolve → `_deltaCanServe(boardStore, boardEpoch, lastSeq)` → build: a delta only
+within one Board lifetime. `getDeltaSince` returns `{ updated, gone, seq }` (and `_handleResync` sends
+`gone: [...DROPPED, ...delta.gone]`). The idempotency cache holds **compact frozen JSON-safe records**
+(never a live Strip or FDR), is rebuilt as a result on replay (`replayed: true`, the current Strip), and
+the four non-Board handlers (airspace, correlation, MARSA, TOFI) have `_cachedOutcome` / `_rememberOutcome`
+blocks. A Mutation without a `clientMutationId` is **never cached** (before, every later cmid-less one was
+answered with the first one's result). Crash-once: replay records persist in the snapshot for 10 minutes
+(`REPLAY_PERSIST_WINDOW_MS`, loaded at restore unfiltered) and the boot reconcile (`_reconcileLogTail`)
+marks any successful, cmid-bearing Board line no Board holds with `op: 'NotPersisted'`, which voids the
+earlier line with that cmid. `_handleSetPositions` now persists when it reassigned anything. Persist is
+**compact JSON and skips a write whose body is unchanged since the last success**; it stays synchronous
+before the ack (no debounce, no batching, either would let an acknowledged change die with the process).
+`code-allocator.js` keeps a rotating cursor (`fdr.codeCursor`, beside `fdr.codes`).
+- Traffic count: a retried drop gets the same `countId`, so `liveCountRecords` and `_index` read
+  COUNT/VOID in file order (a COUNT after a VOID revives it); `reconcile({ backfill })` replays the
+  markers; `isNotPersistedDrop` is exported.
+- Harness: `driver.js` skips M8's broadcast check for a replay (it now broadcasts nothing by design),
+  `logLinesFor` applies the marker rule, `selfcheck` passes; no detector was weakened.
+- Walks and numbers not done: `p50 <= 3 ms` unloaded (2.16 ms measured with `--prune-retired` on a loaded
+  machine, re-measure after L24); the dirty check holds the last serialised body in memory (about the
+  snapshot's size, bounded now L24 retains); the shipped client still never sends `sendEfspResync`, so
+  the epoch matters for any future client and for the soak.
 
 ## 4. What's left, and the known bugs
 
