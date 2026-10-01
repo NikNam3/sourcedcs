@@ -82,6 +82,18 @@ test('a coordination replica is an arrival, from the Position that proposed it',
   assert.equal(found[0].from, 'APP');
 });
 
+test('UI-A U2: a replica minted for a proposal my own controller made is still an arrival (one person on APP and CTR)', () => {
+  const replica = strip({
+    ownerPositionId: 'CTR', bayId: 'ctr-app-coordination', updatedBy: ME,
+    coordination: { primitive: 'HANDOFF', state: 'PROPOSED', peerPositionId: 'APP', mintedForCoordination: true },
+  });
+  const found = A.noteEfspArrivals(new Map(), [replica], ctx({ heldPositions: ['APP', 'CTR'] }));
+  assert.equal(found.length, 1);
+  assert.equal(found[0].from, 'APP');
+  // ...while an ordinary Strip I made myself stays quiet.
+  assert.equal(A.noteEfspArrivals(new Map(), [strip({ stripId: 's9', updatedBy: ME })], ctx()).length, 0);
+});
+
 test('the flash is consumed exactly once, and the edge fades 30 s after it was first seen', () => {
   A.noteEfspArrivals(was('gnd-taxi-out', 'GND'), [strip()], ctx());
   assert.ok(A.efspArrivalFor('s1', 999999), 'an unseen arrival does not fade while nobody has looked');
