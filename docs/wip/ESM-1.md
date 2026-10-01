@@ -9,8 +9,8 @@
 8f0186d (efsp-wp5-correlation) · afbeb67 efsp-scenario-resync to modules · 395ebd0 + 06d1d84 bridge `history` fix.
 **Counts.** crc-desktop 866 (865 pass, 1 todo) → 872 (870 pass, 2 todo, 0 fail): −4 client-global-surface (its todo
 included), +9 module-graph (7 + 2 finding todos), +1 packaging-config. Every other file is the same, one for one
-(e2e-spec-hygiene is 34 at base and in the unit). crc-sync 2083 at base → 2146 on the merged unit: 2145 pass, 1 todo, 0 fail
-(efsp-ato-tokenize's timing test failed once under load ~80 and passed alone). Freeze goldens 47/47 identical, no
+(e2e-spec-hygiene is 34 at base and in the unit). crc-sync 2083 at base → 2146 on the merged unit: 2144 pass, 1 todo, 1 fail
+(the fail is efsp-ato-tokenize's timing test under load ~80; it passes alone). Freeze goldens 47/47 identical, no
 behaviour commits. No selfcheck or soak needed (no crc-sync/src touched).
 **Playwright (E2E_LANE=1, load avg 35-90):** smoke, l2-block-editing, l22-stars-scope and marsa-popover pass (24/25, then marsa-popover
 3/3 alone). l15-metrics:28 fails on the verdict timeout with the classic integration client too, so it is not ESM.
