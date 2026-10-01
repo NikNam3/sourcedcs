@@ -282,6 +282,17 @@ test('setOnEfspChange fires after an EFSP message that broadcast, not after one 
   assert.equal(ws.sent.filter(m => m.type === 'efsp-ack').length, 3, 'the sender still got every ack');
 });
 
+test('a handler result with an ack and no broadcasts array (metrics report/request, resync answers) is sent, not thrown on', () => {
+  const { hub, session } = setup();
+  const ws = fakeWs();
+  hub._efsp = { handleMessage: () => ({ ack: { type: 'efsp-metrics-ack' } }) };
+  let fired = 0;
+  hub.setOnEfspChange(() => { fired += 1; });
+  assert.doesNotThrow(() => hub._onMessage(ws, session, JSON.stringify({ type: 'efsp-metrics-report' })));
+  assert.deepEqual(ws.sent.map(m => m.type), ['efsp-metrics-ack']);
+  assert.equal(fired, 0, 'nothing was broadcast, so nothing changed');
+});
+
 // ── The draw scheme on the wire (docs/adr/0088) ────────────────────────────
 
 test('scheme is on every wire track, and follows the session: ATC Positions + a tactical radar per track (H50)', () => {
