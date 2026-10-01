@@ -44,7 +44,7 @@ function headingDiff(a, b) {
  * One flight, one moment. Pure: all memory lives in `mem`, which the caller
  * keeps per flight and passes back next time.
  *
- * @param {object} input  { hdg: {parsed, at}|null, alt: {parsed, at}|null,
+ * @param {object} input  { hdg: {parsed, at}|null, alt: {parsed, block?: {lowFt, highFt}, at}|null,
  *                          course, groundSpeedMs, verticalSpeedMs, altFt }
  * @param {object} mem    per-flight memory (mutated)
  * @param {number} now    ms
@@ -79,10 +79,19 @@ function evaluateConformance(input, mem, now, cfg) {
   }
 
   // ── altitude ──
-  const alt = input.alt && Number.isFinite(input.alt.parsed) ? input.alt : null;
+  const alt = input.alt && (input.alt.block || Number.isFinite(input.alt.parsed)) ? input.alt : null;
   if (alt && Number.isFinite(input.altFt)) {
     if (mem.altFor !== alt.at) { mem.altFor = alt.at; mem.reached = false; mem.wrongSince = null; mem.bustSince = null; }
-    const diff = alt.parsed - input.altFt; // + means the aircraft is below its clearance
+    // A block (docs/adr/0091) is a band: no deviation anywhere inside it, and
+    // outside it the distance to the NEAREST edge, so the edge tolerance and the
+    // bust threshold are the same as for a single altitude. `edge` is the
+    // altitude the alert is measured from.
+    const low = alt.block ? alt.block.lowFt : alt.parsed;
+    const high = alt.block ? alt.block.highFt : alt.parsed;
+    const edge = input.altFt < low ? low : input.altFt > high ? high : input.altFt;
+    const diff = edge - input.altFt; // + means the aircraft is below its clearance
+    const assigned = alt.block ? (diff === 0 ? (high - input.altFt <= input.altFt - low ? high : low) : edge) : alt.parsed;
+    const blockOut = alt.block ? { block: { lowFt: alt.block.lowFt, highFt: alt.block.highFt } } : {};
     if (Math.abs(diff) <= cfg.atAltitudeBandFt) mem.reached = true;
 
     const fpm = Number.isFinite(input.verticalSpeedMs) ? input.verticalSpeedMs * FPM_PER_MS : 0;
@@ -91,7 +100,7 @@ function evaluateConformance(input, mem, now, cfg) {
     if (wrongWay && !mem.reached) {
       if (mem.wrongSince == null) mem.wrongSince = now;
       if (now - mem.wrongSince >= cfg.wrongWayPersistSec * 1000) {
-        alerts.push({ kind: 'WRONG_WAY', assigned: alt.parsed, altFt: Math.round(input.altFt), fpm: Math.round(fpm), since: mem.wrongSince });
+        alerts.push({ kind: 'WRONG_WAY', assigned, ...blockOut, altFt: Math.round(input.altFt), fpm: Math.round(fpm), since: mem.wrongSince });
       }
     } else {
       mem.wrongSince = null;
@@ -100,7 +109,7 @@ function evaluateConformance(input, mem, now, cfg) {
     if (mem.reached && Math.abs(diff) > cfg.levelBustFt) {
       if (mem.bustSince == null) mem.bustSince = now;
       if (now - mem.bustSince >= cfg.levelBustPersistSec * 1000) {
-        alerts.push({ kind: 'LEVEL_BUST', assigned: alt.parsed, altFt: Math.round(input.altFt), deviationFt: Math.round(-diff), since: mem.bustSince });
+        alerts.push({ kind: 'LEVEL_BUST', assigned, ...blockOut, altFt: Math.round(input.altFt), deviationFt: Math.round(-diff), since: mem.bustSince });
       }
     } else {
       mem.bustSince = null;

@@ -297,6 +297,55 @@ function parseAltitudeFt(text) {
   return m[1].length <= 3 ? n * 100 : n;
 }
 
+/** A flight level and below-FL feet, as the canonical block text writes an end. */
+const BLOCK_FL_FROM_FT = 18000;
+function formatAltitudeEnd(ft) {
+  return ft >= BLOCK_FL_FROM_FT && ft % 100 === 0 ? `FL${String(ft / 100).padStart(3, '0')}` : String(ft);
+}
+
+/** A block in its one canonical text, `FL220-FL240` / `5000-8000` (docs/adr/0091). */
+function formatAltitudeBlock(band) {
+  return `${formatAltitudeEnd(band.lowFt)}-${formatAltitudeEnd(band.highFt)}`;
+}
+
+/** Splits "FL220B240" / "FL220-FL240" / "220TO240" into its two ends in feet, unordered; null when it is not one. */
+function splitAltitudeBlock(t) {
+  for (let i = 1; i < t.length - 1; i += 1) {
+    for (const sep of ['-', 'B', 'TO']) {
+      if (!t.startsWith(sep, i)) continue;
+      const low = parseAltitudeFt(t.slice(0, i));
+      const high = parseAltitudeFt(t.slice(i + sep.length));
+      if (low != null && high != null) return { lowFt: low, highFt: high };
+    }
+  }
+  return null;
+}
+
+function altitudeKey(text) {
+  return String(text == null ? '' : text).trim().toUpperCase().replace(/\s+/g, '');
+}
+
+/**
+ * An assigned altitude as a band in feet (docs/adr/0091): `{ lowFt, highFt }`.
+ * A single altitude is a zero-width band (`lowFt === highFt`). A block is two
+ * altitudes joined by `-`, `B` or `TO` ("FL220-FL240", "FL220B240", "220B240",
+ * "5000-8000"), low first. Null when it is neither, and for a block whose low
+ * end is not below its high end.
+ */
+function parseAltitude(text) {
+  const t = altitudeKey(text);
+  const single = parseAltitudeFt(t);
+  if (single != null) return { lowFt: single, highFt: single };
+  const block = splitAltitudeBlock(t);
+  return block && block.lowFt < block.highFt ? block : null;
+}
+
+/** True when the text is two readable altitudes in the wrong order (or equal), for a precise refusal. */
+function isMisorderedBlock(text) {
+  const block = splitAltitudeBlock(altitudeKey(text));
+  return !!block && block.lowFt >= block.highFt;
+}
+
 // Typed time Blocks (docs/adr/0062's rule, extended by supervisor fix F4).
 //
 // Every …TimeUtc path a controller writes is epoch ms, like every other …Utc
@@ -378,10 +427,11 @@ function normalizeMtrValue(path, value, nowMs) {
   const text = value == null ? '' : String(value).trim().toUpperCase();
   if (text === '') return { ok: true, value: null };
   if (path === 'military.mtr.requestedAltitudeAfterExit') {
-    if (parseAltitudeFt(text) == null) {
-      return { ok: false, detail: 'requested altitude after exit must be an altitude, e.g. FL210 or 080' };
+    const band = parseAltitude(text);
+    if (band == null) {
+      return { ok: false, detail: 'requested altitude after exit must be an altitude or a block, e.g. FL210, 080 or FL210-FL230' };
     }
-    return { ok: true, value: text.replace(/\s+/g, '') };
+    return { ok: true, value: band.lowFt === band.highFt ? text.replace(/\s+/g, '') : formatAltitudeBlock(band) };
   }
   return { ok: true, value: text };
 }
@@ -1211,19 +1261,32 @@ class FdrStore {
       const text = String(value == null ? '' : value).trim().toUpperCase();
       if (text.length > MAX_FREE_TEXT) return { ok: false, reason: 'VALIDATION_ERROR', detail: `limited to ${MAX_FREE_TEXT} characters` };
       let parsed = null;
+      let block = null;
+      let shown = text;
       if (text !== '') {
-        parsed = field === 'altitude' ? parseAltitudeFt(text) : parseHeadingDeg(text);
-        if (parsed === null) {
-          return {
-            ok: false, reason: 'VALIDATION_ERROR',
-            detail: field === 'altitude'
-              ? `${JSON.stringify(text)} is not an altitude — write it like 5000, 050, A050 or FL180`
-              : `${JSON.stringify(text)} is not a heading — write it as 1 to 360, e.g. 050`,
-          };
+        if (field === 'altitude') {
+          const band = parseAltitude(text);
+          if (band === null) {
+            return {
+              ok: false, reason: 'VALIDATION_ERROR',
+              detail: isMisorderedBlock(text)
+                ? `${JSON.stringify(text)} is not a block — write the lower altitude first, e.g. FL220-FL240`
+                : `${JSON.stringify(text)} is not an altitude — write it like 5000, 050, A050, FL180 or a block, FL220-FL240`,
+            };
+          }
+          if (band.lowFt === band.highFt) parsed = band.lowFt;
+          else { block = band; shown = formatAltitudeBlock(band); }
+        } else {
+          parsed = parseHeadingDeg(text);
+          if (parsed === null) {
+            return { ok: false, reason: 'VALIDATION_ERROR', detail: `${JSON.stringify(text)} is not a heading — write it as 1 to 360, e.g. 050` };
+          }
         }
       }
       if (active) active.status = 'SUPERSEDED';
-      cell.entries.push({ value: text, parsed, status: 'ACTIVE', at: now, by: by || null });
+      const entry = { value: shown, parsed, status: 'ACTIVE', at: now, by: by || null };
+      if (field === 'altitude') entry.block = block;
+      cell.entries.push(entry);
     }
 
     fdr.provenance[`clearance.${field}`] = 'CONTROLLER_ENTERED';
@@ -1276,6 +1339,6 @@ module.exports = {
   EDCT_WINDOW_MINUTES, CALL_FOR_RELEASE_BEFORE_MINUTES, CALL_FOR_RELEASE_AFTER_MINUTES,
   TRACK_DEGRADATION_FLAGS, AIRSPACE_OWNERS, RADAR_SERVICE_STATES, SEPARATION_REGIMES, MAX_FREE_TEXT,
   ORDNANCE_STATES, ALERT_STATUSES, MILITARY_WRITABLE_FIELDS, defaultMilitary,
-  CLEARANCE_FIELDS, defaultClearance, ensureClearance, parseAltitudeFt, parseHeadingDeg, activeClearanceEntry,
+  CLEARANCE_FIELDS, defaultClearance, ensureClearance, parseAltitudeFt, parseAltitude, formatAltitudeBlock, parseHeadingDeg, activeClearanceEntry,
   normalizeMtrValue,
 };

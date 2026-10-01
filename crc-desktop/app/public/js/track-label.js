@@ -103,6 +103,11 @@ function assignedAltText(ft) {
   return ft >= ta ? `FL${String(Math.round(ft / 100)).padStart(3, '0')}` : Number(ft).toLocaleString('en-US');
 }
 
+/** An assigned altitude block ({lowFt, highFt}, docs/adr/0091) as 'FL220-FL240'. */
+function assignedBlockText(block) {
+  return `${assignedAltText(block.lowFt)}-${assignedAltText(block.highFt)}`;
+}
+
 /** The type the contact is known as (its flight plan's, or the datalink's), with its display label. */
 function typeText(t) {
   if (!t || !t.type) return '';
@@ -199,7 +204,15 @@ function atcSpeed(speedKt) {
 function atcAssignedText(assigned, currentFt) {
   if (!assigned) return '';
   const parts = [];
-  if (Number.isFinite(assigned.altFt)) {
+  if (assigned.altBlock) {
+    const { lowFt, highFt } = assigned.altBlock;
+    let trend = '';
+    if (Number.isFinite(currentFt)) {
+      if (currentFt < lowFt - 200) trend = '↑';
+      else if (currentFt > highFt + 200) trend = '↓';
+    }
+    parts.push(`A${String(Math.round(lowFt / 100)).padStart(3, '0')}B${String(Math.round(highFt / 100)).padStart(3, '0')}${trend}`);
+  } else if (Number.isFinite(assigned.altFt)) {
     let trend = '';
     if (Number.isFinite(currentFt) && Math.abs(assigned.altFt - currentFt) > 200) trend = assigned.altFt > currentFt ? '↑' : '↓';
     parts.push('A' + String(Math.round(assigned.altFt / 100)).padStart(3, '0') + trend);
@@ -276,7 +289,7 @@ function atcBlockLines(t, v, info = {}) {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     isAir, isSea, isGround, trackName, trackNameSuffix, trackRef, trackEmergency, trackIsIdent,
-    trackCodeTag, altitudeShort, altitudeLong, altitudeText, assignedAltText, typeText, infoLine,
+    trackCodeTag, altitudeShort, altitudeLong, altitudeText, assignedAltText, assignedBlockText, typeText, infoLine,
     pickerText, shouldLabel, tagEditable, emergencyColor,
     ATC_EMERGENCY_TAG, atcEmergencyTag, atcAltitude, atcSpeed, atcAssignedText, atcType, atcBlockLines,
   };

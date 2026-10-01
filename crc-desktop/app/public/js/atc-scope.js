@@ -300,6 +300,7 @@ function atcAssigned(fdr) {
   const hdg = active(fdr.clearance.heading);
   return {
     altFt: alt && Number.isFinite(alt.parsed) ? alt.parsed : null,
+    altBlock: alt && alt.block ? alt.block : null,
     hdg: hdg && Number.isFinite(hdg.parsed) ? hdg.parsed : null,
   };
 }
