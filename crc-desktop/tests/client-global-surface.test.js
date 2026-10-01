@@ -78,12 +78,14 @@ function loadAll() {
     fetch: () => Promise.reject(new Error('no network')), WebSocket: function () {}, Audio: function () {}, Image: function () {},
     maplibregl: permissive(), dockview: permissive(), DockviewCore: permissive(), Chart: permissive(),
     window: {}, ResizeObserver: function () { this.observe = () => {}; this.disconnect = () => {}; }, MutationObserver: function () { this.observe = () => {}; },
-    CRC_CONFIG: {}, CRC_SYNC_URL: 'http://localhost:1', module: { exports: {} },
+    CRC_CONFIG: {}, module: { exports: {} },
   };
   sandbox.window = new Proxy(sandbox, { get: (t, k) => t[k], set: (t, k, v) => { t[k] = v; return true; }, has: () => true });
   sandbox.window.addEventListener = () => {}; sandbox.window.removeEventListener = () => {};
   sandbox.globalThis = sandbox; sandbox.self = sandbox;
   vm.createContext(sandbox);
+  // What the server's generated /js/config.js defines (app/server.js).
+  vm.runInContext('var CRC_SYNC_URL = "ws://localhost:1"; var CASDOOR_CLIENT_ID = ""; var CASDOOR_ENDPOINT = "";', sandbox);
   const results = [];
   for (const s of scripts) {
     const code = fs.readFileSync(fileOf(s), 'utf8');
