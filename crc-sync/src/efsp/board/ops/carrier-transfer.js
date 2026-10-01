@@ -111,5 +111,11 @@ module.exports = {
     }
     return null;
   },
+  auditFields: (ctx, result) => ({ tail: {
+    // The carrier hand-over kind and its trigger type (guide §9.12: "four
+    // different trigger types"), so an after-action review can tell them apart.
+    carrierTransfer: result.carrierTransfer ? result.carrierTransfer.kind : undefined,
+    carrierTrigger: result.carrierTransfer ? result.carrierTransfer.trigger : undefined,
+  } }),
   apply: (ctx, strip, op, meta) => _applyCarrierTransfer(ctx, strip, op.transfer, op.toPositionId, meta.by, meta.actingPositionId, meta.clientMutationId),
 };

@@ -135,8 +135,14 @@ class StripOps {
         else result.fdrs = [...(result.fdrs || []), stamped];
       }
     }
-    this._audit.recordAudit(mutation, actingPositionId, by, before, result);
+    this._audit.recordAudit(mutation, actingPositionId, by, before, result, this.auditFieldsFor(op.kind, result, op));
     return result;
+  }
+
+  /** The op's own audit keys (`auditFields` in its table entry): `{head, tail}`, or none. */
+  auditFieldsFor(kind, result, op) {
+    const entry = this._ops.get(kind);
+    return entry && entry.auditFields && result.ok ? entry.auditFields(this, result, op) : {};
   }
 
 

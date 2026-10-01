@@ -141,5 +141,8 @@ function _applyAnnotationSet(ctx, strip, blockId, value, confirmVacated, by) {
 
 module.exports = {
   kind: 'SetBlock',
+  // The op kind alone names neither the Block written nor a coordination
+  // action (PROPOSE/ACCEPT/REJECT/CANCEL...); the entry says which.
+  auditFields: (ctx, result, op) => ({ head: { blockId: op.blockId, value: op.value } }),
   apply: (ctx, strip, op, meta) => _applySetBlock(ctx, strip, op, meta.by, meta.actingPositionId, meta.clientMutationId),
 };

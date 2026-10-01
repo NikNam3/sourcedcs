@@ -67,5 +67,10 @@ module.exports = {
     }
     return null;
   },
+  auditFields: (ctx, result) => ({ tail: {
+    // The SFA rotation transfer and its trigger type (guide §4.7).
+    sfaTransfer: result.sfaTransfer ? result.sfaTransfer.kind : undefined,
+    sfaTrigger: result.sfaTransfer ? result.sfaTransfer.trigger : undefined,
+  } }),
   apply: (ctx, strip, op, meta) => _applySfaRotation(ctx, strip, meta.by, meta.actingPositionId),
 };

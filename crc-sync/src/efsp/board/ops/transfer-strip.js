@@ -95,5 +95,11 @@ function _applyTransferStrip(ctx, strip, op, by) {
 
 module.exports = {
   kind: 'TransferStrip',
+  auditFields: (ctx, result) => ({ tail: {
+    // Distinguishes a self-coordinated boundary event from a two-party
+    // one (guide §4.8.3 rule 4) — undefined for every op except a
+    // successful TransferStrip, where board-store.js computes it.
+    selfCoordinated: result.selfCoordinated,
+  } }),
   apply: (ctx, strip, op, meta) => _applyTransferStrip(ctx, strip, op, meta.by),
 };

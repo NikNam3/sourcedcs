@@ -77,5 +77,10 @@ function _applyInvokeNla(ctx, strip, by) {
 
 module.exports = {
   kind: 'InvokeNla',
+  // An NLA press records what the op it ran would: a transfer's selfCoordinated, or a carrier hand-over's kind and trigger.
+  auditFields: (ctx, result, op) => ({ tail: {
+    ...ctx.auditFieldsFor('TransferStrip', result, op).tail,
+    ...ctx.auditFieldsFor('CarrierTransfer', result, op).tail,
+  } }),
   apply: (ctx, strip, op, meta) => _applyInvokeNla(ctx, strip, meta.by),
 };
