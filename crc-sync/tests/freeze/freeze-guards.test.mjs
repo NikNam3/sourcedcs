@@ -50,7 +50,7 @@ test('freeze guard 1: every rule board-store reads is wired for every Facility',
   const read = new Set();
   // Rules are read as `this._rules.X` in board-store.js and, once collaborators take the rules object, as a bare
   // `rules.X` under src/efsp/board/. The lookbehind keeps `foo.rules.X` and `_rules.X` out of the bare form.
-  for (const f of boardSources()) for (const m of stripComments(fs.readFileSync(f, 'utf8')).matchAll(/(?:this\._rules|(?<![\w$.])rules)\.([A-Za-z_]\w*)/g)) read.add(m[1]);
+  for (const f of boardSources()) for (const m of stripComments(fs.readFileSync(f, 'utf8')).matchAll(/(?:this\._rules|(?<![\w$.])rules|\b(?:ctx|this)\.rules)\.([A-Za-z_]\w*)/g)) read.add(m[1]);
   assert.ok(read.size >= 40, `expected to find the rule names board-store reads (found ${read.size})`);
   const efsp = createEfsp();
   const gaps = [];

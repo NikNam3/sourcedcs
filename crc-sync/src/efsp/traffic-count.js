@@ -33,6 +33,7 @@ const { WALL_CLOCK } = require('../mission-clock');
 const { getInstrumentationConfig } = require('./instrumentation-config');
 const { SCRAMBLE_PRE_AIRBORNE: _SCRAMBLE_PRE } = require('./alert-scramble');
 const authority = require('./authority');
+const countLog = require('../log').logger('efsp:traffic-count');
 
 const TRAFFIC_COUNT_PATH = writePath('efsp-traffic-count.jsonl', process.env.CRCSYNC_EFSP_TRAFFIC_COUNT_PATH);
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -361,7 +362,7 @@ class TrafficCount {
     }
     const parsed = [];
     for (const line of lines) {
-      try { parsed.push(JSON.parse(line)); } catch { console.warn('[efsp-traffic-count] skipping an unreadable line'); }
+      try { parsed.push(JSON.parse(line)); } catch { countLog.warn('skipping an unreadable line'); }
     }
     const cutoff = this._wallNow() - this._retentionDays * DAY_MS;
     const expired = new Set();
@@ -384,7 +385,7 @@ class TrafficCount {
       fs.writeFileSync(tmp, entries.map(e => JSON.stringify(e)).join('\n') + (entries.length ? '\n' : ''));
       fs.renameSync(tmp, this._path);
     } catch (e) {
-      console.warn('[efsp-traffic-count] failed to compact:', e.message);
+      countLog.warn('failed to compact', { error: e.message });
     }
   }
 
@@ -547,7 +548,7 @@ class TrafficCount {
     } catch (err) {
       // Kept in memory regardless; the next boot's reconciliation finds it
       // missing from the file and backfills it from the log.
-      console.warn('[efsp-traffic-count] failed to append:', err.message);
+      countLog.warn('failed to append', { error: err.message });
     }
     this._index(e);
   }
@@ -595,11 +596,11 @@ class TrafficCount {
         this._append(this._buildRecord(x.entry, { backfilled: true, sua: x.record.suaTraversal }));
         backfilled += 1;
       }
-      console.warn(`[efsp-traffic-count] backfilled ${backfilled} count record(s) the Mutation log has and the count file lacked`);
+      countLog.warn('backfilled count records the Mutation log has and the count file lacked', { backfilled });
       result = reconcileTrafficCount(logEntries, this._entries, {});
     }
     if (result.extra.length || result.mismatched.length) {
-      console.warn(`[efsp-traffic-count] reconciliation: ${result.extra.length} extra, ${result.mismatched.length} mismatched — kept, not deleted`);
+      countLog.warn('reconciliation: extra or mismatched count records — kept, not deleted', { extra: result.extra.length, mismatched: result.mismatched.length });
     }
     this._lastReconciliation = { ...result, checkedAt: this._clock.now(), backfilled };
     return this._lastReconciliation;

@@ -14,6 +14,7 @@
 
 const fs = require('fs');
 const { statePaths, ensureDirFor } = require('./state-paths');
+const log = require('./log').logger('apt-config');
 
 // Overridable so tests can exercise the mutate/persist path against a temp
 // file instead of the real squadron-wide config.
@@ -34,7 +35,7 @@ let byAirport = {};
 try {
   byAirport = JSON.parse(fs.readFileSync(APT_CONFIG_READ_PATH, 'utf8'));
 } catch (e) {
-  console.warn('[apt-config] failed to load config/apt-config.json, starting empty:', e.message);
+  log.warn('failed to load config/apt-config.json, starting empty', { error: e.message });
 }
 
 function _persist() {
@@ -42,7 +43,7 @@ function _persist() {
     ensureDirFor(APT_CONFIG_PATH);
     fs.writeFileSync(APT_CONFIG_PATH, JSON.stringify(byAirport, null, 2));
   } catch (e) {
-    console.warn('[apt-config] failed to persist config/apt-config.json:', e.message);
+    log.warn('failed to persist config/apt-config.json', { error: e.message });
   }
 }
 

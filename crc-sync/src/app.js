@@ -35,7 +35,7 @@ const { ConformanceMonitor } = require('./efsp/conformance');
 const { StcaMonitor } = require('./stca');
 const { loadAlertingConfig } = require('./alerting-config');
 const { indicatedAltFt } = require('./altimetry');
-const { MissionClock } = require('./mission-clock');
+const { MissionClock, WALL_CLOCK } = require('./mission-clock');
 const { MissionSession } = require('./mission-session');
 const { loadTheaters } = require('./theaters');
 const { TheaterContext } = require('./theater-context');
@@ -47,6 +47,13 @@ const { CarrierTick } = require('./efsp/carrier-tick');
 const { carrierDelta } = require('./efsp/efsp-ws');
 const { USER_COALITION } = require('./surveillance/iff');
 const { wireCollabSession } = require('./collab-wiring');
+const log = require('./log').logger('app');
+const authLog = require('./log').logger('auth');
+const weatherLog = require('./log').logger('weather');
+const fieldLog = require('./log').logger('field-state');
+const archiverLog = require('./log').logger('efsp:archiver');
+const fplLog = require('./log').logger('efsp:flight-plan-lookup');
+const stereoLog = require('./log').logger('efsp:stereo-routes');
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
@@ -156,7 +163,7 @@ function createApp(deps = {}) {
     try {
       const tokenData = await auth.casdoorTokenExchange(code, redirectUri);
       if (tokenData.error) {
-        console.warn('[auth] Casdoor token exchange error:', tokenData.error, tokenData.error_description);
+        authLog.warn('Casdoor token exchange error', { error: tokenData.error, description: tokenData.error_description });
         return res.status(400).json({ error: tokenData.error_description || tokenData.error });
       }
       if (!tokenData.access_token) {
@@ -164,7 +171,7 @@ function createApp(deps = {}) {
       }
       res.json({ access_token: tokenData.access_token });
     } catch (err) {
-      console.error('[auth] token exchange failed:', err.message);
+      authLog.error('token exchange failed', { error: err.message });
       res.status(502).json({ error: 'Casdoor exchange failed' });
     }
   });
@@ -288,7 +295,7 @@ function createApp(deps = {}) {
         const w = await grpcClient.getAptWeather(ap.lat, ap.lon, ap.elev || 0);
         airportWeather.set(ap.name, { ...w, updatedAt: Date.now() });
       } catch (e) {
-        console.warn(`[weather] apt-weather fetch failed for ${ap.name}:`, e.message);
+        weatherLog.warn('apt-weather fetch failed', { airport: ap.name, error: e.message });
       }
     }
   }
@@ -319,7 +326,7 @@ function createApp(deps = {}) {
       const icao = (efspFacilityConfig.getFacilityConfig(facilityId).fieldState || {}).airportIcao;
       if (!icao || !efsp.fieldStateStore.hasFieldState(facilityId)) continue;
       const airport = (missionData.airports || []).find(a => a.icao === icao);
-      if (!airport) { console.warn(`[field-state] ${facilityId}: no ${icao} in this mission — active runway left as it is`); continue; }
+      if (!airport) { fieldLog.warn('no such airport in this mission — active runway left as it is', { facilityId, icao }); continue; }
       grpcClient.getAptWeather(airport.lat, airport.lon, airport.elev || 0)
         .then((w) => {
           const r = efsp.fieldStateStore.setActiveRunwayFromWind(facilityId, { windFromTrue: w.windFrom, windKt: w.windKt, missionSession: missionSessionSeq });
@@ -333,10 +340,10 @@ function createApp(deps = {}) {
               fieldStates: [efsp.fieldStateStore.getFieldState(facilityId)],
             });
             efsp.nlaStatusMonitor.tick();
-            console.log(`[field-state] ${facilityId}: active runway ${r.activeRunway} from the mission wind (${w.windFrom}° true, ${w.windKt} kt)`);
+            fieldLog.info('active runway from the mission wind', { facilityId, activeRunway: r.activeRunway, windFromDegTrue: w.windFrom, windKt: w.windKt });
           }
         })
-        .catch((e) => console.warn(`[field-state] ${facilityId}: wind fetch failed, active runway left as it is:`, e.message));
+        .catch((e) => fieldLog.warn('wind fetch failed, active runway left as it is', { facilityId, error: e.message }));
     }
   }
 
@@ -397,7 +404,7 @@ function createApp(deps = {}) {
     efsp.persist();
     for (const p of payloads) wsHub.broadcastEfspBoardDelta(p);
     const n = payloads.reduce((sum, p) => sum + p.gone.length, 0);
-    console.log(`[efsp-archiver] archived ${n} Strip(s) and ${r.fdrIds.length} FDR(s)`);
+    archiverLog.info('archived Strips and FDRs', { strips: n, fdrs: r.fdrIds.length });
     return n;
   }
   missionSession.onNewSession((session) => _archive(efsp.archiver.onMissionSessionChange(session)));
@@ -437,6 +444,7 @@ function createApp(deps = {}) {
   const alertingConfig = loadAlertingConfig();
   const conformanceMonitor = new ConformanceMonitor({
     clock: missionClock,
+    wallClock: WALL_CLOCK,
     trackStore,
     fdrStore: efsp.fdrStore,
     correlationStore: efsp.correlationStore,
@@ -452,6 +460,7 @@ function createApp(deps = {}) {
   // controller advances (§10.3).
   const surveillanceHints = deps.surveillanceHints === null ? null : (deps.surveillanceHints || new SurveillanceHintMonitor({
     clock: missionClock,
+    wallClock: WALL_CLOCK,
     trackStore,
     correlationStore: efsp.correlationStore,
     boardStoreFor: efsp.boardStoreFor,
@@ -540,7 +549,7 @@ function createApp(deps = {}) {
       if (!result.found) return res.status(404).json({ found: false, reason: result.reason });
       res.json({ found: true, seed: toFdrFiledSeed(result.plan) });
     } catch (err) {
-      console.error('[flight-plan-lookup] unexpected error, responding 503 instead of crashing:', err);
+      fplLog.error('unexpected error, responding 503 instead of crashing', { err });
       res.status(503).json({ found: false, reason: 'lookup failed unexpectedly' });
     }
   });
@@ -556,7 +565,7 @@ function createApp(deps = {}) {
       if (!result.ok) return res.status(503).json({ ok: false, reason: result.reason });
       res.json({ ok: true, plans: result.plans });
     } catch (err) {
-      console.error('[flight-plan-lookup] unexpected error listing plans, responding 503 instead of crashing:', err);
+      fplLog.error('unexpected error listing plans, responding 503 instead of crashing', { err });
       res.status(503).json({ ok: false, reason: 'list failed unexpectedly' });
     }
   });
@@ -573,7 +582,7 @@ function createApp(deps = {}) {
     try {
       res.json({ ok: true, routes: efspStereoRoutes.getActiveStereoRoutes() });
     } catch (err) {
-      console.error('[efsp-stereo-routes] unexpected error, responding 503 instead of crashing:', err);
+      stereoLog.error('unexpected error, responding 503 instead of crashing', { err });
       res.status(503).json({ ok: false, reason: 'stereo route lookup failed unexpectedly' });
     }
   });
@@ -662,7 +671,7 @@ function createApp(deps = {}) {
       const activeIds = new Set(trackStore.getAll().map(t => String(t.id)));
       const evicted = collabStore.evictStale(activeIds);
       surveillance.forget(activeIds);
-      if (n > 0 || evicted > 0) console.log(`[crc-sync] expired ${n} stale track(s), evicted ${evicted} overlay entr(y/ies)`);
+      if (n > 0 || evicted > 0) log.info('expired stale tracks and evicted overlay entries', { tracks: n, overlayEntries: evicted });
       wsHub.setAtisActive(atisStore.getActive());
     } },
     { name: 'obligations-nla', periodMs: 15000, tick: () => {
@@ -671,9 +680,9 @@ function createApp(deps = {}) {
     } },
     { name: 'correlation', periodMs: CORRELATION_TICK_MS, tick: () => correlationReconciler.tick() },
     { name: 'carrier', periodMs: 1000, tick: () => carrierTick.tick() },
-    // Conformance runs on the mission clock — its grace period is measured from
-    // the clearance's own timestamp, which is mission time, and the `since` it
-    // reports is shown to controllers. STCA stays on the wall clock: it only
+    // Conformance and the hints stamp mission time (the `since` they report is shown to
+    // controllers); their pure durations (the heading grace, the airborne hold, staleness)
+    // run on the injected wall clock (docs/adr/0096). STCA stays on the wall clock: it only
     // compares track ages, which tracks.js stamps in wall time, and shows no time
     // of day at all.
     { name: 'conformance-stca', periodMs: 1000, tick: () => {
@@ -731,7 +740,7 @@ function createApp(deps = {}) {
       wsHub.broadcastGameTime();
       theaterContext.setMission(missionData);
       wsHub.broadcastTheater();
-      console.log(`[crc-sync] mission init — ${missionData.airports.length} airports, theater ${missionData.theatre || 'unknown'}`);
+      log.info('mission init', { airports: missionData.airports.length, theater: missionData.theatre || 'unknown' });
 
       // Which selectors found nothing in THIS theater — the only point at which
       // that question has an answer, since a selector naming an airfield the map

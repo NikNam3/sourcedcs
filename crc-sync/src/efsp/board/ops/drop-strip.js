@@ -1,0 +1,18 @@
+'use strict';
+
+function _applyDropStrip(ctx, strip, op, by) {
+  // Same open-coordination-link guard as _applyInvokeNla above, for the
+  // explicit DropStrip op (dot-command) path — see that guard's comment.
+  if (strip.coordination && strip.coordination.state === 'PROPOSED') {
+    return { ok: false, reason: 'VALIDATION_ERROR', detail: 'cannot drop a Strip with an open coordination proposal — accept, reject, or wait for a response first', strip };
+  }
+  if (strip.tofiCoordination && strip.tofiCoordination.state === 'PROPOSED') {
+    return { ok: false, reason: 'VALIDATION_ERROR', detail: 'cannot drop a Strip with an open TOFI proposal — accept, reject, or wait for a response first', strip };
+  }
+  return ctx.retire(strip, by);
+}
+
+module.exports = {
+  kind: 'DropStrip',
+  apply: (ctx, strip, op, meta) => _applyDropStrip(ctx, strip, op, meta.by),
+};

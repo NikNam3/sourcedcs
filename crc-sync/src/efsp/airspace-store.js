@@ -29,6 +29,8 @@
 // flight rather than about the airspace, and is untouched by this store.
 
 const { WALL_CLOCK } = require('../mission-clock');
+const { SyncLog } = require('./sync/sync-log');
+const log = require('../log').logger('efsp:airspace-store');
 
 const AIRSPACE_STATES = ['SCHEDULED', 'ACTIVE', 'RELEASED', 'RETURNED'];
 
@@ -66,7 +68,7 @@ class AirspaceStore {
     this._occupancyFor = occupancyFor || (() => 0);
     this._config = airspaceConfig;
     this._records = new Map(); // airspaceId -> record
-    this._seq = 0;
+    this._sync = new SyncLog(); // the store's sequence: a counter only, no ring, no epoch (sync/sync-log.js, S3-1)
     this._mutationLog = null;
     for (const definition of airspaceConfig.getAirspaces()) this._seed(definition);
   }
@@ -102,7 +104,7 @@ class AirspaceStore {
    */
   setMutationLog(mutationLog) { this._mutationLog = mutationLog; }
 
-  get currentSeq() { return this._seq; }
+  get currentSeq() { return this._sync.seq; }
 
   _recordAudit(mutation, actingPositionId, by, before, result) {
     if (!this._mutationLog) return;
@@ -143,7 +145,7 @@ class AirspaceStore {
     record.rev += 1;
     record.updatedAt = this._clock.now();
     record.updatedBy = by || null;
-    this._seq += 1;
+    this._sync.advance();
     if (transition) record.transitions.push({ ...transition, at: record.updatedAt, by: by || null });
   }
 
@@ -190,7 +192,7 @@ class AirspaceStore {
     } catch (err) {
       // Same backstop as BoardStore.applyMutation, for the same reason: one
       // bad op must never take the process down for every connected client.
-      console.error('[airspace-store] unexpected error applying an airspace op — rejecting it instead of crashing:', err);
+      log.error('unexpected error applying an airspace op — rejecting it instead of crashing', { err });
       result = { ok: false, reason: 'VALIDATION_ERROR', detail: 'internal error processing airspace op' };
     }
 

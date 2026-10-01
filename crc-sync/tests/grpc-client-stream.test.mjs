@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import crcLog from '../src/log.js';
 
 const require = createRequire(import.meta.url);
 const grpc = require('@grpc/grpc-js');
@@ -97,11 +98,9 @@ const GrpcClient = require('../src/grpc-client.js');
 // on the fake and complains; keep that out of the test output and let a test
 // read what the unit stream logged.
 function quietConsole(t) {
-  const logged = [];
-  for (const k of ['log', 'warn', 'error']) {
-    t.mock.method(console, k, (...a) => { logged.push(a.join(' ')); });
-  }
-  return logged;
+  const cap = crcLog.capture();
+  t.after(() => cap.stop());
+  return cap;
 }
 
 function startClient(t, opts) {
@@ -199,7 +198,7 @@ function assertBackoff(gaps, base, cap) {
 }
 
 test('a stream the server ends straight away is retried with growing, jittered delays and logged once', async (t) => {
-  const logged = quietConsole(t);
+  const sink = quietConsole(t);
   const base = 50, cap = 400;
   // Data then an OK end every time, exactly what poll_rate 0 did: data on its
   // own must not reset the backoff.
@@ -213,8 +212,8 @@ test('a stream the server ends straight away is retried with growing, jittered d
   assertBackoff(intervals(fake.unitCalls).slice(0, 7), base, cap);
   assertBackoff(intervals(fake.eventCalls).slice(0, 7), base, cap);
 
-  const ended = logged.filter(l => l.includes('unit stream ended'));
-  assert.equal(ended.length, 1, `one line in the first minute, got: ${ended.join(' | ')}`);
+  const ended = sink.records.filter(r => r.message.includes('unit stream ended'));
+  assert.equal(ended.length, 1, `one line in the first minute, got: ${ended.map(r => r.line).join(' | ')}`);
 });
 
 test('a stream that stayed up resets the backoff', async (t) => {

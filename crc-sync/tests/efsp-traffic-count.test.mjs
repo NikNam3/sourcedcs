@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import crcLog from '../src/log.js';
 
 // §11.4 traffic count (docs/adr/0065) — the pure rules first, then the live
 // counter on a real createEfsp(). Every path is overridden BEFORE any src/efsp
@@ -134,9 +135,8 @@ function recordsFor(counter, stripId) {
 }
 
 function quiet(fn) {
-  const orig = console.warn;
-  console.warn = () => {};
-  try { return fn(); } finally { console.warn = orig; }
+  const cap = crcLog.capture();
+  try { return fn(); } finally { cap.stop(); }
 }
 
 // One Board, one counter for the whole file (T11): each test asserts on its

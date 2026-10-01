@@ -8,7 +8,7 @@ import CollaborativeStore from '../src/collab-store.js';
 
 const require = createRequire(import.meta.url);
 const families = require('../src/efsp/wire/families');
-const { ReplayCache } = require('../src/efsp/replay-cache.js');
+const { ReplayCache } = require('../src/efsp/sync/replay-cache.js');
 
 test('the replay cache accepts exactly the kinds the registry declares', () => {
   assert.deepEqual([...families.REPLAY_KINDS].sort(), ['airspace', 'carrier', 'correlation', 'fieldState', 'marsa', 'sfa']);

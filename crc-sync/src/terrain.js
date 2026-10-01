@@ -28,6 +28,7 @@ const path = require('path');
 const zlib = require('zlib');
 
 const { haversineM } = require('./geo');
+const log = require('./log').logger('terrain');
 
 // Fixed sampling zoom, independent of anything a client is looking at.
 const LOS_DEM_ZOOM = 10;
@@ -308,7 +309,7 @@ class TerrainStore {
     } catch (e) {
       // A read-only or full cache directory must not stop the picture working;
       // it only costs a re-fetch next boot.
-      console.warn('[terrain] could not write the tile cache:', e.message);
+      log.warn('could not write the tile cache', { error: e.message });
     }
   }
 
@@ -321,7 +322,7 @@ class TerrainStore {
     if (this._grids.has(key) || this._missing.has(key) || this._inFlight.has(key)) return;
     if (!this._key) {
       if (!this._warnedNoKey) {
-        console.warn('[terrain] CRCSYNC_MAPTILER_KEY is not set — terrain masking is disabled and every radar sees to its full range');
+        log.warn('CRCSYNC_MAPTILER_KEY is not set — terrain masking is disabled and every radar sees to its full range');
         this._warnedNoKey = true;
       }
       this._missing.add(key);
@@ -354,7 +355,7 @@ class TerrainStore {
           // failure is retried on the next sample instead of blinding the
           // radar permanently.
           this._stats.failed += 1;
-          if (this._stats.failed <= 3) console.warn(`[terrain] tile ${job.key} failed:`, e.message);
+          if (this._stats.failed <= 3) log.warn('tile failed', { tile: job.key, error: e.message });
         })
         .finally(() => {
           this._inFlight.delete(job.key);
@@ -460,8 +461,7 @@ class TerrainStore {
     }
 
     if (batch.length) {
-      console.log(`[terrain] pre-warming ${batch.length} DEM tiles for ${(radars || []).length} radars`
-        + (truncated ? ` (capped; ${pending.length - batch.length} more will load on demand)` : ''));
+      log.info('pre-warming DEM tiles', { tiles: batch.length, radars: (radars || []).length, capped: !!truncated, remaining: truncated ? pending.length - batch.length : 0 });
     }
     return batch.length;
   }

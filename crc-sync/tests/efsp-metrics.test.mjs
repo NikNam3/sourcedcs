@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import crcLog from '../src/log.js';
 
 // The §11.5 metric store (docs/adr/0065), unit-tested with an injected mission
 // clock and wall clock. No real Board here — see efsp-metrics-tap.test.mjs.
@@ -331,9 +332,8 @@ test('retention: hour buckets last written more than retentionDays ago (wall clo
 test('an unreadable metrics file is moved aside, not overwritten', () => {
   const p = freshPath();
   fs.writeFileSync(p, '{ broken');
-  const orig = console.warn;
-  console.warn = () => {};
-  try { build(clocks(), { path: p }); } finally { console.warn = orig; }
+  const cap = crcLog.capture();
+  try { build(clocks(), { path: p }); } finally { cap.stop(); }
   assert.equal(fs.existsSync(p), false);
   assert.ok(fs.readdirSync(tmpDir).some(n => n.startsWith(path.basename(p)) && n.includes('.corrupt-')));
 });

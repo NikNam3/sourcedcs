@@ -23,6 +23,8 @@
 // is wired up; if DD175 lookup is wanted later, it needs a real design
 // decision about token forwarding, not just a second URL here.
 
+const log = require('../log').logger('efsp:flight-plan-lookup');
+
 const SOURCEDCS_WEB_URL = process.env.CRCSYNC_SOURCEDCS_WEB_URL || 'http://localhost:7000';
 const LOOKUP_TIMEOUT_MS = 3000;
 const FLIGHT_PLAN_SERVICE_TOKEN = process.env.FLIGHT_PLAN_SERVICE_TOKEN || '';
@@ -55,7 +57,7 @@ async function lookupFlightPlan(callsign, opts = {}) {
     // Network error, DNS failure, connection refused, timeout/abort, or a
     // JSON parse failure on a non-JSON body — all land here. Logged once,
     // never thrown further, never left as an unhandled rejection.
-    console.warn('[flight-plan-lookup] sourcedcs-web unreachable or errored:', err.message);
+    log.warn('sourcedcs-web unreachable or errored', { error: err.message });
     return { found: false, reason: 'sourcedcs-web unreachable' };
   } finally {
     clearTimeout(timer);
@@ -154,7 +156,7 @@ async function listFiledFlightPlans(opts = {}) {
 
     return { ok: true, plans };
   } catch (err) {
-    console.warn('[flight-plan-lookup] sourcedcs-web unreachable or errored (list):', err.message);
+    log.warn('sourcedcs-web unreachable or errored (list)', { error: err.message });
     return { ok: false, reason: 'sourcedcs-web unreachable' };
   } finally {
     clearTimeout(timer);

@@ -16,13 +16,14 @@ const fs = require('fs');
 const path = require('path');
 const { CONFIG_DIR, STATE_DIR } = require('./state-paths');
 const { readShipped } = require('./tuning-file');
+const log = require('./log').logger('theaters');
 
 function _read(file) {
   try {
     const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
     return (parsed && typeof parsed.theaters === 'object' && parsed.theaters) || {};
   } catch (e) {
-    if (e.code !== 'ENOENT') console.warn(`[theaters] failed to read ${file}:`, e.message);
+    if (e.code !== 'ENOENT') log.warn('failed to read', { file, error: e.message });
     return null;
   }
 }
@@ -45,7 +46,7 @@ function loadTheaters(override) {
   const layers = override
     ? [_read(override)]
     : [_read(path.join(CONFIG_DIR, 'theaters.json')), _read(path.join(STATE_DIR, 'theaters.json'))];
-  if (!layers[0]) console.warn('[theaters] no theater table — every theater runs its mission clock on offset 0');
+  if (!layers[0]) log.warn('no theater table — every theater runs its mission clock on offset 0');
   const merged = {};
   for (const layer of layers) {
     for (const [name, entry] of Object.entries(layer || {})) {
@@ -55,20 +56,20 @@ function loadTheaters(override) {
   const out = {};
   for (const [name, entry] of Object.entries(merged)) {
     if (!Number.isFinite(entry.utcOffsetHours)) {
-      console.warn(`[theaters] ${name} has no numeric utcOffsetHours — ignored`);
+      log.warn('no numeric utcOffsetHours — ignored', { theater: name });
       continue;
     }
     const clean = { ...entry };
     if ('transitionAltFt' in clean && !(Number.isFinite(clean.transitionAltFt) && clean.transitionAltFt > 0)) {
-      console.warn(`[theaters] ${name}: transitionAltFt is not a positive number — ignored`);
+      log.warn('transitionAltFt is not a positive number — ignored', { theater: name });
       delete clean.transitionAltFt;
     }
     if ('tmCentralMeridianDeg' in clean && !Number.isFinite(clean.tmCentralMeridianDeg)) {
-      console.warn(`[theaters] ${name}: tmCentralMeridianDeg is not a number — ignored`);
+      log.warn('tmCentralMeridianDeg is not a number — ignored', { theater: name });
       delete clean.tmCentralMeridianDeg;
     }
     if ('magneticVariation' in clean && !_validVariationOverride(clean.magneticVariation)) {
-      console.warn(`[theaters] ${name}: magneticVariation must be exactly one of {fixedDeg} or {offsetDeg} — ignored, the model applies`);
+      log.warn('magneticVariation must be exactly one of {fixedDeg} or {offsetDeg} — ignored, the model applies', { theater: name });
       delete clean.magneticVariation;
     }
     out[name] = clean;

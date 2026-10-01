@@ -29,6 +29,7 @@ const {
   callsignAffinity, buildTrackIndices, AFFINITY_EXACT,
 } = require('./correlation-match');
 const { WALL_CLOCK } = require('../mission-clock');
+const log = require('../log').logger('efsp:correlation-reconciler');
 
 const CORRELATION_TICK_MS = 1000;
 
@@ -349,7 +350,7 @@ class CorrelationReconciler {
     if (rate.eligible < RATE_WARN_MIN_ELIGIBLE) return;
     if (now - this._lastWarnAt < RATE_WARN_INTERVAL_MS) return;
     this._lastWarnAt = now;
-    console.warn(`[efsp] correlation rate ${rate.rate.toFixed(2)} (${rate.correlated + rate.provisional}/${rate.eligible} eligible) — below the ${CORRELATION_RATE_TARGET * 100}% target (§6.6 rule 6)`);
+    log.warn('correlation rate below the target (§6.6 rule 6)', { rate: Number(rate.rate.toFixed(2)), correlated: rate.correlated + rate.provisional, eligible: rate.eligible, targetPct: CORRELATION_RATE_TARGET * 100 });
   }
 
   /** Mission reload — every contact in the theater was re-minted. */

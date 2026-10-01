@@ -39,7 +39,11 @@ class BoardAudit {
     });
   }
 
-  recordAudit(mutation, actingPositionId, by, before, result) {
+  /**
+   * @param {object} [extras] the op's own audit keys (the op table's `auditFields`): `head` is spread after `fdrId`
+   *   (before `action`), `tail` after `after` (the keys that used to follow it here), each in the order given.
+   */
+  recordAudit(mutation, actingPositionId, by, before, result, extras = {}) {
     if (!this._mutationLog || !result.ok) return;
     this._mutationLog.record({
       clientMutationId: mutation.clientMutationId,
@@ -51,27 +55,14 @@ class BoardAudit {
       fdrId: result.strip.fdrId || null,
       // The op kind alone names neither the Block written nor a coordination
       // action (PROPOSE/ACCEPT/REJECT/CANCEL...); the entry says which.
-      ...(mutation.op.kind === 'SetBlock' ? { blockId: mutation.op.blockId, value: mutation.op.value } : {}),
+      ...(extras.head || {}),
       ...(typeof mutation.op.action === 'string' ? { action: mutation.op.action } : {}),
       actingPositionId,
       actorId: by || null,
       at: this._clock.now(),
       before,
       after: deepClone(result.strip),
-      // Distinguishes a self-coordinated boundary event from a two-party
-      // one (guide §4.8.3 rule 4) — undefined for every op except a
-      // successful TransferStrip, where board-store.js computes it.
-      selfCoordinated: result.selfCoordinated,
-      // The carrier hand-over kind and its trigger type (guide §9.12: "four
-      // different trigger types"), so an after-action review can tell them apart.
-      carrierTransfer: result.carrierTransfer ? result.carrierTransfer.kind : undefined,
-      carrierTrigger: result.carrierTransfer ? result.carrierTransfer.trigger : undefined,
-      // The SFA rotation transfer and its trigger type (guide §4.7).
-      sfaTransfer: result.sfaTransfer ? result.sfaTransfer.kind : undefined,
-      sfaTrigger: result.sfaTransfer ? result.sfaTransfer.trigger : undefined,
-      // A gate this Mutation was let past, and why (S-L19 open point, decided in
-      // docs/wip/UI-B.md). Undefined, so absent from the line, otherwise.
-      bypass: result.bypass,
+      ...(extras.tail || {}),
     });
   }
 }

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import crcLog from '../src/log.js';
 
 // docs/adr/0065 — the WP8 policy file. A tuning file (decisions.md P5): read
 // once, never written. Both directories are pointed at temp dirs BEFORE the
@@ -35,10 +36,8 @@ const {
 } = mod;
 
 function quietly(fn) {
-  const warns = [];
-  const orig = console.warn;
-  console.warn = (...a) => warns.push(a.join(' '));
-  try { return { value: fn(), warns }; } finally { console.warn = orig; }
+  const cap = crcLog.capture();
+  try { return { value: fn(), warns: cap.records.filter(r => r.level === 'warn').map(r => r.line) }; } finally { cap.stop(); }
 }
 
 test('with only the shipped file the defaults apply: 30-day log, 30-day metrics, 400-day count, INCIRLIK -> LTAG', () => {
@@ -73,7 +72,7 @@ test('an invalid retentionDays falls back PER FIELD, with a warning — never "k
     assert.equal(value.mutationLog.retentionDays, 30, `bad value ${JSON.stringify(bad)}`);
     assert.equal(value.metrics.retentionDays, 7, 'the valid sibling field is kept');
     assert.equal(value.trafficCount.retentionDays, 400);
-    assert.ok(warns.some(w => w.includes('mutationLog.retentionDays')), `warned for ${JSON.stringify(bad)}`);
+    assert.ok(warns.some(w => w.includes('retentionDays') && w.includes('section=mutationLog')), `warned for ${JSON.stringify(bad)}`);
   }
 });
 

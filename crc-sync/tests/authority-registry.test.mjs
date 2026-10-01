@@ -1,7 +1,5 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import vm from 'node:vm';
 import { createRequire } from 'node:module';
 
 // The authority registry (S3-2, AUTH): its composed tables and accessors.
@@ -9,20 +7,6 @@ const require = createRequire(import.meta.url);
 const authority = require('../src/efsp/authority');
 const nla = require('../src/efsp/nla.js');
 const permission = require('../src/efsp/permission.js');
-
-const boardStoreLiteral = (name) => {
-  const src = fs.readFileSync(new URL('../src/efsp/board-store.js', import.meta.url), 'utf8');
-  const m = new RegExp(`^const ${name} = (.*);$`, 'm').exec(src);
-  assert.ok(m, `board-store.js no longer declares ${name}: BOARD-3 switched its reads; delete this pin`);
-  return vm.runInNewContext(`(${m[1]})`);
-};
-
-// BOARD-3 switches board-store.js's reads to the registry. Until then the two copies must agree.
-for (const name of ['DEFAULT_INITIAL_STATE_BY_ROLE', 'REPLICA_STATE_ON_RECEIPT', 'SENDER_STATE_ON_ACCEPT']) {
-  test(`board-store.js's ${name} equals the registry's`, () => {
-    assert.deepEqual(JSON.parse(JSON.stringify(authority[name])), JSON.parse(JSON.stringify(boardStoreLiteral(name))));
-  });
-}
 
 test('every Role family is a Role of nla.js and carries every field', () => {
   assert.deepEqual(authority.roleNames(), Object.keys(nla.STATES_BY_ROLE));

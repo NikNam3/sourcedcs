@@ -3,6 +3,8 @@ const EventEmitter = require('events');
 const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
 const path = require('path');
+const log = require('./log').logger('grpc');
+const srsLog = require('./log').logger('srs');
 
 const PROTO_ROOT = process.env.DCS_GRPC_PROTO_PATH ||
   path.join(__dirname, '../protos');
@@ -131,7 +133,7 @@ class GrpcClient extends EventEmitter {
       this._unitSvc    = new unitPkg.dcs.unit.v0.UnitService(DCS_HOST, creds, CHANNEL_OPTS);
       this._icao       = require('../data/icao.json');
     } catch (e) {
-      console.error('[grpc] proto load failed:', e.message);
+      log.error('proto load failed', { error: e.message });
       this._setState('disconnected');
       return;
     }
@@ -161,7 +163,7 @@ class GrpcClient extends EventEmitter {
       .then(data => {
         if (this._closed) return;
         if (data.airports.length === 0) {
-          console.warn(`[grpc] mission fetch returned no airports (attempt ${attempt + 1}), retrying in 5s`);
+          log.warn('mission fetch returned no airports, retrying in 5s', { attempt: attempt + 1 });
           this._missionRetryTimer = setTimeout(() => this._fetchMissionWithRetry(attempt + 1), 5000);
           return;
         }
@@ -169,12 +171,12 @@ class GrpcClient extends EventEmitter {
         if (data.airports[0]) {
           this._weatherRef = { lat: data.airports[0].lat, lon: data.airports[0].lon };
         }
-        console.log(`[grpc] mission data ready — ${data.airports.length} airports, ${data.waypoints.length} navpoints, ${data.drawings.length} drawings`);
+        log.info('mission data ready', { airports: data.airports.length, navpoints: data.waypoints.length, drawings: data.drawings.length });
         this.emit('mission-load', data);
       })
       .catch(err => {
         if (this._closed) return;
-        console.error(`[grpc] mission fetch error (attempt ${attempt + 1}): ${err.message}, retrying in 5s`);
+        log.error('mission fetch error, retrying in 5s', { attempt: attempt + 1, error: err.message });
         this._missionRetryTimer = setTimeout(() => this._fetchMissionWithRetry(attempt + 1), 5000);
       });
   }
@@ -250,7 +252,7 @@ class GrpcClient extends EventEmitter {
 
     stream.on('error', (err) => {
       if (stream !== this._unitStream) return; // stale — ignore
-      console.error('[grpc] unit stream error:', err.message);
+      log.error('unit stream error', { error: err.message });
       this._lastUnits.clear(); // let the reaper age them out until the next full sync
       this._setState('reconnecting');
       this._scheduleUnit(startedAt);
@@ -290,11 +292,11 @@ class GrpcClient extends EventEmitter {
       { position: { lat, lon, alt: 0 } },
       (err, res) => {
         if (err || !res) {
-          console.warn('[grpc] weather fetch failed:', err && err.message);
+          log.warn('weather fetch failed', { error: err && err.message });
           return;
         }
         this._weather = { pressurePa: res.pressure, tempK: res.temperature };
-        console.log(`[grpc] weather updated — ${res.pressure.toFixed(0)} Pa / ${res.temperature.toFixed(1)} K`);
+        log.info('weather updated', { pressurePa: Number(res.pressure.toFixed(0)), temperatureK: Number(res.temperature.toFixed(1)) });
         this.emit('weather', this._weather);
       }
     );
@@ -339,7 +341,7 @@ class GrpcClient extends EventEmitter {
         const now = Date.now();
         if (now - this._evalErrorLoggedAt > 60000) {
           this._evalErrorLoggedAt = now;
-          console.warn('[grpc] Eval failed:', failure.message);
+          log.warn('Eval failed', { error: failure.message });
         }
         reject(failure);
       });
@@ -392,10 +394,7 @@ class GrpcClient extends EventEmitter {
     const now = Date.now();
     if (now - this._unitEndLoggedAt < END_LOG_WINDOW_MS) return;
     const n = this._unitEndsSinceLog;
-    const when = delay == null ? '' : ` in ${(delay / 1000).toFixed(1)}s`;
-    console.log(n > 1
-      ? `[grpc] unit stream ended ${n} times in last 60s, reconnecting${when}`
-      : `[grpc] unit stream ended, reconnecting${when}`);
+    log.info(n > 1 ? 'unit stream ended repeatedly in the last 60s, reconnecting' : 'unit stream ended, reconnecting', { ends: n, retryInMs: delay });
     this._unitEndLoggedAt  = now;
     this._unitEndsSinceLog = 0;
   }
@@ -412,7 +411,7 @@ class GrpcClient extends EventEmitter {
     stream.on('data', (event) => {
       if (stream !== this._eventStream) return; // stale — ignore
       if (event.mission_start) {
-        console.log('[grpc] mission_start event');
+        log.info('mission_start event');
         // Before the fetch: a mission_start is a new mission even when the
         // mission-load that follows looks the same (mission-session.js, ADR 0086).
         this.emit('mission-start');
@@ -422,7 +421,7 @@ class GrpcClient extends EventEmitter {
 
     stream.on('error', (err) => {
       if (stream !== this._eventStream) return; // stale — ignore
-      console.warn('[grpc] event stream error:', err.message);
+      log.warn('event stream error', { error: err.message });
       this._scheduleEvent(startedAt);
     });
 
@@ -531,15 +530,15 @@ return net.lua2json(pts)
 
       this._customSvc.Eval({ lua }, (err, res) => {
         if (err || !res) {
-          console.warn(`[grpc] navpoints fetch failed (${coalition}):`, err && err.message);
+          log.warn('navpoints fetch failed', { coalition, error: err && err.message });
           return resolve([]);
         }
-        console.log(`[grpc] navpoints raw (${coalition}):`, res.json && res.json.slice(0, 200));
+        log.debug('navpoints raw', { coalition, raw: res.json && res.json.slice(0, 200) });
         try {
           const parsed = JSON.parse(JSON.parse(res.json));
           resolve(Array.isArray(parsed) ? parsed : []);
         } catch (e) {
-          console.warn(`[grpc] navpoints parse failed (${coalition}):`, e.message, 'raw:', res.json && res.json.slice(0, 200));
+          log.warn('navpoints parse failed', { coalition, error: e.message, raw: res.json && res.json.slice(0, 200) });
           resolve([]);
         }
       });
@@ -636,14 +635,14 @@ return net.lua2json(result)
 
       this._customSvc.Eval({ lua }, (err, res) => {
         if (err || !res) {
-          console.warn('[grpc] drawings fetch failed:', err && err.message);
+          log.warn('drawings fetch failed', { error: err && err.message });
           return resolve([]);
         }
         try {
           const parsed = JSON.parse(JSON.parse(res.json));
           resolve(Array.isArray(parsed) ? parsed : []);
         } catch (e) {
-          console.warn('[grpc] drawings parse failed:', e.message, 'raw:', res.json && res.json.slice(0, 200));
+          log.warn('drawings parse failed', { error: e.message, raw: res.json && res.json.slice(0, 200) });
           resolve([]);
         }
       });
@@ -689,13 +688,13 @@ return net.lua2json(result)
       clearTimeout(this._statusTimer);
       this._statusTimer = setTimeout(() => {
         if (this._state === 'reconnecting') {
-          console.log('[grpc] reconnecting (prolonged)');
+          log.info('reconnecting (prolonged)');
           this.emit('status', 'reconnecting');
         }
       }, 4000);
     } else {
       clearTimeout(this._statusTimer);
-      console.log(`[grpc] ${state}`);
+      log.info('connection state', { state });
       this.emit('status', state);
     }
   }
@@ -720,12 +719,12 @@ return net.lua2json(result)
     if (pos.lat != null && pos.lon != null) {
       req.position = { lat: pos.lat, lon: pos.lon, alt: pos.alt || 0 };
     }
-    console.log('[srs] Transmit req:', JSON.stringify(req));
+    srsLog.info('Transmit req', { req });
     let call;
     const promise = new Promise((resolve, reject) => {
       call = this._srsSvc.Transmit(req, (err, res) => {
-        if (err) { console.error('[srs] Transmit error:', err.message); return reject(err); }
-        console.log('[srs] Transmit ok:', JSON.stringify(res));
+        if (err) { srsLog.error('Transmit error', { error: err.message }); return reject(err); }
+        srsLog.info('Transmit ok', { res });
         resolve(res);
       });
     });

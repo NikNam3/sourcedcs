@@ -100,20 +100,36 @@ function setupHostEnv({ stateDir, seed, startNow, logPath, patchGlobals = true, 
     const m = /^(\[[^\]]{1,60}\][^:—\n]{0,60})/.exec(text);
     return (m ? m[1] : text.slice(0, 50)).trim();
   };
-  const capture = (level) => (...args) => {
-    const text = util.format(...args);
-    const prefix = `${level} ${prefixOf(text)}`;
+  const record = (level, text, prefix, internal) => {
     let s = consoleStats.get(prefix);
     if (!s) { s = { count: 0, first: [] }; consoleStats.set(prefix, s); }
     s.count++;
     if (s.first.length < 20) s.first.push(text.slice(0, 2000));
-    if (text.startsWith('[board-store] unexpected error')) counters.internalErrors++;
-    else if (/unexpected error applying/.test(text)) counters.storeInternalErrors++;
+    if (internal === 'board') counters.internalErrors++;
+    else if (internal === 'store') counters.storeInternalErrors++;
     if (logFd !== null && logLines < LOG_LINE_CAP && s.count <= 200) {
       logLines++;
       fs.writeSync(logFd, `${new Date(clock.now).toISOString()} ${level} ${text.slice(0, 4000)}\n`);
     }
   };
+  // Anything still on console (a few modules outside LOG-2's reach) is captured as before.
+  const capture = (level) => (...args) => {
+    const text = util.format(...args);
+    const internal = text.startsWith('[board-store] unexpected error') ? 'board'
+      : /unexpected error applying/.test(text) ? 'store' : null;
+    record(level, text, `${level} ${prefixOf(text)}`, internal);
+  };
+  // crc-sync's logger (ADR 0097): every event of every level lands in the same stats, keyed by
+  // level, logger name and message (ids live in the context, so a prefix is one kind of event).
+  const logSink = (rec) => {
+    const text = `[${rec.name}] ${rec.line.split(' ').slice(3).join(' ')}`;
+    const internal = rec.name === 'efsp:board-store' && rec.message.startsWith('unexpected error') ? 'board'
+      : /unexpected error applying/.test(rec.message) ? 'store' : null;
+    record(rec.level, text, `${rec.level} [${rec.name}] ${rec.message.slice(0, 60)}`, internal);
+  };
+  // createApp re-configures the logger on every build, so host-core calls this again after it.
+  const configureLog = () => { if (patchGlobals) require(path.join(SRC, 'log.js')).configure({ level: 'debug', sink: logSink }); };
+  configureLog();
   if (patchGlobals) {
     console.log = capture('log');
     console.info = capture('info');
@@ -170,6 +186,7 @@ function setupHostEnv({ stateDir, seed, startNow, logPath, patchGlobals = true, 
     clock,
     counters,
     consoleStats,
+    configureLog,
     realDateNow,
     wrapOrderKey,
     seedIds,

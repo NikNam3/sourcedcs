@@ -19,10 +19,10 @@ class Tofi {
    * @param {object} deps.fdrStore
    * @param {(stripId:string) => void} deps.touch late-bound to the facade's _touch (the soak host patches it)
    * @param {() => string|null} deps.activeCmid the clientMutationId being applied, read late
-   * @param {(strip:object, by:string) => object|null} deps.retire late-bound to the facade's _retireStrip (BOARD-3 moves it)
-   * @param {object} deps.defaultInitialStateByRole facade table, passed as a value
+   * @param {(strip:object, by:string) => object|null} deps.retire late-bound to StripOps' retire
+   * @param {(role:string) => string|undefined} deps.initialStateFor the authority registry's accessor
    */
-  constructor({ rules, state, audit, placement, clock, fdrStore, touch, activeCmid, retire, defaultInitialStateByRole }) {
+  constructor({ rules, state, audit, placement, clock, fdrStore, touch, activeCmid, retire, initialStateFor }) {
     this._rules = rules;
     this._state = state;
     this._audit = audit;
@@ -32,7 +32,7 @@ class Tofi {
     this._touch = touch;
     this._activeCmidOf = activeCmid;
     this._retire = retire;
-    this._defaultInitialStateByRole = defaultInitialStateByRole;
+    this._initialStateFor = initialStateFor;
   }
 
   get _activeCmid() { return this._activeCmidOf(); }
@@ -484,7 +484,7 @@ class Tofi {
       fdrId, // shared with the ATC-side Strip — guide §9.8's binding
       rev: 1,
       role: 'MISSION',
-      state: this._defaultInitialStateByRole.MISSION,
+      state: this._initialStateFor('MISSION'),
       ownerPositionId: toPositionId,
       bayId: coordinationBay.bayId,
       rackId: coordinationBay.rackIds[0],

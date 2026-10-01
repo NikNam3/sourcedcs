@@ -13,7 +13,8 @@
     "pack:linux": "electron-builder --linux AppImage --publish never",
     "pack:win": "electron-builder --win nsis --publish never",
     "e2e": "playwright test",
-    "e2e:headed": "playwright test --headed"
+    "e2e:headed": "playwright test --headed",
+    "e2e:sharded": "node e2e/tools/run-sharded.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

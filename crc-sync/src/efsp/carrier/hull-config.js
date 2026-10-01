@@ -18,6 +18,7 @@
 const fs = require('fs');
 const { readPath } = require('../../state-paths');
 const { validateHullConfig } = require('./ship-state');
+const log = require('../../log').logger('efsp:hull-config');
 
 const CARRIERS_FILE = 'efsp-carriers.json';
 
@@ -35,7 +36,7 @@ function _load() {
   for (const h of list) {
     const v = validateHullConfig(h);
     if (v.ok) hulls.push(JSON.parse(JSON.stringify(h)));
-    else console.warn(`[efsp-carriers] dropping a hull: ${v.detail}`);
+    else log.warn('dropping a hull', { detail: v.detail });
   }
   if (!hulls.length) throw new Error(`[efsp-carriers] ${file} has no valid hull`);
   return hulls;

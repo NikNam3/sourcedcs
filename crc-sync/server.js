@@ -1,7 +1,6 @@
 'use strict';
 require('dotenv').config();
 const log = require('./src/log');
-log.installConsole(); // LOG_LEVEL gates the console.* calls LOG-2 has not converted yet
 
 const GrpcClient = require('./src/grpc-client');
 const SrsClient  = require('./src/srs-client');

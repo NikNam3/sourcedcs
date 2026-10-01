@@ -1,6 +1,21 @@
 # Supervisor handoff
 
-## START HERE: state in session 3 (2026-10-01, evening)
+## START HERE: state at the end of session 4 (2026-10-01, late; usage limit reached)
+
+Record: `docs/parallel/decisions.md` rows S-W1 … S-SYNCq2, H99, H100 (this session). **H99: the supervisor merges finished lanes into `efsp-wp5-correlation` without asking until all waves finish; never push, never deploy (R3-79).** S-APP1: lanes never run `git merge` (classifier denies it); the supervisor runs merges in lane worktrees, the lane resolves. Desk questions go up as soon as they arrive (memory updated).
+
+**Merged** (local, not pushed; head after `193a785`): INFRA3, DES-RELEASE/AIRSP/SPLIT + DESK4 (post-refactor drafts, H100 applied), RENAME-PREP, R0, STORES, WIRE, BOARD-1, APP, DATA-1, DATA-2, LOG-1, BOARD-2, AUTH, BOARD-3, LOG-2, TIME-B, PW-SHARD, plus integration fixes (`457397d`, the tuning-file test dirs, `0bfe9d3` airspace-config lazy load, `c2dfd14` ws-hub tolerates results without `broadcasts`, `2b055d4` last console call + lane-rules §5). W1-W4 server lanes are done. Merged tree: crc-sync 2140/2143 (2 grpc load-timing fails), freeze 47/47, freeze:selfcheck 18/18, soak:selfcheck PASS, crc-desktop 865/866.
+
+**In flight when the session ended (agents may have finished or died; check their branches/wips):**
+- **ESM unit** (`lane/ESM-1-client-modules`, worktree `../sourcedcs-ESM-1`): T a/b/c merged in, efsp-wp5-correlation merged in twice (last clean). ESM-1 was re-running step-9 gates. Next: read `docs/wip/ESM-1.md` report; merge the unit into efsp-wp5-correlation (expect the .js→.mjs renames; BOARD-3/AUTH/LOG-2 edits to `overflight-shared-state-names.test.js` and `client-mirror-parity.test.js` after the unit's last sync must be carried into the .mjs versions); then the full Playwright run with `npm run e2e:sharded -- --lanes 5,6,8,9,0 --rerun-failed` **on a quiet machine** (PW-SHARD could not validate under load 46-92; `git checkout -- docs/wip` after the run). Then start CMSG, ESM-2a, ESM-2b (W3 client lanes). Queued follow-up: migrate the e2e specs off `classic-globals-bridge.js` and delete it.
+- **SYNC is MERGED (S-M-SYNC); ESM-1 finished, unit head `def42b1`, NOT merged yet — do it first.** Old note: SYNC (W5, `lane/SYNC-one-mechanism`, `../sourcedcs-SYNC`): rulings S-SYNC0, S-SYNCq1, S-SYNCq2 (W5-11 reversed S-SYNC0: keep host-core's `_rebalanceRack` wrap; `observeTouches(fn(stripId))`). Merge alone when done; then W6 BACKCOMPAT, then W7 RENAME (A → B → C; desk RP-1..6, RP-F1 open).
+- Desk open: RP-1..RP-6, RP-F1. Everything else settled.
+
+**Human actions:** stop the orphaned `node app/server.js` on :3117 (pid 323124, blocks E2E lane 7); before any deploy check the server's `crc-sync-state` volume for old partial `efsp-facility-*.json` (now a startup error, S-M-DATA1) and do INFRA3's R3-17 server checks (`docs/wip/INFRA3.md`); push a backup; the earlier list below still applies. The 10-min checkpoint loop is not running (restart `tools/checkpoint-worktrees.sh` if wanted). Agent ids: session scratchpad `agents.txt` (may be gone).
+
+---
+
+## Previous: state in session 3 (2026-10-01, evening)
 
 The record is `docs/parallel/decisions.md` (rows H79-H98, S-desk3, S-ARCH2, S-R3-80, S-M-merge4 are this session's). Rules: never push without the human's go; ask before any prod deploy (R3-79); up to 10 agents in parallel (memory `feedback_parallel_agent_budget`); auth hardening out of scope.
 

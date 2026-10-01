@@ -30,6 +30,8 @@
 // Callers never branch on it; it exists so a fallback is visible, on the
 // topbar clock and in every Mutation-log record.
 
+const log = require('./log').logger('mission-clock');
+
 const DEFAULT_STALE_MS = 30000; // six missed polls — rides out a gRPC reconnect, not a lost server
 
 // "2016-06-21T02:40:07Z", "...+00:00", "...T02:40:07.5" — only the calendar
@@ -74,7 +76,7 @@ class MissionClock {
     this._offsetHours = this._offsetKnown ? offset : 0;
     if (theatre && !this._offsetKnown && this._warnedTheatre !== theatre) {
       this._warnedTheatre = theatre;
-      console.warn(`[mission-clock] no UTC offset known for theater "${theatre}" — reading its mission time as Zulu (offset 0) until one is added to config/theaters.json`);
+      log.warn('no UTC offset known for theater — reading its mission time as Zulu (offset 0) until one is added to config/theaters.json', { theater: theatre });
     }
   }
 

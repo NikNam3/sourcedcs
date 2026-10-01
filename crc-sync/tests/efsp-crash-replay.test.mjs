@@ -5,6 +5,7 @@ import os from 'os';
 import path from 'path';
 import crypto from 'crypto';
 import { slot } from './helpers/wire-slots.mjs';
+import crcLog from '../src/log.js';
 
 // docs/adr/0081 (L27), L6's F5: a Mutation survives a crash exactly once.
 //
@@ -39,20 +40,18 @@ const SNAPSHOT_TMP = `${process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH}.tmp`;
 /** Runs fn with the snapshot write failing, the way a crash inside _persist leaves things. */
 function crashingPersist(fn) {
   const orig = fs.writeFileSync;
-  const origWarn = console.warn;
+  const cap = crcLog.capture();
   fs.writeFileSync = function (file, ...rest) {
     if (file === SNAPSHOT_TMP) throw new Error('simulated crash before persist');
     return orig.call(fs, file, ...rest);
   };
-  console.warn = () => {};
-  try { return fn(); } finally { fs.writeFileSync = orig; console.warn = origWarn; }
+  try { return fn(); } finally { fs.writeFileSync = orig; cap.stop(); }
 }
 
 /** A new process over the same files. */
 function restart() {
-  const origWarn = console.warn;
-  console.warn = () => {};
-  try { return createEfsp(); } finally { console.warn = origWarn; }
+  const cap = crcLog.capture();
+  try { return createEfsp(); } finally { cap.stop(); }
 }
 
 function linesFor(efsp, cmid) { return efsp.mutationLog.readAll().filter(e => e.clientMutationId === cmid); }

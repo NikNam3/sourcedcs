@@ -18,8 +18,10 @@
    also snapshots every worktree every 10 min into `refs/checkpoints/<branch>`, but that is a safety
    net, not a substitute.)
 5. ADRs are never edited once committed (P4); take only the ADR number you were given. Tuning files
-   are read once at startup and never written by code (P5). No backwards compatibility. EFSP times
-   come from the injected mission clock, never `Date.now()` (H11). Headings are magnetic (H15, H69).
+   are read once at startup and never written by code (P5). No backwards compatibility. EFSP facts
+   and gates (anything read as a time, stored on a record or compared with one, every Mutation-log `at`) come
+   from the injected mission clock; pure durations and housekeeping use an injected wall clock (`WALL_CLOCK`
+   or a `wallClock` dependency). Never a bare `Date.now()` (H11, ADR 0096). Headings are magnetic (H15, H69).
 6. P2: on an unanswered question take your briefing's recommended default, log it under "Defaults
    taken" in `docs/wip/<LANE>.md`, and carry on. Stop only if the default could destroy work or cross
    another lane's files; then SendMessage "main" briefly and continue with other work.

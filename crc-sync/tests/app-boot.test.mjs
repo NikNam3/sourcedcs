@@ -4,6 +4,7 @@ import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import crcLog from '../src/log.js';
 
 // createApp (src/app.js) with fakes: what server.js, the soak host and these tests share.
 // Every path points into a temp dir BEFORE anything under src/ is required.
@@ -52,14 +53,14 @@ function fakes() {
 const timeouts = () => process.getActiveResourcesInfo().filter((r) => r === 'Timeout').length;
 
 test('createApp: ticker names and periods are the ones server.js had', async (t) => {
-  for (const k of ['log', 'warn', 'error']) t.mock.method(console, k, () => {});
+  { const cap = crcLog.capture(); t.after(() => cap.stop()); }
   const { correlation } = await import('../src/efsp/correlation-reconciler.js').then((m) => ({ correlation: m.CORRELATION_TICK_MS }));
   const app = createApp({ ...fakes(), env: {} });
   assert.deepEqual(app.tickers.map((x) => [x.name, x.periodMs]), EXPECTED.map(([n, p]) => [n, n === 'correlation' ? correlation : p]));
 });
 
 test('createApp: every ticker runs once, start() installs and stop() clears timers and handlers', async (t) => {
-  for (const k of ['log', 'warn', 'error']) t.mock.method(console, k, () => {});
+  { const cap = crcLog.capture(); t.after(() => cap.stop()); }
   const { grpcClient, srsClient } = fakes();
   const baseTimers = timeouts();
   const baseGrpc = grpcClient.eventNames().length;
@@ -79,7 +80,7 @@ test('createApp: every ticker runs once, start() installs and stop() clears time
 });
 
 test('createApp: the express app serves /js/config.js without listening', async (t) => {
-  for (const k of ['log', 'warn', 'error']) t.mock.method(console, k, () => {});
+  { const cap = crcLog.capture(); t.after(() => cap.stop()); }
   const app = createApp({ ...fakes(), env: {} });
   await new Promise((resolve, reject) => {
     const srv = app.http.listen(0, '127.0.0.1', async () => {
