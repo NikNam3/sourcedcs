@@ -1840,3 +1840,40 @@
 .efsp-ato-ar-row, .efsp-ato-gone-row, .efsp-ato-result { font-size: 12px; }
 .efsp-ato-result-bad { color: var(--efsp-bad-text); }
 .efsp-ato-import-go { align-self: flex-start; }
+
+/* ── The carrier (crc-sync docs/adr/0074; guide §9.12) ────────────────────────
+   The ship banner and Case selector over the Position tabs, the Marshal stack's
+   slot board, and the four hand-over buttons. Prominence is place and shape,
+   never colour alone (docs/adr/0056): each trigger type also has its own border
+   style, so the four hand-overs stay four distinct affordances without colour. */
+.carrier-banner { padding: 6px 8px; border-bottom: 1px solid #2a3038; background: #151b21; font-size: 12px; }
+.carrier-banner[hidden] { display: none; }
+.carrier-banner-line { display: flex; gap: 10px; align-items: baseline; }
+.carrier-banner-hull { font-weight: 700; color: #cfd8df; }
+.carrier-banner-text { color: #a8b4bd; font-variant-numeric: tabular-nums; }
+.carrier-banner-problem { color: #ffb347; margin-top: 2px; }
+.carrier-case-row { display: flex; gap: 8px; align-items: center; margin-top: 4px; flex-wrap: wrap; }
+.carrier-case-label { color: #6a7580; }
+.carrier-case-value { font-weight: 700; color: #cfd8df; }
+.carrier-case-advisory { color: #ffb347; }
+.carrier-case-select, .carrier-altimeter-input, .carrier-charlie-input, .carrier-radial-input, .carrier-slot-angels-input {
+  background: #1c2228; color: #cfd8df; border: 1px solid #2a3038; font: inherit; min-height: 26px;
+}
+.carrier-stack-board { margin: 6px 8px; border: 1px solid #2a3038; background: #151b21; }
+.carrier-stack-head { display: flex; gap: 8px; align-items: center; padding: 4px 6px; border-bottom: 1px solid #2a3038; flex-wrap: wrap; }
+.carrier-stack-title { font-weight: 700; color: #cfd8df; margin-right: auto; }
+.carrier-stack-empty { padding: 6px; color: #6a7580; }
+.carrier-stack-warning { padding: 4px 6px; color: #ffb347; }
+.carrier-slot { display: flex; gap: 10px; align-items: center; padding: 3px 6px; min-height: 28px; border-bottom: 1px solid #20262c; font-variant-numeric: tabular-nums; }
+.carrier-slot-vacant { color: #5a6570; border-style: dashed; }
+.carrier-slot-occupied { color: #cfd8df; }
+.carrier-slot.efsp-drop-target { background: #2a4d33; outline: 1px solid #39ff7a; }
+.carrier-slot-index { width: 1.6em; color: #6a7580; }
+.carrier-slot-call { min-width: 7em; font-weight: 700; }
+.carrier-slot-closeup { margin-left: auto; min-height: 24px; background: #1c2228; color: #a8b4bd; border: 1px dashed #4a5560; cursor: pointer; font: inherit; }
+.carrier-slot-pushed { color: #6a9ebf; }
+.efsp-carrier-handover { border-width: 2px; }
+.efsp-carrier-trigger-controller-initiated { border-style: solid; }
+.efsp-carrier-trigger-radar-acquisition { border-style: double; }
+.efsp-carrier-trigger-pilot-ball-call { border-style: dashed; }
+.efsp-carrier-trigger-pilot-see-you { border-style: dotted; }

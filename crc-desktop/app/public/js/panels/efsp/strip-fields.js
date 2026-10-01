@@ -36,6 +36,15 @@ const COMPACT_BLOCKS_BY_ROLE = {
   // '7' stays as the FILED request here; '7A' is the assignment beside it.
   OVERFLIGHT: [...COMPACT_BLOCKS_SHARED, '7A', '9A-VECTOR'],
   MISSION:    ['M3', 'M1', 'M2', 'M4', 'M5', 'M6', 'M7'],
+  // The carrier (crc-sync's docs/adr/0074, guide §9.12). MARSHAL shows the
+  // marshal message: the derived stack fields first (CASE, ANGELS, DME,
+  // EAT/PUSH, RADIAL, FINAL BEARING: read, never typed), then what the Marshal
+  // enters for the flight (approach, button, low state, bingo, EEAT). EEAT is on
+  // the face because it is "the field most likely to be missed" (§9.12 rule 7).
+  // FINAL has nothing to type: callsign, type, final bearing, deck, distance.
+  MARSHAL:    ['C1', 'C2', 'C3', 'C7', 'C6', 'C8', 'C5', 'C9', 'C4', 'C10', 'C12', 'C13', 'C14', 'C15'],
+  FINAL:      ['C1', 'C2', 'C9', 'C16', 'C17'],
+  PATTERN:    ['C1', 'C2', 'C24'],
 };
 
 // ── Per-Position lists ─────────────────────────────────────────────────────
@@ -85,7 +94,7 @@ const COMPACT_BLOCKS_BY_POSITION = {
 };
 
 // Grid columns a field spans. Everything else takes one.
-const FIELD_SPANS = { '1': 2, '3': 2, '9': 3, '24A': 2, M1: 2, M3: 2, M5: 2 };
+const FIELD_SPANS = { '1': 2, '3': 2, '9': 3, '24A': 2, M1: 2, M3: 2, M5: 2, C1: 2, C2: 1, C24: 2 };
 
 function _blockMapFor(role) {
   return (typeof BLOCK_MAPS === 'object' && BLOCK_MAPS && BLOCK_MAPS[role]) || null;

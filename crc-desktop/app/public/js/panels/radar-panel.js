@@ -180,6 +180,8 @@ const EFSP_FACILITY_POSITIONS = {
   // doesn't need one: the backend enforces the read-only-ness regardless
   // of what this list renders.
   TACTICAL: ['TAC_C2', 'AIC', 'GCI', 'JTAC'],
+  // crc-sync's docs/adr/0074 — the carrier's four Positions (DEFAULT_CARRIER_CONFIG).
+  CARRIER: ['CV_MARSHAL', 'CV_PRIFLY', 'CV_APP1', 'CV_APP2'],
   // RANGES is deliberately absent: its Position set is DERIVED server-side
   // from the airspace config (a Position exists only for a range with
   // control of its own), so there is nothing static to list. Those Positions

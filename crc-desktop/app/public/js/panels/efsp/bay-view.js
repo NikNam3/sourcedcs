@@ -2365,7 +2365,8 @@ function _capturePointer() {
 // visually underneath the cursor instead.
 function _findDropTargetAt(clientX, clientY) {
   const el = document.elementFromPoint(clientX, clientY);
-  return el ? el.closest('[data-efsp-drop-position]') : null;
+  // A Marshal stack slot (crc-sync docs/adr/0074) is a drop target too: one gesture, one Move.
+  return el ? el.closest('[data-efsp-drop-position], [data-efsp-drop-slot]') : null;
 }
 
 /**
@@ -2518,7 +2519,9 @@ function _finishDrag(commit) {
   // computeInsertionIndex() always resolves to SOME neighbor position
   // whenever the Rack has other Strips in it (it never itself reports "no
   // change"), so a plain click could silently reorder or relocate a Strip.
-  if (commit && hasMoved && dropTargetEl) {
+  if (commit && hasMoved && dropTargetEl && dropTargetEl.dataset.efspDropSlot !== undefined) {
+    if (typeof carrierMoveToSlot === 'function') carrierMoveToSlot(strip, Number(dropTargetEl.dataset.efspDropSlot));
+  } else if (commit && hasMoved && dropTargetEl) {
     const toPositionId = dropTargetEl.dataset.efspDropPosition;
     const explicitBayId = dropTargetEl.dataset.efspDropBay || null;
     if (toPositionId === strip.ownerPositionId && explicitBayId) {
@@ -2724,6 +2727,9 @@ function renderBay(container, bayId) {
     _reconcileRackStrips(rackEl, bayId, rackId);
   }
 
+  // The Marshal stack's slot board (crc-sync docs/adr/0074): vacancies, derived fields, drop targets.
+  if (bayId === 'cv-marshal-stack' && typeof renderCarrierStackBoard === 'function') renderCarrierStackBoard(container);
+
   container.scrollTop = scrollTop;
   if (focusedStripId && activeEl && !container.contains(activeEl)) {
     // Re-focus by Strip ID, never DOM index (guide §7.8 rule 3) — a
@@ -2865,6 +2871,7 @@ function _stripRenderSignature(strip) {
     ? `${relation.marsaId}/${relation.rev}/${relation.state}/${relation.rendezvousAt ? 1 : 0}/${relation.voidedBy || ''}`
     : ''));
   parts.push('mhl:' + (typeof isMarsaHighlighted === 'function' && isMarsaHighlighted(strip.stripId) ? 1 : 0));
+  parts.push('car:' + (typeof carrierSignatureFor === 'function' ? carrierSignatureFor(strip) : '')); // crc-sync docs/adr/0074 — a Case change moves every carrier Strip's derived fields
   parts.push('ar:' + (typeof arSignatureFor === 'function' ? arSignatureFor(strip) : '')); // docs/adr/0071 — the AR join lives on OTHER flights' Strips
 
   const correlation = typeof getEfspCorrelationForStrip === 'function' ? getEfspCorrelationForStrip(strip) : null;
@@ -2942,7 +2949,8 @@ function _stripElNeedsRebuild(el, wanted, selectedStripId, expandedStripId) {
 }
 
 function _reconcileRackStrips(rackEl, bayId, rackId) {
-  const wanted = bayId.endsWith('-search') ? searchEfspStrips(getActiveEfspSearchQuery()) : getEfspRack(bayId, rackId);
+  const wanted = bayId.endsWith('-search') ? searchEfspStrips(getActiveEfspSearchQuery())
+    : (typeof carrierOrderRack === 'function' ? carrierOrderRack(bayId, getEfspRack(bayId, rackId)) : getEfspRack(bayId, rackId)); // the Marshal stack Bay is ordered by slot (docs/adr/0074)
   const wantedById = new Map(wanted.map(s => [s.stripId, s]));
   const existingEls = new Map(
     [...rackEl.children].filter(el => el.classList.contains('efsp-strip')).map(el => [el.dataset.stripId, el])

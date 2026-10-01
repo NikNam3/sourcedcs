@@ -94,6 +94,8 @@ function applyEfspSnapshot(msg) {
   for (const r of msg.marsa || []) efspMarsa.set(r.marsaId, r);
   efspFieldStates.clear();
   for (const r of msg.fieldStates || []) efspFieldStates.set(r.facilityId, r);
+  // crc-sync's docs/adr/0074 — the carrier's hull record (carrier-state.js).
+  if (typeof applyEfspCarrierSnapshot === 'function') applyEfspCarrierSnapshot(msg);
 }
 
 /**

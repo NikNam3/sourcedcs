@@ -1021,6 +1021,10 @@ class FdrStore {
       if (at == null) return { ok: false, reason: 'VALIDATION_ERROR', detail: `EEAT must be a Zulu time, HHMM (not ${JSON.stringify(value)})` };
       value = at;
     }
+    // A cell types text: a fuel state is pounds, so "1800" is read as the number it is.
+    // The approach button is NOT coerced here: the model reads "251.000" as a frequency and refuses it (§9.12 rule 6).
+    if ((field === 'bingoFuelLb' || field === 'lowStateLb') && typeof value === 'string' && /^\d+(\.\d+)?$/.test(value.trim())) value = Number(value);
+    if (typeof value === 'string' && value.trim() === '') value = null; // an emptied cell clears
     const r = setCarrierFlightField(military.carrier, field, value);
     if (!r.ok) return r;
     fdr.military = { ...military, carrier: r.flight };

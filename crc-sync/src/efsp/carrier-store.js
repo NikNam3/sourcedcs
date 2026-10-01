@@ -136,6 +136,20 @@ class CarrierStore {
       // §9.12's "SHOULD validate": non-empty only when something is wrong (ADR 0058).
       consistency[stackId] = carrier.checkConsistency(derived[stackId]);
     }
+    // What each slot WOULD read if a flight stood in it, so a drag-to-slot can
+    // preview the new angels, DME and push time without the client doing any
+    // arithmetic. The slots run from 0 to two above the top of the stack.
+    const slots = {};
+    for (const [stackId, stack] of Object.entries(r.stacks)) {
+      const top = stack.entries.reduce((m, e) => Math.max(m, e.stackIndex), -1);
+      const last = Math.min(carrier.STACK_DEFAULTS.maxIndex, top + 2);
+      slots[stackId] = [];
+      for (let i = 0; i <= last; i++) {
+        const d = carrier.deriveEntry({ fdrId: null, stackIndex: i, status: 'HOLDING', caseIAngels: null }, {
+          caseValue, charlieTimeUtc: stack.charlieTimeUtc, marshalRadialDeg: stack.marshalRadialDeg, shipState });
+        slots[stackId].push({ stackIndex: i, angels: d.angels, marshalDme: d.marshalDme, pushTimeUtc: d.pushTimeUtc });
+      }
+    }
     const lanes = {};
     for (const [stackId, stack] of Object.entries(r.stacks)) {
       const d = carrier.deriveStack(stack, { caseValue, shipState });
@@ -151,7 +165,7 @@ class CarrierStore {
     return {
       ...deepClone(r),
       shipState: banner,
-      derived, lanes, consistency,
+      derived, slots, lanes, consistency,
       advisory: this._advisory(hullId),
       hull: this.hull(hullId),
     };
