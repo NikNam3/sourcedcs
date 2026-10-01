@@ -1,25 +1,17 @@
-'use strict';
-
 // The per-Position field lists (strip-fields.js, docs/adr/0056) and the rules
 // they were written to. Each rule came from a controller reading the Strip:
 // a field a Position never uses costs Strip height on every flight.
 // Reachability — everything left off is still in the expanded view — is held
 // by efsp-ui-reachability.test.js, per (Role, Position).
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('fs');
-const path = require('path');
-const vm = require('vm');
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const CLIENT = path.join(__dirname, '../app/public/js/panels/efsp');
-const sandbox = { module: { exports: {} } };
-vm.createContext(sandbox);
-for (const file of ['strip-template.js', 'strip-fields.js']) {
-  vm.runInContext(fs.readFileSync(path.join(CLIENT, file), 'utf8'), sandbox, { filename: file });
-}
-const { COMPACT_BLOCKS_BY_POSITION, compactBlocksFor } = sandbox.module.exports;
-const BLOCK_MAPS = vm.runInContext('BLOCK_MAPS', sandbox);
+import { BLOCK_MAPS } from '../app/public/js/panels/efsp/strip-template.js';
+import {
+  COMPACT_BLOCKS_BY_POSITION, compactBlocksFor,
+  MTR_BLOCKS_BY_POSITION, hasMtrData, mtrLostCommsAdvisory,
+} from '../app/public/js/panels/efsp/strip-fields.js';
 
 const everyList = () => Object.entries(COMPACT_BLOCKS_BY_POSITION)
   .flatMap(([role, byPos]) => Object.entries(byPos).map(([positionId, list]) => ({ role, positionId, list })));
@@ -128,7 +120,6 @@ test('a Position no list names falls back to its Role, filtered to the Role\'s B
 
 // ── §9.4 MTR group (crc-sync's docs/adr/0062) ────────────────────────────────
 
-const { MTR_BLOCKS_BY_POSITION, hasMtrData, mtrLostCommsAdvisory } = sandbox.module.exports;
 const everyMtrList = () => Object.entries(MTR_BLOCKS_BY_POSITION)
   .flatMap(([role, byPos]) => Object.entries(byPos).map(([positionId, list]) => ({ role, positionId, list })));
 const fdrWithMtr = (mtr) => ({ military: { mtr }, clearance: { altitude: { entries: [] } } });
