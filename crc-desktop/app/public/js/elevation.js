@@ -6,7 +6,7 @@
 // hard floor in their data product, not a client-side setting). To get
 // contours at every zoom level, this computes them ourselves from MapTiler's
 // terrain-RGB elevation tiles (available zoom 0-14) using a marching-squares
-// isoline trace, run per-tile and cached. Same MapTiler key as the rest of
+// isoline trace, run per-tile and cached. Same MapTiler key (config.js MAPTILER_KEY) as the rest of
 // the map — no new external dependency.
 
 const ELEV_TILE_SIZE   = 512;   // terrain-rgb-v2 tile pixel dimensions
@@ -50,7 +50,7 @@ function elevTileToLonLat(z, tx, ty) {
 // by the contour renderer below (elevFetchGrid, which converts to feet) and
 // los.js's point-elevation queries (which want meters directly).
 async function elevDecodeTileMeters(z, x, y) {
-  const url = `https://api.maptiler.com/tiles/terrain-rgb-v2/${z}/${x}/${y}.webp?key=b08eN2ojRae78YJNYhyu`;
+  const url = `https://api.maptiler.com/tiles/terrain-rgb-v2/${z}/${x}/${y}.webp?key=${MAPTILER_KEY}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`terrain-rgb ${z}/${x}/${y}: HTTP ${res.status}`);
   const bitmap = await createImageBitmap(await res.blob());
