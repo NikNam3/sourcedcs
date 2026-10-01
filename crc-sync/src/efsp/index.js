@@ -71,6 +71,7 @@ const { REGISTRY, RESTORE_ORDER } = require('./stores');
  *   data/ now; see src/state-paths.js.
  */
 function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('efsp-board.json', process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH) } = {}) {
+  facilityConfig.load(); // the Facilities' JSON is read here, not when the module is required (docs/wip/DATA-1.md)
   const codeAllocator = new CodeAllocator();
   const mutationLog = new MutationLog(undefined, { clock });
   const facilities = new Map(); // facilityId -> { boardStore, positionStore, rules }

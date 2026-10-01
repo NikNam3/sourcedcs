@@ -27,12 +27,12 @@
 // one EfspState — Filed/Taxi In/Arrivals/every Coordination Bay have none.
 
 const fs = require('fs');
-const blockMap = require('./block-map');
 const fieldState = require('./field-state'); // pure, requires nothing back (docs/adr/0061)
-const { validateAlertPadConfig } = require('./alert-scramble'); // pure (docs/adr/0070)
+const schema = require('./facility-schema');
+const { validateConfig, validateRadarSelector, validateSfaRotationRecord, BAY_VIEWS } = schema;
 // Required BEFORE this module builds its configs Map: the RANGES Facility's
 // Position set is derived from the airspace definitions (see
-// RANGES_CONFIG). airspace-config.js deliberately does not require
+//  airspace-config.js deliberately does not require
 // this module back, so there is no cycle.
 const airspaceConfig = require('./airspace-config');
 const path = require('path');
@@ -48,13 +48,13 @@ const DEFAULT_FACILITY_ID = 'INCIRLIK';
 // copy exists, else the shipped default) and a write path (always data/) — see
 // state-paths.js for why that split exists at all.
 const FACILITY_CONFIG_FILES = {
-  INCIRLIK: ['efsp-facility-incirlik.json', process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH],
-  CENTER: ['efsp-facility-center.json', process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER],
+  INCIRLIK: ['efsp-facility-incirlik.json', undefined], // set by load()
+  CENTER: ['efsp-facility-center.json', undefined], // set by load()
   // WP4A second slice — the TACTICAL Facility (docs/adr/0013's pattern
   // repeated for a third Facility).
-  TACTICAL: ['efsp-facility-tactical.json', process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL],
+  TACTICAL: ['efsp-facility-tactical.json', undefined], // set by load()
   // docs/adr/0074 — the CARRIER Facility (docs/adr/0064 B1).
-  CARRIER: ['efsp-facility-carrier.json', process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CARRIER],
+  CARRIER: ['efsp-facility-carrier.json', undefined], // set by load()
 };
 
 /** Kept as a name->path map for any existing reader; resolved fresh per call. */
@@ -99,247 +99,53 @@ const SHIPPED_FACILITY_IDS = ['INCIRLIK', 'CENTER', 'TACTICAL', 'CARRIER'];
 // Absent from `coveringChain` deliberately: the chain exists to re-route
 // Strips away from a vacated Position (defect D19), and a Position that owns
 // no Strips has none to strand.
-const RANGES_CONFIG = {
-  facility: 'RANGES',
-  positions: airspaceConfig.getRangePositionIds(),
-  positionClasses: Object.fromEntries(
-    airspaceConfig.getRangePositionIds().map(id => [id, 'USING_AGENCY'])
-  ),
-  coveringChain: {},
-  positionLetters: {},
-  // `hiddenBlocks`, not the `blockVisibility` inclusion list docs/adr/0041
-  // replaced — this config is derived and never persisted, so the stale key
-  // was inert, but leaving it here invited the next reader to copy it.
-  hiddenBlocks: {},
-  // §4.1 rule 2: a range Position is the using agency and owns airspace state,
-  // not a scope. No selectors, and none derived either — unlike `positions`,
-  // there is nothing in the airspace config that describes a radar.
-  positionRadars: {},
-  bays: {},
-  dataOnly: false,
-  standingReleases: [],
-  aitAuthorized: false,
-};
+function _rangesConfig() {
+  return {
+    facility: 'RANGES',
+    positions: airspaceConfig.getRangePositionIds(),
+    positionClasses: Object.fromEntries(
+      airspaceConfig.getRangePositionIds().map(id => [id, 'USING_AGENCY'])
+    ),
+    coveringChain: {},
+    positionLetters: {},
+    // `hiddenBlocks`, not the `blockVisibility` inclusion list docs/adr/0041
+    // replaced — this config is derived and never persisted, so the stale key
+    // was inert, but leaving it here invited the next reader to copy it.
+    hiddenBlocks: {},
+    // §4.1 rule 2: a range Position is the using agency and owns airspace state,
+    // not a scope. No selectors, and none derived either — unlike `positions`,
+    // there is nothing in the airspace config that describes a radar.
+    positionRadars: {},
+    bays: {},
+    dataOnly: false,
+    standingReleases: [],
+    aitAuthorized: false,
+  };
+}
 
-// The shipped defaults, read from config/ (never state/). Step 1 of docs/wip/DATA-1.md keeps the
-// old "defaults, overlaid by the on-disk copy" semantics with the JSON as the defaults; the
-// behaviour commit that follows removes the overlay.
-const DEFAULT_CONFIGS = Object.fromEntries([
-  ...SHIPPED_FACILITY_IDS.map(id => [id, JSON.parse(fs.readFileSync(path.join(CONFIG_DIR, FACILITY_CONFIG_FILES[id][0]), 'utf8'))]),
-  ['RANGES', RANGES_CONFIG],
-]);
+// The shipped Facilities, read from config/ (never state/) on demand. RANGES is derived from the airspace
+// definitions, so it is rebuilt each time rather than cached.
+function _shippedConfigs() {
+  return Object.fromEntries([
+    ...SHIPPED_FACILITY_IDS.map(id => [id, JSON.parse(fs.readFileSync(path.join(CONFIG_DIR, FACILITY_CONFIG_FILES[id][0]), 'utf8'))]),
+    ['RANGES', _rangesConfig()],
+  ]);
+}
+let defaultConfigs = null;
+function _defaultConfigs() { _configs(); return defaultConfigs; }
+
+/** One Facility's shipped config (config/, never state/), a fresh copy. For tests and tools that need the pristine file. */
+function getShippedConfig(facilityId) { return deepClone(_shippedConfigs()[facilityId]); }
 
 function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
 
-/**
- * Validates a candidate facility config (guide §8.3): every required Block
- * for each role in `blockVisibility` MUST stay visible, and every Bay's
- * owning Position MUST exist in the Position set (rule 3). Facility-
- * agnostic — operates on whichever candidate object is passed in. Returns
- * {ok:true} or {ok:false, reason:'VALIDATION_ERROR', detail}.
- */
-function validateConfig(candidate) {
-  // The doctrinal check is unchanged (guide §8.3: every REQUIRED Block MUST
-  // stay visible) — only the direction it reads from. What a Facility hides
-  // is subtracted from the Block Map, and the remainder still has to contain
-  // every required Block.
-  for (const role of Object.keys(candidate.hiddenBlocks || {})) {
-    const all = Object.keys(blockMap.BLOCK_MAPS[role] || {});
-    const visibleBlocks = all.filter(b => !candidate.hiddenBlocks[role].includes(b));
-    const result = blockMap.validateFacilityConfig({ role, visibleBlocks });
-    if (!result.ok) return result;
-  }
-  for (const positionId of Object.keys(candidate.bays || {})) {
-    if (!(candidate.positions || []).includes(positionId)) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: `Bay set references unknown Position ${positionId}` };
-    }
-  }
-  for (const [positionId, letter] of Object.entries(candidate.positionLetters || {})) {
-    if (!(candidate.positions || []).includes(positionId)) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: `positionLetters references unknown Position ${positionId}` };
-    }
-    if (typeof letter !== 'string' || !/^[A-Z0-9]$/.test(letter)) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: `positionLetters.${positionId} must be one character A-Z or 0-9` };
-    }
-  }
-  for (const positionId of Object.keys(candidate.positionClasses || {})) {
-    if (!(candidate.positions || []).includes(positionId)) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: `positionClasses references unknown Position ${positionId}` };
-    }
-  }
-  // Radar selectors are checked for SHAPE only, not for resolving to anything.
-  // A selector naming an airfield this theater does not have is legitimate —
-  // the same config has to work across theaters — so an unresolvable selector
-  // is a startup warning (index.js's _validateRadarSelectors, following
-  // _validateAirspaceReferences), never a config rejection. A malformed one is
-  // a different matter: it can never resolve in any theater.
-  for (const [positionId, selectors] of Object.entries(candidate.positionRadars || {})) {
-    if (!(candidate.positions || []).includes(positionId)) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: `positionRadars references unknown Position ${positionId}` };
-    }
-    if (!Array.isArray(selectors)) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: `positionRadars.${positionId} must be an array of selectors` };
-    }
-    for (const selector of selectors) {
-      const problem = validateRadarSelector(selector);
-      if (problem) {
-        return { ok: false, reason: 'VALIDATION_ERROR', detail: `positionRadars.${positionId}: ${problem}` };
-      }
-    }
-  }
-  const bayProblem = validateBayDescriptors(candidate);
-  if (bayProblem) return { ok: false, reason: 'VALIDATION_ERROR', detail: bayProblem };
-  if (candidate.singleFrequencyApproach !== undefined) {
-    const problem = validateSingleFrequencyApproach(candidate.singleFrequencyApproach, candidate);
-    if (problem) return { ok: false, reason: 'VALIDATION_ERROR', detail: problem };
-  }
-  // The runway inventory (guide §9.7, docs/adr/0061): malformed can never work
-  // anywhere, so it is rejected like a malformed radar selector. How it lines
-  // up with the Bays only warns — see _loadOne.
-  if (candidate.fieldState !== undefined) {
-    const problem = fieldState.validateFieldStateInventory(candidate.fieldState, candidate.positions || []);
-    if (problem) return { ok: false, reason: 'VALIDATION_ERROR', detail: problem };
-  }
-  if (candidate.fieldState && candidate.fieldState.pads) {
-    const problem = validateAlertPadConfig(candidate.fieldState.pads.alert);
-    if (problem) return { ok: false, reason: 'VALIDATION_ERROR', detail: problem };
-  }
-  return { ok: true };
-}
 
-// The Bay descriptor flags (docs/adr/0093). Only these keys beyond bayId/rackIds/
-// impliesState exist, so a typo in a config can never silently mount nothing.
-const BAY_VIEWS = Object.freeze(['pattern', 'final', 'sfa-freqs']);
-// `holdsRole` is L28's (docs/adr/0087): a Bay that files its Role's Strips whatever their state.
-const BAY_DESCRIPTOR_KEYS = Object.freeze(['bayId', 'rackIds', 'impliesState', 'view', 'replacesRacks', 'capacity', 'holdsRole']);
-
-/** A human problem string for a malformed Bay descriptor flag (`view`, `capacity`), or null. */
-function validateBayDescriptors(candidate) {
-  for (const [positionId, bays] of Object.entries(candidate.bays || {})) {
-    for (const bay of bays) {
-      if (bay.view !== undefined && !BAY_VIEWS.includes(bay.view)) {
-        return `bays.${positionId}.${bay.bayId}: unknown view ${JSON.stringify(bay.view)} (one of ${BAY_VIEWS.join(', ')})`;
-      }
-      if (bay.capacity !== undefined && !(Number.isInteger(bay.capacity) && bay.capacity >= 1)) {
-        return `bays.${positionId}.${bay.bayId}: capacity must be a whole number of at least 1`;
-      }
-      if (bay.replacesRacks !== undefined && (typeof bay.replacesRacks !== 'boolean' || !bay.view)) {
-        return `bays.${positionId}.${bay.bayId}: replacesRacks is true or false and needs a view`;
-      }
-      if (bay.holdsRole !== undefined && (typeof bay.holdsRole !== 'string' || !bay.holdsRole)) {
-        return `bays.${positionId}.${bay.bayId}: holdsRole is a Role name`;
-      }
-      const stray = Object.keys(bay).find(k => !BAY_DESCRIPTOR_KEYS.includes(k));
-      if (stray) return `bays.${positionId}.${bay.bayId}: unknown Bay descriptor key ${JSON.stringify(stray)}`;
-    }
-  }
-  return null;
-}
-
-// UHF, [SOURCE-DEFINED]: guide §4.7 says "UHF", the squadron's pool lives in 225.000 to 399.975.
-const SFA_MIN_MHZ = 225;
-const SFA_MAX_MHZ = 399.975;
-const SFA_MIN_POOL = 5; // guide §4.7: "at least five discrete UHF frequencies"
-
-/**
- * Guide §4.7's pool, checked as a unit: at least five unique frequencies whose
- * Racks are exactly the SFA Bay's, a rotation smaller than the pool, and APP-style
- * jurisdiction held by a Position of this Facility. Returns a problem string or null.
- */
-function validateSingleFrequencyApproach(sfa, candidate) {
-  if (!sfa || typeof sfa !== 'object') return 'singleFrequencyApproach must be an object';
-  const positions = candidate.positions || [];
-  if (!positions.includes(sfa.jurisdiction)) return `singleFrequencyApproach.jurisdiction ${JSON.stringify(sfa.jurisdiction)} is not a Position of this Facility`;
-  if (!Array.isArray(sfa.pool) || sfa.pool.length < SFA_MIN_POOL) {
-    return `singleFrequencyApproach.pool needs at least ${SFA_MIN_POOL} frequencies (guide §4.7), has ${Array.isArray(sfa.pool) ? sfa.pool.length : 0}`;
-  }
-  if (!Number.isInteger(sfa.rotationSize) || sfa.rotationSize < 1 || sfa.rotationSize >= sfa.pool.length) {
-    return 'singleFrequencyApproach.rotationSize must be a whole number of at least 1 and smaller than the pool';
-  }
-  const ids = new Set();
-  const mhzs = new Set();
-  for (const entry of sfa.pool) {
-    if (!entry || typeof entry.rackId !== 'string' || !entry.rackId) return 'every singleFrequencyApproach.pool entry needs a rackId';
-    if (ids.has(entry.rackId)) return `singleFrequencyApproach.pool repeats rackId ${entry.rackId}`;
-    ids.add(entry.rackId);
-    if (typeof entry.mhz !== 'number' || !Number.isFinite(entry.mhz) || entry.mhz < SFA_MIN_MHZ || entry.mhz > SFA_MAX_MHZ) {
-      return `singleFrequencyApproach.pool ${entry.rackId}: mhz must be a UHF number from ${SFA_MIN_MHZ} to ${SFA_MAX_MHZ}`;
-    }
-    if (mhzs.has(entry.mhz)) return `singleFrequencyApproach.pool repeats ${entry.mhz} MHz`;
-    mhzs.add(entry.mhz);
-  }
-  const sfaBays = [];
-  for (const bays of Object.values(candidate.bays || {})) for (const b of bays) if (b.view === 'sfa-freqs') sfaBays.push(b);
-  if (sfaBays.length !== 1) return `exactly one Bay must have view 'sfa-freqs', found ${sfaBays.length}`;
-  const bayRacks = sfaBays[0].rackIds || [];
-  if (bayRacks.length !== ids.size || !bayRacks.every(r => ids.has(r))) {
-    return `the SFA Bay's Racks (${bayRacks.join(', ')}) must be exactly the pool's rackIds (${[...ids].join(', ')})`;
-  }
-  if (sfa.initialRotation !== undefined) {
-    const problem = validateSfaRotationRecord(sfa.initialRotation, sfa, positions);
-    if (problem) return `singleFrequencyApproach.initialRotation: ${problem}`;
-  }
-  return null;
-}
-
-/**
- * A rotation record `{ rackId: positionId }` against its config: frequencies
- * from the pool, Positions of the Facility, no more entries than the rotation
- * holds, and one Position on one frequency at a time. Pure; sfa-store.js uses it too.
- */
-function validateSfaRotationRecord(record, sfa, positions) {
-  if (!record || typeof record !== 'object' || Array.isArray(record)) return 'must be an object of rackId to Position';
-  const pool = new Set(sfa.pool.map(p => p.rackId));
-  const entries = Object.entries(record);
-  if (entries.length > sfa.rotationSize) return `at most ${sfa.rotationSize} frequencies are in rotation, got ${entries.length}`;
-  const held = new Set();
-  for (const [rackId, positionId] of entries) {
-    if (!pool.has(rackId)) return `${rackId} is not a pool frequency`;
-    if (!positions.includes(positionId)) return `${positionId} is not a Position of this Facility`;
-    if (held.has(positionId)) return `${positionId} cannot be on two frequencies at once`;
-    held.add(positionId);
-  }
-  return null;
-}
-
-// `datalink` is not a radar: it grants the datalink feed (docs/adr/0059).
-const RADAR_SELECTOR_KINDS = new Set(['airport', 'approach', 'awacs', 'fighter', 'carrier', 'datalink']);
-
-/** Returns a human problem string, or null when the selector is well formed. */
-function validateRadarSelector(selector) {
-  if (!selector || typeof selector !== 'object') return 'a selector must be an object';
-  if (!RADAR_SELECTOR_KINDS.has(selector.kind)) {
-    return `unknown radar kind ${JSON.stringify(selector.kind)} (one of ${[...RADAR_SELECTOR_KINDS].join(', ')})`;
-  }
-  if (selector.airport !== undefined && typeof selector.airport !== 'string') {
-    return 'airport must be an ICAO/name string, or "*"';
-  }
-  if (selector.coalition !== undefined && selector.coalition !== 'own' && selector.coalition !== 'any') {
-    return 'coalition must be "own" or "any"';
-  }
-  // An airport selector against an airborne kind cannot mean anything, and a
-  // config that says it is confused about what it is asking for.
-  if (selector.radar !== undefined && (selector.kind !== 'carrier' || (selector.radar !== 'search' && selector.radar !== 'approach'))) {
-    return 'radar ("search" or "approach") applies to a carrier selector only';
-  }
-  if (selector.hull !== undefined && (selector.kind !== 'carrier' || typeof selector.hull !== 'string')) {
-    return 'hull (a hull id string) applies to a carrier selector only';
-  }
-  if (selector.airport && (selector.kind === 'awacs' || selector.kind === 'fighter' || selector.kind === 'datalink')) {
-    return selector.kind === 'datalink'
-      ? 'the datalink is a network — an airport selector cannot match it'
-      : `${selector.kind} radars are airborne — an airport selector cannot match one`;
-  }
-  return null;
-}
-
-function _loadOne(facilityId) {
-  const defaults = DEFAULT_CONFIGS[facilityId];
+function _loadOne(facilityId, defaults) {
   let config = deepClone(defaults);
   if (DERIVED_FACILITY_IDS.has(facilityId)) return config;
   try {
     const [name, override] = FACILITY_CONFIG_FILES[facilityId];
-    const onDisk = JSON.parse(fs.readFileSync(readPath(name, override), 'utf8'));
+    const onDisk = JSON.parse(fs.readFileSync(_readFrom(name, override), 'utf8'));
     // A `blockVisibility` inclusion list from before this was an exclusion
     // list. Dropped rather than converted: every shipped one was a full set
     // for its day, so it expressed no narrowing at all — converting it would
@@ -367,27 +173,53 @@ function _loadOne(facilityId) {
   return config;
 }
 
-const configs = new Map(Object.keys(DEFAULT_CONFIGS).map(id => [id, _loadOne(id)]));
+
+// The file's read path: the override if one is set and exists, else the live copy in state/, else the shipped
+// config/ file. (state-paths.js's readPath returns an override whether or not it exists; tests point the
+// overrides at temp files that do not.) Writes always go to the override or state/ — FACILITY_CONFIG_PATHS.
+function _readFrom(name, override) {
+  return override && fs.existsSync(override) ? override : readPath(name);
+}
+
+// The facilities, built on first use (or by an explicit load()), never at require time. `null` until then.
+let configs = null;
+
+/**
+ * Reads every Facility's config. Idempotent: a second call is a no-op unless `reload` is set, because
+ * setFacilityConfig changes the live Map and createEfsp may be called more than once in a process.
+ * The env overrides are read here, not at require time.
+ */
+function load({ reload = false } = {}) {
+  if (configs && !reload) return;
+  FACILITY_CONFIG_FILES.INCIRLIK[1] = process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH;
+  FACILITY_CONFIG_FILES.CENTER[1] = process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER;
+  FACILITY_CONFIG_FILES.TACTICAL[1] = process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL;
+  FACILITY_CONFIG_FILES.CARRIER[1] = process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CARRIER;
+  defaultConfigs = _shippedConfigs();
+  configs = new Map(Object.keys(defaultConfigs).map(id => [id, _loadOne(id, defaultConfigs[id])]));
+}
+
+function _configs() { load(); return configs; }
 
 function _persist(facilityId) {
   if (DERIVED_FACILITY_IDS.has(facilityId)) return; // see DERIVED_FACILITY_IDS
   try {
     const target = FACILITY_CONFIG_PATHS[facilityId];
     ensureDirFor(target);
-    fs.writeFileSync(target, JSON.stringify(configs.get(facilityId), null, 2));
+    fs.writeFileSync(target, JSON.stringify(_configs().get(facilityId), null, 2));
   } catch (e) {
     console.warn(`[efsp-facility-config] failed to persist ${facilityId} config:`, e.message);
   }
 }
 
 /** Every Facility this server knows about — index.js's composition root iterates this to build one {boardStore, positionStore} pair per Facility, generically (no hard-coded facility count). */
-function getFacilityIds() { return [...configs.keys()]; }
+function getFacilityIds() { return [..._configs().keys()]; }
 
-function getFacilityConfig(facilityId = DEFAULT_FACILITY_ID) { return deepClone(configs.get(facilityId)); }
+function getFacilityConfig(facilityId = DEFAULT_FACILITY_ID) { return deepClone(_configs().get(facilityId)); }
 
-function getPositionSet(facilityId = DEFAULT_FACILITY_ID) { return [...(configs.get(facilityId).positions)]; }
+function getPositionSet(facilityId = DEFAULT_FACILITY_ID) { return [...(_configs().get(facilityId).positions)]; }
 
-function getCoveringChain(facilityId = DEFAULT_FACILITY_ID) { return { ...(configs.get(facilityId).coveringChain) }; }
+function getCoveringChain(facilityId = DEFAULT_FACILITY_ID) { return { ...(_configs().get(facilityId).coveringChain) }; }
 
 /**
  * WP4A second slice — a Position's doctrinal class (guide §4.1's own Class
@@ -403,7 +235,7 @@ function getCoveringChain(facilityId = DEFAULT_FACILITY_ID) { return { ...(confi
  * field, or a genuinely classless test fixture).
  */
 function getPositionClass(positionId) {
-  for (const config of configs.values()) {
+  for (const config of _configs().values()) {
     const classes = config.positionClasses || {};
     if (Object.prototype.hasOwnProperty.call(classes, positionId)) return classes[positionId];
   }
@@ -412,7 +244,7 @@ function getPositionClass(positionId) {
 
 /** The one character an ATC scope draws for a contact this Position owns (docs/adr/0088); null when none is configured. */
 function getPositionLetter(positionId) {
-  for (const config of configs.values()) {
+  for (const config of _configs().values()) {
     const letters = config.positionLetters || {};
     if (Object.prototype.hasOwnProperty.call(letters, positionId)) return letters[positionId];
   }
@@ -422,7 +254,7 @@ function getPositionLetter(positionId) {
 /** Every Facility's position letters, `{ facilityId: { positionId: letter } }` — sent in the EFSP snapshot (docs/adr/0088). */
 function allPositionLetters() {
   const out = {};
-  for (const [facilityId, config] of configs) out[facilityId] = { ...(config.positionLetters || {}) };
+  for (const [facilityId, config] of _configs()) out[facilityId] = { ...(config.positionLetters || {}) };
   return out;
 }
 
@@ -432,7 +264,7 @@ function allPositionLetters() {
  * answer, not a gap.
  */
 function getPositionRadars(positionId, facilityId = DEFAULT_FACILITY_ID) {
-  const config = configs.get(facilityId);
+  const config = _configs().get(facilityId);
   if (!config) return [];
   return deepClone((config.positionRadars || {})[positionId] || []);
 }
@@ -440,7 +272,7 @@ function getPositionRadars(positionId, facilityId = DEFAULT_FACILITY_ID) {
 /** Every Position, anywhere, that has at least one radar selector — what the coverage panel calls a "radar Position". */
 function radarBearingPositionIds() {
   const out = [];
-  for (const config of configs.values()) {
+  for (const config of _configs().values()) {
     for (const [positionId, selectors] of Object.entries(config.positionRadars || {})) {
       if (Array.isArray(selectors) && selectors.length) out.push(positionId);
     }
@@ -449,7 +281,7 @@ function radarBearingPositionIds() {
 }
 
 function getBaysFor(positionId, facilityId = DEFAULT_FACILITY_ID) {
-  return deepClone(configs.get(facilityId).bays[positionId] || []);
+  return deepClone(_configs().get(facilityId).bays[positionId] || []);
 }
 
 /**
@@ -472,7 +304,7 @@ function getBaysFor(positionId, facilityId = DEFAULT_FACILITY_ID) {
  * somebody deliberately hides it.
  */
 function isBlockVisible(role, blockId, facilityId = DEFAULT_FACILITY_ID) {
-  const config = configs.get(facilityId);
+  const config = _configs().get(facilityId);
   if (!config) return true;
   const hidden = (config.hiddenBlocks || {})[role];
   return !hidden || !hidden.includes(blockId);
@@ -485,7 +317,7 @@ function isBlockVisible(role, blockId, facilityId = DEFAULT_FACILITY_ID) {
 // across both Facilities and needs to know which Board a Bay belongs to.
 function getAllBays(facilityId = DEFAULT_FACILITY_ID) {
   const out = [];
-  for (const [positionId, bays] of Object.entries(configs.get(facilityId).bays)) {
+  for (const [positionId, bays] of Object.entries(_configs().get(facilityId).bays)) {
     for (const bay of bays) out.push({ ...deepClone(bay), positionId, facilityId });
   }
   return out;
@@ -511,7 +343,7 @@ function getBay(bayId, facilityId = DEFAULT_FACILITY_ID) {
 
 /** A Facility's SFA pool config (guide §4.7), or null when it has none (every Facility but INCIRLIK). */
 function getSingleFrequencyApproach(facilityId = DEFAULT_FACILITY_ID) {
-  const config = configs.get(facilityId);
+  const config = _configs().get(facilityId);
   return config && config.singleFrequencyApproach ? deepClone(config.singleFrequencyApproach) : null;
 }
 
@@ -532,11 +364,11 @@ function setFacilityConfig(next, facilityId = DEFAULT_FACILITY_ID) {
   if (DERIVED_FACILITY_IDS.has(facilityId)) {
     return { ok: false, reason: 'VALIDATION_ERROR', detail: `${facilityId}'s Positions are derived from the airspace config — edit that instead` };
   }
-  if (!DEFAULT_CONFIGS[facilityId]) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown facilityId ${facilityId}` };
-  const merged = { ...deepClone(DEFAULT_CONFIGS[facilityId]), ...deepClone(next) };
+  if (!_defaultConfigs()[facilityId]) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown facilityId ${facilityId}` };
+  const merged = { ...deepClone(_defaultConfigs()[facilityId]), ...deepClone(next) };
   const check = validateConfig(merged);
   if (!check.ok) return check; // {ok:false, reason:'VALIDATION_ERROR', detail} — rejected, not persisted
-  configs.set(facilityId, merged);
+  _configs().set(facilityId, merged);
   _persist(facilityId);
   return true;
 }
@@ -575,5 +407,5 @@ module.exports = {
   getPositionRadars, radarBearingPositionIds, validateRadarSelector,
   bayImpliesState, bayHoldsRole, bayForImpliedState, bayExists, coordinationBayFor, setFacilityConfig, validateConfig,
   getBay, getSingleFrequencyApproach, validateSfaRotationRecord, BAY_VIEWS,
-  DEFAULT_CONFIGS,
+  getShippedConfig, load,
 };

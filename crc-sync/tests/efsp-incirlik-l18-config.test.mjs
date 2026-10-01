@@ -81,21 +81,21 @@ test('Bay descriptor flags: the RSU, PAR and SFA Bays and the carrier\'s final/p
 });
 
 test('Bay descriptor flags are validated: an unknown view and a bad capacity are rejected', () => {
-  const bad = clone(fc.DEFAULT_CONFIGS.INCIRLIK);
+  const bad = clone(fc.getShippedConfig('INCIRLIK'));
   bad.bays.RSU[0].view = 'carousel';
   assert.equal(valid(bad).ok, false);
   assert.match(valid(bad).detail, /unknown view/);
-  const zero = clone(fc.DEFAULT_CONFIGS.INCIRLIK);
+  const zero = clone(fc.getShippedConfig('INCIRLIK'));
   zero.bays.PAR[0].capacity = 0;
   assert.equal(valid(zero).ok, false);
   assert.match(valid(zero).detail, /capacity/);
-  const noView = clone(fc.DEFAULT_CONFIGS.INCIRLIK);
+  const noView = clone(fc.getShippedConfig('INCIRLIK'));
   noView.bays.OPS[0].replacesRacks = true;
   assert.match(valid(noView).detail, /replacesRacks/);
-  const stray = clone(fc.DEFAULT_CONFIGS.INCIRLIK);
+  const stray = clone(fc.getShippedConfig('INCIRLIK'));
   stray.bays.OPS[0].colour = 'red';
   assert.match(valid(stray).detail, /unknown Bay descriptor key/);
-  assert.equal(valid(clone(fc.DEFAULT_CONFIGS.INCIRLIK)).ok, true);
+  assert.equal(valid(clone(fc.getShippedConfig('INCIRLIK'))).ok, true);
 });
 
 test('singleFrequencyApproach: APP holds jurisdiction over a pool of at least five, a rotation of three, and the pool IS the SFA Bay\'s Racks', () => {
@@ -109,7 +109,7 @@ test('singleFrequencyApproach: APP holds jurisdiction over a pool of at least fi
 });
 
 test('singleFrequencyApproach is rejected when malformed (guide §4.7: at least five discrete UHF frequencies)', () => {
-  const mutate = (fn) => { const c = clone(fc.DEFAULT_CONFIGS.INCIRLIK); fn(c); return valid(c); };
+  const mutate = (fn) => { const c = clone(fc.getShippedConfig('INCIRLIK')); fn(c); return valid(c); };
   let r = mutate(c => { c.singleFrequencyApproach.pool.pop(); c.bays.SFA[0].rackIds.pop(); });
   assert.equal(r.ok, false); assert.match(r.detail, /at least 5/, 'a pool of four');
   r = mutate(c => { c.singleFrequencyApproach.jurisdiction = 'NOBODY'; });

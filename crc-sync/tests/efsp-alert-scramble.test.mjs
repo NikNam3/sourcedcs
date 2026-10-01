@@ -166,9 +166,9 @@ test('alertPadConstraint still marks the route when none is configured, or field
 // ── config ───────────────────────────────────────────────────────────────
 
 test('validateConfig rejects a non-string accessRoute and accepts the shipped config', () => {
-  assert.equal(facilityConfig.validateConfig(facilityConfig.DEFAULT_CONFIGS.INCIRLIK).ok, true);
-  assert.equal(facilityConfig.DEFAULT_CONFIGS.INCIRLIK.fieldState.pads.alert.accessRoute, 'ALERT ACCESS TAXIWAY');
-  const bad = structuredClone(facilityConfig.DEFAULT_CONFIGS.INCIRLIK);
+  assert.equal(facilityConfig.validateConfig(facilityConfig.getShippedConfig('INCIRLIK')).ok, true);
+  assert.equal(facilityConfig.getShippedConfig('INCIRLIK').fieldState.pads.alert.accessRoute, 'ALERT ACCESS TAXIWAY');
+  const bad = structuredClone(facilityConfig.getShippedConfig('INCIRLIK'));
   bad.fieldState.pads.alert.accessRoute = 42;
   const result = facilityConfig.validateConfig(bad);
   assert.equal(result.ok, false);
