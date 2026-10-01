@@ -952,16 +952,16 @@ test('MTR times refuse what is not a time of day, legibly, and leave the FDR byt
   assert.equal(JSON.stringify(store.getFdr(fdr.fdrId)), before);
 });
 
-test('the requested altitude after exit takes whatever parseAltitudeFt parses, and refuses the rest', () => {
+test('the requested altitude after exit takes whatever parseAltitude parses (a block included, docs/adr/0091), and refuses the rest', () => {
   const store = new FdrStore(undefined, { clock: missionClock });
   const { fdr } = store.createFdr(makeSeed(), { by: 'OPS' });
-  for (const [typed, stored] of [['FL210', 'FL210'], ['080', '080'], ['8000', '8000'], [' fl 190 ', 'FL190'], ['A050', 'A050']]) {
+  for (const [typed, stored] of [['FL210', 'FL210'], ['080', '080'], ['8000', '8000'], [' fl 190 ', 'FL190'], ['A050', 'A050'], ['FL190B210', 'FL190-FL210']]) {
     const r = store.setField(fdr.fdrId, 'military.mtr.requestedAltitudeAfterExit', typed, { by: 'CTR' });
     assert.equal(r.ok, true, typed);
     assert.equal(r.fdr.military.mtr.requestedAltitudeAfterExit, stored, typed);
   }
   const rev = store.getFdr(fdr.fdrId).rev;
-  for (const bad of ['high', 'FL190B210']) {
+  for (const bad of ['high', 'FL210B190']) {
     const r = store.setField(fdr.fdrId, 'military.mtr.requestedAltitudeAfterExit', bad, { by: 'CTR' });
     assert.equal(r.ok, false, bad);
     assert.match(r.detail, /requested altitude after exit must be an altitude/);

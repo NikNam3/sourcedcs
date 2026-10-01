@@ -12,7 +12,7 @@ const CLEARANCE_BLOCKS_BY_ROLE = {
   OVERFLIGHT: { '7A': 'altitude', '9A-VECTOR': 'heading' },
 };
 
-const { ensureClearance, parseAltitudeFt, parseHeadingDeg } = require('./fdr-store');
+const { ensureClearance, parseAltitude, parseHeadingDeg } = require('./fdr-store');
 
 /**
  * Moves every old clearance annotation onto its FDR, in place.
@@ -40,12 +40,18 @@ function migrateClearanceAnnotations(strips, getFdr) {
       if (!fdr || !cell.entries || cell.entries.length === 0) continue;
       const target = ensureClearance(fdr)[field];
       if (target.entries.length > 0) continue;
-      const parse = field === 'altitude' ? parseAltitudeFt : parseHeadingDeg;
-      target.entries = cell.entries.map(e => ({
-        value: e.value == null ? '' : String(e.value).trim().toUpperCase(),
-        parsed: e.value == null || e.value === '' ? null : parse(e.value),
-        status: e.status, at: e.at, by: e.by || null,
-      }));
+      target.entries = cell.entries.map(e => {
+        const empty = e.value == null || e.value === '';
+        const entry = { value: empty ? '' : String(e.value).trim().toUpperCase(), parsed: null, status: e.status, at: e.at, by: e.by || null };
+        if (field === 'altitude') {
+          const band = empty ? null : parseAltitude(e.value);
+          entry.parsed = band && band.lowFt === band.highFt ? band.lowFt : null;
+          entry.block = band && band.lowFt < band.highFt ? band : null;
+        } else {
+          entry.parsed = empty ? null : parseHeadingDeg(e.value);
+        }
+        return entry;
+      });
       moved += 1;
     }
   }
