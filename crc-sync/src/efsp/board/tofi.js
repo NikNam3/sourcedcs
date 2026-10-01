@@ -112,21 +112,17 @@ class Tofi {
       // docs/adr/0022 and TOFI never did, so a controller could open tactical
       // control on a Strip that was not yet airborne, or on a MISSION Strip
       // (the Role TOFI itself creates). See coordination.js.
-      if (this._rules.tofiEligibleState) {
-        const required = this._rules.tofiEligibleState(strip.role);
-        if (!required || strip.state !== required) {
-          return { ok: false, reason: 'VALIDATION_ERROR', detail: required
-            ? `a ${strip.role} Strip must be at ${required} to enter tactical control, not ${strip.state}`
-            : `a ${strip.role} Strip can never open a TOFI exchange`, strip };
-        }
+      const required = this._rules.tofiEligibleState(strip.role);
+      if (!required || strip.state !== required) {
+        return { ok: false, reason: 'VALIDATION_ERROR', detail: required
+          ? `a ${strip.role} Strip must be at ${required} to enter tactical control, not ${strip.state}`
+          : `a ${strip.role} Strip can never open a TOFI exchange`, strip };
       }
-      if (this._rules.tofiCounterparts) {
-        const allowed = this._rules.tofiCounterparts(actingPositionId) || [];
-        if (!allowed.some(c => c.facilityId === op.toFacilityId && c.positionId === op.toPositionId)) {
-          return { ok: false, reason: 'VALIDATION_ERROR', detail: `${op.toPositionId} is not a valid TOFI counterpart for ${actingPositionId}`, strip };
-        }
+      const allowed = this._rules.tofiCounterparts(actingPositionId) || [];
+      if (!allowed.some(c => c.facilityId === op.toFacilityId && c.positionId === op.toPositionId)) {
+        return { ok: false, reason: 'VALIDATION_ERROR', detail: `${op.toPositionId} is not a valid TOFI counterpart for ${actingPositionId}`, strip };
       }
-      const peer = this._rules.peerBoard ? this._rules.peerBoard(op.toFacilityId) : null;
+      const peer = this._rules.peerBoard(op.toFacilityId);
       if (!peer) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown Facility: ${op.toFacilityId}`, strip };
 
       // Track-degradation soft interlock (guide §4.6 rule 5), same as the 5
@@ -166,7 +162,7 @@ class Tofi {
     if (!prior || prior.state !== 'ACTIVE') {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no active tactical control to exit', strip };
     }
-    const peer = this._rules.peerBoard ? this._rules.peerBoard(prior.peerFacilityId) : null;
+    const peer = this._rules.peerBoard(prior.peerFacilityId);
     if (!peer) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown Facility: ${prior.peerFacilityId}`, strip };
 
     const exitFdr = this._fdrStore.getFdr(strip.fdrId);
@@ -246,7 +242,7 @@ class Tofi {
     // airspace type or anything else — so the fix is to make the controller
     // state it, not to guess it.
     if (tofi.direction === 'ENTRY') {
-      const activeMarsa = this._rules.activeMarsaFor ? this._rules.activeMarsaFor(strip.fdrId) : null;
+      const activeMarsa = this._rules.activeMarsaFor(strip.fdrId);
       if (activeMarsa) {
         // The relation owns the regime while it is ACTIVE (docs/adr/0051), and
         // _applySetBlock refuses a direct SREG write for the same reason.
@@ -299,7 +295,7 @@ class Tofi {
     // until a controller drags the replica somewhere else in between, and then
     // silently skips a relocation that should have happened.
     if (tofi.direction === 'ENTRY' && tofi.mintedForTofi) {
-      const targetBay = this._rules.bayForImpliedState ? this._rules.bayForImpliedState(strip.ownerPositionId, strip.state) : null;
+      const targetBay = this._rules.bayForImpliedState(strip.ownerPositionId, strip.state);
       if (targetBay) {
         strip.bayId = targetBay.bayId;
         strip.rackId = targetBay.rackIds[0];
@@ -311,12 +307,10 @@ class Tofi {
     this._touch(strip.stripId);
 
     let peerStrip = null;
-    if (this._rules.peerBoard) {
-      const peer = this._rules.peerBoard(tofi.peerFacilityId);
-      if (peer) {
-        const peerResult = peer.receiveTofiResponse({ causedBy: this._activeCmid, stripId: tofi.peerStripId, response: 'ACCEPT', by });
-        if (peerResult.ok) peerStrip = peerResult.strip;
-      }
+    const peer = this._rules.peerBoard(tofi.peerFacilityId);
+    if (peer) {
+      const peerResult = peer.receiveTofiResponse({ causedBy: this._activeCmid, stripId: tofi.peerStripId, response: 'ACCEPT', by });
+      if (peerResult.ok) peerStrip = peerResult.strip;
     }
     return { ok: true, strip, fdr: writtenFdr, peerFacilityId: tofi.peerFacilityId, peerStrip, warning };
   }
@@ -355,12 +349,10 @@ class Tofi {
     }
 
     let peerStrip = null;
-    if (this._rules.peerBoard) {
-      const peer = this._rules.peerBoard(tofi.peerFacilityId);
-      if (peer) {
-        const peerResult = peer.receiveTofiResponse({ causedBy: this._activeCmid, stripId: tofi.peerStripId, response: 'REJECT', by });
-        if (peerResult.ok) peerStrip = peerResult.strip;
-      }
+    const peer = this._rules.peerBoard(tofi.peerFacilityId);
+    if (peer) {
+      const peerResult = peer.receiveTofiResponse({ causedBy: this._activeCmid, stripId: tofi.peerStripId, response: 'REJECT', by });
+      if (peerResult.ok) peerStrip = peerResult.strip;
     }
     const out = { ok: true, strip, peerFacilityId: tofi.peerFacilityId, peerStrip };
     if (retired && retired.marsaChanged) { out.marsaChanged = retired.marsaChanged; out.fdrs = retired.fdrs; }
@@ -396,12 +388,10 @@ class Tofi {
     this._touch(strip.stripId);
 
     let peerStrip = null;
-    if (this._rules.peerBoard) {
-      const peer = this._rules.peerBoard(tofi.peerFacilityId);
-      if (peer) {
-        const peerResult = peer.receiveTofiResponse({ causedBy: this._activeCmid, stripId: tofi.peerStripId, response: 'TRANSFER_COMMS', by });
-        if (peerResult.ok) peerStrip = peerResult.strip;
-      }
+    const peer = this._rules.peerBoard(tofi.peerFacilityId);
+    if (peer) {
+      const peerResult = peer.receiveTofiResponse({ causedBy: this._activeCmid, stripId: tofi.peerStripId, response: 'TRANSFER_COMMS', by });
+      if (peerResult.ok) peerStrip = peerResult.strip;
     }
     return { ok: true, strip, peerFacilityId: tofi.peerFacilityId, peerStrip };
   }
@@ -467,7 +457,7 @@ class Tofi {
       return { ok: true, strip: existing };
     }
 
-    const coordinationBay = this._rules.coordinationBayFor ? this._rules.coordinationBayFor(toPositionId) : null;
+    const coordinationBay = this._rules.coordinationBayFor(toPositionId);
     if (!coordinationBay) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `no Coordination Bay configured for ${toPositionId}` };
     }

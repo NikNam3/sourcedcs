@@ -88,7 +88,7 @@ class StripOps {
     const entry = this._ops.get(op.kind);
     const denied = entry && entry.authorize
       ? entry.authorize(this, actingPositionId, op)
-      : (this.rules.canMutate && !this.rules.canMutate(actingPositionId, op.kind) ? { ok: false, reason: 'PERMISSION_DENIED' } : null);
+      : (!this.rules.canMutate(actingPositionId, op.kind) ? { ok: false, reason: 'PERMISSION_DENIED' } : null);
     if (denied) return denied;
 
     if (op.kind === 'CreateStrip') {
@@ -111,7 +111,7 @@ class StripOps {
     // else is the owner's alone. The refusal names the owner (B1/B2 stayed
     // invisible for want of it).
     if (strip.ownerPositionId !== actingPositionId
-        && !(this.rules.mayActBesideOwner && this.rules.mayActBesideOwner(actingPositionId, strip, op))) {
+        && !(this.rules.mayActBesideOwner(actingPositionId, strip, op))) {
       return { ok: false, reason: 'NOT_OWNER', detail: `${strip.ownerPositionId} holds this Strip`, strip: deepClone(strip) };
     }
 
@@ -178,7 +178,7 @@ class StripOps {
    * frequency or the flight already has that frequency.
    */
   assignSfaFrequency(strip, by) {
-    const mhz = this.rules.sfaFrequencyFor ? this.rules.sfaFrequencyFor(strip.bayId, strip.rackId) : null;
+    const mhz = this.rules.sfaFrequencyFor(strip.bayId, strip.rackId);
     if (mhz == null) return null;
     const fdr = this.fdrStore.getFdr(strip.fdrId);
     if (!fdr || (fdr.comms && fdr.comms.workingFrequencyMhz === mhz)) return null;
@@ -196,7 +196,7 @@ class StripOps {
    * drainRegimeWrites().
    */
   drainMarsaRegimeWrites() {
-    const fdrs = this.rules.drainMarsaRegimeWrites ? this.rules.drainMarsaRegimeWrites() : [];
+    const fdrs = this.rules.drainMarsaRegimeWrites();
     return fdrs && fdrs.length ? fdrs : undefined;
   }
 
@@ -217,7 +217,6 @@ class StripOps {
    * that would be the interlock firing at the one moment nothing was issued.
    */
   marsaVoidFor(strip, op, by, actingPositionId, clientMutationId) {
-    if (!this.rules.marsaInterlockFor || !this.rules.voidMarsaForAssignment) return null;
     if (op.confirmVacated) return null;
     const interlock = this.rules.marsaInterlockFor(strip.role, op.blockId);
     if (!interlock) return null;
@@ -231,12 +230,12 @@ class StripOps {
   }
 
   applySetState(strip, toState, by) {
-    if (this.rules.isValidState && !this.rules.isValidState(toState, strip.role)) {
+    if (!this.rules.isValidState(toState, strip.role)) {
       return { ok: false, reason: 'VALIDATION_ERROR', strip };
     }
     // A state change that files the Strip into a full Bay (a missed approach coming
     // back on final while another aircraft is on it) is refused, not silently doubled.
-    const into = this.rules.bayForImpliedState ? this.rules.bayForImpliedState(strip.ownerPositionId, toState) : null;
+    const into = this.rules.bayForImpliedState(strip.ownerPositionId, toState);
     if (into && into.impliesState === toState && into.bayId !== strip.bayId) {
       const full = this.placement.bayFullRefusal(into.bayId, strip);
       if (full) return { ok: false, reason: full.reason, detail: full.detail, strip };
@@ -268,7 +267,7 @@ class StripOps {
   isRejectedReplica(strip) {
     if (!strip.coordination || strip.coordination.state !== 'REJECTED') return false;
     if (strip.coordination.mintedForCoordination) return true;
-    const ownCoordinationBay = this.rules.coordinationBayFor ? this.rules.coordinationBayFor(strip.ownerPositionId) : null;
+    const ownCoordinationBay = this.rules.coordinationBayFor(strip.ownerPositionId);
     return !!ownCoordinationBay && strip.bayId === ownCoordinationBay.bayId;
   }
 
@@ -288,7 +287,7 @@ class StripOps {
     // ever transferred it away — raw ownership alone used to be sufficient
     // to invoke ANY NLA on a Strip you held, regardless of whose job that
     // state's action actually is.
-    if (this.rules.canActOnState && !this.rules.canActOnState(strip.ownerPositionId, strip.role, strip.state)) {
+    if (!this.rules.canActOnState(strip.ownerPositionId, strip.role, strip.state)) {
       return { reason: 'PERMISSION_DENIED', detail: `${strip.state} is not ${strip.ownerPositionId}'s to advance` };
     }
 
@@ -384,7 +383,7 @@ class StripOps {
    *          |null} null means no NLA is defined for this State at all.
    */
   nlaStatusFor(strip, now = this.clock.now()) {
-    if (!strip || !this.rules.computeNla) return null;
+    if (!strip) return null;
     const fdr = this.fdrStore.getFdr(strip.fdrId);
     const result = this.rules.computeNla(strip, fdr, now, this.placement.nlaCtx());
     // No NLA at all for this State (every Role's terminal DROPPED) — null, not
@@ -405,7 +404,7 @@ class StripOps {
     // state table, reproduced here with their exact wordings so the advisory
     // never disagrees with the press.
     if (result.transferTo) {
-      const targetBay = this.rules.bayForImpliedState ? this.rules.bayForImpliedState(result.transferTo, result.toState) : null;
+      const targetBay = this.rules.bayForImpliedState(result.transferTo, result.toState);
       if (!targetBay) return { inhibited: `no Bay configured for ${result.transferTo}/${result.toState}`, reason: 'NLA_INHIBITED' };
     } else if (result.toState === 'DROPPED' && strip.tofiCoordination && strip.tofiCoordination.state === 'ACTIVE') {
       return { inhibited: 'cannot drop a Strip under active tactical control — complete a TOFI exit first', reason: 'VALIDATION_ERROR' };
@@ -459,13 +458,13 @@ class StripOps {
     // vacancy and no close-up (H28). A LAUNCH Strip is not in the stack; the
     // removal is a no-op for it.
     let carrierChanged;
-    if (this.rules.carrierRetireFlight && ['MARSHAL', 'FINAL', 'PATTERN'].includes(strip.role)) {
+    if (['MARSHAL', 'FINAL', 'PATTERN'].includes(strip.role)) {
       carrierChanged = this.rules.carrierRetireFlight(strip.fdrId, by) || undefined;
     }
     // U7: a replica that ends takes the proposer's link with it.
     let peerFacilityId; let peerStrip;
     const link = strip.coordination;
-    if (link && link.mintedForCoordination && this.rules.peerBoard) {
+    if (link && link.mintedForCoordination) {
       const peer = this.rules.peerBoard(link.peerFacilityId);
       const ended = peer ? peer.receiveCoordinationPeerGone({ causedBy: this._activeCmid, stripId: link.peerStripId, goneStripId: strip.stripId }) : null;
       if (ended && ended.ok) { peerFacilityId = link.peerFacilityId; peerStrip = ended.strip; }
@@ -493,9 +492,7 @@ class StripOps {
    * never on the automatic allocate() scan.
    */
   _releaseFdrIfLastStrip(strip, by) {
-    const othersLive = this.rules.liveStripsForFdr
-      ? this.rules.liveStripsForFdr(strip.fdrId, strip.stripId)
-      : 0;
+    const othersLive = this.rules.liveStripsForFdr(strip.fdrId, strip.stripId);
     if (othersLive !== 0) return null;
     this.fdrStore.releaseFdr(strip.fdrId);
     // WP6 (docs/adr/0051) — the flight is over, so it leaves any MARSA relation
@@ -505,7 +502,7 @@ class StripOps {
     // anything. Same shape correlation-store.js's retireFinished has, arriving
     // from the other direction: correlation is swept by a 1Hz reconciler and
     // MARSA has no sweep, so the Strip lifecycle has to say so out loud.
-    return this.rules.retireMarsaForFdr ? this.rules.retireMarsaForFdr(strip.fdrId, by) : null;
+    return this.rules.retireMarsaForFdr(strip.fdrId, by);
   }
 }
 

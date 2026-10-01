@@ -10,7 +10,7 @@ function _applyCreateStrip(ctx, op, actingPositionId, by) {
   const bayCheck = ctx.placement.requireKnownBay(op.bayId);
   if (bayCheck) return bayCheck;
   const role = op.role || 'DEPARTURE';
-  if (ctx.rules.isValidRole && !ctx.rules.isValidRole(role)) {
+  if (!ctx.rules.isValidRole(role)) {
     return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown Strip Role: ${role}` };
   }
   // Role-scoped CreateStrip (OPS/DEPARTURE: guide §4.1 rule 3; APP/ARRIVAL: docs/adr/0008) — a
@@ -18,7 +18,7 @@ function _applyCreateStrip(ctx, op, actingPositionId, by) {
   // gate already applied in _dispatch: OPS may only originate DEPARTURE,
   // APP may only originate ARRIVAL. Checked before touching fdrStore so
   // a denied CreateStrip has no side effects.
-  if (ctx.rules.canCreateStripRole && !ctx.rules.canCreateStripRole(actingPositionId, role)) {
+  if (!ctx.rules.canCreateStripRole(actingPositionId, role)) {
     return { ok: false, reason: 'PERMISSION_DENIED' };
   }
 
@@ -121,7 +121,7 @@ function _applyCreateStrip(ctx, op, actingPositionId, by) {
   // Move; a full stack is a warning, not a refusal of the check-in.
   let warning;
   let carrierChanged;
-  if (role === 'MARSHAL' && strip.state === 'IN_STACK' && ctx.rules.carrierAppendFlight) {
+  if (role === 'MARSHAL' && strip.state === 'IN_STACK') {
     const a = ctx.rules.carrierAppendFlight(strip.fdrId, { by, actingPositionId });
     if (a && a.ok === false) warning = `not in the Marshal stack: ${a.detail || a.reason}`;
     else if (a && a.changed && a.changed.length) carrierChanged = true;

@@ -14,7 +14,6 @@ const { runwayInhibitFor, RUNWAY_GATED_STATES } = require('../../field-state');
  * SetState: the Undo / NLA paths that reach _applySetState carry their own.
  */
 function _setStateOwnerRefusal(ctx, strip, toState, actingPositionId) {
-  if (!ctx.rules.canActOnState) return null;
   if (ctx.rules.canActOnState(actingPositionId, strip.role, strip.state)) return null;
   return {
     ok: false, reason: 'PERMISSION_DENIED', strip,
@@ -62,7 +61,7 @@ function _observedDeparture(ctx, strip, op) {
  */
 function _setStateRunwayRefusal(ctx, strip, toState) {
   if (!(RUNWAY_GATED_STATES[strip.role] || []).includes(toState)) return null;
-  const bay = ctx.rules.bayForImpliedState ? ctx.rules.bayForImpliedState(strip.ownerPositionId, toState) : null;
+  const bay = ctx.rules.bayForImpliedState(strip.ownerPositionId, toState);
   const targetRackId = bay && bay.impliesState === toState ? ctx.placement.placementRack(strip, bay) : undefined;
   const inhibit = runwayInhibitFor(strip, ctx.fdrStore.getFdr(strip.fdrId), ctx.placement.fieldStateView(), { targetRackId });
   return inhibit ? { ok: false, reason: 'NLA_INHIBITED', detail: inhibit, strip } : null;
@@ -80,7 +79,7 @@ function _applySetStateOp(ctx, strip, toState, by) {
   // archive clock, not a bare state write that skips all four.
   if (toState === 'DROPPED') return ctx.run('DropStrip', strip, {}, { by });
   const result = ctx.applySetState(strip, toState, by);
-  if (result.ok && ctx.rules.bayImpliesState) {
+  if (result.ok) {
     const implied = ctx.rules.bayImpliesState(strip.bayId);
     if (implied && implied !== strip.state) {
       result.warning = `no ${strip.ownerPositionId} Bay for ${strip.state}; the Strip stays in ${strip.bayId}`;

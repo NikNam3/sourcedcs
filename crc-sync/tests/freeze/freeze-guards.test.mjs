@@ -31,6 +31,8 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
 const { createEfsp } = await import('../../src/efsp/index.js');
 const facilityConfig = await import('../../src/efsp/facility-config.js');
 const { BoardStore } = await import('../../src/efsp/board-store.js');
+const { REQUIRED_RULES } = await import('../../src/efsp/required-rules.js');
+const { fullRules } = await import('../helpers/full-rules.mjs');
 
 function walk(dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -52,6 +54,9 @@ test('freeze guard 1: every rule board-store reads is wired for every Facility',
   // `rules.X` under src/efsp/board/. The lookbehind keeps `foo.rules.X` and `_rules.X` out of the bare form.
   for (const f of boardSources()) for (const m of stripComments(fs.readFileSync(f, 'utf8')).matchAll(/(?:this\._rules|(?<![\w$.])rules|\b(?:ctx|this)\.rules)\.([A-Za-z_]\w*)/g)) read.add(m[1]);
   assert.ok(read.size >= 40, `expected to find the rule names board-store reads (found ${read.size})`);
+  // One source (ARCH-D5): this scan IS the required set. src/efsp/required-rules.js lists it, a BoardStore built
+  // without one of them throws, and a rule read in board/** but not listed there would be checked by nothing.
+  assert.deepEqual([...read].sort(), [...REQUIRED_RULES].sort(), 'the rule names the Board reads differ from REQUIRED_RULES (src/efsp/required-rules.js): update the list');
   const efsp = createEfsp();
   const gaps = [];
   for (const facilityId of facilityConfig.getFacilityIds()) {
@@ -95,4 +100,11 @@ test('freeze guard 2: the Board\'s external surface', () => {
     ],
   }, (d) => d.rows.map(r => [r.id, r]));
   assert.ok(own.length > 0);
+});
+
+test('a BoardStore built without a rule it reads fails at construction, naming the rule', () => {
+  const { facilityId, peerBoard, ...partial } = fullRules();
+  assert.throws(() => new BoardStore({ getFdr: () => null }, partial), /2 required rule\(s\): .*facilityId.*peerBoard|2 required rule\(s\): .*peerBoard.*facilityId/);
+  // null, false and [] are values, not absences
+  assert.doesNotThrow(() => new BoardStore({ getFdr: () => null }, fullRules({ facilityId: null, aitAuthorized: false, standingReleases: [] })));
 });

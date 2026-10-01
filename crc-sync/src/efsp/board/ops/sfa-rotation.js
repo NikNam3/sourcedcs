@@ -15,19 +15,19 @@
  * Nothing is half applied: validate everything, then change the Strip.
  */
 function _applySfaRotation(ctx, strip, by, actingPositionId) {
-  const fx = ctx.rules.sfaTransfers && ctx.rules.sfaTransfers.SFA_ROTATION;
+  const fx = ctx.rules.sfaTransfers.SFA_ROTATION;
   if (!fx) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no SFA rotation in this Facility', strip };
   if (strip.role !== fx.role || strip.state !== fx.state) {
     return { ok: false, reason: 'VALIDATION_ERROR', detail: `${fx.label} applies to an ${fx.role} Strip in ${fx.state}, not ${strip.role} in ${strip.state}`, strip };
   }
   const blocked = ctx.nlaPrecheck(strip);
   if (blocked) return { ok: false, reason: blocked.reason, detail: blocked.detail, strip };
-  const dest = ctx.rules.sfaRotationReceiver ? ctx.rules.sfaRotationReceiver() : null;
+  const dest = ctx.rules.sfaRotationReceiver();
   if (!dest) return { ok: false, reason: 'NO_RECEIVING_POSITION', detail: 'this Facility has no Position to rotate onto', strip };
   if (!ctx.rules.isOccupied(dest)) {
     return { ok: false, reason: 'NO_RECEIVING_POSITION', detail: `${dest} is not manned — the aircraft stays with ${strip.ownerPositionId}`, strip };
   }
-  const bay = ctx.rules.bayForImpliedState ? ctx.rules.bayForImpliedState(dest, fx.toState) : null;
+  const bay = ctx.rules.bayForImpliedState(dest, fx.toState);
   if (!bay || bay.impliesState !== fx.toState) {
     return { ok: false, reason: 'VALIDATION_ERROR', detail: `${dest} has no Bay for ${fx.toState}`, strip };
   }
@@ -62,7 +62,7 @@ function _applySfaRotation(ctx, strip, by, actingPositionId) {
 module.exports = {
   kind: 'SfaRotation',
   authorize: (ctx, actingPositionId) => {
-    if (!(ctx.rules.canSendSfaRotationTransfer && ctx.rules.canSendSfaRotationTransfer(actingPositionId))) {
+    if (!(ctx.rules.canSendSfaRotationTransfer(actingPositionId))) {
       return { ok: false, reason: 'PERMISSION_DENIED', detail: `${actingPositionId} may not rotate an aircraft onto PAR` };
     }
     return null;

@@ -30,6 +30,7 @@
 const { deepClone } = require('./board/strip-util');
 const { WALL_CLOCK } = require('../mission-clock');
 const { BoardState } = require('./board/board-state');
+const { assertRules } = require('./required-rules');
 const { BoardAudit } = require('./board/audit');
 const { Placement } = require('./board/placement');
 const { Coordination } = require('./board/coordination');
@@ -46,25 +47,26 @@ class BoardStore {
    * @param {import('./fdr-store').FdrStore} fdrStore
    * @param {object} rules
    * @param {(blockId:string, role:string) => {kind:'fdr',path:string}|{kind:'annotation'}|null} rules.resolveBlockTarget
-   * @param {(bayId:string) => string|null} [rules.bayHoldsRole] the Role a Bay is reserved for (docs/adr/0087), or null
-   * @param {(bayId:string) => string|null} [rules.bayImpliesState]
-   * @param {(positionId:string, state:string) => {bayId:string,rackIds:string[]}|null} [rules.bayForImpliedState]
+   * @param {(bayId:string) => string|null} rules.bayHoldsRole the Role a Bay is reserved for (docs/adr/0087), or null
+   * @param {(bayId:string) => string|null} rules.bayImpliesState
+   * @param {(positionId:string, state:string) => {bayId:string,rackIds:string[]}|null} rules.bayForImpliedState
    * @param {(strip:object, fdr:object, now:number, ctx:object) => {toState:string,transferTo?:string}|{inhibited:string}|null} rules.computeNla
    * @param {(positionId:string) => boolean} rules.isOccupied
    * @param {(positionId:string) => string|null} rules.coveringPositionFor
-   * @param {(state:string, role:string) => boolean} [rules.isValidState]
-   * @param {(role:string) => boolean} [rules.isValidRole]
-   * @param {(actingPositionId:string, role:string) => boolean} [rules.canCreateStripRole]
-   * @param {string} [rules.facilityId] — WP4A: this Board's own Facility id (docs/adr/0013)
-   * @param {(facilityId:string) => BoardStore|null} [rules.peerBoard] — WP4A: the OTHER Facility's BoardStore instance, for cross-Facility coordination (docs/adr/0015)
-   * @param {(positionId:string) => {bayId:string,rackIds:string[]}|null} [rules.coordinationBayFor] — WP4A
-   * @param {(primitive:string) => object|null} [rules.coordinationEffect] — WP4A, guide §4.6's primitive table (coordination.js)
+   * @param {(state:string, role:string) => boolean} rules.isValidState
+   * @param {(role:string) => boolean} rules.isValidRole
+   * @param {(actingPositionId:string, role:string) => boolean} rules.canCreateStripRole
+   * @param {string} rules.facilityId — WP4A: this Board's own Facility id (docs/adr/0013)
+   * @param {(facilityId:string) => BoardStore|null} rules.peerBoard — WP4A: the OTHER Facility's BoardStore instance, for cross-Facility coordination (docs/adr/0015)
+   * @param {(positionId:string) => {bayId:string,rackIds:string[]}|null} rules.coordinationBayFor — WP4A
+   * @param {(primitive:string) => object|null} rules.coordinationEffect — WP4A, guide §4.6's primitive table (coordination.js)
    */
   constructor(fdrStore, rules, { clock = WALL_CLOCK } = {}) {
     // The mission clock (docs/adr/0079). Every Strip timestamp, every NLA gate
     // and every Mutation-log `at` reads it. The one exception is the NLA
     // double-tap/Undo latch below, which is a UI debounce measured in real
     // seconds and never shown as a time of day — see _applyInvokeNla.
+    assertRules(rules); // a rule the Board reads and the caller omitted is a start-up error, not a check that is silently off
     this._clock = clock;
     this._fdrStore = fdrStore;
     this._rules = rules;
@@ -297,7 +299,7 @@ class BoardStore {
         strip.bayId = bay.bayId;
         strip.rackId = bay.rackId;
         strip.orderKey = this._placement.appendOrderKey(bay.bayId, bay.rackId, strip.stripId);
-      } else if (this._rules.baysFor) {
+      } else {
         unplaced.push(strip.stripId);
       }
       this._state.bump(strip, null);

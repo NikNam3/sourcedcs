@@ -43,9 +43,7 @@ function _applyInvokeNla(ctx, strip, by) {
     // together, in one Mutation — not a separate, easier-to-drift path
     // (guide §3.5 rule 4: NLA is an accelerator FOR the same operation,
     // not a shortcut around its checks).
-    const targetBay = ctx.rules.bayForImpliedState
-      ? ctx.rules.bayForImpliedState(result.transferTo, result.toState)
-      : null;
+    const targetBay = ctx.rules.bayForImpliedState(result.transferTo, result.toState);
     if (!targetBay) {
       return { ok: false, reason: 'NLA_INHIBITED', detail: `no Bay configured for ${result.transferTo}/${result.toState}`, strip };
     }
