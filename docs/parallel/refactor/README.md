@@ -13,7 +13,8 @@ merged code wins over a briefing's line numbers.** Lane rules: `docs/parallel/la
 | W3 | [BOARD-2](BOARD-2.md) · [AUTH](AUTH.md) · [DATA-1](DATA-1.md) · [DATA-2](DATA-2.md) · [LOG-1](LOG-1.md) · [CMSG](CMSG.md) · [ESM-2a](ESM-2a.md) · [ESM-2b](ESM-2b.md) | W2 merged (and the ESM-1 unit, for the client lanes) | any order |
 | W4 | [BOARD-3](BOARD-3.md) · [LOG-2](LOG-2.md) · [TIME-B](TIME-B.md) | BOARD-2, AUTH, LOG-1 merged | BOARD-3 → LOG-2 → TIME-B |
 | W5 | [SYNC](SYNC.md) | W4 merged | alone |
-| W6 | [BACKCOMPAT](BACKCOMPAT.md) | W5 merged | alone; then the window closes and L20 starts |
+| W6 | [BACKCOMPAT](BACKCOMPAT.md) | W5 merged | alone |
+| W7 | RENAME (briefing to be written from `docs/parallel/research/vocabulary.md`, H96/H98) | W6 merged | alone, tree-wide; golden replay proves it; wire/snapshot renames in a separately listed commit; then the window closes and L20 starts |
 
 Every wave also runs **one questioner** (Opus). It reads each lane's step-0 report ("Code as found" plus the design
 notes) and challenges its assumptions against the plan, decisions.md and the code, before the lane writes production
