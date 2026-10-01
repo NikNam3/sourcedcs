@@ -4,7 +4,7 @@
 /* Runs the Playwright suite in parallel shards, one E2E_LANE each.
  *
  *   node e2e/tools/run-sharded.js [--shards N] [--lanes 7,8,9,5,6] [--only a.spec.js,b.spec.js]
- *                                 [--rerun-failed] [--timings <file>] [--out <file.json>]
+ *                                 [--rerun-failed] [--no-record] [--timings <file>] [--out <file.json>]
  *
  * Each shard is one `playwright test <its files>` process on its own E2E_LANE. playwright.config.js
  * already derives everything from the lane (crc-sync on 3010+lane, the app on 3110+lane, a private
@@ -127,6 +127,7 @@ module.exports = { splitShards, parseReport, mergeSummary, updateTimings, rerunC
 
 /* ---------- process handling ---------- */
 
+let interrupted = false; // Ctrl-C or SIGTERM: no timings recorded, no re-runs
 const live = new Set(); // child processes this script started
 
 function killGroup(c, sig) {
@@ -253,7 +254,7 @@ async function main() {
   shards.forEach((s, i) => console.log(`  lane ${lanes[i]}: ${s.files.length} specs, ${s.files.reduce((a, f) => a + (counts[f] || 1), 0)} tests${haveTimings ? `, ~${fmt(s.weight)}` : ''}`));
 
   for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
-    process.on(sig, () => { console.error(`\n${sig}: stopping shards`); stopAll(); setTimeout(() => process.exit(130), 1500); });
+    process.on(sig, () => { interrupted = true; console.error(`\n${sig}: stopping shards`); stopAll(); setTimeout(() => process.exit(130), 1500); });
   }
   process.on('exit', () => { for (const c of live) killGroup(c, 'SIGKILL'); sweepDescendants('SIGKILL'); });
 
@@ -268,10 +269,11 @@ async function main() {
   }));
   const wall = (Date.now() - t0) / 1000;
   const summary = mergeSummary(results);
+  if (interrupted) { console.log('interrupted: no timings recorded, no re-runs'); process.exit(130); }
 
   // timings: only from a run where the file passed completely, so a crashed or aborted file never records a short time
   const clean = summary.perSpec.filter((s) => !s.failed);
-  fs.writeFileSync(timingsFile, JSON.stringify(updateTimings(timings, clean), null, 2) + '\n');
+  if (!flag(args, '--no-record')) fs.writeFileSync(timingsFile, JSON.stringify(updateTimings(timings, clean), null, 2) + '\n');
 
   // re-run each failure alone, serially, on the first lane
   const reruns = [];
