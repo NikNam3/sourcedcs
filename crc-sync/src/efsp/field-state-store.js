@@ -29,6 +29,7 @@
 
 const crypto = require('crypto');
 const { WALL_CLOCK } = require('../mission-clock');
+const { SyncLog } = require('./sync/sync-log');
 const permission = require('./permission');
 const {
   canGo, buildStatusView, activeEndIntoWind, isRunwayChangeInProgress, isRunwayChangeOpen,
@@ -74,7 +75,7 @@ class FieldStateStore {
     this._positions = new Map();   // facilityId -> its Position set, for resolving acknowledgers
     this._records = new Map();     // facilityId -> record
     this._views = new Map();       // facilityId -> cached status view for rule 1
-    this._seq = 0;
+    this._sync = new SyncLog(); // the store's sequence: a counter only, no ring, no epoch (sync/sync-log.js, S3-1)
     this._mutationLog = null;
     for (const facilityId of facilityConfig.getFacilityIds()) {
       const config = facilityConfig.getFacilityConfig(facilityId);
@@ -124,7 +125,7 @@ class FieldStateStore {
   /** The same wiring every EFSP store has; refusals are logged too (see _recordAudit). */
   setMutationLog(mutationLog) { this._mutationLog = mutationLog; }
 
-  get currentSeq() { return this._seq; }
+  get currentSeq() { return this._sync.seq; }
 
   hasFieldState(facilityId) { return this._records.has(facilityId); }
 
@@ -220,7 +221,7 @@ class FieldStateStore {
     record.rev += 1;
     record.updatedAt = this._clock.now();
     record.updatedBy = by || null;
-    this._seq += 1;
+    this._sync.advance();
     this._views.delete(record.facilityId);
     if (transition) record.transitions.push({ ...transition, at: record.updatedAt, by: by || null });
   }
