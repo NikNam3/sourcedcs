@@ -32,6 +32,7 @@ const { keyBetween, rebalance, needsRebalance } = require('./order-key');
 const { newFlags, _validateAltitudeBlock, deepClone, _frequencyFromBlockValue } = require('./board/strip-util');
 const { MAX_FREE_TEXT, SEPARATION_REGIMES } = require('./fdr-store');
 const { WALL_CLOCK } = require('../mission-clock');
+const { BoardState } = require('./board/board-state');
 const { runwayRackFor, runwayInhibitFor, RUNWAY_GATED_STATES } = require('./field-state');
 const { CARRIER_TRANSFER_EFFECTS } = require('./carrier/transfer-effects'); // pure (docs/adr/0074)
 
@@ -113,23 +114,11 @@ class BoardStore {
     this._clock = clock;
     this._fdrStore = fdrStore;
     this._rules = rules;
-    this._strips = new Map(); // stripId -> Strip
-    this._log = [];           // [{seq, type:'update'|'gone', id}]
-    this._seq = 0;
-    // The Board lifetime a seq belongs to (docs/adr/0081, L6's F2). `_seq` and
-    // the `_log` ring are per process and deliberately not persisted, so a
-    // seq from before a restart means nothing after it — and once the new
-    // lifetime's seq overtakes a client's, nothing but a name for the lifetime
-    // can tell the two apart. Minted again by restore(); never persisted.
-    this._epoch = crypto.randomUUID();
-    this._cidSeq = 0;
+    // The kernel (docs/adr/0095): the Strip map, the seq/log ring, the epoch,
+    // the touched set and the cid counter. `touch` is late-bound to this._touch
+    // so a patched _touch (tools/soak/host-core.js) sees every touch.
+    this._state = new BoardState({ clock, touch: (id) => this._touch(id) });
     this._appliedMutations = new Map(); // clientMutationId -> compact frozen replay record (_replayRecord), idempotency (§5.2, docs/adr/0081)
-    // Every Strip a Board event touched since efsp-ws.js last drained it
-    // (docs/adr/0081, guide §5.4 "one Board event"). A rebalance re-keys
-    // Strips the Mutation never named, and a coordination op touches the PEER
-    // Board inside the sender's applyMutation; whoever broadcasts a Board's
-    // change drains this, so every touched Strip rides in that broadcast.
-    this._touchedSinceDrain = new Set();
     this._mutationLog = null; // optional collaborator, see setMutationLog()
     this._activeCmid = null;  // the clientMutationId being applied, while applyMutation runs
     // stripId -> { invokedAt, prevState, expiresAt } — the 400ms double-tap
@@ -148,65 +137,27 @@ class BoardStore {
 
   setMutationLog(mutationLog) { this._mutationLog = mutationLog; }
 
-  get currentSeq() { return this._seq; }
+  get currentSeq() { return this._state.seq; }
   /** This Board lifetime's name (docs/adr/0081). A delta is valid only within one epoch. */
-  get epoch() { return this._epoch; }
-  getStrip(stripId) { return this._strips.get(stripId) || null; }
-  getAll() { return [...this._strips.values()]; }
+  get epoch() { return this._state.epoch; }
+  getStrip(stripId) { return this._state.strips.get(stripId) || null; }
+  getAll() { return this._state.all(); }
 
-  /** Strips currently placed in a Bay/Rack, in order, excluding DROPPED — a DROPPED Strip stays queryable via getStrip()/getAll() but leaves the visible Board (guide §3.4). */
-  getRack(bayId, rackId) {
-    return this.getAll()
-      .filter(s => s.bayId === bayId && s.rackId === rackId && s.state !== 'DROPPED')
-      .sort((a, b) => (a.orderKey < b.orderKey ? -1 : a.orderKey > b.orderKey ? 1 : (a.stripId < b.stripId ? -1 : 1)));
-  }
+  /** Strips currently placed in a Bay/Rack, in order, excluding DROPPED (board/board-state.js rack()). */
+  getRack(bayId, rackId) { return this._state.rack(bayId, rackId); }
 
-  _touch(stripId) {
-    this._log.push({ seq: ++this._seq, type: 'update', id: stripId });
-    this._touchedSinceDrain.add(stripId);
-    this._pruneLog();
-  }
+  // Kept on the facade for tools and tests until SYNC replaces them (docs/adr/0095):
+  // tools/soak/host-core.js patches _touch and reads _log, _strips and _cidSeq.
+  _touch(stripId) { this._state.recordTouch(stripId); }
+  get _log() { return this._state.log; }
+  get _strips() { return this._state.strips; }
+  get _cidSeq() { return this._state.cidSeq; }
 
-  /**
-   * The ids of every Strip touched since the last drain, in first-touch
-   * order, and forgets them. Called by whoever puts this Board's change on the
-   * wire (efsp-ws.js), on this Board and on the peer Board a coordination op
-   * reached — never by board-store itself (docs/adr/0081).
-   * @returns {string[]}
-   */
-  drainTouched() {
-    const ids = [...this._touchedSinceDrain];
-    this._touchedSinceDrain.clear();
-    return ids;
-  }
-  _pruneLog() {
-    if (this._log.length > 2000) this._log.splice(0, this._log.length - 1000);
-  }
+  /** The ids of every Strip touched since the last drain (board/board-state.js). */
+  drainTouched() { return this._state.drainTouched(); }
 
-  /**
-   * Delta resync (guide §5.6) — everything changed since `afterSeq`, within
-   * this Board lifetime. `updated` holds the Strips still in `_strips`
-   * (DROPPED ones included — the caller turns those into `gone`); `gone` holds
-   * ids the window touched that are no longer in `_strips` at all. That is
-   * always empty until retention removes records (L24, S-R2-13); this is the
-   * seam it fills (docs/adr/0081).
-   */
-  getDeltaSince(afterSeq) {
-    const entries = [];
-    for (let i = this._log.length - 1; i >= 0; i--) {
-      if (this._log[i].seq <= afterSeq) break;
-      entries.unshift(this._log[i]);
-    }
-    const byId = new Map();
-    for (const e of entries) byId.set(e.id, e);
-    const updated = [];
-    const gone = []; // touched in the window and no longer on the Board: archived (docs/adr/0082)
-    for (const e of byId.values()) {
-      if (this._strips.has(e.id)) updated.push(this._strips.get(e.id));
-      else gone.push(e.id);
-    }
-    return { updated, gone, seq: this._seq };
-  }
+  /** Delta resync (guide §5.6), within this Board lifetime (board/board-state.js). */
+  getDeltaSince(afterSeq) { return this._state.getDeltaSince(afterSeq); }
 
   // ── orderKey resolution ──────────────────────────────────────────────────
 
@@ -264,14 +215,6 @@ class BoardStore {
       s.rev += 1;
       this._touch(s.stripId);
     }
-  }
-
-  _nextCid() {
-    this._cidSeq += 1;
-    // 3-digit, zero-padded, sequential for this store's lifetime —
-    // [SOURCE-DEFINED] format for Block 4 (guide §6.2); no real-world
-    // format is published. See the implementation plan.
-    return String(this._cidSeq).padStart(3, '0');
   }
 
   // ── Mutation application ─────────────────────────────────────────────────
@@ -407,7 +350,7 @@ class BoardStore {
       return result;
     }
 
-    const strip = this._strips.get(mutation.stripId);
+    const strip = this._state.strips.get(mutation.stripId);
     if (!strip) return { ok: false, reason: 'NOT_FOUND' };
     if (strip.rev !== mutation.baseRev) return { ok: false, reason: 'STALE_REV', strip: deepClone(strip) };
 
@@ -602,7 +545,7 @@ class BoardStore {
       // Board, two same-role Strips on one FDR is §3.6's duplicate
       // origination. Role-agnostic rather than MISSION-specific, so the
       // ATO-first direction reuses this unchanged.
-      const clash = [...this._strips.values()].find(
+      const clash = [...this._state.strips.values()].find(
         s => s.fdrId === op.fdrId && s.role === role && s.state !== 'DROPPED');
       if (clash) {
         return {
@@ -635,7 +578,7 @@ class BoardStore {
     const now = this._clock.now();
     const strip = {
       stripId,
-      cid: this._nextCid(),
+      cid: this._state.nextCid(),
       fdrId: created.fdr.fdrId,
       rev: 1,
       role,
@@ -668,8 +611,7 @@ class BoardStore {
       previousLeg: null,   // set by ConvertToArrival — the departure leg's archived annotations
       createdAt: now, updatedAt: now, updatedBy: by || null,
     };
-    this._strips.set(stripId, strip);
-    this._touch(stripId);
+    this._state.insert(strip);
     // docs/adr/0074: a recovery check-in (a MARSHAL Strip in IN_STACK) joins the
     // Marshal stack at the next free slot. The Marshal re-sequences with one
     // Move; a full stack is a warning, not a refusal of the check-in.
@@ -820,10 +762,7 @@ class BoardStore {
     // instead of a track-id change. Under the fdrId key there is nothing here
     // to reset: the correlation is a fact about the airframe, and the airframe
     // did not change legs — the paperwork did.
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
     return { ok: true, strip, fdr: updatedFdr };
   }
 
@@ -898,10 +837,7 @@ class BoardStore {
       approvedAt: this._clock.now(),
       approvedBy: by || null,
     };
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
 
     const warning = airspace.state !== 'ACTIVE' ? 'AIRSPACE_NOT_ACTIVE' : undefined;
     return { ok: true, strip, fdr: fdrResult.fdr, warning };
@@ -915,10 +851,7 @@ class BoardStore {
     const fdrResult = this._fdrStore.setWorkingFrequency(strip.fdrId, null, { airspaceId: null, by });
     if (!fdrResult.ok) return { ok: false, reason: fdrResult.reason, detail: fdrResult.detail, strip };
     strip.airspaceEntry = null;
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
     return { ok: true, strip, fdr: fdrResult.fdr };
   }
 
@@ -1133,10 +1066,7 @@ class BoardStore {
     if (check.impliedState && check.impliedState !== strip.state) strip.state = check.impliedState;
     const fdrResult = this._assignSfaFrequency(strip, by);
 
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
     return { ok: true, strip, fdr: fdrResult ? fdrResult.fdr : undefined };
   }
 
@@ -1276,10 +1206,7 @@ class BoardStore {
       // ack/broadcast cycle has one consistent rev to key off per Strip,
       // rather than building a fully separate FDR-level optimistic-
       // concurrency protocol on the wire. See the implementation plan.
-      strip.rev += 1;
-      strip.updatedAt = this._clock.now();
-      strip.updatedBy = by || null;
-      this._touch(strip.stripId);
+      this._state.bump(strip, by);
       const marsaVoided = this._marsaVoidFor(strip, op, by, actingPositionId, clientMutationId);
       return {
         ok: true, strip, fdr: fdrResult.fdr, warning: fdrResult.warning,
@@ -1295,10 +1222,7 @@ class BoardStore {
     if (target.kind === 'carrier') {
       const fdrResult = this._fdrStore.setCarrier(strip.fdrId, target.field, op.value, { by });
       if (!fdrResult.ok) return { ok: false, reason: fdrResult.reason, detail: fdrResult.detail, strip };
-      strip.rev += 1;
-      strip.updatedAt = this._clock.now();
-      strip.updatedBy = by || null;
-      this._touch(strip.stripId);
+      this._state.bump(strip, by);
       return { ok: true, strip, fdr: fdrResult.fdr };
     }
 
@@ -1309,10 +1233,7 @@ class BoardStore {
       const fdrResult = this._fdrStore.setClearance(strip.fdrId, target.field,
         { value: op.value, confirmVacated: !!op.confirmVacated }, { by });
       if (!fdrResult.ok) return { ok: false, reason: fdrResult.reason, detail: fdrResult.detail, strip };
-      strip.rev += 1;
-      strip.updatedAt = this._clock.now();
-      strip.updatedBy = by || null;
-      this._touch(strip.stripId);
+      this._state.bump(strip, by);
       const marsaVoided = this._marsaVoidFor(strip, op, by, actingPositionId, clientMutationId);
       return {
         ok: true, strip, fdr: fdrResult.fdr,
@@ -1360,10 +1281,7 @@ class BoardStore {
       cell.entries.push({ value, status: 'ACTIVE', at: this._clock.now(), by: by || null });
     }
 
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
     return { ok: true, strip };
   }
 
@@ -1448,10 +1366,7 @@ class BoardStore {
 
     const sfaFdr = routedBay ? null : this._assignSfaFrequency(strip, by);
 
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
     // A pending Undo window (§3.5 rule 5) is for reverting a STATE change —
     // once ownership has also moved, "revert the state" no longer means
     // what it did when it was recorded (the Strip may now be under a
@@ -1616,10 +1531,7 @@ class BoardStore {
   _applySetFlag(strip, op, by) {
     if (!FLAG_KEYS.includes(op.flag)) return { ok: false, reason: 'VALIDATION_ERROR', strip };
     strip.flags[op.flag] = op.value;
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
     return { ok: true, strip };
   }
 
@@ -1719,10 +1631,7 @@ class BoardStore {
     }
     strip.state = toState;
     this._relocateForImpliedState(strip, toState);
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
     return { ok: true, strip };
   }
 
@@ -2036,10 +1945,7 @@ class BoardStore {
     strip.state = 'DROPPED';
     this._droppedWallAt.set(strip.stripId, Date.now()); // the archive's clock, docs/adr/0082
     strip.flags.removeIndicator = true; // distinct from delete (§3.4) — Strip stays queryable, see getRack()
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
     // `marsaChanged` rather than `marsaVoided`: this is a flight ENDING, not a
     // clearance voiding a relation, and the two must not render as the same
     // thing. A tanker landing mid-AR leaves the relation `ENDED` with
@@ -2299,10 +2205,7 @@ class BoardStore {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no pending coordination proposal on this Strip', strip };
     }
     strip.coordination.state = 'REJECTED';
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
 
     const peerFacilityId = strip.coordination.peerFacilityId;
     let peerStrip = null;
@@ -2345,10 +2248,7 @@ class BoardStore {
       }
     }
     strip.coordination = null;
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
     return { ok: true, strip, peerFacilityId: link.peerFacilityId, peerStrip };
   }
 
@@ -2360,16 +2260,13 @@ class BoardStore {
    * @returns {{ok:true, strip:object|null}} strip null when there was nothing left to change
    */
   receiveCoordinationCancel({ stripId, by, causedBy }) {
-    const strip = this._strips.get(stripId);
+    const strip = this._state.strips.get(stripId);
     if (!strip || strip.state === 'DROPPED' || !strip.coordination) return { ok: true, strip: null };
     const before = deepClone(strip);
     const fromFacilityId = strip.coordination.peerFacilityId;
     if (strip.coordination.state === 'ACTIVE') {
       strip.coordination = null;
-      strip.rev += 1;
-      strip.updatedAt = this._clock.now();
-      strip.updatedBy = by || null;
-      this._touch(strip.stripId);
+      this._state.bump(strip, by);
     } else {
       strip.coordination = null; // so the retire below does not try to tell the proposer back
       this._retireStrip(strip, by);
@@ -2386,15 +2283,12 @@ class BoardStore {
    * @returns {{ok:boolean, strip?:object}}
    */
   receiveCoordinationPeerGone({ stripId, goneStripId, causedBy }) {
-    const strip = this._strips.get(stripId);
+    const strip = this._state.strips.get(stripId);
     const link = strip && strip.coordination;
     if (!link || link.peerStripId !== goneStripId || (link.state !== 'PROPOSED' && link.state !== 'ACTIVE')) return { ok: false };
     const before = deepClone(strip);
     strip.coordination = null;
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, null);
     if (this._mutationLog) {
       this._mutationLog.record({
         clientMutationId: null, op: 'SystemCoordinationEnd', stripId: strip.stripId,
@@ -2421,10 +2315,7 @@ class BoardStore {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'STAND_BY only applies to OPERATIONAL_REQUEST', strip };
     }
     strip.coordination.lastStandByAt = this._clock.now();
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
 
     const peerFacilityId = strip.coordination.peerFacilityId;
     let peerStrip = null;
@@ -2475,7 +2366,7 @@ class BoardStore {
 
     const strip = {
       stripId,
-      cid: this._nextCid(),
+      cid: this._state.nextCid(),
       fdrId,
       rev: 1,
       // The replica carries the SENDER's own Role/EfspState (docs/adr/0022)
@@ -2521,8 +2412,7 @@ class BoardStore {
       },
       createdAt: now, updatedAt: now, updatedBy: by || null,
     };
-    this._strips.set(stripId, strip);
-    this._touch(stripId);
+    this._state.insert(strip);
     this._recordPeer('PeerCoordinationProposal', strip, null, { causedBy, fromFacilityId, by });
     return { ok: true, strip };
   }
@@ -2535,7 +2425,7 @@ class BoardStore {
    * for the same reason receiveCoordinationProposal does.
    */
   receiveCoordinationResponse({ stripId, response, by, causedBy }) {
-    const strip = this._strips.get(stripId);
+    const strip = this._state.strips.get(stripId);
     if (!strip || !strip.coordination) return { ok: false, reason: 'NOT_FOUND' };
     const before = deepClone(strip);
 
@@ -2888,8 +2778,7 @@ class BoardStore {
       // retirement. Its active-TOFI guard cannot fire (the state is REJECTED).
       retired = this._retireStrip(strip, by);
     } else {
-      strip.rev += 1; strip.updatedAt = this._clock.now(); strip.updatedBy = by || null;
-      this._touch(strip.stripId);
+      this._state.bump(strip, by);
     }
 
     let peerStrip = null;
@@ -2967,7 +2856,7 @@ class BoardStore {
     // than create a second MRU record for one airframe. Two mission lines with
     // independent lifecycles is docs/adr/0045's "two answers to one identity
     // question" wearing a different hat.
-    const existing = [...this._strips.values()].find(
+    const existing = [...this._state.strips.values()].find(
       s => s.fdrId === fdrId && s.role === 'MISSION' && s.state !== 'DROPPED');
 
     if (existing) {
@@ -3018,7 +2907,7 @@ class BoardStore {
 
     const strip = {
       stripId,
-      cid: this._nextCid(),
+      cid: this._state.nextCid(),
       fdrId, // shared with the ATC-side Strip — guide §9.8's binding
       rev: 1,
       role: 'MISSION',
@@ -3047,8 +2936,7 @@ class BoardStore {
       },
       createdAt: now, updatedAt: now, updatedBy: by || null,
     };
-    this._strips.set(stripId, strip);
-    this._touch(stripId);
+    this._state.insert(strip);
     this._recordPeer('PeerTofiProposal', strip, null, { causedBy, fromFacilityId, by });
     return { ok: true, strip };
   }
@@ -3060,7 +2948,7 @@ class BoardStore {
    * own Board throughout ENTRY's ACTIVE window).
    */
   receiveTofiExitProposal({ stripId, note, by, causedBy }) {
-    const strip = this._strips.get(stripId);
+    const strip = this._state.strips.get(stripId);
     if (!strip || !strip.tofiCoordination) return { ok: false, reason: 'NOT_FOUND' };
     const before = deepClone(strip);
 
@@ -3088,7 +2976,7 @@ class BoardStore {
    * sides agree on the outcome. Mirrors receiveCoordinationResponse exactly.
    */
   receiveTofiResponse({ stripId, response, by, causedBy }) {
-    const strip = this._strips.get(stripId);
+    const strip = this._state.strips.get(stripId);
     if (!strip || !strip.tofiCoordination) return { ok: false, reason: 'NOT_FOUND' };
     const before = deepClone(strip);
 
@@ -3143,10 +3031,7 @@ class BoardStore {
       } else if (this._rules.baysFor) {
         unplaced.push(strip.stripId);
       }
-      strip.rev += 1;
-      strip.updatedAt = this._clock.now();
-      strip.updatedBy = null;
-      this._touch(strip.stripId);
+      this._state.bump(strip, null);
       if (this._mutationLog) {
         this._mutationLog.record({
           clientMutationId: null, op: 'SystemReassign', stripId: strip.stripId,
@@ -3181,10 +3066,7 @@ class BoardStore {
         strip.rackId = bay.rackId;
         strip.orderKey = this._appendOrderKey(bay.bayId, bay.rackId, strip.stripId);
       }
-      strip.rev += 1;
-      strip.updatedAt = this._clock.now();
-      strip.updatedBy = null;
-      this._touch(strip.stripId);
+      this._state.bump(strip, null);
       if (this._mutationLog) {
         this._mutationLog.record({
           clientMutationId: null, op: 'SystemReassign', stripId: strip.stripId,
@@ -3204,7 +3086,7 @@ class BoardStore {
    * archived at most one sweep late rather than never. Null for a live Strip.
    */
   droppedWallAtOf(stripId) {
-    const strip = this._strips.get(stripId);
+    const strip = this._state.strips.get(stripId);
     if (!strip || strip.state !== 'DROPPED') {
       this._droppedWallAt.delete(stripId);
       return null;
@@ -3227,13 +3109,12 @@ class BoardStore {
    * @returns {string|null} the Strip's fdrId, or null when it was not a DROPPED Strip here
    */
   archiveStrip(stripId, reason, extra = {}) {
-    const strip = this._strips.get(stripId);
+    const strip = this._state.strips.get(stripId);
     if (!strip || strip.state !== 'DROPPED') return null;
-    this._strips.delete(stripId);
+    this._state.strips.delete(stripId);
     this._droppedWallAt.delete(stripId);
     this._nlaHistory.delete(stripId);
-    this._log.push({ seq: ++this._seq, type: 'gone', id: stripId });
-    this._pruneLog();
+    this._state.logGone(stripId);
     if (this._mutationLog) {
       this._mutationLog.record({
         clientMutationId: null, op: 'Archive', stripId, fdrId: strip.fdrId || null,
@@ -3256,21 +3137,21 @@ class BoardStore {
     for (const [cmid, record] of this._appliedMutations) {
       if (record.appliedWallAt >= horizon) replay.push([cmid, record]);
     }
-    return { strips: this.getAll(), cidSeq: this._cidSeq, replay, droppedWallAt: [...this._droppedWallAt] };
+    return { strips: this.getAll(), cidSeq: this._state.cidSeq, replay, droppedWallAt: [...this._droppedWallAt] };
   }
   restore(data) {
-    this._strips = new Map((data?.strips || []).map(s => [s.stripId, s]));
+    this._state.replaceStrips(new Map((data?.strips || []).map(s => [s.stripId, s])));
     // A restored Board is a new lifetime: the ring and the seq did not come
     // back, so no seq a client holds from before can be served a delta.
-    this._epoch = crypto.randomUUID();
+    this._state.newEpoch();
     // A snapshot written before docs/adr/0045 carries a per-Strip
     // `correlation` field. Dropped rather than migrated: it was always the
     // inert `{ state: 'UNCORRELATED' }` placeholder, so there is nothing in it
     // to carry forward, and leaving it would put a second, stale answer to
     // "which contact is this" next to the real one — which is the defect the
     // key change removes, preserved through a restore.
-    for (const strip of this._strips.values()) delete strip.correlation;
-    this._cidSeq = data?.cidSeq || 0;
+    for (const strip of this._state.strips.values()) delete strip.correlation;
+    this._state.setCidSeq(data?.cidSeq || 0);
     // The persisted slice of the idempotency cache (docs/adr/0081). It used to
     // be dropped here, so a CreateStrip whose ack died with the process was
     // created twice on retry (L6's F5). Loaded whole: the snapshot already cut
@@ -3287,7 +3168,7 @@ class BoardStore {
     const dropped = new Map(Array.isArray(data?.droppedWallAt) ? data.droppedWallAt : []);
     this._droppedWallAt = new Map();
     const restoredAt = Date.now();
-    for (const strip of this._strips.values()) {
+    for (const strip of this._state.strips.values()) {
       if (strip.state !== 'DROPPED') continue;
       const at = dropped.get(strip.stripId);
       this._droppedWallAt.set(strip.stripId, Number.isFinite(at) ? at : restoredAt);
