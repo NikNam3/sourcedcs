@@ -79,9 +79,25 @@ const SETTERS = {
 };
 
 // Bridged although the browser defines it: the classic page's top-level `const history` (app.js) shadowed
-// window.history for every bare reference, nothing in the client or its libraries uses the History API (maplibre's
-// hash handler is off: initMap passes no `hash` option), and l22-stars-scope.spec.js calls history.set(...) (S-ESM1c).
+// window.history for every bare reference, and l22-stars-scope.spec.js calls history.set(...) (S-ESM1c). The client
+// and its libraries do not use the History API (maplibre's hash handler is off), but Playwright does: replacing
+// window.history outright made every click wait out its timeout for a "scheduled navigation" (measured, ESM-1).
+// So `history` is the browser's History object with app.js's Map methods forwarded onto it.
 const SHADOWED = new Set(['history']);
+const MAP_KEYS = new Set(['get', 'set', 'has', 'delete', 'clear', 'keys', 'values', 'entries', 'forEach', 'size', Symbol.iterator]);
+function shadowValue(name, ns) {
+  if (name !== 'history') return () => ns[name];
+  const real = window.history;
+  const both = new Proxy(real, {
+    get(target, key) {
+      const from = MAP_KEYS.has(key) ? ns.history : target;
+      const v = Reflect.get(from, key, from);
+      return typeof v === 'function' ? v.bind(from) : v;
+    },
+    set(target, key, value) { return Reflect.set(target, key, value, target); },
+  });
+  return () => both;
+}
 // Browser names an export may collide with and stay unbridged. None today: a new collision is reported loudly.
 const EXPECTED_SKIPS = new Set();
 
@@ -96,7 +112,8 @@ if (typeof window !== 'undefined') {
         continue;
       }
       const set = SETTERS[name] || (() => { throw new TypeError(`classic-globals-bridge: ${name} is read-only (a module binding)`); });
-      Object.defineProperty(window, name, { configurable: true, enumerable: true, get: () => ns[name], set });
+      const get = SHADOWED.has(name) ? shadowValue(name, ns) : () => ns[name];
+      Object.defineProperty(window, name, { configurable: true, enumerable: true, get, set });
       BRIDGED.push(name);
     }
   }
