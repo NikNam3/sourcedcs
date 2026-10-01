@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pattern And Final Mockup</title>
+<meta name="description" content="L18 build target: RSU pattern board, the shared FINAL component (PAR and carrier) and SFA's frequency racks.">
+<style>
+:root{color-scheme:dark;--bg:#0f1214;--panel:#161b1f;--line:#262e35;--line2:#34404a;--text:#d8e0e6;--dim:#8c9aa6;--accent:#8ec7ff;--ok:#8aca8a;--warn:#ffb86b;--bad:#ff7a7a;--badge:#d6a8ff}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0f1214}}
+:root[data-theme="dark"]{--bg:#0f1214}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:22px;font-weight:500;margin:4px 0}h2{font-size:17px;font-weight:500;margin:34px 0 4px;border-top:1px solid var(--line2);padding-top:14px}
+p{margin:6px 0 10px;max-width:92ch}.dim{color:var(--dim)}
+code,.mono{font-family:Consolas,"DejaVu Sans Mono",monospace;font-size:.9em}
+.panel{background:#14181c;border:1px solid var(--line2);border-radius:4px;padding:8px;font-family:Consolas,"DejaVu Sans Mono",monospace;font-size:11px;font-variant-numeric:tabular-nums}
+.grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:900px){.grid{grid-template-columns:minmax(0,1fr)}}
+ol{padding-left:20px;font-size:13px}li{margin:4px 0}
+.hdr{display:flex;gap:10px;align-items:center;margin-bottom:6px;color:var(--dim)}
+.hdr b{color:var(--text);font-weight:500}
+.tag{border:1px solid var(--line2);border-radius:10px;padding:0 7px;font-size:10.5px}
+.tag.adv{border-color:var(--warn);color:var(--warn)}
+/* pattern board */
+.legs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.leg{border:1px solid var(--line2);border-radius:3px;min-height:150px;background:#10151a}
+.leg h4{margin:0;padding:3px 6px;font-size:10.5px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;border-bottom:1px solid var(--line2);display:flex;justify-content:space-between}
+.leg.drop{outline:2px dashed var(--accent)}
+.chip{margin:4px;padding:4px 6px;border:1px solid var(--line2);border-left:4px solid var(--accent);border-radius:3px;background:#1b222a;min-height:44px}
+.chip .cs{font-size:12.5px;color:#fff}.chip .m{color:var(--dim)}
+.chip.long{border-left-color:var(--warn)}
+.chip button{margin-top:3px;font:inherit;color:var(--text);background:#232c35;border:1px solid var(--line2);border-radius:3px;min-height:26px;padding:0 8px}
+.adv-row{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap}
+/* final */
+.final{display:grid;gap:8px}
+.final .big{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.cell{border:1px solid var(--line2);border-radius:3px;padding:6px 8px;background:#10151a}
+.cell .k{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+.cell .v{font-size:30px;color:#fff;line-height:1.1}
+.cadence{height:8px;border-radius:4px;background:#1b222a;overflow:hidden;border:1px solid var(--line2)}
+.cadence i{display:block;height:100%;width:60%;background:var(--accent)}
+.prompt{border:2px solid var(--warn);color:var(--warn);border-radius:3px;padding:8px;font-size:15px;text-align:center;min-height:44px}
+.prompt.none{border-color:var(--line);color:var(--faint,#5d6973)}
+.term{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.term button{min-height:56px;font:inherit;font-size:14px;border-radius:3px;border:2px solid var(--line2);background:#1b222a;color:var(--text)}
+.term .ok{border-color:var(--ok)}.term .go{border-color:var(--bad)}
+/* sfa */
+.freqs{display:grid;gap:4px}
+.fr{display:grid;grid-template-columns:90px minmax(0,1fr) 150px;gap:8px;align-items:center;border:1px solid var(--line2);border-radius:3px;padding:4px 6px;background:#10151a}
+.fr .f{font-size:14px;color:#fff}.fr .rot{color:var(--dim)}
+.fr.free .f{color:var(--dim)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Pattern board, FINAL, and SFA frequency racks</h1>
+<p class="dim">L18 client half, for approval. Three panels over two shared components. The server half (the three Positions, SFA rotation) waits for L17's Roles. Every colour is a CSS variable, nothing is colour-only (border, text and position carry state too).</p>
+
+<h2>1. RSU: the pattern board</h2>
+<p>RSU is supervisory and has no separation authority (guide 4.1 rule 4). Its Bay is a <b>board of four legs</b>, not a rack of Strips. A leg is a Rack (ADR 0064: legs are racks, not states), so moving an aircraft between legs is the existing Move gesture, by drag. The same component serves PriFly (legs initial, break, downwind, groove), configured by leg list.</p>
+<div class="grid"><div class="panel" id="pattern"></div>
+<ol>
+<li><b>Four columns</b> from the Bay's rack list. A chip is callsign, type, intent (T&amp;G / full stop / low approach) and minutes in the pattern, from the mission clock.</li>
+<li><b>Drag a chip to another leg</b> (or tap its leg name, for touch). It is a Move, nothing else.</li>
+<li><b>Two buttons per chip</b>: Landed (state RECOVERED) and Drop. Nothing to type.</li>
+<li><b>Advisories, never refusals</b>: 2+ on the final leg, a chip in the pattern over 10 min, a runway that is closed or suspended with aircraft in the pattern. They are amber tags under the board; RSU has no authority, so nothing is blocked.</li>
+<li>The CLOSED leg is the closed (overhead) pattern, kept as a leg because the guide names it.</li>
+</ol></div>
+
+<h2>2. PAR and the carrier Final: the FINAL component</h2>
+<p>One component, no inputs (guide 7.10). Four large figures, a 5-second cadence bar, a call prompt, two terminal buttons. It holds one Strip. Nothing in it is typed.</p>
+<div class="grid"><div class="panel final" id="final"></div>
+<div>
+<ol>
+<li><b>Figures</b>: runway (or deck for the carrier), decision altitude, distance to touchdown, and glidepath deviation when the track gives one. All derived.</li>
+<li><b>Cadence bar</b> is a free-running 5 s metronome from the mission clock. It is a cue for the talk-down rhythm; it is not tied to taps, because a voice call cannot be observed and a tap per call is data entry.</li>
+<li><b>Call prompt</b>: appears when a required call falls due (every mile, glidepath interception, decision altitude, trend deviation) and clears itself after 4 s.</li>
+<li><b>Terminal buttons</b>: PAR says <i>Landing assured</i> and <i>Missed approach</i>; the carrier says <i>Ball</i> and <i>Waveoff</i>. Both map onto the existing FINAL states (BALL, BOLTER_WAVEOFF), so no new state is added. They are the only gestures.</li>
+</ol>
+<p class="mono dim">Try: <input type="range" id="dist" min="0" max="80" value="42" style="vertical-align:middle"> <span id="distv"></span></p>
+</div></div>
+
+<h2>3. SFA: frequencies, not Positions</h2>
+<p>The controller moves, the Strip's frequency never does (guide 4.7, D17). The board has <b>one rack per pool frequency</b>. Each shows who is on it now and who is next in the rotation. APP holds jurisdiction. The rotation is one button: <i>Rotate onto 3rd freq</i>.</p>
+<div class="grid"><div class="panel" id="sfa"></div>
+<ol>
+<li>Pool of at least five UHF frequencies from facility config (<code>[SOURCE-DEFINED]</code>); three are in the rotation at a time.</li>
+<li>The Strip shows <i>on 288.3</i>. That text is the Strip's frequency and does not change on a rotation transfer.</li>
+<li>What the transfer changes is <b>which controller</b> is on that frequency: ownership moves, the Strip's frequency stays. The UI says "SFA rotated: RAPCON to GCA on 288.3", not "contact 288.3".</li>
+</ol></div>
+</div>
+<script>
+var legs=[["CLOSED",[["BULL 21","F-16","T&G",12]]],["INITIAL",[["VIPR 11","F-16","Full stop",3],["HAWG 41","A-10","Low app",4]]],["BASE",[]],["FINAL",[["RAGE 31","F-16","Full stop",2],["PACK 61","F-15E","T&G",14]]]];
+var p=document.getElementById('pattern'),h='<div class="hdr"><b>RSU pattern board</b><span class="tag">runway 23</span><span class="tag adv">advisory only</span></div><div class="legs">';
+legs.forEach(function(l){h+='<div class="leg"><h4><span>'+l[0]+'</span><span>'+l[1].length+'</span></h4>';l[1].forEach(function(c){h+='<div class="chip'+(c[3]>10?' long':'')+'"><div class="cs">'+c[0]+'</div><div class="m">'+c[1]+' &middot; '+c[2]+' &middot; '+c[3]+' min</div><button>Landed</button> <button>Drop</button></div>'});h+='</div>'});
+h+='</div><div class="adv-row"><span class="tag adv">2 on final: advisory</span><span class="tag adv">BULL 21 12 min in pattern</span></div>';p.innerHTML=h;
+function fin(d){var nm=d/10,call=Math.abs(nm-Math.round(nm))<0.15&&nm>0.5?'Mile call: '+Math.round(nm)+' miles':(nm<0.6?'DECISION ALTITUDE':'');
+document.getElementById('final').innerHTML='<div class="hdr"><b>PAR</b><span class="tag">VIPR 11</span><span class="tag">one Strip</span></div><div class="big"><div class="cell"><div class="k">Runway</div><div class="v">23</div></div><div class="cell"><div class="k">Decision alt</div><div class="v">1,250</div></div><div class="cell"><div class="k">To touchdown</div><div class="v">'+nm.toFixed(1)+' nm</div></div></div><div class="cell"><div class="k">Glidepath</div><div class="v" style="font-size:20px">On (+0.1&deg;)</div></div><div class="cadence"><i style="width:'+((d*7)%100)+'%"></i></div><div class="prompt'+(call?'':' none')+'">'+(call||'No call due')+'</div><div class="term"><button class="ok">Landing assured</button><button class="go">Missed approach</button></div>';
+document.getElementById('distv').textContent=nm.toFixed(1)+' nm'}
+var r=document.getElementById('dist');r.oninput=function(){fin(+r.value)};fin(42);
+var f=[["288.3","VIPR 11","GCA","RAPCON"],["292.1","RAGE 31","RAPCON","GCA"],["305.6","HAWG 41","RAPCON","-"],["319.9","",""," "],["342.4","","",""]];
+var s='<div class="hdr"><b>SFA assigned frequencies</b><span class="tag">APP holds rotation</span></div><div class="freqs">';
+f.forEach(function(x){s+='<div class="fr'+(x[1]?'':' free')+'"><span class="f">'+x[0]+'</span><span>'+(x[1]||'free')+(x[1]?' <span class="rot">on '+x[2]+'; next '+(x[3]||'-')+'</span>':'')+'</span>'+(x[1]?'<button>Rotate</button>':'<span></span>')+'</div>'});
+document.getElementById('sfa').innerHTML=s+'</div>';
+</script>
+</body>
+</html>

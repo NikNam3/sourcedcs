@@ -1,0 +1,33 @@
+/* The pattern board and the FINAL component (docs/adr/0075). Colour is never the only channel: the
+   long-in-pattern chip also says its minutes, an advisory is text, a prompt is text in a bordered box.
+   Touch targets are >= 44px on the terminal buttons (guide 7.6.4): they are the only gesture on FINAL. */
+.efsp-pattern-legs { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 6px; }
+.efsp-pattern-leg { border: 1px solid #34404a; border-radius: 3px; min-height: 120px; background: #10151a; }
+.efsp-pattern-leg-head { display: flex; justify-content: space-between; padding: 3px 6px; border-bottom: 1px solid #34404a;
+  font-size: 10.5px; letter-spacing: .06em; color: #8c9aa6; }
+.efsp-pattern-chip { margin: 4px; padding: 4px 6px; border: 1px solid #34404a; border-left: 4px solid #8ec7ff; border-radius: 3px;
+  background: #1b222a; min-height: 44px; }
+.efsp-pattern-chip-long { border-left-color: #ffb86b; }
+.efsp-pattern-cs { font-size: 12.5px; color: #fff; }
+.efsp-pattern-meta { color: #8c9aa6; }
+.efsp-pattern-actions { display: flex; gap: 4px; margin-top: 3px; }
+.efsp-pattern-actions button { font: inherit; color: inherit; background: #232c35; border: 1px solid #34404a; border-radius: 3px;
+  min-height: 26px; padding: 0 8px; }
+.efsp-pattern-advisories { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.efsp-pattern-advisory { border: 1px solid #ffb86b; color: #ffb86b; border-radius: 10px; padding: 0 7px; font-size: 10.5px; }
+
+.efsp-final { display: grid; gap: 8px; }
+.efsp-final-head { display: flex; gap: 10px; align-items: center; color: #8c9aa6; }
+.efsp-final-figures { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.efsp-final-cell { border: 1px solid #34404a; border-radius: 3px; padding: 6px 8px; background: #10151a; }
+.efsp-final-k { font-size: 10px; color: #8c9aa6; text-transform: uppercase; letter-spacing: .06em; }
+.efsp-final-v { font-size: 30px; color: #fff; line-height: 1.1; }
+.efsp-final-dev-v { font-size: 20px; }
+.efsp-final-cadence { height: 8px; border-radius: 4px; background: #1b222a; border: 1px solid #34404a; overflow: hidden; }
+.efsp-final-cadence-fill { display: block; height: 100%; background: #8ec7ff; }
+.efsp-final-prompt { border: 2px solid #ffb86b; color: #ffb86b; border-radius: 3px; padding: 8px; font-size: 15px; text-align: center; min-height: 44px; }
+.efsp-final-prompt-none { border-color: #262e35; color: #5d6973; }
+.efsp-final-terminals { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.efsp-final-terminal { min-height: 56px; font: inherit; font-size: 14px; border-radius: 3px; border: 2px solid #34404a; background: #1b222a; color: inherit; }
+.efsp-final-ok { border-color: #8aca8a; }
+.efsp-final-go { border-color: #ff7a7a; }
