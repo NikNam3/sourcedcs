@@ -81,6 +81,8 @@ async function mount({ metrics = true } = {}) {
   ws.setEfspSender('sendEfspMutation', (actingPositionId, s, op) => { mutations.push({ actingPositionId, stripId: s.stripId, rev: s.rev, op }); return 'mid'; });
   ws.setEfspSender('sendEfspCreateStrip', () => 'mid');
   geojson._setUpdateMapForTest(() => {});
+  // Rendering a Rack needs more DOM than the stub has; the Bay's content is not what is measured.
+  bay._setRenderBayForTest(() => {});
   bay._setRenderAllOpenEfspBaysForTest(() => {});
   sync.setIsSyncOpen(() => true);
   // The metrics reports; positions frames from the test's own sendEfspSetPositions are not reports.
