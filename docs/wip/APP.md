@@ -1,38 +1,56 @@
-# APP report (lane APP, branch `lane/APP-create-app`, base `b0f273f`) -- INCOMPLETE: the permitted merge was denied
+# APP report (lane APP, branch `lane/APP-create-app`, base `b0f273f`, STORES+WIRE merged by the supervisor as bf3eb48)
 
 ```
+7f5beae refactor(APP): createApp passes paths to createEfsp; BOARD_SNAPSHOT_PATH export retired; wsHub.stop guard dropped
+bf3eb48 Merge efsp-wp5-correlation into lane/APP-create-app (STORES, WIRE)
+fbd405f docs(APP): report, merge-dependent items open
+a185f9b docs(parallel): S-DATA1-0
+90b56a8 docs(parallel): S-M-WIRE, S-DESK4, S-W3early
+e2cd0fa Merge lane/DESK4-amend: post-refactor drafts follow H100
+ee70c9d docs(DESK4): apply H100 to the post-refactor drafts
+3bc1c73 Merge lane/WIRE-families: one wire skeleton, family registry, broadcasts[] in SLOT_ORDER, WsHub.stop()
+5583886 refactor(WIRE): crc-desktop wire scanners read the registry; report, how-to-add note, skeleton tests
+a42cfb3 refactor(WIRE): one skeleton, a family registry, broadcasts[] in SLOT_ORDER; WsHub.stop()
+f9e806a docs(parallel): S-BOARD1-1
+0d0298a docs(parallel): S-M-STORES
 fade783 refactor(APP): the soak host builds the service through createApp
+35f56e3 Merge lane/STORES-registry: persisted-store registry, call-time snapshot paths
+ebb4fc7 docs(parallel): S-ESM1d
+a85209c docs(STORES): report
+c1527b3 docs(STORES): report
 0338f48 test(APP): app-boot test, ticker names and periods, start/stop leave no handle
+241dbc7 docs(parallel): S-BOARD1-0
+28ca472 refactor(STORES): retarget M9 to the registry order
 5127e5b refactor(APP): createApp(deps) in src/app.js, server.js thin
+d095992 docs(parallel): H100 desk answers
+aeeee59 refactor(STORES): persisted-store registry (stores.js) and call-time snapshot paths
+b09df64 docs(parallel): S-WIRE0
+166332f docs(WIRE): step 0, code as found
+8b12d5a docs(parallel): S-APP0
 dcc5c9e wip(APP): step 0, base counts and code as found
+0d29552 wip(STORES): code as found
+439c7e9 docs(parallel): W1 questioner file, S-W1q, S-M-R0
 ```
-- STATUS: the supervisor-permitted `git merge efsp-wp5-correlation` was DENIED by the harness's auto-mode classifier ([Modify Shared
-  Resources]). Not retried or worked around. Everything not needing the merge is done and green; the merge-dependent items below are open.
-- Suites (pre-merge tree): crc-sync 2092 -> 2095 (+3 app-boot). Full run showed 4 failures, all timing tests under load: `ato tokenize
-  pathological inputs`, two `grpc-client` backoff tests, `test-reset` "real server without the env var"; the last two failed the same way
-  at base, the grpc one failed again alone (same as base), test-reset passed alone. crc-desktop 866 (865 pass, 1 todo), untouched.
-- Golden: identical, freeze 47/47, no `freeze:update`. `soak:smoke` PASS (memory not judged), `soak:selfcheck` PASS (all 5 detectors fire).
-  `freeze:selfcheck` not run (no mutation retargeted: M5/M13/M17 sit in efsp-ws/ws-hub, untouched by me). No Playwright.
-- Line counts: server.js 745 -> 21; src/app.js 811 (new); host-core.js 518 -> 443 (-75, and no monitor/instrumentation/archiver wiring left).
-- Structure fixtures: none changed. Files outside "Owns": `tests/efsp-alerts-compose.test.mjs`, `tests/theater-context.test.mjs`,
-  `tests/efsp-ui-b-hooks.test.mjs` (three static tests that read `server.js` as text now read `src/app.js`; same assertions).
-- Tickers (name, ms): datalink-locks (sensorSpecs lockPollMs), coverage 250, clock-source 5000, airport-weather 60000 (was created inside the
-  mission-load handler; now fixed-phase, ticks `lastMissionData`), efsp-metrics 60000, efsp-archiver 60000 (returns Strips archived),
-  stale-reaper 5000, obligations-nla 15000, correlation CORRELATION_TICK_MS (returns the reconciler result), carrier 1000, conformance-stca 1000.
-- Defaults taken: S-APP0 (1)-(3) per supervisor. `trackSeams = {beacon, callsign, gridToMagnetic}` is a real createApp dep and cost no golden
-  change, so no instance-method wrapping was needed for those. `src/test-reset.js` is required lazily, only when CRCSYNC_TEST_RESET=1: its
-  load-time `crypto.randomUUID()` shifted the soak's seeded id stream (every boardEpoch in the goldens). Same refusals, same mount.
-  The soak's `obligationAlerts` sample field is now a constant 0 (the monitor ignores `onAlert` since ADR 0067).
-- BOARD-1 note: the soak host's `bs._rebalanceRack` wrap by name is unchanged and still works on the current tree.
-- OPEN (need the merge): (a) pass `paths` from createApp to `createEfsp`; (b) retire `BOARD_SNAPSHOT_PATH` export with host-core and
-  `freeze-recorder.mjs` in one commit; (c) drop the `typeof wsHub.stop` guard in `src/app.js` and the stop shim in `tests/app-boot.test.mjs`;
-  (d) check host-core against `broadcasts[]` (it never read the old named keys: grep finds none) and keep DATA-1's writeFixtures behaviour
-  (I did not touch `host-client.js`); (e) re-run the gate and the final suites on the merged tree.
-- Findings: the soak hub runs without the hint monitor and airborne observer, so production wiring there is unexercised; enabling it changes
-  `efsp-alerts` frames (`surveillance: []`) and the departure gate: a candidate for a later approved `behaviour(...)` commit, not this lane.
-  Also: the real hub now describes soak tracks through the real identity/transponder models (non-efsp frames only; goldens unaffected).
-
-# APP working file
+- Suites on the merged tree: crc-sync 2101 tests, 2098 pass; the 2 failures (`ato tokenize pathological inputs`, `test-reset` "real server
+  without the env var") are load-timing and both pass alone (15/15, 6/6). Before: 2092 at base (+3 app-boot, +6 from STORES/WIRE).
+  crc-desktop 866 (865 pass, 1 todo), unchanged. Freeze goldens identical, 47/47, no `freeze:update`. `soak:selfcheck` PASS (5/5 fire),
+  `soak:smoke` PASS (run pre-merge, memory not judged). No mutation retargeted, so no `freeze:selfcheck`. No Playwright.
+- Line counts: server.js 745 -> 21; src/app.js new (~810); host-core.js 518 -> ~445.
+- Merge-dependent items done: `paths` passed from createApp to createEfsp (`deps.paths`, default `statePaths(...)` per `env`);
+  `BOARD_SNAPSHOT_PATH` export retired together with host-core (computes its own `statePaths`), freeze-recorder (no longer keys on it) and
+  `tests/efsp-index.test.mjs`; `wsHub.stop` guard and test shim dropped. host-core never read the old named broadcast keys (it wraps
+  `hub._broadcast`), so `broadcasts[]` needed nothing. `host-client.js` untouched: DATA-1's writeFixtures change is not affected by my host.
+- Tickers (name, ms): datalink-locks (lockPollMs), coverage 250, clock-source 5000, airport-weather 60000 (fixed phase, ticks the last mission
+  data; was made inside the mission-load handler), efsp-metrics 60000, efsp-archiver 60000, stale-reaper 5000, obligations-nla 15000,
+  correlation, carrier 1000, conformance-stca 1000.
+- Files outside "Owns": `tests/efsp-alerts-compose`, `tests/theater-context`, `tests/efsp-ui-b-hooks` (static tests read src/app.js now),
+  `tests/efsp-index.test.mjs`, `src/efsp/index.js` (export removal, as STORES asked). No structure fixtures changed.
+- Defaults taken: S-APP0 (1)-(3); `trackSeams` is a real dep (no wrapping needed); `src/test-reset.js` is required lazily only when
+  CRCSYNC_TEST_RESET=1 (its load-time randomUUID shifted the soak's seeded ids); soak `obligationAlerts` is constant 0 (onAlert ignored since
+  ADR 0067). BOARD-1: the `bs._rebalanceRack` wrap by name in host-core is unchanged.
+- Findings: the soak hub runs without the hint monitor and airborne observer, so that production wiring is unexercised there; enabling it
+  adds `surveillance: []` to efsp-alerts and changes the departure gate: a later approved `behaviour(...)` commit, not this lane.
+- Nothing for the supervisor to decide.
 
 ## Step 0: base check (base `b0f273f`, installed with `npm ci` in all three packages)
 
