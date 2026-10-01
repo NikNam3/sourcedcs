@@ -1184,14 +1184,14 @@ function _handleAtoMutation(ctx, session, msg, persist) {
   });
   if (exec.applied) persist();
 
-  const ack = { ...base, ok: true, boardSeq: boardStore.currentSeq, results: exec.results, textSha1: atoRef.textSha1 };
+  const ack = { ...base, ok: true, boardSeq: boardStore.currentSeq, boardEpoch: boardStore.epoch, results: exec.results, textSha1: atoRef.textSha1 };
   cache.set(cmid, ack);
   if (cache.size > ATO_ACK_CACHE_CAP) cache.delete(cache.keys().next().value);
   if (!exec.applied) return { ack };
   return {
     ack,
     broadcast: {
-      version: VERSION, type: 'efsp-board-delta', boardSeq: boardStore.currentSeq, facilityId,
+      version: VERSION, type: 'efsp-board-delta', boardSeq: boardStore.currentSeq, boardEpoch: boardStore.epoch, facilityId,
       strips: { updated: exec.strips.map((s) => _stampStrip(boardStore, boardStore.getStrip(s.stripId) || s, facilityId, ctx)), gone: [] },
       fdrs: { updated: exec.fdrIds.map((id) => ctx.fdrStore.getFdr(id)).filter(Boolean) },
       positions: { updated: [] },
