@@ -90,7 +90,10 @@ module.exports = {
   // a failure is a real failure.
   workers: 1,
   retries: 0,
-  timeout: 20000,
+  // A whole-test ceiling, not a wait: every wait inside a spec is an expect/poll on state with its own
+  // 5-10 s limit. 20 s sat at 19-21 s for the multi-controller specs under load (E2EH, three files hit it
+  // in one run on a busy machine), so a slow machine failed a spec that was progressing.
+  timeout: 60000,
   expect: { timeout: 5000 },
   reporter: [['list']],
   use: {
