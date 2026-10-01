@@ -23,7 +23,7 @@
 // a restart.
 //
 // Built on marsa-store.js: own record map, per-record rev with STALE_REV, a
-// monotonic `_seq`, an audit line for every op INCLUDING refusals, a never-
+// monotonic `_sync` seq, an audit line for every op INCLUDING refusals, a never-
 // throwing `apply`, and snapshot/restore that normalise rather than refuse (a
 // restart must come up). Every time comes from the injected mission clock
 // (decisions H11); nothing here reads Date.now().
@@ -36,6 +36,7 @@ const permission = require('./permission');
 const carrier = require('./carrier');
 const { resolveZuluHhmm } = require('./zulu-time');
 const { WALL_CLOCK } = require('../mission-clock');
+const { SyncLog } = require('./sync/sync-log');
 const log = require('../log').logger('efsp:carrier-store');
 
 const TRANSITIONS_CAP = 200;
@@ -61,7 +62,7 @@ class CarrierStore {
     this._records = new Map();
     for (const h of this._hulls) this._records.set(h.hullId, this._fresh(h.hullId));
     this._shipStates = new Map(); // hullId -> banner (derived, never persisted)
-    this._seq = 0;
+    this._sync = new SyncLog(); // the store's sequence: a counter only, no ring, no epoch (sync/sync-log.js, S3-1)
     this._mutationLog = null;
   }
 
@@ -76,7 +77,7 @@ class CarrierStore {
   }
 
   setMutationLog(mutationLog) { this._mutationLog = mutationLog; }
-  get currentSeq() { return this._seq; }
+  get currentSeq() { return this._sync.seq; }
   get defaultHullId() { return this._hulls[0].hullId; }
   hullIds() { return this._hulls.map(h => h.hullId); }
   hull(hullId = this.defaultHullId) { const h = this._hulls.find(x => x.hullId === hullId); return h ? deepClone(h) : null; }
@@ -195,7 +196,7 @@ class CarrierStore {
     const prev = this._shipStates.get(hullId) || null;
     if (prev && !carrier.shipStateChanged(prev, next)) return false;
     this._shipStates.set(hullId, next);
-    this._seq += 1;
+    this._sync.advance();
     return true;
   }
   getShipState(hullId = this.defaultHullId) { return deepClone(this._shipStates.get(hullId) || null); }
@@ -226,7 +227,7 @@ class CarrierStore {
 
   _touch(record, by, op, detail) {
     record.rev += 1;
-    this._seq += 1;
+    this._sync.advance();
     record.transitions.push({ at: this._clock.now(), by: by || null, op, detail: detail == null ? null : String(detail).slice(0, 200) });
     if (record.transitions.length > TRANSITIONS_CAP) record.transitions.splice(0, record.transitions.length - TRANSITIONS_CAP);
   }
@@ -344,7 +345,7 @@ class CarrierStore {
     if (!r.ok) return r;
     record.stacks[stackId] = r.stack;
     if (!quiet) this._touch(record, by, op.kind, op.fdrId || null);
-    else { record.rev += 1; this._seq += 1; }
+    else { record.rev += 1; this._sync.advance(); }
     return { ok: true, record: deepClone(record), changed: r.changed };
   }
 
