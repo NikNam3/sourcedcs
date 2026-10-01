@@ -204,3 +204,6 @@ infra/mediawiki_backup_*/
 infra/mediawiki-backup-*.sql
 infra/mediawiki_backup_*.tar.gz
 infra/*.sql
+
+# crc-desktop SRS bridge runtime state (written to cwd by lxsrs_v2)
+lxsrs_v2_state.json

@@ -910,7 +910,7 @@
        2. map-setup.js / elevation.js / los.js — MapLibre bootstrap + terrain.
        3. dock.js — the dockview panel shell (registry, open/close/toggle).
        4. panels/*.js — one file per panel's presentation logic (formerly
-          ui.js). These call into dock.js/map-setup.js/los.js by name, and
+          the old ui.js). These call into dock.js/map-setup.js/los.js by name, and
           are in turn called BY app.js's boot section below.
        5. app.js — track/settings state model, plus the boot sequence that
           calls into every panel above to actually start the app.

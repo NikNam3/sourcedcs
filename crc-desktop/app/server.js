@@ -4,9 +4,12 @@ const http  = require('http');
 const https = require('https');
 const fs    = require('fs');
 const path  = require('path');
+const { resolveProxyPath } = require('./proxy-routes');
+const { maptilerKey, renderStyle } = require('./maptiler');
 
 const PUBLIC_DIR       = path.join(__dirname, 'public');
 const DATA_DIR         = path.join(__dirname, 'data');
+const MAPTILER_KEY     = maptilerKey();
 const SRS_RADIO_API    = parseInt(process.env.SRS_RADIO_API_PORT) || 5003;
 
 // crc-sync is the sole gRPC/SRS client now (see crc-sync/server.js) — this
@@ -68,8 +71,18 @@ const httpServer = http.createServer((req, res) => {
     return res.end(
       'var CRC_SYNC_URL      = ' + JSON.stringify(syncConfig.crcSyncUrl)      + ';\n' +
       'var CASDOOR_CLIENT_ID = ' + JSON.stringify(syncConfig.casdoorClientId) + ';\n' +
-      'var CASDOOR_ENDPOINT  = ' + JSON.stringify(syncConfig.casdoorEndpoint) + ';\n'
+      'var CASDOOR_ENDPOINT  = ' + JSON.stringify(syncConfig.casdoorEndpoint) + ';\n' +
+      'var MAPTILER_KEY      = ' + JSON.stringify(MAPTILER_KEY)              + ';\n'
     );
+  }
+
+  // The map style, with the MapTiler key filled in (maptiler.js).
+  if (req.url.split('?')[0] === '/crc-desktop-scope-style.json') {
+    return fs.readFile(path.join(PUBLIC_DIR, 'crc-desktop-scope-style.json'), 'utf8', (err, text) => {
+      if (err) { res.writeHead(404); return res.end('Not found'); }
+      res.writeHead(200, { 'Content-Type': MIME['.json'] });
+      res.end(renderStyle(text, MAPTILER_KEY));
+    });
   }
 
   // ── Connection widget (app/public/js/sync.js) pushes overrides here so
@@ -97,26 +110,9 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
-  // ── crc-sync proxies (ticket mint + the on-demand RPCs) ──────────────────
-  if (req.url === '/api/ws-ticket' && req.method === 'POST')      return proxyToSync(req, res, '/api/ws-ticket');
-  if (req.url === '/api/atis-transmit' && req.method === 'POST')  return proxyToSync(req, res, '/api/atis-transmit');
-  if (req.url === '/api/srs-clients')                              return proxyToSync(req, res, '/api/srs-clients');
-  if (req.url.startsWith('/api/apt-weather'))                      return proxyToSync(req, res, req.url);
-  // A typed magnetic heading → true (crc-sync's docs/adr/0085): the client
-  // never converts a typed magnetic value itself.
-  if (req.url.startsWith('/api/magnetic/to-true'))                 return proxyToSync(req, res, req.url);
-  // EFSP CreateStrip pre-fill (crc-sync/src/efsp/flight-plan-lookup.js) —
-  // same reverse-proxy shape, so the renderer never needs crc-sync's
-  // bearer token directly for this either.
-  if (req.url.startsWith('/api/flight-plan-lookup/'))              return proxyToSync(req, res, req.url);
-  if (req.url === '/api/flight-plan-list')                         return proxyToSync(req, res, req.url);
-  // §9.10's stereo route table (crc-sync/src/efsp/stereo-routes.js) — the
-  // file-by-short-name picker's option source. Same shape again.
-  if (req.url === '/api/stereo-routes')                            return proxyToSync(req, res, req.url);
-  // WP8's metrics and traffic count (crc-sync docs/adr/0065) — the METRICS
-  // panel reads them over the WebSocket; these are for curl and scripts.
-  if (req.url === '/api/efsp/metrics' || req.url.startsWith('/api/efsp/metrics?'))             return proxyToSync(req, res, req.url);
-  if (req.url === '/api/efsp/traffic-count' || req.url.startsWith('/api/efsp/traffic-count?')) return proxyToSync(req, res, req.url);
+  // ── crc-sync proxies (ticket mint + the on-demand RPCs): proxy-routes.js ──
+  const syncPath = resolveProxyPath(req.url, req.method);
+  if (syncPath !== null) return proxyToSync(req, res, syncPath);
 
   // ── SRS radio API proxy → lxsrs_v2 HTTP API (local pilot audio, unrelated to crc-sync) ─
   if (req.url.startsWith('/srs-api/')) {

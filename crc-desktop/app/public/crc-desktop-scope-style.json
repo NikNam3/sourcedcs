@@ -8,11 +8,11 @@
       "type": "vector"
     },
     "maptiler_planet": {
-      "url": "https://api.maptiler.com/tiles/v3/tiles.json?key=b08eN2ojRae78YJNYhyu",
+      "url": "https://api.maptiler.com/tiles/v3/tiles.json?key=__MAPTILER_KEY__",
       "type": "vector"
     }
   },
-  "glyphs": "https://api.maptiler.com/fonts/{fontstack}/{range}.pbf?key=b08eN2ojRae78YJNYhyu",
+  "glyphs": "https://api.maptiler.com/fonts/{fontstack}/{range}.pbf?key=__MAPTILER_KEY__",
   "sprite": "https://api.maptiler.com/maps/streets-v2-dark/sprite",
   "bearing": 0,
   "pitch": 0,

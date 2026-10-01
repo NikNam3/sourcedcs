@@ -72,8 +72,7 @@ test('typed magnetic runway courses are converted by crc-sync, and the map draws
   const geo = read('js/geojson.js');
   assert.match(geo, /const course {5}= approachRwyCourseTrue;/);
   assert.match(geo, /const reciprocal {2}= \(_aprtRwyTrueDeg \+ 180\) % 360;/);
-  const server = fs.readFileSync(path.join(__dirname, '../app/server.js'), 'utf8');
-  assert.match(server, /req\.url\.startsWith\('\/api\/magnetic\/to-true'\)\)\s+return proxyToSync/);
+  assert.equal(require('../app/proxy-routes').resolveProxyPath('/api/magnetic/to-true?mag=90', 'GET'), '/api/magnetic/to-true?mag=90');
 });
 
 test('magnetic.js loads after geo.js and before any panel', () => {
