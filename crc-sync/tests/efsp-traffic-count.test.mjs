@@ -73,7 +73,9 @@ test('countability: one case per row of the table', () => {
   assert.deepEqual(drop('ARRIVAL', 'LANDED'), { counted: true, excludedReason: null });
   assert.deepEqual(drop('ARRIVAL', 'TAXI_IN'), { counted: true, excludedReason: null });
   assert.deepEqual(drop('ARRIVAL', 'INBOUND'), { counted: false, excludedReason: 'NEVER_LANDED' });
-  assert.deepEqual(drop('OVERFLIGHT', 'TRANSITING'), { counted: true, excludedReason: null });
+  assert.deepEqual(drop('OVERFLIGHT', 'IN_SECTOR'), { counted: true, excludedReason: null });
+  assert.deepEqual(drop('OVERFLIGHT', 'HANDED_OFF'), { counted: true, excludedReason: null });
+  assert.deepEqual(drop('OVERFLIGHT', 'INBOUND'), { counted: false, excludedReason: 'NEVER_TRANSITED' }, 'dropped while still INBOUND: it never worked the sector');
   assert.deepEqual(drop('CARRIER_ARRIVAL', 'WHATEVER'), { counted: false, excludedReason: 'UNCLASSIFIED_ROLE' });
 });
 

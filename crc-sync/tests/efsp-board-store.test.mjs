@@ -946,11 +946,11 @@ test('an ARRIVAL CreateStrip defaults its initial state to INBOUND, not PROPOSED
 // `role === 'ARRIVAL' ? 'INBOUND' : 'PROPOSED'` binary, which would have
 // silently given a new OVERFLIGHT Strip the invalid state 'PROPOSED' (not
 // even in OVERFLIGHT_STATE_SET) since no caller passes op.initialState.
-test('an OVERFLIGHT CreateStrip defaults its initial state to TRANSITING, not PROPOSED', () => {
+test('an OVERFLIGHT CreateStrip defaults its initial state to INBOUND, not PROPOSED', () => {
   const { board } = makeStore({ canCreateStripRole: () => true });
   const result = board.applyMutation(createMutation({ op: { ...createMutation().op, role: 'OVERFLIGHT' } }), 'CTR', 'CTR');
   assert.equal(result.ok, true);
-  assert.equal(result.strip.state, 'TRANSITING');
+  assert.equal(result.strip.state, 'INBOUND');
 });
 
 test('CreateStrip with an unknown role is rejected VALIDATION_ERROR when isValidRole is supplied', () => {

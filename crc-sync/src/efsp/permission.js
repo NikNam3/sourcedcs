@@ -621,14 +621,15 @@ const ARRIVAL_STATE_OWNERS = {
   TAXI_IN:         ['GND'],
 };
 
-// [SOURCE-DEFINED] (docs/adr/0023) — OVERFLIGHT has no guide-published
-// state table at all (§6.3 only notes it shares Blocks 20/21 with
-// ARRIVAL); its 2-state TRANSITING->DROPPED lifecycle mirrors DEPARTURE's
-// own HANDED_OFF->DROPPED terminus shape. Both Positions that may
-// originate one (permission.js's CREATE_ROLE_PERMISSIONS) may also act on
-// it, same "self-originator owns it" precedent as ARRIVAL's INBOUND row.
+// [SOURCE-DEFINED] (docs/adr/0087) — the guide's four-state OVERFLIGHT
+// lifecycle (INBOUND, IN_SECTOR, HANDED_OFF, DROPPED); who owns each state is
+// ours, not the guide's. Both Positions that may originate one
+// (permission.js's CREATE_ROLE_PERMISSIONS) may also act on it, same
+// "self-originator owns it" precedent as ARRIVAL's INBOUND row.
 const OVERFLIGHT_STATE_OWNERS = {
-  TRANSITING: ['APP', 'CTR'],
+  INBOUND:    ['APP', 'CTR'],
+  IN_SECTOR:  ['APP', 'CTR'],
+  HANDED_OFF: ['APP', 'CTR'],
   // DROPPED is terminal — no NLA exists for it, so no entry is needed.
 };
 

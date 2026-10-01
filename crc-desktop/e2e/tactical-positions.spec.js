@@ -142,7 +142,9 @@ test('05 CTR proposes the TOFI exit while AIC holds the line, and the TAC_C2 sea
   await ctr.page.evaluate(([c]) => window.sendEfspCreateStrip('CTR', {
     kind: 'CreateStrip', bayId: 'ctr-overflight', rackId: 'main', role: 'OVERFLIGHT', fdr: { callsign: c },
   }, 'CENTER'), [line]);
-  await waitStrip(ctr.page, line, s => s.state === 'TRANSITING', null, 'OVERFLIGHT');
+  await waitStrip(ctr.page, line, s => s.state === 'INBOUND', null, 'OVERFLIGHT');
+  await act(ctr.page, 'CTR', line, { kind: 'SetState', toState: 'IN_SECTOR' }, 'OVERFLIGHT'); // TOFI ENTRY needs the flight being worked (docs/adr/0087)
+  await waitStrip(ctr.page, line, s => s.state === 'IN_SECTOR', null, 'OVERFLIGHT');
   await act(ctr.page, 'CTR', line, { kind: 'TOFI', action: 'PROPOSE', direction: 'ENTRY', toFacilityId: 'TACTICAL', toPositionId: 'TAC_C2' }, 'OVERFLIGHT');
   // The MISSION Strip minted at TACTICAL shares the callsign; the ATC side is the CENTER one.
   await expect.poll(() => combo.page.evaluate((c) => getAllEfspStrips().some(s => s.role === 'MISSION' && getEfspFdr(s.fdrId).identity.callsign === c), line)).toBe(true);

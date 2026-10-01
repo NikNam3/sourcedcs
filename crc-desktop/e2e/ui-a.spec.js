@@ -122,7 +122,9 @@ test('U8: TOFI Exit becomes CTR\'s primary action once the mission line goes OFF
   }, [callsign, role]);
   try {
     await ctr.evaluate((c) => window.sendEfspCreateStrip('CTR', { kind: 'CreateStrip', bayId: 'ctr-overflight', rackId: 'main', role: 'OVERFLIGHT', fdr: { callsign: c } }, 'CENTER'), callsign);
-    await expect.poll(() => state(ctr, 'OVERFLIGHT')).toBe('TRANSITING');
+    await expect.poll(() => state(ctr, 'OVERFLIGHT')).toBe('INBOUND');
+    await act(ctr, 'CTR', 'OVERFLIGHT', { kind: 'SetState', toState: 'IN_SECTOR' }); // TOFI ENTRY needs the flight being worked (docs/adr/0087)
+    await expect.poll(() => state(ctr, 'OVERFLIGHT')).toBe('IN_SECTOR');
     await act(ctr, 'CTR', 'OVERFLIGHT', { kind: 'TOFI', action: 'PROPOSE', direction: 'ENTRY', toFacilityId: 'TACTICAL', toPositionId: 'TAC_C2' });
     await expect.poll(() => state(tac, 'MISSION')).not.toBeNull();
     await act(tac, 'TAC_C2', 'MISSION', { kind: 'TOFI', action: 'ACCEPT', separationRegime: 'ATC' });

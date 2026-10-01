@@ -348,9 +348,8 @@ test('a Strip with no role at all (or role:DEPARTURE) is unaffected by ARRIVAL\'
 });
 
 // ── OVERFLIGHT lifecycle (docs/adr/0023 — [SOURCE-DEFINED]) ──────────────
-// TRANSITING -> DROPPED — the simplest possible 2-state lifecycle, mirroring
-// DEPARTURE's own HANDED_OFF -> DROPPED terminus shape: an overflight never
-// lands at Incirlik, so none of ARRIVAL's tower/final/landed/taxi stages apply.
+// INBOUND -> IN_SECTOR -> HANDED_OFF -> DROPPED — the guide's own four states
+// (docs/adr/0087, superseding 0023's TRANSITING -> DROPPED).
 
 function makeOverflightStrip(state) { return { state, role: 'OVERFLIGHT' }; }
 
@@ -367,8 +366,16 @@ test('every declared OVERFLIGHT State has exactly one NLA or a rendered inhibit 
   }
 });
 
-test('TRANSITING advances to DROPPED, unconditionally — no occupancy gating, unlike DEPARTURE/ARRIVAL\'s transfer-shaped transitions', () => {
-  assert.deepEqual(computeNla(makeOverflightStrip('TRANSITING'), makeFdr(), NOW), { toState: 'DROPPED' });
+test('an OVERFLIGHT walks INBOUND -> IN_SECTOR -> HANDED_OFF -> DROPPED, unconditionally — no occupancy gating, no transferTo', () => {
+  assert.deepEqual(computeNla(makeOverflightStrip('INBOUND'), makeFdr(), NOW), { toState: 'IN_SECTOR' });
+  assert.deepEqual(computeNla(makeOverflightStrip('IN_SECTOR'), makeFdr(), NOW), { toState: 'HANDED_OFF' });
+  assert.deepEqual(computeNla(makeOverflightStrip('HANDED_OFF'), makeFdr(), NOW), { toState: 'DROPPED' });
+});
+
+test('no OVERFLIGHT state is TRANSITING, and the list is the guide\'s four', async () => {
+  const { OVERFLIGHT_STATES } = await import('../src/efsp/nla.js');
+  assert.deepEqual(OVERFLIGHT_STATES, ['INBOUND', 'IN_SECTOR', 'HANDED_OFF', 'DROPPED']);
+  assert.ok(!OVERFLIGHT_STATES.includes('TRANSITING'));
 });
 
 test('OVERFLIGHT\'s DROPPED has no NLA — a terminal state, same as every other role\'s', () => {

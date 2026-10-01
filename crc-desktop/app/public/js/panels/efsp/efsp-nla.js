@@ -34,10 +34,15 @@ const NLA_LABELS = {
     LANDED:          'Taxi In',
     TAXI_IN:         'Drop',
   },
-  // [SOURCE-DEFINED] OVERFLIGHT lifecycle labels (docs/adr/0023) — mirrors
-  // nla.js's computeOverflightNla exactly.
+  // [SOURCE-DEFINED] OVERFLIGHT labels (docs/adr/0087; the states are the
+  // guide's, the labels ours) — mirrors nla.js's computeOverflightNla exactly.
+  // IN_SECTOR's step is "leaves our airspace" (no transfer); handing the flight
+  // to our next Facility is Coordinate/HANDOFF, so the label says what it does
+  // and does not read as that (questions-round3 Q3-11).
   OVERFLIGHT: {
-    TRANSITING: 'Drop',
+    INBOUND:    'Radar Contact',
+    IN_SECTOR:  'Leaves Sector',
+    HANDED_OFF: 'Drop',
   },
   // WP4A second slice — MISSION lifecycle labels, mirroring nla.js's
   // computeMissionNla exactly (guide's own §9.8 lifecycle, line 215).
@@ -132,9 +137,11 @@ const ARRIVAL_STATE_OWNERS = {
   TAXI_IN:         ['GND'],
 };
 
-// [SOURCE-DEFINED] OVERFLIGHT lifecycle authority (docs/adr/0023) — mirrors permission.js exactly.
+// [SOURCE-DEFINED] OVERFLIGHT lifecycle authority (docs/adr/0087) — mirrors permission.js exactly.
 const OVERFLIGHT_STATE_OWNERS = {
-  TRANSITING: ['APP', 'CTR'],
+  INBOUND:    ['APP', 'CTR'],
+  IN_SECTOR:  ['APP', 'CTR'],
+  HANDED_OFF: ['APP', 'CTR'],
 };
 
 // WP4A second slice — MISSION lifecycle authority, mirroring permission.js's
@@ -168,13 +175,12 @@ const TOFI_OP_KINDS = ['TOFI'];
 // gate in _applyCoordinationPropose" caveat as everything else here.
 // bay-view.js's _canProposeCoordination consults this directly (unlike
 // COORDINATION_OP_KINDS above, which only the drift test reads).
-const COORDINATION_ELIGIBLE_STATES = { ARRIVAL: 'INBOUND', DEPARTURE: 'HANDED_OFF' };
+const COORDINATION_ELIGIBLE_STATES = { ARRIVAL: 'INBOUND', DEPARTURE: 'HANDED_OFF', OVERFLIGHT: 'IN_SECTOR' };
 
 // TOFI's own eligibility gate — client mirror of coordination.js's
-// TOFI_ELIGIBLE_STATES. Wider than the coordination one only by OVERFLIGHT,
-// which is absent above because it never originates a HANDOFF, not because
-// it is ever on the ground. Read by bay-view.js's _canProposeTofiEntry.
-const TOFI_ELIGIBLE_STATES = { DEPARTURE: 'HANDED_OFF', ARRIVAL: 'INBOUND', OVERFLIGHT: 'TRANSITING' };
+// TOFI_ELIGIBLE_STATES (OVERFLIGHT at IN_SECTOR, docs/adr/0087). Read by
+// bay-view.js's _canProposeTofiEntry.
+const TOFI_ELIGIBLE_STATES = { DEPARTURE: 'HANDED_OFF', ARRIVAL: 'INBOUND', OVERFLIGHT: 'IN_SECTOR' };
 
 // The carrier's three Roles — mirrors permission.js exactly (crc-sync docs/adr/0074).
 const MARSHAL_STATE_OWNERS = { LAUNCH: ['CV_MARSHAL'], IN_STACK: ['CV_MARSHAL'], COMMENCED: ['CV_APP1', 'CV_APP2'] };

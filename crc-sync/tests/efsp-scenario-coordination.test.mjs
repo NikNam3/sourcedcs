@@ -119,7 +119,7 @@ test('SCENARIO automated information transfer is refused without a directive on 
 
 // ── 15. an overflight ────────────────────────────────────────────────────
 
-test('SCENARIO a flight transiting Center that never touches Incirlik', () => {
+test('SCENARIO a flight transiting Center that never touches Incirlik', async () => {
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
 
@@ -130,14 +130,19 @@ test('SCENARIO a flight transiting Center that never touches Incirlik', () => {
     fdr: { callsign: 'TRANS1', aircraftType: 'A320', wakeCategory: 'M', originAirport: 'LTBA', destinationAirport: 'OJAI' },
   });
   assert.equal(strip.role, 'OVERFLIGHT');
-  assert.equal(strip.state, 'TRANSITING');
+  assert.equal(strip.state, 'INBOUND');
 
   const beacon = efsp.fdrStore.getFdr(strip.fdrId).identity.beaconAssigned;
   assert.equal(efsp.fdrStore._codeAllocator.isAllocated(beacon), true);
 
-  // TRANSITING's only next action is the terminal Drop — the path that used
-  // to skip DropStrip's rules entirely before docs/adr/0027.
-  const dropped = mustAct(efsp, c.CTR, 'CTR', strip, { kind: 'InvokeNla' });
+  // The guide's four states (docs/adr/0087): Radar Contact, Hand Off, then the
+  // terminal Drop — the path that used to skip DropStrip's rules entirely
+  // before docs/adr/0027.
+  const inSector = await advance(efsp, c.CTR, 'CTR', strip);
+  assert.equal(inSector.state, 'IN_SECTOR');
+  const handedOff = await advance(efsp, c.CTR, 'CTR', inSector);
+  assert.equal(handedOff.state, 'HANDED_OFF');
+  const dropped = await advance(efsp, c.CTR, 'CTR', handedOff);
   assert.equal(dropped.state, 'DROPPED');
   assert.equal(dropped.flags.removeIndicator, true);
   assert.equal(efsp.fdrStore._codeAllocator.isAllocated(beacon), false, 'and the code goes back');
@@ -249,4 +254,90 @@ test('converting a flight for its return leg archives the departure annotations 
   const archived = JSON.stringify(returning.previousLeg.annotations);
   assert.match(archived, /MIT 10 BEHIND VIPER2/);
   assert.match(archived, /PILOT REQUESTS FL280/);
+});
+
+// ── docs/adr/0087: an overflight is handed to our next Facility (F14) ─────
+
+const OVF_FDR = (callsign) => ({ callsign, aircraftType: 'A320', wakeCategory: 'M', originAirport: 'LTBA', destinationAirport: 'OJAI' });
+function createOverflight(efsp, c, callsign, who = 'CTR', bayId = 'ctr-overflight') {
+  return mustAct(efsp, c[who], who, null, { kind: 'CreateStrip', bayId, rackId: 'main', role: 'OVERFLIGHT', fdr: OVF_FDR(callsign) });
+}
+const appStrip = (efsp, id) => efsp.boardStoreFor('INCIRLIK').getStrip(id);
+
+test('SCENARIO an IN_SECTOR overflight at CENTER hands off to APP, arrives INBOUND, and the sender goes HANDED_OFF on accept', async () => {
+  const efsp = createEfsp();
+  const c = crew(efsp, ATC);
+
+  let strip = createOverflight(efsp, c, 'OVFH1');
+  assert.equal(strip.state, 'INBOUND');
+  strip = await advance(efsp, c.CTR, 'CTR', strip);
+  assert.equal(strip.state, 'IN_SECTOR');
+
+  const proposed = mustAct(efsp, c.CTR, 'CTR', strip, { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'APP' });
+  assert.equal(proposed.state, 'IN_SECTOR', 'proposing moves nothing');
+  const replica = appStrip(efsp, proposed.coordination.peerStripId);
+  assert.equal(replica.role, 'OVERFLIGHT');
+  assert.equal(replica.state, 'INBOUND', 'the receiving Facility starts the four states again (H74)');
+  assert.equal(replica.fdrId, strip.fdrId, 'one flight, one FDR');
+
+  const accepted = mustAct(efsp, c.APP, 'APP', replica, { kind: 'HANDOFF', action: 'ACCEPT' });
+  assert.equal(accepted.state, 'INBOUND');
+  assert.equal(accepted.bayId, 'app-overflight', 'APP holds it in its own overflight Bay, not ARRIVAL\'s inbound Bay');
+  const sender = efsp.boardStoreFor('CENTER').getStrip(strip.stripId);
+  assert.equal(sender.state, 'HANDED_OFF', 'the sender has left its sector');
+  assert.equal(sender.bayId, 'ctr-overflight', 'and its Bay did not change');
+
+  // Both walk on independently; the sender may now Drop.
+  const walked = await advance(efsp, c.APP, 'APP', accepted);
+  assert.equal(walked.state, 'IN_SECTOR');
+  const dropped = await advance(efsp, c.CTR, 'CTR', sender);
+  assert.equal(dropped.state, 'DROPPED');
+});
+
+test('an INBOUND overflight cannot propose coordination, and neither can a HANDED_OFF one', async () => {
+  const efsp = createEfsp();
+  const c = crew(efsp, ATC);
+  const strip = createOverflight(efsp, c, 'OVFH2');
+  const refused = act(efsp, c.CTR, 'CTR', strip, { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'APP' });
+  assert.equal(refused.ok, false);
+  assert.match(refused.detail, /may not propose coordination from state INBOUND/);
+  let s = await advance(efsp, c.CTR, 'CTR', strip);
+  s = await advance(efsp, c.CTR, 'CTR', s);
+  assert.equal(s.state, 'HANDED_OFF');
+  assert.equal(act(efsp, c.CTR, 'CTR', s, { kind: 'POINT_OUT', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'APP' }).ok, false);
+});
+
+test('POINT_OUT from an IN_SECTOR overflight leaves both states unchanged', async () => {
+  const efsp = createEfsp();
+  const c = crew(efsp, ATC);
+  let strip = createOverflight(efsp, c, 'OVFP1');
+  strip = await advance(efsp, c.CTR, 'CTR', strip);
+  const proposed = mustAct(efsp, c.CTR, 'CTR', strip, { kind: 'POINT_OUT', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'APP' });
+  const replica = appStrip(efsp, proposed.coordination.peerStripId);
+  assert.equal(replica.state, 'INBOUND');
+  const accepted = mustAct(efsp, c.APP, 'APP', replica, { kind: 'POINT_OUT', action: 'ACCEPT' });
+  assert.equal(accepted.state, 'INBOUND', 'the replica keeps the state it was minted with');
+  assert.equal(efsp.boardStoreFor('CENTER').getStrip(strip.stripId).state, 'IN_SECTOR', 'only a HANDOFF takes the sender out of its sector');
+});
+
+test('a rejected overflight HANDOFF leaves the sender IN_SECTOR', async () => {
+  const efsp = createEfsp();
+  const c = crew(efsp, ATC);
+  let strip = createOverflight(efsp, c, 'OVFR1');
+  strip = await advance(efsp, c.CTR, 'CTR', strip);
+  const proposed = mustAct(efsp, c.CTR, 'CTR', strip, { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'APP' });
+  mustAct(efsp, c.APP, 'APP', appStrip(efsp, proposed.coordination.peerStripId), { kind: 'HANDOFF', action: 'REJECT' });
+  assert.equal(efsp.boardStoreFor('CENTER').getStrip(strip.stripId).state, 'IN_SECTOR');
+});
+
+test('an overflight\'s state never moves it between Bays, and ARRIVAL\'s INBOUND Bay is not its home', async () => {
+  const efsp = createEfsp();
+  const c = crew(efsp, ATC);
+  let strip = createOverflight(efsp, c, 'OVFB1');
+  strip = await advance(efsp, c.CTR, 'CTR', strip);
+  assert.equal(strip.bayId, 'ctr-overflight');
+  const dragged = act(efsp, c.CTR, 'CTR', strip, { kind: 'MoveStrip', bayId: 'ctr-enroute', rackId: 'main' });
+  assert.equal(dragged.ok, false, 'a state-implying Bay of another Role refuses it');
+  const set = mustAct(efsp, c.CTR, 'CTR', strip, { kind: 'SetState', toState: 'INBOUND' });
+  assert.equal(set.bayId, 'ctr-overflight');
 });

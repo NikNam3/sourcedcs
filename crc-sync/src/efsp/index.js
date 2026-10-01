@@ -28,6 +28,7 @@
 // are the real, general accessors everything WP4A-aware should use.
 
 const { migrateClearanceAnnotations } = require('./clearance-migration');
+const { migrateOverflightStates } = require('./overflight-migration');
 const fs = require('fs');
 
 const { FdrStore } = require('./fdr-store');
@@ -618,6 +619,11 @@ function _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaSt
     const moved = migrateClearanceAnnotations(
       [...facilities.values()].flatMap(f => f.boardStore.getAll()), id => fdrStore.getFdr(id));
     if (moved) console.log(`[efsp] moved ${moved} assigned altitude/heading history cell(s) from Strips onto their flights`);
+    // docs/adr/0087 — a Board saved before the guide's four overflight states
+    // holds TRANSITING Strips; they come back IN_SECTOR. Before the session
+    // roll-over (server.js), so the Board is legal when it runs.
+    const remapped = migrateOverflightStates([...facilities.values()].flatMap(f => f.boardStore.getAll()));
+    if (remapped) console.log(`[efsp] mapped ${remapped} OVERFLIGHT Strip(s) from TRANSITING to IN_SECTOR`);
     // After the Boards, not before — it has Strips to check against only now.
     _reconcileRestored(facilities, fdrStore, correlationStore, marsaStore);
     // A Mutation audited but never persisted (a crash inside _persist) gets a

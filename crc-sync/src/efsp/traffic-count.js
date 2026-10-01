@@ -45,7 +45,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const COUNTABLE_PRE_DROP_STATES = Object.freeze({
   DEPARTURE: Object.freeze(['DEPARTED', 'HANDED_OFF']),   // it got airborne
   ARRIVAL: Object.freeze(['LANDED', 'TAXI_IN']),          // it got down
-  OVERFLIGHT: Object.freeze(['TRANSITING']),              // its only live state
+  OVERFLIGHT: Object.freeze(['IN_SECTOR', 'HANDED_OFF']),  // it was worked (docs/adr/0087); dropped still INBOUND, it never was
   MISSION: Object.freeze([]),                             // never: shares its FDR with the ATC Strip TOFI linked it to
   // The carrier Roles (docs/adr/0074), [SOURCE-DEFINED]: a launch is a movement
   // (the aircraft left the deck), a trap is one, and a recovered aircraft in the

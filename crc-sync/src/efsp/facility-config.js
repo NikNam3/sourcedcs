@@ -197,7 +197,7 @@ const DEFAULT_CONFIG = {
       // without landing or departing at Incirlik (guide §2's OVERFLIGHT
       // Strip Role), self-originated by APP directly (no sending Facility
       // to receive a coordination proposal from).
-      { bayId: 'app-overflight',   rackIds: ['main'], impliesState: 'TRANSITING' },
+      { bayId: 'app-overflight',   rackIds: ['main'], holdsRole: 'OVERFLIGHT' }, // implies no state (docs/adr/0087): one Bay for every live overflight state
       // WP4A hook (APP<->CTR) — no longer inert: receives proposed
       // HANDOFF/POINT_OUT/TRAFFIC/AIT replicas from CTR (docs/adr/0015).
       { bayId: 'app-coordination', rackIds: ['main'] },
@@ -327,7 +327,7 @@ const DEFAULT_CENTER_CONFIG = {
       // docs/adr/0023 — a flight transiting CENTER's airspace without
       // landing or departing at Incirlik at all (guide §2's OVERFLIGHT
       // Strip Role), self-originated by CTR directly.
-      { bayId: 'ctr-overflight',        rackIds: ['main'], impliesState: 'TRANSITING' },
+      { bayId: 'ctr-overflight',        rackIds: ['main'], holdsRole: 'OVERFLIGHT' }, // implies no state (docs/adr/0087)
       { bayId: 'ctr-app-coordination',  rackIds: ['main'] }, // WP4A seam — proposed HANDOFF/POINT_OUT/TRAFFIC/OPERATIONAL_REQUEST/AIT replicas from APP land here
     ],
   },

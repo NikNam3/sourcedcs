@@ -181,7 +181,7 @@
         "rackIds": [
           "main"
         ],
-        "impliesState": "TRANSITING"
+        "holdsRole": "OVERFLIGHT"
       },
       {
         "bayId": "app-coordination",

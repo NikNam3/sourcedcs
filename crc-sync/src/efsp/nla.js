@@ -63,13 +63,13 @@ const DEPARTURE_STATE_SET = new Set(DEPARTURE_STATES);
 const ARRIVAL_STATES = ['INBOUND', 'HANDED_TO_TOWER', 'FINAL', 'LANDED', 'TAXI_IN', 'DROPPED'];
 const ARRIVAL_STATE_SET = new Set(ARRIVAL_STATES);
 
-// [SOURCE-DEFINED] (docs/adr/0023) — OVERFLIGHT has no guide-published
-// state table at all (§6.3 only notes it shares Blocks 20/21 with
-// ARRIVAL); deliberately the simplest possible 2-state lifecycle, mirroring
-// DEPARTURE's own HANDED_OFF->DROPPED terminus shape — an overflight never
-// lands at Incirlik, so none of ARRIVAL's tower/final/landed/taxi stages
-// apply.
-const OVERFLIGHT_STATES = ['TRANSITING', 'DROPPED'];
+// [SOURCE-DEFINED] (docs/adr/0087, superseding 0023's two-state lifecycle) —
+// the guide's own OVERFLIGHT lifecycle (EFSPImplementationGuide.md:214, itself
+// marked [SOURCE-DEFINED]): INBOUND -> IN_SECTOR -> HANDED_OFF -> DROPPED.
+// The names are the guide's; the NLA labels and the owners are ours. INBOUND
+// and HANDED_OFF are also ARRIVAL's and DEPARTURE's state names: states are
+// per Role, so nothing may compare a bare state without its Role.
+const OVERFLIGHT_STATES = ['INBOUND', 'IN_SECTOR', 'HANDED_OFF', 'DROPPED'];
 const OVERFLIGHT_STATE_SET = new Set(OVERFLIGHT_STATES);
 
 // Guide-specified lifecycle (§9.8, line 215) — not invented. No occupancy/
@@ -403,16 +403,21 @@ function computeArrivalNla(strip, fdr, now, ctx) {
 }
 
 /**
- * OVERFLIGHT's entire NLA table (docs/adr/0023) — a flight transiting this
+ * OVERFLIGHT's entire NLA table (docs/adr/0087) — a flight transiting this
  * Facility's airspace without landing or departing here at all (guide §2).
- * No occupancy gating, no transferTo: unlike DEPARTURE/ARRIVAL, an
- * overflight was never "owned" by a chain of Positions leading somewhere —
- * whichever Position originated it (permission.js's CREATE_ROLE_PERMISSIONS)
- * just works it until it exits coverage, then Drops it.
+ * No occupancy gating, no transferTo: whichever Position originated it
+ * (permission.js's CREATE_ROLE_PERMISSIONS) works it solo. IN_SECTOR's step
+ * is "leaves our airspace" — to an agency this server does not model, so
+ * nothing is transferred. Handing the flight to our own next Facility
+ * (CTR -> APP) is Coordinate/HANDOFF, as at ARRIVAL's CENTER INBOUND.
  */
 function computeOverflightNla(strip) {
   switch (strip.state) {
-    case 'TRANSITING':
+    case 'INBOUND':
+      return { toState: 'IN_SECTOR' };
+    case 'IN_SECTOR':
+      return { toState: 'HANDED_OFF' };
+    case 'HANDED_OFF':
       return { toState: 'DROPPED' };
     case 'DROPPED':
     default:
