@@ -1,5 +1,6 @@
 'use strict';
 require('dotenv').config();
+require('./src/log-level').install(); // LOG_LEVEL=error|warn|info|debug, default info
 
 const express     = require('express');
 const http        = require('http');
