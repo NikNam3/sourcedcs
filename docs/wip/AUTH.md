@@ -1,6 +1,38 @@
 # AUTH: the authority registry (W3)
 
-(Report goes here at the end.)
+## Report
+
+Branch `lane/AUTH-registry`, base `363aec9`. `git log --oneline 363aec9..HEAD`:
+```
+(top) docs(AUTH): report, how-to, defaults and findings
+12e2400 test(AUTH): retarget freeze:selfcheck M12 to authority/roles/departure.js
+5c5e6ad test(AUTH): overflight-shared-state-names ALLOWED follows the authority registry (S-AUTH0, approved by main)
+1f76b82 test(AUTH): authority coverage (plan §9 point 8) and registry tests
+c34d1a5 refactor(AUTH): traffic-count countability reads the Role families
+b5e44f9 refactor(AUTH): Position families; permission.js becomes a facade
+ccea67c refactor(AUTH): authority registry with the seven Role families; nla.js and coordination.js become facades
+```
+- **Suites:** crc-sync 2098 tests / 2096 pass / 1 load-timing fail / 1 todo -> 2106 / 2105 pass / 0 fail / 1 todo
+  (+8: authority-coverage 2, authority-registry 6). crc-desktop 866 / 865 + 1 todo -> unchanged.
+- **Golden:** identical after every structural commit (freeze 47/47; `tables-permission-*`, `tables-nla-*` included).
+  No behaviour commits.
+- **Selfcheck:** `freeze:selfcheck` 18/18 caught; M12 retargeted to `authority/roles/departure.js`, M14 unchanged
+  (still `nla.js`). Soak selfcheck not run: no Gates file touched.
+- **Structure fixtures:** `crc-desktop/tests/overflight-shared-state-names.test.js` ALLOWED (S-AUTH0, approved):
+  added authority/index.js, op-kinds.js, roles/departure.js, arrival.js, overflight.js, positions/incirlik-military.js;
+  dropped permission.js, coordination.js, traffic-count.js. Clock allow-list and board surface unchanged.
+- **Outside Owns:** only that approved test. board-store.js, board/**, facility-config.js, client untouched.
+  PARITY tests' require paths unchanged (facades).
+- **Registry:** `src/efsp/authority/` = index.js (register*, accessors, composed tables, sealed after load),
+  op-kinds.js, classes.js, primitives.js, positions/ (civil-atc, tactical, carrier, incirlik-military),
+  roles/ (departure, arrival, overflight, mission, marshal, final, pattern, nla-common). Facades export exactly as before.
+- **Unit tests retargeted (owned):** efsp-incirlik-l18-config (RSU/SFA/PAR literals only in INCIRLIK_CAPABILITIES,
+  checked across the registry), efsp-alert-scramble (no alertStatus in nla.js or any Role family).
+- **Defaults taken, findings:** below. For BOARD-3: switch board-store's three state tables to the registry accessors,
+  then drop the pins in tests/authority-registry.test.mjs. For merge: DATA-1 also edited the ALLOWED list
+  (trivial conflict). Store-local authority checks (airspace, field-state, SFA) are follow-ups.
+- **Supervisor decides:** nothing open.
+
 
 ## Step 0: code as found (base `363aec9`)
 
@@ -60,3 +92,50 @@ No `tools/` consumer. Two tests read source text: `efsp-alert-scramble` (nla.js 
 
 Position families register in the order civil-atc, tactical, carrier, incirlik-military, which reproduces every key
 and array order of today's tables (incirlik-military extends civil-atc's APP and the role owner tables, so it is last).
+
+## How to add a Role family / a Position family
+
+- **Role family:** write `src/efsp/authority/roles/<role>.js` exporting `family = { role, states (DROPPED included),
+  initialState, stateOwners, computeNla(strip, fdr, now, ctx), countablePreDropStates, excludedWhenNotCountable,
+  replicaStateOnReceipt, senderStateOnAccept, coordinationEligibleState?, tofiEligibleState? }`, and add one
+  `registerRoleFamily(require('./roles/<role>').family)` line in `authority/index.js`. `registerRoleFamily` refuses a
+  missing field or a state that is not the Role's. Then the client's hand copies (`efsp-nla.js` NLA_LABELS and owner
+  tables) fail `client-mirror-parity` until updated (ARCH-D7).
+- **Position family:** write `authority/positions/<family>.js` exporting `family = { family, positions, extends?,
+  permissions: {id: Set}, createRoles?, ownsStates?, fieldStateOwners?, fieldStateGrants?, nonOwnerBlockWrites?,
+  tofiCounterparts?, capabilities? }`, and add one `registerPositionFamily(...)` line (after any family it extends).
+  Then list the Positions in a facility JSON: `tests/authority-coverage.test.mjs` fails until both sides agree.
+- The registry seals after the listed requires; a later `register*` call throws.
+
+## Defaults taken (P2)
+
+- Family names follow plan §2.2 (`civil-atc` holds OPS CD GND TWR APP CTR, although facility-config classes the
+  Incirlik five as BASOPS/MILITARY_ATC: the name is the plan's, the rows are as before).
+- Position families register civil-atc, tactical, carrier, incirlik-military (not the briefing's listing order):
+  incirlik-military extends APP and the Role owner tables, and this order reproduces every composed table's key order.
+- `CV_LANES` lives in `roles/marshal.js` (COMMENCED is its first use); `final.js` imports it (briefing default:
+  the family owning the state).
+- The primitive effect tables (`COORDINATION_EFFECTS`, `TOFI_EFFECTS`) are neither a Role's nor a Position's; they go
+  to `authority/primitives.js`.
+- `read-scope.js` has no table or Position id; unchanged. The read-scope column is in `positions/tactical.js`.
+- The D21 one-Position predicates (`canMutate`, `canActOnState`, ...) stay in `permission.js`; family-specific
+  predicates (SFA, carrier, tactical) live with their family and are re-exported.
+- Validation-failure paths of `register*` are not unit-tested (the registry is sealed at load); only the seal is.
+
+## Findings / follow-ups
+
+- Store files keep their own authority checks, not in the registry yet: `airspace-store.js` (`_isControlling`,
+  `_isUsing`, per-airspace controlling/using Position), `field-state-store.js` (inspection authority narrowing,
+  acknowledger set), `sfa-store.js` (jurisdiction narrowing), `carrier-store.js` (calls permission predicates: fine).
+- `coordination.js`'s `tofiEffect` was never exported (as found); kept, still unexported.
+- `COORDINATION_ELIGIBLE_STATES` key order is now DEPARTURE, ARRIVAL, OVERFLIGHT (was ARRIVAL first). Same values;
+  golden, deepEqual and every lookup unaffected.
+- BOARD-3: read `authority.DEFAULT_INITIAL_STATE_BY_ROLE` / `initialStateFor`, `replicaStateOnReceipt(role, state)`,
+  `senderStateOnAccept(primitive, role, state)`; then delete the three board-store literals and their pins in
+  `tests/authority-registry.test.mjs` (the test says so when they disappear).
+- DATA-1 (merged upstream) removed `facility-config.js` from `overflight-shared-state-names` ALLOWED; my edit of the
+  same list will need a trivial merge.
+
+## Questioner
+
+No questioner points received during the lane.
