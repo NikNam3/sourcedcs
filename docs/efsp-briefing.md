@@ -607,6 +607,23 @@ when not CLEAN (`ORDNANCE_WHEN_SET`, `isOrdnanceSet` in `strip-fields.js`), alwa
   with real client state is covered by L1b's merge (the Playwright spec's `standInFieldState` is now
   redundant and should be deleted), pad occupancy is not read (Q3), no hint in the 8A/8B editor (Q6).
 
+**Alert and scramble (L13, `0070`).** `alert-scramble.js` is the rule module (server, pure:
+`activeScrambles`, `conflictingGroundStrips`, `GROUND_STATES`, `accessRouteText`); the client mirror
+is `panels/efsp/scramble.js` (`scrambleAlertsFor(strip)`, `alertPadConstraintFor(facilityId)`), held to
+it by a drift test, and `#efsp-scramble-line` in `index.html` is the red line. The state is
+`fdr.military.alertStatus`, written only by a controller's `SetBlock` on Block `14E` (`M16`,
+DEPARTURE) or by the ATO import (`NONE`/`ALERT` only, L14). Nothing is derived into storage, so
+nothing needs resetting. `nla.js` never reads it (a test holds that). The access route is
+`fieldState.pads.alert.accessRoute` in `facility-config.js`, shipped as the placeholder
+`ALERT ACCESS TAXIWAY` ([SOURCE-DEFINED], L20).
+- **H56 is a `permission.js` rule, not an ownership accident**: `NON_OWNER_BLOCK_WRITES` lets OPS
+  write `14E` on a DEPARTURE until DROPPED, whoever owns it (L23 added it, S-L13).
+- `traffic-count.js` latches `alertScramble` from the logged `SetBlock`, so a scramble cancelled on
+  the ground **no longer counts** as one (L26 changed the classification).
+- Walks not done: no two-browser walk (one controller holding OPS/CD/GND/TWR stood in).
+  `scrambleAlertsFor` rescans the live Strips once per rendered Strip (O(n²) per render); fine at
+  squadron scale, cache it per render if Boards grow.
+
 ## 4. What's left, and the known bugs
 
 **Not built, in the guide's order.** WP6: the field-state panel and the hook-mismatch check (L1b),

@@ -28,7 +28,7 @@ Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green):
 - **Metrics and a traffic count** exist on the server, as two read endpoints. There is no dashboard yet. See §10.
 - **Built but not usable from the panel yet:** an ATO parser that reads USMTF (atobrief can now export its package as USMTF), and a carrier model (Marshal stack, recovery Case, ship banner). Neither is wired into the Board: ATO import and the carrier Positions arrive in later waves.
 
-Not built: the rest of WP6 — the field-state panel and arresting-gear check (§9.7's client half), alert/scramble (§9.6), the hung-ordnance advisory (§9.5) — plus WP7's ATO import (the parser exists), WP7A's carrier Positions and PAR (the model exists), and WP8's dashboard. `docs/efsp-briefing.md` is the current handoff note.
+Not built: WP6's arresting-gear data (DCS has no wires), plus WP7's ATO import (the parser exists), WP7A's carrier Positions and PAR (the model exists), and WP8's dashboard. `docs/efsp-briefing.md` is the current handoff note.
 
 **Every time EFSP works with is in-game Zulu**: the DCS mission clock, never your PC's clock or real-world UTC. Every typed time (release, void, EDCT, MTR entry and exit, …) is typed as HHMM and dated by the mission's date: the nearest such time within 12 hours.
 
@@ -470,7 +470,7 @@ FDR {
   military: {                                                       — WP6, guide §6.4's military extension namespace (docs/adr/0052)
     ordnanceState ('CLEAN'|'LOADED'|'HUNG'|'EXPENDED')              — Block 3G, a picker. Setting HUNG raises the advisory chip (below)
     hookRequired (bool)                                             — Block 3F, a ✓ toggle. Means this aircraft REQUIRES arresting gear, not merely that it has a tailhook
-    alertStatus ('NONE'|'ALERT'|'SCRAMBLE')                         — no Block yet; §9.6 picks one
+    alertStatus ('NONE'|'ALERT'|'SCRAMBLE')                         — Block 14E, DEPARTURE only (§8H)
     mtr: { designator, entryFix, entryTimeUtc,
            exitFix, exitEstimateUtc, requestedAltitudeAfterExit }   — §9.4, Blocks 9G-* / 9H-* (§4C). Times are epoch ms, typed as HHMM
     altrvRef, arInfo, scl, fuelState, releaseAuthority              — present and unpopulated, no setter (guide §12)
@@ -1058,6 +1058,26 @@ The hot cargo pad and the alert pad exist by name only.
 
 *What is ours, not doctrine:* Tower as sole authority over the runway, CLOSED holding traffic, the
 request/accept flow, the wind rule and the skipped acknowledger are SOURCE's own choices.
+
+## 8H. Alert and scramble (guide §9.6)
+
+**Block `14E` (ALERT)** is on DEPARTURE Strips at `OPS`, `CD`, `GND` and `TWR`. Pick `NONE`, `ALERT` or
+`SCRAMBLE`. `OPS` owns it: it may set it at any state until the Strip is dropped, whoever holds the
+Strip (H56); the other three set it only while they own the Strip. `ALERT` shows only in the field.
+
+**`SCRAMBLE`** raises a red line at the top of the Strip panel, on every tab, for every controller:
+`SCRAMBLE VIPER11 INCIRLIK · CLEARED · <access route> constrained · N flagged`. Click the callsign to
+jump to the Strip. The scrambling Strip gets a red `SCRAMBLE` chip. At the same field, every departure
+at PUSHBACK, TAXI, RUNWAY_QUEUE or LUAW, and every arrival at LANDED or TAXI_IN, gets an amber
+`SCRAMBLE` chip and a reason line telling it to keep clear of the alert-pad access route. Two
+scramblers at once show as two rows, each ground Strip is counted once in "N flagged", and a scrambler
+is never flagged against the other. The FIELD STATE panel names the access route as constrained too.
+
+**Nothing is reordered, held or moved.** Sequencing is the controller's call; the chips are SOURCE
+practice, not FAA doctrine. The indication ends by itself when the scrambler is DEPARTED or dropped.
+To cancel on the ground, set `14E` back to `ALERT` or `NONE`: the field is never reset automatically.
+The access route's name is a placeholder (`ALERT ACCESS TAXIWAY`) for the squadron to rename; the
+"ground" set is Facility-wide because there is no taxi-route model.
 
 ## 9. General controls — quick reference
 
