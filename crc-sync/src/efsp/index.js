@@ -31,16 +31,8 @@ const { migrateClearanceAnnotations } = require('./clearance-migration');
 const { migrateOverflightStates } = require('./overflight-migration');
 const fs = require('fs');
 
-const { FdrStore } = require('./fdr-store');
-const { AirspaceStore } = require('./airspace-store');
-const { CorrelationStore } = require('./correlation-store');
-const { MarsaStore } = require('./marsa-store');
-const { FieldStateStore } = require('./field-state-store');
-const { CarrierStore } = require('./carrier-store');
 const carrierModel = require('./carrier');
-const { SfaStore } = require('./sfa-store');
 const sfaModel = require('./sfa');
-const carrierHulls = require('./carrier/hull-config');
 const airspaceConfig = require('./airspace-config');
 const { CodeAllocator } = require('./code-allocator');
 const { BoardStore } = require('./board-store');
@@ -57,15 +49,7 @@ const { Archiver } = require('./archiver');
 const { statePaths, ensureDirFor } = require('../state-paths');
 const { WALL_CLOCK } = require('../mission-clock');
 const { ReplayCache } = require('./replay-cache');
-
-// Overridable so tests exercise the restore/persist path against a temp
-// file — same pattern as every other config/*.json path in this package.
-// The Board is durable (docs/adr/0002), and used to be written into the
-// image's config/ with no volume behind it — so a container recreate lost it,
-// or worse, restored a snapshot somebody had committed to git. It lives in
-// data/ now; see src/state-paths.js.
-const { read: BOARD_SNAPSHOT_READ_PATH, write: BOARD_SNAPSHOT_PATH } =
-  statePaths('efsp-board.json', process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH);
+const { REGISTRY, RESTORE_ORDER } = require('./stores');
 
 /**
  * @param {object} [deps]
@@ -77,100 +61,25 @@ const { read: BOARD_SNAPSHOT_READ_PATH, write: BOARD_SNAPSHOT_PATH } =
  * @param {() => number} [deps.transitionAltFt] the theater's transition altitude
  *   (theater-context.js); the FdrStore writes a block's text with it. A fixture
  *   that omits it gets 18,000 ft.
+ * @param {{read:string, write:string}} [deps.paths] where the Board snapshot is read from and written to.
+ *   Resolved when createEfsp is called, not when this file is required.
+ *   Overridable so tests exercise the restore/persist path against a temp
+ *   file (CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH) — same pattern as every other config/*.json path in this package.
+ *   The Board is durable (docs/adr/0002), and used to be written into the
+ *   image's config/ with no volume behind it — so a container recreate lost it,
+ *   or worse, restored a snapshot somebody had committed to git. It lives in
+ *   data/ now; see src/state-paths.js.
  */
-function createEfsp({ clock = WALL_CLOCK, transitionAltFt } = {}) {
+function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('efsp-board.json', process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH) } = {}) {
   const codeAllocator = new CodeAllocator();
-  const fdrStore = new FdrStore(codeAllocator, { clock, transitionAltFt });
   const mutationLog = new MutationLog(undefined, { clock });
-  // One store for every Facility, like fdrStore — an airspace is a theater
-  // entity that NAMES its controlling Facility rather than being replicated
-  // into each one. There is no D13 replication question here because nothing
-  // is ever handed across a boundary; the record has exactly one home.
-  const airspaceStore = new AirspaceStore(airspaceConfig, {
-    clock,
-    occupancyFor: (airspaceId) => {
-      let n = 0;
-      for (const { boardStore } of facilities.values()) {
-        for (const s of boardStore.getAll()) {
-          if (s.state !== 'DROPPED' && s.airspaceEntry && s.airspaceEntry.airspaceId === airspaceId) n++;
-        }
-      }
-      return n;
-    },
-  });
-
-  // WP5 (docs/adr/0045) — a FOURTH store, peer to the three above. Keyed by
-  // fdrId, and shared across every Facility for the same reason fdrStore is:
-  // a correlation is a fact about one airframe, and both halves of a
-  // cross-Facility exchange are looking at the same one. There is no D13
-  // replication question here either — the record has one home.
-  const correlationStore = new CorrelationStore({
-    clock,
-    fdrExists: (fdrId) => !!fdrStore.getFdr(fdrId),
-  });
-
-  // WP6 (docs/adr/0051) — a FIFTH store, peer to the four above and shared
-  // across every Facility for the same reason fdrStore and correlationStore
-  // are: MARSA is a fact about a set of airframes, not about one Facility's
-  // Board, and both halves of a cross-Facility exchange are looking at the same
-  // relation. There is no D13 replication question here either — the record has
-  // one home, and its participants are fdrIds, which are already theater-wide.
-  //
-  // setSeparationRegime is injected rather than reached for: the store must not
-  // hold an FdrStore (correlation-store.js's fdrExists precedent), and guide
-  // §4.8.3 requires the regime to actually change when a flight enters a MARSA
-  // block — "if a second controller takes TAC_C2 ten minutes later, the state
-  // must already be correct, or they inherit a lie."
-  const marsaStore = new MarsaStore({
-    clock,
-    fdrExists: (fdrId) => !!fdrStore.getFdr(fdrId),
-    setSeparationRegime: (fdrId, separationRegime, { by } = {}) =>
-      fdrStore.setTofi(fdrId, { separationRegime }, { by }),
-  });
-
-  // WP6 (docs/adr/0061), §9.7 — a SIXTH store: field state. One instance with
-  // one record per Facility that has a runway inventory, for AirspaceStore's
-  // reason — nothing about a runway is ever handed across a boundary. Built
-  // before the facility loop so `rules.fieldStateFor` is a plain closure.
-  // Occupancy is read lazily through `facilities` (not built yet), the same
-  // shape airspaceStore's occupancyFor has: an unmanned acknowledger of a
-  // runway change reverts or is skipped (decisions.md H20).
-  const fieldStateStore = new FieldStateStore(facilityConfig, {
-    clock,
-    isOccupied: (facilityId, positionId) => {
-      const f = facilities.get(facilityId);
-      return !!f && f.positionStore.isOccupied(positionId);
-    },
-    primaryOf: (facilityId, positionId) => {
-      const f = facilities.get(facilityId);
-      return f ? f.positionStore.primaryOf(positionId) : null;
-    },
-  });
-
-  // docs/adr/0074 (ADR 0064 B6) — a SEVENTH store: the carrier's Case, Marshal
-  // stack and altimeter input, one record per hull. Shared across Facilities
-  // like fdrStore (there is exactly one CARRIER Facility; nothing is replicated).
-  // Lane feeding reads CARRIER occupancy lazily through `facilities`.
-  const carrierStore = new CarrierStore({
-    hulls: carrierHulls.getHulls(),
-    clock,
-    fdrExists: (fdrId) => !!fdrStore.getFdr(fdrId),
-    isOccupied: (positionId) => {
-      const f = facilities.get('CARRIER');
-      return !!f && f.positionStore.isOccupied(positionId);
-    },
-  });
-
-  // docs/adr/0075, 0093 — an EIGHTH store: which Position is on which Single
-  // Frequency Approach frequency (guide §4.7). One record, for the Facility whose
-  // config carries a `singleFrequencyApproach` (INCIRLIK); null where none does.
-  const sfaConfig = facilityConfig.getSingleFrequencyApproach();
-  const sfaStore = sfaConfig
-    ? new SfaStore({ config: sfaConfig, positions: facilityConfig.getPositionSet(), facilityId: facilityConfig.DEFAULT_FACILITY_ID, clock })
-    : null;
-
-  const facilityIds = facilityConfig.getFacilityIds();
   const facilities = new Map(); // facilityId -> { boardStore, positionStore, rules }
+  const stores = {};            // registry key -> instance (src/efsp/stores.js)
+  const buildDeps = { clock, transitionAltFt, codeAllocator, mutationLog, facilities, stores };
+  for (const entry of REGISTRY) stores[entry.key] = entry.build(buildDeps);
+  const { fdr: fdrStore, airspaces: airspaceStore, correlations: correlationStore, marsa: marsaStore,
+    fieldStates: fieldStateStore, carriers: carrierStore, sfaRotation: sfaStore } = stores;
+  const facilityIds = facilityConfig.getFacilityIds();
 
   for (const facilityId of facilityIds) {
     const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getCoveringChain(facilityId), { clock });
@@ -308,14 +217,9 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt } = {}) {
     facilities.set(facilityId, { boardStore, positionStore, rules });
   }
 
-  airspaceStore.setMutationLog(mutationLog);
-  correlationStore.setMutationLog(mutationLog);
-  marsaStore.setMutationLog(mutationLog);
-  fieldStateStore.setMutationLog(mutationLog);
-  carrierStore.setMutationLog(mutationLog);
-  if (sfaStore) sfaStore.setMutationLog(mutationLog);
+  for (const entry of REGISTRY) if (entry.audited && stores[entry.key]) stores[entry.key].setMutationLog(mutationLog);
   _validateAirspaceReferences(facilities);
-  _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore, mutationLog, clock, carrierStore, sfaStore);
+  _restore({ facilities, stores, paths, mutationLog, clock });
 
   const defaultFacility = facilities.get(facilityConfig.DEFAULT_FACILITY_ID);
 
@@ -359,6 +263,8 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt } = {}) {
     marsaStore,
     carrierStore,
     sfaStore,
+    // key -> instance, for every entry of the persisted-store registry (stores.js)
+    stores,
     airspaceConfig,
     facilityConfig,
     nlaStatusMonitor,
@@ -397,7 +303,7 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt } = {}) {
       return user.name || user.preferred_username || user.sub || 'unknown';
     },
 
-    handleMessage: (session, msg) => handleMessage(ctx, session, msg, () => _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore, persistState, carrierStore, sfaStore)),
+    handleMessage: (session, msg) => handleMessage(ctx, session, msg, () => _persist({ facilities, stores, persistState, paths })),
 
     /**
      * Persist on demand. The correlation reconciler deliberately does NOT
@@ -407,7 +313,7 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt } = {}) {
      * correlation history — the state itself recomputes within one tick of
      * boot. This exists so a caller that genuinely needs a flush has one.
      */
-    persist: () => _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore, persistState, carrierStore, sfaStore),
+    persist: () => _persist({ facilities, stores, persistState, paths }),
 
     /** Abrupt disconnect (guide §4.8.6) — releases every Position the controller held, across EVERY Facility (a controller may hold Positions in more than one, guide §4.8.5). */
     onDisconnect: (session) => {
@@ -561,62 +467,19 @@ function _validateAirspaceReferences(facilities) {
   }
 }
 
-function _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore, mutationLog, clock, carrierStore, sfaStore = null) {
+function _restore({ facilities, stores, paths, mutationLog, clock }) {
   try {
-    const data = JSON.parse(fs.readFileSync(BOARD_SNAPSHOT_READ_PATH, 'utf8'));
-    fdrStore.restore(data.fdr);
-    // Airspace STATE is durable (ADR 0002); the definitions come from config
-    // on every boot, so restore() skips anything no longer configured and a
-    // newly configured airspace simply starts available. No migration either
-    // way — the same reasoning that keeps facility config out of the snapshot.
-    airspaceStore.restore(data.airspaces);
-    // WP4A shape: { fdr, boards: { [facilityId]: boardSnapshot } }.
-    // Falls back to the pre-WP4A single-board shape ({ fdr, board }) for
-    // an on-disk snapshot written before this slice — restored into
-    // whichever Facility is DEFAULT_FACILITY_ID (INCIRLIK), matching
-    // exactly where that data always lived pre-WP4A.
-    if (data.boards) {
-      for (const [facilityId, boardData] of Object.entries(data.boards)) {
-        const f = facilities.get(facilityId);
-        if (f) f.boardStore.restore(boardData);
-      }
-    } else if (data.board) {
-      const defaultFacilityId = require('./facility-config').DEFAULT_FACILITY_ID;
-      const f = facilities.get(defaultFacilityId);
-      if (f) f.boardStore.restore(data.board);
+    const data = JSON.parse(fs.readFileSync(paths.read, 'utf8'));
+    const all = { facilities, stores, saved: data };
+    const byKey = new Map(REGISTRY.map(e => [e.key, e]));
+    // RESTORE_ORDER, not the registry's (write) order: see stores.js.
+    for (const key of RESTORE_ORDER) {
+      const store = stores[key];
+      if (store) byKey.get(key).restore(store, key === 'boards' ? data.boards : data[key], all);
     }
-    // Correlation records after the FDRs, since restore() skips any whose FDR
-    // is gone. Every restored record comes back UNCORRELATED with its trackId
-    // and its binding nulled — a persisted track id is a lie the moment the
-    // process restarts, because DCS re-mints ids (docs/adr/0045).
-    if (correlationStore) correlationStore.restore(data.correlations);
-    // MARSA relations after the FDRs too, and for the opposite reason to the
-    // correlation case above: a relation comes back INTACT, state and all. A
-    // persisted track id is a lie after a restart because DCS re-mints ids; a
-    // persisted MARSA relation names fdrIds and records a verbal declaration a
-    // tanker crew made, which a crc-sync restart does not make untrue. Coming
-    // back up with every AR silently reverted to ATC separation would be
-    // §4.8.3's "second controller inherits a lie", caused by us.
-    if (marsaStore) marsaStore.restore(data.marsa);
-    // Field state comes back INTACT for MARSA's reason (docs/adr/0061): a
-    // runway suspended for runway works is still suspended after a
-    // crc-sync restart, and coming back OPEN would hand the next controller a
-    // lie. Reconciled against the inventory, like the airspaces.
-    if (fieldStateStore) fieldStateStore.restore(data.fieldStates);
-    // The carrier's Case and stack come back INTACT, MARSA's reasoning: they are
-    // controller declarations, and a restart does not change what PriFly set.
-    // The banner is derived, so it is not restored; a stack entry whose FDR is
-    // gone is dropped without closing up (docs/adr/0074).
-    if (carrierStore) {
-      carrierStore.restore(data.carriers);
-      const gone = carrierStore.evictMissingFdrs();
-      if (gone) console.warn(`[efsp] dropped ${gone} restored Marshal stack entr(y/ies) whose FDR is gone`);
-    }
-    // The SFA rotation comes back INTACT, for the carrier's reason: who is on which
-    // frequency is a controller declaration, and a restart does not change it.
-    if (sfaStore) sfaStore.restore(data.sfaRotation);
     // docs/adr/0058 — a Board saved before the clearance moved onto the FDR
     // still holds the assigned altitude and heading as Strip annotations.
+    const fdrStore = stores.fdr;
     const moved = migrateClearanceAnnotations(
       [...facilities.values()].flatMap(f => f.boardStore.getAll()), id => fdrStore.getFdr(id));
     if (moved) console.log(`[efsp] moved ${moved} assigned altitude/heading history cell(s) from Strips onto their flights`);
@@ -626,7 +489,7 @@ function _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaSt
     const remapped = migrateOverflightStates([...facilities.values()].flatMap(f => f.boardStore.getAll()));
     if (remapped) console.log(`[efsp] mapped ${remapped} OVERFLIGHT Strip(s) from TRANSITING to IN_SECTOR`);
     // After the Boards, not before — it has Strips to check against only now.
-    _reconcileRestored(facilities, fdrStore, correlationStore, marsaStore);
+    _reconcileRestored(facilities, fdrStore, stores.correlations, stores.marsa);
     // A Mutation audited but never persisted (a crash inside _persist) gets a
     // NotPersisted marker, so the log says that line never took effect.
     _reconcileLogTail(facilities, mutationLog, data.persistedWallAt, clock);
@@ -635,24 +498,15 @@ function _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaSt
   }
 }
 
-function _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore, persistState = { lastBody: null }, carrierStore = null, sfaStore = null) {
+function _persist({ facilities, stores, persistState = { lastBody: null }, paths }) {
   try {
-    const boards = {};
-    for (const [facilityId, { boardStore }] of facilities.entries()) boards[facilityId] = boardStore.snapshot();
     // Compact, not pretty-printed: this runs after EVERY successful Mutation,
     // and indenting a snapshot that grows with the session was the largest
     // single cost in the soak (40% of self-time at four hours, L24's
     // profile). A human reading the file pipes it through a formatter.
-    const body = JSON.stringify({
-      boards,
-      fdr: fdrStore.snapshot(),
-      airspaces: airspaceStore.snapshot(),
-      correlations: correlationStore ? correlationStore.snapshot() : [],
-      marsa: marsaStore ? marsaStore.snapshot() : [],
-      fieldStates: fieldStateStore ? fieldStateStore.snapshot() : [],
-      carriers: carrierStore ? carrierStore.snapshot() : [],
-      sfaRotation: sfaStore ? sfaStore.snapshot() : null,
-    });
+    const snap = {};
+    for (const entry of REGISTRY) snap[entry.key] = entry.snapshot(stores[entry.key], { facilities, stores });
+    const body = JSON.stringify(snap);
     // Dirty-only: nothing changed since the last successful write (a caller
     // that persists on a path which changed nothing), so there is nothing to
     // make durable. Compared on the body, so `persistedWallAt` below stays the
@@ -672,17 +526,22 @@ function _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaSt
     // and _restore's catch would come up with an empty Board. Losing one
     // Mutation to a crash is unavoidable; losing the entire session's Board
     // to one is not.
-    const tmpPath = `${BOARD_SNAPSHOT_PATH}.tmp`;
+    const tmpPath = `${paths.write}.tmp`;
     // Same directory as the target, so the rename below stays within one
     // filesystem — across a mount boundary it is not atomic, and the whole
     // point of the sibling-then-rename is that it is.
-    ensureDirFor(BOARD_SNAPSHOT_PATH);
+    ensureDirFor(paths.write);
     fs.writeFileSync(tmpPath, payload);
-    fs.renameSync(tmpPath, BOARD_SNAPSHOT_PATH);
+    fs.renameSync(tmpPath, paths.write);
     persistState.lastBody = body;
   } catch (e) {
     console.warn('[efsp] failed to persist Board snapshot:', e.message);
   }
 }
+
+// createEfsp resolves its own paths when it is called. This is only the default write path as it stands at
+// require time, kept for tools/soak/host-core.js and tests/freeze/freeze-recorder.mjs, which read it (APP's
+// createApp passes `paths` explicitly and retires it).
+const BOARD_SNAPSHOT_PATH = statePaths('efsp-board.json', process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH).write;
 
 module.exports = { createEfsp, BOARD_SNAPSHOT_PATH };

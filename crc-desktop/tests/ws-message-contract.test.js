@@ -13,12 +13,19 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { readClient, readServer, matchAll } = require('./helpers/mirror-source.js');
+const { readClient, readServer, matchAll, SERVER_SRC } = require('./helpers/mirror-source.js');
+const path = require('node:path');
+// The wire families (efsp-ws.js's skeleton dispatches them): their request, ack and delta types come from the registry.
+const { FAMILIES } = require(path.join(SERVER_SRC, 'efsp/wire/families'));
 
 // ── server -> client ────────────────────────────────────────────────────────
 // Every wire envelope the server builds is `{ version: VERSION, type: '...' }`.
-const SERVER_FILES = ['ws-hub.js', 'efsp/efsp-ws.js', 'efsp/metrics.js'];
-const SENT_BY_SERVER = matchAll(SERVER_FILES.map(readServer).join('\n'), /version:\s*VERSION,\s*type:\s*'([^']+)'/g);
+const SERVER_FILES = ['ws-hub.js', 'efsp/efsp-ws.js', 'efsp/metrics.js', 'efsp/wire/frames.js'];
+const FAMILY_FILES = ['airspace', 'correlation', 'marsa', 'field-state', 'carrier', 'sfa', 'ato'].map(n => `efsp/wire/families/${n}.js`);
+const SENT_BY_SERVER = [...new Set([
+  ...matchAll([...SERVER_FILES, ...FAMILY_FILES].map(readServer).join('\n'), /version:\s*VERSION,\s*type:\s*'([^']+)'/g),
+  ...FAMILIES.flatMap(f => [f.ackType, f.deltaType].filter(Boolean)),
+])].sort();
 
 // The client's single dispatcher.
 const APP = readClient('app.js');
@@ -68,7 +75,7 @@ const ACCEPTED_BY_SERVER = (() => {
   const from = EFSP_DISPATCH.indexOf('function handleMessage(');
   assert.ok(from > 0, 'efsp-ws.js no longer has handleMessage()');
   const body = EFSP_DISPATCH.slice(from, EFSP_DISPATCH.indexOf('\n}\n', from));
-  const efsp = matchAll(body, /case '([^']+)':/g);
+  const efsp = [...matchAll(body, /case '([^']+)':/g), ...FAMILIES.map(f => f.type)];
   const metrics = matchAll(readServer('efsp/metrics.js'), /msg\.type === '(efsp-[^']+)'/g);
   const hub = readServer('ws-hub.js');
   const hubSwitch = hub.slice(hub.indexOf('switch (msg.type)'));

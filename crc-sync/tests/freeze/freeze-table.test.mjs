@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { canonical, summarize, summarizeFinalState, digest, checkGolden } from './freeze-lib.mjs';
 import { resetDeterminism } from './freeze-determinism.mjs';
+import { legacyShape } from '../helpers/wire-slots.mjs';
 
 // The systematic table: ONE mutation per (Strip role x Strip state x owner variant x acting Position x op kind),
 // permitted and refused alike, driven through createEfsp().handleMessage (the real wire path) with an injected
@@ -180,7 +181,7 @@ function runMatrix() {
               cell: `${tag} actor=${actor} op=${op.kind}`, before,
               ok: a.ok, reason: a.reason || null, detail: a.detail || null, warning: a.warning || null, routedTo: a.routedTo || null,
               after: stripView(after), strips: (after && after.stripId === use.stripId ? summarize(after) : null),
-              sent: Object.keys(r).filter(x => x !== 'ack').sort(),
+              sent: Object.keys(legacyShape(r)).filter(x => x !== 'ack').sort(),
               audit: summarize(h.audit),
             });
           }

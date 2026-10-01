@@ -1,3 +1,6 @@
+> Amended for H100 (2026-10-01): Q-U2 settled as (b), a panel message only. The `undoNotice` Strip marker, its wire field,
+> its persistence, the UNDONE indicator and `AckUndoNotice` are removed from this lane. Other Q-U answers are as recommended.
+
 # UNDO: one undo history for every one-click Strip move (10 s)
 
 > Read `docs/parallel/refactor/README.md` (conventions, **Test policy**) and `docs/parallel/lane-rules.md` first; they
@@ -23,7 +26,7 @@ FDR / `fdr-store.js`), strip type (Role), staffed (occupied), consolidation (cov
 
 Every op that moves a Strip in one gesture is undoable for 10 s by the Position that did it. Undo restores every record
 the action touched to its state before the action, voids later changes made inside this Facility (audited, the voided
-Position told on the Strip), and refuses when a later change came from another Facility, a system change or a Mutation
+Position told by a panel message only, H100 Q-U2 b), and refuses when a later change came from another Facility, a system change or a Mutation
 that reached outside the action's scope. One `UndoHistory` replaces `BoardStore._nlaHistory`'s Undo half; L17's
 carrier handoffs, L18's SFA rotation, L19's chip and UI-A's TOFI Exit go through it with their own op kinds (H95).
 
@@ -48,8 +51,7 @@ carrier handoffs, L18's SFA rotation, L19's chip and UI-A's TOFI Exit go through
 ## Owns
 
 **UNDO-S:** new `crc-sync/src/efsp/undo/undo-history.js`; `src/efsp/board/strip-ops.js` (scope capture around the op
-table's `apply`, the history record, the Undo op's wiring); `board/ops/undo.js` (rewritten), new
-`board/ops/ack-undo-notice.js`; the **`undo` declaration** in every existing `board/ops/*.js` (that key only; for
+table's `apply`, the history record, the Undo op's wiring); `board/ops/undo.js` (rewritten, incl. the `efsp-undo-voided` panel message hook); the **`undo` declaration** in every existing `board/ops/*.js` (that key only; for
 TOFI, only the `undo` scope in its op module, not `board/tofi.js` internals); `board/placement.js`
 (`restorePlacement`, placement-only touches); `board/board-state.js` (`remove(stripId)` with a `gone` ring entry, if
 SYNC's `SyncLog` has none; the touch flag); the facade `board-store.js` (`receiveUndoRestore` delegation, the
@@ -62,7 +64,7 @@ it, one line per Board); `efsp-ws.js` Board path (ack `undoable`, `baseRev` not 
 
 **UNDO-C:** `crc-desktop/app/public/js/panels/efsp/efsp-nla.js` (window 10 s, `isUndoAvailable`), new
 `js/panels/efsp/panel/undo-slot.js`, the `.undo` verb and Ctrl+Z binding in the panel's dot-command / key handling, the
-`undone` indicator in the Strip element's indicator row (post-ESM-2a `js/panels/efsp/bay/…`), the ack handling line in
+panel message line for `efsp-undo-voided` (post-ESM-2a `js/panels/efsp/panel/…`; no Strip indicator), the ack handling line in
 the client EFSP sender, `tests/efsp-undo-*.test.mjs`, `tests/client-mirror-parity.test.js` (the 30 → 10 s literal),
 new `e2e/efsp-undo.spec.js`, the Undo lines of `docs/efsp-usage-guide.md`, `docs/wip/UNDO-C.md`.
 
@@ -90,10 +92,12 @@ registry (AIRSP phase 2). One line elsewhere: ask "main".
    `receiveUndoRestore`. No op gate re-runs; staffing, Bay capacity and existence are re-checked.
 3. **Voiding and blocking** per ADR 0100 §4: inside the Facility voided and listed; outside the scope, from another
    Facility, or a system change: `UNDO_BLOCKED` naming it. A successful undo drops every overlapping record.
-4. **Notice** per §6: `undoNotice` on each restored Strip, cleared by the next Mutation on it or `AckUndoNotice`.
+4. **Panel message** per §6 (H100 Q-U2 b): one `efsp-undo-voided` message per voided Position to its signed-on sessions, sent
+   after the Undo's Board event. **No** Strip field, **no** `undoNotice`, no persistence, no ack op. Step 0: check whether a
+   per-Position panel notification (the CMSG path) exists and reuse it. A restored Strip equals its before-image.
 5. **Wire** per §7, **audit** per §8 (one entry per Board; `records`, `voided`, `undoneActionId`). The ack carries
    `undoable` for every op whose module declares a scope and whose record committed.
-6. **Defaults to keep unless the human answers otherwise:** Q-U1 (b) every Strip move, Q-U2 (a) Strip notice + toast,
+6. **Answers (decisions.md H100; Q-U1 (b), Q-U3..Q-U6 (a) as recommended, Q-U2 (b) changed):** Q-U1 (b) every Strip move, Q-U2 settled (b) panel message only,
    Q-U3 (a) cross-Facility blocks, Q-U4 (a) `VOIDED` entries, Q-U5 (a) only the performing Position, Q-U6 (a) panel slot.
 
 ## Steps
@@ -104,7 +108,7 @@ registry (AIRSP phase 2). One line elsewhere: ask "main".
    **Tell "main" the commit id**: SPLIT-JOIN is cut from it.
 2. Scopes and restore for the H95 four plus `InvokeNla`/`SetState`/`DropStrip`; then `TransferStrip`, `MoveStrip`,
    `ConvertToArrival`, TOFI `PROPOSE`; the three compensators; `receiveUndoRestore`.
-3. Wire (ack `undoable`, `Undo {actionId}`, broadcasts), audit, notice, `AckUndoNotice`. **Tell "main" the commit id**:
+3. Wire (ack `undoable`, `Undo {actionId}`, broadcasts), audit, the `efsp-undo-voided` panel message. **Tell "main" the commit id**:
    UNDO-C is cut from it. Then metrics.
 4. Remove `_nlaHistory`'s Undo half (the 400 ms latch stays), ADR 0100 finished, report.
 
@@ -116,7 +120,7 @@ MARSA stores, a fake mission clock and an injected wall clock (no sleeps):
 | # | Scenario | Expect |
 |---|---|---|
 | U1 | state-only NLA, Undo at +9.999 s / +10.000 s | restored / `UNDO_UNAVAILABLE` |
-| U2 | transfer-shaped NLA LC → APP; APP writes an annotation at +3 s; LC undoes at +6 s | Strip back with LC after its predecessor; APP's entry `VOIDED`; `undoNotice.voided` names APP; Undo entry's `voided`; APP's own record dropped |
+| U2 | transfer-shaped NLA LC → APP; APP writes an annotation at +3 s; LC undoes at +6 s | Strip back with LC after its predecessor; APP's entry `VOIDED`; the `efsp-undo-voided` message to APP's session names APP's voided annotation and the Strip has no `undoNotice`; Undo entry's `voided`; APP's own record dropped |
 | U3 | terminal Drop with a MARSA relation, then Undo | relation reopened (MARSA entry, `causedBy`), code re-acquired, COUNT VOIDed |
 | U4 | `CarrierHandoff` Commence, and PriFly removal; then the vacated index refilled before Undo | `UnmarkPushed`; `Reinsert`; refusal naming the new occupant |
 | U5 | `SfaRotation`, Undo | back on APP's frequency Rack after its predecessor; PAR's Bay empty |
@@ -134,13 +138,14 @@ MARSA stores, a fake mission clock and an injected wall clock (no sleeps):
 | U17 | op table | every module declares `undo` |
 | U18 | a fake op touching an undeclared Strip | record not undoable, nothing restored |
 | U19 | wire through `efsp-ws` | ack `undoable`; `Undo` without `actionId` refused; `baseRev` ignored; broadcast order Board → Interfacility → MARSA → carrier |
-| U20 | `AckUndoNotice`; next Mutation | notice cleared |
+| U20 | panel message: APP signed on at the time / APP not signed on | one `efsp-undo-voided` to APP's session only, listing only APP's voided Mutations / no message and no error; both cases: the Undo entry's `voided` names APP's Mutation, the restored Strip has no notice field, snapshot and resync carry none |
 | U21 | A: NLA1 then NLA2 on one Strip; undo NLA1 / undo NLA2 | both voided back to before NLA1 / only NLA2 reverted |
+| U23 | control invariant (ADR 0101, H100 DR-6): an Undo whose restored HANDOFF record names a communications or control holder whose Strip is retired | `UNDO_BLOCKED` (a backstop behind the cross-Facility block); never a live flight without a live holder |
 | U22 | metrics | `undos` by op, `undoVoided`, `undoneTransfers`; §11.1 transfer rate unchanged |
 
 UNDO-C: pure tests for the slot (fill, replace, expiry at 10 s on an injected clock, cleared on epoch change), the
-`.undo` / Ctrl+Z dispatch, the `undone` indicator and toast (signed-on Position named), parity 10 s. Playwright: only
-`e2e/efsp-undo.spec.js` (two clients: LC hands off, APP edits, LC undoes; APP sees UNDONE) and the specs of the panels
+`.undo` / Ctrl+Z dispatch, the panel message line (signed-on Position named, dismissible; no Strip indicator), parity 10 s. Playwright: only
+`e2e/efsp-undo.spec.js` (two clients: LC hands off, APP edits, LC undoes; APP sees the panel message and no Strip marker) and the specs of the panels
 you changed, on `E2E_LANE=5`. Never the full suite.
 
 **Goldens:** the refactor window is closed, so the freeze suite is opt-in and not maintained by behaviour lanes
@@ -150,5 +155,5 @@ you changed, on `E2E_LANE=5`. Never the full suite.
 
 ADR 0100 committed and marked Built; U1–U22 green; both unit suites green; `soak:selfcheck` all detectors fire (you touch
 `board/**` and `efsp-ws.js`); `board-seam` strict for every `board/` file you touched; `_nlaHistory` holds only the
-latch; the report lists defaults taken (desk questions unanswered), each op's declared scope, and anything the release
+latch; the report lists answers followed (H100), each op's declared scope, and anything the release
 or AIRSP lanes must declare.

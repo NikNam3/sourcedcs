@@ -2,9 +2,9 @@
 // then re-proves it with `npm run freeze:selfcheck M9`.
 export default {
   id: "M9",
-  what: "the persisted body's key order: fdr before boards",
-  file: "src/efsp/index.js",
-  find: "      boards,\n      fdr: fdrStore.snapshot(),",
-  replace: "      fdr: fdrStore.snapshot(),\n      boards,",
+  what: "the persisted body's key order: two registry entries swapped (fdr before boards)",
+  file: "src/efsp/stores.js",
+  find: "module.exports = { REGISTRY, RESTORE_ORDER };",
+  replace: "[REGISTRY[0], REGISTRY[1]] = [REGISTRY[1], REGISTRY[0]];\nmodule.exports = { REGISTRY, RESTORE_ORDER };",
   detect: ["freeze-hub"],
 };

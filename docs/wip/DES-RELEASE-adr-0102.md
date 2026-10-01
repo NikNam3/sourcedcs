@@ -1,10 +1,12 @@
+> Amended for H100 (2026-10-01): DR-7 (a) and DR-8 (a) settled as recommended; no design change.
+
 # 0102: The separation regime picked at TOFI ENTRY accept becomes effective when the flight is inside an airspace ACTIVE for that MRU, or at a manual "entered" mark
 
 **Status.** Draft (DES-RELEASE, docs only). The TOFI-REGIME lane copies it to `docs/adr/` when it builds it. Rulings:
 H97 (the change, and that TOFI gets no ControlRelease), H79/AIRSP-7/R3-12 (airspaces have geometry: drawn polygon or
 DCS drawing), S-R3-80 (`kind: AREA | ROUTE`), S-desk3/R3-16 (clocks), H95 (undo). Research:
 `docs/parallel/research/control-release.md` § "ATC <-> military" (JO 7610.14 8-1-1, 8-1-7, 8-1-10, 8-1-11).
-Defaults marked **[default, DR-n]** are the recommendations in `docs/wip/DES-RELEASE.md`. Post-RENAME vocabulary as in
+Choices marked **settled H100** are the human's answers (decisions.md H100) to the questions in `docs/wip/DES-RELEASE.md`. Post-RENAME vocabulary as in
 ADR 0101 (flight data = today's FDR; strip type = today's Role).
 
 ## Depends on
@@ -16,7 +18,7 @@ DES-AIRSP and accepted by it (draft `docs/wip/DES-AIRSP-adr-0098.md` on DES-AIRS
 - **I1** A definition has **at most one** using agency: `usingPositionId` (a RANGES Position) **xor**
   `usingFacilityId` (e.g. `TACTICAL`, the MRU); both set is a `VALIDATION_ERROR`, neither means the controlling
   Position acts for both sides. `usingFacilityId` can only change while the record is RETURNED. Which Positions of the
-  using Facility schedule, request and release is the authority capability `airspaceUse` (0098 default DA-7: TAC_C2
+  using Facility schedule, request and release is the authority capability `airspaceUse` (0098 DA-7, settled H100 (a): TAC_C2
   only). *ACTIVE for MRU F* ⇔ the record's state is `ACTIVE` and (`usingFacilityId === F` or `usingPositionId` is a
   Position of F).
 - **I2** `activeContaining({ lat, lon, altFt }, { usingFacilityId }) → { inside: [{airspaceId, kind, name}],
@@ -49,12 +51,12 @@ call sites and records it here.
    the MRU side records a manual **Entered** mark. Then `separationRegime := pendingSeparationRegime`, pending cleared,
    `regimeEffective: { at, trigger: 'AIRSPACE'|'MANUAL', airspaceId|null, by }` stamped. Already inside at accept →
    effective at accept.
-4. **Leaving, or the airspace deactivating, does not change the regime** **[default, DR-7]**. The regime monitor
+4. **Leaving, or the airspace deactivating, does not change the regime** **settled H100 (DR-7 a)**. The regime monitor
    raises the alert `REGIME_OUTSIDE_AIRSPACE`, shown on both Strips (ATC and MISSION) while a non-ATC effective regime's flight is
    not inside any airspace ACTIVE for its MRU, and clears it when the flight is back inside or the regime returns to
    ATC. The way out stays the EXIT handshake (SREG back to ATC, JO 7610.14 8-1-7, 8-1-11: ATC re-establishes
    separation). An automatic revert to ATC would claim ATC is separating when nobody told ATC.
-5. **The manual Entered mark** is made by the MRU Position owning the MISSION Strip **[default, DR-8]**. Allowed with
+5. **The manual Entered mark** is made by the MRU Position owning the MISSION Strip **settled H100 (DR-8 a)**. Allowed with
    or without a containing airspace; without one (no geometry, no correlation, or truly outside) it carries the warning
    `NOT_IN_ACTIVE_AIRSPACE` and the audit says so. It is the only path when the airspace is `unknown` (I2: an
    airspace without geometry) or the flight has no correlated track.

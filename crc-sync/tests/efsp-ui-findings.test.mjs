@@ -4,6 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import crypto from 'crypto';
+import { slot } from './helpers/wire-slots.mjs';
 
 // The server half of the EFSP UI catalogue (docs/ui-findings/) — the findings
 // whose cause turned out to be in crc-sync rather than in the panel:
@@ -176,7 +177,7 @@ test('F-408: giving up the receiving Position re-sends every Strip with its new 
   // and the Strip it applies to was not itself touched by this message, which
   // is the whole reason the broadcast carries the Board rather than a diff.
   const out = efsp.handleMessage(c.CD.session, { type: 'efsp-set-positions', facilityId: 'INCIRLIK', held: [] });
-  const sent = out.broadcast.strips.updated.find(s => s.stripId === strip.stripId);
+  const sent = slot(out, 'primary').strips.updated.find(s => s.stripId === strip.stripId);
   assert.ok(sent, 'the untouched Strip is in the broadcast');
   assert.deepEqual(sent.nla, { inhibited: 'no receiving Position present', reason: 'NLA_INHIBITED' });
 
@@ -215,10 +216,10 @@ test('F-111: declaring MARSA broadcasts the participants\' FDRs, not just the re
     },
   });
   assert.equal(out.ack.ok, true, JSON.stringify(out.ack));
-  assert.equal(out.marsaBroadcast.type, 'efsp-marsa-delta');
+  assert.equal(slot(out, 'marsa').type, 'efsp-marsa-delta');
 
-  const fdrs = out.broadcast.fdrs.updated;
-  assert.equal(out.broadcast.type, 'efsp-board-delta');
+  const fdrs = slot(out, 'primary').fdrs.updated;
+  assert.equal(slot(out, 'primary').type, 'efsp-board-delta');
   assert.deepEqual(fdrs.map(f => f.fdrId).sort(), [a.fdrId, b.fdrId].sort());
   for (const fdr of fdrs) assert.equal(fdr.tofi.separationRegime, 'MARSA');
 });
@@ -241,7 +242,7 @@ test('F-111: ending a relation broadcasts the regime going back to ATC', () => {
 
   const ended = marsa({ kind: 'EndMarsa' }, declared);
   assert.equal(ended.ack.ok, true, JSON.stringify(ended.ack));
-  const fdrs = ended.broadcast.fdrs.updated;
+  const fdrs = slot(ended, 'primary').fdrs.updated;
   assert.deepEqual(fdrs.map(f => f.fdrId).sort(), [a.fdrId, b.fdrId].sort());
   for (const fdr of fdrs) assert.equal(fdr.tofi.separationRegime, 'ATC');
 });
@@ -265,9 +266,9 @@ test('F-111: the interlock void rides the same board-delta as the clearance that
   const fresh = efsp.boardStoreFor('INCIRLIK').getStrip(a.stripId);
   const out = send(efsp, c.OPS, 'OPS', fresh, { kind: 'SetBlock', blockId: '21', value: '5000' });
   assert.equal(out.ack.ok, true, JSON.stringify(out.ack));
-  assert.equal(out.marsaBroadcast.marsa.updated[0].state, 'VOIDED');
+  assert.equal(slot(out, 'marsa').marsa.updated[0].state, 'VOIDED');
 
-  const byId = new Map(out.broadcast.fdrs.updated.map(f => [f.fdrId, f]));
+  const byId = new Map(slot(out, 'primary').fdrs.updated.map(f => [f.fdrId, f]));
   assert.deepEqual([...byId.keys()].sort(), [a.fdrId, b.fdrId].sort(), 'both participants, not just the one cleared');
   for (const fdr of byId.values()) assert.equal(fdr.tofi.separationRegime, 'ATC');
 });
@@ -493,7 +494,7 @@ test('F-306: accepting a TOFI ENTRY carries the regime it wrote in the ack AND t
   assert.equal(out.ack.fdr.tofi.separationRegime, 'DUE_REGARD');
   // ...and the proposer's, from the broadcast every client receives. Without
   // this the write landed and neither screen ever showed it (F-306).
-  const broadcast = out.broadcast.fdrs.updated.find(f => f.fdrId === mission.fdrId);
+  const broadcast = slot(out, 'primary').fdrs.updated.find(f => f.fdrId === mission.fdrId);
   assert.ok(broadcast, 'the FDR is in the board-delta');
   assert.equal(broadcast.tofi.separationRegime, 'DUE_REGARD');
 });

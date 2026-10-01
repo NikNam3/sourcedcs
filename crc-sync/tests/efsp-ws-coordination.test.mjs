@@ -4,6 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import crypto from 'crypto';
+import { slot } from './helpers/wire-slots.mjs';
 
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-ws-coordination-test-'));
 process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = path.join(tmpDir, 'incirlik.json');
@@ -127,21 +128,21 @@ test('CTR originates an ARRIVAL Strip, proposes HANDOFF to APP, and APP accepts 
   };
   const proposed = handleMessage(ctx, CTR_SESSION, proposeMsg, noopPersist);
   assert.equal(proposed.ack.ok, true, JSON.stringify(proposed.ack));
-  assert.ok(proposed.broadcast, 'a successful mutation broadcasts');
-  assert.equal(proposed.broadcast.facilityId, 'CENTER');
+  assert.ok(slot(proposed, 'primary'), 'a successful mutation broadcasts');
+  assert.equal(slot(proposed, 'primary').facilityId, 'CENTER');
 
   // Bug found in live testing: this is what was missing entirely — nothing
   // told any client holding a Position at INCIRLIK that a brand-new
   // replica had just landed in their Coordination Bay. Without
   // peerBroadcast, a connected client would never see it appear at all
   // outside of a full reconnect/resync.
-  assert.ok(proposed.peerBroadcast, 'PROPOSE also broadcasts the new replica to the PEER Facility');
-  assert.equal(proposed.peerBroadcast.facilityId, 'INCIRLIK');
-  assert.equal(proposed.peerBroadcast.strips.updated.length, 1);
+  assert.ok(slot(proposed, 'peer'), 'PROPOSE also broadcasts the new replica to the PEER Facility');
+  assert.equal(slot(proposed, 'peer').facilityId, 'INCIRLIK');
+  assert.equal(slot(proposed, 'peer').strips.updated.length, 1);
   const receiverStripId = proposed.ack.strip.coordination.peerStripId;
-  assert.equal(proposed.peerBroadcast.strips.updated[0].stripId, receiverStripId);
-  assert.equal(proposed.peerBroadcast.strips.updated[0].facilityId, 'INCIRLIK');
-  assert.equal(proposed.peerBroadcast.strips.updated[0].bayId, 'app-coordination');
+  assert.equal(slot(proposed, 'peer').strips.updated[0].stripId, receiverStripId);
+  assert.equal(slot(proposed, 'peer').strips.updated[0].facilityId, 'INCIRLIK');
+  assert.equal(slot(proposed, 'peer').strips.updated[0].bayId, 'app-coordination');
 
   const receiverStrip = ctx.boardStoreFor('INCIRLIK').getStrip(receiverStripId);
   assert.equal(receiverStrip.ownerPositionId, 'APP');
@@ -159,10 +160,10 @@ test('CTR originates an ARRIVAL Strip, proposes HANDOFF to APP, and APP accepts 
 
   // ACCEPT also needs to tell CENTER the sender-side Strip is now ACTIVE —
   // same gap, other direction.
-  assert.ok(accepted.peerBroadcast, 'ACCEPT also broadcasts the sender-side update to the PEER Facility');
-  assert.equal(accepted.peerBroadcast.facilityId, 'CENTER');
-  assert.equal(accepted.peerBroadcast.strips.updated[0].stripId, senderStrip.stripId);
-  assert.equal(accepted.peerBroadcast.strips.updated[0].coordination.state, 'ACTIVE');
+  assert.ok(slot(accepted, 'peer'), 'ACCEPT also broadcasts the sender-side update to the PEER Facility');
+  assert.equal(slot(accepted, 'peer').facilityId, 'CENTER');
+  assert.equal(slot(accepted, 'peer').strips.updated[0].stripId, senderStrip.stripId);
+  assert.equal(slot(accepted, 'peer').strips.updated[0].coordination.state, 'ACTIVE');
 });
 
 test('efsp-resync is facility-scoped — resyncing CENTER never returns INCIRLIK\'s strips or vice versa', () => {
@@ -217,7 +218,7 @@ test('every Strip record in an efsp-mutation ack AND its broadcast delta carries
   holding(ctx, CTR_SESSION, 'CENTER', ['CTR']);
   const created = handleMessage(ctx, CTR_SESSION, createCtrStripMsg(), noopPersist);
   assert.equal(created.ack.strip.facilityId, 'CENTER');
-  assert.equal(created.broadcast.strips.updated[0].facilityId, 'CENTER');
+  assert.equal(slot(created, 'primary').strips.updated[0].facilityId, 'CENTER');
 });
 
 test('a resync-within-window delta also stamps facilityId on every updated Strip', () => {
@@ -272,8 +273,8 @@ test('a coordination proposal that rebalances the peer\'s coordination Rack puts
   const p2 = propose(second);
   assert.equal(p2.ack.ok, true, JSON.stringify(p2.ack));
   assert.ok(incirlik.getStrip(replica1).rev > revBefore, 'the first replica was re-keyed');
-  const peerSent = new Map(p2.peerBroadcast.strips.updated.map(s => [s.stripId, s]));
-  assert.equal(p2.peerBroadcast.strips.updated[0].stripId, p2.ack.strip.coordination.peerStripId, 'the new replica leads');
+  const peerSent = new Map(slot(p2, 'peer').strips.updated.map(s => [s.stripId, s]));
+  assert.equal(slot(p2, 'peer').strips.updated[0].stripId, p2.ack.strip.coordination.peerStripId, 'the new replica leads');
   assert.ok(peerSent.has(replica1), 'the re-keyed peer Strip rides in peerBroadcast');
   assert.equal(peerSent.get(replica1).orderKey, incirlik.getStrip(replica1).orderKey);
   assert.equal(peerSent.get(replica1).rev, incirlik.getStrip(replica1).rev);

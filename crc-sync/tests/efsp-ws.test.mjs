@@ -4,6 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import crypto from 'crypto';
+import { slot } from './helpers/wire-slots.mjs';
 
 // facility-config.js reads its path at module load — override before import.
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-ws-test-'));
@@ -131,9 +132,9 @@ test('a successful efsp-mutation returns both an ack and a broadcast, and calls 
   assert.equal(result.ack.type, 'efsp-mutation-ack');
   assert.equal(result.ack.ok, true);
   assert.ok(result.ack.strip);
-  assert.ok(result.broadcast);
-  assert.equal(result.broadcast.type, 'efsp-board-delta');
-  assert.equal(result.broadcast.strips.updated.length, 1);
+  assert.ok(slot(result, 'primary'));
+  assert.equal(slot(result, 'primary').type, 'efsp-board-delta');
+  assert.equal(slot(result, 'primary').strips.updated.length, 1);
   assert.equal(persisted, true);
 });
 
@@ -144,7 +145,7 @@ test('a failed efsp-mutation returns only an ack (no broadcast), and does not pe
   const result = handleMessage(ctx, SESSION, badMsg, () => { persisted = true; });
 
   assert.equal(result.ack.ok, false);
-  assert.equal(result.broadcast, undefined);
+  assert.equal(slot(result, 'primary'), undefined);
   assert.equal(persisted, false);
 });
 
@@ -187,8 +188,8 @@ test('a DropStrip mutation broadcasts the stripId under "gone", not "updated"', 
   };
   const result = handleMessage(ctx, SESSION, dropMsg, noopPersist);
   assert.equal(result.ack.ok, true);
-  assert.deepEqual(result.broadcast.strips.updated, []);
-  assert.deepEqual(result.broadcast.strips.gone, [strip.stripId]);
+  assert.deepEqual(slot(result, 'primary').strips.updated, []);
+  assert.deepEqual(slot(result, 'primary').strips.gone, [strip.stripId]);
 });
 
 // ── efsp-resync: exactly two paths ──────────────────────────────────────
@@ -252,8 +253,8 @@ test('setting held positions acks with the actually-held set and broadcasts posi
   const result = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', held: ['GND', 'TWR'] }, noopPersist);
   assert.deepEqual(result.ack.held.sort(), ['GND', 'TWR']);
   assert.equal(result.ack.warnings.length, 0);
-  assert.equal(result.broadcast.type, 'efsp-board-delta');
-  assert.equal(result.broadcast.positions.updated.length, 8); // all of INCIRLIK's Positions reported (RSU, SFA, PAR since L18)
+  assert.equal(slot(result, 'primary').type, 'efsp-board-delta');
+  assert.equal(slot(result, 'primary').positions.updated.length, 8); // all of INCIRLIK's Positions reported (RSU, SFA, PAR since L18)
 });
 
 test('vacating a Position with Strips and an occupied covering Position reassigns them and reports the warning with routedTo', () => {
@@ -270,8 +271,8 @@ test('vacating a Position with Strips and an occupied covering Position reassign
   const result = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', held: [] }, noopPersist); // Alice vacates GND
   assert.equal(result.ack.warnings.length, 1);
   assert.deepEqual(result.ack.warnings[0], { positionId: 'GND', count: 1, routedTo: 'TWR' });
-  assert.equal(result.broadcast.strips.updated.length, 1);
-  assert.equal(result.broadcast.strips.updated[0].stripId, strip.stripId);
+  assert.equal(slot(result, 'primary').strips.updated.length, 1);
+  assert.equal(slot(result, 'primary').strips.updated[0].stripId, strip.stripId);
   assert.equal(ctx.boardStore.getStrip(strip.stripId).ownerPositionId, 'TWR');
 });
 
@@ -344,10 +345,10 @@ test('efsp-correlation-mutation routes, binds, and broadcasts its own delta type
   assert.equal(result.ack.correlation.matchedBy, 'BINDING');
   // Its own delta type with its own seq — not a section of efsp-board-delta,
   // because a correlation is not a Strip and rides no Board's sequence.
-  assert.equal(result.broadcast.type, 'efsp-correlation-delta');
-  assert.equal(result.broadcast.correlations.updated.length, 1);
-  assert.ok(Number.isFinite(result.broadcast.correlationSeq));
-  assert.equal(result.broadcast.strips, undefined);
+  assert.equal(slot(result, 'primary').type, 'efsp-correlation-delta');
+  assert.equal(slot(result, 'primary').correlations.updated.length, 1);
+  assert.ok(Number.isFinite(slot(result, 'primary').correlationSeq));
+  assert.equal(slot(result, 'primary').strips, undefined);
 });
 
 test('UnbindTrack routes through the same path', () => {
@@ -376,7 +377,7 @@ test('a correlation op from a session that is not Primary anywhere is refused (d
   const result = handleMessage(ctx, impostor, bindMsg({ fdrId: strip.fdrId, baseRev: 0 }), noopPersist);
   assert.equal(result.ack.ok, false);
   assert.equal(result.ack.reason, 'NOT_HOLDING_POSITION');
-  assert.equal(result.broadcast, undefined);
+  assert.equal(slot(result, 'primary'), undefined);
 });
 
 test('any Primary may bind, whichever Facility holds a Strip for that flight', () => {
@@ -597,8 +598,8 @@ test('a Mutation that rebalances a Rack broadcasts every Strip it re-keyed', () 
   const { a, b, c, d, move } = exhaustedRack(ctx);
   const result = handleMessage(ctx, SESSION, move, noopPersist);
   assert.equal(result.ack.ok, true, JSON.stringify(result.ack));
-  const sent = new Map(result.broadcast.strips.updated.map(s => [s.stripId, s]));
-  assert.equal(result.broadcast.strips.updated[0].stripId, d.stripId, 'the addressed Strip leads');
+  const sent = new Map(slot(result, 'primary').strips.updated.map(s => [s.stripId, s]));
+  assert.equal(slot(result, 'primary').strips.updated[0].stripId, d.stripId, 'the addressed Strip leads');
   for (const id of [a.stripId, b.stripId, c.stripId, d.stripId]) {
     const truth = ctx.boardStore.getStrip(id);
     assert.ok(sent.has(id), `${id} was re-keyed but not broadcast`);
@@ -606,7 +607,7 @@ test('a Mutation that rebalances a Rack broadcasts every Strip it re-keyed', () 
     assert.equal(sent.get(id).rev, truth.rev);
     assert.equal(sent.get(id).facilityId, 'INCIRLIK', 'stamped like every other record');
   }
-  assert.equal(new Set(result.broadcast.strips.updated.map(s => s.stripId)).size, result.broadcast.strips.updated.length, 'no Strip twice');
+  assert.equal(new Set(slot(result, 'primary').strips.updated.map(s => s.stripId)).size, slot(result, 'primary').strips.updated.length, 'no Strip twice');
 });
 
 test('a refused Mutation broadcasts nothing and leaves nothing to drain', () => {
@@ -618,7 +619,7 @@ test('a refused Mutation broadcasts nothing and leaves nothing to drain', () => 
     stripId: s.stripId, baseRev: s.rev + 3, op: { kind: 'SetFlag', flag: 'offset', value: true },
   }, noopPersist);
   assert.equal(r.ack.ok, false);
-  assert.equal(r.broadcast, undefined);
+  assert.equal(slot(r, 'primary'), undefined);
   assert.deepEqual(ctx.boardStore.drainTouched(), []);
 });
 
@@ -632,7 +633,7 @@ test('a replayed success returns the current Strip and produces no broadcast', (
   };
   const first = handleMessage(ctx, SESSION, msg, noopPersist);
   assert.equal(first.ack.ok, true);
-  assert.ok(first.broadcast);
+  assert.ok(slot(first, 'primary'));
   const later = handleMessage(ctx, SESSION, {
     version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(), actingPositionId: 'OPS',
     stripId: s.stripId, baseRev: first.ack.strip.rev, op: { kind: 'SetFlag', flag: 'flipped', value: true },
@@ -642,9 +643,9 @@ test('a replayed success returns the current Strip and produces no broadcast', (
   const replay = handleMessage(ctx, SESSION, msg, () => { persisted = true; });
   assert.equal(replay.ack.ok, true);
   assert.equal(replay.ack.strip.rev, later.ack.strip.rev, 'the current Strip');
-  assert.equal(replay.broadcast, undefined);
-  assert.equal(replay.peerBroadcast, undefined);
-  assert.equal(replay.marsaBroadcast, undefined);
+  assert.equal(slot(replay, 'primary'), undefined);
+  assert.equal(slot(replay, 'peer'), undefined);
+  assert.equal(slot(replay, 'marsa'), undefined);
   assert.equal(persisted, false, 'nothing changed, so nothing is written');
 });
 
@@ -707,7 +708,7 @@ test('resync from the seq the rebalancing broadcast advertised returns an empty 
 
   const result = handleMessage(ctx, SESSION, move, noopPersist);
   client.ack(result.ack);
-  client.delta(result.broadcast);
+  client.delta(slot(result, 'primary'));
   assert.deepEqual(client.diff(ctx.boardStore), [], 'the broadcast alone leaves the replica right');
 
   const r = handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq: client.boardSeq, boardEpoch: client.boardEpoch }, noopPersist);
