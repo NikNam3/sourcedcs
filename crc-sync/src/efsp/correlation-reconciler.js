@@ -414,6 +414,5 @@ function computeCorrelationRate(records) {
 
 module.exports = {
   CorrelationReconciler, computeCorrelationRate,
-  CORRELATION_TICK_MS, CORRELATION_RATE_TARGET, INELIGIBLE_STATES,
-  RATE_WARN_MIN_ELIGIBLE, RATE_WARN_INTERVAL_MS,
+  CORRELATION_TICK_MS, INELIGIBLE_STATES,
 };

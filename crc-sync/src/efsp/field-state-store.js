@@ -742,4 +742,4 @@ class FieldStateStore {
   }
 }
 
-module.exports = { FieldStateStore, SYSTEM_ACTOR };
+module.exports = { FieldStateStore, };

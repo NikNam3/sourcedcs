@@ -154,4 +154,4 @@ class SurveillanceHintMonitor {
   }
 }
 
-module.exports = { SurveillanceHintMonitor, EXPECTS, UNEXPECTING, ADVANCE_TO };
+module.exports = { SurveillanceHintMonitor, EXPECTS, UNEXPECTING, };

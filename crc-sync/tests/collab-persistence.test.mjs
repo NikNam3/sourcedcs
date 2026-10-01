@@ -62,8 +62,13 @@ const VIPER = { id: 101, name: 'Viper 1-1', type: 'F-16C_50' };
 const BEAR = { id: 102, name: 'Bear 1-1', type: 'Tu-95MS' };
 
 // One crc-sync process: the same stores and wiring server.js builds.
-function boot(t, dir, { grace = 150 } = {}) {
-  const clock = { source: 'MISSION', t: 1_000_000, now() { return this.t; } };
+// `clockT` is where the mission clock stands at boot. A restart onto the SAME running mission
+// carries the clock on, so a test that restarts crc-sync passes the previous process's `clock.t`;
+// booting at the default instead put the clock ~30 mission-minutes BEHIND the persisted high-water
+// mark, and whether the gRPC connect's own 'game-time' beat the test's explicit step-back decided
+// how many CLOCK_STEP_BACK sessions opened (the seq 3 !== 2 flake).
+function boot(t, dir, { grace = 150, clockT = 1_000_000 } = {}) {
+  const clock = { source: 'MISSION', t: clockT, now() { return this.t; } };
   const trackStore = new TrackStore();
   const collab = new CollaborativeStore({
     persist: true, path: path.join(dir, 'collab.json'), identityOf: (id) => trackStore.get(id), clockGraceMs: grace,
@@ -123,7 +128,7 @@ test('DCS restarted while crc-sync was down (same .miz, clock steps back): gone'
   a.stop();
 
   // Same .miz, same unit, same id: only the clock reveals the restart.
-  const b = boot(t, dir);
+  const b = boot(t, dir, { clockT: a.clock.t });
   await streamed(b, 101);
   b.clock.t -= 20 * 60000;
   b.announce();

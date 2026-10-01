@@ -14,6 +14,7 @@
 const base = require('@playwright/test');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
 const NM = path.join(__dirname, '..', '..', 'node_modules');
 const VENDORED = [
@@ -30,48 +31,42 @@ async function serveCdnFromNodeModules(context) {
 
 const PATCHED = Symbol('cdn-patched');
 
-/**
- * Puts INCIRLIK's field state back to OPEN with no change open, whatever an earlier spec file left.
- *
- * crc-sync is started once for the whole run, so a spec that fails between "suspend the runway" and
- * its own clean-up leaves 05/23 suspended for every file after it (l4-chain and l4-drag then get a
- * flight stuck at TAXI: "runway 05/23 suspended — works in progress"). One controller holding TWR,
- * OPS and APP can walk every reset step, so a fresh page does it. Cheap when nothing is wrong.
- */
-async function resetFieldState(browser, baseURL) {
-  const { openPanel } = require('./app');
-  const ctx = await browser.newContext({ baseURL, viewport: { width: 1600, height: 1000 } });
-  try {
-    const page = await ctx.newPage();
-    await openPanel(page, { held: ['TWR', 'OPS', 'APP'], controller: 'e2e-reset' });
-    await page.waitForFunction(() => typeof getEfspFieldState === 'function' && !!getEfspFieldState('INCIRLIK'), null, { timeout: 10000 });
-    for (let i = 0; i < 8; i++) {
-      const op = await page.evaluate(() => {
-        const f = getEfspFieldState('INCIRLIK');
-        const r = f.runways[0];
-        const c = f.runwayChange;
-        if (r.pendingRequest) return ['TWR', { kind: 'RejectRunwayRequest', runwayId: r.runwayId, note: 'e2e reset' }];
-        if (c && ['PROPOSED', 'ACKNOWLEDGED'].includes(c.state)) return ['TWR', { kind: 'WithdrawRunwayChange' }];
-        if (c && c.state === 'IN_PROGRESS') return ['TWR', { kind: 'CompleteRunwayChange' }];
-        if (r.status === 'CLOSED') return ['TWR', { kind: 'OpenRunway', runwayId: r.runwayId }];
-        if (r.status === 'SUSPENDED_WORKS') return ['OPS', { kind: 'CompleteRunwayWorks', runwayId: r.runwayId }];
-        if (r.status === 'SUSPENDED_INSPECTION') return ['OPS', { kind: 'CompleteInspection', runwayId: r.runwayId }];
-        return null;
-      });
-      if (!op) return;
-      const before = await page.evaluate(() => getEfspFieldState('INCIRLIK').rev);
-      await page.evaluate(([p, o]) => sendEfspFieldStateMutation(p, 'INCIRLIK', getEfspFieldState('INCIRLIK').rev, o), op);
-      await base.expect.poll(() => page.evaluate(() => getEfspFieldState('INCIRLIK').rev), { timeout: 5000 }).toBeGreaterThan(before);
-    }
-    throw new Error('e2e reset: the field would not go back to OPEN');
-  } finally {
-    await ctx.close().catch(() => {});
-    // Positions are released on disconnect; let crc-sync see it before the spec takes them.
-    await new Promise((r) => setTimeout(r, 800));
-  }
+const LANE = Number(process.env.E2E_LANE || 0);
+const SYNC_URL = `http://127.0.0.1:${3010 + LANE}`;
+// Which spec file the running crc-sync process was last reset for: "<bootId>|<file>". The boot id
+// makes a marker left by an earlier run, or by a crc-sync that has since restarted, harmless.
+const MARKER = path.join(os.tmpdir(), `crc-e2e-lane${LANE}-fresh-for`);
+
+async function bootId() {
+  const r = await fetch(`${SYNC_URL}/__test/boot`);
+  if (!r.ok) throw new Error(`crc-sync has no test reset hook (HTTP ${r.status}); the harness must start it with CRCSYNC_TEST_RESET=1 (e2e/helpers/sync-supervisor.js)`);
+  return (await r.json()).bootId;
 }
 
-let lastFile = null;
+/**
+ * Gives the spec file a brand-new crc-sync: no Strips, no FDRs, field state as shipped, no
+ * carrier/ATO/metrics/replay history, no Positions held. The hook ends the process and the
+ * supervisor starts a clean one (crc-sync/src/test-reset.js), so nothing an earlier spec did, or
+ * failed to undo, is visible and a spec file means the same thing alone or in any order. Called once
+ * per file, by the first test of it (`_freshSync`).
+ */
+async function resetSync(file) {
+  const before = await bootId();
+  let marker = '';
+  try { marker = fs.readFileSync(MARKER, 'utf8'); } catch (_) { /* first run */ }
+  if (marker === `${before}|${file}`) return; // a worker restart after a failed test must not wipe the rest of the file
+  const r = await fetch(`${SYNC_URL}/__test/reset`, { method: 'POST' });
+  if (!r.ok) throw new Error(`crc-sync reset refused: HTTP ${r.status}`);
+  const deadline = Date.now() + 20000;
+  for (;;) {
+    try {
+      const now = await bootId();
+      if (now !== before) { fs.writeFileSync(MARKER, `${now}|${file}`); return; }
+    } catch (e) { if (/no test reset hook/.test(e.message)) throw e; /* between processes */ }
+    if (Date.now() > deadline) throw new Error('crc-sync did not come back after the test reset');
+    await new Promise((res) => setTimeout(res, 100));
+  }
+}
 
 const test = base.test.extend({
   _vendoredCdn: [async ({ browser }, use) => {
@@ -92,12 +87,9 @@ const test = base.test.extend({
     }
     await use();
   }, { auto: true }],
-  // First test of each spec file: undo whatever field state the previous file left behind.
-  _freshField: [async ({ browser }, use, testInfo) => {
-    if (testInfo.file !== lastFile) {
-      lastFile = testInfo.file;
-      await resetFieldState(browser, testInfo.project.use.baseURL);
-    }
+  // First test of each spec file: a new crc-sync, whatever the previous file left behind.
+  _freshSync: [async ({}, use, testInfo) => {
+    await resetSync(testInfo.file);
     await use();
   }, { auto: true }],
   // The default per-test context is created by the `context` fixture, which may have been built
@@ -108,4 +100,4 @@ const test = base.test.extend({
   },
 });
 
-module.exports = { test, expect: base.expect, serveCdnFromNodeModules, resetFieldState };
+module.exports = { test, expect: base.expect, serveCdnFromNodeModules, resetSync };

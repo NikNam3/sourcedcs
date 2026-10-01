@@ -59,4 +59,4 @@ function radarIsHull(hullId, radar) {
   return !!hull.match.type && radar.shipType === hull.match.type;
 }
 
-module.exports = { getHulls, getHull, getDefaultHull, radarIsHull, CARRIERS_FILE };
+module.exports = { getHulls, getHull, radarIsHull, };

@@ -249,9 +249,9 @@ function isCarrier(track) {
 }
 
 module.exports = {
-  buildRadars, loadSensorSpecs, isRadarSite, capsFor, presentationFor, DEFAULT_PRESENTATION,
-  RADAR_TYPES, DEFAULT_CAPS, SENSOR_SPECS_PATH,
+  buildRadars, loadSensorSpecs, isRadarSite,
+  DEFAULT_CAPS,
   AIRPORT_RADAR_HEIGHT_M, SHIP_RADAR_HEIGHT_M,
-  AIRPORT_RADAR, APPROACH_RADAR, CVN_APPROACH_RADAR, SHIP_RADAR_DEFAULT,
+  AIRPORT_RADAR, APPROACH_RADAR, SHIP_RADAR_DEFAULT,
   M_PER_NM,
 };

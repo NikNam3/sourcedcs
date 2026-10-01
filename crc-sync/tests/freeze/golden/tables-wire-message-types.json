@@ -1,7 +1,7 @@
 {
   "rows": [
-    {"id":"client->server (efsp-ws.js handleMessage dispatch)","v":["efsp-airspace-mutation","efsp-ato-mutation","efsp-ato-preview","efsp-carrier-mutation","efsp-correlation-mutation","efsp-field-state-mutation","efsp-marsa-mutation","efsp-mutation","efsp-resync","efsp-set-positions"]},
-    {"id":"every efsp-* type literal sent by src/efsp/*.js and src/ws-hub.js","v":["efsp-airspace-ack","efsp-airspace-delta","efsp-alerts","efsp-ato-ack","efsp-ato-preview-result","efsp-board-delta","efsp-carrier-ack","efsp-carrier-delta","efsp-correlation-ack","efsp-correlation-delta","efsp-field-state-ack","efsp-field-state-delta","efsp-heartbeat","efsp-marsa-ack","efsp-marsa-delta","efsp-metrics","efsp-metrics-report-ack","efsp-mutation-ack","efsp-positions-ack","efsp-snapshot"]},
+    {"id":"client->server (efsp-ws.js handleMessage dispatch)","v":["efsp-airspace-mutation","efsp-ato-mutation","efsp-ato-preview","efsp-carrier-mutation","efsp-correlation-mutation","efsp-field-state-mutation","efsp-marsa-mutation","efsp-mutation","efsp-resync","efsp-set-positions","efsp-sfa-mutation"]},
+    {"id":"every efsp-* type literal sent by src/efsp/*.js and src/ws-hub.js","v":["efsp-airspace-ack","efsp-airspace-delta","efsp-alerts","efsp-ato-ack","efsp-ato-preview-result","efsp-board-delta","efsp-carrier-ack","efsp-carrier-delta","efsp-correlation-ack","efsp-correlation-delta","efsp-field-state-ack","efsp-field-state-delta","efsp-heartbeat","efsp-marsa-ack","efsp-marsa-delta","efsp-metrics","efsp-metrics-report-ack","efsp-mutation-ack","efsp-positions-ack","efsp-resync-reply","efsp-sfa-ack","efsp-sfa-delta","efsp-snapshot"]},
     {"id":"every efsp-* literal appearing in src/ws-hub.js","v":["efsp-alerts","efsp-board-delta","efsp-correlation-delta","efsp-field-state-delta","efsp-heartbeat","efsp-set-positions"]}
   ]
 }

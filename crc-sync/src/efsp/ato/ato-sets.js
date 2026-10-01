@@ -620,7 +620,7 @@ const EXTRACTORS = {
 };
 
 module.exports = {
-  EXTRACTORS, CALLSIGN_RE, CONTROL_AGENCY_TYPES, AR_SYSTEMS, TACAN_RE,
+  EXTRACTORS, CALLSIGN_RE, CONTROL_AGENCY_TYPES,
   normaliseCallsign,
   extractOper, extractMsgId, extractAknldg, extractTimeframe, extractTaskUnit, extractGrouping,
   extractAmsndat, extractMsnacft, extractAmsnloc, extractGtgtloc, extractControla, extractArinfo,

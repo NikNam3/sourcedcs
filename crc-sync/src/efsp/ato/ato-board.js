@@ -527,7 +527,7 @@ function executeImport({ analysis, plan, boardStore, fdrStore, clientMutationId,
 }
 
 module.exports = {
-  ATO_IMPORT_ORIGIN, MAX_ATO_TEXT_BYTES, SEED_PATH_OF,
-  analyseAto, previewAto, planImport, bindCandidatesFor, atoTaskingFor, arLinksByLine, executeImport,
-  atoDateShift, redateAtoTime, redateDeep, isAssignableModeThree, sha1,
+  ATO_IMPORT_ORIGIN, MAX_ATO_TEXT_BYTES,
+  analyseAto, previewAto, planImport, bindCandidatesFor, executeImport,
+  atoDateShift, redateAtoTime, redateDeep, sha1,
 };

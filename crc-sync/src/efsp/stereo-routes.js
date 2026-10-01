@@ -217,5 +217,5 @@ function setStereoRoutes(next) {
 module.exports = {
   getStereoRoutes, getActiveStereoRoutes, resolveStereoRoute, toFdrFiledSeed,
   setStereoRoutes, validateStereoRoutes, normalizeStereoName,
-  STEREO_ROUTES_PATH, MAX_FREE_TEXT,
+  MAX_FREE_TEXT,
 };

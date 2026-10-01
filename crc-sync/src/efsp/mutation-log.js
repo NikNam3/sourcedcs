@@ -207,4 +207,4 @@ class MutationLog {
   }
 }
 
-module.exports = { MutationLog, MUTATION_LOG_PATH, utcDay };
+module.exports = { MutationLog, MUTATION_LOG_PATH, };

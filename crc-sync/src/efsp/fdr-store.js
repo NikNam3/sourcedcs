@@ -26,7 +26,7 @@ const { isValidFrequency, MIN_FREQUENCY_MHZ, MAX_FREQUENCY_MHZ } = require('./ai
 // board-store.js's _applyCreateStrip instead would mean any second creation
 // path — or a test constructing an FdrStore directly — silently skips it.
 const stereoRoutes = require('./stereo-routes');
-const { resolveZuluHhmm, resolveZuluHhmmAfter, formatZuluHhmm } = require('./zulu-time');
+const { resolveZuluHhmm, resolveTypedTime, formatZuluHhmm } = require('./zulu-time');
 const { setCarrierFlightField } = require('./carrier/flight-record');
 const { WALL_CLOCK } = require('../mission-clock');
 const { DEFAULT_TRANSITION_ALT_FT } = require('../theaters');
@@ -402,16 +402,9 @@ const WINDOW_END_OF = { 'mission.vulWindowEndUtc': 'mission.vulWindowStartUtc' }
  * Returns { ok: true, value } (epoch ms or null) or { ok: false, detail }.
  */
 function normalizeTypedTime(path, value, nowMs, startMs = null) {
-  if (typeof value === 'number' && Number.isFinite(value)) return { ok: true, value };
-  const text = value == null ? '' : String(value).trim();
-  if (text === '') return { ok: true, value: null };
-  const ms = WINDOW_END_OF[path] && Number.isFinite(startMs)
-    ? resolveZuluHhmmAfter(text, startMs)
-    : resolveZuluHhmm(text, nowMs);
-  if (ms == null) {
-    return { ok: false, detail: `${TYPED_TIME_LABELS[path]} must be a UTC time as HHMM, e.g. 1432` };
-  }
-  return { ok: true, value: ms };
+  const r = resolveTypedTime(value, nowMs, WINDOW_END_OF[path] ? startMs : null);
+  if (!r.ok) return { ok: false, detail: `${TYPED_TIME_LABELS[path]} must be a UTC time as HHMM, e.g. 1432` };
+  return r;
 }
 
 // §9.4 MTR fields (docs/adr/0062). What each military.mtr.* path accepts.
@@ -1418,10 +1411,10 @@ class FdrStore {
 }
 
 module.exports = {
-  FdrStore, deriveEquipmentSuffix, WRITABLE_PATHS, RELEASE_STATES, VOID_DEADLINE_MINUTES,
+  FdrStore, deriveEquipmentSuffix, WRITABLE_PATHS, VOID_DEADLINE_MINUTES,
   EDCT_WINDOW_MINUTES, CALL_FOR_RELEASE_BEFORE_MINUTES, CALL_FOR_RELEASE_AFTER_MINUTES,
   TRACK_DEGRADATION_FLAGS, AIRSPACE_OWNERS, RADAR_SERVICE_STATES, SEPARATION_REGIMES, MAX_FREE_TEXT,
   ORDNANCE_STATES, ALERT_STATUSES, MILITARY_WRITABLE_FIELDS, defaultMilitary,
-  CLEARANCE_FIELDS, defaultClearance, ensureClearance, parseAltitudeFt, parseAltitude, formatAltitudeBlock, parseHeadingDeg, activeClearanceEntry,
+  ensureClearance, parseAltitudeFt, parseAltitude, formatAltitudeBlock, parseHeadingDeg, activeClearanceEntry,
   normalizeMtrValue,
 };

@@ -232,4 +232,4 @@ function parseColumnar(set, body, firstLine, warnings) {
   set.fields = [];
 }
 
-module.exports = { tokenize, makeField, MAX_INPUT_BYTES, MAX_FREE_TEXT, FREE_TEXT_SETS, KNOWN_SET_NAMES };
+module.exports = { tokenize, MAX_INPUT_BYTES, MAX_FREE_TEXT, };

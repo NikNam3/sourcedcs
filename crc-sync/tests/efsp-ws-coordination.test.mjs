@@ -177,7 +177,7 @@ test('efsp-resync is facility-scoped — resyncing CENTER never returns INCIRLIK
   }, noopPersist);
 
   const centerSnapshot = handleMessage(ctx, CTR_SESSION, { type: 'efsp-resync', facilityId: 'CENTER', lastBoardSeq: -999999 }, noopPersist);
-  assert.equal(centerSnapshot.ack.type, 'efsp-snapshot');
+  assert.equal(centerSnapshot.ack.answer, 'snapshot');
   // The snapshot itself is global (both Facilities, guide §4.8.5's "one
   // client can act across both Boards") — but the STRIPS in it are
   // correctly facility-stamped, and the CENTER-scoped ones are the ones
@@ -227,7 +227,7 @@ test('a resync-within-window delta also stamps facilityId on every updated Strip
   handleMessage(ctx, CTR_SESSION, createCtrStripMsg(), noopPersist);
 
   const result = handleMessage(ctx, CTR_SESSION, { type: 'efsp-resync', facilityId: 'CENTER', lastBoardSeq: before, boardEpoch: ctx.boardStoreFor('CENTER').epoch }, noopPersist);
-  assert.equal(result.ack.type, 'efsp-board-delta');
+  assert.equal(result.ack.answer, 'delta');
   assert.equal(result.ack.strips.updated.length, 1);
   assert.equal(result.ack.strips.updated[0].facilityId, 'CENTER');
 });

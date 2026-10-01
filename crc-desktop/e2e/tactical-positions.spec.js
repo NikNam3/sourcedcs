@@ -10,7 +10,7 @@
  */
 
 const path = require('path');
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./helpers/test');
 const { openPanel, startAction, stripMenuItem } = require('./helpers/app');
 
 /** A mission line's callsign is not in Block 1 (that is the ATC Strips'), so find the Strip by its text. */
@@ -18,6 +18,10 @@ const stripByCallsign = (page, callsign) => page.locator('.efsp-strip', { hasTex
 
 const SHOTS = path.join(__dirname, '../../docs/wip/L23');
 test.use({ viewport: { width: 1400, height: 900 } });
+// Each test opens two or three browser contexts and walks a flight through several states; every wait
+// in it is on state (waitStrip / expect.poll), so the only time limit that can bite is the test's own,
+// which sat at 19-21 s of 20 under load (docs/wip/E2EH.md).
+test.describe.configure({ timeout: 90000 });
 
 let seq = 0;
 const cs = (prefix) => `${prefix}${(Date.now() + seq++) % 10000}`;

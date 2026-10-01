@@ -163,5 +163,4 @@ async function listFiledFlightPlans(opts = {}) {
 
 module.exports = {
   lookupFlightPlan, toFdrFiledSeed, listFiledFlightPlans,
-  SOURCEDCS_WEB_URL, LOOKUP_TIMEOUT_MS,
 };

@@ -221,9 +221,11 @@ test('an OWNED session\'s resync is always a snapshot, even with a valid epoch a
   w.send(jt, { type: 'efsp-resync', facilityId: 'TACTICAL', lastBoardSeq: seq, boardEpoch: board.epoch });
   w.send(tc, { type: 'efsp-resync', facilityId: 'TACTICAL', lastBoardSeq: seq, boardEpoch: board.epoch });
   const jr = jt.ws.sent[0];
-  assert.equal(jr.type, 'efsp-snapshot');
+  assert.equal(jr.type, 'efsp-resync-reply');
+  assert.equal(jr.answer, 'snapshot');
   assert.deepEqual(jr.strips.map(s => s.stripId), [w.handed.stripId]);
-  assert.equal(tc.ws.sent[0].type, 'efsp-board-delta');
+  assert.equal(tc.ws.sent[0].type, 'efsp-resync-reply');
+  assert.equal(tc.ws.sent[0].answer, 'delta');
 });
 
 test('a line handed to the JTAC after it connected arrives with its FDR, and its correlation and MARSA records', () => {

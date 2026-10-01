@@ -196,7 +196,9 @@ test('every efsp-board-delta carries boardEpoch', () => {
 
   for (const [name, msg, fid] of cases) {
     assert.ok(msg, `${name}: no message`);
-    assert.equal(msg.type, 'efsp-board-delta', name);
+    // a resync's delta travels as an efsp-resync-reply (R3-47) tagged answer: 'delta'
+    if (msg.type === 'efsp-resync-reply') assert.equal(msg.answer, 'delta', name);
+    else assert.equal(msg.type, 'efsp-board-delta', name);
     assert.equal(msg.boardEpoch, epochOf(fid), `${name} carries its Board's epoch`);
   }
   const snap = efsp.snapshotFor();

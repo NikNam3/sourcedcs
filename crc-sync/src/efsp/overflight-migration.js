@@ -27,4 +27,4 @@ function migrateOverflightStates(strips) {
   return mapped;
 }
 
-module.exports = { LEGACY_OVERFLIGHT_STATE, migrateOverflightStates };
+module.exports = { migrateOverflightStates };

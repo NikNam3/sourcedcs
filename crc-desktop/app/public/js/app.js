@@ -485,12 +485,19 @@ async function connect() {
   _ws = ws;
   _setSyncSocket(ws);
 
-  ws.onopen = () => console.log('[ws] connected to crc-sync');
+  // No resync on reconnect (R3-47): the server sends a full snapshot on every connect,
+  // which is the recovery. Resync is for a Board epoch change and a missed delta only.
+  ws.onopen = () => {
+    console.log('[ws] connected to crc-sync');
+  };
 
   ws.onmessage = (e) => {
     let msg;
     try { msg = JSON.parse(e.data); } catch (_) { return; }
+    onSyncMessage(msg);
+  };
 
+  const onSyncMessage = (msg) => {
     switch (msg.type) {
       case 'weather':
         weather = { pressurePa: msg.pressurePa, tempK: msg.tempK };
@@ -592,6 +599,7 @@ async function connect() {
       // board-broadcast.md — the guide's <200ms remote-change budget).
       case 'efsp-snapshot':
         applyEfspSnapshot(msg);
+        if (typeof noteEfspSnapshotLanded === 'function') noteEfspSnapshotLanded();
         if (typeof refreshEfspPanel === 'function') refreshEfspPanel();
         // §9.10's route table is fetched over HTTP, not carried on the
         // snapshot — but a snapshot is the one event that means crc-sync may
@@ -626,12 +634,20 @@ async function connect() {
           });
         }
         break;
+      // The answer to this client's efsp-resync (docs/adr/0081, S-12): a snapshot or a
+      // delta, tagged. Unwrapped into the message it carries, so one code path applies it.
+      case 'efsp-resync-reply':
+        onSyncMessage(efspResyncReplyAsMessage(msg));
+        break;
       case 'efsp-board-delta': {
         // Where the changed Strips sat BEFORE this delta, so the panel can
         // tell a Strip that just arrived in one of this controller's Bays
         // from one that merely changed (efsp-arrivals.js, docs/adr/0057).
         const placementBefore = typeof captureEfspPlacement === 'function' ? captureEfspPlacement(msg, getEfspStrip) : null;
+        // A delta from another Board lifetime asks for a resync (answered with a snapshot).
+        if (typeof noteEfspBoardMessageForSync === 'function') noteEfspBoardMessageForSync(msg);
         applyEfspDelta(msg);
+        if (typeof noteEfspResyncAnswered === 'function' && !efspEpochChangeOf(msg)) noteEfspResyncAnswered(msg.facilityId || getEfspFacility());
         if (placementBefore && typeof noteEfspBoardArrivals === 'function') noteEfspBoardArrivals(msg, placementBefore);
         if (typeof refreshEfspPanel === 'function') refreshEfspPanel();
         if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
@@ -643,6 +659,7 @@ async function connect() {
       // rule 5). See efsp-panel.js's staleness interval.
       case 'efsp-heartbeat':
         if (typeof noteEfspHeartbeat === 'function') noteEfspHeartbeat();
+        if (typeof noteEfspHeartbeatForSync === 'function') noteEfspHeartbeatForSync(msg);
         break;
       case 'efsp-mutation-ack': {
         // This controller's own move can land here BEFORE the board delta that
@@ -651,6 +668,7 @@ async function connect() {
         // the two comes second sees no Bay change and adds nothing.
         const ackAsDelta = { strips: { updated: msg.strip ? [msg.strip] : [] } };
         const ackPlacementBefore = typeof captureEfspPlacement === 'function' ? captureEfspPlacement(ackAsDelta, getEfspStrip) : null;
+        if (typeof noteEfspBoardMessageForSync === 'function') noteEfspBoardMessageForSync(msg);
         const result = applyEfspMutationAck(msg);
         if (ackPlacementBefore && typeof noteEfspBoardArrivals === 'function') {
           noteEfspBoardArrivals(ackAsDelta, ackPlacementBefore);

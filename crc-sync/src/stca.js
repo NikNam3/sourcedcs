@@ -146,4 +146,4 @@ class StcaMonitor {
   }
 }
 
-module.exports = { predictConflict, findConflicts, StcaMonitor, isEligible };
+module.exports = { findConflicts, StcaMonitor, isEligible };

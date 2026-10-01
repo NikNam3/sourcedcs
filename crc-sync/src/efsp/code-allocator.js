@@ -137,5 +137,5 @@ class CodeAllocator {
 
 module.exports = {
   CodeAllocator, isReserved, isMonitorSet, isValidCodeFormat, isSynthetic,
-  RESERVED_CODES, MONITOR_SET, SYNTHETIC_BLOCK_START, SYNTHETIC_BLOCK_SIZE,
+  RESERVED_CODES, SYNTHETIC_BLOCK_START, SYNTHETIC_BLOCK_SIZE,
 };

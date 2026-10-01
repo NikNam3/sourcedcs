@@ -158,4 +158,4 @@ function labelPart(wire) {
   return { id: wire.id, iffState: wire.iffState, iffOverride: wire.iffOverride, label: wire.label, type: wire.type };
 }
 
-module.exports = { presentTrack, labelPart, domainOf, schemeOf, WIRE_KEYS, SCHEME_HOLD_SWEEPS };
+module.exports = { presentTrack, labelPart, schemeOf, WIRE_KEYS, SCHEME_HOLD_SWEEPS };

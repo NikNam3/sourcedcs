@@ -60,4 +60,4 @@ function debouncedPhase(mem, instant, now, cfg) {
   return { phase: instant, since: mem.since };
 }
 
-module.exports = { PHASES, instantPhase, debouncedPhase, footprintElevationM, FOOTPRINT_M };
+module.exports = { PHASES, instantPhase, debouncedPhase, };

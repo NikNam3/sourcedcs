@@ -58,4 +58,4 @@ function migrateClearanceAnnotations(strips, getFdr) {
   return moved;
 }
 
-module.exports = { CLEARANCE_BLOCKS_BY_ROLE, migrateClearanceAnnotations };
+module.exports = { migrateClearanceAnnotations };

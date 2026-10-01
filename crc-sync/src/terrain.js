@@ -473,5 +473,5 @@ module.exports = {
   losSightLineHeightM, losProfileBlocked,
   decodePng, decodeTerrainTile, lonLatToTile, bearingDeg, projectPos, bilinear,
   EFFECTIVE_EARTH_RADIUS_M, LOS_SAMPLE_COUNT, LOS_DEM_ZOOM,
-  TILE_SIZE, GRID_STRIDE, GRID_N, CACHE_DIR, PREWARM_MAX_TILES,
+  TILE_SIZE, GRID_STRIDE, GRID_N, PREWARM_MAX_TILES,
 };

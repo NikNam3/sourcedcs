@@ -76,10 +76,11 @@ test('what a controller does is measured and shown on METRICS', async ({ page })
   await expect(missionCell(page, 'timeToFind').locator('.metrics-verdict')).toHaveText('MET');
   await expect(missionCell(page, 'gestureInputs').locator('.metrics-value')).toContainText('FLIP 1.0 (1)');
   await expect(missionCell(page, 'gestureInputs').locator('.metrics-verdict')).toHaveText('MET');
-  // L19 instruments staleness, so the cell no longer says 'not instrumented (L19)'; a run with no
-  // contradicting Strip reads 'nothing in this window'.
+  // L19 declared the staleness source: a fresh crc-sync has no stale contact in the window, so NO DATA
+  // (the old assertion, "not instrumented (L19)", predates the L19 merge and only ever passed on a
+  // source that was not declared yet).
   await expect(missionCell(page, 'staleness').locator('.metrics-value')).toHaveText('nothing in this window');
-  await expect(missionCell(page, 'staleness').locator('.metrics-verdict')).not.toHaveText('NOT INSTRUMENTED');
+  await expect(missionCell(page, 'staleness').locator('.metrics-verdict')).toHaveText('NO DATA');
   await expect(page.locator('#metrics-panel .metrics-reconciliation')).toContainText('reconciles with the Mutation log ✓');
   // The traffic count is the Board's for the whole run, and earlier spec files fly real departures
   // (alert-scramble takes VIPER11 airborne), so "= 0 flights" is not this spec's to assert. What it

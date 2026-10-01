@@ -209,6 +209,7 @@ const RUNWAY_GATED_STATES = Object.freeze({
 // phrase style, naming the runway and what is wrong with it.
 const SUSPENSION_LABELS = {
   WORKS: 'works in progress',
+  RUNWAY_CHANGE: 'runway change in progress',
 };
 
 /** The inhibit reason a runway's status produces, or null when it is usable. */
@@ -444,8 +445,8 @@ function hungOrdnanceAdvisoryFor(strip, fdr, fieldState) {
 
 module.exports = {
   RUNWAY_STATUSES, LEGAL_TRANSITIONS, canGo, SUSPENSION_KINDS, SUSPENSION_LABELS,
-  GEAR_TYPES, GEAR_POSITIONS, GEAR_STATES,
-  RUNWAY_CHANGE_STATES, RUNWAY_CHANGE_OPEN_STATES, isRunwayChangeInProgress, isRunwayChangeOpen,
+  GEAR_TYPES,
+  isRunwayChangeInProgress, isRunwayChangeOpen,
   REQUEST_ACTIONS,
   RUNWAY_GATED_STATES, normalizeRunwayEnd, buildStatusView, resolveRunwayForStrip, runwayStatusReason, runwayInhibitFor,
   runwayAdvisoryFor, runwayRackFor, activeEndIntoWind,

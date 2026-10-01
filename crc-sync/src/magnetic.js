@@ -221,7 +221,7 @@ function magneticToTrue(magDeg, variationDeg) {
 }
 
 module.exports = {
-  parseCof, wmmModel, wmmField, decimalYear, modelDateValid,
+  wmmModel, wmmField, decimalYear, modelDateValid,
   variationAt, variationSource, convergenceAt,
   trueToMagnetic, magneticToTrue, normDeg,
   COF_PATH,

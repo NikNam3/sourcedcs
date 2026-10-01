@@ -152,6 +152,7 @@ class BoardStore {
    * @param {import('./fdr-store').FdrStore} fdrStore
    * @param {object} rules
    * @param {(blockId:string, role:string) => {kind:'fdr',path:string}|{kind:'annotation'}|null} rules.resolveBlockTarget
+   * @param {(bayId:string) => string|null} [rules.bayHoldsRole] the Role a Bay is reserved for (docs/adr/0087), or null
    * @param {(bayId:string) => string|null} [rules.bayImpliesState]
    * @param {(positionId:string, state:string) => {bayId:string,rackIds:string[]}|null} [rules.bayForImpliedState]
    * @param {(strip:object, fdr:object, now:number, ctx:object) => {toState:string,transferTo?:string}|{inhibited:string}|null} rules.computeNla
@@ -497,7 +498,7 @@ class BoardStore {
       case 'SetBlock':      result = this._applySetBlock(strip, op, by, actingPositionId, mutation.clientMutationId); break;
       case 'TransferStrip': result = this._applyTransferStrip(strip, op, by); break;
       case 'SetFlag':       result = this._applySetFlag(strip, op, by); break;
-      case 'SetState':      result = this._setStateOwnerRefusal(strip, op.toState, actingPositionId) || this._setStateRunwayRefusal(strip, op.toState) || this._applySetStateOp(strip, op.toState, by); break;
+      case 'SetState':      result = this._applySetStateGated(strip, op, actingPositionId, by); break;
       case 'InvokeNla':     result = this._applyInvokeNla(strip, by); break;
       case 'Undo':          result = this._applyUndo(strip, by); break;
       case 'DropStrip':     result = this._applyDropStrip(strip, op, by); break;
@@ -610,6 +611,9 @@ class BoardStore {
       // The SFA rotation transfer and its trigger type (guide §4.7).
       sfaTransfer: result.sfaTransfer ? result.sfaTransfer.kind : undefined,
       sfaTrigger: result.sfaTransfer ? result.sfaTransfer.trigger : undefined,
+      // A gate this Mutation was let past, and why (S-L19 open point, decided in
+      // docs/wip/UI-B.md). Undefined, so absent from the line, otherwise.
+      bypass: result.bypass,
     });
   }
 
@@ -1041,6 +1045,44 @@ class BoardStore {
   }
 
   /**
+   * SetState: owner check, then the runway inhibit, then the write. The one
+   * exception to H19's "the Strip waits" is an OBSERVED departure
+   * (`op.observedAirborne`, set only by the surveillance chip): the aircraft is
+   * already off the ground, so refusing the record would only make the Board
+   * wrong. It bypasses the RUNWAY gate alone (never the owner check), only for a
+   * DEPARTURE going to DEPARTED, only when the server's own surveillance agrees
+   * (`setAirborneObserver`: the client's flag is a claim, never evidence), and
+   * the audit line carries `bypass` with the reason. A typed SetState has no
+   * flag and is refused as before.
+   */
+  _applySetStateGated(strip, op, actingPositionId, by) {
+    const owner = this._setStateOwnerRefusal(strip, op.toState, actingPositionId);
+    if (owner) return owner;
+    let refusal = this._setStateRunwayRefusal(strip, op.toState);
+    let bypass = null;
+    if (refusal && this._observedDeparture(strip, op)) {
+      bypass = { gate: 'RUNWAY_INHIBIT', inhibit: refusal.detail, reason: 'OBSERVED_AIRBORNE' };
+      refusal = null;
+    }
+    if (refusal) return refusal;
+    const result = this._applySetStateOp(strip, op.toState, by);
+    if (bypass && result.ok) result.bypass = bypass;
+    return result;
+  }
+
+  _observedDeparture(strip, op) {
+    return op.observedAirborne === true && strip.role === 'DEPARTURE' && op.toState === 'DEPARTED'
+      && typeof this._airborneObserver === 'function' && this._airborneObserver(strip) === true;
+  }
+
+  /**
+   * Who vouches that a Strip's aircraft is observed airborne (L19's hint
+   * monitor: a standing AIRBORNE_ADVANCE hint for the Strip). Unset, no
+   * SetState is ever let past the runway gate.
+   */
+  setAirborneObserver(fn) { this._airborneObserver = fn; }
+
+  /**
    * SetState honours the runway inhibit (decisions.md S-R2-14, H19): the raw
    * state override may not put a Strip into a runway-using state while its
    * runway is suspended or closed — the Strip waits, whichever path is used.
@@ -1069,6 +1111,11 @@ class BoardStore {
   }
 
   _validateBayImpliedTransition(strip, targetBayId, targetRackId) {
+    // A Role Bay (`holdsRole`, docs/adr/0087) takes only its own Role's Strips.
+    const holds = this._rules.bayHoldsRole ? this._rules.bayHoldsRole(targetBayId) : null;
+    if (holds && holds !== strip.role) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `${targetBayId} holds ${holds} Strips only; a ${strip.role} Strip cannot be placed there` };
+    }
     const roleBay = this._roleBayFor(strip);
     if (roleBay) {
       // Another Role's state-implying Bay is not somewhere this Role goes.
@@ -1660,7 +1707,9 @@ class BoardStore {
     const bays = this._rules.baysFor ? this._rules.baysFor(positionId) : [];
     const roleBay = strip ? bays.find(b => b.holdsRole === strip.role) : null;
     if (roleBay) return { bayId: roleBay.bayId, rackId: this._placementRack(strip, roleBay) };
-    const bay = bays.find(b => b.impliesState === state) || bays.find(b => !b.impliesState) || null;
+    // Never another Role's Bay (`holdsRole`, docs/adr/0087): a Role Bay implies no state, so the
+    // "first Bay implying none" fallback used to pick app-overflight for a DEPARTURE.
+    const bay = bays.find(b => b.impliesState === state) || bays.find(b => !b.impliesState && !b.holdsRole) || null;
     if (!bay) return null;
     return { bayId: bay.bayId, rackId: strip ? this._placementRack(strip, bay) : bay.rackIds[0] };
   }

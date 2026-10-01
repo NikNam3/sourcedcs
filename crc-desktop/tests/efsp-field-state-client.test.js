@@ -605,3 +605,12 @@ test('fieldStateSignatureFor changes when the runway does, so bay-view.js rebuil
     delete global.getEfspFdr;
   }
 });
+
+test('a RUNWAY_CHANGE suspension reads "runway change in progress", the same words as the server', () => {
+  for (const kind of ['WORKS', 'RUNWAY_CHANGE', undefined]) {
+    const rw = { runwayId: '05/23', status: 'SUSPENDED_WORKS', suspension: kind ? { kind } : null };
+    assert.equal(rules.runwayStatusReasonFor(rw), serverFieldState.runwayStatusReason(rw), String(kind));
+  }
+  assert.equal(rules.runwayStatusReasonFor({ runwayId: '05/23', status: 'SUSPENDED_WORKS', suspension: { kind: 'RUNWAY_CHANGE' } }),
+    'runway 05/23 suspended — runway change in progress');
+});

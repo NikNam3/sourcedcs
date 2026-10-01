@@ -265,4 +265,4 @@ function parseStructure(text, opts = {}) {
   return doc;
 }
 
-module.exports = { parseStructure, MISSION_SETS, KNOWN_UNMAPPED, LOCATION_SETS, SINGLE_PER_MISSION };
+module.exports = { parseStructure, };

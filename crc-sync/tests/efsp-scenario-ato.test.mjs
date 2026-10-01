@@ -366,3 +366,15 @@ test('the ATO\'s squawk is taken: the duplicate is adopted with a warning, never
   assert.equal(res.beacon.adopted, true);
   assert.equal(res.beacon.warning, 'DUPLICATE_IGNORED_WARNING');
 });
+
+// R3-73: every efsp-board-delta carries the Board's epoch (docs/adr/0081), the ATO import's too:
+// without it a client can never tell the delta came from another Board lifetime.
+test('the ATO import\'s ack and board-delta broadcast carry the Board epoch', () => {
+  const { efsp, c } = fresh();
+  const { ack, res } = importAto(efsp, c);
+  const epoch = efsp.boardStoreFor('TACTICAL').epoch;
+  assert.ok(epoch, 'the Board has an epoch');
+  assert.equal(ack.boardEpoch, epoch);
+  assert.equal(res.broadcast.type, 'efsp-board-delta');
+  assert.equal(res.broadcast.boardEpoch, epoch);
+});
