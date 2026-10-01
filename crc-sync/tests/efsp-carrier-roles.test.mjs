@@ -144,7 +144,10 @@ test('the NLA tables: Commence is Case- and lane-dependent; one next action per 
   assert.equal(caseI.roleChange, 'PATTERN');
   assert.equal(nla.computeNla(strip('MARSHAL', 'IN_STACK'), null, NOW, ctx('I', 'CV_APP1', false)).inhibited, 'no receiving Position present');
   assert.equal(nla.computeNla(strip('MARSHAL', 'COMMENCED'), null, NOW, ctx('III')).roleChange, 'FINAL');
-  assert.equal(nla.computeNla(strip('FINAL', 'ON_FINAL'), null, NOW, {}).carrierTransfer, 'FINAL_TO_LSO');
+  assert.equal(nla.computeNla(strip('FINAL', 'ON_FINAL'), null, NOW, { facilityId: 'CARRIER' }).carrierTransfer, 'FINAL_TO_LSO');
+  // PAR's "Landing assured" is the same state change with no carrier hand-over (ADR 0075).
+  assert.equal(nla.computeNla(strip('FINAL', 'ON_FINAL'), null, NOW, { facilityId: 'INCIRLIK' }).carrierTransfer, undefined);
+  assert.equal(nla.computeNla(strip('FINAL', 'ON_FINAL'), null, NOW, { facilityId: 'INCIRLIK' }).toState, 'BALL');
   assert.deepEqual(nla.computeNla(strip('FINAL', 'BALL'), null, NOW, {}).toState, 'DROPPED');
   assert.equal(nla.computeNla(strip('PATTERN', 'IN_PATTERN'), null, NOW, {}).toState, 'RECOVERED');
   assert.equal(nla.computeNla(strip('MARSHAL', 'LAUNCH'), null, NOW, {}).toState, 'DROPPED');

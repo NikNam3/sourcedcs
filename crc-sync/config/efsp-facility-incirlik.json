@@ -5,12 +5,17 @@
     "CD",
     "GND",
     "TWR",
-    "APP"
+    "RSU",
+    "APP",
+    "SFA",
+    "PAR"
   ],
   "coveringChain": {
     "CD": "GND",
     "GND": "TWR",
-    "TWR": "APP"
+    "TWR": "APP",
+    "SFA": "APP",
+    "PAR": "APP"
   },
   "bays": {
     "OPS": [
@@ -142,6 +147,19 @@
         ]
       }
     ],
+    "RSU": [
+      {
+        "bayId": "rsu-pattern",
+        "rackIds": [
+          "closed",
+          "initial",
+          "base",
+          "final"
+        ],
+        "impliesState": "IN_PATTERN",
+        "view": "pattern"
+      }
+    ],
     "APP": [
       {
         "bayId": "app-inbound",
@@ -169,6 +187,38 @@
         "rackIds": [
           "main"
         ]
+      }
+    ],
+    "SFA": [
+      {
+        "bayId": "sfa-frequencies",
+        "rackIds": [
+          "freq-1",
+          "freq-2",
+          "freq-3",
+          "freq-4",
+          "freq-5"
+        ],
+        "impliesState": "INBOUND",
+        "view": "sfa-freqs"
+      }
+    ],
+    "PAR": [
+      {
+        "bayId": "par-final",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "ON_FINAL",
+        "view": "final",
+        "capacity": 1
+      },
+      {
+        "bayId": "par-missed",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "BOLTER_WAVEOFF"
       }
     ]
   },

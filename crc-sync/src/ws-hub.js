@@ -618,10 +618,12 @@ class WsHub {
         if (result.marsaBroadcast) this._broadcastEfsp(result.marsaBroadcast);
         // docs/adr/0074 — the carrier's Case, stack or banner: one delta carrying the whole hull record.
         if (result.carrierBroadcast) this._broadcastEfsp(result.carrierBroadcast);
+        // docs/adr/0093 — the SFA rotation record: one delta carrying the whole record.
+        if (result.sfaBroadcast) this._broadcastEfsp(result.sfaBroadcast);
         // After the broadcasts, so a client sees the Strip change before the
         // alert change. Guarded: a monitor bug must never cost the sender's
         // round trip.
-        if (this._onEfspChange && (result.broadcast || result.peerBroadcast || result.marsaBroadcast || result.carrierBroadcast)) {
+        if (this._onEfspChange && (result.broadcast || result.peerBroadcast || result.marsaBroadcast || result.carrierBroadcast || result.sfaBroadcast)) {
           try { this._onEfspChange(); } catch (err) { console.error('[crc-sync] onEfspChange failed:', err); }
         }
         // Declaring a different held set is what changes a controller's

@@ -424,7 +424,8 @@ test('FIELD_STATE_OP_OWNERS: TWR alone closes, opens and suspends; OPS completes
   assert.deepEqual(FIELD_STATE_OP_OWNERS.AckRunwayChange, ['OPS', 'APP']);
   assert.deepEqual(FIELD_STATE_OP_OWNERS.RejectRunwayChange, ['OPS', 'APP']);
   // Everyone at the field but tower ASKS (decisions.md H18).
-  assert.deepEqual(FIELD_STATE_OP_OWNERS.RequestRunwayStatus, ['OPS', 'CD', 'GND', 'APP']);
+  // RSU asks too (L18, ADR 0075) but, like everyone, never closes or opens.
+  assert.deepEqual(FIELD_STATE_OP_OWNERS.RequestRunwayStatus, ['OPS', 'CD', 'GND', 'APP', 'RSU']);
 });
 
 test('a range Position, an MRU, CTR and an unknown Position are refused every field-state op', () => {

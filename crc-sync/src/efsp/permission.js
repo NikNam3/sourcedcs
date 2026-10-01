@@ -259,6 +259,82 @@ const CREATE_ROLE_PERMISSIONS = {
   // converted to by a carrier transfer, so no Position may CreateStrip them.
   CV_MARSHAL: new Set(['MARSHAL']),
 };
+// RSU, SFA and PAR: derived from INCIRLIK_CAPABILITIES' `createsRoles` column (below).
+
+// Incirlik's radar-approach and visual-pattern Positions (docs/adr/0075, L18):
+// RSU, SFA and PAR, plus APP's two new columns. ONE table, one row per Position,
+// one column per capability (the shape docs/adr/0080 gave the tactical Positions
+// and L17 the carrier), and every grant below is DERIVED from it, so no Position
+// name is repeated in a second table. Static (P5): read at load, never written.
+//
+//  ops                 the Strip op kinds the Position holds. Literals over
+//                      NON_CREATE_OPS, never a `.filter()` of OP_KINDS (this
+//                      module's header: the maximally-permissive trap). None of
+//                      them gets a coordination primitive, TOFI, ConvertToArrival
+//                      or an airspace-entry op: they sit inside one Facility.
+//  createsRoles        the Strip Roles it may originate via CreateStrip. Nothing
+//                      here is a Role a hand-over would reach it with: only RSU
+//                      originates (a PATTERN Strip for an aircraft it watches join
+//                      the pattern, [SOURCE-DEFINED]); SFA's arrive from APP and
+//                      PAR's by the SFA rotation.
+//  ownsStates          { Role: [states] } this Position works (the "normally owned
+//                      by" authority, §3.4), merged into STATE_OWNERS_BY_ROLE.
+//  requestsRunwayStatus  may SEND RequestRunwayStatus (kinds CLOSE, OPEN,
+//                      BARRIER_CHANGE). RSU asks; only TWR closes or opens a
+//                      runway (decisions.md H18, S-L1b), so no column here grants
+//                      CloseRunway, OpenRunway or any other FIELD_STATE_OP_OWNERS row.
+//  rotatesSfa          the CEILING on who may change the SFA rotation record (guide
+//                      §4.7: APP "retains jurisdiction over the rotation"). The
+//                      store narrows it to config's `singleFrequencyApproach.
+//                      jurisdiction`, never widens it, as CompleteInspection's
+//                      inspectionAuthorityPositionId does.
+//  sendsSfaRotation    may send the SFA_ROTATION transfer (ARRIVAL at the Position
+//                      -> FINAL at the receiver)
+//  receivesSfaRotation the Position an SFA_ROTATION lands on
+const INCIRLIK_CAPABILITIES = {
+  APP: { // APP's own op grant is above; these are the columns L18 adds to it
+    ops: null, createsRoles: null, ownsStates: {},
+    requestsRunwayStatus: true, rotatesSfa: true, sendsSfaRotation: true, receivesSfaRotation: false,
+  },
+  RSU: {
+    ops: [...NON_CREATE_OPS, 'CreateStrip'],
+    createsRoles: ['PATTERN'],
+    ownsStates: { PATTERN: ['IN_PATTERN', 'RECOVERED'] },
+    requestsRunwayStatus: true, rotatesSfa: false, sendsSfaRotation: false, receivesSfaRotation: false,
+  },
+  SFA: {
+    ops: [...NON_CREATE_OPS],
+    createsRoles: [],
+    ownsStates: { ARRIVAL: ['INBOUND'] },
+    requestsRunwayStatus: false, rotatesSfa: false, sendsSfaRotation: true, receivesSfaRotation: false,
+  },
+  PAR: {
+    ops: [...NON_CREATE_OPS],
+    createsRoles: [],
+    ownsStates: { FINAL: ['ON_FINAL', 'BALL', 'BOLTER_WAVEOFF'] },
+    requestsRunwayStatus: false, rotatesSfa: false, sendsSfaRotation: false, receivesSfaRotation: true,
+  },
+};
+
+for (const [positionId, row] of Object.entries(INCIRLIK_CAPABILITIES)) {
+  if (row.ops) PERMISSIONS[positionId] = new Set(row.ops);
+  if (row.createsRoles && row.createsRoles.length) CREATE_ROLE_PERMISSIONS[positionId] = new Set(row.createsRoles);
+}
+
+function _incirlikCap(positionId, key) {
+  return Object.prototype.hasOwnProperty.call(INCIRLIK_CAPABILITIES, positionId) && INCIRLIK_CAPABILITIES[positionId][key] === true;
+}
+/** Positions holding a boolean column of INCIRLIK_CAPABILITIES, in table order. */
+function incirlikPositionsWith(key) {
+  return Object.keys(INCIRLIK_CAPABILITIES).filter(p => INCIRLIK_CAPABILITIES[p][key] === true);
+}
+/** May this Position change the SFA rotation record? Only a CEILING: sfa-store.js narrows it to config's jurisdiction. */
+function canRotateSfa(actingPositionId) { return _incirlikCap(actingPositionId, 'rotatesSfa'); }
+/** May this Position send the SFA_ROTATION transfer (D21: one acting Position)? */
+function canSendSfaRotationTransfer(actingPositionId) { return _incirlikCap(actingPositionId, 'sendsSfaRotation'); }
+/** The Position an SFA_ROTATION lands on, or null. */
+function sfaRotationReceiver() { return incirlikPositionsWith('receivesSfaRotation')[0] || null; }
+
 
 /**
  * @param {string} actingPositionId — exactly one Position; never a set
@@ -380,7 +456,7 @@ const FIELD_STATE_OP_OWNERS = {
   BeginRunwayWorks:           ['TWR'],
   CompleteRunwayWorks:        ['OPS'],
   CompleteInspection:         ['OPS'],
-  RequestRunwayStatus:        ['OPS', 'CD', 'GND', 'APP'],
+  RequestRunwayStatus:        ['OPS', 'CD', 'GND'], // plus every Position with INCIRLIK_CAPABILITIES' requestsRunwayStatus (below): APP, RSU
   AcceptRunwayRequest:        ['TWR'],
   RejectRunwayRequest:        ['TWR'],
   ProposeRunwayChange:        ['TWR'],
@@ -391,6 +467,8 @@ const FIELD_STATE_OP_OWNERS = {
   AckRunwayChange:            ['OPS', 'APP'],
   RejectRunwayChange:         ['OPS', 'APP'],
 };
+
+FIELD_STATE_OP_OWNERS.RequestRunwayStatus = [...FIELD_STATE_OP_OWNERS.RequestRunwayStatus, ...incirlikPositionsWith('requestsRunwayStatus')];
 
 /**
  * Exactly two parameters: ONE acting Position, never a held set — D21 by
@@ -592,6 +670,19 @@ const STATE_OWNERS_BY_ROLE = {
   MARSHAL: MARSHAL_STATE_OWNERS, FINAL: FINAL_STATE_OWNERS, PATTERN: PATTERN_STATE_OWNERS,
 };
 
+// RSU, SFA and PAR's authority comes from INCIRLIK_CAPABILITIES' `ownsStates`
+// column, merged here with FRESH arrays: FINAL's rows above share CV_LANES, so a
+// push would also hand PAR the carrier Marshal's COMMENCED.
+for (const [positionId, row] of Object.entries(INCIRLIK_CAPABILITIES)) {
+  for (const [role, byState] of Object.entries(row.ownsStates || {})) {
+    const table = STATE_OWNERS_BY_ROLE[role];
+    for (const state of byState) {
+      const owners = table[state] || [];
+      if (!owners.includes(positionId)) table[state] = [...owners, positionId];
+    }
+  }
+}
+
 // WP4A second slice — TOFI's target resolution (guide §4.6.3, ATC<->MRU).
 // Per guide §4.1's own Position table, TOFI is listed only for CTR among
 // the ATC Positions built so far (not APP) — so the ATC side is CTR only,
@@ -634,4 +725,5 @@ module.exports = {
   TACTICAL_CAPABILITIES, READ_SCOPES, handBackTargetsFor, tofiAnswererFor, readScopeFor, mayActBesideOwner,
   CARRIER_CAPABILITIES, canSetRecoveryCase, canSequenceMarshalStack, canEditShipStateInput, canRecordCarrierTransfer,
   MARSHAL_STATE_OWNERS, FINAL_STATE_OWNERS, PATTERN_STATE_OWNERS,
+  INCIRLIK_CAPABILITIES, canRotateSfa, canSendSfaRotationTransfer, sfaRotationReceiver, incirlikPositionsWith,
 };

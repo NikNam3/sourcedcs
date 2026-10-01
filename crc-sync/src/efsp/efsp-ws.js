@@ -174,6 +174,7 @@ function _subject(msg) {
     case 'efsp-marsa-mutation':       return { marsaId: msg.marsaId, fdrIds: _marsaFdrIds(msg.op) };
     case 'efsp-field-state-mutation': return { facilityId: msg.facilityId, runwayId: msg.op && msg.op.runwayId };
     case 'efsp-carrier-mutation':     return { hullId: msg.hullId };
+    case 'efsp-sfa-mutation':         return { rackId: msg.op && msg.op.rackId };
     default:                          return {};
   }
 }
@@ -190,6 +191,7 @@ function handleMessage(ctx, session, msg, persist) {
     case 'efsp-ato-preview':   return _handleAtoPreview(ctx, session, msg);
     case 'efsp-ato-mutation':  return _handleAtoMutation(ctx, session, msg, persist);
     case 'efsp-carrier-mutation': return _handleCarrierMutation(ctx, session, msg, persist);
+    case 'efsp-sfa-mutation':  return _handleSfaMutation(ctx, session, msg, persist);
     default:                   return null; // not an EFSP message
   }
 }
@@ -695,6 +697,45 @@ function _handleCarrierMutation(ctx, session, msg, persist) {
   return { ack, carrierBroadcast: carrierDelta(store) };
 }
 
+/**
+ * The SFA rotation record (guide §4.7, docs/adr/0075, 0093): which Position is on
+ * which frequency. An EIGHTH dispatch path for the carrier's reason: the record
+ * is about the approach, not a Strip, so there is no stripId and no Strip-owner
+ * check. Authority is permission.js's capability table narrowed by config's
+ * jurisdiction, inside the store, plus the session binding every dispatch path
+ * carries (docs/adr/0029): Primary at the acting Position, at its Facility.
+ * One delta carrying the whole record, ADR 0064 B6's shape.
+ */
+function _handleSfaMutation(ctx, session, msg, persist) {
+  const store = ctx.sfaStore;
+  const nack = (reason, detail) => ({ ack: { version: VERSION, type: 'efsp-sfa-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason, detail } });
+  if (!store) return nack('VALIDATION_ERROR', 'no SFA in this crc-sync');
+  const facilityId = ctx.facilityConfig.DEFAULT_FACILITY_ID;
+  const positionStore = ctx.positionStoreFor(facilityId);
+  if (!positionStore || positionStore.primaryOf(msg.actingPositionId) !== session.controllerId) {
+    return nack('NOT_HOLDING_POSITION', `you are not Primary at ${msg.actingPositionId} — select it before rotating the SFA frequencies`);
+  }
+  const cached = _cachedOutcome(ctx, 'sfa', msg);
+  if (cached) {
+    return { ack: { version: VERSION, type: 'efsp-sfa-ack', clientMutationId: msg.clientMutationId, ..._subject(msg),
+      ok: cached.ok, sfaRotation: store.view(), reason: cached.reason, detail: cached.detail, sfaSeq: store.currentSeq } };
+  }
+  const result = store.apply({ clientMutationId: msg.clientMutationId, baseRev: msg.baseRev, op: msg.op }, msg.actingPositionId, session.controllerId);
+  _rememberOutcome(ctx, 'sfa', msg, result, null);
+  if (result.ok && result.changed) persist();
+  const ack = {
+    version: VERSION, type: 'efsp-sfa-ack', clientMutationId: msg.clientMutationId, ..._subject(msg),
+    ok: result.ok, sfaRotation: store.view(), reason: result.reason, detail: result.detail, sfaSeq: store.currentSeq,
+  };
+  if (!result.ok || !result.changed) return { ack };
+  return { ack, sfaBroadcast: sfaDelta(store) };
+}
+
+/** The whole rotation record, sent whole: small. Its own delta type and seq, like efsp-carrier-delta. */
+function sfaDelta(sfaStore) {
+  return { version: VERSION, type: 'efsp-sfa-delta', sfaSeq: sfaStore.currentSeq, sfaRotation: sfaStore.view() };
+}
+
 /** The whole hull view(s), sent whole: small, and the derived stack comes from the server so the client never reimplements it. */
 function carrierDelta(carrierStore) {
   return { version: VERSION, type: 'efsp-carrier-delta', carrierSeq: carrierStore.currentSeq, carriers: { updated: carrierStore.getAll() } };
@@ -945,6 +986,9 @@ function _fullSnapshotMessage(ctx) {
     // The carrier's hull record(s) with the derived stack and the banner
     // (docs/adr/0074), sent whole; no efsp-resync branch, as for MARSA.
     carriers: ctx.carrierStore ? ctx.carrierStore.getAll() : [],
+    // Who is on which SFA frequency (docs/adr/0075, 0093), sent whole; null where
+    // this crc-sync has no SFA. No efsp-resync branch, as for the carrier.
+    sfaRotation: ctx.sfaStore ? ctx.sfaStore.view() : null,
   };
 }
 
@@ -1153,4 +1197,4 @@ function _handleAtoMutation(ctx, session, msg, persist) {
   };
 }
 
-module.exports = { handleMessage, carrierDelta, snapshotMessage: _snapshotMessage, filterForSession, supplementFor, readScopeKey, readScopeOf, RESYNC_RING_WINDOW };
+module.exports = { handleMessage, carrierDelta, sfaDelta, snapshotMessage: _snapshotMessage, filterForSession, supplementFor, readScopeKey, readScopeOf, RESYNC_RING_WINDOW };

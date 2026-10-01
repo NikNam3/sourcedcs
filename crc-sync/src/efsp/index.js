@@ -37,6 +37,8 @@ const { MarsaStore } = require('./marsa-store');
 const { FieldStateStore } = require('./field-state-store');
 const { CarrierStore } = require('./carrier-store');
 const carrierModel = require('./carrier');
+const { SfaStore } = require('./sfa-store');
+const sfaModel = require('./sfa');
 const carrierHulls = require('./carrier/hull-config');
 const airspaceConfig = require('./airspace-config');
 const { CodeAllocator } = require('./code-allocator');
@@ -155,6 +157,14 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
     },
   });
 
+  // docs/adr/0075, 0093 — an EIGHTH store: which Position is on which Single
+  // Frequency Approach frequency (guide §4.7). One record, for the Facility whose
+  // config carries a `singleFrequencyApproach` (INCIRLIK); null where none does.
+  const sfaConfig = facilityConfig.getSingleFrequencyApproach();
+  const sfaStore = sfaConfig
+    ? new SfaStore({ config: sfaConfig, positions: facilityConfig.getPositionSet(), facilityId: facilityConfig.DEFAULT_FACILITY_ID, clock })
+    : null;
+
   const facilityIds = facilityConfig.getFacilityIds();
   const facilities = new Map(); // facilityId -> { boardStore, positionStore, rules }
 
@@ -264,6 +274,21 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
       carrierApplyEffect:      (effect, fdrId, meta) => carrierStore.applyEffect(effect, fdrId, meta),
       carrierAppendFlight:     (fdrId, meta) => carrierStore.appendFlight(fdrId, meta),
       carrierRetireFlight:     (fdrId, by) => carrierStore.onFdrRetired(fdrId, by),
+      // docs/adr/0075, 0093 — Bay descriptor flags (`capacity`, `view`) and Single
+      // Frequency Approach. All plain reads of the one Facility config, so they
+      // are the same functions for every Facility (a Facility without an SFA Bay
+      // answers null).
+      bayDescriptor:           (bayId) => facilityConfig.getBay(bayId, facilityId),
+      sfaFrequencyFor:         (bayId, rackId) => {
+        const bay = facilityConfig.getBay(bayId, facilityId);
+        const sfa = facilityConfig.getSingleFrequencyApproach(facilityId);
+        if (!bay || bay.view !== 'sfa-freqs' || !sfa) return null;
+        const entry = sfaModel.poolEntryFor(sfa, rackId);
+        return entry ? entry.mhz : null;
+      },
+      sfaTransfers:            sfaModel.SFA_TRANSFERS,
+      sfaRotationReceiver:     () => permission.sfaRotationReceiver(),
+      canSendSfaRotationTransfer: (actingPositionId) => permission.canSendSfaRotationTransfer(actingPositionId),
     };
 
     const boardStore = new BoardStore(fdrStore, rules, { clock });
@@ -276,8 +301,9 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
   marsaStore.setMutationLog(mutationLog);
   fieldStateStore.setMutationLog(mutationLog);
   carrierStore.setMutationLog(mutationLog);
+  if (sfaStore) sfaStore.setMutationLog(mutationLog);
   _validateAirspaceReferences(facilities);
-  _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore, mutationLog, clock, carrierStore);
+  _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore, mutationLog, clock, carrierStore, sfaStore);
 
   const defaultFacility = facilities.get(facilityConfig.DEFAULT_FACILITY_ID);
 
@@ -320,6 +346,7 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
     correlationStore,
     marsaStore,
     carrierStore,
+    sfaStore,
     airspaceConfig,
     facilityConfig,
     nlaStatusMonitor,
@@ -345,7 +372,7 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
 
   return {
     boardStore: ctx.boardStore, fdrStore, positionStore: ctx.positionStore, mutationLog, clock,
-    airspaceStore, correlationStore, marsaStore, nlaStatusMonitor, fieldStateStore, carrierStore,
+    airspaceStore, correlationStore, marsaStore, nlaStatusMonitor, fieldStateStore, carrierStore, sfaStore,
     boardStoreFor: ctx.boardStoreFor, positionStoreFor: ctx.positionStoreFor,
 
     /**
@@ -358,7 +385,7 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
       return user.name || user.preferred_username || user.sub || 'unknown';
     },
 
-    handleMessage: (session, msg) => handleMessage(ctx, session, msg, () => _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore, persistState, carrierStore)),
+    handleMessage: (session, msg) => handleMessage(ctx, session, msg, () => _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore, persistState, carrierStore, sfaStore)),
 
     /**
      * Persist on demand. The correlation reconciler deliberately does NOT
@@ -368,7 +395,7 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
      * correlation history — the state itself recomputes within one tick of
      * boot. This exists so a caller that genuinely needs a flush has one.
      */
-    persist: () => _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore, persistState, carrierStore),
+    persist: () => _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore, persistState, carrierStore, sfaStore),
 
     /** Abrupt disconnect (guide §4.8.6) — releases every Position the controller held, across EVERY Facility (a controller may hold Positions in more than one, guide §4.8.5). */
     onDisconnect: (session) => {
@@ -522,7 +549,7 @@ function _validateAirspaceReferences(facilities) {
   }
 }
 
-function _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore, mutationLog, clock, carrierStore) {
+function _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore, mutationLog, clock, carrierStore, sfaStore = null) {
   try {
     const data = JSON.parse(fs.readFileSync(BOARD_SNAPSHOT_READ_PATH, 'utf8'));
     fdrStore.restore(data.fdr);
@@ -573,6 +600,9 @@ function _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaSt
       const gone = carrierStore.evictMissingFdrs();
       if (gone) console.warn(`[efsp] dropped ${gone} restored Marshal stack entr(y/ies) whose FDR is gone`);
     }
+    // The SFA rotation comes back INTACT, for the carrier's reason: who is on which
+    // frequency is a controller declaration, and a restart does not change it.
+    if (sfaStore) sfaStore.restore(data.sfaRotation);
     // docs/adr/0058 — a Board saved before the clearance moved onto the FDR
     // still holds the assigned altitude and heading as Strip annotations.
     const moved = migrateClearanceAnnotations(
@@ -588,7 +618,7 @@ function _restore(facilities, fdrStore, airspaceStore, correlationStore, marsaSt
   }
 }
 
-function _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore, persistState = { lastBody: null }, carrierStore = null) {
+function _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaStore, fieldStateStore, persistState = { lastBody: null }, carrierStore = null, sfaStore = null) {
   try {
     const boards = {};
     for (const [facilityId, { boardStore }] of facilities.entries()) boards[facilityId] = boardStore.snapshot();
@@ -604,6 +634,7 @@ function _persist(facilities, fdrStore, airspaceStore, correlationStore, marsaSt
       marsa: marsaStore ? marsaStore.snapshot() : [],
       fieldStates: fieldStateStore ? fieldStateStore.snapshot() : [],
       carriers: carrierStore ? carrierStore.snapshot() : [],
+      sfaRotation: sfaStore ? sfaStore.snapshot() : null,
     });
     // Dirty-only: nothing changed since the last successful write (a caller
     // that persists on a path which changed nothing), so there is nothing to

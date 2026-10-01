@@ -253,7 +253,7 @@ test('setting held positions acks with the actually-held set and broadcasts posi
   assert.deepEqual(result.ack.held.sort(), ['GND', 'TWR']);
   assert.equal(result.ack.warnings.length, 0);
   assert.equal(result.broadcast.type, 'efsp-board-delta');
-  assert.equal(result.broadcast.positions.updated.length, 5); // all of INCIRLIK's Phase 2 Positions reported
+  assert.equal(result.broadcast.positions.updated.length, 8); // all of INCIRLIK's Positions reported (RSU, SFA, PAR since L18)
 });
 
 test('vacating a Position with Strips and an occupied covering Position reassigns them and reports the warning with routedTo', () => {
