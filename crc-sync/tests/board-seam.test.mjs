@@ -6,8 +6,9 @@ import { fileURLToPath } from 'node:url';
 
 // The collaborator seam (plan §2.3): the files under src/efsp/board/ are collaborators of the Board, not parts of one
 // big object. Four rules keep each one extractable and keep the wiring in one place:
-//   1. no `require` of board-store.js or of a sibling under board/, except board/ops/* requiring board/strip-util.js
-//      and board/ops/index.js requiring its op files;
+//   1. no `require` of board-store.js or of a sibling under board/, except that every file under board/ may require
+//      board/strip-util.js (S-R0q: BOARD-1's audit.js needs deepClone from it) and board/ops/index.js may require its
+//      op files;
 //   2. no `<expr>._<name>` read where <expr> is not `this` (another object's private member);
 //   3. no module-level `let`/`var`, and no module-level `const` bound to a `new Map/Set/[]/{}` that is mutated
 //      (hidden shared state between Boards);
@@ -45,8 +46,7 @@ export function checkRequires(text, file, boardDir = BOARD_DIR, boardStore = BOA
     if (!inBoard && !toStore) continue;
     const rel = path.relative(boardDir, file).split(path.sep).join('/');
     const tgt = inBoard ? path.relative(boardDir, target).split(path.sep).join('/') : 'board-store';
-    const isOp = rel.startsWith('ops/');
-    const allowed = (isOp && tgt === 'strip-util') || (rel === 'ops/index.js' && tgt.startsWith('ops/') && tgt !== 'ops/index');
+    const allowed = tgt === 'strip-util' || (rel === 'ops/index.js' && tgt.startsWith('ops/') && tgt !== 'ops/index');
     if (!allowed) out.push(`${rel}:${lineOf(text, m.index)} requires ${m[2]} (${toStore ? 'board-store.js' : 'a sibling under board/'})`);
   }
   return out;
@@ -117,6 +117,7 @@ test('board seam self-test, 1: requires', () => {
   assert.equal(checkRequires("const x = require('./other-op');", F('strip-ops.js')).length, 1, 'a sibling');
   assert.equal(checkRequires("import { y } from './ops/index.js';", F('strip-ops.js')).length, 1, 'ops from a non-ops file');
   assert.equal(checkRequires("const u = require('../strip-util');", F('ops/set-flag.js')).length, 0, 'ops -> strip-util is allowed');
+  assert.equal(checkRequires("const { deepClone } = require('./strip-util');", F('audit.js')).length, 0, 'any board/ file -> strip-util is allowed (S-R0q)');
   assert.equal(checkRequires("const u = require('../other');", F('ops/set-flag.js')).length, 1, 'ops -> anything else is not');
   assert.equal(checkRequires("const a = require('./set-flag');\nconst b = require('./drop');", F('ops/index.js')).length, 0, 'ops/index -> its op files');
   assert.equal(checkRequires("const a = require('./set-flag');", F('ops/drop.js')).length, 1, 'an op requiring a sibling op');
@@ -128,6 +129,9 @@ test('board seam self-test, 2: private reads off something that is not this', ()
   assert.equal(checkPrivateReads('const a = store._strips.get(id);').length, 1);
   assert.equal(checkPrivateReads('this._store._strips.get(id);').length, 1, 'a private of a collaborator reached through this');
   assert.equal(checkPrivateReads('foo()._hidden;').length, 1);
+  assert.equal(checkPrivateReads('const m = this._state._strips;').length, 1, 'chained: a private of a private');
+  assert.equal(checkPrivateReads('const m = x.y._z;').length, 1, 'chained: x.y._z');
+  assert.equal(checkPrivateReads('const m = this._a._b._c;').length, 2, 'every hop after the first');
   assert.equal(checkPrivateReads('const a = this._strips.get(id); this._rules.x(); this._a = this._b;').length, 0);
   assert.equal(checkPrivateReads('// store._strips in a comment\nconst s = "x";').length, 0);
 });
