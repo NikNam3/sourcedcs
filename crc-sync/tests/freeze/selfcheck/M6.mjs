@@ -3,7 +3,7 @@
 export default {
   id: "M6",
   what: "a refusal detail string",
-  file: "src/efsp/board-store.js",
+  file: "src/efsp/board/placement.js",
   find: "detail: `no such Bay here: ${bayId}`",
   replace: "detail: `no such bay: ${bayId}`",
   detect: ["freeze-table","freeze-scenarios","freeze-hub"],
