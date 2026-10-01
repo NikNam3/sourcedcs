@@ -286,6 +286,13 @@ function createEfsp({ clock = WALL_CLOCK } = {}) {
         const entry = sfaModel.poolEntryFor(sfa, rackId);
         return entry ? entry.mhz : null;
       },
+      sfaRackFor:              (bayId, mhz) => {
+        const bay = facilityConfig.getBay(bayId, facilityId);
+        const sfa = facilityConfig.getSingleFrequencyApproach(facilityId);
+        if (!bay || bay.view !== 'sfa-freqs' || !sfa) return null;
+        const entry = sfa.pool.find(p => p.mhz === mhz);
+        return entry ? entry.rackId : null;
+      },
       sfaTransfers:            sfaModel.SFA_TRANSFERS,
       sfaRotationReceiver:     () => permission.sfaRotationReceiver(),
       canSendSfaRotationTransfer: (actingPositionId) => permission.canSendSfaRotationTransfer(actingPositionId),

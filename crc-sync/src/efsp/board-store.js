@@ -934,6 +934,14 @@ class BoardStore {
    * against 05, whatever the active runway was.
    */
   _placementRack(strip, bay) {
+    // An SFA frequency Bay is placed by the flight's own frequency, so a Strip put
+    // back by a system move (a Position retaken, a covering hand-back) returns to
+    // the Rack that IS its frequency, not the first one (guide §4.2, D17).
+    if (this._rules.sfaRackFor && bay && bay.view === 'sfa-freqs') {
+      const fdr = this._fdrStore.getFdr(strip.fdrId);
+      const rack = fdr && fdr.comms ? this._rules.sfaRackFor(bay.bayId, fdr.comms.workingFrequencyMhz) : null;
+      if (rack) return rack;
+    }
     return runwayRackFor(strip, this._fdrStore.getFdr(strip.fdrId), this._fieldStateView(), bay);
   }
 

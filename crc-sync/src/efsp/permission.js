@@ -280,7 +280,7 @@ const CREATE_ROLE_PERMISSIONS = {
 //  ownsStates          { Role: [states] } this Position works (the "normally owned
 //                      by" authority, §3.4), merged into STATE_OWNERS_BY_ROLE.
 //  requestsRunwayStatus  may SEND RequestRunwayStatus (kinds CLOSE, OPEN,
-//                      BARRIER_CHANGE). RSU asks; only TWR closes or opens a
+//                      WORKS; BARRIER_CHANGE is WORKS since L1b). RSU asks; only TWR closes or opens a
 //                      runway (decisions.md H18, S-L1b), so no column here grants
 //                      CloseRunway, OpenRunway or any other FIELD_STATE_OP_OWNERS row.
 //  rotatesSfa          the CEILING on who may change the SFA rotation record (guide
