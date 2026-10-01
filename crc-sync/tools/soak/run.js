@@ -7,7 +7,7 @@
 //        [--realtime] [--restarts n] [--restart-at m,m] [--crew three|full|solo]
 //        [--sample-every s] [--out dir] [--keep-state] [--inproc] [--prune-retired]
 //        [--inject drop-ack|drop-broadcast|leak|skip-shadow-client] [--quiet]
-//        [--warmup-min m] [--threshold-<name> <value>]
+//        [--warmup-min m] [--judge-memory] [--threshold-<name> <value>]
 //
 // Exit: 0 PASS, 1 FAIL (verdict), 2 harness error.
 
@@ -21,7 +21,7 @@ const { PROFILES, CREWS } = require('./traffic');
 const report = require('./report');
 
 function parseArgs(argv) {
-  const o = { minutes: 10, seed: 1, profile: 'realistic', realtime: false, restarts: null, restartAt: null, crew: null, sampleEvery: null, out: null, keepState: false, inproc: false, pruneRetired: false, inject: null, quiet: false, warmupMin: null, thresholds: { ...report.THRESHOLDS } };
+  const o = { minutes: 10, seed: 1, profile: 'realistic', realtime: false, restarts: null, restartAt: null, crew: null, sampleEvery: null, out: null, keepState: false, inproc: false, pruneRetired: false, inject: null, quiet: false, warmupMin: null, judgeMemory: false, thresholds: { ...report.THRESHOLDS } };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]; const v = () => argv[++i];
     switch (a) {
@@ -40,6 +40,7 @@ function parseArgs(argv) {
       case '--prune-retired': o.pruneRetired = true; break;
       case '--inject': o.inject = v(); break;
       case '--quiet': o.quiet = true; break;
+      case '--judge-memory': o.judgeMemory = true; break;
       case '--warmup-min': o.warmupMin = Number(v()); break;
       default:
         if (a.startsWith('--threshold-')) { o.thresholds[a.slice(12)] = Number(v()); break; }
