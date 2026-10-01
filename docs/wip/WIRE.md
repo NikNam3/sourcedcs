@@ -1,6 +1,44 @@
 # WIRE lane (refactor W2): families, one skeleton, `broadcasts[]`
 
-(Report goes here at the end.)
+## Report
+Branch `lane/WIRE-families` from `b0f273f`. Commits: see `git log --oneline b0f273f..HEAD` (docs step 0, the refactor commit, the wip/report commit).
+- Done: every `efsp-<x>-mutation` family (airspace, correlation, MARSA, field state, carrier, SFA) is `src/efsp/wire/families/<x>.js`; ATO
+  preview and ATO mutation are two custom families in `families/ato.js`. `efsp-ws.js` keeps the Board path, resync, set-positions, snapshot
+  assembly and the read scope; `wire/skeleton.js` runs gate, class check, replay, apply, remember, persist, ack, broadcasts. `ws-hub.js` loops
+  `result.broadcasts`; `WsHub.stop()` added. `replay-cache.js` `KINDS` come from the registry. Snapshot family keys come from `snapshotKey/snapshot`
+  in registry order. `filterForSession` delegates correlation and MARSA deltas to the family's `filter`.
+- `efsp-ws.js` 1217 -> 486 lines (wire/ total 838 across 11 files).
+- Tests before -> after: crc-sync 2092 -> 2098 (+5 new tests, +1 todo), all pass; crc-desktop 866 -> 866 (865 pass, 1 skipped, as at base).
+  One load flake (`grpc-client-stream` retry timing) passed alone.
+- Golden: identical, no `freeze:update`; freeze 47/47. The goldens record the old named keys, so `tests/helpers/wire-slots.mjs` maps `broadcasts[]`
+  back by slot name (the array carries a non-enumerable `slots` array set by `orderSlots`); it throws on a missing or mismatched `slots` (tested
+  in `tests/wire-slots.test.mjs`), it never guesses from frame types (primary and peer are both board-deltas).
+- Selfcheck: M5, M5b, M17 retargeted to the one `SLOT_ORDER` constant (`wire/slots.js`, swap two entries), each proven CAUGHT by freeze-hub
+  (`npm run freeze:selfcheck M5|M5b|M13|M17`; M13 file unchanged, still applies, caught by hub, scenarios and tables). The full 17-mutation run was not
+  repeated (only these four touch moved code). `soak:selfcheck` PASS (all detectors fire, drop-broadcast included).
+- Structure fixtures / files outside Owns: `freeze-tables.test.mjs` scraper reads the registry and `src/efsp/wire/**` (owned);
+  `freeze-recorder.mjs` and `freeze-table.test.mjs` use `legacyShape` (harness, not in Owns); crc-desktop `tests/ws-message-contract.test.js` (server file list
+  plus registry types) and `tests/overflight-shared-state-names.test.js` (the INBOUND-in-a-comment allow-list entry moved from `efsp-ws.js` to
+  `wire/skeleton.js`). The ~100 named-key reads in 14 crc-sync tests became `slot(out, 'primary'|'peer'|...)`.
+- Commit granularity: the skeleton, the registry and all families landed in ONE refactor commit, not one per family: `efsp-ws.js`, the hub and
+  the result shape change together, so no intermediate state was golden-green.
+- Defaults taken: P2 `_subject` stays one function (`skeleton.subjectOf`, reading `family.subject`); no heartbeat work (WIRE-B: a per-Facility
+  heartbeat, plan section 6 item 5). S-WIRE0 from main: slot-carrying helper, loud on ambiguity.
+- Answers to the questioner: the order is proven by the real hub trace `peer-marsa-order`, not a stub; M5/M5b/M17 are caught by it.
+- Findings: F1 below (`test.todo` in `tests/wire-skeleton.test.mjs`). Also: `family.filter` exists for correlation and MARSA only; the board-delta, snapshot and
+  alerts filters stay in `efsp-ws.js`. Nothing for the supervisor to decide.
+
+## How to add a family (AIRSP phase 2 is the first reader)
+1. Create `src/efsp/wire/families/<x>.js` exporting `{ type, ackType, deltaType?, replayKind, snapshotKey?, subject(msg), store(ctx), noStore,
+   gate: 'primary-somewhere' | 'primary-at-facility' | fn(ctx, session, msg) -> null|{reason,detail}, notHolding(msg, facilityId), facilityOf?(ctx, msg),
+   permit?(ctx, msg), apply(ctx, session, msg), rememberId(result, msg, ctx), fromCached(ctx, cached, msg), ack(result, ctx, msg), broadcasts(result, ctx, msg),
+   snapshot?(ctx), filter?(ctx, scope, msg) }`. `ack` returns the fields after `ok`; the skeleton adds version, type, clientMutationId, `subject`, `head` and `ok`.
+2. `broadcasts` returns slots `{ primary, peer, marsa, carrier, sfa }` (any subset); the skeleton orders them with `SLOT_ORDER` (`wire/slots.js`).
+3. Add it to `FAMILIES` in `families/index.js` (the order is the snapshot key order; `replayKind` joins the replay cache `KINDS` by itself).
+4. Optional hooks: `head`/`refusalTail` (extra ack fields on refusals), `persistWhen`, `after(ctx, result, msg)` on ok, `unauditedGates: false` (see F1).
+5. A shape that does not fit declares `handle(ctx, session, msg, persist)` returning `{ ack, broadcasts: orderSlots(...) }` and lists why in its file (ATO).
+6. Run the freeze goldens; the message-type table (`tables-wire-message-types`) and crc-desktop's `ws-message-contract` read the registry, so a new type changes the
+   golden: that is an approved-behaviour change, not a structural one.
 
 ## Step 0: base counts
 
