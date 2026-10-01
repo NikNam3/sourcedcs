@@ -25,7 +25,7 @@ Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green):
 - **Forwarding-obligation alerts clear themselves** once the obligation is met or no longer due. Nothing to acknowledge. See §8.
 - **Contact colours come from IFF interrogation**, not from the game's idea of a side, and nothing on the ground is hidden any more. See §8F.
 - **All declutter is off** until the EFSP work is finished: formation labels and navpoint names both show. See §8F.
-- **Metrics and a traffic count** exist on the server, as two read endpoints. There is no dashboard yet. See §10.
+- **Metrics and a traffic count**: the METRICS panel (PANELS → METRICS) and, behind it, two read endpoints on crc-sync. See §10.
 - **ATO import** — `TAC_C2` pastes or drops a USMTF ATO (atobrief exports one) and it becomes mission lines on the Board, with the air-refuelling tanker/receiver join shown on the Strips. See §8I.
 - **Built but not usable from the panel yet:** a carrier model (Marshal stack, recovery Case, ship banner). It is not wired into the Board: the carrier Positions arrive in a later wave.
 
@@ -1130,8 +1130,42 @@ loses that peer. A re-import with a changed tanker rewires the join.
 
 ## 10. Metrics and the traffic count
 
-crc-sync counts what the Board does. There is no dashboard yet (wave 2 builds one); the numbers are
-two read endpoints on crc-sync, open to any signed-in user. Nothing in either names a controller.
+crc-sync counts what the Board does, and crc-desktop measures what a controller does with it (searches,
+time to find a Strip, inputs per gesture). The METRICS panel shows both; behind it are two read endpoints
+on crc-sync, open to any signed-in user. Nothing in either names a controller.
+
+### The METRICS panel
+
+Open it from **PANELS → METRICS** (it docks in the left cluster, closed by default). Anyone signed in can
+open it, with or without a Position. It refreshes on open and every 30 s while it is on screen, and does
+nothing while hidden.
+
+- **Two columns.** *This mission* is everything since the current DCS mission loaded; *Last hour* is a
+  rolling 60 minutes. The selector reads back an earlier mission (which has no last hour).
+- **The verdicts.** `MET` / `NOT MET` compare the number with the guide's §11.5 target (only `NOT MET`
+  is coloured). `TRENDING ↓/→/↑` compares the last three complete hours, for the three metrics whose
+  target is "trending down"; it reads `NO TREND YET` until there are two complete hours, a flat series
+  reads `→`, and no trend is ever coloured, `↑` included. `NO DATA` means measured, but nothing happened
+  in this window. `NOT INSTRUMENTED` means nothing measures it yet, which is **not** zero: staleness
+  reads `not instrumented (L19)` until its detector exists.
+- **Search is a failure symptom (§4.3).** Every search is counted, never what was searched for. A search
+  count that is not trending down means controllers cannot find Strips where they expect them.
+- **Time to find** runs from a Bay coming on screen to the first Strip you select in it. The clock
+  ignores a Bay you leave without selecting, a Bay you hide, a Bay you ignore for 10 minutes, and a
+  click on the arrivals line.
+- **Inputs per gesture** is a declared cost per way of making a gesture: double-click flip 1, Shift+click
+  attention 1, right-click + swatch highlight **2**, `⋯` → Offset **2**. The last two are over the
+  ceiling of one input; that is a finding, not a counting bug (see the briefing).
+- **Per Position** is folded behind a toggle and lists search and time-to-find by Position (H66). There
+  is never a row per person.
+- **Traffic count.** Pick a Facility (it starts on the first Facility where you hold a Position, else
+  `INCIRLIK`). The first line is a partition: every counted flight is local, transient or unknown.
+  Formation, SUA traversal and alert scramble are "of which" counts and can overlap. "Reconciles with the
+  Mutation log" means the count agrees with a recount from the audit log; a mismatch is coloured. The
+  request is scoped to the selected mission.
+- Search per manned hour reads `—` until crc-sync's 60 s manning tick has recorded manned minutes.
+
+### The endpoints
 
 - **`GET /api/efsp/metrics`** — the metric set, per mission session (one DCS mission load to the
   next), with a rolling last hour beside it. `?hours=1..720` narrows it to the last N hours of the

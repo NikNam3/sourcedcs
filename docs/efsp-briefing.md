@@ -646,6 +646,28 @@ miztoyaml on that one edge), `efsp-ato-preview` / `efsp-ato-mutation` on the wir
   `MODE3_NOT_ADOPTED` warning pair is cosmetic. atobrief handing out colliding Mode 3 codes now shows as
   duplicate warnings on the Board (H64). M6/M7 display waited for L16 (done, below).
 
+**The METRICS panel and the client measurements (L15, `0072`).** `panels/metrics-panel.js` is the
+panel; `panels/efsp/efsp-metrics-client.js` collects the browser-side measurements and flushes them
+(after 10 s, at 20 events or on `beforeunload`; queue capped at 500, oldest dropped, an event older
+than 5 min dropped unsent). SEARCH is counted from `_runEfspSearch`, TIME_TO_FIND from a Bay becoming
+visible to the first Strip selected in it (hide detection is a 1 s poll of `efspVisibleBayId()`),
+GESTURE from the static `GESTURE_INPUT_COST` table. `app/server.js` proxies the two read endpoints.
+The wire shape is unchanged from L5's contract (`efsp-metrics-contract.test.mjs`). Facts the panel
+depends on: `searchInvocations.byPosition[P]` has per-hour buckets and no top-level `byHour`;
+`rejectedMutations.mutations` counts every Mutation and `total` the refused ones; `reconciliation` can
+be `null`. `_dispatchGesture` now returns the acting Position (truthy only on dispatch).
+- **Decision for the supervisor, open:** HIGHLIGHT and OFFSET each cost 2 inputs, over §7.3's ceiling
+  of 1. Either accept 2 or give both a one-input entry point (a key or a direct control, plus a
+  `GESTURE_INPUT_COST` row).
+- Staleness shows `not instrumented (L19)` until L19 declares `sources.staleness`. A trend `↑` is not
+  coloured (an observation, not a threshold failure); the supervisor may want it coloured.
+- Not walked: a real hour of controlling with the panel open against DCS (trend over real hours, real
+  manning, correlation rate, a real traffic count, a mission reload creating a second session in the
+  selector); Electron (the e2e drives Chromium); `tests/metrics-panel.test.js` and `e2e/l15-metrics.spec.js`
+  were not re-run against F3's merge by the lane.
+- Flaky under load, not L15's: `grpc-client-stream.test.mjs` "a stream that stayed up resets the
+  backoff" and several `e2e/l1-popovers.spec.js` tests at the 20 s budget.
+
 ## 4. What's left, and the known bugs
 
 **Not built, in the guide's order.** WP6: the field-state panel and the hook-mismatch check (L1b),
