@@ -32,6 +32,7 @@ const { writePath, ensureDirFor } = require('../state-paths');
 const { WALL_CLOCK } = require('../mission-clock');
 const { getInstrumentationConfig } = require('./instrumentation-config');
 const { SCRAMBLE_PRE_AIRBORNE: _SCRAMBLE_PRE } = require('./alert-scramble');
+const authority = require('./authority');
 
 const TRAFFIC_COUNT_PATH = writePath('efsp-traffic-count.jsonl', process.env.CRCSYNC_EFSP_TRAFFIC_COUNT_PATH);
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -42,29 +43,12 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * STATES_BY_ROLE, so a new Role (L17's carrier roles) forces a decision
  * instead of silently vanishing from the count (the ADR 0041 argument).
  */
-const COUNTABLE_PRE_DROP_STATES = Object.freeze({
-  DEPARTURE: Object.freeze(['DEPARTED', 'HANDED_OFF']),   // it got airborne
-  ARRIVAL: Object.freeze(['LANDED', 'TAXI_IN']),          // it got down
-  OVERFLIGHT: Object.freeze(['IN_SECTOR', 'HANDED_OFF']),  // it was worked (docs/adr/0087); dropped still INBOUND, it never was
-  MISSION: Object.freeze([]),                             // never: shares its FDR with the ATC Strip TOFI linked it to
-  // The carrier Roles (docs/adr/0074), [SOURCE-DEFINED]: a launch is a movement
-  // (the aircraft left the deck), a trap is one, and a recovered aircraft in the
-  // pattern is one. A flight that passes MARSHAL -> FINAL -> PATTERN is dropped
-  // once, from the last Strip, so it counts once.
-  MARSHAL: Object.freeze(['LAUNCH']),
-  FINAL: Object.freeze(['BALL']),
-  PATTERN: Object.freeze(['RECOVERED']),
-});
+// Each Role family's `countablePreDropStates` and `excludedWhenNotCountable`
+// (authority/roles/<role>.js), frozen here as before.
+const COUNTABLE_PRE_DROP_STATES = Object.freeze(Object.fromEntries(
+  Object.entries(authority.COUNTABLE_PRE_DROP_STATES).map(([role, states]) => [role, Object.freeze([...states])])));
 
-const EXCLUDED_WHEN_NOT_COUNTABLE = Object.freeze({
-  DEPARTURE: 'NEVER_DEPARTED',
-  ARRIVAL: 'NEVER_LANDED',
-  OVERFLIGHT: 'NEVER_TRANSITED',
-  MISSION: 'MISSION_LINE',
-  MARSHAL: 'NEVER_DEPARTED',
-  FINAL: 'NEVER_LANDED',
-  PATTERN: 'NEVER_LANDED',
-});
+const EXCLUDED_WHEN_NOT_COUNTABLE = Object.freeze({ ...authority.EXCLUDED_WHEN_NOT_COUNTABLE });
 
 const POLICY = '[SOURCE-DEFINED] one record per DROPPED ATC Strip per Facility; see ADR 0065';
 
