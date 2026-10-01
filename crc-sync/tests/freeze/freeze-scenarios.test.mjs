@@ -69,7 +69,7 @@ test('freeze: scenario corpus is deterministic and matches its goldens', { timeo
         fs.writeFileSync(path.join(process.env.FREEZE_DUMP, file.replace('.test.mjs', '.full.json')), JSON.stringify(canonical(raw), null, 1));
       }
       assert.ok(raw.instances.length > 0 && raw.instances.some(x => x.steps.length > 0), `${file}: recorder captured no wire traffic`);
-      checkGolden(assert, 'scenario-' + file.replace(/^efsp-/, '').replace('.test.mjs', ''), compact(raw), unitsOf);
+      checkGolden(assert, '' + file.replace(/^efsp-/, '').replace('.test.mjs', ''), compact(raw), unitsOf);
     });
   }
   t.after(() => fs.rmSync(outDir, { recursive: true, force: true }));
