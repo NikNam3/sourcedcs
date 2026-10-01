@@ -588,7 +588,8 @@ function validateConfig(candidate) {
 // The Bay descriptor flags (docs/adr/0093). Only these keys beyond bayId/rackIds/
 // impliesState exist, so a typo in a config can never silently mount nothing.
 const BAY_VIEWS = Object.freeze(['pattern', 'final', 'sfa-freqs']);
-const BAY_DESCRIPTOR_KEYS = Object.freeze(['bayId', 'rackIds', 'impliesState', 'view', 'replacesRacks', 'capacity']);
+// `holdsRole` is L28's (docs/adr/0087): a Bay that files its Role's Strips whatever their state.
+const BAY_DESCRIPTOR_KEYS = Object.freeze(['bayId', 'rackIds', 'impliesState', 'view', 'replacesRacks', 'capacity', 'holdsRole']);
 
 /** A human problem string for a malformed Bay descriptor flag (`view`, `capacity`), or null. */
 function validateBayDescriptors(candidate) {
@@ -602,6 +603,9 @@ function validateBayDescriptors(candidate) {
       }
       if (bay.replacesRacks !== undefined && (typeof bay.replacesRacks !== 'boolean' || !bay.view)) {
         return `bays.${positionId}.${bay.bayId}: replacesRacks is true or false and needs a view`;
+      }
+      if (bay.holdsRole !== undefined && (typeof bay.holdsRole !== 'string' || !bay.holdsRole)) {
+        return `bays.${positionId}.${bay.bayId}: holdsRole is a Role name`;
       }
       const stray = Object.keys(bay).find(k => !BAY_DESCRIPTOR_KEYS.includes(k));
       if (stray) return `bays.${positionId}.${bay.bayId}: unknown Bay descriptor key ${JSON.stringify(stray)}`;

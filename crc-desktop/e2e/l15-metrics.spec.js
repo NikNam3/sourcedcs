@@ -76,8 +76,10 @@ test('what a controller does is measured and shown on METRICS', async ({ page })
   await expect(missionCell(page, 'timeToFind').locator('.metrics-verdict')).toHaveText('MET');
   await expect(missionCell(page, 'gestureInputs').locator('.metrics-value')).toContainText('FLIP 1.0 (1)');
   await expect(missionCell(page, 'gestureInputs').locator('.metrics-verdict')).toHaveText('MET');
-  await expect(missionCell(page, 'staleness').locator('.metrics-value')).toHaveText('not instrumented (L19)');
-  await expect(missionCell(page, 'staleness').locator('.metrics-verdict')).toHaveText('NOT INSTRUMENTED');
+  // L19 instruments staleness, so the cell no longer says 'not instrumented (L19)'; a run with no
+  // contradicting Strip reads 'nothing in this window'.
+  await expect(missionCell(page, 'staleness').locator('.metrics-value')).toHaveText('nothing in this window');
+  await expect(missionCell(page, 'staleness').locator('.metrics-verdict')).not.toHaveText('NOT INSTRUMENTED');
   await expect(page.locator('#metrics-panel .metrics-reconciliation')).toContainText('reconciles with the Mutation log ✓');
   // The traffic count is the Board's for the whole run, and earlier spec files fly real departures
   // (alert-scramble takes VIPER11 airborne), so "= 0 flights" is not this spec's to assert. What it
