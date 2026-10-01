@@ -442,6 +442,12 @@ class BoardStore {
       if (!(this._rules.canRecordCarrierTransfer && this._rules.canRecordCarrierTransfer(actingPositionId, op.transfer))) {
         return { ok: false, reason: 'PERMISSION_DENIED', detail: `${actingPositionId} may not record ${op.transfer || 'that transfer'}` };
       }
+    } else if (op.kind === 'SfaRotation') {
+      // The SFA_ROTATION transfer (docs/adr/0075, 0093) is not an OP_KINDS grant
+      // either: permission.js's capability table says which Position may send it.
+      if (!(this._rules.canSendSfaRotationTransfer && this._rules.canSendSfaRotationTransfer(actingPositionId))) {
+        return { ok: false, reason: 'PERMISSION_DENIED', detail: `${actingPositionId} may not rotate an aircraft onto PAR` };
+      }
     } else if (this._rules.canMutate && !this._rules.canMutate(actingPositionId, op.kind)) {
       return { ok: false, reason: 'PERMISSION_DENIED' };
     }
@@ -523,6 +529,10 @@ class BoardStore {
       // button reaches the same method.
       case 'CarrierTransfer':
         result = this._applyCarrierTransfer(strip, op.transfer, op.toPositionId, by, actingPositionId, mutation.clientMutationId); break;
+      // docs/adr/0075, 0093 — Single Frequency Approach (guide §4.7): the
+      // controller rotates, the frequency does not. Same shape as a carrier hand-over.
+      case 'SfaRotation':
+        result = this._applySfaRotation(strip, by, actingPositionId); break;
       default:              result = { ok: false, reason: 'VALIDATION_ERROR', strip: deepClone(strip) };
     }
     // docs/adr/0076, Q-L16-3: a DEPARTURE entering Airborne stamps the takeoff
@@ -588,6 +598,9 @@ class BoardStore {
       // different trigger types"), so an after-action review can tell them apart.
       carrierTransfer: result.carrierTransfer ? result.carrierTransfer.kind : undefined,
       carrierTrigger: result.carrierTransfer ? result.carrierTransfer.trigger : undefined,
+      // The SFA rotation transfer and its trigger type (guide §4.7).
+      sfaTransfer: result.sfaTransfer ? result.sfaTransfer.kind : undefined,
+      sfaTrigger: result.sfaTransfer ? result.sfaTransfer.trigger : undefined,
     });
   }
 
@@ -987,6 +1000,14 @@ class BoardStore {
    * against 05, whatever the active runway was.
    */
   _placementRack(strip, bay) {
+    // An SFA frequency Bay is placed by the flight's own frequency, so a Strip put
+    // back by a system move (a Position retaken, a covering hand-back) returns to
+    // the Rack that IS its frequency, not the first one (guide §4.2, D17).
+    if (this._rules.sfaRackFor && bay && bay.view === 'sfa-freqs') {
+      const fdr = this._fdrStore.getFdr(strip.fdrId);
+      const rack = fdr && fdr.comms ? this._rules.sfaRackFor(bay.bayId, fdr.comms.workingFrequencyMhz) : null;
+      if (rack) return rack;
+    }
     return runwayRackFor(strip, this._fdrStore.getFdr(strip.fdrId), this._fieldStateView(), bay);
   }
 
@@ -1087,17 +1108,55 @@ class BoardStore {
     if (bayCheck) return bayCheck;
     const check = this._validateBayImpliedTransition(strip, op.bayId, op.rackId);
     if (!check.ok) return { ok: false, reason: check.reason, detail: check.detail, strip };
+    const full = this._bayFullRefusal(op.bayId, strip);
+    if (full) return { ok: false, reason: full.reason, detail: full.detail, strip };
 
     strip.bayId = op.bayId;
     strip.rackId = op.rackId;
     strip.orderKey = this._resolveOrderKey(op.bayId, op.rackId, op.afterStripId || null, op.beforeStripId || null, strip.stripId);
     if (check.impliedState && check.impliedState !== strip.state) strip.state = check.impliedState;
+    const fdrResult = this._assignSfaFrequency(strip, by);
 
     strip.rev += 1;
     strip.updatedAt = this._clock.now();
     strip.updatedBy = by || null;
     this._touch(strip.stripId);
-    return { ok: true, strip };
+    return { ok: true, strip, fdr: fdrResult ? fdrResult.fdr : undefined };
+  }
+
+  /**
+   * A Bay with a `capacity` (facility-config.js's Bay descriptor flag; PAR's final
+   * Bay holds one, §7.10) refuses one more Strip. Returns a refusal or null. A
+   * DROPPED Strip does not count (it has left the Board), nor does `strip` itself,
+   * so re-ordering inside the Bay is never refused.
+   */
+  _bayFullRefusal(bayId, strip) {
+    const bay = this._rules.bayDescriptor ? this._rules.bayDescriptor(bayId) : null;
+    if (!bay || !Number.isInteger(bay.capacity)) return null;
+    const held = this.getAll().filter(s => s.bayId === bayId && s.state !== 'DROPPED' && s.stripId !== strip.stripId);
+    if (held.length < bay.capacity) return null;
+    return {
+      reason: 'VALIDATION_ERROR',
+      detail: `${bayId} holds ${bay.capacity} Strip${bay.capacity === 1 ? '' : 's'} at a time and ${held[0].callsign || held[0].stripId} is in it`,
+    };
+  }
+
+  /**
+   * Placing a Strip on an SFA frequency Rack assigns it that frequency (guide
+   * §4.2: one Rack per frequency): the FDR's working frequency, the same field the
+   * airspace approval writes, so a frequency is one number on one flight. This is
+   * the controller choosing a frequency, which is not what SFA forbids; it forbids
+   * a CONTROLLER CHANGE being a frequency change, and no transfer or rotation
+   * reaches this (D17). Returns the FDR result, or null when the Rack is no SFA
+   * frequency or the flight already has that frequency.
+   */
+  _assignSfaFrequency(strip, by) {
+    const mhz = this._rules.sfaFrequencyFor ? this._rules.sfaFrequencyFor(strip.bayId, strip.rackId) : null;
+    if (mhz == null) return null;
+    const fdr = this._fdrStore.getFdr(strip.fdrId);
+    if (!fdr || (fdr.comms && fdr.comms.workingFrequencyMhz === mhz)) return null;
+    const r = this._fdrStore.setWorkingFrequency(strip.fdrId, mhz, { by });
+    return r.ok ? r : null;
   }
 
   /**
@@ -1325,6 +1384,8 @@ class BoardStore {
     // below too, so a rejected transfer never partially mutates the Strip.
     const check = this._validateBayImpliedTransition(strip, op.bayId, op.rackId);
     if (!check.ok) return { ok: false, reason: check.reason, detail: check.detail, strip };
+    const full = this._bayFullRefusal(op.bayId, strip);
+    if (full) return { ok: false, reason: full.reason, detail: full.detail, strip };
 
     let destPositionId = op.toPositionId;
     let routedTo = null;
@@ -1369,6 +1430,8 @@ class BoardStore {
       if (routedTo) warning = `${routedTo} has no Bay for this Strip; it stays in ${op.bayId}`;
     }
 
+    const sfaFdr = routedBay ? null : this._assignSfaFrequency(strip, by);
+
     strip.rev += 1;
     strip.updatedAt = this._clock.now();
     strip.updatedBy = by || null;
@@ -1381,7 +1444,7 @@ class BoardStore {
     // regardless of whether this transfer came from a drag or an NLA-
     // driven transfer-shaped transition (board-store.js's own _applyInvokeNla).
     this._nlaHistory.delete(strip.stripId);
-    return { ok: true, strip, routedTo, selfCoordinated, warning };
+    return { ok: true, strip, routedTo, selfCoordinated, warning, fdr: sfaFdr ? sfaFdr.fdr : undefined };
   }
 
   /**
@@ -1479,6 +1542,61 @@ class BoardStore {
     };
   }
 
+  /**
+   * The SFA_ROTATION transfer (guide §4.7, docs/adr/0075, 0093): an ARRIVAL Strip
+   * at INBOUND with APP or SFA becomes a FINAL Strip at ON_FINAL with PAR. The
+   * controller moves; the aircraft's frequency does not, and nothing here reads or
+   * writes the FDR (D17). The Role changes IN PLACE (same Strip, same FDR, as
+   * ConvertToArrival, ADR 0023), the trigger type is recorded on the Strip and the
+   * audit line, and the frequency Rack the Strip left is kept on the record so an
+   * after-action review sees which frequency the rotation was on.
+   *
+   * PAR must be manned: there is no covering fallback, because a FINAL Strip at
+   * APP would sit in a Bay APP does not have. Refused, with the aircraft staying
+   * where it is. PAR's final Bay holds one Strip (§7.10): a second is refused.
+   * Nothing is half applied: validate everything, then change the Strip.
+   */
+  _applySfaRotation(strip, by, actingPositionId) {
+    const fx = this._rules.sfaTransfers && this._rules.sfaTransfers.SFA_ROTATION;
+    if (!fx) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no SFA rotation in this Facility', strip };
+    if (strip.role !== fx.role || strip.state !== fx.state) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `${fx.label} applies to an ${fx.role} Strip in ${fx.state}, not ${strip.role} in ${strip.state}`, strip };
+    }
+    const blocked = this._nlaPrecheck(strip);
+    if (blocked) return { ok: false, reason: blocked.reason, detail: blocked.detail, strip };
+    const dest = this._rules.sfaRotationReceiver ? this._rules.sfaRotationReceiver() : null;
+    if (!dest) return { ok: false, reason: 'NO_RECEIVING_POSITION', detail: 'this Facility has no Position to rotate onto', strip };
+    if (!this._rules.isOccupied(dest)) {
+      return { ok: false, reason: 'NO_RECEIVING_POSITION', detail: `${dest} is not manned — the aircraft stays with ${strip.ownerPositionId}`, strip };
+    }
+    const bay = this._rules.bayForImpliedState ? this._rules.bayForImpliedState(dest, fx.toState) : null;
+    if (!bay || bay.impliesState !== fx.toState) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `${dest} has no Bay for ${fx.toState}`, strip };
+    }
+    const full = this._bayFullRefusal(bay.bayId, strip);
+    if (full) return { ok: false, reason: full.reason, detail: full.detail, strip };
+
+    const now = this._clock.now();
+    const from = { role: strip.role, state: strip.state, ownerPositionId: strip.ownerPositionId, bayId: strip.bayId, rackId: strip.rackId };
+    strip.role = fx.toRole;
+    strip.state = fx.toState;
+    strip.ownerPositionId = dest;
+    delete strip.coveredFrom; // a new owner by decision, not by cover (F10)
+    strip.bayId = bay.bayId;
+    strip.rackId = this._placementRack(strip, bay);
+    strip.orderKey = this._appendOrderKey(strip.bayId, strip.rackId, strip.stripId);
+    strip.sfaTransfer = {
+      kind: 'SFA_ROTATION', trigger: fx.trigger, label: fx.label, at: now, by: by || null,
+      from: from.ownerPositionId, to: dest, fromRole: from.role, toRole: strip.role, frequencyRackId: from.rackId,
+    };
+    strip.rev += 1;
+    strip.updatedAt = now;
+    strip.updatedBy = by || null;
+    this._touch(strip.stripId);
+    this._nlaHistory.delete(strip.stripId);
+    return { ok: true, strip, sfaTransfer: { kind: 'SFA_ROTATION', trigger: fx.trigger } };
+  }
+
   _applySetFlag(strip, op, by) {
     if (!FLAG_KEYS.includes(op.flag)) return { ok: false, reason: 'VALIDATION_ERROR', strip };
     strip.flags[op.flag] = op.value;
@@ -1570,6 +1688,13 @@ class BoardStore {
   _applySetState(strip, toState, by) {
     if (this._rules.isValidState && !this._rules.isValidState(toState, strip.role)) {
       return { ok: false, reason: 'VALIDATION_ERROR', strip };
+    }
+    // A state change that files the Strip into a full Bay (a missed approach coming
+    // back on final while another aircraft is on it) is refused, not silently doubled.
+    const into = this._rules.bayForImpliedState ? this._rules.bayForImpliedState(strip.ownerPositionId, toState) : null;
+    if (into && into.impliesState === toState && into.bayId !== strip.bayId) {
+      const full = this._bayFullRefusal(into.bayId, strip);
+      if (full) return { ok: false, reason: full.reason, detail: full.detail, strip };
     }
     strip.state = toState;
     this._relocateForImpliedState(strip, toState);

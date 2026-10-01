@@ -59,7 +59,7 @@ const COMPACT_BLOCKS_BY_ROLE = {
 //    face only once it is set to something other than CLEAN — see
 //    ORDNANCE_WHEN_SET below (decisions.md H55 and S-L12, crc-sync's
 //    docs/adr/0069).
-//  - A runway field only for the airfield Positions: OPS, CD, GND, TWR, APP.
+//  - A runway field only for the airfield Positions: OPS, CD, GND, TWR, APP, and SFA (an approach controller).
 //  - FREQ (22) only where a controller works more than one frequency: APP and
 //    CTR. OPS, CD, GND and TWR each sit on one.
 //  - The assigned altitude (ALT) wherever a clearance is issued or worked: CD,
@@ -89,6 +89,9 @@ const COMPACT_BLOCKS_BY_POSITION = {
     GND: ['1', '3', '5', '8B'],
     TWR: ['1', '3', '5', '7', '8B', '9A-FUEL', '3F', '3G'],
     APP: ['1', '3', '5', '6', '7', '8A', '8B', '9A-VECTOR', '9A-SPEED', '22', '5A', 'SREG'],
+    // SFA (crc-sync docs/adr/0075): the approach controller's list, FREQ included, because a frequency
+    // is the Strip's attribute and the controller rotates onto it (guide §4.7). No SREG: MARSA is APP's.
+    SFA: ['1', '3', '5', '6', '7', '8A', '8B', '9A-VECTOR', '9A-SPEED', '22', '5A'],
     CTR: ['1', '3', '5', '6', '7', '9A-VECTOR', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A'],
   },
   OVERFLIGHT: {

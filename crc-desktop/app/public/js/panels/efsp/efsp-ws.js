@@ -179,6 +179,19 @@ function sendEfspCarrierMutation(actingPositionId, hullId, baseRev, op) {
   });
 }
 
+/**
+ * An SFA rotation-record op (crc-sync docs/adr/0093): who is on which frequency.
+ * Its own message type because it targets the approach's rotation, not a Strip. Not
+ * registered as a pending mutation, for the reason the carrier and MARSA sends give.
+ */
+function sendEfspSfaMutation(actingPositionId, baseRev, op) {
+  _sendEfsp({
+    version: 1, type: 'efsp-sfa-mutation',
+    clientMutationId: efspClientMutationId(),
+    baseRev, actingPositionId, op,
+  });
+}
+
 /** Resync after reconnect (guide §5.6) — server replies with efsp-board-delta or efsp-snapshot, never a third path. */
 function sendEfspResync(lastBoardSeq) {
   _sendEfsp({ version: 1, type: 'efsp-resync', lastBoardSeq });

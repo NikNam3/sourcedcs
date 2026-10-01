@@ -2747,6 +2747,8 @@ function renderBay(container, bayId) {
   for (const el of [...container.children]) {
     if (el.dataset.bayId === bayId && bay.rackIds.includes(el.dataset.rackId)) {
       existingRackEls.set(el.dataset.rackId, el);
+    } else if (el.classList.contains('efsp-bay-view') && el.dataset.bayId === bayId) {
+      // This Bay's descriptor view (bay-views.js) is kept, so a control the controller is in survives a re-render.
     } else {
       el.remove(); // a different Bay's leftover Rack (or a Rack no longer in this Bay's rackIds)
     }
@@ -2762,6 +2764,8 @@ function renderBay(container, bayId) {
 
   // The Marshal stack's slot board (crc-sync docs/adr/0074): vacancies, derived fields, drop targets.
   if (bayId === 'cv-marshal-stack' && typeof renderCarrierStackBoard === 'function') renderCarrierStackBoard(container);
+  // The Bay's descriptor view (crc-sync docs/adr/0093): the pattern board, the FINAL panel or the SFA rotation header.
+  if (typeof renderBayDescriptorView === 'function') renderBayDescriptorView(container, bay);
 
   container.scrollTop = scrollTop;
   if (focusedStripId && activeEl && !container.contains(activeEl)) {

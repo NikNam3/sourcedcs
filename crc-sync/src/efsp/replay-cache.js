@@ -16,7 +16,7 @@
 // rarely retried across a restart. Pure: no requires.
 
 const REPLAY_CACHE_CAP = 5000;
-const KINDS = new Set(['airspace', 'correlation', 'marsa', 'fieldState', 'carrier']);
+const KINDS = new Set(['airspace', 'correlation', 'marsa', 'fieldState', 'carrier', 'sfa']);
 
 class ReplayCache {
   constructor({ cap = REPLAY_CACHE_CAP } = {}) {

@@ -31,3 +31,15 @@
 .efsp-final-terminal { min-height: 56px; font: inherit; font-size: 14px; border-radius: 3px; border: 2px solid #34404a; background: #1b222a; color: inherit; }
 .efsp-final-ok { border-color: #8aca8a; }
 .efsp-final-go { border-color: #ff7a7a; }
+
+/* Bay descriptor views (docs/adr/0093): the mount point, the SFA rotation header, the empty FINAL line. */
+.efsp-bay-view { margin: 0 0 6px; }
+.efsp-final-none { border: 1px dashed #34404a; border-radius: 3px; padding: 14px; color: #8c9aa6; text-align: center; }
+.efsp-sfa-header { border: 1px solid #34404a; border-radius: 3px; padding: 4px 6px; background: #10151a; }
+.efsp-sfa-title { font-size: 10.5px; letter-spacing: .06em; color: #8c9aa6; margin-bottom: 4px; }
+.efsp-sfa-rows { display: flex; flex-wrap: wrap; gap: 6px; }
+.efsp-sfa-row { display: flex; gap: 6px; align-items: center; border: 1px solid #34404a; border-radius: 3px; padding: 2px 6px; background: #1b222a; }
+.efsp-sfa-freq { color: #fff; font-variant-numeric: tabular-nums; }
+.efsp-sfa-on { color: #8ec7ff; min-width: 36px; }
+.efsp-sfa-spare { color: #5d6973; }
+.efsp-sfa-select { font: inherit; color: inherit; background: #232c35; border: 1px solid #34404a; border-radius: 3px; min-height: 24px; }

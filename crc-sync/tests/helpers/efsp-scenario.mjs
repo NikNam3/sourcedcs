@@ -173,3 +173,21 @@ export function mustCarrierAct(efsp, crewMember, positionId, op, opts) {
   assert.equal(result.ack.ok, true, `${op.kind} as ${positionId}: ${JSON.stringify(result.ack)}`);
   return result;
 }
+
+/**
+ * An SFA rotation-record op (docs/adr/0075, 0093) — its own message type, since
+ * it targets the approach's rotation and no Strip. Returns the whole
+ * handleMessage result (ack and sfaBroadcast).
+ */
+export function sfaAct(efsp, crewMember, positionId, op, { baseRev } = {}) {
+  return efsp.handleMessage(crewMember.session, {
+    version: 1, type: 'efsp-sfa-mutation', clientMutationId: crypto.randomUUID(),
+    baseRev, actingPositionId: positionId, op,
+  });
+}
+
+export function mustSfaAct(efsp, crewMember, positionId, op, opts) {
+  const result = sfaAct(efsp, crewMember, positionId, op, opts);
+  assert.equal(result.ack.ok, true, `${op.kind} as ${positionId}: ${JSON.stringify(result.ack)}`);
+  return result;
+}

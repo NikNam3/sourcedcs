@@ -768,6 +768,16 @@ async function connect() {
         if (typeof renderCarrierBanner === 'function') renderCarrierBanner();
         if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
         break;
+      // crc-sync's docs/adr/0093 — who is on which SFA frequency, sent whole on every change.
+      case 'efsp-sfa-delta':
+        if (typeof applyEfspSfaDelta === 'function') applyEfspSfaDelta(msg);
+        if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
+        break;
+      case 'efsp-sfa-ack':
+        if (!msg.ok && typeof _showMutationError === 'function') _showMutationError(msg.reason || 'Rejected', msg.detail, { subject: 'SFA rotation' });
+        if (msg.sfaRotation && typeof applyEfspSfaDelta === 'function') applyEfspSfaDelta({ sfaRotation: msg.sfaRotation });
+        if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
+        break;
       case 'efsp-field-state-delta':
         if (typeof applyEfspFieldStateDelta === 'function') applyEfspFieldStateDelta(msg);
         if (typeof renderFieldStatePanel === 'function') renderFieldStatePanel();

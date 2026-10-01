@@ -492,9 +492,16 @@ function computeMarshalNla(strip, fdr, now, ctx) {
  * Bolter Bay, ADR 0064 B2): board-store.js's Bay-implied check reads it, so the
  * drag stays inside the state table.
  */
-function computeFinalNla(strip) {
+function computeFinalNla(strip, fdr, now, ctx = {}) {
   switch (strip.state) {
-    case 'ON_FINAL':       return { toState: 'BALL', carrierTransfer: 'FINAL_TO_LSO', alsoLegal: ['BOLTER_WAVEOFF'] };
+    case 'ON_FINAL':
+      // The carrier records "Ball" as its FINAL_TO_LSO hand-over (a trigger type
+      // and Case rule of its own, ADR 0074). PAR's "Landing assured" (ADR 0075)
+      // is the same state change with nothing to hand over: PAR is not a carrier
+      // Position, and that transfer would refuse it by its `from` list.
+      return ctx.facilityId === 'CARRIER'
+        ? { toState: 'BALL', carrierTransfer: 'FINAL_TO_LSO', alsoLegal: ['BOLTER_WAVEOFF'] }
+        : { toState: 'BALL', alsoLegal: ['BOLTER_WAVEOFF'] };
     case 'BALL':           return { toState: 'DROPPED', alsoLegal: ['BOLTER_WAVEOFF'] }; // "Trapped"
     case 'BOLTER_WAVEOFF': return { toState: 'ON_FINAL' };
     case 'DROPPED':

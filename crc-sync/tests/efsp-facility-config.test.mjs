@@ -25,24 +25,26 @@ const {
 } = await import('../src/efsp/facility-config.js');
 const { DEPARTURE_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP, requiredBlocksFor } = await import('../src/efsp/block-map.js');
 
-test('getPositionSet returns exactly INCIRLIK\'s five Phase 2 Positions', () => {
-  assert.deepEqual(getPositionSet(), ['OPS', 'CD', 'GND', 'TWR', 'APP']);
+test('getPositionSet returns exactly INCIRLIK\'s eight Positions (RSU, SFA and PAR since L18, ADR 0075)', () => {
+  assert.deepEqual(getPositionSet(), ['OPS', 'CD', 'GND', 'TWR', 'RSU', 'APP', 'SFA', 'PAR']);
 });
 
-test('getCoveringChain matches the guide\'s default chain, un-truncated through APP (Phase 2)', () => {
-  assert.deepEqual(getCoveringChain(), { CD: 'GND', GND: 'TWR', TWR: 'APP' });
+test('getCoveringChain matches the guide\'s default chain, un-truncated through APP, plus SFA and PAR to APP (L18)', () => {
+  assert.deepEqual(getCoveringChain(), { CD: 'GND', GND: 'TWR', TWR: 'APP', SFA: 'APP', PAR: 'APP' });
 });
 
-test('OPS and APP have no entry in the covering chain — OPS per the guide\'s table, APP because there\'s no CTR Facility yet to cover it', () => {
+test('OPS, RSU and APP have no entry in the covering chain — OPS per the guide\'s table, RSU so a Strip never strands on a supervisory Position (ADR 0075), APP because there\'s no CTR Facility yet to cover it', () => {
   const chain = getCoveringChain();
   assert.equal('OPS' in chain, false);
+  assert.equal('RSU' in chain, false);
   assert.equal('APP' in chain, false);
 });
 
-test('every Position in the Position set has at least one Bay, including a Coordination Bay (WP4A seam, present but inert)', () => {
+test('every Position in the Position set has at least one Bay, including a Coordination Bay (WP4A seam, present but inert) — except RSU, SFA and PAR, which sit on no Facility boundary (ADR 0075)', () => {
   for (const id of getPositionSet()) {
     const bays = getBaysFor(id);
     assert.ok(bays.length > 0, id);
+    if (['RSU', 'SFA', 'PAR'].includes(id)) continue;
     assert.ok(bays.some(b => b.bayId.endsWith('-coordination')), `${id} has no Coordination Bay`);
   }
 });
@@ -100,7 +102,7 @@ test('getFacilityConfig returns a deep copy — mutating it never affects subseq
   const cfg = getFacilityConfig();
   cfg.positions.push('HACKED');
   cfg.bays.OPS[0].bayId = 'tampered';
-  assert.deepEqual(getPositionSet(), ['OPS', 'CD', 'GND', 'TWR', 'APP']);
+  assert.deepEqual(getPositionSet(), DEFAULT_CONFIG.positions);
   assert.equal(getBaysFor('OPS')[0].bayId, 'ops-proposed');
 });
 

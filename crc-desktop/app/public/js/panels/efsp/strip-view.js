@@ -342,6 +342,8 @@ function _buildLifeBlock(strip) {
   }
   // The carrier's second hand-over, beside the NLA (crc-sync docs/adr/0074): "See you" in Case II.
   if (typeof carrierExtraNlaButtons === 'function') for (const extra of carrierExtraNlaButtons(strip)) life.appendChild(extra);
+  // Single Frequency Approach (crc-sync docs/adr/0075): "Rotate to PAR" beside the NLA on a Strip on an SFA frequency.
+  if (typeof sfaExtraNlaButtons === 'function') for (const extra of sfaExtraNlaButtons(strip)) life.appendChild(extra);
   return { life, inhibited };
 }
 
