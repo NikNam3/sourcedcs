@@ -1,0 +1,142 @@
+# Rendered by the nginx image's envsubst step (templates/*.template -> conf.d/).
+# Only ${WIKI_DOMAIN} ${AUTH_DOMAIN} ${DOMAIN} ${ATOBRIEF_DOMAIN} ${CRCSYNC_DOMAIN} are substituted;
+# nginx's own $variables pass through untouched.
+resolver 127.0.0.11 valid=10s ipv6=off;
+client_max_body_size 350M;
+map $http_upgrade $connection_upgrade {
+  default upgrade;
+  "" close;
+}
+map $http_user_agent $bad_bot {
+  default 0;
+  "~*GPTBot" 1;
+  "~*Amazonbot" 1;
+  "~*MJ12bot" 1;
+  "~*DotBot" 1;
+  "~*Bytespider" 1;
+  "~*l9scan" 1;
+  "~*RootEvidence" 1;
+  "~*crusader-worker" 1;
+  "~*Dataprovider" 1;
+}
+map $args $scraper_sig {
+  default 0;
+  "~*tagfilter=visualeditor" 1;
+  "~*tagfilter%3Dvisualeditor" 1;
+  "~*action=feedrecentchanges" 1;
+}
+limit_req_zone $binary_remote_addr zone=wiki:10m rate=5r/s;
+limit_req_zone $binary_remote_addr zone=wikiauth:5m rate=1r/s;
+server {
+  listen 80;
+  server_name ${WIKI_DOMAIN};
+  location /.well-known/acme-challenge/ { root /var/www/certbot; }
+  location / { return 301 https://$host$request_uri; }
+}
+server {
+  listen 443 ssl;
+  server_name ${WIKI_DOMAIN};
+  ssl_certificate /etc/letsencrypt/live/${WIKI_DOMAIN}/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/${WIKI_DOMAIN}/privkey.pem;
+  include /etc/nginx/snippets/wiki-denied-bot-ips.conf;
+  if ($bad_bot) { return 403; }
+  if ($scraper_sig) { return 403; }
+  location = /robots.txt {
+    add_header Content-Type text/plain;
+    return 200 "User-agent: GPTBot\nDisallow: /\nUser-agent: Amazonbot\nDisallow: /\n\nUser-agent: *\nDisallow: /index.php?\nDisallow: /api.php\n";
+  }
+  location = /index.php/Special:PluggableAuthLogin {
+    limit_req zone=wikiauth burst=3 nodelay;
+    set $upstream mediawiki;
+    proxy_pass http://$upstream:80;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-Proto https;
+  }
+  location / {
+    limit_req zone=wiki burst=30 nodelay;
+    set $upstream mediawiki;
+    proxy_pass http://$upstream:80;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-Proto https; }
+}
+server {
+  listen 80;
+  server_name ${AUTH_DOMAIN};
+  location /.well-known/acme-challenge/ { root /var/www/certbot; }
+  location / { return 301 https://$host$request_uri; }
+}
+server {
+  listen 443 ssl;
+  server_name ${AUTH_DOMAIN};
+  ssl_certificate /etc/letsencrypt/live/${AUTH_DOMAIN}/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/${AUTH_DOMAIN}/privkey.pem;
+  location / {
+    set $upstream casdoor;
+    proxy_pass http://$upstream:8000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-Proto https; }
+}
+server {
+  listen 80;
+  server_name ${DOMAIN};
+  location /.well-known/acme-challenge/ { root /var/www/certbot; }
+  location / { return 301 https://$host$request_uri; }
+}
+server {
+  listen 443 ssl;
+  server_name ${DOMAIN};
+  ssl_certificate /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+  location / {
+    set $upstream main-website;
+    proxy_pass http://$upstream:7000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https; }
+}
+server {
+  listen 80;
+  server_name ${ATOBRIEF_DOMAIN};
+  location /.well-known/acme-challenge/ { root /var/www/certbot; }
+  location / { return 301 https://$host$request_uri; }
+}
+server {
+  listen 443 ssl;
+  server_name ${ATOBRIEF_DOMAIN};
+  ssl_certificate /etc/letsencrypt/live/${ATOBRIEF_DOMAIN}/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/${ATOBRIEF_DOMAIN}/privkey.pem;
+  location / {
+    set $upstream atobrief;
+    proxy_pass http://$upstream:4000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    proxy_set_header X-Forwarded-Proto https; }
+}
+server {
+  listen 80;
+  server_name ${CRCSYNC_DOMAIN};
+  location /.well-known/acme-challenge/ { root /var/www/certbot; }
+  location / { return 301 https://$host$request_uri; }
+}
+server {
+  listen 443 ssl;
+  server_name ${CRCSYNC_DOMAIN};
+  ssl_certificate /etc/letsencrypt/live/${CRCSYNC_DOMAIN}/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/${CRCSYNC_DOMAIN}/privkey.pem;
+  location / {
+    set $upstream crc-sync;
+    proxy_pass http://$upstream:3000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    proxy_set_header X-Forwarded-Proto https; }
+}
