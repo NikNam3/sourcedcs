@@ -1,4 +1,9 @@
 'use strict';
+import { isSyncOpen } from '../../sync.js';
+import { missionNow } from '../topbar.js';
+import { getAllEfspStrips, getEfspBays, getEfspStrip } from './efsp-state.js';
+import { _sendEfsp, getActingPositions } from './efsp-ws.js';
+import { efspVisibleBayId } from './efsp-panel.js';
 
 // The three §11.5 metrics only a client can observe (docs/adr/0072, the client
 // half of docs/adr/0065):
@@ -23,7 +28,7 @@
 // — a duration is not a time of day (H11).
 
 // Code constants, not a tuning file (decisions.md P5). docs/adr/0072.
-const EFSP_METRICS_LIMITS = Object.freeze({
+export const EFSP_METRICS_LIMITS = Object.freeze({
   FLUSH_MS: 10 * 1000,          // flush at most this long after an event is queued
   FLUSH_AT: 20,                 // ...or as soon as this many are queued
   MAX_PER_REPORT: 100,          // crc-sync's per-report cap (metrics.js MAX_EVENTS_PER_REPORT)
@@ -37,7 +42,7 @@ const EFSP_METRICS_LIMITS = Object.freeze({
 // point (docs/adr/0072). Keyed `GESTURE:entry-point`. A new entry point (a
 // keyboard shortcut, say) adds a row here; a missing row throws, and the
 // test suite fails, rather than being counted as a silent 1.
-const GESTURE_INPUT_COST = Object.freeze({
+export const GESTURE_INPUT_COST = Object.freeze({
   'FLIP:dblclick': 1,                // a double-click is one input
   'ATTENTION:shift-click': 1,
   'HIGHLIGHT:contextmenu+swatch': 2, // right-click opens the swatches, a click picks one
@@ -47,7 +52,7 @@ const GESTURE_INPUT_COST = Object.freeze({
 });
 
 /** The inputs a gesture cost at `entryPoint`. Throws for a pair with no row. */
-function efspGestureInputCost(gesture, entryPoint) {
+export function efspGestureInputCost(gesture, entryPoint) {
   const cost = GESTURE_INPUT_COST[`${gesture}:${entryPoint}`];
   if (!Number.isInteger(cost)) throw new Error(`[efsp-metrics] no GESTURE_INPUT_COST row for ${gesture}:${entryPoint}`);
   return cost;
@@ -75,7 +80,7 @@ const _isSearchBay = (bayId) => typeof bayId === 'string' && bayId.endsWith('-se
  * @param {(fn:Function) => void} deps.defer             runs fn after the current task (a microtask)
  * @param {(...args:any[]) => void} [deps.warn]
  */
-function createEfspMetricsClient(deps) {
+export function createEfspMetricsClient(deps) {
   const L = EFSP_METRICS_LIMITS;
   const warn = deps.warn || ((...a) => console.warn(...a));
   const warned = new Set();
@@ -293,18 +298,18 @@ function _efspMetricsSafely(what, fn) {
 }
 
 /** From efsp-panel.js's _runEfspSearch, non-empty query only. `bayId` is the Bay the search was run FROM. */
-function noteEfspSearch(positionId, bayId) { _efspMetricsSafely('search hook', m => m.noteSearch(positionId, bayId)); }
+export function noteEfspSearch(positionId, bayId) { _efspMetricsSafely('search hook', m => m.noteSearch(positionId, bayId)); }
 /** From efsp-panel.js's _renderBayTabs on every render — the Bay on screen, or null when the panel is hidden. */
-function noteEfspBayVisible(bayId, positionId) { _efspMetricsSafely('bay hook', m => m.noteBayVisible(bayId, positionId)); }
+export function noteEfspBayVisible(bayId, positionId) { _efspMetricsSafely('bay hook', m => m.noteBayVisible(bayId, positionId)); }
 /** From bay-view.js's _selectStrip / selectEfspStripById, with the new selection (null when cleared). */
-function noteEfspStripSelected(stripId) { _efspMetricsSafely('selection hook', m => m.noteStripSelected(stripId)); }
+export function noteEfspStripSelected(stripId) { _efspMetricsSafely('selection hook', m => m.noteStripSelected(stripId)); }
 /** From each gesture entry point, AFTER _dispatchGesture dispatched; `positionId` is what it returned. */
-function noteEfspGesture(gesture, entryPoint, positionId) {
+export function noteEfspGesture(gesture, entryPoint, positionId) {
   if (!positionId) return; // _dispatchGesture declined: nothing happened, nothing to count
   _efspMetricsSafely('gesture hook', m => m.noteGesture(gesture, entryPoint, positionId));
 }
 /** app.js: `efsp-metrics-report-ack`. */
-function onEfspMetricsReportAck(msg) { _efspMetricsSafely('ack', m => m.onAck(msg)); }
+export function onEfspMetricsReportAck(msg) { _efspMetricsSafely('ack', m => m.onAck(msg)); }
 /** Sends what is queued now rather than at the next flush (tests, and beforeunload). */
 function flushEfspMetricsNow() { let n = 0; _efspMetricsSafely('flush', m => { n = m.flush(); }); return n; }
 /** Local counters — drops, abandons, samples — for a log or the e2e walk. */
@@ -312,8 +317,4 @@ function efspMetricsClientStats() { let s = null; _efspMetricsSafely('stats', m 
 
 if (typeof window !== 'undefined' && window && typeof window.addEventListener === 'function') {
   window.addEventListener('beforeunload', () => { flushEfspMetricsNow(); });
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { createEfspMetricsClient, efspGestureInputCost, GESTURE_INPUT_COST, EFSP_METRICS_LIMITS };
 }

@@ -43,12 +43,12 @@
  * @param {number} scrollTopAtCache — the container's scrollTop when the rects were measured
  * @param {number} scrollTopNow — its scrollTop now
  */
-function scrollCompensatedY(viewportY, scrollTopAtCache, scrollTopNow) {
+export function scrollCompensatedY(viewportY, scrollTopAtCache, scrollTopNow) {
   return viewportY + (scrollTopNow - scrollTopAtCache);
 }
 
 /** The inverse — a cached top back in live viewport coordinates, for drawing the insertion line where the Strips actually are now rather than where they were when measured. */
-function cachedTopToViewportY(cachedY, scrollTopAtCache, scrollTopNow) {
+export function cachedTopToViewportY(cachedY, scrollTopAtCache, scrollTopNow) {
   return cachedY - (scrollTopNow - scrollTopAtCache);
 }
 
@@ -62,7 +62,7 @@ function cachedTopToViewportY(cachedY, scrollTopAtCache, scrollTopNow) {
  *   orderKey server-side — see board-store.js's module comment on why the
  *   client never computes a raw orderKey itself).
  */
-function computeInsertionIndex(rects, pointerY) {
+export function computeInsertionIndex(rects, pointerY) {
   for (let i = 0; i < rects.length; i++) {
     const mid = rects[i].top + rects[i].height / 2;
     if (pointerY < mid) {
@@ -88,10 +88,10 @@ function computeInsertionIndex(rects, pointerY) {
 // or relocate a Strip via drop-target detection under the cursor at that
 // instant. Matches the drag-threshold convention virtually every
 // production drag-and-drop implementation uses for the same reason.
-const DRAG_THRESHOLD_PX = 5;
+export const DRAG_THRESHOLD_PX = 5;
 
 /** @returns {boolean} true once total pointer travel from pointerdown exceeds DRAG_THRESHOLD_PX — the point at which a gesture stops being "just a click." */
-function hasExceededDragThreshold(dx, dy) {
+export function hasExceededDragThreshold(dx, dy) {
   return Math.hypot(dx, dy) > DRAG_THRESHOLD_PX;
 }
 
@@ -117,7 +117,7 @@ function hasExceededDragThreshold(dx, dy) {
  *   order: {stripId:string, rebuild:boolean}[],
  * }}
  */
-function computeRackReconciliation(existingIds, wantedIds, dirtyIds, protectedIds) {
+export function computeRackReconciliation(existingIds, wantedIds, dirtyIds, protectedIds) {
   const existingSet = new Set(existingIds);
   const wantedSet = new Set(wantedIds);
 
@@ -129,11 +129,4 @@ function computeRackReconciliation(existingIds, wantedIds, dirtyIds, protectedId
   }));
 
   return { toRemove, order };
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    computeInsertionIndex, computeRackReconciliation, DRAG_THRESHOLD_PX, hasExceededDragThreshold,
-    scrollCompensatedY, cachedTopToViewportY,
-  };
 }

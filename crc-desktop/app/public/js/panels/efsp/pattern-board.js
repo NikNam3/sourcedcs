@@ -12,27 +12,27 @@
 // Pure model first, renderer second. Times come from the injected mission clock (`nowS`), never
 // Date.now() (H11).
 
-const RSU_LEGS = [
+export const RSU_LEGS = [
   { id: 'closed', label: 'CLOSED' },
   { id: 'initial', label: 'INITIAL' },
   { id: 'base', label: 'BASE' },
   { id: 'final', label: 'FINAL' },
 ];
-const PRIFLY_LEGS = [
+export const PRIFLY_LEGS = [
   { id: 'initial', label: 'INITIAL' },
   { id: 'break', label: 'BREAK' },
   { id: 'downwind', label: 'DOWNWIND' },
   { id: 'groove', label: 'GROOVE' },
 ];
 
-const PATTERN_LONG_MIN = 10;      // [SOURCE-DEFINED] minutes in the pattern before an advisory
-const PATTERN_FINAL_MAX = 1;      // [SOURCE-DEFINED] more than this on the last leg is an advisory
-const UNPLACED_LEG = '?';         // a Strip whose rack is not a leg is shown, never hidden
+export const PATTERN_LONG_MIN = 10;      // [SOURCE-DEFINED] minutes in the pattern before an advisory
+export const PATTERN_FINAL_MAX = 1;      // [SOURCE-DEFINED] more than this on the last leg is an advisory
+export const UNPLACED_LEG = '?';         // a Strip whose rack is not a leg is shown, never hidden
 
-const INTENT_LABELS = { TOUCH_AND_GO: 'T&G', FULL_STOP: 'Full stop', LOW_APPROACH: 'Low app', STOP_AND_GO: 'S&G' };
+export const INTENT_LABELS = { TOUCH_AND_GO: 'T&G', FULL_STOP: 'Full stop', LOW_APPROACH: 'Low app', STOP_AND_GO: 'S&G' };
 
 // PATTERN Role's states (ADR 0064 B2). The two chip actions.
-const PATTERN_ACTIONS = [
+export const PATTERN_ACTIONS = [
   { id: 'LANDED', label: 'Landed', toState: 'RECOVERED' },
   { id: 'DROP', label: 'Drop', toState: 'DROPPED' },
 ];
@@ -48,7 +48,7 @@ const _pbFinite = (v) => typeof v === 'number' && Number.isFinite(v);
  * @param {number} [p.longMin]
  * @param {number} [p.finalMax]
  */
-function patternBoardModel({ legs, strips, nowS, runwayStatus, longMin, finalMax } = {}) {
+export function patternBoardModel({ legs, strips, nowS, runwayStatus, longMin, finalMax } = {}) {
   const legList = Array.isArray(legs) && legs.length ? legs : RSU_LEGS;
   const long = _pbFinite(longMin) ? longMin : PATTERN_LONG_MIN;
   const finalCap = _pbFinite(finalMax) ? finalMax : PATTERN_FINAL_MAX;
@@ -98,14 +98,14 @@ function patternBoardModel({ legs, strips, nowS, runwayStatus, longMin, finalMax
 }
 
 /** The leg after `legId`, for the touch "next leg" button; the last leg has none. */
-function nextLeg(legs, legId) {
+export function nextLeg(legs, legId) {
   const list = Array.isArray(legs) ? legs : [];
   const i = list.findIndex(l => l.id === legId);
   return i >= 0 && i < list.length - 1 ? list[i + 1].id : null;
 }
 
 /** What dragging (or the next-leg button) asks for. A description only: the caller sends the Move. */
-function moveToLeg(stripId, legId) {
+export function moveToLeg(stripId, legId) {
   return { kind: 'MoveToLeg', stripId, rackId: legId };
 }
 
@@ -120,7 +120,7 @@ function _pbEl(doc, tag, cls, text) {
  * @param {object} model   from patternBoardModel
  * @param {object} [o]     { doc, legs, onMove(desc), onAction({stripId,id,toState}) }
  */
-function renderPatternBoard(model, { doc, legs, onMove, onAction } = {}) {
+export function renderPatternBoard(model, { doc, legs, onMove, onAction } = {}) {
   const d = doc || (typeof document !== 'undefined' ? document : null);
   const root = _pbEl(d, 'div', 'efsp-pattern');
   const row = _pbEl(d, 'div', 'efsp-pattern-legs');
@@ -173,11 +173,4 @@ function renderPatternBoard(model, { doc, legs, onMove, onAction } = {}) {
   for (const a of model.advisories) adv.appendChild(_pbEl(d, 'span', 'efsp-pattern-advisory', a.text));
   root.appendChild(adv);
   return root;
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    RSU_LEGS, PRIFLY_LEGS, PATTERN_LONG_MIN, PATTERN_FINAL_MAX, UNPLACED_LEG, INTENT_LABELS, PATTERN_ACTIONS,
-    patternBoardModel, nextLeg, moveToLeg, renderPatternBoard,
-  };
 }

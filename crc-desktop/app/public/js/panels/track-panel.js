@@ -1,4 +1,14 @@
 'use strict';
+import { clearTrackRename, kinematics, setTrackRename, verticalFpm } from '../geo.js';
+import { magneticText } from '../magnetic.js';
+import { clearIffOverride, getIff, iffColor, setIffOverride } from '../iff.js';
+import {
+  altitudeLong, assignedAltText, assignedBlockText, tagEditable, trackName, trackNameSuffix, typeText
+} from '../track-label.js';
+import { _fdrForTrack, buildFiledRoute, parseFiledRouteWaypoints, updateMap } from '../geojson.js';
+import { dock, ensureTrackPanel } from '../dock.js';
+import { conformanceAlertsForFdr, stcaConflictsForTrack } from './efsp/efsp-state.js';
+import { history, map, mapReady, settings, tracks } from '../app.js';
 
 // ── Track info panel ─────────────────────────────────────────────────────
 // Left-clicking an aircraft track opens this persistent side panel. It
@@ -13,7 +23,7 @@
 
 let _trackPanelId = null; // currently displayed track id (string), or null
 
-function initTrackPanel() {
+export function initTrackPanel() {
   const $panel   = document.getElementById('track-panel');
   if (!$panel) return;
 
@@ -112,7 +122,7 @@ function _refreshIffState(t) {
   $badge.appendChild(span);
 }
 
-function showTrackPanel(id) {
+export function showTrackPanel(id) {
   _trackPanelId = String(id);
   // Track Info is a normal closable panel now (see dock.js's REQUIRED_PANELS
   // comment) — clicking a track is its reopen path, so get-or-create it
@@ -127,7 +137,7 @@ function showTrackPanel(id) {
 // forces the view away to whatever tab the user had open before (dockview
 // owns tab switching, and yanking focus away on every empty-map click would
 // be more surprising than useful).
-function closeTrackPanel() {
+export function closeTrackPanel() {
   _trackPanelId    = null;
   _fplShownFor     = null;
   const $fplSec = document.getElementById('tp-fpl-section');
@@ -242,7 +252,7 @@ function _refreshTrackAlerts(trackId) {
   }
 }
 
-function updateTrackPanel() {
+export function updateTrackPanel() {
   if (_trackPanelId == null) return;
   const t = tracks.get(_trackPanelId);
   if (!t) return; // track faded out — leave panel open with last values
@@ -300,7 +310,7 @@ function updateTrackPanel() {
 // controller can tag it — the same shared tag the track panel sets, so every
 // controller sees it. Dismissed on Enter, Escape, or clicking outside.
 
-function showGroundLabelPopup(id, clientX, clientY) {
+export function showGroundLabelPopup(id, clientX, clientY) {
   const popup = document.getElementById('gnd-label-popup');
   const input = document.getElementById('gnd-label-input');
   if (!popup || !input) return;

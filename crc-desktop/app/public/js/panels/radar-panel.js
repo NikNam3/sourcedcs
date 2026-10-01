@@ -1,4 +1,9 @@
 'use strict';
+import { PANEL_TITLES, isDockPanelOpen, isPanelPinned, setPanelPinned, toggleDockPanel } from '../dock.js';
+import { hideLosProfile, showLosProfile } from './los-panel.js';
+import { getAllEfspPositions } from './efsp/efsp-state.js';
+import { getActingPositions, sendEfspSetPositions } from './efsp/efsp-ws.js';
+import { coverageHeldPositions, getActiveRadars } from '../app.js';
 
 // ── Coverage panel: the radars this controller is looking through ─────────
 //
@@ -31,7 +36,7 @@ const TYPE_LABELS = { airport: 'AIRPORT', approach: 'APPROACH', awacs: 'AWACS', 
 // behind the radar list changes. There is nothing to preserve across a
 // re-render any more — no search term, no partial selection — so this just
 // redraws.
-function refreshRadarPanelData() {
+export function refreshRadarPanelData() {
   renderCoverageList();
 }
 
@@ -110,7 +115,7 @@ function panelControlRows() {
   ];
 }
 
-function renderPanelControls() {
+export function renderPanelControls() {
   const $panels = document.getElementById('panel-controls');
   if (!$panels) return;
   $panels.innerHTML = '';
@@ -223,7 +228,7 @@ function _efspFacilityIds() {
 let _positionControlsEl = null;
 let _positionWarningsEl = null;
 
-function renderPositionControls() {
+export function renderPositionControls() {
   if (!_positionControlsEl || typeof getActingPositions !== 'function') return;
   const $positions = _positionControlsEl;
   $positions.innerHTML = '';
@@ -273,7 +278,7 @@ function renderPositionControls() {
 // "warn, do not block" (guide §4.8.6 rule 5): the position change has
 // already been committed by the time this renders, this is purely the
 // count/destination notice, never a confirmation gate.
-function renderPositionWarnings(warnings) {
+export function renderPositionWarnings(warnings) {
   if (!_positionWarningsEl) return;
   const $el = _positionWarningsEl;
   if (!warnings || warnings.length === 0) { $el.textContent = ''; return; }
@@ -285,7 +290,7 @@ function renderPositionWarnings(warnings) {
 }
 
 // Updates the topbar Panels-control button's badge (number of active radars)
-function updateRadarBadge() {
+export function updateRadarBadge() {
   const $badge = document.getElementById('radar-count-badge');
   if (!$badge) return;
   const n = getActiveRadars().length;
@@ -295,7 +300,7 @@ function updateRadarBadge() {
 // Now a normal dockview panel, reached via the topbar Panels-control button
 // (dock.js's wireRadarsPanelButton/toggleOrFocusPanel) — no open/close
 // class toggling or outside-click handling needed here any more.
-function initRadarPanel() {
+export function initRadarPanel() {
   _positionControlsEl = document.getElementById('efsp-position-controls');
   _positionWarningsEl = document.getElementById('efsp-position-warnings');
 

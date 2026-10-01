@@ -18,6 +18,8 @@
 // which arrive whole on deltas — nothing is stored (the WP6 plan's rule-4
 // argument), so a 3G change re-renders the Strip with no new wiring.
 
+import { getEfspFdr, getEfspFieldState } from './efsp-state.js';
+
 function _ordNormalizeEnd(text) {
   if (typeof text !== 'string' && typeof text !== 'number') return null;
   const s = String(text).trim().toUpperCase().replace(/^RWY|^RW/, '').replace(/\s+/g, '');
@@ -64,7 +66,7 @@ function _ordResolveRunway(strip, fdr, fieldState) {
 }
 
 /** The advisory for a Strip, or null — crc-sync's field-state.js hungOrdnanceAdvisoryFor, copied. */
-function hungOrdnanceAdvisoryFor(strip, fdr, fieldState) {
+export function hungOrdnanceAdvisoryFor(strip, fdr, fieldState) {
   if (!strip || !fieldState) return null;
   if (!fdr || !fdr.military || fdr.military.ordnanceState !== 'HUNG') return null;
   if (strip.role !== 'ARRIVAL' && strip.role !== 'DEPARTURE') return null;
@@ -92,14 +94,14 @@ function hungOrdnanceAdvisoryFor(strip, fdr, fieldState) {
 // [SOURCE-DEFINED] shown while the client has no field state for the Facility
 // (L1b's getEfspFieldState not loaded, or no record yet): that ordnance is hung
 // must never depend on another piece arriving first.
-const ORDNANCE_NO_FIELD_STATE_REASON = 'Hung ordnance. The hot cargo pad is shown when field state is available.';
+export const ORDNANCE_NO_FIELD_STATE_REASON = 'Hung ordnance. The hot cargo pad is shown when field state is available.';
 
 /**
  * strip-view.js's _stripAlerts hook: [] or one `ord` alert — an amber HUNG chip
  * and its reason line. On every Position's view of the Strip, whether or not
  * Block 3G is on that Position's grid.
  */
-function ordnanceAlertsFor(strip) {
+export function ordnanceAlertsFor(strip) {
   if (!strip || (strip.role !== 'ARRIVAL' && strip.role !== 'DEPARTURE') || strip.state === 'DROPPED') return [];
   const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(strip.fdrId) : null;
   if (!fdr || !fdr.military || fdr.military.ordnanceState !== 'HUNG') return [];
@@ -110,8 +112,4 @@ function ordnanceAlertsFor(strip) {
     text: 'HUNG',
     reason: advisory ? advisory.reason : ORDNANCE_NO_FIELD_STATE_REASON,
   }];
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { hungOrdnanceAdvisoryFor, ordnanceAlertsFor, ORDNANCE_NO_FIELD_STATE_REASON };
 }

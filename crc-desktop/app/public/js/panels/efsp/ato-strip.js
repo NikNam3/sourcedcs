@@ -1,4 +1,6 @@
 'use strict';
+import { getAllEfspStrips, getEfspFdr, getEfspStrip } from './efsp-state.js';
+import { getSelectedEfspStripId } from './bay-view.js';
 
 // What an imported ATO shows on a Strip (crc-sync's docs/adr/0071, guide §9.8,
 // §9.9 part 2, §3.10.3). Three things, all read-only:
@@ -57,7 +59,7 @@ function _arTacan(fdr) {
  * record is never edited for that.
  * @returns {{role:'TANKER'|'RECEIVER', peers:{fdrId,callsign,stripIds}[], text:string, title:string}|null}
  */
-function arJoinFor(strip) {
+export function arJoinFor(strip) {
   const fdr = strip ? _atoFdr(strip.fdrId) : null;
   const links = _arLinksOf(fdr);
   if (links.length === 0) return null;
@@ -87,15 +89,15 @@ function arJoinFor(strip) {
   return { role, peers, text, title: `Air refuelling (from the ATO)\n${lines.join('\n')}` };
 }
 
-function isArHighlighted(stripId) { return _arHighlightStripIds.has(stripId); }
-function getArHighlightStripIds() { return [..._arHighlightStripIds]; }
+export function isArHighlighted(stripId) { return _arHighlightStripIds.has(stripId); }
+export function getArHighlightStripIds() { return [..._arHighlightStripIds]; }
 
 /**
  * Selecting any participant highlights the others. Called from bay-view.js's
  * _afterSelectionChanged beside MARSA's; null clears it.
  * @returns {boolean} whether the set changed
  */
-function highlightArParticipants(stripId) {
+export function highlightArParticipants(stripId) {
   const strip = stripId && typeof getEfspStrip === 'function' ? getEfspStrip(stripId) : null;
   const join = strip ? arJoinFor(strip) : null;
   const next = new Set(join ? join.peers.flatMap(p => p.stripIds) : []);
@@ -109,14 +111,14 @@ function highlightArParticipants(stripId) {
  * resolved from OTHER flights' Strips (a peer dropped, a peer filed), which no
  * part of this Strip's own record changes, plus whether it is highlighted.
  */
-function arSignatureFor(strip) {
+export function arSignatureFor(strip) {
   const join = arJoinFor(strip);
   const peers = join ? join.peers.map(p => `${p.fdrId}:${p.stripIds.join(',')}`).join(';') : '';
   return `${join ? join.text : ''}|${peers}|${isArHighlighted(strip.stripId) ? 1 : 0}`;
 }
 
 /** Re-resolves the highlight against the current records — after a snapshot. */
-function refreshArHighlight() {
+export function refreshArHighlight() {
   if (typeof getSelectedEfspStripId !== 'function') return false;
   return highlightArParticipants(getSelectedEfspStripId());
 }
@@ -126,7 +128,7 @@ function refreshArHighlight() {
  * strip-view.js alert ({ key, tone, text, reason }). Empty when they agree or
  * the flight has no ATO.
  */
-function atoAlertsFor(strip) {
+export function atoAlertsFor(strip) {
   const fdr = strip ? _atoFdr(strip.fdrId) : null;
   const atoCode = fdr && fdr.ato && fdr.ato.iff ? fdr.ato.iff.modeThree : null;
   if (!atoCode) return [];
@@ -140,7 +142,7 @@ function atoAlertsFor(strip) {
 }
 
 /** The read-only ▼ rows, as [label, value] pairs — [] for a flight no ATO tasked. */
-function atoExpandedRowsFor(strip) {
+export function atoExpandedRowsFor(strip) {
   const fdr = strip ? _atoFdr(strip.fdrId) : null;
   if (!fdr || !fdr.ato) return [];
   const a = fdr.ato;
@@ -169,7 +171,7 @@ function atoExpandedRowsFor(strip) {
 }
 
 /** Appends the ▼ rows to an expanded Strip's panel. Plain text, no editor. */
-function appendAtoExpandedRows(panel, strip) {
+export function appendAtoExpandedRows(panel, strip) {
   for (const [label, value] of atoExpandedRowsFor(strip)) {
     const row = document.createElement('div');
     row.className = 'efsp-expanded-row efsp-ato-row';
@@ -184,11 +186,4 @@ function appendAtoExpandedRows(panel, strip) {
     row.appendChild(v);
     panel.appendChild(row);
   }
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    arJoinFor, arSignatureFor, highlightArParticipants, refreshArHighlight, isArHighlighted, getArHighlightStripIds,
-    atoAlertsFor, atoExpandedRowsFor, appendAtoExpandedRows,
-  };
 }

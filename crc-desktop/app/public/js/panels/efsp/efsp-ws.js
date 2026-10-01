@@ -1,4 +1,9 @@
 'use strict';
+import { isSyncOpen, sendToSync } from '../../sync.js';
+import {
+  efspEpochChangeOf, efspHeartbeatGapOf, efspResyncPositionFor, getPendingMutations, rebaseForResend,
+  registerPendingMutation
+} from './efsp-state.js';
 
 // Client-side EFSP WebSocket helpers — constructs efsp-mutation/efsp-
 // set-positions/efsp-resync messages, sends them via sync.js's existing
@@ -27,7 +32,7 @@ function efspClientMutationId() {
 // an EFSP action that gets silently dropped is indistinguishable from a
 // broken button. Warn loudly here instead, since this is the one place
 // every EFSP send passes through.
-function _sendEfsp(msg) {
+export function _sendEfsp(msg) {
   if (!isSyncOpen()) {
     console.warn('[efsp] WebSocket not open — message NOT sent (silently dropped by sendToSync):', msg);
     return;
@@ -45,7 +50,7 @@ function _sendEfsp(msg) {
  * (NLA/move/transfer/gesture/coordination) all just pass their Strip
  * through unchanged.
  */
-function sendEfspMutation(actingPositionId, strip, op) {
+export function sendEfspMutation(actingPositionId, strip, op) {
   const msg = {
     version: 1, type: 'efsp-mutation',
     clientMutationId: efspClientMutationId(),
@@ -61,7 +66,7 @@ function sendEfspMutation(actingPositionId, strip, op) {
 }
 
 /** CreateStrip has no existing Strip to derive facilityId from — an explicit param, defaulting to INCIRLIK for back-compat with every pre-WP4A call site (efsp-panel.js's OPS-only DEPARTURE form). */
-function sendEfspCreateStrip(actingPositionId, createOp, facilityId = DEFAULT_EFSP_FACILITY_ID) {
+export function sendEfspCreateStrip(actingPositionId, createOp, facilityId = DEFAULT_EFSP_FACILITY_ID) {
   const msg = {
     version: 1, type: 'efsp-mutation',
     clientMutationId: efspClientMutationId(),
@@ -75,7 +80,7 @@ function sendEfspCreateStrip(actingPositionId, createOp, facilityId = DEFAULT_EF
 }
 
 /** Sets the FULL held-Position set for ONE Facility — mirrors position-store.js's own "declare your full set each call" contract, per Facility (docs/adr/0013: each Facility has its own PositionStore instance server-side). */
-function sendEfspSetPositions(facilityId, held) {
+export function sendEfspSetPositions(facilityId, held) {
   _actingPositionsByFacility[facilityId] = [...held];
   _sendEfsp({ version: 1, type: 'efsp-set-positions', facilityId, held });
 }
@@ -87,7 +92,7 @@ function sendEfspSetPositions(facilityId, held) {
  *   slice, so a flat list is exactly as correct as a facility-scoped one
  *   for "does this controller hold Position X").
  */
-function getActingPositions(facilityId) {
+export function getActingPositions(facilityId) {
   if (facilityId) return [...(_actingPositionsByFacility[facilityId] || [])];
   return Object.values(_actingPositionsByFacility).flat();
 }
@@ -99,7 +104,7 @@ function getActingPositions(facilityId) {
  * pending mutation: the replay-on-reconnect machinery (§5.6.3) is keyed on
  * Strip identity, and an airspace op is cheap to simply reissue by hand.
  */
-function sendEfspAirspaceMutation(actingPositionId, airspaceId, baseRev, op) {
+export function sendEfspAirspaceMutation(actingPositionId, airspaceId, baseRev, op) {
   _sendEfsp({
     version: 1, type: 'efsp-airspace-mutation',
     clientMutationId: efspClientMutationId(),
@@ -119,7 +124,7 @@ function sendEfspAirspaceMutation(actingPositionId, airspaceId, baseRev, op) {
  * airspace op is not: §5.6.3's replay machinery is keyed on Strip identity,
  * and a bind is cheap to reissue.
  */
-function sendEfspCorrelationMutation(actingPositionId, fdrId, baseRev, op) {
+export function sendEfspCorrelationMutation(actingPositionId, fdrId, baseRev, op) {
   _sendEfsp({
     version: 1, type: 'efsp-correlation-mutation',
     clientMutationId: efspClientMutationId(),
@@ -139,7 +144,7 @@ function sendEfspCorrelationMutation(actingPositionId, fdrId, baseRev, op) {
  * Not registered as a pending mutation, for the reason the airspace and
  * correlation sends give: §5.6.3's replay machinery is keyed on Strip identity.
  */
-function sendEfspMarsaMutation(actingPositionId, marsaId, baseRev, op) {
+export function sendEfspMarsaMutation(actingPositionId, marsaId, baseRev, op) {
   _sendEfsp({
     version: 1, type: 'efsp-marsa-mutation',
     clientMutationId: efspClientMutationId(),
@@ -155,7 +160,7 @@ function sendEfspMarsaMutation(actingPositionId, marsaId, baseRev, op) {
  * correlation and MARSA sends give: §5.6.3's replay machinery is keyed on
  * Strip identity, and a field-state op is cheap to reissue by hand.
  */
-function sendEfspFieldStateMutation(actingPositionId, facilityId, baseRev, op) {
+export function sendEfspFieldStateMutation(actingPositionId, facilityId, baseRev, op) {
   _sendEfsp({
     version: 1, type: 'efsp-field-state-mutation',
     clientMutationId: efspClientMutationId(),
@@ -171,7 +176,7 @@ function sendEfspFieldStateMutation(actingPositionId, facilityId, baseRev, op) {
  * resent whole on every change). Not registered as a pending mutation, for the
  * reason the airspace and MARSA sends give.
  */
-function sendEfspCarrierMutation(actingPositionId, hullId, baseRev, op) {
+export function sendEfspCarrierMutation(actingPositionId, hullId, baseRev, op) {
   _sendEfsp({
     version: 1, type: 'efsp-carrier-mutation',
     clientMutationId: efspClientMutationId(),
@@ -184,7 +189,7 @@ function sendEfspCarrierMutation(actingPositionId, hullId, baseRev, op) {
  * Its own message type because it targets the approach's rotation, not a Strip. Not
  * registered as a pending mutation, for the reason the carrier and MARSA sends give.
  */
-function sendEfspSfaMutation(actingPositionId, baseRev, op) {
+export function sendEfspSfaMutation(actingPositionId, baseRev, op) {
   _sendEfsp({
     version: 1, type: 'efsp-sfa-mutation',
     clientMutationId: efspClientMutationId(),
@@ -224,13 +229,13 @@ function requestEfspResync(facilityId, reason) {
 }
 
 /** An efsp-snapshot or efsp-board-delta for this Facility landed: the resync (if any) is answered. */
-function noteEfspResyncAnswered(facilityId) {
+export function noteEfspResyncAnswered(facilityId) {
   if (facilityId) _resyncInFlight.delete(facilityId);
 }
-function noteEfspSnapshotLanded() { _resyncInFlight.clear(); }
+export function noteEfspSnapshotLanded() { _resyncInFlight.clear(); }
 
 /** Each heartbeat: age in-flight resyncs, and ask for one when the heartbeat shows a change we never received. */
-function noteEfspHeartbeatForSync(msg) {
+export function noteEfspHeartbeatForSync(msg) {
   for (const [f, n] of _resyncInFlight) {
     if (n + 1 >= RESYNC_RETRY_HEARTBEATS) _resyncInFlight.delete(f); else _resyncInFlight.set(f, n + 1);
   }
@@ -239,7 +244,7 @@ function noteEfspHeartbeatForSync(msg) {
 }
 
 /** A delta or ack from another Board lifetime: resync (the server answers a snapshot). Call before applying it. */
-function noteEfspBoardMessageForSync(msg) {
+export function noteEfspBoardMessageForSync(msg) {
   const changed = efspEpochChangeOf(msg);
   if (changed) requestEfspResync(changed, 'Board epoch changed (server restarted)');
 }
@@ -249,7 +254,7 @@ function noteEfspBoardMessageForSync(msg) {
  * flat, with `answer: 'snapshot' | 'delta'`. Returns the efsp-snapshot / efsp-board-delta
  * message it stands for (the other fields are untouched), for app.js to apply as any other.
  */
-function efspResyncReplyAsMessage(msg) {
+export function efspResyncReplyAsMessage(msg) {
   const { answer, ...rest } = msg;
   return { ...rest, type: answer === 'snapshot' ? 'efsp-snapshot' : 'efsp-board-delta' };
 }
@@ -262,7 +267,7 @@ function efspResyncReplyAsMessage(msg) {
  * onOrphaned rather than silently dropped — "the worst failure mode in
  * the system."
  */
-function replayPendingEfspMutations(onOrphaned) {
+export function replayPendingEfspMutations(onOrphaned) {
   for (const original of getPendingMutations()) {
     const rebased = rebaseForResend(original.clientMutationId);
     if (!rebased) {

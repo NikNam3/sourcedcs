@@ -21,15 +21,15 @@
 // Pure model first, renderer second, so the model is unit-testable with no DOM and the renderer with
 // the stub in tests/helpers/dom-stub.js.
 
-const FINAL_CADENCE_S = 5;           // §7.10: "approximately every 5 seconds"
-const FINAL_PROMPT_HOLD_S = 4;       // a due call stays on screen this long, then clears itself
-const FINAL_GLIDEPATH_TOL_DEG = 0.3; // [SOURCE-DEFINED] inside this is "on glidepath"
-const FINAL_TREND_STEP_DEG = 0.1;    // [SOURCE-DEFINED] drifting further out by this much between samples is a trend
+export const FINAL_CADENCE_S = 5;           // §7.10: "approximately every 5 seconds"
+export const FINAL_PROMPT_HOLD_S = 4;       // a due call stays on screen this long, then clears itself
+export const FINAL_GLIDEPATH_TOL_DEG = 0.3; // [SOURCE-DEFINED] inside this is "on glidepath"
+export const FINAL_TREND_STEP_DEG = 0.1;    // [SOURCE-DEFINED] drifting further out by this much between samples is a trend
 
 // Highest priority first: when two fall due in one sample the controller sees the more urgent one.
-const FINAL_CALL_PRIORITY = ['DECISION_ALTITUDE', 'TREND_DEVIATION', 'GLIDEPATH_INTERCEPT', 'MILE'];
+export const FINAL_CALL_PRIORITY = ['DECISION_ALTITUDE', 'TREND_DEVIATION', 'GLIDEPATH_INTERCEPT', 'MILE'];
 
-const FINAL_TERMINALS = {
+export const FINAL_TERMINALS = {
   PAR: [
     { id: 'ASSURED', label: 'Landing assured', toState: 'BALL' },
     { id: 'MISSED', label: 'Missed approach', toState: 'BOLTER_WAVEOFF' },
@@ -51,7 +51,7 @@ const _fpFinite = (v) => typeof v === 'number' && Number.isFinite(v);
  *
  * @returns {Array<{kind: string, miles?: number}>} in FINAL_CALL_PRIORITY order
  */
-function finalCallsDue(prev, cur, opts = {}) {
+export function finalCallsDue(prev, cur, opts = {}) {
   if (!prev || !cur) return [];
   const tol = _fpFinite(opts.glidepathTolDeg) ? opts.glidepathTolDeg : FINAL_GLIDEPATH_TOL_DEG;
   const step = _fpFinite(opts.trendStepDeg) ? opts.trendStepDeg : FINAL_TREND_STEP_DEG;
@@ -74,7 +74,7 @@ function finalCallsDue(prev, cur, opts = {}) {
   return due.sort((a, b) => FINAL_CALL_PRIORITY.indexOf(a.kind) - FINAL_CALL_PRIORITY.indexOf(b.kind));
 }
 
-function promptText(call) {
+export function promptText(call) {
   switch (call.kind) {
     case 'DECISION_ALTITUDE': return 'DECISION ALTITUDE';
     case 'TREND_DEVIATION': return 'Trend: deviating';
@@ -84,11 +84,11 @@ function promptText(call) {
   }
 }
 
-function formatDistance(nm) {
+export function formatDistance(nm) {
   return _fpFinite(nm) ? `${Math.max(0, nm).toFixed(1)} nm` : '--';
 }
 
-function formatDeviation(dev, tol = FINAL_GLIDEPATH_TOL_DEG) {
+export function formatDeviation(dev, tol = FINAL_GLIDEPATH_TOL_DEG) {
   if (!_fpFinite(dev)) return '--';
   const mag = Math.abs(dev).toFixed(1);
   if (Math.abs(dev) <= tol) return `ON (${dev >= 0 ? '+' : '-'}${mag}°)`;
@@ -99,7 +99,7 @@ function formatDeviation(dev, tol = FINAL_GLIDEPATH_TOL_DEG) {
  * Seconds from the cadence origin to the next 5 s beat, and how far through the beat we are.
  * Both read the injected mission clock; a clock that has not started gives a stalled bar, not NaN.
  */
-function cadenceAt(nowS, originS) {
+export function cadenceAt(nowS, originS) {
   if (!_fpFinite(nowS)) return { phase: 0, nextInS: FINAL_CADENCE_S };
   const t = _fpFinite(originS) ? nowS - originS : nowS;
   const into = ((t % FINAL_CADENCE_S) + FINAL_CADENCE_S) % FINAL_CADENCE_S;
@@ -107,7 +107,7 @@ function cadenceAt(nowS, originS) {
 }
 
 /** The two terminal actions for a kind ('PAR' | 'CARRIER'), as plain data. */
-function terminalActionsFor(kind) {
+export function terminalActionsFor(kind) {
   return (FINAL_TERMINALS[kind] || FINAL_TERMINALS.PAR).map(a => ({ ...a }));
 }
 
@@ -118,7 +118,7 @@ function terminalActionsFor(kind) {
  * sample: { kind, callsign, stripId, runway, decisionAltFt, distanceNm, altitudeFt?,
  *           glidepathDevDeg?, nowS, cadenceOriginS? }
  */
-function createFinalTracker(opts = {}) {
+export function createFinalTracker(opts = {}) {
   let prev = null;
   let prompt = null; // { kind, text, untilS }
   return {
@@ -137,7 +137,7 @@ function createFinalTracker(opts = {}) {
   };
 }
 
-function finalViewModel(sample, prompt) {
+export function finalViewModel(sample, prompt) {
   const s = sample || {};
   const cad = cadenceAt(s.nowS, s.cadenceOriginS);
   return {
@@ -166,7 +166,7 @@ function _fpEl(doc, tag, cls, text) {
  * Renders a view model. No input, select or textarea is ever created (§7.10). The only gestures are
  * the two terminal buttons; `onTerminal({ stripId, id, toState })` receives the tap.
  */
-function renderFinalPanel(vm, { doc, onTerminal } = {}) {
+export function renderFinalPanel(vm, { doc, onTerminal } = {}) {
   const d = doc || (typeof document !== 'undefined' ? document : null);
   const root = _fpEl(d, 'div', 'efsp-final');
   const head = _fpEl(d, 'div', 'efsp-final-head');
@@ -207,13 +207,4 @@ function renderFinalPanel(vm, { doc, onTerminal } = {}) {
   });
   root.appendChild(term);
   return root;
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    FINAL_CADENCE_S, FINAL_PROMPT_HOLD_S, FINAL_GLIDEPATH_TOL_DEG, FINAL_TREND_STEP_DEG,
-    FINAL_CALL_PRIORITY, FINAL_TERMINALS,
-    finalCallsDue, promptText, formatDistance, formatDeviation, cadenceAt,
-    terminalActionsFor, createFinalTracker, finalViewModel, renderFinalPanel,
-  };
 }

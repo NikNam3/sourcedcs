@@ -1,4 +1,6 @@
 'use strict';
+import { losBeamProfile } from '../los.js';
+import { getActiveRadars, settings } from '../app.js';
 
 // ── LOS terrain profile chart ─────────────────────────────────────────────
 // Shown while hovering a radar row in the coverage list: a terrain-vs-distance
@@ -35,7 +37,7 @@ function currentBeamBearing(radar) {
 // (can be anywhere on screen), so position next to whatever's actually
 // being hovered instead of a fixed offset from the panel's old hardcoded
 // left-edge location.
-function showLosProfile(radar, triggerEl) {
+export function showLosProfile(radar, triggerEl) {
   if (!settings.radarDebug) return;
   const $panel = document.getElementById('los-profile-panel');
   const $label = document.getElementById('los-profile-radar-label');
@@ -54,7 +56,7 @@ function showLosProfile(radar, triggerEl) {
   losProfileTimer = setInterval(drawLosProfile, 200);
 }
 
-function hideLosProfile() {
+export function hideLosProfile() {
   losProfileRadarId = null;
   clearInterval(losProfileTimer);
   losProfileTimer = null;

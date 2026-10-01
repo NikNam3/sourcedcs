@@ -20,7 +20,42 @@
 // gates (_canProposeTofiEntry and friends) and state at call time, and those
 // gates stay where efsp-coordination-client.test.js's drift checks find them.
 
-const ROLE_ABBR = { DEPARTURE: 'DEP', ARRIVAL: 'ARR', OVERFLIGHT: 'OVF', MISSION: 'MSN', MARSHAL: 'MAR', FINAL: 'FNL', PATTERN: 'PAT' };
+import { missionNow } from '../topbar.js';
+import {
+  conformanceAlertsForFdr, correlatedTrackIdForStrip, getEfspAirspace, getEfspCorrelationForStrip, getEfspFdr,
+  getEfspStrip, marsaForStrip, otherLiveStripsForFdr, stcaConflictsForTrack, surveillanceHintsForStrip
+} from './efsp-state.js';
+import { clearEfspArrival, consumeEfspArrivalFlash, efspArrivalFor } from './efsp-arrivals.js';
+import { blockLabelFor, blockTitleFor } from './strip-template.js';
+import { nlaButtonLabel, nlaLabelFor, tofiExitDueFor } from './efsp-nla.js';
+import { toggleOffset } from './efsp-gestures.js';
+import { getActingPositions, sendEfspMutation } from './efsp-ws.js';
+import { noteEfspGesture } from './efsp-metrics-client.js';
+import { correlationBadgeFor } from './correlation-highlight.js';
+import { isMarsaHighlighted, marsaBadgeFor } from './marsa-badge.js';
+import { ordnanceAlertsFor } from './ordnance-advisory.js';
+import { compactBlocksFor, fieldSpanFor } from './strip-fields.js';
+import { carrierDecorateNlaButton, carrierExtraNlaButtons } from './carrier-panel.js';
+import { sfaExtraNlaButtons } from './bay-views.js';
+import {
+  AIRSPACE_ENTRY_POSITIONS, CHIP_HISTORY_LIMIT, COORDINATION_PRIMITIVE_LABELS, COORDINATION_TARGETS, HAND_BACK_TO,
+  TOFI_ACCEPT_REGIMES, TOFI_COUNTERPARTS, _appendAnnotationHistory, _appendDropButton, _appendExpandButton,
+  _appendExpandedView, _buildBlockCell, _buildCoordinationNoteEl, _buildCoordinationReasonEl,
+  _canApproveAirspaceEntry, _canConvertToArrival, _canProposeCoordination, _canProposeTofiEntry, _canProposeTofiExit,
+  _canTransferTofiComms, _coordinationIsReplica, _coordinationProposerOf, _coordinationStateWord,
+  _dispatchCoordination, _dispatchCorrelation, _dispatchGesture, _dispatchHandBack, _dispatchMarsa, _dispatchTofi,
+  _handBackBayFor, _invokeNla, _isPendingCoordinationReplica, _isPendingTofiReplica, _isRejectedCoordinationReplica,
+  _mountPopover, _openAirspaceEntryPopover, _openBindPopover, _openCoordinatePopover, _openMarsaPopover,
+  _openTofiEntryPopover, _pendingConvertStripId, _resolveActingPositionId, _swallowRepeatAdvance,
+  _tofiExitPrecondition, _tofiProposerOf, _tofiRegimeChoice, _unmountPopover
+} from './bay-view.js';
+import { scrambleAlertsFor } from './scramble.js';
+import { convertStripToArrival, efspVisibleBayId, noteEfspArrivalShown } from './efsp-panel.js';
+import { arJoinFor, atoAlertsFor, isArHighlighted } from './ato-strip.js';
+import { fieldStateAlertsFor } from './field-state-rules.js';
+import { settings } from '../../app.js';
+
+export const ROLE_ABBR = { DEPARTURE: 'DEP', ARRIVAL: 'ARR', OVERFLIGHT: 'OVF', MISSION: 'MSN', MARSHAL: 'MAR', FINAL: 'FNL', PATTERN: 'PAT' };
 
 function _stripEl(tag, className, text) {
   const node = document.createElement(tag);
@@ -298,7 +333,7 @@ function _tofiExitIsPrimary(strip) {
 }
 
 /** For bay-view.js's render signature: the mission line's state, which this Strip's primary action now depends on (S-L14). */
-function tofiExitSignatureFor(strip) {
+export function tofiExitSignatureFor(strip) {
   const m = strip && strip.tofiCoordination ? _pairedMissionStrip(strip) : null;
   return m ? m.state : '';
 }
@@ -390,7 +425,7 @@ function _buildStripFields(strip) {
 // applies (MARSA, TOFI, an airspace, other Strips on the flight). A quiet Strip
 // has no indicator row at all. Warnings first, so they are always in the same
 // place: the left end of the row.
-const INDICATOR_ORDER = ['stca', 'conf', 'rwy', 'gear', 'ord', 'scram', 'trk', 'marsa', 'tofi', 'airspace', 'timer', 'siblings'];
+export const INDICATOR_ORDER = ['stca', 'conf', 'rwy', 'gear', 'ord', 'scram', 'trk', 'marsa', 'tofi', 'airspace', 'timer', 'siblings'];
 // Keys whose chips come from _stripAlerts (warnings first, left end of the row). rwy/gear:
 // field state (docs/adr/0068); ord: hung ordnance (0069); scram: alert/scramble (0070).
 const ALERT_SLOT_KEYS = new Set(['stca', 'conf', 'rwy', 'gear', 'ord', 'scram']);
@@ -832,7 +867,7 @@ function _buildStripTools(strip) {
 
 // ── Assembly ───────────────────────────────────────────────────────────────
 
-function _buildStripLayout(el, strip, obligation) {
+export function _buildStripLayout(el, strip, obligation) {
   el.classList.add('efsp-strip-c');
   if (_isRejectedCoordinationReplica(strip)) el.classList.add('efsp-strip-inert');
   if (typeof isMarsaHighlighted === 'function' && isMarsaHighlighted(strip.stripId)) {
@@ -885,8 +920,4 @@ function _buildStripLayout(el, strip, obligation) {
   grid.appendChild(main);
   grid.appendChild(_buildStripTools(strip));
   el.appendChild(grid);
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { ROLE_ABBR, INDICATOR_ORDER };
 }

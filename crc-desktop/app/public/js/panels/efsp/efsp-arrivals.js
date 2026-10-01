@@ -18,15 +18,15 @@
 // Not an arrival: a Strip this controller just created, a reorder within a
 // Bay, or any change that leaves a Strip where it was.
 
-const ARRIVAL_FRESH_MS = 30000; // how long a seen arrival keeps its amber edge
-const ARRIVAL_LOG_LIMIT = 3;
+export const ARRIVAL_FRESH_MS = 30000; // how long a seen arrival keeps its amber edge
+export const ARRIVAL_LOG_LIMIT = 3;
 
 // stripId -> { bayId, positionId, from, callsign, at, seenAt, bayUnseen, flashed }
 const _efspArrivals = new Map();
 let _efspArrivalsTouched = 0; // bumped on every change, for cheap "did anything move" checks
 
 /** Where each Strip a delta is about to update currently sits. Call BEFORE applying it. */
-function captureEfspPlacement(msg, getStrip) {
+export function captureEfspPlacement(msg, getStrip) {
   const before = new Map();
   for (const s of (msg && msg.strips && msg.strips.updated) || []) {
     const prev = getStrip(s.stripId);
@@ -57,7 +57,7 @@ function _isMintedReplica(strip) {
  * @param {{heldPositions:string[], myControllerIds:Set<string>|string[], visibleBayId:?string, now:number, callsignOf:(strip)=>string}} ctx
  * @returns {object[]} the arrivals recorded, oldest first
  */
-function noteEfspArrivals(before, updated, ctx) {
+export function noteEfspArrivals(before, updated, ctx) {
   const held = new Set(ctx.heldPositions || []);
   const mine = new Set(ctx.myControllerIds || []);
   const found = [];
@@ -88,7 +88,7 @@ function noteEfspArrivals(before, updated, ctx) {
 }
 
 /** Forget arrivals for Strips that no longer exist on this client (a delta's `gone`). */
-function forgetEfspArrivals(stripIds) {
+export function forgetEfspArrivals(stripIds) {
   let changed = false;
   for (const id of stripIds || []) changed = _efspArrivals.delete(id) || changed;
   if (changed) _efspArrivalsTouched += 1;
@@ -99,7 +99,7 @@ function _isFresh(entry, now) {
 }
 
 /** The arrival marking this Strip, while it should still show — or null. */
-function efspArrivalFor(stripId, now = Date.now()) {
+export function efspArrivalFor(stripId, now = Date.now()) {
   const entry = _efspArrivals.get(stripId);
   return entry && _isFresh(entry, now) ? entry : null;
 }
@@ -110,7 +110,7 @@ function efspArrivalFor(stripId, now = Date.now()) {
  * rebuild for any other reason (another Strip arriving, an FDR change) shows
  * the steady amber edge, not a replay. Also starts the 30 s fade-out clock.
  */
-function consumeEfspArrivalFlash(stripId, now = Date.now()) {
+export function consumeEfspArrivalFlash(stripId, now = Date.now()) {
   const entry = _efspArrivals.get(stripId);
   if (!entry || entry.flashed) return false;
   entry.flashed = true;
@@ -120,25 +120,25 @@ function consumeEfspArrivalFlash(stripId, now = Date.now()) {
 }
 
 /** The controller touched the Strip: it has been noticed. */
-function clearEfspArrival(stripId) {
+export function clearEfspArrival(stripId) {
   if (_efspArrivals.delete(stripId)) _efspArrivalsTouched += 1;
 }
 
 /** Arrivals in this Bay the controller has not had in front of them yet. */
-function unseenEfspArrivalsInBay(bayId) {
+export function unseenEfspArrivalsInBay(bayId) {
   let n = 0;
   for (const e of _efspArrivals.values()) if (e.bayId === bayId && e.bayUnseen) n += 1;
   return n;
 }
 
-function unseenEfspArrivalsForPosition(positionId) {
+export function unseenEfspArrivalsForPosition(positionId) {
   let n = 0;
   for (const e of _efspArrivals.values()) if (e.positionId === positionId && e.bayUnseen) n += 1;
   return n;
 }
 
 /** The controller opened this Bay: everything in it has been seen, and drops off the arrivals line. */
-function markEfspBaySeen(bayId) {
+export function markEfspBaySeen(bayId) {
   let changed = false;
   for (const e of _efspArrivals.values()) {
     if (e.bayId === bayId && e.bayUnseen) { e.bayUnseen = false; changed = true; }
@@ -147,7 +147,7 @@ function markEfspBaySeen(bayId) {
 }
 
 /** The arrivals line: unseen arrivals in OTHER Bays, newest first. */
-function efspArrivalLog(limit = ARRIVAL_LOG_LIMIT) {
+export function efspArrivalLog(limit = ARRIVAL_LOG_LIMIT) {
   return [..._efspArrivals.entries()]
     .filter(([, e]) => e.bayUnseen)
     .sort((a, b) => b[1].at - a[1].at)
@@ -156,7 +156,7 @@ function efspArrivalLog(limit = ARRIVAL_LOG_LIMIT) {
 }
 
 /** When the next seen arrival's amber edge runs out, so the panel can redraw then. Null when nothing is fading. */
-function nextEfspArrivalExpiry(now = Date.now()) {
+export function nextEfspArrivalExpiry(now = Date.now()) {
   let next = null;
   for (const e of _efspArrivals.values()) {
     if (!e.seenAt) continue;
@@ -166,16 +166,6 @@ function nextEfspArrivalExpiry(now = Date.now()) {
   return next;
 }
 
-function efspArrivalsVersion() { return _efspArrivalsTouched; }
+export function efspArrivalsVersion() { return _efspArrivalsTouched; }
 
-function _resetEfspArrivalsForTest() { _efspArrivals.clear(); _efspArrivalsTouched = 0; }
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    ARRIVAL_FRESH_MS, ARRIVAL_LOG_LIMIT,
-    captureEfspPlacement, noteEfspArrivals, forgetEfspArrivals,
-    efspArrivalFor, consumeEfspArrivalFlash, clearEfspArrival,
-    unseenEfspArrivalsInBay, unseenEfspArrivalsForPosition, markEfspBaySeen,
-    efspArrivalLog, nextEfspArrivalExpiry, efspArrivalsVersion, _resetEfspArrivalsForTest,
-  };
-}
+export function _resetEfspArrivalsForTest() { _efspArrivals.clear(); _efspArrivalsTouched = 0; }

@@ -1,4 +1,28 @@
 'use strict';
+import { haversineM, kinematics, projectPos, verticalFpm } from './geo.js';
+import { getIff, iffColor } from './iff.js';
+import {
+  emergencyColor, infoLine, isAir, shouldLabel, trackCodeTag, trackEmergency, trackIsIdent, trackName,
+  trackNameSuffix
+} from './track-label.js';
+import { atcDisplay, atcPalette } from './atc-scope.js';
+import { losVisibleRangeM } from './los.js';
+import { updateTopbarUI } from './panels/topbar.js';
+import { updateRadarBadge } from './panels/radar-panel.js';
+import { approachRwyCourseTrue } from './panels/airport-selector.js';
+import { updateTrackPanel } from './panels/track-panel.js';
+import { _aprtRwyTrueDeg, _aprtSelectedApt } from './panels/aprt-panel.js';
+import {
+  conformanceAlertsForFdr, getAllEfspConflicts, getEfspFdr, getEfspStrip, stcaConflictsForTrack, stripIdsForTrackId
+} from './panels/efsp/efsp-state.js';
+import { getCorrelatedHighlightTrackId } from './panels/efsp/correlation-highlight.js';
+import { buildCarrierFinalLine } from './panels/efsp/carrier-panel.js';
+import {
+  CRC_RANGE_M, FADE_DURATION_MS, HISTORY_MAX, LABEL_EDGE_MARGIN, MIN_SPD_KT_PPL, STALE_MS, TEXT_OFFSET_EM,
+  _pulseBright, approachRwyCourse, coverageApproachFor, getActiveRadars, getBullseye, getLabelHalfW,
+  getLeaderIconGap, getTextSizePx, grpcStatus, history, labelOffsets, lastSweepMs, lastUpdateMs, latestFromServer,
+  map, mapReady, missionData, selectedApt, selectedRef, settings, tracks, updateZoomLimits, zeroSpeedSinceMs
+} from './app.js';
 
 // ── GeoJSON builders ───────────────────────────────────────────────────────
 // All functions return FeatureCollections ready for MapLibre setData().
@@ -24,7 +48,7 @@ const ALERT_COLOR_BAD = '#ff8a4c';
 const ALERT_COLOR_ATTN = '#e0a83c';
 
 /** The Strip-side flight record for a track, if it is correlated to one. */
-function _fdrForTrack(trackId) {
+export function _fdrForTrack(trackId) {
   if (typeof stripIdsForTrackId !== 'function' || typeof getEfspStrip !== 'function') return null;
   for (const stripId of stripIdsForTrackId(trackId)) {
     const strip = getEfspStrip(stripId);
@@ -104,7 +128,7 @@ function sweepOpacity(id, baseOp) {
 // A contact sent with `scheme: 'ATC'` is drawn in the STARS layout. What it
 // shows is atc-scope.js's; this only turns it into features. One display per
 // contact per frame, shared by the dots, the block and its leader.
-const ATC_MAX_SEGMENTS = 16;
+export const ATC_MAX_SEGMENTS = 16;
 const ATC_TRANSPARENT = 'rgba(0,0,0,0)';
 let _atcFrame = null;
 
@@ -425,7 +449,7 @@ function buildLabels() {
 
 // ── Navpoints ─────────────────────────────────────────────────────────────
 
-function buildNavpoints() {
+export function buildNavpoints() {
   if (!missionData || !missionData.waypoints || !missionData.waypoints.length)
     return { type: 'FeatureCollection', features: [] };
   return {
@@ -459,7 +483,7 @@ function dcsColorToCss(colorStr) {
   return `rgba(${r},${g},${b},${a.toFixed(2)})`;
 }
 
-function buildDrawings() {
+export function buildDrawings() {
   if (!missionData || !missionData.drawings || !missionData.drawings.length)
     return { type: 'FeatureCollection', features: [] };
 
@@ -505,7 +529,7 @@ function buildDrawings() {
 // route tokens → destination, each resolved against the mission's navpoints
 // and airports by name/ICAO. Airway identifiers (e.g. "UL9") simply match
 // nothing and are dropped — there is no airway geometry to plot them against.
-function parseFiledRouteWaypoints(filed) {
+export function parseFiledRouteWaypoints(filed) {
   if (!filed) return { points: [], matched: 0, total: 0 };
 
   const byName = new Map();
@@ -537,7 +561,7 @@ function parseFiledRouteWaypoints(filed) {
   return { points, matched: points.length, total: tokens.length };
 }
 
-function buildFiledRoute(points) {
+export function buildFiledRoute(points) {
   if (!points || points.length < 2) return { type: 'FeatureCollection', features: [] };
   return {
     type: 'FeatureCollection',
@@ -552,7 +576,7 @@ function buildFiledRoute(points) {
 // DCS mission-editor "Text" objects (primitiveType TextBox). Kept as its own
 // source/layer rather than folded into buildDrawings() so it can be toggled
 // independently of shape drawings.
-function buildTextMarks() {
+export function buildTextMarks() {
   if (!settings.textMarksEnabled || !missionData || !missionData.drawings || !missionData.drawings.length)
     return { type: 'FeatureCollection', features: [] };
 
@@ -675,7 +699,7 @@ function _makeRing(lat, lon, radiusM, ringType) {
 
 // Range ring — shown for the selected reference track or airport.
 // Ring size for an airport is determined by the largest active radar for that airport.
-function buildRangeRing() {
+export function buildRangeRing() {
   const features = [];
 
   // Reference range ring (CRC/AWACS style)
@@ -744,7 +768,7 @@ function buildEfspCorrelationRing() {
   };
 }
 
-function buildAirports() {
+export function buildAirports() {
   if (!missionData || !missionData.airports) return { type: 'FeatureCollection', features: [] };
   return {
     type: 'FeatureCollection',
@@ -758,7 +782,7 @@ function buildAirports() {
   };
 }
 
-function buildBullseye() {
+export function buildBullseye() {
   const features = [];
   const be = getBullseye();
   if (!be.blue && !be.red) return { type: 'FeatureCollection', features };
@@ -775,7 +799,7 @@ function buildBullseye() {
 // Draws a sweep beam for each active radar when debug mode is on.
 // 360° radars: single rotating line.
 // Nose radars: animated beam + faint cone edges as reference.
-function buildRadarDebug(radars) {
+export function buildRadarDebug(radars) {
   if (!settings.radarDebug || !radars) return { type: 'FeatureCollection', features: [] };
   const features = [];
   const now = Date.now();
@@ -878,7 +902,7 @@ function buildDatalinkLines() {
 
 let _mapRafId = null;
 
-function updateMap() {
+export function updateMap() {
   if (_mapRafId !== null) return;
   _mapRafId = requestAnimationFrame(() => {
     _mapRafId = null;

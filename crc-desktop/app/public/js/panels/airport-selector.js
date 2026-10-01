@@ -1,4 +1,9 @@
 'use strict';
+import { _syncAuthHeaders } from '../sync.js';
+import { requestTrueFromMagnetic } from '../magnetic.js';
+import { updateMap } from '../geojson.js';
+import { $aptDisplay, updateAptDisplay, updateTopbarUI } from './topbar.js';
+import { approachRwyCourse, missionData, selectedApt } from '../app.js';
 
 // ── Airport selector (topbar dropdown + runway course input) and the
 // airport-weather popup shown when left-clicking an airport label on the
@@ -63,7 +68,7 @@ function openAptDropdown() {
   setTimeout(() => $search.focus(), 30);
 }
 
-function initAptSelector() {
+export function initAptSelector() {
   const $dd     = document.getElementById('apt-dropdown');
   const $search = document.getElementById('apt-search');
 
@@ -84,10 +89,10 @@ function initAptSelector() {
 // value is converted by crc-sync, never here (its docs/adr/0085): until the
 // answer comes back, no approach vector is drawn.
 
-let approachRwyCourseTrue = null; // approachRwyCourse at selectedApt, in true
+export let approachRwyCourseTrue = null; // approachRwyCourse at selectedApt, in true
 let _approachCourseReq = 0;
 
-function resolveApproachCourse() {
+export function resolveApproachCourse() {
   const req = ++_approachCourseReq;
   approachRwyCourseTrue = null;
   if (approachRwyCourse == null || !selectedApt) return;
@@ -98,7 +103,7 @@ function resolveApproachCourse() {
   });
 }
 
-function initRwyInput() {
+export function initRwyInput() {
   const $rwyInput = document.getElementById('rwy-input');
   if (!$rwyInput) return;
 
@@ -114,7 +119,7 @@ function initRwyInput() {
 // ── Airport weather popup ─────────────────────────────────────────────────
 // Shown when the user left-clicks an airport label on the map.
 
-function showAptWeatherPanel(label, lat, lon, elevM, clientX, clientY) {
+export function showAptWeatherPanel(label, lat, lon, elevM, clientX, clientY) {
   const panel = document.getElementById('apt-weather-panel');
   if (!panel) return;
 
@@ -158,7 +163,7 @@ function showAptWeatherPanel(label, lat, lon, elevM, clientX, clientY) {
     });
 }
 
-function closeAptWeatherPanel() {
+export function closeAptWeatherPanel() {
   const panel = document.getElementById('apt-weather-panel');
   if (panel) panel.style.display = 'none';
 }

@@ -1,25 +1,72 @@
 'use strict';
+import { _setSyncSocket, getSyncFeedUrl } from './sync.js';
+import { kinematics } from './geo.js';
+import { applyTheaterFacts } from './magnetic.js';
+import { getUserCoalition, loadUserCoalition, toggleUserCoalition } from './iff.js';
+import { trackEmergency, trackIsIdent } from './track-label.js';
+import {
+  buildAirports, buildBullseye, buildDrawings, buildNavpoints, buildRadarDebug, buildTextMarks, updateMap
+} from './geojson.js';
+import { initDock, notifyCoverageChanged } from './dock.js';
+import {
+  checkStale, initUpdateStatus, initZuluClock, updateGameTime, updateNoAwacsUI, updateStatusUI, updateTopbarUI
+} from './panels/topbar.js';
+import { applyLightMode } from './panels/settings-panel.js';
+import {
+  refreshRadarPanelData, renderPositionControls, renderPositionWarnings, updateRadarBadge
+} from './panels/radar-panel.js';
+import { initAptSelector, initRwyInput, resolveApproachCourse } from './panels/airport-selector.js';
+import { updateTrackPanel } from './panels/track-panel.js';
+import {
+  _updateAprtRefCard, _updateAprtRwyHeading, refreshAprtAptList, refreshAprtSelectedApt, refreshAprtTheaterFacts
+} from './panels/aprt-panel.js';
+import {
+  applyEfspAirspaceDelta, applyEfspAlerts, applyEfspCorrelationDelta, applyEfspDelta, applyEfspFieldStateDelta,
+  applyEfspMarsaDelta, applyEfspMutationAck, applyEfspSnapshot, efspEpochChangeOf, getEfspFacility, getEfspStrip
+} from './panels/efsp/efsp-state.js';
+import { captureEfspPlacement } from './panels/efsp/efsp-arrivals.js';
+import { applyEfspCarrierDelta } from './panels/efsp/carrier-state.js';
+import { applyEfspSfaDelta } from './panels/efsp/sfa-state.js';
+import {
+  efspResyncReplyAsMessage, noteEfspBoardMessageForSync, noteEfspHeartbeatForSync, noteEfspResyncAnswered,
+  noteEfspSnapshotLanded, replayPendingEfspMutations
+} from './panels/efsp/efsp-ws.js';
+import { onEfspMetricsReportAck } from './panels/efsp/efsp-metrics-client.js';
+import { refreshCorrelatedHighlight } from './panels/efsp/correlation-highlight.js';
+import { refreshMarsaHighlight } from './panels/efsp/marsa-badge.js';
+import { renderCarrierBanner } from './panels/efsp/carrier-panel.js';
+import { renderAllOpenEfspBays } from './panels/efsp/bay-view.js';
+import {
+  _showMutationError, _showMutationWarning, noteEfspBoardArrivals, noteEfspHeartbeat, notifyEfspMutationAck,
+  notifyEfspOrphanedMutation, refreshEfspPanel, reloadEfspStereoRoutes
+} from './panels/efsp/efsp-panel.js';
+import { refreshArHighlight } from './panels/efsp/ato-strip.js';
+import { onAtoAck, onAtoPreviewResult } from './panels/efsp/ato-import.js';
+import { renderAirspacePanel } from './panels/efsp/airspace-panel.js';
+import { fieldStateSubjectFor } from './panels/efsp/field-state-rules.js';
+import { renderFieldStatePanel } from './panels/efsp/field-state-panel.js';
+import { onEfspMetrics } from './panels/metrics-panel.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
-const COALITION_COLOR       = { 1: '#888888', 2: '#cc4444', 3: '#4488cc' };
-const LIGHT_COALITION_COLOR = { 1: '#505050', 2: '#cc0000', 3: '#004499' }; // higher contrast on light map
-const GROUND_COLOR          = { 1: '#7a7a68', 2: '#aa6644', 3: '#557799' };
-const HISTORY_MAX      = 10;
-const FADE_DURATION_MS = 10000;
-const STALE_MS         = 10000;
-const MIN_SPD_KT_PPL   = 30;
+export const COALITION_COLOR       = { 1: '#888888', 2: '#cc4444', 3: '#4488cc' };
+export const LIGHT_COALITION_COLOR = { 1: '#505050', 2: '#cc0000', 3: '#004499' }; // higher contrast on light map
+export const GROUND_COLOR          = { 1: '#7a7a68', 2: '#aa6644', 3: '#557799' };
+export const HISTORY_MAX      = 10;
+export const FADE_DURATION_MS = 10000;
+export const STALE_MS         = 10000;
+export const MIN_SPD_KT_PPL   = 30;
 
 const CRC_RANGE_NM     = 200;
-const CRC_RANGE_M      = CRC_RANGE_NM * 1852;
+export const CRC_RANGE_M      = CRC_RANGE_NM * 1852;
 
 // Default label position and geometry constants (used by geojson.js + map-setup.js)
-const TEXT_SIZE_PX      = 11;
-const TEXT_OFFSET_EM    = [4.0, -0.5]; // em units [right, up] from icon
+export const TEXT_SIZE_PX      = 11;
+export const TEXT_OFFSET_EM    = [4.0, -0.5]; // em units [right, up] from icon
 const LEADER_ICON_GAP   = 7;
 const LABEL_HALF_W      = 30;
 const LABEL_HALF_H      = 13;
-const LABEL_EDGE_MARGIN = 2;
+export const LABEL_EDGE_MARGIN = 2;
 
 // Radar sweep
 // Beam width for the debug overlay only. Detection is crc-sync's, and it
@@ -54,41 +101,41 @@ const SHIP_RADAR_HEIGHT_M    = 40;
 //   tracks — the contacts still inside the fade window, i.e. what is on the
 //     scope right now. Position and altitude stay gated on illumination on
 //     purpose: that IS the radar simulation, computed once on the server.
-const latestFromServer = new Map(); // id → track (as delivered, incl. illuminatedAt)
-const tracks           = new Map(); // id → track (displayed)
+export const latestFromServer = new Map(); // id → track (as delivered, incl. illuminatedAt)
+export const tracks           = new Map(); // id → track (displayed)
 window.getAllTracks    = () => [...latestFromServer.values()];
 window.getLatestTrack   = (id) => latestFromServer.get(String(id)) || null;
-const history          = new Map(); // id → [{lat, lon, altFt, timestamp}, ...] — altFt null when no sensor gives one
-const labelOffsets     = new Map(); // id → [dLat, dLon] relative to track
+export const history          = new Map(); // id → [{lat, lon, altFt, timestamp}, ...] — altFt null when no sensor gives one
+export const labelOffsets     = new Map(); // id → [dLat, dLon] relative to track
 
 // When the server says each contact was last illuminated. Replaces the local
 // `lastSweepMs` the deleted sweep loop used to write, and is the one clock the
 // fade is computed against — so two controllers watching one contact see it
 // decay together.
-const lastSweepMs      = new Map(); // trackId → illuminatedAt, from the server
-const zeroSpeedSinceMs = new Map(); // trackId → timestamp when 0-speed-airborne first detected
+export const lastSweepMs      = new Map(); // trackId → illuminatedAt, from the server
+export const zeroSpeedSinceMs = new Map(); // trackId → timestamp when 0-speed-airborne first detected
 
 // Static reference data loaded at startup
-let aircraftTypes = {};
+export let aircraftTypes = {};
 let airportsDb    = {};
 
-let missionData      = null;
+export let missionData      = null;
 let weather          = { pressurePa: 101325, tempK: 288.15 }; // ISA defaults until server sends live data
-let atisActive       = []; // [{ frequency, ownerId }] — who's currently transmitting ATIS where, from crc-sync
-let grpcStatus       = 'disconnected';
-let noRadarsActive   = false; // true when the held Positions grant no radar at all
-let srsStatus        = 'disconnected';
-let lastUpdateMs     = null;
-let mapReady         = false;
-let map;
-let _drag            = null;
-let _measure         = null;
-let bullseyePickTarget = null; // 'blue' | 'red' | null — awaiting a map click to set bullseye override
-let _pulseBright     = true;
-let selectedRef      = null; // string track id (reference)
-let selectedApt      = null;
+export let atisActive       = []; // [{ frequency, ownerId }] — who's currently transmitting ATIS where, from crc-sync
+export let grpcStatus       = 'disconnected';
+export let noRadarsActive   = false; // true when the held Positions grant no radar at all
+export let srsStatus        = 'disconnected';
+export let lastUpdateMs     = null;
+export let mapReady         = false;
+export let map;
+export let _drag            = null;
+export let _measure         = null;
+export let bullseyePickTarget = null; // 'blue' | 'red' | null — awaiting a map click to set bullseye override
+export let _pulseBright     = true;
+export let selectedRef      = null; // string track id (reference)
+export let selectedApt      = null;
 let _ws              = null;
-let approachRwyCourse = null; // used for approach-vector line
+export let approachRwyCourse = null; // used for approach-vector line
 
 // ── Coverage ──────────────────────────────────────────────────────────────
 // What this controller is looking through, as crc-sync's `coverage` message
@@ -98,15 +145,15 @@ let approachRwyCourse = null; // used for approach-vector line
 // Delivery and Operations have no scope, and a controller holding only those
 // correctly gets an empty list — the banner says so rather than the map going
 // quietly blank.
-let coverageRadars = [];          // [{id, type, label, lat, lon, elevM, rangeM, sweepMs, sweepStart, grantedBy, ...}]
-let coverageHeldPositions = [];   // [{facilityId, positionId, isPrimary}]
-let coverageDatalink = false;     // whether a held Position is on the datalink
+export let coverageRadars = [];          // [{id, type, label, lat, lon, elevM, rangeM, sweepMs, sweepStart, grantedBy, ...}]
+export let coverageHeldPositions = [];   // [{facilityId, positionId, isPrimary}]
+export let coverageDatalink = false;     // whether a held Position is on the datalink
 
 /** Every radar this controller is looking through. */
-function getActiveRadars() { return coverageRadars; }
+export function getActiveRadars() { return coverageRadars; }
 
 /** The approach radar for an airfield, if we are looking through it — used by the extended centerline. */
-function coverageApproachFor(airportName) {
+export function coverageApproachFor(airportName) {
   return coverageRadars.find(r => r.type === 'approach' && r.airport === airportName) || null;
 }
 
@@ -178,7 +225,7 @@ const DEFAULTS = {
   colNavpoint:    '#3a5a3a',
 };
 
-let settings = { ...DEFAULTS };
+export let settings = { ...DEFAULTS };
 
 function loadSettings() {
   try {
@@ -194,13 +241,13 @@ function loadSettings() {
   delete settings.hdgCorrection;
 }
 
-function saveSettings() {
+export function saveSettings() {
   localStorage.setItem('crc-desktop-settings', JSON.stringify(settings));
 }
 
 // Effective bullseye positions, combining live mission data with any
 // user-configured overrides from the settings panel (per coalition).
-function getBullseye() {
+export function getBullseye() {
   const base = (missionData && missionData.bullseye) || {};
   const ov   = settings.bullseyeOverride || {};
   const pick = (side) => {
@@ -222,12 +269,12 @@ function getBullseye() {
 // ── Scale helpers ─────────────────────────────────────────────────────────
 
 function getScale()         { return settings.scale || 1.0; }
-function getTextSizePx()    { return TEXT_SIZE_PX    * getScale(); }
-function getLeaderIconGap() { return LEADER_ICON_GAP * getScale(); }
-function getLabelHalfW()    { return LABEL_HALF_W    * getScale(); }
+export function getTextSizePx()    { return TEXT_SIZE_PX    * getScale(); }
+export function getLeaderIconGap() { return LEADER_ICON_GAP * getScale(); }
+export function getLabelHalfW()    { return LABEL_HALF_W    * getScale(); }
 function getLabelHalfH()    { return LABEL_HALF_H    * getScale(); }
 
-function applyScale() {
+export function applyScale() {
   if (!mapReady) return;
   const s = getScale();
   map.setLayoutProperty('unit-squares',      'icon-size',     s);
@@ -431,7 +478,7 @@ function applyCoverage(msg) {
 // Computes the bounding rectangle of all active radar coverage areas (each
 // radar treated as a square), then enforces that rectangle as the map bounds
 // and sets minZoom so the full coverage area is always visible.
-function updateZoomLimits() {
+export function updateZoomLimits() {
   if (!mapReady) return;
   const radars = getActiveRadars();
 

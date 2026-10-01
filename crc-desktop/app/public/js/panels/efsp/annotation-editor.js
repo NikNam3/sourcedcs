@@ -20,7 +20,7 @@
  * VALIDATION_ERROR case for that scenario — caller should not have
  * offered the confirm-vacated action in the first place if this happens).
  */
-function applyAnnotationLocally(annotations, blockId, value, confirmVacated) {
+export function applyAnnotationLocally(annotations, blockId, value, confirmVacated) {
   const next = { ...annotations };
   const existing = next[blockId] || { blockId, entries: [] };
   const entries = existing.entries.map(e => ({ ...e }));
@@ -36,8 +36,4 @@ function applyAnnotationLocally(annotations, blockId, value, confirmVacated) {
 
   next[blockId] = { blockId, entries };
   return next;
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { applyAnnotationLocally };
 }

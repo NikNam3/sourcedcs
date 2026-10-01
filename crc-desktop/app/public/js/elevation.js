@@ -1,4 +1,5 @@
 'use strict';
+import { map, mapReady, settings } from './app.js';
 
 // ── Elevation contour overlay ────────────────────────────────────────────
 // MapTiler's ready-made contour vector tileset only has data at zoom 9+
@@ -29,7 +30,7 @@ function elevDemZoomForMapZoom(zoom) {
   return Math.min(11, Math.max(5, Math.round(zoom)));
 }
 
-function elevLonLatToTile(lon, lat, z) {
+export function elevLonLatToTile(lon, lat, z) {
   const n = 2 ** z;
   const x = (lon + 180) / 360 * n;
   const latRad = lat * Math.PI / 180;
@@ -49,7 +50,7 @@ function elevTileToLonLat(z, tx, ty) {
 // Fetches + decodes one terrain-RGB tile into a meters elevation grid. Shared
 // by the contour renderer below (elevFetchGrid, which converts to feet) and
 // los.js's point-elevation queries (which want meters directly).
-async function elevDecodeTileMeters(z, x, y) {
+export async function elevDecodeTileMeters(z, x, y) {
   const url = `https://api.maptiler.com/tiles/terrain-rgb-v2/${z}/${x}/${y}.webp?key=${MAPTILER_KEY}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`terrain-rgb ${z}/${x}/${y}: HTTP ${res.status}`);
@@ -181,13 +182,13 @@ function elevEmptyFC() {
   return { type: 'FeatureCollection', features: [] };
 }
 
-function clearElevationContours() {
+export function clearElevationContours() {
   if (!mapReady) return;
   map.getSource('elevation-contours').setData(elevEmptyFC());
   map.getSource('elevation-contour-labels').setData(elevEmptyFC());
 }
 
-async function updateElevationContours() {
+export async function updateElevationContours() {
   if (!mapReady || !settings.showElevation) return;
   const generation = ++elevGeneration;
 
@@ -230,7 +231,7 @@ function elevScheduleUpdate() {
   elevUpdateTimer = setTimeout(updateElevationContours, 300);
 }
 
-function initElevationContours() {
+export function initElevationContours() {
   map.on('moveend', elevScheduleUpdate);
   if (settings.showElevation) updateElevationContours();
 }

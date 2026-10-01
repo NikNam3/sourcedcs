@@ -1,4 +1,6 @@
 'use strict';
+import { applyEfspCarrierSnapshot } from './carrier-state.js';
+import { applyEfspSfaSnapshot } from './sfa-state.js';
 
 // Client-side mirror of the EFSP Board — plain module-level Maps, matching
 // app.js's existing style (tracks/history/settings are also plain globals,
@@ -85,7 +87,7 @@ const efspConformance = new Map(); // fdrId -> [{ kind, assigned, actual?, altFt
 const efspSurveillanceHints = new Map(); // stripId -> [{ kind: 'AIRBORNE_ADVANCE'|'STALE', stripState, toState?, since, afterSec? }]
 let efspConflicts = [];            // [{ id, a, b, aCallsign, bCallsign, timeToCpaSec, minNm, vertFt, aAt, bAt }]
 
-function applyEfspSnapshot(msg) {
+export function applyEfspSnapshot(msg) {
   efspStrips.clear();
   efspFdrs.clear();
   efspPositions.clear();
@@ -126,15 +128,15 @@ function applyEfspSnapshot(msg) {
  * a different record with a different marsaId. That is docs/adr/0045's shape,
  * and obligations now clear themselves too (full state in efsp-alerts).
  */
-function applyEfspMarsaDelta(msg) {
+export function applyEfspMarsaDelta(msg) {
   for (const r of (msg.marsa && msg.marsa.updated) || []) efspMarsa.set(r.marsaId, r);
 }
 
-function getEfspMarsa(marsaId) { return efspMarsa.get(marsaId) || null; }
-function getAllEfspMarsa() { return [...efspMarsa.values()]; }
+export function getEfspMarsa(marsaId) { return efspMarsa.get(marsaId) || null; }
+export function getAllEfspMarsa() { return [...efspMarsa.values()]; }
 
 /** The ACTIVE relation this flight is in, or null. At most one — crc-sync enforces it. */
-function activeMarsaForFdr(fdrId) {
+export function activeMarsaForFdr(fdrId) {
   if (!fdrId) return null;
   for (const relation of efspMarsa.values()) {
     if (relation.state === 'ACTIVE' && relation.participants.includes(fdrId)) return relation;
@@ -151,7 +153,7 @@ function activeMarsaForFdr(fdrId) {
  * the moment the relation stops being ACTIVE — a badge that only rendered live
  * relations would make the alert vanish at the instant it is raised.
  */
-function marsaForStrip(strip) {
+export function marsaForStrip(strip) {
   if (!strip) return null;
   const active = activeMarsaForFdr(strip.fdrId);
   if (active) return active;
@@ -173,7 +175,7 @@ function marsaForStrip(strip) {
  * every Strip of every participant, which is right — one participant worked by
  * two Facilities has two Strips and both are in the relation.
  */
-function marsaParticipantStripIds(strip) {
+export function marsaParticipantStripIds(strip) {
   const relation = strip ? activeMarsaForFdr(strip.fdrId) : null;
   if (!relation) return [];
   const others = new Set(relation.participants.filter(id => id !== strip.fdrId));
@@ -189,15 +191,15 @@ function marsaParticipantStripIds(strip) {
  * Strip and rides no Board's sequence. One record per Facility, sent whole, so
  * a delta simply replaces it (docs/adr/0068).
  */
-function applyEfspFieldStateDelta(msg) {
+export function applyEfspFieldStateDelta(msg) {
   for (const r of (msg && msg.fieldStates && msg.fieldStates.updated) || []) {
     if (r && r.facilityId) efspFieldStates.set(r.facilityId, r);
   }
 }
 
 /** The Facility's field-state record exactly as the server sent it, or null (L12/L13 read this — do not rename). */
-function getEfspFieldState(facilityId) { return efspFieldStates.get(facilityId) || null; }
-function getAllEfspFieldStates() { return [...efspFieldStates.values()]; }
+export function getEfspFieldState(facilityId) { return efspFieldStates.get(facilityId) || null; }
+export function getAllEfspFieldStates() { return [...efspFieldStates.values()]; }
 
 /**
  * An efsp-correlation-delta — its own message type with its own seq, like the
@@ -207,24 +209,24 @@ function getAllEfspFieldStates() { return [...efspFieldStates.values()]; }
  * arrives whole, so a retracted warning simply comes back as `warning: null`.
  * Obligations clear the same way in spirit: the next efsp-alerts omits them.
  */
-function applyEfspCorrelationDelta(msg) {
+export function applyEfspCorrelationDelta(msg) {
   for (const r of (msg.correlations && msg.correlations.updated) || []) {
     efspCorrelations.set(r.fdrId, r);
   }
   if (msg.stats) efspCorrelationStats = msg.stats;
 }
 
-function getEfspCorrelation(fdrId) { return efspCorrelations.get(fdrId) || null; }
-function getAllEfspCorrelations() { return [...efspCorrelations.values()]; }
-function getEfspCorrelationStats() { return efspCorrelationStats; }
+export function getEfspCorrelation(fdrId) { return efspCorrelations.get(fdrId) || null; }
+export function getAllEfspCorrelations() { return [...efspCorrelations.values()]; }
+export function getEfspCorrelationStats() { return efspCorrelationStats; }
 
 /** The correlation for whichever airframe this Strip is about. */
-function getEfspCorrelationForStrip(strip) {
+export function getEfspCorrelationForStrip(strip) {
   return strip ? getEfspCorrelation(strip.fdrId) : null;
 }
 
 /** The contact this Strip is bound to, or null. What the map highlight reads. */
-function correlatedTrackIdForStrip(strip) {
+export function correlatedTrackIdForStrip(strip) {
   const record = getEfspCorrelationForStrip(strip);
   return record && record.trackId ? record.trackId : null;
 }
@@ -238,7 +240,7 @@ function correlatedTrackIdForStrip(strip) {
  * Returns several when one FDR has several Strips, which is the ordinary case
  * after a cross-Facility handoff.
  */
-function stripIdsForTrackId(trackId) {
+export function stripIdsForTrackId(trackId) {
   const wanted = String(trackId);
   const fdrIds = new Set();
   for (const record of efspCorrelations.values()) {
@@ -251,15 +253,15 @@ function stripIdsForTrackId(trackId) {
 }
 
 /** An efsp-airspace-delta — its own message type, since airspaces are not Strips and ride no Board's seq. */
-function applyEfspAirspaceDelta(msg) {
+export function applyEfspAirspaceDelta(msg) {
   for (const a of (msg.airspaces && msg.airspaces.updated) || []) efspAirspaces.set(a.airspaceId, a);
 }
 
-function getEfspAirspace(airspaceId) { return efspAirspaces.get(airspaceId) || null; }
-function getAllEfspAirspaces() { return [...efspAirspaces.values()]; }
+export function getEfspAirspace(airspaceId) { return efspAirspaces.get(airspaceId) || null; }
+export function getAllEfspAirspaces() { return [...efspAirspaces.values()]; }
 
 /** Live Strips approved into this airspace — what a range controller sees of the flights in their block, read-only. */
-function stripsInAirspace(airspaceId) {
+export function stripsInAirspace(airspaceId) {
   return getAllEfspStrips().filter(s => s.state !== 'DROPPED' && s.airspaceEntry && s.airspaceEntry.airspaceId === airspaceId);
 }
 
@@ -288,13 +290,13 @@ function _adoptBoardSeq(msg) {
 }
 
 /** The Facility whose Board lifetime a delta/ack contradicts, or null. Ask BEFORE applying it. */
-function efspEpochChangeOf(msg) {
+export function efspEpochChangeOf(msg) {
   const { facilityId, epochChanged } = _boardSyncOf(msg);
   return epochChanged ? facilityId : null;
 }
 
 /** What an efsp-resync for this Facility must say: where we are. null when we hold no Board for it. */
-function efspResyncPositionFor(facilityId) {
+export function efspResyncPositionFor(facilityId) {
   if (!efspBoardEpochByFacility.has(facilityId)) return null;
   return { facilityId, lastBoardSeq: efspBoardSeqByFacility.get(facilityId), boardEpoch: efspBoardEpochByFacility.get(facilityId) };
 }
@@ -308,14 +310,14 @@ function efspResyncPositionFor(facilityId) {
  * heartbeat can tell. Two beats in a row, so a delta in flight is not a gap.
  * @returns {?string} the Facility to resync, or null
  */
-function efspHeartbeatGapOf(msg) {
+export function efspHeartbeatGapOf(msg) {
   const facilityId = efspFacility;
   const ours = efspBoardSeqByFacility.get(facilityId);
   if (!facilityId || ours === undefined || !Number.isFinite(msg.boardSeq) || msg.boardSeq <= ours) { _heartbeatBehind = 0; return null; }
   return ++_heartbeatBehind >= 2 ? facilityId : null;
 }
 
-function applyEfspDelta(msg) {
+export function applyEfspDelta(msg) {
   for (const s of (msg.strips && msg.strips.updated) || []) efspStrips.set(s.stripId, s);
   for (const id of (msg.strips && msg.strips.gone) || []) efspStrips.delete(id);
   for (const f of (msg.fdrs && msg.fdrs.updated) || []) efspFdrs.set(f.fdrId, f);
@@ -338,7 +340,7 @@ function applyEfspDelta(msg) {
  * gets the last look at it.
  * @returns {{wasPending:boolean, pending:?object, ok:boolean, reason?:string, detail?:string, warning?:string}}
  */
-function applyEfspMutationAck(msg) {
+export function applyEfspMutationAck(msg) {
   const pending = efspPendingMutations.get(msg.clientMutationId) || null;
   efspPendingMutations.delete(msg.clientMutationId);
   if (msg.strip) efspStrips.set(msg.strip.stripId, msg.strip);
@@ -351,7 +353,7 @@ function applyEfspMutationAck(msg) {
 }
 
 /** Registers a just-sent efsp-mutation message as pending its ack. */
-function registerPendingMutation(msg) {
+export function registerPendingMutation(msg) {
   efspPendingMutations.set(msg.clientMutationId, msg);
 }
 
@@ -359,7 +361,7 @@ function registerPendingMutation(msg) {
  * The one obligation a Strip's badge shows: OVERDUE before WARNING, then the
  * earliest dueAt. null when nothing is due. See getEfspObligations for all.
  */
-function getEfspObligation(stripId) {
+export function getEfspObligation(stripId) {
   const list = efspObligations.get(stripId);
   if (!list || !list.length) return null;
   return list.slice().sort((a, b) =>
@@ -367,9 +369,9 @@ function getEfspObligation(stripId) {
 }
 
 /** Every obligation due on this Strip right now; [] when none. */
-function getEfspObligations(stripId) { return efspObligations.get(stripId) || []; }
+export function getEfspObligations(stripId) { return efspObligations.get(stripId) || []; }
 
-function getPendingMutations() {
+export function getPendingMutations() {
   return [...efspPendingMutations.values()];
 }
 
@@ -380,7 +382,7 @@ function getPendingMutations() {
  * longer exists locally at all (caller should surface that distinctly,
  * not silently drop the mutation).
  */
-function rebaseForResend(clientMutationId) {
+export function rebaseForResend(clientMutationId) {
   const original = efspPendingMutations.get(clientMutationId);
   if (!original || !original.stripId) return null; // CreateStrip has no stripId/baseRev to rebase
   const current = efspStrips.get(original.stripId);
@@ -388,18 +390,18 @@ function rebaseForResend(clientMutationId) {
   return { ...original, baseRev: current.rev };
 }
 
-function getEfspStrip(stripId) { return efspStrips.get(stripId) || null; }
-function getEfspFdr(fdrId) { return efspFdrs.get(fdrId) || null; }
-function getEfspPosition(positionId) { return efspPositions.get(positionId) || null; }
-function getAllEfspStrips() { return [...efspStrips.values()]; }
-function getAllEfspPositions() { return [...efspPositions.values()]; }
-function getEfspBoardSeq() { return efspBoardSeq; }
-function getEfspFacility() { return efspFacility; }
-function getEfspBays() { return efspBays; }
-function isAitAuthorizedFor(facilityId) { return !!efspAitAuthorizedByFacility[facilityId]; }
+export function getEfspStrip(stripId) { return efspStrips.get(stripId) || null; }
+export function getEfspFdr(fdrId) { return efspFdrs.get(fdrId) || null; }
+export function getEfspPosition(positionId) { return efspPositions.get(positionId) || null; }
+export function getAllEfspStrips() { return [...efspStrips.values()]; }
+export function getAllEfspPositions() { return [...efspPositions.values()]; }
+export function getEfspBoardSeq() { return efspBoardSeq; }
+export function getEfspFacility() { return efspFacility; }
+export function getEfspBays() { return efspBays; }
+export function isAitAuthorizedFor(facilityId) { return !!efspAitAuthorizedByFacility[facilityId]; }
 
 /** The ATC-scope letter for a Position (docs/adr/0088), searched across Facilities; null when none is configured. */
-function getEfspPositionLetter(positionId) {
+export function getEfspPositionLetter(positionId) {
   for (const letters of Object.values(efspPositionLetters)) {
     if (letters && Object.prototype.hasOwnProperty.call(letters, positionId)) return letters[positionId];
   }
@@ -417,13 +419,13 @@ function getEfspPositionLetter(positionId) {
  * that says so. Purely client-local — the snapshot already carries every
  * Facility's Strips, so no server support is needed.
  */
-function otherLiveStripsForFdr(fdrId, exceptStripId) {
+export function otherLiveStripsForFdr(fdrId, exceptStripId) {
   if (!fdrId) return [];
   return getAllEfspStrips().filter(s => s.fdrId === fdrId && s.stripId !== exceptStripId && s.state !== 'DROPPED');
 }
 
 /** Live Strips whose FDR carries this callsign — the duplicate-origination check (§3.6). */
-function liveStripsForCallsign(callsign) {
+export function liveStripsForCallsign(callsign) {
   const target = (callsign || '').trim().toUpperCase();
   if (!target) return [];
   return getAllEfspStrips().filter((s) => {
@@ -434,7 +436,7 @@ function liveStripsForCallsign(callsign) {
 }
 
 /** Strips currently placed in a Bay/Rack, in order, excluding DROPPED — mirrors board-store.js's getRack() exactly. */
-function getEfspRack(bayId, rackId) {
+export function getEfspRack(bayId, rackId) {
   return getAllEfspStrips()
     .filter(s => s.bayId === bayId && s.rackId === rackId && s.state !== 'DROPPED')
     .sort((a, b) => (a.orderKey < b.orderKey ? -1 : a.orderKey > b.orderKey ? 1 : (a.stripId < b.stripId ? -1 : 1)));
@@ -450,7 +452,7 @@ function getEfspRack(bayId, rackId) {
  * callsign or beacon code, case-insensitive substring. Excludes DROPPED,
  * same as getEfspRack.
  */
-function searchEfspStrips(query) {
+export function searchEfspStrips(query) {
   const q = (query || '').trim().toLowerCase();
   if (!q) return [];
   return getAllEfspStrips().filter((s) => {
@@ -467,13 +469,13 @@ function searchEfspStrips(query) {
 // ADR 0080; the panel had nowhere to show the line). The Position tab gets one client-local
 // pseudo-Bay, "WITH AIC/JTAC", listing those lines. Like the search Bay it is not Board state and
 // not a destination: nothing can be dropped on it.
-const LINES_WITH_OTHERS = { TAC_C2: ['AIC', 'JTAC'] };
+export const LINES_WITH_OTHERS = { TAC_C2: ['AIC', 'JTAC'] };
 
-function withOthersBayId(positionId) { return `${positionId}-with`; }
-function isWithOthersBayId(bayId) { return typeof bayId === 'string' && bayId.endsWith('-with'); }
+export function withOthersBayId(positionId) { return `${positionId}-with`; }
+export function isWithOthersBayId(bayId) { return typeof bayId === 'string' && bayId.endsWith('-with'); }
 
 /** Live MISSION lines held by the Positions `positionId` has handed lines to, newest first. */
-function efspLinesWithOthers(positionId) {
+export function efspLinesWithOthers(positionId) {
   const owners = LINES_WITH_OTHERS[positionId];
   if (!owners) return [];
   return getAllEfspStrips()
@@ -483,7 +485,7 @@ function efspLinesWithOthers(positionId) {
 
 // Test-only reset — this module holds top-level mutable state (matching
 // app.js's own plain-globals style), so tests need a way to isolate runs.
-function _resetEfspStateForTest() {
+export function _resetEfspStateForTest() {
   efspStrips.clear();
   efspFdrs.clear();
   efspPositions.clear();
@@ -507,7 +509,7 @@ function _resetEfspStateForTest() {
 }
 
 /** Applies an efsp-alerts message: the complete current conformance, conflict and obligation picture. */
-function applyEfspAlerts(msg) {
+export function applyEfspAlerts(msg) {
   efspConformance.clear();
   for (const r of (msg && msg.conformance) || []) if (r.alerts && r.alerts.length) efspConformance.set(r.fdrId, r.alerts);
   efspConflicts = (msg && msg.stca) || [];
@@ -528,19 +530,19 @@ function applyEfspAlerts(msg) {
  * A hint written against another state of the Strip is stale itself — the
  * Strip moved since the server looked — and is not returned.
  */
-function surveillanceHintsForStrip(strip) {
+export function surveillanceHintsForStrip(strip) {
   if (!strip) return [];
   return (efspSurveillanceHints.get(strip.stripId) || []).filter(h => h.stripState === strip.state);
 }
 
 /** What is wrong with this flight's conformance right now; [] when it conforms. */
-function conformanceAlertsForFdr(fdrId) { return efspConformance.get(fdrId) || []; }
+export function conformanceAlertsForFdr(fdrId) { return efspConformance.get(fdrId) || []; }
 
 /** Every current short-term conflict. */
-function getAllEfspConflicts() { return efspConflicts; }
+export function getAllEfspConflicts() { return efspConflicts; }
 
 /** The conflicts this track is in, each seen from its side: { other, otherCallsign, timeToCpaSec, minNm, vertFt, id }. */
-function stcaConflictsForTrack(trackId) {
+export function stcaConflictsForTrack(trackId) {
   if (trackId == null) return [];
   const id = String(trackId);
   return efspConflicts.filter(c => c.a === id || c.b === id).map(c => ({
@@ -549,27 +551,4 @@ function stcaConflictsForTrack(trackId) {
     otherCallsign: c.a === id ? c.bCallsign : c.aCallsign,
     timeToCpaSec: c.timeToCpaSec, minNm: c.minNm, vertFt: c.vertFt,
   }));
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    applyEfspSnapshot, applyEfspDelta, applyEfspMutationAck,
-    registerPendingMutation, getPendingMutations, rebaseForResend,
-    getEfspStrip, getEfspFdr, getEfspPosition, getAllEfspStrips, getAllEfspPositions,
-    otherLiveStripsForFdr, liveStripsForCallsign,
-    LINES_WITH_OTHERS, withOthersBayId, isWithOthersBayId, efspLinesWithOthers,
-    applyEfspAirspaceDelta, getEfspAirspace, getAllEfspAirspaces, stripsInAirspace,
-    applyEfspCorrelationDelta, getEfspCorrelation, getAllEfspCorrelations,
-    getEfspCorrelationForStrip, correlatedTrackIdForStrip, stripIdsForTrackId,
-    getEfspCorrelationStats,
-    applyEfspMarsaDelta, getEfspMarsa, getAllEfspMarsa,
-    applyEfspAlerts, surveillanceHintsForStrip, conformanceAlertsForFdr, getAllEfspConflicts, stcaConflictsForTrack,
-    activeMarsaForFdr, marsaForStrip, marsaParticipantStripIds,
-    getEfspRack, searchEfspStrips, getEfspBoardSeq, getEfspFacility,
-    efspEpochChangeOf, efspResyncPositionFor, efspHeartbeatGapOf, getEfspBays,
-    isAitAuthorizedFor, getEfspPositionLetter,
-    getEfspObligation, getEfspObligations,
-    _resetEfspStateForTest,
-    applyEfspFieldStateDelta, getEfspFieldState, getAllEfspFieldStates,
-  };
 }

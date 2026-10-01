@@ -1,4 +1,10 @@
 'use strict';
+import { trackRef } from '../../track-label.js';
+import { updateMap } from '../../geojson.js';
+import {
+  correlatedTrackIdForStrip, getEfspCorrelationForStrip, getEfspFdr, getEfspStrip, stripIdsForTrackId
+} from './efsp-state.js';
+import { getOpenEfspBayIds, getSelectedEfspStripId, selectEfspStripById } from './bay-view.js';
 
 // Coupled selection (EFSPImplementationGuide.md §6.6 rule 4): "Selecting a
 // Strip MUST highlight its track within 1 second, and vice versa."
@@ -18,7 +24,7 @@
 // The contact whose ring is currently drawn, or null.
 let _correlatedTrackId = null;
 
-function getCorrelatedHighlightTrackId() { return _correlatedTrackId; }
+export function getCorrelatedHighlightTrackId() { return _correlatedTrackId; }
 
 /**
  * Strip -> contact. Called from bay-view.js's _selectStrip.
@@ -27,7 +33,7 @@ function getCorrelatedHighlightTrackId() { return _correlatedTrackId; }
  * says "this is the Strip you have selected", so with no selection it has
  * nothing to say.
  */
-function highlightCorrelatedTrack(stripId) {
+export function highlightCorrelatedTrack(stripId) {
   const next = stripId
     ? correlatedTrackIdForStrip(typeof getEfspStrip === 'function' ? getEfspStrip(stripId) : null)
     : null;
@@ -38,7 +44,7 @@ function highlightCorrelatedTrack(stripId) {
 }
 
 /** Re-resolves the ring against the current records — called when a correlation delta lands. */
-function refreshCorrelatedHighlight() {
+export function refreshCorrelatedHighlight() {
   if (typeof getSelectedEfspStripId !== 'function') return;
   highlightCorrelatedTrack(getSelectedEfspStripId());
 }
@@ -58,7 +64,7 @@ function refreshCorrelatedHighlight() {
  *                 actually open, so the selection is somewhere the controller
  *                 can see it.
  */
-function selectStripForTrack(trackId) {
+export function selectStripForTrack(trackId) {
   if (typeof stripIdsForTrackId !== 'function') return null;
   const stripIds = stripIdsForTrackId(trackId);
   if (stripIds.length === 0) return null;
@@ -95,7 +101,7 @@ function _preferVisibleStrip(stripIds) {
  *   3. The precedent is exact: the airspace badge and the obligation badge are
  *      both non-Block Strip-level indicators, built the same way.
  */
-function correlationBadgeFor(strip) {
+export function correlationBadgeFor(strip) {
   const record = typeof getEfspCorrelationForStrip === 'function' ? getEfspCorrelationForStrip(strip) : null;
   if (!record) return null;
 
@@ -190,11 +196,4 @@ function _provisionalSentence(record, strip) {
     return `callsign match (provisional${record.confidence != null ? `, ${record.confidence}` : ''})`;
   }
   return 'provisional match';
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    highlightCorrelatedTrack, getCorrelatedHighlightTrackId, refreshCorrelatedHighlight,
-    selectStripForTrack, correlationBadgeFor,
-  };
 }

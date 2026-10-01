@@ -1,4 +1,9 @@
 'use strict';
+import { _syncAuthHeaders, sendToSync } from '../sync.js';
+import { currentTheaterFacts, magneticVariationAt, requestTrueFromMagnetic } from '../magnetic.js';
+import { getUserCoalition } from '../iff.js';
+import { updateMap } from '../geojson.js';
+import { atisActive, missionData, saveSettings, settings } from '../app.js';
 
 // ── APRT / Theater side panel ─────────────────────────────────────────────
 // Split out of the former ui.js "god file" — see panels/topbar.js for why
@@ -9,7 +14,7 @@
 // applies the UTC offset (docs/adr/0079) and owns the transition altitude and
 // magnetic variation (docs/adr/0085), all from its config/theaters.json.
 
-let _aprtSelectedApt = null;
+export let _aprtSelectedApt = null;
 
 // Numeric heading parsed from the APRT panel's runway field, for the
 // extended APP-radar centerline (geojson.js buildExtendedCenterline()).
@@ -18,10 +23,10 @@ let _aprtSelectedApt = null;
 // conversion (its docs/adr/0085 — a typed magnetic value is never converted
 // in the client). No centerline is drawn until it answers.
 let _aprtRwyHeading = null;  // magnetic, from the runway number
-let _aprtRwyTrueDeg = null;  // the same, in true, from crc-sync
+export let _aprtRwyTrueDeg = null;  // the same, in true, from crc-sync
 let _aprtRwyReq = 0;
 
-function _updateAprtRwyHeading() {
+export function _updateAprtRwyHeading() {
   const raw = ((document.getElementById('aprt-atis-rwy') || {}).value || '').toUpperCase().trim();
   const m = raw.match(/^(\d{1,2})([LRC]?)$/);
   _aprtRwyHeading = m ? parseInt(m[1], 10) * 10 : null;
@@ -51,7 +56,7 @@ const _atisOwnerId = crypto.randomUUID();
 // visible to update yet either.
 let _atisLiveRefresh = null;
 
-function _updateAprtRefCard() {
+export function _updateAprtRefCard() {
   const $card = document.getElementById('aprt-ref-card');
   if (!$card) return;
 
@@ -134,7 +139,7 @@ function _updateAprtRefCard() {
 // Shows the theater facts crc-sync sent (app.js's 'theater' case): the
 // transition altitude, and the variation at the selected airfield (or the
 // theater's centre) with where it came from. No-op before the panel mounts.
-function refreshAprtTheaterFacts() {
+export function refreshAprtTheaterFacts() {
   const msg = currentTheaterFacts();
   const $ta  = document.getElementById('aprt-theater-ta');
   const $var = document.getElementById('aprt-theater-var');
@@ -152,7 +157,7 @@ function refreshAprtTheaterFacts() {
     : 'World Magnetic Model 2025 at the mission date, unless crc-sync\'s theaters.json overrides it.';
 }
 
-function initAprtPanel() {
+export function initAprtPanel() {
   const $panel  = document.getElementById('aprt-panel');
   const $search = document.getElementById('aprt-search');
   if (!$panel) return;
@@ -590,7 +595,7 @@ function _loadAprtManualWx(apt) {
 // instead of only the next time they reselect it. Skips whichever field (if
 // any) the user currently has focused, so a live edit from someone else
 // can't overwrite this controller's own in-progress keystrokes.
-function refreshAprtSelectedApt() {
+export function refreshAprtSelectedApt() {
   if (!_aprtSelectedApt) return;
   const key    = _aprtSelectedApt.icao || _aprtSelectedApt.name;
   const active = document.activeElement;
@@ -618,7 +623,7 @@ function refreshAprtSelectedApt() {
 }
 
 // Called when airport list changes (new mission) while panel is open
-function refreshAprtAptList() {
+export function refreshAprtAptList() {
   const $panel = document.getElementById('aprt-panel');
   if (!$panel || !$panel.classList.contains('open')) return;
   _renderAprtAptList(document.getElementById('aprt-search').value || '');

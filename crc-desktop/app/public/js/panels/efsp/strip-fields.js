@@ -22,11 +22,13 @@
 // Filtered by the Role's own Block Map before use (compactBlocksFor), so a
 // Block listed here that a Role does not have is dropped rather than drawn
 // as an unlabelled field.
-const COMPACT_BLOCKS_SHARED = [
+import { BLOCK_MAPS } from './strip-template.js';
+
+export const COMPACT_BLOCKS_SHARED = [
   '1', '3', '5', '5A', '7', '8', '8A', '8B', '9', '22', '24A', 'IFR', 'RSVC', 'SREG',
 ];
 
-const COMPACT_BLOCKS_BY_ROLE = {
+export const COMPACT_BLOCKS_BY_ROLE = {
   // Heading and initial altitude: the two things a departure clearance issues
   // beyond the route.
   DEPARTURE:  [...COMPACT_BLOCKS_SHARED, '20', '21'],
@@ -76,7 +78,7 @@ const COMPACT_BLOCKS_BY_ROLE = {
 //  - ALERT (14E) where an alert aircraft is ordered and moved: OPS sets it
 //    (decisions.md H56), and every ground Position shows it: CD, GND, TWR
 //    (crc-sync docs/adr/0070).
-const COMPACT_BLOCKS_BY_POSITION = {
+export const COMPACT_BLOCKS_BY_POSITION = {
   DEPARTURE: {
     OPS: ['1', '3', '5', '6', '7', '8', '8A', '8B', '9', '9F', '3D', '3E', '3G', '14E'],
     CD:  ['1', '3', '5', '7', '8', '8A', '8B', '9', '9F', '10', '14A', '14D', '21', '14E'],
@@ -101,7 +103,7 @@ const COMPACT_BLOCKS_BY_POSITION = {
 };
 
 // Grid columns a field spans. Everything else takes one.
-const FIELD_SPANS = { '1': 2, '3': 2, '9': 3, '24A': 2, M1: 2, M3: 2, M5: 2, C1: 2, C2: 1, C24: 2 };
+export const FIELD_SPANS = { '1': 2, '3': 2, '9': 3, '24A': 2, M1: 2, M3: 2, M5: 2, C1: 2, C2: 1, C24: 2 };
 
 function _blockMapFor(role) {
   return (typeof BLOCK_MAPS === 'object' && BLOCK_MAPS && BLOCK_MAPS[role]) || null;
@@ -112,7 +114,7 @@ function _blockMapFor(role) {
  * order. The per-Position list if there is one, else the Role's; either way
  * only Blocks the Role's Block Map actually has.
  */
-function compactBlocksFor(role, positionId, fdr) {
+export function compactBlocksFor(role, positionId, fdr) {
   const byPosition = COMPACT_BLOCKS_BY_POSITION[role];
   let list = (byPosition && positionId && byPosition[positionId])
     || COMPACT_BLOCKS_BY_ROLE[role] || COMPACT_BLOCKS_SHARED;
@@ -136,19 +138,19 @@ function compactBlocksFor(role, positionId, fdr) {
 // on their face only while it says something other than CLEAN (S-L12). Before
 // that it is one tap away in the expanded view (▼), where every Block off the
 // face is. Tower keeps it on its face unconditionally (COMPACT_BLOCKS_BY_POSITION).
-const ORDNANCE_WHEN_SET = { positions: ['APP', 'CTR'], roles: ['MISSION'] };
+export const ORDNANCE_WHEN_SET = { positions: ['APP', 'CTR'], roles: ['MISSION'] };
 
 function _ordnanceWhenSet(role, positionId) {
   return ORDNANCE_WHEN_SET.roles.includes(role) || (!!positionId && ORDNANCE_WHEN_SET.positions.includes(positionId));
 }
 
 /** True when the flight's ordnance state is anything but CLEAN or empty. */
-function isOrdnanceSet(fdr) {
+export function isOrdnanceSet(fdr) {
   const state = fdr && fdr.military ? fdr.military.ordnanceState : null;
   return !!state && state !== 'CLEAN';
 }
 
-function fieldSpanFor(blockId) {
+export function fieldSpanFor(blockId) {
   return FIELD_SPANS[blockId] || 1;
 }
 
@@ -170,7 +172,7 @@ function fieldSpanFor(blockId) {
 //    exit: the whole group, M11 first. An ARRIVAL is past the route, so its
 //    entry is history and stays in the expanded view.
 //  - MISSION: no MTR Blocks at all. Any Position not named: the expanded view.
-const MTR_BLOCKS_BY_POSITION = {
+export const MTR_BLOCKS_BY_POSITION = {
   DEPARTURE: {
     OPS: ['9G-MTR', '9G-ENTRY', '9G-TIME'],
     CD:  ['9G-MTR'],
@@ -195,7 +197,7 @@ const MTR_FIELDS = ['designator', 'entryFix', 'entryTimeUtc', 'exitFix', 'exitEs
  * that exit fix on the Strip, rather than have it vanish into the expanded
  * view while it still sits on the flight.
  */
-function hasMtrData(fdr) {
+export function hasMtrData(fdr) {
   const mtr = fdr && fdr.military && fdr.military.mtr;
   if (!mtr) return false;
   return MTR_FIELDS.some(k => mtr[k] != null && mtr[k] !== '');
@@ -209,7 +211,7 @@ function hasMtrData(fdr) {
  * here. It never reads 9H-ALT: that is the pilot's request, and the rule says
  * "last clearance". [SOURCE-DEFINED] the wording; the rule is the guide's.
  */
-function mtrLostCommsAdvisory(fdr) {
+export function mtrLostCommsAdvisory(fdr) {
   if (!hasMtrData(fdr)) return null;
   const cell = fdr.clearance && fdr.clearance.altitude;
   const active = cell && Array.isArray(cell.entries) ? cell.entries.find(e => e.status === 'ACTIVE') : null;
@@ -218,14 +220,4 @@ function mtrLostCommsAdvisory(fdr) {
   return 'Lost comms (§9.4): separate assuming the higher of the minimum IFR altitude for each '
     + 'remaining segment — not available in this system — or the altitude in the last clearance: '
     + `${cleared}.`;
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    COMPACT_BLOCKS_SHARED, COMPACT_BLOCKS_BY_ROLE, COMPACT_BLOCKS_BY_POSITION,
-    FIELD_SPANS,
-    compactBlocksFor, fieldSpanFor,
-    MTR_BLOCKS_BY_POSITION, hasMtrData, mtrLostCommsAdvisory,
-    ORDNANCE_WHEN_SET, isOrdnanceSet,
-  };
 }

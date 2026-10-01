@@ -1,4 +1,5 @@
 'use strict';
+import { _syncAuthHeaders } from './sync.js';
 
 // ── Magnetic display (crc-sync's docs/adr/0085) ────────────────────────────
 // Every displayed heading, course, bearing and radial is MAGNETIC (decisions
@@ -24,17 +25,17 @@
 let _theaterFacts = null; // the last `theater` message
 
 /** app.js's `theater` case. */
-function applyTheaterFacts(msg) {
+export function applyTheaterFacts(msg) {
   _theaterFacts = msg || null;
 }
 
 /** The last `theater` message, or null. */
-function currentTheaterFacts() { return _theaterFacts; }
+export function currentTheaterFacts() { return _theaterFacts; }
 
 function _normDeg(d) { return ((d % 360) + 360) % 360; }
 
 /** Variation (east positive) at a position, or at the theater's centre; null when crc-sync has not said. */
-function magneticVariationAt(lat, lon) {
+export function magneticVariationAt(lat, lon) {
   const m = _theaterFacts && _theaterFacts.magnetic;
   if (!m) return null;
   if (Number.isFinite(m.fixedDeg)) return m.fixedDeg;
@@ -60,7 +61,7 @@ function magneticVariationAt(lat, lon) {
  * null when the variation is not known yet — a true value is never shown as
  * if it were magnetic; callers print a dash.
  */
-function toMagneticDisplay(trueDeg, lat, lon) {
+export function toMagneticDisplay(trueDeg, lat, lon) {
   if (!Number.isFinite(trueDeg)) return null;
   const v = magneticVariationAt(lat, lon);
   if (v == null) return null;
@@ -68,13 +69,13 @@ function toMagneticDisplay(trueDeg, lat, lon) {
 }
 
 /** toMagneticDisplay() as three digits ("045"), or "---" when unknown. */
-function magneticText(trueDeg, lat, lon) {
+export function magneticText(trueDeg, lat, lon) {
   const m = toMagneticDisplay(trueDeg, lat, lon);
   return m == null ? '---' : String(m).padStart(3, '0');
 }
 
 /** Grid convergence at a position (true = grid + γ); null when the theater's projection is unknown. */
-function gridConvergenceDeg(lat, lon) {
+export function gridConvergenceDeg(lat, lon) {
   const lon0 = _theaterFacts && _theaterFacts.convergence && _theaterFacts.convergence.tmCentralMeridianDeg;
   if (!Number.isFinite(lon0) || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
   return (lon - lon0) * Math.sin(lat * Math.PI / 180);
@@ -84,15 +85,11 @@ function gridConvergenceDeg(lat, lon) {
  * A magnetic value a controller typed → true, converted by crc-sync.
  * @returns {Promise<number|null>} null when crc-sync cannot say (no variation, not reachable)
  */
-function requestTrueFromMagnetic(magDeg, lat, lon) {
+export function requestTrueFromMagnetic(magDeg, lat, lon) {
   if (![magDeg, lat, lon].every(Number.isFinite)) return Promise.resolve(null);
   const q = `magDeg=${encodeURIComponent(magDeg)}&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`;
   return fetch(`/api/magnetic/to-true?${q}`, { headers: _syncAuthHeaders() })
     .then(r => (r.ok ? r.json() : null))
     .then(d => (d && Number.isFinite(d.trueDeg) ? d.trueDeg : null))
     .catch(() => null);
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { applyTheaterFacts, currentTheaterFacts, magneticVariationAt, toMagneticDisplay, magneticText, gridConvergenceDeg, requestTrueFromMagnetic };
 }

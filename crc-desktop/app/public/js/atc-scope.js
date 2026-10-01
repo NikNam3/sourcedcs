@@ -1,4 +1,14 @@
 'use strict';
+import { kinematics, projectPos } from './geo.js';
+import { atcBlockLines, atcEmergencyTag } from './track-label.js';
+import { updateMap } from './geojson.js';
+import { applyAtcBackground } from './map-setup.js';
+import {
+  conformanceAlertsForFdr, getEfspFdr, getEfspPositionLetter, getEfspStrip, stcaConflictsForTrack,
+  stripIdsForTrackId
+} from './panels/efsp/efsp-state.js';
+import { getActingPositions, sendEfspMutation } from './panels/efsp/efsp-ws.js';
+import { coverageDatalink, coverageRadars, history, lastSweepMs, map, mapReady, settings, tracks } from './app.js';
 
 // The ATC scope in the STARS scheme (crc-sync's docs/adr/0088; decisions H5,
 // H41 variant B, H47, H48, H50, H71).
@@ -32,7 +42,7 @@
 //        values, softened for a non-black background, with a text halo.
 // BLACK — the setting off: strict STARS, the measured TCW values (FAA
 //        DOT/FAA/TC-08/15 Table 1), no halo.
-const ATC_PALETTES = {
+export const ATC_PALETTES = {
   MAP: {
     name: 'MAP', own: '#E6E6E6', other: '#3CE63C', pointout: '#FFFF00', alert: '#FF3C3C', sa: '#FFFF00',
     target: '#1E78FF', targetOpacity: 0.8, otherOpacity: 0.8, halo: 1,
@@ -47,11 +57,11 @@ const ATC_PALETTES = {
 // docs/adr/0058's conformance tag keeps the app's own colours on both
 // backgrounds (H41 S10): it is not STARS, and must not look like STARS's
 // yellow or red.
-const ATC_CONFORM_COLOR = { bad: '#FF8A4C', attn: '#E0A83C' };
-const ATC_DIM_GRAY = '#8C8C8C';
+export const ATC_CONFORM_COLOR = { bad: '#FF8A4C', attn: '#E0A83C' };
+export const ATC_DIM_GRAY = '#8C8C8C';
 
-const ATC_SENDER_BLINK_MS = 5000;   // an accepted handoff / point-out blinks this long at the sender
-const ATC_TIMESHARE_MS = 2000;      // ground speed and type alternate this often (approximation)
+export const ATC_SENDER_BLINK_MS = 5000;   // an accepted handoff / point-out blinks this long at the sender
+export const ATC_TIMESHARE_MS = 2000;      // ground speed and type alternate this often (approximation)
 const ATC_COAST_SWEEPS = 2;         // a correlated track coasts after missing this many ATC sweeps
 const ATC_COAST_FALLBACK_MS = 6000; // when no ATC radar says how often it sweeps
 const ATC_HANDOFF_PRIMITIVES = new Set(['HANDOFF', 'AIT']);
@@ -108,7 +118,7 @@ function _tofiControlled(strips) {
  * @param {Set<string>} acting  the Positions this controller acts as
  * @param {(positionId:string)=>string|null} letterOf
  */
-function atcRelation(t, strips, acting, letterOf) {
+export function atcRelation(t, strips, acting, letterOf) {
   const source = t && t.label && t.label.source;
   const live = (strips || []).filter(s => s && s.state !== 'DROPPED');
   const rel = {
@@ -168,7 +178,7 @@ function atcRelation(t, strips, acting, letterOf) {
  * @param {{tag:string,color:string}|null} env.conform  docs/adr/0058's tag, if any
  * @param {boolean} env.coast
  */
-function atcView(t, rel, env) {
+export function atcView(t, rel, env) {
   const P = env.palette;
   const now = env.now;
   const id = String(t.id);
@@ -268,7 +278,7 @@ function _handedOn(rel, now) {
  * the same-Facility transfer, which STARS shows with the sender's post-accept
  * blink. Impure on purpose (local UI state); atcRelation stays pure.
  */
-function atcNoteOwnership(id, rel, now) {
+export function atcNoteOwnership(id, rel, now) {
   rel.trackId = String(id);
   const seen = _atcOwnerSeen.get(rel.trackId);
   if (seen && seen.mine && !rel.mine && rel.associated && !rel.tofi && !rel.handoffDone && seen.transferredAt == null) {
@@ -282,7 +292,7 @@ function atcNoteOwnership(id, rel, now) {
 }
 
 /** docs/adr/0058's conformance tag for a flight, without the conflict (the ATC block says `CA` for that). */
-function atcConformTag(alerts) {
+export function atcConformTag(alerts) {
   const list = alerts || [];
   const bad = list.find(a => a.kind !== 'HEADING');
   if (bad && bad.kind === 'LEVEL_BUST') return { tag: `BUST${bad.deviationFt > 0 ? '+' : '−'}${Math.abs(bad.deviationFt)}`, color: ATC_CONFORM_COLOR.bad };
@@ -293,7 +303,7 @@ function atcConformTag(alerts) {
 }
 
 /** The flight's ACTIVE assigned altitude (ft) and heading, from its FDR's clearance (docs/adr/0058). */
-function atcAssigned(fdr) {
+export function atcAssigned(fdr) {
   if (!fdr || !fdr.clearance) return null;
   const active = (cell) => cell && (cell.entries || []).find(e => e.status === 'ACTIVE');
   const alt = active(fdr.clearance.altitude);
@@ -308,19 +318,19 @@ function atcAssigned(fdr) {
 // ── The session and the background ────────────────────────────────────────
 
 /** Every radar this controller looks through is an ATC radar, and there is no datalink (H50: an ATC-only session). */
-function atcOnlySession() {
+export function atcOnlySession() {
   const radars = typeof coverageRadars !== 'undefined' ? coverageRadars : [];
   const datalink = typeof coverageDatalink !== 'undefined' ? coverageDatalink : false;
   return radars.length > 0 && radars.every(r => r.presentation === 'ATC') && !datalink;
 }
 
 /** The black strict-STARS scope: the personal setting is off, and only while the session is ATC-only (H71, question 1). */
-function atcBlackScope() {
+export function atcBlackScope() {
   const s = (typeof settings !== 'undefined' && settings) || {};
   return s.atcMapBackground === false && atcOnlySession();
 }
 
-function atcPalette() { return atcBlackScope() ? ATC_PALETTES.BLACK : ATC_PALETTES.MAP; }
+export function atcPalette() { return atcBlackScope() ? ATC_PALETTES.BLACK : ATC_PALETTES.MAP; }
 
 // ── The picture, as geojson.js asks for it ────────────────────────────────
 
@@ -338,7 +348,7 @@ function _letterOf(positionId) {
 }
 
 /** How long after its last return a correlated ATC contact starts to coast. */
-function atcCoastAfterMs() {
+export function atcCoastAfterMs() {
   const radars = typeof coverageRadars !== 'undefined' ? coverageRadars : [];
   const sweeps = radars.filter(r => r.presentation === 'ATC' && Number.isFinite(r.sweepMs)).map(r => r.sweepMs);
   return sweeps.length ? ATC_COAST_SWEEPS * Math.max(...sweeps) : ATC_COAST_FALLBACK_MS;
@@ -350,7 +360,7 @@ function atcCoastAfterMs() {
  * dead-reckoned position, for as long as the app keeps the contact at all
  * (its fade window).
  */
-function atcDisplay(id, t, now = Date.now()) {
+export function atcDisplay(id, t, now = Date.now()) {
   const palette = atcPalette();
   const strips = _stripsFor(id);
   const rel = atcNoteOwnership(id, atcRelation(t, strips, _actingSet(), _letterOf), now);
@@ -383,7 +393,7 @@ function atcDisplay(id, t, now = Date.now()) {
  * acknowledge what is blinking, step a finished exchange down, else toggle the
  * PDB open into an FDB and back. Returns what it did, for tests and logs.
  */
-function atcTargetClick(id, now = Date.now()) {
+export function atcTargetClick(id, now = Date.now()) {
   const t = typeof tracks !== 'undefined' ? tracks.get(String(id)) : null;
   if (!t) return 'NONE';
   const rel = atcNoteOwnership(id, atcRelation(t, _stripsFor(id), _actingSet(), _letterOf), now);
@@ -397,7 +407,7 @@ function atcTargetClick(id, now = Date.now()) {
 }
 
 /** atcTargetClick's decision, with the effects passed in (testable). */
-function atcApplyClick(t, rel, now, { conflicts = [], accept = () => {} } = {}) {
+export function atcApplyClick(t, rel, now, { conflicts = [], accept = () => {} } = {}) {
   const id = String(t.id);
   if (rel.handoffIn) { accept(rel.handoffIn.strip); return 'ACCEPT_HANDOFF'; }
   if (rel.poIn && rel.poIn.state === 'PROPOSED') { accept(rel.poIn.strip); return 'ACCEPT_POINT_OUT'; }
@@ -428,7 +438,7 @@ function atcApplyClick(t, rel, now, { conflicts = [], accept = () => {} } = {}) 
   return 'NONE';
 }
 
-function _resetAtcScopeForTest() {
+export function _resetAtcScopeForTest() {
   _atcAcked.clear(); _atcSeen.clear(); _atcStage.clear(); _atcExpanded.clear(); _atcOwnerSeen.clear();
 }
 
@@ -466,16 +476,8 @@ function atcTick() {
 }
 
 /** Forces the background to be re-applied on the next beat (after the base theme repainted it). */
-function atcBackgroundDirty() { _atcBlackApplied = null; }
+export function atcBackgroundDirty() { _atcBlackApplied = null; }
 
 if (typeof window !== 'undefined' && typeof setInterval === 'function' && !(typeof module !== 'undefined' && module.exports)) {
   setInterval(atcTick, 500);
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    ATC_PALETTES, ATC_CONFORM_COLOR, ATC_DIM_GRAY, ATC_SENDER_BLINK_MS, ATC_TIMESHARE_MS,
-    atcRelation, atcNoteOwnership, atcView, atcConformTag, atcAssigned, atcApplyClick, atcOnlySession, atcBlackScope,
-    atcPalette, atcCoastAfterMs, _resetAtcScopeForTest,
-  };
 }

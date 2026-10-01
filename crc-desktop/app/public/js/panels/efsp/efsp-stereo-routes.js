@@ -1,4 +1,6 @@
 'use strict';
+import { _syncAuthHeaders } from '../../sync.js';
+import { renderAllOpenEfspBays } from './bay-view.js';
 
 // Client-side glue for §9.10's stereo route table — calls crc-sync's
 // GET /api/stereo-routes (crc-sync/src/efsp/stereo-routes.js) via
@@ -21,7 +23,7 @@
 // does not know, so a stale client list can cause a visible rejection but
 // never a wrong FDR.
 
-const STEREO_ROUTES_CLIENT_TIMEOUT_MS = 4000;
+export const STEREO_ROUTES_CLIENT_TIMEOUT_MS = 4000;
 
 // The last list a fetch actually returned (docs/adr/0073). Block 9F's picker
 // (strip-template.js's enumSelectOptionsFor) renders synchronously and cannot
@@ -34,7 +36,7 @@ const STEREO_ROUTES_CLIENT_TIMEOUT_MS = 4000;
 let _stereoRoutesCache = [];
 
 /** The routes the last successful fetch returned, in table order. Never throws; [] before any fetch. */
-function cachedStereoRoutesClient() {
+export function cachedStereoRoutesClient() {
   return _stereoRoutesCache;
 }
 
@@ -46,7 +48,7 @@ function cachedStereoRoutesClient() {
  * fetch, left every Strip's 9F as "no stereo routes configured" until its FDR
  * next changed.
  */
-function stereoRoutesCacheKey() {
+export function stereoRoutesCacheKey() {
   return _stereoRoutesCache.map(r => `${r.name}${r.active === false ? '!' : ''}`).join('|');
 }
 
@@ -54,7 +56,7 @@ function stereoRoutesCacheKey() {
  * @param {{fetchImpl?:typeof fetch, timeoutMs?:number, authHeaders?:()=>object}} [opts] — injectable for tests
  * @returns {Promise<Array<{name:string, description?:string, departureAirport?:string, destinationAirport?:string, route:string, requestedAltitude?:string, remarks?:string}>>} never throws
  */
-async function listStereoRoutesClient(opts = {}) {
+export async function listStereoRoutesClient(opts = {}) {
   const fetchImpl = opts.fetchImpl || fetch;
   const timeoutMs = opts.timeoutMs ?? STEREO_ROUTES_CLIENT_TIMEOUT_MS;
   const authHeaders = opts.authHeaders || (typeof _syncAuthHeaders === 'function' ? _syncAuthHeaders : () => ({}));
@@ -94,12 +96,6 @@ async function listStereoRoutesClient(opts = {}) {
  * used to resolve what a controller typed at `.stereo` against the fetched
  * list before sending; the server normalises again and is the authority.
  */
-function normalizeStereoNameClient(name) {
+export function normalizeStereoNameClient(name) {
   return String(name == null ? '' : name).toUpperCase().replace(/[\s-]+/g, '');
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    listStereoRoutesClient, cachedStereoRoutesClient, stereoRoutesCacheKey, normalizeStereoNameClient, STEREO_ROUTES_CLIENT_TIMEOUT_MS,
-  };
 }
