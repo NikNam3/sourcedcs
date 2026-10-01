@@ -3,8 +3,8 @@
 export default {
   id: "M2",
   what: "a state transition: ConvertToArrival lands in HANDED_TO_TOWER, not INBOUND",
-  file: "src/efsp/board-store.js",
-  find: "    strip.state = 'INBOUND';",
-  replace: "    strip.state = 'HANDED_TO_TOWER';",
+  file: "src/efsp/board/ops/convert-to-arrival.js",
+  find: "  strip.state = 'INBOUND';",
+  replace: "  strip.state = 'HANDED_TO_TOWER';",
   detect: ["freeze-table","freeze-scenarios","freeze-hub"],
 };
