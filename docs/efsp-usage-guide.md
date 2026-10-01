@@ -31,7 +31,7 @@ Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green):
 
 Not built: WP6's arresting-gear data (DCS has no wires), plus WP7A's carrier Positions and PAR (the model exists). `docs/efsp-briefing.md` is the current handoff note.
 
-**Every time EFSP works with is in-game Zulu**: the DCS mission clock, never your PC's clock or real-world UTC. Every typed time (release, void, EDCT, MTR entry and exit, …) is typed as HHMM and dated by the mission's date: the nearest such time within 12 hours.
+**Every time EFSP works with is in-game Zulu**: the DCS mission clock, never your PC's clock or real-world UTC. Every typed time (release, void, EDCT, MTR entry and exit, …) is typed as `HHMM` (`1432` or `14:32Z`) and dated by the mission's date: the nearest such time within 12 hours. Anything that is not a time is refused at the cell.
 
 Facility/Position map as it stands:
 
@@ -1080,8 +1080,10 @@ active runway. A Strip that resolves to none of these is never held.
 5. After the inspection, departures sent to the queue go to the new end's Rack. Strips already
    queued for the old end are not moved: move them yourself.
 
-**At mission start** the active runway is the end most into the mission's wind (a pure crosswind
-picks 05). A reconnect or a crc-sync restart keeps whatever Tower has chosen since.
+**At the start of a mission** (a new *mission session*, below) the active runway is the end most into
+the mission's wind (a pure crosswind picks 05). A reconnect or a crc-sync restart onto the same mission
+keeps whatever Tower has chosen since. Restarting the same `.miz` is a new session, so it re-reads the
+wind and starts a new metrics session.
 
 **Arresting gear** is a stub: DCS does not simulate the wires, so gear is recorded as data and
 nothing checks a `HOOK` ✓ flight against it.
@@ -1149,6 +1151,14 @@ loses that peer. A re-import with a changed tanker rewires the join.
 
 *What is ours, not doctrine:* the USMTF set layouts come from a community wiki
 (`docs/parallel/research/usmtf-ato.md`), the vowel-cut rule and the one-ATO-at-a-time rule.
+
+### Mission sessions
+
+crc-sync decides which mission it is in (`state/mission-session.json`). A **new session** starts on a DCS
+`mission_start`, on a load of a different mission, or when the mission clock steps back by more than 5
+minutes. A reconnect, or a crc-sync restart onto the same mission, stays in the same session. The
+session number is what the metrics (§10) and the traffic count are bucketed by, and what the wind-derived
+active runway and the archiving of finished flights (§8J) key off.
 
 ## 9. General controls — quick reference
 

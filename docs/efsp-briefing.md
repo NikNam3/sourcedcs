@@ -449,7 +449,7 @@ deviation from rule 5's "broadcast on the Board sequence". Every op is audited, 
   hunk, compared against each end's **true** heading, H22). That hunk calls the private
   `WsHub._broadcast`; L1b adds a public `broadcastEfspFieldStateDelta` and switches it.
 - Traps: never add field-state kinds to `OP_KINDS`; the session binding is per-Facility, not
-  "Primary somewhere"; `missionKeyOf` stays in `field-state.js` until F3 hoists it.
+  "Primary somewhere"; `missionKeyOf` is gone: F3 hoisted it as `missionFingerprint` in `mission-session.js`.
 
 **MTR fields (L2, `0062`).** Six plain `fdr` Blocks on DEPARTURE/ARRIVAL/OVERFLIGHT, none on
 MISSION: `9G-MTR`, `9G-ENTRY`, `9G-TIME` (M10) and `9H-EXIT`, `9H-TIME`, `9H-ALT` (M11), each one
@@ -489,8 +489,8 @@ for L15 is `tests/efsp-metrics-contract.test.mjs`, and it differs from L5's brie
 `server.js` and logs every refused `efsp-mutation` plus `NOT_HOLDING_POSITION` on any mutation
 type (S-R2-5). The server stamps client metric events on receipt (S-R2-3). Retention and home
 airports: `config/efsp-instrumentation.json`. Log rotation uses the **wall** clock (a storage
-lifetime), everything a controller reads uses the mission clock. `EfspMetrics._mission()` is a seam
-F3 replaces with `mission-session.js`.
+lifetime), everything a controller reads uses the mission clock. `EfspMetrics` takes the injected `missionSession`
+(F3; the `_mission()` seam and `noteMissionLoad` are gone).
 - `positionStore.observersOf()` returns `{controllerId, controllerName, since}` records, not ids.
 - `airspace-store.apply()` returns STALE_REV and NOT_FOUND before `_recordAudit`, so those refusals
   are not logged (L26's).
@@ -690,6 +690,42 @@ chain. `ZULU_HHMM_BLOCKS` now covers `M6`/`M7` (the set is derived from the Bloc
   the route `description` is not shown as the option's title; editing a vul start does not move a stored
   end, and a start moved past its end is not refused (MISSION validation); a stale MTR exit fix after a
   designator change is still not warned (H23 keeps MTRs free text).
+
+**Mission session (F3, `0086`).** `crc-sync/src/mission-session.js`, persisted to
+`state/mission-session.json`, the instance is the `missionSession` const in `server.js`'s "F3 mission
+session" block. A new session (`reason` in `FIRST`, `MISSION_START`, `MISSION_CHANGED`,
+`CLOCK_STEP_BACK`) starts on a DCS `mission_start`, a load with a different fingerprint, or a clock step
+back of more than 5 min; subscribe with `missionSession.onNewSession((session, previous) => …)` (L24
+does). Users: the wind-derived runway (H22), the metrics session number (H32), the traffic-count
+`missionSession`, the archiver (H36).
+- **Defaults worth knowing.** The `mission_start` roll happens at the *following* mission-load (so the
+  new session carries that load's fingerprint and theater, and the wind derivation never runs on the
+  previous mission's airports). The clock is observed only on `game-time` (`observeClock()` after
+  `missionClock.sample()`, never inside the load handler, where the clock can carry the old theater's
+  offset). A clock-step roll followed within 2 min wall by a load of a different fingerprint is one
+  session. `setActiveRunwayFromWind` takes `{ missionSession }` (a number) and can return
+  `skipped: true`; the server's wind block is `deriveActiveRunwaysFromWind(missionData)`.
+- **Behaviour fixed on the way:** a TWR runway change used to be undone by the next gRPC reconnect (it
+  overwrote the `missionKey` the guard compared); the guard now reads its own `windDerivedSession` on
+  the field-state record (a harmless extra field on the wire).
+- **No migration.** Existing `efsp-metrics.json` / `efsp-traffic-count.jsonl` can hold session numbers
+  from L5's old counter, and the new counter starts at 1: **clear those two files, or accept repeated
+  numbers, on a machine with state.** A persisted field state has no `windDerivedSession`, so its wind is
+  re-applied once.
+- **Walks not done, human-gated:** whether DCS-gRPC sends `mission_start` to a stream that connects
+  *after* the mission has started (if it does, every crc-sync restart rolls the session: restart against
+  a running server and watch `[mission-session]` in the log); a real `.miz` restart through DCS.
+
+**Typed time Blocks (F4, bugfix, no ADR).** `fdr-store.js`'s `TYPED_TIME_LABELS` and
+`normalizeTypedTime(path, value, nowMs)` are the **only** rule for a typed time: a finite number is epoch
+ms already, empty clears to null, a string goes through `resolveZuluHhmm` against the injected clock, and
+anything else is `VALIDATION_ERROR` ("<label> must be a UTC time as HHMM, e.g. 1432") with no partial
+write. `setField` applies it before the write (so `voidDeadlineUtc` and the EDCT/CFR windows derive from a
+number) and `createFdr` applies it to the two filed times of a seed. `normalizeMtrValue` delegates to it.
+A fallback chain must hand `setField`/`createFdr` epoch ms or the controller's typed string, never a
+formatted date. **Persisted FDRs that hold a string time are not migrated**; a leftover string compares as
+before until the Block is retyped. `efsp-scenario-typed-times.test.mjs` is the sortie (a typed void time
+expires; a typed release holds the NLA until reached).
 
 ## 4. What's left, and the known bugs
 
