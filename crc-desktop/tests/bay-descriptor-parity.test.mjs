@@ -1,5 +1,3 @@
-'use strict';
-
 // The Bay descriptor crc-sync puts on the snapshot (facility-config.js's
 // getAllBays) vs the fields the Strip panel reads off a Bay (bay-view.js,
 // efsp-panel.js, efsp-state.js). Descriptors are config, never hand-copied, but
@@ -7,11 +5,12 @@
 // every Bay silently implies nothing (docs/wip/PARITY.md, D-9 "stripe/Bay descriptors").
 // Reads the current server data; independent of nla.js / block-map.js / permission.js.
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const path = require('path');
-const { readClient } = require('./helpers/mirror-source.js');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import { readClient } from './helpers/mirror-source.mjs';
 
+const require = createRequire(import.meta.url);
 const facilities = require('../../crc-sync/src/efsp/facility-config.js');
 const nla = require('../../crc-sync/src/efsp/nla.js');
 

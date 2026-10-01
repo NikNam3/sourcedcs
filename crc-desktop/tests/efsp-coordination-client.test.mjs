@@ -1,16 +1,18 @@
-'use strict';
-
 /* WP4A (docs/adr/0015) — server/client drift guard for the coordination-
    primitive op-kind list, same template efsp-nla-client.test.js already
-   uses for STATE_OWNERS_BY_ROLE: require() both sides, assert.deepEqual
+   uses for STATE_OWNERS_BY_ROLE: import both sides, assert.deepEqual
    directly. A silent drift here would be misleading (a Coordinate button
    that offers a primitive the server doesn't grant, or omits one it does),
    not merely cosmetic. */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import { readClient, constLiteral } from './helpers/mirror-source.mjs';
 
-const { COORDINATION_OP_KINDS, COORDINATION_ELIGIBLE_STATES, TOFI_OP_KINDS } = require('../app/public/js/panels/efsp/efsp-nla.js');
+import { COORDINATION_OP_KINDS, COORDINATION_ELIGIBLE_STATES, TOFI_OP_KINDS, TOFI_ELIGIBLE_STATES } from '../app/public/js/panels/efsp/efsp-nla.js';
+const require = createRequire(import.meta.url);
+
 const server = require('../../crc-sync/src/efsp/permission.js');
 const serverCoordination = require('../../crc-sync/src/efsp/coordination.js');
 
@@ -58,8 +60,6 @@ test('TOFI never collides with any of the 5 coordination primitives, or any ordi
 // gate of its own; same drift-guard template as COORDINATION_ELIGIBLE_STATES
 // above, since a client mirror that drifts either offers a TOFI button the
 // server will reject or hides one it would allow.
-const { TOFI_ELIGIBLE_STATES } = require('../app/public/js/panels/efsp/efsp-nla.js');
-
 test('the client mirror of TOFI_ELIGIBLE_STATES stays in lockstep with coordination.js\'s server copy', () => {
   assert.deepEqual(TOFI_ELIGIBLE_STATES, serverCoordination.TOFI_ELIGIBLE_STATES);
 });
@@ -77,21 +77,9 @@ test('TOFI eligibility covers every airborne ATC-side Role, and never MISSION �
  * the arrays come from the sandbox's realm, so they are copied before a
  * deepStrictEqual that compares prototypes.
  */
-let _bayView = null;
+const bayViewSrc = readClient('panels/efsp/bay-view.js');
 function bayViewValue(name) {
-  const vm = require('vm');
-  if (!_bayView) {
-    _bayView = {
-      console, module: { exports: {} },
-      document: { getElementById: () => null, createElement: () => ({}), addEventListener() {}, removeEventListener() {} },
-      window: {},
-    };
-    _bayView.globalThis = _bayView;
-    vm.createContext(_bayView);
-    const file = require.resolve('../app/public/js/panels/efsp/bay-view.js');
-    vm.runInContext(require('fs').readFileSync(file, 'utf8'), _bayView, { filename: 'bay-view.js' });
-  }
-  return JSON.parse(JSON.stringify(vm.runInContext(name, _bayView)));
+  return constLiteral(bayViewSrc, name, 'bay-view.js');
 }
 
 // The RANGE slice — bay-view.js decides whether to offer the "Airspace…"

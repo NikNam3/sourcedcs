@@ -1,18 +1,21 @@
-'use strict';
-
 /* Unit tests for the client-side NLA label table and the 400ms double-tap /
    30s Undo window logic (efsp-nla.js), using an injected fake `now` rather
    than real timers — same discipline as los-math.test.js. */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 
-const {
+import * as c from '../app/public/js/panels/efsp/efsp-nla.js';
+import {
   NLA_LABELS, nlaLabelFor, DOUBLE_TAP_MS, UNDO_WINDOW_MS,
   isWithinDoubleTapWindow, isUndoAvailable,
   DEFAULT_STALE_THRESHOLD_SECONDS, isEfspBoardStale,
   STATE_OWNERS_BY_ROLE, DEPARTURE_STATE_OWNERS, ARRIVAL_STATE_OWNERS, OVERFLIGHT_STATE_OWNERS, MISSION_STATE_OWNERS, canActOnState,
-} = require('../app/public/js/panels/efsp/efsp-nla.js');
+} from '../app/public/js/panels/efsp/efsp-nla.js';
+
+const require = createRequire(import.meta.url);
+
 
 test('every DEPARTURE lifecycle state except DROPPED has a label', () => {
   for (const state of ['PROPOSED', 'PENDING_CLEARANCE', 'CLEARED', 'HELD', 'PUSHBACK', 'TAXI', 'RUNWAY_QUEUE', 'LUAW', 'DEPARTED', 'HANDED_OFF']) {
@@ -169,7 +172,6 @@ test('this client mirror stays in lockstep with the real, authoritative server t
 test('the carrier state owners and hand-over table mirror the server exactly', () => {
   const server = require('../../crc-sync/src/efsp/permission.js');
   const transfers = require('../../crc-sync/src/efsp/carrier/transfers.js');
-  const c = require('../app/public/js/panels/efsp/efsp-nla.js');
   assert.deepEqual(c.MARSHAL_STATE_OWNERS, server.MARSHAL_STATE_OWNERS);
   assert.deepEqual(c.FINAL_STATE_OWNERS, server.FINAL_STATE_OWNERS);
   assert.deepEqual(c.PATTERN_STATE_OWNERS, server.PATTERN_STATE_OWNERS);
@@ -185,7 +187,6 @@ test('the carrier state owners and hand-over table mirror the server exactly', (
 
 test('every carrier state has an NLA label (or is terminal), and a Case I hand-over names itself', () => {
   const nlaServer = require('../../crc-sync/src/efsp/nla.js');
-  const c = require('../app/public/js/panels/efsp/efsp-nla.js');
   for (const role of ['MARSHAL', 'FINAL', 'PATTERN']) {
     for (const state of nlaServer.STATES_BY_ROLE[role]) {
       if (state === 'DROPPED') continue;

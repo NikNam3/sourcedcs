@@ -1,5 +1,3 @@
-'use strict';
-
 // docs/adr/0087 (questions-round3 Q3-35, lane brief T1): INBOUND and HANDED_OFF
 // are state names of three Roles now (ARRIVAL/OVERFLIGHT, DEPARTURE/OVERFLIGHT).
 // Any code that compares a bare state without its Role is wrong for one of them.
@@ -7,10 +5,13 @@
 // is safe; a NEW file naming one (a scope label, a geojson layer, a conformance
 // rule) fails here until someone decides it is Role-aware.
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('fs');
-const path = require('path');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const REPO = path.join(__dirname, '..', '..');
 const ROOTS = ['crc-sync/src', 'crc-desktop/app/public/js', 'crc-desktop/app/server.js', 'crc-desktop/main.js'];
@@ -25,7 +26,7 @@ const ALLOWED = {
   'crc-sync/src/efsp/traffic-count.js': 'COUNTABLE_PRE_DROP_STATES is keyed by Role',
   'crc-sync/src/efsp/surveillance-hints.js': 'EXPECTS is keyed by Role',
   'crc-sync/src/efsp/overflight-migration.js': 'the comment naming the new states; it only touches TRANSITING',
-  'crc-sync/src/efsp/efsp-ws.js': 'the word INBOUND in a comment about messages',
+  'crc-sync/src/efsp/wire/skeleton.js': 'the word INBOUND in a comment about messages',
   'crc-desktop/app/public/js/panels/efsp/sfa-state.js': 'the rotation button is offered only to role === ARRIVAL at INBOUND (the guard is on the same line)',
   'crc-sync/src/efsp/sfa.js': 'SFA_ROTATION is keyed by Role: it names role ARRIVAL with state INBOUND, and board-store _applySfaRotation refuses any other Role',
   'crc-desktop/app/public/js/panels/efsp/efsp-nla.js': 'per-Role tables',

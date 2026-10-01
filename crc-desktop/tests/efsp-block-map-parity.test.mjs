@@ -1,5 +1,3 @@
-'use strict';
-
 // Cross-package parity check between crc-sync's server-side block-map.js
 // and crc-desktop's client-side strip-template.js — the two "identical"
 // Block Map copies ADR 0001 deliberately keeps as literal duplicates
@@ -44,11 +42,15 @@
 //     kind together as "not directly SetBlock-writable". `tofi` gets the same
 //     check for the same reason.
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
+import './helpers/client-env.mjs';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import * as client from '../app/public/js/panels/efsp/strip-template.js';
+
+const require = createRequire(import.meta.url);
 
 const server = require('../../crc-sync/src/efsp/block-map.js');
-const client = require('../app/public/js/panels/efsp/strip-template.js');
 
 function isWritableKind(kind) {
   return kind === 'fdr' || kind === 'annotation';
