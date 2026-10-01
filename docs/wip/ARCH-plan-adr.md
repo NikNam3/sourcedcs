@@ -1,138 +1,150 @@
-# 0095 — EFSP code structure: capabilities register into tables, the Board splits by concern, and a golden master freezes behaviour first
+# 0095 — EFSP and CRC code structure: a Board facade with collaborators, registries for every extension point, one composition root, native ES modules on the client, JSON as the single source for facility data, and golden replay as the refactor's acceptance
 
-> **Draft, not committed as an ADR.** Lane ARCH wrote this for the human's decision (S-5, D-10, D-9). If
-> accepted, the lane that runs phase S1 copies it to `docs/adr/0095-…md` with the human's choices filled in
-> (marked ⟨D…⟩ below). Plan and evidence: `docs/wip/ARCH-plan.md`.
+> **Ready to commit.** Lane BOARD-1 copies this file to `docs/adr/0095-efsp-and-crc-code-structure.md` in its first
+> commit, without the blockquote. It encodes the human's rulings S-ARCH, H78, H80, H84, H86, H87 and S-desk3
+> (`docs/parallel/decisions.md`). Plan, measurements and phases: `docs/wip/ARCH-plan.md`.
 
 ## Context
 
-The EFSP server and client grew wave by wave, and every capability landed inside a handful of shared files:
+The EFSP server and the CRC client grew one wave at a time, and every capability landed inside a few shared files:
 
-- `crc-sync/src/efsp/board-store.js`: 3,149 lines and one class with 79 methods. 40% of the lines are comments.
-  The 1,699 code lines have 97.6% line and 83.6% branch coverage.
-- `efsp-ws.js`: 1,158 lines with six hand-written wire handlers that share one skeleton.
-- `index.js`: a 43-key `rules` object per Facility, and `_persist`/`_restore` with 8 and 9 positional stores.
-- `server.js`: 11 module-level `setInterval`s, 6 mid-file `require`s, a closure that references a const
-  declared 300 lines later, and no unit coverage. `tools/soak/host-core.js` re-implements its monitor wiring.
-- `crc-desktop` `bay-view.js` (3,066 lines) and `app.js` (20 `efsp-*` cases): classic scripts sharing one global
-  scope. On `integ/wave3-dry` a duplicate `const finite` stops `final-panel.js` from loading at all.
-
-Size is not the main cost. The main cost is **fan-out**. One capability (L18S's SFA rotation) edited
-`board-store.js`, `index.js`, `efsp-ws.js`, `permission.js`, `facility-config.js`, `replay-cache.js` and
-`ws-hub.js`. One lifecycle change (L28) edits seven files. The parallel plan therefore serialises lanes on
-those files (`docs/efsp-parallel-plan.md` §2; decisions S-L8, S-R2-1, S-L6), and its merges conflict where
-registrations collide (S-M24, S-M27).
-
-The second cost is **repetition**. The session binding is typed 7 times, `unaudited: true` 12 times and the
-replay lookup 6 times. Per the file's own comments, a new dispatch path is "exactly where that check gets
-forgotten". The same four-line "rev, updatedAt, updatedBy, touch" block appears 32 times. Forty
-`this._rules.x &&` guards switch a check off without any error when its rule is not wired.
-
-Where the code already uses tables, adding a capability is cheap: `nla.js` `COMPUTE_BY_ROLE`, `permission.js`'s
-capability tables (ADR 0080), `CARRIER_TRANSFER_EFFECTS` (ADR 0074), the Bay descriptor `view` flags (ADR 0093)
-and `strip-view.js`'s `_stripAlerts`.
+- `crc-sync/src/efsp/board-store.js`: 3,310 lines, one class, 40% comments, 97.6% line coverage. Size is not the
+  cost. Fan-out is: one capability (L18S's SFA rotation) edited seven shared files, and one lifecycle (L28) edited seven.
+  The parallel plan therefore serialised lanes on those files, and its merges conflicted where registrations collided.
+- Repetition: seven wire handlers re-type the same skeleton (session binding, `unaudited`, replay, persist, ack,
+  broadcast). The four-line "rev, updatedAt, updatedBy, touch" block appears 31 times. A `rules` object of 49 optional
+  closures switches a check off silently when one is not wired.
+- `index.js` persists and restores through 9 and 10 positional parameters. `server.js` has 11 module-level timers and
+  no unit coverage, and the soak re-implements its monitor wiring.
+- The client is 55 classic scripts sharing one global scope (1,187 names). Duplicate names have already stopped a
+  panel from loading (`finite`) and still silently override each other (`_callsignOfFdr`, `_el`).
+- Squadron facility data lives twice: as JSON in `config/` and as literals in `facility-config.js`, merged at load.
 
 ## Decision
 
-### 1. Behaviour is frozen before anything moves
+### 1. Acceptance: golden replay, with output changes kept separate
 
-A golden-master suite (`crc-sync/tests/golden/`) drives a real `createEfsp()` behind the real `WsHub` with
-fake sockets. It records, per step, every message each socket receives (in order), the Mutation-log lines
-appended and the persisted snapshot. Clocks, `Date.now` and `crypto.randomUUID` are deterministic. The corpus
-is: the op × outcome matrix; the scenario walks; seeded random traffic with reconnects, resyncs and restarts;
-the crash and NotPersisted path; and monitor ticks. A self-check proves it fails on at least eight seeded source
-mutations. Alongside it come: a wiring-completeness test (every rule board-store reads is wired by
-`createEfsp`), a frozen list of the Board's externally used members, a frozen list of `Date.now()` sites, and on
-the client a global-surface test (every `index.html` script loads, no top-level name is declared twice, and the
-set of names is frozen).
+The characterization suite (`crc-sync/tests/freeze/`, `docs/wip/FREEZE.md`) is the refactor's acceptance check. No
+surface (wire, snapshot, audit) is frozen as a principle: this is alpha software, and everything may change. Inside the
+refactor window:
 
-**A refactor phase compares against the fixtures and never re-records them.** A behaviour change re-records
-them in its own commit and lists the diff in the lane report. ⟨D6⟩
+- a **structural** commit leaves every behaviour golden byte-identical;
+- an **output change** is its own explicitly approved commit, which re-records the fixtures in that commit and lists
+  the changed traces;
+- structure fixtures (the Board surface list, the clock allow-list, the client module-graph export list) may change
+  with the structure, listed in the commit.
 
-### 2. A capability registers. It does not branch
+The fixtures are kept up only during the refactor window. When it closes, the suite leaves `npm test` and becomes an
+opt-in script.
 
-- **Wire families.** Each `efsp-<x>-mutation` family is one file in `src/efsp/wire/families/`, declaring its
-  types, replay kind, subject, gate, `apply`, ack fields, broadcasts, and optionally a snapshot key and a
-  read-scope filter. `wire/efsp-ws.js` is the one skeleton that enforces the session binding, `unaudited`, the
-  replay cache, persist-on-ok and broadcast order. `replay-cache.js`'s kinds come from the registry. A handler
+### 2. The Board is a facade over collaborators
+
+`BoardStore` keeps its public API (`applyMutation`, the queries, `getDeltaSince`/`drainTouched`, the `receive*` peer
+methods, `nlaStatusFor`, the Position-lifecycle methods, `archiveStrip`, `snapshot`/`restore`, `setMutationLog`,
+`setAirborneObserver`) and its constructor signature. It delegates to collaborators in `src/efsp/board/`:
+`BoardState` (the kernel: the Strip map, bump, insert, touch), `BoardAudit`, `Placement` (order keys, Bays, implied
+state), `StripOps` (the op table, one file per op, NLA and Undo, retirement), `Coordination`, `Tofi`, and
+`BoardPersistence` (snapshot, restore, archive, the replay window). Each collaborator receives its dependencies in its
+constructor, including any sibling it calls. A source-scan test forbids a collaborator from requiring the facade or a
+sibling, from reading another object's underscore-prefixed members, and from holding module-level state. This replaces
+the prototype mixins the first draft proposed.
+
+### 3. Capabilities register; they do not branch
+
+- **Wire families:** `src/efsp/wire/families/<family>.js` declares type, ack, replay kind, subject, gate, apply, ack
+  fields, broadcasts, and optionally a snapshot key and a read-scope filter. `efsp-ws.js` is the one skeleton. A handler
   result carries `broadcasts: [...]` in today's order, and `ws-hub.js` sends the list.
-- **Persisted stores.** `src/efsp/stores.js` lists `{ key, build, snapshot, restore, after? }` in today's order.
-  `_persist` and `_restore` loop over it. The snapshot's key order and the restore order do not change.
-- **Board ops.** `board/ops/<op>.js` exports `{ kind, authorize?, apply, auditFields? }`, registered in
-  `board/ops/index.js`. `_dispatch` looks an op up instead of switching on it.
-- **Role-change transfers.** The carrier's four hand-overs and the SFA rotation are rows in one `transfers`
-  table with one implementation. Each row keeps its own audit keys and refusal wordings. ⟨optional S2c⟩
-- **Role families.** `src/efsp/roles/<role>.js` holds a Role's states, initial state, NLA, state owners,
-  creators, countable states, replica state on receipt and coordination/TOFI eligibility. `nla.js` and
-  `permission.js` stay as facades with unchanged exports. ⟨S3, after L28⟩
-- **Client messages.** Each family script calls `registerEfspMessage(type, handler)`, and `app.js` dispatches
-  through the registry. ⟨C1a⟩
+- **Persisted stores:** `src/efsp/stores.js` lists `{key, build, snapshot, restore, after?}` in today's order.
+  Persist and restore loop over it.
+- **Board ops:** `board/ops/<op>.js` exports `{kind, authorize?, apply, auditFields?}`.
+- **Authority:** one registry (`src/efsp/authority/`). Position families (civil ATC, Incirlik military ATC, tactical,
+  carrier) register their capabilities and read scopes. Role families (departure, arrival, overflight, mission, marshal,
+  final, pattern) register their states, initial state, NLA, state owners, creators, countability, replica state on
+  receipt and coordination/TOFI eligibility. `permission.js`, `nla.js` and `coordination.js` remain as facades with
+  unchanged exports.
+- **Sync:** one `SyncLog` (seq, ring, epoch, touched set) and one replay cache, used by the Board and by every store
+  that syncs.
+- **Client messages:** each family module calls `registerEfspMessage(type, handler)`, and `app.js` dispatches through
+  the registry.
 
-### 3. The Board splits by concern, by moving code verbatim
+### 4. One composition root
 
-`board/board-store.js` keeps the kernel: the Strip map, `_bump`/`_touch`/`_insertStrip`, the seq ring, the epoch,
-idempotency, dispatch, audit, the position-lifecycle methods, archive, and snapshot/restore. Coordination, TOFI,
-NLA application, retirement, placement, order keys and the ops move out as **prototype mixins**
-(`Object.assign(BoardStore.prototype, …)`). Method bodies, `this` and every name a test or tool reaches stay
-as they are. A source-scan test forbids a mixin from reading the kernel's private state (`_strips`, `_log`,
-`_seq`, `_epoch`, `_touchedSinceDrain`, `_appliedMutations`) directly. The `rules` object keeps its shape.
+`src/app.js` `createApp(deps)` builds everything `server.js` builds today, in dependency order, and returns
+`{ http, wsHub, efsp, monitors, tickers: [{name, periodMs, tick}], start(), stop() }`. `server.js` parses the
+environment, calls `createApp`, `start()` and `listen`. The soak and the tests call `createApp` with fake gRPC and SRS
+clients and drive the tickers by name. No module in `crc-sync/src` does anything when it is required: no timers, no
+file reads, no paths fixed at require time.
 
-### 4. Wiring is a function, not a module load
+### 5. Facility data has one source: JSON
 
-`src/runtime.js` `createRuntime(deps)` builds what `server.js` builds today, in dependency order, and returns
-`{ wsHub, efsp, monitors, tickers: [{ name, periodMs, tick }], start(), stop() }`. `server.js` parses the
-environment, mounts the routes, calls `start()` and listens. The soak calls `createRuntime` with fakes and
-drives `tickers` by name.
+The `DEFAULT_*_CONFIG` literals are removed. `config/efsp-facility-<id>.json` is the shipped source, and a `state/`
+copy, when one exists, replaces it whole (ADR 0048's split is kept: reads prefer `state/`, then the shipped file). Code
+holds the schema (`facility-schema.js`), the rules and the interactions. A missing or invalid file stops start-up with
+the validation message. Tuning defaults that have a JSON twin move to it. Engineering constants stay named in code.
+Doctrine tables are rules and live in the authority registry. UI code is exempt. Derived data (RANGES' Positions from
+the airspaces) stays derived.
 
-### 5. The client keeps classic scripts
+### 6. The client uses native ES modules, with no bundler
 
-There is no ES-module migration and no namespace rename. Every script `index.html` loads must declare unique
-top-level names (a test). New files prefix their private names. ⟨D4⟩ `bay-view.js` may be split by feature into
-classic scripts that keep the same global names, only inside a client freeze. ⟨optional C1b⟩
+Every client file is an ES module with explicit imports and exports. `app/public/js/package.json` scopes
+`"type":"module"` so that `app/server.js` stays CommonJS. `index.html` loads the CDN globals and `/js/config.js` as
+classic scripts, then one `<script type="module" src="./js/main.js">`. Node tests import the files directly. Packaging
+has no build step, and a bundler can be added later without changing the modules. `bay-view.js` and `efsp-panel.js`
+are split by feature into `panels/efsp/bay/` and `panels/efsp/panel/`, each entry re-exporting its public names. Hand
+copies of server tables stay, guarded by the PARITY tests. They are not generated.
 
-### 6. Client mirrors
+### 7. Logging
 
-Code-constant tables are generated into `efsp-tables.generated.js` (one global, `EFSP_TABLES`), checked in and
-kept fresh by a test. Config-derived data stays on the wire. Behaviour mirrors stay hand-written under their
-parity tests. ⟨optional C2, D7⟩
+crc-sync gets a logging system: module-level loggers, levels (error/warn/info/debug, `LOG_LEVEL`), and structured
+context, configured once by `createApp`. ADR 0097 records the details.
 
-### 7. Order and freeze
+### 8. Order and freeze
 
-P0 and C0 start now. The server-core phases (S1 → S2a → S2b → S3) run in one freeze window after L20 merges.
-During the window no other lane edits `board-store`, `efsp-ws`, `index`, `nla`, `permission`, `replay-cache`,
-`coordination`, `traffic-count` or `ws-hub`. S4 and C1a run in parallel, because their files are disjoint.
-⟨D1 scope, D2 window, D3 AIRSP⟩
+The refactor runs after the current integration and before L20, in six waves. During the window no feature lane runs
+(H78), and each core file has exactly one owning lane at a time (`docs/parallel/refactor/README.md`). The back-compat
+code (`efsp.boardStore`/`positionStore` aliases, the pre-WP4A `data.board` restore, the optional-rule guards, the legacy
+`blockVisibility` list) is removed in a small last lane, and a rule missing from a Board's wiring becomes a loud
+start-up error.
 
-## What does not change
+### 9. Room for state versioning
 
-The wire format and message order (ADR 0001, 0004, 0022, 0081); epoch, replay and resync semantics (0006,
-0081); audit semantics (0065, 0081, 0083); the persisted snapshot shape and key order (0002, 0048, 0081);
-mission-clock time and its four documented wall-time exceptions (0079); one Board per Facility (0013, 0015);
-read scope (0080); one carrier hand-over implementation (0074); Bay descriptor flags (0093). Each is checked by
-the golden master and by the existing contract, soak and Playwright suites.
+There is no snapshot versioning or migration now: production starts clean, and EFSP is part of crc-desktop/crc-sync
+v2. The store registry and `BoardPersistence` are the single place where a `version` key and per-store upgrade hooks
+will go. Nothing may assume the snapshot is unversioned.
+
+## What does not change in a structural commit
+
+The wire format and frame order (0001, 0004, 0022, 0081); epoch, replay and resync semantics (0006, 0081); audit
+semantics (0065, 0081, 0083); the persisted snapshot shape and key order (0002, 0048, 0081); one Board per Facility
+(0013, 0015); read scope (0080); one carrier hand-over implementation (0074); Bay descriptor flags (0093). These can
+still change, but only by an approved output change with its own ADR where one is due. Clock policy changes in ADR
+0096, not here.
 
 ## Alternatives considered
 
-- **Leave it.** The code is well tested and well commented, but each new capability keeps serialising lanes on
-  the same files, and the copy-paste gate class keeps recurring. Rejected for the server core. Accepted for
-  `fdr-store.js` and `metrics.js`, which are not on the serialisation path.
-- **Split `BoardStore` into collaborating classes with typed ports** (`FacilityView`, `PermissionPolicy`,
-  `RoleRegistry`, …). It reads better on paper, but it rewrites `this` across 2,000 lines and every one of the
-  84 `rules` fixtures in the board-store unit tests. The risk is out of proportion to the gain. It can still be
-  done later, file by file, once the mixins exist.
-- **An event bus between the Board and its side stores** (MARSA, carrier, SFA). This would change the
-  synchronous, one-event-one-broadcast semantics ADR 0081 depends on. Rejected.
-- **ES modules on the client.** Rejected for now (test-harness churn across 800 tests, load-order change,
-  conflict with every UI lane). Revisit with a build step.
-- **Serve every table on the wire instead of generating it.** Rejected for code constants: it would add a
-  message and couple client startup to it. Data that comes from config is already served.
+- **Prototype mixins** (this ADR's first draft). They keep `this` and every private name, so they are the smallest
+  diff. They are also a single object with hidden coupling under a new file layout. Rejected by the human (H87) in
+  favour of collaborators with explicit dependencies.
+- **Plain functions taking a `board` argument.** They read well but give no place for a collaborator's own state
+  (placement caches, the NLA latch). Collaborators can hold their state privately and still be passed explicitly.
+- **Typed ports and a DI container.** These are machinery the codebase does not need. Rejected.
+- **An event bus between the Board and its side stores.** It would break the synchronous one-event-one-broadcast
+  semantics of ADR 0081. Rejected.
+- **Classic scripts plus a name-uniqueness test.** This catches duplicates but leaves 1,187 implicit globals and
+  load-order coupling. Rejected (H87).
+- **A bundler on the client.** It would add a build step to packaging and to every test run. Deferred. ES modules
+  leave the door open.
+- **Generated client tables.** Rejected (ARCH-D7). PARITY's tests already catch drift.
 
 ## Consequences
 
-- A new capability is new files plus one appended registry line per extension point. The ownership table in
-  plan §2 shrinks to the registries' index files and the Block Map.
-- The session binding, `unaudited` and the replay cache cannot be forgotten on a new path.
-- `board-store.js` drops to about 750 lines. Coordination and TOFI are one file each.
-- The soak exercises the production wiring.
-- Every behaviour lane carries a golden re-record step. ⟨D6⟩
-- The client keeps its build-step-free classic scripts, guarded by a uniqueness test.
+- A new capability is new files plus one registry line per extension point. The parallel plan's serialised shared
+  files shrink to the registries' index files and the Block Map.
+- The session binding, `unaudited` and replay cannot be forgotten on a new wire path.
+- `board-store.js` becomes a facade of a few hundred lines. Coordination, TOFI, placement and each op have their own
+  files.
+- The soak and the tests exercise the production wiring.
+- The client's dependencies are visible in its imports, and a duplicate name can no longer override another file's
+  function.
+- A facility change is a JSON edit, validated at start-up. The shipped JSON and the code cannot disagree.
+- The golden fixtures cost a re-record step for approved output changes during the window, and nothing after it.

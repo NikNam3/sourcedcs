@@ -1,210 +1,133 @@
-# ARCH: is the 3,000-line Board necessary, and what to do about the god files (S-5, D-10, with D-9)
+# ARCH: the executable refactor plan (S-5, D-9, D-10)
 
-Lane ARCH, branch `lane/ARCH-refactor-plan`, cut from `integ/wave3-dry` at `0935ee5`. **Plan only**: no
-production code changed. Companion files: `docs/wip/ARCH-plan-adr.md` (draft ADR 0095) and
-`docs/wip/ARCH-plan-p0-briefing.md` (the briefing for the first lane, tests only).
+Rewritten 2026-10-01 against the human's rulings **S-ARCH, H78, H79–H87 and S-desk3** in
+`docs/parallel/decisions.md` (they win over this text wherever the two disagree). The first version of this file
+(lane ARCH, `0230128`) was a proposal with seven open decisions. Those decisions are settled now, so this version
+is the plan the supervisor dispatches from. Companion files:
 
-The human's notes: S-5 "fix this, and also check if it's really necessary to have a 3000-line board-store.
-There is probably an opportunity to make the code architecture more sensical and more readable". D-10
-"probably an opportunity for architecture improvements".
+- `docs/wip/ARCH-plan-adr.md`: ADR **0095**, ready to copy into `docs/adr/` by lane BOARD-1 (see §8).
+- `docs/parallel/refactor/README.md`: the dispatch order, the waves and the conventions every lane shares.
+- `docs/parallel/refactor/<PHASE>.md`: one briefing for each lane.
+- `docs/wip/FREEZE.md`: phase 0 (the golden master). It is done and merged, and it is the acceptance harness here.
 
-Every number below was measured on this branch (scripts in the session scratchpad: a method/field scanner
-for `board-store.js`, a cluster and call-matrix scanner, a client global-scope scanner, and
-`node --test --experimental-test-coverage`). Line numbers are this branch's.
-
----
-
-## 0. The answer in ten lines
-
-1. `board-store.js` is 3,149 lines, but **1,269 of them (40%) are comment lines** of rationale and defect
-   history. The code is 1,699 lines, and the existing tests cover **97.6% of its lines and 83.6% of its branches**.
-   File size by itself is not the problem.
-2. One third of the file, **coordination (478 lines) and TOFI (521 lines)**, touches the rest only through
-   five kernel methods. These two clusters can be moved out verbatim, which takes the file to about 1,000 lines
-   before anything else is done.
-3. The real cost is **fan-out per capability**. One capability edits six to ten shared files. L18S's SFA rotation
-   added 129 lines to `board-store.js`, 50 to `index.js`, 46 to `efsp-ws.js`, 98 to `permission.js` and 173 to
-   `facility-config.js`, and also edited `replay-cache.js` and `ws-hub.js`. L28 changes one lifecycle in seven
-   files. The lanes queue up on those files (plan §2, S-L8, S-R2-1, S-M24).
-4. The same request skeleton is repeated by hand in six wire handlers: the session binding appears 7 times,
-   `unaudited: true` 12 times and the replay lookup 6 times. The file's own comments say a new dispatch path "is
-   exactly where that check gets forgotten" (it has happened twice). That repetition is a bug class.
-5. `rules` holds 43 optional closures and is read behind 40 `this._rules.x &&` guards. A rule that is not wired
-   in `index.js` switches its check off without any error.
-6. The client's global script scope has a **live defect on `integ/wave3-dry` right now**.
-   `const finite` is declared in both `pattern-board.js` and `final-panel.js`, so `final-panel.js` throws a
-   SyntaxError and never loads. L18S fixed this on its own branch only. `_callsignOfFdr` is still being
-   overridden without any error.
-7. **Worth doing:** a golden-master test of the Board's behaviour (P0); registries for wire families and
-   persisted stores (S1); moving coordination and TOFI out of `board-store.js` (S2a); `createRuntime()` in place
-   of `server.js`'s module-level wiring, reused by the soak (S4); a test that every top-level client name is
-   unique (C0). Total about 4.5 agent-lanes.
-8. **Worth doing if more Roles and capabilities keep coming (they are):** an op-handler table for the Board
-   (S2b), one file per Role family (S3), and a client message registry (C1a). About 3 more lanes.
-9. **Not worth doing now:** moving the client to ES modules, a namespace rename across the client, DI containers
-   or class hierarchies, and schema codegen. Splitting `bay-view.js` (C1b) and generating the client tables (C2)
-   are optional.
-10. The human decides: the scope tier, the freeze window (after L20, about 2–4 days on six core files), whether
-    AIRSP phase 2 waits for S1, and the policy for re-recording golden fixtures (§7).
+Measured on `efsp-wp5-correlation` at `4f5e502`. Changes that `integ/merge4` (worktree `../sourcedcs-MERGE4`) is
+merging right now are listed in §7. Every lane starts from the tree **after** that merge.
 
 ---
 
-## 1. What the god files contain today (measured)
+## 0. The plan in fifteen lines
 
-### 1.1 `crc-sync/src/efsp/board-store.js` — 3,149 lines, one class, 79 methods
+1. **Scope: Tier B, starting with A** (ARCH-D1), plus what the later rulings added: the client moves to native ES
+   modules (H87), facility data moves to JSON (S3-6/R3-72), a logging system (R3-33), one sync mechanism (S3-1),
+   one authority registry (S3-2), one composition root (R3-29), and the clock rule (R3-16/S3-3).
+2. **First-pass god files** (R3-32): `board-store.js`, `server.js`, `bay-view.js`. `efsp-ws.js`, `index.js` and
+   `efsp-panel.js` go too, because their extension points are what serialises the lanes.
+3. **Board:** a **facade plus collaborators** (H87/R3-8). `BoardStore` keeps its public API and delegates to
+   `Placement`, `StripOps`, `Coordination`, `Tofi` and the sync and persistence collaborator. Each collaborator gets
+   its dependencies explicitly in its constructor. No prototype mixins.
+4. **Client:** native ES modules with no bundler. `<script type="module">`, node tests import the files, and packaging
+   has no build step. `bay-view.js` and `efsp-panel.js` are split by feature once they are modules.
+5. **Acceptance** (R3-9, reconciled in S-desk3): golden replay. A structural commit is golden-identical. Any change to
+   the output is its own explicitly approved commit, and that commit re-records the fixtures. Fixtures are kept up
+   only during the refactor window (ARCH-D6 b).
+6. **Order** (H87): the current integration (merge4) first, then this refactor, then L20. No feature lane runs during
+   the window (H78).
+7. **20 phases (22 lane runs) in 6 waves.** About **18 agent-lanes** in total, and about **7–9 working days** elapsed including merges.
+   At most 10 agents run at once, the questioner included (§5).
+8. ADRs: **0095** (refactor), **0096** (clock policy, TIME-B), **0097** (logging, LOG-1), **0098** (reserved for the
+   airspace registry, AIRSP phase 2). 0077 stays L20's.
 
-| # | Cluster | Lines | Total | Code | Comment | `rules` keys read |
-|---|---|---|---|---|---|---|
-| A | Constants, pure helpers (`_replayRecord`, `newFlags`, `_validateAltitudeBlock`, `deepClone`, `_frequencyFromBlockValue`) | 1–140 | 140 | 57 | 72 | 0 |
-| B | Store kernel: `_strips`, `_seq`/`_log` ring, `_epoch`, `_touch`/`drainTouched`, `getDeltaSince`, orderKey resolution and rebalance, `_nextCid` | 141–327 | 187 | 91 | 84 | 0 |
-| C | Mutation pipeline: `applyMutation`, idempotency (`_appliedMutations`, `_replayResult`), `_dispatch` switch, takeoff stamp, `_recordAudit`, `_recordPeer` | 328–593 | 266 | 146 | 102 | 4 |
-| D | Strip ops and placement: CreateStrip, ConvertToArrival, airspace entry, Move, SetBlock (+annotations, MARSA interlock), Transfer, CarrierTransfer, SetFlag, SetState, `_placementRack`, `_bayForNewOwner`, `_relocateForImpliedState`, `_validateBayImpliedTransition` | 594–1600 | 1,007 | 519 | 431 | 30 |
-| E | NLA: `_nlaPrecheck`, rejected-replica rules, `nlaStatusFor`, `_applyInvokeNla`, `_applyUndo` | 1601–1850 | 250 | 103 | 130 | 4 |
-| F | Retirement: DropStrip, `_retireStrip`, `_releaseFdrIfLastStrip` | 1851–1978 | 128 | 47 | 77 | 4 |
-| G | Cross-Facility coordination (5 primitives × PROPOSE/ACCEPT/REJECT/STAND_BY/CANCEL, `receiveCoordination*`) | 1979–2456 | 478 | 298 | 154 | 7 |
-| H | TOFI (ENTRY/EXIT, ACCEPT/REJECT, TRANSFER_COMMS, `receiveTofi*`) | 2457–2977 | 521 | 327 | 163 | 7 |
-| I | Position lifecycle: `reassignPositionStrips`, `returnCoveredStrips` | 2978–3056 | 79 | 57 | 20 | 2 |
-| J | Archive, `snapshot`/`restore` | 3057–3149 | 93 | 54 | 36 | 1 |
-| | **Total** | | **3,149** | **1,699** | **1,269** | **43 distinct** |
+---
 
-**State fields, and how many methods touch each:**
+## 1. What the god files contain (measured; still true)
 
-| Field | Methods | Cohesion |
+### 1.1 `crc-sync/src/efsp/board-store.js`: 3,310 lines, one class
+
+1,324 lines (40%) are comments. Coverage at the last measurement: 97.6% of lines and 83.6% of branches. Size is not the
+problem. Fan-out and repetition are. Method map at `4f5e502`, used to cut the collaborators:
+
+| Cluster | Lines | Goes to |
 |---|---|---|
-| `_rules` | 44 | everywhere (an untyped service locator) |
-| `_clock` | 38 | everywhere (mission time, correct per ADR 0079) |
-| `_fdrStore` | 20 | D, E, G, H (13 distinct FdrStore methods) |
-| `_strips` | 16 | B, C, G/H's `receive*` (they mint replicas by `_strips.set`), J |
-| `_activeCmid` | 12 | C sets it; G, H and F read it for `causedBy` (ADR 0083) |
-| `_mutationLog` | 8 | C, G, H, I, J |
-| `_droppedWallAt` | 7 | F, E (Undo), J |
-| `_appliedMutations` | 6 | C and J only, so it is cohesive |
-| `_nlaHistory` | 6 | E, D (transfer/carrier delete), J |
-| `_seq`, `_log`, `_epoch`, `_touchedSinceDrain`, `_cidSeq` | 3–5 each | B and J only, so they are cohesive |
+| Constants and pure helpers (`_replayRecord`, `newFlags`, `_validateAltitudeBlock`, `deepClone`, `_frequencyFromBlockValue`, the per-Role tables `REPLICA_STATE_ON_RECEIPT`, `SENDER_STATE_ON_ACCEPT`, `DEFAULT_INITIAL_STATE_BY_ROLE`) | 1–148 | helpers: `board/strip-util.js`; per-Role tables: the authority registry (AUTH, read by BOARD-3) |
+| Kernel: strips map, `_touch`/`drainTouched`, `_log` ring, `getDeltaSince`, `_nextCid` | 150–271, 329–345 | `board/board-state.js` (BOARD-1); seq, ring and epoch move under the shared sync mechanism in SYNC |
+| Order keys: `_resolveOrderKey`, `_keyAfterRebalance`, `_rebalanceRack`, `_appendOrderKey` | 273–328, 1645 | `Placement` (BOARD-1) |
+| Audit: `_recordPeer`, `_recordAudit` | 346, 583 | `board/audit.js` (BOARD-1) |
+| Pipeline: `applyMutation`, `_rememberApplied`, `_replayResult`, `_dispatch`, `_stampTakeoffOnStateChange` | 365–582 | the facade keeps `applyMutation`; `_dispatch` becomes the op table (BOARD-3); idempotency goes to SYNC |
+| Placement: `_placementRack`, `_roleBayFor`, `_validateBayImpliedTransition`, `_requireKnownBay`, `_bayFullRefusal`, `_bayForNewOwner`, `_relocateForImpliedState`, `_fieldStateView`, `_nlaCtx` | 982–1182, 1659–1705 | `Placement` (BOARD-1) |
+| Strip ops: Create, ConvertToArrival, airspace entry, Move, SetBlock and annotations, MARSA void, Transfer, CarrierTransfer, SfaRotation, SetFlag, SetState (incl. merge4's gated path) | 616–981, 1136–1758 | `StripOps` with one file per op (BOARD-3) |
+| NLA: rejected-replica rules, `_nlaPrecheck`, `nlaStatusFor`, `_applyInvokeNla`, `_applyUndo` | 1759–2008 | `StripOps` (BOARD-3). The NLA⇄ops knot stays inside one collaborator |
+| Retirement: `_applyDropStrip`, `_retireStrip`, `_releaseFdrIfLastStrip` | 2009–2136 | `StripOps` (BOARD-3) |
+| Coordination (5 primitives × 5 actions, 4 `receiveCoordination*`) | 2137–2617 | `Coordination` (BOARD-2) |
+| TOFI (ENTRY/EXIT, ACCEPT/REJECT, TRANSFER_COMMS, 3 `receiveTofi*`) | 2618–3138 | `Tofi` (BOARD-2) |
+| Position lifecycle: `reassignPositionStrips`, `returnCoveredStrips` | 3139–3217 | the facade, delegating to `Placement` and `StripOps` (BOARD-3) |
+| Archive, `droppedWallAtOf`, `snapshot`/`restore` | 3218–3310 | the persistence collaborator (SYNC) |
 
-**Calls between clusters (distinct methods):** C→D 12, E→D 5, D→B 4, G→B 4, H→B 4, C→E 3, D→E 2, and every
-other pair 1 or 2. The only real knot is **D⇄E**: an NLA press runs a transfer, a set-state, a retire or a
-carrier transfer, and those ops call the NLA precheck. **G and H depend only on the kernel** (`_touch`,
-`getRack`/`_resolveOrderKey`/`_appendOrderKey`, `_recordPeer`, `_activeCmid`, `_strips`), on `_retireStrip`
-and on one placement helper. That is why they can be moved without rewriting.
+`rules` holds **49 distinct keys** read at 131 sites, many behind `this._rules.x &&` guards, so a rule that is not
+wired switches its check off silently (FREEZE guard 1 now catches this in production wiring). The four-line block
+"rev, updatedAt, updatedBy, touch" appears **31 times**.
 
-**Repetition:** the four lines `strip.rev += 1; strip.updatedAt = …; strip.updatedBy = …; this._touch(…)`
-appear **32 times**. `deepClone(strip)` appears 19 times.
+**Surface reached from outside the file** (`tests/freeze/golden/guard-board-surface.json`): the public methods above
+plus `setAirborneObserver` (merge4). Private members reached from outside: `_strips`, `_nlaHistory`,
+`_appliedMutations`, `_bayForNewOwner`, `_retireStrip`, `_droppedWallAt`, `_fdrStore` (tests); `_cidSeq`, `_log`,
+`_touch` (tools). **`tools/soak/host-core.js:112` monkeypatches `bs._touch`** to record touches, and **`:266` reads
+`bs._log.length`**. The guard's `_dispatch`, `_recordAudit`, `_mutationLog`, `_clock` and `_seq` "used by src" rows
+are name collisions with other stores (for example `airspace-store.js` has its own `_recordAudit`), not real reaches.
 
-**Public and private surface used from outside the file.** These names are frozen by P0 (§3) until a phase
-renames one on purpose:
-- Public: `applyMutation`, `getStrip`, `getAll`, `getRack` (9 callers), `currentSeq`, `epoch`,
-  `getDeltaSince`, `drainTouched` (3), `hasApplied`, `nlaStatusFor` (3), `reassignPositionStrips`,
-  `returnCoveredStrips`, `archiveStrip`, `droppedWallAtOf`, `snapshot`, `restore`, `setMutationLog` (6), and the
-  seven `receive*` methods. A peer Board calls the `receive*` methods.
-- Private, reached by tests and tools: `_strips` (7), `_nlaHistory` (3), `_appliedMutations` (4), `_touch` (2),
-  `_log` (2), `_cidSeq`, `_droppedWallAt`, `_bayForNewOwner` (3), `_fdrStore` (3). Moving code with mixins
-  (§2.3) keeps every one of these working without changing a test.
+### 1.2 `efsp-ws.js` (1,202 lines), `replay-cache.js`, `ws-hub.js`
 
-**Coverage** (all of `npm test`): `board-store.js` 97.62% lines, 83.60% branches, 100% functions. The uncovered
-lines are almost all refusal branches (95–96, 395–397, 756–787, 906–911, 948–949, 1408–1462, 1858–1859, 2032–2033, …).
-`efsp-ws.js` 99.4/86.1, `index.js` 99.4/87.9, `ws-hub.js` 91.5/80.1. **`server.js` has no unit coverage**:
-nothing can require it, because it starts the server and its timers at module load.
+There are 11 wire families. Seven hand-written family handlers repeat one skeleton (find the store, bind the session,
+check the replay cache, apply, remember, persist on ok, ack via `_subject`, broadcast). `replay-cache.js` has a fixed
+`KINDS` set (`airspace, correlation, marsa, fieldState, carrier, sfa`). `ws-hub.js` sends `result.broadcast`,
+`.peerBroadcast`, `.marsaBroadcast`, `.carrierBroadcast` and `.sfaBroadcast` by name, in that order (`ws-hub.js:603–626`).
+`WsHub` starts its 500 ms tick in `attach()` and has no `stop()`.
 
-### 1.2 `crc-sync/src/efsp/efsp-ws.js` — 1,158 lines (39% comment)
+### 1.3 `index.js` (687 lines): the EFSP composition root
 
-| Cluster | Lines |
-|---|---|
-| Header, `_stampStrip`, `_mergeFdrs`, `_touchedStrips`, `_boardDelta`, replay-cache helpers, `_subject` (a per-family switch) | 1–180 |
-| `handleMessage` dispatcher (a 10-case switch) | 181–195 |
-| Board Mutation path (`_handleMutation`): gate, apply, persist, ack, then the primary, peer, MARSA and carrier broadcasts | 197–324 |
-| Resync (ADR 0006, 0081) | 326–402 |
-| Airspace / correlation / MARSA / carrier / field-state / ATO family handlers | 404–711, 965–1157 |
-| Set-positions (covering chain, persist) | 712–787 |
-| Read scope (ADR 0080): `filterForSession` (a per-type switch), `supplementFor` | 788–864 |
-| Snapshot (one key per family) | 866–964 |
+`_restore` takes 10 positional parameters and `_persist` takes 9. Each Facility gets a 49-key `rules` literal. Paths are
+resolved when the module is required (`BOARD_SNAPSHOT_PATH`). `facility-config.js` loads every Facility's config when
+it is required (`configs = new Map(...)`, line 748). That is why the freeze harness and the soak purge the require
+cache for every trace.
 
-Each family handler repeats the same skeleton: find the store, bind the session ("Primary at" or "Primary
-somewhere"), look up the replay cache, `apply`, remember the outcome, `persist()` on ok, build the ack with
-`_subject`, then build the broadcast. Counted: `primaryOf(` 7, `unaudited: true` 12, `_cachedOutcome(` 6.
-`replay-cache.js` has a fixed `KINDS` set, edited by L17 (carrier) and L18S (sfa). `ws-hub.js` sends
-`result.broadcast`, `.peerBroadcast`, `.marsaBroadcast` and `.carrierBroadcast` by name, and every new
-family adds one more key.
+### 1.4 `server.js` (734 lines)
 
-### 1.3 `crc-sync/src/efsp/index.js` — 643 lines (43% comment): the composition root
+11 module-level `setInterval`s, 7 `require`s in the middle of the file (270, 391, 540, 564, 644–646), and a forward
+reference from the mission-load closure to `correlationReconciler`. It has no unit coverage, because requiring it starts
+the server. `tools/soak/host-core.js` (518 lines) re-implements the monitor wiring.
 
-Seven shared stores are built before the per-Facility loop. Each Facility gets a `rules` object of
-**43 keys**: closures over `facilityConfig`, `blockMap`, `nla`, `permission`, `coordination`, the
-`positionStore`, `airspaceStore`, `marsaStore`, `fieldStateStore`, `carrierStore` and `carrierModel`.
-`_persist` and `_restore` take the stores **as positional arguments, 8 and 9 of them**. Adding a store
-therefore means editing both signatures, both call sites, the `JSON.stringify` literal and the restore
-sequence. S-M24 and S-M27 had their merge conflicts in exactly that block and in the `ctx` literal.
-Back-compat aliases are still present: `efsp.boardStore` is INCIRLIK, and `_restore` still accepts the
-pre-WP4A `data.board` shape.
+### 1.5 The client
 
-### 1.4 `crc-sync/server.js` — 732 lines: a composition root with module-level side effects
+55 local scripts are loaded as classic scripts (`index.html:919–980`), plus two CDN globals (maplibre, dockview) and
+`/js/config.js`. The local server's `http.createServer` generates `/js/config.js` as four `var` globals. 34 of the
+scripts carry a guarded `module.exports`. Their names share one global scope (1,187 top-level names). The FREEZE
+client guard lists three duplicates. `finite` is fixed in the tree. `_el` and `_callsignOfFdr` are still duplicated,
+and **the later script silently wins**.
 
-| Cluster | Lines |
-|---|---|
-| Express app, auth, ws-ticket | 1–124 |
-| Stores, picture, surveillance, coverage, 2 intervals | 125–245 |
-| gRPC events (9 `grpcClient.on`), weather, mission session, mission-load | 246–400 |
-| REST endpoints | 400–535 |
-| EFSP monitors: instrumentation, archiver, obligations, NLA status, correlation reconciler, carrier tick, conformance, hints, STCA, alert compose | 536–724 |
+- 53 client test files. 42 of them `require()` client scripts. 18 load script text into a `vm` context. 5 inject
+  stubs through `globalThis` (`efsp-bay-views` 14 sites, `efsp-carrier-client` 5, `efsp-ui-a` 3, and others).
+- 3 crc-sync tests read client files: `theater-context.test.mjs` requires `magnetic.js`,
+  `wire-payload-contract.test.mjs` scans `app.js` and `efsp-state.js`, and `efsp-time-chains.test.mjs` compares
+  `time-chains.js` byte for byte.
+- `bay-view.js` is 3,070 lines (39% comments) and `efsp-panel.js` 1,598 lines. `app.js` has 22 `case 'efsp-…'`.
+- `crc-desktop/app/package.json` declares `"type": "commonjs"`. Node is 22.22, so `require(esm)` works. Electron
+  is 43, and it loads `http://localhost:<port>` (`main.js:140`), so module scripts have a real origin.
 
-There are **11 `setInterval`** calls at module scope and **6 `require`s in the middle of the file** (270, 538,
-562, 642–644). The mission-load closure at line 299 calls `correlationReconciler`, which is declared at line 625.
-This only works because the closure runs later. `tools/soak/host-core.js` (518 lines) **re-implements** the
-monitor wiring (obligations, NLA status, reconciler, conformance, STCA, archiver) so that it can drive them one
-tick at a time. As a result the soak does not exercise `server.js`'s real wiring, and the two copies can drift
-apart.
+### 1.6 Facility data and literals
 
-### 1.5 `crc-desktop/app/public/js/panels/efsp/bay-view.js` — 3,066 lines (39% comment), 160 top-level names
+`facility-config.js` holds five `DEFAULT_*_CONFIG` literals (INCIRLIK, CENTER, TACTICAL, CARRIER, RANGES). It merges
+the on-disk JSON over them shallowly (`{...defaults, ...onDisk}`) and falls back to the literal when the result does not
+validate. Only `config/efsp-facility-incirlik.json` and `-center.json` ship. TACTICAL and CARRIER exist only as
+literals, and RANGES is derived from the airspaces. Other code-side defaults with a JSON twin: `alerting-config.js`
+`DEFAULTS`, `instrumentation-config.js`, `surveillance-hints-config.js`, `carrier/ship-state.js` `DEFAULT_HULL`,
+`radars.js` `DEFAULT_CAPS`/`DEFAULT_PRESENTATION`/`SHIP_RADAR_DEFAULT`, `theaters.js` `DEFAULT_TRANSITION_ALT_FT`,
+`stereo-routes.js` and `airspace-config.js` (both `[]`).
 
-| Cluster | Lines | Size |
-|---|---|---|
-| Selection state, refusal seeding, advance swallow | 1–127 | 127 |
-| Block cells and inline editing (enum select, boolean toggle) | 128–512 | 385 |
-| Drop arming, annotation history chips, expanded view, `_buildStripEl` | 513–901 | 389 |
-| Popover portal infrastructure | 902–1102 | 200 |
-| Bind and MARSA popovers and forms, dispatch helpers | 1103–1402 | 300 |
-| Selection, keyboard, acting Position, NLA/move/transfer dispatch | 1403–1568 | 166 |
-| Coordination: permissions, dispatch, display helpers, popover | 1569–1666, 1989–2165 | 275 |
-| TOFI and hand-back | 1667–1892 | 226 |
-| Convert to arrival, airspace entry popover | 1893–1988 | 96 |
-| Gestures, highlight popover | 2166–2245 | 80 |
-| Pointer-events drag, autoscroll | 2246–2600 | 355 |
-| OPS filed-plan cards | 2601–2713 | 113 |
-| Bay/Rack render, reconcile, render signature, scheduling | 2714–3066 | 352 |
+### 1.7 Clock and logging
 
-**Coupling through the global scope:** 59 of `bay-view.js`'s 160 top-level names are read by other scripts, 48 of
-them by `strip-view.js`. `bay-view.js` itself reads 21 names from `efsp-state.js` and 14 from `strip-template.js`.
-Across all 53 client scripts there are 1,186 top-level names, and **three are declared twice**:
-- `finite` (`const`): `pattern-board.js:40` and `final-panel.js:43`. Loading both as classic scripts throws
-  `SyntaxError: Identifier 'finite' has already been declared` (reproduced in a vm), so `final-panel.js` does not
-  load on `integ/wave3-dry`. L18S fixed this on its branch (decision S-L18S).
-- `_el`: declared in three scripts with two different signatures, and `metrics-panel.js` loads last and wins.
-- `_callsignOfFdr`: `carrier-panel.js:146` falls back to the fdrId and `efsp-panel.js:904` falls back to `''`.
-  `efsp-panel.js` loads later and wins, without any error. L18S's uniqueness test only covers the Bay-view
-  scripts, so it does not catch this one.
-
-The file also holds six hand-copied server authority tables (`COORDINATION_TARGETS`, `TOFI_COUNTERPARTS`,
-`HAND_BACK_TO`, `TOFI_ANSWERED_BY`, `AIRSPACE_ENTRY_POSITIONS`, `CONVERT_TO_ARRIVAL_POSITIONS`). PARITY found no
-drift, and those tests hold them in step (`docs/wip/PARITY.md`).
-
-### 1.6 The other client files
-
-- `efsp-panel.js`: 1,598 lines (36% comment). It defines 95 top-level names, 22 of them read elsewhere.
-- `app.js`: 870 lines (27% comment). It has **20 `case 'efsp-…'`** branches in one `ws.onmessage` switch, two for
-  each family (delta and ack).
-- `strip-view.js`: 890 lines. It already has an extension point: plan §2 says to add a case through
-  `_stripAlerts`/`_buildIndicator` rather than restructure.
-
-### 1.7 What the shared-file rules in plan §2 are a symptom of
-
-The ownership table in `docs/efsp-parallel-plan.md` §2 lists eleven shared files. Five of them are
-**serialised outright** (`block-map.js`, `nla.js`, `permission.js` handed from lane to lane, `facility-config.js`
-by wave). The rest have **append-only rules** (`index.js`, `efsp-ws.js`, `app.js`, `index.html`). Decisions
-S-L8, S-R2-1 and S-L6 made L27 go before L23 on `board-store.js` and `efsp-ws.js`, and let L23 edit "only the
-functions L8 named". L28's briefing waits on four lanes for three files. Each of these rules exists because a
-**capability has no home of its own**: its states, owners, NLA, wire path and persistence sit as rows and
-branches inside shared files. The fix is to give each capability a home and make the shared files tables of
-registrations.
+There are 18 `Date.now()` sites in `src/efsp`, frozen per file by `guard-wall-clock.json`. ADR 0079's table puts
+conformance on the mission clock ("the heading grace period runs from the clearance's own `at`"). L19's airborne hold
+(5 s) and staleness (120 s) run on the mission clock in `surveillance-hints.js` `tick(now = this._clock.now())`.
+Logging is bare `console.*`: 135 calls in 34 files. merge4 adds `src/log-level.js`, which wraps `console` by
+`LOG_LEVEL`.
 
 ---
 
@@ -212,430 +135,454 @@ registrations.
 
 ### 2.1 Principles
 
-1. **Behaviour does not change.** The wire, the audit log, replay and epoch behaviour and the persisted snapshot
-   come out byte-equal (§4). Each phase is a move, not a redesign.
-2. **A capability lives in its own files.** A shared file only lists registrations, appended one line at a time,
-   so two lanes adding two capabilities conflict on at most one line each.
-3. **Extension points are tables, not branches.** The codebase already works this way where it works well:
-   `nla.js`'s `COMPUTE_BY_ROLE`, `permission.js`'s capability tables (ADR 0080),
-   `CARRIER_TRANSFER_EFFECTS` (ADR 0074), the Bay descriptor `view` flags (ADR 0093, L18S), and
-   `strip-view.js`'s `_stripAlerts`. This plan extends that pattern. It does not invent a new one.
-4. **No new machinery.** No DI container, no event bus, no class hierarchy, no build step, no codegen at runtime.
-   Each registry is a plain array or object in a plain file.
-5. **Comments move with their code, verbatim.** They are 40% of these files and carry the defect history.
+1. **Structural commits do not change output.** Each phase is mostly moves. Where a ruling asks for a behaviour change,
+   that change is a separate, explicitly approved commit (§3, §6).
+2. **A capability lives in its own files.** Shared files hold registrations, one line each.
+3. **Extension points are tables and registries**, extending what already works (`COMPUTE_BY_ROLE`, the capability
+   tables, `CARRIER_TRANSFER_EFFECTS`, the Bay `view` flags, `_stripAlerts`).
+4. **Dependencies are explicit.** A collaborator gets what it needs in its constructor. A module does nothing when it is
+   imported (no timers, no file reads, no paths fixed at import time).
+5. **Data in JSON, rules in code** (R3-72, S3-6). Facility and squadron data live in `config/` (shipped) or `state/`
+   (written), per ADR 0048 and `state-paths.js`. Code holds the schema, the rules and the interactions. Engineering
+   constants (ring sizes, caps, retry windows) stay in code as named constants (§9 point 6). UI code is exempt.
+6. **No machinery for its own sake.** No DI container, no event bus, no bundler, no codegen.
+7. **Comments move with their code, verbatim.** L20 sweeps them afterwards on the new layout.
+8. **Leave room for state versioning** (S3-4, R3-31). There is no version or migration now. The store registry and
+   the persistence collaborator are the single place a `version` key and per-store upgrade hooks can be added later.
+   Nothing may depend on the snapshot being unversioned.
 
-### 2.2 The seams: what is pure, what holds state, what is the wire
-
-| Layer | Holds state? | Examples (after the refactor) |
-|---|---|---|
-| Doctrine tables and pure rules | no | `roles/*.js` (S3), `block-map.js`, `coordination.js`, `carrier/transfers.js`, `field-state.js`, `board/placement.js` (pure functions over a Bay list and a runway view), `board/order.js` |
-| Stores (one record home each) | yes, persisted | `board/board-store.js` (kernel), `fdr-store.js`, `airspace-store.js`, `marsa-store.js`, `carrier-store.js`, `field-state-store.js`, `correlation-store.js`, `sfa-store.js` |
-| Board behaviour, split by concern | uses the kernel only | `board/ops/*.js`, `board/nla-apply.js`, `board/retire.js`, `board/protocols/coordination.js`, `board/protocols/tofi.js`, `board/admin.js` |
-| Wire | no domain state | `wire/efsp-ws.js` (the generic skeleton, resync, snapshot, read scope), `wire/families/*.js` |
-| Runtime wiring | owns timers | `src/runtime.js` `createRuntime(deps)` → `{ wsHub, efsp, monitors, tickers, start(), stop() }`; `server.js` builds the deps and calls `start()` |
-
-### 2.3 crc-sync directory layout (target; new paths in **bold**)
+### 2.2 Module map (target; **bold** = new)
 
 ```
 crc-sync/
-  server.js                      env → deps, createRuntime(deps).start(), app.listen. No setInterval here.
-  src/runtime.js                 ** createRuntime: builds stores, monitors, WsHub; `tickers` = [{name, periodMs, tick}]
-  src/ws-hub.js                  sends result.broadcasts[] in order (no named broadcast keys)
+  server.js                    env → deps; createApp(deps); app.start(); listen. Nothing else.
+  src/app.js                   ** createApp(deps) → { http, wsHub, efsp, monitors, tickers[{name,periodMs,tick}], start(), stop() } (R3-29)
+  src/log.js                   ** logger(name) → {error,warn,info,debug,child(ctx)}; level/sink set once by createApp (R3-33; absorbs log-level.js)
+  src/ws-hub.js                sends result.broadcasts[] in order; stop()
   src/efsp/
-    index.js                     createEfsp: loops the registries below; no positional store lists
-    stores.js                    ** STORE REGISTRY: [{key:'fdr', build, snapshot, restore, after?}, …] in today's persist order
+    index.js                   createEfsp({clock, transitionAltFt, paths, ...}): loops the registries; no positional store lists
+    stores.js                  ** STORE REGISTRY [{key, build, snapshot, restore, after?}] in today's persist order
+    board-store.js             FACADE: public API only (applyMutation, get*, getDeltaSince, drainTouched, receive*,
+                                 nlaStatusFor, reassign/returnCovered, archiveStrip, snapshot/restore, setMutationLog,
+                                 setAirborneObserver); builds its collaborators and passes each its dependencies
     board/
-      board-store.js             ** kernel (clusters A–C, I, J): strips map, _bump/_touch, seq ring, epoch,
-                                    idempotency, dispatch by OPS table, audit, snapshot/restore  (~750 lines)
-      order.js                   ** _resolveOrderKey/_keyAfterRebalance/_rebalanceRack/_appendOrderKey (mixin)
-      placement.js               ** _placementRack, _bayForNewOwner, _relocateForImpliedState,
-                                    _validateBayImpliedTransition, _requireKnownBay (mixin)
-      ops/index.js               ** OPS TABLE: { MoveStrip: require('./move'), … } plus per-op `authorize`
-      ops/create.js, convert-to-arrival.js, airspace-entry.js, move.js, set-block.js, transfer.js,
-      ops/set-flag.js, set-state.js, role-transfer.js (carrier + SFA, S2c)
-      nla-apply.js               ** cluster E
-      retire.js                  ** cluster F
-      protocols/coordination.js  ** cluster G
-      protocols/tofi.js          ** cluster H
-    roles/                       ** (S3) one file per Role family; roles/index.js aggregates and re-exports
-      departure.js arrival.js overflight.js mission.js marshal.js final.js pattern.js
+      board-state.js           ** kernel: strips map, bump/insert/touch, cid, getDeltaSince over the sync log
+      audit.js                 ** recordAudit / recordPeer (ADR 0083 wording unchanged)
+      placement.js             ** Placement: order keys + Bays + implied state + field-state view
+      strip-ops.js             ** StripOps: the op table, dispatch, NLA, Undo, retirement
+      ops/<op>.js              ** one file per op kind: {kind, authorize?, apply(ctx, strip, op, meta), auditFields?}
+      coordination.js          ** Coordination: PROPOSE/ACCEPT/REJECT/STAND_BY/CANCEL + receiveCoordination*
+      tofi.js                  ** Tofi: ENTRY/EXIT/ACCEPT/REJECT/TRANSFER_COMMS + receiveTofi*
+      persistence.js           ** snapshot/restore/archive/droppedWallAt + replay window (SYNC)
+      strip-util.js            ** deepClone, newFlags, block/frequency helpers
+    sync/
+      sync-log.js              ** ONE seq/ring/epoch/touched mechanism (S3-1), used by the Board and every store that syncs
+      replay-cache.js          ** ONE idempotency cache (Board + families), replacing replay-cache.js and _appliedMutations
     wire/
-      efsp-ws.js                 ** generic family skeleton + Board path + resync + snapshot + read scope
-      families/index.js          ** FAMILY REGISTRY (append one line per family)
-      families/airspace.js correlation.js marsa.js field-state.js carrier.js ato.js sfa.js …
-    nla.js, permission.js        stay as facades re-exporting from roles/ (S3), so no consumer changes
+      families/index.js        ** FAMILY REGISTRY (one line per family)
+      families/<family>.js     ** airspace, correlation, marsa, field-state, carrier, sfa, ato, … : {type, ackType, replayKind,
+                                 subject, gate, apply, ack, broadcasts, snapshotKey?, snapshot?, filter?}
+    efsp-ws.js                 generic skeleton + Board path + resync + set-positions + snapshot + read scope
+    authority/
+      index.js                 ** AUTHORITY REGISTRY (S3-2): Position families and Role families register here
+      positions/<family>.js    ** civil-atc, incirlik-military, tactical, carrier: capabilities, read scope
+      roles/<role>.js          ** departure, arrival, overflight, mission, marshal, final, pattern: states, initial state,
+                                 NLA, state owners, creators, countable states, replica state on receipt, eligibility
+    permission.js, nla.js, coordination.js   facades over authority/ (exports unchanged, so client parity tests stay)
+    facility-config.js         loader + accessors; NO literals
+    facility-schema.js         ** the schema + validateConfig (types, required keys, cross-references)
+    zulu-time.js               the one owner of HHMM rules (QAS); usmtf-time.js owns the DTG grammar (§9 point 9)
+  config/efsp-facility-{incirlik,center,tactical,carrier}.json   the single source (tactical, carrier new)
+
+crc-desktop/app/public/
+  index.html                   CDN scripts + /js/config.js classic; then ONE <script type="module" src="./js/main.js">
+  js/package.json              ** {"type":"module"} (scoped: app/server.js stays CommonJS)
+  js/main.js                   ** imports every module once, in today's load order
+  js/**/*.js                   ES modules: explicit import/export, no guarded module.exports
+  js/panels/efsp/efsp-messages.js   ** client message registry: registerEfspMessage(type, handler) (CMSG)
+  js/panels/efsp/bay-view.js   entry: render/reconcile/dispatch; re-exports its public names (ESM-2a)
+  js/panels/efsp/bay/          ** selection, block-edit, strip-element, popover-portal, popovers/<feature>, drag, ops-cards
+  js/panels/efsp/efsp-panel.js entry; re-exports its public names (ESM-2b)
+  js/panels/efsp/panel/        ** the efsp-panel features
 ```
 
-**Moving a class's methods out without rewriting them.** In S2 every moved cluster is a mixin:
-`Object.assign(BoardStore.prototype, require('./protocols/coordination'))`. The method bodies keep `this`
-exactly as written, every private name that tests and tools reach still resolves, and the diff is a pure move.
-One source-scan test is the seam check: a mixin file may not read `this._strips`, `this._log`, `this._seq`,
-`this._epoch`, `this._touchedSinceDrain` or `this._appliedMutations`. It goes through the kernel's methods
-instead (`getStrip`, `getAll`, `getRack`, **`_insertStrip`** for replica minting, `_touch`, **`_bump`**,
-`_recordPeer`, `_activeCmid`). Plain functions taking a `board` argument would read better in theory. They
-would also rewrite every `this.` in 2,000 lines, which is the risk this plan is avoiding. They can come later,
-one file at a time, if anyone still wants them.
-
-**The `rules` object keeps its shape.** It holds 43 keys and 84 board-store unit tests build partial `rules`
-fixtures, so regrouping it into typed ports would churn every one of those fixtures for no change in behaviour.
-Instead:
-- P0 adds a **wiring-completeness test**: every `this._rules.X` that board-store reads (by source scan) is a key
-  of the `rules` that `createEfsp` builds for every Facility. That closes the "silent off" hole for the
-  production path while leaving the unit fixtures alone.
-- Removing the `this._rules.x &&` guards is allowed by "no backwards compatibility", but it changes behaviour for
-  partial fixtures. It is a separate small lane after S2 (decision D5).
-
-### 2.4 Extension points: how a new capability plugs in without editing a god file
-
-| Extension point | Shape | Today, a new one means editing | After |
-|---|---|---|---|
-| **Wire family** (`efsp-<x>-mutation`) | `families/<x>.js` exports `{ type, ackType, deltaType, replayKind, subject(msg), gate: 'primary-at-facility'\|'primary-somewhere'\|fn, apply(ctx, session, msg), ack(result, ctx), broadcasts(result, ctx), snapshotKey?, snapshot?(ctx, session), filter?(ctx, session, msg) }` | the `efsp-ws.js` switch, a hand-written handler, the `_subject` switch, the snapshot literal, `filterForSession`'s switch, `replay-cache.js` `KINDS`, a new `ws-hub.js` broadcast key | one new file and one line in `families/index.js`. The skeleton enforces the session binding, `unaudited`, the replay cache, persist-on-ok and broadcast order once, for every family |
-| **Persisted store** | `stores.js` entry `{ key, build(deps), snapshot(store), restore(store, data), after?(all) }` in today's order | `_persist`'s and `_restore`'s positional parameters, both call sites, the JSON literal, `setMutationLog` calls, `ctx` and the return literal | one entry, appended. Persist order is the array order, so the JSON key order stays byte-equal (§4) |
-| **Board op** | `ops/<op>.js` exports `{ kind, authorize?(rules, actingPositionId, op), apply(board, strip, op, meta) }` | the `_dispatch` switch, plus a special case before `canMutate` (CarrierTransfer, SfaRotation), plus `_recordAudit` fields | one new file, one line in `ops/index.js`, and an `auditFields(result)` hook for its audit extras |
-| **Role-change transfer** (carrier's four, SFA rotation, the next one) | a row in `transfers` `{ kind, fromRole, fromState, toRole, toState, owner: 'TO'\|'SAME', receiver(rules, strip, op), trigger, label, auditKeys: {kind:'carrierTransfer', trigger:'carrierTrigger'}, effect?(rules, strip, meta) }` | a ~80-line copy of `_applyCarrierTransfer` (L18S's `_applySfaRotation` is that copy) | one table row. The one implementation keeps each family's existing audit field names, so the audit log does not change |
-| **Role family** (S3) | `roles/<role>.js` exports `{ role, states, initialState, computeNla, stateOwners, creators, countableStates, replicaStateOnReceipt, coordinationEligibleState, tofiEligibleState }` | `nla.js` (states, sets, compute), `permission.js` (owners, creators), `board-store.js` (`DEFAULT_INITIAL_STATE_BY_ROLE`, L28's `REPLICA_STATE_ON_RECEIPT`), `traffic-count.js` countability, `coordination.js` eligibility, the client mirrors | one file, plus Block Map rows (`block-map.js` stays the Block table) and Bays in facility config. The client tables regenerate (C2) |
-| **Client message family** (C1a) | `registerEfspMessage(type, handler)` in the family's own script | two `case`s in `app.js`'s switch | one call in the family's own file. `app.js` keeps a one-line dispatch |
-| **Client Bay view** | already done: ADR 0093's descriptor `view` → `bay-views.js` | (exists) | (exists) |
-
-**Walkthroughs** (what each upcoming item would touch once the relevant phase has landed):
-
-- **L28, the OVERFLIGHT lifecycle (if it lands after S3):** `roles/overflight.js` (states, initial `INBOUND`,
-  `computeNla`, owners, countable states, replica state on receipt), the two Bay lines in the facility config,
-  and the regenerated client tables. If it lands **before** S3, which is the expected order, it edits today's
-  seven files and S3 moves its tables like everyone else's. L28 should not wait for the refactor.
-- **AIRSP phase 2, editing airspace definitions:** a `families/airspace-definition.js` (gate: the controlling
-  Position, refusals, an audit through the store, a broadcast of an `efsp-airspace-delta` with the new
-  definitions), an `AirspaceStore`/`airspace-config.js` method that writes `state/` (ADR 0048), a `stores.js`
-  entry if definitions join the snapshot, and on the client one `registerEfspMessage` call in
-  `airspace-panel.js`. No edit to `efsp-ws.js`, `ws-hub.js`, `index.js` or `app.js`. **This is the reason to land
-  S1 before AIRSP phase 2.**
-- **A carrier/SFA-like Role family (for example a second ship, or RSU Roles):** `roles/<role>.js`, one
-  `transfers` row for each role-changing hand-over, a `stores.js` entry plus a `families/<x>.js` if it has its
-  own record (as the carrier stack and the SFA rotation do), its Bays with a `view` flag (ADR 0093), and a
-  client view registered in `bay-views.js`. No edit to `board-store.js`.
-
-### 2.5 What the client mirrors become (D-9)
-
-There are two kinds, and they are treated differently:
-1. **Code constants** (state lists, owner tables, op-kind groups, the TOFI and hand-back capability rows, carrier
-   transfer labels, field-state owners, separation regimes, IFF states). A generator (C2) writes
-   **`crc-desktop/app/public/js/panels/efsp/efsp-tables.generated.js`** from the crc-sync modules at development
-   time. It declares exactly one global, `EFSP_TABLES`, and also `module.exports` for tests. It is checked in,
-   because crc-desktop never requires crc-sync at runtime (ADR 0001, and packaging). A **freshness test**
-   regenerates it in memory and diffs it against the checked-in copy. The client reads `EFSP_TABLES.X` in place
-   of hand-written literals, and the parity tests for those tables retire, because the freshness test replaces
-   them. This removes the triple edit (server table, client copy, parity test) that every `permission.js` or
-   `nla.js` change costs today.
-2. **Config-derived data** (Bays, Positions per Facility, airspaces, runway inventories) already travels in the
-   snapshot (Bays since ADR 0093). It stays on the wire. It is never generated, because a config edit must not
-   need a client release.
-
-**Mirrors of behaviour** (`ordnance-advisory.js`, the logic in `field-state-rules.js`, `time-chains.js`,
-`zulu-time`) stay as hand mirrors under the existing parity tests. Generating code is out of scope.
-
-C2 is **optional**. PARITY found no live drift, and every mirror already has a test, so the gain is less
-editing rather than correctness. Do it together with S3, when the role tables move anyway.
-
-### 2.6 What the client architecture does *not* become
-
-- **Not ES modules.** Electron could load `type="module"`, but 27 scripts carry a guarded `module.exports` for
-  `node:test`, and the 46 client test files `require()` the scripts and inject globals through `globalThis`.
-  Moving to ESM would rewrite the test harness (800 tests), change the load and defer order, and conflict with
-  every UI lane, while the explicit imports it buys are partly already provided by the uniqueness test.
-  Revisit only if the client ever gets a build step.
-- **Not a namespace rename.** Moving 1,186 top-level names behind `window.EFSP.*` would touch every client file.
-  The failure that actually happens (a duplicate name) is caught by a cheap test (C0). New files follow the
-  rule "prefix your private top-level names with the file's short name". L18S's `bay-views.js` does not do this
-  yet (`_send`, `_heldAt`, `_mountPoint`), and only the C0 test keeps those names safe.
-
----
-
-## 3. Migration plan (each phase merges on its own and stays green)
-
-### Phase 0: characterization (golden master). Tests only, start now
-
-Full briefing: `docs/wip/ARCH-plan-p0-briefing.md`. Summary:
-
-- **Harness:** a real `createEfsp()` behind the real `WsHub`, with fake sockets (the `host-core.js` technique),
-  three Facilities, fixed facility and airspace fixtures, a manual mission clock, a deterministic `Date.now`
-  and a seeded `crypto.randomUUID` (patched on the module object that board-store and fdr-store call through).
-  Each step records the input message, every message each fake socket receives in order (this covers ack and
-  broadcast order and ADR 0080 read-scope filtering), the Mutation-log lines appended, and the persisted
-  `efsp-board.json`, parsed: in full at checkpoints and as a hash at every other step.
-- **Corpus:**
-  - T1, the op × outcome matrix. Every op kind, every coordination primitive × action, every TOFI action and
-    every CarrierTransfer kind, each with its success and every reachable refusal reason. The coverage report's
-    uncovered branch list (§1.1) is the checklist.
-  - T2, sortie walks. The step sequences of the existing scenario suites, rewritten as traces: civil and
-    military round trips, coordination, carrier, tactical, manning, field state, MARSA, airspace, correlation,
-    ATO, scramble, ordnance, release, time chains, concurrency.
-  - T3, seeded random traffic. `tools/soak/traffic.js` and `prng.js` in-process, 3 seeds × about 1,500
-    messages, with reconnects and resyncs, Position changes, time advances that trigger archiver sweeps, and a
-    restart (persist, a new `createEfsp`, restore, a new epoch) at fixed points.
-  - T4, crash and restart. The NotPersisted-marker path, using `efsp-crash-replay.test.mjs`'s technique.
-  - T5, monitor ticks. `nlaStatusMonitor.tick`, `archiver.sweep`, and the covering-chain reassign through
-    set-positions.
-- **Guards added alongside:** the wiring-completeness test (§2.3), a frozen list of the Board's public and
-  private surface used outside the file (§1.1), and a client "global surface" test: load every `index.html`
-  script in order in a vm with the DOM stub, require no load error, require no duplicate top-level name across
-  all scripts, and freeze the set of names.
-- **Detector proof** (`npm run golden:selfcheck`, not part of `npm test`, like `soak:selfcheck`): at least eight
-  seeded source mutations applied to a temporary copy of `src/` (drop a `_touch`; swap the peer and MARSA
-  broadcast order; change a refusal detail; drop `causedBy`; persist the replay window as 0; persist the epoch;
-  drop an `unaudited`; skip the proactive rebalance). Each must make the golden test fail.
-- **Fixtures:** compact JSONL under `crc-sync/tests/golden/fixtures/`, under 2 MB, and under 10 s in `npm test`.
-  Recorded on `integ/wave3-dry` now, and **re-recorded once at the start of the freeze**. After that, no refactor
-  phase may re-record (§7, D6).
-- **Effort:** 1 lane (Sonnet), about one agent-day. **No conflicts:** new files only.
-
-### Phase C0: client uniqueness (small, now)
-
-Widen L18S's top-level-name uniqueness test to **every** script `index.html` loads, and fix `_callsignOfFdr`.
-Keep `carrier-panel.js`'s fdrId fallback under a private name. Which fallback the UI wants is a one-line
-question for UI-B. If L18S has not merged, this lane also fixes `finite` and `_el`, or waits for L18S.
-Effort: 0.25 lane. It fits inside UI-B, or a hygiene lane.
-
-### Phase S1: registries for wire families and persisted stores
-
-- `wire/families/*.js` and the generic skeleton. The six family handlers move verbatim into family files, and
-  their shared head and tail (session gate, replay, `unaudited`, persist, `_subject`) move into the skeleton.
-  The Board path (`_handleMutation`), resync, set-positions and the snapshot stay in `wire/efsp-ws.js`.
-- `replay-cache.js` `KINDS` is derived from the registry.
-- `stores.js` registry. `_persist` and `_restore` loop over it in today's order, so the JSON key order and the
-  restore order stay exactly as they are (fdr before boards before correlations, and so on).
-- The handler result carries `broadcasts: [...]` in today's send order (broadcast, peer, MARSA, carrier).
-  `ws-hub.js` sends them in a loop, and `onEfspChange` fires when the list is non-empty. The internal result
-  object changes but the wire does not. `tools/soak/host-core.js` and the ws-hub tests that read the named keys
-  are updated in the same lane.
-- **Gate:** golden byte-equal; `npm test` (crc-sync, crc-desktop); `soak:selfcheck` 5/5; `soak:smoke` PASS;
-  `wire-payload-contract`, `ws-message-contract`.
-- Effort: 1 lane.
-
-### Phase S2a: the Board kernel, and coordination and TOFI out
-
-- Add `_bump(strip, by)` (rev, updatedAt, updatedBy, `_touch`) and `_insertStrip(strip)`, and replace the 32
-  repeated four-line blocks. Behaviour is identical. The mission-clock read stays one `this._clock.now()` per
-  bump; check the two sites that read `now` once and reuse it (`_applyCarrierTransfer`, create).
-- Move clusters G and H verbatim into `board/protocols/coordination.js` and `board/protocols/tofi.js` as
-  prototype mixins. Move orderKey resolution into `board/order.js`.
-- Add the mixin seam test (§2.3).
-- **Result:** `board-store.js` drops to about 1,900 lines, and each protocol is one file.
-- Gate: as S1. Effort: 1 lane (mostly mechanical).
-
-### Phase S2b: the op table, NLA, retirement, placement
-
-- `_dispatch`'s switch becomes `OPS[kind]`, with `authorize` per op (CarrierTransfer, and SfaRotation once
-  merged). `_recordAudit`'s per-op extras become `auditFields(result)`, which emits the same keys in the same
-  order.
-- Clusters D, E, F and the placement helpers move into `ops/*.js`, `nla-apply.js`, `retire.js` and
-  `placement.js`. The D⇄E knot stays a knot, now across two files that call each other through `this`.
-- **Result:** the `board-store.js` kernel is about 750 lines (A, B, C, I, J).
-- Gate: as S1. Effort: 1 lane.
-
-### Phase S2c (optional; after L18S): one role-change transfer
-
-`_applyCarrierTransfer` and `_applySfaRotation` become one `_applyRoleTransfer` over a `transfers` table. Each
-row keeps its own audit keys (`carrierTransfer`/`carrierTrigger`, `sfaTransfer`/`sfaTrigger`), its refusal
-wordings and its stack effect. The golden test proves the audit lines and refusals are unchanged.
-Effort: 0.5 lane.
-
-### Phase S3: Role families
-
-`roles/*.js` as in §2.4. `nla.js` and `permission.js` keep their exports as facades (`STATES_BY_ROLE`,
-`STATE_OWNERS_BY_ROLE`, `computeNla`, `canActOnState`, …), so callers, the client parity tests and the soak do
-not change. The `board-store.js` constants that are per Role (`DEFAULT_INITIAL_STATE_BY_ROLE`, the replica
-state on receipt) move into the role files. `traffic-count.js` countability reads `roles`.
-Gate: as S1, plus the client parity tests. Effort: 1–1.5 lanes. **After L28 merges**, so that the OVERFLIGHT
-tables move once.
-
-### Phase S4: `createRuntime()` (parallel with S2/S3; disjoint files)
-
-`src/runtime.js` builds everything `server.js` builds today, in today's order. Timers become
-`tickers: [{ name, periodMs, tick }]`, and `start()` installs the intervals. The `grpcClient.on` handlers are
-attached in `start()` too. `server.js` keeps env parsing, Express routes, `start()` and `listen`.
-`tools/soak/host-core.js` calls `createRuntime` with fakes and drives `tickers` by name instead of
-re-implementing the wiring. The forward reference to `correlationReconciler` disappears, because the runtime
-builds in dependency order.
-- **Gate:** a new boot smoke test (`createRuntime` with fake gRPC and SRS clients; assert the ticker names and
-  periods match today's 11 intervals; one tick of each); `soak:selfcheck`; `soak:smoke`; a manual local start
-  on a non-3000 port.
-- **Conflicts:** S13 (collab persistence, `server.js` 14 lines), and any lane adding a monitor.
-- Effort: 1 lane.
-
-### Phase C1: the client
-
-- **C1a:** an `efsp-messages.js` registry. Each family's script registers its delta and ack handlers. `app.js`'s
-  20 cases become one dispatch line. `ws-message-contract.test.js` reads the registry. Effort 0.5 lane.
-  **Before AIRSP phase 2**, for the same reason as S1.
-- **C1b (optional):** split `bay-view.js` by the clusters in §1.5 into classic scripts with the **same global
-  names** (block edit, strip element, popover portal, one popover script per feature, drag, OPS filed cards).
-  `bay-view.js` keeps selection, dispatch and render/reconcile (about 650 lines). Gate: the C0 global-surface
-  test (the name set is unchanged), `npm test`, the full Playwright suite. Effort: 1 lane. Do it only in a client
-  freeze window (UI-B, AIRSP and L28's client step all touch these files).
-
-### Phase C2 (optional): generated client tables
-
-As §2.5. Do it with or after S3. Effort: 1 lane.
-
-### Order relative to the lanes in flight, and the freeze
+### 2.3 The Board: facade plus collaborators (H87)
 
 ```
-NOW (no conflicts)      P0 harness + fixtures on integ/wave3-dry   C0 (inside UI-B, or a hygiene lane)
-                        S-14 time-module check (separate, not architecture; see §8)
-THEN (already queued)   real merge → L18S → UI-B → L28 → L20 (L20 runs solo, as planned)
-FREEZE W1 (server core) re-record golden → S1 → S2a → S2b → (S2c) → S3 → (C2)
-   in parallel          S4 (server.js, runtime.js, tools/soak)      C1a (app.js, client registry)
-                        C1b only if the client is also frozen
-AFTER S1                AIRSP phase 2 (its first consumer of the family registry)
+BoardStore (facade)
+  ├─ state       = new BoardState({ clock, syncLog })                    // kernel; owns the Strip map
+  ├─ audit       = new BoardAudit({ state, clock, mutationLog: () => this._mutationLog })
+  ├─ placement   = new Placement({ state, rules, clock })
+  ├─ ops         = new StripOps({ state, audit, placement, rules, fdrStore, clock, touch })
+  ├─ coordination= new Coordination({ state, audit, placement, ops, rules, clock, touch })
+  ├─ tofi        = new Tofi({ state, audit, placement, ops, rules, clock, touch })
+  └─ persistence = new BoardPersistence({ state, replay, clock })         // SYNC
 ```
 
-- **Why after L20:** L20 edits comments and UI text everywhere, and runs alone. S2 moves 1,000+ comment lines.
-  Running them concurrently would conflict on every hunk. L20's inventory (L9, L20PREP) quotes text, so if L20
-  went second its rows would survive the move. But L20 changes refusal details (wire text), which would force a
-  golden re-record in the middle of the freeze. L20 first is cleaner.
-- **The freeze (W1):** from the S1 dispatch until S3 merges, no other lane edits
-  `crc-sync/src/efsp/{board-store,efsp-ws,index,nla,permission,replay-cache,coordination,traffic-count}.js` or
-  `crc-sync/src/ws-hub.js`. All other work continues: new stores in new files, client panels, atobrief,
-  sourcedcs-web, infra. Expected length: **4 sequential lane slots, about 2–4 working days** including merges and
-  gates. The minimum version, S1 and S2a only, takes 2 slots.
-- **If AIRSP phase 2 must start before S1:** let it build the old way. S1 then moves it like the other families,
-  which costs about an hour.
-- **QAS** (crc-sync cleanup, not started; its scope is unknown to this lane): must not touch the frozen files
-  during W1.
+- **The constructor signature `new BoardStore(fdrStore, rules, { clock })` does not change.** `index.js` and the
+  ~84 unit tests that build partial `rules` keep working.
+- **`touch` is a late-bound callback**, `(id) => this._touch(id)`. A collaborator never calls the kernel's touch
+  directly. This keeps `host-core.js`'s monkeypatch of `bs._touch` working until APP or SYNC replaces it with an
+  explicit `observeTouches(fn)`. `_log` stays readable on the facade as a getter until then.
+- **Seam rules, enforced by `tests/board-seam.test.mjs` (written in R0, made strict lane by lane):**
+  1. a file in `src/efsp/board/` never `require`s `board-store.js` or a sibling collaborator. It receives its siblings
+     through its constructor;
+  2. it never reads an underscore-prefixed property of anything other than `this` (so no `deps.state._strips`, no
+     `this._ops._nlaHistory`);
+  3. it has no module-level mutable state;
+  4. it reads rules only as `this._rules.<name>` or `rules.<name>`, so FREEZE guard 1 still sees every rule.
+- Private members reached by tests are allowed to move (R3-31). A lane that moves one updates the test and
+  `guard-board-surface.json` (a structure fixture, §3.2) in the same commit and lists it in its report.
 
----
+### 2.4 Registries
 
-## 4. What must never change, and how each is verified
-
-| Invariant | Source | How it is verified |
+| Registry | Shape | A new one means |
 |---|---|---|
-| Wire format: every message type and field, the `version: 1` envelope, JSON | ADR 0001; PARITY's contracts | golden (every socket's received messages, byte-equal); `wire-payload-contract.test.mjs`; `ws-message-contract.test.js` |
-| Immediate broadcast in the same synchronous pass; send order broadcast → peer → MARSA → carrier | ADR 0004, 0022 | golden (per-socket order); `ws-hub` tests |
-| One Board event, one broadcast; touched Strips drained; DROPPED goes to `gone`; `boardEpoch` on every delta and ack | ADR 0081 | golden; `efsp-ws-replay`; `soak:selfcheck` (detectors for missed touches and seq gaps) |
-| Epoch minted on construction and on `restore()`, never persisted; delta only within one epoch; `RESYNC_RING_WINDOW` 900 against pruning at 2,000/1,000 | ADR 0081, 0006 | golden T3 restart points; resync tests |
-| Replay records compact and frozen; the last 10 minutes of wall time persisted; a replay acks only (no persist, audit or broadcast); a cmid-less Mutation is never cached; the non-Board replay cache is consulted after the gates | ADR 0081 | golden T1 (retries), T4; `efsp-crash-replay`; the detector proof |
-| Audit: a store logs what reaches it, and the tap logs what does not; `unaudited` never reaches the wire; peer entries have `clientMutationId: null` and `causedBy`; every entry names `facilityId`/`fdrId`; SetBlock records `blockId`/`value`; the audit line is written before the snapshot | ADR 0083, 0065, 0081 | golden (log lines per step); traffic-count tests; the soak ledger |
-| Persisted snapshot shape and key order (`persistedWallAt`, `boards{}`, `fdr`, `airspaces`, `correlations`, `marsa`, `fieldStates`, `carriers`, plus `sfa` once L18S lands); the dirty-only write; temp file then rename | ADR 0002, 0048, 0081 | golden (parsed snapshot at checkpoints, raw body hash every step); a restore round-trip test |
-| Mission clock for every EFSP time; `Date.now` only for the four documented wall-time uses (NLA latch, `appliedWallAt`, `droppedWallAt`, `persistedWallAt`) | ADR 0079, H11 | a source-scan test that freezes the list of `Date.now()` sites per file (P0) |
-| A Strip never crosses a Facility; one `BoardStore` per Facility; peers are called in-process | ADR 0013, 0015 | golden T2 coordination and TOFI walks |
-| Read scope per session; a filtered snapshot on scope change | ADR 0080 | golden (per-socket filtering); `ws-hub-read-scope` |
-| Carrier hand-overs have one implementation; four triggers recorded | ADR 0074 | golden T1; carrier scenario |
-| Bay descriptor flags reach the client unchanged | ADR 0093 | `bay-descriptor-parity`; L18S tests |
-| ADRs are never edited (P4); tuning files are read once (P5); no `pkill` (P7) | lane rules | review |
-| The client's behaviour and DOM | n/a | crc-desktop `npm test` (800); the full Playwright suite after every C phase and once at the end of W1; the C0 global-surface test |
+| Wire family (WIRE) | `wire/families/<x>.js` `{type, ackType, replayKind, subject(msg), gate, apply(ctx, session, msg), ack, broadcasts(result, ctx), snapshotKey?, snapshot?, filter?}` | one file + one line in `families/index.js`. The skeleton enforces the session binding, `unaudited`, replay, persist-on-ok and broadcast order once |
+| Persisted store (STORES) | `stores.js` `{key, build(deps), snapshot(store), restore(store, data, all), after?(all)}` | one entry. Array order = JSON key order = restore order |
+| Board op (BOARD-3) | `board/ops/<op>.js` `{kind, authorize?, apply, auditFields?}` | one file + one line in `strip-ops.js`'s table |
+| Authority (AUTH) | `authority/positions/<family>.js`, `authority/roles/<role>.js` | one file. The facades re-export, so client parity tests and freeze tables stay identical |
+| Sync (SYNC) | a store that syncs owns a `SyncLog` and declares `{seqKey, epoch?}` | construct one `SyncLog`. No hand-written ring |
+| Client message (CMSG) | `registerEfspMessage(type, handler)` in the family's module | one call. `app.js` dispatches through the registry |
+| Client Bay view | ADR 0093's descriptor `view` → `bay-views.js` | (exists) |
 
-**The hard rule for every refactor phase:** golden fixtures are compared, never re-recorded. If a phase needs
-to re-record, it is not a refactor. The lane stops and reports.
+### 2.5 Composition root and logging
+
+`createApp(deps)` builds, in dependency order, what `server.js` builds today: Express app and routes (auth routes
+moved verbatim; **auth hardening out of scope**), stores, picture, surveillance, coverage, `createEfsp`, `WsHub`,
+the gRPC/SRS event handlers, the monitors (instrumentation, archiver, obligations, NLA status, correlation reconciler,
+carrier tick, conformance, hints, STCA, alert compose) and merge4's test-reset mount (same guards). Timers become
+`tickers: [{name, periodMs, tick}]`, and only `start()` installs them. `stop()` clears them and calls
+`wsHub.stop()`. The soak (`tools/soak/host-core.js`) and the tests call `createApp` with fake gRPC and SRS clients and
+drive `tickers` by name. The re-implemented monitor wiring goes away.
+
+Logging (LOG-1, then LOG-2). `src/log.js` provides module-level loggers, `const log = require('../log').logger('efsp:board')`.
+It has levels error, warn, info and debug, with `LOG_LEVEL` semantics kept from merge4/INFRA2, and structured
+context: `log.info('persisted', { facilityId, ms })` and `log.child({ sessionId })`. The sink and format are
+configured once in `createApp` (text lines by default). Tests capture logs through a test sink rather than by
+patching `console`. Placed right after APP, so it is threaded once (§5).
+
+### 2.6 Facility data (DATA-1, DATA-2)
+
+The literals go. `config/efsp-facility-<id>.json` is the single source (TACTICAL and CARRIER are written from the
+literals, and INCIRLIK and CENTER are re-checked against them). `facility-schema.js` validates them.
+`facility-config.js` becomes a loader. `load({ paths })` is called by `createEfsp`, not at require time. It reads the
+`state/` copy if one exists, else the `config/` copy (`state-paths.js` `readPath`), whole, with **no merge** over code
+values. Shipped values are identical, so the goldens are identical. Two behaviours change (§6, items 6 and 7): a
+missing or invalid file is a loud startup error instead of a silent fallback to literals, and a `state/` copy no
+longer inherits keys it lacks. RANGES stays derived from the airspaces (code, as today).
+
+### 2.7 The airspace registry seam (design only; AIRSP phase 2 builds it)
+
+Per AIRSP-7, R3-12 and the MTR research (`docs/parallel/research/mtr-airspace.md`), an airspace definition record gains:
+
+```
+{ airspaceId, name, kind: 'AREA' | 'ROUTE', type,               // type stays descriptive (D14); ROUTE types IR/VR/SR/LLTR
+  altLowerFt, altUpperFt,                                        // the envelope (ROUTE: min of lows, max of highs)
+  geometry: { source: 'POLYGON', points: [[lat, lon], ...] }
+          | { source: 'DCS_DRAWING', drawingRef: { layer, name, theater } }   // R3-12: an existing DCS drawing
+          | null,                                                 // AREA without an outline (today's records)
+  segments?: [{ fix, altLowerFt, altUpperFt, widthNm? }], defaultWidthNm?,    // ROUTE only
+  activation: 'APPROVE' | 'CONFIRM',                              // per kind as data: ROUTE confirms, cannot be denied
+  frequencies, positions..., rev }                                // unchanged fields
+```
+
+It plugs into: the definitions schema in `facility-schema.js`'s sibling (`airspace-schema.js`, keyed by theater per R3-22);
+a `wire/families/airspace-definition.js` (Create/Edit/Delete, one audited op with `rev`, R3-25); a `stores.js` entry
+once the definitions join the snapshot (AIRSP.md); a `SyncLog` (SYNC); the authority registry (controlling Position
+plus OPS of the controlling Facility, R3-11; TAC_C2 excluded, AIRSP-6); and one `registerEfspMessage` call on the client.
+Occupancy rules differ per kind (count, not block, for ROUTE) and are a rule in code keyed by `kind`. MTR free-text FDR
+leaves (ADR 0062) stay and resolve to `airspaceId` by designator, read-only. **No lane in this plan builds the panel,
+ops or geometry editor.** ADR **0098** is reserved for AIRSP phase 2.
+
+### 2.8 Time and clocks
+
+- **One owner per grammar** (R3-63). `zulu-time.js` owns typed HHMM ↔ epoch and nearest-occurrence (QAS consolidated it
+  in merge4). `ato/usmtf-time.js` owns USMTF DTGs, a different grammar anchored on TIMEFRAM. `time-chains.js` parses
+  nothing. The client's `time-chains.js` and `formatZuluHhmm` stay as hand copies under PARITY (ARCH-D7). TIME-B
+  confirms that no other parser exists.
+- **Clock rule** (R3-16/S3-3, refining ADR 0079/H11). The mission clock is for facts and gates: anything a controller
+  reads as a time, anything stored on a record or compared with one, and every Mutation-log `at`. The wall clock is for
+  pure durations and housekeeping. Wall time is **injected** (`WALL_CLOCK` from `mission-clock.js`, or a `wallClock`
+  dependency), never a bare `Date.now()`. `tests/clock-policy.test.mjs` (R0) lists every `Date.now()`/`new Date()`
+  site in `src/efsp` with its file, enclosing function and reason, and fails on any site not in the list.
+- **The behaviour change** (TIME-B, approved separately, ADR 0096): L19's airborne hold and staleness duration, and
+  conformance's heading grace, are measured on the wall clock. Every `at`/`since` they stamp or log stays mission time.
+
+### 2.9 The client: native ES modules (ESM-1, ESM-2a/b, CMSG)
+
+- `js/package.json` `{"type":"module"}`, so Node treats the client files as ESM. `app/server.js` stays CommonJS
+  (`app/package.json` keeps `"type":"commonjs"`). electron-builder already packs `app/**/*`, and
+  `tests/packaging-config.test.js` gains an assertion that the scoped `package.json` is packed.
+- `index.html`: the CDN scripts (globals `maplibregl` and `dockview`) and `/js/config.js` (four `var` globals) stay
+  classic and load first. A module reads them as globals. Then one `<script type="module" src="./js/main.js">`.
+- **Evaluation order changes.** ESM evaluates depth-first in dependency order, not in tag order. ESM-1 lists every
+  module with top-level statements that are not declarations, and proves that their order does not matter, or
+  restores it through `main.js`. Import cycles are allowed only where no top-level code reads a binding across the
+  cycle before it is initialised (TDZ). A module-graph test loads the whole graph under the DOM stub.
+- **Duplicates become private, which changes behaviour.** Today the later `_callsignOfFdr` (`efsp-panel.js`, `''`
+  fallback) and the later `_el` (`metrics-panel.js`) silently win. ESM-1 keeps today's effective behaviour by explicit
+  imports and asks the human which fallback the UI wants (§9 point 3).
+- **Tests:** 53 test files become ESM (`.test.mjs`). The `vm` loaders become imports. The `globalThis` stub injection
+  becomes real state fed through the state module's setters, or an explicit hook where the code does I/O (for example
+  `setEfspTransport(fn)` for the sender). The FREEZE client-global-surface guard is replaced by `module-graph.test.mjs`
+  (every file reachable from `main.js`, every import resolves, the graph evaluates under the DOM stub, and the exported
+  name set is frozen as a structure fixture).
+- **Split by feature** (ESM-2a, ESM-2b). Each entry file re-exports its public names, so its importers do not change.
+- **Hand copies of server tables stay**, with their PARITY tests (ARCH-D7). There is no generation (S3-7).
 
 ---
 
-## 5. Effort, value, and an honest answer to "is it really necessary"
+## 3. Acceptance
 
-| Phase | Lanes | Value | Risk | Verdict |
+### 3.1 The golden rule (S-desk3)
+
+No surface (wire, snapshot, audit) is frozen as a principle. Golden replay is how the refactor phases are accepted:
+
+- **A structural commit is golden-identical.** `node --test tests/freeze/freeze-*.test.mjs` passes with no
+  `UPDATE_GOLDEN`, and no behaviour fixture changes.
+- **An output change is its own commit**, explicitly approved by the supervisor (and by the human where §6 says so),
+  titled `behaviour(<LANE>): …`. It re-records the fixtures (`npm run freeze:update`) in that same commit, and the lane
+  report lists every changed trace and step. It is never folded into a structural commit.
+- Fixtures are kept up only during the refactor window (ARCH-D6 b). At the window's close (BACKCOMPAT, W6), the
+  freeze suite leaves `npm test` and becomes opt-in (`npm run freeze`), with a dated note. Outside the window,
+  behaviour lanes do not maintain fixtures.
+
+### 3.2 Three kinds of fixture
+
+| Kind | Files | In a structural commit |
+|---|---|---|
+| Behaviour goldens | `tests/freeze/golden/{hub,scenario,scenarios,table,tables}-*.json` | must be byte-identical |
+| Structure fixtures | `guard-board-surface.json`, the clock allow-list (R0), crc-desktop `module-graph` export fixture (ESM-1) | may change when the structure does. Every change is listed in the commit message and the report |
+| Harness-only fields | `uncarried` in `hub-*.json` (a soak-host accounting artefact, FREEZE finding) | R0 removes it from the compared record, once, so APP's host rewrite stays golden-identical |
+
+### 3.3 Gates for each lane (details in each briefing)
+
+| Gate | When |
+|---|---|
+| Golden replay identical (§3.1) | every lane |
+| `crc-sync`: `npm test` green | every lane |
+| `crc-desktop`: `npm test` green | every lane (server lanes too: crc-desktop tests require crc-sync modules) |
+| `npm run soak:selfcheck` all detectors fire | any lane touching `board-store.js`, `board/**`, `efsp-ws.js`, `wire/**`, `ws-hub.js`, `sync/**`, `host-core.js` |
+| `npm run soak:smoke` PASS (memory "not judged" is fine) | APP, SYNC |
+| `npm run freeze:selfcheck`: every mutation applies and is caught | any lane that moves code a mutation targets. The lane retargets its own mutations (R0 splits them one file each) |
+| Playwright, full suite, on the lane's `E2E_LANE` | ESM-1 (as a unit with ESM-1T), ESM-2a, ESM-2b, CMSG. The supervisor runs the full suite once after each wave merges |
+| `tests/board-seam.test.mjs` strict for the files the lane created | BOARD-1/2/3, SYNC |
+| Boot smoke (`tests/app-boot.test.mjs`) | APP, LOG-1, TIME-B |
+
+---
+
+## 4. Phases
+
+Tier: **A** = the old minimum (golden harness prep, wire and store registries, the kernel with coordination and TOFI
+out, the composition root, the client move). **B** = the rest of the recommended tier plus the later rulings. "Size"
+is in agent-lanes (about one agent-day each). Model: Sonnet 5.5 for code lanes, Opus where the lane designs a pattern
+others follow.
+
+| Phase | Tier | Wave | Goal | Owns (writes) | Depends on | Size | Model |
+|---|---|---|---|---|---|---|---|
+| **R0** | A | 1 | Harness prep: peer+MARSA order trace, `uncarried` out of compare, selfcheck one file per mutation, guards made collaborator- and registry-aware, clock allow-list, seam test | `crc-sync/tests/freeze/**`, `tests/clock-policy.test.mjs`, `tests/board-seam.test.mjs`, `crc-sync/package.json` (freeze script lines) | merge4 | 0.5 | Sonnet |
+| **ESM-1** | A | 1 | Client to native ES modules: package scope, `main.js`, `index.html`, every client file's import/export, local server MIME, packaging assertion, module-graph test, the 3 crc-sync tests that read client files | `crc-desktop/app/public/js/**` (module syntax only), `index.html` script block, `app/server.js` MIME map, `crc-desktop/package.json` test script, `tests/packaging-config.test.js`, `tests/client-global-surface.test.js` → `tests/module-graph.test.mjs` + fixture, `tests/helpers/**`, `crc-desktop/README.md` (module section), crc-sync `tests/{theater-context,wire-payload-contract,efsp-time-chains}.test.mjs` | merge4 | 1 | Opus |
+| **ESM-1T** ×3 | A | 1 | Convert the client test files to ESM, in three disjoint partitions; cut from ESM-1's first commit with converted sources, merged as one unit with ESM-1 | the partition's `crc-desktop/tests/*.test.js` → `.test.mjs` | ESM-1 (sources) | 3 × 0.5 | Sonnet |
+| **BOARD-1** | A | 2 | Facade skeleton; `BoardState` (kernel, `bump`, `insert`); `BoardAudit`; `Placement` (order keys + Bays); ADR 0095 committed | `src/efsp/board-store.js`, `src/efsp/board/{board-state,audit,placement,strip-util}.js`, selfcheck M3/M4/M7, board-store unit tests reaching moved privates, `guard-board-surface.json`, `docs/adr/0095-*.md` | R0 | 1 | Opus |
+| **WIRE** | A | 2 | Family registry + skeleton; `replay-cache` kinds from the registry; `ws-hub` sends `broadcasts[]`; `WsHub.stop()` | `src/efsp/efsp-ws.js`, `src/efsp/wire/**`, `src/efsp/replay-cache.js`, `src/ws-hub.js`, ws-hub/efsp-ws tests reading named keys, `tests/freeze/freeze-tables.test.mjs` (dispatch scraper only), selfcheck M5/M5b/M13 | R0 | 1 | Sonnet |
+| **STORES** | A | 2 | Store registry; `_persist`/`_restore` loop it; `createEfsp({paths})` resolves paths at call time; `ctx` keys unchanged (+`ctx.stores`) | `src/efsp/index.js`, `src/efsp/stores.js`, persistence/index tests, selfcheck M9/M10 | R0 | 0.5 | Sonnet |
+| **APP** | A | 2 | `createApp(deps)` with tickers, start/stop; `server.js` thin; soak host uses `createApp`; boot smoke | `crc-sync/server.js`, `src/app.js`, `tools/soak/{host-core,host,host-env}.js`, `tests/freeze/{freeze-world,freeze-hub-runner}.mjs` (host wiring only), `tests/app-boot.test.mjs` | R0; merges after WIRE (`wsHub.stop()`) and STORES (`paths`) | 1 | Sonnet |
+| **BOARD-2** | A | 3 | `Coordination` and `Tofi` collaborators; facade `receive*` delegate | `board-store.js` (clusters G, H), `board/{coordination,tofi}.js`, their unit tests' private reaches | BOARD-1 | 1 | Sonnet |
+| **AUTH** | B | 3 | Authority registry; Position and Role families; `permission.js`/`nla.js`/`coordination.js` become facades with identical exports; `traffic-count` countability from the registry | `src/efsp/{permission,nla,coordination,read-scope}.js`, `traffic-count.js` (countability constants only), `src/efsp/authority/**`, selfcheck M12/M14 | W2 merged | 1.5 | Opus |
+| **DATA-1** | B | 3 | Facility JSON as the single source; schema; loader without literals, called from `createEfsp` | `src/efsp/facility-config.js`, `src/efsp/facility-schema.js`, `config/efsp-facility-*.json`, `index.js` (the facility load call only), `freeze-tables.test.mjs` (defaults reader only), facility-config tests | W2 merged | 1 | Sonnet |
+| **DATA-2** | B | 3 | Tuning defaults out of code into their JSON twins; literal inventory for the human | `src/alerting-config.js`, `src/efsp/{instrumentation-config,surveillance-hints-config,stereo-routes,airspace-config}.js` (defaults only), `src/efsp/carrier/{hull-config,ship-state}.js`, `src/radars.js` (defaults only), `src/theaters.js` (default TA only), matching `config/*.json`, `docs/wip/DATA-2.md` | W2 merged | 1 | Sonnet |
+| **LOG-1** | B | 3 | `src/log.js`; configured in `createApp`; `log-level.js` absorbed; test sink; ADR 0097 | `src/log.js`, `src/log-level.js` (removed), `src/app.js` (logger setup only), `server.js` (its own console calls), `tests/log.test.mjs`, `docs/adr/0097-*.md` | APP | 0.5 | Sonnet |
+| **CMSG** | B | 3 | Client message registry; `app.js` dispatches through it | `js/app.js`, `js/panels/efsp/efsp-ws.js` (client), new `efsp-messages.js`, registration lines in `airspace-panel.js`, `carrier-panel.js`, `field-state-panel.js`, `metrics-panel.js`, `tests/ws-message-contract.test.mjs` | ESM-1 unit | 0.5 | Sonnet |
+| **ESM-2a** | B | 3 | Split `bay-view.js` by feature into `panels/efsp/bay/` | `js/panels/efsp/bay-view.js`, `js/panels/efsp/bay/**`, bay-view unit tests | ESM-1 unit | 1 | Sonnet |
+| **ESM-2b** | B | 3 | Split `efsp-panel.js` by feature into `panels/efsp/panel/` | `js/panels/efsp/efsp-panel.js`, `js/panels/efsp/panel/**`, efsp-panel unit tests | ESM-1 unit | 0.75 | Sonnet |
+| **BOARD-3** | B | 4 | `StripOps` + op table + NLA/Undo + retirement; per-Role tables read from the authority registry; Position lifecycle delegates | `board-store.js` (clusters ops/NLA/retire/dispatch/lifecycle), `board/{strip-ops}.js`, `board/ops/**`, selfcheck M1/M2/M6/M15, unit tests' private reaches | BOARD-2, AUTH | 1.25 | Sonnet |
+| **LOG-2** | B | 4 | Every `console.*` in crc-sync to module loggers with context; tests that spy `console` use the test sink | `crc-sync/src/**` console call lines **except** `board-store.js`, `board/**`, `surveillance-hints.js`, `conformance.js`; `tools/soak/**` console lines; tests spying console | LOG-1 | 0.75 | Sonnet |
+| **TIME-B** | B | 4 | **Approved change**: L19 hold and staleness, conformance grace on wall time; ADR 0096; HHMM single-owner check | `src/efsp/{surveillance-hints,conformance}.js`, `src/app.js` (their two constructor calls), `tests/clock-policy.test.mjs` allow-list, their unit tests, re-recorded goldens (behaviour commit), `docs/adr/0096-*.md` | APP, R0 | 0.5 | Sonnet |
+| **SYNC** | B | 5 | One `SyncLog` and one replay cache for the Board and every store that syncs; Board persistence collaborator; `observeTouches` replaces the monkeypatch | `board-store.js` (kernel, idempotency, snapshot/restore), `board/{board-state,persistence}.js`, `src/efsp/sync/**`, `src/efsp/replay-cache.js` (removed into `sync/`), `airspace-store.js` (`airspaceSeq` only), `efsp-ws.js` (resync path only), `tools/soak/host-core.js` (touch observer), selfcheck M8 | BOARD-3, WIRE, STORES | 1 | Opus |
+| **BACKCOMPAT** | B | 6 | **Approved change**: back-compat removal; a missing rule is a loud startup error (ARCH-D5); close the fixture window | `index.js` (aliases, legacy `data.board`), `board-store.js` + `board/**` (`this._rules.x &&` guards → required-rules check), `facility-config.js` (legacy `blockVisibility`), `clearance-migration.js`/`overflight-migration.js` (only if §9 point 7 is answered "remove"), a `fullRules()` test helper, `crc-sync/package.json` (freeze out of `npm test`) | all above | 0.5 | Sonnet |
+
+**Totals:** Tier A ≈ 7.5 lanes (R0 0.5, ESM-1 1, ESM-1T 1.5, BOARD-1 1, WIRE 1, STORES 0.5, APP 1, BOARD-2 1).
+Tier B ≈ 10.25 lanes. **All ≈ 18 agent-lanes**: 20 phases, 22 lane runs (ESM-1T is three).
+
+**Superseded from the first plan:** prototype mixins and the mixin seam test (→ collaborators, §2.3); "not ES modules"
+and the C0 uniqueness test (→ ESM-1; duplicates become module-private); C2 generated client tables (→ ARCH-D7,
+hand copies stay); "after L20" (→ before L20, H87); "no surface ever changes" (→ S-desk3's reconciliation, §3.1);
+`createRuntime` (→ `createApp`, R3-29). S2c (one role-change transfer for carrier and SFA) is folded into BOARD-3 as an
+optional last step, only if it is golden-identical.
+
+---
+
+## 5. Waves, parallelism and the freeze
+
+The supervisor runs at most **10 agents at once, one of them the questioner**. The questioner (Opus) reads each lane's
+first report ("Code as found" plus its design notes) before the lane writes code, and challenges assumptions against
+this plan, `decisions.md` and the code. File ownership inside a wave is disjoint, except where a row says "one line".
+
+| Wave | Runs in parallel | Agents | Starts when | Merges as |
 |---|---|---|---|---|
-| P0 golden master + guards | 1 | High. It protects every future lane, not only this refactor | none (tests only) | **Do** |
-| C0 uniqueness test + `_callsignOfFdr` | 0.25 | High. It fixes a live defect class | none | **Do** |
-| S1 wire families + store registry | 1 | High. It removes the copy-paste gate class and the `index.js`/`efsp-ws.js` fan-out | low with P0 | **Do** |
-| S2a kernel, `_bump`, coordination and TOFI out | 1 | High. It halves the file with a verbatim move | low | **Do** |
-| S4 `createRuntime` | 1 | Medium-high. The soak tests the real wiring, and the forward reference goes away | low-medium | **Do** |
-| S2b op table, NLA, retire, placement | 1 | Medium. New ops stop editing `_dispatch` and `_recordAudit` | low-medium | Do if more ops are coming (they are) |
-| S3 Role families | 1–1.5 | Medium-high for "carrier/SFA-like Roles". It turns L28's 7 files into about 2 | medium (core tables) | Do after L28 |
-| C1a client message registry | 0.5 | Medium. It takes `app.js` off every family lane's path | low | Do before AIRSP phase 2 |
-| S2c one role-change transfer | 0.5 | Low-medium. It deletes one 80-line copy | low | Optional |
-| C1b `bay-view.js` split | 1 | Medium for UI lanes' conflicts, low for behaviour | medium (Playwright-only coverage of the DOM) | Optional, client freeze only |
-| C2 generated client tables | 1 | Low-medium. Parity tests already catch drift | low | Optional, with S3 |
-| ESM, namespace rename, DI, typed ports, schema codegen | 3+ | Low | high | **Don't** |
+| **W1** | R0 · ESM-1 · ESM-1T-a · ESM-1T-b · ESM-1T-c (the T lanes start from ESM-1's first sources-converted commit) · questioner | ≤ 6 | merge4 and the R3-47 follow-up are merged and the goldens re-recorded there | R0 alone; ESM-1 + 3×ESM-1T as one unit (both suites + full Playwright) |
+| **W2** | BOARD-1 · WIRE · STORES · APP · questioner | 5 | R0 merged | order WIRE → STORES → BOARD-1 → APP (APP needs `wsHub.stop()` and `paths`; it adds the one-line `paths` pass-through at its merge) |
+| **W3** | BOARD-2 · AUTH · DATA-1 · DATA-2 · LOG-1 · CMSG · ESM-2a · ESM-2b · questioner | 9 | W2 merged (A has been proven golden-identical across four lanes) | any order; DATA-1 and STORES's `index.js` do not meet (DATA-1 edits one call) |
+| **W4** | BOARD-3 · LOG-2 · TIME-B · questioner | 4 | BOARD-2, AUTH and LOG-1 merged | BOARD-3 → LOG-2 → TIME-B (TIME-B's behaviour commit re-records last) |
+| **W5** | SYNC · questioner (AIRSP phase 2 may draft its design and mockup changes against §2.7, without code) | 2 | W4 merged | alone |
+| **W6** | BACKCOMPAT · questioner | 2 | W5 merged | alone, then the window closes and **L20 starts** |
 
-**Tiers:** **A** (minimum) = P0, C0, S1, S2a, S4 ≈ **4.25 lanes**. **B** (recommended) = A + S2b, S3, C1a ≈
-**7.25–7.75 lanes**. **C** (everything sensible) = B + S2c, C1b, C2 ≈ **9.75–10.25 lanes**.
+Why the waves are shaped like this:
 
-**Is a 3,000-line `board-store.js` really necessary?** No. Size, though, is the least of it:
+- `board-store.js` is one file, so BOARD-1 → BOARD-2 → BOARD-3 → SYNC → BACKCOMPAT are strictly sequential on it.
+  Everything else is placed around that chain.
+- Tier A finishes in W3 (BOARD-2). The B lanes start in W3, once W2 has shown that the golden master holds across four
+  parallel structural lanes. That is the reading of "Tier B, starting with A" (§9 point 1).
+- The client track (W1, W3) is disjoint from the server track, apart from the three crc-sync tests ESM-1 owns.
+- AUTH waits for W2 only to keep W2 small and reviewable. It owns no W2 file, so if W2 runs long it can be pulled
+  into W2.
 
-- **It is not as big as it looks.** 40% of it is comments, and they are good ones: rationale, defect ids and ADR
-  pointers. The code is 1,700 lines with 97.6% line coverage. Nobody has to read all of it to change it, and
-  the lane notes report almost no "I could not find where" trouble in it. The traps the lanes did hit
-  (L1's "never add field-state kinds to `OP_KINDS`", L17's `ReplayCache` kind list, L14's render signature,
-  L1b's detached dockview DOM) are **registration and fan-out traps**, not size traps.
-- **The cost is serialisation and repetition.** One capability touches 6–10 shared files. The same gate is
-  re-typed for each family, and the same "rev, updatedAt, updatedBy, touch" block 32 times. Optional rules switch
-  checks off when they are not wired. The composition root is untestable and has been duplicated for the soak.
-  These are the reasons the parallel plan needs an ownership table, serialised lanes and merge orders, and they
-  get worse with every Role family (L17 added three Roles, L18 three Positions and a rotation, L28 a lifecycle).
-- **So the refactor worth doing is the one that gives capabilities a home (S1, S2b, S3) and halves the file by a
-  verbatim move (S2a).** A clever Board decomposition into many classes, typed ports or an event bus would be
-  over-engineering. The existing table-driven pattern (`COMPUTE_BY_ROLE`, the capability tables, the transfer
-  effects, the Bay `view` flags) already works and only needs extending.
-- **The client is the same story at lower stakes.** `bay-view.js` is large but cohesive per feature. The actual
-  defects come from the shared global scope (a live one today) and are fixed by a test, not by an ESM migration.
+### 5.1 Frozen files (no lane outside the named owner may edit them; no feature lane runs at all, H78)
+
+| File(s) | Frozen from | Until | Owner(s) during the freeze |
+|---|---|---|---|
+| `crc-sync/tests/freeze/**` (except as listed per lane) | W1 start | W6 end | R0, then each lane's own selfcheck mutation file |
+| `crc-desktop/app/public/**`, `crc-desktop/tests/**` | W1 start | W3 end | ESM-1/ESM-1T (W1), CMSG/ESM-2a/ESM-2b (W3) |
+| `src/efsp/board-store.js`, `src/efsp/board/**` | W2 start | W6 end | BOARD-1 (W2), BOARD-2 (W3), BOARD-3 (W4), SYNC (W5), BACKCOMPAT (W6) |
+| `src/efsp/efsp-ws.js`, `src/efsp/wire/**`, `src/ws-hub.js`, `src/efsp/replay-cache.js` | W2 start | W5 end | WIRE (W2), SYNC (W5, resync path and replay cache) |
+| `src/efsp/index.js`, `src/efsp/stores.js` | W2 start | W6 end | STORES (W2), DATA-1 (W3, one call), BACKCOMPAT (W6) |
+| `crc-sync/server.js`, `src/app.js`, `tools/soak/host-core.js` | W2 start | W5 end | APP (W2), LOG-1 (W3), TIME-B (W4, two lines), SYNC (W5, host-core touch observer) |
+| `src/efsp/{permission,nla,coordination,read-scope,traffic-count}.js`, `authority/**` | W3 start | W4 end | AUTH (W3); BOARD-3 reads, never writes |
+| `src/efsp/facility-config.js`, `config/efsp-facility-*.json` | W3 start | W6 end | DATA-1 (W3), BACKCOMPAT (W6) |
+| every other `crc-sync/src/**` file | W4 start | W4 end | LOG-2 (console lines only) |
+
+**Elapsed estimate:** W1 1–1.5 days, W2 1.5 days, W3 1.5–2 days, W4 1–1.5 days, W5 1 day, W6 0.5 day, plus merges and
+gates. Total **7–9 working days**. The minimum useful stop is after W3 (all of Tier A plus the registries, the client
+move and the data move).
+
+**An urgent bug fix during the window** lands as its own behaviour commit with a re-record. The next lane in the
+affected chain is cut after it (the supervisor merges it between lanes).
 
 ---
 
-## 6. Risks
+## 6. Approved-change queue (output changes; each its own commit, never inside a structural one)
+
+| # | Change | Ruling | Lane | Approval |
+|---|---|---|---|---|
+| 1 | L19 airborne hold and staleness, conformance heading grace on the wall clock | R3-16, S3-3 | TIME-B | **given** (human); re-record in the commit |
+| 2 | Back-compat removal; a missing rule is a loud startup error | ARCH-D5 | BACKCOMPAT | **given** (human) |
+| 3 | `_callsignOfFdr` / `_el`: which variant each panel uses once they are module-private | none yet | ESM-1 keeps today's effective behaviour; any change waits for the human | **ask** (§9 point 3) |
+| 4 | Extend sync, epoch and delta resync to every store that has none (beyond SYNC's structural unification) | S3-1 says "one mechanism", not "every store resyncs" | SYNC-B, a follow-up after W5 | **ask** |
+| 5 | Per-Facility heartbeat (today only the default Facility's seq is named) | S-UIB limit ("for the refactor's wire phase") | WIRE-B, a follow-up after W2 | **ask** (the supervisor proposes; no human ruling) |
+| 6 | A missing or invalid facility JSON is a startup error, not a silent fallback to literals | S3-6 + ARCH-D5 spirit | DATA-1 (separate commit) | supervisor; the human is told |
+| 7 | A `state/` facility copy no longer inherits keys it lacks (no shallow merge) | S3-6 | DATA-1 (same commit as 6) | supervisor; R3-2 (clean prod) makes it safe |
+| 8 | The restore migrations (`clearance-migration.js`, `overflight-migration.js`) go | R3-2 vs S-L28 | BACKCOMPAT | **ask** (§9 point 7) |
+
+---
+
+## 7. What merge4 changes (plan from the current tree, then re-check on the merged one)
+
+`integ/merge4` (UI-B, E2E-harden, QAS-redo, and the R3-47 follow-up being committed) touches files this plan cuts:
+
+- `board-store.js` +43 lines: UI-B's observed-departure bypass in the SetState path (`_applySetStateGated` region) and
+  a new public `setAirborneObserver(fn)`. `guard-board-surface.json` was re-recorded for it. BOARD-1 and BOARD-3 cut
+  from the merged file. The observer belongs to `StripOps`, and the facade keeps the public setter.
+- `efsp-ws.js`: the ATO import's ack and board-delta carry `boardEpoch` (R3-73). R3-47's server half (an `efsp-resync`
+  reply type) is in an uncommitted diff there now. WIRE starts after both are in.
+- `server.js` +11 lines: the `setAirborneObserver` wiring and the `src/test-reset.js` mount (`CRCSYNC_TEST_RESET`,
+  loopback only, refuses `NODE_ENV=production`). APP moves both into `createApp` unchanged.
+- New `src/log-level.js` (`LOG_LEVEL` wraps `console`). LOG-1 absorbs it, keeping its semantics.
+- `zulu-time.js` consolidation (S-14) and its golden table: the time-owner baseline for TIME-B.
+- About 35 `crc-sync/src` files lose dead exports (S-11 re-scan). Everyone bases on that.
+- `facility-config.js` (4 lines): DATA-1 cuts from the merged file.
+- Client `app.js`, `efsp-state.js`, `efsp-ws.js`: per-Facility seq and epoch, resync triggers, and R3-47 dropping the
+  reconnect resync. `client-global-surface.json` +17 names. New `tests/efsp-resync-state.test.js` and
+  `e2e/ui-b-resync.spec.js`. ESM-1 and CMSG base on these.
+- E2E harness: `e2e/helpers/sync-supervisor.js`, `e2e/tools/run-order.js` and the test-reset route. Playwright gates
+  use that harness.
+- The freeze goldens were re-recorded in merge4 (`9d233cd`). R0 starts from them and re-records only if the R3-47
+  follow-up changed output, which is expected for the resync reply.
+
+---
+
+## 8. ADRs (R3-68: numbers assigned now)
+
+| Number | Title (short) | Written by | Notes |
+|---|---|---|---|
+| **0095** | EFSP and CRC code structure: facade + collaborators, registries, `createApp`, native ES modules on the client, JSON as the single source for facility data, golden-replay acceptance | BOARD-1 copies `docs/wip/ARCH-plan-adr.md` into `docs/adr/0095-…md` at its first commit | it refines 0048 (no code-side defaults behind `config/`) without contradicting it |
+| **0096** | Durations and housekeeping run on the wall clock; facts and gates on the mission clock | TIME-B | supersedes 0079's conformance row and adds L19's rows; 0079 is not edited (P4) |
+| **0097** | A logging system for crc-sync | LOG-1 | |
+| **0098** | Airspace registry: `kind` AREA/ROUTE, geometry from a polygon or a DCS drawing, activation per kind | AIRSP phase 2 (reserved) | |
+| 0077 | (L20's, unchanged) | L20 | |
+
+0090 and 0092 are unused gaps (UI-A and TA left them free). This plan does not fill them (§9 point 10).
+
+---
+
+## 9. Ambiguities and contradictions found (the supervisor or the human decides; each briefing carries the default)
+
+1. **"Tier B, starting with A" (ARCH-D1).** This could mean that A must be merged and proven before any B work starts,
+   or only that A has priority. Default: B starts in W3, after W2 (four A lanes) has merged golden-identical. A
+   finishes in W3 (BOARD-2) beside the first B lanes.
+2. **R3-29 names `createApp(deps)`; the first plan said `createRuntime`.** Default: `createApp` (the human's word).
+   It includes the Express routes, so tests can drive them, and `listen` stays in `server.js`.
+3. **ESM makes duplicate names private, which changes behaviour silently.** Today `efsp-panel.js`'s `_callsignOfFdr`
+   (`''` fallback) overrides `carrier-panel.js`'s (fdrId fallback), and `metrics-panel.js`'s `_el` overrides the two
+   others. Default: ESM-1 keeps today's effective behaviour through explicit imports, and asks the human (queue item 3).
+4. **"Collaborators receive explicit dependencies" vs `host-core.js` monkeypatching `bs._touch`.** Default: a late-bound
+   `touch` callback keeps the patch working until SYNC adds `observeTouches(fn)` (§2.3).
+5. **S3-1 "one sync/replay mechanism for every store".** This could be a structural unification (identical output) or
+   every store gaining an epoch and delta resync (a wire change). Default: SYNC does the structural part. The extension
+   is queue item 4, for the human.
+6. **"No magic values in code except UI code" (S3-6) vs "code holds rules and interactions" (R3-72).** It is not clear
+   whether doctrine tables (state machines, permission and capability rows), engineering constants
+   (`APPLIED_MUTATIONS_CAP`, `REPLAY_PERSIST_WINDOW_MS`, `RESYNC_RING_WINDOW`, `REBALANCE_KEY_LENGTH`) and
+   `[SOURCE-DEFINED]` doctrine values (marshal `maxIndex: 19`, `DEFAULT_CASE 'III'`, `DEFAULT_STACK_ID`) are "magic
+   values". Default: facility and squadron data and tunable thresholds go to JSON (DATA-1, DATA-2). Doctrine tables are
+   rules and stay in code in the authority registry. Engineering constants stay named in code. DATA-2 writes the full
+   inventory with a proposed class for each literal, for the human to confirm.
+7. **R3-2 (prod is a clean start; no back-compat) vs S-L28** ("a persisted `state/efsp-facility-*.json` on the human's
+   live server will lack `holdsRole`: check before deploy"; L28 wrote a restore migration for `TRANSITING`). Default:
+   BACKCOMPAT asks before removing `overflight-migration.js` and `clearance-migration.js` (queue item 8). Everything
+   else in ARCH-D5 is removed.
+8. **S3-2 "Position families register into one authority registry" vs JSON for facility data.** Positions per Facility
+   are facility data (JSON), while what a Position kind may do reads as a rule. Capability rows today are keyed by
+   Position id (`RSU`, `SFA`), which ties rules to data ids. Default: capability rows stay in code, in the registry,
+   keyed by Position id. The facility JSON lists the Positions, and the schema refuses an id with no registered family.
+9. **R3-63 "one owner of the time-parsing rules" vs QAS's finding** that `usmtf-time.js` is a different grammar and
+   merging it risks the ATO import. Default: one owner **per grammar** (§2.8). Merging them would be a human call.
+10. **R3-68 "assign ADR numbers now".** It does not say whether to fill the gaps 0090 and 0092. Default: leave them
+    and number upward (0095–0098).
+11. **Conformance on the wall clock contradicts ADR 0079's own rule.** The grace runs from the clearance's mission-time
+    `at`, a record time. To measure it on the wall clock, TIME-B needs the clearance's wall arrival time (the Mutation
+    log's `wallAt`, or a wall stamp when the conformance monitor first sees the clearance). Default: the monitor stamps
+    the wall time when it first sees the clearance, and the shown `since` stays mission time. ADR 0096 says so.
+12. **The client's local server is plain `http.createServer`, not Express** (CLAUDE.md says "bundled local Express
+    server"). This does not matter for ESM-1 (only the MIME map changes). A CLAUDE.md fix belongs to L20.
+13. **The lane rules still say "EFSP times come from the injected mission clock, never `Date.now()`"** (lane-rules §5,
+    H11). R3-16 narrows that. The supervisor should update `lane-rules.md` when TIME-B merges. This plan does not edit it.
+14. **ARCH-D6 b closes the fixture window, but it does not say whether the suite is deleted or parked.** Default:
+    parked, opt-in, with a dated "stale after" note (BACKCOMPAT).
+15. **merge4's R3-47 server change is uncommitted** in `../sourcedcs-MERGE4` right now. R0 must not start until it is
+    committed and the goldens are re-recorded on it. Otherwise the first structural lane inherits a pending output
+    change.
+
+---
+
+## 10. Invariants that hold through every structural commit (verified by the goldens and the existing suites)
+
+The wire format and message order (ADR 0001, 0004, 0022, 0081: broadcast → peer → MARSA → carrier → SFA); one Board
+event, one broadcast; epoch minted on construction and restore, never persisted; replay records compact, the last 10
+minutes persisted, replay acks only; audit semantics (0065, 0081, 0083: a store logs what reaches it, `unaudited`
+never on the wire, `causedBy` on peer entries); the persisted snapshot's shape and key order (0002, 0048, 0081); the
+mission clock for facts and gates (0079, until 0096 lands); one Board per Facility, peers in-process (0013, 0015); read
+scope (0080); one carrier hand-over implementation (0074); Bay descriptor flags (0093); ADRs never edited (P4); tuning
+files read once (P5); no `pkill` (P7). These are not frozen as principles (R3-31). They change only through §6.
+
+## 11. Risks
 
 | Risk | Mitigation |
 |---|---|
-| A verbatim move still changes behaviour (method name shadowing between mixins, a `this` lost in a callback) | P0 golden byte-equal; the mixin seam test; `Object.assign` throws nothing on a clash, so the S2 lane adds a test that the mixins define disjoint names |
-| The golden corpus misses a path | the T1 matrix is built from the coverage report's uncovered-branch list; the detector proof; the existing 1,947 tests stay |
-| Fixtures go stale while lanes merge before the freeze | re-record exactly once at the freeze start, as a single reviewed commit |
-| A phase drifts into a redesign | the hard rule in §4 (no re-record in a refactor phase); the supervisor reviews each diff for "moves only" |
-| The freeze blocks urgent fixes | a bug fix may land during W1 if it re-records the golden in its own commit and the next refactor lane rebases onto it (the supervisor merges in between) |
-| S4 boot ordering changes timer phase | the boot smoke test asserts the same names and periods. Timer phase is not behaviour anything depends on (the soak drives ticks explicitly) |
-| C1b breaks load order | the C0 global-surface test plus the full Playwright run |
-
----
-
-## 7. Decisions the human must make
-
-- **D1 — scope.** Tier A, B or C (§5). **Recommended: B**, done as A first, then S2b, S3 and C1a once A has
-  shown the golden master holds.
-- **D2 — the freeze window.** W1 after L20, about 2–4 working days on the files listed in §3, with S4 and C1a in
-  parallel. **Recommended: yes.** The alternative, refactoring between lanes with no freeze, means every
-  in-flight lane re-merges against moved code.
-- **D3 — AIRSP phase 2.** Wait for S1 and C1a (recommended), or build it now the old way and let S1 move it.
-- **D4 — the client.** Confirm no ESM migration and no namespace rename. Confirm C0, the all-scripts
-  uniqueness test, instead. **Recommended: confirm.**
-- **D5 — back-compat removal** (`efsp.boardStore`/`positionStore` aliases, pre-WP4A `data.board` restore, the
-  optional `rules` guards). The lane rules say "no backwards compatibility", but this is a behaviour change
-  (partial fixtures) and so not part of a refactor phase. **Recommended:** one small lane after S2b, with its own
-  golden re-record.
-- **D6 — the golden-fixture policy for every lane after P0.** A lane that changes behaviour on purpose
-  re-records the fixtures and lists the diff in its report. A refactor lane never re-records. This adds a small
-  step to every behaviour lane. **Recommended: adopt**, because it is how the next L6-style regression gets
-  caught before merge rather than in the soak.
-- **D7 — C2 (generated client tables).** Recommended: only together with S3. Otherwise keep the parity tests.
-
-## Defaults taken (P2)
-
-- ADR number 0095, as the briefing gave it. The draft is in `docs/wip/ARCH-plan-adr.md`, not in `docs/adr/`.
-- Measurements on `integ/wave3-dry` at `0935ee5`. L18S, UI-B and L28 were read from their branches for the
-  fan-out evidence, not merged.
-- No production code edited. `npm ci` was run in this worktree only, to measure (see the findings).
-
-## Findings for other lanes
-
-1. **Integrator / L18S:** on `integ/wave3-dry`, `final-panel.js` throws `SyntaxError: Identifier 'finite' has
-   already been declared` when loaded after `pattern-board.js`, and `_el` is declared three times with two
-   signatures. L18S's branch fixes both. If L18S does not merge with the real merge, the fix must go in on its
-   own.
-2. **UI-B (or a hygiene lane):** `_callsignOfFdr` is declared in both `carrier-panel.js:146` (fdrId fallback)
-   and `efsp-panel.js:904` (`''` fallback). The second loads later and silently wins. L18S's uniqueness test only
-   covers the Bay-view scripts. Widen it to every script (C0).
-3. **Supervisor (S-M-wave3a):** in a worktree without `npm ci`, crc-sync's `npm test` reports exactly **10
-   failures** (`Cannot find module 'ws'`: ws-hub-*, efsp-ws-replay, efsp-alerts-compose, theater-context,
-   grpc-client-stream, efsp-field-state-l1b, the archiver delta). U6's "10 failures, load flakes" were very
-   likely this, not load. After `npm ci`: **crc-sync 1,947 pass / 0 fail / 0 todo; crc-desktop 800 pass /
-   1 todo**.
-4. **Everyone touching `board-store.js`:** 40 `this._rules.x &&` guards mean a rule missing from `index.js`
-   disables its check without an error. Until P0's wiring-completeness test lands, every lane adding a rule
-   should check that it is wired, as `efsp-scenarios.test.mjs` already notes.
-5. **SOAK owners:** `tools/soak/host-core.js` re-implements `server.js`'s monitor wiring. A monitor added to
-   `server.js` and not to `host-core.js` is never soaked. S4 removes the duplication.
-
-## 8. Out of scope here, noted
-
-- **S-14** (three HHMM parsers: `zulu-time.js`, `usmtf-time.js`, `time-chains.js`, plus `nla.js` deadline
-  checks) is a correctness check, not architecture. It is a 0.25-lane task: a table-driven test feeding the same
-  edge cases (midnight wrap, ±12 h nearest occurrence, `2400`, malformed) to every parser, and sharing the
-  nearest-occurrence function if they agree. It can run any time and touches no frozen file.
-- `fdr-store.js` (1,427 lines) and `metrics.js` (992 lines) were not studied in depth. S-5 names them, but
-  neither is on the lanes' serialisation path. Revisit after W1 using the same method.
+| A collaborator split loses a `this` or a side effect | golden replay; the seam test; freeze:selfcheck re-proven per lane |
+| ESM evaluation order or a TDZ cycle breaks start-up | ESM-1's top-level-statement inventory; the module-graph test evaluates the whole graph; full Playwright as a unit |
+| The ESM test conversion stalls the client track | three parallel T lanes cut from ESM-1's converted sources; the unit merges together |
+| Parallel lanes conflict on shared harness files | R0 splits selfcheck mutations one file each; lanes edit only their own |
+| APP changes soak accounting | `uncarried` removed from the compared record in R0; boot smoke; soak:smoke |
+| DATA-1 changes a shipped value while transcribing literals | identical goldens (the tables golden digests the shipped defaults); a test that the JSON equals the old literal, deleted with the literal |
+| The window runs long | stop after W3 is viable; W4–W6 are independent improvements |
