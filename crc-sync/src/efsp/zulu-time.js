@@ -69,4 +69,20 @@ function formatZuluHhmm(ms) {
   return String(d.getUTCHours()).padStart(2, '0') + String(d.getUTCMinutes()).padStart(2, '0');
 }
 
-module.exports = { parseZuluHhmm, resolveZuluHhmm, resolveZuluHhmmAfter, formatZuluHhmm };
+/**
+ * What a controller (or an import) wrote into a time field, as epoch ms.
+ * A finite number is epoch ms already; empty clears to null; a typed Zulu time
+ * is dated by the mission clock (`afterMs` finite: its first occurrence after
+ * that, else the nearest to `nowMs`). Anything else is { ok: false }, never
+ * stored. The one place that decides how a typed time field is read.
+ * @returns {{ ok: true, value: number|null } | { ok: false }}
+ */
+function resolveTypedTime(value, nowMs, afterMs = null) {
+  if (typeof value === 'number' && Number.isFinite(value)) return { ok: true, value };
+  const text = value == null ? '' : String(value).trim();
+  if (text === '') return { ok: true, value: null };
+  const ms = Number.isFinite(afterMs) ? resolveZuluHhmmAfter(text, afterMs) : resolveZuluHhmm(text, nowMs);
+  return ms == null ? { ok: false } : { ok: true, value: ms };
+}
+
+module.exports = { parseZuluHhmm, resolveZuluHhmm, resolveZuluHhmmAfter, formatZuluHhmm, resolveTypedTime };

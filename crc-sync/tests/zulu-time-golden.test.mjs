@@ -30,3 +30,15 @@ test('formatZuluHhmm answers as captured', () => {
 test('a typed MTR time (the fdr-store typed-time wrapper) answers as captured', () => {
   for (const c of g.mtr) assert.deepEqual(normalizeMtrValue(c.path, c.value, c.now), c.out, JSON.stringify(c));
 });
+
+test('resolveTypedTime: numbers pass, empty clears, text is dated, junk is refused', async () => {
+  const { resolveTypedTime } = await import('../src/efsp/zulu-time.js');
+  const now = Date.UTC(2016, 5, 21, 23, 50);
+  assert.deepEqual(resolveTypedTime(123456, now), { ok: true, value: 123456 });
+  assert.deepEqual(resolveTypedTime('  ', now), { ok: true, value: null });
+  assert.deepEqual(resolveTypedTime(null, now), { ok: true, value: null });
+  assert.deepEqual(resolveTypedTime('0010', now), { ok: true, value: Date.UTC(2016, 5, 22, 0, 10) });
+  assert.deepEqual(resolveTypedTime('0200', now, Date.UTC(2016, 5, 21, 22, 0)), { ok: true, value: Date.UTC(2016, 5, 22, 2, 0) });
+  assert.deepEqual(resolveTypedTime('2460', now), { ok: false });
+  assert.deepEqual(resolveTypedTime(NaN, now), { ok: false });
+});
