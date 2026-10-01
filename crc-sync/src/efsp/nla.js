@@ -550,5 +550,5 @@ module.exports = {
   STATES, DEPARTURE_STATES, ARRIVAL_STATES, OVERFLIGHT_STATES, MISSION_STATES, STATES_BY_ROLE,
   MARSHAL_STATES, FINAL_STATES, PATTERN_STATES,
   isValidState, isFlightPlanValid, isVoidExpired, computeNla, REQUIRED_FOR_CLEARANCE,
-  missingForClearance, flightPlanInhibitReason, CLEARANCE_BLOCK_LABELS,
+  missingForClearance, CLEARANCE_BLOCK_LABELS,
 };

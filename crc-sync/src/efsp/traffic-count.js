@@ -703,7 +703,6 @@ class TrafficCount {
 
 module.exports = {
   TrafficCount,
-  TRAFFIC_COUNT_PATH,
   COUNTABLE_PRE_DROP_STATES,
   hourKey,
   isDropTransition,
@@ -712,10 +711,5 @@ module.exports = {
   countability,
   classifyLocality,
   normalizeAircraftType,
-  countIdFor,
-  logDerivedRecord,
-  expectedFromLog,
-  liveCountRecords,
   reconcileTrafficCount,
-  emptyTotals,
 };

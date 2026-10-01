@@ -306,5 +306,5 @@ class CoverageEngine {
 module.exports = {
   CoverageEngine,
   lastCrossing, lastIllumination, bearingDeg, signedDeltaDeg, normaliseDeg,
-  SWEEP_BEAM_DEG, LOS_CACHE_MS,
+  SWEEP_BEAM_DEG,
 };

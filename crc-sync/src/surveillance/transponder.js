@@ -151,4 +151,4 @@ class Transponders {
   }
 }
 
-module.exports = { Transponders, octalCode, coalitionClass, EMERGENCIES };
+module.exports = { Transponders, octalCode, };

@@ -37,4 +37,4 @@ function isNight(latDeg, lonDeg, dateMs) {
   return el == null ? null : el < NIGHT_BELOW_DEG;
 }
 
-module.exports = { solarElevationDeg, isNight, NIGHT_BELOW_DEG };
+module.exports = { solarElevationDeg, isNight, };

@@ -1411,10 +1411,10 @@ class FdrStore {
 }
 
 module.exports = {
-  FdrStore, deriveEquipmentSuffix, WRITABLE_PATHS, RELEASE_STATES, VOID_DEADLINE_MINUTES,
+  FdrStore, deriveEquipmentSuffix, WRITABLE_PATHS, VOID_DEADLINE_MINUTES,
   EDCT_WINDOW_MINUTES, CALL_FOR_RELEASE_BEFORE_MINUTES, CALL_FOR_RELEASE_AFTER_MINUTES,
   TRACK_DEGRADATION_FLAGS, AIRSPACE_OWNERS, RADAR_SERVICE_STATES, SEPARATION_REGIMES, MAX_FREE_TEXT,
   ORDNANCE_STATES, ALERT_STATUSES, MILITARY_WRITABLE_FIELDS, defaultMilitary,
-  CLEARANCE_FIELDS, defaultClearance, ensureClearance, parseAltitudeFt, parseAltitude, formatAltitudeBlock, parseHeadingDeg, activeClearanceEntry,
+  ensureClearance, parseAltitudeFt, parseAltitude, formatAltitudeBlock, parseHeadingDeg, activeClearanceEntry,
   normalizeMtrValue,
 };

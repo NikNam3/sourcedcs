@@ -118,4 +118,4 @@ class NlaStatusMonitor {
   }
 }
 
-module.exports = { NlaStatusMonitor, statusKey };
+module.exports = { NlaStatusMonitor, };

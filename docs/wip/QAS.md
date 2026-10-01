@@ -20,3 +20,13 @@ Cannot / should not merge: time-chains.js has a byte-identical client copy (ADR 
 
 ## Other
 `soak:smoke` run (src/efsp touched): fails only on `memory.slope 1.74 MB/h`, the known wave-2 finding; no new detector. Defaults taken: none needing a decision.
+
+## Integrator note (integ/merge4)
+QAS was not merged as a branch (it conflicted with L18-server in facility-config.js). Its LOG_LEVEL, zulu-time golden
+table and typed-time consolidation commits were cherry-picked. The S-11 dead-export list above is superseded: the scan
+was re-run on the merged tree (ruling R3-64) and the result is in the commit "refactor(crc-sync): drop exports nothing
+imports" on integ/merge4. 78 names removed; kept on purpose (planned hook, documented API or half of a pair):
+setAirspaces, AIRSPACE_TYPES, MIN_ALTITUDE_FT, MAX_ALTITUDE_FT (AIRSP phase 2 editor), isNotPersistedDrop (ADR 0081 /
+briefing name it as exported), readScopeOf (family with filterForSession/supplementFor/readScopeKey), sfaDelta (pair of
+carrierDelta), extractOper/Aknldg/Grouping/FreeText (the USMTF set-extractor family, ato-sets.js), getHull (accessor
+beside getHulls).

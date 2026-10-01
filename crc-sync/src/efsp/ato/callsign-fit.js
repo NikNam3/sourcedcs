@@ -39,4 +39,4 @@ function fitCallsign(normalised) {
   return FITS_RE.test(out) ? out : null;
 }
 
-module.exports = { fitCallsign, MAX_CALLSIGN };
+module.exports = { fitCallsign, };

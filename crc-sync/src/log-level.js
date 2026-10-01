@@ -39,4 +39,4 @@ function install(target = console, raw = process.env.LOG_LEVEL) {
   };
 }
 
-module.exports = { LEVELS, DEFAULT_LEVEL, parseLevel, install };
+module.exports = { LEVELS, parseLevel, install };

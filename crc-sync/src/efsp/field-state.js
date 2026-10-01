@@ -445,8 +445,8 @@ function hungOrdnanceAdvisoryFor(strip, fdr, fieldState) {
 
 module.exports = {
   RUNWAY_STATUSES, LEGAL_TRANSITIONS, canGo, SUSPENSION_KINDS, SUSPENSION_LABELS,
-  GEAR_TYPES, GEAR_POSITIONS, GEAR_STATES,
-  RUNWAY_CHANGE_STATES, RUNWAY_CHANGE_OPEN_STATES, isRunwayChangeInProgress, isRunwayChangeOpen,
+  GEAR_TYPES,
+  isRunwayChangeInProgress, isRunwayChangeOpen,
   REQUEST_ACTIONS,
   RUNWAY_GATED_STATES, normalizeRunwayEnd, buildStatusView, resolveRunwayForStrip, runwayStatusReason, runwayInhibitFor,
   runwayAdvisoryFor, runwayRackFor, activeEndIntoWind,

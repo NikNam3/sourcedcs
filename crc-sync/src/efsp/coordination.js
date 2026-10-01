@@ -114,5 +114,5 @@ function tofiEligibleState(role) {
 
 module.exports = {
   COORDINATION_PRIMITIVES, COORDINATION_EFFECTS, COORDINATION_ELIGIBLE_STATES, TOFI_EFFECTS, TOFI_ELIGIBLE_STATES,
-  isCoordinationPrimitive, coordinationEffect, coordinationEligibleState, tofiEffect, tofiEligibleState,
+  isCoordinationPrimitive, coordinationEffect, coordinationEligibleState, tofiEligibleState,
 };

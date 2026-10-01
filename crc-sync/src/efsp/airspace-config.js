@@ -205,8 +205,8 @@ function setAirspaces(next) {
 }
 
 module.exports = {
-  getAirspaces, getAirspace, getRangePositionIds, airspacesForUsingPosition,
+  getAirspaces, getAirspace, getRangePositionIds,
   setAirspaces, validateAirspaces, isValidFrequency, isValidAltitude,
-  AIRSPACE_TYPES, AIRSPACES_PATH, MIN_FREQUENCY_MHZ, MAX_FREQUENCY_MHZ,
+  AIRSPACE_TYPES, MIN_FREQUENCY_MHZ, MAX_FREQUENCY_MHZ,
   MIN_ALTITUDE_FT, MAX_ALTITUDE_FT,
 };

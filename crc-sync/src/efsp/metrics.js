@@ -983,10 +983,5 @@ module.exports = {
   createEfspInstrumentation,
   duplicatePositionIds,
   percentile,
-  hourRange,
-  METRICS_PATH,
-  GESTURES,
-  FLAG_TO_GESTURE,
-  KNOWN_SOURCES,
   TTF_SAMPLE_CAP,
 };

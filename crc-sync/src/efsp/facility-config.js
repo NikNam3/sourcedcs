@@ -942,8 +942,8 @@ function coordinationBayFor(positionId, facilityId = DEFAULT_FACILITY_ID) {
 module.exports = {
   DEFAULT_FACILITY_ID, getFacilityIds,
   getFacilityConfig, getPositionSet, getPositionClass, getPositionLetter, allPositionLetters, getCoveringChain, getBaysFor, getAllBays, isBlockVisible,
-  getPositionRadars, radarBearingPositionIds, validateRadarSelector, RADAR_SELECTOR_KINDS,
+  getPositionRadars, radarBearingPositionIds, validateRadarSelector,
   bayImpliesState, bayForImpliedState, bayExists, coordinationBayFor, setFacilityConfig, validateConfig,
-  getBay, getSingleFrequencyApproach, validateSfaRotationRecord, BAY_VIEWS, BAY_DESCRIPTOR_KEYS,
+  getBay, getSingleFrequencyApproach, validateSfaRotationRecord, BAY_VIEWS,
   DEFAULT_CONFIG, DEFAULT_CENTER_CONFIG, DEFAULT_TACTICAL_CONFIG, DEFAULT_CARRIER_CONFIG, DEFAULT_CONFIGS,
 };

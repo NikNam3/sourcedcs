@@ -53,4 +53,4 @@ class ReplayCache {
   get size() { return this._map.size; }
 }
 
-module.exports = { ReplayCache, REPLAY_CACHE_CAP };
+module.exports = { ReplayCache, };

@@ -291,4 +291,3 @@ class CollaborativeStore {
 
 module.exports = CollaborativeStore;
 module.exports.PARK_MS = PARK_MS;
-module.exports.sameUnit = sameUnit;
