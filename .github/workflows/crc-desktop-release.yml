@@ -7,7 +7,29 @@ on:
   workflow_dispatch:
 
 jobs:
+  # R3-37: a release tag must point at a commit that is already on main. Fails first and loudly;
+  # `build` and `trigger-crc-sync-release` both depend on this job, so a refused tag builds,
+  # uploads and redeploys nothing.
+  verify-main:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository (full history)
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Refuse a tag whose commit is not on main
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error title=Release refused::${GITHUB_REF_NAME} points at ${GITHUB_SHA}, which is not on main. Merge to main first, then tag from main (delete this tag: git push --delete origin ${GITHUB_REF_NAME})."
+            exit 1
+          fi
+          echo "${GITHUB_REF_NAME} (${GITHUB_SHA}) is on main."
+
   build:
+    needs: verify-main
     strategy:
       fail-fast: false
       matrix:
@@ -77,13 +99,16 @@ jobs:
           done
 
   trigger-crc-sync-release:
-    needs: build
+    needs: [verify-main, build]
     # Always run this, even if a build/upload leg fails: crc-sync is a
     # shared dependency for every crc-desktop install, not something that
     # should go stale just because one platform's release upload had a
     # transient failure (e.g. the server not yet having a config fix this
     # very deploy chain is responsible for landing).
-    if: ${{ !cancelled() }}
+    # R3-37: the one exception is a tag refused by verify-main. A failed `build` still leaves
+    # verify-main "success", so the unconditional semantics are intact; a refused tag leaves it
+    # "failure" and nothing is redeployed. (`!cancelled()` alone would run after a failed need.)
+    if: ${{ !cancelled() && needs.verify-main.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       actions: write

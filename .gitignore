@@ -195,6 +195,9 @@ vendor/
 /.claude
 sourcedcs-web/data/gallery.json
 sourcedcs-web/data/uploads/
+# R3-17: runtime data of sourcedcs-web (prod: the sourcedcs-web-data volume). First-boot defaults
+# live in sourcedcs-web/data-seed/ and are copied in by seed.js only where absent.
+sourcedcs-web/data/*.json
 
 # debug data
 /tools/data/
