@@ -88,7 +88,8 @@ receives but cannot resync from (queue item 4, SYNC-B).
    `currentSeq` returns `this._sync.seq`. Same values (no ring, no epoch, no `randomUUID`). The five other bare
    counters (correlation, marsa, field-state, carrier, sfa) are **not in my Owns**: asked main (below); default
    while waiting: airspace only, the other five listed for SYNC-B.
-3. **`src/efsp/sync/replay-cache.js`:** one `ReplayCache({ cap = 5000, kinds = null })`. With `kinds` it is the
+3. **(W5-12: the families' shape is the default, the Board's is `ReplayCache.forBoard()`.)**
+   **`src/efsp/sync/replay-cache.js`:** one `ReplayCache({ cap = 5000, kinds = null })`. With `kinds` it is the
    families' cache (key `kind|cmid`, unknown kind throws, `set` compacts to `{ok, reason, detail, warning, id}`
    exactly as today: the skeleton calls it unchanged). Without `kinds` it is a Board's cache (key `cmid`; `set`
    stores the frozen record the caller built). Shared: the keyed test (non-empty string), set-then-evict-first at
@@ -106,7 +107,8 @@ receives but cannot resync from (queue item 4, SYNC-B).
    one-line delegations (public API unchanged). `reassignPositionStrips`/`returnCoveredStrips` stay on the facade
    (Position lifecycle, not persistence); their inline `SystemReassign` entries stay inline (a route through
    BoardAudit would change the entry's key order: not structural).
-5. **`observeTouches(fn)` on the facade.** `fn(stripId, { rebalance })`, where `rebalance` is null or the one
+5. **Superseded by W5-11 / W5-15 (see Rulings): `observeTouches(fn(stripId))` with no context, host-core's
+   `_rebalanceRack` wrap kept, `ringLength` instead of `syncLog`.** As first designed: **`observeTouches(fn)` on the facade.** `fn(stripId, { rebalance })`, where `rebalance` is null or the one
    `{ bayId, rackId, excludeStripId }` object of the rebalance running (the facade sets it around
    `placement.rebalanceRack`, through the callback Placement already calls). The collaborators' `touch` callback
    binds straight to the kernel (`state.recordTouch`), the facade's `_touch` method and `_log` getter go, and
@@ -121,17 +123,114 @@ receives but cannot resync from (queue item 4, SYNC-B).
 8. S-WIREfix: a new hub trace `resync-metrics` (an `efsp-metrics-report`, an `efsp-metrics-request`, and resyncs:
    delta, epoch mismatch, rewound, too old) with its own golden, in a `test(SYNC)` commit before the moves.
 
-## Questions to main (P2 defaults in brackets)
+## Rulings received and how each landed
 
-- Q1: index.js `require('./replay-cache')` -> `require('./sync/replay-cache')`, one line outside Owns. [Ask; if
-  refused, keep `src/efsp/replay-cache.js` as a one-line re-export.]
-- Q2: the five other stores' counters on a `SyncLog` (`advance()`), 3-5 lines each in files outside Owns
-  (correlation, marsa, field-state, carrier, sfa). [Airspace only; the five listed for SYNC-B.]
+- **S-SYNC0 Q1** (index.js require, no shim): done in `566c0a3`. Requirers changed: `src/efsp/index.js:51`,
+  `tests/efsp-ws-replay.test.mjs`, `tests/wire-skeleton.test.mjs`, `tests/sync-log-characterisation.test.mjs`.
+- **S-SYNC0 Q2 / W5-1** (all six counters): one commit per store (`beb86f6` airspace, `3e9f6c0` correlation, `a67422d`
+  MARSA, `0e41da2` field state, `02c94a6` carrier, `8a199f8` SFA), each `_seq` -> `this._sync = new SyncLog()` (counter only) and every bump (in `_touch`
+  and inline: correlation x2 in `reconcile`, carrier's `setShipState` and quiet stack op) -> `this._sync.advance()`.
+  Store tests and freeze green per commit. Three header comments name `_sync seq` instead of `_seq` (pointer only).
+- **S-SYNCq2 W5-11** (reverses the `{rebalance}` design): `observeTouches(fn(stripId))` only; host-core keeps its
+  by-name `_rebalanceRack`, `reassignPositionStrips` and `receive*` wraps and the facade's `_rebalanceRack` shim.
+- **W5-12**: the families' shape is `new ReplayCache()`'s default, kinds read lazily from `wire/families` on first
+  use; the Board's is `ReplayCache.forBoard()`.
+- **W5-13 = W5-4**: `26459a1`, before step 1, green on the base.
+- **W5-14**: `b7a5cbf`. Its diff is the new trace in `freeze-traces.mjs`, the new golden `hub-resync-metrics.json` and
+  the one-word addition of `'resync-metrics'` to `TRACE_NAMES` in `freeze-hub.test.mjs` (the runner needs it). The
+  metrics store's path resolves under `CRCSYNC_STATE_DIR`, which `host-env.js` sets to the world's temp dir before
+  any `src/` require (checked: nothing lands in `crc-sync/state/`).
+- **W5-15**: persistence takes `mutationLog: () => this._mutationLog` (late); no public `syncLog` getter, only
+  `ringLength`.
+
+## Answers to the questioner (questions-W5.md)
+
+- **W5-1** Done, see above.
+- **W5-2** Done: `new SyncLog()` is counter-only; `{ring, touched, epoch}` are opt-in and only `BoardState` turns them
+  on; the epoch is `crypto.randomUUID()` looked up at call time (`const crypto = require('crypto')`, property read on
+  each call, so `seedIds`' patch applies). Freeze identical at every commit proves the uuid sequence.
+- **W5-3** `newEpoch()` changes only the epoch: the seq, the ring and the touched set are kept. Pinned in
+  `sync-log-characterisation.test.mjs` ("newEpoch() changes nothing else") and a Board restore keeps `currentSeq`.
+- **W5-4** Pinned: 2,001 touches leave 1,000 entries starting at seq 1,002; `gone` takes a seq and is not a touch;
+  a delta's first-appearance order with the last entry per id; a resync from exactly 900 behind is a delta and from 901
+  a snapshot (`efsp-ws.test.mjs`); both caches' caps. The window now sits next to the prune in `sync-log.js`
+  (`canServeDelta`, `RESYNC_RING_WINDOW`, `RING_MAX`, `RING_KEEP`); `efsp-ws.js` re-exports `RESYNC_RING_WINDOW`.
+  `tools/soak/report.js:20-21` still copies 2000 and 5000 by hand: Findings.
+- **W5-5** One class, one instance per Board plus the families' instance; each shape keeps its keying and its
+  null-vs-undefined record; the KINDS throw stays; the Board's lookup stays inside `applyMutation`, so
+  `ato/ato-board.js:497`'s per-line cmids (`${cmid}#${lineId}`) still go through it (the ATO tests pass). `has()`
+  keeps the Board's unkeyed `Map.has` (a restored `''` key answers `true` as before). The ATO ack cache stays: Findings.
+- **W5-6** Used: index.js:51 only; host-core's `_appliedMutations`/`_strips`/`_cidSeq`/`_nlaHistory` reads were not
+  changed (the facade keeps `_appliedMutations` and `_droppedWallAt` getters); M13 and M15 did not need retargeting
+  (their lines did not move: the resync case line, and the facade's `  getDeltaSince(` delegation).
+- **W5-7** The contract as recommended, proven by the new `efsp-board-store` test (one observation per ring `update`
+  entry, called after it, rebalance touches attributed through a `_rebalanceRack` wrap, none for an archive).
+  `_log` did **not** stay listed in `guard-board-surface.json`: the guard now lists only members BoardStore has.
+- **W5-8** As recommended: `BoardPersistence` owns `droppedWallAt` and reads the replay window; StripOps reads
+  `() => this._persistence.droppedWallAt`; snapshot key order and record key order unchanged (characterisation test
+  and goldens); allow-list `file` changes only; `REPLAY_PERSIST_WINDOW_MS` re-exported by `board-store.js`.
+- **W5-9** The new trace covers the metrics report (valid with one bad event, duplicate, not holding, invalid) and
+  request (with and without `trafficCount`), a Board replay, a cmid-less Mutation, a family replay and a replay
+  refused at the gate, and six resync decisions. The ring prune, the 900 edge and the cap evictions are unit tests.
+- **W5-10** The proposal below starts from the client as it is.
 
 ## Defaults taken (P2)
 
-(filled as I go)
+- `canServeDelta(current, epoch, lastSeq)` is a pure function in `sync-log.js` taking `{seq, epoch}`; `efsp-ws.js`
+  keeps a one-line `_deltaCanServe(boardStore, …)` wrapper (the facade gains no resync method).
+- `BoardState` no longer takes a `touch` dependency: `bump`/`insert` call its own `recordTouch` (nothing patches the
+  facade any more). Its public API is otherwise unchanged; it gains `observeTouches`.
+- The facade keeps private getters `_appliedMutations` (onto the cache's Map), `_droppedWallAt`, `_strips`,
+  `_cidSeq` for host-core and tests; `ringLength` is the only new public read.
+- The inline `SystemReassign` audit entries in `reassignPositionStrips`/`returnCoveredStrips` and PeerGone's stay
+  inline (BOARD-1/3's finding): routing them through `BoardAudit.recordAudit` would change the entry's key order,
+  which is output. The `Archive` entry moved verbatim into persistence.
+- `familyRecord` keeps `undefined` for absent fields exactly as `replay-cache.js` did; KINDS is read lazily on the
+  first keyed `get`/`set` instead of at require time (same set: `wire/families` is static).
 
 ## Findings for other lanes
 
-(filled as I go)
+- **After the window (W5-5):** `wire/families/ato.js:24-30` keeps a third idempotency cache (WeakMap per ctx, cap
+  200) that stores **whole acks**, not ADR 0081's compact records. It could become a `ReplayCache` with an ATO kind;
+  left as is (frozen file).
+- `tools/soak/report.js:20-21` copies `logRingMax: 2000` and `appliedMax: 5000` by hand; they could read
+  `RING_MAX` (`sync/sync-log.js`) and `APPLIED_MUTATIONS_CAP` (`sync/replay-cache.js`).
+- L20 (comments): `board/placement.js` header (still says host-core patches `_touch`), `board/strip-ops.js`'s
+  `deps.touch`/`deps.droppedWallAt` JSDoc ("the facade's Map"), and Coordination/Tofi constructor notes describe
+  `touch` as the facade's late-bound `_touch`; it is now the kernel's `recordTouch`. `metrics.js:71` names
+  `board-store.js APPLIED_MUTATIONS_CAP` (now `sync/replay-cache.js`).
+- `peerStripId` is recorded in every Board replay record but never read back (`_replayResult`); harmless.
+
+## Step 7: SYNC-B proposal (queue item 4, H88). Not built.
+
+**What the client does today** (`crc-desktop/app/public/js/panels/efsp/efsp-state.js`; on the ESM branch the same
+names become exports): only the Board is tracked: `efspBoardSeqByFacility`/`efspBoardEpochByFacility`, filled by
+`applyEfspSnapshot` and `_adoptBoardSeq`, read by `_boardSyncOf`, `efspEpochChangeOf`, `efspHeartbeatGapOf` and
+`efspResyncPositionFor`; `efsp-ws.js` sends `efsp-resync` and unwraps `efsp-resync-reply` by `answer`. No client file
+reads `airspaceSeq`, `correlationSeq`, `marsaSeq`, `fieldStateSeq`, `carrierSeq` or `sfaSeq`. The family deltas
+(`applyEfspAirspaceDelta`, `…CorrelationDelta`, `…MarsaDelta`, `…FieldStateDelta`, the carrier and SFA handlers)
+replace records by id; only a full snapshot heals a lost one.
+
+**Server side, per store**, a declaration next to its `stores.js` entry: `sync: { seqKey, epochKey, deltaType }`,
+e.g. airspace `{airspaceSeq, airspaceEpoch, efsp-airspace-delta}`. Each store's `SyncLog` turns on `epoch: true`
+(one `randomUUID` per store per lifetime: every golden re-records, so this is a `behaviour(SYNC-B)` commit). No store
+other than the Board needs a ring: each holds a handful of records (airspaces, one field state per Facility, carriers,
+one SFA record, correlations and MARSA relations by FDR), so its resync answer is **its own snapshot slice**, which
+keeps §5.6's "two paths" (delta or snapshot) without a second ring. Correlation is the one that could grow (one
+record per FDR); it is still bounded by the FDR count, so a snapshot slice is fine at squadron scale.
+
+**On the wire:** every family ack and delta also carries its `epochKey`; the snapshot carries `storeSeqs` and
+`storeEpochs` maps (`{airspace: n, …}`). `efsp-resync` gains an optional `stores: {key: {lastSeq, epoch}}`; the reply
+(`efsp-resync-reply`, `answer` per store) carries, for each store whose epoch differs or whose seq is behind, its
+snapshot slice under the same key the full snapshot uses (`snapshotKey`, WIRE's registry). A family delta's seq
+moves by exactly one per change today (`advance()`), unlike the Board's, so a gap **is** detectable from deltas alone
+for these stores: a client holding seq n that receives n+2 asks. The condition is that every `advance()` reaches the
+client as a delta; SYNC-B must check the bumps made off the wire path (correlation's `reconcile`, driven by the
+reconciler tick, and carrier's `setShipState`, driven by the carrier ticker) and either broadcast each one or let the
+heartbeat carry the seq. The heartbeat (WIRE-B, per Facility) should then name every store's seq,
+not only the Board's, so a lost last delta is caught within two beats; sequence SYNC-B after WIRE-B.
+
+**Client changes that follow** (by module export): `efsp-state.js` gains a `storeSync` map (`seq`, `epoch` per store
+key) written by `applyEfspSnapshot` and each `applyEfsp*Delta`, a `storeGapOf(msg)` beside `efspHeartbeatGapOf`, and
+`efspResyncPositionFor` returns the `stores` map; `efsp-ws.js` sends it and routes each slice in the reply to the
+store's existing snapshot applier. The Board path is unchanged.
