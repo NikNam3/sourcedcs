@@ -57,10 +57,9 @@
           npmDepsHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
           installPhase = ''
             mkdir -p $out/share/atobrief
-            cp server.js package.json $out/share/atobrief/
-            cp -r public/ $out/share/atobrief/public/
-            cp -r data/   $out/share/atobrief/data/
-            cp -r node_modules/ $out/share/atobrief/node_modules/
+            # Whole tree, like the Dockerfile's `COPY . .`: the server requires
+            # sibling modules (usmtf-api.js, ...) an explicit list kept missing.
+            cp -r ./. $out/share/atobrief/
             mkdir -p $out/bin
             cat > $out/bin/atobrief <<EOF
             #!/usr/bin/env sh
@@ -80,9 +79,9 @@
           npmDepsHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
           installPhase = ''
             mkdir -p $out/share/sourcedcs-web
-            cp server.js package.json $out/share/sourcedcs-web/
-            cp -r public/ $out/share/sourcedcs-web/public/
-            cp -r node_modules/ $out/share/sourcedcs-web/node_modules/
+            # Whole tree, like the Dockerfile's `COPY . .` (store.js, auth.js,
+            # releases.js, routes/, ... are all required by server.js).
+            cp -r ./. $out/share/sourcedcs-web/
             mkdir -p $out/share/sourcedcs-web/data
             mkdir -p $out/bin
             cat > $out/bin/sourcedcs-web <<EOF

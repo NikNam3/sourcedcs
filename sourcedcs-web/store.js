@@ -43,8 +43,19 @@ if (!fs.existsSync(RELEASES_DIR)) fs.mkdirSync(RELEASES_DIR, { recursive: true }
 function loadJSON(file, fallback) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }
 }
+/* Atomic: write a sibling temp file then rename over the live one, so a crash
+   or SIGKILL mid-write leaves the previous intact file rather than a
+   truncated one. (rename is atomic within a filesystem; the temp file is a
+   sibling for that reason.) */
 function saveJSON(file, data) {
-  fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf8');
+  const tmp = `${file}.${process.pid}.tmp`;
+  try {
+    fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
+    fs.renameSync(tmp, file);
+  } catch (err) {
+    try { fs.unlinkSync(tmp); } catch { /* nothing to clean */ }
+    throw err;
+  }
 }
 function sanitizeStr(value, maxLen) {
   return String(value || '').trim().slice(0, maxLen);

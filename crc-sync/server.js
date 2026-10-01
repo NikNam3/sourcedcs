@@ -38,6 +38,9 @@ const PORT       = parseInt(process.env.PORT, 10) || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
 const app    = express();
+/* Behind nginx (one hop): key req.ip / rate limiters on the real client from
+   X-Forwarded-For, not on the nginx container's address. */
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 
 // ── CORS, scoped — only /api/auth/token is ever called cross-origin, from

@@ -4,9 +4,6 @@ on:
   push:
     tags:
       - 'crc-desktop-v*'
-    paths:
-      - 'crc-desktop/**'
-      - '.github/workflows/crc-desktop-release.yml'
   workflow_dispatch:
 
 jobs:
@@ -68,7 +65,9 @@ jobs:
         run: |
           set -e
           shopt -s nullglob
-          files=(*.exe *.AppImage *.yml *.blockmap)
+          # blockmaps before manifests: latest*.yml must never point at a version whose
+          # blockmap is not there yet (differential update would fall back to a full download)
+          files=(*.exe *.AppImage *.blockmap *.yml)
           for f in "${files[@]}"; do
             echo "Uploading $f"
             curl --fail -sS \
