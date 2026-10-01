@@ -127,7 +127,7 @@ function evaluateConformance(input, mem, now, cfg) {
 class ConformanceMonitor {
   /**
    * @param {object} deps { trackStore, fdrStore, correlationStore, weather: () => {pressurePa,tempK},
-   *                        transitionAltFt: () => number, indicatedAltFt, config, clock?,
+   *                        transitionAltFt: () => number, indicatedAltFt, config, clock?, wallClock?,
    *                        gridToMagnetic?: (gridDeg, lat, lon) => number|null }
    * `gridToMagnetic` turns DCS's GRID course into magnetic (server.js passes
    * theater-context.js's, docs/adr/0085). Without it every answer is
@@ -139,6 +139,7 @@ class ConformanceMonitor {
     // the clearance's own `at`, which is mission time, and an alert's `since`
     // is shown to controllers.
     this._clock = deps.clock || WALL_CLOCK;
+    this._wallClock = deps.wallClock || WALL_CLOCK; // docs/adr/0096
     this._gridToMagnetic = deps.gridToMagnetic || (() => null);
     this._mem = new Map();    // fdrId -> memory
     this._alerts = new Map(); // fdrId -> alerts[]

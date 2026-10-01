@@ -74,11 +74,13 @@ class SurveillanceHintMonitor {
    * @param {()=>object|null} deps.getMissionData
    * @param {{airborne:object, staleness:object}} deps.config  surveillance-hints-config.js
    * @param {object} [deps.clock]  the mission clock (docs/adr/0079)
+   * @param {object} [deps.wallClock]  the wall clock (docs/adr/0096): the hold and the staleness duration
    * @param {(episode:object)=>void} [deps.onStaleness]
    */
   constructor(deps) {
     this._d = deps;
     this._clock = deps.clock || WALL_CLOCK;
+    this._wallClock = deps.wallClock || WALL_CLOCK;
     this._cfg = deps.config;
     this._onStaleness = deps.onStaleness || (() => {});
     this._mem = new Map();   // stripId -> { phase: {instant, since}, episode }
