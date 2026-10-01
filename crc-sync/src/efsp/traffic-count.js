@@ -31,6 +31,7 @@ const fs = require('fs');
 const { writePath, ensureDirFor } = require('../state-paths');
 const { WALL_CLOCK } = require('../mission-clock');
 const { getInstrumentationConfig } = require('./instrumentation-config');
+const { SCRAMBLE_PRE_AIRBORNE: _SCRAMBLE_PRE } = require('./alert-scramble');
 
 const TRAFFIC_COUNT_PATH = writePath('efsp-traffic-count.jsonl', process.env.CRCSYNC_EFSP_TRAFFIC_COUNT_PATH);
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -66,7 +67,9 @@ function hourKey(ms) {
 
 /** A log entry that took a Strip INTO DROPPED. Refusals (`ok:false`) never are (T7). */
 function isDropTransition(entry) {
-  return !!(entry && entry.ok !== false && entry.after && entry.after.state === 'DROPPED'
+  // A peer entry (docs/adr/0083) is a replica's change made from another Facility's
+  // Mutation, never a flight leaving this Facility's traffic.
+  return !!(entry && entry.ok !== false && entry.source !== 'peer' && entry.after && entry.after.state === 'DROPPED'
     && (!entry.before || entry.before.state !== 'DROPPED'));
 }
 
@@ -451,6 +454,13 @@ class TrafficCount {
     if (!entry || entry.ok === false || !entry.stripId) return;
     const strip = entry.after || entry.before;
     if (strip && strip.state !== 'DROPPED') this._maybeLatchScramble(entry.stripId, strip.fdrId);
+    // A scramble called off while the aircraft was still on the ground never
+    // flew: it counts as the Strip's ordinary operation (decisions.md S-L13).
+    // Called off after departure, it was flown and the latch stays.
+    if (entry.op === 'SetBlock' && entry.blockId === '14E' && entry.value !== 'SCRAMBLE'
+        && entry.before && _SCRAMBLE_PRE.DEPARTURE.includes(entry.before.state)) {
+      this._scramble.delete(entry.stripId);
+    }
     const approved = _approvedAirspace(entry);
     if (approved) this._latchSua(entry.stripId, approved);
 
@@ -495,7 +505,9 @@ class TrafficCount {
     const base = logDerivedRecord(entry, sua || this._sua.get(entry.stripId));
     const strip = entry.after;
     const fdr = strip.fdrId && this._fdrStore ? this._fdrStore.getFdr(strip.fdrId) : null;
-    const facilityId = this._facilityOf(entry.stripId) || 'UNKNOWN';
+    // The entry names its Facility (docs/adr/0083), so a Strip no Board holds any more
+    // (archived) keeps it; older entries fall back to looking the Strip up.
+    const facilityId = entry.facilityId || this._facilityOf(entry.stripId) || 'UNKNOWN';
     const identity = (fdr && fdr.identity) || {};
     const flightSize = Number.isInteger(identity.flightSize) && identity.flightSize > 0 ? identity.flightSize : 1;
     // An FDR that is gone (archived after the drop — wave 2's L24, S-R2-13)

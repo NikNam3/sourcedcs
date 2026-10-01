@@ -135,9 +135,9 @@ class Ledger {
         let e;
         try { e = JSON.parse(line); } catch { parseErrors++; continue; }
         if (e.actorId === 'system') systemLines++;
-        if (e.airspaceId !== undefined && e.stripId === undefined) airspaceLines++;
         const cmid = e.clientMutationId;
         if (cmid === null || cmid === undefined) {
+          if (e.airspaceId !== undefined && e.stripId === undefined) airspaceLines++;
           nullCmid++;
           nullByOp[e.op] = (nullByOp[e.op] || 0) + 1;
           continue;
@@ -157,7 +157,7 @@ class Ledger {
       logLines: total, parseErrors, systemAuditLines: systemLines, nullCmidLines: nullCmid, nullCmidByOp: nullByOp,
       auditMissing: 0, auditDuplicate: 0, auditForRefusal: 0, auditOrphan: 0,
       examples: { auditMissing: [], auditDuplicate: [], auditForRefusal: [], auditOrphan: [] },
-      airspace: { storeAnswers: 0, logLinesWithoutCmid: airspaceLines },
+      airspace: { logLinesWithoutCmid: airspaceLines }, // must stay 0 now (L6's F12)
       replayAuditLines: {},
     };
     const ex = (k, v) => { if (res.examples[k].length < EXAMPLE_CAP) res.examples[k].push(v); };
@@ -168,12 +168,8 @@ class Ledger {
       if (this.r2.has(cmid)) continue;
       if (e.ok === null) continue; // never acked — already counted as lost (M1)
       const n = lines.get(cmid) || 0;
-      if (e.type === 'efsp-airspace-mutation') {
-        // efsp-ws.js never hands the airspace store the clientMutationId, so
-        // its audit lines cannot be matched per message; counted in aggregate.
-        if (e.storeReached) res.airspace.storeAnswers++;
-        continue;
-      }
+      // Airspace reconciles per message like the rest: efsp-ws.js hands the store
+      // the clientMutationId and the store audits every answer (docs/adr/0083).
       const extraFromReplay = e.type !== 'efsp-mutation' ? (replayed.get(cmid) || 0) : 0;
       let expectLines;
       if (e.type === 'efsp-mutation') expectLines = e.ok ? 1 : 0;           // M2 / M3

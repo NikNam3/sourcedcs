@@ -293,7 +293,7 @@ test('a SystemReassign in the log is counted', () => {
   hold(efsp, c.TWR.session, 'INCIRLIK', []); // TWR vacates; APP covers it and the Strip follows
   assert.equal(efsp.boardStore.getStrip(strip.stripId).ownerPositionId, 'APP');
   hold(efsp, c.TWR.session, 'INCIRLIK', ['TWR']);
-  const moved = efsp.mutationLog.readAll().filter(e => e.op === 'SystemReassign').length;
+  const moved = efsp.mutationLog.readAll().filter(e => e.op === 'SystemReassign' && e.reason !== 'position-retaken').length;
   assert.ok(efsp.mutationLog.readAll().some(e => e.op === 'SystemReassign' && e.stripId === strip.stripId));
   assert.equal(body().metrics.systemReassigned.total, moved, 'one per reassigned Strip, every one in the log');
   assert.ok(body().metrics.systemReassigned.total > before);

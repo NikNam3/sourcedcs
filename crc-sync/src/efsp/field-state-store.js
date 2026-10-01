@@ -161,6 +161,10 @@ class FieldStateStore {
     out.hotCargoPad = { ...(pads.hotCargo || {}), ...out.hotCargoPad };
     out.alertPad = { ...(pads.alert || {}), ...out.alertPad };
     out.runwayChangeInProgress = isRunwayChangeInProgress(record.runwayChange);
+    // The Facility's configured authorities, so a client mirrors the rule from the
+    // wire instead of falling back to the owners table (S-L1b, docs/adr/0083).
+    out.runwayChangeAcknowledgers = [...(inventory.runwayChangeAcknowledgers || [])];
+    out.inspectionAuthorityPositionId = inventory.inspectionAuthorityPositionId ?? null;
     return out;
   }
 
@@ -195,6 +199,8 @@ class FieldStateStore {
       // (stripId / airspaceId / fdrId / marsaId), and a field-state op is about
       // a Facility's field, not any of those.
       fieldStateFacilityId: mutation.facilityId,
+      // The one name every reader keys on (docs/adr/0083).
+      facilityId: mutation.facilityId ?? null,
       runwayId: op.runwayId ?? null,
       actingPositionId: actingPositionId ?? null,
       actorId: by || null,

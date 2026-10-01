@@ -265,13 +265,13 @@ test('the Mutation log records who did what, including the airspace ops and the 
   airspaceAct(efsp, c.APP, 'APP', 'MOA-RACE', { kind: 'ApproveActivation' });
 
   const entries = efsp.mutationLog.readAll();
-  const scheduled = entries.find(e => e.op === 'ScheduleAirspace' && e.airspaceId === 'MOA-RACE');
+  const scheduled = entries.findLast(e => e.op === 'ScheduleAirspace' && e.airspaceId === 'MOA-RACE' && e.ok);
   assert.ok(scheduled, 'airspace ops were invisible to the audit trail until now');
   assert.equal(scheduled.actingPositionId, 'CTR');
   assert.equal(scheduled.ok, true);
   assert.equal(scheduled.stripId, undefined, 'an airspace op targets no Strip');
 
-  const refused = entries.find(e => e.op === 'ApproveActivation' && e.ok === false);
+  const refused = entries.findLast(e => e.op === 'ApproveActivation' && e.ok === false);
   assert.ok(refused, 'a refusal leaves no transition on the record, so the log is the only trace');
   assert.equal(refused.actingPositionId, 'APP');
   assert.equal(refused.reason, 'PERMISSION_DENIED');

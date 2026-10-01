@@ -772,7 +772,10 @@ function createEfspInstrumentation({
     missionSessionOf: () => missionSession.currentSeq(),
   });
   efsp.mutationLog.onRecord((entry) => {
-    if (entry && entry.ok !== false && entry.op === 'SystemReassign') metrics.recordSystemReassign({ at: entry.at });
+    // A retake (`position-retaken`) hands covered Strips back; it is not a loss of
+    // a Position, so only a vacated one counts (docs/adr/0083). SystemCoordinationEnd
+    // and a CANCEL (an `action` on a coordination op) are not reassignments or attempts.
+    if (entry && entry.ok !== false && entry.op === 'SystemReassign' && entry.reason !== 'position-retaken') metrics.recordSystemReassign({ at: entry.at });
   });
 
   const defaultFacilityId = facilityConfig.DEFAULT_FACILITY_ID;
@@ -908,9 +911,9 @@ function createEfspInstrumentation({
     }
 
     // §11.3: every Mutation is recorded, refusals included. board-store logs
-    // none of its refusals (T1), and NOT_HOLDING_POSITION never reaches any
-    // store; the airspace/correlation/MARSA stores already log their own.
-    if (!ok && (msg.type === 'efsp-mutation' || ack.reason === 'NOT_HOLDING_POSITION')) {
+    // none of its refusals (T1). Every other path logs what reaches its store;
+    // a refusal made before the store says so with `unaudited` (docs/adr/0083).
+    if (!ok && (msg.type === 'efsp-mutation' || result.unaudited === true)) {
       const subject = {};
       for (const k of ['stripId', 'airspaceId', 'fdrId', 'marsaId']) if (msg[k] !== undefined) subject[k] = msg[k];
       efsp.mutationLog.record({
@@ -919,6 +922,7 @@ function createEfspInstrumentation({
         op: op || null,
         ...subject,
         facilityId: ack.facilityId || msg.facilityId || null,
+        ...(msg.op && typeof msg.op.action === 'string' ? { action: msg.op.action } : {}),
         actingPositionId: msg.actingPositionId || null,
         actorId: (session && session.controllerId) || null,
         at,

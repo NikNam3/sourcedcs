@@ -157,10 +157,11 @@ test('sortie: an alert pair scrambles past taxiing traffic — flagged, never re
 
   // Both writes are logged Strip Mutations (decisions.md S-L5): the audit and
   // L5's latch see them. The log names the op kind, not the Block or value
-  // (an L26 audit-completeness finding, docs/wip/L13.md).
+  // ... except that the entry now names both (docs/adr/0083).
   const sets = efsp.mutationLog.readAll()
     .filter(e => e.stripId === viper.stripId && e.ok !== false && e.op === 'SetBlock');
   assert.equal(sets.length, 2, 'SetBlock 14E ALERT and SetBlock 14E SCRAMBLE');
+  assert.deepEqual(sets.map(e => [e.blockId, e.value]), [['14E', 'ALERT'], ['14E', 'SCRAMBLE']]);
   assert.ok(sets.every(e => e.actingPositionId === 'CD'));
 
   // Traffic count: dropped after departure, it counts as an alert scramble.
@@ -202,6 +203,24 @@ test('sortie: two scramblers at once — both listed, each ground Strip flagged 
   await clearBoard();
 });
 
+test('sortie: a scramble called off after departure was flown, and the drop counts it (S-L13)', async () => {
+  const s0 = await clearedDeparture('VIPER52');
+  setAlert('CD', s0, 'SCRAMBLE');
+  let v = fresh(s0);
+  for (let i = 0; i < 8 && v.state !== 'DEPARTED'; i++) {
+    const owner = v.ownerPositionId;
+    v = await advance(efsp, c[owner], owner, v);
+  }
+  assert.equal(v.state, 'DEPARTED');
+  setAlert('OPS', v, 'ALERT');
+  v = await advance(efsp, c.TWR, 'TWR', fresh(v));
+  mustAct(efsp, c.APP, 'APP', fresh(v), { kind: 'DropStrip' });
+  const rec = counter.records().filter(r => r.stripId === s0.stripId);
+  assert.equal(rec.length, 1);
+  assert.equal(rec[0].alertScramble, true);
+  await clearBoard();
+});
+
 test('OPS owns 14E on a departure at every state, whoever holds the Strip (H56, S-L13)', async () => {
   let s = mustAct(efsp, c.OPS, 'OPS', null, {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE',
@@ -225,16 +244,16 @@ test('OPS owns 14E on a departure at every state, whoever holds the Strip (H56, 
   await clearBoard();
 });
 
-test('sortie: L5 latches a scramble reset before the drop — because 14E is a logged Strip Mutation (S-L5)', async () => {
-  // The case noteFdr exists for: SCRAMBLE set, then set back before the Strip
-  // is dropped. The latch catches it only because the write was a logged
-  // Mutation of the Strip; no call into traffic-count.js is wired.
+test('sortie: a scramble cancelled on the ground is the Strip\'s ordinary operation (S-L13, ADR 0083)', async () => {
+  // SCRAMBLE set, then set back while the Strip is still pre-airborne: it
+  // never flew, so the drop is not an alert scramble. The log entry names the
+  // Block and value, which is how the latch is cleared.
   const s = await clearedDeparture('VIPER51');
   setAlert('CD', s, 'SCRAMBLE');
   setAlert('CD', s, 'NONE');
   mustAct(efsp, c.CD, 'CD', fresh(s), { kind: 'DropStrip' });
   const rec = counter.records().filter(r => r.stripId === s.stripId);
   assert.equal(rec.length, 1);
-  assert.equal(rec[0].alertScramble, true);
+  assert.equal(rec[0].alertScramble, false);
   await clearBoard();
 });

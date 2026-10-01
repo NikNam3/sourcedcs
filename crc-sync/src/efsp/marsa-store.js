@@ -205,6 +205,17 @@ class MarsaStore {
     }
   }
 
+  _auditFdrIds(mutation, result, before) {
+    const op = mutation.op || {};
+    const ids = new Set();
+    for (const rel of [result.relation, before]) {
+      for (const id of (rel && rel.participants) || []) ids.add(id);
+    }
+    for (const id of Array.isArray(op.participants) ? op.participants : []) ids.add(String(id));
+    if (op.fdrId != null) ids.add(String(op.fdrId));
+    return [...ids].filter(Boolean);
+  }
+
   _recordAudit(mutation, actingPositionId, by, before, result) {
     if (!this._mutationLog) return;
     this._mutationLog.record({
@@ -216,6 +227,10 @@ class MarsaStore {
       // airspaceId rather than letting stripId stand in for something it is
       // not: readers key on whichever id is present.
       marsaId: (result.relation && result.relation.marsaId) || mutation.marsaId || null,
+      // Theater-wide (docs/adr/0013); the flights it concerns are named instead
+      // (docs/adr/0083): the relation's participants, or the op's own.
+      facilityId: null,
+      fdrIds: this._auditFdrIds(mutation, result, before),
       actingPositionId,
       actorId: by || null,
       at: this._clock.now(),
