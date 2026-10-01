@@ -558,6 +558,38 @@ against real DCS (`docs/wip/LG.md` lists the four things to watch).
 `coordination.js:65` allows proposals only from ARRIVAL/INBOUND and DEPARTURE/HANDED_OFF. H63 moves
 OVERFLIGHT to the guide's own four-state lifecycle (L28), which is where that gets settled.
 
+## 3J. Waves 2 and 3 — what each lane left, and the traps
+
+Same convention as §3I: full notes are in `docs/wip/<lane>.md`. Folded here: L1b, L12, L13, L14,
+L15, L16, L22, L24, L27, F2, F3, F4, L23, L26, U6 and the client half of L18. Not yet folded: UI-A,
+L17, L19 and the E2E notes.
+
+**Field state, client (L1b, `0068`).** Three files: `field-state-rules.js` (the pure mirror of the
+server rules: `fieldStateActionsFor` offers a button only for what Tower or OPS would accept,
+`gearMismatchFor`, `fieldStateAlertsFor`, `fieldStateSignatureFor`), `field-state-panel.js` (the dock
+panel, closed by default, left cluster) and the state getters `getEfspFieldState(facilityId)` /
+`getAllEfspFieldStates()` in `efsp-state.js`, which are the contract for any other chip. The H52 rename
+is done (`SUSPENDED_WORKS`, `WORKS`, `BeginRunwayWorks`, `CompleteRunwayWorks`, a request carries
+`action: 'WORKS'`) and `WsHub.broadcastEfspFieldStateDelta` is public (S-L1d).
+- **A chip that depends on anything other than the Strip, its FDR or the stores already in
+  `bay-view.js`'s `_stripRenderSignature` must add itself to that signature**, or the Strip never
+  rebuilds for it (the NLA board delta lands before the field-state delta). L1b's was one guarded line
+  (S-L1b2) calling `fieldStateSignatureFor`.
+- `field-state-drift.test`-style coverage: `tests/efsp-field-state-client.test.js` replays every
+  button the client offers against a real `FieldStateStore`. Keep it when adding an op.
+- The client derives the runway-change acknowledgers and the inspection authority from the permission
+  table's owners (OPS/APP, OPS) because the record did not carry them. **L26 now puts
+  `runwayChangeAcknowledgers` and `inspectionAuthorityPositionId` on the record, and the client does
+  not read them yet** (open, §4). They agree for Incirlik, so nothing is wrong today.
+- Traps: dockview detaches the inactive tab of a group, and a panel that looks its DOM up with
+  `document.getElementById` while detached fails. This is a standing bug in `efsp-panel.js`'s
+  `_renderArrivalsLine` (a new arrivals line is inserted on every render while the Strip panel is
+  behind another tab) and `srs-radio.js`'s `_renderSlots` (throws on every poll once RADIO is closed).
+  New panels must cache their elements (the airspace-panel rule).
+- Walks not done: a 3F divert onto DOWN gear (no gear exists; the HOOK chip is proved by fixtures and a
+  rendered-Strip test), a crc-sync restart mid-suspension (a page reload was walked), the wind-derived
+  active end (no DCS in the harness), two physical screens.
+
 ## 4. What's left, and the known bugs
 
 **Not built, in the guide's order.** WP6: the field-state panel and the hook-mismatch check (L1b),

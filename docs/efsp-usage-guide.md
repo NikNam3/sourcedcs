@@ -21,7 +21,7 @@ Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green):
   - **The mission line exists from tasking** — `TAC_C2` frags a mission line against a filed flight before it moves, and TOFI later lands on the one that is already there. Accepting tactical control now requires stating the separation regime. See §8C1.
   - **Every Block is reachable, and amendments are visible** — the `▼` button on a Strip opens the Blocks that have no chip, and a superseded value now shows struck through in the Block itself (§3.7). Heading and initial altitude are chips on a DEPARTURE Strip; the radar vector is one on ARRIVAL/OVERFLIGHT. See §4B.
   - **MTR fields** — the military training route a flight is on, where it enters and leaves, and the altitude it wants after exit. See §4C.
-  - **The runway (field state), server half** — Tower owns the runway, everyone else asks; closing it or taking it out for works holds the traffic that would use it; the active runway comes from the wind at mission start. **There is no field-state panel yet**, so nobody can close or suspend a runway from crc-desktop today. See §8G.
+  - **The runway (field state)** — Tower owns the runway, everyone else asks; closing it or taking it out for works holds the traffic that would use it; the active runway comes from the wind at mission start. The FIELD STATE panel and the runway chips on the Strip are in. See §8G.
 - **Forwarding-obligation alerts clear themselves** once the obligation is met or no longer due. Nothing to acknowledge. See §8.
 - **Contact colours come from IFF interrogation**, not from the game's idea of a side, and nothing on the ground is hidden any more. See §8F.
 - **All declutter is off** until the EFSP work is finished: formation labels and navpoint names both show. See §8F.
@@ -949,10 +949,54 @@ You can turn either back on in Settings; it stays as you set it.
 
 ## 8G. The runway — field state (Incirlik)
 
-> **The server half is built; the panel is not** (wave 2, lane L1b). Until the field-state panel
-> lands, nobody can close, suspend or change the runway from crc-desktop. What you see today: the
-> active runway is picked from the wind at mission start, and departures are queued into the Rack of
-> their runway. Everything else below is how it will work, and it is already enforced.
+> **Server and panel are both built** (L1, L1b). The FIELD STATE panel is closed by default: open it
+> from **PANELS → FIELD STATE**. It has no controls of its own beyond the buttons below, and every
+> rule in this section is enforced by the server, not by the panel.
+
+### The FIELD STATE panel
+
+Each airfield with a runway inventory (today only Incirlik) shows:
+
+- **The active end:** `▶ 05 ACTIVE`, and how it was set: from the mission wind at load, or by a runway
+  change. `ACTIVE —` means nothing has set it yet (no mission wind yet).
+- **Each runway** (`05/23`) with a badge: `OPEN`, `CLOSED`, `WORKS` (suspended for runway works) or
+  `INSPECT` (works done, waiting for `OPS`'s inspection). Under the badge: who suspended or closed it,
+  at which Position and when (Zulu), who asked; the last inspection; any request waiting on Tower; and
+  the arresting gear. At Incirlik the gear reads "No arresting gear configured (SOURCE practice)",
+  because DCS simulates no wires.
+- **The runway change:** `05 → 23 · PROPOSED · proposed by TWR (name) 1440Z`, then one chip per
+  acknowledger: `OPS ✓ 1441Z` (`✓ self` when the same person acknowledged it), `APP …` (still
+  waiting), or `APP skipped` (nobody held APP when it was proposed). A rejection or withdrawal says who
+  and why. After completion it reads `PENDING INSPECTION: 05/23`. A rejected change stays on the panel
+  until the next proposal replaces it.
+- **The pads:** the hot cargo pad and the alert pad, by name, and whether they are occupied.
+
+**Buttons appear only for what your Positions may do** (the panel works out what Tower or `OPS` would
+accept):
+
+| You hold | Buttons |
+|---|---|
+| `TWR` | `CLOSE` (asks for a reason), `OPEN`, `WORKS`, `ACCEPT` / `REJECT` a request, `CHG RWY` (pick the end), `WITHDRAW`, `BEGIN`, `COMPLETE` |
+| `OPS`, `CD`, `GND`, `APP` | `REQ CLS`, `REQ OPEN`, `REQ WRKS` (not offered to a controller who also holds `TWR`) |
+| `OPS` | `WRK DONE` (works complete), `INSP OK` (the inspection, the only way back to `OPEN`) |
+| `OPS`, `APP` | `ACK` or `REJECT` a proposed change |
+| `TWR`, `OPS` and `APP` all | `SELF CHG` changes the runway in one input |
+
+Close and every rejection prompt for a reason (`window.prompt`); optional notes are not asked for. When
+a request is waiting on you as `TWR` the tab reads `FIELD STATE (1)`. A refused action shows in the
+Strip panel's banner, starting with the runway it was about.
+
+### On the Strip
+
+- `RWY 05 SUSP` / `RWY 05 INSP` / `RWY 05 CLSD`: the runway this Strip will use is not open. Departures
+  show it from CLEARED onward, arrivals from INBOUND to FINAL. When the server's own inhibit line
+  already says it, the chip adds no second reason line.
+- On FINAL the aircraft can still be marked LANDED.
+- `RWY 05 INACT` (amber): the Strip sits in the Rack of the runway end that is not the active one. Move
+  it to the active end's Rack, or leave it if the pilot needs 05.
+- `HOOK`: a hook-equipped arrival (Block 3F) is heading for a runway whose *configured* arresting gear
+  is not rigged. It is computed in the client and never stored, and **it never shows at Incirlik today**
+  because no gear is configured (H57).
 
 Incirlik's runway `05/23` is one pavement with two directions. Its board shows the runway's status
 (OPEN, CLOSED, SUSPENDED for works, or SUSPENDED awaiting inspection), which end is active, any
@@ -962,8 +1006,8 @@ runway change in progress, and any request waiting on Tower.
 `GND` and `APP` **ask** Tower: request close, request open, or request works, with an optional
 note. Tower accepts, which carries it out and records who asked, or rejects.
 
-**Runway works and the inspection.** (The screen still calls this a "barrier change"; it is being
-renamed to runway works.)
+**Runway works and the inspection.** (Formerly "barrier change". It is generic runway works plus an
+inspection, H52; the inhibit reads `works in progress`.)
 
 1. `TWR` suspends the runway, usually at `OPS`'s request. Both directions are suspended together.
 2. When the work is done, `OPS` marks it complete. The runway stays suspended, now "awaiting
@@ -978,7 +1022,7 @@ renamed to runway works.)
   button shows the reason and refuses, and so does dragging it into the runway queue. Every arrival
   handed to Tower for it is held short of FINAL.
 - The reason names the runway and the cause: `runway 05/23 closed`,
-  `runway 05/23 suspended — awaiting inspection`.
+  `runway 05/23 suspended — works in progress`, `runway 05/23 suspended — awaiting inspection`.
 - An aircraft already on FINAL can always be marked LANDED. Touchdown is not a clearance, and an
   emergency onto a suspended runway gets nothing special: the Strip waits, you work it by voice.
 - Moving a queued Strip to the other direction's Rack does not release it, because both Racks are
