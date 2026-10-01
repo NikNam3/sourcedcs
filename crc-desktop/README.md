@@ -15,7 +15,7 @@ npm start                   # runs via `electron .`
 ## Testing
 
 ```bash
-npm test   # node --test tests/*.test.js
+npm test   # node --test 'tests/*.test.{js,mjs}'
 ```
 
 `lxsrs-setup.js` and the `build` config in `package.json` are covered — see their test files' own comments for exactly which real bug each test reproduces:
@@ -26,6 +26,28 @@ Both are cheap, fast, offline checks — no Electron download, no real Python/pi
 
 - `npm run dev-check` — fast, in-place: runs `npm test` then `npm start`, so you can click through whatever you're working on in the real Electron window. Doesn't touch your existing `app/node_modules` or Python venv (those are real dev state), so it won't catch a fresh-checkout regression by itself — that's what `release-check` is for.
 - `npm run release-check` — slower, run once before tagging a release: checks out a clean `HEAD` into an isolated `git worktree`, does the same two `npm ci`s CI does, runs the tests, packages a Linux AppImage, and actually launches it, failing if it crashes or logs a fatal error. This is the step that would have caught the v1.1.2 crash (`lxsrs-setup.js` missing from `build.files`) before it shipped. It only verifies the Linux/AppImage leg — CI remains the source of truth for the Windows/NSIS leg.
+
+## Client modules
+
+The renderer UI under `app/public/js/` is native ES modules, with no bundler and no build step (H87, ESM-1). `index.html` loads
+the CDN scripts (`maplibregl`, `dockview`) and the local server's generated `/js/config.js` (four `var` globals) as
+classic scripts first. It then loads one `<script type="module" src="./js/main.js">`. `main.js` imports every module once.
+It then makes the start-up calls (atc-scope's beat, `app.js`'s `startApp()`, then `srs-radio.js`) after the whole
+graph has been evaluated. A module does nothing at import beyond declaring its state, so the unit tests import
+the files directly. `app/public/js/package.json` (`{"type":"module"}`) makes Node treat them as ES modules. It ships
+in the asar (`app/**/*`; `tests/packaging-config.test.js` checks it), while `app/package.json` stays CommonJS for
+`app/server.js`.
+
+- A module imports what it uses from another module. Code outside a module replaces a function or a binding only
+  through that module's explicit setter (`setSendToSync`, `setEfspSender`, `_set…`/`_set…ForTest`).
+- Client unit tests are `tests/*.test.mjs`. They import `tests/helpers/client-env.mjs` first (the browser-ish globals),
+  and `tests/helpers/fresh-graph.mjs` when a test needs a new instance of the module graph.
+- `tests/module-graph.test.mjs` checks the graph: every file reachable from `main.js`, every module evaluates as an
+  entry, no read of another module's export without an import, and the exported names frozen in
+  `tests/fixtures/module-graph-exports.json` (re-record with `GOLDEN_RECORD=1` when the structure changes on purpose).
+- `js/classic-globals-bridge.js` is transitional and serves only the Playwright specs, which still call client
+  functions by global name inside `page.evaluate`. It puts a live getter on `window` for every export. Remove it when
+  the specs move to imports or a test hook.
 
 ## Packaging
 
