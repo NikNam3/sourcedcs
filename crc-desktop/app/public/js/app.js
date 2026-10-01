@@ -754,6 +754,20 @@ async function connect() {
         break;
       // WP6 §9.7 (crc-sync docs/adr/0061, crc-desktop 0068). Its own delta with its own seq —
       // field state is not Strips and rides no Board's sequence (0061's rule-5 deviation).
+      // crc-sync's docs/adr/0074 — the carrier's hull record (Case, Marshal
+      // stack with its derived fields, ship banner), sent whole on every change.
+      // A Case change is ONE of these and every carrier Strip re-renders from it.
+      case 'efsp-carrier-delta':
+        if (typeof applyEfspCarrierDelta === 'function') applyEfspCarrierDelta(msg);
+        if (typeof renderCarrierBanner === 'function') renderCarrierBanner();
+        if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
+        break;
+      case 'efsp-carrier-ack':
+        if (!msg.ok && typeof _showMutationError === 'function') _showMutationError(msg.reason || 'Rejected', msg.detail, { subject: 'carrier' });
+        if (msg.carrier && typeof applyEfspCarrierDelta === 'function') applyEfspCarrierDelta({ carriers: { updated: [msg.carrier] } });
+        if (typeof renderCarrierBanner === 'function') renderCarrierBanner();
+        if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
+        break;
       case 'efsp-field-state-delta':
         if (typeof applyEfspFieldStateDelta === 'function') applyEfspFieldStateDelta(msg);
         if (typeof renderFieldStatePanel === 'function') renderFieldStatePanel();

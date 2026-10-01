@@ -207,7 +207,8 @@ function buildRadars({ missionData, tracks, radarSpecs }) {
     if (t.category !== 4) continue;
     const spec = specs.carrierRadar[t.type] || SHIP_RADAR_DEFAULT;
     radars.push({
-      id: `carrier:${t.id}`, type: 'carrier', caps: capsFor('carrier', specs.carrierRadar[t.type]),
+      id: `carrier:${t.id}`, type: 'carrier', carrierRadar: 'search', unitName: t.name || null, shipType: t.type || null,
+      caps: capsFor('carrier', specs.carrierRadar[t.type]),
       presentation: presentationFor('carrier', specs),
       label: label(t) || t.type, sublabel: t.type,
       lat: t.lat, lon: t.lon, elevM: t.alt + SHIP_RADAR_HEIGHT_M,
@@ -220,7 +221,8 @@ function buildRadars({ missionData, tracks, radarSpecs }) {
     if (isCarrier(t)) {
       radars.push({
         // `cvapp:`, not `app:` — see this module's header.
-        id: `cvapp:${t.id}`, type: 'carrier', caps: capsFor('carrierApproach'),
+        id: `cvapp:${t.id}`, type: 'carrier', carrierRadar: 'approach', unitName: t.name || null, shipType: t.type || null,
+        caps: capsFor('carrierApproach'),
         presentation: presentationFor('carrierApproach', specs),
         label: `${label(t) || t.type} APP RDR`, sublabel: t.type,
         lat: t.lat, lon: t.lon, elevM: t.alt + CVN_APPROACH_RADAR.heightM,

@@ -50,7 +50,7 @@ const { WALL_CLOCK } = require('../mission-clock');
 function statusKey(status) {
   if (!status) return 'none';
   if (status.inhibited) return `no:${status.reason}:${status.inhibited}`;
-  return `go:${status.toState}:${status.transferTo || ''}`;
+  return `go:${status.toState}:${status.transferTo || ''}:${status.carrierTransfer || ''}`;
 }
 
 class NlaStatusMonitor {

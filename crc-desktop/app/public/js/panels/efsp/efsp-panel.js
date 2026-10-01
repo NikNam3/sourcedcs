@@ -194,6 +194,7 @@ function _renderPositionTabs() {
   }
 
   _renderBayTabs();
+  if (typeof renderCarrierBanner === 'function') renderCarrierBanner(); // crc-sync docs/adr/0074
 }
 
 function _renderBayTabs() {

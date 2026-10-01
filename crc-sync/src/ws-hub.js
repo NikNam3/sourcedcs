@@ -239,6 +239,9 @@ class WsHub {
    */
   setOnEfspChange(fn) { this._onEfspChange = fn; }
 
+  /** The carrier banner changed with no controller behind it (docs/adr/0074): the tick's delta, the same message a carrier op returns. */
+  broadcastEfspCarrierDelta(delta) { this._broadcastEfsp(delta); }
+
   broadcastEfspCorrelationDelta(payload) {
     this._broadcastEfsp({
       version: VERSION, type: 'efsp-correlation-delta',
@@ -613,10 +616,12 @@ class WsHub {
         // waiting for the next MARSA op to carry it would be docs/adr/0022's
         // bug again — a correct server-side change no client ever hears about.
         if (result.marsaBroadcast) this._broadcastEfsp(result.marsaBroadcast);
+        // docs/adr/0074 — the carrier's Case, stack or banner: one delta carrying the whole hull record.
+        if (result.carrierBroadcast) this._broadcastEfsp(result.carrierBroadcast);
         // After the broadcasts, so a client sees the Strip change before the
         // alert change. Guarded: a monitor bug must never cost the sender's
         // round trip.
-        if (this._onEfspChange && (result.broadcast || result.peerBroadcast || result.marsaBroadcast)) {
+        if (this._onEfspChange && (result.broadcast || result.peerBroadcast || result.marsaBroadcast || result.carrierBroadcast)) {
           try { this._onEfspChange(); } catch (err) { console.error('[crc-sync] onEfspChange failed:', err); }
         }
         // Declaring a different held set is what changes a controller's

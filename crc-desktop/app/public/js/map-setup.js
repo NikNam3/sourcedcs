@@ -298,6 +298,19 @@ function initMap(container) {
       paint: { 'line-color': ['get', 'color'], 'line-opacity': 0.8, 'line-width': 1.5 },
     });
 
+    // ── The carrier's final-bearing line (crc-sync docs/adr/0074; carrier-panel.js) ──
+    map.addSource('carrier-final', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    map.addLayer({
+      id: 'carrier-final-line', type: 'line', source: 'carrier-final',
+      filter: ['==', ['get', 'kind'], 'carrier-final'],
+      paint: { 'line-color': ['get', 'color'], 'line-opacity': 0.8, 'line-width': 1.5, 'line-dasharray': [8, 4] },
+    });
+    map.addLayer({
+      id: 'carrier-final-ticks', type: 'line', source: 'carrier-final',
+      filter: ['==', ['get', 'kind'], 'carrier-final-tick'],
+      paint: { 'line-color': ['get', 'color'], 'line-opacity': 0.8, 'line-width': 1.5 },
+    });
+
     // ── Measure line ─────────────────────────────────────────────────────
     map.addSource('measure', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
     map.addLayer({

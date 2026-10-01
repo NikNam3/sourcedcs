@@ -173,6 +173,7 @@ function _subject(msg) {
     case 'efsp-correlation-mutation': return { fdrId: msg.fdrId };
     case 'efsp-marsa-mutation':       return { marsaId: msg.marsaId, fdrIds: _marsaFdrIds(msg.op) };
     case 'efsp-field-state-mutation': return { facilityId: msg.facilityId, runwayId: msg.op && msg.op.runwayId };
+    case 'efsp-carrier-mutation':     return { hullId: msg.hullId };
     default:                          return {};
   }
 }
@@ -188,6 +189,7 @@ function handleMessage(ctx, session, msg, persist) {
     case 'efsp-field-state-mutation': return _handleFieldStateMutation(ctx, session, msg, persist);
     case 'efsp-ato-preview':   return _handleAtoPreview(ctx, session, msg);
     case 'efsp-ato-mutation':  return _handleAtoMutation(ctx, session, msg, persist);
+    case 'efsp-carrier-mutation': return _handleCarrierMutation(ctx, session, msg, persist);
     default:                   return null; // not an EFSP message
   }
 }
@@ -308,6 +310,15 @@ function _handleMutation(ctx, session, msg, persist) {
   ];
   if (marsaChanged.length > 0 && ctx.marsaStore) {
     out.marsaBroadcast = _marsaDelta(ctx.marsaStore, marsaChanged);
+  }
+  // docs/adr/0074 — a carrier hand-over or a Strip retiring moves the Marshal
+  // stack (Commence marks a flight pushed, a hand-over to PriFly leaves a
+  // vacancy). The record is not a Strip, so it rides its own delta on the same
+  // round trip, MARSA's shape.
+  if (result.carrierChanged && ctx.carrierStore) {
+    out.carrierBroadcast = carrierDelta(ctx.carrierStore);
+    // A push re-numbers nothing but changes which lane the next flight feeds.
+    if (ctx.nlaStatusMonitor) ctx.nlaStatusMonitor.tick();
   }
   return out;
 }
@@ -642,6 +653,53 @@ function _handleMarsaMutation(ctx, session, msg, persist) {
   return out;
 }
 
+/**
+ * Carrier ops (docs/adr/0074; guide §9.12): the recovery Case, the Marshal
+ * stack and the altimeter. A SEVENTH dispatch path, for the reason the MARSA one
+ * exists: the record targets a SHIP, not a Strip, so there is no stripId, no
+ * Strip baseRev and no Strip-owner check. Authority is permission.js's
+ * one-parameter predicates inside the store (PriFly owns the Case, the Marshal
+ * the stack), plus the session binding every dispatch path carries
+ * (docs/adr/0029): the session must be PRIMARY at the acting Position, at the
+ * CARRIER Facility, since a hull has exactly one Facility.
+ */
+function _handleCarrierMutation(ctx, session, msg, persist) {
+  const store = ctx.carrierStore;
+  const nack = (reason, detail) => ({ ack: { version: VERSION, type: 'efsp-carrier-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason, detail } });
+  if (!store) return nack('VALIDATION_ERROR', 'no carrier store');
+  const positionStore = ctx.positionStoreFor('CARRIER');
+  if (!positionStore || positionStore.primaryOf(msg.actingPositionId) !== session.controllerId) {
+    return nack('NOT_HOLDING_POSITION', `you are not Primary at ${msg.actingPositionId} — select it before acting on the carrier`);
+  }
+  const cached = _cachedOutcome(ctx, 'carrier', msg);
+  if (cached) {
+    return { ack: { version: VERSION, type: 'efsp-carrier-ack', clientMutationId: msg.clientMutationId, ..._subject(msg),
+      ok: cached.ok, carrier: store.view(msg.hullId || undefined), reason: cached.reason, detail: cached.detail, carrierSeq: store.currentSeq } };
+  }
+  const result = store.apply({ clientMutationId: msg.clientMutationId, hullId: msg.hullId, baseRev: msg.baseRev, op: msg.op }, msg.actingPositionId, session.controllerId);
+  _rememberOutcome(ctx, 'carrier', msg, result, msg.hullId || null);
+  if (result.ok) persist();
+  const ack = {
+    version: VERSION, type: 'efsp-carrier-ack', clientMutationId: msg.clientMutationId, ..._subject(msg),
+    ok: result.ok, carrier: store.view(msg.hullId || undefined), reason: result.reason, detail: result.detail,
+    changed: result.ok ? result.changed : undefined, carrierSeq: store.currentSeq,
+  };
+  if (!result.ok) return { ack };
+  // The Case and the stack decide every carrier Strip's NLA (Commence or To
+  // pattern, and which lane): re-state the ones whose status moved, as
+  // the sweep does for a clock-driven change (nla-status-monitor.js).
+  if (ctx.nlaStatusMonitor) ctx.nlaStatusMonitor.tick();
+  // One delta carrying the whole hull record: a Case change reaches every
+  // client as ONE message and each re-renders every carrier Strip from it
+  // (WP7A bullet 3, "at once").
+  return { ack, carrierBroadcast: carrierDelta(store) };
+}
+
+/** The whole hull view(s), sent whole: small, and the derived stack comes from the server so the client never reimplements it. */
+function carrierDelta(carrierStore) {
+  return { version: VERSION, type: 'efsp-carrier-delta', carrierSeq: carrierStore.currentSeq, carriers: { updated: carrierStore.getAll() } };
+}
+
 /** Its own delta type with its own seq, like efsp-airspace-delta and efsp-correlation-delta — a relation is not a Strip and rides no Board's sequence. */
 function _marsaDelta(marsaStore, relations) {
   return {
@@ -884,6 +942,9 @@ function _fullSnapshotMessage(ctx) {
     // which is the point of rule 5's own sequence (a reconnect after a
     // suspension must not show an OPEN runway).
     fieldStates: ctx.fieldStateStore ? ctx.fieldStateStore.getAll() : [],
+    // The carrier's hull record(s) with the derived stack and the banner
+    // (docs/adr/0074), sent whole; no efsp-resync branch, as for MARSA.
+    carriers: ctx.carrierStore ? ctx.carrierStore.getAll() : [],
   };
 }
 
@@ -1094,4 +1155,4 @@ function _handleAtoMutation(ctx, session, msg, persist) {
   };
 }
 
-module.exports = { handleMessage, snapshotMessage: _snapshotMessage, filterForSession, supplementFor, readScopeKey, readScopeOf, RESYNC_RING_WINDOW };
+module.exports = { handleMessage, carrierDelta, snapshotMessage: _snapshotMessage, filterForSession, supplementFor, readScopeKey, readScopeOf, RESYNC_RING_WINDOW };

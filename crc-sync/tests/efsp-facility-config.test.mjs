@@ -196,7 +196,7 @@ test('DEFAULT_FACILITY_ID is INCIRLIK — every optional trailing facilityId par
 });
 
 test('getFacilityIds returns every Facility, INCIRLIK first', () => {
-  assert.deepEqual(getFacilityIds(), ['INCIRLIK', 'CENTER', 'TACTICAL', 'RANGES']);
+  assert.deepEqual(getFacilityIds(), ['INCIRLIK', 'CENTER', 'TACTICAL', 'CARRIER', 'RANGES']);
 });
 
 // The RANGES Facility (guide §4.1's fifth) is unlike the other four: its

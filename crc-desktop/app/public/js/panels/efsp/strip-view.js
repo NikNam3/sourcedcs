@@ -20,7 +20,7 @@
 // gates (_canProposeTofiEntry and friends) and state at call time, and those
 // gates stay where efsp-coordination-client.test.js's drift checks find them.
 
-const ROLE_ABBR = { DEPARTURE: 'DEP', ARRIVAL: 'ARR', OVERFLIGHT: 'OVF', MISSION: 'MSN' };
+const ROLE_ABBR = { DEPARTURE: 'DEP', ARRIVAL: 'ARR', OVERFLIGHT: 'OVF', MISSION: 'MSN', MARSHAL: 'MAR', FINAL: 'FNL', PATTERN: 'PAT' };
 
 function _stripEl(tag, className, text) {
   const node = document.createElement(tag);
@@ -288,7 +288,7 @@ function _trackExchange(strip) {
 function _buildLifeBlock(strip) {
   const life = _stripEl('div', 'efsp-strip-life');
   const nlaStatus = strip.nla;
-  const nlaLabel = nlaStatus === null ? null : nlaLabelFor(strip.state, strip.role);
+  const nlaLabel = nlaStatus === null ? null : (typeof nlaButtonLabel === 'function' ? nlaButtonLabel(strip) : nlaLabelFor(strip.state, strip.role)); // a carrier hand-over is labelled by its own name (docs/adr/0074)
   let inhibited = null;
   if (nlaLabel) {
     // Drop is the terminal step, not the one filled "go" button.
@@ -307,8 +307,11 @@ function _buildLifeBlock(strip) {
       });
     }
     btn.addEventListener('pointerdown', (e) => e.stopPropagation());
+    if (typeof carrierDecorateNlaButton === 'function') carrierDecorateNlaButton(btn, strip);
     life.appendChild(btn);
   }
+  // The carrier's second hand-over, beside the NLA (crc-sync docs/adr/0074): "See you" in Case II.
+  if (typeof carrierExtraNlaButtons === 'function') for (const extra of carrierExtraNlaButtons(strip)) life.appendChild(extra);
   return { life, inhibited };
 }
 

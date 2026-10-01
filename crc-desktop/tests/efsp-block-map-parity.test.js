@@ -83,7 +83,7 @@ function assertBlockMapParity(role, serverMap, clientMap) {
     // says which key of one sub-object each writes. A mismatch here sends the
     // controller's edit to the wrong field of the right object, which is
     // exactly as silent as a wrong fdr path and not caught above.
-    if (s.target.kind === 'tofi' || s.target.kind === 'military') {
+    if (s.target.kind === 'tofi' || s.target.kind === 'military' || s.target.kind === 'carrier' || s.target.kind === 'carrier-derived') {
       assert.equal(s.target.kind, c.target.kind, `[${role}] Block ${id}: dedicated target kind differs (server=${s.target.kind}, client=${c.target.kind})`);
       assert.equal(s.target.field, c.target.field, `[${role}] Block ${id}: ${s.target.kind} field differs (server=${s.target.field}, client=${c.target.field})`);
     }
@@ -149,5 +149,38 @@ test('14E is the alert status on DEPARTURE on both sides, and on no other Role',
   for (const role of ['ARRIVAL', 'OVERFLIGHT', 'MISSION']) {
     assert.equal(server.BLOCK_MAPS[role]['14E'], undefined, `server ${role}`);
     assert.equal(client.BLOCK_MAPS[role]['14E'], undefined, `client ${role}`);
+  }
+});
+
+// crc-sync's docs/adr/0074 (ADR 0064 B3): the carrier's three Roles. The generic sweep above
+// holds required, writability and (now) the dedicated kind and `field` of every Block; these
+// say what the design promises, on BOTH sides.
+test('the carrier Block Maps agree on both sides (MARSHAL, FINAL, PATTERN)', () => {
+  for (const role of ['MARSHAL', 'FINAL', 'PATTERN']) {
+    assertBlockMapParity(role, server.BLOCK_MAPS[role], client.BLOCK_MAPS[role]);
+  }
+});
+
+test('derived carrier Blocks are display-only on both sides, and the writable ones route to the flight', () => {
+  const DERIVED = ['C3', 'C5', 'C6', 'C7', 'C8', 'C9'];
+  for (const [side, maps] of [['server', server.BLOCK_MAPS], ['client', client.BLOCK_MAPS]]) {
+    for (const id of DERIVED) {
+      assert.equal(maps.MARSHAL[id].target.kind, 'carrier-derived', `${side} MARSHAL/${id}`);
+      assert.equal(maps.MARSHAL[id].required, false, `${side} MARSHAL/${id}`);
+    }
+    for (const id of ['C4', 'C10', 'C12', 'C13', 'C14', 'C15']) assert.equal(maps.MARSHAL[id].target.kind, 'carrier', `${side} MARSHAL/${id}`);
+    // FINAL: nothing a controller could type, structurally (WP7A bullet 6)
+    for (const [id, def] of Object.entries(maps.FINAL)) assert.ok(!['fdr', 'annotation', 'carrier', 'frequency', 'clearance'].includes(def.target.kind), `${side} FINAL/${id}`);
+  }
+  assert.equal(client.isBlockEditable('C7', 'MARSHAL'), false);
+  assert.equal(client.isBlockEditable('C10', 'MARSHAL'), true);
+  assert.equal(client.isBlockEditable('C1', 'FINAL'), false);
+});
+
+test('the carrier Blocks carry unique labels of at most eight characters within a Role', () => {
+  for (const role of ['MARSHAL', 'FINAL', 'PATTERN']) {
+    const labels = Object.values(client.BLOCK_MAPS[role]).map(d => d.label);
+    assert.equal(new Set(labels).size, labels.length, role);
+    for (const l of labels) assert.ok(l && l.length <= 8, `${role}/${l}`);
   }
 });

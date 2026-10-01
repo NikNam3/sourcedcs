@@ -901,6 +901,7 @@ function _doUpdateMap() {
   map.getSource('bullseye').setData(buildBullseye());
   map.getSource('approach-vec').setData(buildApproachVector());
   map.getSource('ext-centerline').setData(buildExtendedCenterline());
+  if (map.getSource('carrier-final') && typeof buildCarrierFinalLine === 'function') map.getSource('carrier-final').setData(buildCarrierFinalLine()); // crc-sync docs/adr/0074
   map.getSource('datalink-locks').setData(buildDatalinkLines());
   if (!settings.radarDebug) {
     map.getSource('radar-debug').setData({ type: 'FeatureCollection', features: [] });

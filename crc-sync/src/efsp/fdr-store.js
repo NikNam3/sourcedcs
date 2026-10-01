@@ -27,6 +27,7 @@ const { isValidFrequency, MIN_FREQUENCY_MHZ, MAX_FREQUENCY_MHZ } = require('./ai
 // path — or a test constructing an FdrStore directly — silently skips it.
 const stereoRoutes = require('./stereo-routes');
 const { resolveZuluHhmm, resolveZuluHhmmAfter } = require('./zulu-time');
+const { setCarrierFlightField } = require('./carrier/flight-record');
 const { WALL_CLOCK } = require('../mission-clock');
 const { DEFAULT_TRANSITION_ALT_FT } = require('../theaters');
 
@@ -1052,6 +1053,40 @@ class FdrStore {
     // One provenance key for the whole sub-object, as `tofi` already does —
     // these are filled in incrementally from separate Block edits and every
     // one of them is controller-entered.
+    fdr.provenance['military'] = 'CONTROLLER_ENTERED';
+    fdr.rev += 1;
+    fdr.updatedAt = this._clock.now();
+    fdr.updatedBy = by || null;
+    return { ok: true, fdr };
+  }
+
+  /**
+   * docs/adr/0074 (ADR 0064) — one carrier field of this flight
+   * (`fdr.military.carrier`: EEAT, approach type, approach button, bingo field
+   * and fuel, low state). On the FDR because the FDR outlives every Strip: the
+   * launch Strip is dropped at launch and the recovery Strip is a new one on the
+   * same flight, so an EEAT held on a Strip would die exactly when it is needed
+   * (§9.12 rule 7). Validated by carrier/flight-record.js, which refuses a
+   * frequency where a button belongs (rule 6). `null` clears.
+   */
+  setCarrier(fdrId, field, value, { by } = {}) {
+    const fdr = this._fdrs.get(fdrId);
+    if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
+    const military = ensureMilitary(fdr);
+    // EEAT is typed as Zulu HHMM like every other time on a Strip, resolved
+    // against the mission clock (ADR 0079); the model holds epoch ms.
+    if (field === 'eeatUtc' && typeof value === 'string') {
+      const at = resolveZuluHhmm(value, this._clock.now());
+      if (at == null) return { ok: false, reason: 'VALIDATION_ERROR', detail: `EEAT must be a Zulu time, HHMM (not ${JSON.stringify(value)})` };
+      value = at;
+    }
+    // A cell types text: a fuel state is pounds, so "1800" is read as the number it is.
+    // The approach button is NOT coerced here: the model reads "251.000" as a frequency and refuses it (§9.12 rule 6).
+    if ((field === 'bingoFuelLb' || field === 'lowStateLb') && typeof value === 'string' && /^\d+(\.\d+)?$/.test(value.trim())) value = Number(value);
+    if (typeof value === 'string' && value.trim() === '') value = null; // an emptied cell clears
+    const r = setCarrierFlightField(military.carrier, field, value);
+    if (!r.ok) return r;
+    fdr.military = { ...military, carrier: r.flight };
     fdr.provenance['military'] = 'CONTROLLER_ENTERED';
     fdr.rev += 1;
     fdr.updatedAt = this._clock.now();

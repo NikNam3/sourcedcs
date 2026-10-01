@@ -633,6 +633,25 @@ const correlationReconciler = new CorrelationReconciler({
 });
 setInterval(() => correlationReconciler.tick(), CORRELATION_TICK_MS);
 
+// ── The carrier's ship banner (docs/adr/0074, ADR 0064 B6) — matched to the
+// live ship track once a second, republished only when it changed enough to
+// matter. Own coalition, grid convergence and magnetic variation are injected:
+// the model owns none of them (decisions H15, H42).
+const { CarrierTick } = require('./src/efsp/carrier-tick');
+const { carrierDelta } = require('./src/efsp/efsp-ws');
+const { USER_COALITION } = require('./src/surveillance/iff');
+const carrierTick = new CarrierTick({
+  carrierStore: efsp.carrierStore,
+  tracks: () => trackStore.getAll(),
+  ownCoalition: () => USER_COALITION,
+  clock: missionClock,
+  convergenceAt: (lat, lon) => theaterContext.convergenceAt(lat, lon),
+  variationAt: (lat, lon) => theaterContext.variationAt(lat, lon),
+  weatherPa: () => { const w = grpcClient.getWeather(); return w && Number.isFinite(w.pressurePa) ? w.pressurePa : null; },
+  onChange: () => wsHub.broadcastEfspCarrierDelta(carrierDelta(efsp.carrierStore)),
+});
+setInterval(() => carrierTick.tick(), 1000);
+
 // ── Conformance and short-term conflict alerting (docs/adr/0058) ─────────
 // Server-side, because only this process sees every track: a client only
 // receives the ones inside its own coverage. Once a second, the same rhythm as
