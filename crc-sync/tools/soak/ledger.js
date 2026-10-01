@@ -135,9 +135,9 @@ class Ledger {
         let e;
         try { e = JSON.parse(line); } catch { parseErrors++; continue; }
         if (e.actorId === 'system') systemLines++;
-        if (e.airspaceId !== undefined && e.stripId === undefined) airspaceLines++;
         const cmid = e.clientMutationId;
         if (cmid === null || cmid === undefined) {
+          if (e.airspaceId !== undefined && e.stripId === undefined) airspaceLines++;
           nullCmid++;
           nullByOp[e.op] = (nullByOp[e.op] || 0) + 1;
           continue;
