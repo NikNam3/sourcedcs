@@ -127,7 +127,7 @@ function hideLoginGate() {
 }
 
 // ── Connection settings widget ──────────────────────────────────────────
-// Always reachable via Settings → Tools → Connection Settings (ui.js's
+// Always reachable via Settings → Tools → Connection Settings (panels/tools-panel.js's
 // initToolsTab), plus from the login gate above when there's nothing to
 // connect to yet.
 
@@ -206,7 +206,7 @@ function showConnWidget() {
 // here, hand-positioned above the SRS radio bar's fixed bottom edge (with a
 // ResizeObserver to track its height). Both panels are normal dockview
 // panels now — the trigger lives in Settings → Tools instead (wired in
-// ui.js's initToolsTab, calling showConnWidget directly).
+// panels/tools-panel.js's initToolsTab, calling showConnWidget directly).
 
 // Apply overrides immediately (not just lazily inside getSyncFeedUrl) so
 // the CASDOOR_ENDPOINT/CASDOOR_CLIENT_ID an early LOG IN click uses, and

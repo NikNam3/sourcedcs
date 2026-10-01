@@ -10,7 +10,7 @@
 // Info reopens by clicking a track on the map (ensureTrackPanel), the
 // Panels control via its own topbar button (wireRadarsPanelButton/
 // toggleOrFocusPanel), and Settings/Airport/Squawk C/S/Radio via that
-// control's own Panels section (wired in ui.js's initRadarPanel()) — which
+// control's own Panels section (wired in panels/radar-panel.js's initRadarPanel()) — which
 // is why their old dedicated topbar/floating buttons (#btn-settings,
 // #btn-calls, #btn-aprt) were removed rather than rewired, and the
 // connection-settings ("SYNC") button moved into the Settings panel's
@@ -22,7 +22,7 @@ const DockviewCore = window['dockview-core'];
 
 // Single source of truth for every panel's user-facing name. Every spot
 // that displays a panel's name — its dockview tab title, its row label in
-// the radars-panel's Panels section (ui.js's PANEL_CONTROL_ROWS), the
+// the radars-panel's Panels section (panels/radar-panel.js's panelControlRows()), the
 // topbar RADARS/PANELS button's own text — reads from here, so renaming a
 // panel means changing exactly one string instead of hunting through both
 // files and the static HTML and hoping none of the copies drift apart (this
@@ -76,7 +76,7 @@ function initDock() {
   });
 
   loadDockLayout();
-  // The radars-panel's own init() (ui.js's initRadarPanel, invoked by
+  // The radars-panel's own init() (panels/radar-panel.js's initRadarPanel, invoked by
   // mountExistingPanel while fromJSON()/buildDefaultDockLayout() above is
   // still running) renders the Panels checkboxes against whatever sibling
   // panels dockview has constructed *so far* — but fromJSON() walks the
@@ -85,7 +85,7 @@ function initDock() {
   // checkboxes get built unchecked even when the saved layout has them
   // open. Nothing re-renders afterward (onDidLayoutChange isn't wired up
   // until below, and dockview has no onShow-style revisit hook despite
-  // ui.js's initRadarPanel returning one — see its comment). Re-rendering
+  // radar-panel.js's initRadarPanel returning one — see its comment). Re-rendering
   // once more here, now that the whole restore has settled, fixes that.
   if (typeof renderPanelControls === 'function') renderPanelControls();
   wireRadarsPanelButton();
@@ -113,7 +113,7 @@ function initDock() {
     // bursts of change events into a single check — sidesteps this
     // entirely: by the time it runs, dockview's internal state has settled.
     scheduleEnsureRequiredPanels();
-    // The radars-panel's Panels section (ui.js) mirrors dock state in its
+    // The radars-panel's Panels section (panels/radar-panel.js) mirrors dock state in its
     // own checkboxes/status text, but only re-renders on its own tab
     // becoming active or a click inside it — closing a panel by its own tab
     // (the dockview "x", not that checkbox) previously left the checkbox
@@ -207,7 +207,7 @@ const PANEL_SIDE = {
 };
 
 // Track Info's reopen path: clicking a track on the map (showTrackPanel, in
-// ui.js) calls this to get-or-create the panel before activating it, rather
+// panels/track-panel.js) calls this to get-or-create the panel before activating it, rather
 // than relying on a permanent required-panel restore.
 function ensureTrackPanel() {
   const existing = dock.api.getPanel('track');
@@ -270,7 +270,7 @@ function toggleOrFocusPanel(id, addOptionsFn) {
 }
 
 // Optional panels toggled from the radars-panel's "Panels" section (see
-// initRadarPanel() in ui.js) — off by default so the map keeps maximum
+// initRadarPanel() in panels/radar-panel.js) — off by default so the map keeps maximum
 // space until the user actually asks for one. Airport is additionally
 // driven by radar coverage (see notifyCoverageChanged) — Settings/Squawk C/S
 // have no radar tie and are purely manual. Future dockable panels (flight

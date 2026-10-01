@@ -119,7 +119,7 @@ function losVisibleRangeM(radar, bearing, maxRangeM) {
 }
 
 // Terrain profile + a reference sight line along one bearing, for the LOS
-// profile debug chart (ui.js). The reference line runs from the radar to a
+// profile debug chart (panels/los-panel.js). The reference line runs from the radar to a
 // hypothetical grazing target at the terrain height found at maxRangeM — it
 // answers "could this radar graze the ground all the way to its nominal
 // range," the same question losVisibleRangeM answers for the map beam, just
