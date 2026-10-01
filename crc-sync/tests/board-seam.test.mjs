@@ -78,7 +78,9 @@ export function checkModuleState(text) {
 
 /** 4. Rules read only as this._rules.X or rules.X. */
 export function checkRulesAccess(text) {
-  const src = stripComments(text);
+  // A collaborator keeps the rules object in its constructor (S-BOARD1-1): exactly `this._rules = rules;` is exempt,
+  // blanked before the checks below; any other spelling still fires.
+  const src = stripComments(text).replace(/this\._rules\s*=\s*rules\s*;/g, (m) => m.replace(/[^\n]/g, ' '));
   const out = [];
   for (const m of src.matchAll(/this\._rules\b(?!\s*\.\s*[A-Za-z_$])/g)) out.push(`line ${lineOf(src, m.index)}: this._rules used as a whole`);
   for (const m of src.matchAll(/(?<![\w$.])rules\s*\[/g)) out.push(`line ${lineOf(src, m.index)}: rules indexed`);
@@ -156,4 +158,7 @@ test('board seam self-test, 4: rules access', () => {
   assert.equal(checkRulesAccess('const ok = this._rules.isOccupied(p) && rules.canCreateStripRole(a, b);').length, 0);
   assert.equal(checkRulesAccess('function make({ rules }) { return rules.isOccupied(p); }').length, 0, 'a parameter named rules is a declaration');
   assert.equal(checkRulesAccess('// const r = this._rules;').length, 0, 'comments are ignored');
+  assert.equal(checkRulesAccess('constructor({ rules }) { this._rules = rules; }').length, 0, 'a collaborator keeps the rules object (S-BOARD1-1)');
+  assert.ok(checkRulesAccess('this._rules = rules.subset;').length >= 1, 'the exemption is that one statement only');
+  assert.ok(checkRulesAccess('const r = this._rules; r.X').length >= 1, 'aliased after the exemption');
 });
