@@ -88,6 +88,7 @@ const MAP_KEYS = new Set(['get', 'set', 'has', 'delete', 'clear', 'keys', 'value
 function shadowValue(name, ns) {
   if (name !== 'history') return () => ns[name];
   const real = window.history;
+  if (!real || typeof real !== 'object') return () => ns[name]; // no browser History (the Node test stub)
   const both = new Proxy(real, {
     get(target, key) {
       const from = MAP_KEYS.has(key) ? ns.history : target;
