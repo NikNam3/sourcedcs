@@ -3,7 +3,7 @@
 export default {
   id: "M7",
   what: "causedBy dropped from a peer-write audit entry",
-  file: "src/efsp/board-store.js",
+  file: "src/efsp/board/audit.js",
   find: "clientMutationId: null, causedBy: causedBy || null, op,",
   replace: "clientMutationId: null, op,",
   detect: ["freeze-scenarios","freeze-hub"],
