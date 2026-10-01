@@ -47,7 +47,7 @@ const REPLAY_PERSIST_WINDOW_MS = 10 * 60 * 1000;
 // the caller doesn't pass an explicit op.initialState. Deliberately just
 // each role's first lifecycle state, not the full STATES_BY_ROLE table
 // nla.js owns — board-store.js only ever needs the ONE starting value.
-const DEFAULT_INITIAL_STATE_BY_ROLE = { DEPARTURE: 'PROPOSED', ARRIVAL: 'INBOUND', OVERFLIGHT: 'TRANSITING', MISSION: 'TASKED' };
+const DEFAULT_INITIAL_STATE_BY_ROLE = { DEPARTURE: 'PROPOSED', ARRIVAL: 'INBOUND', OVERFLIGHT: 'TRANSITING', MISSION: 'TASKED', MARSHAL: 'IN_STACK', FINAL: 'ON_FINAL', PATTERN: 'IN_PATTERN' };
 
 /**
  * The compact, frozen record the idempotency cache keeps for one applied

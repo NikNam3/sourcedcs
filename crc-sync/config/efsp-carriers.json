@@ -1,0 +1,11 @@
+{
+  "_comment": "The carrier hulls the EFSP's CARRIER Facility knows (docs/adr/0064, 0074). Read once at startup, never written by code (P5); a copy in state/efsp-carriers.json overrides it. match: the DCS unit name first (unitName, exact), then type, and never a track id (ids re-mint on every restart). coalition 'own' means the server's own coalition (CRCSYNC_COALITION). angledDeckDeg: degrees the landing area is angled to port; null takes the per-type table in carrier/ship-state.js (9 degrees for CVN_71 to CVN_75, [SOURCE-DEFINED]). The squadron's carrier is CVN-72, DCS unit UNION (decisions H13, H26). One hull in v1 (H29).",
+  "hulls": [
+    {
+      "hullId": "CVN-72",
+      "label": "CVN-72",
+      "match": { "unitName": "UNION", "type": "CVN_72", "coalition": "own" },
+      "angledDeckDeg": null
+    }
+  ]
+}

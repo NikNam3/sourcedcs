@@ -52,6 +52,8 @@ const FACILITY_CONFIG_FILES = {
   // WP4A second slice — the TACTICAL Facility (docs/adr/0013's pattern
   // repeated for a third Facility).
   TACTICAL: ['efsp-facility-tactical.json', process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL],
+  // docs/adr/0074 — the CARRIER Facility (docs/adr/0064 B1).
+  CARRIER: ['efsp-facility-carrier.json', process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CARRIER],
 };
 
 /** Kept as a name->path map for any existing reader; resolved fresh per call. */
@@ -373,6 +375,58 @@ const DEFAULT_TACTICAL_CONFIG = {
 // Absent from `coveringChain` deliberately: the chain exists to re-route
 // Strips away from a vacated Position (defect D19), and a Position that owns
 // no Strips has none to strand.
+// The CARRIER Facility (docs/adr/0064 B1, docs/adr/0074; guide §4.1, §9.12).
+// [SOURCE-DEFINED] where the guide is silent.
+//  - All four Positions are MILITARY_ATC ("Military ATC afloat"): a new class
+//    would silently lose STCA (station-coverage.js's ATC_CLASSES) and has to be
+//    added to every class set (docs/adr/0041's inclusion-list trap). PriFly's
+//    "supervisory, not radar control" is a permission matter, not a class.
+//  - The covering chain ends at the Marshal and deliberately omits PriFly, so
+//    Strips never strand on a Position that cannot advance them.
+//  - No coordination Bays: "the carrier does not talk to the centre" (§9.13).
+//    Each Position has a `-coordination` Bay anyway only where it is needed as
+//    the "first Bay implying no state" fallback (_bayForNewOwner).
+//  - Radar selectors name the radar and the hull (station-coverage.js).
+const _CVN = { kind: 'carrier', coalition: 'own', hull: 'CVN-72' };
+const DEFAULT_CARRIER_CONFIG = {
+  facility: 'CARRIER',
+  positions: ['CV_MARSHAL', 'CV_PRIFLY', 'CV_APP1', 'CV_APP2'],
+  positionClasses: { CV_MARSHAL: 'MILITARY_ATC', CV_PRIFLY: 'MILITARY_ATC', CV_APP1: 'MILITARY_ATC', CV_APP2: 'MILITARY_ATC' },
+  positionLetters: { CV_MARSHAL: 'V', CV_PRIFLY: 'P', CV_APP1: '1', CV_APP2: '2' },
+  coveringChain: { CV_APP2: 'CV_APP1', CV_APP1: 'CV_MARSHAL' },
+  positionRadars: {
+    CV_MARSHAL: [{ ..._CVN }],
+    CV_PRIFLY:  [{ ..._CVN, radar: 'search' }],
+    CV_APP1:    [{ ..._CVN }],
+    CV_APP2:    [{ ..._CVN }],
+  },
+  hiddenBlocks: {},
+  bays: {
+    CV_MARSHAL: [
+      { bayId: 'cv-marshal-stack',        rackIds: ['main'], impliesState: 'IN_STACK' }, // ordered by stackIndex on the client
+      { bayId: 'cv-marshal-departures',   rackIds: ['main'], impliesState: 'LAUNCH' },
+      { bayId: 'cv-marshal-coordination', rackIds: ['main'] },
+    ],
+    CV_PRIFLY: [
+      { bayId: 'cv-prifly-pattern', rackIds: ['initial', 'break', 'downwind', 'groove'], impliesState: 'IN_PATTERN' },
+      { bayId: 'cv-prifly-deck',    rackIds: ['main'] }, // the deck-state board: inert until designed (ADR 0064 B8)
+    ],
+    CV_APP1: [
+      { bayId: 'cv-app1-lane',   rackIds: ['main'], impliesState: 'COMMENCED' },
+      { bayId: 'cv-app1-final',  rackIds: ['main'], impliesState: 'ON_FINAL' }, // one Strip at a time (§7.10)
+      { bayId: 'cv-app1-bolter', rackIds: ['main'], impliesState: 'BOLTER_WAVEOFF' },
+    ],
+    CV_APP2: [
+      { bayId: 'cv-app2-lane',   rackIds: ['main'], impliesState: 'COMMENCED' },
+      { bayId: 'cv-app2-final',  rackIds: ['main'], impliesState: 'ON_FINAL' },
+      { bayId: 'cv-app2-bolter', rackIds: ['main'], impliesState: 'BOLTER_WAVEOFF' },
+    ],
+  },
+  dataOnly: false,
+  standingReleases: [],
+  aitAuthorized: false,
+};
+
 const DEFAULT_RANGES_CONFIG = {
   facility: 'RANGES',
   positions: airspaceConfig.getRangePositionIds(),
@@ -399,6 +453,7 @@ const DEFAULT_CONFIGS = {
   INCIRLIK: DEFAULT_CONFIG,
   CENTER: DEFAULT_CENTER_CONFIG,
   TACTICAL: DEFAULT_TACTICAL_CONFIG,
+  CARRIER: DEFAULT_CARRIER_CONFIG,
   RANGES: DEFAULT_RANGES_CONFIG,
 };
 
@@ -491,6 +546,12 @@ function validateRadarSelector(selector) {
   }
   // An airport selector against an airborne kind cannot mean anything, and a
   // config that says it is confused about what it is asking for.
+  if (selector.radar !== undefined && (selector.kind !== 'carrier' || (selector.radar !== 'search' && selector.radar !== 'approach'))) {
+    return 'radar ("search" or "approach") applies to a carrier selector only';
+  }
+  if (selector.hull !== undefined && (selector.kind !== 'carrier' || typeof selector.hull !== 'string')) {
+    return 'hull (a hull id string) applies to a carrier selector only';
+  }
   if (selector.airport && (selector.kind === 'awacs' || selector.kind === 'fighter' || selector.kind === 'datalink')) {
     return selector.kind === 'datalink'
       ? 'the datalink is a network — an airport selector cannot match it'
@@ -721,5 +782,5 @@ module.exports = {
   getFacilityConfig, getPositionSet, getPositionClass, getPositionLetter, allPositionLetters, getCoveringChain, getBaysFor, getAllBays, isBlockVisible,
   getPositionRadars, radarBearingPositionIds, validateRadarSelector, RADAR_SELECTOR_KINDS,
   bayImpliesState, bayForImpliedState, bayExists, coordinationBayFor, setFacilityConfig, validateConfig,
-  DEFAULT_CONFIG, DEFAULT_CENTER_CONFIG, DEFAULT_TACTICAL_CONFIG, DEFAULT_CONFIGS,
+  DEFAULT_CONFIG, DEFAULT_CENTER_CONFIG, DEFAULT_TACTICAL_CONFIG, DEFAULT_CARRIER_CONFIG, DEFAULT_CONFIGS,
 };

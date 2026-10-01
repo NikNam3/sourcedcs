@@ -46,6 +46,13 @@ const COUNTABLE_PRE_DROP_STATES = Object.freeze({
   ARRIVAL: Object.freeze(['LANDED', 'TAXI_IN']),          // it got down
   OVERFLIGHT: Object.freeze(['TRANSITING']),              // its only live state
   MISSION: Object.freeze([]),                             // never: shares its FDR with the ATC Strip TOFI linked it to
+  // The carrier Roles (docs/adr/0074), [SOURCE-DEFINED]: a launch is a movement
+  // (the aircraft left the deck), a trap is one, and a recovered aircraft in the
+  // pattern is one. A flight that passes MARSHAL -> FINAL -> PATTERN is dropped
+  // once, from the last Strip, so it counts once.
+  MARSHAL: Object.freeze(['LAUNCH']),
+  FINAL: Object.freeze(['BALL']),
+  PATTERN: Object.freeze(['RECOVERED']),
 });
 
 const EXCLUDED_WHEN_NOT_COUNTABLE = Object.freeze({
@@ -53,6 +60,9 @@ const EXCLUDED_WHEN_NOT_COUNTABLE = Object.freeze({
   ARRIVAL: 'NEVER_LANDED',
   OVERFLIGHT: 'NEVER_TRANSITED',
   MISSION: 'MISSION_LINE',
+  MARSHAL: 'NEVER_DEPARTED',
+  FINAL: 'NEVER_LANDED',
+  PATTERN: 'NEVER_LANDED',
 });
 
 const POLICY = '[SOURCE-DEFINED] one record per DROPPED ATC Strip per Facility; see ADR 0065';

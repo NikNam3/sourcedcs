@@ -81,8 +81,32 @@ const OVERFLIGHT_STATE_SET = new Set(OVERFLIGHT_STATES);
 const MISSION_STATES = ['TASKED', 'AIRBORNE', 'ON_STATION', 'OFF_STATION', 'RTB', 'DROPPED'];
 const MISSION_STATE_SET = new Set(MISSION_STATES);
 
-const STATES_BY_ROLE = { DEPARTURE: DEPARTURE_STATES, ARRIVAL: ARRIVAL_STATES, OVERFLIGHT: OVERFLIGHT_STATES, MISSION: MISSION_STATES };
-const STATE_SETS_BY_ROLE = { DEPARTURE: DEPARTURE_STATE_SET, ARRIVAL: ARRIVAL_STATE_SET, OVERFLIGHT: OVERFLIGHT_STATE_SET, MISSION: MISSION_STATE_SET };
+// The carrier's three Roles (docs/adr/0064 B2, docs/adr/0074), guide §4.1 and
+// §9.12. [SOURCE-DEFINED] state names, chosen so they collide with no other
+// Role's state but DROPPED: in particular NOT `FINAL`, which is an ARRIVAL
+// *state* above (the Role named FINAL below lives on strip.role, not
+// strip.state). INELIGIBLE_STATES and Bay `impliesState` are role-blind string
+// sets, so a clash would be silent.
+//
+// MARSHAL is the carrier's holding/launch Role (a launch is a MARSHAL Strip in
+// LAUNCH; the recovery is a NEW MARSHAL Strip on the same fdrId, so EEAT,
+// which lives on the FDR, survives to it). FINAL is the talk-down Role, shared
+// with PAR (L18); PATTERN is the visual-pattern Role, shared with RSU (L18).
+const MARSHAL_STATES = ['LAUNCH', 'IN_STACK', 'COMMENCED', 'DROPPED'];
+const MARSHAL_STATE_SET = new Set(MARSHAL_STATES);
+const FINAL_STATES = ['ON_FINAL', 'BALL', 'BOLTER_WAVEOFF', 'DROPPED'];
+const FINAL_STATE_SET = new Set(FINAL_STATES);
+const PATTERN_STATES = ['IN_PATTERN', 'RECOVERED', 'DROPPED'];
+const PATTERN_STATE_SET = new Set(PATTERN_STATES);
+
+const STATES_BY_ROLE = {
+  DEPARTURE: DEPARTURE_STATES, ARRIVAL: ARRIVAL_STATES, OVERFLIGHT: OVERFLIGHT_STATES, MISSION: MISSION_STATES,
+  MARSHAL: MARSHAL_STATES, FINAL: FINAL_STATES, PATTERN: PATTERN_STATES,
+};
+const STATE_SETS_BY_ROLE = {
+  DEPARTURE: DEPARTURE_STATE_SET, ARRIVAL: ARRIVAL_STATE_SET, OVERFLIGHT: OVERFLIGHT_STATE_SET, MISSION: MISSION_STATE_SET,
+  MARSHAL: MARSHAL_STATE_SET, FINAL: FINAL_STATE_SET, PATTERN: PATTERN_STATE_SET,
+};
 
 // Backward-compatible alias — every Phase 1 caller/test imports STATES
 // meaning "the departure lifecycle", which is still exactly what it means.
@@ -179,6 +203,14 @@ function _normalizeCtx(ctx) {
     // The rack a drag is dropping the Strip into (decisions.md Q27): judged
     // against the runway it is about to use, not the one it came from.
     targetRackId: ctx && ctx.targetRackId,
+    // The carrier (docs/adr/0074). `carrierCase()` is the ship's recovery Case
+    // ('I'|'II'|'III'; the NLA out of IN_STACK depends on it), and
+    // `carrierLaneFor(strip)` the manned CV_APP lane the Marshal stack would feed
+    // this flight to, or null. Both default to "nothing known", which inhibits
+    // the Commence rather than guessing a lane.
+    carrierCase: (ctx && ctx.carrierCase) || (() => null),
+    carrierLaneFor: (ctx && ctx.carrierLaneFor) || (() => null),
+    carrierInStack: (ctx && ctx.carrierInStack) || (() => true),
   };
 }
 
@@ -407,7 +439,86 @@ function computeMissionNla(strip) {
   }
 }
 
-const COMPUTE_BY_ROLE = { DEPARTURE: computeDepartureNla, ARRIVAL: computeArrivalNla, OVERFLIGHT: computeOverflightNla, MISSION: computeMissionNla };
+/**
+ * MARSHAL's NLA table (docs/adr/0064 B2, docs/adr/0074). A NLA result may carry
+ * `carrierTransfer`, the key of a CARRIER_TRANSFERS row (carrier/transfers.js):
+ * board-store.js then applies the whole transfer (ownership, Role, stack effect,
+ * the trigger type recorded) instead of a bare state write, so the button and
+ * the dedicated CarrierTransfer op are ONE implementation. `roleChange` names
+ * the Role the Strip takes in place. Every trigger is a controller gesture
+ * (guide §10.3, D5): nothing here reads a radar contact.
+ */
+function computeMarshalNla(strip, fdr, now, ctx) {
+  switch (strip.state) {
+    case 'LAUNCH':
+      // "Launched": the launch Strip ends. The recovery will be a new MARSHAL
+      // Strip on the same flight, and EEAT is on the flight (ADR 0064).
+      return { toState: 'DROPPED' };
+
+    case 'IN_STACK': {
+      const caseValue = ctx.carrierCase();
+      if (!ctx.carrierInStack(strip)) return { inhibited: 'not in the Marshal stack — give it a stack position first' };
+      if (caseValue === 'I') {
+        // Case I has no Marshal hand-over in the guide; this row is
+        // [SOURCE-DEFINED] (L4 briefing Q8) and reuses the controller trigger.
+        if (!ctx.isOccupied('CV_PRIFLY') && !ctx.coveringPositionFor('CV_PRIFLY')) {
+          return { inhibited: 'no receiving Position present' };
+        }
+        return { toState: 'IN_PATTERN', transferTo: 'CV_PRIFLY', roleChange: 'PATTERN', carrierTransfer: 'MARSHAL_TO_PATTERN_CASE_I' };
+      }
+      const lane = ctx.carrierLaneFor(strip);
+      if (!lane) return { inhibited: 'no receiving Position present' };
+      // Case II's "See you" (MARSHAL_TO_PRIFLY) is a SECOND, distinct button,
+      // not this one (§3.5 rule 1: one Next Logical Action per Strip).
+      return { toState: 'COMMENCED', transferTo: lane, carrierTransfer: 'MARSHAL_TO_APPROACH' };
+    }
+
+    case 'COMMENCED':
+      // "Radar contact": the lane controller has the aircraft on the scope.
+      // The Role changes in place (as ConvertToArrival does, ADR 0023) and the
+      // Strip stays with the lane.
+      return { toState: 'ON_FINAL', roleChange: 'FINAL', carrierTransfer: 'APPROACH_TO_FINAL' };
+
+    case 'DROPPED':
+    default:
+      return null;
+  }
+}
+
+/**
+ * FINAL's NLA table. Shared with PAR (L18), which either adds a terminal state
+ * or reuses BALL under a neutral label. `alsoLegal` lists the states a drag may
+ * put the Strip in besides the NLA's (a bolter or waveoff is a drag to the
+ * Bolter Bay, ADR 0064 B2): board-store.js's Bay-implied check reads it, so the
+ * drag stays inside the state table.
+ */
+function computeFinalNla(strip) {
+  switch (strip.state) {
+    case 'ON_FINAL':       return { toState: 'BALL', carrierTransfer: 'FINAL_TO_LSO', alsoLegal: ['BOLTER_WAVEOFF'] };
+    case 'BALL':           return { toState: 'DROPPED', alsoLegal: ['BOLTER_WAVEOFF'] }; // "Trapped"
+    case 'BOLTER_WAVEOFF': return { toState: 'ON_FINAL' };
+    case 'DROPPED':
+    default:               return null;
+  }
+}
+
+/** PATTERN's NLA table: pattern legs are Racks, not states (ADR 0064 B2). Shared with RSU (L18). */
+function computePatternNla(strip) {
+  switch (strip.state) {
+    case 'IN_PATTERN': return { toState: 'RECOVERED' };
+    case 'RECOVERED':  return { toState: 'DROPPED' };
+    case 'DROPPED':
+    default:           return null;
+  }
+}
+
+const COMPUTE_BY_ROLE = {
+  DEPARTURE: computeDepartureNla, ARRIVAL: computeArrivalNla, OVERFLIGHT: computeOverflightNla, MISSION: computeMissionNla,
+  // Registered in the same commit as the Roles: computeNla falls back to the
+  // DEPARTURE table for an unknown Role, which would show a MARSHAL Strip
+  // "Send to Clearance" (ADR 0064's trap for L17).
+  MARSHAL: computeMarshalNla, FINAL: computeFinalNla, PATTERN: computePatternNla,
+};
 
 /**
  * @param {object} strip
@@ -425,6 +536,7 @@ function computeNla(strip, fdr, now, ctx = {}) {
 
 module.exports = {
   STATES, DEPARTURE_STATES, ARRIVAL_STATES, OVERFLIGHT_STATES, MISSION_STATES, STATES_BY_ROLE,
+  MARSHAL_STATES, FINAL_STATES, PATTERN_STATES,
   isValidState, isFlightPlanValid, isVoidExpired, computeNla, REQUIRED_FOR_CLEARANCE,
   missingForClearance, flightPlanInhibitReason, CLEARANCE_BLOCK_LABELS,
 };
