@@ -4,6 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import crypto from 'crypto';
+import { slot } from './helpers/wire-slots.mjs';
 
 // docs/adr/0081 (L27), L6's F5: a Mutation survives a crash exactly once.
 //
@@ -84,7 +85,7 @@ test('a CreateStrip whose ack died with the process is not created twice on retr
   const retry = efsp2.handleMessage(c2.OPS.session, JSON.parse(JSON.stringify(msg)));
   assert.equal(retry.ack.ok, true, 'the retry is answered, as a success');
   assert.equal(retry.ack.strip.stripId, first.ack.strip.stripId, 'with the Strip it created the first time');
-  assert.equal(retry.broadcast, undefined, 'a replay broadcasts nothing');
+  assert.equal(slot(retry, 'primary'), undefined, 'a replay broadcasts nothing');
   const named = efsp2.boardStore.getAll().filter(s => efsp2.fdrStore.getFdr(s.fdrId).identity.callsign === 'CRASHA1');
   assert.equal(named.length, 1, 'one Strip, not two');
   assert.equal(linesFor(efsp2, msg.clientMutationId).length, 1, 'and one audit line');

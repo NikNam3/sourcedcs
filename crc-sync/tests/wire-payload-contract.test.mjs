@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { slot } from './helpers/wire-slots.mjs';
 
 // Payload-field contract (docs/wip/PARITY.md, D-9): the fields crc-desktop's
 // efsp-state.js reads off the efsp-snapshot, efsp-board-delta and
@@ -64,7 +65,7 @@ test('every field applyEfspDelta reads is on a real efsp-board-delta (broadcast 
     op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FDR },
   });
   assert.equal(result.ack.ok, true, JSON.stringify(result.ack));
-  const delta = result.broadcast;
+  const delta = slot(result, 'primary');
   assert.equal(delta.type, 'efsp-board-delta');
   const missing = read.filter(f => !(f in delta));
   assert.deepEqual(missing, [], `the client reads delta field(s) the server does not send: ${missing}`);

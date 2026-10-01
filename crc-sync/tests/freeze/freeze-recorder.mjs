@@ -14,6 +14,7 @@ const require = createRequire(import.meta.url);
 const Module = require('node:module');
 
 import './freeze-determinism.mjs';
+import { legacyShape } from '../helpers/wire-slots.mjs';
 
 const clone = (v) => (v === undefined ? null : JSON.parse(JSON.stringify(v)));
 const instances = [];
@@ -33,7 +34,7 @@ function wrap(efsp) {
     const prev = current; current = step;
     try {
       const out = realHandle(session, msg);
-      step.out = clone(out);
+      step.out = clone(legacyShape(out));
       return out;
     } catch (e) {
       step.threw = String(e && e.message);

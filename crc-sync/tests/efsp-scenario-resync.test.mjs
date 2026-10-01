@@ -4,6 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import vm from 'vm';
+import { slot } from './helpers/wire-slots.mjs';
 
 // Scenario: a client that misses a Board delta (or meets a restarted server)
 // asks for a resync and converges (S-12, docs/adr/0081). The server is a real
@@ -85,7 +86,7 @@ test('a client that misses a delta sees the gap at the heartbeat, resyncs, and c
   // two changes; the second one's broadcast never reaches client B
   const first = efsp.handleMessage(c.OPS.session, { version: 1, type: 'efsp-mutation', clientMutationId: 'm1', facilityId: 'INCIRLIK', actingPositionId: 'OPS',
     op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FDR, callsign: 'RSYNC1' } } });
-  b.deliver(first.broadcast);
+  b.deliver(slot(first, 'primary'));
   const second = efsp.handleMessage(c.OPS.session, { version: 1, type: 'efsp-mutation', clientMutationId: 'm2', facilityId: 'INCIRLIK', actingPositionId: 'OPS',
     op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FDR, callsign: 'RSYNC2' } } });
   assert.equal(second.ack.ok, true); // broadcast lost
@@ -96,7 +97,7 @@ test('a client that misses a delta sees the gap at the heartbeat, resyncs, and c
   assert.equal(b.outbox.length, 0, 'one beat behind is not yet a gap (a delta may be in flight)');
   b.deliver(beat);
   assert.equal(b.outbox.length, 1);
-  assert.equal(b.outbox[0].lastBoardSeq, first.broadcast.boardSeq);
+  assert.equal(b.outbox[0].lastBoardSeq, slot(first, 'primary').boardSeq);
   assert.equal(b.outbox[0].boardEpoch, efsp.boardStoreFor('INCIRLIK').epoch);
   b.deliver(beat); // a third beat while the resync is in flight sends nothing more
   assert.equal(b.outbox.length, 1);
@@ -120,7 +121,7 @@ test('a delta from another Board lifetime (server restarted) triggers a resync t
   assert.notEqual(efsp2.boardStoreFor('INCIRLIK').epoch, efsp1.boardStoreFor('INCIRLIK').epoch);
   const r = efsp2.handleMessage(c2.OPS.session, { version: 1, type: 'efsp-mutation', clientMutationId: 'e1', facilityId: 'INCIRLIK', actingPositionId: 'OPS',
     op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FDR, callsign: 'EPOCH2' } } });
-  b.deliver(r.broadcast);
+  b.deliver(slot(r, 'primary'));
   assert.equal(b.outbox.length, 1);
   assert.equal(b.run('efspResyncPositionFor("INCIRLIK").boardEpoch'), efsp1.boardStoreFor('INCIRLIK').epoch, 'the new lifetime\'s epoch is not adopted from a delta');
   assert.deepEqual(serveResyncs(efsp2, c2.CD.session, b), ['snapshot']);

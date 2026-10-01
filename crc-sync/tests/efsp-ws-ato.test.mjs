@@ -4,6 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import crypto from 'crypto';
+import { slot } from './helpers/wire-slots.mjs';
 
 // L14 (docs/adr/0071) — the two ATO wire messages: session binding per
 // Facility, TAC_C2 only, refusals that never throw, idempotent replays and the
@@ -76,7 +77,7 @@ test('the preview is read-only and answers the sender only', () => {
   assert.equal(res.ack.requestId, 'r1');
   assert.equal(res.ack.ok, true);
   assert.equal(res.ack.preview.lines.length, 5);
-  assert.equal(res.broadcast, undefined);
+  assert.equal(slot(res, 'primary'), undefined);
   assert.equal(efsp.boardStoreFor('TACTICAL').currentSeq, before);
   assert.ok(!logLines().some((l) => l.type === 'efsp-ato-preview'), 'never logged');
 });
@@ -107,18 +108,18 @@ test('an import creates the lines, broadcasts one delta, audits once; a replay c
   assert.equal(first.ack.ok, true);
   assert.equal(first.ack.results.length, 5);
   assert.ok(first.ack.results.every((r) => r.ok && r.action === 'CREATE' && r.stripId), JSON.stringify(first.ack.results));
-  assert.equal(first.broadcast.type, 'efsp-board-delta');
-  assert.equal(first.broadcast.facilityId, 'TACTICAL');
-  assert.equal(first.broadcast.strips.updated.length, 5);
-  assert.equal(first.broadcast.fdrs.updated.length, 5);
-  assert.equal(first.peerBroadcast, undefined);
-  assert.equal(first.marsaBroadcast, undefined);
+  assert.equal(slot(first, 'primary').type, 'efsp-board-delta');
+  assert.equal(slot(first, 'primary').facilityId, 'TACTICAL');
+  assert.equal(slot(first, 'primary').strips.updated.length, 5);
+  assert.equal(slot(first, 'primary').fdrs.updated.length, 5);
+  assert.equal(slot(first, 'peer'), undefined);
+  assert.equal(slot(first, 'marsa'), undefined);
   const after = efsp.boardStoreFor('TACTICAL').getAll().filter((s) => s.role === 'MISSION').length;
   assert.equal(after - before, 5);
 
   const replay = importAto(c.TAC_C2, 'TAC_C2', { textSha1: p.preview.textSha1, clientMutationId: cmid });
   assert.deepEqual(replay.ack, first.ack, 'the first ack, verbatim');
-  assert.equal(replay.broadcast, undefined);
+  assert.equal(slot(replay, 'primary'), undefined);
   assert.equal(efsp.boardStoreFor('TACTICAL').getAll().filter((s) => s.role === 'MISSION').length, after);
 
   const audits = logLines().filter((l) => l.clientMutationId === cmid);
@@ -137,7 +138,7 @@ test('re-importing the same ATO previews UPDATE for every line and creates no St
   const before = efsp.boardStoreFor('TACTICAL').currentSeq;
   const r = importAto(c.TAC_C2, 'TAC_C2', { textSha1: p.preview.textSha1 });
   assert.ok(r.ack.results.every((x) => x.ok && x.action === 'UPDATE'));
-  assert.equal(r.broadcast.strips.updated.length, 0);
-  assert.equal(r.broadcast.fdrs.updated.length, 5);
+  assert.equal(slot(r, 'primary').strips.updated.length, 0);
+  assert.equal(slot(r, 'primary').fdrs.updated.length, 5);
   assert.equal(efsp.boardStoreFor('TACTICAL').currentSeq, before);
 });
