@@ -29,12 +29,15 @@ const AIRSPACES = [
 
 function writeFixtures(stateDir) {
   fs.mkdirSync(path.join(stateDir, 'config-empty'), { recursive: true });
+  // The Facilities' own data is the shipped JSON (docs/wip/DATA-1.md): the only files copied in.
+  for (const id of ['incirlik', 'center', 'tactical', 'carrier']) {
+    fs.copyFileSync(path.join(SRC, `../config/efsp-facility-${id}.json`), path.join(stateDir, 'config-empty', `efsp-facility-${id}.json`));
+  }
   fs.mkdirSync(path.join(stateDir, 'terrain'), { recursive: true });
   fs.writeFileSync(path.join(stateDir, 'airspaces.json'), JSON.stringify(AIRSPACES, null, 2));
   fs.writeFileSync(path.join(stateDir, 'stereo-routes.json'), '[]');
   // The three facility overrides are deliberately NOT written: a missing file
-  // makes facility-config fall back to its in-code DEFAULT_CONFIG, as the
-  // tests rely on (briefing §3.6).
+  // makes facility-config read the shipped copy above, as the tests rely on (briefing §3.6).
 }
 
 class ForkedHost {
