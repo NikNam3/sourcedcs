@@ -1,15 +1,14 @@
-'use strict';
 
 /* Unit tests for strip-drag.js's pure insertion-index math (no DOM/real
    pointer events involved), matching los-math.test.js's style. */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const {
+import {
   computeInsertionIndex, computeRackReconciliation, DRAG_THRESHOLD_PX, hasExceededDragThreshold,
   scrollCompensatedY, cachedTopToViewportY,
-} = require('../app/public/js/panels/efsp/strip-drag.js');
+} from '../app/public/js/panels/efsp/strip-drag.js';
 
 function rect(stripId, top, height = 40) { return { stripId, top, height }; }
 

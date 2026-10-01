@@ -1,15 +1,14 @@
-'use strict';
 
 /* The client forgets archived flights (docs/adr/0082, crc-sync's archiver):
    an efsp-board-delta's fdrs.gone removes the FDRs, strips.gone the Strips.
    Without it a client keeps every archived FDR until it reconnects. */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const {
+import {
   applyEfspSnapshot, applyEfspDelta, getEfspFdr, getEfspStrip, getEfspBoardSeq, _resetEfspStateForTest,
-} = require('../app/public/js/panels/efsp/efsp-state.js');
+} from '../app/public/js/panels/efsp/efsp-state.js';
 
 test.beforeEach(() => _resetEfspStateForTest());
 

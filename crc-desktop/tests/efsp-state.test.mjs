@@ -1,21 +1,20 @@
-'use strict';
 
 /* Unit tests for the pure client-side EFSP state mirror (efsp-state.js) —
    snapshot/delta/ack merge logic and the pending-mutation/rebase-on-reject
    bookkeeping, exercised directly without DOM/Electron/network, same
    pattern as los-math.test.js. */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const {
+import {
   applyEfspSnapshot, applyEfspDelta, applyEfspMutationAck,
   registerPendingMutation, getPendingMutations, rebaseForResend,
   getEfspStrip, getEfspFdr, getEfspPosition, getAllEfspStrips, getAllEfspPositions,
   getEfspRack, searchEfspStrips, getEfspBoardSeq, getEfspFacility, getEfspBays,
   applyEfspAlerts, getEfspObligation, getEfspObligations,
   _resetEfspStateForTest,
-} = require('../app/public/js/panels/efsp/efsp-state.js');
+} from '../app/public/js/panels/efsp/efsp-state.js';
 
 function strip(overrides = {}) {
   return { stripId: 's1', fdrId: 'f1', rev: 1, bayId: 'b1', rackId: 'r1', orderKey: 'A', state: 'PROPOSED', ...overrides };

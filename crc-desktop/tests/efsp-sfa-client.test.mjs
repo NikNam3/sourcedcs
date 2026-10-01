@@ -1,18 +1,14 @@
-'use strict';
 
 // The SFA client (crc-sync docs/adr/0075, 0093): its mirrors of permission.js and sfa.js, held to the
 // real server tables, and the pure rules about what it OFFERS. The server is the authority.
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const path = require('path');
-
-const CLIENT = path.join(__dirname, '../app/public/js/panels/efsp');
-const S = require(path.join(CLIENT, 'sfa-state.js'));
-const permission = require('../../crc-sync/src/efsp/permission.js');
-const { SFA_TRANSFERS } = require('../../crc-sync/src/efsp/sfa.js');
-const { SfaStore } = require('../../crc-sync/src/efsp/sfa-store.js');
-const facilityConfig = require('../../crc-sync/src/efsp/facility-config.js');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import * as S from '../app/public/js/panels/efsp/sfa-state.js';
+import permission from '../../crc-sync/src/efsp/permission.js';
+import { SFA_TRANSFERS } from '../../crc-sync/src/efsp/sfa.js';
+import { SfaStore } from '../../crc-sync/src/efsp/sfa-store.js';
+import facilityConfig from '../../crc-sync/src/efsp/facility-config.js';
 
 const clock = { now: () => Date.UTC(2026, 5, 1, 9, 0), source: 'TEST' };
 /** A real record view from the real store, so the client is tested against exactly what the server sends. */

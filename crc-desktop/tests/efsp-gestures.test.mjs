@@ -1,13 +1,12 @@
-'use strict';
 
 /* Unit tests for the four paper-gesture functions (efsp-gestures.js) — the
    guide's §7.3 "one input" cost ceiling made mechanically checkable by
    counting dispatched Mutations per invocation. */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const { toggleOffset, toggleFlip, setHighlight, setAttention } = require('../app/public/js/panels/efsp/efsp-gestures.js');
+import { toggleOffset, toggleFlip, setHighlight, setAttention } from '../app/public/js/panels/efsp/efsp-gestures.js';
 
 function makeStrip(flags = {}) {
   return { stripId: 's1', flags: { offset: false, flipped: false, highlight: null, attention: null, ...flags } };

@@ -1,12 +1,11 @@
-'use strict';
 
 /* Unit tests for the dot-command parser (dot-command.js) — the guide's
    §7.1 rule 5 persistent `.verb args` input surface. */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const { parseDotCommand } = require('../app/public/js/panels/efsp/dot-command.js');
+import { parseDotCommand } from '../app/public/js/panels/efsp/dot-command.js';
 
 test('parses a bare verb with no arguments', () => {
   assert.deepEqual(parseDotCommand('.drop'), { verb: 'drop', args: [] });
