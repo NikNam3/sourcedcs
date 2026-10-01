@@ -62,7 +62,12 @@ function coordinationEffect(primitive) {
 // DEPARTURE/HANDED_OFF (APP->CTR) without inventing any new EfspState —
 // CTR's terminus for a received DEPARTURE Strip is Drop-only, mirroring
 // APP's own existing DEPARTURE terminus.
-const COORDINATION_ELIGIBLE_STATES = { ARRIVAL: 'INBOUND', DEPARTURE: 'HANDED_OFF' };
+//
+// docs/adr/0087 adds OVERFLIGHT at IN_SECTOR (F14: an overflight used to be
+// unable to propose coordination at all), so a CTR overflight can be handed to
+// APP. The receiving side mints it INBOUND (board-store.js's
+// REPLICA_STATE_ON_RECEIPT).
+const COORDINATION_ELIGIBLE_STATES = { ARRIVAL: 'INBOUND', DEPARTURE: 'HANDED_OFF', OVERFLIGHT: 'IN_SECTOR' };
 
 /** @returns {string|undefined} the EfspState `role` must be in to propose a coordination link, or undefined if this role never can. */
 function coordinationEligibleState(role) {
@@ -97,11 +102,10 @@ function tofiEffect(direction) {
 // A flight can only enter tactically controlled airspace once it is actually
 // airborne and enroute, which is the same set of states the 5 primitives
 // already recognise as "airborne, being worked by an enroute Position" —
-// plus OVERFLIGHT, which has no entry in the table above only because it
-// never originates a HANDOFF, not because it is ever on the ground. MISSION
+// plus OVERFLIGHT (IN_SECTOR, docs/adr/0087 — the flight being worked). MISSION
 // is deliberately absent: it is the MRU-side Role TOFI *creates*, never a
 // Role that opens an exchange of its own (docs/adr/0026).
-const TOFI_ELIGIBLE_STATES = { DEPARTURE: 'HANDED_OFF', ARRIVAL: 'INBOUND', OVERFLIGHT: 'TRANSITING' };
+const TOFI_ELIGIBLE_STATES = { DEPARTURE: 'HANDED_OFF', ARRIVAL: 'INBOUND', OVERFLIGHT: 'IN_SECTOR' };
 
 /** @returns {string|undefined} the EfspState `role` must be in to open a TOFI ENTRY, or undefined if this role never can. */
 function tofiEligibleState(role) {

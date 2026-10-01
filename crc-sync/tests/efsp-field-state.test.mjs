@@ -696,7 +696,7 @@ test('a ctx with no fieldStateFor at all behaves exactly as before (every pre-L1
 
 test('OVERFLIGHT and MISSION are never inhibited by field state', () => {
   const view = viewWith('CLOSED');
-  assert.deepEqual(nla.computeNla({ role: 'OVERFLIGHT', state: 'TRANSITING', rackId: 'rwy-05' }, readyFdr(), NOW, ctxWith(view)), { toState: 'DROPPED' });
+  assert.deepEqual(nla.computeNla({ role: 'OVERFLIGHT', state: 'IN_SECTOR', rackId: 'rwy-05' }, readyFdr(), NOW, ctxWith(view)), { toState: 'HANDED_OFF' });
   assert.deepEqual(nla.computeNla({ role: 'MISSION', state: 'TASKED', rackId: 'rwy-05' }, readyFdr(), NOW, ctxWith(view)), { toState: 'AIRBORNE' });
 });
 

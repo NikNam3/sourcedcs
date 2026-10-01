@@ -49,7 +49,7 @@ const ELIGIBILITY = {
   PROPOSED: false, PENDING_CLEARANCE: false, CLEARED: false, HELD: false, TASKED: false, DROPPED: false,
   PUSHBACK: true, TAXI: true, RUNWAY_QUEUE: true, LUAW: true, DEPARTED: true, HANDED_OFF: true,
   INBOUND: true, HANDED_TO_TOWER: true, FINAL: true, LANDED: true, TAXI_IN: true,
-  TRANSITING: true, AIRBORNE: true, ON_STATION: true, OFF_STATION: true, RTB: true,
+  IN_SECTOR: true, AIRBORNE: true, ON_STATION: true, OFF_STATION: true, RTB: true,
   // carrier (docs/adr/0074): all eligible, LAUNCH included (correlation reads the track store, not illumination)
   LAUNCH: true, IN_STACK: true, COMMENCED: true, ON_FINAL: true, BALL: true, BOLTER_WAVEOFF: true, IN_PATTERN: true, RECOVERED: true,
 };

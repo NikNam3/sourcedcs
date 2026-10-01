@@ -119,7 +119,7 @@ test('SCENARIO automated information transfer is refused without a directive on 
 
 // ── 15. an overflight ────────────────────────────────────────────────────
 
-test('SCENARIO a flight transiting Center that never touches Incirlik', () => {
+test('SCENARIO a flight transiting Center that never touches Incirlik', async () => {
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
 
@@ -130,14 +130,19 @@ test('SCENARIO a flight transiting Center that never touches Incirlik', () => {
     fdr: { callsign: 'TRANS1', aircraftType: 'A320', wakeCategory: 'M', originAirport: 'LTBA', destinationAirport: 'OJAI' },
   });
   assert.equal(strip.role, 'OVERFLIGHT');
-  assert.equal(strip.state, 'TRANSITING');
+  assert.equal(strip.state, 'INBOUND');
 
   const beacon = efsp.fdrStore.getFdr(strip.fdrId).identity.beaconAssigned;
   assert.equal(efsp.fdrStore._codeAllocator.isAllocated(beacon), true);
 
-  // TRANSITING's only next action is the terminal Drop — the path that used
-  // to skip DropStrip's rules entirely before docs/adr/0027.
-  const dropped = mustAct(efsp, c.CTR, 'CTR', strip, { kind: 'InvokeNla' });
+  // The guide's four states (docs/adr/0087): Radar Contact, Hand Off, then the
+  // terminal Drop — the path that used to skip DropStrip's rules entirely
+  // before docs/adr/0027.
+  const inSector = await advance(efsp, c.CTR, 'CTR', strip);
+  assert.equal(inSector.state, 'IN_SECTOR');
+  const handedOff = await advance(efsp, c.CTR, 'CTR', inSector);
+  assert.equal(handedOff.state, 'HANDED_OFF');
+  const dropped = await advance(efsp, c.CTR, 'CTR', handedOff);
   assert.equal(dropped.state, 'DROPPED');
   assert.equal(dropped.flags.removeIndicator, true);
   assert.equal(efsp.fdrStore._codeAllocator.isAllocated(beacon), false, 'and the code goes back');

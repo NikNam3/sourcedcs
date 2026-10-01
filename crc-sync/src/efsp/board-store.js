@@ -51,7 +51,16 @@ const REPLAY_PERSIST_WINDOW_MS = 10 * 60 * 1000;
 // the caller doesn't pass an explicit op.initialState. Deliberately just
 // each role's first lifecycle state, not the full STATES_BY_ROLE table
 // nla.js owns — board-store.js only ever needs the ONE starting value.
-const DEFAULT_INITIAL_STATE_BY_ROLE = { DEPARTURE: 'PROPOSED', ARRIVAL: 'INBOUND', OVERFLIGHT: 'TRANSITING', MISSION: 'TASKED', MARSHAL: 'IN_STACK', FINAL: 'ON_FINAL', PATTERN: 'IN_PATTERN' };
+// docs/adr/0087 (supersedes 0022's "the replica carries the sender's state" for
+// OVERFLIGHT only): the guide's four states are one sector's view of a flight,
+// so a flight handed to our next Facility arrives INBOUND there and walks them
+// again. { role: { senderState: replicaState } }; absent = the sender's state.
+const REPLICA_STATE_ON_RECEIPT = { OVERFLIGHT: { IN_SECTOR: 'INBOUND' } };
+// ...and when the receiver ACCEPTs a HANDOFF, the sender's Strip has left its
+// sector: { primitive: { role: { senderState: stateAfterAccept } } }.
+const SENDER_STATE_ON_ACCEPT = { HANDOFF: { OVERFLIGHT: { IN_SECTOR: 'HANDED_OFF' } } };
+
+const DEFAULT_INITIAL_STATE_BY_ROLE = { DEPARTURE: 'PROPOSED', ARRIVAL: 'INBOUND', OVERFLIGHT: 'INBOUND', MISSION: 'TASKED', MARSHAL: 'IN_STACK', FINAL: 'ON_FINAL', PATTERN: 'IN_PATTERN' };
 
 /**
  * The compact, frozen record the idempotency cache keeps for one applied
@@ -1025,7 +1034,28 @@ class BoardStore {
     return inhibit ? { ok: false, reason: 'NLA_INHIBITED', detail: inhibit, strip } : null;
   }
 
+  /**
+   * The owner's Bay that holds this Strip's Role whatever its state (Bay
+   * `holdsRole`, docs/adr/0087), or null. A Role with such a Bay keeps its state
+   * on the Strip: no Bay implies it, so a drag never changes it, and a state
+   * change never moves it — which also stops an OVERFLIGHT `INBOUND` being filed
+   * under ARRIVAL's `INBOUND` Bay, the one thing the shared state names would
+   * otherwise do.
+   */
+  _roleBayFor(strip, positionId = strip.ownerPositionId) {
+    const bays = this._rules.baysFor ? this._rules.baysFor(positionId) : [];
+    return bays.find(b => b.holdsRole === strip.role) || null;
+  }
+
   _validateBayImpliedTransition(strip, targetBayId, targetRackId) {
+    const roleBay = this._roleBayFor(strip);
+    if (roleBay) {
+      // Another Role's state-implying Bay is not somewhere this Role goes.
+      if (this._rules.bayImpliesState && this._rules.bayImpliesState(targetBayId)) {
+        return { ok: false, reason: 'VALIDATION_ERROR', detail: `a ${strip.role} Strip stays in ${roleBay.bayId}; ${targetBayId} is another Role's Bay` };
+      }
+      return { ok: true, impliedState: null };
+    }
     const impliedState = this._rules.bayImpliesState ? this._rules.bayImpliesState(targetBayId) : null;
     if (!impliedState || impliedState === strip.state) return { ok: true, impliedState }; // non-state-implying Bay, or already there — always fine
 
@@ -1510,6 +1540,8 @@ class BoardStore {
    */
   _bayForNewOwner(positionId, state, strip = null) {
     const bays = this._rules.baysFor ? this._rules.baysFor(positionId) : [];
+    const roleBay = strip ? bays.find(b => b.holdsRole === strip.role) : null;
+    if (roleBay) return { bayId: roleBay.bayId, rackId: this._placementRack(strip, roleBay) };
     const bay = bays.find(b => b.impliesState === state) || bays.find(b => !b.impliesState) || null;
     if (!bay) return null;
     return { bayId: bay.bayId, rackId: strip ? this._placementRack(strip, bay) : bay.rackIds[0] };
@@ -1539,6 +1571,7 @@ class BoardStore {
    */
   _relocateForImpliedState(strip, toState) {
     if (!this._rules.bayForImpliedState) return;
+    if (this._roleBayFor(strip)) return; // its Bay holds it in every state (docs/adr/0087)
     const bay = this._rules.bayForImpliedState(strip.ownerPositionId, toState);
     if (!bay || bay.impliesState !== toState || bay.bayId === strip.bayId) return;
     strip.bayId = bay.bayId;
@@ -1804,7 +1837,7 @@ class BoardStore {
       applied = this._applyTransferStrip(strip, { toPositionId: result.transferTo, bayId: targetBay.bayId, rackId: this._placementRack(strip, targetBay) }, by);
     } else if (result.toState === 'DROPPED') {
       // Every Role's terminal NLA is a Drop (DEPARTURE at HANDED_OFF,
-      // ARRIVAL at TAXI_IN, OVERFLIGHT at TRANSITING, MISSION at RTB), and
+      // ARRIVAL at TAXI_IN, OVERFLIGHT at HANDED_OFF, MISSION at RTB), and
       // it has to mean exactly what the explicit DropStrip op means —
       // same guards, same remove indicator, same beacon release. Routed
       // through the one shared path rather than the generic state setter,
@@ -2120,7 +2153,7 @@ class BoardStore {
     // already minted with (docs/adr/0022) — the replica's state was set
     // correctly by receiveCoordinationProposal already; accept only
     // relocates it, it never advances the state itself.
-    const targetBay = this._rules.bayForImpliedState ? this._rules.bayForImpliedState(strip.ownerPositionId, strip.state) : null;
+    const targetBay = this._roleBayFor(strip) || (this._rules.bayForImpliedState ? this._rules.bayForImpliedState(strip.ownerPositionId, strip.state) : null);
     if (targetBay) {
       strip.bayId = targetBay.bayId;
       strip.rackId = this._placementRack(strip, targetBay);
@@ -2340,7 +2373,7 @@ class BoardStore {
       // _applyCoordinationPropose before this is ever called), so the
       // receiving Facility is guaranteed to have a Bay configured for it.
       role: fromRole,
-      state: fromState,
+      state: (REPLICA_STATE_ON_RECEIPT[fromRole] || {})[fromState] || fromState,
       ownerPositionId: toPositionId,
       bayId: coordinationBay.bayId,
       rackId: coordinationBay.rackIds[0],
@@ -2396,6 +2429,9 @@ class BoardStore {
     const now = this._clock.now();
     if (response === 'ACCEPT') {
       const effect = this._rules.coordinationEffect ? this._rules.coordinationEffect(strip.coordination.primitive) : null;
+      // docs/adr/0087: a HANDed-OFF overflight has left this sector.
+      const afterAccept = ((SENDER_STATE_ON_ACCEPT[strip.coordination.primitive] || {})[strip.role] || {})[strip.state];
+      if (afterAccept) strip.state = afterAccept;
       strip.coordination.state = 'ACTIVE';
       strip.coordination.acceptedAt = now;
       strip.coordination.acceptedBy = by || null;

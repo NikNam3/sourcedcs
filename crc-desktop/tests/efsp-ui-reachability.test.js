@@ -770,13 +770,13 @@ test('Convert to Arrival is only offered to the Positions the server lets conver
 });
 
 test('an arrival or overflight Strip draws no chip for a Block its Role does not have', () => {
-  for (const [role, state, owner] of [['ARRIVAL', 'INBOUND', 'CTR'], ['OVERFLIGHT', 'TRANSITING', 'CTR']]) {
+  for (const [role, state, owner] of [['ARRIVAL', 'INBOUND', 'CTR'], ['OVERFLIGHT', 'IN_SECTOR', 'CTR']]) {
     const { el } = renderStrip({ strip: stripAt({ role, state, ownerPositionId: owner, bayId: 'ctr-enroute' }), fdr: FDR, held: [owner] });
     for (const blockId of ['9F', '14A', '14D']) {
       assert.equal(blockCell(el, blockId), undefined, `${role} rendered departure-only Block ${blockId}`);
     }
   }
-  assert.equal(blockCell(renderStrip({ strip: stripAt({ role: 'OVERFLIGHT', state: 'TRANSITING', ownerPositionId: 'CTR' }), fdr: FDR, held: ['CTR'] }).el, '8A'), undefined);
+  assert.equal(blockCell(renderStrip({ strip: stripAt({ role: 'OVERFLIGHT', state: 'IN_SECTOR', ownerPositionId: 'CTR' }), fdr: FDR, held: ['CTR'] }).el, '8A'), undefined);
 });
 
 test('Convert to Arrival is offered for the return leg, and refused mid-exchange', () => {
@@ -2158,7 +2158,7 @@ test('with MTR data, the expanded view still shows exactly what the face does no
   // Proves bay-view.js's _expandedBlockIdsFor got the FDR too: had only the
   // face learned about the MTR group, its Blocks would be on both.
   const fdr = mtrFdrWith({ designator: 'IR107' });
-  for (const [role, positionId, state] of [['DEPARTURE', 'CTR', 'HANDED_OFF'], ['ARRIVAL', 'APP', 'INBOUND'], ['OVERFLIGHT', 'CTR', 'TRANSITING'], ['DEPARTURE', 'OPS', 'PROPOSED']]) {
+  for (const [role, positionId, state] of [['DEPARTURE', 'CTR', 'HANDED_OFF'], ['ARRIVAL', 'APP', 'INBOUND'], ['OVERFLIGHT', 'CTR', 'IN_SECTOR'], ['DEPARTURE', 'OPS', 'PROPOSED']]) {
     const strip = stripAt({ role, state, ownerPositionId: positionId });
     const { expandedEl, sandbox } = expandedWith(strip, fdr, [positionId]);
     const compact = Array.from(sandbox.compactBlocksFor(role, positionId, fdr));
@@ -2169,7 +2169,7 @@ test('with MTR data, the expanded view still shows exactly what the face does no
 });
 
 test('the MTR times render as HHMM and edit through the ordinary click-to-edit cell', () => {
-  const strip = stripAt({ role: 'OVERFLIGHT', state: 'TRANSITING', ownerPositionId: 'CTR' });
+  const strip = stripAt({ role: 'OVERFLIGHT', state: 'IN_SECTOR', ownerPositionId: 'CTR' });
   const fdr = mtrFdrWith({ designator: 'IR107', exitEstimateUtc: Date.UTC(2016, 5, 21, 14, 32) });
   const { el, sent } = renderStrip({ strip, fdr, held: ['CTR'] });
   assert.equal(blockCell(el, '9H-TIME').textContent, '1432');
@@ -2187,7 +2187,7 @@ test('the MTR times render as HHMM and edit through the ordinary click-to-edit c
 
 test('the lost-comms advisory is a grey note in ▼ only — no reason line, no indicator on the face', () => {
   const clearance = { altitude: { entries: [{ value: 'FL180', status: 'ACTIVE', at: 1, by: null }] }, heading: { entries: [] } };
-  const strip = stripAt({ role: 'OVERFLIGHT', state: 'TRANSITING', ownerPositionId: 'CTR' });
+  const strip = stripAt({ role: 'OVERFLIGHT', state: 'IN_SECTOR', ownerPositionId: 'CTR' });
   const cls = (c) => (c.className || '').split(/\s+/);
 
   const quiet = renderStrip({ strip, fdr: mtrFdrWith({}, { clearance }), held: ['CTR'] }).el;
@@ -2209,7 +2209,7 @@ test('the lost-comms advisory is a grey note in ▼ only — no reason line, no 
 });
 
 test('EXIT ALT\'s label carries the lost-comms rule as its hover title', () => {
-  const strip = stripAt({ role: 'OVERFLIGHT', state: 'TRANSITING', ownerPositionId: 'CTR' });
+  const strip = stripAt({ role: 'OVERFLIGHT', state: 'IN_SECTOR', ownerPositionId: 'CTR' });
   const { el } = renderStrip({ strip, fdr: mtrFdrWith({ designator: 'IR107' }), held: ['CTR'] });
   const chip = descendants(el).find(c => c.children && c.children.some(k => k.dataset && k.dataset.block === '9H-ALT'));
   const label = chip.children.find(k => (k.className || '').includes('efsp-block-label'));
@@ -2217,7 +2217,7 @@ test('EXIT ALT\'s label carries the lost-comms rule as its hover title', () => {
 });
 
 test('an MTR write reaches the Strip through the FDR\'s rev — the group appears without the Strip\'s rev moving', () => {
-  const strip = stripAt({ role: 'OVERFLIGHT', state: 'TRANSITING', ownerPositionId: 'CTR' });
+  const strip = stripAt({ role: 'OVERFLIGHT', state: 'IN_SECTOR', ownerPositionId: 'CTR' });
   const { sandbox, el } = renderStrip({ strip, fdr: FDR, held: ['CTR'] });
   assert.equal(sandbox._stripElNeedsRebuild(el, strip, null, null), false);
   sandbox.applyEfspDelta({ fdrs: { updated: [mtrFdrWith({ exitFix: 'E' }, { rev: 2 })] } });

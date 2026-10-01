@@ -760,7 +760,7 @@ class Driver {
     const airborne =
       (strip.role === 'DEPARTURE' && (strip.state === 'DEPARTED' || strip.state === 'HANDED_OFF')) ||
       (strip.role === 'ARRIVAL' && strip.state === 'INBOUND') ||
-      (strip.role === 'OVERFLIGHT' && strip.state === 'TRANSITING') ||
+      (strip.role === 'OVERFLIGHT' && ['INBOUND', 'IN_SECTOR', 'HANDED_OFF'].includes(strip.state)) ||
       (strip.role === 'MISSION' && ['AIRBORNE', 'ON_STATION', 'OFF_STATION'].includes(strip.state));
     if (airborne && f.fdr) this.sky.spawn(f.id, f.fdr, this.now);
     if (strip.role === 'ARRIVAL' && (strip.state === 'LANDED' || strip.state === 'TAXI_IN')) this.sky.land(f.id, this.now);

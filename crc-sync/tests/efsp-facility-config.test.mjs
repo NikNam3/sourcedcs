@@ -235,9 +235,11 @@ test('docs/adr/0022: CTR also has a departures Bay implying HANDED_OFF, for a St
   assert.equal(bayImpliesState('ctr-departures', 'CENTER'), 'HANDED_OFF');
 });
 
-test('docs/adr/0023: both Facilities have an overflight Bay implying TRANSITING', () => {
-  assert.equal(bayImpliesState('app-overflight', 'INCIRLIK'), 'TRANSITING');
-  assert.equal(bayImpliesState('ctr-overflight', 'CENTER'), 'TRANSITING');
+test('docs/adr/0087: both Facilities have an overflight Bay that holds the Role and implies no state', () => {
+  assert.equal(bayImpliesState('app-overflight', 'INCIRLIK'), null);
+  assert.equal(bayImpliesState('ctr-overflight', 'CENTER'), null);
+  assert.equal(getAllBays('INCIRLIK').find(b => b.bayId === 'app-overflight').holdsRole, 'OVERFLIGHT');
+  assert.equal(getAllBays('CENTER').find(b => b.bayId === 'ctr-overflight').holdsRole, 'OVERFLIGHT');
 });
 
 test('docs/adr/0022: aitAuthorized defaults to false on both Facilities', () => {

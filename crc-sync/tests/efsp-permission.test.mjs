@@ -303,10 +303,13 @@ test('TAC_C2 and GCI may originate MISSION, and only MISSION; AIC/JTAC may origi
 
 // docs/adr/0023 — OVERFLIGHT's own lifecycle authority table, mirroring
 // ARRIVAL's shape: whichever Position(s) may originate one may also act on it.
-test('OVERFLIGHT states have their own authority table — both APP and CTR may act on TRANSITING, OPS may not', () => {
-  assert.equal(canActOnState('APP', 'OVERFLIGHT', 'TRANSITING'), true);
-  assert.equal(canActOnState('CTR', 'OVERFLIGHT', 'TRANSITING'), true);
-  assert.equal(canActOnState('OPS', 'OVERFLIGHT', 'TRANSITING'), false);
+test('OVERFLIGHT states have their own authority table — both APP and CTR may act on every live state, OPS may not', () => {
+  for (const state of ['INBOUND', 'IN_SECTOR', 'HANDED_OFF']) {
+    assert.equal(canActOnState('APP', 'OVERFLIGHT', state), true, state);
+    assert.equal(canActOnState('CTR', 'OVERFLIGHT', state), true, state);
+    assert.equal(canActOnState('OPS', 'OVERFLIGHT', state), false, state);
+  }
+  assert.equal(canActOnState('CTR', 'OVERFLIGHT', 'TRANSITING'), false);
 });
 
 test('every state present in DEPARTURE_STATES/ARRIVAL_STATES/OVERFLIGHT_STATES/MISSION_STATES except the terminal DROPPED has a STATE_OWNERS_BY_ROLE entry — nothing silently falls through to "no one may act"', async () => {
