@@ -1422,15 +1422,21 @@ function efspVisibleBayId() {
  * Strip. An arrival in the Bay on screen is never listed — the Strip itself
  * flashes and carries its "from" line.
  */
+// Cached, never looked up with document.getElementById: while dockview has the Strip panel
+// detached (another tab of its group in front) the lookup fails and a new line was inserted on
+// every render, so the arrivals list stacked up (S-L1b finding; the airspace-panel rule).
+let _arrivalsLineEl = null;
+
 function _renderArrivalsLine() {
   if (!_bayTabsEl || typeof efspArrivalLog !== 'function') return;
-  let line = document.getElementById('efsp-arrivals-line');
+  let line = _arrivalsLineEl;
   if (!line) {
     line = document.createElement('div');
     line.id = 'efsp-arrivals-line';
-    if (_bayTabsEl.parentNode && typeof _bayTabsEl.parentNode.insertBefore === 'function') {
-      _bayTabsEl.parentNode.insertBefore(line, _bayTabsEl.nextSibling);
-    }
+    _arrivalsLineEl = line;
+  }
+  if (_bayTabsEl.parentNode && line.parentNode !== _bayTabsEl.parentNode && typeof _bayTabsEl.parentNode.insertBefore === 'function') {
+    _bayTabsEl.parentNode.insertBefore(line, _bayTabsEl.nextSibling);
   }
   const entries = efspArrivalLog();
   line.innerHTML = '';

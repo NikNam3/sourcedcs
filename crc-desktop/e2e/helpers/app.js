@@ -59,7 +59,9 @@ async function openPanel(page, { held = ['OPS'], facilityId = 'INCIRLIK', contro
  * than reaching past dockview and un-hiding the div.
  */
 async function openEfspPanel(page) {
-  await page.waitForFunction(() => typeof window.toggleDockPanel === 'function');
+  // toggleDockPanel is defined as soon as dock.js loads; `dock` is only set when app.js runs
+  // initDock(), a moment later (the first-test race, S-L1b finding). `dock` is a script-scope `let`.
+  await page.waitForFunction(() => typeof window.toggleDockPanel === 'function' && typeof dock !== 'undefined' && dock !== null);
   await page.evaluate(() => {
     if (!window.isDockPanelOpen || !window.isDockPanelOpen('efsp')) window.toggleDockPanel('efsp', true);
   });
