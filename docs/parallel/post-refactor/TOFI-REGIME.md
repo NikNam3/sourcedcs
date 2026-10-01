@@ -1,9 +1,11 @@
+> Amended for H100 (2026-10-01): DR-7 (a) and DR-8 (a) settled as recommended; no design change.
+
 # TOFI-REGIME: the separation regime becomes effective at airspace entry (H97)
 
 > Read `docs/parallel/refactor/README.md` (conventions, test policy) and `docs/parallel/lane-rules.md` first.
 > Rulings: H97, H79 (AIRSP), S-R3-80 (`kind: AREA|ROUTE`), S-desk3/R3-16 and ADR 0096 (clocks), H95 (undo), S-TEST.
 > ADR draft: `docs/wip/DES-RELEASE-adr-0102.md` (copy to `docs/adr/0102-…md` in your first commit). Questions DR-7,
-> DR-8 and the UI sketch: `docs/wip/DES-RELEASE.md`. **decisions.md wins over this briefing.**
+> DR-8 (both settled H100 (a)) and the UI sketch: `docs/wip/DES-RELEASE.md`. **decisions.md wins over this briefing.**
 
 | | |
 |---|---|

@@ -1,8 +1,10 @@
+> Amended for H100 (2026-10-01): DA-5 (b) one-time migration of legacy ranges (§9); other DA answers as recommended.
+
 # 0098. The airspace registry: editable definitions per theater, AREA and ROUTE, geometry, one source of truth
 
 Status: **Draft** (DES-AIRSP, 2026-10-01). The building lane AIRSP-2S-A copies this file to
 `docs/adr/0098-airspace-registry.md` in its first commit (P4: committed ADRs are never edited afterwards).
-Choices marked **[default DA-n]** are the recommendation of an open question in `docs/wip/DES-AIRSP.md`
+Choices marked **settled H100 (DA-n …)** are the human's answers (decisions.md H100) to the questions in `docs/wip/DES-AIRSP.md`
 § "Questions for the human". If the human answers differently, the building lane changes that paragraph before
 committing the ADR.
 
@@ -32,7 +34,7 @@ in it". R2 (staffed) renames Position staffing, not airspace occupancy.
 
 ## Decision
 
-### 1. One registry, owned by crc-sync **[default DA-1]**
+### 1. One registry, owned by crc-sync **settled H100 (DA-1 a)**
 
 crc-sync's airspace store is the **only writer and the only source of truth** for airspace definitions and their
 state. Every edit is a Mutation through `AirspaceStore.apply`, whatever its origin: the crc-desktop panel, the
@@ -83,7 +85,7 @@ session roll. That is unchanged from today, and a reset rule would be its own AD
   name an existing Facility, and not the controlling Facility or RANGES. Unlike `usingPositionId`, it creates no
   Position, so it takes effect live, within the R3-23 limit below.
 - **Which of a using Facility's Positions act for it** (Schedule, RequestActivation, ReleaseAirspace) is a capability
-  in the authority registry, not a definition field: the `airspaceUse` capability **[default DA-7: TAC_C2 only]**.
+  in the authority registry, not a definition field: the `airspaceUse` capability **settled H100 (DA-7 a): TAC_C2 only**.
 - `activation` is **not** a stored field. It is a rule keyed by `kind` (`ACTIVATION_BY_KIND = { AREA: 'APPROVE',
   ROUTE: 'CONFIRM' }`, in code). That is the same treatment ARCH-plan §2.7 gives occupancy. A stored field could
   disagree with `kind`.
@@ -130,7 +132,7 @@ Coordinates are WGS84 decimal degrees `[lat, lon]`.
     the web. At least 3 points, at most 200 (an engineering constant), not closed (the first point is not repeated),
     no self-intersection;
   - `{ source: 'DCS_DRAWING', drawingRef: { layerName, objectName, missionFingerprint }, points: [[lat, lon], …] }`,
-    a mission drawing the controller picked in the panel. **The points are copied at selection [default DA-2]**. The
+    a mission drawing the controller picked in the panel. **The points are copied at selection settled H100 (DA-2 a)**. The
     reference is provenance, and the panel offers "Refresh from drawing" while that drawing is in the loaded
     mission. A circle or oval is turned into a 64-point polygon by the picker. Containment therefore never depends on
     which mission is loaded, and a standing airspace keeps its outline in a mission that lacks the drawing;
@@ -204,16 +206,22 @@ Which position the TOFI monitor passes (the correlated track's) is ADR 0102's de
     pendingRequest }] }`
   - `POST /api/airspace-registry/mutation` with `{ theater, clientMutationId, airspaceId, op, actor: { sub, name } }`
     → the same ack body as `efsp-airspace-ack`.
-- **The service principal**: the web has already checked the user's role **[default DA-3: the booking admins,
+- **The service principal**: the web has already checked the user's role **settled H100 (DA-3 a): the booking admins,
   `admin` and `squadronlead`]**. In crc-sync the principal has the `SQUADRON_ADMIN` authority row: create, edit and
   delete any airspace in any theater. It is still subject to R3-23, the delete guard, `defRev` and validation. Its
   audit entries carry `actingPositionId: null`, `actorId: actor.sub` and `via: 'WEB'`. A web edit runs through the same
   family skeleton as a panel edit, so persistence, the replay cache and the broadcast to every connected session
   happen once, in one place.
 - **The booking tool** books **registry airspaces** instead of its own `ranges` list. A booking stores
-  `airspaceRef: { theater, airspaceId }`, and the altitude bounds come from the registry. Legacy `ranges` stay
-  read-only until their bookings have passed **[default DA-5]**. Controller-position bookings are unchanged.
-- **Calendar bookings in crc-desktop** **[default DA-6: information only]**: crc-sync pulls upcoming airspace
+  `airspaceRef: { theater, airspaceId }`, and the altitude bounds come from the registry. **Legacy `ranges` are migrated
+  once (settled H100 (DA-5 b))**: an admin maps each legacy range to a registry airspace on the airspace admin page, and
+  that range's bookings move to the airspace (`resourceType: 'airspace'`, `airspaceRef`, `migratedFromRangeId` kept on the
+  booking). The migration is all-or-nothing per range, refuses a mapping whose airspace limits do not contain a booking's
+  altitude or whose merged bookings would break the 999 ft deconfliction rule (the admin sees the list and resolves it),
+  and is idempotent. After the migration no legacy range remains, creating a booking on a legacy range is refused, and the
+  one-time tool is removed in a follow-up chore once production has been migrated. Controller-position bookings are
+  unchanged. No data is lost and nothing stays read-only.
+- **Calendar bookings in crc-desktop** **settled H100 (DA-6 a): information only**: crc-sync pulls upcoming airspace
   bookings from the web (`GET /api/bookings/service/upcoming`, the same token, never-throws like
   `listFiledFlightPlans`). It caches them on a ticker and sends `efsp-airspace-calendar` to every session. The panel
   shows the next booking on the card in grey, with real UTC and a link to the booking page. A booking never changes

@@ -1,3 +1,6 @@
+> Amended for H100 (2026-10-01): DA-5 (b) one-time migration of legacy booking ranges, DA-9 (a) plus a layer menu; DA-1..4,
+> DA-6..8 as recommended. Sizing 5.6 lane-units.
+
 # DES-AIRSP: post-refactor design for AIRSP phase 2 (the airspace registry, ADR 0098)
 
 Lane DES-AIRSP is docs-only. It is a W1 side track on `lane/DES-AIRSP-registry`, cut from `165a517`. Its outputs:
@@ -88,8 +91,8 @@ cited by name.
 
 ## Questions for the human
 
-Each question has options and a recommendation. The recommendation is the default written into the drafts, marked
-**[default DA-n]**.
+All answered (decisions.md H100). Each keeps its options and recommendation; the line **Settled H100** is the answer the
+drafts follow. DA-1..4, DA-6..8 are as recommended; DA-5 (b) and DA-9 (a) plus a menu changed the drafts.
 
 **DA-1. Where do airspace definitions live, now that sourcedcs-web edits them too?**
 (a) crc-sync's registry is the only source. The web admin page reads and writes it over a server-to-server API, and
@@ -99,6 +102,7 @@ owner, type), and crc-sync owns live edits (frequencies, name).
 *Recommend (a).* Audit, conflicts, the delete guard and the occupied warning only work where the flights are. (b)
 needs two writers or a write-back with its own failure modes. (c) needs two sources joined by id with nobody owning
 a create or a delete. Cost of (a): the web admin needs crc-sync up, which it always is in the stack.
+**Settled H100 (a).**
 
 **DA-2. When a controller picks a DCS drawing as the outline, is it copied or linked?**
 (a) Copy the points at selection, keep `{layerName, objectName}` as provenance, and offer "Refresh from drawing"
@@ -106,11 +110,13 @@ while that mission is loaded. (b) A live link, resolved at each mission load. Wi
 is unknown.
 *Recommend (a).* Airspaces are standing per theater, while drawings belong to one mission. A live link makes the
 TOFI entry gate and the map depend on which `.miz` is loaded, and a renamed drawing silently removes the outline.
+**Settled H100 (a).**
 
 **DA-3. Who may edit airspaces on sourcedcs-web?**
 (a) The booking admins (`admin`, `squadronlead`), the same people who manage booking ranges today. (b) `admin` only.
 (c) A new Casdoor role (for example `airspaceadmin`).
 *Recommend (a).* It is the existing group for the same data, and adds no new role to provision.
+**Settled H100 (a).**
 
 **DA-4. Does the sourcedcs-web admin page get a map for drawing outlines?**
 (a) No. A coordinate table (lat/lon, decimal or DMS paste) for polygons and route fixes, with a read-only SVG outline
@@ -118,6 +124,7 @@ preview. Drawing on a map, and picking DCS drawings, happen in crc-desktop's pan
 web admin with polygon drawing.
 *Recommend (a)* for phase 2: it keeps the web lane small, the crc-desktop map already exists, and the web cannot see
 mission drawings anyway. (b) can follow as its own lane.
+**Settled H100 (a).**
 
 **DA-5. What happens to the booking tool's existing "ranges"?**
 (a) They become read-only "legacy". Existing bookings keep displaying until they pass, and new range bookings pick a
@@ -125,18 +132,21 @@ registry airspace (theater, then airspace). (b) A one-time migration: an admin m
 airspace, and its bookings move over. (c) Drop the legacy ranges and their bookings (clean start).
 *Recommend (a).* No data loss, no migration code, and it fades out by itself. (b) is worth it only if there are many
 future bookings.
+**Settled H100 (b):** a one-time migration. An admin maps each legacy range to a registry airspace (a mapping table on the airspace admin page), and that range's bookings move to the airspace. The legacy read-only state of option (a) is not built. Details in `AIRSP-2-web.md`.
 
 **DA-6. What do calendar bookings do inside crc-desktop?**
 (a) Information only: the next booking is shown on the airspace card in grey (real UTC, who, altitude), with a link to
 the booking page. (b) Also a "Schedule from booking" button that pre-fills the schedule form. (c) Not shown.
 *Recommend (a).* Bookings are real-world time and the airspace window is mission time (ADR 0079). Mixing them in a
 pre-fill invites a wrong window whenever the mission date differs from today.
+**Settled H100 (a).**
 
 **DA-7. Which Positions of an MRU act as using agency for an airspace released to it (schedule, request activation,
 release)?** This is not editing (AIRSP-6 already said no to that). It is the H97 flow: ATC releases the block to the MRU.
 (a) TAC_C2 only. (b) TAC_C2 and GCI/AIC. (c) Every Position of the MRU Facility.
 *Recommend (a).* TAC_C2 is the Position that accepts the TOFI, and so the one that knows the block is needed. Adding
 more is one capability row.
+**Settled H100 (a).**
 
 **DA-8. Does the panel's geometry and route editor need its own mockup approval before it is built?**
 The approved mockup (AIRSP-1) has no geometry, no route segments, no `usingFacilityId`, and no DCS-drawing picker.
@@ -144,12 +154,14 @@ The approved mockup (AIRSP-1) has no geometry, no route segments, no `usingFacil
 (b) No: build directly from the ADR, and review it in the running app.
 *Recommend (a).* The map interaction (draw, edit vertices, pick a drawing, route legs with widths) is the part most
 likely to need a second look, and 2P-A is not blocked by it.
+**Settled H100 (a).**
 
 **DA-9. What does the scope map show of airspaces?**
 (a) The outline of ACTIVE airspaces (AREA polygons, ROUTE corridors), with a toggle in settings and a label with the
 name and limits. (b) All airspaces, coloured by state. (c) Nothing (panel only).
 *Recommend (a).* It highlights what matters now (R3-12's original recommendation was "highlight when active") without
 cluttering the scope with every standing area. The grey and colour rules follow ADR 0056/0058.
+**Settled H100 (a) plus a menu:** ACTIVE airspace outlines are what the scope map shows by default, and a user menu toggles which airspaces and layers show: per kind, per state and per individual airspace. There is no fixed rule (a fixed rule is too rigid). The choice is a per-user display preference in the client, not shared and not on the wire. Details in `AIRSP-2-panel.md` (2P-B).
 
 ## Findings for other lanes and the supervisor
 
@@ -184,13 +196,12 @@ cluttering the scope with every standing area. The grey and colour rules follow 
 | 2S-A core | `airspace-store.js`, `airspace-config.js` (schema/seed), new `airspace/containment.js`, `stores.js` entry, `wire/families/airspace.js`, `authority/positions/*` airspace rows, `metrics.js`, `config/efsp-airspaces.json`, ADR 0098 | 1.5 / Sonnet | window close + L20 | first |
 | 2S-B edges | new `airspace-service.js`, new `efsp/booking-lookup.js`, `app.js` mount + ticker, `grpc-client.js` `_getDrawings`, `crc-sync/.env.example` | 0.75 / Sonnet | with 2S-A (stub) | after 2S-A |
 | 2P-A editor | `airspace-panel.js`, new `airspace-editor.js`, `airspace-validate.js`, `airspace-capabilities.js`, parity tests | 1 / Sonnet | with 2S-A | after 2S-A |
-| 2P-B geometry | mockup delta first (DA-8), new `airspace-geometry-editor.js`, `map/airspace-draw.js`, `map/airspace-layer.js`, one line each in `map-setup.js` and `settings-panel.js`, the MTR group renderer | 1 / Sonnet (+ mockup) | mockup at once; code on approval | after 2P-A |
-| 2W web | `sourcedcs-web/{crcsync-client.js, routes/airspaces.js, routes/bookings.js, auth.js, public/airspace-admin.*, public/bookings.*, public/wing-admin.html link}`, `infra/docker-compose.yml`, nginx template, root `.env.example`, CLAUDE.md env rows | 1 / Sonnet | with 2S-A | after 2S-B |
+| 2P-B geometry | mockup delta first (DA-8), new `airspace-geometry-editor.js`, `map/airspace-draw.js`, `map/airspace-layer.js`, new `map/airspace-layer-menu.js` (DA-9 menu), one line in `map-setup.js` and the menu mount in `settings-panel.js`, the MTR group renderer | 1.1 / Sonnet (+ mockup) | mockup at once; code on approval | after 2P-A |
+| 2W web | `sourcedcs-web/{crcsync-client.js, routes/airspaces.js, routes/bookings.js, auth.js, public/airspace-admin.*, public/bookings.*, public/wing-admin.html link, the one-time legacy-range migration (DA-5 b)}`, `infra/docker-compose.yml`, nginx template, root `.env.example`, CLAUDE.md env rows | 1.25 / Sonnet | with 2S-A | after 2S-B |
 
-That is about 5.25 lane-units, five agents in parallel (plus the questioner), and about 3 working days elapsed
+That is about 5.6 lane-units (was 5.25: +0.25 for the DA-5 migration, +0.1 for the DA-9 menu), five agents in parallel (plus the questioner), and about 3 working days elapsed
 including merges. The release+TOFI lane (ADR 0102) consumes 2S-A's queries and merges after it.
 
 ## Report
 
-Done; the files are listed at the top. The questions are DA-1..DA-9, all non-blocking for 2S-A: its defaults are
-written in, and the answers change only isolated paragraphs. The interface was sent to main for DES-RELEASE.
+Done; the files are listed at the top. The questions are DA-1..DA-9, all answered (H100); the two that changed a draft, DA-5 (b) and DA-9, touch only 2W and 2P-B. The interface was sent to main for DES-RELEASE.

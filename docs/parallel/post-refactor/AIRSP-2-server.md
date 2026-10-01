@@ -1,10 +1,12 @@
+> Amended for H100 (2026-10-01): the DA questions are answered; no change to this lane's design or size (2S-A 1.5, 2S-B 0.75).
+
 # AIRSP-2 server: the airspace registry in crc-sync (lanes 2S-A and 2S-B)
 
 > Read `docs/parallel/refactor/README.md` (the conventions) and `docs/wip/DES-AIRSP-adr-0098.md` (the ADR, which
 > wins over this briefing). Rulings: H79 (AIRSP-1..7, R3-11, R3-12, R3-22..26), S-R3-80, H97, H84 R3-72/S3-6,
 > S-desk3, H96/H98 (write with the post-RENAME names). Design history: `docs/wip/AIRSP.md`,
 > `docs/wip/DES-AIRSP.md`. **Starts after the refactor window closes and L20 merges** (H78, ARCH-D3). Open questions
-> DA-1..DA-9 are in `docs/wip/DES-AIRSP.md`. Take the marked defaults unless the supervisor relays an answer.
+> DA-1..DA-9 are in `docs/wip/DES-AIRSP.md`. All are answered (decisions.md H100); DA-5 (b) and DA-9 change only the web and panel lanes, nothing here.
 
 Two lanes run in parallel and own disjoint files. 2S-A owns the store, its rules and its persistence. 2S-B owns the
 edges: the HTTP service API, the calendar pull, and the drawing export. 2S-B codes against the ADR's interface and

@@ -1,3 +1,6 @@
+> Amended for H100 (2026-10-01): DA-9 (a) plus a user menu to toggle which airspaces and layers show (no fixed rule); 2P-B is
+> 1.1 lanes. Other DA answers as recommended.
+
 # AIRSP-2 panel: the AIRSPACE panel edits the registry (lanes 2P-A and 2P-B, crc-desktop)
 
 > Read `docs/parallel/refactor/README.md` (the conventions) and `docs/wip/DES-AIRSP-adr-0098.md` (the ADR wins).
@@ -5,7 +8,7 @@
 > R3-11, R3-12, R3-23, R3-24, S-R3-80, ADR 0056/0058 (colour: grey by default, orange-red only for something wrong).
 > UI code is exempt from "no magic values" (S3-6). **Starts after the refactor window and L20.** The client is
 > native ES modules (ESM-1/2), messages are registered with `registerEfspMessage` (CMSG), and the client rule
-> tables are hand copies with parity tests (ARCH-D7). Open questions DA-1..DA-9 are in `docs/wip/DES-AIRSP.md`.
+> tables are hand copies with parity tests (ARCH-D7). Questions DA-1..DA-9 are answered (decisions.md H100, listed in `docs/wip/DES-AIRSP.md`); DA-9 changed 2P-B.
 
 There are two lanes with disjoint files. 2P-A builds the approved mockup: list, editor, conflict, history and delete.
 2P-B builds what the mockup does not show: the geometry and route editor, the DCS-drawing picker, map outlines, and
@@ -77,9 +80,9 @@ everything and edits nothing.
 | | |
 |---|---|
 | Worktree / branch | `/home/nklx/dev/personal/sourcedcs-AIRSP2PB` on `lane/AIRSP-2P-B-geometry` |
-| Size / model | 1 lane / Sonnet 5.5 (step 1 mockup: Opus if the supervisor prefers, docs only) |
+| Size / model | 1.1 lanes / Sonnet 5.5 (+0.1 for the DA-9 layer menu; step 1 mockup: Opus if the supervisor prefers, docs only) |
 
-### Step 1 first: mockup delta **[default DA-8]**
+### Step 1 first: mockup delta **settled H100 (DA-8 a)**
 
 Add one HTML file, `docs/wip/AIRSP-2P-B-mockup.html`, in the style of `AIRSP-mockup.html`, with dark and light
 themes. It shows:
@@ -89,7 +92,7 @@ themes. It shows:
 - the ROUTE editor: a fix table (name, lat/lon or "pick navpoint", altitudes per leg, width per leg or blank for the
   default), the default width, and the derived envelope shown read-only;
 - the map while drawing;
-- the ACTIVE-outline display (DA-9).
+- the airspace layer menu (DA-9) open, with its default (ACTIVE only), and the outlines in both the ACTIVE and the dashed non-active style.
 
 The supervisor publishes it for approval. Build steps 2–5 start when it is approved, but step 2's pure code may
 start at once.
@@ -101,10 +104,28 @@ start at once.
 - New `js/map/airspace-draw.js` (or next to the map modules on your base): MapLibre interaction to draw a polygon,
   move a vertex, delete a vertex, and click to add a route fix or pick a navpoint (`missionData.waypoints`). It emits
   `[lat, lon]` points. Self-intersection is checked through 2P-A's validator.
-- New `js/map/airspace-layer.js`: the ACTIVE airspace outlines (AREA polygon, ROUTE corridor buffered by leg widths
-  for display), each with a label showing name and limits (FL for values at and above the transition altitude, from
-  the `theater` message), and a settings toggle. One registration line in `map-setup.js` and one toggle in
-  `panels/settings-panel.js`.
+- New `js/map/airspace-layer.js`: the airspace outlines (AREA polygon, ROUTE corridor buffered by leg widths for
+  display), each with a label showing name and limits (FL for values at and above the transition altitude, from the
+  `theater` message). **What it draws is decided by the layer menu below, not by a fixed rule (settled H100, DA-9).** An
+  ACTIVE airspace draws as a solid grey outline, any other shown state (SCHEDULED, RELEASED, RETURNED) as a dashed lighter
+  grey outline with its state in the label; orange-red is never used for it (ADR 0056/0058). One registration line in
+  `map-setup.js`.
+- New `js/map/airspace-layer-menu.js` (**settled H100, DA-9: a menu to toggle which airspaces/layers show**), mounted in
+  `panels/settings-panel.js` and openable from a small button on the map. Its model is a pure function in the same
+  file (testable without a DOM):
+  - **Layers:** `Outlines`, `Labels`, `Route corridors` (the buffered corridor) and `Route centrelines`, each on/off.
+  - **Filters, all additive:** by **kind** (`AREA` types MOA, RANGE, DANGER, RESTRICTED, PROHIBITED, WARNING; `ROUTE`),
+    by **state** (SCHEDULED, ACTIVE, RELEASED, RETURNED) and by **individual airspace** (a checklist of the current
+    theater's airspaces, grouped by controlling Facility, with a search box).
+  - **Rule (the whole of it):** an airspace is shown when its layer is on and, if it has an individual setting, that wins
+    (on or off); otherwise when both its kind and its state are enabled. There is no other rule and nothing is forced on.
+  - **Default** (first run, and the "Reset" button): Outlines and Labels on, Route corridors on, centrelines off, every
+    kind on, **state = ACTIVE only**, no individual overrides. That reproduces "outline ACTIVE airspaces" without making it
+    a rule: a user can turn on RETURNED airspaces, or one individual SCHEDULED MOA, or silence one noisy ACTIVE area.
+  - **Persistence:** a per-user display preference in the client's existing settings store (the one the other map toggles
+    use), keyed by theater for the individual overrides (ids belong to a theater). Not synced between sessions, not on
+    the wire, not part of any Board or audit. A new airspace appears under the kind and state filters; an override for a
+    deleted airspace is ignored and pruned.
 - The DCS-drawing picker: read `missionData.drawings`. This needs `name`/`layerName` from 2S-B; until then, show
   "unnamed drawing #n" from the index. Convert a circle or oval to a 64-point polygon (UI code). On pick, **copy the
   points** and set `drawingRef {layerName, objectName, missionFingerprint}` (DA-2).
@@ -113,7 +134,7 @@ start at once.
   unknown designator stays as it is (ADR 0062, H23). This is one renderer file under `js/panels/efsp/bay/` (re-find
   the MTR group renderer on your base); edit that file only.
 - Tests: `crc-desktop/tests/airspace-geometry.test.js` (polygon editing model, route table to segments, circle to
-  polygon, drawing pick copies the points), `airspace-layer.test.js` (which records are drawn, labels),
+  polygon, drawing pick copies the points), `airspace-layer.test.js` (which records are drawn, labels, the solid/dashed styles) and `airspace-layer-menu.test.js` (the model: default = ACTIVE only; each kind, state and individual toggle; an individual override beats the filters; reset; theater switch; a deleted airspace's override pruned; persistence round-trip),
   `mtr-route-note.test.js`.
 - `docs/wip/AIRSP-2P-B.md`.
 
@@ -124,7 +145,8 @@ questioner at step 0), crc-sync, and the web.
 
 ### Walks
 
-- Draw a MOA, save it, and see it outlined once ACTIVE.
+- Draw a MOA, save it, and see it outlined once ACTIVE (the default menu state).
+- Open the menu: include RETURNED in the state filter and see the dashed outlines; turn one ACTIVE airspace off individually; switch theater and back, the choices hold; Reset restores ACTIVE only.
 - Pick a DCS drawing, save it, load a mission without that drawing: the outline stays.
 - Refresh from a moved drawing on a RETURNED airspace; on an ACTIVE one it is locked by R3-23.
 - Build a 4-fix route with one wide leg. TAC_C2 requests it, CTR confirms it, and its corridor shows.
