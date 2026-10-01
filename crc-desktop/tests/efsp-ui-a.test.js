@@ -26,6 +26,6 @@ test('U5: RELEASE (14A) is on a departure at APP and CTR, labelled RELEASE', () 
 });
 
 test('U3: the IFR field says what it is', () => {
-  assert.equal(tpl.blockLabelFor('IFR', 'DEPARTURE'), 'STAYS IFR');
+  assert.equal(tpl.blockLabelFor('IFR', 'DEPARTURE'), 'KEEP IFR');
   assert.match(tpl.blockTitleFor('IFR', null), /TOFI/);
 });

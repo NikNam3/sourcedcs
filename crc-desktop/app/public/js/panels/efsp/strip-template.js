@@ -137,7 +137,7 @@ const DEPARTURE_BLOCK_MAP = {
   // WP4A second slice, §4.6.3 — the three-field separation model. See
   // resolveBlockValue's 'tofi' branch and _buildBlockCell's IFR toggle for
   // why IFR isn't in ENUM_SELECT_BLOCKS the way RSVC/SREG are.
-  'IFR':  { required: false, label: 'STAYS IFR',     target: { kind: 'tofi', field: 'ifrActive' } },
+  'IFR':  { required: false, label: 'KEEP IFR',     target: { kind: 'tofi', field: 'ifrActive' } },
   'RSVC': { required: false, label: 'RADAR',   target: { kind: 'tofi', field: 'radarService' } },
   'SREG': { required: false, label: 'SEP REG', target: { kind: 'tofi', field: 'separationRegime' } },
   '25': { required: true,  label: 'STATE',    target: { kind: 'system', field: 'state' } },
@@ -189,7 +189,7 @@ const ARRIVAL_BLOCK_MAP = {
   '21':       { required: false, label: 'SCRATCH2',  target: { kind: 'annotation' } },
   '24':       { required: true,  label: 'MIT RMKS',     target: { kind: 'annotation' } },
   '24A':      { required: false, label: 'ARSPC',    target: { kind: 'airspace-owner' } }, // WP4A, §4.6.4 — see DEPARTURE_BLOCK_MAP's '24A' comment
-  'IFR':      { required: false, label: 'STAYS IFR',      target: { kind: 'tofi', field: 'ifrActive' } },       // WP4A second slice, §4.6.3 — see DEPARTURE_BLOCK_MAP's comment
+  'IFR':      { required: false, label: 'KEEP IFR',      target: { kind: 'tofi', field: 'ifrActive' } },       // WP4A second slice, §4.6.3 — see DEPARTURE_BLOCK_MAP's comment
   'RSVC':     { required: false, label: 'RADAR',    target: { kind: 'tofi', field: 'radarService' } },
   'SREG':     { required: false, label: 'SEP REG',  target: { kind: 'tofi', field: 'separationRegime' } },
   '25':       { required: true,  label: 'STATE',    target: { kind: 'system', field: 'state' } },
@@ -247,7 +247,7 @@ const OVERFLIGHT_BLOCK_MAP = {
   '21': { required: false, label: 'SCRATCH2',  target: { kind: 'annotation' } },
   '24': { required: true,  label: 'MIT RMKS',     target: { kind: 'annotation' } },
   '24A':{ required: false, label: 'ARSPC',    target: { kind: 'airspace-owner' } },
-  'IFR':  { required: false, label: 'STAYS IFR',     target: { kind: 'tofi', field: 'ifrActive' } },      // WP4A second slice, §4.6.3 — see DEPARTURE_BLOCK_MAP's comment
+  'IFR':  { required: false, label: 'KEEP IFR',     target: { kind: 'tofi', field: 'ifrActive' } },      // WP4A second slice, §4.6.3 — see DEPARTURE_BLOCK_MAP's comment
   'RSVC': { required: false, label: 'RADAR',   target: { kind: 'tofi', field: 'radarService' } },
   'SREG': { required: false, label: 'SEP REG', target: { kind: 'tofi', field: 'separationRegime' } },
   '25': { required: true,  label: 'STATE',    target: { kind: 'system', field: 'state' } },
@@ -668,7 +668,7 @@ const BLOCK_TITLES = {
   '9H-TIME': 'MTR exit estimate, UTC HHMM',
   '9H-ALT': 'requested altitude after exit',
   // UI-A U3: the field is TOFI's ifrActive (guide §4.6.3), not the filed flight rules.
-  'IFR': 'Stays IFR under tactical control (TOFI, guide §4.6.3): ✓ means ATC keeps separating this flight while the mission line works it. Click to toggle.',
+  'IFR': 'Keeps IFR under tactical control (TOFI, guide §4.6.3): ✓ means ATC keeps separating this flight while the mission line works it. Click to toggle.',
 };
 
 // ── §10.5's source on hover (docs/adr/0073) ─────────────────────────────────
