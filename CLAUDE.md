@@ -220,7 +220,7 @@ See `.env.example` for all required variables. Key ones:
 | `CASDOOR_ENDPOINT` | atobrief, sourcedcs-web, crc-sync |
 | `ATOBRIEF_CLIENT_ID` / `ATOBRIEF_CLIENT_SECRET` | atobrief |
 | `CRCSYNC_CLIENT_ID` / `CRCSYNC_CLIENT_SECRET` | crc-sync |
-| `CRCSYNC_DCS_GRPC_HOST`, `CRCSYNC_SRS_HOST`, `CRCSYNC_SRS_PORT` | crc-sync (DCS server upstream) |
+| `CRCSYNC_DCS_GRPC_HOST`, `CRCSYNC_SRS_HOST`, `CRCSYNC_SRS_PORT` | crc-sync (DCS server upstream). These are the root `.env` / compose names; compose hands them to the container as `DCS_GRPC_HOST`, `SRS_HOST`, `SRS_PORT`, which is what the code reads (and what `crc-sync/.env.example` uses for local runs) |
 | `DISCORD_BOT_TOKEN` | sourcedcs-web |
 | `RELEASE_UPLOAD_TOKEN` | sourcedcs-web (accepts uploads) + the `crc-desktop-release.yml` repo secret (sends them) — must match |
 | `CRCSYNC_COALITION` | crc-sync (which DCS coalition is "own": `3` BLUE, the default, or `2` RED; it models the Mode 4 crypto key, and carrier hulls are matched against it). In `.env.example` and forwarded by compose |
