@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+// Tests drive tick(t) with a virtual instant; the wall clock (docs/adr/0096) follows it, so only the
+// divergence tests below separate the two.
+const wallFollows = (m) => { const raw = m.tick.bind(m); m.tick = (t, w = t) => raw(t, w); return m; };
+
 /* docs/adr/0076: what "detected airborne" means, the suggestion chip (§10.3)
  * and staleness (§10.4). The monitor reads and states; nothing here moves a
  * Strip, and the ring-fence tests below hold that. */
@@ -79,6 +83,7 @@ function build({ strips, track, correlated = true, config = CFG }) {
     config,
     onStaleness: (e) => logged.push(e),
   });
+  wallFollows(mon);
   return { mon, state, logged };
 }
 
@@ -183,9 +188,27 @@ test('every occurrence reaches L5 metric 6 as a staleness count', () => {
     config: CFG,
     onStaleness: (e) => metrics.recordStaleness(e),
   });
+  wallFollows(mon);
   for (let t = 0; t <= 130000; t += 1000) mon.tick(t);
   assert.equal(calls.length, 1);
   assert.deepEqual(Object.keys(calls[0]).sort(), ['at', 'durationMs', 'facilityId', 'fdrId', 'positionId', 'stripId', 'stripState', 'trackState']);
+});
+
+test('hold and staleness run on the wall clock; `since` and the logged `at` stay mission time (docs/adr/0096)', () => {
+  const strips = [dep('LUAW')];
+  const { mon, logged } = build({ strips, track: trk({ agl: 800, kt: 160 }) });
+  const MISSION = 9_000_000_000; // unrelated to the wall values below
+  mon.tick(MISSION, 0);
+  assert.equal(mon.tick(MISSION + 3_600_000, 4000), false, 'the mission clock jumped an hour, the hold has seen 4 s of wall time');
+  assert.equal(mon.tick(MISSION + 3_601_000, 5000), true, '5 s of wall time: the chip');
+  const [h] = mon.getAll();
+  assert.equal(h.since, MISSION + 3_601_000, '`since` is mission time');
+  mon.tick(MISSION + 3_602_000, 6000);
+  assert.equal(logged.length, 0, 'not stale: 1 s of wall time into the episode');
+  mon.tick(MISSION + 3_603_000, 5000 + 120000);
+  assert.equal(logged.length, 1);
+  assert.equal(logged[0].at, MISSION + 3_603_000, '`at` is mission time');
+  assert.equal(logged[0].durationMs, 120000, 'durationMs is wall time');
 });
 
 // ── the tuning file ────────────────────────────────────────────────────────

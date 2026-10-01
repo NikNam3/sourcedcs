@@ -65,12 +65,13 @@ test('the NLA status every Strip carries is computed at mission time', () => {
   assert.equal(seen, MISSION_0240Z);
 });
 
-test('conformance measures the heading grace period from the clearance\'s mission-time stamp', () => {
+test('conformance measures the heading grace on the wall clock from first sight; `since` stays mission time (docs/adr/0096)', () => {
   const clock = fakeClock();
-  const cleared = MISSION_0240Z;
+  let wall = 1000;
+  const cleared = MISSION_0240Z; // mission time: a stamp seven years from the wall clock's
   const fdr = { fdrId: 'f1', clearance: { heading: { entries: [{ status: 'ACTIVE', parsed: 90, at: cleared }] }, altitude: { entries: [] } } };
   const monitor = new ConformanceMonitor({
-    clock,
+    clock, wallClock: { now: () => wall },
     trackStore: { get: () => ({ course: 180, groundSpeed: 200, verticalSpeed: 0, alt: 3000 }) },
     fdrStore: { getFdr: () => fdr },
     correlationStore: { getAll: () => [{ fdrId: 'f1', trackId: 't1', state: 'CORRELATED' }] },
@@ -78,14 +79,14 @@ test('conformance measures the heading grace period from the clearance\'s missio
     gridToMagnetic: (deg) => deg, // frames are conformance.test.mjs's concern
     config: { minGroundSpeedKt: 50, headingToleranceDeg: 5, headingGraceSec: 30, headingPersistSec: 10, atAltitudeBandFt: 400, levelBustFt: 500, levelBustPersistSec: 3, wrongWayFpm: 500, wrongWayPersistSec: 5 },
   });
-  // With a wall-clock `now` this would be seven years past the grace period.
-  monitor.tick();
+  clock.set(cleared); monitor.tick();
   assert.deepEqual(monitor.getAll(), [], 'inside the 30 s grace period');
-  clock.set(cleared + 31000);
-  monitor.tick();
-  clock.set(cleared + 42000);
-  monitor.tick();
+  // The mission clock jumps (DCS pause, mission reload): the grace does not care.
+  clock.set(cleared + 3600000); wall += 5000; monitor.tick();
+  assert.deepEqual(monitor.getAll(), [], 'still inside the grace: 5 s of wall time passed');
+  wall += 26000; clock.set(cleared + 3601000); monitor.tick(); // grace over (31 s wall), persistence starts
+  wall += 11000; clock.set(cleared + 3612000); monitor.tick();
   const [{ alerts: [alert] }] = monitor.getAll();
   assert.equal(alert.kind, 'HEADING');
-  assert.equal(alert.since, cleared + 31000, '`since` is mission time too');
+  assert.equal(alert.since, cleared + 3601000, '`since` is mission time');
 });
