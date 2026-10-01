@@ -1,6 +1,7 @@
 'use strict';
 require('dotenv').config();
-require('./src/log-level').install(); // LOG_LEVEL=error|warn|info|debug, default info
+const log = require('./src/log');
+log.installConsole(); // LOG_LEVEL gates the console.* calls LOG-2 has not converted yet
 
 const GrpcClient = require('./src/grpc-client');
 const SrsClient  = require('./src/srs-client');
@@ -14,7 +15,7 @@ const app = createApp({ env: process.env, grpcClient, srsClient });
 app.start();
 
 app.server.listen(PORT, () => {
-  console.log(`[crc-sync] http://localhost:${PORT}`);
+  log.logger('server').info('listening', { url: `http://localhost:${PORT}` });
 });
 
 grpcClient.connect();

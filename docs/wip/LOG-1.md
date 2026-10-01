@@ -1,4 +1,4 @@
-# LOG-1 (step 0, report follows at the end)
+# LOG-1
 
 ## Code as found (base 457397d)
 - `crc-sync/src/log-level.js`: `LEVELS`, `parseLevel`, `install(target, raw)` wraps console.error/warn/info/log/debug; unknown value warns once and uses info. Only user: `server.js` line 3 and `tests/log-level.test.mjs`.

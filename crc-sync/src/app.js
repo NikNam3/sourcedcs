@@ -91,7 +91,7 @@ const COVERAGE_TICK_MS = 250;
 
 /**
  * @param {object} [deps]
- * @param {object} [deps.env] the environment; `CRCSYNC_TEST_RESET`, `NODE_ENV` and `CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH` are read here
+ * @param {object} [deps.env] the environment; `LOG_LEVEL`, `CRCSYNC_TEST_RESET`, `NODE_ENV` and `CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH` are read here
  * @param {{read:string, write:string}} [deps.paths] the Board snapshot's paths (default: state/ per `env`)
  * @param {object} [deps.grpcClient] the DCS-gRPC client (default: a new, unconnected GrpcClient). server.js connects it
  * @param {object} [deps.srsClient] the SRS client (default: a new, unconnected SrsClient)
@@ -111,6 +111,7 @@ const COVERAGE_TICK_MS = 250;
  */
 function createApp(deps = {}) {
   const env = deps.env || process.env;
+  require('./log').configure({ level: env.LOG_LEVEL }); // once per app (ADR 0097)
   const trackSeams = deps.trackSeams || {};
 
   const app    = express();
