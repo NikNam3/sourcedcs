@@ -589,7 +589,7 @@ function _metricsSelectedSession() {
 }
 
 /** Asks crc-sync for the metrics and the traffic count. The answer arrives as `efsp-metrics` (onEfspMetrics). */
-function requestEfspMetrics() {
+export function requestEfspMetrics() {
   if (typeof isSyncOpen === 'function' && !isSyncOpen()) {
     _metricsPanel.error = 'Not connected to crc-sync — showing the last answer.';
     renderMetricsPanel();
@@ -628,7 +628,7 @@ export function onEfspMetrics(msg) {
   renderMetricsPanel();
 }
 
-function _metricsPollTick() {
+export function _metricsPollTick() {
   const showing = _metricsPanelShowing();
   const now = typeof performance !== 'undefined' ? performance.now() : null;
   const due = _metricsPanel.lastRequestAt === null || now === null || now - _metricsPanel.lastRequestAt >= METRICS_POLL_MS;

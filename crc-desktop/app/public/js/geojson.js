@@ -160,7 +160,7 @@ function _atcSegmentProps(d) {
 }
 
 // Track dots
-function buildDots() {
+export function buildDots() {
   const features = [];
   const baseOp   = trackOpacity();
 
@@ -375,7 +375,7 @@ function getDeclutteredIds() {
 // Non-dragged tracks: geo offset computed from em-offset at first render, stored in labelOffsets.
 // Dragged tracks: labelOffsets already holds the geo offset set by the drag interaction.
 // The rendered text uses textOffset [0,0] so MapLibre places it at the geo coordinate directly.
-function buildLabels() {
+export function buildLabels() {
   if (!mapReady) return { type: 'FeatureCollection', features: [] };
   const features    = [];
   const baseOp      = trackOpacity();
