@@ -1141,6 +1141,7 @@ class Driver {
       if (tickN % 5 === 0) what.push('expireTracks');
       if (tickN % 15 === 0) what.push('obligationsNla');
       if (tickN % 10 === 0) what.push('heartbeat');
+      if (tickN % 60 === 0) what.push('metrics');
       const r = await this.call('tick', { what });
       if (r.correlation) this._learnCorrelationStats(r.correlation);
       if (r.alerts) {
@@ -1176,7 +1177,7 @@ class Driver {
     // Log reconciliation every 30 virtual minutes (early failure).
     const recon = async () => {
       const r = await this.ledger.reconcileLog(path.join(this.o.stateDir, 'mutations.jsonl'));
-      this.event('logReconcile', { auditMissing: r.auditMissing, auditDuplicate: r.auditDuplicate, auditForRefusal: r.auditForRefusal, auditOrphan: r.auditOrphan, logLines: r.logLines });
+      this.event('logReconcile', { auditMissing: r.auditMissing, auditDuplicate: r.auditDuplicate, auditWrongSource: r.auditWrongSource, auditOrphan: r.auditOrphan, logLines: r.logLines });
       this.after(30 * MIN, recon, 'recon');
     };
     this.at(this.t0 + 30 * MIN, recon, 'recon');
