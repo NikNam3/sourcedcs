@@ -81,8 +81,9 @@ test('typed magnetic runway courses are converted by crc-sync, and the map draws
 });
 
 test('magnetic.js loads after geo.js and before any panel', () => {
-  const html = read('index.html');
-  const at = (s) => html.indexOf(`<script src="./js/${s}"></script>`);
+  // ESM-1: index.html loads js/main.js, whose import list is the load order the <script> tags used to be.
+  const html = read('js/main.js');
+  const at = (s) => html.indexOf(`import './${s}';`);
   assert.ok(at('magnetic.js') > at('geo.js') && at('geo.js') > 0);
   assert.ok(at('magnetic.js') < at('geojson.js'));
   assert.ok(at('magnetic.js') < at('panels/topbar.js'));

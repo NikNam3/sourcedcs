@@ -1,17 +1,20 @@
-'use strict';
-
 // The carrier's client (crc-sync's docs/adr/0074): what it formats, what it refuses to compute,
 // and that its capability mirror agrees with permission.js.
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const state = require('../app/public/js/panels/efsp/carrier-state.js');
-Object.assign(globalThis, state, require('../app/public/js/panels/efsp/efsp-nla.js'));
-const panel = require('../app/public/js/panels/efsp/carrier-panel.js');
+import { createRequire } from 'node:module';
+import './helpers/client-env.mjs';
+import * as state from '../app/public/js/panels/efsp/carrier-state.js';
+import * as panel from '../app/public/js/panels/efsp/carrier-panel.js';
+import { sendEfspSetPositions } from '../app/public/js/panels/efsp/efsp-ws.js';
+
+const require = createRequire(import.meta.url);
 const permission = require('../../crc-sync/src/efsp/permission.js');
 const { CarrierStore } = require('../../crc-sync/src/efsp/carrier-store.js');
 const hullConfig = require('../../crc-sync/src/efsp/carrier/hull-config.js');
+
 
 const clock = { now: () => Date.UTC(2026, 5, 1, 9, 0), source: 'TEST' };
 
@@ -99,8 +102,7 @@ test('the Marshal stack Bay is ordered by slot, and no other Bay is touched', ()
 
 test('the final-bearing line: from the ship along the reciprocal of the final bearing, only for a tracked ship on a TRUE bearing', () => {
   state._resetEfspCarrierStateForTest();
-  globalThis.getActingPositions = (f) => (f === 'CARRIER' ? ['CV_APP1'] : []);
-  globalThis.projectPos = (lat, lon, brg, m) => [lat + (m / 111320) * Math.cos(brg * Math.PI / 180), lon + (m / 111320) * Math.sin(brg * Math.PI / 180)];
+  sendEfspSetPositions('CARRIER', ['CV_APP1']);
   const v = viewWith();
   state.applyEfspCarrierSnapshot({ carriers: [v] });
   const line = panel.buildCarrierFinalLine();
@@ -113,8 +115,7 @@ test('the final-bearing line: from the ship along the reciprocal of the final be
     state.applyEfspCarrierSnapshot({ carriers: [{ ...v, shipState: { ...v.shipState, ...bad } }] });
     assert.equal(panel.buildCarrierFinalLine().features.length, 0, JSON.stringify(bad));
   }
-  globalThis.getActingPositions = (f) => (f === 'CARRIER' ? [] : ['OPS']);
+  sendEfspSetPositions('CARRIER', []);
   state.applyEfspCarrierSnapshot({ carriers: [v] });
   assert.equal(panel.buildCarrierFinalLine().features.length, 0, 'a controller with no carrier Position gets no line');
-  delete globalThis.getActingPositions; delete globalThis.projectPos;
 });
