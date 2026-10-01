@@ -8,7 +8,11 @@ The record is `docs/parallel/decisions.md` (rows H79-H98, S-desk3, S-ARCH2, S-R3
 
 **Desk.** Every question is settled (the last ones in chat: H87-H98). Nothing open.
 
-**Refactor (in progress).** Plan `docs/wip/ARCH-plan.md`, schedule and conventions `docs/parallel/refactor/README.md`, briefings `docs/parallel/refactor/*.md`; waves W1-W7 (W7 = RENAME, briefing still to be written from `docs/parallel/research/vocabulary.md` per H96/H98), then L20. **W1 dispatched at base `45aee4c`:** R0 (`../sourcedcs-R0`), ESM-1 (`../sourcedcs-ESM1`), the W1 questioner (Opus). ESM-1T a/b/c are cut from ESM-1's "sources converted" commit when ESM-1 reports its hash. Merge: R0 alone; ESM-1 + ESM-1T as one unit; then supervisor full Playwright on lane 7, then W2.
+**Refactor (in progress).** Plan `docs/wip/ARCH-plan.md`, schedule and conventions `docs/parallel/refactor/README.md`, briefings `docs/parallel/refactor/*.md`; waves W1-W7 (W7 = RENAME, briefing still to be written from `docs/parallel/research/vocabulary.md` per H96/H98), then L20. **W1 at base `45aee4c` — stopped cleanly when session 3 ended; relaunch in the next session:**
+- **R0**: worktree `../sourcedcs-R0`, branch `lane/R0-harness-prep`, step 0 committed (`3dbb46a`, `docs/wip/R0.md`). Relaunch with its briefing + "continue from your branch and `docs/wip/R0.md`; step 0 is done". Its open point for the questioner: step 1's order test assumes no Mutation yields both peer and MARSA broadcasts, but `_applyDrop` on a flight's last Strip can return both; default = try one hub trace, else the stub-level `freeze-hub-order` test.
+- **ESM-1**: not started (its empty worktree was removed). Launch fresh per `docs/parallel/refactor/ESM-1.md` (worktree `../sourcedcs-ESM1`, branch `lane/ESM-1-client-modules`, base `45aee4c` or the then-current head); it must SendMessage "main" the hash of its "sources converted" commit, from which ESM-1T a/b/c are cut.
+- **Questioner** (Opus): launch fresh with the W1 briefings; reads each lane's step-0 wip and challenges it.
+- Merge: R0 alone; ESM-1 + ESM-1T as one unit; then supervisor full Playwright on lane 7, then W2. Models: lanes Sonnet 5.5, questioner Opus.
 
 **Queued after the refactor (designs settled):** formation split/join (H89-H91), control release on HANDOFF (H94), undo for every one-click move with a 10 s window (H95), TOFI separation regime effective at airspace entry (H97, with AIRSP phase 2 / ADR 0098, MTRs as `kind: ROUTE` per S-R3-80), per-Facility heartbeat (WIRE-B) and resync for every store (SYNC-B) (H88), logging (LOG-1/2 in the refactor).
 
