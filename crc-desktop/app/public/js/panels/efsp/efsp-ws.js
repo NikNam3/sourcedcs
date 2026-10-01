@@ -288,6 +288,10 @@ export function setEfspSender(name, fn) {
     case 'sendEfspAirspaceMutation': sendEfspAirspaceMutation = fn; break;
     case 'sendEfspCorrelationMutation': sendEfspCorrelationMutation = fn; break;
     case 'sendEfspMarsaMutation': sendEfspMarsaMutation = fn; break;
+    case 'sendEfspFieldStateMutation': sendEfspFieldStateMutation = fn; break;
+    case 'sendEfspSfaMutation': sendEfspSfaMutation = fn; break;
+    case 'sendEfspCarrierMutation': sendEfspCarrierMutation = fn; break;
+    case '_sendEfsp': _sendEfsp = fn; break;
     default: throw new TypeError(`setEfspSender: ${name} is not a replaceable sender`);
   }
 }

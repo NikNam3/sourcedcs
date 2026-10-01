@@ -103,8 +103,11 @@ const SHIP_RADAR_HEIGHT_M    = 40;
 //     purpose: that IS the radar simulation, computed once on the server.
 export const latestFromServer = new Map(); // id → track (as delivered, incl. illuminatedAt)
 export const tracks           = new Map(); // id → track (displayed)
+// ESM-1 (S-ESM1b): ran at script load; startApp() now calls it, so importing app.js starts nothing.
+function _publishTrackAccessors() {
 window.getAllTracks    = () => [...latestFromServer.values()];
 window.getLatestTrack   = (id) => latestFromServer.get(String(id)) || null;
+}
 export const history          = new Map(); // id → [{lat, lon, altFt, timestamp}, ...] — altFt null when no sensor gives one
 export const labelOffsets     = new Map(); // id → [dLat, dLon] relative to track
 
@@ -324,6 +327,8 @@ function pushHistory(id, track) {
 // What stays here is the part that was always a display concern: how a contact
 // fades once its beam has passed, and when it finally goes.
 
+// ESM-1 (S-ESM1b): ran at script load; startApp() now calls it, so importing app.js starts nothing.
+function _startTrackFadeBeat() {
 setInterval(() => {
   const now = Date.now();
   let changed = false;
@@ -370,6 +375,7 @@ setInterval(() => {
     map.getSource('radar-debug').setData(buildRadarDebug(coverageRadars));
   }
 }, FADE_TICK_MS);
+}
 
 // ── Track state ───────────────────────────────────────────────────────────
 
@@ -899,6 +905,8 @@ async function connect() {
 
 // ── Periodic maintenance ──────────────────────────────────────────────────
 
+// ESM-1 (S-ESM1b): ran at script load; startApp() now calls it, so importing app.js starts nothing.
+function _startMaintenanceBeats() {
 setInterval(() => {
   checkStale();
   if (grpcStatus !== 'connected') updateMap();
@@ -917,12 +925,16 @@ setInterval(() => {
     map.setPaintProperty('unit-emerg-square', 'icon-opacity', _pulseBright ? 0.95 : 0.12);
   }
 }, 500);
+}
 
 // ── Boot ──────────────────────────────────────────────────────────────────
 
 // ESM-1: the boot sequence ran at script-execution time, after every earlier script. A module is evaluated in
 // dependency order instead, so main.js calls this once every module has been evaluated (S-ESM1a).
 export function startApp() {
+_publishTrackAccessors();
+_startTrackFadeBeat();
+_startMaintenanceBeats();
 loadSettings();
 loadUserCoalition();
 loadStaticData();
