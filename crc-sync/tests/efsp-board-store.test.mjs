@@ -1163,3 +1163,48 @@ test('a Mutation without a clientMutationId is never answered from the cache', (
   assert.equal(r2.replayed, undefined);
   assert.equal(board.getStrip(strip.stripId).flags.flipped, true);
 });
+
+// ── observeTouches (SYNC, W5-7): the soak host's touch record, without patching _touch ─────────────────
+
+test('observeTouches sees every touch once, after its ring entry, in order; a wrap of _rebalanceRack attributes the rebalance touches; an archive is not a touch', () => {
+  const { board } = makeStore();
+  const a = createStrip(board, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'AAA1111' } } });
+  const b = createStrip(board, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'BBB2222' } } });
+  const c = createStrip(board, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'CCC3333' } } });
+  board.getStrip(a.stripId).orderKey = 'V';
+  board.getStrip(b.stripId).orderKey = 'V';
+
+  // The host-core shape: a cause stack fed by by-name wraps, and one observer per Board.
+  const causeStack = [];
+  const seen = [];
+  const ringAtCall = [];
+  const off = board.observeTouches((id) => {
+    seen.push({ id, cause: causeStack.length ? causeStack[causeStack.length - 1] : null });
+    ringAtCall.push(board.currentSeq);
+  });
+  const orig = board._rebalanceRack.bind(board);
+  let rebalances = 0;
+  board._rebalanceRack = (...args) => { rebalances++; causeStack.push('REBALANCE_SIDE_EFFECT'); try { return orig(...args); } finally { causeStack.pop(); } };
+
+  const seqBefore = board.currentSeq;
+  const result = board.applyMutation(mutation(c, { kind: 'MoveStrip', bayId: 'proposed', rackId: 'main', afterStripId: a.stripId, beforeStripId: b.stripId }), 'OPS', 'OPS');
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(rebalances, 1);
+  const ring = board._state.log.filter(e => e.seq > seqBefore);
+  assert.deepEqual(seen.map(s => s.id), ring.map(e => e.id), 'one observation per ring entry, in order');
+  assert.deepEqual(ringAtCall, ring.map(e => e.seq), 'called after its ring entry');
+  const rebalanced = seen.filter(s => s.cause === 'REBALANCE_SIDE_EFFECT').map(s => s.id).sort();
+  assert.deepEqual(rebalanced, [a.stripId, b.stripId].sort(), 'the Rack minus the moving Strip');
+  assert.deepEqual(seen.filter(s => s.cause === null).map(s => s.id), [c.stripId]);
+
+  // Not for a gone entry; and the returned function removes the observer.
+  seen.length = 0;
+  board.applyMutation(mutation(board.getStrip(c.stripId), { kind: 'DropStrip' }), 'OPS', 'OPS');
+  const n = seen.length;
+  assert.ok(n >= 1);
+  board.archiveStrip(c.stripId, 'AGE');
+  assert.equal(seen.length, n, 'an archive adds a gone entry, not a touch');
+  off();
+  board.applyMutation(mutation(board.getStrip(a.stripId), { kind: 'SetFlag', flag: 'offset', value: true }), 'OPS', 'OPS');
+  assert.equal(seen.length, n);
+});

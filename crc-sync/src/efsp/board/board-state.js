@@ -3,9 +3,9 @@
 // The Board's kernel (docs/adr/0095): the Strip map, the seq/`_log` ring, the epoch, the touched-since-drain set and
 // the cid counter. The facade (board-store.js) and its collaborators read and write Strips through it.
 //
-// `touch` is the facade's late-bound `(id) => this._touch(id)`, not recordTouch: bump() and insert() go through it so
-// whatever is patched onto the facade's _touch (the soak host's touch recorder, tools/soak/host-core.js) still sees
-// every touch. The facade's _touch calls recordTouch.
+// Every touch (bump, insert, and each collaborator's `touch`, which the facade binds to recordTouch) goes through
+// recordTouch, so an observer registered with observeTouches (the facade's, used by tools/soak/host-core.js) sees
+// every one.
 
 const { SyncLog } = require('../sync/sync-log');
 
@@ -13,11 +13,9 @@ class BoardState {
   /**
    * @param {object} deps
    * @param {{now: () => number}} deps.clock the mission clock (docs/adr/0079)
-   * @param {(stripId: string) => void} deps.touch the facade's late-bound touch
    */
-  constructor({ clock, touch }) {
+  constructor({ clock }) {
     this._clock = clock;
-    this._touch = touch;
     this._strips = new Map(); // stripId -> Strip
     // The seq, the `_log` ring, the epoch and the touched set: the one sync mechanism (sync/sync-log.js, S3-1).
     this._sync = new SyncLog({ ring: true, touched: true, epoch: true });
@@ -26,7 +24,7 @@ class BoardState {
 
   /** The Strip map itself (stripId -> Strip). */
   get strips() { return this._strips; }
-  /** The `_log` ring (read by the facade's `_log` getter for tools and tests). */
+  /** The ring (sync/sync-log.js). Read-only use. */
   get log() { return this._sync.ring; }
   get seq() { return this._sync.seq; }
   get epoch() { return this._sync.epoch; }
@@ -42,7 +40,7 @@ class BoardState {
       .sort((a, b) => (a.orderKey < b.orderKey ? -1 : a.orderKey > b.orderKey ? 1 : (a.stripId < b.stripId ? -1 : 1)));
   }
 
-  /** The kernel's touch: the facade's _touch calls this; everything else calls the facade's (late-bound) touch. */
+  /** The kernel's touch: every touch on this Board comes here. */
   recordTouch(stripId) { this._sync.touch(stripId); }
 
   /**
@@ -53,13 +51,13 @@ class BoardState {
     strip.rev += 1;
     strip.updatedAt = this._clock.now();
     strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this.recordTouch(strip.stripId);
   }
 
   /** A new Strip (created, or a minted replica) joins the Board and is touched. */
   insert(strip) {
     this._strips.set(strip.stripId, strip);
-    this._touch(strip.stripId);
+    this.recordTouch(strip.stripId);
   }
 
   /** The ids of every Strip touched since the last drain, in first-touch order (sync/sync-log.js). */

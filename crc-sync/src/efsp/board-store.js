@@ -69,29 +69,30 @@ class BoardStore {
     this._fdrStore = fdrStore;
     this._rules = rules;
     // The kernel (docs/adr/0095): the Strip map, the seq/log ring, the epoch,
-    // the touched set and the cid counter. `touch` is late-bound to this._touch
-    // so a patched _touch (tools/soak/host-core.js) sees every touch.
-    this._state = new BoardState({ clock, touch: (id) => this._touch(id) });
+    // the touched set and the cid counter. Every touch goes through its recordTouch;
+    // observeTouches(fn) sees them all (tools/soak/host-core.js).
+    this._state = new BoardState({ clock });
+    const touch = (id) => this._state.recordTouch(id);
     this._replay = ReplayCache.forBoard(); // clientMutationId -> compact frozen replay record (replayRecord), idempotency (§5.2, docs/adr/0081)
     this._mutationLog = null; // optional collaborator, see setMutationLog()
     // The Mutation-log entries for a client Mutation and a peer write (board/audit.js).
     // `mutationLog` is read late: setMutationLog() can come after construction.
     this._audit = new BoardAudit({ rules, clock, mutationLog: () => this._mutationLog });
-    // Order keys and Bays (board/placement.js). touch and rebalanceRack are late-bound to the
-    // facade (host-core patches both); rejectedReplicaRefusal is the NLA cluster's, still here.
+    // Order keys and Bays (board/placement.js). touch is the kernel's recordTouch; rebalanceRack is late-bound to the
+    // facade (host-core wraps it); rejectedReplicaRefusal is the NLA cluster's, still here.
     this._placement = new Placement({
       state: this._state, rules, clock, fdrStore,
-      touch: (id) => this._touch(id),
+      touch,
       rebalanceRack: (bayId, rackId, excludeStripId) => this._rebalanceRack(bayId, rackId, excludeStripId),
       rejectedReplicaRefusal: (strip, toState) => this._stripOps.rejectedReplicaRefusal(strip, toState),
     });
     this._activeCmid = null;  // the clientMutationId being applied, while applyMutation runs
-    // Cross-Facility coordination and TOFI (board/coordination.js, board/tofi.js). touch and retire are late-bound
-    // to the facade (host-core patches _touch; retire is StripOps'), activeCmid and mutationLog are read late,
+    // Cross-Facility coordination and TOFI (board/coordination.js, board/tofi.js). touch is the kernel's
+    // recordTouch; retire is late-bound to the facade (it is StripOps'), activeCmid and mutationLog are read late,
     // and the per-Role tables are the authority registry's accessors (authority/index.js), passed in.
     this._coordination = new Coordination({
       rules, state: this._state, audit: this._audit, placement: this._placement, clock, fdrStore,
-      touch: (id) => this._touch(id),
+      touch,
       activeCmid: () => this._activeCmid,
       retire: (strip, by) => this._stripOps.retire(strip, by),
       mutationLog: () => this._mutationLog,
@@ -100,7 +101,7 @@ class BoardStore {
     });
     this._tofi = new Tofi({
       rules, state: this._state, audit: this._audit, placement: this._placement, clock, fdrStore,
-      touch: (id) => this._touch(id),
+      touch,
       activeCmid: () => this._activeCmid,
       retire: (strip, by) => this._stripOps.retire(strip, by),
       initialStateFor,
@@ -123,7 +124,7 @@ class BoardStore {
     this._stripOps = new StripOps({
       rules, state: this._state, audit: this._audit, placement: this._placement, clock, fdrStore,
       coordination: this._coordination, tofi: this._tofi, ops: OPS,
-      touch: (id) => this._touch(id),
+      touch,
       activeCmid: () => this._activeCmid,
       nlaHistory: () => this._nlaHistory,
       droppedWallAt: () => this._persistence.droppedWallAt,
@@ -145,10 +146,16 @@ class BoardStore {
   /** Rebalances one Rack (board/placement.js). Kept on the facade: tools/soak/host-core.js wraps it by name. */
   _rebalanceRack(bayId, rackId, excludeStripId) { return this._placement.rebalanceRack(bayId, rackId, excludeStripId); }
 
-  // Kept on the facade for tools and tests until SYNC replaces them (docs/adr/0095):
-  // tools/soak/host-core.js patches _touch and reads _log, _strips and _cidSeq.
-  _touch(stripId) { this._state.recordTouch(stripId); }
-  get _log() { return this._state.log; }
+  /**
+   * `fn(stripId)` after every touch on this Board, synchronously, after its ring entry, in registration order
+   * (sync/sync-log.js). Never for an archive's `gone` entry. Returns a function that removes the observer.
+   */
+  observeTouches(fn) { return this._state.observeTouches(fn); }
+
+  /** How many entries the Board's ring holds now (sync/sync-log.js prunes it past 2,000 to 1,000). */
+  get ringLength() { return this._state.log.length; }
+
+  // Kept on the facade for tools and tests (docs/adr/0095): tools/soak/host-core.js reads _strips and _cidSeq.
   get _strips() { return this._state.strips; }
   get _cidSeq() { return this._state.cidSeq; }
 

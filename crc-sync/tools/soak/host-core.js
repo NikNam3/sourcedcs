@@ -108,8 +108,7 @@ function createHost(env, { stateDir }) {
 
   for (const fid of facilityIds) {
     const bs = efsp.boardStoreFor(fid);
-    const touch = bs._touch.bind(bs);
-    bs._touch = (id) => { touch(id); touched.push({ fid, id, cause: causeStack.length ? causeStack[causeStack.length - 1] : null }); };
+    bs.observeTouches((id) => { touched.push({ fid, id, cause: causeStack.length ? causeStack[causeStack.length - 1] : null }); });
     const wrapCause = (name, cause, onCall) => {
       const orig = bs[name].bind(bs);
       bs[name] = (...args) => {
@@ -205,10 +204,10 @@ function createHost(env, { stateDir }) {
       for (const id of bs._nlaHistory.keys()) { const s = bs._strips.get(id); if (s && s.state === 'DROPPED') nlaHistDropped++; }
       c[`strips.live.${fid}`] = fl;
       c[`strips.dropped.${fid}`] = fd;
-      c[`log.${fid}`] = bs._log.length;
+      c[`log.${fid}`] = bs.ringLength;
       c[`appliedMutations.${fid}`] = bs._appliedMutations.size;
       total += bs._strips.size; live += fl; dropped += fd;
-      log = Math.max(log, bs._log.length);
+      log = Math.max(log, bs.ringLength);
       applied = Math.max(applied, bs._appliedMutations.size);
       nlaHist += bs._nlaHistory.size;
       maxCid = Math.max(maxCid, bs._cidSeq);

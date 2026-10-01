@@ -465,10 +465,11 @@ test('F4: after archiving, no Board, store or monitor structure references the S
   offset = 0;
   for (const fid of facilityConfig.getFacilityIds()) {
     const b = efsp.boardStoreFor(fid);
-    for (const k of ['_strips', '_log', '_nlaHistory', '_droppedWallAt']) {
+    for (const k of ['_strips', '_nlaHistory', '_droppedWallAt']) {
       assert.equal(reachesStrip(b[k], live), false, `${fid}.${k}`);
     }
-    assert.equal(b._log.some(e => e.id === strip.stripId && e.type === 'gone') || fid !== 'INCIRLIK', true, 'the ring keeps the id only');
+    assert.equal(reachesStrip(b._state.log, live), false, `${fid} ring`);
+    assert.equal(b._state.log.some(e => e.id === strip.stripId && e.type === 'gone') || fid !== 'INCIRLIK', true, 'the ring keeps the id only');
   }
   for (const [name, store] of Object.entries({ fdr: efsp.fdrStore._fdrs, correlation: efsp.correlationStore._records, marsa: efsp.marsaStore._relations, nla: efsp.nlaStatusMonitor._last })) {
     assert.equal(reachesStrip(store, live), false, name);
