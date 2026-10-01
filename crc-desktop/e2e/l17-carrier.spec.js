@@ -172,6 +172,8 @@ test('03 Case II hand-overs: Commence feeds a lane, See you hands to PriFly, Rad
   await onFinal.locator('.efsp-nla-btn[data-carrier-transfer="FINAL_TO_LSO"]').click();
   await waitStrip(marshal, a, s => s.state === 'BALL' && s.trigger === 'PILOT_BALL_CALL', 'Ball');
   await expect(strip(marshal, a).locator('.efsp-nla-btn')).toHaveText('Trapped');
+  // Ball and Trapped are two advancing presses: the client swallows a second one inside the 400 ms double-tap window (F-101), as it does for a person's double tap.
+  await marshal.waitForTimeout(450);
   await strip(marshal, a).locator('.efsp-nla-btn').click();
   await expect.poll(() => stripOf(marshal, a)).toBeNull();
   await expect.poll(() => marshal.evaluate(() => carrierDerivedStack().length)).toBe(0);
