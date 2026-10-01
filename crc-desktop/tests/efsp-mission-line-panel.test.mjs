@@ -1,5 +1,3 @@
-'use strict';
-
 /* Can TAC_C2 actually frag a mission line against a flight?
  *
  * crc-sync's efsp-scenario-military.test.mjs is the server half and proves
@@ -14,20 +12,22 @@
  * against stub toolbar elements the way efsp-stereo-panel.test.js does.
  */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('fs');
-const path = require('path');
-const vm = require('vm');
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const { makeElement } = require('./helpers/dom-stub.js');
+import './helpers/client-env.mjs';
+import domStub from './helpers/dom-stub.js';
+import { freshGraph } from './helpers/fresh-graph.mjs';
 
-function unrefTimeout(fn, ms, ...args) {
-  const t = setTimeout(fn, ms, ...args);
-  if (t && typeof t.unref === 'function') t.unref();
-  return t;
-}
-const CLIENT = path.join(__dirname, '../app/public/js/panels/efsp');
+const { makeElement } = domStub;
+
+// Unref'd, so a panel timer — the refusal banner's 30 s auto-clear above all — never holds the test
+// process open until it fires. That one timer kept `npm test` (and so `npm run dev-check`) waiting
+// 30 s after the last assertion had passed.
+const realSetTimeout = globalThis.setTimeout;
+globalThis.setTimeout = (fn, ms, ...args) => { const t = realSetTimeout(fn, ms, ...args); if (t && typeof t.unref === 'function') t.unref(); return t; };
+const realSetInterval = globalThis.setInterval;
+globalThis.setInterval = (fn, ms, ...args) => { const t = realSetInterval(fn, ms, ...args); if (t && typeof t.unref === 'function') t.unref(); return t; };
 
 const TOOLBAR_IDS = [
   'efsp-panel', 'efsp-position-tabs', 'efsp-bay-tabs', 'efsp-bay-content',
@@ -56,45 +56,31 @@ function stripFor(stripId, fdrId, overrides = {}) {
   };
 }
 
-function mountPanel({ held = ['TAC_C2'], strips = [], fdrs = [] } = {}) {
+async function mountPanel({ held = ['TAC_C2'], strips = [], fdrs = [] } = {}) {
   const sent = [];
   const els = {};
   for (const id of TOOLBAR_IDS) {
     els[id] = makeElement(id.endsWith('-btn') ? 'button' : id.includes('role') || id.includes('stereo') || id.includes('bind') ? 'select' : 'input');
   }
 
-  const sandbox = {
-    // Unref'd, so a panel timer — the refusal banner's 30 s auto-clear above
-    // all — never holds the test process open until it fires. That one timer
-    // kept `npm test` (and so `npm run dev-check`) waiting 30 s after the last
-    // assertion had passed.
-    console, module: { exports: {} }, setTimeout: unrefTimeout, clearTimeout, setInterval: () => 0, clearInterval: () => {},
-    Date, JSON, Math, Number, Set, Map, Array, Object, String, Boolean, RegExp,
-    isNaN, parseInt, parseFloat, Promise,
-    document: { getElementById: (id) => els[id] || null, createElement: makeElement, addEventListener() {}, removeEventListener() {} },
-    window: {},
+  globalThis.document.getElementById = (id) => els[id] || null;
+  globalThis.document.createElement = makeElement;
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    if (u.startsWith('/api/stereo-routes')) return { ok: true, json: async () => ({ ok: true, routes: [] }) };
+    return { ok: true, json: async () => ({ found: false }) }; // the flight-plan lookup
   };
-  sandbox.globalThis = sandbox;
-  vm.createContext(sandbox);
 
-  for (const file of ['efsp-nla.js', 'strip-template.js', 'efsp-state.js', 'efsp-arrivals.js', 'dot-command.js',
-    'efsp-gestures.js', 'annotation-editor.js', 'strip-drag.js', 'correlation-highlight.js',
-    'marsa-badge.js', 'strip-fields.js', 'bay-view.js', 'strip-view.js', 'efsp-stereo-routes.js', 'efsp-panel.js']) {
-    vm.runInContext(fs.readFileSync(path.join(CLIENT, file), 'utf8'), sandbox, { filename: file });
-  }
+  const g = freshGraph();
+  const state = await g.import('panels/efsp/efsp-state.js');
+  const ws = await g.import('panels/efsp/efsp-ws.js');
+  const sandbox = await g.import('panels/efsp/efsp-panel.js');
+  ws.setEfspSender('_sendEfsp', () => {});
+  ws.sendEfspSetPositions('INCIRLIK', held); // getActingPositions() = held
+  ws.setEfspSender('sendEfspCreateStrip', (actingPositionId, op, facilityId) => { sent.push({ actingPositionId, op, facilityId }); return 'mid'; });
+  ws.setEfspSender('sendEfspMutation', () => 'mid');
 
-  sandbox.getActingPositions = () => held;
-  sandbox.liveStripsForCallsign = (cs) => strips.filter((s) => {
-    const f = fdrs.find(x => x.fdrId === s.fdrId);
-    return f && f.identity.callsign === cs;
-  });
-  sandbox.sendEfspCreateStrip = (actingPositionId, op, facilityId) => { sent.push({ actingPositionId, op, facilityId }); return 'mid'; };
-  sandbox.sendEfspMutation = () => 'mid';
-  sandbox.updateMap = () => {};
-  sandbox.lookupFlightPlanClient = async () => ({ found: false });
-  sandbox.listStereoRoutesClient = async () => [];
-
-  sandbox.applyEfspSnapshot({ strips, fdrs, positions: [], bays: [], airspaces: [], correlations: [], marsa: [] });
+  state.applyEfspSnapshot({ strips, fdrs, positions: [], bays: [], airspaces: [], correlations: [], marsa: [] });
   sandbox.initEfspPanel();
   return { els, sent, sandbox };
 }
@@ -116,7 +102,7 @@ const TWO_FLIGHTS = {
 // ── the picker ───────────────────────────────────────────────────────────
 
 test('the bind picker lists live flights, blank-first, and names more than the callsign', async () => {
-  const { els } = await settled(mountPanel(TWO_FLIGHTS));
+  const { els } = await settled(await mountPanel(TWO_FLIGHTS));
   const select = els['efsp-create-strip-bind'];
   assert.equal(select.hidden, false);
   assert.deepEqual(select.children.map(o => o.value), ['', 'f1', 'f2']);
@@ -126,7 +112,7 @@ test('the bind picker lists live flights, blank-first, and names more than the c
 });
 
 test('a flight that already has a mission line is not offered', async () => {
-  const { els } = await settled(mountPanel({
+  const { els } = await settled(await mountPanel({
     strips: [...TWO_FLIGHTS.strips, stripFor('m1', 'f1', { role: 'MISSION', state: 'TASKED', ownerPositionId: 'TAC_C2', facilityId: 'TACTICAL', bayId: 'tac-c2-tasked' })],
     fdrs: TWO_FLIGHTS.fdrs,
   }));
@@ -136,19 +122,19 @@ test('a flight that already has a mission line is not offered', async () => {
 });
 
 test('the picker is hidden for GCI, which has no Tasked Bay to frag into', async () => {
-  const { els } = await settled(mountPanel({ ...TWO_FLIGHTS, held: ['GCI'] }));
+  const { els } = await settled(await mountPanel({ ...TWO_FLIGHTS, held: ['GCI'] }));
   assert.equal(els['efsp-create-strip-bind'].hidden, true);
 });
 
 test('the picker is hidden when there is no flight to bind against', async () => {
-  const { els } = await settled(mountPanel({ strips: [], fdrs: [] }));
+  const { els } = await settled(await mountPanel({ strips: [], fdrs: [] }));
   assert.equal(els['efsp-create-strip-bind'].hidden, true);
 });
 
 // ── dispatch ─────────────────────────────────────────────────────────────
 
 test('picking a flight sends fdrId and no fdr at all, with no callsign typed', async () => {
-  const { els, sent } = await settled(mountPanel(TWO_FLIGHTS));
+  const { els, sent } = await settled(await mountPanel(TWO_FLIGHTS));
   els['efsp-create-strip-bind'].value = 'f2';
   // Deliberately empty. docs/ui-findings F-308: this test used to type
   // 'IGNORED' here and assert the op was sent anyway, which is precisely the
@@ -174,7 +160,7 @@ test('binding skips the duplicate-origination warning, which means the opposite 
   // Binding is the precise opposite — the thing that warning tells you to do
   // instead — so leaving it in would make the good path harder than the bad
   // one. One press, not two.
-  const { els, sent } = await settled(mountPanel(TWO_FLIGHTS));
+  const { els, sent } = await settled(await mountPanel(TWO_FLIGHTS));
   els['efsp-create-strip-bind'].value = 'f1';
   els['efsp-new-strip-callsign'].value = 'VIPER11'; // a callsign that IS live
   for (const fn of els['efsp-create-strip-btn']._listeners.click || []) await fn({ preventDefault() {} });
@@ -188,7 +174,7 @@ test('a picked flight needs no callsign retyped', async () => {
   // Measured before the fix: "Enter a callsign first", and no Strip created —
   // _submitCreateStrip validated the typed callsign before it ever read the
   // picker, for an op that carries no `fdr` at all.
-  const { els, sent } = await settled(mountPanel(TWO_FLIGHTS));
+  const { els, sent } = await settled(await mountPanel(TWO_FLIGHTS));
   els['efsp-create-strip-bind'].value = 'f1';
   els['efsp-new-strip-callsign'].value = '';
   for (const fn of els['efsp-create-strip-btn']._listeners.click || []) await fn({ preventDefault() {} });
@@ -199,7 +185,7 @@ test('a picked flight needs no callsign retyped', async () => {
 });
 
 test('a typed callsign that agrees with the picked flight is accepted', async () => {
-  const { els, sent } = await settled(mountPanel(TWO_FLIGHTS));
+  const { els, sent } = await settled(await mountPanel(TWO_FLIGHTS));
   els['efsp-create-strip-bind'].value = 'f2';
   els['efsp-new-strip-callsign'].value = 'viper12';
   for (const fn of els['efsp-create-strip-btn']._listeners.click || []) await fn({ preventDefault() {} });
@@ -211,7 +197,7 @@ test('a typed callsign that disagrees with the picked flight is refused, not dis
   // The adjacent-callsign mis-pick the picker's own comment says it has to
   // survive: measured before the fix, picking MSNA11 and typing MSNA12
   // fragged MSNA11 with no word about the callsign that was typed.
-  const { els, sent } = await settled(mountPanel(TWO_FLIGHTS));
+  const { els, sent } = await settled(await mountPanel(TWO_FLIGHTS));
   els['efsp-create-strip-bind'].value = 'f1';       // VIPER11
   els['efsp-new-strip-callsign'].value = 'VIPER12'; // the neighbour
   for (const fn of els['efsp-create-strip-btn']._listeners.click || []) await fn({ preventDefault() {} });
@@ -222,7 +208,7 @@ test('a typed callsign that disagrees with the picked flight is refused, not dis
 });
 
 test('leaving the picker blank still files a standalone mission line, exactly as before', async () => {
-  const { els, sent } = await settled(mountPanel(TWO_FLIGHTS));
+  const { els, sent } = await settled(await mountPanel(TWO_FLIGHTS));
   els['efsp-create-strip-bind'].value = '';
   els['efsp-new-strip-callsign'].value = 'SHADOW1';
   for (const fn of els['efsp-create-strip-btn']._listeners.click || []) await fn({ preventDefault() {} });
@@ -234,7 +220,7 @@ test('leaving the picker blank still files a standalone mission line, exactly as
 // ── the keyboard path ────────────────────────────────────────────────────
 
 test('.mission binds by callsign, and refuses visibly when it cannot', async () => {
-  const { els, sent, sandbox } = await settled(mountPanel(TWO_FLIGHTS));
+  const { els, sent, sandbox } = await settled(await mountPanel(TWO_FLIGHTS));
   sandbox._dispatchDotCommand({ verb: 'mission', args: ['viper12'] });
   assert.equal(sent.length, 1);
   assert.equal(sent[0].op.fdrId, 'f2', 'case-insensitive, like every other callsign lookup');
@@ -248,7 +234,7 @@ test('.mission binds by callsign, and refuses visibly when it cannot', async () 
 });
 
 test('.mission is refused for a Position that cannot frag one', async () => {
-  const { els, sent, sandbox } = await settled(mountPanel({ ...TWO_FLIGHTS, held: ['CTR'] }));
+  const { els, sent, sandbox } = await settled(await mountPanel({ ...TWO_FLIGHTS, held: ['CTR'] }));
   sandbox._dispatchDotCommand({ verb: 'mission', args: ['VIPER11'] });
   assert.equal(sent.length, 0);
   assert.match(els['efsp-dot-command-preview'].textContent, /only TAC_C2/);
@@ -262,7 +248,7 @@ test('.mission on a flight that already has a mission line says so', async () =>
   // _missionBindCandidates() drops a flight that already has one, so the
   // lookup missed and the generic message fired. The refusal itself is right
   // (one mission line per flight, which crc-sync enforces); the wording was not.
-  const { els, sent, sandbox } = await settled(mountPanel({
+  const { els, sent, sandbox } = await settled(await mountPanel({
     strips: [...TWO_FLIGHTS.strips, stripFor('m1', 'f1', { role: 'MISSION', state: 'TASKED', ownerPositionId: 'TAC_C2', facilityId: 'TACTICAL', bayId: 'tac-c2-tasked' })],
     fdrs: TWO_FLIGHTS.fdrs,
   }));
@@ -273,7 +259,7 @@ test('.mission on a flight that already has a mission line says so', async () =>
 });
 
 test('.mission on a callsign nobody is flying still says the flight does not exist', async () => {
-  const { els, sandbox } = await settled(mountPanel(TWO_FLIGHTS));
+  const { els, sandbox } = await settled(await mountPanel(TWO_FLIGHTS));
   sandbox._dispatchDotCommand({ verb: 'mission', args: ['NOBODY'] });
   assert.match(els['efsp-dot-command-preview'].textContent, /no live flight NOBODY/);
 });
