@@ -6,7 +6,6 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -22,7 +21,7 @@ export function constLiteral(src, name, where = '') {
   const re = new RegExp(`^(?:export\\s+)?(?:const|let)\\s+${name}\\s*=\\s*([\\s\\S]*?);[ \\t]*(?://.*)?$`, 'm');
   const m = re.exec(src);
   if (!m) throw new Error(`${where}: cannot find "const ${name} = ...;" — it was renamed or moved; update the parity test`);
-  return JSON.parse(JSON.stringify(vm.runInNewContext(`(${m[1]})`, {})));
+  return JSON.parse(JSON.stringify(new Function(`return (${m[1]})`)()));
 }
 
 /** All `type: 'x'` literals matching `re` (one capture group) in src, as a sorted unique array. */

@@ -1,22 +1,28 @@
 /* Unit tests for the pure Block Map binding/resolution logic in
    strip-template.js — no DOM involved, matching los-math.test.js's style. */
 
+import './helpers/client-env.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-// In the browser these are globals from their own <script>s; strip-template.js
-// reads them at call time (docs/adr/0073). The stereo cache is swapped per test.
-Object.assign(globalThis, require('../app/public/js/panels/efsp/time-chains.js'));
-let _stereoCache = [];
-globalThis.cachedStereoRoutesClient = () => _stereoCache;
-
-const {
+import { listStereoRoutesClient } from '../app/public/js/panels/efsp/efsp-stereo-routes.js';
+import {
   DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP, BLOCK_MAPS, resolveBlockValue, requiredBlocksFor, formatBlock3,
   activeAnnotationValue, hasActiveAnnotationEntry, annotationHistory, supersededAnnotationEntries,
   isBlockEditable, CONFIRM_VACATED_ELIGIBLE_BLOCKS,
   enumSelectOptionsFor, isBooleanToggleBlock, blockLabelFor,
   ZULU_HHMM_BLOCKS, formatZuluHhmm, blockTitleFor, isEnumBlockClearable, blockValueHintFor,
-} = require('../app/public/js/panels/efsp/strip-template.js');
+} from '../app/public/js/panels/efsp/strip-template.js';
+
+// strip-template.js reads the stereo cache through efsp-stereo-routes.js's cachedStereoRoutesClient()
+// (docs/adr/0073). The stereo cache is swapped per test through the module's own fetch path: an ok
+// response replaces it (an empty list included).
+async function setStereoCache(routes) {
+  await listStereoRoutesClient({
+    fetchImpl: async () => ({ ok: true, json: async () => ({ ok: true, routes }) }),
+    authHeaders: () => ({}),
+  });
+}
 
 const REQUIRED_DEPARTURE_BLOCKS = [
   '1', '2', '3', '4', '4B', '5', '6', '7', '8', '8A', '8B', '9', '9D', '9E',
@@ -413,11 +419,11 @@ test('a flight filed without a stereo renders Block 9F as blank, not as a broken
   assert.equal(resolveBlockValue('9F', null, makeStrip()).value, null);
 });
 
-test('9F is a select of the configured stereo routes, never free text', () => {
+test('9F is a select of the configured stereo routes, never free text', async () => {
   // docs/adr/0073 replaces 0050's free text: the options are the last list
   // crc-sync returned, in table order, and a pick re-files exactly as typing
   // the name did (the server path is unchanged).
-  _stereoCache = [{ name: 'PACK 1', route: 'A' }, { name: 'PACK 2', route: 'B', description: 'south' }];
+  await setStereoCache([{ name: 'PACK 1', route: 'A' }, { name: 'PACK 2', route: 'B', description: 'south' }]);
   try {
     assert.deepEqual(enumSelectOptionsFor('9F', makeFdr()), ['PACK 1', 'PACK 2']);
     assert.deepEqual(enumSelectOptionsFor('9F'), ['PACK 1', 'PACK 2'], 'no FDR is no current route, not a throw');
@@ -428,13 +434,13 @@ test('9F is a select of the configured stereo routes, never free text', () => {
     assert.deepEqual(enumSelectOptionsFor('9F', makeFdr({ filed: { stereoRouteName: 'PACK 9' } })), ['PACK 1', 'PACK 2', 'PACK 9']);
     assert.deepEqual(enumSelectOptionsFor('9F', makeFdr({ filed: { stereoRouteName: 'PACK 2' } })), ['PACK 1', 'PACK 2']);
     // An inactive record (never sent today, but the flag exists) is not offered.
-    _stereoCache = [{ name: 'PACK 1', route: 'A' }, { name: 'OLD', route: 'C', active: false }];
+    await setStereoCache([{ name: 'PACK 1', route: 'A' }, { name: 'OLD', route: 'C', active: false }]);
     assert.deepEqual(enumSelectOptionsFor('9F', makeFdr()), ['PACK 1']);
-  } finally { _stereoCache = []; }
+  } finally { await setStereoCache([]); }
 });
 
-test('9F with no route table is a plain cell, never a control that cannot act (T1)', () => {
-  _stereoCache = [];
+test('9F with no route table is a plain cell, never a control that cannot act (T1)', async () => {
+  await setStereoCache([]);
   assert.equal(enumSelectOptionsFor('9F', makeFdr()), null);
   assert.equal(isBlockEditable('9F', 'DEPARTURE'), false, 'null options with an editable 9F would fall back to free text');
   assert.deepEqual(blockValueHintFor('9F', makeFdr(), makeStrip()), { title: 'no stereo routes configured', estimated: false });

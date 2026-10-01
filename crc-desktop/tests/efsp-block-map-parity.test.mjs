@@ -42,6 +42,7 @@
 //     kind together as "not directly SetBlock-writable". `tofi` gets the same
 //     check for the same reason.
 
+import './helpers/client-env.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';

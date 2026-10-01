@@ -8,12 +8,19 @@
 // nla.js / permission.js / block-map.js (lane L17) shows up as a failure that
 // names the table to update, not as a stale copy of the old answer.
 
+import './helpers/client-env.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import path from 'node:path';
-import vm from 'node:vm';
-import { readClient, readServer, constLiteral, CLIENT_JS } from './helpers/mirror-source.mjs';
+import { createRequire } from 'node:module';
+import { readClient, readServer, constLiteral } from './helpers/mirror-source.mjs';
+import * as clientNla from '../app/public/js/panels/efsp/efsp-nla.js';
+import * as rules from '../app/public/js/panels/efsp/field-state-rules.js';
+import { formatZuluHhmm } from '../app/public/js/panels/efsp/strip-template.js';
+import { COMPACT_BLOCKS_BY_POSITION } from '../app/public/js/panels/efsp/strip-fields.js';
+import { haversineM } from '../app/public/js/geo.js';
+
+const require = createRequire(import.meta.url);
 
 const serverIff = require('../../crc-sync/src/surveillance/iff.js');
 const serverNla = require('../../crc-sync/src/efsp/nla.js');
@@ -44,7 +51,7 @@ test('S-6: every IFF state the server can classify has a client fallback colour,
 // efsp-nla.js NLA_LABELS says it "mirrors nla.js's STATES_BY_ROLE/computeNla": the
 // label is the verb for leaving a state, so every live (non-DROPPED) state of a Role has one.
 
-const { NLA_LABELS, DOUBLE_TAP_MS, UNDO_WINDOW_MS, DEFAULT_STALE_THRESHOLD_SECONDS } = require(path.join(CLIENT_JS, EFSP, 'efsp-nla.js'));
+const { NLA_LABELS, DOUBLE_TAP_MS, UNDO_WINDOW_MS, DEFAULT_STALE_THRESHOLD_SECONDS } = clientNla;
 
 test('D-9: NLA_LABELS has a label for every non-terminal state of every Role in nla.js STATES_BY_ROLE, and none for a state nla.js lacks', () => {
   assert.deepEqual(Object.keys(NLA_LABELS).sort(), Object.keys(serverNla.STATES_BY_ROLE).sort(), 'Roles differ');
@@ -56,7 +63,7 @@ test('D-9: NLA_LABELS has a label for every non-terminal state of every Role in 
 });
 
 test('D-9: the client owner tables name exactly the states nla.js has for each Role (no state without an owner, no owner for a missing state)', () => {
-  const { STATE_OWNERS_BY_ROLE } = require(path.join(CLIENT_JS, EFSP, 'efsp-nla.js'));
+  const { STATE_OWNERS_BY_ROLE } = clientNla;
   for (const [role, states] of Object.entries(serverNla.STATES_BY_ROLE)) {
     const live = states.filter(s => s !== 'DROPPED');
     assert.deepEqual(Object.keys(STATE_OWNERS_BY_ROLE[role]).sort(), [...live].sort(), role);
@@ -76,7 +83,6 @@ test('the client stale-board threshold outlasts several of the server\'s heartbe
 
 // ── field-state-rules.js tables the existing drift tests do not touch ───────
 
-const rules = require(path.join(CLIENT_JS, EFSP, 'field-state-rules.js'));
 const fsSrc = readClient(EFSP + 'field-state-rules.js');
 
 test('D-9: the strips that show a RWY chip are real states of their Role, and cover the state BEFORE every state the server gates on a runway', () => {
@@ -115,7 +121,6 @@ test('D-9: the gear-type labels cover exactly the server GEAR_TYPES', () => {
 
 test('D-9: every Position a client authority table names is a Position some Facility actually has', () => {
   const real = new Set(serverFacilities.getFacilityIds().flatMap(f => serverFacilities.getPositionSet(f)));
-  const clientNla = require(path.join(CLIENT_JS, EFSP, 'efsp-nla.js'));
   const named = new Map();
   const note = (where, ids) => { for (const id of ids) named.set(id, where); };
   for (const owners of Object.values(rules.FIELD_STATE_ACTION_OWNERS)) note('FIELD_STATE_ACTION_OWNERS', owners);
@@ -127,7 +132,6 @@ test('D-9: every Position a client authority table names is a Position some Faci
   for (const v of Object.values(handBack)) note('HAND_BACK_TO', v);
   const answered = constLiteral(bay, 'TOFI_ANSWERED_BY', 'bay-view.js');
   note('TOFI_ANSWERED_BY', [...Object.keys(answered), ...Object.values(answered)]);
-  const { COMPACT_BLOCKS_BY_POSITION } = require(path.join(CLIENT_JS, EFSP, 'strip-fields.js'));
   for (const byPos of Object.values(COMPACT_BLOCKS_BY_POSITION)) note('COMPACT_BLOCKS_BY_POSITION', Object.keys(byPos));
   for (const [id, where] of named) assert.ok(real.has(id), `${where} names Position ${id}, which no Facility in facility-config.js has`);
 });
@@ -157,17 +161,14 @@ test('D-9: efsp-ws.js tracks held Positions for every server Facility, and its d
 // ── pure helpers copied across (geo.js, strip-template.js, bay-view.js) ─────
 
 test('D-9: formatZuluHhmm answers as crc-sync zulu-time.js does', () => {
-  const { formatZuluHhmm } = require(path.join(CLIENT_JS, EFSP, 'strip-template.js'));
   for (const ms of [0, Date.UTC(2026, 8, 30, 14, 32), Date.UTC(2026, 0, 1, 0, 5), Date.UTC(2026, 11, 31, 23, 59, 59), null, undefined, '', 'x', NaN]) {
     assert.equal(formatZuluHhmm(ms), serverZulu.formatZuluHhmm(ms), String(ms));
   }
 });
 
 test('D-9: the client haversineM (geo.js) agrees with crc-sync geo.js', () => {
-  const sandbox = vm.createContext({ console });
-  vm.runInContext(readClient('geo.js'), sandbox, { filename: 'geo.js' });
   for (const [a, b, c, d] of [[37, 35.43, 33.41, 36.52], [0, 0, 0, 0], [-33.9, 151.2, 51.5, -0.12], [89, 10, -89, 170]]) {
-    const got = vm.runInContext(`haversineM(${a}, ${b}, ${c}, ${d})`, sandbox);
+    const got = haversineM(a, b, c, d);
     assert.ok(Math.abs(got - serverGeo.haversineM(a, b, c, d)) < 1e-6, `${a},${b} -> ${c},${d}`);
   }
 });
@@ -175,7 +176,7 @@ test('D-9: the client haversineM (geo.js) agrees with crc-sync geo.js', () => {
 test('D-9: the TOFI accept picker offers exactly the server\'s SEPARATION_REGIMES', () => {
   const server = /const SEPARATION_REGIMES = new Set\((\[[^\]]*\])\)/.exec(readServer('efsp/fdr-store.js'));
   assert.ok(server, 'fdr-store.js SEPARATION_REGIMES moved');
-  const regimes = vm.runInNewContext(server[1]);
+  const regimes = new Function(`return ${server[1]}`)();
   assert.deepEqual([...constLiteral(readClient(EFSP + 'bay-view.js'), 'TOFI_ACCEPT_REGIMES', 'bay-view.js')].sort(), [...regimes].sort());
 });
 
