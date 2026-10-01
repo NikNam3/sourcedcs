@@ -6,6 +6,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import './helpers/client-env.mjs';
 
 import { airspaceActionsFor } from '../app/public/js/panels/efsp/airspace-panel.js';
 

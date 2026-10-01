@@ -5,6 +5,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import './helpers/client-env.mjs';
 
 import {
   EFFECTIVE_EARTH_RADIUS_M, losSightLineHeightM, losProfileBlocked,

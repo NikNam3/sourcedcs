@@ -4,6 +4,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import './helpers/client-env.mjs';
 
 import {
   lookupFlightPlanClient, FLIGHT_PLAN_LOOKUP_CLIENT_TIMEOUT_MS,

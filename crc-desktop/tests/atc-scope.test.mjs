@@ -6,12 +6,13 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import path from 'node:path';
 
-global.settings = { transitionAltFt: 18000 };
-const L = require(path.join(__dirname, '../app/public/js/track-label.js'));
-Object.assign(global, L); // atc-scope.js calls these as browser globals
-const A = require(path.join(__dirname, '../app/public/js/atc-scope.js'));
+import './helpers/client-env.mjs';
+import * as A from '../app/public/js/atc-scope.js';
+import * as L from '../app/public/js/track-label.js';
+import { settings, _setCoverageRadars, _setCoverageDatalink } from '../app/public/js/app.js';
+
+settings.transitionAltFt = 18000;
 
 const P = A.ATC_PALETTES.MAP;
 const LETTERS = { TWR: 'T', APP: 'A', CTR: 'C', TAC_C2: 'M' };
@@ -237,21 +238,21 @@ test('coast: a correlated contact loses its disc; an uncorrelated one never coas
 });
 
 test('the black scope needs the setting off AND an ATC-only session (H71 question 1)', () => {
-  global.coverageDatalink = false;
-  global.coverageRadars = [{ presentation: 'ATC', sweepMs: 3000 }, { presentation: 'ATC', sweepMs: 2000 }];
+  _setCoverageDatalink(false);
+  _setCoverageRadars([{ presentation: 'ATC', sweepMs: 3000 }, { presentation: 'ATC', sweepMs: 2000 }]);
   settings.atcMapBackground = undefined;
   assert.equal(A.atcBlackScope(), false, 'on by default');
   settings.atcMapBackground = false;
   assert.equal(A.atcBlackScope(), true);
   assert.equal(A.atcPalette().name, 'BLACK');
   assert.equal(A.atcCoastAfterMs(), 6000, 'two of the slowest ATC radar\'s sweeps');
-  global.coverageRadars = [{ presentation: 'ATC' }, { presentation: 'TACTICAL' }];
+  _setCoverageRadars([{ presentation: 'ATC' }, { presentation: 'TACTICAL' }]);
   assert.equal(A.atcBlackScope(), false, 'a mixed session keeps the map');
-  global.coverageRadars = [{ presentation: 'ATC' }];
-  global.coverageDatalink = true;
+  _setCoverageRadars([{ presentation: 'ATC' }]);
+  _setCoverageDatalink(true);
   assert.equal(A.atcBlackScope(), false, 'the datalink is tactical');
   delete settings.atcMapBackground;
-  global.coverageRadars = []; global.coverageDatalink = false;
+  _setCoverageRadars([]); _setCoverageDatalink(false);
 });
 
 test('a same-Facility transfer (TWR -> APP, no PROPOSED step) blinks at the sender like an accepted handoff', () => {

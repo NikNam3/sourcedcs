@@ -5,6 +5,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import './helpers/client-env.mjs';
 import {
   createEfspMetricsClient, efspGestureInputCost, GESTURE_INPUT_COST, EFSP_METRICS_LIMITS as L,
 } from '../app/public/js/panels/efsp/efsp-metrics-client.js';

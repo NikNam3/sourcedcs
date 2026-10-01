@@ -11,6 +11,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+import './helpers/client-env.mjs';
+import * as M from '../app/public/js/magnetic.js';
+
+const require = createRequire(import.meta.url);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(__dirname, '../app/public');
 const read = (rel) => fs.readFileSync(path.join(PUBLIC, rel), 'utf8');
 
@@ -82,7 +89,6 @@ test('magnetic.js loads after geo.js and before any panel', () => {
 });
 
 test('magnetic.js: fixed variation, grid interpolation, unknown → null', () => {
-  const M = require(path.join(PUBLIC, 'js/magnetic.js'));
   M.applyTheaterFacts(null);
   assert.equal(M.toMagneticDisplay(90, 35, 36), null);
   M.applyTheaterFacts({ magnetic: { fixedDeg: 5, grid: null }, convergence: { tmCentralMeridianDeg: null } });

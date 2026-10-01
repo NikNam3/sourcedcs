@@ -5,6 +5,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import './helpers/client-env.mjs';
 
 import { createRequire } from 'node:module';
 import {
