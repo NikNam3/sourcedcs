@@ -11,7 +11,7 @@
  * Callsigns are unique per test: the Board lives for the whole run.
  */
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./helpers/test');
 const { openPanel, seedStrip, stripByCallsign } = require('./helpers/app');
 
 const MINUTE = 60 * 1000;

@@ -18,7 +18,7 @@
  * e2e/helpers/app.js; kept here under the parallel-lane rule.
  */
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./helpers/test');
 const { openPanel, seedStrip, stripByCallsign } = require('./helpers/app');
 
 const BAY = 'ops-coordination';

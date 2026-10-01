@@ -9,14 +9,18 @@
  * exceptions and keep their annotations in l2-block-editing.spec.js.
  */
 
-const { test } = require('@playwright/test');
-const { openPanel, seedStrip, expectTouchTarget, stripMenuItem } = require('./helpers/app');
+const { test } = require('./helpers/test');
+const { openPanel, seedStrip, dropStrips, expectTouchTarget, stripMenuItem } = require('./helpers/app');
 
 // Layout C (docs/adr/0056): MARSA… is a ⋯ menu item now, so both the opener
 // and the item it leads to have to meet the floor.
 test('the ⋯ menu and its MARSA… item meet the touch-target floor', async ({ page }) => {
   await openPanel(page, { held: ['OPS'] });
   const strip = await seedStrip(page, { callsign: 'VIPER11', role: 'DEPARTURE' });
-  await expectTouchTarget(strip.locator('.efsp-strip-menu-btn'), '⋯');
-  await expectTouchTarget(await stripMenuItem(strip, 'MARSA…'), 'MARSA… (⋯ menu item)');
+  try {
+    await expectTouchTarget(strip.locator('.efsp-strip-menu-btn'), '⋯');
+    await expectTouchTarget(await stripMenuItem(strip, 'MARSA…'), 'MARSA… (⋯ menu item)');
+  } finally {
+    await dropStrips(page, ['VIPER11']); // l14-ato-import binds its ATO line to the ONE live VIPER11
+  }
 });

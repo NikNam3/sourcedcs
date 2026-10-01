@@ -10,7 +10,7 @@
  * callsign can find an earlier test's Strip.
  */
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./helpers/test');
 const { openPanel, seedStrip, stripByCallsign, expectRefusalIsVisible } = require('./helpers/app');
 
 /** The Strip's server-side placement, read from the page's own state. */

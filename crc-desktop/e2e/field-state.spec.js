@@ -21,7 +21,7 @@
  */
 
 const path = require('path');
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./helpers/test');
 const { openPanel, stripByCallsign, expectRefusalIsVisible } = require('./helpers/app');
 
 test.describe.configure({ mode: 'serial', timeout: 240000 });

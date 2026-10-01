@@ -1496,6 +1496,10 @@
 .efsp-strip-slots { display: flex; flex-wrap: wrap; gap: 4px; }
 .efsp-strip .efsp-ind {
   all: unset;
+  /* `all: unset` resets box-sizing to content-box, so the 1px border below made every chip 24px, not
+     the 22px this rule says, and a Strip's first indicator row cost 30px against a 28px budget
+     (l4-badges.spec.js). */
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   height: 22px;

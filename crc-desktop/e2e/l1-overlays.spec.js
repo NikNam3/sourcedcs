@@ -14,7 +14,7 @@
  * dead too, so covering everything is defensible.
  */
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./helpers/test');
 const { openPanel } = require('./helpers/app');
 
 /** WCAG 2 contrast ratio of an element's text against its own (composited-on-black) background. */

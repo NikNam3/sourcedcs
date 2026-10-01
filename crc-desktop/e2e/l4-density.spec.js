@@ -12,7 +12,7 @@
  * measurement. That changes nothing about the six being measured.
  */
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./helpers/test');
 const { openPanel, seedStrip } = require('./helpers/app');
 
 /** Hide every Strip not in `keep`, then count how many of `keep` fit in the Bay. */
