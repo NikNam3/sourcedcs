@@ -230,3 +230,25 @@ test('every Position of the three can only do through the client what the server
   }
   assert.equal(permission.canSendSfaRotationTransfer('SFA'), true);
 });
+
+test('no top-level name of the Bay-view scripts is declared by any other script the page loads (a clash is a SyntaxError or a silent override only a browser shows)', () => {
+  const fs = require('fs');
+  const root = path.join(__dirname, '../app/public');
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const files = [...html.matchAll(/<script src="\.\/(js\/[^"]+)"/g)].map(m => m[1]);
+  const declared = new Map(); // name -> [files]
+  for (const f of files) {
+    const src = fs.readFileSync(path.join(root, f), 'utf8');
+    for (const m of src.matchAll(/^(?:const|let|var|function)\s+([A-Za-z_$][\w$]*)/gm)) {
+      if (!declared.has(m[1])) declared.set(m[1], new Set());
+      declared.get(m[1]).add(f);
+    }
+  }
+  const mine = ['pattern-board.js', 'final-panel.js', 'bay-views.js', 'sfa-state.js'];
+  for (const f of files.filter(x => mine.some(n => x.endsWith(n)))) {
+    for (const [name, where] of declared) {
+      if (where.has(f) && where.size > 1) assert.fail(`${name} is declared in ${[...where].join(' and ')}`);
+    }
+  }
+  assert.ok(files.some(f => f.endsWith('bay-views.js')) && files.some(f => f.endsWith('sfa-state.js')), 'both are loaded by index.html');
+});

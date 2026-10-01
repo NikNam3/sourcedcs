@@ -37,7 +37,7 @@ const PATTERN_ACTIONS = [
   { id: 'DROP', label: 'Drop', toState: 'DROPPED' },
 ];
 
-const finite = (v) => typeof v === 'number' && Number.isFinite(v);
+const _pbFinite = (v) => typeof v === 'number' && Number.isFinite(v);
 
 /**
  * @param {object} p
@@ -50,8 +50,8 @@ const finite = (v) => typeof v === 'number' && Number.isFinite(v);
  */
 function patternBoardModel({ legs, strips, nowS, runwayStatus, longMin, finalMax } = {}) {
   const legList = Array.isArray(legs) && legs.length ? legs : RSU_LEGS;
-  const long = finite(longMin) ? longMin : PATTERN_LONG_MIN;
-  const finalCap = finite(finalMax) ? finalMax : PATTERN_FINAL_MAX;
+  const long = _pbFinite(longMin) ? longMin : PATTERN_LONG_MIN;
+  const finalCap = _pbFinite(finalMax) ? finalMax : PATTERN_FINAL_MAX;
   const known = new Set(legList.map(l => l.id));
 
   const columns = legList.map(l => ({ legId: l.id, label: l.label, count: 0, chips: [] }));
@@ -59,13 +59,13 @@ function patternBoardModel({ legs, strips, nowS, runwayStatus, longMin, finalMax
   const byLeg = new Map(columns.map(c => [c.legId, c]));
 
   const ordered = [...(strips || [])].sort((a, b) =>
-    (finite(a.order) ? a.order : Infinity) - (finite(b.order) ? b.order : Infinity)
-    || (finite(a.enteredPatternS) ? a.enteredPatternS : Infinity) - (finite(b.enteredPatternS) ? b.enteredPatternS : Infinity)
+    (_pbFinite(a.order) ? a.order : Infinity) - (_pbFinite(b.order) ? b.order : Infinity)
+    || (_pbFinite(a.enteredPatternS) ? a.enteredPatternS : Infinity) - (_pbFinite(b.enteredPatternS) ? b.enteredPatternS : Infinity)
     || String(a.stripId).localeCompare(String(b.stripId)));
 
   const longOnes = [];
   for (const s of ordered) {
-    const minutes = finite(s.enteredPatternS) && finite(nowS) ? Math.max(0, Math.floor((nowS - s.enteredPatternS) / 60)) : null;
+    const minutes = _pbFinite(s.enteredPatternS) && _pbFinite(nowS) ? Math.max(0, Math.floor((nowS - s.enteredPatternS) / 60)) : null;
     const chip = {
       stripId: s.stripId,
       callsign: s.callsign || '',
@@ -109,7 +109,7 @@ function moveToLeg(stripId, legId) {
   return { kind: 'MoveToLeg', stripId, rackId: legId };
 }
 
-function _el(doc, tag, cls, text) {
+function _pbEl(doc, tag, cls, text) {
   const el = doc.createElement(tag);
   if (cls) el.className = cls;
   if (text !== undefined) el.textContent = text;
@@ -122,16 +122,16 @@ function _el(doc, tag, cls, text) {
  */
 function renderPatternBoard(model, { doc, legs, onMove, onAction } = {}) {
   const d = doc || (typeof document !== 'undefined' ? document : null);
-  const root = _el(d, 'div', 'efsp-pattern');
-  const row = _el(d, 'div', 'efsp-pattern-legs');
+  const root = _pbEl(d, 'div', 'efsp-pattern');
+  const row = _pbEl(d, 'div', 'efsp-pattern-legs');
   const legList = legs || model.columns.filter(c => c.legId !== UNPLACED_LEG).map(c => ({ id: c.legId, label: c.label }));
 
   for (const col of model.columns) {
-    const colEl = _el(d, 'div', 'efsp-pattern-leg');
+    const colEl = _pbEl(d, 'div', 'efsp-pattern-leg');
     colEl.dataset.leg = col.legId;
-    const h = _el(d, 'div', 'efsp-pattern-leg-head');
-    h.appendChild(_el(d, 'span', '', col.label));
-    h.appendChild(_el(d, 'span', 'efsp-pattern-count', String(col.count)));
+    const h = _pbEl(d, 'div', 'efsp-pattern-leg-head');
+    h.appendChild(_pbEl(d, 'span', '', col.label));
+    h.appendChild(_pbEl(d, 'span', 'efsp-pattern-count', String(col.count)));
     colEl.appendChild(h);
     if (col.legId !== UNPLACED_LEG) {
       colEl.addEventListener('dragover', (e) => { if (e && e.preventDefault) e.preventDefault(); });
@@ -142,22 +142,22 @@ function renderPatternBoard(model, { doc, legs, onMove, onAction } = {}) {
       });
     }
     for (const chip of col.chips) {
-      const c = _el(d, 'div', chip.long ? 'efsp-pattern-chip efsp-pattern-chip-long' : 'efsp-pattern-chip');
+      const c = _pbEl(d, 'div', chip.long ? 'efsp-pattern-chip efsp-pattern-chip-long' : 'efsp-pattern-chip');
       c.dataset.stripId = chip.stripId;
       c.draggable = true;
       c.addEventListener('dragstart', (e) => { if (e && e.dataTransfer && e.dataTransfer.setData) e.dataTransfer.setData('text/plain', chip.stripId); });
-      c.appendChild(_el(d, 'div', 'efsp-pattern-cs', chip.callsign));
-      c.appendChild(_el(d, 'div', 'efsp-pattern-meta',
+      c.appendChild(_pbEl(d, 'div', 'efsp-pattern-cs', chip.callsign));
+      c.appendChild(_pbEl(d, 'div', 'efsp-pattern-meta',
         [chip.type, chip.intent, chip.minutes === null ? '' : `${chip.minutes} min`].filter(Boolean).join(' · ')));
-      const acts = _el(d, 'div', 'efsp-pattern-actions');
+      const acts = _pbEl(d, 'div', 'efsp-pattern-actions');
       const nxt = nextLeg(legList, chip.legId);
       if (nxt) {
-        const b = _el(d, 'button', 'efsp-pattern-next', 'Next leg');
+        const b = _pbEl(d, 'button', 'efsp-pattern-next', 'Next leg');
         b.addEventListener('click', () => { if (onMove) onMove(moveToLeg(chip.stripId, nxt)); });
         acts.appendChild(b);
       }
       for (const a of PATTERN_ACTIONS) {
-        const b = _el(d, 'button', 'efsp-pattern-action', a.label);
+        const b = _pbEl(d, 'button', 'efsp-pattern-action', a.label);
         b.dataset.action = a.id;
         b.addEventListener('click', () => { if (onAction) onAction({ stripId: chip.stripId, id: a.id, toState: a.toState }); });
         acts.appendChild(b);
@@ -169,8 +169,8 @@ function renderPatternBoard(model, { doc, legs, onMove, onAction } = {}) {
   }
   root.appendChild(row);
 
-  const adv = _el(d, 'div', 'efsp-pattern-advisories');
-  for (const a of model.advisories) adv.appendChild(_el(d, 'span', 'efsp-pattern-advisory', a.text));
+  const adv = _pbEl(d, 'div', 'efsp-pattern-advisories');
+  for (const a of model.advisories) adv.appendChild(_pbEl(d, 'span', 'efsp-pattern-advisory', a.text));
   root.appendChild(adv);
   return root;
 }
