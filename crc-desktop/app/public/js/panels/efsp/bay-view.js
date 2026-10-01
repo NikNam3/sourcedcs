@@ -166,7 +166,7 @@ function _buildBlockCell(strip, blockId) {
     span.classList.add('efsp-block-refused');
     span.title = refusal.message;
   }
-  const hint = typeof blockValueHintFor === 'function' ? blockValueHintFor(blockId, fdr, strip) : null; if (hint) { if (hint.estimated) span.classList.add('efsp-block-estimated'); if (hint.title && !span.title) span.title = hint.title; } // docs/adr/0073: §10.5's source on hover, an estimate in italics
+  const hint = typeof blockValueHintFor === 'function' ? blockValueHintFor(blockId, fdr, strip) : null; if (hint) { if (hint.estimated) span.classList.add('efsp-block-estimated'); if (hint.behindPlan) span.classList.add('efsp-block-behind-plan'); if (hint.title && !span.title) span.title = hint.title; } // docs/adr/0073: §10.5's source on hover, an estimate in italics
 
   // WP4A gap-closure (docs/adr/0022) — restricted-enum Blocks (airspace
   // ownership, track-degradation flag) get a <select>, never the generic
@@ -469,7 +469,8 @@ function _startBlockEdit(strip, blockId, span, draft) {
     if (closed) return;
     const value = input.value.trim();
     revert();
-    if (value === currentValue) return; // no-op edit, don't send a Mutation for nothing
+    // S-L16 W5: retyping a SHOWN ESTIMATE is not a no-op, it accepts the estimate as the actual.
+    if (value === currentValue && !span.classList.contains('efsp-block-estimated')) return; // no-op edit, don't send a Mutation for nothing
     const actingPositionId = _resolveActingPositionId(strip);
     if (!actingPositionId) return;
     // Read the CURRENT Strip (for its rev) rather than the `strip` this

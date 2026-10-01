@@ -26,7 +26,7 @@ const { isValidFrequency, MIN_FREQUENCY_MHZ, MAX_FREQUENCY_MHZ } = require('./ai
 // board-store.js's _applyCreateStrip instead would mean any second creation
 // path — or a test constructing an FdrStore directly — silently skips it.
 const stereoRoutes = require('./stereo-routes');
-const { resolveZuluHhmm, resolveZuluHhmmAfter } = require('./zulu-time');
+const { resolveZuluHhmm, resolveZuluHhmmAfter, formatZuluHhmm } = require('./zulu-time');
 const { WALL_CLOCK } = require('../mission-clock');
 
 const VOID_DEADLINE_MINUTES = 30; // §3.8 — derived, not stored input
@@ -646,6 +646,18 @@ class FdrStore {
    * void-time changes (§3.8). identity.beaconAssigned is NOT handled here
    * — use setBeaconAssigned(), which needs code-allocator validation.
    */
+  /** UI-A: why writing `value` to a vul-window path would leave the window ending before it starts, or null. */
+  _vulWindowRefusal(fdr, path, value) {
+    if (path !== 'mission.vulWindowStartUtc' && path !== 'mission.vulWindowEndUtc') return null;
+    if (!Number.isFinite(value)) return null;
+    const start = path === 'mission.vulWindowStartUtc' ? value : getPath(fdr, 'mission.vulWindowStartUtc');
+    const end = path === 'mission.vulWindowEndUtc' ? value : getPath(fdr, 'mission.vulWindowEndUtc');
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start < end) return null;
+    return path === 'mission.vulWindowStartUtc'
+      ? `the vul window would start at ${formatZuluHhmm(start)}Z, not before its end ${formatZuluHhmm(end)}Z: move the end first`
+      : `the vul window end ${formatZuluHhmm(end)}Z must be after its start ${formatZuluHhmm(start)}Z`;
+  }
+
   setField(fdrId, path, value, { by } = {}) {
     const fdr = this._fdrs.get(fdrId);
     if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
@@ -678,6 +690,11 @@ class FdrStore {
       const time = normalizeTypedTime(path, value, this._clock.now(), WINDOW_END_OF[path] ? getPath(fdr, WINDOW_END_OF[path]) : null);
       if (!time.ok) return { ok: false, reason: 'VALIDATION_ERROR', detail: time.detail };
       value = time.value;
+      // UI-A (S-L16): a vul window never ends before it starts. Moving the start past the end, or
+      // typing an end that is not after the start, is refused and names the way out, instead of
+      // leaving a window that is already over (the end does not move with the start).
+      const vulMsg = this._vulWindowRefusal(fdr, path, value);
+      if (vulMsg) return { ok: false, reason: 'VALIDATION_ERROR', detail: vulMsg };
     }
 
     if (path.startsWith('military.mtr.')) { // §9.4, docs/adr/0062

@@ -717,6 +717,23 @@ function timeChainTitleFor(blockId, fdr, strip) {
 }
 
 /**
+ * S-L16 W3: a typed TAXI (17) or TAKEOFF (18) that now sits BEFORE the proposed departure. A
+ * controller's entry stops the chain (§10.2 rule 3), so a later P-time does not move it, and
+ * the Strip would otherwise show TAXI 1425 ahead of a P-time of 1450 with nothing saying why.
+ * @returns {{typedUtc:number, planUtc:number}|null}
+ */
+function typedTimeBehindPlan(blockId, fdr, strip) {
+  if (((strip && strip.role) || 'DEPARTURE') !== 'DEPARTURE') return null;
+  const chain = typeof timeChainForBlock === 'function' ? timeChainForBlock(blockId) : null;
+  if (chain !== 'offBlock' && chain !== 'takeoff') return null;
+  const own = resolveTimeChain(chain, fdr);
+  if (own.source !== 'CONTROLLER' || own.valueUtc == null) return null;
+  const plan = resolveTimeChain('departure', fdr);
+  if (plan.valueUtc == null || own.valueUtc >= plan.valueUtc) return null;
+  return { typedUtc: own.valueUtc, planUtc: plan.valueUtc };
+}
+
+/**
  * What the VALUE cell of a Block adds to itself (bay-view.js's _buildBlockCell):
  * a hover title and whether to set it in italics as an estimate. Null when
  * the cell needs nothing. Block 9F with no route table says why it is not a
@@ -726,9 +743,16 @@ function blockValueHintFor(blockId, fdr, strip) {
   if (blockId === '9F' && enumSelectOptionsFor('9F', fdr) == null) {
     return { title: 'no stereo routes configured', estimated: false };
   }
-  const title = timeChainTitleFor(blockId, fdr, strip);
+  let title = timeChainTitleFor(blockId, fdr, strip);
   if (!title) return null;
-  return { title, estimated: !!resolveBlockValue(blockId, fdr, strip).estimated };
+  const resolved = resolveBlockValue(blockId, fdr, strip);
+  if (resolved.estimated) title += '\nType it again to accept it as the actual.'; // S-L16 W5
+  const behind = typedTimeBehindPlan(blockId, fdr, strip);
+  if (behind) {
+    title += `\n${formatZuluHhmm(behind.typedUtc)}Z was typed before the proposed departure moved to ${formatZuluHhmm(behind.planUtc)}Z: `
+      + 'a typed time does not follow a new P-time. Clear it to follow, or retype it.'; // S-L16 W3
+  }
+  return { title, estimated: !!resolved.estimated, behindPlan: !!behind };
 }
 
 /**
@@ -756,6 +780,6 @@ if (typeof module !== 'undefined' && module.exports) {
     isBlockEditable, editRedirectFor, CONFIRM_VACATED_ELIGIBLE_BLOCKS,
     enumSelectOptionsFor, ENUM_CLEARABLE_BLOCKS, isEnumBlockClearable, isBooleanToggleBlock, blockLabelFor,
     ZULU_HHMM_BLOCKS, formatZuluHhmm, BLOCK_TITLES, blockTitleFor,
-    TIME_SOURCE_TEXT, timeChainTitleFor, blockValueHintFor,
+    TIME_SOURCE_TEXT, timeChainTitleFor, blockValueHintFor, typedTimeBehindPlan,
   };
 }

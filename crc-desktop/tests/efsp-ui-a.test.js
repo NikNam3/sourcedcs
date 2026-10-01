@@ -41,3 +41,23 @@ test('U8: TOFI Exit is due on the ATC Strip only while its TOFI is ACTIVE and th
   assert.equal(tofiExitDueFor({ ...atc('ACTIVE'), role: 'MISSION' }, mission('RTB')), false, 'never on the mission side');
   assert.equal(tofiExitDueFor({ role: 'ARRIVAL', tofiCoordination: null }, mission('RTB')), false);
 });
+
+test('S-L16 W2: TAXI is on GND\'s face and TAKEOFF on TWR\'s', () => {
+  assert.ok(fields.compactBlocksFor('DEPARTURE', 'GND').includes('17'));
+  assert.ok(fields.compactBlocksFor('DEPARTURE', 'TWR').includes('18'));
+});
+
+test('S-L16 W3/W5: a typed TAXI behind a later P-time is flagged; an estimate says how to accept it', () => {
+  const strip = { role: 'DEPARTURE' };
+  const t = (h, m) => Date.UTC(2026, 3, 14, h, m);
+  const typed = { filed: { proposedDepartureTimeUtc: t(14, 50) }, assigned: { taxiTimeUtc: t(14, 25) } };
+  const behind = tpl.blockValueHintFor('17', typed, strip);
+  assert.equal(behind.behindPlan, true);
+  assert.match(behind.title, /1425Z was typed before the proposed departure moved to 1450Z/);
+  const fresh = { filed: { proposedDepartureTimeUtc: t(14, 20) }, assigned: { taxiTimeUtc: t(14, 25) } };
+  assert.equal(tpl.blockValueHintFor('17', fresh, strip).behindPlan, false, 'typed after the P-time is in order');
+  const est = tpl.blockValueHintFor('17', { filed: { proposedDepartureTimeUtc: t(14, 50) }, assigned: {} }, strip);
+  assert.equal(est.estimated, true);
+  assert.match(est.title, /Type it again to accept it as the actual/);
+  assert.equal(est.behindPlan, false, 'an estimate follows the P-time by construction');
+});
