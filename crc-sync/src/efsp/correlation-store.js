@@ -198,6 +198,8 @@ class CorrelationStore {
       // comment gives — readers key on whichever id is present, rather than
       // one field standing in for something it is not.
       fdrId: mutation.fdrId,
+      // Theater-wide: an FDR belongs to no Facility (docs/adr/0013, docs/adr/0083).
+      facilityId: null,
       actingPositionId,
       actorId: by || null,
       at: this._clock.now(),

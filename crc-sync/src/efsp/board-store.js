@@ -496,6 +496,14 @@ class BoardStore {
       clientMutationId: mutation.clientMutationId,
       op: mutation.op.kind,
       stripId: result.strip.stripId,
+      // Who the entry concerns (docs/adr/0083): the Facility and the flight, so a
+      // reader never has to look them up on a Board that may have archived the Strip.
+      facilityId: this._rules.facilityId || null,
+      fdrId: result.strip.fdrId || null,
+      // The op kind alone names neither the Block written nor a coordination
+      // action (PROPOSE/ACCEPT/REJECT/CANCEL...); the entry says which.
+      ...(mutation.op.kind === 'SetBlock' ? { blockId: mutation.op.blockId, value: mutation.op.value } : {}),
+      ...(typeof mutation.op.action === 'string' ? { action: mutation.op.action } : {}),
       actingPositionId,
       actorId: by || null,
       at: this._clock.now(),
@@ -2005,6 +2013,7 @@ class BoardStore {
     if (this._mutationLog) {
       this._mutationLog.record({
         clientMutationId: null, op: 'SystemCoordinationEnd', stripId: strip.stripId,
+        facilityId: this._rules.facilityId || null, fdrId: strip.fdrId || null,
         actingPositionId: null, actorId: 'system', at: this._clock.now(),
         before, after: deepClone(strip), reason: 'peer-dropped',
       });
@@ -2743,6 +2752,7 @@ class BoardStore {
       if (this._mutationLog) {
         this._mutationLog.record({
           clientMutationId: null, op: 'SystemReassign', stripId: strip.stripId,
+        facilityId: this._rules.facilityId || null, fdrId: strip.fdrId || null,
           actingPositionId: null, actorId: 'system', at: this._clock.now(),
           before, after: deepClone(strip), reason: 'position-vacated',
         });
@@ -2780,6 +2790,7 @@ class BoardStore {
       if (this._mutationLog) {
         this._mutationLog.record({
           clientMutationId: null, op: 'SystemReassign', stripId: strip.stripId,
+        facilityId: this._rules.facilityId || null, fdrId: strip.fdrId || null,
           actingPositionId: null, actorId: 'system', at: this._clock.now(),
           before, after: deepClone(strip), reason: 'position-retaken',
         });

@@ -772,7 +772,10 @@ function createEfspInstrumentation({
     missionSessionOf: () => missionSession.currentSeq(),
   });
   efsp.mutationLog.onRecord((entry) => {
-    if (entry && entry.ok !== false && entry.op === 'SystemReassign') metrics.recordSystemReassign({ at: entry.at });
+    // A retake (`position-retaken`) hands covered Strips back; it is not a loss of
+    // a Position, so only a vacated one counts (docs/adr/0083). SystemCoordinationEnd
+    // and a CANCEL (an `action` on a coordination op) are not reassignments or attempts.
+    if (entry && entry.ok !== false && entry.op === 'SystemReassign' && entry.reason !== 'position-retaken') metrics.recordSystemReassign({ at: entry.at });
   });
 
   const defaultFacilityId = facilityConfig.DEFAULT_FACILITY_ID;
@@ -919,6 +922,7 @@ function createEfspInstrumentation({
         op: op || null,
         ...subject,
         facilityId: ack.facilityId || msg.facilityId || null,
+        ...(msg.op && typeof msg.op.action === 'string' ? { action: msg.op.action } : {}),
         actingPositionId: msg.actingPositionId || null,
         actorId: (session && session.controllerId) || null,
         at,

@@ -346,7 +346,7 @@ test('8. MARSA relations and correlation records of archived FDRs are evicted', 
   assert.equal(efsp.correlationStore.getCorrelation(rx.fdrId), null);
 });
 
-test('9. the traffic count is unchanged by a sweep, and a backfill of an archived FDR is UNKNOWN/ARCHIVED (rule 5)', () => {
+test('9. the traffic count is unchanged by a sweep, and a backfill of an archived FDR is UNKNOWN/ARCHIVED but keeps its Facility (rule 5)', () => {
   const dropped = droppedFlight('COUNT1');
   const before = counter.records().map(r => r.countId).sort();
   const rec = counter.records().find(r => r.stripId === dropped.stripId);
@@ -372,9 +372,9 @@ test('9. the traffic count is unchanged by a sweep, and a backfill of an archive
   assert.equal(back.locality, 'UNKNOWN');
   assert.equal(back.localityBasis, 'ARCHIVED');
   assert.equal(back.callsign, null, 'nothing left to name it by');
-  // Until L26 puts facilityId on log entries (S-L5), an archived Strip's
-  // backfill cannot find its Facility. Pinned so L26's merge flips it.
-  assert.equal(back.facilityId, 'UNKNOWN');
+  // The log entry names its Facility (docs/adr/0083), so an archived Strip's
+  // backfill keeps it.
+  assert.equal(back.facilityId, 'INCIRLIK');
 });
 
 test('10. a snapshot after a sweep holds neither the Strip nor its FDR', () => {

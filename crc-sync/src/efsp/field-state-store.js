@@ -195,6 +195,8 @@ class FieldStateStore {
       // (stripId / airspaceId / fdrId / marsaId), and a field-state op is about
       // a Facility's field, not any of those.
       fieldStateFacilityId: mutation.facilityId,
+      // The one name every reader keys on (docs/adr/0083).
+      facilityId: mutation.facilityId ?? null,
       runwayId: op.runwayId ?? null,
       actingPositionId: actingPositionId ?? null,
       actorId: by || null,
