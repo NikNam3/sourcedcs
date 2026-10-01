@@ -17,6 +17,13 @@ const efspFdrs = new Map();       // fdrId -> FlightDataRecord
 const efspPositions = new Map();  // positionId -> PositionOccupancy
 let efspBoardSeq = 0;
 let efspFacility = null;
+// Board sync position, per Facility (docs/adr/0081). A seq only means something
+// inside one Board lifetime, and each Facility has its own Board: the last seq
+// read and the epoch (lifetime) it belongs to. `efspBoardSeq` stays as the
+// default Facility's seq for the existing readers.
+const efspBoardSeqByFacility = new Map();
+const efspBoardEpochByFacility = new Map();
+let _heartbeatBehind = 0; // consecutive heartbeats that named a seq ahead of ours
 let efspBays = [];
 // WP4A gap-closure (docs/adr/0022) — facilityId -> is AIT authorized (a
 // written directive on file) there. Lets bay-view.js disable the AIT
@@ -87,6 +94,11 @@ function applyEfspSnapshot(msg) {
   for (const p of msg.positions || []) efspPositions.set(p.positionId, p);
   efspBoardSeq = msg.boardSeq;
   efspFacility = msg.facility;
+  efspBoardSeqByFacility.clear();
+  efspBoardEpochByFacility.clear();
+  for (const [f, q] of Object.entries(msg.boardSeqByFacility || {})) efspBoardSeqByFacility.set(f, q);
+  for (const [f, e] of Object.entries(msg.boardEpochByFacility || {})) efspBoardEpochByFacility.set(f, e);
+  _heartbeatBehind = 0;
   efspBays = msg.bays || [];
   efspAitAuthorizedByFacility = msg.aitAuthorizedByFacility || {};
   efspPositionLetters = msg.positionLetters || {};
@@ -251,13 +263,67 @@ function stripsInAirspace(airspaceId) {
   return getAllEfspStrips().filter(s => s.state !== 'DROPPED' && s.airspaceEntry && s.airspaceEntry.airspaceId === airspaceId);
 }
 
+/**
+ * Board sync (docs/adr/0081). The Facility a delta or ack is about, and whether
+ * its Board lifetime is the one we hold. A different epoch means the server
+ * restarted (or restored): our seq names a point in a Board that no longer
+ * exists, so the message's seq is NOT adopted and the caller must resync
+ * (the server answers a different epoch with a snapshot).
+ * @returns {{facilityId:?string, epochChanged:boolean}}
+ */
+function _boardSyncOf(msg) {
+  const facilityId = msg.facilityId || efspFacility || null;
+  const known = efspBoardEpochByFacility.get(facilityId);
+  const epochChanged = known !== undefined && msg.boardEpoch !== undefined && msg.boardEpoch !== known;
+  return { facilityId, epochChanged };
+}
+
+function _adoptBoardSeq(msg) {
+  if (!Number.isFinite(msg.boardSeq)) return;
+  const { facilityId, epochChanged } = _boardSyncOf(msg);
+  if (epochChanged) return;
+  if (msg.boardEpoch !== undefined && facilityId) efspBoardEpochByFacility.set(facilityId, msg.boardEpoch);
+  if (facilityId) efspBoardSeqByFacility.set(facilityId, msg.boardSeq);
+  if (!facilityId || facilityId === efspFacility) efspBoardSeq = msg.boardSeq;
+}
+
+/** The Facility whose Board lifetime a delta/ack contradicts, or null. Ask BEFORE applying it. */
+function efspEpochChangeOf(msg) {
+  const { facilityId, epochChanged } = _boardSyncOf(msg);
+  return epochChanged ? facilityId : null;
+}
+
+/** What an efsp-resync for this Facility must say: where we are. null when we hold no Board for it. */
+function efspResyncPositionFor(facilityId) {
+  if (!efspBoardEpochByFacility.has(facilityId)) return null;
+  return { facilityId, lastBoardSeq: efspBoardSeqByFacility.get(facilityId), boardEpoch: efspBoardEpochByFacility.get(facilityId) };
+}
+
+/** Facilities we hold a Board for (a reconnect resyncs each). */
+function efspHeldBoardFacilities() { return [...efspBoardEpochByFacility.keys()]; }
+
+/**
+ * An efsp-heartbeat names the default Facility's current seq. Deltas arrive in
+ * order on one socket, so after every delta before it is applied the two must
+ * be equal: ahead means a change reached us in no delta. Seqs jump by more
+ * than one per change (a rebalance bumps one per Strip it re-keys), so only the
+ * heartbeat can tell. Two beats in a row, so a delta in flight is not a gap.
+ * @returns {?string} the Facility to resync, or null
+ */
+function efspHeartbeatGapOf(msg) {
+  const facilityId = efspFacility;
+  const ours = efspBoardSeqByFacility.get(facilityId);
+  if (!facilityId || ours === undefined || !Number.isFinite(msg.boardSeq) || msg.boardSeq <= ours) { _heartbeatBehind = 0; return null; }
+  return ++_heartbeatBehind >= 2 ? facilityId : null;
+}
+
 function applyEfspDelta(msg) {
   for (const s of (msg.strips && msg.strips.updated) || []) efspStrips.set(s.stripId, s);
   for (const id of (msg.strips && msg.strips.gone) || []) efspStrips.delete(id);
   for (const f of (msg.fdrs && msg.fdrs.updated) || []) efspFdrs.set(f.fdrId, f);
   for (const id of (msg.fdrs && msg.fdrs.gone) || []) efspFdrs.delete(id); // archived (docs/adr/0082)
   for (const p of (msg.positions && msg.positions.updated) || []) efspPositions.set(p.positionId, p);
-  if (Number.isFinite(msg.boardSeq)) efspBoardSeq = msg.boardSeq;
+  _adoptBoardSeq(msg);
 }
 
 /**
@@ -279,7 +345,10 @@ function applyEfspMutationAck(msg) {
   efspPendingMutations.delete(msg.clientMutationId);
   if (msg.strip) efspStrips.set(msg.strip.stripId, msg.strip);
   if (msg.fdr) efspFdrs.set(msg.fdr.fdrId, msg.fdr);
-  if (Number.isFinite(msg.boardSeq)) efspBoardSeq = msg.boardSeq;
+  // The ack's boardSeq is deliberately NOT adopted: its broadcast delta (same
+  // seq) is what moves our position, so a delta lost after its ack still shows
+  // up as a gap at the next heartbeat (docs/adr/0081). A refusal or a replay has
+  // no delta at all and changes nothing.
   return { wasPending: !!pending, pending, ok: !!msg.ok, reason: msg.reason, detail: msg.detail, warning: msg.warning };
 }
 
@@ -431,6 +500,9 @@ function _resetEfspStateForTest() {
   efspConflicts = [];
   efspBoardSeq = 0;
   efspFacility = null;
+  efspBoardSeqByFacility.clear();
+  efspBoardEpochByFacility.clear();
+  _heartbeatBehind = 0;
   efspBays = [];
   efspAitAuthorizedByFacility = {};
   efspPositionLetters = {};
@@ -495,7 +567,8 @@ if (typeof module !== 'undefined' && module.exports) {
     applyEfspMarsaDelta, getEfspMarsa, getAllEfspMarsa,
     applyEfspAlerts, surveillanceHintsForStrip, conformanceAlertsForFdr, getAllEfspConflicts, stcaConflictsForTrack,
     activeMarsaForFdr, marsaForStrip, marsaParticipantStripIds,
-    getEfspRack, searchEfspStrips, getEfspBoardSeq, getEfspFacility, getEfspBays,
+    getEfspRack, searchEfspStrips, getEfspBoardSeq, getEfspFacility,
+    efspEpochChangeOf, efspResyncPositionFor, efspHeldBoardFacilities, efspHeartbeatGapOf, getEfspBays,
     isAitAuthorizedFor, getEfspPositionLetter,
     getEfspObligation, getEfspObligations,
     _resetEfspStateForTest,

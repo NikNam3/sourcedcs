@@ -497,7 +497,7 @@ class BoardStore {
       case 'SetBlock':      result = this._applySetBlock(strip, op, by, actingPositionId, mutation.clientMutationId); break;
       case 'TransferStrip': result = this._applyTransferStrip(strip, op, by); break;
       case 'SetFlag':       result = this._applySetFlag(strip, op, by); break;
-      case 'SetState':      result = this._setStateOwnerRefusal(strip, op.toState, actingPositionId) || this._setStateRunwayRefusal(strip, op.toState) || this._applySetStateOp(strip, op.toState, by); break;
+      case 'SetState':      result = this._applySetStateGated(strip, op, actingPositionId, by); break;
       case 'InvokeNla':     result = this._applyInvokeNla(strip, by); break;
       case 'Undo':          result = this._applyUndo(strip, by); break;
       case 'DropStrip':     result = this._applyDropStrip(strip, op, by); break;
@@ -610,6 +610,9 @@ class BoardStore {
       // The SFA rotation transfer and its trigger type (guide §4.7).
       sfaTransfer: result.sfaTransfer ? result.sfaTransfer.kind : undefined,
       sfaTrigger: result.sfaTransfer ? result.sfaTransfer.trigger : undefined,
+      // A gate this Mutation was let past, and why (S-L19 open point, decided in
+      // docs/wip/UI-B.md). Undefined, so absent from the line, otherwise.
+      bypass: result.bypass,
     });
   }
 
@@ -1039,6 +1042,44 @@ class BoardStore {
       detail: `${strip.state} is not ${actingPositionId}'s to change`,
     };
   }
+
+  /**
+   * SetState: owner check, then the runway inhibit, then the write. The one
+   * exception to H19's "the Strip waits" is an OBSERVED departure
+   * (`op.observedAirborne`, set only by the surveillance chip): the aircraft is
+   * already off the ground, so refusing the record would only make the Board
+   * wrong. It bypasses the RUNWAY gate alone (never the owner check), only for a
+   * DEPARTURE going to DEPARTED, only when the server's own surveillance agrees
+   * (`setAirborneObserver`: the client's flag is a claim, never evidence), and
+   * the audit line carries `bypass` with the reason. A typed SetState has no
+   * flag and is refused as before.
+   */
+  _applySetStateGated(strip, op, actingPositionId, by) {
+    const owner = this._setStateOwnerRefusal(strip, op.toState, actingPositionId);
+    if (owner) return owner;
+    let refusal = this._setStateRunwayRefusal(strip, op.toState);
+    let bypass = null;
+    if (refusal && this._observedDeparture(strip, op)) {
+      bypass = { gate: 'RUNWAY_INHIBIT', inhibit: refusal.detail, reason: 'OBSERVED_AIRBORNE' };
+      refusal = null;
+    }
+    if (refusal) return refusal;
+    const result = this._applySetStateOp(strip, op.toState, by);
+    if (bypass && result.ok) result.bypass = bypass;
+    return result;
+  }
+
+  _observedDeparture(strip, op) {
+    return op.observedAirborne === true && strip.role === 'DEPARTURE' && op.toState === 'DEPARTED'
+      && typeof this._airborneObserver === 'function' && this._airborneObserver(strip) === true;
+  }
+
+  /**
+   * Who vouches that a Strip's aircraft is observed airborne (L19's hint
+   * monitor: a standing AIRBORNE_ADVANCE hint for the Strip). Unset, no
+   * SetState is ever let past the runway gate.
+   */
+  setAirborneObserver(fn) { this._airborneObserver = fn; }
 
   /**
    * SetState honours the runway inhibit (decisions.md S-R2-14, H19): the raw

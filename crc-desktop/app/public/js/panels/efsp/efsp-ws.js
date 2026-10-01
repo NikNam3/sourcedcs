@@ -192,9 +192,62 @@ function sendEfspSfaMutation(actingPositionId, baseRev, op) {
   });
 }
 
-/** Resync after reconnect (guide §5.6) — server replies with efsp-board-delta or efsp-snapshot, never a third path. */
-function sendEfspResync(lastBoardSeq) {
-  _sendEfsp({ version: 1, type: 'efsp-resync', lastBoardSeq });
+/**
+ * Resync one Board (guide §5.6, docs/adr/0081): says where this client is (the
+ * seq and the epoch it last read). The server answers with an efsp-board-delta
+ * when that position is inside its window and its own lifetime, and with an
+ * efsp-snapshot otherwise, never a third path; app.js already handles both.
+ * Does nothing for a Facility we hold no Board for (the connect-time snapshot
+ * is the answer there).
+ */
+function sendEfspResync(facilityId) {
+  const at = efspResyncPositionFor(facilityId);
+  if (!at) return false;
+  _sendEfsp({ version: 1, type: 'efsp-resync', ...at });
+  return true;
+}
+
+// Facility -> heartbeats waited since its resync went out. A resync's answer is
+// an ordinary delta or snapshot, so it is marked answered by whichever lands
+// next for that Facility (noteEfspResyncAnswered). Counted in heartbeats, not
+// time: the heartbeat is the one signal this client already trusts to tick.
+const _resyncInFlight = new Map();
+const RESYNC_RETRY_HEARTBEATS = 10; // 5 s at the server's 500 ms beat
+
+/** At most one resync per Facility in flight; a lost answer is retried after RESYNC_RETRY_HEARTBEATS. */
+function requestEfspResync(facilityId, reason) {
+  if (!facilityId || _resyncInFlight.has(facilityId)) return false;
+  if (!sendEfspResync(facilityId)) return false;
+  _resyncInFlight.set(facilityId, 0);
+  console.warn('[efsp] resync requested for', facilityId, '-', reason);
+  return true;
+}
+
+/** An efsp-snapshot or efsp-board-delta for this Facility landed: the resync (if any) is answered. */
+function noteEfspResyncAnswered(facilityId) {
+  if (facilityId) _resyncInFlight.delete(facilityId);
+}
+function noteEfspSnapshotLanded() { _resyncInFlight.clear(); }
+
+/** Each heartbeat: age in-flight resyncs, and ask for one when the heartbeat shows a change we never received. */
+function noteEfspHeartbeatForSync(msg) {
+  for (const [f, n] of _resyncInFlight) {
+    if (n + 1 >= RESYNC_RETRY_HEARTBEATS) _resyncInFlight.delete(f); else _resyncInFlight.set(f, n + 1);
+  }
+  const behind = efspHeartbeatGapOf(msg);
+  if (behind) requestEfspResync(behind, 'heartbeat names a seq we never received');
+}
+
+/** A delta or ack from another Board lifetime: resync (the server answers a snapshot). Call before applying it. */
+function noteEfspBoardMessageForSync(msg) {
+  const changed = efspEpochChangeOf(msg);
+  if (changed) requestEfspResync(changed, 'Board epoch changed (server restarted)');
+}
+
+/** The socket just (re)opened and we already hold a Board: say where we are (the connect-time snapshot follows regardless). */
+function resyncHeldEfspBoardsOnOpen() {
+  _resyncInFlight.clear();
+  for (const f of efspHeldBoardFacilities()) requestEfspResync(f, 'reconnect');
 }
 
 /**
