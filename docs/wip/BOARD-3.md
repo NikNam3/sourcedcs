@@ -3,7 +3,11 @@
 ## Report (lane BOARD-3, branch `lane/BOARD-3-strip-ops`, base `0bfe9d3`)
 
 ```
-GITLOG
+14078aa docs(BOARD-3): report; crc-desktop tests follow the moved code (parity literals, INBOUND allow-list)
+542bc9d refactor(BOARD-3): retarget M1 (strip-ops.js), M2 (ops/convert-to-arrival.js), M4 (ops/set-flag.js)
+ec5bb91 refactor(BOARD-3): per-op audit keys are each op's auditFields; BoardAudit.recordAudit takes {head, tail} extras (S-BOARD3-0)
+2afb098 refactor(BOARD-3): StripOps and the op table; per-Role tables read from the authority registry
+19ed29f test(BOARD-3): freeze guard 1 also reads ctx.rules.X / this.rules.X (S-BOARD3-1)
 ```
 
 - `board-store.js` 1910 -> 473 lines (facade: applyMutation + idempotency, kernel shims, receive* delegations, Position lifecycle, archive, snapshot/restore). New: `board/strip-ops.js` 511, `board/ops/*.js` (16 files incl. index).
