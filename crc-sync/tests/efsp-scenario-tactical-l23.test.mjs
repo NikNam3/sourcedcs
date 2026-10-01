@@ -360,7 +360,7 @@ for (const primitive of ['POINT_OUT', 'HANDOFF']) {
     // the replica is retired the way a system path would (an archive, a state
     // override): the store must still end the proposer's link.
     const replica = ctrOf(efsp, sent.coordination.peerStripId);
-    efsp.boardStoreFor('CENTER')._retireStrip(replica, null);
+    efsp.boardStoreFor('CENTER')._stripOps.retire(replica, null);
     assert.equal(inc(efsp, dep.stripId).coordination, null);
   });
 
