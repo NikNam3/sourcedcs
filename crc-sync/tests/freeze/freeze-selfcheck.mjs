@@ -38,9 +38,14 @@ function buildCopy() {
 /** Every freeze test file in its own process, in parallel; a file fails when its process exits non-zero. */
 async function runSuite(dest) {
   const t0 = Date.now();
-  const names = fs.readdirSync(path.join(dest, 'tests/freeze')).filter(f => /^freeze-.*\.test\.mjs$/.test(f));
-  const results = await Promise.all(names.map(f => new Promise((resolve) => {
-    const child = spawn(process.execPath, ['--test', path.join('tests/freeze', f)], { cwd: dest, stdio: ['ignore', 'pipe', 'pipe'] });
+  // The freeze suite, plus the two structure policies that sit beside it in tests/ (clock-policy, board-seam).
+  const files = [
+    ...fs.readdirSync(path.join(dest, 'tests/freeze')).filter(f => /^freeze-.*\.test\.mjs$/.test(f)).map(f => path.join('tests/freeze', f)),
+    ...['clock-policy.test.mjs', 'board-seam.test.mjs'].filter(f => fs.existsSync(path.join(dest, 'tests', f))).map(f => path.join('tests', f)),
+  ];
+  const results = await Promise.all(files.map(rel => new Promise((resolve) => {
+    const f = path.basename(rel);
+    const child = spawn(process.execPath, ['--test', rel], { cwd: dest, stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '';
     child.stdout.on('data', d => { out += d; }); child.stderr.on('data', d => { out += d; });
     const timer = setTimeout(() => child.kill('SIGKILL'), 240000);
