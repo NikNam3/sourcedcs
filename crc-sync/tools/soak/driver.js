@@ -168,7 +168,11 @@ class Driver {
       if (!c) continue;
       if (payload.startsWith('{"version":1,"type":"efsp-heartbeat"')) { this.stats.heartbeats++; continue; }
       if (payload.indexOf('"type":"efsp-') < 0 || payload.indexOf('"type":"efsp-') > 30) continue; // non-EFSP (status, coverage, tracks)
-      const msg = JSON.parse(payload);
+      let msg = JSON.parse(payload);
+      if (msg.type === 'efsp-resync-reply') { // R3-47: the answer to an efsp-resync, unwrapped as the shipped client does
+        const { answer, ...rest } = msg;
+        msg = { ...rest, type: answer === 'snapshot' ? 'efsp-snapshot' : 'efsp-board-delta' };
+      }
       if (resyncFor === clientId && (msg.type === 'efsp-board-delta' || msg.type === 'efsp-snapshot') && !facts.resyncAnswer) {
         facts.resyncAnswer = msg;
         continue; // the caller applies it
