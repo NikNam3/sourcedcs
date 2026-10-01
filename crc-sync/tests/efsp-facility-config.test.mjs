@@ -21,7 +21,7 @@ process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL = tmpFileTactical;
 const {
   getFacilityIds, getFacilityConfig, getPositionSet, getPositionClass, getCoveringChain, getBaysFor, getAllBays,
   bayImpliesState, bayForImpliedState, coordinationBayFor, setFacilityConfig, validateConfig, isBlockVisible,
-  DEFAULT_CONFIG, DEFAULT_CENTER_CONFIG, DEFAULT_TACTICAL_CONFIG, DEFAULT_FACILITY_ID,
+  DEFAULT_CONFIGS, DEFAULT_FACILITY_ID,
 } = await import('../src/efsp/facility-config.js');
 const { DEPARTURE_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP, requiredBlocksFor } = await import('../src/efsp/block-map.js');
 
@@ -102,7 +102,7 @@ test('getFacilityConfig returns a deep copy — mutating it never affects subseq
   const cfg = getFacilityConfig();
   cfg.positions.push('HACKED');
   cfg.bays.OPS[0].bayId = 'tampered';
-  assert.deepEqual(getPositionSet(), DEFAULT_CONFIG.positions);
+  assert.deepEqual(getPositionSet(), DEFAULT_CONFIGS.INCIRLIK.positions);
   assert.equal(getBaysFor('OPS')[0].bayId, 'ops-proposed');
 });
 
@@ -115,7 +115,7 @@ test('setFacilityConfig persists to disk and survives being re-read from a fresh
   assert.equal(onDisk.facility, 'INCIRLIK-TEST');
 
   // Restore for any tests that might run after this one in the same file.
-  setFacilityConfig(DEFAULT_CONFIG);
+  setFacilityConfig(DEFAULT_CONFIGS.INCIRLIK);
 });
 
 test('setFacilityConfig rejects a non-object patch without throwing', () => {
@@ -124,9 +124,9 @@ test('setFacilityConfig rejects a non-object patch without throwing', () => {
   assert.equal(setFacilityConfig(undefined), false);
 });
 
-test('DEFAULT_CONFIG matches what a fresh, unconfigured store actually serves', () => {
-  assert.deepEqual(getPositionSet(), DEFAULT_CONFIG.positions);
-  assert.deepEqual(getCoveringChain(), DEFAULT_CONFIG.coveringChain);
+test('DEFAULT_CONFIGS.INCIRLIK matches what a fresh, unconfigured store actually serves', () => {
+  assert.deepEqual(getPositionSet(), DEFAULT_CONFIGS.INCIRLIK.positions);
+  assert.deepEqual(getCoveringChain(), DEFAULT_CONFIGS.INCIRLIK.coveringChain);
 });
 
 test('nothing is hidden by default, at any Facility — and a Block added later stays that way', () => {
@@ -134,7 +134,7 @@ test('nothing is hidden by default, at any Facility — and a Block added later 
   // it. An inclusion list of "everything today" silently became a deny-list
   // for everything invented tomorrow, which is how IFR/RSVC/SREG ended up
   // unwritable on the real server (docs/adr/0041).
-  for (const config of [DEFAULT_CONFIG, DEFAULT_CENTER_CONFIG, DEFAULT_TACTICAL_CONFIG]) {
+  for (const config of [DEFAULT_CONFIGS.INCIRLIK, DEFAULT_CONFIGS.CENTER, DEFAULT_CONFIGS.TACTICAL]) {
     assert.deepEqual(config.hiddenBlocks, {}, config.facility);
   }
 });
@@ -169,21 +169,21 @@ test('setFacilityConfig rejects an invalid config and does not persist it', () =
   assert.deepEqual(getFacilityConfig().hiddenBlocks, before.hiddenBlocks);
 });
 
-test('loading an on-disk config that fails validation falls back to DEFAULT_CONFIG rather than throwing', async () => {
+test('loading an on-disk config that fails validation falls back to DEFAULT_CONFIGS.INCIRLIK rather than throwing', async () => {
   const fs2 = await import('fs');
   const os2 = await import('os');
   const path2 = await import('path');
   const dir = fs2.mkdtempSync(path2.join(os2.tmpdir(), 'efsp-facility-config-badload-'));
   const file = path2.join(dir, 'efsp-facility-incirlik.json');
-  fs2.writeFileSync(file, JSON.stringify({ ...DEFAULT_CONFIG, hiddenBlocks: { DEPARTURE: ['1'] } }));
+  fs2.writeFileSync(file, JSON.stringify({ ...DEFAULT_CONFIGS.INCIRLIK, hiddenBlocks: { DEPARTURE: ['1'] } }));
 
   const prevPath = process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH;
   process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = file;
   const fresh = await import(`../src/efsp/facility-config.js?bad=${Date.now()}`);
   process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = prevPath;
 
-  assert.deepEqual(fresh.getPositionSet(), DEFAULT_CONFIG.positions);
-  assert.deepEqual(fresh.getFacilityConfig().hiddenBlocks, DEFAULT_CONFIG.hiddenBlocks);
+  assert.deepEqual(fresh.getPositionSet(), DEFAULT_CONFIGS.INCIRLIK.positions);
+  assert.deepEqual(fresh.getFacilityConfig().hiddenBlocks, DEFAULT_CONFIGS.INCIRLIK.hiddenBlocks);
 });
 
 test('bayForImpliedState resolves the Bay whose impliesState matches, falling back to the Position\'s first Bay', () => {
@@ -264,14 +264,14 @@ test('getAllBays stamps every Bay with its facilityId, and does not mix the two 
   assert.equal(centerBays.some(b => b.bayId === 'ops-filed'), false);
 });
 
-test('DEFAULT_CENTER_CONFIG is a valid config on its own', () => {
-  assert.equal(validateConfig(DEFAULT_CENTER_CONFIG).ok, true);
+test('DEFAULT_CONFIGS.CENTER is a valid config on its own', () => {
+  assert.equal(validateConfig(DEFAULT_CONFIGS.CENTER).ok, true);
 });
 
 // ── WP4A second slice: the TACTICAL Facility and positionClass ──────────
 
-test('DEFAULT_TACTICAL_CONFIG is a valid config on its own', () => {
-  assert.equal(validateConfig(DEFAULT_TACTICAL_CONFIG).ok, true);
+test('DEFAULT_CONFIGS.TACTICAL is a valid config on its own', () => {
+  assert.equal(validateConfig(DEFAULT_CONFIGS.TACTICAL).ok, true);
 });
 
 test('TACTICAL has exactly the 4 MRU/non-ATC Positions from guide §4.1', () => {
@@ -323,7 +323,7 @@ test('every Block of every Role is writable at every Facility, since none hides 
 });
 
 test('no default config carries a legacy blockVisibility list — one would hide every Block added since it was written', () => {
-  for (const config of [DEFAULT_CONFIG, DEFAULT_CENTER_CONFIG, DEFAULT_TACTICAL_CONFIG]) {
+  for (const config of [DEFAULT_CONFIGS.INCIRLIK, DEFAULT_CONFIGS.CENTER, DEFAULT_CONFIGS.TACTICAL]) {
     assert.equal(config.blockVisibility, undefined, config.facility);
   }
 });
@@ -334,7 +334,7 @@ test('setFacilityConfig targets the Facility named by its second argument, leavi
   assert.equal(getFacilityConfig('CENTER').facility, 'CENTER-TEST');
   assert.equal(getFacilityConfig('INCIRLIK').facility, 'INCIRLIK');
   // Restore for any tests that might run after this one in the same file.
-  setFacilityConfig(DEFAULT_CENTER_CONFIG, 'CENTER');
+  setFacilityConfig(DEFAULT_CONFIGS.CENTER, 'CENTER');
 });
 
 test('setFacilityConfig rejects an unknown facilityId without throwing', () => {
@@ -342,7 +342,7 @@ test('setFacilityConfig rejects an unknown facilityId without throwing', () => {
   assert.equal(result.ok, false);
 });
 
-test('the actual committed config/efsp-facility-incirlik.json seed is valid JSON matching DEFAULT_CONFIG\'s shape, and round-trips through a fresh load + mutate + re-import', async () => {
+test('the actual committed config/efsp-facility-incirlik.json seed is valid JSON matching DEFAULT_CONFIGS.INCIRLIK\'s shape, and round-trips through a fresh load + mutate + re-import', async () => {
   const realSeedPath = path.join(new URL('.', import.meta.url).pathname, '../config/efsp-facility-incirlik.json');
   const realSeed = JSON.parse(fs.readFileSync(realSeedPath, 'utf8'));
   assert.equal(validateConfig(realSeed).ok, true, 'the committed seed file itself must pass validation');
@@ -377,7 +377,7 @@ test('position letters: T/A/C for the ATC scopes, M for every tactical Position 
 });
 
 test('a position letter must be one character, on a known Position', () => {
-  const base = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+  const base = JSON.parse(JSON.stringify(DEFAULT_CONFIGS.INCIRLIK));
   assert.equal(validateConfig({ ...base, positionLetters: { APP: 'AP' } }).ok, false);
   assert.equal(validateConfig({ ...base, positionLetters: { APP: 'a' } }).ok, false);
   assert.equal(validateConfig({ ...base, positionLetters: { XXX: 'X' } }).ok, false);
