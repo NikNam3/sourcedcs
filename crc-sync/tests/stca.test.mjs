@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 
 // docs/adr/0058 — short-term conflict alert.
 const { findConflicts, StcaMonitor } = await import('../src/stca.js');
-const { DEFAULTS } = await import('../src/alerting-config.js');
+const { loadAlertingConfig } = await import('../src/alerting-config.js');
+const DEFAULTS = loadAlertingConfig();
 
 const cfg = DEFAULTS.stca;
 const KT = 0.514444;

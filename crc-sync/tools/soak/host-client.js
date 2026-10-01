@@ -27,8 +27,13 @@ const AIRSPACES = [
   },
 ];
 
+const TUNING_FILES = ['alerting.json', 'efsp-instrumentation.json', 'efsp-surveillance-hints.json'];
+
 function writeFixtures(stateDir) {
   fs.mkdirSync(path.join(stateDir, 'config-empty'), { recursive: true });
+  // Tuning files have no code defaults any more (DATA-2, H88): a missing one is a
+  // startup error, so the otherwise-empty config dir carries the shipped copies.
+  for (const f of TUNING_FILES) fs.copyFileSync(path.join(__dirname, '../../config', f), path.join(stateDir, 'config-empty', f));
   fs.mkdirSync(path.join(stateDir, 'terrain'), { recursive: true });
   fs.writeFileSync(path.join(stateDir, 'airspaces.json'), JSON.stringify(AIRSPACES, null, 2));
   fs.writeFileSync(path.join(stateDir, 'stereo-routes.json'), '[]');
