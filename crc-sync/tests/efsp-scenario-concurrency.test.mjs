@@ -146,7 +146,7 @@ test('SCENARIO a client that missed a few updates gets a delta, not a whole snap
   airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'LAG2' });
 
   const resync = efsp.handleMessage(c.APP.session, { type: 'efsp-resync', lastBoardSeq: before, boardEpoch: efsp.snapshotFor().boardEpochByFacility.INCIRLIK });
-  assert.equal(resync.ack.type, 'efsp-board-delta', 'inside the ring buffer, so a delta');
+  assert.equal(resync.ack.answer, 'delta', 'inside the ring buffer, so a delta');
   const ids = resync.ack.strips.updated.map(s => s.stripId);
   assert.ok(ids.includes(first.stripId));
   assert.ok(resync.ack.strips.updated.every(s => s.facilityId === 'INCIRLIK'), 'every record is stamped');
@@ -160,7 +160,7 @@ test('SCENARIO a client that fell too far behind is sent a full snapshot instead
   // Beyond the ring-buffer window there is nothing to replay from, so the
   // only honest answer is the whole Board. Two paths, never a third (§5.6).
   const resync = efsp.handleMessage(c.APP.session, { type: 'efsp-resync', lastBoardSeq: -999999 });
-  assert.equal(resync.ack.type, 'efsp-snapshot');
+  assert.equal(resync.ack.answer, 'snapshot');
   assert.ok(resync.ack.strips.length > 0);
   assert.ok(Array.isArray(resync.ack.airspaces), 'and the snapshot carries the airspace board too');
 });

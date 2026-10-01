@@ -326,7 +326,8 @@ function _handleMutation(ctx, session, msg, persist) {
 }
 
 /**
- * efsp-resync (guide §5.6): exactly two answers, a delta or a snapshot.
+ * efsp-resync (guide §5.6): exactly two answers, a delta or a snapshot, sent as an
+ * `efsp-resync-reply` (see _asResyncReply).
  *
  * Three steps, kept in this order so each can grow on its own: resolve the
  * Board, decide whether a delta can serve this client, build the answer. A
@@ -335,6 +336,20 @@ function _handleMutation(ctx, session, msg, persist) {
  * getDeltaSince reports as `gone`.
  */
 function _handleResync(ctx, session, msg) {
+  const { ack } = _resyncAnswer(ctx, session, msg);
+  return { ack: _asResyncReply(ack) };
+}
+
+/**
+ * The answer to an efsp-resync has its own wire type (R3-47, S-12): the snapshot or the
+ * delta it would have been, flat, tagged `answer: 'snapshot' | 'delta'`, so the client
+ * knows it is a reply to what it asked and applies it as the message it carries.
+ */
+function _asResyncReply(inner) {
+  return { ...inner, version: VERSION, type: 'efsp-resync-reply', answer: inner.type === 'efsp-snapshot' ? 'snapshot' : 'delta' };
+}
+
+function _resyncAnswer(ctx, session, msg) {
   // 1. Resolve the Board.
   const facilityId = msg.facilityId || ctx.facilityConfig.DEFAULT_FACILITY_ID;
   const boardStore = ctx.boardStoreFor(facilityId);

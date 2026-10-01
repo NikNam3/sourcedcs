@@ -199,7 +199,7 @@ test('resync within the ring-buffer window returns an efsp-board-delta, not a sn
   handleMessage(ctx, SESSION, createStripMsg(), noopPersist);
 
   const result = handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq: before, boardEpoch: ctx.boardStore.epoch }, noopPersist);
-  assert.equal(result.ack.type, 'efsp-board-delta');
+  assert.equal(result.ack.answer, 'delta');
 });
 
 test('resync with lastBoardSeq far outside the window returns a full efsp-snapshot', () => {
@@ -207,7 +207,7 @@ test('resync with lastBoardSeq far outside the window returns a full efsp-snapsh
   handleMessage(ctx, SESSION, createStripMsg(), noopPersist);
 
   const result = handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq: -999999 }, noopPersist);
-  assert.equal(result.ack.type, 'efsp-snapshot');
+  assert.equal(result.ack.answer, 'snapshot');
   assert.ok(Array.isArray(result.ack.strips));
   assert.ok(Array.isArray(result.ack.fdrs));
   assert.ok(Array.isArray(result.ack.positions));
@@ -217,7 +217,7 @@ test('resync with lastBoardSeq far outside the window returns a full efsp-snapsh
 test('resync with a missing/non-finite lastBoardSeq is treated as TOO_OLD (snapshot), the safe default', () => {
   const ctx = makeCtx();
   const result = handleMessage(ctx, SESSION, { type: 'efsp-resync' }, noopPersist);
-  assert.equal(result.ack.type, 'efsp-snapshot');
+  assert.equal(result.ack.answer, 'snapshot');
 });
 
 test('resync from a client AHEAD of the server returns a snapshot — the server restarted', () => {
@@ -230,7 +230,7 @@ test('resync from a client AHEAD of the server returns a snapshot — the server
   const ahead = ctx.boardStore.currentSeq + 50;
 
   const result = handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq: ahead }, noopPersist);
-  assert.equal(result.ack.type, 'efsp-snapshot', 'a client ahead of the server must be re-seeded, not patched');
+  assert.equal(result.ack.answer, 'snapshot', 'a client ahead of the server must be re-seeded, not patched');
   // And the snapshot is authoritative about emptiness: applyEfspSnapshot
   // clears before it fills, so this is what actually removes the stale Strips.
   assert.deepEqual(result.ack.strips, []);
@@ -241,7 +241,7 @@ test('resync never returns a third message type — only efsp-board-delta or efs
   handleMessage(ctx, SESSION, createStripMsg(), noopPersist);
   for (const lastBoardSeq of [ctx.boardStore.currentSeq, 0, -1, ctx.boardStore.currentSeq - RESYNC_RING_WINDOW, ctx.boardStore.currentSeq + 1]) {
     const result = handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq }, noopPersist);
-    assert.ok(['efsp-board-delta', 'efsp-snapshot'].includes(result.ack.type));
+    assert.ok(['delta', 'snapshot'].includes(result.ack.answer));
   }
 });
 
@@ -428,7 +428,7 @@ test('the snapshot carries correlation records alongside airspaces', () => {
   handleMessage(ctx, session, bindMsg({ fdrId: strip.fdrId, baseRev: 0 }), noopPersist);
 
   const snapshot = handleMessage(ctx, session, { type: 'efsp-resync', lastBoardSeq: -1 }, noopPersist).ack;
-  assert.equal(snapshot.type, 'efsp-snapshot');
+  assert.equal(snapshot.answer, 'snapshot');
   assert.equal(snapshot.correlations.length, 1);
   assert.equal(snapshot.correlations[0].fdrId, strip.fdrId);
 });
@@ -442,7 +442,7 @@ test('efsp-resync has no correlation branch — a reconnecting client gets the s
   createOpsStrip(ctx, session);
 
   const delta = handleMessage(ctx, session, { type: 'efsp-resync', lastBoardSeq: 0, boardEpoch: ctx.boardStore.epoch }, noopPersist).ack;
-  assert.equal(delta.type, 'efsp-board-delta');
+  assert.equal(delta.answer, 'delta');
   assert.equal(delta.correlations, undefined);
 });
 
@@ -657,7 +657,7 @@ test('a resync with the current epoch and a seq inside the window gets a delta',
   const epoch = handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq: -1 }, noopPersist).ack.boardEpochByFacility.INCIRLIK;
   createNamed(ctx, SESSION, 'EPOCH1');
   const r = handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq: before, boardEpoch: epoch }, noopPersist);
-  assert.equal(r.ack.type, 'efsp-board-delta');
+  assert.equal(r.ack.answer, 'delta');
   assert.equal(r.ack.boardEpoch, epoch);
   assert.equal(r.ack.strips.updated.length, 1);
 });
@@ -668,7 +668,7 @@ test('a resync with no epoch gets a snapshot', () => {
   const before = ctx.boardStore.currentSeq;
   createNamed(ctx, SESSION, 'EPOCH2');
   const r = handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq: before }, noopPersist);
-  assert.equal(r.ack.type, 'efsp-snapshot');
+  assert.equal(r.ack.answer, 'snapshot');
 });
 
 test('a resync carrying the previous lifetime\'s epoch gets a snapshot, even when its seq is inside the new lifetime\'s window', () => {
@@ -691,11 +691,11 @@ test('a resync carrying the previous lifetime\'s epoch gets a snapshot, even whe
   while (ctx2.boardStore.currentSeq <= oldSeq + 1) createNamed(ctx2, SESSION, `NEW${ctx2.boardStore.currentSeq}`);
 
   const r = handleMessage(ctx2, SESSION, { type: 'efsp-resync', lastBoardSeq: oldSeq, boardEpoch: oldEpoch }, noopPersist);
-  assert.equal(r.ack.type, 'efsp-snapshot');
+  assert.equal(r.ack.answer, 'snapshot');
   assert.ok(!r.ack.strips.some(s => s.stripId === doomed.stripId), 'the snapshot, not a delta, clears what the client should no longer show');
   // The same seq with the new lifetime's epoch is a delta.
   const ok = handleMessage(ctx2, SESSION, { type: 'efsp-resync', lastBoardSeq: oldSeq, boardEpoch: ctx2.boardStore.epoch }, noopPersist);
-  assert.equal(ok.ack.type, 'efsp-board-delta');
+  assert.equal(ok.ack.answer, 'delta');
 });
 
 test('resync from the seq the rebalancing broadcast advertised returns an empty delta and the client is correct', () => {
@@ -711,7 +711,7 @@ test('resync from the seq the rebalancing broadcast advertised returns an empty 
   assert.deepEqual(client.diff(ctx.boardStore), [], 'the broadcast alone leaves the replica right');
 
   const r = handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq: client.boardSeq, boardEpoch: client.boardEpoch }, noopPersist);
-  assert.equal(r.ack.type, 'efsp-board-delta');
+  assert.equal(r.ack.answer, 'delta');
   assert.deepEqual(r.ack.strips.updated, []);
   assert.deepEqual(r.ack.strips.gone, []);
   client.delta(r.ack);
@@ -735,7 +735,7 @@ test('a resync delta reports a Strip no longer on the Board as gone, once (the s
   const delta = ctx.boardStore.getDeltaSince(before);
   assert.deepEqual(delta.gone, [archived.stripId]);
   const r = handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq: before, boardEpoch: ctx.boardStore.epoch }, noopPersist);
-  assert.equal(r.ack.type, 'efsp-board-delta');
+  assert.equal(r.ack.answer, 'delta');
   assert.deepEqual(r.ack.strips.gone.slice().sort(), [archived.stripId, dropped.stripId].sort());
   assert.deepEqual(r.ack.strips.updated.map(s => s.stripId), [kept.stripId]);
 });

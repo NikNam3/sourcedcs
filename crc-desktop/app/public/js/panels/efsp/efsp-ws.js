@@ -244,10 +244,14 @@ function noteEfspBoardMessageForSync(msg) {
   if (changed) requestEfspResync(changed, 'Board epoch changed (server restarted)');
 }
 
-/** The socket just (re)opened and we already hold a Board: say where we are (the connect-time snapshot follows regardless). */
-function resyncHeldEfspBoardsOnOpen() {
-  _resyncInFlight.clear();
-  for (const f of efspHeldBoardFacilities()) requestEfspResync(f, 'reconnect');
+/**
+ * The server's answer to an efsp-resync is an `efsp-resync-reply`: the snapshot or the delta,
+ * flat, with `answer: 'snapshot' | 'delta'`. Returns the efsp-snapshot / efsp-board-delta
+ * message it stands for (the other fields are untouched), for app.js to apply as any other.
+ */
+function efspResyncReplyAsMessage(msg) {
+  const { answer, ...rest } = msg;
+  return { ...rest, type: answer === 'snapshot' ? 'efsp-snapshot' : 'efsp-board-delta' };
 }
 
 /**

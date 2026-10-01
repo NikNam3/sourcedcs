@@ -102,15 +102,19 @@ test('every field applyEfspMutationAck and the efsp-mutation-ack case read is on
   }
 });
 
-test('S-12: an efsp-resync is answered with an efsp-board-delta or an efsp-snapshot, never a third type', () => {
+test('S-12: an efsp-resync is answered with an efsp-resync-reply, a snapshot or a delta, never a third type', () => {
   const board = efsp.boardStoreFor('INCIRLIK');
   const answers = [
     efsp.handleMessage(c.OPS.session, { type: 'efsp-resync', facilityId: 'INCIRLIK', lastBoardSeq: board.currentSeq, boardEpoch: board.epoch }),
     efsp.handleMessage(c.OPS.session, { type: 'efsp-resync', facilityId: 'INCIRLIK', lastBoardSeq: 0, boardEpoch: 'a-different-epoch' }),
     efsp.handleMessage(c.OPS.session, { type: 'efsp-resync', facilityId: 'INCIRLIK' }),
   ];
-  const types = answers.map(a => a && a.ack && a.ack.type);
-  for (const t of types) assert.ok(['efsp-board-delta', 'efsp-snapshot'].includes(t), `resync answered with ${t}`);
-  // and the client has a case for each
-  for (const t of new Set(types)) assert.ok(CLIENT_APP.includes(`case '${t}'`), `app.js has no case for ${t}`);
+  const acks = answers.map(a => a && a.ack);
+  for (const a of acks) {
+    assert.equal(a.type, 'efsp-resync-reply');
+    assert.ok(['delta', 'snapshot'].includes(a.answer), `resync answered with ${a.answer}`);
+  }
+  assert.deepEqual(acks.map(a => a.answer), ['delta', 'snapshot', 'snapshot']);
+  // and the client has a case for the reply type
+  assert.ok(CLIENT_APP.includes("case 'efsp-resync-reply'"), 'app.js has no case for efsp-resync-reply');
 });

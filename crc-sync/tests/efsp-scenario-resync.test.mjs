@@ -43,6 +43,7 @@ function makeClient() {
     /** app.js's efsp cases, in the order it runs them. */
     deliver(msg) {
       ctx.__m = msg;
+      if (msg.type === 'efsp-resync-reply') return this.deliver(run('efspResyncReplyAsMessage(__m)'));
       switch (msg.type) {
         case 'efsp-snapshot': run('applyEfspSnapshot(__m); noteEfspSnapshotLanded()'); break;
         case 'efsp-board-delta': run('noteEfspBoardMessageForSync(__m); applyEfspDelta(__m); if (!efspEpochChangeOf(__m)) noteEfspResyncAnswered(__m.facilityId || getEfspFacility())'); break;
@@ -67,7 +68,8 @@ function serveResyncs(efsp, session, client) {
     const m = client.outbox.shift();
     assert.equal(m.type, 'efsp-resync');
     const r = efsp.handleMessage(session, m);
-    replies.push(r.ack.type);
+    assert.equal(r.ack.type, 'efsp-resync-reply');
+    replies.push(r.ack.answer);
     client.deliver(r.ack);
   }
   return replies;
@@ -99,7 +101,7 @@ test('a client that misses a delta sees the gap at the heartbeat, resyncs, and c
   b.deliver(beat); // a third beat while the resync is in flight sends nothing more
   assert.equal(b.outbox.length, 1);
 
-  assert.deepEqual(serveResyncs(efsp, c.CD.session, b), ['efsp-board-delta']);
+  assert.deepEqual(serveResyncs(efsp, c.CD.session, b), ['delta']);
   assert.deepEqual(b.stripIds(), serverStrips(efsp));
   b.deliver(beat);
   b.deliver(beat);
@@ -121,23 +123,21 @@ test('a delta from another Board lifetime (server restarted) triggers a resync t
   b.deliver(r.broadcast);
   assert.equal(b.outbox.length, 1);
   assert.equal(b.run('efspResyncPositionFor("INCIRLIK").boardEpoch'), efsp1.boardStoreFor('INCIRLIK').epoch, 'the new lifetime\'s epoch is not adopted from a delta');
-  assert.deepEqual(serveResyncs(efsp2, c2.CD.session, b), ['efsp-snapshot']);
+  assert.deepEqual(serveResyncs(efsp2, c2.CD.session, b), ['snapshot']);
   assert.deepEqual(b.stripIds(), serverStrips(efsp2));
   assert.equal(b.seq('INCIRLIK'), efsp2.boardStoreFor('INCIRLIK').currentSeq);
 });
 
-test('a reconnect with a Board in hand resyncs; with none it sends nothing', () => {
+test('a reconnect sends no resync: the connect-time snapshot is the recovery (R3-47)', () => {
   const efsp = createEfsp();
   const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK' });
   const b = makeClient();
-  b.run('resyncHeldEfspBoardsOnOpen()');
-  assert.equal(b.outbox.length, 0, 'first connect: the snapshot is the answer');
   b.deliver(efsp.snapshotFor(c.CD.session));
   create(efsp, c, 'RECON1'); // missed while the socket was down
-  b.run('resyncHeldEfspBoardsOnOpen()');
-  const sent = b.outbox.map(m => m.facilityId).sort();
-  assert.ok(sent.includes('INCIRLIK'));
-  const replies = serveResyncs(efsp, c.CD.session, b);
-  assert.ok(replies.every(t => t === 'efsp-board-delta'), replies.join());
+  assert.notDeepEqual(b.stripIds(), serverStrips(efsp));
+  assert.equal(b.run('typeof resyncHeldEfspBoardsOnOpen'), 'undefined', 'the reconnect trigger is gone');
+  assert.equal(b.outbox.length, 0, 'nothing is sent on open');
+  b.deliver(efsp.snapshotFor(c.CD.session)); // what ws-hub sends on every connect
   assert.deepEqual(b.stripIds(), serverStrips(efsp));
+  assert.equal(b.outbox.length, 0);
 });

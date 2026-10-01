@@ -299,8 +299,6 @@ function efspResyncPositionFor(facilityId) {
   return { facilityId, lastBoardSeq: efspBoardSeqByFacility.get(facilityId), boardEpoch: efspBoardEpochByFacility.get(facilityId) };
 }
 
-/** Facilities we hold a Board for (a reconnect resyncs each). */
-function efspHeldBoardFacilities() { return [...efspBoardEpochByFacility.keys()]; }
 
 /**
  * An efsp-heartbeat names the default Facility's current seq. Deltas arrive in
@@ -568,7 +566,7 @@ if (typeof module !== 'undefined' && module.exports) {
     applyEfspAlerts, surveillanceHintsForStrip, conformanceAlertsForFdr, getAllEfspConflicts, stcaConflictsForTrack,
     activeMarsaForFdr, marsaForStrip, marsaParticipantStripIds,
     getEfspRack, searchEfspStrips, getEfspBoardSeq, getEfspFacility,
-    efspEpochChangeOf, efspResyncPositionFor, efspHeldBoardFacilities, efspHeartbeatGapOf, getEfspBays,
+    efspEpochChangeOf, efspResyncPositionFor, efspHeartbeatGapOf, getEfspBays,
     isAitAuthorizedFor, getEfspPositionLetter,
     getEfspObligation, getEfspObligations,
     _resetEfspStateForTest,

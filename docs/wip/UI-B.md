@@ -117,3 +117,13 @@ sees what TAC_C2 handed it) is untouched. No code change; the tab name stays "wi
   does not cause one (deltas still carry the seq even when filtered to nothing; checked in `read-scope.js`).
 - `ATO import` broadcasts an `efsp-board-delta` with `boardSeq` but no `boardEpoch` (`efsp-ws.js` ~line 1087): the client treats
   a missing epoch as "no change", and adopts the seq. Suggest L14/L26 stamp it like the others.
+
+## R3-47 (human ruling, applied by the integrator on integ/merge4)
+Resync scope narrowed: the epoch-change trigger stays; the reconnect trigger is dropped (the server sends a full snapshot on
+every connect, that is the recovery; `resyncHeldEfspBoardsOnOpen` and `efspHeldBoardFacilities` are gone); the heartbeat
+trigger covers the default Facility's Board only (unchanged). The answer to an `efsp-resync` has its own wire type,
+`efsp-resync-reply`: the snapshot or the delta, flat, plus `answer: 'snapshot' | 'delta'` (`_asResyncReply` in `efsp-ws.js`);
+app.js unwraps it with `efspResyncReplyAsMessage` and applies it as the message it carries. The ws-message-contract
+and wire-payload-contract tests, the resync scenario and the `ui-b-resync` e2e (now: reconnect converges through the connect
+snapshot, no `efsp-resync` frame sent) were updated; the briefing's and ADR 0081's wording ("delta or snapshot") should say
+`efsp-resync-reply`. Q3-3 (field/carrier state in delta replies) is moot and not added.

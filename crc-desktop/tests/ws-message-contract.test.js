@@ -91,7 +91,7 @@ test('every message type a client send helper emits is accepted by a server disp
 
 // The server accepts a few types the shipped client never sends. Listed so a NEW one
 // has to be acknowledged here (and the reason kept honest). Empty since S-12 was
-// wired (efsp-resync is sent on reconnect, on a Board epoch change and on a heartbeat gap).
+// wired (efsp-resync is sent on a Board epoch change and on a heartbeat gap, not on a reconnect: R3-47).
 const ACCEPTED_BUT_NEVER_SENT_BY_UI = {};
 
 test('every type the server accepts is either sent by the client or a known unreachable path', () => {
@@ -99,31 +99,39 @@ test('every type the server accepts is either sent by the client or a known unre
   assert.deepEqual(orphan, [], `server accepts type(s) no client file sends: ${orphan.join(', ')}`);
 });
 
-// S-12: efsp-resync has no `-ack` type of its own. Its reply is one of two types that
-// already exist; pin that, so a third reply type cannot appear without app.js hearing of it.
-test('efsp-resync has no ack type of its own; its reply is a snapshot or a board delta, both handled by app.js', () => {
+// S-12 / R3-47: efsp-resync has no `-ack` type; its answer is an `efsp-resync-reply`, a snapshot or a
+// delta tagged `answer`. Pin that, so a third kind of answer cannot appear without app.js hearing of it.
+test('efsp-resync is answered with an efsp-resync-reply (answer: snapshot | delta), which app.js handles', () => {
   assert.equal(SENT_BY_SERVER.includes('efsp-resync-ack'), false);
-  const from = EFSP_DISPATCH.indexOf('function _handleResync(');
-  assert.ok(from > 0, '_handleResync moved');
+  const from = EFSP_DISPATCH.indexOf('function _asResyncReply(');
+  assert.ok(from > 0, '_asResyncReply moved');
   const body = EFSP_DISPATCH.slice(from, EFSP_DISPATCH.indexOf('\n}\n', from));
-  const replyTypes = matchAll(body, /type:\s*'([^']+)'/g);
-  for (const t of replyTypes) assert.ok(HANDLED_BY_CLIENT.includes(t), `_handleResync can answer ${t}, which app.js does not handle`);
-  assert.match(body, /_snapshot|snapshotMessage|efsp-snapshot|efsp-board-delta/, '_handleResync no longer replies with a snapshot or delta');
+  assert.match(body, /type:\s*'efsp-resync-reply'/);
+  assert.match(body, /'snapshot'/);
+  assert.match(body, /'delta'/);
+  assert.ok(HANDLED_BY_CLIENT.includes('efsp-resync-reply'), 'app.js has no case for efsp-resync-reply');
+  // _handleResync answers through it, and only through it
+  const h = EFSP_DISPATCH.indexOf('function _handleResync(');
+  assert.ok(h > 0, '_handleResync moved');
+  assert.match(EFSP_DISPATCH.slice(h, EFSP_DISPATCH.indexOf('\n}\n', h)), /_asResyncReply\(/);
 });
 
 // S-12 (ruling in decisions.md): the resync path is reachable from the shipped UI. A sender
 // that nothing calls is the dead path the todo here used to name.
-test('S-12: efsp-resync is wired: sendEfspResync is reached from app.js through the three triggers', () => {
+test('S-12: efsp-resync is wired: sendEfspResync is reached from app.js through the two triggers (no reconnect trigger, R3-47)', () => {
   const WS = readClient('panels/efsp/efsp-ws.js');
   assert.match(WS, /type:\s*'efsp-resync'/);
   // each trigger is called from app.js's socket handlers ...
-  for (const trigger of ['resyncHeldEfspBoardsOnOpen', 'noteEfspBoardMessageForSync', 'noteEfspHeartbeatForSync']) {
+  for (const trigger of ['noteEfspBoardMessageForSync', 'noteEfspHeartbeatForSync']) {
     assert.ok(APP.includes(`${trigger}(`), `app.js never calls ${trigger}`);
     // ... and each reaches requestEfspResync -> sendEfspResync inside efsp-ws.js
     const from = WS.indexOf(`function ${trigger}(`);
     assert.ok(from > 0, `${trigger} missing from efsp-ws.js`);
     assert.match(WS.slice(from, WS.indexOf('\n}\n', from)), /requestEfspResync\(/, `${trigger} does not request a resync`);
   }
+  // R3-47: a reconnect is recovered by the connect snapshot, so nothing resyncs on open
+  assert.equal(APP.includes('resyncHeldEfspBoardsOnOpen'), false, 'app.js resyncs on reconnect again');
+  assert.equal(WS.includes('function resyncHeldEfspBoardsOnOpen('), false);
   const req = WS.indexOf('function requestEfspResync(');
   assert.match(WS.slice(req, WS.indexOf('\n}\n', req)), /sendEfspResync\(/);
 });

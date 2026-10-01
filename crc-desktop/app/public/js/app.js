@@ -485,16 +485,19 @@ async function connect() {
   _ws = ws;
   _setSyncSocket(ws);
 
+  // No resync on reconnect (R3-47): the server sends a full snapshot on every connect,
+  // which is the recovery. Resync is for a Board epoch change and a missed delta only.
   ws.onopen = () => {
     console.log('[ws] connected to crc-sync');
-    // A reconnect with a Board already in hand says where it is (docs/adr/0081).
-    if (typeof resyncHeldEfspBoardsOnOpen === 'function') resyncHeldEfspBoardsOnOpen();
   };
 
   ws.onmessage = (e) => {
     let msg;
     try { msg = JSON.parse(e.data); } catch (_) { return; }
+    onSyncMessage(msg);
+  };
 
+  const onSyncMessage = (msg) => {
     switch (msg.type) {
       case 'weather':
         weather = { pressurePa: msg.pressurePa, tempK: msg.tempK };
@@ -630,6 +633,11 @@ async function connect() {
             if (typeof notifyEfspOrphanedMutation === 'function') notifyEfspOrphanedMutation(orphaned);
           });
         }
+        break;
+      // The answer to this client's efsp-resync (docs/adr/0081, S-12): a snapshot or a
+      // delta, tagged. Unwrapped into the message it carries, so one code path applies it.
+      case 'efsp-resync-reply':
+        onSyncMessage(efspResyncReplyAsMessage(msg));
         break;
       case 'efsp-board-delta': {
         // Where the changed Strips sat BEFORE this delta, so the panel can

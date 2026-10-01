@@ -1,9 +1,9 @@
 'use strict';
 
 /* UI-B (docs/wip/UI-B.md): the client resync (S-12, ADR 0081) on screen. The websocket is killed
- * mid-session, a change is made by someone else while it is down, and the reconnect has to
- * (a) send an efsp-resync carrying the epoch and last seq the client held and (b) end with the
- * Board the server has. The Strip it creates is dropped at the end. */
+ * mid-session, a change is made by someone else while it is down, and the reconnect has to end
+ * with the Board the server has, through the connect-time snapshot (R3-47: no resync is sent on
+ * a reconnect). The Strip it creates is dropped at the end. */
 
 const { test, expect } = require('./helpers/test');
 const { openPanel, dropStrips } = require('./helpers/app');
@@ -26,15 +26,22 @@ const has = (page, callsign) => page.evaluate((cs) => getAllEfspStrips().some(s 
   const f = getEfspFdr(s.fdrId); return f && f.identity.callsign === cs && s.state !== 'DROPPED';
 }), callsign);
 
-test('a websocket killed mid-session reconnects, resyncs from its epoch and seq, and holds what it missed', async ({ browser, page }) => {
+test('a websocket killed mid-session reconnects, sends no resync, and converges through the connect snapshot', async ({ browser, page }) => {
   await openPanel(page, { held: ['CD'], controller: 'e2e-ui-b-watcher' });
   const { page: other } = await controller(browser, { held: ['OPS'], controller: 'e2e-ui-b-actor' });
 
+  // R3-47: a reconnect is recovered by the full snapshot the server sends on every connect; the
+  // client sends no efsp-resync for it (resync is for a Board epoch change and a missed delta).
   const sent = [];
-  page.on('websocket', (ws) => ws.on('framesent', (f) => { try { const m = JSON.parse(f.payload); if (m.type === 'efsp-resync') sent.push(m); } catch (_) { /* not JSON */ } }));
+  let snapshotsAfterReconnect = 0;
+  page.on('websocket', (ws) => {
+    ws.on('framesent', (f) => { try { const m = JSON.parse(f.payload); if (m.type === 'efsp-resync') sent.push(m); } catch (_) { /* not JSON */ } });
+    ws.on('framereceived', (f) => { try { if (JSON.parse(f.payload).type === 'efsp-snapshot') snapshotsAfterReconnect++; } catch (_) { /* not JSON */ } });
+  });
 
   const before = await page.evaluate(() => ({ epoch: efspResyncPositionFor(getEfspFacility()).boardEpoch, seq: getEfspBoardSeq() }));
   expect(before.epoch).toBeTruthy();
+  expect(before.seq).not.toBeUndefined();
 
   // kill the socket (and keep it down) ...
   // (connect() builds its socket from the global WebSocket: while blocked, every attempt is aimed at a dead port,
@@ -60,11 +67,9 @@ test('a websocket killed mid-session reconnects, resyncs from its epoch and seq,
     await page.evaluate(() => { window.__blockWs = false; });
     await expect.poll(() => has(page, callsign), { timeout: 15000 }).toBe(true);
 
-    // the reconnect said where it was
-    expect(sent.length).toBeGreaterThanOrEqual(1);
-    expect(sent[0].boardEpoch).toBe(before.epoch);
-    expect(sent[0].lastBoardSeq).toBe(before.seq);
-    expect(sent[0].facilityId).toBeTruthy();
+    // the connect snapshot did it: no resync was asked for
+    expect(snapshotsAfterReconnect).toBeGreaterThanOrEqual(1);
+    expect(sent).toEqual([]);
 
     // and it converged on exactly the server's Board
     const server = await other.evaluate(() => JSON.stringify(getAllEfspStrips().map(s => `${s.stripId}:${s.rev}`).sort()));

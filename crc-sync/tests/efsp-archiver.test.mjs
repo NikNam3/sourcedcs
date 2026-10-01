@@ -317,7 +317,7 @@ test('7b. on the wire: efsp-resync puts the archived Strip in strips.gone', () =
   archiverFor().sweep();
   offset = 0;
   const { ack } = efsp.handleMessage(c.APP.session, { type: 'efsp-resync', facilityId: 'INCIRLIK', lastBoardSeq: seqBefore, boardEpoch: incirlik().epoch });
-  assert.equal(ack.type, 'efsp-board-delta');
+  assert.equal(ack.answer, 'delta');
   assert.ok(ack.strips.gone.includes(dropped.stripId));
 });
 

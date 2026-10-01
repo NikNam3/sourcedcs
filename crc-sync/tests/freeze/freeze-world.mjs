@@ -70,7 +70,7 @@ export class Recorder {
       const msg = JSON.parse(payload);
       let m;
       if (!this.full) m = `${msg.type}#${msg.boardSeq === undefined ? '' : msg.boardSeq} h=${digest(canonical(msg))}`;
-      else if (msg.type === 'efsp-snapshot') m = this._snapshotView(msg);
+      else if (msg.type === 'efsp-snapshot' || (msg.type === 'efsp-resync-reply' && msg.answer === 'snapshot')) m = this._snapshotView(msg);
       else m = summarize(msg);
       const prev = groups[groups.length - 1];
       if (prev && JSON.stringify(prev.m) === JSON.stringify(m)) prev.to.push(cid);
