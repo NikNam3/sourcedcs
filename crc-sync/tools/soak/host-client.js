@@ -37,6 +37,8 @@ function writeFixtures(stateDir) {
   fs.mkdirSync(path.join(stateDir, 'terrain'), { recursive: true });
   fs.writeFileSync(path.join(stateDir, 'airspaces.json'), JSON.stringify(AIRSPACES, null, 2));
   fs.writeFileSync(path.join(stateDir, 'stereo-routes.json'), '[]');
+  // No theater table (offset 0, as before), but the default transition altitude is read from this file.
+  fs.writeFileSync(path.join(stateDir, 'config-empty', 'theaters.json'), JSON.stringify({ defaultTransitionAltFt: 18000, theaters: {} }));
   // The soak's sensor layer: no airborne or ship radar types, as when the file was absent.
   fs.writeFileSync(path.join(stateDir, 'sensor-specs.json'), JSON.stringify({ radar: {}, carrierRadar: {}, datalink: { participants: [] } }));
   // The three facility overrides are deliberately NOT written: a missing file
