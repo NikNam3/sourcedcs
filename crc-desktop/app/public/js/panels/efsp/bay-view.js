@@ -79,9 +79,9 @@ let _seededRefusalAt = null;
  * the input with the draft and WITHOUT stealing focus, exactly as it does for
  * an edit somebody walked away from.
  */
-function _maybeSeedRefusedBlockEdit(strip, blockId) {
+function _maybeSeedRefusedBlockEdit(strip, refusedBlockId, blockId = refusedBlockId) {
   const refusal = _refusalForStrip(strip);
-  if (!refusal || refusal.blockId !== blockId || refusal.value == null) return;
+  if (!refusal || refusal.blockId !== refusedBlockId || refusal.value == null) return;
   if (_seededRefusalAt === refusal.at) return;
   // Never over the top of an edit the controller has open somewhere else —
   // one open edit on the Board is the standing rule (_openBlockEdit).
@@ -160,8 +160,9 @@ function _buildBlockCell(strip, blockId) {
   // banner to be matched against a Strip by eye. Marked whether or not there
   // is text to put back: a refused confirmVacated carries no value, and which
   // cell was refused is a separate question from what was in it.
+  const redirect = typeof editRedirectFor === 'function' ? editRedirectFor(blockId, strip.role, fdr) : null; // UI-A U4
   const refusal = _refusalForStrip(strip);
-  if (refusal && refusal.blockId === blockId) {
+  if (refusal && refusal.blockId === (redirect ? redirect.blockId : blockId)) {
     span.classList.add('efsp-block-refused');
     span.title = refusal.message;
   }
@@ -182,13 +183,19 @@ function _buildBlockCell(strip, blockId) {
   // isBlockEditable()" reasoning as the enum-<select> case above.
   if (isBooleanToggleBlock(blockId)) return _buildBooleanToggleCell(strip, blockId, span);
 
-  if (!isBlockEditable(blockId, strip.role)) return span;
+  // UI-A U4: TYPE (3) is a composite; editing it edits the aircraft type (3A).
+  if (redirect) {
+    span.dataset.editBlock = redirect.blockId;
+    span.dataset.editValue = redirect.value;
+    span.title = span.title || 'Aircraft type (3A). Click to edit.';
+  }
+  if (!redirect && !isBlockEditable(blockId, strip.role)) return span;
 
   span.classList.add('efsp-block-editable');
   span.tabIndex = 0;
   // F-207 — if this is the cell a refusal just emptied, put the text back into
   // an open editor before either _shouldRestoreBlockEdit call below.
-  _maybeSeedRefusedBlockEdit(strip, blockId);
+  _maybeSeedRefusedBlockEdit(strip, redirect ? redirect.blockId : blockId, blockId);
   const startEdit = (e) => {
     e.stopPropagation(); // never trigger _selectStrip/drag on the parent Strip
     _startBlockEdit(strip, blockId, span);
@@ -433,7 +440,9 @@ function _startBlockEdit(strip, blockId, span, draft) {
   const restoring = draft !== undefined;
   if (!restoring) _closeOpenBlockEdit(); // one open edit on the Board, never two
 
-  const currentValue = span.textContent;
+  // UI-A U4: a redirected cell (TYPE) edits another Block's value.
+  const sendBlockId = span.dataset.editBlock || blockId;
+  const currentValue = span.dataset.editValue != null ? span.dataset.editValue : span.textContent;
   const input = document.createElement('input');
   input.type = 'text';
   input.className = 'efsp-block-input';
@@ -470,7 +479,7 @@ function _startBlockEdit(strip, blockId, span, draft) {
     // moved past, and it comes back rejected as STALE_REV even though
     // nothing else touched the Strip in between.
     const currentStrip = getEfspStrip(strip.stripId) || strip;
-    sendEfspMutation(actingPositionId, currentStrip, { kind: 'SetBlock', blockId, value });
+    sendEfspMutation(actingPositionId, currentStrip, { kind: 'SetBlock', blockId: sendBlockId, value });
   };
 
   // Keeps the draft where a rebuild can find it. Enter/Esc are handled on the

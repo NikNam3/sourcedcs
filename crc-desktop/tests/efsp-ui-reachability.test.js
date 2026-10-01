@@ -224,7 +224,7 @@ test('the Blocks the release and airspace sorties depend on are on the Strips of
   // onto by APP or CTR, who also own the TOFI fields.
   const want = {
     CD: ['14A', '14D'], GND: ['14A', '14D'],
-    APP: ['22', 'SREG', '5A'], CTR: ['22', '24A', 'SREG', 'IFR', 'RSVC', '5A'],
+    APP: ['22', 'SREG', '5A', '14A'], CTR: ['22', '24A', 'SREG', 'IFR', 'RSVC', '5A', '14A'], // 14A at APP/CTR: UI-A U5
   };
   for (const [positionId, blocks] of Object.entries(want)) {
     const compact = compactBlocksFor('DEPARTURE', positionId);
