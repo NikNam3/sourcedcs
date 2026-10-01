@@ -3,10 +3,9 @@
 // Caught by the hub-peer-marsa-order trace: one Mutation yields a peer delta and a MARSA delta (R0 step 1).
 export default {
   id: "M17",
-  what: "frame order: ws-hub sends the MARSA delta before the peer delta",
-  file: "src/ws-hub.js",
-  find: "        if (result.peerBroadcast) this._broadcastEfsp(result.peerBroadcast);\n        // WP6 (docs/adr/0051)",
-  replace: "        if (result.marsaBroadcast) this._broadcastEfsp(result.marsaBroadcast);\n        // WP6 (docs/adr/0051)",
+  what: "frame order: the skeleton sends the MARSA delta before the peer delta",
+  file: "src/efsp/wire/slots.js",
+  find: "const SLOT_ORDER = ['primary', 'peer', 'marsa', 'carrier', 'sfa'];",
+  replace: "const SLOT_ORDER = ['primary', 'marsa', 'peer', 'carrier', 'sfa'];",
   detect: ["freeze-hub"],
-  also: { find: "        if (result.marsaBroadcast) this._broadcastEfsp(result.marsaBroadcast);\n        // docs/adr/0074", replace: "        if (result.peerBroadcast) this._broadcastEfsp(result.peerBroadcast);\n        // docs/adr/0074" },
 };

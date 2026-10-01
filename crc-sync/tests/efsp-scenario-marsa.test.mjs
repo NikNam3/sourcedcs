@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { slot } from './helpers/wire-slots.mjs';
 
 /* MARSA sorties — a tanker and its receivers walked by hand (WP6, §9.2).
  *
@@ -197,8 +198,8 @@ test('sortie 4: the tanker lands mid-AR — the relation ends, and it is not an 
   // The relation ending has to reach the OTHER participant's controller, who
   // did nothing and is still separating — or not — on a stale badge. Same
   // docs/adr/0022 class as the interlock's own broadcast.
-  assert.ok(result.marsaBroadcast, 'the receiver\'s board hears that the AR is over');
-  assert.equal(result.marsaBroadcast.marsa.updated[0].endedBy, 'PARTICIPANT_RETIRED');
+  assert.ok(slot(result, 'marsa'), 'the receiver\'s board hears that the AR is over');
+  assert.equal(slot(result, 'marsa').marsa.updated[0].endedBy, 'PARTICIPANT_RETIRED');
 
   const after = efsp.marsaStore.getRelation(relation.marsaId);
   assert.equal(after.state, 'ENDED');
@@ -345,11 +346,11 @@ test('sortie 9: the void reaches every client on the same round trip as the clea
     op: { kind: 'SetBlock', blockId: '20', value: '090' },
   });
   assert.equal(result.ack.ok, true);
-  assert.ok(result.broadcast, 'the Strip change');
-  assert.ok(result.marsaBroadcast, 'and the void, together');
-  assert.equal(result.marsaBroadcast.type, 'efsp-marsa-delta');
-  assert.equal(result.marsaBroadcast.marsa.updated[0].marsaId, relation.marsaId);
-  assert.equal(result.marsaBroadcast.marsa.updated[0].voidedBy, 'CONTROLLER_COURSE_CHANGE');
+  assert.ok(slot(result, 'primary'), 'the Strip change');
+  assert.ok(slot(result, 'marsa'), 'and the void, together');
+  assert.equal(slot(result, 'marsa').type, 'efsp-marsa-delta');
+  assert.equal(slot(result, 'marsa').marsa.updated[0].marsaId, relation.marsaId);
+  assert.equal(slot(result, 'marsa').marsa.updated[0].voidedBy, 'CONTROLLER_COURSE_CHANGE');
 });
 
 test('sortie 10: a reconnecting controller still sees the relation that just voided', () => {

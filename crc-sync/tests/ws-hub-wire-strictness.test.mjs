@@ -261,7 +261,7 @@ test('a fresh hub already has an efsp-alerts message with all three keys empty â
 test('setOnEfspChange fires after an EFSP message that broadcast, not after one that only acked, and a throw is contained', () => {
   const { hub, session } = setup();
   const ws = fakeWs();
-  let result = { ack: { type: 'efsp-ack' } };
+  let result = { ack: { type: 'efsp-ack' }, broadcasts: [] };
   hub._efsp = { handleMessage: () => result };
   let fired = 0;
   hub.setOnEfspChange(() => { fired += 1; });
@@ -269,7 +269,7 @@ test('setOnEfspChange fires after an EFSP message that broadcast, not after one 
   hub._onMessage(ws, session, JSON.stringify({ type: 'efsp-mutation' }));
   assert.equal(fired, 0, 'an ack alone changed nothing');
 
-  result = { ack: { type: 'efsp-ack' }, broadcast: { type: 'efsp-board-delta' } };
+  result = { ack: { type: 'efsp-ack' }, broadcasts: [{ type: 'efsp-board-delta' }] };
   hub._onMessage(ws, session, JSON.stringify({ type: 'efsp-mutation' }));
   assert.equal(fired, 1);
 

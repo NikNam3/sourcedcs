@@ -1,11 +1,11 @@
 // freeze:selfcheck mutation M5. A lane that moves the code this targets retargets THIS file only (file/find/replace),
 // then re-proves it with `npm run freeze:selfcheck M5`.
+// Caught by the hub-peer-marsa-order trace: one Mutation yields a peer delta and a MARSA delta (R0 step 1).
 export default {
   id: "M5",
-  what: "frame order: ws-hub sends the peer delta before the primary delta",
-  file: "src/ws-hub.js",
-  find: "        if (result.broadcast) this._broadcastEfsp(result.broadcast);",
-  replace: "        if (result.peerBroadcast) this._broadcastEfsp(result.peerBroadcast);",
+  what: "frame order: the skeleton sends the peer delta before the primary delta",
+  file: "src/efsp/wire/slots.js",
+  find: "const SLOT_ORDER = ['primary', 'peer', 'marsa', 'carrier', 'sfa'];",
+  replace: "const SLOT_ORDER = ['peer', 'primary', 'marsa', 'carrier', 'sfa'];",
   detect: ["freeze-hub"],
-  also: { find: "        if (result.peerBroadcast) this._broadcastEfsp(result.peerBroadcast);\n        // WP6 (docs/adr/0051)", replace: "        if (result.broadcast) this._broadcastEfsp(result.broadcast);\n        // WP6 (docs/adr/0051)" },
 };

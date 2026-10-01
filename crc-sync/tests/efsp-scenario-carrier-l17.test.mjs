@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { slot } from './helpers/wire-slots.mjs';
 
 // L17's walks (docs/adr/0074, WP7A part 2): a carrier sortie from launch to
 // trap on the wire, Case as broadcast state, the four hand-overs as four
@@ -111,8 +112,8 @@ test('the stack index drives angels, DME and push time; one Move re-sequences an
   v = view(efsp).derived.MAIN;
   assert.deepEqual(v.map(e => e.fdrId), [d.fdrId, a.fdrId, b.fdrId]);
   assert.deepEqual(v.map(e => e.angels), [6, 7, 8]);
-  assert.ok(r.carrierBroadcast && r.carrierBroadcast.type === 'efsp-carrier-delta', 'one delta carrying the hull record');
-  assert.equal(r.carrierBroadcast.carriers.updated[0].derived.MAIN.length, 3);
+  assert.ok(slot(r, 'carrier') && slot(r, 'carrier').type === 'efsp-carrier-delta', 'one delta carrying the hull record');
+  assert.equal(slot(r, 'carrier').carriers.updated[0].derived.MAIN.length, 3);
 });
 
 test('Case is PriFly\'s: Marshal and the lanes are refused; a change is ONE delta every client re-renders from', () => {
@@ -123,8 +124,8 @@ test('Case is PriFly\'s: Marshal and the lanes are refused; a change is ONE delt
   }
   assert.equal(efsp.carrierStore.caseValue(), 'III', 'the default is the most restrictive');
   const r = mustCarrierAct(efsp, c.CV_PRIFLY, 'CV_PRIFLY', { kind: 'SetCase', to: 'I' });
-  assert.equal(r.carrierBroadcast.carriers.updated[0].recoveryCase.value, 'I');
-  assert.equal(r.carrierBroadcast.carriers.updated[0].derived.MAIN[0].pushTimeUtc, null, 'Case I has no push times');
+  assert.equal(slot(r, 'carrier').carriers.updated[0].recoveryCase.value, 'I');
+  assert.equal(slot(r, 'carrier').carriers.updated[0].derived.MAIN[0].pushTimeUtc, null, 'Case I has no push times');
   // a no-op is not a transition
   refused(carrierAct(efsp, c.CV_PRIFLY, 'CV_PRIFLY', { kind: 'SetCase', to: 'I' }).ack, 'VALIDATION_ERROR');
   // only the Marshal sequences the stack

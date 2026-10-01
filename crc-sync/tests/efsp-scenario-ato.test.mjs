@@ -4,6 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import crypto from 'crypto';
+import { slot } from './helpers/wire-slots.mjs';
 
 /* The ATO sorties — WP7 walked end to end (docs/adr/0071, guide §9.8/§9.9).
  *
@@ -375,6 +376,6 @@ test('the ATO import\'s ack and board-delta broadcast carry the Board epoch', ()
   const epoch = efsp.boardStoreFor('TACTICAL').epoch;
   assert.ok(epoch, 'the Board has an epoch');
   assert.equal(ack.boardEpoch, epoch);
-  assert.equal(res.broadcast.type, 'efsp-board-delta');
-  assert.equal(res.broadcast.boardEpoch, epoch);
+  assert.equal(slot(res, 'primary').type, 'efsp-board-delta');
+  assert.equal(slot(res, 'primary').boardEpoch, epoch);
 });
