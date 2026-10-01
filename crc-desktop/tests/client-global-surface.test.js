@@ -24,6 +24,10 @@ const path = require('path');
 const vm = require('vm');
 const { makeElement } = require('./helpers/dom-stub.js');
 
+// The scripts start async work (auth, config fetch) against globals config.js would define; the stub has none of
+// that, so those promises reject after the test is done. They are not what this test is about.
+process.on('unhandledRejection', () => {});
+
 const PUBLIC = path.join(__dirname, '../app/public');
 const FIXTURE = path.join(__dirname, 'fixtures/client-global-surface.json');
 
