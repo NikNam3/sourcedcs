@@ -364,7 +364,7 @@ const _pad3 = (n) => String(Math.round(n)).padStart(3, '0');
 
 /** An altitude the way a controller reads it: a flight level at and above transition, feet below. */
 function _fmtAlt(ft) {
-  const ta = (typeof settings === 'object' && settings && settings.transitionAltFt) || 18000;
+  const ta = settings.transitionAltFt;
   return ft >= ta ? `FL${_pad3(ft / 100)}` : `${Math.round(ft).toLocaleString('en-US')} ft`;
 }
 const _fmtClock = (sec) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`;
