@@ -80,7 +80,7 @@ cd infra && docker compose up -d
 ```bash
 nix develop          # enter dev shell with Node.js, Python 3, Docker
 ```
-Per-service `nix build .#<name>` package definitions in `flake.nix` predate `crc-sync`/`crc-desktop` and are not guaranteed current for every service — verify before relying on one for anything beyond atobrief/sourcedcs-web.
+`flake.nix` provides dev shells only (`nix develop`, `nix develop .#srs`); the per-service nix packages were removed (R3-67).
 
 ## Architecture
 
@@ -110,6 +110,8 @@ YAML package schema is documented in `docs/atobrief/yaml-format.md` (seven secti
 - Multer file uploads (gallery images, and separately, crc-desktop release installers)
 - Casdoor OAuth token exchange
 - **crc-desktop release hosting** — `releases.js` (`parseReleaseManifest`, `checkReleaseUploadToken`), `POST /api/releases/upload` (CI-only, bearer-token gated — see "How to build and release crc-desktop"), `GET /api/releases/latest`, static `/downloads`, and `public/download.html`. Installers land in `data/releases/`, same Docker volume as everything else.
+
+`data/*.json` is gitignored runtime data (prod: the `sourcedcs-web-data` volume); first-boot defaults are in `data-seed/`, copied by `seed.js` only where absent.
 
 Client secret (`DISCORD_BOT_TOKEN`, `CASDOOR_CLIENT_SECRET`, `RELEASE_UPLOAD_TOKEN`) never reaches the browser. `express-rate-limit` protects auth, upload, and release-upload endpoints.
 
@@ -196,7 +198,7 @@ sourcedcs-web keeps the newest 3 versions of each crc-desktop installer type (`.
 
 ## How to build and release crc-desktop
 
-Tag a commit `crc-desktop-vX.Y.Z` and push the tag — `.github/workflows/crc-desktop-release.yml` handles the rest:
+Tag a commit `crc-desktop-vX.Y.Z` **on `main`** and push the tag — `.github/workflows/crc-desktop-release.yml` handles the rest (its `verify-main` job refuses a tag whose commit is not on `main`; the docker workflows do the same for `v*` tags):
 
 1. Matrix build on `windows-latest` (NSIS `.exe`) and `ubuntu-latest` (`.AppImage`). Each leg: `npm ci` at the crc-desktop root, `npm ci` again inside `app/` (see "crc-desktop" architecture above for why), `npm test`, sets the version from the tag, runs `electron-builder --publish never`.
 2. Uploads the installer + its `latest.yml`/`latest-linux.yml` manifest to `sourcedcs-web`'s `POST /api/releases/upload`, authenticated with the `RELEASE_UPLOAD_TOKEN` repo secret (must match the `RELEASE_UPLOAD_TOKEN` env var sourcedcs-web reads — set in `infra/.env` on the server, wired through `infra/docker-compose.yml`).
