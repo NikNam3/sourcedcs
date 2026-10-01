@@ -16,3 +16,5 @@ Notes
   held Positions through the real `sendEfspSetPositions`, `renderAllOpenEfspBays` and the refusal through test setters.
   Slower than the vm version (about 100 s for the file).
 - time-chains byte compare uses helpers/module-body.mjs.
+- WIRE's edits (3bc1c73) are ported into ws-message-contract and overflight-shared-state-names. Both need WIRE's crc-sync
+  files (`efsp/wire/**`), which this branch lacks, so they fail here and pass on the merged unit.
