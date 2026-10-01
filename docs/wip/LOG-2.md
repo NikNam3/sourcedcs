@@ -1,6 +1,11 @@
 # LOG-2 report (branch lane/LOG-2-call-sites, base 0bfe9d3)
 
-COMMITS_PLACEHOLDER
+```
+bdf2be1 refactor(LOG-2): soak reads logger output through a sink, installConsole deleted, wip report
+3f90445 refactor(LOG-2): board-store console.error to its logger (redo after BOARD-3 if conflicted)
+98f2d96 refactor(LOG-2): src/efsp console calls go to module loggers (not board-store, TIME-B files)
+07617a4 refactor(LOG-2): src/ top-level console calls go to module loggers
+```
 
 - Suites: crc-sync 2130 -> 2144 tests (LOG-1 2130; count differs from tests added by merged lanes), 2141 pass, 1 todo; the 2 fails (grpc-client-stream backoff, ato tokenize timing) pass alone (103/103). crc-desktop 866 (865 pass, 1 todo), unchanged.
 - Golden: identical, 47/47 after every commit, no freeze:update. Selfcheck: soak:selfcheck PASS (clean, drop-ack, drop-broadcast, leak, skip-shadow-client). No Playwright.
