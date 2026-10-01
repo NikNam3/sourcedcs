@@ -832,6 +832,28 @@ before the ack (no debounce, no batching, either would let an acknowledged chang
   snapshot's size, bounded now L24 retains); the shipped client still never sends `sendEfspResync`, so
   the epoch matters for any future client and for the soak.
 
+**Tactical Positions (L23, `0080`).** `permission.js`'s `TACTICAL_CAPABILITIES` is the capability table
+(`PERMISSIONS.JTAC`, `canCorrelate`, `canDeclareMarsa` read it); `mayActBesideOwner` carries the two
+named exceptions to "only the owner acts": TAC_C2 answering TOFI on an AIC-held line
+(`TOFI_ANSWER_ACTIONS`, B2) and OPS writing `14E` (S-L13). `board-store.js`: `_dispatch` has the
+ownership gate (`NOT_OWNER` now carries `<OWNER> holds this Strip`); `SetState` is owner-checked for
+every Role (`_setStateOwnerRefusal`, in the `_dispatch` case, **not** in `_applySetState`, which the NLA
+and Undo paths also call and which must not be owner-checked; a `SetState` to DROPPED routes to
+`_applyDropStrip`); `_bayForNewOwner` moves the Bay with the owner (B3/B4); `reassignPositionStrips` and
+`returnCoveredStrips` implement F10 (`coveredFrom` on the Strip, first Position kept through a second
+hop); the coordination op gains `CANCEL`; `SystemCoordinationEnd` and `SystemReassign`
+(`position-retaken`) are log entries. **Per-session read scope (B6)**: `crc-sync/src/efsp/read-scope.js`
+and `efsp-ws.js`'s `readScopeOf`/`filterForSession`/`supplementFor`/`readScopeKey`; `ws-hub.js`'s
+`_broadcastEfsp`, `_efspFilter`, `_efspAlertsMsg(session)` and the connect snapshot filter every EFSP send
+(`snapshotFor(session)`, `_snapshotMessage(ctx, session)`); `broadcastEfspFieldStateDelta` and the
+heartbeat stay unfiltered (not flights). A Strip that becomes visible to a session arrives with its FDR,
+correlation and MARSA records. Any new EFSP broadcast must go through `_broadcastEfsp`.
+- Open: the two UI follow-ups above (a TAC_C2-only controller cannot Accept an AIC-held exit from the
+  panel; the JTAC's drop-only tabs); GCI has no hand-back row (unchanged); `permission.js`'s module
+  header still says "no coordination primitives are built" (stale since WP4A, L20); the 4-hour soak was not
+  run for this lane; `CANCEL` and the two system log entries are new op strings (a `CANCEL` is not a
+  coordination attempt for the metrics tap).
+
 ## 4. What's left, and the known bugs
 
 **Not built, in the guide's order.** WP6: the field-state panel and the hook-mismatch check (L1b),

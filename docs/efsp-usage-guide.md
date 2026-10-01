@@ -800,25 +800,37 @@ not a drop.
 ### Working a line as `AIC` or `JTAC`
 
 `TAC_C2` owns a mission line's lifecycle; `AIC` and `JTAC` work a line only while `TAC_C2` has
-handed it to them.
+handed it to them. What each Position may do is a capability table in `permission.js` (ADR `0080`), not
+an accident of who owns the Strip. A refusal now says why (`TAC_C2 holds this Strip`, `ON_STATION is not
+AIC's to change`).
 
-- **AIC.** At check-in (the line is already **On Station**) `TAC_C2` transfers it to
-  `aic-on-station`. AIC annotates it and moves it between On Station and Committed, but never
-  advances its state: the next-step button reads "ON_STATION is not AIC's to advance". When the
-  flight is done, AIC transfers it back to `tac-c2-on-station` and `TAC_C2` takes it Off Station.
-- **JTAC.** A JTAC should see only the lines `TAC_C2` has handed it, and hand them back the same
-  way.
-
-⚠️ **Known gaps, being fixed** (wave 2, lane L23). Until then:
-
-- A JTAC cannot hand a line back, and `TAC_C2` cannot touch it while the JTAC holds it. Don't hand
-  a line to a JTAC you need back.
-- While AIC holds a line, `TAC_C2` cannot answer `CTR`'s TOFI Exit on it. AIC has to hand the line
-  back to `TAC_C2` first, and nothing on screen says why the Accept is refused.
-- When AIC walks away, `TAC_C2` becomes the owner, but the line stays in AIC's Bay, where `TAC_C2`
-  has no tab for it. The same happens at Incirlik when GND leaves and TWR covers.
-- A JTAC's client is sent every Strip; a JTAC can bind a contact and declare MARSA; AIC can push a
-  line to Off Station with the state escape hatch. None of that is intended.
+- **AIC.** At check-in (the line is already **On Station**) `TAC_C2` transfers it to `aic-on-station`.
+  AIC annotates it and moves it between On Station and Committed, but **cannot advance its state**: the
+  next-step button is disabled with the reason, `SetState` is refused, and there is no Coordinate or TOFI
+  on an AIC line. When the flight is done AIC hands it back from the `⋯` menu (**Hand back to TAC_C2**)
+  or by dragging it to the `TAC_C2` tab, and `TAC_C2` takes it Off Station. AIC can hand a line to
+  nobody but `TAC_C2`.
+- **The TOFI exit on an AIC-held line is `TAC_C2`'s to answer.** `TAC_C2` accepts `CTR`'s exit (AIC
+  "works under `TAC_C2`'s TOFI"). A controller holding both seats answers it from the AIC tab and it is
+  sent as `TAC_C2`. **Gap:** a `TAC_C2`-only controller cannot see an AIC-held line (AIC's tab is
+  drop-only for them), so the server allows the Accept but the panel does not offer it; a small "with AIC
+  / with JTAC" list on `TAC_C2`'s tab would close it.
+- **JTAC.** A JTAC is **sent only the lines `TAC_C2` has handed it**: its Strips, FDRs, correlations,
+  MARSA and alerts for those flights, and nothing else on any Board. It annotates nothing, binds no
+  contact, declares no MARSA, and can only **hand back** (to `TAC_C2`). A JTAC who leaves the seat leaves
+  the line with `TAC_C2`. (The JTAC panel still draws drop-only tabs for `TAC_C2`, `AIC` and `GCI`, so it
+  shows that those Positions exist; filtering them is a client change.) An observer of `TAC_C2` reads
+  everything `TAC_C2` does.
+- **A covering Position.** When a Position leaves, Strips routed to its cover land in the cover's own Bay
+  for the line's state (else its first Bay implying no state, else they stay put with a warning, and the
+  ack reports how many were `unplaced`). They carry `coveredFrom`, and go back to the Position they came
+  from when it is manned again. The chain at `TACTICAL` is `AIC`/`GCI`/`JTAC` → `TAC_C2`. An unmanned
+  Position with Strips and no cover still warns `routedTo: null`.
+- **Coordination.** The proposer can **Cancel** an open proposal, or **End** an accepted exchange, from the
+  `⋯` menu. If the receiver drops its side, the exchange ends on the proposer's Strip too (the link is
+  cleared, not marked with a new state), including after a completed handoff.
+- **OPS alert status** is set by `OPS` at every state until the Strip is dropped (§8H).
+- A `SetState` to `DROPPED` is a Drop, and is refused under an open proposal or active TOFI like one.
 
 ## 8D. MARSA — when the military separates its own
 
