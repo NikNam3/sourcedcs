@@ -778,6 +778,31 @@ in `map-setup.js`. **Do not decide a block's text or colour anywhere else.**
   Strips (the unit test pins the dispatched op, the e2e shows the picture); the black background in
   light mode. The spec is `crc-desktop/e2e/l22-stars-scope.spec.js`, writing into `docs/wip/L22/`.
 
+**Archiving finished flights (L24, `0082`; H36, H72, H73).** `crc-sync/src/efsp/archiver.js`
+(`Archiver`, `ARCHIVE_AFTER_MS` = 2 h, `sweepChanged`, `archiveDeltas`), on the `createEfsp` facade as
+`efsp.archiver`, swept every 60 s and rolled on `missionSession.onNewSession` in `server.js`'s
+"Archiving finished flights" block. `BoardStore` gains `archiveStrip`, `droppedWallAtOf` (stamped in
+`_retireStrip`; any other DROPPED Strip is stamped the first time a sweep sees it), `getDeltaSince`'s
+`gone`, and `droppedWallAt` in the snapshot; `FdrStore.archiveFdr`; `traffic-count.js`'s `hasCountFor`.
+The archiver builds its own referenced set from every Board (a Strip is archived only when its FDR has no
+live Strip and no un-archived DROPPED one). The wire carries `gone` and `fdrs.gone`
+(`ws-hub.js`'s `broadcastEfspBoardDelta` passes `gone`/`fdrsGone` through; `efsp-state.js`'s
+`applyEfspDelta` handles `fdrs.gone`). **ADR 0002's "durable" now means durable until archived.**
+- **Soak acceptance was restated, H72:** 4 h run, net-growth limit **25%** (`tools/soak/report.js`
+  `THRESHOLDS.netGrowthPct`; no `--warmup-min`, no 8 h run). Measured 17.2% (old 10% gate would fail, and
+  so does the pruned baseline at 20.3%): the growth is the capped caches filling (`_appliedMutations`
+  1218/5000, ring `_log` 1379/2000), not finished flights. `strips.dropped` and `fdrs` are flat after
+  2 h. **The rows "snapshot within 2x of pruned" and "p50 <= 3 ms" cannot pass with 2 h retention**
+  (about 200 Strips and 100 FDRs make a 284 KB snapshot) and need restating or a persist fix; the
+  per-DROPPED-Strip figure is no longer meaningful. Profile: `_persist` is 40% self-time
+  (`JSON.stringify(…, null, 2)` of the whole snapshot on every Mutation) and `correlation-store`
+  `deepClone` 17%; L27 has since landed a compact dirty-only persist (below).
+- `SetState` to `DROPPED` bypasses `_retireStrip` (no TOFI guard, no remove indicator, no beacon
+  release). Whether a client can send it is an open question for L23's capability table; the archiver
+  copes either way.
+- The soak host does not wire L5's instrumentation, so there the archiver runs unguarded (no traffic
+  count) and warns once.
+
 ## 4. What's left, and the known bugs
 
 **Not built, in the guide's order.** WP6: the field-state panel and the hook-mismatch check (L1b),

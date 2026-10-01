@@ -460,7 +460,7 @@ Strip {
 **`flags`** — the "paper gestures" (guide §7.3), each one Mutation (`SetFlag`):
 - `offset` (bool) — visually indents the Strip (⇥ button), no server meaning beyond display.
 - `flipped` (bool) — shows only the callsign (Block 1), hides everything else (double-click to toggle).
-- `removeIndicator` (bool) — set automatically by `DropStrip`; distinct from actual deletion (a `DROPPED` Strip stays queryable, just off the visible Board).
+- `removeIndicator` (bool) — set automatically by `DropStrip`; distinct from actual deletion (a `DROPPED` Strip stays on the server, just off the visible Board, until it is archived (§8J)).
 - `highlight` (`null|'yellow'|'cyan'|'lime'`) — right-click swatch popover. Never red — red is reserved for `attention`.
 - `attention` (`null|'red'`) — Shift+click. The one saturated-red channel on the Board, per guide §7.7 rule 4.
 
@@ -1191,6 +1191,19 @@ loses that peer. A re-import with a changed tanker rewires the join.
 
 *What is ours, not doctrine:* the USMTF set layouts come from a community wiki
 (`docs/parallel/research/usmtf-ato.md`), the vowel-cut rule and the one-ATO-at-a-time rule.
+
+### Archiving finished flights (§8J)
+
+A dropped flight stays on the server for **2 hours** after its drop, or until the **next mission** (a new
+mission session, below), whichever comes first. Then it is *archived*: gone from every screen, from the
+server's memory and from the Board snapshot. Its history is the **Mutation log**
+(`state/efsp-mutations*.jsonl`), which gets one `Archive` line per Strip and one `ArchiveFdr` line per
+flight record; there is **no lookup in the app** (H73). Consequences: an archived drop cannot be undone
+(Undo answers "not found"), live Strips are never touched by archiving (a mission change included), and
+the traffic count is unaffected because every drop is counted before it can be archived. The sweep runs
+once a minute; a Strip dropped by an unusual route (a `SetState` to `DROPPED`, a refused TOFI) may be
+archived one sweep late, and a drop that was not counted at a mission change waits for the age sweep, so
+it may stay up to 2 h.
 
 ### Mission sessions
 
