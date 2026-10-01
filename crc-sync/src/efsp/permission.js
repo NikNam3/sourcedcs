@@ -564,118 +564,17 @@ function canCreateStripRole(actingPositionId, role) {
   return !!allowed && allowed.has(role);
 }
 
-// Per-State authority (guide §3.4's "normally owned by" column) — WHO may
-// advance a Strip OUT of a given State. Checked by board-store.js in
-// ADDITION to raw Strip ownership, not instead of it: ownership alone
-// (guide §4.4) only ever meant "which Position currently holds this
-// Strip," and nothing enforced that holding it also lined up with §3.4's
-// per-State authority column — a Position could hold a Strip indefinitely
-// and simply never transfer it, walking it through every other Position's
-// job single-handedly (e.g. OPS pressing "Mark Cleared" on a Strip it
-// created and never handed to CD). This table closes that gap.
-//
-// Keyed on strip.state — the state the Strip is CURRENTLY in when the
-// action is taken (the FROM state), matching how §3.4's table reads: who
-// works a Strip WHILE it's in a given State. Applies uniformly to every
-// NLA transition (board-store.js's _applyInvokeNla) AND every equivalent
-// drag-based Bay-implied transition (_validateBayImpliedTransition) —
-// guide §3.5 rule 4 makes NLA an accelerator, never the ONLY path to a
-// transition, so gating only the button would be a trivial bypass via drag.
-const DEPARTURE_STATE_OWNERS = {
-  PROPOSED:          ['OPS'],
-  PENDING_CLEARANCE: ['CD'],
-  CLEARED:           ['CD'],
-  HELD:              ['CD', 'GND'],
-  PUSHBACK:          ['GND'],
-  TAXI:              ['GND'],
-  RUNWAY_QUEUE:      ['TWR'],
-  LUAW:              ['TWR'],
-  DEPARTED:          ['TWR'],
-  // CTR added (docs/adr/0022 bug fix) — a CENTER-held HANDED_OFF Strip
-  // (received via APP's real HANDOFF, mirroring ARRIVAL_STATE_OWNERS.
-  // INBOUND's existing ['APP','CTR'] entry for the reverse direction)
-  // needs its owning Position authorized to Drop it, same as APP's own
-  // copy. Without this, a CENTER-side replica — whether legitimately
-  // ACCEPTed and moved to ctr-departures, or REJECTed and left inert in
-  // ctr-app-coordination — had NO way to ever be cleared: NLA's Drop
-  // button rendered but stayed permanently disabled (canActOnState denied
-  // to CTR), found in live testing.
-  HANDED_OFF:        ['APP', 'CTR'],
-  // DROPPED is terminal — no NLA exists for it, so no entry is needed.
-};
-
-// [SOURCE-DEFINED] — ARRIVAL has no guide-published "normally owned by"
-// table (§3.4 only gives the state sequence); this mirrors the same
-// per-Position-per-lifecycle-stage shape as DEPARTURE's guide-sourced one.
-const ARRIVAL_STATE_OWNERS = {
-  // CTR added (docs/adr/0014) — a CENTER-held INBOUND Strip (CTR's own
-  // local origination, mirroring APP's original ADR 0008 stub) needs its
-  // owning Position authorized to act on it too, even though "acting on
-  // it" now means proposing a cross-Facility HANDOFF via the Coordinate
-  // button rather than an ordinary NLA transfer (nla.js's computeArrivalNla
-  // INBOUND case is Facility-aware — see that module's comment).
-  INBOUND:         ['APP', 'CTR'],
-  HANDED_TO_TOWER: ['TWR'],
-  FINAL:           ['TWR'],
-  LANDED:          ['TWR'],
-  TAXI_IN:         ['GND'],
-};
-
-// [SOURCE-DEFINED] (docs/adr/0087) — the guide's four-state OVERFLIGHT
-// lifecycle (INBOUND, IN_SECTOR, HANDED_OFF, DROPPED); who owns each state is
-// ours, not the guide's. Both Positions that may originate one
-// (permission.js's CREATE_ROLE_PERMISSIONS) may also act on it, same
-// "self-originator owns it" precedent as ARRIVAL's INBOUND row.
-const OVERFLIGHT_STATE_OWNERS = {
-  INBOUND:    ['APP', 'CTR'],
-  IN_SECTOR:  ['APP', 'CTR'],
-  HANDED_OFF: ['APP', 'CTR'],
-  // DROPPED is terminal — no NLA exists for it, so no entry is needed.
-};
-
-// [SOURCE-DEFINED] (WP4A second slice) — MISSION has no guide-published
-// state-ownership table (§9.8 only names the lifecycle, guide line 215);
-// mirrors OVERFLIGHT_STATE_OWNERS' "self-originator owns it" precedent —
-// whichever Position originated the mission (CREATE_ROLE_PERMISSIONS
-// above) works its entire lifecycle solo. AIC/JTAC deliberately absent:
-// AIC works under TAC_C2's TOFI rather than owning state transitions
-// itself; JTAC's absence alone is what makes it read-only (guide §4.1:
-// "MISSION (read-only)"), no separate mechanism needed.
-const MISSION_STATE_OWNERS = {
-  TASKED:     ['TAC_C2', 'GCI'],
-  AIRBORNE:   ['TAC_C2', 'GCI'],
-  ON_STATION: ['TAC_C2', 'GCI'],
-  OFF_STATION: ['TAC_C2', 'GCI'],
-  RTB:        ['TAC_C2', 'GCI'],
-  // DROPPED is terminal — no NLA exists for it, so no entry is needed.
-};
-
-// The carrier's three Roles (docs/adr/0064 B2, docs/adr/0074), [SOURCE-DEFINED]
-// like every state table here: guide §4.1 names the Positions and §9.12 the
-// hand-overs, and neither publishes "normally owned by". The Marshal owns a
-// flight until Commence; then the lane controller owns COMMENCED, ON_FINAL,
-// BALL and BOLTER_WAVEOFF; PriFly owns the pattern. Case I and Case II Strips
-// reach PriFly by their own transfer (carrier/transfers.js).
-const CV_LANES = ['CV_APP1', 'CV_APP2'];
-const MARSHAL_STATE_OWNERS = {
-  LAUNCH:    ['CV_MARSHAL'],
-  IN_STACK:  ['CV_MARSHAL'],
-  COMMENCED: CV_LANES,
-};
-const FINAL_STATE_OWNERS = {
-  ON_FINAL:       CV_LANES,
-  BALL:           CV_LANES,
-  BOLTER_WAVEOFF: CV_LANES,
-};
-const PATTERN_STATE_OWNERS = {
-  IN_PATTERN: ['CV_PRIFLY'],
-  RECOVERED:  ['CV_PRIFLY'],
-};
-
-const STATE_OWNERS_BY_ROLE = {
-  DEPARTURE: DEPARTURE_STATE_OWNERS, ARRIVAL: ARRIVAL_STATE_OWNERS, OVERFLIGHT: OVERFLIGHT_STATE_OWNERS, MISSION: MISSION_STATE_OWNERS,
-  MARSHAL: MARSHAL_STATE_OWNERS, FINAL: FINAL_STATE_OWNERS, PATTERN: PATTERN_STATE_OWNERS,
-};
+// Per-State authority (guide §3.4's "normally owned by" column): each Role
+// family's `stateOwners` (authority/roles/<role>.js), composed by the
+// authority registry.
+const { DEPARTURE_STATE_OWNERS } = require('./authority/roles/departure');
+const { ARRIVAL_STATE_OWNERS } = require('./authority/roles/arrival');
+const { OVERFLIGHT_STATE_OWNERS } = require('./authority/roles/overflight');
+const { MISSION_STATE_OWNERS } = require('./authority/roles/mission');
+const { MARSHAL_STATE_OWNERS } = require('./authority/roles/marshal');
+const { FINAL_STATE_OWNERS } = require('./authority/roles/final');
+const { PATTERN_STATE_OWNERS } = require('./authority/roles/pattern');
+const { STATE_OWNERS_BY_ROLE } = require('./authority');
 
 // RSU, SFA and PAR's authority comes from INCIRLIK_CAPABILITIES' `ownsStates`
 // column, merged here with FRESH arrays: FINAL's rows above share CV_LANES, so a
