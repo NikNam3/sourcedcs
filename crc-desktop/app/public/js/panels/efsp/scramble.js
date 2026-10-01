@@ -3,6 +3,7 @@ import { getAllEfspStrips, getEfspFdr, getEfspFieldState, getEfspStrip } from '.
 import { getActingPositions } from './efsp-ws.js';
 import { selectEfspStripById } from './bay-view.js';
 import { _activeBayId, _activePositionTab, _renderPositionTabs } from './efsp-panel.js';
+import { _setActiveBayId, _setActivePositionTab } from './efsp-panel.js';
 
 // Guide §9.6 — alert and scramble, on the client (crc-sync's docs/adr/0070).
 //
@@ -157,8 +158,8 @@ function _revealScrambleStrip(stripId) {
   const held = typeof getActingPositions === 'function' ? getActingPositions() : [];
   if (strip && held.includes(strip.ownerPositionId)
       && typeof _renderPositionTabs === 'function' && typeof _activePositionTab !== 'undefined') {
-    _activePositionTab = strip.ownerPositionId; // eslint-disable-line no-global-assign
-    _activeBayId = strip.bayId; // eslint-disable-line no-global-assign
+    _setActivePositionTab(strip.ownerPositionId); // eslint-disable-line no-global-assign
+    _setActiveBayId(strip.bayId); // eslint-disable-line no-global-assign
     _renderPositionTabs();
   }
   if (typeof selectEfspStripById === 'function') selectEfspStripById(stripId);

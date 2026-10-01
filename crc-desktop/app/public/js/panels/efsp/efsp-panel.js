@@ -47,6 +47,9 @@ import { initAtoImport, refreshAtoImportButton } from './ato-import.js';
 
 export let _activePositionTab = null;
 export let _activeBayId = null;
+// ESM-1: scramble.js assigns both; an imported binding is read-only.
+export function _setActivePositionTab(v) { _activePositionTab = v; }
+export function _setActiveBayId(v) { _activeBayId = v; }
 
 // Cached once in initEfspPanel() — see the module comment above for why
 // this can't be a fresh document.getElementById() per render.
@@ -925,7 +928,7 @@ function _refusalSentence(reason, detail) {
 }
 
 /** The callsign on an FDR — what a controller reads off the Strip, and so how a refusal has to name it. */
-function _callsignOfFdr(fdrId) {
+export function _callsignOfFdr(fdrId) {
   const fdr = fdrId && typeof getEfspFdr === 'function' ? getEfspFdr(fdrId) : null;
   return (fdr && fdr.identity && fdr.identity.callsign) || '';
 }

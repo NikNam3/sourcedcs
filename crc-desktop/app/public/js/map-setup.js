@@ -14,17 +14,18 @@ import {
   TEXT_OFFSET_EM, TEXT_SIZE_PX, _drag, _measure, applyScale, bullseyePickTarget, getTextSizePx, labelOffsets, map,
   mapReady, missionData, settings, tracks
 } from './app.js';
+import { _setDrag, _setMap, _setMapReady, _setMeasure } from './app.js';
 
 // ── Map initialisation ────────────────────────────────────────────────────
 // Sets up all MapLibre sources, layers, and event handlers.
 
 export function initMap(container) {
-  map = new maplibregl.Map({
+  _setMap(new maplibregl.Map({
     container,
     style: '/crc-desktop-scope-style.json',
     center: [35.4258, 37.0021],
     zoom: 7,
-  });
+  }));
 
   map.dragRotate.disable();
   map.touchZoomRotate.disableRotation();
@@ -526,11 +527,11 @@ export function initMap(container) {
       }
 
       const startMouse = map.unproject([e.point.x, e.point.y]);
-      _drag = {
+      _setDrag({
         id, startX: e.point.x, startY: e.point.y,
         startMouseLat: startMouse.lat, startMouseLon: startMouse.lng,
         startRelLat, startRelLon, moved: false,
-      };
+      });
       map.dragPan.disable();
     };
 
@@ -654,7 +655,7 @@ export function initMap(container) {
 
     map.getCanvas().addEventListener('mouseup', () => {
       if (!_drag) return;
-      _drag = null;
+      _setDrag(null);
       map.dragPan.enable();
       map.getCanvas().style.cursor = 'crosshair';
     });
@@ -665,7 +666,7 @@ export function initMap(container) {
       e.preventDefault();
       const rect   = map.getCanvas().getBoundingClientRect();
       const point  = map.unproject([e.clientX - rect.left, e.clientY - rect.top]);
-      _measure = { startLng: point.lng, startLat: point.lat };
+      _setMeasure({ startLng: point.lng, startLat: point.lat });
       map.dragPan.disable();
     });
 
@@ -673,12 +674,12 @@ export function initMap(container) {
 
     map.getCanvas().addEventListener('mouseup', (e) => {
       if (e.button !== 2 || !_measure) return;
-      _measure = null;
+      _setMeasure(null);
       map.dragPan.enable();
       map.getSource('measure').setData({ type: 'FeatureCollection', features: [] });
     });
 
-    mapReady = true;
+    _setMapReady(true);
     applyScale();
     applyMapTheme();
     initElevationContours();

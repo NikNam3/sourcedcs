@@ -134,8 +134,17 @@ export let bullseyePickTarget = null; // 'blue' | 'red' | null — awaiting a ma
 export let _pulseBright     = true;
 export let selectedRef      = null; // string track id (reference)
 export let selectedApt      = null;
-let _ws              = null;
+export let _ws              = null;
 export let approachRwyCourse = null; // used for approach-vector line
+// ESM-1: setters for the bindings other modules assign (map-setup.js, settings-panel.js, airport-selector.js);
+// an imported binding is read-only, so the assignment moved behind these.
+export function _setMap(v) { map = v; }
+export function _setMapReady(v) { mapReady = v; }
+export function _setDrag(v) { _drag = v; }
+export function _setMeasure(v) { _measure = v; }
+export function _setBullseyePickTarget(v) { bullseyePickTarget = v; }
+export function _setSelectedApt(v) { selectedApt = v; }
+export function _setApproachRwyCourse(v) { approachRwyCourse = v; }
 
 // ── Coverage ──────────────────────────────────────────────────────────────
 // What this controller is looking through, as crc-sync's `coverage` message
@@ -911,6 +920,9 @@ setInterval(() => {
 
 // ── Boot ──────────────────────────────────────────────────────────────────
 
+// ESM-1: the boot sequence ran at script-execution time, after every earlier script. A module is evaluated in
+// dependency order instead, so main.js calls this once every module has been evaluated (S-ESM1a).
+export function startApp() {
 loadSettings();
 loadUserCoalition();
 loadStaticData();
@@ -926,6 +938,7 @@ initCoalitionBtn();
 initZuluClock();
 updateTopbarUI();
 connect();
+}
 
 function initCoalitionBtn() {
   const $btn = document.getElementById('btn-coalition');

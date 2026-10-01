@@ -14,8 +14,8 @@ import { applyEfspSfaSnapshot } from './sfa-state.js';
 // works unmodified as a plain <script> global in the browser AND as a
 // require()-able module for node:test — no build step either way.
 
-const efspStrips = new Map();     // stripId -> Strip
-const efspFdrs = new Map();       // fdrId -> FlightDataRecord
+export const efspStrips = new Map();     // stripId -> Strip
+export const efspFdrs = new Map();       // fdrId -> FlightDataRecord
 const efspPositions = new Map();  // positionId -> PositionOccupancy
 let efspBoardSeq = 0;
 let efspFacility = null;
@@ -50,7 +50,7 @@ const efspObligations = new Map(); // stripId -> [{ facilityId, stripId, obligat
 // request, history, plus its static definition). Theater-wide rather than
 // per-Facility: an airspace names its controlling Facility rather than being
 // replicated into each one.
-const efspAirspaces = new Map();
+export const efspAirspaces = new Map();
 
 // WP5 (crc-sync's docs/adr/0045) — fdrId -> the correlation record: which
 // surveillance contact this airframe is, on what evidence, and any warning.

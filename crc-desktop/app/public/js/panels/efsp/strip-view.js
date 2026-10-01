@@ -49,6 +49,7 @@ import {
   _openTofiEntryPopover, _pendingConvertStripId, _resolveActingPositionId, _swallowRepeatAdvance,
   _tofiExitPrecondition, _tofiProposerOf, _tofiRegimeChoice, _unmountPopover
 } from './bay-view.js';
+import { _setPendingConvertStripId } from './bay-view.js';
 import { scrambleAlertsFor } from './scramble.js';
 import { convertStripToArrival, efspVisibleBayId, noteEfspArrivalShown } from './efsp-panel.js';
 import { arJoinFor, atoAlertsFor, isArHighlighted } from './ato-strip.js';
@@ -759,11 +760,11 @@ function _stripMenuItems(strip) {
       // first relabels the item in place and keeps the menu open.
       run: (anchor, itemEl) => {
         if (annotated && _pendingConvertStripId !== strip.stripId) {
-          _pendingConvertStripId = strip.stripId;
+          _setPendingConvertStripId(strip.stripId);
           itemEl.textContent = 'Convert — press again';
           return false;
         }
-        _pendingConvertStripId = null;
+        _setPendingConvertStripId(null);
         convertStripToArrival(strip);
       } });
   }

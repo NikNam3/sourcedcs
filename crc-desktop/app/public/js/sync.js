@@ -263,3 +263,7 @@ export function sendToSync(msg) {
 // tell "silently dropped" apart from "sent, waiting on a reply" to avoid
 // looking identically broken either way. See efsp-ws.js.
 export function isSyncOpen() { return !!(_syncSocket && _syncSocket.readyState === WebSocket.OPEN); }
+
+// ESM-1: replaces sendToSync for every importer (live binding). The classic page let a caller assign the global
+// `sendToSync`; the Playwright specs still do, through js/classic-globals-bridge.js, and unit tests may too.
+export function setSendToSync(fn) { sendToSync = fn; }

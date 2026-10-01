@@ -451,7 +451,7 @@ export function _resetAtcScopeForTest() {
 // of Positions (coverage) or of the setting takes effect on the next beat.
 let _atcBlackApplied = null;
 
-function atcTick() {
+export function atcTick() {
   if (typeof mapReady === 'undefined' || !mapReady) return;
   const black = atcBlackScope();
   if (black !== _atcBlackApplied) {
@@ -477,7 +477,3 @@ function atcTick() {
 
 /** Forces the background to be re-applied on the next beat (after the base theme repainted it). */
 export function atcBackgroundDirty() { _atcBlackApplied = null; }
-
-if (typeof window !== 'undefined' && typeof setInterval === 'function' && !(typeof module !== 'undefined' && module.exports)) {
-  setInterval(atcTick, 500);
-}

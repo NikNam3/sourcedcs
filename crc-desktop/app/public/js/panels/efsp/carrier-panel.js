@@ -6,6 +6,9 @@ import {
   carrierBannerParts, carrierCaseValue, carrierDerivedFor, carrierDerivedStack, carrierHhmm, getEfspCarrier
 } from './carrier-state.js';
 import { getActingPositions, sendEfspCarrierMutation, sendEfspMutation } from './efsp-ws.js';
+// ESM-1: today efsp-panel.js's _callsignOfFdr (fallback '') silently won over this file's own copy (fallback fdrId);
+// the import keeps that effective behaviour (S-ARCH2 item 3, plan §6 queue item 3).
+import { _callsignOfFdr } from './efsp-panel.js';
 
 // The carrier's surfaces on the Strip panel (crc-sync's docs/adr/0074, ADR 0064
 // B7; guide §4.1, §9.12): the ship banner, the Case selector, the Marshal stack
@@ -148,11 +151,6 @@ export function carrierStackRows(view = getEfspCarrier(), stackId = 'MAIN') {
     const entry = byIndex.get(slot.stackIndex) || null;
     return { stackIndex: slot.stackIndex, entry, preview: slot, vacantBelowTop: !entry && slot.stackIndex < top };
   });
-}
-
-function _callsignOfFdr(fdrId) {
-  const fdr = fdrId && typeof getEfspFdr === 'function' ? getEfspFdr(fdrId) : null;
-  return (fdr && fdr.identity && fdr.identity.callsign) || fdrId || '';
 }
 
 /** Orders the Strips of the stack Bay by stack slot (the Bay is "ordered by stackIndex"); every other Bay is left alone. */

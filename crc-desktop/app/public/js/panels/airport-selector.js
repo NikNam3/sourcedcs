@@ -4,6 +4,7 @@ import { requestTrueFromMagnetic } from '../magnetic.js';
 import { updateMap } from '../geojson.js';
 import { $aptDisplay, updateAptDisplay, updateTopbarUI } from './topbar.js';
 import { approachRwyCourse, missionData, selectedApt } from '../app.js';
+import { _setApproachRwyCourse, _setSelectedApt } from '../app.js';
 
 // ── Airport selector (topbar dropdown + runway course input) and the
 // airport-weather popup shown when left-clicking an airport label on the
@@ -45,7 +46,7 @@ function populateAptDropdown($dd) {
       `<span>${a.icao || a.name}</span>` +
       `<span class="apt-opt-name">${a.icao ? a.name : ''}</span>`;
     el.addEventListener('click', () => {
-      selectedApt = a;
+      _setSelectedApt(a);
       $dd.classList.remove('open');
       updateAptDisplay();
       updateTopbarUI();
@@ -109,7 +110,7 @@ export function initRwyInput() {
 
   $rwyInput.addEventListener('input', () => {
     const val = parseInt($rwyInput.value, 10);
-    approachRwyCourse = (!isNaN(val) && val >= 0 && val <= 360) ? val % 360 : null;
+    _setApproachRwyCourse((!isNaN(val) && val >= 0 && val <= 360) ? val % 360 : null);
     resolveApproachCourse();
     updateMap();
   });

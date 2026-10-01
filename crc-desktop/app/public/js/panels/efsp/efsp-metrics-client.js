@@ -313,7 +313,7 @@ export function onEfspMetricsReportAck(msg) { _efspMetricsSafely('ack', m => m.o
 /** Sends what is queued now rather than at the next flush (tests, and beforeunload). */
 function flushEfspMetricsNow() { let n = 0; _efspMetricsSafely('flush', m => { n = m.flush(); }); return n; }
 /** Local counters — drops, abandons, samples — for a log or the e2e walk. */
-function efspMetricsClientStats() { let s = null; _efspMetricsSafely('stats', m => { s = m.stats(); }); return s; }
+export function efspMetricsClientStats() { let s = null; _efspMetricsSafely('stats', m => { s = m.stats(); }); return s; }
 
 if (typeof window !== 'undefined' && window && typeof window.addEventListener === 'function') {
   window.addEventListener('beforeunload', () => { flushEfspMetricsNow(); });

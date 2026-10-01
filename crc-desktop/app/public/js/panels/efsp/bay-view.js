@@ -1925,6 +1925,8 @@ export function _openTofiEntryPopover(strip, anchorEl, counterparts) {
 // The Strip awaiting a second press on Convert to Arrival. Module-level
 // rather than per-render, since a re-render rebuilds the button.
 export let _pendingConvertStripId = null;
+// ESM-1: strip-view.js assigns it; an imported binding is read-only.
+export function _setPendingConvertStripId(v) { _pendingConvertStripId = v; }
 
 export const AIRSPACE_ENTRY_POSITIONS = ['APP', 'CTR'];
 

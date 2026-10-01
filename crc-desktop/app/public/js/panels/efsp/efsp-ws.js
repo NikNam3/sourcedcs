@@ -277,3 +277,17 @@ export function replayPendingEfspMutations(onOrphaned) {
     _sendEfsp(rebased);
   }
 }
+
+// ESM-1: replaces one of the senders for every importer (live binding). The classic page let a caller assign the
+// global `sendEfsp…`; the Playwright specs still do, through js/classic-globals-bridge.js, and unit tests may too.
+export function setEfspSender(name, fn) {
+  switch (name) {
+    case 'sendEfspMutation': sendEfspMutation = fn; break;
+    case 'sendEfspCreateStrip': sendEfspCreateStrip = fn; break;
+    case 'sendEfspSetPositions': sendEfspSetPositions = fn; break;
+    case 'sendEfspAirspaceMutation': sendEfspAirspaceMutation = fn; break;
+    case 'sendEfspCorrelationMutation': sendEfspCorrelationMutation = fn; break;
+    case 'sendEfspMarsaMutation': sendEfspMarsaMutation = fn; break;
+    default: throw new TypeError(`setEfspSender: ${name} is not a replaceable sender`);
+  }
+}

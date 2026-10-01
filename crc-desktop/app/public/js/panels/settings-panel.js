@@ -5,6 +5,7 @@ import { clearElevationContours, updateElevationContours } from '../elevation.js
 import { hideLosProfile } from './los-panel.js';
 import { initToolsTab } from './tools-panel.js';
 import { applyScale, bullseyePickTarget, history, map, mapReady, missionData, saveSettings, settings } from '../app.js';
+import { _setBullseyePickTarget } from '../app.js';
 
 // ── Settings panel: tab switching, per-tab wiring (map display, bullseye
 // override, colours, tools) and the bullseye pick-on-map mode. Split out of
@@ -143,7 +144,7 @@ export function initSettings() {
 const $pickBanner = document.getElementById('pick-banner');
 
 function startBullseyePick(side) {
-  bullseyePickTarget = side;
+  _setBullseyePickTarget(side);
   document.querySelectorAll('[id^="set-be-"][id$="-pick"]').forEach(b => b.classList.remove('active-pick'));
   const $btn = document.getElementById(`set-be-${side}-pick`);
   if ($btn) { $btn.textContent = 'CLICK MAP…'; $btn.classList.add('active-pick'); }
@@ -157,7 +158,7 @@ function startBullseyePick(side) {
 }
 
 function cancelBullseyePick() {
-  bullseyePickTarget = null;
+  _setBullseyePickTarget(null);
   document.querySelectorAll('[id^="set-be-"][id$="-pick"]').forEach(b => {
     b.textContent = 'PICK ON MAP';
     b.classList.remove('active-pick');
