@@ -609,11 +609,14 @@ class WsHub {
         // primary delta, the PEER Facility's, the MARSA relation's, the carrier's, the SFA's. Each is a delta a
         // different store owns and no Board sequence can carry (docs/adr/0022 peer replica, 0051 MARSA void,
         // 0074 carrier, 0093 SFA rotation), sent immediately on the same round trip, never left for the next op.
-        for (const frame of result.broadcasts) this._broadcastEfsp(frame);
+        // Not every handler goes through the skeleton: the metrics report/request and the resync answers
+        // return `{ ack }` alone, which means nothing to broadcast.
+        const broadcasts = result.broadcasts || [];
+        for (const frame of broadcasts) this._broadcastEfsp(frame);
         // After the broadcasts, so a client sees the Strip change before the
         // alert change. Guarded: a monitor bug must never cost the sender's
         // round trip.
-        if (this._onEfspChange && result.broadcasts.length > 0) {
+        if (this._onEfspChange && broadcasts.length > 0) {
           try { this._onEfspChange(); } catch (err) { console.error('[crc-sync] onEfspChange failed:', err); }
         }
         // Declaring a different held set is what changes a controller's

@@ -153,12 +153,18 @@ function _load() {
   return onDisk;
 }
 
-let airspaces = _load();
+// Loaded on first use, not at require time, so requiring this module (facility-config.js does) reads no file
+// (DATA-1's lazy facility load; integration fix after DATA-2).
+let airspaces = null;
+function _all() {
+  if (airspaces === null) airspaces = _load();
+  return airspaces;
+}
 
-function getAirspaces() { return deepClone(airspaces); }
+function getAirspaces() { return deepClone(_all()); }
 
 function getAirspace(airspaceId) {
-  const found = airspaces.find(a => a.airspaceId === airspaceId);
+  const found = _all().find(a => a.airspaceId === airspaceId);
   return found ? deepClone(found) : null;
 }
 
@@ -170,7 +176,7 @@ function getAirspace(airspaceId) {
  */
 function getRangePositionIds() {
   const ids = [];
-  for (const a of airspaces) {
+  for (const a of _all()) {
     if (a.usingPositionId && !ids.includes(a.usingPositionId)) ids.push(a.usingPositionId);
   }
   return ids;
@@ -178,7 +184,7 @@ function getRangePositionIds() {
 
 /** The airspaces a given range Position is responsible for. */
 function airspacesForUsingPosition(positionId) {
-  return deepClone(airspaces.filter(a => a.usingPositionId === positionId));
+  return deepClone(_all().filter(a => a.usingPositionId === positionId));
 }
 
 /**

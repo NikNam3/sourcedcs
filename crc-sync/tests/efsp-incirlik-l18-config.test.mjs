@@ -184,8 +184,10 @@ test('SFA predicates read the one table: APP rotates, APP and SFA send the trans
   assert.equal(permission.canRotateSfa('toString'), false);
 });
 
-test('no Position name of the new three is written in a second table: every RSU/SFA/PAR literal in permission.js is inside INCIRLIK_CAPABILITIES or a comment', () => {
-  const src = fs.readFileSync(new URL('../src/efsp/permission.js', import.meta.url), 'utf8');
+test('no Position name of the new three is written in a second table: every RSU/SFA/PAR literal in the authority registry is inside INCIRLIK_CAPABILITIES or a comment', () => {
+  // AUTH: the table moved to authority/positions/incirlik-military.js; the
+  // other registry files and the permission.js facade must not repeat the names.
+  const src = fs.readFileSync(new URL('../src/efsp/authority/positions/incirlik-military.js', import.meta.url), 'utf8');
   const start = src.indexOf('const INCIRLIK_CAPABILITIES = {');
   const end = src.indexOf('\n};\n', start);
   assert.ok(start > 0 && end > start);
@@ -195,6 +197,13 @@ test('no Position name of the new three is written in a second table: every RSU/
   const outside = code.slice(0, bodyStart) + code.slice(bodyEnd);
   const hits = outside.match(/'(RSU|SFA|PAR)'/g);
   assert.equal(hits, null, `Position literals outside the table: ${hits}`);
+  const others = ['permission.js', 'authority/index.js', 'authority/op-kinds.js', 'authority/classes.js',
+    ...fs.readdirSync(new URL('../src/efsp/authority/positions/', import.meta.url)).filter(f => f !== 'incirlik-military.js').map(f => `authority/positions/${f}`),
+    ...fs.readdirSync(new URL('../src/efsp/authority/roles/', import.meta.url)).map(f => `authority/roles/${f}`)];
+  for (const f of others) {
+    const text = fs.readFileSync(new URL(`../src/efsp/${f}`, import.meta.url), 'utf8').split('\n').map(l => l.replace(/\/\/.*$/, '')).join('\n');
+    assert.equal(text.match(/'(RSU|SFA|PAR)'/g), null, `${f} names RSU/SFA/PAR outside INCIRLIK_CAPABILITIES`);
+  }
 });
 
 test('the tuning stays read-only (P5): no code path writes singleFrequencyApproach', () => {

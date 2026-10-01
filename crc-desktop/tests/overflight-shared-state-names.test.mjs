@@ -19,12 +19,15 @@ const ROOTS = ['crc-sync/src', 'crc-desktop/app/public/js', 'crc-desktop/app/ser
 // file -> why it is safe
 const ALLOWED = {
   'crc-sync/src/efsp/nla.js': 'per-Role state tables and per-Role NLA functions',
-  'crc-sync/src/efsp/permission.js': 'per-Role owner tables (STATE_OWNERS_BY_ROLE)',
-  'crc-sync/src/efsp/coordination.js': 'tables keyed by Role',
+  'crc-sync/src/efsp/authority/index.js': 'comments on the Role-keyed COORDINATION_/TOFI_ELIGIBLE_STATES, composed from the Role families',
+  'crc-sync/src/efsp/authority/op-kinds.js': 'a comment: ConvertToArrival is a DEPARTURE Strip at HANDED_OFF (Role named)',
+  'crc-sync/src/efsp/authority/roles/departure.js': 'the DEPARTURE Role family: its own states, owners and NLA',
+  'crc-sync/src/efsp/authority/roles/arrival.js': 'the ARRIVAL Role family: its own states, owners and NLA',
+  'crc-sync/src/efsp/authority/roles/overflight.js': 'the OVERFLIGHT Role family: its own states, owners, NLA and replica/sender states',
+  'crc-sync/src/efsp/authority/positions/incirlik-military.js': 'ownsStates is keyed by Role ({ ARRIVAL: [\'INBOUND\'] })',
   'crc-sync/src/efsp/board-store.js': 'ConvertToArrival checks the Role; REPLICA_STATE_ON_RECEIPT/SENDER_STATE_ON_ACCEPT and DEFAULT_INITIAL_STATE_BY_ROLE are keyed by Role',
   'crc-sync/src/efsp/board/placement.js': 'comments only (the nlaCtx context and roleBayFor\'s Role Bay rule); roleBayFor keeps an OVERFLIGHT out of ARRIVAL\'s Bays by Role',
   'crc-sync/src/efsp/board/coordination.js': 'a comment only (the replica carries the sender\'s Role/EfspState); the tables it reads are passed in, keyed by Role',
-  'crc-sync/src/efsp/traffic-count.js': 'COUNTABLE_PRE_DROP_STATES is keyed by Role',
   'crc-sync/src/efsp/surveillance-hints.js': 'EXPECTS is keyed by Role',
   'crc-sync/src/efsp/overflight-migration.js': 'the comment naming the new states; it only touches TRANSITING',
   'crc-sync/src/efsp/wire/skeleton.js': 'the word INBOUND in a comment about messages',
