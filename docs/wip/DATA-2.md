@@ -1,6 +1,33 @@
 # DATA-2: tuning defaults move to their JSON twins; the literal inventory
 
-Branch `lane/DATA-2-tuning-json`, base `e2cd0fa`. Report goes here at the end.
+## Report
+
+Branch `lane/DATA-2-tuning-json`, base `e2cd0fa`.
+
+- Moved (one `behaviour(DATA-2)` commit per module, titles per ruling S-DATA2-0): alerting `DEFAULTS`; instrumentation and surveillance-hints defaults; carrier `DEFAULT_HULL`; radars `DEFAULT_CAPS` / `DEFAULT_PRESENTATION` / `SHIP_RADAR_DEFAULT` / `EMPTY_SPECS` (into `sensor-specs.json`: new `defaultCaps`, `shipRadarDefault`); `DEFAULT_TRANSITION_ALT_FT` (into `theaters.json` `defaultTransitionAltFt`); stereo-routes and airspace-config `[]` defaults. New `src/tuning-file.js` (`readShipped`, `readLayer`): the shipped `config/` file is the only source, a missing or invalid one is a startup error naming it, a `state/` copy or test override layers over it. Instrumentation and hints keep their per-field fallback, now to the shipped values. P5 holds: every file is read once at load, nothing writes a tuning file (stereo-routes and airspace-config are state-written data, not tuning files, and are unchanged in that respect).
+- Golden: identical after every commit (47 pass, no `freeze:update`). Selfcheck: not run (no mutation retargeted); `soak:selfcheck` not run (no Gates file touched).
+- Suites: crc-sync 2050 tests (2047 pass, 2 timing fails under load) -> 2057 (2055 pass, 1 timing fail under load, passes alone; `ato tokenize: pathological inputs finish fast` is flaky both ways), 1 todo; crc-desktop 866 -> 866 (865 pass).
+- Tests changed: `conformance`, `stca`, `efsp-block-altitude` (use `loadAlertingConfig()`), `efsp-instrumentation-config` (copies the shipped file into its temp config dir, adds a startup-error test), `efsp-carrier-ship-state` and `efsp-carrier-acceptance` (hull from `getDefaultHull()`), `radars` (shipped fallback, defaults from specs), `efsp-stereo-routes` (three load cases now expect a startup error), `efsp-station-coverage` (writes its empty airspaces file). New: `tests/tuning-defaults.test.mjs` (6).
+- Outside Owns: `crc-sync/tools/soak/host-client.js` (`writeFixtures` copies the shipped tuning files into the soak's otherwise-empty config dir and writes pinned `theaters.json` / `sensor-specs.json` layers so the soak and the freeze world behave as before). `src/tuning-file.js` is new. No structure-fixture changes.
+- Not moved, on ruling or scope: `ANGLED_DECK_BY_TYPE` (ruled data, but `ship-state.js` is pure and takes the hull as an argument; moving it needs the table injected through `hull-config` into `buildShipState`, an API change outside "defaults only"), `AIRPORT_RADAR` / `APPROACH_RADAR` / `CVN_APPROACH_RADAR` and the radar heights, `surveillance/datalink.js` `|| 4000`.
+- Defaults taken (P2): missing tuning file = startup error (ruled); config-dir override is layered over the shipped file rather than replacing it; theaters default stored as a top-level key, not a pseudo-theater.
+- Findings: `grpc-client.js:109` hardcodes the weather reference point 41.0/41.0 (a Caucasus location); it belongs in `theaters.json` (no test.todo written). ISA constants are duplicated in `altimetry.js` and `grpc-client.js`; `MS_PER_KT` in three files; `DAY_MS` in five.
+- For the supervisor: rulings and the follow-up list are in sections C and E below.
+
+`git log --oneline e2cd0fa..HEAD`:
+```
+cb8f867 refactor(DATA-2): station-coverage test writes its empty airspaces file
+f78d59d behaviour(DATA-2): airspaces come from config/ (missing or invalid file is a startup error)
+10c355a behaviour(DATA-2): stereo routes come from config/ (missing or invalid file is a startup error)
+86ddf3f behaviour(DATA-2): default transition altitude comes from config/theaters.json (missing or invalid file is a startup error)
+bfb3627 behaviour(DATA-2): radar defaults come from config/sensor-specs.json (missing or invalid file is a startup error)
+fee1e1d behaviour(DATA-2): carrier hull defaults come from config/ (missing or invalid file is a startup error)
+2ca4f4b behaviour(DATA-2): surveillance-hints defaults come from config/ (missing or invalid file is a startup error)
+e37ddc1 behaviour(DATA-2): instrumentation defaults come from config/ (missing or invalid file is a startup error)
+2c90157 behaviour(DATA-2): alerting defaults come from config/ (missing or invalid file is a startup error)
+f059110 wip(DATA-2): step 0 baselines, code as found, the full literal inventory
+```
+
 
 ## Baselines at e2cd0fa (step 0)
 
@@ -545,3 +572,23 @@ they sit in `efsp/permission.js` (OPS x8, TAC_C2 x8, CENTER x2), `efsp/carrier/t
 All 93 `[SOURCE-DEFINED]` comments in `src` were read; the values they mark are classified in A/B above.
 Not found by the scan (by design): constants computed from other values, class statics, and constants declared inside
 functions (those appear in B as inline numbers).
+
+### C2. Rulings (S-DATA2-0, supervisor)
+
+- `ARCHIVE_AFTER_MS`: stays a named constant (H36 is the human's specific ruling).
+- Correlation `AFFINITY_*`: engineering constant, stays.
+- `DEFAULT_CASE`, marshal `maxIndex` 19, `NIGHT_BELOW_DEG`: doctrine, stay in code.
+- `ANGLED_DECK_BY_TYPE`: unit data, belongs in the carrier hull JSON; not moved here (see E).
+- Synthetic code block, approach types and button range: facility data (R3-53), later data lane.
+- Weather reference point 41/41 in `grpc-client.js`: a finding; should come from `theaters.json`.
+- `permission.js` Position ids: AUTH's registry, untouched.
+- Every other unclear entry: stays in code, listed in E.
+
+### E. Follow-up list (for a later data lane)
+
+1. `ANGLED_DECK_BY_TYPE` into `efsp-carriers.json` (needs the table injected into `buildShipState`).
+2. `AIRPORT_RADAR`, `APPROACH_RADAR`, `CVN_APPROACH_RADAR`, `AIRPORT_RADAR_HEIGHT_M`, `SHIP_RADAR_HEIGHT_M` into `sensor-specs.json`; `datalink.js` `|| 4000` follows.
+3. `SYNTHETIC_BLOCK_START/SIZE`, `APPROACH_TYPES`, `APPROACH_BUTTON_MIN/MAX`, `FUEL_MAX_LB` (R3-53 comm card).
+4. `grpc-client.js` weather reference point (41/41) from `theaters.json`.
+5. `ATO_IMPORT_ORIGIN`, the facility ids in `sfa-store.js`, `index.js`, `efsp-ws.js`, `station-coverage.js`, `transfers.js` (facility topology in code), after DATA-1 and AUTH.
+6. Remaining unclear: `DEFAULT_FACILITY_ID`, the inline "recently amended" 60 s in `forwarding-obligations.js`, `geo.js` on-ground thresholds (borderline tunable), `tracks.js` `STALE_MS`, `PARK_MS`, `SCHEME_HOLD_SWEEPS`, `PUSH_TOLERANCE_MS` / `RADIAL_TOLERANCE_DEG`, ATIS TTLs, NLA debounce/undo windows (all proposed TUNE, none moved).
