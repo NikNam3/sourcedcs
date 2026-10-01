@@ -239,3 +239,11 @@ test('a stream that stayed up resets the backoff', async (t) => {
   assert.ok(gaps[4] - (stableMs + 100) <= base + 30, `after a healthy stream the delay restarts at ${base} ms: ${gaps.join(', ')}`);
   assert.ok(gaps[5] <= 2 * base + 40, `and grows from there: ${gaps.join(', ')}`);
 });
+
+test('the reconnect delay never drops below the base, so the rate has a floor', async (t) => {
+  const c = new GrpcClient({ backoffBaseMs: 100, backoffCapMs: 800 });
+  t.after(() => c.close());
+  for (let n = 0; n < 6; n++) {
+    for (let i = 0; i < 200; i++) assert.ok(c._backoffDelay(n) >= 100, `retry ${n} went below the floor`);
+  }
+});

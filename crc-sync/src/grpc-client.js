@@ -377,10 +377,11 @@ class GrpcClient extends EventEmitter {
   }
 
   // min(cap, base * 2^n), jittered to 50-100 % so many clients don't retry
-  // in step.
+  // in step, but never below the base: a hard floor on the reconnect rate
+  // (one attempt per base, 1 s by default) however the jitter falls.
   _backoffDelay(retries) {
     const nominal = Math.min(this._backoffCap, this._backoffBase * 2 ** Math.min(retries, 30));
-    return Math.round(nominal * (0.5 + Math.random() / 2));
+    return Math.max(this._backoffBase, Math.round(nominal * (0.5 + Math.random() / 2)));
   }
 
   // A clean end is abnormal for this stream (DCS-gRPC holds it open for the
