@@ -3112,3 +3112,4 @@ export function _setSelectEfspStripByIdForTest(fn) { selectEfspStripById = fn; }
 // ESM-1 (S-ESM1c): test seams for state the unit tests set directly in the old shared scope.
 export function _setExpandedStripId(v) { _expandedStripId = v; }
 export function _setSelectedStripIdForTest(id) { _selectedStripId = id; }
+export function _setRenderBayForTest(fn) { renderBay = fn; }
