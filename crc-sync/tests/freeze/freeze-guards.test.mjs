@@ -5,11 +5,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { HERE, checkGolden } from './freeze-lib.mjs';
 
-// Three guards a refactor of board-store.js / index.js must not trip silently:
+// Two guards a refactor of board-store.js / index.js must not trip silently:
 //  1. wiring completeness: every `this._rules.<name>` board-store reads is supplied for EVERY Facility;
-//  2. the Board's external surface: which of its members are used from outside the file;
-//  3. the wall-clock sites: where Date.now() / new Date() is read under src/efsp (ADR 0079, H11).
-// 2 and 3 are frozen as data; the failure text says what to do.
+//  2. the Board's external surface: which of its members are used from outside the file.
+// Guard 2 is frozen as data; the failure text says what to do. (The wall-clock guard is tests/clock-policy.test.mjs.)
+//
+// guard-board-surface.json is a STRUCTURE FIXTURE (plan §3.2), not a behaviour golden: a lane that moves a private
+// member of the Board, or changes which public methods outside code uses, updates it in the same commit
+// (`UPDATE_GOLDEN=1 node --test tests/freeze/freeze-guards.test.mjs`) and lists the change in the commit message.
 
 const CRC_SYNC = path.resolve(HERE, '../..');
 const SRC = path.join(CRC_SYNC, 'src');
@@ -45,7 +48,9 @@ const boardSources = () => [path.join(SRC, 'efsp/board-store.js'), ...(fs.exists
 
 test('freeze guard 1: every rule board-store reads is wired for every Facility', () => {
   const read = new Set();
-  for (const f of boardSources()) for (const m of stripComments(fs.readFileSync(f, 'utf8')).matchAll(/this\._rules\.([A-Za-z_]\w*)/g)) read.add(m[1]);
+  // Rules are read as `this._rules.X` in board-store.js and, once collaborators take the rules object, as a bare
+  // `rules.X` under src/efsp/board/. The lookbehind keeps `foo.rules.X` and `_rules.X` out of the bare form.
+  for (const f of boardSources()) for (const m of stripComments(fs.readFileSync(f, 'utf8')).matchAll(/(?:this\._rules|(?<![\w$.])rules)\.([A-Za-z_]\w*)/g)) read.add(m[1]);
   assert.ok(read.size >= 40, `expected to find the rule names board-store reads (found ${read.size})`);
   const efsp = createEfsp();
   const gaps = [];
@@ -80,6 +85,7 @@ test('freeze guard 2: the Board\'s external surface', () => {
   for (const { id } of privateUsed) assert.ok(id in instance, `${id} is reached from outside board-store.js but no longer exists on a BoardStore: a refactor must keep this name, or update this list in the same commit and say why`);
 
   checkGolden(assert, 'guard-board-surface', {
+    fixture: 'STRUCTURE FIXTURE (plan 3.2): lanes update this file when they move a private member, and list the change in the commit message; it is not a behaviour golden',
     rows: [
       { id: 'public methods used from outside board-store.js (src, server.js, tools)', v: usedFromOutside },
       { id: 'all public methods', v: publicNames.sort() },
@@ -87,15 +93,4 @@ test('freeze guard 2: the Board\'s external surface', () => {
     ],
   }, (d) => d.rows.map(r => [r.id, r]));
   assert.ok(own.length > 0);
-});
-
-test('freeze guard 3: Date.now() / new Date() sites under src/efsp', () => {
-  const sites = [];
-  for (const f of walk(path.join(SRC, 'efsp')).sort()) {
-    const text = stripComments(fs.readFileSync(f, 'utf8'));
-    const nowCalls = (text.match(/Date\.now\b/g) || []).length;
-    const bareDates = (text.match(/new Date\(\s*\)/g) || []).length;
-    if (nowCalls || bareDates) sites.push({ id: rel(f), dateNow: nowCalls, newDateBare: bareDates });
-  }
-  checkGolden(assert, 'guard-wall-clock', { rows: sites }, (d) => d.rows.map(r => [r.id, r]));
 });
