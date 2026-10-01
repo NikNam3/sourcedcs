@@ -1,5 +1,3 @@
-'use strict';
-
 /* The reachability half of §9.10 stereo routes (docs/adr/0050) — a green
    sortie in crc-sync proves the server does the right thing and says
    nothing about whether a controller can ask for it.
@@ -10,26 +8,28 @@
    all. This needs a getElementById backed by real stub elements, which are
    the shared DOM stub's (tests/helpers/dom-stub.js, docs/adr/0054). */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('fs');
-const path = require('path');
-const vm = require("vm");
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
 
-function unrefTimeout(fn, ms, ...args) {
-  const t = setTimeout(fn, ms, ...args);
-  if (t && typeof t.unref === 'function') t.unref();
-  return t;
-}
-const CLIENT = path.join(__dirname, '../app/public/js/panels/efsp');
+import './helpers/client-env.mjs';
+import domStub from './helpers/dom-stub.js';
+import { freshGraph } from './helpers/fresh-graph.mjs';
+
+// Unref'd, so a panel timer — the refusal banner's 30 s auto-clear above all — never holds the test
+// process open until it fires. That one timer kept `npm test` (and so `npm run dev-check`) waiting
+// 30 s after the last assertion had passed.
+const realSetTimeout = globalThis.setTimeout;
+globalThis.setTimeout = (fn, ms, ...args) => { const t = realSetTimeout(fn, ms, ...args); if (t && typeof t.unref === 'function') t.unref(); return t; };
+const realSetInterval = globalThis.setInterval;
+globalThis.setInterval = (fn, ms, ...args) => { const t = realSetInterval(fn, ms, ...args); if (t && typeof t.unref === 'function') t.unref(); return t; };
 
 const ROUTES = [
   { name: 'PACK 1', description: 'north MOA', route: 'LTAG DCT ALPHA', requestedAltitude: '250' },
   { name: 'PACK 2', route: 'LTAG DCT BRAVO' },
 ];
 
-const { makeElement } = require('./helpers/dom-stub.js');
+const { makeElement } = domStub;
 
 /**
  * Loads the real efsp-panel.js against a stubbed toolbar and returns handles
@@ -38,7 +38,7 @@ const { makeElement } = require('./helpers/dom-stub.js');
  * `stereoRoutes` is what the (injected) client fetch resolves to, so the
  * empty-table case — which is the SHIPPED case — is just `[]`.
  */
-function mountPanel({ held = ['OPS'], stereoRoutes = ROUTES, lookupSpy = null, liveStrips = [] } = {}) {
+async function mountPanel({ held = ['OPS'], stereoRoutes = ROUTES, lookupSpy = null, liveStrips = [] } = {}) {
   const sent = [];
   const els = {};
   for (const id of ['efsp-panel', 'efsp-position-tabs', 'efsp-bay-tabs', 'efsp-bay-content',
@@ -49,54 +49,53 @@ function mountPanel({ held = ['OPS'], stereoRoutes = ROUTES, lookupSpy = null, l
     els[id] = makeElement(id.endsWith('-btn') ? 'button' : id.includes('role') || id.includes('stereo') ? 'select' : 'input');
   }
 
-  const sandbox = {
-    // Unref'd, so a panel timer — the refusal banner's 30 s auto-clear above
-    // all — never holds the test process open until it fires. That one timer
-    // kept `npm test` (and so `npm run dev-check`) waiting 30 s after the last
-    // assertion had passed.
-    console, module: { exports: {} }, setTimeout: unrefTimeout, clearTimeout, setInterval: () => 0, clearInterval: () => {},
-    Date, JSON, Math, Number, Set, Map, Array, Object, String, Boolean, RegExp,
-    isNaN, parseInt, parseFloat, Promise,
-    document: { getElementById: (id) => els[id] || null, createElement: makeElement, addEventListener() {}, removeEventListener() {} },
-    window: {},
-  };
-  sandbox.globalThis = sandbox;
-  vm.createContext(sandbox);
+  globalThis.document.getElementById = (id) => els[id] || null;
+  globalThis.document.createElement = makeElement;
 
-  for (const file of ['efsp-nla.js', 'strip-template.js', 'efsp-state.js', 'efsp-arrivals.js', 'dot-command.js',
-    'efsp-gestures.js', 'annotation-editor.js', 'strip-drag.js', 'correlation-highlight.js',
-    'strip-fields.js', 'bay-view.js', 'strip-view.js', 'efsp-stereo-routes.js', 'efsp-panel.js']) {
-    vm.runInContext(fs.readFileSync(path.join(CLIENT, file), 'utf8'), sandbox, { filename: file });
-  }
-
-  sandbox.getActingPositions = () => held;
-  // §3.6's duplicate-origination guard reads this; `liveStrips` lets a test
-  // say "this callsign is already working somewhere".
-  sandbox.liveStripsForCallsign = () => liveStrips;
-  sandbox.sendEfspCreateStrip = (actingPositionId, op, facilityId) => { sent.push({ actingPositionId, op, facilityId }); return 'mid'; };
-  sandbox.sendEfspMutation = () => 'mid';
-  sandbox.updateMap = () => {};
-  // The DD1801 lookup, so a test can assert it was NOT consulted.
-  sandbox.lookupFlightPlanClient = lookupSpy || (async () => ({ found: false }));
-  // Stand in for the fetch, resolved synchronously-enough that initEfspPanel's
-  // fire-and-forget .then() has landed before the test acts (awaited below).
+  // The DD1801 lookup and the route table are fetches: the stubbed fetch answers both, so a test can
+  // assert the lookup was NOT consulted, and the table is "what the server returns" at the time.
   let fetches = 0;
-  sandbox.listStereoRoutesClient = async () => { fetches += 1; return currentRoutes; };
-
   let currentRoutes = stereoRoutes;
+  const lookup = lookupSpy || (async () => ({ found: false }));
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    if (u.startsWith('/api/stereo-routes')) { fetches += 1; return { ok: true, json: async () => ({ ok: true, routes: currentRoutes }) }; }
+    if (u.startsWith('/api/flight-plan-lookup/')) {
+      const result = await lookup(decodeURIComponent(u.slice('/api/flight-plan-lookup/'.length)));
+      return { ok: true, json: async () => result };
+    }
+    return { ok: false, json: async () => ({}) };
+  };
 
-  sandbox.applyEfspSnapshot({ strips: [], fdrs: [], positions: [], bays: [], airspaces: [], correlations: [] });
-  sandbox.initEfspPanel();
+  const g = freshGraph();
+  const state = await g.import('panels/efsp/efsp-state.js');
+  const ws = await g.import('panels/efsp/efsp-ws.js');
+  const panel = await g.import('panels/efsp/efsp-panel.js');
+  ws.setEfspSender('_sendEfsp', () => {});
+  for (const p of held) ws.sendEfspSetPositions(p === 'CTR' ? 'CENTER' : 'INCIRLIK', [p]); // getActingPositions() = held
+  ws.setEfspSender('sendEfspCreateStrip', (actingPositionId, op, facilityId) => { sent.push({ actingPositionId, op, facilityId }); return 'mid'; });
+  ws.setEfspSender('sendEfspMutation', () => 'mid');
+
+  // §3.6's duplicate-origination guard reads the live Strips for a callsign; `liveStrips` lets a test
+  // say "this callsign is already working somewhere" with real Strips of one real flight.
+  const live = liveStrips.map((l, i) => ({
+    stripId: `live-${i}`, cid: `00${i}`, fdrId: 'f-live', rev: 1, role: 'DEPARTURE', state: 'PROPOSED', bayId: 'x', rackId: 'main', orderKey: 'V',
+    annotations: {}, flags: {}, coordination: null, tofiCoordination: null, airspaceEntry: null, ...l,
+  }));
+  const liveFdrs = live.length ? [{ fdrId: 'f-live', rev: 1, identity: { callsign: 'VIPER11' }, filed: {}, assigned: {}, military: {} }] : [];
+  state.applyEfspSnapshot({ strips: live, fdrs: liveFdrs, positions: [], bays: [], airspaces: [], correlations: [] });
+  panel.initEfspPanel();
   return {
-    els, sent, sandbox,
+    els, sent, sandbox: panel,
     fetchCount: () => fetches,
     setServerRoutes: (next) => { currentRoutes = next; },
   };
 }
 
 /** Lets the fire-and-forget fetch in _loadStereoRoutes() land. */
-function mounted0(m) {
-  return new Promise(resolve => setImmediate(() => resolve(m)));
+async function mounted0(m) {
+  const mm = await m;
+  return new Promise(resolve => setImmediate(() => resolve(mm)));
 }
 
 /** The panel, after _loadStereoRoutes()'s fire-and-forget fetch has landed. */
@@ -254,13 +253,13 @@ test('every other dot-command verb still works — .stereo did not shadow the se
 
 // ── the two defects the scenario walk turned up ──────────────────────────
 
-test('.stereo honours §3.6\'s duplicate-origination guard — it used to skip it', () => {
+test('.stereo honours §3.6\'s duplicate-origination guard — it used to skip it', async () => {
   // The original justification was that typing a verb, a route name and a
   // callsign is explicit enough. Wrong: the guard is not about how
   // deliberate the request was, it is about a replica already live at
   // another Facility that should be ACCEPTed, not re-originated.
-  const m = mountPanel({ liveStrips: [{ facilityId: 'CENTER', ownerPositionId: 'CTR' }] });
-  return mounted0(m).then(async () => {
+  const m = await mounted({ liveStrips: [{ facilityId: 'CENTER', ownerPositionId: 'CTR' }] });
+  return Promise.resolve().then(async () => {
     await runDotCommand(m, '.stereo PACK1 VIPER11');
     assert.equal(m.sent.length, 0, 'the first attempt warns instead of creating');
     assert.match(m.els['efsp-dot-command-preview'].textContent, /already has a live Strip at CENTER\/CTR/);
@@ -271,9 +270,9 @@ test('.stereo honours §3.6\'s duplicate-origination guard — it used to skip i
   });
 });
 
-test('the duplicate latch is shared with the button — confirming on one surface confirms on both', () => {
-  const m = mountPanel({ liveStrips: [{ facilityId: 'INCIRLIK', ownerPositionId: 'OPS' }] });
-  return mounted0(m).then(async () => {
+test('the duplicate latch is shared with the button — confirming on one surface confirms on both', async () => {
+  const m = await mounted({ liveStrips: [{ facilityId: 'INCIRLIK', ownerPositionId: 'OPS' }] });
+  return Promise.resolve().then(async () => {
     await runDotCommand(m, '.stereo PACK1 VIPER11');   // warns, latches VIPER11
     assert.equal(m.sent.length, 0);
     m.els['efsp-new-strip-callsign'].value = 'VIPER11';
