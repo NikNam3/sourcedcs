@@ -5,6 +5,7 @@ import './helpers/client-env.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+import { applyEfspSnapshot, _resetEfspStateForTest } from '../app/public/js/panels/efsp/efsp-state.js';
 import { listStereoRoutesClient } from '../app/public/js/panels/efsp/efsp-stereo-routes.js';
 import {
   DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP, BLOCK_MAPS, resolveBlockValue, requiredBlocksFor, formatBlock3,
@@ -151,7 +152,7 @@ test('the assigned altitude and heading read their history from the FLIGHT, not 
     altitude: { entries: [{ value: '050', status: 'SUPERSEDED' }, { value: 'FL180', status: 'ACTIVE' }] },
     heading: { entries: [] },
   } };
-  global.getEfspFdr = (id) => (id === 'fX' ? fdr : null);
+  applyEfspSnapshot({ strips: [], fdrs: [fdr], positions: [] });
   try {
     const strip = makeStrip({ fdrId: 'fX', annotations: { '21': { blockId: '21', entries: [{ value: 'stale', status: 'ACTIVE' }] } } });
     assert.equal(activeAnnotationValue(strip, '21'), 'FL180', 'a leftover Strip note is ignored');
@@ -160,7 +161,7 @@ test('the assigned altitude and heading read their history from the FLIGHT, not 
     assert.equal(resolveBlockValue('21', fdr, strip).value, 'FL180');
     assert.equal(hasActiveAnnotationEntry(strip, '20'), false);
   } finally {
-    delete global.getEfspFdr;
+    _resetEfspStateForTest();
   }
 });
 
