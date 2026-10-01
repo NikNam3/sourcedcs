@@ -68,6 +68,10 @@ test('Bay descriptor flags: the RSU, PAR and SFA Bays and the carrier\'s final/p
   assert.equal(fc.getBay('par-final').view, 'final');
   assert.equal(fc.getBay('sfa-frequencies').view, 'sfa-freqs');
   assert.equal(fc.getBay('par-final').capacity, 1);
+  assert.equal(fc.getBay('rsu-pattern').replacesRacks, true);
+  assert.equal(fc.getBay('par-final').replacesRacks, true);
+  assert.equal(fc.getBay('sfa-frequencies').replacesRacks, undefined, 'the SFA racks ARE the frequencies');
+  assert.equal(fc.getBay('cv-app1-final', 'CARRIER').replacesRacks, undefined, 'the carrier keeps its racks and their buttons');
   assert.deepEqual(fc.getBay('rsu-pattern').rackIds, ['closed', 'initial', 'base', 'final']);
   assert.equal(fc.getBay('cv-prifly-pattern', 'CARRIER').view, 'pattern');
   assert.equal(fc.getBay('cv-app1-final', 'CARRIER').view, 'final');
@@ -85,6 +89,12 @@ test('Bay descriptor flags are validated: an unknown view and a bad capacity are
   zero.bays.PAR[0].capacity = 0;
   assert.equal(valid(zero).ok, false);
   assert.match(valid(zero).detail, /capacity/);
+  const noView = clone(fc.DEFAULT_CONFIG);
+  noView.bays.OPS[0].replacesRacks = true;
+  assert.match(valid(noView).detail, /replacesRacks/);
+  const stray = clone(fc.DEFAULT_CONFIG);
+  stray.bays.OPS[0].colour = 'red';
+  assert.match(valid(stray).detail, /unknown Bay descriptor key/);
   assert.equal(valid(clone(fc.DEFAULT_CONFIG)).ok, true);
 });
 

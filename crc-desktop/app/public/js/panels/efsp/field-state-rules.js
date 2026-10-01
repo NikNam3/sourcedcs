@@ -29,7 +29,7 @@ const FIELD_STATE_ACTION_OWNERS = {
   BeginRunwayWorks:           ['TWR'],
   CompleteRunwayWorks:        ['OPS'],
   CompleteInspection:         ['OPS'],
-  RequestRunwayStatus:        ['OPS', 'CD', 'GND', 'APP'],
+  RequestRunwayStatus:        ['OPS', 'CD', 'GND', 'APP', 'RSU'], // RSU asks, never closes (H18, docs/adr/0075)
   AcceptRunwayRequest:        ['TWR'],
   RejectRunwayRequest:        ['TWR'],
   ProposeRunwayChange:        ['TWR'],

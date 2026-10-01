@@ -125,7 +125,7 @@ const DEPARTURE_STATE_OWNERS = {
 // [SOURCE-DEFINED] ARRIVAL lifecycle authority (docs/adr/0008/0010). CTR
 // added to INBOUND (WP4A, docs/adr/0014) — mirrors permission.js exactly.
 const ARRIVAL_STATE_OWNERS = {
-  INBOUND:         ['APP', 'CTR'],
+  INBOUND:         ['APP', 'CTR', 'SFA'], // SFA (docs/adr/0075) works the inbound aircraft on its frequencies
   HANDED_TO_TOWER: ['TWR'],
   FINAL:           ['TWR'],
   LANDED:          ['TWR'],
@@ -178,8 +178,9 @@ const TOFI_ELIGIBLE_STATES = { DEPARTURE: 'HANDED_OFF', ARRIVAL: 'INBOUND', OVER
 
 // The carrier's three Roles — mirrors permission.js exactly (crc-sync docs/adr/0074).
 const MARSHAL_STATE_OWNERS = { LAUNCH: ['CV_MARSHAL'], IN_STACK: ['CV_MARSHAL'], COMMENCED: ['CV_APP1', 'CV_APP2'] };
-const FINAL_STATE_OWNERS = { ON_FINAL: ['CV_APP1', 'CV_APP2'], BALL: ['CV_APP1', 'CV_APP2'], BOLTER_WAVEOFF: ['CV_APP1', 'CV_APP2'] };
-const PATTERN_STATE_OWNERS = { IN_PATTERN: ['CV_PRIFLY'], RECOVERED: ['CV_PRIFLY'] };
+// PAR (docs/adr/0075) shares FINAL, RSU shares PATTERN: the same Roles, more owners.
+const FINAL_STATE_OWNERS = { ON_FINAL: ['CV_APP1', 'CV_APP2', 'PAR'], BALL: ['CV_APP1', 'CV_APP2', 'PAR'], BOLTER_WAVEOFF: ['CV_APP1', 'CV_APP2', 'PAR'] };
+const PATTERN_STATE_OWNERS = { IN_PATTERN: ['CV_PRIFLY', 'RSU'], RECOVERED: ['CV_PRIFLY', 'RSU'] };
 
 const STATE_OWNERS_BY_ROLE = {
   DEPARTURE: DEPARTURE_STATE_OWNERS, ARRIVAL: ARRIVAL_STATE_OWNERS, OVERFLIGHT: OVERFLIGHT_STATE_OWNERS, MISSION: MISSION_STATE_OWNERS,

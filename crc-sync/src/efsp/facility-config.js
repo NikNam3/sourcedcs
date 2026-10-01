@@ -180,13 +180,15 @@ const DEFAULT_CONFIG = {
       { bayId: 'twr-landed',       rackIds: ['main'], impliesState: 'LANDED' },
       { bayId: 'twr-coordination', rackIds: ['main'] }, // inert this slice
     ],
-    // `view` names the client component a Bay mounts instead of a Strip rack
-    // (docs/adr/0075 / 0093): 'pattern' = pattern-board.js, 'final' =
-    // final-panel.js, 'sfa-freqs' = the SFA frequency racks. `capacity` caps the
-    // Strips the Bay holds; the Bay refuses one more (§7.10: one on final).
+    // The Bay descriptor flags (docs/adr/0093). `view` names the client component
+    // a Bay mounts: 'pattern' = pattern-board.js, 'final' = final-panel.js,
+    // 'sfa-freqs' = the rotation header over the frequency racks. `replacesRacks`
+    // says the component IS the Bay's interface and its Strip racks are not drawn
+    // (RSU and PAR; the carrier's Bays keep their racks, whose buttons are L17's).
+    // `capacity` caps the Strips the Bay holds; the Bay refuses one more (§7.10).
     RSU: [
       // A leg is a Rack (ADR 0064: pattern legs are Racks, not states).
-      { bayId: 'rsu-pattern', rackIds: ['closed', 'initial', 'base', 'final'], impliesState: 'IN_PATTERN', view: 'pattern' },
+      { bayId: 'rsu-pattern', rackIds: ['closed', 'initial', 'base', 'final'], impliesState: 'IN_PATTERN', view: 'pattern', replacesRacks: true },
     ],
     APP: [
       { bayId: 'app-inbound',      rackIds: ['main'], impliesState: 'INBOUND' },   // receives ARRIVAL Strips via CTR's real HANDOFF (docs/adr/0014, superseding docs/adr/0008's local stub) AND self-originated pop-up ARRIVALs (docs/adr/0023)
@@ -207,7 +209,7 @@ const DEFAULT_CONFIG = {
       { bayId: 'sfa-frequencies', rackIds: ['freq-1', 'freq-2', 'freq-3', 'freq-4', 'freq-5'], impliesState: 'INBOUND', view: 'sfa-freqs' },
     ],
     PAR: [
-      { bayId: 'par-final',  rackIds: ['main'], impliesState: 'ON_FINAL', view: 'final', capacity: 1 }, // one Strip at a time (§7.10)
+      { bayId: 'par-final',  rackIds: ['main'], impliesState: 'ON_FINAL', view: 'final', replacesRacks: true, capacity: 1 }, // one Strip at a time (§7.10)
       { bayId: 'par-missed', rackIds: ['main'], impliesState: 'BOLTER_WAVEOFF' }, // "Missed approach": FINAL's own state, as the carrier's Bolter Bay
     ],
   },
@@ -586,6 +588,7 @@ function validateConfig(candidate) {
 // The Bay descriptor flags (docs/adr/0093). Only these keys beyond bayId/rackIds/
 // impliesState exist, so a typo in a config can never silently mount nothing.
 const BAY_VIEWS = Object.freeze(['pattern', 'final', 'sfa-freqs']);
+const BAY_DESCRIPTOR_KEYS = Object.freeze(['bayId', 'rackIds', 'impliesState', 'view', 'replacesRacks', 'capacity']);
 
 /** A human problem string for a malformed Bay descriptor flag (`view`, `capacity`), or null. */
 function validateBayDescriptors(candidate) {
@@ -597,6 +600,11 @@ function validateBayDescriptors(candidate) {
       if (bay.capacity !== undefined && !(Number.isInteger(bay.capacity) && bay.capacity >= 1)) {
         return `bays.${positionId}.${bay.bayId}: capacity must be a whole number of at least 1`;
       }
+      if (bay.replacesRacks !== undefined && (typeof bay.replacesRacks !== 'boolean' || !bay.view)) {
+        return `bays.${positionId}.${bay.bayId}: replacesRacks is true or false and needs a view`;
+      }
+      const stray = Object.keys(bay).find(k => !BAY_DESCRIPTOR_KEYS.includes(k));
+      if (stray) return `bays.${positionId}.${bay.bayId}: unknown Bay descriptor key ${JSON.stringify(stray)}`;
     }
   }
   return null;
@@ -932,6 +940,6 @@ module.exports = {
   getFacilityConfig, getPositionSet, getPositionClass, getPositionLetter, allPositionLetters, getCoveringChain, getBaysFor, getAllBays, isBlockVisible,
   getPositionRadars, radarBearingPositionIds, validateRadarSelector, RADAR_SELECTOR_KINDS,
   bayImpliesState, bayForImpliedState, bayExists, coordinationBayFor, setFacilityConfig, validateConfig,
-  getBay, getSingleFrequencyApproach, validateSfaRotationRecord, BAY_VIEWS,
+  getBay, getSingleFrequencyApproach, validateSfaRotationRecord, BAY_VIEWS, BAY_DESCRIPTOR_KEYS,
   DEFAULT_CONFIG, DEFAULT_CENTER_CONFIG, DEFAULT_TACTICAL_CONFIG, DEFAULT_CARRIER_CONFIG, DEFAULT_CONFIGS,
 };

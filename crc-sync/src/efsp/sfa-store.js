@@ -65,6 +65,7 @@ class SfaStore {
     return {
       facilityId: r.facilityId, rev: r.rev,
       jurisdiction: this._config.jurisdiction, rotationSize: this._config.rotationSize,
+      controllers: permission.sfaControllerPositions().filter(p => this._positions.includes(p)), // who may be put on a frequency
       pool: deepClone(this._config.pool),
       rotation: deepClone(r.rotation),
       transitions: deepClone(r.transitions.slice(-20)),
@@ -125,6 +126,10 @@ class SfaStore {
     }
     if (op.positionId !== null && !this._positions.includes(op.positionId)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `${JSON.stringify(op.positionId)} is not a Position of ${this._facilityId}` };
+    }
+    // Only a Position the capability table gives an SFA column can be on a frequency.
+    if (op.positionId !== null && !permission.sfaControllerPositions().includes(op.positionId)) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `${op.positionId} does not work the SFA frequencies` };
     }
     const next = deepClone(this._record.rotation);
     if (op.positionId === null) {

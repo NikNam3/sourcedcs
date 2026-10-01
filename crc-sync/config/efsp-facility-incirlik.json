@@ -157,7 +157,8 @@
           "final"
         ],
         "impliesState": "IN_PATTERN",
-        "view": "pattern"
+        "view": "pattern",
+        "replacesRacks": true
       }
     ],
     "APP": [
@@ -211,6 +212,7 @@
         ],
         "impliesState": "ON_FINAL",
         "view": "final",
+        "replacesRacks": true,
         "capacity": 1
       },
       {

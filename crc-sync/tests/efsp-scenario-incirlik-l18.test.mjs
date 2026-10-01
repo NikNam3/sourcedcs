@@ -131,15 +131,15 @@ test('only the jurisdiction Position changes the rotation record; the others get
   assert.ok(mutations().some(m => m.op === 'SetSfaRotation' && m.ok === false && m.reason === 'PERMISSION_DENIED'), 'refusals are audited too');
 });
 
-test('the rotation record refuses what cannot be: an unknown frequency, an unknown Position, a fourth frequency, a stale rev', () => {
+test('the rotation record refuses what cannot be: an unknown frequency, an unknown Position, a Position that does not work the SFA, a stale rev', () => {
   const { efsp, c } = fresh();
   refused(sfaAct(efsp, c.APP, 'APP', { kind: 'SetSfaRotation', rackId: 'freq-9', positionId: 'PAR' }).ack, 'VALIDATION_ERROR', /pool/);
   refused(sfaAct(efsp, c.APP, 'APP', { kind: 'SetSfaRotation', rackId: 'freq-4', positionId: 'CTR' }).ack, 'VALIDATION_ERROR', /not a Position/);
-  // three frequencies are in rotation; a fourth needs one taken off first
-  mustSfaAct(efsp, c.APP, 'APP', { kind: 'SetSfaRotation', rackId: 'freq-3', positionId: 'TWR' }); // TWR is a Position of the Facility
-  refused(sfaAct(efsp, c.APP, 'APP', { kind: 'SetSfaRotation', rackId: 'freq-5', positionId: 'OPS' }).ack, 'VALIDATION_ERROR', /at most 3/);
+  // only a Position that works the SFA can be put on a frequency
+  refused(sfaAct(efsp, c.APP, 'APP', { kind: 'SetSfaRotation', rackId: 'freq-3', positionId: 'TWR' }).ack, 'VALIDATION_ERROR', /does not work the SFA/);
+  // a frequency taken out of the rotation, and another put in
   mustSfaAct(efsp, c.APP, 'APP', { kind: 'SetSfaRotation', rackId: 'freq-3', positionId: null });
-  mustSfaAct(efsp, c.APP, 'APP', { kind: 'SetSfaRotation', rackId: 'freq-5', positionId: 'OPS' });
+  mustSfaAct(efsp, c.APP, 'APP', { kind: 'SetSfaRotation', rackId: 'freq-5', positionId: 'PAR' });
   refused(sfaAct(efsp, c.APP, 'APP', { kind: 'SetSfaRotation', rackId: 'freq-1', positionId: 'APP' }, { baseRev: 0 }).ack, 'STALE_REV');
   // setting what is already true changes nothing and says so
   const same = sfaAct(efsp, c.APP, 'APP', { kind: 'SetSfaRotation', rackId: 'freq-1', positionId: 'APP' });

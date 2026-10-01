@@ -332,6 +332,10 @@ function incirlikPositionsWith(key) {
 function canRotateSfa(actingPositionId) { return _incirlikCap(actingPositionId, 'rotatesSfa'); }
 /** May this Position send the SFA_ROTATION transfer (D21: one acting Position)? */
 function canSendSfaRotationTransfer(actingPositionId) { return _incirlikCap(actingPositionId, 'sendsSfaRotation'); }
+/** The Positions that work the SFA frequencies (the ones the table gives any SFA column): who can be on a frequency in the rotation record. */
+function sfaControllerPositions() {
+  return Object.keys(INCIRLIK_CAPABILITIES).filter(p => ['rotatesSfa', 'sendsSfaRotation', 'receivesSfaRotation'].some(k => INCIRLIK_CAPABILITIES[p][k] === true));
+}
 /** The Position an SFA_ROTATION lands on, or null. */
 function sfaRotationReceiver() { return incirlikPositionsWith('receivesSfaRotation')[0] || null; }
 
@@ -725,5 +729,5 @@ module.exports = {
   TACTICAL_CAPABILITIES, READ_SCOPES, handBackTargetsFor, tofiAnswererFor, readScopeFor, mayActBesideOwner,
   CARRIER_CAPABILITIES, canSetRecoveryCase, canSequenceMarshalStack, canEditShipStateInput, canRecordCarrierTransfer,
   MARSHAL_STATE_OWNERS, FINAL_STATE_OWNERS, PATTERN_STATE_OWNERS,
-  INCIRLIK_CAPABILITIES, canRotateSfa, canSendSfaRotationTransfer, sfaRotationReceiver, incirlikPositionsWith,
+  INCIRLIK_CAPABILITIES, canRotateSfa, canSendSfaRotationTransfer, sfaRotationReceiver, sfaControllerPositions, incirlikPositionsWith,
 };

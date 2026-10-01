@@ -170,7 +170,7 @@ function renderPanelControls() {
 // facilityId, held)) since each has its own PositionStore instance
 // server-side — checking CTR never touches INCIRLIK's held set at all.
 const EFSP_FACILITY_POSITIONS = {
-  INCIRLIK: ['OPS', 'CD', 'GND', 'TWR', 'APP'],
+  INCIRLIK: ['OPS', 'CD', 'GND', 'TWR', 'RSU', 'APP', 'SFA', 'PAR'], // RSU, SFA and PAR: crc-sync's docs/adr/0075
   CENTER: ['CTR'],
   // WP4A second slice — TAC_C2/AIC/GCI/JTAC (crc-sync's facility-config.js
   // DEFAULT_TACTICAL_CONFIG.positions). JTAC is included the same way as
