@@ -34,9 +34,9 @@ test('parseAltitudeFt still answers a single altitude only', () => {
 });
 
 test('a block is written back in one canonical form', () => {
-  assert.equal(formatAltitudeBlock(blk(22000, 24000)), 'FL220-FL240');
-  assert.equal(formatAltitudeBlock(blk(5000, 8000)), '5000-8000');
-  assert.equal(formatAltitudeBlock(blk(16000, 20000)), '16000-FL200');
+  assert.equal(formatAltitudeBlock(blk(22000, 24000), 18000), 'FL220-FL240');
+  assert.equal(formatAltitudeBlock(blk(5000, 8000), 18000), '5000-8000');
+  assert.equal(formatAltitudeBlock(blk(16000, 20000), 18000), '16000-FL200');
 });
 
 const FILED = { aircraftType: 'F16', wakeCategory: 'D', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: 'FL250' };

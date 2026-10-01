@@ -17,8 +17,8 @@
 // of the theater (decisions.md H15, H62).
 
 const magnetic = require('./magnetic');
+const { DEFAULT_TRANSITION_ALT_FT } = require('./theaters');
 
-const DEFAULT_TRANSITION_ALT_FT = 18000; // a theater the table does not list
 const DAY_MS = 86400000;
 
 // The variation grid a client interpolates in: the airfields' bounding box,

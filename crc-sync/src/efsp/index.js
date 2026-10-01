@@ -68,10 +68,13 @@ const { read: BOARD_SNAPSHOT_READ_PATH, write: BOARD_SNAPSHOT_PATH } =
  *   reads — a gate, a deadline, a Strip clock, a Mutation's `at` — is in-game
  *   Zulu. server.js passes the real one; a fixture that omits it gets the wall
  *   clock, which is what the mission clock itself answers before DCS does.
+ * @param {() => number} [deps.transitionAltFt] the theater's transition altitude
+ *   (theater-context.js); the FdrStore writes a block's text with it. A fixture
+ *   that omits it gets 18,000 ft.
  */
-function createEfsp({ clock = WALL_CLOCK } = {}) {
+function createEfsp({ clock = WALL_CLOCK, transitionAltFt } = {}) {
   const codeAllocator = new CodeAllocator();
-  const fdrStore = new FdrStore(codeAllocator, { clock });
+  const fdrStore = new FdrStore(codeAllocator, { clock, transitionAltFt });
   const mutationLog = new MutationLog(undefined, { clock });
   // One store for every Facility, like fdrStore — an airspace is a theater
   // entity that NAMES its controlling Facility rather than being replicated
