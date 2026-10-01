@@ -1,6 +1,34 @@
 # ESM-1: the CRC client becomes native ES modules
 
-(Report goes here at the end.)
+## Report
+
+**Branch** `lane/ESM-1-client-modules`, base `165a517`. Own commits (first-parent):
+914474c step 0 · 829d1d5 codemod · **77cf674 sources converted** · 8470f6e inert imports + client-env/fresh-graph (S-ESM1b) ·
+16fb7a1 test seams + bridge history (S-ESM1c) · 35006fa, f6d9cad, 8203df3 setters for T lanes · c346f30 metrics hooks via imports
+(S-ESM1d) · 3b25e44 packaging assertion · 05e3095 docs/README · merges 8a33e76 (Ta), b3c2bed (Tb), 3ad0ddb (Tc), 47be9ae and
+8f0186d (efsp-wp5-correlation) · afbeb67 efsp-scenario-resync to modules · 395ebd0 + 06d1d84 bridge `history` fix.
+**Counts.** crc-desktop 866 (865 pass, 1 todo) → 872 (870 pass, 2 todo, 0 fail): −4 client-global-surface (its todo
+included), +9 module-graph (7 + 2 finding todos), +1 packaging-config. Every other file is the same, one for one
+(e2e-spec-hygiene is 34 at base and in the unit). crc-sync 2083 at base → 2146 on the merged unit: 2145 pass, 1 todo, 0 fail
+(efsp-ato-tokenize's timing test failed once under load ~80 and passed alone). Freeze goldens 47/47 identical, no
+behaviour commits. No selfcheck or soak needed (no crc-sync/src touched).
+**Playwright (E2E_LANE=1, load avg 35-90):** smoke, l2-block-editing, l22-stars-scope and marsa-popover pass (24/25, then marsa-popover
+3/3 alone). l15-metrics:28 fails on the verdict timeout with the classic integration client too, so it is not ESM.
+**Bridge fix found in step 9:** shadowing `window.history` (S-ESM1c) made every Playwright click wait out its timeout for a
+"scheduled navigation" (8.6-10.7 s vs 3.5-5 s). That was the l2 F-201 and marsa-popover timeouts. `history` is now
+the real History with app.js's Map methods forwarded (Proxy). Bridge: 668 names, SKIPPED [] (fixture).
+**Structure fixtures:** client-global-surface.json removed; module-graph-exports.json new (56 modules).
+**Outside "Owns"** (all ruled or forced): crc-sync/tests/efsp-scenario-resync.test.mjs (a 4th client-reading test);
+the merge resolution of crc-desktop/tests/ws-message-contract.test.mjs; tests/helpers/module-body.mjs (W1-T-7).
+**Defaults taken:** bridge details (setters for 7 senders only, console.error on an unexpected skip, not a throw);
+imports after the 'use strict' prologue; app.js's wrapped boot statements not re-indented.
+**Queue item 3:** `_callsignOfFdr` only. carrier-panel.js now imports efsp-panel.js's version (fallback ''), which already won before.
+**Packaging:** pack:linux built the AppImage, and its asar holds js/package.json, main.js and the bridge. Not launched (default endpoint is production).
+**Findings:** latent ReferenceErrors in tools-panel.js:33-34 and geojson.js:651-652 (test.todo); stale header comments on
+the removed guards (L20); 336 always-true `typeof` guards on imports (ESM-2/L20); window.getLatestTrack/getAllTracks are
+still app-published globals; the integration bugs reported in step 9 (ws-hub broadcasts, airspace-config) are fixed upstream.
+**For the supervisor:** the e2e spec migration plus bridge removal (queued); l15-metrics:28 on the integration branch.
+
 
 ## Step 0: code as found (base 165a517)
 
