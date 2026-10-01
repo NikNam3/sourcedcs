@@ -1,6 +1,22 @@
 # Supervisor handoff
 
-## START HERE: state at the end of session 2 (2026-10-01)
+## START HERE: state in session 3 (2026-10-01, evening)
+
+The record is `docs/parallel/decisions.md` (rows H79-H98, S-desk3, S-ARCH2, S-R3-80, S-M-merge4 are this session's). Rules: never push without the human's go; ask before any prod deploy (R3-79); up to 10 agents in parallel (memory `feedback_parallel_agent_budget`); auth hardening out of scope.
+
+**Branch.** `efsp-wp5-correlation` (local only, not pushed; back it up = human action) now holds everything: waves 1-3, merge4 (E2E-harden, UI-B + R3-47, QAS redo, the L28 Role Bay fix). crc-sync 2083/2083, crc-desktop 865 + 1 todo, Playwright 140/140. No lane is unmerged except the refactor lanes below. The old `lane/QA-sync-cleanup`, `lane/UI-B-followup`, `lane/E2E-harden` and the ~30 `../sourcedcs-*` worktrees from waves 1-3 plus `../sourcedcs-MERGE4` can be removed.
+
+**Desk.** Every question is settled (the last ones in chat: H87-H98). Nothing open.
+
+**Refactor (in progress).** Plan `docs/wip/ARCH-plan.md`, schedule and conventions `docs/parallel/refactor/README.md`, briefings `docs/parallel/refactor/*.md`; waves W1-W7 (W7 = RENAME, briefing still to be written from `docs/parallel/research/vocabulary.md` per H96/H98), then L20. **W1 dispatched at base `45aee4c`:** R0 (`../sourcedcs-R0`), ESM-1 (`../sourcedcs-ESM1`), the W1 questioner (Opus). ESM-1T a/b/c are cut from ESM-1's "sources converted" commit when ESM-1 reports its hash. Merge: R0 alone; ESM-1 + ESM-1T as one unit; then supervisor full Playwright on lane 7, then W2.
+
+**Queued after the refactor (designs settled):** formation split/join (H89-H91), control release on HANDOFF (H94), undo for every one-click move with a 10 s window (H95), TOFI separation regime effective at airspace entry (H97, with AIRSP phase 2 / ADR 0098, MTRs as `kind: ROUTE` per S-R3-80), per-Facility heartbeat (WIRE-B) and resync for every store (SYNC-B) (H88), logging (LOG-1/2 in the refactor).
+
+**Human actions outstanding:** push a backup; `docker run` check of the nginx changes; INFRA2's MariaDB init and O-9 checks; live DCS checks (wind, `mission_start`, 10-minute gRPC, carrier ship, FINAL panel, L19 chip); the 4-hour soak workflow.
+
+---
+
+## Previous: state at the end of session 2 (2026-10-01)
 
 Everything older in this file is history; `docs/parallel/decisions.md` (rows H78, S-M-wave3 and the S-* rows above it) is the record.
 
