@@ -1879,3 +1879,7 @@
 .efsp-carrier-trigger-pilot-see-you { border-style: dotted; }
 .carrier-slot-draggable { cursor: grab; }
 .carrier-slot-dragging { opacity: 0.6; cursor: grabbing; }
+
+/* docs/adr/0076 — the suggestion chip is the one indicator that is also a control. */
+.efsp-strip .efsp-ind.efsp-surveillance-chip[role="button"] { cursor: pointer; }
+.efsp-strip .efsp-ind.efsp-surveillance-chip[role="button"]:focus-visible { outline: 2px solid var(--efsp-attn); outline-offset: 1px; }

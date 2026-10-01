@@ -22,12 +22,12 @@ test('server.js calls wsHub.broadcastEfspAlerts in exactly one place, the compos
   const fn = SERVER.match(/\nfunction broadcastEfspAlerts\(\) \{[\s\S]*?\n\}\n/);
   assert.ok(fn, 'the compose function exists');
   assert.match(fn[0], /wsHub\.broadcastEfspAlerts\(/);
-  for (const key of ['conformance', 'stca', 'obligations']) assert.match(fn[0], new RegExp(`${key}:`));
+  for (const key of ['conformance', 'stca', 'obligations', 'surveillance']) assert.match(fn[0], new RegExp(`${key}:`));
 });
 
 test('a conformance-only tick does not clear obligations', () => {
   const body = SERVER.match(/\nfunction broadcastEfspAlerts\(\) \{[\s\S]*?\n\}\n/)[0];
-  const compose = new Function('wsHub', 'conformanceMonitor', 'stcaMonitor', 'obligationMonitor',
+  const compose = new Function('wsHub', 'conformanceMonitor', 'stcaMonitor', 'obligationMonitor', 'surveillanceHints',
     `${body}; return broadcastEfspAlerts;`);
 
   const wsHub = new WsHub({ trackStore: new TrackStore(), collabStore: new CollaborativeStore() });
@@ -35,11 +35,13 @@ test('a conformance-only tick does not clear obligations', () => {
   wsHub._sessions.set({ readyState: 1, send: (raw) => sent.push(JSON.parse(raw)) }, { coverage: null, lastSent: new Map() });
 
   let conformance = [];
+  const hint = { facilityId: 'INCIRLIK', stripId: 's1', kind: 'AIRBORNE_ADVANCE' };
   const obligation = { facilityId: 'INCIRLIK', stripId: 's1', obligationType: 'VOID_TIME_EXPIRED', severity: 'OVERDUE', dueAt: 1, since: 1 };
   const broadcast = compose(wsHub,
     { getAll: () => conformance },
     { getAll: () => [] },
-    { getAll: () => [obligation] });
+    { getAll: () => [obligation] },
+    { getAll: () => [hint] });
 
   broadcast(); // the 15 s sweep raised the obligation
   conformance = [{ fdrId: 'f1', alerts: [] }];
@@ -48,4 +50,5 @@ test('a conformance-only tick does not clear obligations', () => {
   const last = sent.filter(m => m.type === 'efsp-alerts').pop();
   assert.deepEqual(last.conformance, conformance);
   assert.deepEqual(last.obligations, [obligation]);
+  assert.deepEqual(last.surveillance, [hint]);
 });

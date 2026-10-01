@@ -107,6 +107,14 @@ class CorrelationReconciler {
     this._lastRate = null;
     this._lastEligible = 0;
     this._lastWarnAt = 0;
+
+    // trackId -> the fdrId of the finished flight that last held that contact
+    // (docs/adr/0076, S-L27). Such a contact is not claimable by another
+    // flight's callsign or code: it is an earlier flight's aircraft, still in
+    // the air, and a new flight that reuses the callsign must not inherit it.
+    // Forgotten when the contact leaves the picture; an explicit controller
+    // binding (rung 1) is never blocked by it.
+    this._formerHolder = new Map();
   }
 
   /** Every live Strip across every Facility, so eligibility can be judged per FDR. */
@@ -154,6 +162,14 @@ class CorrelationReconciler {
     // A flight with no live Strip anywhere is over, and its record goes with
     // it. Note the distinction from eligibility: a Strip sitting at PROPOSED is
     // live but ineligible — it has no contact YET — and must not be retired.
+    // Its contact is remembered first (docs/adr/0076): it may well still be in
+    // the air, and must not be handed to the next flight with that callsign.
+    for (const [trackId, held] of this._store.trackIndex()) {
+      if (!stripsByFdr.has(held.fdrId)) this._formerHolder.set(String(trackId), held.fdrId);
+    }
+    for (const trackId of [...this._formerHolder.keys()]) {
+      if (!byId.has(trackId)) this._formerHolder.delete(trackId);
+    }
     this._store.retireFinished(new Set(stripsByFdr.keys()));
 
     const eligible = [];
@@ -188,7 +204,7 @@ class CorrelationReconciler {
       if (resolutions.has(fdr.fdrId)) continue;
       const assigned = fdr.identity.beaconAssigned;
       if (!assigned) continue;
-      const candidates = (byBeacon.get(assigned) || []).filter(id => !claimed.has(id));
+      const candidates = (byBeacon.get(assigned) || []).filter(id => !claimed.has(id) && !this._formerHolder.has(id));
       if (candidates.length === 0) continue;
       if (candidates.length > 1) {
         // A duplicate code is structural and explicitly accepted (§3.10.2
@@ -245,7 +261,7 @@ class CorrelationReconciler {
     const callsign = fdr.identity.callsign;
     if (!callsign) return null;
     const stem = callsign.toUpperCase().replace(/[^A-Z]/g, '').replace(/[0-9]/g, '');
-    const candidateIds = (byStem.get(stem) || []).filter(id => !claimed.has(id));
+    const candidateIds = (byStem.get(stem) || []).filter(id => !claimed.has(id) && !this._formerHolder.has(id));
     if (candidateIds.length === 0) return null;
 
     const scored = [];
@@ -338,6 +354,7 @@ class CorrelationReconciler {
 
   /** Mission reload — every contact in the theater was re-minted. */
   resetPicture(reason = 'MISSION_RELOAD', now = this._clock.now()) {
+    this._formerHolder.clear(); // every contact was re-minted; no remembered id means anything
     const { changed } = this._store.resetPicture(reason, now);
     this._warningsRaised += changed.length;
     if (changed.length) this._onDelta({ correlations: changed, stats: this.getStats() });

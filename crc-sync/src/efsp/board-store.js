@@ -35,6 +35,9 @@ const { WALL_CLOCK } = require('../mission-clock');
 const { runwayRackFor, runwayInhibitFor, RUNWAY_GATED_STATES } = require('./field-state');
 const { CARRIER_TRANSFER_EFFECTS } = require('./carrier/transfer-effects'); // pure (docs/adr/0074)
 
+// A DEPARTURE in these states has left the ground (docs/adr/0076).
+const DEPARTURE_AIRBORNE_STATES = ['DEPARTED', 'HANDED_OFF'];
+
 const FLAG_KEYS = ['offset', 'flipped', 'removeIndicator', 'highlight', 'attention'];
 const APPLIED_MUTATIONS_CAP = 5000;
 // How much of the idempotency cache rides in the Board snapshot (docs/adr/0081,
@@ -522,8 +525,40 @@ class BoardStore {
         result = this._applyCarrierTransfer(strip, op.transfer, op.toPositionId, by, actingPositionId, mutation.clientMutationId); break;
       default:              result = { ok: false, reason: 'VALIDATION_ERROR', strip: deepClone(strip) };
     }
+    // docs/adr/0076, Q-L16-3: a DEPARTURE entering Airborne stamps the takeoff
+    // time, however it got there (the NLA, SetState, a drag into the Airborne
+    // Bay) — one place, after every op that can change a state.
+    if (result.ok && strip.state !== before.state) {
+      const stamped = this._stampTakeoffOnStateChange(strip, before.state);
+      if (stamped) {
+        if (!result.fdr || result.fdr.fdrId === stamped.fdrId) result.fdr = stamped;
+        else result.fdrs = [...(result.fdrs || []), stamped];
+      }
+    }
     this._recordAudit(mutation, actingPositionId, by, before, result);
     return result;
+  }
+
+  /**
+   * The takeoff time the state change gives (docs/adr/0076). Stamped when a
+   * DEPARTURE first reaches an airborne state, with the mission clock; cleared
+   * when it is taken back out of one (an Undo, a SetState back), because the
+   * takeoff then did not happen. A DROP keeps it. The first stamp wins.
+   * @returns {object|null} the FDR it changed, for the ack's broadcast.
+   */
+  _stampTakeoffOnStateChange(strip, prevState) {
+    if (strip.role !== 'DEPARTURE' || !this._fdrStore || !this._fdrStore.setTakeoffStamp) return null;
+    const airborne = (st) => DEPARTURE_AIRBORNE_STATES.includes(st);
+    const fdr = this._fdrStore.getFdr(strip.fdrId);
+    if (!fdr) return null;
+    let r = null;
+    if (airborne(strip.state) && !airborne(prevState) && prevState !== 'DROPPED') {
+      if (fdr.timeInputs && fdr.timeInputs.takeoffStampedUtc != null) return null;
+      r = this._fdrStore.setTakeoffStamp(strip.fdrId, this._clock.now());
+    } else if (!airborne(strip.state) && strip.state !== 'DROPPED' && airborne(prevState)) {
+      r = this._fdrStore.setTakeoffStamp(strip.fdrId, null);
+    }
+    return r && r.ok && r.changed ? r.fdr : null;
   }
 
   _recordAudit(mutation, actingPositionId, by, before, result) {

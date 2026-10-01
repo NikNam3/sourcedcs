@@ -1,0 +1,5 @@
+{
+  "_note": "SOURCE tuning, not doctrine (guide §10.3, §10.4; docs/adr/0076). Read once at startup; edit and restart.",
+  "airborne":  { "minGroundSpeedKt": 60, "minAglFt": 200, "holdSec": 5 },
+  "staleness": { "afterSec": 120 }
+}

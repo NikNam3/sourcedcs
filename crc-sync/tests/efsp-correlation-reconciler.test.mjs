@@ -442,3 +442,42 @@ test('a live-but-ineligible Strip is NOT retired — it has no contact yet, whic
 
   assert.ok(store.getCorrelation('f1'), 'the record survives a flight going quiet');
 });
+
+// ── S-L27 / docs/adr/0076: a finished flight's aircraft is not the next flight's ──
+
+test('a callsign match does not claim the aircraft of a flight that has finished (S-L27)', () => {
+  // VIPER1 flew, its Strip was dropped, its aircraft is still in the air. The
+  // callsign is reused by a NEW flight that has not left the apron.
+  const strips = [strip('f1', 'AIRBORNE')];
+  const fdrs = [fdr('f1', 'VIPER1', null)];
+  const tracks = [track(1, 'VIPER1')];
+  const { reconciler, store } = build({ fdrs, strips, tracks });
+  reconciler.tick();
+  assert.equal(store.getCorrelation('f1').trackId, '1');
+
+  strips.length = 0; // f1 over
+  strips.push(strip('f2', 'PUSHBACK'));
+  fdrs.length = 0; fdrs.push(fdr('f2', 'VIPER1', null));
+  reconciler.tick();
+  const rec = store.getCorrelation('f2');
+  assert.notEqual(rec.state, 'CORRELATED', 'the lingering aircraft is not f2');
+  assert.equal(rec.trackId || null, null);
+
+  // Its own aircraft appears (a new contact): it correlates to that one.
+  tracks.push(track(2, 'VIPER1'));
+  reconciler.tick();
+  assert.equal(store.getCorrelation('f2').trackId, '2');
+});
+
+test('an explicit binding can still take a finished flight\'s contact (S-L27)', () => {
+  const strips = [strip('f1', 'AIRBORNE')];
+  const fdrs = [fdr('f1', 'VIPER1', null)];
+  const { reconciler, store } = build({ fdrs, strips, tracks: [track(1, 'VIPER1')] });
+  reconciler.tick();
+  strips.length = 0; strips.push(strip('f2', 'PUSHBACK'));
+  fdrs.length = 0; fdrs.push(fdr('f2', 'VIPER1', null));
+  reconciler.tick();
+  const r = store.apply({ clientMutationId: 'm1', fdrId: 'f2', baseRev: store.getCorrelation('f2').rev, op: { kind: 'BindTrack', trackId: '1' } }, 'GCI', 'u1');
+  reconciler.tick();
+  assert.equal(store.getCorrelation('f2').trackId, '1', JSON.stringify(r));
+});
