@@ -9,7 +9,9 @@
     "test": "node --test",
     "soak": "node tools/soak/run.js",
     "soak:smoke": "node tools/soak/run.js --profile smoke --minutes 20",
-    "soak:selfcheck": "node tools/soak/selfcheck.mjs"
+    "soak:selfcheck": "node tools/soak/selfcheck.mjs",
+    "freeze:update": "UPDATE_GOLDEN=1 node --test tests/freeze/freeze-*.test.mjs",
+    "freeze:selfcheck": "node tests/freeze/freeze-selfcheck.mjs"
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.10.0",

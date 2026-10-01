@@ -1,0 +1,257 @@
+{
+  "instances": [
+    {
+      "steps": [
+        {"n":0,"who":"c-OPS","in":{"facilityId":"INCIRLIK","held":["OPS"],"type":"efsp-set-positions"},"out":{"ack":{"facilityId":"INCIRLIK","held":["OPS"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"boardEpoch":"#1","boardSeq":0,"facilityId":"INCIRLIK","fdrs":{"updated":[]},"positions":{"updated":[{"coveringFor":[],"facilityId":"INCIRLIK","observers":[],"pendingPrimaryRequest":null,"positionId":"OPS","primary":{"controllerId":"c-OPS","controllerName":"OPS","since":1466517000000}},{"coveringFor":[],"facilityId":"INCIRLIK","observers":[],"pendingPrimaryRequest":null,"positionId":"CD","primary":null},{"coveringFor":[],"facilityId":"INCIRLIK","observers":[],"pendingPrimaryRequest":null,"positionId":"GND","primary":null},{"coveringFor":[],"facilityId":"INCIRLIK","observers":[],"pendingPrimaryRequest":null,"positionId":"TWR","primary":null},{"coveringFor":[],"facilityId":"INCIRLIK","observers":[],"pendingPrimaryRequest":null,"positionId":"APP","primary":null}]},"strips":{"gone":[],"updated":[]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":1,"who":"c-CD","in":{"facilityId":"INCIRLIK","held":["CD"],"type":"efsp-set-positions"},"out":{"ack":{"facilityId":"INCIRLIK","held":["CD"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"boardEpoch":"#1","boardSeq":0,"facilityId":"INCIRLIK","fdrs":{"updated":[]},"positions":{"updated":{"~big":"5112924685","chars":733,"keys":"array[5]"}},"strips":{"gone":[],"updated":[]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":2,"who":"c-GND","in":{"facilityId":"INCIRLIK","held":["GND"],"type":"efsp-set-positions"},"out":{"ack":{"facilityId":"INCIRLIK","held":["GND"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"boardEpoch":"#1","boardSeq":0,"facilityId":"INCIRLIK","fdrs":{"updated":[]},"positions":{"updated":{"~big":"e2f48f9f43","chars":798,"keys":"array[5]"}},"strips":{"gone":[],"updated":[]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":3,"who":"c-TWR","in":{"facilityId":"INCIRLIK","held":["TWR"],"type":"efsp-set-positions"},"out":{"ack":{"facilityId":"INCIRLIK","held":["TWR"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"boardEpoch":"#1","boardSeq":0,"facilityId":"INCIRLIK","fdrs":{"updated":[]},"positions":{"updated":{"~big":"45514fdac3","chars":863,"keys":"array[5]"}},"strips":{"gone":[],"updated":[]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":4,"who":"c-APP","in":{"facilityId":"INCIRLIK","held":["APP"],"type":"efsp-set-positions"},"out":{"ack":{"facilityId":"INCIRLIK","held":["APP"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"boardEpoch":"#1","boardSeq":0,"facilityId":"INCIRLIK","fdrs":{"updated":[]},"positions":{"updated":{"~big":"b81c765382","chars":928,"keys":"array[5]"}},"strips":{"gone":[],"updated":[]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":5,"who":"c-OPS","in":{"actingPositionId":"OPS","clientMutationId":"#6","facilityId":"INCIRLIK","op":{"bayId":"ops-proposed","fdr":{"aircraftType":"","callsign":"CHAIN1","departureAirport":"LTAG","destinationAirport":"LTAG","flightPlanDepartureTimeHhmm":"1430","remarks":"","requestedAltitude":"250","route":"DCT","wakeCategory":""},"kind":"CreateStrip","rackId":"main","role":"DEPARTURE"},"type":"efsp-mutation","version":1},"out":{"ack":{"boardEpoch":"#1","boardSeq":1,"clientMutationId":"#6","facilityId":"INCIRLIK","fdr":"F #7 r1 CHAIN1 sq=0001 h=8d056594e9","ok":true,"strip":"S #8 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=0b1568b1db","type":"efsp-mutation-ack","version":1},"broadcast":{"boardEpoch":"#1","boardSeq":1,"facilityId":"INCIRLIK","fdrs":{"updated":["F #7 r1 CHAIN1 sq=0001 h=8d056594e9"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #8 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=0b1568b1db"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"OPS","actorId":"c-OPS","after":"S #8 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=b4e9c88750","at":1466517000000,"before":null,"clientMutationId":"#6","facilityId":"INCIRLIK","fdrId":"#7","op":"CreateStrip","stripId":"#8"}]},
+        {"n":6,"who":"c-OPS","in":{"actingPositionId":"OPS","baseRev":1,"clientMutationId":"#9","facilityId":"INCIRLIK","op":{"blockId":"6","kind":"SetBlock","value":"1450"},"stripId":"#8","type":"efsp-mutation","version":1},"out":{"ack":{"boardEpoch":"#1","boardSeq":2,"clientMutationId":"#9","facilityId":"INCIRLIK","fdr":"F #7 r2 CHAIN1 sq=0001 h=5a28b7f877","ok":true,"strip":"S #8 r2 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=c79bb90181","stripId":"#8","type":"efsp-mutation-ack","version":1},"broadcast":{"boardEpoch":"#1","boardSeq":2,"facilityId":"INCIRLIK","fdrs":{"updated":["F #7 r2 CHAIN1 sq=0001 h=5a28b7f877"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #8 r2 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=c79bb90181"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"OPS","actorId":"c-OPS","after":"S #8 r2 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=2bb4717cfa","at":1466517000000,"before":"S #8 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=b4e9c88750","blockId":"6","clientMutationId":"#9","facilityId":"INCIRLIK","fdrId":"#7","op":"SetBlock","stripId":"#8","value":"1450"}]},
+        {"n":7,"who":"c-OPS","in":{"actingPositionId":"OPS","baseRev":2,"clientMutationId":"#10","facilityId":"INCIRLIK","op":{"blockId":"6","kind":"SetBlock","value":""},"stripId":"#8","type":"efsp-mutation","version":1},"out":{"ack":{"boardEpoch":"#1","boardSeq":3,"clientMutationId":"#10","facilityId":"INCIRLIK","fdr":"F #7 r3 CHAIN1 sq=0001 h=6840ec0f1d","ok":true,"strip":"S #8 r3 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=2200da8674","stripId":"#8","type":"efsp-mutation-ack","version":1},"broadcast":{"boardEpoch":"#1","boardSeq":3,"facilityId":"INCIRLIK","fdrs":{"updated":["F #7 r3 CHAIN1 sq=0001 h=6840ec0f1d"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #8 r3 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=2200da8674"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"OPS","actorId":"c-OPS","after":"S #8 r3 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=170b75ed51","at":1466517000000,"before":"S #8 r2 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=2bb4717cfa","blockId":"6","clientMutationId":"#10","facilityId":"INCIRLIK","fdrId":"#7","op":"SetBlock","stripId":"#8","value":""}]}
+      ],
+      "orphanAudit": [],
+      "final": {
+        "boards": {
+          "INCIRLIK": {
+            "n": 1,
+            "h": "60454d085d",
+            "rows": [
+              "S #8 r3 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=170b75ed51"
+            ],
+            "rest": {
+              "cidSeq": 1,
+              "droppedWallAt": [],
+              "replay": [
+                ["#6",{"appliedWallAt":1782009600000,"detail":null,"fdrId":"#7","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#8","warning":null}],
+                ["#9",{"appliedWallAt":1782009600000,"detail":null,"fdrId":"#7","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#8","warning":null}],
+                ["#10",{"appliedWallAt":1782009600000,"detail":null,"fdrId":"#7","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#8","warning":null}]
+              ]
+            }
+          },
+          "CENTER": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "TACTICAL": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "CARRIER": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "RANGES": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          }
+        },
+        "fdr": {
+          "n": 1,
+          "h": "dec8b81df4",
+          "rows": [
+            "F #7 r3 CHAIN1 sq=0001 h=6840ec0f1d"
+          ],
+          "rest": {
+            "codeCursor": 1,
+            "codes": [
+              ["0001","#7"]
+            ]
+          }
+        },
+        "airspaces": {
+          "n": 0,
+          "h": "97d170e155",
+          "rows": []
+        },
+        "correlations": {
+          "n": 0,
+          "h": "97d170e155",
+          "rows": []
+        },
+        "marsa": {
+          "n": 0,
+          "h": "97d170e155",
+          "rows": []
+        },
+        "fieldStates": {
+          "n": 1,
+          "h": "958d646fb1",
+          "rows": [
+            "INCIRLIK h=0836ccc6bd"
+          ]
+        },
+        "carriers": {
+          "n": 1,
+          "h": "cc6c2f3fbf",
+          "rows": [
+            "CVN-72 h=f3ede6729e"
+          ]
+        }
+      }
+    },
+    {
+      "steps": [
+        {"n":0,"who":"c-OPS","in":{"facilityId":"INCIRLIK","held":["OPS"],"type":"efsp-set-positions"},"out":{"ack":{"facilityId":"INCIRLIK","held":["OPS"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"boardEpoch":"#16","boardSeq":0,"facilityId":"INCIRLIK","fdrs":{"updated":[]},"positions":{"updated":[{"coveringFor":[],"facilityId":"INCIRLIK","observers":[],"pendingPrimaryRequest":null,"positionId":"OPS","primary":{"controllerId":"c-OPS","controllerName":"OPS","since":1466518800000}},{"coveringFor":[],"facilityId":"INCIRLIK","observers":[],"pendingPrimaryRequest":null,"positionId":"CD","primary":null},{"coveringFor":[],"facilityId":"INCIRLIK","observers":[],"pendingPrimaryRequest":null,"positionId":"GND","primary":null},{"coveringFor":[],"facilityId":"INCIRLIK","observers":[],"pendingPrimaryRequest":null,"positionId":"TWR","primary":null},{"coveringFor":[],"facilityId":"INCIRLIK","observers":[],"pendingPrimaryRequest":null,"positionId":"APP","primary":null}]},"strips":{"gone":[],"updated":["S #8 r3 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=1b22cbcdc1"]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":1,"who":"c-CD","in":{"facilityId":"INCIRLIK","held":["CD"],"type":"efsp-set-positions"},"out":{"ack":{"facilityId":"INCIRLIK","held":["CD"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"boardEpoch":"#16","boardSeq":0,"facilityId":"INCIRLIK","fdrs":{"updated":[]},"positions":{"updated":{"~big":"b02ae45f7d","chars":733,"keys":"array[5]"}},"strips":{"gone":[],"updated":["S #8 r3 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=2200da8674"]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":2,"who":"c-GND","in":{"facilityId":"INCIRLIK","held":["GND"],"type":"efsp-set-positions"},"out":{"ack":{"facilityId":"INCIRLIK","held":["GND"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"boardEpoch":"#16","boardSeq":0,"facilityId":"INCIRLIK","fdrs":{"updated":[]},"positions":{"updated":{"~big":"507ffba452","chars":798,"keys":"array[5]"}},"strips":{"gone":[],"updated":["S #8 r3 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=2200da8674"]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":3,"who":"c-TWR","in":{"facilityId":"INCIRLIK","held":["TWR"],"type":"efsp-set-positions"},"out":{"ack":{"facilityId":"INCIRLIK","held":["TWR"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"boardEpoch":"#16","boardSeq":0,"facilityId":"INCIRLIK","fdrs":{"updated":[]},"positions":{"updated":{"~big":"bea3b985a0","chars":863,"keys":"array[5]"}},"strips":{"gone":[],"updated":["S #8 r3 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=2200da8674"]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":4,"who":"c-APP","in":{"facilityId":"INCIRLIK","held":["APP"],"type":"efsp-set-positions"},"out":{"ack":{"facilityId":"INCIRLIK","held":["APP"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"boardEpoch":"#16","boardSeq":0,"facilityId":"INCIRLIK","fdrs":{"updated":[]},"positions":{"updated":{"~big":"655bf531a3","chars":928,"keys":"array[5]"}},"strips":{"gone":[],"updated":["S #8 r3 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=2200da8674"]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":5,"who":"c-OPS","in":{"actingPositionId":"OPS","clientMutationId":"#21","facilityId":"INCIRLIK","op":{"bayId":"ops-proposed","fdr":{"aircraftType":"","callsign":"STAMP1","departureAirport":"LTAG","departureRunway":"05","destinationAirport":"LTAG","flightPlanDepartureTimeHhmm":"1430","remarks":"","requestedAltitude":"250","route":"DCT","wakeCategory":""},"kind":"CreateStrip","rackId":"main","role":"DEPARTURE"},"type":"efsp-mutation","version":1},"out":{"ack":{"boardEpoch":"#16","boardSeq":1,"clientMutationId":"#21","facilityId":"INCIRLIK","fdr":"F #22 r1 STAMP1 sq=0002 h=fe13df1919","ok":true,"strip":"S #23 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:Vt h=dd1148bbca","type":"efsp-mutation-ack","version":1},"broadcast":{"boardEpoch":"#16","boardSeq":1,"facilityId":"INCIRLIK","fdrs":{"updated":["F #22 r1 STAMP1 sq=0002 h=fe13df1919"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #23 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:Vt h=dd1148bbca"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"OPS","actorId":"c-OPS","after":"S #23 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:Vt h=503ad7cfef","at":1466518800000,"before":null,"clientMutationId":"#21","facilityId":"INCIRLIK","fdrId":"#22","op":"CreateStrip","stripId":"#23"}]},
+        {"n":6,"who":"c-OPS","in":{"actingPositionId":"OPS","baseRev":1,"clientMutationId":"#24","facilityId":"INCIRLIK","op":{"kind":"SetState","toState":"RUNWAY_QUEUE"},"stripId":"#23","type":"efsp-mutation","version":1},"out":{"ack":{"boardEpoch":"#16","boardSeq":2,"clientMutationId":"#24","facilityId":"INCIRLIK","ok":true,"strip":"S #23 r2 DEPARTURE/RUNWAY_QUEUE @OPS ops-proposed/main:Vt h=3b22cc2111","stripId":"#23","type":"efsp-mutation-ack","version":1,"warning":"no OPS Bay for RUNWAY_QUEUE; the Strip stays in ops-proposed"},"broadcast":{"boardEpoch":"#16","boardSeq":2,"facilityId":"INCIRLIK","fdrs":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #23 r2 DEPARTURE/RUNWAY_QUEUE @OPS ops-proposed/main:Vt h=3b22cc2111"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"OPS","actorId":"c-OPS","after":"S #23 r2 DEPARTURE/RUNWAY_QUEUE @OPS ops-proposed/main:Vt h=e931b92bc0","at":1466518800000,"before":"S #23 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:Vt h=503ad7cfef","clientMutationId":"#24","facilityId":"INCIRLIK","fdrId":"#22","op":"SetState","stripId":"#23"}]},
+        {"n":7,"who":"c-OPS","in":{"actingPositionId":"OPS","baseRev":2,"clientMutationId":"#25","facilityId":"INCIRLIK","op":{"bayId":"twr-runway-queue","kind":"TransferStrip","rackId":"rwy-05","toPositionId":"TWR"},"stripId":"#23","type":"efsp-mutation","version":1},"out":{"ack":{"boardEpoch":"#16","boardSeq":3,"clientMutationId":"#25","facilityId":"INCIRLIK","ok":true,"routedTo":null,"strip":"S #23 r3 DEPARTURE/RUNWAY_QUEUE @TWR twr-runway-queue/rwy-05:V h=fcf6652eca","stripId":"#23","type":"efsp-mutation-ack","version":1},"broadcast":{"boardEpoch":"#16","boardSeq":3,"facilityId":"INCIRLIK","fdrs":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #23 r3 DEPARTURE/RUNWAY_QUEUE @TWR twr-runway-queue/rwy-05:V h=fcf6652eca"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"OPS","actorId":"c-OPS","after":"S #23 r3 DEPARTURE/RUNWAY_QUEUE @TWR twr-runway-queue/rwy-05:V h=5ffe913dde","at":1466518800000,"before":"S #23 r2 DEPARTURE/RUNWAY_QUEUE @OPS ops-proposed/main:Vt h=e931b92bc0","clientMutationId":"#25","facilityId":"INCIRLIK","fdrId":"#22","op":"TransferStrip","selfCoordinated":false,"stripId":"#23"}]},
+        {"n":8,"who":"c-TWR","in":{"actingPositionId":"TWR","baseRev":3,"clientMutationId":"#26","facilityId":"INCIRLIK","op":{"kind":"SetState","toState":"LUAW"},"stripId":"#23","type":"efsp-mutation","version":1},"out":{"ack":{"boardEpoch":"#16","boardSeq":4,"clientMutationId":"#26","facilityId":"INCIRLIK","ok":true,"strip":"S #23 r4 DEPARTURE/LUAW @TWR twr-runway-queue/rwy-05:V h=4a0af5a1c6","stripId":"#23","type":"efsp-mutation-ack","version":1,"warning":"no TWR Bay for LUAW; the Strip stays in twr-runway-queue"},"broadcast":{"boardEpoch":"#16","boardSeq":4,"facilityId":"INCIRLIK","fdrs":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #23 r4 DEPARTURE/LUAW @TWR twr-runway-queue/rwy-05:V h=4a0af5a1c6"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"TWR","actorId":"c-TWR","after":"S #23 r4 DEPARTURE/LUAW @TWR twr-runway-queue/rwy-05:V h=6b72d0d727","at":1466518800000,"before":"S #23 r3 DEPARTURE/RUNWAY_QUEUE @TWR twr-runway-queue/rwy-05:V h=5ffe913dde","clientMutationId":"#26","facilityId":"INCIRLIK","fdrId":"#22","op":"SetState","stripId":"#23"}]},
+        {"n":9,"who":"c-TWR","in":{"actingPositionId":"TWR","baseRev":4,"clientMutationId":"#27","facilityId":"INCIRLIK","op":{"kind":"InvokeNla"},"stripId":"#23","type":"efsp-mutation","version":1},"out":{"ack":{"boardEpoch":"#16","boardSeq":5,"clientMutationId":"#27","facilityId":"INCIRLIK","fdr":"F #22 r2 STAMP1 sq=0002 h=9a240de73a","ok":true,"strip":"S #23 r5 DEPARTURE/DEPARTED @TWR twr-airborne/main:V h=75d18f3102","stripId":"#23","type":"efsp-mutation-ack","version":1},"broadcast":{"boardEpoch":"#16","boardSeq":5,"facilityId":"INCIRLIK","fdrs":{"updated":["F #22 r2 STAMP1 sq=0002 h=9a240de73a"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #23 r5 DEPARTURE/DEPARTED @TWR twr-airborne/main:V h=75d18f3102"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"TWR","actorId":"c-TWR","after":"S #23 r5 DEPARTURE/DEPARTED @TWR twr-airborne/main:V h=1ddfbddcd0","at":1466519580000,"before":"S #23 r4 DEPARTURE/LUAW @TWR twr-runway-queue/rwy-05:V h=6b72d0d727","clientMutationId":"#27","facilityId":"INCIRLIK","fdrId":"#22","op":"InvokeNla","stripId":"#23"}]},
+        {"n":10,"who":"c-TWR","in":{"actingPositionId":"TWR","baseRev":5,"clientMutationId":"#28","facilityId":"INCIRLIK","op":{"kind":"Undo"},"stripId":"#23","type":"efsp-mutation","version":1},"out":{"ack":{"boardEpoch":"#16","boardSeq":6,"clientMutationId":"#28","facilityId":"INCIRLIK","fdr":"F #22 r3 STAMP1 sq=0002 h=3d92115848","ok":true,"strip":"S #23 r6 DEPARTURE/LUAW @TWR twr-airborne/main:V h=e75d146151","stripId":"#23","type":"efsp-mutation-ack","version":1},"broadcast":{"boardEpoch":"#16","boardSeq":6,"facilityId":"INCIRLIK","fdrs":{"updated":["F #22 r3 STAMP1 sq=0002 h=3d92115848"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #23 r6 DEPARTURE/LUAW @TWR twr-airborne/main:V h=e75d146151"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"TWR","actorId":"c-TWR","after":"S #23 r6 DEPARTURE/LUAW @TWR twr-airborne/main:V h=fc663bc3c0","at":1466519580000,"before":"S #23 r5 DEPARTURE/DEPARTED @TWR twr-airborne/main:V h=1ddfbddcd0","clientMutationId":"#28","facilityId":"INCIRLIK","fdrId":"#22","op":"Undo","stripId":"#23"}]},
+        {"n":11,"who":"c-TWR","in":{"actingPositionId":"TWR","baseRev":6,"clientMutationId":"#29","facilityId":"INCIRLIK","op":{"kind":"SetState","toState":"DEPARTED"},"stripId":"#23","type":"efsp-mutation","version":1},"out":{"ack":{"boardEpoch":"#16","boardSeq":7,"clientMutationId":"#29","facilityId":"INCIRLIK","fdr":"F #22 r4 STAMP1 sq=0002 h=52f9a352c2","ok":true,"strip":"S #23 r7 DEPARTURE/DEPARTED @TWR twr-airborne/main:V h=24d14d89c9","stripId":"#23","type":"efsp-mutation-ack","version":1},"broadcast":{"boardEpoch":"#16","boardSeq":7,"facilityId":"INCIRLIK","fdrs":{"updated":["F #22 r4 STAMP1 sq=0002 h=52f9a352c2"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #23 r7 DEPARTURE/DEPARTED @TWR twr-airborne/main:V h=24d14d89c9"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"TWR","actorId":"c-TWR","after":"S #23 r7 DEPARTURE/DEPARTED @TWR twr-airborne/main:V h=17daa19bbb","at":1466519700000,"before":"S #23 r6 DEPARTURE/LUAW @TWR twr-airborne/main:V h=fc663bc3c0","clientMutationId":"#29","facilityId":"INCIRLIK","fdrId":"#22","op":"SetState","stripId":"#23"}]},
+        {"n":12,"who":"c-TWR","in":{"actingPositionId":"TWR","baseRev":7,"clientMutationId":"#30","facilityId":"INCIRLIK","op":{"bayId":"app-departures","kind":"TransferStrip","rackId":"main","toPositionId":"APP"},"stripId":"#23","type":"efsp-mutation","version":1},"out":{"ack":{"boardEpoch":"#16","boardSeq":8,"clientMutationId":"#30","facilityId":"INCIRLIK","ok":true,"routedTo":null,"strip":"S #23 r8 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=f7754157ba","stripId":"#23","type":"efsp-mutation-ack","version":1},"broadcast":{"boardEpoch":"#16","boardSeq":8,"facilityId":"INCIRLIK","fdrs":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #23 r8 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=f7754157ba"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"TWR","actorId":"c-TWR","after":"S #23 r8 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=2ef87140c5","at":1466520000000,"before":"S #23 r7 DEPARTURE/DEPARTED @TWR twr-airborne/main:V h=17daa19bbb","clientMutationId":"#30","facilityId":"INCIRLIK","fdrId":"#22","op":"TransferStrip","selfCoordinated":false,"stripId":"#23"}]},
+        {"n":13,"who":"c-APP","in":{"actingPositionId":"APP","baseRev":8,"clientMutationId":"#31","facilityId":"INCIRLIK","op":{"blockId":"18","kind":"SetBlock","value":"1436"},"stripId":"#23","type":"efsp-mutation","version":1},"out":{"ack":{"boardEpoch":"#16","boardSeq":9,"clientMutationId":"#31","facilityId":"INCIRLIK","fdr":"F #22 r5 STAMP1 sq=0002 h=319b338090","ok":true,"strip":"S #23 r9 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=ad846340c7","stripId":"#23","type":"efsp-mutation-ack","version":1},"broadcast":{"boardEpoch":"#16","boardSeq":9,"facilityId":"INCIRLIK","fdrs":{"updated":["F #22 r5 STAMP1 sq=0002 h=319b338090"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #23 r9 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=ad846340c7"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"APP","actorId":"c-APP","after":"S #23 r9 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=4f3ec21edc","at":1466520000000,"before":"S #23 r8 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=2ef87140c5","blockId":"18","clientMutationId":"#31","facilityId":"INCIRLIK","fdrId":"#22","op":"SetBlock","stripId":"#23","value":"1436"}]},
+        {"n":14,"who":"c-APP","in":{"actingPositionId":"APP","baseRev":9,"clientMutationId":"#32","facilityId":"INCIRLIK","op":{"blockId":"18","kind":"SetBlock","value":""},"stripId":"#23","type":"efsp-mutation","version":1},"out":{"ack":{"boardEpoch":"#16","boardSeq":10,"clientMutationId":"#32","facilityId":"INCIRLIK","fdr":"F #22 r6 STAMP1 sq=0002 h=768ba42e75","ok":true,"strip":"S #23 r10 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=befaeedc98","stripId":"#23","type":"efsp-mutation-ack","version":1},"broadcast":{"boardEpoch":"#16","boardSeq":10,"facilityId":"INCIRLIK","fdrs":{"updated":["F #22 r6 STAMP1 sq=0002 h=768ba42e75"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #23 r10 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=befaeedc98"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"APP","actorId":"c-APP","after":"S #23 r10 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=90ed31a4d6","at":1466520000000,"before":"S #23 r9 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=4f3ec21edc","blockId":"18","clientMutationId":"#32","facilityId":"INCIRLIK","fdrId":"#22","op":"SetBlock","stripId":"#23","value":""}]},
+        {"n":15,"who":"c-APP","in":{"actingPositionId":"APP","baseRev":10,"clientMutationId":"#33","facilityId":"INCIRLIK","op":{"kind":"DropStrip"},"stripId":"#23","type":"efsp-mutation","version":1},"out":{"ack":{"boardEpoch":"#16","boardSeq":11,"clientMutationId":"#33","facilityId":"INCIRLIK","ok":true,"strip":"S #23 r11 DEPARTURE/DROPPED @APP app-departures/main:V h=6ace67f406","stripId":"#23","type":"efsp-mutation-ack","version":1},"broadcast":{"boardEpoch":"#16","boardSeq":11,"facilityId":"INCIRLIK","fdrs":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":["#23"],"updated":[]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"APP","actorId":"c-APP","after":"S #23 r11 DEPARTURE/DROPPED @APP app-departures/main:V h=f6188b30ea","at":1466520000000,"before":"S #23 r10 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=90ed31a4d6","clientMutationId":"#33","facilityId":"INCIRLIK","fdrId":"#22","op":"DropStrip","stripId":"#23"}]}
+      ],
+      "orphanAudit": [],
+      "final": {
+        "boards": {
+          "INCIRLIK": {
+            "n": 2,
+            "h": "6a5a10fdaa",
+            "rows": [
+              "S #8 r3 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=170b75ed51",
+              "S #23 r11 DEPARTURE/DROPPED @APP app-departures/main:V h=f6188b30ea"
+            ],
+            "rest": {
+              "cidSeq": 2,
+              "droppedWallAt": [
+                ["#23",1782009600410]
+              ],
+              "replay": [
+                ["#6",{"appliedWallAt":1782009600000,"detail":null,"fdrId":"#7","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#8","warning":null}],
+                ["#9",{"appliedWallAt":1782009600000,"detail":null,"fdrId":"#7","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#8","warning":null}],
+                ["#10",{"appliedWallAt":1782009600000,"detail":null,"fdrId":"#7","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#8","warning":null}],
+                ["#21",{"appliedWallAt":1782009600000,"detail":null,"fdrId":"#22","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#23","warning":null}],
+                ["#24",{"appliedWallAt":1782009600000,"detail":null,"fdrId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#23","warning":"no OPS Bay for RUNWAY_QUEUE; the Strip stays in ops-proposed"}],
+                ["#25",{"appliedWallAt":1782009600000,"detail":null,"fdrId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":false,"stripId":"#23","warning":null}],
+                ["#26",{"appliedWallAt":1782009600000,"detail":null,"fdrId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#23","warning":"no TWR Bay for LUAW; the Strip stays in twr-runway-queue"}],
+                ["#27",{"appliedWallAt":1782009600410,"detail":null,"fdrId":"#22","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#23","warning":null}],
+                ["#28",{"appliedWallAt":1782009600410,"detail":null,"fdrId":"#22","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#23","warning":null}],
+                ["#29",{"appliedWallAt":1782009600410,"detail":null,"fdrId":"#22","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#23","warning":null}],
+                ["#30",{"appliedWallAt":1782009600410,"detail":null,"fdrId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":false,"stripId":"#23","warning":null}],
+                ["#31",{"appliedWallAt":1782009600410,"detail":null,"fdrId":"#22","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#23","warning":null}],
+                ["#32",{"appliedWallAt":1782009600410,"detail":null,"fdrId":"#22","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#23","warning":null}],
+                ["#33",{"appliedWallAt":1782009600410,"detail":null,"fdrId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#23","warning":null}]
+              ]
+            }
+          },
+          "CENTER": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "TACTICAL": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "CARRIER": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "RANGES": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          }
+        },
+        "fdr": {
+          "n": 2,
+          "h": "3f2a95bf58",
+          "rows": [
+            "F #7 r3 CHAIN1 sq=0001 h=6840ec0f1d",
+            "F #22 r6 STAMP1 sq=0002 h=768ba42e75"
+          ],
+          "rest": {
+            "codeCursor": 2,
+            "codes": [
+              ["0001","#7"]
+            ]
+          }
+        },
+        "airspaces": {
+          "n": 0,
+          "h": "97d170e155",
+          "rows": []
+        },
+        "correlations": {
+          "n": 0,
+          "h": "97d170e155",
+          "rows": []
+        },
+        "marsa": {
+          "n": 0,
+          "h": "97d170e155",
+          "rows": []
+        },
+        "fieldStates": {
+          "n": 1,
+          "h": "958d646fb1",
+          "rows": [
+            "INCIRLIK h=0836ccc6bd"
+          ]
+        },
+        "carriers": {
+          "n": 1,
+          "h": "cc6c2f3fbf",
+          "rows": [
+            "CVN-72 h=f3ede6729e"
+          ]
+        }
+      }
+    }
+  ]
+}

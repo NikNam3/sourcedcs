@@ -1,0 +1,11 @@
+{
+  "rows": [
+    {"id":"src/efsp/archiver.js","dateNow":1,"newDateBare":0},
+    {"id":"src/efsp/board-store.js","dateNow":7,"newDateBare":0},
+    {"id":"src/efsp/correlation-reconciler.js","dateNow":1,"newDateBare":0},
+    {"id":"src/efsp/index.js","dateNow":1,"newDateBare":0},
+    {"id":"src/efsp/metrics.js","dateNow":2,"newDateBare":0},
+    {"id":"src/efsp/mutation-log.js","dateNow":1,"newDateBare":0},
+    {"id":"src/efsp/traffic-count.js","dateNow":1,"newDateBare":0}
+  ]
+}
