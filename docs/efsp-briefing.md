@@ -141,12 +141,14 @@ buckets take it **by injection**, never `Date.now()` (H11). The theater's local 
 
 **Wave 1 of the parallel lanes** (`0061`–`0067`, `0078`, `0084`). See §3I.
 
-**Waves 2 and 3a and the fixes between them** (`0068`–`0073`, `0075`, `0080`–`0086`, `0088`, `0089`,
-`0091`). See §3J: the field-state panel (L1b), hung ordnance (L12), alert/scramble (L13), the ATO on the
+**Waves 2 and 3 and the fixes between them** (`0068`–`0076`, `0080`–`0086`, `0088`, `0089`, `0091`; `0093` on
+a branch). See §3J: the field-state panel (L1b), hung ordnance (L12), alert/scramble (L13), the ATO on the
 Board (L14), the METRICS panel (L15), the `9F` picker and time chains (L16), the STARS scope (L22),
 archiving (L24), Board sync correctness (L27), the tactical Positions (L23), audit completeness (L26),
-block altitudes (U6), magnetic headings (F2), mission sessions (F3), typed time Blocks (F4) and the
-client half of Incirlik's pattern board and FINAL component (L18).
+block altitudes (U6), magnetic headings (F2), mission sessions (F3), typed time Blocks (F4), the carrier
+Positions and Facility (L17), the suggestion chip and staleness (L19), the UI follow-up (UI-A), the
+per-theater transition altitude (TA), the client-mirror parity tests (PARITY), the soak fixes (SOAK), and
+Incirlik's pattern board and FINAL component (L18; the server half is on a branch).
 
 ## 3A. The RANGE station
 
@@ -1033,7 +1035,8 @@ contact (never PROVISIONAL), aircraft category, ground speed >= 60 kt, >= 200 ft
 inside its 5 km footprint (speed alone beyond it), held 5 s; the four numbers are `[SOURCE-DEFINED]` (L20).
 - **The chip** exists only for a DEPARTURE on the ground side (PUSHBACK, TAXI, RUNWAY_QUEUE, LUAW) and offers
   `SetState` to `DEPARTED`, not `InvokeNla` (from TAXI the NLA would say "to runway queue"). The arrival-side
-  contradiction is staleness only, with no chip. **Staleness** is 120 s after the 5 s hold, logged once per
+  contradiction is staleness only, with no chip. The carrier Roles (`MARSHAL`, `FINAL`, `PATTERN`) expect
+  nothing: an airfield-relative phase means nothing for a moving deck (a ship-relative one is a supervisor decision). **Staleness** is 120 s after the 5 s hold, logged once per
   episode through `metrics.recordStaleness` on the mission clock, with the source declared at wiring so a
   genuine zero is `NO_DATA`. `efsp-alerts` has a fourth slice, `surveillance`, composed in `server.js`'s
   `broadcastEfspAlerts` and filtered by visible Strip in `read-scope.js`. Both indicators are quiet
