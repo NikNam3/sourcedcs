@@ -58,8 +58,6 @@ test('createApp: every ticker runs once, start() installs and stop() clears time
   const baseTimers = timeouts();
   const baseGrpc = grpcClient.eventNames().length;
   const app = createApp({ grpcClient, srsClient, env: {} });
-  // The hub's own timer is WIRE's stop(); until it exists the test clears it itself.
-  if (typeof app.wsHub.stop !== 'function') app.wsHub.stop = () => clearInterval(app.wsHub._timer);
 
   for (const tk of app.tickers) await tk.tick();
 

@@ -43,7 +43,9 @@ function compactStrip(s) {
  */
 function createHost(env, { stateDir }) {
   env.wrapOrderKey();
-  const { BOARD_SNAPSHOT_PATH } = req('efsp/index.js');
+  const { statePaths } = req('state-paths.js');
+  const boardPaths = statePaths('efsp-board.json', process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH);
+  const BOARD_SNAPSHOT_PATH = boardPaths.write;
   // T4: refuse to run unless the snapshot the host will write every Mutation
   // is inside the temp dir. A mistake here overwrites the human's live Board.
   if (!path.resolve(BOARD_SNAPSHOT_PATH).startsWith(path.resolve(stateDir) + path.sep)) {
@@ -66,6 +68,7 @@ function createHost(env, { stateDir }) {
   // MissionSession lives in memory. Time comes from `clock`; nothing is started, the driver calls the tickers.
   const app = createApp({
     env: {},
+    paths: boardPaths,
     grpcClient: Object.assign(new EventEmitter(), { getWeather: () => ({}), evalLua: async () => null, getAptWeather: async () => ({}) }),
     srsClient: Object.assign(new EventEmitter(), { getTransponder: () => null }),
     clock,

@@ -48,7 +48,7 @@ function wrap(efsp) {
 const realLoad = Module._load;
 Module._load = function (request, parent, isMain) {
   const exp = realLoad.apply(this, arguments);
-  if (exp && typeof exp.createEfsp === 'function' && exp.BOARD_SNAPSHOT_PATH && !exp.createEfsp.__freeze) {
+  if (exp && typeof exp.createEfsp === 'function' && !exp.createEfsp.__freeze) {
     const orig = exp.createEfsp;
     exp.createEfsp = function (...a) { return wrap(orig.apply(this, a)); };
     exp.createEfsp.__freeze = true;

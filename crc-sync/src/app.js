@@ -21,6 +21,7 @@ const { createSurveillance } = require('./surveillance');
 const { DatalinkFeed } = require('./surveillance/datalink');
 const auth            = require('./auth');
 const { createEfsp }  = require('./efsp');
+const { statePaths } = require('./state-paths');
 const efspFacilityConfig = require('./efsp/facility-config');
 const { buildRadars, loadSensorSpecs } = require('./radars');
 const { TerrainStore } = require('./terrain');
@@ -90,7 +91,8 @@ const COVERAGE_TICK_MS = 250;
 
 /**
  * @param {object} [deps]
- * @param {object} [deps.env] the environment; only `CRCSYNC_TEST_RESET` (and `NODE_ENV`) are read here
+ * @param {object} [deps.env] the environment; `CRCSYNC_TEST_RESET`, `NODE_ENV` and `CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH` are read here
+ * @param {{read:string, write:string}} [deps.paths] the Board snapshot's paths (default: state/ per `env`)
  * @param {object} [deps.grpcClient] the DCS-gRPC client (default: a new, unconnected GrpcClient). server.js connects it
  * @param {object} [deps.srsClient] the SRS client (default: a new, unconnected SrsClient)
  * @param {{now:()=>number, source:string}} [deps.clock] the mission clock; default a MissionClock fed by the gRPC game-time poll
@@ -194,7 +196,8 @@ function createApp(deps = {}) {
   // "magnetic" means at a position on the mission date. The one place a typed
   // magnetic value becomes true, and the source of the `theater` message.
   const theaterContext = new TheaterContext({ theaters, clock: missionClock });
-  const efsp        = createEfsp({ clock: missionClock, transitionAltFt: () => theaterContext.transitionAltFt() });
+  const boardPaths   = deps.paths || statePaths('efsp-board.json', env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH);
+  const efsp        = createEfsp({ clock: missionClock, transitionAltFt: () => theaterContext.transitionAltFt(), paths: boardPaths });
 
   // ── The radar picture (docs/adr/0042) ────────────────────────────────────
   // Radars, their sweep phase, terrain masking and who may look through what
@@ -788,7 +791,7 @@ function createApp(deps = {}) {
     started = false;
     for (const h of timers.splice(0)) clearInterval(h);
     for (const [emitter, event, fn] of attached.splice(0)) emitter.removeListener(event, fn);
-    if (typeof wsHub.stop === 'function') wsHub.stop(); // WsHub.stop() lands with WIRE; guard until the merge
+    wsHub.stop();
   }
 
   return {

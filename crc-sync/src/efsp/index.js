@@ -539,9 +539,4 @@ function _persist({ facilities, stores, persistState = { lastBody: null }, paths
   }
 }
 
-// createEfsp resolves its own paths when it is called. This is only the default write path as it stands at
-// require time, kept for tools/soak/host-core.js and tests/freeze/freeze-recorder.mjs, which read it (APP's
-// createApp passes `paths` explicitly and retires it).
-const BOARD_SNAPSHOT_PATH = statePaths('efsp-board.json', process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH).write;
-
-module.exports = { createEfsp, BOARD_SNAPSHOT_PATH };
+module.exports = { createEfsp };

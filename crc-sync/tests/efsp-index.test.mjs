@@ -13,7 +13,8 @@ process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = path.join(tmpDir, 'facility.json
 process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH = path.join(tmpDir, 'board.json');
 process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH = path.join(tmpDir, 'mutations.jsonl'); // createEfsp() builds a real MutationLog — keep it off the real repo config dir
 
-const { createEfsp, BOARD_SNAPSHOT_PATH } = await import('../src/efsp/index.js');
+const { createEfsp } = await import('../src/efsp/index.js');
+const BOARD_SNAPSHOT_PATH = process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH;
 
 function createStripMsg() {
   return {
