@@ -31,6 +31,9 @@ const LANE = Number(process.env.E2E_LANE || 0);
 if (!Number.isInteger(LANE) || LANE < 0 || LANE > 9) {
   throw new Error(`E2E_LANE must be an integer 0-9, got ${process.env.E2E_LANE}`);
 }
+// e2e/tools/run-order.js starts the two servers itself and runs one spec file at a time against them,
+// to prove a file does not depend on which ran before it; it sets this so Playwright reuses them.
+const REUSE = process.env.E2E_REUSE_SERVERS === '1';
 const CRC_SYNC_PORT = 3010 + LANE;
 const APP_PORT = 3110 + LANE;
 
@@ -109,7 +112,7 @@ module.exports = {
       // there waits forever on a server that is up and working. This just
       // asks whether it is listening, which is the actual question.
       port: CRC_SYNC_PORT,
-      reuseExistingServer: false,
+      reuseExistingServer: REUSE,
       timeout: 60000,
       env: { ...syncEnv, E2E_STATE_DIR: STATE_DIR },
     },
@@ -119,7 +122,7 @@ module.exports = {
       command: 'node app/server.js',
       cwd: __dirname,
       port: APP_PORT,
-      reuseExistingServer: false,
+      reuseExistingServer: REUSE,
       timeout: 30000,
       env: {
         WS_PORT: String(APP_PORT),
