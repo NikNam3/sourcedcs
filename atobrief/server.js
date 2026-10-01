@@ -1,3 +1,4 @@
+const log = require('./logger');
 // ═══════════════════════════════════════════════════════════
 // server.js — ATO BRIEF web server with session support
 // ═══════════════════════════════════════════════════════════
@@ -136,17 +137,17 @@ app.post('/api/auth/token', authLimiter, async (req, res) => {
   try {
     const tokenData = await casdoorTokenExchange(code, redirectUri);
     if (tokenData.error) {
-      console.warn('[auth] Casdoor token exchange error:', tokenData.error, tokenData.error_description);
+      log.warn('[auth] Casdoor token exchange error:', tokenData.error, tokenData.error_description);
       return res.status(400).json({ error: tokenData.error_description || tokenData.error });
     }
     const accessToken = tokenData.access_token;
     if (!accessToken) {
-      console.warn('[auth] Casdoor response missing access_token:', JSON.stringify(tokenData).slice(0, 200));
+      log.warn('[auth] Casdoor response missing access_token:', JSON.stringify(tokenData).slice(0, 200));
       return res.status(502).json({ error: 'No access token returned by auth server' });
     }
     res.json({ access_token: accessToken });
   } catch (err) {
-    console.error('[auth] Token exchange failed:', err.message);
+    log.error('[auth] Token exchange failed:', err.message);
     res.status(502).json({ error: 'Auth server unreachable or returned an error' });
   }
 });
@@ -366,7 +367,7 @@ const PORT = process.env.PORT || 4000;
 
 if (require.main === module) {
   server.listen(PORT, () => {
-    console.log(`ATO BRIEF server listening on http://localhost:${PORT}`);
+    log.info(`ATO BRIEF server listening on http://localhost:${PORT}`);
   });
 }
 

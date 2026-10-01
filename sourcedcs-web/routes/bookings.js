@@ -1,4 +1,5 @@
 'use strict';
+const log = require('../logger');
 
 const express = require('express');
 const store = require('../store');
@@ -54,7 +55,7 @@ function findBookingResource(resourceType, resourceId) {
 /* Send a new booking as a Discord embed to the configured notify channel */
 async function sendBookingToDiscord(booking, resource) {
   if (!discordClient.DISCORD_BOT_TOKEN) {
-    console.warn('[bookings] DISCORD_BOT_TOKEN not set — cannot post booking to Discord');
+    log.warn('[bookings] DISCORD_BOT_TOKEN not set — cannot post booking to Discord');
     return;
   }
   const chId = store.state.bookingResources.notifyChannelId;
@@ -78,7 +79,7 @@ async function sendBookingToDiscord(booking, resource) {
     footer: { text: 'Booking ID: ' + booking.id },
   };
   await discordClient.discordPost('/channels/' + chId + '/messages', { embeds: [embed] });
-  console.debug('[bookings] Booking ' + booking.id + ' posted to Discord channel ' + chId);
+  log.debug('[bookings] Booking ' + booking.id + ' posted to Discord channel ' + chId);
 }
 
 /* Post a short plain-text notice when a booking is cancelled */
@@ -90,7 +91,7 @@ async function sendBookingCancelledToDiscord(booking, resource) {
   await discordClient.discordPost('/channels/' + chId + '/messages', {
     content: '🗑️ Booking cancelled — ' + label + ' (' + booking.startTime + ' → ' + booking.endTime + ') by ' + (booking.bookedBy.name || 'unknown'),
   });
-  console.debug('[bookings] Booking ' + booking.id + ' cancellation posted to Discord channel ' + chId);
+  log.debug('[bookings] Booking ' + booking.id + ' cancellation posted to Discord channel ' + chId);
 }
 
 /* GET /api/booking-resources — members-only read; notifyChannelId only
@@ -152,7 +153,7 @@ router.delete('/booking-resources/ranges/:id', writeOpsLimiter, auth.requireAuth
   store.state.bookings = store.state.bookings.filter(b => !(b.resourceType === 'range' && b.resourceId === id));
   store.saveJSON(store.BOOKING_RESOURCES_FILE, store.state.bookingResources);
   store.saveJSON(store.BOOKINGS_FILE, store.state.bookings);
-  console.debug('[bookings] Range ' + id + ' deleted (cascaded any bookings) by ' + (req.user.name || req.user.sub));
+  log.debug('[bookings] Range ' + id + ' deleted (cascaded any bookings) by ' + (req.user.name || req.user.sub));
   res.json({ ok: true });
 });
 
@@ -187,7 +188,7 @@ router.delete('/booking-resources/controllers/:id', writeOpsLimiter, auth.requir
   store.state.bookings = store.state.bookings.filter(b => !(b.resourceType === 'controller' && b.resourceId === id));
   store.saveJSON(store.BOOKING_RESOURCES_FILE, store.state.bookingResources);
   store.saveJSON(store.BOOKINGS_FILE, store.state.bookings);
-  console.debug('[bookings] Controller position ' + id + ' deleted (cascaded any bookings) by ' + (req.user.name || req.user.sub));
+  log.debug('[bookings] Controller position ' + id + ' deleted (cascaded any bookings) by ' + (req.user.name || req.user.sub));
   res.json({ ok: true });
 });
 
@@ -240,11 +241,11 @@ router.post('/bookings', bookingLimiter, auth.requireAuth, (req, res) => {
 
   store.state.bookings.push(booking);
   store.saveJSON(store.BOOKINGS_FILE, store.state.bookings);
-  console.debug('[bookings] Booking ' + booking.id + ' created by ' + booking.bookedBy.name);
+  log.debug('[bookings] Booking ' + booking.id + ' created by ' + booking.bookedBy.name);
   res.status(201).json(booking);
 
   sendBookingToDiscord(booking, resource).catch(err =>
-    console.error('[bookings] Discord notify failed:', err.message)
+    log.error('[bookings] Discord notify failed:', err.message)
   );
 });
 
@@ -305,11 +306,11 @@ router.delete('/bookings/:id', writeOpsLimiter, auth.requireAuth, (req, res) => 
   const resource = findBookingResource(booking.resourceType, booking.resourceId);
   store.state.bookings.splice(idx, 1);
   store.saveJSON(store.BOOKINGS_FILE, store.state.bookings);
-  console.debug('[bookings] Booking ' + id + ' cancelled by ' + (req.user.name || req.user.sub));
+  log.debug('[bookings] Booking ' + id + ' cancelled by ' + (req.user.name || req.user.sub));
   res.json({ ok: true });
 
   sendBookingCancelledToDiscord(booking, resource).catch(err =>
-    console.error('[bookings] Discord cancel notify failed:', err.message)
+    log.error('[bookings] Discord cancel notify failed:', err.message)
   );
 });
 

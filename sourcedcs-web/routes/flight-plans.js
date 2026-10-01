@@ -1,4 +1,5 @@
 'use strict';
+const log = require('../logger');
 
 const express = require('express');
 const store = require('../store');
@@ -36,15 +37,15 @@ router.put('/flight-plans/config', writeOpsLimiter, auth.requireAuth, auth.requi
   store.state.fpConfig.controllerSquadron = sq;
   store.state.fpConfig.notifyChannelId = ch;
   store.saveJSON(store.FLIGHT_PLANS_CFG_FILE, store.state.fpConfig);
-  console.debug('[flight-plans] Controller squadron set to:', sq || '(none)');
-  console.debug('[flight-plans] Notify channel set to:', ch || '(none)');
+  log.debug('[flight-plans] Controller squadron set to:', sq || '(none)');
+  log.debug('[flight-plans] Notify channel set to:', ch || '(none)');
   res.json({ controllerSquadron: store.state.fpConfig.controllerSquadron, notifyChannelId: store.state.fpConfig.notifyChannelId });
 });
 
 /* Send a submitted flight plan as a Discord embed to the configured notify channel */
 async function sendFlightPlanToDiscord(plan) {
   if (!discordClient.DISCORD_BOT_TOKEN) {
-    console.warn('[flight-plans] DISCORD_BOT_TOKEN not set — skipping Discord notify');
+    log.warn('[flight-plans] DISCORD_BOT_TOKEN not set — skipping Discord notify');
     return;
   }
   const chId = store.state.fpConfig.notifyChannelId;
@@ -93,7 +94,7 @@ async function sendFlightPlanToDiscord(plan) {
   };
 
   await discordClient.discordPost('/channels/' + chId + '/messages', { embeds: [embed] });
-  console.debug('[flight-plans] FP-' + plan.id + ' posted to Discord channel ' + chId);
+  log.debug('[flight-plans] FP-' + plan.id + ' posted to Discord channel ' + chId);
 }
 
 /* GET /api/flight-plans — returns all plans for admin/controller, own plans otherwise */
@@ -174,11 +175,11 @@ router.post('/flight-plans', writeOpsLimiter, auth.requireAuth, (req, res) => {
 
   store.state.flightPlans.push(plan);
   store.saveJSON(store.FLIGHT_PLANS_FILE, store.state.flightPlans);
-  console.debug('[flight-plans] Plan ' + plan.id + ' submitted by ' + plan.submittedBy.name);
+  log.debug('[flight-plans] Plan ' + plan.id + ' submitted by ' + plan.submittedBy.name);
   res.status(201).json(plan);
 
   sendFlightPlanToDiscord(plan).catch(err =>
-    console.error('[flight-plans] Discord notify failed:', err.message)
+    log.error('[flight-plans] Discord notify failed:', err.message)
   );
 });
 
@@ -214,7 +215,7 @@ router.delete('/flight-plans/:id', writeOpsLimiter, auth.requireAuth, (req, res)
   }
   flightPlans.splice(idx, 1);
   store.saveJSON(store.FLIGHT_PLANS_FILE, flightPlans);
-  console.debug('[flight-plans] Plan ' + id + ' deleted by ' + (req.user.name || req.user.sub));
+  log.debug('[flight-plans] Plan ' + id + ' deleted by ' + (req.user.name || req.user.sub));
   res.json({ ok: true });
 });
 

@@ -52,3 +52,9 @@ test('compose mounts the template + snippets read-only and has no inline config'
   assert.doesNotMatch(y, /client_max_body_size/);
   assert.match(y, /CRCSYNC_DOMAIN=\$\{CRCSYNC_DOMAIN:-\$\{ASACS_DOMAIN\}\}/);
 });
+
+test('LOG_LEVEL reaches the three services and CRCSYNC_URL keeps the ASACS_URL fallback', () => {
+  const y = fs.readFileSync(path.join(root, 'docker-compose.yml'), 'utf8');
+  assert.strictEqual((y.match(/LOG_LEVEL=\$\{LOG_LEVEL:-info\}/g) || []).length, 3);
+  assert.match(y, /CRCSYNC_URL=\$\{CRCSYNC_URL:-\$\{ASACS_URL\}\}/);
+});

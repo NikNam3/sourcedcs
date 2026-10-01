@@ -1,4 +1,5 @@
 'use strict';
+const log = require('../logger');
 
 const express = require('express');
 const store = require('../store');
@@ -51,7 +52,7 @@ async function syncDiscordScheduledEvents() {
             description: de.description || existing.description,
           };
           changed = true;
-          console.debug('[events-sync] Updated event', discordId, '→', status);
+          log.debug('[events-sync] Updated event', discordId, '→', status);
         }
       } else {
         /* Create new event from Discord */
@@ -70,7 +71,7 @@ async function syncDiscordScheduledEvents() {
         };
         events.push(ev);
         changed = true;
-        console.debug('[events-sync] Created event', discordId, ':', ev.name);
+        log.debug('[events-sync] Created event', discordId, ':', ev.name);
       }
     }
 
@@ -78,9 +79,9 @@ async function syncDiscordScheduledEvents() {
       store.saveJSON(store.EVENTS_FILE, events);
     }
     eventsSyncAt = Date.now();
-    console.debug('[events-sync] Sync complete, ' + discordEvents.length + ' Discord event(s) processed');
+    log.debug('[events-sync] Sync complete, ' + discordEvents.length + ' Discord event(s) processed');
   } catch (err) {
-    console.error('[events-sync] Discord fetch failed:', err.message);
+    log.error('[events-sync] Discord fetch failed:', err.message);
   }
 }
 

@@ -132,13 +132,14 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=7000
+      - LOG_LEVEL=${LOG_LEVEL:-info}
       - CASDOOR_CLIENT_ID=${CASDOOR_CLIENT_ID}
       - CASDOOR_ENDPOINT=${CASDOOR_ENDPOINT}
       - DISCORD_URL=${DISCORD_URL}
       - WIKI_URL=${WIKI_URL}
       - ATO_URL=${ATO_URL}
       - OLYMPUS_URL=${OLYMPUS_URL}
-      - ASACS_URL=${ASACS_URL}
+      - CRCSYNC_URL=${CRCSYNC_URL:-${ASACS_URL}}
       - GITHUB_URL=${GITHUB_URL}
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
       - DISCORD_GUILD_ID=${DISCORD_GUILD_ID}
@@ -163,6 +164,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=4000
+      - LOG_LEVEL=${LOG_LEVEL:-info}
       - CASDOOR_ENDPOINT=${CASDOOR_ENDPOINT}
       - ATOBRIEF_CLIENT_ID=${ATOBRIEF_CLIENT_ID}
       - ATOBRIEF_CLIENT_SECRET=${ATOBRIEF_CLIENT_SECRET}
@@ -184,6 +186,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
+      - LOG_LEVEL=${LOG_LEVEL:-info}
       - CASDOOR_ENDPOINT=${CASDOOR_ENDPOINT}
       - CRCSYNC_CLIENT_ID=${CRCSYNC_CLIENT_ID}
       - CRCSYNC_CLIENT_SECRET=${CRCSYNC_CLIENT_SECRET}

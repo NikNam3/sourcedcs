@@ -151,7 +151,7 @@ const DISCORD_URL = process.env.DISCORD_URL || 'https://discord.gg/sourcedcs';
 const WIKI_URL = process.env.WIKI_URL || 'https://wiki.sourcedcs.page';
 const ATO_URL = process.env.ATO_URL || 'https://ato.sourcedcs.page';
 const OLYMPUS_URL = process.env.OLYMPUS_URL || 'https://olympus.sourcedcs.page';
-const ASACS_URL = process.env.ASACS_URL || 'https://asacs.sourcedcs.page';
+const ASACS_URL = process.env.CRCSYNC_URL || process.env.ASACS_URL || 'https://asacs.sourcedcs.page';
 const GITHUB_URL = process.env.GITHUB_URL || 'https://github.com/NikNam3/sourcedcs';
 
 const events = loadJSON(EVENTS_FILE, []);

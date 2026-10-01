@@ -1,4 +1,5 @@
 'use strict';
+const log = require('./logger');
 
 /* Rebuilds every member's activity-score history once per squadron-wide
    "day" (05:00 UTC, see discord-gateway.js's localDateKey), from
@@ -107,7 +108,7 @@ function init({ dataDir, memberIds, getMemberDays, getMemberVacations, localDate
     try {
       rebuildAll({ dataDir, memberIds: memberIds(), getMemberDays, getMemberVacations, localDateKey, todayKey });
     } catch (err) {
-      console.error('[activity-score] daily rebuild failed:', (err && err.stack) || err);
+      log.error('[activity-score] daily rebuild failed:', (err && err.stack) || err);
     }
   }
   tick();
