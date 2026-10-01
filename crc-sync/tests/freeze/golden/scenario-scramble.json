@@ -111,24 +111,6 @@
           "INCIRLIK": {
             "n": 16,
             "h": "dfef82cf46",
-            "rows": [
-              "S #8 r12 DEPARTURE/DROPPED @APP app-departures/main:V h=078b851ffc",
-              "S #14 r5 DEPARTURE/DROPPED @TWR twr-runway-queue/rwy-05:V h=1ba5d97874",
-              "S #19 r4 DEPARTURE/DROPPED @TWR twr-runway-queue/rwy-05:V h=e3bd99cf96",
-              "S #24 r5 ARRIVAL/DROPPED @TWR twr-arrivals/main:V h=bae2b61516",
-              "S #42 r7 DEPARTURE/DROPPED @CD cd-cleared/main:V h=80973794d8",
-              "S #47 r4 DEPARTURE/DROPPED @GND gnd-taxi-out/main:V h=690467fa6a",
-              "S #52 r4 DEPARTURE/DROPPED @TWR twr-runway-queue/rwy-05:V h=757167f075",
-              "S #57 r5 ARRIVAL/DROPPED @TWR twr-arrivals/main:V h=4ef65c9cfa",
-              "S #70 r6 DEPARTURE/DROPPED @CD cd-cleared/main:V h=c182995304",
-              "S #75 r6 DEPARTURE/DROPPED @CD cd-cleared/main:Vt h=71aece336f",
-              "S #80 r4 DEPARTURE/DROPPED @GND gnd-taxi-out/main:V h=ac4fbb5a91",
-              "S #85 r4 DEPARTURE/DROPPED @TWR twr-runway-queue/rwy-05:V h=2027e732aa",
-              "S #90 r5 ARRIVAL/DROPPED @TWR twr-arrivals/main:V h=b54977e437",
-              "S #105 r12 DEPARTURE/DROPPED @APP app-departures/main:V h=8c0c616e8d",
-              "S #119 r6 DEPARTURE/DROPPED @CD cd-pending-clearance/main:V h=3225b668b9",
-              "S #129 r6 DEPARTURE/DROPPED @CD cd-cleared/main:V h=00c4c01eef"
-            ],
             "rest": {
               "cidSeq": 16,
               "droppedWallAt": [
@@ -294,24 +276,6 @@
         "fdr": {
           "n": 16,
           "h": "c4cbad58f0",
-          "rows": [
-            "F #7 r4 VIPER11 sq=0001 h=5a97d369be",
-            "F #13 r1 HAWK1 sq=0002 h=a0cd274645",
-            "F #18 r1 HAWK2 sq=0003 h=17c236e610",
-            "F #23 r1 TANKER3 sq=0004 h=93500e9b0a",
-            "F #41 r4 VIPER21 sq=0005 h=de02ec4216",
-            "F #46 r1 HAWK4 sq=0006 h=d82ff14bdb",
-            "F #51 r1 HAWK5 sq=0007 h=14c56d931d",
-            "F #56 r1 TANKER6 sq=0010 h=dbb83d0377",
-            "F #69 r3 VIPER31 sq=0011 h=f556c3809a",
-            "F #74 r3 VIPER32 sq=0012 h=7a294edfd7",
-            "F #79 r1 HAWK7 sq=0013 h=778d5c886e",
-            "F #84 r1 HAWK8 sq=0014 h=9746caf4d6",
-            "F #89 r1 TANKER9 sq=0015 h=0e7c44ca85",
-            "F #104 r4 VIPER52 sq=0016 h=ae08f109a9",
-            "F #118 r4 COLT41 sq=0017 h=299ded3eed",
-            "F #128 r3 VIPER51 sq=0020 h=3b5f5ab715"
-          ],
           "rest": {
             "codeCursor": 16,
             "codes": []

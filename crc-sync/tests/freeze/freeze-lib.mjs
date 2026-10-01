@@ -70,9 +70,11 @@ function summarizeInner(v, depth) {
   return canonical(v);
 }
 
+const ROWS_MAX = 12; // beyond this a collection is its count + hash (a changed row still changes the hash)
+
 /** A snapshot-shaped value (many records): count + digest of the whole + per-record summaries. */
 export function summarizeCollection(v) {
-  if (Array.isArray(v)) return { n: v.length, h: digest(canonical(v)), rows: v.map(summarizeRow) };
+  if (Array.isArray(v)) return { n: v.length, h: digest(canonical(v)), ...(v.length <= ROWS_MAX ? { rows: v.map(summarizeRow) } : {}) };
   return { h: digest(canonical(v)), v: summarize(v) };
 }
 function summarizeRow(r) {

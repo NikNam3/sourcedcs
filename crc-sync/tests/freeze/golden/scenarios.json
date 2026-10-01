@@ -2789,21 +2789,6 @@
         "fdr": {
           "n": 13,
           "h": "5495f43ad3",
-          "rows": [
-            "F #7 r5 VIPER1 sq=0001 h=31696c6008",
-            "F #40 r2 VIPER1 sq=0002 h=3e453e5429",
-            "F #56 r2 VIPER1 sq=0003 h=f2856dafde",
-            "F #73 r6 VIPER1 sq=0004 h=fc4bbe7c77",
-            "F #116 r5 VIPER1 sq=0005 h=cffd3cdfc8",
-            "F #141 r2 VIPER1 sq=0006 h=79f086404d",
-            "F #169 r1 EAGLE1 sq=0007 h=5ffc37a8d8",
-            "F #174 r1 EAGLE2 sq=0010 h=7820a077cc",
-            "F #189 r2 EAGLE3 sq=0011 h=e54b87f278",
-            "F #206 r4 VIPER1 sq=0012 h=34c9b5f066",
-            "F #232 r3 VIPER1 sq=0013 h=7c89b3d3ec",
-            "F #248 r1 VIPER1 sq=0014 h=cdbd6515a2",
-            "F #265 r3 VIPER1 sq=0015 h=0948286e2c"
-          ],
           "rest": {
             "codeCursor": 13,
             "codes": [
@@ -3054,21 +3039,6 @@
         "fdr": {
           "n": 13,
           "h": "5495f43ad3",
-          "rows": [
-            "F #7 r5 VIPER1 sq=0001 h=31696c6008",
-            "F #40 r2 VIPER1 sq=0002 h=3e453e5429",
-            "F #56 r2 VIPER1 sq=0003 h=f2856dafde",
-            "F #73 r6 VIPER1 sq=0004 h=fc4bbe7c77",
-            "F #116 r5 VIPER1 sq=0005 h=cffd3cdfc8",
-            "F #141 r2 VIPER1 sq=0006 h=79f086404d",
-            "F #169 r1 EAGLE1 sq=0007 h=5ffc37a8d8",
-            "F #174 r1 EAGLE2 sq=0010 h=7820a077cc",
-            "F #189 r2 EAGLE3 sq=0011 h=e54b87f278",
-            "F #206 r4 VIPER1 sq=0012 h=34c9b5f066",
-            "F #232 r3 VIPER1 sq=0013 h=7c89b3d3ec",
-            "F #248 r1 VIPER1 sq=0014 h=cdbd6515a2",
-            "F #265 r3 VIPER1 sq=0015 h=0948286e2c"
-          ],
           "rest": {
             "codeCursor": 13,
             "codes": [

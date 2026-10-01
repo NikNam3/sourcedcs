@@ -339,21 +339,6 @@
           "INCIRLIK": {
             "n": 13,
             "h": "cad3f73e85",
-            "rows": [
-              "S #11 r3 DEPARTURE/TAXI @GND gnd-taxi-out/main:V h=91d531db8e",
-              "S #18 r4 DEPARTURE/LUAW @TWR twr-runway-queue/rwy-05:V h=ffa058a761",
-              "S #23 r5 DEPARTURE/DEPARTED @TWR twr-airborne/main:V h=03bf6b5fb4",
-              "S #29 r5 ARRIVAL/FINAL @TWR twr-final/main:V h=d437e8aced",
-              "S #48 r3 DEPARTURE/TAXI @GND gnd-taxi-out/main:V h=823e35d237",
-              "S #61 r4 DEPARTURE/RUNWAY_QUEUE @TWR twr-runway-queue/rwy-23:V h=3b963d3f5d",
-              "S #73 r6 ARRIVAL/LANDED @TWR twr-landed/main:V h=cb9ebb5ed5",
-              "S #80 r5 ARRIVAL/LANDED @TWR twr-landed/main:Vh h=5ed5d99985",
-              "S #101 r4 DEPARTURE/LUAW @TWR twr-runway-queue/rwy-05:V h=1c676ba338",
-              "S #123 r3 DEPARTURE/RUNWAY_QUEUE @TWR twr-runway-queue/rwy-05:V h=2ba4e3f954",
-              "S #131 r3 DEPARTURE/TAXI @GND gnd-taxi-out/main:V h=594c93a1de",
-              "S #158 r3 DEPARTURE/RUNWAY_QUEUE @TWR twr-runway-queue/rwy-05:V h=b2f1b87f20",
-              "S #163 r4 DEPARTURE/RUNWAY_QUEUE @TWR twr-runway-queue/rwy-23:V h=ab006358e8"
-            ],
             "rest": {
               "cidSeq": 13,
               "droppedWallAt": [],
@@ -468,21 +453,6 @@
         "fdr": {
           "n": 13,
           "h": "3320a96558",
-          "rows": [
-            "F #10 r1 RWY1 sq=0001 h=64aff120aa",
-            "F #17 r1 RWY2 sq=0002 h=a1a263c2de",
-            "F #22 r2 RWY3 sq=0003 h=4567fcb40a",
-            "F #28 r2 ARR4 sq=0004 h=214ed85bfa",
-            "F #47 r1 RWY5 sq=0005 h=e804db98a1",
-            "F #60 r1 RWY6 sq=0006 h=f10f2eed8f",
-            "F #72 r2 ARR7 sq=0007 h=665b2fdd33",
-            "F #79 r2 ARR8 sq=0010 h=820601d984",
-            "F #100 r1 RWY9 sq=0011 h=753bcfc7c2",
-            "F #122 r1 RWY10 sq=0012 h=30a351fd57",
-            "F #130 r1 RWY11 sq=0013 h=a00090db87",
-            "F #157 r1 RWY12 sq=0014 h=6c4c75c370",
-            "F #162 r1 RWY13 sq=0015 h=d29c3ed28b"
-          ],
           "rest": {
             "codeCursor": 13,
             "codes": [
@@ -576,21 +546,6 @@
           "INCIRLIK": {
             "n": 13,
             "h": "56c9416abe",
-            "rows": [
-              "S #11 r3 DEPARTURE/TAXI @GND gnd-taxi-out/main:V h=91d531db8e",
-              "S #18 r6 DEPARTURE/LUAW @TWR twr-coordination/main:V h=4e41ed224a",
-              "S #23 r7 DEPARTURE/DEPARTED @TWR twr-airborne/main:V h=2c4d44863b",
-              "S #29 r7 ARRIVAL/FINAL @TWR twr-final/main:V h=19930d253c",
-              "S #48 r3 DEPARTURE/TAXI @GND gnd-taxi-out/main:V h=823e35d237",
-              "S #61 r6 DEPARTURE/RUNWAY_QUEUE @TWR twr-runway-queue/rwy-05:V h=d08e92d95a",
-              "S #73 r8 ARRIVAL/LANDED @TWR twr-landed/main:V h=1dfad458c7",
-              "S #80 r7 ARRIVAL/LANDED @TWR twr-landed/main:V7 h=a17067e73f",
-              "S #101 r6 DEPARTURE/LUAW @TWR twr-coordination/main:V3 h=b0213972d1",
-              "S #123 r5 DEPARTURE/RUNWAY_QUEUE @TWR twr-runway-queue/rwy-05:VK h=c192958c43",
-              "S #131 r3 DEPARTURE/TAXI @GND gnd-taxi-out/main:V h=594c93a1de",
-              "S #158 r5 DEPARTURE/RUNWAY_QUEUE @TWR twr-runway-queue/rwy-05:VKG h=c0b75a791a",
-              "S #163 r6 DEPARTURE/RUNWAY_QUEUE @TWR twr-runway-queue/rwy-05:VKGC h=cefb2d273e"
-            ],
             "rest": {
               "cidSeq": 13,
               "droppedWallAt": [],
@@ -705,21 +660,6 @@
         "fdr": {
           "n": 13,
           "h": "3320a96558",
-          "rows": [
-            "F #10 r1 RWY1 sq=0001 h=64aff120aa",
-            "F #17 r1 RWY2 sq=0002 h=a1a263c2de",
-            "F #22 r2 RWY3 sq=0003 h=4567fcb40a",
-            "F #28 r2 ARR4 sq=0004 h=214ed85bfa",
-            "F #47 r1 RWY5 sq=0005 h=e804db98a1",
-            "F #60 r1 RWY6 sq=0006 h=f10f2eed8f",
-            "F #72 r2 ARR7 sq=0007 h=665b2fdd33",
-            "F #79 r2 ARR8 sq=0010 h=820601d984",
-            "F #100 r1 RWY9 sq=0011 h=753bcfc7c2",
-            "F #122 r1 RWY10 sq=0012 h=30a351fd57",
-            "F #130 r1 RWY11 sq=0013 h=a00090db87",
-            "F #157 r1 RWY12 sq=0014 h=6c4c75c370",
-            "F #162 r1 RWY13 sq=0015 h=d29c3ed28b"
-          ],
           "rest": {
             "codeCursor": 13,
             "codes": [

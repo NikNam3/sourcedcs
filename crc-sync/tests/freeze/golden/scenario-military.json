@@ -2131,22 +2131,6 @@
           "INCIRLIK": {
             "n": 14,
             "h": "c85de4669d",
-            "rows": [
-              "S #8 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=4e33bd1913",
-              "S #19 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=98ff0997ef",
-              "S #38 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=e85a1693a0",
-              "S #68 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=eb00ef19ad",
-              "S #91 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=c24c259d20",
-              "S #100 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=2269b3e917",
-              "S #120 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=e3253efa7a",
-              "S #146 r7 ARRIVAL/INBOUND @APP app-inbound/main:V h=c31701b845",
-              "S #166 r3 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=14349e46a0",
-              "S #184 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=7d85e25386",
-              "S #200 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=d9f9977026",
-              "S #222 r2 DEPARTURE/DROPPED @OPS ops-proposed/main:V0 h=1edec6fcf2",
-              "S #239 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=5cbe4dfdd3",
-              "S #247 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=f21d6b7c3a"
-            ],
             "rest": {
               "cidSeq": 14,
               "droppedWallAt": [
@@ -2323,22 +2307,6 @@
         "fdr": {
           "n": 14,
           "h": "7893137717",
-          "rows": [
-            "F #7 r3 GCI1 sq=0001 h=ede9071f8c",
-            "F #18 r2 GCI2 sq=0002 h=66fb414066",
-            "F #37 r4 MSN1 sq=0003 h=8906b994d4",
-            "F #67 r2 REJ1 sq=0004 h=10ef1de06a",
-            "F #90 r3 DEGR1 sq=0005 h=abe10f320d",
-            "F #99 r3 DEGR2 sq=0006 h=4458a1f459",
-            "F #119 r2 D12A sq=0007 h=3370b9cbf2",
-            "F #145 r6 HUNG11 sq=0010 h=132f801064",
-            "F #165 r2 DEFER1 sq=0011 h=96ac00e4d1",
-            "F #183 r1 FRAG11 sq=0012 h=0beeae4360",
-            "F #199 r3 FRAG12 sq=0013 h=29ce091adc",
-            "F #221 r1 CNX11 sq=0014 h=9b91dfcc4a",
-            "F #238 r2 BIND11 sq=0015 h=c462176758",
-            "F #246 r2 BIND12 sq=0016 h=e78492eec9"
-          ],
           "rest": {
             "codeCursor": 14,
             "codes": [
@@ -2419,23 +2387,6 @@
           "INCIRLIK": {
             "n": 15,
             "h": "ba851c444e",
-            "rows": [
-              "S #8 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=4e33bd1913",
-              "S #19 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=98ff0997ef",
-              "S #38 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=e85a1693a0",
-              "S #68 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=eb00ef19ad",
-              "S #91 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=c24c259d20",
-              "S #100 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=2269b3e917",
-              "S #120 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=e3253efa7a",
-              "S #146 r7 ARRIVAL/INBOUND @APP app-inbound/main:V h=c31701b845",
-              "S #166 r3 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=14349e46a0",
-              "S #184 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=7d85e25386",
-              "S #200 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=d9f9977026",
-              "S #222 r2 DEPARTURE/DROPPED @OPS ops-proposed/main:V0 h=1edec6fcf2",
-              "S #239 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=5cbe4dfdd3",
-              "S #247 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=f21d6b7c3a",
-              "S #271 r6 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=bb7de33667"
-            ],
             "rest": {
               "cidSeq": 15,
               "droppedWallAt": [
@@ -2630,23 +2581,6 @@
         "fdr": {
           "n": 15,
           "h": "8d13034714",
-          "rows": [
-            "F #7 r3 GCI1 sq=0001 h=ede9071f8c",
-            "F #18 r2 GCI2 sq=0002 h=66fb414066",
-            "F #37 r4 MSN1 sq=0003 h=8906b994d4",
-            "F #67 r2 REJ1 sq=0004 h=10ef1de06a",
-            "F #90 r3 DEGR1 sq=0005 h=abe10f320d",
-            "F #99 r3 DEGR2 sq=0006 h=4458a1f459",
-            "F #119 r2 D12A sq=0007 h=3370b9cbf2",
-            "F #145 r6 HUNG11 sq=0010 h=132f801064",
-            "F #165 r2 DEFER1 sq=0011 h=96ac00e4d1",
-            "F #183 r1 FRAG11 sq=0012 h=0beeae4360",
-            "F #199 r3 FRAG12 sq=0013 h=29ce091adc",
-            "F #221 r1 CNX11 sq=0014 h=9b91dfcc4a",
-            "F #238 r2 BIND11 sq=0015 h=c462176758",
-            "F #246 r2 BIND12 sq=0016 h=e78492eec9",
-            "F #270 r4 FRZ11 sq=0017 h=240ca38e80"
-          ],
           "rest": {
             "codeCursor": 15,
             "codes": [
@@ -2720,24 +2654,6 @@
           "INCIRLIK": {
             "n": 16,
             "h": "fff80e57ba",
-            "rows": [
-              "S #8 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=4e33bd1913",
-              "S #19 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=98ff0997ef",
-              "S #38 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=e85a1693a0",
-              "S #68 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=eb00ef19ad",
-              "S #91 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=c24c259d20",
-              "S #100 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=2269b3e917",
-              "S #120 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=e3253efa7a",
-              "S #146 r7 ARRIVAL/INBOUND @APP app-inbound/main:V h=c31701b845",
-              "S #166 r3 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=14349e46a0",
-              "S #184 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=7d85e25386",
-              "S #200 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=d9f9977026",
-              "S #222 r2 DEPARTURE/DROPPED @OPS ops-proposed/main:V0 h=1edec6fcf2",
-              "S #239 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=5cbe4dfdd3",
-              "S #247 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=f21d6b7c3a",
-              "S #271 r6 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=bb7de33667",
-              "S #299 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=2391430610"
-            ],
             "rest": {
               "cidSeq": 16,
               "droppedWallAt": [
@@ -2940,24 +2856,6 @@
         "fdr": {
           "n": 16,
           "h": "033085dd87",
-          "rows": [
-            "F #7 r3 GCI1 sq=0001 h=ede9071f8c",
-            "F #18 r2 GCI2 sq=0002 h=66fb414066",
-            "F #37 r4 MSN1 sq=0003 h=8906b994d4",
-            "F #67 r2 REJ1 sq=0004 h=10ef1de06a",
-            "F #90 r3 DEGR1 sq=0005 h=abe10f320d",
-            "F #99 r3 DEGR2 sq=0006 h=4458a1f459",
-            "F #119 r2 D12A sq=0007 h=3370b9cbf2",
-            "F #145 r6 HUNG11 sq=0010 h=132f801064",
-            "F #165 r2 DEFER1 sq=0011 h=96ac00e4d1",
-            "F #183 r1 FRAG11 sq=0012 h=0beeae4360",
-            "F #199 r3 FRAG12 sq=0013 h=29ce091adc",
-            "F #221 r1 CNX11 sq=0014 h=9b91dfcc4a",
-            "F #238 r2 BIND11 sq=0015 h=c462176758",
-            "F #246 r2 BIND12 sq=0016 h=e78492eec9",
-            "F #270 r4 FRZ11 sq=0017 h=240ca38e80",
-            "F #298 r2 RST11 sq=0020 h=e13dac4165"
-          ],
           "rest": {
             "codeCursor": 16,
             "codes": [

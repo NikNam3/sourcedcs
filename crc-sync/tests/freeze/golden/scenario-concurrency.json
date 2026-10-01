@@ -2290,21 +2290,6 @@
           "INCIRLIK": {
             "n": 13,
             "h": "0380960412",
-            "rows": [
-              "S #8 r4 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=a96014fe6c",
-              "S #25 r4 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=bdca439d4a",
-              "S #41 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=8175bc365e",
-              "S #69 r3 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=d0e9d24886",
-              "S #74 r3 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=b76410f0b5",
-              "S #89 r3 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=61ebe37b65",
-              "S #104 r4 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=73c6b56cbd",
-              "S #121 r4 ARRIVAL/INBOUND @APP app-inbound/main:V h=6603fdc235",
-              "S #138 r6 DEPARTURE/DROPPED @APP app-departures/main:V h=bd5f936f7c",
-              "S #158 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=1080f2bd2d",
-              "S #189 r3 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=07103bbcf3",
-              "S #214 r3 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=29f0fa70c4",
-              "S #229 r4 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=bdf320b7dc"
-            ],
             "rest": {
               "cidSeq": 13,
               "droppedWallAt": [
@@ -2413,21 +2398,6 @@
         "fdr": {
           "n": 13,
           "h": "4b878eb0fb",
-          "rows": [
-            "F #7 r3 RACE1 sq=0001 h=6c6c72af55",
-            "F #24 r3 RETRY1 sq=0002 h=b73739ff92",
-            "F #40 r1 ADV1 sq=0003 h=fb26529581",
-            "F #68 r2 LAG1 sq=0004 h=e145f173eb",
-            "F #73 r2 LAG2 sq=0005 h=40feca5bd2",
-            "F #88 r2 FAR1 sq=0006 h=07c0d5fa73",
-            "F #103 r3 RECON1 sq=0007 h=9d691ba5ac",
-            "F #120 r3 ROLE1 sq=0010 h=57594e067e",
-            "F #137 r2 BOTH1 sq=0011 h=6309014e53",
-            "F #157 r2 TWICE1 sq=0012 h=7bc74a5395",
-            "F #188 r2 RECON2 sq=0013 h=13c3949ab0",
-            "F #213 r2 ATOMIC1 sq=0014 h=470e3041ad",
-            "F #228 r3 LONG1 sq=0015 h=7186a5454d"
-          ],
           "rest": {
             "codeCursor": 13,
             "codes": [
@@ -2500,22 +2470,6 @@
           "INCIRLIK": {
             "n": 14,
             "h": "e6ae2af85d",
-            "rows": [
-              "S #8 r4 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=a96014fe6c",
-              "S #25 r4 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=bdca439d4a",
-              "S #41 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=8175bc365e",
-              "S #69 r3 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=d0e9d24886",
-              "S #74 r3 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=b76410f0b5",
-              "S #89 r3 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=61ebe37b65",
-              "S #104 r4 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=73c6b56cbd",
-              "S #121 r4 ARRIVAL/INBOUND @APP app-inbound/main:V h=6603fdc235",
-              "S #138 r6 DEPARTURE/DROPPED @APP app-departures/main:V h=bd5f936f7c",
-              "S #158 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=1080f2bd2d",
-              "S #189 r3 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=07103bbcf3",
-              "S #214 r3 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=29f0fa70c4",
-              "S #229 r4 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=bdf320b7dc",
-              "S #247 r5 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=feead6391d"
-            ],
             "rest": {
               "cidSeq": 14,
               "droppedWallAt": [
@@ -2630,22 +2584,6 @@
         "fdr": {
           "n": 14,
           "h": "9d0b76d114",
-          "rows": [
-            "F #7 r3 RACE1 sq=0001 h=6c6c72af55",
-            "F #24 r3 RETRY1 sq=0002 h=b73739ff92",
-            "F #40 r1 ADV1 sq=0003 h=fb26529581",
-            "F #68 r2 LAG1 sq=0004 h=e145f173eb",
-            "F #73 r2 LAG2 sq=0005 h=40feca5bd2",
-            "F #88 r2 FAR1 sq=0006 h=07c0d5fa73",
-            "F #103 r3 RECON1 sq=0007 h=9d691ba5ac",
-            "F #120 r3 ROLE1 sq=0010 h=57594e067e",
-            "F #137 r2 BOTH1 sq=0011 h=6309014e53",
-            "F #157 r2 TWICE1 sq=0012 h=7bc74a5395",
-            "F #188 r2 RECON2 sq=0013 h=13c3949ab0",
-            "F #213 r2 ATOMIC1 sq=0014 h=470e3041ad",
-            "F #228 r3 LONG1 sq=0015 h=7186a5454d",
-            "F #246 r3 NOTE1 sq=0016 h=1b4639b518"
-          ],
           "rest": {
             "codeCursor": 14,
             "codes": [
