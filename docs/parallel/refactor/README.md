@@ -21,6 +21,53 @@ notes) and challenges its assumptions against the plan, decisions.md and the cod
 code. The lane carries on with its defaults meanwhile (P2), but it must answer the questioner's points in its wip file.
 Peak load is 9 agents in W3 (8 lanes and the questioner). The cap is 10.
 
+## Test policy (S-TEST, human 2026-10-01: "only run tests when absolutely necessary") — wins over every briefing's gate lines
+
+Measured unloaded on the dev machine: crc-sync `npm test` 18 s, freeze goldens alone 14 s, crc-desktop `npm test` 8 s,
+`soak:selfcheck` ~40 s, `freeze:selfcheck` ~5 min, **full Playwright ~18 min and load-sensitive** (9 agents running it at
+once is what produced the "load lottery" failures).
+
+- **While working:** run only the test files for the code you touched (`node --test tests/<file>`), plus the freeze
+  goldens (14 s) after each structural commit. That is the per-commit gate.
+- **Once, before your report:** both full unit suites; `soak:selfcheck` if you touched the files listed under Gates;
+  `freeze:selfcheck` only if you retargeted a mutation (once, at the end, not per commit).
+- **Playwright: lanes never run the full suite.** Client lanes (ESM-1, ESM-2a, ESM-2b, CMSG) may run a boot smoke
+  (one spec that loads the app and asserts zero script errors) and the specs for the panels they changed, on their own
+  `E2E_LANE`, never more than one Playwright process per lane. **Server-only lanes run no Playwright at all**: a
+  golden-identical structural change sends byte-identical frames, which the client cannot tell apart.
+- **The supervisor runs the full Playwright suite**, sharded across E2E lanes in parallel (`e2e/tools/run-sharded.js`,
+  PW-SHARD), only (a) after merging a wave that touched `crc-desktop/app/public/**` (the ESM unit; W3's ESM-2a/2b/CMSG,
+  merged together and run once), (b) after any approved `behaviour(...)` commit a controller could see, and (c) once at
+  the window close. Never more than one full run machine-wide. A failure is re-run alone before it counts.
+- Re-running a suite that already passed on the same tree is never needed; cite the earlier run instead.
+
+## Slot plan (cap 10 agents; fill idle slots, critical path first)
+
+The critical path is the board-store chain BOARD-1 → BOARD-2 → BOARD-3 → SYNC → BACKCOMPAT → RENAME. The supervisor
+keeps it moving first and fills the remaining slots in this priority order:
+
+1. **W1 and W2 overlap.** W2's start condition is R0 merged, not the ESM unit: BOARD-1, WIRE, STORES and APP run
+   alongside ESM-1 and ESM-1T a/b/c (server-only vs client-only files). Peak 9 with the questioner.
+2. **Side tracks that touch no frozen file** (start in W1, fill any free slot):
+   - **PW-SHARD** (Sonnet): `crc-desktop/e2e/tools/run-sharded.js` splits the spec files across N `E2E_LANE`s and
+     runs them in parallel with per-lane servers (builds on E2EH's run-order tool and reset supervisor); target the
+     full suite in ~5 min. Touches only `crc-desktop/e2e/tools/**` and a package.json script.
+   - **Post-refactor design** (Opus, docs only): ADR drafts and lane briefings so the feature lanes start the day the
+     window closes: (a) formation Split/Join + undo for every one-click move (H89-H91, H95), (b) control release on
+     HANDOFF (H94) + TOFI regime at airspace entry (H97), (c) the airspace registry ADR 0098 with `kind: AREA|ROUTE`
+     (S-R3-80), geometry as polygon or DCS drawing (R3-12) and the sourcedcs-web airspace admin/booking-tool link
+     (AIRSP-2 note).
+   - **RENAME prep** (Opus, docs only): the W7 briefing(s) and the exact mapping table from
+     `docs/parallel/research/vocabulary.md` + H98 (FAA position names with citations).
+   - **INFRA3** (Sonnet): the settled infra items outside the refactor's files: R3-34 (compose → `./init.sh`), R3-36
+     (CI check for the nginx template, if INFRA2 did not add one), R3-37 (refuse release tags not on main), R3-67
+     (delete the nix packages, not the dev shell; keep any code), R3-17 (untrack `sourcedcs-web/data` with a seed,
+     compare first). Touches `infra/`, `.github/`, `flake.nix`, `sourcedcs-web/` only.
+3. **W7 RENAME runs as three parallel lanes** by area (crc-sync identifiers / client and CSS / docs, config keys, env,
+   infra), sharing one mapping table; wire message names belong to one lane that edits both sides.
+4. **After the window:** L20 first (split by directory into parallel lanes, comments only), then the feature lanes in
+   parallel by disjoint files (Split/Join+undo, release+TOFI, AIRSP phase 2, WIRE-B, SYNC-B).
+
 ## Conventions every refactor lane follows
 
 - **Worktree:** `/home/nklx/dev/personal/sourcedcs-<LANE>` on `lane/<LANE>-<slug>`, cut from `efsp-wp5-correlation`
@@ -44,9 +91,9 @@ Peak load is 9 agents in W3 (8 lanes and the questioner). The cap is 10.
 - **Selfcheck:** after R0, `crc-sync/tests/freeze/selfcheck/` holds one file per mutation (M1…M16). When you move code a
   mutation targets, retarget **that mutation file only** and re-prove it with `npm run freeze:selfcheck` (about 5 min).
   Every mutation must apply and be caught.
-- **Gates** (plan §3.3): both suites green; golden identical; `npm run soak:selfcheck` when you touch
-  `board-store.js`, `board/**`, `efsp-ws.js`, `wire/**`, `ws-hub.js`, `sync/**` or `host-core.js`; Playwright full suite
-  on your `E2E_LANE` when you touch `crc-desktop/app/public/**`.
+- **Gates** (plan §3.3, timing per the test policy above): both suites green; golden identical; `npm run soak:selfcheck`
+  when you touch `board-store.js`, `board/**`, `efsp-ws.js`, `wire/**`, `ws-hub.js`, `sync/**` or `host-core.js`; for
+  client lanes the boot smoke and touched-panel specs only (the full Playwright run is the supervisor's).
 - **Comments move verbatim with their code.** Do not reword, add `[SOURCE-DEFINED]` markers, or fix a stale comment.
   That is L20's job, on the new layout. If a comment is now false because of your move (it names a file or method
   that moved), change only the pointer.
