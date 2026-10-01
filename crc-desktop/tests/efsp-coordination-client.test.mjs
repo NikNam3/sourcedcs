@@ -77,9 +77,9 @@ test('TOFI eligibility covers every airborne ATC-side Role, and never MISSION �
  * the arrays come from the sandbox's realm, so they are copied before a
  * deepStrictEqual that compares prototypes.
  */
-const bayViewSrc = readClient('panels/efsp/bay-view.js');
+const bayViewSrc = readClient('panels/efsp/bay/authority-mirror.js'); // ESM-2a: the hand-copied authority tables
 function bayViewValue(name) {
-  return constLiteral(bayViewSrc, name, 'bay-view.js');
+  return constLiteral(bayViewSrc, name, 'authority-mirror.js');
 }
 
 // The RANGE slice — bay-view.js decides whether to offer the "Airspace…"
