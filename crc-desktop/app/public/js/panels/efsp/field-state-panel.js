@@ -21,7 +21,7 @@
 //
 // Every time shown is in-game Zulu from the server's mission-clock stamps
 // (decisions.md H11). The one direction shown, the mission wind that picked
-// the active end, goes through F2's toMagneticDisplay (H15, S-W3c).
+// the active end, goes through magnetic.js's toMagneticDisplay (H15).
 
 let _fieldStateListEl = null;
 let _fieldStateEmptyEl = null;
@@ -29,13 +29,6 @@ let _fieldStateEmptyEl = null;
 const FIELD_STATE_STATUS_BADGES = {
   OPEN: 'OPEN', CLOSED: 'CLOSED', SUSPENDED_WORKS: 'WORKS', SUSPENDED_INSPECTION: 'INSPECT',
 };
-
-// decisions.md S-W3c: F2 owns toMagneticDisplay(trueDeg). Until F2 merges this
-// stand-in answers "unknown" (null) rather than showing a TRUE direction as if
-// it were magnetic; the panel then leaves the direction out.
-if (typeof globalThis !== 'undefined' && typeof globalThis.toMagneticDisplay !== 'function') {
-  globalThis.toMagneticDisplay = function toMagneticDisplayStub(_trueDeg) { return null; };
-}
 
 function _fsZulu(ms) {
   if (!Number.isFinite(ms)) return '';
