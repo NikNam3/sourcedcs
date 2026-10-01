@@ -122,7 +122,7 @@ app.post('/api/ws-ticket', auth.requireAuth, (req, res) => {
 
 // ── Core components ──────────────────────────────────────────────────────
 const trackStore  = new TrackStore();
-const collabStore = new CollaborativeStore();
+const collabStore = new CollaborativeStore({ persist: true, identityOf: (id) => trackStore.get(id) });
 const atisStore   = new AtisStore();
 const grpcClient  = new GrpcClient();
 const srsClient   = new SrsClient();
@@ -285,7 +285,8 @@ missionSession.onNewSession((session) => {
 grpcClient.on('mission-load', (missionData) => {
   trackStore.clear();
   surveillance.clear();
-  collabStore.clear();
+  // collabStore is NOT cleared here: a mission-load that does not roll the mission
+  // session keeps the same unit ids (docs/adr/0094); a roll cleared it above.
   // Every radar id, sweep phase and line-of-sight answer belonged to the
   // theater that just went away.
   coverageEngine.reset();
@@ -387,6 +388,7 @@ grpcClient.on('game-time', (dt) => {
 });
 // F3: after the sample, so the step-back check reads this poll's time (ADR 0086).
 grpcClient.on('game-time', () => missionSession.observeClock());
+require('./src/collab-wiring').wireCollabSession({ grpcClient, missionSession, collabStore }); // after the handlers it orders against (docs/adr/0094)
 // With DCS gone there are no samples to broadcast on, and the clock has fallen
 // back to the wall clock — clients still need to hear that, and when.
 let lastClockSource = missionClock.source;
