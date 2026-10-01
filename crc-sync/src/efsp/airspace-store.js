@@ -113,6 +113,8 @@ class AirspaceStore {
       // id is present, which is why this is a distinct field rather than
       // stripId reused for something that is not one.
       airspaceId: mutation.airspaceId,
+      // The airspace's own Facility; null when the airspace is unknown (docs/adr/0083).
+      facilityId: (this._config.getAirspace(mutation.airspaceId) || {}).controllingFacilityId || null,
       actingPositionId,
       actorId: by || null,
       at: this._clock.now(),
@@ -156,12 +158,19 @@ class AirspaceStore {
    * @param {string} by — controllerId, for the audit trail
    */
   apply(mutation, actingPositionId, by) {
+    // Every return from here on is audited, the early refusals included
+    // (docs/adr/0083): one Mutation, one log entry.
     const record = this._records.get(mutation.airspaceId);
-    if (!record) return { ok: false, reason: 'NOT_FOUND' };
-    const definition = this._config.getAirspace(mutation.airspaceId);
-    if (!definition) return { ok: false, reason: 'NOT_FOUND' };
+    const definition = record ? this._config.getAirspace(mutation.airspaceId) : null;
+    if (!record || !definition) {
+      const refused = { ok: false, reason: 'NOT_FOUND' };
+      this._recordAudit(mutation, actingPositionId, by, undefined, refused);
+      return refused;
+    }
     if (mutation.baseRev !== undefined && mutation.baseRev !== null && record.rev !== mutation.baseRev) {
-      return { ok: false, reason: 'STALE_REV', airspace: this.getAirspace(mutation.airspaceId) };
+      const refused = { ok: false, reason: 'STALE_REV', airspace: this.getAirspace(mutation.airspaceId) };
+      this._recordAudit(mutation, actingPositionId, by, deepClone(record), refused);
+      return refused;
     }
 
     const op = mutation.op || {};

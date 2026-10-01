@@ -196,7 +196,7 @@ function _handleMutation(ctx, session, msg, persist) {
   const facilityId = msg.facilityId || ctx.facilityConfig.DEFAULT_FACILITY_ID;
   const boardStore = ctx.boardStoreFor(facilityId);
   if (!boardStore) {
-    return { ack: { version: VERSION, type: 'efsp-mutation-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'VALIDATION_ERROR', detail: `unknown facilityId: ${msg.facilityId}` } };
+    return { ack: { version: VERSION, type: 'efsp-mutation-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'VALIDATION_ERROR', detail: `unknown facilityId: ${msg.facilityId}` }, unaudited: true };
   }
   // `actingPositionId` arrives as an untrusted client claim, and every
   // per-Position authority rule downstream (permission.js's canMutate,
@@ -212,7 +212,7 @@ function _handleMutation(ctx, session, msg, persist) {
   // makes you an Observer (§4.8.2 rule 3, D18), and an Observer watches.
   const positionStore = ctx.positionStoreFor(facilityId);
   if (!positionStore || positionStore.primaryOf(msg.actingPositionId) !== session.controllerId) {
-    return { ack: { version: VERSION, type: 'efsp-mutation-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), facilityId, ok: false, reason: 'NOT_HOLDING_POSITION', detail: `you are not Primary at ${msg.actingPositionId} — select it before acting on its Strips` } };
+    return { ack: { version: VERSION, type: 'efsp-mutation-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), facilityId, ok: false, reason: 'NOT_HOLDING_POSITION', detail: `you are not Primary at ${msg.actingPositionId} — select it before acting on its Strips` }, unaudited: true };
   }
 
   const mutation = { clientMutationId: msg.clientMutationId, stripId: msg.stripId, baseRev: msg.baseRev, op: msg.op };
@@ -403,7 +403,7 @@ function _deltaCanServe(boardStore, boardEpoch, lastSeq) {
 function _handleAirspaceMutation(ctx, session, msg, persist) {
   const airspaceStore = ctx.airspaceStore;
   if (!airspaceStore) {
-    return { ack: { version: VERSION, type: 'efsp-airspace-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'VALIDATION_ERROR', detail: 'no airspace store' } };
+    return { ack: { version: VERSION, type: 'efsp-airspace-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'VALIDATION_ERROR', detail: 'no airspace store' }, unaudited: true };
   }
 
   // The same session binding _handleMutation carries (docs/adr/0029), for the
@@ -421,7 +421,7 @@ function _handleAirspaceMutation(ctx, session, msg, persist) {
     return positionStore && positionStore.primaryOf(msg.actingPositionId) === session.controllerId;
   });
   if (!isPrimarySomewhere) {
-    return { ack: { version: VERSION, type: 'efsp-airspace-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'NOT_HOLDING_POSITION', detail: `you are not Primary at ${msg.actingPositionId} — select it before acting on airspace` } };
+    return { ack: { version: VERSION, type: 'efsp-airspace-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'NOT_HOLDING_POSITION', detail: `you are not Primary at ${msg.actingPositionId} — select it before acting on airspace` }, unaudited: true };
   }
 
   const cached = _cachedOutcome(ctx, 'airspace', msg);
@@ -434,7 +434,7 @@ function _handleAirspaceMutation(ctx, session, msg, persist) {
   }
 
   const result = airspaceStore.apply(
-    { airspaceId: msg.airspaceId, baseRev: msg.baseRev, op: msg.op },
+    { clientMutationId: msg.clientMutationId, airspaceId: msg.airspaceId, baseRev: msg.baseRev, op: msg.op },
     msg.actingPositionId, session.controllerId,
   );
   _rememberOutcome(ctx, 'airspace', msg, result, msg.airspaceId);
@@ -477,7 +477,7 @@ function _handleAirspaceMutation(ctx, session, msg, persist) {
 function _handleCorrelationMutation(ctx, session, msg, persist) {
   const correlationStore = ctx.correlationStore;
   if (!correlationStore) {
-    return { ack: { version: VERSION, type: 'efsp-correlation-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'VALIDATION_ERROR', detail: 'no correlation store' } };
+    return { ack: { version: VERSION, type: 'efsp-correlation-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'VALIDATION_ERROR', detail: 'no correlation store' }, unaudited: true };
   }
 
   // The same session binding the other two dispatch paths carry
@@ -499,14 +499,14 @@ function _handleCorrelationMutation(ctx, session, msg, persist) {
     return positionStore && positionStore.primaryOf(msg.actingPositionId) === session.controllerId;
   });
   if (!isPrimarySomewhere) {
-    return { ack: { version: VERSION, type: 'efsp-correlation-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'NOT_HOLDING_POSITION', detail: `you are not Primary at ${msg.actingPositionId} — select it before binding a contact` } };
+    return { ack: { version: VERSION, type: 'efsp-correlation-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'NOT_HOLDING_POSITION', detail: `you are not Primary at ${msg.actingPositionId} — select it before binding a contact` }, unaudited: true };
   }
 
   // Refused by class, not by table: a range Position is the using agency, has
   // no flights to identify (§4.1 rule 2) and, under docs/adr/0042, no scope on
   // which to have seen anything.
   if (!permission.canCorrelate(msg.actingPositionId)) {
-    return { ack: { version: VERSION, type: 'efsp-correlation-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'PERMISSION_DENIED', detail: `${msg.actingPositionId} works no flights, so it identifies no contacts` } };
+    return { ack: { version: VERSION, type: 'efsp-correlation-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'PERMISSION_DENIED', detail: `${msg.actingPositionId} works no flights, so it identifies no contacts` }, unaudited: true };
   }
 
   const cached = _cachedOutcome(ctx, 'correlation', msg);
@@ -556,7 +556,7 @@ function _handleCorrelationMutation(ctx, session, msg, persist) {
 function _handleMarsaMutation(ctx, session, msg, persist) {
   const marsaStore = ctx.marsaStore;
   if (!marsaStore) {
-    return { ack: { version: VERSION, type: 'efsp-marsa-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'VALIDATION_ERROR', detail: 'no MARSA store' } };
+    return { ack: { version: VERSION, type: 'efsp-marsa-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'VALIDATION_ERROR', detail: 'no MARSA store' }, unaudited: true };
   }
 
   // The same session binding the other three dispatch paths carry
@@ -577,13 +577,13 @@ function _handleMarsaMutation(ctx, session, msg, persist) {
     return positionStore && positionStore.primaryOf(msg.actingPositionId) === session.controllerId;
   });
   if (!isPrimarySomewhere) {
-    return { ack: { version: VERSION, type: 'efsp-marsa-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'NOT_HOLDING_POSITION', detail: `you are not Primary at ${msg.actingPositionId} — select it before acting on a MARSA relation` } };
+    return { ack: { version: VERSION, type: 'efsp-marsa-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'NOT_HOLDING_POSITION', detail: `you are not Primary at ${msg.actingPositionId} — select it before acting on a MARSA relation` }, unaudited: true };
   }
 
   // Refused by class, not by table — a range Position is the using agency and
   // works no Strips (§4.1 rule 2), so it has no flights to put into a relation.
   if (!permission.canDeclareMarsa(msg.actingPositionId)) {
-    return { ack: { version: VERSION, type: 'efsp-marsa-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'PERMISSION_DENIED', detail: `${msg.actingPositionId} works no flights, so it declares no MARSA` } };
+    return { ack: { version: VERSION, type: 'efsp-marsa-ack', clientMutationId: msg.clientMutationId, ..._subject(msg), ok: false, reason: 'PERMISSION_DENIED', detail: `${msg.actingPositionId} works no flights, so it declares no MARSA` }, unaudited: true };
   }
 
   // DeclareMarsa is the case that matters: a retried declaration minted a
@@ -898,8 +898,8 @@ function _fullSnapshotMessage(ctx) {
  * anywhere else.
  *
  * A refusal made here, before the store (no store, NOT_HOLDING_POSITION), is
- * not written to the Mutation log — the store audits from its door onward
- * (decisions.md S-R2-5).
+ * marked `unaudited` so the metrics tap writes it (docs/adr/0083); the store
+ * audits from its door onward (decisions.md S-R2-5).
  */
 function _handleFieldStateMutation(ctx, session, msg, persist) {
   const store = ctx.fieldStateStore;
@@ -911,6 +911,8 @@ function _handleFieldStateMutation(ctx, session, msg, persist) {
       ok: false, reason, detail, fieldState: store ? store.getFieldState(facilityId) : null,
       fieldStateSeq: store ? store.currentSeq : undefined,
     },
+    // Both refusals made here come before the store: the tap logs them (docs/adr/0083).
+    unaudited: true,
   });
   if (!store) return refuse('VALIDATION_ERROR', 'no field-state store');
 
@@ -1047,7 +1049,7 @@ function _handleAtoMutation(ctx, session, msg, persist) {
   // docs/adr/0040), except NOT_HOLDING_POSITION, which L5's tap already logs.
   const refuse = (reason, detail) => {
     if (reason !== 'NOT_HOLDING_POSITION') logEntry({ ok: false, reason, detail, source: 'wire' });
-    return { ack: { ...base, ok: false, reason, detail, results: [] } };
+    return { ack: { ...base, ok: false, reason, detail, results: [] }, ...(reason === 'NOT_HOLDING_POSITION' ? { unaudited: true } : {}) };
   };
 
   const gate = _atoGate(ctx, session, msg, op.text);

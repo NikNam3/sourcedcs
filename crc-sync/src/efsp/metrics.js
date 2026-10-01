@@ -908,9 +908,9 @@ function createEfspInstrumentation({
     }
 
     // §11.3: every Mutation is recorded, refusals included. board-store logs
-    // none of its refusals (T1), and NOT_HOLDING_POSITION never reaches any
-    // store; the airspace/correlation/MARSA stores already log their own.
-    if (!ok && (msg.type === 'efsp-mutation' || ack.reason === 'NOT_HOLDING_POSITION')) {
+    // none of its refusals (T1). Every other path logs what reaches its store;
+    // a refusal made before the store says so with `unaudited` (docs/adr/0083).
+    if (!ok && (msg.type === 'efsp-mutation' || result.unaudited === true)) {
       const subject = {};
       for (const k of ['stripId', 'airspaceId', 'fdrId', 'marsaId']) if (msg[k] !== undefined) subject[k] = msg[k];
       efsp.mutationLog.record({
