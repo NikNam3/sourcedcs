@@ -57,7 +57,7 @@ test('ORDNANCE: always on Tower\'s face; on APP, CTR and the tactical Positions 
   // only while it says something. Everywhere else it is in the expanded view.
   const fdr = (ordnanceState) => ({ military: { ordnanceState } });
   for (const { role, positionId, list } of everyList()) {
-    assert.equal(list.includes('3G'), positionId === 'TWR', `static list ${role} at ${positionId}`);
+    assert.equal(list.includes('3G'), positionId === 'TWR' || (positionId === 'OPS' && role === 'DEPARTURE'), `static list ${role} at ${positionId}`);
   }
   const whenSet = [
     ...['DEPARTURE', 'ARRIVAL', 'OVERFLIGHT'].flatMap(role => ['APP', 'CTR'].map(p => [role, p])),
@@ -75,8 +75,11 @@ test('ORDNANCE: always on Tower\'s face; on APP, CTR and the tactical Positions 
     assert.ok(compactBlocksFor(role, 'TWR', fdr('CLEAN')).includes('3G'), `${role} at TWR, CLEAN`);
     assert.ok(compactBlocksFor(role, 'TWR').includes('3G'), `${role} at TWR, no FDR`);
   }
+  // UI-A U1: OPS records the load state, so a DEPARTURE at OPS carries it always.
+  assert.ok(compactBlocksFor('DEPARTURE', 'OPS', fdr('CLEAN')).includes('3G'), 'DEPARTURE at OPS, CLEAN');
   for (const positionId of ['OPS', 'CD', 'GND']) {
     for (const role of ['DEPARTURE', 'ARRIVAL']) {
+      if (positionId === 'OPS' && role === 'DEPARTURE') continue;
       assert.equal(compactBlocksFor(role, positionId, fdr('HUNG')).includes('3G'), false, `${role} at ${positionId}`);
     }
   }
