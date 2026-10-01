@@ -1,17 +1,20 @@
-'use strict';
-
 // The METRICS panel's view-model (docs/adr/0072), against crc-sync's metrics
 // and traffic bodies as docs/adr/0065 ships them (crc-sync's
 // tests/efsp-metrics-contract.test.mjs is the contract). Pure: no DOM, except
 // the last test, which renders into the shared stub.
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('fs');
-const path = require('path');
-const vm = require('vm');
-const { renderMetricsModel, renderTrafficModel, metricsTrend, METRICS_ROWS } = require('../app/public/js/panels/metrics-panel.js');
-const { makeElement, descendants } = require('./helpers/dom-stub.js');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import './helpers/client-env.mjs';
+import { renderMetricsModel, renderTrafficModel, metricsTrend, METRICS_ROWS } from '../app/public/js/panels/metrics-panel.js';
+import domStub from './helpers/dom-stub.js';
+import { freshGraph } from './helpers/fresh-graph.mjs';
+
+const { makeElement, descendants } = domStub;
+
+// initMetricsPanel() starts an interval; it must not keep the test process alive.
+const realSetInterval = globalThis.setInterval;
+globalThis.setInterval = (fn, ms, ...rest) => { const t = realSetInterval(fn, ms, ...rest); if (t.unref) t.unref(); return t; };
 
 const H1 = '2026-09-30T12:00Z', H2 = '2026-09-30T13:00Z', H3 = '2026-09-30T14:00Z', H4 = '2026-09-30T15:00Z';
 const T0 = Date.parse('2026-09-30T12:05:00Z');
@@ -293,19 +296,19 @@ test('traffic count: an unknown Facility falls back to INCIRLIK', () => {
   assert.equal(renderTrafficModel(trafficBody(), 'RANGES').facilityId, 'INCIRLIK');
 });
 
-test('the panel renders seven metric rows into the DOM', () => {
+test('the panel renders seven metric rows into the DOM', async () => {
   const els = { 'metrics-panel': makeElement('div'), 'metrics-content': makeElement('div') };
   const sent = [];
-  const sandbox = {
-    console, module: { exports: {} }, setInterval: () => 0, clearInterval() {}, setTimeout, clearTimeout,
-    Date, JSON, Math, Number, Set, Map, Array, Object, String, Boolean, isNaN, parseInt, parseFloat,
-    crypto: { randomUUID: () => 'req-1' },
-    document: { getElementById: (id) => els[id] || null, createElement: makeElement },
-    isSyncOpen: () => true, sendToSync: (m) => sent.push(m),
-  };
-  sandbox.globalThis = sandbox;
-  vm.createContext(sandbox);
-  vm.runInContext(fs.readFileSync(path.join(__dirname, '../app/public/js/panels/metrics-panel.js'), 'utf8'), sandbox);
+  const g = freshGraph();
+  const sync = await g.import('sync.js');
+  const sandbox = await g.import('panels/metrics-panel.js');
+  const savedGetElementById = document.getElementById;
+  const savedRandomUUID = crypto.randomUUID;
+  document.getElementById = (id) => els[id] || null;
+  crypto.randomUUID = () => 'req-1';
+  sync.setIsSyncOpen(() => true);
+  sync.setSendToSync((m) => sent.push(m));
+  try {
   sandbox.initMetricsPanel();
   assert.equal(sent.length, 1, 'asks on open');
   assert.equal(sent[0].type, 'efsp-metrics-request');
@@ -319,4 +322,8 @@ test('the panel renders seven metric rows into the DOM', () => {
   assert.match(text, /reconciles with the Mutation log ✓/);
   assert.match(text, /Per Position/);
   assert.doesNotMatch(text, /Searches/, 'per-Position numbers are folded by default (H66)');
+  } finally {
+    document.getElementById = savedGetElementById;
+    crypto.randomUUID = savedRandomUUID;
+  }
 });
