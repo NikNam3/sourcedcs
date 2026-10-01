@@ -1,13 +1,12 @@
-'use strict';
 
 // What counts as a Strip ARRIVING in a controller's Bay, and how long it stays
 // marked (efsp-arrivals.js, docs/adr/0057). The rendering half — the tab
 // counts, the arrivals line, the Strip's amber edge and single flash — is in
 // efsp-ui-reachability.test.js and the Playwright specs.
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const A = require('../app/public/js/panels/efsp/efsp-arrivals.js');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import * as A from '../app/public/js/panels/efsp/efsp-arrivals.js';
 
 const ME = 'c-me';
 const OTHER = 'c-other';

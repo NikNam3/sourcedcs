@@ -1,5 +1,3 @@
-'use strict';
-
 /* The MARSA badge and the participant highlight (guide §9.2 rules 2, 5 and 6).
  *
  * The DOM-free half — badge shape, action list and highlight resolution. The
@@ -17,29 +15,25 @@
  *     this codebase already has one unretractable badge too many.
  */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const path = require('path');
+import './helpers/client-env.mjs';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 
-const CLIENT = path.join(__dirname, '../app/public/js/panels/efsp');
-const state = require(path.join(CLIENT, 'efsp-state.js'));
-const {
+import * as state from '../app/public/js/panels/efsp/efsp-state.js';
+import {
   marsaBadgeFor, marsaActionsFor,
   highlightMarsaParticipants, refreshMarsaHighlight,
   getMarsaHighlightStripIds, isMarsaHighlighted,
   MARSA_EXPANSION,
-} = require(path.join(CLIENT, 'marsa-badge.js'));
+} from '../app/public/js/panels/efsp/marsa-badge.js';
+import { _setSelectedStripIdForTest } from '../app/public/js/panels/efsp/bay-view.js';
 
-// marsa-badge.js reaches for these as plain globals, exactly as it does in the
-// browser where every panel file is a <script>.
-global.getEfspStrip = state.getEfspStrip;
-global.getEfspFdr = state.getEfspFdr;
-global.marsaForStrip = state.marsaForStrip;
-global.marsaParticipantStripIds = state.marsaParticipantStripIds;
-global.activeMarsaForFdr = state.activeMarsaForFdr;
+const require = createRequire(import.meta.url);
 
-let selectedStripId = null;
-global.getSelectedEfspStripId = () => selectedStripId;
+// marsa-badge.js reads the selection through bay-view.js's getSelectedEfspStripId (the old test stubbed that
+// global); this drives the real one.
+const setSelected = (id) => _setSelectedStripIdForTest(id);
 
 const TANKER = 'fdr-shell71';
 const RX1 = 'fdr-viper11';
@@ -77,7 +71,7 @@ const FDRS = [fdr(TANKER, 'SHELL71'), fdr(RX1, 'VIPER11'), fdr(RX2, 'VIPER12')];
 function load(marsa = []) {
   state._resetEfspStateForTest();
   state.applyEfspSnapshot({ strips: STRIPS, fdrs: FDRS, positions: [], bays: [], marsa, boardSeq: 1 });
-  selectedStripId = null;
+  setSelected(null);
   highlightMarsaParticipants(null);
 }
 
@@ -229,7 +223,7 @@ test('a FINISHED relation highlights nobody — the flights are not flying toget
 
 test('refreshMarsaHighlight re-resolves against the current selection when a delta lands', () => {
   load([relation()]);
-  selectedStripId = 's-tanker';
+  setSelected('s-tanker');
   refreshMarsaHighlight();
   assert.deepEqual(getMarsaHighlightStripIds(), ['s-rx1']);
   // A receiver joins — the delta arrives, and the highlight follows it.
@@ -284,6 +278,6 @@ test('a VOIDED relation offers a fresh declaration, not more ops on the dead one
 test('the glossary expansion matches crc-sync\'s copy exactly', () => {
   // Two separately deployed packages, so this is checked rather than imported
   // — the same split the Block Map parity test exists for.
-  const server = require(path.join(__dirname, '../../crc-sync/src/efsp/marsa-store.js'));
+  const server = require('../../crc-sync/src/efsp/marsa-store.js');
   assert.equal(MARSA_EXPANSION, server.MARSA_EXPANSION);
 });

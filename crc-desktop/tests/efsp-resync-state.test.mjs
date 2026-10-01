@@ -1,7 +1,6 @@
-'use strict';
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const S = require('../app/public/js/panels/efsp/efsp-state.js');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import * as S from '../app/public/js/panels/efsp/efsp-state.js';
 
 const snap = () => ({
   facility: 'INCIRLIK', boardSeq: 5, boardSeqByFacility: { INCIRLIK: 5, CENTER: 2 },

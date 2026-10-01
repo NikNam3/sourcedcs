@@ -1,56 +1,63 @@
-'use strict';
-
 // Bay descriptor views (crc-sync docs/adr/0093): the pattern board, the FINAL panel and the SFA rotation
 // header mounted by `view`, from the real Bay descriptors the server sends. Wiring tests against the DOM
 // stub: they prove the right op is dispatched and the right racks are hidden, never layout.
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const path = require('path');
-const { makeElement, descendants } = require('./helpers/dom-stub');
+import './helpers/client-env.mjs';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { createRequire } from 'node:module';
+import { makeElement, descendants } from './helpers/dom-stub.js';
 
-const CLIENT = path.join(__dirname, '../app/public/js/panels/efsp');
+import * as V from '../app/public/js/panels/efsp/bay-views.js';
+import { applyEfspSnapshot } from '../app/public/js/panels/efsp/efsp-state.js';
+import { getEfspSfa, applyEfspSfaSnapshot, _resetEfspSfaStateForTest } from '../app/public/js/panels/efsp/sfa-state.js';
+import { setEfspSender, sendEfspSetPositions } from '../app/public/js/panels/efsp/efsp-ws.js';
+
+const require = createRequire(import.meta.url);
 const facilityConfig = require('../../crc-sync/src/efsp/facility-config.js');
 const permission = require('../../crc-sync/src/efsp/permission.js');
 const { SfaStore } = require('../../crc-sync/src/efsp/sfa-store.js');
-Object.assign(globalThis, require(path.join(CLIENT, 'pattern-board.js')), require(path.join(CLIENT, 'final-panel.js')), require(path.join(CLIENT, 'sfa-state.js')));
-const V = require(path.join(CLIENT, 'bay-views.js'));
-Object.assign(globalThis, V);
 const { renderBayDescriptorView, sfaExtraNlaButtons } = V;
-// geo.js is a plain browser script with no exports: load it the way the page does, so haversineM is the real one.
-require('vm').runInThisContext(require('fs').readFileSync(path.join(__dirname, '../app/public/js/geo.js'), 'utf8'));
 
 const allBays = () => facilityConfig.getFacilityIds().flatMap(f => facilityConfig.getAllBays(f));
 const bay = (id) => allBays().find(b => b.bayId === id);
 const sent = [];
 let held = {};
-let racks = {};
 let strips = {};
 let fdrs = {};
 let now = Date.UTC(2026, 5, 1, 9, 0);
 
+// The views read the real Board state, the real acting-Position set and the real senders (ESM-1): the test
+// feeds them through applyEfspSnapshot, sendEfspSetPositions and setEfspSender instead of stubbing globals.
+const syncBoard = () => applyEfspSnapshot({
+  strips: Object.values(strips), fdrs: Object.entries(fdrs).map(([fdrId, f]) => ({ fdrId, ...f })),
+  positions: [], bays: allBays(), boardSeq: 1, sfaRotation: getEfspSfa(),
+});
+const setHeld = (h) => {
+  held = h;
+  for (const f of ['INCIRLIK', 'CENTER', 'TACTICAL', 'CARRIER', 'RANGES']) sendEfspSetPositions(f, held[f] || []);
+};
+const putStrip = (st) => { strips[st.stripId] = st; syncBoard(); };
+const putFdr = (id, f) => { fdrs[id] = f; syncBoard(); };
+const clearBoard = () => { strips = {}; fdrs = {}; syncBoard(); };
+
 function setGlobals() {
   sent.length = 0;
-  globalThis.document = { createElement: makeElement, activeElement: null };
-  globalThis.getEfspBays = () => allBays();
-  globalThis.getEfspRack = (bayId, rackId) => (racks[`${bayId}/${rackId}`] || []);
-  globalThis.getEfspStrip = (id) => strips[id] || null;
-  globalThis.getEfspFdr = (id) => fdrs[id] || null;
-  globalThis.getEfspFieldState = () => null;
-  globalThis.getActingPositions = (facilityId) => held[facilityId] || [];
-  globalThis.missionNow = () => now;
-  globalThis.sendEfspMutation = (position, strip, op) => sent.push({ position, stripId: strip.stripId, op });
-  globalThis.sendEfspSfaMutation = (position, baseRev, op) => sent.push({ position, sfa: true, op });
-  globalThis.correlatedTrackIdForStrip = () => null;
-  globalThis.getActiveRadars = () => [];
+  globalThis.document.activeElement = null;
+  Date.now = () => now;
+  setEfspSender('_sendEfsp', () => {});
+  setEfspSender('sendEfspMutation', (position, strip, op) => sent.push({ position, stripId: strip.stripId, op }));
+  setEfspSender('sendEfspSfaMutation', (position, baseRev, op) => sent.push({ position, sfa: true, op }));
 }
 
-const addStrip = (s, fdr) => { strips[s.stripId] = s; fdrs[s.fdrId] = fdr; (racks[`${s.bayId}/${s.rackId}`] = racks[`${s.bayId}/${s.rackId}`] || []).push(s); return s; };
+const addStrip = (s, fdr) => { fdrs[s.fdrId] = fdr; putStrip(s); return s; };
 const rackEl = (b, rackId) => { const el = makeElement('div'); el.className = 'efsp-rack'; el.dataset.bayId = b.bayId; el.dataset.rackId = rackId; const h = makeElement('div'); h.className = 'efsp-rack-header'; h.textContent = rackId; el.appendChild(h); return el; };
 const containerFor = (b) => { const c = makeElement('div'); for (const r of b.rackIds) c.appendChild(rackEl(b, r)); return c; };
 const click = (el) => (el._listeners.click || []).forEach(fn => fn({ stopPropagation() {} }));
 
-test.beforeEach(() => { held = {}; racks = {}; strips = {}; fdrs = {}; setGlobals(); });
+test.beforeEach(() => { setGlobals(); setHeld({}); clearBoard(); });
 
 test('the descriptor flags reach a client exactly as the server sends them (the mount reads nothing else)', () => {
   assert.equal(bay('rsu-pattern').view, 'pattern');
@@ -71,7 +78,7 @@ test('pattern: legs are the Bay\'s racks, a Strip\'s leg is its rack, and time i
 
 test('pattern mount: hides the racks (RSU replaces them), draws the board, and its three gestures send the right ops as the owner', () => {
   const b = bay('rsu-pattern');
-  held = { INCIRLIK: ['RSU'] };
+  setHeld({ INCIRLIK: ['RSU'] });
   addStrip({ stripId: 's1', fdrId: 'f1', bayId: 'rsu-pattern', rackId: 'initial', ownerPositionId: 'RSU', rev: 3, createdAt: now - 120000, state: 'IN_PATTERN' }, { identity: { callsign: 'VIPER 11' } });
   const c = containerFor(b);
   renderBayDescriptorView(c, b);
@@ -90,7 +97,7 @@ test('pattern mount: hides the racks (RSU replaces them), draws the board, and i
 
 test('pattern mount is read-only for a controller who does not hold the Position', () => {
   const b = bay('rsu-pattern');
-  held = { INCIRLIK: ['TWR'] };
+  setHeld({ INCIRLIK: ['TWR'] });
   addStrip({ stripId: 's1', fdrId: 'f1', bayId: 'rsu-pattern', rackId: 'initial', ownerPositionId: 'RSU', rev: 1, createdAt: now, state: 'IN_PATTERN' }, { identity: { callsign: 'X' } });
   const c = containerFor(b);
   renderBayDescriptorView(c, b);
@@ -100,7 +107,7 @@ test('pattern mount is read-only for a controller who does not hold the Position
 
 test('the carrier keeps its racks: the pattern board sits above them (no replacesRacks)', () => {
   const b = bay('cv-prifly-pattern');
-  held = { CARRIER: ['CV_PRIFLY'] };
+  setHeld({ CARRIER: ['CV_PRIFLY'] });
   const c = containerFor(b);
   renderBayDescriptorView(c, b);
   assert.ok([...c.children].filter(x => x.className === 'efsp-rack').every(r => r.style.display === ''), 'racks stay');
@@ -150,7 +157,7 @@ test('final: PAR\'s terminals are FINAL\'s own states; the carrier\'s Ball keeps
 
 test('final mount: PAR\'s Strip becomes the panel with no input in it, racks hidden, and a terminal button sends the owner\'s op', () => {
   const b = bay('par-final');
-  held = { INCIRLIK: ['PAR'] };
+  setHeld({ INCIRLIK: ['PAR'] });
   addStrip({ stripId: 'p1', fdrId: 'f1', bayId: 'par-final', rackId: 'main', ownerPositionId: 'PAR', rev: 2, state: 'ON_FINAL', role: 'FINAL' }, { identity: { callsign: 'VIPER 11' } });
   const c = containerFor(b);
   renderBayDescriptorView(c, b);
@@ -164,13 +171,13 @@ test('final mount: PAR\'s Strip becomes the panel with no input in it, racks hid
   click(buttons[0]);
   assert.deepEqual(sent.pop().op, { kind: 'SetState', toState: 'BALL' });
   // not the owner: a tap does nothing
-  held = { INCIRLIK: ['TWR'] };
+  setHeld({ INCIRLIK: ['TWR'] });
   const c2 = containerFor(b);
   renderBayDescriptorView(c2, b);
   descendants(c2).filter(e => e.tagName === 'button').forEach(click);
   assert.equal(sent.length, 0);
   // an empty Bay says so, rather than drawing nothing
-  racks = {}; strips = {};
+  clearBoard();
   const c3 = containerFor(b);
   renderBayDescriptorView(c3, b);
   assert.ok(descendants(c3).some(e => e.className === 'efsp-final-none'));
@@ -180,7 +187,7 @@ test('sfa header: every pool frequency is a row; the rack headers say the freque
   const b = bay('sfa-frequencies');
   const store = new SfaStore({ config: facilityConfig.getSingleFrequencyApproach(), positions: facilityConfig.getPositionSet(), clock: { now: () => now, source: 'T' } });
   applyEfspSfaSnapshot({ sfaRotation: store.view() });
-  held = { INCIRLIK: ['SFA'] };
+  setHeld({ INCIRLIK: ['SFA'] });
   const c = containerFor(b);
   renderBayDescriptorView(c, b);
   let all = descendants(c);
@@ -191,7 +198,7 @@ test('sfa header: every pool frequency is a row; the rack headers say the freque
   assert.equal(heads[3], 'freq-4 · 235.100');
   assert.ok([...c.children].filter(x => x.className === 'efsp-rack').every(r => r.style.display === ''), 'the SFA racks ARE the frequencies and stay');
 
-  held = { INCIRLIK: ['APP'] };
+  setHeld({ INCIRLIK: ['APP'] });
   const c2 = containerFor(b);
   renderBayDescriptorView(c2, b);
   all = descendants(c2);
@@ -210,16 +217,16 @@ test('sfa header: every pool frequency is a row; the rack headers say the freque
 test('the Rotate to PAR button sends the transfer as the Strip\'s owner and goes dead on the press', () => {
   const store = new SfaStore({ config: facilityConfig.getSingleFrequencyApproach(), positions: facilityConfig.getPositionSet(), clock: { now: () => now, source: 'T' } });
   applyEfspSfaSnapshot({ sfaRotation: store.view() });
-  held = { INCIRLIK: ['SFA'] };
+  setHeld({ INCIRLIK: ['SFA'] });
   const strip = { stripId: 'a1', fdrId: 'f1', rev: 4, role: 'ARRIVAL', state: 'INBOUND', ownerPositionId: 'SFA', facilityId: 'INCIRLIK' };
-  strips.a1 = strip; fdrs.f1 = { comms: { workingFrequencyMhz: 234.1 } };
+  putFdr('f1', { comms: { workingFrequencyMhz: 234.1 } }); putStrip(strip);
   const buttons = sfaExtraNlaButtons(strip);
   assert.equal(buttons.length, 1);
   assert.equal(buttons[0].textContent, 'Rotate to PAR');
   click(buttons[0]);
   assert.deepEqual(sent.pop(), { position: 'SFA', stripId: 'a1', op: { kind: 'SfaRotation' } });
   assert.equal(buttons[0].disabled, true);
-  fdrs.f1 = { comms: { workingFrequencyMhz: 121.5 } };
+  putFdr('f1', { comms: { workingFrequencyMhz: 121.5 } });
   assert.equal(sfaExtraNlaButtons(strip).length, 0, 'off the SFA pool: no button');
   _resetEfspSfaStateForTest();
 });
@@ -232,10 +239,16 @@ test('every Position of the three can only do through the client what the server
 });
 
 test('no top-level name of the Bay-view scripts is declared by any other script the page loads (a clash is a SyntaxError or a silent override only a browser shows)', () => {
-  const fs = require('fs');
-  const root = path.join(__dirname, '../app/public');
-  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-  const files = [...html.matchAll(/<script src="\.\/(js\/[^"]+)"/g)].map(m => m[1]);
+  const root = path.join(import.meta.dirname, '../app/public');
+  // The page is one module graph now (index.html loads js/main.js): "the scripts the page loads" is that graph.
+  const files = [];
+  const walk = (f) => {
+    if (files.includes(f)) return;
+    files.push(f);
+    const src = fs.readFileSync(path.join(root, f), 'utf8');
+    for (const m of src.matchAll(/(?:from|import)\s+['"](\.[^'"]+)['"]/g)) walk(path.posix.relative('.', path.posix.join(path.posix.dirname(f), m[1])));
+  };
+  walk('js/main.js');
   const declared = new Map(); // name -> [files]
   for (const f of files) {
     const src = fs.readFileSync(path.join(root, f), 'utf8');

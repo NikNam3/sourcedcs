@@ -1,4 +1,3 @@
-'use strict';
 
 /* The Position tab strip doubles as the drag drop-target surface, and used
    to render tabs ONLY for Positions the controller holds — so a controller
@@ -6,10 +5,11 @@
    tab-set computation; the DOM render around it stays untested, as the rest
    of this file's UI does. */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
+import './helpers/client-env.mjs';
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const { computePositionTabs } = require('../app/public/js/panels/efsp/efsp-panel.js');
+import { computePositionTabs } from '../app/public/js/panels/efsp/efsp-panel.js';
 
 const BAYS = [
   { bayId: 'ops-proposed', positionId: 'OPS', facilityId: 'INCIRLIK' },

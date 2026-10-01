@@ -1,5 +1,3 @@
-'use strict';
-
 /* Coupled selection and the correlation badge (guide §6.6 rules 4 and 5).
  *
  * The cases worth pinning are the two judgement calls: clicking a contact
@@ -9,39 +7,31 @@
  * merely different.
  */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const path = require('path');
+import './helpers/client-env.mjs';
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const CLIENT = path.join(__dirname, '../app/public/js/panels/efsp');
-const state = require(path.join(CLIENT, 'efsp-state.js'));
-const {
+import * as state from '../app/public/js/panels/efsp/efsp-state.js';
+import {
   highlightCorrelatedTrack, getCorrelatedHighlightTrackId, refreshCorrelatedHighlight,
   selectStripForTrack, correlationBadgeFor,
-} = require(path.join(CLIENT, 'correlation-highlight.js'));
+} from '../app/public/js/panels/efsp/correlation-highlight.js';
+import { setOpenEfspBays, _setSelectedStripIdForTest, _setSelectEfspStripByIdForTest } from '../app/public/js/panels/efsp/bay-view.js';
+import { _setUpdateMapForTest } from '../app/public/js/geojson.js';
 
-// correlation-highlight.js reaches for these as plain globals, exactly as it
-// does in the browser where every panel file is a <script>.
-global.getEfspStrip = state.getEfspStrip;
-global.getEfspFdr = state.getEfspFdr;
-global.getEfspCorrelationForStrip = state.getEfspCorrelationForStrip;
-global.correlatedTrackIdForStrip = state.correlatedTrackIdForStrip;
-global.stripIdsForTrackId = state.stripIdsForTrackId;
-// The badge names a contact through track-label.js, like every other surface.
-Object.assign(global, require(path.join(__dirname, '../app/public/js/track-label.js')));
-
+// The old test stubbed these as plain globals; the modules now read their imports, so each goes through the
+// module's explicit setter (docs/wip/ESM-1.md, "Setters").
 let mapUpdates = 0;
-global.updateMap = () => { mapUpdates += 1; };
+_setUpdateMapForTest(() => { mapUpdates += 1; });
 
 let selectedStripId = null;
 let selectCalls = 0;
-global.selectEfspStripById = (stripId) => { selectedStripId = stripId; selectCalls += 1; };
-global.getSelectedEfspStripId = () => selectedStripId;
-global.getOpenEfspBayIds = () => ['app-departures'];
+_setSelectEfspStripByIdForTest((stripId) => { selectedStripId = stripId; _setSelectedStripIdForTest(stripId); selectCalls += 1; });
+const select = (id) => { selectedStripId = id; _setSelectedStripIdForTest(id); };
+setOpenEfspBays([{ containerEl: null, bayId: 'app-departures' }]);
 
-global.window = global;
 const liveTracks = new Map();
-global.window.getLatestTrack = (id) => liveTracks.get(String(id)) || null;
+globalThis.getLatestTrack = (id) => liveTracks.get(String(id)) || null; // window === globalThis (client-env.mjs)
 
 function strip(stripId, fdrId, bayId = 'app-departures') {
   return {
@@ -69,7 +59,7 @@ function load({ strips = [], fdrs = [], correlations = [], tracks = [] } = {}) {
   state.applyEfspSnapshot({ strips, fdrs, positions: [], bays: [], correlations, boardSeq: 1 });
   liveTracks.clear();
   for (const t of tracks) liveTracks.set(String(t.id), t);
-  selectedStripId = null;
+  select(null);
   selectCalls = 0;
   mapUpdates = 0;
 }
@@ -153,7 +143,7 @@ test('selecting an uncorrelated Strip draws no ring', () => {
 
 test('a re-bind moves the ring without the selection changing', () => {
   load({ strips: [strip('s1', 'f1')], correlations: [correlation('f1')] });
-  selectedStripId = 's1';
+  select('s1');
   highlightCorrelatedTrack('s1');
   assert.equal(getCorrelatedHighlightTrackId(), '101');
 

@@ -1,13 +1,12 @@
-'use strict';
 
 /* Unit tests for the pure client-side annotation supersession model
    (annotation-editor.js), mirroring board-store.js's server-side rules —
    append-only, SUPERSEDED on amendment, STRUCK only via confirmVacated. */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const { applyAnnotationLocally } = require('../app/public/js/panels/efsp/annotation-editor.js');
+import { applyAnnotationLocally } from '../app/public/js/panels/efsp/annotation-editor.js';
 
 test('first amendment on an empty annotations object creates one ACTIVE entry', () => {
   const result = applyAnnotationLocally({}, '11', '250', false);

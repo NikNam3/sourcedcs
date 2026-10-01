@@ -1,5 +1,3 @@
-'use strict';
-
 /* What a refusal says, and who it says it about.
  *
  * docs/ui-findings F-103: "#efsp-mutation-error reads 'NLA_INHIBITED: no
@@ -14,20 +12,23 @@
  * efsp-ui-reachability's Strip-rendering harness cannot reach it.
  */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('fs');
-const path = require('path');
-const vm = require('vm');
+import './helpers/client-env.mjs';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 
-const { makeElement } = require('./helpers/dom-stub.js');
+import { makeElement } from './helpers/dom-stub.js';
+import { freshGraph } from './helpers/fresh-graph.mjs';
 
-function unrefTimeout(fn, ms, ...args) {
-  const t = setTimeout(fn, ms, ...args);
-  if (t && typeof t.unref === 'function') t.unref();
-  return t;
-}
-const CLIENT = path.join(__dirname, '../app/public/js/panels/efsp');
+// Unref'd, so a panel timer — the refusal banner's 30 s auto-clear above
+// all — never holds the test process open until it fires. That one timer
+// kept `npm test` (and so `npm run dev-check`) waiting 30 s after the last
+// assertion had passed. (The old vm sandbox carried its own setTimeout; the
+// module graph reads the real global, so this file replaces it.)
+const realSetTimeout = globalThis.setTimeout;
+globalThis.setTimeout = (fn, ms, ...args) => { const t = realSetTimeout(fn, ms, ...args); if (t && t.unref) t.unref(); return t; };
+globalThis.setInterval = () => 0;
 
 const TOOLBAR_IDS = [
   'efsp-panel', 'efsp-position-tabs', 'efsp-bay-tabs', 'efsp-bay-content',
@@ -61,42 +62,28 @@ const BOARD = {
   fdrs: [fdrFor('fA', 'AAA11'), fdrFor('fB', 'BBB22')],
 };
 
-function mountPanel() {
+async function mountPanel() {
   const els = {};
   for (const id of TOOLBAR_IDS) els[id] = makeElement(id.endsWith('-btn') ? 'button' : 'input');
+  document.getElementById = (id) => els[id] || null;
 
-  const sandbox = {
-    // Unref'd, so a panel timer — the refusal banner's 30 s auto-clear above
-    // all — never holds the test process open until it fires. That one timer
-    // kept `npm test` (and so `npm run dev-check`) waiting 30 s after the last
-    // assertion had passed.
-    console, module: { exports: {} }, setTimeout: unrefTimeout, clearTimeout, setInterval: () => 0, clearInterval: () => {},
-    Date, JSON, Math, Number, Set, Map, Array, Object, String, Boolean, RegExp,
-    isNaN, parseInt, parseFloat, Promise,
-    document: { getElementById: (id) => els[id] || null, createElement: makeElement, addEventListener() {}, removeEventListener() {} },
-    window: {},
-  };
-  sandbox.globalThis = sandbox;
-  vm.createContext(sandbox);
-
-  for (const file of ['efsp-nla.js', 'strip-template.js', 'efsp-state.js', 'efsp-arrivals.js', 'dot-command.js',
-    'efsp-gestures.js', 'annotation-editor.js', 'strip-drag.js', 'correlation-highlight.js',
-    'marsa-badge.js', 'strip-fields.js', 'bay-view.js', 'strip-view.js', 'efsp-stereo-routes.js', 'efsp-panel.js']) {
-    vm.runInContext(fs.readFileSync(path.join(CLIENT, file), 'utf8'), sandbox, { filename: file });
-  }
+  const g = freshGraph();
+  const L = (f) => g.import(`panels/efsp/${f}`);
+  const [state, ws, panel, bayView, geojson] = await Promise.all([
+    L('efsp-state.js'), L('efsp-ws.js'), L('efsp-panel.js'), L('bay-view.js'), g.import('geojson.js'),
+  ]);
 
   let rerenders = 0;
-  sandbox.getActingPositions = () => ['OPS'];
-  sandbox.renderAllOpenEfspBays = () => { rerenders += 1; };
-  sandbox.updateMap = () => {};
-  sandbox.listStereoRoutesClient = async () => [];
-  sandbox.applyEfspSnapshot({ ...BOARD, positions: [], bays: [], airspaces: [], correlations: [], marsa: [] });
-  sandbox.initEfspPanel();
-  // `const` at the top level of a vm script lands in the context's lexical
-  // scope, not on the sandbox object — the module-level constants are read
-  // by evaluating their names in the context rather than off `sandbox`.
-  const evalIn = expr => vm.runInContext(expr, sandbox);
-  return { els, sandbox, evalIn, banner: els['efsp-mutation-error'], rerenders: () => rerenders };
+  ws.setEfspSender('_sendEfsp', () => {});
+  ws.sendEfspSetPositions('INCIRLIK', ['OPS']); // the acting-Position set getActingPositions() reads
+  bayView._setRenderAllOpenEfspBaysForTest(() => { rerenders += 1; });
+  geojson._setUpdateMapForTest(() => {});
+  state.applyEfspSnapshot({ ...BOARD, positions: [], bays: [], airspaces: [], correlations: [], marsa: [] });
+  panel.initEfspPanel();
+  // The old vm loader exposed every module-level name on one sandbox; the exports of the three modules the
+  // tests reach into are merged into one object here instead.
+  const sandbox = { ...state, ...ws, ...panel };
+  return { els, sandbox, panel, banner: els['efsp-mutation-error'], rerenders: () => rerenders };
 }
 
 const settled = (m) => new Promise(resolve => setImmediate(() => resolve(m)));
@@ -180,8 +167,8 @@ test("VALIDATION_ERROR's detail is the sentence — no canned prefix talking ove
 });
 
 test('every reason code crc-sync can reject with has a plain sentence, and an unknown one still renders', async () => {
-  const { sandbox, banner, evalIn } = await settled(mountPanel());
-  const messages = evalIn('MUTATION_ERROR_MESSAGES');
+  const { sandbox, banner, panel } = await settled(mountPanel());
+  const messages = panel.MUTATION_ERROR_MESSAGES;
   // Enumerated from `ok: false, reason:` across crc-sync/src/efsp/.
   for (const code of ['VALIDATION_ERROR', 'NOT_FOUND', 'PERMISSION_DENIED', 'STALE_REV',
     'NOT_HOLDING_POSITION', 'NLA_INHIBITED', 'NOT_OCCUPIED', 'NOT_OBSERVER', 'NOT_OWNER',
@@ -250,8 +237,8 @@ test('clicking the banner dismisses the refusal, and takes the Strip marker with
 });
 
 test('the auto-clear is a named constant, and long enough to read a route back off', async () => {
-  const { evalIn } = await settled(mountPanel());
-  const visibleMs = evalIn('MUTATION_ERROR_VISIBLE_MS');
+  const { panel } = await settled(mountPanel());
+  const visibleMs = panel.MUTATION_ERROR_VISIBLE_MS;
   // F-103 measured the old one gone at 6.9 s; F-207 adds that for a refused
   // Block edit this is the only surviving copy of what was typed. Whether a
   // refusal should time out AT ALL is the workflow question F-103 leaves
@@ -267,7 +254,7 @@ test('app.js never calls _showMutationError with the whole ack message', () => {
   // `(reason, detail, context)` signature, so a refused efsp-correlation-ack
   // or efsp-marsa-ack rendered "[object Object]". A static check because
   // app.js is the WebSocket front door and cannot be mounted in the stub.
-  const src = fs.readFileSync(path.join(__dirname, '../app/public/js/app.js'), 'utf8');
+  const src = fs.readFileSync(path.join(import.meta.dirname, '../app/public/js/app.js'), 'utf8');
   const calls = src.match(/_showMutationError\([^)]*\)/g) || [];
   assert.ok(calls.length > 0, 'the call sites moved — this guard needs updating');
   for (const call of calls) {

@@ -1,15 +1,13 @@
-'use strict';
-
 // UI-A follow-up: the pure halves of the U1-U8 / S-L15 / S-L16 client fixes.
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
+import './helpers/client-env.mjs';
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-Object.assign(globalThis, require('../app/public/js/panels/efsp/time-chains.js'));
-globalThis.cachedStereoRoutesClient = () => [];
-const tpl = require('../app/public/js/panels/efsp/strip-template.js');
-const fields = require('../app/public/js/panels/efsp/strip-fields.js');
-Object.assign(globalThis, tpl, fields);
+import * as tpl from '../app/public/js/panels/efsp/strip-template.js';
+import * as fields from '../app/public/js/panels/efsp/strip-fields.js';
+import { tofiExitDueFor } from '../app/public/js/panels/efsp/efsp-nla.js';
+import * as st from '../app/public/js/panels/efsp/efsp-state.js';
 
 test('U4: TYPE (3) is redirected to the aircraft type (3A) and carries its current value', () => {
   const fdr = { identity: { aircraftType: 'F16C', flightSize: 2 } };
@@ -31,7 +29,6 @@ test('U3: the IFR field says what it is', () => {
 });
 
 test('U8: TOFI Exit is due on the ATC Strip only while its TOFI is ACTIVE and the mission line is OFF_STATION or RTB', () => {
-  const { tofiExitDueFor } = require('../app/public/js/panels/efsp/efsp-nla.js');
   const atc = (state) => ({ role: 'OVERFLIGHT', tofiCoordination: { state, direction: 'ENTRY', peerStripId: 'm1' } });
   const mission = (state) => ({ role: 'MISSION', state });
   for (const s of ['OFF_STATION', 'RTB']) assert.equal(tofiExitDueFor(atc('ACTIVE'), mission(s)), true, s);
@@ -63,7 +60,6 @@ test('S-L16 W3/W5: a typed TAXI behind a later P-time is flagged; an estimate sa
 });
 
 test('S-L23 finding: TAC_C2 lists the live lines AIC and JTAC hold, and no one else gets the list', () => {
-  const st = require('../app/public/js/panels/efsp/efsp-state.js');
   st._resetEfspStateForTest();
   const mk = (stripId, over) => ({ stripId, fdrId: stripId, role: 'MISSION', state: 'ON_STATION', ownerPositionId: 'AIC', bayId: 'aic-on-station', rackId: 'main', orderKey: stripId, updatedAt: 1, flags: {}, ...over });
   st.applyEfspSnapshot({ strips: [mk('a'), mk('b', { ownerPositionId: 'JTAC' }), mk('c', { ownerPositionId: 'TAC_C2' }), mk('d', { state: 'DROPPED' }), mk('e', { role: 'ARRIVAL' })], fdrs: [], positions: [], bays: [] });
