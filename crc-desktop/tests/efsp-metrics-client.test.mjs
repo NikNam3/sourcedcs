@@ -1,15 +1,13 @@
-'use strict';
-
 // The client half of the §11.5 metrics (docs/adr/0072): what is measured, how
 // it is batched, and when it reaches the wire. crc-sync stamps each event on
 // receipt (decisions.md S-R2-3), so the flush timing IS the bucket timing —
 // hence the tests on "within one flush interval" and "dropped after 5 min".
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const {
-  createEfspMetricsClient, efspGestureInputCost, GESTURE_INPUT_COST, EFSP_METRICS_LIMITS: L,
-} = require('../app/public/js/panels/efsp/efsp-metrics-client.js');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  createEfspMetricsClient, efspGestureInputCost, GESTURE_INPUT_COST, EFSP_METRICS_LIMITS as L,
+} from '../app/public/js/panels/efsp/efsp-metrics-client.js';
 
 const BAYS = [
   { bayId: 'gnd-pending', positionId: 'GND', facilityId: 'INCIRLIK' },

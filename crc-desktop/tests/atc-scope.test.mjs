@@ -1,14 +1,12 @@
-'use strict';
-
 /* The ATC scope in the STARS scheme (crc-sync's docs/adr/0088; decisions H41,
  * H47, H48, H50, H71). track-label.js writes the block, atc-scope.js decides
  * the controller's relation to a contact and what that shows. Both are pure
  * enough to pin here without a map.
  */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const path = require('path');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import path from 'node:path';
 
 global.settings = { transitionAltFt: 18000 };
 const L = require(path.join(__dirname, '../app/public/js/track-label.js'));

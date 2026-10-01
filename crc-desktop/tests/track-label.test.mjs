@@ -1,13 +1,11 @@
-'use strict';
-
 /* How a contact reads (crc-sync's docs/adr/0059). track-label.js is the only
  * code that turns what crc-sync sends into text, so the data block, the track
  * panel, the bind picker and the correlation badge all agree by construction.
  */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const path = require('path');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import path from 'node:path';
 
 global.settings = { transitionAltFt: 18000 };
 const L = require(path.join(__dirname, '../app/public/js/track-label.js'));

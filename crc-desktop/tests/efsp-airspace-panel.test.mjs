@@ -1,15 +1,13 @@
-'use strict';
-
 /* The airspace board's action gating — which buttons a controller is offered
    for an airspace, given what they hold and where the airspace is in its
    lifecycle. Proactive only: airspace-store.js decides, and this exists so a
    controller is never offered something that will be refused. That makes it
    a mirror, and a mirror that drifts is worse than none — hence these. */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const { airspaceActionsFor } = require('../app/public/js/panels/efsp/airspace-panel.js');
+import { airspaceActionsFor } from '../app/public/js/panels/efsp/airspace-panel.js';
 
 /** A range with a control tower of its own: a real using agency, distinct from the controlling one. */
 function range(state, extra = {}) {

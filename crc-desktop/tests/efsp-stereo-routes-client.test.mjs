@@ -1,16 +1,17 @@
-'use strict';
-
 /* Client-side half of §9.10's stereo route table (docs/adr/0050) — the same
    "never throws, degrades to an empty list" contract
    efsp-flight-plan-lookup-client.test.js pins for its own module, verified
    the same way: an injectable fetchImpl, no real network and no DOM. */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const {
+import { createRequire } from 'node:module';
+import {
   listStereoRoutesClient, normalizeStereoNameClient, STEREO_ROUTES_CLIENT_TIMEOUT_MS,
-} = require('../app/public/js/panels/efsp/efsp-stereo-routes.js');
+} from '../app/public/js/panels/efsp/efsp-stereo-routes.js';
+
+const require = createRequire(import.meta.url);
 
 function fakeFetch(status, body) {
   return async () => ({ ok: status >= 200 && status < 300, json: async () => body });

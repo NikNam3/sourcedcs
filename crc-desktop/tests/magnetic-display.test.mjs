@@ -1,5 +1,3 @@
-'use strict';
-
 /* Headings are magnetic, from crc-sync's model (crc-sync docs/adr/0085,
  * decisions H15). The manual `hdgCorrection` setting and its Airport-panel
  * field are gone, every heading display goes through magnetic.js, and a typed
@@ -8,10 +6,10 @@
  * tests/theater-context.test.mjs, against this same file.
  */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('fs');
-const path = require('path');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 
 const PUBLIC = path.join(__dirname, '../app/public');
 const read = (rel) => fs.readFileSync(path.join(PUBLIC, rel), 'utf8');

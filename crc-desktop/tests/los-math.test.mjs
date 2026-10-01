@@ -1,16 +1,14 @@
-'use strict';
-
 /* Unit tests for the pure terrain-masking math in los.js (curvature/refraction
    sight-line height and the blocked/clear decision over a terrain profile).
    These are exercised directly, without Electron/DOM/network, since los.js
    guards its module.exports the same way lxsrs-setup.js does. */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const {
+import {
   EFFECTIVE_EARTH_RADIUS_M, losSightLineHeightM, losProfileBlocked,
-} = require('../app/public/js/los.js');
+} from '../app/public/js/los.js';
 
 /* ══════════════════════════════════════════════════════════
    losSightLineHeightM
