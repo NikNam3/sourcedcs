@@ -721,6 +721,9 @@ setInterval(() => {
   }
 }, 1000);
 
+// Test-only (Playwright harness); mounts nothing unless CRCSYNC_TEST_RESET=1, see src/test-reset.js.
+require('./src/test-reset').mountTestReset(app);
+
 // ── Static hosting ───────────────────────────────────────────────────────
 app.use(express.static(PUBLIC_DIR));
 
