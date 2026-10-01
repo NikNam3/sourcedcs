@@ -60,7 +60,7 @@ class WsHub {
     // The whole EFSP alert state (docs/adr/0058, 0067), empty until a
     // monitor reports — so a client connecting to a freshly started server
     // is told "nothing is wrong" rather than keeping what it had.
-    this._efspAlerts = { conformance: [], stca: [], obligations: [] };
+    this._efspAlerts = { conformance: [], stca: [], obligations: [], surveillance: [] };
     this._onEfspChange = null;
   }
 
@@ -196,7 +196,7 @@ class WsHub {
     // Obligations (docs/adr/0067) and conformance are about flights, so a
     // session that reads only what it owns (docs/adr/0080) gets its own
     // flights' alerts and nobody else's.
-    const msg = { version: VERSION, type: 'efsp-alerts', conformance: a.conformance || [], stca, obligations: a.obligations || [] };
+    const msg = { version: VERSION, type: 'efsp-alerts', conformance: a.conformance || [], stca, obligations: a.obligations || [], surveillance: a.surveillance || [] };
     return this._efspFilter(session, msg) || msg;
   }
 

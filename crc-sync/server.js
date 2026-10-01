@@ -24,6 +24,8 @@ const { CoverageEngine } = require('./src/coverage');
 const { StationCoverage, assignableRadars, reportUnresolvedSelectors } = require('./src/efsp/station-coverage');
 const { ForwardingObligationMonitor } = require('./src/efsp/forwarding-obligations');
 const { CorrelationReconciler, CORRELATION_TICK_MS } = require('./src/efsp/correlation-reconciler');
+const { SurveillanceHintMonitor } = require('./src/efsp/surveillance-hints');
+const { getHintsConfig } = require('./src/efsp/surveillance-hints-config');
 const { ConformanceMonitor } = require('./src/efsp/conformance');
 const { StcaMonitor } = require('./src/stca');
 const { loadAlertingConfig } = require('./src/alerting-config');
@@ -648,6 +650,20 @@ const conformanceMonitor = new ConformanceMonitor({
   gridToMagnetic: (deg, lat, lon) => theaterContext.gridToMagnetic(deg, lat, lon),
   config: alertingConfig.conformance,
 });
+// docs/adr/0076 — "detected airborne" and staleness. It reads the Boards and
+// the correlation records and writes nothing: surveillance informs, the
+// controller advances (§10.3).
+const surveillanceHints = new SurveillanceHintMonitor({
+  clock: missionClock,
+  trackStore,
+  correlationStore: efsp.correlationStore,
+  boardStoreFor: efsp.boardStoreFor,
+  facilityConfig: efspFacilityConfig,
+  getMissionData: () => wsHub.getMissionData(),
+  config: getHintsConfig(),
+  onStaleness: (e) => efspInstrumentation.metrics.recordStaleness(e),
+});
+efspInstrumentation.metrics.declareSource('staleness');
 const stcaMonitor = new StcaMonitor({
   trackStore,
   config: alertingConfig.stca,
@@ -666,6 +682,7 @@ function broadcastEfspAlerts() {
     conformance: conformanceMonitor.getAll(),
     stca: stcaMonitor.getAll(),
     obligations: obligationMonitor.getAll(),
+    surveillance: surveillanceHints.getAll(), // docs/adr/0076: the suggestion chip and staleness
   });
 }
 // Conformance runs on the mission clock — its grace period is measured from
@@ -675,8 +692,9 @@ function broadcastEfspAlerts() {
 // of day at all.
 setInterval(() => {
   const conformanceChanged = conformanceMonitor.tick();
+  const hintsChanged = surveillanceHints.tick();
   const stcaChanged = stcaMonitor.tick(Date.now());
-  if (conformanceChanged || stcaChanged) {
+  if (conformanceChanged || stcaChanged || hintsChanged) {
     broadcastEfspAlerts();
   }
 }, 1000);
