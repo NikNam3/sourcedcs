@@ -22,6 +22,7 @@ const ALLOWED = {
   'crc-sync/src/efsp/coordination.js': 'tables keyed by Role',
   'crc-sync/src/efsp/board-store.js': 'ConvertToArrival checks the Role; REPLICA_STATE_ON_RECEIPT/SENDER_STATE_ON_ACCEPT and DEFAULT_INITIAL_STATE_BY_ROLE are keyed by Role',
   'crc-sync/src/efsp/board/placement.js': 'comments only (the nlaCtx context and roleBayFor\'s Role Bay rule); roleBayFor keeps an OVERFLIGHT out of ARRIVAL\'s Bays by Role',
+  'crc-sync/src/efsp/board/coordination.js': 'a comment only (the replica carries the sender\'s Role/EfspState); the tables it reads are passed in, keyed by Role',
   'crc-sync/src/efsp/facility-config.js': 'Bays imply a state for ARRIVAL/DEPARTURE; board-store skips implication for a Role with a holdsRole Bay',
   'crc-sync/src/efsp/traffic-count.js': 'COUNTABLE_PRE_DROP_STATES is keyed by Role',
   'crc-sync/src/efsp/surveillance-hints.js': 'EXPECTS is keyed by Role',
