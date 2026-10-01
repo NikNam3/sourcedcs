@@ -3,10 +3,14 @@ import assert from 'node:assert/strict';
 
 import { normDeg, reciprocal, angularDiff, gridToTrue, toMagnetic } from '../src/efsp/carrier/angles.js';
 import {
-  ANGLED_DECK_BY_TYPE, DEFAULT_HULL, validateHullConfig, matchHullTrack, hullMatchProblem,
+  ANGLED_DECK_BY_TYPE, validateHullConfig, matchHullTrack, hullMatchProblem,
   computeFinalBearing, inHgFromPa, buildShipState, staleFrom, shipStateChanged,
   defaultShipInputs, applyShipStateInput, normalizeShipInputs, displayBearing,
 } from '../src/efsp/carrier/ship-state.js';
+import { getDefaultHull } from '../src/efsp/carrier/hull-config.js';
+
+// The squadron's one hull is data: config/efsp-carriers.json (DATA-2), no code constant.
+const DEFAULT_HULL = Object.freeze(getDefaultHull());
 
 // Carrier model, pure (WP7A, guide §9.12, docs/adr/0064): angles and ship state.
 
@@ -63,7 +67,7 @@ function ship(over = {}) {
     heading: 123.6, groundSpeed: 15.4333, ...over };
 }
 
-test('DEFAULT_HULL is CVN-72 unit UNION (decisions H13/H26) and validates', () => {
+test('the shipped hull is CVN-72 unit UNION (decisions H13/H26) and validates', () => {
   assert.equal(DEFAULT_HULL.hullId, 'CVN-72');
   assert.equal(DEFAULT_HULL.match.unitName, 'UNION');
   assert.equal(DEFAULT_HULL.match.type, 'CVN_72');
