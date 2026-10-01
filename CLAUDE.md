@@ -28,10 +28,10 @@ PORT=4000 npm start
 npm test   # node --test test/*.test.js
 ```
 
-### sourcedcs-web (Node.js, Express, port 7000)
+### sourcedcs-web (Node.js, Express, port 7000 via `PORT`)
 ```bash
 cd sourcedcs-web && npm install
-PORT=7000 npm start
+PORT=7000 npm start   # server.js itself defaults to 3000 when PORT is unset; the compose stack sets 7000
 npm test   # node --test test/*.test.js
 ```
 
@@ -45,8 +45,14 @@ npm run soak:smoke       # 20 virtual minutes of simulated EFSP traffic; `npm ru
 ```
 The EFSP soak harness lives in `crc-sync/tools/soak/` (flags and profiles in its `run.js`). The literal four-hour
 run is the manual-dispatch workflow `.github/workflows/crc-sync-soak.yml` ("crc-sync EFSP soak (manual)"). Run
-`soak:selfcheck` after touching `board-store.js`, `efsp-ws.js` or `ws-hub.js`. The soak currently **fails** on
-known findings owned by wave-2 lanes; see `docs/efsp-briefing.md`.
+`soak:selfcheck` after touching `board-store.js`, `efsp-ws.js` or `ws-hub.js`. The wave-2 findings the soak used to
+fail on are fixed (`docs/efsp-briefing.md` §3I/§4 has the state), and the `drop-broadcast` selfcheck detector fires
+again (`docs/wip/SOAK.md`). `memory.slope` and `memory.netGrowth` are judged only on runs of 3 hours or more whose
+warm-up covers the 2 h finished-Strip retention (ADR 0082): the heap keeps filling until the archiver starts removing
+DROPPED Strips, so a shorter run (including `soak:smoke`) reports them as **not judged**, which is neither a failure
+nor a pass. `--warmup-min <m>` overrides the warm-up and `--judge-memory` forces the gate (the selfcheck `leak` case
+uses it). The not-judged rule is `lane/SOAKW-warmup-default` (`memoryPolicy()` in `tools/soak/report.js`,
+`docs/wip/SOAKW.md`) and applies once that lane is merged; `--warmup-min` alone is already in the tree.
 
 ### crc-desktop (Electron)
 ```bash
@@ -95,7 +101,7 @@ Frontend structure under `public/js/`:
 
 The presenter hashes their password with `crypto.scryptSync` + salt server-side; presentees join with a room code. Session state (current tab, scroll position) is broadcast to all presentees in real time.
 
-YAML package schema is documented in `docs/atobrief/yaml-format.md` (six sections: `header`, `registry`, `ato`, `aco`, `spins`, `comms`, `weather`).
+YAML package schema is documented in `docs/atobrief/yaml-format.md` (seven sections: `header`, `registry`, `ato`, `aco`, `spins`, `comms`, `weather`).
 
 ### sourcedcs-web
 
@@ -110,7 +116,7 @@ Client secret (`DISCORD_BOT_TOKEN`, `CASDOOR_CLIENT_SECRET`, `RELEASE_UPLOAD_TOK
 
 ### crc-sync
 
-Central backend crc-desktop instances connect to — replaces the old asacs_link server-side role, minus its browser-facing GCI dashboard (crc-sync has no public UI; `public/` is currently an unused scaffold).
+Central backend crc-desktop instances connect to — replaces the old asacs_link server-side role, minus its browser-facing GCI dashboard (crc-sync has no public UI and no `public/` directory: `server.js` still names one, and `GET /js/config.js` is its only live leftover).
 
 - `server.js` — Express + `ws`. Casdoor OAuth code exchange (`POST /api/auth/token`), single-use short-TTL WebSocket connect tickets (`POST /api/ws-ticket`, `src/auth.js`) so a long-lived bearer JWT never rides in a `/feed` WebSocket URL.
 - `src/grpc-client.js` / `src/srs-client.js` — sole gRPC (DCS telemetry) and SRS-transponder client on behalf of every connected crc-desktop instance.
@@ -171,14 +177,23 @@ everything the service writes, and is the `crc-sync-state:/app/state` volume. A 
 and falls back to the shipped default, so a new default added by an image update lands with no
 migration (`crc-sync/src/state-paths.js`, `docs/adr/0048`).
 
+`config/theaters.json` holds the fixed per-theater facts keyed by the name DCS-gRPC's `GetTheatre` returns: UTC
+offset, **transition altitude** (Syria 10,000 ft, the rest 18,000 until someone checks the AIP), the Transverse
+Mercator central meridian (grid convergence) and an optional **magnetic variation override** (`fixedDeg` or
+`offsetDeg`; none shipped, otherwise the World Magnetic Model at the mission date, `docs/adr/0085`). It is read once
+at startup, never written by code, and a copy in `state/theaters.json` overrides it theater by theater, field by
+field (`crc-sync/src/theaters.js`). It replaced `theater-settings.json`, one of the seven lost-state items in the next paragraph.
+
 Before that split, seven things were written into the image with no volume behind them and were
 silently discarded by every `docker compose up -d` — the EFSP Board, the whole Mutation audit log, the
-squadron squawk map, theater settings, per-airport ATIS config and the airspace definitions. Two of
+squadron squawk map, theater settings (the old `theater-settings.json`), per-airport ATIS config and the airspace definitions. Two of
 them were also committed to git, so a recreated container restored an old snapshot rather than
 starting empty. **Do not mount a volume over `/app/config` or `/app/data`**: an empty named volume shadows the shipped
 files and presents as every one of them having reset.
 
-`nginx`'s config is generated inline in `infra/docker-compose.yml`'s `command:` block (no standalone `nginx.conf`). `client_max_body_size` there is `350M` — needed for crc-desktop installer uploads; if you're debugging a `413` on any upload endpoint, check this first, and remember it only takes effect after the `git pull` + `docker compose up -d` sequence above actually runs on the server (not just after merging to `main`).
+`nginx`'s config is generated inline in `infra/docker-compose.yml`'s `command:` block (no standalone `nginx.conf`). `client_max_body_size` there is `350M` — needed for crc-desktop installer uploads; if you're debugging a `413` on any upload endpoint, check this first, and remember it only takes effect after the `git pull` + `docker compose up -d` sequence above actually runs on the server (not just after merging to `main`). The same block sends `X-Forwarded-For $proxy_add_x_forwarded_for` to the atobrief, sourcedcs-web and crc-sync upstreams, and all three apps set `trust proxy` to 1, so `express-rate-limit` keys on the real client address instead of the nginx container's (this too lands only after the `git pull` + `up -d`).
+
+sourcedcs-web keeps the newest 3 versions of each crc-desktop installer type (`.exe`, `.AppImage`) in `data/releases/`: `pruneReleases` (`releases.js`) runs after every successful `POST /api/releases/upload`, deletes older installers and their `.blockmap`, and never deletes a manifest or the file the latest manifest names.
 
 ## How to build and release crc-desktop
 
@@ -205,12 +220,13 @@ See `.env.example` for all required variables. Key ones:
 | `CASDOOR_ENDPOINT` | atobrief, sourcedcs-web, crc-sync |
 | `ATOBRIEF_CLIENT_ID` / `ATOBRIEF_CLIENT_SECRET` | atobrief |
 | `CRCSYNC_CLIENT_ID` / `CRCSYNC_CLIENT_SECRET` | crc-sync |
-| `CRCSYNC_DCS_GRPC_HOST`, `CRCSYNC_SRS_HOST`, `CRCSYNC_SRS_PORT` | crc-sync (DCS server upstream) |
+| `CRCSYNC_DCS_GRPC_HOST`, `CRCSYNC_SRS_HOST`, `CRCSYNC_SRS_PORT` | crc-sync (DCS server upstream). These are the root `.env` / compose names; compose hands them to the container as `DCS_GRPC_HOST`, `SRS_HOST`, `SRS_PORT`, which is what the code reads (and what `crc-sync/.env.example` uses for local runs) |
 | `DISCORD_BOT_TOKEN` | sourcedcs-web |
 | `RELEASE_UPLOAD_TOKEN` | sourcedcs-web (accepts uploads) + the `crc-desktop-release.yml` repo secret (sends them) — must match |
+| `CRCSYNC_COALITION` | crc-sync (which DCS coalition is "own": `3` BLUE, the default, or `2` RED; it models the Mode 4 crypto key, and carrier hulls are matched against it). In `.env.example` and forwarded by compose |
 | `CRCSYNC_SOURCEDCS_WEB_URL` | crc-sync (EFSP flight-plan lookup — reaches sourcedcs-web at `http://main-website:7000` inside the Docker stack) |
 | `FLIGHT_PLAN_SERVICE_TOKEN` | sourcedcs-web (accepts EFSP's filed-plan queries) + crc-sync (sends them) — must match |
 | `CRCSYNC_MAPTILER_KEY` | crc-sync (terrain masking for the radar picture — **optional**: without it every radar sees to its full range and nothing is masked, logged once at startup) |
 | `CRCSYNC_TERRAIN_CACHE_DIR` | crc-sync (DEM tile cache; the Docker stack points it at the `crc-sync-state` volume) |
 | `DCS_GRPC_POLL_RATE` / `DCS_GRPC_MAX_BACKOFF` | crc-sync (DCS-gRPC unit stream: seconds between polls, default 1, floor 1; longest re-poll wait for a unit that isn't changing, default 5). Leave unset |
-| `ATOBRIEF_USMTF_TOKEN` | atobrief (accepts USMTF ATO reads) + crc-sync (sends them, once L14's ATO import lands) — must match |
+| `ATOBRIEF_USMTF_TOKEN` | atobrief (accepts USMTF ATO reads from a machine caller). **Nothing sends it yet**: crc-sync never reads it, and its ATO import (L14) is paste/drop of a USMTF file, not a fetch from atobrief. Only an external USMTF consumer needs it |

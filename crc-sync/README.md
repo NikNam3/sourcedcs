@@ -2,7 +2,7 @@
 
 Central multiplayer sync backend for [`crc-desktop`](../crc-desktop) — the sole gRPC (DCS telemetry) and SRS-transponder client on behalf of every connected crc-desktop instance, broadcasting merged track state + a collaborative overlay (IFF declarations, renames, track numbers) over a Casdoor-authed WebSocket.
 
-Replaces the retired `asacs_link` service. Unlike asacs_link, it has no public browser-facing GCI dashboard today — `public/` exists but is an unused scaffold; every client is crc-desktop itself.
+Replaces the retired `asacs_link` service. Unlike asacs_link, it has no public browser-facing GCI dashboard and no `public/` directory (`server.js` still names one; `/js/config.js` is the only live leftover); every client is crc-desktop itself.
 
 ## Quick start
 

@@ -32,7 +32,7 @@ Public-facing squadron website. Handles roster display, event scheduling, galler
 ```bash
 cd sourcedcs-web
 npm install
-npm start          # → http://localhost:7000
+npm start          # → http://localhost:3000 (the Docker stack sets PORT=7000)
 ```
 
 See [`sourcedcs-web/CASDOOR_SETUP.md`](sourcedcs-web/CASDOOR_SETUP.md) for authentication configuration.

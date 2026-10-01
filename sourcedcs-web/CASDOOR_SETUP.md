@@ -42,14 +42,14 @@ The SOURCE DCS deployment points its Casdoor instance at `https://auth.sourcedcs
 | **Response Type** | `code` |
 | **Token Format** | `JWT` |
 
-> **Redirect URI note:** The redirect URI must exactly match the URL Casdoor redirects to after login. The website sends users to `<origin>/auth-callback.html`, so use your production domain (e.g. `https://sourcedcs.page/auth-callback.html`). For local development, also add `http://localhost:3000/auth-callback.html`.
+> **Redirect URI note:** The redirect URI must exactly match the URL Casdoor redirects to after login. The website sends users to `<origin>/auth-callback.html`, so use your production domain (e.g. `https://sourcedcs.page/auth-callback.html`). For local development, also add `http://localhost:3000/auth-callback.html` (`server.js` listens on 3000 unless `PORT` is set; the Docker stack sets 7000 behind nginx).
 
 3. Under **Providers**, attach any login providers you want (e.g. username/password, Discord, GitHub).
 4. Save.
 
 ### Set environment variables
 
-Copy `.env.example` to `.env` (for local development) and set the values for your deployment:
+The root `.env.example` lists them (in the Docker stack it is copied to `infra/.env` and compose passes the values through). `sourcedcs-web` does not load a `.env` file itself, so for a local run export them in the shell that starts `npm start`:
 
 ```bash
 CASDOOR_CLIENT_ID=<your-client-id-from-above>
@@ -57,7 +57,7 @@ CASDOOR_CLIENT_SECRET=<your-client-secret-from-above>
 CASDOOR_ENDPOINT=https://auth.sourcedcs.page
 ```
 
-`CASDOOR_CLIENT_ID` and `CASDOOR_ENDPOINT` are served to the browser via `/js/config.js` — do **not** hardcode them in the JS source files. `CASDOOR_CLIENT_SECRET` is **only** used server-side and must never be exposed to the browser.
+`CASDOOR_CLIENT_ID` and `CASDOOR_ENDPOINT` are served to the browser via `/js/config.js` (together with the site's link URLs and `SKILL_ADMIN_ROLES`) — do **not** hardcode them in the JS source files. `CASDOOR_CLIENT_SECRET` is **only** used server-side and must never be exposed to the browser.
 
 ## 4. Configure JWT Claims
 
@@ -74,6 +74,10 @@ Admin access is controlled via Casdoor **roles**. Assign the built-in `admin` ro
 1. In Casdoor, go to **Roles** → **Add** (or use an existing role).
 2. Create a role named exactly `admin` in your organisation.
 3. Go to **Users** → select the admin user → **Roles** tab → add the `admin` role.
+
+### Other roles
+
+`admin` is not the only role the server reads. Skill-tree and grading administration (`requireSkillAdmin`) accepts the roles in `config.json`'s `skillAdminRoles` (`admin`, `squadronlead`, `flightlead` as shipped), and the booking resources and ranges (`requireBookingAdmin`) accept `admin` and `squadronlead`. Create those roles in Casdoor the same way.
 
 ### How it works
 

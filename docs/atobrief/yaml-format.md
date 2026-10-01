@@ -22,8 +22,9 @@ weather: { ... }   # Mission weather forecast (WX tab)
 
 ## `schema_version:`
 
-Top-level string that identifies the file format version.  Currently the only
-accepted value is `"1.0"`.
+Top-level string that identifies the file format version.  miztoyaml writes
+`"1.0"`.  The viewer keeps the value when it loads a package but does not
+check it, so a missing or different value is not refused.
 
 ```yaml
 schema_version: "1.0"
@@ -141,7 +142,7 @@ registry:
 ### `tankers:` (list)
 
 A **list** of tanker entries.  Missions reference tankers by callsign via
-`refuel.tanker_id`.  The `miz-to-yaml` tool populates this automatically
+`refuel.tanker_id`.  The `miztoyaml` tool populates this automatically
 from tanker flights (including orbit altitude and speed extracted from the
 DCS route).
 
@@ -160,6 +161,8 @@ registry:
 ```
 
 The altitude display (e.g. `FL240`) is derived at render time from `altitude_ft` — no separate string field is needed.
+
+miztoyaml also fills `mission_number` (the tanker's own `REFUELING` mission, one per tanker flight, numbered in flight order), `freq_mhz` (the group's own frequency), `tacan` (from the group's `ActivateBeacon`, type 4, e.g. `39Y`), `system` (`BOOM` or `DROGUE`, from a DCS-type table; left out for an unknown type) and `arcp` (the orbit waypoint's name, upper-cased, when it has one).  See "USMTF export" below for the fields the export reads.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -307,7 +310,7 @@ drawn on the map as plain dashed lines with **no** route semantics (no speed,
 no time-on-station).  These are distinct from a mission's `steer_points`,
 which describe the flown path.
 
-The `miz-to-yaml` tool populates this automatically from each unique DTC
+The `miztoyaml` tool populates this automatically from each unique DTC
 cartridge referenced by a flight (F-16: the DTC's `GEO_LINES` planning
 points, grouped by the DTC's L1-L4 line flags; F-18: the DTC's real
 steerpoints, grouped by its R1-R3 line flags — F-18 has no separate
@@ -340,9 +343,13 @@ are defined here.  Each mission's `control.agency_id` references these by key;
 callsign and primary frequency are resolved from the registry at load time.
 All agencies are listed in the Intel Strip on the ATO tab.
 
-The `miz-to-yaml` tool automatically extracts AWACS groups from the DCS
-mission (task=AWACS) and populates this section.  The key is the DCS group
-name (which also becomes the `callsign`).
+The `miztoyaml` tool automatically extracts AWACS groups from the DCS
+mission (task=AWACS) and populates this section.  The key is the group's ATO
+callsign (the DCS group name upper-cased, stripped to A-Z and 0-9, and with vowels
+cut back to front until it is 7 characters or fewer, decision H60, the same rule
+as crc-sync's ATO import), which is also the `callsign`.  Each agency also gets
+`mission_number`, the number of its own `AEW` mission (one per AWACS flight, in
+flight order).  The example below keeps the older group-name keys for readability.
 
 ```yaml
 registry:
@@ -371,7 +378,7 @@ metadata.  Because a frequency can only belong to one net and one purpose,
 the metadata is defined once here rather than repeated inside every flight's
 channel preset table.
 
-The `miz-to-yaml` tool automatically populates this list from DTC files and
+The `miztoyaml` tool automatically populates this list from DTC files and
 non-DTC Radio channel presets.  `callsign` and `role` are `null` by default;
 fill them in manually (or via the Registry editor) to annotate each net.
 
@@ -756,17 +763,20 @@ reordered freely without any code changes.
 The SPINS section no longer needs its own `operation`, `ato_day`, or
 `classification` fields — these are propagated from `header`.
 
-**All standard SPINS sections are auto-generated** by `miztoyaml` from the
-ATO data — no separate `spins.md` markdown file is required or supported.
-In the web editor, the **GENERATE STANDARD SECTIONS FROM ATO** button
-rebuilds all sections from the currently loaded package at any time.
+**The standard SPINS sections are generated in the web editor, not by
+`miztoyaml`.**  The converter emits `spins: { version: "1.0", sections: [] }`
+(its `build_spins_sections` helper is tested but not called), and there is no
+separate `spins.md` input.  The **⟳ GENERATE FROM PRESETS** button on the SPINS
+tab (`_initializeSpinsFromAto()` in `editor-spins.js`) builds all nine sections
+from the currently loaded package and the first entry of each preset, at any
+time; it asks before replacing existing sections.
 
 ### Standard auto-generated sections
 
 | Section | Source |
 |---------|--------|
 | **C1 — Command & Control** | C1.1 Tactical Control populated from `registry.control_agencies`; C1.3 Package Lead left empty for manual assignment |
-| **C3 — IFF / SIF** | Table auto-built from `ato.missions`: always Mode 3, squawk codes sequential from 4701 (+10 per mission) |
+| **C3 — IFF / SIF** | Table auto-built from `ato.missions`: always Mode 3, a random unique octal code per mission (never 7500/7600/7700 and never `6xxx`, which crc-sync keeps for AI traffic) |
 | **C4 — Rules of Engagement** | Populated from the Standard preset; changeable via preset picker or individual entry editing |
 | **C5 — Execution** | One block per mission in `ato.missions` with empty OBJECTIVE and DESIRED EFFECTS fields |
 | **C7 — Lost Comms** | Standard preset (AWACS / Package / Intraflight loss procedures) |
@@ -779,8 +789,8 @@ rebuilds all sections from the currently loaded package at any time.
 
 1. Load or create a package YAML.
 2. Switch to the **SPINS** tab and enter edit mode (✎ EDIT SPINS).
-3. Click **↺ GENERATE STANDARD SECTIONS FROM ATO** to populate all sections
-   from the loaded ATO data.  Any existing sections are replaced.
+3. Click **⟳ GENERATE FROM PRESETS** to populate all sections
+   from the loaded ATO data.  Any existing sections are replaced (after a confirmation).
 4. Open individual sections to edit them:
    - **C1.1 Tactical Control** — click *↺ REFRESH FROM REGISTRY* to re-pull
      agency data; entries can also be edited manually.
@@ -1236,6 +1246,8 @@ registry:
 Tankers and AWACS are ordinary missions (`REFUELING` / `AEW`). The registry entry names its
 mission through `mission_number`, and that gives `REFTSK`, `5REFUEL` and `7CONTROL`.
 
+From a `.miz`, miztoyaml fills the tanker and agency `mission_number`, the tanker `tacan`, `freq_mhz`, `system` and `arcp`, and `missions[].datalink` (`l16_callsign` is the lead's voice callsign label plus number, `ju` the lead's `STN_L16`, `tacan` the group's TACAN beacon; all strings).  It does not fill IFF Mode 1/2/3, package id and commander, alert status, vul, report-in point, `offload_klb` or `control.agency_id`, because the `.miz` does not hold them (ADR 0089).
+
 What each export field means (every one is optional, and the mission editor has an input for all of
 them except `secondary_freq_mhz` on a tanker, which is YAML-only):
 
@@ -1271,19 +1283,17 @@ room's export is gone once the room closes or atobrief restarts.
 
 ## IFF Squawk Code Generation
 
-> **Stale:** the formula below is outdated. The editor and miztoyaml randomise Mode 3 codes today.
-> The USMTF export reads whatever the C3 table holds (or `missions[].iff.mode3`).
+> **Rewritten (docs drift fix).**  This section used to describe a formula,
+> `squawk = 4701 + (mission_index × 10)`, that no code implements.  Today the
+> editor's **⟳ GENERATE FROM PRESETS** button assigns each mission a random
+> unique Mode 3 code (`_randomSquawkCode` in `editor-spins.js`), never an
+> emergency code (7500, 7600, 7700) and never `6xxx` (crc-sync's AI block).
+> miztoyaml emits no SPINS C3 at all (`spins.sections` is empty; its unused
+> `build_spins_sections` helper uses the same rule).  The USMTF export reads
+> whatever the C3 table holds (or `missions[].iff.mode3`).
 
-When `miztoyaml` builds the SPINS sections, Mode 3 squawk codes are assigned
-automatically to each mission in ATO order using the following formula:
-
-```
-squawk = 4701 + (mission_index × 10)
-```
-
-This produces codes **4701, 4711, 4721, …** for the first, second, and third
-missions respectively.  Codes can be changed by editing the IFF table in the
-web editor (SPINS → section C3 → edit → adjust CODE column values).
+Codes can be changed by editing the IFF table in the web editor (SPINS →
+section C3 → edit → adjust CODE column values).
 
 ---
 
