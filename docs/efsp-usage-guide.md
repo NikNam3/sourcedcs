@@ -357,7 +357,12 @@ The assigned altitude (`ALT`) and assigned heading (`HDG`) are stored once per f
 every Strip of a flight shows the same value. The filed cruise altitude on a departure or
 overflight is `CRUS ALT`, and changing it is an amendment to the flight plan, not a clearance.
 
-Type an altitude as `FL180`, `A050`, `180` (hundreds of feet) or `5000` (feet). Type a heading as
+Type an altitude as `FL180`, `A050`, `180` (hundreds of feet) or `5000` (feet), or a **block** as two
+altitudes joined by `-`, `B` or `TO`, lower first: `FL220-FL240`, `FL220B240`, `220B240`, `5000-8000`.
+A block is stored and shown in one canonical form (`FL220-FL240`; an end at or above 18,000 ft and a
+whole hundred is written as a flight level, anything else in feet, e.g. `16000-FL200`), whatever the
+transition altitude. A reversed or equal block, a half-written one (`FL220-`) and more than two ends are
+refused with the entry unchanged. The MTR's after-exit altitude takes a block too. Type a heading as
 `050`. Anything else is refused. `HDG` is usually left empty: set it when you vector, and the
 conformance check (§8E) only watches a heading once one is assigned.
 
@@ -930,6 +935,12 @@ between them there. Aircraft in the same active MARSA relation never raise STCA 
 other. Traffic without Strips still does. The tactical Positions get no STCA — a squadron
 decision (`adr/0059`, `[SOURCE-DEFINED]`), not a statement of real-world doctrine.
 
+Against a **block altitude** the deviation is zero anywhere inside the block and the distance to the
+nearest edge outside it (same 400 ft reached / 500 ft bust tolerances, wrong-way means climbing away from
+a block above or descending away from one below). The track panel and the scope's data block show the
+block. The Strip's conformance reason line still quotes the nearest edge ("from FL240") rather than the
+block. STCA does not read the assigned altitude at all.
+
 Altitudes are compared as the controller reads them, on QNH below the transition altitude and as
 flight levels above it. The thresholds are in crc-sync's `config/alerting.json`.
 
@@ -1314,7 +1325,26 @@ has cycled, so a new flight is not handed the previous flight's still-airborne c
 **The audit trail.** Every Mutation, and every refusal, is logged in
 `crc-sync/state/efsp-mutations.jsonl`, plus day segments `efsp-mutations.YYYY-MM-DD[.n].jsonl` named
 by their newest entry. Read the segments in day order, then the live file. `ok:false` entries are
-refusals; `source:'wire'` means the refusal was caught before any store saw it. Retention (30 days by
+refusals; `source:'wire'` means the refusal was caught before any store saw it. Every outcome has exactly
+one entry: a store logs what reaches it, and the wire layer logs the refusals that never reached one
+(`unaudited`, never on the wire). Reading an entry:
+
+- `facilityId` and the FDR are on every entry. `facilityId: null` means theater-wide (correlation and
+  MARSA; a MARSA entry names its `fdrIds`). An airspace entry names the controlling Facility.
+- `SetBlock` names the `blockId` and the `value` written. Coordination and TOFI entries name their
+  `action` (`CANCEL`, ...). Airspace, correlation and MARSA entries carry the `clientMutationId`.
+- `source:'peer'` is a change to a replica on this Facility's Board caused by the other Facility's
+  Mutation: `causedBy` names it and `clientMutationId` is null. There are seven `Peer*` ops, plus
+  `PeerCoordinationCancel`.
+- `SystemReassign` has reason `position-vacated` (a Position left, Strips moved to its cover) or
+  `position-retaken` (they moved back; not counted in the `systemReassigned` metric).
+  `SystemCoordinationEnd` ends a link whose replica was retired.
+- `Archive` / `ArchiveFdr` (§8J) are the end of a finished flight; `NotPersisted` (written at boot)
+  voids the earlier line with the same `clientMutationId`, which never took effect because crc-sync died
+  before saving it.
+- A scramble called off while still on the ground is not counted as an alert scramble in the traffic
+  count; one called off after departure is.
+- A retry answered from the replay cache writes no second entry. Retention (30 days by
 default) and the home airports that decide local vs transient are in
 `crc-sync/config/efsp-instrumentation.json`, or a copy in `state/`; restart crc-sync to apply a
 change.

@@ -854,6 +854,39 @@ correlation and MARSA records. Any new EFSP broadcast must go through `_broadcas
   run for this lane; `CANCEL` and the two system log entries are new op strings (a `CANCEL` is not a
   coordination attempt for the metrics tap).
 
+**Audit completeness (L26, `0083`).** One outcome, one audit entry: a store logs what reaches it, and the
+metrics tap (`metrics.js` `_post`) logs whatever carries `result.unaudited` (the handlers in `efsp-ws.js`
+set it on every pre-store refusal, so it replaced the old "efsp-mutation or NOT_HOLDING_POSITION"
+condition). Every entry has `facilityId` and the FDR (`null` Facility for correlation/MARSA, the
+controlling Facility for airspace); `SetBlock` records `blockId`/`value`; transitions carry a wire `action`;
+airspace passes `clientMutationId` into `apply`. Seven `Peer*` ops (plus `PeerCoordinationCancel`) record
+replica changes with `source: 'peer'`, `causedBy` and `clientMutationId: null` (`_recordPeer`,
+`_activeCmid` in `applyMutation`; `isDropTransition` is guarded by `source: 'peer'` so a cancelled
+replica's retire is not a drop). A cached replay stays unlogged. `traffic-count.js`: a scramble called off
+on the ground is not counted, one called off after departure keeps its latch; an archived drop
+backfilled at boot keeps its Facility. **`getFieldState` now carries `runwayChangeAcknowledgers` and
+`inspectionAuthorityPositionId`**; the client still falls back to the owners table (open item).
+- The soak harness does not install the metrics tap, so its model of "refusals are not logged" for
+  `efsp-mutation` differs from production; the ledger still reconciles what the harness sees (and
+  reconciles airspace per message).
+- Known: `tools/soak/selfcheck.mjs`'s `drop-broadcast` check fails with and without this lane
+  (silentStaleness 0, expected >= 1): a detector to re-verify. `efsp-scenario-concurrency.test.mjs`
+  shares one log across tests, two assertions use `findLast`. The ATO "no store" refusal is reached only
+  through `_atoGate`, which the handler already logs.
+
+**Block altitudes (U6, `0091`).** `fdr-store.js`'s `parseAltitude(text)` returns a band `{ lowFt, highFt }`
+(a single altitude is a zero-width band); `parseAltitudeFt` still answers a single altitude only. A block
+is stored `parsed: null, block: { lowFt, highFt }` with `value` rewritten canonical, so a reader that only
+knows single altitudes ignores the entry rather than misreading it. Conformance deviation is the distance
+to the nearest edge (`0058`'s tolerances unchanged); `clearance-migration.js` reads blocks too;
+`requestedAltitudeAfterExit` takes a block. Client: the track panel, the scope's data block and the map
+line show it. Open: **`strip-view.js`'s conformance reason line reads `a.assigned` (the edge), so a block
+bust says "from FL240" without the block** (use `a.block`; UI-A owns the file); the existing test that
+expected `FL190B210` refused was updated; STCA does not read assigned altitude (a conservative rule is
+in the ADR for later); a block on a datalink/atobrief import path is not walked (the ATO import carries
+no clearance altitude). Pre-existing `crc-sync npm test` failures at U6's base are listed in
+`docs/wip/U6.md`.
+
 ## 4. What's left, and the known bugs
 
 **Not built, in the guide's order.** WP6: the field-state panel and the hook-mismatch check (L1b),
