@@ -46,7 +46,7 @@ const cases = [
   { name: 'clean', extra: [], expect: (rep) => { const b = quiet(rep); return b.length ? `clean run not quiet: ${b.join(', ')}` : null; } },
   { name: 'drop-ack', extra: ['--inject', 'drop-ack'], expect: (rep) => (rep.mutations.lost >= 1 ? null : `lost=${rep.mutations.lost}, expected >= 1`) },
   { name: 'drop-broadcast', extra: ['--inject', 'drop-broadcast'], expect: (rep) => (injectedStale(rep) >= 1 ? null : `silentStaleness (not H1) = ${injectedStale(rep)}, expected >= 1`) },
-  { name: 'leak', extra: ['--inject', 'leak'], expect: (rep) => (rep.memory.r2 > 0.9 && rep.verdict.failures.some(f => f.startsWith('memory.slope')) ? null : `heap slope ${rep.memory.slopeMBPerHour} MB/h R²=${rep.memory.r2}; expected a memory FAIL with R² > 0.9`) },
+  { name: 'leak', extra: ['--inject', 'leak', '--judge-memory'], expect: (rep) => (rep.memory.r2 > 0.9 && rep.verdict.failures.some(f => f.startsWith('memory.slope')) ? null : `heap slope ${rep.memory.slopeMBPerHour} MB/h R²=${rep.memory.r2}; expected a memory FAIL with R² > 0.9`) },
   { name: 'skip-shadow-client', extra: ['--inject', 'skip-shadow-client'], expect: (rep) => (rep.mutations.injectedShadowDrops >= 1 && injectedStale(rep) >= 1 ? null : `dropped ${rep.mutations.injectedShadowDrops}, silentStaleness (not H1) = ${injectedStale(rep)}, expected >= 1`) },
 ];
 
