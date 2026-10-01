@@ -164,14 +164,12 @@ test('pilot walks with field state: the pad by name, a runway request re-stated,
   await goBay(page, 'OPS', 'ops-proposed');
   const dep = await seedStrip(page, { callsign: DEP, actingPositionId: 'OPS', role: 'DEPARTURE',
     fdr: { departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' } });
-  await dep.locator('.efsp-expand-btn').click();
-  await setOrdnance(dep.locator('[data-expanded-block="3G"]'), 'HUNG');
+  // UI-A U1: ORDNANCE is on OPS's face, so it is set there (the expanded view lists only what is off the face).
+  await setOrdnance(dep.locator('.efsp-strip-fields'), 'HUNG');
   await expect(dep.locator('.efsp-strip-reason', { hasText: 'Hung ordnance' })).toContainText('if it returns, taxi to Hot cargo pad');
-  await dep.locator('.efsp-expand-btn').click();
   await only(page, DEP);
   await dep.screenshot({ path: shot('08-departure-returns.png') });
-  await dep.locator('.efsp-expand-btn').click();
-  await setOrdnance(dep.locator('[data-expanded-block="3G"]'), 'CLEAN');
+  await setOrdnance(dep.locator('.efsp-strip-fields'), 'CLEAN');
   await expect(dep.locator('[data-slot="ord"]')).toHaveCount(0);
 
   expect(scriptErrors(consoleErrors), consoleErrors.join('\n')).toEqual([]);

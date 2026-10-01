@@ -55,3 +55,14 @@ Server edits (minimal, listed): `permission.js` (one `NON_OWNER_BLOCK_WRITES` ro
 - Guide 4.6.3: the Strip's `KEEP IFR` is `ifrActive`; hover says what it means.
 - Guide 10.5 / ADR 0073 "left open": W2, W3 and W5 are closed as described above.
 - Usage guide: TOFI Exit appears as the Strip's main button on CTR once the mission line is OFF_STATION/RTB.
+
+## Report numbers
+
+- crc-sync 1852 -> 1854 pass (0 fail; `efsp-ui-a-hooks.test.mjs` +2, one existing ATO test's vul data adjusted).
+- crc-desktop 717 -> 726 pass (`efsp-ui-a.test.js` +7, drop-targets +1, arrivals +1, plus edits to the strip-fields,
+  reachability and metrics tests).
+- Playwright `E2E_LANE=2`: new `ui-a.spec.js` 7/7. Full suite 124 passed / 2 failed; both reruns green (tactical-positions
+  01/02 and 06 pass alone, 06 sits at 19-21 s against a 20 s timeout under load; `ordnance-hung` "pilot walks" failed because
+  the spec set ORDNANCE through the expanded view, which no longer lists it on OPS's face: fixed in the spec, and it needs
+  `field-state.spec.js` before it, as on the baseline, for the active runway).
+- `e2e` regenerates `docs/wip/*.png`; reverted after each run.
