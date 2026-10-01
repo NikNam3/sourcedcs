@@ -419,6 +419,10 @@ async function renderStrip({ strip, fdr, held, airspaces = [], correlations = []
   // efsp-panel.js owns the refusal record; bay-view.js only ever READS it — the panel populates it
   // before the render that follows a refusal and nulls it before the render that follows a dismissal.
   sandbox._setCurrentRefusalForTest(refusal);
+  // The panel is showing the Strip's Bay: the old vm sandbox never loaded efsp-panel.js, so every Strip was "on screen"
+  // (an arrival flashes only where the controller can see it).
+  sandbox._setActiveBayId(strip.bayId);
+  sandbox._setBayContentElForTest({ isConnected: true, offsetParent: {} });
   const liveTracks = new Map(tracks.map(t => [String(t.id), t]));
   globalThis.getLatestTrack = (id) => liveTracks.get(String(id)) || null;
   globalThis.getAllTracks = () => [...liveTracks.values()];
