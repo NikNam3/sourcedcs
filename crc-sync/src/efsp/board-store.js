@@ -28,11 +28,13 @@
 // §5.4) taken literally.
 
 const crypto = require('crypto');
-const { keyBetween, rebalance, needsRebalance } = require('./order-key');
-const { isValidAltitude } = require('./airspace-config');
+const { newFlags, _validateAltitudeBlock, deepClone, _frequencyFromBlockValue } = require('./board/strip-util');
 const { MAX_FREE_TEXT, SEPARATION_REGIMES } = require('./fdr-store');
 const { WALL_CLOCK } = require('../mission-clock');
-const { runwayRackFor, runwayInhibitFor, RUNWAY_GATED_STATES } = require('./field-state');
+const { BoardState } = require('./board/board-state');
+const { BoardAudit } = require('./board/audit');
+const { Placement } = require('./board/placement');
+const { runwayInhibitFor, RUNWAY_GATED_STATES } = require('./field-state');
 const { CARRIER_TRANSFER_EFFECTS } = require('./carrier/transfer-effects'); // pure (docs/adr/0074)
 
 // A DEPARTURE in these states has left the ground (docs/adr/0076).
@@ -86,67 +88,6 @@ function _replayRecord(result, appliedWallAt) {
   });
 }
 
-function newFlags() {
-  return { offset: false, flipped: false, removeIndicator: false, highlight: null, attention: null };
-}
-
-/**
- * An altitude block a flight is restricted to inside an airspace. Feet,
- * whole numbers, upper above lower, and — when the airspace publishes its
- * own vertical limits — inside them, since a controller cannot assign a
- * block the airspace does not contain.
- */
-function _validateAltitudeBlock(block, definition) {
-  if (block === undefined || block === null) return { ok: true };
-  if (typeof block !== 'object') return { ok: false, detail: 'altitudeBlock must be {lowerFt, upperFt}' };
-  const { lowerFt, upperFt } = block;
-  if (!isValidAltitude(lowerFt) || !isValidAltitude(upperFt)) {
-    return { ok: false, detail: 'altitudeBlock needs whole-foot lowerFt and upperFt' };
-  }
-  if (upperFt <= lowerFt) return { ok: false, detail: 'altitudeBlock upperFt must be above lowerFt' };
-  if (isValidAltitude(definition.altLowerFt) && lowerFt < definition.altLowerFt) {
-    return { ok: false, detail: `${definition.name} starts at ${definition.altLowerFt} ft — ${lowerFt} is below it` };
-  }
-  if (isValidAltitude(definition.altUpperFt) && upperFt > definition.altUpperFt) {
-    return { ok: false, detail: `${definition.name} tops at ${definition.altUpperFt} ft — ${upperFt} is above it` };
-  }
-  return { ok: true };
-}
-
-function deepClone(obj) {
-  return obj == null ? obj : JSON.parse(JSON.stringify(obj));
-}
-
-/**
- * Block 22's value, as a frequency.
- *
- * Every Block a controller types into arrives as a STRING — the panel's
- * click-to-edit cell is an <input type="text"> and always has been — while
- * isValidFrequency() requires a number, deliberately, so that a configured
- * airspace frequency and a flight's approved frequency can never validate
- * differently (airspace-config.js's own header says so).
- *
- * Nothing bridged the two, so typing into Block 22 was refused with
- * `frequency must be a number between 30 and 400 MHz, not "360.200"` — a
- * message naming a value that looks perfectly valid, which is the worst kind.
- * The Block has been reachable since the RANGE slice and the only writer that
- * ever worked was ApproveAirspaceEntry, which passes a real number from config.
- *
- * Parsed here rather than coerced in the client because this is the one
- * boundary every writer crosses; a client-side fix would leave the dot-command
- * surface and any second client to make the same mistake again. Strict on
- * purpose: Number('') is 0 and Number('  ') is 0, so a blank must be caught
- * first, and anything that is not a plain decimal is left alone to be refused
- * by the validator with its own message.
- */
-function _frequencyFromBlockValue(value) {
-  if (value === '' || value === undefined || value === null) return null;
-  if (typeof value !== 'string') return value;
-  const trimmed = value.trim();
-  if (trimmed === '') return null;
-  return /^\d+(\.\d+)?$/.test(trimmed) ? Number(trimmed) : value;
-}
-
 class BoardStore {
   /**
    * @param {import('./fdr-store').FdrStore} fdrStore
@@ -174,24 +115,23 @@ class BoardStore {
     this._clock = clock;
     this._fdrStore = fdrStore;
     this._rules = rules;
-    this._strips = new Map(); // stripId -> Strip
-    this._log = [];           // [{seq, type:'update'|'gone', id}]
-    this._seq = 0;
-    // The Board lifetime a seq belongs to (docs/adr/0081, L6's F2). `_seq` and
-    // the `_log` ring are per process and deliberately not persisted, so a
-    // seq from before a restart means nothing after it — and once the new
-    // lifetime's seq overtakes a client's, nothing but a name for the lifetime
-    // can tell the two apart. Minted again by restore(); never persisted.
-    this._epoch = crypto.randomUUID();
-    this._cidSeq = 0;
+    // The kernel (docs/adr/0095): the Strip map, the seq/log ring, the epoch,
+    // the touched set and the cid counter. `touch` is late-bound to this._touch
+    // so a patched _touch (tools/soak/host-core.js) sees every touch.
+    this._state = new BoardState({ clock, touch: (id) => this._touch(id) });
     this._appliedMutations = new Map(); // clientMutationId -> compact frozen replay record (_replayRecord), idempotency (§5.2, docs/adr/0081)
-    // Every Strip a Board event touched since efsp-ws.js last drained it
-    // (docs/adr/0081, guide §5.4 "one Board event"). A rebalance re-keys
-    // Strips the Mutation never named, and a coordination op touches the PEER
-    // Board inside the sender's applyMutation; whoever broadcasts a Board's
-    // change drains this, so every touched Strip rides in that broadcast.
-    this._touchedSinceDrain = new Set();
     this._mutationLog = null; // optional collaborator, see setMutationLog()
+    // The Mutation-log entries for a client Mutation and a peer write (board/audit.js).
+    // `mutationLog` is read late: setMutationLog() can come after construction.
+    this._audit = new BoardAudit({ rules, clock, mutationLog: () => this._mutationLog });
+    // Order keys and Bays (board/placement.js). touch and rebalanceRack are late-bound to the
+    // facade (host-core patches both); rejectedReplicaRefusal is the NLA cluster's, still here.
+    this._placement = new Placement({
+      state: this._state, rules, clock, fdrStore,
+      touch: (id) => this._touch(id),
+      rebalanceRack: (bayId, rackId, excludeStripId) => this._rebalanceRack(bayId, rackId, excludeStripId),
+      rejectedReplicaRefusal: (strip, toState) => this._rejectedReplicaRefusal(strip, toState),
+    });
     this._activeCmid = null;  // the clientMutationId being applied, while applyMutation runs
     // stripId -> { invokedAt, prevState, expiresAt } — the 400ms double-tap
     // guard and the 30s Undo window for the last NLA transition (§3.5
@@ -209,152 +149,32 @@ class BoardStore {
 
   setMutationLog(mutationLog) { this._mutationLog = mutationLog; }
 
-  get currentSeq() { return this._seq; }
+  get currentSeq() { return this._state.seq; }
   /** This Board lifetime's name (docs/adr/0081). A delta is valid only within one epoch. */
-  get epoch() { return this._epoch; }
-  getStrip(stripId) { return this._strips.get(stripId) || null; }
-  getAll() { return [...this._strips.values()]; }
+  get epoch() { return this._state.epoch; }
+  getStrip(stripId) { return this._state.strips.get(stripId) || null; }
+  getAll() { return this._state.all(); }
 
-  /** Strips currently placed in a Bay/Rack, in order, excluding DROPPED — a DROPPED Strip stays queryable via getStrip()/getAll() but leaves the visible Board (guide §3.4). */
-  getRack(bayId, rackId) {
-    return this.getAll()
-      .filter(s => s.bayId === bayId && s.rackId === rackId && s.state !== 'DROPPED')
-      .sort((a, b) => (a.orderKey < b.orderKey ? -1 : a.orderKey > b.orderKey ? 1 : (a.stripId < b.stripId ? -1 : 1)));
-  }
+  /** Strips currently placed in a Bay/Rack, in order, excluding DROPPED (board/board-state.js rack()). */
+  getRack(bayId, rackId) { return this._state.rack(bayId, rackId); }
 
-  _touch(stripId) {
-    this._log.push({ seq: ++this._seq, type: 'update', id: stripId });
-    this._touchedSinceDrain.add(stripId);
-    this._pruneLog();
-  }
+  /** Rebalances one Rack (board/placement.js). Kept on the facade: tools/soak/host-core.js wraps it by name. */
+  _rebalanceRack(bayId, rackId, excludeStripId) { return this._placement.rebalanceRack(bayId, rackId, excludeStripId); }
 
-  /**
-   * The ids of every Strip touched since the last drain, in first-touch
-   * order, and forgets them. Called by whoever puts this Board's change on the
-   * wire (efsp-ws.js), on this Board and on the peer Board a coordination op
-   * reached — never by board-store itself (docs/adr/0081).
-   * @returns {string[]}
-   */
-  drainTouched() {
-    const ids = [...this._touchedSinceDrain];
-    this._touchedSinceDrain.clear();
-    return ids;
-  }
-  _pruneLog() {
-    if (this._log.length > 2000) this._log.splice(0, this._log.length - 1000);
-  }
+  // Kept on the facade for tools and tests until SYNC replaces them (docs/adr/0095):
+  // tools/soak/host-core.js patches _touch and reads _log, _strips and _cidSeq.
+  _touch(stripId) { this._state.recordTouch(stripId); }
+  get _log() { return this._state.log; }
+  get _strips() { return this._state.strips; }
+  get _cidSeq() { return this._state.cidSeq; }
 
-  /**
-   * Delta resync (guide §5.6) — everything changed since `afterSeq`, within
-   * this Board lifetime. `updated` holds the Strips still in `_strips`
-   * (DROPPED ones included — the caller turns those into `gone`); `gone` holds
-   * ids the window touched that are no longer in `_strips` at all. That is
-   * always empty until retention removes records (L24, S-R2-13); this is the
-   * seam it fills (docs/adr/0081).
-   */
-  getDeltaSince(afterSeq) {
-    const entries = [];
-    for (let i = this._log.length - 1; i >= 0; i--) {
-      if (this._log[i].seq <= afterSeq) break;
-      entries.unshift(this._log[i]);
-    }
-    const byId = new Map();
-    for (const e of entries) byId.set(e.id, e);
-    const updated = [];
-    const gone = []; // touched in the window and no longer on the Board: archived (docs/adr/0082)
-    for (const e of byId.values()) {
-      if (this._strips.has(e.id)) updated.push(this._strips.get(e.id));
-      else gone.push(e.id);
-    }
-    return { updated, gone, seq: this._seq };
-  }
+  /** The ids of every Strip touched since the last drain (board/board-state.js). */
+  drainTouched() { return this._state.drainTouched(); }
 
-  // ── orderKey resolution ──────────────────────────────────────────────────
-
-  _resolveOrderKey(bayId, rackId, afterStripId, beforeStripId, excludeStripId) {
-    const rackStrips = this.getRack(bayId, rackId).filter(s => s.stripId !== excludeStripId);
-    const findKey = (id) => (id ? (rackStrips.find(s => s.stripId === id) || {}).orderKey ?? null : null);
-    let key;
-    try {
-      key = keyBetween(findKey(afterStripId), findKey(beforeStripId));
-    } catch (err) {
-      if (err.code !== 'ORDER_KEY_EXHAUSTED') throw err;
-      return this._keyAfterRebalance(bayId, rackId, afterStripId, beforeStripId, excludeStripId);
-    }
-    // The proactive rebalance (docs/adr/0081, L6's F8). Same-slot inserts
-    // grow a key by about half a character each, without bound, and nothing
-    // ever called needsRebalance — keys reached 183 characters in 400 drags.
-    // Once a new key passes REBALANCE_KEY_LENGTH the Rack is re-keyed and the
-    // key recomputed between the neighbours' fresh keys, inside this same
-    // Board event: the re-keyed Strips are touched, so they leave in this
-    // Mutation's broadcast (drainTouched) like every other change it made.
-    if (needsRebalance([key])) return this._keyAfterRebalance(bayId, rackId, afterStripId, beforeStripId, excludeStripId);
-    return key;
-  }
-
-  /** Rebalances the Rack, then resolves the key between the named neighbours' fresh keys. */
-  _keyAfterRebalance(bayId, rackId, afterStripId, beforeStripId, excludeStripId) {
-    this._rebalanceRack(bayId, rackId, excludeStripId);
-    const refreshed = this.getRack(bayId, rackId).filter(s => s.stripId !== excludeStripId);
-    const findKey2 = (id) => (id ? (refreshed.find(s => s.stripId === id) || {}).orderKey ?? null : null);
-    let a = findKey2(afterStripId);
-    let b = findKey2(beforeStripId);
-    // The ONLY way this retry can still fail after a rebalance (which
-    // guarantees every Strip in the Rack gets a fresh, distinct key) is
-    // a > b — which can genuinely happen when afterStripId/beforeStripId
-    // were bounding two Strips that had COLLIDING keys before the
-    // rebalance (order-key.js's jitter tolerance): rebalance() preserves
-    // the Rack's own tie-broken order (by stripId), which can come out
-    // opposite to whatever the caller's after/before labels assumed.
-    // The caller's real intent — "insert between these two specific
-    // Strips" — doesn't actually depend on which one is labelled
-    // "after" vs "before" once already in this recovery path, so
-    // normalize direction here rather than let a second, unrecoverable
-    // throw reach applyMutation's catch-all and reject a perfectly
-    // resolvable Mutation.
-    if (a !== null && b !== null && a > b) { [a, b] = [b, a]; }
-    return keyBetween(a, b);
-  }
-
-  /** Rebalances one Rack — MUST run as one atomic Board event, never mid-drag (guide §5.4). */
-  _rebalanceRack(bayId, rackId, excludeStripId) {
-    const ordered = this.getRack(bayId, rackId).filter(s => s.stripId !== excludeStripId);
-    const fresh = rebalance(ordered.map(s => s.stripId));
-    for (const s of ordered) {
-      s.orderKey = fresh.get(s.stripId);
-      s.rev += 1;
-      this._touch(s.stripId);
-    }
-  }
-
-  _nextCid() {
-    this._cidSeq += 1;
-    // 3-digit, zero-padded, sequential for this store's lifetime —
-    // [SOURCE-DEFINED] format for Block 4 (guide §6.2); no real-world
-    // format is published. See the implementation plan.
-    return String(this._cidSeq).padStart(3, '0');
-  }
+  /** Delta resync (guide §5.6), within this Board lifetime (board/board-state.js). */
+  getDeltaSince(afterSeq) { return this._state.getDeltaSince(afterSeq); }
 
   // ── Mutation application ─────────────────────────────────────────────────
-
-  /**
-   * The entry a PEER write leaves on THIS Board (docs/adr/0083): coordination and
-   * TOFI change the receiving Facility's Board from inside the sender's Mutation.
-   * `clientMutationId` stays null so no reader takes it for a second application
-   * of the sender's Mutation; `causedBy` names that Mutation. `after` of a peer
-   * entry is never a drop the traffic count would count (traffic-count.js).
-   */
-  _recordPeer(op, strip, before, { causedBy, fromFacilityId, by, action }) {
-    if (!this._mutationLog) return;
-    this._mutationLog.record({
-      clientMutationId: null, causedBy: causedBy || null, op,
-      ...(action ? { action } : {}),
-      stripId: strip.stripId, fdrId: strip.fdrId || null,
-      facilityId: this._rules.facilityId || null, fromFacilityId: fromFacilityId || null,
-      actingPositionId: null, actorId: by || null, at: this._clock.now(),
-      before, after: deepClone(strip), source: 'peer',
-    });
-  }
 
   /**
    * Applies a client Mutation (guide §5.2). Returns
@@ -464,11 +284,11 @@ class BoardStore {
 
     if (op.kind === 'CreateStrip') {
       const result = this._applyCreateStrip(op, actingPositionId, by);
-      this._recordAudit(mutation, actingPositionId, by, null, result);
+      this._audit.recordAudit(mutation, actingPositionId, by, null, result);
       return result;
     }
 
-    const strip = this._strips.get(mutation.stripId);
+    const strip = this._state.strips.get(mutation.stripId);
     if (!strip) return { ok: false, reason: 'NOT_FOUND' };
     if (strip.rev !== mutation.baseRev) return { ok: false, reason: 'STALE_REV', strip: deepClone(strip) };
 
@@ -555,7 +375,7 @@ class BoardStore {
         else result.fdrs = [...(result.fdrs || []), stamped];
       }
     }
-    this._recordAudit(mutation, actingPositionId, by, before, result);
+    this._audit.recordAudit(mutation, actingPositionId, by, before, result);
     return result;
   }
 
@@ -581,47 +401,11 @@ class BoardStore {
     return r && r.ok && r.changed ? r.fdr : null;
   }
 
-  _recordAudit(mutation, actingPositionId, by, before, result) {
-    if (!this._mutationLog || !result.ok) return;
-    this._mutationLog.record({
-      clientMutationId: mutation.clientMutationId,
-      op: mutation.op.kind,
-      stripId: result.strip.stripId,
-      // Who the entry concerns (docs/adr/0083): the Facility and the flight, so a
-      // reader never has to look them up on a Board that may have archived the Strip.
-      facilityId: this._rules.facilityId || null,
-      fdrId: result.strip.fdrId || null,
-      // The op kind alone names neither the Block written nor a coordination
-      // action (PROPOSE/ACCEPT/REJECT/CANCEL...); the entry says which.
-      ...(mutation.op.kind === 'SetBlock' ? { blockId: mutation.op.blockId, value: mutation.op.value } : {}),
-      ...(typeof mutation.op.action === 'string' ? { action: mutation.op.action } : {}),
-      actingPositionId,
-      actorId: by || null,
-      at: this._clock.now(),
-      before,
-      after: deepClone(result.strip),
-      // Distinguishes a self-coordinated boundary event from a two-party
-      // one (guide §4.8.3 rule 4) — undefined for every op except a
-      // successful TransferStrip, where board-store computes it above.
-      selfCoordinated: result.selfCoordinated,
-      // The carrier hand-over kind and its trigger type (guide §9.12: "four
-      // different trigger types"), so an after-action review can tell them apart.
-      carrierTransfer: result.carrierTransfer ? result.carrierTransfer.kind : undefined,
-      carrierTrigger: result.carrierTransfer ? result.carrierTransfer.trigger : undefined,
-      // The SFA rotation transfer and its trigger type (guide §4.7).
-      sfaTransfer: result.sfaTransfer ? result.sfaTransfer.kind : undefined,
-      sfaTrigger: result.sfaTransfer ? result.sfaTransfer.trigger : undefined,
-      // A gate this Mutation was let past, and why (S-L19 open point, decided in
-      // docs/wip/UI-B.md). Undefined, so absent from the line, otherwise.
-      bypass: result.bypass,
-    });
-  }
-
   _applyCreateStrip(op, actingPositionId, by) {
     // A Strip in a Bay this Facility does not have is invisible on every
     // Board — every read path goes through a Bay — while still holding a
     // beacon code. Cheaper to refuse than to hunt for later.
-    const bayCheck = this._requireKnownBay(op.bayId);
+    const bayCheck = this._placement.requireKnownBay(op.bayId);
     if (bayCheck) return bayCheck;
     const role = op.role || 'DEPARTURE';
     if (this._rules.isValidRole && !this._rules.isValidRole(role)) {
@@ -663,7 +447,7 @@ class BoardStore {
       // Board, two same-role Strips on one FDR is §3.6's duplicate
       // origination. Role-agnostic rather than MISSION-specific, so the
       // ATO-first direction reuses this unchanged.
-      const clash = [...this._strips.values()].find(
+      const clash = [...this._state.strips.values()].find(
         s => s.fdrId === op.fdrId && s.role === role && s.state !== 'DROPPED');
       if (clash) {
         return {
@@ -691,12 +475,12 @@ class BoardStore {
     const afterStripId = op.afterStripId !== undefined
       ? op.afterStripId
       : (rackStrips.length ? rackStrips[rackStrips.length - 1].stripId : null);
-    const orderKey = this._resolveOrderKey(op.bayId, op.rackId, afterStripId, op.beforeStripId || null, null);
+    const orderKey = this._placement.resolveOrderKey(op.bayId, op.rackId, afterStripId, op.beforeStripId || null, null);
 
     const now = this._clock.now();
     const strip = {
       stripId,
-      cid: this._nextCid(),
+      cid: this._state.nextCid(),
       fdrId: created.fdr.fdrId,
       rev: 1,
       role,
@@ -729,8 +513,7 @@ class BoardStore {
       previousLeg: null,   // set by ConvertToArrival — the departure leg's archived annotations
       createdAt: now, updatedAt: now, updatedBy: by || null,
     };
-    this._strips.set(stripId, strip);
-    this._touch(stripId);
+    this._state.insert(strip);
     // docs/adr/0074: a recovery check-in (a MARSHAL Strip in IN_STACK) joins the
     // Marshal stack at the next free slot. The Marshal re-sequences with one
     // Move; a full stack is a warning, not a refusal of the check-in.
@@ -847,8 +630,8 @@ class BoardStore {
     strip.role = 'ARRIVAL';
     strip.state = 'INBOUND';
     strip.bayId = targetBay.bayId;
-    strip.rackId = this._placementRack(strip, targetBay);
-    strip.orderKey = this._resolveOrderKey(targetBay.bayId, strip.rackId, null, null, strip.stripId);
+    strip.rackId = this._placement.placementRack(strip, targetBay);
+    strip.orderKey = this._placement.resolveOrderKey(targetBay.bayId, strip.rackId, null, null, strip.stripId);
     // The departure leg's annotations are ARCHIVED, not erased. Clearing the
     // live set is right — a DEPARTURE Strip's Block 9A means something
     // different on an ARRIVAL, so carrying the values across would mislabel
@@ -881,30 +664,10 @@ class BoardStore {
     // instead of a track-id change. Under the fdrId key there is nothing here
     // to reset: the correlation is a fact about the airframe, and the airframe
     // did not change legs — the paperwork did.
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
     return { ok: true, strip, fdr: updatedFdr };
   }
 
-  /**
-   * A Bay configured with an implied EfspState (facility-config.js) is
-   * treated as EXACTLY EQUIVALENT to pressing the NLA button for that
-   * transition (guide §3.5 rule 4: "every NLA transition MUST also be
-   * reachable by drag-and-drop... NLA is an accelerator, not the only
-   * path" — accelerator for a specific transition, not an unrestricted
-   * teleport to any state). Dropping into a Bay whose implied state isn't
-   * the CURRENT state's one legal next step — or IS that step but it's
-   * presently inhibited (no beacon code, incomplete flight plan, a hold in
-   * force, ...) — is rejected exactly like invoking that NLA would be.
-   * Without this, a drag (or a same-controller self-coordinated Transfer,
-   * guide §4.8.3) could silently skip a Strip past every doctrine check
-   * NLA enforces — e.g. straight from PROPOSED into a CLEARED Bay with no
-   * flight plan at all, which is exactly the bug this closes.
-   * @returns {{ok:true, impliedState:string|null}|{ok:false, reason:string, detail:string}}
-   */
-  /** {isOccupied, coveringPositionFor, facilityId} bound from this._rules — computeNla()'s occupancy context (guide §4.5, e.g. DEPARTED's real Hand-Off-to-APP inhibit). `facilityId` (WP4A, docs/adr/0014) lets nla.js distinguish a CENTER-held ARRIVAL Strip's INBOUND state (whose next step is the Coordinate/HANDOFF button, not an intrafacility NLA transfer) from an INCIRLIK one. Built once per call site rather than inline so both computeNla() call sites below stay in lockstep. */
   /**
    * Approves this flight to work inside an airspace, on a frequency.
    *
@@ -959,10 +722,7 @@ class BoardStore {
       approvedAt: this._clock.now(),
       approvedBy: by || null,
     };
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
 
     const warning = airspace.state !== 'ACTIVE' ? 'AIRSPACE_NOT_ACTIVE' : undefined;
     return { ok: true, strip, fdr: fdrResult.fdr, warning };
@@ -976,52 +736,8 @@ class BoardStore {
     const fdrResult = this._fdrStore.setWorkingFrequency(strip.fdrId, null, { airspaceId: null, by });
     if (!fdrResult.ok) return { ok: false, reason: fdrResult.reason, detail: fdrResult.detail, strip };
     strip.airspaceEntry = null;
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
     return { ok: true, strip, fdr: fdrResult.fdr };
-  }
-
-  _nlaCtx(target = null) {
-    return {
-      isOccupied: this._rules.isOccupied, coveringPositionFor: this._rules.coveringPositionFor,
-      facilityId: this._rules.facilityId, standingReleases: this._rules.standingReleases,
-      // §9.7 rule 1 (docs/adr/0061) — the runway status view, on every
-      // computeNla call site at once: the button, the advisory stamp, and the
-      // drag. `targetRackId` is set only on the drag path (decisions.md Q27).
-      fieldStateFor: this._rules.fieldStateFor,
-      targetRackId: target ? target.rackId : undefined,
-      // docs/adr/0074 — the recovery Case, the manned lane the stack feeds, and
-      // whether the flight is in the stack, for the carrier's NLA tables.
-      carrierCase: this._rules.carrierCase,
-      carrierLaneFor: this._rules.carrierLaneFor,
-      carrierInStack: this._rules.carrierInStack,
-    };
-  }
-
-  /** This Facility's runway status view, or null (no runways — nothing is runway-gated). */
-  _fieldStateView() {
-    return this._rules.fieldStateFor ? this._rules.fieldStateFor() : null;
-  }
-
-  /**
-   * The rack a Strip lands in when something other than a drag places it in
-   * `bay` (decisions.md Q26, S-R2-1): in a runway-queue Bay, the end its FDR
-   * names or else the active end; anywhere else, the Bay's first rack as
-   * always. Without it every NLA-queued departure sat in rwy-05 and was judged
-   * against 05, whatever the active runway was.
-   */
-  _placementRack(strip, bay) {
-    // An SFA frequency Bay is placed by the flight's own frequency, so a Strip put
-    // back by a system move (a Position retaken, a covering hand-back) returns to
-    // the Rack that IS its frequency, not the first one (guide §4.2, D17).
-    if (this._rules.sfaRackFor && bay && bay.view === 'sfa-freqs') {
-      const fdr = this._fdrStore.getFdr(strip.fdrId);
-      const rack = fdr && fdr.comms ? this._rules.sfaRackFor(bay.bayId, fdr.comms.workingFrequencyMhz) : null;
-      if (rack) return rack;
-    }
-    return runwayRackFor(strip, this._fdrStore.getFdr(strip.fdrId), this._fieldStateView(), bay);
   }
 
   /**
@@ -1092,130 +808,27 @@ class BoardStore {
   _setStateRunwayRefusal(strip, toState) {
     if (!(RUNWAY_GATED_STATES[strip.role] || []).includes(toState)) return null;
     const bay = this._rules.bayForImpliedState ? this._rules.bayForImpliedState(strip.ownerPositionId, toState) : null;
-    const targetRackId = bay && bay.impliesState === toState ? this._placementRack(strip, bay) : undefined;
-    const inhibit = runwayInhibitFor(strip, this._fdrStore.getFdr(strip.fdrId), this._fieldStateView(), { targetRackId });
+    const targetRackId = bay && bay.impliesState === toState ? this._placement.placementRack(strip, bay) : undefined;
+    const inhibit = runwayInhibitFor(strip, this._fdrStore.getFdr(strip.fdrId), this._placement.fieldStateView(), { targetRackId });
     return inhibit ? { ok: false, reason: 'NLA_INHIBITED', detail: inhibit, strip } : null;
   }
 
-  /**
-   * The owner's Bay that holds this Strip's Role whatever its state (Bay
-   * `holdsRole`, docs/adr/0087), or null. A Role with such a Bay keeps its state
-   * on the Strip: no Bay implies it, so a drag never changes it, and a state
-   * change never moves it — which also stops an OVERFLIGHT `INBOUND` being filed
-   * under ARRIVAL's `INBOUND` Bay, the one thing the shared state names would
-   * otherwise do.
-   */
-  _roleBayFor(strip, positionId = strip.ownerPositionId) {
-    const bays = this._rules.baysFor ? this._rules.baysFor(positionId) : [];
-    return bays.find(b => b.holdsRole === strip.role) || null;
-  }
-
-  _validateBayImpliedTransition(strip, targetBayId, targetRackId) {
-    // A Role Bay (`holdsRole`, docs/adr/0087) takes only its own Role's Strips.
-    const holds = this._rules.bayHoldsRole ? this._rules.bayHoldsRole(targetBayId) : null;
-    if (holds && holds !== strip.role) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: `${targetBayId} holds ${holds} Strips only; a ${strip.role} Strip cannot be placed there` };
-    }
-    const roleBay = this._roleBayFor(strip);
-    if (roleBay) {
-      // Another Role's state-implying Bay is not somewhere this Role goes.
-      if (this._rules.bayImpliesState && this._rules.bayImpliesState(targetBayId)) {
-        return { ok: false, reason: 'VALIDATION_ERROR', detail: `a ${strip.role} Strip stays in ${roleBay.bayId}; ${targetBayId} is another Role's Bay` };
-      }
-      return { ok: true, impliedState: null };
-    }
-    const impliedState = this._rules.bayImpliesState ? this._rules.bayImpliesState(targetBayId) : null;
-    if (!impliedState || impliedState === strip.state) return { ok: true, impliedState }; // non-state-implying Bay, or already there — always fine
-
-    // Per-State authority (guide §3.4's "normally owned by" column,
-    // permission.js's canActOnState) — checked here too, not just in
-    // _applyInvokeNla, because dragging into an implied-state Bay is the
-    // OTHER path to the exact same transition (§3.5 rule 4: NLA is an
-    // accelerator, never the only path). Gating only the NLA button would
-    // leave this reachable by drag regardless of who "should" be advancing
-    // the Strip. strip.ownerPositionId is the acting Position here —
-    // _dispatch() already verified actingPositionId === strip.ownerPositionId
-    // before any _apply* method runs.
-    if (this._rules.canActOnState && !this._rules.canActOnState(strip.ownerPositionId, strip.role, strip.state)) {
-      return { ok: false, reason: 'PERMISSION_DENIED', detail: `${strip.state} is not ${strip.ownerPositionId}'s to advance` };
-    }
-
-    // ...and, for the same reason, a declined replica stays inert on this
-    // path too (F-303): the drag IS the other way to make this transition, so
-    // gating only the NLA button would leave it reachable by dropping the
-    // replica into a state-implying Bay. Non-state-implying Bays returned
-    // above, so tidying a dead replica off to one side is unaffected, and no
-    // Bay implies DROPPED, so the Drop exception cannot arise here.
-    const inert = this._rejectedReplicaRefusal(strip, impliedState);
-    if (inert) return { ok: false, reason: inert.reason, detail: inert.detail };
-
-    const fdr = this._fdrStore.getFdr(strip.fdrId);
-    const nla = this._rules.computeNla ? this._rules.computeNla(strip, fdr, this._clock.now(), this._nlaCtx({ bayId: targetBayId, rackId: targetRackId })) : null;
-    if (!nla || nla.inhibited) {
-      return { ok: false, reason: 'NLA_INHIBITED', detail: nla ? nla.inhibited : `no legal transition from ${strip.state}` };
-    }
-    // docs/adr/0074: the four carrier hand-overs are four buttons and each
-    // records its own trigger type (guide §9.12), so a drag into the Bay that
-    // implies the NLA's own state is refused with the button's name rather than
-    // moving the Strip without the stack effect and the tag.
-    if (nla.carrierTransfer && nla.toState === impliedState) {
-      const t = this._rules.carrierTransfers && this._rules.carrierTransfers[nla.carrierTransfer];
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: `use the ${t ? t.label : nla.carrierTransfer} button — a carrier hand-over is recorded, not dragged` };
-    }
-    if (nla.toState !== impliedState && (nla.alsoLegal || []).includes(impliedState)) {
-      return { ok: true, impliedState };
-    }
-    if (nla.toState !== impliedState) {
-      return {
-        ok: false, reason: 'VALIDATION_ERROR',
-        detail: `dropping here would set state to ${impliedState}, but the only valid next state from ${strip.state} is ${nla.toState}`,
-      };
-    }
-    return { ok: true, impliedState };
-  }
-
-  /** @returns {object|null} a rejection when this Facility has no such Bay, else null. */
-  _requireKnownBay(bayId, strip) {
-    if (!this._rules.bayExists || this._rules.bayExists(bayId)) return null;
-    return { ok: false, reason: 'VALIDATION_ERROR', detail: `no such Bay here: ${bayId}`, strip };
-  }
-
   _applyMoveStrip(strip, op, by) {
-    const bayCheck = this._requireKnownBay(op.bayId, strip);
+    const bayCheck = this._placement.requireKnownBay(op.bayId, strip);
     if (bayCheck) return bayCheck;
-    const check = this._validateBayImpliedTransition(strip, op.bayId, op.rackId);
+    const check = this._placement.validateBayImpliedTransition(strip, op.bayId, op.rackId);
     if (!check.ok) return { ok: false, reason: check.reason, detail: check.detail, strip };
-    const full = this._bayFullRefusal(op.bayId, strip);
+    const full = this._placement.bayFullRefusal(op.bayId, strip);
     if (full) return { ok: false, reason: full.reason, detail: full.detail, strip };
 
     strip.bayId = op.bayId;
     strip.rackId = op.rackId;
-    strip.orderKey = this._resolveOrderKey(op.bayId, op.rackId, op.afterStripId || null, op.beforeStripId || null, strip.stripId);
+    strip.orderKey = this._placement.resolveOrderKey(op.bayId, op.rackId, op.afterStripId || null, op.beforeStripId || null, strip.stripId);
     if (check.impliedState && check.impliedState !== strip.state) strip.state = check.impliedState;
     const fdrResult = this._assignSfaFrequency(strip, by);
 
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
     return { ok: true, strip, fdr: fdrResult ? fdrResult.fdr : undefined };
-  }
-
-  /**
-   * A Bay with a `capacity` (facility-config.js's Bay descriptor flag; PAR's final
-   * Bay holds one, §7.10) refuses one more Strip. Returns a refusal or null. A
-   * DROPPED Strip does not count (it has left the Board), nor does `strip` itself,
-   * so re-ordering inside the Bay is never refused.
-   */
-  _bayFullRefusal(bayId, strip) {
-    const bay = this._rules.bayDescriptor ? this._rules.bayDescriptor(bayId) : null;
-    if (!bay || !Number.isInteger(bay.capacity)) return null;
-    const held = this.getAll().filter(s => s.bayId === bayId && s.state !== 'DROPPED' && s.stripId !== strip.stripId);
-    if (held.length < bay.capacity) return null;
-    return {
-      reason: 'VALIDATION_ERROR',
-      detail: `${bayId} holds ${bay.capacity} Strip${bay.capacity === 1 ? '' : 's'} at a time and ${held[0].callsign || held[0].stripId} is in it`,
-    };
   }
 
   /**
@@ -1337,10 +950,7 @@ class BoardStore {
       // ack/broadcast cycle has one consistent rev to key off per Strip,
       // rather than building a fully separate FDR-level optimistic-
       // concurrency protocol on the wire. See the implementation plan.
-      strip.rev += 1;
-      strip.updatedAt = this._clock.now();
-      strip.updatedBy = by || null;
-      this._touch(strip.stripId);
+      this._state.bump(strip, by);
       const marsaVoided = this._marsaVoidFor(strip, op, by, actingPositionId, clientMutationId);
       return {
         ok: true, strip, fdr: fdrResult.fdr, warning: fdrResult.warning,
@@ -1356,10 +966,7 @@ class BoardStore {
     if (target.kind === 'carrier') {
       const fdrResult = this._fdrStore.setCarrier(strip.fdrId, target.field, op.value, { by });
       if (!fdrResult.ok) return { ok: false, reason: fdrResult.reason, detail: fdrResult.detail, strip };
-      strip.rev += 1;
-      strip.updatedAt = this._clock.now();
-      strip.updatedBy = by || null;
-      this._touch(strip.stripId);
+      this._state.bump(strip, by);
       return { ok: true, strip, fdr: fdrResult.fdr };
     }
 
@@ -1370,10 +977,7 @@ class BoardStore {
       const fdrResult = this._fdrStore.setClearance(strip.fdrId, target.field,
         { value: op.value, confirmVacated: !!op.confirmVacated }, { by });
       if (!fdrResult.ok) return { ok: false, reason: fdrResult.reason, detail: fdrResult.detail, strip };
-      strip.rev += 1;
-      strip.updatedAt = this._clock.now();
-      strip.updatedBy = by || null;
-      this._touch(strip.stripId);
+      this._state.bump(strip, by);
       const marsaVoided = this._marsaVoidFor(strip, op, by, actingPositionId, clientMutationId);
       return {
         ok: true, strip, fdr: fdrResult.fdr,
@@ -1421,15 +1025,12 @@ class BoardStore {
       cell.entries.push({ value, status: 'ACTIVE', at: this._clock.now(), by: by || null });
     }
 
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
     return { ok: true, strip };
   }
 
   _applyTransferStrip(strip, op, by) {
-    const bayCheck = this._requireKnownBay(op.bayId, strip);
+    const bayCheck = this._placement.requireKnownBay(op.bayId, strip);
     if (bayCheck) return bayCheck;
     // H2 / H40 (docs/adr/0080): a working Position with a hand-back row may
     // transfer a line only to the Positions the capability table names. The
@@ -1459,9 +1060,9 @@ class BoardStore {
     // (e.g. PROPOSED directly into a CLEARED Bay with no flight plan and
     // no beacon code at all). Validated before the owner/occupancy checks
     // below too, so a rejected transfer never partially mutates the Strip.
-    const check = this._validateBayImpliedTransition(strip, op.bayId, op.rackId);
+    const check = this._placement.validateBayImpliedTransition(strip, op.bayId, op.rackId);
     if (!check.ok) return { ok: false, reason: check.reason, detail: check.detail, strip };
-    const full = this._bayFullRefusal(op.bayId, strip);
+    const full = this._placement.bayFullRefusal(op.bayId, strip);
     if (full) return { ok: false, reason: full.reason, detail: full.detail, strip };
 
     let destPositionId = op.toPositionId;
@@ -1493,26 +1094,23 @@ class BoardStore {
     strip.ownerPositionId = destPositionId;
     delete strip.coveredFrom; // it has a new owner by decision, not by cover (F10)
     if (check.impliedState && check.impliedState !== strip.state) strip.state = check.impliedState;
-    const routedBay = routedTo ? this._bayForNewOwner(destPositionId, strip.state, strip) : null;
+    const routedBay = routedTo ? this._placement.bayForNewOwner(destPositionId, strip.state, strip) : null;
     if (routedBay) {
       // B3: routed to the covering Position, so the line lands in ITS Bay, not
       // the absent Position's (which no panel of the covering one builds).
       strip.bayId = routedBay.bayId;
       strip.rackId = routedBay.rackId;
-      strip.orderKey = this._appendOrderKey(strip.bayId, strip.rackId, strip.stripId);
+      strip.orderKey = this._placement.appendOrderKey(strip.bayId, strip.rackId, strip.stripId);
     } else {
       strip.bayId = op.bayId;
       strip.rackId = op.rackId;
-      strip.orderKey = this._resolveOrderKey(op.bayId, op.rackId, op.afterStripId || null, op.beforeStripId || null, strip.stripId);
+      strip.orderKey = this._placement.resolveOrderKey(op.bayId, op.rackId, op.afterStripId || null, op.beforeStripId || null, strip.stripId);
       if (routedTo) warning = `${routedTo} has no Bay for this Strip; it stays in ${op.bayId}`;
     }
 
     const sfaFdr = routedBay ? null : this._assignSfaFrequency(strip, by);
 
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
     // A pending Undo window (§3.5 rule 5) is for reverting a STATE change —
     // once ownership has also moved, "revert the state" no longer means
     // what it did when it was recorded (the Strip may now be under a
@@ -1592,16 +1190,16 @@ class BoardStore {
     delete strip.coveredFrom; // a new owner by decision, not by cover (F10)
     let warning;
     if (dest !== from.ownerPositionId) {
-      const bay = this._bayForNewOwner(dest, strip.state, strip);
+      const bay = this._placement.bayForNewOwner(dest, strip.state, strip);
       if (bay) {
         strip.bayId = bay.bayId;
         strip.rackId = bay.rackId;
-        strip.orderKey = this._appendOrderKey(bay.bayId, bay.rackId, strip.stripId);
+        strip.orderKey = this._placement.appendOrderKey(bay.bayId, bay.rackId, strip.stripId);
       } else {
         warning = `${dest} has no Bay for this Strip; it stays in ${strip.bayId}`;
       }
     } else {
-      this._relocateForImpliedState(strip, strip.state);
+      this._placement.relocateForImpliedState(strip, strip.state);
     }
     strip.carrierTransfer = {
       kind, trigger: row ? row.trigger : null, label, at: now, by: by || null,
@@ -1650,7 +1248,7 @@ class BoardStore {
     if (!bay || bay.impliesState !== fx.toState) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `${dest} has no Bay for ${fx.toState}`, strip };
     }
-    const full = this._bayFullRefusal(bay.bayId, strip);
+    const full = this._placement.bayFullRefusal(bay.bayId, strip);
     if (full) return { ok: false, reason: full.reason, detail: full.detail, strip };
 
     const now = this._clock.now();
@@ -1660,8 +1258,8 @@ class BoardStore {
     strip.ownerPositionId = dest;
     delete strip.coveredFrom; // a new owner by decision, not by cover (F10)
     strip.bayId = bay.bayId;
-    strip.rackId = this._placementRack(strip, bay);
-    strip.orderKey = this._appendOrderKey(strip.bayId, strip.rackId, strip.stripId);
+    strip.rackId = this._placement.placementRack(strip, bay);
+    strip.orderKey = this._placement.appendOrderKey(strip.bayId, strip.rackId, strip.stripId);
     strip.sfaTransfer = {
       kind: 'SFA_ROTATION', trigger: fx.trigger, label: fx.label, at: now, by: by || null,
       from: from.ownerPositionId, to: dest, fromRole: from.role, toRole: strip.role, frequencyRackId: from.rackId,
@@ -1677,73 +1275,8 @@ class BoardStore {
   _applySetFlag(strip, op, by) {
     if (!FLAG_KEYS.includes(op.flag)) return { ok: false, reason: 'VALIDATION_ERROR', strip };
     strip.flags[op.flag] = op.value;
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
     return { ok: true, strip };
-  }
-
-  /**
-   * The key that puts a Strip at the END of a Rack, the way _applyCreateStrip
-   * places a new one. keyBetween(null, null) is NOT this — it returns the
-   * seed key, which lands mid-Rack once anything else is in there.
-   */
-  _appendOrderKey(bayId, rackId, excludeStripId) {
-    const rackStrips = this.getRack(bayId, rackId).filter(s => s.stripId !== excludeStripId);
-    const last = rackStrips.length ? rackStrips[rackStrips.length - 1].stripId : null;
-    return this._resolveOrderKey(bayId, rackId, last, null, excludeStripId);
-  }
-
-  /**
-   * The Bay a Strip in `state` sits in when `positionId` becomes its owner
-   * without choosing one (docs/adr/0080, B3): the owner's Bay that implies the
-   * state; else its first Bay that implies none (its coordination-style Bay);
-   * else null, and the caller keeps the current Bay and says so. The rack is
-   * the placement rule's (a runway queue's end), as for every other placement.
-   * @returns {{bayId:string, rackId:string}|null}
-   */
-  _bayForNewOwner(positionId, state, strip = null) {
-    const bays = this._rules.baysFor ? this._rules.baysFor(positionId) : [];
-    const roleBay = strip ? bays.find(b => b.holdsRole === strip.role) : null;
-    if (roleBay) return { bayId: roleBay.bayId, rackId: this._placementRack(strip, roleBay) };
-    // Never another Role's Bay (`holdsRole`, docs/adr/0087): a Role Bay implies no state, so the
-    // "first Bay implying none" fallback used to pick app-overflight for a DEPARTURE.
-    const bay = bays.find(b => b.impliesState === state) || bays.find(b => !b.impliesState && !b.holdsRole) || null;
-    if (!bay) return null;
-    return { bayId: bay.bayId, rackId: strip ? this._placementRack(strip, bay) : bay.rackIds[0] };
-  }
-
-  /**
-   * Moves a Strip into its owner's Bay for a state it has just reached, when
-   * that Position has one configured (guide §2, "Bay membership expresses
-   * operational state"; §3.5 rule 4).
-   *
-   * A state-only transition used to change `state` and nothing else, so Mark
-   * Cleared left the Strip in `cd-pending-clearance` reading CLEARED while
-   * `cd-cleared` stayed empty, and the same at GND (`gnd-taxi-out`) and TWR
-   * (`twr-airborne`) — the Bay name and the Strip contradicting each other
-   * (docs/ui-findings/lane1.md F-102). The config already asserts the
-   * equivalence in the other direction: dragging INTO one of these Bays
-   * changes the state (_validateBayImpliedTransition), so the Bay means the
-   * state whichever way the Strip got there.
-   *
-   * Nothing happens when this owner has no Bay for the state — LUAW is the
-   * live example, and TWR's Strip correctly stays in `twr-runway-queue`.
-   * `bayForImpliedState` FALLS BACK to the Position's first Bay when nothing
-   * matches (facility-config.js), which is what a transfer wants and is
-   * exactly wrong here: it would file a Strip reaching LUAW back under
-   * `twr-runway-queue`'s own implied RUNWAY_QUEUE. Hence the explicit
-   * `impliesState` re-check rather than trusting the lookup.
-   */
-  _relocateForImpliedState(strip, toState) {
-    if (!this._rules.bayForImpliedState) return;
-    if (this._roleBayFor(strip)) return; // its Bay holds it in every state (docs/adr/0087)
-    const bay = this._rules.bayForImpliedState(strip.ownerPositionId, toState);
-    if (!bay || bay.impliesState !== toState || bay.bayId === strip.bayId) return;
-    strip.bayId = bay.bayId;
-    strip.rackId = this._placementRack(strip, bay);
-    strip.orderKey = this._appendOrderKey(bay.bayId, strip.rackId, strip.stripId);
   }
 
   /**
@@ -1775,15 +1308,12 @@ class BoardStore {
     // back on final while another aircraft is on it) is refused, not silently doubled.
     const into = this._rules.bayForImpliedState ? this._rules.bayForImpliedState(strip.ownerPositionId, toState) : null;
     if (into && into.impliesState === toState && into.bayId !== strip.bayId) {
-      const full = this._bayFullRefusal(into.bayId, strip);
+      const full = this._placement.bayFullRefusal(into.bayId, strip);
       if (full) return { ok: false, reason: full.reason, detail: full.detail, strip };
     }
     strip.state = toState;
-    this._relocateForImpliedState(strip, toState);
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._placement.relocateForImpliedState(strip, toState);
+    this._state.bump(strip, by);
     return { ok: true, strip };
   }
 
@@ -1892,7 +1422,7 @@ class BoardStore {
    * Three op kinds stay allowed, because each already enforces the rule
    * itself and each is how a dead replica gets cleared away: DropStrip,
    * InvokeNla (which _rejectedReplicaRefusal limits to DROPPED), and
-   * MoveStrip (which _validateBayImpliedTransition refuses into any Bay that
+   * MoveStrip (which Placement.validateBayImpliedTransition refuses into any Bay that
    * would change the Strip's state — moving it aside is fine).
    *
    * MARSA and correlation are flight-level and never reach _dispatch; the
@@ -1926,7 +1456,7 @@ class BoardStore {
   nlaStatusFor(strip, now = this._clock.now()) {
     if (!strip || !this._rules.computeNla) return null;
     const fdr = this._fdrStore.getFdr(strip.fdrId);
-    const result = this._rules.computeNla(strip, fdr, now, this._nlaCtx());
+    const result = this._rules.computeNla(strip, fdr, now, this._placement.nlaCtx());
     // No NLA at all for this State (every Role's terminal DROPPED) — null, not
     // a reason. _applyInvokeNla runs the precheck FIRST and so answers a press
     // on a terminal Strip with whichever precheck refusal comes up; that is
@@ -1978,7 +1508,7 @@ class BoardStore {
     if (blocked) return { ok: false, reason: blocked.reason, detail: blocked.detail, strip };
 
     const fdr = this._fdrStore.getFdr(strip.fdrId);
-    const result = this._rules.computeNla(strip, fdr, now, this._nlaCtx());
+    const result = this._rules.computeNla(strip, fdr, now, this._placement.nlaCtx());
     if (!result || result.inhibited) {
       return { ok: false, reason: 'NLA_INHIBITED', detail: result ? result.inhibited : 'no NLA for this state', strip };
     }
@@ -2008,7 +1538,7 @@ class BoardStore {
       if (!targetBay) {
         return { ok: false, reason: 'NLA_INHIBITED', detail: `no Bay configured for ${result.transferTo}/${result.toState}`, strip };
       }
-      applied = this._applyTransferStrip(strip, { toPositionId: result.transferTo, bayId: targetBay.bayId, rackId: this._placementRack(strip, targetBay) }, by);
+      applied = this._applyTransferStrip(strip, { toPositionId: result.transferTo, bayId: targetBay.bayId, rackId: this._placement.placementRack(strip, targetBay) }, by);
     } else if (result.toState === 'DROPPED') {
       // Every Role's terminal NLA is a Drop (DEPARTURE at HANDED_OFF,
       // ARRIVAL at TAXI_IN, OVERFLIGHT at HANDED_OFF, MISSION at RTB), and
@@ -2097,10 +1627,7 @@ class BoardStore {
     strip.state = 'DROPPED';
     this._droppedWallAt.set(strip.stripId, Date.now()); // the archive's clock, docs/adr/0082
     strip.flags.removeIndicator = true; // distinct from delete (§3.4) — Strip stays queryable, see getRack()
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
     // `marsaChanged` rather than `marsaVoided`: this is a flight ENDING, not a
     // clearance voiding a relation, and the two must not render as the same
     // thing. A tanker landing mid-AR leaves the relation `ENDED` with
@@ -2327,11 +1854,11 @@ class BoardStore {
     // already minted with (docs/adr/0022) — the replica's state was set
     // correctly by receiveCoordinationProposal already; accept only
     // relocates it, it never advances the state itself.
-    const targetBay = this._roleBayFor(strip) || (this._rules.bayForImpliedState ? this._rules.bayForImpliedState(strip.ownerPositionId, strip.state) : null);
+    const targetBay = this._placement.roleBayFor(strip) || (this._rules.bayForImpliedState ? this._rules.bayForImpliedState(strip.ownerPositionId, strip.state) : null);
     if (targetBay) {
       strip.bayId = targetBay.bayId;
-      strip.rackId = this._placementRack(strip, targetBay);
-      strip.orderKey = this._resolveOrderKey(targetBay.bayId, strip.rackId, null, null, strip.stripId);
+      strip.rackId = this._placement.placementRack(strip, targetBay);
+      strip.orderKey = this._placement.resolveOrderKey(targetBay.bayId, strip.rackId, null, null, strip.stripId);
     }
     strip.rev += 1;
     strip.updatedAt = now;
@@ -2360,10 +1887,7 @@ class BoardStore {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no pending coordination proposal on this Strip', strip };
     }
     strip.coordination.state = 'REJECTED';
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
 
     const peerFacilityId = strip.coordination.peerFacilityId;
     let peerStrip = null;
@@ -2406,10 +1930,7 @@ class BoardStore {
       }
     }
     strip.coordination = null;
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
     return { ok: true, strip, peerFacilityId: link.peerFacilityId, peerStrip };
   }
 
@@ -2421,21 +1942,18 @@ class BoardStore {
    * @returns {{ok:true, strip:object|null}} strip null when there was nothing left to change
    */
   receiveCoordinationCancel({ stripId, by, causedBy }) {
-    const strip = this._strips.get(stripId);
+    const strip = this._state.strips.get(stripId);
     if (!strip || strip.state === 'DROPPED' || !strip.coordination) return { ok: true, strip: null };
     const before = deepClone(strip);
     const fromFacilityId = strip.coordination.peerFacilityId;
     if (strip.coordination.state === 'ACTIVE') {
       strip.coordination = null;
-      strip.rev += 1;
-      strip.updatedAt = this._clock.now();
-      strip.updatedBy = by || null;
-      this._touch(strip.stripId);
+      this._state.bump(strip, by);
     } else {
       strip.coordination = null; // so the retire below does not try to tell the proposer back
       this._retireStrip(strip, by);
     }
-    this._recordPeer('PeerCoordinationCancel', strip, before, { causedBy, fromFacilityId, by });
+    this._audit.recordPeer('PeerCoordinationCancel', strip, before, { causedBy, fromFacilityId, by });
     return { ok: true, strip };
   }
 
@@ -2447,15 +1965,12 @@ class BoardStore {
    * @returns {{ok:boolean, strip?:object}}
    */
   receiveCoordinationPeerGone({ stripId, goneStripId, causedBy }) {
-    const strip = this._strips.get(stripId);
+    const strip = this._state.strips.get(stripId);
     const link = strip && strip.coordination;
     if (!link || link.peerStripId !== goneStripId || (link.state !== 'PROPOSED' && link.state !== 'ACTIVE')) return { ok: false };
     const before = deepClone(strip);
     strip.coordination = null;
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, null);
     if (this._mutationLog) {
       this._mutationLog.record({
         clientMutationId: null, op: 'SystemCoordinationEnd', stripId: strip.stripId,
@@ -2482,10 +1997,7 @@ class BoardStore {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'STAND_BY only applies to OPERATIONAL_REQUEST', strip };
     }
     strip.coordination.lastStandByAt = this._clock.now();
-    strip.rev += 1;
-    strip.updatedAt = this._clock.now();
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by);
 
     const peerFacilityId = strip.coordination.peerFacilityId;
     let peerStrip = null;
@@ -2532,11 +2044,11 @@ class BoardStore {
     const now = this._clock.now();
     const rackStrips = this.getRack(coordinationBay.bayId, coordinationBay.rackIds[0]);
     const afterStripId = rackStrips.length ? rackStrips[rackStrips.length - 1].stripId : null;
-    const orderKey = this._resolveOrderKey(coordinationBay.bayId, coordinationBay.rackIds[0], afterStripId, null, null);
+    const orderKey = this._placement.resolveOrderKey(coordinationBay.bayId, coordinationBay.rackIds[0], afterStripId, null, null);
 
     const strip = {
       stripId,
-      cid: this._nextCid(),
+      cid: this._state.nextCid(),
       fdrId,
       rev: 1,
       // The replica carries the SENDER's own Role/EfspState (docs/adr/0022)
@@ -2582,9 +2094,8 @@ class BoardStore {
       },
       createdAt: now, updatedAt: now, updatedBy: by || null,
     };
-    this._strips.set(stripId, strip);
-    this._touch(stripId);
-    this._recordPeer('PeerCoordinationProposal', strip, null, { causedBy, fromFacilityId, by });
+    this._state.insert(strip);
+    this._audit.recordPeer('PeerCoordinationProposal', strip, null, { causedBy, fromFacilityId, by });
     return { ok: true, strip };
   }
 
@@ -2596,7 +2107,7 @@ class BoardStore {
    * for the same reason receiveCoordinationProposal does.
    */
   receiveCoordinationResponse({ stripId, response, by, causedBy }) {
-    const strip = this._strips.get(stripId);
+    const strip = this._state.strips.get(stripId);
     if (!strip || !strip.coordination) return { ok: false, reason: 'NOT_FOUND' };
     const before = deepClone(strip);
 
@@ -2631,7 +2142,7 @@ class BoardStore {
     strip.updatedAt = now;
     strip.updatedBy = by || null;
     this._touch(strip.stripId);
-    this._recordPeer('PeerCoordinationResponse', strip, before, { causedBy, fromFacilityId: strip.coordination.peerFacilityId, by, action: response });
+    this._audit.recordPeer('PeerCoordinationResponse', strip, before, { causedBy, fromFacilityId: strip.coordination.peerFacilityId, by, action: response });
     return { ok: true, strip };
   }
 
@@ -2901,7 +2412,7 @@ class BoardStore {
       if (targetBay) {
         strip.bayId = targetBay.bayId;
         strip.rackId = targetBay.rackIds[0];
-        strip.orderKey = this._resolveOrderKey(targetBay.bayId, targetBay.rackIds[0], null, null, strip.stripId);
+        strip.orderKey = this._placement.resolveOrderKey(targetBay.bayId, targetBay.rackIds[0], null, null, strip.stripId);
       }
     }
 
@@ -2949,8 +2460,7 @@ class BoardStore {
       // retirement. Its active-TOFI guard cannot fire (the state is REJECTED).
       retired = this._retireStrip(strip, by);
     } else {
-      strip.rev += 1; strip.updatedAt = this._clock.now(); strip.updatedBy = by || null;
-      this._touch(strip.stripId);
+      this._state.bump(strip, by);
     }
 
     let peerStrip = null;
@@ -3028,7 +2538,7 @@ class BoardStore {
     // than create a second MRU record for one airframe. Two mission lines with
     // independent lifecycles is docs/adr/0045's "two answers to one identity
     // question" wearing a different hat.
-    const existing = [...this._strips.values()].find(
+    const existing = [...this._state.strips.values()].find(
       s => s.fdrId === fdrId && s.role === 'MISSION' && s.state !== 'DROPPED');
 
     if (existing) {
@@ -3062,7 +2572,7 @@ class BoardStore {
       existing.updatedAt = reusedAt;
       existing.updatedBy = by || null;
       this._touch(existing.stripId);
-      this._recordPeer('PeerTofiProposal', existing, existingBefore, { causedBy, fromFacilityId, by });
+      this._audit.recordPeer('PeerTofiProposal', existing, existingBefore, { causedBy, fromFacilityId, by });
       return { ok: true, strip: existing };
     }
 
@@ -3075,11 +2585,11 @@ class BoardStore {
     const now = this._clock.now();
     const rackStrips = this.getRack(coordinationBay.bayId, coordinationBay.rackIds[0]);
     const afterStripId = rackStrips.length ? rackStrips[rackStrips.length - 1].stripId : null;
-    const orderKey = this._resolveOrderKey(coordinationBay.bayId, coordinationBay.rackIds[0], afterStripId, null, null);
+    const orderKey = this._placement.resolveOrderKey(coordinationBay.bayId, coordinationBay.rackIds[0], afterStripId, null, null);
 
     const strip = {
       stripId,
-      cid: this._nextCid(),
+      cid: this._state.nextCid(),
       fdrId, // shared with the ATC-side Strip — guide §9.8's binding
       rev: 1,
       role: 'MISSION',
@@ -3108,9 +2618,8 @@ class BoardStore {
       },
       createdAt: now, updatedAt: now, updatedBy: by || null,
     };
-    this._strips.set(stripId, strip);
-    this._touch(stripId);
-    this._recordPeer('PeerTofiProposal', strip, null, { causedBy, fromFacilityId, by });
+    this._state.insert(strip);
+    this._audit.recordPeer('PeerTofiProposal', strip, null, { causedBy, fromFacilityId, by });
     return { ok: true, strip };
   }
 
@@ -3121,7 +2630,7 @@ class BoardStore {
    * own Board throughout ENTRY's ACTIVE window).
    */
   receiveTofiExitProposal({ stripId, note, by, causedBy }) {
-    const strip = this._strips.get(stripId);
+    const strip = this._state.strips.get(stripId);
     if (!strip || !strip.tofiCoordination) return { ok: false, reason: 'NOT_FOUND' };
     const before = deepClone(strip);
 
@@ -3138,7 +2647,7 @@ class BoardStore {
     strip.tofiCoordination.acceptedBy = null;
     strip.rev += 1; strip.updatedAt = now; strip.updatedBy = by || null;
     this._touch(strip.stripId);
-    this._recordPeer('PeerTofiExitProposal', strip, before, { causedBy, fromFacilityId: strip.tofiCoordination.peerFacilityId, by });
+    this._audit.recordPeer('PeerTofiExitProposal', strip, before, { causedBy, fromFacilityId: strip.tofiCoordination.peerFacilityId, by });
     return { ok: true, strip };
   }
 
@@ -3149,7 +2658,7 @@ class BoardStore {
    * sides agree on the outcome. Mirrors receiveCoordinationResponse exactly.
    */
   receiveTofiResponse({ stripId, response, by, causedBy }) {
-    const strip = this._strips.get(stripId);
+    const strip = this._state.strips.get(stripId);
     if (!strip || !strip.tofiCoordination) return { ok: false, reason: 'NOT_FOUND' };
     const before = deepClone(strip);
 
@@ -3170,7 +2679,7 @@ class BoardStore {
     strip.updatedAt = now;
     strip.updatedBy = by || null;
     this._touch(strip.stripId);
-    this._recordPeer('PeerTofiResponse', strip, before, { causedBy, fromFacilityId: tofi.peerFacilityId, by, action: response });
+    this._audit.recordPeer('PeerTofiResponse', strip, before, { causedBy, fromFacilityId: tofi.peerFacilityId, by, action: response });
     return { ok: true, strip };
   }
 
@@ -3196,18 +2705,15 @@ class BoardStore {
       if (!strip.coveredFrom) strip.coveredFrom = fromPositionId;
       // B3: the Strip moves into the covering Position's own Bay, or (no Bay
       // there fits) stays where it is and the caller says so.
-      const bay = this._bayForNewOwner(toPositionId, strip.state, strip);
+      const bay = this._placement.bayForNewOwner(toPositionId, strip.state, strip);
       if (bay) {
         strip.bayId = bay.bayId;
         strip.rackId = bay.rackId;
-        strip.orderKey = this._appendOrderKey(bay.bayId, bay.rackId, strip.stripId);
+        strip.orderKey = this._placement.appendOrderKey(bay.bayId, bay.rackId, strip.stripId);
       } else if (this._rules.baysFor) {
         unplaced.push(strip.stripId);
       }
-      strip.rev += 1;
-      strip.updatedAt = this._clock.now();
-      strip.updatedBy = null;
-      this._touch(strip.stripId);
+      this._state.bump(strip, null);
       if (this._mutationLog) {
         this._mutationLog.record({
           clientMutationId: null, op: 'SystemReassign', stripId: strip.stripId,
@@ -3236,16 +2742,13 @@ class BoardStore {
       const before = deepClone(strip);
       strip.ownerPositionId = positionId;
       delete strip.coveredFrom;
-      const bay = this._bayForNewOwner(positionId, strip.state, strip);
+      const bay = this._placement.bayForNewOwner(positionId, strip.state, strip);
       if (bay) {
         strip.bayId = bay.bayId;
         strip.rackId = bay.rackId;
-        strip.orderKey = this._appendOrderKey(bay.bayId, bay.rackId, strip.stripId);
+        strip.orderKey = this._placement.appendOrderKey(bay.bayId, bay.rackId, strip.stripId);
       }
-      strip.rev += 1;
-      strip.updatedAt = this._clock.now();
-      strip.updatedBy = null;
-      this._touch(strip.stripId);
+      this._state.bump(strip, null);
       if (this._mutationLog) {
         this._mutationLog.record({
           clientMutationId: null, op: 'SystemReassign', stripId: strip.stripId,
@@ -3265,7 +2768,7 @@ class BoardStore {
    * archived at most one sweep late rather than never. Null for a live Strip.
    */
   droppedWallAtOf(stripId) {
-    const strip = this._strips.get(stripId);
+    const strip = this._state.strips.get(stripId);
     if (!strip || strip.state !== 'DROPPED') {
       this._droppedWallAt.delete(stripId);
       return null;
@@ -3288,13 +2791,12 @@ class BoardStore {
    * @returns {string|null} the Strip's fdrId, or null when it was not a DROPPED Strip here
    */
   archiveStrip(stripId, reason, extra = {}) {
-    const strip = this._strips.get(stripId);
+    const strip = this._state.strips.get(stripId);
     if (!strip || strip.state !== 'DROPPED') return null;
-    this._strips.delete(stripId);
+    this._state.strips.delete(stripId);
     this._droppedWallAt.delete(stripId);
     this._nlaHistory.delete(stripId);
-    this._log.push({ seq: ++this._seq, type: 'gone', id: stripId });
-    this._pruneLog();
+    this._state.logGone(stripId);
     if (this._mutationLog) {
       this._mutationLog.record({
         clientMutationId: null, op: 'Archive', stripId, fdrId: strip.fdrId || null,
@@ -3317,21 +2819,21 @@ class BoardStore {
     for (const [cmid, record] of this._appliedMutations) {
       if (record.appliedWallAt >= horizon) replay.push([cmid, record]);
     }
-    return { strips: this.getAll(), cidSeq: this._cidSeq, replay, droppedWallAt: [...this._droppedWallAt] };
+    return { strips: this.getAll(), cidSeq: this._state.cidSeq, replay, droppedWallAt: [...this._droppedWallAt] };
   }
   restore(data) {
-    this._strips = new Map((data?.strips || []).map(s => [s.stripId, s]));
+    this._state.replaceStrips(new Map((data?.strips || []).map(s => [s.stripId, s])));
     // A restored Board is a new lifetime: the ring and the seq did not come
     // back, so no seq a client holds from before can be served a delta.
-    this._epoch = crypto.randomUUID();
+    this._state.newEpoch();
     // A snapshot written before docs/adr/0045 carries a per-Strip
     // `correlation` field. Dropped rather than migrated: it was always the
     // inert `{ state: 'UNCORRELATED' }` placeholder, so there is nothing in it
     // to carry forward, and leaving it would put a second, stale answer to
     // "which contact is this" next to the real one — which is the defect the
     // key change removes, preserved through a restore.
-    for (const strip of this._strips.values()) delete strip.correlation;
-    this._cidSeq = data?.cidSeq || 0;
+    for (const strip of this._state.strips.values()) delete strip.correlation;
+    this._state.setCidSeq(data?.cidSeq || 0);
     // The persisted slice of the idempotency cache (docs/adr/0081). It used to
     // be dropped here, so a CreateStrip whose ack died with the process was
     // created twice on retry (L6's F5). Loaded whole: the snapshot already cut
@@ -3348,7 +2850,7 @@ class BoardStore {
     const dropped = new Map(Array.isArray(data?.droppedWallAt) ? data.droppedWallAt : []);
     this._droppedWallAt = new Map();
     const restoredAt = Date.now();
-    for (const strip of this._strips.values()) {
+    for (const strip of this._state.strips.values()) {
       if (strip.state !== 'DROPPED') continue;
       const at = dropped.get(strip.stripId);
       this._droppedWallAt.set(strip.stripId, Number.isFinite(at) ? at : restoredAt);

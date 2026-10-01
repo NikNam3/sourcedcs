@@ -154,9 +154,9 @@ test('B3 with no Bay to fit, the Strip keeps its Bay and the reassignment says s
     isValidState: () => true,
   };
   const board = new BoardStore(new FdrStore(), rules);
-  assert.equal(board._bayForNewOwner('B', 'PROPOSED'), null);
-  assert.deepEqual(board._bayForNewOwner('B', 'OTHER'), { bayId: 'b-only', rackId: 'main' });
-  assert.deepEqual(board._bayForNewOwner('A', 'ANY'), { bayId: 'a-1', rackId: 'main' });
+  assert.equal(board._placement.bayForNewOwner('B', 'PROPOSED'), null);
+  assert.deepEqual(board._placement.bayForNewOwner('B', 'OTHER'), { bayId: 'b-only', rackId: 'main' });
+  assert.deepEqual(board._placement.bayForNewOwner('A', 'ANY'), { bayId: 'a-1', rackId: 'main' });
   const made = board.applyMutation({
     clientMutationId: '00000000-0000-4000-8000-000000000001', op: { kind: 'CreateStrip', bayId: 'a-1', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FDR, callsign: 'L23B3' } },
   }, 'A', 'A');

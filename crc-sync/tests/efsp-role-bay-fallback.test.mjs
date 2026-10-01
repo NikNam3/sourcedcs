@@ -62,11 +62,11 @@ test('a transfer routed to a covering APP, and a new owner at CTR with no matchi
   for (const [facilityId, pos, state] of [['INCIRLIK', 'APP', 'LUAW'], ['INCIRLIK', 'APP', 'FINAL'], ['CENTER', 'CTR', 'LUAW'], ['CENTER', 'CTR', 'FINAL']]) {
     const store = efsp.boardStoreFor(facilityId);
     for (const role of ['DEPARTURE', 'ARRIVAL']) {
-      const bay = store._bayForNewOwner(pos, state, { role });
+      const bay = store._placement.bayForNewOwner(pos, state, { role });
       assert.ok(bay, `${pos} ${role}/${state}`);
       assert.ok(!roleBayIds(pos, facilityId).includes(bay.bayId), `${pos} ${role}/${state} -> ${bay.bayId}`);
     }
-    const ovf = store._bayForNewOwner(pos, 'IN_SECTOR', { role: 'OVERFLIGHT' });
+    const ovf = store._placement.bayForNewOwner(pos, 'IN_SECTOR', { role: 'OVERFLIGHT' });
     assert.ok(roleBayIds(pos, facilityId).includes(ovf.bayId), `${pos} OVERFLIGHT -> ${ovf.bayId}`);
   }
 });

@@ -3,7 +3,7 @@
 export default {
   id: "M3",
   what: "an audit field: actorId dropped from the Mutation-log entry",
-  file: "src/efsp/board-store.js",
+  file: "src/efsp/board/audit.js",
   find: "      actorId: by || null,\n      at: this._clock.now(),\n      before,",
   replace: "      actorId: null,\n      at: this._clock.now(),\n      before,",
   detect: ["freeze-table","freeze-scenarios","freeze-hub"],
