@@ -21,7 +21,6 @@ const ALLOWED = {
   'crc-sync/src/efsp/permission.js': 'per-Role owner tables (STATE_OWNERS_BY_ROLE)',
   'crc-sync/src/efsp/coordination.js': 'tables keyed by Role',
   'crc-sync/src/efsp/board-store.js': 'ConvertToArrival checks the Role; REPLICA_STATE_ON_RECEIPT/SENDER_STATE_ON_ACCEPT and DEFAULT_INITIAL_STATE_BY_ROLE are keyed by Role',
-  'crc-sync/src/efsp/facility-config.js': 'Bays imply a state for ARRIVAL/DEPARTURE; board-store skips implication for a Role with a holdsRole Bay',
   'crc-sync/src/efsp/traffic-count.js': 'COUNTABLE_PRE_DROP_STATES is keyed by Role',
   'crc-sync/src/efsp/surveillance-hints.js': 'EXPECTS is keyed by Role',
   'crc-sync/src/efsp/overflight-migration.js': 'the comment naming the new states; it only touches TRANSITING',

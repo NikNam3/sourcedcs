@@ -3,7 +3,7 @@
 // Facility adaptation layer (EFSPImplementationGuide.md §8) — Position set,
 // Bay/Rack definitions, the covering chain, and the Bay-implies-State
 // mapping. Persisted JSON config, same pattern as theater-settings.js/
-// apt-config.js: loaded once at require time, mutated and re-persisted
+// apt-config.js: loaded once, at the first use (load()), mutated and re-persisted
 // through setters, survives a crc-sync restart. "The configurability is the
 // specification" (§8.1) — even though this module ships no facility-config
 // *editing* UI, the load/persist path exists from the start so a future
@@ -123,56 +123,45 @@ function _rangesConfig() {
   };
 }
 
-// The shipped Facilities, read from config/ (never state/) on demand. RANGES is derived from the airspace
-// definitions, so it is rebuilt each time rather than cached.
-function _shippedConfigs() {
-  return Object.fromEntries([
-    ...SHIPPED_FACILITY_IDS.map(id => [id, JSON.parse(fs.readFileSync(path.join(CONFIG_DIR, FACILITY_CONFIG_FILES[id][0]), 'utf8'))]),
-    ['RANGES', _rangesConfig()],
-  ]);
-}
-let defaultConfigs = null;
-function _defaultConfigs() { _configs(); return defaultConfigs; }
-
 /** One Facility's shipped config (config/, never state/), a fresh copy. For tests and tools that need the pristine file. */
-function getShippedConfig(facilityId) { return deepClone(_shippedConfigs()[facilityId]); }
+function getShippedConfig(facilityId) {
+  if (DERIVED_FACILITY_IDS.has(facilityId)) return _rangesConfig();
+  return JSON.parse(fs.readFileSync(path.join(CONFIG_DIR, FACILITY_CONFIG_FILES[facilityId][0]), 'utf8'));
+}
 
 function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
 
 
-function _loadOne(facilityId, defaults) {
-  let config = deepClone(defaults);
-  if (DERIVED_FACILITY_IDS.has(facilityId)) return config;
+// A missing or invalid facility file is a startup error, never a silent fall back to something else
+// (S-ARCH2 (12)): the shipped JSON is the only source of a Facility's data, a copy in state/ or at an
+// override path replaces it WHOLE (no key-by-key merge), and what it says must pass the schema.
+function _loadOne(facilityId) {
+  if (DERIVED_FACILITY_IDS.has(facilityId)) return _rangesConfig();
+  const [name, override] = FACILITY_CONFIG_FILES[facilityId];
+  const file = _readFrom(name, override);
+  let config;
   try {
-    const [name, override] = FACILITY_CONFIG_FILES[facilityId];
-    const onDisk = JSON.parse(fs.readFileSync(_readFrom(name, override), 'utf8'));
-    // A `blockVisibility` inclusion list from before this was an exclusion
-    // list. Dropped rather than converted: every shipped one was a full set
-    // for its day, so it expressed no narrowing at all — converting it would
-    // faithfully preserve the accidental hiding of every Block added since,
-    // which is the bug. Any genuine narrowing has to be restated as
-    // `hiddenBlocks`, and the warning says so.
-    if (onDisk.blockVisibility) {
-      console.warn(`[efsp-facility-config] ${facilityId}: ignoring a legacy blockVisibility list — express any narrowing as hiddenBlocks instead`);
-      delete onDisk.blockVisibility;
-    }
-    const merged = { ...deepClone(defaults), ...onDisk };
-    const check = validateConfig(merged);
-    if (!check.ok) {
-      console.warn(`[efsp-facility-config] ${facilityId} on-disk config failed validation, using defaults:`, check.detail);
-    } else {
-      config = merged;
-    }
+    config = JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch (e) {
-    console.warn(`[efsp-facility-config] failed to load ${facilityId} config, using defaults:`, e.message);
+    throw new Error(`[efsp-facility-config] ${facilityId}: cannot read its facility file ${file} (looked at the override, state/ and config/): ${e.message}`);
   }
-  // After the merged config is chosen, so the shipped defaults are checked too.
+  // A `blockVisibility` inclusion list from before this was an exclusion
+  // list. Dropped rather than converted: every shipped one was a full set
+  // for its day, so it expressed no narrowing at all — converting it would
+  // faithfully preserve the accidental hiding of every Block added since,
+  // which is the bug. Any genuine narrowing has to be restated as
+  // `hiddenBlocks`, and the warning says so.
+  if (config && config.blockVisibility) {
+    console.warn(`[efsp-facility-config] ${facilityId}: ignoring a legacy blockVisibility list — express any narrowing as hiddenBlocks instead`);
+    delete config.blockVisibility;
+  }
+  const check = schema.validateFacilityConfig(config, facilityId);
+  if (!check.ok) throw new Error(`[efsp-facility-config] ${facilityId}: ${file} is not a valid facility config: ${check.detail}`);
   for (const warning of fieldState.runwayInventoryWarnings(config)) {
     console.warn(`[efsp-facility-config] ${facilityId}: ${warning}`);
   }
   return config;
 }
-
 
 // The file's read path: the override if one is set and exists, else the live copy in state/, else the shipped
 // config/ file. (state-paths.js's readPath returns an override whether or not it exists; tests point the
@@ -195,8 +184,9 @@ function load({ reload = false } = {}) {
   FACILITY_CONFIG_FILES.CENTER[1] = process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER;
   FACILITY_CONFIG_FILES.TACTICAL[1] = process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL;
   FACILITY_CONFIG_FILES.CARRIER[1] = process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CARRIER;
-  defaultConfigs = _shippedConfigs();
-  configs = new Map(Object.keys(defaultConfigs).map(id => [id, _loadOne(id, defaultConfigs[id])]));
+  const loaded = new Map();
+  for (const id of [...SHIPPED_FACILITY_IDS, ...DERIVED_FACILITY_IDS]) loaded.set(id, _loadOne(id));
+  configs = loaded;
 }
 
 function _configs() { load(); return configs; }
@@ -356,7 +346,9 @@ function bayImpliesState(bayId, facilityId = DEFAULT_FACILITY_ID) {
 /**
  * Replaces one Facility's whole config (an explicit reload step, guide
  * §8.4 — "a live Board MUST NOT be mutated by a configuration change
- * without an explicit reload"). No editing UI calls this yet; it exists so
+ * without an explicit reload"). `next` is the whole file and is checked as one
+ * (facility-schema.js's validateFacilityConfig); nothing is merged in from the
+ * shipped copy. No editing UI calls this yet; it exists so
  * one is additive later, and so tests can exercise the persist path.
  */
 function setFacilityConfig(next, facilityId = DEFAULT_FACILITY_ID) {
@@ -364,11 +356,11 @@ function setFacilityConfig(next, facilityId = DEFAULT_FACILITY_ID) {
   if (DERIVED_FACILITY_IDS.has(facilityId)) {
     return { ok: false, reason: 'VALIDATION_ERROR', detail: `${facilityId}'s Positions are derived from the airspace config — edit that instead` };
   }
-  if (!_defaultConfigs()[facilityId]) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown facilityId ${facilityId}` };
-  const merged = { ...deepClone(_defaultConfigs()[facilityId]), ...deepClone(next) };
-  const check = validateConfig(merged);
+  if (!_configs().has(facilityId)) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown facilityId ${facilityId}` };
+  const whole = deepClone(next);
+  const check = schema.validateFacilityConfig(whole, facilityId);
   if (!check.ok) return check; // {ok:false, reason:'VALIDATION_ERROR', detail} — rejected, not persisted
-  _configs().set(facilityId, merged);
+  _configs().set(facilityId, whole);
   _persist(facilityId);
   return true;
 }

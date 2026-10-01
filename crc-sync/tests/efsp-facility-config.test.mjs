@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { spawnSync } from 'child_process';
 
 // facility-config.js reads its config paths once at module load — set both
 // override env vars before the first import, same pattern as
@@ -107,12 +108,12 @@ test('getFacilityConfig returns a deep copy — mutating it never affects subseq
 });
 
 test('setFacilityConfig persists to disk and survives being re-read from a fresh copy of the module state', () => {
-  const patched = { ...getFacilityConfig(), facility: 'INCIRLIK-TEST' };
+  const patched = { ...getFacilityConfig(), aitAuthorized: true };
   const result = setFacilityConfig(patched);
   assert.equal(result, true);
 
   const onDisk = JSON.parse(fs.readFileSync(tmpFile, 'utf8'));
-  assert.equal(onDisk.facility, 'INCIRLIK-TEST');
+  assert.equal(onDisk.aitAuthorized, true);
 
   // Restore for any tests that might run after this one in the same file.
   setFacilityConfig(getShippedConfig('INCIRLIK'));
@@ -167,23 +168,6 @@ test('setFacilityConfig rejects an invalid config and does not persist it', () =
   assert.equal(result.ok, false);
   // Unpersisted — the live config is unchanged.
   assert.deepEqual(getFacilityConfig().hiddenBlocks, before.hiddenBlocks);
-});
-
-test('loading an on-disk config that fails validation falls back to the shipped INCIRLIK config rather than throwing', async () => {
-  const fs2 = await import('fs');
-  const os2 = await import('os');
-  const path2 = await import('path');
-  const dir = fs2.mkdtempSync(path2.join(os2.tmpdir(), 'efsp-facility-config-badload-'));
-  const file = path2.join(dir, 'efsp-facility-incirlik.json');
-  fs2.writeFileSync(file, JSON.stringify({ ...getShippedConfig('INCIRLIK'), hiddenBlocks: { DEPARTURE: ['1'] } }));
-
-  const prevPath = process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH;
-  process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = file;
-  const fresh = await import(`../src/efsp/facility-config.js?bad=${Date.now()}`);
-  process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = prevPath;
-
-  assert.deepEqual(fresh.getPositionSet(), getShippedConfig('INCIRLIK').positions);
-  assert.deepEqual(fresh.getFacilityConfig().hiddenBlocks, getShippedConfig('INCIRLIK').hiddenBlocks);
 });
 
 test('bayForImpliedState resolves the Bay whose impliesState matches, falling back to the Position\'s first Bay', () => {
@@ -329,10 +313,10 @@ test('no default config carries a legacy blockVisibility list — one would hide
 });
 
 test('setFacilityConfig targets the Facility named by its second argument, leaving the other untouched', () => {
-  const patchedCenter = { ...getFacilityConfig('CENTER'), facility: 'CENTER-TEST' };
+  const patchedCenter = { ...getFacilityConfig('CENTER'), aitAuthorized: true };
   assert.equal(setFacilityConfig(patchedCenter, 'CENTER'), true);
-  assert.equal(getFacilityConfig('CENTER').facility, 'CENTER-TEST');
-  assert.equal(getFacilityConfig('INCIRLIK').facility, 'INCIRLIK');
+  assert.equal(getFacilityConfig('CENTER').aitAuthorized, true);
+  assert.equal(getFacilityConfig('INCIRLIK').aitAuthorized, false);
   // Restore for any tests that might run after this one in the same file.
   setFacilityConfig(getShippedConfig('CENTER'), 'CENTER');
 });
@@ -340,28 +324,6 @@ test('setFacilityConfig targets the Facility named by its second argument, leavi
 test('setFacilityConfig rejects an unknown facilityId without throwing', () => {
   const result = setFacilityConfig({ facility: 'GHOST' }, 'GHOST_FACILITY');
   assert.equal(result.ok, false);
-});
-
-test('the actual committed config/efsp-facility-incirlik.json seed is valid JSON matching the shipped INCIRLIK config\'s shape, and round-trips through a fresh load + mutate + re-import', async () => {
-  const realSeedPath = path.join(new URL('.', import.meta.url).pathname, '../config/efsp-facility-incirlik.json');
-  const realSeed = JSON.parse(fs.readFileSync(realSeedPath, 'utf8'));
-  assert.equal(validateConfig(realSeed).ok, true, 'the committed seed file itself must pass validation');
-
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-facility-config-realseed-'));
-  const copyPath = path.join(dir, 'efsp-facility-incirlik.json');
-  fs.copyFileSync(realSeedPath, copyPath);
-
-  const prevPath = process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH;
-  process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = copyPath;
-  const fresh = await import(`../src/efsp/facility-config.js?realseed=${Date.now()}`);
-  assert.deepEqual(fresh.getPositionSet(), realSeed.positions);
-
-  const patched = { ...fresh.getFacilityConfig(), facility: 'INCIRLIK-ROUNDTRIP' };
-  assert.equal(fresh.setFacilityConfig(patched), true);
-  const reloaded = await import(`../src/efsp/facility-config.js?realseed2=${Date.now()}`);
-  assert.equal(reloaded.getFacilityConfig().facility, 'INCIRLIK-ROUNDTRIP');
-
-  process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = prevPath;
 });
 
 // ── Position letters (docs/adr/0088) ──────────────────────────────────────
@@ -382,4 +344,143 @@ test('a position letter must be one character, on a known Position', () => {
   assert.equal(validateConfig({ ...base, positionLetters: { APP: 'a' } }).ok, false);
   assert.equal(validateConfig({ ...base, positionLetters: { XXX: 'X' } }).ok, false);
   assert.equal(validateConfig({ ...base, positionLetters: { APP: 'R' } }).ok, true);
+});
+
+// ── Loading (docs/wip/DATA-1.md, S-ARCH2 (12)) — each case in a fresh process, since the module loads once ──
+
+const CHILD_CWD = path.join(new URL('.', import.meta.url).pathname, '..');
+const REAL_CONFIG = path.join(CHILD_CWD, 'config');
+const FILES = ['incirlik', 'center', 'tactical', 'carrier'].map(id => `efsp-facility-${id}.json`);
+
+/** A temp config dir holding the four shipped files, so a case can break or remove one. */
+function scratchConfigDir() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-facility-load-'));
+  const config = path.join(dir, 'config');
+  fs.mkdirSync(config);
+  for (const f of FILES) fs.copyFileSync(path.join(REAL_CONFIG, f), path.join(config, f));
+  return { dir, config, state: path.join(dir, 'state') };
+}
+
+/** Runs `body` (it sees `fc`, the facility-config module) in a fresh node process with the given env. */
+function inChild({ config, state }, body, extraEnv = {}) {
+  const env = { ...process.env, CRCSYNC_CONFIG_DIR: config, CRCSYNC_STATE_DIR: state, ...extraEnv };
+  for (const k of ['CRCSYNC_EFSP_FACILITY_CONFIG_PATH', 'CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER', 'CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL', 'CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CARRIER']) {
+    if (!(k in extraEnv)) delete env[k];
+  }
+  return spawnSync(process.execPath, ['-e', `const fc = require('./src/efsp/facility-config.js'); ${body}`], { cwd: CHILD_CWD, encoding: 'utf8', env });
+}
+const posOf = (id = 'INCIRLIK') => `console.log(JSON.stringify(fc.getPositionSet('${id}')))`;
+
+test('load, branch 1: with no override and no state/ copy, a Facility is read from the shipped config/ file', () => {
+  const d = scratchConfigDir();
+  const r = inChild(d, posOf('CENTER'));
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout.trim(), '["CTR"]');
+});
+
+test('load, branch 2: a state/ copy replaces the shipped file', () => {
+  const d = scratchConfigDir();
+  fs.mkdirSync(d.state);
+  const center = JSON.parse(fs.readFileSync(path.join(d.config, FILES[1]), 'utf8'));
+  center.positions = ['CTR', 'CTR2']; center.positionClasses.CTR2 = 'CIVIL_ATC';
+  fs.writeFileSync(path.join(d.state, FILES[1]), JSON.stringify(center));
+  const r = inChild(d, posOf('CENTER'));
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout.trim(), '["CTR","CTR2"]');
+});
+
+test('load, branch 3: an override path that exists beats state/ and config/', () => {
+  const d = scratchConfigDir();
+  fs.mkdirSync(d.state);
+  const center = JSON.parse(fs.readFileSync(path.join(d.config, FILES[1]), 'utf8'));
+  fs.writeFileSync(path.join(d.state, FILES[1]), JSON.stringify({ ...center, positions: ['CTR', 'FROM_STATE'], positionClasses: { ...center.positionClasses, FROM_STATE: 'CIVIL_ATC' } }));
+  const override = path.join(d.dir, 'override-center.json');
+  fs.writeFileSync(override, JSON.stringify({ ...center, positions: ['CTR', 'FROM_OVERRIDE'], positionClasses: { ...center.positionClasses, FROM_OVERRIDE: 'CIVIL_ATC' } }));
+  const r = inChild(d, posOf('CENTER'), { CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER: override });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout.trim(), '["CTR","FROM_OVERRIDE"]');
+});
+
+test('load, branch 4: an override path that does not exist is read through to state/ then config/ (a write target, not a hard requirement)', () => {
+  const d = scratchConfigDir();
+  const r = inChild(d, posOf('CENTER'), { CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER: path.join(d.dir, 'not-there.json') });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout.trim(), '["CTR"]');
+});
+
+test('a Facility file missing in the override, state/ and config/ is a loud startup error, never a fallback', () => {
+  const d = scratchConfigDir();
+  fs.rmSync(path.join(d.config, FILES[2]));
+  const r = inChild(d, posOf());
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /\[efsp-facility-config\] TACTICAL: cannot read its facility file .*efsp-facility-tactical\.json/);
+});
+
+test('an invalid file is a startup error carrying the validation message, and does not fall back to the shipped copy', () => {
+  const d = scratchConfigDir();
+  fs.mkdirSync(d.state);
+  const bad = JSON.parse(fs.readFileSync(path.join(d.config, FILES[0]), 'utf8'));
+  bad.hiddenBlocks = { DEPARTURE: ['1'] };
+  fs.writeFileSync(path.join(d.state, FILES[0]), JSON.stringify(bad));
+  const r = inChild(d, posOf());
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /\[efsp-facility-config\] INCIRLIK: .*efsp-facility-incirlik\.json is not a valid facility config/);
+});
+
+test('a state/ copy is not merged with the shipped file: a partial copy fails on the keys it lacks', () => {
+  const d = scratchConfigDir();
+  fs.mkdirSync(d.state);
+  fs.writeFileSync(path.join(d.state, FILES[1]), JSON.stringify({ facility: 'CENTER', positions: ['CTR'], bays: {} }));
+  const r = inChild(d, posOf());
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /CENTER: .*missing required key/);
+});
+
+test('a file that is not JSON is a startup error', () => {
+  const d = scratchConfigDir();
+  fs.writeFileSync(path.join(d.config, FILES[3]), '{ not json');
+  const r = inChild(d, posOf());
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /CARRIER: cannot read its facility file/);
+});
+
+test('a legacy blockVisibility list in a file is dropped with a warning, as before', () => {
+  const d = scratchConfigDir();
+  fs.mkdirSync(d.state);
+  const c = JSON.parse(fs.readFileSync(path.join(d.config, FILES[1]), 'utf8'));
+  fs.writeFileSync(path.join(d.state, FILES[1]), JSON.stringify({ ...c, blockVisibility: { DEPARTURE: ['1'] } }));
+  const r = inChild(d, `${posOf('CENTER')}; console.log(fc.getFacilityConfig('CENTER').blockVisibility)`);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stderr, /ignoring a legacy blockVisibility list/);
+  assert.match(r.stdout, /undefined/);
+});
+
+test('setFacilityConfig writes the whole Facility to state/ (the override path), never into config/, and a restart reads it back', () => {
+  const d = scratchConfigDir();
+  const before = fs.readFileSync(path.join(d.config, FILES[1]), 'utf8');
+  const r = inChild(d, `const c = fc.getFacilityConfig('CENTER'); c.aitAuthorized = true;
+    console.log(fc.setFacilityConfig(c, 'CENTER'));`);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout.trim(), 'true');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(d.state, FILES[1]), 'utf8')).aitAuthorized, true);
+  assert.equal(fs.readFileSync(path.join(d.config, FILES[1]), 'utf8'), before, 'config/ is never written');
+  const again = inChild(d, `console.log(fc.getFacilityConfig('CENTER').aitAuthorized)`);
+  assert.equal(again.stdout.trim(), 'true');
+});
+
+test('setFacilityConfig takes the whole file: a partial one is rejected, not merged with the shipped copy', () => {
+  const d = scratchConfigDir();
+  const r = inChild(d, `console.log(JSON.stringify(fc.setFacilityConfig({ aitAuthorized: true }, 'CENTER')))`);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /"ok":false.*missing required key/);
+  assert.equal(fs.existsSync(path.join(d.state, FILES[1])), false);
+});
+
+test('the file for a Facility must say it is that Facility', () => {
+  const d = scratchConfigDir();
+  const c = JSON.parse(fs.readFileSync(path.join(d.config, FILES[1]), 'utf8'));
+  fs.writeFileSync(path.join(d.config, FILES[1]), JSON.stringify({ ...c, facility: 'ELSEWHERE' }));
+  const r = inChild(d, posOf());
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /CENTER: .*facility is "ELSEWHERE", expected "CENTER"/);
 });
