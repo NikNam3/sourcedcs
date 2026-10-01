@@ -40,6 +40,9 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 if (!fs.existsSync(RELEASES_DIR)) fs.mkdirSync(RELEASES_DIR, { recursive: true });
 
+/* Seed files (data-seed/) fill in only files the data volume lacks; no-op while that dir does not exist. */
+require('./seed').seedDataDir(DATA_DIR, path.join(__dirname, 'data-seed'));
+
 function loadJSON(file, fallback) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }
 }
