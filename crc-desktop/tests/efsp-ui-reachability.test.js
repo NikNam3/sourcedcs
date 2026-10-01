@@ -2564,3 +2564,67 @@ test('a controller holding TAC_C2 and AIC answers a TOFI exit on an AIC-held lin
   click(findByText(only.el, 'Accept TOFI Exit'));
   assert.equal(only.sent[0].actingPositionId, 'AIC', 'the server refuses it, with a reason (AIC has no TOFI grant)');
 });
+
+// ── docs/adr/0076: surveillance informs, the controller advances (§10.3, §10.4) ──
+
+const SURV_HINT = { stripId: 's1', fdrId: 'f1', facilityId: 'INCIRLIK', stripState: 'LUAW', contactPhase: 'AIRBORNE', since: 1000 };
+
+function chipOf(el) { return descendants(el).find(c => c.dataset && c.dataset.slot === 'hint'); }
+function staleOf(el) { return descendants(el).find(c => c.dataset && c.dataset.slot === 'stale'); }
+
+test('the suggestion chip: one click sends the controller\'s own SetState to Airborne, and nothing moves by itself', () => {
+  const strip = stripAt({ state: 'LUAW', ownerPositionId: 'TWR', bayId: 'twr-runway-queue' });
+  const { sandbox, sent } = renderStrip({ strip, fdr: FDR, held: ['TWR'] });
+  const before = JSON.parse(JSON.stringify(strip));
+  sandbox.applyEfspAlerts({ conformance: [], stca: [], obligations: [], surveillance: [{ ...SURV_HINT, kind: 'AIRBORNE_ADVANCE', toState: 'DEPARTED' }] });
+  const el = sandbox._buildStripEl(strip);
+  const chip = chipOf(el);
+  assert.ok(chip, 'the chip is on the Strip');
+  assert.match(chip.textContent, /AIRBORNE/);
+  assert.deepEqual(sent, [], 'drawing the chip sends nothing: surveillance informs');
+  for (const fn of chip._listeners.click || []) fn({ stopPropagation() {} });
+  assert.equal(sent.length, 1, 'one input');
+  assert.equal(sent[0].actingPositionId, 'TWR');
+  assert.deepEqual(JSON.parse(JSON.stringify(sent[0].op)), { kind: 'SetState', toState: 'DEPARTED' });
+  assert.deepEqual(strip, before, 'the Strip record itself is untouched');
+});
+
+test('the chip is information, not a control, for a Position that does not hold the Strip', () => {
+  const strip = stripAt({ state: 'LUAW', ownerPositionId: 'TWR', bayId: 'twr-runway-queue' });
+  const { sandbox, sent } = renderStrip({ strip, fdr: FDR, held: ['OPS'] });
+  sandbox.applyEfspAlerts({ surveillance: [{ ...SURV_HINT, kind: 'AIRBORNE_ADVANCE', toState: 'DEPARTED' }] });
+  const chip = chipOf(sandbox._buildStripEl(strip));
+  assert.ok(chip);
+  assert.equal((chip._listeners.click || []).length, 0);
+  assert.deepEqual(sent, []);
+});
+
+test('a hint written against a state the Strip has since left is not drawn', () => {
+  const strip = stripAt({ state: 'DEPARTED', ownerPositionId: 'TWR', bayId: 'twr-airborne' });
+  const { sandbox } = renderStrip({ strip, fdr: FDR, held: ['TWR'] });
+  sandbox.applyEfspAlerts({ surveillance: [{ ...SURV_HINT, kind: 'AIRBORNE_ADVANCE', toState: 'DEPARTED' }] });
+  assert.equal(chipOf(sandbox._buildStripEl(strip)), undefined);
+});
+
+test('staleness is a quiet, low-severity badge that explains itself and does not mark the Strip as an alert', () => {
+  const strip = stripAt({ state: 'DEPARTED', ownerPositionId: 'APP' });
+  const { sandbox } = renderStrip({ strip, fdr: FDR, held: ['APP'] });
+  sandbox.applyEfspAlerts({ surveillance: [{ ...SURV_HINT, stripState: 'DEPARTED', contactPhase: 'ON_GROUND', kind: 'STALE', afterSec: 120 }] });
+  const el = sandbox._buildStripEl(strip);
+  const badge = staleOf(el);
+  assert.ok(badge);
+  assert.equal(badge.textContent, 'STALE');
+  assert.match(badge.title, /DEPARTED.*on the ground.*2 min/);
+  assert.doesNotMatch(el.className, /efsp-strip-alert/);
+});
+
+test('the render signature changes when a hint appears, so the Strip is rebuilt for it (S-L14)', () => {
+  const strip = stripAt({ state: 'LUAW', ownerPositionId: 'TWR', bayId: 'twr-runway-queue' });
+  const { sandbox } = renderStrip({ strip, fdr: FDR, held: ['TWR'] });
+  const sig = () => sandbox._stripRenderSignature(strip);
+  const none = sig();
+  sandbox.applyEfspAlerts({ surveillance: [{ ...SURV_HINT, kind: 'AIRBORNE_ADVANCE', toState: 'DEPARTED' }] });
+  assert.notEqual(sig(), none);
+  sandbox.applyEfspAlerts({ surveillance: [] });
+  assert.equal(sig(), none);
+});

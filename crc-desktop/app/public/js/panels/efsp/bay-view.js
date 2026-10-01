@@ -2909,6 +2909,11 @@ function _stripRenderSignature(strip) {
     + ';' + stca.map(c => `${c.id}/${c.timeToCpaSec}/${c.minNm}/${c.vertFt}`).join(','));
   // Field state (docs/adr/0068): the RWY/HOOK chips read the Facility's runway record, not the Strip.
   parts.push('fld:' + (typeof fieldStateSignatureFor === 'function' ? fieldStateSignatureFor(strip) : ''));
+  // Surveillance hints (docs/adr/0076) are stated by the server about this Strip, not part of its own
+  // record; whether the chip can be accepted also depends on which Position the controller holds (S-L14).
+  parts.push('sur:' + (typeof surveillanceHintsForStrip === 'function'
+    ? surveillanceHintsForStrip(strip).map(h => `${h.kind}/${h.contactPhase}/${h.since}`).join(',') : '')
+    + (typeof getActingPositions === 'function' && getActingPositions().includes(strip.ownerPositionId) ? '/m' : ''));
 
   return parts.join('|');
 }

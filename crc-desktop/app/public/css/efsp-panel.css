@@ -1840,3 +1840,7 @@
 .efsp-ato-ar-row, .efsp-ato-gone-row, .efsp-ato-result { font-size: 12px; }
 .efsp-ato-result-bad { color: var(--efsp-bad-text); }
 .efsp-ato-import-go { align-self: flex-start; }
+
+/* docs/adr/0076 — the suggestion chip is the one indicator that is also a control. */
+.efsp-strip .efsp-ind.efsp-surveillance-chip[role="button"] { cursor: pointer; }
+.efsp-strip .efsp-ind.efsp-surveillance-chip[role="button"]:focus-visible { outline: 2px solid var(--efsp-attn); outline-offset: 1px; }

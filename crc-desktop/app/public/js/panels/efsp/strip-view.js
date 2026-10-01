@@ -408,6 +408,11 @@ function _stripAlerts(strip) {
 // alert chip after the wave-2 advisories; the AR join a quiet badge after MARSA.
 INDICATOR_ORDER.splice(INDICATOR_ORDER.indexOf('trk'), 0, 'ato');
 INDICATOR_ORDER.splice(INDICATOR_ORDER.indexOf('marsa') + 1, 0, 'ar');
+// docs/adr/0076 (guide §10.3, §10.4): surveillance informs, the controller advances.
+// 'hint' is the suggestion chip, 'stale' the low-severity staleness indication.
+// Both are quiet badges beside the correlation one, not alert chips: neither
+// raises the Strip's attention styling or a reason line, and neither moves it.
+INDICATOR_ORDER.splice(INDICATOR_ORDER.indexOf('trk') + 1, 0, 'hint', 'stale');
 ALERT_SLOT_KEYS.add('ato');
 
 function _indicator(key, text, tone, legacy, title) {
@@ -462,6 +467,39 @@ function _litIndicator(strip, key, el, obligation, siblings) {
     return _indicator(key, obligation.obligationType.replace(/_/g, ' '), overdue ? 'bad' : 'attn',
       `efsp-obligation-badge${overdue ? ' efsp-obligation-badge-overdue' : ''}`,
       `${obligation.obligationType} — ${obligation.severity}`);
+  }
+  if (key === 'hint' || key === 'stale') {
+    const hints = typeof surveillanceHintsForStrip === 'function' ? surveillanceHintsForStrip(strip) : [];
+    const h = hints.find(x => x.kind === (key === 'hint' ? 'AIRBORNE_ADVANCE' : 'STALE'));
+    if (!h) return null;
+    const seen = h.contactPhase === 'AIRBORNE' ? 'detected airborne' : 'detected on the ground';
+    if (key === 'stale') {
+      const mins = Math.max(1, Math.round((h.afterSec || 120) / 60));
+      return _indicator(key, 'STALE', 'on', 'efsp-stale-indicator',
+        `This Strip says ${h.stripState}, but the aircraft is ${seen}, and has been for over ${mins} min. Surveillance informs; update the Strip if it is wrong.`);
+    }
+    // The suggestion chip: one input, and the input is the controller's own
+    // SetState — the ordinary path, every rule on it applying. Only a Position
+    // that holds the Strip can accept; for anyone else it is information.
+    const acting = typeof getActingPositions === 'function' ? getActingPositions() : [];
+    const mine = acting.includes(strip.ownerPositionId);
+    const node = _indicator(key, 'AIRBORNE? ▸', 'attn', 'efsp-surveillance-chip',
+      `Aircraft ${seen}; the Strip says ${h.stripState}. ${mine ? 'Click to advance it to Airborne.' : `${strip.ownerPositionId} holds this Strip.`}`);
+    if (mine) {
+      node.setAttribute('role', 'button');
+      node.tabIndex = 0;
+      node.dataset.toState = h.toState;
+      const accept = (e) => {
+        if (e && e.stopPropagation) e.stopPropagation();
+        if (typeof _swallowRepeatAdvance === 'function' && _swallowRepeatAdvance()) return;
+        const live = (typeof getEfspStrip === 'function' && getEfspStrip(strip.stripId)) || strip;
+        sendEfspMutation(_resolveActingPositionId(live), live, { kind: 'SetState', toState: h.toState });
+      };
+      node.addEventListener('click', accept);
+      node.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') accept(e); });
+      node.addEventListener('pointerdown', (e) => e.stopPropagation()); // not the start of a drag
+    }
+    return node;
   }
   if (key === 'ar') {
     // The AR join (docs/adr/0071): not MARSA, never a warning — tone 'on'.
