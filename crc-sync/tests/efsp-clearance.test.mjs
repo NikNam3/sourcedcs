@@ -18,7 +18,6 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify([]));
 
 const { createEfsp } = await import('../src/efsp/index.js');
 const { FdrStore, parseAltitudeFt, parseHeadingDeg } = await import('../src/efsp/fdr-store.js');
-const { migrateClearanceAnnotations } = await import('../src/efsp/clearance-migration.js');
 const { computeDueObligations } = await import('../src/efsp/forwarding-obligations.js');
 
 function crew(efsp, spec) {
@@ -103,22 +102,3 @@ test('issuing a clearance altitude is not a flight-plan amendment — no AMENDME
   assert.equal(due.some(o => o.obligationType === 'AMENDMENT_INSIDE_30MIN'), false);
 });
 
-test('an old Board\'s clearance annotations move onto their flights on restore', () => {
-  const store = new FdrStore();
-  const a = store.createFdr({ callsign: 'VPR4', ...FILED }, { by: 'test' }).fdr;
-  const b = store.createFdr({ callsign: 'VPR5', ...FILED }, { by: 'test' }).fdr;
-  const history = [{ value: '050', status: 'SUPERSEDED', at: 1, by: 'cd' }, { value: 'fl180', status: 'ACTIVE', at: 2, by: 'app' }];
-  const strips = [
-    { stripId: 's1', fdrId: a.fdrId, role: 'DEPARTURE', annotations: { '21': { blockId: '21', entries: history }, '24': { blockId: '24', entries: [] } } },
-    // A replica of the same flight with its own hand-copied note: the first one wins.
-    { stripId: 's2', fdrId: a.fdrId, role: 'DEPARTURE', annotations: { '21': { blockId: '21', entries: [{ value: '999', status: 'ACTIVE', at: 3 }] } } },
-    { stripId: 's3', fdrId: b.fdrId, role: 'ARRIVAL', annotations: { '9A-VECTOR': { blockId: '9A-VECTOR', entries: [{ value: '270', status: 'ACTIVE', at: 4 }] } } },
-  ];
-  assert.equal(migrateClearanceAnnotations(strips, id => store.getFdr(id)), 2);
-  assert.deepEqual(store.getFdr(a.fdrId).clearance.altitude.entries.map(e => [e.value, e.status, e.parsed]),
-    [['050', 'SUPERSEDED', 5000], ['FL180', 'ACTIVE', 18000]]);
-  assert.equal(active(store.getFdr(b.fdrId).clearance.heading).parsed, 270);
-  assert.equal(strips[0].annotations['21'], undefined);
-  assert.ok(strips[0].annotations['24'], 'other annotations are untouched');
-  assert.equal(strips[1].annotations['21'], undefined);
-});

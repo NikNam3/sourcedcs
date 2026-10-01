@@ -445,15 +445,15 @@ test('a file that is not JSON is a startup error', () => {
   assert.match(r.stderr, /CARRIER: cannot read its facility file/);
 });
 
-test('a legacy blockVisibility list in a file is dropped with a warning, as before', () => {
+test('a legacy blockVisibility list in a file is a startup error naming the file', () => {
   const d = scratchConfigDir();
   fs.mkdirSync(d.state);
   const c = JSON.parse(fs.readFileSync(path.join(d.config, FILES[1]), 'utf8'));
   fs.writeFileSync(path.join(d.state, FILES[1]), JSON.stringify({ ...c, blockVisibility: { DEPARTURE: ['1'] } }));
-  const r = inChild(d, `${posOf('CENTER')}; console.log(fc.getFacilityConfig('CENTER').blockVisibility)`);
-  assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stderr, /ignoring a legacy blockVisibility list/);
-  assert.match(r.stdout, /undefined/);
+  const r = inChild(d, posOf('CENTER'));
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /still has a "blockVisibility" list/);
+  assert.ok(r.stderr.includes(FILES[1]), 'names the file');
 });
 
 test('setFacilityConfig writes the whole Facility to state/ (the override path), never into config/, and a restart reads it back', () => {

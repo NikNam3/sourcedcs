@@ -558,7 +558,7 @@ function fieldAct(e, member, positionId, op, { facilityId = 'INCIRLIK', baseRev 
 const mutationLog = () => fs.readFileSync(process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH, 'utf8').trim().split('\n').map(l => JSON.parse(l));
 
 test('efsp-field-state-mutation routes, applies, acks and broadcasts efsp-field-state-delta with its own fieldStateSeq', () => {
-  const boardSeq = efsp.boardStore.currentSeq;
+  const boardSeq = efsp.boardStoreFor('INCIRLIK').currentSeq;
   const seq = efsp.fieldStateStore.currentSeq;
   const out = fieldAct(efsp, c.TWR, 'TWR', { kind: 'CloseRunway', runwayId: '05/23', reason: 'FOD' });
   assert.equal(out.ack.type, 'efsp-field-state-ack');
@@ -571,7 +571,7 @@ test('efsp-field-state-mutation routes, applies, acks and broadcasts efsp-field-
   assert.equal(slot(out, 'primary').fieldStateSeq, seq + 1);
   assert.equal(rwy(slot(out, 'primary').fieldStates.updated[0]).status, 'CLOSED');
   // Rule 5's deviation: the Board sequence does not move.
-  assert.equal(efsp.boardStore.currentSeq, boardSeq);
+  assert.equal(efsp.boardStoreFor('INCIRLIK').currentSeq, boardSeq);
   const back = fieldAct(efsp, c.TWR, 'TWR', { kind: 'OpenRunway', runwayId: '05/23' });
   assert.equal(back.ack.ok, true);
 });
@@ -607,7 +607,7 @@ test('the snapshot carries fieldStates; efsp-resync has no field-state branch', 
   assert.equal(snap.fieldStates[0].facilityId, 'INCIRLIK');
   assert.equal(rwy(snap.fieldStates[0]).status, 'OPEN');
   // A delta-served resync carries Strips only; field state comes with a snapshot.
-  const resync = efsp.handleMessage(c.TWR.session, { type: 'efsp-resync', facilityId: 'INCIRLIK', lastBoardSeq: efsp.boardStore.currentSeq, boardEpoch: efsp.snapshotFor().boardEpochByFacility.INCIRLIK });
+  const resync = efsp.handleMessage(c.TWR.session, { type: 'efsp-resync', facilityId: 'INCIRLIK', lastBoardSeq: efsp.boardStoreFor('INCIRLIK').currentSeq, boardEpoch: efsp.snapshotFor().boardEpochByFacility.INCIRLIK });
   assert.equal(resync.ack.answer, 'delta');
   assert.equal(JSON.stringify(resync).includes('fieldState'), false);
 });

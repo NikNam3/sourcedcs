@@ -6,6 +6,7 @@ const { createSurveillance } = require('./surveillance');
 const { getAptConfig, setAptConfig } = require('./apt-config');
 const { consumeTicket } = require('./auth');
 const { WALL_CLOCK } = require('./mission-clock');
+const { DEFAULT_FACILITY_ID } = require('./efsp/facility-config');
 const log = require('./log').logger('ws-hub');
 
 const VERSION  = 1;
@@ -539,7 +540,7 @@ class WsHub {
     // arrived" on an idle Board would otherwise be indistinguishable from a
     // dead connection.
     if (this._efsp) {
-      ws.send(JSON.stringify({ version: VERSION, type: 'efsp-heartbeat', boardSeq: this._efsp.boardStore.currentSeq }));
+      ws.send(JSON.stringify({ version: VERSION, type: 'efsp-heartbeat', boardSeq: this._efsp.boardStoreFor(DEFAULT_FACILITY_ID).currentSeq }));
     }
 
     const lastSent = session.lastSent || (session.lastSent = new Map());

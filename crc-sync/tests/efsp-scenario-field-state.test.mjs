@@ -74,7 +74,7 @@ function mustFieldStateAct(e, member, positionId, op) {
 
 const runway = (e = efsp) => e.fieldStateStore.getFieldState('INCIRLIK').runways.find(r => r.runwayId === RWY);
 const fieldState = (e = efsp) => e.fieldStateStore.getFieldState('INCIRLIK');
-const strip = (s, e = efsp) => e.boardStore.getStrip(s.stripId);
+const strip = (s, e = efsp) => e.boardStoreFor('INCIRLIK').getStrip(s.stripId);
 const mutations = () => fs.readFileSync(process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH, 'utf8').trim().split('\n').map(l => JSON.parse(l));
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -137,7 +137,7 @@ test('sortie 0: before the mission wind sets an active runway, a Strip with no r
   const s = departure('TAXI', { runway: null });
   // Built before the suspension would have gated SetState? No — nothing
   // resolves it to a runway, so it was never gated at all.
-  const status = efsp.boardStore.nlaStatusFor(strip(s));
+  const status = efsp.boardStoreFor('INCIRLIK').nlaStatusFor(strip(s));
   assert.deepEqual(status, { toState: 'RUNWAY_QUEUE', transferTo: 'TWR' });
   finishAndInspect();
   // The mission wind now sets the active end (decisions.md H22): 060 true
@@ -176,14 +176,14 @@ test('sortie 1: A barrier reconfiguration suspends the runway, inhibits takeoff 
   // "with the reason shown" — on the press, on the Strip's advisory stamp, and
   // on the board-delta the suspension itself caused, for every Strip it hit.
   for (const s of [queued, lined, inbound]) {
-    assert.equal(efsp.boardStore.nlaStatusFor(strip(s)).inhibited, reason);
+    assert.equal(efsp.boardStoreFor('INCIRLIK').nlaStatusFor(strip(s)).inhibited, reason);
     assert.equal(deltas.stripFor(s).nla.inhibited, reason, `board-delta for ${s.stripId}`);
   }
 
   // "requires an attributable inspection-complete action to resume".
   mustFieldStateAct(efsp, c.OPS, 'OPS', { kind: 'CompleteRunwayWorks', runwayId: RWY });
   assert.equal(runway().status, 'SUSPENDED_INSPECTION');
-  assert.equal(efsp.boardStore.nlaStatusFor(strip(queued)).inhibited, 'runway 05/23 suspended — awaiting inspection');
+  assert.equal(efsp.boardStoreFor('INCIRLIK').nlaStatusFor(strip(queued)).inhibited, 'runway 05/23 suspended — awaiting inspection');
   // No way round the inspection: tower cannot simply reopen it, and tower is
   // not the inspection authority.
   const reopen = fieldStateAct(efsp, c.TWR, 'TWR', { kind: 'OpenRunway', runwayId: RWY });
@@ -237,7 +237,7 @@ test('sortie 4: moving a queued departure to the reciprocal rack does not escape
   // one — but 23 is the same pavement as 05, so the Strip is still held.
   const moved = mustAct(efsp, c.TWR, 'TWR', strip(queued), { kind: 'MoveStrip', bayId: 'twr-runway-queue', rackId: 'rwy-23' });
   assert.equal(moved.rackId, 'rwy-23');
-  assert.equal(efsp.boardStore.nlaStatusFor(strip(queued)).inhibited, 'runway 05/23 suspended — works in progress');
+  assert.equal(efsp.boardStoreFor('INCIRLIK').nlaStatusFor(strip(queued)).inhibited, 'runway 05/23 suspended — works in progress');
   assert.equal(act(efsp, c.TWR, 'TWR', strip(queued), { kind: 'InvokeNla' }).reason, 'NLA_INHIBITED');
   finishAndInspect();
 });
@@ -297,12 +297,12 @@ test('sortie 11: crc-sync restarts mid-suspension and the runway comes back SUSP
   assert.equal(reborn.fieldStateStore.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 240, missionSession: 1 }).changed, false);
   // Occupancy is ephemeral (ADR 0029): the crew re-declares.
   const rc = crew(reborn, ATC);
-  const restored = reborn.boardStore.getStrip(queued.stripId);
-  assert.equal(reborn.boardStore.nlaStatusFor(restored).inhibited, 'runway 05/23 suspended — works in progress');
+  const restored = reborn.boardStoreFor('INCIRLIK').getStrip(queued.stripId);
+  assert.equal(reborn.boardStoreFor('INCIRLIK').nlaStatusFor(restored).inhibited, 'runway 05/23 suspended — works in progress');
   assert.equal(act(reborn, rc.TWR, 'TWR', restored, { kind: 'InvokeNla' }).reason, 'NLA_INHIBITED');
   finishAndInspect(reborn, rc);
   assert.equal(runway(reborn).status, 'OPEN');
-  assert.equal(mustAct(reborn, rc.TWR, 'TWR', reborn.boardStore.getStrip(queued.stripId), { kind: 'InvokeNla' }).state, 'LUAW');
+  assert.equal(mustAct(reborn, rc.TWR, 'TWR', reborn.boardStoreFor('INCIRLIK').getStrip(queued.stripId), { kind: 'InvokeNla' }).state, 'LUAW');
   // Carry on with the reborn server from here, like a real restart.
   reborn.persist();
   efsp = reborn;
@@ -318,11 +318,11 @@ test('sortie 14: a closed runway holds its traffic too, and a Strip with nothing
   mustFieldStateAct(efsp, c.TWR, 'TWR', { kind: 'AcceptRunwayRequest', runwayId: RWY });
   assert.equal(runway().status, 'CLOSED');
   assert.equal(runway().closure.reason, 'disabled aircraft');
-  assert.equal(efsp.boardStore.nlaStatusFor(strip(unfiled)).inhibited, 'runway 05/23 closed');
+  assert.equal(efsp.boardStoreFor('INCIRLIK').nlaStatusFor(strip(unfiled)).inhibited, 'runway 05/23 closed');
   const taxi = departure('TAXI', { runway: null });
   assert.equal(act(efsp, c.GND, 'GND', strip(taxi), { kind: 'InvokeNla' }).detail, 'runway 05/23 closed');
   mustFieldStateAct(efsp, c.TWR, 'TWR', { kind: 'OpenRunway', runwayId: RWY });
-  assert.equal(efsp.boardStore.nlaStatusFor(strip(taxi)).toState, 'RUNWAY_QUEUE');
+  assert.equal(efsp.boardStoreFor('INCIRLIK').nlaStatusFor(strip(taxi)).toState, 'RUNWAY_QUEUE');
 });
 
 // ── rule 3: the runway change ──────────────────────────────────────────────
@@ -385,7 +385,7 @@ test('sortie 6: a runway change completes, the new runway is inspected, and only
   assert.equal(done.runwayChange.state, 'PENDING_INSPECTION');
   // The pavement waits for its inspection, and holds its traffic meanwhile.
   assert.equal(runway().status, 'SUSPENDED_INSPECTION');
-  assert.equal(efsp.boardStore.nlaStatusFor(strip(queuedFor05)).inhibited, 'runway 05/23 suspended — awaiting inspection');
+  assert.equal(efsp.boardStoreFor('INCIRLIK').nlaStatusFor(strip(queuedFor05)).inhibited, 'runway 05/23 suspended — awaiting inspection');
   assert.equal(act(efsp, c.GND, 'GND', strip(taxiing), { kind: 'InvokeNla' }).detail, 'runway 05/23 suspended — awaiting inspection');
   // Only OPS may sign it off.
   assert.equal(fieldStateAct(efsp, c.TWR, 'TWR', { kind: 'CompleteInspection', runwayId: RWY }).reason, 'PERMISSION_DENIED');

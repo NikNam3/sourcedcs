@@ -146,15 +146,10 @@ function _loadOne(facilityId) {
   } catch (e) {
     throw new Error(`[efsp-facility-config] ${facilityId}: cannot read its facility file ${file} (looked at the override, state/ and config/): ${e.message}`);
   }
-  // A `blockVisibility` inclusion list from before this was an exclusion
-  // list. Dropped rather than converted: every shipped one was a full set
-  // for its day, so it expressed no narrowing at all — converting it would
-  // faithfully preserve the accidental hiding of every Block added since,
-  // which is the bug. Any genuine narrowing has to be restated as
-  // `hiddenBlocks`, and the warning says so.
-  if (config && config.blockVisibility) {
-    log.warn('ignoring a legacy blockVisibility list — express any narrowing as hiddenBlocks instead', { facilityId });
-    delete config.blockVisibility;
+  // `blockVisibility` was the inclusion list `hiddenBlocks` replaced (docs/adr/0041). No handling is left (ARCH-D5):
+  // a file that still has one is an old file, and stops start-up rather than being half read.
+  if (config && config.blockVisibility !== undefined) {
+    throw new Error(`[efsp-facility-config] ${facilityId}: ${file} still has a "blockVisibility" list, which was replaced by "hiddenBlocks" (docs/adr/0041): restate any narrowing as hiddenBlocks, or delete the file to use the shipped one`);
   }
   const check = schema.validateFacilityConfig(config, facilityId);
   if (!check.ok) throw new Error(`[efsp-facility-config] ${facilityId}: ${file} is not a valid facility config: ${check.detail}`);

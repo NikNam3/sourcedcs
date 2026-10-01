@@ -181,7 +181,7 @@ test('SCENARIO civil round trip: Incirlik IFR departure -> CTR -> airspace hande
   const handedBack = mustAct(efsp, c.CTR, 'CTR', ctrStrip, {
     kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'APP',
   });
-  let arrival = efsp.boardStore.getStrip(handedBack.coordination.peerStripId);
+  let arrival = efsp.boardStoreFor('INCIRLIK').getStrip(handedBack.coordination.peerStripId);
   arrival = mustAct(efsp, c.APP, 'APP', arrival, { kind: 'HANDOFF', action: 'ACCEPT' });
 
   // Down the arrival chain and off the board.
@@ -343,7 +343,7 @@ test('SCENARIO military round trip: Incirlik IFR departure -> CTR -> tactical co
   const handedBack = mustAct(efsp, c.CTR, 'CTR', ctrStrip, {
     kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'APP',
   });
-  let arrival = efsp.boardStore.getStrip(handedBack.coordination.peerStripId);
+  let arrival = efsp.boardStoreFor('INCIRLIK').getStrip(handedBack.coordination.peerStripId);
   arrival = mustAct(efsp, c.APP, 'APP', arrival, { kind: 'HANDOFF', action: 'ACCEPT' });
   arrival = await advance(efsp, c.APP, 'APP', arrival);
   arrival = jumpTo(efsp, c.TWR, 'TWR', arrival, 'LANDED');
@@ -359,7 +359,7 @@ test('SCENARIO military round trip: Incirlik IFR departure -> CTR -> tactical co
   // grew a shared-FDR indicator for exactly this.
   assert.equal(efsp.fdrStore._codeAllocator.isAllocated(beacon), true);
 
-  const staleDeparture = efsp.boardStore.getStrip(appStrip.stripId);
+  const staleDeparture = efsp.boardStoreFor('INCIRLIK').getStrip(appStrip.stripId);
   assert.equal(staleDeparture.state, 'HANDED_OFF', 'the sender-side Strip is still sitting there');
   mustAct(efsp, c.APP, 'APP', staleDeparture, { kind: 'DropStrip', reason: 'stale after handoff' });
   assert.equal(efsp.fdrStore._codeAllocator.isAllocated(beacon), true, 'CTR still has one');
@@ -426,7 +426,7 @@ test('an Observer at a Position may not mutate its Strips — Primary is what ac
   const c = crew(efsp, { OPS: 'INCIRLIK' });
   const observer = { controllerId: 'c-observer', who: 'Observer' };
   efsp.handleMessage(observer, { type: 'efsp-set-positions', facilityId: 'INCIRLIK', held: ['OPS'] });
-  assert.equal(efsp.positionStore.primaryOf('OPS'), 'c-OPS', 'the second selector is an Observer, not a second Primary');
+  assert.equal(efsp.positionStoreFor('INCIRLIK').primaryOf('OPS'), 'c-OPS', 'the second selector is an Observer, not a second Primary');
 
   const ack = act(efsp, { session: observer, facilityId: 'INCIRLIK' }, 'OPS', null, {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FDR,

@@ -17,7 +17,7 @@
 //
 // The body is written in registry order; it is restored in RESTORE_ORDER, which differs on purpose (the Boards are
 // written first, but restore after the FDRs and airspaces they refer to). The restore steps that cross stores
-// (migrations, _reconcileRestored, _reconcileLogTail) stay in index.js's _restore, after this loop.
+// (_reconcileRestored, _reconcileLogTail) stay in index.js's _restore, after this loop.
 //
 // A future persisted-state `version` key and a per-store upgrade hook would go here (S3-4: not now).
 
@@ -33,6 +33,15 @@ const carrierHulls = require('./carrier/hull-config');
 const facilityConfig = require('./facility-config');
 const log = require('../log').logger('efsp:stores');
 
+// The Blocks that held the assigned altitude and heading as Strip annotations before docs/adr/0058 moved them onto
+// the flight record. A Strip that still has history in one is the old shape: the migration that moved it is gone
+// (ARCH-D5), so it stops start-up instead of leaving a clearance silently invisible.
+const PRE_0058_CLEARANCE_BLOCKS = {
+  DEPARTURE: ['21', '20'],
+  ARRIVAL: ['7', '9A-VECTOR'],
+  OVERFLIGHT: ['7A', '9A-VECTOR'],
+};
+
 const REGISTRY = [
   {
     key: 'boards',
@@ -44,19 +53,28 @@ const REGISTRY = [
       return boards;
     },
     restore: (facilities, data, { saved }) => {
-      // WP4A shape: { fdr, boards: { [facilityId]: boardSnapshot } }.
-      // Falls back to the pre-WP4A single-board shape ({ fdr, board }) for
-      // an on-disk snapshot written before this slice — restored into
-      // whichever Facility is DEFAULT_FACILITY_ID (INCIRLIK), matching
-      // exactly where that data always lived pre-WP4A.
-      if (data) {
-        for (const [facilityId, boardData] of Object.entries(data)) {
-          const f = facilities.get(facilityId);
-          if (f) f.boardStore.restore(boardData);
+      // Shape: { boards: { [facilityId]: boardSnapshot } }. Anything else is refused (ARCH-D5): the pre-WP4A
+      // `board` key, a Facility this server does not have, a Strip in a state its Role does not have.
+      if (!data) {
+        if (saved.board) throw new Error('[efsp] the Board snapshot is in the pre-WP4A shape (a top-level "board", no "boards"): delete state/efsp-board.json to start clean');
+        return;
+      }
+      for (const [facilityId, boardData] of Object.entries(data)) {
+        const f = facilities.get(facilityId);
+        if (!f) throw new Error(`[efsp] the Board snapshot holds a Board for "${facilityId}", which is not a configured Facility (${[...facilities.keys()].join(', ')})`);
+        for (const strip of (boardData && boardData.strips) || []) {
+          if (!f.rules.isValidState(strip.state, strip.role)) {
+            throw new Error(`[efsp] the Board snapshot holds Strip ${strip.stripId} (${facilityId}) in state "${strip.state}", which a ${strip.role} Strip does not have: delete state/efsp-board.json to start clean`);
+          }
         }
-      } else if (saved.board) {
-        const f = facilities.get(facilityConfig.DEFAULT_FACILITY_ID);
-        if (f) f.boardStore.restore(saved.board);
+        for (const strip of (boardData && boardData.strips) || []) {
+          const old = (PRE_0058_CLEARANCE_BLOCKS[strip.role] || [])
+            .filter(blockId => strip.annotations && strip.annotations[blockId] && (strip.annotations[blockId].entries || []).length);
+          if (old.length) {
+            throw new Error(`[efsp] the Board snapshot holds Strip ${strip.stripId} (${facilityId}) with its assigned altitude/heading as Strip annotations (Block ${old.join(', ')}; before docs/adr/0058): delete state/efsp-board.json to start clean`);
+          }
+        }
+        f.boardStore.restore(boardData);
       }
     },
   },

@@ -22,13 +22,9 @@
 // other, and the guide's real-world forwarding-obligation timers (§4.6.1)
 // become compliance/alerting instrumentation on an always-consistent
 // record rather than an actual data-sync protocol we'd otherwise have to
-// build. `efsp.boardStore`/`efsp.positionStore` stay as direct top-level
-// properties (aliased to INCIRLIK) purely for pre-WP4A caller/test
-// back-compat — `efsp.boardStoreFor(facilityId)`/`positionStoreFor(...)`
-// are the real, general accessors everything WP4A-aware should use.
+// build. `efsp.boardStoreFor(facilityId)`/`positionStoreFor(...)` are the
+// accessors; there is no top-level `boardStore`/`positionStore` (ARCH-D5).
 
-const { migrateClearanceAnnotations } = require('./clearance-migration');
-const { migrateOverflightStates } = require('./overflight-migration');
 const fs = require('fs');
 
 const carrierModel = require('./carrier');
@@ -39,6 +35,8 @@ const { BoardStore } = require('./board-store');
 const { MutationLog } = require('./mutation-log');
 const { PositionStore } = require('./position-store');
 const permission = require('./permission');
+const authority = require('./authority');
+const { NO_STRIP_OP_CLASSES } = require('./authority/classes');
 const nla = require('./nla');
 const blockMap = require('./block-map');
 const facilityConfig = require('./facility-config');
@@ -73,6 +71,7 @@ const log = require('../log').logger('efsp');
  */
 function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('efsp-board.json', process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH) } = {}) {
   facilityConfig.load(); // the Facilities' JSON is read here, not when the module is required (docs/wip/DATA-1.md)
+  assertAuthorityCoverage(facilityConfig);
   const codeAllocator = new CodeAllocator();
   const mutationLog = new MutationLog(undefined, { clock });
   const facilities = new Map(); // facilityId -> { boardStore, positionStore, rules }
@@ -223,8 +222,6 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
   _validateAirspaceReferences(facilities);
   _restore({ facilities, stores, paths, mutationLog, clock });
 
-  const defaultFacility = facilities.get(facilityConfig.DEFAULT_FACILITY_ID);
-
   // F-408's clock-driven half. Built here rather than in server.js, unlike the
   // obligation monitor and the correlation reconciler, because efsp-ws.js has
   // to tell it what it has already put on the wire (see its note()) — so it
@@ -255,10 +252,6 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
   });
 
   const ctx = {
-    // Back-compat direct properties (INCIRLIK) — every pre-WP4A caller in
-    // this package (server.js/ws-hub.js/tests) keeps working unmodified.
-    boardStore: defaultFacility.boardStore,
-    positionStore: defaultFacility.positionStore,
     fdrStore,
     airspaceStore,
     correlationStore,
@@ -291,7 +284,7 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
   };
 
   return {
-    boardStore: ctx.boardStore, fdrStore, positionStore: ctx.positionStore, mutationLog, clock,
+    fdrStore, mutationLog, clock,
     airspaceStore, correlationStore, marsaStore, nlaStatusMonitor, fieldStateStore, carrierStore, sfaStore,
     boardStoreFor: ctx.boardStoreFor, positionStoreFor: ctx.positionStoreFor,
 
@@ -469,35 +462,52 @@ function _validateAirspaceReferences(facilities) {
   }
 }
 
-function _restore({ facilities, stores, paths, mutationLog, clock }) {
-  try {
-    const data = JSON.parse(fs.readFileSync(paths.read, 'utf8'));
-    const all = { facilities, stores, saved: data };
-    const byKey = new Map(REGISTRY.map(e => [e.key, e]));
-    // RESTORE_ORDER, not the registry's (write) order: see stores.js.
-    for (const key of RESTORE_ORDER) {
-      const store = stores[key];
-      if (store) byKey.get(key).restore(store, key === 'boards' ? data.boards : data[key], all);
+/**
+ * Every Position a Facility configures (but a using agency, which does no Strip op) must have a registered
+ * Position family in authority/, or its permissions are silently empty. A start-up error (ARCH-D5; was AUTH's
+ * authority-coverage test).
+ * @param {{getFacilityIds: () => string[], getPositionSet: (f:string) => string[], getPositionClass: (p:string) => string}} config
+ */
+function assertAuthorityCoverage(config) {
+  const uncovered = [];
+  for (const facilityId of config.getFacilityIds()) {
+    for (const positionId of config.getPositionSet(facilityId)) {
+      if (NO_STRIP_OP_CLASSES.has(config.getPositionClass(positionId))) continue;
+      if (!authority.positionFamilyOf(positionId)) uncovered.push(`${facilityId}/${positionId}`);
     }
-    // docs/adr/0058 — a Board saved before the clearance moved onto the FDR
-    // still holds the assigned altitude and heading as Strip annotations.
-    const fdrStore = stores.fdr;
-    const moved = migrateClearanceAnnotations(
-      [...facilities.values()].flatMap(f => f.boardStore.getAll()), id => fdrStore.getFdr(id));
-    if (moved) log.info('moved assigned altitude/heading history cells from Strips onto their flights', { moved });
-    // docs/adr/0087 — a Board saved before the guide's four overflight states
-    // holds TRANSITING Strips; they come back IN_SECTOR. Before the session
-    // roll-over (server.js), so the Board is legal when it runs.
-    const remapped = migrateOverflightStates([...facilities.values()].flatMap(f => f.boardStore.getAll()));
-    if (remapped) log.info('mapped OVERFLIGHT Strips from TRANSITING to IN_SECTOR', { remapped });
-    // After the Boards, not before — it has Strips to check against only now.
-    _reconcileRestored(facilities, fdrStore, stores.correlations, stores.marsa);
-    // A Mutation audited but never persisted (a crash inside _persist) gets a
-    // NotPersisted marker, so the log says that line never took effect.
-    _reconcileLogTail(facilities, mutationLog, data.persistedWallAt, clock);
-  } catch (e) {
-    log.warn('no prior Board snapshot to restore (first run, or it failed to load)', { error: e.message });
   }
+  if (uncovered.length) throw new Error(`[efsp] Position(s) configured with no Position family in authority/: ${uncovered.join(', ')}`);
+}
+
+function _restore({ facilities, stores, paths, mutationLog, clock }) {
+  // No file is a first run. A file that is there and cannot be read, parsed or restored is a startup error
+  // (ARCH-D5, H88): an unknown persisted shape is never quietly dropped for an empty Board (docs/wip/BACKCOMPAT.md).
+  let raw;
+  try {
+    raw = fs.readFileSync(paths.read, 'utf8');
+  } catch (e) {
+    if (e.code !== 'ENOENT') throw new Error(`[efsp] cannot read the Board snapshot ${paths.read}: ${e.message}`);
+    log.warn('no prior Board snapshot to restore (first run)', { path: paths.read });
+    return;
+  }
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch (e) {
+    throw new Error(`[efsp] the Board snapshot ${paths.read} is not valid JSON: ${e.message}`);
+  }
+  const all = { facilities, stores, saved: data };
+  const byKey = new Map(REGISTRY.map(e => [e.key, e]));
+  // RESTORE_ORDER, not the registry's (write) order: see stores.js.
+  for (const key of RESTORE_ORDER) {
+    const store = stores[key];
+    if (store) byKey.get(key).restore(store, key === 'boards' ? data.boards : data[key], all);
+  }
+  // After the Boards, not before — it has Strips to check against only now.
+  _reconcileRestored(facilities, stores.fdr, stores.correlations, stores.marsa);
+  // A Mutation audited but never persisted (a crash inside _persist) gets a
+  // NotPersisted marker, so the log says that line never took effect.
+  _reconcileLogTail(facilities, mutationLog, data.persistedWallAt, clock);
 }
 
 function _persist({ facilities, stores, persistState = { lastBody: null }, paths }) {
@@ -541,4 +551,4 @@ function _persist({ facilities, stores, persistState = { lastBody: null }, paths
   }
 }
 
-module.exports = { createEfsp };
+module.exports = { createEfsp, assertAuthorityCoverage };

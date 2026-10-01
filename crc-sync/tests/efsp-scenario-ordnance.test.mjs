@@ -63,7 +63,7 @@ function inboundFromCenter() {
     fdr: { callsign: `HUNG${++n}`, aircraftType: 'F16', wakeCategory: 'M', originAirport: 'LTAG' },
   });
   const handed = mustAct(efsp, c.CTR, 'CTR', enroute, { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'APP' });
-  return mustAct(efsp, c.APP, 'APP', efsp.boardStore.getStrip(handed.coordination.peerStripId), { kind: 'HANDOFF', action: 'ACCEPT' });
+  return mustAct(efsp, c.APP, 'APP', efsp.boardStoreFor('INCIRLIK').getStrip(handed.coordination.peerStripId), { kind: 'HANDOFF', action: 'ACCEPT' });
 }
 
 /** A DEPARTURE queued in a runway rack, owned by TWR. */
@@ -101,7 +101,7 @@ test('sortie: an arrival reports hung ordnance, is advised toward the hot cargo 
 
   // Exactly the chain a CLEAN arrival walks — the advisory inhibits nothing.
   for (const expected of ['FINAL', 'LANDED', 'TAXI_IN']) {
-    assert.equal(efsp.boardStore.nlaStatusFor(fresh(s)).inhibited, undefined, `${expected}: no inhibit`);
+    assert.equal(efsp.boardStoreFor('INCIRLIK').nlaStatusFor(fresh(s)).inhibited, undefined, `${expected}: no inhibit`);
     s = await advance(efsp, c[fresh(s).ownerPositionId], fresh(s).ownerPositionId, fresh(s));
     assert.equal(s.state, expected);
     assert.ok(advisory(s), `the advisory stays up at ${expected}`);

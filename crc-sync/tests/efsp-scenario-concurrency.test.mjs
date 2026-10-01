@@ -107,7 +107,7 @@ test('two controllers advancing the same Strip cannot both move it', async () =>
 
   assert.equal(a.ack.ok, true);
   assert.equal(b.ack.ok, false);
-  assert.equal(efsp.boardStore.getStrip(strip.stripId).state, 'PENDING_CLEARANCE', 'exactly one step taken');
+  assert.equal(efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId).state, 'PENDING_CLEARANCE', 'exactly one step taken');
 });
 
 // ── two controllers on one airspace ─────────────────────────────────────
@@ -141,7 +141,7 @@ test('SCENARIO a client that missed a few updates gets a delta, not a whole snap
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
 
-  const before = efsp.boardStore.currentSeq;
+  const before = efsp.boardStoreFor('INCIRLIK').currentSeq;
   const first = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'LAG1' });
   airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'LAG2' });
 
@@ -225,13 +225,13 @@ test('SCENARIO both ends of a handoff act at the same moment', () => {
   // Center accepts at the same moment Approach tries to advance its own copy.
   // The sender's Strip has an open link, which is what stops it advancing
   // out from under the exchange.
-  const senderMoves = act(efsp, c.APP, 'APP', efsp.boardStore.getStrip(proposed.stripId), { kind: 'InvokeNla' });
+  const senderMoves = act(efsp, c.APP, 'APP', efsp.boardStoreFor('INCIRLIK').getStrip(proposed.stripId), { kind: 'InvokeNla' });
   assert.equal(senderMoves.ok, false);
   assert.match(senderMoves.detail, /open coordination proposal/);
 
   assert.equal(mustAct(efsp, c.CTR, 'CTR', replica, { kind: 'HANDOFF', action: 'ACCEPT' }).coordination.state, 'ACTIVE');
   // And once it is resolved, the sender is free again.
-  assert.equal(act(efsp, c.APP, 'APP', efsp.boardStore.getStrip(proposed.stripId), { kind: 'InvokeNla' }).ok, true);
+  assert.equal(act(efsp, c.APP, 'APP', efsp.boardStoreFor('INCIRLIK').getStrip(proposed.stripId), { kind: 'InvokeNla' }).ok, true);
 });
 
 test('an accept that lands twice resolves the exchange once', () => {
@@ -249,7 +249,7 @@ test('an accept that lands twice resolves the exchange once', () => {
   // The second arrives on the stale revision the accepting client still had.
   const second = act(efsp, c.CTR, 'CTR', replica, { kind: 'HANDOFF', action: 'ACCEPT' });
   assert.equal(second.ok, false);
-  assert.equal(efsp.boardStore.getStrip(proposed.stripId).coordination.state, 'ACTIVE');
+  assert.equal(efsp.boardStoreFor('INCIRLIK').getStrip(proposed.stripId).coordination.state, 'ACTIVE');
 });
 
 // ── the audit trail under contention ────────────────────────────────────
