@@ -114,8 +114,8 @@ track.
 
 ### Callsign misbinding (S-L27)
 
-The soak reuses callsigns every 90 flights, and an exact callsign match claimed a track that still
-belonged to an earlier flight (46 of them in a four-hour run, all `LINGERING_TRACK`). **A contact that
+The soak reuses callsigns every 90 flights, and an exact callsign match could claim a track that still
+belonged to an earlier flight (the soak's `LINGERING_TRACK` cause, S-L27). **A contact that
 was correlated to a flight which has since finished is not claimable by another flight's callsign or
 beacon rung.** The reconciler remembers, per track, which finished flight last held it, until the
 contact leaves the picture. A controller's explicit binding (rung 1) always overrides, because it is a
@@ -154,3 +154,10 @@ truth: it has no aircraft yet.
 - `time-chains.js` (both copies) gains `STATE_CHANGE`, and its fixture changes.
 - The correlation reconciler gains the finished-flight memory; the soak's misbinding count is the
   acceptance row.
+- Known limit: the memory is by track id. A lingering aircraft that DCS re-mints under a new id is a
+  new contact to the reconciler and is not remembered. The soak re-mints (`nextRemintAt`); see
+  `docs/wip/L19.md` for what the runs showed.
+- Not changed: a beacon match onto an aircraft squawking another flight's code (the soak's
+  `FAULT_wrongSquawk`) is the code doing its job, and still binds. Telling it apart needs evidence
+  the ladder does not use (a callsign that belongs to someone else), and is a decision for another
+  ADR.
