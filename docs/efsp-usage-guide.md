@@ -315,7 +315,9 @@ Every Bay tab shows how many Strips are in it, and each Position tab its total.
 
 A Strip that moves into one of your Bays is an **arrival**, whoever moved it:
 another controller handing it to you, a handoff or TOFI proposal landing in your
-coordination Bay, or your own NLA or drag when you work several Positions at once.
+coordination Bay (also when one controller holds both ends, `APP` and `CTR` say: a coordination or TOFI
+replica minted for you is an arrival whoever made it), or your own NLA or drag when you work several
+Positions at once.
 
 - In a Bay you are **not** looking at: that Bay's tab turns amber with **+N**, the
   Position tab gets an amber dot, and a line appears under the Bay tabs:
@@ -559,7 +561,7 @@ FDR {
 
 ## 7. Release states (why a Strip can be stuck at CLEARED/HELD)
 
-Set the release state on Block **14A** (`RLS ST`, a picker) and, for a void time, Block **14D**.
+Set the release state on Block **14A** (`RELEASE`, a picker; it was labelled `RLS ST` before UI-A) and, for a void time, Block **14D**.
 Anything other than `RELEASED` holds the Strip at `CLEARED` — move it to `HELD`, which is what
 `HELD` means, and the time-based gates below are checked there.
 
