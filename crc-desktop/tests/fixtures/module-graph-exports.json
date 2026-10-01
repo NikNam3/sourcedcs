@@ -376,6 +376,7 @@
   "panels/efsp/efsp-metrics-client.js": [
    "EFSP_METRICS_LIMITS",
    "GESTURE_INPUT_COST",
+   "_setEfspMetricsClientForTest",
    "createEfspMetricsClient",
    "efspGestureInputCost",
    "efspMetricsClientStats",
@@ -424,6 +425,7 @@
    "_runEfspSearch",
    "_setActiveBayId",
    "_setActivePositionTab",
+   "_setBayContentElForTest",
    "_setCurrentRefusalForTest",
    "_showMutationError",
    "_showMutationWarning",
@@ -780,7 +782,7 @@
   ]
  },
  "bridge": {
-  "count": 665,
+  "count": 667,
   "skipped": [],
   "names": [
    "$aptDisplay",
@@ -959,12 +961,14 @@
    "_setActiveBayId",
    "_setActivePositionTab",
    "_setApproachRwyCourse",
+   "_setBayContentElForTest",
    "_setBullseyePickTarget",
    "_setCoverageDatalink",
    "_setCoverageHeldPositions",
    "_setCoverageRadars",
    "_setCurrentRefusalForTest",
    "_setDrag",
+   "_setEfspMetricsClientForTest",
    "_setExpandedStripId",
    "_setMap",
    "_setMapReady",

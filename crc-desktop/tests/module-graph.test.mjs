@@ -9,20 +9,24 @@
  *  4. the set of exported names per file, and the names js/classic-globals-bridge.js puts on window (a
  *     transitional debt, S-ESM1a), are frozen in tests/fixtures/module-graph-exports.json. It is a structure
  *     fixture: rewrite it with GOLDEN_RECORD=1 when the structure changes on purpose, and list the change;
- *  5. no CommonJS export guard is left in the client.
+ *  5. no CommonJS export guard is left in the client;
+ *  6. every module also evaluates as its OWN entry, each in a fresh graph (helpers/fresh-graph.mjs): a cycle evaluates
+ *     in a different order from another entry, so a TDZ read that main.js's order hides would show here (W1-ESM-3);
+ *  7. nothing but main.js imports classic-globals-bridge.js: its getters must never run during evaluation (W1-ESM-5);
+ *  8. no identifier in a module names another module's export unless the module imports it or declares it locally.
+ *     A missed import behind a `typeof X === 'function'` guard would otherwise switch a feature off silently (W1-ESM-6).
  * Import cycles are allowed (no module reads a cycle partner's binding at top level, docs/wip/ESM-1.md step 5);
  * the test prints them as diagnostics.
  */
 
+import './helpers/client-env.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
-
-const require = createRequire(import.meta.url);
-const { makeElement } = require('./helpers/dom-stub.js');
+import { permissive } from './helpers/client-env.mjs';
+import { freshGraph } from './helpers/fresh-graph.mjs';
 
 const PUBLIC = path.join(import.meta.dirname, '../app/public');
 const JS = path.join(PUBLIC, 'js');
@@ -67,25 +71,51 @@ function cycles(g) {
   return out;
 }
 
-/** A browser-ish global scope: true browser globals only (the modules import everything else). */
+/** client-env.mjs's globals, with permissive elements; srs-radio.js wires its controls and starts its polls at load. */
 function installDomStub() {
-  const permissive = () => new Proxy(function () {}, { get: (t, k) => (k === Symbol.toPrimitive ? () => '' : permissive()), apply: () => permissive(), construct: () => permissive() });
-  const storage = { getItem: () => null, setItem() {}, removeItem() {} };
-  Object.assign(globalThis, {
-    document: {
-      getElementById: () => permissive(), querySelector: () => null, querySelectorAll: () => [], createElement: makeElement,
-      body: makeElement('body'), documentElement: makeElement('html'), addEventListener() {}, removeEventListener() {}, readyState: 'complete',
-    },
-    localStorage: storage, sessionStorage: storage, requestAnimationFrame: () => 0, cancelAnimationFrame() {},
-    setInterval: () => 0, clearInterval() {},
-    maplibregl: permissive(), dockview: permissive(), WebSocket: function () {}, Audio: function () {}, Image: function () {},
-    ResizeObserver: function () { this.observe = () => {}; this.disconnect = () => {}; }, MutationObserver: function () { this.observe = () => {}; },
-    fetch: () => Promise.reject(new Error('no network')),
-    // What the local server's generated /js/config.js defines (app/server.js).
-    CRC_SYNC_URL: 'ws://localhost:1', CASDOOR_CLIENT_ID: '', CASDOOR_ENDPOINT: '', MAPTILER_KEY: '',
-  });
-  // `history` is the one exported name a browser window already has (checked in Chromium); the bridge leaves it alone.
-  globalThis.window = { history: {}, addEventListener() {}, removeEventListener() {}, innerWidth: 1280, innerHeight: 800, location: { href: 'http://localhost/' } };
+  document.getElementById = () => permissive();
+  globalThis.setInterval = () => 0;
+}
+
+/** Source text with comments and string/template text removed (template `${…}` expressions kept). */
+function codeOnly(src) {
+  let out = '', i = 0;
+  while (i < src.length) {
+    const c = src[i], d = src[i + 1];
+    if (c === '/' && d === '/') { while (i < src.length && src[i] !== '\n') i++; continue; }
+    if (c === '/' && d === '*') { i = src.indexOf('*/', i + 2) + 2; continue; }
+    if (c === "'" || c === '"') { i++; while (i < src.length && src[i] !== c) { if (src[i] === '\\') i++; i++; } i++; out += '""'; continue; }
+    if (c === '`') {
+      i++; out += '`';
+      while (i < src.length && src[i] !== '`') {
+        if (src[i] === '\\') { i += 2; continue; }
+        if (src[i] === '$' && src[i + 1] === '{') {
+          let depth = 1, e = ''; i += 2;
+          while (i < src.length && depth) { if (src[i] === '{') depth++; else if (src[i] === '}') depth--; if (depth) e += src[i]; i++; }
+          out += ' ' + codeOnly(e) + ' ';
+          continue;
+        }
+        i++;
+      }
+      i++; out += '`';
+      continue;
+    }
+    out += c; i++;
+  }
+  return out;
+}
+
+/** Names a module declares anywhere (declarations, destructuring, parameters, catch bindings): a coarse superset. */
+function localNames(code) {
+  const local = new Set();
+  const addList = (list) => list.split(',').forEach(x => x.split('=')[0].replace(/^\s*\.\.\./, '').replace(/[{}[\]]/g, ' ').split(/[\s:]+/).forEach(y => y && local.add(y)));
+  for (const m of code.matchAll(/\b(?:const|let|var|function\*?|class)\s+([A-Za-z_$][\w$]*)/g)) local.add(m[1]);
+  for (const m of code.matchAll(/\b(?:const|let|var)\s*[{[]([^}\]=]*)[}\]]/g)) addList(m[1]);
+  for (const m of code.matchAll(/function\s*\*?\s*[A-Za-z_$]*\s*\(([^)]*)\)/g)) addList(m[1]);
+  for (const m of code.matchAll(/\(([^()]*)\)\s*=>/g)) addList(m[1]);
+  for (const m of code.matchAll(/([A-Za-z_$][\w$]*)\s*=>/g)) local.add(m[1]);
+  for (const m of code.matchAll(/catch\s*\(\s*([A-Za-z_$][\w$]*)/g)) local.add(m[1]);
+  return local;
 }
 
 test('module graph: index.html loads config.js as a classic script and exactly one module, js/main.js', () => {
@@ -140,4 +170,45 @@ test('module graph: the whole graph evaluates under the DOM stub, and the export
       'the exported names changed: list the change and re-record with GOLDEN_RECORD=1');
   }
   assert.deepEqual(surface.bridge, frozen.bridge, 'the classic-globals bridge changed (S-ESM1a: it may only shrink)');
+});
+
+test('module graph: every module evaluates as its own entry, in a fresh graph', async () => {
+  installDomStub();
+  process.on('unhandledRejection', () => {});
+  const failed = [];
+  for (const abs of [...graph().keys()].filter(p => p !== MAIN).sort()) {
+    try { await freshGraph().import(abs); } catch (e) { failed.push(`${rel(abs)}: ${e && e.message}`); }
+  }
+  assert.deepEqual(failed, []);
+});
+
+test('module graph: only main.js imports classic-globals-bridge.js', () => {
+  const bridge = path.join(JS, 'classic-globals-bridge.js');
+  const importers = [...graph()].filter(([, deps]) => deps.includes(bridge)).map(([f]) => rel(f));
+  assert.deepEqual(importers, ['main.js']);
+});
+
+// Intentional shadows: a local name that equals another module's export but is not declared in a way localNames sees.
+const SHADOW_ALLOW = {};
+
+test('module graph: no module reads another module\'s export without importing it', () => {
+  const owner = new Map();
+  const frozen = JSON.parse(fs.readFileSync(FIXTURE, 'utf8')).exports;
+  for (const [f, names] of Object.entries(frozen)) for (const n of names) if (!owner.has(n)) owner.set(n, f);
+  const missed = [];
+  for (const f of Object.keys(frozen)) {
+    if (f === 'classic-globals-bridge.js') continue;
+    const src = fs.readFileSync(path.join(JS, f), 'utf8');
+    const code = codeOnly(src);
+    const imported = new Set();
+    for (const m of src.matchAll(/^\s*import\s*\{([^}]*)\}\s*from/gm)) for (const x of m[1].split(',')) { const t = x.trim().split(/\s+as\s+/).pop(); if (t) imported.add(t); }
+    const local = localNames(code);
+    const allow = new Set(SHADOW_ALLOW[f] || []);
+    for (const m of code.matchAll(/(?<![.\w$])([A-Za-z_$][\w$]*)(?!\s*:(?!:))/g)) {
+      const n = m[1], o = owner.get(n);
+      if (!o || o === f || imported.has(n) || local.has(n) || allow.has(n)) continue;
+      missed.push(`${f}: ${n} (exported by ${o})`);
+    }
+  }
+  assert.deepEqual([...new Set(missed)], []);
 });
