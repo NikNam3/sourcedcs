@@ -1,5 +1,3 @@
-'use strict';
-
 /* The FINAL component (guide §7.10) and the pattern board (§4.2, §4.1 rule 4), against stand-in data.
  * Panel code only: no Position carries either yet (docs/wip/L18.md, the server half).
  *
@@ -10,14 +8,18 @@
  *   - the pattern board advises and never refuses, and never hides a Strip whose rack is not a leg.
  */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const path = require('path');
-const { makeElement, descendants } = require('./helpers/dom-stub');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import './helpers/client-env.mjs';
+import domStub from './helpers/dom-stub.js';
+import * as F from '../app/public/js/panels/efsp/final-panel.js';
+import * as P from '../app/public/js/panels/efsp/pattern-board.js';
 
-const CLIENT = path.join(__dirname, '../app/public/js/panels/efsp');
-const F = require(path.join(CLIENT, 'final-panel.js'));
-const P = require(path.join(CLIENT, 'pattern-board.js'));
+const { makeElement, descendants } = domStub;
+const CLIENT = path.join(path.dirname(fileURLToPath(import.meta.url)), '../app/public/js/panels/efsp');
 
 const doc = { createElement: makeElement };
 const click = (el) => (el._listeners.click || []).forEach(fn => fn({}));
@@ -191,7 +193,6 @@ test('rendered board: next-leg, drop and the two chip actions send the right des
 });
 
 test('neither module reads the wall clock (H11)', () => {
-  const fs = require('fs');
   for (const f of ['final-panel.js', 'pattern-board.js']) {
     const src = fs.readFileSync(path.join(CLIENT, f), 'utf8').replace(/\/\/.*$/gm, '');
     assert.ok(!/Date\.now|new Date\(/.test(src), `${f} reads the wall clock`);
