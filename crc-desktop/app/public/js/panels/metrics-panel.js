@@ -42,7 +42,7 @@ const METRICS_GESTURES = ['FLIP', 'ATTENTION', 'HIGHLIGHT', 'OFFSET'];
 const METRICS_FOOTNOTES = Object.freeze([
   '[SOURCE-DEFINED] Trend: the last three complete hours — ↓ when none rose and at least one fell, → when flat, otherwise the direction of the last step (ADR 0072).',
   '[SOURCE-DEFINED] Time-to-find runs from a Bay coming on screen to the first Strip selected in it; a Bay left, hidden or ignored for 10 min is not counted (ADR 0072).',
-  '[SOURCE-DEFINED] Gesture inputs are a declared cost per entry point: double-click 1, Shift+click 1, right-click + swatch 2, ⋯ menu 2 (ADR 0072).',
+  '[SOURCE-DEFINED] Gesture inputs are a declared cost per entry point: double-click 1, Shift+click 1, Alt+click (offset) 1, Ctrl+click (highlight) 1, right-click + swatch 2, ⋯ menu 2 (ADR 0072).',
 ]);
 
 // ── formatting ─────────────────────────────────────────────────────────────

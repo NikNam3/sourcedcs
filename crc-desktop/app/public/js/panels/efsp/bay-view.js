@@ -867,7 +867,7 @@ function _buildStripEl(strip) {
   }
 
   // Flip: dblclick. Highlight: right-click (contextmenu) opens a 3-swatch
-  // popover. Attention: Shift+click. All three guarded the same way the
+  // popover, or Ctrl+click steps the colour. Offset: Alt+click. Attention: Shift+click. All three guarded the same way the
   // NLA/offset buttons are guarded against drag-start (_onStripPointerDown
   // already ignores pointerdown on interactive children; these fire on the
   // Strip body itself, so they're gated here instead by checking e.target
@@ -876,6 +876,10 @@ function _buildStripEl(strip) {
   el.addEventListener('click', (e) => {
     if (e.target.closest(STRIP_CONTROL_SELECTOR)) return;
     if (e.shiftKey) { const acting = _dispatchGesture(strip, setAttention, 'red'); if (typeof noteEfspGesture === 'function') noteEfspGesture('ATTENTION', 'shift-click', acting); return; }
+    // S-L15 (§7.3 one-input ceiling): OFFSET and HIGHLIGHT each get a one-input entry point.
+    // The ⋯ menu item and the right-click swatches stay for whoever prefers them (2 inputs).
+    if (e.altKey) { e.preventDefault(); const acting = _dispatchGesture(strip, toggleOffset); if (typeof noteEfspGesture === 'function') noteEfspGesture('OFFSET', 'alt-click', acting); return; }
+    if (e.ctrlKey || e.metaKey) { e.preventDefault(); const acting = _cycleHighlight(strip); if (typeof noteEfspGesture === 'function') noteEfspGesture('HIGHLIGHT', 'ctrl-click', acting); return; }
     _selectStrip(strip.stripId);
   });
   el.addEventListener('dblclick', (e) => {
@@ -2176,11 +2180,25 @@ function _dispatchGesture(strip, gestureFn, ...extraArgs) {
 // red, which §7.7 rule 4 reserves for Attention alone ("reserve saturated
 // colour for exceptions" — if both gestures could paint the same colour,
 // a controller scanning the Board couldn't tell which one they're looking
-// at). One click on a swatch is the ENTIRE interaction (setHighlight
-// itself replaces a different active colour in one Mutation, and clears
-// on a repeat click of the same colour — see efsp-gestures.test.js) so
-// this satisfies the one-input cost ceiling even though it's a popover.
+// at). setHighlight replaces a different active colour in one Mutation and
+// clears on a repeat of the same colour (see efsp-gestures.test.js).
+//
+// Inputs, counted honestly (S-L15; the comment here used to say the swatch met the
+// one-input ceiling, which it does not: right-click + swatch is TWO). The one-input
+// entry point is Ctrl+click on the Strip, which steps the colour through the swatches
+// and then off (_cycleHighlight). The popover remains for choosing a colour directly.
 const HIGHLIGHT_SWATCHES = ['yellow', 'cyan', 'lime'];
+
+/** The colour one Ctrl+click moves a Strip to: the next swatch, or (past the last) the last again, which clears it. */
+function _nextHighlightColor(current) {
+  const i = HIGHLIGHT_SWATCHES.indexOf(current);
+  return i < 0 ? HIGHLIGHT_SWATCHES[0] : HIGHLIGHT_SWATCHES[Math.min(i + 1, HIGHLIGHT_SWATCHES.length - 1)];
+}
+
+function _cycleHighlight(strip) {
+  const live = getEfspStrip(strip.stripId) || strip;
+  return _dispatchGesture(strip, setHighlight, _nextHighlightColor(live.flags.highlight));
+}
 
 let _openHighlightPopoverEl = null;
 
