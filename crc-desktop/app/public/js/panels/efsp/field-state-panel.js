@@ -4,7 +4,11 @@ import { PANEL_TITLES, dock } from '../../dock.js';
 import { getAllEfspFieldStates } from './efsp-state.js';
 import { getActingPositions, sendEfspFieldStateMutation } from './efsp-ws.js';
 import { alertPadConstraintFor } from './scramble.js';
-import { fieldStateActionsFor } from './field-state-rules.js';
+import { fieldStateActionsFor, fieldStateSubjectFor } from './field-state-rules.js';
+import { registerEfspMessage } from './efsp-message-registry.js';
+import { applyEfspFieldStateDelta } from './efsp-state.js';
+import { renderAllOpenEfspBays } from './bay-view.js';
+import { _showMutationError } from './efsp-panel.js';
 
 // The field-state board — guide §9.7, crc-sync docs/adr/0061, crc-desktop
 // docs/adr/0068. Per Facility with a runway inventory: each runway's status
@@ -265,3 +269,23 @@ export function initFieldStatePanel() {
   renderFieldStatePanel();
   return { onShow: () => renderFieldStatePanel() };
 }
+
+// The field-state family's wire handlers (CMSG; moved out of app.js's ws.onmessage).
+// WP6 §9.7 (crc-sync docs/adr/0061, crc-desktop 0068). Its own delta with its own seq —
+// field state is not Strips and rides no Board's sequence (0061's rule-5 deviation).
+registerEfspMessage('efsp-field-state-delta', (msg) => {
+  if (typeof applyEfspFieldStateDelta === 'function') applyEfspFieldStateDelta(msg);
+  if (typeof renderFieldStatePanel === 'function') renderFieldStatePanel();
+  if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays(); // RWY / HOOK are derived from it
+});
+
+registerEfspMessage('efsp-field-state-ack', (msg) => {
+  if (!msg.ok && typeof _showMutationError === 'function') {
+    _showMutationError(msg.reason || 'Rejected', msg.detail, { subject: fieldStateSubjectFor(msg) });
+  }
+  if (msg.fieldState && typeof applyEfspFieldStateDelta === 'function') {
+    applyEfspFieldStateDelta({ fieldStates: { updated: [msg.fieldState] } });
+  }
+  if (typeof renderFieldStatePanel === 'function') renderFieldStatePanel();
+  if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
+});

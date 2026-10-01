@@ -9,11 +9,15 @@
 // Read-only on production code. Does not depend on nla.js, block-map.js or
 // permission.js (L17).
 
+import './helpers/client-env.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { readClient, readServer, matchAll, SERVER_SRC } from './helpers/mirror-source.mjs';
+import fs from 'node:fs';
+import { readClient, readServer, matchAll, SERVER_SRC, CLIENT_JS } from './helpers/mirror-source.mjs';
+import { permissive } from './helpers/client-env.mjs';
+import { freshGraph } from './helpers/fresh-graph.mjs';
 
 const require = createRequire(import.meta.url);
 // The wire families (efsp-ws.js's skeleton dispatches them): their request, ack and delta types come from the registry.
@@ -28,16 +32,31 @@ const SENT_BY_SERVER = [...new Set([
   ...FAMILIES.flatMap(f => [f.ackType, f.deltaType].filter(Boolean)),
 ])].sort();
 
-// The client's single dispatcher.
+// The client's dispatcher: app.js's ws.onmessage routes every `efsp-*` frame through dispatchEfspMessage(), and each
+// family's module registers its types at load (CMSG, panels/efsp/efsp-message-registry.js). The registry is read live:
+// every module under panels/ is loaded into one fresh graph so each registration runs.
 const APP = readClient('app.js');
+const MESSAGES = readClient('panels/efsp/efsp-messages.js');
 const SWITCH_FROM = APP.indexOf('switch (msg.type)');
-const HANDLED_BY_CLIENT = (() => {
+const CORE_CASES = (() => {
   assert.ok(SWITCH_FROM > 0, 'app.js no longer has `switch (msg.type)`');
   const rest = APP.slice(SWITCH_FROM);
   // the switch ends at the first line that closes it at its own indent
   const end = rest.search(/\n    \}\n/);
   return matchAll(rest.slice(0, end > 0 ? end : rest.length), /case '([a-z][a-z-]*)':/g);
 })();
+const REGISTERED = await (async () => {
+  globalThis.setInterval = () => 0;
+  document.getElementById = () => permissive();
+  process.on('unhandledRejection', () => {});
+  const g = freshGraph();
+  const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true })
+    .flatMap(e => e.isDirectory() ? walk(path.join(dir, e.name)) : (e.name.endsWith('.js') ? [path.join(dir, e.name)] : []));
+  await g.import('app.js');
+  for (const f of walk(path.join(CLIENT_JS, 'panels'))) await g.import(f);
+  return (await g.import('panels/efsp/efsp-message-registry.js')).registeredEfspTypes();
+})();
+const HANDLED_BY_CLIENT = [...new Set([...CORE_CASES, ...REGISTERED])].sort();
 
 // Server types the client deliberately does not switch on. Must stay empty
 // unless a reason is written next to the entry.
@@ -129,17 +148,30 @@ test('efsp-resync is answered with an efsp-resync-reply (answer: snapshot | delt
 test('S-12: efsp-resync is wired: sendEfspResync is reached from app.js through the two triggers (no reconnect trigger, R3-47)', () => {
   const WS = readClient('panels/efsp/efsp-ws.js');
   assert.match(WS, /type:\s*'efsp-resync'/);
-  // each trigger is called from app.js's socket handlers ...
+  // each trigger is called from a registered message handler (efsp-messages.js) ...
   for (const trigger of ['noteEfspBoardMessageForSync', 'noteEfspHeartbeatForSync']) {
-    assert.ok(APP.includes(`${trigger}(`), `app.js never calls ${trigger}`);
+    assert.ok((APP + MESSAGES).includes(`${trigger}(`), `no message handler calls ${trigger}`);
     // ... and each reaches requestEfspResync -> sendEfspResync inside efsp-ws.js
     const from = WS.indexOf(`function ${trigger}(`);
     assert.ok(from > 0, `${trigger} missing from efsp-ws.js`);
     assert.match(WS.slice(from, WS.indexOf('\n}\n', from)), /requestEfspResync\(/, `${trigger} does not request a resync`);
   }
   // R3-47: a reconnect is recovered by the connect snapshot, so nothing resyncs on open
-  assert.equal(APP.includes('resyncHeldEfspBoardsOnOpen'), false, 'app.js resyncs on reconnect again');
+  assert.equal((APP + MESSAGES).includes('resyncHeldEfspBoardsOnOpen'), false, 'app.js resyncs on reconnect again');
   assert.equal(WS.includes('function resyncHeldEfspBoardsOnOpen('), false);
   const req = WS.indexOf('function requestEfspResync(');
   assert.match(WS.slice(req, WS.indexOf('\n}\n', req)), /sendEfspResync\(/);
+});
+
+// CMSG: the registry itself. A type registered twice would let a later module silently replace an earlier handler.
+test('the EFSP message registry throws on a duplicate type, ignores an unknown one, and routes by type', async () => {
+  const { registerEfspMessage, dispatchEfspMessage, registeredEfspTypes } = await freshGraph().import('panels/efsp/efsp-message-registry.js');
+  const seen = [];
+  registerEfspMessage('efsp-x', (m) => seen.push(m.n));
+  assert.throws(() => registerEfspMessage('efsp-x', () => {}), /already registered/);
+  assert.equal(dispatchEfspMessage({ type: 'efsp-nope' }), false);
+  assert.equal(dispatchEfspMessage({ type: 'efsp-x', n: 1 }), true);
+  assert.deepEqual(seen, [1]);
+  assert.deepEqual(registeredEfspTypes(), ['efsp-x']);
+  assert.ok(REGISTERED.includes('efsp-snapshot') && REGISTERED.length >= 22, `registered: ${REGISTERED.join(', ')}`);
 });

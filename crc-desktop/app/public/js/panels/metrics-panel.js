@@ -2,6 +2,7 @@
 import { isSyncOpen, sendToSync } from '../sync.js';
 import { getEfspBays } from './efsp/efsp-state.js';
 import { getActingPositions } from './efsp/efsp-ws.js';
+import { registerEfspMessage } from './efsp/efsp-message-registry.js';
 
 // The METRICS dock panel — guide §11.5 "instrument from day one", and the
 // §11.4 traffic count (docs/adr/0072; the server half is docs/adr/0065).
@@ -647,3 +648,8 @@ export function initMetricsPanel() {
     onClose: () => { _metricsPanel.wasVisible = false; },
   };
 }
+
+// WP8 (docs/adr/0065, 0072): the METRICS panel's answer (moved out of app.js's ws.onmessage, CMSG).
+registerEfspMessage('efsp-metrics', (msg) => {
+  if (typeof onEfspMetrics === 'function') onEfspMetrics(msg);
+});
