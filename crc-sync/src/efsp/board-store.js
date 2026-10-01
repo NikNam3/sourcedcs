@@ -1422,7 +1422,7 @@ class BoardStore {
    * Three op kinds stay allowed, because each already enforces the rule
    * itself and each is how a dead replica gets cleared away: DropStrip,
    * InvokeNla (which _rejectedReplicaRefusal limits to DROPPED), and
-   * MoveStrip (which _validateBayImpliedTransition refuses into any Bay that
+   * MoveStrip (which Placement.validateBayImpliedTransition refuses into any Bay that
    * would change the Strip's state — moving it aside is fine).
    *
    * MARSA and correlation are flight-level and never reach _dispatch; the

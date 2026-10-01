@@ -289,7 +289,7 @@ class Placement {
    * (`twr-airborne`) — the Bay name and the Strip contradicting each other
    * (docs/ui-findings/lane1.md F-102). The config already asserts the
    * equivalence in the other direction: dragging INTO one of these Bays
-   * changes the state (_validateBayImpliedTransition), so the Bay means the
+   * changes the state (validateBayImpliedTransition), so the Bay means the
    * state whichever way the Strip got there.
    *
    * Nothing happens when this owner has no Bay for the state — LUAW is the
