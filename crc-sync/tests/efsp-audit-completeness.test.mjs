@@ -4,6 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import crypto from 'crypto';
+import crcLog from '../src/log.js';
 
 // L26 / docs/adr/0083: every EFSP Mutation outcome that reaches crc-sync produces
 // exactly one Mutation-log entry, and every entry names its Facility and its FDR(s).
@@ -32,9 +33,8 @@ const { createEfspInstrumentation } = await import('../src/efsp/metrics.js');
 const { crew, hold, mustAct, jumpTo, airborneDeparture, handedToCenter, DEPARTURE_FDR } = await import('./helpers/efsp-scenario.mjs');
 
 function quiet(fn) {
-  const orig = console.warn;
-  console.warn = () => {};
-  try { return fn(); } finally { console.warn = orig; }
+  const cap = crcLog.capture();
+  try { return fn(); } finally { cap.stop(); }
 }
 
 const efsp = createEfsp();

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import crcLog from '../src/log.js';
 
 const { MutationLog } = await import('../src/efsp/mutation-log.js');
 
@@ -186,8 +187,7 @@ test('retention defaults to the configured 30 days', () => {
 test('onRecord: once per successful append with the stamped entry; a throwing listener stops neither record() nor the next listener', () => {
   const log = new MutationLog(tmpLogPath());
   const seen = [];
-  const orig = console.warn;
-  console.warn = () => {};
+  const cap = crcLog.capture();
   try {
     log.onRecord(() => { throw new Error('boom'); });
     const off = log.onRecord((e) => seen.push(e));
@@ -195,7 +195,7 @@ test('onRecord: once per successful append with the stamped entry; a throwing li
     log.record({ op: 'MoveStrip', at: 2 });
     off();
     log.record({ op: 'SetBlock', at: 3 });
-  } finally { console.warn = orig; }
+  } finally { cap.stop(); }
   assert.deepEqual(seen.map(e => e.op), ['CreateStrip', 'MoveStrip']);
   assert.ok(Number.isFinite(seen[0].wallAt) && seen[0].atSource === 'WALL', 'the listener sees the entry as written');
   assert.equal(log.readAll().length, 3);
@@ -208,9 +208,8 @@ test('onRecord: a failed append (the log path is under a FILE) notifies nobody',
   const log = new MutationLog(path.join(blocker, 'efsp-mutations.jsonl'));
   let calls = 0;
   log.onRecord(() => { calls++; });
-  const orig = console.warn;
-  console.warn = () => {};
-  try { log.record({ op: 'CreateStrip', at: 1 }); } finally { console.warn = orig; }
+  const cap = crcLog.capture();
+  try { log.record({ op: 'CreateStrip', at: 1 }); } finally { cap.stop(); }
   assert.equal(calls, 0);
 });
 

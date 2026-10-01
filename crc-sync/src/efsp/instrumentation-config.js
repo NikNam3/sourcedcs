@@ -21,6 +21,7 @@
 const fs = require('fs');
 const { readPath } = require('../state-paths');
 const { readShipped } = require('../tuning-file');
+const log = require('../log').logger('efsp:instrumentation-config');
 
 const CONFIG_NAME = 'efsp-instrumentation.json';
 
@@ -47,7 +48,7 @@ function _retention(section, raw, fallback, source) {
   if (raw === undefined) return _missing(`${section}.retentionDays`, fallback, source);
   if (Number.isInteger(raw) && raw >= 1) return raw;
   if (fallback === undefined) throw new Error(`[efsp-instrumentation] ${source}: ${section}.retentionDays must be an integer >= 1, got ${JSON.stringify(raw)}`);
-  console.warn(`[efsp-instrumentation] ${source}: ${section}.retentionDays must be an integer >= 1, got ${JSON.stringify(raw)} — using ${fallback}`);
+  log.warn('retentionDays must be an integer >= 1 — using the fallback', { source, section, got: raw, fallback });
   return fallback;
 }
 
@@ -55,18 +56,18 @@ function _homeAirports(raw, fallback, source) {
   if (raw === undefined) return _missing('trafficCount.homeAirports', fallback, source);
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     if (fallback === undefined) throw new Error(`[efsp-instrumentation] ${source}: trafficCount.homeAirports must be an object of facilityId -> [ICAO]`);
-    console.warn(`[efsp-instrumentation] ${source}: trafficCount.homeAirports must be an object of facilityId -> [ICAO], using the default`);
+    log.warn('trafficCount.homeAirports must be an object of facilityId -> [ICAO], using the default', { source });
     return fallback;
   }
   const out = {};
   for (const [facilityId, list] of Object.entries(raw)) {
     if (!Array.isArray(list)) {
-      console.warn(`[efsp-instrumentation] ${source}: trafficCount.homeAirports.${facilityId} is not a list — that Facility gets no home airport`);
+      log.warn('trafficCount.homeAirports entry is not a list — that Facility gets no home airport', { source, facilityId });
       continue;
     }
     const codes = list.filter(c => typeof c === 'string').map(c => c.trim().toUpperCase()).filter(Boolean);
     if (codes.length !== list.length) {
-      console.warn(`[efsp-instrumentation] ${source}: trafficCount.homeAirports.${facilityId} has entries that are not airport codes — ignored`);
+      log.warn('trafficCount.homeAirports entry has values that are not airport codes — ignored', { source, facilityId });
     }
     out[facilityId] = [...new Set(codes)];
   }
@@ -75,7 +76,7 @@ function _homeAirports(raw, fallback, source) {
 
 /**
  * Validates a parsed config object field by field against the defaults.
- * Pure apart from console.warn; exported so tests need no file.
+ * Pure apart from log.warn; exported so tests need no file.
  */
 function normalizeInstrumentationConfig(raw, source = 'config', d = DEFAULT_INSTRUMENTATION_CONFIG) {
   d = d || { mutationLog: {}, metrics: {}, trafficCount: {} }; // strict: validating the shipped file
@@ -100,7 +101,7 @@ function loadInstrumentationConfig(filePath = resolveInstrumentationConfigPath()
   try {
     raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
   } catch (e) {
-    console.warn(`[efsp-instrumentation] could not read ${filePath} (${e.message}) — using the shipped defaults`);
+    log.warn('could not read file — using the shipped defaults', { file: filePath, error: e.message });
     return DEFAULT_INSTRUMENTATION_CONFIG;
   }
   return normalizeInstrumentationConfig(raw, filePath);

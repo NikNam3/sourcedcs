@@ -48,6 +48,7 @@ const { WALL_CLOCK } = require('../mission-clock');
 const { MissionSession } = require('../mission-session');
 const { getInstrumentationConfig } = require('./instrumentation-config');
 const { TrafficCount, hourKey } = require('./traffic-count');
+const log = require('../log').logger('efsp:metrics');
 
 const METRICS_PATH = writePath('efsp-metrics.json', process.env.CRCSYNC_EFSP_METRICS_PATH);
 
@@ -202,7 +203,7 @@ class EfspMetrics {
       // Kept for inspection rather than overwritten by the next flush.
       const aside = `${this._path}.corrupt-${this._wallNow()}`;
       try { fs.renameSync(this._path, aside); } catch { /* nothing more to do */ }
-      console.warn(`[efsp-metrics] ${this._path} was unreadable (${e.message}) — moved to ${aside}, starting empty`);
+      log.warn('file was unreadable — moved aside, starting empty', { file: this._path, error: e.message, movedTo: aside });
     }
   }
 
@@ -224,7 +225,7 @@ class EfspMetrics {
       this._writes += 1;
       return true;
     } catch (e) {
-      console.warn('[efsp-metrics] failed to persist:', e.message);
+      log.warn('failed to persist', { error: e.message });
       return false;
     }
   }
@@ -421,7 +422,7 @@ class EfspMetrics {
     // _mission() first: it opens the record of a session that started since
     // the last tick, and keeps the session's lastAt current.
     for (const step of [() => this._mission(), () => this.sampleManning(at), () => this.sampleCorrelation(at), () => this.prune(), () => this._pruneMinutes(at), () => this.flush()]) {
-      try { step(); } catch (e) { console.warn('[efsp-metrics] tick step failed:', e.message); }
+      try { step(); } catch (e) { log.warn('tick step failed', { error: e.message }); }
     }
   }
 
@@ -637,7 +638,7 @@ class EfspMetrics {
     }
     let live = null;
     if (this._correlationStats) {
-      try { live = this._correlationStats() || null; } catch (e) { console.warn('[efsp-metrics] correlation stats getter threw:', e.message); }
+      try { live = this._correlationStats() || null; } catch (e) { log.warn('correlation stats getter threw', { error: e.message }); }
     }
 
     // 5 — rejected Mutations
@@ -685,7 +686,7 @@ class EfspMetrics {
     let obligationsLive = null;
     let obligationsStatus = 'NOT_INSTRUMENTED';
     if (this._obligationStats) {
-      try { obligationsLive = this._obligationStats() || {}; obligationsStatus = 'COLLECTING'; } catch (e) { console.warn('[efsp-metrics] obligation stats getter threw:', e.message); }
+      try { obligationsLive = this._obligationStats() || {}; obligationsStatus = 'COLLECTING'; } catch (e) { log.warn('obligation stats getter threw', { error: e.message }); }
     }
     let reassigned = 0;
     const reassignedByHour = {};
@@ -760,7 +761,7 @@ function createEfspInstrumentation({
 }) {
   const facilityIds = facilityConfig.getFacilityIds();
   const dup = duplicatePositionIds(facilityConfig);
-  if (dup.length) console.warn(`[efsp-metrics] Position ids ${dup.join(', ')} exist in more than one Facility — metrics keyed by positionId will merge them (docs/adr/0065)`);
+  if (dup.length) log.warn('Position ids exist in more than one Facility — metrics keyed by positionId will merge them (docs/adr/0065)', { positionIds: dup });
 
   const metrics = new EfspMetrics({
     path: metricsPath, clock, wallNow, config: config.metrics, facilityIds,
@@ -815,7 +816,7 @@ function createEfspInstrumentation({
       return { status: 200, body: metrics.buildMetricsBody(q) };
     } catch (e) {
       if (e instanceof RangeError) return { status: 404, body: { ok: false, reason: 'NOT_FOUND', detail: e.message } };
-      console.error('[efsp-metrics] metrics report failed:', e);
+      log.error('metrics report failed', { err: e });
       return { status: 503, body: { ok: false, reason: 'metrics report failed unexpectedly' } };
     }
   }
@@ -827,7 +828,7 @@ function createEfspInstrumentation({
       if (q.error) return _bad(q.error);
       return { status: 200, body: trafficCount.report(q) };
     } catch (e) {
-      console.error('[efsp-metrics] traffic count report failed:', e);
+      log.error('traffic count report failed', { err: e });
       return { status: 503, body: { ok: false, reason: 'traffic count report failed unexpectedly' } };
     }
   }
@@ -938,7 +939,7 @@ function createEfspInstrumentation({
   efsp.handleMessage = (session, msg) => {
     if (msg && msg.type === 'efsp-metrics-report') {
       try { return { ack: metrics.handleReport(session, msg) }; } catch (e) {
-        console.warn('[efsp-metrics] report handling failed:', e.message);
+        log.warn('report handling failed', { error: e.message });
         return { ack: { version: VERSION, type: 'efsp-metrics-report-ack', reportId: msg.reportId, ok: false, reason: 'INTERNAL_ERROR' } };
       }
     }
@@ -946,9 +947,9 @@ function createEfspInstrumentation({
       return { ack: _metricsRequestAck(msg) };
     }
     let pre = null;
-    try { if (msg && typeof msg.type === 'string') pre = _pre(msg); } catch (e) { console.warn('[efsp-metrics] tap (pre) failed:', e.message); }
+    try { if (msg && typeof msg.type === 'string') pre = _pre(msg); } catch (e) { log.warn('tap (pre) failed', { error: e.message }); }
     const result = original(session, msg);
-    try { if (msg && typeof msg.type === 'string') _post(session, msg, result, pre); } catch (e) { console.warn('[efsp-metrics] tap failed:', e.message); }
+    try { if (msg && typeof msg.type === 'string') _post(session, msg, result, pre); } catch (e) { log.warn('tap failed', { error: e.message }); }
     return result;
   };
   const originalDisconnect = efsp.onDisconnect;
@@ -962,7 +963,7 @@ function createEfspInstrumentation({
         endedSessions.push(rec);
         if (endedSessions.length > SESSION_RECORDS_KEPT) endedSessions.shift();
       }
-    } catch (e) { console.warn('[efsp-metrics] tap (disconnect) failed:', e.message); }
+    } catch (e) { log.warn('tap (disconnect) failed', { error: e.message }); }
     return originalDisconnect(session);
   };
   metrics._tapInstalled = true;

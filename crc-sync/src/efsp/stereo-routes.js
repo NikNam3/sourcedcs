@@ -36,6 +36,7 @@
 
 const fs = require('fs');
 const { statePaths, ensureDirFor } = require('../state-paths');
+const log = require('../log').logger('efsp:stereo-routes');
 
 // Squadron data a live edit would rewrite (setStereoRoutes), so it reads from
 // state/ if a live copy exists and always writes there — see state-paths.js
@@ -205,7 +206,7 @@ function setStereoRoutes(next) {
     ensureDirFor(STEREO_ROUTES_WRITE_PATH);
     fs.writeFileSync(STEREO_ROUTES_WRITE_PATH, JSON.stringify(stereoRoutes, null, 2));
   } catch (e) {
-    console.warn('[efsp-stereo-routes] failed to persist stereo routes:', e.message);
+    log.warn('failed to persist stereo routes', { error: e.message });
   }
   return { ok: true };
 }

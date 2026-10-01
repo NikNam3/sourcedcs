@@ -8,6 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 const { CONFIG_DIR, readPath } = require('./state-paths');
+const log = require('./log').logger('tuning');
 
 /** The shipped default, parsed. Throws with the file name when it is missing or invalid. */
 function readShipped(name) {
@@ -29,7 +30,7 @@ function readLayer(name, override) {
   try {
     return JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch (e) {
-    console.warn(`[tuning] could not read ${file} (${e.message}), using the shipped ${name}`);
+    log.warn('could not read file, using the shipped one', { file, shipped: name, error: e.message });
     return null;
   }
 }

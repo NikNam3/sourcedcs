@@ -29,6 +29,7 @@
 // flight rather than about the airspace, and is untouched by this store.
 
 const { WALL_CLOCK } = require('../mission-clock');
+const log = require('../log').logger('efsp:airspace-store');
 
 const AIRSPACE_STATES = ['SCHEDULED', 'ACTIVE', 'RELEASED', 'RETURNED'];
 
@@ -190,7 +191,7 @@ class AirspaceStore {
     } catch (err) {
       // Same backstop as BoardStore.applyMutation, for the same reason: one
       // bad op must never take the process down for every connected client.
-      console.error('[airspace-store] unexpected error applying an airspace op — rejecting it instead of crashing:', err);
+      log.error('unexpected error applying an airspace op — rejecting it instead of crashing', { err });
       result = { ok: false, reason: 'VALIDATION_ERROR', detail: 'internal error processing airspace op' };
     }
 

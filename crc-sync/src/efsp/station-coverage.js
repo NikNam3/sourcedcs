@@ -27,6 +27,7 @@
 
 const { USER_COALITION } = require('../surveillance/iff');
 const { radarIsHull } = require('./carrier/hull-config');
+const log = require('../log').logger('efsp:station-coverage');
 
 // The Position classes that separate traffic and so get short-term conflict
 // alerts (docs/adr/0059). The tactical side does not: military positions and
@@ -241,7 +242,7 @@ function reportUnresolvedSelectors(facilityConfig, radars, opts) {
     }
   }
   if (unresolved.length) {
-    console.warn(`[efsp] ${unresolved.length} radar selector(s) match nothing in this theater, so those Positions have no coverage: ${unresolved.join('; ')}`);
+    log.warn('radar selectors match nothing in this theater, so those Positions have no coverage', { count: unresolved.length, selectors: unresolved });
   }
   return unresolved;
 }

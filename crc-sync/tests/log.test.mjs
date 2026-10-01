@@ -2,7 +2,7 @@ import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 const L = await import('../src/log.js');
-const { logger, configure, capture, parseLevel, installConsole } = L.default || L;
+const { logger, configure, capture, parseLevel } = L.default || L;
 
 beforeEach(() => (L.default || L).resetForTests());
 
@@ -87,24 +87,12 @@ test('capture() records every level regardless of LOG_LEVEL, keeps the stream si
   assert.deepEqual(streamed.map((r) => r.message), ['e']);
 });
 
-test('installConsole (absorbed log-level.js): level gates console methods, log counts as info, restore() undoes it', () => {
+test('configure warns once about an unknown level and falls back to info', () => {
   const seen = [];
-  const c = {};
-  for (const m of ['error', 'warn', 'info', 'log', 'debug']) c[m] = (...a) => seen.push([m, ...a]);
-  const restore = installConsole(c, 'warn');
-  for (const m of ['error', 'warn', 'info', 'log', 'debug']) c[m](m, { a: 1 });
-  assert.deepEqual(seen.map((s) => s[0]), ['error', 'warn']);
-  assert.deepEqual(seen[0], ['error', 'error', { a: 1 }]);
-  restore();
-  c.info('back');
-  assert.equal(seen.length, 3);
-});
-
-test('installConsole warns once about an unknown level', () => {
-  const seen = [];
-  const c = { warn: (...a) => seen.push(a), error() {}, info() {}, log() {}, debug() {} };
-  installConsole(c, 'verbose');
-  installConsole(c, 'verbose');
+  const sink = (r) => seen.push(r);
+  assert.equal(configure({ level: 'verbose', sink }), 'info');
+  configure({ level: 'verbose', sink });
   assert.equal(seen.length, 1);
-  assert.match(seen[0][0], /LOG_LEVEL="verbose"/);
+  assert.equal(seen[0].level, 'warn');
+  assert.match(seen[0].message, /LOG_LEVEL="verbose"/);
 });

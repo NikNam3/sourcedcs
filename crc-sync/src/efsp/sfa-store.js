@@ -24,6 +24,7 @@
 const permission = require('./permission');
 const { validateSfaRotationRecord } = require('./facility-config');
 const { WALL_CLOCK } = require('../mission-clock');
+const log = require('../log').logger('efsp:sfa-store');
 
 const TRANSITIONS_CAP = 100;
 const SET_OP = 'SetSfaRotation';
@@ -105,7 +106,7 @@ class SfaStore {
     try {
       result = this._dispatch(mutation, actingPositionId, by);
     } catch (err) {
-      console.error('[sfa-store] unexpected error applying an SFA op — rejecting it instead of crashing:', err);
+      log.error('unexpected error applying an SFA op — rejecting it instead of crashing', { err });
       result = { ok: false, reason: 'VALIDATION_ERROR', detail: 'internal error processing SFA op' };
     }
     this._audit(mutation, actingPositionId, by, before, result);

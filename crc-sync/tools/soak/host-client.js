@@ -132,7 +132,7 @@ class InprocHost {
       this._env = setupHostEnv(this._opts);
     } else {
       // A restart: fresh module state, as a new process would have.
-      for (const k of Object.keys(require.cache)) if (k.startsWith(SRC)) delete require.cache[k];
+      for (const k of Object.keys(require.cache)) if (k.startsWith(SRC) && !k.endsWith('/src/log.js')) delete require.cache[k]; // keep log.js: it holds the soak's sink
       this._env.counters.crashBeforePersist = false;
       this._env.counters.crashed = false;
       this._env.seedIds(this.lifetime);

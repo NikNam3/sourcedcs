@@ -37,6 +37,7 @@ const { Tofi } = require('./board/tofi');
 const { StripOps } = require('./board/strip-ops');
 const OPS = require('./board/ops');
 const { initialStateFor, replicaStateOnReceipt, senderStateOnAccept } = require('./authority');
+const log = require('../log').logger('efsp:board-store');
 
 const APPLIED_MUTATIONS_CAP = 5000;
 // How much of the idempotency cache rides in the Board snapshot (docs/adr/0081,
@@ -218,7 +219,7 @@ class BoardStore {
     try {
       result = this._stripOps.dispatch(mutation, actingPositionId, by);
     } catch (err) {
-      console.error('[board-store] unexpected error applying Mutation — rejecting it instead of crashing:', err);
+      log.error('unexpected error applying Mutation — rejecting it instead of crashing', { err });
       result = { ok: false, reason: 'VALIDATION_ERROR', detail: 'internal error processing mutation' };
     } finally {
       this._activeCmid = null;

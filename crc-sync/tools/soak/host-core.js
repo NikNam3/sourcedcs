@@ -80,6 +80,7 @@ function createHost(env, { stateDir }) {
       gridToMagnetic: (deg) => deg,
     },
   });
+  env.configureLog(); // createApp reset the logger's sink; the soak reads its output (host-env.js)
   const { efsp, trackStore, collabStore, wsHub: hub, monitors } = app;
   const { correlation: reconciler, conformance, stca, obligation: obligationMonitor } = monitors;
   const ticker = Object.fromEntries(app.tickers.map((t) => [t.name, t.tick]));

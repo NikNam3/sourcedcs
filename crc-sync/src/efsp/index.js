@@ -50,6 +50,7 @@ const { statePaths, ensureDirFor } = require('../state-paths');
 const { WALL_CLOCK } = require('../mission-clock');
 const { ReplayCache } = require('./replay-cache');
 const { REGISTRY, RESTORE_ORDER } = require('./stores');
+const log = require('../log').logger('efsp');
 
 /**
  * @param {object} [deps]
@@ -375,7 +376,7 @@ function _reconcileRestored(facilities, fdrStore, correlationStore, marsaStore) 
   // ATC is not separating an aircraft that no longer exists.
   if (marsaStore) {
     const dropped = marsaStore.evictMissingFdrs();
-    if (dropped) console.warn(`[efsp] dropped ${dropped} restored MARSA relation(s) whose participants are gone`);
+    if (dropped) log.warn('dropped restored MARSA relations whose participants are gone', { dropped });
   }
   // A correlation record whose FDR did not come back has nothing to be about.
   // Dropped rather than reported, unlike the missing-FDR Strip case below: a
@@ -383,19 +384,19 @@ function _reconcileRestored(facilities, fdrStore, correlationStore, marsaStore) 
   // while a correlation without one is invisible either way.
   if (correlationStore) {
     const dropped = correlationStore.evictMissingFdrs();
-    if (dropped) console.warn(`[efsp] dropped ${dropped} restored correlation record(s) whose FDR is gone`);
+    if (dropped) log.warn('dropped restored correlation records whose FDR is gone', { dropped });
   }
   for (const [facilityId, { boardStore }] of facilities.entries()) {
     for (const strip of boardStore.getAll()) {
       if (strip.state === 'DROPPED') continue;
       const fdr = fdrStore.getFdr(strip.fdrId);
       if (!fdr) {
-        console.warn(`[efsp] restored Strip ${strip.stripId} at ${facilityId} references a missing FDR ${strip.fdrId} — it will render without flight data`);
+        log.warn('restored Strip references a missing FDR — it will render without flight data', { stripId: strip.stripId, facilityId, fdrId: strip.fdrId });
         continue;
       }
       const code = fdr.identity.beaconAssigned;
       if (code && !allocator.isAllocated(code)) {
-        console.warn(`[efsp] restored Strip ${strip.stripId} squawks ${code}, which the code pool had free — re-reserving it`);
+        log.warn('restored Strip squawks a code the code pool had free — re-reserving it', { stripId: strip.stripId, facilityId, code });
         allocator.reassign(strip.fdrId, code, null);
       }
     }
@@ -450,7 +451,7 @@ function _reconcileLogTail(facilities, mutationLog, persistedWallAt, clock) {
       written += 1;
     }
   }
-  if (written) console.warn(`[efsp] ${written} audited Mutation(s) never reached the Board snapshot (a crash before persist) — marked NotPersisted`);
+  if (written) log.warn('audited Mutations never reached the Board snapshot (a crash before persist) — marked NotPersisted', { written });
   return written;
 }
 
@@ -458,12 +459,12 @@ function _validateAirspaceReferences(facilities) {
   for (const airspace of airspaceConfig.getAirspaces()) {
     const facility = facilities.get(airspace.controllingFacilityId);
     if (!facility) {
-      console.warn(`[efsp] airspace ${airspace.airspaceId} names unknown Facility ${airspace.controllingFacilityId} — nobody can activate it`);
+      log.warn('airspace names an unknown Facility — nobody can activate it', { airspaceId: airspace.airspaceId, facilityId: airspace.controllingFacilityId });
       continue;
     }
     const positions = facilityConfig.getPositionSet(airspace.controllingFacilityId);
     if (!positions.includes(airspace.controllingPositionId)) {
-      console.warn(`[efsp] airspace ${airspace.airspaceId} names controlling Position ${airspace.controllingPositionId}, which does not exist at ${airspace.controllingFacilityId} — nobody can activate it`);
+      log.warn('airspace names a controlling Position that does not exist at its Facility — nobody can activate it', { airspaceId: airspace.airspaceId, positionId: airspace.controllingPositionId, facilityId: airspace.controllingFacilityId });
     }
   }
 }
@@ -483,19 +484,19 @@ function _restore({ facilities, stores, paths, mutationLog, clock }) {
     const fdrStore = stores.fdr;
     const moved = migrateClearanceAnnotations(
       [...facilities.values()].flatMap(f => f.boardStore.getAll()), id => fdrStore.getFdr(id));
-    if (moved) console.log(`[efsp] moved ${moved} assigned altitude/heading history cell(s) from Strips onto their flights`);
+    if (moved) log.info('moved assigned altitude/heading history cells from Strips onto their flights', { moved });
     // docs/adr/0087 — a Board saved before the guide's four overflight states
     // holds TRANSITING Strips; they come back IN_SECTOR. Before the session
     // roll-over (server.js), so the Board is legal when it runs.
     const remapped = migrateOverflightStates([...facilities.values()].flatMap(f => f.boardStore.getAll()));
-    if (remapped) console.log(`[efsp] mapped ${remapped} OVERFLIGHT Strip(s) from TRANSITING to IN_SECTOR`);
+    if (remapped) log.info('mapped OVERFLIGHT Strips from TRANSITING to IN_SECTOR', { remapped });
     // After the Boards, not before — it has Strips to check against only now.
     _reconcileRestored(facilities, fdrStore, stores.correlations, stores.marsa);
     // A Mutation audited but never persisted (a crash inside _persist) gets a
     // NotPersisted marker, so the log says that line never took effect.
     _reconcileLogTail(facilities, mutationLog, data.persistedWallAt, clock);
   } catch (e) {
-    console.warn('[efsp] no prior Board snapshot to restore (first run, or it failed to load):', e.message);
+    log.warn('no prior Board snapshot to restore (first run, or it failed to load)', { error: e.message });
   }
 }
 
@@ -536,7 +537,7 @@ function _persist({ facilities, stores, persistState = { lastBody: null }, paths
     fs.renameSync(tmpPath, paths.write);
     persistState.lastBody = body;
   } catch (e) {
-    console.warn('[efsp] failed to persist Board snapshot:', e.message);
+    log.warn('failed to persist Board snapshot', { error: e.message });
   }
 }
 

@@ -117,22 +117,4 @@ function capture() {
   return cap;
 }
 
-// Until LOG-2 has converted every console.* call, LOG_LEVEL must still gate them. This is the
-// absorbed src/log-level.js: wrap `target`'s methods for the level; returns restore().
-const METHOD_LEVEL = { error: 'error', warn: 'warn', info: 'info', log: 'info', debug: 'debug' };
-function installConsole(target = console, raw = process.env.LOG_LEVEL) {
-  const { level, valid } = parseLevel(raw);
-  const originals = {};
-  for (const [method, at] of Object.entries(METHOD_LEVEL)) {
-    if (typeof target[method] !== 'function') continue;
-    originals[method] = target[method];
-    if (LEVELS[at] > LEVELS[level]) target[method] = () => {};
-  }
-  if (!valid && !warnedInvalid && originals.warn) {
-    warnedInvalid = true;
-    originals.warn.call(target, `LOG_LEVEL=${JSON.stringify(String(raw))} is not error|warn|info|debug; using ${DEFAULT_LEVEL}`);
-  }
-  return function restore() { for (const [m, fn] of Object.entries(originals)) target[m] = fn; };
-}
-
-module.exports = { LEVELS, parseLevel, logger, configure, capture, installConsole, resetForTests };
+module.exports = { LEVELS, parseLevel, logger, configure, capture, resetForTests };

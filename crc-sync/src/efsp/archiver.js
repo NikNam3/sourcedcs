@@ -24,6 +24,8 @@
 // do it. The caller persists and broadcasts what a sweep returns (server.js).
 
 /** H36: two hours. A decision, not tuning, so a constant rather than a config file. */
+const log = require('../log').logger('efsp:archiver');
+
 const ARCHIVE_AFTER_MS = 2 * 60 * 60 * 1000;
 
 class Archiver {
@@ -68,7 +70,7 @@ class Archiver {
     const result = { stripsByFacility: {}, fdrIds: [], relations: 0, correlations: 0, skipped: [] };
     if (!this._isCounted && !this._warnedNoCounter) {
       this._warnedNoCounter = true;
-      console.warn('[efsp-archiver] no traffic count wired — archiving DROPPED Strips without checking they were counted');
+      log.warn('no traffic count wired — archiving DROPPED Strips without checking they were counted');
     }
     const now = this._wallNow();
     const candidateFdrs = new Set();
@@ -85,7 +87,7 @@ class Archiver {
         // bug then shows as a Strip that stays, never as a silent loss.
         if (this._isCounted && !this._isCounted(strip.stripId)) {
           result.skipped.push(strip.stripId);
-          console.warn(`[efsp-archiver] DROPPED Strip ${strip.stripId} at ${facilityId} has no traffic-count record — kept, retried next sweep`);
+          log.warn('DROPPED Strip has no traffic-count record — kept, retried next sweep', { stripId: strip.stripId, facilityId });
           continue;
         }
         const fdrId = board.archiveStrip(strip.stripId, reason, extra);

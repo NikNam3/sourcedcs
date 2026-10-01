@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import crcLog from '../src/log.js';
 
 const { MissionClock, WALL_CLOCK, parseScenarioLocalMs, DEFAULT_STALE_MS } = await import('../src/mission-clock.js');
 const { loadTheaters } = await import('../src/theaters.js');
@@ -106,7 +107,7 @@ test('a sample before the theater is known stays on the wall clock, and becomes 
 });
 
 test('a theater missing from the table runs on offset 0, flagged MISSION_NO_OFFSET, and warns once', (t) => {
-  const warn = t.mock.method(console, 'warn', () => {});
+  const cap = crcLog.capture(); t.after(() => cap.stop());
   const wall = fakeWall();
   const clock = new MissionClock({ offsetHoursFor, wallNow: wall });
   clock.setTheatre('SomeNewMap');
@@ -114,7 +115,7 @@ test('a theater missing from the table runs on offset 0, flagged MISSION_NO_OFFS
   clock.sample('2016-06-21T05:40:00');
   assert.equal(clock.source, 'MISSION_NO_OFFSET');
   assert.equal(clock.now(), Date.UTC(2016, 5, 21, 5, 40, 0));
-  assert.equal(warn.mock.callCount(), 1);
+  assert.equal(cap.records.filter(r => r.level === 'warn').length, 1);
 });
 
 test('when DCS goes quiet the clock falls back to the wall once the last sample is stale, and recovers on the next', () => {
@@ -154,7 +155,7 @@ test('the shipped table covers every DCS theater, with Syria at Z+3 (decisions.m
 });
 
 test('loadTheaters keeps one object per theater and drops an entry without a numeric offset', (t) => {
-  t.mock.method(console, 'warn', () => {});
+  const cap = crcLog.capture(); t.after(() => cap.stop());
   const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'theaters-test-')), 'theaters.json');
   fs.writeFileSync(file, JSON.stringify({ theaters: { Syria: { utcOffsetHours: 3, futureField: 'kept' }, Broken: { utcOffsetHours: 'three' }, Bare: 3 } }));
   assert.deepEqual(loadTheaters(file), { Syria: { utcOffsetHours: 3, futureField: 'kept' } });

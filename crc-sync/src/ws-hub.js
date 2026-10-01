@@ -6,6 +6,7 @@ const { createSurveillance } = require('./surveillance');
 const { getAptConfig, setAptConfig } = require('./apt-config');
 const { consumeTicket } = require('./auth');
 const { WALL_CLOCK } = require('./mission-clock');
+const log = require('./log').logger('ws-hub');
 
 const VERSION  = 1;
 const TICK_MS  = 500; // delta broadcast rate, one timer for every session
@@ -79,7 +80,7 @@ class WsHub {
     });
     this._wss.on('connection', (ws, req) => this._onConnect(ws, req));
     this._timer = setInterval(() => this._tickAll(), TICK_MS);
-    console.log('[ws-hub] /feed attached');
+    log.info('/feed attached');
   }
 
   /** Stops the tick `attach()` started, so a process (or a test) holding a hub can end. Idempotent. */
@@ -617,7 +618,7 @@ class WsHub {
         // alert change. Guarded: a monitor bug must never cost the sender's
         // round trip.
         if (this._onEfspChange && broadcasts.length > 0) {
-          try { this._onEfspChange(); } catch (err) { console.error('[crc-sync] onEfspChange failed:', err); }
+          try { this._onEfspChange(); } catch (err) { log.error('onEfspChange failed', { err }); }
         }
         // Declaring a different held set is what changes a controller's
         // coverage (docs/adr/0042) — taking APP hands you the RAPCON's
