@@ -43,6 +43,14 @@ function registerStripTypeFamily(def) {
   for (const k of ['coordinationEligibleState', 'tofiEligibleState']) {
     if (def[k] !== undefined && !states.includes(def[k])) _fail(`${def.stripType}: ${k} ${def[k]} is not one of its states`);
   }
+  // docs/adr/0099 §4: a family without the formation keys is a start-up error (no silent default).
+  for (const k of ['splitEligibleStates', 'joinEligibleStates', 'groundStates']) {
+    if (!Array.isArray(def[k])) _fail(`${def.stripType}: \`${k}\` must be an array (empty = none)`);
+    for (const s of def[k]) if (s === 'DROPPED' || !states.includes(s)) _fail(`${def.stripType}: ${k} names ${s}, which is not a live state`);
+  }
+  for (const s of def.groundStates) {
+    if (!def.splitEligibleStates.includes(s)) _fail(`${def.stripType}: ground state ${s} is not split-eligible`);
+  }
   stripTypeFamilies.set(def.stripType, def);
 }
 
@@ -169,6 +177,15 @@ function stripTypeNames() { return [...stripTypeFamilies.keys()]; }
 function stateOwners(stripType, state) {
   const table = _own(STATE_OWNERS_BY_STRIP_TYPE, stripType) ? STATE_OWNERS_BY_STRIP_TYPE[stripType] : null;
   return (table && _own(table, state) && table[state]) || [];
+}
+/**
+ * docs/adr/0099 §4: which states of a strip type may split or join, and which of those are on the ground (a split needs no
+ * assignment there). Null for an unknown strip type.
+ * @returns {{split:string[], join:string[], ground:string[]}|null}
+ */
+function formationEligibility(stripType) {
+  const f = stripTypeFamily(stripType);
+  return f ? { split: f.splitEligibleStates, join: f.joinEligibleStates, ground: f.groundStates } : null;
 }
 /** @returns {string|undefined} */
 function initialStateFor(stripType) { return _own(DEFAULT_INITIAL_STATE_BY_STRIP_TYPE, stripType) ? DEFAULT_INITIAL_STATE_BY_STRIP_TYPE[stripType] : undefined; }
@@ -301,7 +318,7 @@ module.exports = {
   positionFamilyOf, positionFamily, positionIds, capabilitiesFor, creatorsOf,
   airspaceRowOf, airspaceAuthority, AIRSPACE_ROWS,
   PERMISSIONS, CREATE_STRIP_TYPE_PERMISSIONS, RUNWAY_STATUS_OP_OWNERS, NON_OWNER_BLOCK_WRITES, TOFI_COUNTERPARTS,
-  stripTypeFamily, stripTypeNames, stateOwners, initialStateFor, replicaStateOnReceipt, senderStateOnAccept,
+  stripTypeFamily, stripTypeNames, formationEligibility, stateOwners, initialStateFor, replicaStateOnReceipt, senderStateOnAccept,
   STATES_BY_STRIP_TYPE, STATE_OWNERS_BY_STRIP_TYPE, DEFAULT_INITIAL_STATE_BY_STRIP_TYPE, REPLICA_STATE_ON_RECEIPT, SENDER_STATE_ON_ACCEPT,
   COUNTABLE_PRE_DROP_STATES, EXCLUDED_WHEN_NOT_COUNTABLE, COORDINATION_ELIGIBLE_STATES, TOFI_ELIGIBLE_STATES,
 };

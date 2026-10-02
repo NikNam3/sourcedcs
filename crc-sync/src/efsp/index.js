@@ -163,6 +163,7 @@ function createEfsp({ clock = WALL_CLOCK, wallClock = WALL_CLOCK, transitionAltF
         }
         return n;
       },
+      formationEligibility: (stripType) => authority.formationEligibility(stripType),
       coordinationEffect: (primitive) => coordination.coordinationEffect(primitive),
       // WP4A gap-closure (docs/adr/0022) — which EfspState a strip type
       // must be in to PROPOSE a coordination link (see coordination.js).

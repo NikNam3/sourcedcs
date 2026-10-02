@@ -269,7 +269,7 @@ const mapOf = (shape) => ({ '*': shape });
 const STRIP_HANDOFF = anyOf('at', 'by', 'from', 'fromStripType', 'kind', 'label', 'to', 'toStripType', 'trigger', 'frequencyRackId');
 const STRIP_SHAPE = {
   ...anyOf('stripId', 'cid', 'flightDataId', 'rev', 'stripType', 'state', 'ownerPositionId', 'bayId', 'rackId', 'orderKey',
-    'annotations', 'flags', 'createdAt', 'updatedAt', 'updatedBy', 'consolidatedFrom'),
+    'annotations', 'flags', 'createdAt', 'updatedAt', 'updatedBy', 'consolidatedFrom', 'endReason', 'joinedInto', 'splitFrom'),
   coordination: anyOf('primitive', 'state', 'note', 'peerFacilityId', 'peerPositionId', 'peerStripId', 'mintedForCoordination',
     'dataOwnerPositionRef', 'separationResponsibilityRef', 'radarIdTransferred', 'commsTransferred', 'lastForwardedEtaUtc',
     'initiatedAt', 'initiatedBy', 'acceptedAt', 'acceptedBy', 'lastStandByAt'),
@@ -282,7 +282,7 @@ const STRIP_SHAPE = {
 };
 const FLIGHT_DATA_SECTIONS = {
   identity: anyOf('aircraftType', 'beaconAssigned', 'beaconObserved', 'callsign', 'degradation', 'equipmentCodes',
-    'equipmentSuffix', 'flightSize', 'homeStation', 'modeOne', 'modeTwo', 'tailNumber', 'trackDegradationFlag', 'unit', 'wakeCategory'),
+    'equipmentSuffix', 'flightSize', 'homeStation', 'modeOne', 'modeTwo', 'splitFrom', 'tailNumber', 'trackDegradationFlag', 'unit', 'wakeCategory'),
   filed: anyOf('arrivalFix', 'departureAirport', 'departureRunway', 'destinationAirport', 'estimatedArrivalTimeUtc',
     'fullRouteClearance', 'originAirport', 'proposedDepartureTimeUtc', 'remarks', 'requestedAltitude', 'route', 'stereoRouteName'),
   assigned: anyOf('atisCode', 'callForReleaseTimeUtc', 'callForReleaseWindowEndUtc', 'callForReleaseWindowStartUtc',
@@ -298,7 +298,7 @@ const FLIGHT_DATA_SECTIONS = {
   tofi: anyOf('changedAt', 'changedBy', 'ifrActive', 'radarService', 'separationRegime'),
   comms: anyOf('airspaceId', 'changedAt', 'changedBy', 'transitions', 'workingFrequencyMhz'),
   airspace: anyOf('changedAt', 'changedBy', 'owner', 'transitions'),
-  clearance: anyOf('altitude', 'heading'),
+  clearance: anyOf('altitude', 'heading', 'speed'),
   timeInputs: anyOf('flightPlanDepartureUtc', 'takeoffStampedUtc'),
 };
 // provenance is flat, keyed by the dotted path it records ('assigned.departureRelease', 'military.mtr.entryFix'), or by a
@@ -308,7 +308,7 @@ const PROVENANCE_SHAPE = anyOf('ato', 'tofi',
   ...Object.entries(FLIGHT_DATA_SECTIONS).flatMap(([section, keys]) => [section, ...Object.keys(keys).map(k => `${section}.${k}`)]),
   ...MTR_FIELDS.map(k => `military.mtr.${k}`));
 const FLIGHT_DATA_SHAPE = {
-  ...anyOf('flightDataId', 'rev', 'createdAt', 'updatedAt', 'updatedBy', 'ato', 'trackRef', 'clearanceUpdatedAt'),
+  ...anyOf('flightDataId', 'rev', 'createdAt', 'updatedAt', 'updatedBy', 'ato', 'trackRef', 'clearanceUpdatedAt', 'voided'),
   ...FLIGHT_DATA_SECTIONS,
   provenance: PROVENANCE_SHAPE,
 };

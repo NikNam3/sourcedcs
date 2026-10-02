@@ -20,6 +20,8 @@ const MODULES = [
   require('./clear-airspace-entry'),
   require('./carrier-handoff'),
   require('./sfa-rotation'),
+  require('./split-formation'),
+  require('./join-formation'),
 ];
 
 module.exports = MODULES.flatMap(m => (Array.isArray(m) ? m : [m]));

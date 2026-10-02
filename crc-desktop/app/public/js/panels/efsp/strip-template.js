@@ -127,6 +127,7 @@ export const DEPARTURE_BLOCK_MAP = {
   // Facility: CD issues ALT with the clearance, AP/CTR amend it and vector.
   '20': { required: false, label: 'HDG',      target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' },
   '21': { required: false, label: 'ALT',      target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' },
+  '9A-SPEED': { required: false, label: 'SPEED',    target: { kind: 'clearance', field: 'speed' } }, // docs/adr/0099 §3, no interlock
   // The guide's own Block 22, "Frequency" — structured rather than a
   // free-text annotation since the RANGE slice, so approving a flight onto
   // an airspace's frequency can write it directly and it validates as one
@@ -182,7 +183,7 @@ export const ARRIVAL_BLOCK_MAP = {
   '9A-DEST':  { required: false, label: 'DEST',     target: { kind: 'annotation' } },
   '9A-PTOUT': { required: false, label: 'PT OUT',   target: { kind: 'annotation' } },
   '9A-VECTOR':{ required: false, label: 'HDG',      target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' }, // docs/adr/0058 — a radar vector IS the assigned heading
-  '9A-SPEED': { required: false, label: 'SPEED',    target: { kind: 'annotation' } },
+  '9A-SPEED': { required: false, label: 'SPEED',    target: { kind: 'clearance', field: 'speed' } }, // docs/adr/0099 §3: the speed cell, a recorded assignment (no interlock)
   // §9.4 MTR fields — see DEPARTURE_BLOCK_MAP's '9G-*' comment
   '9G-MTR':   { required: false, label: 'MTR',      target: { kind: 'flightData', path: 'military.mtr.designator' } },
   '9G-ENTRY': { required: false, label: 'ENTRY',    target: { kind: 'flightData', path: 'military.mtr.entryFix' } },
@@ -238,6 +239,7 @@ export const OVERFLIGHT_BLOCK_MAP = {
   // docs/adr/0058: both are the flight's clearance now, on the flight data.
   '7A': { required: false, label: 'ALT',      target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' },
   '9A-VECTOR': { required: false, label: 'HDG', target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' },
+  '9A-SPEED': { required: false, label: 'SPEED', target: { kind: 'clearance', field: 'speed' } }, // docs/adr/0099 §3, no interlock
   '8':  { required: true,  label: 'ORIG',     target: { kind: 'flightData', path: 'filed.departureAirport' } },
   '8B': { required: true,  label: 'DEST',     target: { kind: 'flightData', path: 'filed.destinationAirport' } },
   '9':  { required: true,  label: 'RTE',      target: { kind: 'flightData', path: 'filed.route' }, provenance: 'COMPUTER_GENERATED' },
