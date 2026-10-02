@@ -1,6 +1,6 @@
 /* Unit tests for the client-side NLA label table and the 400ms double-tap /
    30s Undo window logic (efsp-nla.js), using an injected fake `now` rather
-   than real timers — same discipline as los-math.test.js. */
+   than real timers — same discipline as los-math.test.mjs. */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -116,7 +116,7 @@ test('isEfspBoardStale respects a custom threshold', () => {
 // ── canActOnState (guide §3.4 "normally owned by", docs/adr/0010) ───────
 // Client-side mirror of permission.js's STATE_OWNERS_BY_STRIP_TYPE — a UX
 // convenience so the NLA button can render disabled BEFORE a click, not
-// the enforcement itself (the server is authoritative, see board-store.js).
+// the enforcement itself (the server is authoritative, see `board/ops/invoke-nla.js`).
 
 test('canActOnState has exactly three parameters, same shape as the server-side check', () => {
   assert.equal(canActOnState.length, 3);

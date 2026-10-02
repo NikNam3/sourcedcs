@@ -2,7 +2,7 @@
 /* Unit tests for the pure client-side EFSP state mirror (efsp-state.js) —
    snapshot/delta/ack merge logic and the pending-mutation/rebase-on-reject
    bookkeeping, exercised directly without DOM/Electron/network, same
-   pattern as los-math.test.js. */
+   pattern as los-math.test.mjs. */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';

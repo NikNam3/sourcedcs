@@ -145,7 +145,7 @@ test('ordnanceAlertsFor: nothing for CLEAN/LOADED/EXPENDED, a DROPPED Strip, an 
 
 // ── 3. the real Strip ────────────────────────────────────────────────────
 //
-// A loader of its own, copied from efsp-ui-reachability.test.js's renderStrip
+// A loader of its own, copied from efsp-ui-reachability.test.mjs's renderStrip
 // rather than shared (that harness is not this lane's to change).
 
 async function renderStrip({ strip, flightData, signedOn, runwayStatus }) {

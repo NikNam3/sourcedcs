@@ -27,8 +27,7 @@ import { coverageSignedOnPositions, getActiveRadars } from '../app.js';
 // facility config. It was never really a display preference; it was a
 // description of what a Military Radar Unit works from.
 //
-// Split out of the former ui.js "god file" — see panels/topbar.js for why this
-// stays a plain script rather than an IIFE.
+// Split out of the former ui.js "god file" (history).
 
 const TYPE_LABELS = { airport: 'AIRPORT', approach: 'APPROACH', awacs: 'AWACS', fighter: 'FIGHTER', carrier: 'CARRIER' };
 

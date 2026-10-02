@@ -2,7 +2,7 @@
 // What counts as a Strip ARRIVING in a controller's Bay, and how long it stays
 // marked (efsp-arrivals.js, docs/adr/0057). The rendering half — the tab
 // counts, the arrivals line, the Strip's amber edge and single flash — is in
-// efsp-ui-reachability.test.js and the Playwright specs.
+// efsp-ui-reachability.test.mjs and the Playwright specs.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';

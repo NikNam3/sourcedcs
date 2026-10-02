@@ -1,7 +1,7 @@
 // The measurement hooks, wired into the real Strip panel (docs/adr/0072):
 // efsp-panel.js's search and Bay tabs, bay-view.js's selection and gesture
 // entry points, strip-view.js's Offset menu item. Mounted against the shared
-// DOM stub the way efsp-mission-line-panel.test.js does, with and without
+// DOM stub the way efsp-mission-line-panel.test.mjs does, with and without
 // efsp-metrics-client.js loaded — so the last test can prove a hook never
 // changes what the Strip panel dispatches (T4).
 

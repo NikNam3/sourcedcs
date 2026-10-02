@@ -2,22 +2,22 @@
 import { showConnWidget } from '../sync.js';
 
 // ── Tools tab: DCS altitude calculator ────────────────────────────────────
-// Split out of the former ui.js "god file" — see panels/topbar.js for why
-// this stays a plain script rather than an IIFE.
+// Split out of the former ui.js "god file" (history).
 //
 // The barometric-pressure formula here used to be a second, hand-copied
-// implementation of app.js's `_pressureAtAlt` (with a comment admitting it
-// "must mirror app.js"). It now calls app.js's actual `_pressureAtAlt` and
-// its `ISA_L`/`ISA_INV`/`T_REF_ALT` constants directly — both are plain
-// top-level declarations in a classic (non-module) script, so they're
-// already visible here without any explicit export. `indicatedToApi`'s
+// implementation of app.js's `_pressureAtAlt`. That function and its
+// `ISA_L`/`ISA_INV`/`T_REF_ALT` constants are no longer defined anywhere
+// (`git grep` finds only this file), and this module imports none of them,
+// so the calls below are a latent ReferenceError (ESM-GUARDS' list, the
+// `test.todo` in module-graph.test.mjs).
+// `indicatedToApi`'s
 // bisection search has no app.js equivalent (nothing else in the app needs
 // indicated→true altitude, only true→indicated for track display), so it
 // stays local.
 
 export function initToolsTab() {
   // Was a small floating "SYNC ⚙" tab pinned above the SRS radio bar
-  // (sync.js's _initConnTab) — moved here now that both panels involved
+  // (removed; the Connection button now lives here) — both panels involved
   // are normal dockview panels rather than fixed-position divs with a
   // hand-tracked height relationship between them.
   const btnConn = document.getElementById('set-conn-settings');

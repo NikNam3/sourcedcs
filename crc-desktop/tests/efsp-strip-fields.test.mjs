@@ -2,7 +2,7 @@
 // they were written to. Each rule came from a controller reading the Strip:
 // a field a Position never uses costs Strip height on every flight.
 // Reachability — everything left off is still in the expanded view — is held
-// by efsp-ui-reachability.test.js, per (Role, Position).
+// by efsp-ui-reachability.test.mjs, per (Role, Position).
 
 import './helpers/client-env.mjs';
 import test from 'node:test';

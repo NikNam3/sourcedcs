@@ -28,7 +28,7 @@
 //     Block is directly writable and the other doesn't, SetBlock either
 //     silently no-ops or writes to a field the other side never reads.
 //   - for flight-data-routed Blocks: `target.path` (which FDR field) and `provenance`
-//     (the pre-edit provenance default — see strip-template.test.js's own
+//     (the pre-edit provenance default — see efsp-strip-template.test.mjs's own
 //     "Block 9 defaults to COMPUTER_GENERATED" test, which this mirrors).
 //   - `interlock` (docs/adr/0051) — which Blocks §9.2's MARSA void interlock
 //     watches. Added in WP6: this test compared only the four things above,

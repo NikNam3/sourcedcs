@@ -2,7 +2,7 @@
  *
  * The DOM-free half — badge shape, action list and highlight resolution. The
  * rendered Strip, the popover and the dispatched op are in
- * efsp-ui-reachability.test.js, which runs the real bay-view.js.
+ * efsp-ui-reachability.test.mjs, which runs the real bay-view.js.
  *
  * Three cases carry the deliverable, and each is a judgement that would be
  * easy to get wrong in the opposite direction:

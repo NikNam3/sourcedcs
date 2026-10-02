@@ -1,6 +1,6 @@
 /* Client-side half of §9.10's stereo route table (docs/adr/0050) — the same
    "never throws, degrades to an empty list" contract
-   efsp-flight-plan-lookup-client.test.js pins for its own module, verified
+   efsp-flight-plan-lookup-client.test.mjs pins for its own module, verified
    the same way: an injectable fetchImpl, no real network and no DOM. */
 
 import test from 'node:test';

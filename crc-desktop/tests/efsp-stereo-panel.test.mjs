@@ -3,7 +3,7 @@
    nothing about whether a controller can ask for it.
    efsp-scenario-stereo.test.mjs is the server half; this is the other one.
 
-   efsp-ui-reachability.test.js's own harness renders a STRIP, with
+   efsp-ui-reachability.test.mjs's own harness renders a STRIP, with
    `document.getElementById: () => null`, so it cannot reach the toolbar at
    all. This needs a getElementById backed by real stub elements, which are
    the shared DOM stub's (tests/helpers/dom-stub.js, docs/adr/0054). */
@@ -196,7 +196,7 @@ test('.stereo PACK1 VIPER11 files a Strip, resolving the name the controller act
   // The canonical spelling goes over the wire, not `pack1`.
   assert.equal(m.sent[0].op.flightData.stereoRouteName, 'PACK 1');
   // Byte-identical to what the button sends for the same origin, including
-  // OPS's `stripType: undefined` (board-store.js defaults an absent stripType to
+  // OPS's `stripType: undefined` (`board/ops/create-strip.js` defaults an absent stripType to
   // DEPARTURE). Two filing surfaces, one op — worth pinning, because the
   // easy mistake here is for the keyboard path to drift into sending
   // something subtly different from the pointer path.

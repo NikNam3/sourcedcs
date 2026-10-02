@@ -7,7 +7,7 @@
  * panel has to say so with its cause rather than showing an empty box that
  * looks like a fault.
  *
- * Same vm-plus-DOM-stub approach as efsp-ui-reachability.test.js, and for the
+ * Same vm-plus-DOM-stub approach as efsp-ui-reachability.test.mjs, and for the
  * same reason: it proves the wiring, not the pixels.
  */
 

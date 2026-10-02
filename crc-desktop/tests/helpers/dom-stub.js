@@ -3,7 +3,7 @@
 /* The DOM stub the client tests render the real panel against.
  *
  * Lifted here because there were already two hand-maintained copies —
- * efsp-ui-reachability.test.js's and efsp-stereo-panel.test.js's — and the
+ * efsp-ui-reachability.test.mjs's and efsp-stereo-panel.test.mjs's — and the
  * briefing's own rule is that two is the point at which lifting it out is
  * worth doing and the third should not be written. This is that lift.
  *

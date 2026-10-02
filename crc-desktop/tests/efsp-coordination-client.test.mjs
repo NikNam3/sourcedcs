@@ -1,5 +1,5 @@
 /* WP4A (docs/adr/0015) — server/client drift guard for the coordination-
-   primitive op-kind list, same template efsp-nla-client.test.js already
+   primitive op-kind list, same template efsp-nla-client.test.mjs already
    uses for STATE_OWNERS_BY_STRIP_TYPE: import both sides, assert.deepEqual
    directly. A silent drift here would be misleading (a Coordinate button
    that offers a primitive the server doesn't grant, or omits one it does),
@@ -33,7 +33,7 @@ test('none of the 5 collide with an ordinary op kind (OP_KINDS minus the coordin
 
 // WP4A gap-closure (docs/adr/0022) — the client's proactive Coordinate-
 // button gate must stay in lockstep with the server's authoritative
-// eligibility check (board-store.js's _applyCoordinationPropose), or the
+// eligibility check (`_applyCoordinationPropose` in crc-sync's `board/coordination.js`), or the
 // button will either offer something the server rejects, or hide something
 // it would actually allow.
 test('the client mirror of COORDINATION_ELIGIBLE_STATES stays in lockstep with coordination.js\'s server copy', () => {
@@ -71,7 +71,7 @@ test('TOFI eligibility covers every airborne ATC-side Role, and never MISSION �
 
 /**
  * bay-view.js's own module values, read by running it — the same move
- * docs/adr/0055 made for the compact-Block list (efsp-ui-reachability.test.js's
+ * docs/adr/0055 made for the compact-Block list (efsp-ui-reachability.test.mjs's
  * clientSandbox). Top-level `const`s are lexical bindings, not properties of
  * the vm context, so they are read by evaluating the name in that context; and
  * the arrays come from the sandbox's realm, so they are copied before a

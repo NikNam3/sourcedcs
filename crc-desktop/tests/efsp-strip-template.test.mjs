@@ -1,5 +1,5 @@
 /* Unit tests for the pure Block Map binding/resolution logic in
-   strip-template.js — no DOM involved, matching los-math.test.js's style. */
+   strip-template.js — no DOM involved, matching los-math.test.mjs's style. */
 
 import './helpers/client-env.mjs';
 import test from 'node:test';

@@ -106,8 +106,8 @@ const POPOVERS = {
  * helpers/app.js.
  *
  * It does not insist the Bay ends up EMPTY, and must not: a Strip carrying an
- * open coordination or TOFI proposal is undroppable by design (board-store.js
- * refuses "cannot drop a Strip with an open coordination proposal"), and there
+ * open coordination or TOFI proposal is undroppable by design (crc-sync's
+ * `board/ops/drop-strip.js` refuses "cannot drop a Strip with an open coordination proposal"), and there
  * is no withdraw — only the RECEIVING controller can resolve one, and this page
  * does not hold their Position. The F-107 coordinate case ends by pressing
  * Send, so it leaves exactly such a Strip in ap-inbound; insisting on 0 then

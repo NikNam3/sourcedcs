@@ -1,6 +1,6 @@
 // Hand-mirrored server tables with no parity test before this file
 // (docs/wip/PARITY.md has the full inventory and which test holds which).
-// Same pattern as efsp-block-map-parity.test.js: require the crc-sync module
+// Same pattern as efsp-block-map-parity.test.mjs: require the crc-sync module
 // across the package boundary (test-only; ADR 0001's "no import" rule is
 // about the runtime path) and compare the data the client actually ships.
 //

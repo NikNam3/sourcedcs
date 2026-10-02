@@ -35,7 +35,7 @@ async function advance(page, cs, n) {
       message: `setup: ${cs} stuck at ${before}: ${await page.locator('#efsp-mutation-error').textContent()}`,
     }).not.toBe(before);
     // The server drops a second NLA on the same Strip inside 400 ms, silently
-    // (board-store.js's double-tap guard) — so setup must not outrun it.
+    // (`board/ops/invoke-nla.js`'s double-tap guard) — so setup must not outrun it.
     await page.waitForTimeout(450);
   }
 }

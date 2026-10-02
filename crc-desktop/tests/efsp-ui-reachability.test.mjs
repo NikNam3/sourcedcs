@@ -344,7 +344,7 @@ function menuItem(el, text) {
   return visible(el).find(isItem);
 }
 
-// The same move crc-sync's clearance-migration.js makes: the assigned altitude
+// The same move crc-sync's old clearance migration made (removed, BACKCOMPAT): the assigned altitude
 // and heading used to be Strip annotations, and are the flight's now.
 const _CLEARANCE_BLOCKS = {
   DEPARTURE: { '21': 'altitude', '20': 'heading' },
@@ -428,8 +428,8 @@ async function renderStrip({ strip, flightData, signedOn, airspaces = [], correl
   globalThis.getAllTracks = () => [...liveTracks.values()];
 
   // Fixtures written before docs/adr/0058 put the assigned altitude/heading
-  // history on the Strip; crc-sync moves such notes onto the flight on
-  // restore (clearance-migration.js), and the harness does the same.
+  // history on the Strip; crc-sync used to move such notes onto the flight
+  // on restore (the old clearance migration, removed, BACKCOMPAT), and the harness does the same.
   ({ strip, flightData } = _clearanceFromAnnotations(strip, flightData));
   sandbox.applyEfspSnapshot({
     strips: [strip, ...otherStrips], flightDataList: [flightData, ...otherStrips.map(s => ({ ...FDR, flightDataId: s.flightDataId, identity: { ...FDR.identity, callsign: s._callsign || s.flightDataId } }))],
@@ -630,7 +630,7 @@ test('a Strip working an airspace nobody activated says so on its face', async (
 
 test('the Drop button refuses while a flight is under tactical control', async () => {
   // The inhibit is the SERVER's answer now (F-408's `strip.nla`), not a rule
-  // this file keeps a second copy of — board-store.js's nlaStatusFor puts this
+  // this file keeps a second copy of — `board/strip-ops.js`'s `nlaStatusFor` puts this
   // exact sentence on every Strip record it broadcasts. The fixture carries it
   // because a real Strip does.
   const underControl = stripAt({

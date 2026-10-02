@@ -9,7 +9,7 @@
  * there is nothing to anchor a popover to. That means efsp-ui-reachability's
  * Strip-rendering harness cannot reach this at all (its getElementById
  * returns null by design), and this file mounts the real efsp-panel.js
- * against stub toolbar elements the way efsp-stereo-panel.test.js does.
+ * against stub toolbar elements the way efsp-stereo-panel.test.mjs does.
  */
 
 import test from 'node:test';

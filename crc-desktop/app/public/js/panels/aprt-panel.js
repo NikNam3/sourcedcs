@@ -6,8 +6,7 @@ import { updateMap } from '../geojson.js';
 import { atisActive, missionData, saveSettings, settings } from '../app.js';
 
 // ── APRT / Theater side panel ─────────────────────────────────────────────
-// Split out of the former ui.js "god file" — see panels/topbar.js for why
-// this stays a plain script rather than an IIFE. This was the single
+// Split out of the former ui.js "god file" (history). It was the single
 // largest chunk of ui.js (~625 of its 2234 lines) — airport reference card,
 // manual weather entry, ATIS build/transmit/loop, and a read-only line of
 // theater facts. Nothing about the theater is a setting any more: crc-sync

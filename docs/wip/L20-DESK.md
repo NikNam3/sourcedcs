@@ -13,3 +13,4 @@
 - crc-desktop's local server (`app/server.js`) is Node `http`/`https`, not Express (verified at step 4).
 
 ## Defaults taken (P2)
+- Finding (ESM-GUARDS): tools-panel.js uses _pressureAtAlt/ISA_L/ISA_INV/T_REF_ALT with no import (already the briefing's latent ReferenceError); header comment now says so.

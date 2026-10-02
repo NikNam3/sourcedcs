@@ -8,10 +8,8 @@ import {
 
 // ── Topbar chrome: status dots, update banner, patch notes, Zulu clock,
 // bullseye cursor readout and measure-line labels. Split out of the former
-// ui.js "god file" — these functions are called from app.js/sync.js/
-// map-setup.js as plain globals (not wrapped in an IIFE like srs-radio.js,
-// since that would hide them from those callers — see panels/README notes
-// in the architecture plan for why).
+// ui.js "god file" (history; it no longer exists). An ES module: app.js,
+// sync.js and map-setup.js import these functions by name.
 
 // ── Topbar display elements ────────────────────────────────────────────────
 
