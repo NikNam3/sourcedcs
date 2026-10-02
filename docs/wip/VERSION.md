@@ -18,8 +18,8 @@ Baseline at `6ffc6b8`: crc-sync `npm test` 2118 tests, 2117 pass, 0 fail (1 skip
   `app.js` `connect()` has `ws.onmessage` -> `onSyncMessage`, `ws.onclose` -> `setTimeout(connect, 2000)`.
   `main.js`: autoUpdater events -> `sendUpdateStatus`, `ipcMain.on('update-restart-now')`, `get-last-patch-notes`; `app/preload.js` exposes `crcUpdate`.
 - Workflows: `crc-sync-docker.yml` has one job (`build-and-push`, with the R3-37 tag-on-main refusal); `deploy.yml` has one job, a single
-  SSH step, triggered by `workflow_run` of the three image workflows or `workflow_dispatch`. The `verify-main` guard CLAUDE.md mentions is not in
-  this base (only the tag-on-main step in `crc-sync-docker.yml`). `sourcedcs-web` `GET /api/releases/latest` returns `{ win, linux }`, each
+  SSH step, triggered by `workflow_run` of the three image workflows or `workflow_dispatch`. CORRECTION (supervisor): `verify-main` IS in the base, in `crc-desktop-release.yml`
+  (`trigger-crc-sync-release` needs it, `!cancelled() && needs.verify-main.result == 'success'`), plus the tag-on-main step in each docker workflow. This lane does not touch `crc-desktop-release.yml`. `sourcedcs-web` `GET /api/releases/latest` returns `{ win, linux }`, each
   `{ version, url, size }` or null (`releases.js` `parseReleaseManifest`).
 - E2E: the harness (`playwright.config.js`) runs crc-sync under `e2e/helpers/sync-supervisor.js` with `CRCSYNC_TEST_RESET=1`; lane 3 = ports 3013/3113.
 

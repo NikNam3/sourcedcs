@@ -208,6 +208,8 @@ services:
       # radar sees to its full range — which is logged once at startup.
       - CRCSYNC_MAPTILER_KEY=${CRCSYNC_MAPTILER_KEY:-}
       - CRCSYNC_TERRAIN_CACHE_DIR=/app/state/terrain-cache
+      # Where an out-of-date crc-desktop is pointed by the update-required frame (crc-sync docs/adr/0103).
+      - CRCSYNC_DOWNLOAD_URL=${CRCSYNC_DOWNLOAD_URL:-https://sourcedcs.page/download}
     volumes:
       # EVERYTHING crc-sync writes, and nothing else. Mounted at /app/state,
       # deliberately NOT over /app/config (shipped squadron data: facility,

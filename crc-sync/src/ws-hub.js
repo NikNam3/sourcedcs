@@ -7,12 +7,21 @@ const { getAptConfig, setAptConfig } = require('./apt-config');
 const { consumeTicket } = require('./auth');
 const { WALL_CLOCK } = require('./mission-clock');
 const { DEFAULT_FACILITY_ID } = require('./efsp/facility-config');
+const { WIRE_PROTOCOL } = require('./wire-protocol');
 const log = require('./log').logger('ws-hub');
 
+// The ENVELOPE version on every frame. It is not the wire protocol (src/wire-protocol.js, docs/adr/0103) and must stay 1:
+// the soak matches the literal prefix '{"version":1,"type":...' to inject faults.
 const VERSION  = 1;
+const UPDATE_REQUIRED_CLOSE = 4426;
 const TICK_MS  = 500; // delta broadcast rate, one timer for every session
 
 const MAX_NAME_LEN = 40;
+
+/** A missing or non-integer `protocol` is protocol 1: clients from before the handshake send none. */
+function parseProtocol(raw) {
+  return /^[1-9][0-9]{0,8}$/.test(raw || '') ? Number(raw) : 1;
+}
 
 const NO_PICTURE = {
   coverageFor: () => ({ radars: [], radarIds: new Set(), signedOnPositions: [], radarBearingPositions: [], datalink: false }),
@@ -35,8 +44,13 @@ class WsHub {
    *   what the topbar's Zulu clock shows, and the client's only source of it.
    * @param {object} [deps.theater]      src/theater-context.js (docs/adr/0085) —
    *   the `theater` message: transition altitude and magnetic variation.
+   * @param {number} [deps.wireProtocol] the protocol this server speaks (docs/adr/0103); tests only, defaults to WIRE_PROTOCOL.
+   * @param {string} [deps.downloadUrl]  where `update-required` points an out-of-date client (CRCSYNC_DOWNLOAD_URL); omitted when unset.
    */
-  constructor({ trackStore, collabStore, efsp = null, picture = null, surveillance = null, clock = WALL_CLOCK, theater = null }) {
+  constructor({ trackStore, collabStore, efsp = null, picture = null, surveillance = null, clock = WALL_CLOCK, theater = null, wireProtocol = WIRE_PROTOCOL, downloadUrl = null }) {
+    this._wireProtocol = wireProtocol;
+    this._downloadUrl  = downloadUrl;
+    this._refusedSeen  = new Set(); // who|clientVersion already logged at info
     this._trackStore  = trackStore;
     this._collabStore = collabStore;
     this._efsp        = efsp;
@@ -79,9 +93,36 @@ class WsHub {
         cb(true);
       },
     });
-    this._wss.on('connection', (ws, req) => this._onConnect(ws, req));
+    this._wss.on('connection', (ws, req) => { if (this._admit(ws, req)) this._onConnect(ws, req); });
     this._timer = setInterval(() => this._tickAll(), TICK_MS);
     log.info('/feed attached');
+  }
+
+  /** Tests only (the Playwright hook, src/test-reset.js): make this hub speak another protocol until the process ends. */
+  setWireProtocolForTest(n) { this._wireProtocol = n; }
+
+  /**
+   * The wire protocol handshake (docs/adr/0103). Exact match, or the client gets one `update-required` frame and close
+   * 4426: no session, no coverage, no snapshot. Runs in the connection listener, not in `_onConnect`, which tests and the
+   * soak call directly.
+   * @returns {boolean} whether the client was admitted
+   */
+  _admit(ws, req) {
+    const url = new URL(req.url || '/', 'http://x');
+    const clientProtocol = parseProtocol(url.searchParams.get('protocol'));
+    if (clientProtocol === this._wireProtocol) return true;
+    const clientVersion = (url.searchParams.get('client') || 'unknown').slice(0, 40);
+    const u = req.crcUser || {};
+    const who = u.name || u.preferred_username || u.sub || 'unknown';
+    const key = `${who}|${clientVersion}`;
+    const first = !this._refusedSeen.has(key);
+    this._refusedSeen.add(key);
+    log[first ? 'info' : 'debug']('client refused: update required', { who, clientVersion, clientProtocol, serverProtocol: this._wireProtocol });
+    const frame = { version: VERSION, type: 'update-required', serverProtocol: this._wireProtocol, clientProtocol };
+    if (this._downloadUrl) frame.downloadUrl = this._downloadUrl;
+    try { ws.send(JSON.stringify(frame)); } catch (_) { /* closing anyway */ }
+    ws.close(UPDATE_REQUIRED_CLOSE, 'update required');
+    return false;
   }
 
   /** Stops the tick `attach()` started, so a process (or a test) holding a hub can end. Idempotent. */
