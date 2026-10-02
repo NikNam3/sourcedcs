@@ -88,6 +88,9 @@ test('the real server without the env var has no reset route and survives a POST
     assert.equal(boot1.status, 404);
     const r = await fetch(`http://127.0.0.1:${s.port}/__test/reset`, { method: 'POST' });
     assert.equal(r.status, 404);
+    // docs/adr/0103: the wire-protocol hook does not exist either, and a POST changes nothing.
+    const w = await fetch(`http://127.0.0.1:${s.port}/__test/wire-protocol`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"protocol":9}' });
+    assert.equal(w.status, 404);
     await new Promise((r2) => setTimeout(r2, 300));
     assert.equal(s.child.exitCode, null, 'the process must still be running');
   } finally { s.child.kill(); await s.exited; }
@@ -103,4 +106,32 @@ test('the real server with the env var resets by exiting 75', async () => {
     assert.equal(r.status, 200);
     assert.equal(await s.exited, RESET_EXIT_CODE);
   } finally { s.child.kill(); }
+});
+
+test('the wire-protocol hook exists only with the env var, validates its body and calls the hub', async () => {
+  const app = fakeApp();
+  let set = null;
+  mountTestReset(app, { env: { CRCSYNC_TEST_RESET: '1' }, hooks: { setWireProtocol: (n) => { set = n; } } });
+  const route = app.routes.find(([m, p]) => m === 'POST' && p === '/__test/wire-protocol');
+  assert.ok(route);
+  const handler = route[2][1];
+  const call = (body) => { const r = { status: 200, body: null }; handler({ body }, { status(c) { r.status = c; return this; }, json(b) { r.body = b; } }); return r; };
+  assert.equal(call({ protocol: 'x' }).status, 400);
+  assert.equal(call({ protocol: 0 }).status, 400);
+  assert.equal(set, null);
+  assert.equal(call({ protocol: 7 }).status, 200);
+  assert.equal(set, 7);
+  const bare = fakeApp();
+  assert.equal(mountTestReset(bare, { env: {} }), false);
+  assert.equal(bare.routes.length, 0);
+});
+
+test('the real server with the env var accepts the wire-protocol hook', async () => {
+  const s = boot({ CRCSYNC_TEST_RESET: '1' });
+  try {
+    await up(s.port);
+    const post = (b) => fetch(`http://127.0.0.1:${s.port}/__test/wire-protocol`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) });
+    assert.equal((await post({ protocol: 'no' })).status, 400);
+    assert.equal((await post({ protocol: 9 })).status, 200);
+  } finally { s.child.kill(); await s.exited; }
 });

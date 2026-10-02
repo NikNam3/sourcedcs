@@ -959,6 +959,16 @@
    "trackNameSuffix",
    "trackRef",
    "typeText"
+  ],
+  "update-required.js": [
+   "UPDATE_REQUIRED_CLOSE",
+   "hideUpdateRequired",
+   "isUpdateRequiredShown",
+   "showUpdateRequired",
+   "viewFor"
+  ],
+  "wire-protocol.js": [
+   "WIRE_PROTOCOL"
   ]
  },
  "bridge": {

@@ -288,7 +288,7 @@ function createApp(deps = {}) {
   });
   const { transponders, identity } = surveillance;
 
-  const wsHub       = new WsHub({ trackStore, collabStore, efsp, picture, surveillance, clock: missionClock, theater: theaterContext });
+  const wsHub       = new WsHub({ trackStore, collabStore, efsp, picture, surveillance, clock: missionClock, theater: theaterContext, downloadUrl: env.CRCSYNC_DOWNLOAD_URL || null });
 
   // The radar list itself changes under everyone — an AWACS takes off or lands,
   // a ship spawns — and until this existed nothing told a client about it. A GCI
@@ -644,7 +644,7 @@ function createApp(deps = {}) {
   // Test-only (Playwright harness); mounts nothing unless CRCSYNC_TEST_RESET=1, see src/test-reset.js.
   // Required only here: test-reset.js mints its boot id (crypto.randomUUID) when loaded, and the soak's
   // seeded id stream must not be consumed before createEfsp.
-  if (env.CRCSYNC_TEST_RESET === '1') require('./test-reset').mountTestReset(app, { env });
+  if (env.CRCSYNC_TEST_RESET === '1') require('./test-reset').mountTestReset(app, { env, hooks: { setWireProtocol: (n) => wsHub.setWireProtocolForTest(n) } });
 
   // ── Static hosting ───────────────────────────────────────────────────────
   app.use(express.static(PUBLIC_DIR));

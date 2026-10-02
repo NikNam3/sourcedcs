@@ -6,6 +6,11 @@ on:
     types:
       - completed
   workflow_dispatch:
+    inputs:
+      skip_protocol_gate:
+        description: 'Human only: recreate crc-sync even if its wire protocol differs from the published crc-desktop release (infra/RUNBOOK.md, "Wire protocol and the deploy gate")'
+        type: boolean
+        default: false
 
 concurrency:
   # One deploy at a time per branch, queued rather than dropped. Without
@@ -26,9 +31,30 @@ jobs:
     environment: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name) == 'main' && 'production' || 'development' }}
     
     steps:
+      # The wire protocol gate (crc-sync docs/adr/0103). It decides only whether crc-sync is RECREATED by this deploy, and only
+      # on main (dev has no published release to compare with). It never fails the job: the git pull and every other image
+      # still deploy, and an unreachable releases API warns and lets crc-sync through (S-VERSION1).
+      - name: Check out the deployed commit (full history and tags)
+        if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name) == 'main' }}
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Wire protocol gate
+        id: gate
+        if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name) == 'main' }}
+        env:
+          SKIP_PROTOCOL_GATE: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_protocol_gate && 'true' || 'false' }}
+        run: bash .github/scripts/protocol-gate.sh
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          HOLD_CRC_SYNC: ${{ steps.gate.outputs.hold }}
         with:
+          envs: HOLD_CRC_SYNC
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_KEY }}
@@ -45,5 +71,13 @@ jobs:
             # base image aborts the whole deploy under set -e -- as happened
             # here with a mariadb:11 TLS handshake timeout blocking a nginx
             # config change that had nothing to do with mariadb.
-            docker compose pull main-website atobrief crc-sync
-            docker compose up -d --remove-orphans
+            if [ "${HOLD_CRC_SYNC:-false}" = "true" ]; then
+              # The wire protocol gate held crc-sync (see the "Wire protocol gate" step's error). Deploy everything else and
+              # leave the running crc-sync alone: no pull, no recreate.
+              echo "crc-sync is HELD by the wire protocol gate; deploying every other service."
+              docker compose pull main-website atobrief
+              docker compose up -d --remove-orphans --no-deps $(docker compose config --services | grep -vx crc-sync)
+            else
+              docker compose pull main-website atobrief crc-sync
+              docker compose up -d --remove-orphans
+            fi

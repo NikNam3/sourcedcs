@@ -31,7 +31,7 @@ function isLoopback(addr) {
 /**
  * @returns {boolean} whether the hook was mounted
  */
-function mountTestReset(app, { env = process.env, exit = (code) => process.exit(code), delayMs = 50 } = {}) {
+function mountTestReset(app, { env = process.env, exit = (code) => process.exit(code), delayMs = 50, hooks = {} } = {}) {
   if (env.CRCSYNC_TEST_RESET !== '1') return false;
   if (env.NODE_ENV === 'production') {
     throw new Error('CRCSYNC_TEST_RESET=1 with NODE_ENV=production: the test reset hook must never run in production');
@@ -43,6 +43,14 @@ function mountTestReset(app, { env = process.env, exit = (code) => process.exit(
     res.json({ ok: true, bootId: BOOT_ID });
     // Let the response flush, then die; the supervisor starts a clean process.
     setTimeout(() => exit(RESET_EXIT_CODE), delayMs);
+  });
+  // docs/adr/0103: makes this server speak another wire protocol until the process ends (a reset restarts it), so the
+  // browser suite can see the "update required" overlay. Body: { protocol: <positive integer> }.
+  app.post('/__test/wire-protocol', guard, (req, res) => {
+    const n = req.body && req.body.protocol;
+    if (!Number.isInteger(n) || n < 1 || !hooks.setWireProtocol) return res.status(400).json({ error: 'protocol must be a positive integer' });
+    hooks.setWireProtocol(n);
+    res.json({ ok: true, protocol: n });
   });
   return true;
 }

@@ -60,7 +60,10 @@ const HANDLED_BY_CLIENT = [...new Set([...CORE_CASES, ...REGISTERED])].sort();
 
 // Server types the client deliberately does not switch on. Must stay empty
 // unless a reason is written next to the entry.
-const SERVER_ONLY_OK = {};
+const SERVER_ONLY_OK = {
+  // connect()'s onmessage handles it before the switch, because it ends the connection (crc-sync docs/adr/0103).
+  'update-required': 'handled in app.js connect() ahead of the switch',
+};
 
 test('the scans find the wire at all (guards against a regex that silently matches nothing)', () => {
   assert.ok(SENT_BY_SERVER.length >= 15, `only found ${SENT_BY_SERVER.join(', ')}`);

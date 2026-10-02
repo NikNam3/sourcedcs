@@ -1,5 +1,6 @@
 'use strict';
 import { _setSyncSocket, getSyncFeedUrl } from './sync.js';
+import { UPDATE_REQUIRED_CLOSE, hideUpdateRequired, isUpdateRequiredShown, showUpdateRequired } from './update-required.js';
 import { kinematics } from './geo.js';
 import { applyTheaterFacts } from './magnetic.js';
 import { getUserCoalition, loadUserCoalition, toggleUserCoalition } from './iff.js';
@@ -511,7 +512,12 @@ function normaliseTrack(t) {
   return t.id === String(t.id) ? t : { ...t, id: String(t.id) };
 }
 
+// crc-sync refused this client's wire protocol (docs/adr/0103): stop reconnecting until the overlay's Retry.
+let _updateRequired = false;
+function retryAfterUpdateRequired() { _updateRequired = false; connect(); }
+
 async function connect() {
+  if (_updateRequired) return;
   // crc-sync is a required dependency (no offline/solo mode) — getSyncFeedUrl
   // returns null and shows a login gate if we're not authenticated yet; the
   // existing reconnect timer below just keeps retrying until login completes.
@@ -525,12 +531,14 @@ async function connect() {
   // No resync on reconnect (R3-47): the server sends a full snapshot on every connect,
   // which is the recovery. Resync is for a Board epoch change and a missed delta only.
   ws.onopen = () => {
+    hideUpdateRequired();
     console.log('[ws] connected to crc-sync');
   };
 
   ws.onmessage = (e) => {
     let msg;
     try { msg = JSON.parse(e.data); } catch (_) { return; }
+    if (msg.type === 'update-required') { _updateRequired = true; showUpdateRequired(msg, { onRetry: retryAfterUpdateRequired }); return; }
     onSyncMessage(msg);
   };
 
@@ -638,12 +646,18 @@ async function connect() {
     }
   };
 
-  ws.onclose = () => {
+  ws.onclose = (event) => {
     if (_ws === ws) { _ws = null; _setSyncSocket(null); }
     grpcStatus = 'disconnected';
     srsStatus  = 'disconnected';
     updateStatusUI();
     updateMap();
+    if (event && event.code === UPDATE_REQUIRED_CLOSE) {
+      // Normally the frame arrived first; if only the close did, still show the overlay (server protocol unknown).
+      _updateRequired = true;
+      if (!isUpdateRequiredShown()) showUpdateRequired({}, { onRetry: retryAfterUpdateRequired });
+    }
+    if (_updateRequired) return;
     setTimeout(connect, 2000);
   };
 

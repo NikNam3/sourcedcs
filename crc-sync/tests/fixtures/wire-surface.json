@@ -1,0 +1,126 @@
+{
+  "protocol": 2,
+  "surface": {
+    "clientToServer": [
+      "aptConfigSet",
+      "clearDeclare",
+      "clearRename",
+      "declare",
+      "efsp-airspace-mutation",
+      "efsp-ato-mutation",
+      "efsp-ato-preview",
+      "efsp-carrier-mutation",
+      "efsp-correlation-mutation",
+      "efsp-marsa-mutation",
+      "efsp-mutation",
+      "efsp-resync",
+      "efsp-runway-status-mutation",
+      "efsp-set-positions",
+      "efsp-sfa-mutation",
+      "rename"
+    ],
+    "serverToClient": [
+      "apt-config",
+      "atis",
+      "coverage",
+      "delta",
+      "efsp-airspace-ack",
+      "efsp-airspace-delta",
+      "efsp-alerts",
+      "efsp-ato-ack",
+      "efsp-ato-preview-result",
+      "efsp-board-delta",
+      "efsp-carrier-ack",
+      "efsp-carrier-delta",
+      "efsp-correlation-ack",
+      "efsp-correlation-delta",
+      "efsp-heartbeat",
+      "efsp-marsa-ack",
+      "efsp-marsa-delta",
+      "efsp-metrics",
+      "efsp-metrics-report-ack",
+      "efsp-mutation-ack",
+      "efsp-positions-ack",
+      "efsp-resync-reply",
+      "efsp-runway-status-ack",
+      "efsp-runway-status-delta",
+      "efsp-sfa-ack",
+      "efsp-sfa-delta",
+      "efsp-snapshot",
+      "game-time",
+      "init",
+      "snapshot",
+      "status",
+      "theater",
+      "update-required",
+      "weather"
+    ],
+    "efspOpKinds": [
+      "AIT",
+      "ApproveAirspaceEntry",
+      "ClearAirspaceEntry",
+      "ConvertToArrival",
+      "CreateStrip",
+      "DropStrip",
+      "HANDOFF",
+      "InvokeNla",
+      "MoveStrip",
+      "OPERATIONAL_REQUEST",
+      "POINT_OUT",
+      "SetBlock",
+      "SetFlag",
+      "SetState",
+      "TOFI",
+      "TRAFFIC",
+      "TransferStrip",
+      "Undo"
+    ],
+    "frameKeys": {
+      "status": [
+        "grpc",
+        "srs",
+        "type",
+        "version"
+      ],
+      "weather": [
+        "pressurePa",
+        "tempK",
+        "type",
+        "version"
+      ],
+      "game-time": [
+        "source",
+        "type",
+        "version",
+        "zuluMs"
+      ],
+      "atis": [
+        "active",
+        "type",
+        "version"
+      ],
+      "apt-config": [
+        "airports",
+        "type",
+        "version"
+      ],
+      "init": [
+        "airports",
+        "bullseye",
+        "drawings",
+        "missionId",
+        "theatre",
+        "type",
+        "version",
+        "waypoints"
+      ],
+      "update-required": [
+        "clientProtocol",
+        "downloadUrl",
+        "serverProtocol",
+        "type",
+        "version"
+      ]
+    }
+  }
+}
