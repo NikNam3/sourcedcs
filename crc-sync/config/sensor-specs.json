@@ -1,5 +1,5 @@
 {
-  "_comment": "What each sensor can know. THE single home for these numbers (docs/adr/0042, 0059). `radar`: DCS unit type -> airborne radar; angleFromNose is the total scan arc in degrees centred on the nose (360 = a full rotating dish), rangeNm the detection range against a fighter-size target, sweepMs one full rotation or scan cycle, and an optional `caps` ({height, ssr, mode4}; mode4 = carries a Mode 4/5 interrogator, docs/adr/0066) overrides the defaults for its kind (`defaultCaps` below). `shipRadarDefault`: the surface-search radar of a ship type with no `carrierRadar` entry. `carrierRadar`: ship type -> surface/air search radar. `datalink`: which types are network participants (PPLI) and how often they report. `presentation`: which scheme (ATC or TACTICAL) draws a contact that a radar of each kind sees (airport, approach, carrierApproach, awacs, fighter, carrier); [SOURCE-DEFINED], docs/adr/0088. `transponder`: `syntheticFor` says which coalitions' AI aircraft squawk a synthetic Mode 3/C code; `mode4For` says which coalitions' AI aircraft and ships answer a Mode 4/5 interrogation (only `own` can ever be honoured: a valid reply needs our crypto keys). Every figure is [SOURCE-DEFINED] — DCS publishes none of it, and none of it should be presented as a real system's performance.",
+  "_comment": "What each sensor can know. THE single home for these numbers (docs/adr/0042, 0059). `radar`: DCS unit type -> airborne radar; angleFromNose is the total scan arc in degrees centred on the nose (360 = a full rotating dish), rangeNm the detection range against a fighter-size target, sweepMs one full rotation or scan cycle, and an optional `caps` ({height, ssr, mode4}; mode4 = carries a Mode 4/5 interrogator, docs/adr/0066) overrides the defaults for its kind (`defaultCaps` below). `shipRadarDefault`: the surface-search radar of a ship type with no `carrierRadar` entry. `shipRadarHeightM`: the assumed antenna height above a ship's deck altitude, metres (DCS reports none; terrain masking needs one). `fieldRadar`: the ground-based radars built per airfield (`airport` surveillance, `approach`) and per carrier (`carrierApproach`): rangeNm, sweepMs and heightM, the assumed antenna height above the airfield elevation or the ship's altitude (DCS reports no tower height). All required: a missing or invalid key stops start-up naming this file and the key. `carrierRadar`: ship type -> surface/air search radar. `datalink`: which types are network participants (PPLI) and how often they report. `presentation`: which scheme (ATC or TACTICAL) draws a contact that a radar of each kind sees (airport, approach, carrierApproach, awacs, fighter, carrier); [SOURCE-DEFINED], docs/adr/0088. `transponder`: `syntheticFor` says which coalitions' AI aircraft squawk a synthetic Mode 3/C code; `mode4For` says which coalitions' AI aircraft and ships answer a Mode 4/5 interrogation (only `own` can ever be honoured: a valid reply needs our crypto keys). Every figure is [SOURCE-DEFINED] — DCS publishes none of it, and none of it should be presented as a real system's performance.",
   "presentation": {
     "airport": "ATC",
     "approach": "ATC",
@@ -17,6 +17,12 @@
     "carrierApproach": { "height": false, "ssr": true, "mode4": true }
   },
   "shipRadarDefault": { "rangeNm": 40, "sweepMs": 5000 },
+  "shipRadarHeightM": 40,
+  "fieldRadar": {
+    "airport":         { "rangeNm": 40, "sweepMs": 2000, "heightM": 15 },
+    "approach":        { "rangeNm": 80, "sweepMs": 3000, "heightM": 15 },
+    "carrierApproach": { "rangeNm": 50, "sweepMs": 4000, "heightM": 45 }
+  },
   "radar": {
     "E-3A": {
       "angleFromNose": 360,

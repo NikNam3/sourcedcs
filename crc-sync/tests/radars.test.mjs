@@ -28,7 +28,6 @@ process.env.CRCSYNC_SENSOR_SPECS_PATH = specsPath;
 
 const {
   buildRadars, loadSensorSpecs, isRadarSite, M_PER_NM,
-  AIRPORT_RADAR, APPROACH_RADAR, AIRPORT_RADAR_HEIGHT_M,
 } = await import('../src/radars.js');
 
 const SPECS = loadSensorSpecs(specsPath);
@@ -125,9 +124,9 @@ test('airfield radars carry their ICAO so a config selector can name them, and a
   assert.equal(apt.airport, 'Incirlik');
   assert.equal(apt.label, 'LTAG');
   assert.equal(radars.get('app:Incirlik').label, 'LTAG APP');
-  assert.equal(apt.elevM, 44 + AIRPORT_RADAR_HEIGHT_M);
-  assert.equal(apt.rangeM, AIRPORT_RADAR.rangeNm * M_PER_NM);
-  assert.equal(radars.get('app:Incirlik').rangeM, APPROACH_RADAR.rangeNm * M_PER_NM);
+  assert.equal(apt.elevM, 44 + SPECS.fieldRadar.airport.heightM);
+  assert.equal(apt.rangeM, SPECS.fieldRadar.airport.rangeNm * M_PER_NM);
+  assert.equal(radars.get('app:Incirlik').rangeM, SPECS.fieldRadar.approach.rangeNm * M_PER_NM);
 });
 
 test('an airfield with no ICAO falls back to its name as the label', () => {
@@ -243,4 +242,26 @@ test('the shipped sensor-specs.json classifies every radar kind', async () => {
   assert.deepEqual(shipped.presentation, {
     airport: 'ATC', approach: 'ATC', carrierApproach: 'ATC', awacs: 'TACTICAL', fighter: 'TACTICAL', carrier: 'TACTICAL',
   });
+});
+
+test('field radar figures and the ship antenna height come from sensor-specs.json (DATA-3): the shipped values, a layer override, and a start-up error naming file and key', () => {
+  assert.deepEqual(SPECS.fieldRadar, {
+    airport: { rangeNm: 40, sweepMs: 2000, heightM: 15 },
+    approach: { rangeNm: 80, sweepMs: 3000, heightM: 15 },
+    carrierApproach: { rangeNm: 50, sweepMs: 4000, heightM: 45 },
+  });
+  assert.equal(SPECS.shipRadarHeightM, 40);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'crcsync-radars-field-'));
+  const write = (o) => { const f = path.join(dir, 'sensor-specs.json'); fs.writeFileSync(f, JSON.stringify(o)); return f; };
+  const over = loadSensorSpecs(write({ fieldRadar: { airport: { rangeNm: 25 } }, shipRadarHeightM: 30 }));
+  assert.equal(over.fieldRadar.airport.rangeNm, 25);
+  assert.equal(over.fieldRadar.airport.sweepMs, 2000);
+  assert.equal(over.shipRadarHeightM, 30);
+  const tracks = [{ id: 3, callsign: 'CVN', type: 'CVN_74', category: 4, lat: 36.5, lon: 35.0, alt: 10, heading: 0 }];
+  const r = byId(buildRadars({ missionData: MISSION, tracks, radarSpecs: over }));
+  assert.equal(r.get('apt:Incirlik').rangeM, 25 * M_PER_NM);
+  assert.equal(r.get('carrier:3').elevM, 10 + 30);
+  assert.equal(r.get('cvapp:3').elevM, 10 + 45);
+  assert.throws(() => loadSensorSpecs(write({ fieldRadar: { approach: { sweepMs: 0 } } })), /sensor-specs\.json: "fieldRadar\.approach\.sweepMs" must be/);
+  assert.throws(() => loadSensorSpecs(write({ shipRadarHeightM: 'tall' })), /"shipRadarHeightM" must be/);
 });

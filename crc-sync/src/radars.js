@@ -32,20 +32,11 @@ const { CONFIG_DIR } = require('./state-paths');
 const { readShipped } = require('./tuning-file');
 const log = require('./log').logger('radars');
 
-// DCS reports no radar-tower height, so a ground-based radar needs an assumed
-// offset or terrain masking would make it unrealistically easy to block.
-// Airborne radars use their own live altitude instead.
-const AIRPORT_RADAR_HEIGHT_M = 15;
-const SHIP_RADAR_HEIGHT_M = 40;
-
+// Field radars (airport, approach, carrier approach) and the ship antenna height
+// are `fieldRadar` / `shipRadarHeightM` in config/sensor-specs.json (DATA-3, H88):
+// [SOURCE-DEFINED], DCS models none of it and no figure is any real facility's.
 const M_PER_NM = 1852;
 
-// Airport surveillance and approach radars, per airfield. [SOURCE-DEFINED] —
-// DCS models neither, so these are SOURCE's own figures and must not be
-// presented as any real facility's equipment (defect D11).
-const AIRPORT_RADAR = { rangeNm: 40, sweepMs: 2000 };
-const APPROACH_RADAR = { rangeNm: 80, sweepMs: 3000 };
-const CVN_APPROACH_RADAR = { rangeNm: 50, sweepMs: 4000, heightM: 45 };
 const RADAR_TYPES = ['airport', 'approach', 'awacs', 'fighter', 'carrier'];
 
 // What each kind of radar can measure beyond a position (docs/adr/0059).
@@ -106,15 +97,37 @@ function loadSensorSpecs(specsPath = SENSOR_SPECS_PATH) {
   for (const [k, v] of Object.entries(cfg.presentation || {})) if (PRESENTATIONS.has(v)) presentation[k] = v;
   const defaultCaps = {};
   for (const k of Object.keys(shipped.defaultCaps)) defaultCaps[k] = { ...shipped.defaultCaps[k], ...((cfg.defaultCaps || {})[k] || {}) };
-  return {
+  const fieldRadar = {};
+  for (const k of Object.keys(shipped.fieldRadar || {})) fieldRadar[k] = { ...shipped.fieldRadar[k], ...((cfg.fieldRadar || {})[k] || {}) };
+  const out = {
     radar: cfg.radar || shipped.radar,
     carrierRadar: cfg.carrierRadar || shipped.carrierRadar,
     presentation,
     defaultCaps,
     shipRadarDefault: { ...shipped.shipRadarDefault, ...(cfg.shipRadarDefault || {}) },
+    shipRadarHeightM: cfg.shipRadarHeightM !== undefined ? cfg.shipRadarHeightM : shipped.shipRadarHeightM,
+    fieldRadar,
     datalink: { ...shipped.datalink, ...(cfg.datalink || {}) },
     transponder: { ...shipped.transponder, ...(cfg.transponder || {}) },
   };
+  validateFieldRadar(out, path.resolve(specsPath));
+  return out;
+}
+
+const FIELD_RADAR_KINDS = ['airport', 'approach', 'carrierApproach'];
+
+/** Throws naming the file and the key when a field radar figure or the ship antenna height is missing or not a sane number (DATA-3). */
+function validateFieldRadar(specs, file) {
+  const bad = (key, why) => { throw new Error(`[sensor-specs] ${file}: "${key}" ${why}`); };
+  const num = (v, min) => typeof v === 'number' && Number.isFinite(v) && v >= min;
+  if (!num(specs.shipRadarHeightM, 0)) bad('shipRadarHeightM', 'must be a number of metres >= 0');
+  for (const kind of FIELD_RADAR_KINDS) {
+    const r = specs.fieldRadar[kind];
+    if (!r || typeof r !== 'object') bad(`fieldRadar.${kind}`, 'is missing');
+    if (!num(r.rangeNm, Number.MIN_VALUE)) bad(`fieldRadar.${kind}.rangeNm`, 'must be a number > 0');
+    if (!num(r.sweepMs, Number.MIN_VALUE)) bad(`fieldRadar.${kind}.sweepMs`, 'must be a number > 0');
+    if (!num(r.heightM, 0)) bad(`fieldRadar.${kind}.heightM`, 'must be a number of metres >= 0');
+  }
 }
 
 function isRadarSite(apt) {
@@ -147,13 +160,14 @@ function buildRadars({ missionData, tracks, radarSpecs }) {
   for (const apt of airports) {
     if (!isRadarSite(apt)) continue;
     const aptLabel = apt.icao || apt.name;
-    const elevM = (apt.elev || 0) + AIRPORT_RADAR_HEIGHT_M;
+    const elevM = (apt.elev || 0) + specs.fieldRadar.airport.heightM;
+    const appElevM = (apt.elev || 0) + specs.fieldRadar.approach.heightM;
 
     radars.push({
       id: `apt:${apt.name}`, type: 'airport', label: aptLabel,
       airport: apt.name, airportIcao: apt.icao || null,
       lat: apt.lat, lon: apt.lon, elevM,
-      rangeM: AIRPORT_RADAR.rangeNm * M_PER_NM, sweepMs: AIRPORT_RADAR.sweepMs,
+      rangeM: specs.fieldRadar.airport.rangeNm * M_PER_NM, sweepMs: specs.fieldRadar.airport.sweepMs,
       // The only radar that sees ground vehicles at all.
       seesGround: true, seesShips: false, noGroundAircraft: false,
       angleFromNose: 360, heading: 0,
@@ -163,8 +177,8 @@ function buildRadars({ missionData, tracks, radarSpecs }) {
     radars.push({
       id: `app:${apt.name}`, type: 'approach', label: `${aptLabel} APP`,
       airport: apt.name, airportIcao: apt.icao || null,
-      lat: apt.lat, lon: apt.lon, elevM,
-      rangeM: APPROACH_RADAR.rangeNm * M_PER_NM, sweepMs: APPROACH_RADAR.sweepMs,
+      lat: apt.lat, lon: apt.lon, elevM: appElevM,
+      rangeM: specs.fieldRadar.approach.rangeNm * M_PER_NM, sweepMs: specs.fieldRadar.approach.sweepMs,
       seesGround: false, seesShips: false, noGroundAircraft: true,
       angleFromNose: 360, heading: 0,
       caps: capsFor('approach', null, specs), presentation: presentationFor('approach', specs),
@@ -204,7 +218,7 @@ function buildRadars({ missionData, tracks, radarSpecs }) {
       caps: capsFor('carrier', specs.carrierRadar[t.type], specs),
       presentation: presentationFor('carrier', specs),
       label: label(t) || t.type, sublabel: t.type,
-      lat: t.lat, lon: t.lon, elevM: t.alt + SHIP_RADAR_HEIGHT_M,
+      lat: t.lat, lon: t.lon, elevM: t.alt + specs.shipRadarHeightM,
       rangeM: spec.rangeNm * M_PER_NM, sweepMs: spec.sweepMs,
       seesGround: false, seesShips: true, noGroundAircraft: true,
       angleFromNose: 360, heading: 0, onGround: false,
@@ -218,8 +232,8 @@ function buildRadars({ missionData, tracks, radarSpecs }) {
         caps: capsFor('carrierApproach', null, specs),
         presentation: presentationFor('carrierApproach', specs),
         label: `${label(t) || t.type} APP RDR`, sublabel: t.type,
-        lat: t.lat, lon: t.lon, elevM: t.alt + CVN_APPROACH_RADAR.heightM,
-        rangeM: CVN_APPROACH_RADAR.rangeNm * M_PER_NM, sweepMs: CVN_APPROACH_RADAR.sweepMs,
+        lat: t.lat, lon: t.lon, elevM: t.alt + specs.fieldRadar.carrierApproach.heightM,
+        rangeM: specs.fieldRadar.carrierApproach.rangeNm * M_PER_NM, sweepMs: specs.fieldRadar.carrierApproach.sweepMs,
         seesGround: false, seesShips: false, noGroundAircraft: true,
         angleFromNose: 360, heading: 0, onGround: false,
         coalition: t.coalition,
@@ -243,7 +257,5 @@ function isCarrier(track) {
 
 module.exports = {
   buildRadars, loadSensorSpecs, isRadarSite,
-  AIRPORT_RADAR_HEIGHT_M, SHIP_RADAR_HEIGHT_M,
-  AIRPORT_RADAR, APPROACH_RADAR,
   M_PER_NM,
 };
