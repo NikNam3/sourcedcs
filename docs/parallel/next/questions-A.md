@@ -44,8 +44,9 @@ Top five: QA-VERSION-2, QA-VERSION-1, QA-UNDO-S-1, QA-AIRSP2SA-3, QA-DATA-3-1.
   marsaId` (`crc-sync/src/efsp/metrics.js:921`), and the carrier and SFA families' subjects are `hullId`/`rackId`
   (`wire/families/carrier.js:25`, `sfa.js:24`), so without it the new log entries name nothing.
 - Why: the step-0 review cannot happen after the fact, and frozen-file edits slip through unseen.
-- Recommended: ask each of the five to write its "Code as found" + "Defaults taken" note now (short), so the review
-  below can run against it; confirm (or not) AUDIT-GAPS's `metrics.js` hunk. Since AUDIT-GAPS merges first, UNDO-S and
+- Update: AUDIT-GAPS and MAPKEY have since written their notes (reviewed below), and AUDIT-GAPS's note says the
+  `metrics.js` edit was approved. DATA-3, BRIDGE and ESM-GUARDS still have none.
+- Recommended: ask DATA-3, BRIDGE and ESM-GUARDS for their "Code as found" + "Defaults taken" notes (short). Since AUDIT-GAPS merges first, UNDO-S and
   2S-A pick that hunk up through the merge.
 - Owner: supervisor.
 
@@ -269,5 +270,19 @@ VERSION's D1 (a `POST /__test/wire-protocol` route instead of a process env) avo
 
 ## Step-0 reviews
 
-(Reviews of VERSION, UNDO-S and AIRSP-2S-A step 0 are folded into the points above; the five lanes without a note
-are QA-ALL-1.)
+- **VERSION** (`docs/wip/VERSION.md`): the code as found is accurate (the `verify-main` correction included). D1 is
+  good. Open: QA-VERSION-1 (already built as briefed, `4b99677`), QA-VERSION-2 (step 6 not started), QA-VERSION-3.
+- **UNDO-S** (`docs/wip/UNDO-S.md`, contract `069fdb7`): the symbol map is complete and correct after RENAME. The
+  side-effect table is the useful part. Open: QA-UNDO-S-1..4. The "few lines in ws-hub.js" are in QA-ALL-2.
+- **AIRSP-2S-A** (`docs/wip/AIRSP-2S-A.md`): the code as found matches the base. Reading the RANGES ids from the
+  snapshot before the Facility loop is sound. Open: QA-AIRSP2SA-1..4. The rename's reach is in QA-ALL-2.
+- **AUDIT-GAPS** (note written after the code): all six items done, and freeze identical for the refactor commits.
+  The `metrics.js` edit was approved by "main" (its note says "the approved key-list edit"). The SFA subject is
+  `op.rackId`, which needed one more line. Nothing further. `mintReplica` sits in `board/strip-util.js`, which 2S-A's
+  rename also touches (one require line; QA-ALL-2).
+- **MAPKEY** (note written after the code): the TileJSON source became inline `tiles` so that the map `load` event never
+  waits on a failed TileJSON request. The listener fires only when the key changes (`maptiler-key.js`), so reconnects do
+  not reload tiles. Sound. The remaining risk is the `maxzoom 14` assumption, which the lane states; a live check with a
+  real key is the human's. No point.
+- **DATA-3, BRIDGE, ESM-GUARDS**: no step-0 note yet (QA-ALL-1). DATA-3 was reviewed from its commits (QA-DATA-3-1..3).
+  BRIDGE's and ESM-GUARDS's risks were cleared by the pre-check scan (see "Pre-check items found clean").
