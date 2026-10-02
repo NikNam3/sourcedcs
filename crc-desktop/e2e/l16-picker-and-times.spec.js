@@ -17,7 +17,7 @@ test.describe.configure({ timeout: 90000 });
 const SHOTS = path.join(__dirname, '..', '..', 'docs', 'wip', 'L16');
 
 const flightDataOf = (page, callsign) => page.evaluate((cs) => {
-  const s = [...efspStrips.values()].find(x => (crc.state.efspFlightDataList.get(x.flightDataId) || {}).identity?.callsign === cs);
+  const s = [...crc.state.efspStrips.values()].find(x => (crc.state.efspFlightDataList.get(x.flightDataId) || {}).identity?.callsign === cs);
   return s ? crc.state.efspFlightDataList.get(s.flightDataId) : null;
 }, callsign);
 

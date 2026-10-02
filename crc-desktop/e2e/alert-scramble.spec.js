@@ -34,22 +34,22 @@ async function goBay(page, positionId, bayId) {
 /** One op on the Strip showing `callsign`, through the page's real sender; waits for the ack to land. */
 async function mutate(page, acting, callsign, op) {
   const before = await page.evaluate((cs) => {
-    const s = [...efspStrips.values()].find(x => crc.state.efspFlightDataList.get(x.flightDataId)?.identity?.callsign === cs && x.state !== 'DROPPED');
+    const s = [...crc.state.efspStrips.values()].find(x => crc.state.efspFlightDataList.get(x.flightDataId)?.identity?.callsign === cs && x.state !== 'DROPPED');
     return s ? s.rev : null;
   }, callsign);
   await page.evaluate(([a, cs, o]) => {
-    const s = [...efspStrips.values()].find(x => crc.state.efspFlightDataList.get(x.flightDataId)?.identity?.callsign === cs && x.state !== 'DROPPED');
+    const s = [...crc.state.efspStrips.values()].find(x => crc.state.efspFlightDataList.get(x.flightDataId)?.identity?.callsign === cs && x.state !== 'DROPPED');
     crc.ws.sendEfspMutation(a, s, o);
   }, [acting, callsign, op]);
   await expect.poll(() => page.evaluate((cs) => {
-    const s = [...efspStrips.values()].find(x => crc.state.efspFlightDataList.get(x.flightDataId)?.identity?.callsign === cs);
+    const s = [...crc.state.efspStrips.values()].find(x => crc.state.efspFlightDataList.get(x.flightDataId)?.identity?.callsign === cs);
     return s ? s.rev : null;
   }, callsign)).toBeGreaterThan(before);
 }
 
-const stateOf = (page, cs) => page.evaluate((c) => [...efspStrips.values()].find(x => crc.state.efspFlightDataList.get(x.flightDataId)?.identity?.callsign === c)?.state, cs);
+const stateOf = (page, cs) => page.evaluate((c) => [...crc.state.efspStrips.values()].find(x => crc.state.efspFlightDataList.get(x.flightDataId)?.identity?.callsign === c)?.state, cs);
 const alertOf = (page, cs) => page.evaluate((c) => {
-  const s = [...efspStrips.values()].find(x => crc.state.efspFlightDataList.get(x.flightDataId)?.identity?.callsign === c);
+  const s = [...crc.state.efspStrips.values()].find(x => crc.state.efspFlightDataList.get(x.flightDataId)?.identity?.callsign === c);
   return s ? crc.state.efspFlightDataList.get(s.flightDataId).military.alertStatus : null;
 }, cs);
 
@@ -66,7 +66,7 @@ async function pickAlert(strip, value) {
   await select.selectOption(value);
 }
 
-const bayOrder = (page, bayId) => page.evaluate((b) => [...efspStrips.values()]
+const bayOrder = (page, bayId) => page.evaluate((b) => [...crc.state.efspStrips.values()]
   .filter(s => s.bayId === b && s.state !== 'DROPPED')
   .sort((x, y) => (x.rackId + x.orderKey < y.rackId + y.orderKey ? -1 : 1))
   .map(s => crc.state.efspFlightDataList.get(s.flightDataId).identity.callsign), bayId);
@@ -165,7 +165,7 @@ test('alert and scramble: ALERT is quiet, SCRAMBLE lights the Board and flags gr
 
   // ── 5. VIPER11 gets airborne: the line and every flag go by themselves. ──
   for (let i = 0; i < 8 && (await stateOf(page, CS)) !== 'DEPARTED'; i++) {
-    const owner = await page.evaluate((c) => [...efspStrips.values()].find(x => crc.state.efspFlightDataList.get(x.flightDataId)?.identity?.callsign === c).ownerPositionId, CS);
+    const owner = await page.evaluate((c) => [...crc.state.efspStrips.values()].find(x => crc.state.efspFlightDataList.get(x.flightDataId)?.identity?.callsign === c).ownerPositionId, CS);
     await nla(page, owner, CS);
   }
   expect(await stateOf(page, CS)).toBe('DEPARTED');

@@ -117,7 +117,7 @@ test('a Strip arriving in the Bay on screen flashes once, and is not listed on t
   // Force a rebuild of ARV601 by something unrelated to its arrival.
   await twr.evaluate((cs) => {
     const s = crc.state.getAllEfspStrips().find((x) => crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs);
-    crc.state.applyEfspDelta({ flightDataList: { updated: [{ ...getEfspFlightData(s.flightDataId), rev: crc.state.getEfspFlightData(s.flightDataId).rev + 100 }] } });
+    crc.state.applyEfspDelta({ flightDataList: { updated: [{ ...crc.state.getEfspFlightData(s.flightDataId), rev: crc.state.getEfspFlightData(s.flightDataId).rev + 100 }] } });
     crc.bayView.renderAllOpenEfspBays();
   }, 'ARV601');
   const rebuilt = stripByCallsign(twr, 'ARV601');

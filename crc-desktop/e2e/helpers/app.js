@@ -111,7 +111,7 @@ const CORRELATION_INELIGIBLE = ['PROPOSED', 'PENDING_CLEARANCE', 'CLEARED', 'HEL
  */
 async function settleCorrelation(page, callsign) {
   await expect.poll(() => page.evaluate(([cs, ineligible]) => {
-    const s = [...efspStrips.values()].find((x) => x.state !== 'DROPPED'
+    const s = [...crc.state.efspStrips.values()].find((x) => x.state !== 'DROPPED'
       && (crc.state.efspFlightDataList.get(x.flightDataId) || {}).identity && crc.state.efspFlightDataList.get(x.flightDataId).identity.callsign === cs);
     if (!s || ineligible.includes(s.state)) return true;
     const el = document.querySelector(`.efsp-strip[data-strip-id="${s.stripId}"]`);

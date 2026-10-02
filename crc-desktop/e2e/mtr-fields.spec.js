@@ -97,7 +97,7 @@ test('CTR overflight: no MTR row until MTR data is posted, then the full group o
 
   // Stored as an instant on the flight, shown as HHMM.
   const stored = await page.evaluate((cs) => {
-    const s = [...efspStrips.values()].find(x => (crc.state.efspFlightDataList.get(x.flightDataId) || {}).identity?.callsign === cs);
+    const s = [...crc.state.efspStrips.values()].find(x => (crc.state.efspFlightDataList.get(x.flightDataId) || {}).identity?.callsign === cs);
     return crc.state.efspFlightDataList.get(s.flightDataId).military.mtr.exitEstimateUtc;
   }, 'MTR101');
   expect(typeof stored).toBe('number');

@@ -33,14 +33,14 @@ async function goBay(page, positionId, bayId) {
 
 /** The server-side Strip for a callsign, as the page's own state has it. */
 const serverStrip = (page, callsign) => page.evaluate((cs) => {
-  const s = [...efspStrips.values()].find(x => crc.state.efspFlightDataList.get(x.flightDataId).identity.callsign === cs);
+  const s = [...crc.state.efspStrips.values()].find(x => crc.state.efspFlightDataList.get(x.flightDataId).identity.callsign === cs);
   return s && { rev: s.rev, flags: s.flags, tofi: s.tofiCoordination && s.tofiCoordination.state,
     coordination: s.coordination && s.coordination.state, airspace: s.airspaceEntry && s.airspaceEntry.airspaceId };
 }, callsign);
 
 /** Another controller's update to this Strip, through the real send path. */
 const remoteOffset = (page, callsign) => page.evaluate((cs) => {
-  const s = [...efspStrips.values()].find(x => crc.state.efspFlightDataList.get(x.flightDataId).identity.callsign === cs);
+  const s = [...crc.state.efspStrips.values()].find(x => crc.state.efspFlightDataList.get(x.flightDataId).identity.callsign === cs);
   crc.ws.sendEfspMutation(s.ownerPositionId, s, { kind: 'SetFlag', flag: 'offset', value: !s.flags.offset });
 }, callsign);
 
@@ -124,7 +124,7 @@ async function clearBay(page, bayId) {
   await expect.poll(() => page.evaluate((bay) => {
     const openProposal = (s) => (s.coordination && s.coordination.state === 'INITIATED')
       || (s.tofiCoordination && s.tofiCoordination.state === 'INITIATED');
-    return [...efspStrips.values()].filter(s => s.bayId === bay && s.state !== 'DROPPED' && !openProposal(s)).length;
+    return [...crc.state.efspStrips.values()].filter(s => s.bayId === bay && s.state !== 'DROPPED' && !openProposal(s)).length;
   }, bayId)).toBe(0);
 }
 

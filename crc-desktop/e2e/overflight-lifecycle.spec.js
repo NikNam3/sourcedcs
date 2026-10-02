@@ -24,7 +24,7 @@ async function controller(browser, opts) {
   return page;
 }
 
-const records = (page, callsign) => page.evaluate((c) => [...efspStrips.values()]
+const records = (page, callsign) => page.evaluate((c) => [...crc.state.efspStrips.values()]
   .filter(s => (crc.state.efspFlightDataList.get(s.flightDataId) || {}).identity && crc.state.efspFlightDataList.get(s.flightDataId).identity.callsign === c && s.state !== 'DROPPED')
   .map(s => ({ facilityId: s.facilityId, owner: s.ownerPositionId, bayId: s.bayId, state: s.state, stripType: s.stripType })), callsign);
 const stateAt = async (page, callsign, facilityId) => ((await records(page, callsign)).find(r => r.facilityId === facilityId) || {}).state || null;

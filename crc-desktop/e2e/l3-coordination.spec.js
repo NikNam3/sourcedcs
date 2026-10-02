@@ -70,7 +70,7 @@ function seedCtrArrival(page, callsign) {
 
 /** Every live Strip record for this callsign, as the page's own store has it. */
 function recordsFor(page, callsign) {
-  return page.evaluate((cs) => [...efspStrips.values()]
+  return page.evaluate((cs) => [...crc.state.efspStrips.values()]
     .filter(s => (crc.state.efspFlightDataList.get(s.flightDataId) || {}).identity && crc.state.efspFlightDataList.get(s.flightDataId).identity.callsign === cs && s.state !== 'DROPPED')
     .map(s => ({ facilityId: s.facilityId, owner: s.ownerPositionId, bayId: s.bayId, state: s.state, stripType: s.stripType,
       coordination: s.coordination && s.coordination.state, tofi: s.tofiCoordination && s.tofiCoordination.state })), callsign);
@@ -345,7 +345,7 @@ test('Accept TOFI Exit enables once CTR has set SEP REG back to ATC', async ({ b
 
   await setSepReg(s, 'ATC');
   // The MRU page's own flight-data store does get the change...
-  await expect.poll(() => b.evaluate(() => [...efspFlightDataList.values()].find(f => f.identity && f.identity.callsign === 'EXIT01').tofi.separationRegime)).toBe('ATC');
+  await expect.poll(() => b.evaluate(() => [...crc.state.efspFlightDataList.values()].find(f => f.identity && f.identity.callsign === 'EXIT01').tofi.separationRegime)).toBe('ATC');
   // ...but the MISSION Strip is not rebuilt (its rev did not move), so the
   // button keeps saying "CTR must set separation regime back to ATC" after
   // CTR has done exactly that.
@@ -368,7 +368,7 @@ test('the regime stated when accepting TOFI shows in SEP REG on both sides', asy
   // crc-sync writes flightData.tofi.separationRegime = DUE_REGARD on this accept —
   // a page opened AFTERWARDS gets it in its snapshot. Neither page that was
   // connected at the time ever receives it.
-  const flightDataRegime = (page) => page.evaluate(() => [...efspFlightDataList.values()].find(f => f.identity && f.identity.callsign === 'SREG01').tofi.separationRegime);
+  const flightDataRegime = (page) => page.evaluate(() => [...crc.state.efspFlightDataList.values()].find(f => f.identity && f.identity.callsign === 'SREG01').tofi.separationRegime);
   await expect.poll(() => flightDataRegime(a), { message: 'the CTR page never learns the regime', timeout: 3000 }).toBe('DUE_REGARD');
   await expect.poll(() => flightDataRegime(b), { message: 'the TAC_C2 page that set it never learns it either', timeout: 3000 }).toBe('DUE_REGARD');
 });
@@ -400,7 +400,7 @@ test('the regime picker can be opened with a real click and keeps what was chose
   await expect(select).toHaveValue('ATC');
   await mission.getByRole('button', { name: 'Accept TOFI Entry' }).click({ timeout: 3000 });
 
-  const flightDataRegime = (page) => page.evaluate(() => [...efspFlightDataList.values()].find(f => f.identity && f.identity.callsign === 'SREG02').tofi.separationRegime);
+  const flightDataRegime = (page) => page.evaluate(() => [...crc.state.efspFlightDataList.values()].find(f => f.identity && f.identity.callsign === 'SREG02').tofi.separationRegime);
   await expect.poll(() => flightDataRegime(a), { timeout: 3000 }).toBe('ATC');
 });
 

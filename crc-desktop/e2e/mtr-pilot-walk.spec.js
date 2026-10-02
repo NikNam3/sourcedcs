@@ -43,7 +43,7 @@ async function edit(scope, blockId, text) {
   await input.press('Enter');
 }
 const mtrOf = (page, callsign) => page.evaluate((cs) => {
-  const s = [...efspStrips.values()].find(x => (crc.state.efspFlightDataList.get(x.flightDataId) || {}).identity?.callsign === cs);
+  const s = [...crc.state.efspStrips.values()].find(x => (crc.state.efspFlightDataList.get(x.flightDataId) || {}).identity?.callsign === cs);
   return s ? crc.state.efspFlightDataList.get(s.flightDataId).military.mtr : null;
 }, callsign);
 const faceIds = (strip) => strip.locator('.efsp-strip-fields [data-block]').evaluateAll((els) => els.map((e) => e.dataset.block));
@@ -86,8 +86,8 @@ test('pilot walk: "VIPER11 request a different exit fix", CTR and APP at once', 
   // AP takes the flight.
   const accept = a.getByRole('button', { name: 'Accept Hand Off' });
   await accept.click({ timeout: 3000 });
-  await expect.poll(async () => (await app.evaluate((cs) => [...efspStrips.values()].filter(s => crc.state.efspFlightDataList.get(s.flightDataId)?.identity?.callsign === cs && s.facilityId === 'INCIRLIK').map(s => s.coordination && s.coordination.state), CS))[0]).toBe('ACTIVE');
-  const bayNow = await app.evaluate((cs) => [...efspStrips.values()].find(s => crc.state.efspFlightDataList.get(s.flightDataId)?.identity?.callsign === cs && s.facilityId === 'INCIRLIK').bayId, CS);
+  await expect.poll(async () => (await app.evaluate((cs) => [...crc.state.efspStrips.values()].filter(s => crc.state.efspFlightDataList.get(s.flightDataId)?.identity?.callsign === cs && s.facilityId === 'INCIRLIK').map(s => s.coordination && s.coordination.state), CS))[0]).toBe('ACTIVE');
+  const bayNow = await app.evaluate((cs) => [...crc.state.efspStrips.values()].find(s => crc.state.efspFlightDataList.get(s.flightDataId)?.identity?.callsign === cs && s.facilityId === 'INCIRLIK').bayId, CS);
   if (bayNow !== 'ap-coordination') await goBay(app, 'AP', bayNow);
   const mine = stripOf(app, CS);
   note('1b', `APP accepted; its Strip is in ${bayNow}`);
@@ -154,7 +154,7 @@ test('pilot walk: "VIPER11 request a different exit fix", CTR and APP at once', 
   const input = mine.locator('input.efsp-block-input');
   await input.fill('D');
   const ctrWrite = await ctr.evaluate((cs) => {
-    const s = [...efspStrips.values()].find(x => crc.state.efspFlightDataList.get(x.flightDataId)?.identity?.callsign === cs && x.facilityId === 'CENTER');
+    const s = [...crc.state.efspStrips.values()].find(x => crc.state.efspFlightDataList.get(x.flightDataId)?.identity?.callsign === cs && x.facilityId === 'CENTER');
     crc.ws.sendEfspMutation('CTR', s, { kind: 'SetBlock', blockId: '9H-TIME', value: '1445' }, 'CENTER');
     return s.ownerPositionId;
   }, CS);
