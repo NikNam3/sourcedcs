@@ -4,7 +4,7 @@
 // require this one (seam rule 1).
 
 const crypto = require('crypto');
-const { isValidAltitude } = require('../airspace-config');
+const { isValidAltitude } = require('../airspace-schema');
 
 function newFlags() {
   return { offset: false, flipped: false, removeIndicator: false, highlight: null, attention: null };

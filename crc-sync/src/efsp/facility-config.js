@@ -28,10 +28,11 @@ const fs = require('fs');
 const runwayStatus = require('./runway-status'); // pure, requires nothing back (docs/adr/0061)
 const schema = require('./facility-schema');
 const { validateConfig, validateRadarSelector, validateSfaRotationRecord, BAY_VIEWS } = schema;
-// The RANGES Facility's Position set is derived from the airspace definitions (see _rangesConfig),
-// so this module needs airspace-config.js; airspace-config.js deliberately does not require
-// this module back, so there is no cycle.
-const airspaceConfig = require('./airspace-config');
+// The RANGES Facility's Position set is derived from the airspace definitions (see _rangesConfig). The definitions
+// live in the registry (airspace-store.js, docs/adr/0098) and this module requires none of it: createEfsp derives the
+// ids from every theater's saved definitions and the standing list, and hands them over with setRangePositionIds()
+// before it builds the Facilities.
+let rangePositionIds = [];
 const path = require('path');
 const { CONFIG_DIR, readPath, writePath, ensureDirFor } = require('../state-paths');
 const log = require('../log').logger('efsp:facility-config');
@@ -67,7 +68,7 @@ const FACILITY_CONFIG_PATHS = new Proxy({}, {
 });
 
 // RANGES is deliberately absent from the path table above: its Position set
-// is DERIVED from airspace-config.js, so an on-disk override would freeze a
+// is DERIVED from airspace-schema.js, so an on-disk override would freeze a
 // `positions` array that then silently goes stale the moment an airspace is
 // added or removed. Deriving it every boot is the whole point — there is
 // nothing here a facility config could usefully say. Also spares a
@@ -83,7 +84,7 @@ const SHIPPED_FACILITY_IDS = ['INCIRLIK', 'CENTER', 'TACTICAL', 'CARRIER'];
 // The RANGES Facility (guide §4.1's fifth Facility, §4.1 rule 2). Unlike
 // every Facility above it, this one's Position set is DERIVED rather than
 // listed: a `RANGE` Position exists only for an airspace that has real
-// control of its own (airspace-config.js's usingPositionId). An ordinary MOA
+// control of its own (airspace-schema.js's usingPositionId). An ordinary MOA
 // contributes no Position at all — a flight working inside one is approved
 // onto a working frequency by whichever ATC Position owns the airspace, and
 // there is nobody else to be.
@@ -100,9 +101,9 @@ const SHIPPED_FACILITY_IDS = ['INCIRLIK', 'CENTER', 'TACTICAL', 'CARRIER'];
 function _rangesConfig() {
   return {
     facility: 'RANGES',
-    positions: airspaceConfig.getRangePositionIds(),
+    positions: rangePositionIds,
     positionClasses: Object.fromEntries(
-      airspaceConfig.getRangePositionIds().map(id => [id, 'USING_AGENCY'])
+      rangePositionIds.map(id => [id, 'USING_AGENCY'])
     ),
     consolidation: {},
     positionLetters: {},
@@ -183,6 +184,15 @@ function load({ reload = false } = {}) {
 }
 
 function _configs() { load(); return configs; }
+
+/**
+ * The RANGES Facility's Positions: every distinct `usingPositionId` of every theater's definitions (R3-24: a change
+ * takes effect at the next start). Called by createEfsp before the Facilities are built.
+ */
+function setRangePositionIds(ids) {
+  rangePositionIds = [...new Set(ids)];
+  if (configs) configs.set('RANGES', _rangesConfig());
+}
 
 function _persist(facilityId) {
   if (DERIVED_FACILITY_IDS.has(facilityId)) return; // see DERIVED_FACILITY_IDS
@@ -386,6 +396,7 @@ function coordinationBayFor(positionId, facilityId = DEFAULT_FACILITY_ID) {
 }
 
 module.exports = {
+  setRangePositionIds,
   DEFAULT_FACILITY_ID, getFacilityIds,
   getFacilityConfig, getPositionSet, getPositionClass, getPositionLetter, allPositionLetters, getConsolidation, getBaysFor, getAllBays, isBlockVisible,
   getPositionRadars, radarBearingPositionIds, validateRadarSelector,

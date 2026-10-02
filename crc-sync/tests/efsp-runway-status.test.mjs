@@ -19,7 +19,7 @@ for (const [k, v] of Object.entries({
   CRCSYNC_EFSP_MUTATION_LOG_PATH: 'mutations.jsonl',
   CRCSYNC_EFSP_AIRSPACES_PATH: 'airspaces.json',
 })) process.env[k] = path.join(tmpDir, v);
-fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
+fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
 
 const runwayStatus = await import('../src/efsp/runway-status.js');
 const facilityConfig = (await import('../src/efsp/facility-config.js')).default;

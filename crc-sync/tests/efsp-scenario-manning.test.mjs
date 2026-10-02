@@ -18,10 +18,10 @@ for (const [k, v] of Object.entries({
   CRCSYNC_EFSP_MUTATION_LOG_PATH: 'mutations.jsonl',
   CRCSYNC_EFSP_AIRSPACES_PATH: 'airspaces.json',
 })) process.env[k] = path.join(tmpDir, v);
-fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify([
+fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify({ Test: [
   { airspaceId: 'MOA-RESTART', name: 'Restart MOA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 138.0 },
   { airspaceId: 'MOA-DROP', name: 'Drop MOA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 138.5 },
-]));
+] }));
 
 const { createEfsp } = await import('../src/efsp/index.js');
 const { crew, hold, act, mustAct, airspaceAct, mustAirspaceAct, jumpTo, DEPARTURE_FLIGHT_DATA, airborneDeparture, handedToCenter, activate } = await import('./helpers/efsp-scenario.mjs');
@@ -31,7 +31,7 @@ const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', A
 // ── 21. a controller walks away with strips in front of them ────────────
 
 test('SCENARIO Ground walks away holding strips, and they route down the consolidation chain', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
 
   const strip = mustAct(efsp, c.OPS, 'OPS', null, {
@@ -56,7 +56,7 @@ test('SCENARIO Ground walks away holding strips, and they route down the consoli
 // ── 22. nobody downstream to cover ──────────────────────────────────────
 
 test('SCENARIO the last controller leaves and the strips are visibly stranded, not silently orphaned', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, { OPS: 'INCIRLIK', AP: 'INCIRLIK' });
 
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'STRAND1' });
@@ -75,7 +75,7 @@ test('SCENARIO the last controller leaves and the strips are visibly stranded, n
 // ── an observer cannot quietly take over ────────────────────────────────
 
 test('SCENARIO a second controller sits down at a staffed Position and watches until handed it', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, { OPS: 'INCIRLIK', AP: 'INCIRLIK' });
   const relief = { controllerId: 'c-relief', who: 'Relief' };
 
@@ -95,7 +95,7 @@ test('SCENARIO a second controller sits down at a staffed Position and watches u
 // ── 24. a client drops mid-sortie ───────────────────────────────────────
 
 test('SCENARIO a client disconnects mid-sortie: its Positions are released, its flights are not lost', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
 
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'DROP1' });
@@ -112,7 +112,7 @@ test('SCENARIO a client disconnects mid-sortie: its Positions are released, its 
 });
 
 test('an airspace op issued while disconnected is simply lost, unlike a Strip mutation', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
 
   // Known and deliberate (efsp-ws.js client): Strip mutations are registered
@@ -136,7 +136,7 @@ test('an airspace op issued while disconnected is simply lost, unlike a Strip mu
 // ── 25. the server restarts mid-sortie ──────────────────────────────────
 
 test('SCENARIO crc-sync restarts with a flight airborne in a hot MOA, and everything comes back', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   activate(efsp, c, 'MOA-RESTART');
 
@@ -145,9 +145,9 @@ test('SCENARIO crc-sync restarts with a flight airborne in a hot MOA, and everyt
   });
   const beacon = efsp.flightDataStore.getFlightData(working.flightDataId).identity.beaconAssigned;
 
-  // A fresh createEfsp() is the closest in-process thing to a real restart:
+  // A fresh createEfsp({ currentTheater: () => 'Test' }) is the closest in-process thing to a real restart:
   // new stores, restore() reads what was persisted.
-  const after = createEfsp();
+  const after = createEfsp({ currentTheater: () => 'Test' });
 
   const strip = after.boardStoreFor('CENTER').getStrip(working.stripId);
   assert.ok(strip, 'the Strip survived');

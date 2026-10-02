@@ -23,9 +23,9 @@ for (const [k, v] of Object.entries({
   CRCSYNC_EFSP_MUTATION_LOG_PATH: 'mutations.jsonl',
   CRCSYNC_EFSP_AIRSPACES_PATH: 'airspaces.json',
 })) process.env[k] = path.join(tmpDir, v);
-fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify([
+fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify({ Test: [
   { airspaceId: 'MOA-RACE', name: 'Race MOA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 140.0 },
-]));
+] }));
 
 const { createEfsp } = await import('../src/efsp/index.js');
 const { crew, hold, act, mustAct, airspaceAct, DEPARTURE_FLIGHT_DATA, airborneDeparture } = await import('./helpers/efsp-scenario.mjs');
@@ -43,7 +43,7 @@ function send(efsp, session, { facilityId = 'INCIRLIK', actingPositionId, stripI
 // ── two controllers on one Strip ────────────────────────────────────────
 
 test('SCENARIO two controllers act on the same Strip at once — the second is refused, not silently merged', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'RACE1' });
 
@@ -73,7 +73,7 @@ test('SCENARIO two controllers act on the same Strip at once — the second is r
 });
 
 test('the same Mutation sent twice is applied once — a retry after a lost ack is safe', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'RETRY1' });
 
@@ -93,7 +93,7 @@ test('the same Mutation sent twice is applied once — a retry after a lost ack 
 });
 
 test('two controllers advancing the same Strip cannot both move it', async () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   let strip = mustAct(efsp, c.OPS, 'OPS', null, {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE',
@@ -113,7 +113,7 @@ test('two controllers advancing the same Strip cannot both move it', async () =>
 // ── two controllers on one airspace ─────────────────────────────────────
 
 test('SCENARIO two controllers act on the same airspace at once', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
 
   const booked = airspaceAct(efsp, c.CTR, 'CTR', 'MOA-RACE', {
@@ -138,7 +138,7 @@ test('SCENARIO two controllers act on the same airspace at once', () => {
 // ── a client that fell behind ───────────────────────────────────────────
 
 test('SCENARIO a client that missed a few updates gets a delta, not a whole snapshot', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
 
   const before = efsp.boardStoreFor('INCIRLIK').currentSeq;
@@ -153,7 +153,7 @@ test('SCENARIO a client that missed a few updates gets a delta, not a whole snap
 });
 
 test('SCENARIO a client that fell too far behind is sent a full snapshot instead', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'FAR1' });
 
@@ -166,7 +166,7 @@ test('SCENARIO a client that fell too far behind is sent a full snapshot instead
 });
 
 test('a reconnecting client that never declared its Positions cannot act until it does', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'RECON1' });
 
@@ -190,7 +190,7 @@ test('a reconnecting client that never declared its Positions cannot act until i
 });
 
 test('a Mutation replayed against a Strip whose role changed while the client was away is refused', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'ROLE1' });
   const cached = { stripId: strip.stripId, rev: strip.rev };
@@ -213,7 +213,7 @@ test('a Mutation replayed against a Strip whose role changed while the client wa
 // ── two controllers, one flight, both facilities ────────────────────────
 
 test('SCENARIO both ends of a handoff act at the same moment', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
 
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'BOTH1' });
@@ -235,7 +235,7 @@ test('SCENARIO both ends of a handoff act at the same moment', () => {
 });
 
 test('an accept that lands twice resolves the exchange once', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
 
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'TWICE1' });
@@ -255,7 +255,7 @@ test('an accept that lands twice resolves the exchange once', () => {
 // ── the audit trail under contention ────────────────────────────────────
 
 test('the Mutation log records who did what, including the airspace ops and the refusals', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
 
   airspaceAct(efsp, c.CTR, 'CTR', 'MOA-RACE', { kind: 'ScheduleAirspace', fromUtc: Date.now(), toUtc: Date.now() + 3600000 });
@@ -280,7 +280,7 @@ test('the Mutation log records who did what, including the airspace ops and the 
 // ── what comes back off disk ────────────────────────────────────────────
 
 test('a restored Strip whose beacon code the pool had free gets it re-reserved', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'RECON2' });
   const code = efsp.flightDataStore.getFlightData(strip.flightDataId).identity.beaconAssigned;
@@ -294,14 +294,14 @@ test('a restored Strip whose beacon code the pool had free gets it re-reserved',
 
   // Left alone, the next CreateStrip would mint this code for a different
   // aircraft — the same failure ADR 0028 fixed, arriving another way.
-  const after = createEfsp();
+  const after = createEfsp({ currentTheater: () => 'Test' });
   assert.equal(after.flightDataStore._codeAllocator.isAllocated(code), true,
     'a code a live flight is squawking must not be left in the pool');
   assert.equal(after.flightDataStore._codeAllocator.holderOf(code), strip.flightDataId);
 });
 
 test('the snapshot is written atomically, so a crash mid-write cannot empty the Board', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'ATOMIC1' });
 
@@ -313,7 +313,7 @@ test('the snapshot is written atomically, so a crash mid-write cannot empty the 
 });
 
 test('free text is capped, because a Strip rides whole in every broadcast', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'LONG1' });
 
@@ -333,7 +333,7 @@ test('free text is capped, because a Strip rides whole in every broadcast', () =
 });
 
 test('a coordination note is capped too — it rides in the same broadcast as everything else', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   let strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'NOTE1' });
   strip = mustAct(efsp, c.AP, 'AP', strip, { kind: 'SetBlock', blockId: '5A', value: 'CST' });

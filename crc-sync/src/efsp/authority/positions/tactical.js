@@ -89,6 +89,9 @@ const family = {
   permissions: PERMISSIONS,
   createsStripTypes: CREATE_STRIP_TYPE_PERMISSIONS,
   capabilities: TACTICAL_CAPABILITIES,
+  // ADR 0098 §11, DA-7: the `airspaceUse` capability (schedule, request and release an airspace whose using agency is
+  // the TACTICAL Facility) is TAC_C2's alone. It never creates, edits or deletes (AIRSP-6).
+  airspace: { TAC_C2: { create: null, edit: null, delete: null, use: true } },
   // TOFI's MRU side (guide §4.6.3): both answer to CENTER's CTR.
   tofiCounterparts: {
     TAC_C2: [{ facilityId: 'CENTER', positionId: 'CTR' }],

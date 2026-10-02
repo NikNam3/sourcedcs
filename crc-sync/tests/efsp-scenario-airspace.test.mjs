@@ -22,7 +22,7 @@ for (const [k, v] of Object.entries({
 // One airspace per scenario that needs a clean starting state, plus the two
 // shapes that matter: a block with no control of its own (owned by the Center
 // that owns the airspace it sits in) and a range with its own tower.
-fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify([
+fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify({ Test: [
   { airspaceId: 'MOA-EAST', name: 'East MOA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 134.25 },
   // A danger area with published vertical limits — the altitude-block case.
   { airspaceId: 'D-12', name: 'Danger 12', type: 'DANGER', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 135.5, altLowerFt: 5000, altUpperFt: 28000 },
@@ -32,7 +32,7 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify([
   { airspaceId: 'MOA-LATER', name: 'Later MOA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 137.5 },
   { airspaceId: 'RANGE-SOUTH', name: 'South A/G Range', type: 'RANGE', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP', usingPositionId: 'SOUTH_RANGE', controlFrequencyMhz: 283.5 },
   { airspaceId: 'RANGE-DENY', name: 'Deny Range', type: 'RANGE', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP', usingPositionId: 'DENY_RANGE', controlFrequencyMhz: 284.0 },
-]));
+] }));
 
 const { createEfsp } = await import('../src/efsp/index.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
@@ -50,7 +50,7 @@ function flight(efsp, c, callsign) {
 // ── 5. the bread-and-butter sortie ───────────────────────────────────────
 
 test('SCENARIO before takeoff, out to a MOA, and home again', async () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
 
   // Center books and activates its own block before anyone launches.
@@ -96,7 +96,7 @@ test('SCENARIO before takeoff, out to a MOA, and home again', async () => {
 // ── the altitude-block case ──────────────────────────────────────────────
 
 test('SCENARIO a flight working a danger area is restricted to an altitude block while another crosses it', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   activate(efsp, c, 'D-12');
 
@@ -135,7 +135,7 @@ test('SCENARIO a flight working a danger area is restricted to an altitude block
 });
 
 test('an altitude block has to fit inside the airspace it is in, and be the right way up', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   activate(efsp, c, 'D-12');
   const strip = handedToCenter(efsp, c, flight(efsp, c, 'EAGLE9'));
@@ -168,7 +168,7 @@ test('an altitude block has to fit inside the airspace it is in, and be the righ
 // ── 6. two flights, one block ────────────────────────────────────────────
 
 test('SCENARIO a MOA stays hot when one of two flights leaves it', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   activate(efsp, c, 'MOA-SHARED');
 
@@ -194,7 +194,7 @@ test('SCENARIO a MOA stays hot when one of two flights leaves it', () => {
 // ── 7. released with somebody still inside ───────────────────────────────
 
 test('SCENARIO an airspace released while a flight is still working it', async () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   activate(efsp, c, 'MOA-OCCUPIED');
 
@@ -216,7 +216,7 @@ test('SCENARIO an airspace released while a flight is still working it', async (
 // ── 8. denied, then granted ──────────────────────────────────────────────
 
 test('SCENARIO a range asks, is refused with a reason, asks again and gets it', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, { ...ATC, DENY_RANGE: 'RANGES' });
   const window = { fromUtc: Date.now(), toUtc: Date.now() + 3600000 };
 
@@ -235,7 +235,7 @@ test('SCENARIO a range asks, is refused with a reason, asks again and gets it', 
 // ── 9. a staffed range tower ──────────────────────────────────────────────
 
 test('SCENARIO an A/G range with its own tower: the flight goes to range control, and the range sees it', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, { ...ATC, SOUTH_RANGE: 'RANGES' });
   activate(efsp, c, 'RANGE-SOUTH');
 
@@ -262,7 +262,7 @@ test('SCENARIO an A/G range with its own tower: the flight goes to range control
 // ── 10. booked ahead ─────────────────────────────────────────────────────
 
 test('SCENARIO a block booked for later this afternoon, activated when the time comes', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   const later = { fromUtc: Date.now() + 4 * 3600000, toUtc: Date.now() + 6 * 3600000 };
 
@@ -280,7 +280,7 @@ test('SCENARIO a block booked for later this afternoon, activated when the time 
 // ── 11. into a cold block ────────────────────────────────────────────────
 
 test('SCENARIO a flight approved into a block nobody activated: allowed, flagged, alerted', async () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   assert.equal(efsp.airspaceStore.getAirspace('MOA-COLD').state, 'RETURNED');
 
@@ -303,7 +303,7 @@ test('SCENARIO a controller types a frequency into Block 22 and it is accepted',
   // cell sends a string, isValidFrequency() requires a number, and nothing
   // bridged them, so the only writer that ever worked was ApproveAirspaceEntry
   // passing a number straight out of config.
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'FREQ11' });
 
@@ -327,4 +327,66 @@ test('SCENARIO a controller types a frequency into Block 22 and it is accepted',
     assert.equal(result.ok, false, bad);
     assert.match(result.detail, /frequency must be a number/);
   }
+});
+
+// ── 11. the registry (docs/adr/0098): an edit while flights work the block ──
+
+const ADMIN = { service: 'SQUADRON_ADMIN', sub: 'web-1', name: 'Web Admin' };
+
+test('SCENARIO the frequency of an active MOA is edited while two flights work it, then one is re-approved', () => {
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
+  const c = crew(efsp, ATC);
+  activate(efsp, c, 'MOA-SHARED');
+  const s1 = mustAct(efsp, c.CTR, 'CTR', handedToCenter(efsp, c, flight(efsp, c, 'VIPER5')), { kind: 'ApproveAirspaceEntry', airspaceId: 'MOA-SHARED' });
+  const s2 = mustAct(efsp, c.CTR, 'CTR', handedToCenter(efsp, c, flight(efsp, c, 'VIPER6')), { kind: 'ApproveAirspaceEntry', airspaceId: 'MOA-SHARED' });
+  assert.equal(s1.airspaceEntry.frequencyMhz, 136.0);
+
+  // Its limits are locked while it is ACTIVE (R3-23), and the refusal names the flights.
+  const defRev = efsp.airspaceStore.getAirspace('MOA-SHARED').defRev;
+  const locked = efsp.applyAsService(ADMIN, { clientMutationId: 'e0', theater: 'Test', airspaceId: 'MOA-SHARED', baseDefRev: defRev, op: { kind: 'EditAirspace', patch: { altUpperFt: 20000 } } }).ack;
+  assert.equal(locked.ok, false);
+  assert.match(locked.detail, /ACTIVE.*VIPER5, VIPER6/);
+
+  // The frequency may change: it warns, lists both flights, and both entries are stale.
+  const edited = efsp.applyAsService(ADMIN, { clientMutationId: 'e1', theater: 'Test', airspaceId: 'MOA-SHARED', baseDefRev: defRev, op: { kind: 'EditAirspace', patch: { workingFrequencyMhz: 137.0 } } }).ack;
+  assert.equal(edited.ok, true, JSON.stringify(edited));
+  assert.equal(edited.warning, 'AIRSPACE_EDITED_OCCUPIED');
+  assert.deepEqual(edited.occupied.map(o => o.callsign).sort(), ['VIPER5', 'VIPER6']);
+  assert.deepEqual(edited.staleEntries.map(o => o.callsign).sort(), ['VIPER5', 'VIPER6']);
+  // Strips keep their copy: an edit is not pushed into them.
+  assert.equal(efsp.boardStoreFor('CENTER').getStrip(s1.stripId).airspaceEntry.frequencyMhz, 136.0);
+
+  // VIPER5 is cleared and re-approved onto the new frequency: only VIPER6 is stale on the next frequency edit.
+  const cleared = mustAct(efsp, c.CTR, 'CTR', efsp.boardStoreFor('CENTER').getStrip(s1.stripId), { kind: 'ClearAirspaceEntry' });
+  const again = mustAct(efsp, c.CTR, 'CTR', cleared, { kind: 'ApproveAirspaceEntry', airspaceId: 'MOA-SHARED' });
+  assert.equal(again.airspaceEntry.frequencyMhz, 137.0);
+  const next = efsp.applyAsService(ADMIN, { clientMutationId: 'e2', theater: 'Test', airspaceId: 'MOA-SHARED', baseDefRev: defRev + 1, op: { kind: 'EditAirspace', patch: { controlFrequencyMhz: 250.0 } } }).ack;
+  assert.deepEqual(next.staleEntries.map(o => o.callsign), ['VIPER6']);
+  assert.ok(s2);
+});
+
+test('SCENARIO a route is requested by TAC_C2, delayed by CTR, then confirmed; a Strip whose MTR designator matches shows in the count', () => {
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
+  const c = crew(efsp, { ...ATC, TAC_C2: 'TACTICAL' });
+  const route = {
+    airspaceId: 'IR107', name: 'IR 107', kind: 'ROUTE', type: 'IR', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', usingFacilityId: 'TACTICAL', defaultWidthNm: 8,
+    segments: [{ fix: { name: 'ENTRY', lat: 36, lon: 35 }, altLowerFt: 500, altUpperFt: 1500 }, { fix: { name: 'EXIT', lat: 36, lon: 36 } }],
+  };
+  assert.equal(efsp.applyAsService(ADMIN, { clientMutationId: 'r0', theater: 'Test', op: { kind: 'CreateAirspace', definition: route } }).ack.ok, true);
+  assert.equal(efsp.airspaceStore.routeOccupancy('IR107'), 0);
+  const ctr = handedToCenter(efsp, c, flight(efsp, c, 'VIPER7'));
+  mustAct(efsp, c.CTR, 'CTR', ctr, { kind: 'SetBlock', blockId: '9G-MTR', value: 'ir107' });
+  assert.equal(efsp.airspaceStore.routeOccupancy('IR107'), 1, 'the designator is normalised like the flight data store writes it');
+
+  mustAirspaceAct(efsp, c.CTR, 'CTR', 'IR107', { kind: 'ScheduleAirspace', fromUtc: Date.now(), toUtc: Date.now() + 3600000 });
+  mustAirspaceAct(efsp, c.TAC_C2, 'TAC_C2', 'IR107', { kind: 'RequestActivation' });
+  const delayed = mustAirspaceAct(efsp, c.CTR, 'CTR', 'IR107', { kind: 'DelayActivation', note: 'hold 10 min' });
+  assert.equal(delayed.state, 'SCHEDULED');
+  assert.equal(delayed.pendingRequest.delay.note, 'hold 10 min');
+  const denied = airspaceAct(efsp, c.CTR, 'CTR', 'IR107', { kind: 'DenyActivation' });
+  assert.equal(denied.ok, false);
+  assert.equal(mustAirspaceAct(efsp, c.CTR, 'CTR', 'IR107', { kind: 'ApproveActivation' }).state, 'ACTIVE');
+  const released = airspaceAct(efsp, c.TAC_C2, 'TAC_C2', 'IR107', { kind: 'ReleaseAirspace' });
+  assert.equal(released.ok, true);
+  assert.equal(released.warning, undefined, 'a route with a flight on it never raises the occupied warning');
 });

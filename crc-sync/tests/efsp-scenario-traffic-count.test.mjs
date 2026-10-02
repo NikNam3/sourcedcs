@@ -25,16 +25,16 @@ for (const [k, v] of Object.entries({
   CRCSYNC_EFSP_METRICS_PATH: 'metrics.json',
   CRCSYNC_EFSP_INSTRUMENTATION_CONFIG_PATH: 'instrumentation.json',
 })) process.env[k] = path.join(tmpDir, v);
-fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify([
+fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify({ Test: [
   { airspaceId: 'MOA-SORTIE', name: 'Sortie MOA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 134.25 },
-]));
+] }));
 
 const { createEfsp } = await import('../src/efsp/index.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
 const { TrafficCount, reconcileTrafficCount } = await import('../src/efsp/traffic-count.js');
 const { crew, act, mustAct, advance, DEPARTURE_FLIGHT_DATA, airborneDeparture, handedToCenter, activate } = await import('./helpers/efsp-scenario.mjs');
 
-const efsp = createEfsp();
+const efsp = createEfsp({ currentTheater: () => 'Test' });
 const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL' });
 const counter = new TrafficCount({
   mutationLog: efsp.mutationLog,

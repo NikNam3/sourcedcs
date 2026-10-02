@@ -107,6 +107,12 @@ const family = {
   permissions: PERMISSIONS,
   createsStripTypes: CREATE_STRIP_TYPE_PERMISSIONS,
   runwayStatusOwners: RUNWAY_STATUS_OP_OWNERS,
+  // ADR 0098 §11. OPS of the controlling Facility creates, edits and deletes its Facility's airspaces (R3-11); every
+  // other ATC Position does so for the airspaces it is itself the controlling Position of (AIRSP-2).
+  airspace: {
+    OPS: { create: 'FACILITY', edit: 'FACILITY', delete: 'FACILITY', use: false },
+    ...Object.fromEntries(['CD', 'GC', 'LC', 'AP', 'CTR'].map(id => [id, { create: 'OWN', edit: 'OWN', delete: 'OWN', use: false }])),
+  },
   nonOwnerBlockWrites: NON_OWNER_BLOCK_WRITES,
   // TOFI's ATC side (guide §4.1): CTR only, not AP.
   tofiCounterparts: {

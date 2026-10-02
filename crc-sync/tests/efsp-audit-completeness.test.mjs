@@ -8,7 +8,7 @@ import crcLog from '../src/log.js';
 
 // L26 / docs/adr/0083: every EFSP Mutation outcome that reaches crc-sync produces
 // exactly one Mutation-log entry, and every entry names its Facility and its flight data.
-// Driven through createEfsp() and createEfspInstrumentation() together, as
+// Driven through createEfsp({ currentTheater: () => 'Test' }) and createEfspInstrumentation() together, as
 // efsp-metrics-tap.test.mjs does.
 
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-audit-completeness-'));
@@ -23,9 +23,9 @@ for (const [k, v] of Object.entries({
   CRCSYNC_EFSP_METRICS_PATH: 'metrics.json',
   CRCSYNC_EFSP_INSTRUMENTATION_CONFIG_PATH: 'instrumentation.json',
 })) process.env[k] = path.join(tmpDir, v);
-fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify([
+fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify({ Test: [
   { airspaceId: 'MOA-AUD', name: 'Audit MOA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 134.25 },
-]));
+] }));
 
 const { createEfsp } = await import('../src/efsp/index.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
@@ -37,7 +37,7 @@ function quiet(fn) {
   try { return fn(); } finally { cap.stop(); }
 }
 
-const efsp = createEfsp();
+const efsp = createEfsp({ currentTheater: () => 'Test' });
 quiet(() => createEfspInstrumentation({
   efsp, facilityConfig,
   correlationStats: () => ({ rate: null, eligible: 0 }),

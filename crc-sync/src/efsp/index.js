@@ -28,7 +28,8 @@ const fs = require('fs');
 
 const carrierModel = require('./carrier');
 const sfaModel = require('./sfa');
-const airspaceConfig = require('./airspace-config');
+const airspaceSchema = require('./airspace-schema');
+const { deriveRangePositionIds } = require('./airspace-store');
 const { CodeAllocator } = require('./code-allocator');
 const { BoardStore } = require('./board-store');
 const { MutationLog } = require('./mutation-log');
@@ -47,6 +48,7 @@ const { statePaths, ensureDirFor } = require('../state-paths');
 const { WALL_CLOCK } = require('../mission-clock');
 const { ReplayCache } = require('./sync/replay-cache');
 const { REGISTRY, RESTORE_ORDER, checkPersistedShape } = require('./stores');
+const { SERVICE_ROWS } = require('./authority/airspace');
 const log = require('../log').logger('efsp');
 
 /**
@@ -56,6 +58,10 @@ const log = require('../log').logger('efsp');
  *   reads — a gate, a deadline, a Strip clock, a Mutation's `at` — is in-game
  *   Zulu. app.js passes the real one; a fixture that omits it gets the wall
  *   clock, which is what the mission clock itself answers before DCS does.
+ * @param {() => string|null} [deps.currentTheater] the loaded mission's theater (docs/adr/0098 §2); airspaces are scoped
+ *   to it, and with no mission loaded the panel's list is empty. A fixture that omits it has no mission.
+ * @param {{read:string, write:string}} [deps.standingPaths] where the theater-keyed standing airspace list is read from
+ *   (config/efsp-airspaces.json, a state/ copy replaces it whole). Resolved when createEfsp is called.
  * @param {() => number} [deps.transitionAltFt] the theater's transition altitude
  *   (theater-context.js); the FlightDataStore writes a block's text with it. A fixture
  *   that omits it gets 18,000 ft.
@@ -68,14 +74,22 @@ const log = require('../log').logger('efsp');
  *   or worse, restored a snapshot somebody had committed to git. It lives in
  *   data/ now; see src/state-paths.js.
  */
-function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('efsp-board.json', process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH) } = {}) {
+function createEfsp({ clock = WALL_CLOCK, transitionAltFt, currentTheater = () => null,
+  paths = statePaths('efsp-board.json', process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH),
+  standingPaths = statePaths('efsp-airspaces.json', process.env.CRCSYNC_EFSP_AIRSPACES_PATH) } = {}) {
   facilityConfig.load(); // the Facilities' JSON is read here, not when the module is required (docs/wip/DATA-1.md)
+  // The saved snapshot is read ONCE, here, with the same strict shape check the restore uses, and the RANGES Facility's
+  // Positions are derived from it (and from the standing list's ids not yet seeded) before any Facility is built: the
+  // definitions are data in the registry now, and a Position of RANGES must exist when its PositionStore is made.
+  const saved = _readSnapshot(paths);
+  const standing = airspaceSchema.loadStandingList({ paths: standingPaths });
+  facilityConfig.setRangePositionIds(deriveRangePositionIds(saved && saved.airspaces, standing));
   assertAuthorityCoverage(facilityConfig);
   const codeAllocator = new CodeAllocator();
   const mutationLog = new MutationLog(undefined, { clock });
   const facilities = new Map(); // facilityId -> { boardStore, positionStore, rules }
   const stores = {};            // registry key -> instance (src/efsp/stores.js)
-  const buildDeps = { clock, transitionAltFt, codeAllocator, mutationLog, facilities, stores };
+  const buildDeps = { clock, transitionAltFt, currentTheater, codeAllocator, mutationLog, facilities, stores };
   for (const entry of REGISTRY) stores[entry.key] = entry.build(buildDeps);
   const { flightData: flightDataStore, airspaces: airspaceStore, correlations: correlationStore, marsa: marsaStore,
     runwayStatuses: runwayStatusStore, carriers: carrierStore, sfaRotation: sfaStore } = stores;
@@ -218,8 +232,9 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
   }
 
   for (const entry of REGISTRY) if (entry.audited && stores[entry.key]) stores[entry.key].setMutationLog(mutationLog);
-  _validateAirspaceReferences(facilities);
-  _restore({ facilities, stores, paths, mutationLog, clock });
+  _restore({ facilities, stores, saved, paths, mutationLog, clock });
+  // The standing list, once per id (ADR 0098 §10): a definition that does not validate stops start-up, naming it.
+  if (airspaceStore.seed(standing) > 0) _persist({ facilities, stores, persistState: { lastBody: null }, paths });
 
   // F-408's clock-driven half. Built here rather than in server.js, unlike the
   // obligation monitor and the correlation reconciler, because efsp-ws.js has
@@ -259,7 +274,6 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
     sfaStore,
     // key -> instance, for every entry of the persisted-store registry (stores.js)
     stores,
-    airspaceConfig,
     facilityConfig,
     nlaStatusMonitor,
     runwayStatusStore,
@@ -300,6 +314,19 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
     handleMessage: (session, msg) => handleMessage(ctx, session, msg, () => _persist({ facilities, stores, persistState, paths })),
 
     /**
+     * The HTTP service path into the airspace registry (docs/adr/0098 §9): the same skeleton pass a panel Mutation takes
+     * (persistence, replay cache, delta), with a service principal in place of a signed-on session. `principal` is
+     * `{ service: 'SQUADRON_ADMIN', sub, name }`: the web has already checked the user's role. `msg` is
+     * `{ clientMutationId, theater, airspaceId, op, baseRev?, baseDefRev? }`. Returns what handleMessage returns,
+     * `{ ack, broadcasts }`: the caller sends `broadcasts` to the connected sessions. Not counted as traffic.
+     */
+    applyAsService: (principal, msg) => {
+      const ok = principal && typeof principal.sub === 'string' && principal.sub && typeof principal.name === 'string' && SERVICE_ROWS[principal.service];
+      const session = { controllerId: ok ? principal.sub : null, servicePrincipal: ok ? { service: principal.service, sub: principal.sub, name: principal.name } : { service: 'INVALID_PRINCIPAL' } };
+      return handleMessage(ctx, session, { ...msg, type: 'efsp-airspace-mutation' }, () => _persist({ facilities, stores, persistState, paths }));
+    },
+
+    /**
      * Persist on demand. The correlation reconciler deliberately does NOT
      * call this on its own tick (docs/adr/0045): a guaranteed 1Hz atomic
      * whole-snapshot write is exactly the cost _persist's own comment frets
@@ -330,20 +357,6 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
   };
 }
 
-/**
- * Cross-checks every airspace's `controllingPositionId` against the Facility
- * it names. airspace-config.js validates its own shape but deliberately does
- * not require facility-config.js back (facility-config derives the RANGES
- * Position set FROM it, so the dependency only runs one way) — which leaves
- * exactly one thing unchecked, and it is the one that matters: an airspace
- * naming a Position that does not exist can never be activated by anybody,
- * and would fail as a silent PERMISSION_DENIED with nothing pointing at the
- * config. Warns rather than throws: a typo in one airspace should not stop
- * the server, and the rest of the board still works.
- *
- * `usingPositionId` needs no check — the RANGES Facility's Position set is
- * built from those values, so it exists by construction.
- */
 /**
  * Checks that what came back off disk agrees with itself.
  *
@@ -418,13 +431,22 @@ function _reconcileRestored(facilities, flightDataStore, correlationStore, marsa
  * @returns {number} markers written
  */
 const LOG_TAIL_SLACK_MS = 60 * 1000;
-function _reconcileLogTail(facilities, mutationLog, persistedWallAt, clock) {
+function _reconcileLogTail(facilities, mutationLog, persistedWallAt, clock, airspaceStore = null) {
   if (!mutationLog || !Number.isFinite(persistedWallAt)) return 0;
+  const airspaceLines = []; const airspaceMarked = new Set();
   const boards = [...facilities.values()].map(f => f.boardStore);
   const lines = new Map();   // cmid -> [entry] successful Board lines
   const markers = new Map(); // cmid -> count of NotPersisted markers already written
   for (const e of mutationLog.readSince(persistedWallAt - LOG_TAIL_SLACK_MS)) {
     const cmid = e && e.clientMutationId;
+    // An airspace line (ADR 0098 §10, 0083): a definition edit audited but never persisted, judged on the revisions it recorded.
+    if (airspaceStore && e && e.op !== 'NotPersisted' && e.ok !== false && e.theater && !e.stripId && e.actorId !== 'system' && e.source !== 'wire') {
+      if (typeof cmid === 'string' && cmid !== '' && !airspaceStore.hasApplied(e)) {
+        airspaceLines.push(e);
+      }
+      continue;
+    }
+    if (e && e.op === 'NotPersisted' && e.airspaceId) { airspaceMarked.add(cmid); continue; }
     if (typeof cmid !== 'string' || cmid === '' || !e.stripId) continue;
     if (e.op === 'NotPersisted') { markers.set(cmid, (markers.get(cmid) || 0) + 1); continue; }
     if (e.ok === false || e.source === 'wire' || e.actorId === 'system') continue;
@@ -432,6 +454,14 @@ function _reconcileLogTail(facilities, mutationLog, persistedWallAt, clock) {
     lines.get(cmid).push(e);
   }
   let written = 0;
+  for (const e of airspaceLines) {
+    if (airspaceMarked.has(e.clientMutationId)) continue;
+    mutationLog.record({
+      op: 'NotPersisted', clientMutationId: e.clientMutationId, airspaceId: e.airspaceId, theater: e.theater, voids: e.op,
+      reason: 'CRASH_BEFORE_PERSIST', actorId: 'system', actingPositionId: null, at: clock.now(),
+    });
+    written += 1;
+  }
   for (const [cmid, entries] of lines) {
     if (boards.some(b => b.hasApplied(cmid))) continue;
     const unmarked = entries.slice(markers.get(cmid) || 0);
@@ -445,20 +475,6 @@ function _reconcileLogTail(facilities, mutationLog, persistedWallAt, clock) {
   }
   if (written) log.warn('audited Mutations never reached the Board snapshot (a crash before persist) — marked NotPersisted', { written });
   return written;
-}
-
-function _validateAirspaceReferences(facilities) {
-  for (const airspace of airspaceConfig.getAirspaces()) {
-    const facility = facilities.get(airspace.controllingFacilityId);
-    if (!facility) {
-      log.warn('airspace names an unknown Facility — nobody can activate it', { airspaceId: airspace.airspaceId, facilityId: airspace.controllingFacilityId });
-      continue;
-    }
-    const positions = facilityConfig.getPositionSet(airspace.controllingFacilityId);
-    if (!positions.includes(airspace.controllingPositionId)) {
-      log.warn('airspace names a controlling Position that does not exist at its Facility — nobody can activate it', { airspaceId: airspace.airspaceId, positionId: airspace.controllingPositionId, facilityId: airspace.controllingFacilityId });
-    }
-  }
 }
 
 /**
@@ -485,16 +501,20 @@ function _facilityOrThrow(facilities, facilityId) {
   return facilities.get(facilityId);
 }
 
-function _restore({ facilities, stores, paths, mutationLog, clock }) {
-  // No file is a first run. A file that is there and cannot be read, parsed or restored is a startup error
-  // (ARCH-D5, H88): an unknown persisted shape is never quietly dropped for an empty Board (docs/wip/BACKCOMPAT.md).
+/**
+ * Reads and checks the saved snapshot, once (createEfsp calls it before the Facilities exist, and hands the result to
+ * _restore). No file is a first run (null). A file that is there and cannot be read, parsed or shape-checked is a startup
+ * error (ARCH-D5, H88): an unknown persisted shape is never quietly dropped for an empty Board (docs/wip/BACKCOMPAT.md),
+ * and the file is left untouched.
+ */
+function _readSnapshot(paths) {
   let raw;
   try {
     raw = fs.readFileSync(paths.read, 'utf8');
   } catch (e) {
     if (e.code !== 'ENOENT') throw new Error(`[efsp] cannot read the Board snapshot ${paths.read}: ${e.message}`);
     log.warn('no prior Board snapshot to restore (first run)', { path: paths.read });
-    return;
+    return null;
   }
   let data;
   try {
@@ -505,6 +525,11 @@ function _restore({ facilities, stores, paths, mutationLog, clock }) {
   // Every key the build knows, before any store restores (H88 item 8): an older build's names stop start-up here.
   // The pre-WP4A shape (a top-level `board`) keeps its own, more specific refusal in stores.js's `boards` entry.
   if (!(data && data.board !== undefined && data.boards === undefined)) checkPersistedShape(data, paths.read);
+  return data;
+}
+
+function _restore({ facilities, stores, saved: data, mutationLog, clock }) {
+  if (!data) return;
   const all = { facilities, stores, saved: data };
   const byKey = new Map(REGISTRY.map(e => [e.key, e]));
   // RESTORE_ORDER, not the registry's (write) order: see stores.js.
@@ -516,7 +541,7 @@ function _restore({ facilities, stores, paths, mutationLog, clock }) {
   _reconcileRestored(facilities, stores.flightData, stores.correlations, stores.marsa);
   // A Mutation audited but never persisted (a crash inside _persist) gets a
   // NotPersisted marker, so the log says that line never took effect.
-  _reconcileLogTail(facilities, mutationLog, data.persistedWallAt, clock);
+  _reconcileLogTail(facilities, mutationLog, data.persistedWallAt, clock, stores.airspaces);
 }
 
 function _persist({ facilities, stores, persistState = { lastBody: null }, paths }) {

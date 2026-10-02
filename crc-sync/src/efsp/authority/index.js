@@ -59,7 +59,7 @@ const positionFamilies = [];
 const positionOwner = new Map(); // positionId -> family name
 
 /**
- * @param {{family:string, positions:string[], extends?:string[], permissions:object, createsStripTypes?:object,
+ * @param {{family:string, positions:string[], extends?:string[], permissions:object, createsStripTypes?:object, airspace?:object,
  *   ownsStates?:object, runwayStatusOwners?:object, runwayStatusGrants?:object, nonOwnerBlockWrites?:object[],
  *   tofiCounterparts?:object, capabilities?:object}} def
  */
@@ -74,7 +74,7 @@ function registerPositionFamily(def) {
   const ext = def.extends || [];
   for (const id of ext) if (!positionOwner.has(id)) _fail(`${def.family}: extends ${id}, which no earlier family registered`);
   const mine = new Set([...def.positions, ...ext]);
-  for (const key of ['permissions', 'createsStripTypes', 'ownsStates', 'tofiCounterparts', 'capabilities']) {
+  for (const key of ['permissions', 'createsStripTypes', 'ownsStates', 'tofiCounterparts', 'capabilities', 'airspace']) {
     for (const id of Object.keys(def[key] || {})) if (!mine.has(id)) _fail(`${def.family}: ${key} names ${id}, which is not its Position`);
   }
   for (const id of def.positions) if (!(def.permissions[id] instanceof Set)) _fail(`${def.family}: ${id} has no op grant`);
@@ -235,6 +235,15 @@ for (const f of positionFamilies) {
   }
 }
 
+/** The airspace rows (docs/adr/0098 §11, authority/airspace.js): { positionId: { create, edit, delete, use } }. */
+const AIRSPACE_ROWS = {};
+for (const f of positionFamilies) Object.assign(AIRSPACE_ROWS, f.airspace || {});
+const airspaceAuthority = require('./airspace');
+/** @returns {{create:string|null, edit:string|null, delete:string|null, use:boolean}} a Position's airspace row (its class's row when no family lists it). */
+function airspaceRowOf(positionId) {
+  return airspaceAuthority.rowFor(positionId, { familyRows: AIRSPACE_ROWS, classOf: (id) => require('../facility-config').getPositionClass(id) });
+}
+
 /** permission.js's mayActBesideOwner: every family's non-owner Block writes. */
 const NON_OWNER_BLOCK_WRITES = positionFamilies.flatMap(f => f.nonOwnerBlockWrites || []);
 
@@ -290,6 +299,7 @@ module.exports = {
   runwayInspectionRefusal, selfCoordinationRefusal, sfaJurisdictionRefusal,
   registerStripTypeFamily, registerPositionFamily,
   positionFamilyOf, positionFamily, positionIds, capabilitiesFor, creatorsOf,
+  airspaceRowOf, airspaceAuthority, AIRSPACE_ROWS,
   PERMISSIONS, CREATE_STRIP_TYPE_PERMISSIONS, RUNWAY_STATUS_OP_OWNERS, NON_OWNER_BLOCK_WRITES, TOFI_COUNTERPARTS,
   stripTypeFamily, stripTypeNames, stateOwners, initialStateFor, replicaStateOnReceipt, senderStateOnAccept,
   STATES_BY_STRIP_TYPE, STATE_OWNERS_BY_STRIP_TYPE, DEFAULT_INITIAL_STATE_BY_STRIP_TYPE, REPLICA_STATE_ON_RECEIPT, SENDER_STATE_ON_ACCEPT,

@@ -282,9 +282,11 @@
           }
         },
         "airspaces": {
-          "n": 0,
-          "h": "97d170e155",
-          "rows": []
+          "h": "3f4758be9b",
+          "v": {
+            "byTheater": {},
+            "seeded": {}
+          }
         },
         "correlations": {
           "n": 0,

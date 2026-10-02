@@ -8,7 +8,7 @@ import crcLog from '../src/log.js';
 
 // The tap (docs/adr/0065): createEfspInstrumentation() reassigns the facade's
 // handleMessage/onDisconnect, and every EFSP message, its session and its ack
-// pass through it. Real createEfsp(), real wire path, own paths (T11).
+// pass through it. Real createEfsp({ currentTheater: () => 'Test' }), real wire path, own paths (T11).
 
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-metrics-tap-'));
 for (const [k, v] of Object.entries({
@@ -22,9 +22,9 @@ for (const [k, v] of Object.entries({
   CRCSYNC_EFSP_METRICS_PATH: 'metrics.json',
   CRCSYNC_EFSP_INSTRUMENTATION_CONFIG_PATH: 'instrumentation.json',
 })) process.env[k] = path.join(tmpDir, v);
-fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify([
+fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify({ Test: [
   { airspaceId: 'MOA-TAP', name: 'Tap MOA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 134.25 },
-]));
+] }));
 
 const { createEfsp } = await import('../src/efsp/index.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
@@ -36,7 +36,7 @@ function quiet(fn) {
   try { return fn(); } finally { cap.stop(); }
 }
 
-const efsp = createEfsp();
+const efsp = createEfsp({ currentTheater: () => 'Test' });
 const instr = quiet(() => createEfspInstrumentation({
   efsp, facilityConfig,
   correlationStats: () => ({ rate: null, eligible: 0 }),

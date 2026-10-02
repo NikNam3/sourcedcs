@@ -90,11 +90,19 @@
           }
         },
         "airspaces": {
-          "n": 1,
-          "h": "6476e4cb15",
-          "rows": [
-            "MOA-RACE h=29dac52fae"
-          ]
+          "h": "10f36f7757",
+          "v": {
+            "byTheater": {
+              "Test": [
+                {"airspaceId":"MOA-RACE","defRev":1,"definition":{"airspaceId":"MOA-RACE","altLowerFt":null,"altUpperFt":null,"controlFrequencyMhz":null,"controllingFacilityId":"CENTER","controllingPositionId":"CTR","geometry":null,"kind":"AREA","name":"Race MOA","source":"STANDING","type":"MOA","usingFacilityId":null,"usingPositionId":null,"workingFrequencyMhz":140},"definitionHistory":[],"pendingRequest":null,"rev":0,"state":"RETURNED","theater":"Test","transitions":[],"updatedAt":1782009600000,"updatedBy":"system","window":null}
+              ]
+            },
+            "seeded": {
+              "Test": [
+                "MOA-RACE"
+              ]
+            }
+          }
         },
         "correlations": {
           "n": 0,
@@ -218,11 +226,19 @@
           }
         },
         "airspaces": {
-          "n": 1,
-          "h": "6476e4cb15",
-          "rows": [
-            "MOA-RACE h=29dac52fae"
-          ]
+          "h": "10f36f7757",
+          "v": {
+            "byTheater": {
+              "Test": [
+                {"airspaceId":"MOA-RACE","defRev":1,"definition":{"airspaceId":"MOA-RACE","altLowerFt":null,"altUpperFt":null,"controlFrequencyMhz":null,"controllingFacilityId":"CENTER","controllingPositionId":"CTR","geometry":null,"kind":"AREA","name":"Race MOA","source":"STANDING","type":"MOA","usingFacilityId":null,"usingPositionId":null,"workingFrequencyMhz":140},"definitionHistory":[],"pendingRequest":null,"rev":0,"state":"RETURNED","theater":"Test","transitions":[],"updatedAt":1782009600000,"updatedBy":"system","window":null}
+              ]
+            },
+            "seeded": {
+              "Test": [
+                "MOA-RACE"
+              ]
+            }
+          }
         },
         "correlations": {
           "n": 0,
@@ -350,11 +366,19 @@
           }
         },
         "airspaces": {
-          "n": 1,
-          "h": "6476e4cb15",
-          "rows": [
-            "MOA-RACE h=29dac52fae"
-          ]
+          "h": "10f36f7757",
+          "v": {
+            "byTheater": {
+              "Test": [
+                {"airspaceId":"MOA-RACE","defRev":1,"definition":{"airspaceId":"MOA-RACE","altLowerFt":null,"altUpperFt":null,"controlFrequencyMhz":null,"controllingFacilityId":"CENTER","controllingPositionId":"CTR","geometry":null,"kind":"AREA","name":"Race MOA","source":"STANDING","type":"MOA","usingFacilityId":null,"usingPositionId":null,"workingFrequencyMhz":140},"definitionHistory":[],"pendingRequest":null,"rev":0,"state":"RETURNED","theater":"Test","transitions":[],"updatedAt":1782009600000,"updatedBy":"system","window":null}
+              ]
+            },
+            "seeded": {
+              "Test": [
+                "MOA-RACE"
+              ]
+            }
+          }
         },
         "correlations": {
           "n": 0,
@@ -390,9 +414,9 @@
         {"n":3,"who":"c-LC","in":{"facilityId":"INCIRLIK","signedOn":["LC"],"type":"efsp-set-positions"},"out":{"ack":{"facilityId":"INCIRLIK","signedOn":["LC"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"boardEpoch":"#49","boardSeq":0,"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"985345bb16","chars":1299,"keys":"array[8]"}},"strips":{"gone":[],"updated":["S #8 r4 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=20edfb9b52","S #25 r4 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=7a6f31a904","S #41 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=0bae92af8a"]},"type":"efsp-board-delta","version":1}},"audit":[]},
         {"n":4,"who":"c-AP","in":{"facilityId":"INCIRLIK","signedOn":["AP"],"type":"efsp-set-positions"},"out":{"ack":{"facilityId":"INCIRLIK","signedOn":["AP"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"boardEpoch":"#49","boardSeq":0,"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"da177275b4","chars":1373,"keys":"array[8]"}},"strips":{"gone":[],"updated":["S #8 r4 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=20edfb9b52","S #25 r4 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=7a6f31a904","S #41 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=0bae92af8a"]},"type":"efsp-board-delta","version":1}},"audit":[]},
         {"n":5,"who":"c-CTR","in":{"facilityId":"CENTER","signedOn":["CTR"],"type":"efsp-set-positions"},"out":{"ack":{"facilityId":"CENTER","signedOn":["CTR"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"boardEpoch":"#50","boardSeq":0,"facilityId":"CENTER","flightDataList":{"updated":[]},"positions":{"updated":[{"consolidatedPositions":[],"facilityId":"CENTER","observers":[],"pendingPrimaryRequest":null,"positionId":"CTR","primary":{"controllerId":"c-CTR","controllerName":"CTR","since":1782009600000}}]},"strips":{"gone":[],"updated":[]},"type":"efsp-board-delta","version":1}},"audit":[]},
-        {"n":6,"who":"c-CTR","in":{"actingPositionId":"CTR","airspaceId":"MOA-RACE","baseRev":0,"clientMutationId":"#54","op":{"fromUtc":1782009600000,"kind":"ScheduleAirspace","toUtc":1782013200000},"type":"efsp-airspace-mutation","version":1},"out":{"ack":{"airspace":{"airspaceId":"MOA-RACE","definition":{"airspaceId":"MOA-RACE","controllingFacilityId":"CENTER","controllingPositionId":"CTR","name":"Race MOA","type":"MOA","workingFrequencyMhz":140},"pendingRequest":null,"rev":1,"state":"SCHEDULED","transitions":[{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","state":"SCHEDULED","window":{"fromUtc":1782009600000,"toUtc":1782013200000}}],"updatedAt":1782009600000,"updatedBy":"c-CTR","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},"airspaceId":"MOA-RACE","airspaceSeq":1,"clientMutationId":"#54","ok":true,"type":"efsp-airspace-ack","version":1},"broadcast":{"airspaceSeq":1,"airspaces":{"updated":[{"airspaceId":"MOA-RACE","definition":{"airspaceId":"MOA-RACE","controllingFacilityId":"CENTER","controllingPositionId":"CTR","name":"Race MOA","type":"MOA","workingFrequencyMhz":140},"pendingRequest":null,"rev":1,"state":"SCHEDULED","transitions":[{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","state":"SCHEDULED","window":{"fromUtc":1782009600000,"toUtc":1782013200000}}],"updatedAt":1782009600000,"updatedBy":"c-CTR","window":{"fromUtc":1782009600000,"toUtc":1782013200000}}]},"type":"efsp-airspace-delta","version":1}},"audit":[{"actingPositionId":"CTR","actorId":"c-CTR","after":{"airspaceId":"MOA-RACE","pendingRequest":null,"rev":1,"state":"SCHEDULED","transitions":[{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","state":"SCHEDULED","window":{"fromUtc":1782009600000,"toUtc":1782013200000}}],"updatedAt":1782009600000,"updatedBy":"c-CTR","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},"airspaceId":"MOA-RACE","at":1782009600000,"before":{"airspaceId":"MOA-RACE","pendingRequest":null,"rev":0,"state":"RETURNED","transitions":[],"updatedAt":null,"updatedBy":null,"window":null},"clientMutationId":"#54","facilityId":"CENTER","ok":true,"op":"ScheduleAirspace"}]},
-        {"n":7,"who":"c-CTR","in":{"actingPositionId":"CTR","airspaceId":"MOA-RACE","baseRev":0,"clientMutationId":"#55","op":{"kind":"ApproveActivation"},"type":"efsp-airspace-mutation","version":1},"out":{"ack":{"airspace":{"airspaceId":"MOA-RACE","definition":{"airspaceId":"MOA-RACE","controllingFacilityId":"CENTER","controllingPositionId":"CTR","name":"Race MOA","type":"MOA","workingFrequencyMhz":140},"pendingRequest":null,"rev":1,"state":"SCHEDULED","transitions":[{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","state":"SCHEDULED","window":{"fromUtc":1782009600000,"toUtc":1782013200000}}],"updatedAt":1782009600000,"updatedBy":"c-CTR","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},"airspaceId":"MOA-RACE","airspaceSeq":1,"clientMutationId":"#55","ok":false,"reason":"STALE_REV","type":"efsp-airspace-ack","version":1}},"audit":[{"actingPositionId":"CTR","actorId":"c-CTR","airspaceId":"MOA-RACE","at":1782009600000,"before":{"airspaceId":"MOA-RACE","pendingRequest":null,"rev":1,"state":"SCHEDULED","transitions":[{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","state":"SCHEDULED","window":{"fromUtc":1782009600000,"toUtc":1782013200000}}],"updatedAt":1782009600000,"updatedBy":"c-CTR","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},"clientMutationId":"#55","facilityId":"CENTER","ok":false,"op":"ApproveActivation","reason":"STALE_REV"}]},
-        {"n":8,"who":"c-CTR","in":{"actingPositionId":"CTR","airspaceId":"MOA-RACE","baseRev":1,"clientMutationId":"#56","op":{"kind":"ApproveActivation"},"type":"efsp-airspace-mutation","version":1},"out":{"ack":{"airspace":{"airspaceId":"MOA-RACE","definition":{"airspaceId":"MOA-RACE","controllingFacilityId":"CENTER","controllingPositionId":"CTR","name":"Race MOA","type":"MOA","workingFrequencyMhz":140},"pendingRequest":null,"rev":2,"state":"ACTIVE","transitions":[{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","state":"SCHEDULED","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","selfCoordinated":false,"state":"ACTIVE"}],"updatedAt":1782009600000,"updatedBy":"c-CTR","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},"airspaceId":"MOA-RACE","airspaceSeq":2,"clientMutationId":"#56","ok":true,"type":"efsp-airspace-ack","version":1},"broadcast":{"airspaceSeq":2,"airspaces":{"updated":[{"airspaceId":"MOA-RACE","definition":{"airspaceId":"MOA-RACE","controllingFacilityId":"CENTER","controllingPositionId":"CTR","name":"Race MOA","type":"MOA","workingFrequencyMhz":140},"pendingRequest":null,"rev":2,"state":"ACTIVE","transitions":[{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","state":"SCHEDULED","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","selfCoordinated":false,"state":"ACTIVE"}],"updatedAt":1782009600000,"updatedBy":"c-CTR","window":{"fromUtc":1782009600000,"toUtc":1782013200000}}]},"type":"efsp-airspace-delta","version":1}},"audit":[{"actingPositionId":"CTR","actorId":"c-CTR","after":{"airspaceId":"MOA-RACE","pendingRequest":null,"rev":2,"state":"ACTIVE","transitions":[{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","state":"SCHEDULED","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","selfCoordinated":false,"state":"ACTIVE"}],"updatedAt":1782009600000,"updatedBy":"c-CTR","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},"airspaceId":"MOA-RACE","at":1782009600000,"before":{"airspaceId":"MOA-RACE","pendingRequest":null,"rev":1,"state":"SCHEDULED","transitions":[{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","state":"SCHEDULED","window":{"fromUtc":1782009600000,"toUtc":1782013200000}}],"updatedAt":1782009600000,"updatedBy":"c-CTR","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},"clientMutationId":"#56","facilityId":"CENTER","ok":true,"op":"ApproveActivation"}]}
+        {"n":6,"who":"c-CTR","in":{"actingPositionId":"CTR","airspaceId":"MOA-RACE","baseRev":0,"clientMutationId":"#54","op":{"fromUtc":1782009600000,"kind":"ScheduleAirspace","toUtc":1782013200000},"type":"efsp-airspace-mutation","version":1},"out":{"ack":{"airspace":{"airspaceId":"MOA-RACE","defRev":1,"definition":{"airspaceId":"MOA-RACE","altLowerFt":null,"altUpperFt":null,"controlFrequencyMhz":null,"controllingFacilityId":"CENTER","controllingPositionId":"CTR","geometry":null,"kind":"AREA","name":"Race MOA","source":"STANDING","type":"MOA","usingFacilityId":null,"usingPositionId":null,"workingFrequencyMhz":140},"pendingRequest":null,"rev":1,"state":"SCHEDULED","theater":"Test","transitions":[{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","state":"SCHEDULED","window":{"fromUtc":1782009600000,"toUtc":1782013200000}}],"updatedAt":1782009600000,"updatedBy":"c-CTR","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},"airspaceId":"MOA-RACE","airspaceSeq":1,"clientMutationId":"#54","ok":true,"theater":"Test","type":"efsp-airspace-ack","version":1},"broadcast":{"airspaceSeq":1,"airspaces":{"updated":[{"airspaceId":"MOA-RACE","defRev":1,"definition":{"airspaceId":"MOA-RACE","altLowerFt":null,"altUpperFt":null,"controlFrequencyMhz":null,"controllingFacilityId":"CENTER","controllingPositionId":"CTR","geometry":null,"kind":"AREA","name":"Race MOA","source":"STANDING","type":"MOA","usingFacilityId":null,"usingPositionId":null,"workingFrequencyMhz":140},"pendingRequest":null,"rev":1,"state":"SCHEDULED","theater":"Test","transitions":[{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","state":"SCHEDULED","window":{"fromUtc":1782009600000,"toUtc":1782013200000}}],"updatedAt":1782009600000,"updatedBy":"c-CTR","window":{"fromUtc":1782009600000,"toUtc":1782013200000}}]},"type":"efsp-airspace-delta","version":1}},"audit":[{"actingPositionId":"CTR","actorId":"c-CTR","after":{"airspaceId":"MOA-RACE","defRev":1,"definition":{"airspaceId":"MOA-RACE","altLowerFt":null,"altUpperFt":null,"controlFrequencyMhz":null,"controllingFacilityId":"CENTER","controllingPositionId":"CTR","geometry":null,"kind":"AREA","name":"Race MOA","source":"STANDING","type":"MOA","usingFacilityId":null,"usingPositionId":null,"workingFrequencyMhz":140},"pendingRequest":null,"rev":1,"state":"SCHEDULED","theater":"Test","transitions":[{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","state":"SCHEDULED","window":{"fromUtc":1782009600000,"toUtc":1782013200000}}],"updatedAt":1782009600000,"updatedBy":"c-CTR","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},"airspaceId":"MOA-RACE","at":1782009600000,"before":{"airspaceId":"MOA-RACE","defRev":1,"definition":{"airspaceId":"MOA-RACE","altLowerFt":null,"altUpperFt":null,"controlFrequencyMhz":null,"controllingFacilityId":"CENTER","controllingPositionId":"CTR","geometry":null,"kind":"AREA","name":"Race MOA","source":"STANDING","type":"MOA","usingFacilityId":null,"usingPositionId":null,"workingFrequencyMhz":140},"pendingRequest":null,"rev":0,"state":"RETURNED","theater":"Test","transitions":[],"updatedAt":1782009600000,"updatedBy":"system","window":null},"clientMutationId":"#54","facilityId":"CENTER","ok":true,"op":"ScheduleAirspace","theater":"Test","via":"PANEL"}]},
+        {"n":7,"who":"c-CTR","in":{"actingPositionId":"CTR","airspaceId":"MOA-RACE","baseRev":0,"clientMutationId":"#55","op":{"kind":"ApproveActivation"},"type":"efsp-airspace-mutation","version":1},"out":{"ack":{"airspace":{"airspaceId":"MOA-RACE","defRev":1,"definition":{"airspaceId":"MOA-RACE","altLowerFt":null,"altUpperFt":null,"controlFrequencyMhz":null,"controllingFacilityId":"CENTER","controllingPositionId":"CTR","geometry":null,"kind":"AREA","name":"Race MOA","source":"STANDING","type":"MOA","usingFacilityId":null,"usingPositionId":null,"workingFrequencyMhz":140},"pendingRequest":null,"rev":1,"state":"SCHEDULED","theater":"Test","transitions":[{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","state":"SCHEDULED","window":{"fromUtc":1782009600000,"toUtc":1782013200000}}],"updatedAt":1782009600000,"updatedBy":"c-CTR","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},"airspaceId":"MOA-RACE","airspaceSeq":1,"clientMutationId":"#55","ok":false,"reason":"STALE_REV","theater":"Test","type":"efsp-airspace-ack","version":1}},"audit":[{"actingPositionId":"CTR","actorId":"c-CTR","airspaceId":"MOA-RACE","at":1782009600000,"before":{"airspaceId":"MOA-RACE","defRev":1,"definition":{"airspaceId":"MOA-RACE","altLowerFt":null,"altUpperFt":null,"controlFrequencyMhz":null,"controllingFacilityId":"CENTER","controllingPositionId":"CTR","geometry":null,"kind":"AREA","name":"Race MOA","source":"STANDING","type":"MOA","usingFacilityId":null,"usingPositionId":null,"workingFrequencyMhz":140},"pendingRequest":null,"rev":1,"state":"SCHEDULED","theater":"Test","transitions":[{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","state":"SCHEDULED","window":{"fromUtc":1782009600000,"toUtc":1782013200000}}],"updatedAt":1782009600000,"updatedBy":"c-CTR","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},"clientMutationId":"#55","facilityId":"CENTER","ok":false,"op":"ApproveActivation","reason":"STALE_REV","theater":"Test","via":"PANEL"}]},
+        {"n":8,"who":"c-CTR","in":{"actingPositionId":"CTR","airspaceId":"MOA-RACE","baseRev":1,"clientMutationId":"#56","op":{"kind":"ApproveActivation"},"type":"efsp-airspace-mutation","version":1},"out":{"ack":{"airspace":{"airspaceId":"MOA-RACE","defRev":1,"definition":{"airspaceId":"MOA-RACE","altLowerFt":null,"altUpperFt":null,"controlFrequencyMhz":null,"controllingFacilityId":"CENTER","controllingPositionId":"CTR","geometry":null,"kind":"AREA","name":"Race MOA","source":"STANDING","type":"MOA","usingFacilityId":null,"usingPositionId":null,"workingFrequencyMhz":140},"pendingRequest":null,"rev":2,"state":"ACTIVE","theater":"Test","transitions":[{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","state":"SCHEDULED","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","selfCoordinated":false,"state":"ACTIVE"}],"updatedAt":1782009600000,"updatedBy":"c-CTR","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},"airspaceId":"MOA-RACE","airspaceSeq":2,"clientMutationId":"#56","ok":true,"theater":"Test","type":"efsp-airspace-ack","version":1},"broadcast":{"airspaceSeq":2,"airspaces":{"updated":{"~big":"e8b9f0cd69","chars":775,"keys":"array[1]"}},"type":"efsp-airspace-delta","version":1}},"audit":[{"actingPositionId":"CTR","actorId":"c-CTR","after":{"airspaceId":"MOA-RACE","defRev":1,"definition":{"airspaceId":"MOA-RACE","altLowerFt":null,"altUpperFt":null,"controlFrequencyMhz":null,"controllingFacilityId":"CENTER","controllingPositionId":"CTR","geometry":null,"kind":"AREA","name":"Race MOA","source":"STANDING","type":"MOA","usingFacilityId":null,"usingPositionId":null,"workingFrequencyMhz":140},"pendingRequest":null,"rev":2,"state":"ACTIVE","theater":"Test","transitions":[{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","state":"SCHEDULED","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","selfCoordinated":false,"state":"ACTIVE"}],"updatedAt":1782009600000,"updatedBy":"c-CTR","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},"airspaceId":"MOA-RACE","at":1782009600000,"before":{"airspaceId":"MOA-RACE","defRev":1,"definition":{"airspaceId":"MOA-RACE","altLowerFt":null,"altUpperFt":null,"controlFrequencyMhz":null,"controllingFacilityId":"CENTER","controllingPositionId":"CTR","geometry":null,"kind":"AREA","name":"Race MOA","source":"STANDING","type":"MOA","usingFacilityId":null,"usingPositionId":null,"workingFrequencyMhz":140},"pendingRequest":null,"rev":1,"state":"SCHEDULED","theater":"Test","transitions":[{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","state":"SCHEDULED","window":{"fromUtc":1782009600000,"toUtc":1782013200000}}],"updatedAt":1782009600000,"updatedBy":"c-CTR","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},"clientMutationId":"#56","facilityId":"CENTER","ok":true,"op":"ApproveActivation","theater":"Test","via":"PANEL"}]}
       ],
       "orphanAudit": [],
       "final": {
@@ -481,11 +505,19 @@
           }
         },
         "airspaces": {
-          "n": 1,
-          "h": "320daae74b",
-          "rows": [
-            "MOA-RACE h=03f7048296"
-          ]
+          "h": "113b80bbdc",
+          "v": {
+            "byTheater": {
+              "Test": [
+                {"~big":"a5a6968bc7","chars":796,"keys":["airspaceId","defRev","definition","definitionHistory","pendingRequest","rev","state","theater"]}
+              ]
+            },
+            "seeded": {
+              "Test": [
+                "MOA-RACE"
+              ]
+            }
+          }
         },
         "correlations": {
           "n": 0,
@@ -628,11 +660,19 @@
           }
         },
         "airspaces": {
-          "n": 1,
-          "h": "320daae74b",
-          "rows": [
-            "MOA-RACE h=03f7048296"
-          ]
+          "h": "113b80bbdc",
+          "v": {
+            "byTheater": {
+              "Test": [
+                {"~big":"a5a6968bc7","chars":796,"keys":["airspaceId","defRev","definition","definitionHistory","pendingRequest","rev","state","theater"]}
+              ]
+            },
+            "seeded": {
+              "Test": [
+                "MOA-RACE"
+              ]
+            }
+          }
         },
         "correlations": {
           "n": 0,
@@ -671,7 +711,7 @@
         {"n":6,"who":"c-OPS","in":{"actingPositionId":"OPS","clientMutationId":"#87","facilityId":"INCIRLIK","op":{"bayId":"ops-proposed","flightData":{"aircraftType":"F16","callsign":"FAR1","departureAirport":"LTAG","destinationAirport":"LTAG","requestedAltitude":"250","route":"DCT","wakeCategory":"D"},"kind":"CreateStrip","rackId":"main","stripType":"DEPARTURE"},"type":"efsp-mutation","version":1},"out":{"ack":{"boardEpoch":"#82","boardSeq":1,"clientMutationId":"#87","facilityId":"INCIRLIK","flightData":"F #88 r1 FAR1 sq=0006 h=04f7d61bbd","ok":true,"strip":"S #89 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=8b14dd6c08","type":"efsp-mutation-ack","version":1},"broadcast":{"boardEpoch":"#82","boardSeq":1,"facilityId":"INCIRLIK","flightDataList":{"updated":["F #88 r1 FAR1 sq=0006 h=04f7d61bbd"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #89 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=8b14dd6c08"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"OPS","actorId":"c-OPS","after":"S #89 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=a06c16935c","at":1782009600000,"before":null,"clientMutationId":"#87","facilityId":"INCIRLIK","flightDataId":"#88","op":"CreateStrip","stripId":"#89"}]},
         {"n":7,"who":"c-OPS","in":{"actingPositionId":"OPS","baseRev":1,"clientMutationId":"#90","facilityId":"INCIRLIK","op":{"kind":"SetState","toState":"HANDED_OFF"},"stripId":"#89","type":"efsp-mutation","version":1},"out":{"ack":{"boardEpoch":"#82","boardSeq":2,"clientMutationId":"#90","facilityId":"INCIRLIK","flightData":"F #88 r2 FAR1 sq=0006 h=3cf004e5b2","ok":true,"strip":"S #89 r2 DEPARTURE/HANDED_OFF @OPS ops-proposed/main:V h=8202705c23","stripId":"#89","type":"efsp-mutation-ack","version":1,"warning":"no OPS Bay for HANDED_OFF; the Strip stays in ops-proposed"},"broadcast":{"boardEpoch":"#82","boardSeq":2,"facilityId":"INCIRLIK","flightDataList":{"updated":["F #88 r2 FAR1 sq=0006 h=3cf004e5b2"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #89 r2 DEPARTURE/HANDED_OFF @OPS ops-proposed/main:V h=8202705c23"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"OPS","actorId":"c-OPS","after":"S #89 r2 DEPARTURE/HANDED_OFF @OPS ops-proposed/main:V h=4f8d051592","at":1782009600000,"before":"S #89 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=a06c16935c","clientMutationId":"#90","facilityId":"INCIRLIK","flightDataId":"#88","op":"SetState","stripId":"#89"}]},
         {"n":8,"who":"c-OPS","in":{"actingPositionId":"OPS","baseRev":2,"clientMutationId":"#91","facilityId":"INCIRLIK","op":{"bayId":"ap-departures","kind":"TransferStrip","rackId":"main","toPositionId":"AP"},"stripId":"#89","type":"efsp-mutation","version":1},"out":{"ack":{"boardEpoch":"#82","boardSeq":3,"clientMutationId":"#91","facilityId":"INCIRLIK","ok":true,"routedTo":null,"strip":"S #89 r3 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=a126c9993e","stripId":"#89","type":"efsp-mutation-ack","version":1},"broadcast":{"boardEpoch":"#82","boardSeq":3,"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #89 r3 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=a126c9993e"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"OPS","actorId":"c-OPS","after":"S #89 r3 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=15bf89abba","at":1782009600000,"before":"S #89 r2 DEPARTURE/HANDED_OFF @OPS ops-proposed/main:V h=4f8d051592","clientMutationId":"#91","facilityId":"INCIRLIK","flightDataId":"#88","op":"TransferStrip","selfCoordinated":false,"stripId":"#89"}]},
-        {"n":9,"who":"c-AP","in":{"lastBoardSeq":-999999,"type":"efsp-resync"},"out":{"ack":{"airspaces":[{"airspaceId":"MOA-RACE","definition":{"airspaceId":"MOA-RACE","controllingFacilityId":"CENTER","controllingPositionId":"CTR","name":"Race MOA","type":"MOA","workingFrequencyMhz":140},"pendingRequest":null,"rev":2,"state":"ACTIVE","transitions":[{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","state":"SCHEDULED","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","selfCoordinated":false,"state":"ACTIVE"}],"updatedAt":1782009600000,"updatedBy":"c-CTR","window":{"fromUtc":1782009600000,"toUtc":1782013200000}}],"aitAuthorizedByFacility":{"CARRIER":false,"CENTER":false,"INCIRLIK":false,"RANGES":false,"TACTICAL":false},"answer":"snapshot","bays":[{"bayId":"ops-proposed","facilityId":"INCIRLIK","impliesState":"PROPOSED","positionId":"OPS","rackIds":["main"]},{"bayId":"ops-filed","facilityId":"INCIRLIK","positionId":"OPS","rackIds":["main"]},{"bayId":"ops-runway-status","facilityId":"INCIRLIK","positionId":"OPS","rackIds":["main"]},{"bayId":"ops-coordination","facilityId":"INCIRLIK","positionId":"OPS","rackIds":["main"]},{"bayId":"cd-pending-clearance","facilityId":"INCIRLIK","impliesState":"PENDING_CLEARANCE","positionId":"CD","rackIds":["main"]},{"bayId":"cd-cleared","facilityId":"INCIRLIK","impliesState":"CLEARED","positionId":"CD","rackIds":["main"]},{"bayId":"cd-held","facilityId":"INCIRLIK","impliesState":"HELD","positionId":"CD","rackIds":["main"]},{"bayId":"cd-coordination","facilityId":"INCIRLIK","positionId":"CD","rackIds":["main"]},{"bayId":"gc-pushback","facilityId":"INCIRLIK","impliesState":"PUSHBACK","positionId":"GC","rackIds":["main"]},{"bayId":"gc-taxi-out","facilityId":"INCIRLIK","impliesState":"TAXI","positionId":"GC","rackIds":["main"]},{"bayId":"gc-taxi-in","facilityId":"INCIRLIK","impliesState":"TAXI_IN","positionId":"GC","rackIds":["main"]},{"bayId":"gc-coordination","facilityId":"INCIRLIK","positionId":"GC","rackIds":["main"]},{"bayId":"lc-runway-queue","facilityId":"INCIRLIK","impliesState":"RUNWAY_QUEUE","positionId":"LC","rackIds":["rwy-05","rwy-23"]},{"bayId":"lc-airborne","facilityId":"INCIRLIK","impliesState":"DEPARTED","positionId":"LC","rackIds":["main"]},{"bayId":"lc-arrivals","facilityId":"INCIRLIK","impliesState":"HANDED_TO_TOWER","positionId":"LC","rackIds":["main"]},{"bayId":"lc-final","facilityId":"INCIRLIK","impliesState":"FINAL","positionId":"LC","rackIds":["main"]},{"bayId":"lc-landed","facilityId":"INCIRLIK","impliesState":"LANDED","positionId":"LC","rackIds":["main"]},{"bayId":"lc-coordination","facilityId":"INCIRLIK","positionId":"LC","rackIds":["main"]},{"bayId":"rsu-pattern","facilityId":"INCIRLIK","impliesState":"IN_PATTERN","positionId":"RSU","rackIds":["closed","initial","base","final"],"replacesRacks":true,"view":"pattern"},{"bayId":"ap-inbound","facilityId":"INCIRLIK","impliesState":"INBOUND","positionId":"AP","rackIds":["main"]},{"bayId":"ap-departures","facilityId":"INCIRLIK","impliesState":"HANDED_OFF","positionId":"AP","rackIds":["main"]},{"bayId":"ap-overflight","facilityId":"INCIRLIK","holdsStripType":"OVERFLIGHT","positionId":"AP","rackIds":["main"]},{"bayId":"ap-coordination","facilityId":"INCIRLIK","positionId":"AP","rackIds":["main"]},{"bayId":"sfa-frequencies","facilityId":"INCIRLIK","impliesState":"INBOUND","positionId":"SFA","rackIds":["freq-1","freq-2","freq-3","freq-4","freq-5"],"view":"sfa-freqs"},{"bayId":"par-final","capacity":1,"facilityId":"INCIRLIK","impliesState":"ON_FINAL","positionId":"PAR","rackIds":["main"],"replacesRacks":true,"view":"final"},{"bayId":"par-missed","facilityId":"INCIRLIK","impliesState":"BOLTER_WAVEOFF","positionId":"PAR","rackIds":["main"]},{"bayId":"ctr-enroute","facilityId":"CENTER","impliesState":"INBOUND","positionId":"CTR","rackIds":["main"]},{"bayId":"ctr-departures","facilityId":"CENTER","impliesState":"HANDED_OFF","positionId":"CTR","rackIds":["main"]},{"bayId":"ctr-overflight","facilityId":"CENTER","holdsStripType":"OVERFLIGHT","positionId":"CTR","rackIds":["main"]},{"bayId":"ctr-ap-coordination","facilityId":"CENTER","positionId":"CTR","rackIds":["main"]},{"bayId":"tac-c2-tasked","facilityId":"TACTICAL","impliesState":"TASKED","positionId":"TAC_C2","rackIds":["main"]},{"bayId":"tac-c2-airborne","facilityId":"TACTICAL","impliesState":"AIRBORNE","positionId":"TAC_C2","rackIds":["main"]},{"bayId":"tac-c2-on-station","facilityId":"TACTICAL","impliesState":"ON_STATION","positionId":"TAC_C2","rackIds":["main"]},{"bayId":"tac-c2-tanker","facilityId":"TACTICAL","positionId":"TAC_C2","rackIds":["main"]},{"bayId":"tac-c2-coordination","facilityId":"TACTICAL","positionId":"TAC_C2","rackIds":["main"]},{"bayId":"aic-on-station","facilityId":"TACTICAL","impliesState":"ON_STATION","positionId":"AIC","rackIds":["main"]},{"bayId":"aic-committed","facilityId":"TACTICAL","positionId":"AIC","rackIds":["main"]},{"bayId":"aic-coordination","facilityId":"TACTICAL","positionId":"AIC","rackIds":["main"]},{"bayId":"gci-on-station","facilityId":"TACTICAL","impliesState":"ON_STATION","positionId":"GCI","rackIds":["main"]},{"bayId":"gci-committed","facilityId":"TACTICAL","positionId":"GCI","rackIds":["main"]},{"bayId":"gci-coordination","facilityId":"TACTICAL","positionId":"GCI","rackIds":["main"]},{"bayId":"jtac-mission","facilityId":"TACTICAL","positionId":"JTAC","rackIds":["main"]},{"bayId":"cv-marshal-stack","facilityId":"CARRIER","impliesState":"IN_STACK","positionId":"CV_MARSHAL","rackIds":["main"]},{"bayId":"cv-marshal-departures","facilityId":"CARRIER","impliesState":"LAUNCH","positionId":"CV_MARSHAL","rackIds":["main"]},{"bayId":"cv-marshal-coordination","facilityId":"CARRIER","positionId":"CV_MARSHAL","rackIds":["main"]},{"bayId":"cv-prifly-pattern","facilityId":"CARRIER","impliesState":"IN_PATTERN","positionId":"CV_PRIFLY","rackIds":["initial","break","downwind","groove"],"view":"pattern"},{"bayId":"cv-prifly-deck","facilityId":"CARRIER","positionId":"CV_PRIFLY","rackIds":["main"]},{"bayId":"cv-app1-lane","facilityId":"CARRIER","impliesState":"COMMENCED","positionId":"CV_APP1","rackIds":["main"]},{"bayId":"cv-app1-final","facilityId":"CARRIER","impliesState":"ON_FINAL","positionId":"CV_APP1","rackIds":["main"],"view":"final"},{"bayId":"cv-app1-bolter","facilityId":"CARRIER","impliesState":"BOLTER_WAVEOFF","positionId":"CV_APP1","rackIds":["main"]},{"bayId":"cv-app2-lane","facilityId":"CARRIER","impliesState":"COMMENCED","positionId":"CV_APP2","rackIds":["main"]},{"bayId":"cv-app2-final","facilityId":"CARRIER","impliesState":"ON_FINAL","positionId":"CV_APP2","rackIds":["main"],"view":"final"},{"bayId":"cv-app2-bolter","facilityId":"CARRIER","impliesState":"BOLTER_WAVEOFF","positionId":"CV_APP2","rackIds":["main"]}],"boardEpochByFacility":{"CARRIER":"#85","CENTER":"#83","INCIRLIK":"#82","RANGES":"#86","TACTICAL":"#84"},"boardSeq":3,"boardSeqByFacility":{"CARRIER":0,"CENTER":0,"INCIRLIK":3,"RANGES":0,"TACTICAL":0},"carriers":[{"advisory":null,"consistency":{"MAIN":[]},"derived":{"MAIN":[]},"hull":{"angledDeckDeg":9,"hullId":"CVN-72","label":"CVN-72","match":{"coalition":"own","type":"CVN_72","unitName":"UNION"}},"hullId":"CVN-72","lanes":{"MAIN":[]},"recoveryCase":{"history":[],"setAt":null,"setBy":null,"value":"III"},"rev":0,"shipInputs":{"altimeterInHg":null},"shipState":null,"slots":{"MAIN":[{"angels":6,"marshalDme":21,"pushTimeUtc":null,"stackIndex":0}]},"stacks":{"MAIN":{"charlieTimeUtc":null,"entries":[],"hullId":"CVN-72","marshalRadialDeg":null,"stackId":"MAIN"}},"transitions":[]}],"correlations":[],"facilities":["INCIRLIK","CENTER","TACTICAL","CARRIER","RANGES"],"facility":"INCIRLIK","flightDataList":["F #7 r3 RACE1 sq=0001 h=5f7595b4a2","F #24 r3 RETRY1 sq=0002 h=0ba77b5faf","F #40 r1 ADV1 sq=0003 h=4c56a8179e","F #68 r2 LAG1 sq=0004 h=65d6444480","F #73 r2 LAG2 sq=0005 h=18a45cf29b","F #88 r2 FAR1 sq=0006 h=3cf004e5b2"],"marsa":[],"positionLetters":{"CARRIER":{"CV_APP1":"1","CV_APP2":"2","CV_MARSHAL":"V","CV_PRIFLY":"P"},"CENTER":{"CTR":"C"},"INCIRLIK":{"AP":"A","CD":"D","GC":"G","LC":"T","OPS":"O","PAR":"P","RSU":"R","SFA":"S"},"RANGES":{},"TACTICAL":{"AIC":"M","GCI":"M","JTAC":"M","TAC_C2":"M"}},"positions":[{"consolidatedPositions":[],"facilityId":"INCIRLIK","observers":[],"pendingPrimaryRequest":null,"positionId":"OPS","primary":{"controllerId":"c-OPS","controllerName":"OPS","since":1782009600000}},{"consolidatedPositions":[],"facilityId":"INCIRLIK","observers":[],"pendingPrimaryRequest":null,"positionId":"CD","primary":{"controllerId":"c-CD","controllerName":"CD","since":1782009600000}},{"consolidatedPositions":[],"facilityId":"INCIRLIK","observers":[],"pendingPrimaryRequest":null,"positionId":"GC","primary":{"controllerId":"c-GC","controllerName":"GC","since":1782009600000}},{"consolidatedPositions":[],"facilityId":"INCIRLIK","observers":[],"pendingPrimaryRequest":null,"positionId":"LC","primary":{"controllerId":"c-LC","controllerName":"LC","since":1782009600000}},{"consolidatedPositions":[],"facilityId":"INCIRLIK","observers":[],"pendingPrimaryRequest":null,"positionId":"RSU","primary":null},{"consolidatedPositions":["SFA","PAR"],"facilityId":"INCIRLIK","observers":[],"pendingPrimaryRequest":null,"positionId":"AP","primary":{"controllerId":"c-AP","controllerName":"AP","since":1782009600000}},{"consolidatedPositions":[],"facilityId":"INCIRLIK","observers":[],"pendingPrimaryRequest":null,"positionId":"SFA","primary":null},{"consolidatedPositions":[],"facilityId":"INCIRLIK","observers":[],"pendingPrimaryRequest":null,"positionId":"PAR","primary":null},{"consolidatedPositions":[],"facilityId":"CENTER","observers":[],"pendingPrimaryRequest":null,"positionId":"CTR","primary":{"controllerId":"c-CTR","controllerName":"CTR","since":1782009600000}},{"consolidatedPositions":[],"facilityId":"TACTICAL","observers":[],"pendingPrimaryRequest":null,"positionId":"TAC_C2","primary":null},{"consolidatedPositions":[],"facilityId":"TACTICAL","observers":[],"pendingPrimaryRequest":null,"positionId":"AIC","primary":null},{"consolidatedPositions":[],"facilityId":"TACTICAL","observers":[],"pendingPrimaryRequest":null,"positionId":"GCI","primary":null},{"consolidatedPositions":[],"facilityId":"TACTICAL","observers":[],"pendingPrimaryRequest":null,"positionId":"JTAC","primary":null},{"consolidatedPositions":[],"facilityId":"CARRIER","observers":[],"pendingPrimaryRequest":null,"positionId":"CV_MARSHAL","primary":null},{"consolidatedPositions":[],"facilityId":"CARRIER","observers":[],"pendingPrimaryRequest":null,"positionId":"CV_PRIFLY","primary":null},{"consolidatedPositions":[],"facilityId":"CARRIER","observers":[],"pendingPrimaryRequest":null,"positionId":"CV_APP1","primary":null},{"consolidatedPositions":[],"facilityId":"CARRIER","observers":[],"pendingPrimaryRequest":null,"positionId":"CV_APP2","primary":null}],"runwayStatuses":[{"~big":"35274460cf","chars":725,"keys":["activeRunway","activeRunwaySource","alertPad","facilityId","hotCargoPad","inspectionAuthorityPositionId","rev","runwayChange"]}],"sfaRotation":{"controllers":["AP","SFA","PAR"],"facilityId":"INCIRLIK","jurisdiction":"AP","pool":[{"mhz":232.1,"rackId":"freq-1"},{"mhz":233.1,"rackId":"freq-2"},{"mhz":234.1,"rackId":"freq-3"},{"mhz":235.1,"rackId":"freq-4"},{"mhz":236.1,"rackId":"freq-5"}],"rev":0,"rotation":{"freq-1":"AP","freq-2":"SFA","freq-3":"PAR"},"rotationSize":3,"transitions":[]},"strips":["S #8 r4 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=20edfb9b52","S #25 r4 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=7a6f31a904","S #41 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=0bae92af8a","S #69 r3 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=16d1ed5f5e","S #74 r3 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=5626edf6f2","S #89 r3 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=a126c9993e"],"type":"efsp-resync-reply","version":1}},"audit":[]}
+        {"n":9,"who":"c-AP","in":{"lastBoardSeq":-999999,"type":"efsp-resync"},"out":{"ack":{"airspaces":[{"~big":"053b1189b9","chars":773,"keys":["airspaceId","defRev","definition","pendingRequest","rev","state","theater","transitions"]}],"aitAuthorizedByFacility":{"CARRIER":false,"CENTER":false,"INCIRLIK":false,"RANGES":false,"TACTICAL":false},"answer":"snapshot","bays":[{"bayId":"ops-proposed","facilityId":"INCIRLIK","impliesState":"PROPOSED","positionId":"OPS","rackIds":["main"]},{"bayId":"ops-filed","facilityId":"INCIRLIK","positionId":"OPS","rackIds":["main"]},{"bayId":"ops-runway-status","facilityId":"INCIRLIK","positionId":"OPS","rackIds":["main"]},{"bayId":"ops-coordination","facilityId":"INCIRLIK","positionId":"OPS","rackIds":["main"]},{"bayId":"cd-pending-clearance","facilityId":"INCIRLIK","impliesState":"PENDING_CLEARANCE","positionId":"CD","rackIds":["main"]},{"bayId":"cd-cleared","facilityId":"INCIRLIK","impliesState":"CLEARED","positionId":"CD","rackIds":["main"]},{"bayId":"cd-held","facilityId":"INCIRLIK","impliesState":"HELD","positionId":"CD","rackIds":["main"]},{"bayId":"cd-coordination","facilityId":"INCIRLIK","positionId":"CD","rackIds":["main"]},{"bayId":"gc-pushback","facilityId":"INCIRLIK","impliesState":"PUSHBACK","positionId":"GC","rackIds":["main"]},{"bayId":"gc-taxi-out","facilityId":"INCIRLIK","impliesState":"TAXI","positionId":"GC","rackIds":["main"]},{"bayId":"gc-taxi-in","facilityId":"INCIRLIK","impliesState":"TAXI_IN","positionId":"GC","rackIds":["main"]},{"bayId":"gc-coordination","facilityId":"INCIRLIK","positionId":"GC","rackIds":["main"]},{"bayId":"lc-runway-queue","facilityId":"INCIRLIK","impliesState":"RUNWAY_QUEUE","positionId":"LC","rackIds":["rwy-05","rwy-23"]},{"bayId":"lc-airborne","facilityId":"INCIRLIK","impliesState":"DEPARTED","positionId":"LC","rackIds":["main"]},{"bayId":"lc-arrivals","facilityId":"INCIRLIK","impliesState":"HANDED_TO_TOWER","positionId":"LC","rackIds":["main"]},{"bayId":"lc-final","facilityId":"INCIRLIK","impliesState":"FINAL","positionId":"LC","rackIds":["main"]},{"bayId":"lc-landed","facilityId":"INCIRLIK","impliesState":"LANDED","positionId":"LC","rackIds":["main"]},{"bayId":"lc-coordination","facilityId":"INCIRLIK","positionId":"LC","rackIds":["main"]},{"bayId":"rsu-pattern","facilityId":"INCIRLIK","impliesState":"IN_PATTERN","positionId":"RSU","rackIds":["closed","initial","base","final"],"replacesRacks":true,"view":"pattern"},{"bayId":"ap-inbound","facilityId":"INCIRLIK","impliesState":"INBOUND","positionId":"AP","rackIds":["main"]},{"bayId":"ap-departures","facilityId":"INCIRLIK","impliesState":"HANDED_OFF","positionId":"AP","rackIds":["main"]},{"bayId":"ap-overflight","facilityId":"INCIRLIK","holdsStripType":"OVERFLIGHT","positionId":"AP","rackIds":["main"]},{"bayId":"ap-coordination","facilityId":"INCIRLIK","positionId":"AP","rackIds":["main"]},{"bayId":"sfa-frequencies","facilityId":"INCIRLIK","impliesState":"INBOUND","positionId":"SFA","rackIds":["freq-1","freq-2","freq-3","freq-4","freq-5"],"view":"sfa-freqs"},{"bayId":"par-final","capacity":1,"facilityId":"INCIRLIK","impliesState":"ON_FINAL","positionId":"PAR","rackIds":["main"],"replacesRacks":true,"view":"final"},{"bayId":"par-missed","facilityId":"INCIRLIK","impliesState":"BOLTER_WAVEOFF","positionId":"PAR","rackIds":["main"]},{"bayId":"ctr-enroute","facilityId":"CENTER","impliesState":"INBOUND","positionId":"CTR","rackIds":["main"]},{"bayId":"ctr-departures","facilityId":"CENTER","impliesState":"HANDED_OFF","positionId":"CTR","rackIds":["main"]},{"bayId":"ctr-overflight","facilityId":"CENTER","holdsStripType":"OVERFLIGHT","positionId":"CTR","rackIds":["main"]},{"bayId":"ctr-ap-coordination","facilityId":"CENTER","positionId":"CTR","rackIds":["main"]},{"bayId":"tac-c2-tasked","facilityId":"TACTICAL","impliesState":"TASKED","positionId":"TAC_C2","rackIds":["main"]},{"bayId":"tac-c2-airborne","facilityId":"TACTICAL","impliesState":"AIRBORNE","positionId":"TAC_C2","rackIds":["main"]},{"bayId":"tac-c2-on-station","facilityId":"TACTICAL","impliesState":"ON_STATION","positionId":"TAC_C2","rackIds":["main"]},{"bayId":"tac-c2-tanker","facilityId":"TACTICAL","positionId":"TAC_C2","rackIds":["main"]},{"bayId":"tac-c2-coordination","facilityId":"TACTICAL","positionId":"TAC_C2","rackIds":["main"]},{"bayId":"aic-on-station","facilityId":"TACTICAL","impliesState":"ON_STATION","positionId":"AIC","rackIds":["main"]},{"bayId":"aic-committed","facilityId":"TACTICAL","positionId":"AIC","rackIds":["main"]},{"bayId":"aic-coordination","facilityId":"TACTICAL","positionId":"AIC","rackIds":["main"]},{"bayId":"gci-on-station","facilityId":"TACTICAL","impliesState":"ON_STATION","positionId":"GCI","rackIds":["main"]},{"bayId":"gci-committed","facilityId":"TACTICAL","positionId":"GCI","rackIds":["main"]},{"bayId":"gci-coordination","facilityId":"TACTICAL","positionId":"GCI","rackIds":["main"]},{"bayId":"jtac-mission","facilityId":"TACTICAL","positionId":"JTAC","rackIds":["main"]},{"bayId":"cv-marshal-stack","facilityId":"CARRIER","impliesState":"IN_STACK","positionId":"CV_MARSHAL","rackIds":["main"]},{"bayId":"cv-marshal-departures","facilityId":"CARRIER","impliesState":"LAUNCH","positionId":"CV_MARSHAL","rackIds":["main"]},{"bayId":"cv-marshal-coordination","facilityId":"CARRIER","positionId":"CV_MARSHAL","rackIds":["main"]},{"bayId":"cv-prifly-pattern","facilityId":"CARRIER","impliesState":"IN_PATTERN","positionId":"CV_PRIFLY","rackIds":["initial","break","downwind","groove"],"view":"pattern"},{"bayId":"cv-prifly-deck","facilityId":"CARRIER","positionId":"CV_PRIFLY","rackIds":["main"]},{"bayId":"cv-app1-lane","facilityId":"CARRIER","impliesState":"COMMENCED","positionId":"CV_APP1","rackIds":["main"]},{"bayId":"cv-app1-final","facilityId":"CARRIER","impliesState":"ON_FINAL","positionId":"CV_APP1","rackIds":["main"],"view":"final"},{"bayId":"cv-app1-bolter","facilityId":"CARRIER","impliesState":"BOLTER_WAVEOFF","positionId":"CV_APP1","rackIds":["main"]},{"bayId":"cv-app2-lane","facilityId":"CARRIER","impliesState":"COMMENCED","positionId":"CV_APP2","rackIds":["main"]},{"bayId":"cv-app2-final","facilityId":"CARRIER","impliesState":"ON_FINAL","positionId":"CV_APP2","rackIds":["main"],"view":"final"},{"bayId":"cv-app2-bolter","facilityId":"CARRIER","impliesState":"BOLTER_WAVEOFF","positionId":"CV_APP2","rackIds":["main"]}],"boardEpochByFacility":{"CARRIER":"#85","CENTER":"#83","INCIRLIK":"#82","RANGES":"#86","TACTICAL":"#84"},"boardSeq":3,"boardSeqByFacility":{"CARRIER":0,"CENTER":0,"INCIRLIK":3,"RANGES":0,"TACTICAL":0},"carriers":[{"advisory":null,"consistency":{"MAIN":[]},"derived":{"MAIN":[]},"hull":{"angledDeckDeg":null,"hullId":"CVN-72","label":"CVN-72","match":{"coalition":"own","type":"CVN_72","unitName":"UNION"}},"hullId":"CVN-72","lanes":{"MAIN":[]},"recoveryCase":{"history":[],"setAt":null,"setBy":null,"value":"III"},"rev":0,"shipInputs":{"altimeterInHg":null},"shipState":null,"slots":{"MAIN":[{"angels":6,"marshalDme":21,"pushTimeUtc":null,"stackIndex":0}]},"stacks":{"MAIN":{"charlieTimeUtc":null,"entries":[],"hullId":"CVN-72","marshalRadialDeg":null,"stackId":"MAIN"}},"transitions":[]}],"correlations":[],"facilities":["INCIRLIK","CENTER","TACTICAL","CARRIER","RANGES"],"facility":"INCIRLIK","flightDataList":["F #7 r3 RACE1 sq=0001 h=5f7595b4a2","F #24 r3 RETRY1 sq=0002 h=0ba77b5faf","F #40 r1 ADV1 sq=0003 h=4c56a8179e","F #68 r2 LAG1 sq=0004 h=65d6444480","F #73 r2 LAG2 sq=0005 h=18a45cf29b","F #88 r2 FAR1 sq=0006 h=3cf004e5b2"],"marsa":[],"positionLetters":{"CARRIER":{"CV_APP1":"1","CV_APP2":"2","CV_MARSHAL":"V","CV_PRIFLY":"P"},"CENTER":{"CTR":"C"},"INCIRLIK":{"AP":"A","CD":"D","GC":"G","LC":"T","OPS":"O","PAR":"P","RSU":"R","SFA":"S"},"RANGES":{},"TACTICAL":{"AIC":"M","GCI":"M","JTAC":"M","TAC_C2":"M"}},"positions":[{"consolidatedPositions":[],"facilityId":"INCIRLIK","observers":[],"pendingPrimaryRequest":null,"positionId":"OPS","primary":{"controllerId":"c-OPS","controllerName":"OPS","since":1782009600000}},{"consolidatedPositions":[],"facilityId":"INCIRLIK","observers":[],"pendingPrimaryRequest":null,"positionId":"CD","primary":{"controllerId":"c-CD","controllerName":"CD","since":1782009600000}},{"consolidatedPositions":[],"facilityId":"INCIRLIK","observers":[],"pendingPrimaryRequest":null,"positionId":"GC","primary":{"controllerId":"c-GC","controllerName":"GC","since":1782009600000}},{"consolidatedPositions":[],"facilityId":"INCIRLIK","observers":[],"pendingPrimaryRequest":null,"positionId":"LC","primary":{"controllerId":"c-LC","controllerName":"LC","since":1782009600000}},{"consolidatedPositions":[],"facilityId":"INCIRLIK","observers":[],"pendingPrimaryRequest":null,"positionId":"RSU","primary":null},{"consolidatedPositions":["SFA","PAR"],"facilityId":"INCIRLIK","observers":[],"pendingPrimaryRequest":null,"positionId":"AP","primary":{"controllerId":"c-AP","controllerName":"AP","since":1782009600000}},{"consolidatedPositions":[],"facilityId":"INCIRLIK","observers":[],"pendingPrimaryRequest":null,"positionId":"SFA","primary":null},{"consolidatedPositions":[],"facilityId":"INCIRLIK","observers":[],"pendingPrimaryRequest":null,"positionId":"PAR","primary":null},{"consolidatedPositions":[],"facilityId":"CENTER","observers":[],"pendingPrimaryRequest":null,"positionId":"CTR","primary":{"controllerId":"c-CTR","controllerName":"CTR","since":1782009600000}},{"consolidatedPositions":[],"facilityId":"TACTICAL","observers":[],"pendingPrimaryRequest":null,"positionId":"TAC_C2","primary":null},{"consolidatedPositions":[],"facilityId":"TACTICAL","observers":[],"pendingPrimaryRequest":null,"positionId":"AIC","primary":null},{"consolidatedPositions":[],"facilityId":"TACTICAL","observers":[],"pendingPrimaryRequest":null,"positionId":"GCI","primary":null},{"consolidatedPositions":[],"facilityId":"TACTICAL","observers":[],"pendingPrimaryRequest":null,"positionId":"JTAC","primary":null},{"consolidatedPositions":[],"facilityId":"CARRIER","observers":[],"pendingPrimaryRequest":null,"positionId":"CV_MARSHAL","primary":null},{"consolidatedPositions":[],"facilityId":"CARRIER","observers":[],"pendingPrimaryRequest":null,"positionId":"CV_PRIFLY","primary":null},{"consolidatedPositions":[],"facilityId":"CARRIER","observers":[],"pendingPrimaryRequest":null,"positionId":"CV_APP1","primary":null},{"consolidatedPositions":[],"facilityId":"CARRIER","observers":[],"pendingPrimaryRequest":null,"positionId":"CV_APP2","primary":null}],"runwayStatuses":[{"~big":"35274460cf","chars":725,"keys":["activeRunway","activeRunwaySource","alertPad","facilityId","hotCargoPad","inspectionAuthorityPositionId","rev","runwayChange"]}],"sfaRotation":{"controllers":["AP","SFA","PAR"],"facilityId":"INCIRLIK","jurisdiction":"AP","pool":[{"mhz":232.1,"rackId":"freq-1"},{"mhz":233.1,"rackId":"freq-2"},{"mhz":234.1,"rackId":"freq-3"},{"mhz":235.1,"rackId":"freq-4"},{"mhz":236.1,"rackId":"freq-5"}],"rev":0,"rotation":{"freq-1":"AP","freq-2":"SFA","freq-3":"PAR"},"rotationSize":3,"transitions":[]},"strips":["S #8 r4 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=20edfb9b52","S #25 r4 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=7a6f31a904","S #41 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=0bae92af8a","S #69 r3 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=16d1ed5f5e","S #74 r3 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=5626edf6f2","S #89 r3 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=a126c9993e"],"type":"efsp-resync-reply","version":1}},"audit":[]}
       ],
       "orphanAudit": [],
       "final": {
@@ -778,11 +818,19 @@
           }
         },
         "airspaces": {
-          "n": 1,
-          "h": "320daae74b",
-          "rows": [
-            "MOA-RACE h=03f7048296"
-          ]
+          "h": "113b80bbdc",
+          "v": {
+            "byTheater": {
+              "Test": [
+                {"~big":"a5a6968bc7","chars":796,"keys":["airspaceId","defRev","definition","definitionHistory","pendingRequest","rev","state","theater"]}
+              ]
+            },
+            "seeded": {
+              "Test": [
+                "MOA-RACE"
+              ]
+            }
+          }
         },
         "correlations": {
           "n": 0,
@@ -937,11 +985,19 @@
           }
         },
         "airspaces": {
-          "n": 1,
-          "h": "320daae74b",
-          "rows": [
-            "MOA-RACE h=03f7048296"
-          ]
+          "h": "113b80bbdc",
+          "v": {
+            "byTheater": {
+              "Test": [
+                {"~big":"a5a6968bc7","chars":796,"keys":["airspaceId","defRev","definition","definitionHistory","pendingRequest","rev","state","theater"]}
+              ]
+            },
+            "seeded": {
+              "Test": [
+                "MOA-RACE"
+              ]
+            }
+          }
         },
         "correlations": {
           "n": 0,
@@ -1103,11 +1159,19 @@
           }
         },
         "airspaces": {
-          "n": 1,
-          "h": "320daae74b",
-          "rows": [
-            "MOA-RACE h=03f7048296"
-          ]
+          "h": "113b80bbdc",
+          "v": {
+            "byTheater": {
+              "Test": [
+                {"~big":"a5a6968bc7","chars":796,"keys":["airspaceId","defRev","definition","definitionHistory","pendingRequest","rev","state","theater"]}
+              ]
+            },
+            "seeded": {
+              "Test": [
+                "MOA-RACE"
+              ]
+            }
+          }
         },
         "correlations": {
           "n": 0,
@@ -1285,11 +1349,19 @@
           }
         },
         "airspaces": {
-          "n": 1,
-          "h": "320daae74b",
-          "rows": [
-            "MOA-RACE h=03f7048296"
-          ]
+          "h": "113b80bbdc",
+          "v": {
+            "byTheater": {
+              "Test": [
+                {"~big":"a5a6968bc7","chars":796,"keys":["airspaceId","defRev","definition","definitionHistory","pendingRequest","rev","state","theater"]}
+              ]
+            },
+            "seeded": {
+              "Test": [
+                "MOA-RACE"
+              ]
+            }
+          }
         },
         "correlations": {
           "n": 0,
@@ -1476,11 +1548,19 @@
           }
         },
         "airspaces": {
-          "n": 1,
-          "h": "320daae74b",
-          "rows": [
-            "MOA-RACE h=03f7048296"
-          ]
+          "h": "113b80bbdc",
+          "v": {
+            "byTheater": {
+              "Test": [
+                {"~big":"a5a6968bc7","chars":796,"keys":["airspaceId","defRev","definition","definitionHistory","pendingRequest","rev","state","theater"]}
+              ]
+            },
+            "seeded": {
+              "Test": [
+                "MOA-RACE"
+              ]
+            }
+          }
         },
         "correlations": {
           "n": 0,
@@ -1516,8 +1596,8 @@
         {"n":3,"who":"c-LC","in":{"facilityId":"INCIRLIK","signedOn":["LC"],"type":"efsp-set-positions"},"out":{"ack":{"facilityId":"INCIRLIK","signedOn":["LC"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"boardEpoch":"#170","boardSeq":0,"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"985345bb16","chars":1299,"keys":"array[8]"}},"strips":{"gone":[],"updated":["S #8 r4 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=20edfb9b52","S #25 r4 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=7a6f31a904","S #41 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=0bae92af8a","S #69 r3 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=16d1ed5f5e","S #74 r3 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=5626edf6f2","S #89 r3 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=a126c9993e","S #104 r4 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=43289f4f35","S #121 r4 ARRIVAL/INBOUND @AP ap-inbound/main:V h=11aca2bc11","S #158 r5 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=34a69094ca"]},"type":"efsp-board-delta","version":1}},"audit":[]},
         {"n":4,"who":"c-AP","in":{"facilityId":"INCIRLIK","signedOn":["AP"],"type":"efsp-set-positions"},"out":{"ack":{"facilityId":"INCIRLIK","signedOn":["AP"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"boardEpoch":"#170","boardSeq":0,"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"da177275b4","chars":1373,"keys":"array[8]"}},"strips":{"gone":[],"updated":["S #8 r4 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=20edfb9b52","S #25 r4 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=7a6f31a904","S #41 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=0bae92af8a","S #69 r3 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=16d1ed5f5e","S #74 r3 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=5626edf6f2","S #89 r3 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=a126c9993e","S #104 r4 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=43289f4f35","S #121 r4 ARRIVAL/INBOUND @AP ap-inbound/main:V h=11aca2bc11","S #158 r5 DEPARTURE/HANDED_OFF @AP ap-departures/main:V h=34a69094ca"]},"type":"efsp-board-delta","version":1}},"audit":[]},
         {"n":5,"who":"c-CTR","in":{"facilityId":"CENTER","signedOn":["CTR"],"type":"efsp-set-positions"},"out":{"ack":{"facilityId":"CENTER","signedOn":["CTR"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"boardEpoch":"#171","boardSeq":0,"facilityId":"CENTER","flightDataList":{"updated":[]},"positions":{"updated":[{"consolidatedPositions":[],"facilityId":"CENTER","observers":[],"pendingPrimaryRequest":null,"positionId":"CTR","primary":{"controllerId":"c-CTR","controllerName":"CTR","since":1782009600000}}]},"strips":{"gone":[],"updated":["S #142 r2 DEPARTURE/HANDED_OFF @CTR ctr-departures/main:V h=9c570415da","S #162 r2 DEPARTURE/HANDED_OFF @CTR ctr-departures/main:V h=1d47b2a022"]},"type":"efsp-board-delta","version":1}},"audit":[]},
-        {"n":6,"who":"c-CTR","in":{"actingPositionId":"CTR","airspaceId":"MOA-RACE","baseRev":2,"clientMutationId":"#175","op":{"fromUtc":1782009600000,"kind":"ScheduleAirspace","toUtc":1782013200000},"type":"efsp-airspace-mutation","version":1},"out":{"ack":{"airspace":{"airspaceId":"MOA-RACE","definition":{"airspaceId":"MOA-RACE","controllingFacilityId":"CENTER","controllingPositionId":"CTR","name":"Race MOA","type":"MOA","workingFrequencyMhz":140},"pendingRequest":null,"rev":2,"state":"ACTIVE","transitions":[{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","state":"SCHEDULED","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","selfCoordinated":false,"state":"ACTIVE"}],"updatedAt":1782009600000,"updatedBy":"c-CTR","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},"airspaceId":"MOA-RACE","airspaceSeq":0,"clientMutationId":"#175","detail":"an airspace at ACTIVE cannot go to SCHEDULED","ok":false,"reason":"VALIDATION_ERROR","type":"efsp-airspace-ack","version":1}},"audit":[{"actingPositionId":"CTR","actorId":"c-CTR","airspaceId":"MOA-RACE","at":1782009600000,"before":{"airspaceId":"MOA-RACE","pendingRequest":null,"rev":2,"state":"ACTIVE","transitions":[{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","state":"SCHEDULED","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","selfCoordinated":false,"state":"ACTIVE"}],"updatedAt":1782009600000,"updatedBy":"c-CTR","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},"clientMutationId":"#175","detail":"an airspace at ACTIVE cannot go to SCHEDULED","facilityId":"CENTER","ok":false,"op":"ScheduleAirspace","reason":"VALIDATION_ERROR"}]},
-        {"n":7,"who":"c-AP","in":{"actingPositionId":"AP","airspaceId":"MOA-RACE","baseRev":2,"clientMutationId":"#176","op":{"kind":"ApproveActivation"},"type":"efsp-airspace-mutation","version":1},"out":{"ack":{"airspace":{"airspaceId":"MOA-RACE","definition":{"airspaceId":"MOA-RACE","controllingFacilityId":"CENTER","controllingPositionId":"CTR","name":"Race MOA","type":"MOA","workingFrequencyMhz":140},"pendingRequest":null,"rev":2,"state":"ACTIVE","transitions":[{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","state":"SCHEDULED","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","selfCoordinated":false,"state":"ACTIVE"}],"updatedAt":1782009600000,"updatedBy":"c-CTR","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},"airspaceId":"MOA-RACE","airspaceSeq":0,"clientMutationId":"#176","detail":"only CTR may approve activation of Race MOA","ok":false,"reason":"PERMISSION_DENIED","type":"efsp-airspace-ack","version":1}},"audit":[{"actingPositionId":"AP","actorId":"c-AP","airspaceId":"MOA-RACE","at":1782009600000,"before":{"airspaceId":"MOA-RACE","pendingRequest":null,"rev":2,"state":"ACTIVE","transitions":[{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","state":"SCHEDULED","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","selfCoordinated":false,"state":"ACTIVE"}],"updatedAt":1782009600000,"updatedBy":"c-CTR","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},"clientMutationId":"#176","detail":"only CTR may approve activation of Race MOA","facilityId":"CENTER","ok":false,"op":"ApproveActivation","reason":"PERMISSION_DENIED"}]}
+        {"n":6,"who":"c-CTR","in":{"actingPositionId":"CTR","airspaceId":"MOA-RACE","baseRev":2,"clientMutationId":"#175","op":{"fromUtc":1782009600000,"kind":"ScheduleAirspace","toUtc":1782013200000},"type":"efsp-airspace-mutation","version":1},"out":{"ack":{"airspace":{"airspaceId":"MOA-RACE","defRev":1,"definition":{"airspaceId":"MOA-RACE","altLowerFt":null,"altUpperFt":null,"controlFrequencyMhz":null,"controllingFacilityId":"CENTER","controllingPositionId":"CTR","geometry":null,"kind":"AREA","name":"Race MOA","source":"STANDING","type":"MOA","usingFacilityId":null,"usingPositionId":null,"workingFrequencyMhz":140},"pendingRequest":null,"rev":2,"state":"ACTIVE","theater":"Test","transitions":[{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","state":"SCHEDULED","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","selfCoordinated":false,"state":"ACTIVE"}],"updatedAt":1782009600000,"updatedBy":"c-CTR","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},"airspaceId":"MOA-RACE","airspaceSeq":0,"clientMutationId":"#175","detail":"an airspace at ACTIVE cannot go to SCHEDULED","ok":false,"reason":"VALIDATION_ERROR","theater":"Test","type":"efsp-airspace-ack","version":1}},"audit":[{"actingPositionId":"CTR","actorId":"c-CTR","airspaceId":"MOA-RACE","at":1782009600000,"before":{"airspaceId":"MOA-RACE","defRev":1,"definition":{"airspaceId":"MOA-RACE","altLowerFt":null,"altUpperFt":null,"controlFrequencyMhz":null,"controllingFacilityId":"CENTER","controllingPositionId":"CTR","geometry":null,"kind":"AREA","name":"Race MOA","source":"STANDING","type":"MOA","usingFacilityId":null,"usingPositionId":null,"workingFrequencyMhz":140},"pendingRequest":null,"rev":2,"state":"ACTIVE","theater":"Test","transitions":[{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","state":"SCHEDULED","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","selfCoordinated":false,"state":"ACTIVE"}],"updatedAt":1782009600000,"updatedBy":"c-CTR","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},"clientMutationId":"#175","detail":"an airspace at ACTIVE cannot go to SCHEDULED","facilityId":"CENTER","ok":false,"op":"ScheduleAirspace","reason":"VALIDATION_ERROR","theater":"Test","via":"PANEL"}]},
+        {"n":7,"who":"c-AP","in":{"actingPositionId":"AP","airspaceId":"MOA-RACE","baseRev":2,"clientMutationId":"#176","op":{"kind":"ApproveActivation"},"type":"efsp-airspace-mutation","version":1},"out":{"ack":{"airspace":{"airspaceId":"MOA-RACE","defRev":1,"definition":{"airspaceId":"MOA-RACE","altLowerFt":null,"altUpperFt":null,"controlFrequencyMhz":null,"controllingFacilityId":"CENTER","controllingPositionId":"CTR","geometry":null,"kind":"AREA","name":"Race MOA","source":"STANDING","type":"MOA","usingFacilityId":null,"usingPositionId":null,"workingFrequencyMhz":140},"pendingRequest":null,"rev":2,"state":"ACTIVE","theater":"Test","transitions":[{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","state":"SCHEDULED","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","selfCoordinated":false,"state":"ACTIVE"}],"updatedAt":1782009600000,"updatedBy":"c-CTR","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},"airspaceId":"MOA-RACE","airspaceSeq":0,"clientMutationId":"#176","detail":"only CTR may approve activation of Race MOA","ok":false,"reason":"PERMISSION_DENIED","theater":"Test","type":"efsp-airspace-ack","version":1}},"audit":[{"actingPositionId":"AP","actorId":"c-AP","airspaceId":"MOA-RACE","at":1782009600000,"before":{"airspaceId":"MOA-RACE","defRev":1,"definition":{"airspaceId":"MOA-RACE","altLowerFt":null,"altUpperFt":null,"controlFrequencyMhz":null,"controllingFacilityId":"CENTER","controllingPositionId":"CTR","geometry":null,"kind":"AREA","name":"Race MOA","source":"STANDING","type":"MOA","usingFacilityId":null,"usingPositionId":null,"workingFrequencyMhz":140},"pendingRequest":null,"rev":2,"state":"ACTIVE","theater":"Test","transitions":[{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","state":"SCHEDULED","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},{"actingPositionId":"CTR","at":1782009600000,"by":"c-CTR","selfCoordinated":false,"state":"ACTIVE"}],"updatedAt":1782009600000,"updatedBy":"c-CTR","window":{"fromUtc":1782009600000,"toUtc":1782013200000}},"clientMutationId":"#176","detail":"only CTR may approve activation of Race MOA","facilityId":"CENTER","ok":false,"op":"ApproveActivation","reason":"PERMISSION_DENIED","theater":"Test","via":"PANEL"}]}
       ],
       "orphanAudit": [],
       "final": {
@@ -1662,11 +1742,19 @@
           }
         },
         "airspaces": {
-          "n": 1,
-          "h": "320daae74b",
-          "rows": [
-            "MOA-RACE h=03f7048296"
-          ]
+          "h": "113b80bbdc",
+          "v": {
+            "byTheater": {
+              "Test": [
+                {"~big":"a5a6968bc7","chars":796,"keys":["airspaceId","defRev","definition","definitionHistory","pendingRequest","rev","state","theater"]}
+              ]
+            },
+            "seeded": {
+              "Test": [
+                "MOA-RACE"
+              ]
+            }
+          }
         },
         "correlations": {
           "n": 0,
@@ -1855,11 +1943,19 @@
           }
         },
         "airspaces": {
-          "n": 1,
-          "h": "320daae74b",
-          "rows": [
-            "MOA-RACE h=03f7048296"
-          ]
+          "h": "113b80bbdc",
+          "v": {
+            "byTheater": {
+              "Test": [
+                {"~big":"a5a6968bc7","chars":796,"keys":["airspaceId","defRev","definition","definitionHistory","pendingRequest","rev","state","theater"]}
+              ]
+            },
+            "seeded": {
+              "Test": [
+                "MOA-RACE"
+              ]
+            }
+          }
         },
         "correlations": {
           "n": 0,
@@ -2038,11 +2134,19 @@
           }
         },
         "airspaces": {
-          "n": 1,
-          "h": "320daae74b",
-          "rows": [
-            "MOA-RACE h=03f7048296"
-          ]
+          "h": "113b80bbdc",
+          "v": {
+            "byTheater": {
+              "Test": [
+                {"~big":"a5a6968bc7","chars":796,"keys":["airspaceId","defRev","definition","definitionHistory","pendingRequest","rev","state","theater"]}
+              ]
+            },
+            "seeded": {
+              "Test": [
+                "MOA-RACE"
+              ]
+            }
+          }
         },
         "correlations": {
           "n": 0,
@@ -2237,11 +2341,19 @@
           }
         },
         "airspaces": {
-          "n": 1,
-          "h": "320daae74b",
-          "rows": [
-            "MOA-RACE h=03f7048296"
-          ]
+          "h": "113b80bbdc",
+          "v": {
+            "byTheater": {
+              "Test": [
+                {"~big":"a5a6968bc7","chars":796,"keys":["airspaceId","defRev","definition","definitionHistory","pendingRequest","rev","state","theater"]}
+              ]
+            },
+            "seeded": {
+              "Test": [
+                "MOA-RACE"
+              ]
+            }
+          }
         },
         "correlations": {
           "n": 0,
@@ -2418,11 +2530,19 @@
           }
         },
         "airspaces": {
-          "n": 1,
-          "h": "320daae74b",
-          "rows": [
-            "MOA-RACE h=03f7048296"
-          ]
+          "h": "113b80bbdc",
+          "v": {
+            "byTheater": {
+              "Test": [
+                {"~big":"a5a6968bc7","chars":796,"keys":["airspaceId","defRev","definition","definitionHistory","pendingRequest","rev","state","theater"]}
+              ]
+            },
+            "seeded": {
+              "Test": [
+                "MOA-RACE"
+              ]
+            }
+          }
         },
         "correlations": {
           "n": 0,
@@ -2605,11 +2725,19 @@
           }
         },
         "airspaces": {
-          "n": 1,
-          "h": "320daae74b",
-          "rows": [
-            "MOA-RACE h=03f7048296"
-          ]
+          "h": "113b80bbdc",
+          "v": {
+            "byTheater": {
+              "Test": [
+                {"~big":"a5a6968bc7","chars":796,"keys":["airspaceId","defRev","definition","definitionHistory","pendingRequest","rev","state","theater"]}
+              ]
+            },
+            "seeded": {
+              "Test": [
+                "MOA-RACE"
+              ]
+            }
+          }
         },
         "correlations": {
           "n": 0,

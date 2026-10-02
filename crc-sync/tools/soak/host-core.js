@@ -18,6 +18,7 @@ const fs = require('fs');
 const v8 = require('v8');
 const { EventEmitter } = require('events');
 const { SRC } = require('./host-env');
+const SOAK_THEATER = 'Soak'; // must match host-client.js's standing-list key
 
 const req = (rel) => require(path.join(SRC, rel));
 
@@ -66,13 +67,16 @@ function createHost(env, { stateDir }) {
   // no identity model (the track's own callsign), no theater (a course is taken as already magnetic). The
   // soak has no sensors, so no hint monitor and no airborne observer (docs/wip/APP.md, Findings), and its
   // MissionSession lives in memory. Time comes from `clock`; nothing is started, the driver calls the tickers.
+  // Its mission is in the standing list's theater (ADR 0098: airspaces are scoped to the loaded mission's theater).
+  const missionSession = new MissionSession({ path: null, clock });
+  missionSession.noteMissionLoad({ theatre: SOAK_THEATER, waypoints: [], drawings: [] });
   const app = createApp({
     env: {},
     paths: boardPaths,
     grpcClient: Object.assign(new EventEmitter(), { getWeather: () => ({}), evalLua: async () => null, getAptWeather: async () => ({}) }),
     srsClient: Object.assign(new EventEmitter(), { getTransponder: () => null }),
     clock,
-    missionSession: new MissionSession({ path: null, clock }),
+    missionSession,
     surveillanceHints: null,
     trackSeams: {
       beacon: (t) => { const c = squawks.get(String(t.id)); return c === undefined ? null : c; },
@@ -228,7 +232,7 @@ function createHost(env, { stateDir }) {
     c['correlation.records'] = efsp.correlationStore._records.size;
     c['correlation.transitions'] = corrTransitions;
     let asTransitions = 0;
-    for (const r of efsp.airspaceStore._records.values()) asTransitions += (r.transitions || []).length;
+    for (const records of Object.values(efsp.airspaceStore.snapshot().byTheater)) for (const r of records) asTransitions += (r.transitions || []).length;
     c['airspace.transitions'] = asTransitions;
     c['marsa.relations'] = efsp.marsaStore._relations.size;
     c['nlaStatus.last'] = efsp.nlaStatusMonitor._last.size;

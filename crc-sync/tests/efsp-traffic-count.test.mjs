@@ -6,7 +6,7 @@ import path from 'path';
 import crcLog from '../src/log.js';
 
 // §11.4 traffic count (docs/adr/0065) — the pure rules first, then the live
-// counter on a real createEfsp(). Every path is overridden BEFORE any src/efsp
+// counter on a real createEfsp({ currentTheater: () => 'Test' }). Every path is overridden BEFORE any src/efsp
 // import, so nothing here can touch the real state/ directory.
 
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-traffic-count-'));
@@ -21,9 +21,9 @@ for (const [k, v] of Object.entries({
   CRCSYNC_EFSP_METRICS_PATH: 'metrics.json',
   CRCSYNC_EFSP_INSTRUMENTATION_CONFIG_PATH: 'instrumentation.json',
 })) process.env[k] = path.join(tmpDir, v);
-fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify([
+fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify({ Test: [
   { airspaceId: 'MOA-TC', name: 'Count MOA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 134.25 },
-]));
+] }));
 
 const tc = await import('../src/efsp/traffic-count.js');
 const nla = await import('../src/efsp/nla.js');
@@ -141,7 +141,7 @@ function quiet(fn) {
 
 // One Board, one counter for the whole file (T11): each test asserts on its
 // own Strips, never on file-wide absolute totals.
-const efsp = createEfsp();
+const efsp = createEfsp({ currentTheater: () => 'Test' });
 const c = crew(efsp, ATC);
 let counter = quiet(() => counterFor(efsp));
 
