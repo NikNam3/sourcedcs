@@ -54,7 +54,7 @@ const UNEXPECTING = Object.freeze({
   ARRIVAL: Object.freeze(['DROPPED']),
   MISSION: Object.freeze(['TASKED', 'DROPPED']),
   OVERFLIGHT: Object.freeze(['DROPPED']),
-  // The carrier Roles (docs/adr/0074) expect nothing yet: "airborne" is judged against the nearest
+  // The carrier strip types (docs/adr/0074) expect nothing yet: "airborne" is judged against the nearest
   // airfield's elevation and footprint, which means nothing for a moving deck. Integration default
   // (S-M-L19); building a ship-relative phase is a supervisor decision.
   MARSHAL: Object.freeze(['LAUNCH', 'IN_STACK', 'COMMENCED', 'DROPPED']),

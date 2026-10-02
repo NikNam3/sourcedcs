@@ -3,10 +3,10 @@
 // Cross-Facility coordination primitives (EFSPImplementationGuide.md §4.6)
 // and TOFI (§4.6.3). The tables now live in the authority registry (S3-2):
 // the primitive and TOFI effect tables in authority/primitives.js, and each
-// Role's coordination/TOFI eligibility in its Role family
-// (authority/strip-types/<role>.js), composed in authority/index.js. This module is
+// Strip type's coordination/TOFI eligibility in its strip type family
+// (authority/strip-types/<strip-type>.js), composed in authority/index.js. This module is
 // their facade and exports exactly what it exported before; it is injected
-// into board-store.js as `rules.coordinationEffect` &c from index.js.
+// into the Board as `rules.coordinationEffect` &c from index.js (board/coordination.js reads them).
 
 const { COORDINATION_PRIMITIVES, COORDINATION_EFFECTS, TOFI_EFFECTS } = require('./authority/primitives');
 const { COORDINATION_ELIGIBLE_STATES, TOFI_ELIGIBLE_STATES } = require('./authority');

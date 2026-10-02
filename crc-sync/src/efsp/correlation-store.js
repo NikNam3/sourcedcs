@@ -4,20 +4,20 @@
 // store, peer to FlightDataStore, BoardStore and AirspaceStore.
 //
 // §6.6 rule 2 is the whole design brief: "Store the correlation as its own
-// record with its own history; do not store a raw track ID on the FDR." The
+// record with its own history; do not store a raw track ID on the flight data." The
 // guide is unusually direct about why — identity reconciliation between the
 // flight-data and track domains is a NAMED, MEASURED defect class (defect D1),
 // not a join. In the real prototype 100% of Strip selections highlighted their
 // target in under a second, and only 85-90% of Strips matched a target at all.
 //
-// KEYED BY flightDataId, not stripId. One FDR legitimately has several Strips:
-// per-Facility replicas (docs/adr/0013), a TOFI MISSION Strip on the same FDR,
+// KEYED BY flightDataId, not stripId. One flight data legitimately has several Strips:
+// per-Facility replicas (docs/adr/0013), a TOFI MISSION Strip on the same flight data,
 // and ConvertToArrival keeping one stripId across a role change
 // (docs/adr/0023). A stripId key would let an INCIRLIK replica and its CENTER
 // replica hold different answers to "which contact is this airframe" — and two
 // answers to an identity question IS the defect class, arriving from inside
 // the panel instead of from the track domain. Correlation is a fact about the
-// airframe, and the FDR is the airframe (§3.1).
+// airframe, and the flight data is the airframe (§3.1).
 //
 // Built on airspace-store.js throughout: own _records Map, per-record rev, own
 // _sync seq, setMutationLog, a _recordAudit that logs refusals too, append-only
@@ -74,7 +74,7 @@ function capText(value) {
 class CorrelationStore {
   /**
    * @param {{flightDataExists?:(flightDataId:string)=>boolean}} [deps] — injected the same
-   *   way board-store.js's liveStripsForFlightData is, and for the same reason: this
+   *   way the Board's `liveStripsForFlightData` rule is (index.js; used by board/strip-ops.js), and for the same reason: this
    *   store has no business reaching into the FlightDataStore, and in index.js's
    *   composition root the stores it would need do not all exist yet.
    */
@@ -106,7 +106,7 @@ class CorrelationStore {
       // changing must not bump either of those: a Strip is broadcast whole on
       // every update (docs/adr/0004), so stamping this onto one would flood
       // the delta ring buffer and invalidate controllers' optimistic edits at
-      // reconcile cadence — exactly what §3.1's FDR/Strip split exists to
+      // reconcile cadence — exactly what §3.1's flight data/Strip split exists to
       // prevent ("every track update invalidates the controller's optimistic
       // edit").
       rev: 0,
@@ -133,7 +133,7 @@ class CorrelationStore {
     return record;
   }
 
-  /** The record for an FDR, minted on first ask. */
+  /** The record for the flight data, minted on first ask. */
   _recordFor(flightDataId) {
     return this._records.get(flightDataId) || this._seed(flightDataId);
   }
@@ -143,7 +143,7 @@ class CorrelationStore {
     return record ? deepClone(record) : null;
   }
 
-  /** Every record — what the client's snapshot carries, one per live FDR. */
+  /** Every record — what the client's snapshot carries, one per live flight data. */
   getAll() {
     return [...this._records.values()].map(deepClone);
   }
@@ -167,7 +167,7 @@ class CorrelationStore {
     return index;
   }
 
-  /** The FDR bound to a contact, or null. Used by the client-side reverse lookup's server-side equivalent. */
+  /** The flight data bound to a contact, or null. Used by the client-side reverse lookup's server-side equivalent. */
   flightDataForTrack(trackId) {
     const wanted = String(trackId);
     for (const record of this._records.values()) {
@@ -201,12 +201,12 @@ class CorrelationStore {
     this._mutationLog.record({
       clientMutationId: mutation.clientMutationId,
       op: mutation.op && mutation.op.kind,
-      // No stripId and no airspaceId: a correlation op targets an FDR. A third
+      // No stripId and no airspaceId: a correlation op targets the flight data. A third
       // distinct id field, for the reason airspace-store.js's own audit
       // comment gives — readers key on whichever id is present, rather than
       // one field standing in for something it is not.
       flightDataId: mutation.flightDataId,
-      // Theater-wide: an FDR belongs to no Facility (docs/adr/0013, docs/adr/0083).
+      // Theater-wide: the flight data belongs to no Facility (docs/adr/0013, docs/adr/0083).
       facilityId: null,
       actingPositionId,
       actorId: by || null,
@@ -491,8 +491,8 @@ class CorrelationStore {
   /**
    * Forgets records for flights that are over.
    *
-   * `releaseFlightData` does not delete the FDR — it only frees the beacon code — so
-   * an FDR with nothing but DROPPED Strips lives forever, and its correlation
+   * `releaseFlightData` does not delete the flight data — it only frees the beacon code — so
+   * the flight data with nothing but DROPPED Strips lives forever, and its correlation
    * record used to live with it: never swept again (eligibility needs a live
    * Strip), stuck at whatever it last was, still carrying a `trackId` for a
    * contact the flight has no claim on, and still sent in every snapshot. Over
@@ -516,7 +516,7 @@ class CorrelationStore {
     return retired;
   }
 
-  /** Forgets records whose FDR is gone — FDR lifecycle governs correlation lifecycle, with no separate retention policy. */
+  /** Forgets records whose flight data is gone — flight data lifecycle governs correlation lifecycle, with no separate retention policy. */
   evictMissingFlightDataList() {
     let dropped = 0;
     for (const flightDataId of [...this._records.keys()]) {
@@ -544,7 +544,7 @@ class CorrelationStore {
   restore(data) {
     for (const saved of data || []) {
       if (!saved || !saved.flightDataId) continue;
-      if (!this._flightDataExists(saved.flightDataId)) continue; // its FDR is gone
+      if (!this._flightDataExists(saved.flightDataId)) continue; // its flight data is gone
       const record = deepClone(saved);
       record.trackId = null;
       record.matchedBy = null;

@@ -9,7 +9,7 @@
 // aspirational, not real, until now.
 //
 // `computeDueObligations` is pure logic (mirrors nla.js's isVoidExpired
-// style) — no timers, just "given this Strip/FDR/now/ctx, what's due right
+// style) — no timers, just "given this Strip/flight data/now/ctx, what's due right
 // now." `ForwardingObligationMonitor` is the stateful scanner that ticks
 // over every Strip across every Facility and holds the set of obligations
 // due right now — state, not events: one that stops being due leaves the
@@ -56,7 +56,7 @@ function computeDueObligations(strip, flightData, now, ctx = {}) {
 
   // ETA_REVISION — forward again once the estimate has moved by more than
   // 3 minutes since it was last forwarded (strip.coordination.
-  // lastForwardedEtaUtc, stamped by board-store.js's coordination methods).
+  // lastForwardedEtaUtc, stamped by board/coordination.js).
   if (strip.coordination && (strip.coordination.state === 'INITIATED' || strip.coordination.state === 'ACTIVE')
     && flightData.filed.estimatedArrivalTimeUtc && strip.coordination.lastForwardedEtaUtc) {
     const drift = Math.abs(flightData.filed.estimatedArrivalTimeUtc - strip.coordination.lastForwardedEtaUtc);
@@ -67,7 +67,7 @@ function computeDueObligations(strip, flightData, now, ctx = {}) {
 
   // AMENDMENT_INSIDE_30MIN — an amendment inside 30 minutes of proposed
   // departure requires verbal AND automated coordination. [SIMPLIFIED]:
-  // "just amended" is approximated as "the FDR's updatedAt is within the
+  // "just amended" is approximated as "the flight data's updatedAt is within the
   // last 60 seconds" — no separate amendment-event feed exists to check
   // against instead. Documented in docs/adr/0021.
   if (strip.stripType === 'DEPARTURE' && flightData.filed.proposedDepartureTimeUtc) {
@@ -111,7 +111,7 @@ function computeDueObligations(strip, flightData, now, ctx = {}) {
 
   // UNACTIVATED_AIRSPACE_ENTRY — guide §9.11: "Aircraft entering unactivated
   // airspace MUST alert." The approval itself is deliberately not refused
-  // (see board-store.js's _applyApproveAirspaceEntry) — the airspace may
+  // (see board/ops/approve-airspace-entry.js's _applyApproveAirspaceEntry) — the airspace may
   // well be hot in reality with the board simply not caught up, and refusing
   // would be wrong far more often than right. This is the alert that makes
   // allowing it safe.
@@ -288,7 +288,7 @@ class ForwardingObligationMonitor {
     this._compliance.set(obligationType, stats);
   }
 
-  /** §11.5 "measured acceptance, not asserted" — unpersisted, in-memory, reset on restart (same ephemeral-instrumentation precedent as efsp-panel.js's _searchInvocationCount client-side). */
+  /** §11.5 "measured acceptance, not asserted" — unpersisted, in-memory, reset on restart (the same ephemeral-instrumentation precedent as the client's search-invocation count). */
   getComplianceStats() {
     return Object.fromEntries(this._compliance.entries());
   }

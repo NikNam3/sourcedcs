@@ -22,7 +22,7 @@
 // `bayImpliesState` (guide §3.5 rule 4 / §2 "Bay membership expresses operational state") only covers Bays whose
 // name cleanly maps to one strip state — Filed, Arrivals and every Coordination Bay imply none. A Position's
 // `-coordination` Bay is where the cross-Facility coordination primitives (authority/op-kinds.js's
-// COORDINATION_OP_KINDS) land a proposed Strip replica (guide §16's "an empty-but-present Coordination Bay").
+// COORDINATION_OP_KINDS) land a proposed Strip replica (docs/adr/0015).
 
 const fs = require('fs');
 const runwayStatus = require('./runway-status'); // pure, requires nothing back (docs/adr/0061)
@@ -268,7 +268,7 @@ function getBaysFor(positionId, facilityId = DEFAULT_FACILITY_ID) {
 }
 
 /**
- * May this Facility write this Block on this Role? (guide §8.1 — "the
+ * May this Facility write this Block on this strip type? (guide §8.1 — "the
  * configurability is the specification.")
  *
  * Expressed as what a Facility HIDES, not what it shows. The original shape
@@ -296,7 +296,7 @@ function isBlockVisible(stripType, blockId, facilityId = DEFAULT_FACILITY_ID) {
 // Includes each Bay's owning positionId — lost by a plain Object.values()
 // flatten otherwise, and the client needs it to keep Bays "grouped by
 // Position, never merged into one undifferentiated pile" (guide §4.8.5
-// rule 2). Also stamps facilityId, since a client can now hold Positions
+// rule 2). Also stamps facilityId, since a client can be signed on at Positions
 // across both Facilities and needs to know which Board a Bay belongs to.
 function getAllBays(facilityId = DEFAULT_FACILITY_ID) {
   const out = [];
@@ -361,12 +361,12 @@ function setFacilityConfig(next, facilityId = DEFAULT_FACILITY_ID) {
 /** The Bay whose configured impliesState matches `state` for a Position, or that Position's first Bay as a defensive fallback (guide §3.5 rule 4 accelerator target). */
 function bayForImpliedState(positionId, state, facilityId = DEFAULT_FACILITY_ID) {
   const bays = getBaysFor(positionId, facilityId);
-  // The fallback never lands on a Role Bay (`holdsStripType`, docs/adr/0087): that Bay belongs to one Role, and a caller
-  // that gets it back for another Role's Strip files the Strip under the wrong Role.
+  // The fallback never lands on a strip-type Bay (`holdsStripType`, docs/adr/0087): that Bay belongs to one strip type, and a caller
+  // that gets it back for another strip type's Strip files the Strip under the wrong strip type.
   return bays.find(b => b.impliesState === state) || bays.find(b => !b.holdsStripType) || null;
 }
 
-/** The Role a Bay is reserved for (`holdsStripType`, docs/adr/0087), or null for an ordinary Bay. */
+/** The strip type a Bay is reserved for (`holdsStripType`, docs/adr/0087), or null for an ordinary Bay. */
 function bayHoldsStripType(bayId, facilityId = DEFAULT_FACILITY_ID) {
   const bay = getAllBays(facilityId).find(b => b.bayId === bayId);
   return (bay && bay.holdsStripType) || null;
@@ -375,11 +375,10 @@ function bayHoldsStripType(bayId, facilityId = DEFAULT_FACILITY_ID) {
 /**
  * The Bay a proposed cross-Facility coordination replica lands in for a
  * Position (WP4A, docs/adr/0015) — the Bay whose id ends '-coordination',
- * present-but-inert for every Position since Phase 2 (guide §16's build-
- * sequencing note) and now genuinely used by HANDOFF/POINT_OUT/TRAFFIC/
- * OPERATIONAL_REQUEST/AIT's PROPOSE action. Returns null if the Position
- * has no Coordination Bay configured (board-store.js treats that as "this
- * Position cannot receive a coordination proposal at all").
+ * used by HANDOFF/POINT_OUT/TRAFFIC/OPERATIONAL_REQUEST/AIT's PROPOSE action.
+ * Returns null if the Position has no Coordination Bay configured
+ * (board/coordination.js treats that as "this Position cannot receive a
+ * coordination proposal at all").
  */
 function coordinationBayFor(positionId, facilityId = DEFAULT_FACILITY_ID) {
   const bays = getBaysFor(positionId, facilityId);

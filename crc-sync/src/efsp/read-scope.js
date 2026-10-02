@@ -51,7 +51,7 @@ function isStripVisible(scope, strip, facilityId) {
   return !!ids && ids.has(strip.ownerPositionId);
 }
 
-/** The FDRs of the Strips a scope can see, from `strips` (each stamped with facilityId). */
+/** The flight data of the Strips a scope can see, from `strips` (each stamped with facilityId). */
 function visibleFlightDataIdsOf(scope, strips) {
   const out = new Set();
   for (const s of strips) if (isStripVisible(scope, s) && s.flightDataId) out.add(s.flightDataId);
@@ -79,10 +79,10 @@ function filterSnapshot(msg, scope) {
  * the client). The message is always returned, even empty, so `boardSeq` stays
  * continuous (a skipped delta would make the next resync look like a gap).
  * A Strip that has just BECOME visible (handed to this session) arrives as one
- * updated Strip, and its FDR was filtered out of every delta until now, so the
- * FDR of every visible updated Strip rides along (`flightDataOf` supplies it). Without
+ * updated Strip, and its flight data was filtered out of every delta until now, so the
+ * Flight data of every visible updated Strip rides along (`flightDataOf` supplies it). Without
  * that a handed line drew with a blank callsign.
- * @param {Set<string>} flightDataIds the FDRs of every Strip the scope can see now, on every Board
+ * @param {Set<string>} flightDataIds the flight data of every Strip the scope can see now, on every Board
  * @param {(flightDataId:string) => object|null} [flightDataOf]
  */
 function filterBoardDelta(msg, scope, flightDataIds, flightDataOf = () => null) {

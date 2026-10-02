@@ -22,7 +22,7 @@
 //     allocation concern — display-layer doctrine, exposed here for reuse
 //   - 6000–6777 is the SYNTHETIC block (docs/adr/0059): the codes crc-sync
 //     gives AI aircraft, which have no SRS transponder. Never allocated and
-//     never assignable, so no FDR can hold one and an AI aircraft can never
+//     never assignable, so no flight data can hold one and an AI aircraft can never
 //     correlate on its beacon — it correlates on its callsign or not at all.
 
 const RESERVED_CODES = new Set(['0000', '7500', '7600', '7700', '7400', '7777']);
@@ -68,7 +68,7 @@ class CodeAllocator {
   }
 
   /**
-   * Mints the next available discrete code for a newly created FDR.
+   * Mints the next available discrete code for a newly created flight data.
    *
    * A ROTATING scan (docs/adr/0081, L6's F6): from the code after the last one
    * handed out, wrapping past 7777 back to 0001, skipping reserved/excluded,
@@ -103,7 +103,7 @@ class CodeAllocator {
   /**
    * Validates a controller-entered override for Block 5 (§3.10.2):
    *   - malformed or reserved → hard VALIDATION_ERROR, never assignable
-   *   - already allocated to a *different* FDR → accepted, but flagged as
+   *   - already allocated to a *different* flight data → accepted, but flagged as
    *     DUPLICATE_IGNORED_WARNING (defect D23 — duplicates are structural
    *     in the real system, never blocked)
    */
@@ -118,8 +118,8 @@ class CodeAllocator {
 
   /**
    * Records a controller override as the new holder of `newCode`, after
-   * validateAssignment() has already approved it. Releases the FDR's prior
-   * discrete code first, if it held a different one — an FDR holds at most
+   * validateAssignment() has already approved it. Releases the flight data's prior
+   * discrete code first, if it held a different one — the flight data holds at most
    * one code at a time.
    */
   reassign(flightDataId, newCode, previousCode) {

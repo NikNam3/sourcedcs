@@ -88,7 +88,7 @@ function validateConfig(candidate) {
 // The Bay descriptor flags (docs/adr/0093). Only these keys beyond bayId/rackIds/
 // impliesState exist, so a typo in a config can never silently mount nothing.
 const BAY_VIEWS = Object.freeze(['pattern', 'final', 'sfa-freqs']);
-// `holdsStripType` is L28's (docs/adr/0087): a Bay that files its Role's Strips whatever their state.
+// `holdsStripType` is L28's (docs/adr/0087): a Bay that files its strip type's Strips whatever their state.
 const BAY_DESCRIPTOR_KEYS = Object.freeze(['bayId', 'rackIds', 'impliesState', 'view', 'replacesRacks', 'capacity', 'holdsStripType']);
 
 /** A human problem string for a malformed Bay descriptor flag (`view`, `capacity`), or null. */
@@ -121,7 +121,7 @@ const SFA_MIN_POOL = 5; // guide §4.7: "at least five discrete UHF frequencies"
 
 /**
  * Guide §4.7's pool, checked as a unit: at least five unique frequencies whose
- * Racks are exactly the SFA Bay's, a rotation smaller than the pool, and APP-style
+ * Racks are exactly the SFA Bay's, a rotation smaller than the pool, and AP-style
  * jurisdiction held by a Position of this Facility. Returns a problem string or null.
  */
 function validateSingleFrequencyApproach(sfa, candidate) {
@@ -231,8 +231,7 @@ const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 //    (read-only)"), enforced by authority/ never granting it ownership or Mutation rights, not by anything here.
 //  positionClasses: every Position's doctrinal class (guide §4.1's Class column), which authority/classes.js reads
 //    (through getPositionClass) so the cross-Facility coordination primitives and TOFI are gated by class, not by a hand-kept id list
-//    (docs/adr/0020). Every Position needs one. RSU, SFA and PAR are MILITARY_ATC too: RSU's "advisory, no
-//    separation authority" is a permission matter, never a new class, because a new class would silently drop
+//    (docs/adr/0020). Every Position needs one. RSU, SFA and PAR are MILITARY_ATC too: RSU's advisory role with no separation authority (guide §4.1) is a permission matter, never a new class, because a new class would silently drop
 //    Conflict Alert (position-coverage.js's ATC_CLASSES, the inclusion-list trap of docs/adr/0041).
 //    CARRIER's four Positions are all MILITARY_ATC for the same reason ("Military ATC afloat"); PriFly's
 //    "supervisory, not radar control" is a permission matter too. [SOURCE-DEFINED] (docs/adr/0074) where the
@@ -243,11 +242,13 @@ const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 //  consolidation: where an unstaffed Position's Strips go, one hop: `{ CD: 'GC' }` reads "CD is consolidated at
 //    GC" (guide §4.5 rule 3, §4.8.6; JO 7210.3 para 2-2-3, 2-6-5). Walked to the end by position-store.js. It is
 //    INTRAFACILITY only: it never crosses a Facility, and so deliberately does not extend LC -> AP to CTR (docs/adr/0013
-//    point 4), a different thing from the cross-Facility handoff of §4.6. INCIRLIK's chain is the guide's
-//    default (CD to GC to LC to AP), cut at AP. [SOURCE-DEFINED] (docs/adr/0075): SFA and PAR fall back to AP,
-//    and RSU is absent on purpose, as OPS is and PriFly is on the carrier, so a Strip never strands on a
-//    supervisory Position. [SOURCE-DEFINED] (docs/adr/0074): the carrier chain ends at the Marshal and omits
-//    PriFly. [SOURCE-DEFINED] (docs/adr/0025, 0080): AIC, GCI and JTAC are consolidated at TAC_C2 (JTAC
+//    point 4), a different thing from the cross-Facility handoff of §4.6. The guide's default (§4.8.6 rule 2)
+//    runs on past what we ship: CD, GC, LC, AP, then CTR; AIC and GCI to TAC_C2, then CTR; CV_APP* to CV_MARSHAL to
+//    CV_PRIFLY; RSU to LC; SFA and PAR to AP. What we ship is the guide's, cut where the Facility ends: CD to GC to
+//    LC to AP, SFA and PAR to AP, the tactical and carrier hops inside their Facility. [SOURCE-DEFINED]
+//    (docs/adr/0075): RSU is absent on purpose (the guide's default sends it to LC), as OPS is and PriFly is on
+//    the carrier, so a Strip never strands on a supervisory Position. [SOURCE-DEFINED] (docs/adr/0074): the
+//    carrier chain ends at the Marshal and omits PriFly (the guide's default continues to CV_PRIFLY). [SOURCE-DEFINED] (docs/adr/0025, 0080): AIC, GCI and JTAC are consolidated at TAC_C2 (JTAC
 //    so a line is left with the Position that handed it over, docs/adr/0080); TAC_C2 to CTR is not, because that
 //    hop crosses a Facility. CENTER and RANGES have none: a Position that owns no Strips has none to strand.
 //    An unstaffed Position with no successor is the guide's "warn, do not block" (§4.8.6 rule 5). Whether GC
@@ -262,11 +263,11 @@ const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 //    `airport: '*'` (CENTER's CTR: every airfield's approach radar) needs no editing when the theater changes.
 //    TACTICAL's awacs/fighter/datalink selectors model a Military Radar Unit working the airborne picture, and
 //    `coalition: 'own'` resolves against CRCSYNC_COALITION (docs/adr/0059). RSU watches the field and the visual
-//    pattern (the airport radar), SFA works APP's picture, PAR the precision approach radar alone
+//    pattern (the airport radar), SFA works AP's picture, PAR the precision approach radar alone
 //    (docs/adr/0075). The carrier's selectors name the radar and the hull (position-coverage.js).
 //    INCIRLIK's `LTAG` is the airport-selector id of Incirlik. "Squadron data to verify" for any value we have
 //    not checked against the mission.
-//  hiddenBlocks: Blocks this Facility hides, by strip type (guide §8.2: "a facility MAY narrow this"). Empty
+//  hiddenBlocks: Blocks this Facility hides, by strip type (guide §8.2's "Strip layout" row: visibility is configurable). Empty
 //    everywhere shipped, so a Block added later stays visible without anyone regenerating a file. Validated
 //    against the Block Map's required Blocks (guide §8.3: every required Block MUST stay visible). The earlier
 //    inclusion list `blockVisibility` was replaced by this (docs/adr/0041); a file that still has it is
@@ -278,7 +279,7 @@ const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 //    viewing Bay for JTAC. The first Bay of a Position is the "no match" fallback of placement (board/placement.js's
 //    bayForNewOwner, bayForImpliedState): that is why `ops-proposed` is OPS's first, since `ops-filed` is the
 //    client-local filed-plan queue and a Strip landing there would be invisible. `-coordination` Bays are
-//    present for every Position that can receive a proposed replica (docs/adr/0015; guide §16's seam), and exist
+//    present for every Position that can receive a proposed replica (docs/adr/0015), and exist
 //    on the carrier only as the "first Bay implying no state" fallback ("the carrier does not talk to the
 //    centre", guide §9.13). One Rack per runway end in `lc-runway-queue` (guide §4.2); one Rack per assigned
 //    frequency in `sfa-frequencies` (§4.2, §4.7); a pattern leg is a Rack (docs/adr/0064). The strip state a Bay
@@ -297,7 +298,7 @@ const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 //    RECEIVING Facility is data-only; every shipped Facility has a real controller interface, so false
 //    everywhere, exercised only by test fixtures (docs/adr/0021).
 //  standingReleases: §4.6.2's standing-release envelopes, granted BY the delegating (center) Facility TO the
-//    approach Facility, held in APP's own config. Empty by default: a real envelope is facility data, not
+//    approach Facility, held in AP's own config. Empty by default: a real envelope is facility data, not
 //    code (release-envelope.js's matchesStandingRelease).
 //  aitAuthorized: AIT is configuration, not a default (guide §4.6 rule 7): false until a real written
 //    directive is on file (docs/adr/0022).
@@ -328,8 +329,8 @@ const REQUIRED_KEYS = Object.freeze({
 /**
  * A complete facility file: every required key present with the right type, then validateConfig's checks,
  * then the cross-references. Bays point to Racks they name themselves (non-empty, no repeats), a bayId is
- * unique in the Facility, `holdsStripType` names a Role the Block Map knows, every Position has a class, and the
- * covering chain joins Positions of this Facility and has no loop.
+ * unique in the Facility, `holdsStripType` names a strip type the Block Map knows, every Position has a class, and the
+ * consolidation joins Positions of this Facility and has no loop.
  * Returns {ok:true} or {ok:false, reason:'VALIDATION_ERROR', detail}.
  */
 function validateFacilityConfig(candidate, expectedFacilityId) {

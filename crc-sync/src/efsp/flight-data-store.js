@@ -8,10 +8,10 @@
 // departure, or destination anywhere. This store is the real thing,
 // modelled on EFSPImplementationGuide.md §3.1-3.3, §3.8, §3.10.
 //
-// FDR and Strip are deliberately separate (guide §3.1): this store owns
+// Flight data and Strip are deliberately separate (guide §3.1): this store owns
 // only the flight — identity, filed intent, assigned clearance. Strip
 // lifecycle (state, ownership, Bay/Rack placement, annotations) lives in
-// board-store.js and references an flightDataId, never the reverse.
+// the Board (board-store.js, board/) and references a flightDataId, never the reverse.
 
 const crypto = require('crypto');
 const { CodeAllocator, isValidCodeFormat } = require('./code-allocator');
@@ -23,8 +23,8 @@ const { isValidFrequency, MIN_FREQUENCY_MHZ, MAX_FREQUENCY_MHZ } = require('./ai
 // than the validator-only one above, and deliberately so: createFlightData() is the
 // single place a flat seed is interpreted into identity.*/filed.*, and
 // expanding a short name into a route IS seed interpretation. Putting it in
-// board-store.js's _applyCreateStrip instead would mean any second creation
-// path — or a test constructing an FlightDataStore directly — silently skips it.
+// board/ops/create-strip.js's _applyCreateStrip instead would mean any second creation
+// path — or a test constructing a FlightDataStore directly — silently skips it.
 const stereoRoutes = require('./stereo-routes');
 const { resolveZuluHhmm, resolveTypedTime, formatZuluHhmm } = require('./zulu-time');
 const { setCarrierFlightField } = require('./carrier/flight-record');
@@ -38,7 +38,7 @@ const CALL_FOR_RELEASE_AFTER_MINUTES = 1;   //           / + 1 min
 
 // WP4A (docs/adr/0017) added EDCT and CALL_FOR_RELEASE — §4.6.2's two
 // release states beyond §3.8's original four ("across the boundary": the
-// release travels controller-to-controller CTR->APP->TWR, per that
+// release travels controller-to-controller CTR->AP->LC, per that
 // section's own text). The original four are unchanged/still Phase-2-only
 // reachable without WP4A at all.
 const DEPARTURE_RELEASE_STATES = new Set(['RELEASED', 'HOLD_FOR_RELEASE', 'RELEASE_TIME', 'CLEARANCE_VOID_TIME', 'EDCT', 'CALL_FOR_RELEASE']);
@@ -46,7 +46,7 @@ const DEGRADATION_STATES = new Set(['NONE', 'TRANSPONDER_FAILED', 'MODE_C_FAILED
 const DATALINK_INDICATOR_STATES = new Set(['NONE', 'ISSUED']);
 // WP4A (docs/adr/0019) — guide §4.6 rule 5's track-degradation flags, which
 // force verbal coordination and disable silent cross-Facility transfer
-// while present (board-store.js's _applyCoordinationPropose). Genuinely
+// while present (board/coordination.js's _applyCoordinationPropose). Genuinely
 // distinct from identity.degradation above (equipment failure — Mode C/
 // transponder — not radar-track quality); see this module's WP4A note
 // near WRITABLE_PATHS for why these are two separate fields, not a reuse.
@@ -120,7 +120,7 @@ const WRITABLE_PATHS = new Set([
   'filed.route', 'filed.requestedAltitude', 'filed.departureAirport', 'filed.departureRunway',
   'filed.destinationAirport', 'filed.proposedDepartureTimeUtc', 'filed.fullRouteClearance', 'filed.remarks',
   'filed.stereoRouteName',
-  // ARRIVAL-role fields (Phase 2) — present on every FDR regardless of the
+  // ARRIVAL-role fields (Phase 2) — present on every flight data regardless of the
   // Strip role that ends up referencing it, same "present but unpopulated
   // until relevant" precedent as the DEPARTURE-only fields above (guide
   // §12). Deliberately separate names from the departure fields, not
@@ -140,7 +140,7 @@ const WRITABLE_PATHS = new Set([
   // identity.degradation.
   'identity.trackDegradationFlag',
   // WP4A second slice (docs/adr/0026) — the minimal MISSION field set
-  // (guide §9.8's "military extension namespace"), present on every FDR
+  // (guide §9.8's "military extension namespace"), present on every flight data
   // regardless of stripType, same "present but unpopulated until relevant"
   // precedent as the ARRIVAL-only fields above. Full ATO-driven richness
   // (Mode 1/2/datalink code, MARSA, ordnance, ROZ/ACM) stays WP6/WP7 scope.
@@ -193,7 +193,7 @@ function deriveEquipmentSuffix(equipmentCodes) {
  *    setter validates it so the enum lives in exactly one place.
  *  - WRITTEN through setField(), not setMilitary(): the six leaves of the
  *    `mtr` sub-object (§9.4, guide M10/M11, Blocks 9G-* / 9H-*,
- *    docs/adr/0062). Free text, clock times and an altitude — plain FDR
+ *    docs/adr/0062). Free text, clock times and an altitude — plain flight data
  *    fields, so they share setField()'s refusal and provenance path.
  *  - PRESENT AND UNPOPULATED per §12, no setter and no Block at all, exactly
  *    like identity.modeOne/modeTwo already are: `altrvRef` (M9), `arInfo` (M12), `scl` (M13),
@@ -201,7 +201,7 @@ function deriveEquipmentSuffix(equipmentCodes) {
  *    these; §12's rule is that a deferral leaves its fields in place rather
  *    than absent, and that is all this is.
  *
- * A function rather than a frozen literal because every FDR needs its own
+ * A function rather than a frozen literal because every flight data needs its own
  * `mtr` object — sharing one would make two flights' MTR entries the same
  * entry, which is the kind of bug that only shows up with two aircraft.
  */
@@ -237,11 +237,11 @@ function defaultMilitary() {
 const MILITARY_WRITABLE_FIELDS = new Set(['ordnanceState', 'hookRequired', 'alertStatus']);
 
 /**
- * Returns this FDR's military namespace, seeding it first if the record
+ * Returns this flight data's military namespace, seeding it first if the record
  * predates it.
  *
- * FDRs are durable (docs/adr/0002) and restore() reinstates whole objects off
- * disk, so every board that has ever run carries FDRs whose `military` is the
+ * Flight data are durable (docs/adr/0002) and restore() reinstates whole objects off
+ * disk, so every board that has ever run carries flight data whose `military` is the
  * literal `null` this field was until docs/adr/0052. §12's "present and
  * unpopulated rather than absent" is a promise about the SHAPE a reader sees,
  * and a restored snapshot is a reader — without this, a §9.5 advisory reading
@@ -455,7 +455,7 @@ class FlightDataStore {
   /**
    * @param {CodeAllocator} [codeAllocator]
    * @param {{clock?:{now:()=>number}, transitionAltFt?:()=>number}} [deps] the mission clock (docs/adr/0079)
-   *   — every timestamp on an FDR is a time a controller reads — and the
+   *   — every timestamp on the flight data is a time a controller reads — and the
    *   theater's transition altitude, which decides how a block's text writes
    *   an end (FL or feet). A fixture that omits it gets 18,000 ft.
    */
@@ -472,14 +472,14 @@ class FlightDataStore {
   getAll() { return [...this._flightDataList.values()]; }
 
   /**
-   * Creates a new FDR from filed intent (§3.1, §3.2). Mints a beacon code
+   * Creates a new flight data from filed intent (§3.1, §3.2). Mints a beacon code
    * internally via the code allocator — this is NOT a client-facing RPC
    * (guide §3.10.1's split: crc-sync mints, EFSP only displays/overrides).
    *
    * `seed.stereoRouteName` files by §9.10 short name: the route table is
    * resolved HERE, server-side, and its expansion fills whatever the seed
    * left blank. WP6's acceptance criterion — "a stereo route filed by short
-   * name produces a complete FDR" — is this function's postcondition.
+   * name produces a complete flight data" — is this function's postcondition.
    *
    * Returns { ok:true, flightData } or { ok:false, reason }.
    */
@@ -491,8 +491,8 @@ class FlightDataStore {
 
     // §9.10 / docs/adr/0050 — resolve the short name BEFORE allocate() below,
     // or a refused CreateStrip leaks a beacon code out of the pool. Same
-    // "a denied CreateStrip has no side effects" discipline board-store.js's
-    // canCreateStripType check already documents.
+    // "a denied CreateStrip has no side effects" discipline the Board's
+    // canCreateStripType check (board/ops/create-strip.js) already documents.
     //
     // An unknown name is REFUSED, not silently blanked — deliberately unlike
     // flight-plan-lookup.js's never-block contract, and the difference is
@@ -640,7 +640,7 @@ class FlightDataStore {
       // Permanently null, and kept present per §12's rule that a deferral
       // leaves its fields in place. Guide §3.1 types it `TrackRef?`, but §6.6
       // rule 2 then forbids the only thing it could usefully hold: "do not
-      // store a raw track ID on the FDR". Anything else it could carry is
+      // store a raw track ID on the flight data". Anything else it could carry is
       // either a staleable duplicate of the correlation record's state — which
       // is the defect, not the fix — or the flightDataId, i.e. the record's own key.
       // The correlation lives in correlation-store.js, keyed by flightDataId
@@ -662,7 +662,7 @@ class FlightDataStore {
       // practice and must never be presented as doctrine (defect D11).
       comms: { workingFrequencyMhz: null, airspaceId: null, changedAt: null, changedBy: null, transitions: [] },
       // WP4A second slice (docs/adr/0026) — the minimal MISSION field set
-      // (guide §9.8), present but null/empty on every FDR regardless of
+      // (guide §9.8), present but null/empty on every flight data regardless of
       // role. Written through the generic setField() path (WRITABLE_PATHS
       // above) — these are plain controller-entered values, unlike the
       // separation-model fields below.
@@ -758,7 +758,7 @@ class FlightDataStore {
     }
 
     // §9.10 re-filing (docs/adr/0050). Resolved against the table BEFORE any
-    // write, so a bad name leaves the FDR byte-identical and does not bump
+    // write, so a bad name leaves the flight data byte-identical and does not bump
     // rev — the no-partial-write property every other inline validator here
     // has, and it matters more for this one because a half-applied re-file
     // would leave the label and the route disagreeing, which is the exact
@@ -861,7 +861,7 @@ class FlightDataStore {
   /**
    * Controller override of Block 5 (§3.10.2 rule 2) — routed through the
    * code allocator rather than setField's generic path, since it needs
-   * reserved/duplicate validation and must release the FDR's previous code.
+   * reserved/duplicate validation and must release the flight data's previous code.
    * Returns { ok:false, reason:'VALIDATION_ERROR' } for reserved/malformed
    * codes, or { ok:true, flightData, warning? } — warning is set (never blocking)
    * for a duplicate, per defect D23.
@@ -904,8 +904,8 @@ class FlightDataStore {
    *
    * Writes ONLY on change, and does not bump `rev` otherwise. The reconciler
    * calls this once a second per correlated flight; an unconditional write
-   * would churn every FDR's rev and provenance at reconcile cadence, and an
-   * FDR is broadcast whole on every update.
+   * would churn every flight data's rev and provenance at reconcile cadence, and an
+   * Flight data is broadcast whole on every update.
    *
    * @param {string|null} code — a 4-digit octal string, or null for "nothing
    *   received" (which is a distinct, renderable state, not an absence).
@@ -1073,7 +1073,7 @@ class FlightDataStore {
   /**
    * docs/adr/0074 (ADR 0064) — one carrier field of this flight
    * (`flightData.military.carrier`: EEAT, approach type, approach button, bingo field
-   * and fuel, low state). On the FDR because the FDR outlives every Strip: the
+   * and fuel, low state). On the flight data because the flight data outlives every Strip: the
    * launch Strip is dropped at launch and the recovery Strip is a new one on the
    * same flight, so an EEAT held on a Strip would die exactly when it is needed
    * (§9.12 rule 7). Validated by carrier/flight-record.js, which refuses a
@@ -1108,14 +1108,14 @@ class FlightDataStore {
    * WP7 (docs/adr/0071), guide §9.8/§9.9 — writes what an imported ATO says
    * about this flight. The ONLY writer of `identity.modeOne`/`modeTwo`,
    * `military.scl`, `military.arInfo` and `flightData.ato`, called only from the ATO
-   * import (efsp-ws.js _handleAtoMutation via ato/ato-board.js). Structurally
+   * import (wire/families/ato.js's handleAtoMutation via ato/ato-board.js). Structurally
    * outside WRITABLE_PATHS and MILITARY_WRITABLE_FIELDS on the setTofi /
    * setBeaconObserved template: Mode 1/2 are "displayed, not edited" by ATC
    * (§3.10.3 rule 1), so no Block, no setField() path and no setMilitary() key
    * may ever reach them (defect D24, by construction).
    *
    * `tasking.mode` says how the flight met the ATO:
-   *  - CREATE: the import just made this FDR from the line's seed. Every seed
+   *  - CREATE: the import just made this flight data from the line's seed. Every seed
    *    path is marked provenance 'ATO'; the ATO's Mode 3 is ADOPTED as the
    *    assigned code when the allocator accepts it (decision H64, answering
    *    docs/adr/0054's inherited question), releasing the code createFlightData just
@@ -1255,10 +1255,10 @@ class FlightDataStore {
   }
 
   /**
-   * Releases the FDR's beacon code — called when its LAST live Strip is
+   * Releases the flight data's beacon code — called when its LAST live Strip is
    * DROPPED. Callers must not invoke this while another Strip still
-   * references the FDR (TOFI binds two Strips to one flightDataId, docs/adr/0025);
-   * board-store.js's _releaseFlightDataIfLastStrip is the guard that enforces it.
+   * references the flight data (TOFI binds two Strips to one flightDataId, docs/adr/0025);
+   * board/strip-ops.js's _releaseFlightDataIfLastStrip is the guard that enforces it.
    */
   releaseFlightData(flightDataId) {
     const flightData = this._flightDataList.get(flightDataId);
@@ -1290,8 +1290,8 @@ class FlightDataStore {
   /**
    * Re-claims a code released by releaseFlightData, for Undo of a terminal NLA Drop
    * within its 30s window (§3.5 rule 5). No-op when the code has already gone
-   * to a different FDR in the meantime — that flight is now squawking it, and
-   * minting a knowing duplicate here would be worse than leaving this FDR's
+   * to a different flight data in the meantime — that flight is now squawking it, and
+   * minting a knowing duplicate here would be worse than leaving this flight data's
    * own recorded code un-reserved (defect D23: duplicates warn, never block).
    * @returns {{ok:true, warning?:'DUPLICATE_IGNORED_WARNING'}|{ok:false, reason:'NOT_FOUND'}}
    */
@@ -1372,13 +1372,13 @@ class FlightDataStore {
   }
 
   /**
-   * Archives a finished flight's FDR (docs/adr/0082, H36): it leaves memory
+   * Archives a finished flight's flight data (docs/adr/0082, H36): it leaves memory
    * and the snapshot. Only archiver.js calls this, and only in the sweep that
-   * archived the FDR's last Strip — an FDR that never had a Strip is never
+   * archived the flight data's last Strip — the flight data that never had a Strip is never
    * passed here. The code should already be free (_releaseFlightDataIfLastStrip);
-   * it is released again only if this FDR still holds it, never when another
+   * it is released again only if this flight data still holds it, never when another
    * flight has taken it since. Idempotent.
-   * @returns {boolean} whether there was an FDR to archive
+   * @returns {boolean} whether there was flight data to archive
    */
   archiveFlightData(flightDataId) {
     const flightData = this._flightDataList.get(flightDataId);
@@ -1395,14 +1395,14 @@ class FlightDataStore {
   }
   restore(data) {
     this._flightDataList = new Map((data?.flightDataList || []).map((f) => {
-      // Every FDR written before docs/adr/0052 has `military: null` on disk.
+      // Every flight data written before docs/adr/0052 has `military: null` on disk.
       // Seeding on the way in (rather than on every read) means one place
       // knows about the old shape and nothing downstream has to — see
       // ensureMilitary() for why a null here is worse than it looks.
       ensureMilitary(f);
-      ensureClearance(f); // docs/adr/0058 — FDRs saved before the clearance cells existed
+      ensureClearance(f); // docs/adr/0058 — flight data saved before the clearance cells existed
       if (!f.timeInputs) f.timeInputs = { flightPlanDepartureUtc: null, takeoffStampedUtc: null };
-      if (f.timeInputs.takeoffStampedUtc === undefined) f.timeInputs.takeoffStampedUtc = null; // docs/adr/0076 // docs/adr/0073 — FDRs saved before the time chains
+      if (f.timeInputs.takeoffStampedUtc === undefined) f.timeInputs.takeoffStampedUtc = null; // docs/adr/0076 // docs/adr/0073 — flight data saved before the time chains
       return [f.flightDataId, f];
     }));
     this._codeAllocator.restore(data?.codes);

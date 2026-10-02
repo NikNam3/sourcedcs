@@ -58,9 +58,9 @@ const INELIGIBLE_STATES = new Set([
   // An ATO line exists before the jet does.
   'TASKED',
   'DROPPED',
-  // The carrier Roles (docs/adr/0074) are pinned one by one in
+  // The carrier strip types (docs/adr/0074) are pinned one by one in
   // tests/efsp-carrier-strip-types.test.mjs. Every MARSHAL/FINAL/PATTERN state is
-  // ELIGIBLE, LAUNCH included: correlation matches an FDR against the track
+  // ELIGIBLE, LAUNCH included: correlation matches the flight data against the track
   // store (binding, beacon, callsign), not against what a ship radar has
   // illuminated, so `noGroundAircraft` on the ship radars does not hide a jet
   // on deck, and a launch Strip is the carrier's PUSHBACK ("an aircraft on the
@@ -118,7 +118,7 @@ class CorrelationReconciler {
     this._formerHolder = new Map();
   }
 
-  /** Every live Strip across every Facility, so eligibility can be judged per FDR. */
+  /** Every live Strip across every Facility, so eligibility can be judged per flight data. */
   _liveStripsByFlightData() {
     const byFlightData = new Map(); // flightDataId -> [strip]
     for (const facilityId of this._facilityConfig.getFacilityIds()) {
@@ -134,9 +134,9 @@ class CorrelationReconciler {
   }
 
   /**
-   * An FDR is eligible when at least one of its live Strips is in a state
+   * The flight data is eligible when at least one of its live Strips is in a state
    * where an aircraft could be out there. One Strip is enough: a DEPARTURE
-   * Strip parked at PROPOSED and a MISSION Strip AIRBORNE on the same FDR
+   * Strip parked at PROPOSED and a MISSION Strip AIRBORNE on the same flight data
    * means there is an aircraft.
    */
   static isEligible(strips) {
@@ -144,14 +144,14 @@ class CorrelationReconciler {
   }
 
   /**
-   * One ordered claim sweep over every eligible FDR.
+   * One ordered claim sweep over every eligible flight data.
    *
    * Rung order, claiming as it goes (§6.6 rule 1): an explicit binding, then
    * the assigned beacon code, then an exact callsign, then a fuzzy one. A
    * higher rung always claims a contact before a lower one can, which gives
-   * the priority order for free and makes a collision decidable: if two FDRs
+   * the priority order for free and makes a collision decidable: if two flight data
    * would claim one contact at the SAME rung, neither gets it and both are
-   * told it was ambiguous. One contact never correlates to two FDRs.
+   * told it was ambiguous. One contact never correlates to two flight data.
    */
   tick(now = this._clock.now()) {
     this._ticks += 1;
@@ -307,7 +307,7 @@ class CorrelationReconciler {
   }
 
   /**
-   * Pushes each resolution's observed code onto its FDR — §3.10.2 rule 1's
+   * Pushes each resolution's observed code onto its flight data — §3.10.2 rule 1's
    * assigned-vs-observed pair, which the panel renders as matching /
    * mismatched / assigned-but-nothing-received. setBeaconObserved writes only
    * on change, so this is a no-op for a steady flight.

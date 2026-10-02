@@ -12,8 +12,8 @@
 // declaration of authority, and nothing here touches how a Position is
 // acquired, so docs/adr/0029's session binding is untouched.
 //
-// Held, not Primary. §4.8.2 rule 3 makes a second controller at an staffed
-// Position an Observer, and an Observer watches — so holding a Position gets
+// Signed on, not Primary. §4.8.2 rule 3 makes a second controller at a staffed
+// Position an Observer, and an Observer watches — so being signed on at a Position gets
 // you its picture whether or not you are the one who may act on its Strips.
 //
 // A controller holding no radar-bearing Position gets an empty set, and the

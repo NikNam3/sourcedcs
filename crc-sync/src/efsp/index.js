@@ -3,20 +3,19 @@
 // Composition root for the EFSP subsystem (WP1's "server-side Board store"
 // deliverable) — wires flight-data-store, board-store, position-store, code-
 // allocator, block-map, facility-config, permission, nla and coordination
-// together into the `rules` each Facility's board-store.js needs, plus
-// durable persistence (ADR 0002). server.js/ws-hub.js only ever talk to
+// together into the `rules` each Facility's Board (board-store.js) needs, plus
+// durable persistence (ADR 0002). app.js/ws-hub.js only ever talk to
 // the object this factory returns.
 //
 // WP4A (docs/adr/0013) — createEfsp() now builds ONE {BoardStore,
 // PositionStore, rules} pair PER Facility (facilityConfig.getFacilityIds(),
-// currently ['INCIRLIK','CENTER']), rather than exactly one of each. This
+// currently INCIRLIK, CENTER, TACTICAL, CARRIER and the derived RANGES), rather than exactly one of each. This
 // is the D13 mechanism's foundation: "the Strip does not cross the
 // Facility boundary" (guide §4.6) is realized as two genuinely separate
 // BoardStore instances, each with its own `_strips` Map, so a Strip
-// replica in one can never structurally reach the other's (see board-
-// store.js's own module comment on this). A single FlightDataStore/CodeAllocator/
+// replica in one can never structurally reach the other's (docs/adr/0013). A single FlightDataStore/CodeAllocator/
 // MutationLog stay shared across every Facility — a deliberate
-// simplification of "one logical FDR, N per-Facility Strip replicas"
+// simplification of "one logical flight data, N per-Facility Strip replicas"
 // (docs/adr/0013's own text): both Facilities' replicas reference the
 // SAME flightDataId, so an edit from either side is instantly visible to the
 // other, and the guide's real-world forwarding-obligation timers (§4.6.1)
@@ -55,7 +54,7 @@ const log = require('../log').logger('efsp');
  * @param {{now:()=>number, source:string}} [deps.clock] the mission clock
  *   (docs/adr/0079). Every store below takes it, so every time a controller
  *   reads — a gate, a deadline, a Strip clock, a Mutation's `at` — is in-game
- *   Zulu. server.js passes the real one; a fixture that omits it gets the wall
+ *   Zulu. app.js passes the real one; a fixture that omits it gets the wall
  *   clock, which is what the mission clock itself answers before DCS does.
  * @param {() => number} [deps.transitionAltFt] the theater's transition altitude
  *   (theater-context.js); the FlightDataStore writes a block's text with it. A fixture
@@ -103,7 +102,7 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
       canActOnState:       (actingPositionId, stripType, state) => permission.canActOnState(actingPositionId, stripType, state),
       isSelfCoordinated:   (controllerId, positionId) => positionStore.isSelfCoordinated(controllerId, positionId),
       // docs/adr/0080 — the tactical capability table and the Bay lookups the
-      // ownership, hand-back and covering rules read.
+      // ownership, hand-back and consolidation rules read.
       baysFor:             (positionId) => facilityConfig.getBaysFor(positionId, facilityId),
       handBackTargetsFor:  (positionId) => permission.handBackTargetsFor(positionId),
       mayActBesideOwner:   (actingPositionId, strip, op) => permission.mayActBesideOwner(actingPositionId, strip, op),
@@ -126,7 +125,7 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
         const other = facilities.get(otherFacilityId);
         return other ? other.boardStore : null;
       },
-      // How many live (non-DROPPED) Strips still reference this FDR, across
+      // How many live (non-DROPPED) Strips still reference this flight data, across
       // EVERY Facility, excluding one Strip by id. Deliberately global rather
       // than this Facility's own Board: the FlightDataStore and its CodeAllocator
       // are shared across all Facilities (see this file's module comment),
@@ -143,7 +142,7 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
         return n;
       },
       coordinationEffect: (primitive) => coordination.coordinationEffect(primitive),
-      // WP4A gap-closure (docs/adr/0022) — which EfspState a Strip Role
+      // WP4A gap-closure (docs/adr/0022) — which EfspState a strip type
       // must be in to PROPOSE a coordination link (see coordination.js).
       coordinationEligibleState: (stripType) => coordination.coordinationEligibleState(stripType),
       tofiEligibleState: (stripType) => coordination.tofiEligibleState(stripType),
@@ -161,16 +160,16 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
       // are in one relation, and a clearance issued at either end must void it.
       //
       // marsaInterlockFor is the Block Map lookup rather than a list of Block
-      // ids held in board-store.js — see block-map.js's interlockFor() for why
+      // ids held in the Board — see block-map.js's interlockFor() for why
       // that separation matters (the same Block id means opposite things on
-      // different Roles).
+      // different strip types).
       marsaInterlockFor:       (stripType, blockId) => blockMap.interlockFor(stripType, blockId),
       voidMarsaForAssignment:  (flightDataId, ctx) => marsaStore.voidForAssignment(flightDataId, ctx),
       activeMarsaFor:          (flightDataId) => marsaStore.activeFor(flightDataId),
       retireMarsaForFlightData:       (flightDataId, by) => marsaStore.onFlightDataRetired(flightDataId, by),
       // Ending or voiding a relation writes `tofi.separationRegime` back to
-      // ATC on every participant. Those FDR writes are real changes no
-      // marsa-delta can carry (a relation is not an FDR), so board-store drains
+      // ATC on every participant. Those flight data writes are real changes no
+      // marsa-delta can carry (a relation is not flight data), so the Board drains
       // them onto its own result and efsp-ws.js puts them in the board-delta's
       // `flightDataList.updated` — see marsa-store.js's drainRegimeWrites() (F-111).
       drainMarsaRegimeWrites:  () => marsaStore.drainRegimeWrites(),
@@ -178,7 +177,7 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
       // (null where there are no runways, which never inhibits). Cached in the
       // store, so every NLA stamp can afford to ask.
       runwayStatusFor:           () => runwayStatusStore.statusView(facilityId),
-      // docs/adr/0074 — the carrier hooks board-store.js reads. The NLA out of
+      // docs/adr/0074 — the carrier hooks the Board reads (board/strip-ops.js). The NLA out of
       // IN_STACK depends on the Case and on the staffed lane the stack feeds.
       carrierCase:             () => carrierStore.caseValue(),
       carrierLaneFor:          (strip) => carrierStore.laneFor(strip.flightDataId),
@@ -310,7 +309,7 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
      */
     persist: () => _persist({ facilities, stores, persistState, paths }),
 
-    /** Abrupt disconnect (guide §4.8.6) — releases every Position the controller held, across EVERY Facility (a controller may hold Positions in more than one, guide §4.8.5). */
+    /** Abrupt disconnect (guide §4.8.6) — signs the controller off every Position they were signed on at, across EVERY Facility (a controller may be signed on at Positions in more than one, guide §4.8.5). */
     onDisconnect: (session) => {
       for (const { positionStore } of facilities.values()) positionStore.onDisconnect(session.controllerId);
     },
@@ -348,13 +347,13 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
 /**
  * Checks that what came back off disk agrees with itself.
  *
- * Strips, FDRs and the allocated-code map are three parts of one snapshot,
+ * Strips, flight data and the allocated-code map are three parts of one snapshot,
  * and nothing ever verified they matched. Two ways they can disagree, both
- * silent: a live Strip whose FDR is missing renders with no callsign and
+ * silent: a live Strip whose flight data is missing renders with no callsign and
  * computes its NLA against null; and a live Strip whose beacon code is not
  * marked allocated lets the very next CreateStrip mint that same code for a
  * different aircraft — the identical failure docs/adr/0028 fixed for the
- * shared-FDR case, arriving by a different route.
+ * shared flight data case, arriving by a different route.
  *
  * The code case is repaired rather than just reported: re-reserving a code
  * that a live flight is already squawking is unambiguously right, and
@@ -362,7 +361,7 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
  */
 function _reconcileRestored(facilities, flightDataStore, correlationStore, marsaStore) {
   const allocator = flightDataStore.codeAllocator;
-  // A MARSA relation whose participants' FDRs are all gone has nothing left to
+  // A MARSA relation whose participants' flight data are all gone has nothing left to
   // be about. Dropped rather than reported, on the same split the correlation
   // case below documents: an orphaned relation is invisible either way, and a
   // relation that kept a partial participant list would be a live claim that
@@ -371,9 +370,9 @@ function _reconcileRestored(facilities, flightDataStore, correlationStore, marsa
     const dropped = marsaStore.evictMissingFlightDataList();
     if (dropped) log.warn('dropped restored MARSA relations whose participants are gone', { dropped });
   }
-  // A correlation record whose FDR did not come back has nothing to be about.
-  // Dropped rather than reported, unlike the missing-FDR Strip case below: a
-  // Strip without an FDR still renders and a controller needs to know why,
+  // A correlation record whose flight data did not come back has nothing to be about.
+  // Dropped rather than reported, unlike the missing flight data Strip case below: a
+  // Strip without the flight data still renders and a controller needs to know why,
   // while a correlation without one is invisible either way.
   if (correlationStore) {
     const dropped = correlationStore.evictMissingFlightDataList();

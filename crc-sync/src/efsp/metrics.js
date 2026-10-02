@@ -68,7 +68,7 @@ const KNOWN_SOURCES = Object.freeze(['client', 'staleness']);
 const MAX_EVENTS_PER_REPORT = 100;
 const MAX_LATENCY_MS = 600000;
 const MAX_GESTURE_INPUTS = 50;
-const MUTATION_DEDUPE_CAP = 5000;           // board-store.js APPLIED_MUTATIONS_CAP's shape
+const MUTATION_DEDUPE_CAP = 5000;           // the shape of sync/replay-cache.js's APPLIED_MUTATIONS_CAP (engineering bound)
 const REPORT_DEDUPE_CAP = 1000;
 const SESSIONS_LISTED = 50;
 const MAX_WINDOW_HOURS = 720;
@@ -429,8 +429,8 @@ class EfspMetrics {
   // ── client-reported measurements (metrics 1-3) ──
 
   /**
-   * `efsp-metrics-report`. The reporting controller must hold the Position
-   * right now, as Primary or Observer (the ADR 0029 binding: a client claim is
+   * `efsp-metrics-report`. The reporting controller must be signed on at the Position
+   * right now, as Primary or Observer (the ADR 0029 binding: a client's assertion is
    * checked at the wire). Events are validated one by one; valid ones in a
    * partly invalid report are kept. No search text is ever sent or stored.
    *
@@ -854,7 +854,7 @@ function createEfspInstrumentation({
     const strip = board && board.getStrip(msg.stripId);
     // Only the OWNER's press can be a transfer (T4): once a transfer commits,
     // nlaStatusFor describes the receiver's next step, not the sender's.
-    // nlaStatusFor, never efsp-ws's _stampStrip, which would notify the NLA
+    // nlaStatusFor, never wire/frames.js's stampStrip, which would notify the NLA
     // status monitor (T17).
     if (!strip || strip.ownerPositionId !== msg.actingPositionId) return null;
     const status = board.nlaStatusFor(strip);
@@ -911,7 +911,7 @@ function createEfspInstrumentation({
       if (ok && op === 'SetFlag' && msg.op) metrics.recordSetFlag({ at, flag: msg.op.flag });
     }
 
-    // §11.3: every Mutation is recorded, refusals included. board-store logs
+    // §11.3: every Mutation is recorded, refusals included. the Board logs
     // none of its refusals (T1). Every other path logs what reaches its store;
     // a refusal made before the store says so with `unaudited` (docs/adr/0083).
     if (!ok && (msg.type === 'efsp-mutation' || result.unaudited === true)) {
