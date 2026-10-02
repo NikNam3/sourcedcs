@@ -14,8 +14,9 @@ function fakeWs() {
   return { readyState: OPEN, send: (raw) => sent.push(JSON.parse(raw)), sent };
 }
 
-function fakeEfsp(currentSeq) {
-  return { boardStoreFor: () => ({ currentSeq }) };
+function fakeEfsp(currentSeq, boardsFor = (all) => all) {
+  const all = { INCIRLIK: { seq: currentSeq, epoch: 'e-I' }, CENTER: { seq: currentSeq + 1, epoch: 'e-C' } };
+  return { heartbeatBoardsAll: () => all, heartbeatBoardsFor: (session, a) => boardsFor(a, session) };
 }
 
 test('_tick sends an efsp-heartbeat with the current Board sequence when EFSP is present', () => {
@@ -25,7 +26,8 @@ test('_tick sends an efsp-heartbeat with the current Board sequence when EFSP is
 
   const heartbeat = ws.sent.find(m => m.type === 'efsp-heartbeat');
   assert.ok(heartbeat, 'no efsp-heartbeat message was sent');
-  assert.equal(heartbeat.boardSeq, 7);
+  assert.deepEqual(heartbeat.boards, { INCIRLIK: { seq: 7, epoch: 'e-I' }, CENTER: { seq: 8, epoch: 'e-C' } });
+  assert.equal(Object.keys(heartbeat)[1], 'type', 'type stays the second key (soak and freeze prefix matchers)');
 });
 
 test('_tick sends a heartbeat on an otherwise-quiet tick — EFSP heartbeat is NOT gated on the track/collab early-return', () => {

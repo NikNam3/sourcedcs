@@ -94,7 +94,7 @@ test('a client that misses a delta sees the gap at the heartbeat, resyncs, and c
   assert.equal(second.ack.ok, true); // broadcast lost
   assert.notDeepEqual(b.stripIds(), serverStrips(efsp));
 
-  const beat = { type: 'efsp-heartbeat', boardSeq: efsp.boardStoreFor('INCIRLIK').currentSeq };
+  const beat = { type: 'efsp-heartbeat', boards: efsp.heartbeatBoardsAll() };
   b.deliver(beat);
   assert.equal(b.outbox.length, 0, 'one beat behind is not yet a gap (a delta may be in flight)');
   b.deliver(beat);

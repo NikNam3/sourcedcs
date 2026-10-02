@@ -246,3 +246,35 @@ test('a line handed to the JTAC after it connected arrives with its flight data,
   assert.deepEqual(jt.ws.of('efsp-marsa-delta')[0].marsa.updated.map(r => r.marsaId), ['m1']);
   assert.equal(tc.ws.of('efsp-correlation-delta').length, 0, 'a session that reads everything gets no extras');
 });
+
+// ── docs/adr/0104: the heartbeat names every Board a session is sent ──────
+
+test('the heartbeat: a read-all session is named every Facility, a JTAC-only session only the Facility it holds a Position in', () => {
+  const w = world();
+  const all = w.connect('nobody');
+  const jt = w.connect('c-JTAC', { TACTICAL: ['JTAC'] });
+  w.hub._tickAll();
+  const beatAll = all.ws.of('efsp-heartbeat').at(-1);
+  const beatJt = jt.ws.of('efsp-heartbeat').at(-1);
+  assert.deepEqual(Object.keys(beatAll.boards).sort(), w.efsp.snapshotFor(null).facilities.slice().sort());
+  assert.deepEqual(Object.keys(beatJt.boards), ['TACTICAL']);
+  for (const [f, b] of Object.entries(beatAll.boards)) {
+    assert.equal(b.seq, w.efsp.boardStoreFor(f).currentSeq);
+    assert.equal(b.epoch, w.efsp.boardStoreFor(f).epoch);
+  }
+  assert.equal(Object.keys(beatAll)[1], 'type');
+  assert.equal('boardSeq' in beatAll, false);
+});
+
+test('the heartbeat seq follows a Mutation, and the epoch is the Board\'s lifetime', () => {
+  const w = world();
+  const tc = w.connect('c-TAC_C2', { TACTICAL: ['TAC_C2'] });
+  const before = w.efsp.boardStoreFor('TACTICAL').currentSeq;
+  w.send(tc, mut(w, 'TAC_C2', tacStrip(w, w.kept.stripId), { kind: 'SetBlock', blockId: 'M2', value: 'PKG-2' }));
+  tc.ws.sent.length = 0;
+  w.hub._tickAll();
+  const b = tc.ws.of('efsp-heartbeat').at(-1).boards.TACTICAL;
+  assert.ok(b.seq > before);
+  assert.equal(b.seq, w.efsp.boardStoreFor('TACTICAL').currentSeq);
+  assert.equal(b.epoch, w.efsp.boardStoreFor('TACTICAL').epoch);
+});

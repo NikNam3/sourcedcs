@@ -387,11 +387,36 @@ function supplementFor(ctx, session, filtered) {
 function readScopeKey(ctx, session) { return readScope.scopeKey(readScopeOf(ctx, session)); }
 
 /**
+ * The heartbeat's `boards` for every Facility: `{ [facilityId]: { seq, epoch } }`
+ * (docs/adr/0104). Built once per tick and shared by every session that reads everything.
+ */
+function heartbeatBoardsAll(ctx) {
+  const boards = {};
+  for (const facilityId of ctx.facilityConfig.getFacilityIds()) {
+    const board = ctx.boardStoreFor(facilityId);
+    boards[facilityId] = { seq: board.currentSeq, epoch: board.epoch };
+  }
+  return boards;
+}
+
+/**
+ * The `boards` this session's heartbeat names: every Facility for a session that reads
+ * everything (the shared `all` object itself), and only the Facilities where it holds a
+ * Position for one that reads only what it owns (docs/adr/0080, 0104).
+ */
+function heartbeatBoardsFor(ctx, session, all = heartbeatBoardsAll(ctx)) {
+  const scope = readScopeOf(ctx, session);
+  if (scope.kind === readScope.ALL) return all;
+  const out = {};
+  for (const facilityId of scope.own.keys()) if (all[facilityId]) out[facilityId] = all[facilityId];
+  return out;
+}
+
+/**
  * WP4A: sends every Facility's strips/positions/bays in one message (each
  * record stamped with `facilityId`), since a client can be signed on to Positions
- * and act across both. `boardSeq`/`facility` stay as top-level back-compat
- * aliases for INCIRLIK specifically — `boardSeqByFacility`/`facilities` are
- * the real, general shape.
+ * and act across both. `boardSeqByFacility`/`facilities` are the shape (the
+ * old top-level `boardSeq`/`facility` aliases are gone, docs/adr/0104).
  */
 function _snapshotMessage(ctx, session = null) {
   const full = _fullSnapshotMessage(ctx);
@@ -433,11 +458,9 @@ function _fullSnapshotMessage(ctx) {
     bays.push(...facilityConfig.getAllBays(facilityId));
   }
 
-  const defaultFacilityId = facilityConfig.DEFAULT_FACILITY_ID;
   return {
     version: VERSION, type: 'efsp-snapshot',
-    boardSeq: boardSeqByFacility[defaultFacilityId], // back-compat alias
-    facility: facilityConfig.getFacilityConfig(defaultFacilityId).facility, // back-compat alias
+    // The default Facility comes first (docs/adr/0104): a client selects `facilities[0]`.
     facilities: facilityIds,
     boardSeqByFacility,
     boardEpochByFacility,
@@ -451,4 +474,4 @@ function _fullSnapshotMessage(ctx) {
   };
 }
 
-module.exports = { handleMessage, carrierDelta, sfaDelta, snapshotMessage: _snapshotMessage, filterForSession, supplementFor, readScopeKey, readScopeOf, RESYNC_RING_WINDOW };
+module.exports = { handleMessage, carrierDelta, sfaDelta, snapshotMessage: _snapshotMessage, filterForSession, supplementFor, readScopeKey, readScopeOf, heartbeatBoardsAll, heartbeatBoardsFor, RESYNC_RING_WINDOW };
