@@ -53,7 +53,7 @@ function makeFacilities() {
       coordinationEligibleState: (stripType) => coordination.coordinationEligibleState(stripType),
       tofiCounterparts: (actingPositionId) => permission.tofiCounterparts(actingPositionId),
       // Wired as of the mission-line slice. It was absent, and
-      // board-store.js's `if (this._rules.tofiEligibleState)` guard meant
+      // the `if (rules.tofiEligibleState)` guard then in the Board meant
       // docs/adr/0031's (stripType, state) gate was SILENTLY SKIPPED across this
       // entire file — the one place TOFI is tested most densely. 0031's own
       // Consequences blessed the omission while nothing depended on the gate
@@ -388,7 +388,7 @@ test('the MISSION Strip advances through its own lifecycle via ordinary InvokeNl
 
 test('TOFI ENTRY is refused on an ARRIVAL Strip that is not at INBOUND (docs/adr/0031)', () => {
   // This file's `rules` fixture omitted `tofiEligibleState` until the
-  // mission-line slice, and board-store.js guards on its presence — so the
+  // mission-line slice, and the Board (board/tofi.js) then guarded on its presence — so the
   // gate was skipped across every test here and this assertion would have
   // passed the PROPOSE instead of refusing it. Kept as the proof the wiring
   // is real, not as a restatement of efsp-scenario-military's coverage.

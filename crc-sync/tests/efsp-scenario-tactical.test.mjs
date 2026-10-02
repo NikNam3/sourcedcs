@@ -360,7 +360,7 @@ test('SCENARIO J1 JTAC writes nothing on a line it has not been handed', () => {
   const c = crew(efsp, ALL);
   const m = taskedLine(efsp, c, 'JT11');
 
-  // canMutate runs before ownership (board-store.js _dispatch), so a grant
+  // canMutate runs before ownership (board/strip-ops.js's permission check), so a grant
   // JTAC lacks is PERMISSION_DENIED even on a Strip it does not own.
   for (const op of [
     { kind: 'SetBlock', blockId: 'M2', value: 'PKG-J' },

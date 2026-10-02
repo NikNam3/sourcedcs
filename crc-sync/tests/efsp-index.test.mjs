@@ -111,7 +111,7 @@ test('a Strip mid-DEPARTED-to-APP-transfer (docs/adr/0007) round-trips correctly
   let strip = created.ack.strip;
 
   // Jump straight to DEPARTED via SetState (a direct path, independent of
-  // InvokeNla per guide §3.5 rule 4 — see board-store.test.mjs's own
+  // InvokeNla per guide §3.5 rule 4 — see efsp-board-store.test.mjs's own
   // "SetState is a direct path" test) — this test is about the transfer-
   // shaped NLA step itself, not re-walking every intermediate state
   // (already covered by efsp-nla.test.mjs), and avoids InvokeNla's 400ms

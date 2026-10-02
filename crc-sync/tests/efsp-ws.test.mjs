@@ -161,7 +161,7 @@ test('a rejected mutation\'s ack includes the human-readable detail, not just th
 
   // Drop straight into a Bay whose implied state (RUNWAY_QUEUE) skips
   // ahead of PROPOSED's legal next state (PENDING_CLEARANCE) — the exact
-  // doctrine-bypass case board-store.js's _validateBayImpliedTransition
+  // doctrine-bypass case board/placement.js's `validateBayImpliedTransition`
   // exists to reject, with a detail string explaining why.
   const moveMsg = {
     version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(),
@@ -264,7 +264,7 @@ test('vacating a Position with Strips and an staffed covering Position reassigns
   // gc-coordination (not gc-taxi-in) — this fixture just needs "GND owns
   // a Strip", and gc-taxi-in now implies TAXI_IN (Phase 2), which a fresh
   // PROPOSED Strip can't legally jump straight to (correctly rejected by
-  // _validateBayImpliedTransition). gc-coordination implies no state.
+  // `validateBayImpliedTransition`). gc-coordination implies no state.
   const strip = createStripOwnedBy(ctx, 'GC', 'gc-coordination');
 
   const result = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: [] }, noopPersist); // Alice vacates GND
@@ -281,7 +281,7 @@ test('vacating a Position with Strips and NO staffed covering Position anywhere 
   // gc-coordination (not gc-taxi-in) — this fixture just needs "GND owns
   // a Strip", and gc-taxi-in now implies TAXI_IN (Phase 2), which a fresh
   // PROPOSED Strip can't legally jump straight to (correctly rejected by
-  // _validateBayImpliedTransition). gc-coordination implies no state.
+  // `validateBayImpliedTransition`). gc-coordination implies no state.
   const strip = createStripOwnedBy(ctx, 'GC', 'gc-coordination');
 
   const result = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: [] }, noopPersist);

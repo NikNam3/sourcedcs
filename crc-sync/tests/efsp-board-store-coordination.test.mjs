@@ -71,7 +71,7 @@ function makeFacilities({ aitAuthorized = {} } = {}) {
  * existing test fixtures' use of SetState as a raw jump, e.g.
  * efsp-board-store.test.mjs), THEN TransferStrip into ap-departures —
  * by then strip.state already equals that Bay's impliesState, so
- * _validateBayImpliedTransition's "already there" short-circuit applies
+ * board/placement.js's `validateBayImpliedTransition`'s "already there" short-circuit applies
  * and the transfer is never itself treated as an advancing transition.
  */
 function createAppHandedOffStrip(facilities) {
@@ -623,7 +623,7 @@ test('a REJECTED replica sitting in its owner\'s Coordination Bay cannot PROPOSE
   assert.equal(retried.ok, false);
   assert.equal(retried.reason, 'VALIDATION_ERROR');
   // Refused by _dispatch's rejected-replica gate (F-303) before the
-  // coordination-Bay check in _applyCoordinationPropose is ever reached.
+  // coordination-Bay check in board/coordination.js's `_applyCoordinationPropose` is ever reached.
   assert.match(retried.detail, /rejected — the replica is inert/);
 });
 

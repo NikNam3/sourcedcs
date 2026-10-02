@@ -62,7 +62,7 @@ function mustAct(efsp, crewMember, positionId, strip, op) {
   return ack.strip;
 }
 
-const NLA_DOUBLE_TAP_MS = 400; // board-store.js's _applyInvokeNla guard
+const NLA_DOUBLE_TAP_MS = 400; // board/ops/invoke-nla.js's double-tap guard
 async function advance(efsp, crewMember, positionId, strip) {
   await new Promise(resolve => setTimeout(resolve, NLA_DOUBLE_TAP_MS + 10));
   return mustAct(efsp, crewMember, positionId, strip, { kind: 'InvokeNla' });
@@ -159,7 +159,7 @@ test('F-408: every Strip on the wire carries what its NLA would do and why it wo
   assert.equal(atCd.nla.inhibited, 'flight plan incomplete — ALT, RTE not filed');
 
   // ...and the reason is EXACTLY what pressing it returns. One wording, one
-  // source (board-store's _nlaPrecheck / nla.js's own table).
+  // source (board/strip-ops.js's `nlaPrecheck` / nla.js's own table).
   const refused = act(efsp, c.CD, 'CD', atCd, { kind: 'InvokeNla' });
   assert.equal(refused.ok, false);
   assert.equal(refused.reason, atCd.nla.reason);
@@ -354,7 +354,7 @@ test('F-303: the SENDER\'s own Strip reads REJECTED too, and stays fully workabl
 
   // CENTER still owns the flight and must be able to carry on working it —
   // including proposing the handoff again. Both records read REJECTED, so
-  // telling them apart is the whole of _isRejectedReplica.
+  // telling them apart is the whole of board/strip-ops.js's `isRejectedReplica`.
   const sender = efsp.boardStoreFor('CENTER').getStrip(ctrStrip.stripId);
   assert.equal(sender.coordination.state, 'REJECTED');
   const retried = act(efsp, c.CTR, 'CTR', sender, {

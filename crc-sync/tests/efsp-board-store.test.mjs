@@ -7,9 +7,8 @@ import { fullRules } from "./helpers/full-rules.mjs";
 const { FlightDataStore } = await import('../src/efsp/flight-data-store.js');
 
 // A minimal, deterministic `rules` fixture standing in for block-map.js /
-// facility-config.js / nla.js / position-store.js, which don't exist yet at
-// this point in the build sequence (board-store.js is intentionally
-// decoupled from all of them via dependency injection).
+// facility-config.js / nla.js / position-store.js (BoardStore takes the rules by
+// dependency injection).
 function makeRules(overrides = {}) {
   return {
     resolveBlockTarget: (blockId) => {

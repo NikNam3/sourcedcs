@@ -98,7 +98,7 @@ function jumpTo(efsp, crewMember, positionId, strip, toState) {
   return mustAct(efsp, crewMember, positionId, strip, { kind: 'SetState', toState });
 }
 
-const NLA_DOUBLE_TAP_MS = 400; // board-store.js's _applyInvokeNla guard
+const NLA_DOUBLE_TAP_MS = 400; // board/ops/invoke-nla.js's double-tap guard
 
 /**
  * Press the NLA button, honouring the double-tap guard. A real controller is
@@ -207,7 +207,7 @@ test('the terminal Drop button releases the beacon code, not just the state — 
   assert.equal(efsp.flightDataStore._codeAllocator.isAllocated(code), true);
 
   // ap-departures implies HANDED_OFF, so the Strip has to already be there
-  // before it can land in that Bay (_validateBayImpliedTransition).
+  // before it can land in that Bay (board/placement.js's `validateBayImpliedTransition`).
   const airborne = jumpTo(efsp, c.OPS, 'OPS', strip, 'HANDED_OFF');
   const relocated = mustAct(efsp, c.OPS, 'OPS', airborne, {
     kind: 'TransferStrip', toPositionId: 'AP', bayId: 'ap-departures', rackId: 'main',
@@ -227,7 +227,7 @@ test('Undo of a terminal Drop puts back the remove indicator and re-claims the b
   });
   const code = efsp.flightDataStore.getFlightData(strip.flightDataId).identity.beaconAssigned;
   // ap-departures implies HANDED_OFF, so the Strip has to already be there
-  // before it can land in that Bay (_validateBayImpliedTransition).
+  // before it can land in that Bay (board/placement.js's `validateBayImpliedTransition`).
   const airborne = jumpTo(efsp, c.OPS, 'OPS', strip, 'HANDED_OFF');
   const relocated = mustAct(efsp, c.OPS, 'OPS', airborne, {
     kind: 'TransferStrip', toPositionId: 'AP', bayId: 'ap-departures', rackId: 'main',
@@ -405,7 +405,7 @@ test('a controller cannot act as a Position it is not Primary at, however the mu
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: DEPARTURE_FLIGHT_DATA,
   });
   // ap-departures implies HANDED_OFF, so the Strip has to already be there
-  // before it can land in that Bay (_validateBayImpliedTransition).
+  // before it can land in that Bay (board/placement.js's `validateBayImpliedTransition`).
   const airborne = jumpTo(efsp, c.OPS, 'OPS', strip, 'HANDED_OFF');
   const relocated = mustAct(efsp, c.OPS, 'OPS', airborne, {
     kind: 'TransferStrip', toPositionId: 'AP', bayId: 'ap-departures', rackId: 'main',

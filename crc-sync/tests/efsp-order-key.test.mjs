@@ -58,7 +58,7 @@ test('keyBetween(a, b) sorts strictly between a and b, for many adjacent and dis
 // order-key.js's header comment on _jitter()'s ~1-in-62 collision rate,
 // tolerated for sorting), and a caller inserting between them hit an
 // uncoded throw that crashed the whole server in production before this
-// fix — board-store.js's _resolveOrderKey only retries-after-rebalance for
+// fix — board/placement.js's `resolveOrderKey` only retries-after-rebalance for
 // this exact code, so it MUST be ORDER_KEY_EXHAUSTED, not a distinct one.
 test('keyBetween(a, a) — two equal bounds, e.g. from a prior jitter collision — throws ORDER_KEY_EXHAUSTED, not a plain error', () => {
   assert.throws(() => keyBetween('A', 'A'), (err) => err.code === 'ORDER_KEY_EXHAUSTED');
@@ -170,7 +170,7 @@ test('fuzz: 300 random-position insertions into a growing Rack always keep the s
       k = keyBetween(a, b);
     } catch (err) {
       if (err.code === 'ORDER_KEY_EXHAUSTED') {
-        // Rebalance the whole Rack (as board-store.js's real retry path
+        // Rebalance the whole Rack (as board/placement.js's real retry path
         // would) and retry the same insert against the fresh keys.
         seq = [...rebalance(seq).values()];
         const a2 = pos === 0 ? null : seq[pos - 1];

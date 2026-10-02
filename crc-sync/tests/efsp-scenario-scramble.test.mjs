@@ -47,7 +47,7 @@ const counter = new TrafficCount({
 
 const board = efsp.boardStoreFor('INCIRLIK');
 // The Strip as the wire carries it: facilityId and nla are stamped on at the
-// edge (efsp-ws.js _stampStrip), not stored on the Board.
+// edge (wire/frames.js's `stampStrip`), not stored on the Board.
 const live = () => board.getAll().filter(s => s.state !== 'DROPPED')
   .map(s => ({ ...s, facilityId: 'INCIRLIK', nla: board.nlaStatusFor(s) }));
 const flightDataOf = (id) => efsp.flightDataStore.getFlightData(id);

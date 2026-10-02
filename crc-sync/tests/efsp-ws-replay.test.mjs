@@ -174,7 +174,7 @@ test('every efsp-board-delta carries boardEpoch', () => {
   cases.push(['mutation broadcast', slot(proposed, 'primary'), 'CENTER']);
   cases.push(['peerBroadcast', slot(proposed, 'peer'), 'INCIRLIK']);
 
-  // _handleMarsaMutation's FDR-only delta.
+  // The MARSA mutation path's flight-data-only delta (wire/families/marsa.js).
   const tanker = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'SHELL3' });
   const rx = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'VIPER3' });
   const declared = send(efsp, c.AP, { type: 'efsp-marsa-mutation', actingPositionId: 'AP', op: { kind: 'DeclareMarsa', participants: [tanker.flightDataId, rx.flightDataId], startEvent: 'TANKER_ACCEPTED', endCondition: 'VERTICALLY_POSITIONED', declaringCallsign: 'SHELL3' } });

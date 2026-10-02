@@ -11,7 +11,7 @@ import crypto from 'crypto';
 // file share a snapshot and a test that needs a specific starting state must
 // either create its own airspace or drive the shared one back itself.
 
-export const NLA_DOUBLE_TAP_MS = 400; // board-store.js's _applyInvokeNla guard
+export const NLA_DOUBLE_TAP_MS = 400; // board/ops/invoke-nla.js's double-tap guard
 
 /** One controller per Position, each declaring what it holds the way a real client does. */
 export function crew(efsp, spec) {
@@ -109,7 +109,7 @@ export function airborneDeparture(efsp, c, flightData = DEPARTURE_FLIGHT_DATA) {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData,
   });
   // ap-departures implies HANDED_OFF, so the Strip has to be there already
-  // before it can land in that Bay (_validateBayImpliedTransition).
+  // before it can land in that Bay (board/placement.js's `validateBayImpliedTransition`).
   strip = jumpTo(efsp, c.OPS, 'OPS', strip, 'HANDED_OFF');
   return mustAct(efsp, c.OPS, 'OPS', strip, {
     kind: 'TransferStrip', toPositionId: 'AP', bayId: 'ap-departures', rackId: 'main',
