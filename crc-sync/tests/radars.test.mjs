@@ -265,3 +265,16 @@ test('field radar figures and the ship antenna height come from sensor-specs.jso
   assert.throws(() => loadSensorSpecs(write({ fieldRadar: { approach: { sweepMs: 0 } } })), /sensor-specs\.json: "fieldRadar\.approach\.sweepMs" must be/);
   assert.throws(() => loadSensorSpecs(write({ shipRadarHeightM: 'tall' })), /"shipRadarHeightM" must be/);
 });
+
+test('a state/ copy of sensor-specs.json is held to the shipped keys: an unknown or misspelled key stops start-up naming file and key (DATA-3)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'crcsync-radars-strict-'));
+  const write = (o) => { const f = path.join(dir, 'sensor-specs.json'); fs.writeFileSync(f, JSON.stringify(o)); return f; };
+  assert.throws(() => loadSensorSpecs(write({ fieldRadars: {} })), /sensor-specs\.json has an unknown key "fieldRadars"/);
+  assert.throws(() => loadSensorSpecs(write({ fieldRadar: { airport: { rangeNmi: 30 } } })), /unknown key "fieldRadar\.airport\.rangeNmi"/);
+  assert.throws(() => loadSensorSpecs(write({ transponder: { syntheticBlok: { first: '6000', last: '6777' } } })), /unknown key "transponder\.syntheticBlok"/);
+  assert.throws(() => loadSensorSpecs(write({ datalink: { pliPeriod: 1 } })), /unknown key "datalink\.pliPeriod"/);
+  assert.throws(() => loadSensorSpecs(write({ shipRadarHeight: 1 })), /unknown key "shipRadarHeight"/);
+  // The radar maps are keyed by DCS type: a layer may add a type.
+  const ok = loadSensorSpecs(write({ _note: 'free', radar: { 'Brand-New-Jet': { angleFromNose: 90, rangeNm: 10, sweepMs: 1000 } } }));
+  assert.ok(ok.radar['Brand-New-Jet']);
+});

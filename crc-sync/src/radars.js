@@ -29,7 +29,7 @@ const fs = require('fs');
 
 const { checkOnGround } = require('./geo');
 const { CONFIG_DIR } = require('./state-paths');
-const { readShipped } = require('./tuning-file');
+const { readShipped, checkLayerKeys } = require('./tuning-file');
 const { validateDatalinkConfig, validateTransponderConfig } = require('./surveillance/sensor-config');
 const log = require('./log').logger('radars');
 
@@ -94,6 +94,9 @@ function loadSensorSpecs(specsPath = SENSOR_SPECS_PATH) {
       log.warn('could not read sensor specs, using the shipped sensor-specs.json', { file: specsPath, error: e.message });
     }
   }
+  // The state/ copy is held to the shipped file's keys (H88 item 8): an unknown or misspelled key stops start-up.
+  // `radar` and `carrierRadar` are maps keyed by DCS type name, so their children are free.
+  checkLayerKeys(cfg, shipped, path.resolve(specsPath), 'sensor-specs.json', '', { freeMaps: ['radar', 'carrierRadar'] });
   const presentation = { ...shipped.presentation };
   for (const [k, v] of Object.entries(cfg.presentation || {})) if (PRESENTATIONS.has(v)) presentation[k] = v;
   const defaultCaps = {};

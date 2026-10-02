@@ -28,7 +28,7 @@ function readShipped(name) {
  * the build does not know (an older build's name, `stca` for `conflictAlert`) is an unknown persisted shape and a
  * startup error naming the file and the key, never a value silently ignored. `_comment`-style keys are free.
  */
-function readLayer(name, override, shipped) {
+function readLayer(name, override, shipped, opts) {
   const file = readPath(name, override);
   if (file === path.join(CONFIG_DIR, name)) return null; // no state copy: the shipped file is the whole answer
   let layer;
@@ -38,12 +38,14 @@ function readLayer(name, override, shipped) {
     log.warn('could not read file, using the shipped one', { file, shipped: name, error: e.message });
     return null;
   }
-  if (shipped) checkLayerKeys(layer, shipped, file, name);
+  if (shipped) checkLayerKeys(layer, shipped, file, name, '', opts);
   return layer;
 }
 
 /** Throws naming `file` and the first key path of `layer` that `shipped` does not have. */
-function checkLayerKeys(layer, shipped, file, name, at = '') {
+function checkLayerKeys(layer, shipped, file, name, at = '', opts = {}) {
+  // `freeMaps`: key paths whose children are free-form names (a map keyed by DCS type), not a fixed schema.
+  if (opts.freeMaps && opts.freeMaps.includes(at)) return;
   if (!layer || typeof layer !== 'object' || Array.isArray(layer) || !shipped || typeof shipped !== 'object' || Array.isArray(shipped)) return;
   for (const [k, v] of Object.entries(layer)) {
     if (k.startsWith('_')) continue;
@@ -51,8 +53,8 @@ function checkLayerKeys(layer, shipped, file, name, at = '') {
     if (!Object.prototype.hasOwnProperty.call(shipped, k)) {
       throw new Error(`[tuning] ${file} has an unknown key "${key}" (config/${name} has no such key; an older build's name?): remove or rename it`);
     }
-    checkLayerKeys(v, shipped[k], file, name, key);
+    checkLayerKeys(v, shipped[k], file, name, key, opts);
   }
 }
 
-module.exports = { readShipped, readLayer };
+module.exports = { readShipped, readLayer, checkLayerKeys };
