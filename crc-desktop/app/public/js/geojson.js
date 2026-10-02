@@ -49,7 +49,6 @@ const ALERT_COLOR_ATTN = '#e0a83c';
 
 /** The Strip-side flight record for a track, if it is correlated to one. */
 export function _flightDataForTrack(trackId) {
-  if (typeof stripIdsForTrackId !== 'function' || typeof getEfspStrip !== 'function') return null;
   for (const stripId of stripIdsForTrackId(trackId)) {
     const strip = getEfspStrip(stripId);
     const flightData = strip && getEfspFlightData(strip.flightDataId);
@@ -74,9 +73,9 @@ function buildAssignedLine(flightData) {
 
 /** The one alert tag a data block leads with: a conflict first, then conformance. */
 function buildAlertTag(trackId, flightData) {
-  const conflicts = typeof conflictAlertsForTrack === 'function' ? conflictAlertsForTrack(trackId) : [];
+  const conflicts = conflictAlertsForTrack(trackId);
   if (conflicts.length) return { tag: 'CA', color: ALERT_COLOR_BAD };
-  const alerts = flightData && typeof conformanceAlertsForFlightData === 'function' ? conformanceAlertsForFlightData(flightData.flightDataId) : [];
+  const alerts = flightData ? conformanceAlertsForFlightData(flightData.flightDataId) : [];
   const bad = alerts.find(a => a.kind !== 'HEADING');
   if (bad && bad.kind === 'LEVEL_BUST') return { tag: `BUST${bad.deviationFt > 0 ? '+' : '−'}${Math.abs(bad.deviationFt)}`, color: ALERT_COLOR_BAD };
   if (bad && bad.kind === 'WRONG_WAY') return { tag: `ALT${bad.fpm < 0 ? '↓' : '↑'}`, color: ALERT_COLOR_BAD };
@@ -91,7 +90,7 @@ function buildAlertTag(trackId, flightData) {
  */
 function buildConflictAlertOverlay() {
   const features = [];
-  const conflicts = typeof getAllEfspConflicts === 'function' ? getAllEfspConflicts() : [];
+  const conflicts = getAllEfspConflicts();
   const now = (id) => tracks.get(String(id)) || latestFromServer.get(String(id));
   for (const c of conflicts) {
     const a = now(c.a);
@@ -134,7 +133,7 @@ export const ATC_MAX_SEGMENTS = 16;
 const ATC_TRANSPARENT = 'rgba(0,0,0,0)';
 let _atcFrame = null;
 
-function _isAtc(t) { return !!t && t.scheme === 'ATC' && typeof atcDisplay === 'function'; }
+function _isAtc(t) { return !!t && t.scheme === 'ATC'; }
 
 function _atcDisplayFor(id, t) {
   const now = Date.now();
@@ -239,7 +238,7 @@ function buildTrails() {
     if (_isAtc(t)) {
       // STARS history: five blues, newest to oldest, the same for every
       // track — the trail never says who it is (docs/adr/0088).
-      const P = typeof atcPalette === 'function' ? atcPalette() : null;
+      const P = atcPalette();
       if (!P) continue;
       const fade = sweepOpacity(id, 1) * baseOp;
       for (let age = 1; age <= P.history.length && age < hist.length; age++) {
@@ -641,7 +640,7 @@ function _extCenterlineTickPlan(zoom) {
   return { minorNm: 10, majorNm: 20 };
 }
 
-function buildExtendedCenterline() {
+export function buildExtendedCenterline() {
   if (!_aprtSelectedApt || _aprtRwyTrueDeg == null) return { type: 'FeatureCollection', features: [] };
   // Only drawn for an airfield whose approach radar we are actually looking
   // through. Asked by airport rather than by radar id, because the id used to
@@ -674,8 +673,8 @@ function buildExtendedCenterline() {
     const isMajor = (i * minorNm) % majorNm === 0; // majorNm is always a multiple of minorNm
     const halfWidthM = isMajor ? MAJOR_HALF_WIDTH_M : MINOR_HALF_WIDTH_M;
     const [tLat, tLon] = projectPos(_aprtSelectedApt.lat, _aprtSelectedApt.lon, reciprocal, d * 1852);
-    const [aLat, aLon] = projectPos(tLat, tLon, (trueHeading + 90) % 360, halfWidthM);
-    const [bLat, bLon] = projectPos(tLat, tLon, (trueHeading + 270) % 360, halfWidthM);
+    const [aLat, aLon] = projectPos(tLat, tLon, (_aprtRwyTrueDeg + 90) % 360, halfWidthM);
+    const [bLat, bLon] = projectPos(tLat, tLon, (_aprtRwyTrueDeg + 270) % 360, halfWidthM);
     features.push({
       type: 'Feature',
       geometry: { type: 'LineString', coordinates: [[aLon, aLat], [bLon, bLat]] },
@@ -755,7 +754,6 @@ function buildRefDot() {
  * broken highlight. A correlation is flight-data truth, not a radar return.
  */
 function buildEfspCorrelationRing() {
-  if (typeof getCorrelatedHighlightTrackId !== 'function') return { type: 'FeatureCollection', features: [] };
   const trackId = getCorrelatedHighlightTrackId();
   if (!trackId) return { type: 'FeatureCollection', features: [] };
   const t = tracks.get(trackId) || latestFromServer.get(trackId);
@@ -927,7 +925,7 @@ function _doUpdateMap() {
   map.getSource('bullseye').setData(buildBullseye());
   map.getSource('approach-vec').setData(buildApproachVector());
   map.getSource('ext-centerline').setData(buildExtendedCenterline());
-  if (map.getSource('carrier-final') && typeof buildCarrierFinalLine === 'function') map.getSource('carrier-final').setData(buildCarrierFinalLine()); // crc-sync docs/adr/0074
+  if (map.getSource('carrier-final')) map.getSource('carrier-final').setData(buildCarrierFinalLine()); // crc-sync docs/adr/0074
   map.getSource('datalink-locks').setData(buildDatalinkLines());
   if (!settings.radarDebug) {
     map.getSource('radar-debug').setData({ type: 'FeatureCollection', features: [] });
@@ -935,7 +933,7 @@ function _doUpdateMap() {
   updateZoomLimits();
   updateTopbarUI();
   updateRadarBadge();
-  if (typeof updateTrackPanel === 'function') updateTrackPanel();
+  updateTrackPanel();
 }
 
 // ESM-1 (S-ESM1b): the unit tests replaced the global updateMap to count calls; this is that seam.

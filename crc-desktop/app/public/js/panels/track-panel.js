@@ -213,7 +213,7 @@ function _refreshTrackFpl(flightData) {
  * Nothing is shown while nothing is wrong.
  */
 function _refreshTrackAlerts(trackId) {
-  const flightData = typeof _flightDataForTrack === 'function' ? _flightDataForTrack(trackId) : null;
+  const flightData = _flightDataForTrack(trackId);
   // "ALT FL180 · HDG 050".
   const active = (cell) => cell && cell.entries.find(e => e.status === 'ACTIVE');
   const alt = flightData && flightData.clearance && active(flightData.clearance.altitude);
@@ -233,10 +233,10 @@ function _refreshTrackAlerts(trackId) {
   if (!$alerts) return;
   const lines = [];
   const clock = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
-  for (const c of (typeof conflictAlertsForTrack === 'function' ? conflictAlertsForTrack(trackId) : [])) {
+  for (const c of conflictAlertsForTrack(trackId)) {
     lines.push({ bad: true, text: `Conflict Alert with ${c.otherCallsign} in ${clock(c.timeToCpaSec)}. Closest ${c.minNm} NM / ${c.vertFt} ft.` });
   }
-  for (const a of (flightData && typeof conformanceAlertsForFlightData === 'function' ? conformanceAlertsForFlightData(flightData.flightDataId) : [])) {
+  for (const a of (flightData ? conformanceAlertsForFlightData(flightData.flightDataId) : [])) {
     const pad = (n) => String(n).padStart(3, '0');
     if (a.kind === 'HEADING') lines.push({ bad: false, text: `Assigned heading ${pad(a.assigned)}, tracking ${pad(a.actual)}.` });
     if (a.kind === 'WRONG_WAY') lines.push({ bad: true, text: `Assigned ${a.assigned.toLocaleString('en-US')} ft, ${a.fpm < 0 ? 'descending' : 'climbing'} at ${Math.abs(a.fpm).toLocaleString('en-US')} ft/min.` });
@@ -301,7 +301,7 @@ export function updateTrackPanel() {
   }
 
   // The correlated flight's plan
-  _refreshTrackFpl(typeof _flightDataForTrack === 'function' ? _flightDataForTrack(String(_trackPanelId)) : null);
+  _refreshTrackFpl(_flightDataForTrack(String(_trackPanelId)));
 }
 
 // ── Ground vehicle tag popup ──────────────────────────────────────────────

@@ -56,7 +56,7 @@ export function _openHighlightPopover(strip, anchorEl) {
     swatch.addEventListener('pointerdown', (e) => e.stopPropagation());
     swatch.addEventListener('click', (e) => {
       e.stopPropagation();
-      const acting = _dispatchGesture(strip, setHighlight, color); if (typeof noteEfspGesture === 'function') noteEfspGesture('HIGHLIGHT', 'contextmenu+swatch', acting);
+      const acting = _dispatchGesture(strip, setHighlight, color); noteEfspGesture('HIGHLIGHT', 'contextmenu+swatch', acting);
       _closeHighlightPopover();
     });
     popover.appendChild(swatch);

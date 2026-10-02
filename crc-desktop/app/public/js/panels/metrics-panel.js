@@ -542,7 +542,6 @@ function renderMetricsPanel() {
 }
 
 function _defaultTrafficFacility() {
-  if (typeof getActingPositions !== 'function' || typeof getEfspBays !== 'function') return 'INCIRLIK';
   const facilities = [...new Set((getEfspBays() || []).map(b => b.facilityId).filter(Boolean))];
   return facilities.find(f => getActingPositions(f).length > 0) || 'INCIRLIK';
 }
@@ -591,7 +590,7 @@ function _metricsSelectedSession() {
 
 /** Asks crc-sync for the metrics and the traffic count. The answer arrives as `efsp-metrics` (onEfspMetrics). */
 export function requestEfspMetrics() {
-  if (typeof isSyncOpen === 'function' && !isSyncOpen()) {
+  if (!isSyncOpen()) {
     _metricsPanel.error = 'Not connected to crc-sync — showing the last answer.';
     renderMetricsPanel();
     return null;
@@ -651,5 +650,5 @@ export function initMetricsPanel() {
 
 // WP8 (docs/adr/0065, 0072): the METRICS panel's answer (moved out of app.js's ws.onmessage, CMSG).
 registerEfspMessage('efsp-metrics', (msg) => {
-  if (typeof onEfspMetrics === 'function') onEfspMetrics(msg);
+  onEfspMetrics(msg);
 });

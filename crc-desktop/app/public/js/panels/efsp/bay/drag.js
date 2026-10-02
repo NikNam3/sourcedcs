@@ -311,7 +311,7 @@ function _finishDrag(commit) {
   // whenever the Rack has other Strips in it (it never itself reports "no
   // change"), so a plain click could silently reorder or relocate a Strip.
   if (commit && hasMoved && dropTargetEl && dropTargetEl.dataset.efspDropSlot !== undefined) {
-    if (typeof carrierMoveToSlot === 'function') carrierMoveToSlot(strip, Number(dropTargetEl.dataset.efspDropSlot));
+    carrierMoveToSlot(strip, Number(dropTargetEl.dataset.efspDropSlot));
   } else if (commit && hasMoved && dropTargetEl) {
     const toPositionId = dropTargetEl.dataset.efspDropPosition;
     const explicitBayId = dropTargetEl.dataset.efspDropBay || null;

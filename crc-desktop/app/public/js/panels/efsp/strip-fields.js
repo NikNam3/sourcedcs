@@ -106,7 +106,7 @@ export const COMPACT_BLOCKS_BY_POSITION = {
 export const FIELD_SPANS = { '1': 2, '3': 2, '9': 3, '24A': 2, M1: 2, M3: 2, M5: 2, C1: 2, C2: 1, C24: 2 };
 
 function _blockMapFor(stripType) {
-  return (typeof BLOCK_MAPS === 'object' && BLOCK_MAPS && BLOCK_MAPS[stripType]) || null;
+  return (BLOCK_MAPS && BLOCK_MAPS[stripType]) || null;
 }
 
 /**

@@ -191,7 +191,7 @@ export function atcView(t, rel, env) {
   const conflicts = env.conflicts || [];
 
   const line0 = [];
-  const em = typeof atcEmergencyTag === 'function' ? atcEmergencyTag(t) : '';
+  const em = atcEmergencyTag(t);
   if (em) line0.push({ text: em, color: P.alert, blink: !_atcAcked.has(`EM:${id}:${em}`) });
   if (conflicts.length) line0.push({ text: 'CA', color: P.alert, blink: conflicts.some(c => !_atcAcked.has(`CA:${c}`)) });
   if (t.iffOverride === 'hostile') line0.push({ text: 'SA', color: P.sa, blink: false }); // H47: steady
@@ -324,14 +324,14 @@ export function atcAssigned(flightData) {
 
 /** Every radar this controller looks through is an ATC radar, and there is no datalink (H50: an ATC-only session). */
 export function atcOnlySession() {
-  const radars = typeof coverageRadars !== 'undefined' ? coverageRadars : [];
-  const datalink = typeof coverageDatalink !== 'undefined' ? coverageDatalink : false;
+  const radars = coverageRadars;
+  const datalink = coverageDatalink;
   return radars.length > 0 && radars.every(r => r.presentation === 'ATC') && !datalink;
 }
 
 /** The black strict-STARS scope: the personal setting is off, and only while the session is ATC-only (H71, question 1). */
 export function atcBlackScope() {
-  const s = (typeof settings !== 'undefined' && settings) || {};
+  const s = settings || {};
   return s.atcMapBackground === false && atcOnlySession();
 }
 
@@ -340,21 +340,20 @@ export function atcPalette() { return atcBlackScope() ? ATC_PALETTES.BLACK : ATC
 // ── The picture, as geojson.js asks for it ────────────────────────────────
 
 function _actingSet() {
-  return new Set(typeof getActingPositions === 'function' ? getActingPositions() : []);
+  return new Set(getActingPositions());
 }
 
 function _stripsFor(trackId) {
-  if (typeof stripIdsForTrackId !== 'function' || typeof getEfspStrip !== 'function') return [];
   return stripIdsForTrackId(trackId).map(getEfspStrip).filter(Boolean);
 }
 
 function _letterOf(positionId) {
-  return typeof getEfspPositionLetter === 'function' ? getEfspPositionLetter(positionId) : null;
+  return getEfspPositionLetter(positionId);
 }
 
 /** How long after its last return a correlated ATC contact starts to coast. */
 export function atcCoastAfterMs() {
-  const radars = typeof coverageRadars !== 'undefined' ? coverageRadars : [];
+  const radars = coverageRadars;
   const sweeps = radars.filter(r => r.presentation === 'ATC' && Number.isFinite(r.sweepMs)).map(r => r.sweepMs);
   return sweeps.length ? ATC_COAST_SWEEPS * Math.max(...sweeps) : ATC_COAST_FALLBACK_MS;
 }
@@ -369,25 +368,23 @@ export function atcDisplay(id, t, now = Date.now()) {
   const palette = atcPalette();
   const strips = _stripsFor(id);
   const rel = atcNoteOwnership(id, atcRelation(t, strips, _actingSet(), _letterOf), now);
-  const sinceReturn = now - ((typeof lastSweepMs !== 'undefined' && lastSweepMs.get(id)) || now);
+  const sinceReturn = now - (lastSweepMs.get(id) || now);
   const coast = rel.associated && sinceReturn > atcCoastAfterMs();
 
   let lat = t.lat; let lon = t.lon;
-  const hist = (typeof history !== 'undefined' && history.get && history.get(id)) || [];
-  if (coast && typeof kinematics === 'function' && typeof projectPos === 'function') {
+  const hist = (history.get && history.get(id)) || [];
+  if (coast) {
     const { heading, speedMs } = kinematics(hist);
     if (speedMs > 0) [lat, lon] = projectPos(t.lat, t.lon, heading, speedMs * (sinceReturn / 1000));
   }
 
-  const conflicts = typeof conflictAlertsForTrack === 'function' ? conflictAlertsForTrack(id).map(c => c.id) : [];
-  const flightData = strips.length && typeof getEfspFlightData === 'function' ? getEfspFlightData(strips[0].flightDataId) : null;
-  const conform = flightData && typeof conformanceAlertsForFlightData === 'function' ? atcConformTag(conformanceAlertsForFlightData(flightData.flightDataId)) : null;
+  const conflicts = conflictAlertsForTrack(id).map(c => c.id);
+  const flightData = strips.length ? getEfspFlightData(strips[0].flightDataId) : null;
+  const conform = flightData ? atcConformTag(conformanceAlertsForFlightData(flightData.flightDataId)) : null;
   const view = atcView(t, rel, { palette, now, conflicts, conform, coast });
 
-  const speedKt = typeof kinematics === 'function' ? kinematics(hist).speedKt : 0;
-  const lines = typeof atcBlockLines === 'function'
-    ? atcBlockLines(t, view, { speedKt, assigned: atcAssigned(flightData), typePhase: Math.floor(now / ATC_TIMESHARE_MS) % 2 === 1 })
-    : [];
+  const speedKt = kinematics(hist).speedKt;
+  const lines = atcBlockLines(t, view, { speedKt, assigned: atcAssigned(flightData), typePhase: Math.floor(now / ATC_TIMESHARE_MS) % 2 === 1 });
   return { id, lat, lon, rel, view, palette, lines };
 }
 
@@ -399,13 +396,12 @@ export function atcDisplay(id, t, now = Date.now()) {
  * PDB open into an FDB and back. Returns what it did, for tests and logs.
  */
 export function atcTargetClick(id, now = Date.now()) {
-  const t = typeof tracks !== 'undefined' ? tracks.get(String(id)) : null;
+  const t = tracks.get(String(id));
   if (!t) return 'NONE';
   const rel = atcNoteOwnership(id, atcRelation(t, _stripsFor(id), _actingSet(), _letterOf), now);
   return atcApplyClick(t, rel, now, {
-    conflicts: typeof conflictAlertsForTrack === 'function' ? conflictAlertsForTrack(id).map(c => c.id) : [],
+    conflicts: conflictAlertsForTrack(id).map(c => c.id),
     accept: (strip) => {
-      if (typeof sendEfspMutation !== 'function') return;
       sendEfspMutation(strip.ownerPositionId, strip, { kind: strip.coordination.primitive, action: 'ACCEPT' });
     },
   });
@@ -417,7 +413,7 @@ export function atcApplyClick(t, rel, now, { conflicts = [], accept = () => {} }
   if (rel.handoffIn) { accept(rel.handoffIn.strip); return 'ACCEPT_HANDOFF'; }
   if (rel.poIn && rel.poIn.state === 'INITIATED') { accept(rel.poIn.strip); return 'ACCEPT_POINT_OUT'; }
 
-  const em = typeof atcEmergencyTag === 'function' ? atcEmergencyTag(t) : '';
+  const em = atcEmergencyTag(t);
   if (em && !_atcAcked.has(`EM:${id}:${em}`)) { _atcAcked.add(`EM:${id}:${em}`); return 'ACK_EMERGENCY'; }
   const unacked = conflicts.filter(c => !_atcAcked.has(`CA:${c}`));
   if (unacked.length) { for (const c of unacked) _atcAcked.add(`CA:${c}`); return 'ACK_CONFLICT'; }
@@ -457,12 +453,12 @@ export function _resetAtcScopeForTest() {
 let _atcBlackApplied = null;
 
 export function atcTick() {
-  if (typeof mapReady === 'undefined' || !mapReady) return;
+  if (!mapReady) return;
   const black = atcBlackScope();
   if (black !== _atcBlackApplied) {
     // Set after applying: restoring the theme marks the background dirty
     // (applyMapTheme -> atcBackgroundDirty), and that must not loop.
-    if (typeof applyAtcBackground === 'function') applyAtcBackground(black);
+    applyAtcBackground(black);
     _atcBlackApplied = black;
   }
   // The block follows the app's label scale (applyScale sets it on the
@@ -474,9 +470,8 @@ export function atcTick() {
       map.setLayoutProperty('atc-symbols', 'text-size', size);
     }
   }
-  if (typeof tracks === 'undefined') return;
   for (const t of tracks.values()) {
-    if (t.scheme === 'ATC') { if (typeof updateMap === 'function') updateMap(); return; }
+    if (t.scheme === 'ATC') { updateMap(); return; }
   }
 }
 

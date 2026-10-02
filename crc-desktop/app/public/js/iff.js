@@ -74,11 +74,11 @@ export function iffColor(state) {
   // settings is defined in app.js; safe to read here because iffColor is
   // only ever called at runtime (never at parse time).
   const col = {
-    friendly: (typeof settings !== 'undefined' && settings.colFriendly) || IFF_COLOR_DEFAULTS.friendly,
-    bogey:    (typeof settings !== 'undefined' && settings.colBogey)    || IFF_COLOR_DEFAULTS.bogey,
-    neutral:  (typeof settings !== 'undefined' && settings.colNeutral)  || IFF_COLOR_DEFAULTS.neutral,
-    bandit:   (typeof settings !== 'undefined' && settings.colBandit)   || IFF_COLOR_DEFAULTS.bandit,
-    hostile:  (typeof settings !== 'undefined' && settings.colHostile)  || IFF_COLOR_DEFAULTS.hostile,
+    friendly: settings.colFriendly || IFF_COLOR_DEFAULTS.friendly,
+    bogey:    (settings.colBogey)    || IFF_COLOR_DEFAULTS.bogey,
+    neutral:  (settings.colNeutral)  || IFF_COLOR_DEFAULTS.neutral,
+    bandit:   (settings.colBandit)   || IFF_COLOR_DEFAULTS.bandit,
+    hostile:  (settings.colHostile)  || IFF_COLOR_DEFAULTS.hostile,
   };
   return col[state] || '#888888';
 }

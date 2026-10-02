@@ -95,7 +95,7 @@ function _dispatchAirspace(airspace, action) {
     // controller scheduling one in the moment is the common case; a real
     // date picker is worth having once anyone books ahead. "Now" is mission
     // time (docs/adr/0079): the window is gated and shown against it.
-    const now = typeof missionNow === 'function' ? missionNow() : Date.now();
+    const now = missionNow();
     op.fromUtc = now;
     op.toUtc = now + 2 * 60 * 60 * 1000;
   }
@@ -215,8 +215,8 @@ export function initAirspacePanel() {
 // seq, so it gets its own delta rather than a section of
 // efsp-board-delta.
 registerEfspMessage('efsp-airspace-delta', (msg) => {
-  if (typeof applyEfspAirspaceDelta === 'function') applyEfspAirspaceDelta(msg);
-  if (typeof renderAirspacePanel === 'function') renderAirspacePanel();
+  applyEfspAirspaceDelta(msg);
+  renderAirspacePanel();
 });
 
 registerEfspMessage('efsp-airspace-ack', (msg) => {
@@ -225,17 +225,13 @@ registerEfspMessage('efsp-airspace-ack', (msg) => {
     // An airspace op targets no Strip, so it is named by the block it
     // was about rather than by a callsign (F-103's attribution rule,
     // applied to the thing that actually was refused).
-    if (typeof _showMutationError === 'function') {
-      _showMutationError(msg.reason || 'Rejected', msg.detail,
-        msg.airspace ? { subject: (msg.airspace.definition && msg.airspace.definition.name) || msg.airspace.airspaceId } : null);
-    }
+    _showMutationError(msg.reason || 'Rejected', msg.detail,
+      msg.airspace ? { subject: (msg.airspace.definition && msg.airspace.definition.name) || msg.airspace.airspaceId } : null);
   } else if (msg.warning === 'AIRSPACE_STILL_OCCUPIED') {
     // Released with flights still in it. Allowed — the controller may
     // know they are clear — but they are on the block's frequency and
     // the panel now treats them as being in airspace nobody holds.
-    if (typeof _showMutationWarning === 'function') {
-      _showMutationWarning(`Released with ${msg.occupied} flight${msg.occupied === 1 ? '' : 's'} still in the block`);
-    }
+    _showMutationWarning(`Released with ${msg.occupied} flight${msg.occupied === 1 ? '' : 's'} still in the block`);
   }
-  if (typeof renderAirspacePanel === 'function') renderAirspacePanel();
+  renderAirspacePanel();
 });

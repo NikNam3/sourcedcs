@@ -189,7 +189,7 @@ export function _tofiProposerOf(strip, tofi) {
  */
 export function _tofiExitPrecondition(strip, tofi) {
   if (!tofi || tofi.direction !== 'EXIT' || tofi.state !== 'INITIATED') return null;
-  const flightData = typeof getEfspFlightData === 'function' ? getEfspFlightData(strip.flightDataId) : null;
+  const flightData = getEfspFlightData(strip.flightDataId);
   const regime = (flightData && flightData.tofi && flightData.tofi.separationRegime) || null;
   if (regime === 'ATC') return null;
   const shown = regime || 'unset';

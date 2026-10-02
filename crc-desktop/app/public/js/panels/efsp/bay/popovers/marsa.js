@@ -37,7 +37,7 @@ export function _openMarsaPopover(strip, anchorEl) {
   popover.className = 'efsp-coordinate-popover efsp-marsa-popover';
   popover.addEventListener('pointerdown', (e) => e.stopPropagation());
 
-  const relation = typeof marsaForStrip === 'function' ? marsaForStrip(strip) : null;
+  const relation = marsaForStrip(strip);
   const active = relation && relation.state === 'ACTIVE' ? relation : null;
 
   if (relation) {
@@ -48,13 +48,13 @@ export function _openMarsaPopover(strip, anchorEl) {
     heading.textContent = relation.state === 'VOIDED'
       ? `MARSA voided — declared by ${relation.declaringCallsign}`
       : `MARSA — declared by ${relation.declaringCallsign}`;
-    heading.title = typeof MARSA_EXPANSION === 'string' ? MARSA_EXPANSION : '';
+    heading.title = MARSA_EXPANSION;
     popover.appendChild(heading);
 
     for (const flightDataId of relation.participants) {
       if (flightDataId === strip.flightDataId) continue;
       const peer = getAllEfspStrips().find(s => s.flightDataId === flightDataId && s.state !== 'DROPPED');
-      const flightData = typeof getEfspFlightData === 'function' ? getEfspFlightData(flightDataId) : null;
+      const flightData = getEfspFlightData(flightDataId);
       const label = (flightData && flightData.identity && flightData.identity.callsign) || flightDataId;
       const row = document.createElement('button');
       row.className = 'efsp-marsa-participant-btn';
@@ -72,7 +72,7 @@ export function _openMarsaPopover(strip, anchorEl) {
     }
   }
 
-  for (const action of (typeof marsaActionsFor === 'function' ? marsaActionsFor(strip) : [])) {
+  for (const action of marsaActionsFor(strip)) {
     if (action.kind === 'DeclareMarsa') {
       popover.appendChild(_buildMarsaDeclareForm(strip));
       continue;
@@ -114,7 +114,7 @@ function _marsaCandidates(strip) {
     if (s.state === 'DROPPED' || s.flightDataId === strip.flightDataId) return false;
     // A flight already under MARSA cannot be in a second relation — crc-sync
     // refuses it, and offering it here would be a control that always fails.
-    return !(typeof activeMarsaForFlightData === 'function' && activeMarsaForFlightData(s.flightDataId));
+    return !activeMarsaForFlightData(s.flightDataId);
   });
 }
 
@@ -122,7 +122,7 @@ function _marsaCandidateSelect(strip) {
   const select = document.createElement('select');
   select.className = 'efsp-coordinate-primitive-select';
   for (const s of _marsaCandidates(strip)) {
-    const flightData = typeof getEfspFlightData === 'function' ? getEfspFlightData(s.flightDataId) : null;
+    const flightData = getEfspFlightData(s.flightDataId);
     const option = document.createElement('option');
     option.value = s.flightDataId;
     option.textContent = (flightData && flightData.identity && flightData.identity.callsign) || s.flightDataId;

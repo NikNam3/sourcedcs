@@ -25,6 +25,9 @@ let _aprtRwyHeading = null;  // magnetic, from the runway number
 export let _aprtRwyTrueDeg = null;  // the same, in true, from crc-sync
 let _aprtRwyReq = 0;
 
+/** Test seam: the selected airfield and its runway's true bearing, as a click and crc-sync's answer set them. */
+export function _setAprtRunwayForTest(apt, trueDeg) { _aprtSelectedApt = apt; _aprtRwyTrueDeg = trueDeg; }
+
 export function _updateAprtRwyHeading() {
   const raw = ((document.getElementById('aprt-atis-rwy') || {}).value || '').toUpperCase().trim();
   const m = raw.match(/^(\d{1,2})([LRC]?)$/);
@@ -36,10 +39,10 @@ export function _updateAprtRwyHeading() {
     requestTrueFromMagnetic(_aprtRwyHeading, apt.lat, apt.lon).then((t) => {
       if (req !== _aprtRwyReq) return; // a newer entry replaced it
       _aprtRwyTrueDeg = t;
-      if (typeof updateMap === 'function') updateMap();
+      updateMap();
     });
   }
-  if (typeof updateMap === 'function') updateMap();
+  updateMap();
 }
 
 // Per-app-session id so crc-sync can tell "my own next 5s loop tick" apart

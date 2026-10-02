@@ -22,7 +22,7 @@ function _fragMissionLine(callsign) {
   if (!origin) return _showDotCommandError('only TAC_C2 can frag a mission line');
 
   const candidate = _missionBindCandidates().find((s) => {
-    const flightData = typeof getEfspFlightData === 'function' ? getEfspFlightData(s.flightDataId) : null;
+    const flightData = getEfspFlightData(s.flightDataId);
     return flightData && flightData.identity && String(flightData.identity.callsign || '').toUpperCase() === wanted;
   });
   if (!candidate) {
@@ -32,7 +32,7 @@ function _fragMissionLine(callsign) {
     // The refusal is right (one mission line per flight, which crc-sync
     // enforces); only the wording was wrong.
     const flightDataIds = new Set(liveStripsForCallsign(wanted).map(s => s.flightDataId));
-    const alreadyFragged = flightDataIds.size > 0 && (typeof getAllEfspStrips === 'function' ? getAllEfspStrips() : [])
+    const alreadyFragged = flightDataIds.size > 0 && getAllEfspStrips()
       .some(s => s.stripType === 'MISSION' && s.state !== 'DROPPED' && flightDataIds.has(s.flightDataId));
     if (alreadyFragged) return _showDotCommandError(`${wanted} already has a mission line — a flight gets one`);
     return _showDotCommandError(`no live flight ${wanted} available to frag against`);
@@ -99,7 +99,7 @@ export function _dispatchDotCommand(parsed) {
     // affordance; this is the keyboard path §7.1 rule 4 asks for at the
     // positions that do the data entry, and §7.1 rule 5 is explicit that the
     // dot-command surface is "a primary feature, not a power-user extra".
-    const record = typeof getEfspCorrelationForStrip === 'function' ? getEfspCorrelationForStrip(strip) : null;
+    const record = getEfspCorrelationForStrip(strip);
     const baseRev = record ? record.rev : 0;
     if (parsed.verb === 'unbind') {
       sendEfspCorrelationMutation(actingPositionId, strip.flightDataId, baseRev, { kind: 'UnbindTrack' });
@@ -134,7 +134,7 @@ const MARSA_VERBS = {
 };
 
 function _dispatchMarsaDotCommand(parsed, strip, actingPositionId) {
-  const relation = typeof marsaForStrip === 'function' ? marsaForStrip(strip) : null;
+  const relation = marsaForStrip(strip);
   const active = relation && relation.state === 'ACTIVE' ? relation : null;
 
   if (parsed.verb === 'marsa') {
@@ -190,13 +190,13 @@ function _dispatchMarsaDotCommand(parsed, strip, actingPositionId) {
 }
 
 function _marsaCallsignOf(strip) {
-  const flightData = typeof getEfspFlightData === 'function' ? getEfspFlightData(strip.flightDataId) : null;
+  const flightData = getEfspFlightData(strip.flightDataId);
   return (flightData && flightData.identity && flightData.identity.callsign) || '';
 }
 
 /** The live Strip whose flight answers to this callsign — how a controller names a flight out loud. */
 function _marsaStripByCallsign(callsign) {
-  const matches = typeof liveStripsForCallsign === 'function' ? liveStripsForCallsign(callsign) : [];
+  const matches = liveStripsForCallsign(callsign);
   return matches[0] || null;
 }
 
@@ -244,9 +244,7 @@ function _fileStereoByName(rawName, rawCallsign) {
   // standing as .bind's "needs a track id" precheck: catch the typo where
   // the controller is looking instead of making them wait for a rejection.
   const known = _stereoRoutes.find(r =>
-    typeof normalizeStereoNameClient === 'function'
-      ? normalizeStereoNameClient(r.name) === normalizeStereoNameClient(name)
-      : r.name === name);
+    normalizeStereoNameClient(r.name) === normalizeStereoNameClient(name));
   if (!known) {
     _showDotCommandError(`${name} is not a configured stereo route`);
     return;

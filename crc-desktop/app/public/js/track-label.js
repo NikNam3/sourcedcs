@@ -21,7 +21,7 @@ import { aircraftTypes, settings } from './app.js';
 const EMERGENCY_TAG = { HIJACK: 'HIJ', RADIO: 'RDF', GENERAL: 'EMR' };
 
 function _settings() {
-  return (typeof settings !== 'undefined' && settings) || {};
+  return settings || {};
 }
 
 /** Emergency colours, from the user's settings. */
@@ -113,7 +113,7 @@ export function assignedBlockText(block) {
 /** The type the contact is known as (its flight plan's, or the datalink's), with its display label. */
 export function typeText(t) {
   if (!t || !t.type) return '';
-  const spec = typeof aircraftTypes !== 'undefined' && aircraftTypes && aircraftTypes[t.type];
+  const spec = aircraftTypes && aircraftTypes[t.type];
   return (spec && spec.label) || t.type;
 }
 

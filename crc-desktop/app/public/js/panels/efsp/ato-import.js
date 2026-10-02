@@ -42,7 +42,7 @@ function _atoEl(tag, cls, text) {
   return el;
 }
 
-function _atoSignedOn() { return typeof getActingPositions === 'function' && getActingPositions().includes(ATO_IMPORT_POSITION); }
+function _atoSignedOn() { return getActingPositions().includes(ATO_IMPORT_POSITION); }
 
 function _atoZ(ms) {
   if (ms == null || !Number.isFinite(Number(ms))) return '—';
@@ -138,7 +138,7 @@ export function onAtoPreviewResult(msg) {
   _atoPreviewRequestId = null;
   if (!msg.ok) {
     _atoMessage = '';
-    if (typeof _showMutationError === 'function') _showMutationError(msg.reason || 'Rejected', msg.detail, { subject: 'ATO import' });
+    _showMutationError(msg.reason || 'Rejected', msg.detail, { subject: 'ATO import' });
     _renderAtoDialog();
     return;
   }
@@ -200,7 +200,7 @@ export function onAtoAck(msg) {
   _atoPendingImportId = null;
   if (!msg.ok) {
     _atoMessage = '';
-    if (typeof _showMutationError === 'function') _showMutationError(msg.reason || 'Rejected', msg.detail, { subject: 'ATO import' });
+    _showMutationError(msg.reason || 'Rejected', msg.detail, { subject: 'ATO import' });
     if (msg.reason === 'STALE_REV') _atoPreview = null;
     _renderAtoDialog();
     return;

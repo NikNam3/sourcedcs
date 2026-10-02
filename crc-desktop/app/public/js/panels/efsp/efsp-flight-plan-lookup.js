@@ -24,7 +24,7 @@ export const FLIGHT_PLAN_LOOKUP_CLIENT_TIMEOUT_MS = 4000;
 export async function lookupFlightPlanClient(callsign, opts = {}) {
   const fetchImpl = opts.fetchImpl || fetch;
   const timeoutMs = opts.timeoutMs ?? FLIGHT_PLAN_LOOKUP_CLIENT_TIMEOUT_MS;
-  const authHeaders = opts.authHeaders || (typeof _syncAuthHeaders === 'function' ? _syncAuthHeaders : () => ({}));
+  const authHeaders = opts.authHeaders || _syncAuthHeaders;
 
   if (!callsign || typeof callsign !== 'string') return { found: false };
 
@@ -63,7 +63,7 @@ export const FLIGHT_PLAN_LIST_CLIENT_TIMEOUT_MS = 4000;
 export async function listFiledFlightPlansClient(opts = {}) {
   const fetchImpl = opts.fetchImpl || fetch;
   const timeoutMs = opts.timeoutMs ?? FLIGHT_PLAN_LIST_CLIENT_TIMEOUT_MS;
-  const authHeaders = opts.authHeaders || (typeof _syncAuthHeaders === 'function' ? _syncAuthHeaders : () => ({}));
+  const authHeaders = opts.authHeaders || _syncAuthHeaders;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);

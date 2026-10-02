@@ -26,10 +26,10 @@ import { getSelectedEfspStripId } from './bay-view.js';
 
 let _arHighlightStripIds = new Set();
 
-function _atoFlightData(flightDataId) { return typeof getEfspFlightData === 'function' ? getEfspFlightData(flightDataId) : null; }
+function _atoFlightData(flightDataId) { return getEfspFlightData(flightDataId); }
 
 function _liveStripIdsOfFlightData(flightDataId) {
-  const all = typeof getAllEfspStrips === 'function' ? getAllEfspStrips() : [];
+  const all = getAllEfspStrips();
   return all.filter(s => s.flightDataId === flightDataId && s.state !== 'DROPPED').map(s => s.stripId);
 }
 
@@ -98,7 +98,7 @@ export function getArHighlightStripIds() { return [..._arHighlightStripIds]; }
  * @returns {boolean} whether the set changed
  */
 export function highlightArParticipants(stripId) {
-  const strip = stripId && typeof getEfspStrip === 'function' ? getEfspStrip(stripId) : null;
+  const strip = stripId ? getEfspStrip(stripId) : null;
   const join = strip ? arJoinFor(strip) : null;
   const next = new Set(join ? join.peers.flatMap(p => p.stripIds) : []);
   if (next.size === _arHighlightStripIds.size && [...next].every(id => _arHighlightStripIds.has(id))) return false;
@@ -119,7 +119,6 @@ export function arSignatureFor(strip) {
 
 /** Re-resolves the highlight against the current records — after a snapshot. */
 export function refreshArHighlight() {
-  if (typeof getSelectedEfspStripId !== 'function') return false;
   return highlightArParticipants(getSelectedEfspStripId());
 }
 

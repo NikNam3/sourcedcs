@@ -200,6 +200,6 @@ function _requestPostPopoverRender() {
   _postPopoverRenderTimer = setTimeout(() => {
     _postPopoverRenderTimer = null;
     if (_openPopovers.size > 0) return;
-    if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
+    renderAllOpenEfspBays();
   }, 0);
 }

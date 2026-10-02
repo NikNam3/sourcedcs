@@ -18,7 +18,7 @@ import { renderAllOpenEfspBays, selectEfspStripById } from '../bay-view.js';
 let _arrivalsLineEl = null;
 
 export function _renderArrivalsLine() {
-  if (!_bayTabsEl || typeof efspArrivalLog !== 'function') return;
+  if (!_bayTabsEl) return;
   let line = _arrivalsLineEl;
   if (!line) {
     line = document.createElement('div');
@@ -46,7 +46,7 @@ export function _renderArrivalsLine() {
       _setActivePositionTab(e.positionId);
       _setActiveBayId(e.bayId);
       _renderPositionTabs();
-      if (typeof selectEfspStripById === 'function') selectEfspStripById(e.stripId);
+      selectEfspStripById(e.stripId);
     });
     line.appendChild(row);
   }
@@ -56,24 +56,22 @@ let _arrivalExpiryTimer = null;
 
 /** Redraw when the next seen arrival's amber edge runs out, so it fades on time on a quiet Board. */
 function _scheduleArrivalExpiry() {
-  if (typeof nextEfspArrivalExpiry !== 'function') return;
   const next = nextEfspArrivalExpiry(Date.now());
   if (_arrivalExpiryTimer) { clearTimeout(_arrivalExpiryTimer); _arrivalExpiryTimer = null; }
   if (next === null) return;
   _arrivalExpiryTimer = setTimeout(() => {
     _arrivalExpiryTimer = null;
-    if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
+    renderAllOpenEfspBays();
     _scheduleArrivalExpiry();
   }, Math.max(50, next - Date.now() + 20));
 }
 
 /** app.js, after an efsp-board-delta is applied — see efsp-arrivals.js for the rule. */
 export function noteEfspBoardArrivals(msg, placementBefore) {
-  if (typeof noteEfspArrivals !== 'function') return;
-  const signedOn = typeof getActingPositions === 'function' ? getActingPositions() : [];
+  const signedOn = getActingPositions();
   const mine = new Set();
   for (const positionId of signedOn) {
-    const p = typeof getEfspPosition === 'function' ? getEfspPosition(positionId) : null;
+    const p = getEfspPosition(positionId);
     if (p && p.primary && p.primary.controllerId) mine.add(p.primary.controllerId);
   }
   noteEfspArrivals(placementBefore, (msg.strips && msg.strips.updated) || [], {
@@ -83,7 +81,7 @@ export function noteEfspBoardArrivals(msg, placementBefore) {
       return (flightData && flightData.identity && flightData.identity.callsign) || strip.stripId;
     },
   });
-  if (typeof forgetEfspArrivals === 'function') forgetEfspArrivals(msg.strips && msg.strips.gone);
+  forgetEfspArrivals(msg.strips && msg.strips.gone);
 }
 
 /** strip-view.js, once a new Strip's flash has played: start the fade-out clock. */

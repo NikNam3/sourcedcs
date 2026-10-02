@@ -23,7 +23,7 @@ import { _resolveActingPositionId } from '../bay-view.js';
  * was refused, and marking it would be a false accusation.
  */
 export function _refusalForStrip(strip) {
-  const refusal = typeof getCurrentEfspRefusal === 'function' ? getCurrentEfspRefusal() : null;
+  const refusal = getCurrentEfspRefusal();
   if (!refusal || !refusal.stripId || !strip) return null;
   return refusal.stripId === strip.stripId ? refusal : null;
 }
@@ -99,13 +99,13 @@ export function _buildBlockCell(strip, blockId) {
   // banner to be matched against a Strip by eye. Marked whether or not there
   // is text to put back: a refused confirmVacated carries no value, and which
   // cell was refused is a separate question from what was in it.
-  const redirect = typeof editRedirectFor === 'function' ? editRedirectFor(blockId, strip.stripType, flightData) : null; // UI-A U4
+  const redirect = editRedirectFor(blockId, strip.stripType, flightData); // UI-A U4
   const refusal = _refusalForStrip(strip);
   if (refusal && refusal.blockId === (redirect ? redirect.blockId : blockId)) {
     span.classList.add('efsp-block-refused');
     span.title = refusal.message;
   }
-  const hint = typeof blockValueHintFor === 'function' ? blockValueHintFor(blockId, flightData, strip) : null; if (hint) { if (hint.estimated) span.classList.add('efsp-block-estimated'); if (hint.behindPlan) span.classList.add('efsp-block-behind-plan'); if (hint.title && !span.title) span.title = hint.title; } // docs/adr/0073: §10.5's source on hover, an estimate in italics
+  const hint = blockValueHintFor(blockId, flightData, strip); if (hint) { if (hint.estimated) span.classList.add('efsp-block-estimated'); if (hint.behindPlan) span.classList.add('efsp-block-behind-plan'); if (hint.title && !span.title) span.title = hint.title; } // docs/adr/0073: §10.5's source on hover, an estimate in italics
 
   // WP4A gap-closure (docs/adr/0022) — restricted-enum Blocks (airspace
   // ownership, track-degradation flag) get a <select>, never the generic
@@ -234,7 +234,7 @@ function _buildEnumSelectCell(strip, blockId, span, options) {
     const select = document.createElement('select');
     select.className = 'efsp-block-input efsp-block-enum-select';
     const currentValue = span.textContent || '';
-    const clearable = typeof isEnumBlockClearable === 'function' && isEnumBlockClearable(blockId);
+    const clearable = isEnumBlockClearable(blockId);
     // "—" was offered on all six enum Blocks and did nothing on any of them —
     // the change handler returned early on an empty value, so a Block set by
     // mistake could never be put back and the picker just closed (F-206,

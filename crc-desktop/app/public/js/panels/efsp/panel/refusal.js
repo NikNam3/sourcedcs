@@ -64,7 +64,7 @@ function _refusalSentence(reason, detail) {
 
 /** The callsign on a flight data — what a controller reads off the Strip, and so how a refusal has to name it. */
 export function _callsignOfFlightData(flightDataId) {
-  const flightData = flightDataId && typeof getEfspFlightData === 'function' ? getEfspFlightData(flightDataId) : null;
+  const flightData = flightDataId ? getEfspFlightData(flightDataId) : null;
   return (flightData && flightData.identity && flightData.identity.callsign) || '';
 }
 
@@ -88,7 +88,7 @@ function _refusalSubject(context) {
   const pending = context.pending || null;
   const op = (pending && pending.op) || context.op || null;
   const stripId = (pending && pending.stripId) || context.stripId || null;
-  const strip = stripId && typeof getEfspStrip === 'function' ? getEfspStrip(stripId) : null;
+  const strip = stripId ? getEfspStrip(stripId) : null;
   const callsign = (strip && _callsignOfFlightData(strip.flightDataId))
     || _callsignOfFlightData(context.flightDataId)
     || (op && op.flightData && op.flightData.callsign)   // a refused CreateStrip has no Strip yet — the callsign is in the op
@@ -110,7 +110,7 @@ function _refusalSubject(context) {
     blockId = op.blockId || null;
     if (op.value != null && op.value !== '') {
       value = String(op.value);
-      blockName = (typeof blockLabelFor === 'function' && blockLabelFor(op.blockId, (strip && strip.stripType) || 'DEPARTURE'))
+      blockName = (blockLabelFor(op.blockId, (strip && strip.stripType) || 'DEPARTURE'))
         || op.blockId || '';
     }
   }
@@ -169,7 +169,7 @@ export function dismissEfspRefusal() {
     _mutationErrorEl.dataset.reason = '';
     delete _mutationErrorEl.dataset.stripId;
   }
-  if (had && had.stripId && typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
+  if (had && had.stripId) renderAllOpenEfspBays();
 }
 
 /**

@@ -133,7 +133,6 @@ export const CHIP_HISTORY_LIMIT = 1;
  * written once or never, and it must not sprout an empty container.
  */
 export function _appendAnnotationHistory(container, strip, blockId, limit) {
-  if (typeof supersededAnnotationEntries !== 'function') return;
   const prior = supersededAnnotationEntries(strip, blockId);
   if (prior.length === 0) return;
 
@@ -244,14 +243,13 @@ function _expandedBlockIdsFor(strip, map) {
   const onStrip = new Set(compactBlocksFor(strip.stripType, strip.ownerPositionId, getEfspFlightData(strip.flightDataId)));
   return Object.keys(map).filter((blockId) => {
     if (!onStrip.has(blockId)) return true;
-    return typeof supersededAnnotationEntries === 'function'
-      && supersededAnnotationEntries(strip, blockId).length > CHIP_HISTORY_LIMIT;
+    return supersededAnnotationEntries(strip, blockId).length > CHIP_HISTORY_LIMIT;
   });
 }
 
 export function _appendExpandedView(el, strip) {
   if (_expandedStripId !== strip.stripId) return;
-  const map = (typeof BLOCK_MAPS === 'object' && BLOCK_MAPS[strip.stripType]) || null;
+  const map = BLOCK_MAPS[strip.stripType] || null;
   if (!map) return;
 
   const blocks = _expandedBlockIdsFor(strip, map);
@@ -259,7 +257,7 @@ export function _appendExpandedView(el, strip) {
   // the expanded view, for a flight with MTR data. Not a reason line and not
   // on the collapsed face — an MTR flight with working radios is not wrong
   // (docs/adr/0058).
-  const advisory = typeof mtrLostCommsAdvisory === 'function' ? mtrLostCommsAdvisory(getEfspFlightData(strip.flightDataId)) : null;
+  const advisory = mtrLostCommsAdvisory(getEfspFlightData(strip.flightDataId));
   if (blocks.length === 0 && !advisory) return;
 
   const panel = document.createElement('div');
@@ -279,7 +277,7 @@ export function _appendExpandedView(el, strip) {
     const label = document.createElement('span');
     label.className = 'efsp-expanded-label';
     label.textContent = blockLabelFor(blockId, strip.stripType) || blockId;
-    const labelTitle = typeof blockTitleFor === 'function' ? blockTitleFor(blockId, getEfspFlightData(strip.flightDataId), strip) : null; if (labelTitle) label.title = labelTitle; // docs/adr/0073
+    const labelTitle = blockTitleFor(blockId, getEfspFlightData(strip.flightDataId), strip); if (labelTitle) label.title = labelTitle; // docs/adr/0073
     row.appendChild(label);
 
     const value = document.createElement('span');
@@ -311,7 +309,7 @@ export function _appendExpandedView(el, strip) {
     renderAllOpenEfspBays();
   });
   collapse.addEventListener('pointerdown', (e) => e.stopPropagation());
-  if (typeof appendAtoExpandedRows === 'function') appendAtoExpandedRows(panel, strip); // docs/adr/0071 — read-only
+  appendAtoExpandedRows(panel, strip); // docs/adr/0071 — read-only
   panel.appendChild(collapse);
 
   el.appendChild(panel);
@@ -346,7 +344,7 @@ export function _buildStripEl(strip) {
   // reusing efsp-strip-attention's red (reserved, guide §7.7 rule 4) or
   // the mutation-error red — a due-but-not-yet-catastrophic obligation
   // reads differently from "this Strip needs your attention right now."
-  const obligation = typeof getEfspObligation === 'function' ? getEfspObligation(strip.stripId) : null;
+  const obligation = getEfspObligation(strip.stripId);
   if (obligation) {
     el.classList.add('efsp-strip-obligation-due');
     if (obligation.severity === 'OVERDUE') el.classList.add('efsp-strip-obligation-overdue');
@@ -388,16 +386,16 @@ export function _buildStripEl(strip) {
   // toggle Attention).
   el.addEventListener('click', (e) => {
     if (e.target.closest(STRIP_CONTROL_SELECTOR)) return;
-    if (e.shiftKey) { const acting = _dispatchGesture(strip, setAttention, 'red'); if (typeof noteEfspGesture === 'function') noteEfspGesture('ATTENTION', 'shift-click', acting); return; }
+    if (e.shiftKey) { const acting = _dispatchGesture(strip, setAttention, 'red'); noteEfspGesture('ATTENTION', 'shift-click', acting); return; }
     // S-L15 (§7.3 one-input ceiling): OFFSET and HIGHLIGHT each get a one-input entry point.
     // The ⋯ menu item and the right-click swatches stay for whoever prefers them (2 inputs).
-    if (e.altKey) { e.preventDefault(); const acting = _dispatchGesture(strip, toggleOffset); if (typeof noteEfspGesture === 'function') noteEfspGesture('OFFSET', 'alt-click', acting); return; }
-    if (e.ctrlKey || e.metaKey) { e.preventDefault(); const acting = _cycleHighlight(strip); if (typeof noteEfspGesture === 'function') noteEfspGesture('HIGHLIGHT', 'ctrl-click', acting); return; }
+    if (e.altKey) { e.preventDefault(); const acting = _dispatchGesture(strip, toggleOffset); noteEfspGesture('OFFSET', 'alt-click', acting); return; }
+    if (e.ctrlKey || e.metaKey) { e.preventDefault(); const acting = _cycleHighlight(strip); noteEfspGesture('HIGHLIGHT', 'ctrl-click', acting); return; }
     _selectStrip(strip.stripId);
   });
   el.addEventListener('dblclick', (e) => {
     if (e.target.closest(STRIP_CONTROL_SELECTOR)) return;
-    const acting = _dispatchGesture(strip, toggleFlip); if (typeof noteEfspGesture === 'function') noteEfspGesture('FLIP', 'dblclick', acting);
+    const acting = _dispatchGesture(strip, toggleFlip); noteEfspGesture('FLIP', 'dblclick', acting);
   });
   el.addEventListener('contextmenu', (e) => {
     if (e.target.closest(STRIP_CONTROL_SELECTOR)) return;

@@ -58,7 +58,7 @@ function _fsEl(tag, className, text) {
 }
 
 function _fsWindText(source) {
-  const mag = typeof toMagneticDisplay === 'function' ? toMagneticDisplay(source.windFromTrue) : null;
+  const mag = toMagneticDisplay(source.windFromTrue);
   const dir = mag === null || mag === undefined ? null
     : typeof mag === 'number' ? `${String(Math.round(mag)).padStart(3, '0')}°` : String(mag);
   const kt = Number.isFinite(source.windKt) ? `${Math.round(source.windKt)} kt` : null;
@@ -204,7 +204,7 @@ function _buildPads(record) {
   };
   pad('HOT CARGO PAD', record.hotCargoPad);
   // L13 (alert/scramble) defines alertPadConstraintFor; absent until it merges.
-  const constraint = typeof alertPadConstraintFor === 'function' ? alertPadConstraintFor(record.facilityId) : null;
+  const constraint = alertPadConstraintFor(record.facilityId);
   pad('ALERT PAD', record.alertPad, constraint);
   return pads;
 }
@@ -241,9 +241,9 @@ function _fsUpdateTitle(records) {
     const signedOn = getActingPositions(record.facilityId);
     waiting += runwayStatusActionsFor(record, signedOn).filter(a => a.kind === 'AcceptRunwayRequest').length;
   }
-  const base = (typeof PANEL_TITLES === 'object' && PANEL_TITLES.runwayStatus) || 'RUNWAY STATUS';
+  const base = PANEL_TITLES.runwayStatus || 'RUNWAY STATUS';
   const title = waiting ? `${base} (${waiting})` : base;
-  const panel = typeof dock !== 'undefined' && dock && dock.api ? dock.api.getPanel('runwayStatus') : null;
+  const panel = dock && dock.api ? dock.api.getPanel('runwayStatus') : null;
   // Only on a change: setting a dockview title re-lays the tab out, and doing
   // that on every render would churn the panel under a controller's click.
   if (panel && panel.api && typeof panel.api.setTitle === 'function' && panel.title !== title) panel.api.setTitle(title);
@@ -274,18 +274,18 @@ export function initRunwayStatusPanel() {
 // WP6 §9.7 (crc-sync docs/adr/0061, crc-desktop 0068). Its own delta with its own seq —
 // Runway status is not Strips and rides no Board's sequence (0061's rule-5 deviation).
 registerEfspMessage('efsp-runway-status-delta', (msg) => {
-  if (typeof applyEfspRunwayStatusDelta === 'function') applyEfspRunwayStatusDelta(msg);
-  if (typeof renderRunwayStatusPanel === 'function') renderRunwayStatusPanel();
-  if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays(); // RWY / HOOK are derived from it
+  applyEfspRunwayStatusDelta(msg);
+  renderRunwayStatusPanel();
+  renderAllOpenEfspBays(); // RWY / HOOK are derived from it
 });
 
 registerEfspMessage('efsp-runway-status-ack', (msg) => {
-  if (!msg.ok && typeof _showMutationError === 'function') {
+  if (!msg.ok) {
     _showMutationError(msg.reason || 'Rejected', msg.detail, { subject: runwayStatusSubjectFor(msg) });
   }
-  if (msg.runwayStatus && typeof applyEfspRunwayStatusDelta === 'function') {
+  if (msg.runwayStatus) {
     applyEfspRunwayStatusDelta({ runwayStatuses: { updated: [msg.runwayStatus] } });
   }
-  if (typeof renderRunwayStatusPanel === 'function') renderRunwayStatusPanel();
-  if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
+  renderRunwayStatusPanel();
+  renderAllOpenEfspBays();
 });

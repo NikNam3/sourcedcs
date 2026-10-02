@@ -59,7 +59,7 @@ export function stereoRoutesCacheKey() {
 export async function listStereoRoutesClient(opts = {}) {
   const fetchImpl = opts.fetchImpl || fetch;
   const timeoutMs = opts.timeoutMs ?? STEREO_ROUTES_CLIENT_TIMEOUT_MS;
-  const authHeaders = opts.authHeaders || (typeof _syncAuthHeaders === 'function' ? _syncAuthHeaders : () => ({}));
+  const authHeaders = opts.authHeaders || _syncAuthHeaders;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -75,7 +75,7 @@ export async function listStereoRoutesClient(opts = {}) {
     const routes = data.routes.filter(r => r && r.name && r.route);
     const before = stereoRoutesCacheKey();
     _stereoRoutesCache = routes;
-    if (stereoRoutesCacheKey() !== before && typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
+    if (stereoRoutesCacheKey() !== before) renderAllOpenEfspBays();
     return routes;
   } catch (err) {
     console.warn('[efsp] stereo route list unavailable — filing by short name will just be unavailable:', err.message);

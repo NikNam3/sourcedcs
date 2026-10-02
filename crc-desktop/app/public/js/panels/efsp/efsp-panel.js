@@ -48,7 +48,7 @@ export function refreshEfspPanel() {
   _renderPositionTabs();
   _refreshCreateStripAvailability();
   _renderCorrelationRate();
-  if (typeof renderEfspScrambleLine === 'function') renderEfspScrambleLine();
+  renderEfspScrambleLine();
 }
 
 /**
@@ -63,7 +63,7 @@ export function refreshEfspPanel() {
 function _renderCorrelationRate() {
   const el = document.getElementById('efsp-correlation-rate');
   if (!el) return;
-  const stats = typeof getEfspCorrelationStats === 'function' ? getEfspCorrelationStats() : null;
+  const stats = getEfspCorrelationStats();
   if (!stats || stats.rate == null) { el.textContent = ''; el.className = ''; return; }
   const matched = Math.round(stats.rate * stats.eligible);
   el.textContent = `TRK ${Math.round(stats.rate * 100)}% (${matched}/${stats.eligible})`;
@@ -85,7 +85,7 @@ export function initEfspPanel() {
 
   _wireCreateStrip();
   _wireDotCommand();
-  if (typeof initAtoImport === 'function') initAtoImport(_efspPanelRootEl); // docs/adr/0071
+  initAtoImport(_efspPanelRootEl); // docs/adr/0071
   _loadStereoRoutes();
   _renderPositionTabs();
   startEfspStalenessCheck();

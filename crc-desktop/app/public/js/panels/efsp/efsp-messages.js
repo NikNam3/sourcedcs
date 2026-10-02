@@ -37,40 +37,38 @@ import { renderRunwayStatusPanel } from './runway-status-panel.js';
 // board-broadcast.md — the guide's <200ms remote-change budget).
 registerEfspMessage('efsp-snapshot', (msg) => {
   applyEfspSnapshot(msg);
-  if (typeof noteEfspSnapshotLanded === 'function') noteEfspSnapshotLanded();
-  if (typeof refreshEfspPanel === 'function') refreshEfspPanel();
+  noteEfspSnapshotLanded();
+  refreshEfspPanel();
   // §9.10's route table is fetched over HTTP, not carried on the
   // snapshot — but a snapshot is the one event that means crc-sync may
   // have restarted, which is also the only way the table can change.
   // See efsp-panel.js's _loadStereoRoutes for the bug this closes.
-  if (typeof reloadEfspStereoRoutes === 'function') reloadEfspStereoRoutes();
+  reloadEfspStereoRoutes();
   // MARSA relations come back with the snapshot too, so the selected
   // Strip's participant highlight has to be re-resolved before the
   // re-render below — same reason the correlation ring is, a few lines
   // down. Resolved first, rendered second: the highlight is a class each
   // Strip reads while being built.
-  if (typeof refreshMarsaHighlight === 'function') refreshMarsaHighlight();
-  if (typeof refreshArHighlight === 'function') refreshArHighlight(); // docs/adr/0071
-  if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
+  refreshMarsaHighlight();
+  refreshArHighlight(); // docs/adr/0071
+  renderAllOpenEfspBays();
   // A reconnect brings correlations back with the rest of the snapshot,
   // so a Strip that was selected before the drop needs its ring redrawn
   // — otherwise it stays absent until the next reconcile delta happens
   // to touch that flight, which could be a while on a quiet board.
-  if (typeof refreshCorrelatedHighlight === 'function') refreshCorrelatedHighlight();
+  refreshCorrelatedHighlight();
   updateMap();
-  if (typeof renderAirspacePanel === 'function') renderAirspacePanel();
-  if (typeof renderRunwayStatusPanel === 'function') renderRunwayStatusPanel();
+  renderAirspacePanel();
+  renderRunwayStatusPanel();
   // §5.6.3 — replay every still-pending Mutation against this fresh
   // baseline. A no-op on the very first connect (nothing pending
   // yet); on a RECONNECT this is what stops a Mutation in flight at
   // the moment of disconnect from being silently lost forever (its
   // ack could never otherwise arrive on the dead connection —
   // defect D6, "the worst failure mode in the system").
-  if (typeof replayPendingEfspMutations === 'function') {
-    replayPendingEfspMutations((orphaned) => {
-      if (typeof notifyEfspOrphanedMutation === 'function') notifyEfspOrphanedMutation(orphaned);
-    });
-  }
+  replayPendingEfspMutations((orphaned) => {
+    notifyEfspOrphanedMutation(orphaned);
+  });
 });
 
 // The answer to this client's efsp-resync (docs/adr/0081, S-12): a snapshot or a
@@ -83,14 +81,14 @@ registerEfspMessage('efsp-board-delta', (msg) => {
   // Where the changed Strips sat BEFORE this delta, so the panel can
   // tell a Strip that just arrived in one of this controller's Bays
   // from one that merely changed (efsp-arrivals.js, docs/adr/0057).
-  const placementBefore = typeof captureEfspPlacement === 'function' ? captureEfspPlacement(msg, getEfspStrip) : null;
+  const placementBefore = captureEfspPlacement(msg, getEfspStrip);
   // A delta from another Board lifetime asks for a resync (answered with a snapshot).
-  if (typeof noteEfspBoardMessageForSync === 'function') noteEfspBoardMessageForSync(msg);
+  noteEfspBoardMessageForSync(msg);
   applyEfspDelta(msg);
-  if (typeof noteEfspResyncAnswered === 'function' && !efspEpochChangeOf(msg)) noteEfspResyncAnswered(msg.facilityId || getEfspFacility());
-  if (placementBefore && typeof noteEfspBoardArrivals === 'function') noteEfspBoardArrivals(msg, placementBefore);
-  if (typeof refreshEfspPanel === 'function') refreshEfspPanel();
-  if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
+  if (!efspEpochChangeOf(msg)) noteEfspResyncAnswered(msg.facilityId || getEfspFacility());
+  if (placementBefore) noteEfspBoardArrivals(msg, placementBefore);
+  refreshEfspPanel();
+  renderAllOpenEfspBays();
 });
 
 // Sent every 500ms unconditionally (ws-hub.js's _tick) — the genuine
@@ -98,8 +96,8 @@ registerEfspMessage('efsp-board-delta', (msg) => {
 // quiet Board is not itself evidence the connection died (guide §5.6
 // rule 5). See efsp-panel.js's staleness interval.
 registerEfspMessage('efsp-heartbeat', (msg) => {
-  if (typeof noteEfspHeartbeat === 'function') noteEfspHeartbeat();
-  if (typeof noteEfspHeartbeatForSync === 'function') noteEfspHeartbeatForSync(msg);
+  noteEfspHeartbeat();
+  noteEfspHeartbeatForSync(msg);
 });
 
 registerEfspMessage('efsp-mutation-ack', (msg) => {
@@ -108,23 +106,23 @@ registerEfspMessage('efsp-mutation-ack', (msg) => {
   // so arrivals are noted from the ack too (docs/adr/0057). Whichever of
   // the two comes second sees no Bay change and adds nothing.
   const ackAsDelta = { strips: { updated: msg.strip ? [msg.strip] : [] } };
-  const ackPlacementBefore = typeof captureEfspPlacement === 'function' ? captureEfspPlacement(ackAsDelta, getEfspStrip) : null;
-  if (typeof noteEfspBoardMessageForSync === 'function') noteEfspBoardMessageForSync(msg);
+  const ackPlacementBefore = captureEfspPlacement(ackAsDelta, getEfspStrip);
+  noteEfspBoardMessageForSync(msg);
   const result = applyEfspMutationAck(msg);
-  if (ackPlacementBefore && typeof noteEfspBoardArrivals === 'function') {
+  if (ackPlacementBefore) {
     noteEfspBoardArrivals(ackAsDelta, ackPlacementBefore);
-    if (typeof refreshEfspPanel === 'function') refreshEfspPanel(); // the tab counts and arrivals line
+    refreshEfspPanel(); // the tab counts and arrivals line
   }
   if (!result.ok) console.warn('[efsp] Mutation rejected:', result.reason, msg);
-  if (typeof notifyEfspMutationAck === 'function') notifyEfspMutationAck(msg.clientMutationId, result);
-  if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
+  notifyEfspMutationAck(msg.clientMutationId, result);
+  renderAllOpenEfspBays();
 });
 
 registerEfspMessage('efsp-positions-ack', (msg) => {
   console.warn('[efsp] efsp-positions-ack received, signedOn =', msg.signedOn, 'warnings =', msg.warnings);
-  if (typeof renderPositionControls === 'function') renderPositionControls();
-  if (typeof renderPositionWarnings === 'function') renderPositionWarnings(msg.warnings);
-  if (typeof refreshEfspPanel === 'function') refreshEfspPanel();
+  renderPositionControls();
+  renderPositionWarnings(msg.warnings);
+  refreshEfspPanel();
 });
 
 // WP5 (crc-sync's docs/adr/0045) — changed correlation records, once
@@ -133,7 +131,7 @@ registerEfspMessage('efsp-positions-ack', (msg) => {
 // badge on the Strip.
 registerEfspMessage('efsp-correlation-delta', (msg) => {
   applyEfspCorrelationDelta(msg);
-  if (typeof refreshCorrelatedHighlight === 'function') refreshCorrelatedHighlight();
+  refreshCorrelatedHighlight();
   renderAllOpenEfspBays();
   refreshEfspPanel();
   updateMap();
@@ -148,7 +146,7 @@ registerEfspMessage('efsp-correlation-ack', (msg) => {
   // be named from whatever record the ack carries back.
   if (!msg.ok) _showMutationError(msg.reason || 'Rejected', msg.detail, msg.correlation ? { flightDataId: msg.correlation.flightDataId } : null);
   applyEfspCorrelationDelta({ correlations: { updated: msg.correlation ? [msg.correlation] : [] } });
-  if (typeof refreshCorrelatedHighlight === 'function') refreshCorrelatedHighlight();
+  refreshCorrelatedHighlight();
   renderAllOpenEfspBays();
   updateMap();
 });
@@ -163,8 +161,8 @@ registerEfspMessage('efsp-correlation-ack', (msg) => {
 // rather than trusting the board delta to have done one — the two
 // messages are independent and either may arrive first.
 registerEfspMessage('efsp-marsa-delta', (msg) => {
-  if (typeof applyEfspMarsaDelta === 'function') applyEfspMarsaDelta(msg);
-  if (typeof refreshMarsaHighlight === 'function') refreshMarsaHighlight();
+  applyEfspMarsaDelta(msg);
+  refreshMarsaHighlight();
   renderAllOpenEfspBays();
 });
 
@@ -173,10 +171,8 @@ registerEfspMessage('efsp-marsa-ack', (msg) => {
   // relation is named by its participants, not by one Strip — §9.2's
   // "model it as an edge, not a flag" applies to the refusal too.
   if (!msg.ok) _showMutationError(msg.reason || 'Rejected', msg.detail, msg.marsa ? { flightDataIds: msg.marsa.participants } : null);
-  if (typeof applyEfspMarsaDelta === 'function') {
-    applyEfspMarsaDelta({ marsa: { updated: msg.marsa ? [msg.marsa] : [] } });
-  }
-  if (typeof refreshMarsaHighlight === 'function') refreshMarsaHighlight();
+  applyEfspMarsaDelta({ marsa: { updated: msg.marsa ? [msg.marsa] : [] } });
+  refreshMarsaHighlight();
   renderAllOpenEfspBays();
 });
 
@@ -184,34 +180,34 @@ registerEfspMessage('efsp-marsa-ack', (msg) => {
 // and (docs/adr/0067) every forwarding obligation due right now, sent
 // when it changes and once on connect; one no longer listed is cleared.
 registerEfspMessage('efsp-alerts', (msg) => {
-  if (typeof applyEfspAlerts === 'function') applyEfspAlerts(msg);
-  if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
+  applyEfspAlerts(msg);
+  renderAllOpenEfspBays();
   updateMap();
-  if (typeof updateTrackPanel === 'function') updateTrackPanel();
+  updateTrackPanel();
 });
 
 // crc-sync's docs/adr/0093 — who is on which SFA frequency, sent whole on every change.
 registerEfspMessage('efsp-sfa-delta', (msg) => {
-  if (typeof applyEfspSfaDelta === 'function') applyEfspSfaDelta(msg);
-  if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
+  applyEfspSfaDelta(msg);
+  renderAllOpenEfspBays();
 });
 
 registerEfspMessage('efsp-sfa-ack', (msg) => {
-  if (!msg.ok && typeof _showMutationError === 'function') _showMutationError(msg.reason || 'Rejected', msg.detail, { subject: 'SFA rotation' });
-  if (msg.sfaRotation && typeof applyEfspSfaDelta === 'function') applyEfspSfaDelta({ sfaRotation: msg.sfaRotation });
-  if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
+  if (!msg.ok) _showMutationError(msg.reason || 'Rejected', msg.detail, { subject: 'SFA rotation' });
+  if (msg.sfaRotation) applyEfspSfaDelta({ sfaRotation: msg.sfaRotation });
+  renderAllOpenEfspBays();
 });
 
 // WP7 (crc-sync docs/adr/0071) — the ATO import's two answers, sender only.
 registerEfspMessage('efsp-ato-preview-result', (msg) => {
-  if (typeof onAtoPreviewResult === 'function') onAtoPreviewResult(msg);
+  onAtoPreviewResult(msg);
 });
 
 registerEfspMessage('efsp-ato-ack', (msg) => {
-  if (typeof onAtoAck === 'function') onAtoAck(msg);
+  onAtoAck(msg);
 });
 
 // WP8 (docs/adr/0065, 0072): the ack for the client measurements efsp-metrics-client.js reports.
 registerEfspMessage('efsp-metrics-report-ack', (msg) => {
-  if (typeof onEfspMetricsReportAck === 'function') onEfspMetricsReportAck(msg);
+  onEfspMetricsReportAck(msg);
 });
