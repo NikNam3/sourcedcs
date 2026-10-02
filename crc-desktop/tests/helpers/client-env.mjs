@@ -69,7 +69,7 @@ if (typeof g.WebSocket === 'undefined') {
   g.WebSocket = WebSocket;
 }
 // What the local server's generated /js/config.js defines (app/server.js); sync.js assigns them at load.
-define('CRC_SYNC_URL', 'ws://localhost:1');
+define('CRCSYNC_URL', 'ws://localhost:1');
 define('CASDOOR_CLIENT_ID', '');
 define('CASDOOR_ENDPOINT', '');
 define('MAPTILER_KEY', '');

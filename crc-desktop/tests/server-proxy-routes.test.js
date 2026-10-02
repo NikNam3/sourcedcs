@@ -63,7 +63,7 @@ test('server.js proxies each route upstream with the same headers; 502 when crc-
   const upPort = upstream.address().port;
   const port = await freePort();
   const child = spawn(process.execPath, [path.join(__dirname, '../app/server.js')], {
-    env: { ...process.env, WS_PORT: String(port), CRC_SYNC_URL: `ws://127.0.0.1:${upPort}`, CRC_MAPTILER_KEY: 'testkey123' },
+    env: { ...process.env, WS_PORT: String(port), CRCSYNC_URL: `ws://127.0.0.1:${upPort}`, CRC_MAPTILER_KEY: 'testkey123' },
     stdio: ['ignore', 'pipe', 'inherit'],
   });
   t.after(() => { child.kill(); upstream.close(); });
