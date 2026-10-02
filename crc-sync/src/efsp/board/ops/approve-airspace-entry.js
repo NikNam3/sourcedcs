@@ -70,5 +70,6 @@ function _applyApproveAirspaceEntry(ctx, strip, op, by) {
 // controller is what moves"). The approving controller keeps the Strip.
 module.exports = {
   kind: 'ApproveAirspaceEntry',
+  undo: 'none', // docs/adr/0100 §1: airspace entry approval is not undoable
   apply: (ctx, strip, op, meta) => _applyApproveAirspaceEntry(ctx, strip, op, meta.by),
 };

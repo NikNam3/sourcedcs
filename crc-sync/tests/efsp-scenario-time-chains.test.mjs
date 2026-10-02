@@ -106,7 +106,7 @@ test('SCENARIO T3 the takeoff is stamped by the state change, wins over the off-
   strip = efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId);
 
   // Undo within its window: the takeoff did not happen.
-  const undone = act(efsp, c.LC, 'LC', strip, { kind: 'Undo' });
+  const undone = act(efsp, c.LC, 'LC', strip, { kind: 'Undo', actionId: ack.undoable.actionId });
   assert.equal(undone.ok, true, JSON.stringify(undone));
   assert.equal(flightData().timeInputs.takeoffStampedUtc, null);
   assert.equal(resolveTimeChain('takeoff', flightData()).source, 'EST_OFF_BLOCK');

@@ -20,7 +20,11 @@ class BoardState {
     // The seq, the `_log` ring, the epoch and the touched set: the one sync mechanism (sync/sync-log.js, S3-1).
     this._sync = new SyncLog({ ring: true, touched: true, epoch: true });
     this._cidSeq = 0;
+    this._onTouch = null; // the undo history's hook (docs/adr/0100), set by the facade
   }
+
+  /** `fn(stripId, {placementOnly})` on every touch, before the ring entry (the undo history attributes it). */
+  setTouchHook(fn) { this._onTouch = fn; }
 
   /** The Strip map itself (stripId -> Strip). */
   get strips() { return this._strips; }
@@ -40,8 +44,25 @@ class BoardState {
       .sort((a, b) => (a.orderKey < b.orderKey ? -1 : a.orderKey > b.orderKey ? 1 : (a.stripId < b.stripId ? -1 : 1)));
   }
 
-  /** The kernel's touch: every touch on this Board comes here. */
-  recordTouch(stripId) { this._sync.touch(stripId); }
+  /**
+   * The kernel's touch: every touch on this Board comes here. `placementOnly` marks a rebalance re-keying a
+   * neighbour, which the undo history never counts as a change (docs/adr/0100 §4).
+   */
+  recordTouch(stripId, { placementOnly = false } = {}) {
+    if (this._onTouch) this._onTouch(stripId, { placementOnly });
+    this._sync.touch(stripId);
+  }
+
+  /**
+   * A Strip an undo removes (a record its action created, docs/adr/0100 §3): it leaves the map and the ring gets a
+   * `gone`, like an archive. Returns whether it was here.
+   */
+  remove(stripId) {
+    if (!this._strips.has(stripId)) return false;
+    this._strips.delete(stripId);
+    this._sync.gone(stripId);
+    return true;
+  }
 
   /**
    * One Strip changed by `by`: rev+1, updatedAt from the clock, updatedBy, touch.

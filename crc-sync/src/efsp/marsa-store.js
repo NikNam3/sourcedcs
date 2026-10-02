@@ -623,6 +623,58 @@ class MarsaStore {
     return changed;
   }
 
+  // ── undo compensator (docs/adr/0100 §3) ─────────────────────────────────
+
+  /** The relations an undo scope names, as they are now: a relationId, or every ACTIVE relation of a flight. */
+  relationImages(ref) {
+    if (typeof ref === 'string') { const r = this.getRelation(ref); return r ? [r] : []; }
+    if (ref && ref.flightDataId) return this.allFor(ref.flightDataId).filter(r => r.state === 'ACTIVE');
+    return [];
+  }
+
+  /**
+   * Whether `image` (a relation before the undone action) can be put back: nothing to do when it is unchanged, a
+   * `ReopenRelation` when this flight's retirement removed a participant or ended it (`PARTICIPANT_RETIRED`), and
+   * a block for anything else (someone ended or voided it since).
+   * @returns {{ok:true, action:'NONE'|'REOPEN'}|{ok:false, reason:'UNDO_BLOCKED', detail:string}}
+   */
+  reopenCheck(image) {
+    const now = this._relations.get(image.marsaId);
+    if (!now) return { ok: false, reason: 'UNDO_BLOCKED', detail: `MARSA relation ${image.marsaId} is gone` };
+    const same = now.state === image.state && now.participants.length === image.participants.length;
+    if (same) return { ok: true, action: 'NONE' };
+    const subset = now.participants.every(id => image.participants.includes(id));
+    const retiredOnly = now.state === 'ACTIVE' || (now.state === 'ENDED' && now.endedBy === 'PARTICIPANT_RETIRED');
+    if (image.state === 'ACTIVE' && subset && retiredOnly) return { ok: true, action: 'REOPEN' };
+    return { ok: false, reason: 'UNDO_BLOCKED', detail: `MARSA relation ${image.marsaId} has changed since (${now.state})` };
+  }
+
+  /**
+   * ReopenRelation: the relation goes back to its before-image's state and participants, the regime MARSA again
+   * on every participant, audited with `causedBy` = the Undo's id. Returns the reopened relation, or null.
+   */
+  reopenRelation(image, { causedBy = null, by = null } = {}) {
+    const check = this.reopenCheck(image);
+    if (!check.ok || check.action === 'NONE') return null;
+    this._regimeWrites = [];
+    const relation = this._relations.get(image.marsaId);
+    const before = deepClone(relation);
+    relation.state = image.state;
+    relation.participants = [...image.participants];
+    relation.endedBy = image.endedBy === undefined ? null : image.endedBy;
+    relation.endedAt = image.endedAt === undefined ? null : image.endedAt;
+    this._touch(relation, by, { reason: 'REOPENED', detail: 'undo of the action that ended it (docs/adr/0100)' });
+    this._applyRegime(relation.participants, 'MARSA', by);
+    if (this._mutationLog) {
+      this._mutationLog.record({
+        clientMutationId: null, causedBy, op: 'ReopenRelation', marsaId: relation.marsaId, facilityId: null,
+        flightDataIds: [...relation.participants], actingPositionId: null, actorId: by || null, at: this._clock.now(),
+        ok: true, before, after: deepClone(relation),
+      });
+    }
+    return deepClone(relation);
+  }
+
   /** Forgets relations whose participants are all gone — flight data lifecycle governs relation lifecycle, with no separate retention policy (correlation-store.js's evictMissingFlightDataList, same contract). */
   evictMissingFlightDataList() {
     let dropped = 0;

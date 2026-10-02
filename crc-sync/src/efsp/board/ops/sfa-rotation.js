@@ -1,5 +1,7 @@
 'use strict';
 
+const { stripScope, retireScope, union, callsignOf } = require('../../undo/scopes');
+
 /**
  * The SFA_ROTATION transfer (guide §4.7, docs/adr/0075, 0093): an ARRIVAL Strip
  * at INBOUND with AP or SFA becomes a FINAL Strip at ON_FINAL with PAR. The
@@ -51,7 +53,6 @@ function _applySfaRotation(ctx, strip, by, actingPositionId) {
   strip.updatedAt = now;
   strip.updatedBy = by || null;
   ctx.touch(strip.stripId);
-  ctx.nlaHistory.delete(strip.stripId);
   return { ok: true, strip, sfaTransfer: { kind: 'SFA_ROTATION', trigger: fx.trigger } };
 }
 
@@ -61,6 +62,11 @@ function _applySfaRotation(ctx, strip, by, actingPositionId) {
 // controller rotates, the frequency does not. Same shape as a carrier handoff.
 module.exports = {
   kind: 'SfaRotation',
+  // docs/adr/0100 (H95): the rotation onto PAR; nothing beyond the Strip is written.
+  undo: {
+    label: (op, strip, ctx) => `Rotate ${callsignOf(ctx, strip)} → ${ctx.rules.sfaRotationReceiver() || 'PAR'}`,
+    scope: (ctx, strip) => stripScope(ctx, strip),
+  },
   authorize: (ctx, actingPositionId) => {
     if (!(ctx.rules.canSendSfaRotationTransfer(actingPositionId))) {
       return { ok: false, reason: 'PERMISSION_DENIED', detail: `${actingPositionId} may not rotate an aircraft onto PAR` };

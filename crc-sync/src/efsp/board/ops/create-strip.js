@@ -131,5 +131,6 @@ function _applyCreateStrip(ctx, op, actingPositionId, by) {
 
 module.exports = {
   kind: 'CreateStrip',
+  undo: 'none', // docs/adr/0100 §1: creating a Strip is not undone (drop it)
   apply: (ctx, strip, op, meta) => _applyCreateStrip(ctx, op, meta.actingPositionId, meta.by),
 };

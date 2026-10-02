@@ -1,5 +1,7 @@
 'use strict';
 
+const { stripScope, retireScope, union, callsignOf } = require('../../undo/scopes');
+
 function _applyTransferStrip(ctx, strip, op, by) {
   const bayCheck = ctx.placement.requireKnownBay(op.bayId, strip);
   if (bayCheck) return bayCheck;
@@ -77,19 +79,16 @@ function _applyTransferStrip(ctx, strip, op, by) {
   const sfaFlightData = routedBay ? null : ctx.assignSfaFrequency(strip, by);
 
   ctx.state.bump(strip, by);
-  // A pending Undo window (§3.5 rule 5) is for reverting a STATE change —
-  // once ownership has also moved, "revert the state" no longer means
-  // what it did when it was recorded (the Strip may now be under a
-  // different Position's Bay/lifecycle entirely). Drop it rather than
-  // let a stale Undo fire against a Strip that's since changed hands,
-  // regardless of whether this transfer came from a drag or an NLA-
-  // driven transfer-shaped transition (board/ops/invoke-nla.js's _applyInvokeNla).
-  ctx.nlaHistory.delete(strip.stripId);
   return { ok: true, strip, routedTo, selfCoordinated, warning, flightData: sfaFlightData ? sfaFlightData.flightData : undefined };
 }
 
 module.exports = {
   kind: 'TransferStrip',
+  // docs/adr/0100: a transfer (drag or menu) and the SFA frequency it may assign.
+  undo: {
+    label: (op, strip, ctx) => `Hand off ${callsignOf(ctx, strip)} → ${op.toPositionId}`,
+    scope: (ctx, strip) => stripScope(ctx, strip),
+  },
   auditFields: (ctx, result) => ({ tail: {
     // Distinguishes a self-coordinated boundary event from a two-party
     // one (guide §4.8.3 rule 4) — undefined for every op except a
