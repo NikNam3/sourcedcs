@@ -89,7 +89,7 @@ See [`crc-sync/README.md`](crc-sync/README.md) for architecture details.
 
 ### crc-desktop — DCS GCI/Datalink Desktop Client ("CRC")
 
-Electron desktop client that connects to `crc-sync` for the live tactical picture. Bundles a local Express server and, on Linux, an SRS Standalone radio bridge (`lxsrs_v2`) with its own first-run Python environment setup.
+Electron desktop client that connects to `crc-sync` for the live tactical picture. Bundles a local Node server (plain `http`/`https`) and, on Linux, an SRS Standalone radio bridge (`lxsrs_v2`) with its own first-run Python environment setup.
 
 **Quick start**
 

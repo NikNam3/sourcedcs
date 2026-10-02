@@ -1,5 +1,14 @@
 # infra RUNBOOK
 
+## 2026-10 — crc-sync / crc-desktop vocabulary and structure release: before the deploy
+
+Every EFSP wire name changed, so **ship the client (a crc-desktop release) and the crc-sync image together**; an old
+client against the new server (or the reverse) does not work. Decisions S-M-W7, S-M-BACKCOMPAT, S-M-DATA1.
+
+1. `infra/.env`: rename `ASACS_DOMAIN` / `ASACS_URL` to `CRCSYNC_DOMAIN` / `CRCSYNC_URL` (the old names are no longer read; `.env.example`).
+2. In the `crc-sync-state` volume (`/app/state`), delete: `efsp-board.json`, `efsp-mutations.jsonl`, every `efsp-facility-*.json`, and `alerting.json` if it has an `stca` key (the key is `conflictAlert` now). A state file is not migrated: an unknown key or an old shape stops start-up, with the file and the reason in the log (`checkPersistedShape`, `crc-sync/src/efsp/stores.js`). That includes a top-level `board`, a Board for a Facility that is not configured, a Strip in TRANSITING, and a facility file that is missing or invalid (`crc-sync/config/efsp-facility-*.json` are complete files; there is no merge with a copy in `state/`). The fix is always to correct or delete the named file; deleting gives a clean start.
+3. Then the usual `git pull --ff-only`, `docker compose pull main-website atobrief crc-sync`, `docker compose up -d` (root `CLAUDE.md`, "How the docker-image services deploy").
+
 ## 2026-08-29 — wiki scraper incident: what's blocked and why
 
 The droplet hit a load average of ~145 (1 vCPU) with 811 MB swap in use. Root cause,
