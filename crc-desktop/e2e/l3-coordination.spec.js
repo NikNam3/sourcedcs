@@ -208,7 +208,8 @@ test('the sender can see a HANDOFF is pending, and then that it was accepted', a
   await goBay(b, 'AP', 'ap-coordination');
   await strip(b, 'HOSEE1').getByRole('button', { name: 'Accept Hand Off' }).click({ timeout: 3000 });
   await expect.poll(async () => (await recordsFor(a, 'HOSEE1')).find(r => r.facilityId === 'CENTER').coordination).toBe('ACTIVE');
-  await expect(s, 'accepted HANDOFF: nothing on the sender\'s Strip says so').toContainText(/\bAP\b|RADAR CONTACT|ACCEPTED/i, { timeout: 2000 });
+  // The row reads "HAND OFF → AP" + the state name; INITIATED while pending, ACTIVE once accepted (text nodes are concatenated, so no \b).
+  await expect(s, 'accepted HANDOFF: nothing on the sender\'s Strip says so').toContainText(/ACTIVE|RADAR CONTACT|ACCEPTED/i, { timeout: 2000 });
 });
 
 test('a rejected proposal is visible to the controller who sent it', async ({ browser }) => {
