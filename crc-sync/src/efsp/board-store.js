@@ -387,7 +387,13 @@ class BoardStore {
   droppedWallAtOf(stripId) { return this._persistence.droppedWallAtOf(stripId); }
 
   /** Archives one DROPPED Strip (board/persistence.js, docs/adr/0082). */
-  archiveStrip(stripId, reason, extra = {}) { return this._persistence.archiveStrip(stripId, reason, extra); }
+  archiveStrip(stripId, reason, extra = {}) {
+    // docs/adr/0101 (I4): a transferring Strip that reached DROPPED by a path that skipped `retire` still hands what it
+    // holds to the receiving side before it leaves memory; a no-op when its exchange is settled (the usual case).
+    const strip = this.getStrip(stripId);
+    if (strip && strip.state === 'DROPPED') this._control.onTransferringRetired(strip, 'system');
+    return this._persistence.archiveStrip(stripId, reason, extra);
+  }
 
   /** The Board snapshot (board/persistence.js; durable per ADR 0002). */
   snapshot() { return this._persistence.snapshot(); }
