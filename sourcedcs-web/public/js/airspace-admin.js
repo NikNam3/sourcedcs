@@ -171,7 +171,7 @@ function aaGeometryHtml(d, locked) {
   return '<div class="aa-sub">GEOMETRY: POLYGON (OPTIONAL; NO OUTLINE MEANS CONTAINMENT IS UNKNOWN)</div><div class="aa-geo"><div>' +
     '<table class="aa-table aa-coords"><thead><tr><th>#</th><th>LATITUDE</th><th>LONGITUDE</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>' +
     (locked ? '' : '<button class="btn btn-ghost" style="font-size:9px;padding:6px 12px" data-act="addpt">+ POINT</button>') +
-    '<div class="bk-hint">Decimal degrees or DMS (N36°12\'30" E036°45\'00"). 3 to 200 points, the first point not repeated at the end.</div>' +
+    '<div class="bk-hint">Decimal degrees, DM, DMS (N36°12\'30" E036°45\'00") or MGRS (36S XC 12345 12345). 3 to 200 points, the first point not repeated at the end.</div>' +
     (locked ? '' : '<textarea class="form-input" id="aaPaste" rows="4" placeholder="Paste one point per line"></textarea><button class="btn btn-ghost" style="font-size:9px;padding:6px 12px" data-act="paste">REPLACE FROM PASTE</button>') +
     '</div>' + AirspaceCoords.outlineSvg(parsed.points, true) + '</div>';
 }

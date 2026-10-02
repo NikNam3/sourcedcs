@@ -45,3 +45,18 @@ test('outlineSvg draws a polygon or a route, nothing under two points', () => {
   assert.match(C.outlineSvg([[36, 36], [36, 37], [37, 37]], true), /<polygon/);
   assert.match(C.outlineSvg([[36, 36], [36, 37]], false), /<polyline/);
 });
+
+test('MGRS (H102 AP2B-Q2): reference points, centre of the cell, spaces optional, and the hand copy agrees with crc-desktop', () => {
+  const eq = C.parsePair('31N EA 00000 00000');
+  assert.ok(Math.abs(eq[0]) < 1e-4 && Math.abs(eq[1] - 3) < 1e-4, String(eq)); // equator on the 3E central meridian
+  const p45 = C.parsePair('31T EK 00000 82950');
+  assert.ok(Math.abs(p45[0] - 45) < 1e-4 && Math.abs(p45[1] - 3) < 1e-4, String(p45));
+  assert.deepEqual(C.parsePair('31TEK0000082950'), p45);
+  assert.deepEqual(C.parsePair('31t ek 00000 82950'), p45);
+  const coarse = C.parsePair('36S XC 12 12');
+  assert.ok(coarse && coarse[0] > 30 && coarse[0] < 40);
+  assert.equal(C.parsePair('36S XC 123'), null);
+  assert.equal(C.parsePair('99S XC 1 1'), null);
+  const pts = C.parsePoints('31T EK 00000 82950\n36.5 35.5\nnope');
+  assert.equal(pts.points.length, 2); assert.deepEqual(pts.badLines, [3]);
+});
