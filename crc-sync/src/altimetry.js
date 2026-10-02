@@ -8,6 +8,7 @@
 // altitude against this, so it has to be the number the controller sees, not
 // raw DCS metres (docs/adr/0058).
 
+const ISA_T0 = 288.15;   // K
 const ISA_P0 = 101325;   // Pa
 const ISA_L = 0.0065;    // K/m
 const ISA_G = 9.80665;   // m/s²
@@ -39,4 +40,4 @@ function indicatedAltFt(trueAltM, weather, transitionAltFt) {
   return ((T_REF_ALT / ISA_L) * (1 - Math.pow(p / ref, ISA_INV))) / 0.3048;
 }
 
-module.exports = { indicatedAltFt, ISA_P0 };
+module.exports = { indicatedAltFt, ISA_T0, ISA_P0, ISA_L, ISA_G, ISA_R, ISA_EXP, ISA_INV, H_TROP, T_REF_ALT };

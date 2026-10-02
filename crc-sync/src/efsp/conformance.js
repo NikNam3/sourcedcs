@@ -34,7 +34,7 @@
 const { activeClearanceEntry } = require('./flight-data-store');
 const { WALL_CLOCK } = require('../mission-clock');
 
-const MS_PER_KT = 0.514444;
+const { MS_PER_KT } = require('../units');
 const FPM_PER_MS = 196.850394;
 
 /** Smallest angle between two headings, 0–180. */

@@ -35,7 +35,7 @@ const ATO_IMPORT_ORIGIN = Object.freeze({ facilityId: 'TACTICAL', positionId: 'T
 // [SOURCE-DEFINED] — L3's own input cap, reused so the two never disagree.
 const MAX_ATO_TEXT_BYTES = MAX_INPUT_BYTES;
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+const { DAY_MS } = require('../../units');
 const ACTIONS = new Set(['CREATE', 'BIND', 'UPDATE', 'SKIP']);
 const CALLSIGN_RE = /^[A-Z0-9]{1,7}$/;
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];

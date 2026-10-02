@@ -21,16 +21,8 @@ const MAX_BACKOFF = Math.max(POLL_RATE, parseInt(process.env.DCS_GRPC_MAX_BACKOF
 // GroupCategory numeric values to include (AIRPLANE=1, HELICOPTER=2, GROUND=3, SHIP=4)
 const ALLOWED_CATS = new Set([1, 2, 3, 4]);
 
-// DCS altimeter constants (reverse-engineered; T_REF_ALT is empirical)
-const ISA_T0     = 288.15;
-const ISA_P0     = 101325;
-const ISA_L      = 0.0065;
-const ISA_G      = 9.80665;
-const ISA_R      = 287.05287;
-const ISA_EXP    = ISA_G / (ISA_R * ISA_L);
-const ISA_INV    = (ISA_R * ISA_L) / ISA_G;
-const H_TROP     = 11000.0;
-const T_REF_ALT  = 288.97;
+// DCS altimeter constants (reverse-engineered; T_REF_ALT is empirical): one home, altimetry.js.
+const { ISA_T0, ISA_P0, ISA_L, ISA_G, ISA_R, ISA_EXP, ISA_INV, H_TROP, T_REF_ALT } = require('./altimetry');
 
 const WEATHER_POLL_MS   = 60000; // poll atmosphere every 60 s
 // A healthy unit stream sends a unit only when it changes, and the track

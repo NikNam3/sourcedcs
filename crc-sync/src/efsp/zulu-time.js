@@ -17,7 +17,7 @@
 //
 // Pure, no clock of its own: callers pass the mission clock's now().
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+const { DAY_MS } = require('../units');
 
 /** "1432", "14:32", "1432Z", "14:32z" → { hh, mm }, or null when it is not a Zulu time of day. */
 function parseZuluHhmm(text) {

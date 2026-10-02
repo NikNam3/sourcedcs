@@ -18,7 +18,7 @@
 const magnetic = require('./magnetic');
 const { DEFAULT_TRANSITION_ALT_FT } = require('./theaters');
 
-const DAY_MS = 86400000;
+const { DAY_MS } = require('./units');
 
 // The variation grid a client interpolates in: the airfields' bounding box,
 // padded, at 1°. WMM declination bends slowly enough that bilinear

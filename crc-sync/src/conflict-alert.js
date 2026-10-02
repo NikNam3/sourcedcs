@@ -26,7 +26,7 @@
 // separating them, guide §9.2), anything slower than `minGroundSpeedKt`, and a
 // track younger than `minTrackAgeSec`.
 
-const MS_PER_KT = 0.514444;
+const { MS_PER_KT } = require('./units');
 const M_PER_NM = 1852;
 const FT_PER_M = 3.28084;
 const AIRBORNE_CATEGORIES = new Set([1, 2]); // airplane, helicopter

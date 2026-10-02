@@ -36,7 +36,7 @@ const authority = require('./authority');
 const countLog = require('../log').logger('efsp:traffic-count');
 
 const TRAFFIC_COUNT_PATH = writePath('efsp-traffic-count.jsonl', process.env.CRCSYNC_EFSP_TRAFFIC_COUNT_PATH);
-const DAY_MS = 24 * 60 * 60 * 1000;
+const { DAY_MS } = require('../units');
 
 /**
  * The states a Strip must have been in, just before its drop, to be traffic.

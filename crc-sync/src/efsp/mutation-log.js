@@ -31,7 +31,7 @@ const { WALL_CLOCK } = require('../mission-clock');
 const { getInstrumentationConfig } = require('./instrumentation-config');
 const log = require('../log').logger('efsp:mutation-log');
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+const { DAY_MS } = require('../units');
 
 /** UTC calendar day of an epoch-ms instant, 'YYYY-MM-DD'. */
 function utcDay(ms) { return new Date(ms).toISOString().slice(0, 10); }
