@@ -369,10 +369,12 @@ test('SCENARIO J1 JTAC writes nothing on a line it has not been handed', () => {
     { kind: 'SetState', toState: 'OFF_STATION' },
     { kind: 'MoveStrip', bayId: 'jtac-mission', rackId: 'main' },
     { kind: 'DropStrip' },
-    { kind: 'Undo' },
     { kind: 'TOFI', action: 'ACCEPT', separationRegime: 'MARSA' },
     { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' },
   ]) refused(act(efsp, c.JTAC, 'JTAC', tac(efsp, m.stripId), op), 'PERMISSION_DENIED', null, `JTAC ${op.kind}`);
+
+  // Undo is not a grant (docs/adr/0100 §5): it names an action, and JTAC has none to undo here.
+  refused(act(efsp, c.JTAC, 'JTAC', tac(efsp, m.stripId), { kind: 'Undo' }), 'VALIDATION_ERROR', null, 'JTAC Undo');
 
   // H40 gives JTAC a transfer-BACK. Once B1 is fixed, a transfer of a line it
   // was never handed may come back NOT_OWNER instead — either is a refusal.

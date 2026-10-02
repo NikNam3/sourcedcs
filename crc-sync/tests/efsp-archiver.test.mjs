@@ -90,13 +90,14 @@ function logLines(pred) {
 test('the drop time is stamped on drop, cleared by an Undo, and never on the wire', () => {
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'STAMP1' });
   const before = Date.now();
-  const dropped = mustAct(efsp, c.AP, 'AP', strip, { kind: 'InvokeNla' });
+  const dropAck = act(efsp, c.AP, 'AP', strip, { kind: 'InvokeNla' });
+  const dropped = dropAck.strip;
   assert.equal(dropped.state, 'DROPPED');
   const at = incirlik().droppedWallAtOf(strip.stripId);
   assert.ok(at >= before && at <= Date.now());
   assert.equal('droppedWallAt' in dropped, false, 'not a Strip field');
 
-  const undone = mustAct(efsp, c.AP, 'AP', dropped, { kind: 'Undo' });
+  const undone = mustAct(efsp, c.AP, 'AP', dropped, { kind: 'Undo', actionId: dropAck.undoable.actionId });
   assert.notEqual(undone.state, 'DROPPED');
   assert.equal(incirlik()._droppedWallAt.has(strip.stripId), false);
   assert.equal(incirlik().droppedWallAtOf(strip.stripId), null);
@@ -275,12 +276,13 @@ test('5. a mission change archives every counted DROPPED Strip at once, and no l
   for (const s of incirlik().getAll()) assert.notEqual(s.state, 'DROPPED', 'nothing DROPPED is left');
 });
 
-test('6. Undo of an archived drop is NOT_FOUND — the mission change archives inside the 30 s window', () => {
+test('6. Undo of an archived drop is NOT_FOUND — the mission change archives inside the 10 s window (U14)', () => {
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'UNDO1' });
-  const dropped = mustAct(efsp, c.AP, 'AP', strip, { kind: 'InvokeNla' });
+  const dropAck = act(efsp, c.AP, 'AP', strip, { kind: 'InvokeNla' });
+  const dropped = dropAck.strip;
   assert.equal(dropped.state, 'DROPPED');
   archiverFor().onMissionSessionChange({ seq: 7, reason: 'CLOCK_STEP_BACK' });
-  const undo = act(efsp, c.AP, 'AP', dropped, { kind: 'Undo' });
+  const undo = act(efsp, c.AP, 'AP', dropped, { kind: 'Undo', actionId: dropAck.undoable.actionId });
   assert.equal(undo.ok, false);
   assert.equal(undo.reason, 'NOT_FOUND');
   assert.equal(incirlik()._nlaHistory.has(strip.stripId), false, 'its Undo latch went with it (F7)');
@@ -288,9 +290,10 @@ test('6. Undo of an archived drop is NOT_FOUND — the mission change archives i
 
 test('6b. an age sweep never archives inside the Undo window', () => {
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'UNDO2' });
-  const dropped = mustAct(efsp, c.AP, 'AP', strip, { kind: 'InvokeNla' });
+  const dropAck = act(efsp, c.AP, 'AP', strip, { kind: 'InvokeNla' });
+  const dropped = dropAck.strip;
   archiverFor().sweep();
-  const undone = mustAct(efsp, c.AP, 'AP', dropped, { kind: 'Undo' });
+  const undone = mustAct(efsp, c.AP, 'AP', dropped, { kind: 'Undo', actionId: dropAck.undoable.actionId });
   assert.notEqual(undone.state, 'DROPPED');
 });
 

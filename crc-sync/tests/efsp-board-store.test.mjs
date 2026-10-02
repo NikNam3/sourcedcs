@@ -502,35 +502,33 @@ test('InvokeNla after the 400ms window applies normally', async () => {
   assert.equal(result.strip.state, 'CLEARED');
 });
 
-test('Undo reverts the last NLA-driven transition within the 30s window', () => {
+test('Undo reverts an NLA transition named by its actionId (docs/adr/0100)', () => {
   const { board } = makeStore();
   const strip = createStrip(board); // PROPOSED
-  board.applyMutation(mutation(strip, { kind: 'InvokeNla' }), 'OPS', 'OPS'); // -> PENDING_CLEARANCE
-  const afterNla = board.getStrip(strip.stripId);
-  assert.equal(afterNla.state, 'PENDING_CLEARANCE');
+  const nla = board.applyMutation(mutation(strip, { kind: 'InvokeNla' }), 'OPS', 'OPS'); // -> PENDING_CLEARANCE
+  assert.equal(board.getStrip(strip.stripId).state, 'PENDING_CLEARANCE');
+  assert.equal(nla.undoable.windowMs, 10_000);
 
-  const result = board.applyMutation(mutation(afterNla, { kind: 'Undo' }), 'OPS', 'OPS');
+  const result = board.applyMutation(mutation(board.getStrip(strip.stripId), { kind: 'Undo', actionId: nla.undoable.actionId }), 'OPS', 'OPS');
   assert.equal(result.ok, true);
   assert.equal(result.strip.state, 'PROPOSED');
 });
 
-test('Undo with no prior NLA transition is rejected', () => {
+test('Undo without an actionId is refused; an unknown one is UNDO_UNAVAILABLE', () => {
   const { board } = makeStore();
   const strip = createStrip(board);
-  const result = board.applyMutation(mutation(strip, { kind: 'Undo' }), 'OPS', 'OPS');
-  assert.equal(result.ok, false);
+  assert.equal(board.applyMutation(mutation(strip, { kind: 'Undo' }), 'OPS', 'OPS').reason, 'VALIDATION_ERROR');
+  assert.equal(board.applyMutation(mutation(strip, { kind: 'Undo', actionId: 'nope' }), 'OPS', 'OPS').reason, 'UNDO_UNAVAILABLE');
 });
 
-test('Undo consumes the window — a second Undo immediately after has nothing left to revert', () => {
+test('an action is undone once — a second Undo of it is UNDO_UNAVAILABLE', () => {
   const { board } = makeStore();
   const strip = createStrip(board);
-  board.applyMutation(mutation(strip, { kind: 'InvokeNla' }), 'OPS', 'OPS');
-  const afterNla = board.getStrip(strip.stripId);
-  board.applyMutation(mutation(afterNla, { kind: 'Undo' }), 'OPS', 'OPS');
-
-  const afterUndo = board.getStrip(strip.stripId);
-  const result = board.applyMutation(mutation(afterUndo, { kind: 'Undo' }), 'OPS', 'OPS');
-  assert.equal(result.ok, false);
+  const nla = board.applyMutation(mutation(strip, { kind: 'InvokeNla' }), 'OPS', 'OPS');
+  const undo = { kind: 'Undo', actionId: nla.undoable.actionId };
+  assert.equal(board.applyMutation(mutation(board.getStrip(strip.stripId), undo), 'OPS', 'OPS').ok, true);
+  const result = board.applyMutation(mutation(board.getStrip(strip.stripId), undo), 'OPS', 'OPS');
+  assert.equal(result.reason, 'UNDO_UNAVAILABLE');
 });
 
 // ── Transfer-shaped NLA transitions (Phase 2, docs/adr/0007) ────────────
@@ -579,32 +577,39 @@ test('a transfer-shaped InvokeNla to an unstaffed, uncovered Position is rejecte
   assert.equal(board.getStrip(strip.stripId).ownerPositionId, 'LC');
 });
 
-test('a transfer-shaped InvokeNla is NOT recorded into the Undo window (docs/adr/0009) — Undo reports unavailable right after', () => {
+test('a transfer-shaped InvokeNla is undoable by the sender, not the receiver (docs/adr/0100 §5, superseding ADR 0009)', () => {
   const flightDataStore = new FlightDataStore();
-  const board = new BoardStore(flightDataStore, fullRules(makeTransferNlaRules()));
+  const board = new BoardStore(flightDataStore, fullRules(makeTransferNlaRules({ isStaffed: (p) => p === 'AP' || p === 'LC' })));
   const strip = createStrip(board, 'LC', { op: { ...createMutation().op, bayId: 'lc-airborne', rackId: 'main' } });
   board.applyMutation({ clientMutationId: crypto.randomUUID(), stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'SetState', toState: 'DEPARTED' } }, 'LC', 'LC');
   const departed = board.getStrip(strip.stripId);
-  board.applyMutation(mutation(departed, { kind: 'InvokeNla' }), 'LC', 'LC');
+  const nla = board.applyMutation(mutation(departed, { kind: 'InvokeNla' }), 'LC', 'LC');
 
   const handedOff = board.getStrip(strip.stripId);
-  const undoResult = board.applyMutation(mutation(handedOff, { kind: 'Undo' }), 'AP', 'AP');
-  assert.equal(undoResult.ok, false);
+  const undo = { kind: 'Undo', actionId: nla.undoable.actionId };
+  assert.equal(board.applyMutation(mutation(handedOff, undo), 'AP', 'AP').reason, 'PERMISSION_DENIED');
+  const back = board.applyMutation(mutation(handedOff, undo), 'LC', 'LC');
+  assert.equal(back.ok, true);
+  assert.deepEqual([back.strip.ownerPositionId, back.strip.bayId, back.strip.state], ['LC', 'lc-airborne', 'DEPARTED']);
 });
 
-test('an ordinary TransferStrip clears any PENDING Undo window for that Strip — a stale state-only Undo must not fire after ownership has moved', () => {
+test('a later TransferStrip by the same Facility is voided when the NLA before it is undone; the receiver cannot undo the NLA', () => {
   const { board } = makeStore({
     bayImpliesState: () => null, // the destination Bay in this test implies no state, so the transfer is a pure ownership move
   });
   const strip = createStrip(board); // PROPOSED
-  board.applyMutation(mutation(strip, { kind: 'InvokeNla' }), 'OPS', 'OPS'); // -> PENDING_CLEARANCE, recorded in _nlaHistory
+  const nla = board.applyMutation(mutation(strip, { kind: 'InvokeNla' }), 'OPS', 'OPS'); // -> PENDING_CLEARANCE
   const afterNla = board.getStrip(strip.stripId);
-
-  board.applyMutation(mutation(afterNla, { kind: 'TransferStrip', toPositionId: 'MANNED', bayId: 'somewhere', rackId: 'main' }), 'OPS', 'OPS');
+  const transfer = board.applyMutation(mutation(afterNla, { kind: 'TransferStrip', toPositionId: 'MANNED', bayId: 'somewhere', rackId: 'main' }), 'OPS', 'OPS');
   const afterTransfer = board.getStrip(strip.stripId);
 
-  const undoResult = board.applyMutation(mutation(afterTransfer, { kind: 'Undo' }), 'MANNED', 'MANNED');
-  assert.equal(undoResult.ok, false);
+  const undo = { kind: 'Undo', actionId: nla.undoable.actionId };
+  assert.equal(board.applyMutation(mutation(afterTransfer, undo), 'MANNED', 'MANNED').reason, 'PERMISSION_DENIED');
+  const result = board.applyMutation(mutation(afterTransfer, undo), 'OPS', 'OPS');
+  assert.equal(result.ok, true);
+  assert.equal(result.strip.state, 'PROPOSED');
+  assert.equal(result.strip.ownerPositionId, 'OPS');
+  assert.deepEqual(result.voided.map(v => v.clientMutationId), [transfer.undoable.actionId]);
 });
 
 // ── Per-State authority (guide §3.4 "normally owned by", permission.js's

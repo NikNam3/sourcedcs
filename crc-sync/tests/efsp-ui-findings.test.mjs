@@ -137,7 +137,7 @@ test('F-102: Undo puts the Strip back in the Bay it came from, not just the stat
   strip = await advance(efsp, c.CD, 'CD', strip);
   assert.equal(strip.bayId, 'cd-cleared');
 
-  const undone = mustAct(efsp, c.CD, 'CD', strip, { kind: 'Undo' });
+  const undone = mustAct(efsp, c.CD, 'CD', strip, { kind: 'Undo', actionId: efsp.undoHistory.latestActionFor({ facilityId: 'INCIRLIK', stripId: strip.stripId }) });
   assert.equal(undone.state, 'PENDING_CLEARANCE');
   assert.equal(undone.bayId, 'cd-pending-clearance');
 });
@@ -422,7 +422,6 @@ test('F-303: a rejected replica refuses every op except the ones that clear it a
     { kind: 'SetFlag', flag: 'highlight', value: 'RED' },
     { kind: 'SetState', toState: 'INBOUND' },
     { kind: 'TransferStrip', toPositionId: 'CTR', bayId: 'ctr-departures', rackId: 'main' },
-    { kind: 'Undo' },
     { kind: 'POINT_OUT', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'AP' },
   ];
   for (const op of refusedOps) {

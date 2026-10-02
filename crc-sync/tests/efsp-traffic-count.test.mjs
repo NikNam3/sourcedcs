@@ -183,7 +183,7 @@ test('Undo of a terminal Drop appends a VOID and the flight leaves the count; a 
   const first = recordsFor(counter, strip.stripId);
   assert.equal(first.length, 1);
 
-  strip = mustAct(efsp, c.AP, 'AP', strip, { kind: 'Undo' });
+  strip = mustAct(efsp, c.AP, 'AP', strip, { kind: 'Undo', actionId: efsp.undoHistory.latestActionFor({ facilityId: 'INCIRLIK', stripId: strip.stripId }) });
   assert.equal(strip.state, 'HANDED_OFF');
   assert.equal(recordsFor(counter, strip.stripId).length, 0, 'voided');
   assert.ok(counter.entries().some(e => e.type === 'VOID' && e.countId === first[0].countId), 'a VOID line, not an edit');

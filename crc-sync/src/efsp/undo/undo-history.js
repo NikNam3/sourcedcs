@@ -290,6 +290,19 @@ class UndoHistory {
     for (const [id, r] of this._records) if (wallNow >= r.expiresAt) this._records.delete(id);
   }
 
+  /**
+   * The newest open action whose scope holds this Strip, optionally by one Position, or null. For tools (the soak
+   * driver) and tests that hold a Strip rather than an ack; a client always has the ack's `undoable`.
+   */
+  latestActionFor({ facilityId, stripId }, actingPositionId = null) {
+    const key = stripKey(facilityId, stripId);
+    let found = null;
+    for (const r of this._records.values()) {
+      if (r.keys.has(key) && (!actingPositionId || r.meta.actingPositionId === actingPositionId)) found = r.actionId;
+    }
+    return found;
+  }
+
   /** The open record of an action, or null (tests, the wire's routing). */
   recordOf(actionId) { return this._records.get(actionId) || null; }
 
