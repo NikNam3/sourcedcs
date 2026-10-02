@@ -1,6 +1,6 @@
 'use strict';
 
-// Field state (EFSPImplementationGuide.md §9.7) — the PURE half.
+// Runway status (EFSPImplementationGuide.md §9.7) — the PURE half.
 //
 // This module holds every rule about runways that can be stated as a function
 // of plain data: the runway status machine, the enums, how a Strip's runway is
@@ -17,7 +17,7 @@
 //
 // Later lanes add pure functions HERE rather than to the store: L12's hung-
 // ordnance advisory and L1b's `gearMismatchFor(flightData, runway)` (guide §9.7 rule
-// 4, not built in L1) are both functions of a runway record and an FDR.
+// 4, not built in L1) are both functions of a runway record and a flight data record.
 //
 // Shape (docs/parallel/decisions.md S-Q23): one record per PHYSICAL runway,
 // `{ runwayId: '05/23', ends: ['05', '23'], status, arrestingGear: [...] }`.
@@ -79,7 +79,7 @@ function isRunwayChangeOpen(runwayChange) {
   return !!runwayChange && RUNWAY_CHANGE_OPEN_STATES.includes(runwayChange.state);
 }
 
-// What a Position other than TWR may ASK tower to do to a runway (decisions.md
+// What a Position other than LC may ASK tower to do to a runway (decisions.md
 // H18: tower is the sole authority over the runways; everyone else requests).
 const REQUEST_ACTIONS = ['CLOSE', 'OPEN', 'WORKS'];
 
@@ -162,10 +162,10 @@ function _resolveText(view, text) {
 /**
  * Which runway a Strip is assigned to, and how that was decided
  * (decisions.md S-Q25): the rack it is being dropped into, then the rack it
- * sits in, then its FDR's runway field (8A for a DEPARTURE, 8B for an
+ * sits in, then its flight data's runway field (8A for a DEPARTURE, 8B for an
  * ARRIVAL), then the Facility's active runway, then nothing — fail open.
  *
- * Rack before FLIGHT_DATA: `strip.rackId` is where a controller PUT the Strip, the FDR
+ * Rack before FLIGHT_DATA: `strip.rackId` is where a controller PUT the Strip, the flight data
  * field is filed intent. The target rack comes first on the drag path
  * (decisions.md Q27): a Strip dropped onto 23's rack is about to use 23,
  * whatever rack it came from.
@@ -196,9 +196,13 @@ function resolveRunwayForStrip(strip, flightData, view, { targetRackId } = {}) {
   return null;
 }
 
-// The states whose entry uses the runway, per Role — rule 1's cases seen from
-// the arriving end. nla.js gates the NLA steps into them; board-store.js gates
-// a raw SetState into them the same way (decisions.md S-R2-14). ARRIVAL's
+// The states whose entry uses the runway, per strip type — rule 1's cases seen from
+// the arriving end. nla.js gates the NLA steps into them; board/ops/set-state.js gates
+// a raw SetState into them the same way (decisions.md S-R2-14).
+// [SOURCE-DEFINED] (decisions.md S-R2-14) — which states count as using the
+// runway is our reading of rule 1, not the guide's list.
+// Mirror: crc-desktop's runway-status-rules.js carries the label set
+// (CLOSE/OPEN/WORKS/WRK DONE/...) and SUSPENSION_LABELS; both are ours too. ARRIVAL's
 // LANDED is absent on purpose: touchdown is an observation, not a clearance.
 const RUNWAY_GATED_STATES = Object.freeze({
   DEPARTURE: Object.freeze(['RUNWAY_QUEUE', 'LUAW', 'DEPARTED']),
@@ -233,8 +237,8 @@ function runwayStatusReason(runway) {
 }
 
 /**
- * Rule 1: the reason a Strip's takeoff/landing NLA is inhibited by field
- * state, or null. Null — never an inhibit — when there is no field state, the
+ * Rule 1: the reason a Strip's takeoff/landing NLA is inhibited by runway
+ * status, or null. Null — never an inhibit — when there is no runway status, the
  * runway cannot be resolved, or it is OPEN: an inhibit that fires on bad data
  * strands an aircraft on the board.
  */
@@ -259,10 +263,10 @@ function runwayAdvisoryFor(strip, view) {
 
 /**
  * The rack a Strip is filed into when something other than a drag places it
- * in `bay` — an NLA transfer, an implied-state relocation, an accepted
+ * in `bay` — an NLA strip transfer, an implied-state relocation, an accepted
  * coordination (decisions.md Q26, S-R2-1). In a Bay whose racks are runway
- * ends: the end its FDR names, else the active end. Otherwise — no field
- * state, no runway racks, nothing resolved — the Bay's first rack, which is
+ * ends: the end its flight data names, else the active end. Otherwise — no runway
+ * status, no runway racks, nothing resolved — the Bay's first rack, which is
  * what every placement site did before.
  */
 function runwayRackFor(strip, flightData, view, bay) {
@@ -286,6 +290,7 @@ function runwayRackFor(strip, flightData, view, bay) {
  * number is magnetic, so the inventory carries each end's true heading
  * (`endHeadingsTrue`) rather than this multiplying the number by ten.
  * Ties (calm included) go to the first end in inventory order.
+ * [SOURCE-DEFINED] (decisions H22, S-L1d) — the tie rule (and calm) is ours.
  *
  * @returns {string|null}
  */
@@ -376,7 +381,7 @@ function validateRunwayStatusInventory(runwayStatus, positions = []) {
  * Cross-references between the inventory and the Bays — warnings, never a
  * rejection (docs/efsp-wp6-plan.md Phase 3): a runway naming a rack that no
  * RUNWAY_QUEUE Bay has, and a RUNWAY_QUEUE rack no runway end claims. Either
- * still works; it just means a Strip there resolves by its FDR instead.
+ * still works; it just means a Strip there resolves by its flight data instead.
  */
 function runwayInventoryWarnings(config) {
   const warnings = [];
@@ -408,7 +413,7 @@ function runwayInventoryWarnings(config) {
  * routing constraint toward the hot cargo pad. Never an inhibit. [SOURCE-DEFINED]: the guide's basis
  * is local practice at one base, not doctrine, and SOURCE's pads are placeholder names (H21) — so
  * this states facts (the runway the Strip resolves to, the pad's name) and recommends no runway.
- * Pure: derived from the FDR and the runway-status record, both of which broadcast whole
+ * Pure: derived from the flight data and the runway-status record, both of which broadcast whole
  * (docs/adr/0045's principle; the same argument as rule 4's hook check).
  *
  * `runwayStatus` is one Facility's record as the wire carries it (runway-status-store.js
