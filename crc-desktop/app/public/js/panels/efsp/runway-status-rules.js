@@ -54,7 +54,8 @@ export const RUNWAY_STATUS_RUNWAY_STRIP_STATES = {
 // Where rule 4 (the hook check) applies: an arrival on its way to the runway.
 export const RUNWAY_STATUS_GEAR_CHECK_STATES = ['INBOUND', 'HANDED_TO_TOWER', 'FINAL'];
 
-// The mirror of runway-status.js's SUSPENSION_LABELS (decisions.md H52: the
+// [SOURCE-DEFINED] (decisions.md Q40) — the wording of these suspension labels is
+// ours. The mirror of runway-status.js's SUSPENSION_LABELS (decisions.md H52: the
 // generic "runway works + inspection" suspension).
 const RUNWAY_STATUS_SUSPENSION_LABELS = { WORKS: 'works in progress', RUNWAY_CHANGE: 'runway change in progress' };
 

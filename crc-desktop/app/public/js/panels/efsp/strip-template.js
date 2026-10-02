@@ -15,9 +15,9 @@ import { cachedStereoRoutesClient } from './efsp-stereo-routes.js';
 // shape (see docs/adr/0001-json-wire-format-not-protobuf.md's consequence
 // note on schema drift) — not a compiled contract.
 //
-// resolveBlockValue() is kept PURE and separate from DOM writing (bay-
-// view.js and bay/strip-element.js do the actual rendering) so it's testable without
-// a DOM — same discipline as los.js's math functions.
+// resolveBlockValue() is kept PURE and separate from DOM writing
+// (bay-view.js and bay/strip-element.js do the actual rendering) so it's
+// testable without a DOM — same discipline as los.js's math functions.
 
 // docs/adr/0024 — `label` added to every entry (guide §2's own Block Map
 // definition names it as one of the fields a Block Map maps to; it was the

@@ -88,9 +88,9 @@ export const MARSA_EXPANSION = 'Military Authority Assumes Responsibility for Se
  *                            that landed, or an AR that completed normally,
  *                            must not leave a badge sitting on the Strip
  *                            forever; that is the unretractable-badge problem
- *                            this codebase had before L7 (forwarding-
- *                            obligations.js's alert now clears when its
- *                            condition clears, H39) and must not regrow.
+ *                            this codebase had before L7 (crc-sync's
+ *                            forwarding-obligations.js alert now clears when
+ *                            its condition clears, H39) and must not regrow.
  */
 export function marsaBadgeFor(strip) {
   const relation = typeof marsaForStrip === 'function' ? marsaForStrip(strip) : null;
