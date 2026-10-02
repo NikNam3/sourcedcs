@@ -78,7 +78,7 @@ function keyBetween(a, b) {
     // two equal (or inverted) bounds, so the recovery is identical to
     // ORDER_KEY_EXHAUSTED below: the caller MUST rebalance the Rack
     // (which reassigns fresh, guaranteed-distinct keys) and retry — hence
-    // the same error code, so board/placement.js's resolveOrderKey retry path
+    // the same error code, so board/placement.js's Placement#resolveOrderKey retry path
     // handles this automatically with no separate handling needed.
     const err = new Error(`order-key: keyBetween requires a < b (got ${JSON.stringify(a)}, ${JSON.stringify(b)}) — rebalance the Rack and retry`);
     err.code = 'ORDER_KEY_EXHAUSTED';

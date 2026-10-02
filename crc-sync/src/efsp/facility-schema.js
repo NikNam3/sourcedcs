@@ -247,13 +247,16 @@ const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 //    CTR (nor TAC_C2 to CTR): consolidation is INTRAFACILITY, never crossing a Facility, which is a different
 //    thing from the cross-Facility handoff of §4.6 (position-store.js is scoped to one Facility's staffing).
 //    [SOURCE-DEFINED] (docs/adr/0075) there is no RSU to LC: RSU is absent on purpose, as OPS is, so a Strip
-//    never strands on a supervisory Position. [SOURCE-DEFINED] (docs/adr/0074) the carrier chain ends at
-//    CV_MARSHAL and omits CV_PRIFLY, for the same reason. What ships otherwise is the guide's: CD to GC to LC
-//    to AP, SFA and PAR to AP (guide, adopted by docs/adr/0075), AIC/GCI/JTAC to TAC_C2 (the guide's AIC/GCI; JTAC is
-//    [SOURCE-DEFINED], docs/adr/0080, so a line stays with the Position that handed it over). CENTER and RANGES
-//    have none: a Position that owns no Strips has none to strand. An unstaffed Position with no successor is the
-//    guide's "warn, do not block" (§4.8.6 rule 5). Whether GC should consolidate into LC at all is open
-//    (decisions H101, RP-F1).
+//    never strands on a supervisory Position. [SOURCE-DEFINED] (docs/adr/0074) the carrier chain is CV_APP2 to
+//    CV_APP1 to CV_MARSHAL and stops there, omitting CV_PRIFLY, for the same reason. The rest ships as the guide
+//    has it: CD to GC to LC to AP, SFA and PAR to AP, AIC and GCI to TAC_C2. [SOURCE-DEFINED] (docs/adr/0080)
+//    JTAC to TAC_C2 is ours, so a line stays with the Position that handed it over. CENTER's CTR and RANGES have
+//    no entry: CTR is the Facility's only Position, so there is nowhere inside it to consolidate to (and it
+//    owns Strips, `ctr-enroute`), and a RANGE Position owns no Strips at all (guide §4.1 rule 2). So AP, CTR,
+//    TAC_C2 and CV_MARSHAL end their chains: guide §4.8.6 rule 3 calls a Strip left owned by an unstaffed
+//    Position with no consolidation path defect D19, and the Facility boundary is what leaves it open here;
+//    the mitigation is rule 5's "warn, do not block" (the controller is warned of the stranding before
+//    leaving). Whether GC should consolidate into LC at all is open (decisions H101, RP-F1).
 //  positionRadars: which radars each Position works through, as selectors, never radar ids (docs/adr/0042,
 //    0043). [SOURCE-DEFINED] (docs/adr/0042, 0043): which scope sits at which console is squadron data, not
 //    doctrine; the guide says nothing about it. A radar's id is derived from live mission data, so a stored id
