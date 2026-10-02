@@ -4,8 +4,8 @@ Entry point for the next agent or session. Read this, then the part of `EFSPImpl
 your work names, then write a plan before writing code. This is a handoff, not a build order.
 
 **This revision supersedes the previous one.** The remaining EFSP work is being finished by many
-agents at once, in waves of parallel lanes (`docs/efsp-parallel-plan.md`). **Waves 1 and 2 and wave 3
-are merged** into `efsp-wp5-correlation` (§1), except UI-B. Wave 1
+agents at once, in waves of parallel lanes (`docs/efsp-parallel-plan.md`, history). **Waves 1, 2 and 3, the
+architecture refactor (W1-W7, ADRs `0095`-`0097`) and the vocabulary rename are merged** into `efsp-wp5-correlation` (§1). Wave 1
 (§3I) landed runway status (server), MTR fields, the USMTF ATO parser, the carrier model, WP8 metrics and
 the soak harness, retracting obligation alerts, IFF from interrogation, atobrief's USMTF export and the
 gRPC reconnect fix. Wave 2 and the fixes between waves (§3J) landed the runway-status panel, hung
@@ -16,9 +16,11 @@ the carrier Positions and Facility (L17), the suggestion chip and staleness (L19
 (UI-A), the per-theater transition altitude (TA), the client-mirror parity tests (PARITY), the soak
 fixes (SOAK) and the infra hygiene lane (HYG); the client half of Incirlik's pattern board and FINAL
 component (L18) was already in, and now its server half (RSU/SFA/PAR, ADR `0093`), SOAKW (the soak's
-not-judged memory rule) and L28 (OVERFLIGHT lifecycle, ADR `0087`). **Not merged:** UI-B (resync wiring and
-the follow-ups listed in §4). **Not started:** L20 (the `[SOURCE-DEFINED]` sweep, §5; its prep inventory is in). The known bugs each have an owning
-lane (§4).
+not-judged memory rule) and L28 (OVERFLIGHT lifecycle, ADR `0087`). UI-B (client resync wiring), QAS and E2E-harden were merged afterwards. The refactor moved
+the code into `board/`, `wire/`, `sync/`, `authority/` and a client of native ES modules; the rename gave every
+identifier, wire name and doc word the FAA-based vocabulary (`docs/glossary.md` maps old words to new ones: read it
+before any ADR or note older than the rename). **L20** (the comment and pointer sweep, plus the `[SOURCE-DEFINED]`
+sweep, §5) is in progress. The known bugs each have an owning lane (§4).
 
 If you are a lane agent, your own briefing in `docs/parallel/wave2/` and
 `docs/parallel/lane-rules.md` come first, and **`docs/parallel/decisions.md` overrides both**. If you
@@ -26,32 +28,41 @@ are the supervising session, start at `docs/parallel/supervisor-handoff.md`.
 
 ## 1. State of the tree
 
-Integration branch `efsp-wp5-correlation`. It carries wave 3a (L26, U6, L18's client half) and, merged on
-top, GRPC, SOAK, DOCFOLD, TA, HYG, PARITY, L17, L19, UI-A, L18's server half, SOAKW, L28, QAC, INFRA2, S13,
-DOCS2, FREEZE, ARCH (plan), AIRSP (mockup) and L20-prep. Not pushed. **Not merged:** UI-B, QAS
-(`lane/QA-sync-cleanup`) and E2E-harden. L20 has not started. PARITY's tests are still to be re-run on the
-merged tree.
+Integration branch `efsp-wp5-correlation`. It carries waves 1-3 (including UI-B, QAS, E2E-harden), the
+architecture refactor W1-W7 (FREEZE, then BOARD, WIRE, SYNC, AUTH, APP, DATA, TIME, LOG, the ES-module client, BACKCOMPAT
+and the W7 RENAME) and the L20 briefings. Not pushed.
 
-Green, last recorded per lane (no integrated run is recorded: the unit suites
-have to be re-run unloaded on the merged tree, S-U6): **crc-sync** 1887 (L17), 1884 (TA), 1878 (PARITY), 1873 (L19), 1879 (SOAKW, with the soak fixes), 1922 (L18 server); **crc-desktop** 736
-(L17), 737 (TA), 764 with one todo (PARITY), 771 (L18 server); atobrief 77; Python
-`tools/tests` 360 (L25). (`npm test` in each; the one crc-desktop failure a fresh worktree shows is
-the packaging test's missing `app/node_modules`: run `npm ci` inside `crc-desktop/app`.)
-**Playwright:** the full suite has not been recorded on the merged branch. Per lane: E2E-fix left the
-whole suite at 115 passed, 0 failed; UI-A's full run was 124 passed and 2 flaky (both pass alone);
-`l17-carrier` 5/5 and `l19-surveillance-hints` 2/2 alone, and `l18-incirlik` 3/3 alone. L17 saw
-three `l17-carrier` and two `tactical-positions` failures when five spec files ran together, passing
-alone: the integrator's full run decides whether that is load or a leak. Every spec must
-`require('./helpers/test')` and leave no Strips on the Board (E2E-fix, §3J). `ordnance-hung`'s "pilot
-walks" test needs `runway-status.spec.js` to have run first (it relies on the active runway), as on the
-baseline. Restart the local crc-sync on :3000 after any `crc-sync/src` change.
+Green, as recorded at the W7 merge (decision S-M-W7; no lane re-measured since): **crc-sync** `npm test` 2117 of
+2118 + 1 todo (the failing one is a gRPC backoff load-timing test), **freeze** (`npm run freeze`, opt-in) 48/48,
+**crc-desktop** 881 of 883 + 2 todo, atobrief 77, Python `tools/tests` 360 (L25). A fresh worktree needs `npm ci` in
+`crc-sync`, `crc-desktop` and `crc-desktop/app` (a missing `app/node_modules` fails the packaging test).
+**Playwright:** the sharded full run on the renamed tree (S-REFACTOR-DONE) was 119/140 in parallel, 16 of 18 failures
+passing alone; the two consistent ones were stale specs, fixed in `4fbf057`. Under load many specs fail that pass
+alone: re-run a failure alone before counting it. Every spec must `require('./helpers/test')` and leave no Strips on
+the Board (E2E-fix, §3J). `ordnance-hung`'s "pilot walks" test needs `runway-status.spec.js` to have run first (it
+relies on the active runway), as on the baseline. Restart the local crc-sync on :3000 after any `crc-sync/src` change.
 
-ADRs: `0001`–`0076`, `0078`–`0089`, `0091`, `0093`, `0094`. The gaps: `0077` is reserved for L20, `0090` and `0092` were not
-used (TA took none: it applies `0085`/H62), `0060` is the errata ADR. **An ADR is never edited once
-committed (P4)**: a correction is a new ADR.
+ADRs: `0001`-`0076`, `0078`-`0089`, `0091`, `0093`-`0097` (0095 structure, 0096 clocks, 0097 logging). The gaps: `0077` is
+reserved for L20, `0090` and `0092` were not used (TA took none: it applies `0085`/H62), `0060` is the errata ADR.
+**An ADR is never edited once committed (P4)**: a correction is a new ADR.
+
+**Layout (ADR `0095`).** `board-store.js` is the `BoardStore` facade; the work is in `board/` (collaborators) and
+`board/ops/` (one file per Board op, `{kind, authorize?, apply, auditFields?}`). `wire/` holds the `/feed` handler's
+skeleton and `wire/families/` one file per wire family; `efsp-ws.js` binds them. `sync/` is the replay cache and the
+sync log. `authority/` holds who may do what (`positions/`, `strip-types/`, `classes.js`, `op-kinds.js`; it replaced
+`permission.js`'s tables). `stores.js` is the registry of persisted stores and `PERSISTED_SHAPE`: an unknown key or an
+old shape in `state/` stops start-up. `crc-sync/src/app.js`'s `createApp()` is the composition root with the named
+tickers; `server.js` only builds the gRPC and SRS clients and listens. Facility data is the four complete
+`config/efsp-facility-*.json` (`facility-schema.js`); a missing or invalid one is a start-up error, with no merge.
+The CRC client is native ES modules (`crc-desktop/README.md` "Client modules").
 
 ```
+crc-sync/src/app.js                       createApp(): composition root, named tickers (0095); server.js only listens
 crc-sync/src/efsp/                        the subsystem — stores, rules, the wire handler
+crc-sync/src/efsp/board/, board/ops/      BoardStore's collaborators and one file per Board op (0095)
+crc-sync/src/efsp/wire/, wire/families/   the /feed handler's skeleton and one file per wire family
+crc-sync/src/efsp/sync/                   replay cache, sync log
+crc-sync/src/efsp/authority/              Positions, strip types, op kinds: who may do what
 crc-sync/src/mission-clock.js             in-game Zulu, injected into every EFSP time (F1, 0079)
 crc-sync/src/mission-session.js           which mission we are in: new session on start/other mission/clock step-back (F3, 0086)
 crc-sync/src/magnetic.js                  WMM2025 variation + grid convergence, per-theater override (F2, 0085)
