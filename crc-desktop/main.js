@@ -126,6 +126,7 @@ app.on('ready', async () => {
     let lastUpdateStatus = { state: 'idle' };
     function sendUpdateStatus(status) {
         lastUpdateStatus = status;
+        updateInFlight = status.state === 'checking' || status.state === 'downloading';
         if (win && !win.isDestroyed()) win.webContents.send('update-status', status);
     }
 
@@ -207,6 +208,23 @@ app.on('ready', async () => {
 // Renderer's topbar update dot calls this directly when clicked while in
 // the 'ready' state — the click itself is the restart confirmation.
 ipcMain.on('update-restart-now', () => autoUpdater.quitAndInstall());
+
+// crc-sync refused this client's wire protocol and the "Update required" overlay asked for the release now (crc-sync
+// docs/adr/0103). Idempotent while a check or download is running; unpackaged there is no updater to ask. The outcome
+// reaches the overlay through the existing 'update-status' stream, so this only reports whether it started something.
+let updateInFlight = false;
+ipcMain.handle('update-check-now', async () => {
+    if (!app.isPackaged) return { state: 'idle' };
+    if (updateInFlight) return { state: 'checking' };
+    try {
+        await autoUpdater.checkForUpdates();
+    } catch (err) {
+        console.error('[autoupdate] check failed:', err.message);
+        return { state: 'idle' };
+    }
+    return { state: updateInFlight ? 'checking' : 'idle' };
+});
+ipcMain.handle('get-app-version', () => app.getVersion());
 
 // Backs the "what's new" button in the topbar — returns { version, notes }
 // for the most recent update, or null if none has ever landed on this

@@ -1,4 +1,5 @@
 'use strict';
+import { WIRE_PROTOCOL } from './wire-protocol.js';
 
 // crc-sync client — Casdoor login (via a popup, main.js's
 // setWindowOpenHandler allow-lists the Casdoor authorize URL), the
@@ -233,6 +234,14 @@ async function fetchSyncTicket() {
   }
 }
 
+// The app version, for the server's log only (crc-sync docs/adr/0103). Outside Electron (no preload) it is 'dev'.
+async function appVersion() {
+  try {
+    if (window.crcUpdate && window.crcUpdate.getAppVersion) return String(await window.crcUpdate.getAppVersion());
+  } catch (_) { /* fall through */ }
+  return 'dev';
+}
+
 export async function getSyncFeedUrl() {
   await applyConnOverrides();
   const ticket = await fetchSyncTicket();
@@ -242,7 +251,7 @@ export async function getSyncFeedUrl() {
   }
   hideLoginGate();
   const wsBase = CRCSYNC_URL.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:');
-  return `${wsBase}/feed?ticket=${encodeURIComponent(ticket)}`;
+  return `${wsBase}/feed?ticket=${encodeURIComponent(ticket)}&protocol=${WIRE_PROTOCOL}&client=${encodeURIComponent(await appVersion())}`;
 }
 
 // ── Outbound mutation channel ───────────────────────────────────────────
