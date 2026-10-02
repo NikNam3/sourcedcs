@@ -34,6 +34,8 @@ const MODULES = {
   geojson: '/js/geojson.js',
   geo: '/js/geo.js',
   atc: '/js/atc-scope.js',
+  airspace: '/js/panels/efsp/airspace-panel.js',
+  msgRegistry: '/js/panels/efsp/efsp-message-registry.js',
 };
 
 /** Runs after page.goto('/'). Resolves once every module is imported and `window.crc` exists. */
