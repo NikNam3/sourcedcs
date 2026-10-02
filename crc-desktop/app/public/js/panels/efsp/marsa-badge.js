@@ -49,9 +49,9 @@ export function isMarsaHighlighted(stripId) { return _marsaHighlightStripIds.has
  * @returns {boolean} whether the set changed — the caller re-renders only then.
  */
 export function highlightMarsaParticipants(stripId) {
-  const strip = stripId && typeof getEfspStrip === 'function' ? getEfspStrip(stripId) : null;
+  const strip = stripId ? getEfspStrip(stripId) : null;
   const next = new Set(
-    strip && typeof marsaParticipantStripIds === 'function' ? marsaParticipantStripIds(strip) : [],
+    strip ? marsaParticipantStripIds(strip) : [],
   );
   if (next.size === _marsaHighlightStripIds.size && [...next].every(id => _marsaHighlightStripIds.has(id))) {
     return false;
@@ -62,7 +62,6 @@ export function highlightMarsaParticipants(stripId) {
 
 /** Re-resolves the highlight against the current records — called when a MARSA delta lands. */
 export function refreshMarsaHighlight() {
-  if (typeof getSelectedEfspStripId !== 'function') return false;
   return highlightMarsaParticipants(getSelectedEfspStripId());
 }
 
@@ -93,7 +92,7 @@ export const MARSA_EXPANSION = 'Military Authority Assumes Responsibility for Se
  *                            its condition clears, H39) and must not regrow.
  */
 export function marsaBadgeFor(strip) {
-  const relation = typeof marsaForStrip === 'function' ? marsaForStrip(strip) : null;
+  const relation = marsaForStrip(strip);
   if (!relation) return null;
 
   const others = relation.participants.filter(id => strip && id !== strip.flightDataId);
@@ -151,7 +150,7 @@ function _voidSentence(relation) {
  * still be refused.
  */
 export function marsaActionsFor(strip) {
-  const relation = typeof marsaForStrip === 'function' ? marsaForStrip(strip) : null;
+  const relation = marsaForStrip(strip);
   const active = relation && relation.state === 'ACTIVE' ? relation : null;
   if (!active) {
     return [{ kind: 'DeclareMarsa', label: 'Declare MARSA…' }];

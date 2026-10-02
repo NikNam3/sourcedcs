@@ -35,17 +35,16 @@ export function getCorrelatedHighlightTrackId() { return _correlatedTrackId; }
  */
 export function highlightCorrelatedTrack(stripId) {
   const next = stripId
-    ? correlatedTrackIdForStrip(typeof getEfspStrip === 'function' ? getEfspStrip(stripId) : null)
+    ? correlatedTrackIdForStrip(getEfspStrip(stripId))
     : null;
   if (next === _correlatedTrackId) return _correlatedTrackId;
   _correlatedTrackId = next;
-  if (typeof updateMap === 'function') updateMap();
+  updateMap();
   return _correlatedTrackId;
 }
 
 /** Re-resolves the ring against the current records — called when a correlation delta lands. */
 export function refreshCorrelatedHighlight() {
-  if (typeof getSelectedEfspStripId !== 'function') return;
   highlightCorrelatedTrack(getSelectedEfspStripId());
 }
 
@@ -65,17 +64,15 @@ export function refreshCorrelatedHighlight() {
  *                 can see it.
  */
 export function selectStripForTrack(trackId) {
-  if (typeof stripIdsForTrackId !== 'function') return null;
   const stripIds = stripIdsForTrackId(trackId);
   if (stripIds.length === 0) return null;
   const stripId = stripIds.length === 1 ? stripIds[0] : _preferVisibleStrip(stripIds);
-  if (typeof selectEfspStripById === 'function') selectEfspStripById(stripId);
+  selectEfspStripById(stripId);
   return stripId;
 }
 
 /** The candidate whose Bay is currently open, else the first. */
 function _preferVisibleStrip(stripIds) {
-  if (typeof getOpenEfspBayIds !== 'function' || typeof getEfspStrip !== 'function') return stripIds[0];
   const open = new Set(getOpenEfspBayIds());
   for (const stripId of stripIds) {
     const strip = getEfspStrip(stripId);
@@ -102,7 +99,7 @@ function _preferVisibleStrip(stripIds) {
  *      both non-Block Strip-level indicators, built the same way.
  */
 export function correlationBadgeFor(strip) {
-  const record = typeof getEfspCorrelationForStrip === 'function' ? getEfspCorrelationForStrip(strip) : null;
+  const record = getEfspCorrelationForStrip(strip);
   if (!record) return null;
 
   const warning = record.warning;
@@ -165,7 +162,7 @@ export function correlationBadgeFor(strip) {
   }
 
   return {
-    text: `TRK ${typeof trackRef === 'function' ? trackRef(track) : record.trackId}`,
+    text: `TRK ${trackRef(track)}`,
     className: 'efsp-correlation-badge efsp-correlation-correlated',
     title: _correlatedSentence(record),
   };
@@ -187,7 +184,7 @@ function _correlatedSentence(record) {
 }
 
 function _provisionalSentence(record, strip) {
-  const flightData = typeof getEfspFlightData === 'function' && strip ? getEfspFlightData(strip.flightDataId) : null;
+  const flightData = strip ? getEfspFlightData(strip.flightDataId) : null;
   const assigned = flightData && flightData.identity ? flightData.identity.beaconAssigned : null;
   if (record.observedBeacon && assigned && record.observedBeacon !== assigned) {
     return `observed ${record.observedBeacon} ≠ assigned ${assigned}`;

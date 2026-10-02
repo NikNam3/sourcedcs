@@ -2,7 +2,7 @@
 import { getAllEfspStrips, getEfspFlightData, getEfspRunwayStatus, getEfspStrip } from './efsp-state.js';
 import { getActingPositions } from './efsp-ws.js';
 import { selectEfspStripById } from './bay-view.js';
-import { _activeBayId, _activePositionTab, _renderPositionTabs } from './efsp-panel.js';
+import { _renderPositionTabs } from './efsp-panel.js';
 import { _setActiveBayId, _setActivePositionTab } from './efsp-panel.js';
 
 // Guide §9.6 — alert and scramble, on the client (crc-sync's docs/adr/0070).
@@ -95,14 +95,14 @@ export function alertPadConstraint(runwayStatus, scrambles) {
 // ── the client half ────────────────────────────────────────────────────────
 
 function _scrambleLiveStrips() {
-  return (typeof getAllEfspStrips === 'function' ? getAllEfspStrips() : []).filter(s => s.state !== 'DROPPED');
+  return getAllEfspStrips().filter(s => s.state !== 'DROPPED');
 }
 function _scrambleFlightDataOf(flightDataId) {
-  return typeof getEfspFlightData === 'function' ? getEfspFlightData(flightDataId) : null;
+  return getEfspFlightData(flightDataId);
 }
-/** L1b's client runway status when it is loaded (decisions.md T6: never block on it). */
+/** L1b's client runway status; null until a record has landed (decisions.md T6: never block on it). */
 function _scrambleRunwayStatusFor(facilityId) {
-  return typeof getEfspRunwayStatus === 'function' ? getEfspRunwayStatus(facilityId) : null;
+  return getEfspRunwayStatus(facilityId);
 }
 
 function _joinCallsigns(list) {
@@ -149,18 +149,16 @@ const _seenScrambleStripIds = new Set();
 /**
  * Switches to the Position and Bay holding the Strip when this client holds
  * that Position (the arrivals line's click, efsp-panel.js), then selects it.
- * The Position lookups come from imported modules.
  */
 function _revealScrambleStrip(stripId) {
-  const strip = typeof getEfspStrip === 'function' ? getEfspStrip(stripId) : null;
-  const signedOn = typeof getActingPositions === 'function' ? getActingPositions() : [];
-  if (strip && signedOn.includes(strip.ownerPositionId)
-      && typeof _renderPositionTabs === 'function' && typeof _activePositionTab !== 'undefined') {
+  const strip = getEfspStrip(stripId);
+  const signedOn = getActingPositions();
+  if (strip && signedOn.includes(strip.ownerPositionId)) {
     _setActivePositionTab(strip.ownerPositionId); // eslint-disable-line no-global-assign
     _setActiveBayId(strip.bayId); // eslint-disable-line no-global-assign
     _renderPositionTabs();
   }
-  if (typeof selectEfspStripById === 'function') selectEfspStripById(stripId);
+  selectEfspStripById(stripId);
 }
 
 /**

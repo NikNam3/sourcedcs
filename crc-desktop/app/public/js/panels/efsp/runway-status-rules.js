@@ -252,8 +252,8 @@ export function runwayStatusAlertsFor(strip, lookups) {
   const out = [];
   if (!strip || strip.state === 'DROPPED') return out;
   if (strip.stripType !== 'DEPARTURE' && strip.stripType !== 'ARRIVAL') return out;
-  const runwayStatusFor = (lookups && lookups.runwayStatusFor) || (typeof getEfspRunwayStatus === 'function' ? getEfspRunwayStatus : () => null);
-  const flightDataFor = (lookups && lookups.flightDataFor) || (typeof getEfspFlightData === 'function' ? getEfspFlightData : () => null);
+  const runwayStatusFor = (lookups && lookups.runwayStatusFor) || getEfspRunwayStatus;
+  const flightDataFor = (lookups && lookups.flightDataFor) || getEfspFlightData;
   const record = runwayStatusFor(strip.facilityId);
   if (!record) return out;
   const flightData = strip.flightDataId ? flightDataFor(strip.flightDataId) : null;
@@ -298,7 +298,7 @@ export function runwayStatusAlertsFor(strip, lookups) {
  * the runway-status delta, so without this the chip would lag a whole change.
  */
 export function runwayStatusSignatureFor(strip) {
-  const record = strip && typeof getEfspRunwayStatus === 'function' ? getEfspRunwayStatus(strip.facilityId) : null;
+  const record = strip ? getEfspRunwayStatus(strip.facilityId) : null;
   // The Facility's runway facts any chip may read (status, suspension kind,
   // active end, gear), plus this Strip's own derived alerts.
   const field = record

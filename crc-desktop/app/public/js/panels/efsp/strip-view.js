@@ -27,7 +27,7 @@ import {
 } from './efsp-state.js';
 import { clearEfspArrival, consumeEfspArrivalFlash, efspArrivalFor } from './efsp-arrivals.js';
 import { blockLabelFor, blockTitleFor } from './strip-template.js';
-import { nlaButtonLabel, nlaLabelFor, tofiExitDueFor } from './efsp-nla.js';
+import { nlaButtonLabel, tofiExitDueFor } from './efsp-nla.js';
 import { toggleOffset } from './efsp-gestures.js';
 import { getActingPositions, sendEfspMutation } from './efsp-ws.js';
 import { noteEfspGesture } from './efsp-metrics-client.js';
@@ -96,7 +96,7 @@ function _waitingText(since) {
   if (!since) return '';
   // `since` is crc-sync's mission clock (docs/adr/0079), so the elapsed time
   // is measured against the same clock — topbar.js's missionNow().
-  const now = typeof missionNow === 'function' ? missionNow() : Date.now();
+  const now = missionNow();
   const s = Math.max(0, Math.floor((now - since) / 1000));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
@@ -281,11 +281,10 @@ function _tofiExchange(strip) {
 
 /** A MARSA relation declared but not yet joined: the interlock is armed, and the two answers are on the Strip. */
 function _marsaExchange(strip) {
-  if (typeof marsaForStrip !== 'function') return null;
   const relation = marsaForStrip(strip);
   if (!relation || relation.state !== 'ACTIVE' || relation.rendezvousAt) return null;
   const others = relation.participants.filter(id => id !== strip.flightDataId).map((flightDataId) => {
-    const flightData = typeof getEfspFlightData === 'function' ? getEfspFlightData(flightDataId) : null;
+    const flightData = getEfspFlightData(flightDataId);
     return (flightData && flightData.identity && flightData.identity.callsign) || flightDataId;
   });
   const row = _exchangeRow({ kind: 'marsa', title: `declared by ${relation.declaringCallsign}` });
@@ -305,7 +304,6 @@ function _marsaExchange(strip) {
 
 /** The server would not guess between two contacts; the controller picks one. */
 function _trackExchange(strip) {
-  if (typeof correlationBadgeFor !== 'function') return null;
   const badge = correlationBadgeFor(strip);
   if (!badge || !badge.ambiguous) return null;
   const n = (badge.candidateTrackIds || []).length;
@@ -323,12 +321,11 @@ function _trackExchange(strip) {
 /** The mission Strip this ATC-side Strip's TOFI is with (its tofiCoordination.peerStripId), or null. */
 function _pairedMissionStrip(strip) {
   const tofi = strip && strip.tofiCoordination;
-  return tofi && tofi.peerStripId && typeof getEfspStrip === 'function' ? (getEfspStrip(tofi.peerStripId) || null) : null;
+  return tofi && tofi.peerStripId ? (getEfspStrip(tofi.peerStripId) || null) : null;
 }
 
 /** UI-A U8: should this Strip's NLA slot be TOFI Exit right now? (the mission line is OFF_STATION or RTB.) */
 function _tofiExitIsPrimary(strip) {
-  if (typeof tofiExitDueFor !== 'function' || typeof _canProposeTofiExit !== 'function') return false;
   if (!TOFI_COUNTERPARTS[strip.ownerPositionId] || !_canProposeTofiExit(strip)) return false;
   return tofiExitDueFor(strip, _pairedMissionStrip(strip));
 }
@@ -354,7 +351,7 @@ function _buildLifeBlock(strip) {
     return { life, inhibited: null };
   }
   const nlaStatus = strip.nla;
-  const nlaLabel = nlaStatus === null ? null : (typeof nlaButtonLabel === 'function' ? nlaButtonLabel(strip) : nlaLabelFor(strip.state, strip.stripType)); // a carrier handoff is labelled by its own name (docs/adr/0074)
+  const nlaLabel = nlaStatus === null ? null : nlaButtonLabel(strip); // a carrier handoff is labelled by its own name (docs/adr/0074)
   let inhibited = null;
   if (nlaLabel) {
     // Drop is the terminal step, not the one filled "go" button.
@@ -373,13 +370,13 @@ function _buildLifeBlock(strip) {
       });
     }
     btn.addEventListener('pointerdown', (e) => e.stopPropagation());
-    if (typeof carrierDecorateNlaButton === 'function') carrierDecorateNlaButton(btn, strip);
+    carrierDecorateNlaButton(btn, strip);
     life.appendChild(btn);
   }
   // The carrier's second handoff, beside the NLA (crc-sync docs/adr/0074): "See you" in Case II.
-  if (typeof carrierExtraNlaButtons === 'function') for (const extra of carrierExtraNlaButtons(strip)) life.appendChild(extra);
+  for (const extra of carrierExtraNlaButtons(strip)) life.appendChild(extra);
   // Single Frequency Approach (crc-sync docs/adr/0075): "Rotate to PAR" beside the NLA on a Strip on an SFA frequency.
-  if (typeof sfaExtraNlaButtons === 'function') for (const extra of sfaExtraNlaButtons(strip)) life.appendChild(extra);
+  for (const extra of sfaExtraNlaButtons(strip)) life.appendChild(extra);
   return { life, inhibited };
 }
 
@@ -407,7 +404,7 @@ function _buildStripFields(strip) {
     const chip = _stripEl('span', `efsp-block-chip efsp-field${span > 1 ? ' efsp-field-w' + span : ''}`);
     const label = blockLabelFor(id, strip.stripType);
     const labelEl = _stripEl('span', 'efsp-block-label', label || '');
-    const title = typeof blockTitleFor === 'function' ? blockTitleFor(id, getEfspFlightData(strip.flightDataId)) : null; if (title) labelEl.title = title; // docs/adr/0062
+    const title = blockTitleFor(id, getEfspFlightData(strip.flightDataId)); if (title) labelEl.title = title; // docs/adr/0062
     // §3.7 rule 2's "in the same Block": the current value keeps the field; the
     // latest superseded value sits small and struck beside the label, with a
     // count of the rest. The whole chain is in the expanded view.
@@ -443,8 +440,8 @@ const _fmtClock = (sec) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60
 /** This Strip's conformance alerts and conflicts, each as { key, text, tone, reason }. */
 function _stripAlerts(strip) {
   const out = [];
-  const trackId = typeof correlatedTrackIdForStrip === 'function' ? correlatedTrackIdForStrip(strip) : null;
-  for (const c of (typeof conflictAlertsForTrack === 'function' ? conflictAlertsForTrack(trackId) : [])) {
+  const trackId = correlatedTrackIdForStrip(strip);
+  for (const c of conflictAlertsForTrack(trackId)) {
     // crc-sync names the other aircraft the way it is labelled: its flight's
     // callsign when correlated, else its tag or track number (docs/adr/0059).
     const other = c.otherCallsign;
@@ -454,8 +451,8 @@ function _stripAlerts(strip) {
       reason: `Conflict with ${other} in ${_fmtClock(c.timeToCpaSec)}: closest ${c.minNm} NM / ${c.vertFt} ft.`,
     });
   }
-  if (typeof atoAlertsFor === 'function') out.push(...atoAlertsFor(strip)); // docs/adr/0071, §3.10.3 rule 3
-  for (const a of (typeof conformanceAlertsForFlightData === 'function' ? conformanceAlertsForFlightData(strip.flightDataId) : [])) {
+  out.push(...atoAlertsFor(strip)); // docs/adr/0071, §3.10.3 rule 3
+  for (const a of conformanceAlertsForFlightData(strip.flightDataId)) {
     if (a.kind === 'HEADING') {
       out.push({ key: 'conf', tone: 'attn', legacy: 'efsp-conf-indicator', text: `HDG ${_pad3(a.actual)}`,
         reason: `Assigned heading ${_pad3(a.assigned)}, tracking ${_pad3(a.actual)}.` });
@@ -469,9 +466,9 @@ function _stripAlerts(strip) {
     }
   }
   // Wave-2 advisories, each defined in its own file (docs/adr/0068, 0069, 0070).
-  if (typeof runwayStatusAlertsFor === 'function') out.push(...runwayStatusAlertsFor(strip));
-  if (typeof ordnanceAlertsFor === 'function') out.push(...ordnanceAlertsFor(strip));
-  if (typeof scrambleAlertsFor === 'function') out.push(...scrambleAlertsFor(strip));
+  out.push(...runwayStatusAlertsFor(strip));
+  out.push(...ordnanceAlertsFor(strip));
+  out.push(...scrambleAlertsFor(strip));
   return out;
 }
 
@@ -495,7 +492,7 @@ function _indicator(key, text, tone, legacy, title) {
 
 function _litIndicator(strip, key, el, obligation, siblings) {
   if (key === 'trk') {
-    const badge = typeof correlationBadgeFor === 'function' ? correlationBadgeFor(strip) : null;
+    const badge = correlationBadgeFor(strip);
     if (!badge) return null;
     if (badge.warned) el.classList.add('efsp-strip-correlation-warned');
     // Correlated and nothing wrong is the normal case: say nothing.
@@ -504,7 +501,7 @@ function _litIndicator(strip, key, el, obligation, siblings) {
     return _indicator(key, badge.text, tone, badge.className, badge.title);
   }
   if (key === 'marsa') {
-    const badge = typeof marsaBadgeFor === 'function' ? marsaBadgeFor(strip) : null;
+    const badge = marsaBadgeFor(strip);
     if (!badge) return null;
     if (badge.voided) el.classList.add('efsp-strip-marsa-voided');
     if (badge.armed) el.classList.add('efsp-strip-marsa-armed');
@@ -540,7 +537,7 @@ function _litIndicator(strip, key, el, obligation, siblings) {
       `${obligation.obligationType} — ${obligation.severity}`);
   }
   if (key === 'hint' || key === 'stale') {
-    const hints = typeof surveillanceHintsForStrip === 'function' ? surveillanceHintsForStrip(strip) : [];
+    const hints = surveillanceHintsForStrip(strip);
     const h = hints.find(x => x.kind === (key === 'hint' ? 'AIRBORNE_ADVANCE' : 'STALE'));
     if (!h) return null;
     const seen = h.contactPhase === 'AIRBORNE' ? 'detected airborne' : 'detected on the ground';
@@ -552,7 +549,7 @@ function _litIndicator(strip, key, el, obligation, siblings) {
     // The suggestion chip: one input, and the input is the controller's own
     // SetState — the ordinary path, every rule on it applying. Only a Position
     // that holds the Strip can accept; for anyone else it is information.
-    const acting = typeof getActingPositions === 'function' ? getActingPositions() : [];
+    const acting = getActingPositions();
     const mine = acting.includes(strip.ownerPositionId);
     const node = _indicator(key, 'AIRBORNE? ▸', 'attn', 'efsp-surveillance-chip',
       `Aircraft ${seen}; the Strip says ${h.stripState}. ${mine ? 'Click to advance it to Airborne.' : `${strip.ownerPositionId} holds this Strip.`}`);
@@ -562,8 +559,8 @@ function _litIndicator(strip, key, el, obligation, siblings) {
       node.dataset.toState = h.toState;
       const accept = (e) => {
         if (e && e.stopPropagation) e.stopPropagation();
-        if (typeof _swallowRepeatAdvance === 'function' && _swallowRepeatAdvance()) return;
-        const live = (typeof getEfspStrip === 'function' && getEfspStrip(strip.stripId)) || strip;
+        if (_swallowRepeatAdvance()) return;
+        const live = getEfspStrip(strip.stripId) || strip;
         sendEfspMutation(_resolveActingPositionId(live), live, { kind: 'SetState', toState: h.toState, observedAirborne: true });
       };
       node.addEventListener('click', accept);
@@ -574,7 +571,7 @@ function _litIndicator(strip, key, el, obligation, siblings) {
   }
   if (key === 'ar') {
     // The AR join (docs/adr/0071): not MARSA, never a warning — tone 'on'.
-    const join = typeof arJoinFor === 'function' ? arJoinFor(strip) : null;
+    const join = arJoinFor(strip);
     return join ? _indicator(key, join.text, 'on', 'efsp-ar-badge', join.title) : null;
   }
   if (key === 'siblings') {
@@ -632,7 +629,7 @@ function _buildReasonLines(strip, inhibited, alerts = []) {
       lines.push(why);
     }
   }
-  const marsa = typeof marsaBadgeFor === 'function' ? marsaBadgeFor(strip) : null;
+  const marsa = marsaBadgeFor(strip);
   if (marsa && marsa.voidReason) {
     lines.push(_stripEl('div', 'efsp-strip-reason efsp-strip-reason-bad efsp-marsa-void-reason', marsa.voidReason));
   } else if (marsa && marsa.armed) {
@@ -731,8 +728,8 @@ function _stripMenuItems(strip) {
       title: 'declare, or manage, military authority separating this flight from another',
       run: (anchor) => _openMarsaPopover(strip, anchor) });
   }
-  const record = typeof getEfspCorrelationForStrip === 'function' ? getEfspCorrelationForStrip(strip) : null;
-  const correlation = typeof correlationBadgeFor === 'function' ? correlationBadgeFor(strip) : null;
+  const record = getEfspCorrelationForStrip(strip);
+  const correlation = correlationBadgeFor(strip);
   if (record && !(correlation && correlation.ambiguous)) {
     if (record.binding) {
       items.push({ group: 'Flight', key: 'unbind', label: 'Unbind', cls: 'efsp-correlation-btn', enabled: !!acting,
@@ -772,7 +769,7 @@ function _stripMenuItems(strip) {
   // Strip
   if (acting) {
     items.push({ group: 'Strip', key: 'offset', label: strip.flags.offset ? 'Un-offset ⇤' : 'Offset ⇥', cls: 'efsp-offset-btn',
-      enabled: true, title: 'Offset (cock)', run: () => { const acting = _dispatchGesture(strip, toggleOffset); if (typeof noteEfspGesture === 'function') noteEfspGesture('OFFSET', 'menu', acting); } });
+      enabled: true, title: 'Offset (cock)', run: () => { const acting = _dispatchGesture(strip, toggleOffset); noteEfspGesture('OFFSET', 'menu', acting); } });
   }
   return items;
 }
@@ -871,20 +868,20 @@ function _buildStripTools(strip) {
 export function _buildStripLayout(el, strip, obligation) {
   el.classList.add('efsp-strip-c');
   if (_isRejectedCoordinationReplica(strip)) el.classList.add('efsp-strip-inert');
-  if (typeof isMarsaHighlighted === 'function' && isMarsaHighlighted(strip.stripId)) {
+  if (isMarsaHighlighted(strip.stripId)) {
     el.classList.add('efsp-strip-marsa-participant');
   }
-  if (typeof isArHighlighted === 'function' && isArHighlighted(strip.stripId)) el.classList.add('efsp-strip-ar-participant');
+  if (isArHighlighted(strip.stripId)) el.classList.add('efsp-strip-ar-participant');
 
-  const arrival = typeof efspArrivalFor === 'function' ? efspArrivalFor(strip.stripId) : null;
+  const arrival = efspArrivalFor(strip.stripId);
   if (arrival) {
     el.classList.add('efsp-strip-arrived');
     // The flash plays on the first build the controller can SEE, and never
     // again: rebuilding for any other reason shows the steady amber edge.
-    const onScreen = typeof efspVisibleBayId !== 'function' || efspVisibleBayId() === strip.bayId;
+    const onScreen = efspVisibleBayId() === strip.bayId;
     if (onScreen && consumeEfspArrivalFlash(strip.stripId)) {
       el.classList.add('efsp-strip-arrived-flash');
-      if (typeof noteEfspArrivalShown === 'function') noteEfspArrivalShown();
+      noteEfspArrivalShown();
     }
     // Touching the Strip is noticing it. Cleared in place rather than by a
     // re-render: this is also how a drag starts, and rebuilding the element

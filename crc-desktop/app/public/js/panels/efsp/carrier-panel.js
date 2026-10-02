@@ -1,6 +1,6 @@
 'use strict';
 import { projectPos } from '../../geo.js';
-import { correlatedTrackIdForStrip, getEfspFlightData, getEfspStrip } from './efsp-state.js';
+import { correlatedTrackIdForStrip, getEfspStrip } from './efsp-state.js';
 import { CARRIER_HANDOFFS } from './efsp-nla.js';
 import {
   carrierBannerParts, carrierCaseValue, carrierDerivedFor, carrierDerivedStack, carrierHhmm, getEfspCarrier
@@ -46,7 +46,7 @@ export function carrierActingFor(capability, signedOnIds) {
 }
 
 function _signedOnCarrierIds() {
-  return (typeof getActingPositions === 'function' ? getActingPositions('CARRIER') : []).filter(id => CARRIER_CAPABILITIES[id]);
+  return getActingPositions('CARRIER').filter(id => CARRIER_CAPABILITIES[id]);
 }
 
 function _cel(tag, className, text) {
@@ -336,7 +336,7 @@ export function carrierExtraNlaButtons(strip) {
   btn.addEventListener('pointerdown', (e) => e.stopPropagation());
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
-    const live = (typeof getEfspStrip === 'function' && getEfspStrip(strip.stripId)) || strip;
+    const live = getEfspStrip(strip.stripId) || strip;
     sendEfspMutation(strip.ownerPositionId, live, { kind: 'CarrierHandoff', transfer: 'MARSHAL_TO_PRIFLY' });
     btn.disabled = true;
   });
@@ -361,7 +361,7 @@ export function carrierFinalDistanceText(strip) {
   const view = getEfspCarrier();
   const s = view && view.shipState;
   if (!s || !Number.isFinite(s.lat) || !Number.isFinite(s.lon) || !strip) return '';
-  const trackId = typeof correlatedTrackIdForStrip === 'function' ? correlatedTrackIdForStrip(strip) : null;
+  const trackId = correlatedTrackIdForStrip(strip);
   const track = trackId && typeof window !== 'undefined' && typeof window.getLatestTrack === 'function' ? window.getLatestTrack(trackId) : null;
   if (!track || !Number.isFinite(track.lat) || !Number.isFinite(track.lon)) return '';
   const R = 3440.065; // earth radius, NM
@@ -387,11 +387,11 @@ const CARRIER_FINAL_LINE_NM = 15;
  */
 export function buildCarrierFinalLine() {
   const empty = { type: 'FeatureCollection', features: [] };
-  if (typeof getActingPositions !== 'function' || !getActingPositions('CARRIER').length) return empty;
+  if (!getActingPositions('CARRIER').length) return empty;
   const view = getEfspCarrier();
   const s = view && view.shipState;
   if (!s || !s.found || s.stale || s.headingRef !== 'TRUE' || !Number.isFinite(s.finalBearingDeg)
-      || !Number.isFinite(s.lat) || !Number.isFinite(s.lon) || typeof projectPos !== 'function') return empty;
+      || !Number.isFinite(s.lat) || !Number.isFinite(s.lon)) return empty;
   const out = (s.finalBearingDeg + 180) % 360;
   const [endLat, endLon] = projectPos(s.lat, s.lon, out, CARRIER_FINAL_LINE_NM * 1852);
   const features = [{
@@ -413,14 +413,14 @@ export function buildCarrierFinalLine() {
 // stack with its derived fields, ship banner), sent whole on every change.
 // A Case change is ONE of these and every carrier Strip re-renders from it.
 registerEfspMessage('efsp-carrier-delta', (msg) => {
-  if (typeof applyEfspCarrierDelta === 'function') applyEfspCarrierDelta(msg);
-  if (typeof renderCarrierBanner === 'function') renderCarrierBanner();
-  if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
+  applyEfspCarrierDelta(msg);
+  renderCarrierBanner();
+  renderAllOpenEfspBays();
 });
 
 registerEfspMessage('efsp-carrier-ack', (msg) => {
-  if (!msg.ok && typeof _showMutationError === 'function') _showMutationError(msg.reason || 'Rejected', msg.detail, { subject: 'carrier' });
-  if (msg.carrier && typeof applyEfspCarrierDelta === 'function') applyEfspCarrierDelta({ carriers: { updated: [msg.carrier] } });
-  if (typeof renderCarrierBanner === 'function') renderCarrierBanner();
-  if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
+  if (!msg.ok) _showMutationError(msg.reason || 'Rejected', msg.detail, { subject: 'carrier' });
+  if (msg.carrier) applyEfspCarrierDelta({ carriers: { updated: [msg.carrier] } });
+  renderCarrierBanner();
+  renderAllOpenEfspBays();
 });

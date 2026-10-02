@@ -103,9 +103,9 @@ export const ORDNANCE_NO_RUNWAY_STATUS_REASON = 'Hung ordnance. The hot cargo pa
  */
 export function ordnanceAlertsFor(strip) {
   if (!strip || (strip.stripType !== 'ARRIVAL' && strip.stripType !== 'DEPARTURE') || strip.state === 'DROPPED') return [];
-  const flightData = typeof getEfspFlightData === 'function' ? getEfspFlightData(strip.flightDataId) : null;
+  const flightData = getEfspFlightData(strip.flightDataId);
   if (!flightData || !flightData.military || flightData.military.ordnanceState !== 'HUNG') return [];
-  const runwayStatus = typeof getEfspRunwayStatus === 'function' ? getEfspRunwayStatus(strip.facilityId) : null;
+  const runwayStatus = getEfspRunwayStatus(strip.facilityId);
   const advisory = runwayStatus ? hungOrdnanceAdvisoryFor(strip, flightData, runwayStatus) : null;
   return [{
     key: 'ord', tone: 'attn', legacy: 'efsp-ord-indicator',

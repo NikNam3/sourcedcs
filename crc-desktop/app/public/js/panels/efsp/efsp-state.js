@@ -111,9 +111,9 @@ export function applyEfspSnapshot(msg) {
   efspRunwayStatuses.clear();
   for (const r of msg.runwayStatuses || []) efspRunwayStatuses.set(r.facilityId, r);
   // crc-sync's docs/adr/0074 — the carrier's hull record (carrier-state.js).
-  if (typeof applyEfspCarrierSnapshot === 'function') applyEfspCarrierSnapshot(msg);
+  applyEfspCarrierSnapshot(msg);
   // crc-sync's docs/adr/0093 — who is on which SFA frequency (sfa-state.js).
-  if (typeof applyEfspSfaSnapshot === 'function') applyEfspSfaSnapshot(msg);
+  applyEfspSfaSnapshot(msg);
 }
 
 /**

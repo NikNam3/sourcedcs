@@ -357,7 +357,7 @@ function _historyCellFor(strip, blockId) {
   const map = BLOCK_MAPS[strip.stripType || 'DEPARTURE'];
   const def = map && map[blockId];
   if (def && def.target.kind === 'clearance') {
-    const flightData = typeof getEfspFlightData === 'function' ? getEfspFlightData(strip.flightDataId) : null;
+    const flightData = getEfspFlightData(strip.flightDataId);
     return (flightData && flightData.clearance && flightData.clearance[def.target.field]) || null;
   }
   return (strip.annotations && strip.annotations[blockId]) || null;
@@ -454,7 +454,7 @@ export function resolveBlockValue(blockId, flightData, strip) {
     // show the first source in their chain that has a value, computed here and
     // never written back. `timeSource` says which; `estimated` marks another
     // source's time standing in for an actual that has not happened yet.
-    const chain = ((strip && strip.stripType) || 'DEPARTURE') === 'DEPARTURE' && typeof timeChainForBlock === 'function'
+    const chain = ((strip && strip.stripType) || 'DEPARTURE') === 'DEPARTURE'
       ? timeChainForBlock(blockId) : null;
     if (chain) {
       const r = resolveTimeChain(chain, flightData);
@@ -529,11 +529,11 @@ export function resolveBlockValue(blockId, flightData, strip) {
   // is computed here, and nothing here is editable.
   if (t.kind === 'carrier-derived') {
     let text = '';
-    if (t.field === 'finalDistance') text = typeof carrierFinalDistanceText === 'function' ? carrierFinalDistanceText(strip) : '';
+    if (t.field === 'finalDistance') text = carrierFinalDistanceText(strip);
     else if (t.field === 'callsign') text = flightData && flightData.identity ? (flightData.identity.callsign || '') : '';
     else if (t.field === 'aircraftType') text = flightData && flightData.identity ? (flightData.identity.aircraftType || '') : '';
-    else if (typeof carrierDerivedText === 'function') {
-      const c = typeof getEfspCarrier === 'function' ? getEfspCarrier() : null;
+    else {
+      const c = getEfspCarrier();
       text = carrierDerivedText(t.field, strip ? strip.flightDataId : null, c ? c.shipState : null);
     }
     return { value: text === '' ? null : text, provenance: 'SYSTEM_DERIVED' };
@@ -585,9 +585,9 @@ const ENUM_SELECT_BLOCKS = {
 
 // Block 9F's options come from the stereo route table, which is runtime
 // config (docs/adr/0073): efsp-stereo-routes.js caches the last list crc-sync
-// returned. Guarded because the node tests load this module on its own.
+// returned.
 function _stereoRouteOptions() {
-  const routes = typeof cachedStereoRoutesClient === 'function' ? cachedStereoRoutesClient() : [];
+  const routes = cachedStereoRoutesClient();
   return Array.isArray(routes) ? routes.filter(r => r && r.name && r.active !== false) : [];
 }
 
@@ -780,7 +780,7 @@ function _timeSourceSentence(source, via) {
  */
 export function timeChainTitleFor(blockId, flightData, strip) {
   if (((strip && strip.stripType) || 'DEPARTURE') !== 'DEPARTURE') return null;
-  const chain = typeof timeChainForBlock === 'function' ? timeChainForBlock(blockId) : null;
+  const chain = timeChainForBlock(blockId);
   if (!chain) return null;
   const r = resolveTimeChain(chain, flightData);
   const lines = [TIME_CHAIN_NAMES[chain]];
@@ -808,7 +808,7 @@ export function timeChainTitleFor(blockId, flightData, strip) {
  */
 export function typedTimeBehindPlan(blockId, flightData, strip) {
   if (((strip && strip.stripType) || 'DEPARTURE') !== 'DEPARTURE') return null;
-  const chain = typeof timeChainForBlock === 'function' ? timeChainForBlock(blockId) : null;
+  const chain = timeChainForBlock(blockId);
   if (chain !== 'offBlock' && chain !== 'takeoff') return null;
   const own = resolveTimeChain(chain, flightData);
   if (own.source !== 'CONTROLLER' || own.valueUtc == null) return null;
@@ -852,7 +852,7 @@ export function blockTitleFor(blockId, flightData, strip) {
     if (chainTitle) return chainTitle;
   }
   const base = BLOCK_TITLES[blockId] || null;
-  if (blockId !== '9H-ALT' || typeof mtrLostCommsAdvisory !== 'function') return base;
+  if (blockId !== '9H-ALT') return base;
   const advisory = mtrLostCommsAdvisory(flightData);
   return advisory ? `${base}.\n${advisory}` : base;
 }
