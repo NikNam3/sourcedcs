@@ -43,8 +43,8 @@ async function edit(scope, blockId, text) {
   await input.press('Enter');
 }
 const mtrOf = (page, callsign) => page.evaluate((cs) => {
-  const s = [...efspStrips.values()].find(x => (efspFdrs.get(x.fdrId) || {}).identity?.callsign === cs);
-  return s ? efspFdrs.get(s.fdrId).military.mtr : null;
+  const s = [...efspStrips.values()].find(x => (efspFdrs.get(x.flightDataId) || {}).identity?.callsign === cs);
+  return s ? efspFdrs.get(s.flightDataId).military.mtr : null;
 }, callsign);
 const faceIds = (strip) => strip.locator('.efsp-strip-fields [data-block]').evaluateAll((els) => els.map((e) => e.dataset.block));
 async function only(page, callsign) {
@@ -54,19 +54,19 @@ async function only(page, callsign) {
 }
 
 test('pilot walk: "VIPER11 request a different exit fix", CTR and APP at once', async ({ browser }) => {
-  const ctr = await controller(browser, { held: ['CTR'], facilityId: 'CENTER', controller: 'ctr-walk' });
-  const app = await controller(browser, { held: ['APP'], facilityId: 'INCIRLIK', controller: 'app-walk' });
+  const ctr = await controller(browser, { signedOn: ['CTR'], facilityId: 'CENTER', controller: 'ctr-walk' });
+  const app = await controller(browser, { signedOn: ['AP'], facilityId: 'INCIRLIK', controller: 'app-walk' });
   const CS = 'MTRW11'; // plays "VIPER11"; unique because the Board persists across specs in a run
 
   // An inbound at Center, coordinated to APP so both Facilities hold a Strip.
   await goBay(ctr, 'CTR', 'ctr-enroute');
-  const c = await seedStrip(ctr, { callsign: CS, actingPositionId: 'CTR', bayId: 'ctr-enroute', role: 'ARRIVAL', facilityId: 'CENTER',
-    fdr: { originAirport: 'LCRA', destinationAirport: 'LTAG', route: 'DCT' } });
+  const c = await seedStrip(ctr, { callsign: CS, actingPositionId: 'CTR', bayId: 'ctr-enroute', stripType: 'ARRIVAL', facilityId: 'CENTER',
+    flightData: { originAirport: 'LCRA', destinationAirport: 'LTAG', route: 'DCT' } });
   await startAction(c, 'Coordinate…');
   const pop = ctr.locator('.efsp-coordinate-popover');
   await pop.locator('select').selectOption('HANDOFF');
   await pop.getByRole('button', { name: 'Send' }).dispatchEvent('click');
-  await goBay(app, 'APP', 'app-coordination');
+  await goBay(app, 'AP', 'ap-coordination');
   const a = stripOf(app, CS);
   await expect(a).toBeVisible();
 
@@ -86,9 +86,9 @@ test('pilot walk: "VIPER11 request a different exit fix", CTR and APP at once', 
   // APP takes the flight.
   const accept = a.getByRole('button', { name: 'Accept Hand Off' });
   await accept.click({ timeout: 3000 });
-  await expect.poll(async () => (await app.evaluate((cs) => [...efspStrips.values()].filter(s => efspFdrs.get(s.fdrId)?.identity?.callsign === cs && s.facilityId === 'INCIRLIK').map(s => s.coordination && s.coordination.state), CS))[0]).toBe('ACTIVE');
-  const bayNow = await app.evaluate((cs) => [...efspStrips.values()].find(s => efspFdrs.get(s.fdrId)?.identity?.callsign === cs && s.facilityId === 'INCIRLIK').bayId, CS);
-  if (bayNow !== 'app-coordination') await goBay(app, 'APP', bayNow);
+  await expect.poll(async () => (await app.evaluate((cs) => [...efspStrips.values()].filter(s => efspFdrs.get(s.flightDataId)?.identity?.callsign === cs && s.facilityId === 'INCIRLIK').map(s => s.coordination && s.coordination.state), CS))[0]).toBe('ACTIVE');
+  const bayNow = await app.evaluate((cs) => [...efspStrips.values()].find(s => efspFdrs.get(s.flightDataId)?.identity?.callsign === cs && s.facilityId === 'INCIRLIK').bayId, CS);
+  if (bayNow !== 'ap-coordination') await goBay(app, 'AP', bayNow);
   const mine = stripOf(app, CS);
   note('1b', `APP accepted; its Strip is in ${bayNow}`);
 
@@ -101,7 +101,7 @@ test('pilot walk: "VIPER11 request a different exit fix", CTR and APP at once', 
   const after = await mtrOf(app, CS);
   const struck = await mine.locator('.efsp-strip-fields .efsp-annotation-entry').count();
   note('2', `APP overwrote F/1432/FL190 -> ${after.exitFix}/${new Date(after.exitEstimateUtc).toISOString().slice(11, 16)}/${after.requestedAltitudeAfterExit}. `
-    + `Struck history entries on the face: ${struck} (expected 0 — §3.7 gap, H25). Old exit fix anywhere on the FDR: ${JSON.stringify(after).includes('"F"')}`);
+    + `Struck history entries on the face: ${struck} (expected 0 — §3.7 gap, H25). Old exit fix anywhere on the FLIGHT_DATA: ${JSON.stringify(after).includes('"F"')}`);
   expect(before.exitFix).toBe('F');
   expect(after.exitFix).toBe('E');
   await expect(c.locator('.efsp-strip-fields .efsp-block-9H-EXIT')).toHaveText('E', { timeout: 3000 });
@@ -154,7 +154,7 @@ test('pilot walk: "VIPER11 request a different exit fix", CTR and APP at once', 
   const input = mine.locator('input.efsp-block-input');
   await input.fill('D');
   const ctrWrite = await ctr.evaluate((cs) => {
-    const s = [...efspStrips.values()].find(x => efspFdrs.get(x.fdrId)?.identity?.callsign === cs && x.facilityId === 'CENTER');
+    const s = [...efspStrips.values()].find(x => efspFdrs.get(x.flightDataId)?.identity?.callsign === cs && x.facilityId === 'CENTER');
     window.sendEfspMutation('CTR', s, { kind: 'SetBlock', blockId: '9H-TIME', value: '1445' }, 'CENTER');
     return s.ownerPositionId;
   }, CS);

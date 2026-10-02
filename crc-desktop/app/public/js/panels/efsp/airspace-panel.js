@@ -38,11 +38,11 @@ let _airspaceEmptyEl = null;
  * offered a button that will be refused.
  */
 export function airspaceActionsFor(airspace, signedOnPositionIds) {
-  const held = new Set(signedOnPositionIds || []);
+  const signedOn = new Set(signedOnPositionIds || []);
   const definition = (airspace && airspace.definition) || {};
-  const isControlling = held.has(definition.controllingPositionId);
+  const isControlling = signedOn.has(definition.controllingPositionId);
   const isUsing = definition.usingPositionId
-    ? held.has(definition.usingPositionId)
+    ? signedOn.has(definition.usingPositionId)
     : isControlling;
 
   const actions = [];
@@ -153,8 +153,8 @@ function _buildAirspaceCard(airspace, signedOnPositionIds) {
     const list = document.createElement('div');
     list.className = 'airspace-flights';
     list.textContent = flights.map((s) => {
-      const fdr = getEfspFdr(s.fdrId);
-      const callsign = (fdr && fdr.identity && fdr.identity.callsign) || s.cid;
+      const flightData = getEfspFdr(s.flightDataId);
+      const callsign = (flightData && flightData.identity && flightData.identity.callsign) || s.cid;
       const entry = s.airspaceEntry || {};
       const bits = [];
       if (entry.frequencyMhz) bits.push(entry.frequencyMhz.toFixed(3));
@@ -188,11 +188,11 @@ function _buildAirspaceCard(airspace, signedOnPositionIds) {
 export function renderAirspacePanel() {
   if (!_airspaceListEl) return; // not initialized yet
   const airspaces = getAllEfspAirspaces();
-  const held = getActingPositions();
+  const signedOn = getActingPositions();
 
   _airspaceListEl.innerHTML = '';
   for (const airspace of airspaces) {
-    _airspaceListEl.appendChild(_buildAirspaceCard(airspace, held));
+    _airspaceListEl.appendChild(_buildAirspaceCard(airspace, signedOn));
   }
 
   if (_airspaceEmptyEl) {

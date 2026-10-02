@@ -58,8 +58,8 @@ function build(radars = RADARS) {
   return { coverage, stores };
 }
 
-function hold(stores, facilityId, controllerId, held) {
-  stores.get(facilityId).setSignedOnPositions(controllerId, controllerId, held);
+function hold(stores, facilityId, controllerId, signedOn) {
+  stores.get(facilityId).setSignedOnPositions(controllerId, controllerId, signedOn);
 }
 
 // ── selector matching ──────────────────────────────────────────────────────
@@ -105,26 +105,26 @@ test('a selector that resolves to nothing in this theater is simply empty, not a
 
 test('APP at INCIRLIK is the RAPCON: it gets the approach radar and the field surveillance radar', () => {
   const { coverage, stores } = build();
-  hold(stores, 'INCIRLIK', 'c1', ['APP']);
+  hold(stores, 'INCIRLIK', 'c1', ['AP']);
   const result = coverage.forController('c1');
   assert.deepEqual(result.radars.map(r => r.id), ['app:Incirlik', 'apt:Incirlik']);
-  assert.deepEqual(result.radars[0].grantedBy, ['APP'], 'a radar says which Position put it there');
+  assert.deepEqual(result.radars[0].grantedBy, ['AP'], 'a radar says which Position put it there');
 });
 
 test('TWR gets the field surveillance radar only — the 80nm approach picture is not its job', () => {
   const { coverage, stores } = build();
-  hold(stores, 'INCIRLIK', 'c1', ['TWR']);
+  hold(stores, 'INCIRLIK', 'c1', ['LC']);
   assert.deepEqual(coverage.forController('c1').radars.map(r => r.id), ['apt:Incirlik']);
 });
 
 test('Ground, Clearance Delivery and Operations have no scope, and the answer is empty rather than everything', () => {
-  for (const positionId of ['GND', 'CD', 'OPS']) {
+  for (const positionId of ['GC', 'CD', 'OPS']) {
     const { coverage, stores } = build();
     hold(stores, 'INCIRLIK', 'c1', [positionId]);
     const result = coverage.forController('c1');
     assert.equal(result.radars.length, 0, `${positionId} should have no coverage`);
     assert.deepEqual(result.radarBearingPositions, [], `${positionId} is not a radar Position`);
-    assert.equal(result.heldPositions.length, 1, 'but they are still holding it');
+    assert.equal(result.signedOnPositions.length, 1, 'but they are still holding it');
   }
 });
 
@@ -132,7 +132,7 @@ test('a controller holding nothing at all sees nothing', () => {
   const { coverage } = build();
   const result = coverage.forController('nobody');
   assert.equal(result.radars.length, 0);
-  assert.equal(result.heldPositions.length, 0);
+  assert.equal(result.signedOnPositions.length, 0);
 });
 
 test('CTR gets every airfield approach radar in the theater — an en-route picture with no per-theater editing', () => {
@@ -159,24 +159,24 @@ test('JTAC is read-only and gets no scope', () => {
 
 test('holding Positions at two Facilities unions their coverage, and records both grantors', () => {
   const { coverage, stores } = build();
-  hold(stores, 'INCIRLIK', 'c1', ['APP']);
+  hold(stores, 'INCIRLIK', 'c1', ['AP']);
   hold(stores, 'CENTER', 'c1', ['CTR']);
   const result = coverage.forController('c1');
   assert.deepEqual(result.radars.map(r => r.id).sort(), ['app:Adana', 'app:Incirlik', 'apt:Incirlik']);
   const incirlikApproach = result.radars.find(r => r.id === 'app:Incirlik');
-  assert.deepEqual(incirlikApproach.grantedBy.sort(), ['APP', 'CTR'], 'both hats grant it');
+  assert.deepEqual(incirlikApproach.grantedBy.sort(), ['AP', 'CTR'], 'both hats grant it');
 });
 
 test('a radar-bearing Position held alongside a scopeless one still gives its picture', () => {
   const { coverage, stores } = build();
-  hold(stores, 'INCIRLIK', 'c1', ['GND', 'TWR']);
+  hold(stores, 'INCIRLIK', 'c1', ['GC', 'LC']);
   assert.deepEqual(coverage.forController('c1').radars.map(r => r.id), ['apt:Incirlik']);
-  assert.deepEqual(coverage.forController('c1').radarBearingPositions, ['TWR']);
+  assert.deepEqual(coverage.forController('c1').radarBearingPositions, ['LC']);
 });
 
 test('releasing a Position takes its coverage away on the next ask', () => {
   const { coverage, stores } = build();
-  hold(stores, 'INCIRLIK', 'c1', ['APP']);
+  hold(stores, 'INCIRLIK', 'c1', ['AP']);
   assert.equal(coverage.forController('c1').radars.length, 2);
   hold(stores, 'INCIRLIK', 'c1', []);
   assert.equal(coverage.forController('c1').radars.length, 0);
@@ -186,12 +186,12 @@ test('releasing a Position takes its coverage away on the next ask', () => {
 
 test('an Observer sees the picture too — holding a Position is what grants it, not being Primary', () => {
   const { coverage, stores } = build();
-  hold(stores, 'INCIRLIK', 'first', ['APP']);
-  hold(stores, 'INCIRLIK', 'second', ['APP']);
+  hold(stores, 'INCIRLIK', 'first', ['AP']);
+  hold(stores, 'INCIRLIK', 'second', ['AP']);
   const primary = coverage.forController('first');
   const observer = coverage.forController('second');
-  assert.equal(primary.heldPositions[0].isPrimary, true);
-  assert.equal(observer.heldPositions[0].isPrimary, false, 'the second controller is an Observer');
+  assert.equal(primary.signedOnPositions[0].isPrimary, true);
+  assert.equal(observer.signedOnPositions[0].isPrimary, false, 'the second controller is an Observer');
   assert.deepEqual(
     observer.radars.map(r => r.id), primary.radars.map(r => r.id),
     'and sees exactly the same radars',
@@ -203,7 +203,7 @@ test('an Observer sees the picture too — holding a Position is what grants it,
 test('activeRadars is only what somebody is looking through, so an unattended airfield costs nothing', () => {
   const { coverage, stores } = build();
   assert.deepEqual(coverage.activeRadars(), [], 'nobody on position, nothing to sweep');
-  hold(stores, 'INCIRLIK', 'c1', ['TWR']);
+  hold(stores, 'INCIRLIK', 'c1', ['LC']);
   assert.deepEqual(coverage.activeRadars().map(r => r.id), ['apt:Incirlik']);
   hold(stores, 'CENTER', 'c2', ['CTR']);
   assert.deepEqual(
@@ -234,7 +234,7 @@ test('the radar list is read live, so an AWACS taking off appears without rebuil
 test('the tactical Positions are on the datalink; the ATC Positions are not (docs/adr/0059)', () => {
   const { coverage, stores } = build();
   hold(stores, 'TACTICAL', 'c1', ['GCI']);
-  hold(stores, 'INCIRLIK', 'c2', ['APP']);
+  hold(stores, 'INCIRLIK', 'c2', ['AP']);
   assert.equal(coverage.forController('c1').datalink, true);
   assert.equal(coverage.forController('c2').datalink, false);
   assert.equal(coverage.forController('nobody').datalink, false);
@@ -271,7 +271,7 @@ test('a malformed selector is refused, because it can never resolve in any theat
     ['app:Incirlik', /must be an object/],
   ];
   for (const [selector, pattern] of cases) {
-    const check = facilityConfig.validateConfig({ ...base, positionRadars: { APP: [selector] } });
+    const check = facilityConfig.validateConfig({ ...base, positionRadars: { AP: [selector] } });
     assert.equal(check.ok, false, `${JSON.stringify(selector)} should have been refused`);
     assert.match(check.detail, pattern);
   }
@@ -279,7 +279,7 @@ test('a malformed selector is refused, because it can never resolve in any theat
 
 test('positionRadars that is not an array is refused', () => {
   const base = facilityConfig.getFacilityConfig('INCIRLIK');
-  const check = facilityConfig.validateConfig({ ...base, positionRadars: { APP: 'app:Incirlik' } });
+  const check = facilityConfig.validateConfig({ ...base, positionRadars: { AP: 'app:Incirlik' } });
   assert.equal(check.ok, false);
   assert.match(check.detail, /must be an array/);
 });
@@ -287,17 +287,17 @@ test('positionRadars that is not an array is refused', () => {
 test('an unresolvable-but-well-formed selector is accepted — the same config has to work across theaters', () => {
   const base = facilityConfig.getFacilityConfig('INCIRLIK');
   const check = facilityConfig.validateConfig({
-    ...base, positionRadars: { APP: [{ kind: 'approach', airport: 'EGLL' }] },
+    ...base, positionRadars: { AP: [{ kind: 'approach', airport: 'EGLL' }] },
   });
   assert.equal(check.ok, true);
 });
 
 test('radarBearingPositionIds names the Positions that have a scope at all', () => {
   const ids = facilityConfig.radarBearingPositionIds();
-  for (const positionId of ['TWR', 'APP', 'CTR', 'TAC_C2', 'AIC', 'GCI']) {
+  for (const positionId of ['LC', 'AP', 'CTR', 'TAC_C2', 'AIC', 'GCI']) {
     assert.ok(ids.includes(positionId), `${positionId} should be a radar Position`);
   }
-  for (const positionId of ['OPS', 'CD', 'GND', 'JTAC']) {
+  for (const positionId of ['OPS', 'CD', 'GC', 'JTAC']) {
     assert.ok(!ids.includes(positionId), `${positionId} should not be a radar Position`);
   }
 });
@@ -305,9 +305,9 @@ test('radarBearingPositionIds names the Positions that have a scope at all', () 
 test('conflict alerting is for the ATC Positions only (docs/adr/0059)', () => {
   const { coverage, stores } = build();
   hold(stores, 'TACTICAL', 'c1', ['GCI']);
-  hold(stores, 'INCIRLIK', 'c2', ['TWR']);
+  hold(stores, 'INCIRLIK', 'c2', ['LC']);
   hold(stores, 'CENTER', 'c3', ['CTR']);
-  assert.equal(coverage.forController('c1').stca, false);
-  assert.equal(coverage.forController('c2').stca, true);
-  assert.equal(coverage.forController('c3').stca, true);
+  assert.equal(coverage.forController('c1').conflictAlert, false);
+  assert.equal(coverage.forController('c2').conflictAlert, true);
+  assert.equal(coverage.forController('c3').conflictAlert, true);
 });

@@ -23,10 +23,10 @@ export function _resetEfspSfaStateForTest() { efspSfaView = null; }
 
 // Mirrors of crc-sync permission.js (drift-tested: tests/efsp-sfa-client.test.js).
 // INCIRLIK_CAPABILITIES' `sendsSfaRotation` column, and SFA_TRANSFERS.SFA_ROTATION's label.
-export const SFA_ROTATION_SENDERS = ['APP', 'SFA'];
+export const SFA_ROTATION_SENDERS = ['AP', 'SFA'];
 export const SFA_ROTATION_LABEL = 'Rotate to PAR';
 // INCIRLIK_CAPABILITIES' `rotatesSfa` ceiling; the server narrows it to the config's jurisdiction.
-export const SFA_ROTATION_CEILING = ['APP'];
+export const SFA_ROTATION_CEILING = ['AP'];
 
 /** `232.100`, the way a controller reads a UHF frequency. */
 export function sfaFrequencyText(mhz) { return Number.isFinite(mhz) ? mhz.toFixed(3) : '--'; }
@@ -55,10 +55,10 @@ export function sfaPoolEntryForFrequency(mhz, view = getEfspSfa()) {
  * the transfer, that is on an SFA frequency (its working frequency is in the pool; filing a Strip
  * on an SFA Rack assigns it that frequency). A Strip has one NLA (§3.5 rule 1), so this is a second button beside it, as "See you" is.
  */
-export function sfaRotationOffered(strip, fdr, heldIds, view = getEfspSfa()) {
-  if (!view || !strip || strip.role !== 'ARRIVAL' || strip.state !== 'INBOUND') return false;
+export function sfaRotationOffered(strip, flightData, heldIds, view = getEfspSfa()) {
+  if (!view || !strip || strip.stripType !== 'ARRIVAL' || strip.state !== 'INBOUND') return false;
   if (!SFA_ROTATION_SENDERS.includes(strip.ownerPositionId)) return false;
   if (!(heldIds || []).includes(strip.ownerPositionId)) return false;
-  const mhz = fdr && fdr.comms ? fdr.comms.workingFrequencyMhz : null;
+  const mhz = flightData && flightData.comms ? flightData.comms.workingFrequencyMhz : null;
   return !!sfaPoolEntryForFrequency(mhz, view);
 }

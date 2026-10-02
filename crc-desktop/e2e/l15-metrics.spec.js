@@ -26,9 +26,9 @@ async function openMetrics(page) {
 }
 
 test('what a controller does is measured and shown on METRICS', async ({ page }) => {
-  await openPanel(page, { held: ['OPS', 'GND'] });
-  await seedStrip(page, { callsign: 'MET101', role: 'DEPARTURE', fdr: FDR });
-  await seedStrip(page, { callsign: 'MET102', role: 'DEPARTURE', fdr: FDR });
+  await openPanel(page, { signedOn: ['OPS', 'GC'] });
+  await seedStrip(page, { callsign: 'MET101', stripType: 'DEPARTURE', flightData: FDR });
+  await seedStrip(page, { callsign: 'MET102', stripType: 'DEPARTURE', flightData: FDR });
 
   // Two searches, the way a controller runs one: `.find` in the command line.
   const cmd = page.locator('#efsp-dot-command-input');
@@ -111,7 +111,7 @@ test('what a controller does is measured and shown on METRICS', async ({ page })
 });
 
 test('the panel needs no Position and polls only while it is on screen', async ({ page }) => {
-  await openPanel(page, { held: [] });
+  await openPanel(page, { signedOn: [] });
   await openMetrics(page);
   await expect(page.locator('#metrics-panel .metrics-row[data-metric]')).toHaveCount(7);
 

@@ -16,13 +16,13 @@ const { test, expect } = require('./helpers/test');
 const { openPanel, seedStrip } = require('./helpers/app');
 
 function stripIdOf(page, callsign) {
-  return page.evaluate((cs) => getAllEfspStrips().find((s) => getEfspFdr(s.fdrId).identity.callsign === cs).stripId, callsign);
+  return page.evaluate((cs) => getAllEfspStrips().find((s) => getEfspFdr(s.flightDataId).identity.callsign === cs).stripId, callsign);
 }
 
 async function raiseObligation(page, callsign) {
   const stripId = await stripIdOf(page, callsign);
   await page.evaluate((stripId) => {
-    applyEfspAlerts({ conformance: [], stca: [], obligations: [
+    applyEfspAlerts({ conformance: [], conflictAlert: [], obligations: [
       { facilityId: 'INCIRLIK', stripId, obligationType: 'VOID_TIME_EXPIRED', severity: 'OVERDUE', dueAt: Date.now(), since: Date.now() },
     ] });
     renderAllOpenEfspBays();
@@ -42,8 +42,8 @@ async function raiseObligation(page, callsign) {
 async function dropAll(page, callsigns) {
   await page.evaluate((cs) => {
     for (const s of getAllEfspStrips()) {
-      const fdr = getEfspFdr(s.fdrId);
-      if (!fdr || !cs.includes(fdr.identity.callsign) || s.state === 'DROPPED') continue;
+      const flightData = getEfspFdr(s.flightDataId);
+      if (!flightData || !cs.includes(flightData.identity.callsign) || s.state === 'DROPPED') continue;
       sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
     }
   }, callsigns);
@@ -52,24 +52,24 @@ async function dropAll(page, callsigns) {
 
 // Extends F-305 — was a catalogued finding, now fixed.
 test('an obligation alert shows on the Strip without anything else happening', async ({ page }) => {
-  await openPanel(page, { held: ['OPS'] });
-  const strip = await seedStrip(page, { callsign: 'L4O1', role: 'DEPARTURE' });
+  await openPanel(page, { signedOn: ['OPS'] });
+  const strip = await seedStrip(page, { callsign: 'L4O1', stripType: 'DEPARTURE' });
   await raiseObligation(page, 'L4O1');
   await expect(strip.locator('.efsp-obligation-badge')).toHaveCount(1, { timeout: 2000 });
 });
 
 // Extends F-305 — was a catalogued finding, now fixed.
 test('declaring MARSA updates the badge on the participants', async ({ page }) => {
-  await openPanel(page, { held: ['OPS'] });
-  const tanker = await seedStrip(page, { callsign: 'L4M1', role: 'DEPARTURE' });
-  await seedStrip(page, { callsign: 'L4M2', role: 'DEPARTURE' });
+  await openPanel(page, { signedOn: ['OPS'] });
+  const tanker = await seedStrip(page, { callsign: 'L4M1', stripType: 'DEPARTURE' });
+  await seedStrip(page, { callsign: 'L4M2', stripType: 'DEPARTURE' });
   try {
     // Sent through the page's own MARSA sender, not the popover — the popover
     // is F-001's, and this is about what happens after the relation exists.
     await page.evaluate(() => {
-      const f = (cs) => getAllEfspStrips().find((s) => getEfspFdr(s.fdrId).identity.callsign === cs);
+      const f = (cs) => getAllEfspStrips().find((s) => getEfspFdr(s.flightDataId).identity.callsign === cs);
       sendEfspMarsaMutation('OPS', undefined, undefined, {
-        kind: 'DeclareMarsa', participants: [f('L4M1').fdrId, f('L4M2').fdrId],
+        kind: 'DeclareMarsa', participants: [f('L4M1').flightDataId, f('L4M2').flightDataId],
         startEvent: 'LOCAL_DECLARATION', endCondition: 'ATC_SEPARATION_ESTABLISHED', declaringCallsign: 'L4M1',
       });
     });
@@ -84,8 +84,8 @@ test('declaring MARSA updates the badge on the participants', async ({ page }) =
 
 // Extends F-002 — fixed. Every Strip-level badge used to land under the actions row.
 test('an obligation badge does not push the Strip onto another row', async ({ page }) => {
-  await openPanel(page, { held: ['OPS'] });
-  const strip = await seedStrip(page, { callsign: 'L4O2', role: 'DEPARTURE' });
+  await openPanel(page, { signedOn: ['OPS'] });
+  const strip = await seedStrip(page, { callsign: 'L4O2', stripType: 'DEPARTURE' });
   const before = (await strip.boundingBox()).height;
   await raiseObligation(page, 'L4O2');
   // No click to force a rebuild any more. It was here because F-305 hid the
@@ -107,8 +107,8 @@ test('an obligation badge does not push the Strip onto another row', async ({ pa
 
 // F-407 — was a catalogued finding, now fixed.
 test('the chip labels on one row line up', async ({ page }) => {
-  await openPanel(page, { held: ['OPS'] });
-  const strip = await seedStrip(page, { callsign: 'L4L1', role: 'DEPARTURE' });
+  await openPanel(page, { signedOn: ['OPS'] });
+  const strip = await seedStrip(page, { callsign: 'L4L1', stripType: 'DEPARTURE' });
   const rows = await strip.evaluate((el) => {
     const byRow = new Map();
     for (const chip of el.querySelectorAll('.efsp-block-chip')) {

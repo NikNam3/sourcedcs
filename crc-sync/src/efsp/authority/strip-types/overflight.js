@@ -15,12 +15,12 @@ const OVERFLIGHT_STATES = ['INBOUND', 'IN_SECTOR', 'HANDED_OFF', 'DROPPED'];
 // [SOURCE-DEFINED] (docs/adr/0087) — the guide's four-state OVERFLIGHT
 // lifecycle (INBOUND, IN_SECTOR, HANDED_OFF, DROPPED); who owns each state is
 // ours, not the guide's. Both Positions that may originate one
-// (permission.js's CREATE_ROLE_PERMISSIONS) may also act on it, same
+// (permission.js's CREATE_STRIP_TYPE_PERMISSIONS) may also act on it, same
 // "self-originator owns it" precedent as ARRIVAL's INBOUND row.
 const OVERFLIGHT_STATE_OWNERS = {
-  INBOUND:    ['APP', 'CTR'],
-  IN_SECTOR:  ['APP', 'CTR'],
-  HANDED_OFF: ['APP', 'CTR'],
+  INBOUND:    ['AP', 'CTR'],
+  IN_SECTOR:  ['AP', 'CTR'],
+  HANDED_OFF: ['AP', 'CTR'],
   // DROPPED is terminal — no NLA exists for it, so no entry is needed.
 };
 
@@ -28,7 +28,7 @@ const OVERFLIGHT_STATE_OWNERS = {
  * OVERFLIGHT's entire NLA table (docs/adr/0087) — a flight transiting this
  * Facility's airspace without landing or departing here at all (guide §2).
  * No staffing gating, no transferTo: whichever Position originated it
- * (permission.js's CREATE_ROLE_PERMISSIONS) works it solo. IN_SECTOR's step
+ * (permission.js's CREATE_STRIP_TYPE_PERMISSIONS) works it solo. IN_SECTOR's step
  * is "leaves our airspace" — to an agency this server does not model, so
  * nothing is transferred. Handing the flight to our own next Facility
  * (CTR -> APP) is Coordinate/HANDOFF, as at ARRIVAL's CENTER INBOUND.
@@ -48,7 +48,7 @@ function computeOverflightNla(strip) {
 }
 
 const family = {
-  role: 'OVERFLIGHT',
+  stripType: 'OVERFLIGHT',
   states: OVERFLIGHT_STATES,
   initialState: 'INBOUND',
   stateOwners: OVERFLIGHT_STATE_OWNERS,

@@ -29,7 +29,7 @@ test('deferred/optional Blocks (2A, 4A, 9A-9C, 16, 17, 19-23) are present but no
 });
 
 test('requiredBlocksFor returns an empty array for an unknown role', () => {
-  assert.deepEqual(requiredBlocksFor('NOT_A_ROLE'), []);
+  assert.deepEqual(requiredBlocksFor('NOT_A_STRIP_TYPE'), []);
 });
 
 test('isValidStripType is true for DEPARTURE, ARRIVAL, OVERFLIGHT (docs/adr/0023) and MISSION (WP4A second slice), false for anything else', () => {
@@ -37,16 +37,16 @@ test('isValidStripType is true for DEPARTURE, ARRIVAL, OVERFLIGHT (docs/adr/0023
   assert.equal(isValidStripType('ARRIVAL'), true);
   assert.equal(isValidStripType('OVERFLIGHT'), true);
   assert.equal(isValidStripType('MISSION'), true);
-  assert.equal(isValidStripType('NOT_A_ROLE'), false);
+  assert.equal(isValidStripType('NOT_A_STRIP_TYPE'), false);
 });
 
 // ── resolveBlockTarget ───────────────────────────────────────────────────
 
 test('resolveBlockTarget routes flight-data-bound Blocks to their exact field path', () => {
-  assert.deepEqual(resolveBlockTarget('DEPARTURE', '1'), { kind: 'fdr', path: 'identity.callsign' });
-  assert.deepEqual(resolveBlockTarget('DEPARTURE', '5'), { kind: 'fdr', path: 'identity.beaconAssigned' });
-  assert.deepEqual(resolveBlockTarget('DEPARTURE', '9E'), { kind: 'fdr', path: 'filed.remarks' });
-  assert.deepEqual(resolveBlockTarget('DEPARTURE', '14'), { kind: 'fdr', path: 'assigned.releaseTimeUtc' });
+  assert.deepEqual(resolveBlockTarget('DEPARTURE', '1'), { kind: 'flightData', path: 'identity.callsign' });
+  assert.deepEqual(resolveBlockTarget('DEPARTURE', '5'), { kind: 'flightData', path: 'identity.beaconAssigned' });
+  assert.deepEqual(resolveBlockTarget('DEPARTURE', '9E'), { kind: 'flightData', path: 'filed.remarks' });
+  assert.deepEqual(resolveBlockTarget('DEPARTURE', '14'), { kind: 'flightData', path: 'assigned.releaseTimeUtc' });
 });
 
 test('resolveBlockTarget routes annotation-only Blocks to {kind:"annotation"}', () => {
@@ -71,7 +71,7 @@ test('resolveBlockTarget returns null for an unknown Block ID', () => {
 });
 
 test('resolveBlockTarget returns null for an unknown role entirely', () => {
-  assert.equal(resolveBlockTarget('NOT_A_ROLE', '1'), null);
+  assert.equal(resolveBlockTarget('NOT_A_STRIP_TYPE', '1'), null);
 });
 
 test('resolveBlockTarget returns null for a Block ID MISSION does not define (it uses an M-prefixed namespace, not FAA numbering)', () => {
@@ -111,14 +111,14 @@ test('the assigned altitude and heading are the FLIGHT\'s clearance, on every Ro
   assert.deepEqual(resolveBlockTarget('OVERFLIGHT', '7A'), alt);
   assert.deepEqual(resolveBlockTarget('OVERFLIGHT', '9A-VECTOR'), hdg);
   // And the filed request stays exactly what it was.
-  assert.deepEqual(resolveBlockTarget('DEPARTURE', '7'), { kind: 'fdr', path: 'filed.requestedAltitude' });
+  assert.deepEqual(resolveBlockTarget('DEPARTURE', '7'), { kind: 'flightData', path: 'filed.requestedAltitude' });
 });
 
 test('ARRIVAL resolveBlockTarget routes flight-data-bound Blocks to their exact field path', () => {
-  assert.deepEqual(resolveBlockTarget('ARRIVAL', '1'), { kind: 'fdr', path: 'identity.callsign' });
-  assert.deepEqual(resolveBlockTarget('ARRIVAL', '8'), { kind: 'fdr', path: 'filed.originAirport' });
-  assert.deepEqual(resolveBlockTarget('ARRIVAL', '8B'), { kind: 'fdr', path: 'assigned.landingRunway' });
-  assert.deepEqual(resolveBlockTarget('ARRIVAL', '6'), { kind: 'fdr', path: 'filed.estimatedArrivalTimeUtc' });
+  assert.deepEqual(resolveBlockTarget('ARRIVAL', '1'), { kind: 'flightData', path: 'identity.callsign' });
+  assert.deepEqual(resolveBlockTarget('ARRIVAL', '8'), { kind: 'flightData', path: 'filed.originAirport' });
+  assert.deepEqual(resolveBlockTarget('ARRIVAL', '8B'), { kind: 'flightData', path: 'assigned.landingRunway' });
+  assert.deepEqual(resolveBlockTarget('ARRIVAL', '6'), { kind: 'flightData', path: 'filed.estimatedArrivalTimeUtc' });
 });
 
 test('ARRIVAL resolveBlockTarget returns null for system/composite/flag Blocks (2, 3, 4, 4A, 25, 26)', () => {
@@ -132,13 +132,13 @@ test('ARRIVAL resolveBlockTarget returns null for system/composite/flag Blocks (
 // else in 9A MAY be omitted.
 test('a facility config omitting minimum fuel (9A-FUEL) from blockVisibility.ARRIVAL is rejected by the validator', () => {
   const withoutFuel = requiredBlocksFor('ARRIVAL').filter(id => id !== '9A-FUEL');
-  const result = validateFacilityConfig({ role: 'ARRIVAL', visibleBlocks: withoutFuel });
+  const result = validateFacilityConfig({ stripType: 'ARRIVAL', visibleBlocks: withoutFuel });
   assert.equal(result.ok, false);
   assert.match(result.detail, /9A-FUEL/);
 });
 
 test('a facility config omitting the OPTIONAL 9A-* sub-fields (destination/point-out/vector/speed) from blockVisibility.ARRIVAL is accepted', () => {
-  const result = validateFacilityConfig({ role: 'ARRIVAL', visibleBlocks: REQUIRED_ARRIVAL_BLOCKS });
+  const result = validateFacilityConfig({ stripType: 'ARRIVAL', visibleBlocks: REQUIRED_ARRIVAL_BLOCKS });
   assert.equal(result.ok, true);
 });
 
@@ -163,8 +163,8 @@ test('OVERFLIGHT has no ground/runway/taxi Blocks — it never touches Incirlik\
 });
 
 test('OVERFLIGHT resolveBlockTarget reuses DEPARTURE/ARRIVAL Airport paths for the flight\'s real origin/destination, never Incirlik-specific ones', () => {
-  assert.deepEqual(resolveBlockTarget('OVERFLIGHT', '8'), { kind: 'fdr', path: 'filed.departureAirport' });
-  assert.deepEqual(resolveBlockTarget('OVERFLIGHT', '8B'), { kind: 'fdr', path: 'filed.destinationAirport' });
+  assert.deepEqual(resolveBlockTarget('OVERFLIGHT', '8'), { kind: 'flightData', path: 'filed.departureAirport' });
+  assert.deepEqual(resolveBlockTarget('OVERFLIGHT', '8B'), { kind: 'flightData', path: 'filed.destinationAirport' });
 });
 
 test('OVERFLIGHT resolveBlockTarget returns null for system/composite/flag Blocks (2, 3, 4, 4A, 25, 26)', () => {
@@ -186,16 +186,16 @@ test('every required MISSION Block exists in the Block Map at all', () => {
 });
 
 test('MISSION reuses identity.callsign and identity.beaconAssigned (the guide\'s own "bridge field") rather than inventing new identity fields', () => {
-  assert.deepEqual(resolveBlockTarget('MISSION', 'M3'), { kind: 'fdr', path: 'identity.callsign' });
-  assert.deepEqual(resolveBlockTarget('MISSION', 'M4'), { kind: 'fdr', path: 'identity.beaconAssigned' });
+  assert.deepEqual(resolveBlockTarget('MISSION', 'M3'), { kind: 'flightData', path: 'identity.callsign' });
+  assert.deepEqual(resolveBlockTarget('MISSION', 'M4'), { kind: 'flightData', path: 'identity.beaconAssigned' });
 });
 
 test('MISSION\'s own fields (mission number/package/controlling agency/vul window) route to the mission.* FDR sub-object', () => {
-  assert.deepEqual(resolveBlockTarget('MISSION', 'M1'), { kind: 'fdr', path: 'mission.missionNumber' });
-  assert.deepEqual(resolveBlockTarget('MISSION', 'M2'), { kind: 'fdr', path: 'mission.packageId' });
-  assert.deepEqual(resolveBlockTarget('MISSION', 'M5'), { kind: 'fdr', path: 'mission.controllingAgency' });
-  assert.deepEqual(resolveBlockTarget('MISSION', 'M6'), { kind: 'fdr', path: 'mission.vulWindowStartUtc' });
-  assert.deepEqual(resolveBlockTarget('MISSION', 'M7'), { kind: 'fdr', path: 'mission.vulWindowEndUtc' });
+  assert.deepEqual(resolveBlockTarget('MISSION', 'M1'), { kind: 'flightData', path: 'mission.missionNumber' });
+  assert.deepEqual(resolveBlockTarget('MISSION', 'M2'), { kind: 'flightData', path: 'mission.packageId' });
+  assert.deepEqual(resolveBlockTarget('MISSION', 'M5'), { kind: 'flightData', path: 'mission.controllingAgency' });
+  assert.deepEqual(resolveBlockTarget('MISSION', 'M6'), { kind: 'flightData', path: 'mission.vulWindowStartUtc' });
+  assert.deepEqual(resolveBlockTarget('MISSION', 'M7'), { kind: 'flightData', path: 'mission.vulWindowEndUtc' });
 });
 
 test('MISSION has no FAA-numbered Blocks at all — its namespace is entirely M-prefixed (guide §9.8: drawn from the military extension namespace)', () => {
@@ -223,11 +223,11 @@ const IDENTITY_SUB_BLOCK_PATHS = {
   '3C': 'identity.tailNumber', '3D': 'identity.unit', '3E': 'identity.homeStation',
 };
 
-for (const role of ['DEPARTURE', 'ARRIVAL', 'OVERFLIGHT']) {
-  test(`${role}'s Blocks 3A-3E are present, optional, and flight-data-routed to the right identity path`, () => {
+for (const stripType of ['DEPARTURE', 'ARRIVAL', 'OVERFLIGHT']) {
+  test(`${stripType}'s Blocks 3A-3E are present, optional, and flight-data-routed to the right identity path`, () => {
     for (const [id, path] of Object.entries(IDENTITY_SUB_BLOCK_PATHS)) {
-      assert.deepEqual(resolveBlockTarget(role, id), { kind: 'fdr', path }, `${role}/${id}`);
-      assert.equal(requiredBlocksFor(role).includes(id), false, `${role}/${id} should not be required`);
+      assert.deepEqual(resolveBlockTarget(stripType, id), { kind: 'flightData', path }, `${stripType}/${id}`);
+      assert.equal(requiredBlocksFor(stripType).includes(id), false, `${stripType}/${id} should not be required`);
     }
   });
 }
@@ -235,31 +235,31 @@ for (const role of ['DEPARTURE', 'ARRIVAL', 'OVERFLIGHT']) {
 // ── validateFacilityConfig ───────────────────────────────────────────────
 
 test('validateFacilityConfig accepts a config that includes every required Block', () => {
-  const result = validateFacilityConfig({ role: 'DEPARTURE', visibleBlocks: REQUIRED_DEPARTURE_BLOCKS });
+  const result = validateFacilityConfig({ stripType: 'DEPARTURE', visibleBlocks: REQUIRED_DEPARTURE_BLOCKS });
   assert.deepEqual(result, { ok: true });
 });
 
 test('validateFacilityConfig rejects a config missing even one required Block, and names it', () => {
   const missingOne = REQUIRED_DEPARTURE_BLOCKS.filter(id => id !== '5');
-  const result = validateFacilityConfig({ role: 'DEPARTURE', visibleBlocks: missingOne });
+  const result = validateFacilityConfig({ stripType: 'DEPARTURE', visibleBlocks: missingOne });
   assert.equal(result.ok, false);
   assert.match(result.detail, /5/);
 });
 
 test('validateFacilityConfig lists every missing required Block, not just the first', () => {
   const missingThree = REQUIRED_DEPARTURE_BLOCKS.filter(id => !['5', '9', '18'].includes(id));
-  const result = validateFacilityConfig({ role: 'DEPARTURE', visibleBlocks: missingThree });
+  const result = validateFacilityConfig({ stripType: 'DEPARTURE', visibleBlocks: missingThree });
   assert.equal(result.ok, false);
   for (const id of ['5', '9', '18']) assert.match(result.detail, new RegExp(`\\b${id}\\b`));
 });
 
 test('validateFacilityConfig tolerates extra, non-required visible Blocks', () => {
-  const result = validateFacilityConfig({ role: 'DEPARTURE', visibleBlocks: [...REQUIRED_DEPARTURE_BLOCKS, '2A', '16'] });
+  const result = validateFacilityConfig({ stripType: 'DEPARTURE', visibleBlocks: [...REQUIRED_DEPARTURE_BLOCKS, '2A', '16'] });
   assert.deepEqual(result, { ok: true });
 });
 
 test('validateFacilityConfig rejects an empty visibleBlocks list for a real role', () => {
-  const result = validateFacilityConfig({ role: 'DEPARTURE', visibleBlocks: [] });
+  const result = validateFacilityConfig({ stripType: 'DEPARTURE', visibleBlocks: [] });
   assert.equal(result.ok, false);
 });
 
@@ -287,11 +287,11 @@ test('the guide\'s M18 number is deliberately NOT taken — it belongs to MISSIO
 });
 
 test('a SetBlock at 9F routes to filed.stereoRouteName — writing it is how a flight is re-filed', () => {
-  assert.deepEqual(resolveBlockTarget('DEPARTURE', '9F'), { kind: 'fdr', path: 'filed.stereoRouteName' });
+  assert.deepEqual(resolveBlockTarget('DEPARTURE', '9F'), { kind: 'flightData', path: 'filed.stereoRouteName' });
   // And nowhere else: the other Roles have no 9F at all, so a SetBlock at it
   // there is the ordinary unknown-Block VALIDATION_ERROR.
-  for (const role of ['ARRIVAL', 'OVERFLIGHT', 'MISSION']) {
-    assert.equal(resolveBlockTarget(role, '9F'), null, role);
+  for (const stripType of ['ARRIVAL', 'OVERFLIGHT', 'MISSION']) {
+    assert.equal(resolveBlockTarget(stripType, '9F'), null, stripType);
   }
 });
 
@@ -305,17 +305,17 @@ test('every Strip Role a controller issues clearances on has BOTH a course and a
   // because each Role has its own Block Map. OVERFLIGHT had neither Block
   // before this slice, so a participant transiting on one could be vectored
   // with nothing voiding anything, and nothing anywhere would have said so.
-  for (const role of ['DEPARTURE', 'ARRIVAL', 'OVERFLIGHT']) {
-    const kinds = interlockBlocks(role).map(id => interlockFor(role, id));
-    assert.ok(kinds.includes('COURSE'), `${role} has no course-assignment Block`);
-    assert.ok(kinds.includes('ALTITUDE'), `${role} has no altitude-assignment Block`);
+  for (const stripType of ['DEPARTURE', 'ARRIVAL', 'OVERFLIGHT']) {
+    const kinds = interlockBlocks(stripType).map(id => interlockFor(stripType, id));
+    assert.ok(kinds.includes('COURSE'), `${stripType} has no course-assignment Block`);
+    assert.ok(kinds.includes('ALTITUDE'), `${stripType} has no altitude-assignment Block`);
   }
 });
 
 test('MISSION has no interlock Block, and that is a decision', () => {
   // The interlock is about ATC ISSUING a clearance; a MISSION Strip is the
   // MRU-side mission line (§9.8), not a clearance surface. The relation's
-  // participants are fdrIds, so a void raised on the ATC-side replica of the
+  // participants are flightDataIds, so a void raised on the ATC-side replica of the
   // same flight IS a void of this flight's relation — tagging a MISSION Block
   // would add a second place the same aircraft can void from, not coverage.
   assert.deepEqual(interlockBlocks('MISSION'), []);
@@ -336,7 +336,7 @@ test('the interlock answer is per-Role — Block 7 means opposite things on DEPA
 
 test('interlockFor is null for an unknown Block or Role rather than throwing', () => {
   assert.equal(interlockFor('DEPARTURE', 'NOPE'), null);
-  assert.equal(interlockFor('NOT_A_ROLE', '20'), null);
+  assert.equal(interlockFor('NOT_A_STRIP_TYPE', '20'), null);
 });
 
 test('every interlock Block is one a controller can actually write', () => {
@@ -344,9 +344,9 @@ test('every interlock Block is one a controller can actually write', () => {
   // returns null for those, so SetBlock refuses before reaching the interlock
   // at all. That would be the acceptance criterion held by an unreachable path
   // — docs/adr/0039's defect class exactly.
-  for (const role of Object.keys(BLOCK_MAPS)) {
-    for (const blockId of interlockBlocks(role)) {
-      assert.ok(resolveBlockTarget(role, blockId), `${role}/${blockId} is tagged but not writable`);
+  for (const stripType of Object.keys(BLOCK_MAPS)) {
+    for (const blockId of interlockBlocks(stripType)) {
+      assert.ok(resolveBlockTarget(stripType, blockId), `${stripType}/${blockId} is tagged but not writable`);
     }
   }
 });
@@ -372,11 +372,11 @@ test('the hook and ordnance Blocks exist on EVERY ATC Role, not just the one a t
   // and the test that passes is not the test that matters. A hook requirement
   // and an ordnance state are facts about the airframe — there is no ATC Role
   // they stop being true for.
-  for (const role of ATC_STRIP_TYPES) {
-    assert.deepEqual(resolveBlockTarget(role, '3F'), { kind: 'military', field: 'hookRequired' }, `${role}/3F`);
-    assert.deepEqual(resolveBlockTarget(role, '3G'), { kind: 'military', field: 'ordnanceState' }, `${role}/3G`);
-    assert.equal(BLOCK_MAPS[role]['3F'].required, false, `${role}/3F`);
-    assert.equal(BLOCK_MAPS[role]['3G'].required, false, `${role}/3G`);
+  for (const stripType of ATC_STRIP_TYPES) {
+    assert.deepEqual(resolveBlockTarget(stripType, '3F'), { kind: 'military', field: 'hookRequired' }, `${stripType}/3F`);
+    assert.deepEqual(resolveBlockTarget(stripType, '3G'), { kind: 'military', field: 'ordnanceState' }, `${stripType}/3G`);
+    assert.equal(BLOCK_MAPS[stripType]['3F'].required, false, `${stripType}/3F`);
+    assert.equal(BLOCK_MAPS[stripType]['3G'].required, false, `${stripType}/3G`);
   }
 });
 
@@ -395,9 +395,9 @@ test('the guide\'s M-prefix is never used as a Block id outside MISSION_BLOCK_MA
   // §6.4 M-numbers mean different things from MISSION_BLOCK_MAP's frozen
   // M1-M8, so an M-numbered Block on an ATC Map would be ambiguous by
   // construction. Sub-letter onto the parent Block instead.
-  for (const role of ATC_STRIP_TYPES) {
-    const mNumbered = Object.keys(BLOCK_MAPS[role]).filter(id => /^M\d/.test(id));
-    assert.deepEqual(mNumbered, [], `${role} must not use the M-prefix — sub-letter onto the parent Block instead`);
+  for (const stripType of ATC_STRIP_TYPES) {
+    const mNumbered = Object.keys(BLOCK_MAPS[stripType]).filter(id => /^M\d/.test(id));
+    assert.deepEqual(mNumbered, [], `${stripType} must not use the M-prefix — sub-letter onto the parent Block instead`);
   }
 });
 
@@ -406,7 +406,7 @@ test('MILITARY_BLOCK_NAMESPACE agrees with the Block Maps it documents', () => {
   // it: every entry claiming a concrete Block id must name one that exists and
   // routes where it says, and every `military`-kind Block on any Map must
   // appear in the table. A row names its Blocks one of two ways: `blockId`
-  // (one Block) or `blocks` ({ id: path }, one plain 'fdr' Block per leaf, on
+  // (one Block) or `blocks` ({ id: path }, one plain 'flightData' Block per leaf, on
   // every ATC Role — M10/M11, docs/adr/0062). Never both, never a wildcard.
   const claimed = new Map();
   for (const [m, entry] of Object.entries(MILITARY_BLOCK_NAMESPACE)) {
@@ -416,11 +416,11 @@ test('MILITARY_BLOCK_NAMESPACE agrees with the Block Maps it documents', () => {
       for (const [id, path] of Object.entries(entry.blocks)) {
         assert.ok(!id.includes('*'), `${m} names a wildcard Block ${id}`);
         assert.ok(path.startsWith(entry.field + '.'), `${m}/${id} writes ${path}, outside ${entry.field}`);
-        for (const role of ATC_STRIP_TYPES) {
-          const def = BLOCK_MAPS[role][id];
-          assert.ok(def, `${m} claims Block ${id}, which does not exist on ${role}`);
-          assert.equal(def.target.kind, 'fdr', `${role}/${id}`);
-          assert.equal(def.target.path, path, `${role}/${id} writes a different path than the table says`);
+        for (const stripType of ATC_STRIP_TYPES) {
+          const def = BLOCK_MAPS[stripType][id];
+          assert.ok(def, `${m} claims Block ${id}, which does not exist on ${stripType}`);
+          assert.equal(def.target.kind, 'flightData', `${stripType}/${id}`);
+          assert.equal(def.target.path, path, `${stripType}/${id} writes a different path than the table says`);
         }
         claimed.set(id, entry);
       }
@@ -434,10 +434,10 @@ test('MILITARY_BLOCK_NAMESPACE agrees with the Block Maps it documents', () => {
       assert.equal(`military.${def.target.field}`, entry.field, `${m}/${entry.blockId} writes a different field than the table says`);
     }
   }
-  for (const role of ATC_STRIP_TYPES) {
-    for (const [id, def] of Object.entries(BLOCK_MAPS[role])) {
+  for (const stripType of ATC_STRIP_TYPES) {
+    for (const [id, def] of Object.entries(BLOCK_MAPS[stripType])) {
       if (def.target.kind !== 'military') continue;
-      assert.ok(claimed.has(id), `${role}/${id} is a military Block with no MILITARY_BLOCK_NAMESPACE entry`);
+      assert.ok(claimed.has(id), `${stripType}/${id} is a military Block with no MILITARY_BLOCK_NAMESPACE entry`);
     }
   }
 });
@@ -446,12 +446,12 @@ test('every flight-data-routed Block writing under military. is claimed by exact
   // The reverse drift: a new plain-flightData Block reaching into the military
   // namespace without the table knowing would be the §9.4 reservation
   // problem all over again, invisible to the check above.
-  for (const role of ATC_STRIP_TYPES) {
-    for (const [id, def] of Object.entries(BLOCK_MAPS[role])) {
-      if (def.target.kind !== 'fdr' || !def.target.path.startsWith('military.')) continue;
+  for (const stripType of ATC_STRIP_TYPES) {
+    for (const [id, def] of Object.entries(BLOCK_MAPS[stripType])) {
+      if (def.target.kind !== 'flightData' || !def.target.path.startsWith('military.')) continue;
       const rows = Object.entries(MILITARY_BLOCK_NAMESPACE)
         .filter(([, e]) => e.blocks && e.blocks[id] === def.target.path);
-      assert.equal(rows.length, 1, `${role}/${id} (${def.target.path}) is claimed by ${rows.length} rows`);
+      assert.equal(rows.length, 1, `${stripType}/${id} (${def.target.path}) is claimed by ${rows.length} rows`);
     }
   }
 });
@@ -465,7 +465,7 @@ test('every field the namespace table calls RESERVED or deferred is one setMilit
     if (!entry.field.startsWith('military.')) continue;
     const key = entry.field.slice('military.'.length);
     if (entry.blocks) {
-      // Built as plain fdr leaves (docs/adr/0062): each leaf is setField's,
+      // Built as plain flightData leaves (docs/adr/0062): each leaf is setField's,
       // and the object itself stays out of setMilitary's reach.
       for (const path of Object.values(entry.blocks)) {
         assert.ok(WRITABLE_PATHS.has(path), `${m}: ${path} has a Block but setField will not write it`);
@@ -485,9 +485,9 @@ test('no military Block is tagged as a MARSA interlock', () => {
   // §9.2 rule 2 is about ATC ISSUING a course or an altitude. Declaring an
   // ordnance state or a hook requirement issues nothing, and tagging one would
   // void a live AR every time a pilot reported a hung store.
-  for (const role of ATC_STRIP_TYPES) {
-    for (const [id, def] of Object.entries(BLOCK_MAPS[role])) {
-      if (def.target.kind === 'military') assert.equal(interlockFor(role, id), null, `${role}/${id}`);
+  for (const stripType of ATC_STRIP_TYPES) {
+    for (const [id, def] of Object.entries(BLOCK_MAPS[stripType])) {
+      if (def.target.kind === 'military') assert.equal(interlockFor(stripType, id), null, `${stripType}/${id}`);
     }
   }
 });
@@ -499,27 +499,27 @@ const MTR_BLOCKS = {
   '9H-EXIT': 'military.mtr.exitFix', '9H-TIME': 'military.mtr.exitEstimateUtc', '9H-ALT': 'military.mtr.requestedAltitudeAfterExit',
 };
 
-test('the six MTR Blocks exist on EVERY ATC Role, plain fdr, optional — and none on MISSION', () => {
-  for (const role of ATC_STRIP_TYPES) {
+test('the six MTR Blocks exist on EVERY ATC Role, plain flightData, optional — and none on MISSION', () => {
+  for (const stripType of ATC_STRIP_TYPES) {
     for (const [id, path] of Object.entries(MTR_BLOCKS)) {
-      assert.deepEqual(resolveBlockTarget(role, id), { kind: 'fdr', path }, `${role}/${id}`);
-      assert.equal(BLOCK_MAPS[role][id].required, false, `${role}/${id}`);
-      assert.equal(BLOCK_MAPS[role][id].provenance, undefined, `${role}/${id} carries no provenance default`);
+      assert.deepEqual(resolveBlockTarget(stripType, id), { kind: 'flightData', path }, `${stripType}/${id}`);
+      assert.equal(BLOCK_MAPS[stripType][id].required, false, `${stripType}/${id}`);
+      assert.equal(BLOCK_MAPS[stripType][id].provenance, undefined, `${stripType}/${id} carries no provenance default`);
     }
   }
   for (const id of Object.keys(MTR_BLOCKS)) assert.equal(MISSION_BLOCK_MAP[id], undefined, `MISSION/${id}`);
 });
 
 test('no MTR Block is a MARSA interlock — posting a pilot\'s request issues nothing', () => {
-  for (const role of ATC_STRIP_TYPES) {
-    for (const id of Object.keys(MTR_BLOCKS)) assert.equal(interlockFor(role, id), null, `${role}/${id}`);
+  for (const stripType of ATC_STRIP_TYPES) {
+    for (const id of Object.keys(MTR_BLOCKS)) assert.equal(interlockFor(stripType, id), null, `${stripType}/${id}`);
   }
 });
 
 test('the bare 9G / 9H family ids do not resolve — only the six named Blocks do', () => {
-  for (const role of ATC_STRIP_TYPES) {
-    assert.equal(resolveBlockTarget(role, '9G'), null);
-    assert.equal(resolveBlockTarget(role, '9H'), null);
+  for (const stripType of ATC_STRIP_TYPES) {
+    assert.equal(resolveBlockTarget(stripType, '9G'), null);
+    assert.equal(resolveBlockTarget(stripType, '9H'), null);
   }
 });
 

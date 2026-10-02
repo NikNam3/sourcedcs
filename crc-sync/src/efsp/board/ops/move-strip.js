@@ -15,7 +15,7 @@ function _applyMoveStrip(ctx, strip, op, by) {
   const flightDataResult = ctx.assignSfaFrequency(strip, by);
 
   ctx.state.bump(strip, by);
-  return { ok: true, strip, fdr: flightDataResult ? flightDataResult.fdr : undefined };
+  return { ok: true, strip, flightData: flightDataResult ? flightDataResult.flightData : undefined };
 }
 
 module.exports = {

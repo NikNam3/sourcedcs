@@ -11,12 +11,12 @@
 //   - facility-config.js requires it (to validate the inventory), so a require
 //     back would be a cycle;
 //   - nla.js reaches it only through `ctx.runwayStatusFor()` and so stays a pure
-//     function of (strip, fdr, now, ctx);
+//     function of (strip, flightData, now, ctx);
 //   - runway-status-store.js (the stateful half, docs/adr/0061) builds on it the
 //     way correlation-store.js builds on correlation-match.js.
 //
 // Later lanes add pure functions HERE rather than to the store: L12's hung-
-// ordnance advisory and L1b's `gearMismatchFor(fdr, runway)` (guide §9.7 rule
+// ordnance advisory and L1b's `gearMismatchFor(flightData, runway)` (guide §9.7 rule
 // 4, not built in L1) are both functions of a runway record and an FDR.
 //
 // Shape (docs/parallel/decisions.md S-Q23): one record per PHYSICAL runway,
@@ -139,10 +139,10 @@ function _runwayOfEnd(view, end) {
   return (view.runways || []).find(r => r.ends.includes(end)) || null;
 }
 
-function _flightDataRunwayText(strip, fdr) {
-  if (!fdr) return null;
-  if (strip.role === 'DEPARTURE') return fdr.filed ? fdr.filed.departureRunway : null;
-  if (strip.role === 'ARRIVAL') return fdr.assigned ? fdr.assigned.landingRunway : null;
+function _flightDataRunwayText(strip, flightData) {
+  if (!flightData) return null;
+  if (strip.stripType === 'DEPARTURE') return flightData.filed ? flightData.filed.departureRunway : null;
+  if (strip.stripType === 'ARRIVAL') return flightData.assigned ? flightData.assigned.landingRunway : null;
   return null;
 }
 
@@ -165,7 +165,7 @@ function _resolveText(view, text) {
  * sits in, then its FDR's runway field (8A for a DEPARTURE, 8B for an
  * ARRIVAL), then the Facility's active runway, then nothing — fail open.
  *
- * Rack before FDR: `strip.rackId` is where a controller PUT the Strip, the FDR
+ * Rack before FLIGHT_DATA: `strip.rackId` is where a controller PUT the Strip, the FDR
  * field is filed intent. The target rack comes first on the drag path
  * (decisions.md Q27): a Strip dropped onto 23's rack is about to use 23,
  * whatever rack it came from.
@@ -173,11 +173,11 @@ function _resolveText(view, text) {
  * Only DEPARTURE and ARRIVAL Strips have a runway. OVERFLIGHT and MISSION
  * never resolve, so rule 1 never touches them.
  *
- * @returns {{runwayId:string, end:string|null, source:'TARGET_RACK'|'RACK'|'FDR'|'ACTIVE_RUNWAY'}|null}
+ * @returns {{runwayId:string, end:string|null, source:'TARGET_RACK'|'RACK'|'FLIGHT_DATA'|'ACTIVE_RUNWAY'}|null}
  */
-function resolveRunwayForStrip(strip, fdr, view, { targetRackId } = {}) {
+function resolveRunwayForStrip(strip, flightData, view, { targetRackId } = {}) {
   if (!strip || !view) return null;
-  if (strip.role !== 'DEPARTURE' && strip.role !== 'ARRIVAL') return null;
+  if (strip.stripType !== 'DEPARTURE' && strip.stripType !== 'ARRIVAL') return null;
   const byRack = (rackId, source) => {
     const end = rackId ? view.rackEnds[rackId] : null;
     const runway = end ? _runwayOfEnd(view, end) : null;
@@ -187,8 +187,8 @@ function resolveRunwayForStrip(strip, fdr, view, { targetRackId } = {}) {
   if (target) return target;
   const rack = byRack(strip.rackId, 'RACK');
   if (rack) return rack;
-  const filed = _resolveText(view, _flightDataRunwayText(strip, fdr));
-  if (filed) return { runwayId: filed.runway.runwayId, end: filed.end, source: 'FDR' };
+  const filed = _resolveText(view, _flightDataRunwayText(strip, flightData));
+  if (filed) return { runwayId: filed.runway.runwayId, end: filed.end, source: 'FLIGHT_DATA' };
   if (view.activeRunway) {
     const runway = _runwayOfEnd(view, view.activeRunway);
     if (runway) return { runwayId: runway.runwayId, end: view.activeRunway, source: 'ACTIVE_RUNWAY' };
@@ -238,8 +238,8 @@ function runwayStatusReason(runway) {
  * runway cannot be resolved, or it is OPEN: an inhibit that fires on bad data
  * strands an aircraft on the board.
  */
-function runwayInhibitFor(strip, fdr, view, opts) {
-  const resolved = resolveRunwayForStrip(strip, fdr, view, opts);
+function runwayInhibitFor(strip, flightData, view, opts) {
+  const resolved = resolveRunwayForStrip(strip, flightData, view, opts);
   if (!resolved) return null;
   const runway = view.runways.find(r => r.runwayId === resolved.runwayId);
   return runwayStatusReason(runway);
@@ -265,14 +265,14 @@ function runwayAdvisoryFor(strip, view) {
  * state, no runway racks, nothing resolved — the Bay's first rack, which is
  * what every placement site did before.
  */
-function runwayRackFor(strip, fdr, view, bay) {
+function runwayRackFor(strip, flightData, view, bay) {
   if (!bay) return null;
   const first = (bay.rackIds || [])[0] || null;
   if (!view || !strip) return first;
   const rackIdsByEnd = {};
   for (const [rackId, end] of Object.entries(view.rackEnds || {})) rackIdsByEnd[end] = rackId;
   const inBay = (rackId) => rackId && (bay.rackIds || []).includes(rackId);
-  const filed = _resolveText(view, _flightDataRunwayText(strip, fdr));
+  const filed = _resolveText(view, _flightDataRunwayText(strip, flightData));
   if (filed && filed.end && inBay(rackIdsByEnd[filed.end])) return rackIdsByEnd[filed.end];
   if (view.activeRunway && inBay(rackIdsByEnd[view.activeRunway])) return rackIdsByEnd[view.activeRunway];
   return first;
@@ -309,18 +309,18 @@ function activeEndIntoWind(inventory, windFromTrue) {
 function _isObject(x) { return !!x && typeof x === 'object' && !Array.isArray(x); }
 
 /**
- * Checks a Facility's `fieldState` config for things that can never work in
+ * Checks a Facility's `runwayStatus` config for things that can never work in
  * any deployment. Returns a problem string, or null when it is well formed.
  * Cross-references to Bays only warn (runwayInventoryWarnings below).
  */
-function validateRunwayStatusInventory(fieldState, positions = []) {
-  if (!_isObject(fieldState)) return 'fieldState must be an object';
-  if (!Array.isArray(fieldState.runways)) return 'fieldState.runways must be an array';
+function validateRunwayStatusInventory(runwayStatus, positions = []) {
+  if (!_isObject(runwayStatus)) return 'runwayStatus must be an object';
+  if (!Array.isArray(runwayStatus.runways)) return 'runwayStatus.runways must be an array';
   const runwayIds = new Set();
   const allEnds = new Set();
   const allRacks = new Set();
-  for (const [i, def] of fieldState.runways.entries()) {
-    const where = `fieldState.runways[${i}]`;
+  for (const [i, def] of runwayStatus.runways.entries()) {
+    const where = `runwayStatus.runways[${i}]`;
     if (!_isObject(def)) return `${where} must be an object`;
     if (typeof def.runwayId !== 'string' || !def.runwayId.trim()) return `${where}.runwayId is required`;
     if (runwayIds.has(def.runwayId)) return `duplicate runwayId ${def.runwayId}`;
@@ -353,22 +353,22 @@ function validateRunwayStatusInventory(fieldState, positions = []) {
       if (!Number.isFinite(gear.distanceFt) || gear.distanceFt < 0) return `${g}: distanceFt must be a non-negative number`;
     }
   }
-  const acks = fieldState.runwayChangeAcknowledgers;
+  const acks = runwayStatus.runwayChangeAcknowledgers;
   if (acks !== undefined) {
-    if (!Array.isArray(acks)) return 'fieldState.runwayChangeAcknowledgers must be an array of Positions';
+    if (!Array.isArray(acks)) return 'runwayStatus.runwayChangeAcknowledgers must be an array of Positions';
     for (const p of acks) if (!positions.includes(p)) return `runwayChangeAcknowledgers names unknown Position ${p}`;
   }
-  if (fieldState.inspectionAuthorityPositionId !== undefined && !positions.includes(fieldState.inspectionAuthorityPositionId)) {
-    return `inspectionAuthorityPositionId names unknown Position ${fieldState.inspectionAuthorityPositionId}`;
+  if (runwayStatus.inspectionAuthorityPositionId !== undefined && !positions.includes(runwayStatus.inspectionAuthorityPositionId)) {
+    return `inspectionAuthorityPositionId names unknown Position ${runwayStatus.inspectionAuthorityPositionId}`;
   }
-  if (fieldState.pads !== undefined) {
-    if (!_isObject(fieldState.pads)) return 'fieldState.pads must be an object';
+  if (runwayStatus.pads !== undefined) {
+    if (!_isObject(runwayStatus.pads)) return 'runwayStatus.pads must be an object';
     for (const key of ['hotCargo', 'alert']) {
-      const pad = fieldState.pads[key];
-      if (pad !== null && pad !== undefined && !(_isObject(pad) && typeof pad.name === 'string')) return `fieldState.pads.${key} must be null or {name}`;
+      const pad = runwayStatus.pads[key];
+      if (pad !== null && pad !== undefined && !(_isObject(pad) && typeof pad.name === 'string')) return `runwayStatus.pads.${key} must be null or {name}`;
     }
   }
-  if (fieldState.airportIcao !== undefined && typeof fieldState.airportIcao !== 'string') return 'fieldState.airportIcao must be an ICAO string';
+  if (runwayStatus.airportIcao !== undefined && typeof runwayStatus.airportIcao !== 'string') return 'runwayStatus.airportIcao must be an ICAO string';
   return null;
 }
 
@@ -380,8 +380,8 @@ function validateRunwayStatusInventory(fieldState, positions = []) {
  */
 function runwayInventoryWarnings(config) {
   const warnings = [];
-  const fieldState = config && config.fieldState;
-  if (!fieldState || !Array.isArray(fieldState.runways)) return warnings;
+  const runwayStatus = config && config.runwayStatus;
+  if (!runwayStatus || !Array.isArray(runwayStatus.runways)) return warnings;
   const queueRacks = new Set();
   for (const bays of Object.values(config.bays || {})) {
     for (const bay of bays || []) {
@@ -389,7 +389,7 @@ function runwayInventoryWarnings(config) {
     }
   }
   const mapped = new Set();
-  for (const def of fieldState.runways) {
+  for (const def of runwayStatus.runways) {
     for (const [end, rackId] of Object.entries(def.rackIds || {})) {
       mapped.add(rackId);
       if (!queueRacks.has(rackId)) warnings.push(`runway ${def.runwayId} end ${end} names rack ${rackId}, which no RUNWAY_QUEUE Bay has`);
@@ -408,29 +408,29 @@ function runwayInventoryWarnings(config) {
  * routing constraint toward the hot cargo pad. Never an inhibit. [SOURCE-DEFINED]: the guide's basis
  * is local practice at one base, not doctrine, and SOURCE's pads are placeholder names (H21) — so
  * this states facts (the runway the Strip resolves to, the pad's name) and recommends no runway.
- * Pure: derived from the FDR and the field-state record, both of which broadcast whole
+ * Pure: derived from the FDR and the runway-status record, both of which broadcast whole
  * (docs/adr/0045's principle; the same argument as rule 4's hook check).
  *
- * `fieldState` is one Facility's record as the wire carries it (runway-status-store.js
+ * `runwayStatus` is one Facility's record as the wire carries it (runway-status-store.js
  * getRunwayStatus): its runway rows carry their ends and racks, so it is its own inventory.
  * crc-desktop's panels/efsp/ordnance-advisory.js is a copy, held to this by a drift test.
  *
  * @returns {{kind:'HUNG_ORDNANCE', runway:string|null, end:string|null, runwaySource:string|null,
  *   padName:string|null, text:'HUNG', reason:string}|null}
  */
-function hungOrdnanceAdvisoryFor(strip, fdr, fieldState) {
-  if (!strip || !fieldState) return null;
-  if (!fdr || !fdr.military || fdr.military.ordnanceState !== 'HUNG') return null;
-  if (strip.role !== 'ARRIVAL' && strip.role !== 'DEPARTURE') return null;
+function hungOrdnanceAdvisoryFor(strip, flightData, runwayStatus) {
+  if (!strip || !runwayStatus) return null;
+  if (!flightData || !flightData.military || flightData.military.ordnanceState !== 'HUNG') return null;
+  if (strip.stripType !== 'ARRIVAL' && strip.stripType !== 'DEPARTURE') return null;
   if (strip.state === 'DROPPED') return null;
-  const resolved = resolveRunwayForStrip(strip, fdr, buildStatusView(fieldState, fieldState));
-  const pad = fieldState.hotCargoPad;
+  const resolved = resolveRunwayForStrip(strip, flightData, buildStatusView(runwayStatus, runwayStatus));
+  const pad = runwayStatus.hotCargoPad;
   const padName = pad && typeof pad.name === 'string' && pad.name.trim() ? pad.name.trim() : null;
   // [SOURCE-DEFINED] wording: one sentence per fact, no runway recommended (decisions.md H21).
-  const when = strip.role === 'DEPARTURE' ? 'if it returns' : 'after landing';
+  const when = strip.stripType === 'DEPARTURE' ? 'if it returns' : 'after landing';
   let reason = padName
     ? `Hung ordnance. SOURCE practice: ${when}, taxi to ${padName}; the runway is the controller's call.`
-    : `Hung ordnance. No hot cargo pad is configured at ${fieldState.facilityId} (SOURCE practice).`;
+    : `Hung ordnance. No hot cargo pad is configured at ${runwayStatus.facilityId} (SOURCE practice).`;
   if (resolved) reason += ` Runway ${resolved.runwayId}${resolved.end ? ` (${resolved.end})` : ''} assigned.`;
   return {
     kind: 'HUNG_ORDNANCE',

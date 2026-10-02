@@ -15,7 +15,7 @@ const { CorrelationReconciler, computeCorrelationRate, INELIGIBLE_STATES } =
   await import('../src/efsp/correlation-reconciler.js');
 const { octalCode } = await import('../src/surveillance/transponder.js');
 const { CorrelationStore } = await import('../src/efsp/correlation-store.js');
-const { STATES_BY_ROLE } = await import('../src/efsp/nla.js');
+const { STATES_BY_STRIP_TYPE } = await import('../src/efsp/nla.js');
 
 // ── harness ────────────────────────────────────────────────────────────────
 
@@ -24,30 +24,30 @@ function fakeTrackStore(tracks) {
 }
 
 /** An FlightDataStore stand-in: just identity, plus the observed-code setter. */
-function fakeFlightDataStore(fdrs) {
+function fakeFlightDataStore(flightDataList) {
   const observed = new Map();
   return {
-    getAll: () => fdrs,
-    getFlightData: (id) => fdrs.find(f => f.fdrId === id) || null,
+    getAll: () => flightDataList,
+    getFlightData: (id) => flightDataList.find(f => f.flightDataId === id) || null,
     setBeaconObserved: (id, code) => { observed.set(id, code); return { ok: true, changed: true }; },
     observed,
   };
 }
 
-function fdr(fdrId, callsign, beaconAssigned) {
-  return { fdrId, identity: { callsign, beaconAssigned } };
+function flightData(flightDataId, callsign, beaconAssigned) {
+  return { flightDataId, identity: { callsign, beaconAssigned } };
 }
 
-function strip(fdrId, state = 'AIRBORNE') {
-  return { stripId: `s-${fdrId}`, fdrId, state };
+function strip(flightDataId, state = 'AIRBORNE') {
+  return { stripId: `s-${flightDataId}`, flightDataId, state };
 }
 
 function track(id, callsign, squawk = null) {
   return { id, callsign, squawk, category: 1, lat: 37, lon: 35, alt: 6000 };
 }
 
-function build({ fdrs = [], strips = [], tracks = [] } = {}) {
-  const flightDataStore = fakeFlightDataStore(fdrs);
+function build({ flightDataList = [], strips = [], tracks = [] } = {}) {
+  const flightDataStore = fakeFlightDataStore(flightDataList);
   const store = new CorrelationStore({ flightDataExists: (id) => !!flightDataStore.getFlightData(id) });
   const deltas = [];
   const reconciler = new CorrelationReconciler({
@@ -88,7 +88,7 @@ test('every EfspState is either on the ineligible list or eligible — adding on
   // and somebody notices. This assertion is what makes that a decision rather
   // than a default.
   const all = new Set();
-  for (const states of Object.values(STATES_BY_ROLE)) for (const s of states) all.add(s);
+  for (const states of Object.values(STATES_BY_STRIP_TYPE)) for (const s of states) all.add(s);
   assert.ok(all.size > 10, 'sanity: the state sets loaded');
   for (const state of INELIGIBLE_STATES) {
     assert.ok(all.has(state), `${state} is on the ineligible list but is not an EfspState any more`);
@@ -113,7 +113,7 @@ test('one eligible Strip is enough, even beside an ineligible one on the same FD
 
 test('an FDR with no live Strip at all is not swept', () => {
   const { reconciler, store } = build({
-    fdrs: [fdr('f1', 'VIPER1', '0041')], strips: [], tracks: [track(1, 'VIPER1', 41)],
+    flightDataList: [flightData('f1', 'VIPER1', '0041')], strips: [], tracks: [track(1, 'VIPER1', 41)],
   });
   reconciler.tick();
   assert.equal(store.getCorrelation('f1'), null);
@@ -123,13 +123,13 @@ test('an FDR with no live Strip at all is not swept', () => {
 
 test('an explicit binding outranks everything the sweep could work out', () => {
   const { reconciler, store } = build({
-    fdrs: [fdr('f1', 'VIPER1', '0041')],
+    flightDataList: [flightData('f1', 'VIPER1', '0041')],
     strips: [strip('f1')],
     // Contact 1 squawks the assigned code and answers to the callsign; the
     // controller has bound contact 2 anyway, because they can see it.
     tracks: [track(1, 'VIPER1', 41), track(2, 'UNKNOWN', null)],
   });
-  store.apply({ fdrId: 'f1', baseRev: 0, op: { kind: 'BindTrack', trackId: '2' } }, 'APP', 'c');
+  store.apply({ flightDataId: 'f1', baseRev: 0, op: { kind: 'BindTrack', trackId: '2' } }, 'AP', 'c');
   reconciler.tick();
   const record = store.getCorrelation('f1');
   assert.equal(record.matchedBy, 'BINDING');
@@ -138,9 +138,9 @@ test('an explicit binding outranks everything the sweep could work out', () => {
 
 test('a binding to a contact that no longer exists lets the lower rungs have a go', () => {
   const { reconciler, store } = build({
-    fdrs: [fdr('f1', 'VIPER1', '0041')], strips: [strip('f1')], tracks: [track(1, 'VIPER1', 41)],
+    flightDataList: [flightData('f1', 'VIPER1', '0041')], strips: [strip('f1')], tracks: [track(1, 'VIPER1', 41)],
   });
-  store.apply({ fdrId: 'f1', baseRev: 0, op: { kind: 'BindTrack', trackId: '999' } }, 'APP', 'c');
+  store.apply({ flightDataId: 'f1', baseRev: 0, op: { kind: 'BindTrack', trackId: '999' } }, 'AP', 'c');
   reconciler.tick();
   const record = store.getCorrelation('f1');
   assert.equal(record.matchedBy, 'BEACON');
@@ -149,7 +149,7 @@ test('a binding to a contact that no longer exists lets the lower rungs have a g
 
 test('the assigned beacon code correlates, and the observed code is pushed onto the FDR', () => {
   const { reconciler, store, flightDataStore } = build({
-    fdrs: [fdr('f1', 'VIPER1', '0041')], strips: [strip('f1')], tracks: [track(1, 'SOMETHINGELSE', 41)],
+    flightDataList: [flightData('f1', 'VIPER1', '0041')], strips: [strip('f1')], tracks: [track(1, 'SOMETHINGELSE', 41)],
   });
   reconciler.tick();
   const record = store.getCorrelation('f1');
@@ -161,7 +161,7 @@ test('the assigned beacon code correlates, and the observed code is pushed onto 
 
 test('an exact callsign match correlates when no beacon evidence contradicts it', () => {
   const { reconciler, store } = build({
-    fdrs: [fdr('f1', 'VIPER1', '0041')], strips: [strip('f1')], tracks: [track(1, 'VIPER1', null)],
+    flightDataList: [flightData('f1', 'VIPER1', '0041')], strips: [strip('f1')], tracks: [track(1, 'VIPER1', null)],
   });
   reconciler.tick();
   const record = store.getCorrelation('f1');
@@ -173,7 +173,7 @@ test('an exact callsign match is only provisional when the contact squawks a dif
   // The name agrees and the transponder does not. That is real evidence
   // against the identity, and §3.10.2 rule 1 exists so a controller can see it.
   const { reconciler, store } = build({
-    fdrs: [fdr('f1', 'VIPER1', '0041')], strips: [strip('f1')], tracks: [track(1, 'VIPER1', 56)],
+    flightDataList: [flightData('f1', 'VIPER1', '0041')], strips: [strip('f1')], tracks: [track(1, 'VIPER1', 56)],
   });
   reconciler.tick();
   const record = store.getCorrelation('f1');
@@ -184,7 +184,7 @@ test('an exact callsign match is only provisional when the contact squawks a dif
 
 test('a formation match is fuzzy and always provisional, with its confidence', () => {
   const { reconciler, store } = build({
-    fdrs: [fdr('f1', 'VIPER1', '0041')], strips: [strip('f1')], tracks: [track(1, 'VIPER11', null)],
+    flightDataList: [flightData('f1', 'VIPER1', '0041')], strips: [strip('f1')], tracks: [track(1, 'VIPER11', null)],
   });
   reconciler.tick();
   const record = store.getCorrelation('f1');
@@ -195,7 +195,7 @@ test('a formation match is fuzzy and always provisional, with its confidence', (
 
 test('nothing matching raises TRACK_LOST rather than leaving the record silent', () => {
   const { reconciler, store } = build({
-    fdrs: [fdr('f1', 'VIPER1', '0041')], strips: [strip('f1')], tracks: [track(1, 'HORNET1', 77)],
+    flightDataList: [flightData('f1', 'VIPER1', '0041')], strips: [strip('f1')], tracks: [track(1, 'HORNET1', 77)],
   });
   reconciler.tick();
   const record = store.getCorrelation('f1');
@@ -209,7 +209,7 @@ test('the beacon rung claims first, so the callsign rung gets the contact that i
   // This assertion is what pays for sweeping in rung order rather than
   // resolving each FDR independently.
   const { reconciler, store } = build({
-    fdrs: [fdr('f1', 'VIPER1', '0041'), fdr('f2', 'VIPER1', '0042')],
+    flightDataList: [flightData('f1', 'VIPER1', '0041'), flightData('f2', 'VIPER1', '0042')],
     strips: [strip('f1'), strip('f2')],
     tracks: [track(1, 'VIPER1', null), track(2, 'VIPER1', 42)],
   });
@@ -224,7 +224,7 @@ test('the beacon rung claims first, so the callsign rung gets the contact that i
 
 test('one contact never correlates to two flights', () => {
   const { reconciler, store } = build({
-    fdrs: [fdr('f1', 'VIPER1', '0041'), fdr('f2', 'VIPER1', '0042')],
+    flightDataList: [flightData('f1', 'VIPER1', '0041'), flightData('f2', 'VIPER1', '0042')],
     strips: [strip('f1'), strip('f2')],
     tracks: [track(1, 'VIPER1', 41)],
   });
@@ -236,7 +236,7 @@ test('one contact never correlates to two flights', () => {
 test('two contacts squawking one assigned code is ambiguous, and neither is guessed at', () => {
   // §3.10.2 rule 7: duplicates are structural and accepted. Guessing is not.
   const { reconciler, store } = build({
-    fdrs: [fdr('f1', 'VIPER1', '0041')], strips: [strip('f1')],
+    flightDataList: [flightData('f1', 'VIPER1', '0041')], strips: [strip('f1')],
     tracks: [track(1, 'SOMEONE', 41), track(2, 'SOMEONEELSE', 41)],
   });
   reconciler.tick();
@@ -249,7 +249,7 @@ test('two contacts squawking one assigned code is ambiguous, and neither is gues
 
 test('two contacts answering a callsign equally well is ambiguous too', () => {
   const { reconciler, store } = build({
-    fdrs: [fdr('f1', 'VIPER1', '0041')], strips: [strip('f1')],
+    flightDataList: [flightData('f1', 'VIPER1', '0041')], strips: [strip('f1')],
     tracks: [track(1, 'VIPER1', null), track(2, 'VIPER1', null)],
   });
   reconciler.tick();
@@ -260,7 +260,7 @@ test('two contacts answering a callsign equally well is ambiguous too', () => {
 
 test('a better fuzzy match wins outright rather than being called ambiguous', () => {
   const { reconciler, store } = build({
-    fdrs: [fdr('f1', 'VIPER1', '0041')], strips: [strip('f1')],
+    flightDataList: [flightData('f1', 'VIPER1', '0041')], strips: [strip('f1')],
     // VIPER11 is formation numbering (0.9); VIPER2 is same-stem (0.7).
     tracks: [track(1, 'VIPER11', null), track(2, 'VIPER2', null)],
   });
@@ -273,7 +273,7 @@ test('a better fuzzy match wins outright rather than being called ambiguous', ()
 
 test('onDelta fires once per tick, with only the records that changed', () => {
   const { reconciler, deltas } = build({
-    fdrs: [fdr('f1', 'VIPER1', '0041'), fdr('f2', 'HORNET1', '0042')],
+    flightDataList: [flightData('f1', 'VIPER1', '0041'), flightData('f2', 'HORNET1', '0042')],
     strips: [strip('f1'), strip('f2')],
     tracks: [track(1, 'VIPER1', 41), track(2, 'HORNET1', 42)],
   });
@@ -285,7 +285,7 @@ test('onDelta fires once per tick, with only the records that changed', () => {
 
 test('a quiet tick broadcasts nothing at all', () => {
   const { reconciler, deltas } = build({
-    fdrs: [fdr('f1', 'VIPER1', '0041')], strips: [strip('f1')], tracks: [track(1, 'VIPER1', 41)],
+    flightDataList: [flightData('f1', 'VIPER1', '0041')], strips: [strip('f1')], tracks: [track(1, 'VIPER1', 41)],
   });
   reconciler.tick();
   assert.equal(deltas.length, 1);
@@ -295,7 +295,7 @@ test('a quiet tick broadcasts nothing at all', () => {
 
 test('one flight changing does not drag every other record into the delta', () => {
   const { reconciler, deltas, store } = build({
-    fdrs: [fdr('f1', 'VIPER1', '0041'), fdr('f2', 'HORNET1', '0042')],
+    flightDataList: [flightData('f1', 'VIPER1', '0041'), flightData('f2', 'HORNET1', '0042')],
     strips: [strip('f1'), strip('f2')],
     tracks: [track(1, 'VIPER1', 41), track(2, 'HORNET1', 42)],
   });
@@ -303,7 +303,7 @@ test('one flight changing does not drag every other record into the delta', () =
   deltas.length = 0;
 
   // Re-bind f1 only, by hand, then tick: f2 is untouched.
-  store.apply({ fdrId: 'f1', baseRev: store.getCorrelation('f1').rev, op: { kind: 'BindTrack', trackId: '1' } }, 'APP', 'c');
+  store.apply({ flightDataId: 'f1', baseRev: store.getCorrelation('f1').rev, op: { kind: 'BindTrack', trackId: '1' } }, 'AP', 'c');
   reconciler.tick();
   assert.equal(deltas.length, 0, 'the binding agreed with the sweep, so the sweep changed nothing');
 });
@@ -312,7 +312,7 @@ test('one flight changing does not drag every other record into the delta', () =
 
 test('the rate is reported, and accumulates across ticks for a session figure', () => {
   const { reconciler } = build({
-    fdrs: [fdr('f1', 'VIPER1', '0041'), fdr('f2', 'HORNET1', '0042'), fdr('f3', 'EAGLE1', '0043')],
+    flightDataList: [flightData('f1', 'VIPER1', '0041'), flightData('f2', 'HORNET1', '0042'), flightData('f3', 'EAGLE1', '0043')],
     strips: [strip('f1'), strip('f2'), strip('f3')],
     tracks: [track(1, 'VIPER1', 41), track(2, 'HORNET1', 42)],
   });
@@ -327,18 +327,18 @@ test('the rate is reported, and accumulates across ticks for a session figure', 
 
 test('binding the missing flight takes the rate to 1.0', () => {
   const { reconciler, store } = build({
-    fdrs: [fdr('f1', 'VIPER1', '0041'), fdr('f2', 'HORNET1', '0042')],
+    flightDataList: [flightData('f1', 'VIPER1', '0041'), flightData('f2', 'HORNET1', '0042')],
     strips: [strip('f1'), strip('f2')],
     tracks: [track(1, 'VIPER1', 41), track(9, 'MYSTERY', null)],
   });
   assert.ok(reconciler.tick().stats.rate < 1);
-  store.apply({ fdrId: 'f2', baseRev: store.getCorrelation('f2').rev, op: { kind: 'BindTrack', trackId: '9' } }, 'APP', 'c');
+  store.apply({ flightDataId: 'f2', baseRev: store.getCorrelation('f2').rev, op: { kind: 'BindTrack', trackId: '9' } }, 'AP', 'c');
   assert.equal(reconciler.tick().stats.rate, 1);
 });
 
 test('a ramp-bound departure is not eligible and does not drag the rate down', () => {
   const { reconciler } = build({
-    fdrs: [fdr('f1', 'VIPER1', '0041'), fdr('f2', 'HORNET1', '0042')],
+    flightDataList: [flightData('f1', 'VIPER1', '0041'), flightData('f2', 'HORNET1', '0042')],
     strips: [strip('f1', 'AIRBORNE'), strip('f2', 'PROPOSED')],
     tracks: [track(1, 'VIPER1', 41)],
   });
@@ -350,7 +350,7 @@ test('a ramp-bound departure is not eligible and does not drag the rate down', (
 test('re-binds and warnings are counted, which is what a rate alone would not show', () => {
   const tracks = [track(101, 'VIPER1', 41)];
   const { reconciler } = build({
-    fdrs: [fdr('f1', 'VIPER1', '0041')], strips: [strip('f1')], tracks,
+    flightDataList: [flightData('f1', 'VIPER1', '0041')], strips: [strip('f1')], tracks,
   });
   reconciler.tick();
   assert.equal(reconciler.getStats().rebinds, 0);
@@ -366,7 +366,7 @@ test('re-binds and warnings are counted, which is what a rate alone would not sh
 
 test('resetPicture warns on every record and broadcasts once', () => {
   const { reconciler, store, deltas } = build({
-    fdrs: [fdr('f1', 'VIPER1', '0041')], strips: [strip('f1')], tracks: [track(101, 'VIPER1', 41)],
+    flightDataList: [flightData('f1', 'VIPER1', '0041')], strips: [strip('f1')], tracks: [track(101, 'VIPER1', 41)],
   });
   reconciler.tick();
   deltas.length = 0;
@@ -386,7 +386,7 @@ test('nothing in the sweep can move a Strip — §10.3 is a MUST NOT, enforced b
   const strips = [strip('f1', 'AIRBORNE')];
   const before = JSON.parse(JSON.stringify(strips));
   const { reconciler } = build({
-    fdrs: [fdr('f1', 'VIPER1', '0041')], strips, tracks: [track(1, 'VIPER1', 41)],
+    flightDataList: [flightData('f1', 'VIPER1', '0041')], strips, tracks: [track(1, 'VIPER1', 41)],
   });
   reconciler.tick();
   reconciler.resetPicture('MISSION_RELOAD');
@@ -400,7 +400,7 @@ test('the sweep never touches a Strip even when the contact contradicts its stat
   const strips = [strip('f1', 'PUSHBACK')];
   const before = JSON.parse(JSON.stringify(strips));
   const { reconciler, store } = build({
-    fdrs: [fdr('f1', 'VIPER1', '0041')], strips, tracks: [track(1, 'VIPER1', 41)],
+    flightDataList: [flightData('f1', 'VIPER1', '0041')], strips, tracks: [track(1, 'VIPER1', 41)],
   });
   reconciler.tick();
   assert.equal(store.getCorrelation('f1').state, 'CORRELATED', 'it correlates...');
@@ -417,7 +417,7 @@ test('a flight with no live Strip left is retired, not kept forever with a stale
   // carrying a trackId, and still sent in every snapshot.
   const strips = [strip('f1', 'AIRBORNE')];
   const { reconciler, store } = build({
-    fdrs: [fdr('f1', 'VIPER1', '0041')], strips, tracks: [track(1, 'VIPER1', 41)],
+    flightDataList: [flightData('f1', 'VIPER1', '0041')], strips, tracks: [track(1, 'VIPER1', 41)],
   });
   reconciler.tick();
   assert.equal(store.getCorrelation('f1').trackId, '1');
@@ -432,7 +432,7 @@ test('a flight with no live Strip left is retired, not kept forever with a stale
 test('a live-but-ineligible Strip is NOT retired — it has no contact yet, which is different', () => {
   const strips = [strip('f1', 'AIRBORNE')];
   const { reconciler, store } = build({
-    fdrs: [fdr('f1', 'VIPER1', '0041')], strips, tracks: [track(1, 'VIPER1', 41)],
+    flightDataList: [flightData('f1', 'VIPER1', '0041')], strips, tracks: [track(1, 'VIPER1', 41)],
   });
   reconciler.tick();
 
@@ -449,15 +449,15 @@ test('a callsign match does not claim the aircraft of a flight that has finished
   // VIPER1 flew, its Strip was dropped, its aircraft is still in the air. The
   // callsign is reused by a NEW flight that has not left the apron.
   const strips = [strip('f1', 'AIRBORNE')];
-  const fdrs = [fdr('f1', 'VIPER1', null)];
+  const flightDataList = [flightData('f1', 'VIPER1', null)];
   const tracks = [track(1, 'VIPER1')];
-  const { reconciler, store } = build({ fdrs, strips, tracks });
+  const { reconciler, store } = build({ flightDataList, strips, tracks });
   reconciler.tick();
   assert.equal(store.getCorrelation('f1').trackId, '1');
 
   strips.length = 0; // f1 over
   strips.push(strip('f2', 'PUSHBACK'));
-  fdrs.length = 0; fdrs.push(fdr('f2', 'VIPER1', null));
+  flightDataList.length = 0; flightDataList.push(flightData('f2', 'VIPER1', null));
   reconciler.tick();
   const rec = store.getCorrelation('f2');
   assert.notEqual(rec.state, 'CORRELATED', 'the lingering aircraft is not f2');
@@ -471,13 +471,13 @@ test('a callsign match does not claim the aircraft of a flight that has finished
 
 test('an explicit binding can still take a finished flight\'s contact (S-L27)', () => {
   const strips = [strip('f1', 'AIRBORNE')];
-  const fdrs = [fdr('f1', 'VIPER1', null)];
-  const { reconciler, store } = build({ fdrs, strips, tracks: [track(1, 'VIPER1')] });
+  const flightDataList = [flightData('f1', 'VIPER1', null)];
+  const { reconciler, store } = build({ flightDataList, strips, tracks: [track(1, 'VIPER1')] });
   reconciler.tick();
   strips.length = 0; strips.push(strip('f2', 'PUSHBACK'));
-  fdrs.length = 0; fdrs.push(fdr('f2', 'VIPER1', null));
+  flightDataList.length = 0; flightDataList.push(flightData('f2', 'VIPER1', null));
   reconciler.tick();
-  const r = store.apply({ clientMutationId: 'm1', fdrId: 'f2', baseRev: store.getCorrelation('f2').rev, op: { kind: 'BindTrack', trackId: '1' } }, 'GCI', 'u1');
+  const r = store.apply({ clientMutationId: 'm1', flightDataId: 'f2', baseRev: store.getCorrelation('f2').rev, op: { kind: 'BindTrack', trackId: '1' } }, 'GCI', 'u1');
   reconciler.tick();
   assert.equal(store.getCorrelation('f2').trackId, '1', JSON.stringify(r));
 });

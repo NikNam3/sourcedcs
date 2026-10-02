@@ -10,7 +10,7 @@
 //     is on which pool frequency right now. Only the jurisdiction Position (APP)
 //     changes it.
 //  2. The SFA_ROTATION transfer (below): a Strip's controller changes, the Strip's
-//     frequency never does. It is the same shape as a carrier hand-over (ADR 0074):
+//     frequency never does. It is the same shape as a carrier handoff (ADR 0074):
 //     an ARRIVAL Strip becomes a FINAL Strip IN PLACE (same Strip, same FDR, as
 //     ConvertToArrival does, ADR 0023), ownership moves to PAR, and the transfer's
 //     trigger type is recorded.
@@ -29,8 +29,8 @@ const { TRIGGER_TYPES } = require('./carrier/handoffs');
 const SFA_TRANSFERS = Object.freeze({
   SFA_ROTATION: Object.freeze({
     trigger: 'CONTROLLER_INITIATED',
-    role: 'ARRIVAL', state: 'INBOUND',
-    toRole: 'FINAL', toState: 'ON_FINAL',
+    stripType: 'ARRIVAL', state: 'INBOUND',
+    toStripType: 'FINAL', toState: 'ON_FINAL',
     label: 'Rotate to PAR',
     source: '§4.7',
     guide: '§4.7 — SFA ownership transfer is a controller-side rotation; the Strip\'s frequency does not change',

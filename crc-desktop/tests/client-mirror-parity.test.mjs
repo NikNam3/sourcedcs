@@ -48,25 +48,25 @@ test('S-6: every IFF state the server can classify has a client fallback colour,
 });
 
 // ── NLA button labels (D-9) ─────────────────────────────────────────────────
-// efsp-nla.js NLA_LABELS says it "mirrors nla.js's STATES_BY_ROLE/computeNla": the
+// efsp-nla.js NLA_LABELS says it "mirrors nla.js's STATES_BY_STRIP_TYPE/computeNla": the
 // label is the verb for leaving a state, so every live (non-DROPPED) state of a Role has one.
 
 const { NLA_LABELS, DOUBLE_TAP_MS, UNDO_WINDOW_MS, DEFAULT_STALE_THRESHOLD_SECONDS } = clientNla;
 
-test('D-9: NLA_LABELS has a label for every non-terminal state of every Role in nla.js STATES_BY_ROLE, and none for a state nla.js lacks', () => {
-  assert.deepEqual(Object.keys(NLA_LABELS).sort(), Object.keys(serverNla.STATES_BY_ROLE).sort(), 'Roles differ');
-  for (const [role, states] of Object.entries(serverNla.STATES_BY_ROLE)) {
+test('D-9: NLA_LABELS has a label for every non-terminal state of every Role in nla.js STATES_BY_STRIP_TYPE, and none for a state nla.js lacks', () => {
+  assert.deepEqual(Object.keys(NLA_LABELS).sort(), Object.keys(serverNla.STATES_BY_STRIP_TYPE).sort(), 'Roles differ');
+  for (const [stripType, states] of Object.entries(serverNla.STATES_BY_STRIP_TYPE)) {
     const live = states.filter(s => s !== 'DROPPED');
-    assert.deepEqual(Object.keys(NLA_LABELS[role]).sort(), [...live].sort(), `${role}: label keys vs nla.js states`);
-    for (const s of live) assert.ok(NLA_LABELS[role][s], `${role}.${s} has an empty label`);
+    assert.deepEqual(Object.keys(NLA_LABELS[stripType]).sort(), [...live].sort(), `${stripType}: label keys vs nla.js states`);
+    for (const s of live) assert.ok(NLA_LABELS[stripType][s], `${stripType}.${s} has an empty label`);
   }
 });
 
 test('D-9: the client owner tables name exactly the states nla.js has for each Role (no state without an owner, no owner for a missing state)', () => {
-  const { STATE_OWNERS_BY_ROLE } = clientNla;
-  for (const [role, states] of Object.entries(serverNla.STATES_BY_ROLE)) {
+  const { STATE_OWNERS_BY_STRIP_TYPE } = clientNla;
+  for (const [stripType, states] of Object.entries(serverNla.STATES_BY_STRIP_TYPE)) {
     const live = states.filter(s => s !== 'DROPPED');
-    assert.deepEqual(Object.keys(STATE_OWNERS_BY_ROLE[role]).sort(), [...live].sort(), role);
+    assert.deepEqual(Object.keys(STATE_OWNERS_BY_STRIP_TYPE[stripType]).sort(), [...live].sort(), stripType);
   }
 });
 
@@ -89,12 +89,12 @@ test('D-9: the strips that show a RWY chip are real states of their Role, and co
   // RUNWAY_GATED_STATES lists the states whose ENTRY uses the runway; the chip is shown one step
   // earlier, on the Strip whose next NLA step the inhibit would refuse (the client comment's
   // "so the controller sees the problem before the NLA does").
-  for (const [role, states] of Object.entries(rules.FIELD_STATE_RUNWAY_STRIP_STATES)) {
-    for (const s of states) assert.ok(serverNla.STATES_BY_ROLE[role].includes(s), `${role}.${s} is not a state in nla.js`);
-    const order = serverNla.STATES_BY_ROLE[role];
-    for (const g of serverFieldState.RUNWAY_GATED_STATES[role] || []) {
+  for (const [stripType, states] of Object.entries(rules.FIELD_STATE_RUNWAY_STRIP_STATES)) {
+    for (const s of states) assert.ok(serverNla.STATES_BY_STRIP_TYPE[stripType].includes(s), `${stripType}.${s} is not a state in nla.js`);
+    const order = serverNla.STATES_BY_STRIP_TYPE[stripType];
+    for (const g of serverFieldState.RUNWAY_GATED_STATES[stripType] || []) {
       const before = order[order.indexOf(g) - 1];
-      assert.ok(states.includes(before), `server gates entry to ${role}.${g}, but the client shows no RWY chip on ${before}`);
+      assert.ok(states.includes(before), `server gates entry to ${stripType}.${g}, but the client shows no RWY chip on ${before}`);
     }
   }
   assert.deepEqual(Object.keys(rules.FIELD_STATE_RUNWAY_STRIP_STATES).sort(), Object.keys(serverFieldState.RUNWAY_GATED_STATES).sort());
@@ -124,7 +124,7 @@ test('D-9: every Position a client authority table names is a Position some Faci
   const named = new Map();
   const note = (where, ids) => { for (const id of ids) named.set(id, where); };
   for (const owners of Object.values(rules.FIELD_STATE_ACTION_OWNERS)) note('FIELD_STATE_ACTION_OWNERS', owners);
-  for (const byState of Object.values(clientNla.STATE_OWNERS_BY_ROLE)) for (const owners of Object.values(byState)) note('STATE_OWNERS_BY_ROLE', owners);
+  for (const byState of Object.values(clientNla.STATE_OWNERS_BY_STRIP_TYPE)) for (const owners of Object.values(byState)) note('STATE_OWNERS_BY_STRIP_TYPE', owners);
   const bay = readClient(EFSP + 'bay/authority-mirror.js');
   for (const name of ['AIRSPACE_ENTRY_POSITIONS', 'CONVERT_TO_ARRIVAL_POSITIONS']) note(name, constLiteral(bay, name, 'authority-mirror.js'));
   const handBack = constLiteral(bay, 'HAND_BACK_TO', 'authority-mirror.js');
@@ -153,8 +153,8 @@ test('D-9: the only Facility radar-panel.js does not list is the one whose Posit
 
 test('D-9: efsp-ws.js tracks held Positions for every server Facility, and its default Facility is the server\'s', () => {
   const src = readClient(EFSP + 'efsp-ws.js');
-  const held = constLiteral(src, '_actingPositionsByFacility', 'efsp-ws.js');
-  assert.deepEqual(Object.keys(held).sort(), [...serverFacilities.getFacilityIds()].sort());
+  const signedOn = constLiteral(src, '_actingPositionsByFacility', 'efsp-ws.js');
+  assert.deepEqual(Object.keys(signedOn).sort(), [...serverFacilities.getFacilityIds()].sort());
   assert.equal(/const DEFAULT_EFSP_FACILITY_ID = '([A-Z]+)'/.exec(src)[1], serverFacilities.DEFAULT_FACILITY_ID);
 });
 
@@ -182,7 +182,7 @@ test('D-9: the TOFI accept picker offers exactly the server\'s SEPARATION_REGIME
 
 // ── held by other files already (listed so the inventory stays honest) ──────
 test('the permission tables the older tests hold are still exported under the names they read', () => {
-  for (const k of ['STATE_OWNERS_BY_ROLE', 'FIELD_STATE_OP_OWNERS', 'TACTICAL_CAPABILITIES', 'COORDINATION_OP_KINDS', 'TOFI_OP_KINDS', 'AIRSPACE_ENTRY_OP_KINDS']) {
+  for (const k of ['STATE_OWNERS_BY_STRIP_TYPE', 'RUNWAY_STATUS_OP_OWNERS', 'TACTICAL_CAPABILITIES', 'COORDINATION_OP_KINDS', 'TOFI_OP_KINDS', 'AIRSPACE_ENTRY_OP_KINDS']) {
     assert.ok(serverPermission[k], `permission.js no longer exports ${k}: efsp-nla-client / coordination / reachability parity tests need it`);
   }
 });

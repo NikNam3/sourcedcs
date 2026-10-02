@@ -69,8 +69,8 @@ test('matches if ANY envelope in the list matches, not just the first', () => {
 
 test('once a stereo name is filed, the envelope matches the NAME whatever the expanded route says', () => {
   const envelopes = [{ envelopeId: 'e1', stereoRoute: 'PACK 1', active: true }];
-  const fdr = makeFlightData({ filed: { stereoRouteName: 'PACK 1', route: 'LTAG DCT ALPHA DCT LTAG' } });
-  assert.equal(matchesStandingRelease(fdr, envelopes), true);
+  const flightData = makeFlightData({ filed: { stereoRouteName: 'PACK 1', route: 'LTAG DCT ALPHA DCT LTAG' } });
+  assert.equal(matchesStandingRelease(flightData, envelopes), true);
 });
 
 test('a filed name that is not the envelope\'s does not match, even when the route would have', () => {
@@ -78,8 +78,8 @@ test('a filed name that is not the envelope\'s does not match, even when the rou
   // chance. "Match either" would let one flight satisfy two envelopes, and
   // two answers to one question is the defect class, not the fix.
   const envelopes = [{ envelopeId: 'e1', stereoRoute: 'DCT', active: true }];
-  const fdr = makeFlightData({ filed: { stereoRouteName: 'PACK 1', route: 'DCT' } });
-  assert.equal(matchesStandingRelease(fdr, envelopes), false);
+  const flightData = makeFlightData({ filed: { stereoRouteName: 'PACK 1', route: 'DCT' } });
+  assert.equal(matchesStandingRelease(flightData, envelopes), false);
 });
 
 test('an empty stereo name is "no name", not "a name matching nothing" — it falls back to the route', () => {

@@ -6,7 +6,7 @@
 // required keys and the cross-references a complete file must satisfy.
 
 const blockMap = require('./block-map');
-const fieldState = require('./runway-status'); // pure, requires nothing back (docs/adr/0061)
+const runwayStatus = require('./runway-status'); // pure, requires nothing back (docs/adr/0061)
 const { validateAlertPadConfig } = require('./alert-scramble'); // pure (docs/adr/0070)
 
 /**
@@ -21,10 +21,10 @@ function validateConfig(candidate) {
   // stay visible) — only the direction it reads from. What a Facility hides
   // is subtracted from the Block Map, and the remainder still has to contain
   // every required Block.
-  for (const role of Object.keys(candidate.hiddenBlocks || {})) {
-    const all = Object.keys(blockMap.BLOCK_MAPS[role] || {});
-    const visibleBlocks = all.filter(b => !candidate.hiddenBlocks[role].includes(b));
-    const result = blockMap.validateFacilityConfig({ role, visibleBlocks });
+  for (const stripType of Object.keys(candidate.hiddenBlocks || {})) {
+    const all = Object.keys(blockMap.BLOCK_MAPS[stripType] || {});
+    const visibleBlocks = all.filter(b => !candidate.hiddenBlocks[stripType].includes(b));
+    const result = blockMap.validateFacilityConfig({ stripType, visibleBlocks });
     if (!result.ok) return result;
   }
   for (const positionId of Object.keys(candidate.bays || {})) {
@@ -74,12 +74,12 @@ function validateConfig(candidate) {
   // The runway inventory (guide §9.7, docs/adr/0061): malformed can never work
   // anywhere, so it is rejected like a malformed radar selector. How it lines
   // up with the Bays only warns — see _loadOne.
-  if (candidate.fieldState !== undefined) {
-    const problem = fieldState.validateRunwayStatusInventory(candidate.fieldState, candidate.positions || []);
+  if (candidate.runwayStatus !== undefined) {
+    const problem = runwayStatus.validateRunwayStatusInventory(candidate.runwayStatus, candidate.positions || []);
     if (problem) return { ok: false, reason: 'VALIDATION_ERROR', detail: problem };
   }
-  if (candidate.fieldState && candidate.fieldState.pads) {
-    const problem = validateAlertPadConfig(candidate.fieldState.pads.alert);
+  if (candidate.runwayStatus && candidate.runwayStatus.pads) {
+    const problem = validateAlertPadConfig(candidate.runwayStatus.pads.alert);
     if (problem) return { ok: false, reason: 'VALIDATION_ERROR', detail: problem };
   }
   return { ok: true };
@@ -88,8 +88,8 @@ function validateConfig(candidate) {
 // The Bay descriptor flags (docs/adr/0093). Only these keys beyond bayId/rackIds/
 // impliesState exist, so a typo in a config can never silently mount nothing.
 const BAY_VIEWS = Object.freeze(['pattern', 'final', 'sfa-freqs']);
-// `holdsRole` is L28's (docs/adr/0087): a Bay that files its Role's Strips whatever their state.
-const BAY_DESCRIPTOR_KEYS = Object.freeze(['bayId', 'rackIds', 'impliesState', 'view', 'replacesRacks', 'capacity', 'holdsRole']);
+// `holdsStripType` is L28's (docs/adr/0087): a Bay that files its Role's Strips whatever their state.
+const BAY_DESCRIPTOR_KEYS = Object.freeze(['bayId', 'rackIds', 'impliesState', 'view', 'replacesRacks', 'capacity', 'holdsStripType']);
 
 /** A human problem string for a malformed Bay descriptor flag (`view`, `capacity`), or null. */
 function validateBayDescriptors(candidate) {
@@ -104,8 +104,8 @@ function validateBayDescriptors(candidate) {
       if (bay.replacesRacks !== undefined && (typeof bay.replacesRacks !== 'boolean' || !bay.view)) {
         return `bays.${positionId}.${bay.bayId}: replacesRacks is true or false and needs a view`;
       }
-      if (bay.holdsRole !== undefined && (typeof bay.holdsRole !== 'string' || !bay.holdsRole)) {
-        return `bays.${positionId}.${bay.bayId}: holdsRole is a Role name`;
+      if (bay.holdsStripType !== undefined && (typeof bay.holdsStripType !== 'string' || !bay.holdsStripType)) {
+        return `bays.${positionId}.${bay.bayId}: holdsStripType is a strip type name`;
       }
       const stray = Object.keys(bay).find(k => !BAY_DESCRIPTOR_KEYS.includes(k));
       if (stray) return `bays.${positionId}.${bay.bayId}: unknown Bay descriptor key ${JSON.stringify(stray)}`;
@@ -215,16 +215,16 @@ const fail = (detail) => ({ ok: false, reason: 'VALIDATION_ERROR', detail });
 const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 
 // Keys every facility file must carry (a shipped file is complete: nothing is merged in from the code).
-// `singleFrequencyApproach` and `fieldState` are the only optional ones: a Facility without those Bays has none.
+// `singleFrequencyApproach` and `runwayStatus` are the only optional ones: a Facility without those Bays has none.
 const REQUIRED_KEYS = Object.freeze({
-  facility: 'string', positions: 'array', positionClasses: 'object', positionLetters: 'object', coveringChain: 'object',
+  facility: 'string', positions: 'array', positionClasses: 'object', positionLetters: 'object', consolidation: 'object',
   positionRadars: 'object', hiddenBlocks: 'object', bays: 'object', dataOnly: 'boolean', standingReleases: 'array', aitAuthorized: 'boolean',
 });
 
 /**
  * A complete facility file: every required key present with the right type, then validateConfig's checks,
  * then the cross-references. Bays point to Racks they name themselves (non-empty, no repeats), a bayId is
- * unique in the Facility, `holdsRole` names a Role the Block Map knows, every Position has a class, and the
+ * unique in the Facility, `holdsStripType` names a Role the Block Map knows, every Position has a class, and the
  * covering chain joins Positions of this Facility and has no loop.
  * Returns {ok:true} or {ok:false, reason:'VALIDATION_ERROR', detail}.
  */
@@ -248,14 +248,14 @@ function validateFacilityConfig(candidate, expectedFacilityId) {
   for (const positionId of candidate.positions) {
     if (typeof candidate.positionClasses[positionId] !== 'string') return fail(`positionClasses has no class for Position ${positionId}`);
   }
-  for (const [from, to] of Object.entries(candidate.coveringChain)) {
-    if (!positions.has(from)) return fail(`coveringChain names unknown Position ${from}`);
-    if (!positions.has(to)) return fail(`coveringChain.${from} names unknown Position ${to}`);
+  for (const [from, to] of Object.entries(candidate.consolidation)) {
+    if (!positions.has(from)) return fail(`consolidation names unknown Position ${from}`);
+    if (!positions.has(to)) return fail(`consolidation.${from} names unknown Position ${to}`);
   }
-  for (const start of Object.keys(candidate.coveringChain)) {
+  for (const start of Object.keys(candidate.consolidation)) {
     const seen = new Set([start]);
-    for (let at = candidate.coveringChain[start]; at !== undefined; at = candidate.coveringChain[at]) {
-      if (seen.has(at)) return fail(`coveringChain loops back to ${at}`);
+    for (let at = candidate.consolidation[start]; at !== undefined; at = candidate.consolidation[at]) {
+      if (seen.has(at)) return fail(`consolidation loops back to ${at}`);
       seen.add(at);
     }
   }
@@ -271,13 +271,13 @@ function validateFacilityConfig(candidate, expectedFacilityId) {
         return fail(`bays.${positionId}.${bay.bayId}: rackIds must be a non-empty list of unique Rack ids`);
       }
       if (bay.impliesState !== undefined && (typeof bay.impliesState !== 'string' || !bay.impliesState)) return fail(`bays.${positionId}.${bay.bayId}: impliesState is a state name`);
-      if (bay.holdsRole !== undefined && !Object.prototype.hasOwnProperty.call(blockMap.BLOCK_MAPS, bay.holdsRole)) {
-        return fail(`bays.${positionId}.${bay.bayId}: holdsRole ${JSON.stringify(bay.holdsRole)} is not a Role (one of ${Object.keys(blockMap.BLOCK_MAPS).join(', ')})`);
+      if (bay.holdsStripType !== undefined && !Object.prototype.hasOwnProperty.call(blockMap.BLOCK_MAPS, bay.holdsStripType)) {
+        return fail(`bays.${positionId}.${bay.bayId}: holdsStripType ${JSON.stringify(bay.holdsStripType)} is not a strip type (one of ${Object.keys(blockMap.BLOCK_MAPS).join(', ')})`);
       }
     }
   }
-  for (const role of Object.keys(candidate.hiddenBlocks)) {
-    if (!Object.prototype.hasOwnProperty.call(blockMap.BLOCK_MAPS, role)) return fail(`hiddenBlocks names unknown Role ${role}`);
+  for (const stripType of Object.keys(candidate.hiddenBlocks)) {
+    if (!Object.prototype.hasOwnProperty.call(blockMap.BLOCK_MAPS, stripType)) return fail(`hiddenBlocks names unknown strip type ${stripType}`);
   }
   return { ok: true };
 }

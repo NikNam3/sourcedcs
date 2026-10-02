@@ -41,10 +41,10 @@ function stampStrip(boardStore, strip, facilityId, ctx) {
   return { ...strip, facilityId, nla };
 }
 
-/** The FDRs a Mutation changed — the one it addressed, plus any it wrote as a side effect — deduplicated by fdrId, most recent value winning. */
+/** The FDRs a Mutation changed — the one it addressed, plus any it wrote as a side effect — deduplicated by flightDataId, most recent value winning. */
 function mergeFlightDataList(primary, extra) {
   const byId = new Map();
-  for (const fdr of [primary, ...(extra || [])]) if (fdr && fdr.fdrId) byId.set(fdr.fdrId, fdr);
+  for (const flightData of [primary, ...(extra || [])]) if (flightData && flightData.flightDataId) byId.set(flightData.flightDataId, flightData);
   return [...byId.values()];
 }
 
@@ -74,14 +74,14 @@ function touchedStrips(ctx, boardStore, facilityId, touchedIds, first) {
  * `boardSeq` (docs/adr/0081): a seq only means something within one Board
  * lifetime, and the epoch names the lifetime.
  */
-function boardDelta(ctx, boardStore, facilityId, strips, fdrs, positions = []) {
+function boardDelta(ctx, boardStore, facilityId, strips, flightDataList, positions = []) {
   return {
     version: VERSION, type: 'efsp-board-delta',
     boardSeq: boardStore ? boardStore.currentSeq : undefined,
     boardEpoch: boardStore ? boardStore.epoch : undefined,
     facilityId,
     strips,
-    fdrs: { updated: fdrs },
+    flightDataList: { updated: flightDataList },
     positions: { updated: positions },
   };
 }

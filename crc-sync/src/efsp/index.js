@@ -18,7 +18,7 @@
 // MutationLog stay shared across every Facility — a deliberate
 // simplification of "one logical FDR, N per-Facility Strip replicas"
 // (docs/adr/0013's own text): both Facilities' replicas reference the
-// SAME fdrId, so an edit from either side is instantly visible to the
+// SAME flightDataId, so an edit from either side is instantly visible to the
 // other, and the guide's real-world forwarding-obligation timers (§4.6.1)
 // become compliance/alerting instrumentation on an always-consistent
 // record rather than an actual data-sync protocol we'd otherwise have to
@@ -78,29 +78,29 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
   const stores = {};            // registry key -> instance (src/efsp/stores.js)
   const buildDeps = { clock, transitionAltFt, codeAllocator, mutationLog, facilities, stores };
   for (const entry of REGISTRY) stores[entry.key] = entry.build(buildDeps);
-  const { fdr: flightDataStore, airspaces: airspaceStore, correlations: correlationStore, marsa: marsaStore,
-    fieldStates: runwayStatusStore, carriers: carrierStore, sfaRotation: sfaStore } = stores;
+  const { flightData: flightDataStore, airspaces: airspaceStore, correlations: correlationStore, marsa: marsaStore,
+    runwayStatuses: runwayStatusStore, carriers: carrierStore, sfaRotation: sfaStore } = stores;
   const facilityIds = facilityConfig.getFacilityIds();
 
   for (const facilityId of facilityIds) {
     const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getConsolidation(facilityId), { clock });
 
     const rules = {
-      resolveBlockTarget:  (blockId, role) => blockMap.resolveBlockTarget(role, blockId),
-      isBlockVisible:      (role, blockId) => facilityConfig.isBlockVisible(role, blockId, facilityId),
+      resolveBlockTarget:  (blockId, stripType) => blockMap.resolveBlockTarget(stripType, blockId),
+      isBlockVisible:      (stripType, blockId) => facilityConfig.isBlockVisible(stripType, blockId, facilityId),
       bayImpliesState:     (bayId) => facilityConfig.bayImpliesState(bayId, facilityId),
       bayHoldsStripType:        (bayId) => facilityConfig.bayHoldsStripType(bayId, facilityId),
       bayExists:           (bayId) => facilityConfig.bayExists(bayId, facilityId),
       bayForImpliedState:  (positionId, state) => facilityConfig.bayForImpliedState(positionId, state, facilityId),
       coordinationBayFor:  (positionId) => facilityConfig.coordinationBayFor(positionId, facilityId),
-      computeNla:          (strip, fdr, now, ctx) => nla.computeNla(strip, fdr, now, ctx),
-      isValidState:        (state, role) => nla.isValidState(state, role),
-      isValidStripType:         (role) => blockMap.isValidStripType(role),
+      computeNla:          (strip, flightData, now, ctx) => nla.computeNla(strip, flightData, now, ctx),
+      isValidState:        (state, stripType) => nla.isValidState(state, stripType),
+      isValidStripType:         (stripType) => blockMap.isValidStripType(stripType),
       isStaffed:          (positionId) => positionStore.isStaffed(positionId),
       consolidatedAt: (positionId) => positionStore.consolidatedAt(positionId),
       canMutate:           (actingPositionId, opKind) => permission.canMutate(actingPositionId, opKind),
-      canCreateStripRole:  (actingPositionId, role) => permission.canCreateStripRole(actingPositionId, role),
-      canActOnState:       (actingPositionId, role, state) => permission.canActOnState(actingPositionId, role, state),
+      canCreateStripType:  (actingPositionId, stripType) => permission.canCreateStripType(actingPositionId, stripType),
+      canActOnState:       (actingPositionId, stripType, state) => permission.canActOnState(actingPositionId, stripType, state),
       isSelfCoordinated:   (controllerId, positionId) => positionStore.isSelfCoordinated(controllerId, positionId),
       // docs/adr/0080 — the tactical capability table and the Bay lookups the
       // ownership, hand-back and covering rules read.
@@ -133,11 +133,11 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
       // so "is anyone still using this beacon code" is only answerable by
       // looking at all of them. Same lazy-closure-over-`facilities` shape as
       // peerBoard above, for the same construction-order reason.
-      liveStripsForFlightData: (fdrId, excludeStripId) => {
+      liveStripsForFlightData: (flightDataId, excludeStripId) => {
         let n = 0;
         for (const { boardStore } of facilities.values()) {
           for (const s of boardStore.getAll()) {
-            if (s.fdrId === fdrId && s.stripId !== excludeStripId && s.state !== 'DROPPED') n++;
+            if (s.flightDataId === flightDataId && s.stripId !== excludeStripId && s.state !== 'DROPPED') n++;
           }
         }
         return n;
@@ -145,8 +145,8 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
       coordinationEffect: (primitive) => coordination.coordinationEffect(primitive),
       // WP4A gap-closure (docs/adr/0022) — which EfspState a Strip Role
       // must be in to PROPOSE a coordination link (see coordination.js).
-      coordinationEligibleState: (role) => coordination.coordinationEligibleState(role),
-      tofiEligibleState: (role) => coordination.tofiEligibleState(role),
+      coordinationEligibleState: (stripType) => coordination.coordinationEligibleState(stripType),
+      tofiEligibleState: (stripType) => coordination.tofiEligibleState(stripType),
       // WP4A second slice — TOFI's target resolution (permission.js).
       tofiCounterparts: (actingPositionId) => permission.tofiCounterparts(actingPositionId),
       // The RANGE slice — the airspace an entry approval names, so the Strip
@@ -164,31 +164,31 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
       // ids held in board-store.js — see block-map.js's interlockFor() for why
       // that separation matters (the same Block id means opposite things on
       // different Roles).
-      marsaInterlockFor:       (role, blockId) => blockMap.interlockFor(role, blockId),
-      voidMarsaForAssignment:  (fdrId, ctx) => marsaStore.voidForAssignment(fdrId, ctx),
-      activeMarsaFor:          (fdrId) => marsaStore.activeFor(fdrId),
-      retireMarsaForFlightData:       (fdrId, by) => marsaStore.onFlightDataRetired(fdrId, by),
+      marsaInterlockFor:       (stripType, blockId) => blockMap.interlockFor(stripType, blockId),
+      voidMarsaForAssignment:  (flightDataId, ctx) => marsaStore.voidForAssignment(flightDataId, ctx),
+      activeMarsaFor:          (flightDataId) => marsaStore.activeFor(flightDataId),
+      retireMarsaForFlightData:       (flightDataId, by) => marsaStore.onFlightDataRetired(flightDataId, by),
       // Ending or voiding a relation writes `tofi.separationRegime` back to
       // ATC on every participant. Those FDR writes are real changes no
       // marsa-delta can carry (a relation is not an FDR), so board-store drains
       // them onto its own result and efsp-ws.js puts them in the board-delta's
-      // `fdrs.updated` — see marsa-store.js's drainRegimeWrites() (F-111).
+      // `flightDataList.updated` — see marsa-store.js's drainRegimeWrites() (F-111).
       drainMarsaRegimeWrites:  () => marsaStore.drainRegimeWrites(),
       // WP6 (docs/adr/0061), §9.7 rule 1 — this Facility's runway status view
       // (null where there are no runways, which never inhibits). Cached in the
       // store, so every NLA stamp can afford to ask.
       runwayStatusFor:           () => runwayStatusStore.statusView(facilityId),
       // docs/adr/0074 — the carrier hooks board-store.js reads. The NLA out of
-      // IN_STACK depends on the Case and on the manned lane the stack feeds.
+      // IN_STACK depends on the Case and on the staffed lane the stack feeds.
       carrierCase:             () => carrierStore.caseValue(),
-      carrierLaneFor:          (strip) => carrierStore.laneFor(strip.fdrId),
-      carrierInStack:          (strip) => carrierStore.inStack(strip.fdrId),
+      carrierLaneFor:          (strip) => carrierStore.laneFor(strip.flightDataId),
+      carrierInStack:          (strip) => carrierStore.inStack(strip.flightDataId),
       canRecordCarrierHandoff: (actingPositionId, kind) => permission.canRecordCarrierHandoff(actingPositionId, kind),
       validateCarrierHandoff: (kind, args) => carrierModel.validateCarrierHandoff(kind, args),
       carrierHandoffs:        carrierModel.CARRIER_HANDOFFS,
-      carrierApplyEffect:      (effect, fdrId, meta) => carrierStore.applyEffect(effect, fdrId, meta),
-      carrierAppendFlight:     (fdrId, meta) => carrierStore.appendFlight(fdrId, meta),
-      carrierRetireFlight:     (fdrId, by) => carrierStore.onFlightDataRetired(fdrId, by),
+      carrierApplyEffect:      (effect, flightDataId, meta) => carrierStore.applyEffect(effect, flightDataId, meta),
+      carrierAppendFlight:     (flightDataId, meta) => carrierStore.appendFlight(flightDataId, meta),
+      carrierRetireFlight:     (flightDataId, by) => carrierStore.onFlightDataRetired(flightDataId, by),
       // docs/adr/0075, 0093 — Bay descriptor flags (`capacity`, `view`) and Single
       // Frequency Approach. All plain reads of the one Facility config, so they
       // are the same functions for every Facility (a Facility without an SFA Bay
@@ -277,7 +277,7 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
     // clock (H11/H68) and audits the import itself in the Mutation log.
     clock,
     mutationLog,
-    // Idempotency for the airspace, correlation, MARSA and field-state paths
+    // Idempotency for the airspace, correlation, MARSA and runway-status paths
     // (docs/adr/0081). Memory only: those ops are rev-checked and rarely
     // retried across a restart.
     replayCache: new ReplayCache(),
@@ -382,15 +382,15 @@ function _reconcileRestored(facilities, flightDataStore, correlationStore, marsa
   for (const [facilityId, { boardStore }] of facilities.entries()) {
     for (const strip of boardStore.getAll()) {
       if (strip.state === 'DROPPED') continue;
-      const fdr = flightDataStore.getFlightData(strip.fdrId);
-      if (!fdr) {
-        log.warn('restored Strip references a missing FDR — it will render without flight data', { stripId: strip.stripId, facilityId, fdrId: strip.fdrId });
+      const flightData = flightDataStore.getFlightData(strip.flightDataId);
+      if (!flightData) {
+        log.warn('restored Strip references a missing FDR — it will render without flight data', { stripId: strip.stripId, facilityId, flightDataId: strip.flightDataId });
         continue;
       }
-      const code = fdr.identity.beaconAssigned;
+      const code = flightData.identity.beaconAssigned;
       if (code && !allocator.isAllocated(code)) {
         log.warn('restored Strip squawks a code the code pool had free — re-reserving it', { stripId: strip.stripId, facilityId, code });
-        allocator.reassign(strip.fdrId, code, null);
+        allocator.reassign(strip.flightDataId, code, null);
       }
     }
   }
@@ -511,7 +511,7 @@ function _restore({ facilities, stores, paths, mutationLog, clock }) {
     if (store) byKey.get(key).restore(store, key === 'boards' ? data.boards : data[key], all);
   }
   // After the Boards, not before — it has Strips to check against only now.
-  _reconcileRestored(facilities, stores.fdr, stores.correlations, stores.marsa);
+  _reconcileRestored(facilities, stores.flightData, stores.correlations, stores.marsa);
   // A Mutation audited but never persisted (a crash inside _persist) gets a
   // NotPersisted marker, so the log says that line never took effect.
   _reconcileLogTail(facilities, mutationLog, data.persistedWallAt, clock);

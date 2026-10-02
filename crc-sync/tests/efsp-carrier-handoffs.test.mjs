@@ -71,7 +71,7 @@ test('validateCarrierHandoff refusals: unknown kind, wrong Case, wrong from/to, 
   assert.equal(validateCarrierHandoff(undefined).ok, false, 'never throws');
 });
 
-test('laneFor alternates, falls back to the manned lane, and is null when neither is', () => {
+test('laneFor alternates, falls back to the staffed lane, and is null when neither is', () => {
   assert.equal(laneFor(0), 'CV_APP1');
   assert.equal(laneFor(1), 'CV_APP2');
   assert.equal(laneFor(2), 'CV_APP1');
@@ -88,17 +88,17 @@ test('assignLanes: HOLDING entries in push order; PUSHED entries count but are s
   const stack = {
     stackId: 'MAIN', hullId: 'CVN-72', charlieTimeUtc: 0, marshalRadialDeg: null,
     entries: [
-      { fdrId: 'a', stackIndex: 0, status: 'PUSHED', caseIAngels: null },
-      { fdrId: 'b', stackIndex: 1, status: 'HOLDING', caseIAngels: null },
-      { fdrId: 'c', stackIndex: 3, status: 'HOLDING', caseIAngels: null },
-      { fdrId: 'd', stackIndex: 4, status: 'HOLDING', caseIAngels: null },
+      { flightDataId: 'a', stackIndex: 0, status: 'PUSHED', caseIAngels: null },
+      { flightDataId: 'b', stackIndex: 1, status: 'HOLDING', caseIAngels: null },
+      { flightDataId: 'c', stackIndex: 3, status: 'HOLDING', caseIAngels: null },
+      { flightDataId: 'd', stackIndex: 4, status: 'HOLDING', caseIAngels: null },
     ],
   };
   const lanes = assignLanes(deriveStack(stack, { caseValue: 'III' }));
   assert.deepEqual(lanes, [
-    { fdrId: 'b', pushOrdinal: 1, lane: 'CV_APP2' },
-    { fdrId: 'c', pushOrdinal: 2, lane: 'CV_APP1' },
-    { fdrId: 'd', pushOrdinal: 3, lane: 'CV_APP2' },
+    { flightDataId: 'b', pushOrdinal: 1, lane: 'CV_APP2' },
+    { flightDataId: 'c', pushOrdinal: 2, lane: 'CV_APP1' },
+    { flightDataId: 'd', pushOrdinal: 3, lane: 'CV_APP2' },
   ]);
   assert.deepEqual(assignLanes(null), []);
 });

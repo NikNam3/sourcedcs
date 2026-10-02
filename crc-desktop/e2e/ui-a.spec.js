@@ -23,7 +23,7 @@ async function controller(browser, opts) {
 }
 
 test('U1 + U4: OPS has ORDNANCE on its face and can set HUNG; TYPE is editable', async ({ page }) => {
-  await openPanel(page, { held: ['OPS'] });
+  await openPanel(page, { signedOn: ['OPS'] });
   const callsign = cs('UIA');
   const strip = await seedStrip(page, { callsign });
   try {
@@ -48,7 +48,7 @@ test('U1 + U4: OPS has ORDNANCE on its face and can set HUNG; TYPE is editable',
 });
 
 test('S-L15: Alt+click offsets a Strip and Ctrl+click steps its highlight, one input each', async ({ page }) => {
-  await openPanel(page, { held: ['OPS'] });
+  await openPanel(page, { signedOn: ['OPS'] });
   const callsign = cs('GST');
   const strip = await seedStrip(page, { callsign });
   try {
@@ -68,9 +68,9 @@ test('S-L15: Alt+click offsets a Strip and Ctrl+click steps its highlight, one i
 });
 
 test('S-L16 W5: retyping a shown estimate accepts it as the actual', async ({ page }) => {
-  await openPanel(page, { held: ['OPS', 'GND'] });
+  await openPanel(page, { signedOn: ['OPS', 'GC'] });
   const callsign = cs('EST');
-  const strip = await seedStrip(page, { callsign, fdr: { proposedDepartureTimeUtc: '1450' } });
+  const strip = await seedStrip(page, { callsign, flightData: { proposedDepartureTimeUtc: '1450' } });
   try {
     // P-time 1450 gives TAXI an estimate; the expanded view carries TAXI.
     await strip.locator('.efsp-expand-btn').click();
@@ -88,11 +88,11 @@ test('S-L16 W5: retyping a shown estimate accepts it as the actual', async ({ pa
 });
 
 test('U2: a HANDOFF proposal to CTR announces a new Strip at CTR, even to one controller holding APP and CTR', async ({ browser }) => {
-  const page = await controller(browser, { held: ['APP'], facilityId: 'INCIRLIK', controller: 'uia-combo' });
+  const page = await controller(browser, { signedOn: ['AP'], facilityId: 'INCIRLIK', controller: 'uia-combo' });
   await page.evaluate(() => window.sendEfspSetPositions('CENTER', ['CTR']));
   await page.waitForFunction(() => window.getActingPositions('CENTER').includes('CTR'));
   const callsign = cs('HND');
-  const s = await seedStrip(page, { callsign, actingPositionId: 'APP', bayId: 'app-inbound', role: 'ARRIVAL' });
+  const s = await seedStrip(page, { callsign, actingPositionId: 'AP', bayId: 'ap-inbound', stripType: 'ARRIVAL' });
   try {
     await startAction(s, 'Coordinate…');
     const popover = page.locator('.efsp-coordinate-popover');
@@ -109,19 +109,19 @@ test('U2: a HANDOFF proposal to CTR announces a new Strip at CTR, even to one co
 });
 
 test('U8: TOFI Exit becomes CTR\'s primary action once the mission line goes OFF_STATION', async ({ browser }) => {
-  const ctr = await controller(browser, { held: ['CTR'], facilityId: 'CENTER', controller: 'uia-ctr' });
-  const tac = await controller(browser, { held: ['TAC_C2'], facilityId: 'TACTICAL', controller: 'uia-tac' });
+  const ctr = await controller(browser, { signedOn: ['CTR'], facilityId: 'CENTER', controller: 'uia-ctr' });
+  const tac = await controller(browser, { signedOn: ['TAC_C2'], facilityId: 'TACTICAL', controller: 'uia-tac' });
   const callsign = cs('EXT');
-  const act = (page, pos, role, op) => page.evaluate(([p, c, r, o]) => {
-    const s = getAllEfspStrips().find(x => x.state !== 'DROPPED' && x.role === r && getEfspFdr(x.fdrId).identity.callsign === c);
+  const act = (page, pos, stripType, op) => page.evaluate(([p, c, r, o]) => {
+    const s = getAllEfspStrips().find(x => x.state !== 'DROPPED' && x.stripType === r && getEfspFdr(x.flightDataId).identity.callsign === c);
     window.sendEfspMutation(p, getEfspStrip(s.stripId), o);
-  }, [pos, callsign, role, op]);
-  const state = (page, role) => page.evaluate(([c, r]) => {
-    const s = getAllEfspStrips().find(x => x.state !== 'DROPPED' && x.role === r && getEfspFdr(x.fdrId).identity.callsign === c);
+  }, [pos, callsign, stripType, op]);
+  const state = (page, stripType) => page.evaluate(([c, r]) => {
+    const s = getAllEfspStrips().find(x => x.state !== 'DROPPED' && x.stripType === r && getEfspFdr(x.flightDataId).identity.callsign === c);
     return s ? s.state : null;
-  }, [callsign, role]);
+  }, [callsign, stripType]);
   try {
-    await ctr.evaluate((c) => window.sendEfspCreateStrip('CTR', { kind: 'CreateStrip', bayId: 'ctr-overflight', rackId: 'main', role: 'OVERFLIGHT', fdr: { callsign: c } }, 'CENTER'), callsign);
+    await ctr.evaluate((c) => window.sendEfspCreateStrip('CTR', { kind: 'CreateStrip', bayId: 'ctr-overflight', rackId: 'main', stripType: 'OVERFLIGHT', flightData: { callsign: c } }, 'CENTER'), callsign);
     await expect.poll(() => state(ctr, 'OVERFLIGHT')).toBe('INBOUND');
     await act(ctr, 'CTR', 'OVERFLIGHT', { kind: 'SetState', toState: 'IN_SECTOR' }); // TOFI ENTRY needs the flight being worked (docs/adr/0087)
     await expect.poll(() => state(ctr, 'OVERFLIGHT')).toBe('IN_SECTOR');
@@ -143,9 +143,9 @@ test('U8: TOFI Exit becomes CTR\'s primary action once the mission line goes OFF
     await expect(exit).toHaveText('TOFI Exit');
     await exit.click();
     await expect.poll(() => ctr.evaluate((c) => {
-      const s = getAllEfspStrips().find(x => x.role === 'OVERFLIGHT' && x.state !== 'DROPPED' && getEfspFdr(x.fdrId).identity.callsign === c);
+      const s = getAllEfspStrips().find(x => x.stripType === 'OVERFLIGHT' && x.state !== 'DROPPED' && getEfspFdr(x.flightDataId).identity.callsign === c);
       return s && s.tofiCoordination && s.tofiCoordination.direction + ':' + s.tofiCoordination.state;
-    }, callsign)).toBe('EXIT:PROPOSED');
+    }, callsign)).toBe('EXIT:INITIATED');
   } finally {
     await dropStrips(ctr, [callsign]);
     await dropStrips(tac, [callsign]);
@@ -153,19 +153,19 @@ test('U8: TOFI Exit becomes CTR\'s primary action once the mission line goes OFF
 });
 
 test('S-L23 finding: a TAC_C2-only controller sees the line AIC holds, and a JTAC-only one sees no other Position\'s tab', async ({ browser }) => {
-  const tac = await controller(browser, { held: ['TAC_C2'], facilityId: 'TACTICAL', controller: 'uia-tac2' });
-  const jtac = await controller(browser, { held: ['JTAC'], facilityId: 'TACTICAL', controller: 'uia-jtac2' });
-  await controller(browser, { held: ['AIC'], facilityId: 'TACTICAL', controller: 'uia-aic2' }); // a manned AIC, or the transfer has no receiver
+  const tac = await controller(browser, { signedOn: ['TAC_C2'], facilityId: 'TACTICAL', controller: 'uia-tac2' });
+  const jtac = await controller(browser, { signedOn: ['JTAC'], facilityId: 'TACTICAL', controller: 'uia-jtac2' });
+  await controller(browser, { signedOn: ['AIC'], facilityId: 'TACTICAL', controller: 'uia-aic2' }); // a staffed AIC, or the transfer has no receiver
   const callsign = cs('WTH');
   try {
-    await tac.evaluate((c) => window.sendEfspCreateStrip('TAC_C2', { kind: 'CreateStrip', bayId: 'tac-c2-tasked', rackId: 'main', role: 'MISSION', fdr: { callsign: c } }, 'TACTICAL'), callsign);
-    const line = (page) => page.evaluate((c) => getAllEfspStrips().find(x => x.state !== 'DROPPED' && getEfspFdr(x.fdrId).identity.callsign === c), callsign);
+    await tac.evaluate((c) => window.sendEfspCreateStrip('TAC_C2', { kind: 'CreateStrip', bayId: 'tac-c2-tasked', rackId: 'main', stripType: 'MISSION', flightData: { callsign: c } }, 'TACTICAL'), callsign);
+    const line = (page) => page.evaluate((c) => getAllEfspStrips().find(x => x.state !== 'DROPPED' && getEfspFdr(x.flightDataId).identity.callsign === c), callsign);
     await expect.poll(() => line(tac)).not.toBeNull();
     for (const to of ['AIRBORNE', 'ON_STATION']) {
-      await tac.evaluate(([c, t]) => { const s = getAllEfspStrips().find(x => x.state !== 'DROPPED' && getEfspFdr(x.fdrId).identity.callsign === c); window.sendEfspMutation('TAC_C2', getEfspStrip(s.stripId), { kind: 'SetState', toState: t }); }, [callsign, to]);
+      await tac.evaluate(([c, t]) => { const s = getAllEfspStrips().find(x => x.state !== 'DROPPED' && getEfspFdr(x.flightDataId).identity.callsign === c); window.sendEfspMutation('TAC_C2', getEfspStrip(s.stripId), { kind: 'SetState', toState: t }); }, [callsign, to]);
       await expect.poll(async () => (await line(tac)).state).toBe(to);
     }
-    await tac.evaluate((c) => { const s = getAllEfspStrips().find(x => x.state !== 'DROPPED' && getEfspFdr(x.fdrId).identity.callsign === c); window.sendEfspMutation('TAC_C2', getEfspStrip(s.stripId), { kind: 'TransferStrip', toPositionId: 'AIC', bayId: 'aic-on-station', rackId: 'main' }); }, callsign);
+    await tac.evaluate((c) => { const s = getAllEfspStrips().find(x => x.state !== 'DROPPED' && getEfspFdr(x.flightDataId).identity.callsign === c); window.sendEfspMutation('TAC_C2', getEfspStrip(s.stripId), { kind: 'TransferStrip', toPositionId: 'AIC', bayId: 'aic-on-station', rackId: 'main' }); }, callsign);
     await expect.poll(async () => (await line(tac)).ownerPositionId).toBe('AIC');
     const withTab = tac.locator('#efsp-bay-tabs .efsp-bay-tab', { hasText: 'with AIC/JTAC' });
     await expect(withTab, 'TAC_C2 has a tab for lines held below it').toBeVisible();

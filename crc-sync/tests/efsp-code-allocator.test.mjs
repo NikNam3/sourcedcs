@@ -183,17 +183,17 @@ test('the cursor wraps and still skips reserved, 4000 and the synthetic block', 
 });
 
 test('the cursor survives snapshot/restore', () => {
-  const fdrs = new FlightDataStore();
-  const a = fdrs.codeAllocator;
+  const flightDataList = new FlightDataStore();
+  const a = flightDataList.codeAllocator;
   a.allocate('f1'); a.allocate('f2');
   const released = a.allocate('f3').code;
   a.release(released);
-  const snap = JSON.parse(JSON.stringify(fdrs.snapshot()));
+  const snap = JSON.parse(JSON.stringify(flightDataList.snapshot()));
   const restored = new FlightDataStore();
   restored.restore(snap);
   assert.equal(restored.codeAllocator.cursor, a.cursor);
   assert.notEqual(restored.codeAllocator.allocate('f4').code, released);
   const noCursor = new FlightDataStore();
-  noCursor.restore({ fdrs: [], codes: [] });
+  noCursor.restore({ flightDataList: [], codes: [] });
   assert.equal(noCursor.codeAllocator.cursor, 0, 'a snapshot without a cursor starts at 0000');
 });

@@ -12,7 +12,7 @@ const { test, expect } = require('./helpers/test');
 const { openPanel, seedStrip, stripByCallsign } = require('./helpers/app');
 
 test('the panel loads, connects, and a seeded Strip appears', async ({ page }) => {
-  const { consoleErrors } = await openPanel(page, { held: ['OPS'] });
+  const { consoleErrors } = await openPanel(page, { signedOn: ['OPS'] });
 
   await seedStrip(page, { callsign: 'SMOKE1' });
   await expect(stripByCallsign(page, 'SMOKE1')).toBeVisible();

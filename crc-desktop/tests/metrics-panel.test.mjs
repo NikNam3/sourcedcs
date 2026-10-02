@@ -29,18 +29,18 @@ function metricsBlock({ withSeries = true } = {}) {
     searchInvocations: {
       status: 'COLLECTING', target: { kind: 'TRENDING_DOWN' }, total: 12,
       byPosition: {
-        GND: { facilityId: 'INCIRLIK', total: 9, mannedHours: 3, perMannedHour: 3, byHour: s({
-          [H1]: { missionSession: 2, count: 4, mannedMinutes: 60, perMannedHour: 4 },
-          [H2]: { missionSession: 2, count: 3, mannedMinutes: 60, perMannedHour: 3 },
-          [H3]: { missionSession: 2, count: 2, mannedMinutes: 60, perMannedHour: 2 },
+        GC: { facilityId: 'INCIRLIK', total: 9, staffedHours: 3, perStaffedHour: 3, byHour: s({
+          [H1]: { missionSession: 2, count: 4, staffedMinutes: 60, perStaffedHour: 4 },
+          [H2]: { missionSession: 2, count: 3, staffedMinutes: 60, perStaffedHour: 3 },
+          [H3]: { missionSession: 2, count: 2, staffedMinutes: 60, perStaffedHour: 2 },
         }) },
-        TWR: { facilityId: 'INCIRLIK', total: 3, mannedHours: 1, perMannedHour: 3, byHour: s({ [H4]: { missionSession: 2, count: 3, mannedMinutes: 20, perMannedHour: 9 } }) },
+        LC: { facilityId: 'INCIRLIK', total: 3, staffedHours: 1, perStaffedHour: 3, byHour: s({ [H4]: { missionSession: 2, count: 3, staffedMinutes: 20, perStaffedHour: 9 } }) },
       },
     },
     timeToFind: {
       status: 'COLLECTING', target: { kind: 'P95_BELOW_MS', value: 3000 },
       samples: 14, p50Ms: 900, p95Ms: 2100, maxMs: 2600, pass: true, droppedSamples: 0,
-      byPosition: { GND: { samples: 14, p50Ms: 900, p95Ms: 2100, maxMs: 2600 } },
+      byPosition: { GC: { samples: 14, p50Ms: 900, p95Ms: 2100, maxMs: 2600 } },
       byHour: s({ [H2]: { missionSession: 2, samples: 6, p95Ms: 2000 }, [H3]: { missionSession: 2, samples: 8, p95Ms: 2100 } }),
     },
     gestureInputs: {
@@ -51,13 +51,13 @@ function metricsBlock({ withSeries = true } = {}) {
     correlation: { status: 'COLLECTING', target: { kind: 'AT_LEAST', value: 0.95 }, windowRate: 0.9, live: null, byHour: s({ [H3]: { missionSession: 2, rate: 0.9, samples: 60 } }) },
     rejectedMutations: {
       status: 'COLLECTING', target: { kind: 'TRENDING_DOWN' }, mutations: 120, total: 6,
-      byReason: { STALE_REV: 4, NOT_HOLDING_POSITION: 2 }, byType: {}, byOp: {}, byPosition: { GND: 6 },
+      byReason: { STALE_REV: 4, NOT_HOLDING_POSITION: 2 }, byType: {}, byOp: {}, byPosition: { GC: 6 },
       byHour: s({ [H1]: { missionSession: 2, mutations: 40, total: 1, byReason: {} }, [H2]: { missionSession: 2, mutations: 40, total: 3, byReason: {} }, [H3]: { missionSession: 2, mutations: 40, total: 2, byReason: {} } }),
     },
-    staleness: { status: 'COLLECTING', target: { kind: 'TRENDING_DOWN' }, total: 3, byPosition: { GND: 3 }, byState: { COASTING: 3 }, byHour: s({ [H2]: { missionSession: 2, total: 2 }, [H3]: { missionSession: 2, total: 1 } }) },
+    staleness: { status: 'COLLECTING', target: { kind: 'TRENDING_DOWN' }, total: 3, byPosition: { GC: 3 }, byState: { COASTING: 3 }, byHour: s({ [H2]: { missionSession: 2, total: 2 }, [H3]: { missionSession: 2, total: 1 } }) },
     transfers: {
       status: 'COLLECTING', target: { kind: 'AT_MOST', value: 0.005 },
-      attempts: 200, succeeded: 199, failed: 1, failureRate: 0.005, routedToCovering: 2, inhibitedPress: 1,
+      attempts: 200, succeeded: 199, failed: 1, failureRate: 0.005, routedToConsolidated: 2, inhibitedPress: 1,
       byCause: { STALE_REV: 1 }, byKind: { TRANSFER: { attempts: 150, failed: 1 }, NLA_TRANSFER: { attempts: 50, failed: 0 } }, byHour: {},
     },
     obligations: { status: 'NOT_INSTRUMENTED', live: null },
@@ -89,7 +89,7 @@ function freshBody() {
     correlation: { status: 'NOT_INSTRUMENTED', target: { kind: 'AT_LEAST', value: 0.95 }, windowRate: null, live: null, byHour: {} },
     rejectedMutations: { status: 'NO_DATA', target: { kind: 'TRENDING_DOWN' }, mutations: 0, total: 0, byReason: {}, byType: {}, byOp: {}, byPosition: {}, byHour: {} },
     staleness: { status: 'NOT_INSTRUMENTED', target: { kind: 'TRENDING_DOWN' }, total: null, byPosition: {}, byState: {}, byHour: {} },
-    transfers: { status: 'NO_DATA', target: { kind: 'AT_MOST', value: 0.005 }, attempts: 0, succeeded: 0, failed: 0, failureRate: null, routedToCovering: 0, inhibitedPress: 0, byCause: {}, byKind: { TRANSFER: { attempts: 0, failed: 0 }, NLA_TRANSFER: { attempts: 0, failed: 0 } }, byHour: {} },
+    transfers: { status: 'NO_DATA', target: { kind: 'AT_MOST', value: 0.005 }, attempts: 0, succeeded: 0, failed: 0, failureRate: null, routedToConsolidated: 0, inhibitedPress: 0, byCause: {}, byKind: { TRANSFER: { attempts: 0, failed: 0 }, NLA_TRANSFER: { attempts: 0, failed: 0 } }, byHour: {} },
     obligations: { status: 'NOT_INSTRUMENTED', live: null },
     systemReassigned: { total: 0, byHour: {} },
   };
@@ -137,7 +137,7 @@ test('verdicts: met, not met, and the trend for the trending-down metrics', () =
   assert.match(row(m, 'gestureInputs').cells.mission.title, /OFFSET/);
   assert.equal(row(m, 'correlation').cells.mission.verdict, 'NOT MET');
   assert.equal(row(m, 'transfers').cells.mission.verdict, 'MET', '0.5% is at the ceiling, not over it');
-  // Search per manned hour 4, 3, 2 over the three complete hours (15Z is still filling).
+  // Search per staffed hour 4, 3, 2 over the three complete hours (15Z is still filling).
   assert.equal(row(m, 'searchInvocations').cells.mission.verdict, 'TRENDING ↓');
   // Rejected 1, 3, 2: rose then fell — the last step.
   assert.equal(row(m, 'rejectedMutations').cells.mission.verdict, 'TRENDING ↓');
@@ -221,14 +221,14 @@ test('hourly sparklines carry HHMMZ labels from the mission-clock bucket keys', 
 test('per-Position numbers are there, keyed by Position — and nothing is keyed by controller (H35)', () => {
   const b = collectingBody();
   // Should a controller id ever reappear on the wire, it still must not reach the view.
-  b.metrics.searchInvocations.byPosition.GND.controllerId = 'c-alice';
-  b.metrics.searchInvocations.byPosition.GND.controllerName = 'Alice';
-  b.metrics.timeToFind.byPosition.GND.controllerId = 'c-alice';
+  b.metrics.searchInvocations.byPosition.GC.controllerId = 'c-alice';
+  b.metrics.searchInvocations.byPosition.GC.controllerName = 'Alice';
+  b.metrics.timeToFind.byPosition.GC.controllerId = 'c-alice';
   b.metrics.rejectedMutations.sessions = [{ controllerId: 'c-alice', controllerName: 'Alice', rejected: 3 }];
   b.missionSessions[1].controllerId = 'c-alice';
   const m = renderMetricsModel(b);
-  assert.deepEqual(m.perPosition.search.map(r => r.positionId), ['GND', 'TWR']);
-  assert.deepEqual(m.perPosition.timeToFind.map(r => r.positionId), ['GND']);
+  assert.deepEqual(m.perPosition.search.map(r => r.positionId), ['GC', 'LC']);
+  assert.deepEqual(m.perPosition.timeToFind.map(r => r.positionId), ['GC']);
   const json = JSON.stringify(m);
   assert.equal(json.includes('controllerId'), false);
   assert.equal(json.includes('c-alice'), false);
@@ -252,9 +252,9 @@ function trafficBody(over = {}) {
         totals: { flights: 5, aircraft: 8, local: 3, transient: 2, unknown: 0, formation: 2, formationAircraft: 5, suaTraversal: 2, alertScramble: 1, excluded: 1, excludedByReason: { NEVER_WORKED: 1 } },
         byHour: [{ hourUtc: H2, flights: 2, aircraft: 3, excluded: 0 }, { hourUtc: H3, flights: 3, aircraft: 5, excluded: 1 }],
         byAircraftType: { 'F-16C': { flights: 4, aircraft: 7 }, 'C-130': { flights: 1, aircraft: 1 } },
-        byRole: { DEPARTURE: 3, ARRIVAL: 2 },
+        byStripType: { DEPARTURE: 3, ARRIVAL: 2 },
       },
-      CENTER: { homeAirports: [], totals: { flights: 0, aircraft: 0, local: 0, transient: 0, unknown: 0, formation: 0, formationAircraft: 0, suaTraversal: 0, alertScramble: 0, excluded: 0, excludedByReason: {} }, byHour: [], byAircraftType: {}, byRole: {} },
+      CENTER: { homeAirports: [], totals: { flights: 0, aircraft: 0, local: 0, transient: 0, unknown: 0, formation: 0, formationAircraft: 0, suaTraversal: 0, alertScramble: 0, excluded: 0, excludedByReason: {} }, byHour: [], byAircraftType: {}, byStripType: {} },
     },
     reconciliation: { checkedAt: Date.parse('2026-09-30T14:32:00Z'), ok: true, window: {}, expected: 5, actual: 5, missing: 0, extra: 0, mismatched: 0, backfilled: 0 },
     ...over,

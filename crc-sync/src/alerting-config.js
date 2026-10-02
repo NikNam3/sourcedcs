@@ -23,7 +23,7 @@ function loadAlertingConfig(override) {
   const layer = readLayer(NAME, override) || {};
   return {
     conformance: { ...shipped.conformance, ...(layer.conformance || {}) },
-    stca: { ...shipped.stca, ...(layer.stca || {}) },
+    conflictAlert: { ...shipped.conflictAlert, ...(layer.conflictAlert || {}) },
   };
 }
 

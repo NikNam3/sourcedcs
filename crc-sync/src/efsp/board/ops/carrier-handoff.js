@@ -5,11 +5,11 @@ const { CARRIER_HANDOFF_EFFECTS } = require('../../carrier/handoff-effects'); //
 /**
  * The carrier's four handoffs, as one operation (docs/adr/0064, 0074; guide
  * §9.12: "MUST NOT be unified behind one button"). Reached by the dedicated
- * CarrierTransfer op and by the NLA button (computeNla's `carrierTransfer`),
+ * CarrierHandoff op and by the NLA button (computeNla's `carrierHandoff`),
  * so there is exactly one implementation of what each does.
  *
  * Each kind carries its own TRIGGER TYPE, recorded on the Strip
- * (`carrierTransfer`) and on the audit line, and rendered distinctly. Every
+ * (`carrierHandoff`) and on the audit line, and rendered distinctly. Every
  * trigger is a controller gesture: "radar contact", "ball" and "see you" are
  * the controller recording what they saw or the pilot said, never a
  * surveillance advance (guide §10.3, D5).
@@ -22,8 +22,8 @@ function _applyCarrierHandoff(ctx, strip, kind, toPositionId, by, actingPosition
   if (!fx) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown carrier transfer '${kind}'`, strip };
   const row = ctx.rules.carrierHandoffs[kind];
   const label = row ? row.label : kind;
-  if (strip.role !== fx.role || strip.state !== fx.state) {
-    return { ok: false, reason: 'VALIDATION_ERROR', detail: `${label} applies to a ${fx.role} Strip in ${fx.state}, not ${strip.role} in ${strip.state}`, strip };
+  if (strip.stripType !== fx.stripType || strip.state !== fx.state) {
+    return { ok: false, reason: 'VALIDATION_ERROR', detail: `${label} applies to a ${fx.stripType} Strip in ${fx.state}, not ${strip.stripType} in ${strip.state}`, strip };
   }
   const blocked = ctx.nlaPrecheck(strip);
   if (blocked) return { ok: false, reason: blocked.reason, detail: blocked.detail, strip };
@@ -48,12 +48,12 @@ function _applyCarrierHandoff(ctx, strip, kind, toPositionId, by, actingPosition
   }
 
   // The stack effect: Commence marks the flight pushed (nobody renumbers, the
-  // drift defect D16 names); a hand-over to PriFly removes it leaving a
+  // drift defect D16 names); a handoff to PriFly removes it leaving a
   // vacancy (H28). A flight that was never in the stack has nothing to remove.
   let carrierChanged = false;
   const effect = row ? row.stackEffect : null;
   if (effect) {
-    const r = ctx.rules.carrierApplyEffect(effect, strip.fdrId, { by, actingPositionId, clientMutationId });
+    const r = ctx.rules.carrierApplyEffect(effect, strip.flightDataId, { by, actingPositionId, clientMutationId });
     if (!r.ok && !(effect === 'REMOVE_NO_CLOSE_UP' && r.reason === 'NOT_FOUND')) {
       return { ok: false, reason: r.reason || 'VALIDATION_ERROR', detail: r.detail, strip };
     }
@@ -61,11 +61,11 @@ function _applyCarrierHandoff(ctx, strip, kind, toPositionId, by, actingPosition
   }
 
   const now = ctx.clock.now();
-  const from = { role: strip.role, state: strip.state, ownerPositionId: strip.ownerPositionId };
-  strip.role = fx.toRole;
+  const from = { stripType: strip.stripType, state: strip.state, ownerPositionId: strip.ownerPositionId };
+  strip.stripType = fx.toStripType;
   strip.state = fx.toState;
   strip.ownerPositionId = dest;
-  delete strip.coveredFrom; // a new owner by decision, not by cover (F10)
+  delete strip.consolidatedFrom; // a new owner by decision, not by cover (F10)
   let warning;
   if (dest !== from.ownerPositionId) {
     const bay = ctx.placement.bayForNewOwner(dest, strip.state, strip);
@@ -79,9 +79,9 @@ function _applyCarrierHandoff(ctx, strip, kind, toPositionId, by, actingPosition
   } else {
     ctx.placement.relocateForImpliedState(strip, strip.state);
   }
-  strip.carrierTransfer = {
+  strip.carrierHandoff = {
     kind, trigger: row ? row.trigger : null, label, at: now, by: by || null,
-    from: from.ownerPositionId, to: dest, fromRole: from.role, toRole: strip.role,
+    from: from.ownerPositionId, to: dest, fromStripType: from.stripType, toStripType: strip.stripType,
   };
   strip.rev += 1;
   strip.updatedAt = now;
@@ -90,19 +90,19 @@ function _applyCarrierHandoff(ctx, strip, kind, toPositionId, by, actingPosition
   ctx.nlaHistory.delete(strip.stripId);
   return {
     ok: true, strip, routedTo: routedTo || undefined, warning,
-    carrierTransfer: { kind, trigger: strip.carrierTransfer.trigger },
+    carrierHandoff: { kind, trigger: strip.carrierHandoff.trigger },
     carrierChanged: carrierChanged || undefined,
   };
 }
 
-// CarrierTransfer (docs/adr/0074) is not an OP_KINDS grant: which Position
+// CarrierHandoff (docs/adr/0074) is not an OP_KINDS grant: which Position
 // may record WHICH of the four handoffs is the model's own `from` list
 // (permission.js's canRecordCarrierHandoff), one acting Position and one kind.
 // docs/adr/0074 — the carrier's four handoffs, each its own button with
 // its own trigger type recorded (guide §9.12). One implementation: the NLA
 // button reaches the same method.
 module.exports = {
-  kind: 'CarrierTransfer',
+  kind: 'CarrierHandoff',
   authorize: (ctx, actingPositionId, op) => {
     if (!(ctx.rules.canRecordCarrierHandoff(actingPositionId, op.transfer))) {
       return { ok: false, reason: 'PERMISSION_DENIED', detail: `${actingPositionId} may not record ${op.transfer || 'that transfer'}` };
@@ -110,10 +110,10 @@ module.exports = {
     return null;
   },
   auditFields: (ctx, result) => ({ tail: {
-    // The carrier hand-over kind and its trigger type (guide §9.12: "four
+    // The carrier handoff kind and its trigger type (guide §9.12: "four
     // different trigger types"), so an after-action review can tell them apart.
-    carrierTransfer: result.carrierTransfer ? result.carrierTransfer.kind : undefined,
-    carrierTrigger: result.carrierTransfer ? result.carrierTransfer.trigger : undefined,
+    carrierHandoff: result.carrierHandoff ? result.carrierHandoff.kind : undefined,
+    carrierTrigger: result.carrierHandoff ? result.carrierHandoff.trigger : undefined,
   } }),
   apply: (ctx, strip, op, meta) => _applyCarrierHandoff(ctx, strip, op.transfer, op.toPositionId, meta.by, meta.actingPositionId, meta.clientMutationId),
 };

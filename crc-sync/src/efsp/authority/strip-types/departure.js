@@ -34,22 +34,22 @@ const DEPARTURE_STATE_OWNERS = {
   PROPOSED:          ['OPS'],
   PENDING_CLEARANCE: ['CD'],
   CLEARED:           ['CD'],
-  HELD:              ['CD', 'GND'],
-  PUSHBACK:          ['GND'],
-  TAXI:              ['GND'],
-  RUNWAY_QUEUE:      ['TWR'],
-  LUAW:              ['TWR'],
-  DEPARTED:          ['TWR'],
+  HELD:              ['CD', 'GC'],
+  PUSHBACK:          ['GC'],
+  TAXI:              ['GC'],
+  RUNWAY_QUEUE:      ['LC'],
+  LUAW:              ['LC'],
+  DEPARTED:          ['LC'],
   // CTR added (docs/adr/0022 bug fix) — a CENTER-held HANDED_OFF Strip
   // (received via APP's real HANDOFF, mirroring ARRIVAL_STATE_OWNERS.
-  // INBOUND's existing ['APP','CTR'] entry for the reverse direction)
+  // INBOUND's existing ['AP','CTR'] entry for the reverse direction)
   // needs its owning Position authorized to Drop it, same as APP's own
   // copy. Without this, a CENTER-side replica — whether legitimately
   // ACCEPTed and moved to ctr-departures, or REJECTed and left inert in
-  // ctr-app-coordination — had NO way to ever be cleared: NLA's Drop
+  // ctr-ap-coordination — had NO way to ever be cleared: NLA's Drop
   // button rendered but stayed permanently disabled (canActOnState denied
   // to CTR), found in live testing.
-  HANDED_OFF:        ['APP', 'CTR'],
+  HANDED_OFF:        ['AP', 'CTR'],
   // DROPPED is terminal — no NLA exists for it, so no entry is needed.
 };
 
@@ -79,9 +79,9 @@ const CLEARANCE_BLOCK_LABELS = {
 };
 const CLEARANCE_LABEL_ORDER = ['requestedAltitude', 'departureAirport', 'destinationAirport', 'route'];
 
-function isFlightPlanValid(fdr) {
-  if (!fdr) return false;
-  return REQUIRED_FOR_CLEARANCE.every(k => !!fdr.filed[k]);
+function isFlightPlanValid(flightData) {
+  if (!flightData) return false;
+  return REQUIRED_FOR_CLEARANCE.every(k => !!flightData.filed[k]);
 }
 
 /**
@@ -90,15 +90,15 @@ function isFlightPlanValid(fdr) {
  * is filed, so nothing is filled in).
  * @returns {string[]}
  */
-function missingForClearance(fdr) {
+function missingForClearance(flightData) {
   return CLEARANCE_LABEL_ORDER
-    .filter(k => !fdr || !fdr.filed[k])
+    .filter(k => !flightData || !flightData.filed[k])
     .map(k => CLEARANCE_BLOCK_LABELS[k]);
 }
 
 /** The §3.5-rule-2 inhibit reason for an incomplete plan, naming the Blocks — same specific style as 'a hold is in force' / 'void time expired'. */
-function flightPlanInhibitReason(fdr) {
-  return `flight plan incomplete — ${missingForClearance(fdr).join(', ')} not filed`;
+function flightPlanInhibitReason(flightData) {
+  return `flight plan incomplete — ${missingForClearance(flightData).join(', ')} not filed`;
 }
 
 // The two release states whose gate is a derived WINDOW rather than a single
@@ -110,19 +110,19 @@ const WINDOWED_DEPARTURE_RELEASE_STATES = {
 };
 
 /** True at or after the derived 30-minute void deadline (guide §3.8). Alerting on this is a periodic job elsewhere (this is pure logic, no timers). */
-function isVoidExpired(fdr, now) {
+function isVoidExpired(flightData, now) {
   _requireNow(now);
-  return !!(fdr && fdr.assigned.voidDeadlineUtc && now >= fdr.assigned.voidDeadlineUtc);
+  return !!(flightData && flightData.assigned.voidDeadlineUtc && now >= flightData.assigned.voidDeadlineUtc);
 }
 
 /**
  * @param {object} strip
- * @param {object|null} fdr
+ * @param {object|null} flightData
  * @param {number} now
  * @param {{isStaffed:(positionId:string)=>boolean, consolidatedAt:(positionId:string)=>string|null}} ctx
  * @returns {{toState:string, transferTo?:string}|{inhibited:string}|null}
  */
-function computeDepartureNla(strip, fdr, now, ctx) {
+function computeDepartureNla(strip, flightData, now, ctx) {
   switch (strip.state) {
     case 'PROPOSED':
       // Every boundary crossing between two DIFFERENT owning Positions
@@ -133,7 +133,7 @@ function computeDepartureNla(strip, fdr, now, ctx) {
       // closes the single-Position-controller gap: without this, OPS
       // alone has no drop target to hand a Strip to CD at all (CD's Bay
       // tabs only render for Positions the acting controller holds).
-      if (!fdr || !fdr.identity.beaconAssigned) return { inhibited: 'no beacon code assigned' };
+      if (!flightData || !flightData.identity.beaconAssigned) return { inhibited: 'no beacon code assigned' };
       if (!ctx.isStaffed('CD') && !ctx.consolidatedAt('CD')) {
         return { inhibited: 'no receiving Position present' };
       }
@@ -142,20 +142,20 @@ function computeDepartureNla(strip, fdr, now, ctx) {
     case 'PENDING_CLEARANCE':
       // CLEARED is still CD's own (DEPARTURE_STATE_OWNERS), so this stays
       // state-only — no Position boundary is crossed here.
-      if (!isFlightPlanValid(fdr)) return { inhibited: flightPlanInhibitReason(fdr) };
+      if (!isFlightPlanValid(flightData)) return { inhibited: flightPlanInhibitReason(flightData) };
       return { toState: 'CLEARED' };
 
     case 'CLEARED':
-      if (fdr && fdr.assigned.releaseState !== 'RELEASED') return { inhibited: 'a hold is in force' };
+      if (flightData && flightData.assigned.departureRelease !== 'RELEASED') return { inhibited: 'a hold is in force' };
       // Alert-pad conflict (§9.6) is a flag from alert-scramble.js, never an
       // inhibit here — the guide's [GAP] (docs/adr/0070).
-      if (!ctx.isStaffed('GND') && !ctx.consolidatedAt('GND')) {
+      if (!ctx.isStaffed('GC') && !ctx.consolidatedAt('GC')) {
         return { inhibited: 'no receiving Position present' };
       }
-      return { toState: 'PUSHBACK', transferTo: 'GND' };
+      return { toState: 'PUSHBACK', transferTo: 'GC' };
 
     case 'HELD':
-      if (fdr && fdr.assigned.releaseState === 'RELEASE_TIME' && fdr.assigned.releaseTimeUtc && now < fdr.assigned.releaseTimeUtc) {
+      if (flightData && flightData.assigned.departureRelease === 'RELEASE_TIME' && flightData.assigned.releaseTimeUtc && now < flightData.assigned.releaseTimeUtc) {
         return { inhibited: 'release time not reached' };
       }
       // WP4A (docs/adr/0017), §4.6.2: a HOLD_FOR_RELEASE flight that falls
@@ -165,7 +165,7 @@ function computeDepartureNla(strip, fdr, now, ctx) {
       // own text names. Only checked for HOLD_FOR_RELEASE specifically:
       // RELEASE_TIME/EDCT/CALL_FOR_RELEASE already have their own
       // time-based gates above/below, and RELEASED has none at all.
-      if (fdr && fdr.assigned.releaseState === 'HOLD_FOR_RELEASE' && !matchesStandingRelease(fdr, ctx.standingReleases)) {
+      if (flightData && flightData.assigned.departureRelease === 'HOLD_FOR_RELEASE' && !matchesStandingRelease(flightData, ctx.standingReleases)) {
         return { inhibited: 'outside standing release envelope — file OPERATIONAL_REQUEST' };
       }
       // WP4A (docs/adr/0017), §4.6.2 — the EDCT and call-for-release
@@ -176,22 +176,22 @@ function computeDepartureNla(strip, fdr, now, ctx) {
       // release sortie. Missing a window inhibits too — a slot that has
       // passed needs a new one, and sliding through it silently is exactly
       // what the window exists to prevent.
-      const windowed = fdr && WINDOWED_DEPARTURE_RELEASE_STATES[fdr.assigned.releaseState];
+      const windowed = flightData && WINDOWED_DEPARTURE_RELEASE_STATES[flightData.assigned.departureRelease];
       if (windowed) {
-        const opensAt = fdr.assigned[windowed.startKey];
-        const closesAt = fdr.assigned[windowed.endKey];
+        const opensAt = flightData.assigned[windowed.startKey];
+        const closesAt = flightData.assigned[windowed.endKey];
         if (opensAt && now < opensAt) return { inhibited: `${windowed.label} window is not open yet` };
         if (closesAt && now > closesAt) return { inhibited: `${windowed.label} window has passed — a new slot is needed` };
       }
-      if (isVoidExpired(fdr, now)) return { inhibited: 'void time expired' };
+      if (isVoidExpired(flightData, now)) return { inhibited: 'void time expired' };
       // HELD is jointly owned by CD and GND (DEPARTURE_STATE_OWNERS) since
       // either may be the one holding it, but PUSHBACK is GND's alone —
       // always transfer to GND here, a no-op reassignment when GND already
       // held it.
-      if (!ctx.isStaffed('GND') && !ctx.consolidatedAt('GND')) {
+      if (!ctx.isStaffed('GC') && !ctx.consolidatedAt('GC')) {
         return { inhibited: 'no receiving Position present' };
       }
-      return { toState: 'PUSHBACK', transferTo: 'GND' };
+      return { toState: 'PUSHBACK', transferTo: 'GC' };
 
     case 'PUSHBACK':
       // TAXI is still GND's own — state-only.
@@ -201,19 +201,19 @@ function computeDepartureNla(strip, fdr, now, ctx) {
       // §9.7 rule 1: a departure does not enter the queue for a runway that
       // is suspended or closed — checked before the staffing gate, because
       // the runway is the reason it cannot go, whoever is in the tower.
-      const runway = _runwayInhibit(strip, fdr, ctx);
+      const runway = _runwayInhibit(strip, flightData, ctx);
       if (runway) return { inhibited: runway };
-      if (!ctx.isStaffed('TWR') && !ctx.consolidatedAt('TWR')) {
+      if (!ctx.isStaffed('LC') && !ctx.consolidatedAt('LC')) {
         return { inhibited: 'no receiving Position present' };
       }
-      return { toState: 'RUNWAY_QUEUE', transferTo: 'TWR' };
+      return { toState: 'RUNWAY_QUEUE', transferTo: 'LC' };
     }
 
     case 'RUNWAY_QUEUE': {
       // §9.7 rule 1: no line-up on a suspended or closed runway. Runway
       // OCCUPANCY is not implemented (no §9.7 field for it — see the module
-      // comment); this is the field-state inhibit only.
-      const runway = _runwayInhibit(strip, fdr, ctx);
+      // comment); this is the runway-status inhibit only.
+      const runway = _runwayInhibit(strip, flightData, ctx);
       if (runway) return { inhibited: runway };
       return { toState: 'LUAW' };
     }
@@ -222,7 +222,7 @@ function computeDepartureNla(strip, fdr, now, ctx) {
       // §9.7 rule 1: no takeoff from a suspended or closed runway — covers a
       // runway works begun while the aircraft sat lined up. Occupancy, again,
       // is not implemented.
-      const runway = _runwayInhibit(strip, fdr, ctx);
+      const runway = _runwayInhibit(strip, flightData, ctx);
       if (runway) return { inhibited: runway };
       return { toState: 'DEPARTED' };
     }
@@ -230,10 +230,10 @@ function computeDepartureNla(strip, fdr, now, ctx) {
     case 'DEPARTED':
       // Real, staffing-gated "Hand Off" to APP (docs/adr/0007) — an
       // intrafacility TransferStrip, not WP4A's cross-Facility HANDOFF.
-      if (!ctx.isStaffed('APP') && !ctx.consolidatedAt('APP')) {
+      if (!ctx.isStaffed('AP') && !ctx.consolidatedAt('AP')) {
         return { inhibited: 'no receiving Position present' };
       }
-      return { toState: 'HANDED_OFF', transferTo: 'APP' };
+      return { toState: 'HANDED_OFF', transferTo: 'AP' };
 
     case 'HANDED_OFF':
       return { toState: 'DROPPED' };
@@ -245,7 +245,7 @@ function computeDepartureNla(strip, fdr, now, ctx) {
 }
 
 const family = {
-  role: 'DEPARTURE',
+  stripType: 'DEPARTURE',
   states: DEPARTURE_STATES,
   initialState: 'PROPOSED',                       // board-store.js's DEFAULT_INITIAL_STATE_BY_STRIP_TYPE
   stateOwners: DEPARTURE_STATE_OWNERS,

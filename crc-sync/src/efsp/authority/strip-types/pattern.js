@@ -22,7 +22,7 @@ function computePatternNla(strip) {
 }
 
 const family = {
-  role: 'PATTERN',
+  stripType: 'PATTERN',
   states: PATTERN_STATES,
   initialState: 'IN_PATTERN',
   stateOwners: PATTERN_STATE_OWNERS,

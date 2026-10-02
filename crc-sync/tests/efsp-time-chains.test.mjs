@@ -18,7 +18,7 @@ const { cases } = JSON.parse(fs.readFileSync(path.join(here, 'fixtures/time-chai
 for (const c of cases) {
   test(`time chains: ${c.name}`, () => {
     for (const [name, want] of Object.entries(c.expect)) {
-      const got = resolveTimeChain(name, c.fdr);
+      const got = resolveTimeChain(name, c.flightData);
       assert.deepEqual({ valueUtc: got.valueUtc, source: got.source, via: got.via, estimated: got.estimated }, want, name);
       assert.equal(got.candidates.length, TIME_CHAINS[name].sources.length, name);
     }

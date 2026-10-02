@@ -12,7 +12,7 @@
 // declaration of authority, and nothing here touches how a Position is
 // acquired, so docs/adr/0029's session binding is untouched.
 //
-// Held, not Primary. §4.8.2 rule 3 makes a second controller at an occupied
+// Held, not Primary. §4.8.2 rule 3 makes a second controller at an staffed
 // Position an Observer, and an Observer watches — so holding a Position gets
 // you its picture whether or not you are the one who may act on its Strips.
 //
@@ -105,16 +105,16 @@ class PositionCoverage {
    * Every Position this controller holds, across every Facility, as
    * `{facilityId, positionId, isPrimary}`.
    */
-  heldPositions(controllerId) {
-    const held = [];
+  signedOnPositions(controllerId) {
+    const signedOn = [];
     for (const facilityId of this._facilityConfig.getFacilityIds()) {
       const store = this._positionStoreFor(facilityId);
       if (!store) continue;
       for (const positionId of store.signedOnBy(controllerId)) {
-        held.push({ facilityId, positionId, isPrimary: store.primaryOf(positionId) === controllerId });
+        signedOn.push({ facilityId, positionId, isPrimary: store.primaryOf(positionId) === controllerId });
       }
     }
-    return held;
+    return signedOn;
   }
 
   /**
@@ -126,20 +126,20 @@ class PositionCoverage {
    * Each record carries `grantedBy`, the Position that put it there, so the
    * panel can answer "why am I seeing this".
    *
-   * @returns {{radars:Array, radarIds:Set<string>, heldPositions:Array,
-   *            radarBearingPositions:Array<string>, datalink:boolean, stca:boolean}}
+   * @returns {{radars:Array, radarIds:Set<string>, signedOnPositions:Array,
+   *            radarBearingPositions:Array<string>, datalink:boolean, conflictAlert:boolean}}
    */
   forController(controllerId) {
     const radars = this._radars() || [];
     const byId = new Map(radars.map(r => [r.id, r]));
-    const held = this.heldPositions(controllerId);
+    const signedOn = this.signedOnPositions(controllerId);
     const opts = { ownCoalition: USER_COALITION };
 
     const grantedBy = new Map(); // radarId -> [positionId]
     const radarBearingPositions = [];
     let datalink = false;
 
-    for (const { facilityId, positionId } of held) {
+    for (const { facilityId, positionId } of signedOn) {
       const selectors = this._facilityConfig.getPositionRadars(positionId, facilityId);
       if (!selectors.length) continue;
       if (selectors.some(s => s.kind === 'datalink')) datalink = true;
@@ -163,15 +163,15 @@ class PositionCoverage {
     return {
       radars: out,
       radarIds: new Set(out.map(r => r.id)),
-      heldPositions: held,
+      signedOnPositions: signedOn,
       radarBearingPositions,
       datalink,
-      stca: held.some(p => ATC_CLASSES.has(this._facilityConfig.getPositionClass(p.positionId))),
+      conflictAlert: signedOn.some(p => ATC_CLASSES.has(this._facilityConfig.getPositionClass(p.positionId))),
     };
   }
 
   /**
-   * The union of every occupied Position's coverage — the radars somebody is
+   * The union of every staffed Position's coverage — the radars somebody is
    * actually looking through. coverage.js sweeps this rather than every radar
    * in the theater, so an unattended airfield's radar costs nothing.
    */

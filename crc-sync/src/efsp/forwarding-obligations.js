@@ -27,7 +27,7 @@ const DATA_ONLY_VERIFICATION_MINUTES = 3; // §4.6.1
 
 /**
  * @param {object} strip
- * @param {object} fdr
+ * @param {object} flightData
  * @param {number} now
  * @param {{dataOnly?:boolean}} [ctx] — `dataOnly`: is the Facility this
  *   Strip lives at (the RECEIVING side of an active coordination link)
@@ -36,20 +36,20 @@ const DATA_ONLY_VERIFICATION_MINUTES = 3; // §4.6.1
  *   DATA_ONLY_VERIFICATION branch.
  * @returns {Array<{obligationType:string, dueAt:number, severity:'WARNING'|'OVERDUE'}>}
  */
-function computeDueObligations(strip, fdr, now, ctx = {}) {
+function computeDueObligations(strip, flightData, now, ctx = {}) {
   const obligations = [];
-  if (!strip || !fdr) return obligations;
+  if (!strip || !flightData) return obligations;
   const { dataOnly = false } = ctx;
 
   // ADVANCE_FORWARDING — at least 15 minutes before the aircraft is
   // estimated to enter the receiving Facility's area. Only relevant while
   // this Strip hasn't been forwarded at all yet (no coordination link).
-  if (strip.role === 'ARRIVAL' && !strip.coordination && fdr.filed.estimatedArrivalTimeUtc) {
-    const dueAt = fdr.filed.estimatedArrivalTimeUtc - ADVANCE_FORWARDING_MINUTES * 60 * 1000;
+  if (strip.stripType === 'ARRIVAL' && !strip.coordination && flightData.filed.estimatedArrivalTimeUtc) {
+    const dueAt = flightData.filed.estimatedArrivalTimeUtc - ADVANCE_FORWARDING_MINUTES * 60 * 1000;
     if (now >= dueAt) {
       obligations.push({
         obligationType: 'ADVANCE_FORWARDING', dueAt,
-        severity: now >= fdr.filed.estimatedArrivalTimeUtc ? 'OVERDUE' : 'WARNING',
+        severity: now >= flightData.filed.estimatedArrivalTimeUtc ? 'OVERDUE' : 'WARNING',
       });
     }
   }
@@ -57,9 +57,9 @@ function computeDueObligations(strip, fdr, now, ctx = {}) {
   // ETA_REVISION — forward again once the estimate has moved by more than
   // 3 minutes since it was last forwarded (strip.coordination.
   // lastForwardedEtaUtc, stamped by board-store.js's coordination methods).
-  if (strip.coordination && (strip.coordination.state === 'PROPOSED' || strip.coordination.state === 'ACTIVE')
-    && fdr.filed.estimatedArrivalTimeUtc && strip.coordination.lastForwardedEtaUtc) {
-    const drift = Math.abs(fdr.filed.estimatedArrivalTimeUtc - strip.coordination.lastForwardedEtaUtc);
+  if (strip.coordination && (strip.coordination.state === 'INITIATED' || strip.coordination.state === 'ACTIVE')
+    && flightData.filed.estimatedArrivalTimeUtc && strip.coordination.lastForwardedEtaUtc) {
+    const drift = Math.abs(flightData.filed.estimatedArrivalTimeUtc - strip.coordination.lastForwardedEtaUtc);
     if (drift > ETA_REVISION_THRESHOLD_MINUTES * 60 * 1000) {
       obligations.push({ obligationType: 'ETA_REVISION', dueAt: now, severity: 'WARNING' });
     }
@@ -70,9 +70,9 @@ function computeDueObligations(strip, fdr, now, ctx = {}) {
   // "just amended" is approximated as "the FDR's updatedAt is within the
   // last 60 seconds" — no separate amendment-event feed exists to check
   // against instead. Documented in docs/adr/0021.
-  if (strip.role === 'DEPARTURE' && fdr.filed.proposedDepartureTimeUtc) {
-    const untilDeparture = fdr.filed.proposedDepartureTimeUtc - now;
-    const recentlyAmended = fdr.updatedAt != null && now - fdr.updatedAt <= 60 * 1000;
+  if (strip.stripType === 'DEPARTURE' && flightData.filed.proposedDepartureTimeUtc) {
+    const untilDeparture = flightData.filed.proposedDepartureTimeUtc - now;
+    const recentlyAmended = flightData.updatedAt != null && now - flightData.updatedAt <= 60 * 1000;
     if (untilDeparture > 0 && untilDeparture <= AMENDMENT_WINDOW_MINUTES * 60 * 1000 && recentlyAmended) {
       obligations.push({ obligationType: 'AMENDMENT_INSIDE_30MIN', dueAt: now, severity: 'WARNING' });
     }
@@ -101,10 +101,10 @@ function computeDueObligations(strip, fdr, now, ctx = {}) {
   // OVERDUE with no earlier WARNING tier, unlike ADVANCE_FORWARDING: §3.8
   // describes a hard deadline, not a lead-time window, so there is no
   // meaningful "due soon" moment to escalate from.
-  if (strip.role === 'DEPARTURE' && strip.state === 'HELD' && isVoidExpired(fdr, now)) {
+  if (strip.stripType === 'DEPARTURE' && strip.state === 'HELD' && isVoidExpired(flightData, now)) {
     obligations.push({
       obligationType: 'VOID_TIME_EXPIRED',
-      dueAt: fdr.assigned.voidDeadlineUtc,
+      dueAt: flightData.assigned.voidDeadlineUtc,
       severity: 'OVERDUE',
     });
   }
@@ -139,16 +139,16 @@ function computeDueObligations(strip, fdr, now, ctx = {}) {
  *
  * @returns {Array<{obligationType:string, dueAt:number}>}
  */
-function computePendingObligations(strip, fdr, now) {
+function computePendingObligations(strip, flightData, now) {
   const pending = [];
-  if (!strip || !fdr) return pending;
-  const eta = fdr.filed && fdr.filed.estimatedArrivalTimeUtc;
-  if (strip.role === 'ARRIVAL' && !strip.coordination && eta) {
+  if (!strip || !flightData) return pending;
+  const eta = flightData.filed && flightData.filed.estimatedArrivalTimeUtc;
+  if (strip.stripType === 'ARRIVAL' && !strip.coordination && eta) {
     const dueAt = eta - ADVANCE_FORWARDING_MINUTES * 60 * 1000;
     if (now < dueAt) pending.push({ obligationType: 'ADVANCE_FORWARDING', dueAt });
   }
-  const voidDeadline = fdr.assigned && fdr.assigned.voidDeadlineUtc;
-  if (strip.role === 'DEPARTURE' && strip.state === 'HELD' && voidDeadline && now < voidDeadline) {
+  const voidDeadline = flightData.assigned && flightData.assigned.voidDeadlineUtc;
+  if (strip.stripType === 'DEPARTURE' && strip.state === 'HELD' && voidDeadline && now < voidDeadline) {
     pending.push({ obligationType: 'VOID_TIME_EXPIRED', dueAt: voidDeadline });
   }
   return pending;
@@ -160,8 +160,8 @@ function computePendingObligations(strip, fdr, now) {
 // put back to CLEARED did not get away, and one DROPPED is not live.
 const HELD_INDEX = DEPARTURE_STATES.indexOf('HELD');
 const MET_WHEN = {
-  ADVANCE_FORWARDING: (strip) => strip.role === 'ARRIVAL' && !!strip.coordination,
-  VOID_TIME_EXPIRED: (strip) => strip.role === 'DEPARTURE' && strip.state !== 'DROPPED'
+  ADVANCE_FORWARDING: (strip) => strip.stripType === 'ARRIVAL' && !!strip.coordination,
+  VOID_TIME_EXPIRED: (strip) => strip.stripType === 'DEPARTURE' && strip.state !== 'DROPPED'
     && DEPARTURE_STATES.indexOf(strip.state) > HELD_INDEX,
 };
 
@@ -173,7 +173,7 @@ const MET_WHEN = {
  * whose condition stops being true simply leaves the set, and the whole set
  * rides the `efsp-alerts` full-state message beside conformance and CA.
  *
- * Keyed per Strip replica, not per FDR: an obligation is a duty of the
+ * Keyed per Strip replica, not per FLIGHT_DATA: an obligation is a duty of the
  * Facility holding the Strip, so two Facilities' replicas of one flight
  * legitimately differ.
  */
@@ -187,7 +187,7 @@ class ForwardingObligationMonitor {
     // ETA, a proposed departure or a void deadline, all in mission time.
     this._clock = clock;
     this._boardStoreFor = boardStoreFor;
-    this._fdrStore = flightDataStore;
+    this._flightDataStore = flightDataStore;
     this._facilityConfig = facilityConfig;
     this._airspaceStore = airspaceStore || null;
     this._current = new Map(); // `${facilityId}:${stripId}:${obligationType}` -> entry
@@ -218,11 +218,11 @@ class ForwardingObligationMonitor {
 
       for (const strip of boardStore.getAll()) {
         if (strip.state === 'DROPPED') continue;
-        const fdr = this._fdrStore.getFlightData(strip.fdrId);
-        if (!fdr) continue;
+        const flightData = this._flightDataStore.getFlightData(strip.flightDataId);
+        if (!flightData) continue;
         live.set(`${facilityId}:${strip.stripId}`, strip);
 
-        for (const o of computeDueObligations(strip, fdr, now, { dataOnly, isAirspaceActive })) {
+        for (const o of computeDueObligations(strip, flightData, now, { dataOnly, isAirspaceActive })) {
           const key = `${facilityId}:${strip.stripId}:${o.obligationType}`;
           const prev = this._current.get(key);
           if (!prev) this._recordMissed(o.obligationType);
@@ -233,7 +233,7 @@ class ForwardingObligationMonitor {
             since: prev ? prev.since : now,
           });
         }
-        for (const p of computePendingObligations(strip, fdr, now)) {
+        for (const p of computePendingObligations(strip, flightData, now)) {
           nextPending.set(`${facilityId}:${strip.stripId}:${p.obligationType}`,
             { facilityId, stripId: strip.stripId, ...p });
         }

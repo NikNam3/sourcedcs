@@ -42,7 +42,7 @@ const instr = quiet(() => createEfspInstrumentation({
   correlationStats: () => ({ rate: null, eligible: 0 }),
   obligationStats: () => ({ VOID_TIME_EXPIRED: { met: 1, missed: 2 } }),
 }));
-const c = crew(efsp, { OPS: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' });
+const c = crew(efsp, { OPS: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER' });
 
 const body = () => instr.metrics.buildMetricsBody();
 const logFor = (cmid) => efsp.mutationLog.readAll().filter(e => e.clientMutationId === cmid);
@@ -51,9 +51,9 @@ function send(member, msg) {
   return efsp.handleMessage(member.session, { version: 1, facilityId: member.facilityId, ...msg });
 }
 
-function newStrip(callsign, fdr = {}) {
+function newStrip(callsign, flightData = {}) {
   return mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FLIGHT_DATA, callsign, ...fdr },
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign, ...flightData },
   });
 }
 
@@ -109,29 +109,29 @@ test('a message type nobody has heard of that ends in -mutation is still counted
     metricsPath: path.join(tmpDir, 'suffix-metrics.json'), trafficCountPath: path.join(tmpDir, 'suffix-count.jsonl'),
   }));
   other.trafficCount.close();
-  stubbed.handleMessage({ controllerId: 'c-x' }, { type: 'efsp-field-state-mutation', clientMutationId: 'fs-1', actingPositionId: 'TWR', op: { kind: 'CloseRunway' } });
+  stubbed.handleMessage({ controllerId: 'c-x' }, { type: 'efsp-runway-status-mutation', clientMutationId: 'fs-1', actingPositionId: 'LC', op: { kind: 'CloseRunway' } });
   const r = other.metrics.buildMetricsBody().metrics.rejectedMutations;
-  assert.equal(r.byType['efsp-field-state-mutation'], 1);
+  assert.equal(r.byType['efsp-runway-status-mutation'], 1);
   assert.equal(r.byReason.X, 1);
 });
 
 test('transfers: no receiving Position is a failure with its cause; a covered transfer is routed; neither is a non-transfer', () => {
   const before = body().metrics.transfers;
   const strip = newStrip('TAP2');
-  hold(efsp, c.TWR.session, 'INCIRLIK', []);
-  hold(efsp, c.APP.session, 'INCIRLIK', []);
+  hold(efsp, c.LC.session, 'INCIRLIK', []);
+  hold(efsp, c.AP.session, 'INCIRLIK', []);
   const refused = act(efsp, c.OPS, 'OPS', strip, { kind: 'TransferStrip', toPositionId: 'CD', bayId: 'cd-coordination', rackId: 'main' });
   assert.equal(refused.reason, 'NO_RECEIVING_POSITION');
-  hold(efsp, c.APP.session, 'INCIRLIK', ['APP']);
+  hold(efsp, c.AP.session, 'INCIRLIK', ['AP']);
   const routed = mustAct(efsp, c.OPS, 'OPS', efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId), { kind: 'TransferStrip', toPositionId: 'CD', bayId: 'cd-coordination', rackId: 'main' });
-  assert.equal(routed.ownerPositionId, 'APP');
-  hold(efsp, c.TWR.session, 'INCIRLIK', ['TWR']);
+  assert.equal(routed.ownerPositionId, 'AP');
+  hold(efsp, c.LC.session, 'INCIRLIK', ['LC']);
 
   const t = body().metrics.transfers;
   assert.equal(t.attempts - before.attempts, 2);
   assert.equal(t.failed - before.failed, 1);
   assert.equal(t.succeeded - before.succeeded, 1);
-  assert.equal(t.routedToCovering - before.routedToCovering, 1);
+  assert.equal(t.routedToConsolidated - before.routedToConsolidated, 1);
   assert.equal((t.byCause.NO_RECEIVING_POSITION || 0) - (before.byCause.NO_RECEIVING_POSITION || 0), 1);
   assert.equal(t.byKind.TRANSFER.attempts - before.byKind.TRANSFER.attempts, 2);
 });
@@ -139,19 +139,19 @@ test('transfers: no receiving Position is a failure with its cause; a covered tr
 test('transfers: a transfer-shaped NLA is NLA_TRANSFER; a terminal NLA is not a transfer; a non-owner\'s press is not one (T4)', async () => {
   let strip = newStrip('TAP3');
   strip = jumpTo(efsp, c.OPS, 'OPS', strip, 'DEPARTED');
-  strip = mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'TransferStrip', toPositionId: 'TWR', bayId: 'twr-airborne', rackId: 'main' });
+  strip = mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'TransferStrip', toPositionId: 'LC', bayId: 'lc-airborne', rackId: 'main' });
   const before = body().metrics.transfers;
 
   // A press by someone who does not own it: refused, and not a transfer.
-  assert.equal(act(efsp, c.APP, 'APP', strip, { kind: 'InvokeNla' }).reason, 'NOT_OWNER');
+  assert.equal(act(efsp, c.AP, 'AP', strip, { kind: 'InvokeNla' }).reason, 'NOT_OWNER');
   assert.equal(body().metrics.transfers.attempts, before.attempts);
 
-  strip = await advance(efsp, c.TWR, 'TWR', strip); // TWR DEPARTED -> APP HANDED_OFF
-  assert.equal(strip.ownerPositionId, 'APP');
+  strip = await advance(efsp, c.LC, 'LC', strip); // TWR DEPARTED -> APP HANDED_OFF
+  assert.equal(strip.ownerPositionId, 'AP');
   let t = body().metrics.transfers;
   assert.equal(t.byKind.NLA_TRANSFER.attempts - before.byKind.NLA_TRANSFER.attempts, 1);
 
-  await advance(efsp, c.APP, 'APP', strip); // HANDED_OFF -> DROPPED: not a transfer
+  await advance(efsp, c.AP, 'AP', strip); // HANDED_OFF -> DROPPED: not a transfer
   t = body().metrics.transfers;
   assert.equal(t.attempts - before.attempts, 1);
 });
@@ -161,7 +161,7 @@ test('an owner pressing NLA against its own inhibit is an inhibitedPress, not a 
   hold(efsp, cd.session, 'INCIRLIK', ['CD']);
   try {
     let strip = mustAct(efsp, c.OPS, 'OPS', null, {
-      kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { callsign: 'TAP4' },
+      kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { callsign: 'TAP4' },
     });
     strip = jumpTo(efsp, c.OPS, 'OPS', strip, 'PENDING_CLEARANCE');
     strip = mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'TransferStrip', toPositionId: 'CD', bayId: 'cd-pending-clearance', rackId: 'main' });
@@ -242,7 +242,7 @@ test('efsp-metrics-request answers the sender with requestId echoed, and the tra
 test('nothing on the wire names a controller (H35); per-connection records exist in memory only', () => {
   const ack = efsp.handleMessage(c.OPS.session, { type: 'efsp-metrics-request', requestId: 'q-3' }).ack;
   const wire = JSON.stringify(ack);
-  for (const id of ['c-OPS', 'c-TWR', 'c-APP', 'c-CTR']) assert.ok(!wire.includes(id), `${id} leaked onto the wire`);
+  for (const id of ['c-OPS', 'c-LC', 'c-AP', 'c-CTR']) assert.ok(!wire.includes(id), `${id} leaked onto the wire`);
   assert.ok(!('sessions' in ack.metrics.metrics.rejectedMutations));
   assert.ok(instr.sessionRecords().some(r => r.controllerId === 'c-OPS' && r.endedAt === null));
 });
@@ -289,10 +289,10 @@ test('a SystemReassign in the log is counted', () => {
   const before = body().metrics.systemReassigned.total;
   let strip = newStrip('TAP7');
   strip = jumpTo(efsp, c.OPS, 'OPS', strip, 'DEPARTED');
-  mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'TransferStrip', toPositionId: 'TWR', bayId: 'twr-airborne', rackId: 'main' });
-  hold(efsp, c.TWR.session, 'INCIRLIK', []); // TWR vacates; APP covers it and the Strip follows
-  assert.equal(efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId).ownerPositionId, 'APP');
-  hold(efsp, c.TWR.session, 'INCIRLIK', ['TWR']);
+  mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'TransferStrip', toPositionId: 'LC', bayId: 'lc-airborne', rackId: 'main' });
+  hold(efsp, c.LC.session, 'INCIRLIK', []); // TWR vacates; APP covers it and the Strip follows
+  assert.equal(efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId).ownerPositionId, 'AP');
+  hold(efsp, c.LC.session, 'INCIRLIK', ['LC']);
   const moved = efsp.mutationLog.readAll().filter(e => e.op === 'SystemReassign' && e.reason !== 'position-retaken').length;
   assert.ok(efsp.mutationLog.readAll().some(e => e.op === 'SystemReassign' && e.stripId === strip.stripId));
   assert.equal(body().metrics.systemReassigned.total, moved, 'one per reassigned Strip, every one in the log');

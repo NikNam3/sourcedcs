@@ -8,8 +8,8 @@ const { _runwayInhibit } = require('./nla-common');
 // [SOURCE-DEFINED], per guide §3.4's arrival lifecycle:
 // INBOUND -> HANDED_TO_TOWER -> FINAL -> LANDED -> TAXI_IN -> DROPPED.
 // NOTE: EfspState 'FINAL' here (a value of strip.state) is unrelated to
-// Strip Role 'FINAL' (guide §7.10's PAR/carrier role, WP7A, still
-// unbuilt — that would live on strip.role) — they share the string but
+// Strip Role 'FINAL' (guide §7.10's PAR/carrier stripType, WP7A, still
+// unbuilt — that would live on strip.stripType) — they share the string but
 // are different fields on different objects. Don't conflate them.
 const ARRIVAL_STATES = ['INBOUND', 'HANDED_TO_TOWER', 'FINAL', 'LANDED', 'TAXI_IN', 'DROPPED'];
 
@@ -23,15 +23,15 @@ const ARRIVAL_STATE_OWNERS = {
   // it" now means proposing a cross-Facility HANDOFF via the Coordinate
   // button rather than an ordinary NLA transfer (nla.js's computeArrivalNla
   // INBOUND case is Facility-aware — see that module's comment).
-  INBOUND:         ['APP', 'CTR'],
-  HANDED_TO_TOWER: ['TWR'],
-  FINAL:           ['TWR'],
-  LANDED:          ['TWR'],
-  TAXI_IN:         ['GND'],
+  INBOUND:         ['AP', 'CTR'],
+  HANDED_TO_TOWER: ['LC'],
+  FINAL:           ['LC'],
+  LANDED:          ['LC'],
+  TAXI_IN:         ['GC'],
 };
 
 /** [SOURCE-DEFINED] ARRIVAL lifecycle NLA (docs/adr/0008) — same shape as DEPARTURE's table above. */
-function computeArrivalNla(strip, fdr, now, ctx) {
+function computeArrivalNla(strip, flightData, now, ctx) {
   switch (strip.state) {
     case 'INBOUND':
       // WP4A (docs/adr/0014): a CENTER-held INBOUND Strip's next step is
@@ -46,15 +46,15 @@ function computeArrivalNla(strip, fdr, now, ctx) {
       if (ctx.facilityId === 'CENTER') {
         return { inhibited: 'cross-Facility HANDOFF required — use Coordinate' };
       }
-      if (!ctx.isStaffed('TWR') && !ctx.consolidatedAt('TWR')) {
+      if (!ctx.isStaffed('LC') && !ctx.consolidatedAt('LC')) {
         return { inhibited: 'no receiving Position present' };
       }
-      return { toState: 'HANDED_TO_TOWER', transferTo: 'TWR' };
+      return { toState: 'HANDED_TO_TOWER', transferTo: 'LC' };
 
     case 'HANDED_TO_TOWER': {
       // §9.7 rule 1, the landing half: no clearance onto final for a runway
       // that is suspended or closed. The Strip waits (decisions.md H19).
-      const runway = _runwayInhibit(strip, fdr, ctx);
+      const runway = _runwayInhibit(strip, flightData, ctx);
       if (runway) return { inhibited: runway };
       return { toState: 'FINAL' };
     }
@@ -67,10 +67,10 @@ function computeArrivalNla(strip, fdr, now, ctx) {
       return { toState: 'LANDED' };
 
     case 'LANDED':
-      if (!ctx.isStaffed('GND') && !ctx.consolidatedAt('GND')) {
+      if (!ctx.isStaffed('GC') && !ctx.consolidatedAt('GC')) {
         return { inhibited: 'no receiving Position present' };
       }
-      return { toState: 'TAXI_IN', transferTo: 'GND' };
+      return { toState: 'TAXI_IN', transferTo: 'GC' };
 
     case 'TAXI_IN':
       // Matches DEPARTURE's own HANDED_OFF -> DROPPED precedent — a plain
@@ -85,7 +85,7 @@ function computeArrivalNla(strip, fdr, now, ctx) {
 }
 
 const family = {
-  role: 'ARRIVAL',
+  stripType: 'ARRIVAL',
   states: ARRIVAL_STATES,
   initialState: 'INBOUND',
   stateOwners: ARRIVAL_STATE_OWNERS,

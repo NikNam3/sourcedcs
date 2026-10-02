@@ -63,12 +63,12 @@ const REGISTRY = [
         const f = facilities.get(facilityId);
         if (!f) throw new Error(`[efsp] the Board snapshot holds a Board for "${facilityId}", which is not a configured Facility (${[...facilities.keys()].join(', ')})`);
         for (const strip of (boardData && boardData.strips) || []) {
-          if (!f.rules.isValidState(strip.state, strip.role)) {
-            throw new Error(`[efsp] the Board snapshot holds Strip ${strip.stripId} (${facilityId}) in state "${strip.state}", which a ${strip.role} Strip does not have: delete state/efsp-board.json to start clean`);
+          if (!f.rules.isValidState(strip.state, strip.stripType)) {
+            throw new Error(`[efsp] the Board snapshot holds Strip ${strip.stripId} (${facilityId}) in state "${strip.state}", which a ${strip.stripType} Strip does not have: delete state/efsp-board.json to start clean`);
           }
         }
         for (const strip of (boardData && boardData.strips) || []) {
-          const old = (PRE_0058_CLEARANCE_BLOCKS[strip.role] || [])
+          const old = (PRE_0058_CLEARANCE_BLOCKS[strip.stripType] || [])
             .filter(blockId => strip.annotations && strip.annotations[blockId] && (strip.annotations[blockId].entries || []).length);
           if (old.length) {
             throw new Error(`[efsp] the Board snapshot holds Strip ${strip.stripId} (${facilityId}) with its assigned altitude/heading as Strip annotations (Block ${old.join(', ')}; before docs/adr/0058): delete state/efsp-board.json to start clean`);
@@ -79,7 +79,7 @@ const REGISTRY = [
     },
   },
   {
-    key: 'fdr',
+    key: 'flightData',
     build: ({ clock, transitionAltFt, codeAllocator }) => new FlightDataStore(codeAllocator, { clock, transitionAltFt }),
     snapshot: (s) => s.snapshot(),
     restore: (s, data) => s.restore(data),
@@ -113,12 +113,12 @@ const REGISTRY = [
   {
     key: 'correlations',
     audited: true,
-    // WP5 (docs/adr/0045) — keyed by fdrId, and shared across every Facility for the same reason flightDataStore is:
+    // WP5 (docs/adr/0045) — keyed by flightDataId, and shared across every Facility for the same reason flightDataStore is:
     // a correlation is a fact about one airframe, and both halves of a cross-Facility exchange are looking at
     // the same one. There is no D13 replication question here either — the record has one home.
     build: ({ clock, stores }) => new CorrelationStore({
       clock,
-      flightDataExists: (fdrId) => !!stores.fdr.getFlightData(fdrId),
+      flightDataExists: (flightDataId) => !!stores.flightData.getFlightData(flightDataId),
     }),
     snapshot: (s) => s.snapshot(),
     // Correlation records after the FDRs, since restore() skips any whose FDR
@@ -133,7 +133,7 @@ const REGISTRY = [
     // WP6 (docs/adr/0051) — shared across every Facility for the same reason flightDataStore and correlationStore
     // are: MARSA is a fact about a set of airframes, not about one Facility's Board, and both halves of a
     // cross-Facility exchange are looking at the same relation. There is no D13 replication question here
-    // either — the record has one home, and its participants are fdrIds, which are already theater-wide.
+    // either — the record has one home, and its participants are flightDataIds, which are already theater-wide.
     //
     // setSeparationRegime is injected rather than reached for: the store must not
     // hold an FlightDataStore (correlation-store.js's flightDataExists precedent), and guide
@@ -142,22 +142,22 @@ const REGISTRY = [
     // must already be correct, or they inherit a lie."
     build: ({ clock, stores }) => new MarsaStore({
       clock,
-      flightDataExists: (fdrId) => !!stores.fdr.getFlightData(fdrId),
-      setSeparationRegime: (fdrId, separationRegime, { by } = {}) =>
-        stores.fdr.setTofi(fdrId, { separationRegime }, { by }),
+      flightDataExists: (flightDataId) => !!stores.flightData.getFlightData(flightDataId),
+      setSeparationRegime: (flightDataId, separationRegime, { by } = {}) =>
+        stores.flightData.setTofi(flightDataId, { separationRegime }, { by }),
     }),
     snapshot: (s) => s.snapshot(),
     // MARSA relations after the FDRs too, and for the opposite reason to the
     // correlation case above: a relation comes back INTACT, state and all. A
     // persisted track id is a lie after a restart because DCS re-mints ids; a
-    // persisted MARSA relation names fdrIds and records a verbal declaration a
+    // persisted MARSA relation names flightDataIds and records a verbal declaration a
     // tanker crew made, which a crc-sync restart does not make untrue. Coming
     // back up with every AR silently reverted to ATC separation would be
     // §4.8.3's "second controller inherits a lie", caused by us.
     restore: (s, data) => s.restore(data),
   },
   {
-    key: 'fieldStates',
+    key: 'runwayStatuses',
     audited: true,
     // WP6 (docs/adr/0061), §9.7 — field state. One instance with
     // one record per Facility that has a runway inventory, for AirspaceStore's
@@ -193,7 +193,7 @@ const REGISTRY = [
     build: ({ clock, facilities, stores }) => new CarrierStore({
       hulls: carrierHulls.getHulls(),
       clock,
-      flightDataExists: (fdrId) => !!stores.fdr.getFlightData(fdrId),
+      flightDataExists: (flightDataId) => !!stores.flightData.getFlightData(flightDataId),
       isStaffed: (positionId) => {
         const f = facilities.get('CARRIER');
         return !!f && f.positionStore.isStaffed(positionId);
@@ -230,6 +230,6 @@ const REGISTRY = [
 ];
 
 // The order the saved body is restored in (it is not the order it is written in, see above).
-const RESTORE_ORDER = ['fdr', 'airspaces', 'boards', 'correlations', 'marsa', 'fieldStates', 'carriers', 'sfaRotation'];
+const RESTORE_ORDER = ['flightData', 'airspaces', 'boards', 'correlations', 'marsa', 'runwayStatuses', 'carriers', 'sfaRotation'];
 
 module.exports = { REGISTRY, RESTORE_ORDER };

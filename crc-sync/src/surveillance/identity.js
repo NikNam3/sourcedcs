@@ -20,7 +20,7 @@ class Identity {
   /**
    * @param {object} deps
    * @param {{trackIndex:()=>Map}} deps.correlationStore
-   * @param {{getFlightData:(fdrId:string)=>object|null}} deps.flightDataStore
+   * @param {{getFlightData:(flightDataId:string)=>object|null}} deps.flightDataStore
    * @param {{get:(trackId:string)=>object|null}} deps.collab
    * @param {{get:(trackId:string)=>string}} deps.trackNumbers
    */
@@ -45,19 +45,19 @@ class Identity {
   }
 
   /**
-   * @returns {{fdrId:string|null, correlation:'CORRELATED'|'PROVISIONAL'|null,
+   * @returns {{flightDataId:string|null, correlation:'CORRELATED'|'PROVISIONAL'|null,
    *            flightDataCallsign:string|null, flightDataType:string|null, tag:string|null, trackNumber:string}}
    */
   identify(trackId) {
     const id = String(trackId);
     const hit = this._correlationOf(id);
-    const fdr = hit ? this._flightDataList.getFlightData(hit.fdrId) : null;
+    const flightData = hit ? this._flightDataList.getFlightData(hit.flightDataId) : null;
     const entry = this._collab.get(id);
     return {
-      fdrId: fdr ? hit.fdrId : null,
-      correlation: fdr ? hit.state : null,
-      flightDataCallsign: (fdr && fdr.identity && fdr.identity.callsign) || null,
-      flightDataType: (fdr && fdr.identity && fdr.identity.aircraftType) || null,
+      flightDataId: flightData ? hit.flightDataId : null,
+      correlation: flightData ? hit.state : null,
+      flightDataCallsign: (flightData && flightData.identity && flightData.identity.callsign) || null,
+      flightDataType: (flightData && flightData.identity && flightData.identity.aircraftType) || null,
       tag: (entry && entry.rename && entry.rename.value) || null,
       trackNumber: this._trackNumbers.get(id),
     };

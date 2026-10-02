@@ -69,7 +69,7 @@ class SurveillanceHintMonitor {
   /**
    * @param {object} deps
    * @param {{get:(id)=>object|null}} deps.trackStore
-   * @param {{correlatedTrackId:(fdrId:string)=>string|null}} deps.correlationStore
+   * @param {{correlatedTrackId:(flightDataId:string)=>string|null}} deps.correlationStore
    * @param {(facilityId:string)=>{getAll:()=>object[]}|null} deps.boardStoreFor
    * @param {{getFacilityIds:()=>string[]}} deps.facilityConfig
    * @param {()=>object|null} deps.getMissionData
@@ -104,13 +104,13 @@ class SurveillanceHintMonitor {
       const board = d.boardStoreFor(facilityId);
       if (!board) continue;
       for (const strip of board.getAll()) {
-        const expected = (EXPECTS[strip.role] || {})[strip.state];
+        const expected = (EXPECTS[strip.stripType] || {})[strip.state];
         if (!expected) continue;
         seen.add(strip.stripId);
         const mem = this._mem.get(strip.stripId) || { phase: { instant: null, since: wallNow }, episode: null };
         this._mem.set(strip.stripId, mem);
 
-        const trackId = d.correlationStore.correlatedTrackId(strip.fdrId);
+        const trackId = d.correlationStore.correlatedTrackId(strip.flightDataId);
         const track = trackId ? d.trackStore.get(trackId) : null;
         const observed = track
           ? debouncedPhase(mem.phase, instantPhase(track, missionData, this._cfg.airborne), wallNow, this._cfg.airborne).phase
@@ -124,13 +124,13 @@ class SurveillanceHintMonitor {
           mem.episode = { stripState: strip.state, observed, since: now, wallSince: wallNow, logged: false };
         }
         const base = {
-          stripId: strip.stripId, fdrId: strip.fdrId, facilityId, positionId: strip.ownerPositionId,
+          stripId: strip.stripId, flightDataId: strip.flightDataId, facilityId, positionId: strip.ownerPositionId,
           stripState: strip.state, contactPhase: observed, trackId, since: mem.episode.since,
         };
 
         // The chip: only the airborne direction, only a DEPARTURE.
-        if (observed === PHASES.AIRBORNE && ADVANCE_TO[strip.role]) {
-          hints.set(`${strip.stripId}|chip`, { ...base, kind: 'AIRBORNE_ADVANCE', toState: ADVANCE_TO[strip.role] });
+        if (observed === PHASES.AIRBORNE && ADVANCE_TO[strip.stripType]) {
+          hints.set(`${strip.stripId}|chip`, { ...base, kind: 'AIRBORNE_ADVANCE', toState: ADVANCE_TO[strip.stripType] });
         }
 
         const durationMs = wallNow - mem.episode.wallSince;
@@ -139,7 +139,7 @@ class SurveillanceHintMonitor {
           if (!mem.episode.logged) {
             mem.episode.logged = true;
             try {
-              this._onStaleness({ at: now, facilityId, positionId: strip.ownerPositionId, stripId: strip.stripId, fdrId: strip.fdrId, stripState: strip.state, trackState: observed, durationMs });
+              this._onStaleness({ at: now, facilityId, positionId: strip.ownerPositionId, stripId: strip.stripId, flightDataId: strip.flightDataId, stripState: strip.state, trackState: observed, durationMs });
             } catch (e) {
               log.error('staleness log failed', { err: e });
             }

@@ -14,9 +14,9 @@ import { freshGraph } from './helpers/fresh-graph.mjs';
 
 const { makeElement, descendants } = domStub;
 
-function strip(stripId, fdrId, over = {}) {
+function strip(stripId, flightDataId, over = {}) {
   return {
-    stripId, cid: '001', fdrId, rev: 1, role: 'MISSION', state: 'TASKED', ownerPositionId: 'TAC_C2',
+    stripId, cid: '001', flightDataId, rev: 1, stripType: 'MISSION', state: 'TASKED', ownerPositionId: 'TAC_C2',
     facilityId: 'TACTICAL', bayId: 'tac-c2-tasked', rackId: 'main', orderKey: 'V',
     annotations: {}, flags: { offset: false, flipped: false, removeIndicator: false, highlight: null, attention: null },
     coordination: null, tofiCoordination: null, airspaceEntry: null, ...over,
@@ -24,9 +24,9 @@ function strip(stripId, fdrId, over = {}) {
 }
 
 const W = (h, m) => Date.UTC(2016, 5, 21, h, m);
-function fdr(fdrId, callsign, { beacon = '4521', ato = true, links = [], modeThree = beacon, asTanker = null } = {}) {
+function flightData(flightDataId, callsign, { beacon = '4521', ato = true, links = [], modeThree = beacon, asTanker = null } = {}) {
   return {
-    fdrId, rev: 2, provenance: {},
+    flightDataId, rev: 2, provenance: {},
     identity: { callsign, beaconAssigned: beacon, trackDegradationFlag: 'NONE', modeOne: ato ? '12' : null, modeTwo: ato ? '0011' : null },
     filed: {}, assigned: {}, tofi: { separationRegime: null }, airspace: {}, comms: {},
     mission: { missionNumber: ato ? '1101A' : null },
@@ -45,22 +45,22 @@ function fdr(fdrId, callsign, { beacon = '4521', ato = true, links = [], modeThr
 }
 
 const win = (arctUtc, offloadKlb) => [{ arctUtc, endArUtc: arctUtc + 15 * 60000, offloadKlb }];
-const link = (role, peerFdrId, peerCallsign, windows) => ({ role, peerFdrId, peerCallsign, peerMissionNumber: null, arcp: 'ANCHOR BLUE', windows });
+const link = (stripType, peerFlightDataId, peerCallsign, windows) => ({ stripType, peerFlightDataId, peerCallsign, peerMissionNumber: null, arcp: 'ANCHOR BLUE', windows });
 
 const FDRS = [
-  fdr('f-shell', 'SHELL71', { beacon: '4571', asTanker: { tacan: '38Y' }, links: [link('TANKER', 'f-viper', 'VIPER11', win(W(13, 45), 12)), link('TANKER', 'f-dude', 'DUDE21', win(W(14, 20), 16))] }),
-  fdr('f-viper', 'VIPER11', { links: [link('RECEIVER', 'f-shell', 'SHELL71', win(W(13, 45), 12))] }),
-  fdr('f-dude', 'DUDE21', { beacon: '4531', links: [link('RECEIVER', 'f-shell', 'SHELL71', win(W(14, 20), 16))] }),
-  fdr('f-snake', 'SNAKE41', { beacon: '4541' }),
-  fdr('f-plain', 'PLAIN1', { beacon: '0101', ato: false }),
+  flightData('f-shell', 'SHELL71', { beacon: '4571', asTanker: { tacan: '38Y' }, links: [link('TANKER', 'f-viper', 'VIPER11', win(W(13, 45), 12)), link('TANKER', 'f-dude', 'DUDE21', win(W(14, 20), 16))] }),
+  flightData('f-viper', 'VIPER11', { links: [link('RECEIVER', 'f-shell', 'SHELL71', win(W(13, 45), 12))] }),
+  flightData('f-dude', 'DUDE21', { beacon: '4531', links: [link('RECEIVER', 'f-shell', 'SHELL71', win(W(14, 20), 16))] }),
+  flightData('f-snake', 'SNAKE41', { beacon: '4541' }),
+  flightData('f-plain', 'PLAIN1', { beacon: '0101', ato: false }),
 ];
 const STRIPS = [
   strip('s-shell', 'f-shell'), strip('s-viper', 'f-viper'), strip('s-dude', 'f-dude'), strip('s-snake', 'f-snake'),
-  strip('s-viper-dep', 'f-viper', { role: 'DEPARTURE', state: 'HANDED_OFF', ownerPositionId: 'APP', facilityId: 'INCIRLIK', bayId: 'app-departures' }),
-  strip('s-plain', 'f-plain', { role: 'DEPARTURE', state: 'PROPOSED', ownerPositionId: 'OPS', facilityId: 'INCIRLIK', bayId: 'ops-proposed' }),
+  strip('s-viper-dep', 'f-viper', { stripType: 'DEPARTURE', state: 'HANDED_OFF', ownerPositionId: 'AP', facilityId: 'INCIRLIK', bayId: 'ap-departures' }),
+  strip('s-plain', 'f-plain', { stripType: 'DEPARTURE', state: 'PROPOSED', ownerPositionId: 'OPS', facilityId: 'INCIRLIK', bayId: 'ops-proposed' }),
 ];
 
-async function mount({ strips = STRIPS, fdrs = FDRS } = {}) {
+async function mount({ strips = STRIPS, flightDataList = FDRS } = {}) {
   const sent = [];
   globalThis.document.getElementById = () => null;
   globalThis.getLatestTrack = () => null; // window.getLatestTrack / getAllTracks, as app.js's startApp() sets them
@@ -73,12 +73,12 @@ async function mount({ strips = STRIPS, fdrs = FDRS } = {}) {
   const ato = await g.import('panels/efsp/ato-strip.js');
   ws.setEfspSender('_sendEfsp', () => {});
   ws.sendEfspSetPositions('TACTICAL', ['TAC_C2']);
-  ws.sendEfspSetPositions('INCIRLIK', ['APP', 'OPS']); // getActingPositions() = ['TAC_C2', 'APP', 'OPS'] in union
+  ws.sendEfspSetPositions('INCIRLIK', ['AP', 'OPS']); // getActingPositions() = ['TAC_C2', 'AP', 'OPS'] in union
   for (const name of ['sendEfspMutation', 'sendEfspAirspaceMutation', 'sendEfspCorrelationMutation', 'sendEfspMarsaMutation', '_sendEfsp', 'sendEfspCreateStrip']) {
     ws.setEfspSender(name, (...args) => { sent.push({ name, args }); return 'mid'; });
   }
   bay._setRenderAllOpenEfspBaysForTest(() => {});
-  state.applyEfspSnapshot({ strips, fdrs, positions: [], bays: [], airspaces: [], correlations: [], marsa: [] });
+  state.applyEfspSnapshot({ strips, flightDataList, positions: [], bays: [], airspaces: [], correlations: [], marsa: [] });
   const build = (stripId) => bay._buildStripEl(state.getEfspStrip(stripId));
   const select = (stripId) => {
     const cur = bay.getSelectedEfspStripId();
@@ -138,8 +138,8 @@ test('a dropped peer leaves the group; a receiver whose tanker is gone has no ba
 });
 
 test('the Mode 3 conflict shows only when the ATO\'s code and the assigned code differ', async () => {
-  const fdrs = FDRS.map(f => (f.fdrId === 'f-viper' ? { ...f, identity: { ...f.identity, beaconAssigned: '4533' } } : f));
-  const m = await mount({ fdrs });
+  const flightDataList = FDRS.map(f => (f.flightDataId === 'f-viper' ? { ...f, identity: { ...f.identity, beaconAssigned: '4533' } } : f));
+  const m = await mount({ flightDataList });
   for (const id of ['s-viper', 's-viper-dep']) {
     const chip = slot(m.build(id), 'ato');
     assert.ok(chip, `${id}: every Strip of the flight`);

@@ -12,7 +12,7 @@
 // two participants could disagree about whether they were in the same relation
 // at all.
 //
-// KEYED BY marsaId; PARTICIPANTS ARE fdrIds, NEVER stripIds — the same call
+// KEYED BY marsaId; PARTICIPANTS ARE flightDataIds, NEVER stripIds — the same call
 // docs/adr/0045 made for correlation, for the same reason. One FDR
 // legitimately has several Strips (per-Facility replicas docs/adr/0013, a TOFI
 // MISSION Strip on the same FDR docs/adr/0025, an arrival converted in place
@@ -91,9 +91,9 @@ function capText(value) {
 class MarsaStore {
   /**
    * @param {object} [deps]
-   * @param {(fdrId:string)=>boolean} [deps.flightDataExists]
-   * @param {(fdrId:string, regime:string|null, opts:{by?:string})=>object} [deps.setSeparationRegime]
-   *   — writes fdr.tofi.separationRegime. Injected rather than reached for, the
+   * @param {(flightDataId:string)=>boolean} [deps.flightDataExists]
+   * @param {(flightDataId:string, regime:string|null, opts:{by?:string})=>object} [deps.setSeparationRegime]
+   *   — writes flightData.tofi.separationRegime. Injected rather than reached for, the
    *   same way correlation-store.js takes flightDataExists and board-store.js takes
    *   liveStripsForFlightData: this store has no business holding an FlightDataStore, and in
    *   index.js's composition root the stores it would need do not all exist
@@ -139,11 +139,11 @@ class MarsaStore {
    * a return value through all of them would be more bookkeeping than one
    * journal that every public entry point clears on the way in.
    *
-   * @returns {object[]} FDR records, deduplicated by fdrId
+   * @returns {object[]} FDR records, deduplicated by flightDataId
    */
   drainRegimeWrites() {
     const byId = new Map();
-    for (const fdr of this._regimeWrites) if (fdr && fdr.fdrId) byId.set(fdr.fdrId, fdr);
+    for (const flightData of this._regimeWrites) if (flightData && flightData.flightDataId) byId.set(flightData.flightDataId, flightData);
     this._regimeWrites = [];
     return [...byId.values()];
   }
@@ -178,16 +178,16 @@ class MarsaStore {
    * (docs/adr/0050's phrase), which is also what makes the auto-void and the
    * SREG refusal decidable with no tiebreak.
    */
-  activeFor(fdrId) {
+  activeFor(flightDataId) {
     for (const relation of this._relations.values()) {
-      if (relation.state === 'ACTIVE' && relation.participants.includes(fdrId)) return deepClone(relation);
+      if (relation.state === 'ACTIVE' && relation.participants.includes(flightDataId)) return deepClone(relation);
     }
     return null;
   }
 
   /** Every relation this flight has been in, live or finished. */
-  allFor(fdrId) {
-    return [...this._relations.values()].filter(r => r.participants.includes(fdrId)).map(deepClone);
+  allFor(flightDataId) {
+    return [...this._relations.values()].filter(r => r.participants.includes(flightDataId)).map(deepClone);
   }
 
   _touch(relation, by, transition) {
@@ -214,7 +214,7 @@ class MarsaStore {
       for (const id of (rel && rel.participants) || []) ids.add(id);
     }
     for (const id of Array.isArray(op.participants) ? op.participants : []) ids.add(String(id));
-    if (op.fdrId != null) ids.add(String(op.fdrId));
+    if (op.flightDataId != null) ids.add(String(op.flightDataId));
     return [...ids].filter(Boolean);
   }
 
@@ -223,7 +223,7 @@ class MarsaStore {
     this._mutationLog.record({
       clientMutationId: mutation.clientMutationId,
       op: mutation.op && mutation.op.kind,
-      // Its own id field, not stripId/fdrId/airspaceId — a MARSA op targets a
+      // Its own id field, not stripId/flightDataId/airspaceId — a MARSA op targets a
       // relation BETWEEN several flights, so no single one of those names it.
       // The reasoning airspace-store.js's own audit comment gives for adding
       // airspaceId rather than letting stripId stand in for something it is
@@ -232,7 +232,7 @@ class MarsaStore {
       // Theater-wide (docs/adr/0013); the flights it concerns are named instead
       // (docs/adr/0083): the relation's participants, or the op's own.
       facilityId: null,
-      fdrIds: this._auditFlightDataIds(mutation, result, before),
+      flightDataIds: this._auditFlightDataIds(mutation, result, before),
       actingPositionId,
       actorId: by || null,
       at: this._clock.now(),
@@ -273,7 +273,7 @@ class MarsaStore {
         log.error('unexpected error declaring MARSA — rejecting it instead of crashing', { err });
         result = { ok: false, reason: 'VALIDATION_ERROR', detail: 'internal error processing MARSA declaration' };
       }
-      if (result.ok) result.fdrs = this.drainRegimeWrites();
+      if (result.ok) result.flightDataList = this.drainRegimeWrites();
       this._recordAudit(mutation, actingPositionId, by, null, result);
       return result;
     }
@@ -319,7 +319,7 @@ class MarsaStore {
     if (!result.relation) result.relation = this.getRelation(mutation.marsaId);
     // The regime writes this op made, for efsp-ws.js to put on the wire beside
     // the marsa-delta — see drainRegimeWrites().
-    if (result.ok) result.fdrs = this.drainRegimeWrites();
+    if (result.ok) result.flightDataList = this.drainRegimeWrites();
     this._recordAudit(mutation, actingPositionId, by, before, result);
     return result;
   }
@@ -329,9 +329,9 @@ class MarsaStore {
     if (participants.length < MIN_PARTICIPANTS) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `MARSA is a relation between ${MIN_PARTICIPANTS} or more flights` };
     }
-    for (const fdrId of participants) {
-      if (!this._flightDataExists(fdrId)) {
-        return { ok: false, reason: 'NOT_FOUND', detail: `unknown FDR ${fdrId}` };
+    for (const flightDataId of participants) {
+      if (!this._flightDataExists(flightDataId)) {
+        return { ok: false, reason: 'NOT_FOUND', detail: `unknown FDR ${flightDataId}` };
       }
     }
     if (!START_EVENTS.includes(op.startEvent)) {
@@ -351,17 +351,17 @@ class MarsaStore {
     // One ACTIVE relation per flight. Not a convenience: activeFor() is what
     // the auto-void and the SREG refusal both key on, and a flight in two
     // simultaneous relations would make each of them a guess between the two.
-    for (const fdrId of participants) {
-      const existing = this.activeFor(fdrId);
+    for (const flightDataId of participants) {
+      const existing = this.activeFor(flightDataId);
       if (existing) {
-        return { ok: false, reason: 'VALIDATION_ERROR', detail: `${fdrId} is already in an active MARSA relation (${existing.marsaId})` };
+        return { ok: false, reason: 'VALIDATION_ERROR', detail: `${flightDataId} is already in an active MARSA relation (${existing.marsaId})` };
       }
     }
 
     const now = this._clock.now();
     const relation = {
       marsaId: crypto.randomUUID(),
-      // Its own rev, independent of every participant's fdr.rev and every
+      // Its own rev, independent of every participant's flightData.rev and every
       // Strip's rev — correlation-store.js's reasoning applies unchanged. A
       // Strip is broadcast whole on every update (docs/adr/0004), so stamping a
       // relation change onto N participants' Strips would invalidate N
@@ -390,7 +390,7 @@ class MarsaStore {
       endedAt: null,
       endedBy: null,
       note: capText(op.note),
-      // Append-only, the shape docs/adr/0032 gave fdr.airspace.transitions and
+      // Append-only, the shape docs/adr/0032 gave flightData.airspace.transitions and
       // docs/adr/0045 gave correlation records, for the same reason: FAA JO
       // 7110.65 para 2-3-1's "do not erase or overwrite any item".
       transitions: [],
@@ -448,19 +448,19 @@ class MarsaStore {
   _addParticipant(relation, op, by) {
     const notActive = this._requireActive(relation);
     if (notActive) return notActive;
-    const fdrId = op.fdrId != null ? String(op.fdrId) : '';
-    if (!fdrId) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'AddParticipant needs an fdrId' };
-    if (!this._flightDataExists(fdrId)) return { ok: false, reason: 'NOT_FOUND', detail: `unknown FDR ${fdrId}` };
-    if (relation.participants.includes(fdrId)) {
+    const flightDataId = op.flightDataId != null ? String(op.flightDataId) : '';
+    if (!flightDataId) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'AddParticipant needs an flightDataId' };
+    if (!this._flightDataExists(flightDataId)) return { ok: false, reason: 'NOT_FOUND', detail: `unknown FDR ${flightDataId}` };
+    if (relation.participants.includes(flightDataId)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'that flight is already a participant' };
     }
-    const existing = this.activeFor(fdrId);
+    const existing = this.activeFor(flightDataId);
     if (existing) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: `${fdrId} is already in an active MARSA relation (${existing.marsaId})` };
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `${flightDataId} is already in an active MARSA relation (${existing.marsaId})` };
     }
-    relation.participants.push(fdrId);
-    this._touch(relation, by, { reason: 'PARTICIPANT_ADDED', detail: fdrId });
-    this._applyRegime([fdrId], 'MARSA', by);
+    relation.participants.push(flightDataId);
+    this._touch(relation, by, { reason: 'PARTICIPANT_ADDED', detail: flightDataId });
+    this._applyRegime([flightDataId], 'MARSA', by);
     return { ok: true };
   }
 
@@ -472,15 +472,15 @@ class MarsaStore {
   _removeParticipant(relation, op, by) {
     const notActive = this._requireActive(relation);
     if (notActive) return notActive;
-    const fdrId = op.fdrId != null ? String(op.fdrId) : '';
-    if (!relation.participants.includes(fdrId)) {
+    const flightDataId = op.flightDataId != null ? String(op.flightDataId) : '';
+    if (!relation.participants.includes(flightDataId)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'that flight is not a participant' };
     }
-    relation.participants = relation.participants.filter(id => id !== fdrId);
-    this._touch(relation, by, { reason: 'PARTICIPANT_REMOVED', detail: fdrId });
+    relation.participants = relation.participants.filter(id => id !== flightDataId);
+    this._touch(relation, by, { reason: 'PARTICIPANT_REMOVED', detail: flightDataId });
     // The one leaving is back under ATC separation immediately, whatever
     // happens to the rest of the relation below.
-    this._applyRegime([fdrId], 'ATC', by);
+    this._applyRegime([flightDataId], 'ATC', by);
     if (relation.participants.length < MIN_PARTICIPANTS) {
       this._finish(relation, 'END_CONDITION', `fell below ${MIN_PARTICIPANTS} participants`, by);
     }
@@ -523,7 +523,7 @@ class MarsaStore {
   }
 
   /**
-   * Writes fdr.tofi.separationRegime for a set of participants, tolerating a
+   * Writes flightData.tofi.separationRegime for a set of participants, tolerating a
    * missing FDR rather than failing the op around it.
    *
    * Deliberately best-effort: the relation is the record of what was declared,
@@ -532,18 +532,18 @@ class MarsaStore {
    * the relation's own state stays the authoritative answer to "is this pair
    * under MARSA", and board-store.js reads it directly.
    */
-  _applyRegime(fdrIds, regime, by) {
+  _applyRegime(flightDataIds, regime, by) {
     const written = [];
-    for (const fdrId of fdrIds) {
-      if (!this._flightDataExists(fdrId)) continue;
-      const result = this._setSeparationRegime(fdrId, regime, { by });
+    for (const flightDataId of flightDataIds) {
+      if (!this._flightDataExists(flightDataId)) continue;
+      const result = this._setSeparationRegime(flightDataId, regime, { by });
       if (result && result.ok === false) {
-        log.warn('could not set separation regime', { regime, fdrId, reason: result.reason });
+        log.warn('could not set separation regime', { regime, flightDataId, reason: result.reason });
         continue;
       }
       // Journalled so the caller can broadcast it — see drainRegimeWrites().
-      if (result && result.fdr) this._regimeWrites.push(result.fdr);
-      written.push(fdrId);
+      if (result && result.flightData) this._regimeWrites.push(result.flightData);
+      written.push(flightDataId);
     }
     return written;
   }
@@ -566,12 +566,12 @@ class MarsaStore {
    * a marsa-delta beside the board-delta — so every participant Strip learns
    * about it in the same round trip as the clearance.
    *
-   * @param {string} fdrId
+   * @param {string} flightDataId
    * @param {{cause:string, blockId?:string, clientMutationId?:string, actingPositionId?:string, by?:string}} ctx
    */
-  voidForAssignment(fdrId, { cause, blockId, clientMutationId, actingPositionId, by } = {}) {
+  voidForAssignment(flightDataId, { cause, blockId, clientMutationId, actingPositionId, by } = {}) {
     this._regimeWrites = [];
-    const active = this.activeFor(fdrId);
+    const active = this.activeFor(flightDataId);
     if (!active) return null;
     // Rendezvous has happened: the aircraft are joined up and the interlock is
     // spent. §9.2 rule 2 arms it "prior to rendezvous" specifically, and
@@ -581,7 +581,7 @@ class MarsaStore {
 
     const relation = this._relations.get(active.marsaId);
     const before = deepClone(relation);
-    const detail = `${cause === 'CONTROLLER_COURSE_CHANGE' ? 'course' : 'altitude'} assignment to ${fdrId}${blockId ? ` (Block ${blockId})` : ''} before rendezvous`;
+    const detail = `${cause === 'CONTROLLER_COURSE_CHANGE' ? 'course' : 'altitude'} assignment to ${flightDataId}${blockId ? ` (Block ${blockId})` : ''} before rendezvous`;
     const result = this._void(relation, cause, detail, by);
     if (!result.ok) return null;
 
@@ -608,13 +608,13 @@ class MarsaStore {
    *
    * @returns {object[]} the relations that changed — broadcast by the caller
    */
-  onFlightDataRetired(fdrId, by) {
+  onFlightDataRetired(flightDataId, by) {
     this._regimeWrites = [];
     const changed = [];
     for (const relation of this._relations.values()) {
-      if (relation.state !== 'ACTIVE' || !relation.participants.includes(fdrId)) continue;
-      relation.participants = relation.participants.filter(id => id !== fdrId);
-      this._touch(relation, by, { reason: 'PARTICIPANT_REMOVED', detail: `${fdrId} — flight ended` });
+      if (relation.state !== 'ACTIVE' || !relation.participants.includes(flightDataId)) continue;
+      relation.participants = relation.participants.filter(id => id !== flightDataId);
+      this._touch(relation, by, { reason: 'PARTICIPANT_REMOVED', detail: `${flightDataId} — flight ended` });
       if (relation.participants.length < MIN_PARTICIPANTS) {
         this._finish(relation, 'PARTICIPANT_RETIRED', `fewer than ${MIN_PARTICIPANTS} participants remain`, by);
       }
@@ -627,7 +627,7 @@ class MarsaStore {
   evictMissingFlightDataList() {
     let dropped = 0;
     for (const [marsaId, relation] of [...this._relations.entries()]) {
-      if (relation.participants.some(fdrId => this._flightDataExists(fdrId))) continue;
+      if (relation.participants.some(flightDataId => this._flightDataExists(flightDataId))) continue;
       this._relations.delete(marsaId);
       dropped += 1;
     }
@@ -638,7 +638,7 @@ class MarsaStore {
 
   snapshot() {
     return [...this._relations.values()]
-      .filter(r => r.participants.some(fdrId => this._flightDataExists(fdrId)))
+      .filter(r => r.participants.some(flightDataId => this._flightDataExists(flightDataId)))
       .map(deepClone);
   }
 
@@ -647,7 +647,7 @@ class MarsaStore {
    * INTACT — state, participants, rendezvous and all. The two differ for a
    * reason worth being explicit about: a correlation names a DCS track id,
    * which the process re-mints on restart, so the persisted value is a lie. A
-   * MARSA relation names fdrIds and records a verbal declaration a tanker crew
+   * MARSA relation names flightDataIds and records a verbal declaration a tanker crew
    * made. Nothing about a crc-sync restart makes that declaration untrue, and
    * coming back up with every AR silently reverted to ATC separation would be
    * the "second controller inherits a lie" failure §4.8.3 names, caused by us.
@@ -657,9 +657,9 @@ class MarsaStore {
   restore(data) {
     for (const saved of data || []) {
       if (!saved || !saved.marsaId) continue;
-      if (!Array.isArray(saved.participants) || !saved.participants.some(fdrId => this._flightDataExists(fdrId))) continue;
+      if (!Array.isArray(saved.participants) || !saved.participants.some(flightDataId => this._flightDataExists(flightDataId))) continue;
       const relation = deepClone(saved);
-      relation.participants = relation.participants.filter(fdrId => this._flightDataExists(fdrId));
+      relation.participants = relation.participants.filter(flightDataId => this._flightDataExists(flightDataId));
       relation.transitions = Array.isArray(relation.transitions) ? relation.transitions : [];
       // A relation that came back with too few participants to BE one is
       // finished, not active — the same rule _removeParticipant applies live.

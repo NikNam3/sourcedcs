@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 /* The carrier Roles wired through the shared tables (docs/adr/0074, WP7A part 2):
- * STATES_BY_ROLE, the Block Maps, INELIGIBLE_STATES, permission.js, the CARRIER
+ * STATES_BY_STRIP_TYPE, the Block Maps, INELIGIBLE_STATES, permission.js, the CARRIER
  * Facility. Every assertion here is a decision that used to be a default. */
 
 const nla = await import('../src/efsp/nla.js');
@@ -15,27 +15,27 @@ const CARRIER_STRIP_TYPES = ['MARSHAL', 'FINAL', 'PATTERN'];
 const NOW = Date.UTC(2026, 5, 1, 12, 0, 0);
 
 test('the three carrier Roles have states, owners, a Block Map and an NLA table', () => {
-  for (const role of CARRIER_STRIP_TYPES) {
-    assert.ok(nla.STATES_BY_ROLE[role], `${role} states`);
-    assert.ok(nla.isValidState(nla.STATES_BY_ROLE[role][0], role));
-    assert.ok(blockMap.isValidStripType(role));
-    assert.ok(permission.STATE_OWNERS_BY_ROLE[role], `${role} owners`);
+  for (const stripType of CARRIER_STRIP_TYPES) {
+    assert.ok(nla.STATES_BY_STRIP_TYPE[stripType], `${stripType} states`);
+    assert.ok(nla.isValidState(nla.STATES_BY_STRIP_TYPE[stripType][0], stripType));
+    assert.ok(blockMap.isValidStripType(stripType));
+    assert.ok(permission.STATE_OWNERS_BY_STRIP_TYPE[stripType], `${stripType} owners`);
     // The trap: an unregistered Role falls back to the DEPARTURE table and would offer "Send to Clearance".
-    const first = nla.STATES_BY_ROLE[role][0];
-    const r = nla.computeNla({ role, state: first }, null, NOW, {});
-    assert.ok(!r || r.inhibited || !['PENDING_CLEARANCE'].includes(r.toState), `${role} must not use DEPARTURE's NLA`);
+    const first = nla.STATES_BY_STRIP_TYPE[stripType][0];
+    const r = nla.computeNla({ stripType, state: first }, null, NOW, {});
+    assert.ok(!r || r.inhibited || !['PENDING_CLEARANCE'].includes(r.toState), `${stripType} must not use DEPARTURE's NLA`);
   }
 });
 
 test('no carrier state name collides with another Role\'s state, except DROPPED', () => {
   const others = new Set();
-  for (const [role, states] of Object.entries(nla.STATES_BY_ROLE)) if (!CARRIER_STRIP_TYPES.includes(role)) states.forEach(s => others.add(s));
+  for (const [stripType, states] of Object.entries(nla.STATES_BY_STRIP_TYPE)) if (!CARRIER_STRIP_TYPES.includes(stripType)) states.forEach(s => others.add(s));
   const seen = new Set();
-  for (const role of CARRIER_STRIP_TYPES) {
-    for (const s of nla.STATES_BY_ROLE[role]) {
+  for (const stripType of CARRIER_STRIP_TYPES) {
+    for (const s of nla.STATES_BY_STRIP_TYPE[stripType]) {
       if (s === 'DROPPED') continue;
-      assert.ok(!others.has(s), `${role}/${s} collides with a non-carrier state`);
-      assert.ok(!seen.has(s), `${role}/${s} collides with another carrier Role`);
+      assert.ok(!others.has(s), `${stripType}/${s} collides with a non-carrier state`);
+      assert.ok(!seen.has(s), `${stripType}/${s} collides with another carrier strip type`);
       seen.add(s);
     }
   }
@@ -43,7 +43,7 @@ test('no carrier state name collides with another Role\'s state, except DROPPED'
 });
 
 // "a test forces this decision": EVERY state of EVERY Role carries an explicit
-// eligibility expectation here, so a state added to STATES_BY_ROLE fails this
+// eligibility expectation here, so a state added to STATES_BY_STRIP_TYPE fails this
 // test until somebody decides (docs/adr/0041, and the reconciler's own comment).
 const ELIGIBILITY = {
   PROPOSED: false, PENDING_CLEARANCE: false, CLEARED: false, HELD: false, TASKED: false, DROPPED: false,
@@ -54,11 +54,11 @@ const ELIGIBILITY = {
   LAUNCH: true, IN_STACK: true, COMMENCED: true, ON_FINAL: true, BALL: true, BOLTER_WAVEOFF: true, IN_PATTERN: true, RECOVERED: true,
 };
 test('every state of every Role has an explicit correlation-eligibility decision, and the list agrees', () => {
-  for (const [role, states] of Object.entries(nla.STATES_BY_ROLE)) {
+  for (const [stripType, states] of Object.entries(nla.STATES_BY_STRIP_TYPE)) {
     for (const s of states) {
-      assert.ok(Object.prototype.hasOwnProperty.call(ELIGIBILITY, s), `${role}/${s}: no eligibility decision — add it to INELIGIBLE_STATES or to this table as eligible`);
-      assert.equal(CorrelationReconciler.isEligible([{ state: s }]), ELIGIBILITY[s], `${role}/${s}`);
-      assert.equal(INELIGIBLE_STATES.has(s), !ELIGIBILITY[s], `${role}/${s}`);
+      assert.ok(Object.prototype.hasOwnProperty.call(ELIGIBILITY, s), `${stripType}/${s}: no eligibility decision — add it to INELIGIBLE_STATES or to this table as eligible`);
+      assert.equal(CorrelationReconciler.isEligible([{ state: s }]), ELIGIBILITY[s], `${stripType}/${s}`);
+      assert.equal(INELIGIBLE_STATES.has(s), !ELIGIBILITY[s], `${stripType}/${s}`);
     }
   }
 });
@@ -70,16 +70,16 @@ test('Block Maps: derived Blocks are not writable by SetBlock; carrier Blocks ro
   }
   for (const [id, def] of Object.entries(blockMap.FINAL_BLOCK_MAP)) {
     assert.equal(blockMap.resolveBlockTarget('FINAL', id), null, `FINAL/${id} must not be writable`);
-    assert.ok(!['fdr', 'annotation'].includes(def.target.kind), id);
+    assert.ok(!['flightData', 'annotation'].includes(def.target.kind), id);
   }
   assert.ok(blockMap.resolveBlockTarget('PATTERN', 'C24'));
 });
 
 test('permissions: only the Marshal creates, only as MARSHAL; no CV Position coordinates, TOFIs or converts', () => {
   assert.equal(permission.canMutate('CV_MARSHAL', 'CreateStrip'), true);
-  assert.equal(permission.canCreateStripRole('CV_MARSHAL', 'MARSHAL'), true);
-  assert.equal(permission.canCreateStripRole('CV_MARSHAL', 'FINAL'), false);
-  assert.equal(permission.canCreateStripRole('CV_MARSHAL', 'PATTERN'), false);
+  assert.equal(permission.canCreateStripType('CV_MARSHAL', 'MARSHAL'), true);
+  assert.equal(permission.canCreateStripType('CV_MARSHAL', 'FINAL'), false);
+  assert.equal(permission.canCreateStripType('CV_MARSHAL', 'PATTERN'), false);
   for (const p of ['CV_PRIFLY', 'CV_APP1', 'CV_APP2']) assert.equal(permission.canMutate(p, 'CreateStrip'), false, p);
   for (const p of ['CV_MARSHAL', 'CV_PRIFLY', 'CV_APP1', 'CV_APP2']) {
     for (const k of [...permission.COORDINATION_OP_KINDS, 'TOFI', 'ConvertToArrival', 'ApproveAirspaceEntry', 'ClearAirspaceEntry']) {
@@ -104,7 +104,7 @@ test('ship-level predicates take exactly one Position (D21)', () => {
   assert.equal(permission.canRecordCarrierHandoff('CV_APP2', 'FINAL_TO_LSO'), true);
   assert.equal(permission.canRecordCarrierHandoff('CV_MARSHAL', 'nonsense'), false);
   // a Position of another Facility has none of them
-  assert.equal(permission.canSetRecoveryCase('TWR'), false);
+  assert.equal(permission.canSetRecoveryCase('LC'), false);
 });
 
 test('state authority: Marshal to Commence, lane to the end of the approach, PriFly the pattern', () => {
@@ -121,32 +121,32 @@ test('the CARRIER Facility: four MILITARY_ATC Positions, Bays that imply carrier
   const c = facilityConfig.getFacilityConfig('CARRIER');
   assert.deepEqual(c.positions, ['CV_MARSHAL', 'CV_PRIFLY', 'CV_APP1', 'CV_APP2']);
   for (const p of c.positions) assert.equal(facilityConfig.getPositionClass(p), 'MILITARY_ATC');
-  assert.deepEqual(c.coveringChain, { CV_APP2: 'CV_APP1', CV_APP1: 'CV_MARSHAL' });
-  assert.ok(!Object.keys(c.coveringChain).includes('CV_PRIFLY') && !Object.values(c.coveringChain).includes('CV_PRIFLY'));
+  assert.deepEqual(c.consolidation, { CV_APP2: 'CV_APP1', CV_APP1: 'CV_MARSHAL' });
+  assert.ok(!Object.keys(c.consolidation).includes('CV_PRIFLY') && !Object.values(c.consolidation).includes('CV_PRIFLY'));
   assert.equal(facilityConfig.bayImpliesState('cv-marshal-stack', 'CARRIER'), 'IN_STACK');
   assert.equal(facilityConfig.bayImpliesState('cv-app2-bolter', 'CARRIER'), 'BOLTER_WAVEOFF');
   assert.deepEqual(facilityConfig.getBaysFor('CV_PRIFLY', 'CARRIER')[0].rackIds, ['initial', 'break', 'downwind', 'groove']);
   // every Bay-implied state is a state of some carrier Role
-  const carrierStates = new Set(CARRIER_STRIP_TYPES.flatMap(r => nla.STATES_BY_ROLE[r]));
+  const carrierStates = new Set(CARRIER_STRIP_TYPES.flatMap(r => nla.STATES_BY_STRIP_TYPE[r]));
   for (const b of facilityConfig.getAllBays('CARRIER')) if (b.impliesState) assert.ok(carrierStates.has(b.impliesState), b.bayId);
   assert.equal(facilityConfig.validateConfig(c).ok, true);
 });
 
 test('the NLA tables: Commence is Case- and lane-dependent; one next action per Strip', () => {
-  const ctx = (caseValue, lane = 'CV_APP1', occupied = true) => ({ carrierCase: () => caseValue, carrierLaneFor: () => lane, isStaffed: () => occupied });
-  const strip = (role, state) => ({ role, state, stripId: 's', fdrId: 'f' });
+  const ctx = (caseValue, lane = 'CV_APP1', staffed = true) => ({ carrierCase: () => caseValue, carrierLaneFor: () => lane, isStaffed: () => staffed });
+  const strip = (stripType, state) => ({ stripType, state, stripId: 's', flightDataId: 'f' });
   assert.deepEqual(nla.computeNla(strip('MARSHAL', 'IN_STACK'), null, NOW, ctx('III')),
-    { toState: 'COMMENCED', transferTo: 'CV_APP1', carrierTransfer: 'MARSHAL_TO_APPROACH' });
+    { toState: 'COMMENCED', transferTo: 'CV_APP1', carrierHandoff: 'MARSHAL_TO_APPROACH' });
   assert.deepEqual(nla.computeNla(strip('MARSHAL', 'IN_STACK'), null, NOW, ctx('II', 'CV_APP2')).transferTo, 'CV_APP2');
   assert.equal(nla.computeNla(strip('MARSHAL', 'IN_STACK'), null, NOW, ctx('III', null)).inhibited, 'no receiving Position present');
   const caseI = nla.computeNla(strip('MARSHAL', 'IN_STACK'), null, NOW, ctx('I'));
-  assert.equal(caseI.carrierTransfer, 'MARSHAL_TO_PATTERN_CASE_I');
-  assert.equal(caseI.roleChange, 'PATTERN');
+  assert.equal(caseI.carrierHandoff, 'MARSHAL_TO_PATTERN_CASE_I');
+  assert.equal(caseI.stripTypeChange, 'PATTERN');
   assert.equal(nla.computeNla(strip('MARSHAL', 'IN_STACK'), null, NOW, ctx('I', 'CV_APP1', false)).inhibited, 'no receiving Position present');
-  assert.equal(nla.computeNla(strip('MARSHAL', 'COMMENCED'), null, NOW, ctx('III')).roleChange, 'FINAL');
-  assert.equal(nla.computeNla(strip('FINAL', 'ON_FINAL'), null, NOW, { facilityId: 'CARRIER' }).carrierTransfer, 'FINAL_TO_LSO');
-  // PAR's "Landing assured" is the same state change with no carrier hand-over (ADR 0075).
-  assert.equal(nla.computeNla(strip('FINAL', 'ON_FINAL'), null, NOW, { facilityId: 'INCIRLIK' }).carrierTransfer, undefined);
+  assert.equal(nla.computeNla(strip('MARSHAL', 'COMMENCED'), null, NOW, ctx('III')).stripTypeChange, 'FINAL');
+  assert.equal(nla.computeNla(strip('FINAL', 'ON_FINAL'), null, NOW, { facilityId: 'CARRIER' }).carrierHandoff, 'FINAL_TO_LSO');
+  // PAR's "Landing assured" is the same state change with no carrier handoff (ADR 0075).
+  assert.equal(nla.computeNla(strip('FINAL', 'ON_FINAL'), null, NOW, { facilityId: 'INCIRLIK' }).carrierHandoff, undefined);
   assert.equal(nla.computeNla(strip('FINAL', 'ON_FINAL'), null, NOW, { facilityId: 'INCIRLIK' }).toState, 'BALL');
   assert.deepEqual(nla.computeNla(strip('FINAL', 'BALL'), null, NOW, {}).toState, 'DROPPED');
   assert.equal(nla.computeNla(strip('PATTERN', 'IN_PATTERN'), null, NOW, {}).toState, 'RECOVERED');

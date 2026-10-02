@@ -22,10 +22,10 @@
 // Block 4A is a flag (strip.flags.removeIndicator), not a SetBlock target
 // in Phase 1 (DropStrip sets it directly). resolveBlockTarget() returns
 // null for all of these, matching board-store.js's "unknown blockId is a
-// VALIDATION_ERROR" behavior for anything not fdr/annotation-routed.
+// VALIDATION_ERROR" behavior for anything not flightData/annotation-routed.
 
 const DEPARTURE_BLOCK_MAP = {
-  '1':  { required: true,  target: { kind: 'fdr', path: 'identity.callsign' } },
+  '1':  { required: true,  target: { kind: 'flightData', path: 'identity.callsign' } },
   '2':  { required: true,  target: { kind: 'system' } },
   '2A': { required: false, target: { kind: 'annotation' } },
   '3':  { required: true,  target: { kind: 'composite' } },
@@ -38,11 +38,11 @@ const DEPARTURE_BLOCK_MAP = {
   // (bay-view.js's "Spawn Return Strip") had nothing to actually copy.
   // Grouped near '3' as SOURCE-DEFINED sub-fields, same numbering
   // convention '9A-FUEL' etc. already use.
-  '3A': { required: false, target: { kind: 'fdr', path: 'identity.aircraftType' } },
-  '3B': { required: false, target: { kind: 'fdr', path: 'identity.wakeCategory' } },
-  '3C': { required: false, target: { kind: 'fdr', path: 'identity.tailNumber' } },
-  '3D': { required: false, target: { kind: 'fdr', path: 'identity.unit' } },
-  '3E': { required: false, target: { kind: 'fdr', path: 'identity.homeStation' } },
+  '3A': { required: false, target: { kind: 'flightData', path: 'identity.aircraftType' } },
+  '3B': { required: false, target: { kind: 'flightData', path: 'identity.wakeCategory' } },
+  '3C': { required: false, target: { kind: 'flightData', path: 'identity.tailNumber' } },
+  '3D': { required: false, target: { kind: 'flightData', path: 'identity.unit' } },
+  '3E': { required: false, target: { kind: 'flightData', path: 'identity.homeStation' } },
   // WP6 (docs/adr/0052), guide §6.4's military extension namespace. See
   // MILITARY_BLOCK_NAMESPACE near the bottom of this file for the whole
   // guide-M-number-to-Block-id mapping, and for why the M-prefix is not used.
@@ -52,7 +52,7 @@ const DEPARTURE_BLOCK_MAP = {
   // ordnance state are both facts about the airframe and its configuration,
   // not about the flight's intent or the clearance it has been issued.
   //
-  // Dedicated 'military' target kind, never a generic 'fdr' path, on the
+  // Dedicated 'military' target kind, never a generic 'flightData' path, on the
   // setAirspaceOwner/setTofi template: 3F is a bare boolean (defect D15's own
   // shape — "hook" alone does not say whether the aircraft HAS one or REQUIRES
   // one, and only the second reading gates an arrival on a runway's gear being
@@ -66,26 +66,26 @@ const DEPARTURE_BLOCK_MAP = {
   '3G': { required: false, target: { kind: 'military', field: 'ordnanceState' } }, // guide M14, §9.5
   '4':  { required: true,  target: { kind: 'system' } },
   '4A': { required: false, target: { kind: 'flag' } },
-  '4B': { required: true,  target: { kind: 'fdr', path: 'assigned.datalinkClearanceIndicator' } },
-  '5':  { required: true,  target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
+  '4B': { required: true,  target: { kind: 'flightData', path: 'assigned.datalinkClearanceIndicator' } },
+  '5':  { required: true,  target: { kind: 'flightData', path: 'identity.beaconAssigned' } },
   // WP4A gap-closure (docs/adr/0022), guide §4.6 rule 5 — track-degradation
-  // flag. Plain 'fdr'-routed, unlike '24A': flight-data-store.js's
+  // flag. Plain 'flightData'-routed, unlike '24A': flight-data-store.js's
   // identity.trackDegradationFlag was already in WRITABLE_PATHS and
   // validated inline by setField() since docs/adr/0019 — the gap this
   // closes was purely the missing Block Map entry (no SetBlock path ever
   // reached that already-working validation), not a missing setter.
-  '5A': { required: false, target: { kind: 'fdr', path: 'identity.trackDegradationFlag' } },
-  '6':  { required: true,  target: { kind: 'fdr', path: 'filed.proposedDepartureTimeUtc' } },
-  '7':  { required: true,  target: { kind: 'fdr', path: 'filed.requestedAltitude' } },
-  '8':  { required: true,  target: { kind: 'fdr', path: 'filed.departureAirport' } },
-  '8A': { required: true,  target: { kind: 'fdr', path: 'filed.departureRunway' } },
-  '8B': { required: true,  target: { kind: 'fdr', path: 'filed.destinationAirport' } },
-  '9':  { required: true,  target: { kind: 'fdr', path: 'filed.route' }, provenance: 'COMPUTER_GENERATED' }, // manual restrictions live separately in annotations['9'] — guide's "mixed provenance in one Block" note; rendered as two sources, one Block. provenance is the pre-edit fallback (flight-data-store.js's setField() overrides fdr.provenance['filed.route'] to CONTROLLER_ENTERED once a controller actually edits it — this default only applies until then).
+  '5A': { required: false, target: { kind: 'flightData', path: 'identity.trackDegradationFlag' } },
+  '6':  { required: true,  target: { kind: 'flightData', path: 'filed.proposedDepartureTimeUtc' } },
+  '7':  { required: true,  target: { kind: 'flightData', path: 'filed.requestedAltitude' } },
+  '8':  { required: true,  target: { kind: 'flightData', path: 'filed.departureAirport' } },
+  '8A': { required: true,  target: { kind: 'flightData', path: 'filed.departureRunway' } },
+  '8B': { required: true,  target: { kind: 'flightData', path: 'filed.destinationAirport' } },
+  '9':  { required: true,  target: { kind: 'flightData', path: 'filed.route' }, provenance: 'COMPUTER_GENERATED' }, // manual restrictions live separately in annotations['9'] — guide's "mixed provenance in one Block" note; rendered as two sources, one Block. provenance is the pre-edit fallback (flight-data-store.js's setField() overrides flightData.provenance['filed.route'] to CONTROLLER_ENTERED once a controller actually edits it — this default only applies until then).
   '9A': { required: false, target: { kind: 'annotation' } },
   '9B': { required: false, target: { kind: 'annotation' } },
   '9C': { required: false, target: { kind: 'annotation' } },
-  '9D': { required: true,  target: { kind: 'fdr', path: 'filed.fullRouteClearance' } },
-  '9E': { required: true,  target: { kind: 'fdr', path: 'filed.remarks' } },
+  '9D': { required: true,  target: { kind: 'flightData', path: 'filed.fullRouteClearance' } },
+  '9E': { required: true,  target: { kind: 'flightData', path: 'filed.remarks' } },
   // §9.10 stereo route name (docs/adr/0050). The guide numbers this Block
   // M18 in its §6.4 military-extension table (whose "Basis" column cites
   // §9.9, ATO ingest — that is a mis-citation in the guide; §9.10 is the
@@ -97,7 +97,7 @@ const DEPARTURE_BLOCK_MAP = {
   // codebase's actual convention ('3A'-'3E', '8A'/'8B', '9A'-'9E', '5A',
   // '14A'-'14D'), and a stereo route name IS Block 9's route, named.
   //
-  // Plain 'fdr'-routed, like '5A' and unlike '24A' — writing it IS how a
+  // Plain 'flightData'-routed, like '5A' and unlike '24A' — writing it IS how a
   // controller re-files a live flight onto another stereo ("VIPER11 request
   // change to PACK 2"). It shipped as its own read-only kind; that made the
   // switch case reachable only by hand-editing the route (losing the label
@@ -107,33 +107,33 @@ const DEPARTURE_BLOCK_MAP = {
   // the route cannot disagree — the same inline-validation precedent
   // identity.trackDegradationFlag set, not a weaker guard than the read-only
   // kind was.
-  '9F': { required: false, target: { kind: 'fdr', path: 'filed.stereoRouteName' } },
+  '9F': { required: false, target: { kind: 'flightData', path: 'filed.stereoRouteName' } },
   // §9.4 Military Training Routes (docs/adr/0062). 9G-* is the guide's M10
   // (designator / entry fix / entry time), 9H-* its M11 (exit fix / exit
   // estimate / requested altitude after exit — "the two items a controller
   // asks for by voice"). Split per field like '9A-*', so a Facility can hide
-  // one (hiddenBlocks) without the others. Plain 'fdr', not the 'military'
+  // one (hiddenBlocks) without the others. Plain 'flightData', not the 'military'
   // kind: these are free text, times and an altitude, not an enum or a
   // boolean; flight-data-store.js's normalizeMtrValue() says what each accepts. No
   // interlock tag on any of them: 9H-ALT is the pilot's REQUEST, and posting a
   // request issues nothing — the approval is written in ALT ('21'), which is
   // tagged. On all three ATC Roles; none on MISSION (it shares the FDR).
-  '9G-MTR':   { required: false, target: { kind: 'fdr', path: 'military.mtr.designator' } },
-  '9G-ENTRY': { required: false, target: { kind: 'fdr', path: 'military.mtr.entryFix' } },
-  '9G-TIME':  { required: false, target: { kind: 'fdr', path: 'military.mtr.entryTimeUtc' } },
-  '9H-EXIT':  { required: false, target: { kind: 'fdr', path: 'military.mtr.exitFix' } },
-  '9H-TIME':  { required: false, target: { kind: 'fdr', path: 'military.mtr.exitEstimateUtc' } },
-  '9H-ALT':   { required: false, target: { kind: 'fdr', path: 'military.mtr.requestedAltitudeAfterExit' } },
-  '10': { required: true,  target: { kind: 'fdr', path: 'assigned.atisCode' } },
+  '9G-MTR':   { required: false, target: { kind: 'flightData', path: 'military.mtr.designator' } },
+  '9G-ENTRY': { required: false, target: { kind: 'flightData', path: 'military.mtr.entryFix' } },
+  '9G-TIME':  { required: false, target: { kind: 'flightData', path: 'military.mtr.entryTimeUtc' } },
+  '9H-EXIT':  { required: false, target: { kind: 'flightData', path: 'military.mtr.exitFix' } },
+  '9H-TIME':  { required: false, target: { kind: 'flightData', path: 'military.mtr.exitEstimateUtc' } },
+  '9H-ALT':   { required: false, target: { kind: 'flightData', path: 'military.mtr.requestedAltitudeAfterExit' } },
+  '10': { required: true,  target: { kind: 'flightData', path: 'assigned.atisCode' } },
   '11': { required: true,  target: { kind: 'annotation' } },
-  '14': { required: true,  target: { kind: 'fdr', path: 'assigned.releaseTimeUtc' } },
+  '14': { required: true,  target: { kind: 'flightData', path: 'assigned.releaseTimeUtc' } },
   // WP4A (docs/adr/0017), §4.6.2's release-across-the-boundary additions —
   // independently optional sub-fields, same doctrinal shape as ADR 0008's
   // 9A-* split (each omittable per facility with no new validator logic).
   // The release STATE itself, and the void time the 30-minute deadline is
   // derived from. Both were reachable only from a test until now: §3.8's
   // whole release model gated the NLA and validated server-side, but no
-  // Block routed to `assigned.releaseState` or `assigned.voidTimeUtc`, so a
+  // Block routed to `assigned.departureRelease` or `assigned.voidTimeUtc`, so a
   // controller could not put a flight on hold, or set a void time, at all —
   // which also made WP4's own "void-time expiry raises an alert" criterion
   // unexercisable in the real panel. Found by walking a release sortie.
@@ -141,19 +141,19 @@ const DEPARTURE_BLOCK_MAP = {
   // Numbered in the 14-family rather than taking the guide's unused 15: 14B
   // and 14C are already local extensions of the same release cluster
   // (docs/adr/0017), and a bare `15` would look like a guide Block it is not.
-  '14A': { required: false, target: { kind: 'fdr', path: 'assigned.releaseState' } },
-  '14D': { required: false, target: { kind: 'fdr', path: 'assigned.voidTimeUtc' } },
-  '14B': { required: false, target: { kind: 'fdr', path: 'assigned.edctTimeUtc' } },
-  '14C': { required: false, target: { kind: 'fdr', path: 'assigned.callForReleaseTimeUtc' } },
+  '14A': { required: false, target: { kind: 'flightData', path: 'assigned.departureRelease' } },
+  '14D': { required: false, target: { kind: 'flightData', path: 'assigned.voidTimeUtc' } },
+  '14B': { required: false, target: { kind: 'flightData', path: 'assigned.edctTimeUtc' } },
+  '14C': { required: false, target: { kind: 'flightData', path: 'assigned.callForReleaseTimeUtc' } },
   // Guide M16, §9.6 alert status (docs/adr/0070). A 14-family sub-letter
   // because a scramble is a release decision, and DEPARTURE only because only a
   // departure sits on an alert pad: an ARRIVAL/OVERFLIGHT alert status means
   // nothing. A 'military' target, so it is written through setMilitary()'s
   // enum check by the ordinary SetBlock — a logged Strip Mutation.
   '14E': { required: false, target: { kind: 'military', field: 'alertStatus' } }, // WP6, guide M16 §9.6 — docs/adr/0070
-  '16': { required: false, target: { kind: 'fdr', path: 'assigned.movementAreaEntryTimeUtc' } }, // metering deferred, §12
-  '17': { required: false, target: { kind: 'fdr', path: 'assigned.taxiTimeUtc' } },
-  '18': { required: true,  target: { kind: 'fdr', path: 'assigned.takeoffTimeUtc' } },
+  '16': { required: false, target: { kind: 'flightData', path: 'assigned.movementAreaEntryTimeUtc' } }, // metering deferred, §12
+  '17': { required: false, target: { kind: 'flightData', path: 'assigned.taxiTimeUtc' } },
+  '18': { required: true,  target: { kind: 'flightData', path: 'assigned.takeoffTimeUtc' } },
   '19': { required: false, target: { kind: 'annotation' } },
   // WP6 (docs/adr/0051), §9.2 rule 2 — the MARSA course/altitude void
   // interlock. Blocks 20 and 21 are the guide's OWN §6.2 names for these
@@ -172,7 +172,7 @@ const DEPARTURE_BLOCK_MAP = {
   // request is not "issuing an altitude change".
   //
   // docs/adr/0058: both are the FLIGHT's clearance now, not Strip notes —
-  // fdr.clearance.heading / .altitude, shared by every Position and both
+  // flightData.clearance.heading / .altitude, shared by every Position and both
   // Facilities, so CTR's copy of a departure carries what APP assigned. Shown
   // as HDG and ALT; Block 7 above reads CRUS ALT (what was filed).
   '20': { required: false, target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' },
@@ -186,13 +186,13 @@ const DEPARTURE_BLOCK_MAP = {
   '23': { required: false, target: { kind: 'annotation' } },
   '24': { required: true,  target: { kind: 'annotation' } },
   // WP4A (docs/adr/0018), §4.6.4 — airspace ownership as a direction. A
-  // dedicated target kind, not 'fdr'/'annotation' — see resolveBlockTarget
+  // dedicated target kind, not 'flightData'/'annotation' — see resolveBlockTarget
   // below and flight-data-store.js's setAirspaceOwner() for why this can't be a
   // generic FDR path (the "no boolean path" requirement needs a
   // structurally distinct route, not just a documented convention).
   '24A': { required: false, target: { kind: 'airspace-owner' } },
   // WP4A second slice (docs/adr/0025), §4.6.3 — the three-field separation
-  // model. Dedicated 'tofi' target kind, not 'fdr' — see flight-data-store.js's
+  // model. Dedicated 'tofi' target kind, not 'flightData' — see flight-data-store.js's
   // setTofi() for why (mirrors '24A''s own airspace-owner precedent: "no
   // boolean path" needs a structurally distinct route, not just a
   // documented convention). Applies to any ATC-side role a flight can
@@ -242,33 +242,33 @@ const DEPARTURE_BLOCK_MAP = {
 // (APREQ, release/movement/taxi/takeoff times) are departure-specific
 // clearance-delivery concepts with no arrival equivalent.
 const ARRIVAL_BLOCK_MAP = {
-  '1':        { required: true,  target: { kind: 'fdr', path: 'identity.callsign' } },
+  '1':        { required: true,  target: { kind: 'flightData', path: 'identity.callsign' } },
   '2':        { required: true,  target: { kind: 'system' } },
   '2A':       { required: false, target: { kind: 'annotation' } },
   '3':        { required: true,  target: { kind: 'composite' } },
-  '3A':       { required: false, target: { kind: 'fdr', path: 'identity.aircraftType' } }, // docs/adr/0023 gap-closure — see DEPARTURE_BLOCK_MAP's '3A' comment
-  '3B':       { required: false, target: { kind: 'fdr', path: 'identity.wakeCategory' } },
-  '3C':       { required: false, target: { kind: 'fdr', path: 'identity.tailNumber' } },
-  '3D':       { required: false, target: { kind: 'fdr', path: 'identity.unit' } },
-  '3E':       { required: false, target: { kind: 'fdr', path: 'identity.homeStation' } },
+  '3A':       { required: false, target: { kind: 'flightData', path: 'identity.aircraftType' } }, // docs/adr/0023 gap-closure — see DEPARTURE_BLOCK_MAP's '3A' comment
+  '3B':       { required: false, target: { kind: 'flightData', path: 'identity.wakeCategory' } },
+  '3C':       { required: false, target: { kind: 'flightData', path: 'identity.tailNumber' } },
+  '3D':       { required: false, target: { kind: 'flightData', path: 'identity.unit' } },
+  '3E':       { required: false, target: { kind: 'flightData', path: 'identity.homeStation' } },
   '3F':       { required: false, target: { kind: 'military', field: 'hookRequired' } },  // WP6, guide M15 §9.7 — see DEPARTURE_BLOCK_MAP's '3F'/'3G' comment
   '3G':       { required: false, target: { kind: 'military', field: 'ordnanceState' } }, // WP6, guide M14 §9.5
   '4':        { required: true,  target: { kind: 'system' } },
   '4A':       { required: false, target: { kind: 'flag' } },
-  '4B':       { required: true,  target: { kind: 'fdr', path: 'assigned.datalinkClearanceIndicator' } },
-  '5':        { required: true,  target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
-  '5A':       { required: false, target: { kind: 'fdr', path: 'identity.trackDegradationFlag' } }, // WP4A gap-closure, §4.6 rule 5 — see DEPARTURE_BLOCK_MAP's '5A' comment
-  '6':        { required: true,  target: { kind: 'fdr', path: 'filed.estimatedArrivalTimeUtc' } },
+  '4B':       { required: true,  target: { kind: 'flightData', path: 'assigned.datalinkClearanceIndicator' } },
+  '5':        { required: true,  target: { kind: 'flightData', path: 'identity.beaconAssigned' } },
+  '5A':       { required: false, target: { kind: 'flightData', path: 'identity.trackDegradationFlag' } }, // WP4A gap-closure, §4.6 rule 5 — see DEPARTURE_BLOCK_MAP's '5A' comment
+  '6':        { required: true,  target: { kind: 'flightData', path: 'filed.estimatedArrivalTimeUtc' } },
   // assigned/cleared altitude — confirmVacated-eligible, see module comment.
   // interlock ALTITUDE (docs/adr/0051): unlike DEPARTURE's Block 7 this one IS
   // the assigned altitude, which is exactly why it was annotation-routed in the
   // first place. See DEPARTURE_BLOCK_MAP's '20'/'21' comment.
   // docs/adr/0058 — the flight's clearance altitude, shared with every Facility.
   '7':        { required: true,  target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' },
-  '8':        { required: true,  target: { kind: 'fdr', path: 'filed.originAirport' } },
-  '8A':       { required: false, target: { kind: 'fdr', path: 'filed.arrivalFix' } },
-  '8B':       { required: true,  target: { kind: 'fdr', path: 'assigned.landingRunway' } },
-  '9':        { required: true,  target: { kind: 'fdr', path: 'filed.route' }, provenance: 'COMPUTER_GENERATED' },
+  '8':        { required: true,  target: { kind: 'flightData', path: 'filed.originAirport' } },
+  '8A':       { required: false, target: { kind: 'flightData', path: 'filed.arrivalFix' } },
+  '8B':       { required: true,  target: { kind: 'flightData', path: 'assigned.landingRunway' } },
+  '9':        { required: true,  target: { kind: 'flightData', path: 'filed.route' }, provenance: 'COMPUTER_GENERATED' },
   '9A-FUEL':  { required: true,  target: { kind: 'annotation' } }, // minimum fuel — the doctrinal exception, guide §6.3 note 1
   '9A-DEST':  { required: false, target: { kind: 'annotation' } },
   '9A-PTOUT': { required: false, target: { kind: 'annotation' } },
@@ -277,13 +277,13 @@ const ARRIVAL_BLOCK_MAP = {
   '9A-VECTOR':{ required: false, target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' }, // docs/adr/0058
   '9A-SPEED': { required: false, target: { kind: 'annotation' } },
   // §9.4 MTR fields (docs/adr/0062) — see DEPARTURE_BLOCK_MAP's '9G-*' comment
-  '9G-MTR':   { required: false, target: { kind: 'fdr', path: 'military.mtr.designator' } },
-  '9G-ENTRY': { required: false, target: { kind: 'fdr', path: 'military.mtr.entryFix' } },
-  '9G-TIME':  { required: false, target: { kind: 'fdr', path: 'military.mtr.entryTimeUtc' } },
-  '9H-EXIT':  { required: false, target: { kind: 'fdr', path: 'military.mtr.exitFix' } },
-  '9H-TIME':  { required: false, target: { kind: 'fdr', path: 'military.mtr.exitEstimateUtc' } },
-  '9H-ALT':   { required: false, target: { kind: 'fdr', path: 'military.mtr.requestedAltitudeAfterExit' } },
-  '9E':       { required: true,  target: { kind: 'fdr', path: 'filed.remarks' } },
+  '9G-MTR':   { required: false, target: { kind: 'flightData', path: 'military.mtr.designator' } },
+  '9G-ENTRY': { required: false, target: { kind: 'flightData', path: 'military.mtr.entryFix' } },
+  '9G-TIME':  { required: false, target: { kind: 'flightData', path: 'military.mtr.entryTimeUtc' } },
+  '9H-EXIT':  { required: false, target: { kind: 'flightData', path: 'military.mtr.exitFix' } },
+  '9H-TIME':  { required: false, target: { kind: 'flightData', path: 'military.mtr.exitEstimateUtc' } },
+  '9H-ALT':   { required: false, target: { kind: 'flightData', path: 'military.mtr.requestedAltitudeAfterExit' } },
+  '9E':       { required: true,  target: { kind: 'flightData', path: 'filed.remarks' } },
   '20':       { required: false, target: { kind: 'annotation' } }, // radar scratchpad — Strip-local until WP5, see module comment
   '21':       { required: false, target: { kind: 'annotation' } }, // radar scratchpad — Strip-local until WP5, see module comment
   '24':       { required: true,  target: { kind: 'annotation' } },
@@ -313,22 +313,22 @@ const ARRIVAL_BLOCK_MAP = {
 // departing there. No ground/runway/taxi Blocks (8A, 14, 16-18) — this
 // flight never touches Incirlik's ground.
 const OVERFLIGHT_BLOCK_MAP = {
-  '1':  { required: true,  target: { kind: 'fdr', path: 'identity.callsign' } },
+  '1':  { required: true,  target: { kind: 'flightData', path: 'identity.callsign' } },
   '2':  { required: true,  target: { kind: 'system' } },
   '3':  { required: true,  target: { kind: 'composite' } },
-  '3A': { required: false, target: { kind: 'fdr', path: 'identity.aircraftType' } }, // docs/adr/0023 gap-closure — see DEPARTURE_BLOCK_MAP's '3A' comment
-  '3B': { required: false, target: { kind: 'fdr', path: 'identity.wakeCategory' } },
-  '3C': { required: false, target: { kind: 'fdr', path: 'identity.tailNumber' } },
-  '3D': { required: false, target: { kind: 'fdr', path: 'identity.unit' } },
-  '3E': { required: false, target: { kind: 'fdr', path: 'identity.homeStation' } },
+  '3A': { required: false, target: { kind: 'flightData', path: 'identity.aircraftType' } }, // docs/adr/0023 gap-closure — see DEPARTURE_BLOCK_MAP's '3A' comment
+  '3B': { required: false, target: { kind: 'flightData', path: 'identity.wakeCategory' } },
+  '3C': { required: false, target: { kind: 'flightData', path: 'identity.tailNumber' } },
+  '3D': { required: false, target: { kind: 'flightData', path: 'identity.unit' } },
+  '3E': { required: false, target: { kind: 'flightData', path: 'identity.homeStation' } },
   '3F': { required: false, target: { kind: 'military', field: 'hookRequired' } },  // WP6, guide M15 §9.7 — see DEPARTURE_BLOCK_MAP's '3F'/'3G' comment
   '3G': { required: false, target: { kind: 'military', field: 'ordnanceState' } }, // WP6, guide M14 §9.5
   '4':  { required: true,  target: { kind: 'system' } },
   '4A': { required: false, target: { kind: 'flag' } },
-  '4B': { required: true,  target: { kind: 'fdr', path: 'assigned.datalinkClearanceIndicator' } },
-  '5':  { required: true,  target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
-  '5A': { required: false, target: { kind: 'fdr', path: 'identity.trackDegradationFlag' } }, // WP4A gap-closure, §4.6 rule 5 — see DEPARTURE_BLOCK_MAP's '5A' comment
-  '7':  { required: true,  target: { kind: 'fdr', path: 'filed.requestedAltitude' } },
+  '4B': { required: true,  target: { kind: 'flightData', path: 'assigned.datalinkClearanceIndicator' } },
+  '5':  { required: true,  target: { kind: 'flightData', path: 'identity.beaconAssigned' } },
+  '5A': { required: false, target: { kind: 'flightData', path: 'identity.trackDegradationFlag' } }, // WP4A gap-closure, §4.6 rule 5 — see DEPARTURE_BLOCK_MAP's '5A' comment
+  '7':  { required: true,  target: { kind: 'flightData', path: 'filed.requestedAltitude' } },
   // [SOURCE-DEFINED] WP6 (docs/adr/0051) — OVERFLIGHT had NO Block carrying an
   // ATC course or altitude assignment, which made §9.2 rule 2's interlock
   // silently unreachable for one Strip Role: a MARSA participant transiting on
@@ -353,17 +353,17 @@ const OVERFLIGHT_BLOCK_MAP = {
   // docs/adr/0058 — both are the flight's clearance, shared across Facilities.
   '7A': { required: false, target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' },
   '9A-VECTOR': { required: false, target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' },
-  '8':  { required: true,  target: { kind: 'fdr', path: 'filed.departureAirport' } },  // the flight's real origin, not Incirlik
-  '8B': { required: true,  target: { kind: 'fdr', path: 'filed.destinationAirport' } }, // the flight's real destination, not Incirlik
-  '9':  { required: true,  target: { kind: 'fdr', path: 'filed.route' }, provenance: 'COMPUTER_GENERATED' },
+  '8':  { required: true,  target: { kind: 'flightData', path: 'filed.departureAirport' } },  // the flight's real origin, not Incirlik
+  '8B': { required: true,  target: { kind: 'flightData', path: 'filed.destinationAirport' } }, // the flight's real destination, not Incirlik
+  '9':  { required: true,  target: { kind: 'flightData', path: 'filed.route' }, provenance: 'COMPUTER_GENERATED' },
   // §9.4 MTR fields (docs/adr/0062) — see DEPARTURE_BLOCK_MAP's '9G-*' comment
-  '9G-MTR':   { required: false, target: { kind: 'fdr', path: 'military.mtr.designator' } },
-  '9G-ENTRY': { required: false, target: { kind: 'fdr', path: 'military.mtr.entryFix' } },
-  '9G-TIME':  { required: false, target: { kind: 'fdr', path: 'military.mtr.entryTimeUtc' } },
-  '9H-EXIT':  { required: false, target: { kind: 'fdr', path: 'military.mtr.exitFix' } },
-  '9H-TIME':  { required: false, target: { kind: 'fdr', path: 'military.mtr.exitEstimateUtc' } },
-  '9H-ALT':   { required: false, target: { kind: 'fdr', path: 'military.mtr.requestedAltitudeAfterExit' } },
-  '9E': { required: true,  target: { kind: 'fdr', path: 'filed.remarks' } },
+  '9G-MTR':   { required: false, target: { kind: 'flightData', path: 'military.mtr.designator' } },
+  '9G-ENTRY': { required: false, target: { kind: 'flightData', path: 'military.mtr.entryFix' } },
+  '9G-TIME':  { required: false, target: { kind: 'flightData', path: 'military.mtr.entryTimeUtc' } },
+  '9H-EXIT':  { required: false, target: { kind: 'flightData', path: 'military.mtr.exitFix' } },
+  '9H-TIME':  { required: false, target: { kind: 'flightData', path: 'military.mtr.exitEstimateUtc' } },
+  '9H-ALT':   { required: false, target: { kind: 'flightData', path: 'military.mtr.requestedAltitudeAfterExit' } },
+  '9E': { required: true,  target: { kind: 'flightData', path: 'filed.remarks' } },
   '20': { required: false, target: { kind: 'annotation' } }, // radar scratchpad — Strip-local until WP5, see ARRIVAL_BLOCK_MAP's comment
   '21': { required: false, target: { kind: 'annotation' } }, // radar scratchpad — Strip-local until WP5, see ARRIVAL_BLOCK_MAP's comment
   '24': { required: true,  target: { kind: 'annotation' } },
@@ -393,14 +393,14 @@ const OVERFLIGHT_BLOCK_MAP = {
 // tanker join, ATO ingest) is explicitly deferred to WP6/WP7 — see the
 // scope-cut ADR this Block Map ships with.
 const MISSION_BLOCK_MAP = {
-  'M1': { required: true,  target: { kind: 'fdr', path: 'mission.missionNumber' } },
-  'M2': { required: false, target: { kind: 'fdr', path: 'mission.packageId' } },
-  'M3': { required: true,  target: { kind: 'fdr', path: 'identity.callsign' } },
-  'M4': { required: true,  target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
-  'M5': { required: false, target: { kind: 'fdr', path: 'mission.controllingAgency' } },
-  'M6': { required: false, target: { kind: 'fdr', path: 'mission.vulWindowStartUtc' } },
-  'M7': { required: false, target: { kind: 'fdr', path: 'mission.vulWindowEndUtc' } },
-  'M8': { required: false, target: { kind: 'fdr', path: 'filed.remarks' } },
+  'M1': { required: true,  target: { kind: 'flightData', path: 'mission.missionNumber' } },
+  'M2': { required: false, target: { kind: 'flightData', path: 'mission.packageId' } },
+  'M3': { required: true,  target: { kind: 'flightData', path: 'identity.callsign' } },
+  'M4': { required: true,  target: { kind: 'flightData', path: 'identity.beaconAssigned' } },
+  'M5': { required: false, target: { kind: 'flightData', path: 'mission.controllingAgency' } },
+  'M6': { required: false, target: { kind: 'flightData', path: 'mission.vulWindowStartUtc' } },
+  'M7': { required: false, target: { kind: 'flightData', path: 'mission.vulWindowEndUtc' } },
+  'M8': { required: false, target: { kind: 'flightData', path: 'filed.remarks' } },
   'M25': { required: true, target: { kind: 'system' } },
   'M26': { required: true, target: { kind: 'system' } },
   // No `interlock` Block here, and that is a decision rather than an omission
@@ -408,7 +408,7 @@ const MISSION_BLOCK_MAP = {
   // altitude — "issuing a course or altitude change prior to rendezvous" — and
   // a MISSION Strip is the MRU-side mission line (§9.8), not an ATC clearance
   // surface. The ATC-side replica of the same flight is where a clearance is
-  // issued, and because the relation's participants are fdrIds rather than
+  // issued, and because the relation's participants are flightDataIds rather than
   // stripIds (docs/adr/0045's key choice, reused), a void raised there IS a
   // void of this flight's relation. Tagging a MISSION Block would not add
   // coverage; it would add a second place the same aircraft can void from.
@@ -433,7 +433,7 @@ const MISSION_BLOCK_MAP = {
 //    BEARING cannot be typed (WP7A bullets 2 and 5, D16). The marshal radial
 //    (C5) is set through the stack op SetMarshalRadial, and a Case I altitude
 //    through SetCaseIAngels, never through SetBlock.
-//  - `carrier` Blocks write fdr.military.carrier.<field> through
+//  - `carrier` Blocks write flightData.military.carrier.<field> through
 //    flight-data-store.js's setCarrier(): EEAT, approach, button, bingo and low state
 //    belong to the FLIGHT, which outlives every Strip, so an EEAT set on the
 //    launch Strip is on the recovery Strip by construction.
@@ -447,14 +447,14 @@ const _CARRIER_CHROME = {
   '2':  { required: true,  target: { kind: 'system' } },
   '4':  { required: true,  target: { kind: 'system' } },
   '4A': { required: false, target: { kind: 'flag' } },
-  '5':  { required: false, target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
+  '5':  { required: false, target: { kind: 'flightData', path: 'identity.beaconAssigned' } },
   '25': { required: true,  target: { kind: 'system' } },
   '26': { required: true,  target: { kind: 'system' } },
 };
 
 const MARSHAL_BLOCK_MAP = {
-  'C1':  { required: true,  target: { kind: 'fdr', path: 'identity.callsign' } },
-  'C2':  { required: true,  target: { kind: 'fdr', path: 'identity.aircraftType' } },
+  'C1':  { required: true,  target: { kind: 'flightData', path: 'identity.callsign' } },
+  'C2':  { required: true,  target: { kind: 'flightData', path: 'identity.aircraftType' } },
   'C3':  { required: false, target: { kind: 'carrier-derived', field: 'case' } },
   'C4':  { required: false, target: { kind: 'carrier', field: 'approachType' } },
   'C5':  { required: false, target: { kind: 'carrier-derived', field: 'marshalRadial' } },
@@ -492,8 +492,8 @@ const FINAL_BLOCK_MAP = {
 
 // PATTERN: identity and a free annotation. Shared with RSU (L18).
 const PATTERN_BLOCK_MAP = {
-  'C1':  { required: true,  target: { kind: 'fdr', path: 'identity.callsign' } },
-  'C2':  { required: true,  target: { kind: 'fdr', path: 'identity.aircraftType' } },
+  'C1':  { required: true,  target: { kind: 'flightData', path: 'identity.callsign' } },
+  'C2':  { required: true,  target: { kind: 'flightData', path: 'identity.aircraftType' } },
   'C24': { required: false, target: { kind: 'annotation' } },
   ..._CARRIER_CHROME,
 };
@@ -526,7 +526,7 @@ const BLOCK_MAPS = {
  * `blockId: null` means RESERVED, not undecided — the id is spoken for and
  * lands with that field's own deliverable. A row whose guide number covers
  * several fields names them with `blocks` instead — `{ blockId: path }`, one
- * plain 'fdr' Block per leaf, on every ATC Role (M10/M11, docs/adr/0062). A
+ * plain 'flightData' Block per leaf, on every ATC Role (M10/M11, docs/adr/0062). A
  * row has one or the other, never both, and never a wildcard. Nothing reads this table at
  * runtime; it is documentation that a test can assert against, which is what
  * stops it drifting the way a comment would.
@@ -548,15 +548,15 @@ const MILITARY_BLOCK_NAMESPACE = {
 };
 
 // The 9G-*/9H-* MTR Blocks (M10/M11) were reserved here until §9.4 landed;
-// docs/adr/0062 built them. They are plain 'fdr' Blocks, one per leaf of
-// fdr.military.mtr, written through setField() rather than setMilitary(), so
+// docs/adr/0062 built them. They are plain 'flightData' Blocks, one per leaf of
+// flightData.military.mtr, written through setField() rather than setMilitary(), so
 // MILITARY_WRITABLE_FIELDS does not grow. Where they sit on the Strip — a
 // field-grid row drawn only when the flight has MTR data, M11 first — is the
 // client's strip-fields.js, and the reasons are in that ADR.
 //
 // Nothing on MISSION_BLOCK_MAP, and that is a decision too. An ordnance state
 // and a hook requirement are facts about the airframe, and a MISSION Strip
-// shares its fdrId with the ATC Strip it is TOFI-linked to (docs/adr/0025), so
+// shares its flightDataId with the ATC Strip it is TOFI-linked to (docs/adr/0025), so
 // a write from either surface is a write to the same flight. Giving MISSION
 // its own Block for them would need an id in the very M-namespace this table
 // exists to stop reusing — and would add a second place the same aircraft's
@@ -565,37 +565,37 @@ const MILITARY_BLOCK_NAMESPACE = {
 // that is the ADR that should settle it.
 
 /** Every Strip Role this facility's Block Map data actually defines — board-store.js's CreateStrip validation calls this so an unknown role is a VALIDATION_ERROR, not a silent fallback. */
-function isValidStripType(role) {
-  return Object.prototype.hasOwnProperty.call(BLOCK_MAPS, role);
+function isValidStripType(stripType) {
+  return Object.prototype.hasOwnProperty.call(BLOCK_MAPS, stripType);
 }
 
-function requiredBlocksFor(role) {
-  const map = BLOCK_MAPS[role];
+function requiredBlocksFor(stripType) {
+  const map = BLOCK_MAPS[stripType];
   if (!map) return [];
   return Object.entries(map).filter(([, def]) => def.required).map(([id]) => id);
 }
 
 /**
  * Resolves a Block ID to a SetBlock routing target for board-store.js's
- * applyMutation(): { kind:'fdr', path } for an FDR field, { kind:
+ * applyMutation(): { kind:'flightData', path } for an FDR field, { kind:
  * 'annotation' } for a Strip annotation cell, or null for anything not
  * writable through the generic SetBlock path (system/composite/flag
- * Blocks, or an unknown Block ID / role).
+ * Blocks, or an unknown Block ID / stripType).
  */
-function resolveBlockTarget(role, blockId) {
-  const map = BLOCK_MAPS[role];
+function resolveBlockTarget(stripType, blockId) {
+  const map = BLOCK_MAPS[stripType];
   const def = map && map[blockId];
   if (!def) return null;
-  if (def.target.kind === 'fdr') return { kind: 'fdr', path: def.target.path };
+  if (def.target.kind === 'flightData') return { kind: 'flightData', path: def.target.path };
   if (def.target.kind === 'annotation') return { kind: 'annotation' };
   // WP4A (docs/adr/0018) — routed through flight-data-store.js's dedicated
-  // setAirspaceOwner(), never the generic 'fdr' path above (see that
+  // setAirspaceOwner(), never the generic 'flightData' path above (see that
   // method's own comment for why this needs to be structurally distinct).
   if (def.target.kind === 'airspace-owner') return { kind: 'airspace-owner' };
   // WP4A second slice (docs/adr/0025) — routed through flight-data-store.js's
   // dedicated setTofi(), same reasoning as 'airspace-owner' above. Unlike
   // that kind, 3 different Blocks share this one target kind but route to
-  // 3 different keys on one fdr.tofi sub-object — `field` carries which.
+  // 3 different keys on one flightData.tofi sub-object — `field` carries which.
   if (def.target.kind === 'tofi') return { kind: 'tofi', field: def.target.field };
   // Routed through flight-data-store.js's dedicated setWorkingFrequency(), same
   // reasoning as 'airspace-owner' — a frequency needs validating as a number
@@ -631,15 +631,15 @@ function resolveBlockTarget(role, blockId) {
  * and a parallel list kept elsewhere is docs/adr/0041's frozen inclusion list
  * in a new costume.
  */
-function interlockFor(role, blockId) {
-  const map = BLOCK_MAPS[role];
+function interlockFor(stripType, blockId) {
+  const map = BLOCK_MAPS[stripType];
   const def = map && map[blockId];
   return (def && def.interlock) || null;
 }
 
 /** Every Block, per Role, that interlockFor() answers non-null for — used by the test that holds each Role to having the coverage docs/adr/0051 claims. */
-function interlockBlocks(role) {
-  const map = BLOCK_MAPS[role] || {};
+function interlockBlocks(stripType) {
+  const map = BLOCK_MAPS[stripType] || {};
   return Object.entries(map).filter(([, def]) => def.interlock).map(([id]) => id);
 }
 
@@ -651,10 +651,10 @@ function interlockBlocks(role) {
  * required Block ('9A-FUEL') — no role-specific exception logic needed
  * here beyond the existing required-Block check.
  *
- * @param {{role:string, visibleBlocks:string[]}} config
+ * @param {{stripType:string, visibleBlocks:string[]}} config
  */
 function validateFacilityConfig(config) {
-  const required = requiredBlocksFor(config.role);
+  const required = requiredBlocksFor(config.stripType);
   const visible = new Set(config.visibleBlocks || []);
   const missing = required.filter(id => !visible.has(id));
   if (missing.length > 0) {

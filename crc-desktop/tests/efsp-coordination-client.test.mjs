@@ -1,6 +1,6 @@
 /* WP4A (docs/adr/0015) — server/client drift guard for the coordination-
    primitive op-kind list, same template efsp-nla-client.test.js already
-   uses for STATE_OWNERS_BY_ROLE: import both sides, assert.deepEqual
+   uses for STATE_OWNERS_BY_STRIP_TYPE: import both sides, assert.deepEqual
    directly. A silent drift here would be misleading (a Coordinate button
    that offers a primitive the server doesn't grant, or omits one it does),
    not merely cosmetic. */
@@ -99,7 +99,7 @@ test('the Positions the client offers airspace entry to are exactly the ones the
 test('the Positions the client offers Convert to Arrival to are exactly the ones the server lets do it', () => {
   const clientPositions = bayViewValue('CONVERT_TO_ARRIVAL_POSITIONS');
   const granted = Object.keys(server.PERMISSIONS)
-    .filter(id => server.PERMISSIONS[id].has('ConvertToArrival') && server.canCreateStripRole(id, 'ARRIVAL'));
+    .filter(id => server.PERMISSIONS[id].has('ConvertToArrival') && server.canCreateStripType(id, 'ARRIVAL'));
   assert.deepEqual(clientPositions.sort(), granted.sort());
 });
 

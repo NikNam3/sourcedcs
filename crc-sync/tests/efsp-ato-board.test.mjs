@@ -114,7 +114,7 @@ const ORACLE = {
 };
 
 test('the preview of the research fixture lists its five lines with the oracle\'s values on the mission calendar', () => {
-  const p = previewAto({ text: IRON, fdrs: [], liveStrips: [], nowUtc: MISSION_NOW });
+  const p = previewAto({ text: IRON, flightDataList: [], liveStrips: [], nowUtc: MISSION_NOW });
   assert.equal(p.ok, true);
   assert.equal(p.lines.length, 5);
   assert.match(p.textSha1, /^[0-9a-f]{40}$/);
@@ -137,7 +137,7 @@ test('the preview of the research fixture lists its five lines with the oracle\'
 
 test('a line whose callsign is too long is shortened (H60), and one that cannot be shortened waits for a typed callsign', () => {
   const text = IRON.replace('VIPER 11/402+', 'ENFIELD 11/402+').replace(/ACTYP:KC135\/SHELL 71/, 'ACTYP:KC135/BDRKSTRX 71');
-  const p = previewAto({ text, fdrs: [], liveStrips: [], nowUtc: MISSION_NOW });
+  const p = previewAto({ text, flightDataList: [], liveStrips: [], nowUtc: MISSION_NOW });
   const enfield = p.lines.find((l) => l.lineId === '1101A#0');
   assert.equal(enfield.callsign, 'ENFLD11');
   assert.equal(enfield.seedable, true);
@@ -151,50 +151,50 @@ test('a line whose callsign is too long is shortened (H60), and one that cannot 
 test('a Mode 3 in the AI block is flagged in the preview (S-L3)', () => {
   const text = IRON.replace('     34521//', '     36001//');
   assert.notEqual(text, IRON);
-  const p = previewAto({ text, fdrs: [], liveStrips: [], nowUtc: MISSION_NOW });
+  const p = previewAto({ text, flightDataList: [], liveStrips: [], nowUtc: MISSION_NOW });
   const l = p.lines.find((x) => x.lineId === '1101A#0');
   assert.ok(l.warnings.some((w) => w.code === 'MODE3_NOT_ADOPTED' && /6000–6777/.test(w.message)), JSON.stringify(l.warnings));
 });
 
 // ── Bind candidates ──────────────────────────────────────────────────────────
 
-const fdr = (fdrId, callsign, beaconAssigned, extra = {}) => ({ fdrId, identity: { callsign, beaconAssigned }, provenance: {}, mission: {}, ...extra });
-const strip = (stripId, fdrId, role, facilityId = 'INCIRLIK', ownerPositionId = 'OPS') => ({ stripId, fdrId, role, facilityId, ownerPositionId, state: 'PROPOSED' });
+const flightData = (flightDataId, callsign, beaconAssigned, extra = {}) => ({ flightDataId, identity: { callsign, beaconAssigned }, provenance: {}, mission: {}, ...extra });
+const strip = (stripId, flightDataId, stripType, facilityId = 'INCIRLIK', ownerPositionId = 'OPS') => ({ stripId, flightDataId, stripType, facilityId, ownerPositionId, state: 'PROPOSED' });
 
 test('bind candidates: the Mode 3/A first', () => {
-  const fdrs = [fdr('a', 'VIPER11', '4521'), fdr('b', 'VIPER11', '0101')];
+  const flightDataList = [flightData('a', 'VIPER11', '4521'), flightData('b', 'VIPER11', '0101')];
   const liveStrips = [strip('s1', 'a', 'DEPARTURE'), strip('s2', 'b', 'DEPARTURE')];
-  const c = bindCandidatesFor({ callsign: 'VIPER11', modeThree: '4521' }, fdrs, liveStrips);
-  assert.deepEqual(c.map((x) => [x.fdrId, x.key]), [['a', 'MODE3']], 'a MODE3 match hides the callsign matches');
+  const c = bindCandidatesFor({ callsign: 'VIPER11', modeThree: '4521' }, flightDataList, liveStrips);
+  assert.deepEqual(c.map((x) => [x.flightDataId, x.key]), [['a', 'MODE3']], 'a MODE3 match hides the callsign matches');
   assert.equal(c[0].strips[0].stripId, 's1');
 });
 
 test('bind candidates: the callsign only when no Mode 3 matches; two matches are both listed', () => {
-  const fdrs = [fdr('a', 'VIPER11', '0101'), fdr('b', 'VIPER11', '0102'), fdr('c', 'DUDE21', '0103')];
+  const flightDataList = [flightData('a', 'VIPER11', '0101'), flightData('b', 'VIPER11', '0102'), flightData('c', 'DUDE21', '0103')];
   const liveStrips = [strip('s1', 'a', 'DEPARTURE'), strip('s2', 'b', 'ARRIVAL'), strip('s3', 'c', 'DEPARTURE')];
-  const c = bindCandidatesFor({ callsign: 'VIPER11', modeThree: '4521' }, fdrs, liveStrips);
-  assert.deepEqual(c.map((x) => [x.fdrId, x.key]), [['a', 'CALLSIGN'], ['b', 'CALLSIGN']]);
+  const c = bindCandidatesFor({ callsign: 'VIPER11', modeThree: '4521' }, flightDataList, liveStrips);
+  assert.deepEqual(c.map((x) => [x.flightDataId, x.key]), [['a', 'CALLSIGN'], ['b', 'CALLSIGN']]);
 });
 
 test('bind candidates: a flight with a live MISSION Strip on TACTICAL, or with no live Strip, is not offered', () => {
-  const fdrs = [fdr('a', 'VIPER11', '4521'), fdr('b', 'VIPER11', '4521')];
+  const flightDataList = [flightData('a', 'VIPER11', '4521'), flightData('b', 'VIPER11', '4521')];
   const liveStrips = [strip('s1', 'a', 'DEPARTURE'), strip('m1', 'a', 'MISSION', 'TACTICAL', 'TAC_C2')];
-  assert.deepEqual(bindCandidatesFor({ callsign: 'VIPER11', modeThree: '4521' }, fdrs, liveStrips), []);
+  assert.deepEqual(bindCandidatesFor({ callsign: 'VIPER11', modeThree: '4521' }, flightDataList, liveStrips), []);
 });
 
 test('bind candidates: a reserved or synthetic ATO Mode 3 never matches on the code', () => {
-  const fdrs = [fdr('a', 'OTHER', '7700')];
-  assert.deepEqual(bindCandidatesFor({ callsign: 'VIPER11', modeThree: '7700' }, fdrs, [strip('s', 'a', 'DEPARTURE')]), []);
+  const flightDataList = [flightData('a', 'OTHER', '7700')];
+  assert.deepEqual(bindCandidatesFor({ callsign: 'VIPER11', modeThree: '7700' }, flightDataList, [strip('s', 'a', 'DEPARTURE')]), []);
 });
 
 test('the preview preselects BIND for exactly one candidate and CREATE for two', () => {
-  const one = previewAto({ text: IRON, fdrs: [fdr('a', 'VIPER11', '4521')], liveStrips: [strip('s1', 'a', 'DEPARTURE')], nowUtc: MISSION_NOW });
+  const one = previewAto({ text: IRON, flightDataList: [flightData('a', 'VIPER11', '4521')], liveStrips: [strip('s1', 'a', 'DEPARTURE')], nowUtc: MISSION_NOW });
   const v1 = one.lines.find((l) => l.lineId === '1101A#0');
   assert.equal(v1.action, 'BIND');
   assert.equal(v1.bindCandidates[0].key, 'MODE3');
   const two = previewAto({
     text: IRON,
-    fdrs: [fdr('a', 'VIPER11', '0101'), fdr('b', 'VIPER11', '0102')],
+    flightDataList: [flightData('a', 'VIPER11', '0101'), flightData('b', 'VIPER11', '0102')],
     liveStrips: [strip('s1', 'a', 'DEPARTURE'), strip('s2', 'b', 'DEPARTURE')],
     nowUtc: MISSION_NOW,
   });
@@ -206,20 +206,20 @@ test('the preview preselects BIND for exactly one candidate and CREATE for two',
 // ── The plan ─────────────────────────────────────────────────────────────────
 
 test('planImport refuses a BIND to a flight that is not a candidate, and a stale text', () => {
-  const a = analyseAto({ text: IRON, fdrs: [fdr('a', 'VIPER11', '4521')], liveStrips: [strip('s1', 'a', 'DEPARTURE')], nowUtc: MISSION_NOW });
-  const bad = planImport(a, [{ lineId: '1101A#0', action: 'BIND', fdrId: 'nope' }], { textSha1: a.preview.textSha1 });
+  const a = analyseAto({ text: IRON, flightDataList: [flightData('a', 'VIPER11', '4521')], liveStrips: [strip('s1', 'a', 'DEPARTURE')], nowUtc: MISSION_NOW });
+  const bad = planImport(a, [{ lineId: '1101A#0', action: 'BIND', flightDataId: 'nope' }], { textSha1: a.preview.textSha1 });
   assert.equal(bad.ok, false);
   assert.equal(bad.reason, 'VALIDATION_ERROR');
   const stale = planImport(a, [], { textSha1: '0'.repeat(40) });
   assert.equal(stale.reason, 'STALE_REV');
-  const good = planImport(a, [{ lineId: '1101A#0', action: 'BIND', fdrId: 'a' }], { textSha1: a.preview.textSha1 });
+  const good = planImport(a, [{ lineId: '1101A#0', action: 'BIND', flightDataId: 'a' }], { textSha1: a.preview.textSha1 });
   assert.equal(good.ok, true);
   assert.deepEqual(good.steps.map((s) => s.action), ['BIND', 'CREATE', 'CREATE', 'CREATE', 'CREATE']);
 });
 
 test('planImport: an unseedable line cannot be created without a typed callsign; a typed one is used', () => {
   const text = IRON.replace(/ACTYP:KC135\/SHELL 71/, 'ACTYP:KC135/BDRKSTRX 71');
-  const a = analyseAto({ text, fdrs: [], liveStrips: [], nowUtc: MISSION_NOW });
+  const a = analyseAto({ text, flightDataList: [], liveStrips: [], nowUtc: MISSION_NOW });
   assert.equal(planImport(a, []).ok, false);
   const typed = planImport(a, [{ lineId: '1901T#0', action: 'CREATE', callsignOverride: 'tex71' }]);
   assert.equal(typed.ok, true);

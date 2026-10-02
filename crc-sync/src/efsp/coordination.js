@@ -20,9 +20,9 @@ function coordinationEffect(primitive) {
   return COORDINATION_EFFECTS[primitive] || null;
 }
 
-/** @returns {string|undefined} the EfspState `role` must be in to propose a coordination link, or undefined if this role never can. */
-function coordinationEligibleState(role) {
-  return COORDINATION_ELIGIBLE_STATES[role];
+/** @returns {string|undefined} the EfspState `stripType` must be in to propose a coordination link, or undefined if this role never can. */
+function coordinationEligibleState(stripType) {
+  return COORDINATION_ELIGIBLE_STATES[stripType];
 }
 
 /** @returns {{acceptPhrase:string}|null} */
@@ -30,9 +30,9 @@ function tofiEffect(direction) {
   return TOFI_EFFECTS[direction] || null;
 }
 
-/** @returns {string|undefined} the EfspState `role` must be in to open a TOFI ENTRY, or undefined if this role never can. */
-function tofiEligibleState(role) {
-  return TOFI_ELIGIBLE_STATES[role];
+/** @returns {string|undefined} the EfspState `stripType` must be in to open a TOFI ENTRY, or undefined if this role never can. */
+function tofiEligibleState(stripType) {
+  return TOFI_ELIGIBLE_STATES[stripType];
 }
 
 module.exports = {

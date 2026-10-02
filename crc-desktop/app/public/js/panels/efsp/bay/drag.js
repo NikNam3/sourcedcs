@@ -126,7 +126,7 @@ export function _onStripPointerDown(e, strip) {
  * the Strip's drag-start had to be kept away from it. F-105 then grew those
  * cells from 28x20 to 44x44 of border box, overhanging 12px vertically and 3px
  * horizontally past the box a controller can see, and the guard grew with
- * them: in twr-runway-queue, a pointerdown 8px into a Strip lands inside Block
+ * them: in lc-runway-queue, a pointerdown 8px into a Strip lands inside Block
  * 14D's target (border box from x=15, visible box from x=18) and started no
  * drag at all. Most of a Strip had quietly stopped being draggable, which is
  * what lane 4's F-406 spec actually trips over.
@@ -166,7 +166,7 @@ function _findDropTargetAt(clientX, clientY) {
  *
  * _finishDrag used to commit unconditionally to the Rack the drag STARTED in,
  * and rects were cached only for that Rack, so a Strip dragged from RWY-05
- * onto RWY-23 in twr-runway-queue snapped back into RWY-05 and said nothing.
+ * onto RWY-23 in lc-runway-queue snapped back into RWY-05 and said nothing.
  * The only drop targets that changed a Strip's location were the Position and
  * Bay tabs, which are per Bay — nothing was per Rack, even though this
  * module's own header has always claimed "within/between Racks" and a runway

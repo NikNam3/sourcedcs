@@ -34,11 +34,11 @@ const ALLOWED = {
   'crc-sync/src/efsp/board/coordination.js': 'a comment only (the replica carries the sender\'s Role/EfspState); the tables it reads are passed in, keyed by Role',
   'crc-sync/src/efsp/surveillance-hints.js': 'EXPECTS is keyed by Role',
   'crc-sync/src/efsp/wire/skeleton.js': 'the word INBOUND in a comment about messages',
-  'crc-desktop/app/public/js/panels/efsp/sfa-state.js': 'the rotation button is offered only to role === ARRIVAL at INBOUND (the guard is on the same line)',
-  'crc-sync/src/efsp/sfa.js': 'SFA_ROTATION is keyed by Role: it names role ARRIVAL with state INBOUND, and board-store _applySfaRotation refuses any other Role',
+  'crc-desktop/app/public/js/panels/efsp/sfa-state.js': 'the rotation button is offered only to stripType === ARRIVAL at INBOUND (the guard is on the same line)',
+  'crc-sync/src/efsp/sfa.js': 'SFA_ROTATION is keyed by Role: it names stripType ARRIVAL with state INBOUND, and board-store _applySfaRotation refuses any other Role',
   'crc-desktop/app/public/js/panels/efsp/efsp-nla.js': 'per-Role tables',
-  'crc-desktop/app/public/js/panels/efsp/runway-status-rules.js': 'keyed by Role / guarded by role === ARRIVAL',
-  'crc-desktop/app/public/js/panels/efsp/bay/popovers/airspace-entry.js': 'guarded by role === DEPARTURE (moved from bay-view.js)',
+  'crc-desktop/app/public/js/panels/efsp/runway-status-rules.js': 'keyed by Role / guarded by stripType === ARRIVAL',
+  'crc-desktop/app/public/js/panels/efsp/bay/popovers/airspace-entry.js': 'guarded by stripType === DEPARTURE (moved from bay-view.js)',
 };
 
 function* walk(p) {

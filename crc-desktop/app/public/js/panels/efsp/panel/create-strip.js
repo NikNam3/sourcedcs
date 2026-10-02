@@ -80,13 +80,13 @@ function _selectedStereoName() {
  * out of this base is not what it filed.
  *
  * Takes the ORIGIN rather than the role string on purpose: OPS's entry in
- * CREATE_STRIP_ORIGINS carries `role: undefined` to mean DEPARTURE (the
- * server's own default), so a bare `role === 'DEPARTURE'` would exclude the
+ * CREATE_STRIP_ORIGINS carries `stripType: undefined` to mean DEPARTURE (the
+ * server's own default), so a bare `stripType === 'DEPARTURE'` would exclude the
  * one Position that files these. _createStripOriginKey already normalises
  * the same way.
  */
 export function _stereoEligibleOrigin(origin) {
-  return !!origin && (origin.role || 'DEPARTURE') === 'DEPARTURE';
+  return !!origin && (origin.stripType || 'DEPARTURE') === 'DEPARTURE';
 }
 
 export function _setCreateStripMsg(text, isError) {
@@ -113,11 +113,11 @@ export function _setCreateStripMsg(text, isError) {
 // (entirely plausible under low manning) must be able to originate any of
 // the three, not just whichever this list happened to check first.
 const CREATE_STRIP_ORIGINS = [
-  { actingPositionId: 'OPS', facilityId: 'INCIRLIK', bayId: 'ops-proposed',    role: undefined,     label: 'OPS · Departure' },
-  { actingPositionId: 'APP', facilityId: 'INCIRLIK', bayId: 'app-inbound',     role: 'ARRIVAL',     label: 'APP · Arrival' },
-  { actingPositionId: 'APP', facilityId: 'INCIRLIK', bayId: 'app-overflight',  role: 'OVERFLIGHT',  label: 'APP · Overflight' },
-  { actingPositionId: 'CTR', facilityId: 'CENTER',   bayId: 'ctr-enroute',     role: 'ARRIVAL',     label: 'CTR · Arrival' },
-  { actingPositionId: 'CTR', facilityId: 'CENTER',   bayId: 'ctr-overflight',  role: 'OVERFLIGHT',  label: 'CTR · Overflight' },
+  { actingPositionId: 'OPS', facilityId: 'INCIRLIK', bayId: 'ops-proposed',    stripType: undefined,     label: 'OPS · Departure' },
+  { actingPositionId: 'AP', facilityId: 'INCIRLIK', bayId: 'ap-inbound',     stripType: 'ARRIVAL',     label: 'APP · Arrival' },
+  { actingPositionId: 'AP', facilityId: 'INCIRLIK', bayId: 'ap-overflight',  stripType: 'OVERFLIGHT',  label: 'APP · Overflight' },
+  { actingPositionId: 'CTR', facilityId: 'CENTER',   bayId: 'ctr-enroute',     stripType: 'ARRIVAL',     label: 'CTR · Arrival' },
+  { actingPositionId: 'CTR', facilityId: 'CENTER',   bayId: 'ctr-overflight',  stripType: 'OVERFLIGHT',  label: 'CTR · Overflight' },
   // WP4A second slice — TAC_C2/GCI self-originate a standalone MISSION
   // Strip (guide §9.8), for a mission that never needs to touch ATC-
   // controlled airspace at all. Distinct from a MISSION Strip minted as a
@@ -129,16 +129,16 @@ const CREATE_STRIP_ORIGINS = [
   // narrower On Station/Committed/Coordination set), so its origin starts
   // already ON_STATION rather than at MISSION's default TASKED, matching
   // the one Bay it actually has to land in.
-  { actingPositionId: 'TAC_C2', facilityId: 'TACTICAL', bayId: 'tac-c2-tasked', role: 'MISSION', label: 'TAC_C2 · Mission' },
-  { actingPositionId: 'GCI', facilityId: 'TACTICAL',   bayId: 'gci-on-station', role: 'MISSION', label: 'GCI · Mission', initialState: 'ON_STATION' },
+  { actingPositionId: 'TAC_C2', facilityId: 'TACTICAL', bayId: 'tac-c2-tasked', stripType: 'MISSION', label: 'TAC_C2 · Mission' },
+  { actingPositionId: 'GCI', facilityId: 'TACTICAL',   bayId: 'gci-on-station', stripType: 'MISSION', label: 'GCI · Mission', initialState: 'ON_STATION' },
 ];
 
-function _createStripOriginKey(o) { return `${o.actingPositionId}:${o.role || 'DEPARTURE'}`; }
+function _createStripOriginKey(o) { return `${o.actingPositionId}:${o.stripType || 'DEPARTURE'}`; }
 
 /** Every origin CURRENTLY reachable, given the Positions actually held right now — not a fixed list, since held Positions change live during a session (guide §4.1: "the set changes live during a session"). */
 export function _availableCreateStripOrigins() {
-  const held = getActingPositions();
-  return CREATE_STRIP_ORIGINS.filter(o => held.includes(o.actingPositionId));
+  const signedOn = getActingPositions();
+  return CREATE_STRIP_ORIGINS.filter(o => signedOn.includes(o.actingPositionId));
 }
 
 export function _createStripOrigin() {
@@ -159,19 +159,19 @@ export function _createStripOrigin() {
  */
 export function _missionBindCandidates() {
   const all = typeof getAllEfspStrips === 'function' ? getAllEfspStrips() : [];
-  const taken = new Set(all.filter(s => s.role === 'MISSION' && s.state !== 'DROPPED').map(s => s.fdrId));
+  const taken = new Set(all.filter(s => s.stripType === 'MISSION' && s.state !== 'DROPPED').map(s => s.flightDataId));
   const seen = new Set();
   const out = [];
   for (const s of all) {
-    if (s.role === 'MISSION' || s.state === 'DROPPED') continue;
-    if (taken.has(s.fdrId) || seen.has(s.fdrId)) continue;
-    seen.add(s.fdrId);
+    if (s.stripType === 'MISSION' || s.state === 'DROPPED') continue;
+    if (taken.has(s.flightDataId) || seen.has(s.flightDataId)) continue;
+    seen.add(s.flightDataId);
     out.push(s);
   }
   return out;
 }
 
-/** The fdrId the operator picked, or '' for today's standalone-origination path. */
+/** The flightDataId the operator picked, or '' for today's standalone-origination path. */
 function _selectedBindFdrId() {
   return (_createStripBindEl && !_createStripBindEl.hidden && _createStripBindEl.value) || '';
 }
@@ -187,7 +187,7 @@ function _selectedBindFdrId() {
  */
 function _refreshMissionBindPicker(origin) {
   if (!_createStripBindEl) return;
-  const eligible = !!origin && origin.role === 'MISSION' && origin.actingPositionId === 'TAC_C2';
+  const eligible = !!origin && origin.stripType === 'MISSION' && origin.actingPositionId === 'TAC_C2';
   const candidates = eligible ? _missionBindCandidates() : [];
   // Same "no empty picker to puzzle over" rule the stereo select follows.
   _createStripBindEl.hidden = !eligible || candidates.length === 0;
@@ -202,29 +202,29 @@ function _refreshMissionBindPicker(origin) {
   none.textContent = '— not bound to a flight —';
   _createStripBindEl.appendChild(none);
   for (const s of candidates) {
-    const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(s.fdrId) : null;
-    const id = fdr && fdr.identity ? fdr.identity : {};
+    const flightData = typeof getEfspFdr === 'function' ? getEfspFdr(s.flightDataId) : null;
+    const id = flightData && flightData.identity ? flightData.identity : {};
     const opt = document.createElement('option');
-    opt.value = s.fdrId;
+    opt.value = s.flightDataId;
     // Callsign ALONE is not enough. Four jets in one package with adjacent
     // callsigns is exactly the mis-pick this has to survive, so the squawk
     // and the route are on the row to tell them apart.
-    const route = (fdr && fdr.filed && fdr.filed.route) || '';
-    opt.textContent = [id.callsign || s.fdrId, id.beaconAssigned, route].filter(Boolean).join(' · ');
+    const route = (flightData && flightData.filed && flightData.filed.route) || '';
+    opt.textContent = [id.callsign || s.flightDataId, id.beaconAssigned, route].filter(Boolean).join(' · ');
     _createStripBindEl.appendChild(opt);
   }
-  if (candidates.some(s => s.fdrId === prev)) _createStripBindEl.value = prev;
+  if (candidates.some(s => s.flightDataId === prev)) _createStripBindEl.value = prev;
 }
 
 /**
  * The ATO-first direction (crc-sync docs/adr/0071, docs/adr/0054's promised
  * caller change). An ATO often arrives before the flight is filed: TAC_C2's
  * import made the flight and its mission line, and when OPS then files it,
- * the DEPARTURE must be the SAME flight — same fdrId, same Mode 3/A, no second
+ * the DEPARTURE must be the SAME flight — same flightDataId, same Mode 3/A, no second
  * code minted. So when OPS types a callsign that an ATO mission flight has
  * and that flight has no ATC Strip yet, the bind picker offers "file against
  * ATO mission <msn>", picked by default only when exactly one matches.
- * Sending it is the existing bind path (`op.fdrId`), unchanged server-side.
+ * Sending it is the existing bind path (`op.flightDataId`), unchanged server-side.
  */
 function _atoFirstCandidates(callsign) {
   const wanted = String(callsign || '').trim().toUpperCase();
@@ -234,19 +234,19 @@ function _atoFirstCandidates(callsign) {
   const out = [];
   const seen = new Set();
   for (const s of live) {
-    if (s.role !== 'MISSION' || seen.has(s.fdrId)) continue;
-    seen.add(s.fdrId);
-    const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(s.fdrId) : null;
-    if (!fdr || !fdr.ato || !fdr.identity || fdr.identity.callsign !== wanted) continue;
-    if (live.some(o => o.fdrId === s.fdrId && o.role !== 'MISSION')) continue; // already filed
-    out.push(fdr);
+    if (s.stripType !== 'MISSION' || seen.has(s.flightDataId)) continue;
+    seen.add(s.flightDataId);
+    const flightData = typeof getEfspFdr === 'function' ? getEfspFdr(s.flightDataId) : null;
+    if (!flightData || !flightData.ato || !flightData.identity || flightData.identity.callsign !== wanted) continue;
+    if (live.some(o => o.flightDataId === s.flightDataId && o.stripType !== 'MISSION')) continue; // already filed
+    out.push(flightData);
   }
   return out;
 }
 
 export function _refreshAtoFirstPicker(origin) {
   if (!_createStripBindEl || !_createStripInputEl) return;
-  if (!origin || origin.actingPositionId !== 'OPS' || (origin.role || 'DEPARTURE') !== 'DEPARTURE') return;
+  if (!origin || origin.actingPositionId !== 'OPS' || (origin.stripType || 'DEPARTURE') !== 'DEPARTURE') return;
   const candidates = _atoFirstCandidates(_createStripInputEl.value);
   _createStripBindEl.hidden = candidates.length === 0;
   if (_createStripBindEl.hidden) { _createStripBindEl.value = ''; return; }
@@ -256,14 +256,14 @@ export function _refreshAtoFirstPicker(origin) {
   none.value = '';
   none.textContent = '— a new flight —';
   _createStripBindEl.appendChild(none);
-  for (const fdr of candidates) {
+  for (const flightData of candidates) {
     const opt = document.createElement('option');
-    opt.value = fdr.fdrId;
-    opt.textContent = `file against ATO mission ${fdr.ato.missionNumber || (fdr.mission && fdr.mission.missionNumber) || '?'} · ${fdr.identity.callsign} · ${fdr.identity.beaconAssigned}`;
+    opt.value = flightData.flightDataId;
+    opt.textContent = `file against ATO mission ${flightData.ato.missionNumber || (flightData.mission && flightData.mission.missionNumber) || '?'} · ${flightData.identity.callsign} · ${flightData.identity.beaconAssigned}`;
     _createStripBindEl.appendChild(opt);
   }
-  if (candidates.some(f => f.fdrId === prev)) _createStripBindEl.value = prev;
-  else _createStripBindEl.value = candidates.length === 1 ? candidates[0].fdrId : '';
+  if (candidates.some(f => f.flightDataId === prev)) _createStripBindEl.value = prev;
+  else _createStripBindEl.value = candidates.length === 1 ? candidates[0].flightDataId : '';
 }
 
 export function _refreshCreateStripAvailability() {
@@ -337,7 +337,7 @@ export function _refreshCreateStripAvailability() {
 /**
  * docs/adr/0023 — converts this DEPARTURE Strip into its return-leg
  * ARRIVAL Strip IN PLACE: one Mutation (`ConvertToArrival`), same stripId,
- * same fdrId, throughout. Two earlier versions of this feature spawned a
+ * same flightDataId, throughout. Two earlier versions of this feature spawned a
  * SECOND Strip/FDR instead (per guide §3.6's turnaround rule) — abandoned
  * after live testing found that approach left a stale departure Strip
  * behind and needed every field copied by hand, including a beacon code
@@ -367,7 +367,7 @@ async function _submitCreateStrip() {
     return;
   }
   // docs/ui-findings F-308 — the picker is read BEFORE the typed callsign is
-  // validated, not after. A bound CreateStrip carries no `fdr` at all:
+  // validated, not after. A bound CreateStrip carries no `flightData` at all:
   // identity comes entirely from the flight it is fragged against. Demanding
   // a callsign here therefore asked for a value that was then thrown away,
   // and typing the NEIGHBOURING callsign fragged the picked flight without a
@@ -444,7 +444,7 @@ async function _submitCreateStrip() {
   const stereoRouteName = _stereoEligibleOrigin(origin) ? _selectedStereoName() : '';
 
   let seed = {};
-  if (!stereoRouteName && origin.role !== 'ARRIVAL' && origin.role !== 'OVERFLIGHT' && origin.role !== 'MISSION' && typeof lookupFlightPlanClient === 'function') {
+  if (!stereoRouteName && origin.stripType !== 'ARRIVAL' && origin.stripType !== 'OVERFLIGHT' && origin.stripType !== 'MISSION' && typeof lookupFlightPlanClient === 'function') {
     _createStripLookupInFlight = true;
     if (_createStripInputEl) _createStripInputEl.disabled = true;
     if (_createStripBtnEl) _createStripBtnEl.disabled = true;
@@ -462,9 +462,9 @@ async function _submitCreateStrip() {
     }
   }
 
-  const fdr = origin.role === 'ARRIVAL'
+  const flightData = origin.stripType === 'ARRIVAL'
     ? { callsign, aircraftType: '', wakeCategory: '', originAirport: '', estimatedArrivalTimeUtc: null }
-    : origin.role === 'MISSION'
+    : origin.stripType === 'MISSION'
       ? { callsign, missionNumber: '', packageId: '', controllingAgency: '', vulWindowStartUtc: null, vulWindowEndUtc: null }
       : stereoRouteName
         // Only the callsign and the short name go over the wire — route,
@@ -480,20 +480,20 @@ async function _submitCreateStrip() {
             ...seed, // overrides only the blanks above when the lookup actually found something
           };
 
-  // A bound mission line carries NO `fdr`: identity comes entirely from the
+  // A bound mission line carries NO `flightData`: identity comes entirely from the
   // flight it is fragged against, down to the Mode 3/A (guide §9.8's bridge
   // field). The server refuses both keys together, so sending a blank one
   // "just in case" would refuse the whole op.
   const createOp = bindFdrId
-    ? { kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', role: origin.role, fdrId: bindFdrId, initialState: origin.initialState || undefined }
-    : { kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', role: origin.role, fdr, initialState: origin.initialState || undefined };
+    ? { kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', stripType: origin.stripType, flightDataId: bindFdrId, initialState: origin.initialState || undefined }
+    : { kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', stripType: origin.stripType, flightData, initialState: origin.initialState || undefined };
   _pendingCreateStripMutationId = sendEfspCreateStrip(origin.actingPositionId, createOp, origin.facilityId);
   _createStripInputEl.value = '';
   if (_createStripStereoEl) _createStripStereoEl.value = '';
   if (_createStripBindEl) _createStripBindEl.value = '';
   _pendingDuplicateCallsign = null;
   _setCreateStripMsg(
-    bindFdrId ? (origin.role === 'MISSION' ? `Fragging a mission line for ${boundCallsign || 'this flight'}…` : `Filing ${boundCallsign} against its ATO mission…`)
+    bindFdrId ? (origin.stripType === 'MISSION' ? `Fragging a mission line for ${boundCallsign || 'this flight'}…` : `Filing ${boundCallsign} against its ATO mission…`)
       : stereoRouteName ? `Creating (${stereoRouteName})…`
         : seed.route ? 'Creating (flight plan found)…'
           : 'Creating…',
@@ -516,13 +516,13 @@ export function createStripFromFiledPlan(plan) {
     _setCreateStripMsg('OPS only — select OPS in Panels to create Strips', true);
     return;
   }
-  const fdr = {
+  const flightData = {
     callsign: plan.callsign, aircraftType: '', wakeCategory: '',
     departureAirport: '', destinationAirport: '', route: '', requestedAltitude: '',
     ...(plan.seed || {}),
   };
   _pendingCreateStripMutationId = sendEfspCreateStrip('OPS', {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', fdr,
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', flightData,
   }, 'INCIRLIK');
   _setCreateStripMsg('Creating ' + plan.callsign + ' (flight plan found)…', false);
 }

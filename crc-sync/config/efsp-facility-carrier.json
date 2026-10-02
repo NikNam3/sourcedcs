@@ -18,7 +18,7 @@
     "CV_APP1": "1",
     "CV_APP2": "2"
   },
-  "coveringChain": {
+  "consolidation": {
     "CV_APP2": "CV_APP1",
     "CV_APP1": "CV_MARSHAL"
   },

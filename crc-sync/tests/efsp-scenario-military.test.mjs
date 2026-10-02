@@ -22,7 +22,7 @@ const { createEfsp } = await import('../src/efsp/index.js');
 const { crew, act, mustAct, jumpTo, DEPARTURE_FLIGHT_DATA, airborneDeparture, handedToCenter } = await import('./helpers/efsp-scenario.mjs');
 
 const ALL = {
-  OPS: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER',
+  OPS: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER',
   TAC_C2: 'TACTICAL', GCI: 'TACTICAL', AIC: 'TACTICAL', JTAC: 'TACTICAL',
 };
 
@@ -44,7 +44,7 @@ test('SCENARIO tactical control handed to GCI, which is the other of Center\'s t
   const mission = tacticalStrip(efsp, ctrStrip.tofiCoordination.peerStripId);
   assert.equal(mission.ownerPositionId, 'GCI');
   assert.equal(mission.bayId, 'gci-coordination', 'lands in GCI\'s own Coordination Bay, not TAC_C2\'s');
-  assert.equal(mission.role, 'MISSION');
+  assert.equal(mission.stripType, 'MISSION');
 
   const accepted = mustAct(efsp, c.GCI, 'GCI', mission, { kind: 'TOFI', action: 'ACCEPT', separationRegime: 'MARSA' });
   assert.equal(accepted.tofiCoordination.state, 'ACTIVE');
@@ -116,7 +116,7 @@ test('SCENARIO the MRU refuses tactical control, and the ATC side recovers', () 
   const retried = mustAct(efsp, c.CTR, 'CTR', afterReject, {
     kind: 'TOFI', action: 'PROPOSE', direction: 'ENTRY', toFacilityId: 'TACTICAL', toPositionId: 'GCI',
   });
-  assert.equal(retried.tofiCoordination.state, 'PROPOSED');
+  assert.equal(retried.tofiCoordination.state, 'INITIATED');
   assert.equal(retried.tofiCoordination.peerPositionId, 'GCI', 'and it may ask somebody else');
 });
 
@@ -127,17 +127,17 @@ test('SCENARIO a flight with a degraded track cannot be coordinated silently', (
   const c = crew(efsp, ALL);
 
   let strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'DEGR1' });
-  strip = mustAct(efsp, c.APP, 'APP', strip, { kind: 'SetBlock', blockId: '5A', value: 'CST' });
+  strip = mustAct(efsp, c.AP, 'AP', strip, { kind: 'SetBlock', blockId: '5A', value: 'CST' });
 
   // §4.6 rule 5 — a degraded track forces the verbal path, so the exchange
   // needs a note saying what was said out loud.
-  const silent = act(efsp, c.APP, 'APP', strip, {
+  const silent = act(efsp, c.AP, 'AP', strip, {
     kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR',
   });
   assert.equal(silent.ok, false);
   assert.match(silent.detail, /note/i);
 
-  const spoken = mustAct(efsp, c.APP, 'APP', strip, {
+  const spoken = mustAct(efsp, c.AP, 'AP', strip, {
     kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR',
     note: 'coordinated by landline, coast-tracking',
   });
@@ -191,30 +191,30 @@ test('SCENARIO a loaded flight declares a hung store and a hook requirement, on 
   // a new target kind has been forgotten before.
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'HUNG11' });
 
-  const loaded = mustAct(efsp, c.APP, 'APP', strip, { kind: 'SetBlock', blockId: '3G', value: 'LOADED' });
-  assert.equal(efsp.flightDataStore.getFlightData(loaded.fdrId).military.ordnanceState, 'LOADED');
+  const loaded = mustAct(efsp, c.AP, 'AP', strip, { kind: 'SetBlock', blockId: '3G', value: 'LOADED' });
+  assert.equal(efsp.flightDataStore.getFlightData(loaded.flightDataId).military.ordnanceState, 'LOADED');
 
-  const hooked = mustAct(efsp, c.APP, 'APP', loaded, { kind: 'SetBlock', blockId: '3F', value: true });
-  const fdr = efsp.flightDataStore.getFlightData(hooked.fdrId);
-  assert.equal(fdr.military.hookRequired, true);
-  assert.equal(fdr.military.ordnanceState, 'LOADED', 'one Block\'s write does not clear the other\'s');
-  assert.equal(fdr.provenance.military, 'CONTROLLER_ENTERED');
+  const hooked = mustAct(efsp, c.AP, 'AP', loaded, { kind: 'SetBlock', blockId: '3F', value: true });
+  const flightData = efsp.flightDataStore.getFlightData(hooked.flightDataId);
+  assert.equal(flightData.military.hookRequired, true);
+  assert.equal(flightData.military.ordnanceState, 'LOADED', 'one Block\'s write does not clear the other\'s');
+  assert.equal(flightData.provenance.military, 'CONTROLLER_ENTERED');
 
   // The bad value is refused with a reason, not silently coerced or stored.
-  const bogus = act(efsp, c.APP, 'APP', hooked, { kind: 'SetBlock', blockId: '3G', value: 'ARMED' });
+  const bogus = act(efsp, c.AP, 'AP', hooked, { kind: 'SetBlock', blockId: '3G', value: 'ARMED' });
   assert.equal(bogus.ok, false);
   assert.match(bogus.detail, /invalid ordnance state/);
-  assert.equal(efsp.flightDataStore.getFlightData(hooked.fdrId).military.ordnanceState, 'LOADED');
+  assert.equal(efsp.flightDataStore.getFlightData(hooked.flightDataId).military.ordnanceState, 'LOADED');
 
   // And the same Blocks work on an ARRIVAL, which is the Role that will
   // actually care (§9.7's gear check is on landing). docs/adr/0051's lesson:
   // check every Role, because the test that passes is not the one that matters.
-  const arrival = mustAct(efsp, c.APP, 'APP', hooked, { kind: 'ConvertToArrival' });
-  assert.equal(arrival.role, 'ARRIVAL');
-  const expended = mustAct(efsp, c.APP, 'APP', arrival, { kind: 'SetBlock', blockId: '3G', value: 'EXPENDED' });
-  assert.equal(efsp.flightDataStore.getFlightData(expended.fdrId).military.ordnanceState, 'EXPENDED');
-  assert.equal(efsp.flightDataStore.getFlightData(expended.fdrId).military.hookRequired, true,
-    'a Role change is not a reason for the airframe to stop needing a hook');
+  const arrival = mustAct(efsp, c.AP, 'AP', hooked, { kind: 'ConvertToArrival' });
+  assert.equal(arrival.stripType, 'ARRIVAL');
+  const expended = mustAct(efsp, c.AP, 'AP', arrival, { kind: 'SetBlock', blockId: '3G', value: 'EXPENDED' });
+  assert.equal(efsp.flightDataStore.getFlightData(expended.flightDataId).military.ordnanceState, 'EXPENDED');
+  assert.equal(efsp.flightDataStore.getFlightData(expended.flightDataId).military.hookRequired, true,
+    'a strip type change is not a reason for the airframe to stop needing a hook');
 });
 
 test('the deferred half of the military namespace has no write path at all (§12)', () => {
@@ -226,20 +226,20 @@ test('the deferred half of the military namespace has no write path at all (§12
   // what "present and unpopulated" has to mean in practice, not just at seed
   // time. The 9G/9H ids are RESERVED for §9.4 and must not resolve yet.
   for (const blockId of ['9G', '9H', 'M16']) {
-    const result = act(efsp, c.APP, 'APP', strip, { kind: 'SetBlock', blockId, value: 'X' });
+    const result = act(efsp, c.AP, 'AP', strip, { kind: 'SetBlock', blockId, value: 'X' });
     assert.equal(result.ok, false, blockId);
   }
-  const fdr = efsp.flightDataStore.getFlightData(strip.fdrId);
-  assert.equal(fdr.military.alertStatus, 'NONE');
-  assert.equal(fdr.military.mtr.designator, null);
+  const flightData = efsp.flightDataStore.getFlightData(strip.flightDataId);
+  assert.equal(flightData.military.alertStatus, 'NONE');
+  assert.equal(flightData.military.mtr.designator, null);
 });
 
 // ── 23. the mission line exists from tasking (docs/adr/0054) ─────────────
 
 /** TAC_C2 tasks a mission line bound to an existing flight. No TOFI involved. */
-function taskMissionLine(efsp, c, fdrId) {
+function taskMissionLine(efsp, c, flightDataId) {
   return mustAct(efsp, c.TAC_C2, 'TAC_C2', null, {
-    kind: 'CreateStrip', bayId: 'tac-c2-tasked', rackId: 'main', role: 'MISSION', fdrId,
+    kind: 'CreateStrip', bayId: 'tac-c2-tasked', rackId: 'main', stripType: 'MISSION', flightDataId,
   });
 }
 
@@ -250,18 +250,18 @@ test('SCENARIO a mission line is fragged before the jet moves, and both Strips r
   // The jet is still on the ramp at OPS — nowhere near TOFI-eligible.
   const dep = mustAct(efsp, c.OPS, 'OPS', null, {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main',
-    fdr: { ...DEPARTURE_FLIGHT_DATA, callsign: 'FRAG11' },
+    flightData: { ...DEPARTURE_FLIGHT_DATA, callsign: 'FRAG11' },
   });
   assert.equal(dep.state, 'PROPOSED');
 
-  const mission = taskMissionLine(efsp, c, dep.fdrId);
+  const mission = taskMissionLine(efsp, c, dep.flightDataId);
   assert.equal(mission.state, 'TASKED', 'TASKED finally means something');
   assert.equal(mission.bayId, 'tac-c2-tasked');
-  assert.equal(mission.fdrId, dep.fdrId, 'one flight, two Strips');
+  assert.equal(mission.flightDataId, dep.flightDataId, 'one flight, two Strips');
 
   // One FDR, so one beacon code — guide §9.8's bridge field, not a copy.
-  const fdr = efsp.flightDataStore.getFlightData(dep.fdrId);
-  assert.ok(fdr.identity.beaconAssigned);
+  const flightData = efsp.flightDataStore.getFlightData(dep.flightDataId);
+  assert.ok(flightData.identity.beaconAssigned);
   assert.equal(efsp.flightDataStore.getAll().filter(f => f.identity.callsign === 'FRAG11').length, 1);
 
   // The mission line advances on the MRU's own schedule while the departure
@@ -277,7 +277,7 @@ test('SCENARIO TOFI later lands on the mission line that is already there', () =
   const c = crew(efsp, ALL);
 
   const ctrStrip = atCenter(efsp, c, 'FRAG12');
-  const mission = taskMissionLine(efsp, c, ctrStrip.fdrId);
+  const mission = taskMissionLine(efsp, c, ctrStrip.flightDataId);
 
   const proposed = mustAct(efsp, c.CTR, 'CTR', ctrStrip, {
     kind: 'TOFI', action: 'PROPOSE', direction: 'ENTRY', toFacilityId: 'TACTICAL', toPositionId: 'TAC_C2',
@@ -286,14 +286,14 @@ test('SCENARIO TOFI later lands on the mission line that is already there', () =
     'the exchange points at the Strip TAC_C2 already had');
 
   const onTactical = efsp.boardStoreFor('TACTICAL').getAll()
-    .filter(s => s.fdrId === ctrStrip.fdrId && s.state !== 'DROPPED');
+    .filter(s => s.flightDataId === ctrStrip.flightDataId && s.state !== 'DROPPED');
   assert.equal(onTactical.length, 1, 'one airframe, one MRU record — never a second mission line');
 
   const accepted = mustAct(efsp, c.TAC_C2, 'TAC_C2', tacticalStrip(efsp, mission.stripId), {
     kind: 'TOFI', action: 'ACCEPT', separationRegime: 'MARSA',
   });
   assert.equal(accepted.tofiCoordination.state, 'ACTIVE');
-  assert.equal(efsp.flightDataStore.getFlightData(ctrStrip.fdrId).tofi.separationRegime, 'MARSA');
+  assert.equal(efsp.flightDataStore.getFlightData(ctrStrip.flightDataId).tofi.separationRegime, 'MARSA');
 });
 
 // ── the pilot-request axis, which is where the defects live ─────────────
@@ -304,19 +304,19 @@ test('SCENARIO the flight cancels after it was fragged, and the beacon is not re
 
   const dep = mustAct(efsp, c.OPS, 'OPS', null, {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main',
-    fdr: { ...DEPARTURE_FLIGHT_DATA, callsign: 'CNX11' },
+    flightData: { ...DEPARTURE_FLIGHT_DATA, callsign: 'CNX11' },
   });
-  const mission = taskMissionLine(efsp, c, dep.fdrId);
-  const code = efsp.flightDataStore.getFlightData(dep.fdrId).identity.beaconAssigned;
+  const mission = taskMissionLine(efsp, c, dep.flightDataId);
+  const code = efsp.flightDataStore.getFlightData(dep.flightDataId).identity.beaconAssigned;
 
   // OPS drops the departure. The mission line is still live, so the code the
   // MRU is still looking at must not go back to the pool.
   mustAct(efsp, c.OPS, 'OPS', dep, { kind: 'DropStrip' });
-  assert.equal(efsp.flightDataStore.codeAllocator.holderOf(code), dep.fdrId,
+  assert.equal(efsp.flightDataStore.codeAllocator.holderOf(code), dep.flightDataId,
     'a live mission line keeps the flight alive');
 
   mustAct(efsp, c.TAC_C2, 'TAC_C2', tacticalStrip(efsp, mission.stripId), { kind: 'DropStrip' });
-  assert.notEqual(efsp.flightDataStore.codeAllocator.holderOf(code), dep.fdrId,
+  assert.notEqual(efsp.flightDataStore.codeAllocator.holderOf(code), dep.flightDataId,
     'and the last Strip out releases it');
 });
 
@@ -329,20 +329,20 @@ test('SCENARIO a second mission line for one flight is refused, and a mis-bind i
 
   // The mis-pick this whole affordance has to survive: two adjacent callsigns
   // in one package, and the controller takes the wrong one.
-  const mistake = taskMissionLine(efsp, c, wrong.fdrId);
-  assert.equal(efsp.flightDataStore.getFlightData(mistake.fdrId).identity.callsign, 'BIND12',
+  const mistake = taskMissionLine(efsp, c, wrong.flightDataId);
+  assert.equal(efsp.flightDataStore.getFlightData(mistake.flightDataId).identity.callsign, 'BIND12',
     'the mission line renders the bound flight\'s callsign, so the error is visible at once');
 
   const dupe = act(efsp, c.TAC_C2, 'TAC_C2', null, {
-    kind: 'CreateStrip', bayId: 'tac-c2-tasked', rackId: 'main', role: 'MISSION', fdrId: wrong.fdrId,
+    kind: 'CreateStrip', bayId: 'tac-c2-tasked', rackId: 'main', stripType: 'MISSION', flightDataId: wrong.flightDataId,
   });
   assert.equal(dupe.ok, false);
   assert.match(dupe.detail, /already has a live MISSION Strip/);
 
   // Unbind is Drop: nothing on a wrongly-bound mission line is worth keeping.
   mustAct(efsp, c.TAC_C2, 'TAC_C2', tacticalStrip(efsp, mistake.stripId), { kind: 'DropStrip' });
-  const redone = taskMissionLine(efsp, c, right.fdrId);
-  assert.equal(efsp.flightDataStore.getFlightData(redone.fdrId).identity.callsign, 'BIND11');
+  const redone = taskMissionLine(efsp, c, right.flightDataId);
+  assert.equal(efsp.flightDataStore.getFlightData(redone.flightDataId).identity.callsign, 'BIND11');
 });
 
 test('SCENARIO a bound pair under ACTIVE tactical control cannot be dropped from either side, and the way out is EXIT', () => {
@@ -350,7 +350,7 @@ test('SCENARIO a bound pair under ACTIVE tactical control cannot be dropped from
   const c = crew(efsp, ALL);
 
   let ctrStrip = atCenter(efsp, c, 'FRZ11');
-  const mission = taskMissionLine(efsp, c, ctrStrip.fdrId);
+  const mission = taskMissionLine(efsp, c, ctrStrip.flightDataId);
   ctrStrip = mustAct(efsp, c.CTR, 'CTR', ctrStrip, {
     kind: 'TOFI', action: 'PROPOSE', direction: 'ENTRY', toFacilityId: 'TACTICAL', toPositionId: 'TAC_C2',
   });
@@ -376,14 +376,14 @@ test('SCENARIO a crc-sync restart leaves the two Strips still bound to one fligh
   const efsp = createEfsp();
   const c = crew(efsp, ALL);
   const ctrStrip = atCenter(efsp, c, 'RST11');
-  const mission = taskMissionLine(efsp, c, ctrStrip.fdrId);
+  const mission = taskMissionLine(efsp, c, ctrStrip.flightDataId);
 
   const tac = efsp.boardStoreFor('TACTICAL');
   const snapshot = JSON.parse(JSON.stringify(tac.snapshot()));
   tac.restore(snapshot);
 
   const back = tac.getStrip(mission.stripId);
-  assert.equal(back.fdrId, ctrStrip.fdrId, 'the binding is the shared fdrId, so it survives by construction');
-  assert.equal(back.role, 'MISSION');
+  assert.equal(back.flightDataId, ctrStrip.flightDataId, 'the binding is the shared flightDataId, so it survives by construction');
+  assert.equal(back.stripType, 'MISSION');
   assert.equal(back.state, 'TASKED');
 });

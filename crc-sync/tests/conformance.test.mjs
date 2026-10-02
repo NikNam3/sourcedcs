@@ -105,12 +105,12 @@ test('altitudes are compared as the controller reads them: QNH below transition,
 
 test('the monitor reads correlation, track and clearance, and reports a flight only while it is wrong', async () => {
   const { ConformanceMonitor } = await import('../src/efsp/conformance.js');
-  const fdr = { fdrId: 'f1', clearance: { heading: { entries: [{ value: '050', parsed: 50, status: 'ACTIVE', at: 0 }] }, altitude: { entries: [] } } };
+  const flightData = { flightDataId: 'f1', clearance: { heading: { entries: [{ value: '050', parsed: 50, status: 'ACTIVE', at: 0 }] }, altitude: { entries: [] } } };
   const track = { id: 't1', alt: 3048, course: 90, groundSpeed: FAST, verticalSpeed: 0 };
   const monitor = new ConformanceMonitor({
     trackStore: { get: (id) => (id === 't1' ? track : null) },
-    flightDataStore: { getFlightData: (id) => (id === 'f1' ? fdr : null) },
-    correlationStore: { getAll: () => [{ fdrId: 'f1', trackId: 't1', state: 'CORRELATED' }] },
+    flightDataStore: { getFlightData: (id) => (id === 'f1' ? flightData : null) },
+    correlationStore: { getAll: () => [{ flightDataId: 'f1', trackId: 't1', state: 'CORRELATED' }] },
     weather: () => ({ pressurePa: 101325, tempK: 288.15 }),
     transitionAltFt: () => 18000,
     indicatedAltFt,
@@ -121,7 +121,7 @@ test('the monitor reads correlation, track and clearance, and reports a flight o
   monitor.tick(0); // first sight of the clearance: the wall-clock grace starts here (docs/adr/0096)
   assert.equal(monitor.tick(31 * S), false, 'deviating, but not for 10 s yet');
   assert.equal(monitor.tick(41 * S), true);
-  assert.deepEqual(monitor.getAll().map(r => [r.fdrId, r.alerts[0].kind]), [['f1', 'HEADING']]);
+  assert.deepEqual(monitor.getAll().map(r => [r.flightDataId, r.alerts[0].kind]), [['f1', 'HEADING']]);
   track.course = 50;
   assert.equal(monitor.tick(42 * S), true, 'back on heading: the flight drops off the list');
   assert.deepEqual(monitor.getAll(), []);
@@ -141,12 +141,12 @@ async function syriaMonitor(course, { theatre = 'Syria', at = [37.0, 35.43] } = 
   const theaters = loadTheaters(path.join(import.meta.dirname, '../config/theaters.json'));
   const ctx = new TheaterContext({ theaters, clock: { now: () => Date.UTC(2026, 0, 15), source: 'MISSION' } });
   ctx.setMission({ theatre, airports: [{ lat: at[0], lon: at[1] }] });
-  const fdr = { fdrId: 'f1', clearance: { heading: { entries: [{ value: '050', parsed: 50, status: 'ACTIVE', at: 0 }] }, altitude: { entries: [] } } };
+  const flightData = { flightDataId: 'f1', clearance: { heading: { entries: [{ value: '050', parsed: 50, status: 'ACTIVE', at: 0 }] }, altitude: { entries: [] } } };
   const track = { id: 't1', lat: at[0], lon: at[1], alt: 3048, course, groundSpeed: FAST, verticalSpeed: 0 };
   const monitor = new ConformanceMonitor({
     trackStore: { get: () => track },
-    flightDataStore: { getFlightData: () => fdr },
-    correlationStore: { getAll: () => [{ fdrId: 'f1', trackId: 't1', state: 'CORRELATED' }] },
+    flightDataStore: { getFlightData: () => flightData },
+    correlationStore: { getAll: () => [{ flightDataId: 'f1', trackId: 't1', state: 'CORRELATED' }] },
     weather: () => ({ pressurePa: 101325, tempK: 288.15 }),
     transitionAltFt: () => 10000,
     indicatedAltFt,
@@ -187,8 +187,8 @@ test('unknown magnetic course (no projection for the theater, or no converter): 
   const { ConformanceMonitor } = await import('../src/efsp/conformance.js');
   const bare = new ConformanceMonitor({
     trackStore: { get: () => track },
-    flightDataStore: { getFlightData: () => ({ fdrId: 'f1', clearance: { heading: { entries: [{ parsed: 50, status: 'ACTIVE', at: 0 }] }, altitude: { entries: [] } } }) },
-    correlationStore: { getAll: () => [{ fdrId: 'f1', trackId: 't1', state: 'CORRELATED' }] },
+    flightDataStore: { getFlightData: () => ({ flightDataId: 'f1', clearance: { heading: { entries: [{ parsed: 50, status: 'ACTIVE', at: 0 }] }, altitude: { entries: [] } } }) },
+    correlationStore: { getAll: () => [{ flightDataId: 'f1', trackId: 't1', state: 'CORRELATED' }] },
     weather: () => ({}), transitionAltFt: () => 18000, indicatedAltFt, config: cfg,
   });
   wallFollows(bare);

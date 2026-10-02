@@ -5,9 +5,9 @@ const { VERSION } = require('../frames');
 /** Its own delta type with its own seq (rule 5's deliberate deviation, docs/adr/0061). */
 function runwayStatusDelta(store, records) {
   return {
-    version: VERSION, type: 'efsp-field-state-delta',
-    fieldStateSeq: store.currentSeq,
-    fieldStates: { updated: records.filter(Boolean) },
+    version: VERSION, type: 'efsp-runway-status-delta',
+    runwayStatusSeq: store.currentSeq,
+    runwayStatuses: { updated: records.filter(Boolean) },
   };
 }
 
@@ -27,23 +27,23 @@ const facilityOf = (ctx, msg) => msg.facilityId || ctx.facilityConfig.DEFAULT_FA
  * marked `unaudited` so the metrics tap writes it (docs/adr/0083); the store
  * audits from its door onward (decisions.md S-R2-5).
  *
- * Skeleton deviations: every ack (and refusal) carries `facilityId`, and a refusal also the current `fieldState` and
- * `fieldStateSeq`; a successful op re-states the NLA of Strips the op never touched (`after`).
+ * Skeleton deviations: every ack (and refusal) carries `facilityId`, and a refusal also the current `runwayStatus` and
+ * `runwayStatusSeq`; a successful op re-states the NLA of Strips the op never touched (`after`).
  */
 module.exports = {
-  type: 'efsp-field-state-mutation',
-  ackType: 'efsp-field-state-ack',
-  deltaType: 'efsp-field-state-delta',
-  replayKind: 'fieldState',
-  snapshotKey: 'fieldStates',
+  type: 'efsp-runway-status-mutation',
+  ackType: 'efsp-runway-status-ack',
+  deltaType: 'efsp-runway-status-delta',
+  replayKind: 'runwayStatus',
+  snapshotKey: 'runwayStatuses',
   subject: (msg) => ({ facilityId: msg.facilityId, runwayId: msg.op && msg.op.runwayId }),
   head: (ctx, msg) => ({ facilityId: facilityOf(ctx, msg) }),
   refusalTail: (ctx, msg) => {
     const store = ctx.runwayStatusStore;
-    return { fieldState: store ? store.getRunwayStatus(facilityOf(ctx, msg)) : null, fieldStateSeq: store ? store.currentSeq : undefined };
+    return { runwayStatus: store ? store.getRunwayStatus(facilityOf(ctx, msg)) : null, runwayStatusSeq: store ? store.currentSeq : undefined };
   },
   store: (ctx) => ctx.runwayStatusStore,
-  noStore: 'no field-state store',
+  noStore: 'no runway-status store',
 
   gate: 'primary-at-facility',
   facilityOf,
@@ -59,7 +59,7 @@ module.exports = {
     );
   },
   rememberId: (result, msg, ctx) => facilityOf(ctx, msg),
-  fromCached: (ctx, cached) => ({ ...cached, fieldState: ctx.runwayStatusStore.getRunwayStatus(cached.id) }),
+  fromCached: (ctx, cached) => ({ ...cached, runwayStatus: ctx.runwayStatusStore.getRunwayStatus(cached.id) }),
   after: (ctx) => {
     // A runway's status moves the `nla` stamp of Strips this op never touched
     // — every Strip queued for, or landing on, that runway — the same problem
@@ -70,10 +70,10 @@ module.exports = {
     if (ctx.nlaStatusMonitor) ctx.nlaStatusMonitor.tick();
   },
   ack: (result, ctx) => ({
-    fieldState: result.fieldState, reason: result.reason, detail: result.detail,
-    fieldStateSeq: ctx.runwayStatusStore.currentSeq,
+    runwayStatus: result.runwayStatus, reason: result.reason, detail: result.detail,
+    runwayStatusSeq: ctx.runwayStatusStore.currentSeq,
   }),
-  broadcasts: (result, ctx) => ({ primary: runwayStatusDelta(ctx.runwayStatusStore, [result.fieldState]) }),
+  broadcasts: (result, ctx) => ({ primary: runwayStatusDelta(ctx.runwayStatusStore, [result.runwayStatus]) }),
 
   // Field state (§9.7, docs/adr/0061), one record per Facility with runways,
   // sent whole. No efsp-resync branch, matching airspace, correlation and

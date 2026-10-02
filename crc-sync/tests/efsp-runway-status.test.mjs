@@ -21,17 +21,17 @@ for (const [k, v] of Object.entries({
 })) process.env[k] = path.join(tmpDir, v);
 fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
 
-const fieldState = await import('../src/efsp/runway-status.js');
+const runwayStatus = await import('../src/efsp/runway-status.js');
 const facilityConfig = (await import('../src/efsp/facility-config.js')).default;
 
 const {
   LEGAL_TRANSITIONS, RUNWAY_STATUSES, canGo, normalizeRunwayEnd, buildStatusView,
   resolveRunwayForStrip, runwayInhibitFor, runwayAdvisoryFor, runwayRackFor, activeEndIntoWind,
   validateRunwayStatusInventory, runwayInventoryWarnings,
-} = fieldState;
+} = runwayStatus;
 
 const INCIRLIK = facilityConfig.getFacilityConfig('INCIRLIK');
-const INVENTORY = INCIRLIK.fieldState;
+const INVENTORY = INCIRLIK.runwayStatus;
 
 /** A view as the store would build it, with the pavement at `status`. */
 function viewWith(status, { activeRunway = '05', kind = 'WORKS', inventory = INVENTORY } = {}) {
@@ -44,8 +44,8 @@ function viewWith(status, { activeRunway = '05', kind = 'WORKS', inventory = INV
   });
 }
 
-const departure = (over = {}) => ({ role: 'DEPARTURE', state: 'TAXI', bayId: 'gnd-taxi-out', rackId: 'main', ...over });
-const arrival = (over = {}) => ({ role: 'ARRIVAL', state: 'HANDED_TO_TOWER', bayId: 'twr-arrivals', rackId: 'main', ...over });
+const departure = (over = {}) => ({ stripType: 'DEPARTURE', state: 'TAXI', bayId: 'gc-taxi-out', rackId: 'main', ...over });
+const arrival = (over = {}) => ({ stripType: 'ARRIVAL', state: 'HANDED_TO_TOWER', bayId: 'lc-arrivals', rackId: 'main', ...over });
 const flightDataFiled = (rwy) => ({ filed: { departureRunway: rwy }, assigned: { landingRunway: null } });
 const flightDataLanding = (rwy) => ({ filed: { departureRunway: null }, assigned: { landingRunway: rwy } });
 
@@ -74,13 +74,13 @@ test('no SUSPENDED_* status can reach CLOSED (no side door around the inspection
   }
 });
 
-test("INCIRLIK's shipped inventory is one pavement whose ends name both twr-runway-queue racks, and validates", () => {
+test("INCIRLIK's shipped inventory is one pavement whose ends name both lc-runway-queue racks, and validates", () => {
   assert.equal(validateRunwayStatusInventory(INVENTORY, INCIRLIK.positions), null);
   assert.equal(INVENTORY.runways.length, 1);
   const [rwy] = INVENTORY.runways;
   assert.equal(rwy.runwayId, '05/23');
   assert.deepEqual(rwy.ends, ['05', '23']);
-  const queue = INCIRLIK.bays.TWR.find(b => b.bayId === 'twr-runway-queue');
+  const queue = INCIRLIK.bays.LC.find(b => b.bayId === 'lc-runway-queue');
   assert.deepEqual(Object.values(rwy.rackIds).sort(), [...queue.rackIds].sort());
   assert.deepEqual(runwayInventoryWarnings(INCIRLIK), []);
   // Gear is the data shape only (decisions.md H17) — none shipped.
@@ -97,9 +97,9 @@ test('the shipped config holds no runtime state — no status, no active runway 
 test('validateConfig rejects a malformed runway inventory', () => {
   const bad = (mutate) => {
     const candidate = structuredClone(INCIRLIK);
-    mutate(candidate.fieldState);
+    mutate(candidate.runwayStatus);
     const r = facilityConfig.validateConfig(candidate);
-    assert.equal(r.ok, false, JSON.stringify(candidate.fieldState));
+    assert.equal(r.ok, false, JSON.stringify(candidate.runwayStatus));
     assert.equal(r.reason, 'VALIDATION_ERROR');
     return r.detail;
   };
@@ -127,7 +127,7 @@ test('a well-formed gear entry validates (the shape is kept even though none shi
 
 test('a rackId mismatch is a warning, never a rejection — and so is a runway-queue rack no runway names', () => {
   const candidate = structuredClone(INCIRLIK);
-  candidate.fieldState.runways[0].rackIds = { '05': 'rwy-5' };
+  candidate.runwayStatus.runways[0].rackIds = { '05': 'rwy-5' };
   assert.equal(facilityConfig.validateConfig(candidate).ok, true);
   const warnings = runwayInventoryWarnings(candidate);
   assert.ok(warnings.some(w => /rwy-5\b.*no RUNWAY_QUEUE Bay/.test(w)), warnings.join('\n'));
@@ -137,7 +137,7 @@ test('a rackId mismatch is a warning, never a rejection — and so is a runway-q
 
 test('CENTER, TACTICAL and RANGES have no runway inventory', () => {
   for (const id of ['CENTER', 'TACTICAL', 'RANGES']) {
-    assert.equal(facilityConfig.getFacilityConfig(id).fieldState, undefined, id);
+    assert.equal(facilityConfig.getFacilityConfig(id).runwayStatus, undefined, id);
   }
 });
 
@@ -152,7 +152,7 @@ test("normalizeRunwayEnd: '5', 'RWY 05', 'rw23', ' 23 ', '5L' resolve; garbage r
 
 test('runwayIdForStrip prefers the rack the Strip sits in over the filed runway, and records the source', () => {
   const view = viewWith('OPEN');
-  const r = resolveRunwayForStrip(departure({ state: 'RUNWAY_QUEUE', bayId: 'twr-runway-queue', rackId: 'rwy-23' }), flightDataFiled('05'), view);
+  const r = resolveRunwayForStrip(departure({ state: 'RUNWAY_QUEUE', bayId: 'lc-runway-queue', rackId: 'rwy-23' }), flightDataFiled('05'), view);
   assert.deepEqual(r, { runwayId: '05/23', end: '23', source: 'RACK' });
 });
 
@@ -161,15 +161,15 @@ test('on the drag path the target rack wins over the rack the Strip is in (decis
   const r = resolveRunwayForStrip(departure(), flightDataFiled('05'), view, { targetRackId: 'rwy-23' });
   assert.deepEqual(r, { runwayId: '05/23', end: '23', source: 'TARGET_RACK' });
   // A target rack that is no runway's changes nothing.
-  assert.equal(resolveRunwayForStrip(departure(), flightDataFiled('05'), view, { targetRackId: 'main' }).source, 'FDR');
+  assert.equal(resolveRunwayForStrip(departure(), flightDataFiled('05'), view, { targetRackId: 'main' }).source, 'FLIGHT_DATA');
 });
 
 test('runwayIdForStrip falls back to filed.departureRunway (DEPARTURE) and assigned.landingRunway (ARRIVAL)', () => {
   const view = viewWith('OPEN');
-  assert.deepEqual(resolveRunwayForStrip(departure(), flightDataFiled('rwy 23'), view), { runwayId: '05/23', end: '23', source: 'FDR' });
-  assert.deepEqual(resolveRunwayForStrip(arrival(), flightDataLanding('5'), view), { runwayId: '05/23', end: '05', source: 'FDR' });
+  assert.deepEqual(resolveRunwayForStrip(departure(), flightDataFiled('rwy 23'), view), { runwayId: '05/23', end: '23', source: 'FLIGHT_DATA' });
+  assert.deepEqual(resolveRunwayForStrip(arrival(), flightDataLanding('5'), view), { runwayId: '05/23', end: '05', source: 'FLIGHT_DATA' });
   // A whole-runway designator names the pavement but no direction.
-  assert.deepEqual(resolveRunwayForStrip(arrival(), flightDataLanding('05/23'), view), { runwayId: '05/23', end: null, source: 'FDR' });
+  assert.deepEqual(resolveRunwayForStrip(arrival(), flightDataLanding('05/23'), view), { runwayId: '05/23', end: null, source: 'FLIGHT_DATA' });
 });
 
 test('then to the active runway, then nothing (decisions.md S-Q25)', () => {
@@ -181,8 +181,8 @@ test('then to the active runway, then nothing (decisions.md S-Q25)', () => {
 
 test('OVERFLIGHT and MISSION Strips have no runway', () => {
   const view = viewWith('CLOSED');
-  assert.equal(resolveRunwayForStrip({ role: 'OVERFLIGHT', rackId: 'rwy-05' }, flightDataFiled('05'), view), null);
-  assert.equal(resolveRunwayForStrip({ role: 'MISSION', rackId: 'rwy-05' }, flightDataFiled('05'), view), null);
+  assert.equal(resolveRunwayForStrip({ stripType: 'OVERFLIGHT', rackId: 'rwy-05' }, flightDataFiled('05'), view), null);
+  assert.equal(resolveRunwayForStrip({ stripType: 'MISSION', rackId: 'rwy-05' }, flightDataFiled('05'), view), null);
 });
 
 test('runwayInhibitFor fails open: no field state, unknown runway, OPEN runway -> null', () => {
@@ -202,19 +202,19 @@ test('runwayInhibitFor names the runway and the cause for each unusable status',
 
 test('runwayAdvisoryFor flags a Strip queued for the inactive end, and nothing else (decisions.md Q30)', () => {
   const view = viewWith('OPEN', { activeRunway: '23' });
-  assert.equal(runwayAdvisoryFor(departure({ bayId: 'twr-runway-queue', rackId: 'rwy-05' }), view), 'queued for inactive runway 05');
-  assert.equal(runwayAdvisoryFor(departure({ bayId: 'twr-runway-queue', rackId: 'rwy-23' }), view), null);
+  assert.equal(runwayAdvisoryFor(departure({ bayId: 'lc-runway-queue', rackId: 'rwy-05' }), view), 'queued for inactive runway 05');
+  assert.equal(runwayAdvisoryFor(departure({ bayId: 'lc-runway-queue', rackId: 'rwy-23' }), view), null);
   assert.equal(runwayAdvisoryFor(departure(), view), null);
 });
 
 test("runwayRackFor files a Strip under its filed end, else the active end, else the Bay's first rack (decisions.md Q26)", () => {
-  const queue = INCIRLIK.bays.TWR.find(b => b.bayId === 'twr-runway-queue');
+  const queue = INCIRLIK.bays.LC.find(b => b.bayId === 'lc-runway-queue');
   const view = viewWith('OPEN', { activeRunway: '23' });
   assert.equal(runwayRackFor(departure(), flightDataFiled('05'), view, queue), 'rwy-05');
   assert.equal(runwayRackFor(departure(), flightDataFiled(null), view, queue), 'rwy-23');
   assert.equal(runwayRackFor(departure(), flightDataFiled(null), viewWith('OPEN', { activeRunway: null }), queue), 'rwy-05');
   assert.equal(runwayRackFor(departure(), flightDataFiled('23'), null, queue), 'rwy-05'); // no field state: as before
-  const other = { bayId: 'twr-final', rackIds: ['main'] };
+  const other = { bayId: 'lc-final', rackIds: ['main'] };
   assert.equal(runwayRackFor(departure(), flightDataFiled('05'), view, other), 'main');
 });
 
@@ -238,7 +238,7 @@ const { MutationLog } = await import('../src/efsp/mutation-log.js');
 /** A facility-config stand-in over the SHIPPED INCIRLIK config (plus a runway-less CENTER), or an overridden inventory. */
 function fixtureConfig(runwayStatusOverride) {
   const incirlik = structuredClone(INCIRLIK);
-  if (runwayStatusOverride) incirlik.fieldState = runwayStatusOverride;
+  if (runwayStatusOverride) incirlik.runwayStatus = runwayStatusOverride;
   const center = facilityConfig.getFacilityConfig('CENTER');
   return {
     getFacilityIds: () => ['INCIRLIK', 'CENTER'],
@@ -262,7 +262,7 @@ function op(store, positionId, kind, fields = {}, { by = `c-${positionId}`, base
 function mustOp(store, positionId, kind, fields, opts) {
   const r = op(store, positionId, kind, fields, opts);
   assert.equal(r.ok, true, `${kind} as ${positionId}: ${JSON.stringify({ reason: r.reason, detail: r.detail })}`);
-  return r.fieldState;
+  return r.runwayStatus;
 }
 const rwy = (fs_) => fs_.runways.find(r => r.runwayId === '05/23');
 
@@ -279,20 +279,20 @@ test('the store seeds one record per Facility with an inventory, every runway OP
   assert.deepEqual(rwy(fsI).rackIds, { '05': 'rwy-05', '23': 'rwy-23' });
   assert.equal(fsI.runwayChange, null);
   assert.equal(fsI.runwayChangeInProgress, false);
-  assert.deepEqual(fsI.hotCargoPad, { name: 'Hot cargo pad', occupied: false, occupantFdrId: null });
-  assert.deepEqual(fsI.alertPad, { name: 'Alert pad', accessRoute: 'ALERT ACCESS TAXIWAY', occupied: false, occupantFdrId: null });
+  assert.deepEqual(fsI.hotCargoPad, { name: 'Hot cargo pad', occupied: false, occupantFlightDataId: null });
+  assert.deepEqual(fsI.alertPad, { name: 'Alert pad', accessRoute: 'ALERT ACCESS TAXIWAY', occupied: false, occupantFlightDataId: null });
 });
 
 test('TWR begins runway works: the whole pavement is suspended in one rev, with the kind and who', () => {
   const { store } = freshStore();
   const seq = store.currentSeq;
-  const fsI = mustOp(store, 'TWR', 'BeginRunwayWorks', { runwayId: '05/23', note: 'BAK-12 re-rig' });
+  const fsI = mustOp(store, 'LC', 'BeginRunwayWorks', { runwayId: '05/23', note: 'BAK-12 re-rig' });
   assert.equal(fsI.rev, 1);
   assert.equal(store.currentSeq, seq + 1);
   assert.equal(rwy(fsI).status, 'SUSPENDED_WORKS');
   assert.equal(rwy(fsI).suspension.kind, 'WORKS');
-  assert.equal(rwy(fsI).suspension.positionId, 'TWR');
-  assert.equal(rwy(fsI).suspension.by, 'c-TWR');
+  assert.equal(rwy(fsI).suspension.positionId, 'LC');
+  assert.equal(rwy(fsI).suspension.by, 'c-LC');
   assert.equal(rwy(fsI).suspension.note, 'BAK-12 re-rig');
 });
 
@@ -301,14 +301,14 @@ test('OPS cannot begin runway works or close a runway itself — only TWR (decis
   for (const kind of ['BeginRunwayWorks', 'CloseRunway']) {
     const r = op(store, 'OPS', kind, { runwayId: '05/23' });
     assert.equal(r.reason, 'PERMISSION_DENIED', kind);
-    assert.equal(rwy(r.fieldState).status, 'OPEN');
+    assert.equal(rwy(r.runwayStatus).status, 'OPEN');
   }
 });
 
 test('CompleteRunwayWorks moves to SUSPENDED_INSPECTION, never to OPEN, and keeps the suspension', () => {
   const { store } = freshStore();
-  mustOp(store, 'TWR', 'BeginRunwayWorks', { runwayId: '05/23' });
-  assert.equal(op(store, 'TWR', 'CompleteRunwayWorks', { runwayId: '05/23' }).reason, 'PERMISSION_DENIED');
+  mustOp(store, 'LC', 'BeginRunwayWorks', { runwayId: '05/23' });
+  assert.equal(op(store, 'LC', 'CompleteRunwayWorks', { runwayId: '05/23' }).reason, 'PERMISSION_DENIED');
   const fsI = mustOp(store, 'OPS', 'CompleteRunwayWorks', { runwayId: '05/23' });
   assert.equal(rwy(fsI).status, 'SUSPENDED_INSPECTION');
   assert.equal(rwy(fsI).suspension.kind, 'WORKS');
@@ -316,21 +316,21 @@ test('CompleteRunwayWorks moves to SUSPENDED_INSPECTION, never to OPEN, and keep
 
 test('OpenRunway cannot reopen a suspended runway (rule 2 has no side door), nor can CloseRunway', () => {
   const { store } = freshStore();
-  mustOp(store, 'TWR', 'BeginRunwayWorks', { runwayId: '05/23' });
+  mustOp(store, 'LC', 'BeginRunwayWorks', { runwayId: '05/23' });
   for (const kind of ['OpenRunway', 'CloseRunway']) {
-    const r = op(store, 'TWR', kind, { runwayId: '05/23' });
+    const r = op(store, 'LC', kind, { runwayId: '05/23' });
     assert.equal(r.ok, false, kind);
-    assert.equal(rwy(r.fieldState).status, 'SUSPENDED_WORKS');
+    assert.equal(rwy(r.runwayStatus).status, 'SUSPENDED_WORKS');
   }
   mustOp(store, 'OPS', 'CompleteRunwayWorks', { runwayId: '05/23' });
-  const r = op(store, 'TWR', 'OpenRunway', { runwayId: '05/23' });
+  const r = op(store, 'LC', 'OpenRunway', { runwayId: '05/23' });
   assert.match(r.detail, /only through an inspection/);
-  assert.equal(rwy(r.fieldState).status, 'SUSPENDED_INSPECTION');
+  assert.equal(rwy(r.runwayStatus).status, 'SUSPENDED_INSPECTION');
 });
 
 test('CompleteInspection reopens the runway and stamps lastInspection {by, positionId, at}', () => {
   const { store } = freshStore();
-  mustOp(store, 'TWR', 'BeginRunwayWorks', { runwayId: '05/23' });
+  mustOp(store, 'LC', 'BeginRunwayWorks', { runwayId: '05/23' });
   mustOp(store, 'OPS', 'CompleteRunwayWorks', { runwayId: '05/23' });
   const fsI = mustOp(store, 'OPS', 'CompleteInspection', { runwayId: '05/23', note: 'cable tensioned, FOD walk done' });
   assert.equal(rwy(fsI).status, 'OPEN');
@@ -345,28 +345,28 @@ test('CompleteInspection is refused to a Position other than inspectionAuthority
   // Shipped config: the table ceiling is OPS and the config says OPS, so every
   // other Position is refused by the table.
   const { store } = freshStore();
-  mustOp(store, 'TWR', 'BeginRunwayWorks', { runwayId: '05/23' });
+  mustOp(store, 'LC', 'BeginRunwayWorks', { runwayId: '05/23' });
   mustOp(store, 'OPS', 'CompleteRunwayWorks', { runwayId: '05/23' });
-  for (const p of ['TWR', 'APP', 'GND', 'CD']) assert.equal(op(store, p, 'CompleteInspection', { runwayId: '05/23' }).reason, 'PERMISSION_DENIED', p);
+  for (const p of ['LC', 'AP', 'GC', 'CD']) assert.equal(op(store, p, 'CompleteInspection', { runwayId: '05/23' }).reason, 'PERMISSION_DENIED', p);
   // A config naming another Position narrows OPS out too — it never widens.
   const narrowed = structuredClone(INVENTORY);
-  narrowed.inspectionAuthorityPositionId = 'APP';
+  narrowed.inspectionAuthorityPositionId = 'AP';
   const { store: s2 } = freshStore({ runwayStatusOverride: narrowed });
-  mustOp(s2, 'TWR', 'BeginRunwayWorks', { runwayId: '05/23' });
+  mustOp(s2, 'LC', 'BeginRunwayWorks', { runwayId: '05/23' });
   mustOp(s2, 'OPS', 'CompleteRunwayWorks', { runwayId: '05/23' });
   const r = op(s2, 'OPS', 'CompleteInspection', { runwayId: '05/23' });
   assert.equal(r.reason, 'PERMISSION_DENIED');
-  assert.match(r.detail, /only APP/);
-  assert.equal(op(s2, 'APP', 'CompleteInspection', { runwayId: '05/23' }).reason, 'PERMISSION_DENIED'); // not widened
+  assert.match(r.detail, /only AP /);
+  assert.equal(op(s2, 'AP', 'CompleteInspection', { runwayId: '05/23' }).reason, 'PERMISSION_DENIED'); // not widened
 });
 
 test('CloseRunway / OpenRunway round trip (TWR)', () => {
   const { store } = freshStore();
-  let fsI = mustOp(store, 'TWR', 'CloseRunway', { runwayId: '05/23', reason: 'FOD' });
+  let fsI = mustOp(store, 'LC', 'CloseRunway', { runwayId: '05/23', reason: 'FOD' });
   assert.equal(rwy(fsI).status, 'CLOSED');
   assert.equal(rwy(fsI).closure.reason, 'FOD');
-  assert.equal(rwy(fsI).closure.positionId, 'TWR');
-  fsI = mustOp(store, 'TWR', 'OpenRunway', { runwayId: '05/23' });
+  assert.equal(rwy(fsI).closure.positionId, 'LC');
+  fsI = mustOp(store, 'LC', 'OpenRunway', { runwayId: '05/23' });
   assert.equal(rwy(fsI).status, 'OPEN');
   assert.equal(rwy(fsI).closure, null);
 });
@@ -377,12 +377,12 @@ test('OPS asks tower to close the runway; tower accepts and the closure names wh
   assert.equal(rwy(fsI).status, 'OPEN');
   assert.equal(rwy(fsI).pendingRequest.action, 'CLOSE');
   assert.equal(rwy(fsI).pendingRequest.requestedPositionId, 'OPS');
-  assert.equal(op(store, 'GND', 'RequestRunwayStatus', { runwayId: '05/23', action: 'CLOSE' }).detail, 'OPS already has a CLOSE request with tower for runway 05/23');
+  assert.equal(op(store, 'GC', 'RequestRunwayStatus', { runwayId: '05/23', action: 'CLOSE' }).detail, 'OPS already has a CLOSE request with tower for runway 05/23');
   assert.equal(op(store, 'OPS', 'AcceptRunwayRequest', { runwayId: '05/23' }).reason, 'PERMISSION_DENIED');
-  fsI = mustOp(store, 'TWR', 'AcceptRunwayRequest', { runwayId: '05/23' });
+  fsI = mustOp(store, 'LC', 'AcceptRunwayRequest', { runwayId: '05/23' });
   assert.equal(rwy(fsI).status, 'CLOSED');
   assert.equal(rwy(fsI).pendingRequest, null);
-  assert.equal(rwy(fsI).closure.positionId, 'TWR');
+  assert.equal(rwy(fsI).closure.positionId, 'LC');
   assert.equal(rwy(fsI).closure.requestedBy.positionId, 'OPS');
   assert.equal(rwy(fsI).closure.reason, 'FOD reported');
 });
@@ -391,46 +391,46 @@ test('tower rejects a request; a request for what the runway already is, or from
   const { store } = freshStore();
   assert.match(op(store, 'OPS', 'RequestRunwayStatus', { runwayId: '05/23', action: 'OPEN' }).detail, /nothing to ask/);
   assert.equal(op(store, 'OPS', 'RequestRunwayStatus', { runwayId: '05/23', action: 'PAINT' }).reason, 'VALIDATION_ERROR');
-  assert.equal(op(store, 'TWR', 'RequestRunwayStatus', { runwayId: '05/23', action: 'CLOSE' }).reason, 'PERMISSION_DENIED');
-  mustOp(store, 'APP', 'RequestRunwayStatus', { runwayId: '05/23', action: 'WORKS' });
-  const fsI = mustOp(store, 'TWR', 'RejectRunwayRequest', { runwayId: '05/23', note: 'recovery in progress' });
+  assert.equal(op(store, 'LC', 'RequestRunwayStatus', { runwayId: '05/23', action: 'CLOSE' }).reason, 'PERMISSION_DENIED');
+  mustOp(store, 'AP', 'RequestRunwayStatus', { runwayId: '05/23', action: 'WORKS' });
+  const fsI = mustOp(store, 'LC', 'RejectRunwayRequest', { runwayId: '05/23', note: 'recovery in progress' });
   assert.equal(rwy(fsI).status, 'OPEN');
   assert.equal(rwy(fsI).pendingRequest, null);
   const last = fsI.transitions.at(-1);
   assert.equal(last.op, 'RejectRunwayRequest');
-  assert.equal(last.request.requestedPositionId, 'APP');
+  assert.equal(last.request.requestedPositionId, 'AP');
   assert.equal(last.note, 'recovery in progress');
 });
 
 test('a request made moot by a direct tower op is settled in the same transition', () => {
   const { store } = freshStore();
   mustOp(store, 'OPS', 'RequestRunwayStatus', { runwayId: '05/23', action: 'CLOSE' });
-  const fsI = mustOp(store, 'TWR', 'BeginRunwayWorks', { runwayId: '05/23' });
+  const fsI = mustOp(store, 'LC', 'BeginRunwayWorks', { runwayId: '05/23' });
   assert.equal(rwy(fsI).pendingRequest, null);
   assert.equal(fsI.transitions.at(-1).settledRequest.action, 'CLOSE');
 });
 
 test('a stale baseRev is refused as STALE_REV, carries the record, and is audited', () => {
   const { store, log } = freshStore();
-  mustOp(store, 'TWR', 'CloseRunway', { runwayId: '05/23' });
-  const r = op(store, 'TWR', 'OpenRunway', { runwayId: '05/23' }, { baseRev: 0 });
+  mustOp(store, 'LC', 'CloseRunway', { runwayId: '05/23' });
+  const r = op(store, 'LC', 'OpenRunway', { runwayId: '05/23' }, { baseRev: 0 });
   assert.equal(r.reason, 'STALE_REV');
-  assert.equal(rwy(r.fieldState).status, 'CLOSED');
+  assert.equal(rwy(r.runwayStatus).status, 'CLOSED');
   const entry = log().at(-1);
   assert.equal(entry.reason, 'STALE_REV');
   assert.equal(entry.ok, false);
-  assert.equal(entry.fieldStateFacilityId, 'INCIRLIK');
+  assert.equal(entry.runwayStatusFacilityId, 'INCIRLIK');
   assert.equal(entry.op, 'OpenRunway');
 });
 
 test('every refusal is audited (PERMISSION_DENIED, VALIDATION_ERROR, NOT_FOUND)', () => {
   const { store, log } = freshStore();
   op(store, 'OPS', 'CloseRunway', { runwayId: '05/23' });
-  op(store, 'TWR', 'OpenRunway', { runwayId: '05/23' });
-  op(store, 'TWR', 'CloseRunway', { runwayId: '17/35' });
-  store.apply({ facilityId: 'CENTER', op: { kind: 'CloseRunway', runwayId: '05/23' } }, 'TWR', 'c-TWR');
-  op(store, 'TWR', 'PaintRunway', { runwayId: '05/23' });
-  const reasons = log().map(e => [e.op, e.reason, e.fieldStateFacilityId]);
+  op(store, 'LC', 'OpenRunway', { runwayId: '05/23' });
+  op(store, 'LC', 'CloseRunway', { runwayId: '17/35' });
+  store.apply({ facilityId: 'CENTER', op: { kind: 'CloseRunway', runwayId: '05/23' } }, 'LC', 'c-LC');
+  op(store, 'LC', 'PaintRunway', { runwayId: '05/23' });
+  const reasons = log().map(e => [e.op, e.reason, e.runwayStatusFacilityId]);
   assert.deepEqual(reasons, [
     ['CloseRunway', 'PERMISSION_DENIED', 'INCIRLIK'],
     ['OpenRunway', 'VALIDATION_ERROR', 'INCIRLIK'],
@@ -444,8 +444,8 @@ test('every refusal is audited (PERMISSION_DENIED, VALIDATION_ERROR, NOT_FOUND)'
 test('every success appends to transitions[], bumps rev and currentSeq exactly once, and is audited with before/after', () => {
   const { store, log } = freshStore();
   const steps = [
-    ['TWR', 'BeginRunwayWorks'], ['OPS', 'CompleteRunwayWorks'], ['OPS', 'CompleteInspection'],
-    ['TWR', 'CloseRunway'], ['TWR', 'OpenRunway'],
+    ['LC', 'BeginRunwayWorks'], ['OPS', 'CompleteRunwayWorks'], ['OPS', 'CompleteInspection'],
+    ['LC', 'CloseRunway'], ['LC', 'OpenRunway'],
   ];
   for (const [i, [p, kind]] of steps.entries()) {
     const seq = store.currentSeq;
@@ -468,7 +468,7 @@ test('the status view is cached and rebuilt only when the record changes; nothin
   const v1 = store.statusView('INCIRLIK');
   assert.equal(store.statusView('INCIRLIK'), v1);
   assert.throws(() => { v1.runways[0].status = 'CLOSED'; });
-  mustOp(store, 'TWR', 'CloseRunway', { runwayId: '05/23' });
+  mustOp(store, 'LC', 'CloseRunway', { runwayId: '05/23' });
   const v2 = store.statusView('INCIRLIK');
   assert.notEqual(v2, v1);
   assert.equal(v2.runways[0].status, 'CLOSED');
@@ -499,13 +499,13 @@ test('the mission wind sets the active end once per mission; a reconnect keeps w
 test('snapshot/restore round-trips a SUSPENDED_WORKS runway intact', () => {
   const { store } = freshStore();
   store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, missionSession: 1 });
-  mustOp(store, 'TWR', 'BeginRunwayWorks', { runwayId: '05/23', note: 're-rig' });
+  mustOp(store, 'LC', 'BeginRunwayWorks', { runwayId: '05/23', note: 're-rig' });
   const snap = JSON.parse(JSON.stringify(store.snapshot()));
   const { store: reborn } = freshStore();
   reborn.restore(snap);
   const fsI = reborn.getRunwayStatus('INCIRLIK');
   assert.equal(rwy(fsI).status, 'SUSPENDED_WORKS');
-  assert.equal(rwy(fsI).suspension.positionId, 'TWR');
+  assert.equal(rwy(fsI).suspension.positionId, 'LC');
   assert.equal(rwy(fsI).suspension.note, 're-rig');
   assert.equal(fsI.activeRunway, '05');
   assert.equal(fsI.rev, store.getRunwayStatus('INCIRLIK').rev);
@@ -516,7 +516,7 @@ test('snapshot/restore round-trips a SUSPENDED_WORKS runway intact', () => {
 
 test('restore drops a runway no longer configured and seeds a newly configured one OPEN', () => {
   const { store } = freshStore();
-  mustOp(store, 'TWR', 'CloseRunway', { runwayId: '05/23' });
+  mustOp(store, 'LC', 'CloseRunway', { runwayId: '05/23' });
   const snap = store.snapshot();
   const inv = structuredClone(INVENTORY);
   inv.runways = [{ runwayId: '17/35', ends: ['17', '35'], endHeadingsTrue: { '17': 170, '35': 350 }, arrestingGear: [] }];
@@ -533,7 +533,7 @@ test('apply never throws on garbage input', () => {
   const { store } = freshStore();
   for (const bad of [null, undefined, 7, {}, { facilityId: 'INCIRLIK' }, { facilityId: 'INCIRLIK', op: null },
     { facilityId: 'INCIRLIK', op: { kind: 'CloseRunway' } }, { facilityId: 'INCIRLIK', op: { kind: 'RequestRunwayStatus', runwayId: '05/23', action: {} } }]) {
-    const r = store.apply(bad, 'TWR', 'c-TWR');
+    const r = store.apply(bad, 'LC', 'c-LC');
     assert.equal(r.ok, false, JSON.stringify(bad));
   }
   assert.equal(rwy(store.getRunwayStatus('INCIRLIK')).status, 'OPEN');
@@ -545,40 +545,40 @@ const { createEfsp } = await import('../src/efsp/index.js');
 const { crew, hold } = await import('./helpers/efsp-scenario.mjs');
 
 const efsp = createEfsp();
-const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' });
+const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER' });
 
 function fieldAct(e, member, positionId, op, { facilityId = 'INCIRLIK', baseRev } = {}) {
   const current = e.runwayStatusStore.getRunwayStatus(facilityId);
   return e.handleMessage(member.session, {
-    version: 1, type: 'efsp-field-state-mutation', clientMutationId: `fs-${Math.random()}`,
+    version: 1, type: 'efsp-runway-status-mutation', clientMutationId: `fs-${Math.random()}`,
     facilityId, baseRev: baseRev === undefined ? (current ? current.rev : undefined) : baseRev,
     actingPositionId: positionId, op,
   });
 }
 const mutationLog = () => fs.readFileSync(process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH, 'utf8').trim().split('\n').map(l => JSON.parse(l));
 
-test('efsp-field-state-mutation routes, applies, acks and broadcasts efsp-field-state-delta with its own fieldStateSeq', () => {
+test('efsp-runway-status-mutation routes, applies, acks and broadcasts efsp-runway-status-delta with its own runwayStatusSeq', () => {
   const boardSeq = efsp.boardStoreFor('INCIRLIK').currentSeq;
   const seq = efsp.runwayStatusStore.currentSeq;
-  const out = fieldAct(efsp, c.TWR, 'TWR', { kind: 'CloseRunway', runwayId: '05/23', reason: 'FOD' });
-  assert.equal(out.ack.type, 'efsp-field-state-ack');
+  const out = fieldAct(efsp, c.LC, 'LC', { kind: 'CloseRunway', runwayId: '05/23', reason: 'FOD' });
+  assert.equal(out.ack.type, 'efsp-runway-status-ack');
   assert.equal(out.ack.ok, true);
   assert.equal(out.ack.facilityId, 'INCIRLIK');
   assert.equal(out.ack.runwayId, '05/23');
-  assert.equal(out.ack.fieldStateSeq, seq + 1);
-  assert.equal(rwy(out.ack.fieldState).status, 'CLOSED');
-  assert.equal(slot(out, 'primary').type, 'efsp-field-state-delta');
-  assert.equal(slot(out, 'primary').fieldStateSeq, seq + 1);
-  assert.equal(rwy(slot(out, 'primary').fieldStates.updated[0]).status, 'CLOSED');
+  assert.equal(out.ack.runwayStatusSeq, seq + 1);
+  assert.equal(rwy(out.ack.runwayStatus).status, 'CLOSED');
+  assert.equal(slot(out, 'primary').type, 'efsp-runway-status-delta');
+  assert.equal(slot(out, 'primary').runwayStatusSeq, seq + 1);
+  assert.equal(rwy(slot(out, 'primary').runwayStatuses.updated[0]).status, 'CLOSED');
   // Rule 5's deviation: the Board sequence does not move.
   assert.equal(efsp.boardStoreFor('INCIRLIK').currentSeq, boardSeq);
-  const back = fieldAct(efsp, c.TWR, 'TWR', { kind: 'OpenRunway', runwayId: '05/23' });
+  const back = fieldAct(efsp, c.LC, 'LC', { kind: 'OpenRunway', runwayId: '05/23' });
   assert.equal(back.ack.ok, true);
 });
 
-test('a field-state op from a session not Primary at that Position AT THAT FACILITY is refused NOT_HOLDING_POSITION', () => {
+test('a runway-status op from a session not Primary at that Position AT THAT FACILITY is refused NOT_HOLDING_POSITION', () => {
   // OPS's controller naming TWR.
-  let out = fieldAct(efsp, c.OPS, 'TWR', { kind: 'CloseRunway', runwayId: '05/23' });
+  let out = fieldAct(efsp, c.OPS, 'LC', { kind: 'CloseRunway', runwayId: '05/23' });
   assert.equal(out.ack.reason, 'NOT_HOLDING_POSITION');
   // Primary at CTR at CENTER, naming OPS: not Primary at OPS at INCIRLIK.
   out = fieldAct(efsp, c.CTR, 'OPS', { kind: 'CompleteInspection', runwayId: '05/23' });
@@ -587,60 +587,60 @@ test('a field-state op from a session not Primary at that Position AT THAT FACIL
   out = fieldAct(efsp, c.CTR, 'CTR', { kind: 'CloseRunway', runwayId: '05/23' });
   assert.equal(out.ack.reason, 'NOT_HOLDING_POSITION');
   assert.equal(slot(out, 'primary'), undefined);
-  assert.equal(rwy(out.ack.fieldState).status, 'OPEN');
+  assert.equal(rwy(out.ack.runwayStatus).status, 'OPEN');
 });
 
-test('a refused field-state op returns only an ack, with the current record, and does not persist', () => {
+test('a refused runway-status op returns only an ack, with the current record, and does not persist', () => {
   const before = fs.existsSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH) ? fs.readFileSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, 'utf8') : null;
   const out = fieldAct(efsp, c.OPS, 'OPS', { kind: 'CloseRunway', runwayId: '05/23' });
   assert.equal(out.ack.ok, false);
   assert.equal(out.ack.reason, 'PERMISSION_DENIED');
   assert.equal(slot(out, 'primary'), undefined);
-  assert.equal(rwy(out.ack.fieldState).status, 'OPEN');
+  assert.equal(rwy(out.ack.runwayStatus).status, 'OPEN');
   const after = fs.existsSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH) ? fs.readFileSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, 'utf8') : null;
   assert.equal(after, before);
 });
 
-test('the snapshot carries fieldStates; efsp-resync has no field-state branch', () => {
+test('the snapshot carries runwayStatuses; efsp-resync has no runway-status branch', () => {
   const snap = efsp.snapshotFor();
-  assert.equal(snap.fieldStates.length, 1);
-  assert.equal(snap.fieldStates[0].facilityId, 'INCIRLIK');
-  assert.equal(rwy(snap.fieldStates[0]).status, 'OPEN');
+  assert.equal(snap.runwayStatuses.length, 1);
+  assert.equal(snap.runwayStatuses[0].facilityId, 'INCIRLIK');
+  assert.equal(rwy(snap.runwayStatuses[0]).status, 'OPEN');
   // A delta-served resync carries Strips only; field state comes with a snapshot.
-  const resync = efsp.handleMessage(c.TWR.session, { type: 'efsp-resync', facilityId: 'INCIRLIK', lastBoardSeq: efsp.boardStoreFor('INCIRLIK').currentSeq, boardEpoch: efsp.snapshotFor().boardEpochByFacility.INCIRLIK });
+  const resync = efsp.handleMessage(c.LC.session, { type: 'efsp-resync', facilityId: 'INCIRLIK', lastBoardSeq: efsp.boardStoreFor('INCIRLIK').currentSeq, boardEpoch: efsp.snapshotFor().boardEpochByFacility.INCIRLIK });
   assert.equal(resync.ack.answer, 'delta');
-  assert.equal(JSON.stringify(resync).includes('fieldState'), false);
+  assert.equal(JSON.stringify(resync).includes('runwayStatus'), false);
 });
 
-test('a field-state op writes the Mutation log with fieldStateFacilityId and runwayId', () => {
+test('a runway-status op writes the Mutation log with runwayStatusFacilityId and runwayId', () => {
   fieldAct(efsp, c.OPS, 'OPS', { kind: 'RequestRunwayStatus', runwayId: '05/23', action: 'CLOSE', note: 'bird strike debris' });
   const entry = mutationLog().at(-1);
   assert.equal(entry.op, 'RequestRunwayStatus');
-  assert.equal(entry.fieldStateFacilityId, 'INCIRLIK');
+  assert.equal(entry.runwayStatusFacilityId, 'INCIRLIK');
   assert.equal(entry.runwayId, '05/23');
   assert.equal(entry.actingPositionId, 'OPS');
   assert.equal(entry.actorId, 'c-OPS');
   assert.equal(entry.ok, true);
-  assert.equal(fieldAct(efsp, c.TWR, 'TWR', { kind: 'RejectRunwayRequest', runwayId: '05/23' }).ack.ok, true);
+  assert.equal(fieldAct(efsp, c.LC, 'LC', { kind: 'RejectRunwayRequest', runwayId: '05/23' }).ack.ok, true);
 });
 
 test('a suspension persists and a fresh createEfsp() restores it SUSPENDED_WORKS', () => {
-  assert.equal(fieldAct(efsp, c.TWR, 'TWR', { kind: 'BeginRunwayWorks', runwayId: '05/23' }).ack.ok, true);
+  assert.equal(fieldAct(efsp, c.LC, 'LC', { kind: 'BeginRunwayWorks', runwayId: '05/23' }).ack.ok, true);
   const reborn = createEfsp();
   const fsI = reborn.runwayStatusStore.getRunwayStatus('INCIRLIK');
   assert.equal(rwy(fsI).status, 'SUSPENDED_WORKS');
-  assert.equal(rwy(fsI).suspension.positionId, 'TWR');
+  assert.equal(rwy(fsI).suspension.positionId, 'LC');
   // Drive the shared field back to OPEN for whoever runs next.
   assert.equal(fieldAct(efsp, c.OPS, 'OPS', { kind: 'CompleteRunwayWorks', runwayId: '05/23' }).ack.ok, true);
   assert.equal(fieldAct(efsp, c.OPS, 'OPS', { kind: 'CompleteInspection', runwayId: '05/23' }).ack.ok, true);
 });
 
-test('a handler with no field-state store answers, never throws (a hand-built ctx)', async () => {
+test('a handler with no runway-status store answers, never throws (a hand-built ctx)', async () => {
   const { handleMessage } = await import('../src/efsp/efsp-ws.js');
   const out = handleMessage({ facilityConfig: { DEFAULT_FACILITY_ID: 'INCIRLIK' } }, { controllerId: 'x' },
-    { type: 'efsp-field-state-mutation', actingPositionId: 'TWR', op: { kind: 'CloseRunway', runwayId: '05/23' } }, () => {});
+    { type: 'efsp-runway-status-mutation', actingPositionId: 'LC', op: { kind: 'CloseRunway', runwayId: '05/23' } }, () => {});
   assert.equal(out.ack.ok, false);
-  assert.equal(out.ack.detail, 'no field-state store');
+  assert.equal(out.ack.detail, 'no runway-status store');
 });
 
 // ── step 4 — rule 1: NLA is inhibited on a runway that is not usable ────────
@@ -652,56 +652,56 @@ const ctxWith = (view, extra = {}) => ({ ...everyoneHome, runwayStatusFor: () =>
 const readyFlightData = (over = {}) => ({
   identity: { beaconAssigned: '4001' },
   filed: { route: 'DCT', requestedAltitude: '250', departureAirport: 'LTAG', destinationAirport: 'LTAG', departureRunway: '05', ...over.filed },
-  assigned: { releaseState: 'RELEASED', landingRunway: '05', ...over.assigned },
+  assigned: { departureRelease: 'RELEASED', landingRunway: '05', ...over.assigned },
 });
 
 test('TAXI, RUNWAY_QUEUE and LUAW are inhibited on a suspended runway, with the runway named in the reason', () => {
   const view = viewWith('SUSPENDED_WORKS');
   for (const [state, rackId] of [['TAXI', 'main'], ['RUNWAY_QUEUE', 'rwy-05'], ['LUAW', 'rwy-05']]) {
-    const r = nla.computeNla({ role: 'DEPARTURE', state, rackId }, readyFlightData(), NOW, ctxWith(view));
+    const r = nla.computeNla({ stripType: 'DEPARTURE', state, rackId }, readyFlightData(), NOW, ctxWith(view));
     assert.deepEqual(r, { inhibited: 'runway 05/23 suspended — works in progress' }, state);
   }
 });
 
 test('HANDED_TO_TOWER -> FINAL is inhibited on a suspended runway', () => {
-  const r = nla.computeNla({ role: 'ARRIVAL', state: 'HANDED_TO_TOWER', rackId: 'main' }, readyFlightData(), NOW, ctxWith(viewWith('SUSPENDED_INSPECTION')));
+  const r = nla.computeNla({ stripType: 'ARRIVAL', state: 'HANDED_TO_TOWER', rackId: 'main' }, readyFlightData(), NOW, ctxWith(viewWith('SUSPENDED_INSPECTION')));
   assert.deepEqual(r, { inhibited: 'runway 05/23 suspended — awaiting inspection' });
 });
 
 test('FINAL -> LANDED is never inhibited — touchdown is an observation, not a clearance', () => {
   for (const status of ['SUSPENDED_WORKS', 'SUSPENDED_INSPECTION', 'CLOSED']) {
-    const r = nla.computeNla({ role: 'ARRIVAL', state: 'FINAL', rackId: 'main' }, readyFlightData(), NOW, ctxWith(viewWith(status)));
+    const r = nla.computeNla({ stripType: 'ARRIVAL', state: 'FINAL', rackId: 'main' }, readyFlightData(), NOW, ctxWith(viewWith(status)));
     assert.deepEqual(r, { toState: 'LANDED' }, status);
   }
 });
 
 test('a CLOSED runway inhibits too (decisions.md Q28)', () => {
-  const r = nla.computeNla({ role: 'DEPARTURE', state: 'LUAW', rackId: 'rwy-23' }, readyFlightData(), NOW, ctxWith(viewWith('CLOSED')));
+  const r = nla.computeNla({ stripType: 'DEPARTURE', state: 'LUAW', rackId: 'rwy-23' }, readyFlightData(), NOW, ctxWith(viewWith('CLOSED')));
   assert.deepEqual(r, { inhibited: 'runway 05/23 closed' });
 });
 
 test('an unresolvable runway, a runway not in the inventory, and a Facility with no field state all fail open', () => {
   const noActive = viewWith('CLOSED', { activeRunway: null });
   const flightDataNoRunway = readyFlightData({ filed: { departureRunway: null }, assigned: { landingRunway: null } });
-  assert.deepEqual(nla.computeNla({ role: 'DEPARTURE', state: 'RUNWAY_QUEUE', rackId: 'main' }, flightDataNoRunway, NOW, ctxWith(noActive)), { toState: 'LUAW' });
+  assert.deepEqual(nla.computeNla({ stripType: 'DEPARTURE', state: 'RUNWAY_QUEUE', rackId: 'main' }, flightDataNoRunway, NOW, ctxWith(noActive)), { toState: 'LUAW' });
   const flightDataOther = readyFlightData({ filed: { departureRunway: '17' } });
-  assert.deepEqual(nla.computeNla({ role: 'DEPARTURE', state: 'RUNWAY_QUEUE', rackId: 'main' }, flightDataOther, NOW, ctxWith(noActive)), { toState: 'LUAW' });
-  assert.deepEqual(nla.computeNla({ role: 'DEPARTURE', state: 'RUNWAY_QUEUE', rackId: 'rwy-05' }, readyFlightData(), NOW, ctxWith(null)), { toState: 'LUAW' });
+  assert.deepEqual(nla.computeNla({ stripType: 'DEPARTURE', state: 'RUNWAY_QUEUE', rackId: 'main' }, flightDataOther, NOW, ctxWith(noActive)), { toState: 'LUAW' });
+  assert.deepEqual(nla.computeNla({ stripType: 'DEPARTURE', state: 'RUNWAY_QUEUE', rackId: 'rwy-05' }, readyFlightData(), NOW, ctxWith(null)), { toState: 'LUAW' });
 });
 
 test('a ctx with no runwayStatusFor at all behaves exactly as before (every pre-L1 caller)', () => {
-  assert.deepEqual(nla.computeNla({ role: 'DEPARTURE', state: 'TAXI', rackId: 'main' }, readyFlightData(), NOW, everyoneHome), { toState: 'RUNWAY_QUEUE', transferTo: 'TWR' });
-  assert.deepEqual(nla.computeNla({ role: 'DEPARTURE', state: 'LUAW', rackId: 'rwy-05' }, readyFlightData(), NOW, everyoneHome), { toState: 'DEPARTED' });
-  assert.deepEqual(nla.computeNla({ role: 'ARRIVAL', state: 'HANDED_TO_TOWER', rackId: 'main' }, readyFlightData(), NOW, everyoneHome), { toState: 'FINAL' });
+  assert.deepEqual(nla.computeNla({ stripType: 'DEPARTURE', state: 'TAXI', rackId: 'main' }, readyFlightData(), NOW, everyoneHome), { toState: 'RUNWAY_QUEUE', transferTo: 'LC' });
+  assert.deepEqual(nla.computeNla({ stripType: 'DEPARTURE', state: 'LUAW', rackId: 'rwy-05' }, readyFlightData(), NOW, everyoneHome), { toState: 'DEPARTED' });
+  assert.deepEqual(nla.computeNla({ stripType: 'ARRIVAL', state: 'HANDED_TO_TOWER', rackId: 'main' }, readyFlightData(), NOW, everyoneHome), { toState: 'FINAL' });
 });
 
 test('OVERFLIGHT and MISSION are never inhibited by field state', () => {
   const view = viewWith('CLOSED');
   // INBOUND and HANDED_OFF are ARRIVAL's and DEPARTURE's state names too (docs/adr/0087): a closed runway must not hold an overflight in them.
-  assert.deepEqual(nla.computeNla({ role: 'OVERFLIGHT', state: 'INBOUND', rackId: 'rwy-05' }, readyFlightData(), NOW, ctxWith(view)), { toState: 'IN_SECTOR' });
-  assert.deepEqual(nla.computeNla({ role: 'OVERFLIGHT', state: 'IN_SECTOR', rackId: 'rwy-05' }, readyFlightData(), NOW, ctxWith(view)), { toState: 'HANDED_OFF' });
-  assert.deepEqual(nla.computeNla({ role: 'OVERFLIGHT', state: 'HANDED_OFF', rackId: 'rwy-05' }, readyFlightData(), NOW, ctxWith(view)), { toState: 'DROPPED' });
-  assert.deepEqual(nla.computeNla({ role: 'MISSION', state: 'TASKED', rackId: 'rwy-05' }, readyFlightData(), NOW, ctxWith(view)), { toState: 'AIRBORNE' });
+  assert.deepEqual(nla.computeNla({ stripType: 'OVERFLIGHT', state: 'INBOUND', rackId: 'rwy-05' }, readyFlightData(), NOW, ctxWith(view)), { toState: 'IN_SECTOR' });
+  assert.deepEqual(nla.computeNla({ stripType: 'OVERFLIGHT', state: 'IN_SECTOR', rackId: 'rwy-05' }, readyFlightData(), NOW, ctxWith(view)), { toState: 'HANDED_OFF' });
+  assert.deepEqual(nla.computeNla({ stripType: 'OVERFLIGHT', state: 'HANDED_OFF', rackId: 'rwy-05' }, readyFlightData(), NOW, ctxWith(view)), { toState: 'DROPPED' });
+  assert.deepEqual(nla.computeNla({ stripType: 'MISSION', state: 'TASKED', rackId: 'rwy-05' }, readyFlightData(), NOW, ctxWith(view)), { toState: 'AIRBORNE' });
 });
 
 test('the inhibit follows the rack a Strip is in, at a field with two independent runways', () => {
@@ -715,62 +715,62 @@ test('the inhibit follows the rack a Strip is in, at a field with two independen
     ],
   };
   const view = buildStatusView(inv, { activeRunway: '05', runways: [{ runwayId: '05/23', status: 'CLOSED' }, { runwayId: '17/35', status: 'OPEN' }] });
-  const at = (rackId) => nla.computeNla({ role: 'DEPARTURE', state: 'RUNWAY_QUEUE', rackId }, readyFlightData(), NOW, ctxWith(view));
+  const at = (rackId) => nla.computeNla({ stripType: 'DEPARTURE', state: 'RUNWAY_QUEUE', rackId }, readyFlightData(), NOW, ctxWith(view));
   assert.deepEqual(at('rwy-17'), { toState: 'LUAW' });
   assert.deepEqual(at('rwy-05'), { inhibited: 'runway 05/23 closed' });
-  const taxi = (targetRackId) => nla.computeNla({ role: 'DEPARTURE', state: 'TAXI', rackId: 'main' }, readyFlightData(), NOW, ctxWith(view, { targetRackId }));
-  assert.deepEqual(taxi('rwy-35'), { toState: 'RUNWAY_QUEUE', transferTo: 'TWR' });
+  const taxi = (targetRackId) => nla.computeNla({ stripType: 'DEPARTURE', state: 'TAXI', rackId: 'main' }, readyFlightData(), NOW, ctxWith(view, { targetRackId }));
+  assert.deepEqual(taxi('rwy-35'), { toState: 'RUNWAY_QUEUE', transferTo: 'LC' });
   assert.deepEqual(taxi('rwy-23'), { inhibited: 'runway 05/23 closed' });
   assert.deepEqual(taxi(undefined), { inhibited: 'runway 05/23 closed' }); // filed 8A = 05
 });
 
 // ── step 5 — rule 3: the runway change and its acknowledgements ─────────────
 
-/** A store with every Position manned and a known active end (05). */
-function manned({ occupied = ['OPS', 'CD', 'GND', 'TWR', 'APP'], primaryOf = (f, p) => `c-${p}`, runwayStatusOverride } = {}) {
-  const r = freshStore({ runwayStatusOverride, deps: { isStaffed: (f, p) => f === 'INCIRLIK' && occupied.includes(p), primaryOf } });
+/** A store with every Position staffed and a known active end (05). */
+function staffed({ staffed = ['OPS', 'CD', 'GC', 'LC', 'AP'], primaryOf = (f, p) => `c-${p}`, runwayStatusOverride } = {}) {
+  const r = freshStore({ runwayStatusOverride, deps: { isStaffed: (f, p) => f === 'INCIRLIK' && staffed.includes(p), primaryOf } });
   r.store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, missionSession: 1 });
   return r;
 }
 const change = (store) => store.getRunwayStatus('INCIRLIK').runwayChange;
 
 test('BeginRunwayChange is refused in every state but ACKNOWLEDGED', () => {
-  const { store } = manned();
-  const begin = () => op(store, 'TWR', 'BeginRunwayChange');
+  const { store } = staffed();
+  const begin = () => op(store, 'LC', 'BeginRunwayChange');
   // null — no change at all
   assert.equal(begin().ok, false);
   assert.equal(change(store), null);
   // PROPOSED, no acks
-  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  mustOp(store, 'LC', 'ProposeRunwayChange', { toRunwayId: '23' });
   assert.equal(change(store).state, 'PROPOSED');
   assert.equal(begin().ok, false);
   // PROPOSED, one ack
-  mustOp(store, 'APP', 'AckRunwayChange');
+  mustOp(store, 'AP', 'AckRunwayChange');
   assert.equal(change(store).state, 'PROPOSED');
   assert.equal(begin().ok, false);
   // ACKNOWLEDGED — the only state it goes from
   mustOp(store, 'OPS', 'AckRunwayChange');
   assert.equal(change(store).state, 'ACKNOWLEDGED');
-  mustOp(store, 'TWR', 'BeginRunwayChange');
+  mustOp(store, 'LC', 'BeginRunwayChange');
   // IN_PROGRESS
   assert.equal(change(store).state, 'IN_PROGRESS');
   assert.equal(begin().ok, false);
   // PENDING_INSPECTION
-  mustOp(store, 'TWR', 'CompleteRunwayChange');
+  mustOp(store, 'LC', 'CompleteRunwayChange');
   assert.equal(change(store).state, 'PENDING_INSPECTION');
   assert.equal(begin().ok, false);
   mustOp(store, 'OPS', 'CompleteInspection', { runwayId: '05/23' });
   // REJECTED
-  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '05' });
-  mustOp(store, 'APP', 'RejectRunwayChange', { note: 'recovery inbound' });
+  mustOp(store, 'LC', 'ProposeRunwayChange', { toRunwayId: '05' });
+  mustOp(store, 'AP', 'RejectRunwayChange', { note: 'recovery inbound' });
   assert.equal(change(store).state, 'REJECTED');
   assert.equal(begin().ok, false);
 });
 
 test('acknowledgement order is irrelevant: APP then OPS, and OPS then APP, both reach ACKNOWLEDGED', () => {
-  for (const order of [['APP', 'OPS'], ['OPS', 'APP']]) {
-    const { store } = manned();
-    mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  for (const order of [['AP', 'OPS'], ['OPS', 'AP']]) {
+    const { store } = staffed();
+    mustOp(store, 'LC', 'ProposeRunwayChange', { toRunwayId: '23' });
     mustOp(store, order[0], 'AckRunwayChange');
     assert.equal(change(store).state, 'PROPOSED');
     mustOp(store, order[1], 'AckRunwayChange');
@@ -779,112 +779,112 @@ test('acknowledgement order is irrelevant: APP then OPS, and OPS then APP, both 
 });
 
 test('a second ack from the same acknowledger is refused, not double-counted', () => {
-  const { store } = manned();
-  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
-  mustOp(store, 'APP', 'AckRunwayChange');
-  const again = op(store, 'APP', 'AckRunwayChange');
+  const { store } = staffed();
+  mustOp(store, 'LC', 'ProposeRunwayChange', { toRunwayId: '23' });
+  mustOp(store, 'AP', 'AckRunwayChange');
+  const again = op(store, 'AP', 'AckRunwayChange');
   assert.equal(again.ok, false);
   assert.match(again.detail, /already acknowledged/);
   assert.equal(change(store).state, 'PROPOSED');
 });
 
 test('an ack sent as TWR never counts as an acknowledger (the D21 guard at the store)', () => {
-  const { store } = manned();
-  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
-  assert.equal(op(store, 'TWR', 'AckRunwayChange').reason, 'PERMISSION_DENIED');
-  assert.deepEqual(change(store).acks, { OPS: null, APP: null });
+  const { store } = staffed();
+  mustOp(store, 'LC', 'ProposeRunwayChange', { toRunwayId: '23' });
+  assert.equal(op(store, 'LC', 'AckRunwayChange').reason, 'PERMISSION_DENIED');
+  assert.deepEqual(change(store).acks, { OPS: null, AP: null });
 });
 
 test("an acknowledger set of ['OPS'] (a Facility without APP) cannot deadlock", () => {
   const inv = structuredClone(INVENTORY);
   inv.runwayChangeAcknowledgers = ['OPS'];
-  const { store } = manned({ runwayStatusOverride: inv });
-  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  const { store } = staffed({ runwayStatusOverride: inv });
+  mustOp(store, 'LC', 'ProposeRunwayChange', { toRunwayId: '23' });
   mustOp(store, 'OPS', 'AckRunwayChange');
   assert.equal(change(store).state, 'ACKNOWLEDGED');
   // APP was never asked, so it cannot answer either.
-  assert.equal(op(store, 'APP', 'AckRunwayChange').reason, 'VALIDATION_ERROR');
+  assert.equal(op(store, 'AP', 'AckRunwayChange').reason, 'VALIDATION_ERROR');
 });
 
 test('an acknowledger nobody holds is skipped and recorded, never a deadlock (decisions.md H20)', () => {
-  const { store, log } = manned({ occupied: ['OPS', 'TWR'] });
-  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  const { store, log } = staffed({ staffed: ['OPS', 'LC'] });
+  mustOp(store, 'LC', 'ProposeRunwayChange', { toRunwayId: '23' });
   const ch = change(store);
-  assert.equal(ch.acks.APP.skipped, true);
-  assert.equal(ch.acks.APP.reason, 'UNMANNED');
+  assert.equal(ch.acks.AP.skipped, true);
+  assert.equal(ch.acks.AP.reason, 'UNSTAFFED');
   assert.equal(ch.state, 'PROPOSED');
-  assert.deepEqual(store.getRunwayStatus('INCIRLIK').transitions.at(-1).skippedAcknowledgers, ['APP']);
-  assert.equal(log().at(-1).after.runwayChange.acks.APP.skipped, true);
+  assert.deepEqual(store.getRunwayStatus('INCIRLIK').transitions.at(-1).skippedAcknowledgers, ['AP']);
+  assert.equal(log().at(-1).after.runwayChange.acks.AP.skipped, true);
   mustOp(store, 'OPS', 'AckRunwayChange');
   assert.equal(change(store).state, 'ACKNOWLEDGED');
   // Nobody at all but tower: straight to ACKNOWLEDGED, both skips on record.
-  const { store: alone } = manned({ occupied: ['TWR'] });
-  mustOp(alone, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  const { store: alone } = staffed({ staffed: ['LC'] });
+  mustOp(alone, 'LC', 'ProposeRunwayChange', { toRunwayId: '23' });
   assert.equal(change(alone).state, 'ACKNOWLEDGED');
-  assert.deepEqual(Object.keys(change(alone).acks).filter(p => change(alone).acks[p].skipped), ['OPS', 'APP']);
+  assert.deepEqual(Object.keys(change(alone).acks).filter(p => change(alone).acks[p].skipped), ['OPS', 'AP']);
 });
 
 test('the acknowledger set is frozen at propose time', () => {
-  let occupied = ['OPS', 'TWR'];
-  const r = freshStore({ deps: { isStaffed: (f, p) => occupied.includes(p) } });
+  let staffed = ['OPS', 'LC'];
+  const r = freshStore({ deps: { isStaffed: (f, p) => staffed.includes(p) } });
   r.store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, missionSession: 1 });
-  mustOp(r.store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
-  occupied = ['OPS', 'TWR', 'APP']; // APP arrives after the proposal
-  assert.match(op(r.store, 'APP', 'AckRunwayChange').detail, /skipped/);
+  mustOp(r.store, 'LC', 'ProposeRunwayChange', { toRunwayId: '23' });
+  staffed = ['OPS', 'LC', 'AP']; // APP arrives after the proposal
+  assert.match(op(r.store, 'AP', 'AckRunwayChange').detail, /skipped/);
   mustOp(r.store, 'OPS', 'AckRunwayChange');
   assert.equal(change(r.store).state, 'ACKNOWLEDGED');
-  assert.deepEqual(change(r.store).acknowledgers, ['OPS', 'APP']);
+  assert.deepEqual(change(r.store).acknowledgers, ['OPS', 'AP']);
 });
 
 test('RejectRunwayChange ends the change REJECTED; a new proposal may replace it', () => {
-  const { store } = manned();
-  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  const { store } = staffed();
+  mustOp(store, 'LC', 'ProposeRunwayChange', { toRunwayId: '23' });
   mustOp(store, 'OPS', 'AckRunwayChange');
-  const fsI = mustOp(store, 'APP', 'RejectRunwayChange', { note: 'recovery inbound on 05' });
+  const fsI = mustOp(store, 'AP', 'RejectRunwayChange', { note: 'recovery inbound on 05' });
   assert.equal(fsI.runwayChange.state, 'REJECTED');
-  assert.deepEqual([fsI.runwayChange.rejected.positionId, fsI.runwayChange.rejected.cause, fsI.runwayChange.rejected.note], ['APP', 'REJECTED', 'recovery inbound on 05']);
+  assert.deepEqual([fsI.runwayChange.rejected.positionId, fsI.runwayChange.rejected.cause, fsI.runwayChange.rejected.note], ['AP', 'REJECTED', 'recovery inbound on 05']);
   assert.equal(fsI.runwayChangeInProgress, false);
   const oldId = fsI.runwayChange.changeId;
-  const next = mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  const next = mustOp(store, 'LC', 'ProposeRunwayChange', { toRunwayId: '23' });
   assert.equal(next.runwayChange.state, 'PROPOSED');
   assert.notEqual(next.runwayChange.changeId, oldId);
   assert.equal(next.transitions.at(-1).replaced.changeId, oldId);
 });
 
 test('WithdrawRunwayChange lets TWR retract before Begin, recorded as WITHDRAWN — and not after', () => {
-  const { store } = manned();
-  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  const { store } = staffed();
+  mustOp(store, 'LC', 'ProposeRunwayChange', { toRunwayId: '23' });
   assert.equal(op(store, 'OPS', 'WithdrawRunwayChange').reason, 'PERMISSION_DENIED');
-  const fsI = mustOp(store, 'TWR', 'WithdrawRunwayChange', { note: 'wind backed' });
+  const fsI = mustOp(store, 'LC', 'WithdrawRunwayChange', { note: 'wind backed' });
   assert.deepEqual([fsI.runwayChange.state, fsI.runwayChange.rejected.cause], ['REJECTED', 'WITHDRAWN']);
-  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  mustOp(store, 'LC', 'ProposeRunwayChange', { toRunwayId: '23' });
   mustOp(store, 'OPS', 'AckRunwayChange');
-  mustOp(store, 'APP', 'AckRunwayChange');
-  mustOp(store, 'TWR', 'BeginRunwayChange');
-  assert.match(op(store, 'TWR', 'WithdrawRunwayChange').detail, /under way/);
-  assert.match(op(store, 'APP', 'RejectRunwayChange').detail, /under way/);
+  mustOp(store, 'AP', 'AckRunwayChange');
+  mustOp(store, 'LC', 'BeginRunwayChange');
+  assert.match(op(store, 'LC', 'WithdrawRunwayChange').detail, /under way/);
+  assert.match(op(store, 'AP', 'RejectRunwayChange').detail, /under way/);
 });
 
 test('a second proposal while one is open is refused; a proposal for the active end, a closed runway or an unknown end is refused', () => {
-  const { store } = manned();
-  assert.match(op(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '05' }).detail, /already the active runway/);
-  assert.equal(op(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '17' }).reason, 'NOT_FOUND');
-  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
-  assert.match(op(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' }).detail, /already PROPOSED/);
-  mustOp(store, 'TWR', 'WithdrawRunwayChange');
-  mustOp(store, 'TWR', 'CloseRunway', { runwayId: '05/23' });
-  assert.match(op(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' }).detail, /closed/);
+  const { store } = staffed();
+  assert.match(op(store, 'LC', 'ProposeRunwayChange', { toRunwayId: '05' }).detail, /already the active runway/);
+  assert.equal(op(store, 'LC', 'ProposeRunwayChange', { toRunwayId: '17' }).reason, 'NOT_FOUND');
+  mustOp(store, 'LC', 'ProposeRunwayChange', { toRunwayId: '23' });
+  assert.match(op(store, 'LC', 'ProposeRunwayChange', { toRunwayId: '23' }).detail, /already PROPOSED/);
+  mustOp(store, 'LC', 'WithdrawRunwayChange');
+  mustOp(store, 'LC', 'CloseRunway', { runwayId: '05/23' });
+  assert.match(op(store, 'LC', 'ProposeRunwayChange', { toRunwayId: '23' }).detail, /closed/);
 });
 
 test('CompleteRunwayChange sets the active runway, suspends the pavement for inspection, and it inhibits until inspected', () => {
-  const { store } = manned();
-  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  const { store } = staffed();
+  mustOp(store, 'LC', 'ProposeRunwayChange', { toRunwayId: '23' });
   mustOp(store, 'OPS', 'AckRunwayChange');
-  mustOp(store, 'APP', 'AckRunwayChange');
-  mustOp(store, 'TWR', 'BeginRunwayChange');
+  mustOp(store, 'AP', 'AckRunwayChange');
+  mustOp(store, 'LC', 'BeginRunwayChange');
   // IN_PROGRESS changes no runway status (decisions.md Q29).
   assert.equal(rwy(store.getRunwayStatus('INCIRLIK')).status, 'OPEN');
-  const fsI = mustOp(store, 'TWR', 'CompleteRunwayChange');
+  const fsI = mustOp(store, 'LC', 'CompleteRunwayChange');
   assert.equal(fsI.activeRunway, '23');
   assert.equal(fsI.activeRunwaySource.kind, 'RUNWAY_CHANGE');
   assert.equal(rwy(fsI).status, 'SUSPENDED_INSPECTION');
@@ -897,12 +897,12 @@ test('the change record clears only when every runway in pendingInspection has b
   // Two surfaces: a change from 05 to 17 has to inspect both.
   const inv = structuredClone(INVENTORY);
   inv.runways.push({ runwayId: '17/35', ends: ['17', '35'], endHeadingsTrue: { '17': 175, '35': 355 }, arrestingGear: [] });
-  const { store } = manned({ runwayStatusOverride: inv });
-  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '17' });
+  const { store } = staffed({ runwayStatusOverride: inv });
+  mustOp(store, 'LC', 'ProposeRunwayChange', { toRunwayId: '17' });
   mustOp(store, 'OPS', 'AckRunwayChange');
-  mustOp(store, 'APP', 'AckRunwayChange');
-  mustOp(store, 'TWR', 'BeginRunwayChange');
-  let fsI = mustOp(store, 'TWR', 'CompleteRunwayChange');
+  mustOp(store, 'AP', 'AckRunwayChange');
+  mustOp(store, 'LC', 'BeginRunwayChange');
+  let fsI = mustOp(store, 'LC', 'CompleteRunwayChange');
   assert.deepEqual(fsI.runwayChange.pendingInspection.sort(), ['05/23', '17/35']);
   fsI = mustOp(store, 'OPS', 'CompleteInspection', { runwayId: '17/35' });
   assert.deepEqual(fsI.runwayChange.pendingInspection, ['05/23']);
@@ -915,19 +915,19 @@ test('the change record clears only when every runway in pendingInspection has b
 });
 
 test('CompleteRunwayChange is refused while a runway in the set is mid runway works', () => {
-  const { store } = manned();
-  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  const { store } = staffed();
+  mustOp(store, 'LC', 'ProposeRunwayChange', { toRunwayId: '23' });
   mustOp(store, 'OPS', 'AckRunwayChange');
-  mustOp(store, 'APP', 'AckRunwayChange');
-  mustOp(store, 'TWR', 'BeginRunwayChange');
-  mustOp(store, 'TWR', 'BeginRunwayWorks', { runwayId: '05/23' });
-  const r = op(store, 'TWR', 'CompleteRunwayChange');
+  mustOp(store, 'AP', 'AckRunwayChange');
+  mustOp(store, 'LC', 'BeginRunwayChange');
+  mustOp(store, 'LC', 'BeginRunwayWorks', { runwayId: '05/23' });
+  const r = op(store, 'LC', 'CompleteRunwayChange');
   assert.match(r.detail, /runway 05\/23 is SUSPENDED_WORKS/);
-  assert.equal(r.fieldState.activeRunway, '05');
+  assert.equal(r.runwayStatus.activeRunway, '05');
   // Once the gear work is done and awaiting its inspection, the change can
   // complete, and one inspection signs off both.
   mustOp(store, 'OPS', 'CompleteRunwayWorks', { runwayId: '05/23' });
-  let fsI = mustOp(store, 'TWR', 'CompleteRunwayChange');
+  let fsI = mustOp(store, 'LC', 'CompleteRunwayChange');
   assert.equal(rwy(fsI).suspension.kind, 'WORKS');
   fsI = mustOp(store, 'OPS', 'CompleteInspection', { runwayId: '05/23' });
   assert.equal(rwy(fsI).status, 'OPEN');
@@ -935,54 +935,54 @@ test('CompleteRunwayChange is refused while a runway in the set is mid runway wo
 });
 
 test('runwayChangeInProgress is true exactly in IN_PROGRESS and PENDING_INSPECTION', () => {
-  const { store } = manned();
+  const { store } = staffed();
   const inProgress = () => store.getRunwayStatus('INCIRLIK').runwayChangeInProgress;
   assert.equal(inProgress(), false);
-  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  mustOp(store, 'LC', 'ProposeRunwayChange', { toRunwayId: '23' });
   assert.equal(inProgress(), false);
   mustOp(store, 'OPS', 'AckRunwayChange');
-  mustOp(store, 'APP', 'AckRunwayChange');
+  mustOp(store, 'AP', 'AckRunwayChange');
   assert.equal(inProgress(), false);
-  mustOp(store, 'TWR', 'BeginRunwayChange');
+  mustOp(store, 'LC', 'BeginRunwayChange');
   assert.equal(inProgress(), true);
-  mustOp(store, 'TWR', 'CompleteRunwayChange');
+  mustOp(store, 'LC', 'CompleteRunwayChange');
   assert.equal(inProgress(), true);
   mustOp(store, 'OPS', 'CompleteInspection', { runwayId: '05/23' });
   assert.equal(inProgress(), false);
 });
 
-test('SelfCoordinateRunwayChange: one input from a controller Primary on TWR and every manned acknowledger (decisions.md S-Q24)', () => {
+test('SelfCoordinateRunwayChange: one input from a controller Primary on TWR and every staffed acknowledger (decisions.md S-Q24)', () => {
   const solo = (f, p) => 'c-solo';
-  const { store } = manned({ primaryOf: solo });
-  const fsI = mustOp(store, 'TWR', 'SelfCoordinateRunwayChange', { toRunwayId: '23' }, { by: 'c-solo' });
+  const { store } = staffed({ primaryOf: solo });
+  const fsI = mustOp(store, 'LC', 'SelfCoordinateRunwayChange', { toRunwayId: '23' }, { by: 'c-solo' });
   assert.equal(fsI.runwayChange.state, 'ACKNOWLEDGED');
   assert.equal(fsI.runwayChange.selfCoordinated, true);
-  for (const p of ['OPS', 'APP']) assert.deepEqual([fsI.runwayChange.acks[p].positionId, fsI.runwayChange.acks[p].selfCoordinated, fsI.runwayChange.acks[p].by], [p, true, 'c-solo']);
-  assert.deepEqual(fsI.transitions.at(-1).acknowledgedAs, ['OPS', 'APP']);
+  for (const p of ['OPS', 'AP']) assert.deepEqual([fsI.runwayChange.acks[p].positionId, fsI.runwayChange.acks[p].selfCoordinated, fsI.runwayChange.acks[p].by], [p, true, 'c-solo']);
+  assert.deepEqual(fsI.transitions.at(-1).acknowledgedAs, ['OPS', 'AP']);
   assert.equal(fsI.rev, 2); // wind + this: one input, one rev
-  // Not Primary on APP: refused, naming it.
-  const { store: s2 } = manned({ primaryOf: (f, p) => (p === 'APP' ? 'c-someone-else' : 'c-solo') });
-  const r = op(s2, 'TWR', 'SelfCoordinateRunwayChange', { toRunwayId: '23' }, { by: 'c-solo' });
+  // Not Primary on AP: refused, naming it.
+  const { store: s2 } = staffed({ primaryOf: (f, p) => (p === 'AP' ? 'c-someone-else' : 'c-solo') });
+  const r = op(s2, 'LC', 'SelfCoordinateRunwayChange', { toRunwayId: '23' }, { by: 'c-solo' });
   assert.equal(r.reason, 'PERMISSION_DENIED');
-  assert.match(r.detail, /Primary at APP/);
-  assert.equal(r.fieldState.runwayChange, null);
+  assert.match(r.detail, /Primary at AP /);
+  assert.equal(r.runwayStatus.runwayChange, null);
 });
 
 test('the wind never moves the active runway while a change is open', () => {
-  const { store } = manned();
-  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  const { store } = staffed();
+  mustOp(store, 'LC', 'ProposeRunwayChange', { toRunwayId: '23' });
   const r = store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 240, missionSession: 2 });
   assert.equal(r.changed, false);
   assert.equal(store.getRunwayStatus('INCIRLIK').activeRunway, '05');
 });
 
 test('a reconnect in the same mission session keeps the end TWR changed to; a new session is considered again (ADR 0086)', () => {
-  const { store } = manned(); // session 1's wind set 05
-  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
+  const { store } = staffed(); // session 1's wind set 05
+  mustOp(store, 'LC', 'ProposeRunwayChange', { toRunwayId: '23' });
   mustOp(store, 'OPS', 'AckRunwayChange');
-  mustOp(store, 'APP', 'AckRunwayChange');
-  mustOp(store, 'TWR', 'BeginRunwayChange');
-  mustOp(store, 'TWR', 'CompleteRunwayChange');
+  mustOp(store, 'AP', 'AckRunwayChange');
+  mustOp(store, 'LC', 'BeginRunwayChange');
+  mustOp(store, 'LC', 'CompleteRunwayChange');
   assert.equal(store.getRunwayStatus('INCIRLIK').activeRunwaySource.kind, 'RUNWAY_CHANGE');
   // A gRPC reconnect or crc-sync restart onto session 1: the wind (still from 060) is not re-applied.
   const { store: reborn } = freshStore();
@@ -996,14 +996,14 @@ test('a reconnect in the same mission session keeps the end TWR changed to; a ne
 });
 
 test('a runway change survives a restart mid-way (PROPOSED with one ack comes back PROPOSED with one ack)', () => {
-  const { store } = manned();
-  mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
-  mustOp(store, 'APP', 'AckRunwayChange');
-  const { store: reborn } = manned();
+  const { store } = staffed();
+  mustOp(store, 'LC', 'ProposeRunwayChange', { toRunwayId: '23' });
+  mustOp(store, 'AP', 'AckRunwayChange');
+  const { store: reborn } = staffed();
   reborn.restore(JSON.parse(JSON.stringify(store.snapshot())));
   const ch = change(reborn);
   assert.equal(ch.state, 'PROPOSED');
-  assert.equal(ch.acks.APP.positionId, 'APP');
+  assert.equal(ch.acks.AP.positionId, 'AP');
   assert.equal(ch.acks.OPS, null);
   mustOp(reborn, 'OPS', 'AckRunwayChange');
   assert.equal(change(reborn).state, 'ACKNOWLEDGED');

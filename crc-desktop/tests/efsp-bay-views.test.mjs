@@ -24,24 +24,24 @@ const { renderBayDescriptorView, sfaExtraNlaButtons } = V;
 const allBays = () => facilityConfig.getFacilityIds().flatMap(f => facilityConfig.getAllBays(f));
 const bay = (id) => allBays().find(b => b.bayId === id);
 const sent = [];
-let held = {};
+let signedOn = {};
 let strips = {};
-let fdrs = {};
+let flightDataList = {};
 let now = Date.UTC(2026, 5, 1, 9, 0);
 
 // The views read the real Board state, the real acting-Position set and the real senders (ESM-1): the test
 // feeds them through applyEfspSnapshot, sendEfspSetPositions and setEfspSender instead of stubbing globals.
 const syncBoard = () => applyEfspSnapshot({
-  strips: Object.values(strips), fdrs: Object.entries(fdrs).map(([fdrId, f]) => ({ fdrId, ...f })),
+  strips: Object.values(strips), flightDataList: Object.entries(flightDataList).map(([flightDataId, f]) => ({ flightDataId, ...f })),
   positions: [], bays: allBays(), boardSeq: 1, sfaRotation: getEfspSfa(),
 });
 const setHeld = (h) => {
-  held = h;
-  for (const f of ['INCIRLIK', 'CENTER', 'TACTICAL', 'CARRIER', 'RANGES']) sendEfspSetPositions(f, held[f] || []);
+  signedOn = h;
+  for (const f of ['INCIRLIK', 'CENTER', 'TACTICAL', 'CARRIER', 'RANGES']) sendEfspSetPositions(f, signedOn[f] || []);
 };
 const putStrip = (st) => { strips[st.stripId] = st; syncBoard(); };
-const putFdr = (id, f) => { fdrs[id] = f; syncBoard(); };
-const clearBoard = () => { strips = {}; fdrs = {}; syncBoard(); };
+const putFdr = (id, f) => { flightDataList[id] = f; syncBoard(); };
+const clearBoard = () => { strips = {}; flightDataList = {}; syncBoard(); };
 
 function setGlobals() {
   sent.length = 0;
@@ -52,7 +52,7 @@ function setGlobals() {
   setEfspSender('sendEfspSfaMutation', (position, baseRev, op) => sent.push({ position, sfa: true, op }));
 }
 
-const addStrip = (s, fdr) => { fdrs[s.fdrId] = fdr; putStrip(s); return s; };
+const addStrip = (s, flightData) => { flightDataList[s.flightDataId] = flightData; putStrip(s); return s; };
 const rackEl = (b, rackId) => { const el = makeElement('div'); el.className = 'efsp-rack'; el.dataset.bayId = b.bayId; el.dataset.rackId = rackId; const h = makeElement('div'); h.className = 'efsp-rack-header'; h.textContent = rackId; el.appendChild(h); return el; };
 const containerFor = (b) => { const c = makeElement('div'); for (const r of b.rackIds) c.appendChild(rackEl(b, r)); return c; };
 const click = (el) => (el._listeners.click || []).forEach(fn => fn({ stopPropagation() {} }));
@@ -71,7 +71,7 @@ test('the descriptor flags reach a client exactly as the server sends them (the 
 test('pattern: legs are the Bay\'s racks, a Strip\'s leg is its rack, and time in the pattern runs from joining, not from the last Move', () => {
   const b = bay('rsu-pattern');
   assert.deepEqual(V.patternLegsFor(b).map(l => l.id), ['closed', 'initial', 'base', 'final']);
-  const s = { stripId: 's1', fdrId: 'f1', bayId: 'rsu-pattern', rackId: 'base', createdAt: 60000, updatedAt: 999000 };
+  const s = { stripId: 's1', flightDataId: 'f1', bayId: 'rsu-pattern', rackId: 'base', createdAt: 60000, updatedAt: 999000 };
   const list = V.patternStripsFor(b, (bayId, rackId) => (bayId === 'rsu-pattern' && rackId === 'base' ? [s] : []), () => ({ identity: { callsign: 'VIPER 11', aircraftType: 'F-16C' } }));
   assert.deepEqual(list, [{ stripId: 's1', callsign: 'VIPER 11', type: 'F-16C', legId: 'base', enteredPatternS: 60, order: 0 }]);
 });
@@ -79,7 +79,7 @@ test('pattern: legs are the Bay\'s racks, a Strip\'s leg is its rack, and time i
 test('pattern mount: hides the racks (RSU replaces them), draws the board, and its three gestures send the right ops as the owner', () => {
   const b = bay('rsu-pattern');
   setHeld({ INCIRLIK: ['RSU'] });
-  addStrip({ stripId: 's1', fdrId: 'f1', bayId: 'rsu-pattern', rackId: 'initial', ownerPositionId: 'RSU', rev: 3, createdAt: now - 120000, state: 'IN_PATTERN' }, { identity: { callsign: 'VIPER 11' } });
+  addStrip({ stripId: 's1', flightDataId: 'f1', bayId: 'rsu-pattern', rackId: 'initial', ownerPositionId: 'RSU', rev: 3, createdAt: now - 120000, state: 'IN_PATTERN' }, { identity: { callsign: 'VIPER 11' } });
   const c = containerFor(b);
   renderBayDescriptorView(c, b);
   const racks_ = [...c.children].filter(x => x.className === 'efsp-rack');
@@ -97,8 +97,8 @@ test('pattern mount: hides the racks (RSU replaces them), draws the board, and i
 
 test('pattern mount is read-only for a controller who does not hold the Position', () => {
   const b = bay('rsu-pattern');
-  setHeld({ INCIRLIK: ['TWR'] });
-  addStrip({ stripId: 's1', fdrId: 'f1', bayId: 'rsu-pattern', rackId: 'initial', ownerPositionId: 'RSU', rev: 1, createdAt: now, state: 'IN_PATTERN' }, { identity: { callsign: 'X' } });
+  setHeld({ INCIRLIK: ['LC'] });
+  addStrip({ stripId: 's1', flightDataId: 'f1', bayId: 'rsu-pattern', rackId: 'initial', ownerPositionId: 'RSU', rev: 1, createdAt: now, state: 'IN_PATTERN' }, { identity: { callsign: 'X' } });
   const c = containerFor(b);
   renderBayDescriptorView(c, b);
   click(descendants(c).find(e => e.className === 'efsp-pattern-next'));
@@ -115,7 +115,7 @@ test('the carrier keeps its racks: the pattern board sits above them (no replace
 });
 
 test('a Bay with no view is left alone, and a stale view is removed when a Bay stops having one', () => {
-  const b = bay('app-inbound');
+  const b = bay('ap-inbound');
   const c = containerFor(b);
   renderBayDescriptorView(c, b);
   assert.equal([...c.children].some(x => x.className === 'efsp-bay-view'), false);
@@ -147,10 +147,10 @@ test('final: the sample is distance to the radar site and a glidepath against a 
   assert.equal(noRef.decisionAltFt, undefined, 'no decision height on a deck');
 });
 
-test('final: PAR\'s terminals are FINAL\'s own states; the carrier\'s Ball keeps its recorded hand-over', () => {
+test('final: PAR\'s terminals are FINAL\'s own states; the carrier\'s Ball keeps its recorded handoff', () => {
   assert.deepEqual(V.finalTerminalOp('PAR', { id: 'ASSURED', toState: 'BALL' }), { kind: 'SetState', toState: 'BALL' });
   assert.deepEqual(V.finalTerminalOp('PAR', { id: 'MISSED', toState: 'BOLTER_WAVEOFF' }), { kind: 'SetState', toState: 'BOLTER_WAVEOFF' });
-  assert.deepEqual(V.finalTerminalOp('CARRIER', { id: 'BALL', toState: 'BALL' }), { kind: 'CarrierTransfer', transfer: 'FINAL_TO_LSO' });
+  assert.deepEqual(V.finalTerminalOp('CARRIER', { id: 'BALL', toState: 'BALL' }), { kind: 'CarrierHandoff', transfer: 'FINAL_TO_LSO' });
   assert.deepEqual(V.finalTerminalOp('CARRIER', { id: 'WAVEOFF', toState: 'BOLTER_WAVEOFF' }), { kind: 'SetState', toState: 'BOLTER_WAVEOFF' });
   assert.equal(V.finalTerminalOp('PAR', null), null);
 });
@@ -158,7 +158,7 @@ test('final: PAR\'s terminals are FINAL\'s own states; the carrier\'s Ball keeps
 test('final mount: PAR\'s Strip becomes the panel with no input in it, racks hidden, and a terminal button sends the owner\'s op', () => {
   const b = bay('par-final');
   setHeld({ INCIRLIK: ['PAR'] });
-  addStrip({ stripId: 'p1', fdrId: 'f1', bayId: 'par-final', rackId: 'main', ownerPositionId: 'PAR', rev: 2, state: 'ON_FINAL', role: 'FINAL' }, { identity: { callsign: 'VIPER 11' } });
+  addStrip({ stripId: 'p1', flightDataId: 'f1', bayId: 'par-final', rackId: 'main', ownerPositionId: 'PAR', rev: 2, state: 'ON_FINAL', stripType: 'FINAL' }, { identity: { callsign: 'VIPER 11' } });
   const c = containerFor(b);
   renderBayDescriptorView(c, b);
   assert.equal([...c.children].filter(x => x.className === 'efsp-rack').every(r => r.style.display === 'none'), true);
@@ -171,7 +171,7 @@ test('final mount: PAR\'s Strip becomes the panel with no input in it, racks hid
   click(buttons[0]);
   assert.deepEqual(sent.pop().op, { kind: 'SetState', toState: 'BALL' });
   // not the owner: a tap does nothing
-  setHeld({ INCIRLIK: ['TWR'] });
+  setHeld({ INCIRLIK: ['LC'] });
   const c2 = containerFor(b);
   renderBayDescriptorView(c2, b);
   descendants(c2).filter(e => e.tagName === 'button').forEach(click);
@@ -194,20 +194,20 @@ test('sfa header: every pool frequency is a row; the rack headers say the freque
   assert.equal(all.filter(e => e.className === 'efsp-sfa-row').length, 5);
   assert.equal(all.some(e => e.tagName === 'select'), false, 'SFA only reads the rotation');
   const heads = all.filter(e => e.className === 'efsp-rack-header').map(e => e.textContent);
-  assert.equal(heads[0], 'freq-1 · 232.100 · APP');
+  assert.equal(heads[0], 'freq-1 · 232.100 · AP');
   assert.equal(heads[3], 'freq-4 · 235.100');
   assert.ok([...c.children].filter(x => x.className === 'efsp-rack').every(r => r.style.display === ''), 'the SFA racks ARE the frequencies and stay');
 
-  setHeld({ INCIRLIK: ['APP'] });
+  setHeld({ INCIRLIK: ['AP'] });
   const c2 = containerFor(b);
   renderBayDescriptorView(c2, b);
   all = descendants(c2);
   const selects = all.filter(e => e.tagName === 'select');
   assert.equal(selects.length, 5);
-  assert.deepEqual(descendants(selects[0]).filter(e => e.tagName === 'option').map(o => o.value), ['', 'APP', 'SFA', 'PAR'], 'spare, then the controllers the server names');
+  assert.deepEqual(descendants(selects[0]).filter(e => e.tagName === 'option').map(o => o.value), ['', 'AP', 'SFA', 'PAR'], 'spare, then the controllers the server names');
   selects[3].value = 'PAR';
   (selects[3]._listeners.change || []).forEach(fn => fn({}));
-  assert.deepEqual(sent.pop(), { position: 'APP', sfa: true, op: { kind: 'SetSfaRotation', rackId: 'freq-4', positionId: 'PAR' } });
+  assert.deepEqual(sent.pop(), { position: 'AP', sfa: true, op: { kind: 'SetSfaRotation', rackId: 'freq-4', positionId: 'PAR' } });
   selects[0].value = '';
   (selects[0]._listeners.change || []).forEach(fn => fn({}));
   assert.deepEqual(sent.pop().op, { kind: 'SetSfaRotation', rackId: 'freq-1', positionId: null });
@@ -218,7 +218,7 @@ test('the Rotate to PAR button sends the transfer as the Strip\'s owner and goes
   const store = new SfaStore({ config: facilityConfig.getSingleFrequencyApproach(), positions: facilityConfig.getPositionSet(), clock: { now: () => now, source: 'T' } });
   applyEfspSfaSnapshot({ sfaRotation: store.view() });
   setHeld({ INCIRLIK: ['SFA'] });
-  const strip = { stripId: 'a1', fdrId: 'f1', rev: 4, role: 'ARRIVAL', state: 'INBOUND', ownerPositionId: 'SFA', facilityId: 'INCIRLIK' };
+  const strip = { stripId: 'a1', flightDataId: 'f1', rev: 4, stripType: 'ARRIVAL', state: 'INBOUND', ownerPositionId: 'SFA', facilityId: 'INCIRLIK' };
   putFdr('f1', { comms: { workingFrequencyMhz: 234.1 } }); putStrip(strip);
   const buttons = sfaExtraNlaButtons(strip);
   assert.equal(buttons.length, 1);

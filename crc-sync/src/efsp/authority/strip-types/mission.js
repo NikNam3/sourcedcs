@@ -14,7 +14,7 @@ const MISSION_STATES = ['TASKED', 'AIRBORNE', 'ON_STATION', 'OFF_STATION', 'RTB'
 // [SOURCE-DEFINED] (WP4A second slice) — MISSION has no guide-published
 // state-ownership table (§9.8 only names the lifecycle, guide line 215);
 // mirrors OVERFLIGHT_STATE_OWNERS' "self-originator owns it" precedent —
-// whichever Position originated the mission (CREATE_ROLE_PERMISSIONS
+// whichever Position originated the mission (CREATE_STRIP_TYPE_PERMISSIONS
 // above) works its entire lifecycle solo. AIC/JTAC deliberately absent:
 // AIC works under TAC_C2's TOFI rather than owning state transitions
 // itself; JTAC's absence alone is what makes it read-only (guide §4.1:
@@ -48,7 +48,7 @@ function computeMissionNla(strip) {
 }
 
 const family = {
-  role: 'MISSION',
+  stripType: 'MISSION',
   states: MISSION_STATES,
   initialState: 'TASKED',
   stateOwners: MISSION_STATE_OWNERS,

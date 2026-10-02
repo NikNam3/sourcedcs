@@ -45,10 +45,10 @@ for (const [name, ta, text, shown] of [
 ]) {
   test(`setClearance in ${name} writes the block text with the injected transition altitude and stores feet`, () => {
     const store = new FlightDataStore(undefined, { transitionAltFt: () => ta });
-    const fdr = store.createFlightData({ callsign: 'VPR9', ...FILED }, { by: 'test' }).fdr;
-    const r = store.setClearance(fdr.fdrId, 'altitude', { value: text }, { by: 'cd' });
+    const flightData = store.createFlightData({ callsign: 'VPR9', ...FILED }, { by: 'test' }).flightData;
+    const r = store.setClearance(flightData.flightDataId, 'altitude', { value: text }, { by: 'cd' });
     assert.equal(r.ok, true, JSON.stringify(r));
-    const e = store.getFlightData(fdr.fdrId).clearance.altitude.entries.at(-1);
+    const e = store.getFlightData(flightData.flightDataId).clearance.altitude.entries.at(-1);
     assert.equal(e.value, shown);
     assert.equal(e.block.lowFt % 100, 0);
     assert.ok(e.block.lowFt >= 10000, 'stored in feet');
@@ -58,11 +58,11 @@ for (const [name, ta, text, shown] of [
 test('the transition altitude is read when the text is written, so a theater change applies to the next entry', () => {
   let ta = CAUCASUS;
   const store = new FlightDataStore(undefined, { transitionAltFt: () => ta });
-  const fdr = store.createFlightData({ callsign: 'VPR9', ...FILED }, { by: 'test' }).fdr;
-  store.setClearance(fdr.fdrId, 'altitude', { value: '100B120' }, { by: 'cd' });
+  const flightData = store.createFlightData({ callsign: 'VPR9', ...FILED }, { by: 'test' }).flightData;
+  store.setClearance(flightData.flightDataId, 'altitude', { value: '100B120' }, { by: 'cd' });
   ta = SYRIA;
-  store.setClearance(fdr.fdrId, 'altitude', { value: '100B120' }, { by: 'cd' });
-  const entries = store.getFlightData(fdr.fdrId).clearance.altitude.entries;
+  store.setClearance(flightData.flightDataId, 'altitude', { value: '100B120' }, { by: 'cd' });
+  const entries = store.getFlightData(flightData.flightDataId).clearance.altitude.entries;
   assert.equal(entries.at(-2).value, '10000-12000');
   assert.equal(entries.at(-1).value, 'FL100-FL120');
 });

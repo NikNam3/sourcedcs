@@ -44,28 +44,28 @@ const FILED = { aircraftType: 'F16', wakeCategory: 'D', departureAirport: 'LTAG'
 
 test('setClearance stores a block structurally and canonicalises its text', () => {
   const store = new FlightDataStore();
-  const fdr = store.createFlightData({ callsign: 'VPR1', ...FILED }, { by: 'test' }).fdr;
-  assert.equal(store.setClearance(fdr.fdrId, 'altitude', { value: 'fl220b240' }, { by: 'cd' }).ok, true);
-  const e = store.getFlightData(fdr.fdrId).clearance.altitude.entries[0];
+  const flightData = store.createFlightData({ callsign: 'VPR1', ...FILED }, { by: 'test' }).flightData;
+  assert.equal(store.setClearance(flightData.flightDataId, 'altitude', { value: 'fl220b240' }, { by: 'cd' }).ok, true);
+  const e = store.getFlightData(flightData.flightDataId).clearance.altitude.entries[0];
   assert.equal(e.value, 'FL220-FL240');
   assert.equal(e.parsed, null, 'no single altitude');
   assert.deepEqual(e.block, blk(22000, 24000));
   // Amending to a single altitude clears the block; wire round-trips through snapshot/restore.
-  store.setClearance(fdr.fdrId, 'altitude', { value: 'FL180' }, { by: 'cd' });
-  const e2 = store.getFlightData(fdr.fdrId).clearance.altitude.entries[1];
+  store.setClearance(flightData.flightDataId, 'altitude', { value: 'FL180' }, { by: 'cd' });
+  const e2 = store.getFlightData(flightData.flightDataId).clearance.altitude.entries[1];
   assert.deepEqual([e2.parsed, e2.block], [18000, null]);
-  store.setClearance(fdr.fdrId, 'altitude', { value: '220-240' }, { by: 'cd' });
+  store.setClearance(flightData.flightDataId, 'altitude', { value: '220-240' }, { by: 'cd' });
   const copy = new FlightDataStore();
   copy.restore(JSON.parse(JSON.stringify(store.snapshot())));
-  const r = copy.getFlightData(fdr.fdrId).clearance.altitude.entries.at(-1);
+  const r = copy.getFlightData(flightData.flightDataId).clearance.altitude.entries.at(-1);
   assert.deepEqual(r.block, blk(22000, 24000));
   assert.equal(r.status, 'ACTIVE');
   // Refusals say how to write a block.
-  const bad = store.setClearance(fdr.fdrId, 'altitude', { value: 'FL240-FL220' });
+  const bad = store.setClearance(flightData.flightDataId, 'altitude', { value: 'FL240-FL220' });
   assert.equal(bad.ok, false);
   assert.match(bad.detail, /FL220-FL240/);
   assert.match(bad.detail, /lower/);
-  assert.equal(store.setClearance(fdr.fdrId, 'altitude', { value: 'FL220-' }).ok, false);
+  assert.equal(store.setClearance(flightData.flightDataId, 'altitude', { value: 'FL220-' }).ok, false);
 });
 
 test('the requested altitude after MTR exit may be a block', async () => {
@@ -81,17 +81,17 @@ test('a block set through SetBlock reaches the wire shape every Strip reads', as
   const crypto = await import('crypto');
   const efsp = createEfsp();
   const session = { controllerId: 'c-OPS', who: 'OPS' };
-  efsp.handleMessage(session, { type: 'efsp-set-positions', facilityId: 'INCIRLIK', held: ['OPS'] });
+  efsp.handleMessage(session, { type: 'efsp-set-positions', facilityId: 'INCIRLIK', signedOn: ['OPS'] });
   const send = (strip, op) => efsp.handleMessage(session, {
     version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(), facilityId: 'INCIRLIK', actingPositionId: 'OPS',
     stripId: strip ? strip.stripId : undefined, baseRev: strip ? strip.rev : undefined, op,
   }).ack;
-  let ack = send(null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { callsign: 'VPR9', ...FILED } });
+  let ack = send(null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { callsign: 'VPR9', ...FILED } });
   assert.equal(ack.ok, true, JSON.stringify(ack));
   const strip = ack.strip;
   ack = send(strip, { kind: 'SetBlock', blockId: '21', value: 'FL220B240' });
   if (ack.ok) {
-    const e = efsp.flightDataStore.getFlightData(strip.fdrId).clearance.altitude.entries.at(-1);
+    const e = efsp.flightDataStore.getFlightData(strip.flightDataId).clearance.altitude.entries.at(-1);
     assert.equal(e.value, 'FL220-FL240');
     assert.deepEqual(e.block, blk(22000, 24000));
   } else {
@@ -156,6 +156,6 @@ test('CA is geometry only: an assigned block never enters it', () => {
   const t = (id, over) => ({ id, callsign: `T${id}`, category: 1, lat: 37, lon: 35, alt: 7000, course: 0, groundSpeed: 400 * KT, verticalSpeed: 0, firstSeenAt: now - 60000, ...over });
   const a = t(1, {});
   const b = t(2, { lat: 37 + 10 / 60, course: 180 });
-  assert.equal(findConflicts([a, b], DEFAULTS.stca, now).length, 1);
+  assert.equal(findConflicts([a, b], DEFAULTS.conflictAlert, now).length, 1);
   assert.equal(findConflicts.length <= 3, true, 'no clearance parameter exists to read');
 });

@@ -10,10 +10,10 @@ const NOW = Date.UTC(2026, 0, 1, 12, 0, 0);
 const MIN = 60 * 1000;
 
 function makeArrivalStrip(overrides = {}) {
-  return { stripId: 's1', role: 'ARRIVAL', state: 'INBOUND', coordination: null, ...overrides };
+  return { stripId: 's1', stripType: 'ARRIVAL', state: 'INBOUND', coordination: null, ...overrides };
 }
 function makeDepartureStrip(overrides = {}) {
-  return { stripId: 's1', role: 'DEPARTURE', state: 'PROPOSED', coordination: null, ...overrides };
+  return { stripId: 's1', stripType: 'DEPARTURE', state: 'PROPOSED', coordination: null, ...overrides };
 }
 function makeFlightData(overrides = {}) {
   return {
@@ -23,7 +23,7 @@ function makeFlightData(overrides = {}) {
   };
 }
 
-test('computeDueObligations returns [] for null strip/fdr, never a throw', () => {
+test('computeDueObligations returns [] for null strip/flightData, never a throw', () => {
   assert.deepEqual(computeDueObligations(null, makeFlightData(), NOW), []);
   assert.deepEqual(computeDueObligations(makeArrivalStrip(), null, NOW), []);
 });
@@ -31,102 +31,102 @@ test('computeDueObligations returns [] for null strip/fdr, never a throw', () =>
 // ── ADVANCE_FORWARDING ──────────────────────────────────────────────────
 
 test('ADVANCE_FORWARDING is not yet due more than 15 minutes before the ETA', () => {
-  const fdr = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW + (ADVANCE_FORWARDING_MINUTES + 1) * MIN } });
-  assert.deepEqual(computeDueObligations(makeArrivalStrip(), fdr, NOW), []);
+  const flightData = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW + (ADVANCE_FORWARDING_MINUTES + 1) * MIN } });
+  assert.deepEqual(computeDueObligations(makeArrivalStrip(), flightData, NOW), []);
 });
 
 test('ADVANCE_FORWARDING is due (WARNING) exactly 15 minutes before the ETA, while unforwarded', () => {
-  const fdr = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW + ADVANCE_FORWARDING_MINUTES * MIN } });
-  const result = computeDueObligations(makeArrivalStrip(), fdr, NOW);
+  const flightData = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW + ADVANCE_FORWARDING_MINUTES * MIN } });
+  const result = computeDueObligations(makeArrivalStrip(), flightData, NOW);
   assert.deepEqual(result, [{ obligationType: 'ADVANCE_FORWARDING', dueAt: NOW, severity: 'WARNING' }]);
 });
 
 test('ADVANCE_FORWARDING escalates to OVERDUE once the ETA itself has passed with no coordination started', () => {
-  const fdr = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW - MIN } });
-  const result = computeDueObligations(makeArrivalStrip(), fdr, NOW);
+  const flightData = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW - MIN } });
+  const result = computeDueObligations(makeArrivalStrip(), flightData, NOW);
   assert.equal(result.find(o => o.obligationType === 'ADVANCE_FORWARDING').severity, 'OVERDUE');
 });
 
 test('ADVANCE_FORWARDING never fires once a coordination link exists — already forwarded', () => {
-  const fdr = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW - MIN } });
-  const strip = makeArrivalStrip({ coordination: { state: 'PROPOSED', lastForwardedEtaUtc: NOW - MIN } });
-  const result = computeDueObligations(strip, fdr, NOW);
+  const flightData = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW - MIN } });
+  const strip = makeArrivalStrip({ coordination: { state: 'INITIATED', lastForwardedEtaUtc: NOW - MIN } });
+  const result = computeDueObligations(strip, flightData, NOW);
   assert.equal(result.some(o => o.obligationType === 'ADVANCE_FORWARDING'), false);
 });
 
 test('ADVANCE_FORWARDING never fires for a DEPARTURE-role Strip', () => {
-  const fdr = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW - MIN } });
-  assert.deepEqual(computeDueObligations(makeDepartureStrip(), fdr, NOW), []);
+  const flightData = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW - MIN } });
+  assert.deepEqual(computeDueObligations(makeDepartureStrip(), flightData, NOW), []);
 });
 
 // ── ETA_REVISION ────────────────────────────────────────────────────────
 
 test('ETA_REVISION does not fire when the drift is within the 3-minute threshold', () => {
-  const fdr = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW + 60 * MIN } });
+  const flightData = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW + 60 * MIN } });
   const strip = makeArrivalStrip({ coordination: { state: 'ACTIVE', lastForwardedEtaUtc: NOW + 60 * MIN + 2 * MIN } });
-  assert.deepEqual(computeDueObligations(strip, fdr, NOW), []);
+  assert.deepEqual(computeDueObligations(strip, flightData, NOW), []);
 });
 
 test('ETA_REVISION fires once drift exceeds 3 minutes, in either direction', () => {
-  const fdr = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW + 60 * MIN } });
+  const flightData = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW + 60 * MIN } });
   const strip = makeArrivalStrip({ coordination: { state: 'ACTIVE', lastForwardedEtaUtc: NOW + 60 * MIN - (ETA_REVISION_THRESHOLD_MINUTES + 1) * MIN } });
-  const result = computeDueObligations(strip, fdr, NOW);
+  const result = computeDueObligations(strip, flightData, NOW);
   assert.deepEqual(result, [{ obligationType: 'ETA_REVISION', dueAt: NOW, severity: 'WARNING' }]);
 });
 
 test('ETA_REVISION never fires without an open coordination link at all', () => {
-  const fdr = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW + 60 * MIN } });
-  assert.deepEqual(computeDueObligations(makeArrivalStrip(), fdr, NOW), []);
+  const flightData = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW + 60 * MIN } });
+  assert.deepEqual(computeDueObligations(makeArrivalStrip(), flightData, NOW), []);
 });
 
 test('ETA_REVISION never fires on a REJECTED coordination link', () => {
-  const fdr = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW + 60 * MIN } });
+  const flightData = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW + 60 * MIN } });
   const strip = makeArrivalStrip({ coordination: { state: 'REJECTED', lastForwardedEtaUtc: NOW } });
-  assert.deepEqual(computeDueObligations(strip, fdr, NOW), []);
+  assert.deepEqual(computeDueObligations(strip, flightData, NOW), []);
 });
 
 // ── AMENDMENT_INSIDE_30MIN ────────────────────────────────────────────────
 
 test('AMENDMENT_INSIDE_30MIN fires for a DEPARTURE Strip amended within the last minute, inside 30 minutes of proposed departure', () => {
-  const fdr = makeFlightData({ updatedAt: NOW - 5000, filed: { proposedDepartureTimeUtc: NOW + 10 * MIN } });
-  const result = computeDueObligations(makeDepartureStrip(), fdr, NOW);
+  const flightData = makeFlightData({ updatedAt: NOW - 5000, filed: { proposedDepartureTimeUtc: NOW + 10 * MIN } });
+  const result = computeDueObligations(makeDepartureStrip(), flightData, NOW);
   assert.deepEqual(result, [{ obligationType: 'AMENDMENT_INSIDE_30MIN', dueAt: NOW, severity: 'WARNING' }]);
 });
 
 test('AMENDMENT_INSIDE_30MIN does not fire when the amendment was more than 60s ago', () => {
-  const fdr = makeFlightData({ updatedAt: NOW - 5 * MIN, filed: { proposedDepartureTimeUtc: NOW + 10 * MIN } });
-  assert.deepEqual(computeDueObligations(makeDepartureStrip(), fdr, NOW), []);
+  const flightData = makeFlightData({ updatedAt: NOW - 5 * MIN, filed: { proposedDepartureTimeUtc: NOW + 10 * MIN } });
+  assert.deepEqual(computeDueObligations(makeDepartureStrip(), flightData, NOW), []);
 });
 
 test('AMENDMENT_INSIDE_30MIN does not fire outside the 30-minute departure window', () => {
-  const fdr = makeFlightData({ updatedAt: NOW - 5000, filed: { proposedDepartureTimeUtc: NOW + (AMENDMENT_WINDOW_MINUTES + 5) * MIN } });
-  assert.deepEqual(computeDueObligations(makeDepartureStrip(), fdr, NOW), []);
+  const flightData = makeFlightData({ updatedAt: NOW - 5000, filed: { proposedDepartureTimeUtc: NOW + (AMENDMENT_WINDOW_MINUTES + 5) * MIN } });
+  assert.deepEqual(computeDueObligations(makeDepartureStrip(), flightData, NOW), []);
 });
 
 test('AMENDMENT_INSIDE_30MIN does not fire once the proposed departure time has already passed', () => {
-  const fdr = makeFlightData({ updatedAt: NOW - 5000, filed: { proposedDepartureTimeUtc: NOW - MIN } });
-  assert.deepEqual(computeDueObligations(makeDepartureStrip(), fdr, NOW), []);
+  const flightData = makeFlightData({ updatedAt: NOW - 5000, filed: { proposedDepartureTimeUtc: NOW - MIN } });
+  assert.deepEqual(computeDueObligations(makeDepartureStrip(), flightData, NOW), []);
 });
 
 // ── DATA_ONLY_VERIFICATION ────────────────────────────────────────────────
 
 test('DATA_ONLY_VERIFICATION never fires when the Facility is not data-only (the case for both real Facilities this slice)', () => {
-  const fdr = makeFlightData();
+  const flightData = makeFlightData();
   const strip = makeArrivalStrip({ coordination: { state: 'ACTIVE', acceptedAt: NOW - 10 * MIN } });
-  assert.deepEqual(computeDueObligations(strip, fdr, NOW, { dataOnly: false }), []);
+  assert.deepEqual(computeDueObligations(strip, flightData, NOW, { dataOnly: false }), []);
 });
 
 test('DATA_ONLY_VERIFICATION fires (OVERDUE) once 3 minutes have passed since ACCEPT at a data-only Facility — synthetic fixture only', () => {
-  const fdr = makeFlightData();
+  const flightData = makeFlightData();
   const strip = makeArrivalStrip({ coordination: { state: 'ACTIVE', acceptedAt: NOW - (DATA_ONLY_VERIFICATION_MINUTES + 1) * MIN } });
-  const result = computeDueObligations(strip, fdr, NOW, { dataOnly: true });
+  const result = computeDueObligations(strip, flightData, NOW, { dataOnly: true });
   assert.equal(result.some(o => o.obligationType === 'DATA_ONLY_VERIFICATION' && o.severity === 'OVERDUE'), true);
 });
 
 test('DATA_ONLY_VERIFICATION does not fire before the 3-minute window elapses', () => {
-  const fdr = makeFlightData();
+  const flightData = makeFlightData();
   const strip = makeArrivalStrip({ coordination: { state: 'ACTIVE', acceptedAt: NOW - MIN } });
-  assert.deepEqual(computeDueObligations(strip, fdr, NOW, { dataOnly: true }), []);
+  assert.deepEqual(computeDueObligations(strip, flightData, NOW, { dataOnly: true }), []);
 });
 
 // ── ForwardingObligationMonitor ──────────────────────────────────────────
@@ -135,10 +135,10 @@ function makeBoardStore(strips) {
   return { getAll: () => strips };
 }
 
-function makeMonitor({ strips, fdr, facilities = ['INCIRLIK'], boardFor, dataOnly = false, airspaceStore, flightDataFor } = {}) {
+function makeMonitor({ strips, flightData, facilities = ['INCIRLIK'], boardFor, dataOnly = false, airspaceStore, flightDataFor } = {}) {
   return new ForwardingObligationMonitor({
     boardStoreFor: boardFor || (() => makeBoardStore(strips)),
-    flightDataStore: { getFlightData: flightDataFor || (() => fdr) },
+    flightDataStore: { getFlightData: flightDataFor || (() => flightData) },
     facilityConfig: { getFacilityIds: () => facilities, getFacilityConfig: () => ({ dataOnly }) },
     airspaceStore,
   });
@@ -146,9 +146,9 @@ function makeMonitor({ strips, fdr, facilities = ['INCIRLIK'], boardFor, dataOnl
 
 test('tick() raises once per Strip+obligationType: true on the first raise, false on identical ticks, one entry', () => {
   const strip = makeArrivalStrip({ coordination: null });
-  const fdr = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW + MIN } });
+  const flightData = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW + MIN } });
   const monitor = makeMonitor({
-    fdr, facilities: ['INCIRLIK', 'CENTER'],
+    flightData, facilities: ['INCIRLIK', 'CENTER'],
     boardFor: (facilityId) => (facilityId === 'CENTER' ? makeBoardStore([strip]) : makeBoardStore([])),
   });
 
@@ -165,16 +165,16 @@ test('tick() raises once per Strip+obligationType: true on the first raise, fals
 
 test('tick() skips DROPPED Strips entirely', () => {
   const strip = makeArrivalStrip({ state: 'DROPPED', coordination: null });
-  const fdr = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW - MIN } });
-  const monitor = makeMonitor({ strips: [strip], fdr });
+  const flightData = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW - MIN } });
+  const monitor = makeMonitor({ strips: [strip], flightData });
   assert.equal(monitor.tick(NOW), false);
   assert.deepEqual(monitor.getAll(), []);
 });
 
 test('a missed obligation is recorded in compliance stats; recordMet() counts the opposite', () => {
   const strip = makeArrivalStrip({ coordination: null });
-  const fdr = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW - MIN } });
-  const monitor = makeMonitor({ strips: [strip], fdr });
+  const flightData = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW - MIN } });
+  const monitor = makeMonitor({ strips: [strip], flightData });
   monitor.tick(NOW);
   assert.deepEqual(monitor.getComplianceStats(), { ADVANCE_FORWARDING: { met: 0, missed: 1 } });
 
@@ -184,11 +184,11 @@ test('a missed obligation is recorded in compliance stats; recordMet() counts th
 
 test('a stray onAlert passed to the constructor is ignored, never called and never a throw', () => {
   const strip = makeArrivalStrip({ coordination: null });
-  const fdr = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW - MIN } });
+  const flightData = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW - MIN } });
   let called = 0;
   const monitor = new ForwardingObligationMonitor({
     boardStoreFor: () => makeBoardStore([strip]),
-    flightDataStore: { getFlightData: () => fdr },
+    flightDataStore: { getFlightData: () => flightData },
     facilityConfig: { getFacilityIds: () => ['INCIRLIK'], getFacilityConfig: () => ({ dataOnly: false }) },
     onAlert: () => { called += 1; },
   });
@@ -199,9 +199,9 @@ test('a stray onAlert passed to the constructor is ignored, never called and nev
 
 test('an obligation retracts when its Strip becomes DROPPED, and when the Strip is gone from the Board', () => {
   const strip = makeArrivalStrip({ coordination: null });
-  const fdr = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW - MIN } });
+  const flightData = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW - MIN } });
   let strips = [strip];
-  const monitor = makeMonitor({ boardFor: () => makeBoardStore(strips), fdr });
+  const monitor = makeMonitor({ boardFor: () => makeBoardStore(strips), flightData });
   assert.equal(monitor.tick(NOW), true);
   strip.state = 'DROPPED';
   assert.equal(monitor.tick(NOW + 1000), true);
@@ -216,8 +216,8 @@ test('an obligation retracts when its Strip becomes DROPPED, and when the Strip 
 
 test('ADVANCE_FORWARDING WARNING -> OVERDUE is a change the client gets; since held, missed still 1', () => {
   const strip = makeArrivalStrip({ coordination: null });
-  const fdr = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW + MIN } });
-  const monitor = makeMonitor({ strips: [strip], fdr });
+  const flightData = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW + MIN } });
+  const monitor = makeMonitor({ strips: [strip], flightData });
   assert.equal(monitor.tick(NOW), true);
   assert.equal(monitor.getAll()[0].severity, 'WARNING');
   assert.equal(monitor.tick(NOW + 2 * MIN), true);
@@ -230,8 +230,8 @@ test('ADVANCE_FORWARDING WARNING -> OVERDUE is a change the client gets; since h
 
 test('ETA_REVISION (dueAt: now) stays one unchanged entry across ticks at different now', () => {
   const strip = makeArrivalStrip({ coordination: { state: 'ACTIVE', lastForwardedEtaUtc: NOW + 30 * MIN } });
-  const fdr = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW + 40 * MIN } });
-  const monitor = makeMonitor({ strips: [strip], fdr });
+  const flightData = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW + 40 * MIN } });
+  const monitor = makeMonitor({ strips: [strip], flightData });
   assert.equal(monitor.tick(NOW), true);
   assert.equal(monitor.tick(NOW + 15000), false);
   assert.equal(monitor.tick(NOW + 30000), false);
@@ -240,13 +240,13 @@ test('ETA_REVISION (dueAt: now) stays one unchanged entry across ticks at differ
 
 test('raise, clear, raise again counts two missed episodes', () => {
   const strip = makeArrivalStrip({ coordination: { state: 'ACTIVE', lastForwardedEtaUtc: NOW + 30 * MIN } });
-  const fdr = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW + 40 * MIN } });
-  const monitor = makeMonitor({ strips: [strip], fdr });
+  const flightData = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW + 40 * MIN } });
+  const monitor = makeMonitor({ strips: [strip], flightData });
   monitor.tick(NOW);
   strip.coordination.lastForwardedEtaUtc = NOW + 40 * MIN; // re-forwarded
   assert.equal(monitor.tick(NOW + MIN), true);
   assert.deepEqual(monitor.getAll(), []);
-  fdr.filed.estimatedArrivalTimeUtc = NOW + 50 * MIN; // drifted again
+  flightData.filed.estimatedArrivalTimeUtc = NOW + 50 * MIN; // drifted again
   assert.equal(monitor.tick(NOW + 2 * MIN), true);
   assert.equal(monitor.getAll()[0].since, NOW + 2 * MIN);
   assert.deepEqual(monitor.getComplianceStats(), { ETA_REVISION: { met: 0, missed: 2 } });
@@ -255,7 +255,7 @@ test('raise, clear, raise again counts two missed episodes', () => {
 test('UNACTIVATED_AIRSPACE_ENTRY retracts when the airspace becomes active', () => {
   let active = false;
   const strip = makeArrivalStrip({ coordination: { state: 'ACTIVE' }, airspaceEntry: { airspaceId: 'R-1', approvedAt: NOW - MIN } });
-  const monitor = makeMonitor({ strips: [strip], fdr: makeFlightData(), airspaceStore: { isActive: () => active } });
+  const monitor = makeMonitor({ strips: [strip], flightData: makeFlightData(), airspaceStore: { isActive: () => active } });
   assert.equal(monitor.tick(NOW), true);
   assert.equal(monitor.getAll()[0].obligationType, 'UNACTIVATED_AIRSPACE_ENTRY');
   active = true;
@@ -264,16 +264,16 @@ test('UNACTIVATED_AIRSPACE_ENTRY retracts when the airspace becomes active', () 
 });
 
 test('two Facilities\' replicas of one FDR hold independent entries', () => {
-  const a = makeArrivalStrip({ stripId: 'sA', fdrId: 'f1', coordination: null });
-  const b = makeArrivalStrip({ stripId: 'sB', fdrId: 'f1', coordination: null });
-  const fdr = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW - MIN } });
+  const a = makeArrivalStrip({ stripId: 'sA', flightDataId: 'f1', coordination: null });
+  const b = makeArrivalStrip({ stripId: 'sB', flightDataId: 'f1', coordination: null });
+  const flightData = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW - MIN } });
   const monitor = makeMonitor({
-    fdr, facilities: ['INCIRLIK', 'CENTER'],
+    flightData, facilities: ['INCIRLIK', 'CENTER'],
     boardFor: (facilityId) => makeBoardStore(facilityId === 'CENTER' ? [b] : [a]),
   });
   monitor.tick(NOW);
   assert.deepEqual(monitor.getAll().map(e => [e.facilityId, e.stripId]), [['INCIRLIK', 'sA'], ['CENTER', 'sB']]);
-  b.coordination = { state: 'PROPOSED' }; // CENTER forwarded; INCIRLIK has not
+  b.coordination = { state: 'INITIATED' }; // CENTER forwarded; INCIRLIK has not
   assert.equal(monitor.tick(NOW + 1000), true);
   assert.deepEqual(monitor.getAll().map(e => [e.facilityId, e.stripId]), [['INCIRLIK', 'sA']]);
 });
@@ -283,25 +283,25 @@ test('two Facilities\' replicas of one FDR hold independent entries', () => {
 test('computePendingObligations: ADVANCE_FORWARDING is pending at dueAt - 1, not at dueAt', () => {
   const eta = NOW + 20 * MIN;
   const dueAt = eta - ADVANCE_FORWARDING_MINUTES * MIN;
-  const fdr = makeFlightData({ filed: { estimatedArrivalTimeUtc: eta } });
-  assert.deepEqual(computePendingObligations(makeArrivalStrip(), fdr, dueAt - 1), [{ obligationType: 'ADVANCE_FORWARDING', dueAt }]);
-  assert.deepEqual(computePendingObligations(makeArrivalStrip(), fdr, dueAt), []);
-  assert.deepEqual(computePendingObligations(makeArrivalStrip({ coordination: { state: 'PROPOSED' } }), fdr, dueAt - 1), []);
+  const flightData = makeFlightData({ filed: { estimatedArrivalTimeUtc: eta } });
+  assert.deepEqual(computePendingObligations(makeArrivalStrip(), flightData, dueAt - 1), [{ obligationType: 'ADVANCE_FORWARDING', dueAt }]);
+  assert.deepEqual(computePendingObligations(makeArrivalStrip(), flightData, dueAt), []);
+  assert.deepEqual(computePendingObligations(makeArrivalStrip({ coordination: { state: 'INITIATED' } }), flightData, dueAt - 1), []);
 });
 
 test('computePendingObligations: VOID_TIME_EXPIRED is pending at dueAt - 1, not at dueAt', () => {
-  const fdr = makeVoidFlightData(NOW);
-  assert.deepEqual(computePendingObligations(makeHeldStrip(), fdr, NOW - 1), [{ obligationType: 'VOID_TIME_EXPIRED', dueAt: NOW }]);
-  assert.deepEqual(computePendingObligations(makeHeldStrip(), fdr, NOW), []);
-  assert.deepEqual(computePendingObligations(makeHeldStrip({ state: 'CLEARED' }), fdr, NOW - 1), []);
+  const flightData = makeVoidFlightData(NOW);
+  assert.deepEqual(computePendingObligations(makeHeldStrip(), flightData, NOW - 1), [{ obligationType: 'VOID_TIME_EXPIRED', dueAt: NOW }]);
+  assert.deepEqual(computePendingObligations(makeHeldStrip(), flightData, NOW), []);
+  assert.deepEqual(computePendingObligations(makeHeldStrip({ state: 'CLEARED' }), flightData, NOW - 1), []);
 });
 
 test('coordination proposed at ETA - 20 min counts ADVANCE_FORWARDING met', () => {
   const strip = makeArrivalStrip();
-  const fdr = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW + 20 * MIN } });
-  const monitor = makeMonitor({ strips: [strip], fdr });
+  const flightData = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW + 20 * MIN } });
+  const monitor = makeMonitor({ strips: [strip], flightData });
   monitor.tick(NOW - MIN);
-  strip.coordination = { state: 'PROPOSED' };
+  strip.coordination = { state: 'INITIATED' };
   assert.equal(monitor.tick(NOW), false);
   assert.deepEqual(monitor.getComplianceStats(), { ADVANCE_FORWARDING: { met: 1, missed: 0 } });
   monitor.tick(NOW + 30 * MIN);
@@ -310,8 +310,8 @@ test('coordination proposed at ETA - 20 min counts ADVANCE_FORWARDING met', () =
 
 test('a pending ADVANCE_FORWARDING whose Strip is dropped instead counts nothing', () => {
   const strip = makeArrivalStrip();
-  const fdr = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW + 20 * MIN } });
-  const monitor = makeMonitor({ strips: [strip], fdr });
+  const flightData = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW + 20 * MIN } });
+  const monitor = makeMonitor({ strips: [strip], flightData });
   monitor.tick(NOW - MIN);
   strip.state = 'DROPPED';
   monitor.tick(NOW);
@@ -320,15 +320,15 @@ test('a pending ADVANCE_FORWARDING whose Strip is dropped instead counts nothing
 
 test('a VOID Strip leaving HELD before the deadline counts met; one left HELD past it counts missed', () => {
   const got = makeHeldStrip();
-  const fdr = makeVoidFlightData(NOW + MIN);
-  const m1 = makeMonitor({ strips: [got], fdr });
+  const flightData = makeVoidFlightData(NOW + MIN);
+  const m1 = makeMonitor({ strips: [got], flightData });
   m1.tick(NOW);
   got.state = 'PUSHBACK';
   m1.tick(NOW + 30000);
   assert.deepEqual(m1.getComplianceStats(), { VOID_TIME_EXPIRED: { met: 1, missed: 0 } });
 
   const stuck = makeHeldStrip();
-  const m2 = makeMonitor({ strips: [stuck], fdr });
+  const m2 = makeMonitor({ strips: [stuck], flightData });
   m2.tick(NOW);
   m2.tick(NOW + 2 * MIN);
   assert.deepEqual(m2.getComplianceStats(), { VOID_TIME_EXPIRED: { met: 0, missed: 1 } });
@@ -336,7 +336,7 @@ test('a VOID Strip leaving HELD before the deadline counts met; one left HELD pa
 
 test('a VOID Strip put back to CLEARED before the deadline did not get away: counts nothing', () => {
   const strip = makeHeldStrip();
-  const monitor = makeMonitor({ strips: [strip], fdr: makeVoidFlightData(NOW + MIN) });
+  const monitor = makeMonitor({ strips: [strip], flightData: makeVoidFlightData(NOW + MIN) });
   monitor.tick(NOW);
   strip.state = 'CLEARED';
   monitor.tick(NOW + 30000);
@@ -345,8 +345,8 @@ test('a VOID Strip put back to CLEARED before the deadline did not get away: cou
 
 test('the due-the-moment-they-exist types never count met', () => {
   const strip = makeArrivalStrip({ coordination: { state: 'ACTIVE', lastForwardedEtaUtc: NOW + 30 * MIN } });
-  const fdr = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW + 40 * MIN } });
-  const monitor = makeMonitor({ strips: [strip], fdr });
+  const flightData = makeFlightData({ filed: { estimatedArrivalTimeUtc: NOW + 40 * MIN } });
+  const monitor = makeMonitor({ strips: [strip], flightData });
   monitor.tick(NOW);
   strip.coordination.lastForwardedEtaUtc = NOW + 40 * MIN;
   monitor.tick(NOW + MIN);
@@ -361,48 +361,48 @@ test('the due-the-moment-they-exist types never count met', () => {
 // look at. These cover it as a real obligation.
 
 function makeHeldStrip(overrides = {}) {
-  return { stripId: 's1', role: 'DEPARTURE', state: 'HELD', coordination: null, ...overrides };
+  return { stripId: 's1', stripType: 'DEPARTURE', state: 'HELD', coordination: null, ...overrides };
 }
 function makeVoidFlightData(voidDeadlineUtc, overrides = {}) {
   return {
     updatedAt: NOW,
     filed: { estimatedArrivalTimeUtc: null, proposedDepartureTimeUtc: null, ...overrides.filed },
-    assigned: { releaseState: 'CLEARANCE_VOID_TIME', voidTimeUtc: voidDeadlineUtc - 30 * MIN, voidDeadlineUtc },
+    assigned: { departureRelease: 'CLEARANCE_VOID_TIME', voidTimeUtc: voidDeadlineUtc - 30 * MIN, voidDeadlineUtc },
   };
 }
 
 test('VOID_TIME_EXPIRED is not yet due one minute before the derived deadline', () => {
-  const fdr = makeVoidFlightData(NOW + MIN);
-  assert.deepEqual(computeDueObligations(makeHeldStrip(), fdr, NOW), []);
+  const flightData = makeVoidFlightData(NOW + MIN);
+  assert.deepEqual(computeDueObligations(makeHeldStrip(), flightData, NOW), []);
 });
 
 test('VOID_TIME_EXPIRED fires as OVERDUE at exactly the deadline — a hard deadline, so no WARNING tier', () => {
-  const fdr = makeVoidFlightData(NOW);
-  assert.deepEqual(computeDueObligations(makeHeldStrip(), fdr, NOW), [
+  const flightData = makeVoidFlightData(NOW);
+  assert.deepEqual(computeDueObligations(makeHeldStrip(), flightData, NOW), [
     { obligationType: 'VOID_TIME_EXPIRED', dueAt: NOW, severity: 'OVERDUE' },
   ]);
 });
 
 test('VOID_TIME_EXPIRED never fires without a CLEARANCE_VOID_TIME release state — there is no deadline to miss', () => {
-  const fdr = { updatedAt: NOW, filed: {}, assigned: { releaseState: 'RELEASED', voidTimeUtc: null, voidDeadlineUtc: null } };
-  assert.deepEqual(computeDueObligations(makeHeldStrip(), fdr, NOW), []);
+  const flightData = { updatedAt: NOW, filed: {}, assigned: { departureRelease: 'RELEASED', voidTimeUtc: null, voidDeadlineUtc: null } };
+  assert.deepEqual(computeDueObligations(makeHeldStrip(), flightData, NOW), []);
 });
 
 test('VOID_TIME_EXPIRED never fires for a Strip that is no longer HELD — the flight got away in time', () => {
-  const fdr = makeVoidFlightData(NOW - MIN);
-  assert.deepEqual(computeDueObligations(makeHeldStrip({ state: 'DEPARTED' }), fdr, NOW), []);
+  const flightData = makeVoidFlightData(NOW - MIN);
+  assert.deepEqual(computeDueObligations(makeHeldStrip({ state: 'DEPARTED' }), flightData, NOW), []);
 });
 
 test('VOID_TIME_EXPIRED never fires for a non-DEPARTURE Role — void time is a departure-clearance concept', () => {
-  const fdr = makeVoidFlightData(NOW - MIN);
-  const strip = { stripId: 's1', role: 'ARRIVAL', state: 'HELD', coordination: null };
-  assert.equal(computeDueObligations(strip, fdr, NOW).some(o => o.obligationType === 'VOID_TIME_EXPIRED'), false);
+  const flightData = makeVoidFlightData(NOW - MIN);
+  const strip = { stripId: 's1', stripType: 'ARRIVAL', state: 'HELD', coordination: null };
+  assert.equal(computeDueObligations(strip, flightData, NOW).some(o => o.obligationType === 'VOID_TIME_EXPIRED'), false);
 });
 
 test('the monitor raises VOID_TIME_EXPIRED once, and retracts it when the Strip leaves HELD', () => {
   const strip = makeHeldStrip();
-  const fdr = makeVoidFlightData(NOW - MIN);
-  const monitor = makeMonitor({ strips: [strip], fdr });
+  const flightData = makeVoidFlightData(NOW - MIN);
+  const monitor = makeMonitor({ strips: [strip], flightData });
 
   assert.equal(monitor.tick(NOW), true);
   assert.equal(monitor.tick(NOW + MIN), false);

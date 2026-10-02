@@ -152,8 +152,8 @@ export class World extends Recorder {
     this.clients.set(id, { user, holds, connected: true });
     const reply = this._call({ type: 'connect', clientId: id, user });
     this._record({ act: 'connect', as: id }, reply);
-    for (const [facilityId, held] of Object.entries(holds)) {
-      this.send(id, { type: 'efsp-set-positions', facilityId, held });
+    for (const [facilityId, signedOn] of Object.entries(holds)) {
+      this.send(id, { type: 'efsp-set-positions', facilityId, signedOn });
     }
   }
 

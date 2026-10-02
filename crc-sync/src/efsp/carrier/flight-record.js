@@ -8,12 +8,12 @@
 // lost-comms fallback and MUST survive from the departure Strip through to
 // recovery. It is the field most likely to be missed." One FDR spans the
 // flight's whole life; its Strips come and go (the launch Strip is dropped,
-// the recovery Strip is a new one on the same fdrId, replicas per Facility —
+// the recovery Strip is a new one on the same flightDataId, replicas per Facility —
 // docs/adr/0013). An EEAT held on a Strip dies with the launch Strip.
 //
 // So these fields live on the FDR, in docs/adr/0052's single military
-// namespace, as one sub-object: `fdr.military.carrier` (the way §9.4's MTR
-// fields are `fdr.military.mtr`). Round-1 question Q63, supervisor default
+// namespace, as one sub-object: `flightData.military.carrier` (the way §9.4's MTR
+// fields are `flightData.military.mtr`). Round-1 question Q63, supervisor default
 // (a). L17 adds it to flight-data-store.js's defaultMilitary(); this module defines the
 // shape, the validators and the restore normaliser.
 //
@@ -144,8 +144,8 @@ function normalizeCarrierFlight(raw) {
 }
 
 /** The carrier record of an FDR, wherever it is in its life. */
-function carrierFlightOf(fdr) {
-  return normalizeCarrierFlight(_isObj(fdr) && _isObj(fdr.military) ? fdr.military.carrier : null);
+function carrierFlightOf(flightData) {
+  return normalizeCarrierFlight(_isObj(flightData) && _isObj(flightData.military) ? flightData.military.carrier : null);
 }
 
 // §9.12's order, exactly.
@@ -178,16 +178,16 @@ const MARSHAL_MESSAGE_FIELDS = Object.freeze([
  * given (decisions H15).
  *
  * @param {object} args
- * @param {object} args.fdr        the FDR; carrier fields are read from fdr.military.carrier
+ * @param {object} args.flightData        the FDR; carrier fields are read from flightData.military.carrier
  * @param {object} [args.derived]  marshal-stack.deriveEntry() for this flight, or null
  * @param {string} [args.caseValue] the recovery Case (the record's value)
  * @param {object} [args.shipState]
  * @param {*}      [args.shipWx]   whatever L17 sources; null when unknown
  * @param {number} [args.magneticVariationDeg]
  */
-function marshalMessage({ fdr = null, derived = null, caseValue = null, shipState = null, shipWx = null, magneticVariationDeg = null } = {}) {
-  const identity = _isObj(fdr) && _isObj(fdr.identity) ? fdr.identity : {};
-  const c = carrierFlightOf(fdr);
+function marshalMessage({ flightData = null, derived = null, caseValue = null, shipState = null, shipWx = null, magneticVariationDeg = null } = {}) {
+  const identity = _isObj(flightData) && _isObj(flightData.identity) ? flightData.identity : {};
+  const c = carrierFlightOf(flightData);
   const d = _isObj(derived) ? derived : {};
   const s = _isObj(shipState) ? shipState : {};
   const ref = s.headingRef === 'GRID' ? 'GRID' : 'TRUE';

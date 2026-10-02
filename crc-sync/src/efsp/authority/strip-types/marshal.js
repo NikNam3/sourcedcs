@@ -6,12 +6,12 @@
 // The carrier's three Roles (docs/adr/0064 B2, docs/adr/0074), guide §4.1 and
 // §9.12. [SOURCE-DEFINED] state names, chosen so they collide with no other
 // Role's state but DROPPED: in particular NOT `FINAL`, which is an ARRIVAL
-// *state* above (the Role named FINAL below lives on strip.role, not
+// *state* above (the Role named FINAL below lives on strip.stripType, not
 // strip.state). INELIGIBLE_STATES and Bay `impliesState` are role-blind string
 // sets, so a clash would be silent.
 //
 // MARSHAL is the carrier's holding/launch Role (a launch is a MARSHAL Strip in
-// LAUNCH; the recovery is a NEW MARSHAL Strip on the same fdrId, so EEAT,
+// LAUNCH; the recovery is a NEW MARSHAL Strip on the same flightDataId, so EEAT,
 // which lives on the FDR, survives to it). FINAL is the talk-down Role, shared
 // with PAR (L18); PATTERN is the visual-pattern Role, shared with RSU (L18).
 const MARSHAL_STATES = ['LAUNCH', 'IN_STACK', 'COMMENCED', 'DROPPED'];
@@ -31,14 +31,14 @@ const MARSHAL_STATE_OWNERS = {
 
 /**
  * MARSHAL's NLA table (docs/adr/0064 B2, docs/adr/0074). A NLA result may carry
- * `carrierTransfer`, the key of a CARRIER_HANDOFFS row (carrier/handoffs.js):
+ * `carrierHandoff`, the key of a CARRIER_HANDOFFS row (carrier/handoffs.js):
  * board-store.js then applies the whole transfer (ownership, Role, stack effect,
  * the trigger type recorded) instead of a bare state write, so the button and
- * the dedicated CarrierTransfer op are ONE implementation. `roleChange` names
+ * the dedicated CarrierHandoff op are ONE implementation. `stripTypeChange` names
  * the Role the Strip takes in place. Every trigger is a controller gesture
  * (guide §10.3, D5): nothing here reads a radar contact.
  */
-function computeMarshalNla(strip, fdr, now, ctx) {
+function computeMarshalNla(strip, flightData, now, ctx) {
   switch (strip.state) {
     case 'LAUNCH':
       // "Launched": the launch Strip ends. The recovery will be a new MARSHAL
@@ -49,25 +49,25 @@ function computeMarshalNla(strip, fdr, now, ctx) {
       const caseValue = ctx.carrierCase();
       if (!ctx.carrierInStack(strip)) return { inhibited: 'not in the Marshal stack — give it a stack position first' };
       if (caseValue === 'I') {
-        // Case I has no Marshal hand-over in the guide; this row is
+        // Case I has no Marshal handoff in the guide; this row is
         // [SOURCE-DEFINED] (L4 briefing Q8) and reuses the controller trigger.
         if (!ctx.isStaffed('CV_PRIFLY') && !ctx.consolidatedAt('CV_PRIFLY')) {
           return { inhibited: 'no receiving Position present' };
         }
-        return { toState: 'IN_PATTERN', transferTo: 'CV_PRIFLY', roleChange: 'PATTERN', carrierTransfer: 'MARSHAL_TO_PATTERN_CASE_I' };
+        return { toState: 'IN_PATTERN', transferTo: 'CV_PRIFLY', stripTypeChange: 'PATTERN', carrierHandoff: 'MARSHAL_TO_PATTERN_CASE_I' };
       }
       const lane = ctx.carrierLaneFor(strip);
       if (!lane) return { inhibited: 'no receiving Position present' };
       // Case II's "See you" (MARSHAL_TO_PRIFLY) is a SECOND, distinct button,
       // not this one (§3.5 rule 1: one Next Logical Action per Strip).
-      return { toState: 'COMMENCED', transferTo: lane, carrierTransfer: 'MARSHAL_TO_APPROACH' };
+      return { toState: 'COMMENCED', transferTo: lane, carrierHandoff: 'MARSHAL_TO_APPROACH' };
     }
 
     case 'COMMENCED':
       // "Radar contact": the lane controller has the aircraft on the scope.
       // The Role changes in place (as ConvertToArrival does, ADR 0023) and the
       // Strip stays with the lane.
-      return { toState: 'ON_FINAL', roleChange: 'FINAL', carrierTransfer: 'APPROACH_TO_FINAL' };
+      return { toState: 'ON_FINAL', stripTypeChange: 'FINAL', carrierHandoff: 'APPROACH_TO_FINAL' };
 
     case 'DROPPED':
     default:
@@ -80,7 +80,7 @@ function computeMarshalNla(strip, fdr, now, ctx) {
 // aircraft in the pattern is one. A flight that passes MARSHAL -> FINAL ->
 // PATTERN is dropped once, from the last Strip, so it counts once.
 const family = {
-  role: 'MARSHAL',
+  stripType: 'MARSHAL',
   states: MARSHAL_STATES,
   initialState: 'IN_STACK',
   stateOwners: MARSHAL_STATE_OWNERS,

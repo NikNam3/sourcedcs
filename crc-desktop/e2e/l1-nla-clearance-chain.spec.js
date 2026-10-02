@@ -15,7 +15,7 @@ const { openPanel, seedStrip, stripByCallsign, expectRefusalIsVisible } = requir
 
 /** The Strip's server-side placement, read from the page's own state. */
 const placement = (page, callsign) => page.evaluate((cs) => {
-  const s = [...efspStrips.values()].find(x => efspFdrs.get(x.fdrId).identity.callsign === cs);
+  const s = [...efspStrips.values()].find(x => efspFdrs.get(x.flightDataId).identity.callsign === cs);
   return s ? { bayId: s.bayId, state: s.state } : null;
 }, callsign);
 
@@ -36,9 +36,9 @@ async function fillChip(page, strip, label, value) {
 
 // F-101
 test('a double-tap on NLA moves only the Strip that was tapped', async ({ page }) => {
-  await openPanel(page, { held: ['OPS', 'CD'] });
-  await seedStrip(page, { callsign: 'DTA101', role: 'DEPARTURE' });
-  await seedStrip(page, { callsign: 'DTB101', role: 'DEPARTURE' });
+  await openPanel(page, { signedOn: ['OPS', 'CD'] });
+  await seedStrip(page, { callsign: 'DTA101', stripType: 'DEPARTURE' });
+  await seedStrip(page, { callsign: 'DTB101', stripType: 'DEPARTURE' });
 
   // ops-proposed is shared with every other spec file in the run and the Bay
   // is 269 px tall, so a Strip seeded at the end of a long Rack is below the
@@ -70,8 +70,8 @@ test('a double-tap on NLA moves only the Strip that was tapped', async ({ page }
 
 // F-102
 test('after each NLA the Strip sits in the Bay for its new state', async ({ page }) => {
-  await openPanel(page, { held: ['OPS', 'CD'] });
-  await seedStrip(page, { callsign: 'VPR102', role: 'DEPARTURE' });
+  await openPanel(page, { signedOn: ['OPS', 'CD'] });
+  await seedStrip(page, { callsign: 'VPR102', stripType: 'DEPARTURE' });
   await stripByCallsign(page, 'VPR102').locator('.efsp-nla-btn').click();
   await expect.poll(async () => (await placement(page, 'VPR102')).state).toBe('PENDING_CLEARANCE');
 
@@ -102,9 +102,9 @@ test('a refusal names the Strip it refused', async ({ page }) => {
   // name typed into 9F until 9F became a picker (crc-sync's docs/adr/0073).
   // The finding is unchanged — ATTRIBUTION. Two Strips on screen, one of
   // them refused, and the panel has to say which.
-  await openPanel(page, { held: ['OPS'] });
-  await seedStrip(page, { callsign: 'RFA103', role: 'DEPARTURE' });
-  await seedStrip(page, { callsign: 'RFB103', role: 'DEPARTURE' });
+  await openPanel(page, { signedOn: ['OPS'] });
+  await seedStrip(page, { callsign: 'RFA103', stripType: 'DEPARTURE' });
+  await seedStrip(page, { callsign: 'RFB103', stripType: 'DEPARTURE' });
   const refused = stripByCallsign(page, 'RFB103');
   await refused.locator('.efsp-block-6').click();
   await page.keyboard.type('NOSUCH');
@@ -122,8 +122,8 @@ test('a refusal names the Strip it refused', async ({ page }) => {
 
 // F-104
 test("Mark Cleared's refusal names the missing fields", async ({ page }) => {
-  await openPanel(page, { held: ['OPS', 'CD'] });
-  await seedStrip(page, { callsign: 'VPR104', role: 'DEPARTURE' });
+  await openPanel(page, { signedOn: ['OPS', 'CD'] });
+  await seedStrip(page, { callsign: 'VPR104', stripType: 'DEPARTURE' });
   await stripByCallsign(page, 'VPR104').locator('.efsp-nla-btn').click();
   await expect.poll(async () => (await placement(page, 'VPR104')).state).toBe('PENDING_CLEARANCE');
   await goBay(page, 'CD', 'cd-pending-clearance');

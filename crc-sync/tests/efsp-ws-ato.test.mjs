@@ -101,7 +101,7 @@ test('a text that changed since the preview is STALE_REV, and is audited', () =>
 
 test('an import creates the lines, broadcasts one delta, audits once; a replay creates nothing twice', () => {
   const p = preview(c.TAC_C2, 'TAC_C2');
-  const before = efsp.boardStoreFor('TACTICAL').getAll().filter((s) => s.role === 'MISSION').length;
+  const before = efsp.boardStoreFor('TACTICAL').getAll().filter((s) => s.stripType === 'MISSION').length;
   const cmid = crypto.randomUUID();
   const first = importAto(c.TAC_C2, 'TAC_C2', { textSha1: p.preview.textSha1, clientMutationId: cmid });
   assert.equal(first.ack.type, 'efsp-ato-ack');
@@ -111,16 +111,16 @@ test('an import creates the lines, broadcasts one delta, audits once; a replay c
   assert.equal(slot(first, 'primary').type, 'efsp-board-delta');
   assert.equal(slot(first, 'primary').facilityId, 'TACTICAL');
   assert.equal(slot(first, 'primary').strips.updated.length, 5);
-  assert.equal(slot(first, 'primary').fdrs.updated.length, 5);
+  assert.equal(slot(first, 'primary').flightDataList.updated.length, 5);
   assert.equal(slot(first, 'peer'), undefined);
   assert.equal(slot(first, 'marsa'), undefined);
-  const after = efsp.boardStoreFor('TACTICAL').getAll().filter((s) => s.role === 'MISSION').length;
+  const after = efsp.boardStoreFor('TACTICAL').getAll().filter((s) => s.stripType === 'MISSION').length;
   assert.equal(after - before, 5);
 
   const replay = importAto(c.TAC_C2, 'TAC_C2', { textSha1: p.preview.textSha1, clientMutationId: cmid });
   assert.deepEqual(replay.ack, first.ack, 'the first ack, verbatim');
   assert.equal(slot(replay, 'primary'), undefined);
-  assert.equal(efsp.boardStoreFor('TACTICAL').getAll().filter((s) => s.role === 'MISSION').length, after);
+  assert.equal(efsp.boardStoreFor('TACTICAL').getAll().filter((s) => s.stripType === 'MISSION').length, after);
 
   const audits = logLines().filter((l) => l.clientMutationId === cmid);
   assert.equal(audits.length, 1);
@@ -139,6 +139,6 @@ test('re-importing the same ATO previews UPDATE for every line and creates no St
   const r = importAto(c.TAC_C2, 'TAC_C2', { textSha1: p.preview.textSha1 });
   assert.ok(r.ack.results.every((x) => x.ok && x.action === 'UPDATE'));
   assert.equal(slot(r, 'primary').strips.updated.length, 0);
-  assert.equal(slot(r, 'primary').fdrs.updated.length, 5);
+  assert.equal(slot(r, 'primary').flightDataList.updated.length, 5);
   assert.equal(efsp.boardStoreFor('TACTICAL').currentSeq, before);
 });

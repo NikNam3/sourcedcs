@@ -23,7 +23,7 @@ function viewWith(ops = []) {
   const store = new CarrierStore({ hulls: hullConfig.getHulls(), clock });
   store.setShipState('CVN-72', { hullId: 'CVN-72', found: true, stale: false, headingRef: 'TRUE', brcDeg: 12, finalBearingDeg: 3, speedKt: 15, magneticVariationDeg: 5, altimeterInHg: 29.92, altimeterSource: 'SET', atUtc: Date.UTC(2026, 5, 1, 9, 5), lat: 35, lon: 36 });
   store.apply({ clientMutationId: 'a', op: { kind: 'SetCase', to: 'II' } }, 'CV_PRIFLY', 'p');
-  for (const f of ['f1', 'f2']) store.apply({ clientMutationId: f, op: { kind: 'Append', fdrId: f } }, 'CV_MARSHAL', 'm');
+  for (const f of ['f1', 'f2']) store.apply({ clientMutationId: f, op: { kind: 'Append', flightDataId: f } }, 'CV_MARSHAL', 'm');
   for (const op of ops) store.apply({ clientMutationId: Math.random().toString(), op }, 'CV_MARSHAL', 'm');
   return store.view();
 }
@@ -53,7 +53,7 @@ test('the derived fields are formatted from what the server sent, never computed
 test('Case I has no DME, no push time and no radial: placeholders, and an unassigned altitude says so', () => {
   const store = new CarrierStore({ hulls: hullConfig.getHulls(), clock });
   store.apply({ clientMutationId: 'a', op: { kind: 'SetCase', to: 'I' } }, 'CV_PRIFLY', 'p');
-  store.apply({ clientMutationId: 'b', op: { kind: 'Append', fdrId: 'f1' } }, 'CV_MARSHAL', 'm');
+  store.apply({ clientMutationId: 'b', op: { kind: 'Append', flightDataId: 'f1' } }, 'CV_MARSHAL', 'm');
   state._resetEfspCarrierStateForTest();
   state.applyEfspCarrierDelta({ carriers: { updated: [store.view()] } });
   assert.equal(state.carrierDerivedText('angels', 'f1'), 'assign');
@@ -80,7 +80,7 @@ test('the banner says what is wrong rather than showing a stale number as live',
 });
 
 test('the slot rows: vacancies are empty slots with the server\'s preview, a gap is closable, nothing is computed client-side', () => {
-  const v = viewWith([{ kind: 'Move', fdrId: 'f1', toIndex: 2 }]); // leaves slot 0 vacant? f2 stays at 1
+  const v = viewWith([{ kind: 'Move', flightDataId: 'f1', toIndex: 2 }]); // leaves slot 0 vacant? f2 stays at 1
   state._resetEfspCarrierStateForTest();
   state.applyEfspCarrierSnapshot({ carriers: [v] });
   const rows = panel.carrierStackRows();
@@ -94,8 +94,8 @@ test('the slot rows: vacancies are empty slots with the server\'s preview, a gap
 
 test('the Marshal stack Bay is ordered by slot, and no other Bay is touched', () => {
   state._resetEfspCarrierStateForTest();
-  state.applyEfspCarrierSnapshot({ carriers: [viewWith([{ kind: 'Move', fdrId: 'f2', toIndex: 0 }])] });
-  const strips = [{ fdrId: 'f1', stripId: 's1' }, { fdrId: 'f2', stripId: 's2' }];
+  state.applyEfspCarrierSnapshot({ carriers: [viewWith([{ kind: 'Move', flightDataId: 'f2', toIndex: 0 }])] });
+  const strips = [{ flightDataId: 'f1', stripId: 's1' }, { flightDataId: 'f2', stripId: 's2' }];
   assert.deepEqual(panel.carrierOrderRack('cv-marshal-stack', strips).map(s => s.stripId), ['s2', 's1']);
   assert.deepEqual(panel.carrierOrderRack('ops-proposed', strips).map(s => s.stripId), ['s1', 's2']);
 });

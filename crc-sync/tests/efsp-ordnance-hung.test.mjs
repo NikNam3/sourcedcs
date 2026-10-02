@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 const { hungOrdnanceAdvisoryFor, buildStatusView } = await import('../src/efsp/runway-status.js');
 const nla = await import('../src/efsp/nla.js');
 
-/** A field-state record in the shape runway-status-store.js getRunwayStatus puts on the wire. */
+/** A runway-status record in the shape runway-status-store.js getRunwayStatus puts on the wire. */
 function record({ pad = 'Hot cargo pad', activeRunway = '05', status = 'OPEN', facilityId = 'INCIRLIK' } = {}) {
   return {
     facilityId,
@@ -22,8 +22,8 @@ function record({ pad = 'Hot cargo pad', activeRunway = '05', status = 'OPEN', f
       suspension: null, closure: null, lastInspection: null, pendingRequest: null,
     }],
     runwayChange: null,
-    hotCargoPad: pad === null ? { occupied: false, occupantFdrId: null } : { name: pad, occupied: false, occupantFdrId: null },
-    alertPad: { name: 'Alert pad', occupied: false, occupantFdrId: null },
+    hotCargoPad: pad === null ? { occupied: false, occupantFlightDataId: null } : { name: pad, occupied: false, occupantFlightDataId: null },
+    alertPad: { name: 'Alert pad', occupied: false, occupantFlightDataId: null },
     runwayChangeInProgress: false,
   };
 }
@@ -31,12 +31,12 @@ function record({ pad = 'Hot cargo pad', activeRunway = '05', status = 'OPEN', f
 const flightDataWith = (ordnanceState, over = {}) => ({
   identity: { callsign: 'VIPER11', beaconAssigned: '4001' },
   filed: { route: 'DCT', requestedAltitude: '250', departureAirport: 'LTAG', destinationAirport: 'LTAG', departureRunway: null, ...over.filed },
-  assigned: { releaseState: 'RELEASED', landingRunway: null, ...over.assigned },
+  assigned: { departureRelease: 'RELEASED', landingRunway: null, ...over.assigned },
   military: { ordnanceState, hookRequired: false },
 });
 
-const arrival = (over = {}) => ({ stripId: 's1', fdrId: 'f1', facilityId: 'INCIRLIK', role: 'ARRIVAL', state: 'HANDED_TO_TOWER', rackId: 'main', ...over });
-const departure = (over = {}) => ({ stripId: 's2', fdrId: 'f2', facilityId: 'INCIRLIK', role: 'DEPARTURE', state: 'TAXI', rackId: 'main', ...over });
+const arrival = (over = {}) => ({ stripId: 's1', flightDataId: 'f1', facilityId: 'INCIRLIK', stripType: 'ARRIVAL', state: 'HANDED_TO_TOWER', rackId: 'main', ...over });
+const departure = (over = {}) => ({ stripId: 's2', flightDataId: 'f2', facilityId: 'INCIRLIK', stripType: 'DEPARTURE', state: 'TAXI', rackId: 'main', ...over });
 
 // H21: the advisory states the fact and recommends no runway. A small list of
 // the ways a recommendation gets phrased; the reason must contain none of them.
@@ -63,7 +63,7 @@ test('HUNG on an ARRIVAL names the hot cargo pad and the resolved runway, and re
   // The runway it names is whatever the Strip resolves to — 8B over the active end (S-Q25).
   const b = hungOrdnanceAdvisoryFor(arrival(), flightDataWith('HUNG', { assigned: { landingRunway: '23' } }), record());
   assert.equal(b.end, '23');
-  assert.equal(b.runwaySource, 'FDR');
+  assert.equal(b.runwaySource, 'FLIGHT_DATA');
   assert.match(b.reason, /Runway 05\/23 \(23\) assigned\.$/);
   assert.doesNotMatch(b.reason, RECOMMENDS);
   // A rack beats the FDR field.
@@ -98,9 +98,9 @@ test('HUNG at a Facility with no field state returns null', () => {
 });
 
 test('OVERFLIGHT and MISSION never advise', () => {
-  assert.equal(hungOrdnanceAdvisoryFor(arrival({ role: 'OVERFLIGHT', state: 'ACTIVE' }), flightDataWith('HUNG'), record()), null);
+  assert.equal(hungOrdnanceAdvisoryFor(arrival({ stripType: 'OVERFLIGHT', state: 'ACTIVE' }), flightDataWith('HUNG'), record()), null);
   // A MISSION Strip shares the FDR with its ATC twin (docs/adr/0052): the twin carries the chip.
-  assert.equal(hungOrdnanceAdvisoryFor(arrival({ role: 'MISSION', state: 'ON_STATION' }), flightDataWith('HUNG'), record()), null);
+  assert.equal(hungOrdnanceAdvisoryFor(arrival({ stripType: 'MISSION', state: 'ON_STATION' }), flightDataWith('HUNG'), record()), null);
 });
 
 test('DROPPED never advises', () => {
@@ -124,17 +124,17 @@ test('the advisory is never an inhibit: NLA for a HUNG flight equals the same fl
   for (const [strip, over] of cases) {
     const hung = nla.computeNla(strip, flightDataWith('HUNG', over), NOW, ctx);
     const clean = nla.computeNla(strip, flightDataWith('CLEAN', over), NOW, ctx);
-    assert.deepEqual(hung, clean, `${strip.role} ${strip.state}`);
-    assert.equal(hung.inhibited, undefined, `${strip.role} ${strip.state} is not inhibited`);
+    assert.deepEqual(hung, clean, `${strip.stripType} ${strip.state}`);
+    assert.equal(hung.inhibited, undefined, `${strip.stripType} ${strip.state} is not inhibited`);
     assert.ok(hungOrdnanceAdvisoryFor(strip, flightDataWith('HUNG', over), rec), 'the advisory is live meanwhile');
   }
 });
 
 test('the function is pure: it never mutates its inputs', () => {
   const rec = record();
-  const fdr = flightDataWith('HUNG');
+  const flightData = flightDataWith('HUNG');
   const strip = arrival();
-  const before = JSON.stringify([rec, fdr, strip]);
-  hungOrdnanceAdvisoryFor(strip, fdr, rec);
-  assert.equal(JSON.stringify([rec, fdr, strip]), before);
+  const before = JSON.stringify([rec, flightData, strip]);
+  hungOrdnanceAdvisoryFor(strip, flightData, rec);
+  assert.equal(JSON.stringify([rec, flightData, strip]), before);
 });

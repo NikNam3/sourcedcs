@@ -14,7 +14,7 @@ const airspaceConfig = await import('../src/efsp/airspace-config.js');
 const FIXTURE = [
   {
     airspaceId: 'RANGE-1', name: 'Test Range', type: 'RANGE',
-    controllingFacilityId: 'INCIRLIK', controllingPositionId: 'APP',
+    controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP',
     usingPositionId: 'RANGE_1_CONTROL',
     controlFrequencyMhz: 283.5,
   },
@@ -43,7 +43,7 @@ const WINDOW = { fromUtc: Date.UTC(2026, 0, 1, 12, 0), toUtc: Date.UTC(2026, 0, 
 function activateRange(store) {
   apply(store, 'RANGE-1', { kind: 'ScheduleAirspace', ...WINDOW }, 'RANGE_1_CONTROL');
   apply(store, 'RANGE-1', { kind: 'RequestActivation' }, 'RANGE_1_CONTROL');
-  return apply(store, 'RANGE-1', { kind: 'ApproveActivation' }, 'APP');
+  return apply(store, 'RANGE-1', { kind: 'ApproveActivation' }, 'AP');
 }
 
 // ── shape ────────────────────────────────────────────────────────────────
@@ -72,12 +72,12 @@ test('a record carries its static definition alongside its state, so the board c
 test('an unknown airspace is NOT_FOUND, never a throw', () => {
   const store = makeStore();
   assert.equal(store.getAirspace('NOPE'), null);
-  assert.equal(apply(store, 'NOPE', { kind: 'ScheduleAirspace', ...WINDOW }, 'APP').reason, 'NOT_FOUND');
+  assert.equal(apply(store, 'NOPE', { kind: 'ScheduleAirspace', ...WINDOW }, 'AP').reason, 'NOT_FOUND');
 });
 
 test('an unknown op kind is rejected, not applied', () => {
   const store = makeStore();
-  const result = apply(store, 'RANGE-1', { kind: 'SeizeAirspace' }, 'APP');
+  const result = apply(store, 'RANGE-1', { kind: 'SeizeAirspace' }, 'AP');
   assert.equal(result.ok, false);
   assert.match(result.detail, /unknown airspace op/);
 });
@@ -95,7 +95,7 @@ test('a range walks scheduled -> active -> released -> returned, and is bookable
   assert.ok(store.getAirspace('RANGE-1').pendingRequest);
   assert.equal(store.getAirspace('RANGE-1').state, 'SCHEDULED', 'asking is not getting');
 
-  assert.equal(apply(store, 'RANGE-1', { kind: 'ApproveActivation' }, 'APP').ok, true);
+  assert.equal(apply(store, 'RANGE-1', { kind: 'ApproveActivation' }, 'AP').ok, true);
   assert.equal(store.getAirspace('RANGE-1').state, 'ACTIVE');
   assert.equal(store.getAirspace('RANGE-1').pendingRequest, null, 'the request is consumed');
   assert.equal(store.isActive('RANGE-1'), true);
@@ -104,7 +104,7 @@ test('a range walks scheduled -> active -> released -> returned, and is bookable
   assert.equal(store.getAirspace('RANGE-1').state, 'RELEASED');
   assert.equal(store.isActive('RANGE-1'), false);
 
-  assert.equal(apply(store, 'RANGE-1', { kind: 'ReturnAirspace' }, 'APP').ok, true);
+  assert.equal(apply(store, 'RANGE-1', { kind: 'ReturnAirspace' }, 'AP').ok, true);
   assert.equal(store.getAirspace('RANGE-1').state, 'RETURNED');
   assert.equal(store.getAirspace('RANGE-1').window, null);
 
@@ -157,17 +157,17 @@ test('only the using agency may release; only the controlling Position may take 
   const store = makeStore();
   activateRange(store);
 
-  assert.equal(apply(store, 'RANGE-1', { kind: 'ReleaseAirspace' }, 'APP').reason, 'PERMISSION_DENIED');
+  assert.equal(apply(store, 'RANGE-1', { kind: 'ReleaseAirspace' }, 'AP').reason, 'PERMISSION_DENIED');
   assert.equal(apply(store, 'RANGE-1', { kind: 'ReleaseAirspace' }, 'RANGE_1_CONTROL').ok, true);
   assert.equal(apply(store, 'RANGE-1', { kind: 'ReturnAirspace' }, 'RANGE_1_CONTROL').reason, 'PERMISSION_DENIED');
-  assert.equal(apply(store, 'RANGE-1', { kind: 'ReturnAirspace' }, 'APP').ok, true);
+  assert.equal(apply(store, 'RANGE-1', { kind: 'ReturnAirspace' }, 'AP').ok, true);
 });
 
 test('a range with its own using agency cannot be activated without one having asked', () => {
   const store = makeStore();
   apply(store, 'RANGE-1', { kind: 'ScheduleAirspace', ...WINDOW }, 'RANGE_1_CONTROL');
 
-  const result = apply(store, 'RANGE-1', { kind: 'ApproveActivation' }, 'APP');
+  const result = apply(store, 'RANGE-1', { kind: 'ApproveActivation' }, 'AP');
   assert.equal(result.ok, false);
   assert.match(result.detail, /no activation request/);
 });
@@ -177,7 +177,7 @@ test('denying activation clears the request and leaves the airspace scheduled, w
   apply(store, 'RANGE-1', { kind: 'ScheduleAirspace', ...WINDOW }, 'RANGE_1_CONTROL');
   apply(store, 'RANGE-1', { kind: 'RequestActivation' }, 'RANGE_1_CONTROL');
 
-  assert.equal(apply(store, 'RANGE-1', { kind: 'DenyActivation', reason: 'traffic' }, 'APP').ok, true);
+  assert.equal(apply(store, 'RANGE-1', { kind: 'DenyActivation', reason: 'traffic' }, 'AP').ok, true);
   const airspace = store.getAirspace('RANGE-1');
   assert.equal(airspace.state, 'SCHEDULED');
   assert.equal(airspace.pendingRequest, null);
@@ -190,7 +190,7 @@ test('one controller holding both sides is recorded as a self-coordination, and 
   // two-party dialogue collapses."
   apply(store, 'RANGE-1', { kind: 'ScheduleAirspace', ...WINDOW }, 'RANGE_1_CONTROL', 'solo');
   apply(store, 'RANGE-1', { kind: 'RequestActivation' }, 'RANGE_1_CONTROL', 'solo');
-  assert.equal(apply(store, 'RANGE-1', { kind: 'ApproveActivation' }, 'APP', 'solo').ok, true);
+  assert.equal(apply(store, 'RANGE-1', { kind: 'ApproveActivation' }, 'AP', 'solo').ok, true);
 
   const activation = store.getAirspace('RANGE-1').transitions.find(t => t.state === 'ACTIVE');
   assert.equal(activation.selfCoordinated, true);
@@ -200,7 +200,7 @@ test('two different controllers are NOT a self-coordination', () => {
   const store = makeStore();
   apply(store, 'RANGE-1', { kind: 'ScheduleAirspace', ...WINDOW }, 'RANGE_1_CONTROL', 'range-guy');
   apply(store, 'RANGE-1', { kind: 'RequestActivation' }, 'RANGE_1_CONTROL', 'range-guy');
-  apply(store, 'RANGE-1', { kind: 'ApproveActivation' }, 'APP', 'app-guy');
+  apply(store, 'RANGE-1', { kind: 'ApproveActivation' }, 'AP', 'app-guy');
 
   const activation = store.getAirspace('RANGE-1').transitions.find(t => t.state === 'ACTIVE');
   assert.equal(activation.selfCoordinated, false);
@@ -218,7 +218,7 @@ test('an available airspace cannot jump straight to active — it has to be sche
 test('an active airspace cannot be returned without being released first', () => {
   const store = makeStore();
   activateRange(store);
-  const result = apply(store, 'RANGE-1', { kind: 'ReturnAirspace' }, 'APP');
+  const result = apply(store, 'RANGE-1', { kind: 'ReturnAirspace' }, 'AP');
   assert.equal(result.ok, false);
   assert.match(result.detail, /cannot go to RETURNED/);
 });
@@ -251,14 +251,14 @@ test('every state change is appended to an immutable history, never overwritten'
   const store = makeStore();
   activateRange(store);
   apply(store, 'RANGE-1', { kind: 'ReleaseAirspace' }, 'RANGE_1_CONTROL');
-  apply(store, 'RANGE-1', { kind: 'ReturnAirspace' }, 'APP');
+  apply(store, 'RANGE-1', { kind: 'ReturnAirspace' }, 'AP');
 
   const states = store.getAirspace('RANGE-1').transitions.map(t => t.state);
   assert.deepEqual(states, ['SCHEDULED', 'ACTIVE', 'RELEASED', 'RETURNED']);
   // JO 7110.65 ¶2-3-1 — an after-action review has to be able to say when
   // the block went hot and who approved it, not just where it is now.
   const activation = store.getAirspace('RANGE-1').transitions.find(t => t.state === 'ACTIVE');
-  assert.equal(activation.actingPositionId, 'APP');
+  assert.equal(activation.actingPositionId, 'AP');
   assert.ok(activation.at > 0);
 });
 

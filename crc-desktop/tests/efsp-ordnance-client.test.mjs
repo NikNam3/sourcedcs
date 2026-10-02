@@ -36,20 +36,20 @@ function record({ pad = 'Hot cargo pad', activeRunway = '05', facilityId = 'INCI
       suspension: null, closure: null, lastInspection: null, pendingRequest: null,
     }],
     runwayChange: null,
-    hotCargoPad: pad === null ? { occupied: false, occupantFdrId: null } : { name: pad, occupied: false, occupantFdrId: null },
-    alertPad: { name: 'Alert pad', occupied: false, occupantFdrId: null },
+    hotCargoPad: pad === null ? { occupied: false, occupantFlightDataId: null } : { name: pad, occupied: false, occupantFlightDataId: null },
+    alertPad: { name: 'Alert pad', occupied: false, occupantFlightDataId: null },
     runwayChangeInProgress: false,
   };
 }
 
 const flightDataWith = (ordnanceState, { dep = null, arr = null } = {}) => ({
-  fdrId: 'f1', rev: 1, provenance: {},
+  flightDataId: 'f1', rev: 1, provenance: {},
   identity: { callsign: 'VIPER1', beaconAssigned: '0001', trackDegradationFlag: 'NONE' },
   filed: { departureRunway: dep }, assigned: { landingRunway: arr }, tofi: { ifrActive: true }, airspace: {}, comms: {},
   military: { ordnanceState, hookRequired: false, alertStatus: 'NONE', mtr: {} },
 });
 
-const STATES_BY_ROLE = {
+const STATES_BY_STRIP_TYPE = {
   DEPARTURE: ['TAXI', 'RUNWAY_QUEUE', 'DROPPED'],
   ARRIVAL: ['INBOUND', 'HANDED_TO_TOWER', 'TAXI_IN', 'DROPPED'],
   OVERFLIGHT: ['ACTIVE', 'DROPPED'],
@@ -63,18 +63,18 @@ test('drift: the client copy and crc-sync\'s hungOrdnanceAdvisoryFor agree on ev
   let rows = 0;
   let advised = 0;
   for (const ordnance of ['CLEAN', 'LOADED', 'HUNG', 'EXPENDED']) {
-    for (const [role, states] of Object.entries(STATES_BY_ROLE)) {
+    for (const [stripType, states] of Object.entries(STATES_BY_STRIP_TYPE)) {
       for (const state of states) {
         for (const pad of ['Hot cargo pad', null, '  ']) {
           for (const rackId of ['main', 'rwy-05', 'rwy-23', 'nowhere']) {
             for (const runwayText of [null, '', '23', 'RWY 5', '05/23', '17', 'rw23']) {
               for (const activeRunway of ['05', '23', null]) {
                 for (const fs of [record({ pad, activeRunway }), null]) {
-                  const strip = { stripId: 's1', fdrId: 'f1', facilityId: 'INCIRLIK', role, state, rackId };
-                  const fdr = flightDataWith(ordnance, { dep: runwayText, arr: runwayText });
-                  const s = server.hungOrdnanceAdvisoryFor(strip, fdr, fs);
-                  const c = client.hungOrdnanceAdvisoryFor(strip, fdr, fs);
-                  assert.deepEqual(pick(c), pick(s), JSON.stringify({ ordnance, role, state, pad, rackId, runwayText, activeRunway, fs: !!fs }));
+                  const strip = { stripId: 's1', flightDataId: 'f1', facilityId: 'INCIRLIK', stripType, state, rackId };
+                  const flightData = flightDataWith(ordnance, { dep: runwayText, arr: runwayText });
+                  const s = server.hungOrdnanceAdvisoryFor(strip, flightData, fs);
+                  const c = client.hungOrdnanceAdvisoryFor(strip, flightData, fs);
+                  assert.deepEqual(pick(c), pick(s), JSON.stringify({ ordnance, stripType, state, pad, rackId, runwayText, activeRunway, fs: !!fs }));
                   rows++;
                   if (s) advised++;
                 }
@@ -87,28 +87,28 @@ test('drift: the client copy and crc-sync\'s hungOrdnanceAdvisoryFor agree on ev
   }
   assert.ok(rows > 5000 && advised > 300, `the table exercised both branches (${rows} rows, ${advised} advised)`);
   // And the no-FDR / no-military rows (an archived FDR, S-R2-13).
-  for (const fdr of [null, undefined, { identity: {} }, { military: null }]) {
-    const strip = { role: 'ARRIVAL', state: 'INBOUND', rackId: 'main' };
-    assert.equal(client.hungOrdnanceAdvisoryFor(strip, fdr, record()), server.hungOrdnanceAdvisoryFor(strip, fdr, record()));
+  for (const flightData of [null, undefined, { identity: {} }, { military: null }]) {
+    const strip = { stripType: 'ARRIVAL', state: 'INBOUND', rackId: 'main' };
+    assert.equal(client.hungOrdnanceAdvisoryFor(strip, flightData, record()), server.hungOrdnanceAdvisoryFor(strip, flightData, record()));
   }
 });
 
 // ── 2. ordnanceAlertsFor ─────────────────────────────────────────────────
 
-function alertsSandbox({ fdr, fieldState }) {
-  // The real state module holds the FDR and the field-state record the advisory reads.
+function alertsSandbox({ flightData, runwayStatus }) {
+  // The real state module holds the FDR and the runway-status record the advisory reads.
   efspState._resetEfspStateForTest();
   efspState.applyEfspSnapshot({
-    strips: [], fdrs: fdr ? [fdr] : [], positions: [], bays: [], boardSeq: 1,
-    fieldStates: fieldState ? [fieldState] : [],
+    strips: [], flightDataList: flightData ? [flightData] : [], positions: [], bays: [], boardSeq: 1,
+    runwayStatuses: runwayStatus ? [runwayStatus] : [],
   });
   return client;
 }
 
-const arrivalStrip = (over = {}) => ({ stripId: 's1', fdrId: 'f1', facilityId: 'INCIRLIK', role: 'ARRIVAL', state: 'HANDED_TO_TOWER', rackId: 'main', ...over });
+const arrivalStrip = (over = {}) => ({ stripId: 's1', flightDataId: 'f1', facilityId: 'INCIRLIK', stripType: 'ARRIVAL', state: 'HANDED_TO_TOWER', rackId: 'main', ...over });
 
 test('ordnanceAlertsFor: one amber HUNG chip with the pad sentence when field state is loaded', () => {
-  const sb = alertsSandbox({ fdr: flightDataWith('HUNG', { arr: '05' }), fieldState: record() });
+  const sb = alertsSandbox({ flightData: flightDataWith('HUNG', { arr: '05' }), runwayStatus: record() });
   const alerts = sb.ordnanceAlertsFor(arrivalStrip());
   assert.equal(alerts.length, 1);
   assert.deepEqual({ ...alerts[0] }, {
@@ -119,7 +119,7 @@ test('ordnanceAlertsFor: one amber HUNG chip with the pad sentence when field st
 });
 
 test('ordnanceAlertsFor: the chip still shows with no client field state at all (L1b not loaded)', () => {
-  const sb = alertsSandbox({ fdr: flightDataWith('HUNG'), fieldState: undefined });
+  const sb = alertsSandbox({ flightData: flightDataWith('HUNG'), runwayStatus: undefined });
   assert.equal(efspState.getEfspFieldState('INCIRLIK'), null, 'no client field state loaded');
   const alerts = sb.ordnanceAlertsFor(arrivalStrip());
   assert.equal(alerts.length, 1);
@@ -128,19 +128,19 @@ test('ordnanceAlertsFor: the chip still shows with no client field state at all 
 });
 
 test('ordnanceAlertsFor: a Facility with no record yet shows the generic sentence too', () => {
-  const sb = alertsSandbox({ fdr: flightDataWith('HUNG'), fieldState: null });
+  const sb = alertsSandbox({ flightData: flightDataWith('HUNG'), runwayStatus: null });
   assert.equal(sb.ordnanceAlertsFor(arrivalStrip()).at(0).reason, client.ORDNANCE_NO_FIELD_STATE_REASON);
 });
 
 test('ordnanceAlertsFor: nothing for CLEAN/LOADED/EXPENDED, a DROPPED Strip, an OVERFLIGHT, a MISSION line or a missing FDR', () => {
   for (const state of ['CLEAN', 'LOADED', 'EXPENDED']) {
-    assert.equal(alertsSandbox({ fdr: flightDataWith(state), fieldState: record() }).ordnanceAlertsFor(arrivalStrip()).length, 0, state);
+    assert.equal(alertsSandbox({ flightData: flightDataWith(state), runwayStatus: record() }).ordnanceAlertsFor(arrivalStrip()).length, 0, state);
   }
-  const hung = alertsSandbox({ fdr: flightDataWith('HUNG'), fieldState: record() });
+  const hung = alertsSandbox({ flightData: flightDataWith('HUNG'), runwayStatus: record() });
   assert.equal(hung.ordnanceAlertsFor(arrivalStrip({ state: 'DROPPED' })).length, 0);
-  assert.equal(hung.ordnanceAlertsFor(arrivalStrip({ role: 'OVERFLIGHT', state: 'ACTIVE' })).length, 0);
-  assert.equal(hung.ordnanceAlertsFor(arrivalStrip({ role: 'MISSION', state: 'ON_STATION' })).length, 0);
-  assert.equal(alertsSandbox({ fdr: null, fieldState: record() }).ordnanceAlertsFor(arrivalStrip()).length, 0);
+  assert.equal(hung.ordnanceAlertsFor(arrivalStrip({ stripType: 'OVERFLIGHT', state: 'ACTIVE' })).length, 0);
+  assert.equal(hung.ordnanceAlertsFor(arrivalStrip({ stripType: 'MISSION', state: 'ON_STATION' })).length, 0);
+  assert.equal(alertsSandbox({ flightData: null, runwayStatus: record() }).ordnanceAlertsFor(arrivalStrip()).length, 0);
 });
 
 // ── 3. the real Strip ────────────────────────────────────────────────────
@@ -148,7 +148,7 @@ test('ordnanceAlertsFor: nothing for CLEAN/LOADED/EXPENDED, a DROPPED Strip, an 
 // A loader of its own, copied from efsp-ui-reachability.test.js's renderStrip
 // rather than shared (that harness is not this lane's to change).
 
-async function renderStrip({ strip, fdr, held, fieldState }) {
+async function renderStrip({ strip, flightData, signedOn, runwayStatus }) {
   globalThis.document.getElementById = () => null;
   globalThis.document.createElement = makeElement;
   globalThis.getLatestTrack = () => null; // window.getLatestTrack / getAllTracks, set by app.js's startApp()
@@ -160,17 +160,17 @@ async function renderStrip({ strip, fdr, held, fieldState }) {
   const template = await g.import('panels/efsp/strip-fields.js');
   await g.import('panels/efsp/strip-view.js');
   ws.setEfspSender('_sendEfsp', () => {});
-  ws.sendEfspSetPositions('INCIRLIK', held);
+  ws.sendEfspSetPositions('INCIRLIK', signedOn);
   ws.setEfspSender('sendEfspMutation', () => 'mid');
   bay._setRenderAllOpenEfspBaysForTest(() => {});
-  state.applyEfspSnapshot({ strips: [strip], fdrs: [fdr], positions: [], bays: [], airspaces: [], correlations: [], marsa: [],
-    fieldStates: fieldState ? [fieldState] : [] });
+  state.applyEfspSnapshot({ strips: [strip], flightDataList: [flightData], positions: [], bays: [], airspaces: [], correlations: [], marsa: [],
+    runwayStatuses: runwayStatus ? [runwayStatus] : [] });
   return { el: bay._buildStripEl(strip), sandbox: template };
 }
 
 const appArrival = () => ({
-  stripId: 's1', cid: '001', fdrId: 'f1', rev: 1, facilityId: 'INCIRLIK', role: 'ARRIVAL', state: 'INBOUND',
-  ownerPositionId: 'APP', bayId: 'app-inbound', rackId: 'main', orderKey: 'V',
+  stripId: 's1', cid: '001', flightDataId: 'f1', rev: 1, facilityId: 'INCIRLIK', stripType: 'ARRIVAL', state: 'INBOUND',
+  ownerPositionId: 'AP', bayId: 'ap-inbound', rackId: 'main', orderKey: 'V',
   annotations: {}, flags: { offset: false, flipped: false, removeIndicator: false, highlight: null, attention: null },
   correlation: { state: 'UNCORRELATED' }, coordination: null, tofiCoordination: null, airspaceEntry: null,
 });
@@ -178,9 +178,9 @@ const appArrival = () => ({
 const byClass = (el, cls) => descendants(el).filter(c => (c.className || '').split(/\s+/).includes(cls));
 
 test('a HUNG arrival shows the HUNG chip and its reason line on every Position\'s Strip, whether or not 3G is on its grid', async () => {
-  for (const positionId of ['APP', 'GND', 'TWR', 'CTR']) {
+  for (const positionId of ['AP', 'GC', 'LC', 'CTR']) {
     const strip = { ...appArrival(), ownerPositionId: positionId };
-    const { el, sandbox } = await renderStrip({ strip, fdr: flightDataWith('HUNG', { arr: '23' }), held: [positionId], fieldState: record() });
+    const { el, sandbox } = await renderStrip({ strip, flightData: flightDataWith('HUNG', { arr: '23' }), signedOn: [positionId], runwayStatus: record() });
     const chip = descendants(el).find(c => c.dataset && c.dataset.slot === 'ord');
     assert.ok(chip, `${positionId}: no ord chip`);
     assert.equal(chip.textContent, 'HUNG');
@@ -190,7 +190,7 @@ test('a HUNG arrival shows the HUNG chip and its reason line on every Position\'
     assert.ok(reasons.includes('Hung ordnance. SOURCE practice: after landing, taxi to Hot cargo pad; the runway is the controller\'s call. Runway 05/23 (23) assigned.'),
       `${positionId}: ${JSON.stringify(reasons)}`);
     // GND has no 3G on its grid (H55: only the Positions a pilot reports to), and still sees it.
-    if (positionId === 'GND') assert.equal(sandbox.compactBlocksFor('ARRIVAL', 'GND').includes('3G'), false);
+    if (positionId === 'GC') assert.equal(sandbox.compactBlocksFor('ARRIVAL', 'GC').includes('3G'), false);
     // Chips in their slot order: ord after the conformance warnings, before trk.
     const slots = descendants(el).filter(c => c.dataset && c.dataset.slot).map(c => c.dataset.slot);
     assert.ok(slots.indexOf('ord') < (slots.indexOf('trk') === -1 ? Infinity : slots.indexOf('trk')));
@@ -198,15 +198,15 @@ test('a HUNG arrival shows the HUNG chip and its reason line on every Position\'
 });
 
 test('the chip shows with no client field state loaded, with the generic sentence', async () => {
-  const { el } = await renderStrip({ strip: appArrival(), fdr: flightDataWith('HUNG'), held: ['APP'], fieldState: undefined });
+  const { el } = await renderStrip({ strip: appArrival(), flightData: flightDataWith('HUNG'), signedOn: ['AP'], runwayStatus: undefined });
   assert.ok(descendants(el).find(c => c.dataset && c.dataset.slot === 'ord'));
   assert.ok(byClass(el, 'efsp-strip-reason').some(r => r.textContent === client.ORDNANCE_NO_FIELD_STATE_REASON));
 });
 
 test('the advisory never disables the NLA button', async () => {
-  const strip = { ...appArrival(), ownerPositionId: 'TWR', state: 'HANDED_TO_TOWER', bayId: 'twr-arrivals' };
-  const clean = await renderStrip({ strip, fdr: flightDataWith('CLEAN', { arr: '05' }), held: ['TWR'], fieldState: record() });
-  const hung = await renderStrip({ strip, fdr: flightDataWith('HUNG', { arr: '05' }), held: ['TWR'], fieldState: record() });
+  const strip = { ...appArrival(), ownerPositionId: 'LC', state: 'HANDED_TO_TOWER', bayId: 'lc-arrivals' };
+  const clean = await renderStrip({ strip, flightData: flightDataWith('CLEAN', { arr: '05' }), signedOn: ['LC'], runwayStatus: record() });
+  const hung = await renderStrip({ strip, flightData: flightDataWith('HUNG', { arr: '05' }), signedOn: ['LC'], runwayStatus: record() });
   const buttons = (el) => descendants(el).filter(c => c.tagName === 'button').map(b => [b.textContent, b.disabled]);
   assert.deepEqual(buttons(hung.el), buttons(clean.el));
   assert.ok(buttons(hung.el).some(([label, disabled]) => /Cleared to Land|Final|Land/i.test(label) && !disabled), JSON.stringify(buttons(hung.el)));
@@ -214,7 +214,7 @@ test('the advisory never disables the NLA button', async () => {
 });
 
 test('a CLEAN arrival shows no indicator row at all (docs/adr/0058)', async () => {
-  const { el } = await renderStrip({ strip: appArrival(), fdr: flightDataWith('CLEAN'), held: ['APP'], fieldState: record() });
+  const { el } = await renderStrip({ strip: appArrival(), flightData: flightDataWith('CLEAN'), signedOn: ['AP'], runwayStatus: record() });
   assert.equal(byClass(el, 'efsp-strip-slots').length, 0);
   assert.equal(byClass(el, 'efsp-strip-reason').length, 0);
 });

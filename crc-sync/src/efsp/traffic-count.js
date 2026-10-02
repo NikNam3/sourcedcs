@@ -41,13 +41,13 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /**
  * The states a Strip must have been in, just before its drop, to be traffic.
  * EVERY Role must have an entry — a test holds this table to nla.js's
- * STATES_BY_ROLE, so a new Role (L17's carrier roles) forces a decision
+ * STATES_BY_STRIP_TYPE, so a new Role (L17's carrier roles) forces a decision
  * instead of silently vanishing from the count (the ADR 0041 argument).
  */
 // Each Role family's `countablePreDropStates` and `excludedWhenNotCountable`
 // (authority/strip-types/<role>.js), frozen here as before.
 const COUNTABLE_PRE_DROP_STATES = Object.freeze(Object.fromEntries(
-  Object.entries(authority.COUNTABLE_PRE_DROP_STATES).map(([role, states]) => [role, Object.freeze([...states])])));
+  Object.entries(authority.COUNTABLE_PRE_DROP_STATES).map(([stripType, states]) => [stripType, Object.freeze([...states])])));
 
 const EXCLUDED_WHEN_NOT_COUNTABLE = Object.freeze({ ...authority.EXCLUDED_WHEN_NOT_COUNTABLE });
 
@@ -90,19 +90,19 @@ function isNotPersistedDrop(entry) {
  * @returns {{counted:boolean, excludedReason:string|null}}
  */
 function countability(before, after) {
-  const role = after && after.role;
-  if (role === 'MISSION') return { counted: false, excludedReason: 'MISSION_LINE' };
+  const stripType = after && after.stripType;
+  if (stripType === 'MISSION') return { counted: false, excludedReason: 'MISSION_LINE' };
   const coord = after && after.coordination;
   if (coord && coord.state === 'REJECTED' && coord.mintedForCoordination) {
     // A replica the receiving Facility declined: the flight never became
     // this Facility's traffic (board-store.js _isRejectedReplica).
     return { counted: false, excludedReason: 'REJECTED_REPLICA' };
   }
-  const states = COUNTABLE_PRE_DROP_STATES[role];
+  const states = COUNTABLE_PRE_DROP_STATES[stripType];
   if (!states) return { counted: false, excludedReason: 'UNCLASSIFIED_STRIP_TYPE' };
   const pre = before && before.state;
   if (states.includes(pre)) return { counted: true, excludedReason: null };
-  return { counted: false, excludedReason: EXCLUDED_WHEN_NOT_COUNTABLE[role] || 'UNCLASSIFIED_STRIP_TYPE' };
+  return { counted: false, excludedReason: EXCLUDED_WHEN_NOT_COUNTABLE[stripType] || 'UNCLASSIFIED_STRIP_TYPE' };
 }
 
 function _code(v) { return typeof v === 'string' ? v.trim().toUpperCase() : ''; }
@@ -114,13 +114,13 @@ function _code(v) { return typeof v === 'string' ? v.trim().toUpperCase() : ''; 
  * for. `identity.homeStation` is deliberately NOT used — it is the unit's
  * home, not the field's.
  */
-function classifyLocality(strip, fdr, homeAirports) {
-  if (strip && strip.role === 'OVERFLIGHT') return { locality: 'TRANSIENT', localityBasis: 'OVERFLIGHT' };
-  if (strip && strip.role === 'ARRIVAL' && strip.previousLeg) return { locality: 'LOCAL', localityBasis: 'CONVERTED_ARRIVAL' };
+function classifyLocality(strip, flightData, homeAirports) {
+  if (strip && strip.stripType === 'OVERFLIGHT') return { locality: 'TRANSIENT', localityBasis: 'OVERFLIGHT' };
+  if (strip && strip.stripType === 'ARRIVAL' && strip.previousLeg) return { locality: 'LOCAL', localityBasis: 'CONVERTED_ARRIVAL' };
   const home = new Set((homeAirports || []).map(_code).filter(Boolean));
   if (home.size === 0) return { locality: 'UNKNOWN', localityBasis: 'NO_HOME_AIRPORT_CONFIGURED' };
-  const filed = (fdr && fdr.filed) || {};
-  if (strip && strip.role === 'ARRIVAL') {
+  const filed = (flightData && flightData.filed) || {};
+  if (strip && strip.stripType === 'ARRIVAL') {
     const origin = _code(filed.originAirport);
     if (!origin) return { locality: 'UNKNOWN', localityBasis: 'NO_AIRPORT_DATA' };
     return { locality: home.has(origin) ? 'LOCAL' : 'TRANSIENT', localityBasis: 'AIRPORTS' };
@@ -148,7 +148,7 @@ function logDerivedRecord(entry, suaIds) {
     stripId: entry.stripId,
     droppedAt: entry.at,
     hourUtc: hourKey(entry.at),
-    role: entry.after.role || null,
+    stripType: entry.after.stripType || null,
     dropOp: entry.op || null,
     counted,
     excludedReason,
@@ -158,7 +158,7 @@ function logDerivedRecord(entry, suaIds) {
   };
 }
 
-const RECONCILED_FIELDS = ['stripId', 'droppedAt', 'hourUtc', 'role', 'counted', 'excludedReason', 'suaTraversal', 'dropOp'];
+const RECONCILED_FIELDS = ['stripId', 'droppedAt', 'hourUtc', 'stripType', 'counted', 'excludedReason', 'suaTraversal', 'dropOp'];
 
 function _approvedAirspace(entry) {
   return entry.ok !== false && entry.op === 'ApproveAirspaceEntry' && entry.after && entry.after.airspaceEntry
@@ -327,7 +327,7 @@ class TrafficCount {
   constructor({ mutationLog, flightDataStore, boardStoreFor, facilityIds, config, path: filePath, clock = WALL_CLOCK, wallNow = () => Date.now(), missionSessionOf = () => null }) {
     const defaults = getInstrumentationConfig().trafficCount;
     this._log = mutationLog;
-    this._fdrStore = flightDataStore;
+    this._flightDataStore = flightDataStore;
     this._boardStoreFor = boardStoreFor;
     this._facilityIds = [...(facilityIds || [])];
     this._retentionDays = config && Number.isInteger(config.retentionDays) && config.retentionDays >= 1 ? config.retentionDays : defaults.retentionDays;
@@ -422,7 +422,7 @@ class TrafficCount {
         if (a) this._latchSua(e.stripId, a);
       }
     }
-    for (const s of live.values()) this._maybeLatchScramble(s.stripId, s.fdrId);
+    for (const s of live.values()) this._maybeLatchScramble(s.stripId, s.flightDataId);
   }
 
   // ── live ──
@@ -432,9 +432,9 @@ class TrafficCount {
     this._sua.get(stripId).add(airspaceId);
   }
 
-  _maybeLatchScramble(stripId, fdrId) {
-    const fdr = fdrId && this._fdrStore ? this._fdrStore.getFlightData(fdrId) : null;
-    if (fdr && fdr.military && fdr.military.alertStatus === 'SCRAMBLE') this._scramble.add(stripId);
+  _maybeLatchScramble(stripId, flightDataId) {
+    const flightData = flightDataId && this._flightDataStore ? this._flightDataStore.getFlightData(flightDataId) : null;
+    if (flightData && flightData.military && flightData.military.alertStatus === 'SCRAMBLE') this._scramble.add(stripId);
   }
 
   _facilityOf(stripId) {
@@ -448,7 +448,7 @@ class TrafficCount {
   _onLogEntry(entry) {
     if (!entry || entry.ok === false || !entry.stripId) return;
     const strip = entry.after || entry.before;
-    if (strip && strip.state !== 'DROPPED') this._maybeLatchScramble(entry.stripId, strip.fdrId);
+    if (strip && strip.state !== 'DROPPED') this._maybeLatchScramble(entry.stripId, strip.flightDataId);
     // A scramble called off while the aircraft was still on the ground never
     // flew: it counts as the Strip's ordinary operation (decisions.md S-L13).
     // Called off after departure, it was flown and the latch stays.
@@ -499,25 +499,25 @@ class TrafficCount {
   _buildRecord(entry, { backfilled, sua }) {
     const base = logDerivedRecord(entry, sua || this._sua.get(entry.stripId));
     const strip = entry.after;
-    const fdr = strip.fdrId && this._fdrStore ? this._fdrStore.getFlightData(strip.fdrId) : null;
+    const flightData = strip.flightDataId && this._flightDataStore ? this._flightDataStore.getFlightData(strip.flightDataId) : null;
     // The entry names its Facility (docs/adr/0083), so a Strip no Board holds any more
     // (archived) keeps it; older entries fall back to looking the Strip up.
     const facilityId = entry.facilityId || this._facilityOf(entry.stripId) || 'UNKNOWN';
-    const identity = (fdr && fdr.identity) || {};
+    const identity = (flightData && flightData.identity) || {};
     const flightSize = Number.isInteger(identity.flightSize) && identity.flightSize > 0 ? identity.flightSize : 1;
     // An FDR that is gone (archived after the drop — wave 2's L24, S-R2-13)
     // leaves nothing to classify by: UNKNOWN, and say why.
-    const { locality, localityBasis } = fdr
-      ? classifyLocality(strip, fdr, this._homeAirports[facilityId])
+    const { locality, localityBasis } = flightData
+      ? classifyLocality(strip, flightData, this._homeAirports[facilityId])
       : { locality: 'UNKNOWN', localityBasis: 'ARCHIVED' };
-    const scramble = this._scramble.has(entry.stripId) || !!(fdr && fdr.military && fdr.military.alertStatus === 'SCRAMBLE');
+    const scramble = this._scramble.has(entry.stripId) || !!(flightData && flightData.military && flightData.military.alertStatus === 'SCRAMBLE');
     return {
       type: 'COUNT',
       countId: base.countId,
       stripId: base.stripId,
-      fdrId: strip.fdrId || null,
+      flightDataId: strip.flightDataId || null,
       facilityId,
-      role: base.role,
+      stripType: base.stripType,
       // The FDR's controller-entered callsign — never a DCS track's (ADR 0059).
       callsign: identity.callsign || null,
       droppedAt: base.droppedAt,
@@ -554,15 +554,15 @@ class TrafficCount {
   }
 
   /**
-   * L13's escape hatch (Q11): call after writing fdr.military.alertStatus
+   * L13's escape hatch (Q11): call after writing flightData.military.alertStatus
    * outside a logged Strip Mutation, so a SCRAMBLE that is reset before the
    * drop still counts.
    */
-  noteFlightData(fdrId) {
+  noteFlightData(flightDataId) {
     for (const f of this._facilityIds) {
       const bs = this._boardStoreFor(f);
       if (!bs) continue;
-      for (const s of bs.getAll()) if (s.fdrId === fdrId && s.state !== 'DROPPED') this._maybeLatchScramble(s.stripId, fdrId);
+      for (const s of bs.getAll()) if (s.flightDataId === flightDataId && s.state !== 'DROPPED') this._maybeLatchScramble(s.stripId, flightDataId);
     }
   }
 
@@ -640,7 +640,7 @@ class TrafficCount {
       const totals = emptyTotals();
       const byHour = new Map();
       const byAircraftType = {};
-      const byRole = {};
+      const byStripType = {};
       for (const r of mine) {
         addToTotals(totals, r);
         if (!byHour.has(r.hourUtc)) byHour.set(r.hourUtc, { hourUtc: r.hourUtc, ...emptyTotals(), byAircraftType: {} });
@@ -658,14 +658,14 @@ class TrafficCount {
         if (r.formation) t.formation += 1;
         if (r.suaTraversal && r.suaTraversal.length) t.suaTraversal += 1;
         if (r.alertScramble) t.alertScramble += 1;
-        byRole[r.role] = (byRole[r.role] || 0) + 1;
+        byStripType[r.stripType] = (byStripType[r.stripType] || 0) + 1;
       }
       facilities[f] = {
         homeAirports: [...(this._homeAirports[f] || [])],
         totals,
         byHour: [...byHour.values()].sort((a, b) => (a.hourUtc < b.hourUtc ? -1 : 1)),
         byAircraftType,
-        byRole,
+        byStripType,
       };
     }
 

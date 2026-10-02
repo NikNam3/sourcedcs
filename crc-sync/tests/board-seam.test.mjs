@@ -155,7 +155,7 @@ test('board seam self-test, 4: rules access', () => {
   assert.equal(checkRulesAccess('const f = this._rules[name];').length, 1, 'indexed');
   assert.equal(checkRulesAccess('const f = rules[name];').length, 1, 'indexed bare');
   assert.equal(checkRulesAccess('helper(a, rules);').length, 1, 'passed on whole');
-  assert.equal(checkRulesAccess('const ok = this._rules.isStaffed(p) && rules.canCreateStripRole(a, b);').length, 0);
+  assert.equal(checkRulesAccess('const ok = this._rules.isStaffed(p) && rules.canCreateStripType(a, b);').length, 0);
   assert.equal(checkRulesAccess('function make({ rules }) { return rules.isStaffed(p); }').length, 0, 'a parameter named rules is a declaration');
   assert.equal(checkRulesAccess('// const r = this._rules;').length, 0, 'comments are ignored');
   assert.equal(checkRulesAccess('constructor({ rules }) { this._rules = rules; }').length, 0, 'a collaborator keeps the rules object (S-BOARD1-1)');

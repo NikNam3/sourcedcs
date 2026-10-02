@@ -2,10 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 const {
-  canMutate, canCorrelate, canDeclareMarsa, canCreateStripRole, canActOnState, tofiCounterparts,
-  PERMISSIONS, CREATE_ROLE_PERMISSIONS, STATE_OWNERS_BY_ROLE,
+  canMutate, canCorrelate, canDeclareMarsa, canCreateStripType, canActOnState, tofiCounterparts,
+  PERMISSIONS, CREATE_STRIP_TYPE_PERMISSIONS, STATE_OWNERS_BY_STRIP_TYPE,
   DEPARTURE_STATE_OWNERS, ARRIVAL_STATE_OWNERS, MISSION_STATE_OWNERS,
-  OP_KINDS, COORDINATION_OP_KINDS, APP_CTR_ONLY_OP_KINDS, TOFI_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS,
+  OP_KINDS, COORDINATION_OP_KINDS, AP_CTR_ONLY_OP_KINDS, TOFI_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS,
   NO_STRIP_OP_CLASSES,
   TACTICAL_CAPABILITIES, READ_SCOPES, handBackTargetsFor, tofiAnswererFor, readScopeFor,
 } = await import('../src/efsp/permission.js');
@@ -15,27 +15,27 @@ test('canMutate has exactly two parameters — structurally cannot accept a "hel
   assert.equal(canMutate.length, 2);
 });
 
-test('canCreateStripRole has exactly two parameters — same D21 guard, for the role-scoped CreateStrip axis', () => {
-  assert.equal(canCreateStripRole.length, 2);
+test('canCreateStripType has exactly two parameters — same D21 guard, for the role-scoped CreateStrip axis', () => {
+  assert.equal(canCreateStripType.length, 2);
 });
 
 test('every INCIRLIK Position (OPS, CD, GND, TWR, APP) is defined in the permission table', () => {
-  for (const id of ['OPS', 'CD', 'GND', 'TWR', 'APP']) {
+  for (const id of ['OPS', 'CD', 'GC', 'LC', 'AP']) {
     assert.ok(PERMISSIONS[id], id);
   }
 });
 
 test('OPS and APP both pass the coarse CreateStrip gate (both originate Strips, just for different roles); CD/GND/TWR do not', () => {
   assert.equal(canMutate('OPS', 'CreateStrip'), true);
-  assert.equal(canMutate('APP', 'CreateStrip'), true);
-  for (const id of ['CD', 'GND', 'TWR']) {
+  assert.equal(canMutate('AP', 'CreateStrip'), true);
+  for (const id of ['CD', 'GC', 'LC']) {
     assert.equal(canMutate(id, 'CreateStrip'), false, id);
   }
 });
 
 test('every INCIRLIK/CENTER Position may perform every non-CreateStrip, non-coordination, non-APP/CTR-only, non-TOFI op kind (WP4A\'s coordination primitives, TOFI, and docs/adr/0023\'s ConvertToArrival are op-kind-level asymmetries, tested separately below)', () => {
-  const nonCreate = OP_KINDS.filter(k => k !== 'CreateStrip' && !COORDINATION_OP_KINDS.includes(k) && !APP_CTR_ONLY_OP_KINDS.includes(k) && !TOFI_OP_KINDS.includes(k) && !AIRSPACE_ENTRY_OP_KINDS.includes(k));
-  for (const id of ['OPS', 'CD', 'GND', 'TWR', 'APP', 'CTR']) {
+  const nonCreate = OP_KINDS.filter(k => k !== 'CreateStrip' && !COORDINATION_OP_KINDS.includes(k) && !AP_CTR_ONLY_OP_KINDS.includes(k) && !TOFI_OP_KINDS.includes(k) && !AIRSPACE_ENTRY_OP_KINDS.includes(k));
+  for (const id of ['OPS', 'CD', 'GC', 'LC', 'AP', 'CTR']) {
     for (const op of nonCreate) {
       assert.equal(canMutate(id, op), true, `${id} / ${op}`);
     }
@@ -43,8 +43,8 @@ test('every INCIRLIK/CENTER Position may perform every non-CreateStrip, non-coor
 });
 
 test('only APP and CTR may use ConvertToArrival — CD/GND/TWR/OPS get none, same restriction as the 5 coordination primitives, for the same underlying reason (docs/adr/0023)', () => {
-  for (const id of ['APP', 'CTR']) assert.equal(canMutate(id, 'ConvertToArrival'), true, id);
-  for (const id of ['OPS', 'CD', 'GND', 'TWR']) assert.equal(canMutate(id, 'ConvertToArrival'), false, id);
+  for (const id of ['AP', 'CTR']) assert.equal(canMutate(id, 'ConvertToArrival'), true, id);
+  for (const id of ['OPS', 'CD', 'GC', 'LC']) assert.equal(canMutate(id, 'ConvertToArrival'), false, id);
 });
 
 // ── WP4A: the 5 coordination primitives (guide §4.6) — the SECOND genuine
@@ -52,9 +52,9 @@ test('only APP and CTR may use ConvertToArrival — CD/GND/TWR/OPS get none, sam
 
 test('only APP and CTR may use any of the 5 cross-Facility coordination primitives — CD/GND/TWR/OPS get none, since none of them ever touches a Facility boundary', () => {
   for (const op of COORDINATION_OP_KINDS) {
-    assert.equal(canMutate('APP', op), true, op);
+    assert.equal(canMutate('AP', op), true, op);
     assert.equal(canMutate('CTR', op), true, op);
-    for (const id of ['OPS', 'CD', 'GND', 'TWR']) {
+    for (const id of ['OPS', 'CD', 'GC', 'LC']) {
       assert.equal(canMutate(id, op), false, `${id} / ${op}`);
     }
   }
@@ -68,7 +68,7 @@ test('CTR may CreateStrip (ARRIVAL only) and use every non-CreateStrip op kind, 
 });
 
 test('D21 regression: a controller holding both TWR and CTR is refused HANDOFF while acting as TWR, even though the same controller also holds CTR', () => {
-  assert.equal(canMutate('TWR', 'HANDOFF'), false);
+  assert.equal(canMutate('LC', 'HANDOFF'), false);
   assert.equal(canMutate('CTR', 'HANDOFF'), true);
 });
 
@@ -95,7 +95,7 @@ test('guide\'s own named D21 acceptance test (§13, line 1294): a HANDOFF attemp
 
 test('TOFI is granted only to CTR, TAC_C2 and GCI (guide §4.1\'s own Position table) — not APP (excluded even though it otherwise gets the full OP_KINDS set), not AIC ("works under TAC_C2\'s TOFI", never independently), not JTAC ("MISSION (read-only)")', () => {
   for (const id of ['CTR', 'TAC_C2', 'GCI']) assert.equal(canMutate(id, 'TOFI'), true, id);
-  for (const id of ['APP', 'AIC', 'JTAC', 'OPS', 'CD', 'GND', 'TWR']) assert.equal(canMutate(id, 'TOFI'), false, id);
+  for (const id of ['AP', 'AIC', 'JTAC', 'OPS', 'CD', 'GC', 'LC']) assert.equal(canMutate(id, 'TOFI'), false, id);
 });
 
 test('TAC_C2 and GCI may CreateStrip (they originate MISSION Strips); AIC and JTAC may not', () => {
@@ -127,7 +127,7 @@ test('an unknown Position is denied every op kind', () => {
 });
 
 test('an unknown op kind is denied for every known Position', () => {
-  for (const id of ['OPS', 'CD', 'GND', 'TWR', 'APP']) {
+  for (const id of ['OPS', 'CD', 'GC', 'LC', 'AP']) {
     assert.equal(canMutate(id, 'NotARealOpKind'), false, id);
   }
 });
@@ -136,18 +136,18 @@ test('D21 regression (shape-only): evaluating GND and TWR independently never gr
   // GND/TWR are still permission-identical in Phase 2 — this asserts the
   // *shape* of the guard (independent evaluation, no shared mutable state
   // between calls). OPS-vs-APP below is the real behavioral case.
-  const gndOnly = OP_KINDS.filter(op => canMutate('GND', op));
-  const twrOnly = OP_KINDS.filter(op => canMutate('TWR', op));
-  assert.deepEqual(OP_KINDS.filter(op => canMutate('GND', op)), gndOnly);
-  assert.deepEqual(OP_KINDS.filter(op => canMutate('TWR', op)), twrOnly);
+  const gndOnly = OP_KINDS.filter(op => canMutate('GC', op));
+  const twrOnly = OP_KINDS.filter(op => canMutate('LC', op));
+  assert.deepEqual(OP_KINDS.filter(op => canMutate('GC', op)), gndOnly);
+  assert.deepEqual(OP_KINDS.filter(op => canMutate('LC', op)), twrOnly);
 });
 
-// ── canCreateStripRole (Phase 2) — role-scoped CreateStrip ───────────────
+// ── canCreateStripType (Phase 2) — role-scoped CreateStrip ───────────────
 
 test('OPS may originate DEPARTURE, and only DEPARTURE (guide §4.1 rule 3)', () => {
-  assert.equal(canCreateStripRole('OPS', 'DEPARTURE'), true);
-  assert.equal(canCreateStripRole('OPS', 'ARRIVAL'), false);
-  assert.equal(canCreateStripRole('OPS', 'OVERFLIGHT'), false);
+  assert.equal(canCreateStripType('OPS', 'DEPARTURE'), true);
+  assert.equal(canCreateStripType('OPS', 'ARRIVAL'), false);
+  assert.equal(canCreateStripType('OPS', 'OVERFLIGHT'), false);
 });
 
 // docs/adr/0023 reopens this — ADR 0014 had deliberately emptied APP's
@@ -157,35 +157,35 @@ test('OPS may originate DEPARTURE, and only DEPARTURE (guide §4.1 rule 3)', () 
 // an uncontrolled field with no flight plan on file) found that too
 // narrow: those have no sending Facility to HANDOFF from at all.
 test('APP may originate ARRIVAL and OVERFLIGHT directly (docs/adr/0023), but not DEPARTURE (that stays OPS-only, guide §4.1 rule 3)', () => {
-  assert.equal(canCreateStripRole('APP', 'ARRIVAL'), true);
-  assert.equal(canCreateStripRole('APP', 'OVERFLIGHT'), true);
-  assert.equal(canCreateStripRole('APP', 'DEPARTURE'), false);
+  assert.equal(canCreateStripType('AP', 'ARRIVAL'), true);
+  assert.equal(canCreateStripType('AP', 'OVERFLIGHT'), true);
+  assert.equal(canCreateStripType('AP', 'DEPARTURE'), false);
 });
 
 test('CTR may originate ARRIVAL (docs/adr/0014) and OVERFLIGHT (docs/adr/0023), but not DEPARTURE', () => {
-  assert.equal(canCreateStripRole('CTR', 'ARRIVAL'), true);
-  assert.equal(canCreateStripRole('CTR', 'OVERFLIGHT'), true);
-  assert.equal(canCreateStripRole('CTR', 'DEPARTURE'), false);
+  assert.equal(canCreateStripType('CTR', 'ARRIVAL'), true);
+  assert.equal(canCreateStripType('CTR', 'OVERFLIGHT'), true);
+  assert.equal(canCreateStripType('CTR', 'DEPARTURE'), false);
 });
 
 test('CD/GND/TWR may originate no Strip Role at all', () => {
-  for (const id of ['CD', 'GND', 'TWR']) {
-    assert.equal(canCreateStripRole(id, 'DEPARTURE'), false, id);
-    assert.equal(canCreateStripRole(id, 'ARRIVAL'), false, id);
-    assert.equal(canCreateStripRole(id, 'OVERFLIGHT'), false, id);
+  for (const id of ['CD', 'GC', 'LC']) {
+    assert.equal(canCreateStripType(id, 'DEPARTURE'), false, id);
+    assert.equal(canCreateStripType(id, 'ARRIVAL'), false, id);
+    assert.equal(canCreateStripType(id, 'OVERFLIGHT'), false, id);
   }
 });
 
-test('every Position with CreateStrip in its coarse op-kind set has a CREATE_ROLE_PERMISSIONS entry (even if empty) — nothing silently falls through to "allowed"', () => {
+test('every Position with CreateStrip in its coarse op-kind set has a CREATE_STRIP_TYPE_PERMISSIONS entry (even if empty) — nothing silently falls through to "allowed"', () => {
   for (const id of Object.keys(PERMISSIONS)) {
     if (PERMISSIONS[id].has('CreateStrip')) {
-      assert.ok(CREATE_ROLE_PERMISSIONS[id], `${id} passes the coarse CreateStrip gate but has no role-scoped entry`);
+      assert.ok(CREATE_STRIP_TYPE_PERMISSIONS[id], `${id} passes the coarse CreateStrip gate but has no role-scoped entry`);
     }
   }
 });
 
-test('D21 regression: a controller holding both OPS and CTR is refused CreateStrip(role=ARRIVAL) while acting as OPS, even though the same controller also holds CTR', () => {
-  // The point: canCreateStripRole takes exactly one Position, structurally
+test('D21 regression: a controller holding both OPS and CTR is refused CreateStrip(stripType=ARRIVAL) while acting as OPS, even though the same controller also holds CTR', () => {
+  // The point: canCreateStripType takes exactly one Position, structurally
   // — "also holds CTR" has nowhere to leak in. This is the first test in
   // the suite that can actually distinguish per-acting-Position evaluation
   // from a union bug, since OPS and CTR are genuinely permission-different
@@ -194,18 +194,18 @@ test('D21 regression: a controller holding both OPS and CTR is refused CreateStr
   // ARRIVAL right was narrowed away in favor of the real CTR->APP HANDOFF;
   // docs/adr/0023 reopened it, but OPS/CTR are still permission-different
   // in the direction this test checks — OPS never gets ARRIVAL.)
-  assert.equal(canCreateStripRole('OPS', 'ARRIVAL'), false);
-  assert.equal(canCreateStripRole('CTR', 'ARRIVAL'), true);
+  assert.equal(canCreateStripType('OPS', 'ARRIVAL'), false);
+  assert.equal(canCreateStripType('CTR', 'ARRIVAL'), true);
 });
 
-test('D21 regression, symmetric case: acting as CTR is refused CreateStrip(role=DEPARTURE) even though the same controller also holds OPS', () => {
-  assert.equal(canCreateStripRole('CTR', 'DEPARTURE'), false);
-  assert.equal(canCreateStripRole('OPS', 'DEPARTURE'), true);
+test('D21 regression, symmetric case: acting as CTR is refused CreateStrip(stripType=DEPARTURE) even though the same controller also holds OPS', () => {
+  assert.equal(canCreateStripType('CTR', 'DEPARTURE'), false);
+  assert.equal(canCreateStripType('OPS', 'DEPARTURE'), true);
 });
 
-test('canCreateStripRole returns false for an unknown Position or an unknown role, never a throw', () => {
-  assert.equal(canCreateStripRole('NOT_A_POSITION', 'DEPARTURE'), false);
-  assert.equal(canCreateStripRole('OPS', 'NOT_A_ROLE'), false);
+test('canCreateStripType returns false for an unknown Position or an unknown stripType, never a throw', () => {
+  assert.equal(canCreateStripType('NOT_A_POSITION', 'DEPARTURE'), false);
+  assert.equal(canCreateStripType('OPS', 'NOT_A_STRIP_TYPE'), false);
 });
 
 // ── canActOnState — per-State authority (guide §3.4 "normally owned by") ──
@@ -225,19 +225,19 @@ test('DEPARTURE_STATE_OWNERS matches guide §3.4\'s "normally owned by" column, 
     PROPOSED: ['OPS'],
     PENDING_CLEARANCE: ['CD'],
     CLEARED: ['CD'],
-    HELD: ['CD', 'GND'],
-    PUSHBACK: ['GND'],
-    TAXI: ['GND'],
-    RUNWAY_QUEUE: ['TWR'],
-    LUAW: ['TWR'],
-    DEPARTED: ['TWR'],
-    HANDED_OFF: ['APP', 'CTR'],
+    HELD: ['CD', 'GC'],
+    PUSHBACK: ['GC'],
+    TAXI: ['GC'],
+    RUNWAY_QUEUE: ['LC'],
+    LUAW: ['LC'],
+    DEPARTED: ['LC'],
+    HANDED_OFF: ['AP', 'CTR'],
   });
 });
 
 test('the OPS-owns-PROPOSED case: OPS may act on PROPOSED, CD/GND/TWR/APP may not', () => {
   assert.equal(canActOnState('OPS', 'DEPARTURE', 'PROPOSED'), true);
-  for (const id of ['CD', 'GND', 'TWR', 'APP']) {
+  for (const id of ['CD', 'GC', 'LC', 'AP']) {
     assert.equal(canActOnState(id, 'DEPARTURE', 'PROPOSED'), false, id);
   }
 });
@@ -251,29 +251,29 @@ test('the exact hazard this was built for: OPS may NOT act on PENDING_CLEARANCE 
 
 test('HELD is shared between CD and GND (guide §3.4: "CD / GND"), no one else', () => {
   assert.equal(canActOnState('CD', 'DEPARTURE', 'HELD'), true);
-  assert.equal(canActOnState('GND', 'DEPARTURE', 'HELD'), true);
-  for (const id of ['OPS', 'TWR', 'APP']) {
+  assert.equal(canActOnState('GC', 'DEPARTURE', 'HELD'), true);
+  for (const id of ['OPS', 'LC', 'AP']) {
     assert.equal(canActOnState(id, 'DEPARTURE', 'HELD'), false, id);
   }
 });
 
 test('DEPARTED is TWR\'s (the one about to press the real Hand Off to APP), not APP\'s — APP only owns HANDED_OFF, after the transfer has already happened', () => {
-  assert.equal(canActOnState('TWR', 'DEPARTURE', 'DEPARTED'), true);
-  assert.equal(canActOnState('APP', 'DEPARTURE', 'DEPARTED'), false);
-  assert.equal(canActOnState('APP', 'DEPARTURE', 'HANDED_OFF'), true);
+  assert.equal(canActOnState('LC', 'DEPARTURE', 'DEPARTED'), true);
+  assert.equal(canActOnState('AP', 'DEPARTURE', 'DEPARTED'), false);
+  assert.equal(canActOnState('AP', 'DEPARTURE', 'HANDED_OFF'), true);
 });
 
 test('ARRIVAL states have their own authority table, independent of DEPARTURE\'s — same state-name overlap trap as EfspState FINAL vs Strip Role FINAL', () => {
-  assert.equal(canActOnState('APP', 'ARRIVAL', 'INBOUND'), true);
-  assert.equal(canActOnState('TWR', 'ARRIVAL', 'HANDED_TO_TOWER'), true);
-  assert.equal(canActOnState('TWR', 'ARRIVAL', 'FINAL'), true);
-  assert.equal(canActOnState('TWR', 'ARRIVAL', 'LANDED'), true);
-  assert.equal(canActOnState('GND', 'ARRIVAL', 'TAXI_IN'), true);
+  assert.equal(canActOnState('AP', 'ARRIVAL', 'INBOUND'), true);
+  assert.equal(canActOnState('LC', 'ARRIVAL', 'HANDED_TO_TOWER'), true);
+  assert.equal(canActOnState('LC', 'ARRIVAL', 'FINAL'), true);
+  assert.equal(canActOnState('LC', 'ARRIVAL', 'LANDED'), true);
+  assert.equal(canActOnState('GC', 'ARRIVAL', 'TAXI_IN'), true);
   assert.equal(canActOnState('OPS', 'ARRIVAL', 'INBOUND'), false);
 });
 
 test('canActOnState returns false for DROPPED (terminal, no entry), an unknown state, or an unknown role — never a throw', () => {
-  assert.equal(canActOnState('TWR', 'DEPARTURE', 'DROPPED'), false);
+  assert.equal(canActOnState('LC', 'DEPARTURE', 'DROPPED'), false);
   assert.equal(canActOnState('OPS', 'DEPARTURE', 'NOT_A_STATE'), false);
   assert.equal(canActOnState('OPS', 'OVERFLIGHT', 'PROPOSED'), false); // OVERFLIGHT is a real role (docs/adr/0023), but PROPOSED isn't one of its states
   assert.equal(canActOnState('OPS', 'MISSION', 'TASKED'), false); // MISSION is a real role (WP4A second slice) but OPS never owns any of its states
@@ -293,11 +293,11 @@ test('MISSION states have their own authority table — both TAC_C2 and GCI may 
 });
 
 test('TAC_C2 and GCI may originate MISSION, and only MISSION; AIC/JTAC may originate no Strip Role at all', () => {
-  assert.equal(canCreateStripRole('TAC_C2', 'MISSION'), true);
-  assert.equal(canCreateStripRole('TAC_C2', 'ARRIVAL'), false);
-  assert.equal(canCreateStripRole('GCI', 'MISSION'), true);
+  assert.equal(canCreateStripType('TAC_C2', 'MISSION'), true);
+  assert.equal(canCreateStripType('TAC_C2', 'ARRIVAL'), false);
+  assert.equal(canCreateStripType('GCI', 'MISSION'), true);
   for (const id of ['AIC', 'JTAC']) {
-    assert.equal(canCreateStripRole(id, 'MISSION'), false, id);
+    assert.equal(canCreateStripType(id, 'MISSION'), false, id);
   }
 });
 
@@ -305,30 +305,30 @@ test('TAC_C2 and GCI may originate MISSION, and only MISSION; AIC/JTAC may origi
 // ARRIVAL's shape: whichever Position(s) may originate one may also act on it.
 test('OVERFLIGHT states have their own authority table — both APP and CTR may act on every live state, OPS may not', () => {
   for (const state of ['INBOUND', 'IN_SECTOR', 'HANDED_OFF']) {
-    assert.equal(canActOnState('APP', 'OVERFLIGHT', state), true, state);
+    assert.equal(canActOnState('AP', 'OVERFLIGHT', state), true, state);
     assert.equal(canActOnState('CTR', 'OVERFLIGHT', state), true, state);
     assert.equal(canActOnState('OPS', 'OVERFLIGHT', state), false, state);
   }
   assert.equal(canActOnState('CTR', 'OVERFLIGHT', 'TRANSITING'), false);
 });
 
-test('every state present in DEPARTURE_STATES/ARRIVAL_STATES/OVERFLIGHT_STATES/MISSION_STATES except the terminal DROPPED has a STATE_OWNERS_BY_ROLE entry — nothing silently falls through to "no one may act"', async () => {
+test('every state present in DEPARTURE_STATES/ARRIVAL_STATES/OVERFLIGHT_STATES/MISSION_STATES except the terminal DROPPED has a STATE_OWNERS_BY_STRIP_TYPE entry — nothing silently falls through to "no one may act"', async () => {
   const { DEPARTURE_STATES, ARRIVAL_STATES, OVERFLIGHT_STATES, MISSION_STATES } = await import('../src/efsp/nla.js');
   for (const state of DEPARTURE_STATES) {
     if (state === 'DROPPED') continue;
-    assert.ok(STATE_OWNERS_BY_ROLE.DEPARTURE[state], `DEPARTURE/${state}`);
+    assert.ok(STATE_OWNERS_BY_STRIP_TYPE.DEPARTURE[state], `DEPARTURE/${state}`);
   }
   for (const state of ARRIVAL_STATES) {
     if (state === 'DROPPED') continue;
-    assert.ok(STATE_OWNERS_BY_ROLE.ARRIVAL[state], `ARRIVAL/${state}`);
+    assert.ok(STATE_OWNERS_BY_STRIP_TYPE.ARRIVAL[state], `ARRIVAL/${state}`);
   }
   for (const state of OVERFLIGHT_STATES) {
     if (state === 'DROPPED') continue;
-    assert.ok(STATE_OWNERS_BY_ROLE.OVERFLIGHT[state], `OVERFLIGHT/${state}`);
+    assert.ok(STATE_OWNERS_BY_STRIP_TYPE.OVERFLIGHT[state], `OVERFLIGHT/${state}`);
   }
   for (const state of MISSION_STATES) {
     if (state === 'DROPPED') continue;
-    assert.ok(STATE_OWNERS_BY_ROLE.MISSION[state], `MISSION/${state}`);
+    assert.ok(STATE_OWNERS_BY_STRIP_TYPE.MISSION[state], `MISSION/${state}`);
   }
 });
 
@@ -337,9 +337,9 @@ test('every state present in DEPARTURE_STATES/ARRIVAL_STATES/OVERFLIGHT_STATES/M
 
 test('only APP and CTR may approve a flight into an airspace — the Positions that hold an airborne flight', () => {
   for (const opKind of AIRSPACE_ENTRY_OP_KINDS) {
-    assert.equal(canMutate('APP', opKind), true, opKind);
+    assert.equal(canMutate('AP', opKind), true, opKind);
     assert.equal(canMutate('CTR', opKind), true, opKind);
-    for (const id of ['OPS', 'CD', 'GND', 'TWR']) {
+    for (const id of ['OPS', 'CD', 'GC', 'LC']) {
       assert.equal(canMutate(id, opKind), false, `${id} ${opKind}`);
     }
   }
@@ -371,7 +371,7 @@ test('a range Position declares no MARSA, for the same reason it correlates noth
   // whatever canCorrelate refuses by class, canDeclareMarsa refuses
   // identically — both gate on _worksNoStrips and nothing else, so a Position
   // of class USING_AGENCY is refused by both wherever one exists.
-  for (const id of ['OPS', 'CD', 'GND', 'TWR', 'APP', 'CTR', 'TAC_C2', 'GCI', 'AIC', 'JTAC']) {
+  for (const id of ['OPS', 'CD', 'GC', 'LC', 'AP', 'CTR', 'TAC_C2', 'GCI', 'AIC', 'JTAC']) {
     assert.equal(canDeclareMarsa(id), canCorrelate(id), id);
   }
 });
@@ -402,14 +402,14 @@ test('MARSA is NOT in OP_KINDS — a new op kind there would be picked up silent
 
 // ── field state (guide §9.7, docs/adr/0061) ─────────────────────────────────
 
-const { canActOnRunwayStatus, FIELD_STATE_OP_OWNERS } = await import('../src/efsp/permission.js');
+const { canActOnRunwayStatus, RUNWAY_STATUS_OP_OWNERS } = await import('../src/efsp/permission.js');
 
 test('canActOnRunwayStatus has exactly two parameters — never a held set (D21 by construction)', () => {
   assert.equal(canActOnRunwayStatus.length, 2);
 });
 
-test('no field-state op kind is in OP_KINDS — a new kind there would be picked up by every filtered grant', () => {
-  for (const kind of Object.keys(FIELD_STATE_OP_OWNERS)) {
+test('no runway-status op kind is in OP_KINDS — a new kind there would be picked up by every filtered grant', () => {
+  for (const kind of Object.keys(RUNWAY_STATUS_OP_OWNERS)) {
     assert.ok(!OP_KINDS.includes(kind), `${kind} must not be a Strip Mutation op kind`);
     for (const positionId of Object.keys(PERMISSIONS)) {
       assert.equal(canMutate(positionId, kind), false, `${positionId} must not get ${kind} through canMutate`);
@@ -417,37 +417,37 @@ test('no field-state op kind is in OP_KINDS — a new kind there would be picked
   }
 });
 
-test('FIELD_STATE_OP_OWNERS: TWR alone closes, opens and suspends; OPS completes and inspects; TWR runs a runway change; OPS and APP acknowledge', () => {
+test('RUNWAY_STATUS_OP_OWNERS: TWR alone closes, opens and suspends; OPS completes and inspects; TWR runs a runway change; OPS and APP acknowledge', () => {
   for (const kind of ['CloseRunway', 'OpenRunway', 'BeginRunwayWorks', 'AcceptRunwayRequest', 'RejectRunwayRequest',
     'ProposeRunwayChange', 'SelfCoordinateRunwayChange', 'WithdrawRunwayChange', 'BeginRunwayChange', 'CompleteRunwayChange']) {
-    assert.deepEqual(FIELD_STATE_OP_OWNERS[kind], ['TWR'], kind);
+    assert.deepEqual(RUNWAY_STATUS_OP_OWNERS[kind], ['LC'], kind);
   }
-  assert.deepEqual(FIELD_STATE_OP_OWNERS.CompleteRunwayWorks, ['OPS']);
-  assert.deepEqual(FIELD_STATE_OP_OWNERS.CompleteInspection, ['OPS']);
-  assert.deepEqual(FIELD_STATE_OP_OWNERS.AckRunwayChange, ['OPS', 'APP']);
-  assert.deepEqual(FIELD_STATE_OP_OWNERS.RejectRunwayChange, ['OPS', 'APP']);
+  assert.deepEqual(RUNWAY_STATUS_OP_OWNERS.CompleteRunwayWorks, ['OPS']);
+  assert.deepEqual(RUNWAY_STATUS_OP_OWNERS.CompleteInspection, ['OPS']);
+  assert.deepEqual(RUNWAY_STATUS_OP_OWNERS.AckRunwayChange, ['OPS', 'AP']);
+  assert.deepEqual(RUNWAY_STATUS_OP_OWNERS.RejectRunwayChange, ['OPS', 'AP']);
   // Everyone at the field but tower ASKS (decisions.md H18).
   // RSU asks too (L18, ADR 0075) but, like everyone, never closes or opens.
-  assert.deepEqual(FIELD_STATE_OP_OWNERS.RequestRunwayStatus, ['OPS', 'CD', 'GND', 'APP', 'RSU']);
+  assert.deepEqual(RUNWAY_STATUS_OP_OWNERS.RequestRunwayStatus, ['OPS', 'CD', 'GC', 'AP', 'RSU']);
 });
 
-test('a range Position, an MRU, CTR and an unknown Position are refused every field-state op', () => {
+test('a range Position, an MRU, CTR and an unknown Position are refused every runway-status op', () => {
   for (const positionId of ['RANGE', 'R-2301', 'TAC_C2', 'GCI', 'AIC', 'JTAC', 'CTR', 'NOBODY', undefined]) {
-    for (const kind of Object.keys(FIELD_STATE_OP_OWNERS)) {
+    for (const kind of Object.keys(RUNWAY_STATUS_OP_OWNERS)) {
       assert.equal(canActOnRunwayStatus(positionId, kind), false, `${positionId} / ${kind}`);
     }
   }
-  assert.equal(canActOnRunwayStatus('TWR', 'toString'), false);
-  assert.equal(canActOnRunwayStatus('TWR', 'PaintRunway'), false);
+  assert.equal(canActOnRunwayStatus('LC', 'toString'), false);
+  assert.equal(canActOnRunwayStatus('LC', 'PaintRunway'), false);
 });
 
 test('D21 regression: a controller holding both TWR and APP cannot satisfy BeginRunwayChange from one acting Position', () => {
   // Evaluated per acting Position, never a union of what is held: an
   // acknowledgement sent as TWR never counts as APP's (decisions.md S-Q24).
-  assert.equal(canActOnRunwayStatus('TWR', 'AckRunwayChange'), false);
-  assert.equal(canActOnRunwayStatus('APP', 'BeginRunwayChange'), false);
-  assert.equal(canActOnRunwayStatus('APP', 'AckRunwayChange'), true);
-  assert.equal(canActOnRunwayStatus('TWR', 'BeginRunwayChange'), true);
+  assert.equal(canActOnRunwayStatus('LC', 'AckRunwayChange'), false);
+  assert.equal(canActOnRunwayStatus('AP', 'BeginRunwayChange'), false);
+  assert.equal(canActOnRunwayStatus('AP', 'AckRunwayChange'), true);
+  assert.equal(canActOnRunwayStatus('LC', 'BeginRunwayChange'), true);
 });
 
 // ── L23: the tactical capability table and B5 (docs/adr/0080) ───────────────
@@ -477,7 +477,7 @@ test('the accessors read the table; a Position with no row gets the defaults', (
 test('B5: a JTAC has no scope, so it correlates nothing and declares no MARSA; every other Position is unchanged', () => {
   assert.equal(canCorrelate('JTAC'), false);
   assert.equal(canDeclareMarsa('JTAC'), false);
-  for (const id of ['OPS', 'CD', 'GND', 'TWR', 'APP', 'CTR', 'TAC_C2', 'GCI', 'AIC']) {
+  for (const id of ['OPS', 'CD', 'GC', 'LC', 'AP', 'CTR', 'TAC_C2', 'GCI', 'AIC']) {
     assert.equal(canCorrelate(id), true, id);
     assert.equal(canDeclareMarsa(id), true, id);
   }

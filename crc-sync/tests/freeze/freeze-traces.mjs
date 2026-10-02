@@ -60,15 +60,15 @@ async function driverTrace({ seed, minutes, profile = 'smoke', restartAt = null,
 // an observer, a ghost that holds nothing, and a second APP session that is demoted to Observer.
 // ---------------------------------------------------------------------------------------------------------
 const CREW = {
-  ops: { INCIRLIK: ['OPS'] }, cd: { INCIRLIK: ['CD'] }, gnd: { INCIRLIK: ['GND'] }, twr: { INCIRLIK: ['TWR'] }, app: { INCIRLIK: ['APP'] },
+  ops: { INCIRLIK: ['OPS'] }, cd: { INCIRLIK: ['CD'] }, gnd: { INCIRLIK: ['GC'] }, twr: { INCIRLIK: ['LC'] }, app: { INCIRLIK: ['AP'] },
   ctr: { CENTER: ['CTR'] },
   tac: { TACTICAL: ['TAC_C2'] }, aic: { TACTICAL: ['AIC'] }, gci: { TACTICAL: ['GCI'] }, jtac: { TACTICAL: ['JTAC'] },
   range: { RANGES: ['SOUTH_RANGE'] },
   marshal: { CARRIER: ['CV_MARSHAL'] }, prifly: { CARRIER: ['CV_PRIFLY'] }, cvapp1: { CARRIER: ['CV_APP1'] }, cvapp2: { CARRIER: ['CV_APP2'] },
-  obs: { INCIRLIK: ['APP'] },
+  obs: { INCIRLIK: ['AP'] },
   ghost: {},
 };
-const POS_OF = { ops: ['INCIRLIK', 'OPS'], cd: ['INCIRLIK', 'CD'], gnd: ['INCIRLIK', 'GND'], twr: ['INCIRLIK', 'TWR'], app: ['INCIRLIK', 'APP'], ctr: ['CENTER', 'CTR'],
+const POS_OF = { ops: ['INCIRLIK', 'OPS'], cd: ['INCIRLIK', 'CD'], gnd: ['INCIRLIK', 'GC'], twr: ['INCIRLIK', 'LC'], app: ['INCIRLIK', 'AP'], ctr: ['CENTER', 'CTR'],
   tac: ['TACTICAL', 'TAC_C2'], aic: ['TACTICAL', 'AIC'], gci: ['TACTICAL', 'GCI'], jtac: ['TACTICAL', 'JTAC'], range: ['RANGES', 'SOUTH_RANGE'],
   marshal: ['CARRIER', 'CV_MARSHAL'], prifly: ['CARRIER', 'CV_PRIFLY'], cvapp1: ['CARRIER', 'CV_APP1'], cvapp2: ['CARRIER', 'CV_APP2'] };
 
@@ -86,7 +86,7 @@ const at = (w, id) => (op, strip, o) => { const [f, p] = POS_OF[id]; return w.mu
 
 /** A DEPARTURE at OPS in PROPOSED; returns its live compact strip. */
 function newDeparture(w, callsign) {
-  const r = w.mut('ops', 'INCIRLIK', 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: FDR(callsign) });
+  const r = w.mut('ops', 'INCIRLIK', 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: FDR(callsign) });
   return r.ack && r.ack.strip ? w.strip('INCIRLIK', r.ack.strip.stripId) : null;
 }
 function setState(w, id, strip, toState) {
@@ -100,7 +100,7 @@ function airborne(w, callsign) {
   let s = newDeparture(w, callsign);
   if (!s) throw new Error(`could not create ${callsign}: ${JSON.stringify(w.last && w.last.frames.slice(0, 1))}`);
   s = setState(w, 'ops', s, 'HANDED_OFF');
-  w.mut('ops', 'INCIRLIK', 'OPS', s, { kind: 'TransferStrip', toPositionId: 'APP', bayId: 'app-departures', rackId: 'main' });
+  w.mut('ops', 'INCIRLIK', 'OPS', s, { kind: 'TransferStrip', toPositionId: 'AP', bayId: 'ap-departures', rackId: 'main' });
   return w.strip('INCIRLIK', s.stripId);
 }
 const peerOf = (w, fid, s) => {
@@ -116,21 +116,21 @@ function opMatrix() {
 
   // CreateStrip: success, every refusal reason reachable at creation, replay.
   let dep = newDeparture(w, 'MTX01');
-  ops({ kind: 'CreateStrip', bayId: 'cd-cleared', rackId: 'main', role: 'DEPARTURE', fdr: FDR('MTX-BAYCLASS') });              // wrong Position's Bay
-  ops({ kind: 'CreateStrip', bayId: 'nope', rackId: 'main', role: 'DEPARTURE', fdr: FDR('MTX-NOBAY') });                       // unknown Bay
-  ops({ kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'NOSUCHROLE', fdr: FDR('MTX-NOROLE') });             // unknown Role
-  ops({ kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'ARRIVAL', fdr: FDR('MTX-ARR') });                   // OPS may not originate ARRIVAL
-  cd({ kind: 'CreateStrip', bayId: 'cd-pending-clearance', rackId: 'main', role: 'DEPARTURE', fdr: FDR('MTX-CD') });           // CD may not create
-  w.mut('ghost', 'INCIRLIK', 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: FDR('MTX-GHOST') });
-  w.mut('ops', 'NOWHERE', 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: FDR('MTX-NOFAC') });
-  w.mut('ops', 'INCIRLIK', 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { callsign: '' } });
-  ops({ kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: FDR('MTX02'), afterStripId: dep.stripId });
+  ops({ kind: 'CreateStrip', bayId: 'cd-cleared', rackId: 'main', stripType: 'DEPARTURE', flightData: FDR('MTX-BAYCLASS') });              // wrong Position's Bay
+  ops({ kind: 'CreateStrip', bayId: 'nope', rackId: 'main', stripType: 'DEPARTURE', flightData: FDR('MTX-NOBAY') });                       // unknown Bay
+  ops({ kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'NOSUCHROLE', flightData: FDR('MTX-NOROLE') });             // unknown Role
+  ops({ kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'ARRIVAL', flightData: FDR('MTX-ARR') });                   // OPS may not originate ARRIVAL
+  cd({ kind: 'CreateStrip', bayId: 'cd-pending-clearance', rackId: 'main', stripType: 'DEPARTURE', flightData: FDR('MTX-CD') });           // CD may not create
+  w.mut('ghost', 'INCIRLIK', 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: FDR('MTX-GHOST') });
+  w.mut('ops', 'NOWHERE', 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: FDR('MTX-NOFAC') });
+  w.mut('ops', 'INCIRLIK', 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { callsign: '' } });
+  ops({ kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: FDR('MTX02'), afterStripId: dep.stripId });
   const dupe = w.nextCmid();
-  w.mut('ops', 'INCIRLIK', 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: FDR('MTX-REPLAY') }, { cmid: dupe });
-  w.mut('ops', 'INCIRLIK', 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: FDR('MTX-REPLAY') }, { cmid: dupe });  // idempotent replay
-  at(w, 'app')({ kind: 'CreateStrip', bayId: 'app-inbound', rackId: 'main', role: 'ARRIVAL', fdr: FDR('MTX-ARR1') });
-  ctr({ kind: 'CreateStrip', bayId: 'ctr-overflight', rackId: 'main', role: 'OVERFLIGHT', fdr: FDR('MTX-OVF1') });
-  tac({ kind: 'CreateStrip', bayId: 'tac-c2-tasked', rackId: 'main', role: 'MISSION', fdr: FDR('MTX-MSN1') });
+  w.mut('ops', 'INCIRLIK', 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: FDR('MTX-REPLAY') }, { cmid: dupe });
+  w.mut('ops', 'INCIRLIK', 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: FDR('MTX-REPLAY') }, { cmid: dupe });  // idempotent replay
+  at(w, 'app')({ kind: 'CreateStrip', bayId: 'ap-inbound', rackId: 'main', stripType: 'ARRIVAL', flightData: FDR('MTX-ARR1') });
+  ctr({ kind: 'CreateStrip', bayId: 'ctr-overflight', rackId: 'main', stripType: 'OVERFLIGHT', flightData: FDR('MTX-OVF1') });
+  tac({ kind: 'CreateStrip', bayId: 'tac-c2-tasked', rackId: 'main', stripType: 'MISSION', flightData: FDR('MTX-MSN1') });
 
   // Per-op outcomes on one Strip: success, then each refusal.
   dep = live('INCIRLIK', dep);
@@ -171,10 +171,10 @@ function opMatrix() {
   w.mut('ops', 'INCIRLIK', 'OPS', dep, { kind: 'SetState', toState: 'PROPOSED' });
   // TransferStrip: unknown Position, own Bay, to a Position at another Facility, success.
   const t = live('INCIRLIK', dep);
-  w.mut(POS_OF.ops && 'ops', 'INCIRLIK', 'OPS', t, { kind: 'TransferStrip', toPositionId: 'NOWHERE', bayId: 'app-departures', rackId: 'main' });
-  w.mut('ops', 'INCIRLIK', 'OPS', t, { kind: 'TransferStrip', toPositionId: 'APP', bayId: 'ops-proposed', rackId: 'main' });
+  w.mut(POS_OF.ops && 'ops', 'INCIRLIK', 'OPS', t, { kind: 'TransferStrip', toPositionId: 'NOWHERE', bayId: 'ap-departures', rackId: 'main' });
+  w.mut('ops', 'INCIRLIK', 'OPS', t, { kind: 'TransferStrip', toPositionId: 'AP', bayId: 'ops-proposed', rackId: 'main' });
   w.mut('ops', 'INCIRLIK', 'OPS', t, { kind: 'TransferStrip', toPositionId: 'CTR', bayId: 'ctr-departures', rackId: 'main' });
-  w.mut('ops', 'INCIRLIK', 'OPS', t, { kind: 'TransferStrip', toPositionId: 'APP', bayId: 'app-departures', rackId: 'main' });
+  w.mut('ops', 'INCIRLIK', 'OPS', t, { kind: 'TransferStrip', toPositionId: 'AP', bayId: 'ap-departures', rackId: 'main' });
   dep = live('INCIRLIK', dep);
   byOwner(w, 'INCIRLIK', dep, { kind: 'DropStrip' });
   byOwner(w, 'INCIRLIK', live('INCIRLIK', dep), { kind: 'SetFlag', flag: 'highlight', value: 'red' });                           // op on a DROPPED Strip
@@ -255,10 +255,10 @@ function opMatrix() {
   w.airspace('ops', 'OPS', 'MOA-EAST', { kind: 'ApproveActivation' });
   w.airspace('range', 'SOUTH_RANGE', 'RANGE-SOUTH', { kind: 'ScheduleAirspace', ...win });
   w.airspace('range', 'SOUTH_RANGE', 'RANGE-SOUTH', { kind: 'RequestActivation' });
-  w.airspace('app', 'APP', 'RANGE-SOUTH', { kind: 'ApproveActivation' });
+  w.airspace('app', 'AP', 'RANGE-SOUTH', { kind: 'ApproveActivation' });
   w.airspace('ctr', 'CTR', 'MOA-EAST', { kind: 'ReleaseAirspace' });
   w.airspace('ctr', 'CTR', 'MOA-EAST', { kind: 'ReturnAirspace' });
-  w.airspace('app', 'APP', 'RANGE-SOUTH', { kind: 'ReleaseAirspace' });
+  w.airspace('app', 'AP', 'RANGE-SOUTH', { kind: 'ReleaseAirspace' });
   w.airspace('ctr', 'CTR', 'NO-SUCH', { kind: 'ScheduleAirspace', ...win });
 
   // MARSA: declare (refused: one participant; success), void.
@@ -266,42 +266,42 @@ function opMatrix() {
   const flightDataOf = (s) => w.strip('INCIRLIK', s.stripId);
   void flightDataOf;
   const tr = w.truth().facilities.INCIRLIK.strips;
-  const fd1 = tr.find(x => x.stripId === m1.stripId).fdrId, fd2 = tr.find(x => x.stripId === m2.stripId).fdrId;
-  w.family('app', 'efsp-marsa-mutation', { actingPositionId: 'APP', op: { kind: 'DeclareMarsa', participants: [fd1], startEvent: 'TANKER_ACCEPTED', endCondition: 'VERTICALLY_POSITIONED', declaringCallsign: 'SHELL1' } });
-  const dm = w.family('app', 'efsp-marsa-mutation', { actingPositionId: 'APP', op: { kind: 'DeclareMarsa', participants: [fd1, fd2], startEvent: 'TANKER_ACCEPTED', endCondition: 'VERTICALLY_POSITIONED', declaringCallsign: 'SHELL1' } });
+  const fd1 = tr.find(x => x.stripId === m1.stripId).flightDataId, fd2 = tr.find(x => x.stripId === m2.stripId).flightDataId;
+  w.family('app', 'efsp-marsa-mutation', { actingPositionId: 'AP', op: { kind: 'DeclareMarsa', participants: [fd1], startEvent: 'TANKER_ACCEPTED', endCondition: 'VERTICALLY_POSITIONED', declaringCallsign: 'SHELL1' } });
+  const dm = w.family('app', 'efsp-marsa-mutation', { actingPositionId: 'AP', op: { kind: 'DeclareMarsa', participants: [fd1, fd2], startEvent: 'TANKER_ACCEPTED', endCondition: 'VERTICALLY_POSITIONED', declaringCallsign: 'SHELL1' } });
   w.family('cd', 'efsp-marsa-mutation', { actingPositionId: 'CD', op: { kind: 'DeclareMarsa', participants: [fd1, fd2], startEvent: 'TANKER_ACCEPTED', endCondition: 'VERTICALLY_POSITIONED', declaringCallsign: 'SHELL1' } });
   const marsa = dm.ack && dm.ack.marsa;
   if (marsa) {
-    w.family('app', 'efsp-marsa-mutation', { marsaId: marsa.marsaId, baseRev: marsa.rev, actingPositionId: 'APP', op: { kind: 'MarkRendezvous' } });
+    w.family('app', 'efsp-marsa-mutation', { marsaId: marsa.marsaId, baseRev: marsa.rev, actingPositionId: 'AP', op: { kind: 'MarkRendezvous' } });
     const cur = w.truth();
     void cur;
-    w.family('app', 'efsp-marsa-mutation', { marsaId: marsa.marsaId, baseRev: 99, actingPositionId: 'APP', op: { kind: 'VoidMarsa', note: 'stale' } });
-    w.family('app', 'efsp-marsa-mutation', { marsaId: marsa.marsaId, baseRev: marsa.rev + 1, actingPositionId: 'APP', op: { kind: 'VoidMarsa', note: 'ATC resuming separation' } });
+    w.family('app', 'efsp-marsa-mutation', { marsaId: marsa.marsaId, baseRev: 99, actingPositionId: 'AP', op: { kind: 'VoidMarsa', note: 'stale' } });
+    w.family('app', 'efsp-marsa-mutation', { marsaId: marsa.marsaId, baseRev: marsa.rev + 1, actingPositionId: 'AP', op: { kind: 'VoidMarsa', note: 'ATC resuming separation' } });
   }
 
   // Correlation: bind / unbind a track to an FDR (no tracks fed: a refusal is also an outcome).
   w.tracks({ upsert: [{ id: 'T1', callsign: 'MTX01', lat: 37.0, lon: 35.4, alt: 5000, course: 90, groundSpeed: 250, verticalSpeed: 0, squawk: '4521' }] });
-  w.family('app', 'efsp-correlation-mutation', { fdrId: fd1, baseRev: 0, actingPositionId: 'APP', op: { kind: 'BindTrack', trackId: 'T1' } });
-  w.family('app', 'efsp-correlation-mutation', { fdrId: fd1, baseRev: 1, actingPositionId: 'APP', op: { kind: 'UnbindTrack' } });
-  w.family('cd', 'efsp-correlation-mutation', { fdrId: fd1, baseRev: 0, actingPositionId: 'CD', op: { kind: 'BindTrack', trackId: 'T1' } });
+  w.family('app', 'efsp-correlation-mutation', { flightDataId: fd1, baseRev: 0, actingPositionId: 'AP', op: { kind: 'BindTrack', trackId: 'T1' } });
+  w.family('app', 'efsp-correlation-mutation', { flightDataId: fd1, baseRev: 1, actingPositionId: 'AP', op: { kind: 'UnbindTrack' } });
+  w.family('cd', 'efsp-correlation-mutation', { flightDataId: fd1, baseRev: 0, actingPositionId: 'CD', op: { kind: 'BindTrack', trackId: 'T1' } });
 
   // Field state.
   let fsRev = 0;
   const fsm = (id, acting, op) => {
-    const r = w.family(id, 'efsp-field-state-mutation', { facilityId: 'INCIRLIK', baseRev: fsRev, actingPositionId: acting, op });
-    const rev = r.ack && r.ack.fieldState && r.ack.fieldState.rev;
+    const r = w.family(id, 'efsp-runway-status-mutation', { facilityId: 'INCIRLIK', baseRev: fsRev, actingPositionId: acting, op });
+    const rev = r.ack && r.ack.runwayStatus && r.ack.runwayStatus.rev;
     if (Number.isInteger(rev)) fsRev = rev;
     return r;
   };
   fsm('ops', 'OPS', { kind: 'RequestRunwayStatus', runwayId: '05/23', action: 'WORKS' });   // first call learns the real rev (stale on purpose)
   const rwy = '05/23';
   fsm('ops', 'OPS', { kind: 'RequestRunwayStatus', runwayId: rwy, action: 'CLOSE', note: 'FOD' });
-  fsm('twr', 'TWR', { kind: 'AcceptRunwayRequest', runwayId: rwy });
-  fsm('twr', 'TWR', { kind: 'OpenRunway', runwayId: rwy });
-  fsm('twr', 'TWR', { kind: 'ProposeRunwayChange', toRunwayId: '23' });
+  fsm('twr', 'LC', { kind: 'AcceptRunwayRequest', runwayId: rwy });
+  fsm('twr', 'LC', { kind: 'OpenRunway', runwayId: rwy });
+  fsm('twr', 'LC', { kind: 'ProposeRunwayChange', toRunwayId: '23' });
   fsm('ops', 'OPS', { kind: 'AckRunwayChange' });
-  fsm('twr', 'TWR', { kind: 'WithdrawRunwayChange', note: 'wind backed' });
-  fsm('gnd', 'GND', { kind: 'BeginRunwayChange' });
+  fsm('twr', 'LC', { kind: 'WithdrawRunwayChange', note: 'wind backed' });
+  fsm('gnd', 'GC', { kind: 'BeginRunwayChange' });
 
   // Carrier.
   const cm = (id, acting, op) => w.family(id, 'efsp-carrier-mutation', { actingPositionId: acting, op });
@@ -326,7 +326,7 @@ function opMatrix() {
 
   // Resync paths on the Board: a delta from inside the ring, a stale epoch, nothing known.
   const info = w.truth();
-  const epoch = (w.mut('app', 'INCIRLIK', 'APP', null, { kind: 'CreateStrip', bayId: 'app-inbound', rackId: 'main', role: 'ARRIVAL', fdr: FDR('RSYNC1') }).ack || {}).boardEpoch;
+  const epoch = (w.mut('app', 'INCIRLIK', 'AP', null, { kind: 'CreateStrip', bayId: 'ap-inbound', rackId: 'main', stripType: 'ARRIVAL', flightData: FDR('RSYNC1') }).ack || {}).boardEpoch;
   w.send('app', { version: 1, type: 'efsp-resync', facilityId: 'INCIRLIK', lastBoardSeq: info.facilities.INCIRLIK.currentSeq - 3, boardEpoch: epoch }, 'resync-delta');
   w.send('app', { version: 1, type: 'efsp-resync', facilityId: 'INCIRLIK', lastBoardSeq: info.facilities.INCIRLIK.currentSeq - 3, boardEpoch: 'wrong-epoch' }, 'resync-epoch-mismatch');
   w.send('app', { version: 1, type: 'efsp-resync', facilityId: 'INCIRLIK', lastBoardSeq: 0, boardEpoch: epoch }, 'resync-from-zero');
@@ -357,10 +357,10 @@ function walkCivil() {
   const peer = w.truth().facilities.CENTER.strips.find(x => x.coord && x.coord.peerStripId === s.stripId);
   ctr({ kind: 'HANDOFF', action: 'ACCEPT' }, peer);
   // CTR hands it back: the return leg.
-  ctr({ kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'APP' }, w.strip('CENTER', peer.stripId));
+  ctr({ kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'AP' }, w.strip('CENTER', peer.stripId));
   const back = w.truth().facilities.INCIRLIK.strips.find(x => x.coord && x.coord.peerStripId === peer.stripId && x.stripId !== s.stripId) || w.strip('INCIRLIK', s.stripId);
   app({ kind: 'HANDOFF', action: 'ACCEPT' }, w.strip('INCIRLIK', back.stripId));
-  w.mut('ops', 'INCIRLIK', 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: FDR('CIVIL2') });
+  w.mut('ops', 'INCIRLIK', 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: FDR('CIVIL2') });
   let a = newDeparture(w, 'CIVARR1');
   a = chain(w, 'INCIRLIK', a, 'HANDED_OFF');
   byOwner(w, 'INCIRLIK', a, { kind: 'ConvertToArrival' });
@@ -379,13 +379,13 @@ function walkManning() {
   w.advance(1000);
   w.tick(['heartbeat']);
   w.connect('cd', { holds: CREW.cd });                                        // retakes CD
-  w.send('obs', { type: 'efsp-set-positions', facilityId: 'INCIRLIK', held: ['APP'] }, 'observer-selects-APP');
-  w.send('gnd', { type: 'efsp-set-positions', facilityId: 'INCIRLIK', held: ['GND', 'CD'] }, 'combine-GND+CD');
-  w.send('gnd', { type: 'efsp-set-positions', facilityId: 'INCIRLIK', held: [] }, 'vacate');
-  w.send('cd', { type: 'efsp-set-positions', facilityId: 'INCIRLIK', held: ['CD', 'GND', 'TWR'] }, 'take-three');
-  w.send('ghost', { type: 'efsp-set-positions', facilityId: 'NOWHERE', held: ['X'] }, 'unknown-facility');
-  w.send('ghost', { type: 'efsp-set-positions', facilityId: 'INCIRLIK', held: ['NOPE'] }, 'unknown-position');
-  w.send('app', { type: 'efsp-set-positions', facilityId: 'INCIRLIK', held: ['APP', 'CTR'] }, 'wrong-facility-position');
+  w.send('obs', { type: 'efsp-set-positions', facilityId: 'INCIRLIK', signedOn: ['AP'] }, 'observer-selects-AP');
+  w.send('gnd', { type: 'efsp-set-positions', facilityId: 'INCIRLIK', signedOn: ['GC', 'CD'] }, 'combine-GC+CD');
+  w.send('gnd', { type: 'efsp-set-positions', facilityId: 'INCIRLIK', signedOn: [] }, 'vacate');
+  w.send('cd', { type: 'efsp-set-positions', facilityId: 'INCIRLIK', signedOn: ['CD', 'GC', 'LC'] }, 'take-three');
+  w.send('ghost', { type: 'efsp-set-positions', facilityId: 'NOWHERE', signedOn: ['X'] }, 'unknown-facility');
+  w.send('ghost', { type: 'efsp-set-positions', facilityId: 'INCIRLIK', signedOn: ['NOPE'] }, 'unknown-position');
+  w.send('app', { type: 'efsp-set-positions', facilityId: 'INCIRLIK', signedOn: ['AP', 'CTR'] }, 'wrong-facility-position');
   // Concurrent edits to one Strip from two clients: second is stale.
   byOwner(w, 'INCIRLIK', w.strip('INCIRLIK', d2.stripId), { kind: 'SetFlag', flag: 'highlight', value: 'red' });
   w.mut('cd', 'INCIRLIK', 'CD', d2, { kind: 'SetFlag', flag: 'attention', value: true });
@@ -397,7 +397,7 @@ function walkTactical() {
   const w = crewWorld(41);
   const tac = at(w, 'tac'), aic = at(w, 'aic'), jtac = at(w, 'jtac'), gci = at(w, 'gci');
   const m = (name) => {
-    const r = w.mut('tac', 'TACTICAL', 'TAC_C2', null, { kind: 'CreateStrip', bayId: 'tac-c2-tasked', rackId: 'main', role: 'MISSION', fdr: FDR(name) });
+    const r = w.mut('tac', 'TACTICAL', 'TAC_C2', null, { kind: 'CreateStrip', bayId: 'tac-c2-tasked', rackId: 'main', stripType: 'MISSION', flightData: FDR(name) });
     return r.ack && r.ack.strip ? w.strip('TACTICAL', r.ack.strip.stripId) : null;
   };
   let a = m('MSNA1'); a = chain(w, 'TACTICAL', a, 'ON_STATION', 4);
@@ -463,7 +463,7 @@ function crashReplay() {
   // A crash during a coordination exchange (two Boards change in one Mutation).
   let f = airborne(w, 'CRASH2');
   w.crashBeforeNextPersist();
-  w.mut('app', 'INCIRLIK', 'APP', f, { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' });
+  w.mut('app', 'INCIRLIK', 'AP', f, { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' });
   w.restart();
   for (const [id, holds] of Object.entries(CREW)) w.connect(id, { holds });
   w.send('app', { version: 1, type: 'efsp-resync', facilityId: 'INCIRLIK', lastBoardSeq: 3, boardEpoch: 'epoch-from-before-the-restart' }, 'resync-after-restart');
@@ -479,7 +479,7 @@ function monitors() {
     { id: 'K2', callsign: 'UNKNOWN', lat: 37.2, lon: 35.6, alt: 8000, course: 270, groundSpeed: 300, verticalSpeed: 0, squawk: '7000' }] });
   w.tick(['reconcile']);
   w.advance(1000);
-  w.tick(['reconcile', 'conformanceStca']);
+  w.tick(['reconcile', 'conformanceConflictAlert']);
   w.advance(60000);
   w.tick(['obligationsNla']);
   w.tick(['expireTracks']);
@@ -500,7 +500,7 @@ function monitors() {
   w.send('app', { version: 1, type: 'efsp-resync', facilityId: 'INCIRLIK', lastBoardSeq: 0 }, 'resync-after-archive');
   w.tracks({ remove: ['K1', 'K2'] });
   w.tick(['expireTracks', 'reconcile']);
-  w.send('obs', { type: 'efsp-set-positions', facilityId: 'INCIRLIK', held: ['APP'] });
+  w.send('obs', { type: 'efsp-set-positions', facilityId: 'INCIRLIK', signedOn: ['AP'] });
   void f;
   const out = w.finish(); w.dispose(); return out;
 }
@@ -514,9 +514,9 @@ function peerMarsaOrder() {
   const app = at(w, 'app'), ctr = at(w, 'ctr');
   const live = (f, s) => w.strip(f, s.stripId);
   const m1 = airborne(w, 'PMO1'), m2 = airborne(w, 'PMO2');
-  const flightDataOf = (s) => w.truth().facilities.INCIRLIK.strips.find(x => x.stripId === s.stripId).fdrId;
+  const flightDataOf = (s) => w.truth().facilities.INCIRLIK.strips.find(x => x.stripId === s.stripId).flightDataId;
   const fd1 = flightDataOf(m1), fd2 = flightDataOf(m2);
-  const dm = w.family('app', 'efsp-marsa-mutation', { actingPositionId: 'APP', op: { kind: 'DeclareMarsa', participants: [fd1, fd2], startEvent: 'TANKER_ACCEPTED', endCondition: 'VERTICALLY_POSITIONED', declaringCallsign: 'SHELL1' } });
+  const dm = w.family('app', 'efsp-marsa-mutation', { actingPositionId: 'AP', op: { kind: 'DeclareMarsa', participants: [fd1, fd2], startEvent: 'TANKER_ACCEPTED', endCondition: 'VERTICALLY_POSITIONED', declaringCallsign: 'SHELL1' } });
   void dm;
   const replicaOf = (s) => w.truth().facilities.CENTER.strips.find(x => x.coord && x.coord.peerStripId === s.stripId);
   // Flight 1: the proposer's Strip is dropped first, so the replica is the last live Strip of the FDR.
@@ -541,10 +541,10 @@ function peerMarsaOrder() {
 function resyncMetrics() {
   const w = crewWorld(91);
   const report = (id, extra, label) => w.send(id, { version: 1, type: 'efsp-metrics-report', ...extra }, label);
-  report('app', { reportId: 'rep-1', facilityId: 'INCIRLIK', positionId: 'APP', events: [{ kind: 'SEARCH' }, { kind: 'TIME_TO_FIND', latencyMs: 1200 }, { kind: 'GESTURE', gesture: 'FLIP', inputs: 2 }, { kind: 'BOGUS' }] }, 'metrics-report');
-  report('app', { reportId: 'rep-1', facilityId: 'INCIRLIK', positionId: 'APP', events: [{ kind: 'SEARCH' }] }, 'metrics-report-duplicate');
-  report('ctr', { reportId: 'rep-2', facilityId: 'INCIRLIK', positionId: 'APP', events: [] }, 'metrics-report-not-holding');
-  report('app', { reportId: '', facilityId: 'INCIRLIK', positionId: 'APP', events: [] }, 'metrics-report-invalid');
+  report('app', { reportId: 'rep-1', facilityId: 'INCIRLIK', positionId: 'AP', events: [{ kind: 'SEARCH' }, { kind: 'TIME_TO_FIND', latencyMs: 1200 }, { kind: 'GESTURE', gesture: 'FLIP', inputs: 2 }, { kind: 'BOGUS' }] }, 'metrics-report');
+  report('app', { reportId: 'rep-1', facilityId: 'INCIRLIK', positionId: 'AP', events: [{ kind: 'SEARCH' }] }, 'metrics-report-duplicate');
+  report('ctr', { reportId: 'rep-2', facilityId: 'INCIRLIK', positionId: 'AP', events: [] }, 'metrics-report-not-holding');
+  report('app', { reportId: '', facilityId: 'INCIRLIK', positionId: 'AP', events: [] }, 'metrics-report-invalid');
   w.send('app', { version: 1, type: 'efsp-metrics-request', requestId: 'req-1', hours: 1 }, 'metrics-request');
   w.send('app', { version: 1, type: 'efsp-metrics-request', requestId: 'req-2', hours: 1, trafficCount: {} }, 'metrics-request-traffic');
 
@@ -555,12 +555,12 @@ function resyncMetrics() {
   w.mut('ops', 'INCIRLIK', 'OPS', a, { kind: 'SetFlag', flag: 'highlight', value: 'yellow' }, { cmid });
   w.mut('ops', 'INCIRLIK', 'OPS', a, { kind: 'SetFlag', flag: 'highlight', value: 'yellow' }, { cmid: '' });
   const op = { kind: 'RequestRunwayStatus', runwayId: '05/23', action: 'WORKS' };
-  const probe = w.send('ops', { version: 1, type: 'efsp-field-state-mutation', clientMutationId: w.nextCmid(), facilityId: 'INCIRLIK', baseRev: -1, actingPositionId: 'OPS', op }, 'field-state-stale');
-  const fsRev = probe.ack && probe.ack.fieldState ? probe.ack.fieldState.rev : 0;
-  const fsm = { version: 1, type: 'efsp-field-state-mutation', clientMutationId: w.nextCmid(), facilityId: 'INCIRLIK', baseRev: fsRev, actingPositionId: 'OPS', op };
-  w.send('ops', fsm, 'field-state');
-  w.send('ops', fsm, 'field-state-replay');
-  w.send('gnd', fsm, 'field-state-replay-not-holding');
+  const probe = w.send('ops', { version: 1, type: 'efsp-runway-status-mutation', clientMutationId: w.nextCmid(), facilityId: 'INCIRLIK', baseRev: -1, actingPositionId: 'OPS', op }, 'runway-status-stale');
+  const fsRev = probe.ack && probe.ack.runwayStatus ? probe.ack.runwayStatus.rev : 0;
+  const fsm = { version: 1, type: 'efsp-runway-status-mutation', clientMutationId: w.nextCmid(), facilityId: 'INCIRLIK', baseRev: fsRev, actingPositionId: 'OPS', op };
+  w.send('ops', fsm, 'runway-status');
+  w.send('ops', fsm, 'runway-status-replay');
+  w.send('gnd', fsm, 'runway-status-replay-not-holding');
 
   // Resync decisions on the Board.
   const ack = w.mut('ops', 'INCIRLIK', 'OPS', w.strip('INCIRLIK', a.stripId), { kind: 'SetFlag', flag: 'attention', value: true }).ack || {};

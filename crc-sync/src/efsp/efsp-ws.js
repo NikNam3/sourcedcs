@@ -89,18 +89,18 @@ function _handleMutation(ctx, session, msg, persist) {
   // the separation regime the MRU controller stated (F-306), and a clearance
   // that voids a MARSA relation, or a flight ending that retires it, writes the
   // regime back to ATC on every participant (F-111's other direction). Those
-  // writes landed server-side and reached nobody: the ack carries one `fdr` and
+  // writes landed server-side and reached nobody: the ack carries one `flightData` and
   // the delta carried only that one, so a connected client held the stale value
   // until it next took a full snapshot. board-store.js collects them as
-  // `result.fdrs`.
-  const updatedFlightDataList = mergeFlightDataList(result.fdr, result.fdrs);
+  // `result.flightDataList`.
+  const updatedFlightDataList = mergeFlightDataList(result.flightData, result.flightDataList);
 
   const ack = {
     version: VERSION, type: 'efsp-mutation-ack', clientMutationId: msg.clientMutationId,
     ...skeleton.subjectOf(msg),
     facilityId,
     boardSeq: boardStore.currentSeq, boardEpoch: boardStore.epoch, ok: result.ok,
-    strip: stampedStrip, fdr: result.fdr, reason: result.reason, detail: result.detail,
+    strip: stampedStrip, flightData: result.flightData, reason: result.reason, detail: result.detail,
     warning: result.warning, routedTo: result.routedTo,
   };
   // A replay answers from the idempotency cache (docs/adr/0081): the original
@@ -144,7 +144,7 @@ function _handleMutation(ctx, session, msg, persist) {
     const peerBoardStore = ctx.boardStoreFor(result.peerFacilityId);
     const peerStamped = stampStrip(peerBoardStore, result.peerStrip, result.peerFacilityId, ctx);
     const peerTouched = peerBoardStore ? peerBoardStore.drainTouched() : [];
-    // fdrs: one shared FlightDataStore (docs/adr/0013) — already covered by the primary broadcast's fdrs.updated
+    // flightDataList: one shared FlightDataStore (docs/adr/0013) — already covered by the primary broadcast's flightDataList.updated
     slots.peer = boardDelta(ctx, peerBoardStore, result.peerFacilityId,
       touchedStrips(ctx, peerBoardStore, result.peerFacilityId, peerTouched, peerStamped), []);
   }
@@ -168,8 +168,8 @@ function _handleMutation(ctx, session, msg, persist) {
   if (marsaChanged.length > 0 && ctx.marsaStore) {
     slots.marsa = marsaDelta(ctx.marsaStore, marsaChanged);
   }
-  // docs/adr/0074 — a carrier hand-over or a Strip retiring moves the Marshal
-  // stack (Commence marks a flight pushed, a hand-over to PriFly leaves a
+  // docs/adr/0074 — a carrier handoff or a Strip retiring moves the Marshal
+  // stack (Commence marks a flight pushed, a handoff to PriFly leaves a
   // vacancy). The record is not a Strip, so it rides its own delta on the same
   // round trip, MARSA's shape.
   if (result.carrierChanged && ctx.carrierStore) {
@@ -254,11 +254,11 @@ function _handleSetPositions(ctx, session, msg, persist) {
   const positionStore = ctx.positionStoreFor(facilityId);
   const boardStore = ctx.boardStoreFor(facilityId);
   if (!positionStore || !boardStore) {
-    return { ack: { version: VERSION, type: 'efsp-positions-ack', facilityId, held: [], warnings: [], reason: 'VALIDATION_ERROR', detail: `unknown facilityId: ${facilityId}` }, broadcasts: skeleton.orderSlots(null) };
+    return { ack: { version: VERSION, type: 'efsp-positions-ack', facilityId, signedOn: [], warnings: [], reason: 'VALIDATION_ERROR', detail: `unknown facilityId: ${facilityId}` }, broadcasts: skeleton.orderSlots(null) };
   }
-  const held = Array.isArray(msg.held) ? msg.held : [];
+  const signedOn = Array.isArray(msg.signedOn) ? msg.signedOn : [];
   const staffedBefore = new Set(facilityConfig_positionIds(ctx, facilityId).filter(id => positionStore.isStaffed(id)));
-  const { held: actuallySignedOn, vacated } = positionStore.setSignedOnPositions(session.controllerId, session.who, held);
+  const { signedOn: actuallySignedOn, vacated } = positionStore.setSignedOnPositions(session.controllerId, session.who, signedOn);
 
   const warnings = [];
   const reassignedIds = [];
@@ -266,7 +266,7 @@ function _handleSetPositions(ctx, session, msg, persist) {
   // that were routed away from it (docs/adr/0080).
   for (const positionId of actuallySignedOn) {
     if (!staffedBefore.has(positionId) && positionStore.isStaffed(positionId)) {
-      reassignedIds.push(...boardStore.returnCoveredStrips(positionId));
+      reassignedIds.push(...boardStore.returnConsolidatedStrips(positionId));
     }
   }
   for (const positionId of vacated) {
@@ -300,7 +300,7 @@ function _handleSetPositions(ctx, session, msg, persist) {
   if (reassignedIds.length > 0 && typeof persist === 'function') persist();
 
   return {
-    ack: { version: VERSION, type: 'efsp-positions-ack', facilityId, held: actuallySignedOn, warnings },
+    ack: { version: VERSION, type: 'efsp-positions-ack', facilityId, signedOn: actuallySignedOn, warnings },
     // EVERY live Strip, not just the reassigned ones. Taking or giving up a
     // Position changes who is there to receive a transfer, which changes the
     // `nla` status stampStrip computes for Strips this message never
@@ -325,13 +325,13 @@ function _handleSetPositions(ctx, session, msg, persist) {
  */
 function readScopeOf(ctx, session) {
   if (!session || !session.controllerId) return { kind: readScope.ALL };
-  const held = [];
+  const signedOn = [];
   for (const facilityId of ctx.facilityConfig.getFacilityIds()) {
     const positionStore = ctx.positionStoreFor(facilityId);
     if (!positionStore) continue;
-    for (const positionId of positionStore.signedOnBy(session.controllerId)) held.push({ facilityId, positionId });
+    for (const positionId of positionStore.signedOnBy(session.controllerId)) signedOn.push({ facilityId, positionId });
   }
-  return readScope.scopeOf(held, permission.readScopeFor);
+  return readScope.scopeOf(signedOn, permission.readScopeFor);
 }
 
 /**
@@ -376,12 +376,12 @@ function supplementFor(ctx, session, filtered) {
   if (!filtered || filtered.type !== 'efsp-board-delta') return [];
   const scope = readScopeOf(ctx, session);
   if (scope.kind === readScope.ALL) return [];
-  const fdrIds = new Set(((filtered.strips || {}).updated || []).map(s => s.fdrId).filter(Boolean));
-  if (fdrIds.size === 0) return [];
+  const flightDataIds = new Set(((filtered.strips || {}).updated || []).map(s => s.flightDataId).filter(Boolean));
+  if (flightDataIds.size === 0) return [];
   const out = [];
-  const records = ctx.correlationStore ? [...fdrIds].map(id => ctx.correlationStore.getCorrelation(id)).filter(Boolean) : [];
+  const records = ctx.correlationStore ? [...flightDataIds].map(id => ctx.correlationStore.getCorrelation(id)).filter(Boolean) : [];
   if (records.length) out.push({ version: VERSION, type: 'efsp-correlation-delta', correlations: { updated: records } });
-  const relations = ctx.marsaStore ? ctx.marsaStore.getAll().filter(r => (r.participants || []).some(id => fdrIds.has(id))) : [];
+  const relations = ctx.marsaStore ? ctx.marsaStore.getAll().filter(r => (r.participants || []).some(id => flightDataIds.has(id))) : [];
   if (relations.length) out.push(marsaDelta(ctx.marsaStore, relations));
   return out;
 }
@@ -401,7 +401,7 @@ function _snapshotMessage(ctx, session = null) {
   return session ? readScope.filterSnapshot(full, readScopeOf(ctx, session)) : full;
 }
 
-/** The snapshot keys the families own, in registry order (airspaces, correlations, marsa, fieldStates, carriers, sfaRotation). */
+/** The snapshot keys the families own, in registry order (airspaces, correlations, marsa, runwayStatuses, carriers, sfaRotation). */
 function familySnapshots(ctx) {
   const out = {};
   for (const family of families.FAMILIES) if (family.snapshotKey) out[family.snapshotKey] = family.snapshot(ctx);
@@ -449,7 +449,7 @@ function _fullSnapshotMessage(ctx) {
     // (docs/adr/0088). Config, so it rides the snapshot only.
     positionLetters: facilityConfig.allPositionLetters ? facilityConfig.allPositionLetters() : {},
     positions, bays, strips,
-    fdrs: flightDataStore.getAll(),
+    flightDataList: flightDataStore.getAll(),
     ...familySnapshots(ctx),
   };
 }

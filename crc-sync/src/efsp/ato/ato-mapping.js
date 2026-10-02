@@ -8,8 +8,8 @@
 //              createFlightData's flat seed). Nothing else: createFlightData silently
 //              ignores unknown keys, so a key here that it does not read would
 //              be a promise nobody keeps.
-//   military — the fdr.military fields the ATO owns (alertStatus, scl,
-//              arInfo), shaped as fdr.military holds them. setMilitary() can
+//   military — the flightData.military fields the ATO owns (alertStatus, scl,
+//              arInfo), shaped as flightData.military holds them. setMilitary() can
 //              write alertStatus today; it refuses scl and arInfo by name.
 //   extras   — { ato, identityAto } (S-R2-8): everything with no FDR home
 //              yet — identityAto the IFF Mode 1/2/3 and datalink, ato the

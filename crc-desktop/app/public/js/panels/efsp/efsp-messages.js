@@ -28,7 +28,7 @@ import { renderFieldStatePanel } from './runway-status-panel.js';
 
 // The handlers of the EFSP message families whose state lives in bay-view.js / efsp-panel.js / efsp-state.js
 // (CMSG): Board, correlation, MARSA, alerts, SFA, ATO import, positions, resync. They moved here out of app.js's
-// ws.onmessage switch with their bodies and their call order unchanged. The airspace, carrier, field-state and
+// ws.onmessage switch with their bodies and their call order unchanged. The airspace, carrier, runway-status and
 // metrics families register in their own panel modules.
 
 // EFSP — sent once at connect (efsp-snapshot) plus immediately on
@@ -121,7 +121,7 @@ registerEfspMessage('efsp-mutation-ack', (msg) => {
 });
 
 registerEfspMessage('efsp-positions-ack', (msg) => {
-  console.warn('[efsp] efsp-positions-ack received, held =', msg.held, 'warnings =', msg.warnings);
+  console.warn('[efsp] efsp-positions-ack received, signedOn =', msg.signedOn, 'warnings =', msg.warnings);
   if (typeof renderPositionControls === 'function') renderPositionControls();
   if (typeof renderPositionWarnings === 'function') renderPositionWarnings(msg.warnings);
   if (typeof refreshEfspPanel === 'function') refreshEfspPanel();
@@ -146,7 +146,7 @@ registerEfspMessage('efsp-correlation-ack', (msg) => {
   // A correlation op registers nothing pending (efsp-ws.js: the §5.6.3
   // replay machinery is keyed on Strip identity), so the flight can only
   // be named from whatever record the ack carries back.
-  if (!msg.ok) _showMutationError(msg.reason || 'Rejected', msg.detail, msg.correlation ? { fdrId: msg.correlation.fdrId } : null);
+  if (!msg.ok) _showMutationError(msg.reason || 'Rejected', msg.detail, msg.correlation ? { flightDataId: msg.correlation.flightDataId } : null);
   applyEfspCorrelationDelta({ correlations: { updated: msg.correlation ? [msg.correlation] : [] } });
   if (typeof refreshCorrelatedHighlight === 'function') refreshCorrelatedHighlight();
   renderAllOpenEfspBays();
@@ -172,7 +172,7 @@ registerEfspMessage('efsp-marsa-ack', (msg) => {
   // Same one-argument bug as efsp-correlation-ack above, same fix. A
   // relation is named by its participants, not by one Strip — §9.2's
   // "model it as an edge, not a flag" applies to the refusal too.
-  if (!msg.ok) _showMutationError(msg.reason || 'Rejected', msg.detail, msg.marsa ? { fdrIds: msg.marsa.participants } : null);
+  if (!msg.ok) _showMutationError(msg.reason || 'Rejected', msg.detail, msg.marsa ? { flightDataIds: msg.marsa.participants } : null);
   if (typeof applyEfspMarsaDelta === 'function') {
     applyEfspMarsaDelta({ marsa: { updated: msg.marsa ? [msg.marsa] : [] } });
   }

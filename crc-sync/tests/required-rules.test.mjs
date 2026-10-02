@@ -46,9 +46,9 @@ test('a BoardStore built without rules it reads fails at construction, naming ea
 test('a configured Position with no registered Position family stops start-up', () => {
   const config = {
     getFacilityIds: () => ['F'],
-    getPositionSet: () => ['TWR', 'NOBODY'],
+    getPositionSet: () => ['LC', 'NOBODY'],
     getPositionClass: () => 'CONTROLLER',
   };
   assert.throws(() => assertAuthorityCoverage(config), /F\/NOBODY/);
-  assert.doesNotThrow(() => assertAuthorityCoverage({ ...config, getPositionSet: () => ['TWR'] }));
+  assert.doesNotThrow(() => assertAuthorityCoverage({ ...config, getPositionSet: () => ['LC'] }));
 });

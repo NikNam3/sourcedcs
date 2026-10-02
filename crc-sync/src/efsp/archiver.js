@@ -17,7 +17,7 @@
 //   4. Nothing archived can be undone.
 //
 // "Archived" means gone from memory and from the snapshot. The Mutation log
-// keeps the history, with one `Archive` line per Strip and one `ArchiveFdr`
+// keeps the history, with one `Archive` line per Strip and one `ArchiveFlightData`
 // line per FDR. There is no archive file.
 //
 // This module decides WHEN; BoardStore.archiveStrip and FlightDataStore.archiveFlightData
@@ -46,7 +46,7 @@ class Archiver {
     clock, wallNow = () => Date.now(), retentionMs = ARCHIVE_AFTER_MS, isCounted = null }) {
     this._facilityIds = [...facilityIds];
     this._boardStoreFor = boardStoreFor;
-    this._fdrStore = flightDataStore;
+    this._flightDataStore = flightDataStore;
     this._correlationStore = correlationStore;
     this._marsaStore = marsaStore;
     this._mutationLog = mutationLog;
@@ -64,10 +64,10 @@ class Archiver {
    * One pass over every Board.
    * @param {{all?:boolean, reason?:'AGE'|'MISSION_CHANGE', extra?:object}} [opts]
    *   all: archive every counted DROPPED Strip whatever its age (mission change)
-   * @returns {{stripsByFacility:Object<string,string[]>, fdrIds:string[], relations:number, correlations:number, skipped:string[]}}
+   * @returns {{stripsByFacility:Object<string,string[]>, flightDataIds:string[], relations:number, correlations:number, skipped:string[]}}
    */
   sweep({ all = false, reason = 'AGE', extra = {} } = {}) {
-    const result = { stripsByFacility: {}, fdrIds: [], relations: 0, correlations: 0, skipped: [] };
+    const result = { stripsByFacility: {}, flightDataIds: [], relations: 0, correlations: 0, skipped: [] };
     if (!this._isCounted && !this._warnedNoCounter) {
       this._warnedNoCounter = true;
       log.warn('no traffic count wired — archiving DROPPED Strips without checking they were counted');
@@ -90,9 +90,9 @@ class Archiver {
           log.warn('DROPPED Strip has no traffic-count record — kept, retried next sweep', { stripId: strip.stripId, facilityId });
           continue;
         }
-        const fdrId = board.archiveStrip(strip.stripId, reason, extra);
+        const flightDataId = board.archiveStrip(strip.stripId, reason, extra);
         archived.push(strip.stripId);
-        if (fdrId) candidateFlightDataList.add(fdrId);
+        if (flightDataId) candidateFlightDataList.add(flightDataId);
       }
       if (archived.length) result.stripsByFacility[facilityId] = archived;
     }
@@ -104,15 +104,15 @@ class Archiver {
       for (const facilityId of this._facilityIds) {
         const board = this._boardStoreFor(facilityId);
         if (!board) continue;
-        for (const s of board.getAll()) referenced.add(s.fdrId);
+        for (const s of board.getAll()) referenced.add(s.flightDataId);
       }
-      for (const fdrId of candidateFlightDataList) {
-        if (referenced.has(fdrId)) continue;
-        if (!this._fdrStore.archiveFlightData(fdrId)) continue;
-        result.fdrIds.push(fdrId);
+      for (const flightDataId of candidateFlightDataList) {
+        if (referenced.has(flightDataId)) continue;
+        if (!this._flightDataStore.archiveFlightData(flightDataId)) continue;
+        result.flightDataIds.push(flightDataId);
         if (this._mutationLog) {
           this._mutationLog.record({
-            clientMutationId: null, op: 'ArchiveFdr', fdrId,
+            clientMutationId: null, op: 'ArchiveFlightData', flightDataId,
             actingPositionId: null, actorId: 'system', at: this._clock.now(), reason, ...extra,
           });
         }
@@ -121,7 +121,7 @@ class Archiver {
 
     // What pointed at an archived FDR goes with it. Both only ran at restore
     // before (index.js _reconcileRestored).
-    if (result.fdrIds.length) {
+    if (result.flightDataIds.length) {
       if (this._marsaStore) result.relations = this._marsaStore.evictMissingFlightDataList();
       if (this._correlationStore) result.correlations = this._correlationStore.evictMissingFlightDataList();
     }
@@ -141,7 +141,7 @@ class Archiver {
 
 /** True when a sweep archived anything (the caller then persists and broadcasts). */
 function sweepChanged(r) {
-  return !!r && (Object.keys(r.stripsByFacility).length > 0 || r.fdrIds.length > 0);
+  return !!r && (Object.keys(r.stripsByFacility).length > 0 || r.flightDataIds.length > 0);
 }
 
 /**
@@ -159,7 +159,7 @@ function archiveDeltas(r, boardStoreFor) {
   for (const [facilityId, gone] of Object.entries(r.stripsByFacility)) {
     const board = boardStoreFor(facilityId);
     if (!board) continue;
-    payloads.push({ facilityId, boardSeq: board.currentSeq, gone, flightDataListGone: r.fdrIds });
+    payloads.push({ facilityId, boardSeq: board.currentSeq, gone, flightDataListGone: r.flightDataIds });
   }
   return payloads;
 }

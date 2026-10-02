@@ -11,7 +11,7 @@
     "wrongWayFpm": 500,
     "wrongWayPersistSec": 5
   },
-  "stca": {
+  "conflictAlert": {
     "lateralNm": 3,
     "verticalFt": 1000,
     "lookAheadSec": 120,

@@ -147,13 +147,13 @@ class ConformanceMonitor {
     this._clock = deps.clock || WALL_CLOCK;
     this._wallClock = deps.wallClock || WALL_CLOCK; // docs/adr/0096
     this._gridToMagnetic = deps.gridToMagnetic || (() => null);
-    this._mem = new Map();    // fdrId -> memory
-    this._alerts = new Map(); // fdrId -> alerts[]
+    this._mem = new Map();    // flightDataId -> memory
+    this._alerts = new Map(); // flightDataId -> alerts[]
   }
 
-  /** Every flight with an alert right now: [{ fdrId, alerts }]. */
+  /** Every flight with an alert right now: [{ flightDataId, alerts }]. */
   getAll() {
-    return [...this._alerts.entries()].map(([fdrId, alerts]) => ({ fdrId, alerts }));
+    return [...this._alerts.entries()].map(([flightDataId, alerts]) => ({ flightDataId, alerts }));
   }
 
   /** @returns {boolean} whether any flight's alerts changed */
@@ -164,39 +164,39 @@ class ConformanceMonitor {
     for (const record of correlationStore.getAll()) {
       if (!record.trackId || (record.state !== 'CORRELATED' && record.state !== 'PROVISIONAL')) continue;
       const track = trackStore.get(record.trackId);
-      const fdr = flightDataStore.getFlightData(record.fdrId);
-      if (!track || !fdr) continue;
-      seen.add(record.fdrId);
-      const mem = this._mem.get(record.fdrId) || {};
-      this._mem.set(record.fdrId, mem);
+      const flightData = flightDataStore.getFlightData(record.flightDataId);
+      if (!track || !flightData) continue;
+      seen.add(record.flightDataId);
+      const mem = this._mem.get(record.flightDataId) || {};
+      this._mem.set(record.flightDataId, mem);
       const altFt = this._d.indicatedAltFt(track.alt, this._d.weather(), this._d.transitionAltFt());
       const alerts = evaluateConformance({
-        hdg: activeClearanceEntry(fdr, 'heading'),
-        alt: activeClearanceEntry(fdr, 'altitude'),
+        hdg: activeClearanceEntry(flightData, 'heading'),
+        alt: activeClearanceEntry(flightData, 'altitude'),
         course: Number.isFinite(track.course) ? this._gridToMagnetic(track.course, track.lat, track.lon) : null,
         groundSpeedMs: track.groundSpeed, verticalSpeedMs: track.verticalSpeed, altFt,
       }, mem, now, config, wallNow);
-      changed = this._set(record.fdrId, alerts) || changed;
+      changed = this._set(record.flightDataId, alerts) || changed;
     }
-    for (const fdrId of [...this._alerts.keys()]) {
-      if (!seen.has(fdrId)) { this._alerts.delete(fdrId); changed = true; }
+    for (const flightDataId of [...this._alerts.keys()]) {
+      if (!seen.has(flightDataId)) { this._alerts.delete(flightDataId); changed = true; }
     }
-    for (const fdrId of [...this._mem.keys()]) if (!seen.has(fdrId)) this._mem.delete(fdrId);
+    for (const flightDataId of [...this._mem.keys()]) if (!seen.has(flightDataId)) this._mem.delete(flightDataId);
     return changed;
   }
 
-  _set(fdrId, alerts) {
+  _set(flightDataId, alerts) {
     const key = (list) => list.map(a => `${a.kind}:${a.assigned}:${a.actual ?? ''}:${a.deviationFt ?? ''}`).join('|');
-    const prev = this._alerts.get(fdrId) || [];
+    const prev = this._alerts.get(flightDataId) || [];
     if (alerts.length === 0) {
       if (prev.length === 0) return false;
-      this._alerts.delete(fdrId);
+      this._alerts.delete(flightDataId);
       return true;
     }
     // Numbers that drift every tick (altitude, rate) do not count as a change on
     // their own — only which alerts apply, and the assigned values behind them.
     const changed = key(prev) !== key(alerts);
-    this._alerts.set(fdrId, alerts);
+    this._alerts.set(flightDataId, alerts);
     return changed;
   }
 }

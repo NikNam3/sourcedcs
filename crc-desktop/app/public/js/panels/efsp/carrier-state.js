@@ -45,8 +45,8 @@ export function carrierDerivedStack(stackId = 'MAIN') {
 }
 
 /** The derived entry for a flight, or null when it is not in the stack. */
-export function carrierDerivedFor(fdrId) {
-  return carrierDerivedStack().find(e => e.fdrId === fdrId) || null;
+export function carrierDerivedFor(flightDataId) {
+  return carrierDerivedStack().find(e => e.flightDataId === flightDataId) || null;
 }
 
 /** Is the (possibly derived) value one a controller may NOT type? Every Block of kind `carrier-derived`. */
@@ -74,9 +74,9 @@ export function carrierBearingText(display) {
  * and no radial; an unsequenced Case I flight has no altitude yet).
  * @returns {string}
  */
-export function carrierDerivedText(field, fdrId, ship) {
+export function carrierDerivedText(field, flightDataId, ship) {
   const c = getEfspCarrier();
-  const d = carrierDerivedFor(fdrId);
+  const d = carrierDerivedFor(flightDataId);
   const caseValue = c && c.recoveryCase ? c.recoveryCase.value : null;
   switch (field) {
     case 'case': return caseValue || '';

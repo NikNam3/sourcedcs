@@ -13,7 +13,7 @@ const readScope = require('../../read-scope');
 function marsaFlightDataIds(op) {
   if (!op) return undefined;
   if (Array.isArray(op.participants)) return op.participants.map(String).filter(Boolean);
-  if (op.fdrId) return [String(op.fdrId)];
+  if (op.flightDataId) return [String(op.flightDataId)];
   return undefined;
 }
 
@@ -30,7 +30,7 @@ module.exports = {
   deltaType: 'efsp-marsa-delta',
   replayKind: 'marsa',
   snapshotKey: 'marsa',
-  subject: (msg) => ({ marsaId: msg.marsaId, fdrIds: marsaFlightDataIds(msg.op) }),
+  subject: (msg) => ({ marsaId: msg.marsaId, flightDataIds: marsaFlightDataIds(msg.op) }),
   store: (ctx) => ctx.marsaStore,
   noStore: 'no MARSA store',
 
@@ -87,9 +87,9 @@ module.exports = {
     //
     // A board-delta with no Strips in it, because none changed. It is stamped
     // with the default Facility's own boardSeq, unchanged for the same reason —
-    // fdrs are shared theater-wide (docs/adr/0013) and are not Facility-scoped,
+    // flightDataList are shared theater-wide (docs/adr/0013) and are not Facility-scoped,
     // so there is no per-Facility delta to send N of.
-    const regimeFlightDataList = result.fdrs || [];
+    const regimeFlightDataList = result.flightDataList || [];
     if (regimeFlightDataList.length > 0) {
       const facilityId = ctx.facilityConfig.DEFAULT_FACILITY_ID;
       const boardStore = ctx.boardStoreFor(facilityId);

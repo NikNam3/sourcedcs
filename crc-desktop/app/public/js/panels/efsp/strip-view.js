@@ -161,7 +161,7 @@ function _coordinationExchange(strip) {
   row.appendChild(what);
 
   let meta;
-  if (co.state === 'PROPOSED') {
+  if (co.state === 'INITIATED') {
     meta = _stateMeta(_coordinationStateWord(co), co.initiatedAt);
     // The requester's own Strip: a still-open request that was answered
     // "stand by" must not read as ignored (docs/adr/0022).
@@ -212,7 +212,7 @@ function _tofiExchange(strip) {
   const tofi = strip.tofiCoordination;
   if (!tofi || tofi.state === 'REJECTED') return null;
   const awaitingComms = !!tofi.acceptedAt && !tofi.commsTransferred;
-  if (tofi.state !== 'PROPOSED' && !awaitingComms) return null; // active and settled: the TOFI indicator says so
+  if (tofi.state !== 'INITIATED' && !awaitingComms) return null; // active and settled: the TOFI indicator says so
 
   const pendingIn = _isPendingTofiReplica(strip);
   const blocking = _tofiExitPrecondition(strip, tofi);
@@ -220,10 +220,10 @@ function _tofiExchange(strip) {
     title: blocking || `${_tofiProposerOf(strip, tofi)} proposed this TOFI ${tofi.direction.toLowerCase()}` });
   _addClass(row, 'efsp-tofi-badge');
   if (blocking) _addClass(row, 'efsp-coordination-badge-blocked');
-  row.appendChild(_stripEl('div', 'efsp-x-what', `TOFI ${tofi.direction} ${strip.role === 'MISSION' ? '←' : '→'} ${tofi.peerPositionId}`));
+  row.appendChild(_stripEl('div', 'efsp-x-what', `TOFI ${tofi.direction} ${strip.stripType === 'MISSION' ? '←' : '→'} ${tofi.peerPositionId}`));
 
   let meta;
-  if (awaitingComms && tofi.state !== 'PROPOSED') {
+  if (awaitingComms && tofi.state !== 'INITIATED') {
     meta = _stateMeta('ACCEPTED · comms not moved');
   } else if (blocking) {
     meta = _stateMeta(`${tofi.state} · blocked`);
@@ -284,9 +284,9 @@ function _marsaExchange(strip) {
   if (typeof marsaForStrip !== 'function') return null;
   const relation = marsaForStrip(strip);
   if (!relation || relation.state !== 'ACTIVE' || relation.rendezvousAt) return null;
-  const others = relation.participants.filter(id => id !== strip.fdrId).map((fdrId) => {
-    const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(fdrId) : null;
-    return (fdr && fdr.identity && fdr.identity.callsign) || fdrId;
+  const others = relation.participants.filter(id => id !== strip.flightDataId).map((flightDataId) => {
+    const flightData = typeof getEfspFdr === 'function' ? getEfspFdr(flightDataId) : null;
+    return (flightData && flightData.identity && flightData.identity.callsign) || flightDataId;
   });
   const row = _exchangeRow({ kind: 'marsa', title: `declared by ${relation.declaringCallsign}` });
   row.appendChild(_stripEl('div', 'efsp-x-what', `MARSA · ${others.join(', ') || relation.declaringCallsign}`));
@@ -354,7 +354,7 @@ function _buildLifeBlock(strip) {
     return { life, inhibited: null };
   }
   const nlaStatus = strip.nla;
-  const nlaLabel = nlaStatus === null ? null : (typeof nlaButtonLabel === 'function' ? nlaButtonLabel(strip) : nlaLabelFor(strip.state, strip.role)); // a carrier hand-over is labelled by its own name (docs/adr/0074)
+  const nlaLabel = nlaStatus === null ? null : (typeof nlaButtonLabel === 'function' ? nlaButtonLabel(strip) : nlaLabelFor(strip.state, strip.stripType)); // a carrier handoff is labelled by its own name (docs/adr/0074)
   let inhibited = null;
   if (nlaLabel) {
     // Drop is the terminal step, not the one filled "go" button.
@@ -376,7 +376,7 @@ function _buildLifeBlock(strip) {
     if (typeof carrierDecorateNlaButton === 'function') carrierDecorateNlaButton(btn, strip);
     life.appendChild(btn);
   }
-  // The carrier's second hand-over, beside the NLA (crc-sync docs/adr/0074): "See you" in Case II.
+  // The carrier's second handoff, beside the NLA (crc-sync docs/adr/0074): "See you" in Case II.
   if (typeof carrierExtraNlaButtons === 'function') for (const extra of carrierExtraNlaButtons(strip)) life.appendChild(extra);
   // Single Frequency Approach (crc-sync docs/adr/0075): "Rotate to PAR" beside the NLA on a Strip on an SFA frequency.
   if (typeof sfaExtraNlaButtons === 'function') for (const extra of sfaExtraNlaButtons(strip)) life.appendChild(extra);
@@ -386,7 +386,7 @@ function _buildLifeBlock(strip) {
 function _buildStripTab(strip, arrival) {
   const tab = _stripEl('div', 'efsp-strip-tab');
   tab.appendChild(_stripEl('div', 'efsp-strip-tab-role',
-    `${ROLE_ABBR[strip.role] || strip.role} · ${String(strip.state).replace(/_/g, ' ')}`));
+    `${ROLE_ABBR[strip.stripType] || strip.stripType} · ${String(strip.state).replace(/_/g, ' ')}`));
   // Just arrived from another controller (docs/adr/0057): who from, in amber,
   // until the controller touches the Strip or 30 s after they first saw it.
   if (arrival) tab.appendChild(_stripEl('div', 'efsp-strip-from', `from ${arrival.from}`));
@@ -402,12 +402,12 @@ function _buildStripTab(strip, arrival) {
 
 function _buildStripFields(strip) {
   const grid = _stripEl('div', 'efsp-strip-fields');
-  for (const id of compactBlocksFor(strip.role, strip.ownerPositionId, getEfspFdr(strip.fdrId))) {
+  for (const id of compactBlocksFor(strip.stripType, strip.ownerPositionId, getEfspFdr(strip.flightDataId))) {
     const span = fieldSpanFor(id);
     const chip = _stripEl('span', `efsp-block-chip efsp-field${span > 1 ? ' efsp-field-w' + span : ''}`);
-    const label = blockLabelFor(id, strip.role);
+    const label = blockLabelFor(id, strip.stripType);
     const labelEl = _stripEl('span', 'efsp-block-label', label || '');
-    const title = typeof blockTitleFor === 'function' ? blockTitleFor(id, getEfspFdr(strip.fdrId)) : null; if (title) labelEl.title = title; // docs/adr/0062
+    const title = typeof blockTitleFor === 'function' ? blockTitleFor(id, getEfspFdr(strip.flightDataId)) : null; if (title) labelEl.title = title; // docs/adr/0062
     // §3.7 rule 2's "in the same Block": the current value keeps the field; the
     // latest superseded value sits small and struck beside the label, with a
     // count of the rest. The whole chain is in the expanded view.
@@ -426,10 +426,10 @@ function _buildStripFields(strip) {
 // applies (MARSA, TOFI, an airspace, other Strips on the flight). A quiet Strip
 // has no indicator row at all. Warnings first, so they are always in the same
 // place: the left end of the row.
-export const INDICATOR_ORDER = ['stca', 'conf', 'rwy', 'gear', 'ord', 'scram', 'trk', 'marsa', 'tofi', 'airspace', 'timer', 'siblings'];
+export const INDICATOR_ORDER = ['conflictAlert', 'conf', 'rwy', 'gear', 'ord', 'scram', 'trk', 'marsa', 'tofi', 'airspace', 'timer', 'siblings'];
 // Keys whose chips come from _stripAlerts (warnings first, left end of the row). rwy/gear:
 // field state (docs/adr/0068); ord: hung ordnance (0069); scram: alert/scramble (0070).
-export const ALERT_SLOT_KEYS = new Set(['stca', 'conf', 'rwy', 'gear', 'ord', 'scram']);
+export const ALERT_SLOT_KEYS = new Set(['conflictAlert', 'conf', 'rwy', 'gear', 'ord', 'scram']);
 
 const _pad3 = (n) => String(Math.round(n)).padStart(3, '0');
 
@@ -449,13 +449,13 @@ function _stripAlerts(strip) {
     // callsign when correlated, else its tag or track number (docs/adr/0059).
     const other = c.otherCallsign;
     out.push({
-      key: 'stca', tone: 'bad', legacy: 'efsp-stca-indicator',
+      key: 'conflictAlert', tone: 'bad', legacy: 'efsp-stca-indicator',
       text: `CA ${other} ${_fmtClock(c.timeToCpaSec)}`,
       reason: `Conflict with ${other} in ${_fmtClock(c.timeToCpaSec)}: closest ${c.minNm} NM / ${c.vertFt} ft.`,
     });
   }
   if (typeof atoAlertsFor === 'function') out.push(...atoAlertsFor(strip)); // docs/adr/0071, §3.10.3 rule 3
-  for (const a of (typeof conformanceAlertsForFdr === 'function' ? conformanceAlertsForFdr(strip.fdrId) : [])) {
+  for (const a of (typeof conformanceAlertsForFdr === 'function' ? conformanceAlertsForFdr(strip.flightDataId) : [])) {
     if (a.kind === 'HEADING') {
       out.push({ key: 'conf', tone: 'attn', legacy: 'efsp-conf-indicator', text: `HDG ${_pad3(a.actual)}`,
         reason: `Assigned heading ${_pad3(a.assigned)}, tracking ${_pad3(a.actual)}.` });
@@ -514,8 +514,8 @@ function _litIndicator(strip, key, el, obligation, siblings) {
   }
   if (key === 'tofi') {
     const tofi = strip.tofiCoordination;
-    if (!tofi || (tofi.state !== 'PROPOSED' && tofi.state !== 'ACTIVE')) return null;
-    return _indicator(key, 'TOFI', tofi.state === 'PROPOSED' ? 'attn' : 'on', 'efsp-tofi-indicator',
+    if (!tofi || (tofi.state !== 'INITIATED' && tofi.state !== 'ACTIVE')) return null;
+    return _indicator(key, 'TOFI', tofi.state === 'INITIATED' ? 'attn' : 'on', 'efsp-tofi-indicator',
       `TOFI ${tofi.direction.toLowerCase()} with ${tofi.peerPositionId}: ${tofi.state}`);
   }
   if (key === 'airspace') {
@@ -582,7 +582,7 @@ function _litIndicator(strip, key, el, obligation, siblings) {
     // A sortie that crosses a Facility boundary leaves several live Strips on
     // one flight. Advisory only; the title names each (crc-sync docs/adr/0054).
     return _indicator(key, `+${siblings.length}`, 'on', 'efsp-shared-fdr-badge',
-      `this flight also has ${siblings.length === 1 ? 'a Strip' : `${siblings.length} Strips`} at ${siblings.map(s => `${s.facilityId || '?'}/${s.ownerPositionId} (${s.role})`).join(', ')}`);
+      `this flight also has ${siblings.length === 1 ? 'a Strip' : `${siblings.length} Strips`} at ${siblings.map(s => `${s.facilityId || '?'}/${s.ownerPositionId} (${s.stripType})`).join(', ')}`);
   }
   return null;
 }
@@ -590,7 +590,7 @@ function _litIndicator(strip, key, el, obligation, siblings) {
 /** The indicator row, or null when there is nothing to say (docs/adr/0058). */
 function _buildIndicatorSlots(strip, el, obligation, alerts) {
   const slots = _stripEl('div', 'efsp-strip-slots');
-  const siblings = otherLiveStripsForFdr(strip.fdrId, strip.stripId);
+  const siblings = otherLiveStripsForFdr(strip.flightDataId, strip.stripId);
   for (const key of INDICATOR_ORDER) {
     if (ALERT_SLOT_KEYS.has(key)) {
       for (const a of alerts.filter(x => x.key === key)) slots.appendChild(_indicator(key, a.text, a.tone, a.legacy, a.reason));
@@ -602,7 +602,7 @@ function _buildIndicatorSlots(strip, el, obligation, alerts) {
   // A return leg's archived annotations: only drawn when there are some.
   if (strip.previousLeg && Object.keys(strip.previousLeg.annotations || {}).length > 0) {
     const count = Object.keys(strip.previousLeg.annotations).length;
-    slots.appendChild(_indicator('prevLeg', `${strip.previousLeg.role} ×${count}`, 'on', 'efsp-previous-leg-badge',
+    slots.appendChild(_indicator('prevLeg', `${strip.previousLeg.stripType} ×${count}`, 'on', 'efsp-previous-leg-badge',
       Object.entries(strip.previousLeg.annotations)
         .map(([blockId, cell]) => `${blockId}: ${(cell.entries || []).map(e => e.value).join(' / ')}`).join('\n')));
   }
@@ -673,8 +673,8 @@ function _stripMenuItems(strip) {
   // U7 (docs/adr/0080): the proposer can always leave its own exchange — a link
   // the other side can no longer answer must not strand the Strip.
   if (acting === strip.ownerPositionId && strip.coordination && !strip.coordination.mintedForCoordination
-      && (strip.coordination.state === 'PROPOSED' || strip.coordination.state === 'ACTIVE')) {
-    const open = strip.coordination.state === 'PROPOSED';
+      && (strip.coordination.state === 'INITIATED' || strip.coordination.state === 'ACTIVE')) {
+    const open = strip.coordination.state === 'INITIATED';
     items.push({ group: 'Start', key: 'coordination-cancel', label: open ? 'Cancel proposal' : 'End coordination', cls: 'efsp-coordinate-btn', enabled: true,
       title: open ? 'Withdraw the open proposal' : 'Close this exchange on your Strip (the other side keeps its own)',
       run: () => _dispatchCoordination(strip, strip.coordination.primitive, 'CANCEL') });
@@ -684,7 +684,7 @@ function _stripMenuItems(strip) {
     let reason = '';
     if (!ok) {
       if (pendingIn) reason = answerFirst;
-      else if (strip.coordination && strip.coordination.state === 'PROPOSED') reason = 'a proposal is already open';
+      else if (strip.coordination && strip.coordination.state === 'INITIATED') reason = 'a proposal is already open';
       else if (strip.coordination && strip.coordination.state === 'ACTIVE') reason = 'already coordinated';
       else reason = `not from ${String(strip.state).replace(/_/g, ' ')}`;
     }
@@ -692,7 +692,7 @@ function _stripMenuItems(strip) {
       title: `Propose a cross-Facility coordination to ${COORDINATION_TARGETS[strip.ownerPositionId].positionId}`,
       run: (anchor) => _openCoordinatePopover(strip, anchor) });
   }
-  if (TOFI_COUNTERPARTS[strip.ownerPositionId] && strip.role !== 'MISSION') {
+  if (TOFI_COUNTERPARTS[strip.ownerPositionId] && strip.stripType !== 'MISSION') {
     if (_canProposeTofiExit(strip)) {
       items.push({ group: 'Start', key: 'tofi-exit', label: 'TOFI Exit…', cls: 'efsp-coordinate-btn', enabled: true,
         title: `Propose returning separation to ${strip.tofiCoordination.peerPositionId}`,
@@ -701,7 +701,7 @@ function _stripMenuItems(strip) {
       const ok = _canProposeTofiEntry(strip);
       const tofi = strip.tofiCoordination;
       const reason = ok ? '' : pendingIn ? answerFirst
-        : tofi && tofi.state === 'PROPOSED' ? 'a TOFI proposal is already open'
+        : tofi && tofi.state === 'INITIATED' ? 'a TOFI proposal is already open'
           : `not from ${String(strip.state).replace(/_/g, ' ')}`;
       const counterparts = TOFI_COUNTERPARTS[strip.ownerPositionId];
       items.push({ group: 'Start', key: 'tofi', label: 'TOFI…', cls: 'efsp-coordinate-btn', enabled: ok, reason,
@@ -745,8 +745,8 @@ function _stripMenuItems(strip) {
     }
   }
   if (_canConvertToArrival(strip)) {
-    const blockedBy = (strip.coordination && strip.coordination.state === 'PROPOSED') ? 'an open coordination proposal'
-      : (strip.tofiCoordination && strip.tofiCoordination.state === 'PROPOSED') ? 'an open TOFI proposal'
+    const blockedBy = (strip.coordination && strip.coordination.state === 'INITIATED') ? 'an open coordination proposal'
+      : (strip.tofiCoordination && strip.tofiCoordination.state === 'INITIATED') ? 'an open TOFI proposal'
         : (strip.tofiCoordination && strip.tofiCoordination.state === 'ACTIVE') ? 'active tactical control' : null;
     const annotated = Object.keys(strip.annotations || {}).length > 0;
     const armed = _pendingConvertStripId === strip.stripId;

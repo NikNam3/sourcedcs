@@ -36,11 +36,11 @@ function clocks({ mission = T0, wall = WALL0, source = 'MISSION' } = {}) {
 let fileN = 0;
 function freshPath() { return path.join(tmpDir, `m-${++fileN}.json`); }
 
-/** A position store stub: `manned` is the set of Positions with a Primary; `obs` maps Position -> observers. */
-function positions(manned = [], obs = {}) {
-  const s = { manned: new Set(manned), obs };
-  s.getAll = () => ['OPS', 'GND', 'TWR', 'APP'].map(p => ({ positionId: p, primary: s.manned.has(p) ? { controllerId: `c-${p}` } : null, observers: obs[p] || [] }));
-  s.primaryOf = (p) => (s.manned.has(p) ? `c-${p}` : null);
+/** A position store stub: `staffed` is the set of Positions with a Primary; `obs` maps Position -> observers. */
+function positions(staffed = [], obs = {}) {
+  const s = { staffed: new Set(staffed), obs };
+  s.getAll = () => ['OPS', 'GC', 'LC', 'AP'].map(p => ({ positionId: p, primary: s.staffed.has(p) ? { controllerId: `c-${p}` } : null, observers: obs[p] || [] }));
+  s.primaryOf = (p) => (s.staffed.has(p) ? `c-${p}` : null);
   s.observersOf = (p) => obs[p] || [];
   return s;
 }
@@ -69,9 +69,9 @@ test('percentile is nearest-rank and exact on known samples', () => {
 
 test('time-to-find: p50/p95/max exact, and the target is p95 < 3 s', () => {
   const c = clocks();
-  const m = build(c, { store: positions(['GND']) });
+  const m = build(c, { store: positions(['GC']) });
   const latencies = Array.from({ length: 20 }, (_, i) => (i + 1) * 200); // 200..4000
-  const ack = report(m, 'INCIRLIK', 'GND', latencies.map(l => ({ kind: 'TIME_TO_FIND', latencyMs: l })));
+  const ack = report(m, 'INCIRLIK', 'GC', latencies.map(l => ({ kind: 'TIME_TO_FIND', latencyMs: l })));
   assert.equal(ack.accepted, 20);
   const t = m.buildMetricsBody().metrics.timeToFind;
   assert.equal(t.status, 'COLLECTING');
@@ -80,35 +80,35 @@ test('time-to-find: p50/p95/max exact, and the target is p95 < 3 s', () => {
   assert.equal(t.p95Ms, 3800);
   assert.equal(t.maxMs, 4000);
   assert.equal(t.pass, false);
-  assert.equal(t.byPosition.GND.p95Ms, 3800);
+  assert.equal(t.byPosition.GC.p95Ms, 3800);
 });
 
 test('time-to-find samples are capped per bucket; the rest are counted as dropped, not kept', () => {
   const c = clocks();
-  const m = build(c, { store: positions(['GND']) });
-  for (let i = 0; i < 6; i++) report(m, 'INCIRLIK', 'GND', Array.from({ length: 100 }, () => ({ kind: 'TIME_TO_FIND', latencyMs: 100 })));
+  const m = build(c, { store: positions(['GC']) });
+  for (let i = 0; i < 6; i++) report(m, 'INCIRLIK', 'GC', Array.from({ length: 100 }, () => ({ kind: 'TIME_TO_FIND', latencyMs: 100 })));
   const t = m.buildMetricsBody().metrics.timeToFind;
   assert.equal(t.samples, TTF_SAMPLE_CAP);
   assert.equal(t.droppedSamples, 600 - TTF_SAMPLE_CAP);
 });
 
-test('search rate is per MANNED hour: 30 of 60 minutes manned, 3 searches -> 6 per manned hour', () => {
+test('search rate is per MANNED hour: 30 of 60 minutes staffed, 3 searches -> 6 per staffed hour', () => {
   const c = clocks();
-  const store = positions(['GND']);
+  const store = positions(['GC']);
   const m = build(c, { store });
   for (let i = 0; i < 60; i++) {
     c.m = T0 + i * 60000; // one sample a minute through the 13:00Z hour
-    store.manned = new Set(i < 30 ? ['GND'] : []);
+    store.staffed = new Set(i < 30 ? ['GC'] : []);
     m.sampleManning();
   }
-  store.manned = new Set(['GND']);
-  report(m, 'INCIRLIK', 'GND', [{ kind: 'SEARCH' }, { kind: 'SEARCH', bayId: 'gnd-pending' }, { kind: 'SEARCH' }]);
+  store.staffed = new Set(['GC']);
+  report(m, 'INCIRLIK', 'GC', [{ kind: 'SEARCH' }, { kind: 'SEARCH', bayId: 'gc-pending' }, { kind: 'SEARCH' }]);
   const body = m.buildMetricsBody();
-  const g = body.metrics.searchInvocations.byPosition.GND;
+  const g = body.metrics.searchInvocations.byPosition.GC;
   assert.equal(g.total, 3);
-  assert.equal(g.mannedHours, 0.5);
-  assert.equal(g.perMannedHour, 6);
-  assert.deepEqual(g.byHour['2016-06-21T13:00Z'], { missionSession: 1, count: 3, mannedMinutes: 30, perMannedHour: 6 });
+  assert.equal(g.staffedHours, 0.5);
+  assert.equal(g.perStaffedHour, 6);
+  assert.deepEqual(g.byHour['2016-06-21T13:00Z'], { missionSession: 1, count: 3, staffedMinutes: 30, perStaffedHour: 6 });
 });
 
 test('correlation: the hourly rate is sum(rate x eligible) / sum(eligible), and null with nothing eligible (T19)', () => {
@@ -143,11 +143,11 @@ test('staleness is NOT_INSTRUMENTED with total null until declared, then COLLECT
   s = m.buildMetricsBody().metrics.staleness;
   assert.equal(s.status, 'NO_DATA');
   assert.equal(s.total, 0);
-  m.recordStaleness({ positionId: 'TWR', stripState: 'TAXI', trackState: 'AIRBORNE', durationMs: 5000 });
+  m.recordStaleness({ positionId: 'LC', stripState: 'TAXI', trackState: 'AIRBORNE', durationMs: 5000 });
   s = m.buildMetricsBody().metrics.staleness;
   assert.equal(s.status, 'COLLECTING');
   assert.equal(s.total, 1);
-  assert.deepEqual(s.byPosition, { TWR: 1 });
+  assert.deepEqual(s.byPosition, { LC: 1 });
   assert.deepEqual(s.byState, { TAXI: 1 });
 });
 
@@ -156,11 +156,11 @@ test('an unknown source name throws at wiring time', () => {
 });
 
 test('client metrics are NOT_INSTRUMENTED until a report has ever arrived', () => {
-  const m = build(clocks(), { store: positions(['GND']) });
+  const m = build(clocks(), { store: positions(['GC']) });
   const before = m.buildMetricsBody();
   for (const k of ['searchInvocations', 'timeToFind', 'gestureInputs']) assert.equal(before.metrics[k].status, 'NOT_INSTRUMENTED', k);
   assert.equal(before.sources.client, null);
-  report(m, 'INCIRLIK', 'GND', [{ kind: 'GESTURE', gesture: 'OFFSET', inputs: 1 }]);
+  report(m, 'INCIRLIK', 'GC', [{ kind: 'GESTURE', gesture: 'OFFSET', inputs: 1 }]);
   const after = m.buildMetricsBody();
   assert.equal(after.metrics.gestureInputs.status, 'COLLECTING');
   assert.equal(after.metrics.searchInvocations.status, 'NO_DATA');
@@ -169,16 +169,16 @@ test('client metrics are NOT_INSTRUMENTED until a report has ever arrived', () =
 
 test('client events are stamped by the server on receipt; the client `at` is ignored (S-R2-3)', () => {
   const c = clocks();
-  const m = build(c, { store: positions(['GND']) });
-  const ack = report(m, 'INCIRLIK', 'GND', [{ kind: 'SEARCH', at: Date.now() }, { kind: 'SEARCH', at: 'nonsense' }]);
+  const m = build(c, { store: positions(['GC']) });
+  const ack = report(m, 'INCIRLIK', 'GC', [{ kind: 'SEARCH', at: Date.now() }, { kind: 'SEARCH', at: 'nonsense' }]);
   assert.equal(ack.accepted, 2);
   const body = m.buildMetricsBody();
-  assert.deepEqual(Object.keys(body.metrics.searchInvocations.byPosition.GND.byHour), ['2016-06-21T13:00Z'], 'bucketed by the mission clock, not the client');
+  assert.deepEqual(Object.keys(body.metrics.searchInvocations.byPosition.GC.byHour), ['2016-06-21T13:00Z'], 'bucketed by the mission clock, not the client');
 });
 
 test('gestures: count, mean, max and over-ceiling per gesture', () => {
-  const m = build(clocks(), { store: positions(['TWR']) });
-  report(m, 'INCIRLIK', 'TWR', [
+  const m = build(clocks(), { store: positions(['LC']) });
+  report(m, 'INCIRLIK', 'LC', [
     { kind: 'GESTURE', gesture: 'FLIP', inputs: 1 },
     { kind: 'GESTURE', gesture: 'FLIP', inputs: 3 },
   ]);
@@ -284,16 +284,16 @@ test('persistence: a restart restores buckets, sessions and sources; nothing abo
   const c = clocks();
   const p = freshPath();
   const session = new MissionSession({ path: null, clock: c.clock, wallNow: c.wallNow });
-  const m = build(c, { path: p, store: positions(['GND']), session });
+  const m = build(c, { path: p, store: positions(['GC']), session });
   session.noteMissionLoad(SYRIA);
-  report(m, 'INCIRLIK', 'GND', [{ kind: 'SEARCH' }]);
+  report(m, 'INCIRLIK', 'GC', [{ kind: 'SEARCH' }]);
   m.declareSource('staleness');
   m.recordTransfer({ kind: 'TRANSFER', ok: false, cause: 'NO_RECEIVING_POSITION' });
   assert.equal(m.flush(), true);
   const raw = fs.readFileSync(p, 'utf8');
-  assert.ok(!raw.includes('c-GND'), 'no controller id is persisted');
+  assert.ok(!raw.includes('c-GC'), 'no controller id is persisted');
 
-  const again = build(c, { path: p, store: positions(['GND']), session });
+  const again = build(c, { path: p, store: positions(['GC']), session });
   const a = m.buildMetricsBody();
   const b = again.buildMetricsBody();
   assert.deepEqual(b.metrics.transfers, a.metrics.transfers);

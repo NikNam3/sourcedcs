@@ -11,7 +11,7 @@
 // Wire shape (crc-sync/src/surveillance/presentation.js):
 //   { id, lat, lon, domain: 'AIR'|'SEA'|'GROUND', onGround, illuminatedAt, sources,
 //     iffState, iffOverride,
-//     label: { callsign, source: 'FDR'|'FDR_PROVISIONAL'|'DATALINK'|'TAG'|null, tag, trackNumber },
+//     label: { callsign, source: 'FLIGHT_DATA'|'FLIGHT_DATA_PROVISIONAL'|'DATALINK'|'TAG'|null, tag, trackNumber },
 //     type, ssr: { code, ident, emergency } | null,
 //     altitude: { ft, ref: 'QNH'|'STD', source: 'MODE_C'|'RADAR'|'DATALINK' } | null,
 //     dl: { lock } | null }
@@ -46,7 +46,7 @@ export function trackName(t) {
 
 /** `?` after a name that came from a provisional correlation, so doubt still looks like doubt. */
 export function trackNameSuffix(t) {
-  return t && t.label && t.label.source === 'FDR_PROVISIONAL' ? '?' : '';
+  return t && t.label && t.label.source === 'FLIGHT_DATA_PROVISIONAL' ? '?' : '';
 }
 
 /** The contact's own reference, never its flight's callsign: its code, else its track number. */

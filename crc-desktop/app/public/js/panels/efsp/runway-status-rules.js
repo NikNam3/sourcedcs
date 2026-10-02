@@ -4,7 +4,7 @@ import { getEfspFdr, getEfspFieldState } from './efsp-state.js';
 // Field state on the client (guide §9.7, crc-sync docs/adr/0061, crc-desktop
 // docs/adr/0068) — the PURE rules: which runway a Strip uses, what is wrong
 // with it, whether a hook-equipped arrival has arresting gear to land on, and
-// which field-state buttons a controller is offered.
+// which runway-status buttons a controller is offered.
 //
 // Everything here is a MIRROR of crc-sync's src/efsp/runway-status.js and
 // permission.js, and proactive only: the server decides every op and stamps
@@ -22,24 +22,24 @@ import { getEfspFdr, getEfspFieldState } from './efsp-state.js';
 
 // ── the mirrored tables ────────────────────────────────────────────────────
 
-// crc-sync permission.js FIELD_STATE_OP_OWNERS, verbatim (the drift test
+// crc-sync permission.js RUNWAY_STATUS_OP_OWNERS, verbatim (the drift test
 // asserts deep equality).
 export const FIELD_STATE_ACTION_OWNERS = {
-  CloseRunway:                ['TWR'],
-  OpenRunway:                 ['TWR'],
-  BeginRunwayWorks:           ['TWR'],
+  CloseRunway:                ['LC'],
+  OpenRunway:                 ['LC'],
+  BeginRunwayWorks:           ['LC'],
   CompleteRunwayWorks:        ['OPS'],
   CompleteInspection:         ['OPS'],
-  RequestRunwayStatus:        ['OPS', 'CD', 'GND', 'APP', 'RSU'], // RSU asks, never closes (H18, docs/adr/0075)
-  AcceptRunwayRequest:        ['TWR'],
-  RejectRunwayRequest:        ['TWR'],
-  ProposeRunwayChange:        ['TWR'],
-  SelfCoordinateRunwayChange: ['TWR'],
-  WithdrawRunwayChange:       ['TWR'],
-  BeginRunwayChange:          ['TWR'],
-  CompleteRunwayChange:       ['TWR'],
-  AckRunwayChange:            ['OPS', 'APP'],
-  RejectRunwayChange:         ['OPS', 'APP'],
+  RequestRunwayStatus:        ['OPS', 'CD', 'GC', 'AP', 'RSU'], // RSU asks, never closes (H18, docs/adr/0075)
+  AcceptRunwayRequest:        ['LC'],
+  RejectRunwayRequest:        ['LC'],
+  ProposeRunwayChange:        ['LC'],
+  SelfCoordinateRunwayChange: ['LC'],
+  WithdrawRunwayChange:       ['LC'],
+  BeginRunwayChange:          ['LC'],
+  CompleteRunwayChange:       ['LC'],
+  AckRunwayChange:            ['OPS', 'AP'],
+  RejectRunwayChange:         ['OPS', 'AP'],
 };
 
 // Which Strips show a RWY chip (L1b-Q5 (a), decisions.md S-W2A): every Strip
@@ -96,10 +96,10 @@ function _fsRunwayOfEnd(view, end) {
   return (view.runways || []).find(r => (r.ends || []).includes(end)) || null;
 }
 
-function _fsFdrRunwayText(strip, fdr) {
-  if (!fdr) return null;
-  if (strip.role === 'DEPARTURE') return fdr.filed ? fdr.filed.departureRunway : null;
-  if (strip.role === 'ARRIVAL') return fdr.assigned ? fdr.assigned.landingRunway : null;
+function _fsFdrRunwayText(strip, flightData) {
+  if (!flightData) return null;
+  if (strip.stripType === 'DEPARTURE') return flightData.filed ? flightData.filed.departureRunway : null;
+  if (strip.stripType === 'ARRIVAL') return flightData.assigned ? flightData.assigned.landingRunway : null;
   return null;
 }
 
@@ -123,10 +123,10 @@ function _fsResolveText(view, text) {
  *
  * @returns {{runwayId:string, end:string|null, source:string, runway:object}|null}
  */
-export function runwayForStrip(strip, fdr, record, { targetRackId } = {}) {
+export function runwayForStrip(strip, flightData, record, { targetRackId } = {}) {
   const view = fieldStateViewOf(record);
   if (!strip || !view) return null;
-  if (strip.role !== 'DEPARTURE' && strip.role !== 'ARRIVAL') return null;
+  if (strip.stripType !== 'DEPARTURE' && strip.stripType !== 'ARRIVAL') return null;
   const byRack = (rackId, source) => {
     const end = rackId ? view.rackEnds[rackId] : null;
     const runway = end ? _fsRunwayOfEnd(view, end) : null;
@@ -136,8 +136,8 @@ export function runwayForStrip(strip, fdr, record, { targetRackId } = {}) {
   if (target) return target;
   const rack = byRack(strip.rackId, 'RACK');
   if (rack) return rack;
-  const filed = _fsResolveText(view, _fsFdrRunwayText(strip, fdr));
-  if (filed) return { runwayId: filed.runway.runwayId, end: filed.end, source: 'FDR', runway: filed.runway };
+  const filed = _fsResolveText(view, _fsFdrRunwayText(strip, flightData));
+  if (filed) return { runwayId: filed.runway.runwayId, end: filed.end, source: 'FLIGHT_DATA', runway: filed.runway };
   if (view.activeRunway) {
     const runway = _fsRunwayOfEnd(view, view.activeRunway);
     if (runway) return { runwayId: runway.runwayId, end: view.activeRunway, source: 'ACTIVE_RUNWAY', runway };
@@ -179,7 +179,7 @@ function _fsGearText(gear) {
 }
 
 /**
- * Guide §9.7 rule 4: a hook-equipped arrival (`3F`, fdr.military.hookRequired)
+ * Guide §9.7 rule 4: a hook-equipped arrival (`3F`, flightData.military.hookRequired)
  * onto a runway with no usable arresting gear. Computed, never stored: it is
  * derived from two records that already broadcast whole (the FDR and the field
  * state), so it grows no record, alert type or message (docs/adr/0068).
@@ -195,8 +195,8 @@ function _fsGearText(gear) {
  *
  * @returns {null | { text: 'HOOK', reason: string }}
  */
-export function gearMismatchFor(fdr, runway) {
-  if (!fdr || !fdr.military || fdr.military.hookRequired !== true) return null;
+export function gearMismatchFor(flightData, runway) {
+  if (!flightData || !flightData.military || flightData.military.hookRequired !== true) return null;
   if (!runway) return null;
   const gear = Array.isArray(runway.arrestingGear) ? runway.arrestingGear : [];
   if (gear.length === 0) return null;
@@ -226,12 +226,12 @@ function _fsRwyReason(runway, strip) {
     const after = runway.suspension && runway.suspension.kind === 'RUNWAY_CHANGE' ? ' after the runway change' : '';
     sentence = `Runway ${id} is suspended awaiting inspection${after}; it reopens when OPS signs off the inspection.`;
   }
-  if (strip.role === 'ARRIVAL' && strip.state === 'FINAL') sentence += ' Landing is an observation and is not held.';
+  if (strip.stripType === 'ARRIVAL' && strip.state === 'FINAL') sentence += ' Landing is an observation and is not held.';
   return sentence;
 }
 
 /**
- * The field-state alerts for one Strip, in strip-view.js _stripAlerts's shape
+ * The runway-status alerts for one Strip, in strip-view.js _stripAlerts's shape
  * (`{key, text, tone, legacy, reason}`); strip-view.js calls this through the
  * wave-2 hook line and draws a chip per alert (keys `rwy`, `gear`).
  *
@@ -249,17 +249,17 @@ function _fsRwyReason(runway, strip) {
 export function fieldStateAlertsFor(strip, lookups) {
   const out = [];
   if (!strip || strip.state === 'DROPPED') return out;
-  if (strip.role !== 'DEPARTURE' && strip.role !== 'ARRIVAL') return out;
+  if (strip.stripType !== 'DEPARTURE' && strip.stripType !== 'ARRIVAL') return out;
   const runwayStatusFor = (lookups && lookups.runwayStatusFor) || (typeof getEfspFieldState === 'function' ? getEfspFieldState : () => null);
   const flightDataFor = (lookups && lookups.flightDataFor) || (typeof getEfspFdr === 'function' ? getEfspFdr : () => null);
   const record = runwayStatusFor(strip.facilityId);
   if (!record) return out;
-  const fdr = strip.fdrId ? flightDataFor(strip.fdrId) : null;
-  const resolved = runwayForStrip(strip, fdr, record);
+  const flightData = strip.flightDataId ? flightDataFor(strip.flightDataId) : null;
+  const resolved = runwayForStrip(strip, flightData, record);
   if (!resolved) return out;
   const runway = resolved.runway;
 
-  const chipStates = FIELD_STATE_RUNWAY_STRIP_STATES[strip.role] || [];
+  const chipStates = FIELD_STATE_RUNWAY_STRIP_STATES[strip.stripType] || [];
   if (chipStates.includes(strip.state)) {
     if (runway.status && runway.status !== 'OPEN') {
       const inhibited = strip.nla && strip.nla.inhibited;
@@ -282,18 +282,18 @@ export function fieldStateAlertsFor(strip, lookups) {
     }
   }
 
-  if (strip.role === 'ARRIVAL' && FIELD_STATE_GEAR_CHECK_STATES.includes(strip.state)) {
-    const mismatch = gearMismatchFor(fdr, runway);
+  if (strip.stripType === 'ARRIVAL' && FIELD_STATE_GEAR_CHECK_STATES.includes(strip.state)) {
+    const mismatch = gearMismatchFor(flightData, runway);
     if (mismatch) out.push({ key: 'gear', tone: 'bad', legacy: 'efsp-gear-indicator', text: mismatch.text, reason: mismatch.reason });
   }
   return out;
 }
 
 /**
- * What the Strip's field-state chips depend on, as a string for bay-view.js's
+ * What the Strip's runway-status chips depend on, as a string for bay-view.js's
  * render signature: the Strip is rebuilt when it changes. Field state is not
  * on the Strip, and the re-stamped `nla` board-delta reaches the client before
- * the field-state delta, so without this the chip would lag a whole change.
+ * the runway-status delta, so without this the chip would lag a whole change.
  */
 export function fieldStateSignatureFor(strip) {
   const record = strip && typeof getEfspFieldState === 'function' ? getEfspFieldState(strip.facilityId) : null;
@@ -316,12 +316,12 @@ function _fsOpenChange(change) {
 }
 
 /**
- * The field-state actions this controller may take, given the Positions they
+ * The runway-status actions this controller may take, given the Positions they
  * hold at the record's Facility — airspace-panel.js's airspaceActionsFor
  * shape. One entry per (acting Position, op): an action is always sent AS one
  * Position (D21), so a controller holding OPS and APP sees one Ack for each.
  *
- * Mirrors FIELD_STATE_OP_OWNERS (decisions.md H18/S-L1b: TWR closes, opens and
+ * Mirrors RUNWAY_STATUS_OP_OWNERS (decisions.md H18/S-L1b: TWR closes, opens and
  * begins works; everyone else asks) and the store's preconditions. Two config
  * values the record does not carry fall back to the permission table's owners:
  * the acknowledger set before a change is proposed (AckRunwayChange's owners)
@@ -332,15 +332,15 @@ function _fsOpenChange(change) {
  *   runwayId?:string, action?:string, toEnds?:string[], needs?:'reason'|'toEnd'}[]}
  */
 export function fieldStateActionsFor(record, signedOnPositionIds) {
-  const held = [...new Set(signedOnPositionIds || [])];
+  const signedOn = [...new Set(signedOnPositionIds || [])];
   const out = [];
-  if (!record || held.length === 0) return out;
+  if (!record || signedOn.length === 0) return out;
   const as = (kind, extra) => {
-    for (const positionId of held) {
+    for (const positionId of signedOn) {
       if (_fsOwns(positionId, kind)) out.push({ positionId, kind, ...extra, title: `as ${positionId} — ${extra.title}` });
     }
   };
-  const holdsTower = held.some(p => _fsOwns(p, 'CloseRunway'));
+  const holdsTower = signedOn.some(p => _fsOwns(p, 'CloseRunway'));
 
   for (const runway of record.runways || []) {
     const id = runway.runwayId;
@@ -381,7 +381,7 @@ export function fieldStateActionsFor(record, signedOnPositionIds) {
     if (toEnds.length) {
       as('ProposeRunwayChange', { label: 'CHG RWY', needs: 'toEnd', toEnds, title: 'propose a runway change' });
       const acknowledgers = FIELD_STATE_ACTION_OWNERS.AckRunwayChange;
-      if (holdsTower && acknowledgers.every(p => held.includes(p))) {
+      if (holdsTower && acknowledgers.every(p => signedOn.includes(p))) {
         as('SelfCoordinateRunwayChange', { label: 'SELF CHG', needs: 'toEnd', toEnds, title: `change the runway, acknowledging as ${acknowledgers.join(' and ')} yourself` });
       }
     }
@@ -390,14 +390,14 @@ export function fieldStateActionsFor(record, signedOnPositionIds) {
     const acknowledgers = change.acknowledgers || [];
     if (change.state === 'PROPOSED') {
       for (const p of acknowledgers) {
-        if (held.includes(p) && acks[p] === null && _fsOwns(p, 'AckRunwayChange')) {
+        if (signedOn.includes(p) && acks[p] === null && _fsOwns(p, 'AckRunwayChange')) {
           out.push({ positionId: p, kind: 'AckRunwayChange', label: 'ACK', title: `as ${p} — acknowledge the change to ${change.toRunwayId}` });
         }
       }
     }
     if (change.state === 'PROPOSED' || change.state === 'ACKNOWLEDGED') {
       for (const p of acknowledgers) {
-        if (held.includes(p) && _fsOwns(p, 'RejectRunwayChange')) {
+        if (signedOn.includes(p) && _fsOwns(p, 'RejectRunwayChange')) {
           out.push({ positionId: p, kind: 'RejectRunwayChange', label: 'REJECT', needs: 'reason', title: `as ${p} — reject the change to ${change.toRunwayId}` });
         }
       }
@@ -409,7 +409,7 @@ export function fieldStateActionsFor(record, signedOnPositionIds) {
   return out;
 }
 
-/** What a field-state refusal is about, for the refusal banner: `runway 05/23`, else the Facility. */
+/** What a runway-status refusal is about, for the refusal banner: `runway 05/23`, else the Facility. */
 export function fieldStateSubjectFor(msgOrOp) {
   const m = msgOrOp || {};
   const runwayId = m.runwayId || (m.op && m.op.runwayId);

@@ -1100,7 +1100,7 @@
     /* ── Correlation (WP5, guide §6.6 rule 5) ───────────────────────────────
        Which surveillance contact a flight is, and on what evidence. A
        Strip-level badge like the airspace and obligation badges — not a Block,
-       since a correlation is keyed by fdrId in its own store and is neither
+       since a correlation is keyed by flightDataId in its own store and is neither
        FDR data nor a Strip annotation. Deliberately none of these use the
        attention red that guide §7.7 rule 4 reserves. */
     .efsp-correlation-badge {
@@ -1202,7 +1202,7 @@
        "Military Authority Assumes Responsibility for Separation of Aircraft."
        A Strip-level badge like the correlation and airspace badges, and not a
        Block, for the same reason: the relation is keyed by its own id with
-       fdrId participants, so it is neither FDR data nor a Strip annotation.
+       flightDataId participants, so it is neither FDR data nor a Strip annotation.
 
        Three states that must be distinguishable at a glance, because each
        means something different to the controller looking at it:
@@ -1845,7 +1845,7 @@
 
 /* ── The carrier (crc-sync docs/adr/0074; guide §9.12) ────────────────────────
    The ship banner and Case selector over the Position tabs, the Marshal stack's
-   slot board, and the four hand-over buttons. Prominence is place and shape,
+   slot board, and the four handoff buttons. Prominence is place and shape,
    never colour alone (docs/adr/0056): each trigger type also has its own border
    style, so the four handoffs stay four distinct affordances without colour. */
 .carrier-banner { padding: 6px 8px; border-bottom: 1px solid #2a3038; background: #151b21; font-size: 12px; }

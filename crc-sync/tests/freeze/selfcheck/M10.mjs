@@ -4,7 +4,7 @@ export default {
   id: "M10",
   what: "a rule dropped from createEfsp()'s per-Facility wiring (liveStripsForFlightData)",
   file: "src/efsp/index.js",
-  find: "      liveStripsForFlightData: (fdrId, excludeStripId) => {",
-  replace: "      _notWired_liveStripsForFlightData: (fdrId, excludeStripId) => {",
+  find: "      liveStripsForFlightData: (flightDataId, excludeStripId) => {",
+  replace: "      _notWired_liveStripsForFlightData: (flightDataId, excludeStripId) => {",
   detect: ["freeze-guards"],
 };

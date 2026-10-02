@@ -36,13 +36,13 @@ export function digest(v) {
   return crypto.createHash('sha1').update(JSON.stringify(v)).digest('hex').slice(0, 10);
 }
 
-const isStrip = (v) => v && typeof v === 'object' && typeof v.stripId === 'string' && 'rev' in v && 'state' in v && 'role' in v;
-const isFlightData = (v) => v && typeof v === 'object' && typeof v.fdrId === 'string' && v.identity && v.filed;
+const isStrip = (v) => v && typeof v === 'object' && typeof v.stripId === 'string' && 'rev' in v && 'state' in v && 'stripType' in v;
+const isFlightData = (v) => v && typeof v === 'object' && typeof v.flightDataId === 'string' && v.identity && v.filed;
 
-/** Strip -> "S#13 r4 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=ab12cd34ef". */
+/** Strip -> "S#13 r4 DEPARTURE/HANDED_OFF @APP ap-departures/main:V h=ab12cd34ef". */
 export function summarize(v, depth = 0) {
   const r = summarizeInner(v, depth);
-  // A big nested record (a runway/field-state view, a whole Position list) would dominate the file;
+  // A big nested record (a runway/runway-status view, a whole Position list) would dominate the file;
   // keep its shape and a hash of the full content instead.
   if (depth === 3 && r && typeof r === 'object') {
     const len = JSON.stringify(r).length;
@@ -55,11 +55,11 @@ const BIG = 700;
 function summarizeInner(v, depth) {
   if (isStrip(v)) {
     const c = canonical(v);
-    return `S ${c.stripId} r${c.rev} ${c.role}/${c.state} @${c.ownerPositionId} ${c.bayId}/${c.rackId}:${c.orderKey} h=${digest(c)}`;
+    return `S ${c.stripId} r${c.rev} ${c.stripType}/${c.state} @${c.ownerPositionId} ${c.bayId}/${c.rackId}:${c.orderKey} h=${digest(c)}`;
   }
   if (isFlightData(v)) {
     const c = canonical(v);
-    return `F ${c.fdrId} r${c.rev} ${c.identity.callsign} sq=${c.identity.beaconAssigned} h=${digest(c)}`;
+    return `F ${c.flightDataId} r${c.rev} ${c.identity.callsign} sq=${c.identity.beaconAssigned} h=${digest(c)}`;
   }
   if (Array.isArray(v)) return v.map(e => summarize(e, depth + 1));
   if (v && typeof v === 'object') {
@@ -80,7 +80,7 @@ export function summarizeCollection(v) {
 function summarizeRow(r) {
   if (isStrip(r) || isFlightData(r)) return summarize(r);
   const c = canonical(r);
-  const id = c && (c.airspaceId || c.marsaId || c.fdrId || c.hullId || c.id || c.runwayId || c.facilityId);
+  const id = c && (c.airspaceId || c.marsaId || c.flightDataId || c.hullId || c.id || c.runwayId || c.facilityId);
   return `${id !== undefined ? id : '?'} h=${digest(c)}`;
 }
 
@@ -91,10 +91,10 @@ export function summarizeFinalState(fs_) {
     const { strips, ...rest } = b;
     out.boards[f] = { ...summarizeCollection(strips || []), rest: summarize(rest) };
   }
-  for (const k of ['fdr', 'airspaces', 'correlations', 'marsa', 'fieldStates', 'carriers']) {
-    if (k === 'fdr' && fs_.fdr && !Array.isArray(fs_.fdr)) {
-      const { fdrs, ...rest } = fs_.fdr;
-      out.fdr = { ...(Array.isArray(fdrs) ? summarizeCollection(fdrs) : { h: digest(canonical(fdrs)) }), rest: summarize(rest) };
+  for (const k of ['flightData', 'airspaces', 'correlations', 'marsa', 'runwayStatuses', 'carriers']) {
+    if (k === 'flightData' && fs_.flightData && !Array.isArray(fs_.flightData)) {
+      const { flightDataList, ...rest } = fs_.flightData;
+      out.flightData = { ...(Array.isArray(flightDataList) ? summarizeCollection(flightDataList) : { h: digest(canonical(flightDataList)) }), rest: summarize(rest) };
     } else out[k] = fs_[k] === undefined ? null : summarizeCollection(fs_[k]);
   }
   if (fs_.error) out.error = fs_.error;

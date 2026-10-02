@@ -16,7 +16,7 @@ class Sky {
     this.rng = rng;
     this.aircraft = new Map(); // flightId -> aircraft
     this.byTrack = new Map();  // trackId (string) -> aircraft (includes re-minted-away ids for a while? no: current only)
-    this.retiredTracks = new Map(); // trackId -> { flightId, fdrId } for ids an aircraft no longer uses — so a late correlation to one is attributable
+    this.retiredTracks = new Map(); // trackId -> { flightId, flightDataId } for ids an aircraft no longer uses — so a late correlation to one is attributable
     this._nextId = 16777300;
     this.pendingRemove = [];
     this.stats = { spawned: 0, remints: 0, reloads: 0, faults: { wrongSquawk: 0, noTransponder: 0, typo: 0, sharedCallsign: 0 }, conflictsInjected: 0, nonConformingAssignments: 0 };
@@ -24,12 +24,12 @@ class Sky {
 
   _newId() { return this._nextId++; }
 
-  /** A flight became airborne. `fdr` is { fdrId, callsign, code }. */
-  spawn(flightId, fdr, now) {
+  /** A flight became airborne. `flightData` is { flightDataId, callsign, code }. */
+  spawn(flightId, flightData, now) {
     if (this.aircraft.has(flightId)) return this.aircraft.get(flightId);
     const r = this.rng;
-    let callsign = fdr.callsign;
-    let squawk = fdr.code || null;
+    let callsign = flightData.callsign;
+    let squawk = flightData.code || null;
     const faults = [];
     if (r.chance(0.08)) { squawk = randomCode(r, squawk); faults.push('wrongSquawk'); this.stats.faults.wrongSquawk++; }
     else if (r.chance(0.05 / 0.92)) { squawk = null; faults.push('noTransponder'); this.stats.faults.noTransponder++; }
@@ -41,7 +41,7 @@ class Sky {
     const bearing = r.uniform(0, 2 * Math.PI);
     const dist = r.uniform(5000, 60000);
     const a = {
-      flightId, fdrId: fdr.fdrId, trueCallsign: fdr.callsign, callsign, squawk, faults,
+      flightId, flightDataId: flightData.flightDataId, trueCallsign: flightData.callsign, callsign, squawk, faults,
       id: this._newId(),
       x: Math.sin(bearing) * dist, y: Math.cos(bearing) * dist,
       altM: r.uniform(1500, 3000), targetAltM: r.uniform(4000, 9000),
@@ -136,13 +136,13 @@ class Sky {
 
   _retire(a) {
     this.byTrack.delete(String(a.id));
-    this.retiredTracks.set(String(a.id), { flightId: a.flightId, fdrId: a.fdrId });
+    this.retiredTracks.set(String(a.id), { flightId: a.flightId, flightDataId: a.flightDataId });
     if (this.retiredTracks.size > 5000) this.retiredTracks.delete(this.retiredTracks.keys().next().value);
   }
 
   ownerOfTrack(trackId) {
     const a = this.byTrack.get(String(trackId));
-    if (a) return { flightId: a.flightId, fdrId: a.fdrId, done: a.done, squawk: a.squawk, faults: a.faults };
+    if (a) return { flightId: a.flightId, flightDataId: a.flightDataId, done: a.done, squawk: a.squawk, faults: a.faults };
     const r = this.retiredTracks.get(String(trackId));
     return r ? { ...r, retired: true } : null;
   }

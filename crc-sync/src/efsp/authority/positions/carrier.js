@@ -13,7 +13,7 @@ const PERMISSIONS = {
   // ops: "the carrier does not talk to the centre" (§9.13) holds by construction,
   // not by a list that has to stay current. Only the Marshal originates Strips
   // (launch and recovery check-in); FINAL and PATTERN Strips come only by a
-  // carrier transfer. CarrierTransfer is NOT in OP_KINDS (it is not a `.filter()`
+  // carrier transfer. CarrierHandoff is NOT in OP_KINDS (it is not a `.filter()`
   // grant anyone could pick up silently): board-store.js's dispatch asks
   // canRecordCarrierHandoff below, one acting Position and one transfer kind.
   CV_MARSHAL: new Set([...NON_CREATE_OPS, 'CreateStrip']),
@@ -22,7 +22,7 @@ const PERMISSIONS = {
   CV_APP2:    new Set(NON_CREATE_OPS),
 };
 
-const CREATE_ROLE_PERMISSIONS = {
+const CREATE_STRIP_TYPE_PERMISSIONS = {
   // Launch and recovery check-in are both a MARSHAL Strip (ADR 0064: a launch is
   // a MARSHAL Strip in LAUNCH). FINAL and PATTERN are never created, only
   // converted to by a carrier transfer, so no Position may CreateStrip them.
@@ -68,7 +68,7 @@ const family = {
   family: 'carrier',
   positions: ['CV_MARSHAL', 'CV_PRIFLY', 'CV_APP1', 'CV_APP2'],
   permissions: PERMISSIONS,
-  createsStripTypes: CREATE_ROLE_PERMISSIONS,
+  createsStripTypes: CREATE_STRIP_TYPE_PERMISSIONS,
   capabilities: CARRIER_CAPABILITIES,
 };
 

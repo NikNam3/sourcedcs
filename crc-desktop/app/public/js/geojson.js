@@ -52,18 +52,18 @@ export function _fdrForTrack(trackId) {
   if (typeof stripIdsForTrackId !== 'function' || typeof getEfspStrip !== 'function') return null;
   for (const stripId of stripIdsForTrackId(trackId)) {
     const strip = getEfspStrip(stripId);
-    const fdr = strip && getEfspFdr(strip.fdrId);
-    if (fdr) return fdr;
+    const flightData = strip && getEfspFdr(strip.flightDataId);
+    if (flightData) return flightData;
   }
   return null;
 }
 
 /** "A180 H050": the flight's assigned altitude (hundreds of feet) and heading, when it has them. */
-function buildAssignedLine(fdr) {
-  if (!fdr || !fdr.clearance) return '';
+function buildAssignedLine(flightData) {
+  if (!flightData || !flightData.clearance) return '';
   const active = (cell) => cell && cell.entries.find(e => e.status === 'ACTIVE');
-  const alt = active(fdr.clearance.altitude);
-  const hdg = active(fdr.clearance.heading);
+  const alt = active(flightData.clearance.altitude);
+  const hdg = active(flightData.clearance.heading);
   const parts = [];
   const h = (ft) => String(Math.round(ft / 100)).padStart(3, '0');
   if (alt && alt.block) parts.push(`A${h(alt.block.lowFt)}B${h(alt.block.highFt)}`);
@@ -73,10 +73,10 @@ function buildAssignedLine(fdr) {
 }
 
 /** The one alert tag a data block leads with: a conflict first, then conformance. */
-function buildAlertTag(trackId, fdr) {
+function buildAlertTag(trackId, flightData) {
   const conflicts = typeof stcaConflictsForTrack === 'function' ? stcaConflictsForTrack(trackId) : [];
   if (conflicts.length) return { tag: 'CA', color: ALERT_COLOR_BAD };
-  const alerts = fdr && typeof conformanceAlertsForFdr === 'function' ? conformanceAlertsForFdr(fdr.fdrId) : [];
+  const alerts = flightData && typeof conformanceAlertsForFdr === 'function' ? conformanceAlertsForFdr(flightData.flightDataId) : [];
   const bad = alerts.find(a => a.kind !== 'HEADING');
   if (bad && bad.kind === 'LEVEL_BUST') return { tag: `BUST${bad.deviationFt > 0 ? '+' : '−'}${Math.abs(bad.deviationFt)}`, color: ALERT_COLOR_BAD };
   if (bad && bad.kind === 'WRONG_WAY') return { tag: `ALT${bad.fpm < 0 ? '↓' : '↑'}`, color: ALERT_COLOR_BAD };
@@ -429,9 +429,9 @@ export function buildLabels() {
     const code     = trackCodeTag(t);
 
     // docs/adr/0058: what the flight was told, and anything it is doing wrong.
-    const fdr = air ? _fdrForTrack(id) : null;
-    const { tag: alertTag, color: alertColor } = buildAlertTag(id, fdr);
-    const asgnLine = csOnly ? '' : buildAssignedLine(fdr);
+    const flightData = air ? _fdrForTrack(id) : null;
+    const { tag: alertTag, color: alertColor } = buildAlertTag(id, flightData);
+    const asgnLine = csOnly ? '' : buildAssignedLine(flightData);
 
     features.push({
       type: 'Feature',
@@ -915,7 +915,7 @@ function _doUpdateMap() {
   map.getSource('range-ring').setData(buildRangeRing());
   map.getSource('ref-dot').setData(buildRefDot());
   map.getSource('efsp-correlation').setData(buildEfspCorrelationRing());
-  if (map.getSource('stca')) map.getSource('stca').setData(buildStcaOverlay());
+  if (map.getSource('conflictAlert')) map.getSource('conflictAlert').setData(buildStcaOverlay());
   map.getSource('trails').setData(buildTrails());
   map.getSource('ppl').setData(buildPPL());
   // buildLabels first — it populates labelOffsets which buildLeaders depends on

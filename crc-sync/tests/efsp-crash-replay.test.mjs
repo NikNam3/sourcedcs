@@ -61,7 +61,7 @@ function effective(lines) { return lines.filter(e => e.op !== 'NotPersisted').le
 function createMsg(callsign, cmid = crypto.randomUUID()) {
   return {
     version: 1, type: 'efsp-mutation', clientMutationId: cmid, facilityId: 'INCIRLIK', actingPositionId: 'OPS',
-    op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FLIGHT_DATA, callsign } },
+    op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign } },
   };
 }
 
@@ -86,7 +86,7 @@ test('a CreateStrip whose ack died with the process is not created twice on retr
   assert.equal(retry.ack.ok, true, 'the retry is answered, as a success');
   assert.equal(retry.ack.strip.stripId, first.ack.strip.stripId, 'with the Strip it created the first time');
   assert.equal(slot(retry, 'primary'), undefined, 'a replay broadcasts nothing');
-  const named = efsp2.boardStoreFor('INCIRLIK').getAll().filter(s => efsp2.flightDataStore.getFlightData(s.fdrId).identity.callsign === 'CRASHA1');
+  const named = efsp2.boardStoreFor('INCIRLIK').getAll().filter(s => efsp2.flightDataStore.getFlightData(s.flightDataId).identity.callsign === 'CRASHA1');
   assert.equal(named.length, 1, 'one Strip, not two');
   assert.equal(linesFor(efsp2, msg.clientMutationId).length, 1, 'and one audit line');
 });
@@ -165,7 +165,7 @@ test('the replay window forgets entries older than 10 minutes', () => {
     const board = new BoardStore(new FlightDataStore(), fullRules());
     const create = (callsign) => board.applyMutation({
       clientMutationId: `cm-${callsign}`,
-      op: { kind: 'CreateStrip', bayId: 'proposed', rackId: 'main', fdr: { ...DEPARTURE_FLIGHT_DATA, callsign } },
+      op: { kind: 'CreateStrip', bayId: 'proposed', rackId: 'main', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign } },
     }, 'OPS', 'OPS');
     assert.equal(create('OLD1').ok, true);
     now += REPLAY_PERSIST_WINDOW_MS + 1000;
@@ -183,7 +183,7 @@ test('the replay window forgets entries older than 10 minutes', () => {
 
 test('a consolidation reassignment persists the Board', () => {
   const efsp = createEfsp();
-  const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK' });
+  const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK' });
   const strip = efsp.handleMessage(c.OPS.session, createMsg('VACATE1')).ack.strip;
   // Hand it to CD without walking the lifecycle: this test is about what a
   // vacated Position's reassignment leaves on disk, not about the transfer.
@@ -191,7 +191,7 @@ test('a consolidation reassignment persists the Board', () => {
   efsp.persist();
   const beforeText = fs.readFileSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, 'utf8');
   // CD walks away: its Strips go down the covering chain.
-  const out = efsp.handleMessage(c.CD.session, { type: 'efsp-set-positions', facilityId: 'INCIRLIK', held: [] });
+  const out = efsp.handleMessage(c.CD.session, { type: 'efsp-set-positions', facilityId: 'INCIRLIK', signedOn: [] });
   const moved = out.ack.warnings.find(w => w.positionId === 'CD');
   assert.ok(moved && moved.routedTo, JSON.stringify(out.ack));
   assert.notEqual(fs.readFileSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, 'utf8'), beforeText, 'the snapshot was rewritten');

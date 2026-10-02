@@ -41,7 +41,7 @@ const CARRIER_HANDOFFS = Object.freeze({
     trigger: 'CONTROLLER_INITIATED',
     from: ['CV_MARSHAL'], to: APP_LANES,
     cases: ['II', 'III'],
-    ownershipChange: true, roleChange: null, // MARSHAL stays MARSHAL
+    ownershipChange: true, stripTypeChange: null, // MARSHAL stays MARSHAL
     stackEffect: 'MARK_PUSHED',
     label: 'Commence',
     source: '§9.12',
@@ -51,7 +51,7 @@ const CARRIER_HANDOFFS = Object.freeze({
     trigger: 'RADAR_ACQUISITION',
     from: APP_LANES, to: 'SAME', // same lane controller — §4.1 "MARSHAL → FINAL"
     cases: ['II', 'III'],
-    ownershipChange: false, roleChange: Object.freeze({ from: 'MARSHAL', to: 'FINAL' }),
+    ownershipChange: false, stripTypeChange: Object.freeze({ from: 'MARSHAL', to: 'FINAL' }),
     stackEffect: null,
     label: 'Radar contact',
     source: '§9.12',
@@ -61,7 +61,7 @@ const CARRIER_HANDOFFS = Object.freeze({
     trigger: 'PILOT_BALL_CALL',
     from: APP_LANES, to: 'EXTERNAL_LSO', // the LSO is not an EFSP Position (§4.1 lists four CV Positions)
     cases: ['I', 'II', 'III'],
-    ownershipChange: false, roleChange: null, // a state change only (FINAL ON_FINAL → BALL)
+    ownershipChange: false, stripTypeChange: null, // a state change only (FINAL ON_FINAL → BALL)
     stackEffect: null,
     label: 'Ball',
     source: '§9.12',
@@ -71,7 +71,7 @@ const CARRIER_HANDOFFS = Object.freeze({
     trigger: 'PILOT_SEE_YOU',
     from: ['CV_MARSHAL'], to: Object.freeze(['CV_PRIFLY']),
     cases: ['II'],
-    ownershipChange: true, roleChange: Object.freeze({ from: 'MARSHAL', to: 'PATTERN' }),
+    ownershipChange: true, stripTypeChange: Object.freeze({ from: 'MARSHAL', to: 'PATTERN' }),
     stackEffect: 'REMOVE_NO_CLOSE_UP',
     label: 'See you',
     source: '§9.12',
@@ -81,7 +81,7 @@ const CARRIER_HANDOFFS = Object.freeze({
     trigger: 'CONTROLLER_INITIATED',
     from: ['CV_MARSHAL'], to: Object.freeze(['CV_PRIFLY']),
     cases: ['I'],
-    ownershipChange: true, roleChange: Object.freeze({ from: 'MARSHAL', to: 'PATTERN' }),
+    ownershipChange: true, stripTypeChange: Object.freeze({ from: 'MARSHAL', to: 'PATTERN' }),
     stackEffect: 'REMOVE_NO_CLOSE_UP',
     label: 'To pattern',
     source: '[SOURCE-DEFINED]',
@@ -151,15 +151,15 @@ function laneFor(pushOrdinal, { isStaffed = () => true } = {}) {
  * ordinal is each entry's rank in the stack (PUSHED entries still in the
  * stack count, so a flight's lane does not flip when the one below it
  * commences; vacancies do not count, so the alternation survives a gap).
- * @param {Array<{fdrId, stackIndex, status}>} derivedStack  marshal-stack.deriveStack() output
- * @returns {Array<{fdrId:string, pushOrdinal:number, lane:string|null}>}
+ * @param {Array<{flightDataId, stackIndex, status}>} derivedStack  marshal-stack.deriveStack() output
+ * @returns {Array<{flightDataId:string, pushOrdinal:number, lane:string|null}>}
  */
 function assignLanes(derivedStack, { isStaffed = () => true } = {}) {
   const list = Array.isArray(derivedStack) ? derivedStack.filter((d) => d && Number.isInteger(d.stackIndex)) : [];
   const ordered = list.slice().sort((a, b) => a.stackIndex - b.stackIndex);
   const out = [];
   ordered.forEach((d, i) => {
-    if (d.status === 'HOLDING') out.push({ fdrId: d.fdrId, pushOrdinal: i, lane: laneFor(i, { isStaffed }) });
+    if (d.status === 'HOLDING') out.push({ flightDataId: d.flightDataId, pushOrdinal: i, lane: laneFor(i, { isStaffed }) });
   });
   return out;
 }

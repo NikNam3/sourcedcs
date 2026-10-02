@@ -30,7 +30,7 @@ function compactStrip(s) {
   const t = s.tofiCoordination;
   return {
     stripId: s.stripId, rev: s.rev, state: s.state, ownerPositionId: s.ownerPositionId,
-    bayId: s.bayId, rackId: s.rackId, orderKey: s.orderKey, role: s.role, fdrId: s.fdrId,
+    bayId: s.bayId, rackId: s.rackId, orderKey: s.orderKey, stripType: s.stripType, flightDataId: s.flightDataId,
     coord: c ? { primitive: c.primitive, state: c.state, peerStripId: c.peerStripId, peerFacilityId: c.peerFacilityId, peerPositionId: c.peerPositionId } : null,
     tofi: t ? { state: t.state, direction: t.direction, peerStripId: t.peerStripId, peerFacilityId: t.peerFacilityId } : null,
   };
@@ -82,7 +82,7 @@ function createHost(env, { stateDir }) {
   });
   env.configureLog(); // createApp reset the logger's sink; the soak reads its output (host-env.js)
   const { efsp, trackStore, collabStore, wsHub: hub, monitors } = app;
-  const { correlation: reconciler, conformance, stca, obligation: obligationMonitor } = monitors;
+  const { correlation: reconciler, conformance, conflictAlert, obligation: obligationMonitor } = monitors;
   const ticker = Object.fromEntries(app.tickers.map((t) => [t.name, t.tick]));
   hub._wss = { clients: new Set() }; // never attach(): no timer, no real server (T3)
 
@@ -199,7 +199,7 @@ function createHost(env, { stateDir }) {
       const bs = efsp.boardStoreFor(fid);
       let fl = 0; let fd = 0;
       for (const s of bs._strips.values()) {
-        if (s.state === 'DROPPED') fd++; else { fl++; liveFlightDataList.add(s.fdrId); }
+        if (s.state === 'DROPPED') fd++; else { fl++; liveFlightDataList.add(s.flightDataId); }
       }
       for (const id of bs._nlaHistory.keys()) { const s = bs._strips.get(id); if (s && s.state === 'DROPPED') nlaHistDropped++; }
       c[`strips.live.${fid}`] = fl;
@@ -217,8 +217,8 @@ function createHost(env, { stateDir }) {
     c['log.max'] = log; c['appliedMutations.max'] = applied;
     c['nlaHistory'] = nlaHist; c['nlaHistory.dropped'] = nlaHistDropped;
     c['cidSeq.max'] = maxCid;
-    c['fdrs'] = efsp.flightDataStore._flightDataList.size;
-    c['fdrs.withLiveStrip'] = liveFlightDataList.size;
+    c['flightDataList'] = efsp.flightDataStore._flightDataList.size;
+    c['flightDataList.withLiveStrip'] = liveFlightDataList.size;
     c['codes.allocated'] = efsp.flightDataStore.codeAllocator._allocated.size;
     let corrTransitions = 0;
     for (const r of efsp.correlationStore._records.values()) corrTransitions += (r.transitions || []).length;
@@ -281,7 +281,7 @@ function createHost(env, { stateDir }) {
       const positions = efsp.positionStoreFor(fid).getAll().map(p => ({ positionId: p.positionId, primary: p.primary ? p.primary.controllerId : null, observers: p.observers.map(o => o.controllerId) }));
       facilities[fid] = { currentSeq: bs.currentSeq, strips, dropped, positions };
     }
-    const correlations = efsp.correlationStore.getAll().map(r => ({ fdrId: r.fdrId, rev: r.rev, state: r.state, trackId: r.trackId }));
+    const correlations = efsp.correlationStore.getAll().map(r => ({ flightDataId: r.flightDataId, rev: r.rev, state: r.state, trackId: r.trackId }));
     const airspaces = efsp.airspaceStore.getAll().map(a => ({ airspaceId: a.airspaceId, rev: a.rev, state: a.state }));
     return { facilities, correlations, airspaces };
   }
@@ -330,9 +330,9 @@ function createHost(env, { stateDir }) {
           for (const id of [...squawks.keys()]) if (!active.has(id)) squawks.delete(id);
         }
         if (what.has('reconcile')) reply.correlation = ticker.correlation();
-        if (what.has('conformanceStca')) {
+        if (what.has('conformanceConflictAlert')) {
           ticker['conformance-conflict-alert']();
-          reply.alerts = { conformance: conformance._alerts.size, stca: stca.getAll().length };
+          reply.alerts = { conformance: conformance._alerts.size, conflictAlert: conflictAlert.getAll().length };
         }
         if (what.has('obligationsNla')) {
           ticker['obligations-nla']();
@@ -390,9 +390,9 @@ function createHost(env, { stateDir }) {
       case 'prune': {
         // DIAGNOSTIC ONLY (--prune-retired): what the heap does without
         // retention. Never a fix — see the report header.
-        let strips = 0; let fdrs = 0;
+        let strips = 0; let flightDataList = 0;
         const liveFlightDataList = new Set();
-        for (const [, s] of liveStrips()) liveFlightDataList.add(s.fdrId);
+        for (const [, s] of liveStrips()) liveFlightDataList.add(s.flightDataId);
         for (const fid of facilityIds) {
           const bs = efsp.boardStoreFor(fid);
           for (const [id, s] of bs._strips) {
@@ -402,9 +402,9 @@ function createHost(env, { stateDir }) {
         }
         for (const id of [...efsp.flightDataStore._flightDataList.keys()]) {
           if (liveFlightDataList.has(id)) continue;
-          efsp.flightDataStore._flightDataList.delete(id); efsp.correlationStore._records.delete(id); fdrs++;
+          efsp.flightDataStore._flightDataList.delete(id); efsp.correlationStore._records.delete(id); flightDataList++;
         }
-        reply.pruned = { strips, fdrs };
+        reply.pruned = { strips, flightDataList };
         break;
       }
       case 'console':

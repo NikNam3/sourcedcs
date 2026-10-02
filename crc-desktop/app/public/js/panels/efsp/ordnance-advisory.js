@@ -14,7 +14,7 @@
 // scope, and a second `function resolveRunwayForStrip` would silently replace
 // the first.
 //
-// Computed on every render from the FDR and the field-state record, both of
+// Computed on every render from the FDR and the runway-status record, both of
 // which arrive whole on deltas — nothing is stored (the WP6 plan's rule-4
 // argument), so a 3G change re-renders the Strip with no new wiring.
 
@@ -35,9 +35,9 @@ function _ordCompactId(text) {
 }
 
 /** crc-sync's resolveRunwayForStrip over the wire record: rack, then 8A/8B, then the active end. */
-function _ordResolveRunway(strip, fdr, fieldState) {
-  if (strip.role !== 'DEPARTURE' && strip.role !== 'ARRIVAL') return null;
-  const runways = fieldState.runways || [];
+function _ordResolveRunway(strip, flightData, runwayStatus) {
+  if (strip.stripType !== 'DEPARTURE' && strip.stripType !== 'ARRIVAL') return null;
+  const runways = runwayStatus.runways || [];
   const rackEnds = {};
   for (const r of runways) for (const [end, rackId] of Object.entries(r.rackIds || {})) rackEnds[rackId] = end;
   const ofEnd = (end) => runways.find(r => (r.ends || []).includes(end)) || null;
@@ -47,38 +47,38 @@ function _ordResolveRunway(strip, fdr, fieldState) {
   if (rackRunway) return { runwayId: rackRunway.runwayId, end: rackEnd, source: 'RACK' };
 
   let text = null;
-  if (fdr && strip.role === 'DEPARTURE') text = fdr.filed ? fdr.filed.departureRunway : null;
-  if (fdr && strip.role === 'ARRIVAL') text = fdr.assigned ? fdr.assigned.landingRunway : null;
+  if (flightData && strip.stripType === 'DEPARTURE') text = flightData.filed ? flightData.filed.departureRunway : null;
+  if (flightData && strip.stripType === 'ARRIVAL') text = flightData.assigned ? flightData.assigned.landingRunway : null;
   if (text !== null && text !== undefined && text !== '') {
     const end = _ordNormalizeEnd(text);
     const byEnd = end ? ofEnd(end) : null;
-    if (byEnd) return { runwayId: byEnd.runwayId, end, source: 'FDR' };
+    if (byEnd) return { runwayId: byEnd.runwayId, end, source: 'FLIGHT_DATA' };
     const compact = _ordCompactId(text);
     const whole = runways.find(r => _ordCompactId(r.runwayId) === compact);
-    if (whole) return { runwayId: whole.runwayId, end: null, source: 'FDR' };
+    if (whole) return { runwayId: whole.runwayId, end: null, source: 'FLIGHT_DATA' };
   }
 
-  if (fieldState.activeRunway) {
-    const active = ofEnd(fieldState.activeRunway);
-    if (active) return { runwayId: active.runwayId, end: fieldState.activeRunway, source: 'ACTIVE_RUNWAY' };
+  if (runwayStatus.activeRunway) {
+    const active = ofEnd(runwayStatus.activeRunway);
+    if (active) return { runwayId: active.runwayId, end: runwayStatus.activeRunway, source: 'ACTIVE_RUNWAY' };
   }
   return null;
 }
 
 /** The advisory for a Strip, or null — crc-sync's runway-status.js hungOrdnanceAdvisoryFor, copied. */
-export function hungOrdnanceAdvisoryFor(strip, fdr, fieldState) {
-  if (!strip || !fieldState) return null;
-  if (!fdr || !fdr.military || fdr.military.ordnanceState !== 'HUNG') return null;
-  if (strip.role !== 'ARRIVAL' && strip.role !== 'DEPARTURE') return null;
+export function hungOrdnanceAdvisoryFor(strip, flightData, runwayStatus) {
+  if (!strip || !runwayStatus) return null;
+  if (!flightData || !flightData.military || flightData.military.ordnanceState !== 'HUNG') return null;
+  if (strip.stripType !== 'ARRIVAL' && strip.stripType !== 'DEPARTURE') return null;
   if (strip.state === 'DROPPED') return null;
-  const resolved = _ordResolveRunway(strip, fdr, fieldState);
-  const pad = fieldState.hotCargoPad;
+  const resolved = _ordResolveRunway(strip, flightData, runwayStatus);
+  const pad = runwayStatus.hotCargoPad;
   const padName = pad && typeof pad.name === 'string' && pad.name.trim() ? pad.name.trim() : null;
   // [SOURCE-DEFINED] wording: one sentence per fact, no runway recommended (decisions.md H21).
-  const when = strip.role === 'DEPARTURE' ? 'if it returns' : 'after landing';
+  const when = strip.stripType === 'DEPARTURE' ? 'if it returns' : 'after landing';
   let reason = padName
     ? `Hung ordnance. SOURCE practice: ${when}, taxi to ${padName}; the runway is the controller's call.`
-    : `Hung ordnance. No hot cargo pad is configured at ${fieldState.facilityId} (SOURCE practice).`;
+    : `Hung ordnance. No hot cargo pad is configured at ${runwayStatus.facilityId} (SOURCE practice).`;
   if (resolved) reason += ` Runway ${resolved.runwayId}${resolved.end ? ` (${resolved.end})` : ''} assigned.`;
   return {
     kind: 'HUNG_ORDNANCE',
@@ -102,11 +102,11 @@ export const ORDNANCE_NO_FIELD_STATE_REASON = 'Hung ordnance. The hot cargo pad 
  * Block 3G is on that Position's grid.
  */
 export function ordnanceAlertsFor(strip) {
-  if (!strip || (strip.role !== 'ARRIVAL' && strip.role !== 'DEPARTURE') || strip.state === 'DROPPED') return [];
-  const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(strip.fdrId) : null;
-  if (!fdr || !fdr.military || fdr.military.ordnanceState !== 'HUNG') return [];
-  const fieldState = typeof getEfspFieldState === 'function' ? getEfspFieldState(strip.facilityId) : null;
-  const advisory = fieldState ? hungOrdnanceAdvisoryFor(strip, fdr, fieldState) : null;
+  if (!strip || (strip.stripType !== 'ARRIVAL' && strip.stripType !== 'DEPARTURE') || strip.state === 'DROPPED') return [];
+  const flightData = typeof getEfspFdr === 'function' ? getEfspFdr(strip.flightDataId) : null;
+  if (!flightData || !flightData.military || flightData.military.ordnanceState !== 'HUNG') return [];
+  const runwayStatus = typeof getEfspFieldState === 'function' ? getEfspFieldState(strip.facilityId) : null;
+  const advisory = runwayStatus ? hungOrdnanceAdvisoryFor(strip, flightData, runwayStatus) : null;
   return [{
     key: 'ord', tone: 'attn', legacy: 'efsp-ord-indicator',
     text: 'HUNG',

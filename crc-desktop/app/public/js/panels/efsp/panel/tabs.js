@@ -20,13 +20,13 @@ function _searchBayId(positionId) { return `${positionId}-search`; }
 
 function _positionsWithBays() {
   const bays = getEfspBays();
-  const held = getActingPositions();
+  const signedOn = getActingPositions();
   const byPosition = {};
   for (const b of bays) {
-    if (!held.includes(b.positionId)) continue;
+    if (!signedOn.includes(b.positionId)) continue;
     (byPosition[b.positionId] = byPosition[b.positionId] || []).push(b);
   }
-  if (_searchQuery != null && _activePositionTab && held.includes(_activePositionTab)) {
+  if (_searchQuery != null && _activePositionTab && signedOn.includes(_activePositionTab)) {
     const positionId = _activePositionTab;
     (byPosition[positionId] = byPosition[positionId] || []).push({
       bayId: _searchBayId(positionId), positionId, rackIds: ['results'],
@@ -63,7 +63,7 @@ function _positionsWithBays() {
  * Pure so it can be tested without a DOM; the render below is what is not.
  * @param {Array<{bayId:string, positionId:string, facilityId:string}>} bays
  * @param {string[]} signedOnPositionIds
- * @returns {Array<{positionId:string, facilityId:string, held:boolean, bays:Array}>} held Positions first
+ * @returns {Array<{positionId:string, facilityId:string, signedOn:boolean, bays:Array}>} held Positions first
  */
 // UI-A (S-L23 finding, H59): the JTAC's UI shows only what a JTAC knows, i.e. the lines TAC_C2 has
 // handed it. A drop-only tab for TAC_C2, AIC or GCI shows those Positions exist, so a controller
@@ -72,33 +72,33 @@ function _positionsWithBays() {
 const HOLDS_ONLY_NO_DROP_TABS = ['JTAC'];
 
 export function computePositionTabs(bays, signedOnPositionIds) {
-  const held = new Set(signedOnPositionIds || []);
+  const signedOn = new Set(signedOnPositionIds || []);
   const heldFacilities = new Set();
   for (const b of bays || []) {
-    if (!held.has(b.positionId)) continue;
+    if (!signedOn.has(b.positionId)) continue;
     heldFacilities.add(b.facilityId);
   }
   // A Facility where every held Position is a "no drop tabs" one offers no other Position's tab.
   for (const facilityId of [...heldFacilities]) {
-    const heldHere = [...new Set((bays || []).filter(b => b.facilityId === facilityId && held.has(b.positionId)).map(b => b.positionId))];
+    const heldHere = [...new Set((bays || []).filter(b => b.facilityId === facilityId && signedOn.has(b.positionId)).map(b => b.positionId))];
     if (heldHere.length > 0 && heldHere.every(p => HOLDS_ONLY_NO_DROP_TABS.includes(p))) heldFacilities.delete(facilityId);
   }
   const heldFacilitiesWithTabs = heldFacilities;
 
   const byPosition = new Map();
   for (const b of bays || []) {
-    const isHeld = held.has(b.positionId);
+    const isHeld = signedOn.has(b.positionId);
     if (!isHeld && !heldFacilitiesWithTabs.has(b.facilityId)) continue;
     let entry = byPosition.get(b.positionId);
     if (!entry) {
-      entry = { positionId: b.positionId, facilityId: b.facilityId, held: isHeld, bays: [] };
+      entry = { positionId: b.positionId, facilityId: b.facilityId, signedOn: isHeld, bays: [] };
       byPosition.set(b.positionId, entry);
     }
     if (isHeld) entry.bays.push(b);
   }
 
   const all = [...byPosition.values()];
-  return [...all.filter(p => p.held), ...all.filter(p => !p.held)];
+  return [...all.filter(p => p.signedOn), ...all.filter(p => !p.signedOn)];
 }
 
 /** Runs (or clears, on an empty query) a search — one input, guide §4.3. Activates the search Bay for the current Position tab. */
@@ -126,20 +126,20 @@ export function _renderPositionTabs() {
   if (!signedOnPositionIds.includes(_activePositionTab)) _setActivePositionTab(signedOnPositionIds[0] || null);
 
   _positionTabsEl.innerHTML = '';
-  for (const { positionId, held } of computePositionTabs(getEfspBays(), getActingPositions())) {
+  for (const { positionId, signedOn } of computePositionTabs(getEfspBays(), getActingPositions())) {
     const tab = document.createElement('button');
     tab.className = 'efsp-position-tab'
       + (positionId === _activePositionTab ? ' active' : '')
-      + (held ? '' : ' efsp-position-tab-drop-only');
+      + (signedOn ? '' : ' efsp-position-tab-drop-only');
     tab.dataset.positionId = positionId;
-    _fillTabLabel(tab, positionId, held ? _stripCountForPosition(positionId) : null,
-      held && typeof unseenEfspArrivalsForPosition === 'function' ? unseenEfspArrivalsForPosition(positionId) : 0, 'dot');
+    _fillTabLabel(tab, positionId, signedOn ? _stripCountForPosition(positionId) : null,
+      signedOn && typeof unseenEfspArrivalsForPosition === 'function' ? unseenEfspArrivalsForPosition(positionId) : 0, 'dot');
     // Doubles as a drag drop-zone (guide §4.2: "other Bays reachable
     // through header drop zones that double as drag targets") —
     // bay-view.js hit-tests for this attribute during a drag and issues a
     // TransferStrip to this Position's default Bay on drop.
     tab.dataset.efspDropPosition = positionId;
-    if (held) {
+    if (signedOn) {
       tab.addEventListener('click', () => {
         _setActivePositionTab(positionId);
         _setActiveBayId(null);
@@ -274,9 +274,9 @@ function _refreshPositionTabMarks() {
   for (const tab of _positionTabsEl.children) {
     const positionId = tab.dataset && tab.dataset.positionId;
     if (!positionId) continue;
-    const held = !String(tab.className).includes('efsp-position-tab-drop-only');
-    _fillTabLabel(tab, positionId, held ? _stripCountForPosition(positionId) : null,
-      held && typeof unseenEfspArrivalsForPosition === 'function' ? unseenEfspArrivalsForPosition(positionId) : 0, 'dot');
+    const signedOn = !String(tab.className).includes('efsp-position-tab-drop-only');
+    _fillTabLabel(tab, positionId, signedOn ? _stripCountForPosition(positionId) : null,
+      signedOn && typeof unseenEfspArrivalsForPosition === 'function' ? unseenEfspArrivalsForPosition(positionId) : 0, 'dot');
   }
 }
 

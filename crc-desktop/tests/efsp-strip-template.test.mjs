@@ -62,22 +62,22 @@ test('every Block ID in the client Block Map exists in the server\'s too, by con
 });
 
 test('resolveBlockValue reads flight-data-bound Blocks from the exact field path', () => {
-  const fdr = makeFlightData();
-  assert.deepEqual(resolveBlockValue('1', fdr, makeStrip()), { value: 'VIPER1', provenance: 'CONTROLLER_ENTERED' });
-  assert.deepEqual(resolveBlockValue('5', fdr, makeStrip()), { value: '1234', provenance: 'CONTROLLER_ENTERED' });
+  const flightData = makeFlightData();
+  assert.deepEqual(resolveBlockValue('1', flightData, makeStrip()), { value: 'VIPER1', provenance: 'CONTROLLER_ENTERED' });
+  assert.deepEqual(resolveBlockValue('5', flightData, makeStrip()), { value: '1234', provenance: 'CONTROLLER_ENTERED' });
 });
 
 test('resolveBlockValue uses the FDR\'s own provenance map when present, overriding the Block Map default', () => {
-  const fdr = makeFlightData({ provenance: { 'identity.callsign': 'UPSTREAM_ATO' } });
-  assert.equal(resolveBlockValue('1', fdr, makeStrip()).provenance, 'UPSTREAM_ATO');
+  const flightData = makeFlightData({ provenance: { 'identity.callsign': 'UPSTREAM_ATO' } });
+  assert.equal(resolveBlockValue('1', flightData, makeStrip()).provenance, 'UPSTREAM_ATO');
 });
 
 test('resolveBlockValue on Block 9 defaults to COMPUTER_GENERATED provenance when the FDR carries none for it', () => {
-  const fdr = makeFlightData();
-  assert.equal(resolveBlockValue('9', fdr, makeStrip()).provenance, 'COMPUTER_GENERATED');
+  const flightData = makeFlightData();
+  assert.equal(resolveBlockValue('9', flightData, makeStrip()).provenance, 'COMPUTER_GENERATED');
 });
 
-test('resolveBlockValue on an flight-data-bound Block with a null fdr returns {value:null}, not a throw', () => {
+test('resolveBlockValue on an flight-data-bound Block with a null flightData returns {value:null}, not a throw', () => {
   assert.deepEqual(resolveBlockValue('1', null, makeStrip()), { value: null, provenance: 'CONTROLLER_ENTERED' });
 });
 
@@ -118,10 +118,10 @@ test('resolveBlockValue returns null for an unknown Block ID rather than throwin
 });
 
 test('every required Block resolves to a non-undefined value given a complete fixture FDR/Strip', () => {
-  const fdr = makeFlightData();
+  const flightData = makeFlightData();
   const strip = makeStrip();
   for (const id of REQUIRED_DEPARTURE_BLOCKS) {
-    const result = resolveBlockValue(id, fdr, strip);
+    const result = resolveBlockValue(id, flightData, strip);
     assert.notEqual(result.value, undefined, id);
   }
 });
@@ -148,17 +148,17 @@ test('hasActiveAnnotationEntry is true when an ACTIVE entry exists, false once i
 });
 
 test('the assigned altitude and heading read their history from the FLIGHT, not the Strip (docs/adr/0058)', () => {
-  const fdr = { fdrId: 'fX', clearance: {
+  const flightData = { flightDataId: 'fX', clearance: {
     altitude: { entries: [{ value: '050', status: 'SUPERSEDED' }, { value: 'FL180', status: 'ACTIVE' }] },
     heading: { entries: [] },
   } };
-  applyEfspSnapshot({ strips: [], fdrs: [fdr], positions: [] });
+  applyEfspSnapshot({ strips: [], flightDataList: [flightData], positions: [] });
   try {
-    const strip = makeStrip({ fdrId: 'fX', annotations: { '21': { blockId: '21', entries: [{ value: 'stale', status: 'ACTIVE' }] } } });
+    const strip = makeStrip({ flightDataId: 'fX', annotations: { '21': { blockId: '21', entries: [{ value: 'stale', status: 'ACTIVE' }] } } });
     assert.equal(activeAnnotationValue(strip, '21'), 'FL180', 'a leftover Strip note is ignored');
     assert.equal(hasActiveAnnotationEntry(strip, '21'), true);
     assert.deepEqual(supersededAnnotationEntries(strip, '21').map(x => x.value), ['050']);
-    assert.equal(resolveBlockValue('21', fdr, strip).value, 'FL180');
+    assert.equal(resolveBlockValue('21', flightData, strip).value, 'FL180');
     assert.equal(hasActiveAnnotationEntry(strip, '20'), false);
   } finally {
     _resetEfspStateForTest();
@@ -172,8 +172,8 @@ test('ALT is confirm-vacated on every Role that has one, and the filed altitude 
   assert.equal(blockLabelFor('21', 'DEPARTURE'), 'ALT');
   assert.equal(blockLabelFor('7', 'ARRIVAL'), 'ALT');
   assert.equal(blockLabelFor('7A', 'OVERFLIGHT'), 'ALT');
-  for (const [role, id] of [['DEPARTURE', '20'], ['ARRIVAL', '9A-VECTOR'], ['OVERFLIGHT', '9A-VECTOR']]) {
-    assert.equal(blockLabelFor(id, role), 'HDG', `${role} ${id}`);
+  for (const [stripType, id] of [['DEPARTURE', '20'], ['ARRIVAL', '9A-VECTOR'], ['OVERFLIGHT', '9A-VECTOR']]) {
+    assert.equal(blockLabelFor(id, stripType), 'HDG', `${stripType} ${id}`);
   }
 });
 
@@ -192,8 +192,8 @@ test('formatBlock3 renders count/wake/type/suffix, omitting count for a single-s
 });
 
 test('formatBlock3 includes the flight count for a formation (flightSize > 1)', () => {
-  const fdr = makeFlightData({ identity: { flightSize: 2, wakeCategory: 'D', aircraftType: 'F16', equipmentSuffix: 'GR', degradation: 'NONE' } });
-  assert.equal(formatBlock3(fdr), '2D/F16/GR');
+  const flightData = makeFlightData({ identity: { flightSize: 2, wakeCategory: 'D', aircraftType: 'F16', equipmentSuffix: 'GR', degradation: 'NONE' } });
+  assert.equal(formatBlock3(flightData), '2D/F16/GR');
 });
 
 test('formatBlock3 renders /H or /O for a degradation override, ignoring the stored equipmentSuffix entirely', () => {
@@ -205,11 +205,11 @@ test('formatBlock3 renders /H or /O for a degradation override, ignoring the sto
 });
 
 test('formatBlock3 with no equipmentSuffix and no degradation renders no suffix segment at all', () => {
-  const fdr = makeFlightData({ identity: { flightSize: 1, wakeCategory: 'D', aircraftType: 'F16', equipmentSuffix: '', degradation: 'NONE' } });
-  assert.equal(formatBlock3(fdr), 'D/F16');
+  const flightData = makeFlightData({ identity: { flightSize: 1, wakeCategory: 'D', aircraftType: 'F16', equipmentSuffix: '', degradation: 'NONE' } });
+  assert.equal(formatBlock3(flightData), 'D/F16');
 });
 
-test('formatBlock3 with a null fdr returns an empty string, not a throw', () => {
+test('formatBlock3 with a null flightData returns an empty string, not a throw', () => {
   assert.equal(formatBlock3(null), '');
 });
 
@@ -243,7 +243,7 @@ function makeArrivalFdr(overrides = {}) {
 }
 
 function makeArrivalStrip(overrides = {}) {
-  return { rev: 1, cid: '001', role: 'ARRIVAL', state: 'INBOUND', flags: { removeIndicator: false }, annotations: {}, ...overrides };
+  return { rev: 1, cid: '001', stripType: 'ARRIVAL', state: 'INBOUND', flags: { removeIndicator: false }, annotations: {}, ...overrides };
 }
 
 test('requiredBlocksFor(ARRIVAL) matches ARRIVAL_BLOCK_MAP\'s required set', () => {
@@ -251,19 +251,19 @@ test('requiredBlocksFor(ARRIVAL) matches ARRIVAL_BLOCK_MAP\'s required set', () 
 });
 
 test('resolveBlockValue routes to ARRIVAL_BLOCK_MAP when strip.role is ARRIVAL', () => {
-  const fdr = makeArrivalFdr();
+  const flightData = makeArrivalFdr();
   const strip = makeArrivalStrip();
-  assert.deepEqual(resolveBlockValue('8', fdr, strip), { value: 'LTAG', provenance: 'CONTROLLER_ENTERED' });
+  assert.deepEqual(resolveBlockValue('8', flightData, strip), { value: 'LTAG', provenance: 'CONTROLLER_ENTERED' });
 });
 
 test('resolveBlockValue on ARRIVAL Block 7 reads the flight\'s assigned altitude — unlike DEPARTURE\'s Block 7, the filed one', () => {
-  const fdr = { ...makeArrivalFdr(), clearance: { altitude: { entries: [{ value: '4000', status: 'ACTIVE' }] }, heading: { entries: [] } } };
-  assert.equal(resolveBlockValue('7', fdr, makeArrivalStrip()).value, '4000');
+  const flightData = { ...makeArrivalFdr(), clearance: { altitude: { entries: [{ value: '4000', status: 'ACTIVE' }] }, heading: { entries: [] } } };
+  assert.equal(resolveBlockValue('7', flightData, makeArrivalStrip()).value, '4000');
 });
 
-test('resolveBlockValue on a DEPARTURE Strip (no role, or role:DEPARTURE) still reads Block 7 from the fdr, unaffected by ARRIVAL\'s remapping', () => {
-  const fdr = { identity: {}, filed: { requestedAltitude: '250' }, assigned: {}, provenance: {} };
-  assert.equal(resolveBlockValue('7', fdr, makeStrip()).value, '250');
+test('resolveBlockValue on a DEPARTURE Strip (no role, or role:DEPARTURE) still reads Block 7 from the flightData, unaffected by ARRIVAL\'s remapping', () => {
+  const flightData = { identity: {}, filed: { requestedAltitude: '250' }, assigned: {}, provenance: {} };
+  assert.equal(resolveBlockValue('7', flightData, makeStrip()).value, '250');
 });
 
 test('isBlockEditable is role-aware: ARRIVAL Block 7 is editable (annotation-routed), DEPARTURE Block 7 is also editable (flight-data-routed) — same Block ID, both editable, different mechanism', () => {
@@ -295,7 +295,7 @@ function makeMissionFdr(overrides = {}) {
 }
 
 function makeMissionStrip(overrides = {}) {
-  return { rev: 1, cid: '001', role: 'MISSION', state: 'TASKED', flags: { removeIndicator: false }, annotations: {}, ...overrides };
+  return { rev: 1, cid: '001', stripType: 'MISSION', state: 'TASKED', flags: { removeIndicator: false }, annotations: {}, ...overrides };
 }
 
 test('requiredBlocksFor(MISSION) matches MISSION_BLOCK_MAP\'s required set', () => {
@@ -303,13 +303,13 @@ test('requiredBlocksFor(MISSION) matches MISSION_BLOCK_MAP\'s required set', () 
 });
 
 test('resolveBlockValue routes to MISSION_BLOCK_MAP when strip.role is MISSION, reusing identity.callsign/beaconAssigned', () => {
-  const fdr = makeMissionFdr();
+  const flightData = makeMissionFdr();
   const strip = makeMissionStrip();
-  assert.equal(resolveBlockValue('M3', fdr, strip).value, 'EAGLE1');
-  assert.equal(resolveBlockValue('M4', fdr, strip).value, '4321');
-  assert.equal(resolveBlockValue('M1', fdr, strip).value, 'ALPHA01');
-  assert.equal(resolveBlockValue('M2', fdr, strip).value, 'PKG1');
-  assert.equal(resolveBlockValue('M5', fdr, strip).value, 'AWACS');
+  assert.equal(resolveBlockValue('M3', flightData, strip).value, 'EAGLE1');
+  assert.equal(resolveBlockValue('M4', flightData, strip).value, '4321');
+  assert.equal(resolveBlockValue('M1', flightData, strip).value, 'ALPHA01');
+  assert.equal(resolveBlockValue('M2', flightData, strip).value, 'PKG1');
+  assert.equal(resolveBlockValue('M5', flightData, strip).value, 'AWACS');
 });
 
 test('every required MISSION Block exists in MISSION_BLOCK_MAP', () => {
@@ -324,19 +324,19 @@ test('MISSION has no FAA-numbered Blocks — its namespace is entirely M-prefixe
 
 // ── WP4A gap-closure (docs/adr/0022) ────────────────────────────────────
 
-test('resolveBlockValue on Block 24A (airspace owner) reads fdr.airspace.owner — previously fell through to the null catch-all even before it had an edit path', () => {
-  const fdr = { identity: {}, filed: {}, assigned: {}, provenance: {}, airspace: { owner: 'USING_AGENCY' } };
-  assert.deepEqual(resolveBlockValue('24A', fdr, makeStrip()), { value: 'USING_AGENCY', provenance: 'CONTROLLER_ENTERED' });
+test('resolveBlockValue on Block 24A (airspace owner) reads flightData.airspace.owner — previously fell through to the null catch-all even before it had an edit path', () => {
+  const flightData = { identity: {}, filed: {}, assigned: {}, provenance: {}, airspace: { owner: 'USING_AGENCY' } };
+  assert.deepEqual(resolveBlockValue('24A', flightData, makeStrip()), { value: 'USING_AGENCY', provenance: 'CONTROLLER_ENTERED' });
 });
 
 test('resolveBlockValue on Block 24A with no airspace decided yet returns null, not undefined or a throw', () => {
-  const fdr = { identity: {}, filed: {}, assigned: {}, provenance: {}, airspace: { owner: null } };
-  assert.equal(resolveBlockValue('24A', fdr, makeStrip()).value, null);
+  const flightData = { identity: {}, filed: {}, assigned: {}, provenance: {}, airspace: { owner: null } };
+  assert.equal(resolveBlockValue('24A', flightData, makeStrip()).value, null);
 });
 
-test('resolveBlockValue on Block 5A (track-degradation) reads identity.trackDegradationFlag via the plain fdr path', () => {
-  const fdr = { identity: { trackDegradationFlag: 'CST' }, filed: {}, assigned: {}, provenance: {} };
-  assert.equal(resolveBlockValue('5A', fdr, makeStrip()).value, 'CST');
+test('resolveBlockValue on Block 5A (track-degradation) reads identity.trackDegradationFlag via the plain flightData path', () => {
+  const flightData = { identity: { trackDegradationFlag: 'CST' }, filed: {}, assigned: {}, provenance: {} };
+  assert.equal(resolveBlockValue('5A', flightData, makeStrip()).value, 'CST');
 });
 
 test('enumSelectOptionsFor returns the picker options for 5A, 24A, RSVC and SREG, null for an ordinary Block', () => {
@@ -356,17 +356,17 @@ test('5A is plain flight-data-routed (isBlockEditable true) but 24A/RSVC/SREG st
 
 // ── WP4A second slice, §4.6.3 — the three-field separation model ────────
 
-test('resolveBlockValue on IFR/RSVC/SREG reads the corresponding fdr.tofi field', () => {
-  const fdr = { identity: {}, filed: {}, assigned: {}, provenance: {}, tofi: { ifrActive: true, radarService: 'ACTIVE', separationRegime: 'MARSA' } };
-  assert.equal(resolveBlockValue('IFR', fdr, makeStrip()).value, true);
-  assert.equal(resolveBlockValue('RSVC', fdr, makeStrip()).value, 'ACTIVE');
-  assert.equal(resolveBlockValue('SREG', fdr, makeStrip()).value, 'MARSA');
+test('resolveBlockValue on IFR/RSVC/SREG reads the corresponding flightData.tofi field', () => {
+  const flightData = { identity: {}, filed: {}, assigned: {}, provenance: {}, tofi: { ifrActive: true, radarService: 'ACTIVE', separationRegime: 'MARSA' } };
+  assert.equal(resolveBlockValue('IFR', flightData, makeStrip()).value, true);
+  assert.equal(resolveBlockValue('RSVC', flightData, makeStrip()).value, 'ACTIVE');
+  assert.equal(resolveBlockValue('SREG', flightData, makeStrip()).value, 'MARSA');
 });
 
-test('resolveBlockValue on IFR/RSVC/SREG with no fdr.tofi at all returns null, not a throw', () => {
-  const fdr = { identity: {}, filed: {}, assigned: {}, provenance: {} };
-  assert.equal(resolveBlockValue('IFR', fdr, makeStrip()).value, null);
-  assert.equal(resolveBlockValue('RSVC', fdr, makeStrip()).value, null);
+test('resolveBlockValue on IFR/RSVC/SREG with no flightData.tofi at all returns null, not a throw', () => {
+  const flightData = { identity: {}, filed: {}, assigned: {}, provenance: {} };
+  assert.equal(resolveBlockValue('IFR', flightData, makeStrip()).value, null);
+  assert.equal(resolveBlockValue('RSVC', flightData, makeStrip()).value, null);
 });
 
 test('IFR is neither a free-text-editable Block nor an enum-select Block — it gets the boolean-toggle affordance instead', () => {
@@ -380,10 +380,10 @@ test('IFR is neither a free-text-editable Block nor an enum-select Block — it 
 // ── docs/adr/0024 — every Block Map entry has a short display label ────
 
 test('every entry in every Block Map has a non-empty label of 8 characters or fewer', () => {
-  for (const [role, map] of Object.entries(BLOCK_MAPS)) {
+  for (const [stripType, map] of Object.entries(BLOCK_MAPS)) {
     for (const [blockId, def] of Object.entries(map)) {
-      assert.ok(typeof def.label === 'string' && def.label.length > 0, `${role} Block ${blockId} is missing a label`);
-      assert.ok(def.label.length <= 8, `${role} Block ${blockId}'s label "${def.label}" is longer than 8 characters`);
+      assert.ok(typeof def.label === 'string' && def.label.length > 0, `${stripType} Block ${blockId} is missing a label`);
+      assert.ok(def.label.length <= 8, `${stripType} Block ${blockId}'s label "${def.label}" is longer than 8 characters`);
     }
   }
 });
@@ -403,8 +403,8 @@ test('Block 9F is labelled STEREO and bound to filed.stereoRouteName on DEPARTUR
 });
 
 test('resolveBlockValue reads the stereo name off the FDR', () => {
-  const fdr = { filed: { stereoRouteName: 'PACK 1' }, provenance: { 'filed.stereoRouteName': 'COMPUTER_GENERATED' } };
-  const resolved = resolveBlockValue('9F', fdr, makeStrip());
+  const flightData = { filed: { stereoRouteName: 'PACK 1' }, provenance: { 'filed.stereoRouteName': 'COMPUTER_GENERATED' } };
+  const resolved = resolveBlockValue('9F', flightData, makeStrip());
   assert.equal(resolved.value, 'PACK 1');
   assert.equal(resolved.provenance, 'COMPUTER_GENERATED');
 });
@@ -495,24 +495,24 @@ test('no two Blocks in a Role share a label', () => {
   // Voice Clearance Issued checkbox, 19 is Gate/parking, 23 is Facility
   // remarks, 24 is Miles/minutes-in-trail, and 9A-9C are "facility use", not
   // altitude restrictions — those are Block 9's own manual half.
-  for (const [role, map] of Object.entries(BLOCK_MAPS)) {
+  for (const [stripType, map] of Object.entries(BLOCK_MAPS)) {
     const byLabel = {};
     for (const [id, def] of Object.entries(map)) {
       if (!def.label) continue;
       (byLabel[def.label] = byLabel[def.label] || []).push(id);
     }
     const dupes = Object.entries(byLabel).filter(([, ids]) => ids.length > 1);
-    assert.deepEqual(dupes, [], `${role}: two Blocks cannot share one label`);
+    assert.deepEqual(dupes, [], `${stripType}: two Blocks cannot share one label`);
   }
 });
 
 test('every label fits the compact chip', () => {
   // strip-template.js's own header rule: 8 characters or fewer, so the compact
   // view never has to grow wider to fit one.
-  for (const [role, map] of Object.entries(BLOCK_MAPS)) {
+  for (const [stripType, map] of Object.entries(BLOCK_MAPS)) {
     for (const [id, def] of Object.entries(map)) {
       if (!def.label) continue;
-      assert.ok(def.label.length <= 8, `${role}/${id}: label "${def.label}" is ${def.label.length} characters`);
+      assert.ok(def.label.length <= 8, `${stripType}/${id}: label "${def.label}" is ${def.label.length} characters`);
     }
   }
 });
@@ -528,27 +528,27 @@ function mtrFdr(mtr) {
 }
 
 test('resolveBlockValue reads each MTR field, the two times as a four-digit Zulu time', () => {
-  const fdr = mtrFdr({
+  const flightData = mtrFdr({
     designator: 'IR107', entryFix: 'A', entryTimeUtc: Date.UTC(2016, 5, 21, 14, 5),
     exitFix: 'F', exitEstimateUtc: Date.UTC(2016, 5, 21, 14, 32), requestedAltitudeAfterExit: 'FL190',
   });
   const expected = { '9G-MTR': 'IR107', '9G-ENTRY': 'A', '9G-TIME': '1405', '9H-EXIT': 'F', '9H-TIME': '1432', '9H-ALT': 'FL190' };
-  for (const role of MTR_ROLES) {
+  for (const stripType of MTR_ROLES) {
     for (const [id, value] of Object.entries(expected)) {
-      assert.equal(resolveBlockValue(id, fdr, { role }).value, value, `${role}/${id}`);
+      assert.equal(resolveBlockValue(id, flightData, { stripType }).value, value, `${stripType}/${id}`);
     }
   }
 });
 
 test('an MTR Block on an FDR with military: null (or no time) renders blank, not a throw', () => {
-  const fdr = { ...makeFlightData(), military: null };
-  for (const id of Object.keys(MTR_LABELS)) assert.equal(resolveBlockValue(id, fdr, { role: 'ARRIVAL' }).value, null, id);
-  assert.equal(resolveBlockValue('9H-TIME', mtrFdr({ exitEstimateUtc: null }), { role: 'ARRIVAL' }).value, null);
+  const flightData = { ...makeFlightData(), military: null };
+  for (const id of Object.keys(MTR_LABELS)) assert.equal(resolveBlockValue(id, flightData, { stripType: 'ARRIVAL' }).value, null, id);
+  assert.equal(resolveBlockValue('9H-TIME', mtrFdr({ exitEstimateUtc: null }), { stripType: 'ARRIVAL' }).value, null);
 });
 
 test('the MTR labels are exactly the §9.4 set on every ATC Role', () => {
-  for (const role of MTR_ROLES) {
-    for (const [id, label] of Object.entries(MTR_LABELS)) assert.equal(blockLabelFor(id, role), label, `${role}/${id}`);
+  for (const stripType of MTR_ROLES) {
+    for (const [id, label] of Object.entries(MTR_LABELS)) assert.equal(blockLabelFor(id, stripType), label, `${stripType}/${id}`);
   }
 });
 
@@ -556,7 +556,7 @@ test('the MTR Blocks are ordinary click-to-edit cells — no picker, no toggle',
   for (const id of Object.keys(MTR_LABELS)) {
     assert.equal(enumSelectOptionsFor(id), null, id);
     assert.equal(isBooleanToggleBlock(id), false, id);
-    for (const role of MTR_ROLES) assert.equal(isBlockEditable(id, role), true, `${role}/${id}`);
+    for (const stripType of MTR_ROLES) assert.equal(isBlockEditable(id, stripType), true, `${stripType}/${id}`);
   }
 });
 
@@ -570,49 +570,49 @@ test('ZULU_HHMM_BLOCKS holds the MTR times and every typed …TimeUtc Block (F4)
 test('F4: every ZULU_HHMM Block is an epoch-ms …Utc FDR path on every role map that has it, and renders as HHMM', () => {
   for (const id of ZULU_HHMM_BLOCKS) {
     let seen = 0;
-    for (const [role, map] of Object.entries(BLOCK_MAPS)) {
+    for (const [stripType, map] of Object.entries(BLOCK_MAPS)) {
       if (!map[id]) continue;
       seen += 1;
-      assert.equal(map[id].target.kind, 'fdr', `${role}/${id}`);
-      assert.match(map[id].target.path, /Utc$/, `${role}/${id}`);
+      assert.equal(map[id].target.kind, 'flightData', `${stripType}/${id}`);
+      assert.match(map[id].target.path, /Utc$/, `${stripType}/${id}`);
     }
     assert.ok(seen > 0, id);
   }
   const voidAt = Date.UTC(2016, 5, 21, 14, 32);
-  const fdr = makeFlightData({ assigned: { voidTimeUtc: voidAt, releaseTimeUtc: null } });
-  assert.equal(resolveBlockValue('14D', fdr, makeStrip()).value, '1432');
-  assert.equal(resolveBlockValue('14', fdr, makeStrip()).value, null, 'no time is blank, not 0000');
+  const flightData = makeFlightData({ assigned: { voidTimeUtc: voidAt, releaseTimeUtc: null } });
+  assert.equal(resolveBlockValue('14D', flightData, makeStrip()).value, '1432');
+  assert.equal(resolveBlockValue('14', flightData, makeStrip()).value, null, 'no time is blank, not 0000');
   const eta = makeFlightData({ filed: { estimatedArrivalTimeUtc: Date.UTC(2016, 5, 21, 9, 5) } });
-  assert.equal(resolveBlockValue('6', eta, makeStrip({ role: 'ARRIVAL' })).value, '0905');
+  assert.equal(resolveBlockValue('6', eta, makeStrip({ stripType: 'ARRIVAL' })).value, '0905');
 });
 
 test('every epoch time Block of every Role renders HHMM — the set is derived from the Block Maps (§11.2 rule 1)', () => {
-  // Every fdr target path ending in Utc is an epoch time. A time Block added
+  // Every flightData target path ending in Utc is an epoch time. A time Block added
   // to a map later without ZULU_HHMM_BLOCKS fails here, not on a Strip.
   const derived = new Set();
   for (const map of Object.values(BLOCK_MAPS)) {
-    for (const [id, def] of Object.entries(map)) if (def.target.kind === 'fdr' && /Utc$/.test(def.target.path)) derived.add(id);
+    for (const [id, def] of Object.entries(map)) if (def.target.kind === 'flightData' && /Utc$/.test(def.target.path)) derived.add(id);
   }
   assert.deepEqual([...derived].sort(), [...ZULU_HHMM_BLOCKS].sort());
   const at = Date.UTC(2016, 5, 21, 14, 32);
-  for (const [role, map] of Object.entries(BLOCK_MAPS)) {
+  for (const [stripType, map] of Object.entries(BLOCK_MAPS)) {
     for (const [id, def] of Object.entries(map)) {
       if (!derived.has(id)) continue;
-      const fdr = makeFlightData();
+      const flightData = makeFlightData();
       const parts = def.target.path.split('.');
-      fdr[parts[0]] = { ...(fdr[parts[0]] || {}) };
-      let o = fdr; for (const k of parts.slice(0, -1)) o = (o[k] = o[k] || {});
+      flightData[parts[0]] = { ...(flightData[parts[0]] || {}) };
+      let o = flightData; for (const k of parts.slice(0, -1)) o = (o[k] = o[k] || {});
       o[parts[parts.length - 1]] = at;
-      assert.equal(resolveBlockValue(id, fdr, makeStrip({ role })).value, '1432', `${role}/${id}`);
+      assert.equal(resolveBlockValue(id, flightData, makeStrip({ stripType })).value, '1432', `${stripType}/${id}`);
     }
   }
 });
 
 test('S-F4: a MISSION Strip reads its vul window as HHMM, and M6/M7 open for editing on it', () => {
-  const fdr = makeFlightData();
-  fdr.mission = { vulWindowStartUtc: Date.UTC(2016, 5, 21, 22, 0), vulWindowEndUtc: Date.UTC(2016, 5, 22, 1, 30) };
-  assert.equal(resolveBlockValue('M6', fdr, makeStrip({ role: 'MISSION' })).value, '2200');
-  assert.equal(resolveBlockValue('M7', fdr, makeStrip({ role: 'MISSION' })).value, '0130');
+  const flightData = makeFlightData();
+  flightData.mission = { vulWindowStartUtc: Date.UTC(2016, 5, 21, 22, 0), vulWindowEndUtc: Date.UTC(2016, 5, 22, 1, 30) };
+  assert.equal(resolveBlockValue('M6', flightData, makeStrip({ stripType: 'MISSION' })).value, '2200');
+  assert.equal(resolveBlockValue('M7', flightData, makeStrip({ stripType: 'MISSION' })).value, '0130');
   assert.equal(isBlockEditable('M6', 'MISSION'), true);
 });
 
@@ -622,52 +622,52 @@ const Z = (hh, mm) => Date.UTC(2016, 5, 21, hh, mm);
 
 test('§10.5: departure, off-block and takeoff time each follow an explicit ordered fallback, and the chosen source is visible on hover', () => {
   // Only an ATO departure: P-time shows it, TAXI and TAKEOFF estimate from it.
-  const fdr = makeFlightData({ assigned: { taxiTimeUtc: null, takeoffTimeUtc: null } });
-  fdr.ato = { departure: { timeUtc: Z(13, 10) } };
+  const flightData = makeFlightData({ assigned: { taxiTimeUtc: null, takeoffTimeUtc: null } });
+  flightData.ato = { departure: { timeUtc: Z(13, 10) } };
   const strip = makeStrip();
-  const p = resolveBlockValue('6', fdr, strip);
+  const p = resolveBlockValue('6', flightData, strip);
   assert.deepEqual(p, { value: '1310', provenance: 'COMPUTER_GENERATED', timeSource: 'ATO', estimated: false });
-  assert.match(blockTitleFor('6', fdr, strip), /1310Z from the ATO/);
+  assert.match(blockTitleFor('6', flightData, strip), /1310Z from the ATO/);
   for (const id of ['17', '18']) {
-    const v = resolveBlockValue(id, fdr, strip);
+    const v = resolveBlockValue(id, flightData, strip);
     assert.equal(v.value, '1310', id);
     assert.equal(v.estimated, true, id);
-    assert.equal(blockValueHintFor(id, fdr, strip).estimated, true, id);
+    assert.equal(blockValueHintFor(id, flightData, strip).estimated, true, id);
   }
-  assert.match(blockTitleFor('17', fdr, strip), /~1310Z estimate: P-time, from the ATO/);
-  assert.match(blockTitleFor('18', fdr, strip), /~1310Z estimate: off-block, estimate: P-time/);
+  assert.match(blockTitleFor('17', flightData, strip), /~1310Z estimate: P-time, from the ATO/);
+  assert.match(blockTitleFor('18', flightData, strip), /~1310Z estimate: off-block, estimate: P-time/);
 
   // A controller types TAKEOFF 1402: an actual, no italics, and the hover says so.
-  fdr.assigned.takeoffTimeUtc = Z(14, 2);
-  fdr.provenance = { 'assigned.takeoffTimeUtc': 'CONTROLLER_ENTERED' };
-  const tko = resolveBlockValue('18', fdr, strip);
+  flightData.assigned.takeoffTimeUtc = Z(14, 2);
+  flightData.provenance = { 'assigned.takeoffTimeUtc': 'CONTROLLER_ENTERED' };
+  const tko = resolveBlockValue('18', flightData, strip);
   assert.deepEqual(tko, { value: '1402', provenance: 'CONTROLLER_ENTERED', timeSource: 'CONTROLLER', estimated: false });
-  const hover = blockValueHintFor('18', fdr, strip);
+  const hover = blockValueHintFor('18', flightData, strip);
   assert.equal(hover.estimated, false);
   assert.match(hover.title, /1402Z entered by a controller/);
   assert.match(hover.title, /if cleared: estimate: off-block, estimate: P-time, 1310Z/);
 
   // Cleared (the server stores null): the estimate is back.
-  fdr.assigned.takeoffTimeUtc = null;
-  assert.equal(resolveBlockValue('18', fdr, strip).estimated, true);
+  flightData.assigned.takeoffTimeUtc = null;
+  assert.equal(resolveBlockValue('18', flightData, strip).estimated, true);
 });
 
 test('§10.5: the chains are DEPARTURE-only — an ARRIVAL Block 6 is the ETA, shown as stored', () => {
-  const fdr = makeFlightData({ filed: { estimatedArrivalTimeUtc: Z(9, 5) } });
-  fdr.ato = { departure: { timeUtc: Z(13, 10) } };
-  const arrival = makeStrip({ role: 'ARRIVAL' });
-  assert.deepEqual(resolveBlockValue('6', fdr, arrival), { value: '0905', provenance: 'CONTROLLER_ENTERED' });
-  assert.equal(blockTitleFor('6', fdr, arrival), null);
-  assert.equal(blockValueHintFor('6', fdr, arrival), null);
+  const flightData = makeFlightData({ filed: { estimatedArrivalTimeUtc: Z(9, 5) } });
+  flightData.ato = { departure: { timeUtc: Z(13, 10) } };
+  const arrival = makeStrip({ stripType: 'ARRIVAL' });
+  assert.deepEqual(resolveBlockValue('6', flightData, arrival), { value: '0905', provenance: 'CONTROLLER_ENTERED' });
+  assert.equal(blockTitleFor('6', flightData, arrival), null);
+  assert.equal(blockValueHintFor('6', flightData, arrival), null);
   // And the collapsed face's label, which strip-view.js titles with the FDR
   // alone, gets no chain title — it cannot tell a P-time from an ETA.
-  assert.equal(blockTitleFor('6', fdr), null);
+  assert.equal(blockTitleFor('6', flightData), null);
 });
 
 test('§10.5: with no source at all a time Block is blank, and says so on hover', () => {
-  const fdr = makeFlightData();
-  assert.equal(resolveBlockValue('6', fdr, makeStrip()).value, null);
-  assert.match(blockValueHintFor('17', fdr, makeStrip()).title, /no time from any source/);
+  const flightData = makeFlightData();
+  assert.equal(resolveBlockValue('6', flightData, makeStrip()).value, null);
+  assert.match(blockValueHintFor('17', flightData, makeStrip()).title, /no time from any source/);
 });
 
 test('every MTR Block has a label title; others have none', () => {

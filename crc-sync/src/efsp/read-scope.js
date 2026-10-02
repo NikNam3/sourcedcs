@@ -17,16 +17,16 @@ const ALL = 'ALL';
 const OWNED = 'OWNED';
 
 /**
- * @param {Array<{facilityId:string, positionId:string}>} held every Position the session holds, at every Facility
+ * @param {Array<{facilityId:string, positionId:string}>} signedOn every Position the session holds, at every Facility
  * @param {(positionId:string) => 'ALL'|'OWNED'} readScopeFor
  * @returns {{kind:'ALL'}|{kind:'OWNED', own:Map<string, Set<string>>}}
  *   ALL when the session holds nothing (H58: an unassigned session sees the whole Board, as today) or any Position that reads ALL.
  */
-function scopeOf(held, readScopeFor) {
-  if (!held || held.length === 0) return { kind: ALL };
-  if (held.some(h => readScopeFor(h.positionId) !== OWNED)) return { kind: ALL };
+function scopeOf(signedOn, readScopeFor) {
+  if (!signedOn || signedOn.length === 0) return { kind: ALL };
+  if (signedOn.some(h => readScopeFor(h.positionId) !== OWNED)) return { kind: ALL };
   const own = new Map();
-  for (const { facilityId, positionId } of held) {
+  for (const { facilityId, positionId } of signedOn) {
     if (!own.has(facilityId)) own.set(facilityId, new Set());
     own.get(facilityId).add(positionId);
   }
@@ -54,7 +54,7 @@ function isStripVisible(scope, strip, facilityId) {
 /** The FDRs of the Strips a scope can see, from `strips` (each stamped with facilityId). */
 function visibleFlightDataIdsOf(scope, strips) {
   const out = new Set();
-  for (const s of strips) if (isStripVisible(scope, s) && s.fdrId) out.add(s.fdrId);
+  for (const s of strips) if (isStripVisible(scope, s) && s.flightDataId) out.add(s.flightDataId);
   return out;
 }
 
@@ -62,13 +62,13 @@ function visibleFlightDataIdsOf(scope, strips) {
 function filterSnapshot(msg, scope) {
   if (scope.kind === ALL) return msg;
   const strips = (msg.strips || []).filter(s => isStripVisible(scope, s));
-  const fdrIds = new Set(strips.map(s => s.fdrId));
+  const flightDataIds = new Set(strips.map(s => s.flightDataId));
   return {
     ...msg,
     strips,
-    fdrs: (msg.fdrs || []).filter(f => fdrIds.has(f.fdrId)),
-    correlations: (msg.correlations || []).filter(c => fdrIds.has(c.fdrId)),
-    marsa: (msg.marsa || []).filter(r => (r.participants || []).some(id => fdrIds.has(id))),
+    flightDataList: (msg.flightDataList || []).filter(f => flightDataIds.has(f.flightDataId)),
+    correlations: (msg.correlations || []).filter(c => flightDataIds.has(c.flightDataId)),
+    marsa: (msg.marsa || []).filter(r => (r.participants || []).some(id => flightDataIds.has(id))),
   };
 }
 
@@ -82,10 +82,10 @@ function filterSnapshot(msg, scope) {
  * updated Strip, and its FDR was filtered out of every delta until now, so the
  * FDR of every visible updated Strip rides along (`flightDataOf` supplies it). Without
  * that a handed line drew with a blank callsign.
- * @param {Set<string>} fdrIds the FDRs of every Strip the scope can see now, on every Board
- * @param {(fdrId:string) => object|null} [flightDataOf]
+ * @param {Set<string>} flightDataIds the FDRs of every Strip the scope can see now, on every Board
+ * @param {(flightDataId:string) => object|null} [flightDataOf]
  */
-function filterBoardDelta(msg, scope, fdrIds, flightDataOf = () => null) {
+function filterBoardDelta(msg, scope, flightDataIds, flightDataOf = () => null) {
   if (scope.kind === ALL) return msg;
   const strips = msg.strips || {};
   const updated = [];
@@ -94,45 +94,45 @@ function filterBoardDelta(msg, scope, fdrIds, flightDataOf = () => null) {
     if (isStripVisible(scope, s, s.facilityId || msg.facilityId)) updated.push(s);
     else gone.push(s.stripId);
   }
-  const fdrs = msg.fdrs || {};
-  const flightDataListUpdated = (fdrs.updated || []).filter(f => fdrIds.has(f.fdrId));
-  const have = new Set(flightDataListUpdated.map(f => f.fdrId));
+  const flightDataList = msg.flightDataList || {};
+  const flightDataListUpdated = (flightDataList.updated || []).filter(f => flightDataIds.has(f.flightDataId));
+  const have = new Set(flightDataListUpdated.map(f => f.flightDataId));
   for (const s of updated) {
-    if (!s.fdrId || have.has(s.fdrId)) continue;
-    const fdr = flightDataOf(s.fdrId);
-    if (fdr) { flightDataListUpdated.push(fdr); have.add(s.fdrId); }
+    if (!s.flightDataId || have.has(s.flightDataId)) continue;
+    const flightData = flightDataOf(s.flightDataId);
+    if (flightData) { flightDataListUpdated.push(flightData); have.add(s.flightDataId); }
   }
   return {
     ...msg,
     strips: { ...strips, updated, gone },
-    fdrs: { ...fdrs, updated: flightDataListUpdated },
+    flightDataList: { ...flightDataList, updated: flightDataListUpdated },
   };
 }
 
 /** efsp-correlation-delta: the visible flights' records, or null when none is left. */
-function filterCorrelationDelta(msg, scope, fdrIds) {
+function filterCorrelationDelta(msg, scope, flightDataIds) {
   if (scope.kind === ALL) return msg;
-  const updated = ((msg.correlations || {}).updated || []).filter(c => fdrIds.has(c.fdrId));
+  const updated = ((msg.correlations || {}).updated || []).filter(c => flightDataIds.has(c.flightDataId));
   return updated.length ? { ...msg, correlations: { ...msg.correlations, updated } } : null;
 }
 
 /** efsp-marsa-delta: relations with a visible participant, or null when none is left. */
-function filterMarsaDelta(msg, scope, fdrIds) {
+function filterMarsaDelta(msg, scope, flightDataIds) {
   if (scope.kind === ALL) return msg;
-  const updated = ((msg.marsa || {}).updated || []).filter(r => (r.participants || []).some(id => fdrIds.has(id)));
+  const updated = ((msg.marsa || {}).updated || []).filter(r => (r.participants || []).some(id => flightDataIds.has(id)));
   return updated.length ? { ...msg, marsa: { ...msg.marsa, updated } } : null;
 }
 
 /**
- * efsp-alerts: conformance (by fdrId), obligations and surveillance hints (by Facility and Strip)
- * for visible flights only. `stca` is scoped per session elsewhere (ATC only).
+ * efsp-alerts: conformance (by flightDataId), obligations and surveillance hints (by Facility and Strip)
+ * for visible flights only. `conflictAlert` is scoped per session elsewhere (ATC only).
  * @param {(facilityId:string, stripId:string) => boolean} stripVisible
  */
-function filterAlerts(msg, scope, fdrIds, stripVisible) {
+function filterAlerts(msg, scope, flightDataIds, stripVisible) {
   if (scope.kind === ALL) return msg;
   return {
     ...msg,
-    conformance: (msg.conformance || []).filter(a => fdrIds.has(a.fdrId)),
+    conformance: (msg.conformance || []).filter(a => flightDataIds.has(a.flightDataId)),
     obligations: (msg.obligations || []).filter(o => stripVisible(o.facilityId, o.stripId)),
     surveillance: (msg.surveillance || []).filter(h => stripVisible(h.facilityId, h.stripId)),
   };

@@ -91,7 +91,7 @@ function callsignAffinity(flightDataCallsign, trackCallsign) {
 
 /**
  * Per-tick lookup tables over the live tracks, built once rather than
- * re-scanned per FDR — this is what keeps the reconciler O(tracks + fdrs).
+ * re-scanned per FDR — this is what keeps the reconciler O(tracks + flightDataList).
  *
  * Both are one-to-MANY on purpose. A duplicate beacon code is structural and
  * explicitly accepted (§3.10.2 rule 7: "duplicate codes raise an alert, never

@@ -3,7 +3,7 @@
 // The marshal stack (guide §9.12, docs/adr/0064).
 //
 // §9.12: "Case III — one integer drives four displayed fields." The stored
-// record holds ONLY authoritative values: which flight (fdrId) sits at which
+// record holds ONLY authoritative values: which flight (flightDataId) sits at which
 // stack index, whether it has pushed, the Charlie time, the marshal radial
 // the controller set (if any), and — Case I only — the squadron-assigned
 // altitude. Angels, marshal DME, push time, the push window, the marshal
@@ -33,7 +33,7 @@
 //                      absorbs it, so no pilot above the gap is re-cleared).
 //
 // Every op is ONE call that returns the WHOLE new stack plus `changed`, the
-// fdrIds whose derived display changed, in stack order — how L17 turns one
+// flightDataIds whose derived display changed, in stack order — how L17 turns one
 // gesture into one delta. Ops never read the Case: the stack is the same
 // stack in every Case, and only the derivation reads it, so a Case change
 // needs no stack op at all. Nothing here mutates its input or throws on bad
@@ -42,7 +42,7 @@
 const { normDeg, reciprocal, angularDiff } = require('./angles');
 const { isSequencedCase, isCase } = require('./recovery-case');
 
-const ENTRY_KEYS = Object.freeze(['fdrId', 'stackIndex', 'status', 'caseIAngels']);
+const ENTRY_KEYS = Object.freeze(['flightDataId', 'stackIndex', 'status', 'caseIAngels']);
 const STACK_KEYS = Object.freeze(['stackId', 'hullId', 'charlieTimeUtc', 'marshalRadialDeg', 'entries']);
 const ENTRY_STATUSES = Object.freeze(['HOLDING', 'PUSHED']);
 const STACK_DEFAULTS = Object.freeze({ maxIndex: 19 }); // [SOURCE-DEFINED] — L4 briefing Q4
@@ -119,20 +119,20 @@ function validateStack(stack, opts = STACK_DEFAULTS) {
   for (const e of stack.entries) {
     if (!_isObj(e)) return _fail('every entry must be an object');
     for (const k of Object.keys(e)) {
-      if (DERIVED_KEYS.includes(k)) return _fail(`entry ${e.fdrId}: '${k}' — ${DERIVED_DETAIL}`);
-      if (!ENTRY_KEYS.includes(k)) return _fail(`entry ${e.fdrId}: unknown key '${k}'`);
+      if (DERIVED_KEYS.includes(k)) return _fail(`entry ${e.flightDataId}: '${k}' — ${DERIVED_DETAIL}`);
+      if (!ENTRY_KEYS.includes(k)) return _fail(`entry ${e.flightDataId}: unknown key '${k}'`);
     }
-    if (typeof e.fdrId !== 'string' || !e.fdrId) return _fail('entry fdrId must be a non-empty string');
-    if (seenFlightData.has(e.fdrId)) return _fail(`fdrId ${e.fdrId} appears twice in the stack`);
-    seenFlightData.add(e.fdrId);
+    if (typeof e.flightDataId !== 'string' || !e.flightDataId) return _fail('entry flightDataId must be a non-empty string');
+    if (seenFlightData.has(e.flightDataId)) return _fail(`flightDataId ${e.flightDataId} appears twice in the stack`);
+    seenFlightData.add(e.flightDataId);
     if (!Number.isInteger(e.stackIndex) || e.stackIndex < 0 || e.stackIndex > maxIndex) {
-      return _fail(`entry ${e.fdrId}: stackIndex must be an integer 0..${maxIndex}`);
+      return _fail(`entry ${e.flightDataId}: stackIndex must be an integer 0..${maxIndex}`);
     }
-    if (e.stackIndex <= prev) return _fail(`entries must be in ascending, unique stackIndex order (at ${e.fdrId})`);
+    if (e.stackIndex <= prev) return _fail(`entries must be in ascending, unique stackIndex order (at ${e.flightDataId})`);
     prev = e.stackIndex;
-    if (!ENTRY_STATUSES.includes(e.status)) return _fail(`entry ${e.fdrId}: status must be one of ${ENTRY_STATUSES.join(', ')}`);
+    if (!ENTRY_STATUSES.includes(e.status)) return _fail(`entry ${e.flightDataId}: status must be one of ${ENTRY_STATUSES.join(', ')}`);
     if (!_validCaseIAngels(e.caseIAngels)) {
-      return _fail(`entry ${e.fdrId}: caseIAngels must be an integer ${CASE_I_MIN_ANGELS}..${CASE_I_MAX_ANGELS} or null`);
+      return _fail(`entry ${e.flightDataId}: caseIAngels must be an integer ${CASE_I_MIN_ANGELS}..${CASE_I_MAX_ANGELS} or null`);
     }
   }
   return { ok: true, stack };
@@ -140,7 +140,7 @@ function validateStack(stack, opts = STACK_DEFAULTS) {
 
 /**
  * Lenient — for restore (trap T9). Drops derived and unknown keys, drops
- * entries that cannot be kept (bad fdrId, duplicate fdrId, an index clash or
+ * entries that cannot be kept (bad flightDataId, duplicate flightDataId, an index clash or
  * out of range), sorts the rest, and reports what it dropped. Never refuses:
  * a restart that comes up with one stray key removed beats one that comes up
  * with an empty carrier.
@@ -159,16 +159,16 @@ function normalizeStack(raw, { stackId = DEFAULT_STACK_ID, hullId = null, maxInd
   const rawEntries = Array.isArray(src.entries) ? src.entries.slice() : [];
   const cleaned = [];
   for (const e of rawEntries) {
-    if (!_isObj(e) || typeof e.fdrId !== 'string' || !e.fdrId) {
-      dropped.push({ fdrId: _isObj(e) ? e.fdrId ?? null : null, why: 'no fdrId' });
+    if (!_isObj(e) || typeof e.flightDataId !== 'string' || !e.flightDataId) {
+      dropped.push({ flightDataId: _isObj(e) ? e.flightDataId ?? null : null, why: 'no flightDataId' });
       continue;
     }
     if (!Number.isInteger(e.stackIndex) || e.stackIndex < 0 || e.stackIndex > max) {
-      dropped.push({ fdrId: e.fdrId, why: `stackIndex out of range 0..${max}` });
+      dropped.push({ flightDataId: e.flightDataId, why: `stackIndex out of range 0..${max}` });
       continue;
     }
     cleaned.push({
-      fdrId: e.fdrId,
+      flightDataId: e.flightDataId,
       stackIndex: e.stackIndex,
       status: ENTRY_STATUSES.includes(e.status) ? e.status : 'HOLDING',
       caseIAngels: _validCaseIAngels(e.caseIAngels) ? e.caseIAngels : null,
@@ -178,9 +178,9 @@ function normalizeStack(raw, { stackId = DEFAULT_STACK_ID, hullId = null, maxInd
   const seenFlightData = new Set();
   const seenIdx = new Set();
   for (const e of cleaned) {
-    if (seenFlightData.has(e.fdrId)) { dropped.push({ fdrId: e.fdrId, why: 'duplicate fdrId' }); continue; }
-    if (seenIdx.has(e.stackIndex)) { dropped.push({ fdrId: e.fdrId, why: `stackIndex ${e.stackIndex} already taken` }); continue; }
-    seenFlightData.add(e.fdrId);
+    if (seenFlightData.has(e.flightDataId)) { dropped.push({ flightDataId: e.flightDataId, why: 'duplicate flightDataId' }); continue; }
+    if (seenIdx.has(e.stackIndex)) { dropped.push({ flightDataId: e.flightDataId, why: `stackIndex ${e.stackIndex} already taken` }); continue; }
+    seenFlightData.add(e.flightDataId);
     seenIdx.add(e.stackIndex);
     stack.entries.push(e);
   }
@@ -201,7 +201,7 @@ function deriveEntry(entry, { caseValue, charlieTimeUtc = null, marshalRadialDeg
   const e = _isObj(entry) ? entry : {};
   const fb = shipState && Number.isFinite(shipState.finalBearingDeg) ? normDeg(shipState.finalBearingDeg) : null;
   const base = {
-    fdrId: e.fdrId ?? null,
+    flightDataId: e.flightDataId ?? null,
     stackIndex: Number.isInteger(e.stackIndex) ? e.stackIndex : null,
     status: e.status ?? null,
     caseValue: isCase(caseValue) ? caseValue : null,
@@ -271,7 +271,7 @@ function deriveStack(stack, { caseValue, shipState = null } = {}) {
  * never break the first; this exists to catch the day someone stores a DME
  * again. The second CAN fire: the Marshal controller may set a radial
  * (decisions H27) that is far from the final bearing's reciprocal.
- * @returns {Array<{fdrId, code, detail}>} empty when consistent
+ * @returns {Array<{flightDataId, code, detail}>} empty when consistent
  */
 function checkConsistency(derived, { radialToleranceDeg = RADIAL_TOLERANCE_DEG } = {}) {
   const list = Array.isArray(derived) ? derived : [derived];
@@ -279,15 +279,15 @@ function checkConsistency(derived, { radialToleranceDeg = RADIAL_TOLERANCE_DEG }
   for (const d of list) {
     if (!_isObj(d) || !isSequencedCase(d.caseValue)) continue;
     if (!(Number.isFinite(d.angels) && Number.isFinite(d.marshalDme) && d.angels + DME_PLUS === d.marshalDme)) {
-      out.push({ fdrId: d.fdrId, code: 'DME_NOT_ANGELS_PLUS_15', detail: `angels ${d.angels} + 15 ≠ DME ${d.marshalDme}` });
+      out.push({ flightDataId: d.flightDataId, code: 'DME_NOT_ANGELS_PLUS_15', detail: `angels ${d.angels} + 15 ≠ DME ${d.marshalDme}` });
     }
     if (!(Number.isFinite(d.angels) && d.angels >= MIN_ANGELS)) {
-      out.push({ fdrId: d.fdrId, code: 'BELOW_MINIMUM_ALTITUDE', detail: `angels ${d.angels} is below the §9.12 minimum of ${MIN_ANGELS}` });
+      out.push({ flightDataId: d.flightDataId, code: 'BELOW_MINIMUM_ALTITUDE', detail: `angels ${d.angels} is below the §9.12 minimum of ${MIN_ANGELS}` });
     }
     const diff = angularDiff(d.marshalRadialDeg, reciprocal(d.expectedFinalBearingDeg));
     if (diff != null && diff > radialToleranceDeg) {
       out.push({
-        fdrId: d.fdrId,
+        flightDataId: d.flightDataId,
         code: 'RADIAL_NOT_RECIPROCAL_OF_FINAL_BEARING',
         detail: `marshal radial ${Math.round(d.marshalRadialDeg)} is ${Math.round(diff)}° from the reciprocal of final bearing ${Math.round(d.expectedFinalBearingDeg)}`,
       });
@@ -305,9 +305,9 @@ function _copyEntries(stack) {
 function _result(stack, entries, changedSet, extra = {}) {
   const sorted = entries.slice().sort((a, b) => a.stackIndex - b.stackIndex);
   const next = { ...stack, ...extra, entries: sorted };
-  // `changed` in stack order; an fdrId that left the stack keeps its old place.
-  const order = new Map(stack.entries.map((e) => [e.fdrId, e.stackIndex]));
-  for (const e of sorted) order.set(e.fdrId, e.stackIndex);
+  // `changed` in stack order; an flightDataId that left the stack keeps its old place.
+  const order = new Map(stack.entries.map((e) => [e.flightDataId, e.stackIndex]));
+  for (const e of sorted) order.set(e.flightDataId, e.stackIndex);
   const changed = [...changedSet].sort((a, b) => order.get(a) - order.get(b) || (a < b ? -1 : 1));
   return { ok: true, stack: next, changed };
 }
@@ -335,7 +335,7 @@ function _placeAt(entries, newEntry, index, maxIndex) {
   const hp = _highestPushed(entries);
   if (index <= hp) {
     const pushed = entries.find((e) => e.stackIndex === hp);
-    return _fail(`cannot place at ${index}: ${pushed.fdrId} at ${hp} has already pushed, and renumbering it would rewrite a push time in the past`);
+    return _fail(`cannot place at ${index}: ${pushed.flightDataId} at ${hp} has already pushed, and renumbering it would rewrite a push time in the past`);
   }
   const byIndex = new Map(entries.map((e) => [e.stackIndex, e]));
   // The run of occupied slots starting at `index`; it ends at the first vacancy.
@@ -345,17 +345,17 @@ function _placeAt(entries, newEntry, index, maxIndex) {
   if (topAfter > maxIndex) {
     const top = run.length ? run[run.length - 1] : null;
     return _fail(top
-      ? `the stack is full: ${top.fdrId} at ${top.stackIndex} would move above the top slot ${maxIndex}`
+      ? `the stack is full: ${top.flightDataId} at ${top.stackIndex} would move above the top slot ${maxIndex}`
       : `stackIndex ${index} is above the top slot ${maxIndex}`);
   }
-  const shiftedIds = new Set(run.map((e) => e.fdrId));
-  const out = entries.map((e) => (shiftedIds.has(e.fdrId) ? { ...e, stackIndex: e.stackIndex + 1 } : e));
+  const shiftedIds = new Set(run.map((e) => e.flightDataId));
+  const out = entries.map((e) => (shiftedIds.has(e.flightDataId) ? { ...e, stackIndex: e.stackIndex + 1 } : e));
   out.push({ ...newEntry, stackIndex: index });
   return { ok: true, entries: out, shifted: [...shiftedIds] };
 }
 
-function _checkFlightDataId(fdrId) {
-  return typeof fdrId === 'string' && fdrId.length > 0;
+function _checkFlightDataId(flightDataId) {
+  return typeof flightDataId === 'string' && flightDataId.length > 0;
 }
 
 /**
@@ -363,22 +363,22 @@ function _checkFlightDataId(fdrId) {
  * together — altitude, DME and push time as one (§9.12 rule 2) — until a
  * vacancy absorbs the ripple.
  */
-function insertAt(stack, { fdrId, stackIndex, caseIAngels = null } = {}, opts = STACK_DEFAULTS) {
+function insertAt(stack, { flightDataId, stackIndex, caseIAngels = null } = {}, opts = STACK_DEFAULTS) {
   const v = validateStack(stack, opts);
   if (!v.ok) return v;
-  if (!_checkFlightDataId(fdrId)) return _fail('fdrId must be a non-empty string');
-  if (stack.entries.some((e) => e.fdrId === fdrId)) return _fail(`${fdrId} is already in the stack — use Move to re-sequence it`);
+  if (!_checkFlightDataId(flightDataId)) return _fail('flightDataId must be a non-empty string');
+  if (stack.entries.some((e) => e.flightDataId === flightDataId)) return _fail(`${flightDataId} is already in the stack — use Move to re-sequence it`);
   if (!_validCaseIAngels(caseIAngels)) return _fail(`caseIAngels must be an integer ${CASE_I_MIN_ANGELS}..${CASE_I_MAX_ANGELS} or null`);
-  const placed = _placeAt(_copyEntries(stack), { fdrId, status: 'HOLDING', caseIAngels }, stackIndex, _maxIndex(opts));
+  const placed = _placeAt(_copyEntries(stack), { flightDataId, status: 'HOLDING', caseIAngels }, stackIndex, _maxIndex(opts));
   if (!placed.ok) return placed;
-  return _result(stack, placed.entries, new Set([fdrId, ...placed.shifted]));
+  return _result(stack, placed.entries, new Set([flightDataId, ...placed.shifted]));
 }
 
 /** Insert at the next free slot above the highest entry. */
-function append(stack, { fdrId, caseIAngels = null } = {}, opts = STACK_DEFAULTS) {
+function append(stack, { flightDataId, caseIAngels = null } = {}, opts = STACK_DEFAULTS) {
   const v = validateStack(stack, opts);
   if (!v.ok) return v;
-  return insertAt(stack, { fdrId, stackIndex: _highest(stack.entries) + 1, caseIAngels }, opts);
+  return insertAt(stack, { flightDataId, stackIndex: _highest(stack.entries) + 1, caseIAngels }, opts);
 }
 
 /**
@@ -387,29 +387,29 @@ function append(stack, { fdrId, caseIAngels = null } = {}, opts = STACK_DEFAULTS
  * with insertAt's rules and refusals. Moving DOWN renumbers exactly the
  * entries it passes (the vacancy it left absorbs the ripple).
  */
-function move(stack, { fdrId, toIndex } = {}, opts = STACK_DEFAULTS) {
+function move(stack, { flightDataId, toIndex } = {}, opts = STACK_DEFAULTS) {
   const v = validateStack(stack, opts);
   if (!v.ok) return v;
-  const entry = stack.entries.find((e) => e.fdrId === fdrId);
-  if (!entry) return _fail(`${fdrId} is not in the stack`, 'NOT_FOUND');
-  if (entry.status === 'PUSHED') return _fail(`${fdrId} has already pushed and cannot be re-sequenced`);
-  if (toIndex === entry.stackIndex) return _fail(`${fdrId} is already at ${toIndex}`);
-  const rest = _copyEntries(stack).filter((e) => e.fdrId !== fdrId);
+  const entry = stack.entries.find((e) => e.flightDataId === flightDataId);
+  if (!entry) return _fail(`${flightDataId} is not in the stack`, 'NOT_FOUND');
+  if (entry.status === 'PUSHED') return _fail(`${flightDataId} has already pushed and cannot be re-sequenced`);
+  if (toIndex === entry.stackIndex) return _fail(`${flightDataId} is already at ${toIndex}`);
+  const rest = _copyEntries(stack).filter((e) => e.flightDataId !== flightDataId);
   const placed = _placeAt(rest, { ...entry }, toIndex, _maxIndex(opts));
   if (!placed.ok) return placed;
-  return _result(stack, placed.entries, new Set([fdrId, ...placed.shifted]));
+  return _result(stack, placed.entries, new Set([flightDataId, ...placed.shifted]));
 }
 
 function _closeUpEntries(entries, gapIndex) {
   const above = entries.filter((e) => e.stackIndex > gapIndex);
   const pushed = above.find((e) => e.status === 'PUSHED');
   if (pushed) {
-    return _fail(`cannot close up: ${pushed.fdrId} at ${pushed.stackIndex} has already pushed, and renumbering it would rewrite a push time in the past`);
+    return _fail(`cannot close up: ${pushed.flightDataId} at ${pushed.stackIndex} has already pushed, and renumbering it would rewrite a push time in the past`);
   }
-  const ids = new Set(above.map((e) => e.fdrId));
+  const ids = new Set(above.map((e) => e.flightDataId));
   return {
     ok: true,
-    entries: entries.map((e) => (ids.has(e.fdrId) ? { ...e, stackIndex: e.stackIndex - 1 } : e)),
+    entries: entries.map((e) => (ids.has(e.flightDataId) ? { ...e, stackIndex: e.stackIndex - 1 } : e)),
     shifted: [...ids],
   };
 }
@@ -419,13 +419,13 @@ function _closeUpEntries(entries, gapIndex) {
  * default its slot stays VACANT and nobody above moves (decisions H28);
  * `closeUp: true` shifts every entry above the gap down one, in the same op.
  */
-function remove(stack, { fdrId, closeUp = false } = {}, opts = STACK_DEFAULTS) {
+function remove(stack, { flightDataId, closeUp = false } = {}, opts = STACK_DEFAULTS) {
   const v = validateStack(stack, opts);
   if (!v.ok) return v;
-  const entry = stack.entries.find((e) => e.fdrId === fdrId);
-  if (!entry) return _fail(`${fdrId} is not in the stack`, 'NOT_FOUND');
-  let entries = _copyEntries(stack).filter((e) => e.fdrId !== fdrId);
-  const changed = new Set([fdrId]);
+  const entry = stack.entries.find((e) => e.flightDataId === flightDataId);
+  if (!entry) return _fail(`${flightDataId} is not in the stack`, 'NOT_FOUND');
+  let entries = _copyEntries(stack).filter((e) => e.flightDataId !== flightDataId);
+  const changed = new Set([flightDataId]);
   if (closeUp === true) {
     const c = _closeUpEntries(entries, entry.stackIndex);
     if (!c.ok) return c;
@@ -453,14 +453,14 @@ function closeUp(stack, { fromIndex } = {}, opts = STACK_DEFAULTS) {
  * above down a slot, every other push time would jump a minute earlier —
  * D16's drift arriving by a side door.
  */
-function markPushed(stack, { fdrId } = {}, opts = STACK_DEFAULTS) {
+function markPushed(stack, { flightDataId } = {}, opts = STACK_DEFAULTS) {
   const v = validateStack(stack, opts);
   if (!v.ok) return v;
-  const entry = stack.entries.find((e) => e.fdrId === fdrId);
-  if (!entry) return _fail(`${fdrId} is not in the stack`, 'NOT_FOUND');
-  if (entry.status === 'PUSHED') return _fail(`${fdrId} has already pushed`);
-  const entries = _copyEntries(stack).map((e) => (e.fdrId === fdrId ? { ...e, status: 'PUSHED' } : e));
-  return _result(stack, entries, new Set([fdrId]));
+  const entry = stack.entries.find((e) => e.flightDataId === flightDataId);
+  if (!entry) return _fail(`${flightDataId} is not in the stack`, 'NOT_FOUND');
+  if (entry.status === 'PUSHED') return _fail(`${flightDataId} has already pushed`);
+  const entries = _copyEntries(stack).map((e) => (e.flightDataId === flightDataId ? { ...e, status: 'PUSHED' } : e));
+  return _result(stack, entries, new Set([flightDataId]));
 }
 
 /**
@@ -475,21 +475,21 @@ function setCharlieTime(stack, { charlieTimeUtc } = {}, opts = STACK_DEFAULTS) {
     return _fail('charlieTimeUtc must be epoch ms (mission Zulu) or null');
   }
   if (charlieTimeUtc === stack.charlieTimeUtc) return _fail('Charlie time is unchanged');
-  const changed = new Set(stack.entries.filter((e) => e.status === 'HOLDING').map((e) => e.fdrId));
+  const changed = new Set(stack.entries.filter((e) => e.status === 'HOLDING').map((e) => e.flightDataId));
   return _result(stack, _copyEntries(stack), changed, { charlieTimeUtc });
 }
 
 /** Case I only: the squadron-assigned altitude — the one per-entry value a controller types. */
-function setCaseIAngels(stack, { fdrId, caseIAngels } = {}, opts = STACK_DEFAULTS) {
+function setCaseIAngels(stack, { flightDataId, caseIAngels } = {}, opts = STACK_DEFAULTS) {
   const v = validateStack(stack, opts);
   if (!v.ok) return v;
-  const entry = stack.entries.find((e) => e.fdrId === fdrId);
-  if (!entry) return _fail(`${fdrId} is not in the stack`, 'NOT_FOUND');
+  const entry = stack.entries.find((e) => e.flightDataId === flightDataId);
+  if (!entry) return _fail(`${flightDataId} is not in the stack`, 'NOT_FOUND');
   if (caseIAngels === undefined || !_validCaseIAngels(caseIAngels)) {
     return _fail(`caseIAngels must be an integer ${CASE_I_MIN_ANGELS}..${CASE_I_MAX_ANGELS} (§9.12: from 2,000 ft) or null`);
   }
-  const entries = _copyEntries(stack).map((e) => (e.fdrId === fdrId ? { ...e, caseIAngels } : e));
-  return _result(stack, entries, new Set([fdrId]));
+  const entries = _copyEntries(stack).map((e) => (e.flightDataId === flightDataId ? { ...e, caseIAngels } : e));
+  return _result(stack, entries, new Set([flightDataId]));
 }
 
 /**
@@ -506,7 +506,7 @@ function setMarshalRadial(stack, { marshalRadialDeg } = {}, opts = STACK_DEFAULT
     return _fail('marshalRadialDeg must be a bearing in [0, 360) degrees true, or null for the default (final bearing + 180)');
   }
   if (marshalRadialDeg === stack.marshalRadialDeg) return _fail('marshal radial is unchanged');
-  const changed = new Set(stack.entries.map((e) => e.fdrId));
+  const changed = new Set(stack.entries.map((e) => e.flightDataId));
   return _result(stack, _copyEntries(stack), changed, { marshalRadialDeg });
 }
 

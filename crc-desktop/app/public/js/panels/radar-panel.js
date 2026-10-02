@@ -110,7 +110,7 @@ function panelControlRows() {
     { id: 'radio',    label: PANEL_TITLES.radio },
     { id: 'efsp',     label: PANEL_TITLES.efsp },
     { id: 'airspace', label: PANEL_TITLES.airspace },
-    { id: 'fieldState', label: PANEL_TITLES.fieldState },
+    { id: 'runwayStatus', label: PANEL_TITLES.runwayStatus },
     { id: 'metrics',  label: PANEL_TITLES.metrics },
   ];
 }
@@ -175,7 +175,7 @@ export function renderPanelControls() {
 // facilityId, held)) since each has its own PositionStore instance
 // server-side — checking CTR never touches INCIRLIK's held set at all.
 const EFSP_FACILITY_POSITIONS = {
-  INCIRLIK: ['OPS', 'CD', 'GND', 'TWR', 'RSU', 'APP', 'SFA', 'PAR'], // RSU, SFA and PAR: crc-sync's docs/adr/0075
+  INCIRLIK: ['OPS', 'CD', 'GC', 'LC', 'RSU', 'AP', 'SFA', 'PAR'], // RSU, SFA and PAR: crc-sync's docs/adr/0075
   CENTER: ['CTR'],
   // WP4A second slice — TAC_C2/AIC/GCI/JTAC (crc-sync's facility-config.js
   // DEFAULT_TACTICAL_CONFIG.positions). JTAC is included the same way as
@@ -235,7 +235,7 @@ export function renderPositionControls() {
 
   for (const facilityId of _efspFacilityIds()) {
     const positionIds = _efspPositionsFor(facilityId);
-    const held = new Set(getActingPositions(facilityId));
+    const signedOn = new Set(getActingPositions(facilityId));
 
     const $facilityHeader = document.createElement('div');
     $facilityHeader.className = 'panel-ctrl-facility-header';
@@ -255,9 +255,9 @@ export function renderPositionControls() {
       $toggle.className = 'toggle';
       const $cb = document.createElement('input');
       $cb.type = 'checkbox';
-      $cb.checked = held.has(positionId);
+      $cb.checked = signedOn.has(positionId);
       $cb.addEventListener('change', () => {
-        const next = new Set(held);
+        const next = new Set(signedOn);
         if ($cb.checked) next.add(positionId); else next.delete(positionId);
         console.warn('[efsp] Acting-As checkbox changed:', facilityId, positionId, '->', $cb.checked, '| sending held =', [...next]);
         sendEfspSetPositions(facilityId, [...next]);

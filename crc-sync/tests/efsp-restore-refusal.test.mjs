@@ -35,8 +35,8 @@ function savedBoard() {
   const first = createEfsp();
   const c = crew(first, { CTR: 'CENTER' });
   const strip = mustAct(first, c.CTR, 'CTR', null, {
-    kind: 'CreateStrip', bayId: 'ctr-overflight', rackId: 'main', role: 'OVERFLIGHT',
-    fdr: { callsign: 'OLD1', aircraftType: 'A320', wakeCategory: 'M', originAirport: 'LTBA', destinationAirport: 'OJAI' },
+    kind: 'CreateStrip', bayId: 'ctr-overflight', rackId: 'main', stripType: 'OVERFLIGHT',
+    flightData: { callsign: 'OLD1', aircraftType: 'A320', wakeCategory: 'M', originAirport: 'LTBA', destinationAirport: 'OJAI' },
   });
   return { strip, body: JSON.parse(fs.readFileSync(file, 'utf8')) };
 }
@@ -60,7 +60,7 @@ test('an OVERFLIGHT Strip saved as TRANSITING (before docs/adr/0087) stops start
 
 test('the pre-WP4A snapshot shape (a top-level board) stops start-up', () => {
   const { body } = savedBoard();
-  const old = { fdr: body.fdr, board: body.boards.CENTER };
+  const old = { flightData: body.flightData, board: body.boards.CENTER };
   fs.writeFileSync(file, JSON.stringify(old));
   assertRefusedUntouched(() => createEfsp(), /pre-WP4A shape/);
 });

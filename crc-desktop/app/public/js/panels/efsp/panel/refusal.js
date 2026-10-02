@@ -48,7 +48,7 @@ export const MUTATION_ERROR_MESSAGES = {
   NOT_HOLDING_POSITION: 'You are not Primary at that Position',
   NOT_OWNER: 'Another Position owns this Strip',
   PERMISSION_DENIED: 'Your Position is not allowed to do that',
-  NOT_OCCUPIED: 'Nobody is Primary at that Position',
+  NOT_STAFFED: 'Nobody is Primary at that Position',
   ALREADY_PRIMARY: 'You are already Primary at that Position',
   NOT_OBSERVER: 'You are not an observer at that Position',
 };
@@ -63,9 +63,9 @@ function _refusalSentence(reason, detail) {
 }
 
 /** The callsign on an FDR — what a controller reads off the Strip, and so how a refusal has to name it. */
-export function _callsignOfFdr(fdrId) {
-  const fdr = fdrId && typeof getEfspFdr === 'function' ? getEfspFdr(fdrId) : null;
-  return (fdr && fdr.identity && fdr.identity.callsign) || '';
+export function _callsignOfFdr(flightDataId) {
+  const flightData = flightDataId && typeof getEfspFdr === 'function' ? getEfspFdr(flightDataId) : null;
+  return (flightData && flightData.identity && flightData.identity.callsign) || '';
 }
 
 /**
@@ -76,7 +76,7 @@ export function _callsignOfFdr(fdrId) {
  *
  * @param {?object} context
  *   `{pending}`  the original efsp-mutation message (the usual case)
- *   `{stripId}` / `{fdrId}` / `{fdrIds}`  for the ack types that are not
+ *   `{stripId}` / `{flightDataId}` / `{flightDataIds}`  for the ack types that are not
  *       Strip Mutations and so register nothing pending (correlation, MARSA)
  *   `{subject}`  an already-formatted name for something that is not a
  *       flight at all, e.g. an airspace
@@ -89,11 +89,11 @@ function _refusalSubject(context) {
   const op = (pending && pending.op) || context.op || null;
   const stripId = (pending && pending.stripId) || context.stripId || null;
   const strip = stripId && typeof getEfspStrip === 'function' ? getEfspStrip(stripId) : null;
-  const callsign = (strip && _callsignOfFdr(strip.fdrId))
-    || _callsignOfFdr(context.fdrId)
-    || (op && op.fdr && op.fdr.callsign)   // a refused CreateStrip has no Strip yet — the callsign is in the op
-    || _callsignOfFdr(op && op.fdrId)
-    || (context.fdrIds || []).map(_callsignOfFdr).filter(Boolean).join(' + ');
+  const callsign = (strip && _callsignOfFdr(strip.flightDataId))
+    || _callsignOfFdr(context.flightDataId)
+    || (op && op.flightData && op.flightData.callsign)   // a refused CreateStrip has no Strip yet — the callsign is in the op
+    || _callsignOfFdr(op && op.flightDataId)
+    || (context.flightDataIds || []).map(_callsignOfFdr).filter(Boolean).join(' + ');
 
   // F-207 — the Block input closes on Enter, before the server replies, so on
   // a refusal the typed text exists nowhere else on screen. Put it in the
@@ -110,7 +110,7 @@ function _refusalSubject(context) {
     blockId = op.blockId || null;
     if (op.value != null && op.value !== '') {
       value = String(op.value);
-      blockName = (typeof blockLabelFor === 'function' && blockLabelFor(op.blockId, (strip && strip.role) || 'DEPARTURE'))
+      blockName = (typeof blockLabelFor === 'function' && blockLabelFor(op.blockId, (strip && strip.stripType) || 'DEPARTURE'))
         || op.blockId || '';
     }
   }

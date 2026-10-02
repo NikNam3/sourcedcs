@@ -22,14 +22,14 @@ const { createEfsp } = await import('../src/efsp/index.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
 const { crew, act, mustAct, jumpTo, advance, DEPARTURE_FLIGHT_DATA, obligationAlerts } = await import('./helpers/efsp-scenario.mjs');
 
-const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK' };
+const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK' };
 const MINUTE = 60 * 1000;
 
 /** A cleared flight sitting at CD, which is where every release case begins. */
 async function cleared(efsp, c, callsign) {
   let strip = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE',
-    fdr: { ...DEPARTURE_FLIGHT_DATA, callsign },
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE',
+    flightData: { ...DEPARTURE_FLIGHT_DATA, callsign },
   });
   strip = await advance(efsp, c.OPS, 'OPS', strip); // -> PENDING_CLEARANCE at CD
   return jumpTo(efsp, c.CD, 'CD', strip, 'CLEARED');
@@ -52,7 +52,7 @@ test('SCENARIO a flight held for release cannot push until somebody releases it'
   });
   const released = await advance(efsp, c.CD, 'CD', strip);
   assert.equal(released.state, 'PUSHBACK');
-  assert.equal(released.ownerPositionId, 'GND');
+  assert.equal(released.ownerPositionId, 'GC');
 });
 
 // ── 2. clearance void time ───────────────────────────────────────────────
@@ -69,8 +69,8 @@ test('SCENARIO a clearance goes void while the flight is still on the ground', a
   strip = mustAct(efsp, c.CD, 'CD', strip, { kind: 'SetBlock', blockId: '14D', value: voidTime });
   strip = jumpTo(efsp, c.CD, 'CD', strip, 'HELD');
 
-  const fdr = efsp.flightDataStore.getFlightData(strip.fdrId);
-  assert.equal(fdr.assigned.voidDeadlineUtc, voidTime + 30 * MINUTE, 'the deadline is derived, not entered');
+  const flightData = efsp.flightDataStore.getFlightData(strip.flightDataId);
+  assert.equal(flightData.assigned.voidDeadlineUtc, voidTime + 30 * MINUTE, 'the deadline is derived, not entered');
 
   // Passive half: the release button refuses.
   const blocked = act(efsp, c.CD, 'CD', strip, { kind: 'InvokeNla' });
@@ -122,7 +122,7 @@ test('SCENARIO an EDCT slot: inside the window it goes, outside it waits', async
   // goes to HELD — which is what HELD means (§3.4: "hold for release,
   // release time, or void time in force"). The windows are checked there.
   strip = jumpTo(efsp, c.CD, 'CD', strip, 'HELD');
-  const window = efsp.flightDataStore.getFlightData(strip.fdrId).assigned;
+  const window = efsp.flightDataStore.getFlightData(strip.flightDataId).assigned;
   assert.equal(window.edctWindowStartUtc, window.edctTimeUtc - 5 * MINUTE, '±5 minutes, derived');
   assert.equal(window.edctWindowEndUtc, window.edctTimeUtc + 5 * MINUTE);
   assert.equal((await advance(efsp, c.CD, 'CD', strip)).state, 'PUSHBACK');
@@ -156,7 +156,7 @@ test('SCENARIO call for release: a tighter window than an EDCT, and it bites the
   waiting = mustAct(efsp, c.CD, 'CD', waiting, { kind: 'SetBlock', blockId: '14C', value: Date.now() + 30 * MINUTE });
 
   waiting = jumpTo(efsp, c.CD, 'CD', waiting, 'HELD');
-  const assigned = efsp.flightDataStore.getFlightData(waiting.fdrId).assigned;
+  const assigned = efsp.flightDataStore.getFlightData(waiting.flightDataId).assigned;
   assert.equal(assigned.callForReleaseWindowStartUtc, assigned.callForReleaseTimeUtc - 2 * MINUTE);
   assert.equal(assigned.callForReleaseWindowEndUtc, assigned.callForReleaseTimeUtc + 1 * MINUTE,
     'asymmetric on purpose — −2/+1, not ±5 like an EDCT');

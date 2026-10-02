@@ -174,7 +174,7 @@ class CoverageEngine {
    * Self-correcting within one scan, but wrong in the meantime and wrong in a
    * way that reads as a bug rather than as radar behaviour.
    *
-   * A contact another manned radar also sees keeps that radar and stays.
+   * A contact another staffed radar also sees keeps that radar and stays.
    */
   _pruneUnsweptRadars(sweptIds) {
     for (const [trackId, byRadar] of this._illuminated) {

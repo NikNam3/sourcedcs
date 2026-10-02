@@ -17,15 +17,15 @@ import {
 } from '../app/public/js/panels/efsp/efsp-state.js';
 
 function strip(overrides = {}) {
-  return { stripId: 's1', fdrId: 'f1', rev: 1, bayId: 'b1', rackId: 'r1', orderKey: 'A', state: 'PROPOSED', ...overrides };
+  return { stripId: 's1', flightDataId: 'f1', rev: 1, bayId: 'b1', rackId: 'r1', orderKey: 'A', state: 'PROPOSED', ...overrides };
 }
 
 test.beforeEach(() => _resetEfspStateForTest());
 
-test('applyEfspSnapshot populates strips/fdrs/positions and boardSeq/facility/bays', () => {
+test('applyEfspSnapshot populates strips/flightDataList/positions and boardSeq/facility/bays', () => {
   applyEfspSnapshot({
     boardSeq: 5, facility: 'INCIRLIK',
-    strips: [strip()], fdrs: [{ fdrId: 'f1' }], positions: [{ positionId: 'OPS' }],
+    strips: [strip()], flightDataList: [{ flightDataId: 'f1' }], positions: [{ positionId: 'OPS' }],
     bays: [{ bayId: 'b1' }],
   });
   assert.equal(getEfspBoardSeq(), 5);
@@ -37,16 +37,16 @@ test('applyEfspSnapshot populates strips/fdrs/positions and boardSeq/facility/ba
 });
 
 test('applyEfspSnapshot replaces prior state wholesale, not merges', () => {
-  applyEfspSnapshot({ boardSeq: 1, strips: [strip({ stripId: 'old' })], fdrs: [], positions: [] });
-  applyEfspSnapshot({ boardSeq: 2, strips: [strip({ stripId: 'new' })], fdrs: [], positions: [] });
+  applyEfspSnapshot({ boardSeq: 1, strips: [strip({ stripId: 'old' })], flightDataList: [], positions: [] });
+  applyEfspSnapshot({ boardSeq: 2, strips: [strip({ stripId: 'new' })], flightDataList: [], positions: [] });
   assert.equal(getEfspStrip('old'), null);
   assert.ok(getEfspStrip('new'));
   assert.equal(getAllEfspStrips().length, 1);
 });
 
 test('applyEfspDelta updates changed strips and removes gone ones, leaving others untouched', () => {
-  applyEfspSnapshot({ boardSeq: 1, strips: [strip({ stripId: 's1' }), strip({ stripId: 's2' })], fdrs: [], positions: [] });
-  applyEfspDelta({ boardSeq: 2, strips: { updated: [strip({ stripId: 's1', rev: 2 })], gone: ['s2'] }, fdrs: { updated: [] }, positions: { updated: [] } });
+  applyEfspSnapshot({ boardSeq: 1, strips: [strip({ stripId: 's1' }), strip({ stripId: 's2' })], flightDataList: [], positions: [] });
+  applyEfspDelta({ boardSeq: 2, strips: { updated: [strip({ stripId: 's1', rev: 2 })], gone: ['s2'] }, flightDataList: { updated: [] }, positions: { updated: [] } });
 
   assert.equal(getEfspStrip('s1').rev, 2);
   assert.equal(getEfspStrip('s2'), null);
@@ -54,20 +54,20 @@ test('applyEfspDelta updates changed strips and removes gone ones, leaving other
 });
 
 test('applyEfspDelta updates FDRs and Positions too', () => {
-  applyEfspDelta({ boardSeq: 1, strips: { updated: [], gone: [] }, fdrs: { updated: [{ fdrId: 'f1', rev: 3 }] }, positions: { updated: [{ positionId: 'GND', primary: null }] } });
+  applyEfspDelta({ boardSeq: 1, strips: { updated: [], gone: [] }, flightDataList: { updated: [{ flightDataId: 'f1', rev: 3 }] }, positions: { updated: [{ positionId: 'GC', primary: null }] } });
   assert.equal(getEfspFdr('f1').rev, 3);
   assert.equal(getAllEfspPositions().length, 1);
 });
 
 test('applyEfspDelta with a non-finite boardSeq leaves the current one unchanged', () => {
-  applyEfspSnapshot({ boardSeq: 7, strips: [], fdrs: [], positions: [] });
-  applyEfspDelta({ strips: { updated: [], gone: [] }, fdrs: { updated: [] }, positions: { updated: [] } });
+  applyEfspSnapshot({ boardSeq: 7, strips: [], flightDataList: [], positions: [] });
+  applyEfspDelta({ strips: { updated: [], gone: [] }, flightDataList: { updated: [] }, positions: { updated: [] } });
   assert.equal(getEfspBoardSeq(), 7);
 });
 
 // ── applyEfspMutationAck ─────────────────────────────────────────────────
 
-test('a successful ack applies the returned strip/fdr and clears the pending entry', () => {
+test('a successful ack applies the returned strip/flightData and clears the pending entry', () => {
   registerPendingMutation({ clientMutationId: 'm1', stripId: 's1', baseRev: 1, op: { kind: 'SetFlag' } });
   const result = applyEfspMutationAck({ clientMutationId: 'm1', ok: true, boardSeq: 2, strip: strip({ rev: 2 }) });
 
@@ -118,7 +118,7 @@ test('registerPendingMutation tracks a sent-but-unacked mutation until its ack c
 });
 
 test('rebaseForResend rebuilds baseRev against the current local Strip', () => {
-  applyEfspSnapshot({ boardSeq: 1, strips: [strip({ rev: 5 })], fdrs: [], positions: [] });
+  applyEfspSnapshot({ boardSeq: 1, strips: [strip({ rev: 5 })], flightDataList: [], positions: [] });
   registerPendingMutation({ clientMutationId: 'm1', stripId: 's1', baseRev: 1, op: { kind: 'SetFlag', flag: 'offset', value: true } });
 
   const rebased = rebaseForResend('m1');
@@ -152,7 +152,7 @@ test('getEfspRack filters by bay/rack, excludes DROPPED, and sorts by orderKey',
       strip({ stripId: 's3', bayId: 'b1', rackId: 'r1', orderKey: 'C', state: 'DROPPED' }),
       strip({ stripId: 's4', bayId: 'b2', rackId: 'r1', orderKey: 'A' }), // different bay
     ],
-    fdrs: [], positions: [],
+    flightDataList: [], positions: [],
   });
   const rack = getEfspRack('b1', 'r1');
   assert.deepEqual(rack.map(s => s.stripId), ['s2', 's1']);
@@ -160,38 +160,38 @@ test('getEfspRack filters by bay/rack, excludes DROPPED, and sorts by orderKey',
 
 // ── searchEfspStrips (guide §4.3 rule 2, defect D2) ─────────────────────
 
-function fdr(overrides = {}) {
-  return { fdrId: 'f1', identity: { callsign: 'VIPER1', beaconAssigned: '1234', ...overrides.identity } };
+function flightData(overrides = {}) {
+  return { flightDataId: 'f1', identity: { callsign: 'VIPER1', beaconAssigned: '1234', ...overrides.identity } };
 }
 
 test('searchEfspStrips matches callsign, case-insensitively', () => {
-  applyEfspSnapshot({ boardSeq: 1, strips: [strip({ fdrId: 'f1' })], fdrs: [fdr()], positions: [] });
+  applyEfspSnapshot({ boardSeq: 1, strips: [strip({ flightDataId: 'f1' })], flightDataList: [flightData()], positions: [] });
   assert.deepEqual(searchEfspStrips('viper').map(s => s.stripId), ['s1']);
   assert.deepEqual(searchEfspStrips('VIPER1').map(s => s.stripId), ['s1']);
 });
 
 test('searchEfspStrips matches beacon code as a substring', () => {
-  applyEfspSnapshot({ boardSeq: 1, strips: [strip({ fdrId: 'f1' })], fdrs: [fdr()], positions: [] });
+  applyEfspSnapshot({ boardSeq: 1, strips: [strip({ flightDataId: 'f1' })], flightDataList: [flightData()], positions: [] });
   assert.deepEqual(searchEfspStrips('234').map(s => s.stripId), ['s1']);
 });
 
 test('searchEfspStrips with an empty or whitespace-only query returns no results, not everything', () => {
-  applyEfspSnapshot({ boardSeq: 1, strips: [strip({ fdrId: 'f1' })], fdrs: [fdr()], positions: [] });
+  applyEfspSnapshot({ boardSeq: 1, strips: [strip({ flightDataId: 'f1' })], flightDataList: [flightData()], positions: [] });
   assert.deepEqual(searchEfspStrips(''), []);
   assert.deepEqual(searchEfspStrips('   '), []);
   assert.deepEqual(searchEfspStrips(undefined), []);
 });
 
 test('searchEfspStrips excludes DROPPED Strips, same as getEfspRack', () => {
-  applyEfspSnapshot({ boardSeq: 1, strips: [strip({ fdrId: 'f1', state: 'DROPPED' })], fdrs: [fdr()], positions: [] });
+  applyEfspSnapshot({ boardSeq: 1, strips: [strip({ flightDataId: 'f1', state: 'DROPPED' })], flightDataList: [flightData()], positions: [] });
   assert.deepEqual(searchEfspStrips('viper'), []);
 });
 
 test('searchEfspStrips finds a Strip regardless of which Bay/Rack it currently sits in — it\'s a second view onto the same live data, not a re-parent', () => {
   applyEfspSnapshot({
     boardSeq: 1,
-    strips: [strip({ stripId: 's1', fdrId: 'f1', bayId: 'cd-held', rackId: 'main' })],
-    fdrs: [fdr()], positions: [],
+    strips: [strip({ stripId: 's1', flightDataId: 'f1', bayId: 'cd-held', rackId: 'main' })],
+    flightDataList: [flightData()], positions: [],
   });
   const [result] = searchEfspStrips('viper');
   assert.equal(result.bayId, 'cd-held'); // unchanged — search doesn't move anything
@@ -204,7 +204,7 @@ function obligation(overrides = {}) {
 }
 
 test('an obligation in efsp-alerts appears on its Strip', () => {
-  applyEfspAlerts({ conformance: [], stca: [], obligations: [obligation()] });
+  applyEfspAlerts({ conformance: [], conflictAlert: [], obligations: [obligation()] });
   assert.equal(getEfspObligation('s1').obligationType, 'VOID_TIME_EXPIRED');
   assert.deepEqual(getEfspObligations('s1'), [obligation()]);
   assert.equal(getEfspObligation('s2'), null);
@@ -212,8 +212,8 @@ test('an obligation in efsp-alerts appears on its Strip', () => {
 });
 
 test('the next efsp-alerts without an obligation removes it — replace, never merge', () => {
-  applyEfspAlerts({ conformance: [], stca: [], obligations: [obligation(), obligation({ stripId: 's2' })] });
-  applyEfspAlerts({ conformance: [], stca: [], obligations: [obligation({ stripId: 's2' })] });
+  applyEfspAlerts({ conformance: [], conflictAlert: [], obligations: [obligation(), obligation({ stripId: 's2' })] });
+  applyEfspAlerts({ conformance: [], conflictAlert: [], obligations: [obligation({ stripId: 's2' })] });
   assert.equal(getEfspObligation('s1'), null);
   assert.notEqual(getEfspObligation('s2'), null);
 });
@@ -230,7 +230,7 @@ test('OVERDUE outranks WARNING on one Strip, then the earliest dueAt', () => {
 
 test('an efsp-alerts with no obligations key clears them', () => {
   applyEfspAlerts({ obligations: [obligation()] });
-  applyEfspAlerts({ conformance: [], stca: [] });
+  applyEfspAlerts({ conformance: [], conflictAlert: [] });
   assert.equal(getEfspObligation('s1'), null);
 });
 

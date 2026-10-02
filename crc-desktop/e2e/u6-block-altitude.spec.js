@@ -9,13 +9,13 @@ const { openPanel, seedStrip, dropStrips } = require('./helpers/app');
 const CS = 'U6BLK1';
 
 test('ALT takes FL220B240, shows it as FL220-FL240, refuses a reversed block, and a single altitude replaces it', async ({ page }) => {
-  await openPanel(page, { held: ['CTR'], facilityId: 'CENTER', controller: 'u6-ctr' });
+  await openPanel(page, { signedOn: ['CTR'], facilityId: 'CENTER', controller: 'u6-ctr' });
   try {
-    const s = await seedStrip(page, { callsign: CS, actingPositionId: 'CTR', bayId: 'ctr-enroute', role: 'ARRIVAL', facilityId: 'CENTER' });
+    const s = await seedStrip(page, { callsign: CS, actingPositionId: 'CTR', bayId: 'ctr-enroute', stripType: 'ARRIVAL', facilityId: 'CENTER' });
     const id = await s.getAttribute('data-strip-id');
     const stored = () => page.evaluate((i) => {
-      const fdr = getEfspFdr(getEfspStrip(i).fdrId);
-      const e = fdr.clearance.altitude.entries.filter(x => x.status === 'ACTIVE').at(-1);
+      const flightData = getEfspFdr(getEfspStrip(i).flightDataId);
+      const e = flightData.clearance.altitude.entries.filter(x => x.status === 'ACTIVE').at(-1);
       return e ? { value: e.value, parsed: e.parsed, block: e.block } : null;
     }, id);
     const type = async (text) => {

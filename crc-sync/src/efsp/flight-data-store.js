@@ -11,7 +11,7 @@
 // FDR and Strip are deliberately separate (guide §3.1): this store owns
 // only the flight — identity, filed intent, assigned clearance. Strip
 // lifecycle (state, ownership, Bay/Rack placement, annotations) lives in
-// board-store.js and references an fdrId, never the reverse.
+// board-store.js and references an flightDataId, never the reverse.
 
 const crypto = require('crypto');
 const { CodeAllocator, isValidCodeFormat } = require('./code-allocator');
@@ -91,7 +91,7 @@ const MAX_FREE_TEXT = 2000;
 // leaves (docs/adr/0062), which are plain controller free text / time /
 // altitude, go through setField() and are normalised by normalizeMtrValue();
 // the `mtr` object itself is not writable), and all structural/system fields
-// (fdrId, rev, provenance, createdAt/updatedAt/updatedBy). identity.
+// (flightDataId, rev, provenance, createdAt/updatedAt/updatedBy). identity.
 // beaconAssigned is listed here but routed through a dedicated method
 // (setBeaconAssigned) rather than the generic path, since it needs
 // code-allocator validation, not just a plain write.
@@ -127,7 +127,7 @@ const WRITABLE_PATHS = new Set([
   // repurposed ones — filed.departureAirport means something different
   // from filed.originAirport, and confusing them would be a genuine bug.
   'filed.originAirport', 'filed.arrivalFix', 'filed.estimatedArrivalTimeUtc',
-  'assigned.clearedRoute', 'assigned.clearedAltitude', 'assigned.releaseState', 'assigned.releaseTimeUtc',
+  'assigned.clearedRoute', 'assigned.clearedAltitude', 'assigned.departureRelease', 'assigned.releaseTimeUtc',
   'assigned.voidTimeUtc', 'assigned.delayInfo', 'assigned.atisCode', 'assigned.datalinkClearanceIndicator',
   'assigned.movementAreaEntryTimeUtc', 'assigned.taxiTimeUtc', 'assigned.takeoffTimeUtc',
   'assigned.landingRunway',
@@ -141,13 +141,13 @@ const WRITABLE_PATHS = new Set([
   'identity.trackDegradationFlag',
   // WP4A second slice (docs/adr/0026) — the minimal MISSION field set
   // (guide §9.8's "military extension namespace"), present on every FDR
-  // regardless of role, same "present but unpopulated until relevant"
+  // regardless of stripType, same "present but unpopulated until relevant"
   // precedent as the ARRIVAL-only fields above. Full ATO-driven richness
   // (Mode 1/2/datalink code, MARSA, ordnance, ROZ/ACM) stays WP6/WP7 scope.
   'mission.missionNumber', 'mission.packageId', 'mission.controllingAgency',
   'mission.vulWindowStartUtc', 'mission.vulWindowEndUtc',
   // §9.4 MTR fields (docs/adr/0062), Blocks 9G-* (guide M10) and 9H-* (M11).
-  // Plain fdr fields, not setMilitary(): free text, times and an altitude,
+  // Plain flightData fields, not setMilitary(): free text, times and an altitude,
   // none an enum or a boolean. Normalised by normalizeMtrValue().
   'military.mtr.designator', 'military.mtr.entryFix', 'military.mtr.entryTimeUtc',
   'military.mtr.exitFix', 'military.mtr.exitEstimateUtc', 'military.mtr.requestedAltitudeAfterExit',
@@ -231,7 +231,7 @@ function defaultMilitary() {
   };
 }
 
-// The subset of fdr.military setMilitary() will write. Everything else in
+// The subset of flightData.military setMilitary() will write. Everything else in
 // defaultMilitary() is §12's present-and-unpopulated and is refused, by name,
 // rather than merged — see setMilitary()'s own comment.
 const MILITARY_WRITABLE_FIELDS = new Set(['ordnanceState', 'hookRequired', 'alertStatus']);
@@ -245,14 +245,14 @@ const MILITARY_WRITABLE_FIELDS = new Set(['ordnanceState', 'hookRequired', 'aler
  * literal `null` this field was until docs/adr/0052. §12's "present and
  * unpopulated rather than absent" is a promise about the SHAPE a reader sees,
  * and a restored snapshot is a reader — without this, a §9.5 advisory reading
- * `fdr.military.ordnanceState` throws on exactly the flights that were already
+ * `flightData.military.ordnanceState` throws on exactly the flights that were already
  * airborne when the service restarted, which is the worst possible set.
  *
  * Seeds in place and returns the object, so callers can treat it as present.
  */
-function ensureMilitary(fdr) {
-  if (!fdr.military) fdr.military = defaultMilitary();
-  return fdr.military;
+function ensureMilitary(flightData) {
+  if (!flightData.military) flightData.military = defaultMilitary();
+  return flightData.military;
 }
 
 // ── The clearance as issued: assigned altitude and heading (docs/adr/0058) ──
@@ -274,11 +274,11 @@ function defaultClearance() {
   return { altitude: { entries: [] }, heading: { entries: [] } };
 }
 
-function ensureClearance(fdr) {
-  if (!fdr.clearance) fdr.clearance = defaultClearance();
-  if (!fdr.clearance.altitude) fdr.clearance.altitude = { entries: [] };
-  if (!fdr.clearance.heading) fdr.clearance.heading = { entries: [] };
-  return fdr.clearance;
+function ensureClearance(flightData) {
+  if (!flightData.clearance) flightData.clearance = defaultClearance();
+  if (!flightData.clearance.altitude) flightData.clearance.altitude = { entries: [] };
+  if (!flightData.clearance.heading) flightData.clearance.heading = { entries: [] };
+  return flightData.clearance;
 }
 
 /**
@@ -446,8 +446,8 @@ function parseHeadingDeg(text) {
 }
 
 /** The value a clearance cell currently holds, or null. */
-function activeClearanceEntry(fdr, field) {
-  const cell = fdr && fdr.clearance && fdr.clearance[field];
+function activeClearanceEntry(flightData, field) {
+  const cell = flightData && flightData.clearance && flightData.clearance[field];
   return (cell && cell.entries.find(e => e.status === 'ACTIVE')) || null;
 }
 
@@ -463,12 +463,12 @@ class FlightDataStore {
     this._clock = clock;
     this._transitionAltFt = transitionAltFt;
     this._codeAllocator = codeAllocator || new CodeAllocator();
-    this._flightDataList = new Map(); // fdrId -> FlightDataRecord
+    this._flightDataList = new Map(); // flightDataId -> FlightDataRecord
   }
 
   get codeAllocator() { return this._codeAllocator; }
 
-  getFlightData(fdrId) { return this._flightDataList.get(fdrId) || null; }
+  getFlightData(flightDataId) { return this._flightDataList.get(flightDataId) || null; }
   getAll() { return [...this._flightDataList.values()]; }
 
   /**
@@ -481,7 +481,7 @@ class FlightDataStore {
    * left blank. WP6's acceptance criterion — "a stereo route filed by short
    * name produces a complete FDR" — is this function's postcondition.
    *
-   * Returns { ok:true, fdr } or { ok:false, reason }.
+   * Returns { ok:true, flightData } or { ok:false, reason }.
    */
   createFlightData(seed, { by }) {
     const callsign = String(seed?.callsign || '').toUpperCase();
@@ -492,7 +492,7 @@ class FlightDataStore {
     // §9.10 / docs/adr/0050 — resolve the short name BEFORE allocate() below,
     // or a refused CreateStrip leaks a beacon code out of the pool. Same
     // "a denied CreateStrip has no side effects" discipline board-store.js's
-    // canCreateStripRole check already documents.
+    // canCreateStripType check already documents.
     //
     // An unknown name is REFUSED, not silently blanked — deliberately unlike
     // flight-plan-lookup.js's never-block contract, and the difference is
@@ -546,11 +546,11 @@ class FlightDataStore {
     // stereo client-side skips the flight-plan lookup entirely.
     const filedFrom = (key) => seed[key] || stereoSeed[key] || '';
 
-    const fdrId = crypto.randomUUID();
+    const flightDataId = crypto.randomUUID();
     const now = this._clock.now();
     const equipmentCodes = Array.isArray(seed.equipmentCodes) ? [...seed.equipmentCodes] : [];
 
-    const minted = this._codeAllocator.allocate(fdrId);
+    const minted = this._codeAllocator.allocate(flightDataId);
     if (minted.error) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'beacon code pool exhausted' };
 
     const provenance = {
@@ -568,8 +568,8 @@ class FlightDataStore {
       provenance['filed.stereoRouteName'] = 'COMPUTER_GENERATED';
     }
 
-    const fdr = {
-      fdrId,
+    const flightData = {
+      flightDataId,
       rev: 1,
       identity: {
         callsign,
@@ -614,7 +614,7 @@ class FlightDataStore {
       assigned: {
         clearedRoute: null,
         clearedAltitude: null,
-        releaseState: 'RELEASED',
+        departureRelease: 'RELEASED',
         releaseTimeUtc: null,
         voidTimeUtc: null,
         voidDeadlineUtc: null,
@@ -642,8 +642,8 @@ class FlightDataStore {
       // rule 2 then forbids the only thing it could usefully hold: "do not
       // store a raw track ID on the FDR". Anything else it could carry is
       // either a staleable duplicate of the correlation record's state — which
-      // is the defect, not the fix — or the fdrId, i.e. the record's own key.
-      // The correlation lives in correlation-store.js, keyed by fdrId
+      // is the defect, not the fix — or the flightDataId, i.e. the record's own key.
+      // The correlation lives in correlation-store.js, keyed by flightDataId
       // (docs/adr/0045). Nothing reads or writes this.
       trackRef: null,
       // WP4A (docs/adr/0018), §4.6.4 — a DIRECTION, never a bare boolean
@@ -688,8 +688,8 @@ class FlightDataStore {
       updatedBy: by || null,
     };
 
-    this._flightDataList.set(fdrId, fdr);
-    return { ok: true, fdr };
+    this._flightDataList.set(flightDataId, flightData);
+    return { ok: true, flightData };
   }
 
   /**
@@ -700,20 +700,20 @@ class FlightDataStore {
    * — use setBeaconAssigned(), which needs code-allocator validation.
    */
   /** UI-A: why writing `value` to a vul-window path would leave the window ending before it starts, or null. */
-  _vulWindowRefusal(fdr, path, value) {
+  _vulWindowRefusal(flightData, path, value) {
     if (path !== 'mission.vulWindowStartUtc' && path !== 'mission.vulWindowEndUtc') return null;
     if (!Number.isFinite(value)) return null;
-    const start = path === 'mission.vulWindowStartUtc' ? value : getPath(fdr, 'mission.vulWindowStartUtc');
-    const end = path === 'mission.vulWindowEndUtc' ? value : getPath(fdr, 'mission.vulWindowEndUtc');
+    const start = path === 'mission.vulWindowStartUtc' ? value : getPath(flightData, 'mission.vulWindowStartUtc');
+    const end = path === 'mission.vulWindowEndUtc' ? value : getPath(flightData, 'mission.vulWindowEndUtc');
     if (!Number.isFinite(start) || !Number.isFinite(end) || start < end) return null;
     return path === 'mission.vulWindowStartUtc'
       ? `the vul window would start at ${formatZuluHhmm(start)}Z, not before its end ${formatZuluHhmm(end)}Z: move the end first`
       : `the vul window end ${formatZuluHhmm(end)}Z must be after its start ${formatZuluHhmm(start)}Z`;
   }
 
-  setField(fdrId, path, value, { by } = {}) {
-    const fdr = this._flightDataList.get(fdrId);
-    if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
+  setField(flightDataId, path, value, { by } = {}) {
+    const flightData = this._flightDataList.get(flightDataId);
+    if (!flightData) return { ok: false, reason: 'NOT_FOUND' };
     if (path === 'identity.beaconAssigned') {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'use setBeaconAssigned' };
     }
@@ -729,7 +729,7 @@ class FlightDataStore {
     if (path === 'identity.degradation' && !DEGRADATION_STATES.has(value)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'invalid degradation state' };
     }
-    if (path === 'assigned.releaseState' && !DEPARTURE_RELEASE_STATES.has(value)) {
+    if (path === 'assigned.departureRelease' && !DEPARTURE_RELEASE_STATES.has(value)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'invalid release state' };
     }
     if (path === 'assigned.datalinkClearanceIndicator' && !DATALINK_INDICATOR_STATES.has(value)) {
@@ -740,13 +740,13 @@ class FlightDataStore {
     }
 
     if (TYPED_TIME_LABELS[path] && !path.startsWith('military.mtr.')) { // F4: typed HHMM → epoch ms
-      const time = normalizeTypedTime(path, value, this._clock.now(), WINDOW_END_OF[path] ? getPath(fdr, WINDOW_END_OF[path]) : null);
+      const time = normalizeTypedTime(path, value, this._clock.now(), WINDOW_END_OF[path] ? getPath(flightData, WINDOW_END_OF[path]) : null);
       if (!time.ok) return { ok: false, reason: 'VALIDATION_ERROR', detail: time.detail };
       value = time.value;
       // UI-A (S-L16): a vul window never ends before it starts. Moving the start past the end, or
       // typing an end that is not after the start, is refused and names the way out, instead of
       // leaving a window that is already over (the end does not move with the start).
-      const vulMsg = this._vulWindowRefusal(fdr, path, value);
+      const vulMsg = this._vulWindowRefusal(flightData, path, value);
       if (vulMsg) return { ok: false, reason: 'VALIDATION_ERROR', detail: vulMsg };
     }
 
@@ -754,7 +754,7 @@ class FlightDataStore {
       const mtr = normalizeMtrValue(path, value, this._clock.now(), this._transitionAltFt());
       if (!mtr.ok) return { ok: false, reason: 'VALIDATION_ERROR', detail: mtr.detail };
       value = mtr.value;
-      ensureMilitary(fdr);
+      ensureMilitary(flightData);
     }
 
     // §9.10 re-filing (docs/adr/0050). Resolved against the table BEFORE any
@@ -784,7 +784,7 @@ class FlightDataStore {
       }
     }
 
-    setPath(fdr, path, value);
+    setPath(flightData, path, value);
 
     // A re-file REWRITES the filed route from the table rather than merely
     // relabelling the Strip. Relabelling was the alternative and it is
@@ -810,14 +810,14 @@ class FlightDataStore {
     if (stereoExpansion) {
       const seed = stereoRoutes.toFlightDataFiledSeed(stereoExpansion);
       for (const key of ['route', 'requestedAltitude', 'departureAirport', 'destinationAirport']) {
-        fdr.filed[key] = seed[key];
-        fdr.provenance[`filed.${key}`] = 'COMPUTER_GENERATED';
+        flightData.filed[key] = seed[key];
+        flightData.provenance[`filed.${key}`] = 'COMPUTER_GENERATED';
       }
     }
 
     if (path === 'identity.equipmentCodes') {
-      fdr.identity.equipmentSuffix = deriveEquipmentSuffix(value);
-      fdr.provenance['identity.equipmentSuffix'] = 'SYSTEM_DERIVED';
+      flightData.identity.equipmentSuffix = deriveEquipmentSuffix(value);
+      flightData.provenance['identity.equipmentSuffix'] = 'SYSTEM_DERIVED';
     }
 
     // §9.10 (docs/adr/0050) — an amended route is no longer the canned one,
@@ -828,34 +828,34 @@ class FlightDataStore {
     // at all would keep the PACK 1 envelope waiving the flight's hold.
     // Clearing the name never touches the route — un-labelling a flight must
     // not blank its route mid-taxi.
-    if (path === 'filed.route') fdr.filed.stereoRouteName = '';
+    if (path === 'filed.route') flightData.filed.stereoRouteName = '';
 
-    if (path === 'assigned.releaseState' || path === 'assigned.voidTimeUtc') {
-      fdr.assigned.voidDeadlineUtc =
-        fdr.assigned.releaseState === 'CLEARANCE_VOID_TIME' && fdr.assigned.voidTimeUtc
-          ? fdr.assigned.voidTimeUtc + VOID_DEADLINE_MINUTES * 60 * 1000
+    if (path === 'assigned.departureRelease' || path === 'assigned.voidTimeUtc') {
+      flightData.assigned.voidDeadlineUtc =
+        flightData.assigned.departureRelease === 'CLEARANCE_VOID_TIME' && flightData.assigned.voidTimeUtc
+          ? flightData.assigned.voidTimeUtc + VOID_DEADLINE_MINUTES * 60 * 1000
           : null;
     }
 
     // WP4A (docs/adr/0017) — EDCT/CALL_FOR_RELEASE windows derive the same
     // way voidDeadlineUtc does above: recomputed on every write of either
     // the release state or the relevant time, never independently settable.
-    if (path === 'assigned.releaseState' || path === 'assigned.edctTimeUtc') {
-      const active = fdr.assigned.releaseState === 'EDCT' && fdr.assigned.edctTimeUtc;
-      fdr.assigned.edctWindowStartUtc = active ? fdr.assigned.edctTimeUtc - EDCT_WINDOW_MINUTES * 60 * 1000 : null;
-      fdr.assigned.edctWindowEndUtc   = active ? fdr.assigned.edctTimeUtc + EDCT_WINDOW_MINUTES * 60 * 1000 : null;
+    if (path === 'assigned.departureRelease' || path === 'assigned.edctTimeUtc') {
+      const active = flightData.assigned.departureRelease === 'EDCT' && flightData.assigned.edctTimeUtc;
+      flightData.assigned.edctWindowStartUtc = active ? flightData.assigned.edctTimeUtc - EDCT_WINDOW_MINUTES * 60 * 1000 : null;
+      flightData.assigned.edctWindowEndUtc   = active ? flightData.assigned.edctTimeUtc + EDCT_WINDOW_MINUTES * 60 * 1000 : null;
     }
-    if (path === 'assigned.releaseState' || path === 'assigned.callForReleaseTimeUtc') {
-      const active = fdr.assigned.releaseState === 'CALL_FOR_RELEASE' && fdr.assigned.callForReleaseTimeUtc;
-      fdr.assigned.callForReleaseWindowStartUtc = active ? fdr.assigned.callForReleaseTimeUtc - CALL_FOR_RELEASE_BEFORE_MINUTES * 60 * 1000 : null;
-      fdr.assigned.callForReleaseWindowEndUtc   = active ? fdr.assigned.callForReleaseTimeUtc + CALL_FOR_RELEASE_AFTER_MINUTES * 60 * 1000 : null;
+    if (path === 'assigned.departureRelease' || path === 'assigned.callForReleaseTimeUtc') {
+      const active = flightData.assigned.departureRelease === 'CALL_FOR_RELEASE' && flightData.assigned.callForReleaseTimeUtc;
+      flightData.assigned.callForReleaseWindowStartUtc = active ? flightData.assigned.callForReleaseTimeUtc - CALL_FOR_RELEASE_BEFORE_MINUTES * 60 * 1000 : null;
+      flightData.assigned.callForReleaseWindowEndUtc   = active ? flightData.assigned.callForReleaseTimeUtc + CALL_FOR_RELEASE_AFTER_MINUTES * 60 * 1000 : null;
     }
 
-    fdr.provenance[path] = 'CONTROLLER_ENTERED';
-    fdr.rev += 1;
-    fdr.updatedAt = this._clock.now();
-    fdr.updatedBy = by || null;
-    return { ok: true, fdr };
+    flightData.provenance[path] = 'CONTROLLER_ENTERED';
+    flightData.rev += 1;
+    flightData.updatedAt = this._clock.now();
+    flightData.updatedBy = by || null;
+    return { ok: true, flightData };
   }
 
   /**
@@ -863,24 +863,24 @@ class FlightDataStore {
    * code allocator rather than setField's generic path, since it needs
    * reserved/duplicate validation and must release the FDR's previous code.
    * Returns { ok:false, reason:'VALIDATION_ERROR' } for reserved/malformed
-   * codes, or { ok:true, fdr, warning? } — warning is set (never blocking)
+   * codes, or { ok:true, flightData, warning? } — warning is set (never blocking)
    * for a duplicate, per defect D23.
    */
-  setBeaconAssigned(fdrId, code, { by } = {}) {
-    const fdr = this._flightDataList.get(fdrId);
-    if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
+  setBeaconAssigned(flightDataId, code, { by } = {}) {
+    const flightData = this._flightDataList.get(flightDataId);
+    if (!flightData) return { ok: false, reason: 'NOT_FOUND' };
 
-    const check = this._codeAllocator.validateAssignment(code, fdrId);
+    const check = this._codeAllocator.validateAssignment(code, flightDataId);
     if (!check.ok) return { ok: false, reason: check.reason, detail: check.detail };
 
-    const previous = fdr.identity.beaconAssigned;
-    this._codeAllocator.reassign(fdrId, code, previous);
-    fdr.identity.beaconAssigned = code;
-    fdr.provenance['identity.beaconAssigned'] = 'CONTROLLER_ENTERED';
-    fdr.rev += 1;
-    fdr.updatedAt = this._clock.now();
-    fdr.updatedBy = by || null;
-    return { ok: true, fdr, warning: check.warning };
+    const previous = flightData.identity.beaconAssigned;
+    this._codeAllocator.reassign(flightDataId, code, previous);
+    flightData.identity.beaconAssigned = code;
+    flightData.provenance['identity.beaconAssigned'] = 'CONTROLLER_ENTERED';
+    flightData.rev += 1;
+    flightData.updatedAt = this._clock.now();
+    flightData.updatedBy = by || null;
+    return { ok: true, flightData, warning: check.warning };
   }
 
   /**
@@ -909,23 +909,23 @@ class FlightDataStore {
    *
    * @param {string|null} code — a 4-digit octal string, or null for "nothing
    *   received" (which is a distinct, renderable state, not an absence).
-   * @returns {{ok:true, fdr, changed:boolean}|{ok:false, reason, detail?}}
+   * @returns {{ok:true, flightData, changed:boolean}|{ok:false, reason, detail?}}
    */
-  setBeaconObserved(fdrId, code, { source = 'UPSTREAM_TRACK' } = {}) {
-    const fdr = this._flightDataList.get(fdrId);
-    if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
+  setBeaconObserved(flightDataId, code, { source = 'UPSTREAM_TRACK' } = {}) {
+    const flightData = this._flightDataList.get(flightDataId);
+    if (!flightData) return { ok: false, reason: 'NOT_FOUND' };
     if (code !== null && !isValidCodeFormat(code)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `observed code must be 4 octal digits or null, not ${JSON.stringify(code)}` };
     }
-    if (fdr.identity.beaconObserved === code) return { ok: true, fdr, changed: false };
+    if (flightData.identity.beaconObserved === code) return { ok: true, flightData, changed: false };
 
-    fdr.identity.beaconObserved = code;
-    fdr.provenance['identity.beaconObserved'] = source;
-    fdr.rev += 1;
-    fdr.updatedAt = this._clock.now();
+    flightData.identity.beaconObserved = code;
+    flightData.provenance['identity.beaconObserved'] = source;
+    flightData.rev += 1;
+    flightData.updatedAt = this._clock.now();
     // No updatedBy: surveillance is not a controller, and stamping a
     // controllerId here would attribute a machine observation to a person.
-    return { ok: true, fdr, changed: true };
+    return { ok: true, flightData, changed: true };
   }
 
   /**
@@ -941,11 +941,11 @@ class FlightDataStore {
    * generic-path route to setting it as a boolean, or as anything else,
    * even by accident. This is the template docs/adr/0018 flags for the
    * deferred `separation_regime` field when TOFI eventually lands.
-   * @returns {{ok:true, fdr}|{ok:false, reason:'NOT_FOUND'|'VALIDATION_ERROR', detail?}}
+   * @returns {{ok:true, flightData}|{ok:false, reason:'NOT_FOUND'|'VALIDATION_ERROR', detail?}}
    */
-  setAirspaceOwner(fdrId, owner, { by } = {}) {
-    const fdr = this._flightDataList.get(fdrId);
-    if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
+  setAirspaceOwner(flightDataId, owner, { by } = {}) {
+    const flightData = this._flightDataList.get(flightDataId);
+    if (!flightData) return { ok: false, reason: 'NOT_FOUND' };
     if (!AIRSPACE_OWNERS.has(owner)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `airspace ownership must be a direction (${[...AIRSPACE_OWNERS].join(' or ')}), not ${JSON.stringify(owner)}` };
     }
@@ -957,17 +957,17 @@ class FlightDataStore {
     // 7110.65 ¶2-3-1's "do not erase or overwrite any item"); `owner` stays
     // the current-value field so every existing reader is unaffected.
     const now = this._clock.now();
-    fdr.airspace = {
+    flightData.airspace = {
       owner,
       changedAt: now,
       changedBy: by || null,
-      transitions: [...(fdr.airspace.transitions || []), { owner, at: now, by: by || null }],
+      transitions: [...(flightData.airspace.transitions || []), { owner, at: now, by: by || null }],
     };
-    fdr.provenance['airspace.owner'] = 'CONTROLLER_ENTERED';
-    fdr.rev += 1;
-    fdr.updatedAt = this._clock.now();
-    fdr.updatedBy = by || null;
-    return { ok: true, fdr };
+    flightData.provenance['airspace.owner'] = 'CONTROLLER_ENTERED';
+    flightData.rev += 1;
+    flightData.updatedAt = this._clock.now();
+    flightData.updatedBy = by || null;
+    return { ok: true, flightData };
   }
 
   /**
@@ -986,11 +986,11 @@ class FlightDataStore {
    * CONSTRUCTION — separation_regime is one 5-value enum field, not two
    * independent booleans — so no cross-field validation is needed here.
    * @param {{ifrActive?:boolean, radarService?:string|null, separationRegime?:string|null}} patch
-   * @returns {{ok:true, fdr}|{ok:false, reason:'NOT_FOUND'|'VALIDATION_ERROR', detail?}}
+   * @returns {{ok:true, flightData}|{ok:false, reason:'NOT_FOUND'|'VALIDATION_ERROR', detail?}}
    */
-  setTofi(fdrId, patch, { by } = {}) {
-    const fdr = this._flightDataList.get(fdrId);
-    if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
+  setTofi(flightDataId, patch, { by } = {}) {
+    const flightData = this._flightDataList.get(flightDataId);
+    if (!flightData) return { ok: false, reason: 'NOT_FOUND' };
     // Both fields START as null and null is a real, renderable state — "no
     // radar service", "the regime has not been stated" — so clearing one is a
     // meaningful controller action, not an erasure. An enum picker's "—"
@@ -1006,12 +1006,12 @@ class FlightDataStore {
     if (patch.separationRegime !== undefined && patch.separationRegime !== null && !SEPARATION_REGIMES.has(patch.separationRegime)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `invalid separation_regime: ${JSON.stringify(patch.separationRegime)}` };
     }
-    fdr.tofi = { ...fdr.tofi, ...patch, changedAt: this._clock.now(), changedBy: by || null };
-    fdr.provenance['tofi'] = 'CONTROLLER_ENTERED';
-    fdr.rev += 1;
-    fdr.updatedAt = this._clock.now();
-    fdr.updatedBy = by || null;
-    return { ok: true, fdr };
+    flightData.tofi = { ...flightData.tofi, ...patch, changedAt: this._clock.now(), changedBy: by || null };
+    flightData.provenance['tofi'] = 'CONTROLLER_ENTERED';
+    flightData.rev += 1;
+    flightData.updatedAt = this._clock.now();
+    flightData.updatedBy = by || null;
+    return { ok: true, flightData };
   }
 
   /**
@@ -1032,17 +1032,17 @@ class FlightDataStore {
    *
    * An unknown key is REFUSED rather than merged. `patch` arrives from a
    * Block Map `field` on the wire, so a typo'd or invented field name would
-   * otherwise silently grow fdr.military a member nothing reads — and §12's
+   * otherwise silently grow flightData.military a member nothing reads — and §12's
    * deferred fields (mtr, altrvRef, arInfo, scl, fuelState, releaseAuthority)
    * sit right beside these, so "not writable yet" has to fail loudly rather
    * than become writable by accident.
    *
    * @param {{ordnanceState?:string, hookRequired?:boolean, alertStatus?:string}} patch
-   * @returns {{ok:true, fdr}|{ok:false, reason:'NOT_FOUND'|'VALIDATION_ERROR', detail?}}
+   * @returns {{ok:true, flightData}|{ok:false, reason:'NOT_FOUND'|'VALIDATION_ERROR', detail?}}
    */
-  setMilitary(fdrId, patch, { by } = {}) {
-    const fdr = this._flightDataList.get(fdrId);
-    if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
+  setMilitary(flightDataId, patch, { by } = {}) {
+    const flightData = this._flightDataList.get(flightDataId);
+    if (!flightData) return { ok: false, reason: 'NOT_FOUND' };
 
     for (const key of Object.keys(patch || {})) {
       if (!MILITARY_WRITABLE_FIELDS.has(key)) {
@@ -1059,30 +1059,30 @@ class FlightDataStore {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `hookRequired must be true or false, not ${JSON.stringify(patch.hookRequired)}` };
     }
 
-    fdr.military = { ...ensureMilitary(fdr), ...patch };
+    flightData.military = { ...ensureMilitary(flightData), ...patch };
     // One provenance key for the whole sub-object, as `tofi` already does —
     // these are filled in incrementally from separate Block edits and every
     // one of them is controller-entered.
-    fdr.provenance['military'] = 'CONTROLLER_ENTERED';
-    fdr.rev += 1;
-    fdr.updatedAt = this._clock.now();
-    fdr.updatedBy = by || null;
-    return { ok: true, fdr };
+    flightData.provenance['military'] = 'CONTROLLER_ENTERED';
+    flightData.rev += 1;
+    flightData.updatedAt = this._clock.now();
+    flightData.updatedBy = by || null;
+    return { ok: true, flightData };
   }
 
   /**
    * docs/adr/0074 (ADR 0064) — one carrier field of this flight
-   * (`fdr.military.carrier`: EEAT, approach type, approach button, bingo field
+   * (`flightData.military.carrier`: EEAT, approach type, approach button, bingo field
    * and fuel, low state). On the FDR because the FDR outlives every Strip: the
    * launch Strip is dropped at launch and the recovery Strip is a new one on the
    * same flight, so an EEAT held on a Strip would die exactly when it is needed
    * (§9.12 rule 7). Validated by carrier/flight-record.js, which refuses a
    * frequency where a button belongs (rule 6). `null` clears.
    */
-  setCarrier(fdrId, field, value, { by } = {}) {
-    const fdr = this._flightDataList.get(fdrId);
-    if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
-    const military = ensureMilitary(fdr);
+  setCarrier(flightDataId, field, value, { by } = {}) {
+    const flightData = this._flightDataList.get(flightDataId);
+    if (!flightData) return { ok: false, reason: 'NOT_FOUND' };
+    const military = ensureMilitary(flightData);
     // EEAT is typed as Zulu HHMM like every other time on a Strip, resolved
     // against the mission clock (ADR 0079); the model holds epoch ms.
     if (field === 'eeatUtc' && typeof value === 'string') {
@@ -1096,18 +1096,18 @@ class FlightDataStore {
     if (typeof value === 'string' && value.trim() === '') value = null; // an emptied cell clears
     const r = setCarrierFlightField(military.carrier, field, value);
     if (!r.ok) return r;
-    fdr.military = { ...military, carrier: r.flight };
-    fdr.provenance['military'] = 'CONTROLLER_ENTERED';
-    fdr.rev += 1;
-    fdr.updatedAt = this._clock.now();
-    fdr.updatedBy = by || null;
-    return { ok: true, fdr };
+    flightData.military = { ...military, carrier: r.flight };
+    flightData.provenance['military'] = 'CONTROLLER_ENTERED';
+    flightData.rev += 1;
+    flightData.updatedAt = this._clock.now();
+    flightData.updatedBy = by || null;
+    return { ok: true, flightData };
   }
 
   /**
    * WP7 (docs/adr/0071), guide §9.8/§9.9 — writes what an imported ATO says
    * about this flight. The ONLY writer of `identity.modeOne`/`modeTwo`,
-   * `military.scl`, `military.arInfo` and `fdr.ato`, called only from the ATO
+   * `military.scl`, `military.arInfo` and `flightData.ato`, called only from the ATO
    * import (efsp-ws.js _handleAtoMutation via ato/ato-board.js). Structurally
    * outside WRITABLE_PATHS and MILITARY_WRITABLE_FIELDS on the setTofi /
    * setBeaconObserved template: Mode 1/2 are "displayed, not edited" by ATC
@@ -1131,9 +1131,9 @@ class FlightDataStore {
    * Refuses unknown keys, validates everything before writing anything, and
    * bumps `rev` once.
    *
-   * @returns {{ok:true, fdr, kept:object[], beacon:object|null}|{ok:false, reason, detail?}}
+   * @returns {{ok:true, flightData, kept:object[], beacon:object|null}|{ok:false, reason, detail?}}
    */
-  applyAtoTasking(fdrId, tasking, { by } = {}) {
+  applyAtoTasking(flightDataId, tasking, { by } = {}) {
     const TASKING_KEYS = new Set(['mode', 'identity', 'modeThree', 'military', 'seed', 'ato']);
     const MODES = new Set(['CREATE', 'BIND', 'UPDATE']);
     const SEED_PATHS = new Set(['mission.missionNumber', 'mission.packageId', 'mission.controllingAgency',
@@ -1141,8 +1141,8 @@ class FlightDataStore {
       'identity.unit', 'identity.homeStation']);
     const refuse = (detail) => ({ ok: false, reason: 'VALIDATION_ERROR', detail });
 
-    const fdr = this._flightDataList.get(fdrId);
-    if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
+    const flightData = this._flightDataList.get(flightDataId);
+    if (!flightData) return { ok: false, reason: 'NOT_FOUND' };
     if (!tasking || typeof tasking !== 'object') return refuse('an ATO tasking is an object');
     for (const key of Object.keys(tasking)) if (!TASKING_KEYS.has(key)) return refuse(`${key} is not part of an ATO tasking`);
     const mode = tasking.mode;
@@ -1168,8 +1168,8 @@ class FlightDataStore {
       let value = raw;
       if (path === 'identity.flightSize' && !(Number.isInteger(value) && value > 0)) continue;
       if (path === 'identity.aircraftType' && typeof value !== 'string') continue;
-      const current = getPath(fdr, path);
-      const prov = fdr.provenance[path];
+      const current = getPath(flightData, path);
+      const prov = flightData.provenance[path];
       const owned = mode === 'CREATE' || prov === 'ATO' || (prov === undefined && blank(current));
       if (!owned) {
         if ((current == null ? null : current) !== (value == null ? null : value)) {
@@ -1177,44 +1177,44 @@ class FlightDataStore {
         }
         continue;
       }
-      setPath(fdr, path, value === undefined ? null : value);
-      fdr.provenance[path] = 'ATO';
+      setPath(flightData, path, value === undefined ? null : value);
+      flightData.provenance[path] = 'ATO';
     }
-    if (mode === 'CREATE') fdr.provenance['identity.callsign'] = 'ATO';
+    if (mode === 'CREATE') flightData.provenance['identity.callsign'] = 'ATO';
 
-    fdr.identity.modeOne = identity.modeOne == null ? null : identity.modeOne;
-    fdr.identity.modeTwo = identity.modeTwo == null ? null : identity.modeTwo;
-    fdr.provenance['identity.modeOne'] = 'ATO';
-    fdr.provenance['identity.modeTwo'] = 'ATO';
+    flightData.identity.modeOne = identity.modeOne == null ? null : identity.modeOne;
+    flightData.identity.modeTwo = identity.modeTwo == null ? null : identity.modeTwo;
+    flightData.provenance['identity.modeOne'] = 'ATO';
+    flightData.provenance['identity.modeTwo'] = 'ATO';
 
-    const mil = ensureMilitary(fdr);
+    const mil = ensureMilitary(flightData);
     mil.scl = military.scl == null ? null : military.scl;
     mil.arInfo = military.arInfo == null ? null : military.arInfo;
     if (mode === 'CREATE' && military.alertStatus === 'ALERT') mil.alertStatus = 'ALERT';
-    fdr.provenance['military.scl'] = 'ATO';
-    fdr.provenance['military.arInfo'] = 'ATO';
+    flightData.provenance['military.scl'] = 'ATO';
+    flightData.provenance['military.arInfo'] = 'ATO';
 
-    fdr.ato = { ...tasking.ato };
-    fdr.provenance['ato'] = 'ATO';
+    flightData.ato = { ...tasking.ato };
+    flightData.provenance['ato'] = 'ATO';
 
     let beacon = null;
     if (mode === 'CREATE' && tasking.modeThree) {
-      const check = this._codeAllocator.validateAssignment(tasking.modeThree, fdrId);
+      const check = this._codeAllocator.validateAssignment(tasking.modeThree, flightDataId);
       if (check.ok) {
-        const previous = fdr.identity.beaconAssigned;
-        this._codeAllocator.reassign(fdrId, tasking.modeThree, previous);
-        fdr.identity.beaconAssigned = tasking.modeThree;
-        fdr.provenance['identity.beaconAssigned'] = 'ATO';
+        const previous = flightData.identity.beaconAssigned;
+        this._codeAllocator.reassign(flightDataId, tasking.modeThree, previous);
+        flightData.identity.beaconAssigned = tasking.modeThree;
+        flightData.provenance['identity.beaconAssigned'] = 'ATO';
         beacon = { adopted: true, code: tasking.modeThree, released: previous !== tasking.modeThree ? previous : null, warning: check.warning };
       } else {
-        beacon = { adopted: false, code: fdr.identity.beaconAssigned, atoCode: tasking.modeThree, detail: check.detail || 'reserved or malformed' };
+        beacon = { adopted: false, code: flightData.identity.beaconAssigned, atoCode: tasking.modeThree, detail: check.detail || 'reserved or malformed' };
       }
     }
 
-    fdr.rev += 1;
-    fdr.updatedAt = this._clock.now();
-    fdr.updatedBy = by || null;
-    return { ok: true, fdr, kept, beacon };
+    flightData.rev += 1;
+    flightData.updatedAt = this._clock.now();
+    flightData.updatedBy = by || null;
+    return { ok: true, flightData, kept, beacon };
   }
 
   /**
@@ -1231,39 +1231,39 @@ class FlightDataStore {
    * moves.
    *
    * @param {number|null} frequencyMhz — MHz as a number, or null to clear
-   * @returns {{ok:true, fdr}|{ok:false, reason, detail?}}
+   * @returns {{ok:true, flightData}|{ok:false, reason, detail?}}
    */
-  setWorkingFrequency(fdrId, frequencyMhz, { airspaceId = null, by } = {}) {
-    const fdr = this._flightDataList.get(fdrId);
-    if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
+  setWorkingFrequency(flightDataId, frequencyMhz, { airspaceId = null, by } = {}) {
+    const flightData = this._flightDataList.get(flightDataId);
+    if (!flightData) return { ok: false, reason: 'NOT_FOUND' };
     if (frequencyMhz !== null && !isValidFrequency(frequencyMhz)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `frequency must be a number between ${MIN_FREQUENCY_MHZ} and ${MAX_FREQUENCY_MHZ} MHz, not ${JSON.stringify(frequencyMhz)}` };
     }
     const now = this._clock.now();
-    fdr.comms = {
+    flightData.comms = {
       workingFrequencyMhz: frequencyMhz,
       airspaceId,
       changedAt: now,
       changedBy: by || null,
-      transitions: [...(fdr.comms.transitions || []), { workingFrequencyMhz: frequencyMhz, airspaceId, at: now, by: by || null }],
+      transitions: [...(flightData.comms.transitions || []), { workingFrequencyMhz: frequencyMhz, airspaceId, at: now, by: by || null }],
     };
-    fdr.provenance['comms.workingFrequencyMhz'] = 'CONTROLLER_ENTERED';
-    fdr.rev += 1;
-    fdr.updatedAt = now;
-    fdr.updatedBy = by || null;
-    return { ok: true, fdr };
+    flightData.provenance['comms.workingFrequencyMhz'] = 'CONTROLLER_ENTERED';
+    flightData.rev += 1;
+    flightData.updatedAt = now;
+    flightData.updatedBy = by || null;
+    return { ok: true, flightData };
   }
 
   /**
    * Releases the FDR's beacon code — called when its LAST live Strip is
    * DROPPED. Callers must not invoke this while another Strip still
-   * references the FDR (TOFI binds two Strips to one fdrId, docs/adr/0025);
+   * references the FDR (TOFI binds two Strips to one flightDataId, docs/adr/0025);
    * board-store.js's _releaseFlightDataIfLastStrip is the guard that enforces it.
    */
-  releaseFlightData(fdrId) {
-    const fdr = this._flightDataList.get(fdrId);
-    if (!fdr) return;
-    this._codeAllocator.release(fdr.identity.beaconAssigned);
+  releaseFlightData(flightDataId) {
+    const flightData = this._flightDataList.get(flightDataId);
+    if (!flightData) return;
+    this._codeAllocator.release(flightData.identity.beaconAssigned);
   }
 
   /**
@@ -1274,17 +1274,17 @@ class FlightDataStore {
    * what to take back. Bumps `rev` so every client redraws, and leaves
    * `updatedAt` alone: this is not a flight-plan amendment (the same reason
    * setClearance leaves it). Writes only on change.
-   * @returns {{ok:true, fdr, changed:boolean}|{ok:false, reason:'NOT_FOUND'}}
+   * @returns {{ok:true, flightData, changed:boolean}|{ok:false, reason:'NOT_FOUND'}}
    */
-  setTakeoffStamp(fdrId, utc) {
-    const fdr = this._flightDataList.get(fdrId);
-    if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
+  setTakeoffStamp(flightDataId, utc) {
+    const flightData = this._flightDataList.get(flightDataId);
+    if (!flightData) return { ok: false, reason: 'NOT_FOUND' };
     const value = Number.isFinite(utc) ? utc : null;
-    if (!fdr.timeInputs) fdr.timeInputs = { flightPlanDepartureUtc: null, takeoffStampedUtc: null };
-    if (fdr.timeInputs.takeoffStampedUtc === value) return { ok: true, fdr, changed: false };
-    fdr.timeInputs.takeoffStampedUtc = value;
-    fdr.rev += 1;
-    return { ok: true, fdr, changed: true };
+    if (!flightData.timeInputs) flightData.timeInputs = { flightPlanDepartureUtc: null, takeoffStampedUtc: null };
+    if (flightData.timeInputs.takeoffStampedUtc === value) return { ok: true, flightData, changed: false };
+    flightData.timeInputs.takeoffStampedUtc = value;
+    flightData.rev += 1;
+    return { ok: true, flightData, changed: true };
   }
 
   /**
@@ -1295,14 +1295,14 @@ class FlightDataStore {
    * own recorded code un-reserved (defect D23: duplicates warn, never block).
    * @returns {{ok:true, warning?:'DUPLICATE_IGNORED_WARNING'}|{ok:false, reason:'NOT_FOUND'}}
    */
-  reacquireFlightData(fdrId) {
-    const fdr = this._flightDataList.get(fdrId);
-    if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
-    const code = fdr.identity.beaconAssigned;
+  reacquireFlightData(flightDataId) {
+    const flightData = this._flightDataList.get(flightDataId);
+    if (!flightData) return { ok: false, reason: 'NOT_FOUND' };
+    const code = flightData.identity.beaconAssigned;
     if (!code) return { ok: true };
     const holder = this._codeAllocator.holderOf(code);
-    if (holder && holder !== fdrId) return { ok: true, warning: 'DUPLICATE_IGNORED_WARNING' };
-    this._codeAllocator.reassign(fdrId, code, null);
+    if (holder && holder !== flightDataId) return { ok: true, warning: 'DUPLICATE_IGNORED_WARNING' };
+    this._codeAllocator.reassign(flightDataId, code, null);
     return { ok: true };
   }
 
@@ -1318,13 +1318,13 @@ class FlightDataStore {
    *
    * An empty value is allowed and means "no assignment" (resume own
    * navigation, for a heading); it is recorded like any other amendment.
-   * @returns {{ok:true, fdr}|{ok:false, reason:'NOT_FOUND'|'VALIDATION_ERROR', detail?}}
+   * @returns {{ok:true, flightData}|{ok:false, reason:'NOT_FOUND'|'VALIDATION_ERROR', detail?}}
    */
-  setClearance(fdrId, field, { value, confirmVacated = false } = {}, { by } = {}) {
-    const fdr = this._flightDataList.get(fdrId);
-    if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
+  setClearance(flightDataId, field, { value, confirmVacated = false } = {}, { by } = {}) {
+    const flightData = this._flightDataList.get(flightDataId);
+    if (!flightData) return { ok: false, reason: 'NOT_FOUND' };
     if (!CLEARANCE_FIELDS.has(field)) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown clearance field ${field}` };
-    const cell = ensureClearance(fdr)[field];
+    const cell = ensureClearance(flightData)[field];
     const active = cell.entries.find(e => e.status === 'ACTIVE');
     const now = this._clock.now();
 
@@ -1364,11 +1364,11 @@ class FlightDataStore {
       cell.entries.push(entry);
     }
 
-    fdr.provenance[`clearance.${field}`] = 'CONTROLLER_ENTERED';
-    fdr.rev += 1;
-    fdr.clearanceUpdatedAt = now;
-    fdr.updatedBy = by || null;
-    return { ok: true, fdr };
+    flightData.provenance[`clearance.${field}`] = 'CONTROLLER_ENTERED';
+    flightData.rev += 1;
+    flightData.clearanceUpdatedAt = now;
+    flightData.updatedBy = by || null;
+    return { ok: true, flightData };
   }
 
   /**
@@ -1380,21 +1380,21 @@ class FlightDataStore {
    * flight has taken it since. Idempotent.
    * @returns {boolean} whether there was an FDR to archive
    */
-  archiveFlightData(fdrId) {
-    const fdr = this._flightDataList.get(fdrId);
-    if (!fdr) return false;
-    const code = fdr.identity && fdr.identity.beaconAssigned;
-    if (code && this._codeAllocator.holderOf(code) === fdrId) this._codeAllocator.release(code);
-    this._flightDataList.delete(fdrId);
+  archiveFlightData(flightDataId) {
+    const flightData = this._flightDataList.get(flightDataId);
+    if (!flightData) return false;
+    const code = flightData.identity && flightData.identity.beaconAssigned;
+    if (code && this._codeAllocator.holderOf(code) === flightDataId) this._codeAllocator.release(code);
+    this._flightDataList.delete(flightDataId);
     return true;
   }
 
   // ── Persistence (durable per ADR 0002) ──────────────────────────────────
   snapshot() {
-    return { fdrs: this.getAll(), codes: this._codeAllocator.snapshot(), codeCursor: this._codeAllocator.cursor };
+    return { flightDataList: this.getAll(), codes: this._codeAllocator.snapshot(), codeCursor: this._codeAllocator.cursor };
   }
   restore(data) {
-    this._flightDataList = new Map((data?.fdrs || []).map((f) => {
+    this._flightDataList = new Map((data?.flightDataList || []).map((f) => {
       // Every FDR written before docs/adr/0052 has `military: null` on disk.
       // Seeding on the way in (rather than on every read) means one place
       // knows about the old shape and nothing downstream has to — see
@@ -1403,7 +1403,7 @@ class FlightDataStore {
       ensureClearance(f); // docs/adr/0058 — FDRs saved before the clearance cells existed
       if (!f.timeInputs) f.timeInputs = { flightPlanDepartureUtc: null, takeoffStampedUtc: null };
       if (f.timeInputs.takeoffStampedUtc === undefined) f.timeInputs.takeoffStampedUtc = null; // docs/adr/0076 // docs/adr/0073 — FDRs saved before the time chains
-      return [f.fdrId, f];
+      return [f.flightDataId, f];
     }));
     this._codeAllocator.restore(data?.codes);
     this._codeAllocator.restoreCursor(data?.codeCursor); // docs/adr/0081: the rotating cursor survives a restart

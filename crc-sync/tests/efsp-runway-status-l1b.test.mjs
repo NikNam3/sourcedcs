@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import WsHub from '../src/ws-hub.js';
 import TrackStore from '../src/tracks.js';
 import CollaborativeStore from '../src/collab-store.js';
-import fieldState from '../src/efsp/runway-status.js';
+import runwayStatus from '../src/efsp/runway-status.js';
 import permission from '../src/efsp/permission.js';
 
-// L1b's two server-side changes (docs/adr/0068): the public field-state
+// L1b's two server-side changes (docs/adr/0068): the public runway-status
 // broadcaster (decisions.md S-L1d) and the generic "runway works + inspection"
 // suspension that replaced the barrier change (decisions.md H52).
 
@@ -17,39 +17,39 @@ function fakeWs(readyState = OPEN) {
   return { readyState, send: (raw) => sent.push(JSON.parse(raw)), sent };
 }
 
-test('broadcastEfspRunwayStatusDelta sends the same efsp-field-state-delta a field-state op returns, to every open client', () => {
+test('broadcastEfspRunwayStatusDelta sends the same efsp-runway-status-delta a runway-status op returns, to every open client', () => {
   const hub = new WsHub({ trackStore: new TrackStore(), collabStore: new CollaborativeStore(), efsp: null });
   const a = fakeWs();
   const b = fakeWs();
   const closed = { readyState: 3, send: () => { throw new Error('must not send on a closed socket'); } };
   hub._wss = { clients: [a, closed, b] };
   const record = { facilityId: 'INCIRLIK', rev: 3, activeRunway: '23' };
-  hub.broadcastEfspRunwayStatusDelta({ fieldStateSeq: 9, fieldStates: [record, null] });
+  hub.broadcastEfspRunwayStatusDelta({ runwayStatusSeq: 9, runwayStatuses: [record, null] });
   for (const ws of [a, b]) {
-    assert.deepEqual(ws.sent, [{ version: 1, type: 'efsp-field-state-delta', fieldStateSeq: 9, fieldStates: { updated: [record] } }]);
+    assert.deepEqual(ws.sent, [{ version: 1, type: 'efsp-runway-status-delta', runwayStatusSeq: 9, runwayStatuses: { updated: [record] } }]);
   }
 });
 
 test('broadcastEfspRunwayStatusDelta is a no-op before the WebSocket server exists', () => {
   const hub = new WsHub({ trackStore: new TrackStore(), collabStore: new CollaborativeStore(), efsp: null });
   hub._wss = null;
-  hub.broadcastEfspRunwayStatusDelta({ fieldStateSeq: 1, fieldStates: [] });
+  hub.broadcastEfspRunwayStatusDelta({ runwayStatusSeq: 1, runwayStatuses: [] });
 });
 
 test('H52: the suspension is generic runway works — no barrier-specific kind, status, op or request action remains', () => {
-  assert.deepEqual(fieldState.SUSPENSION_KINDS, ['WORKS', 'RUNWAY_CHANGE']);
-  assert.ok(fieldState.RUNWAY_STATUSES.includes('SUSPENDED_WORKS'));
-  assert.deepEqual(fieldState.REQUEST_ACTIONS, ['CLOSE', 'OPEN', 'WORKS']);
-  assert.deepEqual(permission.FIELD_STATE_OP_OWNERS.BeginRunwayWorks, ['TWR']);
-  assert.deepEqual(permission.FIELD_STATE_OP_OWNERS.CompleteRunwayWorks, ['OPS']);
+  assert.deepEqual(runwayStatus.SUSPENSION_KINDS, ['WORKS', 'RUNWAY_CHANGE']);
+  assert.ok(runwayStatus.RUNWAY_STATUSES.includes('SUSPENDED_WORKS'));
+  assert.deepEqual(runwayStatus.REQUEST_ACTIONS, ['CLOSE', 'OPEN', 'WORKS']);
+  assert.deepEqual(permission.RUNWAY_STATUS_OP_OWNERS.BeginRunwayWorks, ['LC']);
+  assert.deepEqual(permission.RUNWAY_STATUS_OP_OWNERS.CompleteRunwayWorks, ['OPS']);
   const everything = JSON.stringify([
-    fieldState.SUSPENSION_KINDS, fieldState.RUNWAY_STATUSES, fieldState.REQUEST_ACTIONS,
-    fieldState.LEGAL_TRANSITIONS, fieldState.SUSPENSION_LABELS, Object.keys(permission.FIELD_STATE_OP_OWNERS),
+    runwayStatus.SUSPENSION_KINDS, runwayStatus.RUNWAY_STATUSES, runwayStatus.REQUEST_ACTIONS,
+    runwayStatus.LEGAL_TRANSITIONS, runwayStatus.SUSPENSION_LABELS, Object.keys(permission.RUNWAY_STATUS_OP_OWNERS),
   ]);
   assert.doesNotMatch(everything, /barrier/i);
 });
 
 test('H52: the inhibit reason for works names the runway and says works are in progress', () => {
   const runway = { runwayId: '05/23', status: 'SUSPENDED_WORKS', suspension: { kind: 'WORKS' } };
-  assert.equal(fieldState.runwayStatusReason(runway), 'runway 05/23 suspended — works in progress');
+  assert.equal(runwayStatus.runwayStatusReason(runway), 'runway 05/23 suspended — works in progress');
 });

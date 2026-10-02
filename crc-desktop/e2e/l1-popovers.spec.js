@@ -33,14 +33,14 @@ async function goBay(page, positionId, bayId) {
 
 /** The server-side Strip for a callsign, as the page's own state has it. */
 const serverStrip = (page, callsign) => page.evaluate((cs) => {
-  const s = [...efspStrips.values()].find(x => efspFdrs.get(x.fdrId).identity.callsign === cs);
+  const s = [...efspStrips.values()].find(x => efspFdrs.get(x.flightDataId).identity.callsign === cs);
   return s && { rev: s.rev, flags: s.flags, tofi: s.tofiCoordination && s.tofiCoordination.state,
     coordination: s.coordination && s.coordination.state, airspace: s.airspaceEntry && s.airspaceEntry.airspaceId };
 }, callsign);
 
 /** Another controller's update to this Strip, through the real send path. */
 const remoteOffset = (page, callsign) => page.evaluate((cs) => {
-  const s = [...efspStrips.values()].find(x => efspFdrs.get(x.fdrId).identity.callsign === cs);
+  const s = [...efspStrips.values()].find(x => efspFdrs.get(x.flightDataId).identity.callsign === cs);
   sendEfspMutation(s.ownerPositionId, s, { kind: 'SetFlag', flag: 'offset', value: !s.flags.offset });
 }, callsign);
 
@@ -55,21 +55,21 @@ const injectAirspace = (page) => page.evaluate(() => efspAirspaces.set('R-L1', {
 
 const POPOVERS = {
   highlight: {
-    facilityId: 'INCIRLIK', positionId: 'APP', bayId: 'app-inbound', selector: '.efsp-highlight-popover',
+    facilityId: 'INCIRLIK', positionId: 'AP', bayId: 'ap-inbound', selector: '.efsp-highlight-popover',
     open: (strip) => strip.click({ button: 'right', position: { x: 3, y: 3 } }),
     act: (pop) => pop.locator('button').first(),
   },
   MARSA: {
-    facilityId: 'INCIRLIK', positionId: 'APP', bayId: 'app-inbound', selector: '.efsp-marsa-popover',
+    facilityId: 'INCIRLIK', positionId: 'AP', bayId: 'ap-inbound', selector: '.efsp-marsa-popover',
     open: (strip) => startAction(strip, 'MARSA…', { timeout: 3000 }),
   },
   coordinate: {
-    facilityId: 'INCIRLIK', positionId: 'APP', bayId: 'app-inbound', selector: '.efsp-coordinate-popover',
+    facilityId: 'INCIRLIK', positionId: 'AP', bayId: 'ap-inbound', selector: '.efsp-coordinate-popover',
     open: (strip) => startAction(strip, 'Coordinate…', { timeout: 3000 }),
     act: (pop) => pop.getByRole('button', { name: 'Send' }),
   },
   airspace: {
-    facilityId: 'INCIRLIK', positionId: 'APP', bayId: 'app-inbound', selector: '.efsp-coordinate-popover', inject: true,
+    facilityId: 'INCIRLIK', positionId: 'AP', bayId: 'ap-inbound', selector: '.efsp-coordinate-popover', inject: true,
     open: (strip) => startAction(strip, 'Airspace…', { timeout: 3000 }),
     act: (pop) => pop.getByRole('button', { name: 'Approve entry' }),
   },
@@ -79,7 +79,7 @@ const POPOVERS = {
     act: (pop) => pop.getByRole('button', { name: 'Send TOFI' }),
   },
   bind: {
-    facilityId: 'INCIRLIK', positionId: 'APP', bayId: 'app-inbound', selector: '.efsp-coordinate-popover',
+    facilityId: 'INCIRLIK', positionId: 'AP', bayId: 'ap-inbound', selector: '.efsp-coordinate-popover',
     // Bind… is drawn from the correlation record, which arrives after the
     // Strip and does not move its rev — so the Strip is never rebuilt to show
     // it (extends F-305, tested on its own below). Selecting the Strip forces
@@ -110,7 +110,7 @@ const POPOVERS = {
  * refuses "cannot drop a Strip with an open coordination proposal"), and there
  * is no withdraw — only the RECEIVING controller can resolve one, and this page
  * does not hold their Position. The F-107 coordinate case ends by pressing
- * Send, so it leaves exactly such a Strip in app-inbound; insisting on 0 then
+ * Send, so it leaves exactly such a Strip in ap-inbound; insisting on 0 then
  * failed the next two tests to use that Bay (airspace, highlight) inside this
  * helper, 20 lines before the assertion they exist to make. One leftover Strip
  * above the seeded one is harmless at this describe's 2400px viewport.
@@ -122,8 +122,8 @@ async function clearBay(page, bayId) {
     }
   }, bayId);
   await expect.poll(() => page.evaluate((bay) => {
-    const openProposal = (s) => (s.coordination && s.coordination.state === 'PROPOSED')
-      || (s.tofiCoordination && s.tofiCoordination.state === 'PROPOSED');
+    const openProposal = (s) => (s.coordination && s.coordination.state === 'INITIATED')
+      || (s.tofiCoordination && s.tofiCoordination.state === 'INITIATED');
     return [...efspStrips.values()].filter(s => s.bayId === bay && s.state !== 'DROPPED' && !openProposal(s)).length;
   }, bayId)).toBe(0);
 }
@@ -131,13 +131,13 @@ async function clearBay(page, bayId) {
 /** Opens the panel at the popover's Position, seeds `count` Strips, opens the popover on the first. */
 async function openPopoverOn(page, name, count) {
   const P = POPOVERS[name];
-  await openPanel(page, { held: [P.positionId], facilityId: P.facilityId });
+  await openPanel(page, { signedOn: [P.positionId], facilityId: P.facilityId });
   await goBay(page, P.positionId, P.bayId);
   await clearBay(page, P.bayId);
   if (P.inject) await injectAirspace(page);
   const callsigns = Array.from({ length: count }, () => uniqueCallsign('L'));
   for (const callsign of callsigns) {
-    await seedStrip(page, { callsign, role: 'ARRIVAL', bayId: P.bayId, actingPositionId: P.positionId, facilityId: P.facilityId });
+    await seedStrip(page, { callsign, stripType: 'ARRIVAL', bayId: P.bayId, actingPositionId: P.positionId, facilityId: P.facilityId });
   }
   const strip = stripByCallsign(page, callsigns[0]);
   await P.open(strip);
@@ -202,10 +202,10 @@ test.describe('with room to be uncovered', () => {
 
 // ── extends F-305 ────────────────────────────────────────────────────────
 test('extends F-305: an uncorrelated flight shows NO TRK and Bind… on its own', async ({ page }) => {
-  await openPanel(page, { held: ['APP'] });
-  await goBay(page, 'APP', 'app-inbound');
-  await clearBay(page, 'app-inbound');
-  const strip = await seedStrip(page, { callsign: uniqueCallsign('C'), role: 'ARRIVAL', bayId: 'app-inbound', actingPositionId: 'APP' });
+  await openPanel(page, { signedOn: ['AP'] });
+  await goBay(page, 'AP', 'ap-inbound');
+  await clearBay(page, 'ap-inbound');
+  const strip = await seedStrip(page, { callsign: uniqueCallsign('C'), stripType: 'ARRIVAL', bayId: 'ap-inbound', actingPositionId: 'AP' });
   await expect.poll(() => strip.evaluate((el) => {
     const r = getEfspCorrelationForStrip(getEfspStrip(el.dataset.stripId));
     return r && r.state;

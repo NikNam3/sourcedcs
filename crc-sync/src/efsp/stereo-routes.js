@@ -31,7 +31,7 @@
 // **A stereo name is local symbology.** Guide §8.3 rule 5: "Local symbology
 // defined in configuration MUST be marked local-only and MUST NOT appear in
 // any inter-facility message." That is why expansion happens once, at filing
-// time, into fdr.filed.route — a Strip replicated to CENTER carries the
+// time, into flightData.filed.route — a Strip replicated to CENTER carries the
 // expanded route, never the short name as its route.
 
 const fs = require('fs');

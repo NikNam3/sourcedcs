@@ -41,7 +41,7 @@ const {
   crew, act, mustAct, marsaAct, mustMarsaAct, airborneDeparture, DEPARTURE_FLIGHT_DATA,
 } = await import('./helpers/efsp-scenario.mjs');
 
-const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' };
+const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER' };
 
 const efsp = createEfsp();
 const c = crew(efsp, ATC);
@@ -52,9 +52,9 @@ function flight(callsign) {
 }
 
 function declareAr(participants, declaringCallsign) {
-  return mustMarsaAct(efsp, c.APP, 'APP', null, {
+  return mustMarsaAct(efsp, c.AP, 'AP', null, {
     kind: 'DeclareMarsa',
-    participants: participants.map(s => s.fdrId),
+    participants: participants.map(s => s.flightDataId),
     startEvent: 'TANKER_ACCEPTED',
     endCondition: 'VERTICALLY_POSITIONED',
     declaringCallsign,
@@ -76,12 +76,12 @@ test('sortie 1: a heading assigned to a joining receiver voids MARSA and alerts 
   assert.equal(relation.rendezvousAt, null, 'the interlock is armed until rendezvous');
   // §4.8.3 — the separation regime genuinely changes, on every participant.
   for (const s of [tanker, rx1, rx2]) {
-    assert.equal(efsp.flightDataStore.getFlightData(s.fdrId).tofi.separationRegime, 'MARSA');
+    assert.equal(efsp.flightDataStore.getFlightData(s.flightDataId).tofi.separationRegime, 'MARSA');
   }
 
   // APP turns one receiver onto a vector. Block 20 is the guide's own §6.2
   // name for the DEPARTURE heading Block.
-  const ack = act(efsp, c.APP, 'APP', fresh(rx1), { kind: 'SetBlock', blockId: '20', value: '270' });
+  const ack = act(efsp, c.AP, 'AP', fresh(rx1), { kind: 'SetBlock', blockId: '20', value: '270' });
   assert.equal(ack.ok, true, 'the clearance itself goes through — the interlock voids, it does not refuse');
 
   // "...voids the relation, sets voidedBy..."
@@ -95,18 +95,18 @@ test('sortie 1: a heading assigned to a joining receiver voids MARSA and alerts 
   // off one record (docs/adr/0045's shape), with no per-Strip fan-out.
   assert.deepEqual(
     voided.participants.slice().sort(),
-    [tanker.fdrId, rx1.fdrId, rx2.fdrId].sort(),
+    [tanker.flightDataId, rx1.flightDataId, rx2.flightDataId].sort(),
   );
   for (const s of [tanker, rx1, rx2]) {
-    assert.equal(efsp.marsaStore.activeFor(s.fdrId), null, `${s.stripId} is no longer under MARSA`);
-    assert.equal(efsp.flightDataStore.getFlightData(s.fdrId).tofi.separationRegime, 'ATC',
+    assert.equal(efsp.marsaStore.activeFor(s.flightDataId), null, `${s.stripId} is no longer under MARSA`);
+    assert.equal(efsp.flightDataStore.getFlightData(s.flightDataId).tofi.separationRegime, 'ATC',
       'ATC is separating them again — the half of the void that makes the flight\'s own fields true');
   }
 
   // The heading actually landed. A void that quietly ate the clearance would
   // be worse than no interlock at all.
   // The heading is the flight's clearance now (docs/adr/0058), on the FDR.
-  assert.equal(efsp.flightDataStore.getFlightData(rx1.fdrId).clearance.heading.entries.find(e => e.status === 'ACTIVE').value, '270');
+  assert.equal(efsp.flightDataStore.getFlightData(rx1.flightDataId).clearance.heading.entries.find(e => e.status === 'ACTIVE').value, '270');
 });
 
 test('sortie 1a: the same holds for an altitude, with its own cause', () => {
@@ -115,7 +115,7 @@ test('sortie 1a: the same holds for an altitude, with its own cause', () => {
   const relation = declareAr([tanker, rx], 'SHELL72');
 
   // Block 21 — the guide's §6.2 "Initial altitude".
-  mustAct(efsp, c.APP, 'APP', fresh(tanker), { kind: 'SetBlock', blockId: '21', value: '250' });
+  mustAct(efsp, c.AP, 'AP', fresh(tanker), { kind: 'SetBlock', blockId: '21', value: '250' });
   const voided = efsp.marsaStore.getRelation(relation.marsaId);
   assert.equal(voided.voidedBy, 'CONTROLLER_ALTITUDE_CHANGE');
   assert.match(voided.voidedDetail, /Block 21/);
@@ -130,7 +130,7 @@ test('sortie 1b: amending the FILED altitude is not an assignment, and does not 
   // asked for, not what ATC assigned it. Amending it is not "issuing an
   // altitude change", and an interlock that fired here would void an AR every
   // time somebody corrected a flight plan.
-  mustAct(efsp, c.APP, 'APP', fresh(tanker), { kind: 'SetBlock', blockId: '7', value: '260' });
+  mustAct(efsp, c.AP, 'AP', fresh(tanker), { kind: 'SetBlock', blockId: '7', value: '260' });
   assert.equal(efsp.marsaStore.getRelation(relation.marsaId).state, 'ACTIVE');
 });
 
@@ -139,12 +139,12 @@ test('sortie 1c: after rendezvous the interlock is spent and an established AR s
   const rx = flight('VIPER41');
   const relation = declareAr([tanker, rx], 'SHELL74');
 
-  mustMarsaAct(efsp, c.APP, 'APP', relation.marsaId, { kind: 'MarkRendezvous' });
-  mustAct(efsp, c.APP, 'APP', fresh(tanker), { kind: 'SetBlock', blockId: '21', value: '260' });
+  mustMarsaAct(efsp, c.AP, 'AP', relation.marsaId, { kind: 'MarkRendezvous' });
+  mustAct(efsp, c.AP, 'AP', fresh(tanker), { kind: 'SetBlock', blockId: '21', value: '260' });
 
   const after = efsp.marsaStore.getRelation(relation.marsaId);
   assert.equal(after.state, 'ACTIVE', 'voiding an established AR on every altitude change would make the relation unusable');
-  assert.equal(efsp.flightDataStore.getFlightData(rx.fdrId).tofi.separationRegime, 'MARSA');
+  assert.equal(efsp.flightDataStore.getFlightData(rx.flightDataId).tofi.separationRegime, 'MARSA');
 });
 
 // ── Sortie 2 — what a pilot asks for ────────────────────────────────────────
@@ -153,13 +153,13 @@ test('sortie 2: "SHELL75, VIPER52 is joining you" — a late receiver, mid-AR', 
   const tanker = flight('SHELL75');
   const rx1 = flight('VIPER51');
   const relation = declareAr([tanker, rx1], 'SHELL75');
-  mustMarsaAct(efsp, c.APP, 'APP', relation.marsaId, { kind: 'MarkRendezvous' });
+  mustMarsaAct(efsp, c.AP, 'AP', relation.marsaId, { kind: 'MarkRendezvous' });
 
   const rx2 = flight('VIPER52');
-  const joined = mustMarsaAct(efsp, c.APP, 'APP', relation.marsaId, { kind: 'AddParticipant', fdrId: rx2.fdrId });
+  const joined = mustMarsaAct(efsp, c.AP, 'AP', relation.marsaId, { kind: 'AddParticipant', flightDataId: rx2.flightDataId });
 
   assert.equal(joined.participants.length, 3);
-  assert.equal(efsp.flightDataStore.getFlightData(rx2.fdrId).tofi.separationRegime, 'MARSA');
+  assert.equal(efsp.flightDataStore.getFlightData(rx2.flightDataId).tofi.separationRegime, 'MARSA');
   // The relation never ended, so nothing about it was lost.
   assert.equal(joined.startEvent, 'TANKER_ACCEPTED');
   assert.equal(joined.declaringCallsign, 'SHELL75');
@@ -172,15 +172,15 @@ test('sortie 3: one receiver breaks off; the AR continues until the last one lea
   const rx2 = flight('VIPER62');
   const relation = declareAr([tanker, rx1, rx2], 'SHELL76');
 
-  mustMarsaAct(efsp, c.APP, 'APP', relation.marsaId, { kind: 'RemoveParticipant', fdrId: rx2.fdrId });
+  mustMarsaAct(efsp, c.AP, 'AP', relation.marsaId, { kind: 'RemoveParticipant', flightDataId: rx2.flightDataId });
   assert.equal(efsp.marsaStore.getRelation(relation.marsaId).state, 'ACTIVE');
-  assert.equal(efsp.flightDataStore.getFlightData(rx2.fdrId).tofi.separationRegime, 'ATC');
-  assert.equal(efsp.flightDataStore.getFlightData(tanker.fdrId).tofi.separationRegime, 'MARSA');
+  assert.equal(efsp.flightDataStore.getFlightData(rx2.flightDataId).tofi.separationRegime, 'ATC');
+  assert.equal(efsp.flightDataStore.getFlightData(tanker.flightDataId).tofi.separationRegime, 'MARSA');
 
-  mustMarsaAct(efsp, c.APP, 'APP', relation.marsaId, { kind: 'RemoveParticipant', fdrId: rx1.fdrId });
+  mustMarsaAct(efsp, c.AP, 'AP', relation.marsaId, { kind: 'RemoveParticipant', flightDataId: rx1.flightDataId });
   const ended = efsp.marsaStore.getRelation(relation.marsaId);
   assert.equal(ended.state, 'ENDED');
-  assert.equal(efsp.flightDataStore.getFlightData(tanker.fdrId).tofi.separationRegime, 'ATC');
+  assert.equal(efsp.flightDataStore.getFlightData(tanker.flightDataId).tofi.separationRegime, 'ATC');
 });
 
 test('sortie 4: the tanker lands mid-AR — the relation ends, and it is not an alert', () => {
@@ -188,9 +188,9 @@ test('sortie 4: the tanker lands mid-AR — the relation ends, and it is not an 
   const rx = flight('VIPER71');
   const relation = declareAr([tanker, rx], 'SHELL77');
 
-  const result = efsp.handleMessage(c.APP.session, {
+  const result = efsp.handleMessage(c.AP.session, {
     version: 1, type: 'efsp-mutation', clientMutationId: 'cm-drop',
-    facilityId: 'INCIRLIK', actingPositionId: 'APP',
+    facilityId: 'INCIRLIK', actingPositionId: 'AP',
     stripId: tanker.stripId, baseRev: fresh(tanker).rev,
     op: { kind: 'DropStrip' },
   });
@@ -206,8 +206,8 @@ test('sortie 4: the tanker lands mid-AR — the relation ends, and it is not an 
   // A flight finishing is not an interlock firing, and must not render as one.
   assert.equal(after.endedBy, 'PARTICIPANT_RETIRED');
   assert.equal(after.voidedBy, null);
-  assert.equal(efsp.flightDataStore.getFlightData(rx.fdrId).tofi.separationRegime, 'ATC');
-  assert.equal(efsp.marsaStore.activeFor(rx.fdrId), null);
+  assert.equal(efsp.flightDataStore.getFlightData(rx.flightDataId).tofi.separationRegime, 'ATC');
+  assert.equal(efsp.marsaStore.activeFor(rx.flightDataId), null);
 });
 
 test('sortie 5: a controller cannot take separation back by editing the Block', () => {
@@ -217,24 +217,24 @@ test('sortie 5: a controller cannot take separation back by editing the Block', 
 
   // Two answers to "who is separating these aircraft" is the defect class, so
   // while the relation is ACTIVE it owns the field.
-  const refused = act(efsp, c.APP, 'APP', fresh(rx), { kind: 'SetBlock', blockId: 'SREG', value: 'ATC' });
+  const refused = act(efsp, c.AP, 'AP', fresh(rx), { kind: 'SetBlock', blockId: 'SREG', value: 'ATC' });
   assert.equal(refused.ok, false);
   assert.match(refused.detail, /active MARSA relation declared by SHELL78/);
   assert.match(refused.detail, /end or void it/);
-  assert.equal(efsp.flightDataStore.getFlightData(rx.fdrId).tofi.separationRegime, 'MARSA');
+  assert.equal(efsp.flightDataStore.getFlightData(rx.flightDataId).tofi.separationRegime, 'MARSA');
 
   // The way out is the action the controller actually wanted, and it sets the
   // regime back as part of doing so.
-  mustMarsaAct(efsp, c.APP, 'APP', relation.marsaId, { kind: 'VoidMarsa', note: 'ATC resuming separation' });
-  assert.equal(efsp.flightDataStore.getFlightData(rx.fdrId).tofi.separationRegime, 'ATC');
-  assert.equal(act(efsp, c.APP, 'APP', fresh(rx), { kind: 'SetBlock', blockId: 'SREG', value: 'DUE_REGARD' }).ok, true);
+  mustMarsaAct(efsp, c.AP, 'AP', relation.marsaId, { kind: 'VoidMarsa', note: 'ATC resuming separation' });
+  assert.equal(efsp.flightDataStore.getFlightData(rx.flightDataId).tofi.separationRegime, 'ATC');
+  assert.equal(act(efsp, c.AP, 'AP', fresh(rx), { kind: 'SetBlock', blockId: 'SREG', value: 'DUE_REGARD' }).ok, true);
 });
 
 test('sortie 6: an unattributed declaration is refused — §9.2 rule 1 makes it the tanker\'s', () => {
   const tanker = flight('SHELL79');
   const rx = flight('VIPER91');
-  const ack = marsaAct(efsp, c.APP, 'APP', null, {
-    kind: 'DeclareMarsa', participants: [tanker.fdrId, rx.fdrId],
+  const ack = marsaAct(efsp, c.AP, 'AP', null, {
+    kind: 'DeclareMarsa', participants: [tanker.flightDataId, rx.flightDataId],
     startEvent: 'LOCAL_DECLARATION', endCondition: 'ATC_SEPARATION_ESTABLISHED',
     declaringCallsign: '',
   });
@@ -248,19 +248,19 @@ test('sortie 6: an unattributed declaration is refused — §9.2 rule 1 makes it
 
 test('sortie 6a: the interlock covers an ARRIVAL Strip — cleared altitude and radar vector', () => {
   const tanker = flight('SHELL83');
-  const inbound = mustAct(efsp, c.APP, 'APP', null, {
-    kind: 'CreateStrip', bayId: 'app-inbound', rackId: 'main', role: 'ARRIVAL',
-    fdr: { callsign: 'VIPER04', aircraftType: 'F16', originAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT' },
+  const inbound = mustAct(efsp, c.AP, 'AP', null, {
+    kind: 'CreateStrip', bayId: 'ap-inbound', rackId: 'main', stripType: 'ARRIVAL',
+    flightData: { callsign: 'VIPER04', aircraftType: 'F16', originAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT' },
   });
 
   const altitudeAr = declareAr([tanker, inbound], 'SHELL83');
   // ARRIVAL's Block 7 IS the assigned altitude (annotation-routed, so it
   // carries §3.7's append-only model) — the opposite of DEPARTURE's Block 7.
-  mustAct(efsp, c.APP, 'APP', fresh(inbound), { kind: 'SetBlock', blockId: '7', value: '100' });
+  mustAct(efsp, c.AP, 'AP', fresh(inbound), { kind: 'SetBlock', blockId: '7', value: '100' });
   assert.equal(efsp.marsaStore.getRelation(altitudeAr.marsaId).voidedBy, 'CONTROLLER_ALTITUDE_CHANGE');
 
   const vectorAr = declareAr([fresh(tanker), fresh(inbound)], 'SHELL83');
-  mustAct(efsp, c.APP, 'APP', fresh(inbound), { kind: 'SetBlock', blockId: '9A-VECTOR', value: '310' });
+  mustAct(efsp, c.AP, 'AP', fresh(inbound), { kind: 'SetBlock', blockId: '9A-VECTOR', value: '310' });
   assert.equal(efsp.marsaStore.getRelation(vectorAr.marsaId).voidedBy, 'CONTROLLER_COURSE_CHANGE');
 });
 
@@ -271,34 +271,34 @@ test('sortie 6b: the interlock covers an OVERFLIGHT Strip, which had no assignme
   // acceptance criterion passing on two Roles and quietly not holding on the
   // third.
   const tanker = flight('SHELL84');
-  const transit = mustAct(efsp, c.APP, 'APP', null, {
-    kind: 'CreateStrip', bayId: 'app-overflight', rackId: 'main', role: 'OVERFLIGHT',
-    fdr: { callsign: 'VIPER05', aircraftType: 'F16', departureAirport: 'LTAC', destinationAirport: 'LTAI', route: 'DCT' },
+  const transit = mustAct(efsp, c.AP, 'AP', null, {
+    kind: 'CreateStrip', bayId: 'ap-overflight', rackId: 'main', stripType: 'OVERFLIGHT',
+    flightData: { callsign: 'VIPER05', aircraftType: 'F16', departureAirport: 'LTAC', destinationAirport: 'LTAI', route: 'DCT' },
   });
 
   const climbAr = declareAr([tanker, transit], 'SHELL84');
-  mustAct(efsp, c.APP, 'APP', fresh(transit), { kind: 'SetBlock', blockId: '7A', value: '240' });
+  mustAct(efsp, c.AP, 'AP', fresh(transit), { kind: 'SetBlock', blockId: '7A', value: '240' });
   assert.equal(efsp.marsaStore.getRelation(climbAr.marsaId).voidedBy, 'CONTROLLER_ALTITUDE_CHANGE');
 
   const vectorAr = declareAr([fresh(tanker), fresh(transit)], 'SHELL84');
-  mustAct(efsp, c.APP, 'APP', fresh(transit), { kind: 'SetBlock', blockId: '9A-VECTOR', value: '180' });
+  mustAct(efsp, c.AP, 'AP', fresh(transit), { kind: 'SetBlock', blockId: '9A-VECTOR', value: '180' });
   assert.equal(efsp.marsaStore.getRelation(vectorAr.marsaId).voidedBy, 'CONTROLLER_COURSE_CHANGE');
 });
 
 test('sortie 6c: confirming a vacated altitude issues nothing, so it voids nothing', () => {
   const tanker = flight('SHELL85');
-  const inbound = mustAct(efsp, c.APP, 'APP', null, {
-    kind: 'CreateStrip', bayId: 'app-inbound', rackId: 'main', role: 'ARRIVAL',
-    fdr: { callsign: 'VIPER06', aircraftType: 'F16', originAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT' },
+  const inbound = mustAct(efsp, c.AP, 'AP', null, {
+    kind: 'CreateStrip', bayId: 'ap-inbound', rackId: 'main', stripType: 'ARRIVAL',
+    flightData: { callsign: 'VIPER06', aircraftType: 'F16', originAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT' },
   });
-  mustAct(efsp, c.APP, 'APP', fresh(inbound), { kind: 'SetBlock', blockId: '7', value: '150' });
+  mustAct(efsp, c.AP, 'AP', fresh(inbound), { kind: 'SetBlock', blockId: '7', value: '150' });
 
   const relation = declareAr([tanker, inbound], 'SHELL85');
   // §3.7 rule 3's confirmVacated carries no value and issues no instruction —
   // it records that the aircraft has LEFT an altitude assigned earlier. An
   // interlock firing here would void a live AR at the one moment nothing was
   // issued.
-  mustAct(efsp, c.APP, 'APP', fresh(inbound), { kind: 'SetBlock', blockId: '7', confirmVacated: true });
+  mustAct(efsp, c.AP, 'AP', fresh(inbound), { kind: 'SetBlock', blockId: '7', confirmVacated: true });
   assert.equal(efsp.marsaStore.getRelation(relation.marsaId).state, 'ACTIVE');
 });
 
@@ -307,8 +307,8 @@ test('sortie 7: claiming a Position you are not Primary at is refused on this pa
   const rx = flight('VIPER01');
   // docs/adr/0029 — actingPositionId is an untrusted client claim, and a new
   // dispatch path is exactly where that check gets forgotten.
-  const ack = marsaAct(efsp, c.APP, 'CTR', null, {
-    kind: 'DeclareMarsa', participants: [tanker.fdrId, rx.fdrId],
+  const ack = marsaAct(efsp, c.AP, 'CTR', null, {
+    kind: 'DeclareMarsa', participants: [tanker.flightDataId, rx.flightDataId],
     startEvent: 'TANKER_ACCEPTED', endCondition: 'VERTICALLY_POSITIONED', declaringCallsign: 'SHELL80',
   });
   assert.equal(ack.ok, false);
@@ -319,16 +319,16 @@ test('sortie 8: the board comes back from a restart with the AR still up', () =>
   const tanker = flight('SHELL81');
   const rx = flight('VIPER02');
   const relation = declareAr([tanker, rx], 'SHELL81');
-  mustMarsaAct(efsp, c.APP, 'APP', relation.marsaId, { kind: 'MarkRendezvous' });
+  mustMarsaAct(efsp, c.AP, 'AP', relation.marsaId, { kind: 'MarkRendezvous' });
   efsp.persist();
 
   const reborn = createEfsp();
   const restored = reborn.marsaStore.getRelation(relation.marsaId);
   assert.equal(restored.state, 'ACTIVE', 'a verbal declaration is not made untrue by a crc-sync restart');
   assert.ok(restored.rendezvousAt);
-  assert.equal(reborn.flightDataStore.getFlightData(rx.fdrId).tofi.separationRegime, 'MARSA');
+  assert.equal(reborn.flightDataStore.getFlightData(rx.flightDataId).tofi.separationRegime, 'MARSA');
   // And the interlock is still correctly DISarmed for it.
-  assert.equal(reborn.marsaStore.voidForAssignment(rx.fdrId, { cause: 'CONTROLLER_COURSE_CHANGE' }), null);
+  assert.equal(reborn.marsaStore.voidForAssignment(rx.flightDataId, { cause: 'CONTROLLER_COURSE_CHANGE' }), null);
 });
 
 test('sortie 9: the void reaches every client on the same round trip as the clearance', () => {
@@ -339,9 +339,9 @@ test('sortie 9: the void reaches every client on the same round trip as the clea
   // The raw handleMessage result, not the helper's ack — this is what ws-hub.js
   // broadcasts, and a correct server-side change no client ever hears about is
   // the bug docs/adr/0022 found for peer Strips.
-  const result = efsp.handleMessage(c.APP.session, {
+  const result = efsp.handleMessage(c.AP.session, {
     version: 1, type: 'efsp-mutation', clientMutationId: 'cm-broadcast',
-    facilityId: 'INCIRLIK', actingPositionId: 'APP',
+    facilityId: 'INCIRLIK', actingPositionId: 'AP',
     stripId: rx.stripId, baseRev: fresh(rx).rev,
     op: { kind: 'SetBlock', blockId: '20', value: '090' },
   });
@@ -384,18 +384,18 @@ test('sortie 11: "SHELL71, VIPER11 has a hung store" does not void the AR', () =
   const relation = declareAr([tanker, rx], 'SHELL73');
   assert.equal(relation.rendezvousAt, null, 'armed — this is the case that would void');
 
-  const hung = mustAct(efsp, c.APP, 'APP', fresh(rx), { kind: 'SetBlock', blockId: '3G', value: 'HUNG' });
-  assert.equal(efsp.flightDataStore.getFlightData(hung.fdrId).military.ordnanceState, 'HUNG');
+  const hung = mustAct(efsp, c.AP, 'AP', fresh(rx), { kind: 'SetBlock', blockId: '3G', value: 'HUNG' });
+  assert.equal(efsp.flightDataStore.getFlightData(hung.flightDataId).military.ordnanceState, 'HUNG');
   assert.equal(efsp.marsaStore.getRelation(relation.marsaId).state, 'ACTIVE',
     'reporting a hung store is not ATC issuing a course or an altitude');
 
   // Same for the hook requirement, and on the tanker rather than the receiver.
-  mustAct(efsp, c.APP, 'APP', fresh(tanker), { kind: 'SetBlock', blockId: '3F', value: true });
+  mustAct(efsp, c.AP, 'AP', fresh(tanker), { kind: 'SetBlock', blockId: '3F', value: true });
   assert.equal(efsp.marsaStore.getRelation(relation.marsaId).state, 'ACTIVE');
 
   // And the interlock is still live — the relation is intact because nothing
   // fired, not because it stopped working.
-  mustAct(efsp, c.APP, 'APP', fresh(rx), { kind: 'SetBlock', blockId: '21', value: '210' });
+  mustAct(efsp, c.AP, 'AP', fresh(rx), { kind: 'SetBlock', blockId: '21', value: '210' });
   assert.equal(efsp.marsaStore.getRelation(relation.marsaId).state, 'VOIDED');
   assert.equal(efsp.marsaStore.getRelation(relation.marsaId).voidedBy, 'CONTROLLER_ALTITUDE_CHANGE');
 });
@@ -405,8 +405,8 @@ test('sortie 12: a controller cannot declare an ordnance state the panel does no
   // anyway, because a dot-command, a replayed Mutation and a second client
   // all reach SetBlock without going through the picker.
   const solo = flight('VIPER32');
-  const bad = act(efsp, c.APP, 'APP', solo, { kind: 'SetBlock', blockId: '3G', value: 'WINCHESTER' });
+  const bad = act(efsp, c.AP, 'AP', solo, { kind: 'SetBlock', blockId: '3G', value: 'WINCHESTER' });
   assert.equal(bad.ok, false);
   assert.match(bad.detail, /invalid ordnance state/);
-  assert.equal(efsp.flightDataStore.getFlightData(solo.fdrId).military.ordnanceState, 'CLEAN');
+  assert.equal(efsp.flightDataStore.getFlightData(solo.flightDataId).military.ordnanceState, 'CLEAN');
 });

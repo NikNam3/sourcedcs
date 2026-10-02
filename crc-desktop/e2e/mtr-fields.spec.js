@@ -49,15 +49,15 @@ async function only(page, callsigns) {
 
 const OVF = { departureAirport: 'LTAC', destinationAirport: 'LTAI', route: 'DCT' };
 
-async function ctrOverflight(page, callsign, fdr = {}) {
+async function ctrOverflight(page, callsign, flightData = {}) {
   return seedStrip(page, {
-    callsign, actingPositionId: 'CTR', bayId: 'ctr-overflight', role: 'OVERFLIGHT', facilityId: 'CENTER',
-    fdr: { ...OVF, ...fdr },
+    callsign, actingPositionId: 'CTR', bayId: 'ctr-overflight', stripType: 'OVERFLIGHT', facilityId: 'CENTER',
+    flightData: { ...OVF, ...flightData },
   });
 }
 
 test('CTR overflight: no MTR row until MTR data is posted, then the full group on its own row, M11 first', async ({ page }) => {
-  await openPanel(page, { held: ['CTR'], facilityId: 'CENTER' });
+  await openPanel(page, { signedOn: ['CTR'], facilityId: 'CENTER' });
   await goBay(page, 'CTR', 'ctr-overflight');
   const strip = await ctrOverflight(page, 'MTR101');
   await only(page, ['MTR101']);
@@ -97,8 +97,8 @@ test('CTR overflight: no MTR row until MTR data is posted, then the full group o
 
   // Stored as an instant on the flight, shown as HHMM.
   const stored = await page.evaluate((cs) => {
-    const s = [...efspStrips.values()].find(x => (efspFdrs.get(x.fdrId) || {}).identity?.callsign === cs);
-    return efspFdrs.get(s.fdrId).military.mtr.exitEstimateUtc;
+    const s = [...efspStrips.values()].find(x => (efspFdrs.get(x.flightDataId) || {}).identity?.callsign === cs);
+    return efspFdrs.get(s.flightDataId).military.mtr.exitEstimateUtc;
   }, 'MTR101');
   expect(typeof stored).toBe('number');
   expect(new Date(stored).getUTCHours() * 100 + new Date(stored).getUTCMinutes()).toBe(1432);
@@ -114,7 +114,7 @@ test('CTR overflight: no MTR row until MTR data is posted, then the full group o
 });
 
 test('the chip labels on every row of an MTR Strip line up', async ({ page }) => {
-  await openPanel(page, { held: ['CTR'], facilityId: 'CENTER' });
+  await openPanel(page, { signedOn: ['CTR'], facilityId: 'CENTER' });
   await goBay(page, 'CTR', 'ctr-overflight');
   const strip = await ctrOverflight(page, 'MTR102');
   await strip.locator('.efsp-expand-btn').click();
@@ -138,7 +138,7 @@ test('the chip labels on every row of an MTR Strip line up', async ({ page }) =>
 });
 
 test('two MTR Strips in one Bay with different wrapping above: the MTR group sits at the same x', async ({ page }) => {
-  await openPanel(page, { held: ['CTR'], facilityId: 'CENTER' });
+  await openPanel(page, { signedOn: ['CTR'], facilityId: 'CENTER' });
   await goBay(page, 'CTR', 'ctr-overflight');
   const a = await ctrOverflight(page, 'MTR103');
   const b = await ctrOverflight(page, 'MTR104', {
@@ -158,7 +158,7 @@ test('two MTR Strips in one Bay with different wrapping above: the MTR group sit
 });
 
 test('a bad exit estimate is refused, and the refusal is legible at the cell', async ({ page }) => {
-  await openPanel(page, { held: ['CTR'], facilityId: 'CENTER' });
+  await openPanel(page, { signedOn: ['CTR'], facilityId: 'CENTER' });
   await goBay(page, 'CTR', 'ctr-overflight');
   const strip = await ctrOverflight(page, 'MTR105');
   await strip.locator('.efsp-expand-btn').click();
@@ -178,7 +178,7 @@ test('a bad exit estimate is refused, and the refusal is legible at the cell', a
 
 test('the lost-comms advisory: a grey note in ▼ naming the ALT clearance, nothing on the collapsed face', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1600 });
-  await openPanel(page, { held: ['CTR'], facilityId: 'CENTER' });
+  await openPanel(page, { signedOn: ['CTR'], facilityId: 'CENTER' });
   await goBay(page, 'CTR', 'ctr-overflight');
   const strip = await ctrOverflight(page, 'MTR106');
   const reasonsBefore = await strip.locator('.efsp-strip-reason').count();
@@ -210,11 +210,11 @@ test('the lost-comms advisory: a grey note in ▼ naming the ALT clearance, noth
 });
 
 test('APP arrival: the M11 group only — no entry fields on the face', async ({ page }) => {
-  await openPanel(page, { held: ['APP'] });
-  await goBay(page, 'APP', 'app-inbound');
+  await openPanel(page, { signedOn: ['AP'] });
+  await goBay(page, 'AP', 'ap-inbound');
   const strip = await seedStrip(page, {
-    callsign: 'MTR107', actingPositionId: 'APP', bayId: 'app-inbound', role: 'ARRIVAL',
-    fdr: { originAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT' },
+    callsign: 'MTR107', actingPositionId: 'AP', bayId: 'ap-inbound', stripType: 'ARRIVAL',
+    flightData: { originAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT' },
   });
   await strip.locator('.efsp-expand-btn').click();
   await edit(strip.locator('[data-expanded-block="9H-EXIT"]'), '9H-EXIT', 'E');
@@ -230,7 +230,7 @@ test('APP arrival: the M11 group only — no entry fields on the face', async ({
 
 test('narrow Bays (480 and 320 px): no field under 66 px, nothing overflows the Strip', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1600 });
-  await openPanel(page, { held: ['CTR'], facilityId: 'CENTER' });
+  await openPanel(page, { signedOn: ['CTR'], facilityId: 'CENTER' });
   await goBay(page, 'CTR', 'ctr-overflight');
   const strip = await ctrOverflight(page, 'MTR108');
   await strip.locator('.efsp-expand-btn').click();

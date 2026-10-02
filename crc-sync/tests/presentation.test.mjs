@@ -10,7 +10,7 @@ const TRACK = {
   category: 1, lat: 37.1, lon: 35.2, alt: 3048, heading: 90, course: 91, groundSpeed: 200, verticalSpeed: 0,
 };
 const ENV = { weather: { pressurePa: 101325, tempK: 288.15 }, transitionAltFt: 18000 };
-const NOBODY = { fdrId: null, correlation: null, flightDataCallsign: null, flightDataType: null, tag: null, trackNumber: 'TN00007' };
+const NOBODY = { flightDataId: null, correlation: null, flightDataCallsign: null, flightDataType: null, tag: null, trackNumber: 'TN00007' };
 
 const APP = { caps: { height: false, ssr: true, mode4: false }, sweepMs: 3000, at: 1000 };
 const PSR_ONLY = { caps: { height: false, ssr: false, mode4: false }, sweepMs: 3000, at: 1000 };
@@ -80,11 +80,11 @@ test('a radar whose last return is stale does not lend its capabilities', () => 
 });
 
 test('correlated: the flight callsign and type; provisional is flagged; the tag loses', () => {
-  const who = { ...NOBODY, fdrId: 'f1', correlation: 'CORRELATED', flightDataCallsign: 'VIPER11', flightDataType: 'F16', tag: 'BANDIT' };
+  const who = { ...NOBODY, flightDataId: 'f1', correlation: 'CORRELATED', flightDataCallsign: 'VIPER11', flightDataType: 'F16', tag: 'BANDIT' };
   const wire = present({ who });
-  assert.deepEqual(wire.label, { callsign: 'VIPER11', source: 'FDR', tag: 'BANDIT', trackNumber: 'TN00007' });
+  assert.deepEqual(wire.label, { callsign: 'VIPER11', source: 'FLIGHT_DATA', tag: 'BANDIT', trackNumber: 'TN00007' });
   assert.equal(wire.type, 'F16');
-  assert.equal(present({ who: { ...who, correlation: 'PROVISIONAL' } }).label.source, 'FDR_PROVISIONAL');
+  assert.equal(present({ who: { ...who, correlation: 'PROVISIONAL' } }).label.source, 'FLIGHT_DATA_PROVISIONAL');
   assert.deepEqual(present({ who: { ...NOBODY, tag: 'BANDIT' } }).label.source, 'TAG');
 });
 

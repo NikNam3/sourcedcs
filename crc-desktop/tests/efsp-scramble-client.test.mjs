@@ -18,34 +18,34 @@ const server = require('../../crc-sync/src/efsp/alert-scramble.js');
 
 // ── fixtures ─────────────────────────────────────────────────────────────
 
-const fdr = (fdrId, callsign, alertStatus = 'NONE') => ({
-  fdrId, rev: 1, identity: { callsign }, filed: {}, assigned: {},
+const flightData = (flightDataId, callsign, alertStatus = 'NONE') => ({
+  flightDataId, rev: 1, identity: { callsign }, filed: {}, assigned: {},
   military: { ordnanceState: 'CLEAN', hookRequired: false, alertStatus },
 });
-const strip = (stripId, fdrId, role, state, facilityId = 'INCIRLIK', ownerPositionId = 'GND', bayId = 'gnd-taxi-out') => ({
-  stripId, fdrId, role, state, facilityId, ownerPositionId, bayId, rackId: 'main', orderKey: 'V', rev: 1,
+const strip = (stripId, flightDataId, stripType, state, facilityId = 'INCIRLIK', ownerPositionId = 'GC', bayId = 'gc-taxi-out') => ({
+  stripId, flightDataId, stripType, state, facilityId, ownerPositionId, bayId, rackId: 'main', orderKey: 'V', rev: 1,
   annotations: {}, flags: {}, coordination: null, tofiCoordination: null, airspaceEntry: null, previousLeg: null,
 });
 
 const FDRS = [
-  fdr('f-viper', 'VIPER11', 'SCRAMBLE'), fdr('f-alert', 'COLT21', 'ALERT'), fdr('f-taxi', 'HAWK31'),
-  fdr('f-queue', 'EAGLE41'), fdr('f-in', 'TANKER51'), fdr('f-gone', 'BONE61', 'SCRAMBLE'), fdr('f-other', 'OTHER71'),
+  flightData('f-viper', 'VIPER11', 'SCRAMBLE'), flightData('f-alert', 'COLT21', 'ALERT'), flightData('f-taxi', 'HAWK31'),
+  flightData('f-queue', 'EAGLE41'), flightData('f-in', 'TANKER51'), flightData('f-gone', 'BONE61', 'SCRAMBLE'), flightData('f-other', 'OTHER71'),
 ];
 const STRIPS = [
   strip('s-viper', 'f-viper', 'DEPARTURE', 'CLEARED', 'INCIRLIK', 'CD', 'cd-cleared'),
   strip('s-alert', 'f-alert', 'DEPARTURE', 'CLEARED', 'INCIRLIK', 'CD', 'cd-cleared'),
   strip('s-taxi', 'f-taxi', 'DEPARTURE', 'TAXI'),
-  strip('s-queue', 'f-queue', 'DEPARTURE', 'RUNWAY_QUEUE', 'INCIRLIK', 'TWR', 'twr-runway-queue'),
+  strip('s-queue', 'f-queue', 'DEPARTURE', 'RUNWAY_QUEUE', 'INCIRLIK', 'LC', 'lc-runway-queue'),
   strip('s-in', 'f-in', 'ARRIVAL', 'TAXI_IN'),
-  strip('s-gone', 'f-gone', 'DEPARTURE', 'DEPARTED', 'INCIRLIK', 'TWR', 'twr-departed'),
+  strip('s-gone', 'f-gone', 'DEPARTURE', 'DEPARTED', 'INCIRLIK', 'LC', 'twr-departed'),
   strip('s-other', 'f-other', 'DEPARTURE', 'TAXI', 'CENTER'),
 ];
-const fdrMap = new Map(FDRS.map(f => [f.fdrId, f]));
+const fdrMap = new Map(FDRS.map(f => [f.flightDataId, f]));
 const flightDataOf = (id) => fdrMap.get(id) || null;
 
-function load(strips = STRIPS, fdrs = FDRS, fieldStates = []) {
+function load(strips = STRIPS, flightDataList = FDRS, runwayStatuses = []) {
   state._resetEfspStateForTest();
-  state.applyEfspSnapshot({ strips, fdrs, positions: [], bays: [], boardSeq: 1, fieldStates });
+  state.applyEfspSnapshot({ strips, flightDataList, positions: [], bays: [], boardSeq: 1, runwayStatuses });
 }
 
 // ── drift ────────────────────────────────────────────────────────────────
@@ -54,20 +54,20 @@ test('drift: scramble.js answers exactly as crc-sync\'s alert-scramble.js over o
   assert.deepEqual(client.SCRAMBLE_PRE_AIRBORNE, server.SCRAMBLE_PRE_AIRBORNE);
   assert.deepEqual(client.GROUND_STATES, server.GROUND_STATES);
   const extra = [strip('s-ace', 'f-ace', 'DEPARTURE', 'TAXI'), strip('s-missing', 'f-missing', 'DEPARTURE', 'LUAW')];
-  const fdrs = (id) => (id === 'f-ace' ? fdr('f-ace', 'ACE12', 'SCRAMBLE') : flightDataOf(id));
+  const flightDataList = (id) => (id === 'f-ace' ? flightData('f-ace', 'ACE12', 'SCRAMBLE') : flightDataOf(id));
   for (const strips of [STRIPS, [...STRIPS, ...extra], [], STRIPS.filter(s => s.stripId !== 's-viper')]) {
     for (const facilityId of [undefined, 'INCIRLIK', 'CENTER']) {
-      assert.deepEqual(client.activeScrambles(strips, fdrs, facilityId), server.activeScrambles(strips, fdrs, facilityId));
+      assert.deepEqual(client.activeScrambles(strips, flightDataList, facilityId), server.activeScrambles(strips, flightDataList, facilityId));
       if (facilityId) {
-        assert.deepEqual(client.conflictingGroundStrips(strips, fdrs, facilityId), server.conflictingGroundStrips(strips, fdrs, facilityId));
+        assert.deepEqual(client.conflictingGroundStrips(strips, flightDataList, facilityId), server.conflictingGroundStrips(strips, flightDataList, facilityId));
       }
     }
   }
   const scrambles = server.activeScrambles(STRIPS, flightDataOf, 'INCIRLIK');
-  for (const fieldState of [null, { alertPad: {} }, { alertPad: { accessRoute: 'ALERT ACCESS TAXIWAY' } }, { alertPad: { accessRoute: 7 } }]) {
-    assert.deepEqual(client.alertPadConstraint(fieldState, scrambles), server.alertPadConstraint(fieldState, scrambles));
-    assert.deepEqual(client.alertPadConstraint(fieldState, []), server.alertPadConstraint(fieldState, []));
-    assert.equal(client.accessRouteText(fieldState), server.accessRouteText(fieldState));
+  for (const runwayStatus of [null, { alertPad: {} }, { alertPad: { accessRoute: 'ALERT ACCESS TAXIWAY' } }, { alertPad: { accessRoute: 7 } }]) {
+    assert.deepEqual(client.alertPadConstraint(runwayStatus, scrambles), server.alertPadConstraint(runwayStatus, scrambles));
+    assert.deepEqual(client.alertPadConstraint(runwayStatus, []), server.alertPadConstraint(runwayStatus, []));
+    assert.equal(client.accessRouteText(runwayStatus), server.accessRouteText(runwayStatus));
   }
 });
 
@@ -124,7 +124,7 @@ test('alertPadConstraintFor with getEfspFieldState names the configured route', 
 // ── the Board-wide line ──────────────────────────────────────────────────
 
 /** efsp-state.js + scramble.js in their own sandbox, against the DOM stub. */
-async function lineSandbox({ strips = STRIPS, fdrs = FDRS, held = [] } = {}) {
+async function lineSandbox({ strips = STRIPS, flightDataList = FDRS, signedOn = [] } = {}) {
   const line = domStub.makeElement('div');
   line.id = 'efsp-scramble-line';
   const selected = [];
@@ -136,9 +136,9 @@ async function lineSandbox({ strips = STRIPS, fdrs = FDRS, held = [] } = {}) {
   const bay = await g.import('panels/efsp/bay-view.js');
   const scramble = await g.import('panels/efsp/scramble.js');
   ws.setEfspSender('_sendEfsp', () => {});
-  ws.sendEfspSetPositions('INCIRLIK', held);
+  ws.sendEfspSetPositions('INCIRLIK', signedOn);
   bay._setSelectEfspStripByIdForTest((id) => { selected.push(id); return true; });
-  st.applyEfspSnapshot({ strips, fdrs, positions: [], bays: [], boardSeq: 1 });
+  st.applyEfspSnapshot({ strips, flightDataList, positions: [], bays: [], boardSeq: 1 });
   const render = () => scramble.renderEfspScrambleLine();
   return { line, selected, render };
 }
@@ -173,7 +173,7 @@ test('one row per scramble: callsign button, Facility, state, the constrained ro
 
 test('two scramblers: two rows, each ground Strip counted once', async () => {
   const strips = [...STRIPS, strip('s-ace', 'f-ace', 'DEPARTURE', 'TAXI')];
-  const { line, render } = await lineSandbox({ strips, fdrs: [...FDRS, fdr('f-ace', 'ACE12', 'SCRAMBLE')] });
+  const { line, render } = await lineSandbox({ strips, flightDataList: [...FDRS, flightData('f-ace', 'ACE12', 'SCRAMBLE')] });
   render();
   assert.deepEqual(line.children.map(r => r.children[1].textContent), ['ACE12', 'VIPER11']);
   for (const r of line.children) assert.match(r.children[2].textContent, /· 3 flagged$/);

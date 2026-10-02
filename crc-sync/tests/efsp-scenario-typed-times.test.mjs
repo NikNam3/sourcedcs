@@ -33,7 +33,7 @@ const facilityConfig = await import('../src/efsp/facility-config.js');
 const { ForwardingObligationMonitor } = await import('../src/efsp/forwarding-obligations.js');
 const { crew, act, mustAct, jumpTo, advance, DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');
 
-const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK' };
+const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK' };
 const MINUTE = 60 * 1000;
 const zulu = (hh, mm) => Date.UTC(2016, 5, 21, hh, mm);
 
@@ -55,8 +55,8 @@ function setup() {
 
 async function cleared(efsp, c, callsign) {
   let strip = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE',
-    fdr: { ...DEPARTURE_FLIGHT_DATA, callsign },
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE',
+    flightData: { ...DEPARTURE_FLIGHT_DATA, callsign },
   });
   strip = await advance(efsp, c.OPS, 'OPS', strip); // -> PENDING_CLEARANCE at CD
   return jumpTo(efsp, c.CD, 'CD', strip, 'CLEARED');
@@ -74,7 +74,7 @@ test('SCENARIO a void time typed as 1400 is dated on the mission day and actuall
   strip = mustAct(efsp, c.CD, 'CD', strip, { kind: 'SetBlock', blockId: '14D', value: '1400' });
   strip = jumpTo(efsp, c.CD, 'CD', strip, 'HELD');
 
-  const assigned = efsp.flightDataStore.getFlightData(strip.fdrId).assigned;
+  const assigned = efsp.flightDataStore.getFlightData(strip.flightDataId).assigned;
   assert.equal(assigned.voidTimeUtc, zulu(14, 0), 'epoch ms on the MISSION date, not the typed string');
   assert.equal(assigned.voidDeadlineUtc, zulu(14, 30), 'the derived deadline is arithmetic, not concatenation');
 
@@ -102,7 +102,7 @@ test('SCENARIO a release time typed as 14:00Z holds the flight until 1400, then 
   strip = mustAct(efsp, c.CD, 'CD', strip, { kind: 'SetBlock', blockId: '14A', value: 'RELEASE_TIME' });
   strip = mustAct(efsp, c.CD, 'CD', strip, { kind: 'SetBlock', blockId: '14', value: '14:00Z' });
   strip = jumpTo(efsp, c.CD, 'CD', strip, 'HELD');
-  assert.equal(efsp.flightDataStore.getFlightData(strip.fdrId).assigned.releaseTimeUtc, zulu(14, 0));
+  assert.equal(efsp.flightDataStore.getFlightData(strip.flightDataId).assigned.releaseTimeUtc, zulu(14, 0));
 
   const early = act(efsp, c.CD, 'CD', fresh(efsp, strip), { kind: 'InvokeNla' });
   assert.equal(early.ok, false, 'ten minutes early: held');
@@ -111,7 +111,7 @@ test('SCENARIO a release time typed as 14:00Z holds the flight until 1400, then 
   clock.set(zulu(14, 0));
   const pushed = await advance(efsp, c.CD, 'CD', fresh(efsp, strip));
   assert.equal(pushed.state, 'PUSHBACK');
-  assert.equal(pushed.ownerPositionId, 'GND');
+  assert.equal(pushed.ownerPositionId, 'GC');
 });
 
 // ── 3. the slot windows derive from a typed time ─────────────────────────
@@ -123,7 +123,7 @@ test('SCENARIO an EDCT typed as 1355 opens its window at 1350 and a CFR typed as
   edct = mustAct(efsp, c.CD, 'CD', edct, { kind: 'SetBlock', blockId: '14A', value: 'EDCT' });
   edct = mustAct(efsp, c.CD, 'CD', edct, { kind: 'SetBlock', blockId: '14B', value: '1355' });
   edct = jumpTo(efsp, c.CD, 'CD', edct, 'HELD');
-  const e = efsp.flightDataStore.getFlightData(edct.fdrId).assigned;
+  const e = efsp.flightDataStore.getFlightData(edct.flightDataId).assigned;
   assert.deepEqual([e.edctTimeUtc, e.edctWindowStartUtc, e.edctWindowEndUtc], [zulu(13, 55), zulu(13, 50), zulu(14, 0)]);
 
   let cfr = await cleared(efsp, c, 'CFR9');
@@ -144,16 +144,16 @@ test('SCENARIO a typo\'d void time (1472) is refused and the FDR is unchanged; a
   let strip = await cleared(efsp, c, 'TYPO9');
   strip = mustAct(efsp, c.CD, 'CD', strip, { kind: 'SetBlock', blockId: '14A', value: 'CLEARANCE_VOID_TIME' });
   strip = mustAct(efsp, c.CD, 'CD', strip, { kind: 'SetBlock', blockId: '14D', value: '1400' });
-  const before = structuredClone(efsp.flightDataStore.getFlightData(strip.fdrId));
+  const before = structuredClone(efsp.flightDataStore.getFlightData(strip.flightDataId));
 
   const typo = act(efsp, c.CD, 'CD', strip, { kind: 'SetBlock', blockId: '14D', value: '1472' });
   assert.equal(typo.ok, false);
   assert.equal(typo.reason, 'VALIDATION_ERROR');
   assert.match(typo.detail, /void time must be a UTC time as HHMM/);
-  assert.deepEqual(efsp.flightDataStore.getFlightData(strip.fdrId), before, 'no partial write, no rev bump');
+  assert.deepEqual(efsp.flightDataStore.getFlightData(strip.flightDataId), before, 'no partial write, no rev bump');
 
   mustAct(efsp, c.CD, 'CD', fresh(efsp, strip), { kind: 'SetBlock', blockId: '14D', value: '' });
-  const assigned = efsp.flightDataStore.getFlightData(strip.fdrId).assigned;
+  const assigned = efsp.flightDataStore.getFlightData(strip.flightDataId).assigned;
   assert.equal(assigned.voidTimeUtc, null);
   assert.equal(assigned.voidDeadlineUtc, null);
 });
@@ -165,8 +165,8 @@ test('SCENARIO Blocks 6, 16, 17 and 18 store epoch ms on the mission date; an ET
   let strip = await cleared(efsp, c, 'TIME9');
   for (const [blockId, typed, expected] of [['6', '1345', zulu(13, 45)], ['16', '1352', zulu(13, 52)], ['17', '1355', zulu(13, 55)], ['18', '1405', zulu(14, 5)]]) {
     strip = mustAct(efsp, c.CD, 'CD', fresh(efsp, strip), { kind: 'SetBlock', blockId, value: typed });
-    const fdr = efsp.flightDataStore.getFlightData(strip.fdrId);
-    const value = { '6': fdr.filed.proposedDepartureTimeUtc, '16': fdr.assigned.movementAreaEntryTimeUtc, '17': fdr.assigned.taxiTimeUtc, '18': fdr.assigned.takeoffTimeUtc }[blockId];
+    const flightData = efsp.flightDataStore.getFlightData(strip.flightDataId);
+    const value = { '6': flightData.filed.proposedDepartureTimeUtc, '16': flightData.assigned.movementAreaEntryTimeUtc, '17': flightData.assigned.taxiTimeUtc, '18': flightData.assigned.takeoffTimeUtc }[blockId];
     assert.equal(value, expected, blockId);
   }
 
@@ -174,7 +174,7 @@ test('SCENARIO Blocks 6, 16, 17 and 18 store epoch ms on the mission date; an ET
   clock.set(zulu(23, 50));
   const arrival = efsp.flightDataStore.createFlightData({ callsign: 'ARR9', estimatedArrivalTimeUtc: '0010' }, { by: 'test' });
   assert.equal(arrival.ok, true);
-  assert.equal(arrival.fdr.filed.estimatedArrivalTimeUtc, Date.UTC(2016, 5, 22, 0, 10));
+  assert.equal(arrival.flightData.filed.estimatedArrivalTimeUtc, Date.UTC(2016, 5, 22, 0, 10));
   const bad = efsp.flightDataStore.createFlightData({ callsign: 'ARR8', estimatedArrivalTimeUtc: 'soon' }, { by: 'test' });
   assert.equal(bad.ok, false);
   assert.match(bad.detail, /estimated arrival time must be a UTC time as HHMM/);

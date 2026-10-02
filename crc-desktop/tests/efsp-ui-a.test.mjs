@@ -10,16 +10,16 @@ import { tofiExitDueFor } from '../app/public/js/panels/efsp/efsp-nla.js';
 import * as st from '../app/public/js/panels/efsp/efsp-state.js';
 
 test('U4: TYPE (3) is redirected to the aircraft type (3A) and carries its current value', () => {
-  const fdr = { identity: { aircraftType: 'F16C', flightSize: 2 } };
-  assert.deepEqual(tpl.editRedirectFor('3', 'DEPARTURE', fdr), { blockId: '3A', value: 'F16C' });
+  const flightData = { identity: { aircraftType: 'F16C', flightSize: 2 } };
+  assert.deepEqual(tpl.editRedirectFor('3', 'DEPARTURE', flightData), { blockId: '3A', value: 'F16C' });
   assert.deepEqual(tpl.editRedirectFor('3', 'ARRIVAL', null), { blockId: '3A', value: '' });
-  assert.equal(tpl.editRedirectFor('3', 'MISSION', fdr), null, 'a mission line has no 3A');
-  assert.equal(tpl.editRedirectFor('5', 'DEPARTURE', fdr), null);
+  assert.equal(tpl.editRedirectFor('3', 'MISSION', flightData), null, 'a mission line has no 3A');
+  assert.equal(tpl.editRedirectFor('5', 'DEPARTURE', flightData), null);
   assert.equal(tpl.isBlockEditable('3'), false, 'the composite itself is still not a write target');
 });
 
 test('U5: RELEASE (14A) is on a departure at APP and CTR, labelled RELEASE', () => {
-  for (const p of ['APP', 'CTR']) assert.ok(fields.compactBlocksFor('DEPARTURE', p).includes('14A'), p);
+  for (const p of ['AP', 'CTR']) assert.ok(fields.compactBlocksFor('DEPARTURE', p).includes('14A'), p);
   assert.equal(tpl.blockLabelFor('14A', 'DEPARTURE'), 'RELEASE');
 });
 
@@ -29,23 +29,23 @@ test('U3: the IFR field says what it is', () => {
 });
 
 test('U8: TOFI Exit is due on the ATC Strip only while its TOFI is ACTIVE and the mission line is OFF_STATION or RTB', () => {
-  const atc = (state) => ({ role: 'OVERFLIGHT', tofiCoordination: { state, direction: 'ENTRY', peerStripId: 'm1' } });
-  const mission = (state) => ({ role: 'MISSION', state });
+  const atc = (state) => ({ stripType: 'OVERFLIGHT', tofiCoordination: { state, direction: 'ENTRY', peerStripId: 'm1' } });
+  const mission = (state) => ({ stripType: 'MISSION', state });
   for (const s of ['OFF_STATION', 'RTB']) assert.equal(tofiExitDueFor(atc('ACTIVE'), mission(s)), true, s);
   for (const s of ['TASKED', 'AIRBORNE', 'ON_STATION', 'DROPPED']) assert.equal(tofiExitDueFor(atc('ACTIVE'), mission(s)), false, s);
-  assert.equal(tofiExitDueFor(atc('PROPOSED'), mission('RTB')), false, 'an exit already proposed is not offered again');
+  assert.equal(tofiExitDueFor(atc('INITIATED'), mission('RTB')), false, 'an exit already proposed is not offered again');
   assert.equal(tofiExitDueFor(atc('ACTIVE'), null), false);
-  assert.equal(tofiExitDueFor({ ...atc('ACTIVE'), role: 'MISSION' }, mission('RTB')), false, 'never on the mission side');
-  assert.equal(tofiExitDueFor({ role: 'ARRIVAL', tofiCoordination: null }, mission('RTB')), false);
+  assert.equal(tofiExitDueFor({ ...atc('ACTIVE'), stripType: 'MISSION' }, mission('RTB')), false, 'never on the mission side');
+  assert.equal(tofiExitDueFor({ stripType: 'ARRIVAL', tofiCoordination: null }, mission('RTB')), false);
 });
 
 test('S-L16 W2: TAXI is on GND\'s face and TAKEOFF on TWR\'s', () => {
-  assert.ok(fields.compactBlocksFor('DEPARTURE', 'GND').includes('17'));
-  assert.ok(fields.compactBlocksFor('DEPARTURE', 'TWR').includes('18'));
+  assert.ok(fields.compactBlocksFor('DEPARTURE', 'GC').includes('17'));
+  assert.ok(fields.compactBlocksFor('DEPARTURE', 'LC').includes('18'));
 });
 
 test('S-L16 W3/W5: a typed TAXI behind a later P-time is flagged; an estimate says how to accept it', () => {
-  const strip = { role: 'DEPARTURE' };
+  const strip = { stripType: 'DEPARTURE' };
   const t = (h, m) => Date.UTC(2026, 3, 14, h, m);
   const typed = { filed: { proposedDepartureTimeUtc: t(14, 50) }, assigned: { taxiTimeUtc: t(14, 25) } };
   const behind = tpl.blockValueHintFor('17', typed, strip);
@@ -61,8 +61,8 @@ test('S-L16 W3/W5: a typed TAXI behind a later P-time is flagged; an estimate sa
 
 test('S-L23 finding: TAC_C2 lists the live lines AIC and JTAC hold, and no one else gets the list', () => {
   st._resetEfspStateForTest();
-  const mk = (stripId, over) => ({ stripId, fdrId: stripId, role: 'MISSION', state: 'ON_STATION', ownerPositionId: 'AIC', bayId: 'aic-on-station', rackId: 'main', orderKey: stripId, updatedAt: 1, flags: {}, ...over });
-  st.applyEfspSnapshot({ strips: [mk('a'), mk('b', { ownerPositionId: 'JTAC' }), mk('c', { ownerPositionId: 'TAC_C2' }), mk('d', { state: 'DROPPED' }), mk('e', { role: 'ARRIVAL' })], fdrs: [], positions: [], bays: [] });
+  const mk = (stripId, over) => ({ stripId, flightDataId: stripId, stripType: 'MISSION', state: 'ON_STATION', ownerPositionId: 'AIC', bayId: 'aic-on-station', rackId: 'main', orderKey: stripId, updatedAt: 1, flags: {}, ...over });
+  st.applyEfspSnapshot({ strips: [mk('a'), mk('b', { ownerPositionId: 'JTAC' }), mk('c', { ownerPositionId: 'TAC_C2' }), mk('d', { state: 'DROPPED' }), mk('e', { stripType: 'ARRIVAL' })], flightDataList: [], positions: [], bays: [] });
   assert.deepEqual(st.efspLinesWithOthers('TAC_C2').map(s => s.stripId).sort(), ['a', 'b']);
   assert.deepEqual(st.efspLinesWithOthers('CTR'), []);
   assert.equal(st.isWithOthersBayId(st.withOthersBayId('TAC_C2')), true);

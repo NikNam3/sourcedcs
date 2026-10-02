@@ -3,7 +3,7 @@
 // Field state (EFSPImplementationGuide.md §9.7) — the STATEFUL half, and the
 // sixth EFSP store (docs/adr/0061).
 //
-// A peer of the Strip model, not a subsidiary of it (§9.1: "the field-state
+// A peer of the Strip model, not a subsidiary of it (§9.1: "the runway-status
 // model is a peer of the Strip model"). ONE instance for the whole server
 // holding one record per Facility that has a runway inventory (today only
 // INCIRLIK), for the reason AirspaceStore is single-instance: nothing about a
@@ -13,7 +13,7 @@
 // STALE_REV, which is correct rather than costly.
 //
 // Config vs state (decisions.md P5, docs/adr/0048): WHICH runways, ends and
-// gear exist is the Facility's `fieldState` inventory, read ONCE here at
+// gear exist is the Facility's `runwayStatus` inventory, read ONCE here at
 // construction and never written back. Everything that changes at runtime —
 // status, suspension, closure, inspection, the active end, a runway change,
 // a request to tower — lives only in this store and the Board snapshot. This
@@ -23,7 +23,7 @@
 // into-wind end) are runway-status.js's; this file applies them to records.
 //
 // Rule 5's deliberate deviation: field state rides its OWN sequence
-// (`currentSeq`, sent as `fieldStateSeq`) and its own efsp-field-state-delta,
+// (`currentSeq`, sent as `runwayStatusSeq`) and its own efsp-runway-status-delta,
 // not the Board sequence the guide names — see docs/adr/0061 for why each
 // literal reading of "broadcast on the Board sequence" breaks.
 
@@ -71,7 +71,7 @@ class RunwayStatusStore {
     this._clock = clock;
     this._isStaffed = isStaffed || (() => false);
     this._primaryOf = primaryOf || (() => null);
-    this._inventories = new Map(); // facilityId -> fieldState inventory (config, read once)
+    this._inventories = new Map(); // facilityId -> runwayStatus inventory (config, read once)
     this._positions = new Map();   // facilityId -> its Position set, for resolving acknowledgers
     this._records = new Map();     // facilityId -> record
     this._views = new Map();       // facilityId -> cached status view for rule 1
@@ -79,8 +79,8 @@ class RunwayStatusStore {
     this._mutationLog = null;
     for (const facilityId of facilityConfig.getFacilityIds()) {
       const config = facilityConfig.getFacilityConfig(facilityId);
-      if (!config || !config.fieldState) continue; // no inventory, no record
-      this._inventories.set(facilityId, deepClone(config.fieldState));
+      if (!config || !config.runwayStatus) continue; // no inventory, no record
+      this._inventories.set(facilityId, deepClone(config.runwayStatus));
       this._positions.set(facilityId, [...(config.positions || [])]);
       this._records.set(facilityId, this._seed(facilityId));
     }
@@ -103,8 +103,8 @@ class RunwayStatusStore {
       runwayChange: null,
       // §12: a deferral leaves its fields present. L12 (hot cargo) and L13
       // (alert pad) give these meaning; no op here touches them.
-      hotCargoPad: { occupied: false, occupantFdrId: null },
-      alertPad: { occupied: false, occupantFdrId: null },
+      hotCargoPad: { occupied: false, occupantFlightDataId: null },
+      alertPad: { occupied: false, occupantFlightDataId: null },
       transitions: [],
       updatedAt: null,
       updatedBy: null,
@@ -198,9 +198,9 @@ class RunwayStatusStore {
       clientMutationId: mutation.clientMutationId,
       op: op.kind,
       // Its own id field: Mutation-log readers key on whichever id is present
-      // (stripId / airspaceId / fdrId / marsaId), and a field-state op is about
+      // (stripId / airspaceId / flightDataId / marsaId), and a runway-status op is about
       // a Facility's field, not any of those.
-      fieldStateFacilityId: mutation.facilityId,
+      runwayStatusFacilityId: mutation.facilityId,
       // The one name every reader keys on (docs/adr/0083).
       facilityId: mutation.facilityId ?? null,
       runwayId: op.runwayId ?? null,
@@ -229,8 +229,8 @@ class RunwayStatusStore {
   // ── the one entry point ────────────────────────────────────────────────
 
   /**
-   * Every field-state op. Never throws; every result carries the current
-   * record as `fieldState`, success or refusal; every outcome is audited.
+   * Every runway-status op. Never throws; every result carries the current
+   * record as `runwayStatus`, success or refusal; every outcome is audited.
    * One op is one rev, one seq and one audit entry, however many runways it
    * touches.
    *
@@ -255,9 +255,9 @@ class RunwayStatusStore {
         result = { ok: false, reason: 'STALE_REV', detail: `field state is at rev ${record.rev}, not ${mutation.baseRev}` };
       } else if (!permission.canActOnRunwayStatus(actingPositionId, op.kind)) {
         before = deepClone(record);
-        result = Object.prototype.hasOwnProperty.call(permission.FIELD_STATE_OP_OWNERS, op.kind)
+        result = Object.prototype.hasOwnProperty.call(permission.RUNWAY_STATUS_OP_OWNERS, op.kind)
           ? { ok: false, reason: 'PERMISSION_DENIED', detail: `${op.kind} is not ${actingPositionId}'s` }
-          : { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown field-state op: ${op.kind}` };
+          : { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown runway-status op: ${op.kind}` };
       } else {
         before = deepClone(record);
         result = this._dispatch(record, op, actingPositionId, by);
@@ -265,10 +265,10 @@ class RunwayStatusStore {
     } catch (err) {
       // The backstop every EFSP store has: one bad op must never take the
       // process down for every connected client.
-      log.error('unexpected error applying a field-state op — rejecting it instead of crashing', { err });
-      result = { ok: false, reason: 'VALIDATION_ERROR', detail: 'internal error processing field-state op' };
+      log.error('unexpected error applying a runway-status op — rejecting it instead of crashing', { err });
+      result = { ok: false, reason: 'VALIDATION_ERROR', detail: 'internal error processing runway-status op' };
     }
-    result.fieldState = this.getRunwayStatus(mutation && mutation.facilityId);
+    result.runwayStatus = this.getRunwayStatus(mutation && mutation.facilityId);
     this._recordAudit(mutation || {}, actingPositionId, by, before, result);
     return result;
   }
@@ -292,7 +292,7 @@ class RunwayStatusStore {
       case 'BeginRunwayChange':          return this._beginChange(ctx);
       case 'CompleteRunwayChange':       return this._completeChange(ctx);
       default:
-        return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown field-state op: ${op.kind}` };
+        return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown runway-status op: ${op.kind}` };
     }
   }
 
@@ -422,7 +422,7 @@ class RunwayStatusStore {
 
   // ── rule 3: the runway change ──────────────────────────────────────────
   //
-  // Its own machine on the field-state record. board-store.js's coordination
+  // Its own machine on the runway-status record. board-store.js's coordination
   // primitives cannot carry it: they are attached to a Strip, cross-Facility
   // by construction (TWR, OPS and APP are all INCIRLIK), and one proposer /
   // one responder with no way to say "OPS AND APP".
@@ -462,13 +462,13 @@ class RunwayStatusStore {
     for (const positionId of acknowledgers) {
       acks[positionId] = this._isStaffed(record.facilityId, positionId)
         ? null
-        : { skipped: true, reason: 'UNMANNED', at: now };
+        : { skipped: true, reason: 'UNSTAFFED', at: now };
     }
     const required = acknowledgers.filter(p => acks[p] === null);
 
     if (selfCoordinate) {
       // One input, legal only when this controller is Primary on every
-      // acknowledger that is manned (TWR is checked at the wire).
+      // acknowledger that is staffed (TWR is checked at the wire).
       const elsewhere = required.filter(p => this._primaryOf(record.facilityId, p) !== by);
       if (elsewhere.length) {
         return { ok: false, reason: 'PERMISSION_DENIED', detail: `a self-coordinated runway change needs you Primary at ${elsewhere.join(' and ')} — ask for the acknowledgement instead` };

@@ -27,29 +27,29 @@ const valid = (cfg) => fc.validateConfig(cfg);
 
 test('INCIRLIK has RSU, SFA and PAR: MILITARY_ATC (so CA keeps them), unique letters, covering chain without RSU', () => {
   const cfg = fc.getFacilityConfig();
-  assert.deepEqual(cfg.positions, ['OPS', 'CD', 'GND', 'TWR', 'RSU', 'APP', 'SFA', 'PAR']);
+  assert.deepEqual(cfg.positions, ['OPS', 'CD', 'GC', 'LC', 'RSU', 'AP', 'SFA', 'PAR']);
   for (const id of ['RSU', 'SFA', 'PAR']) assert.equal(fc.getPositionClass(id), 'MILITARY_ATC', id);
   assert.deepEqual([cfg.positionLetters.RSU, cfg.positionLetters.SFA, cfg.positionLetters.PAR], ['R', 'S', 'P']);
   const letters = Object.values(cfg.positionLetters);
   assert.equal(new Set(letters).size, letters.length, 'a letter is unique inside the Facility');
-  assert.equal(cfg.coveringChain.SFA, 'APP');
-  assert.equal(cfg.coveringChain.PAR, 'APP');
-  assert.equal('RSU' in cfg.coveringChain, false, 'a Strip never strands on a supervisory Position');
+  assert.equal(cfg.consolidation.SFA, 'AP');
+  assert.equal(cfg.consolidation.PAR, 'AP');
+  assert.equal('RSU' in cfg.consolidation, false, 'a Strip never strands on a supervisory Position');
 });
 
 test('radars: RSU the airport radar, SFA APP\'s picture, PAR the precision approach radar alone', () => {
   assert.deepEqual(fc.getPositionRadars('RSU'), [{ kind: 'airport', airport: 'LTAG' }]);
-  assert.deepEqual(fc.getPositionRadars('SFA'), fc.getPositionRadars('APP'));
+  assert.deepEqual(fc.getPositionRadars('SFA'), fc.getPositionRadars('AP'));
   assert.deepEqual(fc.getPositionRadars('PAR'), [{ kind: 'approach', airport: 'LTAG' }]);
   assert.ok(fc.radarBearingPositionIds().includes('PAR'));
 });
 
 test('Bays: each Position\'s Bay implies a state its Role really has, and the new states are not in INELIGIBLE_STATES (every PATTERN/FINAL state is decided)', () => {
   const stripTypeOfBay = { 'rsu-pattern': 'PATTERN', 'sfa-frequencies': 'ARRIVAL', 'par-final': 'FINAL', 'par-missed': 'FINAL' };
-  for (const [bayId, role] of Object.entries(stripTypeOfBay)) {
+  for (const [bayId, stripType] of Object.entries(stripTypeOfBay)) {
     const bay = fc.getBay(bayId);
     assert.ok(bay, bayId);
-    assert.ok(nla.STATES_BY_ROLE[role].includes(bay.impliesState), `${bayId} implies ${bay.impliesState}, not a ${role} state`);
+    assert.ok(nla.STATES_BY_STRIP_TYPE[stripType].includes(bay.impliesState), `${bayId} implies ${bay.impliesState}, not a ${stripType} state`);
   }
   // The SFA Bay's state is ARRIVAL's own INBOUND (S-L18), not a new one.
   assert.equal(fc.bayImpliesState('sfa-frequencies'), 'INBOUND');
@@ -100,7 +100,7 @@ test('Bay descriptor flags are validated: an unknown view and a bad capacity are
 
 test('singleFrequencyApproach: APP holds jurisdiction over a pool of at least five, a rotation of three, and the pool IS the SFA Bay\'s Racks', () => {
   const sfa = fc.getSingleFrequencyApproach();
-  assert.equal(sfa.jurisdiction, 'APP');
+  assert.equal(sfa.jurisdiction, 'AP');
   assert.equal(sfa.rotationSize, 3);
   assert.ok(sfa.pool.length >= 5);
   assert.deepEqual(sfa.pool.map(p => p.rackId), fc.getBay('sfa-frequencies').rackIds);
@@ -128,9 +128,9 @@ test('singleFrequencyApproach is rejected when malformed (guide §4.7: at least 
   assert.match(r.detail, /must be exactly the pool/);
   r = mutate(c => { delete c.bays.SFA[0].view; });
   assert.match(r.detail, /exactly one Bay/);
-  r = mutate(c => { c.singleFrequencyApproach.initialRotation = { 'freq-1': 'APP', 'freq-2': 'APP' }; });
+  r = mutate(c => { c.singleFrequencyApproach.initialRotation = { 'freq-1': 'AP', 'freq-2': 'AP' }; });
   assert.match(r.detail, /two frequencies at once/);
-  r = mutate(c => { c.singleFrequencyApproach.initialRotation = { 'freq-1': 'APP', 'freq-2': 'SFA', 'freq-3': 'PAR', 'freq-4': 'TWR' }; });
+  r = mutate(c => { c.singleFrequencyApproach.initialRotation = { 'freq-1': 'AP', 'freq-2': 'SFA', 'freq-3': 'PAR', 'freq-4': 'LC' }; });
   assert.match(r.detail, /at most 3/);
   assert.equal(mutate(() => {}).ok, true);
 });
@@ -138,7 +138,7 @@ test('singleFrequencyApproach is rejected when malformed (guide §4.7: at least 
 test('permission rows: one capability table; PAR and SFA get ordinary Strip ops and no coordination, TOFI, conversion or airspace op', () => {
   for (const id of ['RSU', 'SFA', 'PAR']) {
     const ops = permission.PERMISSIONS[id];
-    for (const k of [...permission.COORDINATION_OP_KINDS, ...permission.TOFI_OP_KINDS, ...permission.APP_CTR_ONLY_OP_KINDS, ...permission.AIRSPACE_ENTRY_OP_KINDS]) {
+    for (const k of [...permission.COORDINATION_OP_KINDS, ...permission.TOFI_OP_KINDS, ...permission.AP_CTR_ONLY_OP_KINDS, ...permission.AIRSPACE_ENTRY_OP_KINDS]) {
       assert.equal(ops.has(k), false, `${id} must not hold ${k}`);
     }
     assert.equal(ops.has('MoveStrip') && ops.has('TransferStrip') && ops.has('SetState'), true, id);
@@ -146,9 +146,9 @@ test('permission rows: one capability table; PAR and SFA get ordinary Strip ops 
   assert.equal(permission.canMutate('RSU', 'CreateStrip'), true);
   assert.equal(permission.canMutate('SFA', 'CreateStrip'), false, 'SFA\'s Strips arrive from APP');
   assert.equal(permission.canMutate('PAR', 'CreateStrip'), false, 'PAR\'s arrive by the rotation');
-  assert.equal(permission.canCreateStripRole('RSU', 'PATTERN'), true);
-  assert.equal(permission.canCreateStripRole('RSU', 'ARRIVAL'), false);
-  assert.equal(permission.canCreateStripRole('PAR', 'FINAL'), false);
+  assert.equal(permission.canCreateStripType('RSU', 'PATTERN'), true);
+  assert.equal(permission.canCreateStripType('RSU', 'ARRIVAL'), false);
+  assert.equal(permission.canCreateStripType('PAR', 'FINAL'), false);
 });
 
 test('state authority: RSU works PATTERN, SFA works INBOUND, PAR works FINAL; no other row moved', () => {
@@ -161,13 +161,13 @@ test('state authority: RSU works PATTERN, SFA works INBOUND, PAR works FINAL; no
     assert.equal(permission.canActOnState('PAR', 'FINAL', s), true, s);
     assert.equal(permission.canActOnState('CV_APP1', 'FINAL', s), true, s);
   }
-  assert.deepEqual(permission.STATE_OWNERS_BY_ROLE.MARSHAL.COMMENCED, ['CV_APP1', 'CV_APP2'], 'PAR did not leak into the Marshal table through a shared array');
+  assert.deepEqual(permission.STATE_OWNERS_BY_STRIP_TYPE.MARSHAL.COMMENCED, ['CV_APP1', 'CV_APP2'], 'PAR did not leak into the Marshal table through a shared array');
   assert.equal(permission.canActOnState('PAR', 'ARRIVAL', 'INBOUND'), false);
 });
 
 test('RSU may ask about a runway and never close or open one (H18)', () => {
   assert.equal(permission.canActOnRunwayStatus('RSU', 'RequestRunwayStatus'), true);
-  for (const kind of Object.keys(permission.FIELD_STATE_OP_OWNERS)) {
+  for (const kind of Object.keys(permission.RUNWAY_STATUS_OP_OWNERS)) {
     if (kind === 'RequestRunwayStatus') continue;
     for (const id of ['RSU', 'SFA', 'PAR']) assert.equal(permission.canActOnRunwayStatus(id, kind), false, `${id} / ${kind}`);
   }
@@ -175,9 +175,9 @@ test('RSU may ask about a runway and never close or open one (H18)', () => {
 });
 
 test('SFA predicates read the one table: APP rotates, APP and SFA send the transfer, PAR receives it (one acting Position, D21)', () => {
-  assert.equal(permission.canRotateSfa('APP'), true);
-  for (const id of ['SFA', 'PAR', 'RSU', 'TWR', 'CV_MARSHAL', 'NOBODY', undefined]) assert.equal(permission.canRotateSfa(id), false, String(id));
-  assert.equal(permission.canSendSfaRotationTransfer('APP'), true);
+  assert.equal(permission.canRotateSfa('AP'), true);
+  for (const id of ['SFA', 'PAR', 'RSU', 'LC', 'CV_MARSHAL', 'NOBODY', undefined]) assert.equal(permission.canRotateSfa(id), false, String(id));
+  assert.equal(permission.canSendSfaRotationTransfer('AP'), true);
   assert.equal(permission.canSendSfaRotationTransfer('SFA'), true);
   assert.equal(permission.canSendSfaRotationTransfer('PAR'), false);
   assert.equal(permission.sfaRotationReceiver(), 'PAR');

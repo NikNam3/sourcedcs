@@ -64,8 +64,8 @@ function _maybeSeedRefusedBlockEdit(strip, refusedBlockId, blockId = refusedBloc
   _openBlockEdit = { stripId: strip.stripId, blockId, draft: refusal.value, input: null, close: () => {} };
 }
 
-export function _blockLabel(fdr, strip, blockId) {
-  const { value } = resolveBlockValue(blockId, fdr, strip);
+export function _blockLabel(flightData, strip, blockId) {
+  const { value } = resolveBlockValue(blockId, flightData, strip);
   if (value == null || value === '') return '';
   if (typeof value === 'boolean') return value ? '✓' : '';
   return String(value);
@@ -88,24 +88,24 @@ export function _blockLabel(fdr, strip, blockId) {
  * survives the rebuild rather than blocking it (see _isProtectedStripEl).
  */
 export function _buildBlockCell(strip, blockId) {
-  const fdr = getEfspFdr(strip.fdrId);
+  const flightData = getEfspFdr(strip.flightDataId);
   const span = document.createElement('span');
   span.className = 'efsp-block efsp-block-' + blockId;
   span.dataset.block = blockId;
-  span.textContent = _blockLabel(fdr, strip, blockId);
+  span.textContent = _blockLabel(flightData, strip, blockId);
 
   // F-103, at cell resolution — a refused SetBlock names the Block it was
   // about, so the cell that was rejected says so rather than leaving the
   // banner to be matched against a Strip by eye. Marked whether or not there
   // is text to put back: a refused confirmVacated carries no value, and which
   // cell was refused is a separate question from what was in it.
-  const redirect = typeof editRedirectFor === 'function' ? editRedirectFor(blockId, strip.role, fdr) : null; // UI-A U4
+  const redirect = typeof editRedirectFor === 'function' ? editRedirectFor(blockId, strip.stripType, flightData) : null; // UI-A U4
   const refusal = _refusalForStrip(strip);
   if (refusal && refusal.blockId === (redirect ? redirect.blockId : blockId)) {
     span.classList.add('efsp-block-refused');
     span.title = refusal.message;
   }
-  const hint = typeof blockValueHintFor === 'function' ? blockValueHintFor(blockId, fdr, strip) : null; if (hint) { if (hint.estimated) span.classList.add('efsp-block-estimated'); if (hint.behindPlan) span.classList.add('efsp-block-behind-plan'); if (hint.title && !span.title) span.title = hint.title; } // docs/adr/0073: §10.5's source on hover, an estimate in italics
+  const hint = typeof blockValueHintFor === 'function' ? blockValueHintFor(blockId, flightData, strip) : null; if (hint) { if (hint.estimated) span.classList.add('efsp-block-estimated'); if (hint.behindPlan) span.classList.add('efsp-block-behind-plan'); if (hint.title && !span.title) span.title = hint.title; } // docs/adr/0073: §10.5's source on hover, an estimate in italics
 
   // WP4A gap-closure (docs/adr/0022) — restricted-enum Blocks (airspace
   // ownership, track-degradation flag) get a <select>, never the generic
@@ -114,7 +114,7 @@ export function _buildBlockCell(strip, blockId) {
   // reach it). Checked before isBlockEditable() since these Blocks are
   // deliberately excluded from that generic path (see strip-template.js's
   // isBlockEditable comment).
-  const enumOptions = enumSelectOptionsFor(blockId, fdr); // the FDR: 9F offers a retired route its flight still flies (docs/adr/0073)
+  const enumOptions = enumSelectOptionsFor(blockId, flightData); // the FLIGHT_DATA: 9F offers a retired route its flight still flies (docs/adr/0073)
   if (enumOptions) return _buildEnumSelectCell(strip, blockId, span, enumOptions);
 
   // WP4A second slice — IFR (a boolean, not a restricted-value string enum)
@@ -128,7 +128,7 @@ export function _buildBlockCell(strip, blockId) {
     span.dataset.editValue = redirect.value;
     span.title = span.title || 'Aircraft type (3A). Click to edit.';
   }
-  if (!redirect && !isBlockEditable(blockId, strip.role)) return span;
+  if (!redirect && !isBlockEditable(blockId, strip.stripType)) return span;
 
   span.classList.add('efsp-block-editable');
   span.tabIndex = 0;
@@ -151,7 +151,7 @@ export function _buildBlockCell(strip, blockId) {
   // the drag threshold instead, so a press here is an ordinary click until it
   // becomes a real drag — see _capturePointer for the whole argument.
 
-  if ((CONFIRM_VACATED_ELIGIBLE_BLOCKS[strip.role] || []).includes(blockId) && hasActiveAnnotationEntry(strip, blockId)) {
+  if ((CONFIRM_VACATED_ELIGIBLE_BLOCKS[strip.stripType] || []).includes(blockId) && hasActiveAnnotationEntry(strip, blockId)) {
     // confirmVacated (guide §3.7 rule 3) — a SIBLING action to the
     // click-to-edit flow above, not part of it, so Enter/Esc semantics of
     // free-text editing stay untouched. Sends confirmVacated:true with no

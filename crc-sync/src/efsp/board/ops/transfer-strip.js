@@ -59,7 +59,7 @@ function _applyTransferStrip(ctx, strip, op, by) {
   const selfCoordinated = ctx.rules.isSelfCoordinated(by, destPositionId);
 
   strip.ownerPositionId = destPositionId;
-  delete strip.coveredFrom; // it has a new owner by decision, not by cover (F10)
+  delete strip.consolidatedFrom; // it has a new owner by decision, not by cover (F10)
   if (check.impliedState && check.impliedState !== strip.state) strip.state = check.impliedState;
   const routedBay = routedTo ? ctx.placement.bayForNewOwner(destPositionId, strip.state, strip) : null;
   if (routedBay) {
@@ -86,7 +86,7 @@ function _applyTransferStrip(ctx, strip, op, by) {
   // regardless of whether this transfer came from a drag or an NLA-
   // driven transfer-shaped transition (board-store.js's own _applyInvokeNla).
   ctx.nlaHistory.delete(strip.stripId);
-  return { ok: true, strip, routedTo, selfCoordinated, warning, fdr: sfaFlightData ? sfaFlightData.fdr : undefined };
+  return { ok: true, strip, routedTo, selfCoordinated, warning, flightData: sfaFlightData ? sfaFlightData.flightData : undefined };
 }
 
 module.exports = {

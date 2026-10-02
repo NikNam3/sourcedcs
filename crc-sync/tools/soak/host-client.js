@@ -22,7 +22,7 @@ const AIRSPACES = [
   },
   {
     airspaceId: 'RANGE-SOUTH', name: 'South A/G Range', type: 'RANGE',
-    controllingFacilityId: 'INCIRLIK', controllingPositionId: 'APP',
+    controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP',
     usingPositionId: 'SOUTH_RANGE', controlFrequencyMhz: 283.5,
   },
 ];

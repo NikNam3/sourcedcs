@@ -92,10 +92,10 @@ class Driver {
     this.oracle = new Map();      // `${fid}|${sid}` -> { ...compact, dropped }
     this.positions = new Map();   // `${fid}|${pos}` -> primary controllerId
     this.airspaces = new Map();   // airspaceId -> { rev, state }
-    this.correlations = new Map(); // fdrId -> { rev, state, trackId }
+    this.correlations = new Map(); // flightDataId -> { rev, state, trackId }
     this.flights = new Map();
     this.stripFlight = new Map(); // sid -> flightId
-    this.flightDataFlight = new Map();   // fdrId -> flightId
+    this.flightDataFlight = new Map();   // flightDataId -> flightId
     this.flightSeq = 0;
     this.lastNla = new Map();     // sid -> virtual ms of the last InvokeNla
     this.uncarriedHints = new Map(); // `${fid}|${sid}` -> cause
@@ -256,7 +256,7 @@ class Driver {
     if (prev && prev.rev > s.rev) return;
     this.oracle.set(k, {
       stripId: s.stripId, rev: s.rev, state: s.state, ownerPositionId: s.ownerPositionId, bayId: s.bayId, rackId: s.rackId,
-      orderKey: s.orderKey, role: s.role, fdrId: s.fdrId, facilityId: fid, dropped: s.state === 'DROPPED',
+      orderKey: s.orderKey, stripType: s.stripType, flightDataId: s.flightDataId, facilityId: fid, dropped: s.state === 'DROPPED',
       coordination: s.coordination ? { primitive: s.coordination.primitive, state: s.coordination.state, peerStripId: s.coordination.peerStripId } : (s.coord || null),
       tofiCoordination: s.tofiCoordination ? { state: s.tofiCoordination.state, peerStripId: s.tofiCoordination.peerStripId } : (s.tofi || null),
     });
@@ -280,17 +280,17 @@ class Driver {
   }
 
   _learnCorrelation(r) {
-    this.correlations.set(r.fdrId, { rev: r.rev, state: r.state, trackId: r.trackId });
+    this.correlations.set(r.flightDataId, { rev: r.rev, state: r.state, trackId: r.trackId });
     if (r.state === 'CORRELATED' && r.trackId) {
       const owner = this.sky.ownerOfTrack(r.trackId);
-      if (owner && owner.fdrId !== r.fdrId) {
-        const key = `${r.fdrId}|${r.trackId}`;
+      if (owner && owner.flightDataId !== r.flightDataId) {
+        const key = `${r.flightDataId}|${r.trackId}`;
         if (!this.stats.misbinding.seen.has(key)) {
           this.stats.misbinding.seen.add(key);
           const cause = owner.done ? 'LINGERING_TRACK' : (owner.faults && owner.faults.length ? `FAULT_${owner.faults.join('+')}` : 'OTHER_LIVE_FLIGHT');
           this.stats.misbinding.count++;
           this.stats.misbinding.byCause[cause] = (this.stats.misbinding.byCause[cause] || 0) + 1;
-          const ex = { fdrId: r.fdrId, trackId: r.trackId, matchedBy: r.matchedBy, trackBelongsToFlightData: owner.fdrId, cause, squawk: owner.squawk };
+          const ex = { flightDataId: r.flightDataId, trackId: r.trackId, matchedBy: r.matchedBy, trackBelongsToFlightData: owner.flightDataId, cause, squawk: owner.squawk };
           if (this.stats.misbinding.examples.length < 20) this.stats.misbinding.examples.push(ex);
           this.event('misbinding', ex);
         }
@@ -343,7 +343,7 @@ class Driver {
     const ack = acks[0].msg;
     this.ledger.onAck(ack, { isReplay: replay });
     if (!replay && !ack.ok && !['STALE_REV', 'NLA_INHIBITED', 'NOT_HOLDING_POSITION'].includes(ack.reason)) {
-      this.event(`refusal:${msg.op ? msg.op.kind : msg.type}:${ack.reason}`, { detail: ack.detail, actingPositionId: msg.actingPositionId, strip: ack.strip ? { state: ack.strip.state, owner: ack.strip.ownerPositionId, role: ack.strip.role } : null });
+      this.event(`refusal:${msg.op ? msg.op.kind : msg.type}:${ack.reason}`, { detail: ack.detail, actingPositionId: msg.actingPositionId, strip: ack.strip ? { state: ack.strip.state, owner: ack.strip.ownerPositionId, stripType: ack.strip.stripType } : null });
     }
     // M8 holds for a first send. A replay answers from the idempotency cache
     // and broadcasts nothing by design (docs/adr/0081): its broadcast went out
@@ -439,7 +439,7 @@ class Driver {
     const id = ++this.flightSeq;
     const f = {
       id, script, callsign: callsignFor(script, id), strips: new Map(), done: false, ok: true,
-      queue: [], attempts: 0, fdr: null, storm: null,
+      queue: [], attempts: 0, flightData: null, storm: null,
     };
     f.own = (sid, fid) => { f.strips.set(sid, fid); this.stripFlight.set(sid, id); };
     if (this.rng.chance(this.profile.stormP)) {
@@ -532,9 +532,9 @@ class Driver {
       return this.resume(f, { ok: false, reason: ack.reason, ack });
     }
     f.own(ack.strip.stripId, it.facilityId);
-    if (ack.fdr) {
-      f.fdr = { fdrId: ack.fdr.fdrId, callsign: ack.fdr.identity && ack.fdr.identity.callsign || f.callsign, code: ack.fdr.identity && ack.fdr.identity.beaconAssigned };
-      this.flightDataFlight.set(ack.fdr.fdrId, f.id);
+    if (ack.flightData) {
+      f.flightData = { flightDataId: ack.flightData.flightDataId, callsign: ack.flightData.identity && ack.flightData.identity.callsign || f.callsign, code: ack.flightData.identity && ack.flightData.identity.beaconAssigned };
+      this.flightDataFlight.set(ack.flightData.flightDataId, f.id);
     }
     this.onStrip(f, it.facilityId, ack.strip);
     this.queueEdits(f, it.facilityId, ack.strip, null);
@@ -597,7 +597,7 @@ class Driver {
     if (last !== undefined && this.now - last < NLA_GUARD_MS) { this.after(NLA_GUARD_MS, () => this.execIntent(f), 'nla-guard'); return null; }
 
     // Pressed NLA inhibited three times in this state: set it by hand.
-    const fallback = f.inhibited >= 3 ? (NLA_FALLBACK[s.role] || {})[s.state] : null;
+    const fallback = f.inhibited >= 3 ? (NLA_FALLBACK[s.stripType] || {})[s.state] : null;
     const op = fallback ? { kind: 'SetState', toState: fallback } : { kind: 'InvokeNla' };
     const before = { state: s.state, rev: s.rev, owner: s.ownerPositionId };
     const msg = { version: 1, type: 'efsp-mutation', facilityId: it.facilityId, actingPositionId: actor, stripId: it.stripId, baseRev: s.rev, op };
@@ -617,9 +617,9 @@ class Driver {
     }
     // A covering Position was handed a Strip it may not advance (the vacated
     // Position's work, routed down the covering chain). A controller hands it
-    // back once its Position is manned again; until then the flight waits.
+    // back once its Position is staffed again; until then the flight waits.
     const notMine = ack.reason === 'PERMISSION_DENIED' && /is not (\w+)'s to advance/.exec(ack.detail || '');
-    if (notMine && s.role === 'DEPARTURE' && RETURN_BAY[s.state]) {
+    if (notMine && s.stripType === 'DEPARTURE' && RETURN_BAY[s.state]) {
       this.stats.consolidationStranded = (this.stats.consolidationStranded || 0) + 1;
       const home = RETURN_BAY[s.state];
       if (this.clientForPosition(home.position)) {
@@ -649,11 +649,11 @@ class Driver {
       if (!s || s.dropped) return;
       const client = this.clientForPosition(s.ownerPositionId);
       if (!client || s.ownerPositionId === 'SOUTH_RANGE') return;
-      const cur = this.correlations.get(it.fdrId);
+      const cur = this.correlations.get(it.flightDataId);
       const trackId = this.sky.trackIdOf(f.id);
       if (it.op.kind === 'BindTrack' && !trackId) return;
       const op = it.op.kind === 'BindTrack' ? { kind: 'BindTrack', trackId: String(trackId) } : { kind: 'UnbindTrack' };
-      const ack = await this.send(client, { version: 1, type: 'efsp-correlation-mutation', fdrId: it.fdrId, baseRev: cur ? cur.rev : 0, actingPositionId: s.ownerPositionId, op }, { label: `f${f.id}|corr` });
+      const ack = await this.send(client, { version: 1, type: 'efsp-correlation-mutation', flightDataId: it.flightDataId, baseRev: cur ? cur.rev : 0, actingPositionId: s.ownerPositionId, op }, { label: `f${f.id}|corr` });
       if (ack && ack.ok) f.bound = op.kind === 'BindTrack';
       return;
     }
@@ -696,13 +696,13 @@ class Driver {
     const stateOnlyNla = nlaBefore && strip.ownerPositionId === nlaBefore.owner && strip.state !== nlaBefore.state;
     if (stateOnlyNla && r.chance(0.01)) { f.queue.push({ kind: 'op', edit: true, facilityId: fid, stripId: sid, op: { kind: 'InvokeNla' }, doubleTap: true }); return; }
     if (stateOnlyNla && r.chance(0.01)) f.queue.push({ kind: 'op', edit: true, facilityId: fid, stripId: sid, op: { kind: 'Undo' } });
-    const clearance = strip.role !== 'MISSION';
+    const clearance = strip.stripType !== 'MISSION';
     if (clearance && r.chance(0.05)) f.queue.push({ kind: 'op', edit: true, facilityId: fid, stripId: sid, op: { kind: 'SetBlock', blockId: '21', value: `FL${r.int(12, 36)}0` } });
     if (clearance && r.chance(0.03)) f.queue.push({ kind: 'op', edit: true, facilityId: fid, stripId: sid, op: { kind: 'SetBlock', blockId: '20', value: String(r.int(1, 36) * 10).padStart(3, '0') } });
     if (r.chance(0.05)) f.queue.push({ kind: 'op', edit: true, facilityId: fid, stripId: sid, op: { kind: 'SetFlag', flag: r.pick(['highlight', 'attention']), value: r.chance(0.5) } });
     if (r.chance(0.03)) f.queue.push({ kind: 'op', edit: true, facilityId: fid, stripId: sid, op: { kind: 'MoveStrip' } });
-    if (f.fdr && this.sky.trackIdOf(f.id) && r.chance(0.02)) {
-      f.queue.push({ kind: 'correlation', edit: true, facilityId: fid, stripId: sid, fdrId: f.fdr.fdrId, op: { kind: f.bound && r.chance(0.5) ? 'UnbindTrack' : 'BindTrack' } });
+    if (f.flightData && this.sky.trackIdOf(f.id) && r.chance(0.02)) {
+      f.queue.push({ kind: 'correlation', edit: true, facilityId: fid, stripId: sid, flightDataId: f.flightData.flightDataId, op: { kind: f.bound && r.chance(0.5) ? 'UnbindTrack' : 'BindTrack' } });
     }
     if (f.storm && !f.storm.done && r.chance(0.5)) {
       f.storm.done = true;
@@ -762,12 +762,12 @@ class Driver {
   onStrip(f, fid, strip) {
     if (!strip) return;
     const airborne =
-      (strip.role === 'DEPARTURE' && (strip.state === 'DEPARTED' || strip.state === 'HANDED_OFF')) ||
-      (strip.role === 'ARRIVAL' && strip.state === 'INBOUND') ||
-      (strip.role === 'OVERFLIGHT' && ['INBOUND', 'IN_SECTOR', 'HANDED_OFF'].includes(strip.state)) ||
-      (strip.role === 'MISSION' && ['AIRBORNE', 'ON_STATION', 'OFF_STATION'].includes(strip.state));
-    if (airborne && f.fdr) this.sky.spawn(f.id, f.fdr, this.now);
-    if (strip.role === 'ARRIVAL' && (strip.state === 'LANDED' || strip.state === 'TAXI_IN')) this.sky.land(f.id, this.now);
+      (strip.stripType === 'DEPARTURE' && (strip.state === 'DEPARTED' || strip.state === 'HANDED_OFF')) ||
+      (strip.stripType === 'ARRIVAL' && strip.state === 'INBOUND') ||
+      (strip.stripType === 'OVERFLIGHT' && ['INBOUND', 'IN_SECTOR', 'HANDED_OFF'].includes(strip.state)) ||
+      (strip.stripType === 'MISSION' && ['AIRBORNE', 'ON_STATION', 'OFF_STATION'].includes(strip.state));
+    if (airborne && f.flightData) this.sky.spawn(f.id, f.flightData, this.now);
+    if (strip.stripType === 'ARRIVAL' && (strip.state === 'LANDED' || strip.state === 'TAXI_IN')) this.sky.land(f.id, this.now);
   }
 
   async ensureRangeActive() {
@@ -778,7 +778,7 @@ class Driver {
     const steps = [
       ['SOUTH_RANGE', { kind: 'ScheduleAirspace', fromUtc: this.now, toUtc: this.now + 6 * 60 * MIN }],
       ['SOUTH_RANGE', { kind: 'RequestActivation' }],
-      ['APP', { kind: 'ApproveActivation' }],
+      ['AP', { kind: 'ApproveActivation' }],
     ];
     for (const [pos, op] of steps) {
       const client = this.clientForPosition(pos);
@@ -853,7 +853,7 @@ class Driver {
         if (!client) continue;
         let op = { kind: 'DropStrip', reason: 'soak janitor' };
         const prevFail = fails.get(s.stripId);
-        if (prevFail && /open coordination proposal/.test(prevFail.detail || '') && s.coord && s.coord.state === 'PROPOSED') op = { kind: s.coord.primitive, action: 'REJECT' };
+        if (prevFail && /open coordination proposal/.test(prevFail.detail || '') && s.coord && s.coord.state === 'INITIATED') op = { kind: s.coord.primitive, action: 'REJECT' };
         else if (prevFail && /open TOFI proposal/.test(prevFail.detail || '')) op = { kind: 'TOFI', action: 'REJECT' };
         const ack = await this.send(client, { version: 1, type: 'efsp-mutation', facilityId: fid, actingPositionId: s.ownerPositionId, stripId: s.stripId, baseRev: s.rev, op }, { label: 'janitor' });
         if (ack && ack.ok && ack.strip && ack.strip.state === 'DROPPED') { this.stats.janitorDrops++; fails.delete(s.stripId); continue; }
@@ -861,8 +861,8 @@ class Driver {
         const n = (prevFail ? prevFail.n : 0) + 1;
         fails.set(s.stripId, { n, reason: ack ? ack.reason : 'LOST', detail: ack ? ack.detail : null, facilityId: fid });
         if (n >= 3 && !this.stats.orphans.has(s.stripId)) {
-          this.stats.orphans.set(s.stripId, { facilityId: fid, state: s.state, role: s.role, owner: s.ownerPositionId, reason: ack ? ack.reason : 'LOST', detail: ack ? ack.detail : null, tofi: s.tofi, coord: s.coord });
-          this.event('orphan', { stripId: s.stripId, facilityId: fid, state: s.state, role: s.role, reason: ack && ack.reason, detail: ack && ack.detail });
+          this.stats.orphans.set(s.stripId, { facilityId: fid, state: s.state, stripType: s.stripType, owner: s.ownerPositionId, reason: ack ? ack.reason : 'LOST', detail: ack ? ack.detail : null, tofi: s.tofi, coord: s.coord });
+          this.event('orphan', { stripId: s.stripId, facilityId: fid, state: s.state, stripType: s.stripType, reason: ack && ack.reason, detail: ack && ack.detail });
         }
       }
     }
@@ -882,8 +882,8 @@ class Driver {
 
   async declare(c) {
     if (c.passive) { c.declared = true; return; }
-    for (const [fid, held] of Object.entries(c.holds)) {
-      const { facts } = await this.send(c, { type: 'efsp-set-positions', facilityId: fid, held });
+    for (const [fid, signedOn] of Object.entries(c.holds)) {
+      const { facts } = await this.send(c, { type: 'efsp-set-positions', facilityId: fid, signedOn });
       const acks = facts.acks.get(`positions:${fid}`) || [];
       if (acks.length !== 1) { this.ledger.lost++; this.event('lost', { type: 'efsp-set-positions', client: c.id, facilityId: fid }); }
     }
@@ -894,17 +894,17 @@ class Driver {
   async restorePrimaries() {
     for (const c of this.clients.values()) {
       if (c.observer || c.passive || !c.connected) continue;
-      for (const [fid, held] of Object.entries(c.holds)) {
-        const wrong = held.filter(p => this.positions.get(`${fid}|${p}`) !== c.id);
+      for (const [fid, signedOn] of Object.entries(c.holds)) {
+        const wrong = signedOn.filter(p => this.positions.get(`${fid}|${p}`) !== c.id);
         if (!wrong.length) continue;
         for (const o of this.clients.values()) {
           if (o === c || !o.connected) continue;
           const theirs = (o.holds[fid] || []);
           if (!wrong.some(p => this.positions.get(`${fid}|${p}`) === o.id)) continue;
-          await this.send(o, { type: 'efsp-set-positions', facilityId: fid, held: [] });
-          await this.send(c, { type: 'efsp-set-positions', facilityId: fid, held: [] });
-          await this.send(c, { type: 'efsp-set-positions', facilityId: fid, held });
-          await this.send(o, { type: 'efsp-set-positions', facilityId: fid, held: theirs });
+          await this.send(o, { type: 'efsp-set-positions', facilityId: fid, signedOn: [] });
+          await this.send(c, { type: 'efsp-set-positions', facilityId: fid, signedOn: [] });
+          await this.send(c, { type: 'efsp-set-positions', facilityId: fid, signedOn });
+          await this.send(o, { type: 'efsp-set-positions', facilityId: fid, signedOn: theirs });
         }
       }
     }
@@ -1033,7 +1033,7 @@ class Driver {
         if (exclude.has(s.stripId)) continue;
         const q = postIdx.get(`${fid}|${s.stripId}`);
         const bad = !q ? 'missing' : q.rev < s.rev ? 'older' : null;
-        const diff = q ? ['state', 'ownerPositionId', 'bayId', 'rackId', 'orderKey', 'role', 'fdrId'].filter(k => q[k] !== s[k]) : [];
+        const diff = q ? ['state', 'ownerPositionId', 'bayId', 'rackId', 'orderKey', 'stripType', 'flightDataId'].filter(k => q[k] !== s[k]) : [];
         if (bad || (q && q.rev === s.rev && diff.length)) {
           this.stats.restart.boardLostOnRestart++;
           const ex = { facilityId: fid, stripId: s.stripId, kind: bad || 'changed', preRev: s.rev, postRev: q ? q.rev : null, fields: diff, cause: this.uncarriedHints.get(`${fid}|${s.stripId}`) || null };
@@ -1070,7 +1070,7 @@ class Driver {
       const client = this.clientForPosition('OPS');
       if (!client) return null;
       const f = { id: `r2-${idx}`, callsign: `RTWO${idx}` };
-      const msg = { version: 1, type: 'efsp-mutation', clientMutationId: this.nextCmid(), facilityId: 'INCIRLIK', actingPositionId: 'OPS', op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { callsign: f.callsign, aircraftType: 'F16', wakeCategory: 'M', departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' } } };
+      const msg = { version: 1, type: 'efsp-mutation', clientMutationId: this.nextCmid(), facilityId: 'INCIRLIK', actingPositionId: 'OPS', op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { callsign: f.callsign, aircraftType: 'F16', wakeCategory: 'M', departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' } } };
       this.ledger.r2.add(msg.clientMutationId);
       this.ledger.onSent(msg, client.id, this.now, this.lifetime);
       this.note(`r2|create`);
@@ -1141,7 +1141,7 @@ class Driver {
     let tickN = 0;
     const tick = async () => {
       tickN++;
-      const what = ['reconcile', 'conformanceStca'];
+      const what = ['reconcile', 'conformanceConflictAlert'];
       if (tickN % 5 === 0) what.push('expireTracks');
       if (tickN % 15 === 0) what.push('obligationsNla');
       if (tickN % 10 === 0) what.push('heartbeat');
@@ -1149,9 +1149,9 @@ class Driver {
       const r = await this.call('tick', { what });
       if (r.correlation) this._learnCorrelationStats(r.correlation);
       if (r.alerts) {
-        if (r.alerts.stca > this.stats.alerts.conflictAlertMax) this.stats.alerts.conflictAlertMax = r.alerts.stca;
-        if (r.alerts.stca > 0 && !this._conflictAlertUp) this.stats.alerts.conflictAlertRaised++;
-        this._conflictAlertUp = r.alerts.stca > 0;
+        if (r.alerts.conflictAlert > this.stats.alerts.conflictAlertMax) this.stats.alerts.conflictAlertMax = r.alerts.conflictAlert;
+        if (r.alerts.conflictAlert > 0 && !this._conflictAlertUp) this.stats.alerts.conflictAlertRaised++;
+        this._conflictAlertUp = r.alerts.conflictAlert > 0;
         if (r.alerts.conformance > 0 && !this._confUp) this.stats.alerts.conformanceRaised++;
         this._confUp = r.alerts.conformance > 0;
       }
@@ -1237,9 +1237,9 @@ class Driver {
       if (c && (c.holds.INCIRLIK || []).length > 1) {
         this.stats.manningChurn++;
         this.note(`churn|${c.id}`);
-        await this.send(c, { type: 'efsp-set-positions', facilityId: 'INCIRLIK', held: c.holds.INCIRLIK.filter(p2 => p2 !== 'CD') });
+        await this.send(c, { type: 'efsp-set-positions', facilityId: 'INCIRLIK', signedOn: c.holds.INCIRLIK.filter(p2 => p2 !== 'CD') });
         this.after(this.rngNet.uniform(2 * MIN, 4 * MIN), async () => {
-          if (c.connected && c.declared) await this.send(c, { type: 'efsp-set-positions', facilityId: 'INCIRLIK', held: c.holds.INCIRLIK });
+          if (c.connected && c.declared) await this.send(c, { type: 'efsp-set-positions', facilityId: 'INCIRLIK', signedOn: c.holds.INCIRLIK });
         }, 'churn-back');
       }
       this.after(this.rngNet.exp(60 / p.manningChurnPerHour * MIN), churn, 'churn');

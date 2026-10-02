@@ -15,7 +15,7 @@ function _applyUndo(ctx, strip, by) {
   // silent duplicate, exactly as a controller override would (D23).
   if (strip.state === 'DROPPED') {
     strip.flags.removeIndicator = false;
-    ctx.flightDataStore.reacquireFlightData(strip.fdrId);
+    ctx.flightDataStore.reacquireFlightData(strip.flightDataId);
     ctx.droppedWallAt.delete(strip.stripId);
   }
   return ctx.applySetState(strip, last.prevState, by);

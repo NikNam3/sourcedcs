@@ -47,7 +47,7 @@ const {
   crew, hold, act, mustAct, marsaAct, jumpTo, DEPARTURE_FLIGHT_DATA, airborneDeparture, handedToCenter,
 } = await import('./helpers/efsp-scenario.mjs');
 
-const ALL = { OPS: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL', GCI: 'TACTICAL', AIC: 'TACTICAL', JTAC: 'TACTICAL' };
+const ALL = { OPS: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL', GCI: 'TACTICAL', AIC: 'TACTICAL', JTAC: 'TACTICAL' };
 const COORDINATION_KINDS = ['HANDOFF', 'POINT_OUT', 'TRAFFIC', 'OPERATIONAL_REQUEST', 'AIT'];
 
 // The Board is durable (ADR 0002): every createEfsp() in one file restores the
@@ -85,7 +85,7 @@ function onStationUnderTofi(efsp, c, callsign) {
 /** A mission line TAC_C2 tasks itself (no TOFI, ADR 0054's standalone origination), set to `state`. */
 function taskedLine(efsp, c, callsign, state = 'ON_STATION') {
   let line = mustAct(efsp, c.TAC_C2, 'TAC_C2', null, {
-    kind: 'CreateStrip', bayId: 'tac-c2-tasked', rackId: 'main', role: 'MISSION', fdr: { callsign },
+    kind: 'CreateStrip', bayId: 'tac-c2-tasked', rackId: 'main', stripType: 'MISSION', flightData: { callsign },
   });
   // jumpTo is SetState, the unchecked escape hatch: used here only to SET UP a
   // state, never to prove somebody may advance to it (see A1 and B7).
@@ -123,7 +123,7 @@ test('SCENARIO A1 AIC works a mission line it is handed, and nothing more (H2)',
 
   // Annotate.
   m = mustAct(efsp, c.AIC, 'AIC', tac(efsp, m.stripId), { kind: 'SetBlock', blockId: 'M2', value: 'PKG-A' });
-  assert.equal(efsp.flightDataStore.getFlightData(m.fdrId).mission.packageId, 'PKG-A');
+  assert.equal(efsp.flightDataStore.getFlightData(m.flightDataId).mission.packageId, 'PKG-A');
   m = mustAct(efsp, c.AIC, 'AIC', tac(efsp, m.stripId), { kind: 'SetFlag', flag: 'highlight', value: 'yellow' });
 
   // On Station ↔ Committed. aic-committed implies no state, so the move is free.
@@ -155,7 +155,7 @@ test('SCENARIO A1 AIC works a mission line it is handed, and nothing more (H2)',
 
   // Does not originate mission lines.
   refused(act(efsp, c.AIC, 'AIC', null, {
-    kind: 'CreateStrip', bayId: 'aic-on-station', rackId: 'main', role: 'MISSION', fdr: { callsign: 'X' },
+    kind: 'CreateStrip', bayId: 'aic-on-station', rackId: 'main', stripType: 'MISSION', flightData: { callsign: 'X' },
   }), 'PERMISSION_DENIED', null, 'AIC CreateStrip');
 
   // §4.6.3 rule 2 holds whoever owns the Strip: no Drop under tactical control.
@@ -173,7 +173,7 @@ test('SCENARIO A1 AIC works a mission line it is handed, and nothing more (H2)',
   assert.equal(m.ownerPositionId, 'TAC_C2');
   const off = mustAct(efsp, c.TAC_C2, 'TAC_C2', tac(efsp, m.stripId), { kind: 'InvokeNla' });
   assert.equal(off.state, 'OFF_STATION');
-  assert.equal(efsp.flightDataStore.getFlightData(off.fdrId).mission.packageId, 'PKG-A', 'AIC\'s annotation travels with the line');
+  assert.equal(efsp.flightDataStore.getFlightData(off.flightDataId).mission.packageId, 'PKG-A', 'AIC\'s annotation travels with the line');
 });
 
 test('SCENARIO A2 CTR asks for the exit while AIC holds the line — AIC cannot answer it, and the TOFI exception is TAC_C2\'s only (B2)', () => {
@@ -186,7 +186,7 @@ test('SCENARIO A2 CTR asks for the exit while AIC holds the line — AIC cannot 
   ctr = mustAct(efsp, c.CTR, 'CTR', ctrOf(efsp, ctr.stripId), { kind: 'SetBlock', blockId: 'SREG', value: 'ATC' });
   mustAct(efsp, c.CTR, 'CTR', ctr, { kind: 'TOFI', action: 'PROPOSE', direction: 'EXIT' });
   assert.equal(tac(efsp, m.stripId).tofiCoordination.direction, 'EXIT');
-  assert.equal(tac(efsp, m.stripId).tofiCoordination.state, 'PROPOSED');
+  assert.equal(tac(efsp, m.stripId).tofiCoordination.state, 'INITIATED');
 
   // AIC holds no TOFI grant (ADR 0025): the exchange is not its to answer.
   refused(act(efsp, c.AIC, 'AIC', tac(efsp, m.stripId), { kind: 'TOFI', action: 'ACCEPT' }),
@@ -241,15 +241,15 @@ test('SCENARIO A3\' a covering reassignment lands the line in a Bay the covering
 
 test('SCENARIO A3\'\' the same holds at Incirlik: GND walks away and TWR gets the Strip in a TWR Bay', () => {
   const efsp = freshEfsp();
-  const c = crew(efsp, { OPS: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK' });
+  const c = crew(efsp, { OPS: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK' });
   const strip = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FLIGHT_DATA, callsign: 'VAC14' },
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign: 'VAC14' },
   });
-  mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'TransferStrip', toPositionId: 'GND', bayId: 'gnd-coordination', rackId: 'main' });
-  hold(efsp, c.GND.session, 'INCIRLIK', []);
+  mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'TransferStrip', toPositionId: 'GC', bayId: 'gc-coordination', rackId: 'main' });
+  hold(efsp, c.GC.session, 'INCIRLIK', []);
   const after = efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId);
-  assert.equal(after.ownerPositionId, 'TWR');
-  const twrBays = facilityConfig.getBaysFor('TWR', 'INCIRLIK').map(b => b.bayId);
+  assert.equal(after.ownerPositionId, 'LC');
+  const twrBays = facilityConfig.getBaysFor('LC', 'INCIRLIK').map(b => b.bayId);
   assert.ok(twrBays.includes(after.bayId), `TWR owns it but it sits in ${after.bayId}`);
 });
 
@@ -262,7 +262,7 @@ test('SCENARIO A4 with TAC_C2 gone too, the chain bottoms out inside TACTICAL an
   // Guide §4.8.6 writes the chain as AIC/GCI → TAC_C2 → CTR. The TAC_C2 → CTR
   // hop is deliberately not built: it would cross a Facility, and
   // consolidatedAt() is scoped to one Facility's PositionStore
-  // (facility-config.js's TACTICAL coveringChain comment; ADR 0013 point 4
+  // (facility-config.js's TACTICAL consolidation comment; ADR 0013 point 4
   // rejected the identical APP → CTR extension). Warn, do not block.
   assert.deepEqual(hold(efsp, c.AIC.session, 'TACTICAL', []).ack.warnings,
     [{ positionId: 'AIC', count: 1, routedTo: null }]);
@@ -299,12 +299,12 @@ test('SCENARIO A5\' a transfer is refused into a Bay that is not the receiving P
 
 test('SCENARIO A6 one controller holding CTR and AIC still gets no coordination primitive (D12/D21, §4.8.4)', () => {
   const efsp = freshEfsp();
-  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL', JTAC: 'TACTICAL' });
+  const c = crew(efsp, { OPS: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL', JTAC: 'TACTICAL' });
 
   // A mission line on a flight CTR is working (the taskMissionLine shape).
   const ctrStrip = handedToCenter(efsp, c, airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'CMB11' }));
   let line = mustAct(efsp, c.TAC_C2, 'TAC_C2', null, {
-    kind: 'CreateStrip', bayId: 'tac-c2-tasked', rackId: 'main', role: 'MISSION', fdrId: ctrStrip.fdrId,
+    kind: 'CreateStrip', bayId: 'tac-c2-tasked', rackId: 'main', stripType: 'MISSION', flightDataId: ctrStrip.flightDataId,
   });
   line = jumpTo(efsp, c.TAC_C2, 'TAC_C2', line, 'AIRBORNE');
   line = jumpTo(efsp, c.TAC_C2, 'TAC_C2', line, 'ON_STATION');
@@ -330,7 +330,7 @@ test('SCENARIO A6 one controller holding CTR and AIC still gets no coordination 
   }
   // CTR's hat does not reach into TACTICAL: combination does not merge Facilities.
   refused(act(efsp, combo, 'CTR', tac(efsp, m.stripId), {
-    kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'APP',
+    kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'AP',
   }), 'NOT_HOLDING_POSITION', null, 'CTR hat on a TACTICAL Strip');
 
   // The AIC hat works, and only as AIC.
@@ -383,7 +383,7 @@ test('SCENARIO J1 JTAC writes nothing on a line it has not been handed', () => {
   assert.ok(['PERMISSION_DENIED', 'NOT_OWNER'].includes(take.reason), JSON.stringify(take));
 
   refused(act(efsp, c.JTAC, 'JTAC', null, {
-    kind: 'CreateStrip', bayId: 'jtac-mission', rackId: 'main', role: 'MISSION', fdr: { callsign: 'JX' },
+    kind: 'CreateStrip', bayId: 'jtac-mission', rackId: 'main', stripType: 'MISSION', flightData: { callsign: 'JX' },
   }), 'PERMISSION_DENIED', null, 'JTAC CreateStrip');
 
   assert.equal(tac(efsp, m.stripId).rev, m.rev, 'nothing JTAC sent touched the line');
@@ -418,10 +418,10 @@ test('SCENARIO J3 a JTAC has no scope, so it neither binds a contact nor declare
   const a = taskedLine(efsp, c, 'JT14');
   const b = taskedLine(efsp, c, 'JT15');
 
-  const current = efsp.correlationStore.getCorrelation(a.fdrId);
+  const current = efsp.correlationStore.getCorrelation(a.flightDataId);
   const bind = efsp.handleMessage(c.JTAC.session, {
     version: 1, type: 'efsp-correlation-mutation', clientMutationId: crypto.randomUUID(),
-    fdrId: a.fdrId, baseRev: current ? current.rev : 0, actingPositionId: 'JTAC',
+    flightDataId: a.flightDataId, baseRev: current ? current.rev : 0, actingPositionId: 'JTAC',
     op: { kind: 'BindTrack', trackId: '777' },
   }).ack;
   // canCorrelate's own argument for refusing RANGE ("no scope either") holds
@@ -429,7 +429,7 @@ test('SCENARIO J3 a JTAC has no scope, so it neither binds a contact nor declare
   assert.equal(bind.ok, false, `JTAC bound a track: ${JSON.stringify(bind)}`);
 
   const marsa = marsaAct(efsp, c.JTAC, 'JTAC', null, {
-    kind: 'DeclareMarsa', participants: [a.fdrId, b.fdrId],
+    kind: 'DeclareMarsa', participants: [a.flightDataId, b.flightDataId],
     startEvent: 'LOCAL_DECLARATION', endCondition: 'ATC_SEPARATION_ESTABLISHED', declaringCallsign: 'JT14',
   });
   assert.equal(marsa.ok, false, `JTAC declared MARSA: ${JSON.stringify(marsa)}`);

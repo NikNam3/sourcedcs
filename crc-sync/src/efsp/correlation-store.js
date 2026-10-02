@@ -10,7 +10,7 @@
 // not a join. In the real prototype 100% of Strip selections highlighted their
 // target in under a second, and only 85-90% of Strips matched a target at all.
 //
-// KEYED BY fdrId, not stripId. One FDR legitimately has several Strips:
+// KEYED BY flightDataId, not stripId. One FDR legitimately has several Strips:
 // per-Facility replicas (docs/adr/0013), a TOFI MISSION Strip on the same FDR,
 // and ConvertToArrival keeping one stripId across a role change
 // (docs/adr/0023). A stripId key would let an INCIRLIK replica and its CENTER
@@ -73,7 +73,7 @@ function capText(value) {
 
 class CorrelationStore {
   /**
-   * @param {{flightDataExists?:(fdrId:string)=>boolean}} [deps] — injected the same
+   * @param {{flightDataExists?:(flightDataId:string)=>boolean}} [deps] — injected the same
    *   way board-store.js's liveStripsForFlightData is, and for the same reason: this
    *   store has no business reaching into the FlightDataStore, and in index.js's
    *   composition root the stores it would need do not all exist yet.
@@ -81,7 +81,7 @@ class CorrelationStore {
   constructor({ flightDataExists, clock = WALL_CLOCK } = {}) {
     this._clock = clock; // the mission clock, docs/adr/0079
     this._flightDataExists = flightDataExists || (() => true);
-    this._records = new Map(); // fdrId -> record
+    this._records = new Map(); // flightDataId -> record
     this._sync = new SyncLog(); // the store's sequence: a counter only, no ring, no epoch (sync/sync-log.js, S3-1)
     this._mutationLog = null;
   }
@@ -99,10 +99,10 @@ class CorrelationStore {
 
   get currentSeq() { return this._sync.seq; }
 
-  _seed(fdrId) {
+  _seed(flightDataId) {
     const record = {
-      fdrId,
-      // Its own rev, independent of fdr.rev and strip.rev. A correlation
+      flightDataId,
+      // Its own rev, independent of flightData.rev and strip.rev. A correlation
       // changing must not bump either of those: a Strip is broadcast whole on
       // every update (docs/adr/0004), so stamping this onto one would flood
       // the delta ring buffer and invalidate controllers' optimistic edits at
@@ -120,7 +120,7 @@ class CorrelationStore {
       warning: null,
       observedBeacon: null,
       lastMatchedAt: null,
-      // Append-only, the shape docs/adr/0032 gave fdr.airspace.transitions and
+      // Append-only, the shape docs/adr/0032 gave flightData.airspace.transitions and
       // for the same reason: FAA JO 7110.65 para 2-3-1's "do not erase or
       // overwrite any item". Appended only on a CHANGE to state/matchedBy/
       // trackId — never per tick — so a whole flight yields a handful of
@@ -129,17 +129,17 @@ class CorrelationStore {
       updatedAt: null,
       updatedBy: null,
     };
-    this._records.set(fdrId, record);
+    this._records.set(flightDataId, record);
     return record;
   }
 
   /** The record for an FDR, minted on first ask. */
-  _recordFor(fdrId) {
-    return this._records.get(fdrId) || this._seed(fdrId);
+  _recordFor(flightDataId) {
+    return this._records.get(flightDataId) || this._seed(flightDataId);
   }
 
-  getCorrelation(fdrId) {
-    const record = this._records.get(fdrId);
+  getCorrelation(flightDataId) {
+    const record = this._records.get(flightDataId);
     return record ? deepClone(record) : null;
   }
 
@@ -149,20 +149,20 @@ class CorrelationStore {
   }
 
   /** The contact a flight is CORRELATED to (not PROVISIONAL, not lost), or null. A read with no copy: docs/adr/0076's monitor asks per Strip per tick. */
-  correlatedTrackId(fdrId) {
-    const record = this._records.get(fdrId);
+  correlatedTrackId(flightDataId) {
+    const record = this._records.get(flightDataId);
     return record && record.state === 'CORRELATED' && record.trackId ? String(record.trackId) : null;
   }
 
   /**
-   * trackId -> { fdrId, state } for every record bound to a contact, built in
+   * trackId -> { flightDataId, state } for every record bound to a contact, built in
    * one pass with no copying. surveillance/identity.js calls it once per
    * broadcast tick, where getAll()'s deep clone of every record would not do.
    */
   trackIndex() {
     const index = new Map();
     for (const record of this._records.values()) {
-      if (record.trackId) index.set(record.trackId, { fdrId: record.fdrId, state: record.state });
+      if (record.trackId) index.set(record.trackId, { flightDataId: record.flightDataId, state: record.state });
     }
     return index;
   }
@@ -171,7 +171,7 @@ class CorrelationStore {
   flightDataForTrack(trackId) {
     const wanted = String(trackId);
     for (const record of this._records.values()) {
-      if (record.trackId === wanted) return record.fdrId;
+      if (record.trackId === wanted) return record.flightDataId;
     }
     return null;
   }
@@ -205,7 +205,7 @@ class CorrelationStore {
       // distinct id field, for the reason airspace-store.js's own audit
       // comment gives — readers key on whichever id is present, rather than
       // one field standing in for something it is not.
-      fdrId: mutation.fdrId,
+      flightDataId: mutation.flightDataId,
       // Theater-wide: an FDR belongs to no Facility (docs/adr/0013, docs/adr/0083).
       facilityId: null,
       actingPositionId,
@@ -215,7 +215,7 @@ class CorrelationStore {
       reason: result.ok ? undefined : result.reason,
       detail: result.ok ? undefined : result.detail,
       before,
-      after: result.ok ? this.getCorrelation(mutation.fdrId) : undefined,
+      after: result.ok ? this.getCorrelation(mutation.flightDataId) : undefined,
     });
   }
 
@@ -231,27 +231,27 @@ class CorrelationStore {
    * AirspaceStore.apply: never throws, always returns a result the caller can
    * turn into an ack. Optimistic concurrency on the record's own rev.
    *
-   * @param {{clientMutationId:string, fdrId:string, baseRev:number, op:{kind:string, trackId?:string, note?:string}}} mutation
+   * @param {{clientMutationId:string, flightDataId:string, baseRev:number, op:{kind:string, trackId?:string, note?:string}}} mutation
    * @param {string} actingPositionId — already verified by efsp-ws.js to be a
    *   Position the calling session is Primary at (docs/adr/0029)
    * @param {string} by — controllerId, for the audit trail
    */
   apply(mutation, actingPositionId, by) {
-    if (!mutation.fdrId) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no fdrId' };
-    if (!this._flightDataExists(mutation.fdrId)) {
-      const miss = { ok: false, reason: 'NOT_FOUND', detail: `unknown FDR ${mutation.fdrId}` };
+    if (!mutation.flightDataId) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no flightDataId' };
+    if (!this._flightDataExists(mutation.flightDataId)) {
+      const miss = { ok: false, reason: 'NOT_FOUND', detail: `unknown FDR ${mutation.flightDataId}` };
       this._recordAudit(mutation, actingPositionId, by, null, miss);
       return miss;
     }
 
-    const record = this._recordFor(mutation.fdrId);
+    const record = this._recordFor(mutation.flightDataId);
     if (mutation.baseRev !== undefined && mutation.baseRev !== null && record.rev !== mutation.baseRev) {
       // Audited like every other refusal. AirspaceStore returns early here
       // without logging, which leaves a rejected ask with no trace anywhere —
       // and "a refusal is the interesting half of an authority model" is the
       // reason this store has an audit hook at all. A deliberate divergence,
       // not an oversight.
-      const stale = { ok: false, reason: 'STALE_REV', correlation: this.getCorrelation(mutation.fdrId) };
+      const stale = { ok: false, reason: 'STALE_REV', correlation: this.getCorrelation(mutation.flightDataId) };
       this._recordAudit(mutation, actingPositionId, by, deepClone(record), stale);
       return stale;
     }
@@ -276,7 +276,7 @@ class CorrelationStore {
     // Every result carries the record, success or not — a rejection that says
     // nothing about current state leaves the client rendering its own guess
     // (airspace-store.js's stated reason).
-    if (!result.correlation) result.correlation = this.getCorrelation(mutation.fdrId);
+    if (!result.correlation) result.correlation = this.getCorrelation(mutation.flightDataId);
     this._recordAudit(mutation, actingPositionId, by, before, result);
     return result;
   }
@@ -329,7 +329,7 @@ class CorrelationStore {
    * Applies one sweep's resolutions. NOT a Mutation: no actingPositionId, no
    * baseRev, no MutationLog entry — surveillance is not a controller.
    *
-   * @param {Map<string, object|null>} resolutions — fdrId -> a resolution
+   * @param {Map<string, object|null>} resolutions — flightDataId -> a resolution
    *   ({trackId, matchedBy, confidence, observedBeacon, warning}) or null for
    *   "nothing matched". A resolution may also be `{warning}` alone.
    * @returns {{changed: object[]}} only the records that actually changed —
@@ -338,8 +338,8 @@ class CorrelationStore {
   reconcile(resolutions, now = this._clock.now()) {
     const changed = [];
 
-    for (const [fdrId, resolution] of resolutions) {
-      const record = this._recordFor(fdrId);
+    for (const [flightDataId, resolution] of resolutions) {
+      const record = this._recordFor(flightDataId);
       const before = {
         state: record.state, matchedBy: record.matchedBy, trackId: record.trackId,
         warningKind: record.warning ? record.warning.kind : null,
@@ -373,7 +373,7 @@ class CorrelationStore {
             reason: this._matchReason(before, record, identityChanged, hadWarning),
             fromTrackId: identityChanged ? fromTrackId : null,
           });
-          changed.push(this.getCorrelation(fdrId));
+          changed.push(this.getCorrelation(flightDataId));
           continue;
         }
         // Nothing about the identity changed, but the warning may have been
@@ -388,7 +388,7 @@ class CorrelationStore {
             record.updatedAt = now;
             this._sync.advance();
           }
-          changed.push(this.getCorrelation(fdrId));
+          changed.push(this.getCorrelation(flightDataId));
         }
         continue;
       }
@@ -420,7 +420,7 @@ class CorrelationStore {
           record.updatedAt = now;
           this._sync.advance();
         }
-        changed.push(this.getCorrelation(fdrId));
+        changed.push(this.getCorrelation(flightDataId));
       }
     }
 
@@ -483,7 +483,7 @@ class CorrelationStore {
         fromTrackId: lostTrackId,
         detail: record.warning.detail,
       });
-      changed.push(this.getCorrelation(record.fdrId));
+      changed.push(this.getCorrelation(record.flightDataId));
     }
     return { changed };
   }
@@ -504,14 +504,14 @@ class CorrelationStore {
    * what" belongs anyway.
    *
    * @param {Set<string>} flightDataIdsWithLiveStrips
-   * @returns {string[]} the fdrIds retired
+   * @returns {string[]} the flightDataIds retired
    */
   retireFinished(flightDataIdsWithLiveStrips) {
     const retired = [];
-    for (const fdrId of [...this._records.keys()]) {
-      if (flightDataIdsWithLiveStrips.has(fdrId)) continue;
-      this._records.delete(fdrId);
-      retired.push(fdrId);
+    for (const flightDataId of [...this._records.keys()]) {
+      if (flightDataIdsWithLiveStrips.has(flightDataId)) continue;
+      this._records.delete(flightDataId);
+      retired.push(flightDataId);
     }
     return retired;
   }
@@ -519,8 +519,8 @@ class CorrelationStore {
   /** Forgets records whose FDR is gone — FDR lifecycle governs correlation lifecycle, with no separate retention policy. */
   evictMissingFlightDataList() {
     let dropped = 0;
-    for (const fdrId of [...this._records.keys()]) {
-      if (!this._flightDataExists(fdrId)) { this._records.delete(fdrId); dropped += 1; }
+    for (const flightDataId of [...this._records.keys()]) {
+      if (!this._flightDataExists(flightDataId)) { this._records.delete(flightDataId); dropped += 1; }
     }
     return dropped;
   }
@@ -528,7 +528,7 @@ class CorrelationStore {
   // ── Persistence (durable per docs/adr/0002) ─────────────────────────────
 
   snapshot() {
-    return [...this._records.values()].filter(r => this._flightDataExists(r.fdrId)).map(deepClone);
+    return [...this._records.values()].filter(r => this._flightDataExists(r.flightDataId)).map(deepClone);
   }
 
   /**
@@ -543,8 +543,8 @@ class CorrelationStore {
    */
   restore(data) {
     for (const saved of data || []) {
-      if (!saved || !saved.fdrId) continue;
-      if (!this._flightDataExists(saved.fdrId)) continue; // its FDR is gone
+      if (!saved || !saved.flightDataId) continue;
+      if (!this._flightDataExists(saved.flightDataId)) continue; // its FDR is gone
       const record = deepClone(saved);
       record.trackId = null;
       record.matchedBy = null;
@@ -554,7 +554,7 @@ class CorrelationStore {
       record.state = 'UNCORRELATED';
       record.warning = null;
       record.transitions = Array.isArray(record.transitions) ? record.transitions : [];
-      this._records.set(record.fdrId, record);
+      this._records.set(record.flightDataId, record);
     }
   }
 }

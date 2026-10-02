@@ -305,7 +305,7 @@ test('illumination does not outlive the radar that produced it', () => {
   // expired them on the spot.
   const engine = new CoverageEngine();
   sweepOnce(engine, [APPROACH], [aircraft(1, 37.2, 35.2)]);
-  assert.ok(engine.illuminationFor('1'), 'illuminated while manned');
+  assert.ok(engine.illuminationFor('1'), 'illuminated while staffed');
 
   // The Position is vacated: activeRadars() no longer offers app:X.
   engine.tick([], [aircraft(1, 37.2, 35.2)], null, 2_000_000);
@@ -314,7 +314,7 @@ test('illumination does not outlive the radar that produced it', () => {
   assert.equal(engine.isVisibleThrough('1', new Set(['app:X'])), false);
 });
 
-test('a contact another manned radar also sees keeps that radar and stays', () => {
+test('a contact another staffed radar also sees keeps that radar and stays', () => {
   const engine = new CoverageEngine();
   const second = { ...APPROACH, id: 'app:Y' };
   sweepOnce(engine, [APPROACH, second], [aircraft(1, 37.2, 35.2)]);

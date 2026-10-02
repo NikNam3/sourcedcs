@@ -27,7 +27,7 @@ class StripOps {
    * @param {() => string|null} deps.activeCmid the clientMutationId being applied, read late
    * @param {() => Map} deps.nlaHistory the facade's Map, read late
    * @param {() => Map} deps.droppedWallAt the facade's Map, read late
-   * @param {(role:string) => string|undefined} deps.initialStateFor the authority registry's accessor
+   * @param {(stripType:string) => string|undefined} deps.initialStateFor the authority registry's accessor
    */
   constructor(deps) {
     this.rules = deps.rules;
@@ -131,8 +131,8 @@ class StripOps {
     if (result.ok && strip.state !== before.state) {
       const stamped = this._stampTakeoffOnStateChange(strip, before.state);
       if (stamped) {
-        if (!result.fdr || result.fdr.fdrId === stamped.fdrId) result.fdr = stamped;
-        else result.fdrs = [...(result.fdrs || []), stamped];
+        if (!result.flightData || result.flightData.flightDataId === stamped.flightDataId) result.flightData = stamped;
+        else result.flightDataList = [...(result.flightDataList || []), stamped];
       }
     }
     this._audit.recordAudit(mutation, actingPositionId, by, before, result, this.auditFieldsFor(op.kind, result, op));
@@ -154,18 +154,18 @@ class StripOps {
    * @returns {object|null} the FDR it changed, for the ack's broadcast.
    */
   _stampTakeoffOnStateChange(strip, prevState) {
-    if (strip.role !== 'DEPARTURE' || !this.flightDataStore || !this.flightDataStore.setTakeoffStamp) return null;
+    if (strip.stripType !== 'DEPARTURE' || !this.flightDataStore || !this.flightDataStore.setTakeoffStamp) return null;
     const airborne = (st) => DEPARTURE_AIRBORNE_STATES.includes(st);
-    const fdr = this.flightDataStore.getFlightData(strip.fdrId);
-    if (!fdr) return null;
+    const flightData = this.flightDataStore.getFlightData(strip.flightDataId);
+    if (!flightData) return null;
     let r = null;
     if (airborne(strip.state) && !airborne(prevState) && prevState !== 'DROPPED') {
-      if (fdr.timeInputs && fdr.timeInputs.takeoffStampedUtc != null) return null;
-      r = this.flightDataStore.setTakeoffStamp(strip.fdrId, this.clock.now());
+      if (flightData.timeInputs && flightData.timeInputs.takeoffStampedUtc != null) return null;
+      r = this.flightDataStore.setTakeoffStamp(strip.flightDataId, this.clock.now());
     } else if (!airborne(strip.state) && strip.state !== 'DROPPED' && airborne(prevState)) {
-      r = this.flightDataStore.setTakeoffStamp(strip.fdrId, null);
+      r = this.flightDataStore.setTakeoffStamp(strip.flightDataId, null);
     }
-    return r && r.ok && r.changed ? r.fdr : null;
+    return r && r.ok && r.changed ? r.flightData : null;
   }
 
   /**
@@ -180,9 +180,9 @@ class StripOps {
   assignSfaFrequency(strip, by) {
     const mhz = this.rules.sfaFrequencyFor(strip.bayId, strip.rackId);
     if (mhz == null) return null;
-    const fdr = this.flightDataStore.getFlightData(strip.fdrId);
-    if (!fdr || (fdr.comms && fdr.comms.workingFrequencyMhz === mhz)) return null;
-    const r = this.flightDataStore.setWorkingFrequency(strip.fdrId, mhz, { by });
+    const flightData = this.flightDataStore.getFlightData(strip.flightDataId);
+    if (!flightData || (flightData.comms && flightData.comms.workingFrequencyMhz === mhz)) return null;
+    const r = this.flightDataStore.setWorkingFrequency(strip.flightDataId, mhz, { by });
     return r.ok ? r : null;
   }
 
@@ -191,13 +191,13 @@ class StripOps {
    * or voiding a relation writes ATC back on every participant). A relation is
    * not a Strip and its participants' Strips may sit in another Facility, so
    * those FDR writes reach nobody unless they are collected here and put in the
-   * board-delta's own `fdrs.updated` — the same gap F-111 found on the declare
+   * board-delta's own `flightDataList.updated` — the same gap F-111 found on the declare
    * side, arriving from the Strip-op direction. See marsa-store.js's
    * drainRegimeWrites().
    */
   drainMarsaRegimeWrites() {
-    const fdrs = this.rules.drainMarsaRegimeWrites();
-    return fdrs && fdrs.length ? fdrs : undefined;
+    const flightDataList = this.rules.drainMarsaRegimeWrites();
+    return flightDataList && flightDataList.length ? flightDataList : undefined;
   }
 
   /**
@@ -218,9 +218,9 @@ class StripOps {
    */
   marsaVoidFor(strip, op, by, actingPositionId, clientMutationId) {
     if (op.confirmVacated) return null;
-    const interlock = this.rules.marsaInterlockFor(strip.role, op.blockId);
+    const interlock = this.rules.marsaInterlockFor(strip.stripType, op.blockId);
     if (!interlock) return null;
-    return this.rules.voidMarsaForAssignment(strip.fdrId, {
+    return this.rules.voidMarsaForAssignment(strip.flightDataId, {
       cause: interlock === 'COURSE' ? 'CONTROLLER_COURSE_CHANGE' : 'CONTROLLER_ALTITUDE_CHANGE',
       blockId: op.blockId,
       clientMutationId,
@@ -230,7 +230,7 @@ class StripOps {
   }
 
   applySetState(strip, toState, by) {
-    if (!this.rules.isValidState(toState, strip.role)) {
+    if (!this.rules.isValidState(toState, strip.stripType)) {
       return { ok: false, reason: 'VALIDATION_ERROR', strip };
     }
     // A state change that files the Strip into a full Bay (a missed approach coming
@@ -287,7 +287,7 @@ class StripOps {
     // ever transferred it away — raw ownership alone used to be sufficient
     // to invoke ANY NLA on a Strip you held, regardless of whose job that
     // state's action actually is.
-    if (!this.rules.canActOnState(strip.ownerPositionId, strip.role, strip.state)) {
+    if (!this.rules.canActOnState(strip.ownerPositionId, strip.stripType, strip.state)) {
       return { reason: 'PERMISSION_DENIED', detail: `${strip.state} is not ${strip.ownerPositionId}'s to advance` };
     }
 
@@ -301,14 +301,14 @@ class StripOps {
     // forever for a response that would never come. Mirrors the existing
     // "a Strip cannot have two open coordination links at once" guard in
     // _applyCoordinationPropose — same open-link concept, different action.
-    if (strip.coordination && strip.coordination.state === 'PROPOSED') {
+    if (strip.coordination && strip.coordination.state === 'INITIATED') {
       return { reason: 'VALIDATION_ERROR', detail: 'cannot advance a Strip with an open coordination proposal — accept, reject, or wait for a response first' };
     }
     // Same open-link guard, extended to TOFI's own coordination record
     // (WP4A second slice) — a Strip with an open (unresolved) TOFI
     // proposal shouldn't silently advance its own lifecycle out from under
     // the pending exchange.
-    if (strip.tofiCoordination && strip.tofiCoordination.state === 'PROPOSED') {
+    if (strip.tofiCoordination && strip.tofiCoordination.state === 'INITIATED') {
       return { reason: 'VALIDATION_ERROR', detail: 'cannot advance a Strip with an open TOFI proposal — accept, reject, or wait for a response first' };
     }
     return null;
@@ -384,8 +384,8 @@ class StripOps {
    */
   nlaStatusFor(strip, now = this.clock.now()) {
     if (!strip) return null;
-    const fdr = this.flightDataStore.getFlightData(strip.fdrId);
-    const result = this.rules.computeNla(strip, fdr, now, this.placement.nlaCtx());
+    const flightData = this.flightDataStore.getFlightData(strip.flightDataId);
+    const result = this.rules.computeNla(strip, flightData, now, this.placement.nlaCtx());
     // No NLA at all for this State (every Role's terminal DROPPED) — null, not
     // a reason. _applyInvokeNla runs the precheck FIRST and so answers a press
     // on a terminal Strip with whichever precheck refusal comes up; that is
@@ -410,11 +410,11 @@ class StripOps {
       return { inhibited: 'cannot drop a Strip under active tactical control — complete a TOFI exit first', reason: 'VALIDATION_ERROR' };
     }
     const status = result.transferTo ? { toState: result.toState, transferTo: result.transferTo } : { toState: result.toState };
-    // docs/adr/0074: which carrier hand-over this NLA button records, and the
+    // docs/adr/0074: which carrier handoff this NLA button records, and the
     // Role it changes the Strip to, so the panel labels it from the model's own
     // table (and renders "See you" beside it in Case II).
-    if (result.carrierTransfer) status.carrierTransfer = result.carrierTransfer;
-    if (result.roleChange) status.roleChange = result.roleChange;
+    if (result.carrierHandoff) status.carrierHandoff = result.carrierHandoff;
+    if (result.stripTypeChange) status.stripTypeChange = result.stripTypeChange;
     return status;
   }
 
@@ -458,8 +458,8 @@ class StripOps {
     // vacancy and no close-up (H28). A LAUNCH Strip is not in the stack; the
     // removal is a no-op for it.
     let carrierChanged;
-    if (['MARSHAL', 'FINAL', 'PATTERN'].includes(strip.role)) {
-      carrierChanged = this.rules.carrierRetireFlight(strip.fdrId, by) || undefined;
+    if (['MARSHAL', 'FINAL', 'PATTERN'].includes(strip.stripType)) {
+      carrierChanged = this.rules.carrierRetireFlight(strip.flightDataId, by) || undefined;
     }
     // U7: a replica that ends takes the proposer's link with it.
     let peerFacilityId; let peerStrip;
@@ -472,7 +472,7 @@ class StripOps {
     return {
       ok: true, strip,
       marsaChanged: marsaChanged && marsaChanged.length ? marsaChanged : undefined,
-      fdrs: marsaChanged && marsaChanged.length ? this.drainMarsaRegimeWrites() : undefined,
+      flightDataList: marsaChanged && marsaChanged.length ? this.drainMarsaRegimeWrites() : undefined,
       peerFacilityId, peerStrip, carrierChanged,
     };
   }
@@ -482,7 +482,7 @@ class StripOps {
    * references that FDR, anywhere (this Facility or any other).
    *
    * One FDR meant one live Strip until TOFI, which deliberately binds a
-   * MISSION Strip and its ATC-side Strip to one shared fdrId (docs/adr/0025)
+   * MISSION Strip and its ATC-side Strip to one shared flightDataId (docs/adr/0025)
    * with independent lifecycles. An unconditional release therefore handed
    * the shared Mode 3/A code back to the allocator when the MRU controller
    * retired their MISSION Strip — while the ATC-side flight was still
@@ -492,9 +492,9 @@ class StripOps {
    * never on the automatic allocate() scan.
    */
   _releaseFlightDataIfLastStrip(strip, by) {
-    const othersLive = this.rules.liveStripsForFlightData(strip.fdrId, strip.stripId);
+    const othersLive = this.rules.liveStripsForFlightData(strip.flightDataId, strip.stripId);
     if (othersLive !== 0) return null;
-    this.flightDataStore.releaseFlightData(strip.fdrId);
+    this.flightDataStore.releaseFlightData(strip.flightDataId);
     // WP6 (docs/adr/0051) — the flight is over, so it leaves any MARSA relation
     // it was in. Left alone the relation would keep naming an aircraft on the
     // ground, keep its separation regime at MARSA on an FDR nobody is working,
@@ -502,7 +502,7 @@ class StripOps {
     // anything. Same shape correlation-store.js's retireFinished has, arriving
     // from the other direction: correlation is swept by a 1Hz reconciler and
     // MARSA has no sweep, so the Strip lifecycle has to say so out loud.
-    return this.rules.retireMarsaForFlightData(strip.fdrId, by);
+    return this.rules.retireMarsaForFlightData(strip.flightDataId, by);
   }
 }
 

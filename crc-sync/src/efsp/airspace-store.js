@@ -84,7 +84,7 @@ class AirspaceStore {
       // approval (§9.11: "coordination and approval must precede airspace
       // entry and exit"). Null when there is nothing outstanding.
       pendingRequest: null,
-      // Append-only, same shape docs/adr/0032 gave fdr.airspace.transitions
+      // Append-only, same shape docs/adr/0032 gave flightData.airspace.transitions
       // and for the same reason — JO 7110.65 ¶2-3-1's "do not erase or
       // overwrite any item". An after-action review has to be able to say
       // when the block went hot and who approved it, not just where it is now.

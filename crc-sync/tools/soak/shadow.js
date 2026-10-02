@@ -12,7 +12,7 @@
 // an ack re-inserts is kept (the client does too) but ignored by diff(): the
 // panel never renders a DROPPED Strip.
 
-const COMPARED = ['stripId', 'rev', 'state', 'ownerPositionId', 'bayId', 'rackId', 'orderKey', 'role', 'fdrId'];
+const COMPARED = ['stripId', 'rev', 'state', 'ownerPositionId', 'bayId', 'rackId', 'orderKey', 'stripType', 'flightDataId'];
 
 function compared(s) {
   const o = {};

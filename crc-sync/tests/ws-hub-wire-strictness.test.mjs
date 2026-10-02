@@ -34,7 +34,7 @@ function setup() {
   });
   const lit = { 7: new Map([['app:X', 5000]]) };
   const picture = {
-    coverageFor: () => ({ radars: [APP], radarIds: new Set(['app:X']), heldPositions: [], radarBearingPositions: ['APP'] }),
+    coverageFor: () => ({ radars: [APP], radarIds: new Set(['app:X']), signedOnPositions: [], radarBearingPositions: ['AP'] }),
     illuminated: () => new Map(Object.entries(lit)),
     radars: () => [APP],
   };
@@ -63,11 +63,11 @@ test('correlating the contact relabels it on the next tick, without a position u
   hub._tick(ws, session);
   assert.equal(ws.sent[0].updated[0].label.callsign, null);
 
-  records.push({ trackId: '7', fdrId: 'f1', state: 'CORRELATED' });
+  records.push({ trackId: '7', flightDataId: 'f1', state: 'CORRELATED' });
   hub._tick(ws, session);
   const delta = ws.sent[1];
   assert.deepEqual(delta.updated, []);
-  assert.deepEqual(delta.relabeled.map(r => [r.id, r.label.callsign, r.label.source, r.type]), [['7', 'VIPER11', 'FDR', 'F16']]);
+  assert.deepEqual(delta.relabeled.map(r => [r.id, r.label.callsign, r.label.source, r.type]), [['7', 'VIPER11', 'FLIGHT_DATA', 'F16']]);
 
   hub._tick(ws, session);
   assert.equal(ws.sent.length, 2, 'and only once');
@@ -80,7 +80,7 @@ test('a tag relabels too, and the flight callsign still beats it', () => {
   collabStore.rename('7', 'bandit', 'c1');
   hub._tick(ws, session);
   assert.equal(ws.sent[1].relabeled[0].label.callsign, 'BANDIT');
-  records.push({ trackId: '7', fdrId: 'f1', state: 'CORRELATED' });
+  records.push({ trackId: '7', flightDataId: 'f1', state: 'CORRELATED' });
   hub._tick(ws, session);
   assert.equal(ws.sent[2].relabeled[0].label.callsign, 'VIPER11');
   assert.equal(ws.sent[2].relabeled[0].label.tag, 'BANDIT');
@@ -97,7 +97,7 @@ test('datalink: a participant is seen with no radar, and a lock never reveals a 
   const surveillance = createSurveillance({ collab: collabStore, datalink });
   const lit = {};
   const picture = {
-    coverageFor: () => ({ radars: [APP], radarIds: new Set(['app:X']), heldPositions: [], radarBearingPositions: [], datalink: true }),
+    coverageFor: () => ({ radars: [APP], radarIds: new Set(['app:X']), signedOnPositions: [], radarBearingPositions: [], datalink: true }),
     illuminated: () => new Map(Object.entries(lit)),
     radars: () => [APP],
   };
@@ -124,23 +124,23 @@ test('CA reaches only an ATC Position, and only when both aircraft are in its pi
   hub._sessions.set(ws, session);
   hub._tick(ws, session); // contact 7 now in this picture
   const conflict = (a, b) => ({ id: `${a}|${b}`, a, b, aCallsign: 'A', bCallsign: 'B', timeToCpaSec: 40, minNm: 1, vertFt: 0 });
-  const alerts = { conformance: [{ fdrId: 'f1', alerts: [] }], stca: [conflict('7', '8')] };
+  const alerts = { conformance: [{ flightDataId: 'f1', alerts: [] }], conflictAlert: [conflict('7', '8')] };
 
-  session.coverage = { ...session.coverage, stca: true };
+  session.coverage = { ...session.coverage, conflictAlert: true };
   hub.broadcastEfspAlerts(alerts);
   let msg = sent.filter(m => m.type === 'efsp-alerts').pop();
-  assert.deepEqual(msg.stca, [], 'the other aircraft is not in this picture');
+  assert.deepEqual(msg.conflictAlert, [], 'the other aircraft is not in this picture');
   assert.equal(msg.conformance.length, 1, 'conformance is about the flight, and goes to everybody');
 
   session.lastSent.set('8', 1);
   hub.broadcastEfspAlerts(alerts);
   msg = sent.filter(m => m.type === 'efsp-alerts').pop();
-  assert.equal(msg.stca.length, 1);
+  assert.equal(msg.conflictAlert.length, 1);
 
-  session.coverage = { ...session.coverage, stca: false };
+  session.coverage = { ...session.coverage, conflictAlert: false };
   hub.broadcastEfspAlerts(alerts);
   msg = sent.filter(m => m.type === 'efsp-alerts').pop();
-  assert.deepEqual(msg.stca, [], 'a tactical Position gets no conflict alerts');
+  assert.deepEqual(msg.conflictAlert, [], 'a tactical Position gets no conflict alerts');
 });
 
 // ── IFF from interrogation, per session (docs/adr/0066) ────────────────────
@@ -157,7 +157,7 @@ function iffSetup({ tracks, lit, srs = null, missionData = null }) {
   const collabStore = new CollaborativeStore();
   const surveillance = createSurveillance({ collab: collabStore, srs });
   const all = [APP, CRC, APT];
-  const coverageFor = (ids) => ({ radars: all.filter(r => ids.includes(r.id)), radarIds: new Set(ids), heldPositions: [], radarBearingPositions: [] });
+  const coverageFor = (ids) => ({ radars: all.filter(r => ids.includes(r.id)), radarIds: new Set(ids), signedOnPositions: [], radarBearingPositions: [] });
   const picture = {
     coverageFor: () => coverageFor([]),
     illuminated: () => new Map(Object.entries(lit)),
@@ -245,18 +245,18 @@ test('obligations reach every session, including a tactical one that gets no CA'
   const ws = { readyState: 1, send: (raw) => sent.push(JSON.parse(raw)) };
   hub._sessions.set(ws, session);
   const obligation = { facilityId: 'INCIRLIK', stripId: 's1', obligationType: 'VOID_TIME_EXPIRED', severity: 'OVERDUE', dueAt: 1, since: 1 };
-  session.coverage = { ...session.coverage, stca: false };
-  hub.broadcastEfspAlerts({ conformance: [], stca: [], obligations: [obligation] });
+  session.coverage = { ...session.coverage, conflictAlert: false };
+  hub.broadcastEfspAlerts({ conformance: [], conflictAlert: [], obligations: [obligation] });
   const msg = sent.filter(m => m.type === 'efsp-alerts').pop();
   assert.deepEqual(msg.obligations, [obligation]);
-  assert.deepEqual(msg.stca, []);
+  assert.deepEqual(msg.conflictAlert, []);
 });
 
 test('a fresh hub already has an efsp-alerts message with all three keys empty — what a connecting client is sent', () => {
   const { hub, session } = setup();
   const msg = hub._efspAlertsMsg(session);
   assert.equal(msg.type, 'efsp-alerts');
-  assert.deepEqual([msg.conformance, msg.stca, msg.obligations], [[], [], []]);
+  assert.deepEqual([msg.conformance, msg.conflictAlert, msg.obligations], [[], [], []]);
 });
 
 test('setOnEfspChange fires after an EFSP message that broadcast, not after one that only acked, and a throw is contained', () => {
@@ -304,7 +304,7 @@ test('scheme is on every wire track, and follows the session: ATC Positions + a 
   const collabStore = new CollaborativeStore();
   const surveillance = createSurveillance({ collab: collabStore });
   const lit = { 1: new Map([['app:X', 5000], ['crc:A', 5000]]), 2: new Map([['app:X', 5000]]) };
-  const cov = (stca) => ({ radars: [AP, E3], radarIds: new Set(['app:X', 'crc:A']), heldPositions: [], radarBearingPositions: [], stca });
+  const cov = (conflictAlert) => ({ radars: [AP, E3], radarIds: new Set(['app:X', 'crc:A']), signedOnPositions: [], radarBearingPositions: [], conflictAlert });
   const picture = { coverageFor: () => cov(true), illuminated: () => new Map(Object.entries(lit)), radars: () => [AP, E3] };
   const hub = new WsHub({ trackStore, collabStore, picture, surveillance });
 
@@ -324,9 +324,9 @@ test('taking or releasing an ATC Position re-sends the picture even when the rad
   const trackStore = new TrackStore();
   trackStore.update({ id: 7, callsign: 'X', name: 'U7', coalition: 3, type: 'F-16C_50', category: 1, lat: 37, lon: 35, alt: 3000 });
   const collabStore = new CollaborativeStore();
-  let stca = false;
+  let conflictAlert = false;
   const picture = {
-    coverageFor: () => ({ radars: [AP], radarIds: new Set(['app:X']), heldPositions: [], radarBearingPositions: [], stca }),
+    coverageFor: () => ({ radars: [AP], radarIds: new Set(['app:X']), signedOnPositions: [], radarBearingPositions: [], conflictAlert }),
     illuminated: () => new Map([['7', new Map([['app:X', 5000]])]]),
     radars: () => [AP],
   };
@@ -334,7 +334,7 @@ test('taking or releasing an ATC Position re-sends the picture even when the rad
   const session = { controllerId: 'c1', lastSent: new Map(), labelRevs: new Map() };
   hub._setCoverage(session, picture.coverageFor());
   const ws = fakeWs();
-  stca = true;
+  conflictAlert = true;
   assert.equal(hub._refreshCoverage(ws, session), true);
   const snap = ws.sent.find(m => m.type === 'snapshot');
   assert.equal(snap.tracks[0].scheme, 'ATC');

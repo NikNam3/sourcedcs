@@ -114,3 +114,28 @@ one crc-sync config site). They were made by the classifiers next to them (`clas
   content is byte-identical, and `freeze-scenarios` derives the golden name from the scenario test file, which §6
   moves in commit 1.
 - `heldPositions` promoted to W (above).
+
+## The wire commit's proof that the re-record is a pure rename (S-RENA1)
+
+The question: does every new golden, read back through the inverse of the map, equal the base golden?
+
+Scripts, all in `docs/wip/RENAME-A/inverse/`:
+1. `build_inverse.py <base golden dir>` writes `inverse.json`, the inverse of rename-map §7:
+   - every `=`/`?` token row and `lit` row as new → old; where two old tokens share a new one, the W row wins (`staffed` → `manned`);
+   - the stems reversed (`flightData` → `fdr`, `runwayStatus` → `fieldState`, …), the N18 part rows reversed, and "strip type(s)" → "Role(s)";
+   - one declared wording change, "unknown strip type" → "unknown Strip Role" (S-RENA0 (4));
+   - the base goldens' own token set: a token the base already had is never rewritten.
+2. `inverse-lib.mjs` stands in for `freeze-lib.mjs` in a scratch copy of the renamed crc-sync. It is the base `freeze-lib.mjs` (as `freeze-lib-old.mjs`), with every input of `canonical`, `summarize`, `summarizeCollection`, `summarizeFinalState` and `checkGolden` passed through the inverse first. Record hashes are therefore taken over old-vocabulary records with old key order.
+3. `patch_scratch.sh` sends the two raw-text hashes the harness takes outside the library through the same inverse: freeze-world's persisted-snapshot hash and the soak driver's `trafficDigest`. It patches the scratch copy only.
+4. In the scratch copy, `UPDATE_GOLDEN=1 node --test tests/freeze/freeze-*.test.mjs` passes 48/48. It writes the goldens in the old vocabulary.
+5. `compare_inverse.py <scratch goldens> <base goldens at 8c1347a>` compares them file by file.
+
+Result (`docs/wip/RENAME-A/inverse/result.txt`), 44 files:
+- **33 SAME**, byte-identical. This includes every scenario golden but one, all the hub-random and hub-order-keys traces, every table golden but one, and guard-board-surface.
+- **8 KEYORDER**, equal once object keys are sorted: the hub-* traces whose connect snapshot `_snapshotView` sorts by key. The harness sorts by the NEW key name (`fieldStates` → `runwayStatuses` moves it after `positionLetters`) before the inverse runs. Every value and hash is equal.
+- **1 STRSORT**: `tables-wire-message-types`. Its type lists are sorted by the new names (`efsp-field-state-*` → `efsp-runway-status-*`), so they are equal as sets.
+- **2 DIFF**, both explained:
+  - `scenario-carrier-l17` lines 1298 and 1344: "a carrier hand-over is recorded" now reads "a carrier handoff is recorded" (N06 `hand-over` → `handoff`). The base goldens already contain the token `handoff` with its own meaning, so the inverse leaves it alone by rule.
+  - `tables-nla-coordination-config` lines 26-30: `.v.coveringChain` is absent. This is an artifact of the proof: the renamed harness reads `c.consolidation` from a `canonical()` result, and in the proof `canonical()` has already inverted the key back to `coveringChain`. The same lines' `h` (the digest of the whole facility config) is equal. A direct check also passes: the real new golden's `consolidation` maps, inverted, equal the base `coveringChain` maps on all five lines.
+
+Nothing else differs. The wire commit changes names only, plus the one declared refusal wording.

@@ -39,10 +39,10 @@ async function visibleCount(page, keep) {
 }
 
 test('six DEPARTURE Strips: how many are visible, with and without 20/21', async ({ page }) => {
-  await openPanel(page, { held: ['OPS'] });
+  await openPanel(page, { signedOn: ['OPS'] });
 
   const shipped = ['L4D1', 'L4D2', 'L4D3', 'L4D4', 'L4D5', 'L4D6'];
-  for (const cs of shipped) await seedStrip(page, { callsign: cs, role: 'DEPARTURE' });
+  for (const cs of shipped) await seedStrip(page, { callsign: cs, stripType: 'DEPARTURE' });
   const a = await visibleCount(page, shipped);
 
   // Strips built from here on use the compact list without 20/21. Existing
@@ -52,7 +52,7 @@ test('six DEPARTURE Strips: how many are visible, with and without 20/21', async
     COMPACT_BLOCKS_BY_ROLE.DEPARTURE = COMPACT_BLOCKS_BY_ROLE.DEPARTURE.filter((b) => b !== '20' && b !== '21');
   });
   const trimmed = ['L4E1', 'L4E2', 'L4E3', 'L4E4', 'L4E5', 'L4E6'];
-  for (const cs of trimmed) await seedStrip(page, { callsign: cs, role: 'DEPARTURE' });
+  for (const cs of trimmed) await seedStrip(page, { callsign: cs, stripType: 'DEPARTURE' });
   const b = await visibleCount(page, trimmed);
 
   const note = (label, m) => `${label}: ${m.full} fully + ${m.partial} partly visible of 6 (Strip ${m.stripHeight}px, Bay ${m.bayHeight}px)`;
@@ -68,7 +68,7 @@ test('six DEPARTURE Strips: how many are visible, with and without 20/21', async
 
 // F-401 — fixed. Five status surfaces used to reserve 68px while empty.
 test('an empty status line takes no height', async ({ page }) => {
-  await openPanel(page, { held: ['OPS'] });
+  await openPanel(page, { signedOn: ['OPS'] });
   const reserved = await page.evaluate(() => [
     '#efsp-connection-banner', '#efsp-correlation-rate', '#efsp-mutation-error',
     '#efsp-mutation-warning', '#efsp-dot-command-preview',

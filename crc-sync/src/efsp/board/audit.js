@@ -32,7 +32,7 @@ class BoardAudit {
     this._mutationLog.record({
       clientMutationId: null, causedBy: causedBy || null, op,
       ...(action ? { action } : {}),
-      stripId: strip.stripId, fdrId: strip.fdrId || null,
+      stripId: strip.stripId, flightDataId: strip.flightDataId || null,
       facilityId: this._rules.facilityId || null, fromFacilityId: fromFacilityId || null,
       actingPositionId: null, actorId: by || null, at: this._clock.now(),
       before, after: deepClone(strip), source: 'peer',
@@ -40,7 +40,7 @@ class BoardAudit {
   }
 
   /**
-   * @param {object} [extras] the op's own audit keys (the op table's `auditFields`): `head` is spread after `fdrId`
+   * @param {object} [extras] the op's own audit keys (the op table's `auditFields`): `head` is spread after `flightDataId`
    *   (before `action`), `tail` after `after` (the keys that used to follow it here), each in the order given.
    */
   recordAudit(mutation, actingPositionId, by, before, result, extras = {}) {
@@ -52,7 +52,7 @@ class BoardAudit {
       // Who the entry concerns (docs/adr/0083): the Facility and the flight, so a
       // reader never has to look them up on a Board that may have archived the Strip.
       facilityId: this._rules.facilityId || null,
-      fdrId: result.strip.fdrId || null,
+      flightDataId: result.strip.flightDataId || null,
       // The op kind alone names neither the Block written nor a coordination
       // action (PROPOSE/ACCEPT/REJECT/CANCEL...); the entry says which.
       ...(extras.head || {}),

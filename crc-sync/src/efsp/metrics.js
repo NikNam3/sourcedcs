@@ -109,7 +109,7 @@ function summarize(samples) {
 function ratio(num, den) { return den > 0 ? num / den : null; }
 
 function _transfers(b) {
-  return b.transfers || (b.transfers = { attempts: 0, succeeded: 0, failed: 0, routedToCovering: 0, inhibitedPress: 0, byCause: {}, byKind: {} });
+  return b.transfers || (b.transfers = { attempts: 0, succeeded: 0, failed: 0, routedToConsolidated: 0, inhibitedPress: 0, byCause: {}, byKind: {} });
 }
 
 /** Every hour key of the `n` hours ending with the hour containing `endMs`, ascending. */
@@ -328,7 +328,7 @@ class EfspMetrics {
       k.attempts += 1;
       if (ok) {
         t.succeeded += 1;
-        if (routedTo) t.routedToCovering += 1;
+        if (routedTo) t.routedToConsolidated += 1;
       } else {
         t.failed += 1;
         k.failed += 1;
@@ -372,7 +372,7 @@ class EfspMetrics {
 
   /**
    * Metric 6 (§10.4) — L19's hook, one call per staleness detection:
-   *   metrics.recordStaleness({ at, facilityId, positionId, stripId, fdrId, stripState, trackState, durationMs })
+   *   metrics.recordStaleness({ at, facilityId, positionId, stripId, flightDataId, stripState, trackState, durationMs })
    * Only the aggregate is kept.
    */
   recordStaleness({ at = this._clock.now(), positionId, stripState } = {}) {
@@ -566,7 +566,7 @@ class EfspMetrics {
     const series = (h) => h !== null;
     const clientStatus = (has) => (this._sources.client === null || this._sources.client === undefined ? 'NOT_INSTRUMENTED' : has ? 'COLLECTING' : 'NO_DATA');
 
-    // 1 — search invocations per manned Position-hour
+    // 1 — search invocations per staffed Position-hour
     const byPosition = {};
     let searchTotal = 0;
     for (const [h, b] of entries) {
@@ -574,19 +574,19 @@ class EfspMetrics {
       for (const p of positions) {
         const s = (b.search || {})[p];
         const m = (b.manning || {})[p];
-        const row = byPosition[p] || (byPosition[p] = { facilityId: (s || m).facilityId, total: 0, mannedMinutes: 0, byHour: {} });
+        const row = byPosition[p] || (byPosition[p] = { facilityId: (s || m).facilityId, total: 0, staffedMinutes: 0, byHour: {} });
         const count = s ? s.count : 0;
         const minutes = m ? m.minutes : 0;
         row.total += count;
-        row.mannedMinutes += minutes;
+        row.staffedMinutes += minutes;
         searchTotal += count;
-        if (series(h)) row.byHour[h] = { missionSession: seq, count, mannedMinutes: minutes, perMannedHour: minutes > 0 ? count / (minutes / 60) : null };
+        if (series(h)) row.byHour[h] = { missionSession: seq, count, staffedMinutes: minutes, perStaffedHour: minutes > 0 ? count / (minutes / 60) : null };
       }
     }
     for (const row of Object.values(byPosition)) {
-      row.mannedHours = row.mannedMinutes / 60;
-      row.perMannedHour = row.mannedMinutes > 0 ? row.total / row.mannedHours : null;
-      delete row.mannedMinutes;
+      row.staffedHours = row.staffedMinutes / 60;
+      row.perStaffedHour = row.staffedMinutes > 0 ? row.total / row.staffedHours : null;
+      delete row.staffedMinutes;
     }
     const searchHas = entries.some(([, b]) => b.search);
 
@@ -664,14 +664,14 @@ class EfspMetrics {
     }
 
     // 7 — transfers
-    const tr = { attempts: 0, succeeded: 0, failed: 0, routedToCovering: 0, inhibitedPress: 0, byCause: {}, byKind: {} };
+    const tr = { attempts: 0, succeeded: 0, failed: 0, routedToConsolidated: 0, inhibitedPress: 0, byCause: {}, byKind: {} };
     for (const k of TRANSFER_KINDS) tr.byKind[k] = { attempts: 0, failed: 0 };
     const trByHour = {};
     for (const [h, b] of entries) {
       const t = b.transfers;
       if (!t) continue;
       tr.attempts += t.attempts; tr.succeeded += t.succeeded; tr.failed += t.failed;
-      tr.routedToCovering += t.routedToCovering; tr.inhibitedPress += t.inhibitedPress || 0;
+      tr.routedToConsolidated += t.routedToConsolidated; tr.inhibitedPress += t.inhibitedPress || 0;
       for (const [k, v] of Object.entries(t.byCause)) inc(tr.byCause, k, v);
       for (const [k, v] of Object.entries(t.byKind)) {
         const row = tr.byKind[k] || (tr.byKind[k] = { attempts: 0, failed: 0 });
@@ -734,7 +734,7 @@ class EfspMetrics {
         status: !this._tapInstalled ? 'NOT_INSTRUMENTED' : tr.attempts > 0 ? 'COLLECTING' : 'NO_DATA',
         target: { kind: 'AT_MOST', value: TRANSFER_FAILURE_TARGET },
         attempts: tr.attempts, succeeded: tr.succeeded, failed: tr.failed,
-        failureRate: ratio(tr.failed, tr.attempts), routedToCovering: tr.routedToCovering,
+        failureRate: ratio(tr.failed, tr.attempts), routedToConsolidated: tr.routedToConsolidated,
         inhibitedPress: tr.inhibitedPress,
         byCause: tr.byCause, byKind: tr.byKind, byHour: trByHour,
       },
@@ -916,7 +916,7 @@ function createEfspInstrumentation({
     // a refusal made before the store says so with `unaudited` (docs/adr/0083).
     if (!ok && (msg.type === 'efsp-mutation' || result.unaudited === true)) {
       const subject = {};
-      for (const k of ['stripId', 'airspaceId', 'fdrId', 'marsaId']) if (msg[k] !== undefined) subject[k] = msg[k];
+      for (const k of ['stripId', 'airspaceId', 'flightDataId', 'marsaId']) if (msg[k] !== undefined) subject[k] = msg[k];
       efsp.mutationLog.record({
         clientMutationId: id === undefined ? null : id,
         type: msg.type,

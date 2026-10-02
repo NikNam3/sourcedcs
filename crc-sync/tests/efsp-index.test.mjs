@@ -21,7 +21,7 @@ function createStripMsg() {
     version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(), actingPositionId: 'OPS',
     op: {
       kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main',
-      fdr: { callsign: 'VIPER1', aircraftType: 'F16', wakeCategory: 'D', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' },
+      flightData: { callsign: 'VIPER1', aircraftType: 'F16', wakeCategory: 'D', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' },
     },
   };
 }
@@ -49,7 +49,7 @@ test('controllerIdFor uses the same fallback chain as ws-hub.js\'s session.who',
 test('handleMessage end-to-end: a CreateStrip mutation is reflected in boardStore/flightDataStore directly', () => {
   const efsp = createEfsp();
   const session = { controllerId: 'c1', who: 'Alice' };
-  efsp.handleMessage(session, { type: 'efsp-set-positions', held: ['OPS'] });
+  efsp.handleMessage(session, { type: 'efsp-set-positions', signedOn: ['OPS'] });
   const result = efsp.handleMessage(session, createStripMsg());
   assert.equal(result.ack.ok, true);
   assert.equal(efsp.boardStoreFor('INCIRLIK').getAll().length, 1);
@@ -62,7 +62,7 @@ test('snapshotFor returns a well-formed efsp-snapshot message with all four coll
   assert.equal(snap.type, 'efsp-snapshot');
   assert.equal(snap.facility, 'INCIRLIK');
   assert.ok(Array.isArray(snap.strips));
-  assert.ok(Array.isArray(snap.fdrs));
+  assert.ok(Array.isArray(snap.flightDataList));
   assert.ok(Array.isArray(snap.positions));
   assert.ok(Array.isArray(snap.bays));
 });
@@ -70,12 +70,12 @@ test('snapshotFor returns a well-formed efsp-snapshot message with all four coll
 test('onDisconnect releases every Position the controller held', () => {
   const efsp = createEfsp();
   const session = { controllerId: 'c1', who: 'Alice' };
-  efsp.handleMessage(session, { type: 'efsp-set-positions', held: ['GND', 'TWR'] });
-  assert.equal(efsp.positionStoreFor('INCIRLIK').isStaffed('GND'), true);
+  efsp.handleMessage(session, { type: 'efsp-set-positions', signedOn: ['GC', 'LC'] });
+  assert.equal(efsp.positionStoreFor('INCIRLIK').isStaffed('GC'), true);
 
   efsp.onDisconnect(session);
-  assert.equal(efsp.positionStoreFor('INCIRLIK').isStaffed('GND'), false);
-  assert.equal(efsp.positionStoreFor('INCIRLIK').isStaffed('TWR'), false);
+  assert.equal(efsp.positionStoreFor('INCIRLIK').isStaffed('GC'), false);
+  assert.equal(efsp.positionStoreFor('INCIRLIK').isStaffed('LC'), false);
 });
 
 // ── Persistence — the actual "restart" scenario (ADR 0002) ─────────────────
@@ -83,7 +83,7 @@ test('onDisconnect releases every Position the controller held', () => {
 test('a successful mutation persists to BOARD_SNAPSHOT_PATH, and a freshly constructed efsp instance restores it', () => {
   const efsp1 = createEfsp();
   const session = { controllerId: 'c1', who: 'Alice' };
-  efsp1.handleMessage(session, { type: 'efsp-set-positions', held: ['OPS'] });
+  efsp1.handleMessage(session, { type: 'efsp-set-positions', signedOn: ['OPS'] });
   const result = efsp1.handleMessage(session, createStripMsg());
   const stripId = result.ack.strip.stripId;
 
@@ -95,7 +95,7 @@ test('a successful mutation persists to BOARD_SNAPSHOT_PATH, and a freshly const
   const restored = efsp2.boardStoreFor('INCIRLIK').getStrip(stripId);
   assert.ok(restored);
   assert.equal(restored.ownerPositionId, 'OPS');
-  assert.ok(efsp2.flightDataStore.getFlightData(restored.fdrId));
+  assert.ok(efsp2.flightDataStore.getFlightData(restored.flightDataId));
 });
 
 test('a Strip mid-DEPARTED-to-APP-transfer (docs/adr/0007) round-trips correctly across a simulated restart — exactly one owner, no strand', () => {
@@ -103,9 +103,9 @@ test('a Strip mid-DEPARTED-to-APP-transfer (docs/adr/0007) round-trips correctly
   const ops = { controllerId: 'ops', who: 'Ops1' };
   const twr = { controllerId: 'twr', who: 'Twr1' };
   const app = { controllerId: 'app', who: 'App1' };
-  efsp1.handleMessage(ops, { type: 'efsp-set-positions', held: ['OPS'] });
-  efsp1.handleMessage(twr, { type: 'efsp-set-positions', held: ['TWR'] });
-  efsp1.handleMessage(app, { type: 'efsp-set-positions', held: ['APP'] }); // APP must be occupied for the real, staffing-gated Hand Off
+  efsp1.handleMessage(ops, { type: 'efsp-set-positions', signedOn: ['OPS'] });
+  efsp1.handleMessage(twr, { type: 'efsp-set-positions', signedOn: ['LC'] });
+  efsp1.handleMessage(app, { type: 'efsp-set-positions', signedOn: ['AP'] }); // APP must be staffed for the real, staffing-gated Hand Off
 
   const created = efsp1.handleMessage(ops, createStripMsg());
   let strip = created.ack.strip;
@@ -133,27 +133,27 @@ test('a Strip mid-DEPARTED-to-APP-transfer (docs/adr/0007) round-trips correctly
   const relocated = efsp1.handleMessage(ops, {
     version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(),
     actingPositionId: 'OPS', stripId: strip.stripId, baseRev: strip.rev,
-    op: { kind: 'TransferStrip', toPositionId: 'TWR', bayId: 'twr-airborne', rackId: 'main' },
+    op: { kind: 'TransferStrip', toPositionId: 'LC', bayId: 'lc-airborne', rackId: 'main' },
   });
   assert.equal(relocated.ack.ok, true, JSON.stringify(relocated.ack));
   strip = relocated.ack.strip;
-  assert.equal(strip.ownerPositionId, 'TWR');
+  assert.equal(strip.ownerPositionId, 'LC');
 
   const transferred = efsp1.handleMessage(twr, {
     version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(),
-    actingPositionId: 'TWR', stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'InvokeNla' },
+    actingPositionId: 'LC', stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'InvokeNla' },
   });
   assert.equal(transferred.ack.ok, true, JSON.stringify(transferred.ack));
-  assert.equal(transferred.ack.strip.ownerPositionId, 'APP');
+  assert.equal(transferred.ack.strip.ownerPositionId, 'AP');
   assert.equal(transferred.ack.strip.state, 'HANDED_OFF');
 
   // Simulated restart — fresh stores, restore() reads from disk.
   const efsp2 = createEfsp();
   const restored = efsp2.boardStoreFor('INCIRLIK').getStrip(strip.stripId);
   assert.ok(restored);
-  assert.equal(restored.ownerPositionId, 'APP'); // exactly one owner, unchanged by the restart (D7)
+  assert.equal(restored.ownerPositionId, 'AP'); // exactly one owner, unchanged by the restart (D7)
   assert.equal(restored.state, 'HANDED_OFF');
-  assert.equal(restored.bayId, 'app-departures');
+  assert.equal(restored.bayId, 'ap-departures');
 });
 
 // ── WP4A: cross-Facility HANDOFF survives a restart (docs/adr/0013-0015) ──
@@ -169,8 +169,8 @@ function createCtrStripMsg() {
     version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(),
     facilityId: 'CENTER', actingPositionId: 'CTR',
     op: {
-      kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', role: 'ARRIVAL',
-      fdr: { callsign: 'EAGLE1', aircraftType: 'F15', wakeCategory: 'D', originAirport: 'LTAC' },
+      kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', stripType: 'ARRIVAL',
+      flightData: { callsign: 'EAGLE1', aircraftType: 'F15', wakeCategory: 'D', originAirport: 'LTAC' },
     },
   };
 }
@@ -178,7 +178,7 @@ function createCtrStripMsg() {
 test('a HANDOFF interrupted mid-PROPOSE (before ACCEPT) round-trips both replicas correctly across a simulated restart — each still exists, independently, on its own Facility\'s Board', () => {
   const efsp1 = createEfsp();
   const ctr = { controllerId: 'ctr', who: 'Ctr1' };
-  efsp1.handleMessage(ctr, { type: 'efsp-set-positions', facilityId: 'CENTER', held: ['CTR'] });
+  efsp1.handleMessage(ctr, { type: 'efsp-set-positions', facilityId: 'CENTER', signedOn: ['CTR'] });
 
   const created = efsp1.handleMessage(ctr, createCtrStripMsg());
   assert.equal(created.ack.ok, true, JSON.stringify(created.ack));
@@ -187,7 +187,7 @@ test('a HANDOFF interrupted mid-PROPOSE (before ACCEPT) round-trips both replica
   const proposed = efsp1.handleMessage(ctr, {
     version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(),
     facilityId: 'CENTER', actingPositionId: 'CTR', stripId: senderStrip.stripId, baseRev: senderStrip.rev,
-    op: { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'APP' },
+    op: { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'AP' },
   });
   assert.equal(proposed.ack.ok, true, JSON.stringify(proposed.ack));
   const receiverStripId = proposed.ack.strip.coordination.peerStripId;
@@ -198,14 +198,14 @@ test('a HANDOFF interrupted mid-PROPOSE (before ACCEPT) round-trips both replica
 
   const restoredSender = efsp2.boardStoreFor('CENTER').getStrip(senderStrip.stripId);
   assert.ok(restoredSender);
-  assert.equal(restoredSender.coordination.state, 'PROPOSED');
+  assert.equal(restoredSender.coordination.state, 'INITIATED');
   assert.equal(restoredSender.coordination.peerStripId, receiverStripId);
 
   const restoredReceiver = efsp2.boardStoreFor('INCIRLIK').getStrip(receiverStripId);
   assert.ok(restoredReceiver);
-  assert.equal(restoredReceiver.ownerPositionId, 'APP');
-  assert.equal(restoredReceiver.bayId, 'app-coordination');
-  assert.equal(restoredReceiver.coordination.state, 'PROPOSED');
+  assert.equal(restoredReceiver.ownerPositionId, 'AP');
+  assert.equal(restoredReceiver.bayId, 'ap-coordination');
+  assert.equal(restoredReceiver.coordination.state, 'INITIATED');
   assert.equal(restoredReceiver.coordination.peerStripId, senderStrip.stripId);
 
   // The exchange can still be completed after the restart, exactly as if
@@ -214,14 +214,14 @@ test('a HANDOFF interrupted mid-PROPOSE (before ACCEPT) round-trips both replica
   // Position staffing is deliberately ephemeral (ADR 0002 — it never enters
   // the durable snapshot), so a reconnecting client re-declares it after a
   // restart exactly like it does on a first connect.
-  efsp2.handleMessage(app, { type: 'efsp-set-positions', facilityId: 'INCIRLIK', held: ['APP'] });
+  efsp2.handleMessage(app, { type: 'efsp-set-positions', facilityId: 'INCIRLIK', signedOn: ['AP'] });
   const accepted = efsp2.handleMessage(app, {
     version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(),
-    facilityId: 'INCIRLIK', actingPositionId: 'APP', stripId: receiverStripId, baseRev: restoredReceiver.rev,
+    facilityId: 'INCIRLIK', actingPositionId: 'AP', stripId: receiverStripId, baseRev: restoredReceiver.rev,
     op: { kind: 'HANDOFF', action: 'ACCEPT' },
   });
   assert.equal(accepted.ack.ok, true, JSON.stringify(accepted.ack));
-  assert.equal(accepted.ack.strip.bayId, 'app-inbound');
+  assert.equal(accepted.ack.strip.bayId, 'ap-inbound');
 });
 
 test('a failed mutation does not write a new snapshot', () => {
@@ -229,7 +229,7 @@ test('a failed mutation does not write a new snapshot', () => {
   const before = fs.existsSync(BOARD_SNAPSHOT_PATH) ? fs.readFileSync(BOARD_SNAPSHOT_PATH, 'utf8') : null;
 
   const session = { controllerId: 'c1', who: 'Alice' };
-  const badMsg = { ...createStripMsg(), actingPositionId: 'GND' }; // GND may not CreateStrip
+  const badMsg = { ...createStripMsg(), actingPositionId: 'GC' }; // GND may not CreateStrip
   const result = efsp.handleMessage(session, badMsg);
   assert.equal(result.ack.ok, false);
 

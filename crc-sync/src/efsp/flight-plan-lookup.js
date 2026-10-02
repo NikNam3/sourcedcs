@@ -94,7 +94,7 @@ function toFlightDataFiledSeed(plan) {
     aircraftType: plan.aircraftType || '',
     wakeCategory: plan.wtc || '',
     // Item 13's departure time, HHMM Zulu as the pilot typed it. createFlightData()
-    // dates it by the mission clock into fdr.timeInputs, one source of the
+    // dates it by the mission clock into flightData.timeInputs, one source of the
     // P-time fallback chain (docs/adr/0073) — never into the controller's
     // filed.proposedDepartureTimeUtc.
     flightPlanDepartureTimeHhmm: plan.depTime || '',

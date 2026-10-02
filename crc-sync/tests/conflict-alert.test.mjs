@@ -6,7 +6,7 @@ const { findConflicts, ConflictAlertMonitor } = await import('../src/conflict-al
 const { loadAlertingConfig } = await import('../src/alerting-config.js');
 const DEFAULTS = loadAlertingConfig();
 
-const cfg = DEFAULTS.stca;
+const cfg = DEFAULTS.conflictAlert;
 const KT = 0.514444;
 const NOW = 1_000_000;
 const NM_LAT = 1 / 60; // one nautical mile of latitude, in degrees
@@ -62,7 +62,7 @@ test('a MARSA pair is suppressed; the monitor reports a change while conflicts e
   const marsa = new ConflictAlertMonitor({
     trackStore: store, config: cfg,
     flightDataForTrack: (id) => (String(id) === '1' ? 'fA' : 'fB'),
-    activeMarsaFor: (fdrId) => ({ participants: ['fA', 'fB'] }),
+    activeMarsaFor: (flightDataId) => ({ participants: ['fA', 'fB'] }),
   });
   assert.equal(marsa.tick(NOW), false);
   assert.deepEqual(marsa.getAll(), []);

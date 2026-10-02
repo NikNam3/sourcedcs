@@ -20,7 +20,7 @@ class Tofi {
    * @param {(stripId:string) => void} deps.touch late-bound to the facade's _touch (the soak host patches it)
    * @param {() => string|null} deps.activeCmid the clientMutationId being applied, read late
    * @param {(strip:object, by:string) => object|null} deps.retire late-bound to StripOps' retire
-   * @param {(role:string) => string|undefined} deps.initialStateFor the authority registry's accessor
+   * @param {(stripType:string) => string|undefined} deps.initialStateFor the authority registry's accessor
    */
   constructor({ rules, state, audit, placement, clock, flightDataStore, touch, activeCmid, retire, initialStateFor }) {
     this._rules = rules;
@@ -28,7 +28,7 @@ class Tofi {
     this._audit = audit;
     this._placement = placement;
     this._clock = clock;
-    this._fdrStore = flightDataStore;
+    this._flightDataStore = flightDataStore;
     this._touch = touch;
     this._activeCmidOf = activeCmid;
     this._retire = retire;
@@ -55,7 +55,7 @@ class Tofi {
   //     ACCEPT's effect the way commsTransfers is for the 5 primitives.
   //  4. The receiving side's Strip is a different Strip ROLE (MISSION),
   //     not a same-role mirror — and it shares the ATC-side Strip's own
-  //     fdrId rather than getting a fresh one (guide §9.8's "bind it to
+  //     flightDataId rather than getting a fresh one (guide §9.8's "bind it to
   //     the same FDR as any tower Strip for that flight," realized now
   //     rather than deferred to WP7).
   //
@@ -79,20 +79,20 @@ class Tofi {
   /**
    * Always invoked on the ATC-side Strip. ENTRY mints a brand-new MISSION
    * Strip on the target MRU Facility's own Board (receiveTofiProposal,
-   * sharing this Strip's fdrId); EXIT re-enters the SAME already-existing
+   * sharing this Strip's flightDataId); EXIT re-enters the SAME already-existing
    * link (receiveTofiExitProposal), minting nothing new.
    */
   _applyTofiPropose(strip, op, by, actingPositionId) {
     if (op.direction !== 'ENTRY' && op.direction !== 'EXIT') {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'direction must be ENTRY or EXIT', strip };
     }
-    if (strip.tofiCoordination && strip.tofiCoordination.state === 'PROPOSED') {
+    if (strip.tofiCoordination && strip.tofiCoordination.state === 'INITIATED') {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'this Strip already has an open TOFI proposal', strip };
     }
     // The same open-link guard _nlaPrecheck and _applyConvertToArrival apply.
     // Without it CTR could open tactical control from a handoff replica it had
     // not yet accepted — on a flight APP still worked.
-    if (strip.coordination && strip.coordination.state === 'PROPOSED') {
+    if (strip.coordination && strip.coordination.state === 'INITIATED') {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'cannot open a TOFI exchange while a coordination proposal is open — accept or reject it first', strip };
     }
 
@@ -108,15 +108,15 @@ class Tofi {
       if (op.toFacilityId === this._rules.facilityId) {
         return { ok: false, reason: 'VALIDATION_ERROR', detail: 'TOFI target must be a different Facility', strip };
       }
-      // TOFI's own (role, state) gate — the 5 primitives have had one since
+      // TOFI's own (stripType, state) gate — the 5 primitives have had one since
       // docs/adr/0022 and TOFI never did, so a controller could open tactical
       // control on a Strip that was not yet airborne, or on a MISSION Strip
       // (the Role TOFI itself creates). See coordination.js.
-      const required = this._rules.tofiEligibleState(strip.role);
+      const required = this._rules.tofiEligibleState(strip.stripType);
       if (!required || strip.state !== required) {
         return { ok: false, reason: 'VALIDATION_ERROR', detail: required
-          ? `a ${strip.role} Strip must be at ${required} to enter tactical control, not ${strip.state}`
-          : `a ${strip.role} Strip can never open a TOFI exchange`, strip };
+          ? `a ${strip.stripType} Strip must be at ${required} to enter tactical control, not ${strip.state}`
+          : `a ${strip.stripType} Strip can never open a TOFI exchange`, strip };
       }
       const allowed = this._rules.tofiCounterparts(actingPositionId) || [];
       if (!allowed.some(c => c.facilityId === op.toFacilityId && c.positionId === op.toPositionId)) {
@@ -129,7 +129,7 @@ class Tofi {
       // ATC<->ATC primitives (docs/adr/0019) — TOFI is named in the same
       // §4.6 primitive table this rule sits directly under, so it applies
       // here too, for both directions.
-      const entryFlightData = this._fdrStore.getFlightData(strip.fdrId);
+      const entryFlightData = this._flightDataStore.getFlightData(strip.flightDataId);
       const entryDegraded = entryFlightData && entryFlightData.identity.trackDegradationFlag && entryFlightData.identity.trackDegradationFlag !== 'NONE';
       if (entryDegraded && !op.note) {
         return {
@@ -141,12 +141,12 @@ class Tofi {
 
       const proposal = peer.receiveTofiProposal({
         causedBy: this._activeCmid, fromFacilityId: this._rules.facilityId, fromPositionId: actingPositionId,
-        fromStripId: strip.stripId, toPositionId: op.toPositionId, fdrId: strip.fdrId, note: op.note || null, by,
+        fromStripId: strip.stripId, toPositionId: op.toPositionId, flightDataId: strip.flightDataId, note: op.note || null, by,
       });
       if (!proposal.ok) return { ok: false, reason: proposal.reason || 'VALIDATION_ERROR', detail: proposal.detail, strip };
 
       strip.tofiCoordination = {
-        direction: 'ENTRY', state: 'PROPOSED',
+        direction: 'ENTRY', state: 'INITIATED',
         peerFacilityId: op.toFacilityId, peerStripId: proposal.strip.stripId, peerPositionId: op.toPositionId,
         commsTransferred: false, commsTransferredAt: null, commsTransferredBy: null,
         note: op.note || null,
@@ -165,7 +165,7 @@ class Tofi {
     const peer = this._rules.peerBoard(prior.peerFacilityId);
     if (!peer) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown Facility: ${prior.peerFacilityId}`, strip };
 
-    const exitFlightData = this._fdrStore.getFlightData(strip.fdrId);
+    const exitFlightData = this._flightDataStore.getFlightData(strip.flightDataId);
     const exitDegraded = exitFlightData && exitFlightData.identity.trackDegradationFlag && exitFlightData.identity.trackDegradationFlag !== 'NONE';
     if (exitDegraded && !op.note) {
       return {
@@ -179,7 +179,7 @@ class Tofi {
     if (!exitResult.ok) return { ok: false, reason: exitResult.reason || 'VALIDATION_ERROR', detail: exitResult.detail, strip };
 
     strip.tofiCoordination = {
-      ...prior, direction: 'EXIT', state: 'PROPOSED',
+      ...prior, direction: 'EXIT', state: 'INITIATED',
       commsTransferred: false, commsTransferredAt: null, commsTransferredBy: null,
       note: op.note || null,
       initiatedAt: now, initiatedBy: by || null, acceptedAt: null, acceptedBy: null,
@@ -199,7 +199,7 @@ class Tofi {
    */
   _applyTofiAccept(strip, op, by) {
     const tofi = strip.tofiCoordination;
-    if (!tofi || tofi.state !== 'PROPOSED') {
+    if (!tofi || tofi.state !== 'INITIATED') {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no pending TOFI proposal on this Strip', strip };
     }
     // A soft warning, deliberately NOT a second hard gate beside
@@ -219,18 +219,18 @@ class Tofi {
     // lane1.md F-111's class).
     let writtenFlightData;
     if (tofi.direction === 'EXIT') {
-      const fdr = this._fdrStore.getFlightData(strip.fdrId);
-      if (!fdr || !fdr.tofi || fdr.tofi.separationRegime !== 'ATC') {
+      const flightData = this._flightDataStore.getFlightData(strip.flightDataId);
+      if (!flightData || !flightData.tofi || flightData.tofi.separationRegime !== 'ATC') {
         return { ok: false, reason: 'VALIDATION_ERROR', detail: 'separation_regime must be set back to ATC before completing a TOFI exit', strip };
       }
-      if (fdr.airspace && fdr.airspace.owner === 'USING_AGENCY') {
+      if (flightData.airspace && flightData.airspace.owner === 'USING_AGENCY') {
         warning = 'AIRSPACE_STILL_WITH_USING_AGENCY';
       }
     }
 
     // ENTRY — the MRU controller MUST say under which regime they are taking
     // the aircraft (docs/adr/0053). Nothing required this before, and
-    // fdr.tofi.separationRegime starts as null, so the whole of tactical
+    // flightData.tofi.separationRegime starts as null, so the whole of tactical
     // control could run with the FDR saying nothing at all about who was
     // separating: §4.8.3's "a second controller takes TAC_C2 ten minutes later
     // and inherits a lie", arriving by a route nobody was watching. It also
@@ -242,7 +242,7 @@ class Tofi {
     // airspace type or anything else — so the fix is to make the controller
     // state it, not to guess it.
     if (tofi.direction === 'ENTRY') {
-      const activeMarsa = this._rules.activeMarsaFor(strip.fdrId);
+      const activeMarsa = this._rules.activeMarsaFor(strip.flightDataId);
       if (activeMarsa) {
         // The relation owns the regime while it is ACTIVE (docs/adr/0051), and
         // _applySetBlock refuses a direct SREG write for the same reason.
@@ -263,9 +263,9 @@ class Tofi {
             strip,
           };
         }
-        const wrote = this._fdrStore.setTofi(strip.fdrId, { separationRegime: op.separationRegime }, { by });
+        const wrote = this._flightDataStore.setTofi(strip.flightDataId, { separationRegime: op.separationRegime }, { by });
         if (!wrote.ok) return { ok: false, reason: wrote.reason, detail: wrote.detail, strip };
-        writtenFlightData = wrote.fdr;
+        writtenFlightData = wrote.flightData;
       }
     }
 
@@ -312,13 +312,13 @@ class Tofi {
       const peerResult = peer.receiveTofiResponse({ causedBy: this._activeCmid, stripId: tofi.peerStripId, response: 'ACCEPT', by });
       if (peerResult.ok) peerStrip = peerResult.strip;
     }
-    return { ok: true, strip, fdr: writtenFlightData, peerFacilityId: tofi.peerFacilityId, peerStrip, warning };
+    return { ok: true, strip, flightData: writtenFlightData, peerFacilityId: tofi.peerFacilityId, peerStrip, warning };
   }
 
   /** Always invoked on the MISSION-side Strip, mirroring _applyTofiAccept's own side. */
   _applyTofiReject(strip, op, by) {
     const tofi = strip.tofiCoordination;
-    if (!tofi || tofi.state !== 'PROPOSED') {
+    if (!tofi || tofi.state !== 'INITIATED') {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no pending TOFI proposal on this Strip', strip };
     }
     tofi.state = 'REJECTED';
@@ -355,7 +355,7 @@ class Tofi {
       if (peerResult.ok) peerStrip = peerResult.strip;
     }
     const out = { ok: true, strip, peerFacilityId: tofi.peerFacilityId, peerStrip };
-    if (retired && retired.marsaChanged) { out.marsaChanged = retired.marsaChanged; out.fdrs = retired.fdrs; }
+    if (retired && retired.marsaChanged) { out.marsaChanged = retired.marsaChanged; out.flightDataList = retired.flightDataList; }
     return out;
   }
 
@@ -400,18 +400,18 @@ class Tofi {
    * Called by the ATC-side Facility's BoardStore (via rules.peerBoard) on a
    * TOFI ENTRY PROPOSE — mints a brand-new, independent MISSION Strip in
    * THIS Facility's own `_strips` Map, landing in the receiving Position's
-   * Coordination Bay. Shares the ATC-side Strip's own fdrId (guide §9.8's
+   * Coordination Bay. Shares the ATC-side Strip's own flightDataId (guide §9.8's
    * binding, realized now) rather than minting a fresh FDR — the one
    * genuinely new piece of D13-style replication this slice adds: every
    * one of the 5 ATC<->ATC primitives already does this (their replica
-   * shares the sender's fdrId too), but always with the SAME Strip Role on
+   * shares the sender's flightDataId too), but always with the SAME Strip Role on
    * both sides; TOFI is the first primitive to bind two DIFFERENT roles
-   * (the ATC-side role, and MISSION) to one shared FDR.
+   * (the ATC-side stripType, and MISSION) to one shared FDR.
    * @returns {{ok:true, strip}|{ok:false, reason, detail}}
    */
-  receiveTofiProposal({ fromFacilityId, fromPositionId, fromStripId, toPositionId, fdrId, note, by, causedBy }) {
-    const fdr = this._fdrStore.getFlightData(fdrId);
-    if (!fdr) return { ok: false, reason: 'NOT_FOUND', detail: 'referenced FDR not found' };
+  receiveTofiProposal({ fromFacilityId, fromPositionId, fromStripId, toPositionId, flightDataId, note, by, causedBy }) {
+    const flightData = this._flightDataStore.getFlightData(flightDataId);
+    if (!flightData) return { ok: false, reason: 'NOT_FOUND', detail: 'referenced FDR not found' };
 
     // FIND BEFORE MINT (docs/adr/0054). A mission line can now exist before
     // any TOFI — TAC_C2 tasks it and binds it to the flight at fragging time —
@@ -420,7 +420,7 @@ class Tofi {
     // independent lifecycles is docs/adr/0045's "two answers to one identity
     // question" wearing a different hat.
     const existing = [...this._state.strips.values()].find(
-      s => s.fdrId === fdrId && s.role === 'MISSION' && s.state !== 'DROPPED');
+      s => s.flightDataId === flightDataId && s.stripType === 'MISSION' && s.state !== 'DROPPED');
 
     if (existing) {
       if (existing.ownerPositionId !== toPositionId) {
@@ -433,7 +433,7 @@ class Tofi {
         };
       }
       const open = existing.tofiCoordination;
-      if (open && (open.state === 'PROPOSED' || open.state === 'ACTIVE')) {
+      if (open && (open.state === 'INITIATED' || open.state === 'ACTIVE')) {
         return { ok: false, reason: 'VALIDATION_ERROR', detail: 'a TOFI exchange is already open on this mission line' };
       }
       // Reuse. Deliberately touches NOTHING but the exchange record: this
@@ -443,7 +443,7 @@ class Tofi {
       const reusedAt = this._clock.now();
       const existingBefore = deepClone(existing);
       existing.tofiCoordination = {
-        direction: 'ENTRY', state: 'PROPOSED',
+        direction: 'ENTRY', state: 'INITIATED',
         peerFacilityId: fromFacilityId, peerStripId: fromStripId, peerPositionId: fromPositionId,
         commsTransferred: false, commsTransferredAt: null, commsTransferredBy: null,
         note: note || null,
@@ -453,7 +453,7 @@ class Tofi {
       existing.updatedAt = reusedAt;
       existing.updatedBy = by || null;
       this._touch(existing.stripId);
-      this._audit.recordPeer('PeerTofiProposal', existing, existingBefore, { causedBy, fromFacilityId, by });
+      this._audit.recordPeer('TofiProposal', existing, existingBefore, { causedBy, fromFacilityId, by });
       return { ok: true, strip: existing };
     }
 
@@ -471,9 +471,9 @@ class Tofi {
     const strip = {
       stripId,
       cid: this._state.nextCid(),
-      fdrId, // shared with the ATC-side Strip — guide §9.8's binding
+      flightDataId, // shared with the ATC-side Strip — guide §9.8's binding
       rev: 1,
-      role: 'MISSION',
+      stripType: 'MISSION',
       state: this._initialStateFor('MISSION'),
       ownerPositionId: toPositionId,
       bayId: coordinationBay.bayId,
@@ -481,13 +481,13 @@ class Tofi {
       orderKey,
       annotations: {},
       flags: newFlags(),
-      // No `correlation` — it is keyed by fdrId, and a replica shares the
+      // No `correlation` — it is keyed by flightDataId, and a replica shares the
       // originator's FDR (docs/adr/0013), so it shares the correlation too.
       // That is the case a per-Strip field got wrong: both halves of a
       // cross-Facility exchange are looking at one airframe.
       coordination: null,
       tofiCoordination: {
-        direction: 'ENTRY', state: 'PROPOSED',
+        direction: 'ENTRY', state: 'INITIATED',
         peerFacilityId: fromFacilityId, peerStripId: fromStripId, peerPositionId: fromPositionId,
         commsTransferred: false, commsTransferredAt: null, commsTransferredBy: null,
         note: note || null,
@@ -500,7 +500,7 @@ class Tofi {
       createdAt: now, updatedAt: now, updatedBy: by || null,
     };
     this._state.insert(strip);
-    this._audit.recordPeer('PeerTofiProposal', strip, null, { causedBy, fromFacilityId, by });
+    this._audit.recordPeer('TofiProposal', strip, null, { causedBy, fromFacilityId, by });
     return { ok: true, strip };
   }
 
@@ -517,7 +517,7 @@ class Tofi {
 
     const now = this._clock.now();
     strip.tofiCoordination.direction = 'EXIT';
-    strip.tofiCoordination.state = 'PROPOSED';
+    strip.tofiCoordination.state = 'INITIATED';
     strip.tofiCoordination.commsTransferred = false;
     strip.tofiCoordination.commsTransferredAt = null;
     strip.tofiCoordination.commsTransferredBy = null;
@@ -528,7 +528,7 @@ class Tofi {
     strip.tofiCoordination.acceptedBy = null;
     strip.rev += 1; strip.updatedAt = now; strip.updatedBy = by || null;
     this._touch(strip.stripId);
-    this._audit.recordPeer('PeerTofiExitProposal', strip, before, { causedBy, fromFacilityId: strip.tofiCoordination.peerFacilityId, by });
+    this._audit.recordPeer('TofiExitProposal', strip, before, { causedBy, fromFacilityId: strip.tofiCoordination.peerFacilityId, by });
     return { ok: true, strip };
   }
 
@@ -560,7 +560,7 @@ class Tofi {
     strip.updatedAt = now;
     strip.updatedBy = by || null;
     this._touch(strip.stripId);
-    this._audit.recordPeer('PeerTofiResponse', strip, before, { causedBy, fromFacilityId: tofi.peerFacilityId, by, action: response });
+    this._audit.recordPeer('TofiResponse', strip, before, { causedBy, fromFacilityId: tofi.peerFacilityId, by, action: response });
     return { ok: true, strip };
   }
 }

@@ -10,12 +10,12 @@ import { applyEfspFieldStateDelta } from './efsp-state.js';
 import { renderAllOpenEfspBays } from './bay-view.js';
 import { _showMutationError } from './efsp-panel.js';
 
-// The field-state board — guide §9.7, crc-sync docs/adr/0061, crc-desktop
+// The runway-status board — guide §9.7, crc-sync docs/adr/0061, crc-desktop
 // docs/adr/0068. Per Facility with a runway inventory: each runway's status
 // and who put it there, the active end, the arresting gear, requests waiting
 // on tower, the runway change and its acknowledgements, and the pads.
 //
-// Its own dock panel, like AIRSPACE, and NOT the `ops-field-state` Bay: a
+// Its own dock panel, like AIRSPACE, and NOT the `ops-runway-status` Bay: a
 // runway is not a Strip, so nothing about it belongs in a rack, and a
 // controller working TWR wants the field and the Strips open side by side.
 // The Bay stays the inert Strip container ADR 0061 left it.
@@ -198,7 +198,7 @@ function _buildRunwayChange(record, actions) {
 function _buildPads(record) {
   const pads = _fsEl('div', 'field-state-pads');
   const pad = (label, p, extra) => {
-    const occupied = p && p.occupied ? ` · occupied${p.occupantFdrId ? ` (${p.occupantFdrId})` : ''}` : '';
+    const occupied = p && p.occupied ? ` · occupied${p.occupantFlightDataId ? ` (${p.occupantFlightDataId})` : ''}` : '';
     pads.appendChild(_fsEl('div', 'field-state-line field-state-pad', `${label} · ${(p && p.name) || 'not configured'}${occupied}`));
     if (extra) pads.appendChild(_fsEl('div', 'field-state-line field-state-pad-constraint', extra));
   };
@@ -238,12 +238,12 @@ function _buildFieldStateSection(record, signedOnPositionIds) {
 function _fsUpdateTitle(records) {
   let waiting = 0;
   for (const record of records) {
-    const held = getActingPositions(record.facilityId);
-    waiting += fieldStateActionsFor(record, held).filter(a => a.kind === 'AcceptRunwayRequest').length;
+    const signedOn = getActingPositions(record.facilityId);
+    waiting += fieldStateActionsFor(record, signedOn).filter(a => a.kind === 'AcceptRunwayRequest').length;
   }
-  const base = (typeof PANEL_TITLES === 'object' && PANEL_TITLES.fieldState) || 'FIELD STATE';
+  const base = (typeof PANEL_TITLES === 'object' && PANEL_TITLES.runwayStatus) || 'FIELD STATE';
   const title = waiting ? `${base} (${waiting})` : base;
-  const panel = typeof dock !== 'undefined' && dock && dock.api ? dock.api.getPanel('fieldState') : null;
+  const panel = typeof dock !== 'undefined' && dock && dock.api ? dock.api.getPanel('runwayStatus') : null;
   // Only on a change: setting a dockview title re-lays the tab out, and doing
   // that on every render would churn the panel under a controller's click.
   if (panel && panel.api && typeof panel.api.setTitle === 'function' && panel.title !== title) panel.api.setTitle(title);
@@ -270,21 +270,21 @@ export function initFieldStatePanel() {
   return { onShow: () => renderFieldStatePanel() };
 }
 
-// The field-state family's wire handlers (CMSG; moved out of app.js's ws.onmessage).
+// The runway-status family's wire handlers (CMSG; moved out of app.js's ws.onmessage).
 // WP6 §9.7 (crc-sync docs/adr/0061, crc-desktop 0068). Its own delta with its own seq —
 // field state is not Strips and rides no Board's sequence (0061's rule-5 deviation).
-registerEfspMessage('efsp-field-state-delta', (msg) => {
+registerEfspMessage('efsp-runway-status-delta', (msg) => {
   if (typeof applyEfspFieldStateDelta === 'function') applyEfspFieldStateDelta(msg);
   if (typeof renderFieldStatePanel === 'function') renderFieldStatePanel();
   if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays(); // RWY / HOOK are derived from it
 });
 
-registerEfspMessage('efsp-field-state-ack', (msg) => {
+registerEfspMessage('efsp-runway-status-ack', (msg) => {
   if (!msg.ok && typeof _showMutationError === 'function') {
     _showMutationError(msg.reason || 'Rejected', msg.detail, { subject: fieldStateSubjectFor(msg) });
   }
-  if (msg.fieldState && typeof applyEfspFieldStateDelta === 'function') {
-    applyEfspFieldStateDelta({ fieldStates: { updated: [msg.fieldState] } });
+  if (msg.runwayStatus && typeof applyEfspFieldStateDelta === 'function') {
+    applyEfspFieldStateDelta({ runwayStatuses: { updated: [msg.runwayStatus] } });
   }
   if (typeof renderFieldStatePanel === 'function') renderFieldStatePanel();
   if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();

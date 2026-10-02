@@ -50,7 +50,7 @@ const { wireCollabSession } = require('./collab-wiring');
 const log = require('./log').logger('app');
 const authLog = require('./log').logger('auth');
 const weatherLog = require('./log').logger('weather');
-const fieldLog = require('./log').logger('field-state');
+const fieldLog = require('./log').logger('runway-status');
 const archiverLog = require('./log').logger('efsp:archiver');
 const fplLog = require('./log').logger('efsp:flight-plan-lookup');
 const stereoLog = require('./log').logger('efsp:stereo-routes');
@@ -323,7 +323,7 @@ function createApp(deps = {}) {
   function deriveActiveRunwaysFromWind(missionData) {
     const missionSessionSeq = missionSession.currentSeq();
     for (const facilityId of efspFacilityConfig.getFacilityIds()) {
-      const icao = (efspFacilityConfig.getFacilityConfig(facilityId).fieldState || {}).airportIcao;
+      const icao = (efspFacilityConfig.getFacilityConfig(facilityId).runwayStatus || {}).airportIcao;
       if (!icao || !efsp.runwayStatusStore.hasRunwayStatus(facilityId)) continue;
       const airport = (missionData.airports || []).find(a => a.icao === icao);
       if (!airport) { fieldLog.warn('no such airport in this mission — active runway left as it is', { facilityId, icao }); continue; }
@@ -334,10 +334,10 @@ function createApp(deps = {}) {
           // that this session's wind is applied (docs/adr/0086).
           if (r.ok && !r.skipped) efsp.persist();
           if (r.ok && r.changed) {
-            // The same delta a field-state op sends (decisions.md S-L1d).
+            // The same delta a runway-status op sends (decisions.md S-L1d).
             wsHub.broadcastEfspRunwayStatusDelta({
-              fieldStateSeq: efsp.runwayStatusStore.currentSeq,
-              fieldStates: [efsp.runwayStatusStore.getRunwayStatus(facilityId)],
+              runwayStatusSeq: efsp.runwayStatusStore.currentSeq,
+              runwayStatuses: [efsp.runwayStatusStore.getRunwayStatus(facilityId)],
             });
             efsp.nlaStatusMonitor.tick();
             fieldLog.info('active runway from the mission wind', { facilityId, activeRunway: r.activeRunway, windFromDegTrue: w.windFrom, windKt: w.windKt });
@@ -404,7 +404,7 @@ function createApp(deps = {}) {
     efsp.persist();
     for (const p of payloads) wsHub.broadcastEfspBoardDelta(p);
     const n = payloads.reduce((sum, p) => sum + p.gone.length, 0);
-    archiverLog.info('archived Strips and FDRs', { strips: n, fdrs: r.fdrIds.length });
+    archiverLog.info('archived Strips and FDRs', { strips: n, flightDataList: r.flightDataIds.length });
     return n;
   }
   missionSession.onNewSession((session) => _archive(efsp.archiver.onMissionSessionChange(session)));
@@ -481,9 +481,9 @@ function createApp(deps = {}) {
   }
   const conflictAlertMonitor = new ConflictAlertMonitor({
     trackStore,
-    config: alertingConfig.stca,
+    config: alertingConfig.conflictAlert,
     flightDataForTrack: (trackId) => efsp.correlationStore.flightDataForTrack(trackId),
-    activeMarsaFor: (fdrId) => efsp.marsaStore.activeFor(fdrId),
+    activeMarsaFor: (flightDataId) => efsp.marsaStore.activeFor(flightDataId),
     // Alert text names each aircraft the way identity does (docs/adr/0059).
     callsignFor: trackSeams.callsign || ((track) => identity.labelFor(track.id)),
   });
@@ -495,7 +495,7 @@ function createApp(deps = {}) {
   function broadcastEfspAlerts() {
     wsHub.broadcastEfspAlerts({
       conformance: conformanceMonitor.getAll(),
-      stca: conflictAlertMonitor.getAll(),
+      conflictAlert: conflictAlertMonitor.getAll(),
       obligations: obligationMonitor.getAll(),
       surveillance: surveillanceHints ? surveillanceHints.getAll() : undefined, // docs/adr/0076: the suggestion chip and staleness
     });
@@ -810,7 +810,7 @@ function createApp(deps = {}) {
       obligation: obligationMonitor,
       correlation: correlationReconciler,
       conformance: conformanceMonitor,
-      stca: conflictAlertMonitor,
+      conflictAlert: conflictAlertMonitor,
       surveillanceHints,
       carrier: carrierTick,
       instrumentation: efspInstrumentation,

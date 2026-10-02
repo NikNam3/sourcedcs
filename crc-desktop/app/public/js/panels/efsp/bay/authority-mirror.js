@@ -14,8 +14,8 @@
 // other side. A real multi-Facility topology would need a picker; this
 // slice deliberately doesn't build one it can't yet exercise.
 export const COORDINATION_TARGETS = {
-  APP: { facilityId: 'CENTER', positionId: 'CTR' },
-  CTR: { facilityId: 'INCIRLIK', positionId: 'APP' },
+  AP: { facilityId: 'CENTER', positionId: 'CTR' },
+  CTR: { facilityId: 'INCIRLIK', positionId: 'AP' },
 };
 
 // ── WP4A second slice: TOFI (guide §4.6.3) — a genuinely different
@@ -23,7 +23,7 @@ export const COORDINATION_TARGETS = {
 // entry (see crc-sync's board-store.js module comment for the full list of
 // structural differences: two independent exchanges per Strip, a distinct
 // comms-transfer action, no jurisdiction transfer ever, a different Strip
-// Role on the receiving side sharing one fdrId).
+// Role on the receiving side sharing one flightDataId).
 //
 // Unlike COORDINATION_TARGETS' fixed 1:1 stub, TOFI genuinely needs a
 // picker: per the guide's own §4.1 Position table, TOFI is listed only for
@@ -48,10 +48,10 @@ export const HAND_BACK_TO = { AIC: ['TAC_C2'], JTAC: ['TAC_C2'] };
 // `tofiAnsweredBy`, held to it by the drift test in efsp-ui-reachability.test.js.
 export const TOFI_ANSWERED_BY = { AIC: 'TAC_C2' };
 
-export const AIRSPACE_ENTRY_POSITIONS = ['APP', 'CTR'];
+export const AIRSPACE_ENTRY_POSITIONS = ['AP', 'CTR'];
 
 // The Positions the server lets convert a DEPARTURE into its return ARRIVAL:
 // they need both the ConvertToArrival op (permission.js) and the right to
-// create an ARRIVAL Strip (canCreateStripRole). efsp-coordination-client.test.js
+// create an ARRIVAL Strip (canCreateStripType). efsp-coordination-client.test.js
 // holds this to the server's tables.
-export const CONVERT_TO_ARRIVAL_POSITIONS = ['APP', 'CTR'];
+export const CONVERT_TO_ARRIVAL_POSITIONS = ['AP', 'CTR'];

@@ -24,15 +24,15 @@ const MODE_C = { ft: 12000, ref: 'QNH', source: 'MODE_C' };
 test('a contact is named by its flight, else its code, else its track number', () => {
   assert.equal(L.trackName(contact()), 'TN00007', 'primary only');
   assert.equal(L.trackName(contact({ ssr: { code: '4521' } })), '4521', 'squawking, uncorrelated');
-  const flight = contact({ ssr: { code: '4521' }, label: { callsign: 'VIPER11', source: 'FDR', trackNumber: 'TN00007' } });
+  const flight = contact({ ssr: { code: '4521' }, label: { callsign: 'VIPER11', source: 'FLIGHT_DATA', trackNumber: 'TN00007' } });
   assert.equal(L.trackName(flight), 'VIPER11');
   assert.equal(L.trackNameSuffix(flight), '');
-  assert.equal(L.trackNameSuffix({ ...flight, label: { ...flight.label, source: 'FDR_PROVISIONAL' } }), '?', 'doubt looks like doubt');
+  assert.equal(L.trackNameSuffix({ ...flight, label: { ...flight.label, source: 'FLIGHT_DATA_PROVISIONAL' } }), '?', 'doubt looks like doubt');
 });
 
 test('the code line: emergencies always, the code only when a callsign already names it', () => {
   assert.deepEqual(L.trackCodeTag(contact({ ssr: { code: '4521' } })), { text: '', color: null }, 'the code is already the name');
-  const named = contact({ ssr: { code: '4521' }, label: { callsign: 'VIPER11', source: 'FDR', trackNumber: 'TN1' } });
+  const named = contact({ ssr: { code: '4521' }, label: { callsign: 'VIPER11', source: 'FLIGHT_DATA', trackNumber: 'TN1' } });
   assert.equal(L.trackCodeTag(named).text, '4521');
   const em = L.trackCodeTag(contact({ ssr: { code: '7700', emergency: 'GENERAL' } }));
   assert.equal(em.text, 'EMR');
@@ -56,7 +56,7 @@ test('the info line: altitude and rate only with an altitude, ground speed alway
 });
 
 test('the correlation badge names the contact, never the flight it already sits under', () => {
-  const flight = contact({ ssr: { code: '4521' }, label: { callsign: 'VIPER11', source: 'FDR', trackNumber: 'TN00007' } });
+  const flight = contact({ ssr: { code: '4521' }, label: { callsign: 'VIPER11', source: 'FLIGHT_DATA', trackNumber: 'TN00007' } });
   assert.equal(L.trackRef(flight), '4521');
   assert.equal(L.trackRef({ ...flight, ssr: null }), 'TN00007');
 });
@@ -73,7 +73,7 @@ test('ships and vehicles get a data block only once tagged; a tag is editable on
   assert.equal(L.shouldLabel(contact({ domain: 'SEA', label: { callsign: 'CVN', source: 'TAG', trackNumber: 'TN1' } })), true);
   assert.equal(L.tagEditable(contact()), true);
   assert.equal(L.tagEditable(contact({ label: { callsign: 'X', source: 'TAG' } })), true);
-  assert.equal(L.tagEditable(contact({ label: { callsign: 'VIPER11', source: 'FDR' } })), false);
+  assert.equal(L.tagEditable(contact({ label: { callsign: 'VIPER11', source: 'FLIGHT_DATA' } })), false);
 });
 
 test('an assigned altitude is written the way a controller writes it', () => {

@@ -16,7 +16,7 @@ function range(state, extra = {}) {
     airspaceId: 'RANGE-1', state, pendingRequest: null, window: null, rev: 1,
     definition: {
       airspaceId: 'RANGE-1', name: 'Test Range', type: 'RANGE',
-      controllingPositionId: 'APP', usingPositionId: 'RANGE_CTL', controlFrequencyMhz: 283.5,
+      controllingPositionId: 'AP', usingPositionId: 'RANGE_CTL', controlFrequencyMhz: 283.5,
     },
     ...extra,
   };
@@ -34,11 +34,11 @@ function moa(state, extra = {}) {
   };
 }
 
-const kinds = (airspace, held) => airspaceActionsFor(airspace, held).map(a => a.kind);
+const kinds = (airspace, signedOn) => airspaceActionsFor(airspace, signedOn).map(a => a.kind);
 
 test('a controller holding neither side is offered nothing at all', () => {
-  assert.deepEqual(kinds(range('RETURNED'), ['TWR']), []);
-  assert.deepEqual(kinds(range('SCHEDULED', { pendingRequest: { requestedPositionId: 'RANGE_CTL' } }), ['GND']), []);
+  assert.deepEqual(kinds(range('RETURNED'), ['LC']), []);
+  assert.deepEqual(kinds(range('SCHEDULED', { pendingRequest: { requestedPositionId: 'RANGE_CTL' } }), ['GC']), []);
   assert.deepEqual(kinds(moa('ACTIVE'), ['OPS']), []);
 });
 
@@ -53,13 +53,13 @@ test('the using agency schedules, asks and releases — and is never offered app
 
 test('the controlling agency approves, denies and takes back', () => {
   const pending = range('SCHEDULED', { pendingRequest: { requestedPositionId: 'RANGE_CTL' } });
-  assert.deepEqual(kinds(pending, ['APP']).sort(), ['ApproveActivation', 'DenyActivation', 'ReturnAirspace'].sort());
-  assert.deepEqual(kinds(range('RELEASED'), ['APP']), ['ReturnAirspace']);
+  assert.deepEqual(kinds(pending, ['AP']).sort(), ['ApproveActivation', 'DenyActivation', 'ReturnAirspace'].sort());
+  assert.deepEqual(kinds(range('RELEASED'), ['AP']), ['ReturnAirspace']);
 });
 
 test('approval is not offered until the using agency has actually asked', () => {
-  assert.equal(kinds(range('SCHEDULED'), ['APP']).includes('ApproveActivation'), false);
-  assert.equal(kinds(range('SCHEDULED'), ['APP']).includes('ReturnAirspace'), true, 'but it can still be cancelled');
+  assert.equal(kinds(range('SCHEDULED'), ['AP']).includes('ApproveActivation'), false);
+  assert.equal(kinds(range('SCHEDULED'), ['AP']).includes('ReturnAirspace'), true, 'but it can still be cancelled');
 });
 
 test('a MOA with no control of its own is run entirely by its controlling Position', () => {
@@ -77,28 +77,28 @@ test('one controller holding both sides is offered both halves — the dialogue 
   // §4.8.3: "the state change is mandatory and unconditional. Only the
   // two-party dialogue collapses."
   const pending = range('SCHEDULED', { pendingRequest: { requestedPositionId: 'RANGE_CTL' } });
-  const offered = kinds(pending, ['RANGE_CTL', 'APP']);
+  const offered = kinds(pending, ['RANGE_CTL', 'AP']);
   assert.equal(offered.includes('ApproveActivation'), true);
   assert.equal(offered.includes('DenyActivation'), true);
 });
 
 test('an active airspace is never offered a direct return — it has to be released first', () => {
-  assert.equal(kinds(range('ACTIVE'), ['APP']).includes('ReturnAirspace'), false);
-  assert.deepEqual(kinds(range('ACTIVE'), ['APP']), []);
+  assert.equal(kinds(range('ACTIVE'), ['AP']).includes('ReturnAirspace'), false);
+  assert.deepEqual(kinds(range('ACTIVE'), ['AP']), []);
 });
 
 test('every offered action names the Position to act as, so a combined controller sends the right one', () => {
   const pending = range('SCHEDULED', { pendingRequest: { requestedPositionId: 'RANGE_CTL' } });
-  for (const action of airspaceActionsFor(pending, ['RANGE_CTL', 'APP'])) {
+  for (const action of airspaceActionsFor(pending, ['RANGE_CTL', 'AP'])) {
     assert.ok(action.positionId, action.kind);
     assert.ok(action.label, action.kind);
   }
   assert.equal(airspaceActionsFor(range('RETURNED'), ['RANGE_CTL'])[0].positionId, 'RANGE_CTL');
-  assert.equal(airspaceActionsFor(range('RELEASED'), ['APP'])[0].positionId, 'APP');
+  assert.equal(airspaceActionsFor(range('RELEASED'), ['AP'])[0].positionId, 'AP');
 });
 
 test('missing or empty inputs are tolerated rather than thrown on', () => {
   assert.deepEqual(airspaceActionsFor(range('RETURNED'), []), []);
   assert.deepEqual(airspaceActionsFor(range('RETURNED'), undefined), []);
-  assert.deepEqual(airspaceActionsFor({ state: 'RETURNED' }, ['APP']), []);
+  assert.deepEqual(airspaceActionsFor({ state: 'RETURNED' }, ['AP']), []);
 });

@@ -119,7 +119,7 @@ function findConflicts(tracks, cfg, now = Date.now(), suppress = () => false, ca
 
 class ConflictAlertMonitor {
   /**
-   * @param {object} deps { trackStore, config, flightDataForTrack?(trackId), activeMarsaFor?(fdrId), callsignFor?(track) }
+   * @param {object} deps { trackStore, config, flightDataForTrack?(trackId), activeMarsaFor?(flightDataId), callsignFor?(track) }
    */
   constructor(deps) {
     this._d = deps;

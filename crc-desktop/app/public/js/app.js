@@ -101,7 +101,7 @@ export let missionData      = null;
 let weather          = { pressurePa: 101325, tempK: 288.15 }; // ISA defaults until server sends live data
 export let atisActive       = []; // [{ frequency, ownerId }] — who's currently transmitting ATIS where, from crc-sync
 export let grpcStatus       = 'disconnected';
-export let noRadarsActive   = false; // true when the held Positions grant no radar at all
+export let noRadarsActive   = false; // true when the signedOn Positions grant no radar at all
 export let srsStatus        = 'disconnected';
 export let lastUpdateMs     = null;
 export let mapReady         = false;
@@ -134,7 +134,7 @@ export function _setApproachRwyCourse(v) { approachRwyCourse = v; }
 // quietly blank.
 export let coverageRadars = [];          // [{id, type, label, lat, lon, elevM, rangeM, sweepMs, sweepStart, grantedBy, ...}]
 export let coverageHeldPositions = [];   // [{facilityId, positionId, isPrimary}]
-export let coverageDatalink = false;     // whether a held Position is on the datalink
+export let coverageDatalink = false;     // whether a signedOn Position is on the datalink
 
 /** Every radar this controller is looking through. */
 export function getActiveRadars() { return coverageRadars; }
@@ -447,7 +447,7 @@ function applyDelta(updated, relabeled, gone) {
  */
 export function applyCoverage(msg) {
   coverageRadars = msg.radars || [];
-  coverageHeldPositions = msg.heldPositions || [];
+  coverageHeldPositions = msg.signedOnPositions || [];
   coverageDatalink = !!msg.datalink;
 
   // The datalink is a picture too (crc-sync's docs/adr/0059): a tactical

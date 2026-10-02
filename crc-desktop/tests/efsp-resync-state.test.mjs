@@ -4,9 +4,9 @@ import * as S from '../app/public/js/panels/efsp/efsp-state.js';
 
 const snap = () => ({
   facility: 'INCIRLIK', boardSeq: 5, boardSeqByFacility: { INCIRLIK: 5, CENTER: 2 },
-  boardEpochByFacility: { INCIRLIK: 'e-I', CENTER: 'e-C' }, strips: [], fdrs: [], positions: [],
+  boardEpochByFacility: { INCIRLIK: 'e-I', CENTER: 'e-C' }, strips: [], flightDataList: [], positions: [],
 });
-const delta = (o) => ({ type: 'efsp-board-delta', strips: { updated: [], gone: [] }, fdrs: { updated: [] }, positions: { updated: [] }, ...o });
+const delta = (o) => ({ type: 'efsp-board-delta', strips: { updated: [], gone: [] }, flightDataList: { updated: [] }, positions: { updated: [] }, ...o });
 
 test('seq and epoch are tracked per Facility: a CENTER delta does not move INCIRLIK', () => {
   S._resetEfspStateForTest();

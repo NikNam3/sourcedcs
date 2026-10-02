@@ -54,11 +54,11 @@ function _isMintedReplica(strip) {
  * Records the arrivals in one applied delta.
  * @param {Map} before   captureEfspPlacement's result, taken before the delta was applied
  * @param {object[]} updated  the delta's updated Strip records
- * @param {{heldPositions:string[], myControllerIds:Set<string>|string[], visibleBayId:?string, now:number, callsignOf:(strip)=>string}} ctx
+ * @param {{signedOnPositions:string[], myControllerIds:Set<string>|string[], visibleBayId:?string, now:number, callsignOf:(strip)=>string}} ctx
  * @returns {object[]} the arrivals recorded, oldest first
  */
 export function noteEfspArrivals(before, updated, ctx) {
-  const held = new Set(ctx.heldPositions || []);
+  const signedOn = new Set(ctx.signedOnPositions || []);
   const mine = new Set(ctx.myControllerIds || []);
   const found = [];
   for (const strip of updated || []) {
@@ -67,7 +67,7 @@ export function noteEfspArrivals(before, updated, ctx) {
     // A Strip that has moved on (or been dropped) is no longer "new here".
     if (existing && (existing.bayId !== strip.bayId || strip.state === 'DROPPED')) _efspArrivals.delete(strip.stripId);
     if (strip.state === 'DROPPED') continue;
-    if (!held.has(strip.ownerPositionId)) continue;
+    if (!signedOn.has(strip.ownerPositionId)) continue;
     if (prev && prev.bayId === strip.bayId) continue;           // it did not move
     // A Strip this controller just made. NOT a coordination/TOFI replica, though: the exchange
     // mints it at the receiving Position, and a controller who holds both ends (UI-A U2: one

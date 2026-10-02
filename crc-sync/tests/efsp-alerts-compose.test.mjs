@@ -22,7 +22,7 @@ test('app.js calls wsHub.broadcastEfspAlerts in exactly one place, the compose f
   const fn = SERVER.match(/\n *function broadcastEfspAlerts\(\) \{[\s\S]*?\n  \}\n/);
   assert.ok(fn, 'the compose function exists');
   assert.match(fn[0], /wsHub\.broadcastEfspAlerts\(/);
-  for (const key of ['conformance', 'stca', 'obligations', 'surveillance']) assert.match(fn[0], new RegExp(`${key}:`));
+  for (const key of ['conformance', 'conflictAlert', 'obligations', 'surveillance']) assert.match(fn[0], new RegExp(`${key}:`));
 });
 
 test('a conformance-only tick does not clear obligations', () => {
@@ -44,7 +44,7 @@ test('a conformance-only tick does not clear obligations', () => {
     { getAll: () => [hint] });
 
   broadcast(); // the 15 s sweep raised the obligation
-  conformance = [{ fdrId: 'f1', alerts: [] }];
+  conformance = [{ flightDataId: 'f1', alerts: [] }];
   broadcast(); // then the 1 s tick saw conformance change
 
   const last = sent.filter(m => m.type === 'efsp-alerts').pop();

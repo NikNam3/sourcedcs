@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 
 const { PositionStore } = await import('../src/efsp/position-store.js');
 
-const POSITIONS = ['OPS', 'CD', 'GND', 'TWR'];
-const CONSOLIDATION = { CD: 'GND', GND: 'TWR' }; // Phase-1-truncated at TWR; OPS and TWR have no covering Position, matching the guide's own chain table
+const POSITIONS = ['OPS', 'CD', 'GC', 'LC'];
+const CONSOLIDATION = { CD: 'GC', GC: 'LC' }; // Phase-1-truncated at TWR; OPS and TWR have no covering Position, matching the guide's own chain table
 
 function freshStore() {
   return new PositionStore(POSITIONS, CONSOLIDATION);
@@ -12,23 +12,23 @@ function freshStore() {
 
 test('a freshly created Position is unstaffed', () => {
   const store = freshStore();
-  assert.equal(store.isStaffed('GND'), false);
-  assert.equal(store.primaryOf('GND'), null);
+  assert.equal(store.isStaffed('GC'), false);
+  assert.equal(store.primaryOf('GC'), null);
 });
 
 test('the first controller to select an unstaffed Position becomes Primary', () => {
   const store = freshStore();
-  store.setSignedOnPositions('c1', 'Alice', ['GND']);
-  assert.equal(store.isStaffed('GND'), true);
-  assert.equal(store.primaryOf('GND'), 'c1');
+  store.setSignedOnPositions('c1', 'Alice', ['GC']);
+  assert.equal(store.isStaffed('GC'), true);
+  assert.equal(store.primaryOf('GC'), 'c1');
 });
 
 test('a second controller selecting an already-Primary\'d Position becomes an Observer, never a second Primary (defect D18)', () => {
   const store = freshStore();
-  store.setSignedOnPositions('c1', 'Alice', ['GND']);
-  store.setSignedOnPositions('c2', 'Bob', ['GND']);
-  assert.equal(store.primaryOf('GND'), 'c1');
-  assert.deepEqual(store.observersOf('GND').map(o => o.controllerId), ['c2']);
+  store.setSignedOnPositions('c1', 'Alice', ['GC']);
+  store.setSignedOnPositions('c2', 'Bob', ['GC']);
+  assert.equal(store.primaryOf('GC'), 'c1');
+  assert.deepEqual(store.observersOf('GC').map(o => o.controllerId), ['c2']);
 });
 
 test('D18: many controllers racing to claim the same Position never resolves to two Primaries, under any interleaving', () => {
@@ -40,16 +40,16 @@ test('D18: many controllers racing to claim the same Position never resolves to 
   // invariant under test is that the *store* never lets two survive, for
   // any ordering, not that this simulates network race timing.
   const shuffled = [...controllerIds].sort(() => Math.random() - 0.5);
-  for (const id of shuffled) store.setSignedOnPositions(id, id, ['GND']);
+  for (const id of shuffled) store.setSignedOnPositions(id, id, ['GC']);
 
   let primaryCount = 0;
   // Cross-check via the store's own bookkeeping: exactly one controller's
   // held-set includes GND as the one who "won" Primary, and getAll()
   // agrees.
-  const all = store.getAll().find(p => p.positionId === 'GND');
+  const all = store.getAll().find(p => p.positionId === 'GC');
   assert.ok(all.primary);
   for (const id of controllerIds) {
-    if (store.primaryOf('GND') === id) primaryCount++;
+    if (store.primaryOf('GC') === id) primaryCount++;
   }
   assert.equal(primaryCount, 1);
   // Everyone who isn't Primary is an Observer, not silently dropped.
@@ -58,183 +58,183 @@ test('D18: many controllers racing to claim the same Position never resolves to 
 
 test('a handoff (Primary A -> Primary B for the same Position) is purely an staffing change — PositionStore itself never touches Strip data (it has none to touch)', () => {
   const store = freshStore();
-  store.setSignedOnPositions('c1', 'Alice', ['GND']);
-  store.setSignedOnPositions('c2', 'Bob', ['GND']);
-  const req = store.requestPrimary('c2', 'GND');
+  store.setSignedOnPositions('c1', 'Alice', ['GC']);
+  store.setSignedOnPositions('c2', 'Bob', ['GC']);
+  const req = store.requestPrimary('c2', 'GC');
   assert.equal(req.ok, true);
-  const release = store.releasePrimaryTo('GND', 'c2');
+  const release = store.releasePrimaryTo('GC', 'c2');
   assert.equal(release.ok, true);
-  assert.equal(store.primaryOf('GND'), 'c2');
-  assert.deepEqual(store.observersOf('GND').map(o => o.controllerId), ['c1']); // old Primary demoted to Observer, not dropped
+  assert.equal(store.primaryOf('GC'), 'c2');
+  assert.deepEqual(store.observersOf('GC').map(o => o.controllerId), ['c1']); // old Primary demoted to Observer, not dropped
 });
 
 test('requestPrimary is refused for a non-Observer (not currently holding that Position at all)', () => {
   const store = freshStore();
-  store.setSignedOnPositions('c1', 'Alice', ['GND']);
-  const result = store.requestPrimary('c2', 'GND');
+  store.setSignedOnPositions('c1', 'Alice', ['GC']);
+  const result = store.requestPrimary('c2', 'GC');
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'NOT_OBSERVER');
 });
 
 test('requestPrimary is refused for the Position\'s own current Primary', () => {
   const store = freshStore();
-  store.setSignedOnPositions('c1', 'Alice', ['GND']);
-  const result = store.requestPrimary('c1', 'GND');
+  store.setSignedOnPositions('c1', 'Alice', ['GC']);
+  const result = store.requestPrimary('c1', 'GC');
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'ALREADY_PRIMARY');
 });
 
 test('releasePrimaryTo requires the target to actually be an Observer', () => {
   const store = freshStore();
-  store.setSignedOnPositions('c1', 'Alice', ['GND']);
-  const result = store.releasePrimaryTo('GND', 'c2');
+  store.setSignedOnPositions('c1', 'Alice', ['GC']);
+  const result = store.releasePrimaryTo('GC', 'c2');
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'NOT_OBSERVER');
 });
 
 // ── Vacate / covering chain (defect D19) ────────────────────────────────────
 
-test('D19: vacating a Position with no successor routes down the covering chain to the nearest occupied covering Position', () => {
+test('D19: vacating a Position with no successor routes down the covering chain to the nearest staffed covering Position', () => {
   const store = freshStore();
-  store.setSignedOnPositions('c1', 'Alice', ['GND']);
-  store.setSignedOnPositions('c2', 'Bob', ['TWR']);
+  store.setSignedOnPositions('c1', 'Alice', ['GC']);
+  store.setSignedOnPositions('c2', 'Bob', ['LC']);
   // GND has no Observer, so vacating leaves it unstaffed; its covering
   // chain (CD -> GND -> TWR from GND's perspective is just "GND -> TWR")
-  // should resolve to TWR, which IS occupied.
+  // should resolve to TWR, which IS staffed.
   const result = store.setSignedOnPositions('c1', 'Alice', []); // vacate GND
-  assert.deepEqual(result.vacated, ['GND']);
-  assert.equal(store.isStaffed('GND'), false);
-  assert.equal(store.consolidatedAt('GND'), 'TWR');
+  assert.deepEqual(result.vacated, ['GC']);
+  assert.equal(store.isStaffed('GC'), false);
+  assert.equal(store.consolidatedAt('GC'), 'LC');
 });
 
-test('D19: covering chain walks past an also-unoccupied intermediate Position to the next one that IS occupied', () => {
+test('D19: covering chain walks past an also-unoccupied intermediate Position to the next one that IS staffed', () => {
   const store = freshStore();
-  store.setSignedOnPositions('c1', 'Alice', ['TWR']); // only TWR occupied; CD and GND are not
+  store.setSignedOnPositions('c1', 'Alice', ['LC']); // only TWR staffed; CD and GND are not
   // CD's chain is CD -> GND -> TWR; GND is unstaffed too, so it should skip to TWR.
-  assert.equal(store.consolidatedAt('CD'), 'TWR');
+  assert.equal(store.consolidatedAt('CD'), 'LC');
 });
 
 test('D19: when the entire covering chain is unstaffed, consolidatedAt returns null — a distinct, checkable "nobody at all" condition, not a silent wrong answer', () => {
   const store = freshStore();
   // Nobody holds anything.
   assert.equal(store.consolidatedAt('CD'), null);
-  assert.equal(store.consolidatedAt('GND'), null);
+  assert.equal(store.consolidatedAt('GC'), null);
 });
 
 test('OPS and TWR have no covering Position at all, matching the guide\'s own chain table (CD->GND->TWR; OPS uncovered)', () => {
   const store = freshStore();
   store.setSignedOnPositions('c1', 'Alice', ['OPS']);
   store.setSignedOnPositions('c2', 'Bob', ['CD']);
-  store.setSignedOnPositions('c3', 'Carol', ['GND']);
-  store.setSignedOnPositions('c4', 'Dave', ['TWR']);
+  store.setSignedOnPositions('c3', 'Carol', ['GC']);
+  store.setSignedOnPositions('c4', 'Dave', ['LC']);
   assert.equal(store.consolidatedAt('OPS'), null);
-  assert.equal(store.consolidatedAt('TWR'), null);
+  assert.equal(store.consolidatedAt('LC'), null);
 });
 
 test('a non-abrupt vacate with a waiting Observer does NOT auto-promote — promotion is an explicit prompt (guide §4.8.6 rule 1)', () => {
   const store = freshStore();
-  store.setSignedOnPositions('c1', 'Alice', ['GND']);
-  store.setSignedOnPositions('c2', 'Bob', ['GND']); // c2 becomes Observer
+  store.setSignedOnPositions('c1', 'Alice', ['GC']);
+  store.setSignedOnPositions('c2', 'Bob', ['GC']); // c2 becomes Observer
   store.setSignedOnPositions('c1', 'Alice', []); // Alice explicitly deselects GND
-  assert.equal(store.isStaffed('GND'), false); // NOT auto-promoted
-  assert.deepEqual(store.observersOf('GND').map(o => o.controllerId), ['c2']); // Bob is still just an Observer
+  assert.equal(store.isStaffed('GC'), false); // NOT auto-promoted
+  assert.deepEqual(store.observersOf('GC').map(o => o.controllerId), ['c2']); // Bob is still just an Observer
 });
 
 test('onDisconnect (abrupt) DOES auto-promote the longest-waiting Observer', () => {
   const store = freshStore();
-  store.setSignedOnPositions('c1', 'Alice', ['GND']);
-  store.setSignedOnPositions('c2', 'Bob', ['GND']);
-  store.setSignedOnPositions('c3', 'Carol', ['GND']); // Bob is longest-waiting Observer, Carol second
+  store.setSignedOnPositions('c1', 'Alice', ['GC']);
+  store.setSignedOnPositions('c2', 'Bob', ['GC']);
+  store.setSignedOnPositions('c3', 'Carol', ['GC']); // Bob is longest-waiting Observer, Carol second
   store.onDisconnect('c1');
-  assert.equal(store.primaryOf('GND'), 'c2'); // Bob promoted, not Carol
-  assert.deepEqual(store.observersOf('GND').map(o => o.controllerId), ['c3']);
+  assert.equal(store.primaryOf('GC'), 'c2'); // Bob promoted, not Carol
+  assert.deepEqual(store.observersOf('GC').map(o => o.controllerId), ['c3']);
 });
 
 test('onDisconnect with no waiting Observer simply leaves the Position unstaffed', () => {
   const store = freshStore();
-  store.setSignedOnPositions('c1', 'Alice', ['GND']);
+  store.setSignedOnPositions('c1', 'Alice', ['GC']);
   store.onDisconnect('c1');
-  assert.equal(store.isStaffed('GND'), false);
+  assert.equal(store.isStaffed('GC'), false);
 });
 
 test('onDisconnect releases every Position the controller held, not just one', () => {
   const store = freshStore();
-  store.setSignedOnPositions('c1', 'Alice', ['GND', 'TWR']);
+  store.setSignedOnPositions('c1', 'Alice', ['GC', 'LC']);
   store.onDisconnect('c1');
-  assert.equal(store.isStaffed('GND'), false);
-  assert.equal(store.isStaffed('TWR'), false);
+  assert.equal(store.isStaffed('GC'), false);
+  assert.equal(store.isStaffed('LC'), false);
 });
 
 // ── setSignedOnPositions diffing / recomposition (guide §4.8.5) ────────────────
 
 test('setSignedOnPositions only touches Positions that actually changed — holding an unrelated Position stays untouched across a change', () => {
   const store = freshStore();
-  store.setSignedOnPositions('c1', 'Alice', ['GND', 'TWR']);
-  store.setSignedOnPositions('c1', 'Alice', ['GND']); // drops TWR, keeps GND
-  assert.equal(store.primaryOf('GND'), 'c1'); // GND untouched, still c1's
-  assert.equal(store.isStaffed('TWR'), false);
+  store.setSignedOnPositions('c1', 'Alice', ['GC', 'LC']);
+  store.setSignedOnPositions('c1', 'Alice', ['GC']); // drops TWR, keeps GND
+  assert.equal(store.primaryOf('GC'), 'c1'); // GND untouched, still c1's
+  assert.equal(store.isStaffed('LC'), false);
 });
 
 test('setSignedOnPositions filters out unknown Position ids rather than throwing', () => {
   const store = freshStore();
-  const result = store.setSignedOnPositions('c1', 'Alice', ['GND', 'NOT_REAL']);
-  assert.deepEqual(result.held, ['GND']);
+  const result = store.setSignedOnPositions('c1', 'Alice', ['GC', 'NOT_REAL']);
+  assert.deepEqual(result.signedOn, ['GC']);
 });
 
 test('re-declaring the exact same held set is a no-op — no spurious vacate/reclaim', () => {
   const store = freshStore();
-  store.setSignedOnPositions('c1', 'Alice', ['GND']);
-  const result = store.setSignedOnPositions('c1', 'Alice', ['GND']);
+  store.setSignedOnPositions('c1', 'Alice', ['GC']);
+  const result = store.setSignedOnPositions('c1', 'Alice', ['GC']);
   assert.deepEqual(result.vacated, []);
-  assert.equal(store.primaryOf('GND'), 'c1');
+  assert.equal(store.primaryOf('GC'), 'c1');
 });
 
 // ── Combination across Positions (guide §4.8) ───────────────────────────────
 
 test('one controller can hold multiple Positions simultaneously, each independently tracked', () => {
   const store = freshStore();
-  store.setSignedOnPositions('c1', 'Alice', ['CD', 'GND', 'TWR']);
-  assert.deepEqual(store.signedOnBy('c1').sort(), ['CD', 'GND', 'TWR']);
+  store.setSignedOnPositions('c1', 'Alice', ['CD', 'GC', 'LC']);
+  assert.deepEqual(store.signedOnBy('c1').sort(), ['CD', 'GC', 'LC']);
   assert.equal(store.primaryOf('CD'), 'c1');
-  assert.equal(store.primaryOf('GND'), 'c1');
-  assert.equal(store.primaryOf('TWR'), 'c1');
+  assert.equal(store.primaryOf('GC'), 'c1');
+  assert.equal(store.primaryOf('LC'), 'c1');
 });
 
 // ── Self-coordination (guide §4.8.3, defect D20) ────────────────────────────
 
 test('isSelfCoordinated is true when the controller holds Primary at the destination Position', () => {
   const store = freshStore();
-  store.setSignedOnPositions('c1', 'Alice', ['GND', 'TWR']);
-  assert.equal(store.isSelfCoordinated('c1', 'TWR'), true);
+  store.setSignedOnPositions('c1', 'Alice', ['GC', 'LC']);
+  assert.equal(store.isSelfCoordinated('c1', 'LC'), true);
 });
 
 test('isSelfCoordinated is false for a different controller, or a Position the controller does not hold', () => {
   const store = freshStore();
-  store.setSignedOnPositions('c1', 'Alice', ['GND']);
-  store.setSignedOnPositions('c2', 'Bob', ['TWR']);
-  assert.equal(store.isSelfCoordinated('c1', 'TWR'), false);
-  assert.equal(store.isSelfCoordinated('c2', 'GND'), false);
+  store.setSignedOnPositions('c1', 'Alice', ['GC']);
+  store.setSignedOnPositions('c2', 'Bob', ['LC']);
+  assert.equal(store.isSelfCoordinated('c1', 'LC'), false);
+  assert.equal(store.isSelfCoordinated('c2', 'GC'), false);
 });
 
 test('isSelfCoordinated is false when the controller is merely an Observer at the destination, not Primary', () => {
   const store = freshStore();
-  store.setSignedOnPositions('c1', 'Alice', ['TWR']);
-  store.setSignedOnPositions('c2', 'Bob', ['TWR']); // Bob is Observer
-  assert.equal(store.isSelfCoordinated('c2', 'TWR'), false);
+  store.setSignedOnPositions('c1', 'Alice', ['LC']);
+  store.setSignedOnPositions('c2', 'Bob', ['LC']); // Bob is Observer
+  assert.equal(store.isSelfCoordinated('c2', 'LC'), false);
 });
 
 // ── getAll() shape ───────────────────────────────────────────────────────
 
 test('getAll returns every configured Position, including unstaffed ones', () => {
   const store = freshStore();
-  store.setSignedOnPositions('c1', 'Alice', ['GND']);
+  store.setSignedOnPositions('c1', 'Alice', ['GC']);
   const all = store.getAll();
   assert.deepEqual(all.map(p => p.positionId).sort(), POSITIONS.slice().sort());
 });
 
-test('getAll\'s coveringFor lists the unstaffed Positions currently routing through this one', () => {
+test('getAll\'s consolidatedPositions lists the unstaffed Positions currently routing through this one', () => {
   const store = freshStore();
-  store.setSignedOnPositions('c1', 'Alice', ['TWR']); // CD and GND unstaffed, both eventually cover to TWR
-  const twr = store.getAll().find(p => p.positionId === 'TWR');
-  assert.deepEqual(twr.coveringFor.sort(), ['CD', 'GND']);
+  store.setSignedOnPositions('c1', 'Alice', ['LC']); // CD and GND unstaffed, both eventually cover to TWR
+  const twr = store.getAll().find(p => p.positionId === 'LC');
+  assert.deepEqual(twr.consolidatedPositions.sort(), ['CD', 'GC']);
 });

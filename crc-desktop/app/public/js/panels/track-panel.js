@@ -148,7 +148,7 @@ export function closeTrackPanel() {
 // The correlated flight's filed plan. The flight record IS the flight plan
 // (docs/adr/0059): a contact has one once it is correlated to a Strip, and
 // there is nothing to look up by callsign any more.
-let _fplShownFor     = null; // fdrId + rev last rendered
+let _fplShownFor     = null; // flightDataId + rev last rendered
 let _currentFiled    = null;
 let _filedRouteShown = false;
 
@@ -161,15 +161,15 @@ function _clearFiledRoute() {
   if ($status) $status.textContent = '';
 }
 
-function _refreshTrackFpl(fdr) {
+function _refreshTrackFpl(flightData) {
   const $section = document.getElementById('tp-fpl-section');
   const $msg     = document.getElementById('tp-fpl-msg');
   if (!$section || !$msg) return;
-  const key = fdr ? `${fdr.fdrId}:${fdr.rev}` : null;
+  const key = flightData ? `${flightData.flightDataId}:${flightData.rev}` : null;
   if (key === _fplShownFor) return;
   _fplShownFor = key;
   _clearFiledRoute();
-  const filed = fdr && fdr.filed;
+  const filed = flightData && flightData.filed;
   if (!filed || !(filed.route || filed.departureAirport || filed.destinationAirport)) {
     _currentFiled = null;
     $section.style.display = 'none';
@@ -178,7 +178,7 @@ function _refreshTrackFpl(fdr) {
   _currentFiled = filed;
   const cruise = filed.requestedAltitude ? ` · ${filed.requestedAltitude}` : '';
   $msg.textContent = [
-    `${fdr.identity.callsign}${fdr.identity.aircraftType ? ' ' + fdr.identity.aircraftType : ''}${cruise}`,
+    `${flightData.identity.callsign}${flightData.identity.aircraftType ? ' ' + flightData.identity.aircraftType : ''}${cruise}`,
     [filed.departureAirport, filed.route, filed.destinationAirport].filter(Boolean).join(' '),
   ].join('\n');
   $section.style.display = 'block';
@@ -214,11 +214,11 @@ function _refreshTrackFpl(fdr) {
  * Nothing is shown while nothing is wrong.
  */
 function _refreshTrackAlerts(trackId) {
-  const fdr = typeof _fdrForTrack === 'function' ? _fdrForTrack(trackId) : null;
+  const flightData = typeof _fdrForTrack === 'function' ? _fdrForTrack(trackId) : null;
   // "ALT FL180 · HDG 050".
   const active = (cell) => cell && cell.entries.find(e => e.status === 'ACTIVE');
-  const alt = fdr && fdr.clearance && active(fdr.clearance.altitude);
-  const hdg = fdr && fdr.clearance && active(fdr.clearance.heading);
+  const alt = flightData && flightData.clearance && active(flightData.clearance.altitude);
+  const hdg = flightData && flightData.clearance && active(flightData.clearance.heading);
   const parts = [];
   if (alt && alt.block) parts.push(`ALT ${assignedBlockText(alt.block)}`);
   else if (alt && Number.isFinite(alt.parsed)) parts.push(`ALT ${assignedAltText(alt.parsed)}`);
@@ -237,7 +237,7 @@ function _refreshTrackAlerts(trackId) {
   for (const c of (typeof stcaConflictsForTrack === 'function' ? stcaConflictsForTrack(trackId) : [])) {
     lines.push({ bad: true, text: `CA with ${c.otherCallsign} in ${clock(c.timeToCpaSec)}. Closest ${c.minNm} NM / ${c.vertFt} ft.` });
   }
-  for (const a of (fdr && typeof conformanceAlertsForFdr === 'function' ? conformanceAlertsForFdr(fdr.fdrId) : [])) {
+  for (const a of (flightData && typeof conformanceAlertsForFdr === 'function' ? conformanceAlertsForFdr(flightData.flightDataId) : [])) {
     const pad = (n) => String(n).padStart(3, '0');
     if (a.kind === 'HEADING') lines.push({ bad: false, text: `Assigned heading ${pad(a.assigned)}, tracking ${pad(a.actual)}.` });
     if (a.kind === 'WRONG_WAY') lines.push({ bad: true, text: `Assigned ${a.assigned.toLocaleString('en-US')} ft, ${a.fpm < 0 ? 'descending' : 'climbing'} at ${Math.abs(a.fpm).toLocaleString('en-US')} ft/min.` });

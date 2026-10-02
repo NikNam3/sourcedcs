@@ -21,7 +21,7 @@ import { _setActiveBayId, _setActivePositionTab } from './efsp-panel.js';
 //   2. a chip and a reason line on the scrambling Strip and on every ground
 //      Strip at its Facility, scrambleAlertsFor() — strip-view.js's wave-2 hook;
 //   3. the access route marked constrained, alertPadConstraintFor() — read by
-//      L1b's field-state panel when both are loaded.
+//      L1b's runway-status panel when both are loaded.
 // The local rules are shown as "SOURCE practice", never as FAA/USAF doctrine.
 //
 // The pure half below is a hand copy of crc-sync/src/efsp/alert-scramble.js (a
@@ -39,23 +39,23 @@ export const GROUND_STATES = Object.freeze({
   ARRIVAL: Object.freeze(['LANDED', 'TAXI_IN']),
 });
 
-function _scrambleCallsignOf(strip, fdr) {
-  return (fdr && fdr.identity && fdr.identity.callsign) || strip.stripId;
+function _scrambleCallsignOf(strip, flightData) {
+  return (flightData && flightData.identity && flightData.identity.callsign) || strip.stripId;
 }
 
-function _isScrambling(strip, fdr) {
-  if (!strip || strip.role !== 'DEPARTURE') return false;
+function _isScrambling(strip, flightData) {
+  if (!strip || strip.stripType !== 'DEPARTURE') return false;
   if (!SCRAMBLE_PRE_AIRBORNE.DEPARTURE.includes(strip.state)) return false;
-  return !!(fdr && fdr.military && fdr.military.alertStatus === 'SCRAMBLE');
+  return !!(flightData && flightData.military && flightData.military.alertStatus === 'SCRAMBLE');
 }
 
 export function activeScrambles(strips, flightDataOf, facilityId) {
   const out = [];
   for (const strip of strips || []) {
     if (facilityId !== undefined && facilityId !== null && strip.facilityId !== facilityId) continue;
-    const fdr = strip.fdrId ? flightDataOf(strip.fdrId) : null;
-    if (!_isScrambling(strip, fdr)) continue;
-    out.push({ stripId: strip.stripId, fdrId: strip.fdrId, facilityId: strip.facilityId, state: strip.state, callsign: _scrambleCallsignOf(strip, fdr) });
+    const flightData = strip.flightDataId ? flightDataOf(strip.flightDataId) : null;
+    if (!_isScrambling(strip, flightData)) continue;
+    out.push({ stripId: strip.stripId, flightDataId: strip.flightDataId, facilityId: strip.facilityId, state: strip.state, callsign: _scrambleCallsignOf(strip, flightData) });
   }
   return out.sort((a, b) => (a.callsign < b.callsign ? -1 : a.callsign > b.callsign ? 1 : (a.stripId < b.stripId ? -1 : 1)));
 }
@@ -63,32 +63,32 @@ export function activeScrambles(strips, flightDataOf, facilityId) {
 export function conflictingGroundStrips(strips, flightDataOf, facilityId) {
   const scrambles = activeScrambles(strips, flightDataOf, facilityId);
   if (scrambles.length === 0) return [];
-  const scramblingFlightDataList = new Set(scrambles.map(s => s.fdrId));
+  const scramblingFlightDataList = new Set(scrambles.map(s => s.flightDataId));
   const out = [];
   for (const strip of strips || []) {
     if (strip.facilityId !== facilityId) continue;
-    const states = GROUND_STATES[strip.role];
+    const states = GROUND_STATES[strip.stripType];
     if (!states || !states.includes(strip.state)) continue;
-    if (scramblingFlightDataList.has(strip.fdrId)) continue;
-    const fdr = strip.fdrId ? flightDataOf(strip.fdrId) : null;
-    out.push({ stripId: strip.stripId, fdrId: strip.fdrId, facilityId: strip.facilityId, role: strip.role, state: strip.state, callsign: _scrambleCallsignOf(strip, fdr) });
+    if (scramblingFlightDataList.has(strip.flightDataId)) continue;
+    const flightData = strip.flightDataId ? flightDataOf(strip.flightDataId) : null;
+    out.push({ stripId: strip.stripId, flightDataId: strip.flightDataId, facilityId: strip.facilityId, stripType: strip.stripType, state: strip.state, callsign: _scrambleCallsignOf(strip, flightData) });
   }
   return out;
 }
 
-export function accessRouteText(fieldState) {
-  if (!fieldState) return 'the alert-pad access route';
-  const pad = fieldState.alertPad;
+export function accessRouteText(runwayStatus) {
+  if (!runwayStatus) return 'the alert-pad access route';
+  const pad = runwayStatus.alertPad;
   if (pad && typeof pad.accessRoute === 'string' && pad.accessRoute) return pad.accessRoute;
   return 'the alert-pad access route (not configured)';
 }
 
-export function alertPadConstraint(fieldState, scrambles) {
+export function alertPadConstraint(runwayStatus, scrambles) {
   if (!scrambles || scrambles.length === 0) return null;
-  const pad = fieldState && fieldState.alertPad;
+  const pad = runwayStatus && runwayStatus.alertPad;
   const route = pad && typeof pad.accessRoute === 'string' && pad.accessRoute ? pad.accessRoute : null;
   const who = scrambles.map(s => s.callsign).join(', ');
-  const head = route ? `ACCESS ROUTE ${route}` : `ALERT-PAD ACCESS ROUTE${fieldState ? ' (not configured)' : ''}`;
+  const head = route ? `ACCESS ROUTE ${route}` : `ALERT-PAD ACCESS ROUTE${runwayStatus ? ' (not configured)' : ''}`;
   return { route, text: `${head} CONSTRAINED — scramble in progress (${who})` };
 }
 
@@ -97,8 +97,8 @@ export function alertPadConstraint(fieldState, scrambles) {
 function _scrambleLiveStrips() {
   return (typeof getAllEfspStrips === 'function' ? getAllEfspStrips() : []).filter(s => s.state !== 'DROPPED');
 }
-function _scrambleFdrOf(fdrId) {
-  return typeof getEfspFdr === 'function' ? getEfspFdr(fdrId) : null;
+function _scrambleFdrOf(flightDataId) {
+  return typeof getEfspFdr === 'function' ? getEfspFdr(flightDataId) : null;
 }
 /** L1b's client field state when it is loaded (decisions.md T6: never block on it). */
 function _scrambleFieldStateFor(facilityId) {
@@ -137,7 +137,7 @@ export function scrambleAlertsFor(strip) {
   }];
 }
 
-/** L1b's field-state panel hook: the constrained-route line for a Facility, or null. */
+/** L1b's runway-status panel hook: the constrained-route line for a Facility, or null. */
 export function alertPadConstraintFor(facilityId) {
   const scrambles = activeScrambles(_scrambleLiveStrips(), _scrambleFdrOf, facilityId);
   const c = alertPadConstraint(_scrambleFieldStateFor(facilityId), scrambles);
@@ -155,8 +155,8 @@ const _seenScrambleStripIds = new Set();
  */
 function _revealScrambleStrip(stripId) {
   const strip = typeof getEfspStrip === 'function' ? getEfspStrip(stripId) : null;
-  const held = typeof getActingPositions === 'function' ? getActingPositions() : [];
-  if (strip && held.includes(strip.ownerPositionId)
+  const signedOn = typeof getActingPositions === 'function' ? getActingPositions() : [];
+  if (strip && signedOn.includes(strip.ownerPositionId)
       && typeof _renderPositionTabs === 'function' && typeof _activePositionTab !== 'undefined') {
     _setActivePositionTab(strip.ownerPositionId); // eslint-disable-line no-global-assign
     _setActiveBayId(strip.bayId); // eslint-disable-line no-global-assign

@@ -15,7 +15,7 @@ const TICK_MS  = 500; // delta broadcast rate, one timer for every session
 const MAX_NAME_LEN = 40;
 
 const NO_PICTURE = {
-  coverageFor: () => ({ radars: [], radarIds: new Set(), heldPositions: [], radarBearingPositions: [], datalink: false }),
+  coverageFor: () => ({ radars: [], radarIds: new Set(), signedOnPositions: [], radarBearingPositions: [], datalink: false }),
   illuminated: () => new Map(),
   radars: () => [],
 };
@@ -62,7 +62,7 @@ class WsHub {
     // The whole EFSP alert state (docs/adr/0058, 0067), empty until a
     // monitor reports — so a client connecting to a freshly started server
     // is told "nothing is wrong" rather than keeping what it had.
-    this._efspAlerts = { conformance: [], stca: [], obligations: [], surveillance: [] };
+    this._efspAlerts = { conformance: [], conflictAlert: [], obligations: [], surveillance: [] };
     this._onEfspChange = null;
   }
 
@@ -136,7 +136,7 @@ class WsHub {
    *
    * `strips.gone` is empty for that sweep: it never removes a Strip, it only
    * re-states ones that are still there. The archiver (docs/adr/0082) is the
-   * other caller, and the only sender of `gone` Strips and `fdrs.gone` here.
+   * other caller, and the only sender of `gone` Strips and `flightDataList.gone` here.
    */
   _boardEpochFor(facilityId) {
     const board = this._efsp && typeof this._efsp.boardStoreFor === 'function' ? this._efsp.boardStoreFor(facilityId) : null;
@@ -152,7 +152,7 @@ class WsHub {
       boardEpoch: payload.boardEpoch !== undefined ? payload.boardEpoch : this._boardEpochFor(payload.facilityId),
       facilityId: payload.facilityId,
       strips: { updated: payload.strips || [], gone: payload.gone || [] },
-      fdrs: payload.flightDataListGone && payload.flightDataListGone.length ? { updated: [], gone: payload.flightDataListGone } : { updated: [] },
+      flightDataList: payload.flightDataListGone && payload.flightDataListGone.length ? { updated: [], gone: payload.flightDataListGone } : { updated: [] },
       positions: { updated: [] },
     });
   }
@@ -197,13 +197,13 @@ class WsHub {
   _efspAlertsMsg(session) {
     const a = this._efspAlerts || {};
     const seen = (session && session.lastSent) || new Map();
-    const stca = session && session.coverage && session.coverage.stca
-      ? (a.stca || []).filter(c => seen.has(String(c.a)) && seen.has(String(c.b)))
+    const conflictAlert = session && session.coverage && session.coverage.conflictAlert
+      ? (a.conflictAlert || []).filter(c => seen.has(String(c.a)) && seen.has(String(c.b)))
       : [];
     // Obligations (docs/adr/0067) and conformance are about flights, so a
     // session that reads only what it owns (docs/adr/0080) gets its own
     // flights' alerts and nobody else's.
-    const msg = { version: VERSION, type: 'efsp-alerts', conformance: a.conformance || [], stca, obligations: a.obligations || [], surveillance: a.surveillance || [] };
+    const msg = { version: VERSION, type: 'efsp-alerts', conformance: a.conformance || [], conflictAlert, obligations: a.obligations || [], surveillance: a.surveillance || [] };
     return this._efspFilter(session, msg) || msg;
   }
 
@@ -260,16 +260,16 @@ class WsHub {
   /**
    * Field state (guide §9.7, docs/adr/0061) changed with no controller's op
    * behind it — today only the active end derived from the mission wind at
-   * load (decisions.md H22). The same efsp-field-state-delta a field-state op
+   * load (decisions.md H22). The same efsp-runway-status-delta a runway-status op
    * returns from handleMessage, on field state's own sequence (0061's rule-5
    * deviation), so a client needs one handler for both (docs/adr/0068,
    * decisions.md S-L1d).
    */
   broadcastEfspRunwayStatusDelta(payload) {
     this._broadcast({
-      version: VERSION, type: 'efsp-field-state-delta',
-      fieldStateSeq: payload.fieldStateSeq,
-      fieldStates: { updated: (payload.fieldStates || []).filter(Boolean) },
+      version: VERSION, type: 'efsp-runway-status-delta',
+      runwayStatusSeq: payload.runwayStatusSeq,
+      runwayStatuses: { updated: (payload.runwayStatuses || []).filter(Boolean) },
     });
   }
 
@@ -338,7 +338,7 @@ class WsHub {
       const d = this._surv.describe(track);
       described.set(id, d);
       const w = d.who;
-      const fp = [d.iffOverride, w.fdrId, w.correlation, w.flightDataCallsign, w.flightDataType, w.tag].join('|');
+      const fp = [d.iffOverride, w.flightDataId, w.correlation, w.flightDataCallsign, w.flightDataType, w.tag].join('|');
       const prev = this._labels.get(id);
       if (!prev) this._labels.set(id, { fp, rev: 1 });
       else if (prev.fp !== fp) this._labels.set(id, { fp, rev: prev.rev + 1 });
@@ -399,7 +399,7 @@ class WsHub {
       at: hit.at, radars: hit.radars, dl,
       who: d.who, mode4: d.mode4, iffOverride: d.iffOverride, transponder: d.transponder,
       env: this._surv.env(), missionData: this._missionData,
-      atcSession: !!(session && session.coverage && session.coverage.stca),
+      atcSession: !!(session && session.coverage && session.coverage.conflictAlert),
     });
   }
 
@@ -423,10 +423,10 @@ class WsHub {
     return {
       version: VERSION, type: 'coverage',
       radars: session.coverage.radars,
-      heldPositions: session.coverage.heldPositions,
+      signedOnPositions: session.coverage.signedOnPositions,
       radarBearingPositions: session.coverage.radarBearingPositions,
       datalink: !!session.coverage.datalink,
-      stca: !!session.coverage.stca,
+      conflictAlert: !!session.coverage.conflictAlert,
     };
   }
 
@@ -441,9 +441,9 @@ class WsHub {
    */
   _refreshCoverage(ws, session) {
     const next = this._picture.coverageFor(session.controllerId);
-    // `stca` is whether an ATC Position is held, which decides the draw scheme
+    // `conflictAlert` is whether an ATC Position is held, which decides the draw scheme
     // of every contact (docs/adr/0088) — a change of it re-sends the picture too.
-    const key = (c) => [...c.radars.map(r => r.id)].sort().join(',') + (c.datalink ? '+DL' : '') + (c.stca ? '+ATC' : '');
+    const key = (c) => [...c.radars.map(r => r.id)].sort().join(',') + (c.datalink ? '+DL' : '') + (c.conflictAlert ? '+ATC' : '');
     const before = key(session.coverage);
     const after = key(next);
     this._setCoverage(session, next);

@@ -65,7 +65,7 @@ function handleAtoPreview(ctx, session, msg) {
   const base = { version: VERSION, type: 'efsp-ato-preview-result', requestId: msg.requestId };
   const gate = _atoGate(ctx, session, msg, msg.text);
   if (gate.reason) return { ack: { ...base, ok: false, reason: gate.reason, detail: gate.detail }, broadcasts: orderSlots(null) };
-  const preview = atoBoard.previewAto({ text: msg.text, fdrs: ctx.flightDataStore.getAll(), liveStrips: _atoLiveStrips(ctx), nowUtc: ctx.clock.now() });
+  const preview = atoBoard.previewAto({ text: msg.text, flightDataList: ctx.flightDataStore.getAll(), liveStrips: _atoLiveStrips(ctx), nowUtc: ctx.clock.now() });
   return { ack: { ...base, ok: true, preview }, broadcasts: orderSlots(null) };
 }
 
@@ -102,7 +102,7 @@ function handleAtoMutation(ctx, session, msg, persist) {
   if (op.kind !== 'ImportAto') return refuse('VALIDATION_ERROR', `unknown ATO op ${JSON.stringify(op.kind)}`);
 
   const now = ctx.clock.now();
-  const analysis = atoBoard.analyseAto({ text: op.text, fdrs: ctx.flightDataStore.getAll(), liveStrips: _atoLiveStrips(ctx), nowUtc: now });
+  const analysis = atoBoard.analyseAto({ text: op.text, flightDataList: ctx.flightDataStore.getAll(), liveStrips: _atoLiveStrips(ctx), nowUtc: now });
   const plan = atoBoard.planImport(analysis, op.choices, { textSha1: op.textSha1 });
   if (!plan.ok) return refuse(plan.reason, plan.detail);
 
@@ -117,7 +117,7 @@ function handleAtoMutation(ctx, session, msg, persist) {
   });
   logEntry({
     ok: true, atoMsgId: _atoMsgId(analysis.doc.header), textSha1: atoRef.textSha1,
-    lines: exec.results.map((r) => ({ lineId: r.lineId, action: r.action, ok: r.ok, stripId: r.stripId || null, fdrId: r.fdrId || null, reason: r.reason || null })),
+    lines: exec.results.map((r) => ({ lineId: r.lineId, action: r.action, ok: r.ok, stripId: r.stripId || null, flightDataId: r.flightDataId || null, reason: r.reason || null })),
   });
   if (exec.applied) persist();
 
@@ -130,7 +130,7 @@ function handleAtoMutation(ctx, session, msg, persist) {
     broadcasts: orderSlots({ primary: {
       version: VERSION, type: 'efsp-board-delta', boardSeq: boardStore.currentSeq, boardEpoch: boardStore.epoch, facilityId,
       strips: { updated: exec.strips.map((s) => stampStrip(boardStore, boardStore.getStrip(s.stripId) || s, facilityId, ctx)), gone: [] },
-      fdrs: { updated: exec.fdrIds.map((id) => ctx.flightDataStore.getFlightData(id)).filter(Boolean) },
+      flightDataList: { updated: exec.flightDataIds.map((id) => ctx.flightDataStore.getFlightData(id)).filter(Boolean) },
       positions: { updated: [] },
     } }),
   };

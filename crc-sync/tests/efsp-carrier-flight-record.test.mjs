@@ -81,21 +81,21 @@ test('normalizeCarrierFlight: missing → defaults; a set EEAT survives; junk dr
   assert.deepEqual(normalizeCarrierFlight(normalizeCarrierFlight(n)), n, 'idempotent');
 });
 
-test('carrierFlightOf reads fdr.military.carrier; an FDR from before L17 reads as defaults', () => {
+test('carrierFlightOf reads flightData.military.carrier; an FDR from before L17 reads as defaults', () => {
   assert.deepEqual(carrierFlightOf({ military: null }), defaultCarrierFlight());
   assert.deepEqual(carrierFlightOf({}), defaultCarrierFlight());
   assert.equal(carrierFlightOf({ military: { carrier: { eeatUtc: T } } }).eeatUtc, T);
 });
 
 test('marshalMessage: the sixteen fields in §9.12 order; blanks are null, not missing', () => {
-  const labels = marshalMessage({ fdr: {} }).map((x) => x.label);
+  const labels = marshalMessage({ flightData: {} }).map((x) => x.label);
   assert.deepEqual(labels, [
     'CALLSIGN', 'TYPE', 'CASE', 'APPROACH TYPE', 'MARSHAL RADIAL', 'MARSHAL DME', 'ANGELS', 'EAT/PUSH',
     'EXPECTED FINAL BEARING', 'APPROACH BUTTON', 'ALTIMETER', 'SHIP WX', 'FUEL/LOW STATE', 'BINGO FIELD',
     'BINGO FUEL', 'EEAT',
   ]);
   assert.equal(MARSHAL_MESSAGE_FIELDS.length, 16);
-  for (const item of marshalMessage({ fdr: {} })) {
+  for (const item of marshalMessage({ flightData: {} })) {
     assert.ok('value' in item, item.key);
     assert.equal(item.value, null, item.key);
   }
@@ -103,14 +103,14 @@ test('marshalMessage: the sixteen fields in §9.12 order; blanks are null, not m
 });
 
 test('marshalMessage fills from FDR, derivation and ship state; bearings display magnetic', () => {
-  const fdr = {
+  const flightData = {
     identity: { callsign: 'HORNET 11', aircraftType: 'FA18C' },
     military: { carrier: { eeatUtc: T, approachType: 'ICLS', approachButton: 15, bingoField: 'LCRA', bingoFuelLb: 4500, lowStateLb: 7200 } },
   };
   const shipState = { finalBearingDeg: 115, altimeterInHg: 29.92, headingRef: 'TRUE' };
-  const derived = deriveEntry({ fdrId: 'f', stackIndex: 2, status: 'HOLDING', caseIAngels: null },
+  const derived = deriveEntry({ flightDataId: 'f', stackIndex: 2, status: 'HOLDING', caseIAngels: null },
     { caseValue: 'III', charlieTimeUtc: T + 3_600_000, shipState });
-  const m = Object.fromEntries(marshalMessage({ fdr, derived, caseValue: 'III', shipState, magneticVariationDeg: 5 }).map((x) => [x.key, x]));
+  const m = Object.fromEntries(marshalMessage({ flightData, derived, caseValue: 'III', shipState, magneticVariationDeg: 5 }).map((x) => [x.key, x]));
   assert.equal(m.callsign.value, 'HORNET 11');
   assert.equal(m.type.value, 'FA18C');
   assert.equal(m.case.value, 'III');

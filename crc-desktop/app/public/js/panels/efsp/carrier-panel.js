@@ -6,7 +6,7 @@ import {
   carrierBannerParts, carrierCaseValue, carrierDerivedFor, carrierDerivedStack, carrierHhmm, getEfspCarrier
 } from './carrier-state.js';
 import { getActingPositions, sendEfspCarrierMutation, sendEfspMutation } from './efsp-ws.js';
-// ESM-1: today efsp-panel.js's _callsignOfFdr (fallback '') silently won over this file's own copy (fallback fdrId);
+// ESM-1: today efsp-panel.js's _callsignOfFdr (fallback '') silently won over this file's own copy (fallback flightDataId);
 // the import keeps that effective behaviour (S-ARCH2 item 3, plan §6 queue item 3).
 import { _callsignOfFdr } from './efsp-panel.js';
 import { registerEfspMessage } from './efsp-message-registry.js';
@@ -16,7 +16,7 @@ import { _showMutationError } from './efsp-panel.js';
 
 // The carrier's surfaces on the Strip panel (crc-sync's docs/adr/0074, ADR 0064
 // B7; guide §4.1, §9.12): the ship banner, the Case selector, the Marshal stack
-// board, and the hand-over buttons beside the NLA.
+// board, and the handoff buttons beside the NLA.
 //
 // What this file does NOT do is arithmetic. Angels, DME, push time, the final
 // bearing and every magnetic conversion are computed by crc-sync and arrive in
@@ -70,9 +70,9 @@ function _sendCarrier(capability, op) {
 export function renderCarrierBanner() {
   const root = typeof document !== 'undefined' ? document.getElementById('efsp-carrier-banner') : null;
   if (!root) return;
-  const held = _heldCarrierIds();
+  const signedOn = _heldCarrierIds();
   const view = getEfspCarrier();
-  if (held.length === 0 || !view) { root.hidden = true; root.innerHTML = ''; return; }
+  if (signedOn.length === 0 || !view) { root.hidden = true; root.innerHTML = ''; return; }
   root.hidden = false;
   // An open input must not be torn out from under the controller (Enter commits,
   // Esc reverts, no commit on blur: the Strip panel's own rule).
@@ -96,7 +96,7 @@ export function renderCarrierBanner() {
   const caseRow = _cel('div', 'carrier-case-row');
   caseRow.appendChild(_cel('span', 'carrier-case-label', 'CASE'));
   const current = view.recoveryCase ? view.recoveryCase.value : null;
-  if (carrierActingFor('setsCase', held)) {
+  if (carrierActingFor('setsCase', signedOn)) {
     const sel = _cel('select', 'carrier-case-select');
     sel.dataset.carrierCase = 'select';
     for (const c of CARRIER_CASES) {
@@ -122,7 +122,7 @@ export function renderCarrierBanner() {
     caseRow.appendChild(adv);
   }
   // The one thing a controller may enter on the banner: the altimeter.
-  if (carrierActingFor('editsShipInput', held)) {
+  if (carrierActingFor('editsShipInput', signedOn)) {
     const alt = _cel('input', 'carrier-altimeter-input');
     alt.type = 'text';
     alt.placeholder = 'altimeter';
@@ -160,14 +160,14 @@ export function carrierStackRows(view = getEfspCarrier(), stackId = 'MAIN') {
 /** Orders the Strips of the stack Bay by stack slot (the Bay is "ordered by stackIndex"); every other Bay is left alone. */
 export function carrierOrderRack(bayId, strips) {
   if (bayId !== 'cv-marshal-stack') return strips;
-  const idx = new Map(carrierDerivedStack().map(e => [e.fdrId, e.stackIndex]));
-  return strips.slice().sort((a, b) => (idx.has(a.fdrId) ? idx.get(a.fdrId) : 1e9) - (idx.has(b.fdrId) ? idx.get(b.fdrId) : 1e9));
+  const idx = new Map(carrierDerivedStack().map(e => [e.flightDataId, e.stackIndex]));
+  return strips.slice().sort((a, b) => (idx.has(a.flightDataId) ? idx.get(a.flightDataId) : 1e9) - (idx.has(b.flightDataId) ? idx.get(b.flightDataId) : 1e9));
 }
 
 /** Moves a Strip's flight to a slot: ONE gesture, ONE `Move` (§9.12 rule 2). Called by the drag's drop and by the slot's own hand. */
 export function carrierMoveToSlot(strip, toIndex) {
   if (!strip || !Number.isInteger(toIndex)) return false;
-  return _sendCarrier('sequencesStack', { kind: 'Move', fdrId: strip.fdrId, toIndex });
+  return _sendCarrier('sequencesStack', { kind: 'Move', flightDataId: strip.flightDataId, toIndex });
 }
 
 /**
@@ -202,7 +202,7 @@ function _wireSlotDrag(el, row) {
       if (over) over.classList.remove('efsp-drop-target');
       const target = moved ? slotAt(ev.clientX, ev.clientY) : null;
       if (target && target !== el) {
-        _sendCarrier('sequencesStack', { kind: 'Move', fdrId: row.entry.fdrId, toIndex: Number(target.dataset.slotIndex) });
+        _sendCarrier('sequencesStack', { kind: 'Move', flightDataId: row.entry.flightDataId, toIndex: Number(target.dataset.slotIndex) });
       }
     };
     document.addEventListener('pointermove', move);
@@ -219,7 +219,7 @@ function _slotRowEl(row, caseValue, sequenced, canSequence) {
   el.appendChild(_cel('span', 'carrier-slot-index', String(row.stackIndex)));
   const entry = row.entry;
   const shown = entry || row.preview;
-  el.appendChild(_cel('span', 'carrier-slot-call', entry ? _callsignOfFdr(entry.fdrId) : '—'));
+  el.appendChild(_cel('span', 'carrier-slot-call', entry ? _callsignOfFdr(entry.flightDataId) : '—'));
   el.appendChild(_cel('span', 'carrier-slot-angels', shown.angels != null ? `A${shown.angels}` : (entry ? 'assign' : '')));
   if (sequenced) {
     el.appendChild(_cel('span', 'carrier-slot-dme', shown.marshalDme != null ? `${shown.marshalDme} DME` : ''));
@@ -236,7 +236,7 @@ function _slotRowEl(row, caseValue, sequenced, canSequence) {
       inp.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
           const raw = inp.value.trim();
-          _sendCarrier('sequencesStack', { kind: 'SetCaseIAngels', fdrId: entry.fdrId, caseIAngels: raw === '' ? null : Number(raw) });
+          _sendCarrier('sequencesStack', { kind: 'SetCaseIAngels', flightDataId: entry.flightDataId, caseIAngels: raw === '' ? null : Number(raw) });
           inp.value = '';
         } else if (e.key === 'Escape') { inp.value = ''; inp.blur(); }
       });
@@ -312,32 +312,32 @@ export function renderCarrierStackBoard(container) {
 
 // ── Hand-over buttons ────────────────────────────────────────────────────
 
-/** Gives the NLA button its hand-over's identity: four trigger types, four looks (WP7A bullet 4). */
+/** Gives the NLA button its handoff's identity: four trigger types, four looks (WP7A bullet 4). */
 export function carrierDecorateNlaButton(btn, strip) {
-  const key = strip && strip.nla && strip.nla.carrierTransfer;
+  const key = strip && strip.nla && strip.nla.carrierHandoff;
   const t = key && CARRIER_HANDOFFS[key];
   if (!t) return;
-  btn.dataset.carrierTransfer = key;
+  btn.dataset.carrierHandoff = key;
   btn.dataset.carrierTrigger = t.trigger;
   btn.classList.add('efsp-carrier-handover', `efsp-carrier-trigger-${t.trigger.toLowerCase().replace(/_/g, '-')}`);
   btn.title = btn.title || `${t.label} — ${t.trigger.replace(/_/g, ' ').toLowerCase()}`;
 }
 
-/** The second hand-over button a Strip may carry: "See you" beside Commence, Case II only (a Strip has one NLA, §3.5 rule 1). */
+/** The second handoff button a Strip may carry: "See you" beside Commence, Case II only (a Strip has one NLA, §3.5 rule 1). */
 export function carrierExtraNlaButtons(strip) {
-  if (!strip || strip.role !== 'MARSHAL' || strip.state !== 'IN_STACK' || carrierCaseValue() !== 'II') return [];
+  if (!strip || strip.stripType !== 'MARSHAL' || strip.state !== 'IN_STACK' || carrierCaseValue() !== 'II') return [];
   if (!getActingPositions('CARRIER').includes(strip.ownerPositionId)) return [];
   const t = CARRIER_HANDOFFS.MARSHAL_TO_PRIFLY;
   if (!t.from.includes(strip.ownerPositionId)) return [];
   const btn = _cel('button', `efsp-sbtn efsp-nla-btn efsp-carrier-handover efsp-carrier-trigger-${t.trigger.toLowerCase().replace(/_/g, '-')}`, t.label);
-  btn.dataset.carrierTransfer = 'MARSHAL_TO_PRIFLY';
+  btn.dataset.carrierHandoff = 'MARSHAL_TO_PRIFLY';
   btn.dataset.carrierTrigger = t.trigger;
   btn.title = 'See you: the pilot has the ship visual. Hands the flight to PriFly, leaving a gap in the stack.';
   btn.addEventListener('pointerdown', (e) => e.stopPropagation());
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
     const live = (typeof getEfspStrip === 'function' && getEfspStrip(strip.stripId)) || strip;
-    sendEfspMutation(strip.ownerPositionId, live, { kind: 'CarrierTransfer', transfer: 'MARSHAL_TO_PRIFLY' });
+    sendEfspMutation(strip.ownerPositionId, live, { kind: 'CarrierHandoff', transfer: 'MARSHAL_TO_PRIFLY' });
     btn.disabled = true;
   });
   return [btn];
@@ -345,10 +345,10 @@ export function carrierExtraNlaButtons(strip) {
 
 /** A signature of everything derived that a carrier Strip draws, for the keyed reconciler (bay-view.js's _stripRenderSignature). */
 export function carrierSignatureFor(strip) {
-  if (!strip || !['MARSHAL', 'FINAL', 'PATTERN'].includes(strip.role)) return '';
+  if (!strip || !['MARSHAL', 'FINAL', 'PATTERN'].includes(strip.stripType)) return '';
   const view = getEfspCarrier();
   if (!view) return '';
-  const d = carrierDerivedFor(strip.fdrId);
+  const d = carrierDerivedFor(strip.flightDataId);
   const s = view.shipState || {};
   return [view.recoveryCase && view.recoveryCase.value, d ? `${d.stackIndex}/${d.angels}/${d.marshalDme}/${d.pushTimeUtc}/${d.status}/${(d.marshalRadialDisplay || {}).value}/${(d.expectedFinalBearingDisplay || {}).value}` : '',
     s.finalBearingDeg, s.found ? 1 : 0].join('|');

@@ -1,4 +1,4 @@
-/* The field-state board (guide §9.7, crc-sync docs/adr/0061, crc-desktop
+/* The runway-status board (guide §9.7, crc-sync docs/adr/0061, crc-desktop
    docs/adr/0068). Its own panel, its own file. Colours are efsp-panel.css's
    tokens: grey for normal, amber (--efsp-attn) for "waiting on someone",
    orange-red (--efsp-bad) for "the runway cannot be used". */

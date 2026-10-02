@@ -25,15 +25,15 @@ const { WALL_CLOCK } = require('../mission-clock');
 
 class PositionStore {
   /**
-   * @param {string[]} positionIds — the fixed Position set, e.g. ['OPS','CD','GND','TWR'] for Phase 1
-   * @param {object} coveringChain — one-hop covering map, e.g. { CD:'GND', GND:'TWR' } (guide §4.8.6's default chain, Phase-1-truncated at TWR since APP doesn't exist yet). A Position absent from this map (like OPS, and TWR itself) has no covering Position — matches the guide's own chain table, which never lists one for OPS either.
+   * @param {string[]} positionIds — the fixed Position set, e.g. ['OPS','CD','GC','LC'] for Phase 1
+   * @param {object} consolidation — one-hop covering map, e.g. { CD:'GC', GC:'LC' } (guide §4.8.6's default chain, Phase-1-truncated at TWR since APP doesn't exist yet). A Position absent from this map (like OPS, and TWR itself) has no covering Position — matches the guide's own chain table, which never lists one for OPS either.
    */
-  constructor(positionIds, coveringChain, { clock = WALL_CLOCK } = {}) {
+  constructor(positionIds, consolidation, { clock = WALL_CLOCK } = {}) {
     // The mission clock (docs/adr/0079) — `since` is who has held a Position
     // from when, which a controller reads as a time of day.
     this._clock = clock;
     this._positionIds = new Set(positionIds);
-    this._consolidation = coveringChain || {};
+    this._consolidation = consolidation || {};
     this._state = new Map(); // positionId -> { primary, observers:[], pendingPrimaryRequest }
     for (const id of positionIds) {
       this._state.set(id, { primary: null, observers: [], pendingPrimaryRequest: null });
@@ -91,7 +91,7 @@ class PositionStore {
       primary: s.primary,
       observers: [...s.observers],
       pendingPrimaryRequest: s.pendingPrimaryRequest,
-      coveringFor: [...this._positionIds].filter(
+      consolidatedPositions: [...this._positionIds].filter(
         id => id !== positionId && !this.isStaffed(id) && this.consolidatedAt(id) === positionId
       ),
     }));
@@ -106,7 +106,7 @@ class PositionStore {
    * abrupt — an Observer promotion, if any, is offered as an explicit
    * prompt by the caller, not auto-applied here; see releasePrimaryTo()).
    *
-   * @returns {{held:string[], vacated:string[]}} — `vacated` is what the
+   * @returns {{signedOn:string[], vacated:string[]}} — `vacated` is what the
    *   caller (index.js/efsp-ws.js) should check against board-store's
    *   Strip counts to build the "this would strand N Strips" warning
    *   (guide §4.8.6 rule 5 — warn, never block).
@@ -130,7 +130,7 @@ class PositionStore {
     if (after.size > 0) this._sessions.set(controllerId, after);
     else this._sessions.delete(controllerId);
 
-    return { held: [...after], vacated };
+    return { signedOn: [...after], vacated };
   }
 
   _signOn(controllerId, controllerName, positionId, now) {
@@ -150,7 +150,7 @@ class PositionStore {
   /** An Observer requests Primary (guide §4.8.2 rule 3) — delivered to the current Primary; requires their release via releasePrimaryTo(). Never auto-promotes. */
   requestPrimary(controllerId, positionId, now = this._clock.now()) {
     const s = this._state.get(positionId);
-    if (!s || !s.primary) return { ok: false, reason: 'NOT_OCCUPIED' };
+    if (!s || !s.primary) return { ok: false, reason: 'NOT_STAFFED' };
     if (s.primary.controllerId === controllerId) return { ok: false, reason: 'ALREADY_PRIMARY' };
     if (!s.observers.some(o => o.controllerId === controllerId)) return { ok: false, reason: 'NOT_OBSERVER' };
     s.pendingPrimaryRequest = { controllerId, requestedAt: now };
@@ -160,7 +160,7 @@ class PositionStore {
   /** The current Primary explicitly releases Primary to a requesting Observer — a prompt, never automatic (guide §4.8.6 rule 1). */
   releasePrimaryTo(positionId, toControllerId, now = this._clock.now()) {
     const s = this._state.get(positionId);
-    if (!s || !s.primary) return { ok: false, reason: 'NOT_OCCUPIED' };
+    if (!s || !s.primary) return { ok: false, reason: 'NOT_STAFFED' };
     const observer = s.observers.find(o => o.controllerId === toControllerId);
     if (!observer) return { ok: false, reason: 'NOT_OBSERVER' };
 
@@ -200,8 +200,8 @@ class PositionStore {
 
   /** Abrupt disconnect — releases every Position the controller held, auto-promoting where possible (guide §4.8.6 rule 1). */
   onDisconnect(controllerId) {
-    const held = this._sessions.get(controllerId) || new Set();
-    for (const id of held) this._signOff(controllerId, id, { abrupt: true });
+    const signedOn = this._sessions.get(controllerId) || new Set();
+    for (const id of signedOn) this._signOff(controllerId, id, { abrupt: true });
     this._sessions.delete(controllerId);
   }
 }

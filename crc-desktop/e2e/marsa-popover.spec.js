@@ -31,7 +31,7 @@ const { openPanel, seedStrip, stripByCallsign, expectOnTop, expectDoesSomething,
 let seeded = [];
 
 test.beforeEach(async ({ page }) => {
-  await openPanel(page, { held: ['OPS'] });
+  await openPanel(page, { signedOn: ['OPS'] });
   // Three Strips, because one Strip cannot be behind anything. The reported
   // symptom needs a neighbour below it in the same Rack.
   const before = await page.evaluate(() => getAllEfspStrips().map((s) => s.stripId));

@@ -30,7 +30,7 @@ const PERMISSIONS = {
   JTAC: new Set(['TransferStrip']),
 };
 
-const CREATE_ROLE_PERMISSIONS = {
+const CREATE_STRIP_TYPE_PERMISSIONS = {
   // WP4A second slice — TAC_C2/GCI originate MISSION Strips (guide §9.8:
   // "TAC_C2 works mission lines"). A standalone origination (own fresh
   // FDR) for a mission that never touches ATC-controlled airspace at all —
@@ -87,7 +87,7 @@ const family = {
   family: 'tactical',
   positions: ['TAC_C2', 'GCI', 'AIC', 'JTAC'],
   permissions: PERMISSIONS,
-  createsStripTypes: CREATE_ROLE_PERMISSIONS,
+  createsStripTypes: CREATE_STRIP_TYPE_PERMISSIONS,
   capabilities: TACTICAL_CAPABILITIES,
   // TOFI's MRU side (guide §4.6.3): both answer to CENTER's CTR.
   tofiCounterparts: {

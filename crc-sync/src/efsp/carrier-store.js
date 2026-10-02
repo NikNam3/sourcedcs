@@ -11,7 +11,7 @@
 //   { hullId, rev, recoveryCase, stacks: { [stackId]: MarshalStack }, shipInputs, transitions[] }
 //
 // v1 has one hull and one `MAIN` stack (decisions H29), so a second stack or
-// hull is additive. Entries are keyed by fdrId, never by Strip or track id.
+// hull is additive. Entries are keyed by flightDataId, never by Strip or track id.
 //
 // WHAT IS STORED AND WHAT IS NOT. The stored record holds only authoritative
 // values (the Case, the stack index of each flight, the Charlie time, the
@@ -49,7 +49,7 @@ class CarrierStore {
   /**
    * @param {object} deps
    * @param {object[]} deps.hulls hull configs (carrier/hull-config.js)
-   * @param {(fdrId:string)=>boolean} [deps.flightDataExists]
+   * @param {(flightDataId:string)=>boolean} [deps.flightDataExists]
    * @param {(positionId:string)=>boolean} [deps.isStaffed] CARRIER Position staffing, for lane feeding
    * @param {{now:()=>number}} [deps.clock] the mission clock
    */
@@ -93,22 +93,22 @@ class CarrierStore {
   }
 
   /** Is this flight in a hull's stack (any entry, pushed or holding)? */
-  inStack(fdrId, hullId = this.defaultHullId) {
+  inStack(flightDataId, hullId = this.defaultHullId) {
     const r = this._records.get(hullId);
-    return !!r && Object.values(r.stacks).some(s => s.entries.some(e => e.fdrId === fdrId));
+    return !!r && Object.values(r.stacks).some(s => s.entries.some(e => e.flightDataId === flightDataId));
   }
 
   /**
-   * The manned CV_APP lane the stack would feed this flight to, or null
+   * The staffed CV_APP lane the stack would feed this flight to, or null
    * (carrier/handoffs.js: alternating by push ordinal, the other lane when the
    * preferred one is unstaffed, none when neither is).
    */
-  laneFor(fdrId, hullId = this.defaultHullId) {
+  laneFor(flightDataId, hullId = this.defaultHullId) {
     const r = this._records.get(hullId);
     if (!r) return null;
     for (const stack of Object.values(r.stacks)) {
       const derived = carrier.deriveStack(stack, { caseValue: r.recoveryCase.value, shipState: null });
-      const lane = carrier.assignLanes(derived, { isStaffed: this._isStaffed }).find(l => l.fdrId === fdrId);
+      const lane = carrier.assignLanes(derived, { isStaffed: this._isStaffed }).find(l => l.flightDataId === flightDataId);
       if (lane) return lane.lane;
     }
     return null;
@@ -148,7 +148,7 @@ class CarrierStore {
       const last = Math.min(carrier.STACK_DEFAULTS.maxIndex, top + 1); // one open slot above the stack: a drop there appends
       slots[stackId] = [];
       for (let i = 0; i <= last; i++) {
-        const d = carrier.deriveEntry({ fdrId: null, stackIndex: i, status: 'HOLDING', caseIAngels: null }, {
+        const d = carrier.deriveEntry({ flightDataId: null, stackIndex: i, status: 'HOLDING', caseIAngels: null }, {
           caseValue, charlieTimeUtc: stack.charlieTimeUtc, marshalRadialDeg: stack.marshalRadialDeg, shipState });
         slots[stackId].push({ stackIndex: i, angels: d.angels, marshalDme: d.marshalDme, pushTimeUtc: d.pushTimeUtc });
       }
@@ -211,7 +211,7 @@ class CarrierStore {
       clientMutationId: mutation.clientMutationId,
       op: op.kind,
       // Its own id field: a carrier op targets a ship's recovery, which no
-      // single stripId/fdrId/marsaId names (marsa-store.js's reasoning).
+      // single stripId/flightDataId/marsaId names (marsa-store.js's reasoning).
       carrierHullId: mutation.hullId || this.defaultHullId,
       actingPositionId,
       actorId: by || null,
@@ -236,7 +236,7 @@ class CarrierStore {
 
   /**
    * The one entry point for a controller-driven carrier op (SetCase, a stack
-   * op, SetShipInput). Never throws. `changed` on a stack op is the fdrIds
+   * op, SetShipInput). Never throws. `changed` on a stack op is the flightDataIds
    * whose derived display moved, in stack order, for the one delta.
    *
    * @param {{clientMutationId:string, hullId?:string, baseRev?:number, op:object}} mutation
@@ -338,13 +338,13 @@ class CarrierStore {
     const stackId = op.stackId || carrier.DEFAULT_STACK_ID;
     const stack = record.stacks[stackId];
     if (!stack) return { ok: false, reason: 'NOT_FOUND', detail: `unknown stack ${stackId}` };
-    if ((op.kind === 'InsertAt' || op.kind === 'Append') && !this._flightDataExists(op.fdrId)) {
-      return { ok: false, reason: 'NOT_FOUND', detail: `unknown FDR ${op.fdrId}` };
+    if ((op.kind === 'InsertAt' || op.kind === 'Append') && !this._flightDataExists(op.flightDataId)) {
+      return { ok: false, reason: 'NOT_FOUND', detail: `unknown FDR ${op.flightDataId}` };
     }
     const r = carrier.applyStackOp(stack, op);
     if (!r.ok) return r;
     record.stacks[stackId] = r.stack;
-    if (!quiet) this._touch(record, by, op.kind, op.fdrId || null);
+    if (!quiet) this._touch(record, by, op.kind, op.flightDataId || null);
     else { record.rev += 1; this._sync.advance(); }
     return { ok: true, record: deepClone(record), changed: r.changed };
   }
@@ -357,11 +357,11 @@ class CarrierStore {
    * `REMOVE_NO_CLOSE_UP` leaves a vacancy (decisions H28).
    * @returns {{ok:boolean, reason?:string, detail?:string, changed?:Array}}
    */
-  applyEffect(effect, fdrId, { hullId = this.defaultHullId, by = null, actingPositionId = null, clientMutationId = null } = {}) {
+  applyEffect(effect, flightDataId, { hullId = this.defaultHullId, by = null, actingPositionId = null, clientMutationId = null } = {}) {
     const record = this._records.get(hullId);
     if (!record) return { ok: false, reason: 'NOT_FOUND', detail: `unknown hull ${hullId}` };
-    const op = effect === 'MARK_PUSHED' ? { kind: 'MarkPushed', fdrId }
-      : effect === 'REMOVE_NO_CLOSE_UP' ? { kind: 'Remove', fdrId, closeUp: false }
+    const op = effect === 'MARK_PUSHED' ? { kind: 'MarkPushed', flightDataId }
+      : effect === 'REMOVE_NO_CLOSE_UP' ? { kind: 'Remove', flightDataId, closeUp: false }
       : null;
     if (!op) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown stack effect ${effect}` };
     const before = deepClone(record);
@@ -371,12 +371,12 @@ class CarrierStore {
   }
 
   /** A flight joins the stack at the next free slot (a recovery check-in). */
-  appendFlight(fdrId, { hullId = this.defaultHullId, by = null, actingPositionId = null, clientMutationId = null } = {}) {
+  appendFlight(flightDataId, { hullId = this.defaultHullId, by = null, actingPositionId = null, clientMutationId = null } = {}) {
     const record = this._records.get(hullId);
     if (!record) return { ok: false, reason: 'NOT_FOUND', detail: `unknown hull ${hullId}` };
-    if (this.inStack(fdrId, hullId)) return { ok: true, changed: [], already: true };
+    if (this.inStack(flightDataId, hullId)) return { ok: true, changed: [], already: true };
     const before = deepClone(record);
-    const r = this._stackOp(record, { kind: 'Append', fdrId }, by, false);
+    const r = this._stackOp(record, { kind: 'Append', flightDataId }, by, false);
     this._audit({ clientMutationId, op: { kind: 'Stack:Append' }, hullId }, actingPositionId, by, before, r);
     return r;
   }
@@ -387,13 +387,13 @@ class CarrierStore {
    * (H28, ADR 0064).
    * @returns {boolean} whether anything changed
    */
-  onFlightDataRetired(fdrId, by = null) {
+  onFlightDataRetired(flightDataId, by = null) {
     let changed = false;
     for (const record of this._records.values()) {
       for (const [stackId, stack] of Object.entries(record.stacks)) {
-        if (!stack.entries.some(e => e.fdrId === fdrId)) continue;
-        const r = carrier.remove(stack, { fdrId, closeUp: false });
-        if (r.ok) { record.stacks[stackId] = r.stack; this._touch(record, by, 'RetireFlight', fdrId); changed = true; }
+        if (!stack.entries.some(e => e.flightDataId === flightDataId)) continue;
+        const r = carrier.remove(stack, { flightDataId, closeUp: false });
+        if (r.ok) { record.stacks[stackId] = r.stack; this._touch(record, by, 'RetireFlight', flightDataId); changed = true; }
       }
     }
     return changed;
@@ -404,7 +404,7 @@ class CarrierStore {
     for (const record of this._records.values()) {
       for (const stack of Object.values(record.stacks)) {
         for (const e of stack.entries.slice()) {
-          if (!this._flightDataExists(e.fdrId) && this.onFlightDataRetired(e.fdrId, 'system')) n += 1;
+          if (!this._flightDataExists(e.flightDataId) && this.onFlightDataRetired(e.flightDataId, 'system')) n += 1;
         }
       }
     }

@@ -38,18 +38,18 @@ const TOOLBAR_IDS = [
   'efsp-mutation-error', 'efsp-mutation-warning', 'efsp-connection-banner',
 ];
 
-function flightDataFor(fdrId, callsign) {
+function flightDataFor(flightDataId, callsign) {
   return {
-    fdrId, rev: 1, provenance: {},
+    flightDataId, rev: 1, provenance: {},
     identity: { callsign, beaconAssigned: '0001', trackDegradationFlag: 'NONE' },
     filed: {}, assigned: {}, tofi: {}, airspace: {}, comms: {},
     military: { ordnanceState: 'CLEAN', hookRequired: false, alertStatus: 'NONE', mtr: {} },
   };
 }
 
-function stripFor(stripId, fdrId, overrides = {}) {
+function stripFor(stripId, flightDataId, overrides = {}) {
   return {
-    stripId, cid: '001', fdrId, rev: 3, role: 'DEPARTURE', state: 'PROPOSED',
+    stripId, cid: '001', flightDataId, rev: 3, stripType: 'DEPARTURE', state: 'PROPOSED',
     ownerPositionId: 'OPS', facilityId: 'INCIRLIK', bayId: 'ops-proposed', rackId: 'main', orderKey: 'V',
     annotations: {}, flags: { offset: false, flipped: false, removeIndicator: false, highlight: null, attention: null },
     correlation: { state: 'UNCORRELATED' }, coordination: null, tofiCoordination: null, airspaceEntry: null,
@@ -59,7 +59,7 @@ function stripFor(stripId, fdrId, overrides = {}) {
 
 const BOARD = {
   strips: [stripFor('sA', 'fA'), stripFor('sB', 'fB')],
-  fdrs: [flightDataFor('fA', 'AAA11'), flightDataFor('fB', 'BBB22')],
+  flightDataList: [flightDataFor('fA', 'AAA11'), flightDataFor('fB', 'BBB22')],
 };
 
 async function mountPanel() {
@@ -123,7 +123,7 @@ test('a refused CreateStrip names the callsign from the request — there is no 
   const clientMutationId = 'cm-create';
   sandbox.registerPendingMutation({
     version: 1, type: 'efsp-mutation', clientMutationId, facilityId: 'INCIRLIK', actingPositionId: 'OPS',
-    op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', fdr: { callsign: 'NEW777' } },
+    op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', flightData: { callsign: 'NEW777' } },
   });
   sandbox.notifyEfspMutationAck(clientMutationId, sandbox.applyEfspMutationAck({
     clientMutationId, ok: false, reason: 'VALIDATION_ERROR', detail: 'beacon code pool exhausted',
@@ -171,7 +171,7 @@ test('every reason code crc-sync can reject with has a plain sentence, and an un
   const messages = panel.MUTATION_ERROR_MESSAGES;
   // Enumerated from `ok: false, reason:` across crc-sync/src/efsp/.
   for (const code of ['VALIDATION_ERROR', 'NOT_FOUND', 'PERMISSION_DENIED', 'STALE_REV',
-    'NOT_HOLDING_POSITION', 'NLA_INHIBITED', 'NOT_OCCUPIED', 'NOT_OBSERVER', 'NOT_OWNER',
+    'NOT_HOLDING_POSITION', 'NLA_INHIBITED', 'NOT_STAFFED', 'NOT_OBSERVER', 'NOT_OWNER',
     'NO_RECEIVING_POSITION', 'ALREADY_PRIMARY']) {
     assert.ok(Object.prototype.hasOwnProperty.call(messages, code), `${code} has no mapping`);
   }

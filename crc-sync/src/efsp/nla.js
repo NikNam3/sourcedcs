@@ -60,19 +60,19 @@ const { FINAL_STATES } = require('./authority/strip-types/final');
 const { PATTERN_STATES } = require('./authority/strip-types/pattern');
 
 const { DEPARTURE_STATES, REQUIRED_FOR_CLEARANCE, CLEARANCE_BLOCK_LABELS, isFlightPlanValid, missingForClearance, isVoidExpired } = departure;
-const STATES_BY_ROLE = authority.STATES_BY_ROLE;
-const STATE_SETS_BY_STRIP_TYPE = Object.fromEntries(Object.entries(STATES_BY_ROLE).map(([role, states]) => [role, new Set(states)]));
+const STATES_BY_STRIP_TYPE = authority.STATES_BY_STRIP_TYPE;
+const STATE_SETS_BY_STRIP_TYPE = Object.fromEntries(Object.entries(STATES_BY_STRIP_TYPE).map(([stripType, states]) => [stripType, new Set(states)]));
 
 // Backward-compatible alias — every Phase 1 caller/test imports STATES
 // meaning "the departure lifecycle", which is still exactly what it means.
 const STATES = DEPARTURE_STATES;
 
-function isValidState(state, role = 'DEPARTURE') {
-  const set = STATE_SETS_BY_STRIP_TYPE[role];
+function isValidState(state, stripType = 'DEPARTURE') {
+  const set = STATE_SETS_BY_STRIP_TYPE[stripType];
   return !!set && set.has(state);
 }
 
-/** Normalizes the injected staffing context, defaulting to "nothing is occupied, nothing covers" when omitted — a safe, meaningful degrade (an staffing-gated NLA simply reports inhibited) rather than a throw, since not every caller has staffing info at hand (e.g. a fixture-driven test). `facilityId` (WP4A) defaults to undefined, which computeArrivalNla treats as "not CENTER" — i.e. every pre-WP4A caller that never passes it keeps the original INCIRLIK behavior unchanged. `standingReleases` (WP4A, §4.6.2) defaults to an empty array — no envelopes configured means nothing is ever pre-cleared by one. */
+/** Normalizes the injected staffing context, defaulting to "nothing is staffed, nothing covers" when omitted — a safe, meaningful degrade (an staffing-gated NLA simply reports inhibited) rather than a throw, since not every caller has staffing info at hand (e.g. a fixture-driven test). `facilityId` (WP4A) defaults to undefined, which computeArrivalNla treats as "not CENTER" — i.e. every pre-WP4A caller that never passes it keeps the original INCIRLIK behavior unchanged. `standingReleases` (WP4A, §4.6.2) defaults to an empty array — no envelopes configured means nothing is ever pre-cleared by one. */
 function _normalizeCtx(ctx) {
   return {
     isStaffed: (ctx && ctx.isStaffed) || (() => false),
@@ -88,7 +88,7 @@ function _normalizeCtx(ctx) {
     targetRackId: ctx && ctx.targetRackId,
     // The carrier (docs/adr/0074). `carrierCase()` is the ship's recovery Case
     // ('I'|'II'|'III'; the NLA out of IN_STACK depends on it), and
-    // `carrierLaneFor(strip)` the manned CV_APP lane the Marshal stack would feed
+    // `carrierLaneFor(strip)` the staffed CV_APP lane the Marshal stack would feed
     // this flight to, or null. Both default to "nothing known", which inhibits
     // the Commence rather than guessing a lane.
     carrierCase: (ctx && ctx.carrierCase) || (() => null),
@@ -100,25 +100,25 @@ function _normalizeCtx(ctx) {
 // Each Role family's computeNla is registered in the same commit as the Role:
 // computeNla falls back to the DEPARTURE table for an unknown Role, which would
 // show a MARSHAL Strip "Send to Clearance" (ADR 0064's trap for L17).
-const COMPUTE_BY_STRIP_TYPE = Object.fromEntries(authority.stripTypeNames().map(role => [role, authority.stripTypeFamily(role).computeNla]));
+const COMPUTE_BY_STRIP_TYPE = Object.fromEntries(authority.stripTypeNames().map(stripType => [stripType, authority.stripTypeFamily(stripType).computeNla]));
 const computeDepartureNla = departure.computeDepartureNla;
 
 /**
  * @param {object} strip
- * @param {object|null} fdr
+ * @param {object|null} flightData
  * @param {number} now  mission-clock ms (docs/adr/0079)
  * @param {object} [ctx]
  * @returns {{toState:string, transferTo?:string}|{inhibited:string}|null} null means no NLA is
  *   defined for this State at all (a terminal state).
  */
-function computeNla(strip, fdr, now, ctx = {}) {
+function computeNla(strip, flightData, now, ctx = {}) {
   _requireNow(now);
-  const compute = COMPUTE_BY_STRIP_TYPE[strip.role] || computeDepartureNla;
-  return compute(strip, fdr, now, _normalizeCtx(ctx));
+  const compute = COMPUTE_BY_STRIP_TYPE[strip.stripType] || computeDepartureNla;
+  return compute(strip, flightData, now, _normalizeCtx(ctx));
 }
 
 module.exports = {
-  STATES, DEPARTURE_STATES, ARRIVAL_STATES, OVERFLIGHT_STATES, MISSION_STATES, STATES_BY_ROLE,
+  STATES, DEPARTURE_STATES, ARRIVAL_STATES, OVERFLIGHT_STATES, MISSION_STATES, STATES_BY_STRIP_TYPE,
   MARSHAL_STATES, FINAL_STATES, PATTERN_STATES,
   isValidState, isFlightPlanValid, isVoidExpired, computeNla, REQUIRED_FOR_CLEARANCE,
   missingForClearance, CLEARANCE_BLOCK_LABELS,
