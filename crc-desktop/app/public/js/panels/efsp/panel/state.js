@@ -27,6 +27,7 @@ export let _mutationErrorEl = null;
 export let _mutationWarningEl = null;
 export let _undoSlotEl = null;
 export let _undoVoidedEl = null;
+export let _controlAttestEl = null;
 export let _connectionBannerEl = null;
 export let _efspPanelRootEl = null; // cached, not document.getElementById() per check — same detached-DOM reasoning as every other element above
 
@@ -50,5 +51,6 @@ export function _cachePanelElements() {
   _mutationWarningEl = document.getElementById('efsp-mutation-warning');
   _undoSlotEl = document.getElementById('efsp-undo-slot');
   _undoVoidedEl = document.getElementById('efsp-undo-voided');
+  _controlAttestEl = document.getElementById('efsp-control-attest');
   _connectionBannerEl = document.getElementById('efsp-connection-banner');
 }

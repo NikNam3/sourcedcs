@@ -331,11 +331,14 @@
   ],
   "panels/efsp/bay/authority-mirror.js": [
    "AIRSPACE_ENTRY_POSITIONS",
+   "CARRIER_HANDOFF_STRIP_TYPE",
+   "CARRIER_HANDOFF_TARGET",
    "CONVERT_TO_ARRIVAL_POSITIONS",
    "COORDINATION_TARGETS",
    "HAND_BACK_TO",
    "TOFI_ANSWERED_BY",
-   "TOFI_COUNTERPARTS"
+   "TOFI_COUNTERPARTS",
+   "canHandOffToCarrier"
   ],
   "panels/efsp/bay/block-edit.js": [
    "_blockLabel",
@@ -372,6 +375,11 @@
   ],
   "panels/efsp/bay/popovers/bind.js": [
    "_openBindPopover"
+  ],
+  "panels/efsp/bay/popovers/control-release.js": [
+   "_dispatchHandoffOp",
+   "_dispatchHandoffStep",
+   "_openControlReleasePopover"
   ],
   "panels/efsp/bay/popovers/coordination.js": [
    "COORDINATION_PRIMITIVE_LABELS",
@@ -448,6 +456,27 @@
    "carrierHhmm",
    "getEfspCarrier",
    "isCarrierDerivedBlock"
+  ],
+  "panels/efsp/control-release-rules.js": [
+   "OBLIGATION_LABELS",
+   "RELEASE_SCOPES",
+   "RELEASE_SCOPE_LABELS",
+   "attestationRequest",
+   "buildGrantOp",
+   "buildRefuseOp",
+   "buildRequestOp",
+   "buildStepOp",
+   "commsHolderPosition",
+   "controlHolderPosition",
+   "controlMoved",
+   "handoffChips",
+   "handoffPositions",
+   "handoffSideOf",
+   "handoffSteps",
+   "isStepsHandoff",
+   "parseEffectiveAt",
+   "releaseSummary",
+   "requestSummary"
   ],
   "panels/efsp/correlation-highlight.js": [
    "correlationBadgeFor",
@@ -709,6 +738,13 @@
    "noteEfspArrivalShown",
    "noteEfspBoardArrivals"
   ],
+  "panels/efsp/panel/control-attest.js": [
+   "_resetControlAttestForTest",
+   "confirmControlAttestation",
+   "dismissControlAttestation",
+   "getControlAttestation",
+   "noteAttestationRefusal"
+  ],
   "panels/efsp/panel/create-strip.js": [
    "_availableCreateStripOrigins",
    "_createStripOrigin",
@@ -755,6 +791,7 @@
    "_bayTabsEl",
    "_cachePanelElements",
    "_connectionBannerEl",
+   "_controlAttestEl",
    "_createStripBindEl",
    "_createStripBtnEl",
    "_createStripInputEl",

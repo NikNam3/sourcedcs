@@ -51,6 +51,8 @@ import {
 } from './bay-view.js';
 import { _setPendingConvertStripId } from './bay-view.js';
 import { _openJoinPopover, _openSplitPopover } from './bay/popovers/formation.js';
+import { _dispatchHandoffStep, _openControlReleasePopover } from './bay/popovers/control-release.js';
+import { OBLIGATION_LABELS, handoffChips, handoffSteps } from './control-release-rules.js';
 import { holdsFormationGrant, joinOffer, splitChipFor, splitOffer } from './formation-rules.js';
 import { scrambleAlertsFor } from './scramble.js';
 import { convertStripToArrival, efspVisibleBayId, noteEfspArrivalShown } from './efsp-panel.js';
@@ -146,6 +148,14 @@ function _exchangeButtons(buttons) {
   return wrap;
 }
 
+/** The buttons of a HANDOFF's steps (docs/adr/0101): a one-click mark sends at once (Undo covers it), a form opens a popover. */
+function _handoffStepButtons(strip, acting) {
+  return handoffSteps(strip, acting).map(step => _stripButton(step.label, `efsp-handoff-step efsp-handoff-step-${step.key.toLowerCase().replace(/_/g, '-')}`, {
+    title: step.reason || step.title, disabled: !step.enabled, action: `handoff-${step.key.toLowerCase()}`,
+    onClick: (e, btn) => (step.form ? _openControlReleasePopover(strip, btn, step.form) : _dispatchHandoffStep(strip, step.key)),
+  }));
+}
+
 /** The five coordination primitives — both sides, every state. F-302's badge, as a row. */
 function _coordinationExchange(strip) {
   const co = strip.coordination;
@@ -189,6 +199,22 @@ function _coordinationExchange(strip) {
   }
 
   if (co.note) row.appendChild(_buildCoordinationNoteEl(co.note, proposer));
+
+  // docs/adr/0101: after ACCEPT a HANDOFF carries who has communications and control, the ControlRelease in effect, and
+  // the steps still to take. The row is the place for them: they are the next thing the controller does.
+  const chips = handoffChips(strip);
+  if (chips.length) {
+    const wrap = _stripEl('div', 'efsp-coordination-badges efsp-handoff-chips');
+    for (const c of chips) {
+      const chip = _stripEl('span', `efsp-handoff-chip efsp-handoff-chip-${c.key} efsp-handoff-tone-${c.tone}${c.held ? ' efsp-handoff-held' : ''}`, c.text);
+      chip.title = c.title;
+      chip.dataset.chip = c.key;
+      wrap.appendChild(chip);
+    }
+    row.appendChild(wrap);
+    const stepButtons = _handoffStepButtons(strip, _resolveActingPositionId(strip));
+    if (stepButtons.length) row.appendChild(_exchangeButtons(stepButtons));
+  }
 
   if (pendingIn) {
     const isOpsRequest = co.primitive === 'OPERATIONAL_REQUEST';
@@ -534,9 +560,10 @@ function _litIndicator(strip, key, el, obligation, siblings) {
   if (key === 'timer') {
     if (!obligation) return null;
     const overdue = obligation.severity === 'OVERDUE';
-    return _indicator(key, obligation.obligationType.replace(/_/g, ' '), overdue ? 'bad' : 'attn',
+    const named = OBLIGATION_LABELS[obligation.obligationType]; // docs/adr/0101: the two control-invariant obligations
+    return _indicator(key, named ? named.label : obligation.obligationType.replace(/_/g, ' '), overdue ? 'bad' : 'attn',
       `efsp-obligation-badge${overdue ? ' efsp-obligation-badge-overdue' : ''}`,
-      `${obligation.obligationType} — ${obligation.severity}`);
+      named ? `${named.title} (${obligation.obligationType} — ${obligation.severity})` : `${obligation.obligationType} — ${obligation.severity}`);
   }
   if (key === 'hint' || key === 'stale') {
     const hints = surveillanceHintsForStrip(strip);
@@ -682,6 +709,12 @@ function _stripMenuItems(strip) {
     items.push({ group: 'Start', key: 'coordination-cancel', label: open ? 'Cancel proposal' : 'End coordination', cls: 'efsp-coordinate-btn', enabled: true,
       title: open ? 'Withdraw the open proposal' : 'Close this exchange on your Strip (the other side keeps its own)',
       run: () => _dispatchCoordination(strip, strip.coordination.primitive, 'CANCEL') });
+  }
+  // docs/adr/0101: the steps of an accepted HANDOFF are also here, so a Strip whose row is scrolled out still has them.
+  for (const step of handoffSteps(strip, acting)) {
+    items.push({ group: 'Start', key: `handoff-${step.key.toLowerCase()}`, label: step.label, cls: 'efsp-coordinate-btn', enabled: step.enabled,
+      reason: step.reason || '', title: step.title,
+      run: (anchor) => (step.form ? _openControlReleasePopover(strip, anchor, step.form) : _dispatchHandoffStep(strip, step.key)) });
   }
   if (COORDINATION_TARGETS[strip.ownerPositionId]) {
     const ok = _canProposeCoordination(strip) && !!acting;
