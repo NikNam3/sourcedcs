@@ -545,6 +545,8 @@ return net.lua2json(pts)
   // Fetch DCS mission-editor drawings via CustomService.Eval.
   // Each drawing is returned with pre-converted lat/lon points (coord.LOtoLL).
   // Circles are returned as {lat, lon, radius}; polyline/polygon types as {points:[{lat,lon}]}.
+  // Each carries its `name` and its layer's `layerName` (docs/adr/0098 §4: an airspace's DCS_DRAWING geometry names its
+  // drawing), which also makes missionFingerprint() see drawing names.
   _getDrawings() {
     return new Promise((resolve) => {
       const lua = `
@@ -569,6 +571,8 @@ if ok and layers then
             fillColor     = obj.fillColorString,
             closed        = obj.closed,
             text          = obj.text,
+            name          = obj.name,
+            layerName     = layer.name,
           }
           -- Origin lat/lon for circle center or anchor
           if ox ~= 0 or oy ~= 0 then
