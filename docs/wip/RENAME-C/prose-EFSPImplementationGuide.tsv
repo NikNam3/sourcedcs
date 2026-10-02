@@ -1,0 +1,53 @@
+# line	old	new   (KEEP	why lines are listed at the end)
+21	Position, flight data, Mutation	Position, Flight data, Mutation
+93	a presentation of one flight data to controllers	a presentation of one flight's flight data to controllers
+93	One flight data MAY have more than one Strip	One flight's flight data MAY have more than one Strip
+101	the per-Strip-Role mapping	the per-strip-type mapping
+107	**Position** — an operating role a controller signs into.	**Position** — an operating position a controller signs on to (as derived from selected radar stations, §4.8).
+115	**EFSP State** — the value of Block 25.	**Strip state** — the value of Block 25.
+117	for the current EFSP State.	for the current strip state.
+123	### 3.1 flight data and Strip are separate	### 3.1 Flight data and Strip are separate
+125	The flight data is the flight;	The flight data is the flight's record;
+127	Reason: the flight data changes	Reason: the flight data changes
+193	### 3.4 EFSP State `[SOURCE-DEFINED]`	### 3.4 Strip state `[SOURCE-DEFINED]`
+201	| flight data exists, strip auto-created	| flight data exists, strip auto-created
+248	### 3.6 When one flight data gets more than one Strip	### 3.6 When one flight's flight data gets more than one Strip
+253	referencing separate flight data.	referencing separate flight data.
+390	**Positions are not signed into. They are derived	**Positions are not picked directly. They are derived
+390	the set changes live during a session.**	the set changes live during a session (a controller is then signed on to each Position the selection yields).**
+392	when no controller holds `AP`,	when no controller is signed on to `AP`,
+450	gated on occupancy.** A Position is occupied when some connected controller is its Primary (§4.8.2). A transfer to an unoccupied Position	gated on staffing.** A Position is staffed when some connected controller is its Primary (§4.8.2). A transfer to an unstaffed Position
+450	Occupancy is derived and changes live	Staffing is derived and changes live
+451	route to the **covering Position** per the facility configuration	route to the Position it is **consolidated at**, per the facility configuration
+542	### 4.8 Position occupancy, combination and handoff	### 4.8 Position staffing, combination and handoff
+544	several controllers may hold the same station with one acting as Primary	several controllers may select the same radar station with one acting as Primary
+546	*"roles can be combined or split in real-time based on workload"*	*"roles can be combined or split in real-time based on workload"* (Saab's word "roles" is theirs; here they are Positions)
+556	becomes unoccupied and nobody replaces it	becomes unstaffed and nobody replaces it
+568	| Role | May act | Sees |	| Primary or Observer | May act | Sees |
+596	two Positions held by the same controller	two Positions signed on by the same controller
+605	never as the union of the held set.**	never as the union of the signed-on set.**
+616	a controller holding six Positions needs	a controller signed on to six Positions needs
+616	With many Positions held, the vStrips	With many Positions signed on, the vStrips
+625	If **no controller holds the Position**, its Strips MUST route to the **covering Position** named in facility configuration (§8.2)	If **no controller is signed on to the Position**, its Strips MUST route to the Position it is **consolidated at**, named in facility configuration (§8.2)
+625	The default covering chain:	The default consolidation:
+626	If the covering Position is also unoccupied, follow the chain to the end. **A Strip MUST NOT be left owned by an unoccupied Position with no covering path.**	If that Position is also unstaffed, follow the consolidation to its end. **A Strip MUST NOT be left owned by an unstaffed Position with no consolidation path.**
+627	Vacating with delegated airspace held is a special case: when `AP` becomes unoccupied	Vacating with delegated airspace is a special case: when `AP` becomes unstaffed
+636	| Positions held per controller, over time	| Positions signed on per controller, over time
+639	| Time a Position spends unoccupied while holding Strips | the covering chain working, or not	| Time a Position spends unstaffed while it still owns Strips | the consolidation working, or not
+1144	a **FACSFAC-equivalent role owning	a **FACSFAC-equivalent Position owning
+1264	since Position occupancy derives from it	since Position staffing derives from it
+1283	### WP1A — Position occupancy, combination and handoff	### WP1A — Position staffing, combination and handoff
+1289	the covering chain and vacate handling	the consolidation and vacate handling
+1295	two Positions held by one controller	two Positions signed on by one controller
+1296	because one person held both sides.	because one person was signed on to both sides.
+1299	routes its Strips down the covering chain	routes its Strips down the consolidation
+1336	Deliverables: EFSP State machine	Deliverables: strip state machine
+1336	release-state model with	departure-release model with
+1445	§4.5 occupancy gating	§4.5 staffing gating
+1492	owned by an unoccupied Position with no covering path	owned by an unstaffed Position with no consolidation path
+1493	between two Positions held by one controller	between two Positions signed on by one controller
+1494	**D21 Permissions unioned across held Positions**	**D21 Permissions unioned across signed-on Positions**
+1494	union of the held set's powers	union of the signed-on set's powers
+1494	ATC hat held by the same person	ATC hat signed on by the same person
+753	**EFSP State**	**Strip state**
+80	own annotations, Bay position and State.	own annotations, Bay position and strip state.

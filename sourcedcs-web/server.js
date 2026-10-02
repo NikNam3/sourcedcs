@@ -105,7 +105,7 @@ app.get('/js/config.js', (_req, res) => {
     'var WIKI_URL            = ' + JSON.stringify(store.WIKI_URL) + ';\n' +
     'var ATO_URL             = ' + JSON.stringify(store.ATO_URL) + ';\n' +
     'var OLYMPUS_URL         = ' + JSON.stringify(store.OLYMPUS_URL) + ';\n' +
-    'var ASACS_URL           = ' + JSON.stringify(store.ASACS_URL) + ';\n' +
+    'var CRCSYNC_URL           = ' + JSON.stringify(store.CRCSYNC_URL) + ';\n' +
     'var GITHUB_URL          = ' + JSON.stringify(store.GITHUB_URL) + ';\n' +
     'var SKILL_ADMIN_ROLES   = ' + JSON.stringify(auth.SKILL_ADMIN_ROLES) + ';\n'
   );

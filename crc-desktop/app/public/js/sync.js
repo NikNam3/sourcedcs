@@ -33,7 +33,7 @@ function clearSyncToken() {
 
 // ── Connection settings (URL / Casdoor endpoint / client ID) ──────────────
 // config.json (read at Electron startup, exposed via /js/config.js as
-// CRC_SYNC_URL/CASDOOR_ENDPOINT/CASDOOR_CLIENT_ID) provides the defaults.
+// CRCSYNC_URL/CASDOOR_ENDPOINT/CASDOOR_CLIENT_ID) provides the defaults.
 // A squadron member can override any of them from the widget below without
 // touching config.json — stored in localStorage, reapplied on every launch.
 
@@ -57,19 +57,19 @@ function getConnOverrides() {
 function getEffectiveConn() {
   const overrides = getConnOverrides();
   return {
-    crcSyncUrl:      overrides.crcSyncUrl      || (typeof CRC_SYNC_URL      !== 'undefined' ? CRC_SYNC_URL      : 'wss://asacs.sourcedcs.page'),
+    crcSyncUrl:      overrides.crcSyncUrl      || (typeof CRCSYNC_URL      !== 'undefined' ? CRCSYNC_URL      : 'wss://asacs.sourcedcs.page'),
     casdoorEndpoint: overrides.casdoorEndpoint || (typeof CASDOOR_ENDPOINT  !== 'undefined' ? CASDOOR_ENDPOINT  : ''),
     casdoorClientId: overrides.casdoorClientId || (typeof CASDOOR_CLIENT_ID !== 'undefined' ? CASDOOR_CLIENT_ID : ''),
   };
 }
 
 // Applies any stored overrides to the in-page globals (so the rest of this
-// file just reads CRC_SYNC_URL/CASDOOR_* as usual) and pushes them to the
+// file just reads CRCSYNC_URL/CASDOOR_* as usual) and pushes them to the
 // local server so its crc-sync proxies (ws-ticket, atis-transmit, ...) stay
 // consistent with what the renderer is actually using. Runs once at load.
 async function applyConnOverrides() {
   const eff = getEffectiveConn();
-  CRC_SYNC_URL      = eff.crcSyncUrl;
+  CRCSYNC_URL      = eff.crcSyncUrl;
   CASDOOR_ENDPOINT   = eff.casdoorEndpoint;
   CASDOOR_CLIENT_ID  = eff.casdoorClientId;
   try {
@@ -241,7 +241,7 @@ export async function getSyncFeedUrl() {
     return null;
   }
   hideLoginGate();
-  const wsBase = CRC_SYNC_URL.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:');
+  const wsBase = CRCSYNC_URL.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:');
   return `${wsBase}/feed?ticket=${encodeURIComponent(ticket)}`;
 }
 

@@ -28,9 +28,8 @@ services:
       - AUTH_DOMAIN=${AUTH_DOMAIN}
       - DOMAIN=${DOMAIN}
       - ATOBRIEF_DOMAIN=${ATOBRIEF_DOMAIN}
-      # Neutral name for the crc-sync vhost. ASACS_DOMAIN is the retired asacs_link
-      # name; it is still honoured as a fallback so an existing infra/.env keeps working.
-      - CRCSYNC_DOMAIN=${CRCSYNC_DOMAIN:-${ASACS_DOMAIN}}
+      # The crc-sync vhost. One spelling only; the retired asacs_link name is no longer read (R3-35).
+      - CRCSYNC_DOMAIN=${CRCSYNC_DOMAIN}
     # No `command:`: the nginx image's entrypoint renders templates/*.template with
     # envsubst into conf.d/ (only the variables set in `environment` above).
     depends_on:
@@ -140,7 +139,7 @@ services:
       - WIKI_URL=${WIKI_URL}
       - ATO_URL=${ATO_URL}
       - OLYMPUS_URL=${OLYMPUS_URL}
-      - CRCSYNC_URL=${CRCSYNC_URL:-${ASACS_URL}}
+      - CRCSYNC_URL=${CRCSYNC_URL}
       - GITHUB_URL=${GITHUB_URL}
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
       - DISCORD_GUILD_ID=${DISCORD_GUILD_ID}

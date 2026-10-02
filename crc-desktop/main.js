@@ -85,7 +85,7 @@ app.on('ready', async () => {
     // DCS_GRPC_*/SRS_HOST/SRS_PORT are gone — crc-sync is now the sole
     // gRPC/SRS-transponder client (see crc-sync/server.js); this local
     // server only proxies a handful of on-demand RPCs to it.
-    process.env.CRC_SYNC_URL       = config.crcSyncUrl || 'wss://asacs.sourcedcs.page';
+    process.env.CRCSYNC_URL       = config.crcSyncUrl || 'wss://asacs.sourcedcs.page';
     process.env.CASDOOR_CLIENT_ID  = config.casdoorClientId || '';
     process.env.CASDOOR_ENDPOINT   = config.casdoorEndpoint || '';
     process.env.SRS_RADIO_API_PORT = String(config.srsApiPort);
