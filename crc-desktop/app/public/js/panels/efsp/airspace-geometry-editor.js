@@ -23,6 +23,13 @@ import { altitudeText, parseAltitudeText } from './airspace-editor.js';
 
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+/** The airspace's name as typed in the form around this section (for the map toolbar's title). */
+function _nameOf(container) {
+  const editor = container.closest('.airspace-editor');
+  const row = editor && [...editor.querySelectorAll('.airspace-field')].find(r => /^\W*NAME/.test((r.querySelector('.airspace-field-label') || {}).textContent || ''));
+  const input = row && row.querySelector('input');
+  return input ? input.value.trim() : '';
+}
 const drawings = () => (missionData && missionData.drawings) || [];
 
 export function mountGeometryEditor(container, definition, onChange) {
@@ -48,7 +55,7 @@ function mountArea(ctx, definition) {
     const pts = st.geometry && st.geometry.points ? st.geometry.points : [];
     st.drawingNow = true;
     const ok = startDraw({
-      mode: 'polygon', title: (ctx.container.closest('.airspace-editor')?.querySelector('input.airspace-input')?.value) || '', points: pts,
+      mode: 'polygon', title: _nameOf(ctx.container), points: pts,
       onDone: (points) => { st.drawingNow = false; if (!same(points, pts)) set(polygonGeometry(points)); else render(); },
       onCancel: () => { st.drawingNow = false; render(); },
     });
