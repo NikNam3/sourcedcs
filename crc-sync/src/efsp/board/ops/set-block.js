@@ -16,7 +16,7 @@ function _applySetBlock(ctx, strip, op, by, actingPositionId, clientMutationId) 
   // a second controller takes TAC_C2 ten minutes later, the state must
   // already be correct, or they inherit a lie." marsa-store.js writes the
   // regime on declare and writes it back on end/void; letting SREG be edited
-  // underneath that would let the FDR and the relation disagree with nothing
+  // underneath that would let the flight data and the relation disagree with nothing
   // saying which was right.
   //
   // Refused rather than silently overridden, and the reason names the way
@@ -34,7 +34,7 @@ function _applySetBlock(ctx, strip, op, by, actingPositionId, clientMutationId) 
   }
   // §8.1 — a Facility that hides a Block hides it for writes too, not just
   // for rendering. Enforced here because this is the only path a Block
-  // value reaches an FDR or an annotation by.
+  // value reaches the flight data or an annotation by.
   if (!ctx.rules.isBlockVisible(strip.stripType, op.blockId)) {
     return { ok: false, reason: 'VALIDATION_ERROR', detail: `Block ${op.blockId} is not visible for ${strip.stripType} at this Facility`, strip };
   }
@@ -55,10 +55,10 @@ function _applySetBlock(ctx, strip, op, by, actingPositionId, clientMutationId) 
               : ctx.flightDataStore.setField(strip.flightDataId, target.path, op.value, { by });
     if (!flightDataResult.ok) return { ok: false, reason: flightDataResult.reason, detail: flightDataResult.detail, strip };
 
-    // FDR keeps its own independent rev (guide §3.1); the Strip's rev is
+    // flight data keeps its own independent rev (guide §3.1); the Strip's rev is
     // also bumped here as a deliberate Phase-1 simplification so the
     // ack/broadcast cycle has one consistent rev to key off per Strip,
-    // rather than building a fully separate FDR-level optimistic-
+    // rather than building a fully separate flight data-level optimistic-
     // concurrency protocol on the wire. See the implementation plan.
     ctx.state.bump(strip, by);
     const marsaVoided = ctx.marsaVoidFor(strip, op, by, actingPositionId, clientMutationId);
@@ -68,7 +68,7 @@ function _applySetBlock(ctx, strip, op, by, actingPositionId, clientMutationId) 
     };
   }
 
-  // docs/adr/0074 — a flight's own carrier fields, written to the FDR
+  // docs/adr/0074 — a flight's own carrier fields, written to the flight data
   // (`flightData.military.carrier`) so they survive from the launch Strip to the
   // recovery Strip. A `carrier-derived` Block never reaches here: its target
   // resolves to null above, so SetBlock on CASE, DME, ANGELS, EAT/PUSH or the
@@ -80,7 +80,7 @@ function _applySetBlock(ctx, strip, op, by, actingPositionId, clientMutationId) 
     return { ok: true, strip, flightData: flightDataResult.flightData };
   }
 
-  // docs/adr/0058 — the flight's assigned altitude or heading. On the FDR,
+  // docs/adr/0058 — the flight's assigned altitude or heading. On the flight data,
   // not the Strip, so every Facility's copy reads the same value; history
   // and confirmVacated work exactly as they do for a Strip annotation.
   if (target.kind === 'clearance') {
@@ -118,7 +118,7 @@ function _applySetBlock(ctx, strip, op, by, actingPositionId, clientMutationId) 
  * aircraft has actually left, not amending to something new).
  */
 function _applyAnnotationSet(ctx, strip, blockId, value, confirmVacated, by) {
-  // Same ceiling the FDR's free-text fields get, for the same reason: an
+  // Same ceiling the flight data's free-text fields get, for the same reason: an
   // annotation rides in every broadcast of this Strip and is append-only,
   // so an oversized one is permanent as well as repeated.
   if (typeof value === 'string' && value.length > MAX_FREE_TEXT) {

@@ -1,0 +1,123 @@
+crc-sync/src/efsp/board-store.js:8	vocab:FDR		// FDRs and Position staffing are NOT part of this ring buffer: Phase 1 has
+crc-sync/src/efsp/board-store.js:9	vocab:FDR		// at most a few dozen Strips/FDRs and four Positions, so efsp-ws.js just
+crc-sync/src/efsp/board-store.js:50	vocab:Role		* @param {(bayId:string) => string|null} rules.bayHoldsStripType the Role a Bay is reserved for (docs/adr/0087), or null
+crc-sync/src/efsp/board-store.js:60	bs		* @param {(facilityId:string) => BoardStore|null} rules.peerBoard — WP4A: the OTHER Facility's BoardStore instance, for cross-Facility coordination (docs/adr/00
+crc-sync/src/efsp/board-store.js:94	vocab:Role		// and the per-Role tables are the authority registry's accessors (authority/index.js), passed in.
+crc-sync/src/efsp/board-store.js:221	vocab:FDR		* as they are NOW. The cache holds ids, never a Strip or an FDR, so a replay
+crc-sync/src/efsp/board-store.js:278	vocab:covering		* fully unstaffed and its Strips must route down the covering chain
+crc-sync/src/efsp/board-store.js:295	vocab:covering		// B3: the Strip moves into the covering Position's own Bay, or (no Bay
+crc-sync/src/efsp/board-store.js:321	vocab:covering		* routed away from it to a covering Position — which may not advance them
+crc-sync/src/efsp/board-store.js:322	vocab:TWR/GND/APP		* (PENDING_CLEARANCE is not GND's to advance) and which nothing ever returned
+crc-sync/src/efsp/board/audit.js:4	bs		// PEER write leaves on this Board. Wording and fields unchanged from board-store.js.
+crc-sync/src/efsp/board/board-state.js:4	bs		// the cid counter. The facade (board-store.js) and its collaborators read and write Strips through it.
+crc-sync/src/efsp/board/coordination.js:5	bs		// makes on this one. Moved verbatim from board-store.js; the facade's `receiveCoordination*` delegate here.
+crc-sync/src/efsp/board/coordination.js:47	vocab:FDR		// "The Strip does not cross the Facility boundary... one logical FDR, N
+crc-sync/src/efsp/board/coordination.js:49	bs		// move). Concretely: this BoardStore instance is one Facility's Board
+crc-sync/src/efsp/board/coordination.js:50	bs		// (index.js's composition root now constructs one {BoardStore,
+crc-sync/src/efsp/board/coordination.js:55	bs		// method on the RECEIVING Facility's own BoardStore instance
+crc-sync/src/efsp/board/coordination.js:92	vocab:TWR/GND/APP		// — every other primitive is always available to APP/CTR; AIT alone
+crc-sync/src/efsp/board/coordination.js:179	bs		// Strip in the PEER Facility's own BoardStore (a live-in-memory side
+crc-sync/src/efsp/board/coordination.js:314	vocab:covering		* system change, like a covering reassignment.
+crc-sync/src/efsp/board/coordination.js:363	bs		* Called by the SENDING Facility's BoardStore (via rules.peerBoard) when
+crc-sync/src/efsp/board/coordination.js:376	vocab:Role		* SENDER's own Strip Role/EfspState, not a hardcoded ARRIVAL/INBOUND
+crc-sync/src/efsp/board/coordination.js:402	vocab:Role		// The replica carries the SENDER's own Role/EfspState (docs/adr/0022)
+crc-sync/src/efsp/board/coordination.js:418	vocab:FDR		// originator's FDR (docs/adr/0013), so it shares the correlation too.
+crc-sync/src/efsp/board/coordination.js:426	priv	_isRejectedReplica	// Read by _isRejectedReplica to keep a declined replica inert
+crc-sync/src/efsp/board/coordination.js:451	bs		* Called by the RECEIVING Facility's BoardStore (via rules.peerBoard)
+crc-sync/src/efsp/board/ops/convert-to-arrival.js:10	vocab:FDR		* airframe are separate Strips referencing separate FDRs") — chosen
+crc-sync/src/efsp/board/ops/convert-to-arrival.js:11	vocab:FDR		* explicitly over spawning a second Strip/FDR pair (the first version of
+crc-sync/src/efsp/board/ops/convert-to-arrival.js:16	vocab:FDR		* auto-allocates a fresh code). Reusing the same FDR makes every one of
+crc-sync/src/efsp/board/ops/convert-to-arrival.js:34	vocab:Role		// Role-scoped, same two-tier permission shape _applyCreateStrip uses —
+crc-sync/src/efsp/board/ops/convert-to-arrival.js:36	vocab:TWR/GND/APP		// _dispatch restricts this to APP/CTR; this is the fine-grained half,
+crc-sync/src/efsp/board/ops/convert-to-arrival.js:73	vocab:FDR		// Bug found in live testing: DEPARTURE and ARRIVAL read DIFFERENT FDR
+crc-sync/src/efsp/board/ops/convert-to-arrival.js:76	vocab:FDR		// (block-map.js). Converting in place never touches the FDR otherwise
+crc-sync/src/efsp/board/ops/convert-to-arrival.js:77	vocab:FDR		// (that's the whole point — same FDR throughout), so originAirport
+crc-sync/src/efsp/board/ops/convert-to-arrival.js:147	vocab:FDR		// FDR throughout, for a returning flight at the same Facility.
+crc-sync/src/efsp/board/ops/create-strip.js:16	vocab:Role		// Role-scoped CreateStrip (OPS/DEPARTURE: guide §4.1 rule 3; APP/ARRIVAL: docs/adr/0008) — a
+crc-sync/src/efsp/board/ops/create-strip.js:16	vocab:TWR/GND/APP		// Role-scoped CreateStrip (OPS/DEPARTURE: guide §4.1 rule 3; APP/ARRIVAL: docs/adr/0008) — a
+crc-sync/src/efsp/board/ops/create-strip.js:19	vocab:TWR/GND/APP		// APP may only originate ARRIVAL. Checked before touching flightDataStore so
+crc-sync/src/efsp/board/ops/create-strip.js:27	vocab:FDR		// FDR — which is how a mission line comes to be the SAME flight as the
+crc-sync/src/efsp/board/ops/create-strip.js:31	vocab:Role		// (known Bay, valid Role, canCreateStripType) and everything below
+crc-sync/src/efsp/board/ops/create-strip.js:35	vocab:Role		// case is this same op with a different Role and acting Position.
+crc-sync/src/efsp/board/ops/create-strip.js:48	vocab:FDR		// same-role Strips for one FDR on two Boards (docs/adr/0013). Within ONE
+crc-sync/src/efsp/board/ops/create-strip.js:49	vocab:FDR		// Board, two same-role Strips on one FDR is §3.6's duplicate
+crc-sync/src/efsp/board/ops/create-strip.js:50	vocab:Role		// origination. Role-agnostic rather than MISSION-specific, so the
+crc-sync/src/efsp/board/ops/create-strip.js:66	vocab:claim		// referenced it. Re-claim it, or the next CreateStrip is handed a code a
+crc-sync/src/efsp/board/ops/create-strip.js:94	bs		// rules-injection — board-store.js only ever needs each role's own
+crc-sync/src/efsp/board/ops/create-strip.js:104	vocab:FDR		// used to sit here was keyed wrongly: one FDR legitimately has several
+crc-sync/src/efsp/board/ops/index.js:4	bs		// board-store.js passes this list to StripOps; an op reaches another only through `ctx.run(kind, ...)`.
+crc-sync/src/efsp/board/ops/invoke-nla.js:38	vocab:TWR/GND/APP		// Transfer-shaped NLA transition (Phase 2's real TWR->APP "Hand
+crc-sync/src/efsp/board/ops/invoke-nla.js:40	vocab:TWR/GND/APP		// case — and ARRIVAL's INBOUND->TWR/LANDED->GND steps). Routed
+crc-sync/src/efsp/board/ops/invoke-nla.js:52	vocab:Role		// Every Role's terminal NLA is a Drop (DEPARTURE at HANDED_OFF,
+crc-sync/src/efsp/board/ops/set-block.js:19	vocab:FDR		// underneath that would let the FDR and the relation disagree with nothing
+crc-sync/src/efsp/board/ops/set-block.js:37	vocab:FDR		// value reaches an FDR or an annotation by.
+crc-sync/src/efsp/board/ops/set-block.js:58	vocab:FDR		// FDR keeps its own independent rev (guide §3.1); the Strip's rev is
+crc-sync/src/efsp/board/ops/set-block.js:61	vocab:FDR		// rather than building a fully separate FDR-level optimistic-
+crc-sync/src/efsp/board/ops/set-block.js:71	vocab:FDR		// docs/adr/0074 — a flight's own carrier fields, written to the FDR
+crc-sync/src/efsp/board/ops/set-block.js:83	vocab:FDR		// docs/adr/0058 — the flight's assigned altitude or heading. On the FDR,
+crc-sync/src/efsp/board/ops/set-block.js:103	vocab:covering		// change, and an interlock that silently stops covering a Block when its
+crc-sync/src/efsp/board/ops/set-block.js:121	vocab:FDR		// Same ceiling the FDR's free-text fields get, for the same reason: an
+crc-sync/src/efsp/board/ops/set-state.js:12	vocab:Role		* Bay-implied drag already apply — for every Role. Checked before the runway
+crc-sync/src/efsp/board/ops/set-state.js:14	priv	_applySetState	* SetState: the Undo / NLA paths that reach _applySetState carry their own.
+crc-sync/src/efsp/board/ops/set-state.js:31	vocab:claim		* (`setAirborneObserver`: the client's flag is a claim, never evidence), and
+crc-sync/src/efsp/board/ops/sfa-rotation.js:5	vocab:TWR/GND/APP		* at INBOUND with APP or SFA becomes a FINAL Strip at ON_FINAL with PAR. The
+crc-sync/src/efsp/board/ops/sfa-rotation.js:7	vocab:FDR		* writes the FDR (D17). The Role changes IN PLACE (same Strip, same FDR, as
+crc-sync/src/efsp/board/ops/sfa-rotation.js:7	vocab:Role		* writes the FDR (D17). The Role changes IN PLACE (same Strip, same FDR, as
+crc-sync/src/efsp/board/ops/sfa-rotation.js:12	vocab:covering		* PAR must be staffed: there is no covering fallback, because a FINAL Strip at
+crc-sync/src/efsp/board/ops/sfa-rotation.js:13	vocab:TWR/GND/APP		* APP would sit in a Bay APP does not have. Refused, with the aircraft staying
+crc-sync/src/efsp/board/ops/transfer-strip.js:66	vocab:covering		// B3: routed to the covering Position, so the line lands in ITS Bay, not
+crc-sync/src/efsp/board/ops/transfer-strip.js:67	vocab:covering		// the absent Position's (which no panel of the covering one builds).
+crc-sync/src/efsp/board/ops/transfer-strip.js:87	bs		// driven transfer-shaped transition (board-store.js's own _applyInvokeNla).
+crc-sync/src/efsp/board/ops/transfer-strip.js:97	bs		// successful TransferStrip, where board-store.js computes it.
+crc-sync/src/efsp/board/ops/undo.js:12	vocab:claim		// indicator and re-claim the beacon code. The code can only have been
+crc-sync/src/efsp/board/persistence.js:5	bs		// verbatim from board-store.js; the facade delegates to it.
+crc-sync/src/efsp/board/persistence.js:31	bs		// (docs/adr/0082, H36). Wall time on purpose, like the NLA latch (board-store.js): a
+crc-sync/src/efsp/board/placement.js:4	vocab:Role		// Bays (Role Bays, Bay-implied state, capacity, the Bay a new owner gets, the rack a system move picks). Moved verbatim
+crc-sync/src/efsp/board/placement.js:5	bs		// from board-store.js; the facade calls these methods.
+crc-sync/src/efsp/board/placement.js:104	vocab:TWR/GND/APP		/** {isStaffed, consolidatedAt, facilityId} bound from this._rules — computeNla()'s staffing context (guide §4.5, e.g. DEPARTED's real Hand-Off-to-APP inhibit).
+crc-sync/src/efsp/board/placement.js:129	vocab:FDR		* `bay` (decisions.md Q26, S-R2-1): in a runway-queue Bay, the end its FDR
+crc-sync/src/efsp/board/placement.js:136	vocab:covering		// back by a system move (a Position retaken, a covering hand-back) returns to
+crc-sync/src/efsp/board/placement.js:147	vocab:Role		* The owner's Bay that holds this Strip's Role whatever its state (Bay
+crc-sync/src/efsp/board/placement.js:148	vocab:Role		* `holdsStripType`, docs/adr/0087), or null. A Role with such a Bay keeps its state
+crc-sync/src/efsp/board/placement.js:176	vocab:Role		// A Role Bay (`holdsStripType`, docs/adr/0087) takes only its own Role's Strips.
+crc-sync/src/efsp/board/placement.js:183	vocab:Role		// Another Role's state-implying Bay is not somewhere this Role goes.
+crc-sync/src/efsp/board/placement.js:200	priv	_apply	// before any _apply* method runs.
+crc-sync/src/efsp/board/placement.js:274	vocab:Role		// Never another Role's Bay (`holdsStripType`, docs/adr/0087): a Role Bay implies no state, so the
+crc-sync/src/efsp/board/placement.js:288	vocab:TWR/GND/APP		* `cd-cleared` stayed empty, and the same at GND (`gc-taxi-out`) and TWR
+crc-sync/src/efsp/board/placement.js:296	vocab:TWR/GND/APP		* live example, and TWR's Strip correctly stays in `lc-runway-queue`.
+crc-sync/src/efsp/board/strip-ops.js:6	bs		// rejected-replica rules gate every op. Moved from board-store.js.
+crc-sync/src/efsp/board/strip-ops.js:119	priv	_rejectedReplicaOpRefusal	// just the NLA and the Bay-implied drag. See _rejectedReplicaOpRefusal.
+crc-sync/src/efsp/board/strip-ops.js:154	vocab:FDR		* @returns {object|null} the FDR it changed, for the ack's broadcast.
+crc-sync/src/efsp/board/strip-ops.js:173	vocab:FDR		* §4.2: one Rack per frequency): the FDR's working frequency, the same field the
+crc-sync/src/efsp/board/strip-ops.js:177	vocab:FDR		* reaches this (D17). Returns the FDR result, or null when the Rack is no SFA
+crc-sync/src/efsp/board/strip-ops.js:190	vocab:FDR		* The FDRs a MARSA side effect just rewrote the separation regime on (ending
+crc-sync/src/efsp/board/strip-ops.js:193	vocab:FDR		* those FDR writes reach nobody unless they are collected here and put in the
+crc-sync/src/efsp/board/strip-ops.js:286	vocab:TWR/GND/APP		// Strip through CD's, GND's and TWR's entire job just because nobody
+crc-sync/src/efsp/board/strip-ops.js:320	vocab:TWR/GND/APP		* beyond stopping a re-propose. So APP could reject a Point Out from CTR and
+crc-sync/src/efsp/board/strip-ops.js:322	vocab:TWR/GND/APP		* INCIRLIK Tower holding an arrival for a flight CENTER still owns and APP
+crc-sync/src/efsp/board/strip-ops.js:324	priv	_isRejectedReplica	* _isRejectedReplica for how the two are told apart.
+crc-sync/src/efsp/board/strip-ops.js:329	bs		* a bug found in live testing (see efsp-board-store-coordination's own
+crc-sync/src/efsp/board/strip-ops.js:348	vocab:FDR		* airspace entry, convert it to an arrival, or write Blocks into the FDR it
+crc-sync/src/efsp/board/strip-ops.js:389	vocab:Role		// No NLA at all for this State (every Role's terminal DROPPED) — null, not
+crc-sync/src/efsp/board/strip-ops.js:414	vocab:Role		// Role it changes the Strip to, so the panel labels it from the model's own
+crc-sync/src/efsp/board/strip-ops.js:424	vocab:Role		* DROPPED — every Role has one, labelled "Drop" in the UI).
+crc-sync/src/efsp/board/strip-ops.js:428	priv	_applySetState	* ordinary Drop *button* routes through InvokeNla -> _applySetState, a
+crc-sync/src/efsp/board/strip-ops.js:481	vocab:FDR		* Releases the FDR's beacon code only once NO other live Strip still
+crc-sync/src/efsp/board/strip-ops.js:482	vocab:FDR		* references that FDR, anywhere (this Facility or any other).
+crc-sync/src/efsp/board/strip-ops.js:484	vocab:FDR		* One FDR meant one live Strip until TOFI, which deliberately binds a
+crc-sync/src/efsp/board/strip-ops.js:500	vocab:FDR		// ground, keep its separation regime at MARSA on an FDR nobody is working,
+crc-sync/src/efsp/board/tofi.js:5	bs		// Moved verbatim from board-store.js; the facade's `receiveTofi*` delegate here.
+crc-sync/src/efsp/board/tofi.js:59	vocab:FDR		//     the same FDR as any tower Strip for that flight," realized now
+crc-sync/src/efsp/board/tofi.js:92	priv	_nlaPrecheck	// The same open-link guard _nlaPrecheck and _applyConvertToArrival apply.
+crc-sync/src/efsp/board/tofi.js:94	vocab:TWR/GND/APP		// not yet accepted — on a flight APP still worked.
+crc-sync/src/efsp/board/tofi.js:114	vocab:Role		// (the Role TOFI itself creates). See coordination.js.
+crc-sync/src/efsp/board/tofi.js:213	vocab:FDR		// The FDR this accept writes, carried out on the result so the ack and the
+crc-sync/src/efsp/board/tofi.js:234	vocab:FDR		// control could run with the FDR saying nothing at all about who was
+crc-sync/src/efsp/board/tofi.js:340	vocab:FDR		// FDR, and the ATC-side Strip is still live by construction here.
+crc-sync/src/efsp/board/tofi.js:400	bs		* Called by the ATC-side Facility's BoardStore (via rules.peerBoard) on a
+crc-sync/src/efsp/board/tofi.js:404	vocab:FDR		* binding, realized now) rather than minting a fresh FDR — the one
+crc-sync/src/efsp/board/tofi.js:407	vocab:Role		* shares the sender's flightDataId too), but always with the SAME Strip Role on
+crc-sync/src/efsp/board/tofi.js:409	vocab:FDR		* (the ATC-side stripType, and MISSION) to one shared FDR.
+crc-sync/src/efsp/board/tofi.js:485	vocab:FDR		// originator's FDR (docs/adr/0013), so it shares the correlation too.
+crc-sync/src/efsp/board/tofi.js:508	bs		* Called by the ATC-side Facility's BoardStore on a TOFI EXIT PROPOSE —
+crc-sync/src/efsp/board/tofi.js:536	bs		* Called by the MISSION-side Facility's BoardStore once its controller

@@ -1,7 +1,7 @@
 'use strict';
 
 // The Board's audit (docs/adr/0095, docs/adr/0083): the Mutation-log entry a client Mutation leaves, and the entry a
-// PEER write leaves on this Board. Wording and fields unchanged from board-store.js.
+// PEER write leaves on this Board. StripOps (client Mutations) and Coordination and Tofi (peer writes) call it.
 
 const { deepClone } = require('./strip-util');
 

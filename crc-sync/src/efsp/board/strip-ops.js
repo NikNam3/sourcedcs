@@ -3,7 +3,7 @@
 // The Strip operations (docs/adr/0095): the dispatch of a Mutation to its op in the table (board/ops/), the NLA
 // (precheck, rejected-replica rules, nlaStatusFor) and retirement (Drop, retire). NLA and the ops are one
 // collaborator because they call each other: InvokeNla runs TransferStrip, SetState and DropStrip, and the
-// rejected-replica rules gate every op. Moved from board-store.js.
+// rejected-replica rules gate every op.
 
 const { MAX_FREE_TEXT } = require('../flight-data-store');
 const { deepClone } = require('./strip-util');
@@ -23,10 +23,10 @@ class StripOps {
    * @param {object} deps.coordination Coordination (the HANDOFF... ops call it)
    * @param {object} deps.tofi Tofi (the TOFI op calls it)
    * @param {object[]} deps.ops the op table, `{kind, authorize?, apply(ctx, strip, op, meta)}` each (board/ops/index.js)
-   * @param {(stripId:string) => void} deps.touch late-bound to the facade's _touch
+   * @param {(stripId:string) => void} deps.touch the kernel's `recordTouch` (board/board-state.js)
    * @param {() => string|null} deps.activeCmid the clientMutationId being applied, read late
-   * @param {() => Map} deps.nlaHistory the facade's Map, read late
-   * @param {() => Map} deps.droppedWallAt the facade's Map, read late
+   * @param {() => Map} deps.nlaHistory the NLA latch Map the facade owns, read late
+   * @param {() => Map} deps.droppedWallAt BoardPersistence's Map, read late (restore() replaces it)
    * @param {(stripType:string) => string|undefined} deps.initialStateFor the authority registry's accessor
    */
   constructor(deps) {
@@ -48,11 +48,11 @@ class StripOps {
   }
 
   get _activeCmid() { return this._activeCmidOf(); }
-  /** stripId -> the last NLA's latch record; the facade owns the Map (it is persisted state's neighbour). */
+  /** stripId -> the last NLA's latch record; the facade owns the Map. */
   get nlaHistory() { return this._nlaHistoryOf(); }
-  /** stripId -> wall ms of its drop (docs/adr/0082); the facade owns the Map. */
+  /** stripId -> wall ms of its drop (docs/adr/0082); BoardPersistence owns the Map (board/persistence.js). */
   get droppedWallAt() { return this._droppedWallAtOf(); }
-  /** Late-bound to the facade's _touch (tools/soak/host-core.js patches it). */
+  /** The kernel's `recordTouch` (board/board-state.js); `observeTouches` sees every call. */
   touch(stripId) { this._touchOf(stripId); }
 
   /**
@@ -116,7 +116,7 @@ class StripOps {
     }
 
     // F-303, the rest of it: a rejected replica is inert for every op, not
-    // just the NLA and the Bay-implied drag. See _rejectedReplicaOpRefusal.
+    // just the NLA and the Bay-implied drag. See `StripOps#rejectedReplicaOpRefusal`.
     const inert = this.rejectedReplicaOpRefusal(strip, op);
     if (inert) return { ok: false, reason: inert.reason, detail: inert.detail, strip: deepClone(strip) };
 
@@ -151,7 +151,7 @@ class StripOps {
    * DEPARTURE first reaches an airborne state, with the mission clock; cleared
    * when it is taken back out of one (an Undo, a SetState back), because the
    * takeoff then did not happen. A DROP keeps it. The first stamp wins.
-   * @returns {object|null} the FDR it changed, for the ack's broadcast.
+   * @returns {object|null} the flight data it changed, for the ack's broadcast.
    */
   _stampTakeoffOnStateChange(strip, prevState) {
     if (strip.stripType !== 'DEPARTURE' || !this.flightDataStore || !this.flightDataStore.setTakeoffStamp) return null;
@@ -170,11 +170,11 @@ class StripOps {
 
   /**
    * Placing a Strip on an SFA frequency Rack assigns it that frequency (guide
-   * §4.2: one Rack per frequency): the FDR's working frequency, the same field the
+   * §4.2: one Rack per frequency): the flight data's working frequency, the same field the
    * airspace approval writes, so a frequency is one number on one flight. This is
    * the controller choosing a frequency, which is not what SFA forbids; it forbids
    * a CONTROLLER CHANGE being a frequency change, and no transfer or rotation
-   * reaches this (D17). Returns the FDR result, or null when the Rack is no SFA
+   * reaches this (D17). Returns the flight data result, or null when the Rack is no SFA
    * frequency or the flight already has that frequency.
    */
   assignSfaFrequency(strip, by) {
@@ -187,10 +187,10 @@ class StripOps {
   }
 
   /**
-   * The FDRs a MARSA side effect just rewrote the separation regime on (ending
+   * The flight data a MARSA side effect just rewrote the separation regime on (ending
    * or voiding a relation writes ATC back on every participant). A relation is
    * not a Strip and its participants' Strips may sit in another Facility, so
-   * those FDR writes reach nobody unless they are collected here and put in the
+   * those flight data writes reach nobody unless they are collected here and put in the
    * board-delta's own `flightDataList.updated` — the same gap F-111 found on the declare
    * side, arriving from the Strip-op direction. See marsa-store.js's
    * drainRegimeWrites().
@@ -256,9 +256,9 @@ class StripOps {
    *
    * `mintedForCoordination` is stamped by receiveCoordinationProposal and is
    * the authoritative answer, for exactly the reason TOFI's own
-   * `mintedForTofi` exists (see _applyTofiAccept): the alternative — deriving
+   * `mintedForTofi` exists (see board/tofi.js's _applyTofiAccept): the alternative — deriving
    * it from the Strip still sitting in its owner's Coordination Bay, as
-   * _applyCoordinationPropose does — gives the same answer right up until
+   * board/coordination.js's _applyCoordinationPropose does — gives the same answer right up until
    * somebody drags the replica somewhere else, and then silently stops
    * applying. The Bay derivation is kept as the fallback so a replica minted
    * before this field existed, and restored from a persisted Board
@@ -273,17 +273,17 @@ class StripOps {
 
   /**
    * Everything that refuses an NLA BEFORE the state table is consulted —
-   * shared by _applyInvokeNla (which decides) and nlaStatusFor (which only
+   * shared by board/ops/invoke-nla.js's _applyInvokeNla (which decides) and nlaStatusFor (which only
    * reports), so there is exactly one wording per reason.
    * @returns {{reason:string, detail:string}|null}
    */
   nlaPrecheck(strip) {
     // Per-State authority (guide §3.4's "normally owned by" column,
     // permission.js's canActOnState) — the acting Position (==
-    // strip.ownerPositionId; _dispatch() already verified that above)
+    // strip.ownerPositionId; `StripOps#dispatch` already verified that above)
     // must be authorized for the Strip's CURRENT state, not just own the
     // Strip. This is what stops e.g. OPS from single-handedly walking a
-    // Strip through CD's, GND's and TWR's entire job just because nobody
+    // Strip through CD's, GC's and LC's entire job just because nobody
     // ever transferred it away — raw ownership alone used to be sufficient
     // to invoke ANY NLA on a Strip you held, regardless of whose job that
     // state's action actually is.
@@ -300,7 +300,7 @@ class StripOps {
     // so the receiving Facility's replica was silently orphaned, waiting
     // forever for a response that would never come. Mirrors the existing
     // "a Strip cannot have two open coordination links at once" guard in
-    // _applyCoordinationPropose — same open-link concept, different action.
+    // board/coordination.js's _applyCoordinationPropose — same open-link concept, different action.
     if (strip.coordination && strip.coordination.state === 'INITIATED') {
       return { reason: 'VALIDATION_ERROR', detail: 'cannot advance a Strip with an open coordination proposal — accept, reject, or wait for a response first' };
     }
@@ -315,13 +315,13 @@ class StripOps {
   }
 
   /**
-   * F-303: a declined replica is "left inert" — _applyCoordinationPropose's
+   * F-303: a declined replica is "left inert" — board/coordination.js's _applyCoordinationPropose's
    * own comment has said so since WP4A, and nothing anywhere enforced it
-   * beyond stopping a re-propose. So APP could reject a Point Out from CTR and
+   * beyond stopping a re-propose. So AP could reject a Point Out from CTR and
    * then hand that same flight to its own Tower, and the server took it:
-   * INCIRLIK Tower holding an arrival for a flight CENTER still owns and APP
+   * INCIRLIK Tower holding an arrival for a flight CENTER still owns and AP
    * explicitly declined. The sender's own Strip is untouched — see
-   * _isRejectedReplica for how the two are told apart.
+   * `StripOps#isRejectedReplica` for how the two are told apart.
    *
    * Drop is the deliberate exception, and the only NLA a dead replica should
    * have left: it is how the controller clears it off their Board, and a
@@ -341,20 +341,20 @@ class StripOps {
   }
 
   /**
-   * The op-level half of F-303. _rejectedReplicaRefusal only ever guarded the
+   * The op-level half of F-303. `StripOps#rejectedReplicaRefusal` only ever guarded the
    * NLA and the Bay-implied drag, so a controller who had just rejected a
    * handoff could still open a TOFI on the dead replica (minting a MISSION
    * Strip on TACTICAL for a flight the sender still controls), approve an
-   * airspace entry, convert it to an arrival, or write Blocks into the FDR it
+   * airspace entry, convert it to an arrival, or write Blocks into the flight data it
    * shares with the sender's live Strip.
    *
    * Three op kinds stay allowed, because each already enforces the rule
    * itself and each is how a dead replica gets cleared away: DropStrip,
-   * InvokeNla (which _rejectedReplicaRefusal limits to DROPPED), and
+   * InvokeNla (which `StripOps#rejectedReplicaRefusal` limits to DROPPED), and
    * MoveStrip (which Placement.validateBayImpliedTransition refuses into any Bay that
    * would change the Strip's state — moving it aside is fine).
    *
-   * MARSA and correlation are flight-level and never reach _dispatch; the
+   * MARSA and correlation are flight-level and never reach `StripOps#dispatch`; the
    * client hides their controls on a rejected replica instead.
    *
    * @returns {{reason:string, detail:string}|null}
@@ -368,9 +368,9 @@ class StripOps {
   /**
    * What pressing this Strip's NLA button would do RIGHT NOW, computed for
    * its owner — who is the only Position ever offered it (guide §3.5's one
-   * NLA per State, _dispatch's NOT_OWNER gate).
+   * NLA per State, `StripOps#dispatch`'s NOT_OWNER gate).
    *
-   * Advisory only: _applyInvokeNla still decides, and still refuses. This
+   * Advisory only: board/ops/invoke-nla.js's _applyInvokeNla still decides, and still refuses. This
    * exists because §3.5 rule 2 requires the inhibit REASON to be rendered
    * rather than the control merely greyed out, and until now every reason was
    * computed on the press and never reached the client at all — an NLA the
@@ -386,8 +386,8 @@ class StripOps {
     if (!strip) return null;
     const flightData = this.flightDataStore.getFlightData(strip.flightDataId);
     const result = this.rules.computeNla(strip, flightData, now, this.placement.nlaCtx());
-    // No NLA at all for this State (every Role's terminal DROPPED) — null, not
-    // a reason. _applyInvokeNla runs the precheck FIRST and so answers a press
+    // No NLA at all for this State (every strip type's terminal DROPPED) — null, not
+    // a reason. board/ops/invoke-nla.js's _applyInvokeNla runs the precheck FIRST and so answers a press
     // on a terminal Strip with whichever precheck refusal comes up; that is
     // right for a press, and wrong here, where reporting a reason would have
     // the panel render an explanation for a button that does not exist.
@@ -411,7 +411,7 @@ class StripOps {
     }
     const status = result.transferTo ? { toState: result.toState, transferTo: result.transferTo } : { toState: result.toState };
     // docs/adr/0074: which carrier handoff this NLA button records, and the
-    // Role it changes the Strip to, so the panel labels it from the model's own
+    // strip type it changes the Strip to, so the panel labels it from the model's own
     // table (and renders "See you" beside it in Case II).
     if (result.carrierHandoff) status.carrierHandoff = result.carrierHandoff;
     if (result.stripTypeChange) status.stripTypeChange = result.stripTypeChange;
@@ -421,11 +421,11 @@ class StripOps {
   /**
    * The ONE path by which a Strip reaches DROPPED, whichever op asked for it
    * (the explicit DropStrip op, or a terminal NLA transition whose toState is
-   * DROPPED — every Role has one, labelled "Drop" in the UI).
+   * DROPPED — every strip type has one, labelled "Drop" in the UI).
    *
    * Found by an end-to-end scenario trace: this used to live entirely inside
-   * _applyDropStrip, which only the `.drop` dot-command ever reaches. The
-   * ordinary Drop *button* routes through InvokeNla -> _applySetState, a
+   * board/ops/drop-strip.js's _applyDropStrip, which only the `.drop` dot-command ever reaches. The
+   * ordinary Drop *button* routes through InvokeNla -> `StripOps#applySetState`, a
    * generic two-line state setter — so the guide §4.6.3 rule 2 rejection
    * below was trivially bypassable from the default UI (dropping a Strip out
    * from under a live TOFI exchange, leaving the peer's own record stuck at
@@ -478,10 +478,10 @@ class StripOps {
   }
 
   /**
-   * Releases the FDR's beacon code only once NO other live Strip still
-   * references that FDR, anywhere (this Facility or any other).
+   * Releases the flight data's beacon code only once NO other live Strip still
+   * references that flight data, anywhere (this Facility or any other).
    *
-   * One FDR meant one live Strip until TOFI, which deliberately binds a
+   * One flight data meant one live Strip until TOFI, which deliberately binds a
    * MISSION Strip and its ATC-side Strip to one shared flightDataId (docs/adr/0025)
    * with independent lifecycles. An unconditional release therefore handed
    * the shared Mode 3/A code back to the allocator when the MRU controller
@@ -497,7 +497,7 @@ class StripOps {
     this.flightDataStore.releaseFlightData(strip.flightDataId);
     // WP6 (docs/adr/0051) — the flight is over, so it leaves any MARSA relation
     // it was in. Left alone the relation would keep naming an aircraft on the
-    // ground, keep its separation regime at MARSA on an FDR nobody is working,
+    // ground, keep its separation regime at MARSA on flight data nobody is working,
     // and keep arming an interlock for a flight that cannot be assigned
     // anything. Same shape correlation-store.js's retireFinished has, arriving
     // from the other direction: correlation is swept by a 1Hz reconciler and
