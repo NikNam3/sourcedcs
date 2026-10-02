@@ -34,8 +34,19 @@ function renderNew() {
   return t;
 }
 
-test('new template renders identically to the old inline config', () => {
-  assert.strictEqual(norm(renderNew()), norm(renderOld()));
+// The one deliberate difference since the inline config: the crc-sync vhost denies the registry API (S-DES1 F6).
+const REGISTRY_DENY = '# The airspace registry API is for sourcedcs-web inside the stack only (http://crc-sync:3000); never public.\n  location /api/airspace-registry { return 404; }\n';
+
+test('new template renders identically to the old inline config (bar the registry deny)', () => {
+  assert.ok(renderNew().includes(REGISTRY_DENY), 'registry deny present');
+  assert.strictEqual(norm(renderNew().replace(REGISTRY_DENY, '')), norm(renderOld()));
+});
+
+test('the registry deny sits in the crc-sync vhost only, ahead of the catch-all', () => {
+  const t = renderNew();
+  assert.strictEqual((t.match(/location \/api\/airspace-registry/g) || []).length, 1);
+  const vhost = t.slice(t.indexOf('server_name ' + ENV.CRCSYNC_DOMAIN + ';', t.indexOf('listen 443', t.indexOf('server_name ' + ENV.CRCSYNC_DOMAIN))));
+  assert.ok(vhost.indexOf('/api/airspace-registry') < vhost.indexOf('location / {'));
 });
 
 test('client_max_body_size stays 350M and bot IPs live in the include', () => {
@@ -59,4 +70,11 @@ test('LOG_LEVEL reaches the three services and CRCSYNC_URL has no ASACS_URL fall
   assert.strictEqual((y.match(/LOG_LEVEL=\$\{LOG_LEVEL:-info\}/g) || []).length, 3);
   assert.match(y, /CRCSYNC_URL=\$\{CRCSYNC_URL\}/);
   assert.doesNotMatch(y, /ASACS_/);
+});
+
+test('AIRSPACE_SERVICE_TOKEN reaches main-website and crc-sync; the web reaches crc-sync inside the stack', () => {
+  const y = fs.readFileSync(path.join(root, 'docker-compose.yml'), 'utf8');
+  assert.strictEqual((y.match(/AIRSPACE_SERVICE_TOKEN=\$\{AIRSPACE_SERVICE_TOKEN\}/g) || []).length, 2);
+  assert.match(y, /SOURCEDCS_CRCSYNC_URL=http:\/\/crc-sync:3000/);
+  assert.match(y, /CRCSYNC_SOURCEDCS_WEB_PUBLIC_URL=\$\{CRCSYNC_SOURCEDCS_WEB_PUBLIC_URL/);
 });

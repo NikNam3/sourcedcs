@@ -148,6 +148,8 @@ services:
       - CASDOOR_CLIENT_SECRET=${CASDOOR_CLIENT_SECRET}
       - RELEASE_UPLOAD_TOKEN=${RELEASE_UPLOAD_TOKEN}
       - FLIGHT_PLAN_SERVICE_TOKEN=${FLIGHT_PLAN_SERVICE_TOKEN}
+      - AIRSPACE_SERVICE_TOKEN=${AIRSPACE_SERVICE_TOKEN}
+      - SOURCEDCS_CRCSYNC_URL=http://crc-sync:3000
     networks:
       - web
     volumes:
@@ -198,6 +200,8 @@ services:
       - CRCSYNC_COALITION=${CRCSYNC_COALITION:-3}
       - CRCSYNC_SOURCEDCS_WEB_URL=${CRCSYNC_SOURCEDCS_WEB_URL:-http://main-website:7000}
       - FLIGHT_PLAN_SERVICE_TOKEN=${FLIGHT_PLAN_SERVICE_TOKEN}
+      - AIRSPACE_SERVICE_TOKEN=${AIRSPACE_SERVICE_TOKEN}
+      - CRCSYNC_SOURCEDCS_WEB_PUBLIC_URL=${CRCSYNC_SOURCEDCS_WEB_PUBLIC_URL:-https://sourcedcs.page}
       # Terrain masking for the radar picture is server-side now (crc-sync's
       # docs/adr/0044), so the DEM tiles it samples are fetched here. Without a
       # key the picture still works and terrain simply masks nothing — every
