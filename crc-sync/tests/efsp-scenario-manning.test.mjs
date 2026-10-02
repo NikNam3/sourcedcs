@@ -43,12 +43,12 @@ test('SCENARIO Ground walks away holding strips, and they route down the coverin
   });
   assert.equal(onGround.ownerPositionId, 'GC');
 
-  // GND vacates. TWR covers it (the chain is CD→GND→TWR→APP), so the Strip
+  // GC vacates. LC covers it (the chain is CD→GC→LC→AP), so the Strip
   // follows rather than being left with nobody.
   const ack = hold(efsp, c.GC.session, 'INCIRLIK', []).ack;
   assert.deepEqual(ack.warnings, [{ positionId: 'GC', count: 1, routedTo: 'LC' }]);
   assert.equal(efsp.boardStoreFor('INCIRLIK').getStrip(onGround.stripId).ownerPositionId, 'LC');
-  // ...into one of TWR's own Bays, the only ones its panel builds (docs/adr/0080, B3).
+  // ...into one of LC's own Bays, the only ones its panel builds (docs/adr/0080, B3).
   const bayId = efsp.boardStoreFor('INCIRLIK').getStrip(onGround.stripId).bayId;
   assert.ok(['lc-runway-queue', 'lc-airborne', 'lc-arrivals', 'lc-final', 'lc-landed', 'lc-coordination'].includes(bayId), `TWR owns it but it sits in ${bayId}`);
 });
@@ -62,7 +62,7 @@ test('SCENARIO the last controller leaves and the strips are visibly stranded, n
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'STRAND1' });
   assert.equal(strip.ownerPositionId, 'AP');
 
-  // APP has no covering Position at all (the chain ends there), so this is
+  // AP has no Position to be consolidated at (the chain ends there), so this is
   // defect D19's boundary: the warning has to be distinct from "routed", and
   // the Strip must not quietly disappear.
   const ack = hold(efsp, c.AP.session, 'INCIRLIK', []).ack;

@@ -88,7 +88,7 @@ test('F-102: every NLA in the departure chain leaves the Strip in the Bay for it
   let strip = createDeparture(efsp, c, 'VPR102');
 
   // The exact table docs/ui-findings/lane1.md F-102 measured, made to come out
-  // right. LUAW is the deliberate blank: TWR has no Bay implying it, so the
+  // right. LUAW is the deliberate blank: LC has no Bay implying it, so the
   // Strip correctly stays where it was.
   const walk = [
     ['OPS', 'cd-pending-clearance', 'PENDING_CLEARANCE'],
@@ -199,7 +199,7 @@ test('F-408: a terminal state has no NLA at all, and says so as null rather than
   assert.equal(dropped.nla, null);
 });
 
-// ── F-111 / F-306 — an FDR written as a side effect reaches the clients ───
+// ── F-111 / F-306 — a flight data record written as a side effect reaches the clients ───
 
 test('F-111: declaring MARSA broadcasts the participants\' FDRs, not just the relation', () => {
   const efsp = createEfsp();
@@ -280,7 +280,7 @@ test('F-206: SREG and RSVC accept being cleared; the four Blocks with no "unset"
   const c = crew(efsp, { OPS: 'INCIRLIK' });
   let strip = createDeparture(efsp, c, 'CLR206');
 
-  // Set then clear, for the two whose FDR field genuinely starts as null.
+  // Set then clear, for the two whose flight data field genuinely starts as null.
   for (const [blockId, value, field] of [['SREG', 'DUE_REGARD', 'separationRegime'], ['RSVC', 'ACTIVE', 'radarService']]) {
     strip = mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'SetBlock', blockId, value });
     assert.equal(efsp.flightDataStore.getFlightData(strip.flightDataId).tofi[field], value);
@@ -305,7 +305,7 @@ test('F-303: the facility that rejected a coordination cannot then work the repl
   const efsp = createEfsp();
   const c = crew(efsp, { OPS: 'INCIRLIK', AP: 'INCIRLIK', LC: 'INCIRLIK', CTR: 'CENTER' });
 
-  // A CENTER-held INBOUND ARRIVAL, point-outed to INCIRLIK's APP.
+  // A CENTER-held INBOUND ARRIVAL, point-outed to INCIRLIK's AP.
   const ctrStrip = mustAct(efsp, c.CTR, 'CTR', null, {
     kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', stripType: 'ARRIVAL',
     flightData: { callsign: 'DED303', aircraftType: 'F16', wakeCategory: 'D', originAirport: 'LTAC', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' },
@@ -386,7 +386,7 @@ test('F-303: Drop is the one NLA a dead replica keeps — it is how it gets clea
   assert.equal(dropped.state, 'DROPPED');
 });
 
-// APP → CTR HANDOFF of a DEPARTURE, answered by CTR. Returns CENTER's replica.
+// AP → CTR HANDOFF of a DEPARTURE, answered by CTR. Returns CENTER's replica.
 function handoffToCenter(efsp, c, callsign, answer) {
   const created = mustAct(efsp, c.OPS, 'OPS', null, {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE',
@@ -410,9 +410,9 @@ test('F-303: a rejected replica refuses every op except the ones that clear it a
   const { replica } = handoffToCenter(efsp, c, 'INR303', 'REJECT');
   assert.equal(replica.coordination.state, 'REJECTED');
 
-  // The user-reported case first: CTR rejected APP's handoff and could then
+  // The user-reported case first: CTR rejected AP's handoff and could then
   // open tactical control on the dead copy, minting a MISSION Strip on
-  // TACTICAL for a flight APP still worked.
+  // TACTICAL for a flight AP still worked.
   const refusedOps = [
     { kind: 'TOFI', action: 'PROPOSE', direction: 'ENTRY', toFacilityId: 'TACTICAL', toPositionId: 'TAC_C2' },
     { kind: 'ConvertToArrival' },
@@ -535,7 +535,7 @@ test('F-408: a release time passing is broadcast exactly once, and a second tick
   const strip = heldWithReleaseTime(efsp, c, 'HLD408', releaseAt);
 
   // Settle first. The Board is durable and shared across the tests in this
-  // file, and the FDR above was edited outside the Mutation path, so a fresh
+  // file, and the flight data above was edited outside the Mutation path, so a fresh
   // monitor legitimately has a backlog to state before "only what moved" means
   // anything.
   const settled = efsp.nlaStatusMonitor.tick(releaseAt - 60 * 1000);

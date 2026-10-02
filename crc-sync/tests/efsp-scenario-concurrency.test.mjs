@@ -48,7 +48,7 @@ test('SCENARIO two controllers act on the same Strip at once — the second is r
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'RACE1' });
 
   // Both clients are looking at the same revision. A relieving controller
-  // sits down at APP as an Observer and both hold their own cached copy.
+  // sits down at AP as an Observer and both hold their own cached copy.
   const seen = { stripId: strip.stripId, rev: strip.rev };
 
   const first = send(efsp, c.AP.session, {
@@ -286,7 +286,7 @@ test('a restored Strip whose beacon code the pool had free gets it re-reserved',
   const code = efsp.flightDataStore.getFlightData(strip.flightDataId).identity.beaconAssigned;
 
   // Corrupt the snapshot the way a partial write or an older format would:
-  // the Strip and its FDR survive, the allocated-code map does not.
+  // the Strip and its flight data survive, the allocated-code map does not.
   const snapshotPath = process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH;
   const data = JSON.parse(fs.readFileSync(snapshotPath, 'utf8'));
   data.flightData.codes = [];

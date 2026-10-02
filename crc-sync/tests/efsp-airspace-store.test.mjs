@@ -147,7 +147,7 @@ test('the controlling Position of a DIFFERENT airspace has no authority here', (
 
   // CTR owns the MOA, not this range — the authority is per airspace, which
   // is the whole point of configuring it per airspace rather than fixing it
-  // to APP as the guide's §9.11 wording does.
+  // to AP as the guide's §9.11 wording does.
   const result = apply(store, 'RANGE-1', { kind: 'ApproveActivation' }, 'CTR');
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'PERMISSION_DENIED');

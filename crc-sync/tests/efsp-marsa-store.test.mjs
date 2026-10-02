@@ -315,7 +315,7 @@ test('a relation that comes back with one participant left is finished, not acti
   const { store } = makeStore();
   declare(store);
   const saved = store.snapshot();
-  const { store: reborn } = makeStore({ known: [TANKER] }); // RX1's FDR is gone
+  const { store: reborn } = makeStore({ known: [TANKER] }); // RX1's flight data is gone
   reborn.restore(saved);
   const r = reborn.getAll()[0];
   assert.equal(r.state, 'ENDED');
@@ -355,12 +355,12 @@ test('an op against an unknown relation is NOT_FOUND', () => {
 // ── the regime writes this store makes, and who hears about them (F-111) ────
 //
 // Declaring writes MARSA on every participant and ending/voiding writes ATC
-// back. Those are FDR writes, and an FDR rides an efsp-board-delta — the
+// back. Those are flight data writes, and a flight data record rides an efsp-board-delta — the
 // marsa-delta carries the relation and nothing else. So the writes reached no
 // connected client at all until the next full snapshot. This is the journal
 // efsp-ws.js drains to put them on the wire.
 
-/** A store whose injected setter returns the FDR it wrote, the way flight-data-store.setTofi does. */
+/** A store whose injected setter returns the flight data it wrote, the way flight-data-store.setTofi does. */
 function makeStoreWithFlightDataList() {
   const flightDataList = new Map([TANKER, RX1, RX2, OUTSIDER].map(id => [id, { flightDataId: id, tofi: { separationRegime: null } }]));
   const store = new MarsaStore({

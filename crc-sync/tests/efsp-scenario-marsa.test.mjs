@@ -46,7 +46,7 @@ const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', A
 const efsp = createEfsp();
 const c = crew(efsp, ATC);
 
-/** An airborne flight parked at APP's terminus, which is where an AR starts. */
+/** An airborne flight parked at AP's terminus, which is where an AR starts. */
 function flight(callsign) {
   return airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign });
 }
@@ -79,7 +79,7 @@ test('sortie 1: a heading assigned to a joining receiver voids MARSA and alerts 
     assert.equal(efsp.flightDataStore.getFlightData(s.flightDataId).tofi.separationRegime, 'MARSA');
   }
 
-  // APP turns one receiver onto a vector. Block 20 is the guide's own §6.2
+  // AP turns one receiver onto a vector. Block 20 is the guide's own §6.2
   // name for the DEPARTURE heading Block.
   const ack = act(efsp, c.AP, 'AP', fresh(rx1), { kind: 'SetBlock', blockId: '20', value: '270' });
   assert.equal(ack.ok, true, 'the clearance itself goes through — the interlock voids, it does not refuse');
@@ -105,7 +105,7 @@ test('sortie 1: a heading assigned to a joining receiver voids MARSA and alerts 
 
   // The heading actually landed. A void that quietly ate the clearance would
   // be worse than no interlock at all.
-  // The heading is the flight's clearance now (docs/adr/0058), on the FDR.
+  // The heading is the flight's clearance now (docs/adr/0058), on the flight data.
   assert.equal(efsp.flightDataStore.getFlightData(rx1.flightDataId).clearance.heading.entries.find(e => e.status === 'ACTIVE').value, '270');
 });
 
@@ -268,7 +268,7 @@ test('sortie 6b: the interlock covers an OVERFLIGHT Strip, which had no assignme
   // Before docs/adr/0051 an OVERFLIGHT Strip carried no Block meaning "ATC
   // assigned this course/altitude", so a MARSA participant transiting on one
   // could be vectored or climbed with nothing voiding the relation — the
-  // acceptance criterion passing on two Roles and quietly not holding on the
+  // acceptance criterion passing on two strip types and quietly not holding on the
   // third.
   const tanker = flight('SHELL84');
   const transit = mustAct(efsp, c.AP, 'AP', null, {

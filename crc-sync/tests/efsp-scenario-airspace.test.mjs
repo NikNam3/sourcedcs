@@ -63,11 +63,11 @@ test('SCENARIO before takeoff, out to a MOA, and home again', async () => {
   const flightDataId = strip.flightDataId;
   strip = await advance(efsp, c.OPS, 'OPS', strip);   // -> PENDING_CLEARANCE at CD
   strip = jumpTo(efsp, c.CD, 'CD', strip, 'CLEARED');
-  strip = await advance(efsp, c.CD, 'CD', strip);     // -> PUSHBACK at GND
+  strip = await advance(efsp, c.CD, 'CD', strip);     // -> PUSHBACK at GC
   strip = jumpTo(efsp, c.GC, 'GC', strip, 'TAXI');
-  strip = await advance(efsp, c.GC, 'GC', strip);   // -> RUNWAY_QUEUE at TWR
+  strip = await advance(efsp, c.GC, 'GC', strip);   // -> RUNWAY_QUEUE at LC
   strip = jumpTo(efsp, c.LC, 'LC', strip, 'DEPARTED');
-  strip = await advance(efsp, c.LC, 'LC', strip);   // -> HANDED_OFF at APP
+  strip = await advance(efsp, c.LC, 'LC', strip);   // -> HANDED_OFF at AP
   assert.equal(strip.ownerPositionId, 'AP');
 
   const ctrStrip = handedToCenter(efsp, c, strip);
@@ -85,9 +85,9 @@ test('SCENARIO before takeoff, out to a MOA, and home again', async () => {
   });
   let arrival = efsp.boardStoreFor('INCIRLIK').getStrip(handedBack.coordination.peerStripId);
   arrival = mustAct(efsp, c.AP, 'AP', arrival, { kind: 'HANDOFF', action: 'ACCEPT' });
-  arrival = await advance(efsp, c.AP, 'AP', arrival);  // -> HANDED_TO_TOWER at TWR
+  arrival = await advance(efsp, c.AP, 'AP', arrival);  // -> HANDED_TO_TOWER at LC
   arrival = jumpTo(efsp, c.LC, 'LC', arrival, 'LANDED');
-  arrival = await advance(efsp, c.LC, 'LC', arrival);  // -> TAXI_IN at GND
+  arrival = await advance(efsp, c.LC, 'LC', arrival);  // -> TAXI_IN at GC
   arrival = await advance(efsp, c.GC, 'GC', arrival);  // terminal Drop
   assert.equal(arrival.state, 'DROPPED');
   assert.equal(arrival.flags.removeIndicator, true);

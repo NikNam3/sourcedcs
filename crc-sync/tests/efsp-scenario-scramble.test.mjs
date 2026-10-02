@@ -69,7 +69,7 @@ async function clearedDeparture(callsign) {
   return s;
 }
 
-/** Ground traffic to be flagged: a departure at TAXI (GND), one at RUNWAY_QUEUE (TWR), an arrival at TAXI_IN. */
+/** Ground traffic to be flagged: a departure at TAXI (GC), one at RUNWAY_QUEUE (LC), an arrival at TAXI_IN. */
 function groundTraffic() {
   const dep = (state) => {
     let s = mustAct(efsp, c.OPS, 'OPS', null, {
@@ -165,7 +165,7 @@ test('sortie: an alert pair scrambles past taxiing traffic — flagged, never re
   assert.ok(sets.every(e => e.actingPositionId === 'CD'));
 
   // Traffic count: dropped after departure, it counts as an alert scramble.
-  v = await advance(efsp, c.LC, 'LC', v); // DEPARTED -> HANDED_OFF, to APP
+  v = await advance(efsp, c.LC, 'LC', v); // DEPARTED -> HANDED_OFF, to AP
   mustAct(efsp, c.AP, 'AP', fresh(v), { kind: 'DropStrip' });
   const rec = counter.records().filter(r => r.stripId === viper.stripId);
   assert.equal(rec.length, 1);

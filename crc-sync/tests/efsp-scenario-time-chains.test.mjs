@@ -93,7 +93,7 @@ test('SCENARIO T3 the takeoff is stamped by the state change, wins over the off-
   strip = jumpTo(efsp, c.LC, 'LC', strip, 'LUAW');
   assert.equal(flightData().timeInputs.takeoffStampedUtc, null, 'lining up is not taking off');
 
-  // TWR presses Airborne: the NLA.
+  // LC presses Airborne: the NLA.
   now = zulu(14, 33);
   await new Promise(r => setTimeout(r, 410)); // the double-tap guard
   const ack = act(efsp, c.LC, 'LC', strip, { kind: 'InvokeNla' });

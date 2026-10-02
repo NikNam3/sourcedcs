@@ -180,11 +180,11 @@ test('validateConfig rejects a non-string accessRoute and accepts the shipped co
 // ── the [GAP]: a scramble changes no NLA ─────────────────────────────────
 
 test('a scramble changes no NLA', () => {
-  // nla.js is handed the Strip, its own FDR and a Board-derived ctx; the
+  // nla.js is handed the Strip, its own flight data and a Board-derived ctx; the
   // proof that no other flight's scramble can reach it is that nothing in
   // the module reads alertStatus at all. The Strip's OWN alert status is
   // toggled through every value and must change nothing either.
-  // AUTH: the per-Role NLA tables live in the authority registry's Role families.
+  // AUTH: the per-strip-type NLA tables live in the authority registry's strip type families.
   const roleDir = path.join(here, '../src/efsp/authority/strip-types');
   for (const f of ['../src/efsp/nla.js', ...fs.readdirSync(roleDir).map(n => path.join('../src/efsp/authority/strip-types', n))]) {
     const source = fs.readFileSync(path.join(here, f), 'utf8');

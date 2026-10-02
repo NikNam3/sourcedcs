@@ -263,7 +263,7 @@ test('SCENARIO A4 with TAC_C2 gone too, the chain bottoms out inside TACTICAL an
   // hop is deliberately not built: it would cross a Facility, and
   // consolidatedAt() is scoped to one Facility's PositionStore
   // (facility-config.js's TACTICAL consolidation comment; ADR 0013 point 4
-  // rejected the identical APP → CTR extension). Warn, do not block.
+  // rejected the identical AP → CTR extension). Warn, do not block.
   assert.deepEqual(hold(efsp, c.AIC.session, 'TACTICAL', []).ack.warnings,
     [{ positionId: 'AIC', count: 1, routedTo: null }]);
   assert.equal(tac(efsp, m.stripId).ownerPositionId, 'AIC', 'visibly stranded, not silently orphaned');
@@ -309,7 +309,7 @@ test('SCENARIO A6 one controller holding CTR and AIC still gets no coordination 
   line = jumpTo(efsp, c.TAC_C2, 'TAC_C2', line, 'AIRBORNE');
   line = jumpTo(efsp, c.TAC_C2, 'TAC_C2', line, 'ON_STATION');
 
-  // The CTR controller hands the seat to the combined one, who then holds CTR
+  // The CTR controller hands the Position to the combined one, who then holds CTR
   // at CENTER and AIC at TACTICAL on ONE session — which is what military's
   // "holding both CTR and TAC_C2" sortie names but, with two sessions, does not do.
   hold(efsp, c.CTR.session, 'CENTER', []);

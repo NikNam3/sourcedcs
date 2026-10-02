@@ -15,7 +15,7 @@ import crypto from 'crypto';
 // meets depend on which op RUNS them, and no test ever walked one Strip
 // through the sequence a real flight takes. Four separate bugs lived in that
 // gap (the terminal-Drop path skipping DropStrip's own rules entirely, the
-// beacon code released out from under a live shared-FDR flight,
+// beacon code released out from under a live shared-flight-data flight,
 // ConvertToArrival discarding an open link, and an unbound actingPositionId).
 //
 // Driven through createEfsp() + handleMessage — the real composition root and
@@ -135,18 +135,18 @@ test('SCENARIO civil round trip: Incirlik IFR departure -> CTR -> airspace hande
   strip = await advance(efsp, c.OPS, 'OPS', strip);  // PROPOSED -> PENDING_CLEARANCE, transfers to CD
   assert.equal(strip.ownerPositionId, 'CD');
   strip = jumpTo(efsp, c.CD, 'CD', strip, 'CLEARED');
-  strip = await advance(efsp, c.CD, 'CD', strip);    // -> PUSHBACK, transfers to GND
+  strip = await advance(efsp, c.CD, 'CD', strip);    // -> PUSHBACK, transfers to GC
   assert.equal(strip.ownerPositionId, 'GC');
   strip = jumpTo(efsp, c.GC, 'GC', strip, 'TAXI');
-  strip = await advance(efsp, c.GC, 'GC', strip);  // -> RUNWAY_QUEUE, transfers to TWR
+  strip = await advance(efsp, c.GC, 'GC', strip);  // -> RUNWAY_QUEUE, transfers to LC
   assert.equal(strip.ownerPositionId, 'LC');
   strip = jumpTo(efsp, c.LC, 'LC', strip, 'DEPARTED');
-  strip = await advance(efsp, c.LC, 'LC', strip);  // -> HANDED_OFF, transfers to APP
+  strip = await advance(efsp, c.LC, 'LC', strip);  // -> HANDED_OFF, transfers to AP
   assert.equal(strip.ownerPositionId, 'AP');
   assert.equal(strip.state, 'HANDED_OFF');
 
-  // APP hands the flight across the Facility boundary to CTR. The D13
-  // mechanism mints a SECOND Strip at CENTER sharing this one's FDR.
+  // AP hands the flight across the Facility boundary to CTR. The D13
+  // mechanism mints a SECOND Strip at CENTER sharing this one's flight data.
   const appStrip = mustAct(efsp, c.AP, 'AP', strip, {
     kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR',
   });
@@ -157,7 +157,7 @@ test('SCENARIO civil round trip: Incirlik IFR departure -> CTR -> airspace hande
   assert.equal(ctrStrip.coordination.state, 'ACTIVE');
 
   // The MOA leg. There is no RANGE Facility or airspace board in this slice
-  // (see docs/adr/0027) — the only artifact is the FDR's airspace direction,
+  // (see docs/adr/0027) — the only artifact is the flight data's airspace direction,
   // which must survive a full there-and-back round trip AND keep the record
   // of both transitions, not just the most recent one.
   mustAct(efsp, c.CTR, 'CTR', ctrStrip, { kind: 'SetBlock', blockId: '24A', value: 'USING_AGENCY' });
@@ -171,8 +171,8 @@ test('SCENARIO civil round trip: Incirlik IFR departure -> CTR -> airspace hande
   assert.deepEqual(airspace.transitions.map(t => t.owner), ['USING_AGENCY', 'CONTROLLING_AGENCY'],
     'both transitions are on the record — a flat overwrite would show only the second');
 
-  // Return leg: the same Strip/FDR converts in place at CTR (docs/adr/0023),
-  // then is handed back to APP as an ARRIVAL.
+  // Return leg: the same Strip/flight data converts in place at CTR (docs/adr/0023),
+  // then is handed back to AP as an ARRIVAL.
   ctrStrip = mustAct(efsp, c.CTR, 'CTR', ctrStrip, { kind: 'ConvertToArrival' });
   assert.equal(ctrStrip.stripType, 'ARRIVAL');
   assert.equal(ctrStrip.state, 'INBOUND');
@@ -185,10 +185,10 @@ test('SCENARIO civil round trip: Incirlik IFR departure -> CTR -> airspace hande
   arrival = mustAct(efsp, c.AP, 'AP', arrival, { kind: 'HANDOFF', action: 'ACCEPT' });
 
   // Down the arrival chain and off the board.
-  arrival = await advance(efsp, c.AP, 'AP', arrival); // -> HANDED_TO_TOWER, transfers to TWR
+  arrival = await advance(efsp, c.AP, 'AP', arrival); // -> HANDED_TO_TOWER, transfers to LC
   assert.equal(arrival.ownerPositionId, 'LC');
   arrival = jumpTo(efsp, c.LC, 'LC', arrival, 'LANDED');
-  arrival = await advance(efsp, c.LC, 'LC', arrival); // -> TAXI_IN, transfers to GND
+  arrival = await advance(efsp, c.LC, 'LC', arrival); // -> TAXI_IN, transfers to GC
   assert.equal(arrival.ownerPositionId, 'GC');
   arrival = await advance(efsp, c.GC, 'GC', arrival); // TAXI_IN's terminal NLA: Drop
   assert.equal(arrival.state, 'DROPPED');
@@ -268,8 +268,8 @@ test('SCENARIO military round trip: Incirlik IFR departure -> CTR -> tactical co
   ctrStrip = mustAct(efsp, c.CTR, 'CTR', ctrStrip, { kind: 'HANDOFF', action: 'ACCEPT' });
 
   // TOFI ENTRY. A MISSION Strip is minted on TACTICAL's Board, sharing this
-  // flight's FDR (guide §9.8) — the first primitive to bind two different
-  // Roles to one FDR.
+  // flight's flight data (guide §9.8) — the first primitive to bind two different
+  // Strip types to one flight data.
   ctrStrip = mustAct(efsp, c.CTR, 'CTR', ctrStrip, {
     kind: 'TOFI', action: 'PROPOSE', direction: 'ENTRY', toFacilityId: 'TACTICAL', toPositionId: 'TAC_C2',
   });
@@ -351,12 +351,12 @@ test('SCENARIO military round trip: Incirlik IFR departure -> CTR -> tactical co
   arrival = await advance(efsp, c.GC, 'GC', arrival);
   assert.equal(arrival.state, 'DROPPED');
 
-  // Still held. One sortie leaves several Strips on one FDR — each Facility
+  // Still held. One sortie leaves several Strips on one flight data — each Facility
   // keeps its own and retires it on its own schedule (guide §4.6) — and the
   // code belongs to the flight, not to any one of them. Here both the
-  // sender-side departure Strip APP kept at handoff and CTR's own Strip are
+  // sender-side departure Strip AP kept at handoff and CTR's own Strip are
   // still live. Nothing forces their resolution, which is why the client
-  // grew a shared-FDR indicator for exactly this.
+  // grew a shared-flight-data indicator for exactly this.
   assert.equal(efsp.flightDataStore._codeAllocator.isAllocated(beacon), true);
 
   const staleDeparture = efsp.boardStoreFor('INCIRLIK').getStrip(appStrip.stripId);
@@ -366,7 +366,7 @@ test('SCENARIO military round trip: Incirlik IFR departure -> CTR -> tactical co
 
   mustAct(efsp, c.CTR, 'CTR', efsp.boardStoreFor('CENTER').getStrip(ctrStrip.stripId), { kind: 'DropStrip', reason: 'handed back' });
 
-  // Only now, with the last Strip on this FDR gone, does the code come back.
+  // Only now, with the last Strip on this flight data gone, does the code come back.
   assert.equal(efsp.flightDataStore._codeAllocator.isAllocated(beacon), false);
 });
 
@@ -411,13 +411,13 @@ test('a controller cannot act as a Position it is not Primary at, however the mu
     kind: 'TransferStrip', toPositionId: 'AP', bayId: 'ap-departures', rackId: 'main',
   });
 
-  // The OPS controller names APP — the Position that genuinely owns the
+  // The OPS controller names AP — the Position that genuinely owns the
   // Strip — but has not selected it. Ownership alone used to be enough.
   const ack = act(efsp, c.OPS, 'AP', relocated, { kind: 'InvokeNla' });
   assert.equal(ack.ok, false);
   assert.equal(ack.reason, 'NOT_HOLDING_POSITION');
 
-  // The controller who actually holds APP can.
+  // The controller who actually holds AP can.
   assert.equal(act(efsp, c.AP, 'AP', relocated, { kind: 'InvokeNla' }).ok, true);
 });
 
@@ -578,7 +578,7 @@ test('a range Position works no Strips — it can run its airspace and nothing e
   const strip = mustAct(efsp, c.OPS, 'OPS', null, {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: DEPARTURE_FLIGHT_DATA,
   });
-  // Guide §4.1: "no strip primitives — owns airspace state", Strip Roles "none".
+  // Guide §4.1: "no strip primitives — owns airspace state", strip types "none".
   for (const op of [{ kind: 'InvokeNla' }, { kind: 'SetState', toState: 'HANDED_OFF' }, { kind: 'DropStrip', reason: 'x' }]) {
     const ack = act(efsp, c.WEST_RANGE, 'WEST_RANGE', strip, op);
     assert.equal(ack.ok, false, op.kind);

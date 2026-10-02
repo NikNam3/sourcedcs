@@ -191,7 +191,7 @@ test('a Mode 3 the allocator refuses keeps the minted code and says so', () => {
 });
 
 test('Mode 1 and Mode 2 cannot be written by any ATC Position', () => {
-  // Statically: no Block of any Role targets them.
+  // Statically: no Block of any strip type targets them.
   for (const [stripType, map] of Object.entries(BLOCK_MAPS)) {
     for (const blockId of Object.keys(map)) {
       const t = resolveBlockTarget(blockId, stripType);

@@ -66,7 +66,7 @@ test('HUNG on an ARRIVAL names the hot cargo pad and the resolved runway, and re
   assert.equal(b.runwaySource, 'FLIGHT_DATA');
   assert.match(b.reason, /Runway 05\/23 \(23\) assigned\.$/);
   assert.doesNotMatch(b.reason, RECOMMENDS);
-  // A rack beats the FDR field.
+  // A rack beats the flight data field.
   assert.equal(hungOrdnanceAdvisoryFor(arrival({ rackId: 'rwy-05' }), flightDataWith('HUNG', { assigned: { landingRunway: '23' } }), record()).runwaySource, 'RACK');
 });
 
@@ -99,7 +99,7 @@ test('HUNG at a Facility with no field state returns null', () => {
 
 test('OVERFLIGHT and MISSION never advise', () => {
   assert.equal(hungOrdnanceAdvisoryFor(arrival({ stripType: 'OVERFLIGHT', state: 'ACTIVE' }), flightDataWith('HUNG'), record()), null);
-  // A MISSION Strip shares the FDR with its ATC twin (docs/adr/0052): the twin carries the chip.
+  // A MISSION Strip shares the flight data with its ATC twin (docs/adr/0052): the twin carries the chip.
   assert.equal(hungOrdnanceAdvisoryFor(arrival({ stripType: 'MISSION', state: 'ON_STATION' }), flightDataWith('HUNG'), record()), null);
 });
 

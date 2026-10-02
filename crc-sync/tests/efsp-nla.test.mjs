@@ -242,7 +242,7 @@ test('RUNWAY_QUEUE -> LUAW -> DEPARTED, state-only, unconditionally in Phase 2 (
 });
 
 // Phase 2 (docs/adr/0007, superseding ADR 0005's always-succeed stub) —
-// DEPARTED's NLA is now a real, staffing-gated "Hand Off" to APP.
+// DEPARTED's NLA is now a real, staffing-gated "Hand Off" to AP.
 
 test('DEPARTED is inhibited when APP is neither staffed nor covered — no receiving Position present', () => {
   const ctx = { isStaffed: () => false, consolidatedAt: () => null };
@@ -304,7 +304,7 @@ test('INBOUND transitions when TWR is unstaffed but covered', () => {
 });
 
 // ── WP4A (docs/adr/0014): a CENTER-held INBOUND Strip's next step is the
-// cross-Facility HANDOFF, not an intrafacility TWR transfer ────────────
+// cross-Facility HANDOFF, not an intrafacility LC transfer ────────────
 
 test('INBOUND is inhibited with a HANDOFF-pointing reason when ctx.facilityId is CENTER, even if TWR would otherwise be staffed — there is no TWR at CENTER to transfer to at all', () => {
   const ctx = { isStaffed: () => true, consolidatedAt: () => null, facilityId: 'CENTER' };
@@ -448,7 +448,7 @@ test('an envelope naming the EXPANDED route does not release a flight filed unde
 test('amending a stereo flight\'s route puts it back outside the envelope — the label cleared with the route', () => {
   // flight-data-store.js's setField clears filed.stereoRouteName on a route
   // amendment; this is what that clearing is FOR. Modelled here as the
-  // post-amendment FDR the store would have produced.
+  // post-amendment flight data the store would have produced.
   const amended = makeFlightData({
     assigned: { departureRelease: 'HOLD_FOR_RELEASE' },
     filed: { stereoRouteName: '', route: 'LTAG DCT DELTA' },

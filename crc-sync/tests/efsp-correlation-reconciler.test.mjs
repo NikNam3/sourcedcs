@@ -207,7 +207,7 @@ test('nothing matching raises TRACK_LOST rather than leaving the record silent',
 
 test('the beacon rung claims first, so the callsign rung gets the contact that is left', () => {
   // This assertion is what pays for sweeping in rung order rather than
-  // resolving each FDR independently.
+  // resolving each flight data independently.
   const { reconciler, store } = build({
     flightDataList: [flightData('f1', 'VIPER1', '0041'), flightData('f2', 'VIPER1', '0042')],
     strips: [strip('f1'), strip('f2')],
@@ -411,7 +411,7 @@ test('the sweep never touches a Strip even when the contact contradicts its stat
 
 test('a flight with no live Strip left is retired, not kept forever with a stale contact', () => {
   // Found by walking the sortie: releaseFlightData only frees the beacon code, it does
-  // not delete the FDR — so an FDR with nothing but DROPPED Strips lives
+  // not delete the flight data — so a flight data record with nothing but DROPPED Strips lives
   // forever, and its correlation record lived with it. Never swept again
   // (eligibility needs a live Strip), stuck at whatever it last was, still
   // carrying a trackId, and still sent in every snapshot.

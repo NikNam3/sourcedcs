@@ -7,7 +7,7 @@ import path from 'path';
 /* Typed time Blocks — supervisor fix F4 (R2-17, S-R2-17).
  *
  * A controller types a release, void or slot time as four-digit Zulu ("1400")
- * into Blocks 6, 14, 14B–D and 16–18. Before F4 the string went into the FDR
+ * into Blocks 6, 14, 14B–D and 16–18. Before F4 the string went into the flight data
  * as-is, so a typed void time never expired ("1400" + 30 min is the string
  * "14001800000") and a typed release time never held (`now < "1400"` is
  * false for any epoch). These sorties type the times the way the cell sends

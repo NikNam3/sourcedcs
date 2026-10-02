@@ -1,4 +1,4 @@
-// freeze:selfcheck mutation M12 (retargeted by AUTH: DEPARTURE_STATE_OWNERS moved to the DEPARTURE Role family). A lane that moves the code this targets retargets THIS file only (file/find/replace),
+// freeze:selfcheck mutation M12 (retargeted by AUTH: DEPARTURE_STATE_OWNERS moved to the DEPARTURE strip type family). A lane that moves the code this targets retargets THIS file only (file/find/replace),
 // then re-proves it with `npm run freeze:selfcheck M12`.
 export default {
   id: "M12",

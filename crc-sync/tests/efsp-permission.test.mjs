@@ -48,7 +48,7 @@ test('only APP and CTR may use ConvertToArrival — CD/GND/TWR/OPS get none, sam
 });
 
 // ── WP4A: the 5 coordination primitives (guide §4.6) — the SECOND genuine
-// per-Position permission asymmetry, after OPS/APP's CreateStrip role split.
+// per-Position permission asymmetry, after OPS/AP's CreateStrip role split.
 
 test('only APP and CTR may use any of the 5 cross-Facility coordination primitives — CD/GND/TWR/OPS get none, since none of them ever touches a Facility boundary', () => {
   for (const op of COORDINATION_OP_KINDS) {
@@ -133,9 +133,9 @@ test('an unknown op kind is denied for every known Position', () => {
 });
 
 test('D21 regression (shape-only): evaluating GND and TWR independently never grants either one the other\'s (identical) permissions beyond what each already has standalone', () => {
-  // GND/TWR are still permission-identical in Phase 2 — this asserts the
+  // GC/LC are still permission-identical in Phase 2 — this asserts the
   // *shape* of the guard (independent evaluation, no shared mutable state
-  // between calls). OPS-vs-APP below is the real behavioral case.
+  // between calls). OPS-vs-AP below is the real behavioral case.
   const gndOnly = OP_KINDS.filter(op => canMutate('GC', op));
   const twrOnly = OP_KINDS.filter(op => canMutate('LC', op));
   assert.deepEqual(OP_KINDS.filter(op => canMutate('GC', op)), gndOnly);
@@ -150,9 +150,9 @@ test('OPS may originate DEPARTURE, and only DEPARTURE (guide §4.1 rule 3)', () 
   assert.equal(canCreateStripType('OPS', 'OVERFLIGHT'), false);
 });
 
-// docs/adr/0023 reopens this — ADR 0014 had deliberately emptied APP's
-// ARRIVAL right, reasoning ARRIVAL Strips at APP should only ever arrive
-// via the real CTR->APP HANDOFF. Live testing against real ATC scenarios
+// docs/adr/0023 reopens this — ADR 0014 had deliberately emptied AP's
+// ARRIVAL right, reasoning ARRIVAL Strips at AP should only ever arrive
+// via the real CTR->AP HANDOFF. Live testing against real ATC scenarios
 // (a VFR aircraft picking up an IFR clearance airborne, an aircraft from
 // an uncontrolled field with no flight plan on file) found that too
 // narrow: those have no sending Facility to HANDOFF from at all.
@@ -189,9 +189,9 @@ test('D21 regression: a controller holding both OPS and CTR is refused CreateStr
   // — "also holds CTR" has nowhere to leak in. This is the first test in
   // the suite that can actually distinguish per-acting-Position evaluation
   // from a union bug, since OPS and CTR are genuinely permission-different
-  // (Phase 1's CD/GND/TWR were identical and couldn't reveal this).
-  // (WP4A, docs/adr/0014: this used to pair OPS with APP, before APP's own
-  // ARRIVAL right was narrowed away in favor of the real CTR->APP HANDOFF;
+  // (Phase 1's CD/GC/LC were identical and couldn't reveal this).
+  // (WP4A, docs/adr/0014: this used to pair OPS with AP, before AP's own
+  // ARRIVAL right was narrowed away in favor of the real CTR->AP HANDOFF;
   // docs/adr/0023 reopened it, but OPS/CTR are still permission-different
   // in the direction this test checks — OPS never gets ARRIVAL.)
   assert.equal(canCreateStripType('OPS', 'ARRIVAL'), false);
@@ -391,7 +391,7 @@ test('an MRU may declare MARSA — D12 is about ATC service, and MARSA is its op
 });
 
 test('MARSA is NOT in OP_KINDS — a new op kind there would be picked up silently by every filtered grant', () => {
-  // PERMISSIONS' entries for OPS/APP/CTR are built with .filter() over
+  // PERMISSIONS' entries for OPS/AP/CTR are built with .filter() over
   // OP_KINDS, so anything added there lands in them without a line being
   // written. That is the maximally-permissive trap the module comment warns
   // about, which is why MARSA has its own predicate instead.
@@ -400,7 +400,7 @@ test('MARSA is NOT in OP_KINDS — a new op kind there would be picked up silent
   }
 });
 
-// ── field state (guide §9.7, docs/adr/0061) ─────────────────────────────────
+// ── runway status (guide §9.7, docs/adr/0061) ─────────────────────────────────
 
 const { canActOnRunwayStatus, RUNWAY_STATUS_OP_OWNERS } = await import('../src/efsp/permission.js');
 
@@ -443,7 +443,7 @@ test('a range Position, an MRU, CTR and an unknown Position are refused every ru
 
 test('D21 regression: a controller holding both TWR and APP cannot satisfy BeginRunwayChange from one acting Position', () => {
   // Evaluated per acting Position, never a union of what is held: an
-  // acknowledgement sent as TWR never counts as APP's (decisions.md S-Q24).
+  // acknowledgement sent as LC never counts as AP's (decisions.md S-Q24).
   assert.equal(canActOnRunwayStatus('LC', 'AckRunwayChange'), false);
   assert.equal(canActOnRunwayStatus('AP', 'BeginRunwayChange'), false);
   assert.equal(canActOnRunwayStatus('AP', 'AckRunwayChange'), true);

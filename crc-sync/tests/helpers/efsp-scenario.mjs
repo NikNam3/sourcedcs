@@ -103,7 +103,7 @@ export const DEPARTURE_FLIGHT_DATA = {
   departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250',
 };
 
-/** A DEPARTURE Strip parked at APP's terminus, which is where most airborne scenarios start. */
+/** A DEPARTURE Strip parked at AP's terminus, which is where most airborne scenarios start. */
 export function airborneDeparture(efsp, c, flightData = DEPARTURE_FLIGHT_DATA) {
   let strip = mustAct(efsp, c.OPS, 'OPS', null, {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData,

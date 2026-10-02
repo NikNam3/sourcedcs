@@ -56,7 +56,7 @@ function filed(callsign, extra = {}) {
   });
 }
 
-/** The rest of airborneDeparture(): handed off and parked at APP's terminus. */
+/** The rest of airborneDeparture(): handed off and parked at AP's terminus. */
 function toApp(strip) {
   strip = jumpTo(efsp, c.OPS, 'OPS', strip, 'HANDED_OFF');
   return mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'TransferStrip', toPositionId: 'AP', bayId: 'ap-departures', rackId: 'main' });
@@ -89,7 +89,7 @@ test('sortie 1: OPS posts the entry, CTR posts the exit on its replica, and it i
     exitFix: 'F', exitEstimateUtc: zulu(14, 32), requestedAltitudeAfterExit: 'FL190',
   }, 'the INCIRLIK Strip reads what CTR posted — dated on the MISSION day');
 
-  // APP converts its Strip for the recovery. ConvertToArrival archives the
+  // AP converts its Strip for the recovery. ConvertToArrival archives the
   // Strip's own annotations; the MTR data lives on the flight and must all
   // survive.
   const converted = mustAct(efsp, c.AP, 'AP', incirlik(app), { kind: 'ConvertToArrival' });

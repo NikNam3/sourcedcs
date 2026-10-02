@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-/* The carrier Roles wired through the shared tables (docs/adr/0074, WP7A part 2):
+/* The carrier strip types wired through the shared tables (docs/adr/0074, WP7A part 2):
  * STATES_BY_STRIP_TYPE, the Block Maps, INELIGIBLE_STATES, permission.js, the CARRIER
  * Facility. Every assertion here is a decision that used to be a default. */
 
@@ -20,7 +20,7 @@ test('the three carrier Roles have states, owners, a Block Map and an NLA table'
     assert.ok(nla.isValidState(nla.STATES_BY_STRIP_TYPE[stripType][0], stripType));
     assert.ok(blockMap.isValidStripType(stripType));
     assert.ok(permission.STATE_OWNERS_BY_STRIP_TYPE[stripType], `${stripType} owners`);
-    // The trap: an unregistered Role falls back to the DEPARTURE table and would offer "Send to Clearance".
+    // The trap: an unregistered strip type falls back to the DEPARTURE table and would offer "Send to Clearance".
     const first = nla.STATES_BY_STRIP_TYPE[stripType][0];
     const r = nla.computeNla({ stripType, state: first }, null, NOW, {});
     assert.ok(!r || r.inhibited || !['PENDING_CLEARANCE'].includes(r.toState), `${stripType} must not use DEPARTURE's NLA`);
@@ -42,7 +42,7 @@ test('no carrier state name collides with another Role\'s state, except DROPPED'
   assert.ok(!nla.MARSHAL_STATES.includes('FINAL') && !nla.FINAL_STATES.includes('FINAL'), 'FINAL is an ARRIVAL state');
 });
 
-// "a test forces this decision": EVERY state of EVERY Role carries an explicit
+// "a test forces this decision": EVERY state of EVERY strip type carries an explicit
 // eligibility expectation here, so a state added to STATES_BY_STRIP_TYPE fails this
 // test until somebody decides (docs/adr/0041, and the reconciler's own comment).
 const ELIGIBILITY = {
@@ -126,7 +126,7 @@ test('the CARRIER Facility: four MILITARY_ATC Positions, Bays that imply carrier
   assert.equal(facilityConfig.bayImpliesState('cv-marshal-stack', 'CARRIER'), 'IN_STACK');
   assert.equal(facilityConfig.bayImpliesState('cv-app2-bolter', 'CARRIER'), 'BOLTER_WAVEOFF');
   assert.deepEqual(facilityConfig.getBaysFor('CV_PRIFLY', 'CARRIER')[0].rackIds, ['initial', 'break', 'downwind', 'groove']);
-  // every Bay-implied state is a state of some carrier Role
+  // every Bay-implied state is a state of some carrier strip type
   const carrierStates = new Set(CARRIER_STRIP_TYPES.flatMap(r => nla.STATES_BY_STRIP_TYPE[r]));
   for (const b of facilityConfig.getAllBays('CARRIER')) if (b.impliesState) assert.ok(carrierStates.has(b.impliesState), b.bayId);
   assert.equal(facilityConfig.validateConfig(c).ok, true);

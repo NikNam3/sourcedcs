@@ -154,7 +154,7 @@ test('SCENARIO an unannounced inbound, against the same flight arriving properly
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
 
-  // Pop-up: nobody handed it over, so APP originates the Strip itself.
+  // Pop-up: nobody handed it over, so AP originates the Strip itself.
   const popUp = mustAct(efsp, c.AP, 'AP', null, {
     kind: 'CreateStrip', bayId: 'ap-inbound', rackId: 'main', stripType: 'ARRIVAL',
     flightData: { callsign: 'POPUP1', aircraftType: 'C130', wakeCategory: 'M', originAirport: 'LTAC' },
@@ -162,7 +162,7 @@ test('SCENARIO an unannounced inbound, against the same flight arriving properly
   assert.equal(popUp.coordination, null, 'self-originated — there is no exchange behind it');
   assert.equal(popUp.state, 'INBOUND');
 
-  // Properly: CTR has it and hands it across, which mints the Strip at APP.
+  // Properly: CTR has it and hands it across, which mints the Strip at AP.
   const enroute = mustAct(efsp, c.CTR, 'CTR', null, {
     kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', stripType: 'ARRIVAL',
     flightData: { callsign: 'PROPER1', aircraftType: 'C130', wakeCategory: 'M', originAirport: 'LTAC' },

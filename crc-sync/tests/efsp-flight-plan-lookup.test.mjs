@@ -96,7 +96,7 @@ test('the callsign is URL-encoded into the request path', async () => {
   assert.equal(requestedUrl, 'http://example.test/api/fpl1801/by-callsign/VIPER%201%2F2');
 });
 
-// ── toFlightDataFiledSeed — the DD1801 -> FDR.filed field mapping ─────────────────
+// ── toFlightDataFiledSeed — the DD1801 -> flight data `filed` field mapping ─────────────────
 
 test('toFlightDataFiledSeed maps exactly the fields EFSP models, dropping everything DD1801-specific with no equivalent', () => {
   const seed = toFlightDataFiledSeed(makePlan());

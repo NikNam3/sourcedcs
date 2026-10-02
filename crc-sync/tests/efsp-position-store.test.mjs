@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 const { PositionStore } = await import('../src/efsp/position-store.js');
 
 const POSITIONS = ['OPS', 'CD', 'GC', 'LC'];
-const CONSOLIDATION = { CD: 'GC', GC: 'LC' }; // Phase-1-truncated at TWR; OPS and TWR have no covering Position, matching the guide's own chain table
+const CONSOLIDATION = { CD: 'GC', GC: 'LC' }; // Phase-1-truncated at LC; OPS and LC have no Position to be consolidated at, matching the guide's own chain table
 
 function freshStore() {
   return new PositionStore(POSITIONS, CONSOLIDATION);
@@ -44,7 +44,7 @@ test('D18: many controllers racing to claim the same Position never resolves to 
 
   let primaryCount = 0;
   // Cross-check via the store's own bookkeeping: exactly one controller's
-  // held-set includes GND as the one who "won" Primary, and getAll()
+  // signed-on set includes GC as the one who "won" Primary, and getAll()
   // agrees.
   const all = store.getAll().find(p => p.positionId === 'GC');
   assert.ok(all.primary);
@@ -92,16 +92,16 @@ test('releasePrimaryTo requires the target to actually be an Observer', () => {
   assert.equal(result.reason, 'NOT_OBSERVER');
 });
 
-// ── Vacate / covering chain (defect D19) ────────────────────────────────────
+// ── Vacate / consolidation chain (defect D19) ────────────────────────────────────
 
 test('D19: vacating a Position with no successor routes down the covering chain to the nearest staffed covering Position', () => {
   const store = freshStore();
   store.setSignedOnPositions('c1', 'Alice', ['GC']);
   store.setSignedOnPositions('c2', 'Bob', ['LC']);
-  // GND has no Observer, so vacating leaves it unstaffed; its covering
-  // chain (CD -> GND -> TWR from GND's perspective is just "GND -> TWR")
-  // should resolve to TWR, which IS staffed.
-  const result = store.setSignedOnPositions('c1', 'Alice', []); // vacate GND
+  // GC has no Observer, so vacating leaves it unstaffed; its consolidation
+  // chain (CD -> GC -> LC from GC's perspective is just GC -> LC)
+  // should resolve to LC, which IS staffed.
+  const result = store.setSignedOnPositions('c1', 'Alice', []); // vacate GC
   assert.deepEqual(result.vacated, ['GC']);
   assert.equal(store.isStaffed('GC'), false);
   assert.equal(store.consolidatedAt('GC'), 'LC');
@@ -109,8 +109,8 @@ test('D19: vacating a Position with no successor routes down the covering chain 
 
 test('D19: covering chain walks past an also-unoccupied intermediate Position to the next one that IS staffed', () => {
   const store = freshStore();
-  store.setSignedOnPositions('c1', 'Alice', ['LC']); // only TWR staffed; CD and GND are not
-  // CD's chain is CD -> GND -> TWR; GND is unstaffed too, so it should skip to TWR.
+  store.setSignedOnPositions('c1', 'Alice', ['LC']); // only LC staffed; CD and GC are not
+  // CD's chain is CD -> GC -> LC; GC is unstaffed too, so it should skip to LC.
   assert.equal(store.consolidatedAt('CD'), 'LC');
 });
 
@@ -135,7 +135,7 @@ test('a non-abrupt vacate with a waiting Observer does NOT auto-promote — prom
   const store = freshStore();
   store.setSignedOnPositions('c1', 'Alice', ['GC']);
   store.setSignedOnPositions('c2', 'Bob', ['GC']); // c2 becomes Observer
-  store.setSignedOnPositions('c1', 'Alice', []); // Alice explicitly deselects GND
+  store.setSignedOnPositions('c1', 'Alice', []); // Alice explicitly deselects GC
   assert.equal(store.isStaffed('GC'), false); // NOT auto-promoted
   assert.deepEqual(store.observersOf('GC').map(o => o.controllerId), ['c2']); // Bob is still just an Observer
 });
@@ -170,8 +170,8 @@ test('onDisconnect releases every Position the controller held, not just one', (
 test('setSignedOnPositions only touches Positions that actually changed — holding an unrelated Position stays untouched across a change', () => {
   const store = freshStore();
   store.setSignedOnPositions('c1', 'Alice', ['GC', 'LC']);
-  store.setSignedOnPositions('c1', 'Alice', ['GC']); // drops TWR, keeps GND
-  assert.equal(store.primaryOf('GC'), 'c1'); // GND untouched, still c1's
+  store.setSignedOnPositions('c1', 'Alice', ['GC']); // drops LC, keeps GC
+  assert.equal(store.primaryOf('GC'), 'c1'); // GC untouched, still c1's
   assert.equal(store.isStaffed('LC'), false);
 });
 
@@ -234,7 +234,7 @@ test('getAll returns every configured Position, including unstaffed ones', () =>
 
 test('getAll\'s consolidatedPositions lists the unstaffed Positions currently routing through this one', () => {
   const store = freshStore();
-  store.setSignedOnPositions('c1', 'Alice', ['LC']); // CD and GND unstaffed, both eventually cover to TWR
+  store.setSignedOnPositions('c1', 'Alice', ['LC']); // CD and GC unstaffed, both are eventually consolidated at LC
   const twr = store.getAll().find(p => p.positionId === 'LC');
   assert.deepEqual(twr.consolidatedPositions.sort(), ['CD', 'GC']);
 });

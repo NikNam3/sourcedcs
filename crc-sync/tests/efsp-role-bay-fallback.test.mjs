@@ -4,7 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-// A Role Bay (`holdsStripType`, docs/adr/0087: ap-overflight, ctr-overflight) takes its own Role's
+// A strip type Bay (`holdsStripType`, docs/adr/0087: ap-overflight, ctr-overflight) takes its own strip type's
 // Strips and nobody else's. Before this file, `_bayForNewOwner`'s "first Bay implying no state"
 // fallback and `bayForImpliedState`'s `bays[0]` fallback could both land a DEPARTURE or ARRIVAL there.
 

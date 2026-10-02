@@ -157,7 +157,7 @@ test('reads are clones — mutating a result cannot corrupt the table', () => {
   assert.equal(getStereoRoutes()[0].name, 'PACK 1');
 });
 
-// ── the FDR seed ─────────────────────────────────────────────────────────
+// ── the flight data seed ─────────────────────────────────────────────────────────
 
 test('toFlightDataFiledSeed produces the flat seed createFlightData consumes', () => {
   assert.deepEqual(toFlightDataFiledSeed(resolveStereoRoute('PACK1')), {

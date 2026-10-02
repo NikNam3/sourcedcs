@@ -130,7 +130,7 @@ test('CTR originates an ARRIVAL Strip, proposes HANDOFF to APP, and APP accepts 
   assert.equal(slot(proposed, 'primary').facilityId, 'CENTER');
 
   // Bug found in live testing: this is what was missing entirely — nothing
-  // told any client holding a Position at INCIRLIK that a brand-new
+  // told any client signed on at a Position at INCIRLIK that a brand-new
   // replica had just landed in their Coordination Bay. Without
   // peerBroadcast, a connected client would never see it appear at all
   // outside of a full reconnect/resync.

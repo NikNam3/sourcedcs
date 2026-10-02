@@ -59,7 +59,7 @@ function makeFacilities() {
       // Consequences blessed the omission while nothing depended on the gate
       // being real; find-before-mint does, so it stops being defensible.
       tofiEligibleState: (stripType) => coordination.tofiEligibleState(stripType),
-      // Needed by _releaseFlightDataIfLastStrip once one FDR legitimately carries
+      // Needed by _releaseFlightDataIfLastStrip once one flight data legitimately carries
       // several Strips. Absent here too, so the beacon-release refcount was
       // reading `0` for every Strip in this file.
       liveStripsForFlightData: (flightDataId, excludeStripId) => {
@@ -126,7 +126,7 @@ function completeEntry(facilities) {
   return { atcStrip: ctrBoard.getStrip(atcStrip0.stripId), missionStrip: accepted.strip };
 }
 
-// ── PROPOSE (ENTRY) mints a real MISSION Strip sharing the ATC Strip's FDR ──
+// ── PROPOSE (ENTRY) mints a real MISSION Strip sharing the ATC Strip's flight data ──
 
 test('TOFI ENTRY PROPOSE mints a brand-new MISSION Strip on TACTICAL\'s own Board, sharing the ATC-side Strip\'s flightDataId (guide §9.8\'s binding)', () => {
   const facilities = makeFacilities();
@@ -149,7 +149,7 @@ test('TOFI ENTRY PROPOSE mints a brand-new MISSION Strip on TACTICAL\'s own Boar
   assert.equal(missionStrip.state, 'TASKED');
   assert.equal(missionStrip.ownerPositionId, 'TAC_C2');
   assert.equal(missionStrip.bayId, 'tac-c2-coordination');
-  assert.equal(missionStrip.flightDataId, atcStrip.flightDataId); // shared FDR, not a fresh one
+  assert.equal(missionStrip.flightDataId, atcStrip.flightDataId); // shared flight data, not a fresh one
   assert.equal(missionStrip.tofiCoordination.direction, 'ENTRY');
   assert.equal(missionStrip.tofiCoordination.state, 'INITIATED');
   assert.equal(missionStrip.tofiCoordination.peerStripId, atcStrip.stripId);

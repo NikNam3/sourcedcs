@@ -7,7 +7,7 @@ import { slot } from './helpers/wire-slots.mjs';
 
 // L23's own walks (docs/adr/0080), beside L8's efsp-scenario-tactical.test.mjs:
 // the capability table's rules on the wire, the Bay that follows an owner (B3/
-// B4), the TOFI answerer (B2), SetState's owner check (B7), the covering return
+// B4), the TOFI answerer (B2), SetState's owner check (B7), the consolidation return
 // (F10), the retire path (S-L24) and a coordination link that outlives its peer
 // (U7). Same prologue as L8's file: every scenario file owns its snapshot paths.
 
@@ -209,7 +209,7 @@ test('B2 the exception is MISSION-only and TOFI-only, and OPS\'s 14E exception i
   assert.equal(mayActBesideOwner('OPS', { ...dep, stripType: 'ARRIVAL' }, { kind: 'SetBlock', blockId: '14E' }), false);
 });
 
-// ── B7: SetState is owner-checked, for every Role ─────────────────────────
+// ── B7: SetState is owner-checked, for every strip type ─────────────────────────
 
 test('B7 SetState needs the Position that owns the current state, and the refusal says whose state it is', () => {
   const efsp = freshEfsp();
@@ -273,7 +273,7 @@ test('S-L24 a refused TOFI retires the strip it minted through the same path (ar
   assert.ok(efsp.boardStoreFor('TACTICAL')._droppedWallAt.has(minted.stripId));
 });
 
-// ── F10: a covering Position gives the Strips back ────────────────────────
+// ── F10: the Position an unstaffed one is consolidated at gives the Strips back ────────────────────────
 
 test('F10 Strips routed to a covering Position go back, into the returning Position\'s Bay, when it is staffed again', () => {
   const efsp = freshEfsp();

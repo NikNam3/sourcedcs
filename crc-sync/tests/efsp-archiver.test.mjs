@@ -75,7 +75,7 @@ const incirlik = () => efsp.boardStoreFor('INCIRLIK');
 const center = () => efsp.boardStoreFor('CENTER');
 const tactical = () => efsp.boardStoreFor('TACTICAL');
 
-/** A flight flown to APP's terminus and dropped there: counted traffic. */
+/** A flight flown to AP's terminus and dropped there: counted traffic. */
 function droppedFlight(callsign) {
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign });
   return mustAct(efsp, c.AP, 'AP', strip, { kind: 'DropStrip' });
@@ -186,13 +186,13 @@ test('2. an FDR goes with its last Strip, not before: TOFI\'s shared FDR stays w
   assert.ok(again.flightDataStore.getFlightData(ctrStrip.flightDataId));
   assert.ok(again.boardStoreFor('CENTER').getStrip(ctrStrip.stripId));
 
-  // The FDR goes only in the sweep that archives its LAST Strip.
+  // The flight data goes only in the sweep that archives its LAST Strip.
   const dropped = mustAct(efsp, c.CTR, 'CTR', center().getStrip(ctrStrip.stripId), { kind: 'DropStrip' });
   offset = 3 * HOUR;
   const r2 = archiver.sweep();
   assert.ok(r2.stripsByFacility.CENTER.includes(dropped.stripId));
-  // The APP-side Strip of the same flight (the HANDOFF's sender) is DROPPED
-  // too only if APP dropped it; until every Strip is gone, the FDR stays.
+  // The AP-side Strip of the same flight (the HANDOFF's sender) is DROPPED
+  // too only if AP dropped it; until every Strip is gone, the flight data stays.
   const appNow = appStrip ? incirlik().getStrip(appStrip.stripId) : null;
   if (appNow) {
     assert.equal(r2.flightDataIds.includes(dropped.flightDataId), false, 'the APP Strip still references it');
@@ -357,7 +357,7 @@ test('9. the traffic count is unchanged by a sweep, and a backfill of an archive
   assert.deepEqual(counter.records().map(r => r.countId).sort(), before, 'Archive/ArchiveFlightData lines are not drops or undos');
   assert.equal(counter.reconcile().ok, true, 'and the log still reconciles');
 
-  // A count file lost after the archive: the boot backfill finds no FDR.
+  // A count file lost after the archive: the boot backfill finds no flight data.
   const fresh = quiet(() => new TrafficCount({
     mutationLog: efsp.mutationLog, flightDataStore: efsp.flightDataStore, boardStoreFor: efsp.boardStoreFor,
     facilityIds: facilityConfig.getFacilityIds(), config: { retentionDays: 400, homeAirports: { INCIRLIK: ['LTAG'] } },

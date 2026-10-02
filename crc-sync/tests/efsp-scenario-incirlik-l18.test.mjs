@@ -12,7 +12,7 @@ import { slot } from './helpers/wire-slots.mjs';
  * (decisions memory "walk pilot requests"): a pilot who SWITCHES (asks for a
  * different frequency, goes back round the pattern), CANCELS (a missed
  * approach, a drop, a rotation that finds PAR unstaffed), and ARRIVES LATE (the
- * receiving Position takes its seat after the aircraft is ready, a Position
+ * receiving Position signs on after the aircraft is ready, a Position
  * vacates with an aircraft on its frequency).
  */
 
@@ -54,7 +54,7 @@ function refused(ack, reason, detail, label = '') {
   if (detail) assert.match(ack.detail || '', detail, label);
 }
 
-/** An inbound ARRIVAL with APP, then handed to SFA on a frequency Rack. */
+/** An inbound ARRIVAL with AP, then handed to SFA on a frequency Rack. */
 function sfaArrival(efsp, c, rackId = 'freq-2') {
   let s = mustAct(efsp, c.AP, 'AP', null, {
     kind: 'CreateStrip', bayId: 'ap-inbound', rackId: 'main', stripType: 'ARRIVAL',
@@ -273,7 +273,7 @@ test('LATE ARRIVAL: SFA vacates with aircraft on its frequencies; the Strips go 
     assert.equal(now.bayId, 'ap-inbound', 'in the Bay APP works inbound aircraft from, not a frequency Rack APP does not have');
     assert.equal(freqOf(efsp, s), mhz, 'the frequency did not change when the controller did');
   }
-  // SFA returns late: the covering hand-back puts each aircraft back on ITS frequency Rack
+  // SFA returns late: the consolidation hand-back puts each aircraft back on ITS frequency Rack
   hold(efsp, c.SFA.session, 'INCIRLIK', ['SFA']);
   for (const [s, rack] of [[a, 'freq-1'], [b, 'freq-5']]) {
     const now = strip(efsp, s);
@@ -355,7 +355,7 @@ test('LATE ARRIVAL: an aircraft is already in the pattern when RSU leaves; the S
   const s = patternStrip(efsp, c, 'base');
   const r = hold(efsp, c.RSU.session, 'INCIRLIK', []);
   const now = strip(efsp, s);
-  // RSU has no covering Position (ADR 0075: a supervisory Position the chain does not name), so nothing is
+  // RSU has no Position to be consolidated at (ADR 0075: a supervisory Position the chain does not name), so nothing is
   // re-routed and nothing is lost: the Strip stays owned by RSU in its Bay, and the ack says so.
   assert.equal(now.ownerPositionId, 'RSU');
   assert.equal(now.bayId, 'rsu-pattern');
@@ -377,7 +377,7 @@ test('RSU asks for a runway change and may not make one (H18): a request reaches
   assert.equal(current().runways[0].status, 'OPEN', 'asking suspends nothing');
   refused(send({ kind: 'CloseRunway', runwayId: '05/23' }), 'PERMISSION_DENIED');
   refused(send({ kind: 'OpenRunway', runwayId: '05/23' }), 'PERMISSION_DENIED');
-  // withdraw by letting TWR reject it, so the shared runway is left as found
+  // withdraw by letting LC reject it, so the shared runway is left as found
   const twr = c.LC;
   const rej = efsp.handleMessage(twr.session, {
     version: 1, type: 'efsp-runway-status-mutation', clientMutationId: crypto.randomUUID(),

@@ -5,7 +5,7 @@ import os from 'os';
 import path from 'path';
 import { slot } from './helpers/wire-slots.mjs';
 
-/* Field state (guide §9.7, docs/adr/0061) — the pure module, the store driven
+/* Runway status (guide §9.7, docs/adr/0061) — the pure module, the store driven
  * directly, and the wire. The two §13 acceptance lines are walked end to end in
  * efsp-scenario-runway-status.test.mjs; this file pins each rule on its own.
  */
@@ -577,7 +577,7 @@ test('efsp-runway-status-mutation routes, applies, acks and broadcasts efsp-runw
 });
 
 test('a runway-status op from a session not Primary at that Position AT THAT FACILITY is refused NOT_HOLDING_POSITION', () => {
-  // OPS's controller naming TWR.
+  // OPS's controller naming LC.
   let out = fieldAct(efsp, c.OPS, 'LC', { kind: 'CloseRunway', runwayId: '05/23' });
   assert.equal(out.ack.reason, 'NOT_HOLDING_POSITION');
   // Primary at CTR at CENTER, naming OPS: not Primary at OPS at INCIRLIK.
@@ -606,7 +606,7 @@ test('the snapshot carries runwayStatuses; efsp-resync has no runway-status bran
   assert.equal(snap.runwayStatuses.length, 1);
   assert.equal(snap.runwayStatuses[0].facilityId, 'INCIRLIK');
   assert.equal(rwy(snap.runwayStatuses[0]).status, 'OPEN');
-  // A delta-served resync carries Strips only; field state comes with a snapshot.
+  // A delta-served resync carries Strips only; runway status comes with a snapshot.
   const resync = efsp.handleMessage(c.LC.session, { type: 'efsp-resync', facilityId: 'INCIRLIK', lastBoardSeq: efsp.boardStoreFor('INCIRLIK').currentSeq, boardEpoch: efsp.snapshotFor().boardEpochByFacility.INCIRLIK });
   assert.equal(resync.ack.answer, 'delta');
   assert.equal(JSON.stringify(resync).includes('runwayStatus'), false);
@@ -802,7 +802,7 @@ test("an acknowledger set of ['OPS'] (a Facility without APP) cannot deadlock", 
   mustOp(store, 'LC', 'ProposeRunwayChange', { toRunwayId: '23' });
   mustOp(store, 'OPS', 'AckRunwayChange');
   assert.equal(change(store).state, 'ACKNOWLEDGED');
-  // APP was never asked, so it cannot answer either.
+  // AP was never asked, so it cannot answer either.
   assert.equal(op(store, 'AP', 'AckRunwayChange').reason, 'VALIDATION_ERROR');
 });
 
@@ -829,7 +829,7 @@ test('the acknowledger set is frozen at propose time', () => {
   const r = freshStore({ deps: { isStaffed: (f, p) => staffed.includes(p) } });
   r.store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, missionSession: 1 });
   mustOp(r.store, 'LC', 'ProposeRunwayChange', { toRunwayId: '23' });
-  staffed = ['OPS', 'LC', 'AP']; // APP arrives after the proposal
+  staffed = ['OPS', 'LC', 'AP']; // AP arrives after the proposal
   assert.match(op(r.store, 'AP', 'AckRunwayChange').detail, /skipped/);
   mustOp(r.store, 'OPS', 'AckRunwayChange');
   assert.equal(change(r.store).state, 'ACKNOWLEDGED');
