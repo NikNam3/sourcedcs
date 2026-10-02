@@ -31,7 +31,7 @@ export const UNPLACED_LEG = '?';         // a Strip whose rack is not a leg is s
 
 export const INTENT_LABELS = { TOUCH_AND_GO: 'T&G', FULL_STOP: 'Full stop', LOW_APPROACH: 'Low app', STOP_AND_GO: 'S&G' };
 
-// PATTERN Role's states (ADR 0064 B2). The two chip actions.
+// PATTERN strip type's states (ADR 0064 B2). The two chip actions.
 export const PATTERN_ACTIONS = [
   { id: 'LANDED', label: 'Landed', toState: 'RECOVERED' },
   { id: 'DROP', label: 'Drop', toState: 'DROPPED' },

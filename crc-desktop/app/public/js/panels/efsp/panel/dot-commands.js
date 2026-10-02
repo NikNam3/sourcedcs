@@ -204,7 +204,7 @@ function _marsaStripByCallsign(callsign) {
  * `.stereo <NAME> <CALLSIGN>` — the keyboard half of filing by short name.
  *
  * Shares _createStripOrigin() with the toolbar rather than duplicating the
- * OPS/APP/CTR gate and the combined-Position choice, so the two surfaces can
+ * OPS/AP/CTR gate and the combined-Position choice, so the two surfaces can
  * never disagree about who may originate what.
  *
  * Deliberately does NOT reuse _submitCreateStrip's duplicate-callsign

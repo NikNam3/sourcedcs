@@ -23,7 +23,7 @@ export function _canProposeTofiEntry(strip) {
   if (strip.stripType === 'MISSION') return false;
   if (_isRejectedCoordinationReplica(strip)) return false;
   // Not while a coordination is still open — a handoff replica CTR has not
-  // accepted is a flight APP still works (board/tofi.js's `_applyTofiPropose`).
+  // accepted is a flight AP still works (board/tofi.js's `_applyTofiPropose`).
   if (strip.coordination && strip.coordination.state === 'INITIATED') return false;
   // The (role, state) gate the 5 primitives have had since docs/adr/0022 and
   // TOFI never did — a flight has to actually be airborne and enroute before

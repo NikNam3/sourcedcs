@@ -62,7 +62,7 @@ function _refusalSentence(reason, detail) {
   return detail || reason || 'Rejected';
 }
 
-/** The callsign on an FDR — what a controller reads off the Strip, and so how a refusal has to name it. */
+/** The callsign on a flight data — what a controller reads off the Strip, and so how a refusal has to name it. */
 export function _callsignOfFlightData(flightDataId) {
   const flightData = flightDataId && typeof getEfspFlightData === 'function' ? getEfspFlightData(flightDataId) : null;
   return (flightData && flightData.identity && flightData.identity.callsign) || '';

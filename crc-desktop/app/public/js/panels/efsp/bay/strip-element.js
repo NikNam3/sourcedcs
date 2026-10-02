@@ -33,7 +33,7 @@ const DROP_ARM_MS = 5000;
  * OPS has always held the permission, so an OPS controller who proposed the
  * wrong Strip could always drop it — but the ONLY way to ask was the `.drop`
  * dot-command. The NLA button reads "Send to Clearance" at PROPOSED; "Drop" is
- * every Role's TERMINAL transition and appears nowhere else. So a fully
+ * every strip type's TERMINAL transition and appears nowhere else. So a fully
  * implemented, permitted operation had no affordance at all.
  *
  * Invisible to efsp-ui-reachability.test.mjs because that test holds every
@@ -228,7 +228,7 @@ export function _appendExpandButton(container, strip) {
 /**
  * Which Blocks the expanded view lists — what is NOT already on the Strip.
  *
- * It listed every Block for the Role at first, which made it mostly a second
+ * It listed every Block for the strip type at first, which made it mostly a second
  * copy of the chips a controller was already looking at: 26 of ~30 rows said
  * nothing new, and the handful that did were buried. The panel's job is
  * reaching what the chips cannot, so that is all it shows.
@@ -331,7 +331,7 @@ export function _buildStripEl(strip) {
   // and the reconciler reused every element unchanged: nothing on screen moved.
   el.dataset.expanded = _expandedStripId === strip.stripId ? '1' : '0';
   // Everything this element renders that lives OUTSIDE the Strip record —
-  // strip.nla, the FDR, siblings, obligation, MARSA, correlation, airspace,
+  // strip.nla, the flight data, siblings, obligation, MARSA, correlation, airspace,
   // the refusal. Same mechanism as `expanded` above, generalized: see
   // _stripRenderSignature for the six surfaces that were stale without it.
   el.dataset.sig = _stripRenderSignature(strip);

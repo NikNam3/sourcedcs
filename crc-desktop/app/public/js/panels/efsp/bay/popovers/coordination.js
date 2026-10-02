@@ -25,7 +25,7 @@ export function _isPendingCoordinationReplica(strip) {
 // that need a server/client drift test (see that module's own comment).
 // Was previously hardcoded to ARRIVAL-only here, which is what made the
 // Coordinate button unreachable for any DEPARTURE Strip — this fix closes
-// both the missing APP->CTR handoff AND the other 4 primitives' same
+// both the missing AP->CTR handoff AND the other 4 primitives' same
 // ARRIVAL-only gate.
 
 /**

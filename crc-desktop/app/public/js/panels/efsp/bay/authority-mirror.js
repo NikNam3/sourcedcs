@@ -7,10 +7,10 @@
 // crc-sync's authority tables grant exclusively to AP/CTR (§4.6, this slice's civil
 // ATC<->ATC scope). No MRU-refusal audit is needed yet: no MRU Position
 // exists this slice (docs/adr/0020's deferral) — gating the Coordinate
-// button to APP/CTR only is what D12 will extend once one does.
+// button to AP/CTR only is what D12 will extend once one does.
 //
 // Target Facility/Position is DETERMINISTIC this slice — there are only
-// two Facilities, and each of APP/CTR has exactly one counterpart on the
+// two Facilities, and each of AP/CTR has exactly one counterpart on the
 // other side. A real multi-Facility topology would need a picker; this
 // slice deliberately doesn't build one it can't yet exercise.
 export const COORDINATION_TARGETS = {
@@ -27,7 +27,7 @@ export const COORDINATION_TARGETS = {
 //
 // Unlike COORDINATION_TARGETS' fixed 1:1 stub, TOFI genuinely needs a
 // picker: per the guide's own §4.1 Position table, TOFI is listed only for
-// CTR among the ATC Positions built so far (not APP), but the MRU side has
+// CTR among the ATC Positions built so far (not AP), but the MRU side has
 // TWO candidates (TAC_C2, GCI) — CTR-initiated TOFI must let the controller
 // choose. TAC_C2/GCI-initiated TOFI has exactly one candidate (CTR) and
 // skips the picker, behaving like today's deterministic stub.

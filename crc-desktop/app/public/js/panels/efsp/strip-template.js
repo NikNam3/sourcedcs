@@ -25,7 +25,7 @@ import { cachedStereoRoutesClient } from './efsp-stereo-routes.js';
 // never used for display, only validation/permission/routing, matching the
 // same asymmetry efsp-block-map-parity.test.mjs already documents for
 // `field`/`flag`. Kept to 8 characters or fewer so the compact view never
-// has to grow wider to fit one, and UNIQUE within a Role — a label is the
+// has to grow wider to fit one, and UNIQUE within a strip type — a label is the
 // only thing telling two Blocks apart, and the expanded view renders the long
 // tail where four Blocks once all read NOTE and three all read RESTR. Take the
 // wording from the guide's own §6.2/§6.3 field column rather than inventing
@@ -47,7 +47,7 @@ export const DEPARTURE_BLOCK_MAP = {
   // namespace. Mirrors crc-sync's block-map.js; see its MILITARY_BLOCK_NAMESPACE
   // table for the whole guide-M-number-to-Block-id mapping and why the
   // M-prefix is not reused. Both hang off Block 3 because the 3-family is the
-  // airframe, and both are on all three ATC Roles.
+  // airframe, and both are on all three ATC strip types.
   //
   // 3F is a click-to-toggle boolean (BOOLEAN_TOGGLE_BLOCKS below) and 3G an
   // enum <select> (ENUM_SELECT_BLOCKS) — never the generic free-text path,
@@ -123,8 +123,8 @@ export const DEPARTURE_BLOCK_MAP = {
   // client had no way to know which Blocks §9.2 watches — fine while the only
   // use was a tooltip the client composes for itself, wrong the moment it
   // needs to say so per-Block. efsp-block-map-parity.test.mjs compares it now.
-  // docs/adr/0058 — the flight's clearance, on the FDR and shared with every
-  // Facility: CD issues ALT with the clearance, APP/CTR amend it and vector.
+  // docs/adr/0058 — the flight's clearance, on the flight data and shared with every
+  // Facility: CD issues ALT with the clearance, AP/CTR amend it and vector.
   '20': { required: false, label: 'HDG',      target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' },
   '21': { required: false, label: 'ALT',      target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' },
   // The guide's own Block 22, "Frequency" — structured rather than a
@@ -231,11 +231,11 @@ export const OVERFLIGHT_BLOCK_MAP = {
   '7':  { required: true,  label: 'CRUS ALT', target: { kind: 'flightData', path: 'filed.requestedAltitude' } }, // what was filed; the assigned altitude is the clearance (docs/adr/0058)
   // WP6 (crc-sync's docs/adr/0051) — OVERFLIGHT had no Block carrying an ATC
   // course or altitude ASSIGNMENT, only the filed request above, which left
-  // §9.2's MARSA interlock unreachable on this one Role. Annotation-routed
+  // §9.2's MARSA interlock unreachable on this one strip type. Annotation-routed
   // like ARRIVAL's equivalents, so a transiting flight's clearance history is
   // append-only (§3.7) and confirmVacated works. See the server's copy for the
   // [SOURCE-DEFINED] note on the numbering.
-  // docs/adr/0058: both are the flight's clearance now, on the FDR.
+  // docs/adr/0058: both are the flight's clearance now, on the flight data.
   '7A': { required: false, label: 'ALT',      target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' },
   '9A-VECTOR': { required: false, label: 'HDG', target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' },
   '8':  { required: true,  label: 'ORIG',     target: { kind: 'flightData', path: 'filed.departureAirport' } },
@@ -292,7 +292,7 @@ export const MISSION_BLOCK_MAP = {
 // time from the Charlie time, the final bearing from the ship's heading) and
 // refuses any write, so nothing here is editable and nothing here computes
 // (carrier-state.js formats what the server sent). `carrier` Blocks are the
-// flight's own fields, on the FDR so they survive launch to recovery.
+// flight's own fields, on the flight data so they survive launch to recovery.
 const _CARRIER_CHROME = {
   '2':  { required: true,  label: 'REV',    target: { kind: 'system', field: 'rev' } },
   '4':  { required: true,  label: 'CID',    target: { kind: 'system', field: 'cid' } },
@@ -415,7 +415,7 @@ export function supersededAnnotationEntries(strip, blockId) {
 // role-keyed since eligibility is per-role: DEPARTURE's Block 21 ("Initial
 // altitude") vs ARRIVAL's Block 7 (assigned/cleared altitude — the field
 // that actually gets a sequence of clearances on a descending arrival).
-// Every Role's assigned altitude now (docs/adr/0058) — OVERFLIGHT's 7A was
+// Every strip type's assigned altitude now (docs/adr/0058) — OVERFLIGHT's 7A was
 // missing, so an overflight's altitude had no ⌿ at all.
 export const CONFIRM_VACATED_ELIGIBLE_BLOCKS = { DEPARTURE: ['21'], ARRIVAL: ['7'], OVERFLIGHT: ['7A'] };
 
@@ -434,8 +434,8 @@ export function formatBlock3(flightData) {
 }
 
 /**
- * Resolves one Block's display value + provenance for a Strip/FDR pair.
- * Role-aware via strip.stripType (defaulting to DEPARTURE when strip is null —
+ * Resolves one Block's display value + provenance for a Strip/flight data pair.
+ * Strip-type-aware via strip.stripType (defaulting to DEPARTURE when strip is null —
  * e.g. an unrendered/placeholder cell) rather than a separate parameter,
  * since every real caller already has the Strip in hand.
  * NLA (Block 26) resolves to null here — the button's label/inhibit state
@@ -494,7 +494,7 @@ export function resolveBlockValue(blockId, flightData, strip) {
   // WP4A gap-closure (docs/adr/0022) — was previously falling through to
   // the null/SYSTEM_DERIVED catch-all below, meaning Block 24A never
   // actually displayed flightData.airspace.owner even before it had an edit path.
-  // Reads straight off the FDR, same shape as the 'flightData' branch above — kept
+  // Reads straight off the flight data, same shape as the 'flightData' branch above — kept
   // separate since airspace ownership lives in flightData.airspace, not
   // flightData.identity/flightData.filed/flightData.assigned like every generic 'flightData' path.
   if (t.kind === 'airspace-owner') {
@@ -509,7 +509,7 @@ export function resolveBlockValue(blockId, flightData, strip) {
   // WP6 (crc-sync's docs/adr/0052), guide §6.4 — the military extension
   // namespace, read exactly like 'tofi' above. The `flightData.military &&` guard is
   // not defensive padding: this field was the literal `null` of a WP6 hook
-  // until 0052, and an FDR restored from a snapshot written before then can
+  // until 0052, and a flight data restored from a snapshot written before then can
   // still arrive that way if it reaches a client before the server has
   // reseeded it.
   if (t.kind === 'military') {
@@ -518,7 +518,7 @@ export function resolveBlockValue(blockId, flightData, strip) {
   // The RANGE slice — Block 22, the frequency this flight has been approved
   // onto. Lives in flightData.comms for the same reason airspace ownership lives in
   // flightData.airspace: a dedicated setter, not a generic writable path.
-  // crc-sync docs/adr/0074 — a flight's own carrier fields, off the FDR.
+  // crc-sync docs/adr/0074 — a flight's own carrier fields, off the flight data.
   if (t.kind === 'carrier') {
     const raw = flightData && flightData.military && flightData.military.carrier ? flightData.military.carrier[t.field] : null;
     const value = t.field === 'eeatUtc' && raw != null ? formatZuluHhmm(raw) : raw;
@@ -702,7 +702,7 @@ export function isBlockEditable(blockId, stripType = 'DEPARTURE') {
  * UI-A U4: the TYPE field (Block 3) is a read-only composite (count, wake, type,
  * suffix), so it cannot be written itself. Editing it edits the one part a
  * controller means by "type", the aircraft type (3A, identity.aircraftType), which
- * is a plain flightData field every airframe Role already has. The wake category (3B)
+ * is a plain flightData field every airframe strip type already has. The wake category (3B)
  * stays in the expanded view: nothing derives it from the type, and guessing it
  * would put a made-up value on a Strip.
  * @returns {{blockId:string, value:string}|null} null when the Block is not redirected
@@ -717,7 +717,7 @@ export function editRedirectFor(blockId, stripType, flightData) {
 
 // ── Zulu time-of-day Blocks (crc-sync's docs/adr/0062) ──────────────────────
 //
-// Blocks whose FDR value is epoch ms (dated by crc-sync against the MISSION
+// Blocks whose flight data value is epoch ms (dated by crc-sync against the MISSION
 // clock, never the wall clock — H11) and which a controller reads and types
 // as a four-digit Zulu time. resolveBlockValue shows them as '1432', so the
 // click-to-edit cell opens on '1432' and sends back what the controller typed;
@@ -776,7 +776,7 @@ function _timeSourceSentence(source, via) {
 /**
  * The hover text for Block 6/17/18 on a DEPARTURE Strip: the Block's name, the
  * value and where it came from, and what would apply if it were cleared.
- * Null for any other Block or Role.
+ * Null for any other Block or strip type.
  */
 export function timeChainTitleFor(blockId, flightData, strip) {
   if (((strip && strip.stripType) || 'DEPARTURE') !== 'DEPARTURE') return null;
@@ -843,7 +843,7 @@ export function blockValueHintFor(blockId, flightData, strip) {
  * The label's hover title for this Block, or null. `flightData` adds the lost-comms
  * rule to EXIT ALT; with `strip`, Blocks 6/17/18 on a DEPARTURE carry §10.5's
  * source (docs/adr/0073). Without the Strip (the collapsed face's label, which
- * strip-view.js titles with the FDR alone) the chain title is left off: the
+ * strip-view.js titles with the flight data alone) the chain title is left off: the
  * same id is the ETA on an ARRIVAL, and the value cell carries it anyway.
  */
 export function blockTitleFor(blockId, flightData, strip) {

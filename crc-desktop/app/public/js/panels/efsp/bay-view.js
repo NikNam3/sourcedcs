@@ -112,7 +112,7 @@ export function getSelectedEfspStripId() { return _selectedStripId; }
 // click on a different Strip, which no per-Strip guard can see.
 //
 // Lane 4 measured it on every transfer-shaped step, and the worst case is the
-// one to design against: a double-tap on "Hand Off to APP" pressed "Line Up
+// one to design against: a double-tap on "Hand Off to AP" pressed "Line Up
 // and Wait" for the jet that slid up underneath. The Strip that arrives under
 // the pointer need not even be in the same state as the one tapped, so this is
 // a runway clearance nobody gave.
@@ -264,7 +264,7 @@ function _keyTargetIsStripControl(e) {
 }
 
 // The Position a controller acts as for a Mutation on this Strip — its
-// current Owner if held, else whichever held Position happens to be first.
+// current Owner if signed on, else whichever signed-on Position happens to be first.
 // Shared by every dispatch helper below (NLA, move, transfer, gestures).
 export function _resolveActingPositionId(strip) {
   const positions = getActingPositions();
@@ -349,7 +349,7 @@ export function _dispatchGesture(strip, gestureFn, ...extraArgs) {
   return actingPositionId; // truthy only when dispatched — what the gesture metric counts (docs/adr/0072)
 }
 
-/** The first configured Bay for a Position — used as the transfer landing spot when the drop target is a Position tab rather than a specific Bay tab. crc-sync's facility-config.js Bay ordering intentionally puts each Position's "entry" Bay first (e.g. CD's Pending Clearance, GND's Pushback). */
+/** The first configured Bay for a Position — used as the transfer landing spot when the drop target is a Position tab rather than a specific Bay tab. crc-sync's facility-config.js Bay ordering intentionally puts each Position's "entry" Bay first (e.g. CD's Pending Clearance, GC's Pushback). */
 export function _defaultBayFor(positionId) {
   return getEfspBays().find(b => b.positionId === positionId) || null;
 }
@@ -500,14 +500,14 @@ export function _isProtectedStripEl(el) {
  * `rev` stands still (lane 3's F-305, measured on six separate surfaces):
  *
  *   strip.nla      what pressing the NLA would do right now. crc-sync moves it
- *                  when Position occupancy or a clock deadline changes, and
+ *                  when Position staffing or a clock deadline changes, and
  *                  deliberately does NOT bump `rev` to say so — `rev` is
  *                  concurrency control, and bumping it outside a Mutation
  *                  would invalidate every controller's in-flight edit.
- *   the FDR        every Block value, and flightData.tofi.separationRegime, which is
+ *   flight data    every Block value, and flightData.tofi.separationRegime, which is
  *                  what the TOFI exit gate reads. A regime set on the ATC-side
  *                  Strip left the MRU's "Accept TOFI Exit" disabled forever.
- *   siblings       the +N shared-FDR badge is computed from OTHER Strips.
+ *   siblings       the +N shared-flight-data badge is computed from OTHER Strips.
  *   obligation     §4.6.1's alerts live in their own store. An OVERDUE
  *                  obligation that only appears once the controller happens to
  *                  touch that Strip is not an alarm.
@@ -545,7 +545,7 @@ export function _stripRenderSignature(strip) {
 
   const siblings = typeof otherLiveStripsForFlightData === 'function' ? otherLiveStripsForFlightData(strip.flightDataId, strip.stripId) : [];
   // Not just the count: the badge's title names each sibling's Facility,
-  // Position and Role, and a sibling that moves desk changes it.
+  // Position and strip type, and a sibling that moves desk changes it.
   parts.push('sib:' + siblings.map(s => `${s.stripId}/${s.facilityId || '?'}/${s.ownerPositionId}/${s.stripType}`).sort().join(','));
 
   const obligation = typeof getEfspObligation === 'function' ? getEfspObligation(strip.stripId) : null;
@@ -600,7 +600,7 @@ export function _stripRenderSignature(strip) {
   const conflictAlert = typeof conflictAlertsForTrack === 'function' ? conflictAlertsForTrack(trackId) : [];
   parts.push('alr:' + conf.map(a => `${a.kind}/${a.assigned}/${a.actual ?? ''}/${a.deviationFt ?? ''}/${a.fpm ?? ''}`).join(',')
     + ';' + conflictAlert.map(c => `${c.id}/${c.timeToCpaSec}/${c.minNm}/${c.vertFt}`).join(','));
-  // Field state (docs/adr/0068): the RWY/HOOK chips read the Facility's runway record, not the Strip.
+  // Runway status (docs/adr/0068): the RWY/HOOK chips read the Facility's runway record, not the Strip.
   parts.push('fld:' + (typeof runwayStatusSignatureFor === 'function' ? runwayStatusSignatureFor(strip) : ''));
   // Surveillance hints (docs/adr/0076) are stated by the server about this Strip, not part of its own
   // record; whether the chip can be accepted also depends on which Position the controller holds (S-L14).
@@ -625,7 +625,7 @@ export function _stripRenderSignature(strip) {
  *    was missing, so the expand toggle set its state, asked for a re-render,
  *    and the reconciler reused every element unchanged. The button did
  *    nothing visible at all.
- *  - something the Strip RENDERS but does not own changed — the FDR, a
+ *  - something the Strip RENDERS but does not own changed — the flight data, a
  *    sibling, an obligation, a MARSA relation, a correlation, the airspace,
  *    a refusal, or `strip.nla`. See _stripRenderSignature; this was the same
  *    omission as expansion, six more times over (F-305).

@@ -25,7 +25,7 @@ export function _canConvertToArrival(strip) {
 }
 
 // The field lists (COMPACT_BLOCKS_*, compactBlocksFor) live in strip-fields.js,
-// loaded before this file. They are per-Position now, not only per-Role.
+// loaded before this file. They are per-Position now, not only per-strip-type.
 
 export function _canApproveAirspaceEntry(strip) {
   if (!AIRSPACE_ENTRY_POSITIONS.includes(strip.ownerPositionId)) return false;

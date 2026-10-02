@@ -17,7 +17,7 @@ import { _showMutationError } from './efsp-panel.js';
 //
 // Its own dock panel, like AIRSPACE, and NOT the `ops-runway-status` Bay: a
 // runway is not a Strip, so nothing about it belongs in a rack, and a
-// controller working TWR wants the field and the Strips open side by side.
+// controller working LC wants the field and the Strips open side by side.
 // The Bay stays the inert Strip container ADR 0061 left it.
 //
 // The buttons come from runway-status-rules.js's runwayStatusActionsFor — a
@@ -256,7 +256,7 @@ export function renderRunwayStatusPanel() {
   if (!_runwayStatusListEl) return; // not initialized yet
   _runwayStatusListEl.innerHTML = '';
   // L1b-Q6 (a): every record, since a CTR controller may want to know the
-  // runway is shut; actions only for Positions held at THAT Facility.
+  // runway is shut; actions only for Positions signed on at THAT Facility.
   for (const record of records) {
     _runwayStatusListEl.appendChild(_buildRunwayStatusSection(record, getActingPositions(record.facilityId)));
   }
@@ -272,7 +272,7 @@ export function initRunwayStatusPanel() {
 
 // The runway-status family's wire handlers (CMSG; moved out of app.js's ws.onmessage).
 // WP6 §9.7 (crc-sync docs/adr/0061, crc-desktop 0068). Its own delta with its own seq —
-// field state is not Strips and rides no Board's sequence (0061's rule-5 deviation).
+// Runway status is not Strips and rides no Board's sequence (0061's rule-5 deviation).
 registerEfspMessage('efsp-runway-status-delta', (msg) => {
   if (typeof applyEfspRunwayStatusDelta === 'function') applyEfspRunwayStatusDelta(msg);
   if (typeof renderRunwayStatusPanel === 'function') renderRunwayStatusPanel();

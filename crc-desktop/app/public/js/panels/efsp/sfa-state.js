@@ -38,7 +38,7 @@ export function sfaRotationRows(view = getEfspSfa()) {
   return view.pool.map(p => ({ rackId: p.rackId, mhz: p.mhz, text: sfaFrequencyText(p.mhz), positionId: rotation[p.rackId] || null }));
 }
 
-/** The held Position that may change the rotation (the jurisdiction Position, inside the ceiling), or null. Pure over `signedOnIds`. */
+/** The signed-on Position that may change the rotation (the jurisdiction Position, inside the ceiling), or null. Pure over `signedOnIds`. */
 export function sfaRotatingPosition(signedOnIds, view = getEfspSfa()) {
   if (!view) return null;
   return (signedOnIds || []).find(id => id === view.jurisdiction && SFA_ROTATION_CEILING.includes(id)) || null;
@@ -51,7 +51,7 @@ export function sfaPoolEntryForFrequency(mhz, view = getEfspSfa()) {
 }
 
 /**
- * Should this Strip carry the rotation button? An ARRIVAL at INBOUND, held by a Position that may send
+ * Should this Strip carry the rotation button? An ARRIVAL at INBOUND, owned by a Position that may send
  * the transfer, that is on an SFA frequency (its working frequency is in the pool; filing a Strip
  * on an SFA Rack assigns it that frequency). A Strip has one NLA (§3.5 rule 1), so this is a second button beside it, as "See you" is.
  */

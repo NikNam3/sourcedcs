@@ -100,7 +100,7 @@ function _scrambleLiveStrips() {
 function _scrambleFlightDataOf(flightDataId) {
   return typeof getEfspFlightData === 'function' ? getEfspFlightData(flightDataId) : null;
 }
-/** L1b's client field state when it is loaded (decisions.md T6: never block on it). */
+/** L1b's client runway status when it is loaded (decisions.md T6: never block on it). */
 function _scrambleRunwayStatusFor(facilityId) {
   return typeof getEfspRunwayStatus === 'function' ? getEfspRunwayStatus(facilityId) : null;
 }

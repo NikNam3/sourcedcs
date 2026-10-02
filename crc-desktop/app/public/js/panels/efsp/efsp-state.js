@@ -4,7 +4,7 @@ import { applyEfspSfaSnapshot } from './sfa-state.js';
 
 // Client-side mirror of the EFSP Board — plain module-level Maps, matching
 // app.js's existing style (tracks/history/settings are also plain globals,
-// not a framework store). Owns the local copy of Strips/FDRs/Positions,
+// not a framework store). Owns the local copy of Strips/flight data/Positions,
 // applying snapshot/delta/ack messages from crc-sync, and the pending-
 // mutation tracker that lets an unacknowledged Mutation be replayed against
 // a fresh baseline after reconnect (guide §5.6.3) instead of silently lost
@@ -53,7 +53,7 @@ export const efspAirspaces = new Map();
 // WP5 (crc-sync's docs/adr/0045) — flightDataId -> the correlation record: which
 // surveillance contact this airframe is, on what evidence, and any warning.
 //
-// Keyed by flightDataId, not stripId, and that is the point. One FDR legitimately has
+// Keyed by flightDataId, not stripId, and that is the point. One flight data legitimately has
 // several Strips — per-Facility replicas, a TOFI MISSION Strip, an arrival
 // converted in place — and they are all one airframe. A per-Strip correlation
 // would let two of them disagree about which contact it is, which is the
@@ -235,7 +235,7 @@ export function correlatedTrackIdForStrip(strip) {
  *
  * A linear walk rather than a maintained index — the same reasoning
  * otherLiveStripsForFlightData already documents, and the Strip count is in the tens.
- * Returns several when one FDR has several Strips, which is the ordinary case
+ * Returns several when one flight data has several Strips, which is the ordinary case
  * after a cross-Facility handoff.
  */
 export function stripIdsForTrackId(trackId) {
@@ -407,11 +407,11 @@ export function getEfspPositionLetter(positionId) {
 }
 
 /**
- * Other live Strips sharing this FDR, excluding one by id.
+ * Other live Strips sharing this flight data, excluding one by id.
  *
  * One flight legitimately has several Strips: every cross-Facility exchange
  * mints a replica rather than moving the original (guide §4.6), and TOFI
- * binds a MISSION Strip to the same FDR too. Each holder retires its own on
+ * binds a MISSION Strip to the same flight data too. Each holder retires its own on
  * its own schedule, so a sender-side Strip routinely outlives its usefulness
  * with nothing on screen saying another one exists. This feeds the indicator
  * that says so. Purely client-local — the snapshot already carries every
@@ -422,7 +422,7 @@ export function otherLiveStripsForFlightData(flightDataId, exceptStripId) {
   return getAllEfspStrips().filter(s => s.flightDataId === flightDataId && s.stripId !== exceptStripId && s.state !== 'DROPPED');
 }
 
-/** Live Strips whose FDR carries this callsign — the duplicate-origination check (§3.6). */
+/** Live Strips whose flight data carries this callsign — the duplicate-origination check (§3.6). */
 export function liveStripsForCallsign(callsign) {
   const target = (callsign || '').trim().toUpperCase();
   if (!target) return [];

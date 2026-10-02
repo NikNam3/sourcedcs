@@ -14,7 +14,7 @@
 // sharing one global scope with its neighbours; as an ES module they are
 // file-private, and the prefix is now only a naming convention.
 //
-// Computed on every render from the FDR and the runway-status record, both of
+// Computed on every render from the flight data and the runway-status record, both of
 // which arrive whole on deltas — nothing is stored (the WP6 plan's rule-4
 // argument), so a 3G change re-renders the Strip with no new wiring.
 
@@ -91,7 +91,7 @@ export function hungOrdnanceAdvisoryFor(strip, flightData, runwayStatus) {
   };
 }
 
-// [SOURCE-DEFINED] shown while the client has no field state for the Facility
+// [SOURCE-DEFINED] shown while the client has no runway status for the Facility
 // (L1b's getEfspRunwayStatus not loaded, or no record yet): that ordnance is hung
 // must never depend on another piece arriving first.
 export const ORDNANCE_NO_RUNWAY_STATUS_REASON = 'Hung ordnance. The hot cargo pad is shown when runway status is available.';

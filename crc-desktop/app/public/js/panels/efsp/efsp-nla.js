@@ -14,7 +14,7 @@
 // role-keyed since Phase 2 adds ARRIVAL. DEPARTED's label reflects the
 // real transfer-shaped Hand Off now (docs/adr/0007, superseding ADR
 // 0005's "(local)" stub wording — this IS the real intrafacility
-// TransferStrip to APP, just not WP4A's cross-Facility HANDOFF).
+// TransferStrip to AP, just not WP4A's cross-Facility HANDOFF).
 export const NLA_LABELS = {
   DEPARTURE: {
     PROPOSED:          'Send to Clearance',
@@ -56,7 +56,7 @@ export const NLA_LABELS = {
     OFF_STATION: 'RTB',
     RTB:         'Drop',
   },
-  // The carrier's Roles (crc-sync's docs/adr/0074, nla.js's computeMarshalNla,
+  // The carrier's strip types (crc-sync's docs/adr/0074, nla.js's computeMarshalNla,
   // computeFinalNla, computePatternNla). IN_STACK's label is Case-dependent
   // ('Commence' in Case II and III, 'To pattern' in Case I): the server's own
   // `strip.nla.carrierHandoff` names the handoff and nlaButtonLabel() below
@@ -89,7 +89,7 @@ export const CARRIER_HANDOFFS = {
   MARSHAL_TO_PATTERN_CASE_I: { label: 'To pattern',    trigger: 'CONTROLLER_INITIATED', from: ['CV_MARSHAL'], cases: ['I'] },
 };
 
-/** The label on a Strip's NLA button: the handoff's own name when the server says the NLA is one, else the Role's state table. */
+/** The label on a Strip's NLA button: the handoff's own name when the server says the NLA is one, else the strip type's state table. */
 export function nlaButtonLabel(strip) {
   const t = strip && strip.nla && strip.nla.carrierHandoff;
   if (t && CARRIER_HANDOFFS[t]) return CARRIER_HANDOFFS[t].label;
@@ -188,9 +188,9 @@ export const COORDINATION_ELIGIBLE_STATES = { ARRIVAL: 'INBOUND', DEPARTURE: 'HA
 // bay-view.js's _canProposeTofiEntry.
 export const TOFI_ELIGIBLE_STATES = { DEPARTURE: 'HANDED_OFF', ARRIVAL: 'INBOUND', OVERFLIGHT: 'IN_SECTOR' };
 
-// The carrier's three Roles — mirrors the authority tables exactly (crc-sync docs/adr/0074).
+// The carrier's three strip types — mirrors the authority tables exactly (crc-sync docs/adr/0074).
 export const MARSHAL_STATE_OWNERS = { LAUNCH: ['CV_MARSHAL'], IN_STACK: ['CV_MARSHAL'], COMMENCED: ['CV_APP1', 'CV_APP2'] };
-// PAR (docs/adr/0075) shares FINAL, RSU shares PATTERN: the same Roles, more owners.
+// PAR (docs/adr/0075) shares FINAL, RSU shares PATTERN: the same strip types, more owners.
 export const FINAL_STATE_OWNERS = { ON_FINAL: ['CV_APP1', 'CV_APP2', 'PAR'], BALL: ['CV_APP1', 'CV_APP2', 'PAR'], BOLTER_WAVEOFF: ['CV_APP1', 'CV_APP2', 'PAR'] };
 export const PATTERN_STATE_OWNERS = { IN_PATTERN: ['CV_PRIFLY', 'RSU'], RECOVERED: ['CV_PRIFLY', 'RSU'] };
 

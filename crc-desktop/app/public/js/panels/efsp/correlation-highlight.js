@@ -59,7 +59,7 @@ export function refreshCorrelatedHighlight() {
  *                 selection because of a click somewhere else makes the panel
  *                 feel haunted, and the absence of a ring is already the
  *                 signal that this contact is not on the board.
- *   several       one FDR with several Strips is ordinary after a
+ *   several       one flight data with several Strips is ordinary after a
  *                 cross-Facility handoff. Prefer the one in a Bay that is
  *                 actually open, so the selection is somewhere the controller
  *                 can see it.
@@ -90,7 +90,7 @@ function _preferVisibleStrip(stripIds) {
  * Rendered as a Strip-level badge rather than a Block, for three reasons worth
  * keeping written down:
  *
- *   1. A correlation is not a Block. Every Block Map entry routes to an FDR
+ *   1. A correlation is not a Block. Every Block Map entry routes to a flight data
  *      path, an annotation, a flag, a system value, a composite or a
  *      frequency; a correlation record is keyed by flightDataId in its own store and
  *      is none of those. A Block would need a seventh target kind whose only

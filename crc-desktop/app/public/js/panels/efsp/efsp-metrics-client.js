@@ -73,7 +73,7 @@ const _isSearchBay = (bayId) => typeof bayId === 'string' && bayId.endsWith('-se
  * @param {(msg:object) => void} deps.send               sends one efsp-metrics-report
  * @param {() => boolean} deps.isOpen                    is the crc-sync socket open
  * @param {() => Array<{bayId:string, positionId:string, facilityId:string}>} deps.bays
- * @param {(facilityId:string) => string[]} deps.signedOn    Positions held at a Facility
+ * @param {(facilityId:string) => string[]} deps.signedOn    Positions signed on at a Facility
  * @param {(stripId:string) => object|null} deps.stripOf
  * @param {(bayId:string) => boolean} deps.bayHasStrips
  * @param {() => string|null} deps.visibleBayId          the Bay on screen, null when the panel is hidden

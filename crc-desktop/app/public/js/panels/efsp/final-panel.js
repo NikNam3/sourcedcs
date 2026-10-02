@@ -1,7 +1,7 @@
 'use strict';
 
 // The FINAL component, shared by PAR and the carrier Final lane (EFSPImplementationGuide.md §7.10,
-// docs/adr/0075, built on docs/adr/0064's Role FINAL).
+// docs/adr/0075, built on docs/adr/0064's strip type FINAL).
 //
 // "PAR and the carrier Final controller are the same job." The controller is talking continuously, so
 // the Strip is minimal and glanceable and MUST NOT need data entry during the approach. Everything
@@ -14,7 +14,7 @@
 // REQUIRED (every mile, glidepath interception, decision altitude, trend deviation) are prompted from
 // the track's own movement, and clear themselves.
 //
-// THE TERMINAL EVENT. ADR 0064 left PAR's terminal state to L18: reuse the FINAL Role's own states
+// THE TERMINAL EVENT. ADR 0064 left PAR's terminal state to L18: reuse the FINAL strip type's own states
 // under neutral labels rather than add a state (the FINAL strip type's lifecycle in crc-sync's authority/strip-types/final.js is L17's). "Ball" and "Landing assured" both
 // end the talk-down and go to BALL; "Waveoff" and "Missed approach" both go to BOLTER_WAVEOFF.
 //

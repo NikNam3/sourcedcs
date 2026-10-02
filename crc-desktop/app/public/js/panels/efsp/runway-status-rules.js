@@ -1,7 +1,7 @@
 'use strict';
 import { getEfspFlightData, getEfspRunwayStatus } from './efsp-state.js';
 
-// Field state on the client (guide §9.7, crc-sync docs/adr/0061, crc-desktop
+// Runway status on the client (guide §9.7, crc-sync docs/adr/0061, crc-desktop
 // docs/adr/0068) — the PURE rules: which runway a Strip uses, what is wrong
 // with it, whether a hook-equipped arrival has arresting gear to land on, and
 // which runway-status buttons a controller is offered.
@@ -118,7 +118,7 @@ function _fsResolveText(view, text) {
 
 /**
  * Which runway a Strip uses (decisions.md S-Q25): the target rack, its rack,
- * its FDR's 8A/8B, the Facility's active end, else null (fail open). The same
+ * its flight data's 8A/8B, the Facility's active end, else null (fail open). The same
  * order, normalisation and `source` names as crc-sync's resolveRunwayForStrip,
  * plus the runway row itself so a caller need not look it up again.
  *
@@ -182,8 +182,8 @@ function _fsGearText(gear) {
 /**
  * Guide §9.7 rule 4: a hook-equipped arrival (`3F`, flightData.military.hookRequired)
  * onto a runway with no usable arresting gear. Computed, never stored: it is
- * derived from two records that already broadcast whole (the FDR and the field
- * state), so it grows no record, alert type or message (docs/adr/0068).
+ * derived from two records that already broadcast whole (the flight data and the runway
+ * status), so it grows no record, alert type or message (docs/adr/0068).
  *
  * decisions.md H57 (L1b-Q1 (a)): it fires ONLY when gear is configured. No
  * inventory — Incirlik ships `arrestingGear: []` (H17: DCS simulates no wires)
@@ -292,7 +292,7 @@ export function runwayStatusAlertsFor(strip, lookups) {
 
 /**
  * What the Strip's runway-status chips depend on, as a string for bay-view.js's
- * render signature: the Strip is rebuilt when it changes. Field state is not
+ * render signature: the Strip is rebuilt when it changes. Runway status is not
  * on the Strip, and the re-stamped `nla` board-delta reaches the client before
  * the runway-status delta, so without this the chip would lag a whole change.
  */
@@ -320,7 +320,7 @@ function _fsOpenChange(change) {
  * The runway-status actions this controller may take, given the Positions they
  * hold at the record's Facility — airspace-panel.js's airspaceActionsFor
  * shape. One entry per (acting Position, op): an action is always sent AS one
- * Position (D21), so a controller holding OPS and APP sees one Ack for each.
+ * Position (D21), so a controller holding OPS and AP sees one Ack for each.
  *
  * [SOURCE-DEFINED] (docs/adr/0068) — the button labels (CLOSE, WORKS, WRK DONE,
  * INSP OK, ACCEPT, REJECT, REQ CLS, REQ WRKS, REQ OPEN, CHG RWY, SELF CHG, ACK,

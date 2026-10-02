@@ -1,9 +1,9 @@
 // The Strip's face: Layout C (docs/adr/0056).
 //
 //   ┌──────────── tab ────────────┬──────────── main ─────────────┬ tools ┐
-//   │ DEP · HANDED OFF            │ CALLSIGN  TYPE  SQUAWK  …      │  ⋯     │
+//   │ DEP · HANDED OFF            │ CALLSIGN  TYPE  BEACON  …      │  ⋯     │
 //   │ ── one row per exchange ──  │ [TRK] [MARSA] [TOFI] …         │  ▼     │
-//   │ HANDOFF ← APP  [Rej][Acc]   │ ▲ reason, a full line          │  ✕     │
+//   │ HANDOFF ← AP   [Rej][Acc]   │ ▲ reason, a full line          │  ✕     │
 //   │ ── next step ──  [ NLA ]    │ (expanded view)                │        │
 //   └─────────────────────────────┴───────────────────────────────┴────────┘
 //
@@ -428,7 +428,7 @@ function _buildStripFields(strip) {
 // place: the left end of the row.
 export const INDICATOR_ORDER = ['conflictAlert', 'conf', 'rwy', 'gear', 'ord', 'scram', 'trk', 'marsa', 'tofi', 'airspace', 'timer', 'siblings'];
 // Keys whose chips come from _stripAlerts (warnings first, left end of the row). rwy/gear:
-// field state (docs/adr/0068); ord: hung ordnance (0069); scram: alert/scramble (0070).
+// Runway status (docs/adr/0068); ord: hung ordnance (0069); scram: alert/scramble (0070).
 export const ALERT_SLOT_KEYS = new Set(['conflictAlert', 'conf', 'rwy', 'gear', 'ord', 'scram']);
 
 const _pad3 = (n) => String(Math.round(n)).padStart(3, '0');

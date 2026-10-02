@@ -15,7 +15,7 @@ import { getSelectedEfspStripId } from './bay-view.js';
 //    agree. Nothing prefers either code silently.
 //  - the ▼ rows: Mode 1/2 (displayed, never edited — rule 1), the ATO's Mode 3,
 //    datalink, SCL, mission type, agency, on-station time, AR detail and the
-//    missing acceptance fields, on EVERY Role of the flight's Strips.
+//    missing acceptance fields, on EVERY strip type of the flight's Strips.
 //
 // A badge, not a Block — marsa-badge.js's three reasons: the join is keyed by
 // flightDataId, no Block target kind could hold it, and a read-only Block would be

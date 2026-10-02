@@ -12,10 +12,10 @@ import {
 // as sync.js itself (which also has none) — the logic worth testing in
 // isolation (message merging, rebase) already lives in efsp-state.js.
 
-// WP4A (docs/adr/0013): keyed by facilityId — each Facility's held-Position
+// WP4A (docs/adr/0013): keyed by facilityId — each Facility's signed-on-Position
 // set is independent server-side (a separate PositionStore instance per
 // Facility), so the client tracks them the same way. Position IDs are
-// globally unique across Facilities in this slice (OPS/CD/GND/TWR/APP vs
+// globally unique across Facilities in this slice (OPS/CD/GC/LC/AP vs
 // CTR never collide), which is what lets getActingPositions() below still
 // return one flat, facility-agnostic list for every pre-WP4A call site.
 const DEFAULT_EFSP_FACILITY_ID = 'INCIRLIK';
@@ -42,8 +42,8 @@ export function _sendEfsp(msg) {
 
 /**
  * Sends a Mutation targeting an existing Strip. Caller MUST only pass a
- * currently-held Position — efsp-panel.js only offers actions for
- * Positions actually held. facilityId is read directly off the Strip
+ * currently signed-on Position — efsp-panel.js only offers actions for
+ * Positions actually signed on. facilityId is read directly off the Strip
  * (every Strip record arriving from crc-sync since WP4A carries one,
  * efsp-ws.js server-side stamps it on every snapshot/delta/ack) rather
  * than threaded through every call site — bay-view.js's dispatch helpers
@@ -79,7 +79,7 @@ export function sendEfspCreateStrip(actingPositionId, createOp, facilityId = DEF
   return msg.clientMutationId;
 }
 
-/** Sets the FULL held-Position set for ONE Facility — mirrors position-store.js's own "declare your full set each call" contract, per Facility (docs/adr/0013: each Facility has its own PositionStore instance server-side). */
+/** Sets the FULL signed-on-Position set for ONE Facility — mirrors position-store.js's own "declare your full set each call" contract, per Facility (docs/adr/0013: each Facility has its own PositionStore instance server-side). */
 export function sendEfspSetPositions(facilityId, signedOn) {
   _actingPositionsByFacility[facilityId] = [...signedOn];
   _sendEfsp({ version: 1, type: 'efsp-set-positions', facilityId, signedOn });
@@ -90,7 +90,7 @@ export function sendEfspSetPositions(facilityId, signedOn) {
  *   EVERY Facility (every pre-WP4A call site in bay-view.js/efsp-panel.js
  *   does this — Position IDs are globally unique across Facilities this
  *   slice, so a flat list is exactly as correct as a facility-scoped one
- *   for "does this controller hold Position X").
+ *   for "is this controller signed on at Position X").
  */
 export function getActingPositions(facilityId) {
   if (facilityId) return [...(_actingPositionsByFacility[facilityId] || [])];
