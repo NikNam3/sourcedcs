@@ -61,6 +61,7 @@
       "AIT",
       "ApproveAirspaceEntry",
       "ClearAirspaceEntry",
+      "ControlRelease",
       "ConvertToArrival",
       "CreateStrip",
       "DropStrip",
