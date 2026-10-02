@@ -18,5 +18,8 @@
     "stepSec": 2,
     "minGroundSpeedKt": 50,
     "minTrackAgeSec": 10
+  },
+  "tofiRegime": {
+    "regimeExitGraceS": 10
   }
 }
