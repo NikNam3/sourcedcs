@@ -1,5 +1,31 @@
 # infra RUNBOOK
 
+## Wire protocol and the deploy gate (crc-sync ADR 0103)
+
+crc-sync and crc-desktop each compile in a wire protocol number (`crc-sync/src/wire-protocol.js`, `crc-desktop/app/public/js/wire-protocol.js`).
+A client whose number differs from the server's is refused with an "Update required" overlay (close code 4426); it does not reconnect on its own.
+The per-frame `version: 1` is unrelated and stays 1.
+
+- **Bump rule.** Any lane that changes the wire runs `cd crc-sync && npm run wire:record`. `crc-sync/tests/wire-protocol.test.mjs` fails
+  until it has (message types, EFSP op kinds, top-level frame keys). The script bumps both copies by one only if the last
+  `crc-desktop-v*` tag already shipped the current number; a number already ahead of the release is shared by every change until the
+  next release, and running the script twice never bumps twice. A tag with no `wire-protocol.js` is protocol 1. A change the scan cannot see
+  (a value's meaning) is bumped by hand with `npm run wire:record -- --bump`. A crc-desktop parity test fails if only one copy moved.
+- **Release order.** Merge to `main`, tag `crc-desktop-vX.Y.Z` from `main` (the release uploads the installers, then dispatches the crc-sync
+  image, which deploys). Between the upload and the crc-sync deploy, updated clients see "the server must be updated first" for a few minutes.
+- **The gate** (`.github/scripts/protocol-gate.sh`, the "Wire protocol gate" step of `deploy.yml`, main only) compares crc-sync's number with the
+  number in the published release (`https://sourcedcs.page/api/releases/latest`, then `git show crc-desktop-v<version>:...`). When they differ
+  the step reports an error: **"crc-sync speaks protocol N, the published CRC vX speaks M: publish a crc-desktop release first (tag
+  crc-desktop-vX.Y.Z from main) or revert the wire change."** It holds only crc-sync: the `git pull`, the other images and the rest of the stack
+  still deploy, and the running crc-sync is left alone. A published version with no tag in the repo also holds it. If the releases API cannot be read the
+  gate warns and lets crc-sync through.
+- **`skip_protocol_gate`.** A `workflow_dispatch` input on `deploy.yml`, for the human only, that recreates crc-sync despite a mismatch (every old
+  client then sees "Update required" until it updates). Use it only knowingly.
+- `crc-sync-docker.yml` runs both unit suites first; no image is built when one fails.
+- Optional `CRCSYNC_DOWNLOAD_URL` (compose default `https://sourcedcs.page/download.html`) is the link the refusal frame carries.
+- Clients installed before the handshake send no protocol: they are refused and keep reconnecting every 2 s with the topbar showing
+  disconnected, until electron-updater installs the new release on their next launch. This is a one-time, accepted cost.
+
 ## 2026-10 — crc-sync / crc-desktop vocabulary and structure release: before the deploy
 
 Every EFSP wire name changed, so **ship the client (a crc-desktop release) and the crc-sync image together**; an old
