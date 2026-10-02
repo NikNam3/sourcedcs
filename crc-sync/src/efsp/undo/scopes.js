@@ -16,7 +16,7 @@ function stripScope(ctx, strip) {
 /**
  * What a retirement (StripOps#retire, the one path to DROPPED) may write: the Strip, its flight data and code, every
  * ACTIVE MARSA relation of the flight and each participant's flight data (the regime goes back to ATC), the carrier
- * stack entry of a carrier Strip, and the proposer's Strip on the peer Board when this Strip is a replica (U7).
+ * stack entry of a carrier Strip, and the peer Board's Strip of a coordination exchange (U7, docs/adr/0101).
  */
 function retireScope(ctx, strip) {
   const scope = stripScope(ctx, strip);
@@ -28,8 +28,10 @@ function retireScope(ctx, strip) {
     if (relation) for (const id of relation.participants || []) scope.flightData.push(id);
   }
   if (['MARSHAL', 'FINAL', 'PATTERN'].includes(strip.stripType)) scope.carrier = [{ flightDataId: strip.flightDataId }];
+  // The peer's Strip of a live exchange: a replica that ends takes the proposer's link with it (U7), and a proposer that
+  // ends while it still holds communications or control hands them to the replica (docs/adr/0101 TRANSFERRING_RETIRED).
   const link = strip.coordination;
-  if (link && link.mintedForCoordination && link.peerFacilityId && link.peerStripId) {
+  if (link && link.peerFacilityId && link.peerStripId && (link.mintedForCoordination || link.state === 'INITIATED' || link.state === 'ACTIVE')) {
     scope.strips.push({ facilityId: link.peerFacilityId, stripId: link.peerStripId });
   }
   return scope;

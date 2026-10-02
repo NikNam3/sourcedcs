@@ -30,9 +30,15 @@ export function fakeClock(start = Date.now()) {
   return clock;
 }
 
-export function makeWorld(createEfsp, helpers, { clock, staffed = STAFFED } = {}) {
+/** The undo window's wall clock (docs/adr/0100), moved by hand: `wallClock.advance(10_000)` closes the window. */
+export function fakeWallClock(start = 1_000_000) {
+  const wall = { t: start, now: () => wall.t, advance: (ms) => { wall.t += ms; } };
+  return wall;
+}
+
+export function makeWorld(createEfsp, helpers, { clock, wallClock, staffed = STAFFED } = {}) {
   fs.rmSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, { force: true });
-  const efsp = createEfsp(clock ? { clock } : {});
+  const efsp = createEfsp({ ...(clock ? { clock } : {}), ...(wallClock ? { wallClock } : {}) });
   const c = helpers.crew(efsp, staffed);
   return { efsp, c, clock };
 }

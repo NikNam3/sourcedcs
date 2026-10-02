@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'fs';
-import { prologue, makeWorld, exchange, holders } from './helpers/control-release-fixture.mjs';
+import { prologue, makeWorld, exchange, holders, fakeWallClock } from './helpers/control-release-fixture.mjs';
 
 // The control invariant (docs/adr/0101, H100 DR-6): a live flight never has nobody holding comms and control. One scenario
 // per path of the ADR's table; each asserts the invariant after every step (CRCSYNC_CONTROL_INVARIANT=throw makes a
@@ -12,6 +12,7 @@ const { createEfsp } = await import('../src/efsp/index.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
 const helpers = await import('./helpers/efsp-scenario.mjs');
 const { ForwardingObligationMonitor } = await import('../src/efsp/forwarding-obligations.js');
+const { controlInvariantRefusal } = (await import('../src/efsp/board/ops/undo.js')).default;
 const { act, mustAct, hold } = helpers;
 
 const world = (opts) => {
@@ -289,6 +290,51 @@ test('I8 a restored record that names a retired holder is a violation the undo e
 });
 
 test.todo('I8 undo of a mark, and undo of the drop that caused TRANSFERRING_RETIRED (Strip and holders back together): needs the UNDO-S executor');
+
+test('I8 the executor refuses a restore while the exchange has nobody covering it (exchangeProblems, CONTROL_UNCOVERED): UNDO_BLOCKED', () => repairMode(() => {
+  const wallClock = fakeWallClock();
+  const w = world({ wallClock });
+  const ex = ex0(w, 'I8U');
+  const ack = asT(w, ex, DROP); // the replica holds both
+  hold(w.efsp, w.c.AP.session, 'INCIRLIK', []); // AP leaves, nobody covers, and the dropped proposer cannot take them: unrepairable
+  assert.ok(problems(w, ex).length > 0, 'the standing alert');
+  const blocked = asT(w, ex, { kind: 'Undo', actionId: ack.undoable.actionId });
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.reason, 'UNDO_BLOCKED');
+  assert.match(blocked.detail, /nobody covering/);
+  assert.equal(ex.T().state, 'DROPPED', 'nothing restored');
+  hold(w.efsp, w.c.AP.session, 'INCIRLIK', ['AP']); // someone signs on: the exchange is whole again, and the undo goes through
+  assert.equal(asT(w, ex, { kind: 'Undo', actionId: ack.undoable.actionId }).ok, true);
+  holds(w, ex);
+}));
+
+test('I8 controlInvariantRefusal reads ADR 0101\'s holder fields: a retired or unstaffed holder blocks, a retired side holding nothing does not', () => {
+  const link = (over) => ({
+    primitive: 'HANDOFF', state: 'ACTIVE', peerFacilityId: 'CENTER', peerStripId: 'T1', mintedForCoordination: true,
+    comms: { transferred: true }, control: { holder: 'RECEIVING' }, separationResponsibilityRef: { facilityId: 'INCIRLIK', positionId: 'AP' }, ...over,
+  });
+  const image = (coordination) => [{ facilityId: 'INCIRLIK', stripId: 'R1', strip: { stripId: 'R1', state: 'INBOUND', ownerPositionId: 'AP', coordination } }];
+  const envFor = ({ peer, apCovered = true }) => ({
+    boardFor: (f) => (f === 'CENTER'
+      ? { getStrip: () => peer, stripOwnerCovered: () => true }
+      : { getStrip: () => ({ stripId: 'R1', state: 'INBOUND', ownerPositionId: 'AP' }), stripOwnerCovered: () => apCovered }),
+  });
+  const T = (state, owner = 'CTR') => ({ stripId: 'T1', state, ownerPositionId: owner });
+  const cases = [
+    ['receiver holds both, proposer retired', link(), { peer: T('DROPPED') }, null],
+    ['proposer holds comms and is retired', link({ comms: { transferred: false } }), { peer: T('DROPPED') }, /communications holder/],
+    ['proposer holds control and is gone', link({ control: { holder: 'TRANSFERRING' }, separationResponsibilityRef: { facilityId: 'CENTER', positionId: 'CTR' } }), { peer: null }, /control holder/],
+    ['receiver holds both and AP is not staffed', link(), { peer: T('INBOUND'), apCovered: false }, /not staffed/],
+    ['control Position moved on the Strip not restored', link({ control: { holder: 'TRANSFERRING' }, comms: { transferred: false }, separationResponsibilityRef: { facilityId: 'CENTER', positionId: 'CTR' } }), { peer: T('INBOUND', 'CTR2') }, /control Position/],
+    ['all live and staffed', link(), { peer: T('INBOUND') }, null],
+    ['an INITIATED proposal needs its peer live', link({ state: 'INITIATED' }), { peer: T('DROPPED') }, /retired/],
+  ];
+  for (const [name, coordination, env, expected] of cases) {
+    const r = controlInvariantRefusal(envFor(env), image(coordination), new Map());
+    if (!expected) assert.equal(r, null, name);
+    else { assert.equal(r && r.reason, 'UNDO_BLOCKED', name); assert.match(r.detail, expected, name); }
+  }
+});
 
 // ── I10: restart ────────────────────────────────────────────────────────────────────────────────────────────────────
 

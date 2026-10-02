@@ -338,6 +338,12 @@ class BoardStore {
   /** The violations of the control invariant for the exchange this Strip is half of (undo, the standing alert). */
   exchangeProblems(stripId) { return this._control.exchangeProblems(this.getStrip(stripId)); }
 
+  /** The control invariant for the exchange this Strip is half of, after an undo restored it (board/ops/undo.js); returns the repairs made. */
+  assertExchangeInvariant(stripId, by = null) {
+    const strip = this.getStrip(stripId);
+    return strip ? this._control.assertControlInvariant(strip, by) : [];
+  }
+
   /** A TOFI ENTRY was proposed against this Facility (board/tofi.js). */
   receiveTofiProposal(args) { return this._tofi.receiveTofiProposal(args); }
 
