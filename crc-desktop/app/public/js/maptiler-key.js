@@ -23,7 +23,7 @@ export async function loadMaptilerKey(token, fetchFn = fetch) {
     if (changed) for (const fn of listeners) { try { fn(key); } catch (e) { console.warn('[maptiler-key] listener failed', e); } }
     return key;
   } catch (e) {
-    console.warn('[maptiler-key] no MapTiler key from crc-sync:', e.message);
+    console.warn('[maptiler-key] map key unavailable from crc-sync:', e.message);
     return null;
   }
 }

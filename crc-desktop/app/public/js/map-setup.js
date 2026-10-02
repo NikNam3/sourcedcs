@@ -34,6 +34,24 @@ function refreshMaptilerSources() {
   }
 }
 
+// No key, or MapTiler refuses it: the basemap tiles answer 403. The map stays usable on the style's Background layer
+// (the scope, strips and every panel do not depend on tiles); the controller gets one notice and the log one warning.
+let basemapNotice = null;
+function showBasemapNotice(container) {
+  if (basemapNotice) return;
+  console.warn('[map] map key unavailable: no basemap or terrain contours until crc-sync supplies a valid MapTiler key');
+  basemapNotice = document.createElement('div');
+  basemapNotice.id = 'basemap-notice';
+  basemapNotice.textContent = 'NO BASEMAP: map key unavailable';
+  basemapNotice.style.cssText = 'position:absolute;left:8px;bottom:8px;z-index:5;padding:3px 8px;font:11px monospace;letter-spacing:.06em;'
+    + 'color:#c9a24a;background:rgba(0,0,0,.65);border:1px solid #6b5a2a;pointer-events:none';
+  container.appendChild(basemapNotice);
+}
+function clearBasemapNotice() {
+  if (basemapNotice) basemapNotice.remove();
+  basemapNotice = null;
+}
+
 export function initMap(container) {
   _setMap(new maplibregl.Map({
     container,
@@ -44,7 +62,14 @@ export function initMap(container) {
     zoom: 7,
   }));
 
-  onMaptilerKey(refreshMaptilerSources);
+  onMaptilerKey(() => { clearBasemapNotice(); refreshMaptilerSources(); });
+  map.on('error', (e) => {
+    const err = e && e.error;
+    if (err && err.status === 403 && /^https:\/\/api\.maptiler\.com\//.test(err.url || '')) showBasemapNotice(container);
+  });
+  // maplibre fires 'load' from a render frame, and a map whose only tiles errored draws nothing more, so the frame
+  // that would announce it never comes: nudge it until the map is ready (mapReady gates every overlay).
+  const nudge = setInterval(() => { if (mapReady) clearInterval(nudge); else map.triggerRepaint(); }, 400);
 
   map.dragRotate.disable();
   map.touchZoomRotate.disableRotation();
