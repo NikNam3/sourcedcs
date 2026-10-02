@@ -28,6 +28,9 @@ import { efspVisibleBayId } from './efsp-panel.js';
 // — a duration is not a time of day (H11).
 
 // Code constants, not a tuning file (decisions.md P5). docs/adr/0072.
+// [SOURCE-DEFINED] (docs/adr/0072) — TTF_CAP_MS: a Bay entry open longer than this
+// is not counted as a time-to-first-touch, and the metrics panel says so. The rest
+// are engineering bounds (flush cadence, queue and age caps, a visibility poll).
 export const EFSP_METRICS_LIMITS = Object.freeze({
   FLUSH_MS: 10 * 1000,          // flush at most this long after an event is queued
   FLUSH_AT: 20,                 // ...or as soon as this many are queued
@@ -41,7 +44,9 @@ export const EFSP_METRICS_LIMITS = Object.freeze({
 // [SOURCE-DEFINED] — the inputs a controller spends at each gesture entry
 // point (docs/adr/0072). Keyed `GESTURE:entry-point`. A new entry point (a
 // keyboard shortcut, say) adds a row here; a missing row throws, and the
-// test suite fails, rather than being counted as a silent 1.
+// test suite fails, rather than being counted as a silent 1. Rows of 2 are over
+// guide §7.3's ceiling of 1 input; accepted for now (S-L15), one-input entry
+// points are a later UI lane's.
 export const GESTURE_INPUT_COST = Object.freeze({
   'FLIP:dblclick': 1,                // a double-click is one input
   'ATTENTION:shift-click': 1,

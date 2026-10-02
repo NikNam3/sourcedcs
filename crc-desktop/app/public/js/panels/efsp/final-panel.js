@@ -22,7 +22,7 @@
 // the stub in tests/helpers/dom-stub.js.
 
 export const FINAL_CADENCE_S = 5;           // §7.10: "approximately every 5 seconds"
-export const FINAL_PROMPT_HOLD_S = 4;       // a due call stays on screen this long, then clears itself
+export const FINAL_PROMPT_HOLD_S = 4;       // [SOURCE-DEFINED] (docs/adr/0064) a due call stays on screen this long, then clears itself
 export const FINAL_GLIDEPATH_TOL_DEG = 0.3; // [SOURCE-DEFINED] inside this is "on glidepath"
 export const FINAL_TREND_STEP_DEG = 0.1;    // [SOURCE-DEFINED] drifting further out by this much between samples is a trend
 

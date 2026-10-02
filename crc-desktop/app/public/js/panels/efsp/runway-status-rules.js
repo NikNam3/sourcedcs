@@ -41,7 +41,9 @@ export const RUNWAY_STATUS_ACTION_OWNERS = {
   RejectRunwayChange:         ['OPS', 'AP'],
 };
 
-// Which Strips show a RWY chip (L1b-Q5 (a), decisions.md S-W2A): every Strip
+// [SOURCE-DEFINED] (docs/adr/0068) — which Strips show a RWY chip
+// (L1b-Q5 (a), decisions.md S-W2A; the state set is ours, mirroring runway-status.js's
+// RUNWAY_GATED_STATES): every Strip
 // that will still use the runway, so the controller sees the problem before
 // the NLA does. FINAL is listed although its NLA (-> LANDED) is never held.
 export const RUNWAY_STATUS_RUNWAY_STRIP_STATES = {
@@ -320,12 +322,19 @@ function _fsOpenChange(change) {
  * shape. One entry per (acting Position, op): an action is always sent AS one
  * Position (D21), so a controller holding OPS and APP sees one Ack for each.
  *
- * Mirrors RUNWAY_STATUS_OP_OWNERS (decisions.md H18/S-L1b: TWR closes, opens and
+ * [SOURCE-DEFINED] (docs/adr/0068) — the button labels (CLOSE, WORKS, WRK DONE,
+ * INSP OK, ACCEPT, REJECT, REQ CLS, REQ WRKS, REQ OPEN, CHG RWY, SELF CHG, ACK,
+ * WITHDRAW, BEGIN, COMPLETE, OPEN) are ours, not the guide's.
+ *
+ * Mirrors RUNWAY_STATUS_OP_OWNERS (decisions.md H18/S-L1b: LC closes, opens and
  * begins works; everyone else asks) and the store's preconditions. Two config
- * values the record does not carry fall back to the permission table's owners:
- * the acknowledger set before a change is proposed (AckRunwayChange's owners)
- * and the inspection authority (CompleteInspection's owners). Both equal
- * Incirlik's config (docs/wip/L1b.md, Findings).
+ * values a record without `runwayChangeAcknowledgers` /
+ * `inspectionAuthorityPositionId` does not carry fall back to the authority
+ * table's owners (the owners-table fallback): the acknowledger set before a
+ * change is proposed (AckRunwayChange's owners) and the inspection authority
+ * (CompleteInspection's owners). Both equal Incirlik's config
+ * (docs/wip/L1b.md, Findings). Both fields are on the wire now; dropping the
+ * fallback is a later UI lane's (S-L26), not a comment change.
  *
  * @returns {{positionId:string, kind:string, label:string, title:string,
  *   runwayId?:string, action?:string, toEnds?:string[], needs?:'reason'|'toEnd'}[]}

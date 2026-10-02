@@ -46,8 +46,9 @@ export const NLA_LABELS = {
     IN_SECTOR:  'Leaves Sector',
     HANDED_OFF: 'Drop',
   },
-  // WP4A second slice — MISSION lifecycle labels, mirroring nla.js's
-  // computeMissionNla exactly (guide's own §9.8 lifecycle, line 215).
+  // [SOURCE-DEFINED] — the guide's own mission lifecycle (guide line 215, under
+  // §3.4's [SOURCE-DEFINED] heading). WP4A second slice, mirroring
+  // authority/strip-types/mission.js's computeMissionNla exactly.
   MISSION: {
     TASKED:      'Airborne',
     AIRBORNE:    'On Station',
@@ -99,7 +100,8 @@ export function nlaLabelFor(state, stripType = 'DEPARTURE') {
   return (NLA_LABELS[stripType] || {})[state] || null;
 }
 
-// Per-State authority (guide §3.4's "normally owned by" column) — client
+// [SOURCE-DEFINED] (guide §3.4) — mirrors authority/strip-types/departure.js's marker.
+// Per-State authority (guide §3.4's "normally owned by" column), client
 // mirror of crc-sync's STATE_OWNERS_BY_STRIP_TYPE (authority/index.js) and
 // permission.js's canActOnState. The SERVER check (board/ops/invoke-nla.js's
 // `_applyInvokeNla` and board/placement.js's
@@ -148,9 +150,9 @@ export const OVERFLIGHT_STATE_OWNERS = {
   HANDED_OFF: ['AP', 'CTR'],
 };
 
-// WP4A second slice — MISSION lifecycle authority, mirroring crc-sync's
-// MISSION_STATE_OWNERS (authority/strip-types/mission.js) exactly. AIC/JTAC deliberately absent — see that
-// module's own comment.
+// [SOURCE-DEFINED] — the guide's own mission lifecycle (guide line 215, under
+// §3.4's [SOURCE-DEFINED] heading). WP4A second slice, mirroring crc-sync's MISSION_STATE_OWNERS (authority/strip-types/mission.js) exactly.
+// AIC/JTAC deliberately absent — see that module's own comment.
 export const MISSION_STATE_OWNERS = {
   TASKED:      ['TAC_C2', 'GCI'],
   AIRBORNE:    ['TAC_C2', 'GCI'],
