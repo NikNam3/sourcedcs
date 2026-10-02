@@ -34,7 +34,8 @@ const { createEfsp } = await import('../src/efsp/index.js');
 const { crew, DEPARTURE_FDR } = await import('./helpers/efsp-scenario.mjs');
 
 const CLIENT_STATE = fs.readFileSync(path.join(import.meta.dirname, '../../crc-desktop/app/public/js/panels/efsp/efsp-state.js'), 'utf8');
-const CLIENT_APP = fs.readFileSync(path.join(import.meta.dirname, '../../crc-desktop/app/public/js/app.js'), 'utf8');
+// CMSG: the efsp message handlers moved out of app.js into the registry's modules.
+const CLIENT_APP = fs.readFileSync(path.join(import.meta.dirname, '../../crc-desktop/app/public/js/panels/efsp/efsp-messages.js'), 'utf8');
 
 /** The `msg.<field>` names read inside `function <name>(...) { ... }` (first top-level close). */
 function fieldsReadBy(src, fnName) {
@@ -77,8 +78,12 @@ test('every field applyEfspDelta reads is on a real efsp-board-delta (broadcast 
 
 test('every field applyEfspMutationAck and the efsp-mutation-ack case read is on a real ack (success) or a rejection', () => {
   const read = fieldsReadBy(CLIENT_STATE, 'applyEfspMutationAck');
-  const caseFrom = CLIENT_APP.indexOf("case 'efsp-mutation-ack'");
-  const caseBody = CLIENT_APP.slice(caseFrom, CLIENT_APP.indexOf("case 'efsp-positions-ack'"));
+  const caseFrom = CLIENT_APP.indexOf("registerEfspMessage('efsp-mutation-ack'");
+  const caseTo = CLIENT_APP.indexOf("registerEfspMessage('efsp-positions-ack'");
+  // a handler that moved again must fail here, not scan an empty body (indexOf -1 slices to '')
+  assert.ok(caseFrom >= 0 && caseTo > caseFrom, 'the efsp-mutation-ack handler moved: update this scan');
+  const caseBody = CLIENT_APP.slice(caseFrom, caseTo);
+  assert.ok(caseBody.length > 100, 'the efsp-mutation-ack handler body scanned empty');
   const inCase = [...new Set([...caseBody.matchAll(/\bmsg\.([A-Za-z_]\w*)/g)].map(m => m[1]))];
   const wanted = [...new Set([...read, ...inCase])].sort();
   assert.ok(wanted.length >= 6, `scan found ${wanted}`);
@@ -117,5 +122,5 @@ test('S-12: an efsp-resync is answered with an efsp-resync-reply, a snapshot or 
   }
   assert.deepEqual(acks.map(a => a.answer), ['delta', 'snapshot', 'snapshot']);
   // and the client has a case for the reply type
-  assert.ok(CLIENT_APP.includes("case 'efsp-resync-reply'"), 'app.js has no case for efsp-resync-reply');
+  assert.ok(CLIENT_APP.includes("registerEfspMessage('efsp-resync-reply'"), 'app.js has no case for efsp-resync-reply');
 });

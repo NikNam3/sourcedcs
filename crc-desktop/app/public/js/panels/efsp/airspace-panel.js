@@ -2,6 +2,9 @@
 import { missionNow } from '../topbar.js';
 import { getAllEfspAirspaces, getEfspFdr, stripsInAirspace } from './efsp-state.js';
 import { getActingPositions, sendEfspAirspaceMutation } from './efsp-ws.js';
+import { registerEfspMessage } from './efsp-message-registry.js';
+import { applyEfspAirspaceDelta } from './efsp-state.js';
+import { _showMutationError, _showMutationWarning } from './efsp-panel.js';
 
 // The airspace board — guide §4.2: "Airspace board (not a strip rack)", and
 // §4.1 rule 2: the `RANGE` Position "works no Strips. It owns airspace state
@@ -206,3 +209,33 @@ export function initAirspacePanel() {
   renderAirspacePanel();
   return { onShow: () => renderAirspacePanel() };
 }
+
+// The airspace family's wire handlers (CMSG; moved out of app.js's ws.onmessage).
+// The RANGE slice — an airspace is not a Strip and rides no Board's
+// seq, so it gets its own delta rather than a section of
+// efsp-board-delta.
+registerEfspMessage('efsp-airspace-delta', (msg) => {
+  if (typeof applyEfspAirspaceDelta === 'function') applyEfspAirspaceDelta(msg);
+  if (typeof renderAirspacePanel === 'function') renderAirspacePanel();
+});
+
+registerEfspMessage('efsp-airspace-ack', (msg) => {
+  if (!msg.ok) {
+    console.warn('[efsp] airspace op rejected:', msg.reason, msg);
+    // An airspace op targets no Strip, so it is named by the block it
+    // was about rather than by a callsign (F-103's attribution rule,
+    // applied to the thing that actually was refused).
+    if (typeof _showMutationError === 'function') {
+      _showMutationError(msg.reason || 'Rejected', msg.detail,
+        msg.airspace ? { subject: (msg.airspace.definition && msg.airspace.definition.name) || msg.airspace.airspaceId } : null);
+    }
+  } else if (msg.warning === 'AIRSPACE_STILL_OCCUPIED') {
+    // Released with flights still in it. Allowed — the controller may
+    // know they are clear — but they are on the block's frequency and
+    // the panel now treats them as being in airspace nobody holds.
+    if (typeof _showMutationWarning === 'function') {
+      _showMutationWarning(`Released with ${msg.occupied} flight${msg.occupied === 1 ? '' : 's'} still in the block`);
+    }
+  }
+  if (typeof renderAirspacePanel === 'function') renderAirspacePanel();
+});

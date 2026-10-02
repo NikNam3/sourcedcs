@@ -466,6 +466,12 @@
    "toggleFlip",
    "toggleOffset"
   ],
+  "panels/efsp/efsp-message-registry.js": [
+   "dispatchEfspMessage",
+   "registerEfspMessage",
+   "registeredEfspTypes"
+  ],
+  "panels/efsp/efsp-messages.js": [],
   "panels/efsp/efsp-metrics-client.js": [
    "EFSP_METRICS_LIMITS",
    "GESTURE_INPUT_COST",

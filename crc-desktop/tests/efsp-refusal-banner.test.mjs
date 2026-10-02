@@ -249,12 +249,14 @@ test('the auto-clear is a named constant, and long enough to read a route back o
 
 // ── F-103, the one-argument bug in app.js ────────────────────────────────
 
-test('app.js never calls _showMutationError with the whole ack message', () => {
+test('no EFSP message handler (app.js, efsp-messages.js, the panel modules) ever calls _showMutationError with the whole ack message', () => {
   // Measured: `_showMutationError(msg)` at two call sites against a
   // `(reason, detail, context)` signature, so a refused efsp-correlation-ack
   // or efsp-marsa-ack rendered "[object Object]". A static check because
   // app.js is the WebSocket front door and cannot be mounted in the stub.
-  const src = fs.readFileSync(path.join(import.meta.dirname, '../app/public/js/app.js'), 'utf8');
+  // CMSG: the call sites moved from app.js into the registered handlers.
+  const src = ['app.js', 'panels/efsp/efsp-messages.js', 'panels/efsp/airspace-panel.js', 'panels/efsp/carrier-panel.js',
+    'panels/efsp/field-state-panel.js'].map(f => fs.readFileSync(path.join(import.meta.dirname, '../app/public/js', f), 'utf8')).join('\n');
   const calls = src.match(/_showMutationError\([^)]*\)/g) || [];
   assert.ok(calls.length > 0, 'the call sites moved — this guard needs updating');
   for (const call of calls) {

@@ -9,6 +9,10 @@ import { getActingPositions, sendEfspCarrierMutation, sendEfspMutation } from '.
 // ESM-1: today efsp-panel.js's _callsignOfFdr (fallback '') silently won over this file's own copy (fallback fdrId);
 // the import keeps that effective behaviour (S-ARCH2 item 3, plan §6 queue item 3).
 import { _callsignOfFdr } from './efsp-panel.js';
+import { registerEfspMessage } from './efsp-message-registry.js';
+import { applyEfspCarrierDelta } from './carrier-state.js';
+import { renderAllOpenEfspBays } from './bay-view.js';
+import { _showMutationError } from './efsp-panel.js';
 
 // The carrier's surfaces on the Strip panel (crc-sync's docs/adr/0074, ADR 0064
 // B7; guide §4.1, §9.12): the ship banner, the Case selector, the Marshal stack
@@ -403,3 +407,20 @@ export function buildCarrierFinalLine() {
   }
   return { type: 'FeatureCollection', features };
 }
+
+// The carrier family's wire handlers (CMSG; moved out of app.js's ws.onmessage).
+// crc-sync's docs/adr/0074 — the carrier's hull record (Case, Marshal
+// stack with its derived fields, ship banner), sent whole on every change.
+// A Case change is ONE of these and every carrier Strip re-renders from it.
+registerEfspMessage('efsp-carrier-delta', (msg) => {
+  if (typeof applyEfspCarrierDelta === 'function') applyEfspCarrierDelta(msg);
+  if (typeof renderCarrierBanner === 'function') renderCarrierBanner();
+  if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
+});
+
+registerEfspMessage('efsp-carrier-ack', (msg) => {
+  if (!msg.ok && typeof _showMutationError === 'function') _showMutationError(msg.reason || 'Rejected', msg.detail, { subject: 'carrier' });
+  if (msg.carrier && typeof applyEfspCarrierDelta === 'function') applyEfspCarrierDelta({ carriers: { updated: [msg.carrier] } });
+  if (typeof renderCarrierBanner === 'function') renderCarrierBanner();
+  if (typeof renderAllOpenEfspBays === 'function') renderAllOpenEfspBays();
+});
