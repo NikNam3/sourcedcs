@@ -18,7 +18,7 @@
 **SHOULD / SHOULD NOT** — required unless a stated reason applies. Departures MUST be recorded as an ADR (§0.4).
 **MAY** — permitted, at the implementer's discretion.
 
-Defined Terms are capitalised throughout (Strip, Bay, Rack, Position, Flight Data Record, Mutation, Board). Their definitions are in §2 and are binding: where prose and §2 disagree, §2 governs.
+Defined Terms are capitalised throughout (Strip, Bay, Rack, Position, flight data, Mutation, Board). Their definitions are in §2 and are binding: where prose and §2 disagree, §2 governs.
 
 > **Editor's note.** This guide is drafted in a general normative register. It has **not** been conformed to the SOURCE Contract Language Standard, because that standard's text was not available to the drafter. A conforming editor's pass is required before this document is published to the wiki — in particular for defect-class naming, apparatus, and the precision rules on quantities and time expressions.
 
@@ -88,11 +88,11 @@ Departure metering and surface scheduling (TOBT/TMAT computation); datalink clea
 
 ## 2. Defined Terms
 
-**Flight Data Record (FDR)** — the authoritative record of one flight or one formation: identity, filed intent, assigned clearance, current state. Server-owned. Exactly one per flight per operating day. Not itself a Strip.
+**Flight data** — the authoritative record of one flight or one formation: identity, filed intent, assigned clearance, current state. Server-owned. Exactly one per flight per operating day. Not itself a Strip.
 
-**Strip** — a presentation of one FDR to controllers, carrying its own annotations, position in a Bay, and lifecycle State. One FDR MAY have more than one Strip only where §3.6 permits.
+**Strip** — a presentation of one flight data to controllers, carrying its own annotations, position in a Bay, and lifecycle State. One flight data MAY have more than one Strip only where §3.6 permits.
 
-**Strip Role** — `DEPARTURE`, `ARRIVAL`, `OVERFLIGHT`, `MISSION`, `COORDINATION`, `PATTERN`, `MARSHAL`, `FINAL`. Determines which Block Map applies. The last three are SOURCE additions for the RSU, carrier and precision-approach positions and are `[SOURCE-DEFINED]` in layout, though their field content is sourced (§9.12, §7.10).
+**strip type** — `DEPARTURE`, `ARRIVAL`, `OVERFLIGHT`, `MISSION`, `COORDINATION`, `PATTERN`, `MARSHAL`, `FINAL`. Determines which Block Map applies. The last three are SOURCE additions for the RSU, carrier and precision-approach positions and are `[SOURCE-DEFINED]` in layout, though their field content is sourced (§9.12, §7.10).
 
 **Facility** — the top-level container: `INCIRLIK`, `CENTER`, `RANGES`, `TACTICAL`, `CARRIER`. Strips do not move between Facilities; data is forwarded and each Facility holds its own replica (§4.6).
 
@@ -120,11 +120,11 @@ Departure metering and surface scheduling (TOBT/TMAT computation); datalink clea
 
 ## 3. Domain model
 
-### 3.1 FDR and Strip are separate — non-negotiable
+### 3.1 flight data and Strip are separate — non-negotiable
 
-The FDR is the flight; the Strip is what a controller works with. They MUST be separate entities with separate revisions.
+The flight data is the flight; the Strip is what a controller works with. They MUST be separate entities with separate revisions.
 
-Reason: the FDR changes from upstream data (track updates, filed amendments, ATO ingest); the Strip changes from controller action. Collapsing them means every track update invalidates the controller's optimistic edit, and every annotation dirties the flight record. The real systems keep them separate — TFDM's block map marks fields "Computer-generated" versus "manually enter" as distinct provenance classes `[Annex §2.5]`.
+Reason: the flight data changes from upstream data (track updates, filed amendments, ATO ingest); the Strip changes from controller action. Collapsing them means every track update invalidates the controller's optimistic edit, and every annotation dirties the flight record. The real systems keep them separate — TFDM's block map marks fields "Computer-generated" versus "manually enter" as distinct provenance classes `[Annex §2.5]`.
 
 ```
 FlightDataRecord {
@@ -142,7 +142,7 @@ FlightDataRecord {
 Strip {
   stripId          string
   flightDataId            string
-  rev              uint64          // independent of FDR rev
+  rev              uint64          // independent of flight data rev
   stripType             StripRole
   state            EfspState       // Block 25
   ownerPositionId  string
@@ -198,7 +198,7 @@ Departure lifecycle:
 
 | State | Meaning | Normally owned by |
 |---|---|---|
-| `PROPOSED` | FDR exists, strip auto-created from filed data | `OPS` |
+| `PROPOSED` | flight data exists, strip auto-created from filed data | `OPS` |
 | `PENDING_CLEARANCE` | Awaiting clearance delivery | `CD` |
 | `CLEARED` | Clearance issued (voice or datalink) | `CD` |
 | `HELD` | Hold for release, release time, or void time in force — §3.8 | `CD` / `GC` |
@@ -245,12 +245,12 @@ Rules:
 4. Every NLA transition MUST also be reachable by drag-and-drop and by keyboard command. NLA is an accelerator, not the only path.
 5. **`Undo` MUST exist for the last NLA transition per Strip**, with a 30-second window. The Raytheon patent lists Undo as a first-class One Touch Action, and misfires on a touch panel are the expected failure mode `[Annex §3]`.
 
-### 3.6 When one FDR gets more than one Strip
+### 3.6 When one flight data gets more than one Strip
 
 Permitted only in these cases, and MUST NOT be extended without an ADR:
 
 1. A **`COORDINATION` half-strip** pushed to another Position while the full Strip remains with the Owner. Half-strips exist in vStrips for exactly this `[Annex §15.1]`.
-2. A **turnaround**: an `ARRIVAL` Strip that reaches `DROPPED` and a later `DEPARTURE` Strip for the same airframe are separate Strips referencing separate FDRs.
+2. A **turnaround**: an `ARRIVAL` Strip that reaches `DROPPED` and a later `DEPARTURE` Strip for the same airframe are separate Strips referencing separate flight data.
 
 Notably **not** permitted in v1: en-route `(flight, fix)` posting, where one flight generates a sequence of Strips, one per posted fix, linked by strip number and revision. That is how the real en route system works `[Annex §9]` and it is deferred (§12).
 
@@ -281,7 +281,7 @@ Rules:
 4. `PREPLANNED` entries render distinctly (the paper equivalent is red pencil).
 5. **`Enter` commits, `Esc` cancels and reverts. The EFSP MUST NOT auto-commit an annotation on blur.** An accidental click elsewhere must never amend a clearance. This is VRC's exact contract and the right one `[Annex §15.2]`.
 
-### 3.8 Departure release states
+### 3.8 Departure departure release states
 
 Four states MUST be modelled, from FAA JO 7110.65 ¶4-3-4 `[Annex §9]`:
 
@@ -359,7 +359,7 @@ Identity {
 
 Eighteen Positions across five Facilities. The **Class** column is load-bearing and is derived in `EFSP-Coordination-Annex.md` §1: it determines which coordination primitives a Position may use, and it is not a stylistic choice.
 
-| ID | Name | Class | Facility | Primitives | Strip Roles |
+| ID | Name | Class | Facility | Primitives | strip types |
 |---|---|---|---|---|---|
 | `CD` | Clearance Delivery | Military ATC | Incirlik | intrafacility transfer; receives release | `DEPARTURE` |
 | `GC` | Ground | Military ATC | Incirlik | intrafacility transfer | `DEPARTURE`, `ARRIVAL` |
@@ -368,7 +368,7 @@ Eighteen Positions across five Facilities. The **Class** column is load-bearing 
 | `AP` | Approach / Departure (RAPCON) | **Military ATC** | Incirlik | `HANDOFF`, `POINT_OUT`, `TRAFFIC`, `OPERATIONAL_REQUEST`, release | all |
 | `SFA` | Single Frequency Approach | Military ATC | Incirlik | **frequency-rotation transfer** — §4.7 | `ARRIVAL` |
 | `PAR` | PAR Approach | Military ATC | Incirlik | continuous guidance | `FINAL` |
-| `OPS` | Operations | **BASOPS / AMOPS** | Incirlik | files flight plans; owns Field State; **not a control position** | originates `DEPARTURE` |
+| `OPS` | Operations | **BASOPS / AMOPS** | Incirlik | files flight plans; owns Runway Status; **not a control position** | originates `DEPARTURE` |
 | `CTR` | Ankara Center | Civil ATC | Center | `HANDOFF`, `POINT_OUT`, `TRAFFIC`, data forwarding, release, `TOFI` | all |
 | `RANGE` | Range Control | **Using agency** | Ranges | **no strip primitives** — owns airspace state | none |
 | `TAC_C2` | Tactical C2 | **MRU** | Tactical | **`TOFI` only** | `MISSION` |
@@ -383,8 +383,8 @@ Eighteen Positions across five Facilities. The **Class** column is load-bearing 
 **Four rules that follow, and MUST be enforced in code, not merely documented:**
 
 1. **`TAC_C2`, `GCI`, `AIC` and `JTAC` MUST NOT be given `HANDOFF` or `POINT_OUT`.** FAA JO 7610.14A ¶8-1-1 states that Military Radar Units *"must not be authorized nor requested to provide ATC services."* They get `TRANSFER_OF_FLIGHT_INFORMATION` (§4.6). Offering them a handoff button is a doctrinal defect, class **D12** (§15).
-2. **`RANGE` works no Strips.** It owns airspace state — schedule, activation, release direction. Give it a Field State board.
-3. **`OPS` originates the Flight Data Record**, matching the real BASOPS path in which the pilot files with base operations and base operations forwards to the centre `[Coord §2.5]`. It is also the owner of Field State actions under §9.7.
+2. **`RANGE` works no Strips.** It owns airspace state — schedule, activation, release direction. Give it a Runway Status board.
+3. **`OPS` originates the flight data**, matching the real BASOPS path in which the pilot files with base operations and base operations forwards to the centre `[Coord §2.5]`. It is also the owner of Runway Status actions under §9.7.
 4. **`RSU` and `CV_PRIFLY` are supervisory positions over a visual pattern**, not radar control positions. Their Bay is a pattern board, not a strip rack.
 
 **Positions are not signed into. They are derived from the controller's selected radar stations, they combine freely including across Facilities, and the set changes live during a session.** This is a property of the host CRC, it is the normal operating condition under low manning, and it governs §4.8 — read that before implementing anything in this section.
@@ -401,7 +401,7 @@ Default Bay sets `[SOURCE-DEFINED]` — the real TFDM bay names are not publishe
 
 | Position | Bays |
 |---|---|
-| `OPS` | Filed · Proposed · Field State · Coordination |
+| `OPS` | Filed · Proposed · Runway Status · Coordination |
 | `CD` | Pending Clearance · Cleared · Held · Coordination |
 | `GC` | Pushback · Taxi Out · Taxi In · Coordination |
 | `LC` | Runway Queue (one Rack per runway) · Airborne · Arrivals · Coordination |
@@ -409,7 +409,7 @@ Default Bay sets `[SOURCE-DEFINED]` — the real TFDM bay names are not publishe
 | `AP` | Inbound · In Sector · Departures · Handed Off · Coordination |
 | `SFA` | Assigned Frequencies (one Rack per frequency — §4.7) |
 | `PAR` | On Final (one Strip at a time, minimal — §7.10) |
-| `CTR` | Inbound · In Sector · Delegated to APP · Forwarded · Coordination |
+| `CTR` | Inbound · In Sector · Delegated to AP · Forwarded · Coordination |
 | `RANGE` | Airspace board (not a strip rack) — scheduled, active, released, returned |
 | `TAC_C2` | Tasked · Airborne · On Station · Tanker · Coordination |
 | `AIC` / `GCI` | On Station · Committed · Coordination |
@@ -457,7 +457,7 @@ TransferStrip {
 
 **The Strip does not cross the Facility boundary.** Each Facility materialises its own Strip from forwarded data: FDIO strips print locally on defined triggers including facility-boundary crossing; the orders oblige forwarding of *data*, not the artefact; and each holder keeps its own Strip current and removes it on its own schedule `[Coord §2.6]`.
 
-> **One logical Flight Data Record; N per-Facility Strip replicas; synchronised by data messages plus coordination events.**
+> **One logical flight data; N per-Facility Strip replicas; synchronised by data messages plus coordination events.**
 
 Implementing this as a strip *move* across Facilities is defect class **D13** (§15).
 
@@ -823,7 +823,7 @@ This buys per-facility layouts without forking components, and makes "click to c
 Requirements:
 
 1. Correlation keys, in priority order: explicit controller binding → Mode 3/A beacon code → callsign exact match → callsign fuzzy match (flagged as provisional).
-2. `TrackRef` MUST tolerate the underlying track identity changing. Store the correlation as its own record with its own history; do not store a raw track ID on the FDR.
+2. `TrackRef` MUST tolerate the underlying track identity changing. Store the correlation as its own record with its own history; do not store a raw track ID on the flight data.
 3. **A track identity change MUST NOT silently break the binding.** It MUST either re-bind on the beacon code or raise an uncorrelated warning on the Strip.
 4. Selecting a Strip MUST highlight its track within 1 second (the measured real-world benchmark), and vice versa.
 5. Render correlation state on the Strip: `CORRELATED`, `PROVISIONAL`, `UNCORRELATED`. EuroScope keys its whole tag-type system to correlation state `[Annex §15.4]`; that is the right instinct.
@@ -935,7 +935,7 @@ FAA doctrine states plainly that **"national standardization of items (10 throug
 
 | Domain | Configurable |
 |---|---|
-| Strip layout | Block Map per Strip Role: visibility, required/optional, label, format, actions (§6.5) |
+| Strip layout | Block Map per strip type: visibility, required/optional, label, format, actions (§6.5) |
 | Bays | Bay set per Position; Racks per Bay; sort keys; partition rules |
 | Runways | Runway list; Rack-per-runway mapping; arresting-gear configuration (§9.7) |
 | Colours | Full palette, per state and per alert tier |
@@ -1018,7 +1018,7 @@ Lost-comms rule to implement as an advisory: separate assuming the aircraft main
 
 `M14` ∈ `{CLEAN, LOADED, HUNG, EXPENDED}`.
 
-`HUNG` MUST propagate to field state: verified local practice is that hung ordnance influences **runway selection** — Kunsan selects the runway that minimises taxi distance to the hot cargo pad, weather permitting `[Annex §13.8]`. Implement as an advisory on runway assignment plus a routing constraint toward the designated hazardous-cargo parking area.
+`HUNG` MUST propagate to runway status: verified local practice is that hung ordnance influences **runway selection** — Kunsan selects the runway that minimises taxi distance to the hot cargo pad, weather permitting `[Annex §13.8]`. Implement as an advisory on runway assignment plus a routing constraint toward the designated hazardous-cargo parking area.
 
 ### 9.6 Alert and scramble
 
@@ -1030,11 +1030,11 @@ Implement: a `SCRAMBLE` Strip MUST raise a Board-wide priority indication, and M
 
 **[GAP] Do not implement a scramble/interceptor priority *ordering* from this guide.** FAA JO 7110.65 §2-1-4 (Operational Priority) and §9-2-7 (Interceptor Operations) were not read `[Annex §13.7]`. Read them before writing priority logic; until then, `SCRAMBLE` raises an indication and the controller decides.
 
-### 9.7 Field state — the arresting-gear model
+### 9.7 Runway status — the arresting-gear model
 
 This is the highest-value military-specific feature in the guide, and it has no civil equivalent.
 
-Verified: arresting-gear configuration is a **field state that gates runway availability**, and changing it **suspends runway operations pending a post-configuration inspection**. Barrier Maintenance notifies AMOPS and the tower before reconfiguration; operations resume only after AMOPS performs the inspection `[Annex §13.8]`.
+Verified: arresting-gear configuration is a **runway status that gates runway availability**, and changing it **suspends runway operations pending a post-configuration inspection**. Barrier Maintenance notifies AMOPS and the tower before reconfiguration; operations resume only after AMOPS performs the inspection `[Annex §13.8]`.
 
 ```
 RunwayStatus {
@@ -1057,7 +1057,7 @@ Rules:
 2. Resumption MUST require an explicit inspection-complete action attributable to a Position — by default `OPS` (AMOPS) `[Annex §13.8]`.
 3. A **runway change MUST require coordination with `OPS` and `AP`** before it can be initiated. The verified real-world rule is that the tower coordinates with the Supervisor of Flying and the RAPCON; SOURCE has no separate SOF Position, so `OPS` carries that role. Implement as a coordination workflow with acknowledgements, not a dropdown.
 4. Aircraft with `M15` hook requirement MUST be checked against gear state on approach; a mismatch alerts.
-5. Field state changes MUST broadcast on the Board sequence like any other Mutation and MUST appear in the audit log.
+5. Runway status changes MUST broadcast on the Board sequence like any other Mutation and MUST appear in the audit log.
 
 ### 9.8 The tactical Position and the ATO mission line
 
@@ -1074,11 +1074,11 @@ Rules:
 
 **The bridge field is the Mode 3/A code.** It appears in the ATO's `MSNACFT` IFF/SIF fields and in the Strip's beacon Block. Everything else is joined by convention, voice or agreement.
 
-Implement the `MISSION` Strip Role with its own Block Map drawn from the military extension namespace, and bind it to the same FDR as any tower Strip for that flight. **Joining the ATO refueling line to the ATC strip is something a milsim panel can do that a real one cannot** — do it, and make it visible.
+Implement the `MISSION` strip type with its own Block Map drawn from the military extension namespace, and bind it to the same flight data as any tower Strip for that flight. **Joining the ATO refueling line to the ATC strip is something a milsim panel can do that a real one cannot** — do it, and make it visible.
 
 ### 9.9 ATO ingest
 
-Ingest USMTF-style ATO sets and map them onto FDRs. Mapping per `[Annex §14.3]`:
+Ingest USMTF-style ATO sets and map them onto flight data. Mapping per `[Annex §14.3]`:
 
 | Set | Target |
 |---|---|
@@ -1196,7 +1196,7 @@ Apply the same shape to departure time, off-block time and takeoff time. The cho
 
 1. Transfer success rate MUST be ≥ 99.5% measured over a session (the real-world benchmark is 99.68–100% `[Annex §4]`).
 2. No Mutation may be lost on reconnect (§5.6).
-3. Server restart MUST NOT lose the Board. Persist Strips, Bays, order keys and field state.
+3. Server restart MUST NOT lose the Board. Persist Strips, Bays, order keys and runway status.
 
 ### 11.2 Time and units
 
@@ -1270,7 +1270,7 @@ Acceptance: a reviewer who has not read the codebase can, from the report alone,
 
 **Entry:** WP0 accepted.
 
-Deliverables: protobuf schema for FDR, Strip, Bay, Rack, Mutation, presence, Board events; server-side Board store with revisions, order keys and the Mutation log; WebSocket channel with version negotiation, sequence numbers, snapshot and delta resync.
+Deliverables: protobuf schema for flight data, Strip, Bay, Rack, Mutation, presence, Board events; server-side Board store with revisions, order keys and the Mutation log; WebSocket channel with version negotiation, sequence numbers, snapshot and delta resync.
 
 Acceptance:
 
@@ -1308,7 +1308,7 @@ Deliverables: data-driven Block Map (§6.5); Departure, Arrival and Overflight m
 
 Acceptance:
 
-- All Blocks marked required in §6.2 render, with correct labels, on a Strip built from a fixture FDR.
+- All Blocks marked required in §6.2 render, with correct labels, on a Strip built from a fixture flight data.
 - Amending a Block leaves the prior value visible and struck through.
 - An altitude cannot be struck as vacated without an explicit confirm action.
 - `Enter` commits; `Esc` reverts; blur does neither.
@@ -1375,21 +1375,21 @@ Acceptance:
 
 **Entry:** WP4.
 
-Deliverables: military extension Blocks (§6.4); MARSA relation with the course/altitude-change void interlock (§9.2); field state with arresting-gear gating and the runway-change coordination workflow (§9.7); alert/scramble constraints (§9.6); ordnance state (§9.5); MTR fields (§9.4); stereo route table (§9.10); airspace activation authority (§9.11).
+Deliverables: military extension Blocks (§6.4); MARSA relation with the course/altitude-change void interlock (§9.2); runway status with arresting-gear gating and the runway-change coordination workflow (§9.7); alert/scramble constraints (§9.6); ordnance state (§9.5); MTR fields (§9.4); stereo route table (§9.10); airspace activation authority (§9.11).
 
 Acceptance:
 
 - A heading or altitude assignment to a MARSA participant before rendezvous voids the relation, sets `voidedBy`, and alerts every participant Strip.
 - A barrier reconfiguration suspends the runway, inhibits takeoff and landing NLA with the reason shown, and requires an attributable inspection-complete action to resume.
 - A runway change cannot be initiated without `OPS` and `AP` acknowledgement.
-- A stereo route filed by short name produces a complete FDR.
+- A stereo route filed by short name produces a complete flight data.
 - No UI text or code comment presents a `[SOURCE-DEFINED]` behaviour as real-world doctrine. **Audit this explicitly.**
 
 ### WP7 — ATO ingest and the tactical Position
 
 **Entry:** WP6.
 
-Deliverables: ATO set parser and mapping (§9.9); `MISSION` Strip Role and `TAC_C2` Bays; AR line ↔ tanker Strip join; ATO↔Strip binding on Mode 3/A.
+Deliverables: ATO set parser and mapping (§9.9); `MISSION` strip type and `TAC_C2` Bays; AR line ↔ tanker Strip join; ATO↔Strip binding on Mode 3/A.
 
 Acceptance:
 
@@ -1401,7 +1401,7 @@ Acceptance:
 
 **Entry:** WP4A.
 
-Deliverables: `MARSHAL`, `FINAL` and `PATTERN` Strip Roles; the marshal stack with stack index as the authoritative key (§9.12); Case as broadcast session state; the four heterogeneous ownership transfers; ship-state banner with computed final bearing; the shared `FINAL` component for `PAR` and the carrier Final lane (§7.10); `SFA` frequency-rotation transfer (§4.7).
+Deliverables: `MARSHAL`, `FINAL` and `PATTERN` strip types; the marshal stack with stack index as the authoritative key (§9.12); Case as broadcast session state; the four heterogeneous ownership transfers; ship-state banner with computed final bearing; the shared `FINAL` component for `PAR` and the carrier Final lane (§7.10); `SFA` frequency-rotation transfer (§4.7).
 
 Acceptance:
 

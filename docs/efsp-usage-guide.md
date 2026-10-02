@@ -1,14 +1,14 @@
 # EFSP usage guide
 
-A working reference for the Electronic Flight Strip Panel — what's built, how to drive it, and what every field on a Strip/FDR is for. Kept current as the panel grows; see `docs/adr/` for the reasoning behind any of this, and `EFSPImplementationGuide.md` for the spec it implements.
+A working reference for the Electronic Flight Strip Panel — what's built, how to drive it, and what every field on a Strip/flight data is for. Kept current as the panel grows; see `docs/adr/` for the reasoning behind any of this, and `EFSPImplementationGuide.md` for the spec it implements.
 
 ## 1. Status right now
 
 Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green per lane; the Playwright suite has not been recorded on the merged branch, see the briefing). This reflects `efsp-wp5-correlation`, including Incirlik's RSU/SFA/PAR (§8L) and OVERFLIGHT's four-state lifecycle (`adr/0087`):
 
 - **WP0-WP4** (guide): domain model, Mutation protocol, Position occupancy/combination, Block Map, Bays/Racks/drag, States/NLA/transfer, 30s Undo.
-- **WP4A first slice**: a second Facility (`CENTER`/`CTR`) alongside `INCIRLIK`'s five Positions; the 5 cross-Facility coordination primitives (`HANDOFF`/`POINT_OUT`/`TRAFFIC`/`OPERATIONAL_REQUEST`/`AIT`) between `AP` and `CTR`; per-Facility Strip replication (two independent Strips linked by `coordination`, not one moved Strip); `EDCT`/`CALL_FOR_RELEASE` release states + standing-release envelopes; airspace ownership as a direction; track-degradation soft interlock; timed forwarding-obligation alerts — see §8.
-- **WP4A second slice**: the `TACTICAL` Facility (`TAC_C2`/`AIC`/`GCI`/`JTAC`), a `MISSION` Strip Role, and TOFI — the ATC⇄MRU exchange for handing a flight into tactical control and getting it back (`docs/adr/0025`/`0026`).
+- **WP4A first slice**: a second Facility (`CENTER`/`CTR`) alongside `INCIRLIK`'s five Positions; the 5 cross-Facility coordination primitives (`HANDOFF`/`POINT_OUT`/`TRAFFIC`/`OPERATIONAL_REQUEST`/`AIT`) between `AP` and `CTR`; per-Facility Strip replication (two independent Strips linked by `coordination`, not one moved Strip); `EDCT`/`CALL_FOR_RELEASE` departure release states + standing-release envelopes; airspace ownership as a direction; track-degradation soft interlock; timed forwarding-obligation alerts — see §8.
+- **WP4A second slice**: the `TACTICAL` Facility (`TAC_C2`/`AIC`/`GCI`/`JTAC`), a `MISSION` strip type, and TOFI — the ATC⇄MRU exchange for handing a flight into tactical control and getting it back (`docs/adr/0025`/`0026`).
 - **The `RANGE` station**: MOAs and ranges as real entities with a booked schedule, an activation approval round trip, and flights approved onto a working or range-control frequency — see §8A.
 - **Flight-plan pre-fill**: `OPS`'s CreateStrip form looks up a pilot-submitted DD1801 (ICAO IFR) flight plan from sourcedcs-web by callsign and pre-fills the departure fields — see §4.
 - **`ops-filed` queue**: `OPS`'s `ops-filed` Bay now shows every currently-filed DD1801 plan as a card, each with a one-click "Create Strip" — see §4. ⚠️ **Requires a deployment step to actually work** — see the callout at the end of §4.
@@ -21,7 +21,7 @@ Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green per lan
   - **The mission line exists from tasking** — `TAC_C2` frags a mission line against a filed flight before it moves, and TOFI later lands on the one that is already there. Accepting tactical control now requires stating the separation regime. See §8C1.
   - **Every Block is reachable, and amendments are visible** — the `▼` button on a Strip opens the Blocks that have no chip, and a superseded value now shows struck through in the Block itself (§3.7). Heading and initial altitude are chips on a DEPARTURE Strip; the radar vector is one on ARRIVAL/OVERFLIGHT. See §4B.
   - **MTR fields** — the military training route a flight is on, where it enters and leaves, and the altitude it wants after exit. See §4C.
-  - **The runway (field state)** — Tower owns the runway, everyone else asks; closing it or taking it out for works holds the traffic that would use it; the active runway comes from the wind at mission start. The RUNWAY STATUS panel and the runway chips on the Strip are in. See §8G.
+  - **The runway (runway status)** — Tower owns the runway, everyone else asks; closing it or taking it out for works holds the traffic that would use it; the active runway comes from the wind at mission start. The RUNWAY STATUS panel and the runway chips on the Strip are in. See §8G.
 - **Forwarding-obligation alerts clear themselves** once the obligation is met or no longer due. Nothing to acknowledge. See §8.
 - **Contact colours come from IFF interrogation**, not from the game's idea of a side, and nothing on the ground is hidden any more. See §8F.
 - **All declutter is off** until the EFSP work is finished: formation labels and navpoint names both show. See §8F.
@@ -45,7 +45,7 @@ Facility/Position map as it stands:
 
 | Facility | Positions | Notes |
 |---|---|---|
-| `INCIRLIK` | `OPS`, `CD`, `GC`, `LC`, `AP` (+ `RSU`, `SFA`, `PAR`, §8L) | Covering chain `CD→GND→TWR→APP` (`SFA`, `PAR` → `AP`; `RSU` has none) |
+| `INCIRLIK` | `OPS`, `CD`, `GC`, `LC`, `AP` (+ `RSU`, `SFA`, `PAR`, §8L) | Covering chain `CD→GC→LC→AP` (`SFA`, `PAR` → `AP`; `RSU` has none) |
 | `CENTER` | `CTR` | No covering chain (mirrors `OPS`) |
 | `CARRIER` | `CV_MARSHAL`, `CV_PRIFLY`, `CV_APP1`, `CV_APP2` | Covering chain `CV_APP2→CV_APP1→CV_MARSHAL`; `CV_PRIFLY` is outside it (§8K) |
 | `TACTICAL` | `TAC_C2`, `AIC`, `GCI`, `JTAC` | `AIC`/`GCI`/`JTAC` covered by `TAC_C2`; `AIC` and `JTAC` work only lines `TAC_C2` hands them (§8C1) |
@@ -62,7 +62,7 @@ The full pre-departure chain is `PROPOSED → PENDING_CLEARANCE → CLEARED → 
 
 Equivalently: drag the Strip directly into `CD`'s `cd-cleared` Bay — `_validateBayImpliedTransition` enforces the exact same flight-plan-valid gate on the drag path (guide §3.5 rule 4: NLA is an accelerator, never the *only* path).
 
-One extra gate exists on the state **after** CLEARED: `CLEARED`'s own NLA ("Approve Pushback") additionally checks `flightData.assigned.departureRelease === 'RELEASED'` — if the flight has any other release state (`HOLD_FOR_RELEASE`, `RELEASE_TIME`, `CLEARANCE_VOID_TIME`, `EDCT`, `CALL_FOR_RELEASE`), pushing past `CLEARED` is inhibited (`"a hold is in force"`) until that clears — see §7 below.
+One extra gate exists on the state **after** CLEARED: `CLEARED`'s own NLA ("Approve Pushback") additionally checks `flightData.assigned.departureRelease === 'RELEASED'` — if the flight has any other departure release state (`HOLD_FOR_RELEASE`, `RELEASE_TIME`, `CLEARANCE_VOID_TIME`, `EDCT`, `CALL_FOR_RELEASE`), pushing past `CLEARED` is inhibited (`"a hold is in force"`) until that clears — see §7 below.
 
 Per-State authority table for reference (who's allowed to advance a Strip **out of** its current state):
 
@@ -76,7 +76,7 @@ Per-State authority table for reference (who's allowed to advance a Strip **out 
 | `TAXI` | `GC` | To Runway Queue | `RUNWAY_QUEUE` (transfers to `LC`) |
 | `RUNWAY_QUEUE` | `LC` | Line Up and Wait | `LUAW` |
 | `LUAW` | `LC` | Cleared for Takeoff | `DEPARTED` |
-| `DEPARTED` | `LC` | Hand Off to APP | `HANDED_OFF` (transfers to `AP`, intrafacility) |
+| `DEPARTED` | `LC` | Hand Off to AP | `HANDED_OFF` (transfers to `AP`, intrafacility) |
 | `HANDED_OFF` | `AP` | Drop | `DROPPED` |
 
 ARRIVAL lifecycle is `INBOUND → HANDED_TO_TOWER → FINAL → LANDED → TAXI_IN → DROPPED`, owned by `AP`(or `CTR`)/`LC`/`LC`/`LC`/`GC` respectively. A `CENTER`-held `INBOUND` Strip has **no** ordinary NLA at all — its next action is the **Coordinate** button (§8), not this table.
@@ -115,8 +115,8 @@ Every Position's Bay set is fixed by `facility-config.js` (guide §4.2). A Bay w
 
 | Bay | Implies state | Intended usage |
 |---|---|---|
-| `lc-runway-queue` | `RUNWAY_QUEUE` | Departure sequencing — **one Rack per runway direction** (`rwy-05`, `rwy-23`). Order within a Rack *is* the departure sequence (guide §4.2) — this is the one Bay where Strip order in the Rack is operationally meaningful, not just cosmetic. GND's "To Runway Queue" files a Strip into the Rack of its runway: the one on its flight plan, else the active runway (§8G). |
-| `lc-airborne` | `DEPARTED` | Strips that have taken off, waiting on "Hand Off to APP" (staffing-gated — nothing happens until `AP` is occupied or covered). |
+| `lc-runway-queue` | `RUNWAY_QUEUE` | Departure sequencing — **one Rack per runway direction** (`rwy-05`, `rwy-23`). Order within a Rack *is* the departure sequence (guide §4.2) — this is the one Bay where Strip order in the Rack is operationally meaningful, not just cosmetic. GC's "To Runway Queue" files a Strip into the Rack of its runway: the one on its flight plan, else the active runway (§8G). |
+| `lc-airborne` | `DEPARTED` | Strips that have taken off, waiting on "Hand Off to AP" (staffing-gated — nothing happens until `AP` is occupied or covered). |
 | `lc-arrivals` | `HANDED_TO_TOWER` | **Arrivals** handed to you from `AP`'s inbound sequence — your intake queue for the arrival side. |
 | `lc-final` | `FINAL` | Arrivals on final approach. |
 | `lc-landed` | `LANDED` | Just-landed arrivals, waiting on hand-off to `GC` for taxi-in. |
@@ -321,10 +321,10 @@ Positions at once.
 
 - In a Bay you are **not** looking at: that Bay's tab turns amber with **+N**, the
   Position tab gets an amber dot, and a line appears under the Bay tabs:
-  `VIPER11 → lc-runway-queue from GND`. Click it to open the Bay with the Strip
+  `VIPER11 → lc-runway-queue from GC`. Click it to open the Bay with the Strip
   selected. Opening the Bay clears the tab and the line.
 - In the Bay you **are** looking at: the Strip flashes once and keeps an amber edge
-  and a **from GND** line in its tab until you touch it, or for 30 seconds.
+  and a **from GC** line in its tab until you touch it, or for 30 seconds.
 
 Not announced: a Strip you just created, a reorder within a Bay, or a change that
 leaves a Strip where it was. The "from" line names the Position it came from, or the
@@ -333,12 +333,12 @@ Bay when it moved within one Position.
 ### The fields, and the `▼` button
 
 Each Position sees the fields it works, not all of them: Tower sees HOOK and ORDNANCE (ORDNANCE is always on
-Tower's face and on OPS's departure face, where the load state is recorded; on APP, CTR and mission lines it
+Tower's face and on OPS's departure face, where the load state is recorded; on AP, CTR and mission lines it
 joins the face only once it is not CLEAN, and is always one `▼` away: a pilot reports hung ordnance to
-whoever they are talking to, H55), APP and CTR see FREQ, and on a departure also RELEASE (Block `14A`, the
-release state, where the release travels, §7), CTR sees the TOFI fields (`KEEP IFR` is TOFI's `ifrActive`:
+whoever they are talking to, H55), AP and CTR see FREQ, and on a departure also RELEASE (Block `14A`, the
+departure release state, where the release travels, §7), CTR sees the TOFI fields (`KEEP IFR` is TOFI's `ifrActive`:
 the flight stays IFR under tactical control and ATC keeps separating it; hover it), the airfield Positions
-see the runway, GND sees TAXI (`17`) and TWR TAKEOFF (`18`). TYPE already carries the aircraft and wake:
+see the runway, GC sees TAXI (`17`) and LC TAKEOFF (`18`). TYPE already carries the aircraft and wake:
 clicking it edits the bare aircraft type (Block `3A`); the wake category stays in `▼`. CID and TAIL are on
 no Strip. The full table is in `docs/adr/0056`.
 
@@ -408,7 +408,7 @@ Three times fall back to an estimate until a controller types the actual (§10.5
 - **Hover the value, or the label in `▼`,** to see where it came from, e.g. *"~1430Z estimate: P-time,
   from the filed DD-1801 (item 13, EOBT)"*. After you have typed one, the hover also says what you would
   get back if you cleared it.
-- **Gotchas.** `TAXI` is on GND's face and `TAKEOFF` on TWR's. A `TAXI` or `TAKEOFF` a controller already
+- **Gotchas.** `TAXI` is on GC's face and `TAKEOFF` on LC's. A `TAXI` or `TAKEOFF` a controller already
   typed does **not** move when the P-time later changes (a controller's entry stops the chain); one typed
   earlier than the (new) proposed departure is shown with a dotted underline and a hover saying why a
   typed time does not follow a P-time. **Retyping the value an estimate shows now accepts it as the
@@ -438,11 +438,11 @@ with the exit fields first, because the exit is what you need at a glance:
 
 | Strip | Position | On the face |
 |---|---|---|
-| DEPARTURE, OVERFLIGHT | APP, CTR | all six: MTR · EXIT · EXIT EST · EXIT ALT · ENTRY · ENTRY TM |
-| ARRIVAL | APP, CTR | MTR · EXIT · EXIT EST · EXIT ALT |
+| DEPARTURE, OVERFLIGHT | AP, CTR | all six: MTR · EXIT · EXIT EST · EXIT ALT · ENTRY · ENTRY TM |
+| ARRIVAL | AP, CTR | MTR · EXIT · EXIT EST · EXIT ALT |
 | any | OPS | MTR · ENTRY · ENTRY TM |
 | any | CD | MTR |
-| any | GND, TWR | none (still in ▼) |
+| any | GC, LC | none (still in ▼) |
 
 A MISSION line has no MTR Blocks: the mission line shares the flight with its ATC Strip, and the
 route is recorded once, there.
@@ -474,7 +474,7 @@ Two things to know when a pilot changes his plan:
 Strip {
   stripId          UUID, immutable identity
   cid               3-digit sequential display code (Block 4) — [SOURCE-DEFINED] format
-  flightDataId             reference to the FDR this Strip presents (§6)
+  flightDataId             reference to the flight data this Strip presents (§6)
   rev               optimistic-concurrency counter — every Mutation must supply the baseRev it read
   stripType              'DEPARTURE' | 'ARRIVAL' | 'OVERFLIGHT' | 'MISSION' — picks which Block Map/NLA table applies
   state             the EfspState (Block 25) — see the tables in §2
@@ -498,12 +498,12 @@ Strip {
 
 **`annotations`** — append-only cells for any Block routed `{kind:'annotation'}` in the Block Map (§6). Each cell is a list of `Entry{value, status, at, by}`; `status ∈ ACTIVE|SUPERSEDED|STRUCK|PREPLANNED`. Amending appends a new `ACTIVE` entry and marks the old one `SUPERSEDED` — never overwrites (guide §3.7, FAA JO 7110.65 ¶2-3-1: "do not erase or overwrite any item"). `confirmVacated: true` on a `SetBlock` marks the current `ACTIVE` entry `STRUCK` instead (for altitude-type Blocks — a controller confirming the aircraft has actually left an altitude, never automatic on assignment).
 
-## 6. FDR fields
+## 6. flight data fields
 
-The FDR (`Flight Data Record`) is the authoritative flight record a Strip presents — separate on purpose (guide §3.1): one FDR per flight, N Strip *presentations* of it (only one this slice, except a WP4A coordination replica — §8). `assigned` fields are the ones ATC actually writes.
+The flight data (`flight data`) is the authoritative flight record a Strip presents — separate on purpose (guide §3.1): one flight data per flight, N Strip *presentations* of it (only one this slice, except a WP4A coordination replica — §8). `assigned` fields are the ones ATC actually writes.
 
 ```
-FDR {
+flight data {
   flightDataId, rev
   identity: {
     callsign, flightSize, aircraftType, wakeCategory,
@@ -550,18 +550,18 @@ FDR {
 - **`identity`** — "who/what is this aircraft" (callsign, type, squawk, equipment). Mostly filled at creation; `beaconAssigned` is minted automatically unless overridden.
 - **`beaconAssigned` and `beaconObserved` are two fields on purpose**, and comparing them is the point: they match (all well), they differ (the pilot is squawking the wrong code — the Strip shows `TRK?`), or observed is null (assigned, nothing received — either the transponder is off or nothing has correlated yet). Collapsing them into one would hide a mismatch entirely, which is a defect the guide names by number. `beaconObserved` is written by the correlation subsystem, never by a controller.
 - **`filed`** — "what the pilot/flight plan asked for" (route, altitude, airports, times). This is what `isFlightPlanValid` checks before `CLEARED` is reachable, and what §4's pre-fill populates.
-- **`assigned`** — "what ATC has actually granted" (clearance, release state/timing, ATIS code, movement times). This is the bucket that changes as a flight progresses through the departure sequence.
+- **`assigned`** — "what ATC has actually granted" (clearance, departure release state/timing, ATIS code, movement times). This is the bucket that changes as a flight progresses through the departure sequence.
 - **`airspace`** — WP4A only, a delegated-airspace direction, orthogonal to everything else.
 - **`military`** — guide §6.4's military extension namespace. Two single fields are live and enterable from the Strip: **Block 3G (`ORDNANCE`)**, a four-value picker, and **Block 3F (`HOOK`)**, a ✓ toggle; so are the six MTR fields (§4C). Both sit in the 3-family beside aircraft type and tail number, because they are facts about the airframe, and both are on DEPARTURE, ARRIVAL and OVERFLIGHT Strips. Everything else in the object is present but unwritable — the field exists so its arrival later is not a schema change, and the server refuses a write to it by name rather than ignoring one.
   - **`HOOK` ✓ means the aircraft requires arresting gear.** It is not "has a tailhook". The `HOOK` chip (§8G) reads it that way, and only when a runway has configured gear. DCS does not simulate arresting wires, so the runway's gear is kept as data only, and Incirlik has none configured.
-  - **Setting `ORDNANCE` to `HUNG` raises an amber `HUNG` chip on every Position's Strip for that flight** (and on the mission line, which shares the FDR), with one reason line: *"Hung ordnance. SOURCE practice: after landing, taxi to Hot cargo pad; the runway is the controller's call. Runway 05/23 (05) assigned."* On a departure it says "if it returns". The runway named is whatever the Strip resolves to (its runway Rack, then 8A/8B, then the active end); the line never recommends one, and the pad is a name with no position. **It is advice only: it never disables the next-step button, never reorders a queue, and the flight lands, taxis and drops as usual.** Set `CLEAN` or `EXPENDED` when the pilot reports the store safe and the chip goes. Nothing is raised for `LOADED`. With no field state (a Facility with no inventory) the line reads "The hot cargo pad is shown when field state is available."
+  - **Setting `ORDNANCE` to `HUNG` raises an amber `HUNG` chip on every Position's Strip for that flight** (and on the mission line, which shares the flight data), with one reason line: *"Hung ordnance. SOURCE practice: after landing, taxi to Hot cargo pad; the runway is the controller's call. Runway 05/23 (05) assigned."* On a departure it says "if it returns". The runway named is whatever the Strip resolves to (its runway Rack, then 8A/8B, then the active end); the line never recommends one, and the pad is a name with no position. **It is advice only: it never disables the next-step button, never reorders a queue, and the flight lands, taxis and drops as usual.** Set `CLEAN` or `EXPENDED` when the pilot reports the store safe and the chip goes. Nothing is raised for `LOADED`. With no runway status (a Facility with no inventory) the line reads "The hot cargo pad is shown when runway status is available."
   - **ORDNANCE is on the mission line too** (`3G` on `MISSION`, H55) because it is the same field as on the ATC twin. HOOK is not: it gates a runway, which a mission line never uses.
   - The guide numbers these `M14`/`M15` in its §6.4 table. **Those numbers are not used as Block ids here** — the `M`-prefix belongs to the MISSION Strip's own Block Map, which uses `M1`–`M8` with different meanings. The mapping between the guide's numbers and this system's Block ids is in `docs/adr/0052`.
 - **`trackRef`** — permanently null, and kept only so its absence isn't a schema change later. The correlation lives in its own store keyed by `flightDataId`, because one flight can have several Strips and they are all the same aircraft — see §8C.
 
 ## 7. Release states (why a Strip can be stuck at CLEARED/HELD)
 
-Set the release state on Block **14A** (`RELEASE`, a picker; it was labelled `RLS ST` before UI-A) and, for a void time, Block **14D**.
+Set the departure release state on Block **14A** (`RELEASE`, a picker; it was labelled `RLS ST` before UI-A) and, for a void time, Block **14D**.
 Anything other than `RELEASED` holds the Strip at `CLEARED` — move it to `HELD`, which is what
 `HELD` means, and the time-based gates below are checked there.
 
@@ -586,13 +586,13 @@ expansion is — and stops covering one the moment somebody amends its route, be
 label. Envelopes configured before stereo routes existed, which named a route string, still work
 unchanged.
 
-## 8. WP4A: cross-Facility coordination (APP ↔ CTR)
+## 8. WP4A: cross-Facility coordination (AP ↔ CTR)
 
 Only `AP` and `CTR` can use this. It's a **separate mechanism** from the ordinary NLA chain above — "the Strip does not cross the Facility boundary" (guide §4.6). A `HANDOFF`/etc. creates a **second, independent Strip** at the receiving Facility, linked (not merged) to the sender's.
 
 **To hand an inbound flight from `CTR` to `AP`:**
 1. Acting as `CTR`, create a Strip (the callsign box works for `CTR` too now — it originates an `ARRIVAL` Strip in `ctr-enroute`; no flight-plan pre-fill for this path, see §4's scope note).
-2. Click **Coordinate…** on the Strip, pick `HANDOFF`, add a note if the FDR has a `trackDegradationFlag` set (required in that case), press Send.
+2. Click **Coordinate…** on the Strip, pick `HANDOFF`, add a note if the flight data has a `trackDegradationFlag` set (required in that case), press Send.
 3. This creates a new Strip in `AP`'s `ap-coordination` Bay, `coordination.state: 'INITIATED'`.
 4. Acting as `AP`, click **Accept** on that Strip — it moves to `ap-inbound`, `state: INBOUND`, and both sides' `coordination.state` become `'ACTIVE'`. Data ownership and separation responsibility both move to `AP` (`HANDOFF`'s full-jurisdiction row).
 5. From here the `AP`-side Strip proceeds through the normal `ARRIVAL` chain (§2). The `CTR`-side Strip stays in `ctr-enroute` — drop it manually once you're done with it (each side is independently removable).
@@ -790,7 +790,7 @@ toolbar and choose the flight from the **bind picker** beside it — rows read
 `VIPER11 · 4201 · LTAG DCT ALPHA`, so two jets in one package with adjacent callsigns
 are distinguishable. Or type `.mission VIPER11`.
 
-- The mission line lands in **Tasked** and shares the flight's FDR, so it shows that
+- The mission line lands in **Tasked** and shares the flight's flight data, so it shows that
   flight's callsign and **its squawk** — one Mode 3/A, never a second. If the callsign
   is wrong you picked the wrong jet: drop it and frag another. There is no re-bind.
 - Leave the picker blank for a mission that never touches ATC airspace at all — that
@@ -813,7 +813,7 @@ being worked enroute (`HANDED_OFF` / `INBOUND` / `TRANSITING`).
    has a mission line the proposal lands **on it** — no second Strip appears, and it
    does not move out of the Bay it is in.
 2. The MRU presses **Accept TOFI Entry** — and **must pick a separation regime** from
-   the `<select>` beside the button. This is what the FDR records as the answer to
+   the `<select>` beside the button. This is what the flight data records as the answer to
    "who is separating this aircraft", and it is asked rather than guessed because it
    comes from the governing agreement. An accept without one is refused.
 3. **Transfer Comms** is a separate press, from either side.
@@ -851,7 +851,7 @@ AIC's to change`).
   it, listing the live MISSION lines AIC and JTAC hold, so a `TAC_C2`-only controller can see one and Accept
   `CTR`'s exit from the panel. It is read-only guidance: nothing can be dropped on it, and it lists mission
   lines only. **Gap:** a line `GCI` holds is not listed (GCI is not a `TAC_C2` delegate).
-- **JTAC.** A JTAC is **sent only the lines `TAC_C2` has handed it**: its Strips, FDRs, correlations,
+- **JTAC.** A JTAC is **sent only the lines `TAC_C2` has handed it**: its Strips, flight data, correlations,
   MARSA and alerts for those flights, and nothing else on any Board. It annotates nothing, binds no
   contact, declares no MARSA, and can only **hand back** (to `TAC_C2`). A JTAC who leaves the seat leaves
   the line with `TAC_C2`. (A controller holding nothing but `JTAC` at the Facility is not given drop-only tabs
@@ -957,7 +957,7 @@ the scope gets a coloured tag, and the track panel lists it.
 | `HDG 072` | more than 5° off the assigned heading for 10 s (after 30 s to make the turn). The number is where it is actually going, **magnetic**; where the variation is unknown the heading is not checked at all |
 | `ALT ↓` / `ALT ↑` | going the wrong way: told to climb and descending, or the reverse, faster than 500 ft/min |
 | `BUST +600` | it reached its `ALT` and has since left it by more than 500 ft |
-| `CA SNAKE21 0:55` | on present course and rate it will be within 3 NM and 1,000 ft of SNAKE21 in 55 s. Only at an ATC Position (TWR, APP, CTR…), and only when both aircraft are on your scope |
+| `CA SNAKE21 0:55` | on present course and rate it will be within 3 NM and 1,000 ft of SNAKE21 in 55 s. Only at an ATC Position (LC, AP, CTR…), and only when both aircraft are on your scope |
 
 Not a warning: a flight that has not started its climb or descent yet ("descend when ready"). Only
 a flight going the opposite way alerts. Route conformance and terrain are not checked yet.
@@ -1025,7 +1025,7 @@ the game's idea of which side it is on:
 - **Nothing on the ground is hidden.** The tower sees every aircraft on the ground within its
   radar's reach, enemy ramps included. That is on purpose for now.
 
-### The ATC scope: STARS-style blocks (TWR, APP, CTR)
+### The ATC scope: STARS-style blocks (LC, AP, CTR)
 
 If you hold an ATC Position, contacts that only an airfield, approach or carrier-approach radar sees are
 drawn the way a STARS scope draws them. A contact is still drawn the tactical way while any tactical
@@ -1055,7 +1055,7 @@ conformance tag (§8E, drawn in the app's own orange, not STARS's). A provisiona
   track panel. Acknowledgements and click-downs are local to your scope and are not synced, as on STARS.
 - A handoff you sent blinks for 5 s once accepted, then stays white until you click it green, then
   partial. It blinks only for something *this scope saw happen*: a reconnect shows the settled picture.
-  A same-Facility transfer (TWR drags a Strip to APP) blinks at the sender too. `UN` blinks when a
+  A same-Facility transfer (LC drags a Strip to AP) blinks at the sender too. `UN` blinks when a
   point-out you sent was rejected.
 - **Settings → Map Overlays → "ATC Map Background"** off gives a strict black STARS scope, **only** when
   every radar you see is an ATC radar and there is no datalink.
@@ -1105,7 +1105,7 @@ existing installs:
 
 You can turn either back on in Settings; it stays as you set it.
 
-## 8G. The runway — field state (Incirlik)
+## 8G. The runway — runway status (Incirlik)
 
 > **Server and panel are both built** (L1, L1b). The RUNWAY STATUS panel is closed by default: open it
 > from **PANELS → RUNWAY STATUS**. It has no controls of its own beyond the buttons below, and every
@@ -1122,9 +1122,9 @@ Each airfield with a runway inventory (today only Incirlik) shows:
   at which Position and when (Zulu), who asked; the last inspection; any request waiting on Tower; and
   the arresting gear. At Incirlik the gear reads "No arresting gear configured (SOURCE practice)",
   because DCS simulates no wires.
-- **The runway change:** `05 → 23 · PROPOSED · proposed by TWR (name) 1440Z`, then one chip per
-  acknowledger: `OPS ✓ 1441Z` (`✓ self` when the same person acknowledged it), `APP …` (still
-  waiting), or `APP skipped` (nobody held APP when it was proposed). A rejection or withdrawal says who
+- **The runway change:** `05 → 23 · PROPOSED · proposed by LC (name) 1440Z`, then one chip per
+  acknowledger: `OPS ✓ 1441Z` (`✓ self` when the same person acknowledged it), `AP …` (still
+  waiting), or `AP skipped` (nobody held AP when it was proposed). A rejection or withdrawal says who
   and why. After completion it reads `PENDING INSPECTION: 05/23`. A rejected change stays on the panel
   until the next proposal replaces it.
 - **The pads:** the hot cargo pad and the alert pad, by name, and whether they are occupied.
@@ -1460,7 +1460,7 @@ refusals; `source:'wire'` means the refusal was caught before any store saw it. 
 one entry: a store logs what reaches it, and the wire layer logs the refusals that never reached one
 (`unaudited`, never on the wire). Reading an entry:
 
-- `facilityId` and the FDR are on every entry. `facilityId: null` means theater-wide (correlation and
+- `facilityId` and the flight data are on every entry. `facilityId: null` means theater-wide (correlation and
   MARSA; a MARSA entry names its `flightDataIds`). An airspace entry names the controlling Facility.
 - `SetBlock` names the `blockId` and the `value` written. Coordination and TOFI entries name their
   `action` (`CANCEL`, ...). Airspace, correlation and MARSA entries carry the `clientMutationId`.

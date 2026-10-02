@@ -6,7 +6,7 @@ your work names, then write a plan before writing code. This is a handoff, not a
 **This revision supersedes the previous one.** The remaining EFSP work is being finished by many
 agents at once, in waves of parallel lanes (`docs/efsp-parallel-plan.md`). **Waves 1 and 2 and wave 3
 are merged** into `efsp-wp5-correlation` (§1), except UI-B. Wave 1
-(§3I) landed field state (server), MTR fields, the USMTF ATO parser, the carrier model, WP8 metrics and
+(§3I) landed runway status (server), MTR fields, the USMTF ATO parser, the carrier model, WP8 metrics and
 the soak harness, retracting obligation alerts, IFF from interrogation, atobrief's USMTF export and the
 gRPC reconnect fix. Wave 2 and the fixes between waves (§3J) landed the runway-status panel, hung
 ordnance, alert/scramble, the ATO on the Board and the AR join, the METRICS panel, the `9F` picker and
@@ -66,7 +66,7 @@ crc-sync/src/surveillance/iff.js          classifyIff(): the one place a contact
 crc-sync/src/efsp/position-coverage.js     which Positions grant which radars
 crc-sync/src/efsp/correlation-*.js        Strip<->contact records (flightDataId-keyed), the ladder, the 1 Hz sweep
 crc-sync/src/efsp/marsa-store.js          the MARSA relation, and the void interlock
-crc-sync/src/efsp/runway-status*.js         field state: pure rules + RunwayStatusStore, the sixth store (0061)
+crc-sync/src/efsp/runway-status*.js         runway status: pure rules + RunwayStatusStore, the sixth store (0061)
 crc-sync/src/efsp/zulu-time.js            typed HHMM -> epoch ms against the mission clock (L2)
 crc-sync/src/efsp/forwarding-obligations.js  obligations as state, retracting (0067)
 crc-sync/src/efsp/metrics.js, traffic-count.js  WP8 metrics, §11.4 traffic count, log retention (0065)
@@ -156,7 +156,7 @@ block inside an airspace, which is how two aircraft share one (`0038`).
 Two things about the shape before extending it:
 
 - **A range Position works no Strips, structurally.** Guide §4.1's Class column for `RANGE` is "Using
-  agency" and its Strip Roles column is "none". `permission.js` refuses every Strip op to the
+  agency" and its strip types column is "none". `permission.js` refuses every Strip op to the
   `USING_AGENCY` class in `canMutate` — and now every correlation op in `canCorrelate` too — by class
   rather than by absence from a table, because the `RANGES` Facility's Positions are *derived* from
   the airspace config and are never hand-listed (`0035`).
@@ -208,7 +208,7 @@ authoritative, and `los-panel.js`'s header says so.
 
 ## 3C. WP5 — track correlation
 
-`strip.correlation` was an inert hook keyed by `stripId`, and **the key was wrong** (`0045`). One FDR
+`strip.correlation` was an inert hook keyed by `stripId`, and **the key was wrong** (`0045`). One flight data
 legitimately has several Strips — per-Facility replicas, a TOFI `MISSION` Strip, an arrival converted
 in place — so a per-Strip correlation lets two replicas of one airframe disagree about which contact
 it is, and two answers to an identity question *is* the defect class §6.6 exists to prevent. The
@@ -257,7 +257,7 @@ every one in machinery that already existed and looked finished:
 | Airspace ops were invisible to the Mutation log, so a refused request left no trace anywhere | `0040` |
 | **The shipped facility config silently hid every Block added after it was written** | `0041` |
 | The Board snapshot was rewritten non-atomically after every Mutation | `0041` |
-| Nothing checked a restored snapshot's Strips, FDRs and code pool agreed | `0041` |
+| Nothing checked a restored snapshot's Strips, flight data and code pool agreed | `0041` |
 | Controller free text had no ceiling, and rides whole in every broadcast | `0041` |
 | **The sweep sampled a ~22 ms beam dwell on a 50 ms tick, so contacts were missed unpredictably** | `0043` |
 | A CVN's approach radar shared the `app:` id namespace with airport approach radars | `0042` |
@@ -299,7 +299,7 @@ changed while its client was away.
 ## 3E. Stereo routes
 
 §9.10's canned-route table, WP6's cheap deliverable (`0050`). `stereo-routes.js` is squadron config
-on `0048`'s `config/`-vs-`state/` split; `createFlightData()` expands a short name into a complete FDR
+on `0048`'s `config/`-vs-`state/` split; `createFlightData()` expands a short name into a complete flight data
 **server-side**; Block `9F` (`STEREO`) carries the name and writing it re-files the flight; a
 `<select>` beside the callsign box and `.stereo PACK1 VIPER11` both file one. WP6's acceptance
 criterion is asserted verbatim in `efsp-scenario-stereo.test.mjs`.
@@ -388,7 +388,7 @@ Four things to know before extending it:
 
 - **Both new Blocks are on all three ATC Roles, and neither was on MISSION.** (**Amended by H55,
   `0069`: `3G` is now also on `MISSION`**, appended as `MISSION_BLOCK_MAP`'s last row, because a pilot
-  reports hung ordnance to whoever they talk to; it is still the same FDR field, so one fact with a
+  reports hung ordnance to whoever they talk to; it is still the same flight data field, so one fact with a
   second surface. `3F` stays off.) `0051`'s lesson
   applied rather than remembered. MISSION is left out deliberately: it shares its `flightDataId` with the
   ATC Strip it is TOFI-linked to, so a Block there would be a *second place* to declare one
@@ -402,10 +402,10 @@ Four things to know before extending it:
   `arInfo`, `scl`, `fuelState`, `releaseAuthority`. `mtr` got its write path with L2's `9G-*`/`9H-*`
   Blocks (§3I). `alertStatus` is the one middle case: enum settled and validated, no Block yet;
   L13 gives it Block `14E`.
-- **`restore()` seeds the namespace onto an FDR that predates it.** Every board that has ever run
+- **`restore()` seeds the namespace onto a flight data that predates it.** Every board that has ever run
   has `military: null` on disk; without the seed a §9.5 reader throws on exactly the flights that
   were airborne when the service restarted. The client guards the same case, because nothing
-  reseeds an FDR already in a connected client's cache.
+  reseeds a flight data already in a connected client's cache.
 
 **`3G` `HUNG` is an advisory now (L12, `0069`) and `alertStatus` is Block `14E` (L13, `0070`)**; see
 §3J.
@@ -429,7 +429,7 @@ Five things to know before extending it:
 - **`CreateStrip` takes an optional `op.flightDataId`**, mutually exclusive with `op.flightData`,
   deliberately **role-agnostic**. Its duplicate check scans the LOCAL Board only: the
   global `liveStripsForFlightData` is role-blind, and the coordination primitives legitimately
-  put same-role Strips for one FDR on two Boards.
+  put same-role Strips for one flight data on two Boards.
 - **TOFI finds before it mints**, and `mintedForTofi` is what keeps that safe.
   `bayForImpliedState` **falls back to `bays[0]`** when no Bay implies the state,
   TAC_C2's `bays[0]` is `tac-c2-tasked`, and TAC_C2 has no Bay for `OFF_STATION` or
@@ -447,7 +447,7 @@ Five things to know before extending it:
 **And the hole (`0053`).** Nothing ever required `flightData.tofi.separationRegime` to be set.
 `TOFI_EFFECTS`/`tofiEffect` in `coordination.js` **is dead code** — it looks like it
 applies the exchange's effects and has no runtime consumer at all — so the whole of
-tactical control could run with the FDR saying nothing about who was separating the
+tactical control could run with the flight data saying nothing about who was separating the
 aircraft, and the EXIT gate then failed twenty minutes downstream for a reason nobody
 could trace. Accepting an ENTRY now **requires** the regime, asked for and never
 derived (defect D14), with a picker beside the Accept button. An ACTIVE MARSA relation
@@ -458,7 +458,7 @@ is the one exception — it owns the regime (`0051`).
 
 Each lane's full notes are in `docs/wip/<lane>.md`; what follows is what the next agent needs.
 
-**Field state, server (L1, `0061`).** `RunwayStatusStore` is the **sixth store**: one record per
+**Runway status, server (L1, `0061`).** `RunwayStatusStore` is the **sixth store**: one record per
 Facility with a `runwayStatus` inventory (INCIRLIK only), its own `rev`, its own sequence
 (`runwayStatusSeq`) and its own delta (`efsp-runway-status-delta`). That last one is a deliberate
 deviation from rule 5's "broadcast on the Board sequence". Every op is audited, refusals and
@@ -469,12 +469,12 @@ deviation from rule 5's "broadcast on the Board sequence". Every op is audited, 
   `runwayChange` are store state only. One record per pavement (`05/23`), the active **end** on the
   Facility (S-Q23).
 - `runway-status.js` is pure: the status machine (the absent `SUSPENDED_BARRIER_CHANGE → OPEN` edge
-  *is* rule 2: only the inspection reopens), runway resolution (target rack → rack → FDR 8A/8B →
+  *is* rule 2: only the inspection reopens), runway resolution (target rack → rack → flight data 8A/8B →
   active end → fail open, S-Q25), the inhibit wording, the into-wind end, `runwayAdvisoryFor`,
   `runwayRackFor`.
-- **TWR alone closes, opens and suspends** (H18). OPS, CD, GND and APP send `RequestRunwayStatus`,
-  and TWR accepts or rejects. OPS completes the works and signs off the inspection. The runway-change
-  machine takes OPS/APP acknowledgements as coordination, not permission; an unstaffed acknowledger
+- **LC alone closes, opens and suspends** (H18). OPS, CD, GC and AP send `RequestRunwayStatus`,
+  and LC accepts or rejects. OPS completes the works and signs off the inspection. The runway-change
+  machine takes OPS/AP acknowledgements as coordination, not permission; an unstaffed acknowledger
   is skipped and audited (H20); `SelfCoordinateRunwayChange` is the solo case (S-Q24).
 - `nla.js` reads `ctx.runwayStatusFor()`, default null, failing open. `board-store.js` threads it
   through `_nlaCtx`, judges a drag against the target rack, files Strips by runway through
@@ -494,19 +494,19 @@ MISSION: `9G-MTR`, `9G-ENTRY`, `9G-TIME` (M10) and `9H-EXIT`, `9H-TIME`, `9H-ALT
 leaf of `flightData.military.mtr`. `MILITARY_BLOCK_NAMESPACE` rows use either `blockId` or `blocks`, never
 both and never a wildcard. `compactBlocksFor(stripType, positionId, flightData)`: the third argument adds the
 flight's conditional MTR group, and **the face (`strip-view.js`) and ▼ (`bay-view.js`) must pass the
-same FDR**, or a Block ends up on both or neither. **Times are epoch ms** (S-L2a): `zulu-time.js`
+same flight data**, or a Block ends up on both or neither. **Times are epoch ms** (S-L2a): `zulu-time.js`
 (`resolveZuluHhmm`, nearest occurrence within ±12 h of the mission clock) on the server,
 `ZULU_HHMM_BLOCKS`/`formatZuluHhmm` on the client. Don't store a typed string. `.efsp-expanded-note`
 is the place for an advisory that is not a warning.
 
 **USMTF ATO parser (L3, `0063`).** `crc-sync/src/efsp/ato/ato-ingest.js`'s
 `ingestAtoText(text, { referenceUtc })` turns USMTF text into mission lines, **creates nothing** (no
-FDR, Strip or code) and never throws. Pass `missionClock.now()`, never `Date.now()`. Each line is
+flight data, Strip or code) and never throws. Pass `missionClock.now()`, never `Date.now()`. Each line is
 `{ lineId, sourceLines, provenance, flightDataSeed, military, extras: { ato, identityAto }, warnings }`
 (S-Q50, S-R2-8): `flightDataSeed` holds only what `createFlightData` accepts; the normalised callsign,
 `seedable`, `missingAcceptanceFields` and the mission number live in `extras.ato`. The ATO's Mode 3
 is reported in `extras.identityAto.modeThree` and never seeded as a beacon. `ATO_FIELD_TARGETS`
-names the FDR path of every ATO value and whether anything can write it today (most can't: Mode
+names the flight data path of every ATO value and whether anything can write it today (most can't: Mode
 1/2, SCL, `arInfo`, datalink are L14's). USMTF is the only input (H1). The set layouts come from a
 community wiki, cross-checked in `docs/parallel/research/usmtf-ato.md`; none is doctrine.
 Agency types live in one table (`ato-sets.js`, H45/H54: `OTR` + callsign until answered).
@@ -611,21 +611,21 @@ Same convention as §3I: full notes are in `docs/wip/<lane>.md`. Folded here: L1
 L15, L16, L22, L24, L27, F2, F3, F4, L23, L26, U6, L18 (both halves), UI-A,
 L17, L19, TA, PARITY, GRPC, SOAK, SOAKW, HYG, L25 and E2E-fix. Not yet folded: L28 (merged, notes in `docs/wip/L28.md`), UI-B (not merged), L20.
 
-**Field state, client (L1b, `0068`).** Three files: `runway-status-rules.js` (the pure mirror of the
+**Runway status, client (L1b, `0068`).** Three files: `runway-status-rules.js` (the pure mirror of the
 server rules: `runwayStatusActionsFor` offers a button only for what Tower or OPS would accept,
 `gearMismatchFor`, `runwayStatusAlertsFor`, `runwayStatusSignatureFor`), `runway-status-panel.js` (the dock
 panel, closed by default, left cluster) and the state getters `getEfspRunwayStatus(facilityId)` /
 `getAllEfspRunwayStatuss()` in `efsp-state.js`, which are the contract for any other chip. The H52 rename
 is done (`SUSPENDED_WORKS`, `WORKS`, `BeginRunwayWorks`, `CompleteRunwayWorks`, a request carries
 `action: 'WORKS'`) and `WsHub.broadcastEfspRunwayStatusDelta` is public (S-L1d).
-- **A chip that depends on anything other than the Strip, its FDR or the stores already in
+- **A chip that depends on anything other than the Strip, its flight data or the stores already in
   `bay-view.js`'s `_stripRenderSignature` must add itself to that signature**, or the Strip never
   rebuilds for it (the NLA board delta lands before the runway-status delta). L1b's was one guarded line
   (S-L1b2) calling `runwayStatusSignatureFor`.
 - `runway-status-drift.test`-style coverage: `tests/efsp-runway-status-client.test.js` replays every
   button the client offers against a real `RunwayStatusStore`. Keep it when adding an op.
 - The client derives the runway-change acknowledgers and the inspection authority from the permission
-  table's owners (OPS/APP, OPS) because the record did not carry them. **L26 now puts
+  table's owners (OPS/AP, OPS) because the record did not carry them. **L26 now puts
   `runwayChangeAcknowledgers` and `inspectionAuthorityPositionId` on the record, and the client does
   not read them yet** (open, §4). They agree for Incirlik, so nothing is wrong today.
 - Traps: dockview detaches the inactive tab of a group, and a panel that looks its DOM up with
@@ -642,8 +642,8 @@ is done (`SUSPENDED_WORKS`, `WORKS`, `BeginRunwayWorks`, `CompleteRunwayWorks`, 
 client mirror `panels/efsp/ordnance-advisory.js`, held together by the drift test in
 `tests/efsp-ordnance-client.test.js`: **change both together**. It is a chip plus one reason line,
 never an inhibit, and it deliberately recommends no runway (the pad is a placeholder name, H21). It
-reads field state through `getEfspRunwayStatus(strip.facilityId)` and expects `null` for CENTER/TACTICAL.
-H55 put `3G` on `MISSION` and S-L12 settled the faces: always on TWR's, on APP/CTR/mission lines only
+reads runway status through `getEfspRunwayStatus(strip.facilityId)` and expects `null` for CENTER/TACTICAL.
+H55 put `3G` on `MISSION` and S-L12 settled the faces: always on LC's, on AP/CTR/mission lines only
 when not CLEAN (`ORDNANCE_WHEN_SET`, `isOrdnanceSet` in `strip-fields.js`), always in ▼.
 - The advisory function has the three hook lines in `strip-view.js`, byte-identical to L1b's and
   L13's (S-W2A); `ord` sits before `scram` in `INDICATOR_ORDER`.
@@ -664,7 +664,7 @@ nothing needs resetting. `nla.js` never reads it (a test holds that). The access
   write `14E` on a DEPARTURE until DROPPED, whoever owns it (L23 added it, S-L13).
 - `traffic-count.js` latches `alertScramble` from the logged `SetBlock`, so a scramble cancelled on
   the ground **no longer counts** as one (L26 changed the classification).
-- Walks not done: no two-browser walk (one controller holding OPS/CD/GND/TWR stood in).
+- Walks not done: no two-browser walk (one controller holding OPS/CD/GC/LC stood in).
   `scrambleAlertsFor` rescans the live Strips once per rendered Strip (O(n²) per render); fine at
   squadron scale, cache it per render if Boards grow.
 
@@ -673,7 +673,7 @@ candidates, plan, tasking, AR links, execution, the H68 whole-day date shift), `
 (H60: every vowel, leading one included, back to front; unfittable returns `null`, which differs from
 miztoyaml on that one edge), `efsp-ato-preview` / `efsp-ato-mutation` on the wire, and on the client
 `ato-import.js`, `ato-strip.js` and the OPS "file against ATO mission" picker in `efsp-panel.js`.
-- **The ATO's values live on the FDR through one setter, `flightDataStore.applyAtoTasking`**, never through
+- **The ATO's values live on the flight data through one setter, `flightDataStore.applyAtoTasking`**, never through
   `WRITABLE_PATHS`/`setField`: that would reopen D24 and mark ATO values as controller-typed. It may
   write only `scl`, `arInfo` and `alertStatus` (`NONE`/`ALERT`) under `military`.
 - Bind preselection is narrowed: a unique Mode 3 match is preselected only if the callsign agrees;
@@ -728,9 +728,9 @@ chain. `ZULU_HHMM_BLOCKS` now covers `M6`/`M7` (the set is derived from the Bloc
 `resolveZuluHhmmAfter` dates the vul end. `time-chains.js` loads before `strip-template.js`.
 - Opt-in `E2E_STEREO_ROUTES` makes the e2e harness install a stereo table (fixture
   `e2e/fixtures/l16-stereo-routes.json`).
-- Open: the state-transition source for takeoff (needs a `board-store.js` hook and an FDR broadcast on
+- Open: the state-transition source for takeoff (needs a `board-store.js` hook and a flight data broadcast on
   a state-only Mutation, would be the takeoff chain's next source); **W2** TAXI/TAKEOFF are on no face
-  (a GND controller must expand the Strip; owner: the field lists); **W3** a typed TAXI does not follow
+  (a GC controller must expand the Strip; owner: the field lists); **W3** a typed TAXI does not follow
   a later P-time change and nothing flags it (a conformance-style hint, whoever takes §10.2 next); **W5**
   an estimate cannot be accepted as the actual without retyping a different value (left open in `0073`);
   the route `description` is not shown as the option's title; editing a vul start does not move a stored
@@ -751,12 +751,12 @@ does). Users: the wind-derived runway (H22), the metrics session number (H32), t
   offset). A clock-step roll followed within 2 min wall by a load of a different fingerprint is one
   session. `setActiveRunwayFromWind` takes `{ missionSession }` (a number) and can return
   `skipped: true`; the server's wind block is `deriveActiveRunwaysFromWind(missionData)`.
-- **Behaviour fixed on the way:** a TWR runway change used to be undone by the next gRPC reconnect (it
+- **Behaviour fixed on the way:** a LC runway change used to be undone by the next gRPC reconnect (it
   overwrote the `missionKey` the guard compared); the guard now reads its own `windDerivedSession` on
   the runway-status record (a harmless extra field on the wire).
 - **No migration.** Existing `efsp-metrics.json` / `efsp-traffic-count.jsonl` can hold session numbers
   from L5's old counter, and the new counter starts at 1: **clear those two files, or accept repeated
-  numbers, on a machine with state.** A persisted field state has no `windDerivedSession`, so its wind is
+  numbers, on a machine with state.** A persisted runway status has no `windDerivedSession`, so its wind is
   re-applied once.
 - **Walks not done, human-gated:** whether DCS-gRPC sends `mission_start` to a stream that connects
   *after* the mission has started (if it does, every crc-sync restart rolls the session: restart against
@@ -769,7 +769,7 @@ anything else is `VALIDATION_ERROR` ("<label> must be a UTC time as HHMM, e.g. 1
 write. `setField` applies it before the write (so `voidDeadlineUtc` and the EDCT/CFR windows derive from a
 number) and `createFlightData` applies it to the two filed times of a seed. `normalizeMtrValue` delegates to it.
 A fallback chain must hand `setField`/`createFlightData` epoch ms or the controller's typed string, never a
-formatted date. **Persisted FDRs that hold a string time are not migrated**; a leftover string compares as
+formatted date. **Persisted flight data that hold a string time are not migrated**; a leftover string compares as
 before until the Block is retyped. `efsp-scenario-typed-times.test.mjs` is the sortie (a typed void time
 expires; a typed release holds the NLA until reached).
 
@@ -828,7 +828,7 @@ in `map-setup.js`. **Do not decide a block's text or colour anywhere else.**
 "Archiving finished flights" block. `BoardStore` gains `archiveStrip`, `droppedWallAtOf` (stamped in
 `_retireStrip`; any other DROPPED Strip is stamped the first time a sweep sees it), `getDeltaSince`'s
 `gone`, and `droppedWallAt` in the snapshot; `FlightDataStore.archiveFlightData`; `traffic-count.js`'s `hasCountFor`.
-The archiver builds its own referenced set from every Board (a Strip is archived only when its FDR has no
+The archiver builds its own referenced set from every Board (a Strip is archived only when its flight data has no
 live Strip and no un-archived DROPPED one). The wire carries `gone` and `flightDataList.gone`
 (`ws-hub.js`'s `broadcastEfspBoardDelta` passes `gone`/`flightDataListGone` through; `efsp-state.js`'s
 `applyEfspDelta` handles `flightDataList.gone`). **ADR 0002's "durable" now means durable until archived.**
@@ -837,7 +837,7 @@ live Strip and no un-archived DROPPED one). The wire carries `gone` and `flightD
   so does the pruned baseline at 20.3%): the growth is the capped caches filling (`_appliedMutations`
   1218/5000, ring `_log` 1379/2000), not finished flights. `strips.dropped` and `flightDataList` are flat after
   2 h. **The rows "snapshot within 2x of pruned" and "p50 <= 3 ms" cannot pass with 2 h retention**
-  (about 200 Strips and 100 FDRs make a 284 KB snapshot) and need restating or a persist fix; the
+  (about 200 Strips and 100 flight data make a 284 KB snapshot) and need restating or a persist fix; the
   per-DROPPED-Strip figure is no longer meaningful. Profile: `_persist` is 40% self-time
   (`JSON.stringify(…, null, 2)` of the whole snapshot on every Mutation) and `correlation-store`
   `deepClone` 17%; L27 has since landed a compact dirty-only persist (below).
@@ -854,7 +854,7 @@ carries `boardEpoch`** (`_boardEpochFor` in `ws-hub.js`; the heartbeat carries `
 `_handleResync` is resolve → `_deltaCanServe(boardStore, boardEpoch, lastSeq)` → build: a delta only
 within one Board lifetime. `getDeltaSince` returns `{ updated, gone, seq }` (and `_handleResync` sends
 `gone: [...DROPPED, ...delta.gone]`). The idempotency cache holds **compact frozen JSON-safe records**
-(never a live Strip or FDR), is rebuilt as a result on replay (`replayed: true`, the current Strip), and
+(never a live Strip or flight data), is rebuilt as a result on replay (`replayed: true`, the current Strip), and
 the four non-Board handlers (airspace, correlation, MARSA, TOFI) have `_cachedOutcome` / `_rememberOutcome`
 blocks. A Mutation without a `clientMutationId` is **never cached** (before, every later cmid-less one was
 answered with the first one's result). Crash-once: replay records persist in the snapshot for 10 minutes
@@ -888,7 +888,7 @@ hop); the coordination op gains `CANCEL`; `SystemCoordinationEnd` and `SystemRea
 and `efsp-ws.js`'s `readScopeOf`/`filterForSession`/`supplementFor`/`readScopeKey`; `ws-hub.js`'s
 `_broadcastEfsp`, `_efspFilter`, `_efspAlertsMsg(session)` and the connect snapshot filter every EFSP send
 (`snapshotFor(session)`, `_snapshotMessage(ctx, session)`); `broadcastEfspRunwayStatusDelta` and the
-heartbeat stay unfiltered (not flights). A Strip that becomes visible to a session arrives with its FDR,
+heartbeat stay unfiltered (not flights). A Strip that becomes visible to a session arrives with its flight data,
 correlation and MARSA records. Any new EFSP broadcast must go through `_broadcastEfsp`.
 - U7: `receiveCoordinationPeerGone` ends only a PROPOSED or ACTIVE link (S-L23: a completed handoff is not a live link, so the receiver's later drop leaves the sender's Strip alone; tested).
 - Open: the two UI follow-ups above (a TAC_C2-only controller cannot Accept an AIC-held exit from the
@@ -900,7 +900,7 @@ correlation and MARSA records. Any new EFSP broadcast must go through `_broadcas
 **Audit completeness (L26, `0083`).** One outcome, one audit entry: a store logs what reaches it, and the
 metrics tap (`metrics.js` `_post`) logs whatever carries `result.unaudited` (the handlers in `efsp-ws.js`
 set it on every pre-store refusal, so it replaced the old "efsp-mutation or NOT_HOLDING_POSITION"
-condition). Every entry has `facilityId` and the FDR (`null` Facility for correlation/MARSA, the
+condition). Every entry has `facilityId` and the flight data (`null` Facility for correlation/MARSA, the
 controlling Facility for airspace); `SetBlock` records `blockId`/`value`; transitions carry a wire `action`;
 airspace passes `clientMutationId` into `apply`. Seven `Peer*` ops (plus `InterfacilityCoordinationCancel`) record
 replica changes with `source: 'peer'`, `causedBy` and `clientMutationId: null` (`_recordPeer`,
@@ -950,16 +950,16 @@ Landed (`RECOVERED`) and Drop (`DROPPED`).
   an SFA frequencies Bay (implies `INBOUND`, an existing ARRIVAL state), `par-final` (one Strip) and a second
   PAR Bay `par-missed` (BOLTER_WAVEOFF), and a validated `singleFrequencyApproach: { jurisdiction: 'AP',
   rotationSize: 3, pool }` (five placeholder UHF frequencies, `freq-1..5` = 232.1 to 236.1 MHz,
-  `[SOURCE-DEFINED]`; initial rotation APP/SFA/PAR on `freq-1/2/3`). Every grant derives from one table,
+  `[SOURCE-DEFINED]`; initial rotation AP/SFA/PAR on `freq-1/2/3`). Every grant derives from one table,
   `INCIRLIK_CAPABILITIES` in `permission.js` (`ops`, `createsStripTypes`, `ownsStates`, `requestsRunwayStatus`,
   `rotatesSfa`, `sendsSfaRotation`, `receivesSfaRotation`). RSU originates PATTERN Strips, may send
   `RequestRunway...` (CLOSE, OPEN, WORKS) and never closes a runway (H18); SFA and PAR originate nothing.
   New modules `sfa.js` and `sfa-store.js` (the rotation record `{ rackId: positionId }`, persisted with the EFSP
-  state, one whole delta, audited; **only APP edits it**: the table's `rotatesSfa` is the ceiling and
+  state, one whole delta, audited; **only AP edits it**: the table's `rotatesSfa` is the ceiling and
   config's `jurisdiction` narrows it). The `SfaRotation` Strip op moves an ARRIVAL at INBOUND to FINAL at
   `ON_FINAL` in place and to PAR, trigger type `CONTROLLER_INITIATED` (the four stay four), and never touches
   the flight's frequency (D17). It is refused when PAR is unstaffed (no covering fallback, a FINAL Strip at
-  APP would sit in a Bay APP does not have) or `par-final` is full. **A frequency is the FDR's working
+  AP would sit in a Bay AP does not have) or `par-final` is full. **A frequency is the flight data's working
   frequency and the Rack is that frequency**: filing a Strip on an SFA Rack writes the pool frequency (the
   field an airspace approval also writes), and a system placement puts a Strip back on the Rack matching
   its frequency. Wire: `efsp-sfa-mutation`, `efsp-sfa-ack`, `efsp-sfa-delta`, `sfaRotation` in the snapshot;
@@ -979,15 +979,15 @@ Landed (`RECOVERED`) and Drop (`DROPPED`).
     load; the Node tests load one module each. A test now holds the Bay-view scripts' top-level names unique
     across `index.html`.
   - Open: `capacity: 1` could enforce "one at a time" on the carrier's final Bays (not set: a behaviour
-    change in L17's design); a PAR vacated with an aircraft on final leaves the Strip in APP's coordination
-    Bay where APP cannot advance it (the same shape as L17's watch item, §3J); an airspace approval that
-    rewrites a flight's frequency desyncs its SFA Rack (the Rack is a placement, the FDR is the truth);
+    change in L17's design); a PAR vacated with an aircraft on final leaves the Strip in AP's coordination
+    Bay where AP cannot advance it (the same shape as L17's watch item, §3J); an airspace approval that
+    rewrites a flight's frequency desyncs its SFA Rack (the Rack is a placement, the flight data is the truth);
     the FINAL panel has never seen a live DCS track (the harness shows `--`). `docs/wip/L18.md` is stale
     on `BARRIER_CHANGE` (it is `WORKS`) and on the SFA state.
 
 **Carrier Positions and the CARRIER Facility (L17, `0074`).** New: `carrier-store.js` (the `CarrierStore`),
 `carrier-tick.js` (the ship state from the hull's track), `carrier/hull-config.js`, `carrier/sun.js`,
-`carrier/transfer-effects.js`, `config/efsp-carriers.json`; client `carrier-state.js` and `carrier-panel.js`.
+`carrier/handoff-effects.js`, `config/efsp-carriers.json`; client `carrier-state.js` and `carrier-panel.js`.
 - **Roles and Facility.** `MARSHAL`, `FINAL` and `PATTERN` Roles (committed first so L18 could read them), and
   the `CARRIER` Facility with four Positions `CV_MARSHAL`, `CV_PRIFLY`, `CV_APP1`, `CV_APP2`; PriFly is
   outside the covering chain, the chain is APP2 to APP1 to Marshal. Grants come from `CARRIER_CAPABILITIES`;
@@ -996,7 +996,7 @@ Landed (`RECOVERED`) and Drop (`DROPPED`).
   unknown Role (the `0064` trap), so the NLA tables were registered in the same commit as the Roles; a test
   now holds an explicit expectation for every state of every Role in `INELIGIBLE_STATES`, so a state added
   later fails until someone decides. `LAUNCH` is correlation-eligible (ship radars set `noGroundAircraft`,
-  but correlation matches the FDR against the track store).
+  but correlation matches the flight data against the track store).
 - **Wire.** `efsp-carrier-mutation`, `efsp-carrier-ack`, `efsp-carrier-delta` and `carriers` in the snapshot,
   each in its own replay-cache kind (`carrier`); the `CarrierHandoff` op, and `carrierHandoff` /
   `carrierTrigger` audit fields. `normalizeStack` returns `{ok, stack, dropped}`, not the stack (the first
@@ -1058,15 +1058,15 @@ inside its 5 km footprint (speed alone beyond it), held 5 s; the four numbers ar
 DEPARTURE face always and may write it on any non-DROPPED departure whoever holds it (a second
 `NON_OWNER_BLOCK_WRITES` row, the `14E` precedent). **U2's root cause:** `efsp-arrivals.js` skipped every new
 Strip whose `updatedBy` was one of the controller's own ids, and a coordination replica carries the
-proposer's id, so one controller holding APP and CTR was never told; a minted replica
+proposer's id, so one controller holding AP and CTR was never told; a minted replica
 (`mintedForCoordination`, `mintedForTofi`) is now an arrival whoever made it. If a human still sees no
 notification with two controllers, the next suspect is `signedOnPositions`/`getActingPositions()` at the receiving
 client. U3: the label is `KEEP IFR` (TOFI's `ifrActive`) with a hover. U4: TYPE edits the bare aircraft type
-(Block `3A`); the wake category stays in the expanded view. U5: RELEASE (`14A`) on a DEPARTURE's face at APP
+(Block `3A`); the wake category stays in the expanded view. U5: RELEASE (`14A`) on a DEPARTURE's face at AP
 and CTR. U8: when the paired mission Strip is OFF_STATION or RTB and the ATC Strip's TOFI is ACTIVE, CTR's
 NLA slot is a filled `TOFI Exit` button (`tofiExitDueFor` in `efsp-nla.js`; the render signature carries the
 mission line's state). S-L15: Alt+click toggles OFFSET, Ctrl/Cmd+click steps HIGHLIGHT. S-L16: TAXI (17) on
-GND's face and TAKEOFF (18) on TWR's; a typed TAXI/TAKEOFF earlier than the proposed departure is dotted with
+GC's face and TAKEOFF (18) on LC's; a typed TAXI/TAKEOFF earlier than the proposed departure is dotted with
 a hover; retyping the value an estimate shows now sends it, so the estimate becomes the actual; `setField`
 (`flight-data-store.js` `_vulWindowRefusal`) refuses a vul start not before the end and an end not after the start.
 S-L23: a held `TAC_C2` gets a client-local "with AIC/JTAC" tab listing the live MISSION lines AIC/JTAC hold
@@ -1173,7 +1173,7 @@ lifecycle is built (L28, `0087`). Not merged: UI-B (below). Not started: the `[S
 WP6 acceptance criterion in its own right and runs last. Everything else in WP6 to WP8 that the guide names is
 built: the runway-status panel, `HUNG`, alert/scramble, the ATO import and AR join, the metrics dashboard.
 **UI-B** is the follow-up lane (not merged): wire `sendEfspResync()` (S-12, with the
-open question of the other sequence numbers: carrier, field state, ATO and metrics have their own and no
+open question of the other sequence numbers: carrier, runway status, ATO and metrics have their own and no
 resync, Q3-3), the `RUNWAY_CHANGE` suspension label, the L19 chip against a suspended runway, and the
 items in the table marked UI-B.
 
@@ -1190,19 +1190,19 @@ the hard-coded 18,000 ft (TA); the `tools/miztoyaml` frequency bug (L25).
 
 | Item | Severity | Owner | Source |
 |---|---|---|---|
-| **S-12: `sendEfspResync()` has no caller** in the client, so a client that misses a delta or sees an epoch change has no recovery path but a reconnect; ruled "wire it", and the other stores (carrier, field state, ATO, metrics) have no resync at all | medium | UI-B | PARITY, S-PARITY, Q3-3 |
+| **S-12: `sendEfspResync()` has no caller** in the client, so a client that misses a delta or sees an epoch change has no recovery path but a reconnect; ruled "wire it", and the other stores (carrier, runway status, ATO, metrics) have no resync at all | medium | UI-B | PARITY, S-PARITY, Q3-3 |
 | A runway suspended by a runway change reads "suspended — works in progress" through a fallback (`SUSPENSION_LABELS` has only `WORKS`) | low | UI-B | PARITY |
-| The L19 chip's `SetState` to DEPARTED is refused while the runway is suspended (H19): right for a clearance, odd for an observed fact | decision | UI-B / field state | L19 |
+| The L19 chip's `SetState` to DEPARTED is refused while the runway is suspended (H19): right for a clearance, odd for an observed fact | decision | UI-B / runway status | L19 |
 | **Gestures at the one-input ceiling**: HIGHLIGHT and OFFSET now have one-input forms (Alt+click, Ctrl/Cmd+click); the menu and swatch forms still cost 2. Accept, or remove the 2-input forms | decision | human | L15, UI-A |
 | A trend `↑` in METRICS is not coloured (an observation, not a threshold failure) | decision | supervisor | L15 |
 | The client still derives runway-change acknowledgers and the inspection authority from the permission table's owners; the record carries `runwayChangeAcknowledgers` and `inspectionAuthorityPositionId` (L26). Agrees for Incirlik, wrong for any other config | low | UI-B | L1b, L26 |
 | `strip-view.js`'s conformance reason line reads `a.assigned` (the nearest edge), so a block-altitude bust says "from FL240" without the block; use `a.block` | low | UI-B | U6 |
 | GCI-held lines are not in `TAC_C2`'s "with AIC/JTAC" tab (GCI is not a delegate); the metrics `time-to-find` counts that tab as a Bay; `srs-radio.js` has no unit test | low | UI-B | UI-A |
 | **Carrier, never seen live:** the Marshal holds approach Strips it cannot advance when the chain ends at it (`0064`'s design, kept); the banner reads "hull not found" without a real ship; the weather advisory knows only night; the carrier's final Bays have no `capacity: 1`; two hulls, the deck-state board (`0064` B8) and the in-browser final-bearing line are not walked | medium | human live check / L17 owner | L17, S-L17, L18S |
-| **Incirlik RSU/SFA/PAR:** a PAR vacated with an aircraft on final leaves the Strip with APP where APP cannot advance it; an airspace approval that rewrites a flight's frequency desyncs its SFA Rack; the FINAL panel has never seen a live DCS track; its thresholds and the placeholder frequencies are `[SOURCE-DEFINED]` | medium | human live check / L20 | L18S |
+| **Incirlik RSU/SFA/PAR:** a PAR vacated with an aircraft on final leaves the Strip with AP where AP cannot advance it; an airspace approval that rewrites a flight's frequency desyncs its SFA Rack; the FINAL panel has never seen a live DCS track; its thresholds and the placeholder frequencies are `[SOURCE-DEFINED]` | medium | human live check / L20 | L18S |
 | One `LINGERING_TRACK` in the 240-minute soak at wave 2: it did not reproduce for L19 (20 seeds at 240 min, 6 at 480), so the fix is unit-tested only. Known limit: a DCS re-mint of a lingering aircraft under a new track id is a new contact to the reconciler; a callsign memory with a position test is not built | watch | next soak run | L27, L19 |
 | The 4-hour soak's heap gates (net growth 25%, H72) need the human's workflow run; they are judged only on runs of 3 h or more with a 2 h warm-up; the unloaded p50 <= 3 ms was only measured as a proxy | acceptance | human | L24, L27, SOAKW |
-| **Merge-time decisions in the questions file** (`docs/parallel/questions-round3.md`): the 2 h archive against 1.5–3 h sorties (a returning flight loses its FDR, ATO line, MARSA and `military` Blocks; Q3-2), a DCS crash or mission restart with live Strips (Q3-4), carrier flights with no path into the ATO, traffic count or home-airport rule (Q3-6) | decision | human | L24, F3, L17 |
+| **Merge-time decisions in the questions file** (`docs/parallel/questions-round3.md`): the 2 h archive against 1.5–3 h sorties (a returning flight loses its flight data, ATO line, MARSA and `military` Blocks; Q3-2), a DCS crash or mission restart with live Strips (Q3-4), carrier flights with no path into the ATO, traffic count or home-airport rule (Q3-6) | decision | human | L24, F3, L17 |
 | `grpc-client.js:764` `windFrom = heading·180/π + 270` is unexplained and the DCS wind vector may be grid, not true (about -2° at Incirlik): needs a live check against the mission editor's wind. The ATIS-wind frame follows it | needs a live check | human | F2, S-F2b |
 | Six theaters have no `tmCentralMeridianDeg` (TheChannel, MarianaIslandsWWII, Kola, Afghanistan, Iraq, GermanyCW): their grid headings cannot be converted; `tools/miztoyaml/projection.py` needs the same table and a test keeping the two equal | theater work | unowned | F2 |
 | Whether DCS-gRPC sends `mission_start` to a stream that connects *after* the mission started (if so every crc-sync restart rolls the mission session); a real `.miz` restart through DCS | needs a live check | human | F3, S-F3 |
@@ -1253,7 +1253,7 @@ folding when they land).
 - **The Strip layout (`0056`)** was checked by eye in Playwright screenshots; the all-lit worst
   cases from the mockup have not been walked live with two controllers yet. Indicators appear only
   when something is wrong (`0058`).
-- **Assigned `ALT`/`HDG` live on the FDR (`flightData.clearance`, `0058`)**, not on the Strip. Writing one
+- **Assigned `ALT`/`HDG` live on the flight data (`flightData.clearance`, `0058`)**, not on the Strip. Writing one
   bumps `clearanceUpdatedAt`, never `updatedAt`. Open: filed-route conformance, and terrain/MSAW
   once AIRAC data exists. Headings are magnetic everywhere (F2, H15, H69).
 - **What a client is told about a contact is decided in one place (`0059`)**: server
