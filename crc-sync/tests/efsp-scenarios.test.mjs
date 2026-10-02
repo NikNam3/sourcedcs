@@ -232,10 +232,12 @@ test('Undo of a terminal Drop puts back the remove indicator and re-claims the b
   const relocated = mustAct(efsp, c.OPS, 'OPS', airborne, {
     kind: 'TransferStrip', toPositionId: 'AP', bayId: 'ap-departures', rackId: 'main',
   });
-  const dropped = mustAct(efsp, c.AP, 'AP', relocated, { kind: 'InvokeNla' });
+  const dropAck = act(efsp, c.AP, 'AP', relocated, { kind: 'InvokeNla' });
+  const dropped = dropAck.strip;
   assert.equal(efsp.flightDataStore._codeAllocator.isAllocated(code), false);
+  assert.equal(dropAck.undoable.windowMs, 10_000, 'docs/adr/0100: the ack says the drop is undoable');
 
-  const undone = mustAct(efsp, c.AP, 'AP', dropped, { kind: 'Undo' });
+  const undone = mustAct(efsp, c.AP, 'AP', dropped, { kind: 'Undo', actionId: dropAck.undoable.actionId });
   assert.equal(undone.state, 'HANDED_OFF');
   assert.equal(undone.flags.removeIndicator, false);
   assert.equal(efsp.flightDataStore._codeAllocator.isAllocated(code), true, 'the code is re-claimed, not orphaned');

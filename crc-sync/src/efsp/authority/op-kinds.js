@@ -8,7 +8,9 @@
 
 const OP_KINDS = [
   'CreateStrip', 'MoveStrip', 'SetBlock', 'TransferStrip',
-  'SetFlag', 'SetState', 'InvokeNla', 'Undo', 'DropStrip',
+  // Undo is not a grant (docs/adr/0100 §5): only the Position that performed an action may undo it, whatever
+  // ops it holds (a JTAC undoing its hand-back), so board/strip-ops.js's _dispatchUndo gates it on the record.
+  'SetFlag', 'SetState', 'InvokeNla', 'DropStrip',
   'HANDOFF', 'POINT_OUT', 'TRAFFIC', 'OPERATIONAL_REQUEST', 'AIT',
   // docs/adr/0023 — converts a DEPARTURE Strip at HANDED_OFF into an
   // ARRIVAL Strip IN PLACE (same Strip, same flight data), for a flight returning

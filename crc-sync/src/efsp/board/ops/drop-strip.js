@@ -1,5 +1,7 @@
 'use strict';
 
+const { stripScope, retireScope, union, callsignOf } = require('../../undo/scopes');
+
 function _applyDropStrip(ctx, strip, op, by) {
   // Same open-coordination-link guard as board/ops/invoke-nla.js's _applyInvokeNla above, for the
   // explicit DropStrip op (dot-command) path — see that guard's comment.
@@ -14,6 +16,10 @@ function _applyDropStrip(ctx, strip, op, by) {
 
 module.exports = {
   kind: 'DropStrip',
-  undo: 'none', // docs/adr/0100: not undoable (yet); UNDO-S step 2 declares the scopes
+  // docs/adr/0100: a retirement, with everything it ends (MARSA, carrier stack, the peer link, the code).
+  undo: {
+    label: (op, strip, ctx) => `Drop ${callsignOf(ctx, strip)}`,
+    scope: (ctx, strip) => retireScope(ctx, strip),
+  },
   apply: (ctx, strip, op, meta) => _applyDropStrip(ctx, strip, op, meta.by),
 };

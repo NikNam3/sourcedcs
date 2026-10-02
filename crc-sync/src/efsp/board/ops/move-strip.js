@@ -1,5 +1,7 @@
 'use strict';
 
+const { stripScope, retireScope, union, callsignOf } = require('../../undo/scopes');
+
 function _applyMoveStrip(ctx, strip, op, by) {
   const bayCheck = ctx.placement.requireKnownBay(op.bayId, strip);
   if (bayCheck) return bayCheck;
@@ -20,6 +22,10 @@ function _applyMoveStrip(ctx, strip, op, by) {
 
 module.exports = {
   kind: 'MoveStrip',
-  undo: 'none', // docs/adr/0100: not undoable (yet); UNDO-S step 2 declares the scopes
+  // docs/adr/0100: a drag (and the SFA frequency a frequency Rack assigns).
+  undo: {
+    label: (op, strip, ctx) => `Move ${callsignOf(ctx, strip)}`,
+    scope: (ctx, strip) => stripScope(ctx, strip),
+  },
   apply: (ctx, strip, op, meta) => _applyMoveStrip(ctx, strip, op, meta.by),
 };

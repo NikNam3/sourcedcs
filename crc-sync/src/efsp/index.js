@@ -40,11 +40,12 @@ const nla = require('./nla');
 const blockMap = require('./block-map');
 const facilityConfig = require('./facility-config');
 const coordination = require('./coordination');
-const { handleMessage, snapshotMessage, filterForSession, supplementFor, readScopeKey } = require('./efsp-ws');
+const { handleMessage, snapshotMessage, filterForSession, supplementFor, readScopeKey, directedFor } = require('./efsp-ws');
 const { NlaStatusMonitor } = require('./nla-status-monitor');
 const { Archiver } = require('./archiver');
 const { statePaths, ensureDirFor } = require('../state-paths');
 const { WALL_CLOCK } = require('../mission-clock');
+const { UndoHistory, undoEnv } = require('./undo/undo-history');
 const { ReplayCache } = require('./sync/replay-cache');
 const { REGISTRY, RESTORE_ORDER, checkPersistedShape } = require('./stores');
 const log = require('../log').logger('efsp');
@@ -68,7 +69,7 @@ const log = require('../log').logger('efsp');
  *   or worse, restored a snapshot somebody had committed to git. It lives in
  *   data/ now; see src/state-paths.js.
  */
-function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('efsp-board.json', process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH) } = {}) {
+function createEfsp({ clock = WALL_CLOCK, wallClock = WALL_CLOCK, transitionAltFt, paths = statePaths('efsp-board.json', process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH) } = {}) {
   facilityConfig.load(); // the Facilities' JSON is read here, not when the module is required (docs/wip/DATA-1.md)
   assertAuthorityCoverage(facilityConfig);
   const codeAllocator = new CodeAllocator();
@@ -80,6 +81,13 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
   const { flightData: flightDataStore, airspaces: airspaceStore, correlations: correlationStore, marsa: marsaStore,
     runwayStatuses: runwayStatusStore, carriers: carrierStore, sfaRotation: sfaStore } = stores;
   const facilityIds = facilityConfig.getFacilityIds();
+  // docs/adr/0100: one undo history for the process, every Board reports to it; the wall clock times its 10 s.
+  const undoHistory = new UndoHistory({ wallClock });
+  undoHistory.attach(undoEnv({
+    boardFor: (facilityId) => { const f = facilities.get(facilityId); return f ? f.boardStore : null; },
+    flightDataStore, carrierStore, marsaStore,
+  }));
+  flightDataStore.setWriteObserver((id, paths) => undoHistory.observe({ kind: 'flightData', id, paths }));
 
   for (const facilityId of facilityIds) {
     const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getConsolidation(facilityId), { clock });
@@ -212,7 +220,7 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
       canSendSfaRotationTransfer: (actingPositionId) => permission.canSendSfaRotationTransfer(actingPositionId),
     };
 
-    const boardStore = new BoardStore(flightDataStore, rules, { clock });
+    const boardStore = new BoardStore(flightDataStore, rules, { clock, undoHistory });
     boardStore.setMutationLog(mutationLog);
     facilities.set(facilityId, { boardStore, positionStore, rules });
   }
@@ -283,7 +291,7 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
   };
 
   return {
-    flightDataStore, mutationLog, clock,
+    flightDataStore, mutationLog, clock, undoHistory,
     airspaceStore, correlationStore, marsaStore, nlaStatusMonitor, runwayStatusStore, carrierStore, sfaStore,
     boardStoreFor: ctx.boardStoreFor, positionStoreFor: ctx.positionStoreFor,
 
@@ -324,6 +332,8 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
      */
     filterForSession: (session, msg) => filterForSession(ctx, session, msg),
     supplementFor: (session, filtered) => supplementFor(ctx, session, filtered),
+    // docs/adr/0100 §6: an Undo's panel message to the sessions signed on to a voided Position (ws-hub.js sends it).
+    directedFor: (session, directed) => directedFor(ctx, session, directed),
     readScopeKey: (session) => readScopeKey(ctx, session),
 
     archiver,

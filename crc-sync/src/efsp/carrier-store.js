@@ -370,6 +370,65 @@ class CarrierStore {
     return r;
   }
 
+  // ── undo compensators (docs/adr/0100 §3) ────────────────────────────────
+
+  /** One flight's stack entry as it is now, for an undo's before-image, or null when it is in no stack. */
+  entryImage(flightDataId) {
+    for (const record of this._records.values()) {
+      for (const [stackId, stack] of Object.entries(record.stacks)) {
+        const e = stack.entries.find(x => x.flightDataId === flightDataId);
+        if (e) return { hullId: record.hullId, stackId, entry: deepClone(e) };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * What putting `image` back needs: nothing, `UnmarkPushed` (Commence undone) or `Reinsert` at the vacated index
+   * (a PriFly removal or a retirement undone). A Reinsert is refused when that index has been refilled since.
+   * @returns {{ok:true, action:'NONE'|'UNMARK_PUSHED'|'REINSERT'}|{ok:false, reason:'UNDO_BLOCKED', detail:string}}
+   */
+  restoreCheck(flightDataId, image) {
+    if (!image) return { ok: true, action: 'NONE' };
+    const now = this.entryImage(flightDataId);
+    if (now) {
+      return now.entry.status === 'PUSHED' && image.entry.status !== 'PUSHED' ? { ok: true, action: 'UNMARK_PUSHED' } : { ok: true, action: 'NONE' };
+    }
+    const record = this._records.get(image.hullId);
+    const stack = record && record.stacks[image.stackId];
+    if (!stack) return { ok: false, reason: 'UNDO_BLOCKED', detail: `the Marshal stack ${image.stackId} is gone` };
+    const occupant = stack.entries.find(e => e.stackIndex === image.entry.stackIndex);
+    if (occupant) {
+      return { ok: false, reason: 'UNDO_BLOCKED', detail: `Marshal stack slot ${image.entry.stackIndex} has been refilled by ${occupant.flightDataId}` };
+    }
+    return { ok: true, action: 'REINSERT' };
+  }
+
+  /**
+   * Applies what restoreCheck said (`UnmarkPushed` / `Reinsert`), audited with `causedBy` = the Undo's id.
+   * @returns {{ok:boolean, changed:string[]}}
+   */
+  restoreEntry(flightDataId, image, { causedBy = null, by = null } = {}) {
+    const check = this.restoreCheck(flightDataId, image);
+    if (!check.ok) return { ...check, changed: [] };
+    if (check.action === 'NONE') return { ok: true, changed: [] };
+    const record = this._records.get(image.hullId);
+    const before = deepClone(record);
+    const stack = record.stacks[image.stackId];
+    let kind;
+    if (check.action === 'UNMARK_PUSHED') {
+      kind = 'UnmarkPushed';
+      stack.entries = stack.entries.map(e => (e.flightDataId === flightDataId ? { ...e, status: image.entry.status } : e));
+    } else {
+      kind = 'Reinsert';
+      stack.entries = [...stack.entries, deepClone(image.entry)].sort((a, b) => a.stackIndex - b.stackIndex);
+    }
+    this._touch(record, by, kind, flightDataId);
+    const result = { ok: true, record: deepClone(record), changed: [flightDataId] };
+    this._audit({ clientMutationId: null, op: { kind: `Stack:${kind}` }, hullId: image.hullId }, null, by, before, result, { causedBy });
+    return result;
+  }
+
   /** A flight joins the stack at the next free slot (a recovery check-in). */
   appendFlight(flightDataId, { hullId = this.defaultHullId, by = null, actingPositionId = null, clientMutationId = null } = {}) {
     const record = this._records.get(hullId);

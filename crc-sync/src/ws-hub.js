@@ -612,6 +612,13 @@ class WsHub {
         // return `{ ack }` alone, which means nothing to broadcast.
         const broadcasts = result.broadcasts || [];
         for (const frame of broadcasts) this._broadcastEfsp(frame);
+        // docs/adr/0100 §6: an Undo's panel message, after its Board event, to the sessions signed on to the voided Position.
+        for (const d of result.directed || []) {
+          for (const [client, s] of this._sessions) {
+            const frame = this._efsp.directedFor ? this._efsp.directedFor(s, d) : null;
+            if (frame && client.readyState === WebSocket.OPEN) client.send(JSON.stringify(frame));
+          }
+        }
         // After the broadcasts, so a client sees the Strip change before the
         // alert change. Guarded: a monitor bug must never cost the sender's
         // round trip.

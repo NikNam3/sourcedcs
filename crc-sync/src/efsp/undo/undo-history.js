@@ -135,6 +135,12 @@ class UndoHistory {
    */
   attach(capture) { this._capture = capture; }
 
+  /**
+   * The attached environment: the capture functions above plus what the Undo op restores through
+   * (`boardFor(facilityId)`, `flightDataStore`, `carrierStore`, `marsaStore`).
+   */
+  get env() { return this._capture; }
+
   // ── frames ───────────────────────────────────────────────────────────────
 
   /**
@@ -333,6 +339,21 @@ class UndoHistory {
   get size() { return this._records.size; }
 }
 
+/**
+ * The environment an UndoHistory is attached to (createEfsp, or a Board built alone): how a Scope's before-images are
+ * taken and the stores the Undo op restores through. `carrierStore`/`marsaStore` may be absent (a Board built alone).
+ */
+function undoEnv({ boardFor, flightDataStore, carrierStore = null, marsaStore = null }) {
+  return {
+    boardFor, flightDataStore, carrierStore, marsaStore,
+    strip: (facilityId, stripId) => { const b = boardFor(facilityId); return b ? b.captureForUndo(stripId) : null; },
+    flightData: (id) => { const f = flightDataStore.getFlightData(id); return f ? JSON.parse(JSON.stringify(f)) : null; },
+    code: (code) => ({ code, holder: flightDataStore.codeAllocator.holderOf(code) }),
+    carrier: (flightDataId) => (carrierStore ? carrierStore.entryImage(flightDataId) : null),
+    marsa: (ref) => (marsaStore ? marsaStore.relationImages(ref) : []),
+  };
+}
+
 function blockedDetail(b) {
   if (b.kind === 'SYSTEM') return `a system change (${b.op}) has changed ${b.id} since; undo it by hand`;
   const who = `${b.op}${b.actingPositionId ? ` by ${b.actingPositionId}` : ''}${b.facilityId ? ` at ${b.facilityId}` : ''}`;
@@ -340,4 +361,4 @@ function blockedDetail(b) {
   return `a later change reached beyond this action (${who}); undo that first`;
 }
 
-module.exports = { UndoHistory, UNDO_WINDOW_MS, undoDeclarationProblem, normalizeScope, stripKey, flightDataKey };
+module.exports = { UndoHistory, UNDO_WINDOW_MS, undoEnv, undoDeclarationProblem, normalizeScope, stripKey, flightDataKey };

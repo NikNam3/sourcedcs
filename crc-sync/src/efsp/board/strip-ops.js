@@ -8,6 +8,7 @@
 const { MAX_FREE_TEXT } = require('../flight-data-store');
 const { deepClone } = require('./strip-util');
 const { undoDeclarationProblem } = require('../undo/undo-history');
+const { voidAppendedEntries } = require('../undo/append-only');
 
 // A DEPARTURE in these states has left the ground (docs/adr/0076).
 const DEPARTURE_AIRBORNE_STATES = ['DEPARTED', 'HANDED_OFF'];
@@ -29,6 +30,7 @@ class StripOps {
    * @param {() => Map} deps.nlaHistory the NLA latch Map the facade owns, read late
    * @param {() => Map} deps.droppedWallAt BoardPersistence's Map, read late (restore() replaces it)
    * @param {(stripType:string) => string|undefined} deps.initialStateFor the authority registry's accessor
+   * @param {() => import('../undo/undo-history').UndoHistory} deps.undoHistory the one undo history, read late
    */
   constructor(deps) {
     this.rules = deps.rules;
@@ -50,8 +52,15 @@ class StripOps {
     this._nlaHistoryOf = deps.nlaHistory;
     this._droppedWallAtOf = deps.droppedWallAt;
     this.initialStateFor = deps.initialStateFor;
+    this._undoHistoryOf = deps.undoHistory;
     this.airborneObserver = undefined;
   }
+
+  /** The Board's audit (board/audit.js): the Undo op writes its own entry (docs/adr/0100 §8). */
+  get audit() { return this._audit; }
+
+  /** The one undo history (docs/adr/0100), shared by every Board of the process. */
+  get undoHistory() { return this._undoHistoryOf(); }
 
   get _activeCmid() { return this._activeCmidOf(); }
   /** stripId -> the last NLA's latch record; the facade owns the Map. */
@@ -92,13 +101,24 @@ class StripOps {
     // answers "may this Position class perform this op kind at all"
     // (e.g. only OPS may CreateStrip — guide §4.1 rule 3).
     const entry = this._ops.get(op.kind);
+    // docs/adr/0100 §5, §7: Undo names an action, not a Strip state; it has its own gate (the record's Position).
+    if (op.kind === 'Undo') return this._dispatchUndo(mutation, actingPositionId, by);
     const denied = entry && entry.authorize
       ? entry.authorize(this, actingPositionId, op)
       : (!this.rules.canMutate(actingPositionId, op.kind) ? { ok: false, reason: 'PERMISSION_DENIED' } : null);
     if (denied) return denied;
 
+    const keyed = typeof mutation.clientMutationId === 'string' && mutation.clientMutationId !== '';
+    const frameMeta = (strip, label) => ({
+      facilityId: this.rules.facilityId, actingPositionId, actorId: by || null, op: op.kind, label,
+      stripId: strip ? strip.stripId : null, at: this.clock.now(),
+    });
+
     if (op.kind === 'CreateStrip') {
-      const result = this.run('CreateStrip', null, op, { actingPositionId, by });
+      this.undoHistory.begin(keyed ? mutation.clientMutationId : null, frameMeta(null), null);
+      let result;
+      try { result = this.run('CreateStrip', null, op, { actingPositionId, by }); } catch (err) { this.undoHistory.abort(); throw err; }
+      this.undoHistory.commit(result);
       this._audit.recordAudit(mutation, actingPositionId, by, null, result);
       return result;
     }
@@ -128,21 +148,146 @@ class StripOps {
 
     const before = deepClone(strip);
     const meta = { by, actingPositionId, clientMutationId: mutation.clientMutationId };
-    const result = entry
-      ? entry.apply(this, strip, op, meta)
-      : { ok: false, reason: 'VALIDATION_ERROR', strip: deepClone(strip) };
-    // docs/adr/0076, Q-L16-3: a DEPARTURE entering Airborne stamps the takeoff
-    // time, however it got there (the NLA, SetState, a drag into the Airborne
-    // Bay) — one place, after every op that can change a state.
-    if (result.ok && strip.state !== before.state) {
-      const stamped = this._stampTakeoffOnStateChange(strip, before.state);
-      if (stamped) {
-        if (!result.flightData || result.flightData.flightDataId === stamped.flightDataId) result.flightData = stamped;
-        else result.flightDataList = [...(result.flightDataList || []), stamped];
+    // docs/adr/0100: the op's undo scope is read BEFORE it applies (the before-images), and the frame sees
+    // everything it touches. A keyed Mutation whose module declares a scope is undoable for 10 s.
+    const undo = entry && entry.undo !== 'none' && keyed ? entry.undo : null;
+    const scope = undo ? undo.scope(this, strip, op) : null;
+    this.undoHistory.begin(keyed ? mutation.clientMutationId : null, frameMeta(strip, scope ? undo.label(op, strip, this) : undefined), scope);
+    let result;
+    try {
+      result = entry
+        ? entry.apply(this, strip, op, meta)
+        : { ok: false, reason: 'VALIDATION_ERROR', strip: deepClone(strip) };
+      // docs/adr/0076, Q-L16-3: a DEPARTURE entering Airborne stamps the takeoff
+      // time, however it got there (the NLA, SetState, a drag into the Airborne
+      // Bay) — one place, after every op that can change a state.
+      if (result.ok && strip.state !== before.state) {
+        const stamped = this._stampTakeoffOnStateChange(strip, before.state);
+        if (stamped) {
+          if (!result.flightData || result.flightData.flightDataId === stamped.flightDataId) result.flightData = stamped;
+          else result.flightDataList = [...(result.flightDataList || []), stamped];
+        }
       }
+    } catch (err) {
+      this.undoHistory.abort();
+      throw err;
     }
+    const created = scope && result.ok && undo.created ? undo.created(result, this) : undefined;
+    const undoable = this.undoHistory.commit(result, { created });
+    if (undoable) result.undoable = undoable;
     this._audit.recordAudit(mutation, actingPositionId, by, before, result, this.auditFieldsFor(op.kind, result, op));
     return result;
+  }
+
+  /**
+   * Undo (docs/adr/0100): `op.actionId` names the action; the history says whether it may be undone and by whom,
+   * and board/ops/undo.js validates and applies its Plan. No Strip-state gate (owner, baseRev) applies: the undoer
+   * may no longer own the Strip (Q-U5 a), and the Undo voids later changes on purpose.
+   */
+  _dispatchUndo(mutation, actingPositionId, by) {
+    const { op } = mutation;
+    if (typeof op.actionId !== 'string' || op.actionId === '') {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'an Undo names the action it undoes (actionId)' };
+    }
+    if (!this.rules.isStaffed(actingPositionId)) {
+      return { ok: false, reason: 'NOT_STAFFED', detail: `${actingPositionId} is not staffed` };
+    }
+    const history = this.undoHistory;
+    const got = history.undo(op.actionId, actingPositionId);
+    if (!got.ok) return { ok: false, reason: got.reason, detail: got.detail };
+    const { plan } = got;
+    if (plan.meta.facilityId !== this.rules.facilityId) {
+      return { ok: false, reason: 'UNDO_UNAVAILABLE', detail: `that action was at ${plan.meta.facilityId}: send the Undo there` };
+    }
+    const keyed = typeof mutation.clientMutationId === 'string' && mutation.clientMutationId !== '';
+    history.begin(keyed ? mutation.clientMutationId : null, {
+      facilityId: this.rules.facilityId, actingPositionId, actorId: by || null, op: 'Undo', undo: true, at: this.clock.now(),
+    }, null);
+    let result;
+    try {
+      result = this.run('Undo', null, op, { by, actingPositionId, clientMutationId: keyed ? mutation.clientMutationId : null, plan });
+    } catch (err) {
+      history.abort();
+      throw err;
+    }
+    history.commit(result);
+    if (result.ok) history.complete(plan);
+    return result;
+  }
+
+  // ── undo restore (docs/adr/0100 §3), this Board's half ─────────────────────
+
+  /** A Strip's before-image for the undo history: the record, where it sits, and its drop's wall time. */
+  captureForUndo(stripId) {
+    const strip = this.state.strips.get(stripId);
+    if (!strip) return null;
+    const wallAt = this.droppedWallAt.get(stripId);
+    return { strip: deepClone(strip), placement: this.placement.placementOf(strip), droppedWallAt: wallAt == null ? null : wallAt };
+  }
+
+  /**
+   * What can have changed underneath a restore of `images` (Strips of this Board): an archived Strip
+   * (`NOT_FOUND`, ADR 0082 rule 4), an owner no longer staffed (`NOT_STAFFED`), a full Bay (`BAY_FULL`). The op
+   * gates are not re-run: the state was valid a few seconds ago.
+   * @returns {{ok:false, reason:string, detail:string}|null}
+   */
+  checkRestore(images) {
+    for (const img of images) {
+      if (!img.strip) continue;
+      const live = this.state.strips.get(img.stripId);
+      if (!live) return { ok: false, reason: 'NOT_FOUND', detail: `${img.stripId} has been archived; nothing archived can be undone` };
+      if (img.strip.state === 'DROPPED') continue;
+      const owner = img.strip.ownerPositionId;
+      if (owner !== live.ownerPositionId && !this.rules.isStaffed(owner)) {
+        return { ok: false, reason: 'NOT_STAFFED', detail: `${owner} is no longer staffed, so ${img.stripId} cannot go back to it` };
+      }
+      if (img.placement && img.placement.bayId !== live.bayId) {
+        const full = this.placement.bayFullRefusal(img.placement.bayId, live);
+        if (full) return { ok: false, reason: 'BAY_FULL', detail: full.detail };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Restores `images` (whole records: every field but `rev`, `updatedAt`, `updatedBy`; placement after the recorded
+   * predecessor; annotation entries added since VOIDED, never erased) and removes `removeIds` (records the action
+   * created: the ring gets a `gone`). Call checkRestore first: this does not refuse.
+   * @returns {{records: {stripId:string, flightDataId:string|null, before:object, after:object|null}[], gone: string[]}}
+   */
+  restoreImages(images, removeIds, { voidedBy, by }) {
+    const records = [];
+    for (const img of images) {
+      if (!img.strip) continue;
+      const live = this.state.strips.get(img.stripId);
+      if (!live) continue;
+      const before = deepClone(live);
+      const annotations = deepClone(live.annotations || {});
+      for (const [blockId, cell] of Object.entries(annotations)) {
+        voidAppendedEntries(img.strip.annotations && img.strip.annotations[blockId], cell, voidedBy);
+      }
+      for (const k of Object.keys(live)) delete live[k];
+      Object.assign(live, deepClone(img.strip), { annotations });
+      if (img.strip.state !== 'DROPPED' && img.placement) this.placement.restorePlacement(live, img.placement);
+      if (img.strip.state === 'DROPPED' && img.droppedWallAt != null) this.droppedWallAt.set(live.stripId, img.droppedWallAt);
+      else this.droppedWallAt.delete(live.stripId);
+      live.rev = before.rev + 1;
+      live.updatedAt = this.clock.now();
+      live.updatedBy = by || null;
+      this.touch(live.stripId);
+      records.push({ stripId: live.stripId, flightDataId: live.flightDataId || null, before, after: deepClone(live) });
+    }
+    const gone = [];
+    for (const stripId of removeIds) {
+      const live = this.state.strips.get(stripId);
+      if (!live) continue;
+      this.touch(stripId); // in this Board event's delta, where a missing Strip goes out as `gone`
+      this.state.remove(stripId);
+      this.droppedWallAt.delete(stripId);
+      gone.push(stripId);
+      records.push({ stripId, flightDataId: live.flightDataId || null, before: deepClone(live), after: null });
+    }
+    return { records, gone };
   }
 
   /** The op's own audit keys (`auditFields` in its table entry): `{head, tail}`, or none. */

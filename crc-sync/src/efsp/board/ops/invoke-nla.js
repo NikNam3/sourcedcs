@@ -1,7 +1,16 @@
 'use strict';
 
+const { stripScope, retireScope, union, callsignOf } = require('../../undo/scopes');
+
+/** What the NLA would do now (the state table), or null when it has none or is inhibited: the undo scope's route. */
+function _route(ctx, strip) {
+  const flightData = ctx.flightDataStore.getFlightData(strip.flightDataId);
+  const r = ctx.rules.computeNla(strip, flightData, ctx.clock.now(), ctx.placement.nlaCtx());
+  return r && !r.inhibited ? r : null;
+}
+
 function _applyInvokeNla(ctx, strip, by) {
-  // Two clocks, deliberately. The latch (400ms double tap, 30s Undo) is how
+  // Two clocks, deliberately. The latch (400ms double tap) is how
   // long a person's finger took, in real time; the NLA gate is a release
   // time or a void deadline, in mission time (docs/adr/0079).
   const wallNow = Date.now();
@@ -32,7 +41,6 @@ function _applyInvokeNla(ctx, strip, by) {
     return ctx.run('CarrierHandoff', strip, { transfer: result.carrierHandoff, toPositionId: result.transferTo || null }, { by, actingPositionId: strip.ownerPositionId, clientMutationId: null });
   }
 
-  const prevState = strip.state;
   let applied;
   if (result.transferTo) {
     // Transfer-shaped NLA transition (Phase 2's real LC->AP "Hand
@@ -62,20 +70,32 @@ function _applyInvokeNla(ctx, strip, by) {
     applied = ctx.applySetState(strip, result.toState, by);
   }
 
-  // Undo (§3.5 rule 5) stays scoped to state-only NLA transitions in
-  // Phase 2 (docs/adr/0009) — a transfer-shaped transition's failure
-  // mode is the existing transfer-timeout-revert path (§4.5 rule 5), not
-  // this button, and board/ops/transfer-strip.js's _applyTransferStrip already clears any stale entry
-  // here regardless of how the transfer happened.
-  if (applied.ok && !result.transferTo) {
-    ctx.nlaHistory.set(strip.stripId, { invokedAt: wallNow, prevState, expiresAt: wallNow + 30000 });
-  }
+  // The double-tap latch (§3.5 rule 3). Undo is no longer here: every NLA, whatever it routes to, is undone through
+  // the one undo history (docs/adr/0100, superseding ADR 0009's state-only Undo).
+  if (applied.ok && !result.transferTo) ctx.nlaHistory.set(strip.stripId, { invokedAt: wallNow });
   return applied;
 }
 
 module.exports = {
   kind: 'InvokeNla',
-  undo: 'none', // docs/adr/0100: not undoable (yet); UNDO-S step 2 declares the scopes
+  // docs/adr/0100: as the op the NLA routes to (state-only, transfer-shaped, terminal Drop, carrier handoff).
+  undo: {
+    label: (op, strip, ctx) => {
+      const route = _route(ctx, strip);
+      const cs = callsignOf(ctx, strip);
+      if (!route) return `NLA ${cs}`;
+      if (route.carrierHandoff) return `${(ctx.rules.carrierHandoffs[route.carrierHandoff] || {}).label || route.carrierHandoff} ${cs}`;
+      if (route.transferTo) return `Hand off ${cs} → ${route.transferTo}`;
+      if (route.toState === 'DROPPED') return `Drop ${cs}`;
+      return `${cs} → ${route.toState}`;
+    },
+    scope: (ctx, strip) => {
+      const route = _route(ctx, strip);
+      if (route && route.toState === 'DROPPED' && !route.transferTo && !route.carrierHandoff) return retireScope(ctx, strip);
+      if (route && route.carrierHandoff) return union(stripScope(ctx, strip), { carrier: [{ flightDataId: strip.flightDataId }] });
+      return stripScope(ctx, strip);
+    },
+  },
   // An NLA press records what the op it ran would: a transfer's selfCoordinated, or a carrier handoff's kind and trigger.
   auditFields: (ctx, result, op) => ({ tail: {
     ...ctx.auditFieldsFor('TransferStrip', result, op).tail,
