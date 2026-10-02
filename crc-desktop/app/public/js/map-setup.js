@@ -213,17 +213,17 @@ export function initMap(container) {
     // Strips too; not the attention red §7.7 rule 4 reserves.
     map.addSource('conflictAlert', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
     map.addLayer({
-      id: 'stca-paths', type: 'line', source: 'conflictAlert',
+      id: 'conflict-alert-paths', type: 'line', source: 'conflictAlert',
       filter: ['==', ['get', 'kind'], 'path'],
       paint: { 'line-color': '#ff8a4c', 'line-width': 1.5, 'line-dasharray': [3, 2], 'line-opacity': 0.9 },
     });
     map.addLayer({
-      id: 'stca-cpa-line', type: 'line', source: 'conflictAlert',
+      id: 'conflict-alert-cpa-line', type: 'line', source: 'conflictAlert',
       filter: ['==', ['get', 'kind'], 'cpa-line'],
       paint: { 'line-color': '#ff8a4c', 'line-width': 1 },
     });
     map.addLayer({
-      id: 'stca-cpa', type: 'circle', source: 'conflictAlert',
+      id: 'conflict-alert-cpa', type: 'circle', source: 'conflictAlert',
       filter: ['==', ['get', 'kind'], 'cpa'],
       paint: {
         'circle-radius': 12, 'circle-color': 'rgba(255,138,76,0.12)',
@@ -231,7 +231,7 @@ export function initMap(container) {
       },
     });
     map.addLayer({
-      id: 'stca-cpa-label', type: 'symbol', source: 'conflictAlert',
+      id: 'conflict-alert-cpa-label', type: 'symbol', source: 'conflictAlert',
       filter: ['==', ['get', 'kind'], 'cpa'],
       layout: {
         'text-field': ['get', 'label'], 'text-font': ['Roboto Regular', 'Noto Sans Regular'],

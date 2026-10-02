@@ -2,7 +2,7 @@
 import { haversineM } from '../../geo.js';
 import { missionNow } from '../topbar.js';
 import {
-  correlatedTrackIdForStrip, getEfspBays, getEfspFdr, getEfspFieldState, getEfspRack, getEfspStrip
+  correlatedTrackIdForStrip, getEfspBays, getEfspFlightData, getEfspRunwayStatus, getEfspRack, getEfspStrip
 } from './efsp-state.js';
 import { getEfspCarrier } from './carrier-state.js';
 import {
@@ -63,7 +63,7 @@ export function patternLegsFor(bay) {
  * not from its last Move, so going round again does not reset it.
  * @param {object} bay
  * @param {(bayId:string, rackId:string)=>object[]} rackOf  getEfspRack
- * @param {(flightDataId:string)=>object|null} flightDataOf               getEfspFdr
+ * @param {(flightDataId:string)=>object|null} flightDataOf               getEfspFlightData
  */
 export function patternStripsFor(bay, rackOf, flightDataOf) {
   const out = [];
@@ -136,7 +136,7 @@ const _finalTrackers = new Map(); // stripId -> final-panel tracker
 const _finalMounts = new Set();   // containers showing a final view, refreshed on a timer
 let _finalTimer = null;
 
-function _heldAt(bay) {
+function _signedOnAt(bay) {
   return typeof getActingPositions === 'function' ? getActingPositions(bay.facilityId) : [];
 }
 
@@ -183,15 +183,15 @@ function _busy(el) {
 function _renderPattern(container, bay) {
   const mount = _mountPoint(container, bay.bayId);
   const legs = patternLegsFor(bay);
-  const strips = patternStripsFor(bay, getEfspRack, getEfspFdr);
-  const fs = typeof getEfspFieldState === 'function' ? getEfspFieldState(bay.facilityId) : null;
+  const strips = patternStripsFor(bay, getEfspRack, getEfspFlightData);
+  const fs = typeof getEfspRunwayStatus === 'function' ? getEfspRunwayStatus(bay.facilityId) : null;
   const runway = fs && fs.runways && fs.runways[0];
   const model = patternBoardModel({
     legs, strips, nowS: (typeof missionNow === 'function' ? missionNow() : Date.now()) / 1000,
     runwayOpenStatus: runway ? (runway.status === 'OPEN' ? 'OPEN' : (runway.status === 'CLOSED' ? 'CLOSED' : 'SUSPENDED')) : undefined,
   });
   // Only a held Position acts: a read-only board for everyone else.
-  const signedOn = _heldAt(bay);
+  const signedOn = _signedOnAt(bay);
   const owner = (stripId) => { const s = getEfspStrip(stripId); return s && signedOn.includes(s.ownerPositionId) ? s : null; };
   const act = (stripId, op) => { const s = owner(stripId); if (s && op) _send(s, { ...op, ...(op.kind === 'MoveStrip' ? { bayId: bay.bayId } : {}) }); };
   const board = renderPatternBoard(model, {
@@ -220,25 +220,25 @@ function _renderFinal(container, bay) {
   const kind = bay.facilityId === 'CARRIER' ? 'CARRIER' : 'PAR';
   const live = [];
   for (const rackId of bay.rackIds || []) live.push(...getEfspRack(bay.bayId, rackId));
-  const signedOn = _heldAt(bay);
+  const signedOn = _signedOnAt(bay);
   const gone = new Set([..._finalTrackers.keys()]);
   const wrap = document.createElement('div');
   wrap.dataset.bayView = 'final';
   if (live.length === 0) {
     const none = document.createElement('div');
     none.className = 'efsp-final-none';
-    none.textContent = kind === 'CARRIER' ? 'No aircraft on final.' : 'No aircraft on final. Rotate an aircraft in from SFA or APP.';
+    none.textContent = kind === 'CARRIER' ? 'No aircraft on final.' : 'No aircraft on final. Rotate an aircraft in from SFA or AP.';
     wrap.appendChild(none);
   }
   for (const strip of live) {
     gone.delete(strip.stripId);
     if (!_finalTrackers.has(strip.stripId)) _finalTrackers.set(strip.stripId, createFinalTracker());
-    const flightData = getEfspFdr(strip.flightDataId);
+    const flightData = getEfspFlightData(strip.flightDataId);
     const trackId = typeof correlatedTrackIdForStrip === 'function' ? correlatedTrackIdForStrip(strip) : null;
     const track = trackId && typeof window !== 'undefined' && typeof window.getLatestTrack === 'function' ? window.getLatestTrack(trackId) : null;
     let runwayText = '--';
-    if (typeof runwayForStrip === 'function' && typeof getEfspFieldState === 'function') {
-      const r = runwayForStrip({ ...strip, stripType: 'ARRIVAL' }, flightData, getEfspFieldState(bay.facilityId));
+    if (typeof runwayForStrip === 'function' && typeof getEfspRunwayStatus === 'function') {
+      const r = runwayForStrip({ ...strip, stripType: 'ARRIVAL' }, flightData, getEfspRunwayStatus(bay.facilityId));
       if (r) runwayText = r.end || r.runwayId;
     }
     const sample = finalSampleFor({
@@ -277,7 +277,7 @@ function _renderSfaHeader(container, bay) {
   const mount = _mountPoint(container, bay.bayId);
   if (!view) { _replace(mount, null); return; }
   if (_busy(mount)) return;
-  const signedOn = _heldAt(bay);
+  const signedOn = _signedOnAt(bay);
   const rotating = sfaRotatingPosition(signedOn, view);
   const box = document.createElement('div');
   box.className = 'efsp-sfa-header';
@@ -346,7 +346,7 @@ export function renderBayDescriptorView(container, bay) {
 /** The second button beside the NLA on a Strip on an SFA frequency: Rotate to PAR (ADR 0075). */
 export function sfaExtraNlaButtons(strip) {
   if (typeof getEfspSfa !== 'function' || typeof getActingPositions !== 'function') return [];
-  const flightData = typeof getEfspFdr === 'function' ? getEfspFdr(strip.flightDataId) : null;
+  const flightData = typeof getEfspFlightData === 'function' ? getEfspFlightData(strip.flightDataId) : null;
   if (!sfaRotationOffered(strip, flightData, getActingPositions(strip.facilityId || undefined))) return [];
   const btn = document.createElement('button');
   btn.className = 'efsp-sbtn efsp-nla-btn efsp-sfa-rotate';

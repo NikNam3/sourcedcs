@@ -230,7 +230,7 @@ function _cell(id, block, windowId, ctx) {
       const causes = _topEntries(block.byCause);
       const extra = [
         causes ? `causes: ${causes}` : null,
-        block.routedToConsolidated ? `${block.routedToConsolidated} routed to a covering Position` : null,
+        block.routedToConsolidated ? `${block.routedToConsolidated} routed to a consolidated Position` : null,
         block.inhibitedPress ? `${block.inhibitedPress} inhibited ${block.inhibitedPress === 1 ? 'press' : 'presses'} (not attempts)` : null,
       ].filter(Boolean).join(' · ');
       return {
@@ -523,7 +523,7 @@ function renderMetricsPanel() {
     const pp = _el('div', 'metrics-per-position');
     pp.appendChild(_el('div', 'metrics-section-title', 'Search invocations'));
     pp.appendChild(model.perPosition.search.length
-      ? _renderTable(['Position', 'Facility', 'Searches', 'Per staffed hour', 'Manned hours', 'Last hour'],
+      ? _renderTable(['Position', 'Facility', 'Searches', 'Per staffed hour', 'Staffed hours', 'Last hour'],
         model.perPosition.search.map(r => [r.positionId, r.facilityId, r.total, r.perStaffedHour, r.staffedHours, r.lastHour]))
       : _el('div', 'efsp-empty', 'no data'));
     pp.appendChild(_el('div', 'metrics-section-title', 'Time-to-find'));

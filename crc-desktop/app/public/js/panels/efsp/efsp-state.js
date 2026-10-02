@@ -15,8 +15,8 @@ import { applyEfspSfaSnapshot } from './sfa-state.js';
 // require()-able module for node:test — no build step either way.
 
 export const efspStrips = new Map();     // stripId -> Strip
-export const efspFdrs = new Map();       // flightDataId -> FlightDataRecord
-const efspPositions = new Map();  // positionId -> PositionOccupancy
+export const efspFlightDataList = new Map();       // flightDataId -> FlightDataRecord
+const efspPositions = new Map();  // positionId -> PositionStaffing
 let efspBoardSeq = 0;
 let efspFacility = null;
 // Board sync position, per Facility (docs/adr/0081). A seq only means something
@@ -75,7 +75,7 @@ let efspCorrelationStats = null;
 // one is the alert §9.2 rule 2 requires, and dropping it would erase the
 // warning for whoever just reconnected.
 const efspMarsa = new Map();
-const efspFieldStates = new Map(); // facilityId -> runway-status record (crc-sync docs/adr/0061)
+const efspRunwayStatuses = new Map(); // facilityId -> runway-status record (crc-sync docs/adr/0061)
 
 // docs/adr/0058 — what crc-sync's conformance and conflict monitors say is
 // WRONG right now. Sent whole on every change (efsp-alerts), so a flight that
@@ -89,10 +89,10 @@ let efspConflicts = [];            // [{ id, a, b, aCallsign, bCallsign, timeToC
 
 export function applyEfspSnapshot(msg) {
   efspStrips.clear();
-  efspFdrs.clear();
+  efspFlightDataList.clear();
   efspPositions.clear();
   for (const s of msg.strips || []) efspStrips.set(s.stripId, s);
-  for (const f of msg.flightDataList || []) efspFdrs.set(f.flightDataId, f);
+  for (const f of msg.flightDataList || []) efspFlightDataList.set(f.flightDataId, f);
   for (const p of msg.positions || []) efspPositions.set(p.positionId, p);
   efspBoardSeq = msg.boardSeq;
   efspFacility = msg.facility;
@@ -110,8 +110,8 @@ export function applyEfspSnapshot(msg) {
   for (const r of msg.correlations || []) efspCorrelations.set(r.flightDataId, r);
   efspMarsa.clear();
   for (const r of msg.marsa || []) efspMarsa.set(r.marsaId, r);
-  efspFieldStates.clear();
-  for (const r of msg.runwayStatuses || []) efspFieldStates.set(r.facilityId, r);
+  efspRunwayStatuses.clear();
+  for (const r of msg.runwayStatuses || []) efspRunwayStatuses.set(r.facilityId, r);
   // crc-sync's docs/adr/0074 — the carrier's hull record (carrier-state.js).
   if (typeof applyEfspCarrierSnapshot === 'function') applyEfspCarrierSnapshot(msg);
   // crc-sync's docs/adr/0093 — who is on which SFA frequency (sfa-state.js).
@@ -136,7 +136,7 @@ export function getEfspMarsa(marsaId) { return efspMarsa.get(marsaId) || null; }
 export function getAllEfspMarsa() { return [...efspMarsa.values()]; }
 
 /** The ACTIVE relation this flight is in, or null. At most one — crc-sync enforces it. */
-export function activeMarsaForFdr(flightDataId) {
+export function activeMarsaForFlightData(flightDataId) {
   if (!flightDataId) return null;
   for (const relation of efspMarsa.values()) {
     if (relation.state === 'ACTIVE' && relation.participants.includes(flightDataId)) return relation;
@@ -155,7 +155,7 @@ export function activeMarsaForFdr(flightDataId) {
  */
 export function marsaForStrip(strip) {
   if (!strip) return null;
-  const active = activeMarsaForFdr(strip.flightDataId);
+  const active = activeMarsaForFlightData(strip.flightDataId);
   if (active) return active;
   let latest = null;
   for (const relation of efspMarsa.values()) {
@@ -170,13 +170,13 @@ export function marsaForStrip(strip) {
  * "selecting one participant MUST highlight the others."
  *
  * A linear walk rather than a maintained index, the same reasoning
- * otherLiveStripsForFdr and stripIdsForTrackId already document: the Strip
+ * otherLiveStripsForFlightData and stripIdsForTrackId already document: the Strip
  * count is in the tens, and a relation has a handful of participants. Returns
  * every Strip of every participant, which is right — one participant worked by
  * two Facilities has two Strips and both are in the relation.
  */
 export function marsaParticipantStripIds(strip) {
-  const relation = strip ? activeMarsaForFdr(strip.flightDataId) : null;
+  const relation = strip ? activeMarsaForFlightData(strip.flightDataId) : null;
   if (!relation) return [];
   const others = new Set(relation.participants.filter(id => id !== strip.flightDataId));
   if (others.size === 0) return [];
@@ -191,15 +191,15 @@ export function marsaParticipantStripIds(strip) {
  * Strip and rides no Board's sequence. One record per Facility, sent whole, so
  * a delta simply replaces it (docs/adr/0068).
  */
-export function applyEfspFieldStateDelta(msg) {
+export function applyEfspRunwayStatusDelta(msg) {
   for (const r of (msg && msg.runwayStatuses && msg.runwayStatuses.updated) || []) {
-    if (r && r.facilityId) efspFieldStates.set(r.facilityId, r);
+    if (r && r.facilityId) efspRunwayStatuses.set(r.facilityId, r);
   }
 }
 
 /** The Facility's runway-status record exactly as the server sent it, or null (L12/L13 read this — do not rename). */
-export function getEfspFieldState(facilityId) { return efspFieldStates.get(facilityId) || null; }
-export function getAllEfspFieldStates() { return [...efspFieldStates.values()]; }
+export function getEfspRunwayStatus(facilityId) { return efspRunwayStatuses.get(facilityId) || null; }
+export function getAllEfspRunwayStatuses() { return [...efspRunwayStatuses.values()]; }
 
 /**
  * An efsp-correlation-delta — its own message type with its own seq, like the
@@ -236,7 +236,7 @@ export function correlatedTrackIdForStrip(strip) {
  * airframe this contact is?
  *
  * A linear walk rather than a maintained index — the same reasoning
- * otherLiveStripsForFdr already documents, and the Strip count is in the tens.
+ * otherLiveStripsForFlightData already documents, and the Strip count is in the tens.
  * Returns several when one FDR has several Strips, which is the ordinary case
  * after a cross-Facility handoff.
  */
@@ -320,8 +320,8 @@ export function efspHeartbeatGapOf(msg) {
 export function applyEfspDelta(msg) {
   for (const s of (msg.strips && msg.strips.updated) || []) efspStrips.set(s.stripId, s);
   for (const id of (msg.strips && msg.strips.gone) || []) efspStrips.delete(id);
-  for (const f of (msg.flightDataList && msg.flightDataList.updated) || []) efspFdrs.set(f.flightDataId, f);
-  for (const id of (msg.flightDataList && msg.flightDataList.gone) || []) efspFdrs.delete(id); // archived (docs/adr/0082)
+  for (const f of (msg.flightDataList && msg.flightDataList.updated) || []) efspFlightDataList.set(f.flightDataId, f);
+  for (const id of (msg.flightDataList && msg.flightDataList.gone) || []) efspFlightDataList.delete(id); // archived (docs/adr/0082)
   for (const p of (msg.positions && msg.positions.updated) || []) efspPositions.set(p.positionId, p);
   _adoptBoardSeq(msg);
 }
@@ -344,7 +344,7 @@ export function applyEfspMutationAck(msg) {
   const pending = efspPendingMutations.get(msg.clientMutationId) || null;
   efspPendingMutations.delete(msg.clientMutationId);
   if (msg.strip) efspStrips.set(msg.strip.stripId, msg.strip);
-  if (msg.flightData) efspFdrs.set(msg.flightData.flightDataId, msg.flightData);
+  if (msg.flightData) efspFlightDataList.set(msg.flightData.flightDataId, msg.flightData);
   // The ack's boardSeq is deliberately NOT adopted: its broadcast delta (same
   // seq) is what moves our position, so a delta lost after its ack still shows
   // up as a gap at the next heartbeat (docs/adr/0081). A refusal or a replay has
@@ -391,7 +391,7 @@ export function rebaseForResend(clientMutationId) {
 }
 
 export function getEfspStrip(stripId) { return efspStrips.get(stripId) || null; }
-export function getEfspFdr(flightDataId) { return efspFdrs.get(flightDataId) || null; }
+export function getEfspFlightData(flightDataId) { return efspFlightDataList.get(flightDataId) || null; }
 export function getEfspPosition(positionId) { return efspPositions.get(positionId) || null; }
 export function getAllEfspStrips() { return [...efspStrips.values()]; }
 export function getAllEfspPositions() { return [...efspPositions.values()]; }
@@ -419,7 +419,7 @@ export function getEfspPositionLetter(positionId) {
  * that says so. Purely client-local — the snapshot already carries every
  * Facility's Strips, so no server support is needed.
  */
-export function otherLiveStripsForFdr(flightDataId, exceptStripId) {
+export function otherLiveStripsForFlightData(flightDataId, exceptStripId) {
   if (!flightDataId) return [];
   return getAllEfspStrips().filter(s => s.flightDataId === flightDataId && s.stripId !== exceptStripId && s.state !== 'DROPPED');
 }
@@ -430,7 +430,7 @@ export function liveStripsForCallsign(callsign) {
   if (!target) return [];
   return getAllEfspStrips().filter((s) => {
     if (s.state === 'DROPPED') return false;
-    const flightData = getEfspFdr(s.flightDataId);
+    const flightData = getEfspFlightData(s.flightDataId);
     return !!(flightData && flightData.identity && (flightData.identity.callsign || '').toUpperCase() === target);
   });
 }
@@ -457,7 +457,7 @@ export function searchEfspStrips(query) {
   if (!q) return [];
   return getAllEfspStrips().filter((s) => {
     if (s.state === 'DROPPED') return false;
-    const flightData = getEfspFdr(s.flightDataId);
+    const flightData = getEfspFlightData(s.flightDataId);
     const callsign = (flightData && flightData.identity && flightData.identity.callsign) || '';
     const beacon = (flightData && flightData.identity && flightData.identity.beaconAssigned) || '';
     return callsign.toLowerCase().includes(q) || beacon.toLowerCase().includes(q);
@@ -487,7 +487,7 @@ export function efspLinesWithOthers(positionId) {
 // app.js's own plain-globals style), so tests need a way to isolate runs.
 export function _resetEfspStateForTest() {
   efspStrips.clear();
-  efspFdrs.clear();
+  efspFlightDataList.clear();
   efspPositions.clear();
   efspPendingMutations.clear();
   efspObligations.clear();
@@ -495,7 +495,7 @@ export function _resetEfspStateForTest() {
   efspCorrelations.clear();
   efspCorrelationStats = null;
   efspMarsa.clear();
-  efspFieldStates.clear();
+  efspRunwayStatuses.clear();
   efspConformance.clear();
   efspConflicts = [];
   efspBoardSeq = 0;
@@ -536,13 +536,13 @@ export function surveillanceHintsForStrip(strip) {
 }
 
 /** What is wrong with this flight's conformance right now; [] when it conforms. */
-export function conformanceAlertsForFdr(flightDataId) { return efspConformance.get(flightDataId) || []; }
+export function conformanceAlertsForFlightData(flightDataId) { return efspConformance.get(flightDataId) || []; }
 
 /** Every current short-term conflict. */
 export function getAllEfspConflicts() { return efspConflicts; }
 
 /** The conflicts this track is in, each seen from its side: { other, otherCallsign, timeToCpaSec, minNm, vertFt, id }. */
-export function stcaConflictsForTrack(trackId) {
+export function conflictAlertsForTrack(trackId) {
   if (trackId == null) return [];
   const id = String(trackId);
   return efspConflicts.filter(c => c.a === id || c.b === id).map(c => ({

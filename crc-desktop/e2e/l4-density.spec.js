@@ -49,7 +49,7 @@ test('six DEPARTURE Strips: how many are visible, with and without 20/21', async
   // elements are not rebuilt, which is why this is a second set of six rather
   // than the same six re-measured.
   await page.evaluate(() => {
-    COMPACT_BLOCKS_BY_ROLE.DEPARTURE = COMPACT_BLOCKS_BY_ROLE.DEPARTURE.filter((b) => b !== '20' && b !== '21');
+    COMPACT_BLOCKS_BY_STRIP_TYPE.DEPARTURE = COMPACT_BLOCKS_BY_STRIP_TYPE.DEPARTURE.filter((b) => b !== '20' && b !== '21');
   });
   const trimmed = ['L4E1', 'L4E2', 'L4E3', 'L4E4', 'L4E5', 'L4E6'];
   for (const cs of trimmed) await seedStrip(page, { callsign: cs, stripType: 'DEPARTURE' });

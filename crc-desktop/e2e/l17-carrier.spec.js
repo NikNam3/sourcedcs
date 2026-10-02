@@ -34,7 +34,7 @@ async function controller(browser, baseURL, name, signedOn) {
 
 const strip = (page, callsign) => page.locator('.efsp-strip', { has: page.locator('.efsp-block-C1', { hasText: callsign }) }).first();
 const stripOf = (page, callsign) => page.evaluate((c) => {
-  const s = getAllEfspStrips().find(x => x.state !== 'DROPPED' && (getEfspFdr(x.flightDataId) || { identity: {} }).identity.callsign === c);
+  const s = getAllEfspStrips().find(x => x.state !== 'DROPPED' && (getEfspFlightData(x.flightDataId) || { identity: {} }).identity.callsign === c);
   return s ? { stripId: s.stripId, flightDataId: s.flightDataId, stripType: s.stripType, state: s.state, ownerPositionId: s.ownerPositionId, bayId: s.bayId, trigger: s.carrierHandoff && s.carrierHandoff.trigger } : null;
 }, callsign);
 const waitStrip = (page, callsign, pred, what) => expect.poll(async () => { const s = await stripOf(page, callsign); return !!s && pred(s); }, { message: what, timeout: 10000 }).toBe(true);
@@ -118,7 +118,7 @@ test('02 the slot board shows what the slot means; a drag to a slot is one Move 
   await marshal.screenshot({ path: path.join(SHOTS, '02-drag-to-slot-preview.png') });
   await marshal.mouse.up();
   await expect.poll(() => marshal.evaluate(() => carrierDerivedStack().map(e => e.flightDataId))).not.toEqual(before);
-  const after = await marshal.evaluate(() => carrierDerivedStack().map(e => [getEfspFdr(e.flightDataId).identity.callsign, e.stackIndex, e.angels]));
+  const after = await marshal.evaluate(() => carrierDerivedStack().map(e => [getEfspFlightData(e.flightDataId).identity.callsign, e.stackIndex, e.angels]));
   expect(after).toEqual([[c, 0, 6], [a, 1, 7], [b, 2, 8]]);
   await expect(strip(marshal, c).locator('.efsp-block-C7')).toHaveText('6');
   await marshal.screenshot({ path: path.join(SHOTS, '02-after-resequence.png') });
@@ -135,15 +135,15 @@ test('03 Case II handoffs: Commence feeds a lane, See you hands to PriFly, Radar
   await openBay(marshal, 'CV_MARSHAL', 'cv-marshal-stack');
 
   // Commence: the NLA, labelled by its handoff, carrying its trigger type
-  const commence = strip(marshal, a).locator('.efsp-nla-btn[data-carrier-transfer="MARSHAL_TO_APPROACH"]');
+  const commence = strip(marshal, a).locator('.efsp-nla-btn[data-carrier-handoff="MARSHAL_TO_APPROACH"]');
   await expect(commence).toHaveText('Commence');
   await expect(commence).toHaveAttribute('data-carrier-trigger', 'CONTROLLER_INITIATED');
   // and "See you" beside it: a second, distinct button with its own trigger type
-  const seeYou = strip(marshal, b).locator('.efsp-nla-btn[data-carrier-transfer="MARSHAL_TO_PRIFLY"]');
+  const seeYou = strip(marshal, b).locator('.efsp-nla-btn[data-carrier-handoff="MARSHAL_TO_PRIFLY"]');
   await expect(seeYou).toHaveText('See you');
   await expect(seeYou).toHaveAttribute('data-carrier-trigger', 'PILOT_SEE_YOU');
   await strip(marshal, a).scrollIntoViewIfNeeded();
-  await marshal.screenshot({ path: path.join(SHOTS, '03-two-handover-buttons.png') });
+  await marshal.screenshot({ path: path.join(SHOTS, '03-two-handoff-buttons.png') });
   await commence.click();
   await waitStrip(marshal, a, s => s.state === 'COMMENCED' && s.ownerPositionId === 'CV_APP1' && s.trigger === 'CONTROLLER_INITIATED', 'Commence');
   await expect.poll(() => marshal.evaluate(() => carrierDerivedStack().map(e => [e.stackIndex, e.status]))).toEqual([[0, 'PUSHED'], [1, 'HOLDING']]);
@@ -158,7 +158,7 @@ test('03 Case II handoffs: Commence feeds a lane, See you hands to PriFly, Radar
 
   // Radar contact at the lane: same Strip, now FINAL
   await openBay(marshal, 'CV_APP1', 'cv-app1-lane');
-  await strip(marshal, a).locator('.efsp-nla-btn[data-carrier-transfer="APPROACH_TO_FINAL"]').click();
+  await strip(marshal, a).locator('.efsp-nla-btn[data-carrier-handoff="APPROACH_TO_FINAL"]').click();
   await waitStrip(marshal, a, s => s.stripType === 'FINAL' && s.state === 'ON_FINAL' && s.trigger === 'RADAR_ACQUISITION', 'Radar contact');
   await openBay(marshal, 'CV_APP1', 'cv-app1-final');
   const onFinal = strip(marshal, a);
@@ -169,7 +169,7 @@ test('03 Case II handoffs: Commence feeds a lane, See you hands to PriFly, Radar
   await expect(onFinal.locator('.efsp-block-C16')).toBeVisible();
   await onFinal.scrollIntoViewIfNeeded();
   await marshal.screenshot({ path: path.join(SHOTS, '03-final-nothing-to-type.png') });
-  await onFinal.locator('.efsp-nla-btn[data-carrier-transfer="FINAL_TO_LSO"]').click();
+  await onFinal.locator('.efsp-nla-btn[data-carrier-handoff="FINAL_TO_LSO"]').click();
   await waitStrip(marshal, a, s => s.state === 'BALL' && s.trigger === 'PILOT_BALL_CALL', 'Ball');
   await expect(strip(marshal, a).locator('.efsp-nla-btn')).toHaveText('Trapped');
   // Ball and Trapped are two advancing presses: the client swallows a second one inside the 400 ms double-tap window (F-101), as it does for a person's double tap.
@@ -200,9 +200,9 @@ test('04 Case I is an altitude list: no push column, the flight goes to the patt
   await angels.fill('3'); await angels.press('Enter');
   await expect(board.locator('.carrier-slot-occupied')).toContainText('A3');
   await marshal.screenshot({ path: path.join(SHOTS, '04-case-i-list.png') });
-  const toPattern = strip(marshal, a).locator('.efsp-nla-btn[data-carrier-transfer="MARSHAL_TO_PATTERN_CASE_I"]');
+  const toPattern = strip(marshal, a).locator('.efsp-nla-btn[data-carrier-handoff="MARSHAL_TO_PATTERN_CASE_I"]');
   await expect(toPattern).toHaveText('To pattern');
-  await expect(strip(marshal, a).locator('.efsp-nla-btn[data-carrier-transfer="MARSHAL_TO_PRIFLY"]')).toHaveCount(0);
+  await expect(strip(marshal, a).locator('.efsp-nla-btn[data-carrier-handoff="MARSHAL_TO_PRIFLY"]')).toHaveCount(0);
   await toPattern.click();
   await waitStrip(pri, a, s => s.stripType === 'PATTERN' && s.ownerPositionId === 'CV_PRIFLY', 'Case I to pattern');
   await cleanUp(marshal, pri);
@@ -218,7 +218,7 @@ test('05 a refusal is visible: a Marshal cannot set the Case, and a frequency is
   await expect(marshal.locator('#efsp-mutation-error')).toContainText(/PERMISSION_DENIED|Case/i);
   await openBay(marshal, 'CV_MARSHAL', 'cv-marshal-stack');
   await marshal.evaluate((c) => {
-    const s = getAllEfspStrips().find(x => getEfspFdr(x.flightDataId).identity.callsign === c);
+    const s = getAllEfspStrips().find(x => getEfspFlightData(x.flightDataId).identity.callsign === c);
     sendEfspMutation('CV_MARSHAL', s, { kind: 'SetBlock', blockId: 'C10', value: '251.000' });
   }, a);
   await expect(marshal.locator('#efsp-mutation-error')).toContainText(/frequency/i);

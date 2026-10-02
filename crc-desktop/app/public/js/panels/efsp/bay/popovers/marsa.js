@@ -1,5 +1,5 @@
 'use strict';
-import { activeMarsaForFdr, getAllEfspStrips, getEfspFdr, marsaForStrip } from '../../efsp-state.js';
+import { activeMarsaForFlightData, getAllEfspStrips, getEfspFlightData, marsaForStrip } from '../../efsp-state.js';
 import { MARSA_EXPANSION, marsaActionsFor } from '../../marsa-badge.js';
 import { _mountPopover, _unmountPopover } from '../popover-portal.js';
 import { _dispatchMarsa, selectEfspStripById } from '../../bay-view.js';
@@ -54,7 +54,7 @@ export function _openMarsaPopover(strip, anchorEl) {
     for (const flightDataId of relation.participants) {
       if (flightDataId === strip.flightDataId) continue;
       const peer = getAllEfspStrips().find(s => s.flightDataId === flightDataId && s.state !== 'DROPPED');
-      const flightData = typeof getEfspFdr === 'function' ? getEfspFdr(flightDataId) : null;
+      const flightData = typeof getEfspFlightData === 'function' ? getEfspFlightData(flightDataId) : null;
       const label = (flightData && flightData.identity && flightData.identity.callsign) || flightDataId;
       const row = document.createElement('button');
       row.className = 'efsp-marsa-participant-btn';
@@ -114,7 +114,7 @@ function _marsaCandidates(strip) {
     if (s.state === 'DROPPED' || s.flightDataId === strip.flightDataId) return false;
     // A flight already under MARSA cannot be in a second relation — crc-sync
     // refuses it, and offering it here would be a control that always fails.
-    return !(typeof activeMarsaForFdr === 'function' && activeMarsaForFdr(s.flightDataId));
+    return !(typeof activeMarsaForFlightData === 'function' && activeMarsaForFlightData(s.flightDataId));
   });
 }
 
@@ -122,7 +122,7 @@ function _marsaCandidateSelect(strip) {
   const select = document.createElement('select');
   select.className = 'efsp-coordinate-primitive-select';
   for (const s of _marsaCandidates(strip)) {
-    const flightData = typeof getEfspFdr === 'function' ? getEfspFdr(s.flightDataId) : null;
+    const flightData = typeof getEfspFlightData === 'function' ? getEfspFlightData(s.flightDataId) : null;
     const option = document.createElement('option');
     option.value = s.flightDataId;
     option.textContent = (flightData && flightData.identity && flightData.identity.callsign) || s.flightDataId;

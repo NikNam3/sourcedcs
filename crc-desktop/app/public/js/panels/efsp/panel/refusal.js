@@ -2,7 +2,7 @@
 import { _mutationErrorEl, _mutationWarningEl } from './state.js';
 import { _pendingCreateStripMutationId, _setCreateStripMsg, _setPendingCreateStripMutationId } from './create-strip.js';
 import { blockLabelFor } from '../strip-template.js';
-import { getEfspFdr, getEfspStrip } from '../efsp-state.js';
+import { getEfspFlightData, getEfspStrip } from '../efsp-state.js';
 import { renderAllOpenEfspBays } from '../bay-view.js';
 
 // Rejections that reach here have no other visible surface — a dragged
@@ -63,8 +63,8 @@ function _refusalSentence(reason, detail) {
 }
 
 /** The callsign on an FDR — what a controller reads off the Strip, and so how a refusal has to name it. */
-export function _callsignOfFdr(flightDataId) {
-  const flightData = flightDataId && typeof getEfspFdr === 'function' ? getEfspFdr(flightDataId) : null;
+export function _callsignOfFlightData(flightDataId) {
+  const flightData = flightDataId && typeof getEfspFlightData === 'function' ? getEfspFlightData(flightDataId) : null;
   return (flightData && flightData.identity && flightData.identity.callsign) || '';
 }
 
@@ -89,11 +89,11 @@ function _refusalSubject(context) {
   const op = (pending && pending.op) || context.op || null;
   const stripId = (pending && pending.stripId) || context.stripId || null;
   const strip = stripId && typeof getEfspStrip === 'function' ? getEfspStrip(stripId) : null;
-  const callsign = (strip && _callsignOfFdr(strip.flightDataId))
-    || _callsignOfFdr(context.flightDataId)
+  const callsign = (strip && _callsignOfFlightData(strip.flightDataId))
+    || _callsignOfFlightData(context.flightDataId)
     || (op && op.flightData && op.flightData.callsign)   // a refused CreateStrip has no Strip yet — the callsign is in the op
-    || _callsignOfFdr(op && op.flightDataId)
-    || (context.flightDataIds || []).map(_callsignOfFdr).filter(Boolean).join(' + ');
+    || _callsignOfFlightData(op && op.flightDataId)
+    || (context.flightDataIds || []).map(_callsignOfFlightData).filter(Boolean).join(' + ');
 
   // F-207 — the Block input closes on Enter, before the server replies, so on
   // a refusal the typed text exists nowhere else on screen. Put it in the

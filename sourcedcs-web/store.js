@@ -154,7 +154,7 @@ const DISCORD_URL = process.env.DISCORD_URL || 'https://discord.gg/sourcedcs';
 const WIKI_URL = process.env.WIKI_URL || 'https://wiki.sourcedcs.page';
 const ATO_URL = process.env.ATO_URL || 'https://ato.sourcedcs.page';
 const OLYMPUS_URL = process.env.OLYMPUS_URL || 'https://olympus.sourcedcs.page';
-const ASACS_URL = process.env.CRCSYNC_URL || process.env.ASACS_URL || 'https://asacs.sourcedcs.page';
+const CRCSYNC_URL = process.env.CRCSYNC_URL || 'https://asacs.sourcedcs.page';
 const GITHUB_URL = process.env.GITHUB_URL || 'https://github.com/NikNam3/sourcedcs';
 
 const events = loadJSON(EVENTS_FILE, []);
@@ -238,6 +238,6 @@ module.exports = {
   loadJSON, saveJSON, sanitizeStr, parseCallsign, normalizeSkillTree,
   VALID_GRADES, ROLE_LABELS, DEFAULT_ROLE_SORT_ORDER,
   ROSTER_CACHE_TTL, EVENTS_SYNC_TTL,
-  DISCORD_URL, WIKI_URL, ATO_URL, OLYMPUS_URL, ASACS_URL, GITHUB_URL,
+  DISCORD_URL, WIKI_URL, ATO_URL, OLYMPUS_URL, CRCSYNC_URL, GITHUB_URL,
   state,
 };

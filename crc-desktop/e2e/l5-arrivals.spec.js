@@ -32,7 +32,7 @@ async function goBay(page, positionId, bayId) {
 }
 
 const stateOf = (page, cs) => page.evaluate((cs) => {
-  const s = getAllEfspStrips().find((x) => getEfspFdr(x.flightDataId).identity.callsign === cs);
+  const s = getAllEfspStrips().find((x) => getEfspFlightData(x.flightDataId).identity.callsign === cs);
   return s && s.state;
 }, cs);
 
@@ -40,7 +40,7 @@ const stateOf = (page, cs) => page.evaluate((cs) => {
 async function taxiToTower(page, cs) {
   for (let i = 0; i < 5; i++) {
     const before = await stateOf(page, cs);
-    await page.evaluate((cs) => _invokeNla(getAllEfspStrips().find((x) => getEfspFdr(x.flightDataId).identity.callsign === cs)), cs);
+    await page.evaluate((cs) => _invokeNla(getAllEfspStrips().find((x) => getEfspFlightData(x.flightDataId).identity.callsign === cs)), cs);
     // 10 s: one Mutation round trip, measured over 3 s under load. The spec's budget is 90 s.
     await expect.poll(() => stateOf(page, cs), { timeout: 10000 }).not.toBe(before);
     await page.waitForTimeout(450); // the server's per-Strip double-tap guard
@@ -66,7 +66,7 @@ test('a Strip handed over while you look elsewhere lights its Bay tab and the ar
   const row = twr.locator('#efsp-arrivals-line .efsp-arrival-row');
   await expect(row).toHaveCount(1);
   await expect(row).toContainText('ARV501');
-  await expect(row).toContainText('from GND');
+  await expect(row).toContainText('from GC');
 
   // Clicking the line opens the Bay: the tab and the line clear, the Strip keeps its mark.
   await row.click();
@@ -77,10 +77,10 @@ test('a Strip handed over while you look elsewhere lights its Bay tab and the ar
     'the Position tab still says there is something unseen').toHaveCount(0);
   const s = stripByCallsign(twr, 'ARV501');
   await expect(s).toHaveClass(/efsp-strip-arrived/);
-  await expect(s.locator('.efsp-strip-from')).toHaveText('from GND');
+  await expect(s.locator('.efsp-strip-from')).toHaveText('from GC');
 
   // Touching it is noticing it.
-  await s.locator('.efsp-strip-tab-role').click();
+  await s.locator('.efsp-strip-tab-type').click();
   await expect(s).not.toHaveClass(/efsp-strip-arrived/);
 });
 
@@ -116,8 +116,8 @@ test('a Strip arriving in the Bay on screen flashes once, and is not listed on t
   await expect(stripByCallsign(twr, 'ARV602')).toHaveClass(/efsp-strip-arrived-flash/);
   // Force a rebuild of ARV601 by something unrelated to its arrival.
   await twr.evaluate((cs) => {
-    const s = getAllEfspStrips().find((x) => getEfspFdr(x.flightDataId).identity.callsign === cs);
-    applyEfspDelta({ flightDataList: { updated: [{ ...getEfspFdr(s.flightDataId), rev: getEfspFdr(s.flightDataId).rev + 100 }] } });
+    const s = getAllEfspStrips().find((x) => getEfspFlightData(x.flightDataId).identity.callsign === cs);
+    applyEfspDelta({ flightDataList: { updated: [{ ...getEfspFlightData(s.flightDataId), rev: getEfspFlightData(s.flightDataId).rev + 100 }] } });
     renderAllOpenEfspBays();
   }, 'ARV601');
   const rebuilt = stripByCallsign(twr, 'ARV601');
@@ -132,7 +132,7 @@ test('working several Positions, your own hand-off to a Bay you are not looking 
   await taxiToTower(page, 'ARV701');
   const queueTab = page.locator('#efsp-bay-tabs .efsp-bay-tab[data-bay-id="lc-runway-queue"]');
   await expect(queueTab.locator('.efsp-tab-new')).toHaveText('+1');
-  await expect(page.locator('#efsp-arrivals-line .efsp-arrival-row')).toContainText('from GND');
+  await expect(page.locator('#efsp-arrivals-line .efsp-arrival-row')).toContainText('from GC');
 });
 
 test('creating a Strip yourself is not announced', async ({ page }) => {

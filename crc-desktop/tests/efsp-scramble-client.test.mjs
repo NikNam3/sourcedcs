@@ -27,7 +27,7 @@ const strip = (stripId, flightDataId, stripType, state, facilityId = 'INCIRLIK',
   annotations: {}, flags: {}, coordination: null, tofiCoordination: null, airspaceEntry: null, previousLeg: null,
 });
 
-const FDRS = [
+const FLIGHT_DATA_LIST = [
   flightData('f-viper', 'VIPER11', 'SCRAMBLE'), flightData('f-alert', 'COLT21', 'ALERT'), flightData('f-taxi', 'HAWK31'),
   flightData('f-queue', 'EAGLE41'), flightData('f-in', 'TANKER51'), flightData('f-gone', 'BONE61', 'SCRAMBLE'), flightData('f-other', 'OTHER71'),
 ];
@@ -40,10 +40,10 @@ const STRIPS = [
   strip('s-gone', 'f-gone', 'DEPARTURE', 'DEPARTED', 'INCIRLIK', 'LC', 'twr-departed'),
   strip('s-other', 'f-other', 'DEPARTURE', 'TAXI', 'CENTER'),
 ];
-const fdrMap = new Map(FDRS.map(f => [f.flightDataId, f]));
-const flightDataOf = (id) => fdrMap.get(id) || null;
+const flightDataMap = new Map(FLIGHT_DATA_LIST.map(f => [f.flightDataId, f]));
+const flightDataOf = (id) => flightDataMap.get(id) || null;
 
-function load(strips = STRIPS, flightDataList = FDRS, runwayStatuses = []) {
+function load(strips = STRIPS, flightDataList = FLIGHT_DATA_LIST, runwayStatuses = []) {
   state._resetEfspStateForTest();
   state.applyEfspSnapshot({ strips, flightDataList, positions: [], bays: [], boardSeq: 1, runwayStatuses });
 }
@@ -102,29 +102,29 @@ test('scrambleAlertsFor: a quiet Strip, an ALERT Strip, another Facility and a D
 });
 
 test('scrambleAlertsFor names the configured route when field state is loaded', () => {
-  load(STRIPS, FDRS, [{ facilityId: 'INCIRLIK', alertPad: { name: 'Alert pad', accessRoute: 'ALERT ACCESS TAXIWAY' } }]);
+  load(STRIPS, FLIGHT_DATA_LIST, [{ facilityId: 'INCIRLIK', alertPad: { name: 'Alert pad', accessRoute: 'ALERT ACCESS TAXIWAY' } }]);
   const [chip] = client.scrambleAlertsFor(state.getEfspStrip('s-taxi'));
   assert.match(chip.reason, /keep clear of ALERT ACCESS TAXIWAY\./);
 });
 
 // ── alertPadConstraintFor ────────────────────────────────────────────────
 
-test('alertPadConstraintFor without getEfspFieldState still marks the route (L1b not loaded)', () => {
+test('alertPadConstraintFor without getEfspRunwayStatus still marks the route (L1b not loaded)', () => {
   load();
-  assert.equal(state.getEfspFieldState('INCIRLIK'), null, 'no field state loaded');
+  assert.equal(state.getEfspRunwayStatus('INCIRLIK'), null, 'no field state loaded');
   assert.equal(client.alertPadConstraintFor('INCIRLIK'), 'ALERT-PAD ACCESS ROUTE CONSTRAINED — scramble in progress (VIPER11)');
   assert.equal(client.alertPadConstraintFor('CENTER'), null);
 });
 
-test('alertPadConstraintFor with getEfspFieldState names the configured route', () => {
-  load(STRIPS, FDRS, [{ facilityId: 'INCIRLIK', alertPad: { name: 'Alert pad', accessRoute: 'ALERT ACCESS TAXIWAY' } }]);
+test('alertPadConstraintFor with getEfspRunwayStatus names the configured route', () => {
+  load(STRIPS, FLIGHT_DATA_LIST, [{ facilityId: 'INCIRLIK', alertPad: { name: 'Alert pad', accessRoute: 'ALERT ACCESS TAXIWAY' } }]);
   assert.equal(client.alertPadConstraintFor('INCIRLIK'), 'ACCESS ROUTE ALERT ACCESS TAXIWAY CONSTRAINED — scramble in progress (VIPER11)');
 });
 
 // ── the Board-wide line ──────────────────────────────────────────────────
 
 /** efsp-state.js + scramble.js in their own sandbox, against the DOM stub. */
-async function lineSandbox({ strips = STRIPS, flightDataList = FDRS, signedOn = [] } = {}) {
+async function lineSandbox({ strips = STRIPS, flightDataList = FLIGHT_DATA_LIST, signedOn = [] } = {}) {
   const line = domStub.makeElement('div');
   line.id = 'efsp-scramble-line';
   const selected = [];
@@ -173,7 +173,7 @@ test('one row per scramble: callsign button, Facility, state, the constrained ro
 
 test('two scramblers: two rows, each ground Strip counted once', async () => {
   const strips = [...STRIPS, strip('s-ace', 'f-ace', 'DEPARTURE', 'TAXI')];
-  const { line, render } = await lineSandbox({ strips, flightDataList: [...FDRS, flightData('f-ace', 'ACE12', 'SCRAMBLE')] });
+  const { line, render } = await lineSandbox({ strips, flightDataList: [...FLIGHT_DATA_LIST, flightData('f-ace', 'ACE12', 'SCRAMBLE')] });
   render();
   assert.deepEqual(line.children.map(r => r.children[1].textContent), ['ACE12', 'VIPER11']);
   for (const r of line.children) assert.match(r.children[2].textContent, /· 3 flagged$/);

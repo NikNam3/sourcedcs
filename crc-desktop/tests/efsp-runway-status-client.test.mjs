@@ -18,7 +18,7 @@ import * as state from '../app/public/js/panels/efsp/efsp-state.js';
 import * as rules from '../app/public/js/panels/efsp/runway-status-rules.js';
 
 const require = createRequire(import.meta.url);
-const serverFieldState = require('../../crc-sync/src/efsp/runway-status.js');
+const serverRunwayStatus = require('../../crc-sync/src/efsp/runway-status.js');
 const serverPermission = require('../../crc-sync/src/efsp/permission.js');
 const { RunwayStatusStore } = require('../../crc-sync/src/efsp/runway-status-store.js');
 
@@ -53,8 +53,8 @@ function record({ status = 'OPEN', activeRunway = '05', suspension = null, closu
 
 const departure = (extra = {}) => ({ stripId: 's-dep', flightDataId: 'f-dep', facilityId: 'INCIRLIK', stripType: 'DEPARTURE', state: 'TAXI', bayId: 'gc-taxi-out', rackId: 'main', ...extra });
 const arrival = (extra = {}) => ({ stripId: 's-arr', flightDataId: 'f-arr', facilityId: 'INCIRLIK', stripType: 'ARRIVAL', state: 'HANDED_TO_TOWER', bayId: 'lc-arrivals', rackId: 'main', ...extra });
-const fdrDep = (rwy) => ({ flightDataId: 'f-dep', filed: { departureRunway: rwy }, assigned: {}, military: {} });
-const fdrArr = (rwy, hook = false) => ({ flightDataId: 'f-arr', filed: {}, assigned: { landingRunway: rwy }, military: { hookRequired: hook } });
+const flightDataDep = (rwy) => ({ flightDataId: 'f-dep', filed: { departureRunway: rwy }, assigned: {}, military: {} });
+const flightDataArr = (rwy, hook = false) => ({ flightDataId: 'f-arr', filed: {}, assigned: { landingRunway: rwy }, military: { hookRequired: hook } });
 const lookups = (rec, flightData) => ({ runwayStatusFor: (id) => (rec && rec.facilityId === id ? rec : null), flightDataFor: () => flightData });
 
 // ── Step 1: client state ────────────────────────────────────────────────────
@@ -62,56 +62,56 @@ const lookups = (rec, flightData) => ({ runwayStatusFor: (id) => (rec && rec.fac
 test('a snapshot fills the field states by Facility; a second snapshot replaces them', () => {
   state._resetEfspStateForTest();
   state.applyEfspSnapshot({ runwayStatuses: [record({ rev: 1 })] });
-  assert.equal(state.getEfspFieldState('INCIRLIK').rev, 1);
-  assert.equal(state.getAllEfspFieldStates().length, 1);
+  assert.equal(state.getEfspRunwayStatus('INCIRLIK').rev, 1);
+  assert.equal(state.getAllEfspRunwayStatuses().length, 1);
   state.applyEfspSnapshot({ runwayStatuses: [] });
-  assert.equal(state.getEfspFieldState('INCIRLIK'), null);
-  assert.deepEqual(state.getAllEfspFieldStates(), []);
+  assert.equal(state.getEfspRunwayStatus('INCIRLIK'), null);
+  assert.deepEqual(state.getAllEfspRunwayStatuses(), []);
 });
 
 test('a delta replaces a record whole; an ack carrying a record applies it the same way', () => {
   state._resetEfspStateForTest();
   state.applyEfspSnapshot({ runwayStatuses: [record({ rev: 1 })] });
-  state.applyEfspFieldStateDelta({ runwayStatusSeq: 2, runwayStatuses: { updated: [record({ rev: 2, status: 'CLOSED' })] } });
-  assert.equal(state.getEfspFieldState('INCIRLIK').rev, 2);
-  assert.equal(state.getEfspFieldState('INCIRLIK').runways[0].status, 'CLOSED');
+  state.applyEfspRunwayStatusDelta({ runwayStatusSeq: 2, runwayStatuses: { updated: [record({ rev: 2, status: 'CLOSED' })] } });
+  assert.equal(state.getEfspRunwayStatus('INCIRLIK').rev, 2);
+  assert.equal(state.getEfspRunwayStatus('INCIRLIK').runways[0].status, 'CLOSED');
   // app.js's efsp-runway-status-ack case wraps the ack's record into a delta.
-  state.applyEfspFieldStateDelta({ runwayStatuses: { updated: [record({ rev: 3 })] } });
-  assert.equal(state.getEfspFieldState('INCIRLIK').rev, 3);
-  state.applyEfspFieldStateDelta({});
-  assert.equal(state.getEfspFieldState('INCIRLIK').rev, 3);
+  state.applyEfspRunwayStatusDelta({ runwayStatuses: { updated: [record({ rev: 3 })] } });
+  assert.equal(state.getEfspRunwayStatus('INCIRLIK').rev, 3);
+  state.applyEfspRunwayStatusDelta({});
+  assert.equal(state.getEfspRunwayStatus('INCIRLIK').rev, 3);
 });
 
 test('a Facility with no field state is null, and the test reset clears everything', () => {
   state._resetEfspStateForTest();
   state.applyEfspSnapshot({ runwayStatuses: [record()] });
-  assert.equal(state.getEfspFieldState('CENTER'), null);
+  assert.equal(state.getEfspRunwayStatus('CENTER'), null);
   state._resetEfspStateForTest();
-  assert.equal(state.getEfspFieldState('INCIRLIK'), null);
+  assert.equal(state.getEfspRunwayStatus('INCIRLIK'), null);
 });
 
 // ── Step 2: drift against crc-sync ──────────────────────────────────────────
 
 const RESOLVER_CASES = [
-  ['rack wins over the FDR', departure({ bayId: 'lc-runway-queue', rackId: 'rwy-23', state: 'RUNWAY_QUEUE' }), fdrDep('05'), {}],
-  ['the drag target wins over the rack', departure({ bayId: 'lc-runway-queue', rackId: 'rwy-23' }), fdrDep('23'), { targetRackId: 'rwy-05' }],
-  ['8A when there is no runway rack', departure(), fdrDep('RWY 5'), {}],
-  ['8B for an arrival', arrival(), fdrArr('23'), {}],
-  ['a whole-pavement designator in 8A', departure(), fdrDep('05/23'), {}],
-  ['the active end when nothing else says', departure(), fdrDep(''), {}],
-  ['garbage 8A falls back to the active end', departure(), fdrDep('banana'), {}],
-  ['an 8A that names no configured runway falls back', departure(), fdrDep('17'), {}],
-  ['OVERFLIGHT never resolves', departure({ stripType: 'OVERFLIGHT' }), fdrDep('05'), {}],
-  ['MISSION never resolves', departure({ stripType: 'MISSION' }), fdrDep('05'), {}],
+  ['rack wins over the FDR', departure({ bayId: 'lc-runway-queue', rackId: 'rwy-23', state: 'RUNWAY_QUEUE' }), flightDataDep('05'), {}],
+  ['the drag target wins over the rack', departure({ bayId: 'lc-runway-queue', rackId: 'rwy-23' }), flightDataDep('23'), { targetRackId: 'rwy-05' }],
+  ['8A when there is no runway rack', departure(), flightDataDep('RWY 5'), {}],
+  ['8B for an arrival', arrival(), flightDataArr('23'), {}],
+  ['a whole-pavement designator in 8A', departure(), flightDataDep('05/23'), {}],
+  ['the active end when nothing else says', departure(), flightDataDep(''), {}],
+  ['garbage 8A falls back to the active end', departure(), flightDataDep('banana'), {}],
+  ['an 8A that names no configured runway falls back', departure(), flightDataDep('17'), {}],
+  ['OVERFLIGHT never resolves', departure({ stripType: 'OVERFLIGHT' }), flightDataDep('05'), {}],
+  ['MISSION never resolves', departure({ stripType: 'MISSION' }), flightDataDep('05'), {}],
   ['no FDR, no rack: the active end', arrival(), null, {}],
 ];
 
 test('drift: runwayForStrip resolves exactly as crc-sync resolveRunwayForStrip, source included', () => {
   for (const activeRunway of ['05', '23', null]) {
     const rec = record({ activeRunway });
-    const view = serverFieldState.buildStatusView(rec, rec);
+    const view = serverRunwayStatus.buildStatusView(rec, rec);
     for (const [name, strip, flightData, opts] of RESOLVER_CASES) {
-      const server = serverFieldState.resolveRunwayForStrip(strip, flightData, view, opts);
+      const server = serverRunwayStatus.resolveRunwayForStrip(strip, flightData, view, opts);
       const client = rules.runwayForStrip(strip, flightData, rec, opts);
       const strip_ = client ? { runwayId: client.runwayId, end: client.end, source: client.source } : null;
       assert.deepEqual(strip_, server, `${name} (active ${activeRunway})`);
@@ -121,7 +121,7 @@ test('drift: runwayForStrip resolves exactly as crc-sync resolveRunwayForStrip, 
 
 test('drift: normalizeRunwayEnd agrees with crc-sync on every spelling', () => {
   for (const text of ['5', '05', 'RWY 05', 'rw23', ' 23 ', '5L', '36', '37', '0', 'banana', '', null, 23, '05/23']) {
-    assert.equal(rules.normalizeRunwayEnd(text), serverFieldState.normalizeRunwayEnd(text), String(text));
+    assert.equal(rules.normalizeRunwayEnd(text), serverRunwayStatus.normalizeRunwayEnd(text), String(text));
   }
 });
 
@@ -132,26 +132,26 @@ test('drift: the inhibit wording and the inactive-runway advisory are crc-sync\'
   ];
   for (const [status, suspension] of statuses) {
     const rec = record({ status, suspension });
-    const view = serverFieldState.buildStatusView(rec, rec);
-    assert.equal(rules.runwayStatusReasonFor(rec.runways[0]), serverFieldState.runwayStatusReason(view.runways[0]), status);
+    const view = serverRunwayStatus.buildStatusView(rec, rec);
+    assert.equal(rules.runwayStatusReasonFor(rec.runways[0]), serverRunwayStatus.runwayStatusReason(view.runways[0]), status);
     for (const [name, strip, flightData] of RESOLVER_CASES) {
       const resolved = rules.runwayForStrip(strip, flightData, rec);
       const client = resolved ? rules.runwayStatusReasonFor(resolved.runway) : null;
-      assert.equal(client, serverFieldState.runwayInhibitFor(strip, flightData, view), `${name} ${status}`);
+      assert.equal(client, serverRunwayStatus.runwayInhibitFor(strip, flightData, view), `${name} ${status}`);
     }
   }
   for (const activeRunway of ['05', '23', null]) {
     const rec = record({ activeRunway });
-    const view = serverFieldState.buildStatusView(rec, rec);
+    const view = serverRunwayStatus.buildStatusView(rec, rec);
     for (const rackId of ['rwy-05', 'rwy-23', 'main', undefined]) {
       const strip = departure({ rackId, state: 'RUNWAY_QUEUE' });
-      assert.equal(rules.runwayAdvisoryFor(strip, rec), serverFieldState.runwayAdvisoryFor(strip, view), `${rackId} active ${activeRunway}`);
+      assert.equal(rules.runwayAdvisoryFor(strip, rec), serverRunwayStatus.runwayAdvisoryFor(strip, view), `${rackId} active ${activeRunway}`);
     }
   }
 });
 
 test('drift: the client owners table is crc-sync RUNWAY_STATUS_OP_OWNERS, verbatim', () => {
-  assert.deepEqual(rules.FIELD_STATE_ACTION_OWNERS, serverPermission.RUNWAY_STATUS_OP_OWNERS);
+  assert.deepEqual(rules.RUNWAY_STATUS_ACTION_OWNERS, serverPermission.RUNWAY_STATUS_OP_OWNERS);
 });
 
 // Every Position any Facility has, plus one that holds nothing on the field.
@@ -211,7 +211,7 @@ test('drift: every offered button names an owned kind, is offered only AS a Posi
   for (const [name, history] of Object.entries(SCENARIOS)) {
     const rec = storeAfter(history).getRunwayStatus('INCIRLIK');
     for (const signedOn of HELD_SETS) {
-      for (const action of rules.fieldStateActionsFor(rec, signedOn)) {
+      for (const action of rules.runwayStatusActionsFor(rec, signedOn)) {
         offered += 1;
         const where = `${name}, holding ${signedOn.join('+')}: ${action.kind} as ${action.positionId}`;
         assert.ok(Object.prototype.hasOwnProperty.call(serverPermission.RUNWAY_STATUS_OP_OWNERS, action.kind), where);
@@ -226,14 +226,14 @@ test('drift: every offered button names an owned kind, is offered only AS a Posi
   assert.ok(offered > 40, `only ${offered} buttons were exercised`);
 });
 
-// ── Step 2: fieldStateActionsFor, case by case ──────────────────────────────
+// ── Step 2: runwayStatusActionsFor, case by case ──────────────────────────────
 
-const kinds = (rec, signedOn) => rules.fieldStateActionsFor(rec, signedOn).map(a => a.action ? `${a.kind}:${a.action}` : a.kind);
+const kinds = (rec, signedOn) => rules.runwayStatusActionsFor(rec, signedOn).map(a => a.action ? `${a.kind}:${a.action}` : a.kind);
 
 test('holding nothing on the field is offered nothing', () => {
-  assert.deepEqual(rules.fieldStateActionsFor(record(), []), []);
-  assert.deepEqual(rules.fieldStateActionsFor(record(), ['CTR']), []);
-  assert.deepEqual(rules.fieldStateActionsFor(null, ['LC']), []);
+  assert.deepEqual(rules.runwayStatusActionsFor(record(), []), []);
+  assert.deepEqual(rules.runwayStatusActionsFor(record(), ['CTR']), []);
+  assert.deepEqual(rules.runwayStatusActionsFor(null, ['LC']), []);
 });
 
 test('OPS on an OPEN runway only ASKS tower — never Close or Begin works (H18, S-L1b)', () => {
@@ -247,9 +247,9 @@ test('LC: Close / Begin works, Propose, and Accept/Reject on a pending request',
   assert.deepEqual(kinds(record({ status: 'CLOSED' }), ['LC']), ['OpenRunway'], 'no change onto a closed runway (L1: refused)');
   const pending = record({ pendingRequest: { requestId: 'r', action: 'WORKS', requestedPositionId: 'OPS' } });
   assert.deepEqual(kinds(pending, ['LC']), ['CloseRunway', 'BeginRunwayWorks', 'AcceptRunwayRequest', 'RejectRunwayRequest', 'ProposeRunwayChange']);
-  const close = rules.fieldStateActionsFor(record(), ['LC']).find(a => a.kind === 'CloseRunway');
+  const close = rules.runwayStatusActionsFor(record(), ['LC']).find(a => a.kind === 'CloseRunway');
   assert.equal(close.needs, 'reason');
-  const reject = rules.fieldStateActionsFor(pending, ['LC']).find(a => a.kind === 'RejectRunwayRequest');
+  const reject = rules.runwayStatusActionsFor(pending, ['LC']).find(a => a.kind === 'RejectRunwayRequest');
   assert.equal(reject.needs, 'reason');
 });
 
@@ -261,7 +261,7 @@ test('OPS completes works on SUSPENDED_WORKS; only the inspection authority sign
 
 test('APP acknowledges only while PROPOSED and not yet acked; Begin only once ACKNOWLEDGED', () => {
   const change = (st, acks) => record({ runwayChange: { changeId: 'c', state: st, fromRunwayId: '05', toRunwayId: '23', acknowledgers: ['OPS', 'AP'], acks } });
-  const kinds = (rec, signedOn) => rules.fieldStateActionsFor(rec, signedOn).map(a => a.kind).filter(k => k !== 'RequestRunwayStatus');
+  const kinds = (rec, signedOn) => rules.runwayStatusActionsFor(rec, signedOn).map(a => a.kind).filter(k => k !== 'RequestRunwayStatus');
   assert.deepEqual(kinds(change('PROPOSED', { OPS: null, AP: null }), ['AP']), ['AckRunwayChange', 'RejectRunwayChange']);
   assert.deepEqual(kinds(change('PROPOSED', { OPS: null, AP: { by: 'x' } }), ['AP']), ['RejectRunwayChange']);
   assert.deepEqual(kinds(change('PROPOSED', { OPS: null, AP: { skipped: true, reason: 'UNSTAFFED' } }), ['AP']), ['RejectRunwayChange']);
@@ -274,16 +274,16 @@ test('APP acknowledges only while PROPOSED and not yet acked; Begin only once AC
 test('a controller holding TWR, OPS and APP is offered the one-input self-coordinated change (S-Q24)', () => {
   assert.ok(kinds(record(), ['LC', 'OPS', 'AP']).includes('SelfCoordinateRunwayChange'));
   assert.ok(!kinds(record(), ['LC', 'OPS']).includes('SelfCoordinateRunwayChange'));
-  const self = rules.fieldStateActionsFor(record({ activeRunway: '05' }), ['LC', 'OPS', 'AP']).find(a => a.kind === 'SelfCoordinateRunwayChange');
+  const self = rules.runwayStatusActionsFor(record({ activeRunway: '05' }), ['LC', 'OPS', 'AP']).find(a => a.kind === 'SelfCoordinateRunwayChange');
   assert.equal(self.positionId, 'LC');
   assert.deepEqual(self.toEnds, ['23']);
-  assert.deepEqual(rules.fieldStateActionsFor(record({ activeRunway: null }), ['LC']).find(a => a.kind === 'ProposeRunwayChange').toEnds, ['05', '23']);
+  assert.deepEqual(rules.runwayStatusActionsFor(record({ activeRunway: null }), ['LC']).find(a => a.kind === 'ProposeRunwayChange').toEnds, ['05', '23']);
 });
 
-test('fieldStateSubjectFor names the runway, else the change, else the Facility', () => {
-  assert.equal(rules.fieldStateSubjectFor({ runwayId: '05/23', facilityId: 'INCIRLIK' }), 'runway 05/23');
-  assert.equal(rules.fieldStateSubjectFor({ op: { kind: 'ProposeRunwayChange', toRunwayId: '23' } }), 'runway change to 23');
-  assert.equal(rules.fieldStateSubjectFor({ facilityId: 'INCIRLIK' }), 'INCIRLIK field state');
+test('runwayStatusSubjectFor names the runway, else the change, else the Facility', () => {
+  assert.equal(rules.runwayStatusSubjectFor({ runwayId: '05/23', facilityId: 'INCIRLIK' }), 'runway 05/23');
+  assert.equal(rules.runwayStatusSubjectFor({ op: { kind: 'ProposeRunwayChange', toRunwayId: '23' } }), 'runway change to 23');
+  assert.equal(rules.runwayStatusSubjectFor({ facilityId: 'INCIRLIK' }), 'INCIRLIK runway status');
 });
 
 // ── Step 2: rule 4 ──────────────────────────────────────────────────────────
@@ -292,94 +292,94 @@ const gear = (state, end = '05', type = 'BAK_12') => ({ end, position: 'APPROACH
 const rwyWith = (g) => record({ gear: g }).runways[0];
 
 test('gearMismatchFor: no hook -> null; no runway -> null; no inventory -> null (H57: fires only when gear is configured)', () => {
-  assert.equal(rules.gearMismatchFor(fdrArr('05', false), rwyWith([gear('DOWN')])), null);
-  assert.equal(rules.gearMismatchFor(fdrArr('05', true), null), null);
-  assert.equal(rules.gearMismatchFor(fdrArr('05', true), rwyWith([])), null);
+  assert.equal(rules.gearMismatchFor(flightDataArr('05', false), rwyWith([gear('DOWN')])), null);
+  assert.equal(rules.gearMismatchFor(flightDataArr('05', true), null), null);
+  assert.equal(rules.gearMismatchFor(flightDataArr('05', true), rwyWith([])), null);
   assert.equal(rules.gearMismatchFor(null, rwyWith([gear('DOWN')])), null);
 });
 
 test('gearMismatchFor: all gear DOWN -> HOOK, naming the runway and every gear; one UP anywhere on the pavement -> null', () => {
-  const m = rules.gearMismatchFor(fdrArr('05', true), rwyWith([gear('DOWN'), gear('OUT_OF_SERVICE', '23', 'E_5')]));
+  const m = rules.gearMismatchFor(flightDataArr('05', true), rwyWith([gear('DOWN'), gear('OUT_OF_SERVICE', '23', 'E_5')]));
   assert.equal(m.text, 'HOOK');
   assert.equal(m.reason, 'Hook required: no arresting gear is rigged on runway 05/23 (SOURCE practice). BAK-12 05 end DOWN, E-5 23 end OUT OF SERVICE.');
-  assert.equal(rules.gearMismatchFor(fdrArr('05', true), rwyWith([gear('DOWN'), gear('UP', '23')])), null);
+  assert.equal(rules.gearMismatchFor(flightDataArr('05', true), rwyWith([gear('DOWN'), gear('UP', '23')])), null);
 });
 
 test('gearMismatchFor: OUT_OF_SERVICE is not usable', () => {
-  assert.ok(rules.gearMismatchFor(fdrArr('05', true), rwyWith([gear('OUT_OF_SERVICE')])));
+  assert.ok(rules.gearMismatchFor(flightDataArr('05', true), rwyWith([gear('OUT_OF_SERVICE')])));
 });
 
-// ── Step 2: fieldStateAlertsFor ─────────────────────────────────────────────
+// ── Step 2: runwayStatusAlertsFor ─────────────────────────────────────────────
 
-const alerts = (strip, rec, flightData) => rules.fieldStateAlertsFor(strip, lookups(rec, flightData));
+const alerts = (strip, rec, flightData) => rules.runwayStatusAlertsFor(strip, lookups(rec, flightData));
 
 test('a quiet Strip on an OPEN active runway gets nothing (ADR 0058: nothing for normal)', () => {
-  assert.deepEqual(alerts(departure(), record(), fdrDep('05')), []);
-  assert.deepEqual(alerts(arrival(), record(), fdrArr('05')), []);
+  assert.deepEqual(alerts(departure(), record(), flightDataDep('05')), []);
+  assert.deepEqual(alerts(arrival(), record(), flightDataArr('05')), []);
 });
 
 test('RWY SUSP / INSP / CLSD on every runway-using state (Q5 (a)), naming the resolved end and what clears it', () => {
   const works = record({ status: 'SUSPENDED_WORKS', suspension: { kind: 'WORKS' } });
   for (const st of ['CLEARED', 'HELD', 'PUSHBACK', 'TAXI', 'RUNWAY_QUEUE', 'LUAW']) {
-    const [a] = alerts(departure({ state: st }), works, fdrDep('05'));
+    const [a] = alerts(departure({ state: st }), works, flightDataDep('05'));
     assert.deepEqual({ key: a.key, tone: a.tone, text: a.text }, { key: 'rwy', tone: 'bad', text: 'RWY 05 SUSP' }, st);
     assert.equal(a.reason, 'Runway 05/23 is suspended for works; it reopens when OPS completes the works and signs off the inspection.');
   }
-  const [insp] = alerts(departure(), record({ status: 'SUSPENDED_INSPECTION', suspension: { kind: 'WORKS' } }), fdrDep('23'));
+  const [insp] = alerts(departure(), record({ status: 'SUSPENDED_INSPECTION', suspension: { kind: 'WORKS' } }), flightDataDep('23'));
   assert.equal(insp.text, 'RWY 23 INSP');
-  const [clsd] = alerts(arrival({ state: 'INBOUND' }), record({ status: 'CLOSED' }), fdrArr('05'));
+  const [clsd] = alerts(arrival({ state: 'INBOUND' }), record({ status: 'CLOSED' }), flightDataArr('05'));
   assert.equal(clsd.text, 'RWY 05 CLSD');
-  assert.equal(clsd.reason, 'Runway 05/23 is closed; it reopens when TWR opens it.');
-  const [fin] = alerts(arrival({ state: 'FINAL' }), record({ status: 'CLOSED' }), fdrArr('05'));
+  assert.equal(clsd.reason, 'Runway 05/23 is closed; it reopens when LC opens it.');
+  const [fin] = alerts(arrival({ state: 'FINAL' }), record({ status: 'CLOSED' }), flightDataArr('05'));
   assert.match(fin.reason, /Landing is an observation and is not held\.$/);
 });
 
 test('no RWY chip for states that no longer use the runway, OVERFLIGHT/MISSION, DROPPED, or a Facility with no record', () => {
   const closed = record({ status: 'CLOSED' });
-  for (const st of ['PROPOSED', 'PENDING_CLEARANCE', 'DEPARTED', 'HANDED_OFF']) assert.deepEqual(alerts(departure({ state: st }), closed, fdrDep('05')), [], st);
-  for (const st of ['LANDED', 'TAXI_IN']) assert.deepEqual(alerts(arrival({ state: st }), closed, fdrArr('05')), [], st);
-  assert.deepEqual(alerts(departure({ state: 'DROPPED' }), closed, fdrDep('05')), []);
-  assert.deepEqual(alerts(departure({ stripType: 'OVERFLIGHT' }), closed, fdrDep('05')), []);
-  assert.deepEqual(alerts(departure({ facilityId: 'CENTER' }), closed, fdrDep('05')), []);
-  assert.deepEqual(alerts(departure(), record({ status: 'CLOSED', activeRunway: null }), fdrDep('banana')), [], 'unresolvable fails open');
+  for (const st of ['PROPOSED', 'PENDING_CLEARANCE', 'DEPARTED', 'HANDED_OFF']) assert.deepEqual(alerts(departure({ state: st }), closed, flightDataDep('05')), [], st);
+  for (const st of ['LANDED', 'TAXI_IN']) assert.deepEqual(alerts(arrival({ state: st }), closed, flightDataArr('05')), [], st);
+  assert.deepEqual(alerts(departure({ state: 'DROPPED' }), closed, flightDataDep('05')), []);
+  assert.deepEqual(alerts(departure({ stripType: 'OVERFLIGHT' }), closed, flightDataDep('05')), []);
+  assert.deepEqual(alerts(departure({ facilityId: 'CENTER' }), closed, flightDataDep('05')), []);
+  assert.deepEqual(alerts(departure(), record({ status: 'CLOSED', activeRunway: null }), flightDataDep('banana')), [], 'unresolvable fails open');
 });
 
 test('the RWY reason line is suppressed (the chip is not) when the server\'s NLA inhibit already names the runway', () => {
   const works = record({ status: 'SUSPENDED_WORKS', suspension: { kind: 'WORKS' } });
   const strip = departure({ state: 'RUNWAY_QUEUE', bayId: 'lc-runway-queue', rackId: 'rwy-05', nla: { inhibited: 'runway 05/23 suspended — works in progress' } });
-  const [a] = alerts(strip, works, fdrDep('05'));
+  const [a] = alerts(strip, works, flightDataDep('05'));
   assert.equal(a.text, 'RWY 05 SUSP');
   assert.equal(a.reason, null);
 });
 
 test('the inactive-runway advisory (Q30): attn chip on an OPEN runway when queued for the other end', () => {
   const strip = departure({ state: 'RUNWAY_QUEUE', bayId: 'lc-runway-queue', rackId: 'rwy-05' });
-  const [a] = alerts(strip, record({ activeRunway: '23' }), fdrDep('05'));
+  const [a] = alerts(strip, record({ activeRunway: '23' }), flightDataDep('05'));
   assert.deepEqual({ key: a.key, tone: a.tone, text: a.text }, { key: 'rwy', tone: 'attn', text: 'RWY 05 INACT' });
   assert.match(a.reason, /^Queued for inactive runway 05; the active runway is 23\./);
-  assert.deepEqual(alerts(strip, record({ activeRunway: '05' }), fdrDep('05')), []);
-  assert.deepEqual(alerts(strip, record({ activeRunway: null }), fdrDep('05')), []);
+  assert.deepEqual(alerts(strip, record({ activeRunway: '05' }), flightDataDep('05')), []);
+  assert.deepEqual(alerts(strip, record({ activeRunway: null }), flightDataDep('05')), []);
 });
 
 test('HOOK on a hook-required ARRIVAL inbound, handed to tower or on final when the runway\'s gear is all down', () => {
   const rec = record({ gear: [gear('DOWN')] });
   for (const st of ['INBOUND', 'HANDED_TO_TOWER', 'FINAL']) {
-    const out = alerts(arrival({ state: st }), rec, fdrArr('05', true));
+    const out = alerts(arrival({ state: st }), rec, flightDataArr('05', true));
     assert.deepEqual(out.map(a => [a.key, a.text, a.tone]), [['gear', 'HOOK', 'bad']], st);
   }
-  assert.deepEqual(alerts(arrival({ state: 'LANDED' }), rec, fdrArr('05', true)), []);
-  assert.deepEqual(alerts(departure(), rec, { ...fdrDep('05'), military: { hookRequired: true } }), [], 'rule 4 is about arrivals');
-  assert.deepEqual(alerts(arrival(), record(), fdrArr('05', true)), [], 'the shipped empty inventory never fires (H57)');
+  assert.deepEqual(alerts(arrival({ state: 'LANDED' }), rec, flightDataArr('05', true)), []);
+  assert.deepEqual(alerts(departure(), rec, { ...flightDataDep('05'), military: { hookRequired: true } }), [], 'rule 4 is about arrivals');
+  assert.deepEqual(alerts(arrival(), record(), flightDataArr('05', true)), [], 'the shipped empty inventory never fires (H57)');
 });
 
 // ── Step 3: the dock panel, rendered for real against the DOM stub ─────────
 
 const { makeElement, descendants } = domStub;
 
-/** Renders the real FIELD STATE panel; returns the list element and every dispatch. */
-async function renderFieldStateBoard({ records, signedOn, prompt = () => 'a reason', scrambling = false }) {
+/** Renders the real RUNWAY STATUS panel; returns the list element and every dispatch. */
+async function renderRunwayStatusBoard({ records, signedOn, prompt = () => 'a reason', scrambling = false }) {
   const sent = [];
-  const nodes = { 'field-state-list': makeElement('div'), 'field-state-empty': makeElement('div') };
+  const nodes = { 'runway-status-list': makeElement('div'), 'runway-status-empty': makeElement('div') };
   globalThis.document.getElementById = (id) => nodes[id] || null;
   globalThis.document.createElement = makeElement;
   globalThis.prompt = prompt; // window.prompt
@@ -389,7 +389,7 @@ async function renderFieldStateBoard({ records, signedOn, prompt = () => 'a reas
   const panel = await g.import('panels/efsp/runway-status-panel.js');
   ws.setEfspSender('_sendEfsp', () => {});
   ws.sendEfspSetPositions('INCIRLIK', signedOn);
-  ws.setEfspSender('sendEfspFieldStateMutation', (actingPositionId, facilityId, baseRev, op) => sent.push({ actingPositionId, facilityId, baseRev, op }));
+  ws.setEfspSender('sendEfspRunwayStatusMutation', (actingPositionId, facilityId, baseRev, op) => sent.push({ actingPositionId, facilityId, baseRev, op }));
   const snapshot = { runwayStatuses: records };
   if (scrambling) {
     // L13's constraint comes from a real scramble in the Board: a SCRAMBLE FDR with a CLEARED departure.
@@ -397,8 +397,8 @@ async function renderFieldStateBoard({ records, signedOn, prompt = () => 'a reas
     snapshot.strips = [{ stripId: 's-viper', flightDataId: 'f-viper', stripType: 'DEPARTURE', state: 'CLEARED', facilityId: 'INCIRLIK', ownerPositionId: 'CD', bayId: 'cd-cleared', rackId: 'main', orderKey: 'V', rev: 1, annotations: {}, flags: {}, coordination: null, tofiCoordination: null, airspaceEntry: null, previousLeg: null }];
   }
   st.applyEfspSnapshot(snapshot);
-  panel.initFieldStatePanel();
-  return { list: nodes['field-state-list'], empty: nodes['field-state-empty'], sent };
+  panel.initRunwayStatusPanel();
+  return { list: nodes['runway-status-list'], empty: nodes['runway-status-empty'], sent };
 }
 
 // Objects built inside the vm sandbox have that realm's prototypes; compare them as data.
@@ -417,7 +417,7 @@ test('the board shows a suspended runway with who suspended it, who asked, and w
     rev: 7, status: 'SUSPENDED_WORKS',
     suspension: { kind: 'WORKS', since, by: 'maverick', positionId: 'LC', note: 'BAK-12 re-rig', requestedBy: { positionId: 'OPS', by: 'goose', requestId: 'r1' } },
   });
-  const { list, empty } = await renderFieldStateBoard({ records: [rec], signedOn: [] });
+  const { list, empty } = await renderRunwayStatusBoard({ records: [rec], signedOn: [] });
   const all = texts(list);
   assert.ok(all.includes('SUSPENDED WORKS by LC (maverick) 1432Z · requested by OPS (goose) — BAK-12 re-rig'), all.join('\n'));
   assert.ok(all.includes('WORKS'), 'the status badge');
@@ -430,28 +430,28 @@ test('the board shows a suspended runway with who suspended it, who asked, and w
 });
 
 test('with no active end (no DCS wind yet) the board says ACTIVE — and why', async () => {
-  const { list } = await renderFieldStateBoard({ records: [record({ activeRunway: null })], signedOn: [] });
+  const { list } = await renderRunwayStatusBoard({ records: [record({ activeRunway: null })], signedOn: [] });
   assert.ok(texts(list).includes('ACTIVE —'));
   assert.ok(texts(list).some(t => /^No active end yet/.test(t)));
 });
 
 test('OPS\'s button sends the request to tower with the record\'s rev, as OPS, and goes dead on the press', async () => {
-  const { list, sent } = await renderFieldStateBoard({ records: [record({ rev: 11 })], signedOn: ['OPS'] });
+  const { list, sent } = await renderRunwayStatusBoard({ records: [record({ rev: 11 })], signedOn: ['OPS'] });
   const req = descendants(list).find(n => n.tagName === 'button' && n.dataset.kind === 'RequestRunwayStatus' && n.dataset.action === 'WORKS');
   press(req);
   assert.deepEqual(plain(sent), [{ actingPositionId: 'OPS', facilityId: 'INCIRLIK', baseRev: 11, op: { kind: 'RequestRunwayStatus', runwayId: '05/23', action: 'WORKS' } }]);
   assert.equal(req.disabled, true);
-  assert.equal(req.title, 'as OPS — ask TWR to suspend runway 05/23 for works');
+  assert.equal(req.title, 'as OPS — ask LC to suspend runway 05/23 for works');
   assert.equal(button(list, 'BeginRunwayWorks'), undefined, 'OPS never begins works itself (H18)');
 });
 
 test('TWR begins works with the record\'s rev; Close asks for a reason and Cancel aborts', async () => {
-  const board = await renderFieldStateBoard({ records: [record({ rev: 3 })], signedOn: ['LC'], prompt: () => null });
+  const board = await renderRunwayStatusBoard({ records: [record({ rev: 3 })], signedOn: ['LC'], prompt: () => null });
   press(button(board.list, 'BeginRunwayWorks', 'LC'));
   assert.deepEqual(plain(board.sent[0]), { actingPositionId: 'LC', facilityId: 'INCIRLIK', baseRev: 3, op: { kind: 'BeginRunwayWorks', runwayId: '05/23' } });
   press(button(board.list, 'CloseRunway', 'LC'));
   assert.equal(board.sent.length, 1, 'Cancel on the reason prompt sends nothing');
-  const again = await renderFieldStateBoard({ records: [record({ rev: 3 })], signedOn: ['LC'], prompt: () => 'FOD' });
+  const again = await renderRunwayStatusBoard({ records: [record({ rev: 3 })], signedOn: ['LC'], prompt: () => 'FOD' });
   press(button(again.list, 'CloseRunway', 'LC'));
   assert.deepEqual(plain(again.sent[0].op), { kind: 'CloseRunway', runwayId: '05/23', reason: 'FOD' });
 });
@@ -463,7 +463,7 @@ test('a runway change shows each acknowledger, a self-coordinated ack says so, a
     proposedAt: Date.UTC(2026, 8, 30, 14, 40), note: null, acknowledgers: ['OPS', 'AP'],
     acks: { OPS: { by: 'maverick', positionId: 'OPS', at, selfCoordinated: true }, AP: null }, selfCoordinated: false, rejected: null, pendingInspection: [],
   } });
-  const { list, sent } = await renderFieldStateBoard({ records: [rec], signedOn: ['AP'] });
+  const { list, sent } = await renderRunwayStatusBoard({ records: [rec], signedOn: ['AP'] });
   const all = texts(list);
   assert.ok(all.includes('05 → 23 · PROPOSED · proposed by LC (maverick) 1440Z'), all.join('\n'));
   assert.ok(all.includes('OPS ✓ self 1441Z'));
@@ -471,7 +471,7 @@ test('a runway change shows each acknowledger, a self-coordinated ack says so, a
   press(button(list, 'AckRunwayChange', 'AP'));
   assert.deepEqual(plain(sent[0].op), { kind: 'AckRunwayChange' });
 
-  const propose = await renderFieldStateBoard({ records: [record({ activeRunway: null })], signedOn: ['LC'] });
+  const propose = await renderRunwayStatusBoard({ records: [record({ activeRunway: null })], signedOn: ['LC'] });
   const select = descendants(propose.list).find(n => n.tagName === 'select');
   assert.deepEqual(select.children.map(o => o.value), ['05', '23']);
   select.value = '23';
@@ -480,20 +480,20 @@ test('a runway change shows each acknowledger, a self-coordinated ack says so, a
 });
 
 test('a controller holding nothing sees the board and no buttons at all', async () => {
-  const { list } = await renderFieldStateBoard({ records: [record({ pendingRequest: { requestId: 'r', action: 'CLOSE', requestedPositionId: 'OPS', requestedAt: 0 } })], signedOn: [] });
+  const { list } = await renderRunwayStatusBoard({ records: [record({ pendingRequest: { requestId: 'r', action: 'CLOSE', requestedPositionId: 'OPS', requestedAt: 0 } })], signedOn: [] });
   assert.equal(descendants(list).filter(n => n.tagName === 'button').length, 0);
   assert.ok(texts(list).some(t => t.startsWith('REQUEST CLOSE from OPS')));
 });
 
 test('the alert-pad line renders L13\'s constraint when it is defined, and nothing when it is not', async () => {
-  const withHook = await await renderFieldStateBoard({ records: [record()], signedOn: [], scrambling: true });
+  const withHook = await await renderRunwayStatusBoard({ records: [record()], signedOn: [], scrambling: true });
 assert.ok(texts(withHook.list).includes('ALERT-PAD ACCESS ROUTE (not configured) CONSTRAINED — scramble in progress (VIPER11)'));
-  const without = await renderFieldStateBoard({ records: [record()], signedOn: [] });
-  assert.equal(descendants(without.list).filter(n => /field-state-pad-constraint/.test(n.className)).length, 0);
+  const without = await renderRunwayStatusBoard({ records: [record()], signedOn: [] });
+  assert.equal(descendants(without.list).filter(n => /runway-status-pad-constraint/.test(n.className)).length, 0);
 });
 
 test('no records: the empty state shows', async () => {
-  const { empty, list } = await renderFieldStateBoard({ records: [], signedOn: ['LC'] });
+  const { empty, list } = await renderRunwayStatusBoard({ records: [], signedOn: ['LC'] });
   assert.equal(empty.hidden, false);
   assert.equal(list.children.length, 0);
 });
@@ -520,7 +520,7 @@ async function renderStripWithField({ strip, flightData, records }) {
   return bay._buildStripEl(strip);
 }
 
-const STRIP_FDR = (extra = {}) => ({
+const STRIP_FLIGHT_DATA = (extra = {}) => ({
   flightDataId: 'f1', rev: 1, provenance: {},
   identity: { callsign: 'VIPER1', beaconAssigned: '0001', trackDegradationFlag: 'NONE' },
   filed: {}, assigned: {}, tofi: { ifrActive: true }, airspace: {}, comms: {},
@@ -540,7 +540,7 @@ const reasonLines = (el) => descendants(el).filter(n => /\befsp-strip-reason\b/.
 
 test('a Strip taxiing for a suspended runway shows the RWY chip first in the row, and its reason line', async () => {
   const el = await renderStripWithField({
-    strip: fieldStrip(), flightData: STRIP_FDR({ filed: { departureRunway: '05' } }),
+    strip: fieldStrip(), flightData: STRIP_FLIGHT_DATA({ filed: { departureRunway: '05' } }),
     records: [record({ status: 'SUSPENDED_WORKS', suspension: { kind: 'WORKS' } })],
   });
   const [chip] = chips(el);
@@ -553,7 +553,7 @@ test('a Strip taxiing for a suspended runway shows the RWY chip first in the row
 test('HOOK on a hook-required arrival handed to tower onto a runway whose only gear is down', async () => {
   const el = await renderStripWithField({
     strip: fieldStrip({ stripType: 'ARRIVAL', state: 'HANDED_TO_TOWER', ownerPositionId: 'LC', bayId: 'lc-arrivals' }),
-    flightData: STRIP_FDR({ assigned: { landingRunway: '05' }, military: { hookRequired: true } }),
+    flightData: STRIP_FLIGHT_DATA({ assigned: { landingRunway: '05' }, military: { hookRequired: true } }),
     records: [record({ gear: [gear('DOWN')] })],
   });
   assert.deepEqual(chips(el).map(c => [c.dataset.slot, c.textContent]), [['gear', 'HOOK']]);
@@ -561,7 +561,7 @@ test('HOOK on a hook-required arrival handed to tower onto a runway whose only g
 });
 
 test('a quiet Strip on an open runway has no RWY or HOOK chip (ADR 0058: nothing for normal)', async () => {
-  const el = await renderStripWithField({ strip: fieldStrip(), flightData: STRIP_FDR({ filed: { departureRunway: '05' } }), records: [record()] });
+  const el = await renderStripWithField({ strip: fieldStrip(), flightData: STRIP_FLIGHT_DATA({ filed: { departureRunway: '05' } }), records: [record()] });
   assert.deepEqual(chips(el), []);
   assert.deepEqual(reasonLines(el), []);
 });
@@ -570,7 +570,7 @@ test('the server\'s runway-status NLA inhibit still renders exactly one reason l
   const inhibited = 'runway 05/23 suspended — works in progress';
   const el = await renderStripWithField({
     strip: fieldStrip({ state: 'RUNWAY_QUEUE', ownerPositionId: 'LC', bayId: 'lc-runway-queue', rackId: 'rwy-05', nla: { inhibited, reason: 'RUNWAY' } }),
-    flightData: STRIP_FDR(),
+    flightData: STRIP_FLIGHT_DATA(),
     records: [record({ status: 'SUSPENDED_WORKS', suspension: { kind: 'WORKS' } })],
   });
   assert.deepEqual(chips(el).map(c => c.textContent), ['RWY 05 SUSP']);
@@ -581,22 +581,22 @@ test('the server\'s runway-status NLA inhibit still renders exactly one reason l
   assert.equal(nla.disabled, true);
 });
 
-test('fieldStateSignatureFor changes when the runway does, so bay-view.js rebuilds the Strip (S-L1b2)', () => {
+test('runwayStatusSignatureFor changes when the runway does, so bay-view.js rebuilds the Strip (S-L1b2)', () => {
   state._resetEfspStateForTest();
   const strip = departure();
-  state.applyEfspSnapshot({ strips: [strip], flightDataList: [fdrDep('05')], runwayStatuses: [record()] });
-  const open = rules.fieldStateSignatureFor(strip);
-  state.applyEfspFieldStateDelta({ runwayStatuses: { updated: [record({ status: 'SUSPENDED_WORKS', suspension: { kind: 'WORKS' } })] } });
-  const works = rules.fieldStateSignatureFor(strip);
+  state.applyEfspSnapshot({ strips: [strip], flightDataList: [flightDataDep('05')], runwayStatuses: [record()] });
+  const open = rules.runwayStatusSignatureFor(strip);
+  state.applyEfspRunwayStatusDelta({ runwayStatuses: { updated: [record({ status: 'SUSPENDED_WORKS', suspension: { kind: 'WORKS' } })] } });
+  const works = rules.runwayStatusSignatureFor(strip);
   assert.notEqual(works, open);
-  state.applyEfspFieldStateDelta({ runwayStatuses: { updated: [record({ activeRunway: '23' })] } });
-  assert.notEqual(rules.fieldStateSignatureFor(strip), open, 'the active end is in it too');
+  state.applyEfspRunwayStatusDelta({ runwayStatuses: { updated: [record({ activeRunway: '23' })] } });
+  assert.notEqual(rules.runwayStatusSignatureFor(strip), open, 'the active end is in it too');
 });
 
 test('a RUNWAY_CHANGE suspension reads "runway change in progress", the same words as the server', () => {
   for (const kind of ['WORKS', 'RUNWAY_CHANGE', undefined]) {
     const rw = { runwayId: '05/23', status: 'SUSPENDED_WORKS', suspension: kind ? { kind } : null };
-    assert.equal(rules.runwayStatusReasonFor(rw), serverFieldState.runwayStatusReason(rw), String(kind));
+    assert.equal(rules.runwayStatusReasonFor(rw), serverRunwayStatus.runwayStatusReason(rw), String(kind));
   }
   assert.equal(rules.runwayStatusReasonFor({ runwayId: '05/23', status: 'SUSPENDED_WORKS', suspension: { kind: 'RUNWAY_CHANGE' } }),
     'runway 05/23 suspended — runway change in progress');

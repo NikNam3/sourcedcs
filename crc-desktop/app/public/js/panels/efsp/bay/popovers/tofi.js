@@ -1,7 +1,7 @@
 'use strict';
 import { TOFI_ELIGIBLE_STATES } from '../../efsp-nla.js';
 import { getActingPositions, sendEfspMutation } from '../../efsp-ws.js';
-import { getEfspFdr, getEfspStrip } from '../../efsp-state.js';
+import { getEfspFlightData, getEfspStrip } from '../../efsp-state.js';
 import { TOFI_ANSWERED_BY, TOFI_COUNTERPARTS } from '../authority-mirror.js';
 import { _isRejectedCoordinationReplica } from './coordination.js';
 import { _resolveActingPositionId, _swallowRepeatAdvance } from '../../bay-view.js';
@@ -125,7 +125,7 @@ function _onDocPointerDownCloseTofiPopover(e) {
  */
 export function _openTofiEntryPopover(strip, anchorEl, counterparts) {
   _closeTofiPopover();
-  const flightData = getEfspFdr(strip.flightDataId);
+  const flightData = getEfspFlightData(strip.flightDataId);
   const degraded = !!(flightData && flightData.identity && flightData.identity.trackDegradationFlag && flightData.identity.trackDegradationFlag !== 'NONE');
 
   const popover = document.createElement('div');
@@ -189,7 +189,7 @@ export function _tofiProposerOf(strip, tofi) {
  */
 export function _tofiExitPrecondition(strip, tofi) {
   if (!tofi || tofi.direction !== 'EXIT' || tofi.state !== 'INITIATED') return null;
-  const flightData = typeof getEfspFdr === 'function' ? getEfspFdr(strip.flightDataId) : null;
+  const flightData = typeof getEfspFlightData === 'function' ? getEfspFlightData(strip.flightDataId) : null;
   const regime = (flightData && flightData.tofi && flightData.tofi.separationRegime) || null;
   if (regime === 'ATC') return null;
   const shown = regime || 'unset';

@@ -1,0 +1,194 @@
+crc-desktop/app/public/css/efsp-panel.css:265:   preview comparison) so e.g. '0001' reads as SQUAWK without memorizing
+crc-desktop/app/public/css/efsp-panel.css:555:/* Expand — opens every Block for the Strip's Role (§3.7's "full history on
+crc-desktop/app/public/index.html:188:         the normal case"), e.g. holding OPS+APP+CTR at once. Options are
+crc-desktop/app/public/index.html:192:    <select id="efsp-create-strip-role" hidden></select>
+crc-desktop/app/public/index.html:234:  <div id="field-state-empty" class="efsp-empty">No field state at any Facility you can see.</div>
+crc-desktop/app/public/index.html:715:      Drawn from the APRT panel's runway when an APP radar for that airport is enabled.
+crc-desktop/app/public/js/app.js:443: * A `coverage` message: which radars the Positions this controller holds let
+crc-desktop/app/public/js/atc-scope.js:125:    associated: (source === 'FDR' || source === 'FDR_PROVISIONAL') && live.length > 0,
+crc-desktop/app/public/js/atc-scope.js:130:  const atcStrips = live.filter(s => s.role !== 'MISSION');
+crc-desktop/app/public/js/atc-scope.js:159:    const mission = live.find(s => s.role === 'MISSION');
+crc-desktop/app/public/js/atc-scope.js:262: * accepted, or a same-Facility transfer (a Strip dragged TWR -> APP, which
+crc-desktop/app/public/js/atc-scope.js:305:/** The flight's ACTIVE assigned altitude (ft) and heading, from its FDR's clearance (docs/adr/0058). */
+crc-desktop/app/public/js/dock.js:52:  fieldState: 'FIELD STATE',
+crc-desktop/app/public/js/geojson.js:78:  if (conflicts.length) return { tag: 'STCA', color: ALERT_COLOR_BAD };
+crc-desktop/app/public/js/geojson.js:751: * That matters. `tracks` only holds contacts inside the fade window, so a
+crc-desktop/app/public/js/panels/efsp/airspace-panel.js:237:      _showMutationWarning(`Released with ${msg.occupied} flight${msg.occupied === 1 ? '' : 's'} still in the block`);
+crc-desktop/app/public/js/panels/efsp/ato-import.js:67:/** "No control that always fails" (efsp-panel.js): hidden unless TAC_C2 is held. */
+crc-desktop/app/public/js/panels/efsp/ato-strip.js:79:        `${role === 'TANKER' ? 'Receiver' : 'Tanker'} ${callsign}`,
+crc-desktop/app/public/js/panels/efsp/ato-strip.js:162:    ['On station', a.onStationUtc != null ? _atoHhmm(a.onStationUtc) : '—'],
+crc-desktop/app/public/js/panels/efsp/bay-view.js:115:// one to design against: a double-tap on "Hand Off to APP" pressed "Line Up
+crc-desktop/app/public/js/panels/efsp/bay-view.js:352:/** The first configured Bay for a Position — used as the transfer landing spot when the drop target is a Position tab rather than a specific Bay tab. Facility-config.js's Bay ordering intentionally puts each Position's "entry" Bay first (e.g. CD's Pending Clearance, GND's Pushback). */
+crc-desktop/app/public/js/panels/efsp/bay-view.js:441:  rackEl.setAttribute('role', 'list');
+crc-desktop/app/public/js/panels/efsp/bay-view.js:549:  parts.push('sib:' + siblings.map(s => `${s.stripId}/${s.facilityId || '?'}/${s.ownerPositionId}/${s.role}`).sort().join(','));
+crc-desktop/app/public/js/panels/efsp/bay-views.js:85:/** What a chip action or a Move asks the server for, as a plain op, or null. The Position that acts is the Strip's owner, if held. */
+crc-desktop/app/public/js/panels/efsp/bay-views.js:125: * by the owner (ADR 0075). The carrier's "Ball" is its recorded FINAL_TO_LSO hand-over, so the trigger type
+crc-desktop/app/public/js/panels/efsp/bay-views.js:195:  const owner = (stripId) => { const s = getEfspStrip(stripId); return s && held.includes(s.ownerPositionId) ? s : null; };
+crc-desktop/app/public/js/panels/efsp/bay-views.js:230:    none.textContent = kind === 'CARRIER' ? 'No aircraft on final.' : 'No aircraft on final. Rotate an aircraft in from SFA or APP.';
+crc-desktop/app/public/js/panels/efsp/bay-views.js:287:  title.textContent = `SFA ROTATION · ${view.jurisdiction} holds it · ${view.rotationSize} of ${view.pool.length} frequencies`;
+crc-desktop/app/public/js/panels/efsp/bay/authority-mirror.js:18:  CTR: { facilityId: 'INCIRLIK', positionId: 'APP' },
+crc-desktop/app/public/js/panels/efsp/bay/authority-mirror.js:41:// permission.js's TACTICAL_CAPABILITIES[*].handBackTo, held to it by
+crc-desktop/app/public/js/panels/efsp/bay/authority-mirror.js:46:// B2 (docs/adr/0080): AIC "works under TAC_C2's TOFI", so on an AIC-held line
+crc-desktop/app/public/js/panels/efsp/bay/authority-mirror.js:48:// `tofiAnsweredBy`, held to it by the drift test in efsp-ui-reachability.test.js.
+crc-desktop/app/public/js/panels/efsp/bay/authority-mirror.js:51:export const AIRSPACE_ENTRY_POSITIONS = ['APP', 'CTR'];
+crc-desktop/app/public/js/panels/efsp/bay/authority-mirror.js:57:export const CONVERT_TO_ARRIVAL_POSITIONS = ['APP', 'CTR'];
+crc-desktop/app/public/js/panels/efsp/bay/block-edit.js:102:  const redirect = typeof editRedirectFor === 'function' ? editRedirectFor(blockId, strip.role, fdr) : null; // UI-A U4
+crc-desktop/app/public/js/panels/efsp/bay/block-edit.js:149:  // must not: with F-105's 44x44 targets that guard covered most of the Strip
+crc-desktop/app/public/js/panels/efsp/bay/block-edit.js:284:      // A clear is the '' the <select> itself holds, not a null spelled here:
+crc-desktop/app/public/js/panels/efsp/bay/popovers/tofi.js:67:/** The Position a TOFI answer is sent as: the owner's TOFI answerer when this controller holds it, else the usual resolution. */
+crc-desktop/app/public/js/panels/efsp/bay/strip-element.js:254:  const map = (typeof BLOCK_MAPS === 'object' && BLOCK_MAPS[strip.role]) || null;
+crc-desktop/app/public/js/panels/efsp/bay/strip-element.js:365:  el.setAttribute('role', 'listitem');
+crc-desktop/app/public/js/panels/efsp/carrier-panel.js:99:  if (carrierActingFor('setsCase', held)) {
+crc-desktop/app/public/js/panels/efsp/carrier-panel.js:125:  if (carrierActingFor('editsShipInput', held)) {
+crc-desktop/app/public/js/panels/efsp/carrier-panel.js:214:  const el = _cel('div', 'carrier-slot' + (row.entry ? ' carrier-slot-occupied' : ' carrier-slot-vacant'));
+crc-desktop/app/public/js/panels/efsp/carrier-panel.js:322:  btn.classList.add('efsp-carrier-handover', `efsp-carrier-trigger-${t.trigger.toLowerCase().replace(/_/g, '-')}`);
+crc-desktop/app/public/js/panels/efsp/carrier-panel.js:332:  const btn = _cel('button', `efsp-sbtn efsp-nla-btn efsp-carrier-handover efsp-carrier-trigger-${t.trigger.toLowerCase().replace(/_/g, '-')}`, t.label);
+crc-desktop/app/public/js/panels/efsp/carrier-panel.js:348:  if (!strip || !['MARSHAL', 'FINAL', 'PATTERN'].includes(strip.role)) return '';
+crc-desktop/app/public/js/panels/efsp/efsp-messages.js:124:  console.warn('[efsp] efsp-positions-ack received, held =', msg.held, 'warnings =', msg.warnings);
+crc-desktop/app/public/js/panels/efsp/efsp-metrics-client.js:71: * @param {(facilityId:string) => string[]} deps.held    Positions held at a Facility
+crc-desktop/app/public/js/panels/efsp/efsp-metrics-client.js:112:      warnOnce('not-held', `[efsp-metrics] dropping a ${event.kind} for ${positionId || 'no Position'}: not held (logged once)`);
+crc-desktop/app/public/js/panels/efsp/efsp-nla.js:26:    DEPARTED:          'Hand Off to APP',
+crc-desktop/app/public/js/panels/efsp/efsp-nla.js:59:  // `strip.nla.carrierTransfer` names the hand-over and nlaButtonLabel() below
+crc-desktop/app/public/js/panels/efsp/efsp-nla.js:89:/** The label on a Strip's NLA button: the hand-over's own name when the server says the NLA is one, else the Role's state table. */
+crc-desktop/app/public/js/panels/efsp/efsp-nla.js:121:  HELD:              ['CD', 'GND'],
+crc-desktop/app/public/js/panels/efsp/efsp-nla.js:122:  PUSHBACK:          ['GND'],
+crc-desktop/app/public/js/panels/efsp/efsp-nla.js:123:  TAXI:              ['GND'],
+crc-desktop/app/public/js/panels/efsp/efsp-nla.js:124:  RUNWAY_QUEUE:      ['TWR'],
+crc-desktop/app/public/js/panels/efsp/efsp-nla.js:125:  LUAW:              ['TWR'],
+crc-desktop/app/public/js/panels/efsp/efsp-nla.js:126:  DEPARTED:          ['TWR'],
+crc-desktop/app/public/js/panels/efsp/efsp-nla.js:127:  HANDED_OFF:        ['APP', 'CTR'], // docs/adr/0022 bug fix — mirrors permission.js exactly
+crc-desktop/app/public/js/panels/efsp/efsp-nla.js:133:  INBOUND:         ['APP', 'CTR', 'SFA'], // SFA (docs/adr/0075) works the inbound aircraft on its frequencies
+crc-desktop/app/public/js/panels/efsp/efsp-nla.js:134:  HANDED_TO_TOWER: ['TWR'],
+crc-desktop/app/public/js/panels/efsp/efsp-nla.js:135:  FINAL:           ['TWR'],
+crc-desktop/app/public/js/panels/efsp/efsp-nla.js:136:  LANDED:          ['TWR'],
+crc-desktop/app/public/js/panels/efsp/efsp-nla.js:137:  TAXI_IN:         ['GND'],
+crc-desktop/app/public/js/panels/efsp/efsp-nla.js:142:  INBOUND:    ['APP', 'CTR'],
+crc-desktop/app/public/js/panels/efsp/efsp-nla.js:143:  IN_SECTOR:  ['APP', 'CTR'],
+crc-desktop/app/public/js/panels/efsp/efsp-nla.js:144:  HANDED_OFF: ['APP', 'CTR'],
+crc-desktop/app/public/js/panels/efsp/efsp-panel.js:45:// "held OPS but panel still says no Position" bug.
+crc-desktop/app/public/js/panels/efsp/efsp-state.js:482:    .filter(s => s.role === 'MISSION' && s.state !== 'DROPPED' && owners.includes(s.ownerPositionId))
+crc-desktop/app/public/js/panels/efsp/efsp-stereo-routes.js:48: * fetch, left every Strip's 9F as "no stereo routes configured" until its FDR
+crc-desktop/app/public/js/panels/efsp/efsp-ws.js:15:// WP4A (docs/adr/0013): keyed by facilityId — each Facility's held-Position
+crc-desktop/app/public/js/panels/efsp/efsp-ws.js:85:  _sendEfsp({ version: 1, type: 'efsp-set-positions', facilityId, held });
+crc-desktop/app/public/js/panels/efsp/efsp-ws.js:118: * binding". Its own message type because it targets an FDR: no stripId, no
+crc-desktop/app/public/js/panels/efsp/final-panel.js:4:// docs/adr/0075, built on docs/adr/0064's Role FINAL).
+crc-desktop/app/public/js/panels/efsp/final-panel.js:17:// THE TERMINAL EVENT. ADR 0064 left PAR's terminal state to L18: reuse the FINAL Role's own states
+crc-desktop/app/public/js/panels/efsp/ordnance-advisory.js:39:  if (strip.role !== 'DEPARTURE' && strip.role !== 'ARRIVAL') return null;
+crc-desktop/app/public/js/panels/efsp/ordnance-advisory.js:55:    if (byEnd) return { runwayId: byEnd.runwayId, end, source: 'FDR' };
+crc-desktop/app/public/js/panels/efsp/ordnance-advisory.js:58:    if (whole) return { runwayId: whole.runwayId, end: null, source: 'FDR' };
+crc-desktop/app/public/js/panels/efsp/ordnance-advisory.js:72:  if (strip.role !== 'ARRIVAL' && strip.role !== 'DEPARTURE') return null;
+crc-desktop/app/public/js/panels/efsp/ordnance-advisory.js:97:export const ORDNANCE_NO_FIELD_STATE_REASON = 'Hung ordnance. The hot cargo pad is shown when field state is available.';
+crc-desktop/app/public/js/panels/efsp/ordnance-advisory.js:105:  if (!strip || (strip.role !== 'ARRIVAL' && strip.role !== 'DEPARTURE') || strip.state === 'DROPPED') return [];
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:83: * CREATE_STRIP_ORIGINS carries `role: undefined` to mean DEPARTURE (the
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:84: * server's own default), so a bare `role === 'DEPARTURE'` would exclude the
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:101:// ARRIVAL, matching guide §4.1's "all" Strip Roles for APP) and adds
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:116:  { actingPositionId: 'OPS', facilityId: 'INCIRLIK', bayId: 'ops-proposed',    role: undefined,     label: 'OPS · Departure' },
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:117:  { actingPositionId: 'APP', facilityId: 'INCIRLIK', bayId: 'app-inbound',     role: 'ARRIVAL',     label: 'APP · Arrival' },
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:118:  { actingPositionId: 'APP', facilityId: 'INCIRLIK', bayId: 'app-overflight',  role: 'OVERFLIGHT',  label: 'APP · Overflight' },
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:119:  { actingPositionId: 'CTR', facilityId: 'CENTER',   bayId: 'ctr-enroute',     role: 'ARRIVAL',     label: 'CTR · Arrival' },
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:120:  { actingPositionId: 'CTR', facilityId: 'CENTER',   bayId: 'ctr-overflight',  role: 'OVERFLIGHT',  label: 'CTR · Overflight' },
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:132:  { actingPositionId: 'TAC_C2', facilityId: 'TACTICAL', bayId: 'tac-c2-tasked', role: 'MISSION', label: 'TAC_C2 · Mission' },
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:133:  { actingPositionId: 'GCI', facilityId: 'TACTICAL',   bayId: 'gci-on-station', role: 'MISSION', label: 'GCI · Mission', initialState: 'ON_STATION' },
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:136:function _createStripOriginKey(o) { return `${o.actingPositionId}:${o.role || 'DEPARTURE'}`; }
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:141:  return CREATE_STRIP_ORIGINS.filter(o => held.includes(o.actingPositionId));
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:162:  const taken = new Set(all.filter(s => s.role === 'MISSION' && s.state !== 'DROPPED').map(s => s.fdrId));
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:241:    if (live.some(o => o.fdrId === s.fdrId && o.role !== 'MISSION')) continue; // already filed
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:249:  if (!origin || origin.actingPositionId !== 'OPS' || (origin.role || 'DEPARTURE') !== 'DEPARTURE') return;
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:317:      // Same "never silently reset a deliberate choice" rule the role
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:328:    _setCreateStripMsg('OPS, APP or CTR only — select one in Panels to create Strips', true);
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:330:    // Clear a stale "OPS/APP/CTR only"/validation message once one is
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:366:    _setCreateStripMsg('OPS, APP or CTR only — select one in Panels to create Strips', true);
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:421:  // aggressively", §10.5 provenance fallback chains) — DEPARTURE-role
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:447:  if (!stereoRouteName && origin.role !== 'ARRIVAL' && origin.role !== 'OVERFLIGHT' && origin.role !== 'MISSION' && typeof lookupFlightPlanClient === 'function') {
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:488:    ? { kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', role: origin.role, fdrId: bindFdrId, initialState: origin.initialState || undefined }
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:489:    : { kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', role: origin.role, fdr, initialState: origin.initialState || undefined };
+crc-desktop/app/public/js/panels/efsp/panel/dot-commands.js:21:  const origin = _availableCreateStripOrigins().find(o => o.role === 'MISSION' && o.actingPositionId === 'TAC_C2');
+crc-desktop/app/public/js/panels/efsp/panel/dot-commands.js:36:      .some(s => s.role === 'MISSION' && s.state !== 'DROPPED' && fdrIds.has(s.fdrId));
+crc-desktop/app/public/js/panels/efsp/panel/dot-commands.js:42:    kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', role: 'MISSION',
+crc-desktop/app/public/js/panels/efsp/panel/dot-commands.js:234:    _showDotCommandError('OPS, APP or CTR only — select one in Panels to create Strips');
+crc-desktop/app/public/js/panels/efsp/panel/dot-commands.js:238:    _showDotCommandError(`a stereo route seeds a DEPARTURE Strip, not ${origin.role}`);
+crc-desktop/app/public/js/panels/efsp/panel/dot-commands.js:269:    kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', role: origin.role,
+crc-desktop/app/public/js/panels/efsp/panel/refusal.js:113:      blockName = (typeof blockLabelFor === 'function' && blockLabelFor(op.blockId, (strip && strip.role) || 'DEPARTURE'))
+crc-desktop/app/public/js/panels/efsp/panel/state.js:42:  _createStripRoleEl = document.getElementById('efsp-create-strip-role');
+crc-desktop/app/public/js/panels/efsp/panel/tabs.js:35:  // UI-A: the "with AIC/JTAC" pseudo-Bay on a held TAC_C2's tab, only while there is a line in it.
+crc-desktop/app/public/js/panels/efsp/panel/tabs.js:66: * @returns {Array<{positionId:string, facilityId:string, held:boolean, bays:Array}>} held Positions first
+crc-desktop/app/public/js/panels/efsp/panel/tabs.js:83:    const heldHere = [...new Set((bays || []).filter(b => b.facilityId === facilityId && held.has(b.positionId)).map(b => b.positionId))];
+crc-desktop/app/public/js/panels/efsp/panel/tabs.js:101:  return [...all.filter(p => p.held), ...all.filter(p => !p.held)];
+crc-desktop/app/public/js/panels/efsp/panel/tabs.js:159:    empty.textContent = 'No Position held — select one in Panels.';
+crc-desktop/app/public/js/panels/efsp/runway-status-panel.js:151:    line('field-state-request', `REQUEST ${String(r.action).replace(/_/g, ' ')} from ${_fsWho(r.requestedPositionId, r.requestedBy)} ${_fsZulu(r.requestedAt)}${r.note ? ` — ${r.note}` : ''} · waiting on TWR`);
+crc-desktop/app/public/js/panels/efsp/runway-status-panel.js:166:    chip.title = `${positionId} was unmanned when the change was proposed, so it was skipped (and audited)`;
+crc-desktop/app/public/js/panels/efsp/runway-status-panel.js:201:    const occupied = p && p.occupied ? ` · occupied${p.occupantFdrId ? ` (${p.occupantFdrId})` : ''}` : '';
+crc-desktop/app/public/js/panels/efsp/runway-status-panel.js:202:    pads.appendChild(_fsEl('div', 'field-state-line field-state-pad', `${label} · ${(p && p.name) || 'not configured'}${occupied}`));
+crc-desktop/app/public/js/panels/efsp/runway-status-panel.js:244:  const base = (typeof PANEL_TITLES === 'object' && PANEL_TITLES.fieldState) || 'FIELD STATE';
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:28:  CloseRunway:                ['TWR'],
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:29:  OpenRunway:                 ['TWR'],
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:30:  BeginRunwayWorks:           ['TWR'],
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:33:  RequestRunwayStatus:        ['OPS', 'CD', 'GND', 'APP', 'RSU'], // RSU asks, never closes (H18, docs/adr/0075)
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:34:  AcceptRunwayRequest:        ['TWR'],
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:35:  RejectRunwayRequest:        ['TWR'],
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:36:  ProposeRunwayChange:        ['TWR'],
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:37:  SelfCoordinateRunwayChange: ['TWR'],
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:38:  WithdrawRunwayChange:       ['TWR'],
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:39:  BeginRunwayChange:          ['TWR'],
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:40:  CompleteRunwayChange:       ['TWR'],
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:41:  AckRunwayChange:            ['OPS', 'APP'],
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:42:  RejectRunwayChange:         ['OPS', 'APP'],
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:47:// the NLA does. FINAL is listed although its NLA (-> LANDED) is never held.
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:129:  if (strip.role !== 'DEPARTURE' && strip.role !== 'ARRIVAL') return null;
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:140:  if (filed) return { runwayId: filed.runway.runwayId, end: filed.end, source: 'FDR', runway: filed.runway };
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:222:    sentence = `Runway ${id} is closed; it reopens when TWR opens it.`;
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:229:  if (strip.role === 'ARRIVAL' && strip.state === 'FINAL') sentence += ' Landing is an observation and is not held.';
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:252:  if (strip.role !== 'DEPARTURE' && strip.role !== 'ARRIVAL') return out;
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:365:        as('RequestRunwayStatus', { runwayId: id, action: 'CLOSE', label: 'REQ CLS', title: `ask TWR to close runway ${id}` });
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:366:        as('RequestRunwayStatus', { runwayId: id, action: 'WORKS', label: 'REQ WRKS', title: `ask TWR to suspend runway ${id} for works` });
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:369:        as('RequestRunwayStatus', { runwayId: id, action: 'OPEN', label: 'REQ OPEN', title: `ask TWR to open runway ${id}` });
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:384:      if (holdsTower && acknowledgers.every(p => held.includes(p))) {
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:419:  return m.facilityId ? `${m.facilityId} field state` : 'field state';
+crc-desktop/app/public/js/panels/efsp/scramble.js:103:/** L1b's client field state when it is loaded (decisions.md T6: never block on it). */
+crc-desktop/app/public/js/panels/efsp/sfa-state.js:26:export const SFA_ROTATION_SENDERS = ['APP', 'SFA'];
+crc-desktop/app/public/js/panels/efsp/sfa-state.js:29:export const SFA_ROTATION_CEILING = ['APP'];
+crc-desktop/app/public/js/panels/efsp/strip-fields.js:35:  // '7' is the ASSIGNED altitude on this Role (annotation-routed, append-only);
+crc-desktop/app/public/js/panels/efsp/strip-fields.js:60://    Tower's and OPS's face always (OPS records the load state, UI-A U1); on APP, CTR and every tactical Position it is on the
+crc-desktop/app/public/js/panels/efsp/strip-fields.js:74://  - TAXI (17) on GND's face and TAKEOFF (18) on TWR's: the off-block call and the takeoff call are
+crc-desktop/app/public/js/panels/efsp/strip-fields.js:77://    travels CTR -> APP -> TWR (guide §4.6.2) and each of them reads and passes it (UI-A U5).
+crc-desktop/app/public/js/panels/efsp/strip-fields.js:95:    // is the Strip's attribute and the controller rotates onto it (guide §4.7). No SREG: MARSA is APP's.
+crc-desktop/app/public/js/panels/efsp/strip-fields.js:109:  return (typeof BLOCK_MAPS === 'object' && BLOCK_MAPS && BLOCK_MAPS[role]) || null;
+crc-desktop/app/public/js/panels/efsp/strip-fields.js:141:export const ORDNANCE_WHEN_SET = { positions: ['APP', 'CTR'], roles: ['MISSION'] };
+crc-desktop/app/public/js/panels/efsp/strip-template.js:60:  '5':  { required: true,  label: 'SQUAWK',   target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
+crc-desktop/app/public/js/panels/efsp/strip-template.js:126:  // docs/adr/0058 — the flight's clearance, on the FDR and shared with every
+crc-desktop/app/public/js/panels/efsp/strip-template.js:173:  '5':        { required: true,  label: 'SQUAWK',   target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
+crc-desktop/app/public/js/panels/efsp/strip-template.js:229:  '5':  { required: true,  label: 'SQUAWK',   target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
+crc-desktop/app/public/js/panels/efsp/strip-template.js:234:  // §9.2's MARSA interlock unreachable on this one Role. Annotation-routed
+crc-desktop/app/public/js/panels/efsp/strip-template.js:238:  // docs/adr/0058: both are the flight's clearance now, on the FDR.
+crc-desktop/app/public/js/panels/efsp/strip-template.js:277:  'M4': { required: true,  label: 'SQUAWK',  target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
+crc-desktop/app/public/js/panels/efsp/strip-template.js:289:// guide §9.12) — a literal duplicate of crc-sync's block-map.js, held by
+crc-desktop/app/public/js/panels/efsp/strip-template.js:295:// flight's own fields, on the FDR so they survive launch to recovery.
+crc-desktop/app/public/js/panels/efsp/strip-template.js:300:  '5':  { required: false, label: 'SQUAWK', target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
+crc-desktop/app/public/js/panels/efsp/strip-template.js:437: * Resolves one Block's display value + provenance for a Strip/FDR pair.
+crc-desktop/app/public/js/panels/efsp/strip-template.js:521:  // crc-sync docs/adr/0074 — a flight's own carrier fields, off the FDR.
+crc-desktop/app/public/js/panels/efsp/strip-template.js:630://                   "no release state".
+crc-desktop/app/public/js/panels/efsp/strip-template.js:667:/** @returns {string|null} this Block's display label for the given role, or null if the Block doesn't exist for that role. */
+crc-desktop/app/public/js/panels/efsp/strip-view.js:223:  row.appendChild(_stripEl('div', 'efsp-x-what', `TOFI ${tofi.direction} ${strip.role === 'MISSION' ? '←' : '→'} ${tofi.peerPositionId}`));
+crc-desktop/app/public/js/panels/efsp/strip-view.js:357:  const nlaLabel = nlaStatus === null ? null : (typeof nlaButtonLabel === 'function' ? nlaButtonLabel(strip) : nlaLabelFor(strip.state, strip.role)); // a carrier hand-over is labelled by its own name (docs/adr/0074)
+crc-desktop/app/public/js/panels/efsp/strip-view.js:379:  // The carrier's second hand-over, beside the NLA (crc-sync docs/adr/0074): "See you" in Case II.
+crc-desktop/app/public/js/panels/efsp/strip-view.js:388:  tab.appendChild(_stripEl('div', 'efsp-strip-tab-role',
+crc-desktop/app/public/js/panels/efsp/strip-view.js:389:    `${ROLE_ABBR[strip.role] || strip.role} · ${String(strip.state).replace(/_/g, ' ')}`));
+crc-desktop/app/public/js/panels/efsp/strip-view.js:453:      text: `STCA ${other} ${_fmtClock(c.timeToCpaSec)}`,
+crc-desktop/app/public/js/panels/efsp/strip-view.js:558:      `Aircraft ${seen}; the Strip says ${h.stripState}. ${mine ? 'Click to advance it to Airborne.' : `${strip.ownerPositionId} holds this Strip.`}`);
+crc-desktop/app/public/js/panels/efsp/strip-view.js:560:      node.setAttribute('role', 'button');
+crc-desktop/app/public/js/panels/efsp/strip-view.js:585:      `this flight also has ${siblings.length === 1 ? 'a Strip' : `${siblings.length} Strips`} at ${siblings.map(s => `${s.facilityId || '?'}/${s.ownerPositionId} (${s.role})`).join(', ')}`);
+crc-desktop/app/public/js/panels/efsp/strip-view.js:605:    slots.appendChild(_indicator('prevLeg', `${strip.previousLeg.role} ×${count}`, 'on', 'efsp-previous-leg-badge',
+crc-desktop/app/public/js/panels/efsp/strip-view.js:758:        : `Turn this Strip into its return ARRIVAL leg at ${strip.ownerPositionId} — same Strip, same FDR, no duplicate`,
+crc-desktop/app/public/js/panels/efsp/strip-view.js:802:  menu.setAttribute('role', 'menu');
+crc-desktop/app/public/js/panels/efsp/strip-view.js:812:    btn.setAttribute('role', 'menuitem');
+crc-desktop/app/public/js/panels/metrics-panel.js:156:        value: `${_plural(block.total, 'search', 'searches')} · ${_num(rate)} per manned hour`,
+crc-desktop/app/public/js/panels/metrics-panel.js:233:        block.routedToCovering ? `${block.routedToCovering} routed to a covering Position` : null,
+crc-desktop/app/public/js/panels/metrics-panel.js:526:      ? _renderTable(['Position', 'Facility', 'Searches', 'Per manned hour', 'Manned hours', 'Last hour'],
+crc-desktop/app/public/js/panels/radar-panel.js:73:    $label.textContent = r.label + (isGnd ? ' GND' : '');
+crc-desktop/app/public/js/panels/radar-panel.js:174:// Facility's held set is sent independently (sendEfspSetPositions(
+crc-desktop/app/public/js/panels/radar-panel.js:176:// server-side — checking CTR never touches INCIRLIK's held set at all.
+crc-desktop/app/public/js/panels/radar-panel.js:178:  INCIRLIK: ['OPS', 'CD', 'GND', 'TWR', 'RSU', 'APP', 'SFA', 'PAR'], // RSU, SFA and PAR: crc-sync's docs/adr/0075
+crc-desktop/app/public/js/panels/radar-panel.js:262:        console.warn('[efsp] Acting-As checkbox changed:', facilityId, positionId, '->', $cb.checked, '| sending held =', [...next]);
+crc-desktop/app/public/js/panels/radar-panel.js:288:      : `${w.count} Strip(s) from ${w.positionId} have no covering Position — unassigned`
+crc-desktop/app/public/js/panels/track-panel.js:238:    lines.push({ bad: true, text: `STCA with ${c.otherCallsign} in ${clock(c.timeToCpaSec)}. Closest ${c.minNm} NM / ${c.vertFt} ft.` });
+crc-desktop/app/public/js/track-label.js:14://     label: { callsign, source: 'FDR'|'FDR_PROVISIONAL'|'DATALINK'|'TAG'|null, tag, trackNumber },

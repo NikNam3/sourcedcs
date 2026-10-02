@@ -1,7 +1,7 @@
 'use strict';
 
 /* The WP6 Phase 3 walk (docs/efsp-wp6-plan.md "Verification" 4 and 5), in a
- * real browser: the FIELD STATE panel, runway works and the inspection, the
+ * real browser: the RUNWAY STATUS panel, runway works and the inspection, the
  * Strip's RWY chip and NLA inhibit, the runway change with its
  * acknowledgements, and the pilot requests the client can show.
  *
@@ -63,28 +63,28 @@ async function controller(browser, signedOn, name) {
 
 // ── the field ────────────────────────────────────────────────────────────
 
-const field = (page) => page.evaluate(() => getEfspFieldState('INCIRLIK'));
+const field = (page) => page.evaluate(() => getEfspRunwayStatus('INCIRLIK'));
 const runway = async (page) => (await field(page)).runways[0];
 
 /** Sends a runway-status op with the current rev, as `positionId`, and waits for the record to move. */
 async function fieldOp(page, positionId, op) {
   const before = (await field(page)).rev;
-  await page.evaluate(([p, o]) => sendEfspFieldStateMutation(p, 'INCIRLIK', getEfspFieldState('INCIRLIK').rev, o), [positionId, op]);
+  await page.evaluate(([p, o]) => sendEfspRunwayStatusMutation(p, 'INCIRLIK', getEfspRunwayStatus('INCIRLIK').rev, o), [positionId, op]);
   await expect.poll(async () => (await field(page)).rev, { message: `${op.kind} as ${positionId}` }).toBeGreaterThan(before);
 }
 
-/** Opens FIELD STATE the way a controller does: its row in the PANELS list. */
+/** Opens RUNWAY STATUS the way a controller does: its row in the PANELS list. */
 async function openFieldPanel(page) {
   if (!(await page.evaluate(() => isDockPanelOpen('runwayStatus')))) {
     if (!(await page.evaluate(() => isDockPanelOpen('radars')))) await page.locator('#btn-radars').click();
     await page.evaluate(() => dock.api.getPanel('radars').api.setActive());
-    await page.locator('#panel-controls .panel-ctrl-label', { hasText: /^FIELD STATE/ }).click();
+    await page.locator('#panel-controls .panel-ctrl-label', { hasText: /^RUNWAY STATUS/ }).click();
   }
-  await expect(page.locator('#field-state-panel')).toBeVisible();
+  await expect(page.locator('#runway-status-panel')).toBeVisible();
 }
 
 /**
- * Puts FIELD STATE in its own column beside the Strip panel, so a controller
+ * Puts RUNWAY STATUS in its own column beside the Strip panel, so a controller
  * (and a screenshot) sees the field and the Strips at once. Also sidesteps
  * the Strip panel rendering while dockview has it detached behind another tab
  * of its group (docs/wip/L1b.md, Findings: the arrivals line duplicates).
@@ -96,7 +96,7 @@ async function besideStrips(page) {
     dock.addPanel({ id: 'runwayStatus', component: 'runwayStatus', title: PANEL_TITLES.runwayStatus, position: { referencePanel: 'efsp', direction: 'right' } });
     dock.api.getPanel('efsp').api.setActive();
   });
-  await expect(page.locator('#field-state-panel')).toBeVisible();
+  await expect(page.locator('#runway-status-panel')).toBeVisible();
   await expect(page.locator('#efsp-panel')).toBeVisible();
 }
 
@@ -108,7 +108,7 @@ async function front(page, id) {
 /** A runway-status button in the panel, pressed. The panel must be in front. */
 async function press(page, kind, { positionId, action } = {}) {
   await front(page, 'runwayStatus');
-  let sel = `#field-state-panel button[data-kind="${kind}"]`;
+  let sel = `#runway-status-panel button[data-kind="${kind}"]`;
   if (positionId) sel += `[data-position-id="${positionId}"]`;
   if (action) sel += `[data-action="${action}"]`;
   const btn = page.locator(sel);
@@ -118,7 +118,7 @@ async function press(page, kind, { positionId, action } = {}) {
   await expect.poll(async () => (await field(page)).rev, { message: `${kind} applied` }).toBeGreaterThan(before);
 }
 
-const offered = (page, kind) => page.locator(`#field-state-panel button[data-kind="${kind}"]`);
+const offered = (page, kind) => page.locator(`#runway-status-panel button[data-kind="${kind}"]`);
 
 /** Back to OPEN with no change open, whatever the walk left (briefing T12). Needs TWR and OPS held. */
 async function resetField(page) {
@@ -140,14 +140,14 @@ async function resetField(page) {
 // ── Strips ───────────────────────────────────────────────────────────────
 
 const stripOf = (page, cs) => page.evaluate((cs) => getAllEfspStrips().find((x) => {
-  const f = getEfspFdr(x.flightDataId);
+  const f = getEfspFlightData(x.flightDataId);
   return f && f.identity.callsign === cs && x.state !== 'DROPPED';
 }) || null, cs);
 
 /** A Strip op sent as `positionId`, else its owner when held here, else the first Position held here. */
 async function stripOp(page, cs, op, positionId) {
   await page.evaluate(([cs, op, p]) => {
-    const s = getAllEfspStrips().find((x) => getEfspFdr(x.flightDataId).identity.callsign === cs && x.state !== 'DROPPED');
+    const s = getAllEfspStrips().find((x) => getEfspFlightData(x.flightDataId).identity.callsign === cs && x.state !== 'DROPPED');
     const signedOn = getActingPositions('INCIRLIK');
     sendEfspMutation(p || (signedOn.includes(s.ownerPositionId) ? s.ownerPositionId : signedOn[0]), s, op);
   }, [cs, op, positionId || null]);
@@ -170,7 +170,7 @@ async function setState(page, cs, toState) {
 async function nla(page, cs, n = 1) {
   for (let i = 0; i < n; i++) {
     const before = (await stripOf(page, cs)).state;
-    await page.evaluate((cs) => _invokeNla(getAllEfspStrips().find((x) => getEfspFdr(x.flightDataId).identity.callsign === cs && x.state !== 'DROPPED')), cs);
+    await page.evaluate((cs) => _invokeNla(getAllEfspStrips().find((x) => getEfspFlightData(x.flightDataId).identity.callsign === cs && x.state !== 'DROPPED')), cs);
     await expect.poll(async () => (await stripOf(page, cs)).state, { message: `${cs} NLA from ${before}` }).not.toBe(before);
     await page.waitForTimeout(450); // the server's per-Strip 400 ms double-tap guard (T5)
   }
@@ -214,9 +214,9 @@ test('Phase 3 walk: OPS asks for runway works, TWR suspends, the Strips hold, FI
   await openFieldPanel(twr);
 
   // 1. The panel, opened from the PANELS list.
-  await expect(twr.locator('#field-state-panel .field-state-runway-id')).toHaveText('05/23');
-  await expect(twr.locator('#field-state-panel .field-state-badge')).toHaveText('OPEN');
-  await expect(twr.locator('#field-state-panel .field-state-active')).toHaveText(/ACTIVE/);
+  await expect(twr.locator('#runway-status-panel .runway-status-runway-id')).toHaveText('05/23');
+  await expect(twr.locator('#runway-status-panel .runway-status-badge')).toHaveText('OPEN');
+  await expect(twr.locator('#runway-status-panel .runway-status-active')).toHaveText(/ACTIVE/);
   await shot(twr, '01-panel-open');
   await besideStrips(twr);
   await besideStrips(ops);
@@ -236,21 +236,21 @@ test('Phase 3 walk: OPS asks for runway works, TWR suspends, the Strips hold, FI
     await stripOp(ops, cs, { kind: 'SetBlock', blockId: '8B', value: '05' }, 'AP');
   }
   await stripOp(ops, ARR_FIN, { kind: 'SetBlock', blockId: '3F', value: true }, 'AP');
-  await expect.poll(async () => (await ops.evaluate((cs) => { const s = getAllEfspStrips().find((x) => getEfspFdr(x.flightDataId).identity.callsign === cs); return getEfspFdr(s.flightDataId).military.hookRequired; }, ARR_FIN))).toBe(true);
+  await expect.poll(async () => (await ops.evaluate((cs) => { const s = getAllEfspStrips().find((x) => getEfspFlightData(x.flightDataId).identity.callsign === cs); return getEfspFlightData(s.flightDataId).military.hookRequired; }, ARR_FIN))).toBe(true);
   await nla(ops, ARR_TWR, 1); // -> HANDED_TO_TOWER (TWR)
   await nla(ops, ARR_FIN, 1);
   await nla(twr, ARR_FIN, 1); // -> FINAL
 
   // 3. OPS asks; TWR (another person) accepts, which suspends the runway.
   await press(ops, 'RequestRunwayStatus', { positionId: 'OPS', action: 'WORKS' });
-  await expect(ops.locator('#field-state-panel .field-state-request')).toHaveText(/^REQUEST WORKS from OPS \(goose\) \d{4}Z · waiting on TWR$/);
+  await expect(ops.locator('#runway-status-panel .runway-status-request')).toHaveText(/^REQUEST WORKS from OPS \(goose\) \d{4}Z · waiting on LC$/);
   await expect(offered(ops, 'BeginRunwayWorks'), 'OPS never begins works itself (H18)').toHaveCount(0);
-  await expect(twr.locator('#field-state-panel .field-state-request')).toBeVisible();
+  await expect(twr.locator('#runway-status-panel .runway-status-request')).toBeVisible();
   await press(twr, 'AcceptRunwayRequest', { positionId: 'LC' });
   expect((await runway(twr)).status).toBe('SUSPENDED_WORKS');
-  await expect(twr.locator('#field-state-panel .field-state-suspension'))
-    .toHaveText(/^SUSPENDED WORKS by TWR \(maverick\) \d{4}Z · requested by OPS \(goose\)$/);
-  await expect(twr.locator('#field-state-panel .field-state-badge')).toHaveText('WORKS');
+  await expect(twr.locator('#runway-status-panel .runway-status-suspension'))
+    .toHaveText(/^SUSPENDED WORKS by LC \(maverick\) \d{4}Z · requested by OPS \(goose\)$/);
+  await expect(twr.locator('#runway-status-panel .runway-status-badge')).toHaveText('WORKS');
   await shot(twr, '02-suspended-panel');
 
   // Every Strip that will use 05/23 says so; the queued departure and the
@@ -297,7 +297,7 @@ test('Phase 3 walk: OPS asks for runway works, TWR suspends, the Strips hold, FI
   // server refuses it anyway when sent by hand — named by the runway.
   await expect(offered(twr, 'CompleteInspection')).toHaveCount(0);
   await front(twr, 'efsp');
-  await twr.evaluate(() => sendEfspFieldStateMutation('LC', 'INCIRLIK', getEfspFieldState('INCIRLIK').rev, { kind: 'CompleteInspection', runwayId: '05/23' }));
+  await twr.evaluate(() => sendEfspRunwayStatusMutation('LC', 'INCIRLIK', getEfspRunwayStatus('INCIRLIK').rev, { kind: 'CompleteInspection', runwayId: '05/23' }));
   await expect(twr.locator('#efsp-mutation-error')).toHaveText(/^runway 05\/23 — /);
   expect(await expectRefusalIsVisible(twr, 'TWR signing off an inspection')).toMatch(/^runway 05\/23/);
   await shot(twr, '05-inspection-refused-to-twr');
@@ -307,7 +307,7 @@ test('Phase 3 walk: OPS asks for runway works, TWR suspends, the Strips hold, FI
   await expect(chip(stripByCallsign(twr, DEP_Q))).toHaveCount(0);
   await expect(nlaBtn(stripByCallsign(twr, DEP_Q))).toBeEnabled();
   await front(twr, 'runwayStatus');
-  await expect(twr.locator('#field-state-panel .field-state-inspection')).toHaveText(/^INSPECTED by OPS \(goose\) \d{4}Z$/);
+  await expect(twr.locator('#runway-status-panel .runway-status-inspection')).toHaveText(/^INSPECTED by OPS \(goose\) \d{4}Z$/);
   await shot(twr, '06-reopened');
 
   await dropAll([ops, twr], [DEP_TAXI, DEP_Q, ARR_TWR, ARR_FIN]);
@@ -338,13 +338,13 @@ test('Phase 3 walk: a runway change needs OPS and APP (each a different person),
 
   // TWR proposes 05 -> 23 from the panel's end picker.
   await front(twr, 'runwayStatus');
-  await twr.locator('#field-state-panel select.field-state-to-end').selectOption('23');
+  await twr.locator('#runway-status-panel select.runway-status-to-end').selectOption('23');
   await press(twr, 'ProposeRunwayChange', { positionId: 'LC' });
   await expect(offered(twr, 'BeginRunwayChange'), 'not before both acknowledge').toHaveCount(0);
   await press(app, 'AckRunwayChange', { positionId: 'AP' });
   await expect(offered(twr, 'BeginRunwayChange'), 'APP alone is not enough').toHaveCount(0);
-  await expect(twr.locator('#field-state-panel .field-state-ack-done')).toHaveText([/^APP ✓ \d{4}Z$/]);
-  await expect(twr.locator('#field-state-panel .field-state-ack-waiting')).toHaveText(['OPS …']);
+  await expect(twr.locator('#runway-status-panel .runway-status-ack-done')).toHaveText([/^AP ✓ \d{4}Z$/]);
+  await expect(twr.locator('#runway-status-panel .runway-status-ack-waiting')).toHaveText(['OPS …']);
   await press(ops, 'AckRunwayChange', { positionId: 'OPS' });
   await expect(offered(twr, 'BeginRunwayChange')).toHaveCount(1);
   await press(twr, 'BeginRunwayChange', { positionId: 'LC' });
@@ -352,11 +352,11 @@ test('Phase 3 walk: a runway change needs OPS and APP (each a different person),
   const pending = await field(twr);
   expect(pending.activeRunway).toBe('23');
   expect(pending.runwayChange.state).toBe('PENDING_INSPECTION');
-  await expect(twr.locator('#field-state-panel .field-state-change-pending')).toHaveText('PENDING INSPECTION: 05/23');
+  await expect(twr.locator('#runway-status-panel .runway-status-change-pending')).toHaveText('PENDING INSPECTION: 05/23');
   await press(ops, 'CompleteInspection', { positionId: 'OPS' });
   expect((await field(twr)).runwayChange).toBeNull();
   await front(twr, 'runwayStatus');
-  await expect(twr.locator('#field-state-panel .field-state-active')).toHaveText('▶ 23 ACTIVE');
+  await expect(twr.locator('#runway-status-panel .runway-status-active')).toHaveText('▶ 23 ACTIVE');
   await shot(twr, '07-runway-change-done');
 
   // Q30: nothing moves a Strip on its own; the one queued for 05 is told.
@@ -368,18 +368,18 @@ test('Phase 3 walk: a runway change needs OPS and APP (each a different person),
 
   // Pilot request "request runway 23": TWR moves the Strip to 23's rack and
   // the advisory follows the rack (the chip goes).
-  await twr.evaluate((cs) => _moveStrip(getAllEfspStrips().find((s) => getEfspFdr(s.flightDataId).identity.callsign === cs && s.state !== 'DROPPED'), 'lc-runway-queue', 'rwy-23', null, null), DEP);
+  await twr.evaluate((cs) => _moveStrip(getAllEfspStrips().find((s) => getEfspFlightData(s.flightDataId).identity.callsign === cs && s.state !== 'DROPPED'), 'lc-runway-queue', 'rwy-23', null, null), DEP);
   await expect.poll(async () => (await stripOf(twr, DEP)).rackId).toBe('rwy-23');
   await expect(chip(stripByCallsign(twr, DEP))).toHaveCount(0);
 
   // A change APP rejects: what TWR sees.
   await front(twr, 'runwayStatus');
-  await twr.locator('#field-state-panel select.field-state-to-end').selectOption('05');
+  await twr.locator('#runway-status-panel select.runway-status-to-end').selectOption('05');
   await press(twr, 'ProposeRunwayChange', { positionId: 'LC' });
   app.once('dialog', (d) => d.accept('wind is 240 at 15'));
   await press(app, 'RejectRunwayChange', { positionId: 'AP' });
   await front(twr, 'runwayStatus');
-  await expect(twr.locator('#field-state-panel .field-state-change-rejected')).toHaveText(/^REJECTED by APP \(iceman\) \d{4}Z — wind is 240 at 15$/);
+  await expect(twr.locator('#runway-status-panel .runway-status-change-rejected')).toHaveText(/^REJECTED by AP \(iceman\) \d{4}Z — wind is 240 at 15$/);
   expect((await field(twr)).activeRunway).toBe('23');
   await shot(twr, '09-rejected');
 
@@ -393,12 +393,12 @@ test('a reload mid-suspension still shows SUSPENDED (the snapshot carries it); t
   await besideStrips(twr);
   await press(twr, 'BeginRunwayWorks', { positionId: 'LC' });
   await twr.reload();
-  await twr.waitForFunction(() => typeof getEfspFieldState === 'function' && !!getEfspFieldState('INCIRLIK'));
+  await twr.waitForFunction(() => typeof getEfspRunwayStatus === 'function' && !!getEfspRunwayStatus('INCIRLIK'));
   await openFieldPanel(twr);
   await besideStrips(twr);
   await front(twr, 'runwayStatus');
-  await expect(twr.locator('#field-state-panel .field-state-badge')).toHaveText('WORKS');
-  await expect(twr.locator('#field-state-panel .field-state-suspension')).toHaveText(/^SUSPENDED WORKS by TWR \(maverick\) \d{4}Z$/);
+  await expect(twr.locator('#runway-status-panel .runway-status-badge')).toHaveText('WORKS');
+  await expect(twr.locator('#runway-status-panel .runway-status-suspension')).toHaveText(/^SUSPENDED WORKS by LC \(maverick\) \d{4}Z$/);
   await shot(twr, '11-reload-still-suspended');
   // The reload dropped the Positions (a new connection); take them back to clean up.
   await twr.evaluate(() => window.sendEfspSetPositions('INCIRLIK', ['LC', 'OPS']));
@@ -414,13 +414,13 @@ test('one controller holding TWR, OPS and APP changes the runway in one self-coo
   await front(solo, 'runwayStatus');
   await expect(offered(solo, 'SelfCoordinateRunwayChange')).toHaveCount(1);
   const to = (await field(solo)).activeRunway === '23' ? '05' : '23';
-  await solo.locator('#field-state-panel .field-state-actions').filter({ has: solo.locator('button[data-kind="SelfCoordinateRunwayChange"]') })
-    .locator('select.field-state-to-end').last().selectOption(to);
+  await solo.locator('#runway-status-panel .runway-status-actions').filter({ has: solo.locator('button[data-kind="SelfCoordinateRunwayChange"]') })
+    .locator('select.runway-status-to-end').last().selectOption(to);
   await press(solo, 'SelfCoordinateRunwayChange', { positionId: 'LC' });
   const change = (await field(solo)).runwayChange;
   expect(change.state).toBe('ACKNOWLEDGED');
   expect(change.selfCoordinated).toBe(true);
-  await expect(solo.locator('#field-state-panel .field-state-ack-done')).toHaveText([/^OPS ✓ self \d{4}Z$/, /^APP ✓ self \d{4}Z$/]);
+  await expect(solo.locator('#runway-status-panel .runway-status-ack-done')).toHaveText([/^OPS ✓ self \d{4}Z$/, /^AP ✓ self \d{4}Z$/]);
   await shot(solo, '12-self-coordinated');
   await press(solo, 'BeginRunwayChange', { positionId: 'LC' });
   await press(solo, 'CompleteRunwayChange', { positionId: 'LC' });

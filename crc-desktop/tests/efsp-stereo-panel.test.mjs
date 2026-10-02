@@ -43,7 +43,7 @@ async function mountPanel({ signedOn = ['OPS'], stereoRoutes = ROUTES, lookupSpy
   const els = {};
   for (const id of ['efsp-panel', 'efsp-position-tabs', 'efsp-bay-tabs', 'efsp-bay-content',
     'efsp-new-strip-callsign', 'efsp-create-strip-btn', 'efsp-create-strip-msg',
-    'efsp-create-strip-role', 'efsp-create-strip-stereo', 'efsp-dot-command-input',
+    'efsp-create-strip-type', 'efsp-create-strip-stereo', 'efsp-dot-command-input',
     'efsp-dot-command-preview', 'efsp-mutation-error', 'efsp-mutation-warning',
     'efsp-connection-banner']) {
     els[id] = makeElement(id.endsWith('-btn') ? 'button' : id.includes('role') || id.includes('type') || id.includes('stereo') ? 'select' : 'input');
@@ -238,7 +238,7 @@ test('.stereo refuses when no origin Position is held at all', async () => {
   const m = await mounted({ signedOn: [] });
   await runDotCommand(m, '.stereo PACK1 VIPER11');
   assert.equal(m.sent.length, 0);
-  assert.match(m.els['efsp-dot-command-preview'].textContent, /OPS, APP or CTR only/);
+  assert.match(m.els['efsp-dot-command-preview'].textContent, /OPS, AP or CTR only/);
 });
 
 test('every other dot-command verb still works — .stereo did not shadow the selection guard', async () => {

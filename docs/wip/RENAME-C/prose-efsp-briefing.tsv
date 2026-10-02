@@ -1,0 +1,16 @@
+95	occupancy, combination, handoff	staffing, combination, handoff
+105	**The `RANGE` station**	**The `RANGE` Position**
+148	## 3A. The RANGE station	## 3A. The RANGE Position
+185	- **Coverage follows the Positions you hold.**	- **Coverage follows the Positions you are signed on to.**
+186	  stations by **selector**	  Positions by **selector**
+189	- **No radar-bearing Position held means	- **No radar-bearing Position signed on means
+190	A controller holding only those gets	A controller signed on to only those gets
+667	one controller holding OPS/CD/GC/LC stood in	one controller signed on to OPS/CD/GC/LC stood in
+961	(no covering fallback,	(no consolidation fallback,
+991	- **strip types and Facility.**	- **Strip types and Facility.**
+993	outside the covering chain, the chain is	outside the consolidation, which is
+1015	The covering chain ends at the Marshal	The consolidation ends at the Marshal
+1040	Position the controller holds that owns	Position the controller is signed on to that owns
+1061	one controller holding AP and CTR	one controller signed on to AP and CTR
+1072	S-L23: a held `TAC_C2` gets	S-L23: a signed-on `TAC_C2` gets
+949	covering `SFA`/`PAR` to `AP`	consolidating `SFA`/`PAR` at `AP`

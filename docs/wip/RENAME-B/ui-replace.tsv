@@ -1,0 +1,48 @@
+crc-desktop/app/public/index.html:234	No field state at any Facility	No runway status at any Facility
+crc-desktop/app/public/js/geojson.js:78	tag: 'STCA'	tag: 'CA'
+crc-desktop/app/public/js/panels/efsp/bay-views.js:230	from SFA or APP.	from SFA or AP.
+crc-desktop/app/public/js/panels/efsp/efsp-nla.js:26	'Hand Off to APP'	'Hand Off to AP'
+crc-desktop/app/public/js/panels/efsp/ordnance-advisory.js:97	when field state is available	when runway status is available
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:117	'APP · Arrival'	'AP · Arrival'
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:118	'APP · Overflight'	'AP · Overflight'
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:328	OPS, APP or CTR only	OPS, AP or CTR only
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:366	OPS, APP or CTR only	OPS, AP or CTR only
+crc-desktop/app/public/js/panels/efsp/panel/dot-commands.js:234	OPS, APP or CTR only	OPS, AP or CTR only
+crc-desktop/app/public/js/panels/efsp/panel/tabs.js:159	No Position held	No Position signed on
+crc-desktop/app/public/js/panels/efsp/runway-status-panel.js:166	was unmanned when	was unstaffed when
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:222	when TWR opens it	when LC opens it
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:365	ask TWR to close	ask LC to close
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:366	ask TWR to suspend	ask LC to suspend
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:369	ask TWR to open	ask LC to open
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:419	${m.facilityId} field state` : 'field state'	${m.facilityId} runway status` : 'runway status'
+crc-desktop/app/public/js/panels/efsp/strip-view.js:453	text: `STCA ${other}	text: `Conflict Alert ${other}
+crc-desktop/app/public/js/panels/efsp/strip-view.js:758	same FDR,	same flight data,
+crc-desktop/app/public/js/panels/metrics-panel.js:156	per manned hour	per staffed hour
+crc-desktop/app/public/js/panels/metrics-panel.js:233	routed to a covering Position	routed to a consolidated Position
+crc-desktop/app/public/js/panels/metrics-panel.js:526	'Per manned hour', 'Manned hours'	'Per staffed hour', 'Staffed hours'
+crc-desktop/app/public/js/panels/radar-panel.js:288	have no covering Position	have no Position to be consolidated at
+crc-desktop/app/public/js/panels/track-panel.js:238	STCA with	Conflict Alert with
+crc-desktop/app/public/js/atc-scope.js:125	'FDR' / 'FDR_PROVISIONAL'	KEEP correlation source values: W (A's wire commit)
+crc-desktop/app/public/js/panels/efsp/airspace-panel.js:237	occupied	KEEP airspace occupancy stays
+crc-desktop/app/public/js/panels/efsp/ato-strip.js:162	On station	KEEP On Station is MRU state (kept, rename-map N02)
+crc-desktop/app/public/js/panels/efsp/bay-views.js:287	holds it	KEEP SFA jurisdiction ("holds"), not a Position hold
+crc-desktop/app/public/js/panels/efsp/carrier-panel.js:214	carrier-slot-occupied	KEEP Marshal slot, keep (N03)
+crc-desktop/app/public/js/panels/efsp/efsp-messages.js:124	held =	KEEP console.warn log line, not UI
+crc-desktop/app/public/js/panels/efsp/efsp-metrics-client.js:112	not held	KEEP log line, not UI
+crc-desktop/app/public/js/panels/efsp/efsp-nla.js:31,51,52	Hand to Tower / On Station / Off Station	KEEP Tower is the FAA word; On/Off Station are MRU labels
+crc-desktop/app/public/js/panels/efsp/ordnance-advisory.js:55,58	source: FDR	KEEP W value (A)
+crc-desktop/app/public/js/panels/efsp/runway-status-panel.js:201	occupied	KEEP pad occupancy, not a Position
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:229	is not held	KEEP NLA "held" meaning not held/withheld, not a Position hold
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:140	source: 'FDR'	KEEP W value (A)
+crc-desktop/app/public/js/panels/efsp/strip-view.js:558	holds this Strip	KEEP ownership phrase, not a Position hold
+crc-desktop/app/public/js/panels/radar-panel.js:73	' GND'	KEEP ground radar kind label, not the Position
+crc-desktop/app/public/js/panels/radar-panel.js:262	sending held	KEEP console.warn log line
+crc-desktop/app/public/index.html:894	Hold to transmit	KEEP PTT
+crc-desktop/app/public/js/panels/efsp/bay/authority-mirror.js:18,51,57	Position id literals	KEEP W lit rows: A
+crc-desktop/app/public/js/panels/efsp/efsp-nla.js:121-144	Position id arrays	KEEP W lit rows: A
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:28-42	Position id arrays	KEEP W lit rows: A
+crc-desktop/app/public/js/panels/efsp/sfa-state.js:26,29	Position id arrays	KEEP W lit: A
+crc-desktop/app/public/js/panels/efsp/strip-fields.js:141	positions: ['APP','CTR']	KEEP W lit: A (roles key is in review N11)
+crc-desktop/app/public/js/panels/radar-panel.js:178	INCIRLIK Position list	KEEP W lit: A
+crc-desktop/app/public/css/efsp-panel.css:265	SQUAWK	KEEP comment
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:33	RequestRunwayStatus list	KEEP W lit: A

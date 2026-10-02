@@ -73,28 +73,28 @@ const HOLDS_ONLY_NO_DROP_TABS = ['JTAC'];
 
 export function computePositionTabs(bays, signedOnPositionIds) {
   const signedOn = new Set(signedOnPositionIds || []);
-  const heldFacilities = new Set();
+  const signedOnFacilities = new Set();
   for (const b of bays || []) {
     if (!signedOn.has(b.positionId)) continue;
-    heldFacilities.add(b.facilityId);
+    signedOnFacilities.add(b.facilityId);
   }
   // A Facility where every held Position is a "no drop tabs" one offers no other Position's tab.
-  for (const facilityId of [...heldFacilities]) {
-    const heldHere = [...new Set((bays || []).filter(b => b.facilityId === facilityId && signedOn.has(b.positionId)).map(b => b.positionId))];
-    if (heldHere.length > 0 && heldHere.every(p => HOLDS_ONLY_NO_DROP_TABS.includes(p))) heldFacilities.delete(facilityId);
+  for (const facilityId of [...signedOnFacilities]) {
+    const signedOnHere = [...new Set((bays || []).filter(b => b.facilityId === facilityId && signedOn.has(b.positionId)).map(b => b.positionId))];
+    if (signedOnHere.length > 0 && signedOnHere.every(p => HOLDS_ONLY_NO_DROP_TABS.includes(p))) signedOnFacilities.delete(facilityId);
   }
-  const heldFacilitiesWithTabs = heldFacilities;
+  const signedOnFacilitiesWithTabs = signedOnFacilities;
 
   const byPosition = new Map();
   for (const b of bays || []) {
-    const isHeld = signedOn.has(b.positionId);
-    if (!isHeld && !heldFacilitiesWithTabs.has(b.facilityId)) continue;
+    const isSignedOn = signedOn.has(b.positionId);
+    if (!isSignedOn && !signedOnFacilitiesWithTabs.has(b.facilityId)) continue;
     let entry = byPosition.get(b.positionId);
     if (!entry) {
-      entry = { positionId: b.positionId, facilityId: b.facilityId, signedOn: isHeld, bays: [] };
+      entry = { positionId: b.positionId, facilityId: b.facilityId, signedOn: isSignedOn, bays: [] };
       byPosition.set(b.positionId, entry);
     }
-    if (isHeld) entry.bays.push(b);
+    if (isSignedOn) entry.bays.push(b);
   }
 
   const all = [...byPosition.values()];
@@ -156,7 +156,7 @@ export function _renderPositionTabs() {
   if (signedOnPositionIds.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'efsp-empty';
-    empty.textContent = 'No Position held — select one in Panels.';
+    empty.textContent = 'No Position signed on — select one in Panels.';
     _positionTabsEl.appendChild(empty);
   }
 

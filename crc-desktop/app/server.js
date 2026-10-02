@@ -26,7 +26,7 @@ const SRS_RADIO_API    = parseInt(process.env.SRS_RADIO_API_PORT) || 5003;
 // so a squadron member can point at a different crc-sync/Casdoor without
 // hand-editing config.json. config.json's values are just the defaults.
 const syncConfig = {
-  crcSyncUrl:      process.env.CRC_SYNC_URL || 'wss://asacs.sourcedcs.page',
+  crcSyncUrl:      process.env.CRCSYNC_URL || 'wss://asacs.sourcedcs.page',
   casdoorClientId: process.env.CASDOOR_CLIENT_ID || '',
   casdoorEndpoint: process.env.CASDOOR_ENDPOINT || '',
 };
@@ -69,7 +69,7 @@ const httpServer = http.createServer((req, res) => {
   if (req.url === '/js/config.js') {
     res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
     return res.end(
-      'var CRC_SYNC_URL      = ' + JSON.stringify(syncConfig.crcSyncUrl)      + ';\n' +
+      'var CRCSYNC_URL      = ' + JSON.stringify(syncConfig.crcSyncUrl)      + ';\n' +
       'var CASDOOR_CLIENT_ID = ' + JSON.stringify(syncConfig.casdoorClientId) + ';\n' +
       'var CASDOOR_ENDPOINT  = ' + JSON.stringify(syncConfig.casdoorEndpoint) + ';\n' +
       'var MAPTILER_KEY      = ' + JSON.stringify(MAPTILER_KEY)              + ';\n'

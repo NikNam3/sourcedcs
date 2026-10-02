@@ -18,7 +18,7 @@ export { computePositionTabs, _runEfspSearch, getActiveEfspSearchQuery, _renderP
 export { noteEfspBoardArrivals, noteEfspArrivalShown } from './panel/arrivals.js';
 export { reloadEfspStereoRoutes, convertStripToArrival, createStripFromFiledPlan } from './panel/create-strip.js';
 export {
-  MUTATION_ERROR_VISIBLE_MS, MUTATION_ERROR_MESSAGES, _callsignOfFdr, _showMutationError, getCurrentEfspRefusal,
+  MUTATION_ERROR_VISIBLE_MS, MUTATION_ERROR_MESSAGES, _callsignOfFlightData, _showMutationError, getCurrentEfspRefusal,
   _showMutationWarning, notifyEfspOrphanedMutation, notifyEfspMutationAck, _setCurrentRefusalForTest
 } from './panel/refusal.js';
 export { _dispatchDotCommand } from './panel/dot-commands.js';

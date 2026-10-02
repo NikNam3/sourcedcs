@@ -1,0 +1,14 @@
+crc-desktop/tests/efsp-ordnance-client.test.mjs:127	when field state is available	when runway status is available
+crc-desktop/tests/efsp-nla-client.test.mjs:32	'Hand Off to APP'	'Hand Off to AP'
+crc-desktop/tests/efsp-nla-client.test.mjs:31	Hand-Off-to-APP	Hand-Off-to-AP
+crc-desktop/e2e/l4-chain.spec.js:61	'Hand Off to APP'	'Hand Off to AP'
+crc-desktop/e2e/l4-chain.spec.js:112	Hand Off to APP	Hand Off to AP
+crc-desktop/e2e/l4-chain.spec.js:122	Hand Off to APP	Hand Off to AP
+crc-desktop/tests/efsp-stereo-panel.test.mjs:241	OPS, APP or CTR only	OPS, AP or CTR only
+crc-desktop/tests/efsp-runway-status-client.test.mjs:286	INCIRLIK field state	INCIRLIK runway status
+crc-desktop/tests/efsp-runway-status-client.test.mjs:332	when TWR opens it	when LC opens it
+crc-desktop/tests/efsp-runway-status-client.test.mjs:444	ask TWR to suspend	ask LC to suspend
+crc-desktop/tests/efsp-ui-reachability.test.mjs:662	Hand Off to APP	Hand Off to AP
+crc-desktop/tests/efsp-ui-reachability.test.mjs:972	STCA SNAKE21	Conflict Alert SNAKE21
+crc-desktop/tests/efsp-ui-reachability.test.mjs:976	STCA SNAKE21	Conflict Alert SNAKE21
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1900	Hand Off to APP	Hand Off to AP

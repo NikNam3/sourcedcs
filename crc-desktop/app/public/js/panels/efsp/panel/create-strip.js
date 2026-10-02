@@ -1,9 +1,9 @@
 'use strict';
-import { _callsignOfFdr } from './refusal.js';
-import { _createStripBindEl, _createStripBtnEl, _createStripInputEl, _createStripMsgEl, _createStripRoleEl, _createStripStereoEl } from './state.js';
+import { _callsignOfFlightData } from './refusal.js';
+import { _createStripBindEl, _createStripBtnEl, _createStripInputEl, _createStripMsgEl, _createStripTypeEl, _createStripStereoEl } from './state.js';
 import { _resolveActingPositionId } from '../bay-view.js';
 import { getActingPositions, sendEfspCreateStrip, sendEfspMutation } from '../efsp-ws.js';
-import { getAllEfspStrips, getEfspFdr, liveStripsForCallsign } from '../efsp-state.js';
+import { getAllEfspStrips, getEfspFlightData, liveStripsForCallsign } from '../efsp-state.js';
 import { listStereoRoutesClient } from '../efsp-stereo-routes.js';
 import { lookupFlightPlanClient } from '../efsp-flight-plan-lookup.js';
 import { refreshAtoImportButton } from '../ato-import.js';
@@ -114,8 +114,8 @@ export function _setCreateStripMsg(text, isError) {
 // the three, not just whichever this list happened to check first.
 const CREATE_STRIP_ORIGINS = [
   { actingPositionId: 'OPS', facilityId: 'INCIRLIK', bayId: 'ops-proposed',    stripType: undefined,     label: 'OPS · Departure' },
-  { actingPositionId: 'AP', facilityId: 'INCIRLIK', bayId: 'ap-inbound',     stripType: 'ARRIVAL',     label: 'APP · Arrival' },
-  { actingPositionId: 'AP', facilityId: 'INCIRLIK', bayId: 'ap-overflight',  stripType: 'OVERFLIGHT',  label: 'APP · Overflight' },
+  { actingPositionId: 'AP', facilityId: 'INCIRLIK', bayId: 'ap-inbound',     stripType: 'ARRIVAL',     label: 'AP · Arrival' },
+  { actingPositionId: 'AP', facilityId: 'INCIRLIK', bayId: 'ap-overflight',  stripType: 'OVERFLIGHT',  label: 'AP · Overflight' },
   { actingPositionId: 'CTR', facilityId: 'CENTER',   bayId: 'ctr-enroute',     stripType: 'ARRIVAL',     label: 'CTR · Arrival' },
   { actingPositionId: 'CTR', facilityId: 'CENTER',   bayId: 'ctr-overflight',  stripType: 'OVERFLIGHT',  label: 'CTR · Overflight' },
   // WP4A second slice — TAC_C2/GCI self-originate a standalone MISSION
@@ -145,7 +145,7 @@ export function _createStripOrigin() {
   const available = _availableCreateStripOrigins();
   if (available.length === 0) return null;
   if (available.length === 1) return available[0]; // the common single-Position case — no picker was shown, nothing to read
-  const selectedKey = _createStripRoleEl && _createStripRoleEl.value;
+  const selectedKey = _createStripTypeEl && _createStripTypeEl.value;
   return available.find(o => _createStripOriginKey(o) === selectedKey) || available[0];
 }
 
@@ -172,7 +172,7 @@ export function _missionBindCandidates() {
 }
 
 /** The flightDataId the operator picked, or '' for today's standalone-origination path. */
-function _selectedBindFdrId() {
+function _selectedBindFlightDataId() {
   return (_createStripBindEl && !_createStripBindEl.hidden && _createStripBindEl.value) || '';
 }
 
@@ -202,7 +202,7 @@ function _refreshMissionBindPicker(origin) {
   none.textContent = '— not bound to a flight —';
   _createStripBindEl.appendChild(none);
   for (const s of candidates) {
-    const flightData = typeof getEfspFdr === 'function' ? getEfspFdr(s.flightDataId) : null;
+    const flightData = typeof getEfspFlightData === 'function' ? getEfspFlightData(s.flightDataId) : null;
     const id = flightData && flightData.identity ? flightData.identity : {};
     const opt = document.createElement('option');
     opt.value = s.flightDataId;
@@ -236,7 +236,7 @@ function _atoFirstCandidates(callsign) {
   for (const s of live) {
     if (s.stripType !== 'MISSION' || seen.has(s.flightDataId)) continue;
     seen.add(s.flightDataId);
-    const flightData = typeof getEfspFdr === 'function' ? getEfspFdr(s.flightDataId) : null;
+    const flightData = typeof getEfspFlightData === 'function' ? getEfspFlightData(s.flightDataId) : null;
     if (!flightData || !flightData.ato || !flightData.identity || flightData.identity.callsign !== wanted) continue;
     if (live.some(o => o.flightDataId === s.flightDataId && o.stripType !== 'MISSION')) continue; // already filed
     out.push(flightData);
@@ -270,25 +270,25 @@ export function _refreshCreateStripAvailability() {
   if (!_createStripInputEl || !_createStripBtnEl) return;
   if (_createStripLookupInFlight) return; // don't fight the "Looking up flight plan…" message or re-enable mid-lookup — _submitCreateStrip owns this window
   const available = _availableCreateStripOrigins();
-  if (_createStripRoleEl) {
+  if (_createStripTypeEl) {
     // Only actually a CHOICE when 2+ origins are simultaneously reachable
     // (a combined-Position controller) — the common single-Position case
     // keeps today's minimal toolbar, nothing to pick.
-    _createStripRoleEl.hidden = available.length <= 1;
-    if (!_createStripRoleEl.hidden) {
-      const prevKey = _createStripRoleEl.value;
-      _createStripRoleEl.innerHTML = '';
+    _createStripTypeEl.hidden = available.length <= 1;
+    if (!_createStripTypeEl.hidden) {
+      const prevKey = _createStripTypeEl.value;
+      _createStripTypeEl.innerHTML = '';
       for (const o of available) {
         const opt = document.createElement('option');
         opt.value = _createStripOriginKey(o);
         opt.textContent = o.label;
-        _createStripRoleEl.appendChild(opt);
+        _createStripTypeEl.appendChild(opt);
       }
       // Preserve the operator's prior choice across a Position-set change
       // (e.g. picking up a third Position) when it's still valid; default
       // to the first option otherwise — never silently reset a deliberate
       // choice out from under them.
-      if (available.some(o => _createStripOriginKey(o) === prevKey)) _createStripRoleEl.value = prevKey;
+      if (available.some(o => _createStripOriginKey(o) === prevKey)) _createStripTypeEl.value = prevKey;
     }
   }
   const origin = _createStripOrigin();
@@ -325,7 +325,7 @@ export function _refreshCreateStripAvailability() {
   _createStripInputEl.disabled = !origin;
   _createStripBtnEl.disabled = !origin;
   if (!origin) {
-    _setCreateStripMsg('OPS, APP or CTR only — select one in Panels to create Strips', true);
+    _setCreateStripMsg('OPS, AP or CTR only — select one in Panels to create Strips', true);
   } else if (!_pendingCreateStripMutationId) {
     // Clear a stale "OPS/APP/CTR only"/validation message once one is
     // selected — but never stomp "Creating…" while an attempt is still in
@@ -363,7 +363,7 @@ async function _submitCreateStrip() {
 
   const origin = _createStripOrigin();
   if (!origin) {
-    _setCreateStripMsg('OPS, APP or CTR only — select one in Panels to create Strips', true);
+    _setCreateStripMsg('OPS, AP or CTR only — select one in Panels to create Strips', true);
     return;
   }
   // docs/ui-findings F-308 — the picker is read BEFORE the typed callsign is
@@ -374,10 +374,10 @@ async function _submitCreateStrip() {
   // word — the adjacent-callsign mis-pick _refreshMissionBindPicker's own
   // comment says this has to survive. `.mission <CALLSIGN>` never had the
   // problem because it has no second source of identity to disagree with.
-  const bindFdrId = _selectedBindFdrId();
-  const boundCallsign = bindFdrId ? _callsignOfFdr(bindFdrId) : '';
+  const bindFlightDataId = _selectedBindFlightDataId();
+  const boundCallsign = bindFlightDataId ? _callsignOfFlightData(bindFlightDataId) : '';
   const callsign = _createStripInputEl.value.trim().toUpperCase();
-  if (bindFdrId) {
+  if (bindFlightDataId) {
     // Not demanded — and not silently discarded either. Only the controller
     // knows which of the two flights they meant.
     if (callsign && boundCallsign && callsign !== boundCallsign) {
@@ -408,7 +408,7 @@ async function _submitCreateStrip() {
   // flight that already has both" — binding is the precise opposite, the
   // very thing the warning tells you to do instead. Leaving it in would
   // make the good path harder than the bad one.
-  const existing = bindFdrId ? [] : liveStripsForCallsign(callsign);
+  const existing = bindFlightDataId ? [] : liveStripsForCallsign(callsign);
   if (existing.length > 0 && _pendingDuplicateCallsign !== callsign) {
     _pendingDuplicateCallsign = callsign;
     const where = existing.map(s => `${s.facilityId || '?'}/${s.ownerPositionId}`).join(', ');
@@ -484,8 +484,8 @@ async function _submitCreateStrip() {
   // flight it is fragged against, down to the Mode 3/A (guide §9.8's bridge
   // field). The server refuses both keys together, so sending a blank one
   // "just in case" would refuse the whole op.
-  const createOp = bindFdrId
-    ? { kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', stripType: origin.stripType, flightDataId: bindFdrId, initialState: origin.initialState || undefined }
+  const createOp = bindFlightDataId
+    ? { kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', stripType: origin.stripType, flightDataId: bindFlightDataId, initialState: origin.initialState || undefined }
     : { kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', stripType: origin.stripType, flightData, initialState: origin.initialState || undefined };
   _pendingCreateStripMutationId = sendEfspCreateStrip(origin.actingPositionId, createOp, origin.facilityId);
   _createStripInputEl.value = '';
@@ -493,7 +493,7 @@ async function _submitCreateStrip() {
   if (_createStripBindEl) _createStripBindEl.value = '';
   _pendingDuplicateCallsign = null;
   _setCreateStripMsg(
-    bindFdrId ? (origin.stripType === 'MISSION' ? `Fragging a mission line for ${boundCallsign || 'this flight'}…` : `Filing ${boundCallsign} against its ATO mission…`)
+    bindFlightDataId ? (origin.stripType === 'MISSION' ? `Fragging a mission line for ${boundCallsign || 'this flight'}…` : `Filing ${boundCallsign} against its ATO mission…`)
       : stereoRouteName ? `Creating (${stereoRouteName})…`
         : seed.route ? 'Creating (flight plan found)…'
           : 'Creating…',

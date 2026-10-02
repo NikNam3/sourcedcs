@@ -1,7 +1,7 @@
 'use strict';
 import { nlaLabelFor } from '../efsp-nla.js';
 import { sendEfspMutation } from '../efsp-ws.js';
-import { getEfspFdr, getEfspObligation, getEfspStrip } from '../efsp-state.js';
+import { getEfspFlightData, getEfspObligation, getEfspStrip } from '../efsp-state.js';
 import { BLOCK_MAPS, blockLabelFor, blockTitleFor, supersededAnnotationEntries } from '../strip-template.js';
 import { compactBlocksFor, mtrLostCommsAdvisory } from '../strip-fields.js';
 import { appendAtoExpandedRows } from '../ato-strip.js';
@@ -241,7 +241,7 @@ export function _appendExpandButton(container, strip) {
  * precisely because the chip is not telling the whole story.
  */
 function _expandedBlockIdsFor(strip, map) {
-  const onStrip = new Set(compactBlocksFor(strip.stripType, strip.ownerPositionId, getEfspFdr(strip.flightDataId)));
+  const onStrip = new Set(compactBlocksFor(strip.stripType, strip.ownerPositionId, getEfspFlightData(strip.flightDataId)));
   return Object.keys(map).filter((blockId) => {
     if (!onStrip.has(blockId)) return true;
     return typeof supersededAnnotationEntries === 'function'
@@ -259,7 +259,7 @@ export function _appendExpandedView(el, strip) {
   // the expanded view, for a flight with MTR data. Not a reason line and not
   // on the collapsed face — an MTR flight with working radios is not wrong
   // (docs/adr/0058).
-  const advisory = typeof mtrLostCommsAdvisory === 'function' ? mtrLostCommsAdvisory(getEfspFdr(strip.flightDataId)) : null;
+  const advisory = typeof mtrLostCommsAdvisory === 'function' ? mtrLostCommsAdvisory(getEfspFlightData(strip.flightDataId)) : null;
   if (blocks.length === 0 && !advisory) return;
 
   const panel = document.createElement('div');
@@ -279,7 +279,7 @@ export function _appendExpandedView(el, strip) {
     const label = document.createElement('span');
     label.className = 'efsp-expanded-label';
     label.textContent = blockLabelFor(blockId, strip.stripType) || blockId;
-    const labelTitle = typeof blockTitleFor === 'function' ? blockTitleFor(blockId, getEfspFdr(strip.flightDataId), strip) : null; if (labelTitle) label.title = labelTitle; // docs/adr/0073
+    const labelTitle = typeof blockTitleFor === 'function' ? blockTitleFor(blockId, getEfspFlightData(strip.flightDataId), strip) : null; if (labelTitle) label.title = labelTitle; // docs/adr/0073
     row.appendChild(label);
 
     const value = document.createElement('span');
@@ -319,7 +319,7 @@ export function _appendExpandedView(el, strip) {
 
 export function _buildStripEl(strip) {
   _setRestoredEditInThisStrip(false); // an open Block edit is restored into exactly one cell of this Strip
-  const flightData = getEfspFdr(strip.flightDataId);
+  const flightData = getEfspFlightData(strip.flightDataId);
   const el = document.createElement('div');
   el.className = 'efsp-strip';
   el.dataset.stripId = strip.stripId;

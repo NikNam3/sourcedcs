@@ -23,7 +23,7 @@ async function controller(browser, opts) {
 }
 
 const has = (page, callsign) => page.evaluate((cs) => getAllEfspStrips().some(s => {
-  const f = getEfspFdr(s.flightDataId); return f && f.identity.callsign === cs && s.state !== 'DROPPED';
+  const f = getEfspFlightData(s.flightDataId); return f && f.identity.callsign === cs && s.state !== 'DROPPED';
 }), callsign);
 
 test('a websocket killed mid-session reconnects, sends no resync, and converges through the connect snapshot', async ({ browser, page }) => {

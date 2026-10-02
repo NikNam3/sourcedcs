@@ -13,7 +13,7 @@ import { approachRwyCourseTrue } from './panels/airport-selector.js';
 import { updateTrackPanel } from './panels/track-panel.js';
 import { _aprtRwyTrueDeg, _aprtSelectedApt } from './panels/aprt-panel.js';
 import {
-  conformanceAlertsForFdr, getAllEfspConflicts, getEfspFdr, getEfspStrip, stcaConflictsForTrack, stripIdsForTrackId
+  conformanceAlertsForFlightData, getAllEfspConflicts, getEfspFlightData, getEfspStrip, conflictAlertsForTrack, stripIdsForTrackId
 } from './panels/efsp/efsp-state.js';
 import { getCorrelatedHighlightTrackId } from './panels/efsp/correlation-highlight.js';
 import { buildCarrierFinalLine } from './panels/efsp/carrier-panel.js';
@@ -48,11 +48,11 @@ const ALERT_COLOR_BAD = '#ff8a4c';
 const ALERT_COLOR_ATTN = '#e0a83c';
 
 /** The Strip-side flight record for a track, if it is correlated to one. */
-export function _fdrForTrack(trackId) {
+export function _flightDataForTrack(trackId) {
   if (typeof stripIdsForTrackId !== 'function' || typeof getEfspStrip !== 'function') return null;
   for (const stripId of stripIdsForTrackId(trackId)) {
     const strip = getEfspStrip(stripId);
-    const flightData = strip && getEfspFdr(strip.flightDataId);
+    const flightData = strip && getEfspFlightData(strip.flightDataId);
     if (flightData) return flightData;
   }
   return null;
@@ -74,9 +74,9 @@ function buildAssignedLine(flightData) {
 
 /** The one alert tag a data block leads with: a conflict first, then conformance. */
 function buildAlertTag(trackId, flightData) {
-  const conflicts = typeof stcaConflictsForTrack === 'function' ? stcaConflictsForTrack(trackId) : [];
+  const conflicts = typeof conflictAlertsForTrack === 'function' ? conflictAlertsForTrack(trackId) : [];
   if (conflicts.length) return { tag: 'CA', color: ALERT_COLOR_BAD };
-  const alerts = flightData && typeof conformanceAlertsForFdr === 'function' ? conformanceAlertsForFdr(flightData.flightDataId) : [];
+  const alerts = flightData && typeof conformanceAlertsForFlightData === 'function' ? conformanceAlertsForFlightData(flightData.flightDataId) : [];
   const bad = alerts.find(a => a.kind !== 'HEADING');
   if (bad && bad.kind === 'LEVEL_BUST') return { tag: `BUST${bad.deviationFt > 0 ? '+' : '−'}${Math.abs(bad.deviationFt)}`, color: ALERT_COLOR_BAD };
   if (bad && bad.kind === 'WRONG_WAY') return { tag: `ALT${bad.fpm < 0 ? '↓' : '↑'}`, color: ALERT_COLOR_BAD };
@@ -89,7 +89,7 @@ function buildAlertTag(trackId, flightData) {
  * Each short-term conflict drawn on the scope: both predicted paths, the line
  * between their closest points, and a marker there with the countdown.
  */
-function buildStcaOverlay() {
+function buildConflictAlertOverlay() {
   const features = [];
   const conflicts = typeof getAllEfspConflicts === 'function' ? getAllEfspConflicts() : [];
   const now = (id) => tracks.get(String(id)) || latestFromServer.get(String(id));
@@ -429,7 +429,7 @@ export function buildLabels() {
     const code     = trackCodeTag(t);
 
     // docs/adr/0058: what the flight was told, and anything it is doing wrong.
-    const flightData = air ? _fdrForTrack(id) : null;
+    const flightData = air ? _flightDataForTrack(id) : null;
     const { tag: alertTag, color: alertColor } = buildAlertTag(id, flightData);
     const asgnLine = csOnly ? '' : buildAssignedLine(flightData);
 
@@ -915,7 +915,7 @@ function _doUpdateMap() {
   map.getSource('range-ring').setData(buildRangeRing());
   map.getSource('ref-dot').setData(buildRefDot());
   map.getSource('efsp-correlation').setData(buildEfspCorrelationRing());
-  if (map.getSource('conflictAlert')) map.getSource('conflictAlert').setData(buildStcaOverlay());
+  if (map.getSource('conflictAlert')) map.getSource('conflictAlert').setData(buildConflictAlertOverlay());
   map.getSource('trails').setData(buildTrails());
   map.getSource('ppl').setData(buildPPL());
   // buildLabels first — it populates labelOffsets which buildLeaders depends on

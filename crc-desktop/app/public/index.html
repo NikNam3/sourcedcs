@@ -189,7 +189,7 @@
          built dynamically by efsp-panel.js's _refreshCreateStripAvailability
          from whichever Positions are actually signedOn right now — nothing
          static here. Hidden by default via the native `hidden` attribute. -->
-    <select id="efsp-create-strip-role" hidden></select>
+    <select id="efsp-create-strip-type" hidden></select>
     <!-- File by §9.10 short name (docs/adr/0050). Options come from
          crc-sync's GET /api/stereo-routes at panel init; hidden whenever
          that list is empty, which is the shipped state — the squadron
@@ -230,9 +230,9 @@
 
 <!-- Field state (guide §9.7, crc-sync docs/adr/0061). Its own panel: runways and gear are
      not Strips, so this is not the ops-runway-status Bay (docs/adr/0068). -->
-<div id="field-state-panel" class="dock-unmounted">
-  <div id="field-state-empty" class="efsp-empty">No field state at any Facility you can see.</div>
-  <div id="field-state-list"></div>
+<div id="runway-status-panel" class="dock-unmounted">
+  <div id="runway-status-empty" class="efsp-empty">No runway status at any Facility you can see.</div>
+  <div id="runway-status-list"></div>
 </div>
 
 <!-- METRICS (guide §11.5 + §11.4 traffic count, docs/adr/0072). Read-only;

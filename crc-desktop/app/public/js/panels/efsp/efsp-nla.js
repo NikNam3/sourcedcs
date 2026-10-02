@@ -23,7 +23,7 @@ export const NLA_LABELS = {
     TAXI:              'To Runway Queue',
     RUNWAY_QUEUE:      'Line Up and Wait',
     LUAW:              'Cleared for Takeoff',
-    DEPARTED:          'Hand Off to APP',
+    DEPARTED:          'Hand Off to AP',
     HANDED_OFF:        'Drop',
   },
   // [SOURCE-DEFINED] ARRIVAL lifecycle labels (docs/adr/0008).
