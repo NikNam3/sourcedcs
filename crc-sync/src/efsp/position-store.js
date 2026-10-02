@@ -1,21 +1,21 @@
 'use strict';
 
-// Position staffing — Primary/Observer, claim/request/release, the
-// covering chain, and self-coordination lookups (EFSPImplementationGuide.md
+// Position staffing — Primary/Observer, sign on/request/release, the
+// consolidation, and self-coordination lookups (EFSPImplementationGuide.md
 // §4.8, WP1A). Net-new: WP0 reconnaissance this session confirmed no
 // Position/role concept exists anywhere in crc-sync today — auth.js is
 // pure per-user Casdoor OAuth with no role selection, and CRCSYNC_COALITION
 // is one global env var, not per-controller (see surveillance/iff.js).
 //
 // Deliberately ephemeral, like TrackStore/CollaborativeStore — NOT part of
-// the durable persistence this Phase adds for Board/FDR state (ADR 0002).
+// the durable persistence this Phase adds for Board/flight data state (ADR 0002).
 // Guide §4.8.2 rule 5 is explicit: "Primary status is presence state...
 // and it MUST NOT enter the durable Mutation log." What IS durable is
-// `actingPositionId` stamped onto each Mutation by board-store.js/
+// `actingPositionId` stamped onto each Mutation by the Board (board/audit.js) and
 // mutation-log.js — never this store's own state.
 //
-// Positions are NOT signed into or derived from radar-station selection in
-// this implementation (guide's D-9 talks about stations, but Ground/
+// Positions are NOT signed on from or derived from radar-station selection in
+// this implementation (guide's D-9 talks about radar stations, but Ground/
 // Clearance Delivery have no associated radar at all) — see the
 // implementation plan's decision: a dedicated Position selector in
 // crc-desktop calls setSignedOnPositions() with the controller's full
@@ -25,11 +25,11 @@ const { WALL_CLOCK } = require('../mission-clock');
 
 class PositionStore {
   /**
-   * @param {string[]} positionIds — the fixed Position set, e.g. ['OPS','CD','GC','LC'] for Phase 1
-   * @param {object} consolidation — one-hop covering map, e.g. { CD:'GC', GC:'LC' } (guide §4.8.6's default chain, Phase-1-truncated at TWR since APP doesn't exist yet). A Position absent from this map (like OPS, and TWR itself) has no covering Position — matches the guide's own chain table, which never lists one for OPS either.
+   * @param {string[]} positionIds — the fixed Position set, e.g. ['OPS','CD','GC','LC'] (a Facility's Position set)
+   * @param {object} consolidation — one-hop consolidation map, e.g. { CD:'GC', GC:'LC' } (guide §4.8.6 rule 2's default consolidation, cut where the Facility ends). A Position absent from this map (like OPS) is consolidated nowhere — and OPS is on no chain in the guide's default either.
    */
   constructor(positionIds, consolidation, { clock = WALL_CLOCK } = {}) {
-    // The mission clock (docs/adr/0079) — `since` is who has held a Position
+    // The mission clock (docs/adr/0079) — `since` is who has been signed on at a Position
     // from when, which a controller reads as a time of day.
     this._clock = clock;
     this._positionIds = new Set(positionIds);
@@ -38,7 +38,7 @@ class PositionStore {
     for (const id of positionIds) {
       this._state.set(id, { primary: null, observers: [], pendingPrimaryRequest: null });
     }
-    this._sessions = new Map(); // controllerId -> Set(positionId) currently held
+    this._sessions = new Map(); // controllerId -> Set(positionId) currently signed on
   }
 
   isStaffed(positionId) {
@@ -61,10 +61,10 @@ class PositionStore {
   }
 
   /**
-   * Walks the covering chain to the end (guide §4.8.6 rule 3: "If the
-   * covering Position is also unstaffed, follow the chain to the end"),
+   * Walks the consolidation to its end (guide §4.8.6 rule 3: "If that
+   * Position is also unstaffed, follow the consolidation to its end"),
    * returning the first STAFFED Position found, or null if the chain
-   * bottoms out with nobody occupying any link (defect D19's boundary —
+   * bottoms out with nobody signed on at any link (defect D19's boundary —
    * callers must treat null distinctly from a stranding they failed to
    * detect, not silently swallow it).
    */
@@ -98,17 +98,17 @@ class PositionStore {
   }
 
   /**
-   * A controller declares the FULL set of Positions they hold this session
+   * A controller declares the FULL set of Positions they are signed on at this session
    * (the dedicated Position selector, not derived from radar stations —
-   * see the module comment). Diffs against what they previously held:
-   * newly-added Positions are claimed (Primary if unstaffed, else
-   * Observer); removed ones are released (§4.8.6 vacate handling, non-
+   * see the module comment). Diffs against what they were signed on at:
+   * newly-added Positions are signed on (Primary if unstaffed, else
+   * Observer); removed ones are signed off (§4.8.6 vacate handling, non-
    * abrupt — an Observer promotion, if any, is offered as an explicit
    * prompt by the caller, not auto-applied here; see releasePrimaryTo()).
    *
    * @returns {{signedOn:string[], vacated:string[]}} — `vacated` is what the
-   *   caller (index.js/efsp-ws.js) should check against board-store's
-   *   Strip counts to build the "this would strand N Strips" warning
+   *   caller (index.js/efsp-ws.js) should check against the Board's
+   *   (board-store.js) Strip counts to build the "this would strand N Strips" warning
    *   (guide §4.8.6 rule 5 — warn, never block).
    */
   setSignedOnPositions(controllerId, controllerName, signedOnPositionIds, now = this._clock.now()) {
@@ -144,7 +144,7 @@ class PositionStore {
         s.observers.push({ controllerId, controllerName, since: now });
       }
     }
-    // s.primary.controllerId === controllerId already: idempotent re-claim, no-op.
+    // s.primary.controllerId === controllerId already: idempotent re-sign-on, no-op.
   }
 
   /** An Observer requests Primary (guide §4.8.2 rule 3) — delivered to the current Primary; requires their release via releasePrimaryTo(). Never auto-promotes. */
@@ -198,7 +198,7 @@ class PositionStore {
     }
   }
 
-  /** Abrupt disconnect — releases every Position the controller held, auto-promoting where possible (guide §4.8.6 rule 1). */
+  /** Abrupt disconnect — signs the controller off every Position they were signed on at, auto-promoting where possible (guide §4.8.6 rule 1). */
   onDisconnect(controllerId) {
     const signedOn = this._sessions.get(controllerId) || new Set();
     for (const id of signedOn) this._signOff(controllerId, id, { abrupt: true });

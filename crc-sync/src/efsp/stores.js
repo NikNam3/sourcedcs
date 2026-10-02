@@ -16,7 +16,7 @@
 //             all = { facilities, stores, saved } (saved: the whole saved body).
 //
 // The body is written in registry order; it is restored in RESTORE_ORDER, which differs on purpose (the Boards are
-// written first, but restore after the FDRs and airspaces they refer to). The restore steps that cross stores
+// written first, but restore after the flight data and airspaces they refer to). The restore steps that cross stores
 // (_reconcileRestored, _reconcileLogTail) stay in index.js's _restore, after this loop.
 //
 // A future persisted-state `version` key and a per-store upgrade hook would go here (S3-4: not now).
@@ -45,7 +45,7 @@ const PRE_0058_CLEARANCE_BLOCKS = {
 const REGISTRY = [
   {
     key: 'boards',
-    // The per-Facility BoardStores are built in createEfsp's Facility loop; the "store" here is that Map.
+    // The per-Facility BoardStores (board-store.js) are built in createEfsp's Facility loop; the "store" here is that Map.
     build: ({ facilities }) => facilities,
     snapshot: (facilities) => {
       const boards = {};
@@ -54,7 +54,7 @@ const REGISTRY = [
     },
     restore: (facilities, data, { saved }) => {
       // Shape: { boards: { [facilityId]: boardSnapshot } }. Anything else is refused (ARCH-D5): the pre-WP4A
-      // `board` key, a Facility this server does not have, a Strip in a state its Role does not have.
+      // `board` key, a Facility this server does not have, a Strip in a state its strip type does not have.
       if (!data) {
         if (saved.board) throw new Error('[efsp] the Board snapshot is in the pre-WP4A shape (a top-level "board", no "boards"): delete state/efsp-board.json to start clean');
         return;
@@ -121,7 +121,7 @@ const REGISTRY = [
       flightDataExists: (flightDataId) => !!stores.flightData.getFlightData(flightDataId),
     }),
     snapshot: (s) => s.snapshot(),
-    // Correlation records after the FDRs, since restore() skips any whose FDR
+    // Correlation records after the flight data, since restore() skips any whose flight data
     // is gone. Every restored record comes back UNCORRELATED with its trackId
     // and its binding nulled — a persisted track id is a lie the moment the
     // process restarts, because DCS re-mints ids (docs/adr/0045).
@@ -147,7 +147,7 @@ const REGISTRY = [
         stores.flightData.setTofi(flightDataId, { separationRegime }, { by }),
     }),
     snapshot: (s) => s.snapshot(),
-    // MARSA relations after the FDRs too, and for the opposite reason to the
+    // MARSA relations after the flight data too, and for the opposite reason to the
     // correlation case above: a relation comes back INTACT, state and all. A
     // persisted track id is a lie after a restart because DCS re-mints ids; a
     // persisted MARSA relation names flightDataIds and records a verbal declaration a
@@ -159,7 +159,7 @@ const REGISTRY = [
   {
     key: 'runwayStatuses',
     audited: true,
-    // WP6 (docs/adr/0061), §9.7 — field state. One instance with
+    // WP6 (docs/adr/0061), §9.7 — runway status. One instance with
     // one record per Facility that has a runway inventory, for AirspaceStore's
     // reason — nothing about a runway is ever handed across a boundary.
     // Staffing is read lazily through `facilities`, the same
@@ -177,7 +177,7 @@ const REGISTRY = [
       },
     }),
     snapshot: (s) => s.snapshot(),
-    // Field state comes back INTACT for MARSA's reason (docs/adr/0061): a
+    // Runway status comes back INTACT for MARSA's reason (docs/adr/0061): a
     // runway suspended for runway works is still suspended after a
     // crc-sync restart, and coming back OPEN would hand the next controller a
     // lie. Reconciled against the inventory, like the airspaces.
@@ -202,7 +202,7 @@ const REGISTRY = [
     snapshot: (s) => s.snapshot(),
     // The carrier's Case and stack come back INTACT, MARSA's reasoning: they are
     // controller declarations, and a restart does not change what PriFly set.
-    // The banner is derived, so it is not restored; a stack entry whose FDR is
+    // The banner is derived, so it is not restored; a stack entry whose flight data is
     // gone is dropped without closing up (docs/adr/0074).
     restore: (s, data) => {
       s.restore(data);

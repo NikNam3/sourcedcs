@@ -2,10 +2,12 @@
 
 // The thresholds behind "detected airborne" and staleness (docs/adr/0076).
 //
+// [SOURCE-DEFINED] (docs/adr/0076) — every threshold (config/efsp-surveillance-hints.json)
+// is SOURCE's own choice, not doctrine: guide §10.4 says only "a configured threshold".
+//
 // A TUNING FILE (decisions.md P5): read ONCE, at module load, never written by
 // code. A change applies on restart. Invalid values warn and fall back to the
-// default PER FIELD. None of these is doctrine: guide §10.4 says only "a
-// configured threshold".
+// default PER FIELD.
 
 const fs = require('fs');
 const { readPath } = require('../state-paths');

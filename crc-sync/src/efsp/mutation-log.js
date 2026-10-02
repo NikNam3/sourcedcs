@@ -2,8 +2,8 @@
 
 // Append-only audit log for EFSP Mutations (guide §5.2, §11.3). New pattern
 // for crc-sync — see docs/adr/0002-durable-board-persistence.md. Nothing
-// else in this codebase keeps a durable, ever-growing log; theater-settings
-// .js/apt-config.js persist current *state* only, not history.
+// else in this codebase keeps a durable, ever-growing log; the other state/
+// files persist current *state* only, not history.
 //
 // Format: one JSON object per line (JSONL), append-only.
 //
@@ -39,9 +39,8 @@ function utcDay(ms) { return new Date(ms).toISOString().slice(0, 10); }
 function escapeRegExp(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
 // Overridable so tests exercise the append/read path against a temp file
-// instead of the real squadron-wide log — same pattern as theater-settings
-// .js's CRCSYNC_THEATER_SETTINGS_PATH.
-// Append-only audit state, so it lives in data/ rather than config/ — it was
+// instead of the real squadron-wide log (CRCSYNC_EFSP_MUTATION_LOG_PATH).
+// Append-only audit state, so it lives in state/ rather than config/ — it was
 // previously written into the image and committed to git (see state-paths.js).
 const MUTATION_LOG_PATH = writePath('efsp-mutations.jsonl', process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH);
 

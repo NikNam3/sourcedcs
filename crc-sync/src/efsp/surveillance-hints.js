@@ -49,12 +49,13 @@ const EXPECTS = Object.freeze({
 });
 
 // States that deliberately expect nothing.
+// [SOURCE-DEFINED] (docs/adr/0076) — which strip states expect neither ground nor air is our choice.
 const UNEXPECTING = Object.freeze({
   DEPARTURE: Object.freeze(['PROPOSED', 'PENDING_CLEARANCE', 'CLEARED', 'HELD', 'DROPPED']),
   ARRIVAL: Object.freeze(['DROPPED']),
   MISSION: Object.freeze(['TASKED', 'DROPPED']),
   OVERFLIGHT: Object.freeze(['DROPPED']),
-  // The carrier Roles (docs/adr/0074) expect nothing yet: "airborne" is judged against the nearest
+  // The carrier strip types (docs/adr/0074) expect nothing yet: "airborne" is judged against the nearest
   // airfield's elevation and footprint, which means nothing for a moving deck. Integration default
   // (S-M-L19); building a ship-relative phase is a supervisor decision.
   MARSHAL: Object.freeze(['LAUNCH', 'IN_STACK', 'COMMENCED', 'DROPPED']),

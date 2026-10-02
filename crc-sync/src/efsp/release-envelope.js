@@ -1,10 +1,13 @@
 'use strict';
 
 // Standing-release envelope matching (EFSPImplementationGuide.md §4.6.2,
-// docs/adr/0017) — "the agreement normally converts the per-flight call
-// into a standing release for a named envelope — a stereo route, at or
-// below an altitude, within a radius. Anything outside the envelope falls
-// back to a per-flight OPERATIONAL_REQUEST."
+// docs/adr/0017) — "The agreement normally converts the per-flight call into a
+// **standing release** for a named envelope — a stereo route, at or below an
+// altitude, within a radius. ... anything outside the envelope falls back to a
+// per-flight `OPERATIONAL_REQUEST`."
+//
+// [SOURCE-DEFINED] (docs/adr/0017, 0050) — the matching rules (short name first,
+// then route string, altitude, radius) are ours; the envelope idea is §4.6.2's.
 //
 // Pure predicate, injected into nla.js's ctx the same way
 // isFlightPlanValid/isVoidExpired already are — facility-config.js owns
@@ -15,7 +18,7 @@
 // `stereoRoute` now matches §9.10's filed short name first and the expanded
 // route string only as a fallback — see _matchesOne and docs/adr/0050. The
 // route table it names lives in stereo-routes.js; this module still knows
-// nothing about it, and deliberately: it compares two strings off the FDR.
+// nothing about it, and deliberately: it compares two strings off the flight data.
 
 /**
  * @param {object} flightData — matched on `filed.stereoRouteName` (preferred) / `filed.route` / `filed.requestedAltitude`
@@ -33,7 +36,7 @@ function _matchesOne(flightData, envelope) {
   let matchedSomething = false;
 
   if (envelope.stereoRoute) {
-    // Match the FILED SHORT NAME when the FDR carries one — that is the
+    // Match the FILED SHORT NAME when the flight data carries one — that is the
     // whole point of a stereo (§9.10), and docs/adr/0050 built the table
     // this criterion was written against but could not reach.
     //

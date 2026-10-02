@@ -1,9 +1,9 @@
 'use strict';
 
-// A controller types a time of day; the FDR stores an instant.
+// A controller types a time of day; the flight data stores an instant.
 //
 // Strip times are spoken and written as four-digit Zulu clock times with no
-// date ("exit at 32" → 1432). Every …Utc field on an FDR is epoch ms, so a
+// date ("exit at 32" → 1432). Every …Utc field on the flight data is epoch ms, so a
 // typed time has to be given a date. That date is the MISSION clock's
 // (docs/adr/0079, H11), never the wall clock's: a mission set on 2016-06-21 and
 // flown today must not land a 1432 on today's calendar.

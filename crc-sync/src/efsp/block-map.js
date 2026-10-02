@@ -1,12 +1,12 @@
 'use strict';
 
-// The Block Maps as data, per Strip Role (EFSPImplementationGuide.md §6.2,
+// The Block Maps as data, per strip type (EFSPImplementationGuide.md §6.2,
 // §6.3, §6.5) — "the Block Map MUST be data, not code." This is the
-// server-side copy: binds each Block ID to either an FDR field path or a
+// server-side copy: binds each Block ID to either a flight data field path or a
 // Strip annotation cell, and records which Blocks are ✱-required. The
 // client keeps an identical copy (strip-template.js) for rendering — kept
 // in sync by a shared binding-table fixture used by both sides' test
-// suites (efsp-block-map-parity.test.js), NOT by import: crc-sync and
+// suites (efsp-block-map-parity.test.mjs), NOT by import: crc-sync and
 // crc-desktop are separately deployed packages with separate build/Docker
 // contexts (the same reason src/auth.js is duplicated across services
 // rather than shared, per its own header comment).
@@ -16,12 +16,12 @@
 // leave its schema fields present and unpopulated rather than absent."
 //
 // Blocks 2 (revision), 4 (cid), 25 (state) and 26 (NLA) are system-derived
-// — not writable through the generic SetBlock path at all (board-store.js
-// manages rev/cid/state directly; NLA is computed, never stored). Block 3
+// — not writable through the generic SetBlock path at all (the Board
+// (board/) manages rev/cid/state directly; NLA is computed, never stored). Block 3
 // is a read-only composite render of several identity fields at once, and
 // Block 4A is a flag (strip.flags.removeIndicator), not a SetBlock target
-// in Phase 1 (DropStrip sets it directly). resolveBlockTarget() returns
-// null for all of these, matching board-store.js's "unknown blockId is a
+// (DropStrip sets it directly). resolveBlockTarget() returns
+// null for all of these, matching board/ops/set-block.js's "unknown blockId is a
 // VALIDATION_ERROR" behavior for anything not flightData/annotation-routed.
 
 const DEPARTURE_BLOCK_MAP = {
@@ -58,10 +58,10 @@ const DEPARTURE_BLOCK_MAP = {
   // one, and only the second reading gates an arrival on a runway's gear being
   // rigged) and 3G is a restricted enum. See flight-data-store.js's setMilitary().
   //
-  // Present on all three ATC Roles, not just DEPARTURE. docs/adr/0051's lesson
-  // was that a per-Role Block Map lets a rule hold on two Roles and silently
+  // Present on all three ATC strip types, not just DEPARTURE. docs/adr/0051's lesson
+  // was that a per-strip-type Block Map lets a rule hold on two strip types and silently
   // not on the third; an aircraft's hook and its ordnance are facts about the
-  // airframe, so there is no Role they stop being true for.
+  // airframe, so there is no strip type they stop being true for.
   '3F': { required: false, target: { kind: 'military', field: 'hookRequired' } },  // guide M15, §9.7
   '3G': { required: false, target: { kind: 'military', field: 'ordnanceState' } }, // guide M14, §9.5
   '4':  { required: true,  target: { kind: 'system' } },
@@ -92,7 +92,7 @@ const DEPARTURE_BLOCK_MAP = {
   // right section). It is NOT numbered M18 here, for two reasons: the
   // M-prefix namespace belongs to MISSION_BLOCK_MAP, which docs/adr/0026
   // froze with its own meanings (its M4 is the beacon, the guide's M4 is IFF
-  // Mode 1/2), and MISSION is the one Role that never files a stereo. '9F'
+  // Mode 1/2), and MISSION is the one strip type that never files a stereo. '9F'
   // instead, because sub-lettering a field onto its parent Block is this
   // codebase's actual convention ('3A'-'3E', '8A'/'8B', '9A'-'9E', '5A',
   // '14A'-'14D'), and a stereo route name IS Block 9's route, named.
@@ -117,7 +117,7 @@ const DEPARTURE_BLOCK_MAP = {
   // boolean; flight-data-store.js's normalizeMtrValue() says what each accepts. No
   // interlock tag on any of them: 9H-ALT is the pilot's REQUEST, and posting a
   // request issues nothing — the approval is written in ALT ('21'), which is
-  // tagged. On all three ATC Roles; none on MISSION (it shares the FDR).
+  // tagged. On all three ATC strip types; none on MISSION (it shares the flight data).
   '9G-MTR':   { required: false, target: { kind: 'flightData', path: 'military.mtr.designator' } },
   '9G-ENTRY': { required: false, target: { kind: 'flightData', path: 'military.mtr.entryFix' } },
   '9G-TIME':  { required: false, target: { kind: 'flightData', path: 'military.mtr.entryTimeUtc' } },
@@ -173,7 +173,7 @@ const DEPARTURE_BLOCK_MAP = {
   //
   // docs/adr/0058: both are the FLIGHT's clearance now, not Strip notes —
   // flightData.clearance.heading / .altitude, shared by every Position and both
-  // Facilities, so CTR's copy of a departure carries what APP assigned. Shown
+  // Facilities, so CTR's copy of a departure carries what AP assigned. Shown
   // as HDG and ALT; Block 7 above reads CRUS ALT (what was filed).
   '20': { required: false, target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' },
   '21': { required: false, target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' },
@@ -188,7 +188,7 @@ const DEPARTURE_BLOCK_MAP = {
   // WP4A (docs/adr/0018), §4.6.4 — airspace ownership as a direction. A
   // dedicated target kind, not 'flightData'/'annotation' — see resolveBlockTarget
   // below and flight-data-store.js's setAirspaceOwner() for why this can't be a
-  // generic FDR path (the "no boolean path" requirement needs a
+  // generic flight data path (the "no boolean path" requirement needs a
   // structurally distinct route, not just a documented convention).
   '24A': { required: false, target: { kind: 'airspace-owner' } },
   // WP4A second slice (docs/adr/0025), §4.6.3 — the three-field separation
@@ -223,7 +223,7 @@ const DEPARTURE_BLOCK_MAP = {
 // fuel is required and MUST survive any facility narrowing (enforced by
 // validateFacilityConfig below); destination/point-out/vector/speed are
 // each independently optional. Modelled as separate annotation-routed
-// Blocks (not one opaque composite) specifically so blockVisibility can
+// Blocks (not one opaque composite) specifically so a Facility's `hiddenBlocks` can
 // enforce that split per-Block, with no new validator logic needed.
 //
 // Blocks 20/21 are the guide's arrival radar-automation scratchpads
@@ -302,11 +302,11 @@ const ARRIVAL_BLOCK_MAP = {
 
 // [SOURCE-DEFINED] Overflight Block Map (docs/adr/0023) — a flight
 // transiting this Facility's airspace without landing or departing here at
-// all (guide §2's Strip Role list; §6.3's only Overflight-specific note is
+// all (guide §2's strip type list; §6.3's only Overflight-specific note is
 // that it shares Blocks 20/21's radar scratchpads with ARRIVAL — no fuller
 // field table is published anywhere in the guide, so per §0.2 discipline
 // this mirrors ARRIVAL_BLOCK_MAP's general shape rather than transcribing
-// doctrine that doesn't exist). Reuses existing generic FDR paths instead
+// doctrine that doesn't exist). Reuses existing generic flight data paths instead
 // of adding new ones: '8'/'8B' (departureAirport/destinationAirport) here
 // mean the flight's REAL origin/destination — never Incirlik, since an
 // overflight strip only exists at all because it isn't landing or
@@ -331,7 +331,7 @@ const OVERFLIGHT_BLOCK_MAP = {
   '7':  { required: true,  target: { kind: 'flightData', path: 'filed.requestedAltitude' } },
   // [SOURCE-DEFINED] WP6 (docs/adr/0051) — OVERFLIGHT had NO Block carrying an
   // ATC course or altitude assignment, which made §9.2 rule 2's interlock
-  // silently unreachable for one Strip Role: a MARSA participant transiting on
+  // silently unreachable for one strip type: a MARSA participant transiting on
   // an OVERFLIGHT Strip could be vectored or climbed with nothing voiding the
   // relation. The acceptance criterion would have passed on DEPARTURE and
   // ARRIVAL and quietly not held here.
@@ -342,7 +342,7 @@ const OVERFLIGHT_BLOCK_MAP = {
   // ('3A'-'3E', '8A'/'8B', '9A'-'9F', '5A', '14A'-'14D'): '7A' is Block 7's
   // altitude, assigned rather than requested. Numbered '7A' and not plain '7'
   // because OVERFLIGHT's Block 7 already means filed.requestedAltitude here and
-  // ARRIVAL's does not — the two Roles genuinely differ, and collapsing them
+  // ARRIVAL's does not — the two strip types genuinely differ, and collapsing them
   // would be the field-reuse mistake docs/adr/0023 avoided for '8'/'8B'.
   //
   // Same [SOURCE-DEFINED] basis as OVERFLIGHT_BLOCK_MAP's whole existence: the
@@ -381,7 +381,7 @@ const OVERFLIGHT_BLOCK_MAP = {
 };
 
 // [SOURCE-DEFINED] WP4A second slice (docs/adr/0026) — the MISSION Strip
-// Role's Block Map, drawn from the guide's own "military extension
+// Strip type's Block Map, drawn from the guide's own "military extension
 // namespace" instruction (§9.8), NOT a DEPARTURE/ARRIVAL field-reuse the
 // way OVERFLIGHT's was (docs/adr/0023) — a mission line is keyed by
 // mission number/package ID, not callsign/beacon, per the guide's own
@@ -416,7 +416,7 @@ const MISSION_BLOCK_MAP = {
   // Ordnance state on the mission line too (decisions.md H55, docs/adr/0069): a
   // pilot reports hung ordnance to whoever they are talking to, and inbound from
   // a tasking that is the tactical Position. It is the same field — the MISSION
-  // Strip and its ATC twin share one FDR — so this adds a second surface onto
+  // Strip and its ATC twin share one flight data — so this adds a second surface onto
   // one fact, not a second fact. The hook requirement (3F) stays off: it gates
   // a runway, which a mission line never uses.
   '3G': { required: false, target: { kind: 'military', field: 'ordnanceState' } }, // guide M14, §9.5
@@ -467,7 +467,7 @@ const MARSHAL_BLOCK_MAP = {
   'C13': { required: false, target: { kind: 'carrier', field: 'bingoField' } },
   'C14': { required: false, target: { kind: 'carrier', field: 'bingoFuelLb' } },
   'C15': { required: false, target: { kind: 'carrier', field: 'eeatUtc' } }, // writable on the LAUNCH Strip too
-  // Free note, annotation-routed like every Role's remarks cell.
+  // Free note, annotation-routed like every strip type's remarks cell.
   'C24': { required: false, target: { kind: 'annotation' } },
   ..._CARRIER_CHROME,
 };
@@ -526,7 +526,7 @@ const BLOCK_MAPS = {
  * `blockId: null` means RESERVED, not undecided — the id is spoken for and
  * lands with that field's own deliverable. A row whose guide number covers
  * several fields names them with `blocks` instead — `{ blockId: path }`, one
- * plain 'flightData' Block per leaf, on every ATC Role (M10/M11, docs/adr/0062). A
+ * plain 'flightData' Block per leaf, on every ATC strip type (M10/M11, docs/adr/0062). A
  * row has one or the other, never both, and never a wildcard. Nothing reads this table at
  * runtime; it is documentation that a test can assert against, which is what
  * stops it drifting the way a comment would.
@@ -564,7 +564,7 @@ const MILITARY_BLOCK_NAMESPACE = {
 // question" in a new costume. When §9.8's mission line grows richer (WP7),
 // that is the ADR that should settle it.
 
-/** Every Strip Role this facility's Block Map data actually defines — board-store.js's CreateStrip validation calls this so an unknown role is a VALIDATION_ERROR, not a silent fallback. */
+/** Every strip type this facility's Block Map data actually defines — board/ops/create-strip.js's CreateStrip validation calls this so an unknown strip type is a VALIDATION_ERROR, not a silent fallback. */
 function isValidStripType(stripType) {
   return Object.prototype.hasOwnProperty.call(BLOCK_MAPS, stripType);
 }
@@ -576,8 +576,8 @@ function requiredBlocksFor(stripType) {
 }
 
 /**
- * Resolves a Block ID to a SetBlock routing target for board-store.js's
- * applyMutation(): { kind:'flightData', path } for an FDR field, { kind:
+ * Resolves a Block ID to a SetBlock routing target for board/ops/set-block.js's
+ * _applySetBlock: { kind:'flightData', path } for a flight data field, { kind:
  * 'annotation' } for a Strip annotation cell, or null for anything not
  * writable through the generic SetBlock path (system/composite/flag
  * Blocks, or an unknown Block ID / stripType).
@@ -606,7 +606,7 @@ function resolveBlockTarget(stripType, blockId) {
   // kind, `field` carrying which key of one sub-object this Block writes.
   if (def.target.kind === 'military') return { kind: 'military', field: def.target.field };
   // docs/adr/0058 — the flight's assigned altitude or heading, through
-  // flight-data-store.js's setClearance(), which keeps §3.7's history on the FDR.
+  // flight-data-store.js's setClearance(), which keeps §3.7's history on the flight data.
   if (def.target.kind === 'clearance') return { kind: 'clearance', field: def.target.field };
   // docs/adr/0074 — a flight's own carrier fields (EEAT, approach, button,
   // bingo, low state), through flight-data-store.js's setCarrier(). The kind
@@ -621,12 +621,12 @@ function resolveBlockTarget(stripType, blockId) {
  * issuing a course or an altitude assignment?
  *
  * @returns {'COURSE'|'ALTITUDE'|null} null for every Block that is neither,
- *   and for an unknown Block ID or Role.
+ *   and for an unknown Block ID or strip type.
  *
- * Read by board-store.js's _applySetBlock, which hands a non-null answer to
+ * Read by board/ops/set-block.js's _applySetBlock, which hands a non-null answer to
  * marsa-store.js's voidForAssignment. Deliberately a Block Map lookup and not a
  * list of ids held in marsa-store.js: the Block Map is the one place that knows
- * what a Block MEANS, it is per-Role (ARRIVAL's Block 7 is an assigned altitude
+ * what a Block MEANS, it is per-strip-type (ARRIVAL's Block 7 is an assigned altitude
  * and DEPARTURE's Block 7 is a filed request — the same id, opposite answers),
  * and a parallel list kept elsewhere is docs/adr/0041's frozen inclusion list
  * in a new costume.
@@ -637,7 +637,7 @@ function interlockFor(stripType, blockId) {
   return (def && def.interlock) || null;
 }
 
-/** Every Block, per Role, that interlockFor() answers non-null for — used by the test that holds each Role to having the coverage docs/adr/0051 claims. */
+/** Every Block, per strip type, that interlockFor() answers non-null for — used by the test that holds each strip type to having the coverage docs/adr/0051 claims. */
 function interlockBlocks(stripType) {
   const map = BLOCK_MAPS[stripType] || {};
   return Object.entries(map).filter(([, def]) => def.interlock).map(([id]) => id);

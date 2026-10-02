@@ -15,7 +15,7 @@
 // lands at the Facility's own airfield (H33), and the hour a record lands in
 // (the drop, not the takeoff or landing minute).
 //
-// Fed by MutationLog.onRecord — never by board-store.js, which it does not
+// Fed by MutationLog.onRecord — never by the Board (board-store.js), which it does not
 // touch. Reconciles against the same log (WP8 acceptance bullet 3): one pure
 // predicate pair (isDropTransition/isUndoOfDrop) and one pure countability
 // rule, used by both the live listener and reconcileTrafficCount().
@@ -40,11 +40,11 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * The states a Strip must have been in, just before its drop, to be traffic.
- * EVERY Role must have an entry — a test holds this table to nla.js's
- * STATES_BY_STRIP_TYPE, so a new Role (L17's carrier roles) forces a decision
+ * EVERY strip type must have an entry — a test holds this table to nla.js's
+ * STATES_BY_STRIP_TYPE, so a new strip type (L17's carrier strip types) forces a decision
  * instead of silently vanishing from the count (the ADR 0041 argument).
  */
-// Each Role family's `countablePreDropStates` and `excludedWhenNotCountable`
+// Each strip type family's `countablePreDropStates` and `excludedWhenNotCountable`
 // (authority/strip-types/<role>.js), frozen here as before.
 const COUNTABLE_PRE_DROP_STATES = Object.freeze(Object.fromEntries(
   Object.entries(authority.COUNTABLE_PRE_DROP_STATES).map(([stripType, states]) => [stripType, Object.freeze([...states])])));
@@ -95,7 +95,7 @@ function countability(before, after) {
   const coord = after && after.coordination;
   if (coord && coord.state === 'REJECTED' && coord.mintedForCoordination) {
     // A replica the receiving Facility declined: the flight never became
-    // this Facility's traffic (board-store.js _isRejectedReplica).
+    // this Facility's traffic (board/strip-ops.js's rejectedReplicaRefusal).
     return { counted: false, excludedReason: 'REJECTED_REPLICA' };
   }
   const states = COUNTABLE_PRE_DROP_STATES[stripType];
@@ -227,7 +227,7 @@ function _sameValue(a, b) {
  * the log's oldest retained entry (the count outlives the log: 400 days vs 30).
  *
  * Only log-derivable fields are compared (RECONCILED_FIELDS). Locality,
- * formation, aircraft type and alert scramble come from the FDR, which the
+ * formation, aircraft type and alert scramble come from the flight data, which the
  * log does not carry; the classifier's unit tests cover those instead.
  */
 function reconcileTrafficCount(logEntries, countEntries, { from = null, to = null } = {}) {
@@ -404,7 +404,7 @@ class TrafficCount {
 
   /**
    * The latches only matter for Strips still live, and both come back at
-   * boot: SUA from the retained log's approvals, scramble from the FDR as it
+   * boot: SUA from the retained log's approvals, scramble from the flight data as it
    * is now (there is no history of alertStatus anywhere to replay).
    */
   _rebuildLatches() {
@@ -492,9 +492,9 @@ class TrafficCount {
   }
 
   /**
-   * Freezes a record from the log entry plus the FDR as it is RIGHT NOW (the
-   * FDR outlives the Strip and keeps changing, T5). Backfill is the one case
-   * that uses a later FDR, and says so.
+   * Freezes a record from the log entry plus the flight data as it is RIGHT NOW (the
+   * Flight data outlives the Strip and keeps changing, T5). Backfill is the one case
+   * that uses a later flight data, and says so.
    */
   _buildRecord(entry, { backfilled, sua }) {
     const base = logDerivedRecord(entry, sua || this._sua.get(entry.stripId));
@@ -505,7 +505,7 @@ class TrafficCount {
     const facilityId = entry.facilityId || this._facilityOf(entry.stripId) || 'UNKNOWN';
     const identity = (flightData && flightData.identity) || {};
     const flightSize = Number.isInteger(identity.flightSize) && identity.flightSize > 0 ? identity.flightSize : 1;
-    // An FDR that is gone (archived after the drop — wave 2's L24, S-R2-13)
+    // The flight data that is gone (archived after the drop — wave 2's L24, S-R2-13)
     // leaves nothing to classify by: UNKNOWN, and say why.
     const { locality, localityBasis } = flightData
       ? classifyLocality(strip, flightData, this._homeAirports[facilityId])
@@ -518,7 +518,7 @@ class TrafficCount {
       flightDataId: strip.flightDataId || null,
       facilityId,
       stripType: base.stripType,
-      // The FDR's controller-entered callsign — never a DCS track's (ADR 0059).
+      // The flight data's controller-entered callsign — never a DCS track's (ADR 0059).
       callsign: identity.callsign || null,
       droppedAt: base.droppedAt,
       hourUtc: base.hourUtc,
@@ -575,7 +575,7 @@ class TrafficCount {
   /**
    * Runs the reconciliation against the retained log; with `backfill`, a
    * drop the log has and the count lacks is written now, classified from the
-   * log entry and the CURRENT FDR, marked `backfilled: true`. Extra and
+   * log entry and the CURRENT flight data, marked `backfilled: true`. Extra and
    * mismatched records are warned and kept — a record is never deleted
    * because the log lost something.
    */

@@ -3,29 +3,32 @@
 // Archiving finished flights (docs/adr/0082; decisions.md H36, S-R2-13).
 //
 // Nothing used to leave memory: a DROPPED Strip stayed in its Board's _strips
-// forever, its FDR stayed in the FlightDataStore, and both went into every snapshot.
+// forever, its flight data stayed in the FlightDataStore, and both went into every snapshot.
 // L6's 4-hour soak measured it: the snapshot grew from 23 KB to 470 KB and a
 // Mutation's p50 from 0.8 to 13 ms. The rules, exactly as S-R2-13 fixed them:
 //
 //   1. A Strip is archived when it is DROPPED and either 2 h of wall time have
 //      passed since its drop or the mission session rolls over (F3, ADR 0086),
 //      and L5's traffic count has its record.
-//   2. An FDR is archived only if it had a Strip and every Strip that
+//   2. The flight data is archived only if it had a Strip and every Strip that
 //      referenced it is DROPPED or archived: it goes in the sweep that archives
-//      its last Strip. An FDR that never had a Strip is never touched.
+//      its last Strip. The flight data that never had a Strip is never touched.
 //   3. Mission change archives everything DROPPED and counted, whatever its age.
 //   4. Nothing archived can be undone.
 //
 // "Archived" means gone from memory and from the snapshot. The Mutation log
 // keeps the history, with one `Archive` line per Strip and one `ArchiveFlightData`
-// line per FDR. There is no archive file.
+// line per flight data. There is no archive file.
 //
-// This module decides WHEN; BoardStore.archiveStrip and FlightDataStore.archiveFlightData
-// do it. The caller persists and broadcasts what a sweep returns (server.js).
+// This module decides WHEN; BoardStore.archiveStrip (board-store.js, via board/persistence.js) and
+// FlightDataStore.archiveFlightData do it. The caller persists and broadcasts what a sweep returns (app.js).
 
-/** H36: two hours. A decision, not tuning, so a constant rather than a config file. */
 const log = require('../log').logger('efsp:archiver');
 
+/**
+ * [SOURCE-DEFINED] (H36, docs/adr/0082) — two hours after a Strip is finished is
+ * the human's decision, not tuning, so a constant rather than a config file.
+ */
 const ARCHIVE_AFTER_MS = 2 * 60 * 60 * 1000;
 
 class Archiver {
@@ -57,7 +60,7 @@ class Archiver {
     this._warnedNoCounter = false;
   }
 
-  /** Wired by server.js to the traffic count (L5), which is built outside createEfsp. */
+  /** Wired by app.js to the traffic count (L5), which is built outside createEfsp. */
   setIsCounted(fn) { this._isCounted = fn; }
 
   /**
@@ -97,8 +100,8 @@ class Archiver {
       if (archived.length) result.stripsByFacility[facilityId] = archived;
     }
 
-    // Rule 2: an FDR goes only when no Strip on any Board — live, or DROPPED
-    // and not archived yet — still references it (TOFI's shared FDR, T1).
+    // Rule 2: the flight data goes only when no Strip on any Board — live, or DROPPED
+    // and not archived yet — still references it (TOFI's shared flight data, T1).
     if (candidateFlightDataList.size) {
       const referenced = new Set();
       for (const facilityId of this._facilityIds) {
@@ -119,7 +122,7 @@ class Archiver {
       }
     }
 
-    // What pointed at an archived FDR goes with it. Both only ran at restore
+    // What pointed at an archived flight data goes with it. Both only ran at restore
     // before (index.js _reconcileRestored).
     if (result.flightDataIds.length) {
       if (this._marsaStore) result.relations = this._marsaStore.evictMissingFlightDataList();
@@ -147,8 +150,8 @@ function sweepChanged(r) {
 /**
  * The board-deltas that tell clients about a sweep: one per Facility whose
  * ring advanced, so every client's boardSeq stays continuous (T5), each
- * carrying the archived FDR ids — the FlightDataStore is shared across Facilities
- * and a client holds every FDR, whichever Facility it works. The archived
+ * carrying the archived flight data ids — the FlightDataStore is shared across Facilities
+ * and a client holds every flight data, whichever Facility it works. The archived
  * Strips were already DROPPED, so their `gone` is a no-op on a client that
  * saw the drop; it matters to one that missed it.
  * @returns {{facilityId:string, boardSeq:number, gone:string[], flightDataListGone:string[]}[]}

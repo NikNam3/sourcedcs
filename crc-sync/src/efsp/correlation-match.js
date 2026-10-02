@@ -18,7 +18,7 @@
 //
 //   - The beacon rung matches the code the transponder is SENDING
 //     (surveillance/transponder.js, injected as `beaconOf`): nothing when it
-//     is off, and never an AI's synthetic code, which no FDR can hold.
+//     is off, and never an AI's synthetic code, which no flight data can hold.
 //   - The callsign rungs match the RAW DCS unit callsign, which is what a
 //     pilot files, and never the label a controller sees. The label comes
 //     from correlation itself (the Strip's callsign) or from a controller's
@@ -91,7 +91,7 @@ function callsignAffinity(flightDataCallsign, trackCallsign) {
 
 /**
  * Per-tick lookup tables over the live tracks, built once rather than
- * re-scanned per FDR — this is what keeps the reconciler O(tracks + flightDataList).
+ * re-scanned per flight data — this is what keeps the reconciler O(tracks + flightDataList).
  *
  * Both are one-to-MANY on purpose. A duplicate beacon code is structural and
  * explicitly accepted (§3.10.2 rule 7: "duplicate codes raise an alert, never

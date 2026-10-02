@@ -4,9 +4,11 @@
 // hour buckets and the traffic-count records are kept, and which airfields are
 // "home" to each Facility for the §11.4 local/transient split.
 //
-// Every value here is a SOURCE policy choice, not doctrine. Guide §11.3 is
-// explicit that the audit retention must be configurable rather than encode
-// any one number; 30 days is ours.
+// [SOURCE-DEFINED] (docs/adr/0065) — every value here (retention of 30 / 30 /
+// 400 days, and the home airfields, e.g. INCIRLIK: LTAG) is a SOURCE policy
+// choice, not doctrine. Guide §11.3 is explicit that the audit retention must be
+// configurable rather than encode any one number (and D-6 says retention is not
+// a requirement); the figures, 400 days included, are ours.
 //
 // A TUNING FILE (decisions.md P5): read ONCE, at module load, and never
 // written by code. A change applies on restart only. There is deliberately no
