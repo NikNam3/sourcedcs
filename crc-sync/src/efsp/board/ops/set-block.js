@@ -1,6 +1,6 @@
 'use strict';
 
-const { MAX_FREE_TEXT } = require('../../fdr-store');
+const { MAX_FREE_TEXT } = require('../../flight-data-store');
 const { _frequencyFromBlockValue } = require('../strip-util');
 
 function _applySetBlock(ctx, strip, op, by, actingPositionId, clientMutationId) {

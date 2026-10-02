@@ -53,7 +53,7 @@ import { _setPendingConvertStripId } from './bay-view.js';
 import { scrambleAlertsFor } from './scramble.js';
 import { convertStripToArrival, efspVisibleBayId, noteEfspArrivalShown } from './efsp-panel.js';
 import { arJoinFor, atoAlertsFor, isArHighlighted } from './ato-strip.js';
-import { fieldStateAlertsFor } from './field-state-rules.js';
+import { fieldStateAlertsFor } from './runway-status-rules.js';
 import { settings } from '../../app.js';
 
 export const ROLE_ABBR = { DEPARTURE: 'DEP', ARRIVAL: 'ARR', OVERFLIGHT: 'OVF', MISSION: 'MSN', MARSHAL: 'MAR', FINAL: 'FNL', PATTERN: 'PAT' };

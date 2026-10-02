@@ -1848,7 +1848,7 @@ test('a pointer pick still commits on change — that gesture IS the choice', as
 test('"—" is offered only where the server accepts a clear, and clears with ""', async () => {
   // F-206: "—" was offered on all six enum Blocks and did nothing on any of
   // them — the change handler returned early on an empty value. Only RSVC and
-  // SREG accept a clear; fdr-store.js's setTofi() normalizes the '' a <select>
+  // SREG accept a clear; flight-data-store.js's setTofi() normalizes the '' a <select>
   // sends to null, so "cleared" has one spelling server-side.
   // strip-template.js's ENUM_CLEARABLE_BLOCKS carries the per-Block answer.
   const held = ['CTR'];

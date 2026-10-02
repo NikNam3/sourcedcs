@@ -44,7 +44,7 @@ const log = require('../log').logger('efsp:board-store');
 
 class BoardStore {
   /**
-   * @param {import('./fdr-store').FdrStore} fdrStore
+   * @param {import('./flight-data-store').FdrStore} fdrStore
    * @param {object} rules
    * @param {(blockId:string, role:string) => {kind:'fdr',path:string}|{kind:'annotation'}|null} rules.resolveBlockTarget
    * @param {(bayId:string) => string|null} rules.bayHoldsRole the Role a Bay is reserved for (docs/adr/0087), or null

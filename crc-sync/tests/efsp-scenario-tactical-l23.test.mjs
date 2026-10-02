@@ -27,7 +27,7 @@ const facilityConfig = (await import('../src/efsp/facility-config.js')).default;
 const permission = await import('../src/efsp/permission.js');
 const { BoardStore } = await import('../src/efsp/board-store.js');
 import { fullRules } from "./helpers/full-rules.mjs";
-const { FdrStore } = await import('../src/efsp/fdr-store.js');
+const { FdrStore } = await import('../src/efsp/flight-data-store.js');
 const {
   crew, hold, act, mustAct, jumpTo, advance, DEPARTURE_FDR, airborneDeparture, handedToCenter,
 } = await import('./helpers/efsp-scenario.mjs');

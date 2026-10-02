@@ -4,7 +4,7 @@
 // and TOFI (§4.6.3). The tables now live in the authority registry (S3-2):
 // the primitive and TOFI effect tables in authority/primitives.js, and each
 // Role's coordination/TOFI eligibility in its Role family
-// (authority/roles/<role>.js), composed in authority/index.js. This module is
+// (authority/strip-types/<role>.js), composed in authority/index.js. This module is
 // their facade and exports exactly what it exported before; it is injected
 // into board-store.js as `rules.coordinationEffect` &c from index.js.
 

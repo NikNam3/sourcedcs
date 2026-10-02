@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
  */
 
 const { CorrelationStore, MATCH_KEYS } = await import('../src/efsp/correlation-store.js');
-const { MAX_FREE_TEXT } = await import('../src/efsp/fdr-store.js');
+const { MAX_FREE_TEXT } = await import('../src/efsp/flight-data-store.js');
 
 const FDR = 'fdr-1';
 

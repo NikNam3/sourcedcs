@@ -446,7 +446,7 @@ test('an envelope naming the EXPANDED route does not release a flight filed unde
 });
 
 test('amending a stereo flight\'s route puts it back outside the envelope — the label cleared with the route', () => {
-  // fdr-store.js's setField clears filed.stereoRouteName on a route
+  // flight-data-store.js's setField clears filed.stereoRouteName on a route
   // amendment; this is what that clearing is FOR. Modelled here as the
   // post-amendment FDR the store would have produced.
   const amended = makeFdr({

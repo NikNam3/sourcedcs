@@ -147,9 +147,9 @@ test('advisories: crowded final and long in pattern; never anything that refuses
 });
 
 test('a closed or suspended runway with aircraft in the pattern is advised, an empty pattern is not', () => {
-  assert.ok(P.patternBoardModel({ legs: P.RSU_LEGS, strips, nowS: 1000, runwayStatus: 'SUSPENDED' })
+  assert.ok(P.patternBoardModel({ legs: P.RSU_LEGS, strips, nowS: 1000, runwayOpenStatus: 'SUSPENDED' })
     .advisories.some(a => a.kind === 'RUNWAY_NOT_OPEN'));
-  assert.deepEqual(P.patternBoardModel({ legs: P.RSU_LEGS, strips: [], nowS: 1000, runwayStatus: 'CLOSED' }).advisories, []);
+  assert.deepEqual(P.patternBoardModel({ legs: P.RSU_LEGS, strips: [], nowS: 1000, runwayOpenStatus: 'CLOSED' }).advisories, []);
 });
 
 test('a Strip whose rack is not a leg is shown as UNPLACED, never hidden', () => {

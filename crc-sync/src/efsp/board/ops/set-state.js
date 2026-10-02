@@ -1,6 +1,6 @@
 'use strict';
 
-const { runwayInhibitFor, RUNWAY_GATED_STATES } = require('../../field-state');
+const { runwayInhibitFor, RUNWAY_GATED_STATES } = require('../../runway-status');
 
 /**
  * SetState is owner-checked (decisions.md S-R2-14, docs/adr/0080, B7). Until

@@ -20,7 +20,7 @@
 // store never calls setFacilityConfig and never writes a config file.
 //
 // The pure rules (status machine, runway resolution, inhibit wording, the
-// into-wind end) are field-state.js's; this file applies them to records.
+// into-wind end) are runway-status.js's; this file applies them to records.
 //
 // Rule 5's deliberate deviation: field state rides its OWN sequence
 // (`currentSeq`, sent as `fieldStateSeq`) and its own efsp-field-state-delta,
@@ -34,7 +34,7 @@ const permission = require('./permission');
 const {
   canGo, buildStatusView, activeEndIntoWind, isRunwayChangeInProgress, isRunwayChangeOpen,
   REQUEST_ACTIONS,
-} = require('./field-state');
+} = require('./runway-status');
 const log = require('../log').logger('efsp:field-state-store');
 
 function deepClone(obj) { return obj === undefined ? undefined : JSON.parse(JSON.stringify(obj)); }

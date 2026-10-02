@@ -45,7 +45,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * instead of silently vanishing from the count (the ADR 0041 argument).
  */
 // Each Role family's `countablePreDropStates` and `excludedWhenNotCountable`
-// (authority/roles/<role>.js), frozen here as before.
+// (authority/strip-types/<role>.js), frozen here as before.
 const COUNTABLE_PRE_DROP_STATES = Object.freeze(Object.fromEntries(
   Object.entries(authority.COUNTABLE_PRE_DROP_STATES).map(([role, states]) => [role, Object.freeze([...states])])));
 

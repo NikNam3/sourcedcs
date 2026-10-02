@@ -26,12 +26,12 @@
 // the parser guessed.
 //
 // Pure: requires only usmtf-time.js and ../code-allocator (itself pure).
-// Deliberately NOT fdr-store.js — it reads config at require time.
+// Deliberately NOT flight-data-store.js — it reads config at require time.
 
 const { isDtgShaped } = require('./usmtf-time');
 const { isValidCodeFormat, isReserved, isSynthetic } = require('../code-allocator');
 
-// Duplicates fdr-store.js:67's CALLSIGN_RE (§3.2 rule 1), after upper-casing.
+// Duplicates flight-data-store.js:67's CALLSIGN_RE (§3.2 rule 1), after upper-casing.
 // Not required from there (load-time I/O); the parity test in
 // tests/efsp-ato-acceptance.test.mjs proves createFdr refuses what this refuses.
 const CALLSIGN_RE = /^[A-Z0-9]{1,7}$/;

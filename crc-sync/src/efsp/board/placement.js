@@ -9,7 +9,7 @@
 // still on the facade).
 
 const { keyBetween, rebalance, needsRebalance } = require('../order-key');
-const { runwayRackFor } = require('../field-state');
+const { runwayRackFor } = require('../runway-status');
 
 class Placement {
   /**
@@ -17,7 +17,7 @@ class Placement {
    * @param {import('./board-state').BoardState} deps.state
    * @param {object} deps.rules the Board's rules
    * @param {{now: () => number}} deps.clock the mission clock
-   * @param {import('../fdr-store').FdrStore} deps.fdrStore
+   * @param {import('../flight-data-store').FdrStore} deps.fdrStore
    * @param {(stripId: string) => void} deps.touch
    * @param {(bayId: string, rackId: string, excludeStripId: string|null) => void} deps.rebalanceRack
    * @param {(strip: object, toState: string) => object|null} deps.rejectedReplicaRefusal

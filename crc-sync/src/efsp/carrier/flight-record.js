@@ -14,7 +14,7 @@
 // So these fields live on the FDR, in docs/adr/0052's single military
 // namespace, as one sub-object: `fdr.military.carrier` (the way §9.4's MTR
 // fields are `fdr.military.mtr`). Round-1 question Q63, supervisor default
-// (a). L17 adds it to fdr-store.js's defaultMilitary(); this module defines the
+// (a). L17 adds it to flight-data-store.js's defaultMilitary(); this module defines the
 // shape, the validators and the restore normaliser.
 //
 // Provenance:
@@ -128,7 +128,7 @@ function setCarrierFlightField(flight, field, value) {
 /**
  * Restore path, and the read path for an FDR from before L17 wired this in:
  * a missing namespace or key becomes its default (§12's "present and
- * unpopulated" promise — fdr-store.js's ensureMilitary reasoning); an invalid
+ * unpopulated" promise — flight-data-store.js's ensureMilitary reasoning); an invalid
  * value becomes null; unknown keys are dropped. A valid set EEAT is never
  * cleared.
  */

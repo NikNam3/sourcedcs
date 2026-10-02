@@ -3,7 +3,7 @@
 // THE AUTHORITY REGISTRY (S3-2, docs/adr/0095; plan §2.4). Who may do what,
 // and how each Role's lifecycle runs, in one place.
 //
-//  - A Role family (`roles/<role>.js`) is one Strip Role: its states, initial
+//  - A Role family (`strip-types/<role>.js`) is one Strip Role: its states, initial
 //    state, NLA, state owners, countable states, replica state on receipt,
 //    sender state on accept, and coordination/TOFI eligibility.
 //  - A Position family (`positions/<family>.js`) is a group of Positions: their
@@ -47,13 +47,13 @@ function registerRoleFamily(def) {
 }
 
 // ── Role families, in today's STATES_BY_ROLE order ─────────────────────────
-registerRoleFamily(require('./roles/departure').family);
-registerRoleFamily(require('./roles/arrival').family);
-registerRoleFamily(require('./roles/overflight').family);
-registerRoleFamily(require('./roles/mission').family);
-registerRoleFamily(require('./roles/marshal').family);
-registerRoleFamily(require('./roles/final').family);
-registerRoleFamily(require('./roles/pattern').family);
+registerRoleFamily(require('./strip-types/departure').family);
+registerRoleFamily(require('./strip-types/arrival').family);
+registerRoleFamily(require('./strip-types/overflight').family);
+registerRoleFamily(require('./strip-types/mission').family);
+registerRoleFamily(require('./strip-types/marshal').family);
+registerRoleFamily(require('./strip-types/final').family);
+registerRoleFamily(require('./strip-types/pattern').family);
 
 const positionFamilies = [];
 const positionOwner = new Map(); // positionId -> family name

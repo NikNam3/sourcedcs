@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 // SCL, AR info, `fdr.ato`, the adopted Mode 3 (H64) and the seed provenance
 // guard a re-import relies on.
 
-const { FdrStore, WRITABLE_PATHS, MILITARY_WRITABLE_FIELDS } = await import('../src/efsp/fdr-store.js');
+const { FdrStore, WRITABLE_PATHS, MILITARY_WRITABLE_FIELDS } = await import('../src/efsp/flight-data-store.js');
 const { CodeAllocator } = await import('../src/efsp/code-allocator.js');
 
 const clock = { now: () => Date.UTC(2016, 5, 21, 10, 0) };

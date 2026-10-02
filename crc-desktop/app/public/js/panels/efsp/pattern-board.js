@@ -44,11 +44,11 @@ const _pbFinite = (v) => typeof v === 'number' && Number.isFinite(v);
  * @param {Array<{id,label}>} p.legs         the Bay's racks, in left-to-right order
  * @param {Array<object>} p.strips           { stripId, callsign, type?, intent?, legId, enteredPatternS?, order? }
  * @param {number} p.nowS                    mission clock, seconds
- * @param {string} [p.runwayStatus]          'OPEN' | 'SUSPENDED' | 'CLOSED'
+ * @param {string} [p.runwayOpenStatus]          'OPEN' | 'SUSPENDED' | 'CLOSED'
  * @param {number} [p.longMin]
  * @param {number} [p.finalMax]
  */
-export function patternBoardModel({ legs, strips, nowS, runwayStatus, longMin, finalMax } = {}) {
+export function patternBoardModel({ legs, strips, nowS, runwayOpenStatus, longMin, finalMax } = {}) {
   const legList = Array.isArray(legs) && legs.length ? legs : RSU_LEGS;
   const long = _pbFinite(longMin) ? longMin : PATTERN_LONG_MIN;
   const finalCap = _pbFinite(finalMax) ? finalMax : PATTERN_FINAL_MAX;
@@ -91,8 +91,8 @@ export function patternBoardModel({ legs, strips, nowS, runwayStatus, longMin, f
     advisories.push({ kind: 'LONG_IN_PATTERN', text: `${c.callsign} ${c.minutes} min in pattern`, stripIds: [c.stripId] });
   }
   const total = columns.reduce((n, c) => n + c.count, 0);
-  if (runwayStatus && runwayStatus !== 'OPEN' && total > 0) {
-    advisories.push({ kind: 'RUNWAY_NOT_OPEN', text: `runway ${String(runwayStatus).toLowerCase()} with ${total} in pattern`, stripIds: [] });
+  if (runwayOpenStatus && runwayOpenStatus !== 'OPEN' && total > 0) {
+    advisories.push({ kind: 'RUNWAY_NOT_OPEN', text: `runway ${String(runwayOpenStatus).toLowerCase()} with ${total} in pattern`, stripIds: [] });
   }
   return { columns, advisories, total };
 }

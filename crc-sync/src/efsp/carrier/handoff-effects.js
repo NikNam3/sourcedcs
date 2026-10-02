@@ -1,6 +1,6 @@
 'use strict';
 
-// What each carrier hand-over does to the STRIP (docs/adr/0074). transfers.js
+// What each carrier hand-over does to the STRIP (docs/adr/0074). handoffs.js
 // (L4) says who may send it, in which Case, with which trigger type and what it
 // does to the stack; this says which Strip it applies to and what the Strip
 // becomes. Kept beside it, pure, so board-store.js holds no carrier doctrine.

@@ -22,7 +22,7 @@
 //
 // Pure: no store, no clock. Who may do what is permission.js's capability table.
 
-const { TRIGGER_TYPES } = require('./carrier/transfers');
+const { TRIGGER_TYPES } = require('./carrier/handoffs');
 
 // The trigger type is one of the FOUR guide §9.12 names (a rotation is the
 // controller's own gesture, like Commence): the four types stay four.

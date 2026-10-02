@@ -25,7 +25,7 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '[]'); // no code defa
 const facilityConfig = (await import('../src/efsp/facility-config.js')).default
   || await import('../src/efsp/facility-config.js');
 const { PositionStore } = await import('../src/efsp/position-store.js');
-const { StationCoverage, selectorMatches, resolveSelectors } = await import('../src/efsp/station-coverage.js');
+const { StationCoverage, selectorMatches, resolveSelectors } = await import('../src/efsp/position-coverage.js');
 const { USER_COALITION } = await import('../src/surveillance/iff.js');
 
 const ENEMY_COALITION = USER_COALITION === 3 ? 2 : 3;

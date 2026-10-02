@@ -5,7 +5,7 @@
 // mission lines; this module decides what each line becomes on TACTICAL's
 // Board — a new flight, a Strip bound to a flight already filed, an update of
 // a flight an earlier ATO tasked, or nothing — and builds the tasking that
-// fdr-store.js's applyAtoTasking() writes onto the flight. It parses nothing
+// flight-data-store.js's applyAtoTasking() writes onto the flight. It parses nothing
 // itself and it never trusts a client's parse: the server re-reads the text on
 // import (efsp-ws.js _handleAtoMutation).
 //
@@ -42,7 +42,7 @@ const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', '
 
 // The seed-owned FDR paths: filled from the ATO, but a controller may type
 // over them (WRITABLE_PATHS), and a re-import then keeps the controller's
-// value (§10.2 rule 3). Mirrored by fdr-store.js's ATO_SEED_PATHS.
+// value (§10.2 rule 3). Mirrored by flight-data-store.js's ATO_SEED_PATHS.
 const SEED_PATH_OF = Object.freeze({
   missionNumber: 'mission.missionNumber',
   packageId: 'mission.packageId',

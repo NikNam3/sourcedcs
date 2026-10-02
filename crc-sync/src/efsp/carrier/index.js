@@ -90,7 +90,7 @@ const {
   validateCarrierTransfer,
   laneFor,
   assignLanes,
-} = require('./transfers');
+} = require('./handoffs');
 
 module.exports = {
   normDeg,

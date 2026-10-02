@@ -11,7 +11,7 @@ import {
 import { getActingPositions, sendEfspMutation, sendEfspSfaMutation } from './efsp-ws.js';
 import { patternBoardModel, renderPatternBoard } from './pattern-board.js';
 import { createFinalTracker, renderFinalPanel } from './final-panel.js';
-import { runwayForStrip } from './field-state-rules.js';
+import { runwayForStrip } from './runway-status-rules.js';
 import { getActiveRadars } from '../../app.js';
 
 // Bay descriptor views (crc-sync docs/adr/0075, 0093): a Bay whose descriptor says
@@ -188,7 +188,7 @@ function _renderPattern(container, bay) {
   const runway = fs && fs.runways && fs.runways[0];
   const model = patternBoardModel({
     legs, strips, nowS: (typeof missionNow === 'function' ? missionNow() : Date.now()) / 1000,
-    runwayStatus: runway ? (runway.status === 'OPEN' ? 'OPEN' : (runway.status === 'CLOSED' ? 'CLOSED' : 'SUSPENDED')) : undefined,
+    runwayOpenStatus: runway ? (runway.status === 'OPEN' ? 'OPEN' : (runway.status === 'CLOSED' ? 'CLOSED' : 'SUSPENDED')) : undefined,
   });
   // Only a held Position acts: a read-only board for everyone else.
   const held = _heldAt(bay);

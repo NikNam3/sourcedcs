@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 const { DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP, BLOCK_MAPS, isValidRole, requiredBlocksFor, resolveBlockTarget, validateFacilityConfig, interlockFor, interlockBlocks, MILITARY_BLOCK_NAMESPACE } =
   await import('../src/efsp/block-map.js');
-const { MILITARY_WRITABLE_FIELDS, defaultMilitary, WRITABLE_PATHS } = await import('../src/efsp/fdr-store.js');
+const { MILITARY_WRITABLE_FIELDS, defaultMilitary, WRITABLE_PATHS } = await import('../src/efsp/flight-data-store.js');
 
 const REQUIRED_DEPARTURE_BLOCKS = [
   '1', '2', '3', '4', '4B', '5', '6', '7', '8', '8A', '8B', '9', '9D', '9E',
@@ -213,7 +213,7 @@ test('MISSION resolveBlockTarget returns null for system Blocks (M25, M26)', () 
 // ── Blocks 3A-3E (docs/adr/0023 gap-closure) — aircraft type/wake category/
 // tail number/unit/home station. Block 3 only ever DISPLAYED these as a
 // read-only composite; identity.aircraftType/wakeCategory/tailNumber/unit/
-// homeStation were already validated and writable via fdr-store.js's
+// homeStation were already validated and writable via flight-data-store.js's
 // generic setField() (all five in WRITABLE_PATHS since Phase 1), but no
 // Block anywhere routed a SetBlock at any of them until now. Present,
 // optional, and identical across all three roles. ─────────────────────────

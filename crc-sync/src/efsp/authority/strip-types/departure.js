@@ -169,7 +169,7 @@ function computeDepartureNla(strip, fdr, now, ctx) {
         return { inhibited: 'outside standing release envelope — file OPERATIONAL_REQUEST' };
       }
       // WP4A (docs/adr/0017), §4.6.2 — the EDCT and call-for-release
-      // windows. fdr-store.js has derived both on every write since that
+      // windows. flight-data-store.js has derived both on every write since that
       // slice (EDCT ±5 min, call-for-release −2/+1), and until now nothing
       // anywhere read them: a flight with a slot an hour away was not held
       // at all, which made the whole derivation inert. Found by walking a

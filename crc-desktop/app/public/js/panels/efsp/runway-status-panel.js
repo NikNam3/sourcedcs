@@ -4,7 +4,7 @@ import { PANEL_TITLES, dock } from '../../dock.js';
 import { getAllEfspFieldStates } from './efsp-state.js';
 import { getActingPositions, sendEfspFieldStateMutation } from './efsp-ws.js';
 import { alertPadConstraintFor } from './scramble.js';
-import { fieldStateActionsFor, fieldStateSubjectFor } from './field-state-rules.js';
+import { fieldStateActionsFor, fieldStateSubjectFor } from './runway-status-rules.js';
 import { registerEfspMessage } from './efsp-message-registry.js';
 import { applyEfspFieldStateDelta } from './efsp-state.js';
 import { renderAllOpenEfspBays } from './bay-view.js';
@@ -20,7 +20,7 @@ import { _showMutationError } from './efsp-panel.js';
 // controller working TWR wants the field and the Strips open side by side.
 // The Bay stays the inert Strip container ADR 0061 left it.
 //
-// The buttons come from field-state-rules.js's fieldStateActionsFor — a
+// The buttons come from runway-status-rules.js's fieldStateActionsFor — a
 // proactive mirror of crc-sync's authority split. The server decides; a
 // refusal lands in the Strip panel's refusal banner, named by the runway.
 //

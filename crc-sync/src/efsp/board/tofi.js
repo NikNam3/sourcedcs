@@ -6,7 +6,7 @@
 
 const crypto = require('crypto');
 const { newFlags, deepClone } = require('./strip-util');
-const { SEPARATION_REGIMES } = require('../fdr-store');
+const { SEPARATION_REGIMES } = require('../flight-data-store');
 
 class Tofi {
   /**

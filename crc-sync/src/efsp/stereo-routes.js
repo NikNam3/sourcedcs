@@ -44,11 +44,11 @@ const log = require('../log').logger('efsp:stereo-routes');
 const { read: STEREO_ROUTES_PATH, write: STEREO_ROUTES_WRITE_PATH } =
   statePaths('efsp-stereo-routes.json', process.env.CRCSYNC_EFSP_STEREO_ROUTES_PATH);
 
-// The same ceiling fdr-store.js puts on controller-entered free text, and for
+// The same ceiling flight-data-store.js puts on controller-entered free text, and for
 // the same reason: a stereo route seeds an FDR, and an FDR is broadcast whole
 // to every connected client on every subsequent change (docs/adr/0004's
 // immediate broadcast) and sits in the durable snapshot forever. Duplicated
-// rather than imported to keep the require direction one-way — fdr-store.js
+// rather than imported to keep the require direction one-way — flight-data-store.js
 // requires this module, not the reverse.
 const MAX_FREE_TEXT = 2000;
 
@@ -170,7 +170,7 @@ function resolveStereoRoute(name) {
  * The flat FDR seed a resolved route expands to — deliberately the same key
  * set flight-plan-lookup.js's toFdrFiledSeed() produces, because the briefing
  * frames a stereo as "the same shape with a local table instead of an HTTP
- * lookup" and fdr-store.js's createFdr() seed is the shared contract.
+ * lookup" and flight-data-store.js's createFdr() seed is the shared contract.
  *
  * aircraftType/wakeCategory are absent, unlike the DD1801 seed: a canned
  * ROUTE says nothing about what airframe is flying it, and guessing would put

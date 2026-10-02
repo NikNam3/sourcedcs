@@ -10,7 +10,7 @@ const ingest = (name) => mapAtoDocument(parseStructure(fixture(name)));
 const iffOf = (l) => ({ modeOne: l.extras.identityAto.modeOne, modeTwo: l.extras.identityAto.modeTwo, modeThree: l.extras.identityAto.modeThree });
 const lines = (r) => Object.fromEntries(r.missionLines.map((l) => [l.lineId, l]));
 
-// Every flat key fdr-store.js createFdr() reads from its seed (createFdr's
+// Every flat key flight-data-store.js createFdr() reads from its seed (createFdr's
 // body, the `seed.<key>` reads from `callsign` down to the mission set). A
 // literal on purpose: if createFdr grows a key, this list is where L14 looks.
 const CREATE_FDR_SEED_KEYS = ['callsign', 'flightSize', 'aircraftType', 'wakeCategory', 'equipmentCodes',

@@ -6,10 +6,10 @@ import assert from 'node:assert/strict';
  * The sortie is walked in efsp-scenario-ordnance.test.mjs.
  */
 
-const { hungOrdnanceAdvisoryFor, buildStatusView } = await import('../src/efsp/field-state.js');
+const { hungOrdnanceAdvisoryFor, buildStatusView } = await import('../src/efsp/runway-status.js');
 const nla = await import('../src/efsp/nla.js');
 
-/** A field-state record in the shape field-state-store.js getFieldState puts on the wire. */
+/** A field-state record in the shape runway-status-store.js getFieldState puts on the wire. */
 function record({ pad = 'Hot cargo pad', activeRunway = '05', status = 'OPEN', facilityId = 'INCIRLIK' } = {}) {
   return {
     facilityId,

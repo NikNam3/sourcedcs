@@ -282,7 +282,7 @@ function _buildEnumSelectCell(strip, blockId, span, options) {
       if (!actingPositionId) return;
       const currentStrip = getEfspStrip(strip.stripId) || strip;
       // A clear is the '' the <select> itself holds, not a null spelled here:
-      // fdr-store.js's setTofi() normalizes it, so "cleared" has one spelling
+      // flight-data-store.js's setTofi() normalizes it, so "cleared" has one spelling
       // server-side rather than two.
       sendEfspMutation(actingPositionId, currentStrip, { kind: 'SetBlock', blockId, value });
     };

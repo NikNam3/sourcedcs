@@ -66,7 +66,7 @@ async function lookupFlightPlan(callsign, opts = {}) {
 
 /**
  * Maps sourcedcs-web's DD1801 field names onto EFSP's FDR seed shape
- * (fdr-store.js's createFdr() seed — flat keys, nested into identity.* /
+ * (flight-data-store.js's createFdr() seed — flat keys, nested into identity.* /
  * filed.* by createFdr() itself) — [SOURCE-DEFINED] mapping, since
  * sourcedcs-web's schema predates and is independent of EFSP's, and the
  * two use different field names for the same concepts. Only carries over

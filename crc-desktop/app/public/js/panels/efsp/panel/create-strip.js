@@ -341,7 +341,7 @@ export function _refreshCreateStripAvailability() {
  * SECOND Strip/FDR instead (per guide §3.6's turnaround rule) — abandoned
  * after live testing found that approach left a stale departure Strip
  * behind and needed every field copied by hand, including a beacon code
- * that can't even be copied cleanly (fdr-store.js's createFdr always
+ * that can't even be copied cleanly (flight-data-store.js's createFdr always
  * auto-allocates a fresh one). Reusing the same FDR makes both problems
  * structurally impossible — there's nothing to copy, because nothing new
  * is created. `board-store.js`'s `_applyConvertToArrival` is authoritative

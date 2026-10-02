@@ -12,7 +12,7 @@
 //     back would be a cycle;
 //   - nla.js reaches it only through `ctx.fieldStateFor()` and so stays a pure
 //     function of (strip, fdr, now, ctx);
-//   - field-state-store.js (the stateful half, docs/adr/0061) builds on it the
+//   - runway-status-store.js (the stateful half, docs/adr/0061) builds on it the
 //     way correlation-store.js builds on correlation-match.js.
 //
 // Later lanes add pure functions HERE rather than to the store: L12's hung-
@@ -108,7 +108,7 @@ function _compactId(text) {
 
 /**
  * The minimal, read-only view rule 1 needs, built from the inventory (config)
- * and the stored state. field-state-store.js caches one per Facility and
+ * and the stored state. runway-status-store.js caches one per Facility and
  * rebuilds it only when that Facility's record changes, because nlaStatusFor
  * runs for every Strip on every stamp.
  *
@@ -411,7 +411,7 @@ function runwayInventoryWarnings(config) {
  * Pure: derived from the FDR and the field-state record, both of which broadcast whole
  * (docs/adr/0045's principle; the same argument as rule 4's hook check).
  *
- * `fieldState` is one Facility's record as the wire carries it (field-state-store.js
+ * `fieldState` is one Facility's record as the wire carries it (runway-status-store.js
  * getFieldState): its runway rows carry their ends and racks, so it is its own inventory.
  * crc-desktop's panels/efsp/ordnance-advisory.js is a copy, held to this by a drift test.
  *

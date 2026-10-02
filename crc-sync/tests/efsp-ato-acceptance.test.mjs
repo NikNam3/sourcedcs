@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const { ingestAtoText, parseAtoText, collectWarnings } = await import('../src/efsp/ato/ato-ingest.js');
 const { CALLSIGN_RE } = await import('../src/efsp/ato/ato-sets.js');
 const { MAX_FREE_TEXT: TOKENIZER_MAX_FREE_TEXT } = await import('../src/efsp/ato/usmtf-tokenize.js');
-const { FdrStore, MAX_FREE_TEXT } = await import('../src/efsp/fdr-store.js');
+const { FdrStore, MAX_FREE_TEXT } = await import('../src/efsp/flight-data-store.js');
 
 const fixture = (name) => readFileSync(new URL(`./fixtures/ato/${name}`, import.meta.url), 'utf8');
 const Z = (h, m) => Date.UTC(2026, 8, 14, h, m); // iron-flag-26-3: 14 SEP 2026
@@ -36,7 +36,7 @@ const EXPECTED = {
 // WP7 bullet 1 (guide line 1396) — the PARSER half. "Mission Strips" are
 // L14's: this test proves the seed each Strip would be created from, through
 // the real createFdr. IFF is asserted on the LINE (extras.identityAto), not on
-// the FDR, because no FDR write path for Mode 1/2 exists (fdr-store.js:
+// the FDR, because no FDR write path for Mode 1/2 exists (flight-data-store.js:
 // "ATO-owned, WP7 hook — no setter exists anywhere") and the ATO's Mode 3 is
 // deliberately never seeded as the beacon (guide §3.10.3 rule 3, ADR 0054).
 test('WP7: An ATO fixture produces mission Strips with correct mission number, package, vul window, controlling agency and IFF codes (parser half: createFdr seeds + IFF on the line)', () => {
@@ -84,7 +84,7 @@ test('ato parity: createFdr accepts every seedable line and refuses the CALLSIGN
   assert.equal(bad.extras.ato.callsign, 'WEASEL31');
   assert.equal(bad.fdrSeed.callsign, null);
   // With the normalised callsign put back, createFdr must refuse it too —
-  // proving CALLSIGN_RE here matches fdr-store.js's rule.
+  // proving CALLSIGN_RE here matches flight-data-store.js's rule.
   const refused = new FdrStore().createFdr({ ...bad.fdrSeed, callsign: bad.extras.ato.callsign }, { by: 'ato-test' });
   assert.equal(refused.ok, false);
   assert.equal(refused.reason, 'VALIDATION_ERROR');
@@ -97,7 +97,7 @@ test('ato parity: createFdr accepts every seedable line and refuses the CALLSIGN
   }
 });
 
-test('ato parity: the free-text cap equals fdr-store.js MAX_FREE_TEXT', () => {
+test('ato parity: the free-text cap equals flight-data-store.js MAX_FREE_TEXT', () => {
   assert.equal(TOKENIZER_MAX_FREE_TEXT, MAX_FREE_TEXT);
 });
 

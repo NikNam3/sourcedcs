@@ -53,7 +53,7 @@ export function _canTransferTofiComms(strip) {
 }
 
 // The regimes offered when accepting tactical control (docs/adr/0053).
-// Mirrors fdr-store.js's SEPARATION_REGIMES; the server validates, this is
+// Mirrors flight-data-store.js's SEPARATION_REGIMES; the server validates, this is
 // the picker so nobody types one of five exact strings by hand. MARSA is
 // first because it is the common military case — but it is a default nobody
 // can accept without seeing, which is the point.

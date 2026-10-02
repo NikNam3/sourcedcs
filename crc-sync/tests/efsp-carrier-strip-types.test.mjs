@@ -154,7 +154,7 @@ test('the NLA tables: Commence is Case- and lane-dependent; one next action per 
 });
 
 test('a ship radar selector can name the radar and the hull', async () => {
-  const { selectorMatches } = await import('../src/efsp/station-coverage.js');
+  const { selectorMatches } = await import('../src/efsp/position-coverage.js');
   const search = { type: 'carrier', carrierRadar: 'search', unitName: 'UNION', shipType: 'CVN_72', coalition: 2 };
   const app = { ...search, carrierRadar: 'approach' };
   const other = { ...search, unitName: 'TARAWA', shipType: 'LHA_Tarawa' };

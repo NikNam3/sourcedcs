@@ -7,7 +7,7 @@ import { slot } from './helpers/wire-slots.mjs';
 
 /* Field state (guide §9.7, docs/adr/0061) — the pure module, the store driven
  * directly, and the wire. The two §13 acceptance lines are walked end to end in
- * efsp-scenario-field-state.test.mjs; this file pins each rule on its own.
+ * efsp-scenario-runway-status.test.mjs; this file pins each rule on its own.
  */
 
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-field-state-'));
@@ -21,7 +21,7 @@ for (const [k, v] of Object.entries({
 })) process.env[k] = path.join(tmpDir, v);
 fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
 
-const fieldState = await import('../src/efsp/field-state.js');
+const fieldState = await import('../src/efsp/runway-status.js');
 const facilityConfig = (await import('../src/efsp/facility-config.js')).default;
 
 const {
@@ -232,7 +232,7 @@ test('the active end is the one most into the TRUE wind (decisions.md H22)', () 
 
 // ── step 2 — the store, driven directly ─────────────────────────────────────
 
-const { FieldStateStore } = await import('../src/efsp/field-state-store.js');
+const { FieldStateStore } = await import('../src/efsp/runway-status-store.js');
 const { MutationLog } = await import('../src/efsp/mutation-log.js');
 
 /** A facility-config stand-in over the SHIPPED INCIRLIK config (plus a runway-less CENTER), or an overridden inventory. */

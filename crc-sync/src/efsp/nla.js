@@ -28,7 +28,7 @@
 // Field state (§9.7 rule 1, docs/adr/0061) now inhibits: a DEPARTURE's
 // TAXI/RUNWAY_QUEUE/LUAW steps and an ARRIVAL's HANDED_TO_TOWER -> FINAL are
 // refused while the Strip's runway is suspended or closed, with the runway and
-// the cause named — resolved through `ctx.fieldStateFor()` (field-state.js).
+// the cause named — resolved through `ctx.fieldStateFor()` (runway-status.js).
 // Runway OCCUPANCY is still not implemented: §9.7's schema has no occupancy
 // field and §3.5's RUNWAY_QUEUE row cites no section, so inventing one would
 // be D11. The alert-pad conflict (§9.6) is a FLAG, never an inhibit: a
@@ -46,18 +46,18 @@
 // primitive (still nowhere near DEPARTURE's own lifecycle this slice).
 
 // The tables and the per-Role NLA functions now live in the authority
-// registry's Role families (authority/roles/<role>.js, S3-2). This module is
+// registry's Role families (authority/strip-types/<role>.js, S3-2). This module is
 // their facade: it exports exactly what it exported before.
 
 const authority = require('./authority');
-const { _requireNow } = require('./authority/roles/nla-common');
-const departure = require('./authority/roles/departure');
-const { ARRIVAL_STATES } = require('./authority/roles/arrival');
-const { OVERFLIGHT_STATES } = require('./authority/roles/overflight');
-const { MISSION_STATES } = require('./authority/roles/mission');
-const { MARSHAL_STATES } = require('./authority/roles/marshal');
-const { FINAL_STATES } = require('./authority/roles/final');
-const { PATTERN_STATES } = require('./authority/roles/pattern');
+const { _requireNow } = require('./authority/strip-types/nla-common');
+const departure = require('./authority/strip-types/departure');
+const { ARRIVAL_STATES } = require('./authority/strip-types/arrival');
+const { OVERFLIGHT_STATES } = require('./authority/strip-types/overflight');
+const { MISSION_STATES } = require('./authority/strip-types/mission');
+const { MARSHAL_STATES } = require('./authority/strip-types/marshal');
+const { FINAL_STATES } = require('./authority/strip-types/final');
+const { PATTERN_STATES } = require('./authority/strip-types/pattern');
 
 const { DEPARTURE_STATES, REQUIRED_FOR_CLEARANCE, CLEARANCE_BLOCK_LABELS, isFlightPlanValid, missingForClearance, isVoidExpired } = departure;
 const STATES_BY_ROLE = authority.STATES_BY_ROLE;

@@ -2,11 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 // docs/adr/0091 — block altitudes in the ALT field.
-const { FdrStore, parseAltitudeFt, parseAltitude, formatAltitudeBlock } = await import('../src/efsp/fdr-store.js');
+const { FdrStore, parseAltitudeFt, parseAltitude, formatAltitudeBlock } = await import('../src/efsp/flight-data-store.js');
 const { evaluateConformance, FPM_PER_MS, MS_PER_KT } = await import('../src/efsp/conformance.js');
 const { loadAlertingConfig } = await import('../src/alerting-config.js');
 const DEFAULTS = loadAlertingConfig();
-const { findConflicts } = await import('../src/stca.js');
+const { findConflicts } = await import('../src/conflict-alert.js');
 
 const blk = (lowFt, highFt) => ({ lowFt, highFt });
 
@@ -69,7 +69,7 @@ test('setClearance stores a block structurally and canonicalises its text', () =
 });
 
 test('the requested altitude after MTR exit may be a block', async () => {
-  const { normalizeMtrValue } = await import('../src/efsp/fdr-store.js');
+  const { normalizeMtrValue } = await import('../src/efsp/flight-data-store.js');
   const path = 'military.mtr.requestedAltitudeAfterExit';
   assert.deepEqual(normalizeMtrValue(path, 'fl210b230', 0), { ok: true, value: 'FL210-FL230' });
   assert.deepEqual(normalizeMtrValue(path, 'FL210', 0), { ok: true, value: 'FL210' });

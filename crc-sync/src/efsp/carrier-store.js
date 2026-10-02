@@ -100,7 +100,7 @@ class CarrierStore {
 
   /**
    * The manned CV_APP lane the stack would feed this flight to, or null
-   * (carrier/transfers.js: alternating by push ordinal, the other lane when the
+   * (carrier/handoffs.js: alternating by push ordinal, the other lane when the
    * preferred one is unmanned, none when neither is).
    */
   laneFor(fdrId, hullId = this.defaultHullId) {

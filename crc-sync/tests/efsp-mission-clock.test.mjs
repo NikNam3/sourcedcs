@@ -17,7 +17,7 @@ process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH = path.join(tmpDir, 'mutations.jsonl'
 const { createEfsp } = await import('../src/efsp/index.js');
 const { BoardStore } = await import('../src/efsp/board-store.js');
 import { fullRules } from "./helpers/full-rules.mjs";
-const { FdrStore } = await import('../src/efsp/fdr-store.js');
+const { FdrStore } = await import('../src/efsp/flight-data-store.js');
 const { ConformanceMonitor } = await import('../src/efsp/conformance.js');
 
 const MISSION_0240Z = Date.UTC(2016, 5, 21, 2, 40, 0);

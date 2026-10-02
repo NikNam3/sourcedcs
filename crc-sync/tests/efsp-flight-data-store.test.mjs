@@ -24,7 +24,7 @@ const {
   FdrStore, deriveEquipmentSuffix, VOID_DEADLINE_MINUTES,
   EDCT_WINDOW_MINUTES, CALL_FOR_RELEASE_BEFORE_MINUTES, CALL_FOR_RELEASE_AFTER_MINUTES,
   TRACK_DEGRADATION_FLAGS, AIRSPACE_OWNERS, RADAR_SERVICE_STATES, SEPARATION_REGIMES,
-} = await import('../src/efsp/fdr-store.js');
+} = await import('../src/efsp/flight-data-store.js');
 const { isReserved } = await import('../src/efsp/code-allocator.js');
 
 function makeSeed(overrides = {}) {
@@ -898,7 +898,7 @@ test('the enum fields with no null state refuse being cleared', () => {
 
 // ── §9.4 MTR fields (docs/adr/0062) — the six military.mtr.* leaves ──────────
 
-const { normalizeMtrValue } = await import('../src/efsp/fdr-store.js');
+const { normalizeMtrValue } = await import('../src/efsp/flight-data-store.js');
 const { resolveZuluHhmm, formatZuluHhmm, parseZuluHhmm } = await import('../src/efsp/zulu-time.js');
 
 // A mission clock fixed on a date nothing else uses, so a time resolved

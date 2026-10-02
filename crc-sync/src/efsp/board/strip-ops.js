@@ -5,7 +5,7 @@
 // collaborator because they call each other: InvokeNla runs TransferStrip, SetState and DropStrip, and the
 // rejected-replica rules gate every op. Moved from board-store.js.
 
-const { MAX_FREE_TEXT } = require('../fdr-store');
+const { MAX_FREE_TEXT } = require('../flight-data-store');
 const { deepClone } = require('./strip-util');
 
 // A DEPARTURE in these states has left the ground (docs/adr/0076).
@@ -70,7 +70,7 @@ class StripOps {
 
     // Coordination and TOFI notes carry the verbal half of an exchange and
     // are free text, so they get the same ceiling as every other free-text
-    // field (see fdr-store.js's MAX_FREE_TEXT). Bounded HERE, at the one
+    // field (see flight-data-store.js's MAX_FREE_TEXT). Bounded HERE, at the one
     // choke point every Mutation passes through, rather than at each of the
     // eight places a note is read — an earlier attempt to patch those
     // individually silently matched nothing and left the cap absent.

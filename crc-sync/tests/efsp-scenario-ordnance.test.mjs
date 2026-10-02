@@ -29,7 +29,7 @@ for (const [k, v] of Object.entries({
 fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
 
 const { createEfsp } = await import('../src/efsp/index.js');
-const { hungOrdnanceAdvisoryFor } = await import('../src/efsp/field-state.js');
+const { hungOrdnanceAdvisoryFor } = await import('../src/efsp/runway-status.js');
 const { crew, act, mustAct, jumpTo, advance, DEPARTURE_FDR } = await import('./helpers/efsp-scenario.mjs');
 
 const efsp = createEfsp();

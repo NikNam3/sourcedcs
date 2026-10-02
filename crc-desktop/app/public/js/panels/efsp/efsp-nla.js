@@ -76,7 +76,7 @@ export const NLA_LABELS = {
 
 // The carrier's hand-overs (guide §9.12: four different buttons, four trigger
 // types, "MUST NOT be unified behind one button"). A client mirror of
-// crc-sync's carrier/transfers.js, drift-tested like the tables below. `seeYou`
+// crc-sync's carrier/handoffs.js, drift-tested like the tables below. `seeYou`
 // (MARSHAL_TO_PRIFLY) is the Case II second button beside the NLA.
 export const CARRIER_TRANSFERS = {
   MARSHAL_TO_APPROACH:       { label: 'Commence',      trigger: 'CONTROLLER_INITIATED', from: ['CV_MARSHAL'], cases: ['II', 'III'] },

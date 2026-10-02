@@ -6,7 +6,7 @@
 // required keys and the cross-references a complete file must satisfy.
 
 const blockMap = require('./block-map');
-const fieldState = require('./field-state'); // pure, requires nothing back (docs/adr/0061)
+const fieldState = require('./runway-status'); // pure, requires nothing back (docs/adr/0061)
 const { validateAlertPadConfig } = require('./alert-scramble'); // pure (docs/adr/0070)
 
 /**

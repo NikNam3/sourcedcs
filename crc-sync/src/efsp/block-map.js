@@ -32,7 +32,7 @@ const DEPARTURE_BLOCK_MAP = {
   // docs/adr/0023 gap-closure — Block 3 only ever DISPLAYED these as a
   // read-only composite (formatBlock3, client-side); identity.aircraftType/
   // wakeCategory/tailNumber/unit/homeStation were already validated and
-  // writable via fdr-store.js's generic setField() (all five in
+  // writable via flight-data-store.js's generic setField() (all five in
   // WRITABLE_PATHS since Phase 1), but no Block anywhere ever routed a
   // SetBlock at any of them — found live when a same-flight identity copy
   // (bay-view.js's "Spawn Return Strip") had nothing to actually copy.
@@ -56,7 +56,7 @@ const DEPARTURE_BLOCK_MAP = {
   // setAirspaceOwner/setTofi template: 3F is a bare boolean (defect D15's own
   // shape — "hook" alone does not say whether the aircraft HAS one or REQUIRES
   // one, and only the second reading gates an arrival on a runway's gear being
-  // rigged) and 3G is a restricted enum. See fdr-store.js's setMilitary().
+  // rigged) and 3G is a restricted enum. See flight-data-store.js's setMilitary().
   //
   // Present on all three ATC Roles, not just DEPARTURE. docs/adr/0051's lesson
   // was that a per-Role Block Map lets a rule hold on two Roles and silently
@@ -69,7 +69,7 @@ const DEPARTURE_BLOCK_MAP = {
   '4B': { required: true,  target: { kind: 'fdr', path: 'assigned.datalinkClearanceIndicator' } },
   '5':  { required: true,  target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
   // WP4A gap-closure (docs/adr/0022), guide §4.6 rule 5 — track-degradation
-  // flag. Plain 'fdr'-routed, unlike '24A': fdr-store.js's
+  // flag. Plain 'fdr'-routed, unlike '24A': flight-data-store.js's
   // identity.trackDegradationFlag was already in WRITABLE_PATHS and
   // validated inline by setField() since docs/adr/0019 — the gap this
   // closes was purely the missing Block Map entry (no SetBlock path ever
@@ -80,7 +80,7 @@ const DEPARTURE_BLOCK_MAP = {
   '8':  { required: true,  target: { kind: 'fdr', path: 'filed.departureAirport' } },
   '8A': { required: true,  target: { kind: 'fdr', path: 'filed.departureRunway' } },
   '8B': { required: true,  target: { kind: 'fdr', path: 'filed.destinationAirport' } },
-  '9':  { required: true,  target: { kind: 'fdr', path: 'filed.route' }, provenance: 'COMPUTER_GENERATED' }, // manual restrictions live separately in annotations['9'] — guide's "mixed provenance in one Block" note; rendered as two sources, one Block. provenance is the pre-edit fallback (fdr-store.js's setField() overrides fdr.provenance['filed.route'] to CONTROLLER_ENTERED once a controller actually edits it — this default only applies until then).
+  '9':  { required: true,  target: { kind: 'fdr', path: 'filed.route' }, provenance: 'COMPUTER_GENERATED' }, // manual restrictions live separately in annotations['9'] — guide's "mixed provenance in one Block" note; rendered as two sources, one Block. provenance is the pre-edit fallback (flight-data-store.js's setField() overrides fdr.provenance['filed.route'] to CONTROLLER_ENTERED once a controller actually edits it — this default only applies until then).
   '9A': { required: false, target: { kind: 'annotation' } },
   '9B': { required: false, target: { kind: 'annotation' } },
   '9C': { required: false, target: { kind: 'annotation' } },
@@ -102,7 +102,7 @@ const DEPARTURE_BLOCK_MAP = {
   // change to PACK 2"). It shipped as its own read-only kind; that made the
   // switch case reachable only by hand-editing the route (losing the label
   // and the standing-release match) or by dropping and re-creating the Strip
-  // (a new beacon code mid-taxi). fdr-store.js's setField() validates the
+  // (a new beacon code mid-taxi). flight-data-store.js's setField() validates the
   // name against the table and re-expands the route from it, so the name and
   // the route cannot disagree — the same inline-validation precedent
   // identity.trackDegradationFlag set, not a weaker guard than the read-only
@@ -114,7 +114,7 @@ const DEPARTURE_BLOCK_MAP = {
   // asks for by voice"). Split per field like '9A-*', so a Facility can hide
   // one (hiddenBlocks) without the others. Plain 'fdr', not the 'military'
   // kind: these are free text, times and an altitude, not an enum or a
-  // boolean; fdr-store.js's normalizeMtrValue() says what each accepts. No
+  // boolean; flight-data-store.js's normalizeMtrValue() says what each accepts. No
   // interlock tag on any of them: 9H-ALT is the pilot's REQUEST, and posting a
   // request issues nothing — the approval is written in ALT ('21'), which is
   // tagged. On all three ATC Roles; none on MISSION (it shares the FDR).
@@ -187,12 +187,12 @@ const DEPARTURE_BLOCK_MAP = {
   '24': { required: true,  target: { kind: 'annotation' } },
   // WP4A (docs/adr/0018), §4.6.4 — airspace ownership as a direction. A
   // dedicated target kind, not 'fdr'/'annotation' — see resolveBlockTarget
-  // below and fdr-store.js's setAirspaceOwner() for why this can't be a
+  // below and flight-data-store.js's setAirspaceOwner() for why this can't be a
   // generic FDR path (the "no boolean path" requirement needs a
   // structurally distinct route, not just a documented convention).
   '24A': { required: false, target: { kind: 'airspace-owner' } },
   // WP4A second slice (docs/adr/0025), §4.6.3 — the three-field separation
-  // model. Dedicated 'tofi' target kind, not 'fdr' — see fdr-store.js's
+  // model. Dedicated 'tofi' target kind, not 'fdr' — see flight-data-store.js's
   // setTofi() for why (mirrors '24A''s own airspace-owner precedent: "no
   // boolean path" needs a structurally distinct route, not just a
   // documented convention). Applies to any ATC-side role a flight can
@@ -434,7 +434,7 @@ const MISSION_BLOCK_MAP = {
 //    (C5) is set through the stack op SetMarshalRadial, and a Case I altitude
 //    through SetCaseIAngels, never through SetBlock.
 //  - `carrier` Blocks write fdr.military.carrier.<field> through
-//    fdr-store.js's setCarrier(): EEAT, approach, button, bingo and low state
+//    flight-data-store.js's setCarrier(): EEAT, approach, button, bingo and low state
 //    belong to the FLIGHT, which outlives every Strip, so an EEAT set on the
 //    launch Strip is on the recovery Strip by construction.
 //
@@ -588,28 +588,28 @@ function resolveBlockTarget(role, blockId) {
   if (!def) return null;
   if (def.target.kind === 'fdr') return { kind: 'fdr', path: def.target.path };
   if (def.target.kind === 'annotation') return { kind: 'annotation' };
-  // WP4A (docs/adr/0018) — routed through fdr-store.js's dedicated
+  // WP4A (docs/adr/0018) — routed through flight-data-store.js's dedicated
   // setAirspaceOwner(), never the generic 'fdr' path above (see that
   // method's own comment for why this needs to be structurally distinct).
   if (def.target.kind === 'airspace-owner') return { kind: 'airspace-owner' };
-  // WP4A second slice (docs/adr/0025) — routed through fdr-store.js's
+  // WP4A second slice (docs/adr/0025) — routed through flight-data-store.js's
   // dedicated setTofi(), same reasoning as 'airspace-owner' above. Unlike
   // that kind, 3 different Blocks share this one target kind but route to
   // 3 different keys on one fdr.tofi sub-object — `field` carries which.
   if (def.target.kind === 'tofi') return { kind: 'tofi', field: def.target.field };
-  // Routed through fdr-store.js's dedicated setWorkingFrequency(), same
+  // Routed through flight-data-store.js's dedicated setWorkingFrequency(), same
   // reasoning as 'airspace-owner' — a frequency needs validating as a number
   // in one band, and the write is append-only.
   if (def.target.kind === 'frequency') return { kind: 'frequency' };
-  // WP6 (docs/adr/0052), guide §6.4 — routed through fdr-store.js's dedicated
+  // WP6 (docs/adr/0052), guide §6.4 — routed through flight-data-store.js's dedicated
   // setMilitary(). Shares the 'tofi' shape exactly: several Blocks, one target
   // kind, `field` carrying which key of one sub-object this Block writes.
   if (def.target.kind === 'military') return { kind: 'military', field: def.target.field };
   // docs/adr/0058 — the flight's assigned altitude or heading, through
-  // fdr-store.js's setClearance(), which keeps §3.7's history on the FDR.
+  // flight-data-store.js's setClearance(), which keeps §3.7's history on the FDR.
   if (def.target.kind === 'clearance') return { kind: 'clearance', field: def.target.field };
   // docs/adr/0074 — a flight's own carrier fields (EEAT, approach, button,
-  // bingo, low state), through fdr-store.js's setCarrier(). The kind
+  // bingo, low state), through flight-data-store.js's setCarrier(). The kind
   // `carrier-derived` falls through to null on purpose: derived values cannot
   // be written by any Block (§9.12 rule 1).
   if (def.target.kind === 'carrier') return { kind: 'carrier', field: def.target.field };

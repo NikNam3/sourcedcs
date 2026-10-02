@@ -59,7 +59,7 @@ const INELIGIBLE_STATES = new Set([
   'TASKED',
   'DROPPED',
   // The carrier Roles (docs/adr/0074) are pinned one by one in
-  // tests/efsp-carrier-roles.test.mjs. Every MARSHAL/FINAL/PATTERN state is
+  // tests/efsp-carrier-strip-types.test.mjs. Every MARSHAL/FINAL/PATTERN state is
   // ELIGIBLE, LAUNCH included: correlation matches an FDR against the track
   // store (binding, beacon, callsign), not against what a ship radar has
   // illuminated, so `noGroundAircraft` on the ship radars does not hide a jet

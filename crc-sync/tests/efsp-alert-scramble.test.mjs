@@ -185,8 +185,8 @@ test('a scramble changes no NLA', () => {
   // the module reads alertStatus at all. The Strip's OWN alert status is
   // toggled through every value and must change nothing either.
   // AUTH: the per-Role NLA tables live in the authority registry's Role families.
-  const roleDir = path.join(here, '../src/efsp/authority/roles');
-  for (const f of ['../src/efsp/nla.js', ...fs.readdirSync(roleDir).map(n => path.join('../src/efsp/authority/roles', n))]) {
+  const roleDir = path.join(here, '../src/efsp/authority/strip-types');
+  for (const f of ['../src/efsp/nla.js', ...fs.readdirSync(roleDir).map(n => path.join('../src/efsp/authority/strip-types', n))]) {
     const source = fs.readFileSync(path.join(here, f), 'utf8');
     assert.ok(!/alertStatus/.test(source), `${f} reads alertStatus`);
   }

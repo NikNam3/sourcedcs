@@ -52,7 +52,7 @@
 // The tables themselves now live in the authority registry (authority/,
 // S3-2): the op-kind vocabulary in op-kinds.js, the class rules in classes.js,
 // each Position family's grants and capability columns in
-// positions/<family>.js, each Role's state owners in roles/<role>.js, all
+// positions/<family>.js, each Role's state owners in strip-types/<role>.js, all
 // composed in authority/index.js. This module is their facade and exports
 // exactly what it exported before; the one-Position predicates (the D21
 // gates) stay here.
@@ -69,13 +69,13 @@ const {
 const {
   INCIRLIK_CAPABILITIES, canRotateSfa, canSendSfaRotationTransfer, sfaRotationReceiver, sfaControllerPositions, incirlikPositionsWith,
 } = require('./authority/positions/incirlik-military');
-const { DEPARTURE_STATE_OWNERS } = require('./authority/roles/departure');
-const { ARRIVAL_STATE_OWNERS } = require('./authority/roles/arrival');
-const { OVERFLIGHT_STATE_OWNERS } = require('./authority/roles/overflight');
-const { MISSION_STATE_OWNERS } = require('./authority/roles/mission');
-const { MARSHAL_STATE_OWNERS } = require('./authority/roles/marshal');
-const { FINAL_STATE_OWNERS } = require('./authority/roles/final');
-const { PATTERN_STATE_OWNERS } = require('./authority/roles/pattern');
+const { DEPARTURE_STATE_OWNERS } = require('./authority/strip-types/departure');
+const { ARRIVAL_STATE_OWNERS } = require('./authority/strip-types/arrival');
+const { OVERFLIGHT_STATE_OWNERS } = require('./authority/strip-types/overflight');
+const { MISSION_STATE_OWNERS } = require('./authority/strip-types/mission');
+const { MARSHAL_STATE_OWNERS } = require('./authority/strip-types/marshal');
+const { FINAL_STATE_OWNERS } = require('./authority/strip-types/final');
+const { PATTERN_STATE_OWNERS } = require('./authority/strip-types/pattern');
 const {
   PERMISSIONS, CREATE_ROLE_PERMISSIONS, STATE_OWNERS_BY_ROLE, FIELD_STATE_OP_OWNERS, NON_OWNER_BLOCK_WRITES, TOFI_COUNTERPARTS,
 } = authority;

@@ -256,7 +256,7 @@ test('no EFSP message handler (app.js, efsp-messages.js, the panel modules) ever
   // app.js is the WebSocket front door and cannot be mounted in the stub.
   // CMSG: the call sites moved from app.js into the registered handlers.
   const src = ['app.js', 'panels/efsp/efsp-messages.js', 'panels/efsp/airspace-panel.js', 'panels/efsp/carrier-panel.js',
-    'panels/efsp/field-state-panel.js'].map(f => fs.readFileSync(path.join(import.meta.dirname, '../app/public/js', f), 'utf8')).join('\n');
+    'panels/efsp/runway-status-panel.js'].map(f => fs.readFileSync(path.join(import.meta.dirname, '../app/public/js', f), 'utf8')).join('\n');
   const calls = src.match(/_showMutationError\([^)]*\)/g) || [];
   assert.ok(calls.length > 0, 'the call sites moved — this guard needs updating');
   for (const call of calls) {

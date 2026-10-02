@@ -61,7 +61,7 @@ class CodeAllocator {
     this._cursor = 0;
   }
 
-  /** The rotating cursor, persisted beside the allocated codes (fdr-store.js snapshot). */
+  /** The rotating cursor, persisted beside the allocated codes (flight-data-store.js snapshot). */
   get cursor() { return this._cursor; }
   restoreCursor(cursor) {
     this._cursor = Number.isInteger(cursor) && cursor >= 0 && cursor <= 0o7777 ? cursor : 0;
@@ -130,7 +130,7 @@ class CodeAllocator {
   isAllocated(code) { return this._allocated.has(code); }
   holderOf(code) { return this._allocated.get(code) || null; }
 
-  // ── Persistence (durable per ADR 0002 — ties to fdr-store.js's snapshot) ──
+  // ── Persistence (durable per ADR 0002 — ties to flight-data-store.js's snapshot) ──
   snapshot() { return [...this._allocated.entries()]; }
   restore(entries) { this._allocated = new Map(entries || []); }
 }

@@ -47,7 +47,7 @@
 
 const crypto = require('crypto');
 
-const { MAX_FREE_TEXT } = require('./fdr-store');
+const { MAX_FREE_TEXT } = require('./flight-data-store');
 const { WALL_CLOCK } = require('../mission-clock');
 const { SyncLog } = require('./sync/sync-log');
 const log = require('../log').logger('efsp:marsa-store');

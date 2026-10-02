@@ -4,7 +4,7 @@
 // one MissionLine per MSNACFT, a document-level AR join table, and packages.
 //
 // Output shape, per decision S-Q50: every line carries
-//   fdrSeed  — ONLY keys FdrStore.createFdr(seed) reads today (fdr-store.js,
+//   fdrSeed  — ONLY keys FdrStore.createFdr(seed) reads today (flight-data-store.js,
 //              createFdr's flat seed). Nothing else: createFdr silently
 //              ignores unknown keys, so a key here that it does not read would
 //              be a promise nobody keeps.
@@ -39,7 +39,7 @@
 // Pure: requires nothing with load-time I/O.
 
 // createFdr's flat seed keys this mapping fills (a subset of
-// fdr-store.js createFdr's whole list; the test pins it).
+// flight-data-store.js createFdr's whole list; the test pins it).
 const SEED_KEYS = Object.freeze(['callsign', 'flightSize', 'aircraftType', 'unit', 'homeStation',
   'missionNumber', 'packageId', 'controllingAgency', 'vulWindowStartUtc', 'vulWindowEndUtc']);
 

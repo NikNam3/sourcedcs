@@ -13,7 +13,7 @@ process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER = path.join(tmpDir, 'center
 
 const { BoardStore } = await import('../src/efsp/board-store.js');
 import { fullRules } from "./helpers/full-rules.mjs";
-const { FdrStore } = await import('../src/efsp/fdr-store.js');
+const { FdrStore } = await import('../src/efsp/flight-data-store.js');
 const { PositionStore } = await import('../src/efsp/position-store.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
 const blockMap = await import('../src/efsp/block-map.js');
@@ -513,11 +513,11 @@ test('AIT PROPOSE succeeds once the sending Facility is configured as authorized
 });
 
 // ── docs/adr/0022: trackDegradationFlag's Block Map wiring ──────────────
-// (fdr-store.js's setField() already validated this field via WRITABLE_PATHS
+// (flight-data-store.js's setField() already validated this field via WRITABLE_PATHS
 // since docs/adr/0019 — the gap was purely that no Block ever routed a
 // SetBlock at it; Block '5A' closes that.)
 
-test('SetBlock on the new track-degradation Block (5A) round-trips through fdr-store.js\'s existing setField validation', () => {
+test('SetBlock on the new track-degradation Block (5A) round-trips through flight-data-store.js\'s existing setField validation', () => {
   const facilities = makeFacilities();
   const strip = createCtrStrip(facilities);
   const { boardStore } = facilities.get('CENTER');

@@ -28,7 +28,7 @@
 // All three are skipped below `minGroundSpeedKt`, so nothing alerts on the
 // ground. It never moves or advances a Strip (guide §10.3).
 
-const { activeClearanceEntry } = require('./fdr-store');
+const { activeClearanceEntry } = require('./flight-data-store');
 const { WALL_CLOCK } = require('../mission-clock');
 
 const MS_PER_KT = 0.514444;

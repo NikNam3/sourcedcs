@@ -6,7 +6,7 @@ import { initTrackPanel } from './panels/track-panel.js';
 import { initAprtPanel } from './panels/aprt-panel.js';
 import { initEfspPanel } from './panels/efsp/efsp-panel.js';
 import { initAirspacePanel } from './panels/efsp/airspace-panel.js';
-import { initFieldStatePanel } from './panels/efsp/field-state-panel.js';
+import { initFieldStatePanel } from './panels/efsp/runway-status-panel.js';
 import { initMetricsPanel } from './panels/metrics-panel.js';
 import { getActiveRadars, map } from './app.js';
 

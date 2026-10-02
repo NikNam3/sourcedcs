@@ -21,11 +21,11 @@
 //
 // A future persisted-state `version` key and a per-store upgrade hook would go here (S3-4: not now).
 
-const { FdrStore } = require('./fdr-store');
+const { FdrStore } = require('./flight-data-store');
 const { AirspaceStore } = require('./airspace-store');
 const { CorrelationStore } = require('./correlation-store');
 const { MarsaStore } = require('./marsa-store');
-const { FieldStateStore } = require('./field-state-store');
+const { FieldStateStore } = require('./runway-status-store');
 const { CarrierStore } = require('./carrier-store');
 const { SfaStore } = require('./sfa-store');
 const airspaceConfig = require('./airspace-config');

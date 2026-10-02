@@ -7,7 +7,7 @@
 // geometry (decisions.md H21) — so the reason line states facts (the runway the
 // Strip resolves to, the pad's name) and recommends no runway.
 //
-// hungOrdnanceAdvisoryFor is a COPY of crc-sync's src/efsp/field-state.js
+// hungOrdnanceAdvisoryFor is a COPY of crc-sync's src/efsp/runway-status.js
 // function of the same name, runway resolution included: browser scripts cannot
 // load crc-sync. tests/efsp-ordnance-client.test.js holds the two together.
 // The helpers are prefixed `_ord` because every script here shares one global
@@ -65,7 +65,7 @@ function _ordResolveRunway(strip, fdr, fieldState) {
   return null;
 }
 
-/** The advisory for a Strip, or null — crc-sync's field-state.js hungOrdnanceAdvisoryFor, copied. */
+/** The advisory for a Strip, or null — crc-sync's runway-status.js hungOrdnanceAdvisoryFor, copied. */
 export function hungOrdnanceAdvisoryFor(strip, fdr, fieldState) {
   if (!strip || !fieldState) return null;
   if (!fdr || !fdr.military || fdr.military.ordnanceState !== 'HUNG') return null;

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 // Lane TA — the theater's transition altitude decides how an altitude's TEXT is
 // written (FL at and above it, feet below). Stored values are feet either way.
-const { FdrStore, parseAltitude, formatAltitudeBlock, normalizeMtrValue } = await import('../src/efsp/fdr-store.js');
+const { FdrStore, parseAltitude, formatAltitudeBlock, normalizeMtrValue } = await import('../src/efsp/flight-data-store.js');
 const { indicatedAltFt } = await import('../src/altimetry.js');
 const { TheaterContext } = await import('../src/theater-context.js');
 

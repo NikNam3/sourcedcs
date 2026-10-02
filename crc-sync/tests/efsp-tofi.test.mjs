@@ -16,7 +16,7 @@ process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL = path.join(tmpDir, 'tact
 
 const { BoardStore } = await import('../src/efsp/board-store.js');
 import { fullRules } from "./helpers/full-rules.mjs";
-const { FdrStore } = await import('../src/efsp/fdr-store.js');
+const { FdrStore } = await import('../src/efsp/flight-data-store.js');
 const { PositionStore } = await import('../src/efsp/position-store.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
 const blockMap = await import('../src/efsp/block-map.js');

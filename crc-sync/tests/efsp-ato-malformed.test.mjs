@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const { ingestAtoText, collectWarnings } = await import('../src/efsp/ato/ato-ingest.js');
-const { FdrStore } = await import('../src/efsp/fdr-store.js');
+const { FdrStore } = await import('../src/efsp/flight-data-store.js');
 
 // The repository normalises line endings (`* text=auto`), so the fixture is
 // stored with LF. The briefing asks for this ATO to be read with CRLF, so the

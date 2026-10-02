@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import WsHub from '../src/ws-hub.js';
 import TrackStore from '../src/tracks.js';
 import CollaborativeStore from '../src/collab-store.js';
-import fieldState from '../src/efsp/field-state.js';
+import fieldState from '../src/efsp/runway-status.js';
 import permission from '../src/efsp/permission.js';
 
 // L1b's two server-side changes (docs/adr/0068): the public field-state

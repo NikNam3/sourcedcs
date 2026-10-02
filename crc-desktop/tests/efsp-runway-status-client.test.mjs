@@ -2,7 +2,7 @@
    the pure rules mirror and its drift tests against crc-sync, the dock
    panel, and the Strip's RWY / HOOK chips.
 
-   The rules are a MIRROR of crc-sync's field-state.js and permission.js and
+   The rules are a MIRROR of crc-sync's runway-status.js and permission.js and
    proactive only. A mirror that drifts is worse than none, so the drift tests
    below require the real server modules and run both sides over one table —
    and replay every offered button against a real FieldStateStore. */
@@ -15,12 +15,12 @@ import './helpers/client-env.mjs';
 import domStub from './helpers/dom-stub.js';
 import { freshGraph } from './helpers/fresh-graph.mjs';
 import * as state from '../app/public/js/panels/efsp/efsp-state.js';
-import * as rules from '../app/public/js/panels/efsp/field-state-rules.js';
+import * as rules from '../app/public/js/panels/efsp/runway-status-rules.js';
 
 const require = createRequire(import.meta.url);
-const serverFieldState = require('../../crc-sync/src/efsp/field-state.js');
+const serverFieldState = require('../../crc-sync/src/efsp/runway-status.js');
 const serverPermission = require('../../crc-sync/src/efsp/permission.js');
-const { FieldStateStore } = require('../../crc-sync/src/efsp/field-state-store.js');
+const { FieldStateStore } = require('../../crc-sync/src/efsp/runway-status-store.js');
 
 // ── fixtures ────────────────────────────────────────────────────────────────
 
@@ -386,7 +386,7 @@ async function renderFieldStateBoard({ records, held, prompt = () => 'a reason',
   const g = freshGraph();
   const st = await g.import('panels/efsp/efsp-state.js');
   const ws = await g.import('panels/efsp/efsp-ws.js');
-  const panel = await g.import('panels/efsp/field-state-panel.js');
+  const panel = await g.import('panels/efsp/runway-status-panel.js');
   ws.setEfspSender('_sendEfsp', () => {});
   ws.sendEfspSetPositions('INCIRLIK', held);
   ws.setEfspSender('sendEfspFieldStateMutation', (actingPositionId, facilityId, baseRev, op) => sent.push({ actingPositionId, facilityId, baseRev, op }));
@@ -511,7 +511,7 @@ async function renderStripWithField({ strip, fdr, records }) {
   const ws = await g.import('panels/efsp/efsp-ws.js');
   const bay = await g.import('panels/efsp/bay-view.js');
   await g.import('panels/efsp/strip-view.js');
-  await g.import('panels/efsp/field-state-rules.js');
+  await g.import('panels/efsp/runway-status-rules.js');
   ws.setEfspSender('_sendEfsp', () => {});
   ws.sendEfspSetPositions('INCIRLIK', ['TWR']);
   ws.setEfspSender('sendEfspMutation', () => 'mid');

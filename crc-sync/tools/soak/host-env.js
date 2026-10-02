@@ -65,7 +65,7 @@ function setupHostEnv({ stateDir, seed, startNow, logPath, patchGlobals = true, 
   const realDateNow = Date.now;
   if (patchGlobals) {
     // D2: the virtual clock. Every clock read under src/efsp, tracks.js and
-    // stca.js is Date.now() or an injected clock — checked while the briefing
+    // conflict-alert.js is Date.now() or an injected clock — checked while the briefing
     // was written — so a four-hour soak runs in minutes and the 400ms
     // double-tap latch is satisfied by arithmetic, not by sleeping.
     Date.now = () => clock.now;

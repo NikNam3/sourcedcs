@@ -4,7 +4,7 @@ import crypto from 'crypto';
 
 const { BoardStore } = await import('../src/efsp/board-store.js');
 import { fullRules } from "./helpers/full-rules.mjs";
-const { FdrStore } = await import('../src/efsp/fdr-store.js');
+const { FdrStore } = await import('../src/efsp/flight-data-store.js');
 
 // A minimal, deterministic `rules` fixture standing in for block-map.js /
 // facility-config.js / nla.js / position-store.js, which don't exist yet at

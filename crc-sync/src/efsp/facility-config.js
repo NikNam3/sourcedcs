@@ -27,7 +27,7 @@
 // one EfspState — Filed/Taxi In/Arrivals/every Coordination Bay have none.
 
 const fs = require('fs');
-const fieldState = require('./field-state'); // pure, requires nothing back (docs/adr/0061)
+const fieldState = require('./runway-status'); // pure, requires nothing back (docs/adr/0061)
 const schema = require('./facility-schema');
 const { validateConfig, validateRadarSelector, validateSfaRotationRecord, BAY_VIEWS } = schema;
 // Required BEFORE this module builds its configs Map: the RANGES Facility's

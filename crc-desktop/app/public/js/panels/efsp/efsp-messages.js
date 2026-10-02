@@ -24,7 +24,7 @@ import {
 import { refreshArHighlight } from './ato-strip.js';
 import { onAtoAck, onAtoPreviewResult } from './ato-import.js';
 import { renderAirspacePanel } from './airspace-panel.js';
-import { renderFieldStatePanel } from './field-state-panel.js';
+import { renderFieldStatePanel } from './runway-status-panel.js';
 
 // The handlers of the EFSP message families whose state lives in bay-view.js / efsp-panel.js / efsp-state.js
 // (CMSG): Board, correlation, MARSA, alerts, SFA, ATO import, positions, resync. They moved here out of app.js's

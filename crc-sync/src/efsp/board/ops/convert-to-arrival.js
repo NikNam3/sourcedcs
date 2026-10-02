@@ -12,7 +12,7 @@ const { newFlags } = require('../strip-util');
  * this feature) after live testing found the two-Strip approach left a
  * stale departure Strip behind and required copying every field by hand
  * (route, altitude, remarks, identity, beacon code — the last of which
- * can't even be copied cleanly, since fdr-store.js's createFdr always
+ * can't even be copied cleanly, since flight-data-store.js's createFdr always
  * auto-allocates a fresh code). Reusing the same FDR makes every one of
  * those problems structurally impossible: there is nothing to copy,
  * because nothing new was created.

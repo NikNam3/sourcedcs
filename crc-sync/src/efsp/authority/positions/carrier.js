@@ -4,7 +4,7 @@
 // CV_APP1, CV_APP2 (docs/adr/0064 B4, docs/adr/0074). Moved from permission.js.
 
 const { NON_CREATE_OPS } = require('../op-kinds');
-const { CARRIER_TRANSFERS } = require('../../carrier/transfers'); // pure (docs/adr/0064)
+const { CARRIER_TRANSFERS } = require('../../carrier/handoffs'); // pure (docs/adr/0064)
 
 const PERMISSIONS = {
   // The CARRIER Facility (docs/adr/0064 B4, docs/adr/0074; guide §4.1: "Military

@@ -1,6 +1,6 @@
 'use strict';
 
-const { CARRIER_TRANSFER_EFFECTS } = require('../../carrier/transfer-effects'); // pure (docs/adr/0074)
+const { CARRIER_TRANSFER_EFFECTS } = require('../../carrier/handoff-effects'); // pure (docs/adr/0074)
 
 /**
  * The carrier's four hand-overs, as one operation (docs/adr/0064, 0074; guide

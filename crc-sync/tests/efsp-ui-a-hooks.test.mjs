@@ -13,7 +13,7 @@ test('U1 OPS records ORDNANCE (3G) on a departure whoever holds it, and nothing 
 });
 
 test('S-L16: a vul window cannot be left ending before it starts', async () => {
-  const { FdrStore } = await import('../src/efsp/fdr-store.js');
+  const { FdrStore } = await import('../src/efsp/flight-data-store.js');
   const store = new FdrStore();
   const created = store.createFdr({
     callsign: 'WEASEL1', flightSize: 2, aircraftType: 'F16', wakeCategory: 'D', equipmentCodes: ['G'],

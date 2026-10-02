@@ -18,7 +18,7 @@ const MODULES = [
   require('./convert-to-arrival'),
   require('./approve-airspace-entry'),
   require('./clear-airspace-entry'),
-  require('./carrier-transfer'),
+  require('./carrier-handoff'),
   require('./sfa-rotation'),
 ];
 

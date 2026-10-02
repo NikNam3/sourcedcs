@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   TRIGGER_TYPES, CARRIER_TRANSFERS, GUIDE_TRANSFER_KINDS, validateCarrierTransfer, laneFor, assignLanes,
-} from '../src/efsp/carrier/transfers.js';
+} from '../src/efsp/carrier/handoffs.js';
 import { deriveStack } from '../src/efsp/carrier/marshal-stack.js';
 
 // Guide §9.12: "Ownership transfers on the carrier are heterogeneous and MUST

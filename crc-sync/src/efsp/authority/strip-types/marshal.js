@@ -21,7 +21,7 @@ const MARSHAL_STATES = ['LAUNCH', 'IN_STACK', 'COMMENCED', 'DROPPED'];
 // hand-overs, and neither publishes "normally owned by". The Marshal owns a
 // flight until Commence; then the lane controller owns COMMENCED, ON_FINAL,
 // BALL and BOLTER_WAVEOFF; PriFly owns the pattern. Case I and Case II Strips
-// reach PriFly by their own transfer (carrier/transfers.js).
+// reach PriFly by their own transfer (carrier/handoffs.js).
 const CV_LANES = ['CV_APP1', 'CV_APP2'];
 const MARSHAL_STATE_OWNERS = {
   LAUNCH:    ['CV_MARSHAL'],
@@ -31,7 +31,7 @@ const MARSHAL_STATE_OWNERS = {
 
 /**
  * MARSHAL's NLA table (docs/adr/0064 B2, docs/adr/0074). A NLA result may carry
- * `carrierTransfer`, the key of a CARRIER_TRANSFERS row (carrier/transfers.js):
+ * `carrierTransfer`, the key of a CARRIER_TRANSFERS row (carrier/handoffs.js):
  * board-store.js then applies the whole transfer (ownership, Role, stack effect,
  * the trigger type recorded) instead of a bare state write, so the button and
  * the dedicated CarrierTransfer op are ONE implementation. `roleChange` names

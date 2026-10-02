@@ -15,7 +15,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import { readClient, readServer, constLiteral } from './helpers/mirror-source.mjs';
 import * as clientNla from '../app/public/js/panels/efsp/efsp-nla.js';
-import * as rules from '../app/public/js/panels/efsp/field-state-rules.js';
+import * as rules from '../app/public/js/panels/efsp/runway-status-rules.js';
 import { formatZuluHhmm } from '../app/public/js/panels/efsp/strip-template.js';
 import { COMPACT_BLOCKS_BY_POSITION } from '../app/public/js/panels/efsp/strip-fields.js';
 import { haversineM } from '../app/public/js/geo.js';
@@ -24,7 +24,7 @@ const require = createRequire(import.meta.url);
 
 const serverIff = require('../../crc-sync/src/surveillance/iff.js');
 const serverNla = require('../../crc-sync/src/efsp/nla.js');
-const serverFieldState = require('../../crc-sync/src/efsp/field-state.js');
+const serverFieldState = require('../../crc-sync/src/efsp/runway-status.js');
 const serverPermission = require('../../crc-sync/src/efsp/permission.js');
 const serverFacilities = require('../../crc-sync/src/efsp/facility-config.js');
 const serverZulu = require('../../crc-sync/src/efsp/zulu-time.js');
@@ -81,9 +81,9 @@ test('the client stale-board threshold outlasts several of the server\'s heartbe
   assert.ok(DEFAULT_STALE_THRESHOLD_SECONDS * 1000 >= 4 * tick, `a ${DEFAULT_STALE_THRESHOLD_SECONDS}s threshold vs a ${tick}ms heartbeat would flap`);
 });
 
-// ── field-state-rules.js tables the existing drift tests do not touch ───────
+// ── runway-status-rules.js tables the existing drift tests do not touch ───────
 
-const fsSrc = readClient(EFSP + 'field-state-rules.js');
+const fsSrc = readClient(EFSP + 'runway-status-rules.js');
 
 test('D-9: the strips that show a RWY chip are real states of their Role, and cover the state BEFORE every state the server gates on a runway', () => {
   // RUNWAY_GATED_STATES lists the states whose ENTRY uses the runway; the chip is shown one step
@@ -107,15 +107,15 @@ test('D-9: the hook-check states are ARRIVAL states, and a subset of the RWY-chi
   }
 });
 
-test('D-9: the suspension-kind labels are field-state.js\'s, verbatim', () => {
+test('D-9: the suspension-kind labels are runway-status.js\'s, verbatim', () => {
   // NOTE (PARITY finding, not client drift): SUSPENSION_KINDS also has RUNWAY_CHANGE but
   // SUSPENSION_LABELS does not, so the server words a change-suspension "works in progress"
   // by fallback. Both sides agree; see docs/wip/PARITY.md.
-  assert.deepEqual(constLiteral(fsSrc, 'FIELD_STATE_SUSPENSION_LABELS', 'field-state-rules.js'), serverFieldState.SUSPENSION_LABELS);
+  assert.deepEqual(constLiteral(fsSrc, 'FIELD_STATE_SUSPENSION_LABELS', 'runway-status-rules.js'), serverFieldState.SUSPENSION_LABELS);
 });
 
 test('D-9: the gear-type labels cover exactly the server GEAR_TYPES', () => {
-  const client = constLiteral(fsSrc, 'FIELD_STATE_GEAR_TYPE_LABELS', 'field-state-rules.js');
+  const client = constLiteral(fsSrc, 'FIELD_STATE_GEAR_TYPE_LABELS', 'runway-status-rules.js');
   assert.deepEqual(Object.keys(client).sort(), [...serverFieldState.GEAR_TYPES].sort());
 });
 
@@ -174,8 +174,8 @@ test('D-9: the client haversineM (geo.js) agrees with crc-sync geo.js', () => {
 });
 
 test('D-9: the TOFI accept picker offers exactly the server\'s SEPARATION_REGIMES', () => {
-  const server = /const SEPARATION_REGIMES = new Set\((\[[^\]]*\])\)/.exec(readServer('efsp/fdr-store.js'));
-  assert.ok(server, 'fdr-store.js SEPARATION_REGIMES moved');
+  const server = /const SEPARATION_REGIMES = new Set\((\[[^\]]*\])\)/.exec(readServer('efsp/flight-data-store.js'));
+  assert.ok(server, 'flight-data-store.js SEPARATION_REGIMES moved');
   const regimes = new Function(`return ${server[1]}`)();
   assert.deepEqual([...constLiteral(readClient(EFSP + 'bay/popovers/tofi.js'), 'TOFI_ACCEPT_REGIMES', 'tofi.js')].sort(), [...regimes].sort());
 });

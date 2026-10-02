@@ -6,12 +6,12 @@ import { getEfspFdr, getEfspFieldState } from './efsp-state.js';
 // with it, whether a hook-equipped arrival has arresting gear to land on, and
 // which field-state buttons a controller is offered.
 //
-// Everything here is a MIRROR of crc-sync's src/efsp/field-state.js and
+// Everything here is a MIRROR of crc-sync's src/efsp/runway-status.js and
 // permission.js, and proactive only: the server decides every op and stamps
 // every NLA inhibit (`strip.nla.inhibited`). These functions exist so a
 // controller sees a runway problem on a Strip before the NLA does, and is not
 // offered a button that will be refused. A mirror that drifts is worse than
-// none, so tests/efsp-field-state-client.test.js requires the crc-sync modules
+// none, so tests/efsp-runway-status-client.test.js requires the crc-sync modules
 // and runs both over one table of cases.
 //
 // Dual-use: plain function declarations for the browser (classic <script>,
@@ -53,13 +53,13 @@ export const FIELD_STATE_RUNWAY_STRIP_STATES = {
 // Where rule 4 (the hook check) applies: an arrival on its way to the runway.
 export const FIELD_STATE_GEAR_CHECK_STATES = ['INBOUND', 'HANDED_TO_TOWER', 'FINAL'];
 
-// The mirror of field-state.js's SUSPENSION_LABELS (decisions.md H52: the
+// The mirror of runway-status.js's SUSPENSION_LABELS (decisions.md H52: the
 // generic "runway works + inspection" suspension).
 const FIELD_STATE_SUSPENSION_LABELS = { WORKS: 'works in progress', RUNWAY_CHANGE: 'runway change in progress' };
 
 const FIELD_STATE_GEAR_TYPE_LABELS = { BAK_12: 'BAK-12', E_5: 'E-5', OTHER: 'Gear' };
 
-// ── runway designators and resolution (mirror of field-state.js) ──────────
+// ── runway designators and resolution (mirror of runway-status.js) ──────────
 
 /** A runway END designator from free text, or null: '5' -> '05', 'RWY 23' -> '23'. */
 export function normalizeRunwayEnd(text) {
@@ -77,7 +77,7 @@ function _fsCompactId(text) {
 }
 
 /**
- * The read view field-state.js's buildStatusView builds from the inventory,
+ * The read view runway-status.js's buildStatusView builds from the inventory,
  * built here from the wire record — whose runway rows carry their own ends
  * and racks (crc-sync getFieldState merges the inventory in).
  */
@@ -145,7 +145,7 @@ export function runwayForStrip(strip, fdr, record, { targetRackId } = {}) {
   return null;
 }
 
-/** field-state.js's runwayStatusReason, verbatim: the server's inhibit wording, or null when usable. */
+/** runway-status.js's runwayStatusReason, verbatim: the server's inhibit wording, or null when usable. */
 export function runwayStatusReasonFor(runway) {
   if (!runway) return null;
   switch (runway.status) {
@@ -162,7 +162,7 @@ export function runwayStatusReasonFor(runway) {
   }
 }
 
-/** field-state.js's runwayAdvisoryFor (decisions.md Q30): a Strip queued for an end that is not the active one. */
+/** runway-status.js's runwayAdvisoryFor (decisions.md Q30): a Strip queued for an end that is not the active one. */
 export function runwayAdvisoryFor(strip, record) {
   const view = fieldStateViewOf(record);
   if (!strip || !view || !view.activeRunway) return null;

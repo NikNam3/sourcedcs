@@ -16,7 +16,7 @@ import { renderBayDescriptorView } from './bay-views.js';
 import { stereoRoutesCacheKey } from './efsp-stereo-routes.js';
 import { tofiExitSignatureFor } from './strip-view.js';
 import { efspArrivalFor } from './efsp-arrivals.js';
-import { fieldStateSignatureFor } from './field-state-rules.js';
+import { fieldStateSignatureFor } from './runway-status-rules.js';
 import { trackRef } from '../../track-label.js';
 import { getActiveEfspSearchQuery } from './efsp-panel.js';
 import { computeRackReconciliation } from './strip-drag.js';

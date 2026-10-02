@@ -187,7 +187,7 @@ test('SCENARIO a loaded flight declares a hung store and a hook requirement, on 
 
   // The whole reason this reaches for the real wiring rather than a rules
   // fixture: the 'military' target kind has to survive block-map.js ->
-  // board-store.js -> fdr-store.js's dedicated setter. Every hop is somewhere
+  // board-store.js -> flight-data-store.js's dedicated setter. Every hop is somewhere
   // a new target kind has been forgotten before.
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'HUNG11' });
 

@@ -17,7 +17,7 @@ process.env.CRCSYNC_EFSP_AIRSPACES_PATH = path.join(tmpDir, 'airspaces.json');
 fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify([]));
 
 const { createEfsp } = await import('../src/efsp/index.js');
-const { FdrStore, parseAltitudeFt, parseHeadingDeg } = await import('../src/efsp/fdr-store.js');
+const { FdrStore, parseAltitudeFt, parseHeadingDeg } = await import('../src/efsp/flight-data-store.js');
 const { computeDueObligations } = await import('../src/efsp/forwarding-obligations.js');
 
 function crew(efsp, spec) {

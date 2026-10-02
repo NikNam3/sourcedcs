@@ -22,7 +22,7 @@ for (const [k, v] of Object.entries({
 fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
 
 const { createEfsp } = await import('../src/efsp/index.js');
-const fieldState = await import('../src/efsp/field-state.js');
+const fieldState = await import('../src/efsp/runway-status.js');
 const { crew, mustAct, jumpTo, DEPARTURE_FDR } = await import('./helpers/efsp-scenario.mjs');
 
 test('RUNWAY_CHANGE has its own label in the inhibit reason; WORKS and unknown kinds read as before', () => {

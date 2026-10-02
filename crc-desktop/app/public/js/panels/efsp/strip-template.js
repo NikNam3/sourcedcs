@@ -553,7 +553,7 @@ export function resolveBlockValue(blockId, fdr, strip) {
 // text would let a controller enter something invalid. Keyed by blockId,
 // not target.kind: '24A' needs a structurally distinct target kind
 // server-side (the D15 "no boolean path" defect), but '5A' is plain
-// 'fdr'-routed (fdr-store.js's setField already validates it) — both still
+// 'fdr'-routed (flight-data-store.js's setField already validates it) — both still
 // deserve the same picker UX, not free text, so this is a client-only
 // rendering decision independent of how the server routes the write.
 // Distinct from isBlockEditable() below: these ARE editable, just not
@@ -565,19 +565,19 @@ export function resolveBlockValue(blockId, fdr, strip) {
 // convention instead of a 2-option <select>.
 const ENUM_SELECT_BLOCKS = {
   '5A': ['NONE', 'CST', 'FAIL', 'IF', 'NT', 'TRK'],
-  // §3.8's release states. fdr-store.js validates the value; this is the
+  // §3.8's release states. flight-data-store.js validates the value; this is the
   // picker so a controller never types one of six exact strings by hand.
   '14A': ['RELEASED', 'HOLD_FOR_RELEASE', 'RELEASE_TIME', 'CLEARANCE_VOID_TIME', 'EDCT', 'CALL_FOR_RELEASE'],
   '24A': ['CONTROLLING_AGENCY', 'USING_AGENCY'],
   'RSVC': ['ACTIVE', 'TERMINATED'],
   'SREG': ['ATC', 'MARSA', 'USING_AGENCY', 'DUE_REGARD', 'SEE_AND_AVOID'],
-  // WP6 §9.5 (guide M14) — ordnance state. fdr-store.js's ORDNANCE_STATES is
+  // WP6 §9.5 (guide M14) — ordnance state. flight-data-store.js's ORDNANCE_STATES is
   // the authority; this is the picker. A static literal is right here, unlike
   // Block 9F's route table, because these four values are the guide's own and
   // are not runtime config.
   '3G': ['CLEAN', 'LOADED', 'HUNG', 'EXPENDED'],
   // WP6 §9.6 (guide M16) — alert status, the guide's own three values;
-  // fdr-store.js's ALERT_STATUSES is the authority. 'NONE' is its cleared
+  // flight-data-store.js's ALERT_STATUSES is the authority. 'NONE' is its cleared
   // value and is in the list, as 3G's 'CLEAN' is (crc-sync docs/adr/0070).
   '14E': ['NONE', 'ALERT', 'SCRAMBLE'],
   'C4': ['TACAN', 'ICLS', 'ACLS', 'PAR', 'VISUAL'], // crc-sync carrier/flight-record.js APPROACH_TYPES
@@ -620,7 +620,7 @@ export function enumSelectOptionsFor(blockId, fdr) {
 // This is the SERVER's answer to "which of the six accept a clear", not a
 // guess from reading the validators:
 //   RSVC / SREG  -> both start as null and null is a real, renderable state,
-//                   so clearing one is a meaningful action. fdr-store.js's
+//                   so clearing one is a meaningful action. flight-data-store.js's
 //                   setTofi() normalizes the '' a <select> sends to null, so
 //                   "—" sends '' and there is one spelling of "cleared"
 //                   server-side.
@@ -631,7 +631,7 @@ export function enumSelectOptionsFor(blockId, fdr) {
 //   24A          -> airspace ownership is a DIRECTION, and its record is
 //                   append-only precisely so a handover cannot be erased.
 //                   "Give it back" is CONTROLLING_AGENCY, not blank.
-//   9F           -> fdr-store.js's setField('filed.stereoRouteName', '')
+//   9F           -> flight-data-store.js's setField('filed.stereoRouteName', '')
 //                   clears the LABEL and keeps the route (docs/adr/0050), so
 //                   "cancel the stereo" is meaningful and the route a flight
 //                   is taxiing on never goes blank (docs/adr/0073).

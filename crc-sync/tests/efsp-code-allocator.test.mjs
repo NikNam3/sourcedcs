@@ -152,7 +152,7 @@ test('restore() with no prior data (empty/undefined) yields a clean allocator', 
 // ── docs/adr/0081 (L27): the rotating cursor (L6's F6) ───────────────────
 
 const { isSynthetic } = await import('../src/efsp/code-allocator.js');
-const { FdrStore } = await import('../src/efsp/fdr-store.js');
+const { FdrStore } = await import('../src/efsp/flight-data-store.js');
 
 test('a released code is not re-issued by the next allocate', () => {
   const a = new CodeAllocator();

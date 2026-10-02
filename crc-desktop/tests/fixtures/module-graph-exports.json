@@ -630,25 +630,6 @@
    "sendEfspSfaMutation",
    "setEfspSender"
   ],
-  "panels/efsp/field-state-panel.js": [
-   "initFieldStatePanel",
-   "renderFieldStatePanel"
-  ],
-  "panels/efsp/field-state-rules.js": [
-   "FIELD_STATE_ACTION_OWNERS",
-   "FIELD_STATE_GEAR_CHECK_STATES",
-   "FIELD_STATE_RUNWAY_STRIP_STATES",
-   "fieldStateActionsFor",
-   "fieldStateAlertsFor",
-   "fieldStateSignatureFor",
-   "fieldStateSubjectFor",
-   "fieldStateViewOf",
-   "gearMismatchFor",
-   "normalizeRunwayEnd",
-   "runwayAdvisoryFor",
-   "runwayForStrip",
-   "runwayStatusReasonFor"
-  ],
   "panels/efsp/final-panel.js": [
    "FINAL_CADENCE_S",
    "FINAL_CALL_PRIORITY",
@@ -766,6 +747,25 @@
    "nextLeg",
    "patternBoardModel",
    "renderPatternBoard"
+  ],
+  "panels/efsp/runway-status-panel.js": [
+   "initFieldStatePanel",
+   "renderFieldStatePanel"
+  ],
+  "panels/efsp/runway-status-rules.js": [
+   "FIELD_STATE_ACTION_OWNERS",
+   "FIELD_STATE_GEAR_CHECK_STATES",
+   "FIELD_STATE_RUNWAY_STRIP_STATES",
+   "fieldStateActionsFor",
+   "fieldStateAlertsFor",
+   "fieldStateSignatureFor",
+   "fieldStateSubjectFor",
+   "fieldStateViewOf",
+   "gearMismatchFor",
+   "normalizeRunwayEnd",
+   "runwayAdvisoryFor",
+   "runwayForStrip",
+   "runwayStatusReasonFor"
   ],
   "panels/efsp/scramble.js": [
    "GROUND_STATES",

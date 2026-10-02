@@ -2,7 +2,7 @@
 
 // Helpers more than one Role family's NLA table uses (moved from nla.js, AUTH).
 
-const { runwayInhibitFor } = require('../../field-state');
+const { runwayInhibitFor } = require('../../runway-status');
 
 /**
  * `now` is required everywhere in this module, and is the mission clock's
@@ -14,7 +14,7 @@ function _requireNow(now) {
   if (!Number.isFinite(now)) throw new TypeError('nla: `now` (mission-clock ms) is required');
 }
 
-/** Rule 1's inhibit for this Strip's runway, or null (fail open — see field-state.js). */
+/** Rule 1's inhibit for this Strip's runway, or null (fail open — see runway-status.js). */
 function _runwayInhibit(strip, fdr, ctx) {
   return runwayInhibitFor(strip, fdr, ctx.fieldStateFor(), { targetRackId: ctx.targetRackId });
 }

@@ -199,7 +199,7 @@ test('no Position name of the new three is written in a second table: every RSU/
   assert.equal(hits, null, `Position literals outside the table: ${hits}`);
   const others = ['permission.js', 'authority/index.js', 'authority/op-kinds.js', 'authority/classes.js',
     ...fs.readdirSync(new URL('../src/efsp/authority/positions/', import.meta.url)).filter(f => f !== 'incirlik-military.js').map(f => `authority/positions/${f}`),
-    ...fs.readdirSync(new URL('../src/efsp/authority/roles/', import.meta.url)).map(f => `authority/roles/${f}`)];
+    ...fs.readdirSync(new URL('../src/efsp/authority/strip-types/', import.meta.url)).map(f => `authority/strip-types/${f}`)];
   for (const f of others) {
     const text = fs.readFileSync(new URL(`../src/efsp/${f}`, import.meta.url), 'utf8').split('\n').map(l => l.replace(/\/\/.*$/, '')).join('\n');
     assert.equal(text.match(/'(RSU|SFA|PAR)'/g), null, `${f} names RSU/SFA/PAR outside INCIRLIK_CAPABILITIES`);

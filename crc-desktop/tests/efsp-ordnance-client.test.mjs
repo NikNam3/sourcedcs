@@ -21,12 +21,12 @@ import * as client from '../app/public/js/panels/efsp/ordnance-advisory.js';
 import * as efspState from '../app/public/js/panels/efsp/efsp-state.js';
 
 const require = createRequire(import.meta.url);
-const server = require('../../crc-sync/src/efsp/field-state.js');
+const server = require('../../crc-sync/src/efsp/runway-status.js');
 const { makeElement, descendants } = domStub;
 
 // ── fixtures ─────────────────────────────────────────────────────────────
 
-/** One Facility's record as crc-sync's field-state-store.js getFieldState puts it on the wire. */
+/** One Facility's record as crc-sync's runway-status-store.js getFieldState puts it on the wire. */
 function record({ pad = 'Hot cargo pad', activeRunway = '05', facilityId = 'INCIRLIK' } = {}) {
   return {
     facilityId, rev: 2, activeRunway, activeRunwaySource: 'WIND',
