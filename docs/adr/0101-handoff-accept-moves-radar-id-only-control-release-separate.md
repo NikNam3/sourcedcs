@@ -3,11 +3,39 @@
 
 # 0101: On an interfacility HANDOFF, accept moves radar identification and the Strip only; communications, ControlRelease and transfer of control are separate steps
 
-**Status.** Draft (DES-RELEASE, docs only). The CONTROL-RELEASE lane copies it to `docs/adr/` when it builds it and
-records what differs. Rulings: H94 (the model), H98 (named `ControlRelease`, never a bare "Release"), H93/H94 (carrier
-Positions are EFSP Positions; the Strip does not leave the EFSP), H95 (undo), S-desk3/R3-16 (clocks). Research:
-`docs/parallel/research/control-release.md`. Choices marked **settled H100 (…)** are the human's answers (decisions.md H100) to the questions in
-`docs/wip/DES-RELEASE.md` § "Questions for the human".
+**Status.** Accepted, built by CR-S (lane `lane/CR-S-control-release`). Rulings: H94 (the model), H98 (named `ControlRelease`,
+never a bare "Release"), H93/H94 (carrier Positions are EFSP Positions; the Strip does not leave the EFSP), H95 (undo),
+S-desk3/R3-16 (clocks), H100 (DR-1..DR-11, the control invariant). Research: `docs/parallel/research/control-release.md`.
+Choices marked **settled H100 (…)** are the human's answers (decisions.md H100) to the questions in `docs/wip/DES-RELEASE.md`.
+
+**Differs from the draft (as built):**
+
+1. `ControlRelease` is held where a HANDOFF is, through its own list `COORDINATION_STEP_OP_KINDS` in `authority/op-kinds.js`;
+   `COORDINATION_OP_KINDS` stays the five primitives the client mirrors. A Position's grant is by op kind, so the carrier
+   Marshal's narrower grant (answer a HANDOFF, never propose) is a registry table, `COORDINATION_ACTIONS`
+   (`authority/positions/carrier.js`), read through `permission.canMutateAction` and the op modules' `authorize`.
+2. A proposal to a Position that does not take the primitive is refused at the proposer (`X does not take a POINT_OUT`).
+3. A second `TRANSFER_COMMS` is refused (`VALIDATION_ERROR`), not a silent no-op; the first record wins.
+4. `CANCEL` of an ACTIVE HANDOFF is refused once comms or control have moved (the receiver's Drop is the way back).
+5. The record gains `coordination.repair` (the standing notice of a repair), an optional `trigger` on `comms` for moves that
+   no controller made (`TRANSFERRING_RETIRED`, `REPAIR`) and the control trigger `REPAIR`. The persisted-shape allow-list
+   (`stores.js`) lists `comms`, `control`, `release`, `releaseRequest`, `repair` and no longer `commsTransferred` on a
+   `coordination` (TOFI's own `commsTransferred` is unchanged).
+6. **Sign-off is not blocked** (S-CRS0, answered by "main"): today's sign-off only warns when the consolidation chain
+   bottoms out, so an exchange Strip can be left with an unstaffed owner. `assertControlInvariant` runs after every
+   HANDOFF-family mutation, every retirement, every change of staffing and at restore; under test it throws
+   (`CRCSYNC_CONTROL_INVARIANT=throw`), otherwise it repairs by moving the holder to the other side when that Strip is live
+   and its owner staffed. Every repair is its own `InterfacilityControlRepair` entry (with a peer mirror), sets
+   `coordination.repair` on both Strips and shows as the obligation `CONTROL_REPAIRED` on both Facilities' panels. A violation
+   nothing can repair shows as the standing obligation `CONTROL_UNCOVERED` (severity OVERDUE) on both panels, recomputed on
+   every tick and Mutation, until someone signs on. At restore only liveness is judged (nobody has signed on yet).
+7. A transferring Strip that reaches DROPPED without the `retire` path is settled at archive time (`BoardStore#archiveStrip`).
+8. The control-axis check treats an altitude that equals the assigned one as no instruction, and accepts as `coordinatedWith`
+   either the other Strip's current owner or the Position the proposal named.
+9. The two marks declare their undo scope (both Strips) in `board/ops/coordination.js`; the executor is UNDO-S's and is not
+   merged into this branch, so the undo walks are `test.todo`.
+10. The receiver's drop is the existing `receiveCoordinationPeerGone` (the exchange ends on the proposer's Strip); the
+    `SystemCoordinationEnd` entry gains `control: { trigger: 'RECEIVING_RETIRED', returned }` when the receiver held anything.
 
 Written in the post-RENAME vocabulary (`docs/parallel/research/vocabulary.md`, H96/H98): Position, staffed, sign
 on/off, consolidation, handoff, `CarrierHandoff`, flight data (today FDR, `fdrId`), strip type (today Strip Role),
