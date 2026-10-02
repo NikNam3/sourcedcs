@@ -101,7 +101,7 @@ test('scrambleAlertsFor: a quiet Strip, an ALERT Strip, another Facility and a D
   for (const id of ['s-taxi', 's-queue', 's-in']) assert.deepEqual(client.scrambleAlertsFor(state.getEfspStrip(id)), [], `${id} with no scramble`);
 });
 
-test('scrambleAlertsFor names the configured route when field state is loaded', () => {
+test('scrambleAlertsFor names the configured route when runway status is loaded', () => {
   load(STRIPS, FLIGHT_DATA_LIST, [{ facilityId: 'INCIRLIK', alertPad: { name: 'Alert pad', accessRoute: 'ALERT ACCESS TAXIWAY' } }]);
   const [chip] = client.scrambleAlertsFor(state.getEfspStrip('s-taxi'));
   assert.match(chip.reason, /keep clear of ALERT ACCESS TAXIWAY\./);

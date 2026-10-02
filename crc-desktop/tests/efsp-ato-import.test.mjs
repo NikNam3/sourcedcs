@@ -64,7 +64,7 @@ function previewed(m) {
   return req;
 }
 
-test('the Import ATO button is there only while TAC_C2 is held', async () => {
+test('the Import ATO button is there only while TAC_C2 is signed on', async () => {
   assert.equal((await mount()).button.hidden, false);
   const gci = await mount({ signedOn: ['GCI'] });
   assert.equal(gci.button.hidden, true);

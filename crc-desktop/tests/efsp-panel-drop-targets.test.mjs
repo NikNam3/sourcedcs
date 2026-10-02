@@ -25,7 +25,7 @@ test('a single-Position controller still gets a drop target for every other Posi
   assert.deepEqual(tabs.map(t => t.signedOn), [true, false, false]);
 });
 
-test('held Positions come first, so the tabs a controller actually works in stay leftmost', () => {
+test('signed-on Positions come first, so the tabs a controller actually works in stay leftmost', () => {
   const tabs = computePositionTabs(BAYS, ['GC']);
   assert.equal(tabs[0].positionId, 'GC');
   assert.equal(tabs[0].signedOn, true);
@@ -44,7 +44,7 @@ test('holding Positions at two Facilities surfaces drop targets at both, and onl
   assert.deepEqual(tabs.filter(t => !t.signedOn).map(t => t.positionId), ['CD', 'GC']);
 });
 
-test('only held Positions carry their Bays — a drop-only tab has nothing to page through', () => {
+test('only signed-on Positions carry their Bays — a drop-only tab has nothing to page through', () => {
   const tabs = computePositionTabs(BAYS, ['OPS']);
   assert.equal(tabs.find(t => t.positionId === 'OPS').bays.length, 1);
   assert.deepEqual(tabs.find(t => t.positionId === 'CD').bays, []);

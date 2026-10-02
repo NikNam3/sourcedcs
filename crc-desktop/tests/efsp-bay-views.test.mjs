@@ -183,7 +183,7 @@ test('final mount: PAR\'s Strip becomes the panel with no input in it, racks hid
   assert.ok(descendants(c3).some(e => e.className === 'efsp-final-none'));
 });
 
-test('sfa header: every pool frequency is a row; the rack headers say the frequency and the controller; only APP gets selects', () => {
+test('sfa header: every pool frequency is a row; the rack headers say the frequency and the controller; only AP gets selects', () => {
   const b = bay('sfa-frequencies');
   const store = new SfaStore({ config: facilityConfig.getSingleFrequencyApproach(), positions: facilityConfig.getPositionSet(), clock: { now: () => now, source: 'T' } });
   applyEfspSfaSnapshot({ sfaRotation: store.view() });

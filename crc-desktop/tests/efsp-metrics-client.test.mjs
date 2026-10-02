@@ -154,7 +154,7 @@ test('an event queued for more than 5 minutes is dropped, not sent into a later 
   assert.equal(h.client.stats().droppedStale, 1);
 });
 
-test('a Position not held is never reported (crc-sync would refuse it); one warning per session', () => {
+test('a Position not signed on is never reported (crc-sync would refuse it); one warning per session', () => {
   const h = harness();
   h.client.noteSearch('CTR', 'ctr-overflight');
   h.client.noteSearch('CTR', 'ctr-overflight');

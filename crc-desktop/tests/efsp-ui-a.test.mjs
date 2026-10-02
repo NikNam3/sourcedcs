@@ -18,7 +18,7 @@ test('U4: TYPE (3) is redirected to the aircraft type (3A) and carries its curre
   assert.equal(tpl.isBlockEditable('3'), false, 'the composite itself is still not a write target');
 });
 
-test('U5: RELEASE (14A) is on a departure at APP and CTR, labelled RELEASE', () => {
+test('U5: RELEASE (14A) is on a departure at AP and CTR, labelled RELEASE', () => {
   for (const p of ['AP', 'CTR']) assert.ok(fields.compactBlocksFor('DEPARTURE', p).includes('14A'), p);
   assert.equal(tpl.blockLabelFor('14A', 'DEPARTURE'), 'RELEASE');
 });
@@ -39,7 +39,7 @@ test('U8: TOFI Exit is due on the ATC Strip only while its TOFI is ACTIVE and th
   assert.equal(tofiExitDueFor({ stripType: 'ARRIVAL', tofiCoordination: null }, mission('RTB')), false);
 });
 
-test('S-L16 W2: TAXI is on GND\'s face and TAKEOFF on TWR\'s', () => {
+test('S-L16 W2: TAXI is on GC\'s face and TAKEOFF on LC\'s', () => {
   assert.ok(fields.compactBlocksFor('DEPARTURE', 'GC').includes('17'));
   assert.ok(fields.compactBlocksFor('DEPARTURE', 'LC').includes('18'));
 });

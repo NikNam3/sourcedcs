@@ -81,7 +81,7 @@ test('a coordination replica is an arrival, from the Position that proposed it',
   assert.equal(found[0].from, 'AP');
 });
 
-test('UI-A U2: a replica minted for a proposal my own controller made is still an arrival (one person on APP and CTR)', () => {
+test('UI-A U2: a replica minted for a proposal my own controller made is still an arrival (one person on AP and CTR)', () => {
   const replica = strip({
     ownerPositionId: 'CTR', bayId: 'ctr-ap-coordination', updatedBy: ME,
     coordination: { primitive: 'HANDOFF', state: 'INITIATED', peerPositionId: 'AP', mintedForCoordination: true },

@@ -45,7 +45,7 @@ test('every field the client reads off a `bay` is on the server\'s Bay descripto
   for (const field of loose) assert.ok(bays.some(b => field in b), `client reads bay.${field} but no Bay has such a field`);
 });
 
-test('every Bay descriptor has the fields the panel keys on, and an impliesState that is a real state of some Role', () => {
+test('every Bay descriptor has the fields the panel keys on, and an impliesState that is a real state of some strip type', () => {
   const allStates = new Set(Object.values(nla.STATES_BY_STRIP_TYPE).flat());
   for (const b of allBays()) {
     for (const f of ['bayId', 'positionId', 'facilityId', 'rackIds']) assert.ok(b[f], `${b.bayId}.${f}`);

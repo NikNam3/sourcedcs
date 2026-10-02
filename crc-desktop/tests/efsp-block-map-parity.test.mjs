@@ -111,7 +111,7 @@ test('server and client MISSION_BLOCK_MAP agree on every Block ID, required flag
 // §9.4 MTR fields (crc-sync's docs/adr/0062) — held explicitly rather than
 // trusted to the per-strip-type sweeps above: six new Blocks on three strip types is
 // eighteen places for a path to be mistyped on one side only.
-test('the six MTR Blocks are on all three ATC Roles on both sides, with identical paths, and on neither MISSION map', () => {
+test('the six MTR Blocks are on all three ATC strip types on both sides, with identical paths, and on neither MISSION map', () => {
   const MTR = {
     '9G-MTR': 'military.mtr.designator', '9G-ENTRY': 'military.mtr.entryFix', '9G-TIME': 'military.mtr.entryTimeUtc',
     '9H-EXIT': 'military.mtr.exitFix', '9H-TIME': 'military.mtr.exitEstimateUtc', '9H-ALT': 'military.mtr.requestedAltitudeAfterExit',
@@ -132,7 +132,7 @@ test('the six MTR Blocks are on all three ATC Roles on both sides, with identica
 // whoever the pilot is talking to, tactical Positions included, so Block 3G is
 // on every strip type — MISSION too — on both sides, onto the one flight-data field. The hook
 // (3F) stays on the three ATC strip types only.
-test('Block 3G is on all four Roles on both sides, onto military.ordnanceState, and 3F never on MISSION', () => {
+test('Block 3G is on all four strip types on both sides, onto military.ordnanceState, and 3F never on MISSION', () => {
   for (const stripType of ['DEPARTURE', 'ARRIVAL', 'OVERFLIGHT', 'MISSION']) {
     assert.deepEqual(server.BLOCK_MAPS[stripType]['3G'].target, { kind: 'military', field: 'ordnanceState' }, `server ${stripType}/3G`);
     assert.deepEqual(client.BLOCK_MAPS[stripType]['3G'].target, { kind: 'military', field: 'ordnanceState' }, `client ${stripType}/3G`);
@@ -144,7 +144,7 @@ test('Block 3G is on all four Roles on both sides, onto military.ordnanceState, 
 });
 
 // §9.6 alert status (crc-sync's docs/adr/0070): one Block, DEPARTURE only.
-test('14E is the alert status on DEPARTURE on both sides, and on no other Role', () => {
+test('14E is the alert status on DEPARTURE on both sides, and on no other strip type', () => {
   assert.deepEqual(server.DEPARTURE_BLOCK_MAP['14E'].target, { kind: 'military', field: 'alertStatus' });
   assert.deepEqual(client.DEPARTURE_BLOCK_MAP['14E'].target, { kind: 'military', field: 'alertStatus' });
   assert.equal(server.DEPARTURE_BLOCK_MAP['14E'].required, client.DEPARTURE_BLOCK_MAP['14E'].required);
@@ -179,7 +179,7 @@ test('derived carrier Blocks are display-only on both sides, and the writable on
   assert.equal(client.isBlockEditable('C1', 'FINAL'), false);
 });
 
-test('the carrier Blocks carry unique labels of at most eight characters within a Role', () => {
+test('the carrier Blocks carry unique labels of at most eight characters within a strip type', () => {
   for (const stripType of ['MARSHAL', 'FINAL', 'PATTERN']) {
     const labels = Object.values(client.BLOCK_MAPS[stripType]).map(d => d.label);
     assert.equal(new Set(labels).size, labels.length, stripType);

@@ -17,7 +17,7 @@ import {
 const everyList = () => Object.entries(COMPACT_BLOCKS_BY_POSITION)
   .flatMap(([stripType, byPos]) => Object.entries(byPos).map(([positionId, list]) => ({ stripType, positionId, list })));
 
-test('every field a Position shows is a Block its Role actually has', () => {
+test('every field a Position shows is a Block its strip type actually has', () => {
   for (const { stripType, positionId, list } of everyList()) {
     const missing = list.filter(id => !(id in BLOCK_MAPS[stripType]));
     assert.deepEqual(Array.from(missing), [], `${stripType} at ${positionId}`);
@@ -113,7 +113,7 @@ test('STATE is on no Strip — the tab header says it', () => {
   }
 });
 
-test('a Position no list names falls back to its Role, filtered to the Role\'s Blocks', () => {
+test('a Position no list names falls back to its strip type, filtered to the strip type\'s Blocks', () => {
   const list = compactBlocksFor('ARRIVAL', 'NOBODY');
   assert.ok(list.includes('9A-VECTOR'));
   assert.equal(list.some(id => !(id in BLOCK_MAPS.ARRIVAL)), false);
@@ -125,7 +125,7 @@ const everyMtrList = () => Object.entries(MTR_BLOCKS_BY_POSITION)
   .flatMap(([stripType, byPos]) => Object.entries(byPos).map(([positionId, list]) => ({ stripType, positionId, list })));
 const flightDataWithMtr = (mtr) => ({ military: { mtr }, clearance: { altitude: { entries: [] } } });
 
-test('every MTR list names Blocks its Role has, and only 9G-*/9H-* ids', () => {
+test('every MTR list names Blocks its strip type has, and only 9G-*/9H-* ids', () => {
   for (const { stripType, positionId, list } of everyMtrList()) {
     for (const id of list) {
       assert.ok(id in BLOCK_MAPS[stripType], `${stripType} at ${positionId}: ${id}`);
@@ -148,7 +148,7 @@ test('M11 is prominent: the exit fix and estimate come before the entry fields',
   }
 });
 
-test('GND, TWR and MISSION get no MTR group', () => {
+test('GC, LC and MISSION get no MTR group', () => {
   for (const stripType of Object.keys(MTR_BLOCKS_BY_POSITION)) {
     assert.equal(MTR_BLOCKS_BY_POSITION[stripType].GC, undefined, `${stripType} GND`);
     assert.equal(MTR_BLOCKS_BY_POSITION[stripType].LC, undefined, `${stripType} TWR`);
@@ -156,7 +156,7 @@ test('GND, TWR and MISSION get no MTR group', () => {
   assert.equal(MTR_BLOCKS_BY_POSITION.MISSION, undefined);
 });
 
-test('compactBlocksFor without an FDR, or with one that has no MTR, is exactly what it was', () => {
+test('compactBlocksFor without flight data, or with one that has no MTR, is exactly what it was', () => {
   const noMtr = flightDataWithMtr({ designator: null, exitFix: '' });
   for (const { stripType, positionId } of everyList()) {
     assert.deepEqual(Array.from(compactBlocksFor(stripType, positionId, noMtr)), Array.from(compactBlocksFor(stripType, positionId)), `${stripType} at ${positionId}`);
@@ -194,7 +194,7 @@ test('mtrLostCommsAdvisory states the rule, shows the ACTIVE ALT, admits the mis
 });
 
 // §9.6 alert status (crc-sync docs/adr/0070, decisions.md H56).
-test('ALERT (14E) is on OPS, CD, GND and TWR — the ground Positions — and nowhere else', () => {
+test('ALERT (14E) is on OPS, CD, GC and LC — the ground Positions — and nowhere else', () => {
   for (const { stripType, positionId, list } of everyList()) {
     const expected = stripType === 'DEPARTURE' && ['OPS', 'CD', 'GC', 'LC'].includes(positionId);
     assert.equal(list.includes('14E'), expected, `${stripType} at ${positionId}`);
