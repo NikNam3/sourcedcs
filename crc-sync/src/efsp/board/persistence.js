@@ -3,9 +3,8 @@
 // The Board's persistence (docs/adr/0095, H87): the snapshot and restore, the archive of a DROPPED Strip, when each
 // DROPPED Strip dropped, and the persisted window of the Board's idempotency cache (sync/replay-cache.js). BoardStore delegates to it.
 //
-// `mutationLog` and `nlaHistory` are read late: setMutationLog() can come after construction, and the NLA history
-// is the facade's. The `droppedWallAt` Map is this object's; restore() replaces it, so StripOps reads it late
-// through this object.
+// `nlaHistory` is read late: it is the facade's. The `droppedWallAt` Map is this object's; restore() replaces it,
+// so StripOps reads it late through this object.
 
 const { REPLAY_PERSIST_WINDOW_MS } = require('../sync/replay-cache');
 
@@ -16,15 +15,15 @@ class BoardPersistence {
    * @param {import('./board-state').BoardState} deps.state
    * @param {import('../sync/replay-cache').ReplayCache} deps.replay the Board's idempotency cache
    * @param {{now: () => number}} deps.clock the mission clock
-   * @param {() => object|null} deps.mutationLog read late
+   * @param {object} deps.audit BoardAudit (the Archive entry)
    * @param {() => Map} deps.nlaHistory the facade's NLA history, read late
    */
-  constructor({ rules, state, replay, clock, mutationLog, nlaHistory }) {
+  constructor({ rules, state, replay, clock, audit, nlaHistory }) {
     this._rules = rules;
     this._state = state;
     this._replay = replay;
     this._clock = clock;
-    this._mutationLogOf = mutationLog;
+    this._audit = audit;
     this._nlaHistoryOf = nlaHistory;
     // stripId -> Date.now() at its drop: when a DROPPED Strip is archived
     // (docs/adr/0082, H36). Wall time on purpose, like the NLA latch (board/ops/invoke-nla.js): a
@@ -33,7 +32,6 @@ class BoardPersistence {
     this._droppedWallAt = new Map();
   }
 
-  get _mutationLog() { return this._mutationLogOf(); }
   get _nlaHistory() { return this._nlaHistoryOf(); }
   /** stripId -> wall ms of its drop (replaced by restore(), so read it through this getter). */
   get droppedWallAt() { return this._droppedWallAt; }
@@ -74,15 +72,8 @@ class BoardPersistence {
     this._droppedWallAt.delete(stripId);
     this._nlaHistory.delete(stripId);
     this._state.logGone(stripId);
-    if (this._mutationLog) {
-      this._mutationLog.record({
-        clientMutationId: null, op: 'Archive', stripId, flightDataId: strip.flightDataId || null,
-        // L26 (decisions.md S-L5) puts facilityId on every Board entry; this
-        // line carries it from the start.
-        facilityId: this._rules.facilityId || null,
-        actingPositionId: null, actorId: 'system', at: this._clock.now(), reason, ...extra,
-      });
-    }
+    // L26 (decisions.md S-L5) puts facilityId on every Board entry; this line carries it from the start.
+    this._audit.recordSystem('Archive', strip, { reason, ...extra }, { flightDataFirst: true });
     return strip.flightDataId || null;
   }
 

@@ -70,7 +70,7 @@ function run(family, ctx, session, msg, persist) {
   const refuse = (reason, detail) => ({
     ack: { ...prefix(), ok: false, reason, detail, ...(family.refusalTail ? family.refusalTail(ctx, msg) : {}) },
     broadcasts: orderSlots(null),
-    ...(family.unauditedGates === false ? {} : { unaudited: true }),
+    unaudited: true,
   });
 
   const store = family.store(ctx);

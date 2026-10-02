@@ -46,13 +46,10 @@ const RATE_WARN_INTERVAL_MS = 60000;
 // States in which there is no contact to find, so the flight is not counted in
 // the denominator either.
 //
-// An EXCLUSION list, per docs/adr/0041's lesson. An inclusion list would mean
-// a state added in WP6 or WP7 silently leaves the denominator, and the rate
-// silently RISES — flattering and wrong. With an exclusion list a new state
-// defaults to eligible, so the rate FALLS and somebody notices. A test
-// (efsp-correlation-reconciler.test.mjs) checks only that every state listed
-// here is still a real state in nla.js's STATES_BY_STRIP_TYPE; it does not catch a
-// new state that is silently eligible, so whoever adds a state decides here.
+// An exclusion list, per docs/adr/0041's lesson: a state that is not listed counts in the
+// denominator. A test (efsp-correlation-reconciler.test.mjs) pins the COMPLETE classification:
+// its explicit ELIGIBLE set plus this one must equal the union of nla.js's
+// STATES_BY_STRIP_TYPE, so a new state fails there until it is put on one side or the other.
 const INELIGIBLE_STATES = new Set([
   // Pre-movement: the aircraft may not even be spawned.
   'PROPOSED', 'PENDING_CLEARANCE', 'CLEARED', 'HELD',

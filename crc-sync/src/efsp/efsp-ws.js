@@ -271,11 +271,11 @@ function _handleSetPositions(ctx, session, msg, persist) {
     const owned = boardStore.getAll().filter(s => s.ownerPositionId === positionId && s.state !== 'DROPPED');
     if (owned.length === 0) continue;
 
-    const covering = positionStore.consolidatedAt(positionId);
-    if (covering) {
-      const moved = boardStore.reassignPositionStrips(positionId, covering);
+    const consolidatedAt = positionStore.consolidatedAt(positionId);
+    if (consolidatedAt) {
+      const moved = boardStore.reassignPositionStrips(positionId, consolidatedAt);
       reassignedIds.push(...moved);
-      const warning = { positionId, count: owned.length, routedTo: covering };
+      const warning = { positionId, count: owned.length, routedTo: consolidatedAt };
       if (moved.unplaced && moved.unplaced.length) warning.unplaced = moved.unplaced.length; // no Bay of the Position they were consolidated at fits: they stay where they were
       warnings.push(warning);
     } else {

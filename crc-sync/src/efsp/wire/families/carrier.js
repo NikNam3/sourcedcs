@@ -11,9 +11,6 @@ const { carrierDelta } = require('../frames');
  * the stack), plus the session binding every dispatch path carries
  * (docs/adr/0029): the session must be PRIMARY at the acting Position, at the
  * CARRIER Facility, since a hull has exactly one Facility.
- *
- * Skeleton deviation: its gate refusals are NOT marked `unaudited` (`unauditedGates: false`), as before the refactor
- * (docs/wip/WIRE.md finding F1).
  */
 module.exports = {
   type: 'efsp-carrier-mutation',
@@ -21,7 +18,6 @@ module.exports = {
   deltaType: 'efsp-carrier-delta',
   replayKind: 'carrier',
   snapshotKey: 'carriers',
-  unauditedGates: false,
   subject: (msg) => ({ hullId: msg.hullId }),
   store: (ctx) => ctx.carrierStore,
   noStore: 'no carrier store',

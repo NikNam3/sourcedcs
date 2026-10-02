@@ -81,18 +81,26 @@ test('an empty board reports null, never 1.0 — otherwise the 95% gate passes v
 
 // ── eligibility ────────────────────────────────────────────────────────────
 
-test('every EfspState is either on the ineligible list or eligible — adding one forces the decision', () => {
-  // docs/adr/0041's lesson: an inclusion list would let a state added in WP6
-  // or WP7 silently leave the denominator, and the rate would silently RISE.
-  // With an exclusion list a new state defaults to eligible, so the rate FALLS
-  // and somebody notices. This assertion is what makes that a decision rather
-  // than a default.
+// Every state a Strip can be in, classified one way or the other. The module holds the
+// ineligible side; this is the eligible side. A state added to the authority registry's
+// STATES_BY_STRIP_TYPE fails here until it is put on one side (docs/adr/0041's lesson).
+const ELIGIBLE = new Set([
+  'PUSHBACK', 'TAXI', 'RUNWAY_QUEUE', 'LUAW', 'DEPARTED', 'HANDED_OFF', 'INBOUND', 'HANDED_TO_TOWER', 'FINAL', 'LANDED',
+  'TAXI_IN', 'IN_SECTOR', 'AIRBORNE', 'ON_STATION', 'OFF_STATION', 'RTB',
+  'LAUNCH', 'IN_STACK', 'COMMENCED', 'ON_FINAL', 'BALL', 'BOLTER_WAVEOFF', 'IN_PATTERN', 'RECOVERED',
+]);
+
+test('every state of every strip type is classified: ELIGIBLE here plus INELIGIBLE_STATES equals the registry\'s states', () => {
   const all = new Set();
   for (const states of Object.values(STATES_BY_STRIP_TYPE)) for (const s of states) all.add(s);
   assert.ok(all.size > 10, 'sanity: the state sets loaded');
-  for (const state of INELIGIBLE_STATES) {
-    assert.ok(all.has(state), `${state} is on the ineligible list but is not an EfspState any more`);
-  }
+  const overlap = [...ELIGIBLE].filter(s => INELIGIBLE_STATES.has(s));
+  assert.deepEqual(overlap, [], 'a state is on both sides');
+  const classified = new Set([...ELIGIBLE, ...INELIGIBLE_STATES]);
+  const unclassified = [...all].filter(s => !classified.has(s));
+  const stale = [...classified].filter(s => !all.has(s));
+  assert.deepEqual(unclassified, [], `new state(s) on neither side: put each on ELIGIBLE here or in INELIGIBLE_STATES`);
+  assert.deepEqual(stale, [], 'classified here but no longer a state of any strip type');
 });
 
 test('a pre-movement flight is not eligible, so it does not drag the rate down', () => {

@@ -11,7 +11,7 @@ const { sfaDelta } = require('../frames');
  * carries (docs/adr/0029): Primary at the acting Position, at its Facility.
  * One delta carrying the whole record, ADR 0064 B6's shape.
  *
- * Skeleton deviations: gate refusals are NOT marked `unaudited` (`unauditedGates: false`, finding F1); it persists and
+ * Skeleton deviation: it persists and
  * broadcasts only when the op `changed` the record (`persistWhen`, and `broadcasts` returning no slot otherwise).
  */
 module.exports = {
@@ -20,7 +20,6 @@ module.exports = {
   deltaType: 'efsp-sfa-delta',
   replayKind: 'sfa',
   snapshotKey: 'sfaRotation',
-  unauditedGates: false,
   subject: (msg) => ({ rackId: msg.op && msg.op.rackId }),
   store: (ctx) => ctx.sfaStore,
   noStore: 'no SFA in this crc-sync',

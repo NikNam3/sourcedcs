@@ -1,7 +1,7 @@
 'use strict';
 
 // The Board's audit (docs/adr/0095, docs/adr/0083): the Mutation-log entry a client Mutation leaves, and the entry a
-// PEER write leaves on this Board. StripOps (client Mutations) and Coordination and Tofi (peer writes) call it.
+// PEER write leaves on this Board, and the SYSTEM entries (recordSystem). StripOps (client Mutations) and Coordination and Tofi (peer writes) call it.
 
 const { deepClone } = require('./strip-util');
 
@@ -36,6 +36,24 @@ class BoardAudit {
       facilityId: this._rules.facilityId || null, fromFacilityId: fromFacilityId || null,
       actingPositionId: null, actorId: by || null, at: this._clock.now(),
       before, after: deepClone(strip), source: 'peer',
+    });
+  }
+
+  /**
+   * A SYSTEM write: no client Mutation and no acting Position (a peer dropped, a Position vacated or retaken, an
+   * archive). `tail` is spread after `at`, in the order given, so each site keeps the key order its JSONL line
+   * always had; `flightDataFirst` puts `flightDataId` before `facilityId` (Archive's order; the others write
+   * `facilityId` first). `strip` supplies `stripId` and `flightDataId`.
+   */
+  recordSystem(op, strip, tail, { flightDataFirst = false } = {}) {
+    if (!this._mutationLog) return;
+    const flightDataId = strip.flightDataId || null;
+    const facilityId = this._rules.facilityId || null;
+    this._mutationLog.record({
+      clientMutationId: null, op, stripId: strip.stripId,
+      ...(flightDataFirst ? { flightDataId, facilityId } : { facilityId, flightDataId }),
+      actingPositionId: null, actorId: 'system', at: this._clock.now(),
+      ...tail,
     });
   }
 

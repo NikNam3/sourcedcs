@@ -41,10 +41,10 @@ function _applyCarrierHandoff(ctx, strip, kind, toPositionId, by, actingPosition
 
   let routedTo = null;
   if (fx.owner === 'TO' && !ctx.rules.isStaffed(dest)) {
-    const covering = ctx.rules.consolidatedAt(dest);
-    if (!covering || !ctx.rules.isStaffed(covering)) return { ok: false, reason: 'NO_RECEIVING_POSITION', strip };
-    dest = covering;
-    routedTo = covering;
+    const consolidatedAt = ctx.rules.consolidatedAt(dest);
+    if (!consolidatedAt || !ctx.rules.isStaffed(consolidatedAt)) return { ok: false, reason: 'NO_RECEIVING_POSITION', strip };
+    dest = consolidatedAt;
+    routedTo = consolidatedAt;
   }
 
   // The stack effect: Commence marks the flight pushed (nobody renumbers, the
