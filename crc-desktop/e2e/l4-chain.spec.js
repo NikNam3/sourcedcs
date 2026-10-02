@@ -19,17 +19,17 @@ const { openPanel, seedStrip, stripByCallsign } = require('./helpers/app');
 const FDR = { route: 'DCT', requestedAltitude: 'FL250', departureAirport: 'LTAG', destinationAirport: 'LTAF' };
 const ALL = ['OPS', 'CD', 'GC', 'LC', 'AP'];
 
-const stripOf = (cs) => getAllEfspStrips().find((x) => getEfspFdr(x.flightDataId).identity.callsign === cs);
+const stripOf = (cs) => getAllEfspStrips().find((x) => getEfspFlightData(x.flightDataId).identity.callsign === cs);
 const info = (page, cs) => page.evaluate((cs) => {
-  const s = getAllEfspStrips().find((x) => getEfspFdr(x.flightDataId).identity.callsign === cs);
+  const s = getAllEfspStrips().find((x) => getEfspFlightData(x.flightDataId).identity.callsign === cs);
   return s && { owner: s.ownerPositionId, bay: s.bayId, state: s.state };
 }, cs);
-const allStates = (page) => page.evaluate(() => Object.fromEntries(getAllEfspStrips().map((s) => [getEfspFdr(s.flightDataId).identity.callsign, s.state])));
+const allStates = (page) => page.evaluate(() => Object.fromEntries(getAllEfspStrips().map((s) => [getEfspFlightData(s.flightDataId).identity.callsign, s.state])));
 
 async function advance(page, cs, n) {
   for (let i = 0; i < n; i++) {
     const before = (await info(page, cs)).state;
-    await page.evaluate((cs) => _invokeNla(getAllEfspStrips().find((x) => getEfspFdr(x.flightDataId).identity.callsign === cs)), cs);
+    await page.evaluate((cs) => _invokeNla(getAllEfspStrips().find((x) => getEfspFlightData(x.flightDataId).identity.callsign === cs)), cs);
     await expect.poll(async () => (await info(page, cs)).state, {
       timeout: 3000,
       message: `setup: ${cs} stuck at ${before}: ${await page.locator('#efsp-mutation-error').textContent()}`,
@@ -58,7 +58,7 @@ async function show(page, cs) {
 // outside the window proves nothing and is retried with a fresh pair, and the
 // test fails loudly if the harness cannot produce a double tap at all.
 const DOUBLE_TAP_MS = 400;
-for (const [label, n, tag] of [['Approve Pushback', 2, 'P'], ['To Runway Queue', 4, 'Q'], ['Hand Off to APP', 7, 'H']]) {
+for (const [label, n, tag] of [['Approve Pushback', 2, 'P'], ['To Runway Queue', 4, 'Q'], ['Hand Off to AP', 7, 'H']]) {
   test(`a double-tap on ${label} moves only the Strip that was tapped`, async ({ page }) => {
     test.setTimeout(120000);
     await page.setViewportSize({ width: 1600, height: 1600 });
@@ -109,7 +109,7 @@ test('an NLA the server will refuse says so before it is pressed', async ({ page
   await page.setViewportSize({ width: 1600, height: 1600 });
   await openPanel(page, { signedOn: ALL });
   await seedStrip(page, { callsign: 'L4X1', stripType: 'DEPARTURE', flightData: FDR });
-  await advance(page, 'L4X1', 7); // DEPARTED, next is Hand Off to APP
+  await advance(page, 'L4X1', 7); // DEPARTED, next is Hand Off to AP
   // Release APP. Nothing else covers it, so the server will now inhibit.
   await page.evaluate((h) => window.sendEfspSetPositions('INCIRLIK', h), ALL.filter((p) => p !== 'AP'));
   await page.waitForFunction(() => !getActingPositions('INCIRLIK').includes('AP'));
@@ -119,5 +119,5 @@ test('an NLA the server will refuse says so before it is pressed', async ({ page
   const btn = stripByCallsign(page, 'L4X1').locator('.efsp-nla-btn');
   const pre = { enabled: await btn.isEnabled(), title: await btn.getAttribute('title'), strip: await stripByCallsign(page, 'L4X1').innerText() };
   expect(pre.enabled && !pre.title && !/no receiving Position/i.test(pre.strip),
-    `Hand Off to APP looks pressable: enabled=${pre.enabled} title=${pre.title}`).toBe(false);
+    `Hand Off to AP looks pressable: enabled=${pre.enabled} title=${pre.title}`).toBe(false);
 });

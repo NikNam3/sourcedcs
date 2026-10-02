@@ -1,5 +1,5 @@
 'use strict';
-import { getAllEfspStrips, getEfspFdr, getEfspFieldState, getEfspStrip } from './efsp-state.js';
+import { getAllEfspStrips, getEfspFlightData, getEfspRunwayStatus, getEfspStrip } from './efsp-state.js';
 import { getActingPositions } from './efsp-ws.js';
 import { selectEfspStripById } from './bay-view.js';
 import { _activeBayId, _activePositionTab, _renderPositionTabs } from './efsp-panel.js';
@@ -97,12 +97,12 @@ export function alertPadConstraint(runwayStatus, scrambles) {
 function _scrambleLiveStrips() {
   return (typeof getAllEfspStrips === 'function' ? getAllEfspStrips() : []).filter(s => s.state !== 'DROPPED');
 }
-function _scrambleFdrOf(flightDataId) {
-  return typeof getEfspFdr === 'function' ? getEfspFdr(flightDataId) : null;
+function _scrambleFlightDataOf(flightDataId) {
+  return typeof getEfspFlightData === 'function' ? getEfspFlightData(flightDataId) : null;
 }
 /** L1b's client field state when it is loaded (decisions.md T6: never block on it). */
-function _scrambleFieldStateFor(facilityId) {
-  return typeof getEfspFieldState === 'function' ? getEfspFieldState(facilityId) : null;
+function _scrambleRunwayStatusFor(facilityId) {
+  return typeof getEfspRunwayStatus === 'function' ? getEfspRunwayStatus(facilityId) : null;
 }
 
 function _joinCallsigns(list) {
@@ -118,7 +118,7 @@ function _joinCallsigns(list) {
 export function scrambleAlertsFor(strip) {
   if (!strip || !strip.facilityId) return [];
   const strips = _scrambleLiveStrips();
-  const scrambles = activeScrambles(strips, _scrambleFdrOf, strip.facilityId);
+  const scrambles = activeScrambles(strips, _scrambleFlightDataOf, strip.facilityId);
   if (scrambles.length === 0) return [];
   if (scrambles.some(s => s.stripId === strip.stripId)) {
     return [{
@@ -126,10 +126,10 @@ export function scrambleAlertsFor(strip) {
       reason: 'Alert scramble. SOURCE practice: taxiing traffic yields and the alert-pad access route stays clear; sequencing is the controller\'s call.',
     }];
   }
-  if (!conflictingGroundStrips(strips, _scrambleFdrOf, strip.facilityId).some(s => s.stripId === strip.stripId)) return [];
+  if (!conflictingGroundStrips(strips, _scrambleFlightDataOf, strip.facilityId).some(s => s.stripId === strip.stripId)) return [];
   const who = _joinCallsigns(scrambles.map(s => s.callsign));
   const plural = scrambles.length > 1;
-  const route = accessRouteText(_scrambleFieldStateFor(strip.facilityId));
+  const route = accessRouteText(_scrambleRunwayStatusFor(strip.facilityId));
   return [{
     key: 'scram', tone: 'attn', legacy: 'efsp-scramble-conflict-indicator', text: 'SCRAMBLE',
     reason: `${who} ${plural ? 'are' : 'is'} scrambling from ${strip.facilityId}. SOURCE practice: keep clear of ${route}. `
@@ -139,8 +139,8 @@ export function scrambleAlertsFor(strip) {
 
 /** L1b's runway-status panel hook: the constrained-route line for a Facility, or null. */
 export function alertPadConstraintFor(facilityId) {
-  const scrambles = activeScrambles(_scrambleLiveStrips(), _scrambleFdrOf, facilityId);
-  const c = alertPadConstraint(_scrambleFieldStateFor(facilityId), scrambles);
+  const scrambles = activeScrambles(_scrambleLiveStrips(), _scrambleFlightDataOf, facilityId);
+  const c = alertPadConstraint(_scrambleRunwayStatusFor(facilityId), scrambles);
   return c ? c.text : null;
 }
 
@@ -174,7 +174,7 @@ export function renderEfspScrambleLine() {
   const line = typeof document !== 'undefined' ? document.getElementById('efsp-scramble-line') : null;
   if (!line) return;
   const strips = _scrambleLiveStrips();
-  const scrambles = activeScrambles(strips, _scrambleFdrOf);
+  const scrambles = activeScrambles(strips, _scrambleFlightDataOf);
   line.innerHTML = '';
   line.hidden = scrambles.length === 0;
   const live = new Set(scrambles.map(s => s.stripId));
@@ -182,7 +182,7 @@ export function renderEfspScrambleLine() {
   const flaggedByFacility = new Map();
   for (const s of scrambles) {
     if (!flaggedByFacility.has(s.facilityId)) {
-      flaggedByFacility.set(s.facilityId, conflictingGroundStrips(strips, _scrambleFdrOf, s.facilityId).length);
+      flaggedByFacility.set(s.facilityId, conflictingGroundStrips(strips, _scrambleFlightDataOf, s.facilityId).length);
     }
     const row = document.createElement('div');
     row.className = 'efsp-scramble-row' + (_seenScrambleStripIds.has(s.stripId) ? '' : ' efsp-scramble-row-new');
@@ -202,7 +202,7 @@ export function renderEfspScrambleLine() {
     row.appendChild(cs);
 
     const flagged = flaggedByFacility.get(s.facilityId);
-    const route = accessRouteText(_scrambleFieldStateFor(s.facilityId));
+    const route = accessRouteText(_scrambleRunwayStatusFor(s.facilityId));
     const detail = document.createElement('span');
     detail.className = 'efsp-scramble-detail';
     detail.textContent = [s.facilityId, s.state, `${route} constrained`, `${flagged} flagged`].join(' · ');

@@ -1,9 +1,9 @@
 'use strict';
 import { isWithinDoubleTapWindow } from './efsp-nla.js';
 import {
-  conformanceAlertsForFdr, correlatedTrackIdForStrip, efspLinesWithOthers, getEfspAirspace, getEfspBays,
-  getEfspCorrelationForStrip, getEfspFdr, getEfspMarsa, getEfspObligation, getEfspRack, getEfspStrip,
-  isWithOthersBayId, marsaForStrip, otherLiveStripsForFdr, searchEfspStrips, stcaConflictsForTrack,
+  conformanceAlertsForFlightData, correlatedTrackIdForStrip, efspLinesWithOthers, getEfspAirspace, getEfspBays,
+  getEfspCorrelationForStrip, getEfspFlightData, getEfspMarsa, getEfspObligation, getEfspRack, getEfspStrip,
+  isWithOthersBayId, marsaForStrip, otherLiveStripsForFlightData, searchEfspStrips, conflictAlertsForTrack,
   surveillanceHintsForStrip
 } from './efsp-state.js';
 import { getActingPositions, sendEfspCorrelationMutation, sendEfspMarsaMutation, sendEfspMutation } from './efsp-ws.js';
@@ -16,7 +16,7 @@ import { renderBayDescriptorView } from './bay-views.js';
 import { stereoRoutesCacheKey } from './efsp-stereo-routes.js';
 import { tofiExitSignatureFor } from './strip-view.js';
 import { efspArrivalFor } from './efsp-arrivals.js';
-import { fieldStateSignatureFor } from './runway-status-rules.js';
+import { runwayStatusSignatureFor } from './runway-status-rules.js';
 import { trackRef } from '../../track-label.js';
 import { getActiveEfspSearchQuery } from './efsp-panel.js';
 import { computeRackReconciliation } from './strip-drag.js';
@@ -539,11 +539,11 @@ export function _stripRenderSignature(strip) {
   // Which Position the controller is acting as decides which controls render.
   parts.push('act:' + (_resolveActingPositionId(strip) || ''));
 
-  const flightData = typeof getEfspFdr === 'function' ? getEfspFdr(strip.flightDataId) : null;
+  const flightData = typeof getEfspFlightData === 'function' ? getEfspFlightData(strip.flightDataId) : null;
   parts.push('flightData:' + (flightData ? flightData.rev : ''));
   parts.push('stereo:' + (typeof stereoRoutesCacheKey === 'function' ? stereoRoutesCacheKey() : '')); // Block 9F's options (docs/adr/0073)
 
-  const siblings = typeof otherLiveStripsForFdr === 'function' ? otherLiveStripsForFdr(strip.flightDataId, strip.stripId) : [];
+  const siblings = typeof otherLiveStripsForFlightData === 'function' ? otherLiveStripsForFlightData(strip.flightDataId, strip.stripId) : [];
   // Not just the count: the badge's title names each sibling's Facility,
   // Position and Role, and a sibling that moves desk changes it.
   parts.push('sib:' + siblings.map(s => `${s.stripId}/${s.facilityId || '?'}/${s.ownerPositionId}/${s.stripType}`).sort().join(','));
@@ -595,13 +595,13 @@ export function _stripRenderSignature(strip) {
   // Conformance and conflict alerts (docs/adr/0058). A conflict's countdown is
   // part of what the Strip says, so it rebuilds each second while one lasts —
   // only the Strips actually in a conflict.
-  const conf = typeof conformanceAlertsForFdr === 'function' ? conformanceAlertsForFdr(strip.flightDataId) : [];
+  const conf = typeof conformanceAlertsForFlightData === 'function' ? conformanceAlertsForFlightData(strip.flightDataId) : [];
   const trackId = typeof correlatedTrackIdForStrip === 'function' ? correlatedTrackIdForStrip(strip) : null;
-  const conflictAlert = typeof stcaConflictsForTrack === 'function' ? stcaConflictsForTrack(trackId) : [];
+  const conflictAlert = typeof conflictAlertsForTrack === 'function' ? conflictAlertsForTrack(trackId) : [];
   parts.push('alr:' + conf.map(a => `${a.kind}/${a.assigned}/${a.actual ?? ''}/${a.deviationFt ?? ''}/${a.fpm ?? ''}`).join(',')
     + ';' + conflictAlert.map(c => `${c.id}/${c.timeToCpaSec}/${c.minNm}/${c.vertFt}`).join(','));
   // Field state (docs/adr/0068): the RWY/HOOK chips read the Facility's runway record, not the Strip.
-  parts.push('fld:' + (typeof fieldStateSignatureFor === 'function' ? fieldStateSignatureFor(strip) : ''));
+  parts.push('fld:' + (typeof runwayStatusSignatureFor === 'function' ? runwayStatusSignatureFor(strip) : ''));
   // Surveillance hints (docs/adr/0076) are stated by the server about this Strip, not part of its own
   // record; whether the chip can be accepted also depends on which Position the controller holds (S-L14).
   parts.push('sur:' + (typeof surveillanceHintsForStrip === 'function'

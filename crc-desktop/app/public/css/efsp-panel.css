@@ -55,7 +55,7 @@
    for the common single-Position case. */
 /* The stereo-route and mission-line pickers share it — both were unstyled,
    and so drew as the browser's white default select at its own size. */
-#efsp-create-strip-role,
+#efsp-create-strip-type,
 #efsp-create-strip-stereo,
 #efsp-create-strip-bind {
   min-height: 32px;
@@ -888,7 +888,7 @@
 }
 /* This flight has other live Strips elsewhere (a replica at another
    Facility, or a MISSION Strip sharing its FDR). Advisory only. */
-.efsp-shared-fdr-badge { border-color: #4a7dbf; color: #bfe0ff; }
+.efsp-shared-flight-data-badge { border-color: #4a7dbf; color: #bfe0ff; }
 .efsp-coordination-badge-data { border-color: #6a5bbf; color: #c9c0ff; }
 .efsp-coordination-badge-sep  { border-color: #4a7dbf; color: #bfe0ff; }
 /* OPERATIONAL_REQUEST STAND BY indicator (docs/adr/0022) — same neutral
@@ -1398,7 +1398,7 @@
   gap: 6px;
   min-width: 0;
 }
-.efsp-strip-tab-role {
+.efsp-strip-tab-type {
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1626,7 +1626,7 @@
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     align-items: start;
   }
-  .efsp-strip-tab-role { grid-column: 1 / -1; }
+  .efsp-strip-tab-type { grid-column: 1 / -1; }
   .efsp-strip-life { margin-top: 0; }
   .efsp-strip-tools {
     grid-column: 2;
@@ -1670,7 +1670,7 @@
    of its min-height (the + New Strip button did exactly that). */
 #efsp-new-strip-callsign,
 #efsp-create-strip-btn,
-#efsp-create-strip-role,
+#efsp-create-strip-type,
 #efsp-create-strip-stereo,
 #efsp-create-strip-bind,
 .efsp-position-tab,
@@ -1874,7 +1874,7 @@
 .carrier-slot-call { min-width: 7em; font-weight: 700; }
 .carrier-slot-closeup { margin-left: auto; min-height: 24px; background: #1c2228; color: #a8b4bd; border: 1px dashed #4a5560; cursor: pointer; font: inherit; }
 .carrier-slot-pushed { color: #6a9ebf; }
-.efsp-carrier-handover { border-width: 2px; }
+.efsp-carrier-handoff { border-width: 2px; }
 .efsp-carrier-trigger-controller-initiated { border-style: solid; }
 .efsp-carrier-trigger-radar-acquisition { border-style: double; }
 .efsp-carrier-trigger-pilot-ball-call { border-style: dashed; }

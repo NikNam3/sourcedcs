@@ -110,7 +110,7 @@ const CORRELATION_INELIGIBLE = ['PROPOSED', 'PENDING_CLEARANCE', 'CLEARED', 'HEL
 async function settleCorrelation(page, callsign) {
   await expect.poll(() => page.evaluate(([cs, ineligible]) => {
     const s = [...efspStrips.values()].find((x) => x.state !== 'DROPPED'
-      && (efspFdrs.get(x.flightDataId) || {}).identity && efspFdrs.get(x.flightDataId).identity.callsign === cs);
+      && (efspFlightDataList.get(x.flightDataId) || {}).identity && efspFlightDataList.get(x.flightDataId).identity.callsign === cs);
     if (!s || ineligible.includes(s.state)) return true;
     const el = document.querySelector(`.efsp-strip[data-strip-id="${s.stripId}"]`);
     return !!el && /\|cor:\d/.test(el.dataset.sig || '');
@@ -274,7 +274,7 @@ async function startAction(strip, name, opts = {}) {
 async function dropStrips(page, callsigns) {
   await page.evaluate((cs) => {
     for (const s of getAllEfspStrips()) {
-      const flightData = getEfspFdr(s.flightDataId);
+      const flightData = getEfspFlightData(s.flightDataId);
       if (!flightData || !cs.includes(flightData.identity.callsign) || s.state === 'DROPPED') continue;
       sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
     }
@@ -291,18 +291,18 @@ async function dropStrips(page, callsigns) {
  * `page` must hold TWR, OPS and AP: one controller holding all three self-coordinates the change.
  */
 async function ensureActiveRunway(page, end = '05') {
-  await page.waitForFunction(() => typeof getEfspFieldState === 'function' && !!getEfspFieldState('INCIRLIK'));
+  await page.waitForFunction(() => typeof getEfspRunwayStatus === 'function' && !!getEfspRunwayStatus('INCIRLIK'));
   const step = async (positionId, op) => {
-    const before = await page.evaluate(() => getEfspFieldState('INCIRLIK').rev);
-    await page.evaluate(([p, o]) => sendEfspFieldStateMutation(p, 'INCIRLIK', getEfspFieldState('INCIRLIK').rev, o), [positionId, op]);
-    await expect.poll(() => page.evaluate(() => getEfspFieldState('INCIRLIK').rev), { timeout: 5000 }).toBeGreaterThan(before);
+    const before = await page.evaluate(() => getEfspRunwayStatus('INCIRLIK').rev);
+    await page.evaluate(([p, o]) => sendEfspRunwayStatusMutation(p, 'INCIRLIK', getEfspRunwayStatus('INCIRLIK').rev, o), [positionId, op]);
+    await expect.poll(() => page.evaluate(() => getEfspRunwayStatus('INCIRLIK').rev), { timeout: 5000 }).toBeGreaterThan(before);
   };
-  const active = () => page.evaluate(() => getEfspFieldState('INCIRLIK').activeRunway);
+  const active = () => page.evaluate(() => getEfspRunwayStatus('INCIRLIK').activeRunway);
   if ((await active()) === end) return;
   await step('LC', { kind: 'SelfCoordinateRunwayChange', toRunwayId: end });
   await step('LC', { kind: 'BeginRunwayChange' });
   await step('LC', { kind: 'CompleteRunwayChange' });
-  const needsInspection = await page.evaluate(() => getEfspFieldState('INCIRLIK').runways[0].status === 'SUSPENDED_INSPECTION');
+  const needsInspection = await page.evaluate(() => getEfspRunwayStatus('INCIRLIK').runways[0].status === 'SUSPENDED_INSPECTION');
   if (needsInspection) await step('OPS', { kind: 'CompleteInspection', runwayId: '05/23' });
   await expect.poll(active, { timeout: 5000 }).toBe(end);
 }

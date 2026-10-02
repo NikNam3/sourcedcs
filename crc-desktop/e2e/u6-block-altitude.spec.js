@@ -14,7 +14,7 @@ test('ALT takes FL220B240, shows it as FL220-FL240, refuses a reversed block, an
     const s = await seedStrip(page, { callsign: CS, actingPositionId: 'CTR', bayId: 'ctr-enroute', stripType: 'ARRIVAL', facilityId: 'CENTER' });
     const id = await s.getAttribute('data-strip-id');
     const stored = () => page.evaluate((i) => {
-      const flightData = getEfspFdr(getEfspStrip(i).flightDataId);
+      const flightData = getEfspFlightData(getEfspStrip(i).flightDataId);
       const e = flightData.clearance.altitude.entries.filter(x => x.status === 'ACTIVE').at(-1);
       return e ? { value: e.value, parsed: e.parsed, block: e.block } : null;
     }, id);

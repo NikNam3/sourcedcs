@@ -1,6 +1,6 @@
 'use strict';
 import { COORDINATION_ELIGIBLE_STATES } from '../../efsp-nla.js';
-import { getEfspFdr, getEfspStrip, isAitAuthorizedFor } from '../../efsp-state.js';
+import { getEfspFlightData, getEfspStrip, isAitAuthorizedFor } from '../../efsp-state.js';
 import { sendEfspMutation } from '../../efsp-ws.js';
 import { COORDINATION_TARGETS } from '../authority-mirror.js';
 import { _resolveActingPositionId, _swallowRepeatAdvance } from '../../bay-view.js';
@@ -177,7 +177,7 @@ function _onDocPointerDownCloseCoordinatePopover(e) {
 /** Opens the primitive-choice popover — mirrors _openHighlightPopover's exact pattern (anchor, outside-click close, deferred listener). */
 export function _openCoordinatePopover(strip, anchorEl) {
   _closeCoordinatePopover();
-  const flightData = getEfspFdr(strip.flightDataId);
+  const flightData = getEfspFlightData(strip.flightDataId);
   const degraded = !!(flightData && flightData.identity && flightData.identity.trackDegradationFlag && flightData.identity.trackDegradationFlag !== 'NONE');
 
   const popover = document.createElement('div');

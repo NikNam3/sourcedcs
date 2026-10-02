@@ -24,7 +24,7 @@ import {
 import { refreshArHighlight } from './ato-strip.js';
 import { onAtoAck, onAtoPreviewResult } from './ato-import.js';
 import { renderAirspacePanel } from './airspace-panel.js';
-import { renderFieldStatePanel } from './runway-status-panel.js';
+import { renderRunwayStatusPanel } from './runway-status-panel.js';
 
 // The handlers of the EFSP message families whose state lives in bay-view.js / efsp-panel.js / efsp-state.js
 // (CMSG): Board, correlation, MARSA, alerts, SFA, ATO import, positions, resync. They moved here out of app.js's
@@ -59,7 +59,7 @@ registerEfspMessage('efsp-snapshot', (msg) => {
   if (typeof refreshCorrelatedHighlight === 'function') refreshCorrelatedHighlight();
   updateMap();
   if (typeof renderAirspacePanel === 'function') renderAirspacePanel();
-  if (typeof renderFieldStatePanel === 'function') renderFieldStatePanel();
+  if (typeof renderRunwayStatusPanel === 'function') renderRunwayStatusPanel();
   // §5.6.3 — replay every still-pending Mutation against this fresh
   // baseline. A no-op on the very first connect (nothing pending
   // yet); on a RECONNECT this is what stops a Mutation in flight at

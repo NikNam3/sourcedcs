@@ -1,0 +1,13 @@
+crc-desktop/app/public/js/geojson.js:625:APP-control#1	N	English comment or test title about a radar scope or prose, not an id (L20)
+crc-desktop/app/public/js/panels/efsp/bay/popovers/coordination.js:28:APP-#1	N	English comment or test title about a radar scope or prose, not an id (L20)
+crc-desktop/e2e/l22-stars-scope.spec.js:107:APP-only#1	N	English comment or test title about a radar scope or prose, not an id (L20)
+crc-desktop/e2e/l22-stars-scope.spec.js:158:APP-only#1	N	English comment or test title about a radar scope or prose, not an id (L20)
+crc-desktop/e2e/runway-status.spec.js:226:ARR_TWR#1	N	test-local variable name (list for L20)
+crc-desktop/e2e/runway-status.spec.js:234:ARR_TWR#1	N	test-local variable name (list for L20)
+crc-desktop/e2e/runway-status.spec.js:240:ARR_TWR#1	N	test-local variable name (list for L20)
+crc-desktop/e2e/runway-status.spec.js:266:ARR_TWR#1	N	test-local variable name (list for L20)
+crc-desktop/e2e/runway-status.spec.js:313:ARR_TWR#1	N	test-local variable name (list for L20)
+crc-desktop/tests/efsp-coordination-client.test.mjs:98:APP-owned#1	N	English comment or test title about a radar scope or prose, not an id (L20)
+crc-desktop/tests/efsp-metrics-client.test.mjs:315:GND-search#1	Y	test Bay id built from the Position id (Bay ids carry the Position prefix)
+crc-desktop/tests/efsp-metrics-client.test.mjs:319:GND-search#1	Y	test Bay id built from the Position id (Bay ids carry the Position prefix)
+crc-desktop/tests/efsp-nla-client.test.mjs:31:Hand-Off-to-APP#1	Y	test title quotes the UI label "Hand Off to APP", which becomes "Hand Off to AP"

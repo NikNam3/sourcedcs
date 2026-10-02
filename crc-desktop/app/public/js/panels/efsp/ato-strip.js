@@ -1,5 +1,5 @@
 'use strict';
-import { getAllEfspStrips, getEfspFdr, getEfspStrip } from './efsp-state.js';
+import { getAllEfspStrips, getEfspFlightData, getEfspStrip } from './efsp-state.js';
 import { getSelectedEfspStripId } from './bay-view.js';
 
 // What an imported ATO shows on a Strip (crc-sync's docs/adr/0071, guide §9.8,
@@ -26,9 +26,9 @@ import { getSelectedEfspStripId } from './bay-view.js';
 
 let _arHighlightStripIds = new Set();
 
-function _atoFdr(flightDataId) { return typeof getEfspFdr === 'function' ? getEfspFdr(flightDataId) : null; }
+function _atoFlightData(flightDataId) { return typeof getEfspFlightData === 'function' ? getEfspFlightData(flightDataId) : null; }
 
-function _liveStripIdsOfFdr(flightDataId) {
+function _liveStripIdsOfFlightData(flightDataId) {
   const all = typeof getAllEfspStrips === 'function' ? getAllEfspStrips() : [];
   return all.filter(s => s.flightDataId === flightDataId && s.state !== 'DROPPED').map(s => s.stripId);
 }
@@ -60,7 +60,7 @@ function _arTacan(flightData) {
  * @returns {{stripType:'TANKER'|'RECEIVER', peers:{flightDataId,callsign,stripIds}[], text:string, title:string}|null}
  */
 export function arJoinFor(strip) {
-  const flightData = strip ? _atoFdr(strip.flightDataId) : null;
+  const flightData = strip ? _atoFlightData(strip.flightDataId) : null;
   const links = _arLinksOf(flightData);
   if (links.length === 0) return null;
   const stripType = links[0].stripType;
@@ -68,9 +68,9 @@ export function arJoinFor(strip) {
   const lines = [];
   for (const l of links) {
     if (!l.peerFlightDataId) continue;
-    const stripIds = _liveStripIdsOfFdr(l.peerFlightDataId);
+    const stripIds = _liveStripIdsOfFlightData(l.peerFlightDataId);
     if (stripIds.length === 0) continue;
-    const pf = _atoFdr(l.peerFlightDataId);
+    const pf = _atoFlightData(l.peerFlightDataId);
     const callsign = (pf && pf.identity && pf.identity.callsign) || l.peerCallsign || l.peerFlightDataId;
     peers.push({ flightDataId: l.peerFlightDataId, callsign, stripIds });
     const tacan = _arTacan(stripType === 'TANKER' ? flightData : pf) || _arTacan(flightData);
@@ -129,7 +129,7 @@ export function refreshArHighlight() {
  * the flight has no ATO.
  */
 export function atoAlertsFor(strip) {
-  const flightData = strip ? _atoFdr(strip.flightDataId) : null;
+  const flightData = strip ? _atoFlightData(strip.flightDataId) : null;
   const atoCode = flightData && flightData.ato && flightData.ato.iff ? flightData.ato.iff.modeThree : null;
   if (!atoCode) return [];
   const atc = flightData.identity ? flightData.identity.beaconAssigned : null;
@@ -143,7 +143,7 @@ export function atoAlertsFor(strip) {
 
 /** The read-only ▼ rows, as [label, value] pairs — [] for a flight no ATO tasked. */
 export function atoExpandedRowsFor(strip) {
-  const flightData = strip ? _atoFdr(strip.flightDataId) : null;
+  const flightData = strip ? _atoFlightData(strip.flightDataId) : null;
   if (!flightData || !flightData.ato) return [];
   const a = flightData.ato;
   const id = flightData.identity || {};

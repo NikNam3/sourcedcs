@@ -123,7 +123,7 @@ test('a Position no list names falls back to its Role, filtered to the Role\'s B
 
 const everyMtrList = () => Object.entries(MTR_BLOCKS_BY_POSITION)
   .flatMap(([stripType, byPos]) => Object.entries(byPos).map(([positionId, list]) => ({ stripType, positionId, list })));
-const fdrWithMtr = (mtr) => ({ military: { mtr }, clearance: { altitude: { entries: [] } } });
+const flightDataWithMtr = (mtr) => ({ military: { mtr }, clearance: { altitude: { entries: [] } } });
 
 test('every MTR list names Blocks its Role has, and only 9G-*/9H-* ids', () => {
   for (const { stripType, positionId, list } of everyMtrList()) {
@@ -157,7 +157,7 @@ test('GND, TWR and MISSION get no MTR group', () => {
 });
 
 test('compactBlocksFor without an FDR, or with one that has no MTR, is exactly what it was', () => {
-  const noMtr = fdrWithMtr({ designator: null, exitFix: '' });
+  const noMtr = flightDataWithMtr({ designator: null, exitFix: '' });
   for (const { stripType, positionId } of everyList()) {
     assert.deepEqual(Array.from(compactBlocksFor(stripType, positionId, noMtr)), Array.from(compactBlocksFor(stripType, positionId)), `${stripType} at ${positionId}`);
     assert.equal(compactBlocksFor(stripType, positionId).some(id => /^9[GH]-/.test(id)), false);
@@ -165,22 +165,22 @@ test('compactBlocksFor without an FDR, or with one that has no MTR, is exactly w
 });
 
 test('any one MTR field brings the group — the trigger is not the designator', () => {
-  const list = Array.from(compactBlocksFor('DEPARTURE', 'CTR', fdrWithMtr({ exitFix: 'F' })));
+  const list = Array.from(compactBlocksFor('DEPARTURE', 'CTR', flightDataWithMtr({ exitFix: 'F' })));
   assert.deepEqual(list.slice(-MTR_BLOCKS_BY_POSITION.DEPARTURE.CTR.length), Array.from(MTR_BLOCKS_BY_POSITION.DEPARTURE.CTR));
-  assert.deepEqual(Array.from(compactBlocksFor('DEPARTURE', 'LC', fdrWithMtr({ exitFix: 'F' }))), Array.from(compactBlocksFor('DEPARTURE', 'LC')));
+  assert.deepEqual(Array.from(compactBlocksFor('DEPARTURE', 'LC', flightDataWithMtr({ exitFix: 'F' }))), Array.from(compactBlocksFor('DEPARTURE', 'LC')));
 });
 
 test('hasMtrData: false for nothing, true for any one value', () => {
-  for (const flightData of [null, {}, { military: null }, fdrWithMtr({}), fdrWithMtr({ designator: null, exitFix: '', exitEstimateUtc: null })]) {
+  for (const flightData of [null, {}, { military: null }, flightDataWithMtr({}), flightDataWithMtr({ designator: null, exitFix: '', exitEstimateUtc: null })]) {
     assert.equal(hasMtrData(flightData), false, JSON.stringify(flightData));
   }
   for (const key of ['designator', 'entryFix', 'entryTimeUtc', 'exitFix', 'exitEstimateUtc', 'requestedAltitudeAfterExit']) {
-    assert.equal(hasMtrData(fdrWithMtr({ [key]: key.endsWith('Utc') ? 1466519520000 : 'X' })), true, key);
+    assert.equal(hasMtrData(flightDataWithMtr({ [key]: key.endsWith('Utc') ? 1466519520000 : 'X' })), true, key);
   }
 });
 
 test('mtrLostCommsAdvisory states the rule, shows the ACTIVE ALT, admits the missing half, never reads 9H-ALT', () => {
-  assert.equal(mtrLostCommsAdvisory(fdrWithMtr({})), null);
+  assert.equal(mtrLostCommsAdvisory(flightDataWithMtr({})), null);
   const flightData = {
     military: { mtr: { designator: 'IR107', requestedAltitudeAfterExit: 'FL230' } },
     clearance: { altitude: { entries: [{ value: 'FL120', status: 'SUPERSEDED' }, { value: 'FL180', status: 'ACTIVE' }] } },
@@ -190,7 +190,7 @@ test('mtrLostCommsAdvisory states the rule, shows the ACTIVE ALT, admits the mis
   assert.match(text, /FL180/);
   assert.match(text, /not available in this system/);
   assert.doesNotMatch(text, /FL230|FL120/);
-  assert.match(mtrLostCommsAdvisory(fdrWithMtr({ exitFix: 'E' })), /none posted \(ALT is empty\)/);
+  assert.match(mtrLostCommsAdvisory(flightDataWithMtr({ exitFix: 'E' })), /none posted \(ALT is empty\)/);
 });
 
 // §9.6 alert status (crc-sync docs/adr/0070, decisions.md H56).

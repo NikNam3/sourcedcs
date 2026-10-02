@@ -3,7 +3,7 @@ import { _bayTabsEl, _setActiveBayId, _setActivePositionTab } from './state.js';
 import { _renderPositionTabs, efspVisibleBayId } from './tabs.js';
 import { efspArrivalLog, forgetEfspArrivals, nextEfspArrivalExpiry, noteEfspArrivals } from '../efsp-arrivals.js';
 import { getActingPositions } from '../efsp-ws.js';
-import { getEfspFdr, getEfspPosition } from '../efsp-state.js';
+import { getEfspFlightData, getEfspPosition } from '../efsp-state.js';
 import { renderAllOpenEfspBays, selectEfspStripById } from '../bay-view.js';
 
 /**
@@ -79,7 +79,7 @@ export function noteEfspBoardArrivals(msg, placementBefore) {
   noteEfspArrivals(placementBefore, (msg.strips && msg.strips.updated) || [], {
     signedOnPositions: signedOn, myControllerIds: mine, visibleBayId: efspVisibleBayId(), now: Date.now(),
     callsignOf: (strip) => {
-      const flightData = getEfspFdr(strip.flightDataId);
+      const flightData = getEfspFlightData(strip.flightDataId);
       return (flightData && flightData.identity && flightData.identity.callsign) || strip.stripId;
     },
   });

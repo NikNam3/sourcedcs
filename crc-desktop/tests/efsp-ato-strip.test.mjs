@@ -47,7 +47,7 @@ function flightData(flightDataId, callsign, { beacon = '4521', ato = true, links
 const win = (arctUtc, offloadKlb) => [{ arctUtc, endArUtc: arctUtc + 15 * 60000, offloadKlb }];
 const link = (stripType, peerFlightDataId, peerCallsign, windows) => ({ stripType, peerFlightDataId, peerCallsign, peerMissionNumber: null, arcp: 'ANCHOR BLUE', windows });
 
-const FDRS = [
+const FLIGHT_DATA_LIST = [
   flightData('f-shell', 'SHELL71', { beacon: '4571', asTanker: { tacan: '38Y' }, links: [link('TANKER', 'f-viper', 'VIPER11', win(W(13, 45), 12)), link('TANKER', 'f-dude', 'DUDE21', win(W(14, 20), 16))] }),
   flightData('f-viper', 'VIPER11', { links: [link('RECEIVER', 'f-shell', 'SHELL71', win(W(13, 45), 12))] }),
   flightData('f-dude', 'DUDE21', { beacon: '4531', links: [link('RECEIVER', 'f-shell', 'SHELL71', win(W(14, 20), 16))] }),
@@ -60,7 +60,7 @@ const STRIPS = [
   strip('s-plain', 'f-plain', { stripType: 'DEPARTURE', state: 'PROPOSED', ownerPositionId: 'OPS', facilityId: 'INCIRLIK', bayId: 'ops-proposed' }),
 ];
 
-async function mount({ strips = STRIPS, flightDataList = FDRS } = {}) {
+async function mount({ strips = STRIPS, flightDataList = FLIGHT_DATA_LIST } = {}) {
   const sent = [];
   globalThis.document.getElementById = () => null;
   globalThis.getLatestTrack = () => null; // window.getLatestTrack / getAllTracks, as app.js's startApp() sets them
@@ -138,7 +138,7 @@ test('a dropped peer leaves the group; a receiver whose tanker is gone has no ba
 });
 
 test('the Mode 3 conflict shows only when the ATO\'s code and the assigned code differ', async () => {
-  const flightDataList = FDRS.map(f => (f.flightDataId === 'f-viper' ? { ...f, identity: { ...f.identity, beaconAssigned: '4533' } } : f));
+  const flightDataList = FLIGHT_DATA_LIST.map(f => (f.flightDataId === 'f-viper' ? { ...f, identity: { ...f.identity, beaconAssigned: '4533' } } : f));
   const m = await mount({ flightDataList });
   for (const id of ['s-viper', 's-viper-dep']) {
     const chip = slot(m.build(id), 'ato');

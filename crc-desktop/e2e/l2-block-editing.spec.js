@@ -95,7 +95,7 @@ test('F-202: a half-typed Block keeps focus when another controller updates a di
     await page.keyboard.type('FL3');
 
     await setBlockVia(page2, otherId, '8', 'LTAG', 'CD');
-    await expect.poll(() => page.evaluate((i) => window.getEfspFdr(window.getEfspStrip(i).flightDataId).filed.departureAirport, otherId)).toBe('LTAG');
+    await expect.poll(() => page.evaluate((i) => window.getEfspFlightData(window.getEfspStrip(i).flightDataId).filed.departureAirport, otherId)).toBe('LTAG');
     await page.waitForTimeout(100); // one rAF for the batched render
 
     // Measured: focus is now div.efsp-strip — FOC201's own Strip element.
@@ -134,7 +134,7 @@ test('F-204: a Strip with an abandoned Block edit still shows other changes to i
   await expect(s.locator('input.efsp-block-input')).toHaveCount(1);
 
   await setBlockVia(page, id, '8', 'LTAG');
-  await expect.poll(() => page.evaluate((i) => window.getEfspFdr(window.getEfspStrip(i).flightDataId).filed.departureAirport, id)).toBe('LTAG');
+  await expect.poll(() => page.evaluate((i) => window.getEfspFlightData(window.getEfspStrip(i).flightDataId).filed.departureAirport, id)).toBe('LTAG');
   // Measured: DEP stays blank; data-rev on the element stays at the old rev.
   await expect(s.locator('.efsp-block-8')).toHaveText('LTAG', { timeout: 2000 });
 });

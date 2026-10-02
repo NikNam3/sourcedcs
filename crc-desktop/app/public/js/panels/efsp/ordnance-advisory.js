@@ -18,7 +18,7 @@
 // which arrive whole on deltas — nothing is stored (the WP6 plan's rule-4
 // argument), so a 3G change re-renders the Strip with no new wiring.
 
-import { getEfspFdr, getEfspFieldState } from './efsp-state.js';
+import { getEfspFlightData, getEfspRunwayStatus } from './efsp-state.js';
 
 function _ordNormalizeEnd(text) {
   if (typeof text !== 'string' && typeof text !== 'number') return null;
@@ -92,9 +92,9 @@ export function hungOrdnanceAdvisoryFor(strip, flightData, runwayStatus) {
 }
 
 // [SOURCE-DEFINED] shown while the client has no field state for the Facility
-// (L1b's getEfspFieldState not loaded, or no record yet): that ordnance is hung
+// (L1b's getEfspRunwayStatus not loaded, or no record yet): that ordnance is hung
 // must never depend on another piece arriving first.
-export const ORDNANCE_NO_FIELD_STATE_REASON = 'Hung ordnance. The hot cargo pad is shown when field state is available.';
+export const ORDNANCE_NO_RUNWAY_STATUS_REASON = 'Hung ordnance. The hot cargo pad is shown when runway status is available.';
 
 /**
  * strip-view.js's _stripAlerts hook: [] or one `ord` alert — an amber HUNG chip
@@ -103,13 +103,13 @@ export const ORDNANCE_NO_FIELD_STATE_REASON = 'Hung ordnance. The hot cargo pad 
  */
 export function ordnanceAlertsFor(strip) {
   if (!strip || (strip.stripType !== 'ARRIVAL' && strip.stripType !== 'DEPARTURE') || strip.state === 'DROPPED') return [];
-  const flightData = typeof getEfspFdr === 'function' ? getEfspFdr(strip.flightDataId) : null;
+  const flightData = typeof getEfspFlightData === 'function' ? getEfspFlightData(strip.flightDataId) : null;
   if (!flightData || !flightData.military || flightData.military.ordnanceState !== 'HUNG') return [];
-  const runwayStatus = typeof getEfspFieldState === 'function' ? getEfspFieldState(strip.facilityId) : null;
+  const runwayStatus = typeof getEfspRunwayStatus === 'function' ? getEfspRunwayStatus(strip.facilityId) : null;
   const advisory = runwayStatus ? hungOrdnanceAdvisoryFor(strip, flightData, runwayStatus) : null;
   return [{
     key: 'ord', tone: 'attn', legacy: 'efsp-ord-indicator',
     text: 'HUNG',
-    reason: advisory ? advisory.reason : ORDNANCE_NO_FIELD_STATE_REASON,
+    reason: advisory ? advisory.reason : ORDNANCE_NO_RUNWAY_STATUS_REASON,
   }];
 }

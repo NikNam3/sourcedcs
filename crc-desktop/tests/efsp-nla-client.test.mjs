@@ -29,7 +29,7 @@ test('nlaLabelFor returns null for an unknown state rather than throwing', () =>
 });
 
 test('DEPARTED uses the real Hand-Off-to-AP wording (docs/adr/0007), not ADR 0005\'s old "(local)" stub', () => {
-  assert.equal(NLA_LABELS.DEPARTURE.DEPARTED, 'Hand Off to APP');
+  assert.equal(NLA_LABELS.DEPARTURE.DEPARTED, 'Hand Off to AP');
 });
 
 // ── ARRIVAL lifecycle (Phase 2, docs/adr/0008) ──────────────────────────

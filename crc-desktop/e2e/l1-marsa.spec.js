@@ -44,7 +44,7 @@ async function seedPair(page) {
 
 /** The relation this page's own store holds for a callsign, if any. */
 const relationFor = (page, callsign) => page.evaluate((cs) => {
-  const strip = [...efspStrips.values()].find(s => efspFdrs.get(s.flightDataId).identity.callsign === cs);
+  const strip = [...efspStrips.values()].find(s => efspFlightDataList.get(s.flightDataId).identity.callsign === cs);
   if (!strip) return null;
   const rel = typeof marsaForStrip === 'function' ? marsaForStrip(strip) : null;
   return rel && { state: rel.state, reason: rel.voidReason || null, declaringCallsign: rel.declaringCallsign };
@@ -53,7 +53,7 @@ const relationFor = (page, callsign) => page.evaluate((cs) => {
 /** Declare through the page's own send function — the popover cannot (F-110). */
 async function declareVia(page, aCallsign, bCallsign, declaringCallsign) {
   await page.evaluate(([csA, csB, declarer]) => {
-    const byCs = (cs) => [...efspStrips.values()].find(s => efspFdrs.get(s.flightDataId).identity.callsign === cs);
+    const byCs = (cs) => [...efspStrips.values()].find(s => efspFlightDataList.get(s.flightDataId).identity.callsign === cs);
     window.sendEfspMarsaMutation('OPS', undefined, undefined, {
       kind: 'DeclareMarsa',
       participants: [byCs(csA).flightDataId, byCs(csB).flightDataId],
@@ -118,8 +118,8 @@ test('F-111: declaring MARSA puts MARSA in SEP REG on this page', async ({ page 
   await declareVia(page, a, b, 'SHELL71');
 
   const regime = await page.evaluate((cs) => {
-    const strip = [...efspStrips.values()].find(s => efspFdrs.get(s.flightDataId).identity.callsign === cs);
-    return efspFdrs.get(strip.flightDataId).tofi && efspFdrs.get(strip.flightDataId).tofi.separationRegime;
+    const strip = [...efspStrips.values()].find(s => efspFlightDataList.get(s.flightDataId).identity.callsign === cs);
+    return efspFlightDataList.get(strip.flightDataId).tofi && efspFlightDataList.get(strip.flightDataId).tofi.separationRegime;
   }, a);
 
   expect(regime, 'the server wrote MARSA; this client was never told').toBe('MARSA');
@@ -138,7 +138,7 @@ test('extends F-305: the void reaches the declaring controller\'s own Strip', as
   // The interlock: a controller altitude change on a participant before
   // rendezvous voids the relation (plan §13's acceptance line).
   await page.evaluate((cs) => {
-    const strip = [...efspStrips.values()].find(s => efspFdrs.get(s.flightDataId).identity.callsign === cs);
+    const strip = [...efspStrips.values()].find(s => efspFlightDataList.get(s.flightDataId).identity.callsign === cs);
     // sendEfspMutation is (actingPositionId, strip, op) — three arguments, and
     // the second is the Strip RECORD, which is where the rev is read from. The
     // reconstruction called it with (acting, stripId, rev, op); the op landed
@@ -170,7 +170,7 @@ test('extends F-305: the participant highlight is drawn on the other Strip', asy
   // never gets the class: the highlight is client-local state of exactly the
   // kind selection and expansion were given dataset entries for, and has none.
   const signedOn = await page.evaluate((cs) => {
-    const strip = [...efspStrips.values()].find(s => efspFdrs.get(s.flightDataId).identity.callsign === cs);
+    const strip = [...efspStrips.values()].find(s => efspFlightDataList.get(s.flightDataId).identity.callsign === cs);
     return window.getMarsaHighlightStripIds().includes(strip.stripId);
   }, b);
   expect(signedOn, 'precondition: the highlight set should hold the peer').toBe(true);

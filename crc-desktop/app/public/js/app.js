@@ -133,7 +133,7 @@ export function _setApproachRwyCourse(v) { approachRwyCourse = v; }
 // correctly gets an empty list — the banner says so rather than the map going
 // quietly blank.
 export let coverageRadars = [];          // [{id, type, label, lat, lon, elevM, rangeM, sweepMs, sweepStart, grantedBy, ...}]
-export let coverageHeldPositions = [];   // [{facilityId, positionId, isPrimary}]
+export let coverageSignedOnPositions = [];   // [{facilityId, positionId, isPrimary}]
 export let coverageDatalink = false;     // whether a signedOn Position is on the datalink
 
 /** Every radar this controller is looking through. */
@@ -447,7 +447,7 @@ function applyDelta(updated, relabeled, gone) {
  */
 export function applyCoverage(msg) {
   coverageRadars = msg.radars || [];
-  coverageHeldPositions = msg.signedOnPositions || [];
+  coverageSignedOnPositions = msg.signedOnPositions || [];
   coverageDatalink = !!msg.datalink;
 
   // The datalink is a picture too (crc-sync's docs/adr/0059): a tactical
@@ -720,4 +720,4 @@ function _updateCoalitionBtn($btn) {
 export function _setSettingsForTest(v) { settings = v; }
 export function _setCoverageRadars(v) { coverageRadars = v; }
 export function _setCoverageDatalink(v) { coverageDatalink = v; }
-export function _setCoverageHeldPositions(v) { coverageHeldPositions = v; }
+export function _setCoverageHeldPositions(v) { coverageSignedOnPositions = v; }

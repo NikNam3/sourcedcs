@@ -66,11 +66,11 @@ function relation(over = {}) {
 }
 
 const STRIPS = [strip('s-tanker', TANKER), strip('s-rx1', RX1), strip('s-rx2', RX2)];
-const FDRS = [flightData(TANKER, 'SHELL71'), flightData(RX1, 'VIPER11'), flightData(RX2, 'VIPER12')];
+const FLIGHT_DATA_LIST = [flightData(TANKER, 'SHELL71'), flightData(RX1, 'VIPER11'), flightData(RX2, 'VIPER12')];
 
 function load(marsa = []) {
   state._resetEfspStateForTest();
-  state.applyEfspSnapshot({ strips: STRIPS, flightDataList: FDRS, positions: [], bays: [], marsa, boardSeq: 1 });
+  state.applyEfspSnapshot({ strips: STRIPS, flightDataList: FLIGHT_DATA_LIST, positions: [], bays: [], marsa, boardSeq: 1 });
   setSelected(null);
   highlightMarsaParticipants(null);
 }
@@ -82,7 +82,7 @@ const stripOf = (id) => state.getEfspStrip(id);
 test('a snapshot carries relations, and a delta updates one in place', () => {
   load([relation()]);
   assert.equal(state.getAllEfspMarsa().length, 1);
-  assert.equal(state.activeMarsaForFdr(TANKER).marsaId, 'm-1');
+  assert.equal(state.activeMarsaForFlightData(TANKER).marsaId, 'm-1');
 
   state.applyEfspMarsaDelta({ marsa: { updated: [relation({ rev: 2, rendezvousAt: 2000 })] } });
   assert.equal(state.getEfspMarsa('m-1').rendezvousAt, 2000);
@@ -94,13 +94,13 @@ test('a void needs nothing cleared — the record arrives whole', () => {
   state.applyEfspMarsaDelta({
     marsa: { updated: [relation({ rev: 2, state: 'VOIDED', voidedBy: 'CONTROLLER_COURSE_CHANGE', endedAt: 3000 })] },
   });
-  assert.equal(state.activeMarsaForFdr(TANKER), null, 'no longer active');
+  assert.equal(state.activeMarsaForFlightData(TANKER), null, 'no longer active');
   assert.equal(state.getEfspMarsa('m-1').voidedBy, 'CONTROLLER_COURSE_CHANGE', 'but still there to render');
 });
 
 test('a flight in no relation resolves to null everywhere', () => {
   load([relation()]);
-  assert.equal(state.activeMarsaForFdr(RX2), null);
+  assert.equal(state.activeMarsaForFlightData(RX2), null);
   assert.equal(state.marsaForStrip(stripOf('s-rx2')), null);
   assert.equal(marsaBadgeFor(stripOf('s-rx2')), null);
 });
@@ -155,7 +155,7 @@ test('a VOIDED relation is rule 2\'s alert, and names the cause', () => {
   assert.match(badge.title, /course was assigned before rendezvous/);
   assert.match(badge.title, /ATC is separating these aircraft again/);
   // "alerts every participant Strip" — one record, every participant.
-  assert.deepEqual(badge.participantFdrIds, [TANKER, RX1]);
+  assert.deepEqual(badge.participantFlightDataIds, [TANKER, RX1]);
   assert.ok(marsaBadgeFor(stripOf('s-tanker')).voided, 'the tanker sees it too');
 });
 
@@ -236,7 +236,7 @@ test('a DROPPED Strip is not highlighted', () => {
   state._resetEfspStateForTest();
   state.applyEfspSnapshot({
     strips: [strip('s-tanker', TANKER), { ...strip('s-rx1', RX1), state: 'DROPPED' }],
-    flightDataList: FDRS, positions: [], bays: [], marsa: [relation()], boardSeq: 1,
+    flightDataList: FLIGHT_DATA_LIST, positions: [], bays: [], marsa: [relation()], boardSeq: 1,
   });
   highlightMarsaParticipants('s-tanker');
   assert.deepEqual(getMarsaHighlightStripIds(), []);
