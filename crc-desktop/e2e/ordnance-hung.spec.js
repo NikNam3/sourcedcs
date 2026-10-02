@@ -4,7 +4,7 @@
  * in a real browser against a real crc-sync. Screenshots go to docs/wip/L12/
  * and are described in docs/wip/L12.md.
  *
- * Client field state (getEfspFieldState) is L1b's real client; nothing is stubbed.
+ * Client field state (getEfspRunwayStatus) is L1b's real client; nothing is stubbed.
  */
 
 const path = require('path');

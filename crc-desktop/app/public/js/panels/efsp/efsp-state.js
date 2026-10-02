@@ -75,7 +75,7 @@ let efspCorrelationStats = null;
 // one is the alert §9.2 rule 2 requires, and dropping it would erase the
 // warning for whoever just reconnected.
 const efspMarsa = new Map();
-const efspFieldStates = new Map(); // facilityId -> field-state record (crc-sync docs/adr/0061)
+const efspRunwayStatuses = new Map(); // facilityId -> field-state record (crc-sync docs/adr/0061)
 
 // docs/adr/0058 — what crc-sync's conformance and conflict monitors say is
 // WRONG right now. Sent whole on every change (efsp-alerts), so a flight that
@@ -110,8 +110,8 @@ export function applyEfspSnapshot(msg) {
   for (const r of msg.correlations || []) efspCorrelations.set(r.fdrId, r);
   efspMarsa.clear();
   for (const r of msg.marsa || []) efspMarsa.set(r.marsaId, r);
-  efspFieldStates.clear();
-  for (const r of msg.fieldStates || []) efspFieldStates.set(r.facilityId, r);
+  efspRunwayStatuses.clear();
+  for (const r of msg.fieldStates || []) efspRunwayStatuses.set(r.facilityId, r);
   // crc-sync's docs/adr/0074 — the carrier's hull record (carrier-state.js).
   if (typeof applyEfspCarrierSnapshot === 'function') applyEfspCarrierSnapshot(msg);
   // crc-sync's docs/adr/0093 — who is on which SFA frequency (sfa-state.js).
@@ -191,15 +191,15 @@ export function marsaParticipantStripIds(strip) {
  * Strip and rides no Board's sequence. One record per Facility, sent whole, so
  * a delta simply replaces it (docs/adr/0068).
  */
-export function applyEfspFieldStateDelta(msg) {
+export function applyEfspRunwayStatusDelta(msg) {
   for (const r of (msg && msg.fieldStates && msg.fieldStates.updated) || []) {
-    if (r && r.facilityId) efspFieldStates.set(r.facilityId, r);
+    if (r && r.facilityId) efspRunwayStatuses.set(r.facilityId, r);
   }
 }
 
 /** The Facility's field-state record exactly as the server sent it, or null (L12/L13 read this — do not rename). */
-export function getEfspFieldState(facilityId) { return efspFieldStates.get(facilityId) || null; }
-export function getAllEfspFieldStates() { return [...efspFieldStates.values()]; }
+export function getEfspRunwayStatus(facilityId) { return efspRunwayStatuses.get(facilityId) || null; }
+export function getAllEfspRunwayStatuses() { return [...efspRunwayStatuses.values()]; }
 
 /**
  * An efsp-correlation-delta — its own message type with its own seq, like the
@@ -495,7 +495,7 @@ export function _resetEfspStateForTest() {
   efspCorrelations.clear();
   efspCorrelationStats = null;
   efspMarsa.clear();
-  efspFieldStates.clear();
+  efspRunwayStatuses.clear();
   efspConformance.clear();
   efspConflicts = [];
   efspBoardSeq = 0;

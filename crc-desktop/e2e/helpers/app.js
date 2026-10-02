@@ -291,18 +291,18 @@ async function dropStrips(page, callsigns) {
  * `page` must hold TWR, OPS and APP: one controller holding all three self-coordinates the change.
  */
 async function ensureActiveRunway(page, end = '05') {
-  await page.waitForFunction(() => typeof getEfspFieldState === 'function' && !!getEfspFieldState('INCIRLIK'));
+  await page.waitForFunction(() => typeof getEfspRunwayStatus === 'function' && !!getEfspRunwayStatus('INCIRLIK'));
   const step = async (positionId, op) => {
-    const before = await page.evaluate(() => getEfspFieldState('INCIRLIK').rev);
-    await page.evaluate(([p, o]) => sendEfspFieldStateMutation(p, 'INCIRLIK', getEfspFieldState('INCIRLIK').rev, o), [positionId, op]);
-    await expect.poll(() => page.evaluate(() => getEfspFieldState('INCIRLIK').rev), { timeout: 5000 }).toBeGreaterThan(before);
+    const before = await page.evaluate(() => getEfspRunwayStatus('INCIRLIK').rev);
+    await page.evaluate(([p, o]) => sendEfspRunwayStatusMutation(p, 'INCIRLIK', getEfspRunwayStatus('INCIRLIK').rev, o), [positionId, op]);
+    await expect.poll(() => page.evaluate(() => getEfspRunwayStatus('INCIRLIK').rev), { timeout: 5000 }).toBeGreaterThan(before);
   };
-  const active = () => page.evaluate(() => getEfspFieldState('INCIRLIK').activeRunway);
+  const active = () => page.evaluate(() => getEfspRunwayStatus('INCIRLIK').activeRunway);
   if ((await active()) === end) return;
   await step('TWR', { kind: 'SelfCoordinateRunwayChange', toRunwayId: end });
   await step('TWR', { kind: 'BeginRunwayChange' });
   await step('TWR', { kind: 'CompleteRunwayChange' });
-  const needsInspection = await page.evaluate(() => getEfspFieldState('INCIRLIK').runways[0].status === 'SUSPENDED_INSPECTION');
+  const needsInspection = await page.evaluate(() => getEfspRunwayStatus('INCIRLIK').runways[0].status === 'SUSPENDED_INSPECTION');
   if (needsInspection) await step('OPS', { kind: 'CompleteInspection', runwayId: '05/23' });
   await expect.poll(active, { timeout: 5000 }).toBe(end);
 }

@@ -18,7 +18,7 @@
 // which arrive whole on deltas — nothing is stored (the WP6 plan's rule-4
 // argument), so a 3G change re-renders the Strip with no new wiring.
 
-import { getEfspFlightData, getEfspFieldState } from './efsp-state.js';
+import { getEfspFlightData, getEfspRunwayStatus } from './efsp-state.js';
 
 function _ordNormalizeEnd(text) {
   if (typeof text !== 'string' && typeof text !== 'number') return null;
@@ -92,9 +92,9 @@ export function hungOrdnanceAdvisoryFor(strip, fdr, fieldState) {
 }
 
 // [SOURCE-DEFINED] shown while the client has no field state for the Facility
-// (L1b's getEfspFieldState not loaded, or no record yet): that ordnance is hung
+// (L1b's getEfspRunwayStatus not loaded, or no record yet): that ordnance is hung
 // must never depend on another piece arriving first.
-export const ORDNANCE_NO_FIELD_STATE_REASON = 'Hung ordnance. The hot cargo pad is shown when field state is available.';
+export const ORDNANCE_NO_RUNWAY_STATUS_REASON = 'Hung ordnance. The hot cargo pad is shown when field state is available.';
 
 /**
  * strip-view.js's _stripAlerts hook: [] or one `ord` alert — an amber HUNG chip
@@ -105,11 +105,11 @@ export function ordnanceAlertsFor(strip) {
   if (!strip || (strip.role !== 'ARRIVAL' && strip.role !== 'DEPARTURE') || strip.state === 'DROPPED') return [];
   const fdr = typeof getEfspFlightData === 'function' ? getEfspFlightData(strip.fdrId) : null;
   if (!fdr || !fdr.military || fdr.military.ordnanceState !== 'HUNG') return [];
-  const fieldState = typeof getEfspFieldState === 'function' ? getEfspFieldState(strip.facilityId) : null;
+  const fieldState = typeof getEfspRunwayStatus === 'function' ? getEfspRunwayStatus(strip.facilityId) : null;
   const advisory = fieldState ? hungOrdnanceAdvisoryFor(strip, fdr, fieldState) : null;
   return [{
     key: 'ord', tone: 'attn', legacy: 'efsp-ord-indicator',
     text: 'HUNG',
-    reason: advisory ? advisory.reason : ORDNANCE_NO_FIELD_STATE_REASON,
+    reason: advisory ? advisory.reason : ORDNANCE_NO_RUNWAY_STATUS_REASON,
   }];
 }

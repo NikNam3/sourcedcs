@@ -109,14 +109,14 @@ test('scrambleAlertsFor names the configured route when field state is loaded', 
 
 // ── alertPadConstraintFor ────────────────────────────────────────────────
 
-test('alertPadConstraintFor without getEfspFieldState still marks the route (L1b not loaded)', () => {
+test('alertPadConstraintFor without getEfspRunwayStatus still marks the route (L1b not loaded)', () => {
   load();
-  assert.equal(state.getEfspFieldState('INCIRLIK'), null, 'no field state loaded');
+  assert.equal(state.getEfspRunwayStatus('INCIRLIK'), null, 'no field state loaded');
   assert.equal(client.alertPadConstraintFor('INCIRLIK'), 'ALERT-PAD ACCESS ROUTE CONSTRAINED — scramble in progress (VIPER11)');
   assert.equal(client.alertPadConstraintFor('CENTER'), null);
 });
 
-test('alertPadConstraintFor with getEfspFieldState names the configured route', () => {
+test('alertPadConstraintFor with getEfspRunwayStatus names the configured route', () => {
   load(STRIPS, FLIGHT_DATA_LIST, [{ facilityId: 'INCIRLIK', alertPad: { name: 'Alert pad', accessRoute: 'ALERT ACCESS TAXIWAY' } }]);
   assert.equal(client.alertPadConstraintFor('INCIRLIK'), 'ACCESS ROUTE ALERT ACCESS TAXIWAY CONSTRAINED — scramble in progress (VIPER11)');
 });

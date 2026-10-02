@@ -6,7 +6,7 @@ import { initTrackPanel } from './panels/track-panel.js';
 import { initAprtPanel } from './panels/aprt-panel.js';
 import { initEfspPanel } from './panels/efsp/efsp-panel.js';
 import { initAirspacePanel } from './panels/efsp/airspace-panel.js';
-import { initFieldStatePanel } from './panels/efsp/runway-status-panel.js';
+import { initRunwayStatusPanel } from './panels/efsp/runway-status-panel.js';
 import { initMetricsPanel } from './panels/metrics-panel.js';
 import { getActiveRadars, map } from './app.js';
 
@@ -49,7 +49,7 @@ export const PANEL_TITLES = {
   radio:    'RADIO',
   efsp:     'FLIGHT STRIPS',
   airspace: 'AIRSPACE',
-  fieldState: 'FIELD STATE',
+  fieldState: 'RUNWAY STATUS',
   metrics:  'METRICS',
 };
 
@@ -72,7 +72,7 @@ export function initDock() {
         case 'radio':    return mountExistingPanel('srs-radio-panel', null);
         case 'efsp':     return mountExistingPanel('efsp-panel', initEfspPanel);
         case 'airspace': return mountExistingPanel('airspace-panel', initAirspacePanel);
-        case 'fieldState': return mountExistingPanel('field-state-panel', initFieldStatePanel);
+        case 'fieldState': return mountExistingPanel('runway-status-panel', initRunwayStatusPanel);
         case 'metrics':  return mountExistingPanel('metrics-panel', initMetricsPanel);
         default: throw new Error(`[dock] unknown panel component: ${options.name}`);
       }

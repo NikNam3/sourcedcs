@@ -16,7 +16,7 @@ import { renderBayDescriptorView } from './bay-views.js';
 import { stereoRoutesCacheKey } from './efsp-stereo-routes.js';
 import { tofiExitSignatureFor } from './strip-view.js';
 import { efspArrivalFor } from './efsp-arrivals.js';
-import { fieldStateSignatureFor } from './runway-status-rules.js';
+import { runwayStatusSignatureFor } from './runway-status-rules.js';
 import { trackRef } from '../../track-label.js';
 import { getActiveEfspSearchQuery } from './efsp-panel.js';
 import { computeRackReconciliation } from './strip-drag.js';
@@ -601,7 +601,7 @@ export function _stripRenderSignature(strip) {
   parts.push('alr:' + conf.map(a => `${a.kind}/${a.assigned}/${a.actual ?? ''}/${a.deviationFt ?? ''}/${a.fpm ?? ''}`).join(',')
     + ';' + stca.map(c => `${c.id}/${c.timeToCpaSec}/${c.minNm}/${c.vertFt}`).join(','));
   // Field state (docs/adr/0068): the RWY/HOOK chips read the Facility's runway record, not the Strip.
-  parts.push('fld:' + (typeof fieldStateSignatureFor === 'function' ? fieldStateSignatureFor(strip) : ''));
+  parts.push('fld:' + (typeof runwayStatusSignatureFor === 'function' ? runwayStatusSignatureFor(strip) : ''));
   // Surveillance hints (docs/adr/0076) are stated by the server about this Strip, not part of its own
   // record; whether the chip can be accepted also depends on which Position the controller holds (S-L14).
   parts.push('sur:' + (typeof surveillanceHintsForStrip === 'function'

@@ -24,7 +24,7 @@ const require = createRequire(import.meta.url);
 
 const serverIff = require('../../crc-sync/src/surveillance/iff.js');
 const serverNla = require('../../crc-sync/src/efsp/nla.js');
-const serverFieldState = require('../../crc-sync/src/efsp/runway-status.js');
+const serverRunwayStatus = require('../../crc-sync/src/efsp/runway-status.js');
 const serverPermission = require('../../crc-sync/src/efsp/permission.js');
 const serverFacilities = require('../../crc-sync/src/efsp/facility-config.js');
 const serverZulu = require('../../crc-sync/src/efsp/zulu-time.js');
@@ -89,21 +89,21 @@ test('D-9: the strips that show a RWY chip are real states of their Role, and co
   // RUNWAY_GATED_STATES lists the states whose ENTRY uses the runway; the chip is shown one step
   // earlier, on the Strip whose next NLA step the inhibit would refuse (the client comment's
   // "so the controller sees the problem before the NLA does").
-  for (const [role, states] of Object.entries(rules.FIELD_STATE_RUNWAY_STRIP_STATES)) {
+  for (const [role, states] of Object.entries(rules.RUNWAY_STATUS_RUNWAY_STRIP_STATES)) {
     for (const s of states) assert.ok(serverNla.STATES_BY_ROLE[role].includes(s), `${role}.${s} is not a state in nla.js`);
     const order = serverNla.STATES_BY_ROLE[role];
-    for (const g of serverFieldState.RUNWAY_GATED_STATES[role] || []) {
+    for (const g of serverRunwayStatus.RUNWAY_GATED_STATES[role] || []) {
       const before = order[order.indexOf(g) - 1];
       assert.ok(states.includes(before), `server gates entry to ${role}.${g}, but the client shows no RWY chip on ${before}`);
     }
   }
-  assert.deepEqual(Object.keys(rules.FIELD_STATE_RUNWAY_STRIP_STATES).sort(), Object.keys(serverFieldState.RUNWAY_GATED_STATES).sort());
+  assert.deepEqual(Object.keys(rules.RUNWAY_STATUS_RUNWAY_STRIP_STATES).sort(), Object.keys(serverRunwayStatus.RUNWAY_GATED_STATES).sort());
 });
 
 test('D-9: the hook-check states are ARRIVAL states, and a subset of the RWY-chip states', () => {
-  for (const s of rules.FIELD_STATE_GEAR_CHECK_STATES) {
+  for (const s of rules.RUNWAY_STATUS_GEAR_CHECK_STATES) {
     assert.ok(serverNla.ARRIVAL_STATES.includes(s), s);
-    assert.ok(rules.FIELD_STATE_RUNWAY_STRIP_STATES.ARRIVAL.includes(s), s);
+    assert.ok(rules.RUNWAY_STATUS_RUNWAY_STRIP_STATES.ARRIVAL.includes(s), s);
   }
 });
 
@@ -111,19 +111,19 @@ test('D-9: the suspension-kind labels are runway-status.js\'s, verbatim', () => 
   // NOTE (PARITY finding, not client drift): SUSPENSION_KINDS also has RUNWAY_CHANGE but
   // SUSPENSION_LABELS does not, so the server words a change-suspension "works in progress"
   // by fallback. Both sides agree; see docs/wip/PARITY.md.
-  assert.deepEqual(constLiteral(fsSrc, 'FIELD_STATE_SUSPENSION_LABELS', 'runway-status-rules.js'), serverFieldState.SUSPENSION_LABELS);
+  assert.deepEqual(constLiteral(fsSrc, 'RUNWAY_STATUS_SUSPENSION_LABELS', 'runway-status-rules.js'), serverRunwayStatus.SUSPENSION_LABELS);
 });
 
 test('D-9: the gear-type labels cover exactly the server GEAR_TYPES', () => {
-  const client = constLiteral(fsSrc, 'FIELD_STATE_GEAR_TYPE_LABELS', 'runway-status-rules.js');
-  assert.deepEqual(Object.keys(client).sort(), [...serverFieldState.GEAR_TYPES].sort());
+  const client = constLiteral(fsSrc, 'RUNWAY_STATUS_GEAR_TYPE_LABELS', 'runway-status-rules.js');
+  assert.deepEqual(Object.keys(client).sort(), [...serverRunwayStatus.GEAR_TYPES].sort());
 });
 
 test('D-9: every Position a client authority table names is a Position some Facility actually has', () => {
   const real = new Set(serverFacilities.getFacilityIds().flatMap(f => serverFacilities.getPositionSet(f)));
   const named = new Map();
   const note = (where, ids) => { for (const id of ids) named.set(id, where); };
-  for (const owners of Object.values(rules.FIELD_STATE_ACTION_OWNERS)) note('FIELD_STATE_ACTION_OWNERS', owners);
+  for (const owners of Object.values(rules.RUNWAY_STATUS_ACTION_OWNERS)) note('RUNWAY_STATUS_ACTION_OWNERS', owners);
   for (const byState of Object.values(clientNla.STATE_OWNERS_BY_ROLE)) for (const owners of Object.values(byState)) note('STATE_OWNERS_BY_ROLE', owners);
   const bay = readClient(EFSP + 'bay/authority-mirror.js');
   for (const name of ['AIRSPACE_ENTRY_POSITIONS', 'CONVERT_TO_ARRIVAL_POSITIONS']) note(name, constLiteral(bay, name, 'authority-mirror.js'));

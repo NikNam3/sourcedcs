@@ -4,7 +4,7 @@
  *     (browser scripts cannot load crc-sync), so both run over one table and
  *     must agree on every row.
  *  2. ordnanceAlertsFor with and without client field state (L1b's
- *     getEfspFieldState may not be loaded; the chip shows regardless).
+ *     getEfspRunwayStatus may not be loaded; the chip shows regardless).
  *  3. The real strip-view.js rendering the chip and reason line on a Position
  *     whose grid does not carry Block 3G, and nothing on a CLEAN Strip
  *     (docs/adr/0058).
@@ -120,7 +120,7 @@ test('ordnanceAlertsFor: one amber HUNG chip with the pad sentence when field st
 
 test('ordnanceAlertsFor: the chip still shows with no client field state at all (L1b not loaded)', () => {
   const sb = alertsSandbox({ fdr: fdrWith('HUNG'), fieldState: undefined });
-  assert.equal(efspState.getEfspFieldState('INCIRLIK'), null, 'no client field state loaded');
+  assert.equal(efspState.getEfspRunwayStatus('INCIRLIK'), null, 'no client field state loaded');
   const alerts = sb.ordnanceAlertsFor(arrivalStrip());
   assert.equal(alerts.length, 1);
   assert.equal(alerts[0].text, 'HUNG');
@@ -129,7 +129,7 @@ test('ordnanceAlertsFor: the chip still shows with no client field state at all 
 
 test('ordnanceAlertsFor: a Facility with no record yet shows the generic sentence too', () => {
   const sb = alertsSandbox({ fdr: fdrWith('HUNG'), fieldState: null });
-  assert.equal(sb.ordnanceAlertsFor(arrivalStrip()).at(0).reason, client.ORDNANCE_NO_FIELD_STATE_REASON);
+  assert.equal(sb.ordnanceAlertsFor(arrivalStrip()).at(0).reason, client.ORDNANCE_NO_RUNWAY_STATUS_REASON);
 });
 
 test('ordnanceAlertsFor: nothing for CLEAN/LOADED/EXPENDED, a DROPPED Strip, an OVERFLIGHT, a MISSION line or a missing FDR', () => {
@@ -200,7 +200,7 @@ test('a HUNG arrival shows the HUNG chip and its reason line on every Position\'
 test('the chip shows with no client field state loaded, with the generic sentence', async () => {
   const { el } = await renderStrip({ strip: appArrival(), fdr: fdrWith('HUNG'), held: ['APP'], fieldState: undefined });
   assert.ok(descendants(el).find(c => c.dataset && c.dataset.slot === 'ord'));
-  assert.ok(byClass(el, 'efsp-strip-reason').some(r => r.textContent === client.ORDNANCE_NO_FIELD_STATE_REASON));
+  assert.ok(byClass(el, 'efsp-strip-reason').some(r => r.textContent === client.ORDNANCE_NO_RUNWAY_STATUS_REASON));
 });
 
 test('the advisory never disables the NLA button', async () => {

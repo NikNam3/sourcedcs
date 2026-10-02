@@ -2,7 +2,7 @@
 import { haversineM } from '../../geo.js';
 import { missionNow } from '../topbar.js';
 import {
-  correlatedTrackIdForStrip, getEfspBays, getEfspFlightData, getEfspFieldState, getEfspRack, getEfspStrip
+  correlatedTrackIdForStrip, getEfspBays, getEfspFlightData, getEfspRunwayStatus, getEfspRack, getEfspStrip
 } from './efsp-state.js';
 import { getEfspCarrier } from './carrier-state.js';
 import {
@@ -184,7 +184,7 @@ function _renderPattern(container, bay) {
   const mount = _mountPoint(container, bay.bayId);
   const legs = patternLegsFor(bay);
   const strips = patternStripsFor(bay, getEfspRack, getEfspFlightData);
-  const fs = typeof getEfspFieldState === 'function' ? getEfspFieldState(bay.facilityId) : null;
+  const fs = typeof getEfspRunwayStatus === 'function' ? getEfspRunwayStatus(bay.facilityId) : null;
   const runway = fs && fs.runways && fs.runways[0];
   const model = patternBoardModel({
     legs, strips, nowS: (typeof missionNow === 'function' ? missionNow() : Date.now()) / 1000,
@@ -237,8 +237,8 @@ function _renderFinal(container, bay) {
     const trackId = typeof correlatedTrackIdForStrip === 'function' ? correlatedTrackIdForStrip(strip) : null;
     const track = trackId && typeof window !== 'undefined' && typeof window.getLatestTrack === 'function' ? window.getLatestTrack(trackId) : null;
     let runwayText = '--';
-    if (typeof runwayForStrip === 'function' && typeof getEfspFieldState === 'function') {
-      const r = runwayForStrip({ ...strip, role: 'ARRIVAL' }, fdr, getEfspFieldState(bay.facilityId));
+    if (typeof runwayForStrip === 'function' && typeof getEfspRunwayStatus === 'function') {
+      const r = runwayForStrip({ ...strip, role: 'ARRIVAL' }, fdr, getEfspRunwayStatus(bay.facilityId));
       if (r) runwayText = r.end || r.runwayId;
     }
     const sample = finalSampleFor({

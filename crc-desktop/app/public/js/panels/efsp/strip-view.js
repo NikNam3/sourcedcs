@@ -53,7 +53,7 @@ import { _setPendingConvertStripId } from './bay-view.js';
 import { scrambleAlertsFor } from './scramble.js';
 import { convertStripToArrival, efspVisibleBayId, noteEfspArrivalShown } from './efsp-panel.js';
 import { arJoinFor, atoAlertsFor, isArHighlighted } from './ato-strip.js';
-import { fieldStateAlertsFor } from './runway-status-rules.js';
+import { runwayStatusAlertsFor } from './runway-status-rules.js';
 import { settings } from '../../app.js';
 
 export const STRIP_TYPE_ABBR = { DEPARTURE: 'DEP', ARRIVAL: 'ARR', OVERFLIGHT: 'OVF', MISSION: 'MSN', MARSHAL: 'MAR', FINAL: 'FNL', PATTERN: 'PAT' };
@@ -469,7 +469,7 @@ function _stripAlerts(strip) {
     }
   }
   // Wave-2 advisories, each defined in its own file (docs/adr/0068, 0069, 0070).
-  if (typeof fieldStateAlertsFor === 'function') out.push(...fieldStateAlertsFor(strip));
+  if (typeof runwayStatusAlertsFor === 'function') out.push(...runwayStatusAlertsFor(strip));
   if (typeof ordnanceAlertsFor === 'function') out.push(...ordnanceAlertsFor(strip));
   if (typeof scrambleAlertsFor === 'function') out.push(...scrambleAlertsFor(strip));
   return out;

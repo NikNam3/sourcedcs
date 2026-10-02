@@ -160,7 +160,7 @@ export function sendEfspMarsaMutation(actingPositionId, marsaId, baseRev, op) {
  * correlation and MARSA sends give: §5.6.3's replay machinery is keyed on
  * Strip identity, and a field-state op is cheap to reissue by hand.
  */
-export function sendEfspFieldStateMutation(actingPositionId, facilityId, baseRev, op) {
+export function sendEfspRunwayStatusMutation(actingPositionId, facilityId, baseRev, op) {
   _sendEfsp({
     version: 1, type: 'efsp-field-state-mutation',
     clientMutationId: efspClientMutationId(),
@@ -288,7 +288,7 @@ export function setEfspSender(name, fn) {
     case 'sendEfspAirspaceMutation': sendEfspAirspaceMutation = fn; break;
     case 'sendEfspCorrelationMutation': sendEfspCorrelationMutation = fn; break;
     case 'sendEfspMarsaMutation': sendEfspMarsaMutation = fn; break;
-    case 'sendEfspFieldStateMutation': sendEfspFieldStateMutation = fn; break;
+    case 'sendEfspRunwayStatusMutation': sendEfspRunwayStatusMutation = fn; break;
     case 'sendEfspSfaMutation': sendEfspSfaMutation = fn; break;
     case 'sendEfspCarrierMutation': sendEfspCarrierMutation = fn; break;
     case '_sendEfsp': _sendEfsp = fn; break;
