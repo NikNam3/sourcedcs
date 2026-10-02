@@ -246,6 +246,8 @@ test('U5: a rotation is undoable by the Position that rotated it: back on its fr
   const s = sfaArrival(efsp, c);
   const last = sfaArrival(efsp, c);
   const before = strip(efsp, s);
+  const rackBefore = board(efsp).getRack(before.bayId, before.rackId).map(x => x.stripId);
+  assert.deepEqual(rackBefore.slice().sort(), [first.stripId, s.stripId, last.stripId].sort());
   const ack = act(efsp, c.SFA, 'SFA', before, { kind: 'SfaRotation' });
   assert.equal(ack.ok, true, JSON.stringify(ack));
   const undo = { kind: 'Undo', actionId: ack.undoable.actionId };
@@ -257,7 +259,7 @@ test('U5: a rotation is undoable by the Position that rotated it: back on its fr
     [before.stripType, before.state, before.ownerPositionId, before.bayId, before.rackId]);
   assert.equal(now.sfaTransfer, before.sfaTransfer);
   const rack = efsp.boardStoreFor('INCIRLIK').getRack(before.bayId, before.rackId).map(x => x.stripId);
-  assert.deepEqual(rack, [first.stripId, s.stripId, last.stripId], 'after its predecessor');
+  assert.deepEqual(rack, rackBefore, 'after its predecessor');
   const parFinal = efsp.boardStoreFor('INCIRLIK').getAll().filter(x => x.ownerPositionId === 'PAR' && x.state !== 'DROPPED');
   assert.deepEqual(parFinal, [], 'PAR\'s Bay is empty');
 });

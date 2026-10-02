@@ -211,7 +211,7 @@ export function canActOnState(actingPositionId, stripType, state) {
 }
 
 export const DOUBLE_TAP_MS = 400;
-export const UNDO_WINDOW_MS = 30000;
+export const UNDO_WINDOW_MS = 10000; // H95 / docs/adr/0100: crc-sync's UNDO_WINDOW_MS (src/efsp/undo/undo-history.js)
 
 /**
  * @param {number|null} lastInvokedAt timestamp of the last advancing press, or null
