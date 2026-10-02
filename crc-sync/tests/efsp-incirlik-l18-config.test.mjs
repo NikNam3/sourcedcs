@@ -25,7 +25,7 @@ const { CorrelationReconciler, INELIGIBLE_STATES } = await import('../src/efsp/c
 const clone = (o) => JSON.parse(JSON.stringify(o));
 const valid = (cfg) => fc.validateConfig(cfg);
 
-test('INCIRLIK has RSU, SFA and PAR: MILITARY_ATC (so CA keeps them), unique letters, covering chain without RSU', () => {
+test('INCIRLIK has RSU, SFA and PAR: MILITARY_ATC (so CA keeps them), unique letters, consolidation chain without RSU', () => {
   const cfg = fc.getFacilityConfig();
   assert.deepEqual(cfg.positions, ['OPS', 'CD', 'GC', 'LC', 'RSU', 'AP', 'SFA', 'PAR']);
   for (const id of ['RSU', 'SFA', 'PAR']) assert.equal(fc.getPositionClass(id), 'MILITARY_ATC', id);
@@ -37,7 +37,7 @@ test('INCIRLIK has RSU, SFA and PAR: MILITARY_ATC (so CA keeps them), unique let
   assert.equal('RSU' in cfg.consolidation, false, 'a Strip never strands on a supervisory Position');
 });
 
-test('radars: RSU the airport radar, SFA APP\'s picture, PAR the precision approach radar alone', () => {
+test('radars: RSU the airport radar, SFA AP\'s picture, PAR the precision approach radar alone', () => {
   assert.deepEqual(fc.getPositionRadars('RSU'), [{ kind: 'airport', airport: 'LTAG' }]);
   assert.deepEqual(fc.getPositionRadars('SFA'), fc.getPositionRadars('AP'));
   assert.deepEqual(fc.getPositionRadars('PAR'), [{ kind: 'approach', airport: 'LTAG' }]);
@@ -98,7 +98,7 @@ test('Bay descriptor flags are validated: an unknown view and a bad capacity are
   assert.equal(valid(clone(fc.getShippedConfig('INCIRLIK'))).ok, true);
 });
 
-test('singleFrequencyApproach: APP holds jurisdiction over a pool of at least five, a rotation of three, and the pool IS the SFA Bay\'s Racks', () => {
+test('singleFrequencyApproach: AP holds jurisdiction over a pool of at least five, a rotation of three, and the pool IS the SFA Bay\'s Racks', () => {
   const sfa = fc.getSingleFrequencyApproach();
   assert.equal(sfa.jurisdiction, 'AP');
   assert.equal(sfa.rotationSize, 3);
@@ -174,7 +174,7 @@ test('RSU may ask about a runway and never close or open one (H18)', () => {
   assert.equal(permission.canActOnRunwayStatus('SFA', 'RequestRunwayStatus'), false);
 });
 
-test('SFA predicates read the one table: APP rotates, APP and SFA send the transfer, PAR receives it (one acting Position, D21)', () => {
+test('SFA predicates read the one table: AP rotates, AP and SFA send the transfer, PAR receives it (one acting Position, D21)', () => {
   assert.equal(permission.canRotateSfa('AP'), true);
   for (const id of ['SFA', 'PAR', 'RSU', 'LC', 'CV_MARSHAL', 'NOBODY', undefined]) assert.equal(permission.canRotateSfa(id), false, String(id));
   assert.equal(permission.canSendSfaRotationTransfer('AP'), true);

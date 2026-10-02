@@ -103,7 +103,7 @@ test('a selector that resolves to nothing in this theater is simply empty, not a
 
 // ── the shipped defaults ───────────────────────────────────────────────────
 
-test('APP at INCIRLIK is the RAPCON: it gets the approach radar and the field surveillance radar', () => {
+test('AP at INCIRLIK is the RAPCON: it gets the approach radar and the field surveillance radar', () => {
   const { coverage, stores } = build();
   hold(stores, 'INCIRLIK', 'c1', ['AP']);
   const result = coverage.forController('c1');
@@ -111,7 +111,7 @@ test('APP at INCIRLIK is the RAPCON: it gets the approach radar and the field su
   assert.deepEqual(result.radars[0].grantedBy, ['AP'], 'a radar says which Position put it there');
 });
 
-test('TWR gets the field surveillance radar only — the 80nm approach picture is not its job', () => {
+test('LC gets the field surveillance radar only — the 80nm approach picture is not its job', () => {
   const { coverage, stores } = build();
   hold(stores, 'INCIRLIK', 'c1', ['LC']);
   assert.deepEqual(coverage.forController('c1').radars.map(r => r.id), ['apt:Incirlik']);
@@ -167,7 +167,7 @@ test('holding Positions at two Facilities unions their coverage, and records bot
   assert.deepEqual(incirlikApproach.grantedBy.sort(), ['AP', 'CTR'], 'both hats grant it');
 });
 
-test('a radar-bearing Position held alongside a scopeless one still gives its picture', () => {
+test('a radar-bearing Position signed on alongside a scopeless one still gives its picture', () => {
   const { coverage, stores } = build();
   hold(stores, 'INCIRLIK', 'c1', ['GC', 'LC']);
   assert.deepEqual(coverage.forController('c1').radars.map(r => r.id), ['apt:Incirlik']);

@@ -75,7 +75,7 @@ test('setClearance keeps §3.7 history, confirms vacated only on altitude, and r
   assert.equal(active(store.getFlightData(flightData.flightDataId).clearance.heading).value, '');
 });
 
-test('what APP assigns is on CTR\'s copy of the flight — one clearance, not one per Strip', () => {
+test('what AP assigns is on CTR\'s copy of the flight — one clearance, not one per Strip', () => {
   const efsp = createEfsp();
   const c = crew(efsp, { OPS: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER' });
   let strip = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { callsign: 'VPR2', ...FILED } });

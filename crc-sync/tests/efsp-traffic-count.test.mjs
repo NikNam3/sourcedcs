@@ -80,7 +80,7 @@ test('countability: one case per row of the table', () => {
   assert.deepEqual(drop('CARRIER_ARRIVAL', 'WHATEVER'), { counted: false, excludedReason: 'UNCLASSIFIED_STRIP_TYPE' });
 });
 
-test('ROLE COVERAGE: every Role nla.js knows has a countability entry, and every state listed exists for it (T14)', () => {
+test('STRIP TYPE COVERAGE: every strip type nla.js knows has a countability entry, and every state listed exists for it (T14)', () => {
   for (const [stripType, states] of Object.entries(nla.STATES_BY_STRIP_TYPE)) {
     assert.ok(COUNTABLE_PRE_DROP_STATES[stripType], `strip type ${stripType} has no traffic-count decision — add it to COUNTABLE_PRE_DROP_STATES`);
     for (const s of COUNTABLE_PRE_DROP_STATES[stripType]) assert.ok(states.includes(s), `${stripType}: ${s} is not a ${stripType} state`);
@@ -297,7 +297,7 @@ test('retention compaction at boot drops records older than retentionDays, atomi
   assert.equal(fs.existsSync(`${p}.tmp`), false);
 });
 
-test('a backfill whose FDR has since been archived is UNKNOWN, basis ARCHIVED (S-R2-13)', () => {
+test('a backfill whose flight data has since been archived is UNKNOWN, basis ARCHIVED (S-R2-13)', () => {
   const archived = quiet(() => new TrafficCount({
     mutationLog: efsp.mutationLog,
     flightDataStore: { getFlightData: () => null }, // every flight data gone

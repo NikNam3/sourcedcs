@@ -181,7 +181,7 @@ test('SCENARIO a controller holding both CTR and TAC_C2 still cannot hand off a 
 
 // ── 22. the military extension namespace, end to end (docs/adr/0052) ──────
 
-test('SCENARIO a loaded flight declares a hung store and a hook requirement, on every ATC Role', () => {
+test('SCENARIO a loaded flight declares a hung store and a hook requirement, on every ATC strip type', () => {
   const efsp = createEfsp();
   const c = crew(efsp, ALL);
 

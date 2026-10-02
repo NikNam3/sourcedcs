@@ -96,7 +96,7 @@ test('SFA acceptance (guide §4.7, D17): rotating moves the controller and the S
   assert.equal(log[0].sfaTrigger, 'CONTROLLER_INITIATED');
 });
 
-test('APP may send the rotation transfer from its own Strip too (APP/SFA to PAR); PAR, RSU and TWR may not', () => {
+test('AP may send the rotation transfer from its own Strip too (AP/SFA to PAR); PAR, RSU and LC may not', () => {
   const { efsp, c } = fresh();
   let s = mustAct(efsp, c.AP, 'AP', null, {
     kind: 'CreateStrip', bayId: 'ap-inbound', rackId: 'main', stripType: 'ARRIVAL',
@@ -182,7 +182,7 @@ test('a pilot SWITCHES frequency: the controller drags the Strip to another Rack
   assert.equal(freqOf(efsp, s), MS['freq-2']);
 });
 
-test('a pilot SWITCHES controller (back to APP, then on to PAR): the frequency is the same each time', () => {
+test('a pilot SWITCHES controller (back to AP, then on to PAR): the frequency is the same each time', () => {
   const { efsp, c } = fresh();
   const s = sfaArrival(efsp, c, 'freq-3');
   const back = mustAct(efsp, c.SFA, 'SFA', strip(efsp, s), { kind: 'TransferStrip', toPositionId: 'AP', bayId: 'ap-inbound', rackId: 'main' });
@@ -228,7 +228,7 @@ test('PAR\'s terminal events: Landing assured is the ordinary BALL state with no
   assert.equal(live(efsp).length, 0);
 });
 
-test('a rotation CANCELLED by the receiver: PAR unstaffed refuses it and the aircraft stays; PAR LATE to its seat, the retry works', () => {
+test('a rotation CANCELLED by the receiver: PAR unstaffed refuses it and the aircraft stays; PAR LATE to its Position, the retry works', () => {
   const { efsp, c } = fresh();
   const s = sfaArrival(efsp, c);
   hold(efsp, c.PAR.session, 'INCIRLIK', []); // PAR leaves
@@ -240,7 +240,7 @@ test('a rotation CANCELLED by the receiver: PAR unstaffed refuses it and the air
   assert.equal(ok.ownerPositionId, 'PAR');
 });
 
-test('a rotation is not undoable (the state the Undo would restore is another Role\'s): Undo is refused and nothing moves', () => {
+test('a rotation is not undoable (the state the Undo would restore is another strip type\'s): Undo is refused and nothing moves', () => {
   const { efsp, c } = fresh();
   const s = sfaArrival(efsp, c);
   mustAct(efsp, c.SFA, 'SFA', strip(efsp, s), { kind: 'SfaRotation' });
@@ -261,7 +261,7 @@ test('a rotation applies to an ARRIVAL at INBOUND only: a Strip already on final
   refused(act(efsp, c.OPS, 'OPS', dep, { kind: 'SfaRotation' }), 'PERMISSION_DENIED', null, 'OPS holds no rotation right');
 });
 
-test('LATE ARRIVAL: SFA vacates with aircraft on its frequencies; the Strips go to APP, every frequency is unchanged, and they come back to their own Racks when SFA returns', () => {
+test('LATE ARRIVAL: SFA vacates with aircraft on its frequencies; the Strips go to AP, every frequency is unchanged, and they come back to their own Racks when SFA returns', () => {
   const { efsp, c } = fresh();
   const a = sfaArrival(efsp, c, 'freq-1');
   const b = sfaArrival(efsp, c, 'freq-5');
@@ -284,7 +284,7 @@ test('LATE ARRIVAL: SFA vacates with aircraft on its frequencies; the Strips go 
   }
 });
 
-test('LATE ARRIVAL: PAR vacates with an aircraft on final; the Strip is not lost (it goes to APP, which cannot advance it: the trap L17 recorded for the Marshal), and PAR gets it back', () => {
+test('LATE ARRIVAL: PAR vacates with an aircraft on final; the Strip is not lost (it goes to AP, which cannot advance it: the trap L17 recorded for the Marshal), and PAR gets it back', () => {
   const { efsp, c } = fresh();
   const s = sfaArrival(efsp, c);
   mustAct(efsp, c.SFA, 'SFA', strip(efsp, s), { kind: 'SfaRotation' });
@@ -364,7 +364,7 @@ test('LATE ARRIVAL: an aircraft is already in the pattern when RSU leaves; the S
   mustAct(efsp, c.RSU, 'RSU', strip(efsp, s), { kind: 'MoveStrip', bayId: 'rsu-pattern', rackId: 'final' });
 });
 
-test('RSU asks for a runway change and may not make one (H18): a request reaches TWR, a close is refused', () => {
+test('RSU asks for a runway change and may not make one (H18): a request reaches LC, a close is refused', () => {
   const { efsp, c } = fresh();
   const rsu = c.RSU;
   const current = () => efsp.runwayStatusStore.getRunwayStatus('INCIRLIK');

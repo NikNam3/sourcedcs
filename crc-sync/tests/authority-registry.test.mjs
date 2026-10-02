@@ -8,7 +8,7 @@ const authority = require('../src/efsp/authority');
 const nla = require('../src/efsp/nla.js');
 const permission = require('../src/efsp/permission.js');
 
-test('every Role family is a Role of nla.js and carries every field', () => {
+test('every strip type family is a strip type of nla.js and carries every field', () => {
   assert.deepEqual(authority.stripTypeNames(), Object.keys(nla.STATES_BY_STRIP_TYPE));
   for (const stripType of authority.stripTypeNames()) {
     const f = authority.stripTypeFamily(stripType);

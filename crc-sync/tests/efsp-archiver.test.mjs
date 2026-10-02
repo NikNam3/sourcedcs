@@ -152,7 +152,7 @@ test('1. a DROPPED Strip is archived 2 h after its drop and not before', () => {
   assert.equal(archiver.sweep().stripsByFacility.INCIRLIK, undefined, 'a second sweep has nothing left of it');
 });
 
-test('2. an FDR goes with its last Strip, not before: TOFI\'s shared FDR stays while the other Facility\'s Strip is live', () => {
+test('2. flight data goes with its last Strip, not before: TOFI\'s shared flight data stays while the other Facility\'s Strip is live', () => {
   let ctrStrip = handedToCenter(efsp, c, airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'SHARE1' }));
   const appStrip = incirlik().getAll().find(s => s.flightDataId === ctrStrip.flightDataId && s.stripId !== ctrStrip.stripId);
   ctrStrip = mustAct(efsp, c.CTR, 'CTR', ctrStrip, {
@@ -206,7 +206,7 @@ test('2. an FDR goes with its last Strip, not before: TOFI\'s shared FDR stays w
   assert.equal(efsp.flightDataStore.getFlightData(dropped.flightDataId), null);
 });
 
-test('3. an FDR that never had a Strip is never archived', () => {
+test('3. flight data that never had a Strip is never archived', () => {
   const { flightData } = efsp.flightDataStore.createFlightData({ ...DEPARTURE_FLIGHT_DATA, callsign: 'SEED1' }, { by: 'ato' });
   droppedFlight('SEED2');
   const archiver = archiverFor();
@@ -318,7 +318,7 @@ test('7b. on the wire: efsp-resync puts the archived Strip in strips.gone', () =
   assert.ok(ack.strips.gone.includes(dropped.stripId));
 });
 
-test('8. MARSA relations and correlation records of archived FDRs are evicted', () => {
+test('8. MARSA relations and correlation records of archived flight data are evicted', () => {
   const tanker = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'SHELL1' });
   const rx = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'VIPER9' });
   const relation = mustMarsaAct(efsp, c.AP, 'AP', null, {
@@ -343,7 +343,7 @@ test('8. MARSA relations and correlation records of archived FDRs are evicted', 
   assert.equal(efsp.correlationStore.getCorrelation(rx.flightDataId), null);
 });
 
-test('9. the traffic count is unchanged by a sweep, and a backfill of an archived FDR is UNKNOWN/ARCHIVED but keeps its Facility (rule 5)', () => {
+test('9. the traffic count is unchanged by a sweep, and a backfill of an archived flight data is UNKNOWN/ARCHIVED but keeps its Facility (rule 5)', () => {
   const dropped = droppedFlight('COUNT1');
   const before = counter.records().map(r => r.countId).sort();
   const rec = counter.records().find(r => r.stripId === dropped.stripId);
@@ -374,7 +374,7 @@ test('9. the traffic count is unchanged by a sweep, and a backfill of an archive
   assert.equal(back.facilityId, 'INCIRLIK');
 });
 
-test('10. a snapshot after a sweep holds neither the Strip nor its FDR', () => {
+test('10. a snapshot after a sweep holds neither the Strip nor its flight data', () => {
   const dropped = droppedFlight('SNAP1');
   offset = 3 * HOUR;
   archiverFor().sweep();

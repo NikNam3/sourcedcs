@@ -81,7 +81,7 @@ test('normalizeCarrierFlight: missing → defaults; a set EEAT survives; junk dr
   assert.deepEqual(normalizeCarrierFlight(normalizeCarrierFlight(n)), n, 'idempotent');
 });
 
-test('carrierFlightOf reads flightData.military.carrier; an FDR from before L17 reads as defaults', () => {
+test('carrierFlightOf reads flightData.military.carrier; flight data from before L17 reads as defaults', () => {
   assert.deepEqual(carrierFlightOf({ military: null }), defaultCarrierFlight());
   assert.deepEqual(carrierFlightOf({}), defaultCarrierFlight());
   assert.equal(carrierFlightOf({ military: { carrier: { eeatUtc: T } } }).eeatUtc, T);
@@ -102,7 +102,7 @@ test('marshalMessage: the sixteen fields in §9.12 order; blanks are null, not m
   assert.equal(marshalMessage().length, 16, 'never throws on no input');
 });
 
-test('marshalMessage fills from FDR, derivation and ship state; bearings display magnetic', () => {
+test('marshalMessage fills from flight data, derivation and ship state; bearings display magnetic', () => {
   const flightData = {
     identity: { callsign: 'HORNET 11', aircraftType: 'FA18C' },
     military: { carrier: { eeatUtc: T, approachType: 'ICLS', approachButton: 15, bingoField: 'LCRA', bingoFuelLb: 4500, lowStateLb: 7200 } },

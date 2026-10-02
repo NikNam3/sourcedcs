@@ -226,7 +226,7 @@ test('taking a radar Position re-sends the picture; giving it up empties it', ()
   assert.deepEqual(ws.sent.find(m => m.type === 'snapshot').tracks, [], 'handing the Position back empties it');
 });
 
-test('a coverage message goes out even when the radar set is unchanged, because the held list is in it', () => {
+test('a coverage message goes out even when the radar set is unchanged, because the signed-on list is in it', () => {
   // Taking Ground adds no scope, but the client still renders what you hold.
   const grants = { c1: ['app:Incirlik'], 'c1:signedOn': [] };
   const picture = fakePicture(grants, {});

@@ -92,7 +92,7 @@ test('optional fields must be strings when present', () => {
   assert.match(check.detail, /requestedAltitude must be a string/);
 });
 
-test('free text is capped — a stereo route seeds an FDR, and an FDR is broadcast whole', () => {
+test('free text is capped — a stereo route seeds flight data, and flight data is broadcast whole', () => {
   const check = validateStereoRoutes([{ name: 'PACK 1', route: 'x'.repeat(MAX_FREE_TEXT + 1) }]);
   assert.equal(check.ok, false);
   assert.match(check.detail, new RegExp(`limited to ${MAX_FREE_TEXT} characters`));

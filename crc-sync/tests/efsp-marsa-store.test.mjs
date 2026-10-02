@@ -374,7 +374,7 @@ function makeStoreWithFlightDataList() {
   return { store, flightDataList };
 }
 
-test('DeclareMarsa reports the FDRs whose separation regime it wrote', () => {
+test('DeclareMarsa reports the flight data whose separation regime it wrote', () => {
   const { store } = makeStoreWithFlightDataList();
   const result = declare(store);
   assert.deepEqual(result.flightDataList.map(f => f.flightDataId).sort(), [TANKER, RX1].sort());

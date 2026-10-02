@@ -229,7 +229,7 @@ test('SCENARIO A3 AIC walks away and the line routes to TAC_C2 (§4.8.6 rule 2)'
   assert.equal(tac(efsp, m.stripId).bayId, 'tac-c2-on-station');
 });
 
-test('SCENARIO A3\' a covering reassignment lands the line in a Bay the covering Position has', () => {
+test('SCENARIO A3\' a consolidation reassignment lands the line in a Bay the consolidating Position has', () => {
   const efsp = freshEfsp();
   const c = crew(efsp, ALL);
   const m = toAic(efsp, c, taskedLine(efsp, c, 'VAC13'));

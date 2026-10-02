@@ -67,7 +67,7 @@ test('snapshotFor returns a well-formed efsp-snapshot message with all four coll
   assert.ok(Array.isArray(snap.bays));
 });
 
-test('onDisconnect releases every Position the controller held', () => {
+test('onDisconnect releases every Position the controller signed on', () => {
   const efsp = createEfsp();
   const session = { controllerId: 'c1', who: 'Alice' };
   efsp.handleMessage(session, { type: 'efsp-set-positions', signedOn: ['GC', 'LC'] });
@@ -98,7 +98,7 @@ test('a successful mutation persists to BOARD_SNAPSHOT_PATH, and a freshly const
   assert.ok(efsp2.flightDataStore.getFlightData(restored.flightDataId));
 });
 
-test('a Strip mid-DEPARTED-to-APP-transfer (docs/adr/0007) round-trips correctly across a simulated restart — exactly one owner, no strand', () => {
+test('a Strip mid-DEPARTED-to-AP-transfer (docs/adr/0007) round-trips correctly across a simulated restart — exactly one owner, no strand', () => {
   const efsp1 = createEfsp();
   const ops = { controllerId: 'ops', who: 'Ops1' };
   const twr = { controllerId: 'twr', who: 'Twr1' };

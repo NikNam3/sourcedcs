@@ -34,7 +34,7 @@ test('getConsolidation matches the guide\'s default chain, un-truncated through 
   assert.deepEqual(getConsolidation(), { CD: 'GC', GC: 'LC', LC: 'AP', SFA: 'AP', PAR: 'AP' });
 });
 
-test('OPS, RSU and APP have no entry in the covering chain — OPS per the guide\'s table, RSU so a Strip never strands on a supervisory Position (ADR 0075), APP because there\'s no CTR Facility yet to cover it', () => {
+test('OPS, RSU and AP have no entry in the consolidation chain — OPS per the guide\'s table, RSU so a Strip never strands on a supervisory Position (ADR 0075), AP because there\'s no CTR Facility yet to cover it', () => {
   const chain = getConsolidation();
   assert.equal('OPS' in chain, false);
   assert.equal('RSU' in chain, false);
@@ -78,7 +78,7 @@ test('bayImpliesState returns null for Bays with no implied state, and for unkno
   assert.equal(bayImpliesState('not-a-real-bay'), null);
 });
 
-test('TWR\'s runway-queue Bay has one Rack per configured runway (guide §4.2)', () => {
+test('LC\'s runway-queue Bay has one Rack per configured runway (guide §4.2)', () => {
   const twrBays = getBaysFor('LC');
   const runwayQueue = twrBays.find(b => b.bayId === 'lc-runway-queue');
   assert.ok(runwayQueue.rackIds.length >= 2);
@@ -202,12 +202,12 @@ test('every zero-arg call site from before WP4A keeps behaving identically — t
   assert.deepEqual(getFacilityConfig().facility, getFacilityConfig('INCIRLIK').facility);
 });
 
-test('CENTER has exactly one Position, CTR, with no covering Position (mirrors OPS\'s "absent from the chain" precedent)', () => {
+test('CENTER has exactly one Position, CTR, with no consolidating Position (mirrors OPS\'s "absent from the chain" precedent)', () => {
   assert.deepEqual(getPositionSet('CENTER'), ['CTR']);
   assert.deepEqual(getConsolidation('CENTER'), {});
 });
 
-test('INCIRLIK\'s own covering chain is NOT extended to CTR — the covering chain is an intrafacility occupancy-fallback mechanism, a different thing from the cross-Facility HANDOFF primitive (docs/adr/0013)', () => {
+test('INCIRLIK\'s own consolidation chain is NOT extended to CTR — the consolidation chain is an intrafacility occupancy-fallback mechanism, a different thing from the cross-Facility HANDOFF primitive (docs/adr/0013)', () => {
   assert.equal('AP' in getConsolidation('INCIRLIK'), false);
 });
 
@@ -217,11 +217,11 @@ test('CTR has a Coordination Bay and an en-route Bay implying INBOUND', () => {
   assert.equal(bayImpliesState('ctr-enroute', 'CENTER'), 'INBOUND');
 });
 
-test('docs/adr/0022: CTR also has a departures Bay implying HANDED_OFF, for a Strip handed off from APP', () => {
+test('docs/adr/0022: CTR also has a departures Bay implying HANDED_OFF, for a Strip handed off from AP', () => {
   assert.equal(bayImpliesState('ctr-departures', 'CENTER'), 'HANDED_OFF');
 });
 
-test('docs/adr/0087: both Facilities have an overflight Bay that holds the Role and implies no state', () => {
+test('docs/adr/0087: both Facilities have an overflight Bay that holds the strip type and implies no state', () => {
   assert.equal(bayImpliesState('ap-overflight', 'INCIRLIK'), null);
   assert.equal(bayImpliesState('ctr-overflight', 'CENTER'), null);
   assert.equal(getAllBays('INCIRLIK').find(b => b.bayId === 'ap-overflight').holdsStripType, 'OVERFLIGHT');
@@ -297,7 +297,7 @@ test('TAC_C2 and GCI each have Bays implying every MISSION lifecycle state that 
   assert.equal(bayImpliesState('gci-on-station', 'TACTICAL'), 'ON_STATION');
 });
 
-test('every Block of every Role is writable at every Facility, since none hides anything', () => {
+test('every Block of every strip type is writable at every Facility, since none hides anything', () => {
   for (const [facilityId, map] of [['INCIRLIK', DEPARTURE_BLOCK_MAP], ['CENTER', DEPARTURE_BLOCK_MAP], ['TACTICAL', MISSION_BLOCK_MAP]]) {
     const stripType = map === MISSION_BLOCK_MAP ? 'MISSION' : 'DEPARTURE';
     for (const blockId of Object.keys(map)) {

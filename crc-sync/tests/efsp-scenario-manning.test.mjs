@@ -30,7 +30,7 @@ const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', A
 
 // ── 21. a controller walks away with strips in front of them ────────────
 
-test('SCENARIO Ground walks away holding strips, and they route down the covering chain', () => {
+test('SCENARIO Ground walks away holding strips, and they route down the consolidation chain', () => {
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
 
@@ -74,7 +74,7 @@ test('SCENARIO the last controller leaves and the strips are visibly stranded, n
 
 // ── an observer cannot quietly take over ────────────────────────────────
 
-test('SCENARIO a second controller sits down at an staffed Position and watches until handed it', () => {
+test('SCENARIO a second controller sits down at a staffed Position and watches until handed it', () => {
   const efsp = createEfsp();
   const c = crew(efsp, { OPS: 'INCIRLIK', AP: 'INCIRLIK' });
   const relief = { controllerId: 'c-relief', who: 'Relief' };

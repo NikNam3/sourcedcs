@@ -120,7 +120,7 @@ test('every refusal is logged exactly once', () => {
 
 // ── G4 ──
 
-test('every entry written by any path names its facilityId, and its FDR where it has one', () => {
+test('every entry written by any path names its facilityId, and its flight data where it has one', () => {
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'AUD2' });
   const handed = handedToCenter(efsp, c, strip);
   // A correlation and a MARSA, a runway-status op, a consolidation reassignment.
@@ -265,7 +265,7 @@ test('a backfilled drop of a Strip no Board still holds keeps its Facility from 
   assert.equal(rec.facilityId, 'INCIRLIK');
 });
 
-test('the field state on the wire carries the configured acknowledgers and inspection authority (S-L1b)', () => {
+test('the runway status on the wire carries the configured acknowledgers and inspection authority (S-L1b)', () => {
   const state = efsp.runwayStatusStore.getRunwayStatus('INCIRLIK');
   assert.deepEqual(state.runwayChangeAcknowledgers, ['OPS', 'AP']);
   assert.equal(state.inspectionAuthorityPositionId, 'OPS');

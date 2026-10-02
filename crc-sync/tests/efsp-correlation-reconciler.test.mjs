@@ -107,11 +107,11 @@ test('everything from pushback onward is eligible — an aircraft on the ramp is
   }
 });
 
-test('one eligible Strip is enough, even beside an ineligible one on the same FDR', () => {
+test('one eligible Strip is enough, even beside an ineligible one on the same flight data', () => {
   assert.equal(CorrelationReconciler.isEligible([strip('f', 'PROPOSED'), strip('f', 'AIRBORNE')]), true);
 });
 
-test('an FDR with no live Strip at all is not swept', () => {
+test('flight data with no live Strip at all is not swept', () => {
   const { reconciler, store } = build({
     flightDataList: [flightData('f1', 'VIPER1', '0041')], strips: [], tracks: [track(1, 'VIPER1', 41)],
   });
@@ -147,7 +147,7 @@ test('a binding to a contact that no longer exists lets the lower rungs have a g
   assert.equal(record.trackId, '1');
 });
 
-test('the assigned beacon code correlates, and the observed code is pushed onto the FDR', () => {
+test('the assigned beacon code correlates, and the observed code is pushed onto the flight data', () => {
   const { reconciler, store, flightDataStore } = build({
     flightDataList: [flightData('f1', 'VIPER1', '0041')], strips: [strip('f1')], tracks: [track(1, 'SOMETHINGELSE', 41)],
   });

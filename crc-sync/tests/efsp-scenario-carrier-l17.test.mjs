@@ -175,7 +175,7 @@ test('a lane that is unstaffed feeds the other; with neither staffed the Commenc
   assert.match(status.inhibited, /no receiving Position present/);
 });
 
-test('radar contact changes the Role in place; ball and trap end the approach; the stack entry leaves with a vacancy', async () => {
+test('radar contact changes the strip type in place; ball and trap end the approach; the stack entry leaves with a vacancy', async () => {
   const { efsp, c } = fresh();
   const a = checkIn(efsp, c, 'AAA11');
   const b = checkIn(efsp, c, 'BBB22');

@@ -42,7 +42,7 @@ const snapshot = () => ({
   marsa: [{ marsaId: 'm1', participants: ['f1', 'f2'] }, { marsaId: 'm2', participants: ['f2', 'f3'] }],
 });
 
-test('snapshot: strips, their FDRs, correlations and relations with a visible participant; everything else unchanged', () => {
+test('snapshot: strips, their flight data, correlations and relations with a visible participant; everything else unchanged', () => {
   const msg = snapshot();
   const out = rs.filterSnapshot(msg, jtac);
   assert.deepEqual(out.strips.map(s => s.stripId), ['a']);
@@ -108,7 +108,7 @@ test('alerts: conformance by flight and obligations by Strip, for visible ones o
   assert.deepEqual(out.conflictAlert, alerts.conflictAlert);
 });
 
-test('board delta: the FDR of every visible updated Strip rides along (a handed line must not draw blank), once', () => {
+test('board delta: the flight data of every visible updated Strip rides along (a handed line must not draw blank), once', () => {
   const delta = {
     type: 'efsp-board-delta', boardSeq: 9, facilityId: 'TACTICAL',
     strips: { updated: [strip('a', 'JTAC', 'f1'), strip('a2', 'JTAC', 'f1')], gone: [] }, flightDataList: { updated: [] }, positions: { updated: [] },

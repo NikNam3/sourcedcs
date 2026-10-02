@@ -66,7 +66,7 @@ function mutation(strip, op, overrides = {}) {
 
 // ── CreateStrip ──────────────────────────────────────────────────────────
 
-test('CreateStrip creates a Strip owned by the acting Position, with a minted FDR/beacon', () => {
+test('CreateStrip creates a Strip owned by the acting Position, with a minted flight data/beacon', () => {
   const { board } = makeStore();
   const strip = createStrip(board, 'OPS');
   assert.equal(strip.ownerPositionId, 'OPS');
@@ -85,7 +85,7 @@ test('CreateStrip appends new Strips at the end of the target Rack by default', 
   assert.deepEqual(rack.map(s => s.stripId), [a.stripId, b.stripId]);
 });
 
-test('CreateStrip with an invalid FDR seed (bad callsign) is rejected and creates no Strip', () => {
+test('CreateStrip with an invalid flight data seed (bad callsign) is rejected and creates no Strip', () => {
   const { board } = makeStore();
   const mut = createMutation({ op: { ...createMutation().op, flightData: { ...createMutation().op.flightData, callsign: 'TOOLONGCALLSIGN' } } });
   const result = board.applyMutation(mut, 'OPS', 'OPS');
@@ -716,7 +716,7 @@ test('without a canActOnState rule supplied, this gate is simply skipped (opt-in
 
 // ── TransferStrip: staffing gating + consolidation chain (guide §4.5) ──────────
 
-test('TransferStrip to an staffed Position succeeds and changes owner + Bay/Rack atomically', () => {
+test('TransferStrip to a staffed Position succeeds and changes owner + Bay/Rack atomically', () => {
   const { board } = makeStore();
   const strip = createStrip(board, 'OPS');
   const result = board.applyMutation(
@@ -767,7 +767,7 @@ test('TransferStrip into a Bay with no implied state leaves the Strip state unch
   assert.equal(result.strip.state, strip.state);
 });
 
-test('TransferStrip to an unstaffed Position with no covering Position is rejected with NO_RECEIVING_POSITION and the Strip stays with the sender', () => {
+test('TransferStrip to an unstaffed Position with no consolidating Position is rejected with NO_RECEIVING_POSITION and the Strip stays with the sender', () => {
   const { board } = makeStore({ consolidatedAt: () => null });
   const strip = createStrip(board, 'OPS');
   const result = board.applyMutation(
@@ -779,7 +779,7 @@ test('TransferStrip to an unstaffed Position with no covering Position is reject
   assert.equal(board.getStrip(strip.stripId).ownerPositionId, 'OPS');
 });
 
-test('TransferStrip to an unstaffed Position with an staffed covering Position routes there instead, and reports routedTo', () => {
+test('TransferStrip to an unstaffed Position with a staffed consolidating Position routes there instead, and reports routedTo', () => {
   const { board } = makeStore(); // fixture: UNSTAFFED -> consolidated at COVER, and COVER is staffed
   const strip = createStrip(board, 'OPS');
   const result = board.applyMutation(
@@ -804,7 +804,7 @@ test('TransferStrip is itself owner-gated — a non-owning Position cannot initi
 
 // ── reassignPositionStrips — system-initiated, consolidation routing (guide §4.8.6 rule 2) ──
 
-test('reassignPositionStrips moves every non-DROPPED Strip owned by the vacated Position to the covering Position', () => {
+test('reassignPositionStrips moves every non-DROPPED Strip owned by the vacated Position to the consolidating Position', () => {
   const { board } = makeStore();
   const a = createStrip(board, 'GC', { op: { ...createMutation().op, flightData: { ...createMutation().op.flightData, callsign: 'AAA1111' } } });
   const b = createStrip(board, 'GC', { op: { ...createMutation().op, flightData: { ...createMutation().op.flightData, callsign: 'BBB2222' } } });
@@ -893,7 +893,7 @@ test('when a canMutate rule is supplied, a denied (actingPosition, opKind) combi
   assert.equal(result.reason, 'PERMISSION_DENIED');
 });
 
-test('CreateStrip itself is gated by canMutate (only OPS may originate an FDR, guide §4.1 rule 3)', () => {
+test('CreateStrip itself is gated by canMutate (only OPS may originate flight data, guide §4.1 rule 3)', () => {
   const { board } = makeStore({ canMutate: (actingPositionId, opKind) => !(opKind === 'CreateStrip' && actingPositionId !== 'OPS') });
   const result = board.applyMutation(createMutation(), 'GC', 'GC');
   assert.equal(result.ok, false);
@@ -986,7 +986,7 @@ test('a DROPPED Strip leaves the visible Board — getRack excludes it', () => {
   assert.equal(board.getRack(strip.bayId, strip.rackId).some(s => s.stripId === strip.stripId), false);
 });
 
-test('DropStrip releases the FDR\'s beacon code back to the allocator', () => {
+test('DropStrip releases the flight data\'s beacon code back to the allocator', () => {
   const { board, flightDataStore } = makeStore();
   const strip = createStrip(board);
   const code = flightDataStore.getFlightData(strip.flightDataId).identity.beaconAssigned;
@@ -1137,7 +1137,7 @@ test('a replayed STALE_REV refusal returns the current Strip, not the one at ref
   assert.equal(r2.strip.rev, revAtRefusal + 1, 'the replica is handed today\'s Strip, never an older one');
 });
 
-test('the cache holds no Strip or FDR object', () => {
+test('the cache holds no Strip or flight data object', () => {
   const { board } = makeStore();
   const strip = createStrip(board);
   board.applyMutation(mutation(strip, { kind: 'SetFlag', flag: 'offset', value: true }), 'OPS', 'OPS');

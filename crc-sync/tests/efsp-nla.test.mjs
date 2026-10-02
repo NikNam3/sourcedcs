@@ -58,7 +58,7 @@ test('PROPOSED is inhibited until a beacon code is assigned (guide §3.5)', () =
   assert.deepEqual(result, { inhibited: 'no beacon code assigned' });
 });
 
-test('PROPOSED with a beacon assigned but CD neither staffed nor covered is inhibited — no receiving Position present', () => {
+test('PROPOSED with a beacon assigned but CD neither staffed nor consolidated at another Position is inhibited — no receiving Position present', () => {
   const ctx = { isStaffed: () => false, consolidatedAt: () => null };
   const result = computeNla(makeStrip('PROPOSED'), makeFlightData(), Date.now(), ctx);
   assert.deepEqual(result, { inhibited: 'no receiving Position present' });
@@ -70,7 +70,7 @@ test('PROPOSED with a beacon assigned advances to PENDING_CLEARANCE, transferrin
   assert.deepEqual(result, { toState: 'PENDING_CLEARANCE', transferTo: 'CD' });
 });
 
-test('PROPOSED transitions when CD is unstaffed but covered by another Position', () => {
+test('PROPOSED transitions when CD is unstaffed but consolidated at another Position', () => {
   const ctx = { isStaffed: () => false, consolidatedAt: (id) => (id === 'CD' ? 'OPS' : null) };
   const result = computeNla(makeStrip('PROPOSED'), makeFlightData(), Date.now(), ctx);
   assert.deepEqual(result, { toState: 'PENDING_CLEARANCE', transferTo: 'CD' });
@@ -102,7 +102,7 @@ test('an empty flight plan names all four Blocks, in Block order', () => {
   );
 });
 
-test('missingForClearance treats a missing FDR as nothing filed at all', () => {
+test('missingForClearance treats a missing flight data as nothing filed at all', () => {
   assert.deepEqual(missingForClearance(null), ['ALT', 'DEP', 'DEST', 'RTE']);
   assert.deepEqual(missingForClearance(makeFlightData()), []);
 });
@@ -126,13 +126,13 @@ test('CLEARED is inhibited when a hold is in force (departureRelease !== RELEASE
   }
 });
 
-test('CLEARED with departureRelease RELEASED but GND neither staffed nor covered is inhibited', () => {
+test('CLEARED with departureRelease RELEASED but GC neither staffed nor consolidated at another Position is inhibited', () => {
   const ctx = { isStaffed: () => false, consolidatedAt: () => null };
   const result = computeNla(makeStrip('CLEARED'), makeFlightData(), Date.now(), ctx);
   assert.deepEqual(result, { inhibited: 'no receiving Position present' });
 });
 
-test('CLEARED with departureRelease RELEASED advances to PUSHBACK, transferring to GND, once GND is staffed', () => {
+test('CLEARED with departureRelease RELEASED advances to PUSHBACK, transferring to GC, once GC is staffed', () => {
   const ctx = { isStaffed: (id) => id === 'GC', consolidatedAt: () => null };
   const result = computeNla(makeStrip('CLEARED'), makeFlightData(), Date.now(), ctx);
   assert.deepEqual(result, { toState: 'PUSHBACK', transferTo: 'GC' });
@@ -147,7 +147,7 @@ test('HELD is inhibited when the release time has not yet been reached', () => {
   assert.deepEqual(result, { inhibited: 'release time not reached' });
 });
 
-test('HELD releases once the release time has passed, transferring to GND, once GND is staffed', () => {
+test('HELD releases once the release time has passed, transferring to GC, once GC is staffed', () => {
   const now = Date.UTC(2026, 0, 1, 12, 0, 0);
   const flightData = makeFlightData({ assigned: { departureRelease: 'RELEASE_TIME', releaseTimeUtc: now - 1000 } });
   const ctx = { isStaffed: (id) => id === 'GC', consolidatedAt: () => null };
@@ -162,13 +162,13 @@ test('HELD is inhibited once the derived void deadline has expired', () => {
   assert.deepEqual(result, { inhibited: 'void time expired' });
 });
 
-test('HELD with no active hold condition but GND neither staffed nor covered is inhibited', () => {
+test('HELD with no active hold condition but GC neither staffed nor consolidated at another Position is inhibited', () => {
   const ctx = { isStaffed: () => false, consolidatedAt: () => null };
   const result = computeNla(makeStrip('HELD'), makeFlightData(), Date.now(), ctx);
   assert.deepEqual(result, { inhibited: 'no receiving Position present' });
 });
 
-test('HELD with no active hold condition releases to PUSHBACK, transferring to GND — a no-op reassignment if GND already held it', () => {
+test('HELD with no active hold condition releases to PUSHBACK, transferring to GC — a no-op reassignment if GC already held it', () => {
   const ctx = { isStaffed: (id) => id === 'GC', consolidatedAt: () => null };
   const result = computeNla(makeStrip('HELD'), makeFlightData(), Date.now(), ctx);
   assert.deepEqual(result, { toState: 'PUSHBACK', transferTo: 'GC' });
@@ -222,21 +222,21 @@ test('isVoidExpired is false when no voidDeadlineUtc is set', () => {
 
 // ── The rest of the straight-line lifecycle ─────────────────────────────
 
-test('PUSHBACK -> TAXI, state-only (still GND\'s own — no boundary crossed)', () => {
+test('PUSHBACK -> TAXI, state-only (still GC\'s own — no boundary crossed)', () => {
   assert.deepEqual(computeNla(makeStrip('PUSHBACK'), makeFlightData(), NOW), { toState: 'TAXI' });
 });
 
-test('TAXI is inhibited when TWR is neither staffed nor covered', () => {
+test('TAXI is inhibited when LC is neither staffed nor consolidated at another Position', () => {
   const ctx = { isStaffed: () => false, consolidatedAt: () => null };
   assert.deepEqual(computeNla(makeStrip('TAXI'), makeFlightData(), Date.now(), ctx), { inhibited: 'no receiving Position present' });
 });
 
-test('TAXI transitions to RUNWAY_QUEUE, transferring to TWR, once TWR is staffed', () => {
+test('TAXI transitions to RUNWAY_QUEUE, transferring to LC, once LC is staffed', () => {
   const ctx = { isStaffed: (id) => id === 'LC', consolidatedAt: () => null };
   assert.deepEqual(computeNla(makeStrip('TAXI'), makeFlightData(), Date.now(), ctx), { toState: 'RUNWAY_QUEUE', transferTo: 'LC' });
 });
 
-test('RUNWAY_QUEUE -> LUAW -> DEPARTED, state-only, unconditionally in Phase 2 (WP6 inhibits not yet built; both stay TWR\'s own)', () => {
+test('RUNWAY_QUEUE -> LUAW -> DEPARTED, state-only, unconditionally in Phase 2 (WP6 inhibits not yet built; both stay LC\'s own)', () => {
   assert.deepEqual(computeNla(makeStrip('RUNWAY_QUEUE'), makeFlightData(), NOW), { toState: 'LUAW' });
   assert.deepEqual(computeNla(makeStrip('LUAW'), makeFlightData(), NOW), { toState: 'DEPARTED' });
 });
@@ -244,17 +244,17 @@ test('RUNWAY_QUEUE -> LUAW -> DEPARTED, state-only, unconditionally in Phase 2 (
 // Phase 2 (docs/adr/0007, superseding ADR 0005's always-succeed stub) —
 // DEPARTED's NLA is now a real, staffing-gated "Hand Off" to AP.
 
-test('DEPARTED is inhibited when APP is neither staffed nor covered — no receiving Position present', () => {
+test('DEPARTED is inhibited when AP is neither staffed nor consolidated at another Position — no receiving Position present', () => {
   const ctx = { isStaffed: () => false, consolidatedAt: () => null };
   assert.deepEqual(computeNla(makeStrip('DEPARTED'), makeFlightData(), Date.now(), ctx), { inhibited: 'no receiving Position present' });
 });
 
-test('DEPARTED transitions to HANDED_OFF, transferring to APP, once APP is staffed', () => {
+test('DEPARTED transitions to HANDED_OFF, transferring to AP, once AP is staffed', () => {
   const ctx = { isStaffed: (id) => id === 'AP', consolidatedAt: () => null };
   assert.deepEqual(computeNla(makeStrip('DEPARTED'), makeFlightData(), Date.now(), ctx), { toState: 'HANDED_OFF', transferTo: 'AP' });
 });
 
-test('DEPARTED transitions when APP is unstaffed but covered by another Position', () => {
+test('DEPARTED transitions when AP is unstaffed but consolidated at another Position', () => {
   const ctx = { isStaffed: () => false, consolidatedAt: (id) => (id === 'AP' ? 'LC' : null) };
   assert.deepEqual(computeNla(makeStrip('DEPARTED'), makeFlightData(), Date.now(), ctx), { toState: 'HANDED_OFF', transferTo: 'AP' });
 });
@@ -288,17 +288,17 @@ test('every declared ARRIVAL State has exactly one NLA or a rendered inhibit rea
   }
 });
 
-test('INBOUND is inhibited when TWR is neither staffed nor covered', () => {
+test('INBOUND is inhibited when LC is neither staffed nor consolidated at another Position', () => {
   const ctx = { isStaffed: () => false, consolidatedAt: () => null };
   assert.deepEqual(computeNla(makeArrivalStrip('INBOUND'), makeFlightData(), Date.now(), ctx), { inhibited: 'no receiving Position present' });
 });
 
-test('INBOUND transitions to HANDED_TO_TOWER, transferring to TWR, once TWR is staffed', () => {
+test('INBOUND transitions to HANDED_TO_TOWER, transferring to LC, once LC is staffed', () => {
   const ctx = { isStaffed: (id) => id === 'LC', consolidatedAt: () => null };
   assert.deepEqual(computeNla(makeArrivalStrip('INBOUND'), makeFlightData(), Date.now(), ctx), { toState: 'HANDED_TO_TOWER', transferTo: 'LC' });
 });
 
-test('INBOUND transitions when TWR is unstaffed but covered', () => {
+test('INBOUND transitions when LC is unstaffed but consolidated at another Position', () => {
   const ctx = { isStaffed: () => false, consolidatedAt: (id) => (id === 'LC' ? 'AP' : null) };
   assert.deepEqual(computeNla(makeArrivalStrip('INBOUND'), makeFlightData(), Date.now(), ctx), { toState: 'HANDED_TO_TOWER', transferTo: 'LC' });
 });
@@ -306,7 +306,7 @@ test('INBOUND transitions when TWR is unstaffed but covered', () => {
 // ── WP4A (docs/adr/0014): a CENTER-held INBOUND Strip's next step is the
 // cross-Facility HANDOFF, not an intrafacility LC transfer ────────────
 
-test('INBOUND is inhibited with a HANDOFF-pointing reason when ctx.facilityId is CENTER, even if TWR would otherwise be staffed — there is no TWR at CENTER to transfer to at all', () => {
+test('INBOUND is inhibited with a HANDOFF-pointing reason when ctx.facilityId is CENTER, even if LC would otherwise be staffed — there is no LC at CENTER to transfer to at all', () => {
   const ctx = { isStaffed: () => true, consolidatedAt: () => null, facilityId: 'CENTER' };
   assert.deepEqual(
     computeNla(makeArrivalStrip('INBOUND'), makeFlightData(), Date.now(), ctx),
@@ -325,12 +325,12 @@ test('HANDED_TO_TOWER -> FINAL -> LANDED, unconditionally (no WP6/WP7A machinery
   assert.deepEqual(computeNla(makeArrivalStrip('FINAL'), makeFlightData(), NOW), { toState: 'LANDED' });
 });
 
-test('LANDED is inhibited when GND is neither staffed nor covered', () => {
+test('LANDED is inhibited when GC is neither staffed nor consolidated at another Position', () => {
   const ctx = { isStaffed: () => false, consolidatedAt: () => null };
   assert.deepEqual(computeNla(makeArrivalStrip('LANDED'), makeFlightData(), Date.now(), ctx), { inhibited: 'no receiving Position present' });
 });
 
-test('LANDED transitions to TAXI_IN, transferring to GND, once GND is staffed', () => {
+test('LANDED transitions to TAXI_IN, transferring to GC, once GC is staffed', () => {
   const ctx = { isStaffed: (id) => id === 'GC', consolidatedAt: () => null };
   assert.deepEqual(computeNla(makeArrivalStrip('LANDED'), makeFlightData(), Date.now(), ctx), { toState: 'TAXI_IN', transferTo: 'GC' });
 });

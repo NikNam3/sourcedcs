@@ -26,19 +26,19 @@ const { crew, hold, act, mustAct, jumpTo, DEPARTURE_FLIGHT_DATA } = await import
 const ATC = { OPS: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER' };
 const stripTypeBayIds = (positionId, facilityId) => facilityConfig.getBaysFor(positionId, facilityId).filter(b => b.holdsStripType).map(b => b.bayId);
 
-test('the shipped Role Bays are where the audit looked', () => {
+test('the shipped strip type Bays are where the audit looked', () => {
   assert.deepEqual(stripTypeBayIds('AP', 'INCIRLIK'), ['ap-overflight']);
   assert.deepEqual(stripTypeBayIds('CTR', 'CENTER'), ['ctr-overflight']);
 });
 
-test('bayForImpliedState never falls back to a Role Bay', () => {
+test('bayForImpliedState never falls back to a strip type Bay', () => {
   for (const [pos, fac] of [['AP', 'INCIRLIK'], ['CTR', 'CENTER']]) {
     const bay = facilityConfig.bayForImpliedState(pos, 'NO_SUCH_STATE', fac);
     assert.ok(bay && !bay.holdsStripType, `${pos}: ${bay && bay.bayId}`);
   }
 });
 
-test('SCENARIO TWR vacated: a LUAW DEPARTURE reassigned to APP lands in ap-coordination, not ap-overflight; and goes back on retake', () => {
+test('SCENARIO LC vacated: a LUAW DEPARTURE reassigned to AP lands in ap-coordination, not ap-overflight; and goes back on retake', () => {
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
   let s = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign: 'RBF1', departureRunway: '05' } });
@@ -57,7 +57,7 @@ test('SCENARIO TWR vacated: a LUAW DEPARTURE reassigned to APP lands in ap-coord
   assert.notEqual(at.bayId, 'ap-overflight');
 });
 
-test('a transfer routed to a covering APP, and a new owner at CTR with no matching Bay, never pick a Role Bay for another Role', () => {
+test('a transfer routed to a consolidating AP, and a new owner at CTR with no matching Bay, never pick a strip type Bay for another strip type', () => {
   const efsp = createEfsp();
   for (const [facilityId, pos, state] of [['INCIRLIK', 'AP', 'LUAW'], ['INCIRLIK', 'AP', 'FINAL'], ['CENTER', 'CTR', 'LUAW'], ['CENTER', 'CTR', 'FINAL']]) {
     const store = efsp.boardStoreFor(facilityId);
@@ -71,7 +71,7 @@ test('a transfer routed to a covering APP, and a new owner at CTR with no matchi
   }
 });
 
-test('a DEPARTURE cannot be dragged into a Role Bay; an OVERFLIGHT can still be moved within its own', () => {
+test('a DEPARTURE cannot be dragged into a strip type Bay; an OVERFLIGHT can still be moved within its own', () => {
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
   const dep = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign: 'RBF2' } });
