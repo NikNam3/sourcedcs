@@ -337,7 +337,7 @@ class Tofi {
    * @param {{trigger:'AIRSPACE'|'MANUAL', airspaceId?:string|null, by?:string|null, warning?:string}} info
    * @returns {{ok:true, flightData, regime, airspaceId, trigger, warning}|{ok:false, reason, detail}}
    */
-  markEntered(flightDataId, { trigger, airspaceId = null, by = null, warning } = {}) {
+  markEntered(flightDataId, { trigger, airspaceId = null, by = null, warning, system = false } = {}) {
     const flightData = this._flightDataStore.getFlightData(flightDataId);
     const pending = flightData && flightData.tofi && flightData.tofi.pendingSeparationRegime;
     if (!pending) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no separation regime is waiting for entry on this flight' };
@@ -345,7 +345,7 @@ class Tofi {
     const wrote = this._flightDataStore.setTofi(flightDataId, {
       separationRegime: pending, pendingSeparationRegime: null, pendingSince: null, pendingFacilityId: null,
       regimeEffective: { at: this._clock.now(), trigger, airspaceId, facilityId, by },
-    }, { by });
+    }, { by, system });
     if (!wrote.ok) return wrote;
     return { ok: true, flightData: wrote.flightData, regime: pending, airspaceId, trigger, warning };
   }
@@ -384,9 +384,12 @@ class Tofi {
       && s.state !== 'DROPPED' && s.tofiCoordination && s.tofiCoordination.direction === 'ENTRY' && s.tofiCoordination.state === 'ACTIVE');
     if (!strip) return { ok: false, reason: 'NOT_FOUND', detail: 'no MISSION Strip under active tactical control on this Board' };
     const before = deepClone(strip);
-    const entered = this.markEntered(flightDataId, { trigger: 'AIRSPACE', airspaceId, by: 'system' });
+    const entered = this.markEntered(flightDataId, { trigger: 'AIRSPACE', airspaceId, by: 'system', system: true });
     if (!entered.ok) return entered;
-    this._state.bump(strip, 'system');
+    // The Strip itself is unchanged (the regime lives on the flight data): push a delta without counting it as a change
+    // to an open undo's record (docs/adr/0100; an observed path, like the flight data write above).
+    strip.rev += 1; strip.updatedAt = this._clock.now(); strip.updatedBy = 'system';
+    this._touch(strip.stripId, { placementOnly: true });
     this._audit.recordSystem('TofiRegimeEntered', strip, {
       before, after: deepClone(strip), tofiRegime: { trigger: 'AIRSPACE', airspaceId, regime: entered.regime, warning: null },
     });

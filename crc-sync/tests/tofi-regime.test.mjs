@@ -23,16 +23,24 @@ const facilityConfig = await import('../src/efsp/facility-config.js');
 const blockMap = await import('../src/efsp/block-map.js');
 const nla = await import('../src/efsp/nla.js');
 const permission = await import('../src/efsp/permission.js');
+const { UndoHistory, undoEnv } = await import('../src/efsp/undo/undo-history.js');
 const coordination = await import('../src/efsp/coordination.js');
 
 // docs/adr/0102: where the flight is, for accept and MARK_ENTERED. Outside by default.
 let LOCATION = { located: false, inside: [], unknown: [] };
 const INSIDE = { located: true, inside: [{ airspaceId: 'MOA-1', kind: 'AREA', name: 'MOA' }], unknown: [] };
 
+// docs/adr/0100: one undo history for the three Boards, timed by this wall clock.
+let WALL_NOW = 1_000_000;
+
 function makeFacilities() {
   LOCATION = { located: false, inside: [], unknown: [] };
+  WALL_NOW = 1_000_000;
   const flightDataStore = new FlightDataStore();
   const facilities = new Map();
+  const undoHistory = new UndoHistory({ wallClock: { now: () => WALL_NOW } });
+  undoHistory.attach(undoEnv({ boardFor: (id) => { const x = facilities.get(id); return x ? x.boardStore : null; }, flightDataStore }));
+  flightDataStore.setWriteObserver((id, paths) => undoHistory.observe({ kind: 'flightData', id, paths }));
 
   for (const facilityId of facilityConfig.getFacilityIds()) {
     const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getConsolidation(facilityId));
@@ -79,7 +87,7 @@ function makeFacilities() {
         return n;
       },
     };
-    const boardStore = new BoardStore(flightDataStore, fullRules(rules));
+    const boardStore = new BoardStore(flightDataStore, fullRules(rules), { undoHistory });
     facilities.set(facilityId, { boardStore, positionStore });
   }
   return facilities;
@@ -251,7 +259,33 @@ test('MARK_ENTERED twice is refused; with ATC picked there is nothing to mark; t
   assert.equal(tofiOf(f3, p3.flightDataId).pendingSeparationRegime, 'MARSA');
 });
 
-test.todo('MARK_ENTERED is undoable within 10 s and restores pending and the effective regime (H95, DR-5 a): needs the Undo executor of ADR 0100, not on this base');
+const undoOf = (ack) => ({ kind: 'Undo', actionId: ack.undoable.actionId });
+/** An Undo restores through staffed Positions (docs/adr/0100 "validate, then apply"). */
+function staffTactical(f) {
+  const ps = f.get('TACTICAL').positionStore;
+  ps.setSignedOnPositions('tac-c2-controller', 'TAC C2', ['TAC_C2']);
+  ps.setSignedOnPositions('jtac-controller', 'JTAC', ['JTAC']);
+}
+
+test.todo('MARK_ENTERED is undoable within 10 s (next commit)');
+
+test('the monitor\'s automatic entry blocks no open undo of the same flight', () => {
+  const f = makeFacilities(); const p = propose(f);
+  accept(f, p.missionId, 'MARSA');
+  staffTactical(f);
+  const b = tac(f); const strip = b.getStrip(p.missionId);
+  const move = b.applyMutation(mutation({ stripId: p.missionId, baseRev: strip.rev, op: { kind: 'MoveStrip', bayId: strip.bayId, rackId: strip.rackId, beforeStripId: null, afterStripId: null } }), 'TAC_C2', 'tac-c2-controller');
+  assert.equal(move.ok, true, JSON.stringify(move));
+  assert.ok(move.undoable, 'the move is undoable before the monitor acts');
+  const { monitor } = monitorFor(f);
+  LOCATION = INSIDE;
+  monitor.tick(1000, 1000); monitor.tick(2000, 2000);
+  assert.equal(tofiOf(f, p.flightDataId).regimeEffective.trigger, 'AIRSPACE');
+  assert.equal(b.undoHistory.recordOf(move.undoable.actionId).blockedBy, null, 'the monitor writes observed paths');
+  const undone = act(f, p.missionId, undoOf(move));
+  assert.equal(undone.ok, true, JSON.stringify(undone));
+  assert.equal(tofiOf(f, p.flightDataId).separationRegime, 'MARSA', 'the automatic entry stands');
+});
 
 // ── SREG, EXIT, REJECT ───────────────────────────────────────────────────
 

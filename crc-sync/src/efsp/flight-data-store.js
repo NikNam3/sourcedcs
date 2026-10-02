@@ -159,7 +159,15 @@ const WRITABLE_PATHS = new Set([
  * Paths surveillance writes (docs/adr/0100 §3). An undo never restores them: the aircraft's squawk is a fact, not a
  * controller's change. A later op that writes a field from a system observation lists it here.
  */
-const OBSERVED_PATHS = Object.freeze(['identity.beaconObserved']);
+// The regime monitor's writes (docs/adr/0102, src/efsp/tofi-regime-monitor.js): an automatic AIRSPACE entry is an
+// observation of where the aircraft is, so it neither blocks an open undo nor reaches a frame's footprint. Unlike
+// the squawk, a controller's action (ACCEPT, MARK_ENTERED) writes the same fields, and restorePaths puts them back
+// when it restores the `tofi` section.
+const TOFI_MONITOR_PATHS = Object.freeze([
+  'tofi.separationRegime', 'tofi.pendingSeparationRegime', 'tofi.pendingSince', 'tofi.pendingFacilityId',
+  'tofi.regimeEffective', 'tofi.changedAt', 'tofi.changedBy',
+]);
+const OBSERVED_PATHS = Object.freeze(['identity.beaconObserved', ...TOFI_MONITOR_PATHS]);
 
 function getPath(obj, path) {
   return path.split('.').reduce((o, k) => (o == null ? o : o[k]), obj);
@@ -505,7 +513,10 @@ class FlightDataStore {
   get hasWriteObserver() { return !!this._writeObserver; }
 
   _wrote(flightDataId, paths) {
-    if (this._writeObserver) this._writeObserver(flightDataId, paths.filter(p => !OBSERVED_PATHS.includes(p)));
+    if (!this._writeObserver) return;
+    const reported = paths.filter(p => !OBSERVED_PATHS.includes(p));
+    if (paths.length && !reported.length) return; // an observed write only: no change to attribute
+    this._writeObserver(flightDataId, reported);
   }
 
   /**
@@ -529,7 +540,7 @@ class FlightDataStore {
         if (voidAppendedEntries(image.clearance && image.clearance[field], cell, voidedBy)) changed = true;
         continue;
       }
-      const kept = OBSERVED_PATHS.filter(o => o.startsWith(`${path}.`)).map(o => [o, getPath(flightData, o)]);
+      const kept = OBSERVED_PATHS.filter(o => o.startsWith(`${path}.`) && !TOFI_MONITOR_PATHS.includes(o)).map(o => [o, getPath(flightData, o)]);
       const want = getPath(image, path);
       if (JSON.stringify(getPath(flightData, path)) === JSON.stringify(want)) continue;
       setPathCreating(flightData, path, want === undefined ? undefined : JSON.parse(JSON.stringify(want)));
@@ -1089,7 +1100,7 @@ class FlightDataStore {
    * @param {{ifrActive?:boolean, radarService?:string|null, separationRegime?:string|null, pendingSeparationRegime?:string|null, pendingSince?:number|null, pendingFacilityId?:string|null, regimeEffective?:object|null}} patch
    * @returns {{ok:true, flightData}|{ok:false, reason:'NOT_FOUND'|'VALIDATION_ERROR', detail?}}
    */
-  setTofi(flightDataId, patch, { by } = {}) {
+  setTofi(flightDataId, patch, { by, system = false } = {}) {
     const flightData = this._flightDataList.get(flightDataId);
     if (!flightData) return { ok: false, reason: 'NOT_FOUND' };
     // Both fields START as null and null is a real, renderable state — "no
@@ -1129,7 +1140,9 @@ class FlightDataStore {
     flightData.rev += 1;
     flightData.updatedAt = this._clock.now();
     flightData.updatedBy = by || null;
-    this._wrote(flightDataId, ['tofi']);
+    // The regime monitor (`system`) reports the fields it wrote, all observed paths (TOFI_MONITOR_PATHS); a
+    // controller's write reports the section, which an undo restores.
+    this._wrote(flightDataId, system ? Object.keys(patch).map(k => `tofi.${k}`).concat(['tofi.changedAt', 'tofi.changedBy']) : ['tofi']);
     return { ok: true, flightData };
   }
 
@@ -1664,5 +1677,5 @@ module.exports = {
   TRACK_DEGRADATION_FLAGS, AIRSPACE_OWNERS, RADAR_SERVICE_STATES, SEPARATION_REGIMES, MAX_FREE_TEXT,
   ORDNANCE_STATES, ALERT_STATUSES, MILITARY_WRITABLE_FIELDS, defaultMilitary,
   ensureClearance, parseAltitudeFt, parseAltitude, parseSpeed, formatAltitudeBlock, parseHeadingDeg, activeClearanceEntry,
-  normalizeMtrValue, OBSERVED_PATHS,
+  normalizeMtrValue, OBSERVED_PATHS, TOFI_MONITOR_PATHS,
 };
