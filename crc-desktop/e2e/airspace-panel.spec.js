@@ -53,7 +53,7 @@ async function inject(page, records) {
   }, records);
 }
 // a field row by its LABEL (a row's help text also says "name" and "frequencies")
-const fld = (ed, label) => ed.locator('.airspace-field').filter({ has: ed.locator('.airspace-field-label', { hasText: label }) });
+const fld = (ed, label) => ed.locator('.airspace-field').filter({ has: ed.page().locator('.airspace-field-label', { hasText: label }) });
 const card = (page, id) => page.locator(`.airspace-card[data-airspace-id="${id}"]`);
 async function menu(page, id) {
   await card(page, id).locator('.airspace-more-btn').click();
@@ -134,8 +134,8 @@ test('R3-23: an ACTIVE airspace offers only name and frequencies, with the reaso
   await page.locator('.airspace-seg-btn[data-filter="all"]').click();
   await (await menu(page, 'MOA-KYE')).locator('[data-action="edit"]').click();
   const ed = card(page, 'MOA-KYE').locator('.airspace-editor');
-  for (const label of ['NAME', 'WORK FREQ', 'RANGE FREQ']) await expect(ed.locator('.airspace-field', { hasText: label }).locator('input')).toBeEnabled();
-  for (const label of ['ALT LOWER', 'ALT UPPER', 'USING POSITION']) await expect(ed.locator('.airspace-field', { hasText: label }).locator('input')).toBeDisabled();
+  for (const label of ['NAME', 'WORK FREQ', 'RANGE FREQ']) await expect(fld(ed, label).locator('input')).toBeEnabled();
+  for (const label of ['ALT LOWER', 'ALT UPPER', 'USING POSITION']) await expect(fld(ed, label).locator('input')).toBeDisabled();
   await expect(fld(ed, 'ALT UPPER').locator('.airspace-field-why')).toHaveText('airspace is ACTIVE: only name and frequencies can change');
   await expect(fld(ed, 'USING POSITION')).toContainText('takes effect after the next crc-sync restart');
 });
