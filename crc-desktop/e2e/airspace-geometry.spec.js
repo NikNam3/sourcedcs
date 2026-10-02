@@ -160,13 +160,16 @@ test('Refresh from drawing is offered when the loaded drawing moved, and the out
   const sent = await page.evaluate(() => window.__sent);
   expect(sent[0].op.patch.geometry.points).toHaveLength(5);
   expect(sent[0].op.patch.geometry.source).toBe('DCS_DRAWING');
+  // the ack lands: the form closes and the record now holds the refreshed copy
+  await page.evaluate(([a, r]) => crc.msgRegistry.dispatchEfspMessage({ version: 1, type: 'efsp-airspace-ack', clientMutationId: a.clientMutationId, airspaceId: 'MOA-ADS', ok: true, airspace: r }), [sent[0], rec(def({ geometry: sent[0].op.patch.geometry }), { defRev: 4 })]);
+  await inject(page, [rec(def({ geometry: sent[0].op.patch.geometry }), { defRev: 4 })]);
+  await expect(card(page, 'MOA-ADS').locator('.airspace-editor')).toHaveCount(0);
   // a mission without that drawing: the saved copy and its outline stay
-  await page.evaluate(() => crc.msgRegistry.dispatchEfspMessage({ version: 1, type: 'efsp-airspace-delta', airspaceSeq: 2, airspaces: { updated: [] } }));
   await page.evaluate((m) => { m.drawings = []; crc.app._ws.onmessage({ data: JSON.stringify(m) }); }, MISSION());
   await expect(card(page, 'MOA-ADS')).toBeVisible();
   await expect.poll(() => outlineIds(page)).toEqual([]); // RETURNED: the default menu does not draw it, but the record keeps its points
   const ed3 = await edit(page, 'MOA-ADS');
-  await expect(ed3.locator('.asg-count')).toContainText('4 points');
+  await expect(ed3.locator('.asg-count')).toContainText('5 points');
   await expect(ed3.locator('#asg-refresh')).toBeDisabled();
   await expect(ed3.locator('.asg-why')).toContainText('is not in the loaded mission');
 });
@@ -218,7 +221,7 @@ test('Draw on map: click points, click the first to close, drag a point across a
   await expect(bar.locator('.asd-title')).toContainText('EDITING OUTLINE');
   await expect(bar.locator('.asd-primary')).toBeEnabled();
   // drag vertex 3 (36.7, 35.2) across to the far side of the opposite edge: the shape crosses itself
-  const from = await px(page, 36.7, 35.2); const to = await px(page, 36.1, 35.9);
+  const from = await px(page, 36.7, 35.2); const to = await px(page, 36.3, 35.9);
   await page.mouse.move(from.x, from.y); await page.mouse.down(); await page.mouse.move((from.x + to.x) / 2, (from.y + to.y) / 2, { steps: 4 }); await page.mouse.move(to.x, to.y, { steps: 4 }); await page.mouse.up();
   await expect(bar.locator('.asd-problem')).toContainText('Edges cross');
   await expect(bar.locator('.asd-primary')).toBeDisabled();
