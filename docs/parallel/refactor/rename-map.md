@@ -228,8 +228,12 @@ N03	?	tok	*	unoccupied	unstaffed	review
 N03	?	tok	*	occupancy	staffing	review
 N03	?	tok	*	OCCUPIED	STAFFED	review
 N03	?	tok	*	Occupancy	Staffing	review
+N03	=	tok	*	manned	staffed	S-RENA0 (3): metrics "staffed hour", refusal details, test helpers
+N03	=	tok	W	mannedHours	staffedHours	S-RENA0 (3): metrics report field (client metrics panel reads it)
+N03	=	tok	W	perMannedHour	perStaffedHour	S-RENA0 (3): metrics report field
+N03	=	tok	W	mannedMinutes	staffedMinutes	S-RENA0 (3): metrics report field (byHour), same family
 N04	=	tok	A	setHeldPositions	setSignedOnPositions
-N04	=	tok	S	heldPositions	signedOnPositions
+N04	=	tok	W	heldPositions	signedOnPositions
 N04	=	tok	S	heldPositionIds	signedOnPositionIds
 N04	=	tok	B	coverageHeldPositions	coverageSignedOnPositions
 N04	=	tok	A	heldBy	signedOnBy	PositionStore method
@@ -252,6 +256,10 @@ N04	!	tok	-	cd-held	cd-held	Bay id (HELD state)
 N04	!	tok	-	requestPrimary	requestPrimary	Primary/Observer kept
 N04	!	tok	-	releasePrimaryTo	releasePrimaryTo	transfer of Primary, not sign-off
 N04	!	tok	-	getActingPositions	getActingPositions
+N04	!	tok	-	CENTER-held	CENTER-held	S-RENA0 (2): "a Strip CENTER holds" (owner sense), not the signed-on list
+N04	!	tok	-	AIC-held	AIC-held	S-RENA0 (2): owner sense, as above
+N04	!	tok	-	held-set	held-set	S-RENA0 (2): comment prose (N04 rule: prose is L20)
+N04	!	tok	-	actually-held	actually-held	S-RENA0 (2): test-title prose (L20)
 N04	?	tok	W	held	signedOn	review: the Position list on efsp-set-positions/efsp-positions-ack/coverage (W) and locals holding Position ids; never HELD/hold
 N05	=	tok	W	coveringChain	consolidation	facility JSON key + accessor; in goldens
 N05	=	tok	A	_coveringChain	_consolidation
@@ -297,6 +305,7 @@ N07	=	tok	A	stcaChanged	conflictAlertChanged
 N07	=	tok	A	stcaRaised	conflictAlertRaised
 N07	=	tok	A	_stcaUp	_conflictAlertUp
 N07	=	tok	W	conformanceStca	conformanceConflictAlert	freeze harness tick name (in hub goldens)
+N07	=	tok	A	conformance-stca	conformance-conflict-alert	S-RENA0 (2): ticker name (app.js, app-boot test, soak host-core)
 N07	=	tok	B	stcaConflictsForTrack	conflictAlertsForTrack
 N07	=	tok	B	buildStcaOverlay	buildConflictAlertOverlay
 N07	=	tok	B	stcaNode	conflictAlertNode
@@ -348,6 +357,14 @@ N11	=	tok	A	roleChange	stripTypeChange
 N11	=	tok	A	toRole	toStripType
 N11	=	tok	A	fromRole	fromStripType
 N11	=	tok	A	createsRoles	createsStripTypes	capability column
+N11	=	tok	A	createRoles	createsStripTypes	S-RENA0 (2): the Position-family field, one spelling with createsRoles (a property MERGE, accepted)
+N11	=	tok	A	registerRoleFamily	registerStripTypeFamily	S-RENA0 (2)
+N11	=	tok	A	roleFamilies	stripTypeFamilies	S-RENA0 (2)
+N11	=	tok	A	roleFamily	stripTypeFamily	S-RENA0 (2)
+N11	=	tok	A	_byRole	_byStripType	S-RENA0 (2)
+N11	=	tok	A	_byRoleWhere	_byStripTypeWhere	S-RENA0 (2)
+N11	=	tok	A	roleBayFor	stripTypeBayFor	S-RENA0 (2)
+N11	=	tok	A	roleNames	stripTypeNames	S-RENA0 (2)
 N11	=	tok	A	byRole	byStripType
 N11	=	tok	A	bayHoldsRole	bayHoldsStripType
 N11	=	tok	A	roleBay	stripTypeBay
