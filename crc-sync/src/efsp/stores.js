@@ -207,7 +207,7 @@ const REGISTRY = [
     restore: (s, data) => {
       s.restore(data);
       const gone = s.evictMissingFlightDataList();
-      if (gone) log.warn('dropped restored Marshal stack entries whose FDR is gone', { dropped: gone });
+      if (gone) log.warn('dropped restored Marshal stack entries whose flight data is gone', { dropped: gone });
     },
   },
   {

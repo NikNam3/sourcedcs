@@ -41,7 +41,7 @@ function _applyCreateStrip(ctx, op, actingPositionId, by) {
     const bound = ctx.flightDataStore.getFlightData(op.flightDataId);
     // Same reason code and wording receiveTofiProposal already uses, so
     // both binding paths fail identically.
-    if (!bound) return { ok: false, reason: 'NOT_FOUND', detail: 'referenced FDR not found' };
+    if (!bound) return { ok: false, reason: 'NOT_FOUND', detail: 'referenced flight data not found' };
 
     // Scanned LOCALLY, not through rules.liveStripsForFlightData — that one is
     // global and strip-type-blind, and the 5 ATC<->ATC primitives legitimately put

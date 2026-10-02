@@ -121,7 +121,7 @@ function build(d, meta) {
     harness: {
       version: 1, commit: meta.commit, node: process.version, argv: meta.argv,
       mode: meta.inproc ? 'inproc' : 'fork', transport: 'wshub', clock: meta.realtime ? 'realtime' : 'virtual',
-      diagnostics: meta.pruneRetired ? ['prune-retired (DIAGNOSTIC ONLY: DROPPED Strips and orphan FDRs deleted every 10 min — never a fix)'] : [],
+      diagnostics: meta.pruneRetired ? ['prune-retired (DIAGNOSTIC ONLY: DROPPED Strips and orphan flight data deleted every 10 min — never a fix)'] : [],
       inject: meta.inject || null,
       notes: [
         'Server Math.random replaced by a seeded PRNG and Date.now by the virtual clock (briefing D2/D5) — not production behaviour.',

@@ -239,7 +239,7 @@ class CorrelationStore {
   apply(mutation, actingPositionId, by) {
     if (!mutation.flightDataId) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no flightDataId' };
     if (!this._flightDataExists(mutation.flightDataId)) {
-      const miss = { ok: false, reason: 'NOT_FOUND', detail: `unknown FDR ${mutation.flightDataId}` };
+      const miss = { ok: false, reason: 'NOT_FOUND', detail: `unknown flight data ${mutation.flightDataId}` };
       this._recordAudit(mutation, actingPositionId, by, null, miss);
       return miss;
     }

@@ -339,7 +339,7 @@ class CarrierStore {
     const stack = record.stacks[stackId];
     if (!stack) return { ok: false, reason: 'NOT_FOUND', detail: `unknown stack ${stackId}` };
     if ((op.kind === 'InsertAt' || op.kind === 'Append') && !this._flightDataExists(op.flightDataId)) {
-      return { ok: false, reason: 'NOT_FOUND', detail: `unknown FDR ${op.flightDataId}` };
+      return { ok: false, reason: 'NOT_FOUND', detail: `unknown flight data ${op.flightDataId}` };
     }
     const r = carrier.applyStackOp(stack, op);
     if (!r.ok) return r;

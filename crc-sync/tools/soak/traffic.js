@@ -213,7 +213,7 @@ const SCRIPTS = {
     const a = yield act('INCIRLIK', arr, { kind: 'HANDOFF', action: 'ACCEPT' });
     if (!a.ok) return;
     yield walk('INCIRLIK', arr, s => s.state === 'DROPPED', 10);
-    yield act('CENTER', enroute, { kind: 'DropStrip', reason: 'handed to APP' });
+    yield act('CENTER', enroute, { kind: 'DropStrip', reason: 'handed to AP' });
   },
 
   * overflight(f, x) {
