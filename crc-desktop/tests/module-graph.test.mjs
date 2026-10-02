@@ -6,13 +6,12 @@
  *  2. every .js under app/public/js is reachable from main.js, and every import names a file that exists;
  *  3. the whole graph evaluates in Node under a DOM stub with no throw. Node links named imports against the
  *     target's exports before evaluating anything, so this also proves every import resolves to an export;
- *  4. the set of exported names per file, and the names js/classic-globals-bridge.js puts on window (a
- *     transitional debt, S-ESM1a), are frozen in tests/fixtures/module-graph-exports.json. It is a structure
+ *  4. the set of exported names per file is frozen in tests/fixtures/module-graph-exports.json. It is a structure
  *     fixture: rewrite it with GOLDEN_RECORD=1 when the structure changes on purpose, and list the change;
  *  5. no CommonJS export guard is left in the client;
  *  6. every module also evaluates as its OWN entry, each in a fresh graph (helpers/fresh-graph.mjs): a cycle evaluates
  *     in a different order from another entry, so a TDZ read that main.js's order hides would show here (W1-ESM-3);
- *  7. nothing but main.js imports classic-globals-bridge.js: its getters must never run during evaluation (W1-ESM-5);
+ *  7. (the classic-globals bridge guard is gone: BRIDGE deleted the bridge);
  *  8. no identifier in a module names another module's export unless the module imports it or declares it locally.
  *     A missed import behind a `typeof X === 'function'` guard would otherwise switch a feature off silently (W1-ESM-6).
  * Import cycles are allowed (no module reads a cycle partner's binding at top level, docs/wip/ESM-1.md step 5);
@@ -152,11 +151,7 @@ test('module graph: the whole graph evaluates under the DOM stub, and the export
     const ns = await import(pathToFileURL(abs).href);
     exportsByFile[rel(abs)] = Object.keys(ns).sort();
   }
-  const bridge = await import(pathToFileURL(path.join(JS, 'classic-globals-bridge.js')).href);
-  const surface = {
-    exports: exportsByFile,
-    bridge: { count: bridge.BRIDGED.length, skipped: [...bridge.SKIPPED].sort(), names: [...bridge.BRIDGED].sort() },
-  };
+  const surface = { exports: exportsByFile };
   if (process.env.GOLDEN_RECORD === '1') {
     fs.writeFileSync(FIXTURE, JSON.stringify(surface, null, 1) + '\n');
     return;
@@ -169,7 +164,6 @@ test('module graph: the whole graph evaluates under the DOM stub, and the export
     assert.deepEqual({ file: f, added, removed }, { file: f, added: [], removed: [] },
       'the exported names changed: list the change and re-record with GOLDEN_RECORD=1');
   }
-  assert.deepEqual(surface.bridge, frozen.bridge, 'the classic-globals bridge changed (S-ESM1a: it may only shrink)');
 });
 
 test('module graph: every module evaluates as its own entry, in a fresh graph', async () => {
@@ -182,12 +176,6 @@ test('module graph: every module evaluates as its own entry, in a fresh graph', 
   assert.deepEqual(failed, []);
 });
 
-test('module graph: only main.js imports classic-globals-bridge.js', () => {
-  const bridge = path.join(JS, 'classic-globals-bridge.js');
-  const importers = [...graph()].filter(([, deps]) => deps.includes(bridge)).map(([f]) => rel(f));
-  assert.deepEqual(importers, ['main.js']);
-});
-
 // Intentional shadows: a local name that equals another module's export but is not declared in a way localNames sees.
 const SHADOW_ALLOW = {};
 
@@ -197,7 +185,6 @@ test('module graph: no module reads another module\'s export without importing i
   for (const [f, names] of Object.entries(frozen)) for (const n of names) if (!owner.has(n)) owner.set(n, f);
   const missed = [];
   for (const f of Object.keys(frozen)) {
-    if (f === 'classic-globals-bridge.js') continue;
     const src = fs.readFileSync(path.join(JS, f), 'utf8');
     const code = codeOnly(src);
     const imported = new Set();

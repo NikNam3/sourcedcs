@@ -1,6 +1,6 @@
 'use strict';
 
-/* The specs' one way into the client's modules (BRIDGE, replacing js/classic-globals-bridge.js).
+/* The specs' one way into the client's modules (BRIDGE; it replaced the old classic-globals shim).
  *
  * `installAppModules(page)` puts `window.crc` on the page: one namespace object per module the specs use,
  * made with a dynamic `import()` of the same URL main.js loaded, so each is the very module record the app

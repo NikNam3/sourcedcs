@@ -279,7 +279,7 @@ export function replayPendingEfspMutations(onOrphaned) {
 }
 
 // ESM-1: replaces one of the senders for every importer (live binding). The classic page let a caller assign the
-// global `sendEfsp…`; the Playwright specs still do, through js/classic-globals-bridge.js, and unit tests may too.
+// global `sendEfsp…`; the e2e specs use this setter (e2e/helpers/modules.js), and unit tests may too.
 export function setEfspSender(name, fn) {
   switch (name) {
     case 'sendEfspMutation': sendEfspMutation = fn; break;

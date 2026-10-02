@@ -58,7 +58,6 @@ import './panels/efsp/runway-status-rules.js';
 import './panels/efsp/runway-status-panel.js';
 import './panels/metrics-panel.js';
 import './app.js';
-import './classic-globals-bridge.js'; // last: for the Playwright specs only (see its header)
 import { atcTick } from './atc-scope.js';
 import { startApp } from './app.js';
 

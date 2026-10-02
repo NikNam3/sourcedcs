@@ -45,9 +45,8 @@ in the asar (`app/**/*`; `tests/packaging-config.test.js` checks it), while `app
 - `tests/module-graph.test.mjs` checks the graph: every file reachable from `main.js`, every module evaluates as an
   entry, no read of another module's export without an import, and the exported names frozen in
   `tests/fixtures/module-graph-exports.json` (re-record with `GOLDEN_RECORD=1` when the structure changes on purpose).
-- `js/classic-globals-bridge.js` is transitional and serves only the Playwright specs, which still call client
-  functions by global name inside `page.evaluate`. It puts a live getter on `window` for every export. Remove it when
-  the specs move to imports or a test hook.
+- The Playwright specs reach the client's modules through `e2e/helpers/modules.js` (`window.crc.<module>.<name>`, made with
+  dynamic imports of the same module URLs); nothing in the client puts its names on `window`.
 
 ## Packaging
 
