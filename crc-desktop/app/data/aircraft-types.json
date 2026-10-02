@@ -44,7 +44,7 @@
   "P-8A": { "label": "P-8A Poseidon" },
   "Tu-142": { "label": "Tu-142 Bear-F" },
   "S-3B": { "label": "S-3B Viking" },
-  "_comment_carriers": { "label": undefined },
+  "_comment_carriers": "Carrier hulls follow (DCS unit types).",
   "CVN_74": { "label": "CVN-74 Stennis" },
   "CVN_75": { "label": "CVN-75 H.S Truman" },
   "CVN_71": { "label": "CVN-71 T.Roosevelt" },
