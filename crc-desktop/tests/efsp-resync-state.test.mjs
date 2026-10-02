@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as S from '../app/public/js/panels/efsp/efsp-state.js';
 
 const snap = () => ({
-  facility: 'INCIRLIK', boardSeq: 5, boardSeqByFacility: { INCIRLIK: 5, CENTER: 2 },
+  facilities: ['INCIRLIK', 'CENTER'], boardSeqByFacility: { INCIRLIK: 5, CENTER: 2 },
   boardEpochByFacility: { INCIRLIK: 'e-I', CENTER: 'e-C' }, strips: [], flightDataList: [], positions: [],
 });
 const delta = (o) => ({ type: 'efsp-board-delta', strips: { updated: [], gone: [] }, flightDataList: { updated: [] }, positions: { updated: [] }, ...o });
@@ -36,11 +36,28 @@ test('an ack does not move the seq (its delta does); no Board held means no resy
   assert.equal(S.getEfspBoardSeq(), 5);
 });
 
-test('the heartbeat gap needs two beats in a row, and a matching beat resets it', () => {
+const beat = (I, C) => ({ type: 'efsp-heartbeat', boards: { INCIRLIK: { seq: I, epoch: 'e-I' }, CENTER: { seq: C, epoch: 'e-C' } } });
+
+test('the heartbeat gap needs two beats in a row per Facility, and a matching beat resets it', () => {
   S._resetEfspStateForTest();
   S.applyEfspSnapshot(snap());
-  assert.equal(S.efspHeartbeatGapOf({ boardSeq: 7 }), null);
-  assert.equal(S.efspHeartbeatGapOf({ boardSeq: 5 }), null);
-  assert.equal(S.efspHeartbeatGapOf({ boardSeq: 7 }), null);
-  assert.equal(S.efspHeartbeatGapOf({ boardSeq: 7 }), 'INCIRLIK');
+  assert.deepEqual(S.efspHeartbeatGapOf(beat(7, 2)), []);
+  assert.deepEqual(S.efspHeartbeatGapOf(beat(5, 2)), []);
+  assert.deepEqual(S.efspHeartbeatGapOf(beat(7, 2)), []);
+  assert.deepEqual(S.efspHeartbeatGapOf(beat(7, 2)), ['INCIRLIK']);
+});
+
+test('a non-selected Facility behind is named, alone, and the other keeps its own count', () => {
+  S._resetEfspStateForTest();
+  S.applyEfspSnapshot(snap());
+  assert.deepEqual(S.efspHeartbeatGapOf(beat(5, 4)), []);
+  assert.deepEqual(S.efspHeartbeatGapOf(beat(5, 4)), ['CENTER']);
+  assert.deepEqual(S.efspHeartbeatGapOf(beat(5, 2)), [], 'a matching beat resets');
+});
+
+test('a heartbeat epoch that differs from ours names that Facility at once; a Facility we hold no Board for is ignored', () => {
+  S._resetEfspStateForTest();
+  S.applyEfspSnapshot(snap());
+  const b = { type: 'efsp-heartbeat', boards: { INCIRLIK: { seq: 5, epoch: 'e-I' }, CENTER: { seq: 2, epoch: 'e-NEW' }, TACTICAL: { seq: 9, epoch: 'e-T' } } };
+  assert.deepEqual(S.efspHeartbeatGapOf(b), ['CENTER']);
 });

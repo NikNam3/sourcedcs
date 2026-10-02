@@ -23,7 +23,7 @@ let efspFacility = null;
 // default Facility's seq for the existing readers.
 const efspBoardSeqByFacility = new Map();
 const efspBoardEpochByFacility = new Map();
-let _heartbeatBehind = 0; // consecutive heartbeats that named a seq ahead of ours
+const _heartbeatBehind = new Map(); // facilityId -> consecutive heartbeats that named a seq ahead of ours
 let efspBays = [];
 // WP4A gap-closure (docs/adr/0022) — facilityId -> is AIT authorized (a
 // written directive on file) there. Lets bay-view.js disable the AIT
@@ -92,13 +92,13 @@ export function applyEfspSnapshot(msg) {
   for (const s of msg.strips || []) efspStrips.set(s.stripId, s);
   for (const f of msg.flightDataList || []) efspFlightDataList.set(f.flightDataId, f);
   for (const p of msg.positions || []) efspPositions.set(p.positionId, p);
-  efspBoardSeq = msg.boardSeq;
-  efspFacility = msg.facility;
+  efspFacility = (msg.facilities || [])[0] || null; // the default Facility comes first (crc-sync docs/adr/0104)
+  efspBoardSeq = (msg.boardSeqByFacility || {})[efspFacility];
   efspBoardSeqByFacility.clear();
   efspBoardEpochByFacility.clear();
   for (const [f, q] of Object.entries(msg.boardSeqByFacility || {})) efspBoardSeqByFacility.set(f, q);
   for (const [f, e] of Object.entries(msg.boardEpochByFacility || {})) efspBoardEpochByFacility.set(f, e);
-  _heartbeatBehind = 0;
+  _heartbeatBehind.clear();
   efspBays = msg.bays || [];
   efspAitAuthorizedByFacility = msg.aitAuthorizedByFacility || {};
   efspPositionLetters = msg.positionLetters || {};
@@ -301,18 +301,26 @@ export function efspResyncPositionFor(facilityId) {
 
 
 /**
- * An efsp-heartbeat names the default Facility's current seq. Deltas arrive in
- * order on one socket, so after every delta before it is applied the two must
- * be equal: ahead means a change reached us in no delta. Seqs jump by more
- * than one per change (a rebalance bumps one per Strip it re-keys), so only the
- * heartbeat can tell. Two beats in a row, so a delta in flight is not a gap.
- * @returns {?string} the Facility to resync, or null
+ * An efsp-heartbeat names every Board this session is sent: `boards: { [facilityId]: { seq, epoch } }`
+ * (crc-sync docs/adr/0104). Deltas arrive in order on one socket, so after every delta the two must
+ * be equal: ahead means a change reached us in no delta. Seqs jump by more than one per change
+ * (a rebalance bumps one per Strip it re-keys), so only the heartbeat can tell. Two beats in a row,
+ * so a delta in flight is not a gap. A different epoch is a different Board lifetime: at once.
+ * @returns {string[]} the Facilities to resync
  */
 export function efspHeartbeatGapOf(msg) {
-  const facilityId = efspFacility;
-  const ours = efspBoardSeqByFacility.get(facilityId);
-  if (!facilityId || ours === undefined || !Number.isFinite(msg.boardSeq) || msg.boardSeq <= ours) { _heartbeatBehind = 0; return null; }
-  return ++_heartbeatBehind >= 2 ? facilityId : null;
+  const out = [];
+  for (const [facilityId, b] of Object.entries(msg.boards || {})) {
+    const ours = efspBoardSeqByFacility.get(facilityId);
+    const knownEpoch = efspBoardEpochByFacility.get(facilityId);
+    if (ours === undefined) { _heartbeatBehind.delete(facilityId); continue; }
+    if (b.epoch !== undefined && knownEpoch !== undefined && b.epoch !== knownEpoch) { out.push(facilityId); continue; }
+    if (!Number.isFinite(b.seq) || b.seq <= ours) { _heartbeatBehind.delete(facilityId); continue; }
+    const n = (_heartbeatBehind.get(facilityId) || 0) + 1;
+    _heartbeatBehind.set(facilityId, n);
+    if (n >= 2) out.push(facilityId);
+  }
+  return out;
 }
 
 export function applyEfspDelta(msg) {
@@ -500,7 +508,7 @@ export function _resetEfspStateForTest() {
   efspFacility = null;
   efspBoardSeqByFacility.clear();
   efspBoardEpochByFacility.clear();
-  _heartbeatBehind = 0;
+  _heartbeatBehind.clear();
   efspBays = [];
   efspAitAuthorizedByFacility = {};
   efspPositionLetters = {};
