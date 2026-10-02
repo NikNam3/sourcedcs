@@ -60,7 +60,7 @@ The full pre-departure chain is `PROPOSED → PENDING_CLEARANCE → CLEARED → 
 3. **Now acting as `CD`, confirm/fill in the flight plan fields:** `filed.route` (Block 9), `filed.requestedAltitude` (Block 7), `filed.departureAirport` (Block 8), `filed.destinationAirport` (Block 8B). All four are required — `computeNla` checks `isFlightPlanValid`, and `PENDING_CLEARANCE`'s NLA is inhibited with `"flight plan invalid"` until they're all non-empty. If step 1's auto-fill found a match these are likely already populated — review them like any pre-filled field, they're fully editable (an ordinary Block edit, same as if `CD` had typed them).
 4. **`CD` presses the NLA button ("Mark Cleared").** This is state-only (`CLEARED` is still `CD`'s own state, no Position boundary crossed) — the Strip stays with `CD`, state becomes `CLEARED`.
 
-Equivalently: drag the Strip directly into `CD`'s `cd-cleared` Bay — `_validateBayImpliedTransition` enforces the exact same flight-plan-valid gate on the drag path (guide §3.5 rule 4: NLA is an accelerator, never the *only* path).
+Equivalently: drag the Strip directly into `CD`'s `cd-cleared` Bay — `board/placement.js`'s `Placement#validateBayImpliedTransition` enforces the exact same flight-plan-valid gate on the drag path (guide §3.5 rule 4: NLA is an accelerator, never the *only* path).
 
 One extra gate exists on the state **after** CLEARED: `CLEARED`'s own NLA ("Approve Pushback") additionally checks `flightData.assigned.departureRelease === 'RELEASED'` — if the flight has any other departure release state (`HOLD_FOR_RELEASE`, `RELEASE_TIME`, `CLEARANCE_VOID_TIME`, `EDCT`, `CALL_FOR_RELEASE`), pushing past `CLEARED` is inhibited (`"a hold is in force"`) until that clears — see §7 below.
 
@@ -79,11 +79,13 @@ Per-State authority table for reference (who's allowed to advance a Strip **out 
 | `DEPARTED` | `LC` | Hand Off to AP | `HANDED_OFF` (transfers to `AP`, intrafacility) |
 | `HANDED_OFF` | `AP` | Drop | `DROPPED` |
 
+The states, who owns each one and the button labels are SOURCE's own lifecycle (guide §3.4 and §3.5, `[SOURCE-DEFINED]`); real TFDM publishes none of them. See §8F1.
+
 ARRIVAL lifecycle is `INBOUND → HANDED_TO_TOWER → FINAL → LANDED → TAXI_IN → DROPPED`, owned by `AP`(or `CTR`)/`LC`/`LC`/`LC`/`GC` respectively. A `CENTER`-held `INBOUND` Strip has **no** ordinary NLA at all — its next action is the **Coordinate** button (§8), not this table.
 
 ## 3. Bays by Position — intended usage
 
-Every Position's Bay set is fixed by `facility-config.js` (guide §4.2). A Bay with an **implied state** (`impliesState`) is a real lifecycle stop — dropping/NLA-ing a Strip into it both relocates *and* advances it (§2). A Bay with no implied state is a holding/staging area — placement there is purely organizational, it never changes `strip.state` on its own.
+Every Position's Bay set is fixed by the facility files (`facility-config.js` loads them): guide §4.2's default Bay sets, which are SOURCE's own (the real TFDM bay names are not published; §8F1). A Bay with an **implied state** (`impliesState`) is a real lifecycle stop — dropping/NLA-ing a Strip into it both relocates *and* advances it (§2). A Bay with no implied state is a holding/staging area — placement there is purely organizational, it never changes `strip.state` on its own.
 
 ### `OPS` — Operations (files flight plans; asks Tower for runway changes and signs off runway inspections)
 
@@ -115,7 +117,7 @@ Every Position's Bay set is fixed by `facility-config.js` (guide §4.2). A Bay w
 
 | Bay | Implies state | Intended usage |
 |---|---|---|
-| `lc-runway-queue` | `RUNWAY_QUEUE` | Departure sequencing — **one Rack per runway direction** (`rwy-05`, `rwy-23`). Order within a Rack *is* the departure sequence (guide §4.2) — this is the one Bay where Strip order in the Rack is operationally meaningful, not just cosmetic. GC's "To Runway Queue" files a Strip into the Rack of its runway: the one on its flight plan, else the active runway (§8G). |
+| `lc-runway-queue` | `RUNWAY_QUEUE` | Departure sequencing — **one Rack per runway direction** (`rwy-05`, `rwy-23`). Order within a Rack *is* the departure sequence (guide §1 "Rack", Annex §9) — this is the one Bay where Strip order in the Rack is operationally meaningful, not just cosmetic. GC's "To Runway Queue" files a Strip into the Rack of its runway: the one on its flight plan, else the active runway (§8G). |
 | `lc-airborne` | `DEPARTED` | Strips that have taken off, waiting on "Hand Off to AP" (staffing-gated — nothing happens until `AP`, or the Position it is consolidated at, is staffed). |
 | `lc-arrivals` | `HANDED_TO_TOWER` | **Arrivals** handed to you from `AP`'s inbound sequence — your intake queue for the arrival side. |
 | `lc-final` | `FINAL` | Arrivals on final approach. |
@@ -344,7 +346,7 @@ no Strip. The full table is in `docs/adr/0056`.
 
 Everything else is behind **`▼`** — and *only* the rest: the panel never repeats a Block that is
 already a field, so it is the short list of what you cannot otherwise see. One Strip is expanded
-at a time, in Block Map order, which is the order of the paper strip.
+at a time, in Block Map order. For a DEPARTURE Strip that is the FAA paper strip's order (guide §6.2); the other strip types' orders are ours (§8F1).
 
 (The one thing it does repeat is a Block whose history is too long for its field — that is what
 the `+N` opens.)
@@ -669,13 +671,12 @@ board until it is filled in. One entry per MOA or range:
 ```
 
 - `controllingPositionId` is **who approves activation** — the Position that owns the airspace the
-  MOA sits in. For the MOAs around Incirlik that is Ankara Center (`CTR`), not Incirlik Approach.
+  MOA sits in. In SOURCE's model (the project owner's airspace picture, `adr/0036`) the MOAs around Incirlik belong to Ankara Center (`CTR`), not Incirlik Approach. The sourced rule is only that ATC, not the using agency, approves activation (guide §9.11).
 - `usingPositionId` is **only** for a range with a control tower of its own. Including it creates a
   Position under a `RANGES` Facility that somebody can act as; leaving it out (the ordinary MOA
   case) creates no Position at all, and the controlling Position runs the airspace by itself.
-- `type` is one of `MOA`, `RANGE`, `DANGER`, `RESTRICTED`, `PROHIBITED`, `WARNING` — the FAA and
-  ICAO names for overlapping things, since what the FAA calls a MOA is usually charted as a danger
-  or restricted area here. It is a **label only**: nothing in the system behaves differently because
+- `type` is one of `MOA`, `RANGE`, `DANGER`, `RESTRICTED`, `PROHIBITED`, `WARNING` — a label set of our own that
+  borrows FAA and ICAO special-use-airspace names. It is a **label only**: nothing in the system behaves differently because
   of it, and nothing may — separation regime in particular is never derived from airspace type.
 - Frequencies are **MHz as a number**, 30–400. A range's `controlFrequencyMhz` is its tower; a
   MOA's `workingFrequencyMhz` is what flights working inside it go to.
@@ -691,7 +692,7 @@ range control skips the request — its controlling Position schedules and activ
 If you are signed on to both sides, you still press both buttons: the state changes are real, only the
 conversation with another controller collapses.
 
-**Putting a flight in.** On the Strip, **Airspace…** → pick the airspace → *Approve entry*. The
+**Putting a flight in.** Working and range-control frequencies, and approving a flight onto one, are this squadron's operating practice, not an FAA or DoD procedure (`[SOURCE-DEFINED]`, `adr/0037`); the approval round trip itself is guide §9.11. On the Strip, **Airspace…** → pick the airspace → *Approve entry*. The
 flight's frequency (Block 22, `FREQ`) is filled from the airspace, and a badge on the Strip names
 where it is working. **Leave airspace** clears both. You keep the Strip throughout — approving a
 frequency change hands over nothing.
@@ -700,8 +701,8 @@ Approving a flight into an airspace nobody has activated is allowed, not blocked
 well be hot with the board simply not caught up — but the badge turns amber and an alert is raised.
 Releasing a block with flights still in it is allowed for the same reason, and warns the same way.
 
-**Sharing a block by altitude.** Approving entry takes an optional altitude block, which is how two
-aircraft use one area: hold the working flight down to 5,000–15,000 while a transit crosses at
+**Sharing a block by altitude.** Approving entry takes an optional altitude block, which is how, in this model,
+two aircraft share one area: hold the working flight down to 5,000–15,000 while a transit crosses at
 20,000–28,000. Re-issuing the approval on a flight already in that airspace **amends** the
 restriction rather than being refused, so tightening it and later lifting it (pass `null`) are both
 one action. No restriction at all is not the same as a restriction covering the whole area — the
@@ -714,16 +715,18 @@ each flight's block next to its callsign.
 are signed on to under **ACTING AS**, not by anything you tick. The Coverage list in the same panel is read-only:
 it tells you which radars your Positions give you, and which Position gave you each one.
 
+These are the shipped `positionRadars` defaults and radar figures: SOURCE's guess at which scope sits at which console, not any real facility's equipment (`adr/0042`, `0043`; §8F1).
+
 | Signed on to | You see |
 |---|---|
-| `LC` | Incirlik's field surveillance radar (40 nm, and the only one that shows ground vehicles) |
-| `AP` | that, plus the approach radar (80 nm) — you are the RAPCON |
+| `LC` | the field radar crc-sync models for Incirlik (40 nm in our model, and the only one that shows ground vehicles) |
+| `AP` | that, plus the approach radar crc-sync models there (80 nm) — you are the RAPCON |
 | `CTR` | every airfield's approach radar in the theater, i.e. the en-route picture |
 | `TAC_C2` / `AIC` / `GCI` | the own-coalition airborne picture (AWACS and fighter radars) |
 | `OPS`, `CD`, `GC`, `JTAC` | **nothing** |
 
-That last row is deliberate, not a fault. Ground and Clearance Delivery have no scope in any real
-facility, so being signed on to only those shows an empty map and a banner saying **NO RADAR COVERAGE — HOLD A
+That last row is deliberate, not a fault. In our model (`adr/0033`) Ground and Clearance Delivery work no scope,
+so being signed on to only those shows an empty map and a banner saying **NO RADAR COVERAGE — HOLD A
 RADAR POSITION**. If you need the picture, take a radar Position; you will get it the moment you do.
 
 Two consequences worth knowing:
@@ -735,7 +738,7 @@ Two consequences worth knowing:
 
 A radar whose aircraft is on the ground is listed with `GC` beside it and shows nothing — that is a
 parked AWACS, not a fault. Which scope sits at which console is squadron configuration
-(`positionRadars` in the facility config), and the shipped defaults are a guess.
+(`positionRadars` in the facility config).
 
 ## 8C. Correlation — how a Strip finds its contact
 
@@ -885,7 +888,7 @@ is why the form asks who said it.
 `.marsa VIPER11 SHELL71` — if the flight that declared it is not the one you have selected).
 
 Pick the other flight, the start event, and when it ends. The typed form defaults to the refuelling
-case (tanker accepted / until vertically positioned); the popover is where you pick an MTR entry or a
+case (tanker accepted / until vertically positioned), our default because it is the case guide §9.2 spells out in full; the popover is where you pick an MTR entry or a
 local declaration instead.
 
 A flight is in **at most one** relation at a time. Once one is running, `.marsa <CALLSIGN>` means
@@ -973,8 +976,8 @@ a block above or descending away from one below). The track panel and the scope'
 block. The Strip's conformance reason line still quotes the nearest edge ("from FL240") rather than the
 block. CA does not read the assigned altitude at all.
 
-Altitudes are compared as the controller reads them, on QNH below the transition altitude and as
-flight levels above it. The thresholds are in crc-sync's `config/alerting.json`.
+Altitudes are compared as the controller reads them, on QNH below the theater's transition altitude (§8J) and as
+flight levels above it. Every threshold on this page is SOURCE's own choice (crc-sync's `config/alerting.json`, `adr/0058`), not a published standard.
 
 ## 8F. Reading a contact — what your sensors can tell you
 
@@ -984,20 +987,20 @@ know (`adr/0059`). The same aircraft can read differently at two consoles.
 | You see | Because |
 |---|---|
 | `TN00042`, no altitude | a primary return only: your radar has it, but either it does not interrogate or the aircraft is not squawking |
-| `6123` / `080 G250` | it is squawking (code, Mode C altitude) and nothing identifies it yet. 6000–6777 is an AI aircraft's code |
+| `6123` / `080 G250` | it is squawking (code, Mode C altitude) and nothing identifies it yet. 6000–6777 is the block crc-sync gives AI aircraft (our convention, `adr/0059`; not a real code allocation) |
 | `VIPER11` / `180 G450` / `4521` | correlated to a Strip: its callsign is the Strip's, and its code sits underneath |
 | `COLT31?` | correlated **provisionally** — check it |
-| `230*` | an altitude from a height-finding radar (AWACS, fighter, carrier), not from the aircraft |
+| `230*` | an altitude from a radar crc-sync models as height-finding (AWACS, fighter, carrier), not from the aircraft |
 | `Enfield11` / `210L` | a datalink report from one of your own aircraft (tactical Positions) |
 | `EMR` / `RDF` / `HIJ` in colour | squawking 7700 / 7600 / 7500 |
 
-- **A player with no SRS client has no transponder.** Approach and tower radars see them as a track
+- **In crc-sync's model a player's transponder is whatever SRS reports, so a player with no SRS client has none.** Approach and tower radars see them as a track
   number with no altitude until SRS is running.
-- **Airfield and approach radars are 2D with SSR.** Their altitude always comes from the aircraft.
+- **crc-sync models airfield and approach radars as 2D with SSR.** Their altitude always comes from the aircraft.
 - **Tags** (the track panel's text box, or clicking a ground vehicle) name a contact nothing else
   identifies, for everybody. A correlated flight's callsign takes over from a tag, and the box
   is disabled while it does.
-- **The datalink** (TAC_C2, AIC, GCI) shows your own participating aircraft even with no radar
+- **The datalink** (crc-sync's model of one, `[SOURCE-DEFINED]`: which types take part is in `sensor-specs.json`) at TAC_C2, AIC and GCI shows your own participating aircraft even with no radar
   on them, with dashed lines to what their radars are locked on — but only to contacts your own
   picture already has.
 - The track panel's *Flight Plan* is the correlated flight's filed plan. **OVERLAY ROUTE** plots it.
@@ -1062,7 +1065,7 @@ conformance tag (§8E, drawn in the app's own orange, not STARS's). A provisiona
 - `M` means the flight is under tactical control after TOFI (§8C1). Letters for non-radar Positions:
   `OPS` `O`, `CD` `D`, `GC` `G`.
 
-*What is ours, not doctrine:* `SA` on a hostile declaration, the single `M` for every tactical Position,
+*What is ours, not doctrine* (see also §8F1): `SA` on a hostile declaration, the single `M` for every tactical Position,
 the colours (the approved mockup's) and the coast timing.
 
 ### When the picture disagrees with the Strip (surveillance informs, you advance)
@@ -1104,6 +1107,42 @@ existing installs:
   The map shows every navpoint (`WP1`, `NAV003`, …) until it is reworked with AIRAC data.
 
 You can turn either back on in Settings; it stays as you set it.
+
+## 8F1. What is ours and what is sourced
+
+EFSP follows `EFSPImplementationGuide.md` and the FAA and ICAO texts it cites. Where the guide is silent, SOURCE
+chose, and in code and config that choice is marked `[SOURCE-DEFINED]`. The screen carries no such marker, because
+a label makes no claim, so this section lists the things you see without one, once. "SOURCE practice" in a
+message means the same thing: it is how this squadron does it, not a published rule. Nothing below is wrong
+for being ours; it is only not doctrine, and not to be quoted as doctrine.
+
+| What you see | Ours or sourced | Where it is decided |
+|---|---|---|
+| **State names, who owns each state, the button labels** (`PENDING_CLEARANCE`, "Send to Clearance", "Hand Off to AP", the ARRIVAL, OVERFLIGHT and MISSION lifecycles) | Ours (guide §3.4, §3.5 are `[SOURCE-DEFINED]`; real TFDM publishes none of it). The OVERFLIGHT lifecycle is the guide's four-state one (`adr/0087`), itself `[SOURCE-DEFINED]` there | `adr/0012`, `0023`, `0087` |
+| **Bay names and Bay sets**, the Rack per runway end, the Coordination Bays | The Incirlik Bay table is the guide's §4.2 default and is itself `[SOURCE-DEFINED]`; the `CENTER`, `TACTICAL` and `CARRIER` sets, JTAC's viewing Bay and the pattern and SFA Bays are ours | `adr/0013`, `0025`, `0074`, `0075`, `0093` |
+| **Block Maps** for ARRIVAL, OVERFLIGHT and MISSION, all sub-lettered Blocks (`3A`-`3G`, `7A`, `9A-*`, `9F`, `M1`-`M8`), the CID format, the equipment suffix (naive: sorted code letters, nothing fills it today) | Ours. The DEPARTURE Block Map is the FAA strip's (guide §6.2, Annex §2.1) | `adr/0008`, `0023`, `0026`, `0056` |
+| **Which Positions exist**, their letters on the scope | Incirlik's eight (OPS, CD, GC, LC, AP, RSU, SFA, PAR), `CTR` and the tactical four are the guide's; the `CARRIER` Facility and the RSU, SFA and PAR Positions are ours. The Position letters are ours | `adr/0074`, `0075`, `0088` |
+| **Consolidation** (where an unstaffed Position's Strips go) | The guide's default (§4.8.6 rule 2) is `CD→GC→LC→AP→CTR`, `AIC`/`GCI`→`TAC_C2`→`CTR`, `CV_APP*`→`CV_MARSHAL`→`CV_PRIFLY`, `RSU`→`LC`, `SFA`/`PAR`→`AP`. We ship it with four deviations. **No `AP→CTR` and no `TAC_C2→CTR`**: consolidation stays inside one Facility (`adr/0013`). **No `RSU→LC`**: RSU is supervisory, so a Strip never strands on it (`adr/0075`). **The carrier chain is `CV_APP2→CV_APP1→CV_MARSHAL` and stops there**, without `CV_PRIFLY` (`adr/0074`). **`JTAC→TAC_C2`** is ours (`adr/0080`). So `AP`, `CTR`, `TAC_C2` and `CV_MARSHAL` end their chains, and a Strip can be left with an unstaffed Position there; sign-off warns, it does not block (guide §4.8.6) | `facility-schema.js` notes |
+| **Runway status**: which states count as using the runway (`RUNWAY_GATED_STATES`: a DEPARTURE in `RUNWAY_QUEUE`, `LUAW` or `DEPARTED`; an ARRIVAL in `FINAL`), the button labels (CLOSE, OPEN, WORKS, WRK DONE, INSP OK, ACCEPT, REJECT, REQ CLS, REQ WRKS, REQ OPEN, CHG RWY, SELF CHG, ACK, WITHDRAW, BEGIN), the "works in progress" and "runway change in progress" wordings, Tower as sole authority, the wind rule for the active end, the skipped acknowledger | Ours | `adr/0061`, `0068`, `0070` |
+| **Incirlik's runway data**: runway 05/23 with true headings 56 and 236, the airport `LTAG` whose wind picks the active end, acknowledgers `OPS` and `AP`, `OPS` as inspection authority, the hot cargo and alert pad names and the alert access route, no arresting gear | Squadron data, **to verify**. The headings are approximate and true, not magnetic | `adr/0061`, `0070` |
+| **SFA, PAR and the pattern**: five UHF frequencies 232.1 to 236.1 MHz and who starts on which, glidepath tolerance, trend step, prompt hold, long-in-pattern | Ours; the frequencies are placeholders, **to verify** | `adr/0075`, `0093` |
+| **Carrier figures**: default Case III, approach types and button range, Marshal stack limit and radial tolerance, the angled deck, night as the sun 6 degrees below the horizon, the alternating CV_APP lanes | Ours, where the guide's §9.12 gives none. Not yet seen against a real DCS ship | `adr/0064`, `0074` |
+| **Radar picture**: which scope sits at which console (`positionRadars`), the figures and kinds in `sensor-specs.json` (range, sweep, 2D or height-finding, SSR, Mode 4), which scheme draws which radar (ATC or TACTICAL), the datalink membership | Ours. DCS publishes none of it, and none of it describes a real system | `adr/0042`, `0043`, `0059`, `0066`, `0088` |
+| **The synthetic code block `6000`-`6777`** that crc-sync gives AI aircraft | Ours; not a real code allocation | `adr/0059` |
+| **Conformance and Conflict Alert thresholds** (`config/alerting.json`) | Ours, not a published standard. The tactical Positions get no CA: a squadron decision | `adr/0058`, `0059` |
+| **Surveillance hints** (airborne at 60 kt, 200 ft, 5 s; `STALE` after 120 s) | Ours | `adr/0076` |
+| **The transition altitude**: Syria 10,000 ft, 18,000 ft elsewhere | A per-theater setting in `config/theaters.json`; the 18,000 ft is a placeholder | `adr/0085` |
+| **Airspace**: the `type` label set, working and range-control frequencies and approving a flight onto one, MOAs around Incirlik belonging to `CTR`, the shipped airspace list (empty) | Ours (squadron practice and the project owner's airspace picture). Only "ATC approves activation" is sourced (guide §9.11) | `adr/0036`, `0037` |
+| **The ATO import**: the USMTF set layouts (from a community wiki), the vowel-cut rule, one ATO at a time | Ours | `adr/0071`, `0078` |
+| **Metrics notes**: they say `[SOURCE-DEFINED]` on screen, on purpose | Ours | `adr/0072` |
+| **Instrumentation and archiving** (the 2 h retention of finished flights) | Ours, tunable in config | `adr/0065`, `0082` |
+
+**What is sourced, with its clause:** the cross-Facility primitives (HANDOFF, POINT_OUT, TRAFFIC, OPERATIONAL_REQUEST,
+AIT; guide §4.6), the forwarding-obligation timers (§4.6.1, §4.6.2), MARSA (§9.2), amendments (§3.7), beacon codes
+(§3.10), stereo routes (§9.10), activation of a MOA (§9.11), the DEPARTURE Strip (§6.2), the runway-status rules the
+guide spells out (§9.7), alert and scramble (§9.6) and the carrier rules the guide gives (§9.12, §9.13).
+
+Corrections to earlier ADRs (they are never edited) are collected in `adr/0077`.
 
 ## 8G. The runway — runway status (Incirlik)
 
@@ -1213,7 +1252,7 @@ nothing checks a `HOOK` ✓ flight against it.
 
 The hot cargo pad and the alert pad exist by name only.
 
-*What is ours, not doctrine:* Tower as sole authority over the runway, CLOSED holding traffic, the
+*What is ours, not doctrine* (see also §8F1): Tower as sole authority over the runway, CLOSED holding traffic, the
 request/accept flow, the wind rule and the skipped acknowledger are SOURCE's own choices.
 
 ## 8H. Alert and scramble (guide §9.6)
@@ -1272,7 +1311,7 @@ are highlighted (per client). **It is not MARSA** and declares nothing, separate
 `separationRegime`. If the tanker's Strip is dropped, the receivers keep their records and their badge
 loses that peer. A re-import with a changed tanker rewires the join.
 
-*What is ours, not doctrine:* the USMTF set layouts come from a community wiki
+*What is ours, not doctrine* (see also §8F1): the USMTF set layouts come from a community wiki
 (`docs/parallel/research/usmtf-ato.md`), the vowel-cut rule and the one-ATO-at-a-time rule.
 
 ## 8J. Mission sessions, archiving and magnetic headings
