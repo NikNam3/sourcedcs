@@ -15,9 +15,14 @@ function _key(facilityId, stripId) { return `${facilityId}/${stripId}`; }
 /**
  * The control invariant (ADR 0101, H100 DR-6): a restored HANDOFF record must not name a holder whose Strip is
  * retired, or a live flight would be left with nobody holding communications or control. A backstop behind the
- * cross-Facility block. Returns the refusal, or null.
+ * cross-Facility block. A record that carries ADR 0101's holder fields (`comms`, `control`, ACTIVE) is checked holder by
+ * holder: the side holding communications and the side holding control must each be live and staffed (or consolidated
+ * into a staffed Position), and a control Position (`separationResponsibilityRef`) on a Strip the Undo does not restore
+ * must still be that Strip's owner. A record without them (an INITIATED proposal, or a primitive with no steps) needs its
+ * peer live. Returns the refusal, or null.
  */
 function _controlInvariantRefusal(env, images, restoring) {
+  const blocked = (detail) => ({ ok: false, reason: 'UNDO_BLOCKED', detail });
   for (const img of images) {
     const link = img.strip && img.strip.coordination;
     if (!link || link.primitive !== 'HANDOFF' || !HOLDER_STATES.includes(link.state) || !link.peerStripId) continue;
@@ -25,11 +30,53 @@ function _controlInvariantRefusal(env, images, restoring) {
     const restored = restoring.get(_key(link.peerFacilityId, link.peerStripId));
     const peerBoard = env.boardFor(link.peerFacilityId);
     const peer = restored ? restored.strip : (peerBoard ? peerBoard.getStrip(link.peerStripId) : null);
-    if (!peer || peer.state === 'DROPPED') {
-      return {
-        ok: false, reason: 'UNDO_BLOCKED',
-        detail: `restoring ${img.stripId} would name ${link.peerFacilityId}'s ${link.peerStripId} as holder, and that Strip is retired`,
-      };
+    const peerLive = !!peer && peer.state !== 'DROPPED';
+    const retiredDetail = (axis) => `restoring ${img.stripId} would name ${link.peerFacilityId}'s ${link.peerStripId} as ${axis}holder, and that Strip is retired`;
+    if (link.state !== 'ACTIVE' || !link.comms || !link.control) {
+      if (!peerLive) return blocked(retiredDetail(''));
+      continue;
+    }
+    const mine = link.mintedForCoordination ? 'RECEIVING' : 'TRANSFERRING';
+    const sides = {
+      [mine]: { facilityId: img.facilityId, stripId: img.stripId, strip: img.strip, live: true, restored: true },
+      [mine === 'RECEIVING' ? 'TRANSFERRING' : 'RECEIVING']: {
+        facilityId: link.peerFacilityId, stripId: link.peerStripId, strip: peer, live: peerLive, restored: !!restored,
+      },
+    };
+    const commsSide = link.comms.transferred ? 'RECEIVING' : 'TRANSFERRING';
+    const controlSide = link.control.holder === 'RECEIVING' ? 'RECEIVING' : 'TRANSFERRING';
+    for (const [axis, side] of [['communications', commsSide], ['control', controlSide]]) {
+      const h = sides[side];
+      if (!h.live) return blocked(retiredDetail(`the ${axis} `));
+      const board = env.boardFor(h.facilityId);
+      const live = board ? board.getStrip(h.stripId) : null;
+      // A restored owner that differs from the live one was checked by checkRestore (NOT_STAFFED); otherwise ask the Board.
+      const covered = !live || live.ownerPositionId !== h.strip.ownerPositionId || !board.stripOwnerCovered || board.stripOwnerCovered(h.stripId);
+      if (!covered) {
+        return blocked(`restoring ${img.stripId} would leave ${axis} with ${h.strip.ownerPositionId}, and ${h.strip.ownerPositionId} is not staffed`);
+      }
+    }
+    const ref = link.separationResponsibilityRef;
+    const holder = sides[controlSide];
+    if (ref && !holder.restored && holder.strip && (ref.facilityId !== holder.facilityId || ref.positionId !== holder.strip.ownerPositionId)) {
+      return blocked(`restoring ${img.stripId} would name ${ref.positionId} as the control Position, and control is with ${holder.strip.ownerPositionId} now`);
+    }
+  }
+  return null;
+}
+
+/**
+ * ADR 0101: an exchange whose control invariant does not hold right now (the standing CONTROL_UNCOVERED alert: nobody
+ * live and staffed to repair it to) is not restored over; a controller settles it first. Returns the refusal, or null.
+ */
+function _exchangeProblemsRefusal(env, images) {
+  for (const img of images) {
+    const board = env.boardFor(img.facilityId);
+    if (!board || !board.exchangeProblems) continue;
+    const found = board.exchangeProblems(img.stripId);
+    if (found.length) {
+      const what = found.map(p => `${p.axis} held by the ${p.side.toLowerCase()} side (${p.why})`).join('; ');
+      return { ok: false, reason: 'UNDO_BLOCKED', detail: `the hand-off of ${img.stripId} has nobody covering it: ${what}; settle that first` };
     }
   }
   return null;
@@ -67,7 +114,7 @@ function _applyUndo(ctx, meta) {
     const refusal = f === facilityId ? ctx.checkRestore(part.images) : board.checkUndoRestore(part.images);
     if (refusal) return refusal;
   }
-  const invariant = _controlInvariantRefusal(env, [...restoring.values()], restoring);
+  const invariant = _exchangeProblemsRefusal(env, [...restoring.values()]) || _controlInvariantRefusal(env, [...restoring.values()], restoring);
   if (invariant) return invariant;
   const carrierActions = [];
   for (const c of plan.images.carrier || []) {
@@ -100,6 +147,14 @@ function _applyUndo(ctx, meta) {
     const restoredHere = r.records.find(x => x.after);
     if (restoredHere) peerStrip = env.boardFor(f).getStrip(restoredHere.stripId);
     if (r.gone.length) peerGone = true;
+  }
+
+  // ADR 0101: the invariant is asserted after every restore, as after every HANDOFF-family Mutation (validated above, so
+  // this only ever finds what changed in between; in production it repairs and alerts).
+  for (const img of restoring.values()) {
+    if (!img.strip.coordination || img.strip.state === 'DROPPED') continue;
+    const board = env.boardFor(img.facilityId);
+    if (board && board.assertExchangeInvariant) board.assertExchangeInvariant(img.stripId, by);
   }
 
   const compensators = {};
@@ -195,4 +250,5 @@ module.exports = {
   undo: 'none', // docs/adr/0100 §1: no redo
   apply: (ctx, strip, op, meta) => _applyUndo(ctx, meta),
   controlInvariantRefusal: _controlInvariantRefusal, // for tests (U23)
+  exchangeProblemsRefusal: _exchangeProblemsRefusal, // for tests (ADR 0101 I8)
 };

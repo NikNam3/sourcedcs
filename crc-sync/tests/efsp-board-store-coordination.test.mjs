@@ -158,7 +158,7 @@ test('HANDOFF PROPOSE mints a brand-new, independent Strip in the receiving Faci
   assert.equal(receiverStrip.flightDataId, senderStrip.flightDataId); // one logical flight data, shared — docs/adr/0013's simplification
 });
 
-test('ACCEPT moves the receiver replica into its normal INBOUND Bay, sets both sides ACTIVE, and moves data ownership + separation responsibility to the receiver (HANDOFF\'s full-jurisdiction-transfer row)', () => {
+test('ACCEPT moves the receiver replica into its normal INBOUND Bay, sets both sides ACTIVE, and moves data ownership (not control or comms) to the receiver', () => {
   const facilities = makeFacilities();
   const senderStrip = createCtrStrip(facilities);
   const proposed = proposeHandoff(facilities, senderStrip);
@@ -176,9 +176,11 @@ test('ACCEPT moves the receiver replica into its normal INBOUND Bay, sets both s
   assert.equal(accepted.strip.state, 'INBOUND');
   assert.equal(accepted.strip.coordination.state, 'ACTIVE');
   assert.deepEqual(accepted.strip.coordination.dataOwnerPositionRef, { facilityId: 'INCIRLIK', positionId: 'AP' });
-  assert.deepEqual(accepted.strip.coordination.separationResponsibilityRef, { facilityId: 'INCIRLIK', positionId: 'AP' });
+  // docs/adr/0101: control and comms stay with the transferring side until their own steps.
+  assert.deepEqual(accepted.strip.coordination.separationResponsibilityRef, { facilityId: 'CENTER', positionId: 'CTR' });
   assert.equal(accepted.strip.coordination.radarIdTransferred, true);
-  assert.equal(accepted.strip.coordination.commsTransferred, true);
+  assert.equal(accepted.strip.coordination.comms.transferred, false);
+  assert.equal(accepted.strip.coordination.control.holder, 'TRANSFERRING');
 
   // The SENDER's own Strip is also updated to ACTIVE — both replicas agree.
   const { boardStore: ctrBoard } = facilities.get('CENTER');
@@ -267,7 +269,7 @@ test('POINT_OUT on ACCEPT moves separation responsibility but leaves data owners
   assert.equal(accepted.ok, true, JSON.stringify(accepted));
   assert.deepEqual(accepted.strip.coordination.dataOwnerPositionRef, { facilityId: 'CENTER', positionId: 'CTR' }); // stays with initiator
   assert.deepEqual(accepted.strip.coordination.separationResponsibilityRef, { facilityId: 'INCIRLIK', positionId: 'AP' }); // moves
-  assert.equal(accepted.strip.coordination.commsTransferred, false); // guide's table: POINT_OUT comms does not transfer
+  assert.equal(accepted.strip.coordination.comms, undefined); // guide's table: POINT_OUT comms does not transfer, and it has no comms step
 });
 
 // ── Validation and permission gates ──────────────────────────────────────

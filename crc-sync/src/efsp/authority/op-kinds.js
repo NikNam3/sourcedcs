@@ -12,6 +12,8 @@ const OP_KINDS = [
   // ops it holds (a JTAC undoing its hand-back), so board/strip-ops.js's _dispatchUndo gates it on the record.
   'SetFlag', 'SetState', 'InvokeNla', 'DropStrip',
   'HANDOFF', 'POINT_OUT', 'TRAFFIC', 'OPERATIONAL_REQUEST', 'AIT',
+  // docs/adr/0101 (H94, H98): the release of control inside a HANDOFF, never a bare "Release" (that is departure release).
+  'ControlRelease',
   // docs/adr/0023 — converts a DEPARTURE Strip at HANDED_OFF into an
   // ARRIVAL Strip IN PLACE (same Strip, same flight data), for a flight returning
   // to the same Facility that just handed it off. Deliberately restricted
@@ -40,6 +42,11 @@ const OP_KINDS = [
 // the list, and so canMutate()'s D21 shape stays a single flat lookup.
 const COORDINATION_OP_KINDS = ['HANDOFF', 'POINT_OUT', 'TRAFFIC', 'OPERATIONAL_REQUEST', 'AIT'];
 
+// A step inside one of them (docs/adr/0101): held exactly where the HANDOFF is, so every place that withholds the
+// primitives withholds it too, and kept out of COORDINATION_OP_KINDS because that list is the five primitives the client
+// mirrors (crc-desktop's coordination lockstep test).
+const COORDINATION_STEP_OP_KINDS = ['ControlRelease'];
+
 // Op kinds restricted to exactly AP/CTR, for reasons other than being a
 // cross-Facility coordination primitive — currently just ConvertToArrival
 // (docs/adr/0023). Kept separate from COORDINATION_OP_KINDS since it isn't
@@ -65,8 +72,8 @@ const TOFI_OP_KINDS = ['TOFI'];
 // tactical and carrier Positions through NON_CREATE_OPS silently. Ownership of the Strip is checked by the Board as always.
 const FORMATION_OP_KINDS = ['SplitFormation', 'JoinFormation'];
 
-const NON_CREATE_OPS = OP_KINDS.filter(k => k !== 'CreateStrip' && !COORDINATION_OP_KINDS.includes(k) && !AP_CTR_ONLY_OP_KINDS.includes(k) && !TOFI_OP_KINDS.includes(k) && !AIRSPACE_ENTRY_OP_KINDS.includes(k));
+const NON_CREATE_OPS = OP_KINDS.filter(k => k !== 'CreateStrip' && !COORDINATION_OP_KINDS.includes(k) && !COORDINATION_STEP_OP_KINDS.includes(k) && !AP_CTR_ONLY_OP_KINDS.includes(k) && !TOFI_OP_KINDS.includes(k) && !AIRSPACE_ENTRY_OP_KINDS.includes(k));
 
 module.exports = {
-  OP_KINDS, COORDINATION_OP_KINDS, AP_CTR_ONLY_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_OP_KINDS, FORMATION_OP_KINDS, NON_CREATE_OPS,
+  OP_KINDS, COORDINATION_OP_KINDS, COORDINATION_STEP_OP_KINDS, AP_CTR_ONLY_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_OP_KINDS, FORMATION_OP_KINDS, NON_CREATE_OPS,
 };

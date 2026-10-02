@@ -18,10 +18,11 @@ class Coordination {
    * @param {(stripId:string) => void} deps.touch the kernel's `recordTouch` (board/board-state.js)
    * @param {() => string|null} deps.activeCmid the clientMutationId being applied, read late
    * @param {(strip:object, by:string) => object|null} deps.retire late-bound to StripOps' retire
-   * @param {(stripType:string, senderState:string) => string} deps.replicaStateOnReceipt the authority registry's accessor (docs/adr/0087)
+   * @param {object} deps.control HandoffControl (board/handoff-control.js): the comms, ControlRelease and control records
+   * @param {(toPositionId:string, stripType:string, senderState:string) => {stripType:string, state:string}} deps.replicaOnReceipt the authority registry's accessor (docs/adr/0087, 0101)
    * @param {(primitive:string, stripType:string, senderState:string) => string|undefined} deps.senderStateOnAccept the authority registry's accessor (docs/adr/0087)
    */
-  constructor({ rules, state, audit, placement, clock, flightDataStore, touch, activeCmid, retire, replicaStateOnReceipt, senderStateOnAccept }) {
+  constructor({ rules, state, audit, placement, clock, flightDataStore, touch, activeCmid, retire, control, replicaOnReceipt, senderStateOnAccept }) {
     this._rules = rules;
     this._state = state;
     this._audit = audit;
@@ -31,7 +32,8 @@ class Coordination {
     this._touch = touch;
     this._activeCmidOf = activeCmid;
     this._retire = retire;
-    this._replicaStateOnReceipt = replicaStateOnReceipt;
+    this._control = control;
+    this._replicaOnReceipt = replicaOnReceipt;
     this._senderStateOnAccept = senderStateOnAccept;
   }
 
@@ -74,6 +76,11 @@ class Coordination {
       case 'STAND_BY': return this._applyCoordinationStandBy(strip, op, by);
       // The proposer's own way out of its own exchange (U7, docs/adr/0080).
       case 'CANCEL':   return this._applyCoordinationCancel(strip, op, by);
+      // docs/adr/0101: communications and control are steps of their own after a HANDOFF's ACCEPT.
+      case 'TRANSFER_COMMS':
+      case 'TRANSFER_CONTROL':
+        if (op.kind !== 'HANDOFF') return { ok: false, reason: 'VALIDATION_ERROR', detail: `${op.action} only applies to a HANDOFF`, strip };
+        return this._control.applyMark(strip, op, by, actingPositionId);
       default:         return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown coordination action: ${op.action}`, strip };
     }
   }
@@ -124,6 +131,11 @@ class Coordination {
     }
     const peer = this._rules.peerBoard(op.toFacilityId);
     if (!peer) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown Facility: ${op.toFacilityId}`, strip };
+    // docs/adr/0101 (DR-3): a Position answers only the primitives its grant holds (the carrier Marshal takes a HANDOFF
+    // and nothing else, so a POINT_OUT proposed to it would mint a replica nobody could answer).
+    if (!peer.canTakeCoordination(op.toPositionId, primitive)) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `${op.toPositionId} does not take a ${primitive}`, strip };
+    }
 
     // Track-degradation soft interlock (guide §4.6 rule 5): CST/FAIL/IF/NT/
     // TRK force verbal coordination; a non-empty note is the electronic
@@ -153,7 +165,7 @@ class Coordination {
       dataOwnerPositionRef: { facilityId: this._rules.facilityId, positionId: actingPositionId },
       separationResponsibilityRef: { facilityId: this._rules.facilityId, positionId: actingPositionId },
       radarIdTransferred: false,
-      commsTransferred: false,
+      ...this._control.initialFields(primitive),
       lastForwardedEtaUtc: flightData ? flightData.filed.estimatedArrivalTimeUtc : null,
       note: op.note || null,
       initiatedAt: now, initiatedBy: by || null,
@@ -184,7 +196,7 @@ class Coordination {
     const now = this._clock.now();
     strip.coordination.state = 'ACTIVE';
     strip.coordination.radarIdTransferred = effect.radarIdTransfers;
-    strip.coordination.commsTransferred = effect.commsTransfers;
+    Object.assign(strip.coordination, this._control.acceptFields(strip.coordination, now, by));
     strip.coordination.acceptedAt = now;
     strip.coordination.acceptedBy = by || null;
     if (effect.dataOwnershipMoves) {
@@ -209,6 +221,15 @@ class Coordination {
     strip.updatedAt = now;
     strip.updatedBy = by || null;
     this._touch(strip.stripId);
+    // docs/adr/0101 (DR-3): a Strip that lands in the Marshal stack joins it at the next free slot, through the same
+    // check-in a recovery CreateStrip makes. A full stack is a warning, not a refusal of the handoff.
+    let warning;
+    let carrierChanged;
+    if (strip.stripType === 'MARSHAL' && strip.state === 'IN_STACK') {
+      const a = this._rules.carrierAppendFlight(strip.flightDataId, { by, actingPositionId });
+      if (a && a.ok === false) warning = `not in the Marshal stack: ${a.detail || a.reason}`;
+      else if (a && a.changed && a.changed.length) carrierChanged = true;
+    }
 
     // Tell the peer their sender-side Strip is now ACTIVE too — both
     // replicas agree the exchange is live; each proceeds independently
@@ -222,7 +243,8 @@ class Coordination {
       const peerResult = peer.receiveCoordinationResponse({ causedBy: this._activeCmid, stripId: strip.coordination.peerStripId, response: 'ACCEPT', by });
       if (peerResult.ok) peerStrip = peerResult.strip;
     }
-    return { ok: true, strip, peerFacilityId, peerStrip };
+    this._control.assertControlInvariant(strip, by);
+    return { ok: true, strip, peerFacilityId, peerStrip, warning, carrierChanged };
   }
 
   _applyCoordinationReject(strip, op, by) {
@@ -262,6 +284,13 @@ class Coordination {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'only the proposer can cancel; answer the proposal with ACCEPT or REJECT', strip };
     }
     const link = strip.coordination;
+    // docs/adr/0101: once communications or control have moved, the exchange is how the flight is held; cancelling it
+    // would leave two Strips and no record of who has the aircraft. The correction is the receiver's own Drop (control and
+    // comms come back to this side) or, before control moved, ControlRelease WITHDRAW.
+    if (this._control.isSteps(strip) && link.state === 'ACTIVE'
+        && ((link.comms && link.comms.transferred) || (link.control && link.control.holder !== 'TRANSFERRING'))) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'communications or control have already moved to the receiving side; the exchange cannot be cancelled', strip };
+    }
     let peerStrip = null;
     const peer = this._rules.peerBoard(link.peerFacilityId);
     if (peer) {
@@ -308,9 +337,15 @@ class Coordination {
     const link = strip && strip.coordination;
     if (!link || link.peerStripId !== goneStripId || (link.state !== 'INITIATED' && link.state !== 'ACTIVE')) return { ok: false };
     const before = deepClone(strip);
+    // docs/adr/0101 (RECEIVING_RETIRED): the receiver's replica is gone, so the exchange ends here and whatever the
+    // receiver held (comms, control) is this Strip's again; it is the live one. The entry says what came back.
+    const returned = link.state === 'ACTIVE' ? this._control.receivingRetiredEntry(strip) : null;
     strip.coordination = null;
     this._state.bump(strip, null);
-    this._audit.recordSystem('SystemCoordinationEnd', strip, { before, after: deepClone(strip), reason: 'peer-dropped', causedBy: causedBy || null });
+    this._audit.recordSystem('SystemCoordinationEnd', strip, {
+      before, after: deepClone(strip), reason: 'peer-dropped', causedBy: causedBy || null,
+      ...(returned && returned.returned.length ? { control: returned } : {}),
+    });
     return { ok: true, strip };
   }
 
@@ -364,6 +399,9 @@ class Coordination {
   receiveCoordinationProposal({ primitive, fromFacilityId, fromPositionId, fromStripId, toPositionId, flightDataId, fromStripType, fromState, note, by, causedBy }) {
     const flightData = this._flightDataStore.getFlightData(flightDataId);
     if (!flightData) return { ok: false, reason: 'NOT_FOUND', detail: 'referenced flight data not found' };
+    // What the replica is minted as here: the sender's own strip type and state, or the receiving Position's own row
+    // (a carrier Marshal mints a MARSHAL Strip at IN_STACK, docs/adr/0101).
+    const minted = this._replicaOnReceipt(toPositionId, fromStripType, fromState);
 
     const coordinationBay = this._rules.coordinationBayFor(toPositionId);
     if (!coordinationBay) {
@@ -374,9 +412,9 @@ class Coordination {
     // separate "not yet accepted" pseudo-state — coordination.state is what actually tracks PROPOSED/ACTIVE/REJECTED.
     // fromState is guaranteed to be one of coordination.js's COORDINATION_ELIGIBLE_STATES combos (checked by
     // _applyCoordinationPropose before this is ever called), so the receiving Facility is guaranteed to have a Bay
-    // configured for it.
+    // configured for it. A receiving Position's own row may mint another strip type (`minted`, docs/adr/0101).
     const strip = mintReplica({ state: this._state, placement: this._placement, clock: this._clock }, {
-      flightDataId, stripType: fromStripType, state: this._replicaStateOnReceipt(fromStripType, fromState),
+      flightDataId, stripType: minted.stripType, state: minted.state,
       toPositionId, coordinationBay, by,
       links: (now) => ({
         coordination: {
@@ -394,7 +432,7 @@ class Coordination {
           dataOwnerPositionRef: { facilityId: fromFacilityId, positionId: fromPositionId },
           separationResponsibilityRef: { facilityId: fromFacilityId, positionId: fromPositionId },
           radarIdTransferred: false,
-          commsTransferred: false,
+          ...this._control.initialFields(primitive),
           lastForwardedEtaUtc: flightData.filed.estimatedArrivalTimeUtc || null,
           note: note || null,
           initiatedAt: now, initiatedBy: by || null,
@@ -430,7 +468,7 @@ class Coordination {
       strip.coordination.acceptedBy = by || null;
       if (effect) {
         strip.coordination.radarIdTransferred = effect.radarIdTransfers;
-        strip.coordination.commsTransferred = effect.commsTransfers;
+        Object.assign(strip.coordination, this._control.acceptFields(strip.coordination, now, by));
         if (effect.dataOwnershipMoves) {
           strip.coordination.dataOwnerPositionRef = { facilityId: strip.coordination.peerFacilityId, positionId: strip.coordination.peerPositionId };
         }

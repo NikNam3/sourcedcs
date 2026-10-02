@@ -66,12 +66,13 @@ function frameKeys() {
   };
 }
 
-// Every kind a client may send in an efsp-mutation: the granted OP_KINDS, the formation ops (a capability, not an OP_KINDS
+// Every kind a client may send in an efsp-mutation: the granted OP_KINDS, the coordination step kinds (ControlRelease,
+// docs/adr/0101; also in OP_KINDS, named here so the list says so), the formation ops (a capability, not an OP_KINDS
 // entry: docs/adr/0099 §4) and Undo (no grant: docs/adr/0100 §5). Not the internal CarrierHandoff/SfaRotation, which ride
 // their own message types.
 function efspOpKinds() {
-  const { OP_KINDS, FORMATION_OP_KINDS } = require(path.join(SRC, 'efsp', 'authority', 'op-kinds.js'));
-  return [...new Set([...OP_KINDS, ...FORMATION_OP_KINDS, 'Undo'])].sort();
+  const { OP_KINDS, COORDINATION_STEP_OP_KINDS, FORMATION_OP_KINDS } = require(path.join(SRC, 'efsp', 'authority', 'op-kinds.js'));
+  return [...new Set([...OP_KINDS, ...COORDINATION_STEP_OP_KINDS, ...FORMATION_OP_KINDS, 'Undo'])].sort();
 }
 
 function computeSurface() {

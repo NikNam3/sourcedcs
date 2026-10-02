@@ -16,10 +16,33 @@ const PERMISSIONS = {
   // carrier transfer. CarrierHandoff is NOT in OP_KINDS (it is not a `.filter()`
   // grant anyone could pick up silently): board/ops/carrier-handoff.js asks
   // canRecordCarrierHandoff below, one acting Position and one transfer kind.
-  CV_MARSHAL: new Set([...NON_CREATE_OPS, 'CreateStrip']),
+  // docs/adr/0101 (DR-3): the Marshal RECEIVES a HANDOFF (and asks for a ControlRelease); it proposes nothing, which
+  // COORDINATION_ACTIONS below holds at the action level, since the grant is by op kind.
+  CV_MARSHAL: new Set([...NON_CREATE_OPS, 'CreateStrip', 'HANDOFF', 'ControlRelease']),
   CV_PRIFLY:  new Set(NON_CREATE_OPS),
   CV_APP1:    new Set(NON_CREATE_OPS),
   CV_APP2:    new Set(NON_CREATE_OPS),
+};
+
+/**
+ * The actions of a coordination op kind a Position may use, where its grant is narrower than the kind (docs/adr/0101).
+ * A Position absent here has every action of every kind it holds. CV_MARSHAL answers a HANDOFF and records the two
+ * marks; it never PROPOSEs or CANCELs ("the carrier does not talk to the centre" stays true outbound).
+ */
+const COORDINATION_ACTIONS = {
+  CV_MARSHAL: {
+    HANDOFF: ['ACCEPT', 'REJECT', 'TRANSFER_COMMS', 'TRANSFER_CONTROL'],
+    ControlRelease: ['REQUEST'],
+  },
+};
+
+/**
+ * What a coordination replica is minted as at a Position whose strip type differs from the sender's (docs/adr/0101 DR-3):
+ * { receivingPositionId: { senderStripType: { senderState: { stripType, state } } } }. An ARRIVAL at INBOUND handed to
+ * the Marshal is a MARSHAL Strip at IN_STACK, and ACCEPT joins it to the stack through the check-in path.
+ */
+const REPLICA_ON_RECEIPT = {
+  CV_MARSHAL: { ARRIVAL: { INBOUND: { stripType: 'MARSHAL', state: 'IN_STACK' } } },
 };
 
 const CREATE_STRIP_TYPE_PERMISSIONS = {
@@ -70,6 +93,8 @@ const family = {
   permissions: PERMISSIONS,
   createsStripTypes: CREATE_STRIP_TYPE_PERMISSIONS,
   capabilities: CARRIER_CAPABILITIES,
+  coordinationActions: COORDINATION_ACTIONS,
+  replicaOnReceipt: REPLICA_ON_RECEIPT,
 };
 
 module.exports = {
