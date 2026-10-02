@@ -65,7 +65,7 @@ export function startDraw(o) {
   const route = o.mode === 'route' || o.mode === 'pick';
   const s = _session = {
     o, route, points: (o.points || []).map(p => [p[0], p[1]]), closed: !route && (o.points || []).length >= MIN_POLYGON_VERTICES,
-    selected: null, drag: null, cursor: null, names: [],
+    selected: null, drag: null, cursor: null, names: (o.points || []).map(() => null),
   };
   s.bar = _el('div', 'asd-bar'); s.title = _el('div', 'asd-title'); s.help = _el('div', 'asd-help'); s.problem = _el('div', 'asd-problem');
   s.buttons = _el('div', 'asd-buttons'); s.readout = _el('div', 'asd-readout');
