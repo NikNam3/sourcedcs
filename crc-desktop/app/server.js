@@ -12,6 +12,10 @@ const DATA_DIR         = path.join(__dirname, 'data');
 const MAPTILER_KEY     = maptilerKey();
 const SRS_RADIO_API    = parseInt(process.env.SRS_RADIO_API_PORT) || 5003;
 
+// This is the renderer's local server, built on Node's own `http`/`https`
+// modules (no Express): it serves app/public, generates /js/config.js and
+// proxies the few crc-sync calls below.
+//
 // crc-sync is the sole gRPC/SRS client now (see crc-sync/server.js) — this
 // local server no longer runs GrpcClient/SrsClient/TrackStore/WsServer at
 // all. The renderer connects straight to crc-sync's /feed WebSocket for

@@ -14,3 +14,4 @@
 
 ## Defaults taken (P2)
 - Finding (ESM-GUARDS): tools-panel.js uses _pressureAtAlt/ISA_L/ISA_INV/T_REF_ALT with no import (already the briefing's latent ReferenceError); header comment now says so.
+- Step 4: crc-desktop/app/server.js is Node http/https (require('http'), require('https'); no express anywhere in app/). Header now says so. CLAUDE.md's "Express" for it is wrong (L20-DOCS, S-ARCH2 16).
