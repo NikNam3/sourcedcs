@@ -169,7 +169,7 @@ function storeAfter(history) {
   let t = Date.UTC(2026, 8, 30, 14, 0);
   const store = new FieldStateStore(facilityConfigFixture(), {
     clock: { now: () => (t += 60000) },
-    isOccupied: () => true,
+    isStaffed: () => true,
     primaryOf: () => 'c1',
   });
   for (const [positionId, op] of history) {

@@ -75,11 +75,11 @@ test('laneFor alternates, falls back to the manned lane, and is null when neithe
   assert.equal(laneFor(0), 'CV_APP1');
   assert.equal(laneFor(1), 'CV_APP2');
   assert.equal(laneFor(2), 'CV_APP1');
-  const onlyApp1 = { isOccupied: (p) => p === 'CV_APP1' };
+  const onlyApp1 = { isStaffed: (p) => p === 'CV_APP1' };
   assert.equal(laneFor(1, onlyApp1), 'CV_APP1');
-  assert.equal(laneFor(0, { isOccupied: (p) => p === 'CV_APP2' }), 'CV_APP2');
-  assert.equal(laneFor(0, { isOccupied: () => false }), null);
-  assert.equal(laneFor(0, { isOccupied: () => { throw new Error('x'); } }), null, 'never throws');
+  assert.equal(laneFor(0, { isStaffed: (p) => p === 'CV_APP2' }), 'CV_APP2');
+  assert.equal(laneFor(0, { isStaffed: () => false }), null);
+  assert.equal(laneFor(0, { isStaffed: () => { throw new Error('x'); } }), null, 'never throws');
   assert.equal(laneFor(-1), null);
   assert.equal(laneFor(1.5), null);
 });

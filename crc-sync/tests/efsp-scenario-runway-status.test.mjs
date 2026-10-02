@@ -295,7 +295,7 @@ test('sortie 11: crc-sync restarts mid-suspension and the runway comes back SUSP
   assert.equal(fieldState(reborn).activeRunway, '05');
   // The same mission reconnecting does not re-derive the active runway.
   assert.equal(reborn.fieldStateStore.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 240, missionSession: 1 }).changed, false);
-  // Occupancy is ephemeral (ADR 0029): the crew re-declares.
+  // Staffing is ephemeral (ADR 0029): the crew re-declares.
   const rc = crew(reborn, ATC);
   const restored = reborn.boardStoreFor('INCIRLIK').getStrip(queued.stripId);
   assert.equal(reborn.boardStoreFor('INCIRLIK').nlaStatusFor(restored).inhibited, 'runway 05/23 suspended — works in progress');

@@ -29,7 +29,7 @@ function makeFacilities() {
   const facilities = new Map();
 
   for (const facilityId of facilityConfig.getFacilityIds()) {
-    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getCoveringChain(facilityId));
+    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getConsolidation(facilityId));
     const rules = {
       resolveBlockTarget: (blockId, role) => blockMap.resolveBlockTarget(role, blockId),
       bayImpliesState: (bayId) => facilityConfig.bayImpliesState(bayId, facilityId),
@@ -38,8 +38,8 @@ function makeFacilities() {
       computeNla: (strip, fdr, now, ctx) => nla.computeNla(strip, fdr, now, ctx),
       isValidState: (state, role) => nla.isValidState(state, role),
       isValidRole: (role) => blockMap.isValidRole(role),
-      isOccupied: (id) => positionStore.isOccupied(id),
-      coveringPositionFor: (id) => positionStore.coveringPositionFor(id),
+      isStaffed: (id) => positionStore.isStaffed(id),
+      consolidatedAt: (id) => positionStore.consolidatedAt(id),
       canMutate: (actingPositionId, opKind) => permission.canMutate(actingPositionId, opKind),
       canCreateStripRole: (actingPositionId, role) => permission.canCreateStripRole(actingPositionId, role),
       canActOnState: (actingPositionId, role, state) => permission.canActOnState(actingPositionId, role, state),

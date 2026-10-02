@@ -27,7 +27,7 @@ const OVERFLIGHT_STATE_OWNERS = {
 /**
  * OVERFLIGHT's entire NLA table (docs/adr/0087) — a flight transiting this
  * Facility's airspace without landing or departing here at all (guide §2).
- * No occupancy gating, no transferTo: whichever Position originated it
+ * No staffing gating, no transferTo: whichever Position originated it
  * (permission.js's CREATE_ROLE_PERMISSIONS) works it solo. IN_SECTOR's step
  * is "leaves our airspace" — to an agency this server does not model, so
  * nothing is transferred. Handing the flight to our own next Facility

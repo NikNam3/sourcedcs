@@ -257,24 +257,24 @@ function _handleSetPositions(ctx, session, msg, persist) {
     return { ack: { version: VERSION, type: 'efsp-positions-ack', facilityId, held: [], warnings: [], reason: 'VALIDATION_ERROR', detail: `unknown facilityId: ${facilityId}` }, broadcasts: skeleton.orderSlots(null) };
   }
   const held = Array.isArray(msg.held) ? msg.held : [];
-  const occupiedBefore = new Set(facilityConfig_positionIds(ctx, facilityId).filter(id => positionStore.isOccupied(id)));
-  const { held: actuallyHeld, vacated } = positionStore.setHeldPositions(session.controllerId, session.who, held);
+  const staffedBefore = new Set(facilityConfig_positionIds(ctx, facilityId).filter(id => positionStore.isStaffed(id)));
+  const { held: actuallySignedOn, vacated } = positionStore.setSignedOnPositions(session.controllerId, session.who, held);
 
   const warnings = [];
   const reassignedIds = [];
   // F10: a Position that was empty and now has a Primary gets back the Strips
   // that were routed away from it (docs/adr/0080).
-  for (const positionId of actuallyHeld) {
-    if (!occupiedBefore.has(positionId) && positionStore.isOccupied(positionId)) {
+  for (const positionId of actuallySignedOn) {
+    if (!staffedBefore.has(positionId) && positionStore.isStaffed(positionId)) {
       reassignedIds.push(...boardStore.returnCoveredStrips(positionId));
     }
   }
   for (const positionId of vacated) {
-    if (positionStore.isOccupied(positionId)) continue; // another controller is now Primary — nothing to route
+    if (positionStore.isStaffed(positionId)) continue; // another controller is now Primary — nothing to route
     const owned = boardStore.getAll().filter(s => s.ownerPositionId === positionId && s.state !== 'DROPPED');
     if (owned.length === 0) continue;
 
-    const covering = positionStore.coveringPositionFor(positionId);
+    const covering = positionStore.consolidatedAt(positionId);
     if (covering) {
       const moved = boardStore.reassignPositionStrips(positionId, covering);
       reassignedIds.push(...moved);
@@ -284,7 +284,7 @@ function _handleSetPositions(ctx, session, msg, persist) {
     } else {
       // Defect D19 boundary: the covering chain bottomed out with nobody
       // occupying any link. MUST be a visible, distinct condition — never
-      // a Strip silently left owned by an unoccupied Position with no
+      // a Strip silently left owned by an unstaffed Position with no
       // signal to anyone (guide §4.8.6 rule 3).
       warnings.push({ positionId, count: owned.length, routedTo: null });
     }
@@ -294,13 +294,13 @@ function _handleSetPositions(ctx, session, msg, persist) {
   // reassignPositionStrips touched is already in it. Drained so those touches
   // do not ride again on the next Mutation's broadcast (docs/adr/0081).
   boardStore.drainTouched();
-  // A covering-chain reassignment changes the Board, and it used to be the one
+  // A consolidation reassignment changes the Board, and it used to be the one
   // Board change never persisted: a restart before the next Mutation restored
   // the Strips to the Position that had left (docs/adr/0081, L6's F2/F5 tail).
   if (reassignedIds.length > 0 && typeof persist === 'function') persist();
 
   return {
-    ack: { version: VERSION, type: 'efsp-positions-ack', facilityId, held: actuallyHeld, warnings },
+    ack: { version: VERSION, type: 'efsp-positions-ack', facilityId, held: actuallySignedOn, warnings },
     // EVERY live Strip, not just the reassigned ones. Taking or giving up a
     // Position changes who is there to receive a transfer, which changes the
     // `nla` status stampStrip computes for Strips this message never
@@ -329,7 +329,7 @@ function readScopeOf(ctx, session) {
   for (const facilityId of ctx.facilityConfig.getFacilityIds()) {
     const positionStore = ctx.positionStoreFor(facilityId);
     if (!positionStore) continue;
-    for (const positionId of positionStore.heldBy(session.controllerId)) held.push({ facilityId, positionId });
+    for (const positionId of positionStore.signedOnBy(session.controllerId)) held.push({ facilityId, positionId });
   }
   return readScope.scopeOf(held, permission.readScopeFor);
 }

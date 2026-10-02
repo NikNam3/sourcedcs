@@ -150,13 +150,13 @@ test('board seam self-test, 3: module-level state', () => {
 
 test('board seam self-test, 4: rules access', () => {
   assert.equal(checkRulesAccess('const r = this._rules;').length, 1, 'aliased');
-  assert.equal(checkRulesAccess('const { isOccupied } = this._rules;').length >= 1, true, 'destructured');
-  assert.equal(checkRulesAccess('const { isOccupied } = rules;').length >= 1, true, 'destructured bare');
+  assert.equal(checkRulesAccess('const { isStaffed } = this._rules;').length >= 1, true, 'destructured');
+  assert.equal(checkRulesAccess('const { isStaffed } = rules;').length >= 1, true, 'destructured bare');
   assert.equal(checkRulesAccess('const f = this._rules[name];').length, 1, 'indexed');
   assert.equal(checkRulesAccess('const f = rules[name];').length, 1, 'indexed bare');
   assert.equal(checkRulesAccess('helper(a, rules);').length, 1, 'passed on whole');
-  assert.equal(checkRulesAccess('const ok = this._rules.isOccupied(p) && rules.canCreateStripRole(a, b);').length, 0);
-  assert.equal(checkRulesAccess('function make({ rules }) { return rules.isOccupied(p); }').length, 0, 'a parameter named rules is a declaration');
+  assert.equal(checkRulesAccess('const ok = this._rules.isStaffed(p) && rules.canCreateStripRole(a, b);').length, 0);
+  assert.equal(checkRulesAccess('function make({ rules }) { return rules.isStaffed(p); }').length, 0, 'a parameter named rules is a declaration');
   assert.equal(checkRulesAccess('// const r = this._rules;').length, 0, 'comments are ignored');
   assert.equal(checkRulesAccess('constructor({ rules }) { this._rules = rules; }').length, 0, 'a collaborator keeps the rules object (S-BOARD1-1)');
   assert.ok(checkRulesAccess('this._rules = rules.subset;').length >= 1, 'the exemption is that one statement only');

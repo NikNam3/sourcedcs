@@ -50,13 +50,13 @@ class CarrierStore {
    * @param {object} deps
    * @param {object[]} deps.hulls hull configs (carrier/hull-config.js)
    * @param {(fdrId:string)=>boolean} [deps.fdrExists]
-   * @param {(positionId:string)=>boolean} [deps.isOccupied] CARRIER Position occupancy, for lane feeding
+   * @param {(positionId:string)=>boolean} [deps.isStaffed] CARRIER Position staffing, for lane feeding
    * @param {{now:()=>number}} [deps.clock] the mission clock
    */
-  constructor({ hulls, fdrExists, isOccupied, clock = WALL_CLOCK } = {}) {
+  constructor({ hulls, fdrExists, isStaffed, clock = WALL_CLOCK } = {}) {
     this._clock = clock;
     this._fdrExists = fdrExists || (() => true);
-    this._isOccupied = isOccupied || (() => false);
+    this._isStaffed = isStaffed || (() => false);
     if (!hulls || !hulls.length) throw new Error('CarrierStore needs at least one hull (config/efsp-carriers.json)');
     this._hulls = hulls.map(deepClone);
     this._records = new Map();
@@ -101,14 +101,14 @@ class CarrierStore {
   /**
    * The manned CV_APP lane the stack would feed this flight to, or null
    * (carrier/handoffs.js: alternating by push ordinal, the other lane when the
-   * preferred one is unmanned, none when neither is).
+   * preferred one is unstaffed, none when neither is).
    */
   laneFor(fdrId, hullId = this.defaultHullId) {
     const r = this._records.get(hullId);
     if (!r) return null;
     for (const stack of Object.values(r.stacks)) {
       const derived = carrier.deriveStack(stack, { caseValue: r.recoveryCase.value, shipState: null });
-      const lane = carrier.assignLanes(derived, { isOccupied: this._isOccupied }).find(l => l.fdrId === fdrId);
+      const lane = carrier.assignLanes(derived, { isStaffed: this._isStaffed }).find(l => l.fdrId === fdrId);
       if (lane) return lane.lane;
     }
     return null;
@@ -156,7 +156,7 @@ class CarrierStore {
     const lanes = {};
     for (const [stackId, stack] of Object.entries(r.stacks)) {
       const d = carrier.deriveStack(stack, { caseValue, shipState });
-      lanes[stackId] = carrier.assignLanes(d, { isOccupied: this._isOccupied });
+      lanes[stackId] = carrier.assignLanes(d, { isStaffed: this._isStaffed });
     }
     let banner = deepClone(shipState);
     if (banner) {

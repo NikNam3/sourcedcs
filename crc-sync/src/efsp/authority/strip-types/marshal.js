@@ -51,7 +51,7 @@ function computeMarshalNla(strip, fdr, now, ctx) {
       if (caseValue === 'I') {
         // Case I has no Marshal hand-over in the guide; this row is
         // [SOURCE-DEFINED] (L4 briefing Q8) and reuses the controller trigger.
-        if (!ctx.isOccupied('CV_PRIFLY') && !ctx.coveringPositionFor('CV_PRIFLY')) {
+        if (!ctx.isStaffed('CV_PRIFLY') && !ctx.consolidatedAt('CV_PRIFLY')) {
           return { inhibited: 'no receiving Position present' };
         }
         return { toState: 'IN_PATTERN', transferTo: 'CV_PRIFLY', roleChange: 'PATTERN', carrierTransfer: 'MARSHAL_TO_PATTERN_CASE_I' };

@@ -40,9 +40,9 @@ function _applyCarrierTransfer(ctx, strip, kind, toPositionId, by, actingPositio
   if (!v.ok) return { ok: false, reason: v.reason || 'VALIDATION_ERROR', detail: v.detail, strip };
 
   let routedTo = null;
-  if (fx.owner === 'TO' && !ctx.rules.isOccupied(dest)) {
-    const covering = ctx.rules.coveringPositionFor(dest);
-    if (!covering || !ctx.rules.isOccupied(covering)) return { ok: false, reason: 'NO_RECEIVING_POSITION', strip };
+  if (fx.owner === 'TO' && !ctx.rules.isStaffed(dest)) {
+    const covering = ctx.rules.consolidatedAt(dest);
+    if (!covering || !ctx.rules.isStaffed(covering)) return { ok: false, reason: 'NO_RECEIVING_POSITION', strip };
     dest = covering;
     routedTo = covering;
   }

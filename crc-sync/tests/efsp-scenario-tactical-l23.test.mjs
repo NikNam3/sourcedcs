@@ -150,7 +150,7 @@ test('B3 the routed TransferStrip lands in the covering Position\'s Bay too, and
 
 test('B3 with no Bay to fit, the Strip keeps its Bay and the reassignment says so', () => {
   const rules = {
-    resolveBlockTarget: () => ({ kind: 'annotation' }), isOccupied: () => true, coveringPositionFor: () => null,
+    resolveBlockTarget: () => ({ kind: 'annotation' }), isStaffed: () => true, consolidatedAt: () => null,
     baysFor: (p) => (p === 'B' ? [{ bayId: 'b-only', rackIds: ['main'], impliesState: 'OTHER' }] : [{ bayId: 'a-1', rackIds: ['main'] }]),
     isValidState: () => true,
   };

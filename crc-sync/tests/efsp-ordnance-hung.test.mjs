@@ -112,7 +112,7 @@ test('the advisory is never an inhibit: NLA for a HUNG flight equals the same fl
   const NOW = Date.UTC(2026, 8, 30, 12, 0, 0);
   const rec = record();
   const view = buildStatusView(rec, rec);
-  const ctx = { isOccupied: () => true, coveringPositionFor: () => null, fieldStateFor: () => view };
+  const ctx = { isStaffed: () => true, consolidatedAt: () => null, fieldStateFor: () => view };
   const cases = [
     [arrival({ state: 'HANDED_TO_TOWER' }), { assigned: { landingRunway: '05' } }],
     [arrival({ state: 'FINAL' }), { assigned: { landingRunway: '05' } }],

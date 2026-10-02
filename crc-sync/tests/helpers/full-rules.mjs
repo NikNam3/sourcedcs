@@ -1,6 +1,6 @@
 // A complete `rules` object for a BoardStore built in a unit test (ARCH-D5): every rule the Board reads, each
 // defaulting to the neutral answer (the one the Board gave when the rule was absent), with the test's own rules
-// laid over it. `fullRules({ isOccupied: () => true })`. The name list is src/efsp/required-rules.js.
+// laid over it. `fullRules({ isStaffed: () => true })`. The name list is src/efsp/required-rules.js.
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { REQUIRED_RULES } = require('../../src/efsp/required-rules.js');
@@ -35,13 +35,13 @@ export const DEFAULT_RULES = {
   coordinationBayFor: () => null,
   coordinationEffect: () => null,
   coordinationEligibleState: (role) => coordination.coordinationEligibleState(role),
-  coveringPositionFor: () => null,
+  consolidatedAt: () => null,
   drainMarsaRegimeWrites: () => [],
   facilityId: null,
   fieldStateFor: () => null,
   handBackTargetsFor: () => null,
   isBlockVisible: () => true,
-  isOccupied: () => false,
+  isStaffed: () => false,
   isSelfCoordinated: () => false,
   isValidRole: () => true,
   isValidState: () => true,

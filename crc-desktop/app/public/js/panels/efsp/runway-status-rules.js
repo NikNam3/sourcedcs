@@ -331,8 +331,8 @@ function _fsOpenChange(change) {
  * @returns {{positionId:string, kind:string, label:string, title:string,
  *   runwayId?:string, action?:string, toEnds?:string[], needs?:'reason'|'toEnd'}[]}
  */
-export function fieldStateActionsFor(record, heldPositionIds) {
-  const held = [...new Set(heldPositionIds || [])];
+export function fieldStateActionsFor(record, signedOnPositionIds) {
+  const held = [...new Set(signedOnPositionIds || [])];
   const out = [];
   if (!record || held.length === 0) return out;
   const as = (kind, extra) => {

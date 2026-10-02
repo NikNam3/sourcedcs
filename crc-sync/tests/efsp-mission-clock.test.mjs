@@ -36,7 +36,7 @@ function createStripMsg() {
   };
 }
 
-test('createEfsp stamps Strips, FDRs, Position occupancy and the Mutation log with mission time', () => {
+test('createEfsp stamps Strips, FDRs, Position staffing and the Mutation log with mission time', () => {
   const clock = fakeClock();
   const efsp = createEfsp({ clock });
   assert.equal(efsp.clock, clock);

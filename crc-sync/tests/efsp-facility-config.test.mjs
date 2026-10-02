@@ -20,7 +20,7 @@ process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER = tmpFileCenter;
 process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL = tmpFileTactical;
 
 const {
-  getFacilityIds, getFacilityConfig, getPositionSet, getPositionClass, getCoveringChain, getBaysFor, getAllBays,
+  getFacilityIds, getFacilityConfig, getPositionSet, getPositionClass, getConsolidation, getBaysFor, getAllBays,
   bayImpliesState, bayForImpliedState, coordinationBayFor, setFacilityConfig, validateConfig, isBlockVisible,
   getShippedConfig, DEFAULT_FACILITY_ID,
 } = await import('../src/efsp/facility-config.js');
@@ -30,12 +30,12 @@ test('getPositionSet returns exactly INCIRLIK\'s eight Positions (RSU, SFA and P
   assert.deepEqual(getPositionSet(), ['OPS', 'CD', 'GND', 'TWR', 'RSU', 'APP', 'SFA', 'PAR']);
 });
 
-test('getCoveringChain matches the guide\'s default chain, un-truncated through APP, plus SFA and PAR to APP (L18)', () => {
-  assert.deepEqual(getCoveringChain(), { CD: 'GND', GND: 'TWR', TWR: 'APP', SFA: 'APP', PAR: 'APP' });
+test('getConsolidation matches the guide\'s default chain, un-truncated through APP, plus SFA and PAR to APP (L18)', () => {
+  assert.deepEqual(getConsolidation(), { CD: 'GND', GND: 'TWR', TWR: 'APP', SFA: 'APP', PAR: 'APP' });
 });
 
 test('OPS, RSU and APP have no entry in the covering chain — OPS per the guide\'s table, RSU so a Strip never strands on a supervisory Position (ADR 0075), APP because there\'s no CTR Facility yet to cover it', () => {
-  const chain = getCoveringChain();
+  const chain = getConsolidation();
   assert.equal('OPS' in chain, false);
   assert.equal('RSU' in chain, false);
   assert.equal('APP' in chain, false);
@@ -127,7 +127,7 @@ test('setFacilityConfig rejects a non-object patch without throwing', () => {
 
 test('the shipped INCIRLIK config matches what a fresh, unconfigured store actually serves', () => {
   assert.deepEqual(getPositionSet(), getShippedConfig('INCIRLIK').positions);
-  assert.deepEqual(getCoveringChain(), getShippedConfig('INCIRLIK').coveringChain);
+  assert.deepEqual(getConsolidation(), getShippedConfig('INCIRLIK').coveringChain);
 });
 
 test('nothing is hidden by default, at any Facility — and a Block added later stays that way', () => {
@@ -197,18 +197,18 @@ test('RANGES exists with no Positions until an airspace declares one, and works 
 
 test('every zero-arg call site from before WP4A keeps behaving identically — the optional facilityId param defaults to INCIRLIK', () => {
   assert.deepEqual(getPositionSet(), getPositionSet('INCIRLIK'));
-  assert.deepEqual(getCoveringChain(), getCoveringChain('INCIRLIK'));
+  assert.deepEqual(getConsolidation(), getConsolidation('INCIRLIK'));
   assert.deepEqual(getBaysFor('OPS'), getBaysFor('OPS', 'INCIRLIK'));
   assert.deepEqual(getFacilityConfig().facility, getFacilityConfig('INCIRLIK').facility);
 });
 
 test('CENTER has exactly one Position, CTR, with no covering Position (mirrors OPS\'s "absent from the chain" precedent)', () => {
   assert.deepEqual(getPositionSet('CENTER'), ['CTR']);
-  assert.deepEqual(getCoveringChain('CENTER'), {});
+  assert.deepEqual(getConsolidation('CENTER'), {});
 });
 
 test('INCIRLIK\'s own covering chain is NOT extended to CTR — the covering chain is an intrafacility occupancy-fallback mechanism, a different thing from the cross-Facility HANDOFF primitive (docs/adr/0013)', () => {
-  assert.equal('APP' in getCoveringChain('INCIRLIK'), false);
+  assert.equal('APP' in getConsolidation('INCIRLIK'), false);
 });
 
 test('CTR has a Coordination Bay and an en-route Bay implying INBOUND', () => {
@@ -272,8 +272,8 @@ test('getPositionClass resolves every Position\'s doctrinal class, searching acr
   assert.equal(getPositionClass('NOT_A_POSITION'), null);
 });
 
-test('AIC/GCI -> TAC_C2 is a legal intrafacility covering-chain entry, but TAC_C2 -> CTR is NOT — that hop would cross a Facility boundary (mirrors docs/adr/0013 point 4\'s identical APP -> CTR rejection)', () => {
-  const chain = getCoveringChain('TACTICAL');
+test('AIC/GCI -> TAC_C2 is a legal intrafacility consolidation entry, but TAC_C2 -> CTR is NOT — that hop would cross a Facility boundary (mirrors docs/adr/0013 point 4\'s identical APP -> CTR rejection)', () => {
+  const chain = getConsolidation('TACTICAL');
   assert.equal(chain.AIC, 'TAC_C2');
   assert.equal(chain.GCI, 'TAC_C2');
   assert.equal('TAC_C2' in chain, false);

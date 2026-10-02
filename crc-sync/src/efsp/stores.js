@@ -162,14 +162,14 @@ const REGISTRY = [
     // WP6 (docs/adr/0061), §9.7 — field state. One instance with
     // one record per Facility that has a runway inventory, for AirspaceStore's
     // reason — nothing about a runway is ever handed across a boundary.
-    // Occupancy is read lazily through `facilities`, the same
-    // shape airspaceStore's occupancyFor has: an unmanned acknowledger of a
+    // Staffing is read lazily through `facilities`, the same
+    // shape airspaceStore's occupancyFor has: an unstaffed acknowledger of a
     // runway change reverts or is skipped (decisions.md H20).
     build: ({ clock, facilities }) => new FieldStateStore(facilityConfig, {
       clock,
-      isOccupied: (facilityId, positionId) => {
+      isStaffed: (facilityId, positionId) => {
         const f = facilities.get(facilityId);
-        return !!f && f.positionStore.isOccupied(positionId);
+        return !!f && f.positionStore.isStaffed(positionId);
       },
       primaryOf: (facilityId, positionId) => {
         const f = facilities.get(facilityId);
@@ -189,14 +189,14 @@ const REGISTRY = [
     // docs/adr/0074 (ADR 0064 B6) — the carrier's Case, Marshal
     // stack and altimeter input, one record per hull. Shared across Facilities
     // like fdrStore (there is exactly one CARRIER Facility; nothing is replicated).
-    // Lane feeding reads CARRIER occupancy lazily through `facilities`.
+    // Lane feeding reads CARRIER staffing lazily through `facilities`.
     build: ({ clock, facilities, stores }) => new CarrierStore({
       hulls: carrierHulls.getHulls(),
       clock,
       fdrExists: (fdrId) => !!stores.fdr.getFdr(fdrId),
-      isOccupied: (positionId) => {
+      isStaffed: (positionId) => {
         const f = facilities.get('CARRIER');
-        return !!f && f.positionStore.isOccupied(positionId);
+        return !!f && f.positionStore.isStaffed(positionId);
       },
     }),
     snapshot: (s) => s.snapshot(),

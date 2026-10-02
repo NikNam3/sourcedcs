@@ -37,8 +37,8 @@ let _airspaceEmptyEl = null;
  * Proactive only. The server decides; this exists so a controller is not
  * offered a button that will be refused.
  */
-export function airspaceActionsFor(airspace, heldPositionIds) {
-  const held = new Set(heldPositionIds || []);
+export function airspaceActionsFor(airspace, signedOnPositionIds) {
+  const held = new Set(signedOnPositionIds || []);
   const definition = (airspace && airspace.definition) || {};
   const isControlling = held.has(definition.controllingPositionId);
   const isUsing = definition.usingPositionId
@@ -107,7 +107,7 @@ function _dispatchAirspace(airspace, action) {
   sendEfspAirspaceMutation(action.positionId, airspace.airspaceId, airspace.rev, op);
 }
 
-function _buildAirspaceCard(airspace, heldPositionIds) {
+function _buildAirspaceCard(airspace, signedOnPositionIds) {
   const definition = airspace.definition || {};
   const card = document.createElement('div');
   card.className = `airspace-card airspace-state-${airspace.state.toLowerCase()}`;
@@ -167,7 +167,7 @@ function _buildAirspaceCard(airspace, heldPositionIds) {
     card.appendChild(list);
   }
 
-  const actions = airspaceActionsFor(airspace, heldPositionIds);
+  const actions = airspaceActionsFor(airspace, signedOnPositionIds);
   if (actions.length > 0) {
     const row = document.createElement('div');
     row.className = 'airspace-actions';

@@ -647,7 +647,7 @@ test('a handler with no field-state store answers, never throws (a hand-built ct
 
 const nla = await import('../src/efsp/nla.js');
 const NOW = Date.UTC(2026, 8, 30, 12, 0, 0);
-const everyoneHome = { isOccupied: () => true, coveringPositionFor: () => null };
+const everyoneHome = { isStaffed: () => true, consolidatedAt: () => null };
 const ctxWith = (view, extra = {}) => ({ ...everyoneHome, fieldStateFor: () => view, ...extra });
 const readyFdr = (over = {}) => ({
   identity: { beaconAssigned: '4001' },
@@ -728,7 +728,7 @@ test('the inhibit follows the rack a Strip is in, at a field with two independen
 
 /** A store with every Position manned and a known active end (05). */
 function manned({ occupied = ['OPS', 'CD', 'GND', 'TWR', 'APP'], primaryOf = (f, p) => `c-${p}`, fieldStateOverride } = {}) {
-  const r = freshStore({ fieldStateOverride, deps: { isOccupied: (f, p) => f === 'INCIRLIK' && occupied.includes(p), primaryOf } });
+  const r = freshStore({ fieldStateOverride, deps: { isStaffed: (f, p) => f === 'INCIRLIK' && occupied.includes(p), primaryOf } });
   r.store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, missionSession: 1 });
   return r;
 }
@@ -826,7 +826,7 @@ test('an acknowledger nobody holds is skipped and recorded, never a deadlock (de
 
 test('the acknowledger set is frozen at propose time', () => {
   let occupied = ['OPS', 'TWR'];
-  const r = freshStore({ deps: { isOccupied: (f, p) => occupied.includes(p) } });
+  const r = freshStore({ deps: { isStaffed: (f, p) => occupied.includes(p) } });
   r.store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, missionSession: 1 });
   mustOp(r.store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
   occupied = ['OPS', 'TWR', 'APP']; // APP arrives after the proposal

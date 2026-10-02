@@ -11,7 +11,7 @@
 // Phase 2 adds ARRIVAL (originated by APP — docs/adr/0008, since there's
 // still no CTR Facility to hand an inbound flight off from) and makes
 // DEPARTED's NLA real: APP is now a configured, occupiable INCIRLIK
-// Position, so "Hand Off" is a genuine, occupancy-gated intrafacility
+// Position, so "Hand Off" is a genuine, staffing-gated intrafacility
 // TransferStrip (docs/adr/0007 supersedes ADR 0005's always-succeed stub —
 // TWR and APP are both INCIRLIK Positions, so this is NOT WP4A's
 // cross-Facility HANDOFF, which is still APP<->CTR and still unbuilt).
@@ -20,7 +20,7 @@
 // transition that crosses a DEPARTURE_STATE_OWNERS boundary (not just
 // DEPARTED->APP): PROPOSED->PENDING_CLEARANCE, CLEARED->PUSHBACK,
 // HELD->PUSHBACK, and TAXI->RUNWAY_QUEUE all now carry `transferTo` and
-// the same occupancy-gated inhibit. A transition that stays with the same
+// the same staffing-gated inhibit. A transition that stays with the same
 // owner (PENDING_CLEARANCE->CLEARED, PUSHBACK->TAXI, RUNWAY_QUEUE->LUAW,
 // LUAW->DEPARTED) is still state-only — no Position boundary, nothing to
 // transfer.
@@ -72,11 +72,11 @@ function isValidState(state, role = 'DEPARTURE') {
   return !!set && set.has(state);
 }
 
-/** Normalizes the injected occupancy context, defaulting to "nothing is occupied, nothing covers" when omitted — a safe, meaningful degrade (an occupancy-gated NLA simply reports inhibited) rather than a throw, since not every caller has occupancy info at hand (e.g. a fixture-driven test). `facilityId` (WP4A) defaults to undefined, which computeArrivalNla treats as "not CENTER" — i.e. every pre-WP4A caller that never passes it keeps the original INCIRLIK behavior unchanged. `standingReleases` (WP4A, §4.6.2) defaults to an empty array — no envelopes configured means nothing is ever pre-cleared by one. */
+/** Normalizes the injected staffing context, defaulting to "nothing is occupied, nothing covers" when omitted — a safe, meaningful degrade (an staffing-gated NLA simply reports inhibited) rather than a throw, since not every caller has staffing info at hand (e.g. a fixture-driven test). `facilityId` (WP4A) defaults to undefined, which computeArrivalNla treats as "not CENTER" — i.e. every pre-WP4A caller that never passes it keeps the original INCIRLIK behavior unchanged. `standingReleases` (WP4A, §4.6.2) defaults to an empty array — no envelopes configured means nothing is ever pre-cleared by one. */
 function _normalizeCtx(ctx) {
   return {
-    isOccupied: (ctx && ctx.isOccupied) || (() => false),
-    coveringPositionFor: (ctx && ctx.coveringPositionFor) || (() => null),
+    isStaffed: (ctx && ctx.isStaffed) || (() => false),
+    consolidatedAt: (ctx && ctx.consolidatedAt) || (() => null),
     facilityId: ctx && ctx.facilityId,
     standingReleases: (ctx && ctx.standingReleases) || [],
     // §9.7 (docs/adr/0061): this Facility's runway status view, or null. A

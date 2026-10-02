@@ -30,8 +30,8 @@ function makeRules(overrides = {}) {
       if (strip.state === 'CLEARED') return { inhibited: 'hold in force' };
       return null;
     },
-    isOccupied: (positionId) => positionId !== 'UNMANNED',
-    coveringPositionFor: (positionId) => (positionId === 'UNMANNED' ? 'COVER' : null),
+    isStaffed: (positionId) => positionId !== 'UNMANNED',
+    consolidatedAt: (positionId) => (positionId === 'UNMANNED' ? 'COVER' : null),
     isValidState: (state) => ['PROPOSED', 'PENDING_CLEARANCE', 'CLEARED', 'RUNWAY_QUEUE', 'DEPARTED', 'DROPPED'].includes(state),
     ...overrides,
   };
@@ -546,8 +546,8 @@ function makeTransferNlaRules(overrides = {}) {
     bayForImpliedState: (positionId, state) =>
       (positionId === 'APP' && state === 'HANDED_OFF' ? { bayId: 'app-departures', rackIds: ['main'] } : null),
     computeNla: (strip) => (strip.state === 'DEPARTED' ? { toState: 'HANDED_OFF', transferTo: 'APP' } : null),
-    isOccupied: (positionId) => positionId === 'APP',
-    coveringPositionFor: () => null,
+    isStaffed: (positionId) => positionId === 'APP',
+    consolidatedAt: () => null,
     isValidState: () => true,
     ...overrides,
   };
@@ -567,9 +567,9 @@ test('a transfer-shaped InvokeNla changes owner, Bay, and state atomically, in o
   assert.equal(result.strip.state, 'HANDED_OFF');
 });
 
-test('a transfer-shaped InvokeNla to an unoccupied, uncovered Position is rejected via _applyTransferStrip\'s own occupancy gate, and the Strip stays with the sender — defense in depth even when computeNla itself doesn\'t pre-check occupancy (the real nla.js does; this fixture deliberately doesn\'t, to exercise board-store.js\'s own gate)', () => {
+test('a transfer-shaped InvokeNla to an unstaffed, uncovered Position is rejected via _applyTransferStrip\'s own staffing gate, and the Strip stays with the sender — defense in depth even when computeNla itself doesn\'t pre-check staffing (the real nla.js does; this fixture deliberately doesn\'t, to exercise board-store.js\'s own gate)', () => {
   const fdrStore = new FdrStore();
-  const board = new BoardStore(fdrStore, fullRules(makeTransferNlaRules({ isOccupied: () => false, coveringPositionFor: () => null })));
+  const board = new BoardStore(fdrStore, fullRules(makeTransferNlaRules({ isStaffed: () => false, consolidatedAt: () => null })));
   const strip = createStrip(board, 'TWR', { op: { ...createMutation().op, bayId: 'twr-airborne', rackId: 'main' } });
   board.applyMutation({ clientMutationId: crypto.randomUUID(), stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'SetState', toState: 'DEPARTED' } }, 'TWR', 'TWR');
   const departed = board.getStrip(strip.stripId);
@@ -632,8 +632,8 @@ function makeStateOwnerRules(overrides = {}) {
       return null;
     },
     resolveBlockTarget: () => ({ kind: 'annotation' }),
-    isOccupied: () => true,
-    coveringPositionFor: () => null,
+    isStaffed: () => true,
+    consolidatedAt: () => null,
     isValidState: () => true,
     ...overrides,
   };
@@ -715,7 +715,7 @@ test('without a canActOnState rule supplied, this gate is simply skipped (opt-in
   assert.equal(result.ok, true);
 });
 
-// ── TransferStrip: occupancy gating + covering chain (guide §4.5) ──────────
+// ── TransferStrip: staffing gating + covering chain (guide §4.5) ──────────
 
 test('TransferStrip to an occupied Position succeeds and changes owner + Bay/Rack atomically', () => {
   const { board } = makeStore();
@@ -768,8 +768,8 @@ test('TransferStrip into a Bay with no implied state leaves the Strip state unch
   assert.equal(result.strip.state, strip.state);
 });
 
-test('TransferStrip to an unmanned Position with no covering Position is rejected with NO_RECEIVING_POSITION and the Strip stays with the sender', () => {
-  const { board } = makeStore({ coveringPositionFor: () => null });
+test('TransferStrip to an unstaffed Position with no covering Position is rejected with NO_RECEIVING_POSITION and the Strip stays with the sender', () => {
+  const { board } = makeStore({ consolidatedAt: () => null });
   const strip = createStrip(board, 'OPS');
   const result = board.applyMutation(
     mutation(strip, { kind: 'TransferStrip', toPositionId: 'UNMANNED', bayId: 'x', rackId: 'y' }),
@@ -780,7 +780,7 @@ test('TransferStrip to an unmanned Position with no covering Position is rejecte
   assert.equal(board.getStrip(strip.stripId).ownerPositionId, 'OPS');
 });
 
-test('TransferStrip to an unmanned Position with an occupied covering Position routes there instead, and reports routedTo', () => {
+test('TransferStrip to an unstaffed Position with an occupied covering Position routes there instead, and reports routedTo', () => {
   const { board } = makeStore(); // fixture: UNMANNED -> covered by COVER, and COVER is occupied
   const strip = createStrip(board, 'OPS');
   const result = board.applyMutation(
@@ -803,7 +803,7 @@ test('TransferStrip is itself owner-gated — a non-owning Position cannot initi
   assert.equal(result.reason, 'NOT_OWNER');
 });
 
-// ── reassignPositionStrips — system-initiated, covering-chain routing (guide §4.8.6 rule 2) ──
+// ── reassignPositionStrips — system-initiated, consolidation routing (guide §4.8.6 rule 2) ──
 
 test('reassignPositionStrips moves every non-DROPPED Strip owned by the vacated Position to the covering Position', () => {
   const { board } = makeStore();

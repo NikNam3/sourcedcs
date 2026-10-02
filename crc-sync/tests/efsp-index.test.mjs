@@ -71,11 +71,11 @@ test('onDisconnect releases every Position the controller held', () => {
   const efsp = createEfsp();
   const session = { controllerId: 'c1', who: 'Alice' };
   efsp.handleMessage(session, { type: 'efsp-set-positions', held: ['GND', 'TWR'] });
-  assert.equal(efsp.positionStoreFor('INCIRLIK').isOccupied('GND'), true);
+  assert.equal(efsp.positionStoreFor('INCIRLIK').isStaffed('GND'), true);
 
   efsp.onDisconnect(session);
-  assert.equal(efsp.positionStoreFor('INCIRLIK').isOccupied('GND'), false);
-  assert.equal(efsp.positionStoreFor('INCIRLIK').isOccupied('TWR'), false);
+  assert.equal(efsp.positionStoreFor('INCIRLIK').isStaffed('GND'), false);
+  assert.equal(efsp.positionStoreFor('INCIRLIK').isStaffed('TWR'), false);
 });
 
 // ── Persistence — the actual "restart" scenario (ADR 0002) ─────────────────
@@ -105,7 +105,7 @@ test('a Strip mid-DEPARTED-to-APP-transfer (docs/adr/0007) round-trips correctly
   const app = { controllerId: 'app', who: 'App1' };
   efsp1.handleMessage(ops, { type: 'efsp-set-positions', held: ['OPS'] });
   efsp1.handleMessage(twr, { type: 'efsp-set-positions', held: ['TWR'] });
-  efsp1.handleMessage(app, { type: 'efsp-set-positions', held: ['APP'] }); // APP must be occupied for the real, occupancy-gated Hand Off
+  efsp1.handleMessage(app, { type: 'efsp-set-positions', held: ['APP'] }); // APP must be occupied for the real, staffing-gated Hand Off
 
   const created = efsp1.handleMessage(ops, createStripMsg());
   let strip = created.ack.strip;
@@ -211,7 +211,7 @@ test('a HANDOFF interrupted mid-PROPOSE (before ACCEPT) round-trips both replica
   // The exchange can still be completed after the restart, exactly as if
   // nothing had happened — no strand, no duplicate, no crash.
   const app = { controllerId: 'app', who: 'App1' };
-  // Position occupancy is deliberately ephemeral (ADR 0002 — it never enters
+  // Position staffing is deliberately ephemeral (ADR 0002 — it never enters
   // the durable snapshot), so a reconnecting client re-declares it after a
   // restart exactly like it does on a first connect.
   efsp2.handleMessage(app, { type: 'efsp-set-positions', facilityId: 'INCIRLIK', held: ['APP'] });

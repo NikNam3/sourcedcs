@@ -59,24 +59,24 @@ test('PROPOSED is inhibited until a beacon code is assigned (guide §3.5)', () =
 });
 
 test('PROPOSED with a beacon assigned but CD neither occupied nor covered is inhibited — no receiving Position present', () => {
-  const ctx = { isOccupied: () => false, coveringPositionFor: () => null };
+  const ctx = { isStaffed: () => false, consolidatedAt: () => null };
   const result = computeNla(makeStrip('PROPOSED'), makeFdr(), Date.now(), ctx);
   assert.deepEqual(result, { inhibited: 'no receiving Position present' });
 });
 
 test('PROPOSED with a beacon assigned advances to PENDING_CLEARANCE, transferring to CD, once CD is occupied', () => {
-  const ctx = { isOccupied: (id) => id === 'CD', coveringPositionFor: () => null };
+  const ctx = { isStaffed: (id) => id === 'CD', consolidatedAt: () => null };
   const result = computeNla(makeStrip('PROPOSED'), makeFdr(), Date.now(), ctx);
   assert.deepEqual(result, { toState: 'PENDING_CLEARANCE', transferTo: 'CD' });
 });
 
-test('PROPOSED transitions when CD is unoccupied but covered by another Position', () => {
-  const ctx = { isOccupied: () => false, coveringPositionFor: (id) => (id === 'CD' ? 'OPS' : null) };
+test('PROPOSED transitions when CD is unstaffed but covered by another Position', () => {
+  const ctx = { isStaffed: () => false, consolidatedAt: (id) => (id === 'CD' ? 'OPS' : null) };
   const result = computeNla(makeStrip('PROPOSED'), makeFdr(), Date.now(), ctx);
   assert.deepEqual(result, { toState: 'PENDING_CLEARANCE', transferTo: 'CD' });
 });
 
-test('PROPOSED with a null fdr (defensive) is inhibited on the beacon check, before occupancy is even considered', () => {
+test('PROPOSED with a null fdr (defensive) is inhibited on the beacon check, before staffing is even considered', () => {
   const result = computeNla(makeStrip('PROPOSED'), null, NOW);
   assert.deepEqual(result, { inhibited: 'no beacon code assigned' });
 });
@@ -127,13 +127,13 @@ test('CLEARED is inhibited when a hold is in force (releaseState !== RELEASED)',
 });
 
 test('CLEARED with releaseState RELEASED but GND neither occupied nor covered is inhibited', () => {
-  const ctx = { isOccupied: () => false, coveringPositionFor: () => null };
+  const ctx = { isStaffed: () => false, consolidatedAt: () => null };
   const result = computeNla(makeStrip('CLEARED'), makeFdr(), Date.now(), ctx);
   assert.deepEqual(result, { inhibited: 'no receiving Position present' });
 });
 
 test('CLEARED with releaseState RELEASED advances to PUSHBACK, transferring to GND, once GND is occupied', () => {
-  const ctx = { isOccupied: (id) => id === 'GND', coveringPositionFor: () => null };
+  const ctx = { isStaffed: (id) => id === 'GND', consolidatedAt: () => null };
   const result = computeNla(makeStrip('CLEARED'), makeFdr(), Date.now(), ctx);
   assert.deepEqual(result, { toState: 'PUSHBACK', transferTo: 'GND' });
 });
@@ -150,7 +150,7 @@ test('HELD is inhibited when the release time has not yet been reached', () => {
 test('HELD releases once the release time has passed, transferring to GND, once GND is occupied', () => {
   const now = Date.UTC(2026, 0, 1, 12, 0, 0);
   const fdr = makeFdr({ assigned: { releaseState: 'RELEASE_TIME', releaseTimeUtc: now - 1000 } });
-  const ctx = { isOccupied: (id) => id === 'GND', coveringPositionFor: () => null };
+  const ctx = { isStaffed: (id) => id === 'GND', consolidatedAt: () => null };
   const result = computeNla(makeStrip('HELD'), fdr, now, ctx);
   assert.deepEqual(result, { toState: 'PUSHBACK', transferTo: 'GND' });
 });
@@ -163,13 +163,13 @@ test('HELD is inhibited once the derived void deadline has expired', () => {
 });
 
 test('HELD with no active hold condition but GND neither occupied nor covered is inhibited', () => {
-  const ctx = { isOccupied: () => false, coveringPositionFor: () => null };
+  const ctx = { isStaffed: () => false, consolidatedAt: () => null };
   const result = computeNla(makeStrip('HELD'), makeFdr(), Date.now(), ctx);
   assert.deepEqual(result, { inhibited: 'no receiving Position present' });
 });
 
 test('HELD with no active hold condition releases to PUSHBACK, transferring to GND — a no-op reassignment if GND already held it', () => {
-  const ctx = { isOccupied: (id) => id === 'GND', coveringPositionFor: () => null };
+  const ctx = { isStaffed: (id) => id === 'GND', consolidatedAt: () => null };
   const result = computeNla(makeStrip('HELD'), makeFdr(), Date.now(), ctx);
   assert.deepEqual(result, { toState: 'PUSHBACK', transferTo: 'GND' });
 });
@@ -178,15 +178,15 @@ test('HELD with no active hold condition releases to PUSHBACK, transferring to G
 
 test('HELD with releaseState HOLD_FOR_RELEASE and no matching standing release is inhibited, pointing at OPERATIONAL_REQUEST', () => {
   const fdr = makeFdr({ assigned: { releaseState: 'HOLD_FOR_RELEASE' } });
-  const ctx = { isOccupied: (id) => id === 'GND', coveringPositionFor: () => null, standingReleases: [] };
+  const ctx = { isStaffed: (id) => id === 'GND', consolidatedAt: () => null, standingReleases: [] };
   const result = computeNla(makeStrip('HELD'), fdr, Date.now(), ctx);
   assert.deepEqual(result, { inhibited: 'outside standing release envelope — file OPERATIONAL_REQUEST' });
 });
 
-test('HELD with releaseState HOLD_FOR_RELEASE and a matching standing release proceeds normally (skips straight to the GND-occupancy check)', () => {
+test('HELD with releaseState HOLD_FOR_RELEASE and a matching standing release proceeds normally (skips straight to the GC-staffing check)', () => {
   const fdr = makeFdr({ assigned: { releaseState: 'HOLD_FOR_RELEASE' }, filed: { route: 'DCT', requestedAltitude: '250', departureAirport: 'LTAG', destinationAirport: 'LTAC' } });
   const ctx = {
-    isOccupied: (id) => id === 'GND', coveringPositionFor: () => null,
+    isStaffed: (id) => id === 'GND', consolidatedAt: () => null,
     standingReleases: [{ envelopeId: 'e1', stereoRoute: 'DCT', active: true }],
   };
   const result = computeNla(makeStrip('HELD'), fdr, Date.now(), ctx);
@@ -195,14 +195,14 @@ test('HELD with releaseState HOLD_FOR_RELEASE and a matching standing release pr
 
 test('every pre-WP4A caller (ctx.standingReleases omitted) defaults to an empty envelope list — HOLD_FOR_RELEASE is inhibited by default, never a throw', () => {
   const fdr = makeFdr({ assigned: { releaseState: 'HOLD_FOR_RELEASE' } });
-  const result = computeNla(makeStrip('HELD'), fdr, Date.now(), { isOccupied: () => true, coveringPositionFor: () => null });
+  const result = computeNla(makeStrip('HELD'), fdr, Date.now(), { isStaffed: () => true, consolidatedAt: () => null });
   assert.deepEqual(result, { inhibited: 'outside standing release envelope — file OPERATIONAL_REQUEST' });
 });
 
 test('RELEASE_TIME and CLEARANCE_VOID_TIME are unaffected by the standing-release check — only HOLD_FOR_RELEASE triggers it', () => {
   const now = Date.UTC(2026, 0, 1, 12, 0, 0);
   const fdr = makeFdr({ assigned: { releaseState: 'RELEASE_TIME', releaseTimeUtc: now - 1000 } });
-  const ctx = { isOccupied: (id) => id === 'GND', coveringPositionFor: () => null, standingReleases: [] };
+  const ctx = { isStaffed: (id) => id === 'GND', consolidatedAt: () => null, standingReleases: [] };
   const result = computeNla(makeStrip('HELD'), fdr, now, ctx);
   assert.deepEqual(result, { toState: 'PUSHBACK', transferTo: 'GND' }); // not the standing-release inhibit
 });
@@ -227,12 +227,12 @@ test('PUSHBACK -> TAXI, state-only (still GND\'s own — no boundary crossed)', 
 });
 
 test('TAXI is inhibited when TWR is neither occupied nor covered', () => {
-  const ctx = { isOccupied: () => false, coveringPositionFor: () => null };
+  const ctx = { isStaffed: () => false, consolidatedAt: () => null };
   assert.deepEqual(computeNla(makeStrip('TAXI'), makeFdr(), Date.now(), ctx), { inhibited: 'no receiving Position present' });
 });
 
 test('TAXI transitions to RUNWAY_QUEUE, transferring to TWR, once TWR is occupied', () => {
-  const ctx = { isOccupied: (id) => id === 'TWR', coveringPositionFor: () => null };
+  const ctx = { isStaffed: (id) => id === 'TWR', consolidatedAt: () => null };
   assert.deepEqual(computeNla(makeStrip('TAXI'), makeFdr(), Date.now(), ctx), { toState: 'RUNWAY_QUEUE', transferTo: 'TWR' });
 });
 
@@ -242,20 +242,20 @@ test('RUNWAY_QUEUE -> LUAW -> DEPARTED, state-only, unconditionally in Phase 2 (
 });
 
 // Phase 2 (docs/adr/0007, superseding ADR 0005's always-succeed stub) —
-// DEPARTED's NLA is now a real, occupancy-gated "Hand Off" to APP.
+// DEPARTED's NLA is now a real, staffing-gated "Hand Off" to APP.
 
 test('DEPARTED is inhibited when APP is neither occupied nor covered — no receiving Position present', () => {
-  const ctx = { isOccupied: () => false, coveringPositionFor: () => null };
+  const ctx = { isStaffed: () => false, consolidatedAt: () => null };
   assert.deepEqual(computeNla(makeStrip('DEPARTED'), makeFdr(), Date.now(), ctx), { inhibited: 'no receiving Position present' });
 });
 
 test('DEPARTED transitions to HANDED_OFF, transferring to APP, once APP is occupied', () => {
-  const ctx = { isOccupied: (id) => id === 'APP', coveringPositionFor: () => null };
+  const ctx = { isStaffed: (id) => id === 'APP', consolidatedAt: () => null };
   assert.deepEqual(computeNla(makeStrip('DEPARTED'), makeFdr(), Date.now(), ctx), { toState: 'HANDED_OFF', transferTo: 'APP' });
 });
 
-test('DEPARTED transitions when APP is unoccupied but covered by another Position', () => {
-  const ctx = { isOccupied: () => false, coveringPositionFor: (id) => (id === 'APP' ? 'TWR' : null) };
+test('DEPARTED transitions when APP is unstaffed but covered by another Position', () => {
+  const ctx = { isStaffed: () => false, consolidatedAt: (id) => (id === 'APP' ? 'TWR' : null) };
   assert.deepEqual(computeNla(makeStrip('DEPARTED'), makeFdr(), Date.now(), ctx), { toState: 'HANDED_OFF', transferTo: 'APP' });
 });
 
@@ -289,17 +289,17 @@ test('every declared ARRIVAL State has exactly one NLA or a rendered inhibit rea
 });
 
 test('INBOUND is inhibited when TWR is neither occupied nor covered', () => {
-  const ctx = { isOccupied: () => false, coveringPositionFor: () => null };
+  const ctx = { isStaffed: () => false, consolidatedAt: () => null };
   assert.deepEqual(computeNla(makeArrivalStrip('INBOUND'), makeFdr(), Date.now(), ctx), { inhibited: 'no receiving Position present' });
 });
 
 test('INBOUND transitions to HANDED_TO_TOWER, transferring to TWR, once TWR is occupied', () => {
-  const ctx = { isOccupied: (id) => id === 'TWR', coveringPositionFor: () => null };
+  const ctx = { isStaffed: (id) => id === 'TWR', consolidatedAt: () => null };
   assert.deepEqual(computeNla(makeArrivalStrip('INBOUND'), makeFdr(), Date.now(), ctx), { toState: 'HANDED_TO_TOWER', transferTo: 'TWR' });
 });
 
-test('INBOUND transitions when TWR is unoccupied but covered', () => {
-  const ctx = { isOccupied: () => false, coveringPositionFor: (id) => (id === 'TWR' ? 'APP' : null) };
+test('INBOUND transitions when TWR is unstaffed but covered', () => {
+  const ctx = { isStaffed: () => false, consolidatedAt: (id) => (id === 'TWR' ? 'APP' : null) };
   assert.deepEqual(computeNla(makeArrivalStrip('INBOUND'), makeFdr(), Date.now(), ctx), { toState: 'HANDED_TO_TOWER', transferTo: 'TWR' });
 });
 
@@ -307,15 +307,15 @@ test('INBOUND transitions when TWR is unoccupied but covered', () => {
 // cross-Facility HANDOFF, not an intrafacility TWR transfer ────────────
 
 test('INBOUND is inhibited with a HANDOFF-pointing reason when ctx.facilityId is CENTER, even if TWR would otherwise be occupied — there is no TWR at CENTER to transfer to at all', () => {
-  const ctx = { isOccupied: () => true, coveringPositionFor: () => null, facilityId: 'CENTER' };
+  const ctx = { isStaffed: () => true, consolidatedAt: () => null, facilityId: 'CENTER' };
   assert.deepEqual(
     computeNla(makeArrivalStrip('INBOUND'), makeFdr(), Date.now(), ctx),
     { inhibited: 'cross-Facility HANDOFF required — use Coordinate' },
   );
 });
 
-test('every pre-WP4A caller (ctx.facilityId omitted entirely) is completely unaffected — INBOUND still resolves via the ordinary TWR-occupancy path', () => {
-  const ctx = { isOccupied: (id) => id === 'TWR', coveringPositionFor: () => null };
+test('every pre-WP4A caller (ctx.facilityId omitted entirely) is completely unaffected — INBOUND still resolves via the ordinary LC-staffing path', () => {
+  const ctx = { isStaffed: (id) => id === 'TWR', consolidatedAt: () => null };
   assert.equal('facilityId' in ctx, false);
   assert.deepEqual(computeNla(makeArrivalStrip('INBOUND'), makeFdr(), Date.now(), ctx), { toState: 'HANDED_TO_TOWER', transferTo: 'TWR' });
 });
@@ -326,12 +326,12 @@ test('HANDED_TO_TOWER -> FINAL -> LANDED, unconditionally (no WP6/WP7A machinery
 });
 
 test('LANDED is inhibited when GND is neither occupied nor covered', () => {
-  const ctx = { isOccupied: () => false, coveringPositionFor: () => null };
+  const ctx = { isStaffed: () => false, consolidatedAt: () => null };
   assert.deepEqual(computeNla(makeArrivalStrip('LANDED'), makeFdr(), Date.now(), ctx), { inhibited: 'no receiving Position present' });
 });
 
 test('LANDED transitions to TAXI_IN, transferring to GND, once GND is occupied', () => {
-  const ctx = { isOccupied: (id) => id === 'GND', coveringPositionFor: () => null };
+  const ctx = { isStaffed: (id) => id === 'GND', consolidatedAt: () => null };
   assert.deepEqual(computeNla(makeArrivalStrip('LANDED'), makeFdr(), Date.now(), ctx), { toState: 'TAXI_IN', transferTo: 'GND' });
 });
 
@@ -366,7 +366,7 @@ test('every declared OVERFLIGHT State has exactly one NLA or a rendered inhibit 
   }
 });
 
-test('an OVERFLIGHT walks INBOUND -> IN_SECTOR -> HANDED_OFF -> DROPPED, unconditionally — no occupancy gating, no transferTo', () => {
+test('an OVERFLIGHT walks INBOUND -> IN_SECTOR -> HANDED_OFF -> DROPPED, unconditionally — no staffing gating, no transferTo', () => {
   assert.deepEqual(computeNla(makeOverflightStrip('INBOUND'), makeFdr(), NOW), { toState: 'IN_SECTOR' });
   assert.deepEqual(computeNla(makeOverflightStrip('IN_SECTOR'), makeFdr(), NOW), { toState: 'HANDED_OFF' });
   assert.deepEqual(computeNla(makeOverflightStrip('HANDED_OFF'), makeFdr(), NOW), { toState: 'DROPPED' });
@@ -385,7 +385,7 @@ test('OVERFLIGHT\'s DROPPED has no NLA — a terminal state, same as every other
 // ── MISSION lifecycle (WP4A second slice) ────────────────────────────────
 // TASKED -> AIRBORNE -> ON_STATION -> OFF_STATION -> RTB -> DROPPED — the
 // guide's own published lifecycle (§9.8, line 215), not invented. No
-// occupancy gating, no transferTo, same shape as OVERFLIGHT's own table:
+// staffing gating, no transferTo, same shape as OVERFLIGHT's own table:
 // whichever Position originated (or received via TOFI ENTRY) the mission
 // works its entire lifecycle solo.
 
@@ -404,7 +404,7 @@ test('every declared MISSION State has exactly one NLA or a rendered inhibit rea
   }
 });
 
-test('MISSION advances linearly through its whole lifecycle, unconditionally — no occupancy gating', () => {
+test('MISSION advances linearly through its whole lifecycle, unconditionally — no staffing gating', () => {
   assert.deepEqual(computeNla(makeMissionStrip('TASKED'), makeFdr(), NOW), { toState: 'AIRBORNE' });
   assert.deepEqual(computeNla(makeMissionStrip('AIRBORNE'), makeFdr(), NOW), { toState: 'ON_STATION' });
   assert.deepEqual(computeNla(makeMissionStrip('ON_STATION'), makeFdr(), NOW), { toState: 'OFF_STATION' });
@@ -426,7 +426,7 @@ test('HELD + HOLD_FOR_RELEASE clears when the flight was FILED on the envelope\'
     filed: { stereoRouteName: 'PACK 1', route: 'LTAG DCT ALPHA DCT LTAG' },
   });
   const ctx = {
-    isOccupied: (id) => id === 'GND', coveringPositionFor: () => null,
+    isStaffed: (id) => id === 'GND', consolidatedAt: () => null,
     standingReleases: [{ envelopeId: 'e1', stereoRoute: 'PACK 1', active: true }],
   };
   assert.deepEqual(computeNla(makeStrip('HELD'), fdr, Date.now(), ctx), { toState: 'PUSHBACK', transferTo: 'GND' });
@@ -438,7 +438,7 @@ test('an envelope naming the EXPANDED route does not release a flight filed unde
     filed: { stereoRouteName: 'PACK 1', route: 'LTAG DCT ALPHA DCT LTAG' },
   });
   const ctx = {
-    isOccupied: (id) => id === 'GND', coveringPositionFor: () => null,
+    isStaffed: (id) => id === 'GND', consolidatedAt: () => null,
     standingReleases: [{ envelopeId: 'e1', stereoRoute: 'LTAG DCT ALPHA DCT LTAG', active: true }],
   };
   assert.deepEqual(computeNla(makeStrip('HELD'), fdr, Date.now(), ctx),
@@ -454,7 +454,7 @@ test('amending a stereo flight\'s route puts it back outside the envelope — th
     filed: { stereoRouteName: '', route: 'LTAG DCT DELTA' },
   });
   const ctx = {
-    isOccupied: (id) => id === 'GND', coveringPositionFor: () => null,
+    isStaffed: (id) => id === 'GND', consolidatedAt: () => null,
     standingReleases: [{ envelopeId: 'e1', stereoRoute: 'PACK 1', active: true }],
   };
   assert.deepEqual(computeNla(makeStrip('HELD'), amended, Date.now(), ctx),

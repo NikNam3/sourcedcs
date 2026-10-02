@@ -166,7 +166,7 @@ class CoverageEngine {
    * Drops radars that are no longer being swept from the live picture.
    *
    * Without this, illumination outlives the radar that produced it. The swept
-   * set is scoped to OCCUPIED Positions, so when the last controller holding
+   * set is scoped to STAFFED Positions, so when the last controller holding
    * Approach vacates, its radar stops sweeping — but its entries stayed put
    * with their old timestamps. Re-taking the Position minutes later then
    * replayed those contacts, stamped with an `illuminatedAt` from before the

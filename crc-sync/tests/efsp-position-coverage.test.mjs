@@ -13,7 +13,7 @@ import path from 'node:path';
  * not the radar ids docs/adr/0041 would have caught us writing down.
  */
 
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crcsync-stationcov-'));
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crcsync-poscov-'));
 // Point every facility config at files that do not exist, so _loadOne falls
 // back to the defaults — the pattern every other EFSP test file uses.
 process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = path.join(tmpDir, 'incirlik.json');
@@ -25,7 +25,7 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '[]'); // no code defa
 const facilityConfig = (await import('../src/efsp/facility-config.js')).default
   || await import('../src/efsp/facility-config.js');
 const { PositionStore } = await import('../src/efsp/position-store.js');
-const { StationCoverage, selectorMatches, resolveSelectors } = await import('../src/efsp/position-coverage.js');
+const { PositionCoverage, selectorMatches, resolveSelectors } = await import('../src/efsp/position-coverage.js');
 const { USER_COALITION } = await import('../src/surveillance/iff.js');
 
 const ENEMY_COALITION = USER_COALITION === 3 ? 2 : 3;
@@ -41,16 +41,16 @@ const RADARS = [
   { id: 'carrier:30', type: 'carrier', coalition: USER_COALITION },
 ];
 
-/** A StationCoverage over fresh PositionStores, plus the stores to drive them. */
+/** A PositionCoverage over fresh PositionStores, plus the stores to drive them. */
 function build(radars = RADARS) {
   const stores = new Map();
   for (const facilityId of facilityConfig.getFacilityIds()) {
     stores.set(facilityId, new PositionStore(
       facilityConfig.getPositionSet(facilityId),
-      facilityConfig.getCoveringChain(facilityId),
+      facilityConfig.getConsolidation(facilityId),
     ));
   }
-  const coverage = new StationCoverage({
+  const coverage = new PositionCoverage({
     facilityConfig,
     positionStoreFor: (facilityId) => stores.get(facilityId) || null,
     radars: () => radars,
@@ -59,7 +59,7 @@ function build(radars = RADARS) {
 }
 
 function hold(stores, facilityId, controllerId, held) {
-  stores.get(facilityId).setHeldPositions(controllerId, controllerId, held);
+  stores.get(facilityId).setSignedOnPositions(controllerId, controllerId, held);
 }
 
 // ── selector matching ──────────────────────────────────────────────────────
@@ -217,10 +217,10 @@ test('the radar list is read live, so an AWACS taking off appears without rebuil
   const stores = new Map();
   for (const facilityId of facilityConfig.getFacilityIds()) {
     stores.set(facilityId, new PositionStore(
-      facilityConfig.getPositionSet(facilityId), facilityConfig.getCoveringChain(facilityId),
+      facilityConfig.getPositionSet(facilityId), facilityConfig.getConsolidation(facilityId),
     ));
   }
-  const coverage = new StationCoverage({
+  const coverage = new PositionCoverage({
     facilityConfig,
     positionStoreFor: (id) => stores.get(id) || null,
     radars: () => radars,

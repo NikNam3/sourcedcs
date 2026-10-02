@@ -31,7 +31,7 @@ function makeCtx() {
   const facilities = new Map();
 
   for (const facilityId of facilityConfig.getFacilityIds()) {
-    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getCoveringChain(facilityId));
+    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getConsolidation(facilityId));
     const rules = {
       resolveBlockTarget: (blockId, role) => blockMap.resolveBlockTarget(role, blockId),
       bayImpliesState: (bayId) => facilityConfig.bayImpliesState(bayId, facilityId),
@@ -40,8 +40,8 @@ function makeCtx() {
       computeNla: (strip, fdr, now, ctx) => nla.computeNla(strip, fdr, now, ctx),
       isValidState: (state, role) => nla.isValidState(state, role),
       isValidRole: (role) => blockMap.isValidRole(role),
-      isOccupied: (id) => positionStore.isOccupied(id),
-      coveringPositionFor: (id) => positionStore.coveringPositionFor(id),
+      isStaffed: (id) => positionStore.isStaffed(id),
+      consolidatedAt: (id) => positionStore.consolidatedAt(id),
       canMutate: (actingPositionId, opKind) => permission.canMutate(actingPositionId, opKind),
       canCreateStripRole: (actingPositionId, role) => permission.canCreateStripRole(actingPositionId, role),
       canActOnState: (actingPositionId, role, state) => permission.canActOnState(actingPositionId, role, state),
@@ -207,8 +207,8 @@ test('efsp-set-positions is facility-scoped — holding CTR at CENTER does not t
   const ctx = makeCtx();
   const result = handleMessage(ctx, CTR_SESSION, { type: 'efsp-set-positions', facilityId: 'CENTER', held: ['CTR'] }, noopPersist);
   assert.deepEqual(result.ack.held, ['CTR']);
-  assert.equal(ctx.positionStoreFor('CENTER').isOccupied('CTR'), true);
-  assert.equal(ctx.positionStoreFor('INCIRLIK').isOccupied('APP'), false);
+  assert.equal(ctx.positionStoreFor('CENTER').isStaffed('CTR'), true);
+  assert.equal(ctx.positionStoreFor('INCIRLIK').isStaffed('APP'), false);
 });
 
 test('every Strip record in an efsp-mutation ack AND its broadcast delta carries facilityId, not just the snapshot — a client that only ever sees deltas after its first connect must still be able to filter by Facility', () => {

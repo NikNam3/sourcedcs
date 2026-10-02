@@ -261,7 +261,7 @@ test('SCENARIO A4 with TAC_C2 gone too, the chain bottoms out inside TACTICAL an
   assert.deepEqual(hold(efsp, c.TAC_C2.session, 'TACTICAL', []).ack.warnings, [], 'TAC_C2 owns nothing');
   // Guide §4.8.6 writes the chain as AIC/GCI → TAC_C2 → CTR. The TAC_C2 → CTR
   // hop is deliberately not built: it would cross a Facility, and
-  // coveringPositionFor() is scoped to one Facility's PositionStore
+  // consolidatedAt() is scoped to one Facility's PositionStore
   // (facility-config.js's TACTICAL coveringChain comment; ADR 0013 point 4
   // rejected the identical APP → CTR extension). Warn, do not block.
   assert.deepEqual(hold(efsp, c.AIC.session, 'TACTICAL', []).ack.warnings,

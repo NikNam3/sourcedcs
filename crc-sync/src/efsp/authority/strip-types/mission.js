@@ -3,7 +3,7 @@
 // The MISSION Role family (authority registry, S3-2). States and NLA moved
 // from nla.js, state owners from permission.js.
 
-// Guide-specified lifecycle (§9.8, line 215) — not invented. No occupancy/
+// Guide-specified lifecycle (§9.8, line 215) — not invented. No staffing/
 // transferTo gating, same reasoning as OVERFLIGHT's own table: TAC_C2/GCI
 // (whichever originated the mission, or received it via a TOFI ENTRY
 // exchange) work its entire lifecycle solo — the cross-Position richness
@@ -31,7 +31,7 @@ const MISSION_STATE_OWNERS = {
 /**
  * MISSION's entire NLA table (WP4A second slice) — a simple linear
  * progression through the guide's own 6-state lifecycle (§9.8), no
- * occupancy gating, no transferTo — same shape as computeOverflightNla,
+ * staffing gating, no transferTo — same shape as computeOverflightNla,
  * for the same reason (the cross-Position richness a real mission-line
  * panel would need is WP7 scope, deferred by this slice's scope-cut ADR).
  */

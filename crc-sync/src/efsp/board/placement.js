@@ -101,10 +101,10 @@ class Placement {
     return this.resolveOrderKey(bayId, rackId, last, null, excludeStripId);
   }
 
-  /** {isOccupied, coveringPositionFor, facilityId} bound from this._rules — computeNla()'s occupancy context (guide §4.5, e.g. DEPARTED's real Hand-Off-to-APP inhibit). `facilityId` (WP4A, docs/adr/0014) lets nla.js distinguish a CENTER-held ARRIVAL Strip's INBOUND state (whose next step is the Coordinate/HANDOFF button, not an intrafacility NLA transfer) from an INCIRLIK one. Built once per call site rather than inline so both computeNla() call sites below stay in lockstep. */
+  /** {isStaffed, consolidatedAt, facilityId} bound from this._rules — computeNla()'s staffing context (guide §4.5, e.g. DEPARTED's real Hand-Off-to-APP inhibit). `facilityId` (WP4A, docs/adr/0014) lets nla.js distinguish a CENTER-held ARRIVAL Strip's INBOUND state (whose next step is the Coordinate/HANDOFF button, not an intrafacility NLA transfer) from an INCIRLIK one. Built once per call site rather than inline so both computeNla() call sites below stay in lockstep. */
   nlaCtx(target = null) {
     return {
-      isOccupied: this._rules.isOccupied, coveringPositionFor: this._rules.coveringPositionFor,
+      isStaffed: this._rules.isStaffed, consolidatedAt: this._rules.consolidatedAt,
       facilityId: this._rules.facilityId, standingReleases: this._rules.standingReleases,
       // §9.7 rule 1 (docs/adr/0061) — the runway status view, on every
       // computeNla call site at once: the button, the advisory stamp, and the

@@ -61,15 +61,15 @@ class FieldStateStore {
    *   getFacilityIds() and getFacilityConfig(id))
    * @param {object} [deps]
    * @param {{now:()=>number}} [deps.clock] the mission clock (docs/adr/0079)
-   * @param {(facilityId:string, positionId:string)=>boolean} [deps.isOccupied]
+   * @param {(facilityId:string, positionId:string)=>boolean} [deps.isStaffed]
    *   is somebody Primary at that Position — to resolve who acknowledges a
-   *   runway change (an unmanned acknowledger reverts or is skipped)
+   *   runway change (an unstaffed acknowledger reverts or is skipped)
    * @param {(facilityId:string, positionId:string)=>string|null} [deps.primaryOf]
    *   the controllerId Primary at that Position — for SelfCoordinateRunwayChange
    */
-  constructor(facilityConfig, { clock = WALL_CLOCK, isOccupied, primaryOf } = {}) {
+  constructor(facilityConfig, { clock = WALL_CLOCK, isStaffed, primaryOf } = {}) {
     this._clock = clock;
-    this._isOccupied = isOccupied || (() => false);
+    this._isStaffed = isStaffed || (() => false);
     this._primaryOf = primaryOf || (() => null);
     this._inventories = new Map(); // facilityId -> fieldState inventory (config, read once)
     this._positions = new Map();   // facilityId -> its Position set, for resolving acknowledgers
@@ -460,7 +460,7 @@ class FieldStateStore {
     const acknowledgers = [...(ctx.inventory.runwayChangeAcknowledgers || [])];
     const acks = {};
     for (const positionId of acknowledgers) {
-      acks[positionId] = this._isOccupied(record.facilityId, positionId)
+      acks[positionId] = this._isStaffed(record.facilityId, positionId)
         ? null
         : { skipped: true, reason: 'UNMANNED', at: now };
     }
@@ -513,7 +513,7 @@ class FieldStateStore {
     }
     const existing = change.acks[actingPositionId];
     if (existing) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: existing.skipped ? `${actingPositionId} was unmanned when the change was proposed and was skipped` : `${actingPositionId} has already acknowledged` };
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: existing.skipped ? `${actingPositionId} was unstaffed when the change was proposed and was skipped` : `${actingPositionId} has already acknowledged` };
     }
     // A boundary event between two Positions one controller holds is a
     // self-coordination (§4.8.3): allowed, and recorded as such.

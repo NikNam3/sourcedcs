@@ -77,7 +77,7 @@ test('the connect snapshot a JTAC-only session receives carries only its handed 
   const [snap] = ws.of('efsp-snapshot');
   assert.deepEqual(snap.strips.map(s => s.stripId), [w.handed.stripId]);
   assert.deepEqual(snap.fdrs.map(f => f.fdrId), [w.handed.fdrId]);
-  assert.ok(snap.positions.length >= 4 && snap.bays.length > 0, 'occupancy and Bays are not flights (Q7)');
+  assert.ok(snap.positions.length >= 4 && snap.bays.length > 0, 'staffing and Bays are not flights (Q7)');
   const [alerts] = ws.of('efsp-alerts');
   assert.ok(alerts, 'the alerts are sent, scoped');
 });
@@ -127,7 +127,7 @@ test('the NLA-monitor sweep and the set-positions re-stamp are filtered too', ()
   const restamp = jt.ws.of('efsp-board-delta').pop();
   assert.ok(restamp);
   assert.deepEqual(restamp.strips.updated.map(s => s.stripId), [w.handed.stripId]);
-  assert.ok(restamp.positions.updated.length > 0, 'occupancy is not filtered');
+  assert.ok(restamp.positions.updated.length > 0, 'staffing is not filtered');
 });
 
 test('correlation and MARSA deltas carry only the JTAC\'s flights, and are skipped when none is left', () => {

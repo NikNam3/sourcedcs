@@ -298,7 +298,7 @@ test('two radars illuminating one track both appear against it', () => {
 
 test('illumination does not outlive the radar that produced it', () => {
   // Found by walking the sortie rather than by a test: the swept set is scoped
-  // to OCCUPIED Positions, so when the last holder of Approach vacates its
+  // to STAFFED Positions, so when the last holder of Approach vacates its
   // radar stops sweeping — and its entries used to stay put with their old
   // timestamps. Re-taking the Position minutes later replayed those contacts
   // stamped from before the gap, so the client drew them already faded and

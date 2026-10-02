@@ -163,7 +163,7 @@ function _fsAckChip(positionId, ack) {
   if (ack === null || ack === undefined) return _fsEl('span', 'field-state-ack field-state-ack-waiting', `${positionId} …`);
   if (ack.skipped) {
     const chip = _fsEl('span', 'field-state-ack field-state-ack-skipped', `${positionId} skipped`);
-    chip.title = `${positionId} was unmanned when the change was proposed, so it was skipped (and audited)`;
+    chip.title = `${positionId} was unstaffed when the change was proposed, so it was skipped (and audited)`;
     return chip;
   }
   return _fsEl('span', 'field-state-ack field-state-ack-done', `${positionId} ✓${ack.selfCoordinated ? ' self' : ''} ${_fsZulu(ack.at)}`);
@@ -209,7 +209,7 @@ function _buildPads(record) {
   return pads;
 }
 
-function _buildFieldStateSection(record, heldPositionIds) {
+function _buildFieldStateSection(record, signedOnPositionIds) {
   const section = _fsEl('div', 'field-state-facility');
   section.dataset.facilityId = record.facilityId;
 
@@ -224,7 +224,7 @@ function _buildFieldStateSection(record, heldPositionIds) {
   else if (src && src.kind === 'RUNWAY_CHANGE') section.appendChild(_fsEl('div', 'field-state-line field-state-active-source', `Active end by runway change ${_fsZulu(src.at)}`));
   else if (!record.activeRunway) section.appendChild(_fsEl('div', 'field-state-line field-state-active-source', 'No active end yet: set from the mission wind at load, or by a runway change.'));
 
-  const actions = fieldStateActionsFor(record, heldPositionIds);
+  const actions = fieldStateActionsFor(record, signedOnPositionIds);
   for (const runway of record.runways || []) {
     section.appendChild(_buildRunwayCard(record, runway, actions.filter(a => a.runwayId === runway.runwayId)));
   }

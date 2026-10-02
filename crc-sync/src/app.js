@@ -26,7 +26,7 @@ const efspFacilityConfig = require('./efsp/facility-config');
 const { buildRadars, loadSensorSpecs } = require('./radars');
 const { TerrainStore } = require('./terrain');
 const { CoverageEngine } = require('./coverage');
-const { StationCoverage, assignableRadars, reportUnresolvedSelectors } = require('./efsp/position-coverage');
+const { PositionCoverage, assignableRadars, reportUnresolvedSelectors } = require('./efsp/position-coverage');
 const { ForwardingObligationMonitor } = require('./efsp/forwarding-obligations');
 const { CorrelationReconciler, CORRELATION_TICK_MS } = require('./efsp/correlation-reconciler');
 const { SurveillanceHintMonitor } = require('./efsp/surveillance-hints');
@@ -212,7 +212,7 @@ function createApp(deps = {}) {
   // all live here now rather than in each renderer. The chain is:
   //
   //   sensor-specs.json + missionData + tracks  ->  buildRadars()
-  //   StationCoverage    which Positions grant which of those radars
+  //   PositionCoverage    which Positions grant which of those radars
   //   CoverageEngine     what each of those radars is illuminating, one phase
   //                      for everybody, terrain included
   //   WsHub              each session gets only what its Positions can see
@@ -232,7 +232,7 @@ function createApp(deps = {}) {
     });
   }
 
-  const stationCoverage = new StationCoverage({
+  const positionCoverage = new PositionCoverage({
     facilityConfig: efspFacilityConfig,
     positionStoreFor: efsp.positionStoreFor,
     radars: currentRadars,
@@ -240,7 +240,7 @@ function createApp(deps = {}) {
 
   const picture = {
     coverageFor: (controllerId) => {
-      const result = stationCoverage.forController(controllerId);
+      const result = positionCoverage.forController(controllerId);
       // Stamp each radar with the server's own sweep phase. The client draws the
       // debug beam overlay from it, and that overlay used to be decorative —
       // each renderer guessed its own phase, so the beam it drew was nowhere
@@ -648,7 +648,7 @@ function createApp(deps = {}) {
         lastRadarIds = ids;
         wsHub.refreshAllCoverage();
       }
-      coverageEngine.tick(stationCoverage.activeRadars(), trackStore.getAll(), wsHub.getMissionData());
+      coverageEngine.tick(positionCoverage.activeRadars(), trackStore.getAll(), wsHub.getMissionData());
     } },
     // With DCS gone there are no samples to broadcast on, and the clock has fallen
     // back to the wall clock — clients still need to hear that, and when.
@@ -755,7 +755,7 @@ function createApp(deps = {}) {
       // Scoped to radars some Position is actually ASSIGNED, not every airfield in
       // the theater: a 225-airfield map produces 450 airfield radars and would
       // pre-fetch about nine hundred tiles for scopes nobody will ever look
-      // through. Not scoped to OCCUPIED Positions, though — a controller taking
+      // through. Not scoped to STAFFED Positions, though — a controller taking
       // Approach mid-session must not then wait for a DEM. Airborne radars are
       // excluded because they move, so there is no fixed circle to fetch, and
       // they warm as they fly.

@@ -40,13 +40,13 @@ function computeArrivalNla(strip, fdr, now, ctx) {
       // via the Coordinate button/dispatch path, not this ordinary
       // intrafacility-transfer NLA. There is no TWR Position at CENTER to
       // transfer to at all, so this branches BEFORE attempting the
-      // INCIRLIK-only TWR-occupancy check below. Every caller that never
+      // INCIRLIK-only LC-staffing check below. Every caller that never
       // sets ctx.facilityId (every pre-WP4A call site, and every
       // INCIRLIK-scoped one) is unaffected.
       if (ctx.facilityId === 'CENTER') {
         return { inhibited: 'cross-Facility HANDOFF required — use Coordinate' };
       }
-      if (!ctx.isOccupied('TWR') && !ctx.coveringPositionFor('TWR')) {
+      if (!ctx.isStaffed('TWR') && !ctx.consolidatedAt('TWR')) {
         return { inhibited: 'no receiving Position present' };
       }
       return { toState: 'HANDED_TO_TOWER', transferTo: 'TWR' };
@@ -67,7 +67,7 @@ function computeArrivalNla(strip, fdr, now, ctx) {
       return { toState: 'LANDED' };
 
     case 'LANDED':
-      if (!ctx.isOccupied('GND') && !ctx.coveringPositionFor('GND')) {
+      if (!ctx.isStaffed('GND') && !ctx.consolidatedAt('GND')) {
         return { inhibited: 'no receiving Position present' };
       }
       return { toState: 'TAXI_IN', transferTo: 'GND' };

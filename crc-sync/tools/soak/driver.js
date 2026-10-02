@@ -620,12 +620,12 @@ class Driver {
     // back once its Position is manned again; until then the flight waits.
     const notMine = ack.reason === 'PERMISSION_DENIED' && /is not (\w+)'s to advance/.exec(ack.detail || '');
     if (notMine && s.role === 'DEPARTURE' && RETURN_BAY[s.state]) {
-      this.stats.coveringStranded = (this.stats.coveringStranded || 0) + 1;
+      this.stats.consolidationStranded = (this.stats.consolidationStranded || 0) + 1;
       const home = RETURN_BAY[s.state];
       if (this.clientForPosition(home.position)) {
         const cur = ack.strip || s;
         const back = await this.send(client, { version: 1, type: 'efsp-mutation', facilityId: it.facilityId, actingPositionId: actor, stripId: it.stripId, baseRev: cur.rev, op: { kind: 'TransferStrip', toPositionId: home.position, bayId: home.bayId, rackId: 'main' } }, { label: `f${f.id}|handback` });
-        if (back && back.ok) { this.stats.coveringHandedBack = (this.stats.coveringHandedBack || 0) + 1; this.after(this.thinkMs(), () => this.execIntent(f), 'walk'); return null; }
+        if (back && back.ok) { this.stats.consolidationHandedBack = (this.stats.consolidationHandedBack || 0) + 1; this.after(this.thinkMs(), () => this.execIntent(f), 'walk'); return null; }
       }
       f.attempts++;
       if (f.attempts > 40) return this.resume(f, { ok: false, reason: ack.reason, ack });
@@ -890,7 +890,7 @@ class Driver {
     c.declared = true;
   }
 
-  /** H41-style Observer auto-promotion (position-store.js:_release abrupt) can leave a returning controller as an Observer. Put the crew back the way it was declared. */
+  /** H41-style Observer auto-promotion (position-store.js:_signOff abrupt) can leave a returning controller as an Observer. Put the crew back the way it was declared. */
   async restorePrimaries() {
     for (const c of this.clients.values()) {
       if (c.observer || c.passive || !c.connected) continue;

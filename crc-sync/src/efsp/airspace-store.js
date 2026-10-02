@@ -184,7 +184,7 @@ class AirspaceStore {
         case 'RequestActivation': result = this._requestActivation(record, definition, op, actingPositionId, by); break;
         case 'ApproveActivation': result = this._approveActivation(record, definition, op, actingPositionId, by); break;
         case 'DenyActivation':    result = this._denyActivation(record, definition, op, actingPositionId, by); break;
-        case 'ReleaseAirspace':   result = this._release(record, definition, op, actingPositionId, by); break;
+        case 'ReleaseAirspace':   result = this._signOff(record, definition, op, actingPositionId, by); break;
         case 'ReturnAirspace':    result = this._return(record, definition, op, actingPositionId, by); break;
         default:
           result = { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown airspace op: ${op.kind}` };
@@ -322,7 +322,7 @@ class AirspaceStore {
     return { ok: true };
   }
 
-  _release(record, definition, op, actingPositionId, by) {
+  _signOff(record, definition, op, actingPositionId, by) {
     if (!this._isUsing(definition, actingPositionId)) {
       return this._denied(record, `${actingPositionId} is not the using agency for ${definition.name}`);
     }

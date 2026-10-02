@@ -119,7 +119,7 @@ function isVoidExpired(fdr, now) {
  * @param {object} strip
  * @param {object|null} fdr
  * @param {number} now
- * @param {{isOccupied:(positionId:string)=>boolean, coveringPositionFor:(positionId:string)=>string|null}} ctx
+ * @param {{isStaffed:(positionId:string)=>boolean, consolidatedAt:(positionId:string)=>string|null}} ctx
  * @returns {{toState:string, transferTo?:string}|{inhibited:string}|null}
  */
 function computeDepartureNla(strip, fdr, now, ctx) {
@@ -134,7 +134,7 @@ function computeDepartureNla(strip, fdr, now, ctx) {
       // alone has no drop target to hand a Strip to CD at all (CD's Bay
       // tabs only render for Positions the acting controller holds).
       if (!fdr || !fdr.identity.beaconAssigned) return { inhibited: 'no beacon code assigned' };
-      if (!ctx.isOccupied('CD') && !ctx.coveringPositionFor('CD')) {
+      if (!ctx.isStaffed('CD') && !ctx.consolidatedAt('CD')) {
         return { inhibited: 'no receiving Position present' };
       }
       return { toState: 'PENDING_CLEARANCE', transferTo: 'CD' };
@@ -149,7 +149,7 @@ function computeDepartureNla(strip, fdr, now, ctx) {
       if (fdr && fdr.assigned.releaseState !== 'RELEASED') return { inhibited: 'a hold is in force' };
       // Alert-pad conflict (§9.6) is a flag from alert-scramble.js, never an
       // inhibit here — the guide's [GAP] (docs/adr/0070).
-      if (!ctx.isOccupied('GND') && !ctx.coveringPositionFor('GND')) {
+      if (!ctx.isStaffed('GND') && !ctx.consolidatedAt('GND')) {
         return { inhibited: 'no receiving Position present' };
       }
       return { toState: 'PUSHBACK', transferTo: 'GND' };
@@ -188,7 +188,7 @@ function computeDepartureNla(strip, fdr, now, ctx) {
       // either may be the one holding it, but PUSHBACK is GND's alone —
       // always transfer to GND here, a no-op reassignment when GND already
       // held it.
-      if (!ctx.isOccupied('GND') && !ctx.coveringPositionFor('GND')) {
+      if (!ctx.isStaffed('GND') && !ctx.consolidatedAt('GND')) {
         return { inhibited: 'no receiving Position present' };
       }
       return { toState: 'PUSHBACK', transferTo: 'GND' };
@@ -199,11 +199,11 @@ function computeDepartureNla(strip, fdr, now, ctx) {
 
     case 'TAXI': {
       // §9.7 rule 1: a departure does not enter the queue for a runway that
-      // is suspended or closed — checked before the occupancy gate, because
+      // is suspended or closed — checked before the staffing gate, because
       // the runway is the reason it cannot go, whoever is in the tower.
       const runway = _runwayInhibit(strip, fdr, ctx);
       if (runway) return { inhibited: runway };
-      if (!ctx.isOccupied('TWR') && !ctx.coveringPositionFor('TWR')) {
+      if (!ctx.isStaffed('TWR') && !ctx.consolidatedAt('TWR')) {
         return { inhibited: 'no receiving Position present' };
       }
       return { toState: 'RUNWAY_QUEUE', transferTo: 'TWR' };
@@ -228,9 +228,9 @@ function computeDepartureNla(strip, fdr, now, ctx) {
     }
 
     case 'DEPARTED':
-      // Real, occupancy-gated "Hand Off" to APP (docs/adr/0007) — an
+      // Real, staffing-gated "Hand Off" to APP (docs/adr/0007) — an
       // intrafacility TransferStrip, not WP4A's cross-Facility HANDOFF.
-      if (!ctx.isOccupied('APP') && !ctx.coveringPositionFor('APP')) {
+      if (!ctx.isStaffed('APP') && !ctx.consolidatedAt('APP')) {
         return { inhibited: 'no receiving Position present' };
       }
       return { toState: 'HANDED_OFF', transferTo: 'APP' };

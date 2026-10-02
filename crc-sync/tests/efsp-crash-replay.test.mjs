@@ -181,7 +181,7 @@ test('the replay window forgets entries older than 10 minutes', () => {
   } finally { Date.now = realNow; }
 });
 
-test('a covering-chain reassignment persists the Board', () => {
+test('a consolidation reassignment persists the Board', () => {
   const efsp = createEfsp();
   const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK' });
   const strip = efsp.handleMessage(c.OPS.session, createMsg('VACATE1')).ack.strip;

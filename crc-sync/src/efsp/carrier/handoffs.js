@@ -129,17 +129,17 @@ function validateCarrierTransfer(kind, { caseValue, fromPositionId, toPositionId
 /**
  * §9.12: "Feed them alternately from the Marshal stack in push order."
  * Even push ordinal → CV_APP1, odd → CV_APP2 ([SOURCE-DEFINED] parity, guide
- * OQ8). If the preferred lane is unmanned, the other; if neither is, null —
+ * OQ8). If the preferred lane is unstaffed, the other; if neither is, null —
  * the NLA inhibits with nla.js's existing "no receiving Position present".
  * @param {number} pushOrdinal  0-based place in push order
- * @param {{isOccupied:(positionId:string)=>boolean}} ctx
+ * @param {{isStaffed:(positionId:string)=>boolean}} ctx
  */
-function laneFor(pushOrdinal, { isOccupied = () => true } = {}) {
+function laneFor(pushOrdinal, { isStaffed = () => true } = {}) {
   if (!Number.isInteger(pushOrdinal) || pushOrdinal < 0) return null;
   const preferred = APP_LANES[pushOrdinal % 2];
   const other = APP_LANES[(pushOrdinal + 1) % 2];
   const occ = (p) => {
-    try { return isOccupied(p) === true; } catch { return false; }
+    try { return isStaffed(p) === true; } catch { return false; }
   };
   if (occ(preferred)) return preferred;
   if (occ(other)) return other;
@@ -154,12 +154,12 @@ function laneFor(pushOrdinal, { isOccupied = () => true } = {}) {
  * @param {Array<{fdrId, stackIndex, status}>} derivedStack  marshal-stack.deriveStack() output
  * @returns {Array<{fdrId:string, pushOrdinal:number, lane:string|null}>}
  */
-function assignLanes(derivedStack, { isOccupied = () => true } = {}) {
+function assignLanes(derivedStack, { isStaffed = () => true } = {}) {
   const list = Array.isArray(derivedStack) ? derivedStack.filter((d) => d && Number.isInteger(d.stackIndex)) : [];
   const ordered = list.slice().sort((a, b) => a.stackIndex - b.stackIndex);
   const out = [];
   ordered.forEach((d, i) => {
-    if (d.status === 'HOLDING') out.push({ fdrId: d.fdrId, pushOrdinal: i, lane: laneFor(i, { isOccupied }) });
+    if (d.status === 'HOLDING') out.push({ fdrId: d.fdrId, pushOrdinal: i, lane: laneFor(i, { isStaffed }) });
   });
   return out;
 }

@@ -5,18 +5,18 @@
 // ordering, ownership, ring-buffer resync) are modelled closely on
 // TrackStore's snapshot+delta-log shape (src/tracks.js).
 //
-// FDRs and Position occupancy are NOT part of this ring buffer: Phase 1 has
+// FDRs and Position staffing are NOT part of this ring buffer: Phase 1 has
 // at most a few dozen Strips/FDRs and four Positions, so efsp-ws.js just
 // includes fdrStore.getAll()/positionStore.getAll() in full on every
 // snapshot AND delta message, rather than building a second/third
 // ring-buffer for state this small. Revisit only if that stops being cheap.
 //
-// Doctrinal decisions (block routing, Bay-implies-state, NLA, occupancy/
-// covering-chain) are deliberately NOT known to this module — they're
+// Doctrinal decisions (block routing, Bay-implies-state, NLA, staffing/
+// consolidation) are deliberately NOT known to this module — they're
 // injected as `rules` functions from the composition root (index.js),
 // which is what actually knows the Departure Block Map (block-map.js),
 // facility Bay config (facility-config.js), the NLA table (nla.js), and
-// Position occupancy (position-store.js). This file only knows Strip/Rack/
+// Position staffing (position-store.js). This file only knows Strip/Rack/
 // Mutation mechanics.
 //
 // Ordering deviates slightly from the implementation plan's first-pass
@@ -51,8 +51,8 @@ class BoardStore {
    * @param {(bayId:string) => string|null} rules.bayImpliesState
    * @param {(positionId:string, state:string) => {bayId:string,rackIds:string[]}|null} rules.bayForImpliedState
    * @param {(strip:object, fdr:object, now:number, ctx:object) => {toState:string,transferTo?:string}|{inhibited:string}|null} rules.computeNla
-   * @param {(positionId:string) => boolean} rules.isOccupied
-   * @param {(positionId:string) => string|null} rules.coveringPositionFor
+   * @param {(positionId:string) => boolean} rules.isStaffed
+   * @param {(positionId:string) => string|null} rules.consolidatedAt
    * @param {(state:string, role:string) => boolean} rules.isValidState
    * @param {(role:string) => boolean} rules.isValidRole
    * @param {(actingPositionId:string, role:string) => boolean} rules.canCreateStripRole
@@ -275,7 +275,7 @@ class BoardStore {
   /**
    * System-initiated bulk reassignment of every non-DROPPED Strip owned by
    * `fromPositionId` to `toPositionId` — used when a Position becomes
-   * fully unoccupied and its Strips must route down the covering chain
+   * fully unstaffed and its Strips must route down the covering chain
    * (guide §4.8.6 rule 2). Distinct from applyMutation()'s controller-
    * initiated TransferStrip: there is no controller "sending" this (the
    * Position itself vacated), so it bypasses the ownership/baseRev/

@@ -133,7 +133,7 @@ test('the CARRIER Facility: four MILITARY_ATC Positions, Bays that imply carrier
 });
 
 test('the NLA tables: Commence is Case- and lane-dependent; one next action per Strip', () => {
-  const ctx = (caseValue, lane = 'CV_APP1', occupied = true) => ({ carrierCase: () => caseValue, carrierLaneFor: () => lane, isOccupied: () => occupied });
+  const ctx = (caseValue, lane = 'CV_APP1', occupied = true) => ({ carrierCase: () => caseValue, carrierLaneFor: () => lane, isStaffed: () => occupied });
   const strip = (role, state) => ({ role, state, stripId: 's', fdrId: 'f' });
   assert.deepEqual(nla.computeNla(strip('MARSHAL', 'IN_STACK'), null, NOW, ctx('III')),
     { toState: 'COMMENCED', transferTo: 'CV_APP1', carrierTransfer: 'MARSHAL_TO_APPROACH' });

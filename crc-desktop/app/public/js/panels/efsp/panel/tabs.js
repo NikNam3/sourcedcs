@@ -62,7 +62,7 @@ function _positionsWithBays() {
  *
  * Pure so it can be tested without a DOM; the render below is what is not.
  * @param {Array<{bayId:string, positionId:string, facilityId:string}>} bays
- * @param {string[]} heldPositionIds
+ * @param {string[]} signedOnPositionIds
  * @returns {Array<{positionId:string, facilityId:string, held:boolean, bays:Array}>} held Positions first
  */
 // UI-A (S-L23 finding, H59): the JTAC's UI shows only what a JTAC knows, i.e. the lines TAC_C2 has
@@ -71,8 +71,8 @@ function _positionsWithBays() {
 // line back from the Strip's menu, which needs no tab.)
 const HOLDS_ONLY_NO_DROP_TABS = ['JTAC'];
 
-export function computePositionTabs(bays, heldPositionIds) {
-  const held = new Set(heldPositionIds || []);
+export function computePositionTabs(bays, signedOnPositionIds) {
+  const held = new Set(signedOnPositionIds || []);
   const heldFacilities = new Set();
   for (const b of bays || []) {
     if (!held.has(b.positionId)) continue;
@@ -122,8 +122,8 @@ export function getActiveEfspSearchQuery() { return _searchQuery; }
 export function _renderPositionTabs() {
   if (!_positionTabsEl) return; // not initialized yet — initEfspPanel() hasn't run
   const byPosition = _positionsWithBays();
-  const heldPositionIds = Object.keys(byPosition);
-  if (!heldPositionIds.includes(_activePositionTab)) _setActivePositionTab(heldPositionIds[0] || null);
+  const signedOnPositionIds = Object.keys(byPosition);
+  if (!signedOnPositionIds.includes(_activePositionTab)) _setActivePositionTab(signedOnPositionIds[0] || null);
 
   _positionTabsEl.innerHTML = '';
   for (const { positionId, held } of computePositionTabs(getEfspBays(), getActingPositions())) {
@@ -153,7 +153,7 @@ export function _renderPositionTabs() {
     _positionTabsEl.appendChild(tab);
   }
 
-  if (heldPositionIds.length === 0) {
+  if (signedOnPositionIds.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'efsp-empty';
     empty.textContent = 'No Position held — select one in Panels.';

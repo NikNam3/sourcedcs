@@ -68,7 +68,7 @@ test('SCENARIO the last controller leaves and the strips are visibly stranded, n
   const ack = hold(efsp, c.APP.session, 'INCIRLIK', []).ack;
   assert.deepEqual(ack.warnings, [{ positionId: 'APP', count: 1, routedTo: null }]);
   const stranded = efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId);
-  assert.equal(stranded.ownerPositionId, 'APP', 'still owned by an unoccupied Position — surfaced, not hidden');
+  assert.equal(stranded.ownerPositionId, 'APP', 'still owned by an unstaffed Position — surfaced, not hidden');
   assert.equal(stranded.state, 'HANDED_OFF');
 });
 
@@ -101,11 +101,11 @@ test('SCENARIO a client disconnects mid-sortie: its Positions are released, its 
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'DROP1' });
   efsp.onDisconnect(c.APP.session);
 
-  assert.equal(efsp.positionStoreFor('INCIRLIK').isOccupied('APP'), false, 'an abrupt drop releases the Position');
+  assert.equal(efsp.positionStoreFor('INCIRLIK').isStaffed('APP'), false, 'an abrupt drop releases the Position');
   assert.equal(efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId).ownerPositionId, 'APP',
     'but the flight is still there — a disconnect is not a reason to lose a Strip');
 
-  // Coming back is just declaring Positions again: occupancy is deliberately
+  // Coming back is just declaring Positions again: staffing is deliberately
   // ephemeral (ADR 0002), so nothing about it survives, and nothing needs to.
   hold(efsp, c.APP.session, 'INCIRLIK', ['APP']);
   assert.equal(act(efsp, c.APP, 'APP', efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId), { kind: 'InvokeNla' }).ok, true);
@@ -161,9 +161,9 @@ test('SCENARIO crc-sync restarts with a flight airborne in a hot MOA, and everyt
   assert.equal(airspace.state, 'ACTIVE', 'the block is still hot');
   assert.deepEqual(airspace.transitions.map(t => t.state), ['SCHEDULED', 'ACTIVE'], 'with its history intact');
 
-  // Position occupancy deliberately does NOT survive — it is presence, not
+  // Position staffing deliberately does NOT survive — it is presence, not
   // Board state (§4.8.2 rule 5), so a reconnecting client re-declares it.
-  assert.equal(after.positionStoreFor('CENTER').isOccupied('CTR'), false);
+  assert.equal(after.positionStoreFor('CENTER').isStaffed('CTR'), false);
   const back = { controllerId: 'c-CTR', who: 'CTR' };
   hold(after, back, 'CENTER', ['CTR']);
   assert.equal(act(after, { session: back, facilityId: 'CENTER' }, 'CTR', strip, { kind: 'ClearAirspaceEntry' }).ok, true);

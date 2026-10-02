@@ -27,7 +27,7 @@
 
 const { USER_COALITION } = require('../surveillance/iff');
 const { radarIsHull } = require('./carrier/hull-config');
-const log = require('../log').logger('efsp:station-coverage');
+const log = require('../log').logger('efsp:position-coverage');
 
 // The Position classes that separate traffic and so get short-term conflict
 // alerts (docs/adr/0059). The tactical side does not: military positions and
@@ -86,7 +86,7 @@ function resolveSelectors(selectors, radars, opts) {
   return out;
 }
 
-class StationCoverage {
+class PositionCoverage {
   /**
    * @param {object} deps
    * @param {object} deps.facilityConfig
@@ -110,7 +110,7 @@ class StationCoverage {
     for (const facilityId of this._facilityConfig.getFacilityIds()) {
       const store = this._positionStoreFor(facilityId);
       if (!store) continue;
-      for (const positionId of store.heldBy(controllerId)) {
+      for (const positionId of store.signedOnBy(controllerId)) {
         held.push({ facilityId, positionId, isPrimary: store.primaryOf(positionId) === controllerId });
       }
     }
@@ -184,7 +184,7 @@ class StationCoverage {
       const store = this._positionStoreFor(facilityId);
       if (!store) continue;
       for (const positionId of this._facilityConfig.getPositionSet(facilityId)) {
-        if (!store.isOccupied(positionId)) continue;
+        if (!store.isStaffed(positionId)) continue;
         const selectors = this._facilityConfig.getPositionRadars(positionId, facilityId);
         for (const radarId of resolveSelectors(selectors, radars, opts)) wanted.add(radarId);
       }
@@ -198,7 +198,7 @@ class StationCoverage {
  * Every radar any Position's selectors resolve to, whether or not anybody is
  * on position — the set worth pre-fetching terrain for.
  *
- * Distinct from StationCoverage.activeRadars(), which is scoped to OCCUPIED
+ * Distinct from PositionCoverage.activeRadars(), which is scoped to STAFFED
  * Positions: a controller taking Approach mid-session must not then wait for
  * a DEM. This is "could anyone ever look through it in this theater", which in
  * a 225-airfield map is a handful rather than 450.
@@ -248,6 +248,6 @@ function reportUnresolvedSelectors(facilityConfig, radars, opts) {
 }
 
 module.exports = {
-  StationCoverage, selectorMatches, resolveSelectors, ATC_CLASSES,
+  PositionCoverage, selectorMatches, resolveSelectors, ATC_CLASSES,
   assignableRadars, reportUnresolvedSelectors,
 };

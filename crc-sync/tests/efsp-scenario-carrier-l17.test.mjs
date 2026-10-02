@@ -164,13 +164,13 @@ test('Case II: Commence feeds the lanes alternately, marks the flight pushed and
   assert.equal(strip(efsp, d.stripId).ownerPositionId, 'CV_MARSHAL');
 });
 
-test('a lane that is unmanned feeds the other; with neither manned the Commence is inhibited', async () => {
+test('a lane that is unstaffed feeds the other; with neither manned the Commence is inhibited', async () => {
   const { efsp, c } = fresh();
   const a = checkIn(efsp, c, 'AAA11');
   hold(efsp, c.CV_APP1.session, 'CARRIER', []);
   assert.equal(efsp.boardStoreFor('CARRIER').nlaStatusFor(strip(efsp, a.stripId)).transferTo, 'CV_APP2');
   hold(efsp, c.CV_APP2.session, 'CARRIER', []);
-  // APP2's cover is APP1 (unmanned), APP1's is the Marshal: the lane list is the occupancy of the two lanes only
+  // APP2's cover is APP1 (unstaffed), APP1's is the Marshal: the lane list is the staffing of the two lanes only
   const status = efsp.boardStoreFor('CARRIER').nlaStatusFor(strip(efsp, a.stripId));
   assert.match(status.inhibited, /no receiving Position present/);
 });

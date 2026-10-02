@@ -190,7 +190,7 @@ test('a scramble changes no NLA', () => {
     const source = fs.readFileSync(path.join(here, f), 'utf8');
     assert.ok(!/alertStatus/.test(source), `${f} reads alertStatus`);
   }
-  const ctx = { isOccupied: () => true, coveringPositionFor: () => null, facilityId: 'INCIRLIK' };
+  const ctx = { isStaffed: () => true, consolidatedAt: () => null, facilityId: 'INCIRLIK' };
   const now = Date.UTC(2026, 8, 30, 12);
   for (const [role, states] of [['DEPARTURE', nla.DEPARTURE_STATES], ['ARRIVAL', nla.ARRIVAL_STATES]]) {
     for (const state of states) {

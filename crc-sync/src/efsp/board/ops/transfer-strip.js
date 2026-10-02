@@ -27,7 +27,7 @@ function _applyTransferStrip(ctx, strip, op, by) {
   // controllers, the gap isn't specific to self-coordination — from
   // dragging a Strip straight past every doctrine check NLA enforces
   // (e.g. PROPOSED directly into a CLEARED Bay with no flight plan and
-  // no beacon code at all). Validated before the owner/occupancy checks
+  // no beacon code at all). Validated before the owner/staffing checks
   // below too, so a rejected transfer never partially mutates the Strip.
   const check = ctx.placement.validateBayImpliedTransition(strip, op.bayId, op.rackId);
   if (!check.ok) return { ok: false, reason: check.reason, detail: check.detail, strip };
@@ -38,9 +38,9 @@ function _applyTransferStrip(ctx, strip, op, by) {
   let routedTo = null;
   let warning;
 
-  if (!ctx.rules.isOccupied(op.toPositionId)) {
-    const covering = ctx.rules.coveringPositionFor(op.toPositionId);
-    if (!covering || !ctx.rules.isOccupied(covering)) {
+  if (!ctx.rules.isStaffed(op.toPositionId)) {
+    const covering = ctx.rules.consolidatedAt(op.toPositionId);
+    if (!covering || !ctx.rules.isStaffed(covering)) {
       return { ok: false, reason: 'NO_RECEIVING_POSITION', strip };
     }
     destPositionId = covering;

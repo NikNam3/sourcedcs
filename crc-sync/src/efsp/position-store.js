@@ -1,6 +1,6 @@
 'use strict';
 
-// Position occupancy — Primary/Observer, claim/request/release, the
+// Position staffing — Primary/Observer, claim/request/release, the
 // covering chain, and self-coordination lookups (EFSPImplementationGuide.md
 // §4.8, WP1A). Net-new: WP0 reconnaissance this session confirmed no
 // Position/role concept exists anywhere in crc-sync today — auth.js is
@@ -18,7 +18,7 @@
 // this implementation (guide's D-9 talks about stations, but Ground/
 // Clearance Delivery have no associated radar at all) — see the
 // implementation plan's decision: a dedicated Position selector in
-// crc-desktop calls setHeldPositions() with the controller's full
+// crc-desktop calls setSignedOnPositions() with the controller's full
 // declared set each time it changes.
 
 const { WALL_CLOCK } = require('../mission-clock');
@@ -33,7 +33,7 @@ class PositionStore {
     // from when, which a controller reads as a time of day.
     this._clock = clock;
     this._positionIds = new Set(positionIds);
-    this._coveringChain = coveringChain || {};
+    this._consolidation = coveringChain || {};
     this._state = new Map(); // positionId -> { primary, observers:[], pendingPrimaryRequest }
     for (const id of positionIds) {
       this._state.set(id, { primary: null, observers: [], pendingPrimaryRequest: null });
@@ -41,7 +41,7 @@ class PositionStore {
     this._sessions = new Map(); // controllerId -> Set(positionId) currently held
   }
 
-  isOccupied(positionId) {
+  isStaffed(positionId) {
     const s = this._state.get(positionId);
     return !!(s && s.primary);
   }
@@ -56,26 +56,26 @@ class PositionStore {
     return s ? [...s.observers] : [];
   }
 
-  heldBy(controllerId) {
+  signedOnBy(controllerId) {
     return [...(this._sessions.get(controllerId) || [])];
   }
 
   /**
    * Walks the covering chain to the end (guide §4.8.6 rule 3: "If the
-   * covering Position is also unoccupied, follow the chain to the end"),
-   * returning the first OCCUPIED Position found, or null if the chain
+   * covering Position is also unstaffed, follow the chain to the end"),
+   * returning the first STAFFED Position found, or null if the chain
    * bottoms out with nobody occupying any link (defect D19's boundary —
    * callers must treat null distinctly from a stranding they failed to
    * detect, not silently swallow it).
    */
-  coveringPositionFor(positionId) {
-    let current = this._coveringChain[positionId] || null;
+  consolidatedAt(positionId) {
+    let current = this._consolidation[positionId] || null;
     const seen = new Set([positionId]);
     while (current) {
       if (seen.has(current)) return null; // cycle guard — configuration bug, never a real chain
       seen.add(current);
-      if (this.isOccupied(current)) return current;
-      current = this._coveringChain[current] || null;
+      if (this.isStaffed(current)) return current;
+      current = this._consolidation[current] || null;
     }
     return null;
   }
@@ -92,7 +92,7 @@ class PositionStore {
       observers: [...s.observers],
       pendingPrimaryRequest: s.pendingPrimaryRequest,
       coveringFor: [...this._positionIds].filter(
-        id => id !== positionId && !this.isOccupied(id) && this.coveringPositionFor(id) === positionId
+        id => id !== positionId && !this.isStaffed(id) && this.consolidatedAt(id) === positionId
       ),
     }));
   }
@@ -101,7 +101,7 @@ class PositionStore {
    * A controller declares the FULL set of Positions they hold this session
    * (the dedicated Position selector, not derived from radar stations —
    * see the module comment). Diffs against what they previously held:
-   * newly-added Positions are claimed (Primary if unoccupied, else
+   * newly-added Positions are claimed (Primary if unstaffed, else
    * Observer); removed ones are released (§4.8.6 vacate handling, non-
    * abrupt — an Observer promotion, if any, is offered as an explicit
    * prompt by the caller, not auto-applied here; see releasePrimaryTo()).
@@ -111,20 +111,20 @@ class PositionStore {
    *   Strip counts to build the "this would strand N Strips" warning
    *   (guide §4.8.6 rule 5 — warn, never block).
    */
-  setHeldPositions(controllerId, controllerName, heldPositionIds, now = this._clock.now()) {
-    const valid = heldPositionIds.filter(id => this._positionIds.has(id));
+  setSignedOnPositions(controllerId, controllerName, signedOnPositionIds, now = this._clock.now()) {
+    const valid = signedOnPositionIds.filter(id => this._positionIds.has(id));
     const before = this._sessions.get(controllerId) || new Set();
     const after = new Set(valid);
 
     const vacated = [];
     for (const id of before) {
       if (!after.has(id)) {
-        this._release(controllerId, id, { abrupt: false });
+        this._signOff(controllerId, id, { abrupt: false });
         vacated.push(id);
       }
     }
     for (const id of after) {
-      if (!before.has(id)) this._claim(controllerId, controllerName, id, now);
+      if (!before.has(id)) this._signOn(controllerId, controllerName, id, now);
     }
 
     if (after.size > 0) this._sessions.set(controllerId, after);
@@ -133,7 +133,7 @@ class PositionStore {
     return { held: [...after], vacated };
   }
 
-  _claim(controllerId, controllerName, positionId, now) {
+  _signOn(controllerId, controllerName, positionId, now) {
     const s = this._state.get(positionId);
     if (!s.primary) {
       s.primary = { controllerId, controllerName, since: now };
@@ -176,10 +176,10 @@ class PositionStore {
    * @param {{abrupt:boolean}} opts — abrupt=true (disconnect) auto-promotes
    *   the longest-waiting Observer (guide §4.8.6 rule 1 exception);
    *   abrupt=false (explicit deselect) leaves the Position simply
-   *   unoccupied — the caller offers Observer promotion as an explicit
+   *   unstaffed — the caller offers Observer promotion as an explicit
    *   prompt, not this store's job.
    */
-  _release(controllerId, positionId, { abrupt }) {
+  _signOff(controllerId, positionId, { abrupt }) {
     const s = this._state.get(positionId);
     if (!s) return;
     if (s.primary && s.primary.controllerId === controllerId) {
@@ -201,7 +201,7 @@ class PositionStore {
   /** Abrupt disconnect — releases every Position the controller held, auto-promoting where possible (guide §4.8.6 rule 1). */
   onDisconnect(controllerId) {
     const held = this._sessions.get(controllerId) || new Set();
-    for (const id of held) this._release(controllerId, id, { abrupt: true });
+    for (const id of held) this._signOff(controllerId, id, { abrupt: true });
     this._sessions.delete(controllerId);
   }
 }

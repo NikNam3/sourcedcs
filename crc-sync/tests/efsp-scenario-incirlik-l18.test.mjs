@@ -11,7 +11,7 @@ import { slot } from './helpers/wire-slots.mjs';
  * Not just the lifecycle. Each flow is walked the way pilots disturb it
  * (decisions memory "walk pilot requests"): a pilot who SWITCHES (asks for a
  * different frequency, goes back round the pattern), CANCELS (a missed
- * approach, a drop, a rotation that finds PAR unmanned), and ARRIVES LATE (the
+ * approach, a drop, a rotation that finds PAR unstaffed), and ARRIVES LATE (the
  * receiving Position takes its seat after the aircraft is ready, a Position
  * vacates with an aircraft on its frequency).
  */
@@ -228,7 +228,7 @@ test('PAR\'s terminal events: Landing assured is the ordinary BALL state with no
   assert.equal(live(efsp).length, 0);
 });
 
-test('a rotation CANCELLED by the receiver: PAR unmanned refuses it and the aircraft stays; PAR LATE to its seat, the retry works', () => {
+test('a rotation CANCELLED by the receiver: PAR unstaffed refuses it and the aircraft stays; PAR LATE to its seat, the retry works', () => {
   const { efsp, c } = fresh();
   const s = sfaArrival(efsp, c);
   hold(efsp, c.PAR.session, 'INCIRLIK', []); // PAR leaves

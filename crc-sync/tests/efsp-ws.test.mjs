@@ -34,7 +34,7 @@ function makeCtx() {
   const facilities = new Map();
 
   for (const facilityId of facilityIds) {
-    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getCoveringChain(facilityId));
+    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getConsolidation(facilityId));
     const rules = {
       resolveBlockTarget: (blockId, role) => blockMap.resolveBlockTarget(role, blockId),
       bayImpliesState: (bayId) => facilityConfig.bayImpliesState(bayId, facilityId),
@@ -43,8 +43,8 @@ function makeCtx() {
       computeNla: (strip, fdr, now, ctx) => nla.computeNla(strip, fdr, now, ctx),
       isValidState: (state, role) => nla.isValidState(state, role),
       isValidRole: (role) => blockMap.isValidRole(role),
-      isOccupied: (id) => positionStore.isOccupied(id),
-      coveringPositionFor: (id) => positionStore.coveringPositionFor(id),
+      isStaffed: (id) => positionStore.isStaffed(id),
+      consolidatedAt: (id) => positionStore.consolidatedAt(id),
       canMutate: (actingPositionId, opKind) => permission.canMutate(actingPositionId, opKind),
       canCreateStripRole: (actingPositionId, role) => permission.canCreateStripRole(actingPositionId, role),
       canActOnState: (actingPositionId, role, state) => permission.canActOnState(actingPositionId, role, state),
@@ -157,7 +157,7 @@ test('a rejected mutation\'s ack includes the human-readable detail, not just th
   // so the doctrine-bypass check below is actually reached, rather than
   // this Mutation instead being rejected earlier for "no receiving Position
   // present", which isn't what this test is about.
-  ctx.positionStoreFor('INCIRLIK').setHeldPositions('controller-cd', 'CD-Holder', ['CD']);
+  ctx.positionStoreFor('INCIRLIK').setSignedOnPositions('controller-cd', 'CD-Holder', ['CD']);
 
   // Drop straight into a Bay whose implied state (RUNWAY_QUEUE) skips
   // ahead of PROPOSED's legal next state (PENDING_CLEARANCE) — the exact
@@ -286,7 +286,7 @@ test('vacating a Position with Strips and NO occupied covering Position anywhere
 
   const result = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', held: [] }, noopPersist);
   assert.deepEqual(result.ack.warnings, [{ positionId: 'GND', count: 1, routedTo: null }]);
-  // Strip ownership is untouched — still GND, which is now unoccupied; this
+  // Strip ownership is untouched — still GND, which is now unstaffed; this
   // is the D19 boundary condition itself, surfaced rather than hidden.
   assert.equal(ctx.boardStoreFor('INCIRLIK').getStrip(strip.stripId).ownerPositionId, 'GND');
 });
@@ -306,7 +306,7 @@ test('a non-abrupt vacate does NOT auto-promote a waiting Observer, so its Strip
   createStripOwnedBy(ctx, 'GND', 'gnd-coordination'); // see the comment above the other two uses of this fixture
 
   const result = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', held: [] }, noopPersist); // Alice explicitly vacates
-  assert.equal(ctx.positionStoreFor('INCIRLIK').isOccupied('GND'), false); // Bob was NOT auto-promoted — an explicit prompt is required, not built here
+  assert.equal(ctx.positionStoreFor('INCIRLIK').isStaffed('GND'), false); // Bob was NOT auto-promoted — an explicit prompt is required, not built here
   assert.equal(result.ack.warnings.length, 1); // so the Strip genuinely needed routing, and GND has no covering Position occupied in this fixture
   assert.equal(result.ack.warnings[0].routedTo, null);
 });

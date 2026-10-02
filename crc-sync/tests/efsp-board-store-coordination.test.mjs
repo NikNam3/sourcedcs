@@ -33,7 +33,7 @@ function makeFacilities({ aitAuthorized = {} } = {}) {
   const facilities = new Map();
 
   for (const facilityId of facilityConfig.getFacilityIds()) {
-    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getCoveringChain(facilityId));
+    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getConsolidation(facilityId));
     const rules = {
       resolveBlockTarget: (blockId, role) => blockMap.resolveBlockTarget(role, blockId),
       bayImpliesState: (bayId) => facilityConfig.bayImpliesState(bayId, facilityId),
@@ -42,8 +42,8 @@ function makeFacilities({ aitAuthorized = {} } = {}) {
       computeNla: (strip, fdr, now, ctx) => nla.computeNla(strip, fdr, now, ctx),
       isValidState: (state, role) => nla.isValidState(state, role),
       isValidRole: (role) => blockMap.isValidRole(role),
-      isOccupied: (id) => positionStore.isOccupied(id),
-      coveringPositionFor: (id) => positionStore.coveringPositionFor(id),
+      isStaffed: (id) => positionStore.isStaffed(id),
+      consolidatedAt: (id) => positionStore.consolidatedAt(id),
       canMutate: (actingPositionId, opKind) => permission.canMutate(actingPositionId, opKind),
       canCreateStripRole: (actingPositionId, role) => permission.canCreateStripRole(actingPositionId, role),
       canActOnState: (actingPositionId, role, state) => permission.canActOnState(actingPositionId, role, state),
@@ -76,7 +76,7 @@ function makeFacilities({ aitAuthorized = {} } = {}) {
  */
 function createAppHandedOffStrip(facilities) {
   const { boardStore: incirlikBoard, positionStore: incirlikPositions } = facilities.get('INCIRLIK');
-  incirlikPositions.setHeldPositions('app-controller', 'App1', ['APP']);
+  incirlikPositions.setSignedOnPositions('app-controller', 'App1', ['APP']);
   const created = incirlikBoard.applyMutation(mutation({
     op: {
       kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main',
@@ -318,7 +318,7 @@ test('a Strip cannot have two open coordination links at once — a second PROPO
 test('D21 regression: only APP/CTR may PROPOSE a coordination primitive — GND is refused even though it owns its own Strip', () => {
   const facilities = makeFacilities();
   const { boardStore: incirlikBoard, positionStore: incirlikPositions } = facilities.get('INCIRLIK');
-  incirlikPositions.setHeldPositions('gnd-controller', 'Gnd1', ['GND']); // occupy GND so the TransferStrip fixture setup below can route to it
+  incirlikPositions.setSignedOnPositions('gnd-controller', 'Gnd1', ['GND']); // occupy GND so the TransferStrip fixture setup below can route to it
   const created = incirlikBoard.applyMutation(mutation({
     op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', fdr: { callsign: 'VIPER1', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' } },
   }), 'OPS', 'ops-controller');
@@ -433,7 +433,7 @@ test('APP -> CTR HANDOFF ACCEPT moves the replica into ctr-departures (not ctr-e
 test('PROPOSE is rejected when the Strip is not in an eligible (role, state) combo — a DEPARTURE Strip at APP but still PROPOSED (not yet HANDED_OFF) cannot propose HANDOFF', () => {
   const facilities = makeFacilities();
   const { boardStore: incirlikBoard, positionStore } = facilities.get('INCIRLIK');
-  positionStore.setHeldPositions('app-controller', 'App1', ['APP']);
+  positionStore.setSignedOnPositions('app-controller', 'App1', ['APP']);
   const created = incirlikBoard.applyMutation(mutation({
     op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', fdr: { callsign: 'VIPER2', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' } },
   }), 'OPS', 'ops-controller');
@@ -711,7 +711,7 @@ test('ConvertToArrival maps the departure record\'s departureAirport onto the ne
 test('ConvertToArrival resets annotations/flags/coordination to fresh-Strip defaults — none of them mean the same thing under the new role', () => {
   const facilities = makeFacilities();
   const { boardStore, positionStore } = facilities.get('INCIRLIK');
-  positionStore.setHeldPositions('app-controller', 'App1', ['APP']);
+  positionStore.setSignedOnPositions('app-controller', 'App1', ['APP']);
   const strip = createAppHandedOffStrip(facilities);
   const flagged = boardStore.applyMutation(mutation({
     stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'SetFlag', flag: 'attention', value: 'red' },
@@ -737,7 +737,7 @@ test('a Strip carries no correlation field at all — it is keyed by fdrId, not 
   // still airborne and still squawking the code docs/adr/0023 kept for it.
   const facilities = makeFacilities();
   const { boardStore, positionStore } = facilities.get('INCIRLIK');
-  positionStore.setHeldPositions('app-controller', 'App1', ['APP']);
+  positionStore.setSignedOnPositions('app-controller', 'App1', ['APP']);
   const strip = createAppHandedOffStrip(facilities);
   assert.equal('correlation' in strip, false, 'not set on creation');
 
@@ -762,7 +762,7 @@ test('a pre-WP5 snapshot’s per-Strip correlation field stops the restore (no q
 test('ConvertToArrival is rejected on anything other than a DEPARTURE Strip at HANDED_OFF', () => {
   const facilities = makeFacilities();
   const { boardStore, positionStore } = facilities.get('INCIRLIK');
-  positionStore.setHeldPositions('app-controller', 'App1', ['APP']);
+  positionStore.setSignedOnPositions('app-controller', 'App1', ['APP']);
   const created = boardStore.applyMutation(mutation({
     op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', fdr: { callsign: 'VIPER3', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' } },
   }), 'OPS', 'ops-controller');
@@ -786,7 +786,7 @@ test('ConvertToArrival is rejected on anything other than a DEPARTURE Strip at H
 test('D21 regression: TWR may not ConvertToArrival even a Strip it happens to own — only APP/CTR ever get this op kind at all', () => {
   const facilities = makeFacilities();
   const { boardStore, positionStore } = facilities.get('INCIRLIK');
-  positionStore.setHeldPositions('twr-controller', 'Twr1', ['TWR']);
+  positionStore.setSignedOnPositions('twr-controller', 'Twr1', ['TWR']);
   const created = boardStore.applyMutation(mutation({
     op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', fdr: { callsign: 'VIPER4', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' } },
   }), 'OPS', 'ops-controller');

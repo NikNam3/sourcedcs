@@ -205,7 +205,7 @@ function getFacilityConfig(facilityId = DEFAULT_FACILITY_ID) { return deepClone(
 
 function getPositionSet(facilityId = DEFAULT_FACILITY_ID) { return [...(_configs().get(facilityId).positions)]; }
 
-function getCoveringChain(facilityId = DEFAULT_FACILITY_ID) { return { ...(_configs().get(facilityId).coveringChain) }; }
+function getConsolidation(facilityId = DEFAULT_FACILITY_ID) { return { ...(_configs().get(facilityId).coveringChain) }; }
 
 /**
  * WP4A second slice — a Position's doctrinal class (guide §4.1's own Class
@@ -391,7 +391,7 @@ function coordinationBayFor(positionId, facilityId = DEFAULT_FACILITY_ID) {
 
 module.exports = {
   DEFAULT_FACILITY_ID, getFacilityIds,
-  getFacilityConfig, getPositionSet, getPositionClass, getPositionLetter, allPositionLetters, getCoveringChain, getBaysFor, getAllBays, isBlockVisible,
+  getFacilityConfig, getPositionSet, getPositionClass, getPositionLetter, allPositionLetters, getConsolidation, getBaysFor, getAllBays, isBlockVisible,
   getPositionRadars, radarBearingPositionIds, validateRadarSelector,
   bayImpliesState, bayHoldsRole, bayForImpliedState, bayExists, coordinationBayFor, setFacilityConfig, validateConfig,
   getBay, getSingleFrequencyApproach, validateSfaRotationRecord, BAY_VIEWS,

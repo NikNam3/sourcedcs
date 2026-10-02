@@ -171,7 +171,7 @@ test('a reconnecting client that never declared its Positions cannot act until i
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'RECON1' });
 
   // The client drops and comes back. It has a cached Strip and a pending
-  // Mutation to replay — but occupancy is presence, and presence did not
+  // Mutation to replay — but staffing is presence, and presence did not
   // survive (§4.8.2 rule 5). Replaying before re-declaring must not work.
   efsp.onDisconnect(c.APP.session);
   const tooSoon = send(efsp, c.APP.session, {

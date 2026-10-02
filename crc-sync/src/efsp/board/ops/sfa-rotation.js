@@ -24,7 +24,7 @@ function _applySfaRotation(ctx, strip, by, actingPositionId) {
   if (blocked) return { ok: false, reason: blocked.reason, detail: blocked.detail, strip };
   const dest = ctx.rules.sfaRotationReceiver();
   if (!dest) return { ok: false, reason: 'NO_RECEIVING_POSITION', detail: 'this Facility has no Position to rotate onto', strip };
-  if (!ctx.rules.isOccupied(dest)) {
+  if (!ctx.rules.isStaffed(dest)) {
     return { ok: false, reason: 'NO_RECEIVING_POSITION', detail: `${dest} is not manned — the aircraft stays with ${strip.ownerPositionId}`, strip };
   }
   const bay = ctx.rules.bayForImpliedState(dest, fx.toState);

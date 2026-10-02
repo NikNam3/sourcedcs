@@ -25,7 +25,7 @@ const VERSION = 1;
  * so there is nothing per-connection to compute here.
  *
  * Derived at the wire boundary, never stored on the Strip: it is a function of
- * Position occupancy and the clock as much as of the Strip, so persisting it
+ * Position staffing and the clock as much as of the Strip, so persisting it
  * would make the Board snapshot carry a value that is wrong the moment anyone
  * takes or gives up a Position.
  *

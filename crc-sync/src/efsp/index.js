@@ -83,7 +83,7 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
   const facilityIds = facilityConfig.getFacilityIds();
 
   for (const facilityId of facilityIds) {
-    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getCoveringChain(facilityId), { clock });
+    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getConsolidation(facilityId), { clock });
 
     const rules = {
       resolveBlockTarget:  (blockId, role) => blockMap.resolveBlockTarget(role, blockId),
@@ -96,8 +96,8 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
       computeNla:          (strip, fdr, now, ctx) => nla.computeNla(strip, fdr, now, ctx),
       isValidState:        (state, role) => nla.isValidState(state, role),
       isValidRole:         (role) => blockMap.isValidRole(role),
-      isOccupied:          (positionId) => positionStore.isOccupied(positionId),
-      coveringPositionFor: (positionId) => positionStore.coveringPositionFor(positionId),
+      isStaffed:          (positionId) => positionStore.isStaffed(positionId),
+      consolidatedAt: (positionId) => positionStore.consolidatedAt(positionId),
       canMutate:           (actingPositionId, opKind) => permission.canMutate(actingPositionId, opKind),
       canCreateStripRole:  (actingPositionId, role) => permission.canCreateStripRole(actingPositionId, role),
       canActOnState:       (actingPositionId, role, state) => permission.canActOnState(actingPositionId, role, state),

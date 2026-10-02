@@ -256,7 +256,7 @@ class Coordination {
   /**
    * The proposer cancels, or closes, its own exchange (U7, docs/adr/0080). A
    * link on the proposer's Strip that the other side can no longer answer — the
-   * receiver dropped its replica, its Position is unmanned, a proposal nobody
+   * receiver dropped its replica, its Position is unstaffed, a proposal nobody
    * will get to — used to be unreachable: the guards that keep an open link
    * honest (no Drop, no Convert, no second proposal, no NLA) also kept the
    * proposer from ever leaving it. Legal for any state of the link, on the
