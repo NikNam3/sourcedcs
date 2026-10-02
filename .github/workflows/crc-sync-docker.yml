@@ -17,7 +17,37 @@ env:
   IMAGE_NAME: ${{ github.repository }}/crc-sync
 
 jobs:
+  # The deploy gate (docs/adr/0103, S3-5): no image is built unless both unit suites pass. crc-desktop's suite is here
+  # too because its parity test reads crc-sync's wire-protocol.js. A workflow_dispatch from the crc-desktop release runs it too.
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: |
+          (cd crc-sync && npm ci)
+          (cd crc-desktop && npm ci)
+          (cd crc-desktop/app && npm ci)
+
+      - name: crc-sync tests
+        working-directory: crc-sync
+        run: npm test
+
+      - name: crc-desktop tests
+        working-directory: crc-desktop
+        run: npm test
+
   build-and-push:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
