@@ -31,12 +31,12 @@ export const COMPACT_BLOCKS_SHARED = [
 export const COMPACT_BLOCKS_BY_STRIP_TYPE = {
   // Heading and initial altitude: the two things a departure clearance issues
   // beyond the route.
-  DEPARTURE:  [...COMPACT_BLOCKS_SHARED, '20', '21'],
+  DEPARTURE:  [...COMPACT_BLOCKS_SHARED, '20', '21', '9A-SPEED'],
   // '7' is the ASSIGNED altitude on this strip type (annotation-routed, append-only);
   // the vector is the other constant.
-  ARRIVAL:    [...COMPACT_BLOCKS_SHARED, '9A-VECTOR'],
+  ARRIVAL:    [...COMPACT_BLOCKS_SHARED, '9A-VECTOR', '9A-SPEED'],
   // '7' stays as the FILED request here; '7A' is the assignment beside it.
-  OVERFLIGHT: [...COMPACT_BLOCKS_SHARED, '7A', '9A-VECTOR'],
+  OVERFLIGHT: [...COMPACT_BLOCKS_SHARED, '7A', '9A-VECTOR', '9A-SPEED'],
   MISSION:    ['M3', 'M1', 'M2', 'M4', 'M5', 'M6', 'M7'],
   // The carrier (crc-sync's docs/adr/0074, guide §9.12). MARSHAL shows the
   // marshal message: the derived stack fields first (CASE, ANGELS, DME,
@@ -84,8 +84,8 @@ export const COMPACT_BLOCKS_BY_POSITION = {
     CD:  ['1', '3', '5', '7', '8', '8A', '8B', '9', '9F', '10', '14A', '14D', '21', '14E'],
     GC: ['1', '3', '5', '8', '8A', '14A', '14D', '17', '14E'],
     LC: ['1', '3', '5', '8A', '21', '14D', '18', '3F', '3G', '14E'],
-    AP: ['1', '3', '5', '7', '8A', '9', '20', '21', '14A', '22', '5A', 'SREG'],
-    CTR: ['1', '3', '5', '7', '21', '20', '8B', '9', '14A', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A'],
+    AP: ['1', '3', '5', '7', '8A', '9', '20', '21', '9A-SPEED', '14A', '22', '5A', 'SREG'],
+    CTR: ['1', '3', '5', '7', '21', '20', '9A-SPEED', '8B', '9', '14A', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A'],
   },
   ARRIVAL: {
     GC: ['1', '3', '5', '8B'],
@@ -94,11 +94,11 @@ export const COMPACT_BLOCKS_BY_POSITION = {
     // SFA (crc-sync docs/adr/0075): the approach controller's list, FREQ included, because a frequency
     // is the Strip's attribute and the controller rotates onto it (guide §4.7). No SREG: MARSA is AP's.
     SFA: ['1', '3', '5', '6', '7', '8A', '8B', '9A-VECTOR', '9A-SPEED', '22', '5A'],
-    CTR: ['1', '3', '5', '6', '7', '9A-VECTOR', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A'],
+    CTR: ['1', '3', '5', '6', '7', '9A-VECTOR', '9A-SPEED', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A'],
   },
   OVERFLIGHT: {
-    AP: ['1', '3', '5', '7A', '8B', '9', '9A-VECTOR', '22', '5A', 'SREG'],
-    CTR: ['1', '3', '5', '7A', '8B', '9', '9A-VECTOR', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A'],
+    AP: ['1', '3', '5', '7A', '8B', '9', '9A-VECTOR', '9A-SPEED', '22', '5A', 'SREG'],
+    CTR: ['1', '3', '5', '7A', '8B', '9', '9A-VECTOR', '9A-SPEED', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A'],
   },
 };
 

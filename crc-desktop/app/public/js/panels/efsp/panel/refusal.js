@@ -51,6 +51,7 @@ export const MUTATION_ERROR_MESSAGES = {
   NOT_STAFFED: 'Nobody is Primary at that Position',
   ALREADY_PRIMARY: 'You are already Primary at that Position',
   NOT_OBSERVER: 'You are not an observer at that Position',
+  ASSIGNMENT_REQUIRED: 'The departing part needs a heading, speed or altitude assignment', // docs/adr/0099 (SplitFormation)
 };
 
 function _refusalSentence(reason, detail) {
