@@ -401,6 +401,8 @@ export function getEfspFlightData(flightDataId) { return efspFlightDataList.get(
 export function getEfspPosition(positionId) { return efspPositions.get(positionId) || null; }
 export function getAllEfspStrips() { return [...efspStrips.values()]; }
 export function getAllEfspPositions() { return [...efspPositions.values()]; }
+/** The Board epoch (lifetime) this client holds for a Facility, or undefined. */
+export function getEfspBoardEpoch(facilityId) { return efspBoardEpochByFacility.get(facilityId); }
 export function getEfspBoardSeq() { return efspBoardSeq; }
 export function getEfspFacility() { return efspFacility; }
 export function getEfspBays() { return efspBays; }

@@ -65,6 +65,25 @@ export function sendEfspMutation(actingPositionId, strip, op) {
   return msg.clientMutationId;
 }
 
+/**
+ * Undoes the action in the undo slot (docs/adr/0100 §7): `{kind:'Undo', actionId}`. `stripId` is the Strip the
+ * original action addressed (it routes the message to the Board); baseRev is not checked for an Undo. Not
+ * registered as pending: the replay-on-reconnect machinery would rebase it, and a stale Undo must not be re-sent
+ * by guesswork (undo-slot.js tracks its own ack).
+ */
+export function sendEfspUndo(actingPositionId, slot) {
+  const msg = {
+    version: 1, type: 'efsp-mutation',
+    clientMutationId: efspClientMutationId(),
+    facilityId: slot.facilityId || undefined,
+    actingPositionId,
+    stripId: slot.stripId,
+    op: { kind: 'Undo', actionId: slot.actionId },
+  };
+  _sendEfsp(msg);
+  return msg.clientMutationId;
+}
+
 /** CreateStrip has no existing Strip to derive facilityId from — an explicit param, defaulting to INCIRLIK for back-compat with every pre-WP4A call site (efsp-panel.js's OPS-only DEPARTURE form). */
 export function sendEfspCreateStrip(actingPositionId, createOp, facilityId = DEFAULT_EFSP_FACILITY_ID) {
   const msg = {
@@ -282,6 +301,7 @@ export function replayPendingEfspMutations(onOrphaned) {
 export function setEfspSender(name, fn) {
   switch (name) {
     case 'sendEfspMutation': sendEfspMutation = fn; break;
+    case 'sendEfspUndo': sendEfspUndo = fn; break;
     case 'sendEfspCreateStrip': sendEfspCreateStrip = fn; break;
     case 'sendEfspSetPositions': sendEfspSetPositions = fn; break;
     case 'sendEfspAirspaceMutation': sendEfspAirspaceMutation = fn; break;

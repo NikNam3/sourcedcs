@@ -24,6 +24,7 @@ import {
 import { refreshArHighlight } from './ato-strip.js';
 import { onAtoAck, onAtoPreviewResult } from './ato-import.js';
 import { renderAirspacePanel } from './airspace-panel.js';
+import { noteUndoAck, noteUndoBoardEpoch, noteUndoVoided, reconcileUndoSlotEpoch } from './panel/undo-slot.js';
 import { renderRunwayStatusPanel } from './runway-status-panel.js';
 
 // The handlers of the EFSP message families whose state lives in bay-view.js / efsp-panel.js / efsp-state.js
@@ -37,6 +38,7 @@ import { renderRunwayStatusPanel } from './runway-status-panel.js';
 // board-broadcast.md — the guide's <200ms remote-change budget).
 registerEfspMessage('efsp-snapshot', (msg) => {
   applyEfspSnapshot(msg);
+  reconcileUndoSlotEpoch(); // a new Board lifetime: nothing to undo (docs/adr/0100 §7)
   noteEfspSnapshotLanded();
   refreshEfspPanel();
   // §9.10's route table is fetched over HTTP, not carried on the
@@ -84,6 +86,7 @@ registerEfspMessage('efsp-board-delta', (msg) => {
   const placementBefore = captureEfspPlacement(msg, getEfspStrip);
   // A delta from another Board lifetime asks for a resync (answered with a snapshot).
   noteEfspBoardMessageForSync(msg);
+  noteUndoBoardEpoch(msg.facilityId || getEfspFacility(), msg.boardEpoch);
   applyEfspDelta(msg);
   if (!efspEpochChangeOf(msg)) noteEfspResyncAnswered(msg.facilityId || getEfspFacility());
   if (placementBefore) noteEfspBoardArrivals(msg, placementBefore);
@@ -113,8 +116,11 @@ registerEfspMessage('efsp-mutation-ack', (msg) => {
     noteEfspBoardArrivals(ackAsDelta, ackPlacementBefore);
     refreshEfspPanel(); // the tab counts and arrivals line
   }
+  noteUndoBoardEpoch(msg.facilityId, msg.boardEpoch);
+  // The Undo slot (docs/adr/0100 §10) takes the ack's `undoable`; an Undo's own refusal shows in the slot line.
+  const wasUndoAck = noteUndoAck(msg, result.pending);
   if (!result.ok) console.warn('[efsp] Mutation rejected:', result.reason, msg);
-  notifyEfspMutationAck(msg.clientMutationId, result);
+  if (!wasUndoAck) notifyEfspMutationAck(msg.clientMutationId, result);
   renderAllOpenEfspBays();
 });
 
@@ -210,4 +216,10 @@ registerEfspMessage('efsp-ato-ack', (msg) => {
 // WP8 (docs/adr/0065, 0072): the ack for the client measurements efsp-metrics-client.js reports.
 registerEfspMessage('efsp-metrics-report-ack', (msg) => {
   onEfspMetricsReportAck(msg);
+});
+
+// docs/adr/0100 §6 (H100 Q-U2 b): another Position's Undo voided a change of this Position. A panel message,
+// dismissible, kept for the session only. Nothing is drawn on the Strip.
+registerEfspMessage('efsp-undo-voided', (msg) => {
+  noteUndoVoided(msg);
 });

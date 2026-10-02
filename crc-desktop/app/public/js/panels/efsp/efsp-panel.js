@@ -7,6 +7,7 @@ import { dismissEfspRefusal } from './panel/refusal.js';
 import { getEfspCorrelationStats } from './efsp-state.js';
 import { initAtoImport } from './ato-import.js';
 import { renderEfspScrambleLine } from './scramble.js';
+import { renderUndoSlot, wireUndoKeys } from './panel/undo-slot.js';
 import { startEfspStalenessCheck } from './panel/staleness.js';
 
 // The feature modules live in panel/ (ESM-2b): state.js (shared state), staleness.js, tabs.js (Position and Bay
@@ -85,6 +86,8 @@ export function initEfspPanel() {
 
   _wireCreateStrip();
   _wireDotCommand();
+  wireUndoKeys(_efspPanelRootEl); // docs/adr/0100 §10: Ctrl+Z
+  renderUndoSlot();
   initAtoImport(_efspPanelRootEl); // docs/adr/0071
   _loadStereoRoutes();
   _renderPositionTabs();

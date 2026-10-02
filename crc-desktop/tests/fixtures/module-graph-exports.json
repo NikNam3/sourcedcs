@@ -596,6 +596,7 @@
    "getAllEfspStrips",
    "getEfspAirspace",
    "getEfspBays",
+   "getEfspBoardEpoch",
    "getEfspBoardSeq",
    "getEfspCorrelation",
    "getEfspCorrelationForStrip",
@@ -650,6 +651,7 @@
    "sendEfspRunwayStatusMutation",
    "sendEfspSetPositions",
    "sendEfspSfaMutation",
+   "sendEfspUndo",
    "setEfspSender"
   ],
   "panels/efsp/final-panel.js": [
@@ -767,7 +769,9 @@
    "_positionTabsEl",
    "_setActiveBayId",
    "_setActivePositionTab",
-   "_setBayContentElForTest"
+   "_setBayContentElForTest",
+   "_undoSlotEl",
+   "_undoVoidedEl"
   ],
   "panels/efsp/panel/tabs.js": [
    "_renderPositionTabs",
@@ -775,6 +779,27 @@
    "computePositionTabs",
    "efspVisibleBayId",
    "getActiveEfspSearchQuery"
+  ],
+  "panels/efsp/panel/undo-slot.js": [
+   "UNDO_OUTCOME_MS",
+   "_resetUndoForTest",
+   "_setUndoClockForTest",
+   "dismissUndoVoided",
+   "getUndoOutcome",
+   "getUndoSlot",
+   "getUndoVoidedMessages",
+   "isTextEntryTarget",
+   "isUndoKey",
+   "noteUndoAck",
+   "noteUndoBoardEpoch",
+   "noteUndoVoided",
+   "reconcileUndoSlotEpoch",
+   "renderUndoSlot",
+   "requestUndo",
+   "undoOutcomeText",
+   "undoSlotText",
+   "undoVoidedMessageText",
+   "wireUndoKeys"
   ],
   "panels/efsp/pattern-board.js": [
    "INTENT_LABELS",
