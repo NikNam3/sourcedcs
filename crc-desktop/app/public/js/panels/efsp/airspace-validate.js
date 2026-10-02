@@ -259,3 +259,13 @@ export function checkAirspaceReferences(def, lookup) {
   }
   return null;
 }
+
+/**
+ * What changed between two definitions, field by field, in DEFINITION_FIELDS order: [{ field, from, to }] (null for empty).
+ * The shape of a `definitionHistory` entry's `changes` (ADR 0098 §4).
+ */
+export function diffDefinitions(from, to) {
+  const a = from || {}; const b = to || {};
+  const same = (x, y) => JSON.stringify(x ?? null) === JSON.stringify(y ?? null);
+  return DEFINITION_FIELDS.filter(f => !same(a[f], b[f])).map(f => ({ field: f, from: a[f] ?? null, to: b[f] ?? null }));
+}

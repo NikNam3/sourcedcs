@@ -39,6 +39,7 @@
       "main.js",
       "lxsrs-setup.js",
       "patch-notes.js",
+      "external-link.js",
       "config.json",
       "app/**/*",
       "!app/package.json",

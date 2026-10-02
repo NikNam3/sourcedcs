@@ -1,6 +1,7 @@
 'use strict';
 import { applyEfspCarrierSnapshot } from './carrier-state.js';
 import { applyEfspSfaSnapshot } from './sfa-state.js';
+import { diffDefinitions } from './airspace-validate.js';
 
 // Client-side mirror of the EFSP Board — plain module-level Maps, matching
 // app.js's existing style (tracks/history/settings are also plain globals,
@@ -49,6 +50,22 @@ const efspObligations = new Map(); // stripId -> [{ facilityId, stripId, obligat
 // per-Facility: an airspace names its controlling Facility rather than being
 // replicated into each one.
 export const efspAirspaces = new Map();
+
+// The definition edits THIS window has seen arrive (airspaceId -> [{ defRev, at, by, changes: [{ field, from, to }] }],
+// oldest first, bounded). crc-sync keeps the full trail (`definitionHistory`) but does not put it on the wire (its record
+// view strips it), so the History view shows what this window watched change, and says so; the Mutation log has the rest.
+export const efspAirspaceEdits = new Map();
+const AIRSPACE_EDIT_LOG_CAP = 50;
+
+/** A record arrived over `previous`: when its definition revision moved, log the edit (what changed, when, by whom). */
+function _noteAirspaceEdit(previous, next) {
+  if (!previous || !(next.defRev > previous.defRev)) return;
+  const log = efspAirspaceEdits.get(next.airspaceId) || [];
+  log.push({ defRev: next.defRev, at: next.updatedAt, by: next.updatedBy || null, missed: next.defRev - previous.defRev - 1,
+    changes: diffDefinitions(previous.definition, next.definition) });
+  while (log.length > AIRSPACE_EDIT_LOG_CAP) log.shift();
+  efspAirspaceEdits.set(next.airspaceId, log);
+}
 
 // WP5 (crc-sync's docs/adr/0045) — flightDataId -> the correlation record: which
 // surveillance contact this airframe is, on what evidence, and any warning.
@@ -102,8 +119,14 @@ export function applyEfspSnapshot(msg) {
   efspBays = msg.bays || [];
   efspAitAuthorizedByFacility = msg.aitAuthorizedByFacility || {};
   efspPositionLetters = msg.positionLetters || {};
+  // A snapshot after a reconnect can carry edits made while this window was away: log them against what it last held.
+  const heldAirspaces = new Map(efspAirspaces);
   efspAirspaces.clear();
-  for (const a of msg.airspaces || []) efspAirspaces.set(a.airspaceId, a);
+  for (const a of msg.airspaces || []) {
+    _noteAirspaceEdit(heldAirspaces.get(a.airspaceId), a);
+    efspAirspaces.set(a.airspaceId, a);
+  }
+  for (const id of [...efspAirspaceEdits.keys()]) if (!efspAirspaces.has(id)) efspAirspaceEdits.delete(id);
   efspCorrelations.clear();
   for (const r of msg.correlations || []) efspCorrelations.set(r.flightDataId, r);
   efspMarsa.clear();
@@ -252,8 +275,19 @@ export function stripIdsForTrackId(trackId) {
 
 /** An efsp-airspace-delta — its own message type, since airspaces are not Strips and ride no Board's seq. */
 export function applyEfspAirspaceDelta(msg) {
-  for (const a of (msg.airspaces && msg.airspaces.updated) || []) efspAirspaces.set(a.airspaceId, a);
+  for (const a of (msg.airspaces && msg.airspaces.updated) || []) {
+    _noteAirspaceEdit(efspAirspaces.get(a.airspaceId), a);
+    efspAirspaces.set(a.airspaceId, a);
+  }
+  // A deleted airspace (ADR 0098 §8): gone from every client, with the edits this window kept for it.
+  for (const id of (msg.airspaces && msg.airspaces.removed) || []) {
+    efspAirspaces.delete(id);
+    efspAirspaceEdits.delete(id);
+  }
 }
+
+/** The definition edits this window has seen for an airspace, oldest first. */
+export function getEfspAirspaceEdits(airspaceId) { return [...(efspAirspaceEdits.get(airspaceId) || [])]; }
 
 export function getEfspAirspace(airspaceId) { return efspAirspaces.get(airspaceId) || null; }
 export function getAllEfspAirspaces() { return [...efspAirspaces.values()]; }
@@ -501,6 +535,8 @@ export function _resetEfspStateForTest() {
   efspCorrelations.clear();
   efspCorrelationStats = null;
   efspMarsa.clear();
+  efspAirspaces.clear();
+  efspAirspaceEdits.clear();
   efspRunwayStatuses.clear();
   efspConformance.clear();
   efspConflicts = [];
