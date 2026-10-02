@@ -267,7 +267,45 @@ function staffTactical(f) {
   ps.setSignedOnPositions('jtac-controller', 'JTAC', ['JTAC']);
 }
 
-test.todo('MARK_ENTERED is undoable within 10 s (next commit)');
+test('MARK_ENTERED is undoable within 10 s: pending is back and the effective stamp is gone (H95, DR-5 a)', () => {
+  const f = makeFacilities(); const p = propose(f);
+  accept(f, p.missionId, 'MARSA');
+  staffTactical(f);
+  const before = { ...tofiOf(f, p.flightDataId) };
+  assert.equal(before.pendingSeparationRegime, 'MARSA');
+  const marked = act(f, p.missionId, { kind: 'TOFI', action: 'MARK_ENTERED' });
+  assert.equal(marked.ok, true, JSON.stringify(marked));
+  assert.match(marked.undoable.label, /^Mark entered EAGLE1$/);
+  assert.equal(tofiOf(f, p.flightDataId).separationRegime, 'MARSA');
+  WALL_NOW += 9_000;
+  const undone = act(f, p.missionId, undoOf(marked));
+  assert.equal(undone.ok, true, JSON.stringify(undone));
+  const t = tofiOf(f, p.flightDataId);
+  assert.equal(t.separationRegime, 'ATC'); assert.equal(t.pendingSeparationRegime, 'MARSA');
+  assert.equal(t.pendingFacilityId, before.pendingFacilityId); assert.equal(t.pendingSince, before.pendingSince);
+  assert.equal(t.regimeEffective, null);
+});
+
+test('MARK_ENTERED: at 10 s the answer is UNDO_UNAVAILABLE, and another Position cannot undo it', () => {
+  const f = makeFacilities(); const p = propose(f);
+  accept(f, p.missionId, 'MARSA');
+  staffTactical(f);
+  const marked = act(f, p.missionId, { kind: 'TOFI', action: 'MARK_ENTERED' });
+  const b = tac(f);
+  const other = b.applyMutation(mutation({ stripId: p.missionId, baseRev: b.getStrip(p.missionId).rev, op: undoOf(marked) }), 'JTAC', 'jtac-controller');
+  assert.equal(other.ok, false); assert.notEqual(other.reason, 'UNDO_UNAVAILABLE');
+  assert.equal(tofiOf(f, p.flightDataId).separationRegime, 'MARSA', 'nothing changed');
+  WALL_NOW += 10_000;
+  const late = act(f, p.missionId, undoOf(marked));
+  assert.equal(late.ok, false); assert.equal(late.reason, 'UNDO_UNAVAILABLE');
+  assert.equal(tofiOf(f, p.flightDataId).separationRegime, 'MARSA');
+});
+
+test('the other TOFI answers (ACCEPT, REJECT, TRANSFER_COMMS) are not undoable', () => {
+  const f = makeFacilities(); const p = propose(f);
+  const accepted = accept(f, p.missionId, 'MARSA');
+  assert.equal(accepted.ok, true); assert.equal(accepted.undoable, undefined);
+});
 
 test('the monitor\'s automatic entry blocks no open undo of the same flight', () => {
   const f = makeFacilities(); const p = propose(f);
