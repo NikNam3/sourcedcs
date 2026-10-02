@@ -298,7 +298,7 @@ test('a SetBlock at 9F routes to filed.stereoRouteName — writing it is how a f
 
 // ── WP6: the MARSA course/altitude interlock (§9.2 rule 2, docs/adr/0051) ──
 
-test('every Strip Role a controller issues clearances on has BOTH a course and an altitude interlock Block', () => {
+test('every strip type a controller issues clearances on has BOTH a course and an altitude interlock Block', () => {
   // The point of this test. §13's acceptance criterion — "a heading or
   // altitude assignment to a MARSA participant before rendezvous voids the
   // relation" — can pass on one strip type while silently not holding on another,
@@ -321,7 +321,7 @@ test('MISSION has no interlock Block, and that is a decision', () => {
   assert.deepEqual(interlockBlocks('MISSION'), []);
 });
 
-test('the interlock answer is per-Role — Block 7 means opposite things on DEPARTURE and ARRIVAL', () => {
+test('the interlock answer is per-strip type — Block 7 means opposite things on DEPARTURE and ARRIVAL', () => {
   // DEPARTURE's Block 7 is filed.requestedAltitude, what the flight ASKED FOR.
   // ARRIVAL's Block 7 is the assigned/cleared altitude. Same id, opposite
   // answers — which is why this lives in the Block Map and not in a list of
@@ -334,7 +334,7 @@ test('the interlock answer is per-Role — Block 7 means opposite things on DEPA
   assert.equal(interlockFor('OVERFLIGHT', '9A-VECTOR'), 'COURSE');
 });
 
-test('interlockFor is null for an unknown Block or Role rather than throwing', () => {
+test('interlockFor is null for an unknown Block or strip type rather than throwing', () => {
   assert.equal(interlockFor('DEPARTURE', 'NOPE'), null);
   assert.equal(interlockFor('NOT_A_STRIP_TYPE', '20'), null);
 });
@@ -366,7 +366,7 @@ test('OVERFLIGHT\'s two assignment Blocks keep a clearance history (on the fligh
 
 const ATC_STRIP_TYPES = ['DEPARTURE', 'ARRIVAL', 'OVERFLIGHT'];
 
-test('the hook and ordnance Blocks exist on EVERY ATC Role, not just the one a test happened to use', () => {
+test('the hook and ordnance Blocks exist on EVERY ATC strip type, not just the one a test happened to use', () => {
   // docs/adr/0051's lesson, asserted rather than trusted: each strip type has its own
   // Block Map, so a field added to one silently does not exist on the others,
   // and the test that passes is not the test that matters. A hook requirement
@@ -380,7 +380,7 @@ test('the hook and ordnance Blocks exist on EVERY ATC Role, not just the one a t
   }
 });
 
-test('MISSION gets ordnance (H55) onto the same FDR field, and never the hook', () => {
+test('MISSION gets ordnance (H55) onto the same flight data field, and never the hook', () => {
   // decisions.md H55 (docs/adr/0069) overrides docs/adr/0052's "MISSION gets
   // neither": a pilot reports hung ordnance to whoever they are talking to,
   // which may be a tactical Position. It is still one fact in one place — the
@@ -499,7 +499,7 @@ const MTR_BLOCKS = {
   '9H-EXIT': 'military.mtr.exitFix', '9H-TIME': 'military.mtr.exitEstimateUtc', '9H-ALT': 'military.mtr.requestedAltitudeAfterExit',
 };
 
-test('the six MTR Blocks exist on EVERY ATC Role, plain flightData, optional — and none on MISSION', () => {
+test('the six MTR Blocks exist on EVERY ATC strip type, plain flightData, optional — and none on MISSION', () => {
   for (const stripType of ATC_STRIP_TYPES) {
     for (const [id, path] of Object.entries(MTR_BLOCKS)) {
       assert.deepEqual(resolveBlockTarget(stripType, id), { kind: 'flightData', path }, `${stripType}/${id}`);
@@ -525,7 +525,7 @@ test('the bare 9G / 9H family ids do not resolve — only the six named Blocks d
 
 // ── §9.6 alert status (docs/adr/0070) ───────────────────────────────────────
 
-test('M16 is Block 14E on DEPARTURE and on no other Role', () => {
+test('M16 is Block 14E on DEPARTURE and on no other strip type', () => {
   // The namespace drift test above looks only at DEPARTURE_BLOCK_MAP, so the
   // "no other Role" half is held here: an ARRIVAL/OVERFLIGHT alert status
   // means nothing, and only a departure sits on an alert pad.

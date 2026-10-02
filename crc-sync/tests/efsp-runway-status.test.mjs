@@ -185,7 +185,7 @@ test('OVERFLIGHT and MISSION Strips have no runway', () => {
   assert.equal(resolveRunwayForStrip({ stripType: 'MISSION', rackId: 'rwy-05' }, flightDataFiled('05'), view), null);
 });
 
-test('runwayInhibitFor fails open: no field state, unknown runway, OPEN runway -> null', () => {
+test('runwayInhibitFor fails open: no runway status, unknown runway, OPEN runway -> null', () => {
   assert.equal(runwayInhibitFor(departure(), flightDataFiled('05'), null), null);
   assert.equal(runwayInhibitFor(departure(), flightDataFiled('05'), viewWith('OPEN')), null);
   assert.equal(runwayInhibitFor(departure(), flightDataFiled('17'), viewWith('CLOSED', { activeRunway: null })), null);
@@ -283,7 +283,7 @@ test('the store seeds one record per Facility with an inventory, every runway OP
   assert.deepEqual(fsI.alertPad, { name: 'Alert pad', accessRoute: 'ALERT ACCESS TAXIWAY', occupied: false, occupantFlightDataId: null });
 });
 
-test('TWR begins runway works: the whole pavement is suspended in one rev, with the kind and who', () => {
+test('LC begins runway works: the whole pavement is suspended in one rev, with the kind and who', () => {
   const { store } = freshStore();
   const seq = store.currentSeq;
   const fsI = mustOp(store, 'LC', 'BeginRunwayWorks', { runwayId: '05/23', note: 'BAK-12 re-rig' });
@@ -296,7 +296,7 @@ test('TWR begins runway works: the whole pavement is suspended in one rev, with 
   assert.equal(rwy(fsI).suspension.note, 'BAK-12 re-rig');
 });
 
-test('OPS cannot begin runway works or close a runway itself — only TWR (decisions.md H18)', () => {
+test('OPS cannot begin runway works or close a runway itself — only LC (decisions.md H18)', () => {
   const { store } = freshStore();
   for (const kind of ['BeginRunwayWorks', 'CloseRunway']) {
     const r = op(store, 'OPS', kind, { runwayId: '05/23' });
@@ -360,7 +360,7 @@ test('CompleteInspection is refused to a Position other than inspectionAuthority
   assert.equal(op(s2, 'AP', 'CompleteInspection', { runwayId: '05/23' }).reason, 'PERMISSION_DENIED'); // not widened
 });
 
-test('CloseRunway / OpenRunway round trip (TWR)', () => {
+test('CloseRunway / OpenRunway round trip (LC)', () => {
   const { store } = freshStore();
   let fsI = mustOp(store, 'LC', 'CloseRunway', { runwayId: '05/23', reason: 'FOD' });
   assert.equal(rwy(fsI).status, 'CLOSED');
@@ -387,7 +387,7 @@ test('OPS asks tower to close the runway; tower accepts and the closure names wh
   assert.equal(rwy(fsI).closure.reason, 'FOD reported');
 });
 
-test('tower rejects a request; a request for what the runway already is, or from TWR itself, is refused', () => {
+test('tower rejects a request; a request for what the runway already is, or from LC itself, is refused', () => {
   const { store } = freshStore();
   assert.match(op(store, 'OPS', 'RequestRunwayStatus', { runwayId: '05/23', action: 'OPEN' }).detail, /nothing to ask/);
   assert.equal(op(store, 'OPS', 'RequestRunwayStatus', { runwayId: '05/23', action: 'PAINT' }).reason, 'VALIDATION_ERROR');
@@ -680,7 +680,7 @@ test('a CLOSED runway inhibits too (decisions.md Q28)', () => {
   assert.deepEqual(r, { inhibited: 'runway 05/23 closed' });
 });
 
-test('an unresolvable runway, a runway not in the inventory, and a Facility with no field state all fail open', () => {
+test('an unresolvable runway, a runway not in the inventory, and a Facility with no runway status all fail open', () => {
   const noActive = viewWith('CLOSED', { activeRunway: null });
   const flightDataNoRunway = readyFlightData({ filed: { departureRunway: null }, assigned: { landingRunway: null } });
   assert.deepEqual(nla.computeNla({ stripType: 'DEPARTURE', state: 'RUNWAY_QUEUE', rackId: 'main' }, flightDataNoRunway, NOW, ctxWith(noActive)), { toState: 'LUAW' });
@@ -695,7 +695,7 @@ test('a ctx with no runwayStatusFor at all behaves exactly as before (every pre-
   assert.deepEqual(nla.computeNla({ stripType: 'ARRIVAL', state: 'HANDED_TO_TOWER', rackId: 'main' }, readyFlightData(), NOW, everyoneHome), { toState: 'FINAL' });
 });
 
-test('OVERFLIGHT and MISSION are never inhibited by field state', () => {
+test('OVERFLIGHT and MISSION are never inhibited by runway status', () => {
   const view = viewWith('CLOSED');
   // INBOUND and HANDED_OFF are ARRIVAL's and DEPARTURE's state names too (docs/adr/0087): a closed runway must not hold an overflight in them.
   assert.deepEqual(nla.computeNla({ stripType: 'OVERFLIGHT', state: 'INBOUND', rackId: 'rwy-05' }, readyFlightData(), NOW, ctxWith(view)), { toState: 'IN_SECTOR' });
@@ -767,7 +767,7 @@ test('BeginRunwayChange is refused in every state but ACKNOWLEDGED', () => {
   assert.equal(begin().ok, false);
 });
 
-test('acknowledgement order is irrelevant: APP then OPS, and OPS then APP, both reach ACKNOWLEDGED', () => {
+test('acknowledgement order is irrelevant: AP then OPS, and OPS then AP, both reach ACKNOWLEDGED', () => {
   for (const order of [['AP', 'OPS'], ['OPS', 'AP']]) {
     const { store } = staffed();
     mustOp(store, 'LC', 'ProposeRunwayChange', { toRunwayId: '23' });
@@ -788,7 +788,7 @@ test('a second ack from the same acknowledger is refused, not double-counted', (
   assert.equal(change(store).state, 'PROPOSED');
 });
 
-test('an ack sent as TWR never counts as an acknowledger (the D21 guard at the store)', () => {
+test('an ack sent as LC never counts as an acknowledger (the D21 guard at the store)', () => {
   const { store } = staffed();
   mustOp(store, 'LC', 'ProposeRunwayChange', { toRunwayId: '23' });
   assert.equal(op(store, 'LC', 'AckRunwayChange').reason, 'PERMISSION_DENIED');
@@ -851,7 +851,7 @@ test('RejectRunwayChange ends the change REJECTED; a new proposal may replace it
   assert.equal(next.transitions.at(-1).replaced.changeId, oldId);
 });
 
-test('WithdrawRunwayChange lets TWR retract before Begin, recorded as WITHDRAWN — and not after', () => {
+test('WithdrawRunwayChange lets LC retract before Begin, recorded as WITHDRAWN — and not after', () => {
   const { store } = staffed();
   mustOp(store, 'LC', 'ProposeRunwayChange', { toRunwayId: '23' });
   assert.equal(op(store, 'OPS', 'WithdrawRunwayChange').reason, 'PERMISSION_DENIED');
@@ -951,7 +951,7 @@ test('runwayChangeInProgress is true exactly in IN_PROGRESS and PENDING_INSPECTI
   assert.equal(inProgress(), false);
 });
 
-test('SelfCoordinateRunwayChange: one input from a controller Primary on TWR and every staffed acknowledger (decisions.md S-Q24)', () => {
+test('SelfCoordinateRunwayChange: one input from a controller Primary on LC and every staffed acknowledger (decisions.md S-Q24)', () => {
   const solo = (f, p) => 'c-solo';
   const { store } = staffed({ primaryOf: solo });
   const fsI = mustOp(store, 'LC', 'SelfCoordinateRunwayChange', { toRunwayId: '23' }, { by: 'c-solo' });
@@ -976,7 +976,7 @@ test('the wind never moves the active runway while a change is open', () => {
   assert.equal(store.getRunwayStatus('INCIRLIK').activeRunway, '05');
 });
 
-test('a reconnect in the same mission session keeps the end TWR changed to; a new session is considered again (ADR 0086)', () => {
+test('a reconnect in the same mission session keeps the end LC changed to; a new session is considered again (ADR 0086)', () => {
   const { store } = staffed(); // session 1's wind set 05
   mustOp(store, 'LC', 'ProposeRunwayChange', { toRunwayId: '23' });
   mustOp(store, 'OPS', 'AckRunwayChange');

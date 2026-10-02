@@ -114,7 +114,7 @@ export function createEfspMetricsClient(deps) {
     if (!positionId || !_holds(facilityId, positionId)) {
       // crc-sync would refuse the report (NOT_HOLDING_POSITION) — T7.
       stats.droppedNotSignedOn += 1;
-      warnOnce('not-held', `[efsp-metrics] dropping a ${event.kind} for ${positionId || 'no Position'}: not held (logged once)`);
+      warnOnce('not-held', `[efsp-metrics] dropping a ${event.kind} for ${positionId || 'no Position'}: not signed on (logged once)`);
       return;
     }
     if (deps.missionNow) event.at = deps.missionNow();

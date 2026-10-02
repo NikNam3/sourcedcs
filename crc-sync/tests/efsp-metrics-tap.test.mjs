@@ -115,7 +115,7 @@ test('a message type nobody has heard of that ends in -mutation is still counted
   assert.equal(r.byReason.X, 1);
 });
 
-test('transfers: no receiving Position is a failure with its cause; a covered transfer is routed; neither is a non-transfer', () => {
+test('transfers: no receiving Position is a failure with its cause; a consolidated transfer is routed; neither is a non-transfer', () => {
   const before = body().metrics.transfers;
   const strip = newStrip('TAP2');
   hold(efsp, c.LC.session, 'INCIRLIK', []);

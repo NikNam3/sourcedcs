@@ -393,7 +393,7 @@ test('VOID_TIME_EXPIRED never fires for a Strip that is no longer HELD — the f
   assert.deepEqual(computeDueObligations(makeHeldStrip({ state: 'DEPARTED' }), flightData, NOW), []);
 });
 
-test('VOID_TIME_EXPIRED never fires for a non-DEPARTURE Role — void time is a departure-clearance concept', () => {
+test('VOID_TIME_EXPIRED never fires for a non-DEPARTURE strip type — void time is a departure-clearance concept', () => {
   const flightData = makeVoidFlightData(NOW - MIN);
   const strip = { stripId: 's1', stripType: 'ARRIVAL', state: 'HELD', coordination: null };
   assert.equal(computeDueObligations(strip, flightData, NOW).some(o => o.obligationType === 'VOID_TIME_EXPIRED'), false);

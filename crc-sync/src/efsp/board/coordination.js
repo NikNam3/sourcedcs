@@ -381,7 +381,7 @@ class Coordination {
    */
   receiveCoordinationProposal({ primitive, fromFacilityId, fromPositionId, fromStripId, toPositionId, flightDataId, fromStripType, fromState, note, by, causedBy }) {
     const flightData = this._flightDataStore.getFlightData(flightDataId);
-    if (!flightData) return { ok: false, reason: 'NOT_FOUND', detail: 'referenced FDR not found' };
+    if (!flightData) return { ok: false, reason: 'NOT_FOUND', detail: 'referenced flight data not found' };
 
     const coordinationBay = this._rules.coordinationBayFor(toPositionId);
     if (!coordinationBay) {

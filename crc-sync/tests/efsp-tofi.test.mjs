@@ -417,7 +417,7 @@ function bindMissionLine(facilities, flightDataId, overrides = {}) {
   }), 'TAC_C2', 'tac-c2-controller');
 }
 
-test('CreateStrip binds a MISSION Strip to an existing flight, sharing its FDR and its beacon code', () => {
+test('CreateStrip binds a MISSION Strip to an existing flight, sharing its flight data and its beacon code', () => {
   const facilities = makeFacilities();
   const atcStrip = createCtrStrip(facilities);
   const { boardStore: tacBoard } = facilities.get('TACTICAL');

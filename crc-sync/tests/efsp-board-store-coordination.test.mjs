@@ -315,7 +315,7 @@ test('a Strip cannot have two open coordination links at once — a second PROPO
   assert.equal(second.reason, 'VALIDATION_ERROR');
 });
 
-test('D21 regression: only APP/CTR may PROPOSE a coordination primitive — GND is refused even though it owns its own Strip', () => {
+test('D21 regression: only AP/CTR may PROPOSE a coordination primitive — GC is refused even though it owns its own Strip', () => {
   const facilities = makeFacilities();
   const { boardStore: incirlikBoard, positionStore: incirlikPositions } = facilities.get('INCIRLIK');
   incirlikPositions.setSignedOnPositions('gc-controller', 'Gnd1', ['GC']); // occupy GC so the TransferStrip fixture setup below can route to it
@@ -349,7 +349,7 @@ test('ACCEPT/REJECT with no pending PROPOSED coordination on the Strip is reject
 
 // ── Track-degradation soft interlock (guide §4.6 rule 5), docs/adr/0019 ──
 
-test('PROPOSE is rejected without a note when the FDR carries a non-NONE track-degradation flag', () => {
+test('PROPOSE is rejected without a note when the flight data carries a non-NONE track-degradation flag', () => {
   const facilities = makeFacilities();
   const strip = createCtrStrip(facilities);
   const { boardStore, } = facilities.get('CENTER');
@@ -387,7 +387,7 @@ test('OPERATIONAL_REQUEST APPROVE creates a replica and updates both sides like 
 
 // ── docs/adr/0022: AP -> CTR DEPARTURE coordination (the gap-closure) ──
 
-test('APP -> CTR HANDOFF PROPOSE mints a DEPARTURE/HANDED_OFF replica at CTR — the previously-hardcoded ARRIVAL/INBOUND shape is now the sender\'s actual role/state', () => {
+test('AP -> CTR HANDOFF PROPOSE mints a DEPARTURE/HANDED_OFF replica at CTR — the previously-hardcoded ARRIVAL/INBOUND shape is now the sender\'s actual role/state', () => {
   const facilities = makeFacilities();
   const senderStrip = createAppHandedOffStrip(facilities);
   assert.equal(senderStrip.stripType, 'DEPARTURE');
@@ -404,7 +404,7 @@ test('APP -> CTR HANDOFF PROPOSE mints a DEPARTURE/HANDED_OFF replica at CTR —
   assert.equal(receiver.bayId, 'ctr-ap-coordination');
 });
 
-test('APP -> CTR HANDOFF ACCEPT moves the replica into ctr-departures (not ctr-enroute) and each side stays independently droppable', () => {
+test('AP -> CTR HANDOFF ACCEPT moves the replica into ctr-departures (not ctr-enroute) and each side stays independently droppable', () => {
   const facilities = makeFacilities();
   const senderStrip = createAppHandedOffStrip(facilities);
   const proposed = proposeFromApp(facilities, senderStrip);
@@ -430,7 +430,7 @@ test('APP -> CTR HANDOFF ACCEPT moves the replica into ctr-departures (not ctr-e
   assert.equal(senderStill.state, 'HANDED_OFF'); // untouched — independent replicas, D13
 });
 
-test('PROPOSE is rejected when the Strip is not in an eligible (stripType, state) combo — a DEPARTURE Strip at APP but still PROPOSED (not yet HANDED_OFF) cannot propose HANDOFF', () => {
+test('PROPOSE is rejected when the Strip is not in an eligible (stripType, state) combo — a DEPARTURE Strip at AP but still PROPOSED (not yet HANDED_OFF) cannot propose HANDOFF', () => {
   const facilities = makeFacilities();
   const { boardStore: incirlikBoard, positionStore } = facilities.get('INCIRLIK');
   positionStore.setSignedOnPositions('ap-controller', 'App1', ['AP']);
@@ -783,7 +783,7 @@ test('ConvertToArrival is rejected on anything other than a DEPARTURE Strip at H
   assert.equal(result.reason, 'VALIDATION_ERROR');
 });
 
-test('D21 regression: TWR may not ConvertToArrival even a Strip it happens to own — only APP/CTR ever get this op kind at all', () => {
+test('D21 regression: LC may not ConvertToArrival even a Strip it happens to own — only AP/CTR ever get this op kind at all', () => {
   const facilities = makeFacilities();
   const { boardStore, positionStore } = facilities.get('INCIRLIK');
   positionStore.setSignedOnPositions('lc-controller', 'Twr1', ['LC']);
@@ -806,7 +806,7 @@ test('D21 regression: TWR may not ConvertToArrival even a Strip it happens to ow
   assert.equal(result.reason, 'PERMISSION_DENIED');
 });
 
-test('ConvertToArrival works identically at CTR (CENTER Facility) — a departure handed off from APP, then converted for its return leg', () => {
+test('ConvertToArrival works identically at CTR (CENTER Facility) — a departure handed off from AP, then converted for its return leg', () => {
   const facilities = makeFacilities();
   const senderStrip = createAppHandedOffStrip(facilities);
   const proposed = proposeFromApp(facilities, senderStrip);

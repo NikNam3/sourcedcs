@@ -411,7 +411,7 @@ class Tofi {
    */
   receiveTofiProposal({ fromFacilityId, fromPositionId, fromStripId, toPositionId, flightDataId, note, by, causedBy }) {
     const flightData = this._flightDataStore.getFlightData(flightDataId);
-    if (!flightData) return { ok: false, reason: 'NOT_FOUND', detail: 'referenced FDR not found' };
+    if (!flightData) return { ok: false, reason: 'NOT_FOUND', detail: 'referenced flight data not found' };
 
     // FIND BEFORE MINT (docs/adr/0054). A mission line can now exist before
     // any TOFI — TAC_C2 tasks it and binds it to the flight at fragging time —

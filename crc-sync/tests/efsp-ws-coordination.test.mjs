@@ -110,7 +110,7 @@ test('a message with an unknown facilityId is rejected, not a throw', () => {
 
 // ── End-to-end HANDOFF across the wire-message boundary ──────────────────
 
-test('CTR originates an ARRIVAL Strip, proposes HANDOFF to APP, and APP accepts it — full round trip through handleMessage with facilityId routing', () => {
+test('CTR originates an ARRIVAL Strip, proposes HANDOFF to AP, and AP accepts it — full round trip through handleMessage with facilityId routing', () => {
   const ctx = makeCtx();
   holding(ctx, CTR_SESSION, 'CENTER', ['CTR']);
   holding(ctx, AP_SESSION, 'INCIRLIK', ['AP']);

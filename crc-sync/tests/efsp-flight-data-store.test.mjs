@@ -70,7 +70,7 @@ test('createFlightData mints a beacon code automatically and marks it COMPUTER_G
   assert.equal(flightData.provenance['identity.beaconAssigned'], 'COMPUTER_GENERATED');
 });
 
-test('createFlightData never mints a code from the code allocator that duplicates another FDR\'s freshly minted code', () => {
+test('createFlightData never mints a code from the code allocator that duplicates another flight data\'s freshly minted code', () => {
   const store = new FlightDataStore();
   const { flightData: a } = store.createFlightData(makeSeed({ callsign: 'AAA1111' }), { by: 'OPS' });
   const { flightData: b } = store.createFlightData(makeSeed({ callsign: 'BBB2222' }), { by: 'OPS' });
@@ -112,7 +112,7 @@ test('createFlightData seeds guide §6.4\'s military namespace, with every undel
   }
 });
 
-test('two FDRs do not share one military.mtr object', () => {
+test('two flight data do not share one military.mtr object', () => {
   const store = new FlightDataStore();
   const { flightData: a } = store.createFlightData(makeSeed(), { by: 'OPS' });
   const { flightData: b } = store.createFlightData(makeSeed({ callsign: 'MIL0002' }), { by: 'OPS' });
@@ -181,7 +181,7 @@ test('there is no writable path for identity.modeOne or identity.modeTwo anywher
   assert.equal(store.setField(flightData.flightDataId, 'identity.modeTwo', '1234', { by: 'CD' }).ok, false);
 });
 
-test('setBeaconAssigned rejects a reserved code as VALIDATION_ERROR and does not change the FDR', () => {
+test('setBeaconAssigned rejects a reserved code as VALIDATION_ERROR and does not change the flight data', () => {
   const store = new FlightDataStore();
   const { flightData } = store.createFlightData(makeSeed(), { by: 'OPS' });
   const before = flightData.identity.beaconAssigned;
@@ -288,7 +288,7 @@ test('releaseFlightData frees the beacon code back to the allocator', () => {
   assert.equal(store.codeAllocator.isAllocated(code), false);
 });
 
-test('snapshot()/restore() round-trips both FDR state and code-allocator state', () => {
+test('snapshot()/restore() round-trips both flight data state and code-allocator state', () => {
   const store = new FlightDataStore();
   const { flightData } = store.createFlightData(makeSeed(), { by: 'OPS' });
   const snap = store.snapshot();
@@ -301,7 +301,7 @@ test('snapshot()/restore() round-trips both FDR state and code-allocator state',
 
 // ── WP4A: EDCT / CALL_FOR_RELEASE (§4.6.2), docs/adr/0017 ──────────────
 
-test('a fresh FDR starts with every EDCT/CALL_FOR_RELEASE field null', () => {
+test('a fresh flight data starts with every EDCT/CALL_FOR_RELEASE field null', () => {
   const store = new FlightDataStore();
   const { flightData } = store.createFlightData(makeSeed(), { by: 'OPS' });
   assert.equal(flightData.assigned.edctTimeUtc, null);
@@ -387,7 +387,7 @@ test('every value TRACK_DEGRADATION_FLAGS lists is accepted', () => {
 
 // ── WP4A: airspace ownership as a direction (§4.6.4), docs/adr/0018 ────
 
-test('a fresh FDR\'s airspace ownership starts null (undecided), not a default direction', () => {
+test('a fresh flight data\'s airspace ownership starts null (undecided), not a default direction', () => {
   const store = new FlightDataStore();
   const { flightData } = store.createFlightData(makeSeed(), { by: 'OPS' });
   assert.deepEqual(flightData.airspace, { owner: null, changedAt: null, changedBy: null, transitions: [] });
@@ -434,7 +434,7 @@ test('AIRSPACE_OWNERS has exactly the two directions the guide names, nothing el
 
 // ── WP4A second slice, §4.6.3 — the three-field separation model ────────
 
-test('a fresh FDR\'s tofi sub-object starts at its documented defaults, not null', () => {
+test('a fresh flight data\'s tofi sub-object starts at its documented defaults, not null', () => {
   const store = new FlightDataStore();
   const { flightData } = store.createFlightData(makeSeed(), { by: 'OPS' });
   assert.deepEqual(flightData.tofi, { ifrActive: false, radarService: null, separationRegime: null, changedAt: null, changedBy: null });
@@ -539,7 +539,7 @@ test('null is a real observed value — "assigned but nothing received", not an 
   assert.equal(store.getFlightData(flightData.flightDataId).identity.beaconObserved, null);
 });
 
-test('setBeaconObserved writes only on change, so a once-a-second reconciler does not churn every FDR rev', () => {
+test('setBeaconObserved writes only on change, so a once-a-second reconciler does not churn every flight data rev', () => {
   const store = new FlightDataStore();
   const { flightData } = store.createFlightData(makeSeed(), { by: 'OPS' });
   const before = store.getFlightData(flightData.flightDataId).rev;
@@ -596,7 +596,7 @@ test('trackRef stays null and has no route to being written — §6.6 rule 2 for
 
 // ── §9.10 stereo routes (docs/adr/0050) ──────────────────────────────────
 
-test('ACCEPTANCE (WP6): a stereo route filed by short name produces a complete FDR', () => {
+test('ACCEPTANCE (WP6): a stereo route filed by short name produces a complete flight data', () => {
   // The guide's own acceptance criterion for this deliverable, word for word.
   // Callsign and short name are ALL that is supplied — everything else comes
   // out of the table, which is what "does not require a full flight-plan
@@ -612,7 +612,7 @@ test('ACCEPTANCE (WP6): a stereo route filed by short name produces a complete F
   assert.equal(flightData.filed.stereoRouteName, 'PACK 1');
 });
 
-test('the FDR records the table\'s canonical name, not the spelling that was typed', () => {
+test('the flight data records the table\'s canonical name, not the spelling that was typed', () => {
   const store = new FlightDataStore();
   for (const typed of ['PACK1', 'pack 1', 'pack-1']) {
     const { flightData } = store.createFlightData({ callsign: 'VIPER1', stereoRouteName: typed }, { by: 'OPS' });
@@ -849,7 +849,7 @@ test('setField cannot reach the military namespace — every path but the six MT
 // `military` is the literal null it was before docs/adr/0052, and a §9.5/§9.7
 // reader must not throw on exactly the flights that were already airborne
 // when the service restarted.
-test('restore seeds the military namespace onto an FDR written before it existed', () => {
+test('restore seeds the military namespace onto flight data written before it existed', () => {
   const store = new FlightDataStore();
   const { flightData } = store.createFlightData(makeSeed(), { by: 'OPS' });
   const legacy = JSON.parse(JSON.stringify(store.snapshot()));
@@ -936,7 +936,7 @@ test('MTR times are stored as epoch ms on the MISSION date, typed as HHMM / HH:M
   }
 });
 
-test('MTR times refuse what is not a time of day, legibly, and leave the FDR byte-identical', () => {
+test('MTR times refuse what is not a time of day, legibly, and leave the flight data byte-identical', () => {
   const store = new FlightDataStore(undefined, { clock: missionClock });
   const { flightData } = store.createFlightData(makeSeed(), { by: 'OPS' });
   store.setField(flightData.flightDataId, 'military.mtr.exitEstimateUtc', '1432', { by: 'CTR' });
@@ -1003,7 +1003,7 @@ test('setMilitary still refuses mtr, whole — the leaves go through setField on
   assert.equal(store.getFlightData(flightData.flightDataId).military.mtr.designator, null);
 });
 
-test('an FDR restored from before docs/adr/0052 (military: null) accepts an MTR write', () => {
+test('flight data restored from before docs/adr/0052 (military: null) accepts an MTR write', () => {
   const store = new FlightDataStore(undefined, { clock: missionClock });
   const { flightData } = store.createFlightData(makeSeed(), { by: 'OPS' });
   const legacy = JSON.parse(JSON.stringify(store.snapshot()));
@@ -1073,7 +1073,7 @@ test('0073: a DD1801 departure time that is not a time is dropped, never a refus
   }
 });
 
-test('0073: restore() seeds timeInputs onto an FDR persisted before it, so a reader never throws (T9)', () => {
+test('0073: restore() seeds timeInputs onto flight data persisted before it, so a reader never throws (T9)', () => {
   const store = missionStore(MISSION_DAY(13, 50));
   const { flightData } = store.createFlightData(makeSeed(), { by: 'c-OPS' });
   const old = JSON.parse(JSON.stringify(flightData));

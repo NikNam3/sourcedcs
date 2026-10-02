@@ -92,7 +92,7 @@ test('HUNG on a DEPARTURE says "if it returns" (an aborted sortie, Q1)', () => {
   assert.doesNotMatch(a.reason, RECOMMENDS);
 });
 
-test('HUNG at a Facility with no field state returns null', () => {
+test('HUNG at a Facility with no runway status returns null', () => {
   assert.equal(hungOrdnanceAdvisoryFor(arrival({ facilityId: 'CENTER' }), flightDataWith('HUNG'), null), null);
   assert.equal(hungOrdnanceAdvisoryFor(arrival({ facilityId: 'CENTER' }), flightDataWith('HUNG'), undefined), null);
 });

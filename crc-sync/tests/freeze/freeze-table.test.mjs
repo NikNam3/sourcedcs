@@ -227,7 +227,7 @@ test('freeze table: CreateStrip (Position x stripType)', () => {
   checkGolden(assert, 'table-create', { cells: createMatrix() }, (d) => d.cells.map(c => [c.cell, c]));
 });
 
-test('freeze table: snapshot()/restore() reproduces the Board and FDRs', () => {
+test('freeze table: snapshot()/restore() reproduces the Board and flight data', () => {
   for (const r of matrix.roundTrips) {
     assert.ok(r.boardsEqual, `${r.id}: a restored Board differs from the persisted one`);
     assert.ok(r.flightDataEqual, `${r.id}: restored FDRs differ from the persisted ones`);
@@ -235,7 +235,7 @@ test('freeze table: snapshot()/restore() reproduces the Board and FDRs', () => {
   checkGolden(assert, 'table-roundtrip', { cells: matrix.roundTrips.map(r => ({ ...r, cell: r.id })) }, (d) => d.cells.map(c => [c.cell, c]));
 });
 
-test('freeze table: what the NLA button offers per Role x state x owner', () => {
+test('freeze table: what the NLA button offers per strip type x state x owner', () => {
   checkGolden(assert, 'table-nla', { cells: matrix.nlas }, (d) => d.cells.map(c => [c.cell, c]));
 });
 

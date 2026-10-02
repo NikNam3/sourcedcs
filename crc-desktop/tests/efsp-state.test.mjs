@@ -53,7 +53,7 @@ test('applyEfspDelta updates changed strips and removes gone ones, leaving other
   assert.equal(getEfspBoardSeq(), 2);
 });
 
-test('applyEfspDelta updates FDRs and Positions too', () => {
+test('applyEfspDelta updates flight data and Positions too', () => {
   applyEfspDelta({ boardSeq: 1, strips: { updated: [], gone: [] }, flightDataList: { updated: [{ flightDataId: 'f1', rev: 3 }] }, positions: { updated: [{ positionId: 'GC', primary: null }] } });
   assert.equal(getEfspFlightData('f1').rev, 3);
   assert.equal(getAllEfspPositions().length, 1);

@@ -69,7 +69,7 @@ test('SCENARIO T1 OPS files from a DD1801; P-time falls back to the plan, a cont
   assert.deepEqual(ours.map(e => [e.op, e.actingPositionId]), [['CreateStrip', 'OPS'], ['SetBlock', 'OPS'], ['SetBlock', 'OPS']]);
 });
 
-test('SCENARIO T2 an FDR carrying the ATO\'s departure time and no plan resolves to ATO (hand-built, contract C1)', () => {
+test('SCENARIO T2 flight data carrying the ATO\'s departure time and no plan resolves to ATO (hand-built, contract C1)', () => {
   const T = zulu(13, 10);
   const flightData = { filed: { proposedDepartureTimeUtc: null }, assigned: {}, timeInputs: { flightPlanDepartureUtc: null }, ato: { departure: { timeUtc: T } } };
   assert.deepEqual(pick(resolveTimeChain('departure', flightData)), { valueUtc: T, source: 'ATO' });

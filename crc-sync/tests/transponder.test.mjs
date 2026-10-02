@@ -75,7 +75,7 @@ test('the allocator never hands out, and refuses, a code from the synthetic bloc
   }
   const refused = new CodeAllocator().validateAssignment('6123', 'f1');
   assert.equal(refused.ok, false);
-  assert.match(refused.detail, /uncontrolled/);
+  assert.match(refused.detail, /reserved for AI aircraft/);
 });
 
 // docs/adr/0066 — a valid Mode 4/5 reply needs our crypto.

@@ -94,7 +94,7 @@ test('releasePrimaryTo requires the target to actually be an Observer', () => {
 
 // ── Vacate / consolidation chain (defect D19) ────────────────────────────────────
 
-test('D19: vacating a Position with no successor routes down the covering chain to the nearest staffed covering Position', () => {
+test('D19: vacating a Position with no successor routes down the consolidation chain to the nearest staffed consolidating Position', () => {
   const store = freshStore();
   store.setSignedOnPositions('c1', 'Alice', ['GC']);
   store.setSignedOnPositions('c2', 'Bob', ['LC']);
@@ -107,21 +107,21 @@ test('D19: vacating a Position with no successor routes down the covering chain 
   assert.equal(store.consolidatedAt('GC'), 'LC');
 });
 
-test('D19: covering chain walks past an also-unoccupied intermediate Position to the next one that IS staffed', () => {
+test('D19: consolidation chain walks past an also-unstaffed intermediate Position to the next one that IS staffed', () => {
   const store = freshStore();
   store.setSignedOnPositions('c1', 'Alice', ['LC']); // only LC staffed; CD and GC are not
   // CD's chain is CD -> GC -> LC; GC is unstaffed too, so it should skip to LC.
   assert.equal(store.consolidatedAt('CD'), 'LC');
 });
 
-test('D19: when the entire covering chain is unstaffed, consolidatedAt returns null — a distinct, checkable "nobody at all" condition, not a silent wrong answer', () => {
+test('D19: when the entire consolidation chain is unstaffed, consolidatedAt returns null — a distinct, checkable "nobody at all" condition, not a silent wrong answer', () => {
   const store = freshStore();
   // Nobody holds anything.
   assert.equal(store.consolidatedAt('CD'), null);
   assert.equal(store.consolidatedAt('GC'), null);
 });
 
-test('OPS and TWR have no covering Position at all, matching the guide\'s own chain table (CD->GND->TWR; OPS uncovered)', () => {
+test('OPS and LC have no consolidating Position at all, matching the guide\'s own chain table (CD->GC->LC; OPS uncovered)', () => {
   const store = freshStore();
   store.setSignedOnPositions('c1', 'Alice', ['OPS']);
   store.setSignedOnPositions('c2', 'Bob', ['CD']);
@@ -157,7 +157,7 @@ test('onDisconnect with no waiting Observer simply leaves the Position unstaffed
   assert.equal(store.isStaffed('GC'), false);
 });
 
-test('onDisconnect releases every Position the controller held, not just one', () => {
+test('onDisconnect releases every Position the controller signed on, not just one', () => {
   const store = freshStore();
   store.setSignedOnPositions('c1', 'Alice', ['GC', 'LC']);
   store.onDisconnect('c1');
@@ -181,7 +181,7 @@ test('setSignedOnPositions filters out unknown Position ids rather than throwing
   assert.deepEqual(result.signedOn, ['GC']);
 });
 
-test('re-declaring the exact same held set is a no-op — no spurious vacate/reclaim', () => {
+test('re-declaring the exact same signed-on set is a no-op — no spurious vacate/reclaim', () => {
   const store = freshStore();
   store.setSignedOnPositions('c1', 'Alice', ['GC']);
   const result = store.setSignedOnPositions('c1', 'Alice', ['GC']);
@@ -235,6 +235,6 @@ test('getAll returns every configured Position, including unstaffed ones', () =>
 test('getAll\'s consolidatedPositions lists the unstaffed Positions currently routing through this one', () => {
   const store = freshStore();
   store.setSignedOnPositions('c1', 'Alice', ['LC']); // CD and GC unstaffed, both are eventually consolidated at LC
-  const twr = store.getAll().find(p => p.positionId === 'LC');
-  assert.deepEqual(twr.consolidatedPositions.sort(), ['CD', 'GC']);
+  const lc = store.getAll().find(p => p.positionId === 'LC');
+  assert.deepEqual(lc.consolidatedPositions.sort(), ['CD', 'GC']);
 });

@@ -247,7 +247,7 @@ test('resync never returns a third message type — only efsp-board-delta or efs
 
 // ── efsp-set-positions ───────────────────────────────────────────────────
 
-test('setting held positions acks with the actually-held set and broadcasts positions', () => {
+test('setting signed-on positions acks with the actually-signed-on set and broadcasts positions', () => {
   const ctx = makeCtx();
   const result = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: ['GC', 'LC'] }, noopPersist);
   assert.deepEqual(result.ack.signedOn.sort(), ['GC', 'LC']);
@@ -256,7 +256,7 @@ test('setting held positions acks with the actually-held set and broadcasts posi
   assert.equal(slot(result, 'primary').positions.updated.length, 8); // all of INCIRLIK's Positions reported (RSU, SFA, PAR since L18)
 });
 
-test('vacating a Position with Strips and an staffed covering Position reassigns them and reports the warning with routedTo', () => {
+test('vacating a Position with Strips and a staffed consolidating Position reassigns them and reports the warning with routedTo', () => {
   const ctx = makeCtx();
   handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: ['GC'] }, noopPersist); // Alice is signed on at GC
   handleMessage(ctx, { controllerId: 'controller-2', who: 'Bob' }, { type: 'efsp-set-positions', signedOn: ['LC'] }, noopPersist); // Bob signs on at LC (the Position GC is consolidated at)
@@ -275,7 +275,7 @@ test('vacating a Position with Strips and an staffed covering Position reassigns
   assert.equal(ctx.boardStoreFor('INCIRLIK').getStrip(strip.stripId).ownerPositionId, 'LC');
 });
 
-test('vacating a Position with Strips and NO staffed covering Position anywhere reports routedTo:null, distinctly, and does not silently drop the Strip', () => {
+test('vacating a Position with Strips and NO staffed consolidating Position anywhere reports routedTo:null, distinctly, and does not silently drop the Strip', () => {
   const ctx = makeCtx();
   handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: ['GC'] }, noopPersist); // GC signed on, but nobody signed on at LC
   // gc-coordination (not gc-taxi-in) — this fixture just needs "GC owns
@@ -411,7 +411,7 @@ test('a refused correlation op still carries the record, so the client renders t
   assert.equal(stale.ack.correlation.trackId, '101');
 });
 
-test('a correlation op for an unknown FDR is refused, not thrown', () => {
+test('a correlation op for an unknown flight data is refused, not thrown', () => {
   const ctx = makeCtx();
   const session = { controllerId: 'c-ops4', who: 'Ops4' };
   holding(ctx, session, ['OPS']);

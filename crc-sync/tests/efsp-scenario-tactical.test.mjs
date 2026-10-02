@@ -229,7 +229,7 @@ test('SCENARIO A3 AIC walks away and the line routes to TAC_C2 (§4.8.6 rule 2)'
   assert.equal(tac(efsp, m.stripId).bayId, 'tac-c2-on-station');
 });
 
-test('SCENARIO A3\' a covering reassignment lands the line in a Bay the covering Position has', () => {
+test('SCENARIO A3\' a consolidation reassignment lands the line in a Bay the consolidating Position has', () => {
   const efsp = freshEfsp();
   const c = crew(efsp, ALL);
   const m = toAic(efsp, c, taskedLine(efsp, c, 'VAC13'));
@@ -249,8 +249,8 @@ test('SCENARIO A3\'\' the same holds at Incirlik: GND walks away and TWR gets th
   hold(efsp, c.GC.session, 'INCIRLIK', []);
   const after = efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId);
   assert.equal(after.ownerPositionId, 'LC');
-  const twrBays = facilityConfig.getBaysFor('LC', 'INCIRLIK').map(b => b.bayId);
-  assert.ok(twrBays.includes(after.bayId), `TWR owns it but it sits in ${after.bayId}`);
+  const lcBays = facilityConfig.getBaysFor('LC', 'INCIRLIK').map(b => b.bayId);
+  assert.ok(lcBays.includes(after.bayId), `LC owns it but it sits in ${after.bayId}`);
 });
 
 test('SCENARIO A4 with TAC_C2 gone too, the chain bottoms out inside TACTICAL and says so (D19)', () => {

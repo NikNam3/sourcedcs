@@ -49,7 +49,7 @@ test('a record is minted on first ask, uncorrelated and with no history', () => 
   assert.deepEqual(seeded.transitions, []);
 });
 
-test('the record carries its own rev, independent of any Strip or FDR', () => {
+test('the record carries its own rev, independent of any Strip or flight data', () => {
   const s = store();
   bind(s);
   assert.equal(s.getCorrelation(FDR).rev, 1);
@@ -109,7 +109,7 @@ test('UnbindTrack with nothing bound is refused', () => {
   assert.match(result.detail, /nothing is explicitly bound/);
 });
 
-test('an unknown op kind and an unknown FDR are both refused, not thrown', () => {
+test('an unknown op kind and an unknown flight data are both refused, not thrown', () => {
   const s = store();
   assert.equal(s.apply({ flightDataId: FDR, op: { kind: 'Nope' } }, 'AP', 'c').reason, 'VALIDATION_ERROR');
   assert.equal(s.apply({ flightDataId: 'ghost', op: { kind: 'BindTrack', trackId: '1' } }, 'AP', 'c').reason, 'NOT_FOUND');
@@ -139,7 +139,7 @@ test('a binding note is capped at the free-text ceiling that rides every broadca
 
 // ── the audit trail ────────────────────────────────────────────────────────
 
-test('a controller op is logged against its FDR, and a REFUSAL is logged too', () => {
+test('a controller op is logged against its flight data, and a REFUSAL is logged too', () => {
   const entries = [];
   const s = store();
   s.setMutationLog({ record: (e) => entries.push(e) });
@@ -348,7 +348,7 @@ test('flightDataForTrack answers the reverse question the client asks on a map c
   assert.equal(s.flightDataForTrack('999'), null);
 });
 
-test('a record whose FDR is gone is evicted — FDR lifecycle governs correlation lifecycle', () => {
+test('a record whose flight data is gone is evicted — flight data lifecycle governs correlation lifecycle', () => {
   const flightDataList = [FDR];
   const s = new CorrelationStore({ flightDataExists: (id) => flightDataList.includes(id) });
   s.reconcile(new Map([[FDR, resolvedTo('101', 'BEACON', 'CORRELATED')]]));
@@ -377,7 +377,7 @@ test('restore keeps the history but never the contact — a persisted track id i
   assert.equal(record.transitions[0].reason, 'EXPLICIT_BIND');
 });
 
-test('restore skips a record whose FDR is gone', () => {
+test('restore skips a record whose flight data is gone', () => {
   const s = store();
   bind(s);
   const snapshot = s.snapshot();
@@ -386,7 +386,7 @@ test('restore skips a record whose FDR is gone', () => {
   assert.equal(restored.getAll().length, 0);
 });
 
-test('snapshot omits a record whose FDR has already gone', () => {
+test('snapshot omits a record whose flight data has already gone', () => {
   const flightDataList = [FDR];
   const s = new CorrelationStore({ flightDataExists: (id) => flightDataList.includes(id) });
   bind(s);

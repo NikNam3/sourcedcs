@@ -406,7 +406,7 @@ test('sortie 6: a runway change completes, the new runway is inspected, and only
   completeChange();
 });
 
-test("sortie 7: APP rejects the runway change, and tower's next proposal starts clean", () => {
+test("sortie 7: AP rejects the runway change, and tower's next proposal starts clean", () => {
   mustRunwayStatusAct(efsp, c.LC, 'LC', { kind: 'ProposeRunwayChange', toRunwayId: '23' });
   mustRunwayStatusAct(efsp, c.OPS, 'OPS', { kind: 'AckRunwayChange' });
   const rejected = mustRunwayStatusAct(efsp, c.AP, 'AP', { kind: 'RejectRunwayChange', note: 'recovery of four inbound on 05' });
@@ -447,7 +447,7 @@ test('sortie 12: a restart mid runway-change keeps the acknowledgements already 
   c = rc;
 });
 
-test('sortie 13: the D21 twin — an ack sent as TWR never counts as APP’s, and one person holding every Position self-coordinates in one input', () => {
+test('sortie 13: the D21 twin — an ack sent as LC never counts as AP’s, and one person holding every Position self-coordinates in one input', () => {
   // One controller takes LC and AP (the others give them up first, or the
   // newcomer would only be an Observer, §4.8.2).
   hold(efsp, c.LC.session, 'INCIRLIK', []);

@@ -239,7 +239,7 @@ test('a Strip rebuilds when something it RENDERS but does not own changes', asyn
   assert.equal(needsRebuild(el, strip, null, null), true, 'the FDR moved under the Strip');
 });
 
-test('the clearance Blocks a controller edits on most Strips are chips, per Role', () => {
+test('the clearance Blocks a controller edits on most Strips are chips, per strip type', () => {
   // The criterion is EDIT FREQUENCY, not interlock-ness — see
   // COMPACT_BLOCKS_BY_STRIP_TYPE's comment. A heading and an initial altitude are
   // issued with every departure clearance; a radar vector constantly.
@@ -779,7 +779,7 @@ test('Convert to Arrival is only offered to the Positions the server lets conver
   assert.equal(menuItem(el, 'Convert to Arrival →'), undefined);
 });
 
-test('an arrival or overflight Strip draws no chip for a Block its Role does not have', async () => {
+test('an arrival or overflight Strip draws no chip for a Block its strip type does not have', async () => {
   for (const [stripType, state, owner] of [['ARRIVAL', 'INBOUND', 'CTR'], ['OVERFLIGHT', 'IN_SECTOR', 'CTR']]) {
     const { el } = await renderStrip({ strip: stripAt({ stripType, state, ownerPositionId: owner, bayId: 'ctr-enroute' }), flightData: FDR, signedOn: [owner] });
     for (const blockId of ['9F', '14A', '14D']) {
@@ -1239,7 +1239,7 @@ test('the hook requirement toggles, and a blank cell sends true rather than clea
   assert.equal(sent[0].op.value, true, 'a blank hook cell must SET the requirement, not clear it');
 });
 
-test('an FDR from before the military namespace existed still renders its Strip', async () => {
+test('flight data from before the military namespace existed still renders its Strip', async () => {
   // Nothing reseeds a flight-data record already in a connected client's cache, so a Strip
   // can legitimately arrive with `military: null` — the literal value this
   // field held until docs/adr/0052. Rendering must degrade to a blank cell,
@@ -2146,7 +2146,7 @@ async function expandedWith(strip, flightData, signedOn) {
   return { ...r, expandedEl: r.sandbox._buildStripEl(strip) };
 }
 
-test('an APP ARRIVAL with an exit fix shows the M11 group as fields; without MTR data, none of them — all six in ▼', async () => {
+test('an AP ARRIVAL with an exit fix shows the M11 group as fields; without MTR data, none of them — all six in ▼', async () => {
   const strip = stripAt({ stripType: 'ARRIVAL', state: 'INBOUND', ownerPositionId: 'AP' });
   const withMtr = await renderStrip({ strip, flightData: mtrFlightDataWith({ exitFix: 'E' }), signedOn: ['AP'] });
   for (const id of ['9G-MTR', '9H-EXIT', '9H-TIME', '9H-ALT']) assert.ok(inFields(withMtr.el, id), `${id} is not a field`);
@@ -2220,7 +2220,7 @@ test('EXIT ALT\'s label carries the lost-comms rule as its hover title', async (
   assert.match(label.title, /Lost comms \(§9\.4\)/);
 });
 
-test('an MTR write reaches the Strip through the FDR\'s rev — the group appears without the Strip\'s rev moving', async () => {
+test('an MTR write reaches the Strip through the flight data\'s rev — the group appears without the Strip\'s rev moving', async () => {
   const strip = stripAt({ stripType: 'OVERFLIGHT', state: 'IN_SECTOR', ownerPositionId: 'CTR' });
   const { sandbox, el } = await renderStrip({ strip, flightData: FDR, signedOn: ['CTR'] });
   assert.equal(sandbox._stripElNeedsRebuild(el, strip, null, null), false);
@@ -2276,7 +2276,7 @@ test('a CLEAN flight: ORDNANCE is on Tower\'s face, and in ▼ at APP, CTR and e
   }
 });
 
-test('a set ORDNANCE is on the face at APP, CTR and every tactical Position, and can be cleared from there', async () => {
+test('a set ORDNANCE is on the face at AP, CTR and every tactical Position, and can be cleared from there', async () => {
   const hung = { ...FDR, rev: 2, military: { ...FDR.military, ordnanceState: 'HUNG' } };
   for (const [stripType, positionId, state] of ORDNANCE_CASES) {
     const where = `${stripType} at ${positionId}`;
@@ -2291,7 +2291,7 @@ test('a set ORDNANCE is on the face at APP, CTR and every tactical Position, and
 
 // ── §9.6 alert status (crc-sync's docs/adr/0070) ─────────────────────────
 
-test('alert status is a NONE/ALERT/SCRAMBLE picker on a TWR departure, and SCRAMBLE sends SetBlock 14E', async () => {
+test('alert status is a NONE/ALERT/SCRAMBLE picker on a LC departure, and SCRAMBLE sends SetBlock 14E', async () => {
   const { el, sent } = await renderStrip({ strip: stripAt({ ownerPositionId: 'LC', state: 'RUNWAY_QUEUE' }), flightData: FDR, signedOn: ['LC'] });
 
   const cell = blockCell(el, '14E');

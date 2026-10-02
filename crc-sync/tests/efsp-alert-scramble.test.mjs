@@ -56,7 +56,7 @@ test('SCRAMBLE_PRE_AIRBORNE is a subset of nla.js\'s DEPARTURE_STATES', () => {
   assert.ok(!SCRAMBLE_PRE_AIRBORNE.DEPARTURE.includes('DEPARTED'));
 });
 
-test('GROUND_STATES are states of their Role', () => {
+test('GROUND_STATES are states of their strip type', () => {
   for (const [stripType, states] of Object.entries(GROUND_STATES)) {
     for (const s of states) assert.ok(nla.STATES_BY_STRIP_TYPE[stripType].includes(s), `${stripType}/${s}`);
   }
@@ -85,7 +85,7 @@ test('a scrambler that is DEPARTED raises nothing', () => {
   assert.ok(!activeScrambles(dropped.strips, dropped.flightDataOf).some(s => s.stripId === 's-drop'));
 });
 
-test('a scrambling FDR with no pre-airborne DEPARTURE Strip raises nothing, and an archived FDR is null, not a throw', () => {
+test('a scrambling flight data with no pre-airborne DEPARTURE Strip raises nothing, and an archived flight data is null, not a throw', () => {
   const { strips, flightDataOf } = board([flightData('f-arr', 'ARR1', 'SCRAMBLE')], [
     strip('s-arr', 'f-arr', 'ARRIVAL', 'TAXI_IN'),
     strip('s-archived', 'f-missing', 'DEPARTURE', 'TAXI'),
@@ -151,7 +151,7 @@ test('alertPadConstraint names the configured route while a scramble is active',
   assert.equal(alertPadConstraint(runwayStatus, []), null);
 });
 
-test('alertPadConstraint still marks the route when none is configured, or field state is unknown (Q9, T6)', () => {
+test('alertPadConstraint still marks the route when none is configured, or runway status is unknown (Q9, T6)', () => {
   assert.deepEqual(alertPadConstraint({ facilityId: 'CENTER', alertPad: { occupied: false } }, SCRAMBLE), {
     route: null, text: 'ALERT-PAD ACCESS ROUTE (not configured) CONSTRAINED — scramble in progress (VIPER11)',
   });

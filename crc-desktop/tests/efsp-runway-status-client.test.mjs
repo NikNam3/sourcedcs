@@ -82,7 +82,7 @@ test('a delta replaces a record whole; an ack carrying a record applies it the s
   assert.equal(state.getEfspRunwayStatus('INCIRLIK').rev, 3);
 });
 
-test('a Facility with no field state is null, and the test reset clears everything', () => {
+test('a Facility with no runway status is null, and the test reset clears everything', () => {
   state._resetEfspStateForTest();
   state.applyEfspSnapshot({ runwayStatuses: [record()] });
   assert.equal(state.getEfspRunwayStatus('CENTER'), null);
@@ -259,7 +259,7 @@ test('OPS completes works on SUSPENDED_WORKS; only the inspection authority sign
   assert.deepEqual(kinds(record({ status: 'SUSPENDED_INSPECTION', suspension: { kind: 'WORKS' } }), ['LC']), ['ProposeRunwayChange']);
 });
 
-test('APP acknowledges only while PROPOSED and not yet acked; Begin only once ACKNOWLEDGED', () => {
+test('AP acknowledges only while PROPOSED and not yet acked; Begin only once ACKNOWLEDGED', () => {
   const change = (st, acks) => record({ runwayChange: { changeId: 'c', state: st, fromRunwayId: '05', toRunwayId: '23', acknowledgers: ['OPS', 'AP'], acks } });
   const kinds = (rec, signedOn) => rules.runwayStatusActionsFor(rec, signedOn).map(a => a.kind).filter(k => k !== 'RequestRunwayStatus');
   assert.deepEqual(kinds(change('PROPOSED', { OPS: null, AP: null }), ['AP']), ['AckRunwayChange', 'RejectRunwayChange']);
@@ -271,7 +271,7 @@ test('APP acknowledges only while PROPOSED and not yet acked; Begin only once AC
   assert.deepEqual(kinds(change('PENDING_INSPECTION', { OPS: {}, AP: {} }), ['LC']), ['CloseRunway', 'BeginRunwayWorks']);
 });
 
-test('a controller holding TWR, OPS and APP is offered the one-input self-coordinated change (S-Q24)', () => {
+test('a controller holding LC, OPS and AP is offered the one-input self-coordinated change (S-Q24)', () => {
   assert.ok(kinds(record(), ['LC', 'OPS', 'AP']).includes('SelfCoordinateRunwayChange'));
   assert.ok(!kinds(record(), ['LC', 'OPS']).includes('SelfCoordinateRunwayChange'));
   const self = rules.runwayStatusActionsFor(record({ activeRunway: '05' }), ['LC', 'OPS', 'AP']).find(a => a.kind === 'SelfCoordinateRunwayChange');
@@ -445,7 +445,7 @@ test('OPS\'s button sends the request to tower with the record\'s rev, as OPS, a
   assert.equal(button(list, 'BeginRunwayWorks'), undefined, 'OPS never begins works itself (H18)');
 });
 
-test('TWR begins works with the record\'s rev; Close asks for a reason and Cancel aborts', async () => {
+test('LC begins works with the record\'s rev; Close asks for a reason and Cancel aborts', async () => {
   const board = await renderRunwayStatusBoard({ records: [record({ rev: 3 })], signedOn: ['LC'], prompt: () => null });
   press(button(board.list, 'BeginRunwayWorks', 'LC'));
   assert.deepEqual(plain(board.sent[0]), { actingPositionId: 'LC', facilityId: 'INCIRLIK', baseRev: 3, op: { kind: 'BeginRunwayWorks', runwayId: '05/23' } });

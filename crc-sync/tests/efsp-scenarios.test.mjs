@@ -196,7 +196,7 @@ test('SCENARIO civil round trip: Incirlik IFR departure -> CTR -> airspace hande
     'the Drop BUTTON must set the remove indicator, exactly as the .drop command does');
 });
 
-test('the terminal Drop button releases the beacon code, not just the state — the FDR goes back in the pool', () => {
+test('the terminal Drop button releases the beacon code, not just the state — the flight data goes back in the pool', () => {
   const efsp = createEfsp();
   const c = crew(efsp, { OPS: 'INCIRLIK', AP: 'INCIRLIK' });
 

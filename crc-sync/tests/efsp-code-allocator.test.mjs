@@ -101,7 +101,7 @@ test('validateAssignment accepts 4000 as a valid manual override target (first-c
   assert.deepEqual(alloc.validateAssignment('4000', 'flight-data-1'), { ok: true });
 });
 
-test('validateAssignment flags — but does not block — a code already held by a different FDR (duplicate, defect D23)', () => {
+test('validateAssignment flags — but does not block — a code already held by a different flight data (duplicate, defect D23)', () => {
   const alloc = new CodeAllocator();
   alloc.reassign('flight-data-1', '1234', null);
   const result = alloc.validateAssignment('1234', 'flight-data-2');
@@ -109,14 +109,14 @@ test('validateAssignment flags — but does not block — a code already held by
   assert.equal(result.warning, 'DUPLICATE_IGNORED_WARNING');
 });
 
-test('validateAssignment does not flag a duplicate warning when the code is already held by the SAME FDR', () => {
+test('validateAssignment does not flag a duplicate warning when the code is already held by the SAME flight data', () => {
   const alloc = new CodeAllocator();
   alloc.reassign('flight-data-1', '1234', null);
   const result = alloc.validateAssignment('1234', 'flight-data-1');
   assert.deepEqual(result, { ok: true });
 });
 
-test('reassign() releases the FDR\'s previous code and takes the new one', () => {
+test('reassign() releases the flight data\'s previous code and takes the new one', () => {
   const alloc = new CodeAllocator();
   alloc.reassign('flight-data-1', '1111', null);
   alloc.reassign('flight-data-1', '2222', '1111');
@@ -124,7 +124,7 @@ test('reassign() releases the FDR\'s previous code and takes the new one', () =>
   assert.equal(alloc.holderOf('2222'), 'flight-data-1');
 });
 
-test('reassign() allows two FDRs to hold a duplicate code simultaneously (never blocked)', () => {
+test('reassign() allows two flight data to hold a duplicate code simultaneously (never blocked)', () => {
   const alloc = new CodeAllocator();
   alloc.reassign('flight-data-1', '1234', null);
   alloc.reassign('flight-data-2', '1234', null);

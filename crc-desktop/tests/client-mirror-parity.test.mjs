@@ -53,7 +53,7 @@ test('S-6: every IFF state the server can classify has a client fallback colour,
 
 const { NLA_LABELS, DOUBLE_TAP_MS, UNDO_WINDOW_MS, DEFAULT_STALE_THRESHOLD_SECONDS } = clientNla;
 
-test('D-9: NLA_LABELS has a label for every non-terminal state of every Role in nla.js STATES_BY_STRIP_TYPE, and none for a state nla.js lacks', () => {
+test('D-9: NLA_LABELS has a label for every non-terminal state of every strip type in nla.js STATES_BY_STRIP_TYPE, and none for a state nla.js lacks', () => {
   assert.deepEqual(Object.keys(NLA_LABELS).sort(), Object.keys(serverNla.STATES_BY_STRIP_TYPE).sort(), 'Roles differ');
   for (const [stripType, states] of Object.entries(serverNla.STATES_BY_STRIP_TYPE)) {
     const live = states.filter(s => s !== 'DROPPED');
@@ -62,7 +62,7 @@ test('D-9: NLA_LABELS has a label for every non-terminal state of every Role in 
   }
 });
 
-test('D-9: the client owner tables name exactly the states nla.js has for each Role (no state without an owner, no owner for a missing state)', () => {
+test('D-9: the client owner tables name exactly the states nla.js has for each strip type (no state without an owner, no owner for a missing state)', () => {
   const { STATE_OWNERS_BY_STRIP_TYPE } = clientNla;
   for (const [stripType, states] of Object.entries(serverNla.STATES_BY_STRIP_TYPE)) {
     const live = states.filter(s => s !== 'DROPPED');
@@ -85,7 +85,7 @@ test('the client stale-board threshold outlasts several of the server\'s heartbe
 
 const fsSrc = readClient(EFSP + 'runway-status-rules.js');
 
-test('D-9: the strips that show a RWY chip are real states of their Role, and cover the state BEFORE every state the server gates on a runway', () => {
+test('D-9: the strips that show a RWY chip are real states of their strip type, and cover the state BEFORE every state the server gates on a runway', () => {
   // RUNWAY_GATED_STATES lists the states whose ENTRY uses the runway; the chip is shown one step
   // earlier, on the Strip whose next NLA step the inhibit would refuse (the client comment's
   // "so the controller sees the problem before the NLA does").
@@ -151,7 +151,7 @@ test('D-9: the only Facility radar-panel.js does not list is the one whose Posit
   assert.deepEqual(unlisted, ['RANGES'], `a new Facility (${unlisted}) has no "acting as" checkboxes until it is listed or derived`);
 });
 
-test('D-9: efsp-ws.js tracks held Positions for every server Facility, and its default Facility is the server\'s', () => {
+test('D-9: efsp-ws.js tracks signed-on Positions for every server Facility, and its default Facility is the server\'s', () => {
   const src = readClient(EFSP + 'efsp-ws.js');
   const signedOn = constLiteral(src, '_actingPositionsByFacility', 'efsp-ws.js');
   assert.deepEqual(Object.keys(signedOn).sort(), [...serverFacilities.getFacilityIds()].sort());

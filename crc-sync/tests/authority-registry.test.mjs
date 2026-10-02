@@ -8,7 +8,7 @@ const authority = require('../src/efsp/authority');
 const nla = require('../src/efsp/nla.js');
 const permission = require('../src/efsp/permission.js');
 
-test('every Role family is a Role of nla.js and carries every field', () => {
+test('every strip type family is a strip type of nla.js and carries every field', () => {
   assert.deepEqual(authority.stripTypeNames(), Object.keys(nla.STATES_BY_STRIP_TYPE));
   for (const stripType of authority.stripTypeNames()) {
     const f = authority.stripTypeFamily(stripType);
@@ -31,9 +31,9 @@ test('accessors answer from the composed tables', () => {
   assert.equal(authority.senderStateOnAccept('HANDOFF', 'ARRIVAL', 'INBOUND'), undefined);
   assert.deepEqual(authority.creatorsOf('ARRIVAL'), ['AP', 'CTR']);
   assert.deepEqual(authority.creatorsOf('PATTERN'), ['RSU']);
-  const app = authority.capabilitiesFor('AP');
-  assert.equal(app.family, 'civil-atc');
-  assert.equal(app.capabilities.rotatesSfa, true, 'incirlik-military extends APP');
+  const ap = authority.capabilitiesFor('AP');
+  assert.equal(ap.family, 'civil-atc');
+  assert.equal(ap.capabilities.rotatesSfa, true, 'incirlik-military extends AP');
   assert.equal(authority.capabilitiesFor('JTAC').capabilities.readScope, 'OWNED');
   assert.equal(authority.capabilitiesFor('NOBODY'), null);
 });

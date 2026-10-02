@@ -227,14 +227,14 @@ test('.stereo refuses a malformed callsign client-side, same rule the button app
   assert.match(m.els['efsp-dot-command-preview'].textContent, /not a valid callsign/);
 });
 
-test('.stereo refuses when the held Position cannot originate a DEPARTURE Strip', async () => {
+test('.stereo refuses when the signed-on Position cannot originate a DEPARTURE Strip', async () => {
   const m = await mounted({ signedOn: ['CTR'] });
   await runDotCommand(m, '.stereo PACK1 VIPER11');
   assert.equal(m.sent.length, 0);
   assert.match(m.els['efsp-dot-command-preview'].textContent, /DEPARTURE/);
 });
 
-test('.stereo refuses when no origin Position is held at all', async () => {
+test('.stereo refuses when no origin Position is signed on at all', async () => {
   const m = await mounted({ signedOn: [] });
   await runDotCommand(m, '.stereo PACK1 VIPER11');
   assert.equal(m.sent.length, 0);

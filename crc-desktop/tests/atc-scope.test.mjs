@@ -255,7 +255,7 @@ test('the black scope needs the setting off AND an ATC-only session (H71 questio
   _setCoverageRadars([]); _setCoverageDatalink(false);
 });
 
-test('a same-Facility transfer (TWR -> APP, no PROPOSED step) blinks at the sender like an accepted handoff', () => {
+test('a same-Facility transfer (LC -> AP, no PROPOSED step) blinks at the sender like an accepted handoff', () => {
   const TWR = new Set(['LC']);
   let rel = A.atcNoteOwnership('7', A.atcRelation(contact(), [strip({ ownerPositionId: 'LC' })], TWR, letterOf), 1000);
   assert.equal(A.atcView(contact(), rel, env({ now: 1000 })).color, P.own);

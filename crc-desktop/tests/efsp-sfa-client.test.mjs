@@ -46,7 +46,7 @@ test('the server\'s view carries what the client draws: the pool, the jurisdicti
   assert.equal(S.getEfspSfa(), next, 'a message with no record changes nothing');
 });
 
-test('only the held jurisdiction Position is offered the rotation controls', () => {
+test('only the signed-on jurisdiction Position is offered the rotation controls', () => {
   const v = realView();
   assert.equal(S.sfaRotatingPosition(['SFA', 'PAR'], v), null);
   assert.equal(S.sfaRotatingPosition(['SFA', 'AP'], v), 'AP');
@@ -54,7 +54,7 @@ test('only the held jurisdiction Position is offered the rotation controls', () 
   assert.equal(S.sfaRotatingPosition(undefined, v), null);
 });
 
-test('the Rotate to PAR button is offered on an inbound aircraft on an SFA frequency, to a held sender, and nowhere else', () => {
+test('the Rotate to PAR button is offered on an inbound aircraft on an SFA frequency, to a signed-on sender, and nowhere else', () => {
   const v = realView();
   const onFreq = { comms: { workingFrequencyMhz: 233.1 } };
   const strip = (over) => ({ stripType: 'ARRIVAL', state: 'INBOUND', ownerPositionId: 'SFA', ...over });

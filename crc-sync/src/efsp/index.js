@@ -376,14 +376,14 @@ function _reconcileRestored(facilities, flightDataStore, correlationStore, marsa
   // while a correlation without one is invisible either way.
   if (correlationStore) {
     const dropped = correlationStore.evictMissingFlightDataList();
-    if (dropped) log.warn('dropped restored correlation records whose FDR is gone', { dropped });
+    if (dropped) log.warn('dropped restored correlation records whose flight data is gone', { dropped });
   }
   for (const [facilityId, { boardStore }] of facilities.entries()) {
     for (const strip of boardStore.getAll()) {
       if (strip.state === 'DROPPED') continue;
       const flightData = flightDataStore.getFlightData(strip.flightDataId);
       if (!flightData) {
-        log.warn('restored Strip references a missing FDR — it will render without flight data', { stripId: strip.stripId, facilityId, flightDataId: strip.flightDataId });
+        log.warn('restored Strip references missing flight data — it will render without flight data', { stripId: strip.stripId, facilityId, flightDataId: strip.flightDataId });
         continue;
       }
       const code = flightData.identity.beaconAssigned;

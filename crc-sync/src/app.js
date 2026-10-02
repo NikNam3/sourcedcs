@@ -406,7 +406,7 @@ function createApp(deps = {}) {
     efsp.persist();
     for (const p of payloads) wsHub.broadcastEfspBoardDelta(p);
     const n = payloads.reduce((sum, p) => sum + p.gone.length, 0);
-    archiverLog.info('archived Strips and FDRs', { strips: n, flightDataList: r.flightDataIds.length });
+    archiverLog.info('archived Strips and flight data', { strips: n, flightDataList: r.flightDataIds.length });
     return n;
   }
   missionSession.onNewSession((session) => _archive(efsp.archiver.onMissionSessionChange(session)));

@@ -14,7 +14,7 @@ const { INELIGIBLE_STATES, CorrelationReconciler } = await import('../src/efsp/c
 const CARRIER_STRIP_TYPES = ['MARSHAL', 'FINAL', 'PATTERN'];
 const NOW = Date.UTC(2026, 5, 1, 12, 0, 0);
 
-test('the three carrier Roles have states, owners, a Block Map and an NLA table', () => {
+test('the three carrier strip types have states, owners, a Block Map and an NLA table', () => {
   for (const stripType of CARRIER_STRIP_TYPES) {
     assert.ok(nla.STATES_BY_STRIP_TYPE[stripType], `${stripType} states`);
     assert.ok(nla.isValidState(nla.STATES_BY_STRIP_TYPE[stripType][0], stripType));
@@ -27,7 +27,7 @@ test('the three carrier Roles have states, owners, a Block Map and an NLA table'
   }
 });
 
-test('no carrier state name collides with another Role\'s state, except DROPPED', () => {
+test('no carrier state name collides with another strip type\'s state, except DROPPED', () => {
   const others = new Set();
   for (const [stripType, states] of Object.entries(nla.STATES_BY_STRIP_TYPE)) if (!CARRIER_STRIP_TYPES.includes(stripType)) states.forEach(s => others.add(s));
   const seen = new Set();
@@ -53,7 +53,7 @@ const ELIGIBILITY = {
   // carrier (docs/adr/0074): all eligible, LAUNCH included (correlation reads the track store, not illumination)
   LAUNCH: true, IN_STACK: true, COMMENCED: true, ON_FINAL: true, BALL: true, BOLTER_WAVEOFF: true, IN_PATTERN: true, RECOVERED: true,
 };
-test('every state of every Role has an explicit correlation-eligibility decision, and the list agrees', () => {
+test('every state of every strip type has an explicit correlation-eligibility decision, and the list agrees', () => {
   for (const [stripType, states] of Object.entries(nla.STATES_BY_STRIP_TYPE)) {
     for (const s of states) {
       assert.ok(Object.prototype.hasOwnProperty.call(ELIGIBILITY, s), `${stripType}/${s}: no eligibility decision — add it to INELIGIBLE_STATES or to this table as eligible`);
@@ -117,7 +117,7 @@ test('state authority: Marshal to Commence, lane to the end of the approach, Pri
   assert.equal(permission.canActOnState('CV_PRIFLY', 'FINAL', 'BALL'), false);
 });
 
-test('the CARRIER Facility: four MILITARY_ATC Positions, Bays that imply carrier states, PriFly out of the covering chain', () => {
+test('the CARRIER Facility: four MILITARY_ATC Positions, Bays that imply carrier states, PriFly out of the consolidation chain', () => {
   const c = facilityConfig.getFacilityConfig('CARRIER');
   assert.deepEqual(c.positions, ['CV_MARSHAL', 'CV_PRIFLY', 'CV_APP1', 'CV_APP2']);
   for (const p of c.positions) assert.equal(facilityConfig.getPositionClass(p), 'MILITARY_ATC');

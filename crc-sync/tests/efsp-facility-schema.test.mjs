@@ -56,12 +56,12 @@ test('a bayId used twice is rejected', () => {
   reject(c, 'used twice');
 });
 
-test('holdsStripType must be a known Role', () => {
+test('holdsStripType must be a known strip type', () => {
   const c = shipped('CENTER'); c.bays.CTR.find(b => b.holdsStripType).holdsStripType = 'NOPE';
   reject(c, 'holdsStripType "NOPE" is not a strip type');
 });
 
-test('the covering chain names known Positions and has no loop', () => {
+test('the consolidation chain names known Positions and has no loop', () => {
   const a = shipped('INCIRLIK'); a.consolidation.CD = 'NOPE';
   reject(a, 'consolidation.CD names unknown Position NOPE');
   const b = shipped('INCIRLIK'); b.consolidation.NOPE = 'CD';
@@ -75,7 +75,7 @@ test('every Position needs a class', () => {
   reject(c, 'no class for Position JTAC');
 });
 
-test('hiddenBlocks must name a known Role', () => {
+test('hiddenBlocks must name a known strip type', () => {
   const c = shipped('CENTER'); c.hiddenBlocks.NOPE = ['1'];
   reject(c, 'hiddenBlocks names unknown strip type NOPE');
 });

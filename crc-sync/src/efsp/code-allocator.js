@@ -112,7 +112,7 @@ class CodeAllocator {
   validateAssignment(code, flightDataId) {
     if (!isValidCodeFormat(code)) return { ok: false, reason: 'VALIDATION_ERROR' };
     if (isReserved(code))         return { ok: false, reason: 'VALIDATION_ERROR' };
-    if (isSynthetic(code))        return { ok: false, reason: 'VALIDATION_ERROR', detail: 'reserved for uncontrolled traffic' };
+    if (isSynthetic(code))        return { ok: false, reason: 'VALIDATION_ERROR', detail: "reserved for AI aircraft (crc-sync's synthetic block 6000–6777)" };
     const holder = this._allocated.get(code);
     if (holder && holder !== flightDataId) return { ok: true, warning: 'DUPLICATE_IGNORED_WARNING' };
     return { ok: true };

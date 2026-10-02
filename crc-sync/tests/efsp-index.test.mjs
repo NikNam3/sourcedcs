@@ -67,7 +67,7 @@ test('snapshotFor returns a well-formed efsp-snapshot message with all four coll
   assert.ok(Array.isArray(snap.bays));
 });
 
-test('onDisconnect releases every Position the controller held', () => {
+test('onDisconnect releases every Position the controller signed on', () => {
   const efsp = createEfsp();
   const session = { controllerId: 'c1', who: 'Alice' };
   efsp.handleMessage(session, { type: 'efsp-set-positions', signedOn: ['GC', 'LC'] });
@@ -98,14 +98,14 @@ test('a successful mutation persists to BOARD_SNAPSHOT_PATH, and a freshly const
   assert.ok(efsp2.flightDataStore.getFlightData(restored.flightDataId));
 });
 
-test('a Strip mid-DEPARTED-to-APP-transfer (docs/adr/0007) round-trips correctly across a simulated restart — exactly one owner, no strand', () => {
+test('a Strip mid-DEPARTED-to-AP-transfer (docs/adr/0007) round-trips correctly across a simulated restart — exactly one owner, no strand', () => {
   const efsp1 = createEfsp();
   const ops = { controllerId: 'ops', who: 'Ops1' };
-  const twr = { controllerId: 'twr', who: 'Twr1' };
-  const app = { controllerId: 'app', who: 'App1' };
+  const lc = { controllerId: 'lc', who: 'Lc1' };
+  const ap = { controllerId: 'ap', who: 'Ap1' };
   efsp1.handleMessage(ops, { type: 'efsp-set-positions', signedOn: ['OPS'] });
-  efsp1.handleMessage(twr, { type: 'efsp-set-positions', signedOn: ['LC'] });
-  efsp1.handleMessage(app, { type: 'efsp-set-positions', signedOn: ['AP'] }); // AP must be staffed for the real, staffing-gated Hand Off
+  efsp1.handleMessage(lc, { type: 'efsp-set-positions', signedOn: ['LC'] });
+  efsp1.handleMessage(ap, { type: 'efsp-set-positions', signedOn: ['AP'] }); // AP must be staffed for the real, staffing-gated Hand Off
 
   const created = efsp1.handleMessage(ops, createStripMsg());
   let strip = created.ack.strip;
@@ -125,7 +125,7 @@ test('a Strip mid-DEPARTED-to-APP-transfer (docs/adr/0007) round-trips correctly
 
   // DEPARTED is LC's to advance (permission.js's canActOnState), not
   // OPS's — relocate ownership to LC first. This TransferStrip targets a
-  // Bay whose implied state MATCHES the Strip's current state (twr-
+  // Bay whose implied state MATCHES the Strip's current state (lc-
   // airborne implies DEPARTED), so it's a same-state hand-off, not an
   // advance, and isn't itself gated by canActOnState (nothing is being
   // advanced here, just handed to the Position whose job the CURRENT
@@ -139,7 +139,7 @@ test('a Strip mid-DEPARTED-to-APP-transfer (docs/adr/0007) round-trips correctly
   strip = relocated.ack.strip;
   assert.equal(strip.ownerPositionId, 'LC');
 
-  const transferred = efsp1.handleMessage(twr, {
+  const transferred = efsp1.handleMessage(lc, {
     version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(),
     actingPositionId: 'LC', stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'InvokeNla' },
   });
@@ -210,12 +210,12 @@ test('a HANDOFF interrupted mid-PROPOSE (before ACCEPT) round-trips both replica
 
   // The exchange can still be completed after the restart, exactly as if
   // nothing had happened — no strand, no duplicate, no crash.
-  const app = { controllerId: 'app', who: 'App1' };
+  const ap = { controllerId: 'ap', who: 'Ap1' };
   // Position staffing is deliberately ephemeral (ADR 0002 — it never enters
   // the durable snapshot), so a reconnecting client re-declares it after a
   // restart exactly like it does on a first connect.
-  efsp2.handleMessage(app, { type: 'efsp-set-positions', facilityId: 'INCIRLIK', signedOn: ['AP'] });
-  const accepted = efsp2.handleMessage(app, {
+  efsp2.handleMessage(ap, { type: 'efsp-set-positions', facilityId: 'INCIRLIK', signedOn: ['AP'] });
+  const accepted = efsp2.handleMessage(ap, {
     version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(),
     facilityId: 'INCIRLIK', actingPositionId: 'AP', stripId: receiverStripId, baseRev: restoredReceiver.rev,
     op: { kind: 'HANDOFF', action: 'ACCEPT' },

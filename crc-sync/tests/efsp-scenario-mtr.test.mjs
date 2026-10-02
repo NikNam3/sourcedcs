@@ -68,23 +68,23 @@ function onTheRoute(callsign) {
   ops = mustAct(efsp, c.OPS, 'OPS', ops, { kind: 'SetBlock', blockId: '9G-MTR', value: 'IR107' });
   ops = mustAct(efsp, c.OPS, 'OPS', ops, { kind: 'SetBlock', blockId: '9G-ENTRY', value: 'A' });
   ops = mustAct(efsp, c.OPS, 'OPS', ops, { kind: 'SetBlock', blockId: '9G-TIME', value: '1405' });
-  const app = toApp(ops);
-  const ctr = handedToCenter(efsp, c, app);
-  return { app: incirlik(app), ctr };
+  const ap = toApp(ops);
+  const ctr = handedToCenter(efsp, c, ap);
+  return { ap: incirlik(ap), ctr };
 }
 
 // ── 1. posted on departure, read on arrival ─────────────────────────────────
 
 test('sortie 1: OPS posts the entry, CTR posts the exit on its replica, and it is one flight\'s data everywhere', () => {
-  let { app, ctr } = onTheRoute('VIPER11');
-  assert.equal(ctr.flightDataId, app.flightDataId, 'one FDR behind both Facilities\' Strips');
+  let { ap, ctr } = onTheRoute('VIPER11');
+  assert.equal(ctr.flightDataId, ap.flightDataId, 'one flight data behind both Facilities\' Strips');
 
   // "VIPER11, IR107, exit F at 32, request FL190."
   ctr = mustAct(efsp, c.CTR, 'CTR', ctr, { kind: 'SetBlock', blockId: '9H-EXIT', value: 'f' });
   ctr = mustAct(efsp, c.CTR, 'CTR', ctr, { kind: 'SetBlock', blockId: '9H-TIME', value: '1432' });
   ctr = mustAct(efsp, c.CTR, 'CTR', ctr, { kind: 'SetBlock', blockId: '9H-ALT', value: 'FL190' });
 
-  assert.deepEqual(mtrOf(incirlik(app)), {
+  assert.deepEqual(mtrOf(incirlik(ap)), {
     designator: 'IR107', entryFix: 'A', entryTimeUtc: zulu(14, 5),
     exitFix: 'F', exitEstimateUtc: zulu(14, 32), requestedAltitudeAfterExit: 'FL190',
   }, 'the INCIRLIK Strip reads what CTR posted — dated on the MISSION day');
@@ -92,7 +92,7 @@ test('sortie 1: OPS posts the entry, CTR posts the exit on its replica, and it i
   // AP converts its Strip for the recovery. ConvertToArrival archives the
   // Strip's own annotations; the MTR data lives on the flight and must all
   // survive.
-  const converted = mustAct(efsp, c.AP, 'AP', incirlik(app), { kind: 'ConvertToArrival' });
+  const converted = mustAct(efsp, c.AP, 'AP', incirlik(ap), { kind: 'ConvertToArrival' });
   assert.equal(converted.stripType, 'ARRIVAL');
   assert.equal(mtrOf(converted).exitFix, 'F');
   assert.equal(mtrOf(converted).designator, 'IR107');
@@ -102,7 +102,7 @@ test('sortie 1: OPS posts the entry, CTR posts the exit on its replica, and it i
 // ── 2. "request a different exit fix" ───────────────────────────────────────
 
 test('sortie 2: "request exit at E instead, estimating 40, request FL210" — a request posts, only the approval voids MARSA', () => {
-  let { app, ctr } = onTheRoute('VIPER12');
+  let { ap, ctr } = onTheRoute('VIPER12');
   ctr = mustAct(efsp, c.CTR, 'CTR', ctr, { kind: 'SetBlock', blockId: '9H-EXIT', value: 'F' });
   ctr = mustAct(efsp, c.CTR, 'CTR', ctr, { kind: 'SetBlock', blockId: '9H-TIME', value: '1432' });
   ctr = mustAct(efsp, c.CTR, 'CTR', ctr, { kind: 'SetBlock', blockId: '9H-ALT', value: 'FL190' });
@@ -125,7 +125,7 @@ test('sortie 2: "request exit at E instead, estimating 40, request FL210" — a 
   assert.equal(mtr.exitEstimateUtc, zulu(14, 40));
   assert.equal(mtr.requestedAltitudeAfterExit, 'FL210');
   assert.equal(flightDataOf(ctr).rev, rev + 3, 'three writes, three revs — and nothing else touched');
-  assert.equal(mtrOf(incirlik(app)).exitFix, 'E', 'APP\'s Strip reads the new exit fix');
+  assert.equal(mtrOf(incirlik(ap)).exitFix, 'E', 'AP\'s Strip reads the new exit fix');
   assert.equal(efsp.marsaStore.getRelation(relation.marsaId).state, 'ACTIVE',
     'posting the pilot\'s REQUEST issues nothing, so it must not void the join');
 

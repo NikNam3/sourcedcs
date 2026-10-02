@@ -67,12 +67,12 @@ test('resolveBlockValue reads flight-data-bound Blocks from the exact field path
   assert.deepEqual(resolveBlockValue('5', flightData, makeStrip()), { value: '1234', provenance: 'CONTROLLER_ENTERED' });
 });
 
-test('resolveBlockValue uses the FDR\'s own provenance map when present, overriding the Block Map default', () => {
+test('resolveBlockValue uses the flight data\'s own provenance map when present, overriding the Block Map default', () => {
   const flightData = makeFlightData({ provenance: { 'identity.callsign': 'UPSTREAM_ATO' } });
   assert.equal(resolveBlockValue('1', flightData, makeStrip()).provenance, 'UPSTREAM_ATO');
 });
 
-test('resolveBlockValue on Block 9 defaults to COMPUTER_GENERATED provenance when the FDR carries none for it', () => {
+test('resolveBlockValue on Block 9 defaults to COMPUTER_GENERATED provenance when the flight data carries none for it', () => {
   const flightData = makeFlightData();
   assert.equal(resolveBlockValue('9', flightData, makeStrip()).provenance, 'COMPUTER_GENERATED');
 });
@@ -117,7 +117,7 @@ test('resolveBlockValue returns null for an unknown Block ID rather than throwin
   assert.deepEqual(resolveBlockValue('ZZZ', makeFlightData(), makeStrip()), { value: null, provenance: 'SYSTEM_DERIVED' });
 });
 
-test('every required Block resolves to a non-undefined value given a complete fixture FDR/Strip', () => {
+test('every required Block resolves to a non-undefined value given a complete fixture flight data/Strip', () => {
   const flightData = makeFlightData();
   const strip = makeStrip();
   for (const id of REQUIRED_DEPARTURE_BLOCKS) {
@@ -165,7 +165,7 @@ test('the assigned altitude and heading read their history from the FLIGHT, not 
   }
 });
 
-test('ALT is confirm-vacated on every Role that has one, and the filed altitude reads CRUS ALT', () => {
+test('ALT is confirm-vacated on every strip type that has one, and the filed altitude reads CRUS ALT', () => {
   assert.deepEqual(CONFIRM_VACATED_ELIGIBLE_BLOCKS, { DEPARTURE: ['21'], ARRIVAL: ['7'], OVERFLIGHT: ['7A'] });
   assert.equal(blockLabelFor('7', 'DEPARTURE'), 'CRUS ALT');
   assert.equal(blockLabelFor('7', 'OVERFLIGHT'), 'CRUS ALT');
@@ -402,7 +402,7 @@ test('Block 9F is labelled STEREO and bound to filed.stereoRouteName on DEPARTUR
   assert.ok(blockLabelFor('9F', 'DEPARTURE').length <= 8, 'docs/adr/0024 caps a Block label at 8 characters');
 });
 
-test('resolveBlockValue reads the stereo name off the FDR', () => {
+test('resolveBlockValue reads the stereo name off the flight data', () => {
   const flightData = { filed: { stereoRouteName: 'PACK 1' }, provenance: { 'filed.stereoRouteName': 'COMPUTER_GENERATED' } };
   const resolved = resolveBlockValue('9F', flightData, makeStrip());
   assert.equal(resolved.value, 'PACK 1');
@@ -485,7 +485,7 @@ test('a Block with only an ACTIVE entry has no superseded entries', () => {
 
 // ── labels have to tell Blocks apart ─────────────────────────────────────
 
-test('no two Blocks in a Role share a label', () => {
+test('no two Blocks in a strip type share a label', () => {
   // Surfaced the moment the expanded view started rendering the long tail: a
   // DEPARTURE Strip had FOUR fields labelled NOTE (2A, 19, 23, 24) and THREE
   // labelled RESTR (9A, 9B, 9C). All seven were writable and none of them said
@@ -540,13 +540,13 @@ test('resolveBlockValue reads each MTR field, the two times as a four-digit Zulu
   }
 });
 
-test('an MTR Block on an FDR with military: null (or no time) renders blank, not a throw', () => {
+test('an MTR Block on flight data with military: null (or no time) renders blank, not a throw', () => {
   const flightData = { ...makeFlightData(), military: null };
   for (const id of Object.keys(MTR_LABELS)) assert.equal(resolveBlockValue(id, flightData, { stripType: 'ARRIVAL' }).value, null, id);
   assert.equal(resolveBlockValue('9H-TIME', mtrFlightData({ exitEstimateUtc: null }), { stripType: 'ARRIVAL' }).value, null);
 });
 
-test('the MTR labels are exactly the §9.4 set on every ATC Role', () => {
+test('the MTR labels are exactly the §9.4 set on every ATC strip type', () => {
   for (const stripType of MTR_STRIP_TYPES) {
     for (const [id, label] of Object.entries(MTR_LABELS)) assert.equal(blockLabelFor(id, stripType), label, `${stripType}/${id}`);
   }
@@ -567,7 +567,7 @@ test('ZULU_HHMM_BLOCKS holds the MTR times and every typed …TimeUtc Block (F4)
   assert.equal(formatZuluHhmm('garbage'), '');
 });
 
-test('F4: every ZULU_HHMM Block is an epoch-ms …Utc FDR path on every role map that has it, and renders as HHMM', () => {
+test('F4: every ZULU_HHMM Block is an epoch-ms …Utc flight data path on every role map that has it, and renders as HHMM', () => {
   for (const id of ZULU_HHMM_BLOCKS) {
     let seen = 0;
     for (const [stripType, map] of Object.entries(BLOCK_MAPS)) {
@@ -586,7 +586,7 @@ test('F4: every ZULU_HHMM Block is an epoch-ms …Utc FDR path on every role map
   assert.equal(resolveBlockValue('6', eta, makeStrip({ stripType: 'ARRIVAL' })).value, '0905');
 });
 
-test('every epoch time Block of every Role renders HHMM — the set is derived from the Block Maps (§11.2 rule 1)', () => {
+test('every epoch time Block of every strip type renders HHMM — the set is derived from the Block Maps (§11.2 rule 1)', () => {
   // Every flightData target path ending in Utc is an epoch time. A time Block added
   // to a map later without ZULU_HHMM_BLOCKS fails here, not on a Strip.
   const derived = new Set();

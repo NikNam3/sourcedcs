@@ -64,7 +64,7 @@ test('the client mirror of TOFI_ELIGIBLE_STATES stays in lockstep with coordinat
   assert.deepEqual(TOFI_ELIGIBLE_STATES, serverCoordination.TOFI_ELIGIBLE_STATES);
 });
 
-test('TOFI eligibility covers every airborne ATC-side Role, and never MISSION — the Role it creates', () => {
+test('TOFI eligibility covers every airborne ATC-side strip type, and never MISSION — the strip type it creates', () => {
   assert.deepEqual(Object.keys(TOFI_ELIGIBLE_STATES).sort(), ['ARRIVAL', 'DEPARTURE', 'OVERFLIGHT']);
   assert.equal(TOFI_ELIGIBLE_STATES.MISSION, undefined);
 });

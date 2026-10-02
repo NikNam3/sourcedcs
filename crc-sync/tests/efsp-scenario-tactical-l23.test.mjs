@@ -125,7 +125,7 @@ test('B1 (Q2) a JTAC who walks away leaves the line with TAC_C2, in TAC_C2\'s ow
 
 // ── B3 / B4: the Bay follows the owner ────────────────────────────────────
 
-test('B3 the covering Bay is the one implying the state; else the first Bay implying none; the Strip never sits in the absent Position\'s Bay', () => {
+test('B3 the consolidating Bay is the one implying the state; else the first Bay implying none; the Strip never sits in the absent Position\'s Bay', () => {
   const efsp = freshEfsp();
   const c = crew(efsp, ALL);
   // OFF_STATION: no TAC_C2 Bay implies it, so the first Bay with no implied state.
@@ -137,7 +137,7 @@ test('B3 the covering Bay is the one implying the state; else the first Bay impl
   assert.ok(baysOf('TAC_C2').includes(after.bayId));
 });
 
-test('B3 the routed TransferStrip lands in the covering Position\'s Bay too, and the ack keeps routedTo', () => {
+test('B3 the routed TransferStrip lands in the consolidating Position\'s Bay too, and the ack keeps routedTo', () => {
   const efsp = freshEfsp();
   const c = crew(efsp, ALL);
   hold(efsp, c.AIC.session, 'TACTICAL', []);
@@ -275,7 +275,7 @@ test('S-L24 a refused TOFI retires the strip it minted through the same path (ar
 
 // ── F10: the Position an unstaffed one is consolidated at gives the Strips back ────────────────────────
 
-test('F10 Strips routed to a covering Position go back, into the returning Position\'s Bay, when it is staffed again', () => {
+test('F10 Strips routed to a consolidating Position go back, into the returning Position\'s Bay, when it is staffed again', () => {
   const efsp = freshEfsp();
   const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK' });
   let s = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign: 'L23F1' } });
@@ -297,7 +297,7 @@ test('F10 Strips routed to a covering Position go back, into the returning Posit
   assert.ok(slot(back, 'primary').strips.updated.some(x => x.stripId === s.stripId), 'the return is broadcast');
 });
 
-test('F10 a Strip the covering Position transferred on by decision does not come back', () => {
+test('F10 a Strip the consolidating Position transferred on by decision does not come back', () => {
   const efsp = freshEfsp();
   const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK' });
   let s = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign: 'L23F2' } });

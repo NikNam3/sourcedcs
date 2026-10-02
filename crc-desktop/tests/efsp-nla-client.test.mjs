@@ -133,7 +133,7 @@ test('OPS is authorized for PROPOSED (its own state)', () => {
   assert.equal(canActOnState('OPS', 'DEPARTURE', 'PROPOSED'), true);
 });
 
-test('HELD is shared between CD and GND, no one else', () => {
+test('HELD is shared between CD and GC, no one else', () => {
   assert.equal(canActOnState('CD', 'DEPARTURE', 'HELD'), true);
   assert.equal(canActOnState('GC', 'DEPARTURE', 'HELD'), true);
   assert.equal(canActOnState('LC', 'DEPARTURE', 'HELD'), false);

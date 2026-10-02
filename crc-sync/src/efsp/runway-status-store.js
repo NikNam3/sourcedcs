@@ -247,12 +247,12 @@ class RunwayStatusStore {
       const op = mutation.op && typeof mutation.op === 'object' ? mutation.op : {};
       const record = this._records.get(mutation.facilityId);
       if (!record) {
-        result = { ok: false, reason: 'NOT_FOUND', detail: `no field state at ${mutation.facilityId}` };
+        result = { ok: false, reason: 'NOT_FOUND', detail: `no runway status at ${mutation.facilityId}` };
       } else if (mutation.baseRev !== undefined && mutation.baseRev !== null && record.rev !== mutation.baseRev) {
         // Audited, like correlation-store.js and unlike airspace-store.js,
         // which returns here without a trace.
         before = deepClone(record);
-        result = { ok: false, reason: 'STALE_REV', detail: `field state is at rev ${record.rev}, not ${mutation.baseRev}` };
+        result = { ok: false, reason: 'STALE_REV', detail: `runway status is at rev ${record.rev}, not ${mutation.baseRev}` };
       } else if (!permission.canActOnRunwayStatus(actingPositionId, op.kind)) {
         before = deepClone(record);
         result = Object.prototype.hasOwnProperty.call(permission.RUNWAY_STATUS_OP_OWNERS, op.kind)
@@ -728,7 +728,7 @@ class RunwayStatusStore {
       });
       const ends = inventory.runways.flatMap(d => d.ends);
       if (record.activeRunway && !ends.includes(record.activeRunway)) {
-        log.warn('restored active runway is no longer configured — unset until the wind or TWR sets it', { facilityId: saved.facilityId, activeRunway: record.activeRunway });
+        log.warn('restored active runway is no longer configured — unset until the wind or LC sets it', { facilityId: saved.facilityId, activeRunway: record.activeRunway });
         record.activeRunway = null;
         record.activeRunwaySource = null;
       }

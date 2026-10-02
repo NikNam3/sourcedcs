@@ -67,7 +67,7 @@ const mut = (w, positionId, strip, op, facilityId = 'TACTICAL') => ({
   facilityId, actingPositionId: positionId, stripId: strip.stripId, baseRev: strip.rev, op,
 });
 
-test('the connect snapshot a JTAC-only session receives carries only its handed Strips and their FDRs', () => {
+test('the connect snapshot a JTAC-only session receives carries only its handed Strips and their flight data', () => {
   const w = world();
   // Connect WITHOUT the helper's clearing: the snapshot is the first thing sent.
   const ws = fakeWs();
@@ -228,7 +228,7 @@ test('an OWNED session\'s resync is always a snapshot, even with a valid epoch a
   assert.equal(tc.ws.sent[0].answer, 'delta');
 });
 
-test('a line handed to the JTAC after it connected arrives with its FDR, and its correlation and MARSA records', () => {
+test('a line handed to the JTAC after it connected arrives with its flight data, and its correlation and MARSA records', () => {
   const w = world();
   const jt = w.connect('c-JTAC', { TACTICAL: ['JTAC'] });
   const tc = w.connect('c-TAC_C2', { TACTICAL: ['TAC_C2'] });

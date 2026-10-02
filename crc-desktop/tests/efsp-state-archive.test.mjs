@@ -12,7 +12,7 @@ import {
 
 test.beforeEach(() => _resetEfspStateForTest());
 
-test('applyEfspDelta: flightDataList.gone removes archived FDRs, and leaves the rest', () => {
+test('applyEfspDelta: flightDataList.gone removes archived flight data, and leaves the rest', () => {
   applyEfspSnapshot({
     boardSeq: 4, strips: [{ stripId: 's1', flightDataId: 'f1', state: 'PROPOSED' }],
     flightDataList: [{ flightDataId: 'f1' }, { flightDataId: 'f2' }], positions: [],

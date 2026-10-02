@@ -80,7 +80,7 @@ export function renderCoverageList() {
     const $range = document.createElement('span');
     $range.className = 'radar-row-range';
     $range.textContent = `${Math.round(r.rangeM / 1852)}nm`;
-    $range.title = TYPE_LABELS[r.type] || r.type.toUpperCase();
+    $range.title = `${TYPE_LABELS[r.type] || r.type.toUpperCase()} — range in crc-sync's model, not the real site's`;
 
     $row.appendChild($label);
     $row.appendChild($via);

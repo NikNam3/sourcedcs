@@ -107,7 +107,7 @@ function alertsSandbox({ flightData, runwayStatus }) {
 
 const arrivalStrip = (over = {}) => ({ stripId: 's1', flightDataId: 'f1', facilityId: 'INCIRLIK', stripType: 'ARRIVAL', state: 'HANDED_TO_TOWER', rackId: 'main', ...over });
 
-test('ordnanceAlertsFor: one amber HUNG chip with the pad sentence when field state is loaded', () => {
+test('ordnanceAlertsFor: one amber HUNG chip with the pad sentence when runway status is loaded', () => {
   const sb = alertsSandbox({ flightData: flightDataWith('HUNG', { arr: '05' }), runwayStatus: record() });
   const alerts = sb.ordnanceAlertsFor(arrivalStrip());
   assert.equal(alerts.length, 1);
@@ -118,7 +118,7 @@ test('ordnanceAlertsFor: one amber HUNG chip with the pad sentence when field st
   assert.ok(alerts[0].text.length <= 8 && alerts[0].text === alerts[0].text.toUpperCase(), 'chip label: capitals, 8 characters at most');
 });
 
-test('ordnanceAlertsFor: the chip still shows with no client field state at all (L1b not loaded)', () => {
+test('ordnanceAlertsFor: the chip still shows with no client runway status at all (L1b not loaded)', () => {
   const sb = alertsSandbox({ flightData: flightDataWith('HUNG'), runwayStatus: undefined });
   assert.equal(efspState.getEfspRunwayStatus('INCIRLIK'), null, 'no client field state loaded');
   const alerts = sb.ordnanceAlertsFor(arrivalStrip());
@@ -132,7 +132,7 @@ test('ordnanceAlertsFor: a Facility with no record yet shows the generic sentenc
   assert.equal(sb.ordnanceAlertsFor(arrivalStrip()).at(0).reason, client.ORDNANCE_NO_RUNWAY_STATUS_REASON);
 });
 
-test('ordnanceAlertsFor: nothing for CLEAN/LOADED/EXPENDED, a DROPPED Strip, an OVERFLIGHT, a MISSION line or a missing FDR', () => {
+test('ordnanceAlertsFor: nothing for CLEAN/LOADED/EXPENDED, a DROPPED Strip, an OVERFLIGHT, a MISSION line or a missing flight data', () => {
   for (const state of ['CLEAN', 'LOADED', 'EXPENDED']) {
     assert.equal(alertsSandbox({ flightData: flightDataWith(state), runwayStatus: record() }).ordnanceAlertsFor(arrivalStrip()).length, 0, state);
   }
@@ -197,7 +197,7 @@ test('a HUNG arrival shows the HUNG chip and its reason line on every Position\'
   }
 });
 
-test('the chip shows with no client field state loaded, with the generic sentence', async () => {
+test('the chip shows with no client runway status loaded, with the generic sentence', async () => {
   const { el } = await renderStrip({ strip: appArrival(), flightData: flightDataWith('HUNG'), signedOn: ['AP'], runwayStatus: undefined });
   assert.ok(descendants(el).find(c => c.dataset && c.dataset.slot === 'ord'));
   assert.ok(byClass(el, 'efsp-strip-reason').some(r => r.textContent === client.ORDNANCE_NO_RUNWAY_STATUS_REASON));

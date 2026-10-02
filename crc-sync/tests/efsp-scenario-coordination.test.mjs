@@ -264,7 +264,7 @@ function createOverflight(efsp, c, callsign, who = 'CTR', bayId = 'ctr-overfligh
 }
 const appStrip = (efsp, id) => efsp.boardStoreFor('INCIRLIK').getStrip(id);
 
-test('SCENARIO an IN_SECTOR overflight at CENTER hands off to APP, arrives INBOUND, and the sender goes HANDED_OFF on accept', async () => {
+test('SCENARIO an IN_SECTOR overflight at CENTER hands off to AP, arrives INBOUND, and the sender goes HANDED_OFF on accept', async () => {
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
 

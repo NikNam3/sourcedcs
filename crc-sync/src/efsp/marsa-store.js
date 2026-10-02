@@ -331,7 +331,7 @@ class MarsaStore {
     }
     for (const flightDataId of participants) {
       if (!this._flightDataExists(flightDataId)) {
-        return { ok: false, reason: 'NOT_FOUND', detail: `unknown FDR ${flightDataId}` };
+        return { ok: false, reason: 'NOT_FOUND', detail: `unknown flight data ${flightDataId}` };
       }
     }
     if (!START_EVENTS.includes(op.startEvent)) {
@@ -450,7 +450,7 @@ class MarsaStore {
     if (notActive) return notActive;
     const flightDataId = op.flightDataId != null ? String(op.flightDataId) : '';
     if (!flightDataId) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'AddParticipant needs an flightDataId' };
-    if (!this._flightDataExists(flightDataId)) return { ok: false, reason: 'NOT_FOUND', detail: `unknown FDR ${flightDataId}` };
+    if (!this._flightDataExists(flightDataId)) return { ok: false, reason: 'NOT_FOUND', detail: `unknown flight data ${flightDataId}` };
     if (relation.participants.includes(flightDataId)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'that flight is already a participant' };
     }

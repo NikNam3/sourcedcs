@@ -173,7 +173,7 @@ function iffSetup({ tracks, lit, srs = null, missionData = null }) {
   return { hub, collabStore, sessionWith };
 }
 
-test('two sessions, two colours: one own aircraft is neutral on APP and friendly on a Mode 4 radar', () => {
+test('two sessions, two colours: one own aircraft is neutral on AP and friendly on a Mode 4 radar', () => {
   const { hub, sessionWith } = iffSetup({
     tracks: [{ id: 7 }],
     lit: { 7: new Map([['app:X', 5000], ['crc:A', 5000]]) },
