@@ -5,11 +5,9 @@ const https = require('https');
 const fs    = require('fs');
 const path  = require('path');
 const { resolveProxyPath } = require('./proxy-routes');
-const { maptilerKey, renderStyle } = require('./maptiler');
 
 const PUBLIC_DIR       = path.join(__dirname, 'public');
 const DATA_DIR         = path.join(__dirname, 'data');
-const MAPTILER_KEY     = maptilerKey();
 const SRS_RADIO_API    = parseInt(process.env.SRS_RADIO_API_PORT) || 5003;
 
 // This is the renderer's local server, built on Node's own `http`/`https`
@@ -75,18 +73,8 @@ const httpServer = http.createServer((req, res) => {
     return res.end(
       'var CRCSYNC_URL      = ' + JSON.stringify(syncConfig.crcSyncUrl)      + ';\n' +
       'var CASDOOR_CLIENT_ID = ' + JSON.stringify(syncConfig.casdoorClientId) + ';\n' +
-      'var CASDOOR_ENDPOINT  = ' + JSON.stringify(syncConfig.casdoorEndpoint) + ';\n' +
-      'var MAPTILER_KEY      = ' + JSON.stringify(MAPTILER_KEY)              + ';\n'
+      'var CASDOOR_ENDPOINT  = ' + JSON.stringify(syncConfig.casdoorEndpoint) + ';\n'
     );
-  }
-
-  // The map style, with the MapTiler key filled in (maptiler.js).
-  if (req.url.split('?')[0] === '/crc-desktop-scope-style.json') {
-    return fs.readFile(path.join(PUBLIC_DIR, 'crc-desktop-scope-style.json'), 'utf8', (err, text) => {
-      if (err) { res.writeHead(404); return res.end('Not found'); }
-      res.writeHead(200, { 'Content-Type': MIME['.json'] });
-      res.end(renderStyle(text, MAPTILER_KEY));
-    });
   }
 
   // ── Connection widget (app/public/js/sync.js) pushes overrides here so

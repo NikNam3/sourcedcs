@@ -1,5 +1,6 @@
 'use strict';
 import { map, mapReady, settings } from './app.js';
+import { maptilerKey, onMaptilerKey } from './maptiler-key.js';
 
 // ── Elevation contour overlay ────────────────────────────────────────────
 // MapTiler's ready-made contour vector tileset only has data at zoom 9+
@@ -7,7 +8,7 @@ import { map, mapReady, settings } from './app.js';
 // hard floor in their data product, not a client-side setting). To get
 // contours at every zoom level, this computes them ourselves from MapTiler's
 // terrain-RGB elevation tiles (available zoom 0-14) using a marching-squares
-// isoline trace, run per-tile and cached. Same MapTiler key (config.js MAPTILER_KEY) as the rest of
+// isoline trace, run per-tile and cached. Same MapTiler key (maptiler-key.js, from crc-sync after login) as the rest of
 // the map — no new external dependency.
 
 const ELEV_TILE_SIZE   = 512;   // terrain-rgb-v2 tile pixel dimensions
@@ -51,7 +52,11 @@ function elevTileToLonLat(z, tx, ty) {
 // by the contour renderer below (elevFetchGrid, which converts to feet) and
 // los.js's point-elevation queries (which want meters directly).
 export async function elevDecodeTileMeters(z, x, y) {
-  const url = `https://api.maptiler.com/tiles/terrain-rgb-v2/${z}/${x}/${y}.webp?key=${MAPTILER_KEY}`;
+  // No key yet (before login, or crc-sync has none): nothing is fetched or cached, so the next request
+  // after the key arrives (onMaptilerKey, initElevationContours) starts clean.
+  const key = maptilerKey();
+  if (!key) throw new Error('no MapTiler key');
+  const url = `https://api.maptiler.com/tiles/terrain-rgb-v2/${z}/${x}/${y}.webp?key=${encodeURIComponent(key)}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`terrain-rgb ${z}/${x}/${y}: HTTP ${res.status}`);
   const bitmap = await createImageBitmap(await res.blob());
@@ -233,5 +238,6 @@ function elevScheduleUpdate() {
 
 export function initElevationContours() {
   map.on('moveend', elevScheduleUpdate);
+  onMaptilerKey(elevScheduleUpdate);
   if (settings.showElevation) updateElevationContours();
 }

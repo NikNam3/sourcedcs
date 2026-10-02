@@ -9,6 +9,8 @@ const exactOrQuery = (p) => (url) => url === p || url.startsWith(p + '?');
 
 const PROXY_ROUTES = [
   { match: exact('/api/ws-ticket'),                method: 'POST', path: '/api/ws-ticket' },
+  // The MapTiler key, handed over after login (crc-sync GET /api/client-config; public/js/maptiler-key.js).
+  { match: exact('/api/client-config'),            method: 'GET',  path: '/api/client-config' },
   { match: exact('/api/atis-transmit'),            method: 'POST', path: '/api/atis-transmit' },
   { match: exact('/api/srs-clients'),                             path: '/api/srs-clients' },
   { match: prefix('/api/apt-weather'),                            path: null },

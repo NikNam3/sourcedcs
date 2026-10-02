@@ -9,7 +9,6 @@ const net = require('node:net');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { resolveProxyPath } = require('../app/proxy-routes');
-const { maptilerKey, DEFAULT_MAPTILER_KEY, renderStyle } = require('../app/maptiler');
 
 const freePort = () => new Promise((res) => {
   const s = net.createServer().listen(0, () => { const p = s.address().port; s.close(() => res(p)); });
@@ -26,6 +25,8 @@ const request = (port, method, url, { headers = {}, body } = {}) => new Promise(
 // [method, url, expected upstream path or null (not proxied)]
 const CASES = [
   ['POST', '/api/ws-ticket', '/api/ws-ticket'],
+  ['GET', '/api/client-config', '/api/client-config'],
+  ['POST', '/api/client-config', null],
   ['GET', '/api/ws-ticket', null],
   ['POST', '/api/atis-transmit', '/api/atis-transmit'],
   ['GET', '/api/atis-transmit', null],
@@ -63,7 +64,7 @@ test('server.js proxies each route upstream with the same headers; 502 when crc-
   const upPort = upstream.address().port;
   const port = await freePort();
   const child = spawn(process.execPath, [path.join(__dirname, '../app/server.js')], {
-    env: { ...process.env, WS_PORT: String(port), CRCSYNC_URL: `ws://127.0.0.1:${upPort}`, CRC_MAPTILER_KEY: 'testkey123' },
+    env: { ...process.env, WS_PORT: String(port), CRCSYNC_URL: `ws://127.0.0.1:${upPort}` },
     stdio: ['ignore', 'pipe', 'inherit'],
   });
   t.after(() => { child.kill(); upstream.close(); });
@@ -97,28 +98,17 @@ test('server.js proxies each route upstream with the same headers; 502 when crc-
   }
   assert.equal(seen.length, 0);
 
-  // D-3: config.js carries the key and the style is filled in from it.
+  // MAPKEY: the client holds no key. config.js has none, and the style is served as it is, with no key=.
   const cfg = await request(port, 'GET', '/js/config.js');
-  assert.match(cfg.body, /var MAPTILER_KEY\s+= "testkey123";/);
+  assert.ok(!/MAPTILER/i.test(cfg.body));
   const style = await request(port, 'GET', '/crc-desktop-scope-style.json');
   assert.equal(style.status, 200);
+  assert.ok(!style.body.includes('key='));
   assert.ok(!style.body.includes('__MAPTILER_KEY__'));
-  assert.ok(style.body.includes('key=testkey123'));
-  assert.ok(JSON.parse(style.body).glyphs.includes('key=testkey123'));
 
   // crc-sync unreachable: 502 with the same JSON body.
   await new Promise((r) => upstream.close(r));
   const down = await request(port, 'GET', '/api/stereo-routes');
   assert.equal(down.status, 502);
   assert.deepEqual(JSON.parse(down.body), { error: 'crc-sync unreachable' });
-});
-
-test('maptiler: one key, env override, shipped default, no copy left in the client', () => {
-  assert.equal(maptilerKey({}), DEFAULT_MAPTILER_KEY);
-  assert.equal(maptilerKey({ CRC_MAPTILER_KEY: ' abc ' }), 'abc');
-  assert.equal(renderStyle('a=__MAPTILER_KEY__&b=__MAPTILER_KEY__', 'k'), 'a=k&b=k');
-  const fs = require('node:fs');
-  for (const f of ['public/js/elevation.js', 'public/crc-desktop-scope-style.json']) {
-    assert.ok(!fs.readFileSync(path.join(__dirname, '../app', f), 'utf8').includes(DEFAULT_MAPTILER_KEY), f);
-  }
 });

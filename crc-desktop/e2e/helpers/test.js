@@ -27,6 +27,10 @@ async function serveCdnFromNodeModules(context) {
   for (const [re, rel, type] of VENDORED) {
     await context.route(re, (route) => route.fulfill({ status: 200, contentType: type, body: fs.readFileSync(path.join(NM, rel)) }));
   }
+  // MAPKEY: the e2e crc-sync has no MapTiler key, so the client has none. Nothing may leave the machine for MapTiler:
+  // answer it as MapTiler does a key-less request (403), which is the no-key path the app really takes. Sprite and
+  // tiles both land here; the Background layer is the basemap.
+  await context.route(/^https:\/\/api\.maptiler\.com\//, (route) => route.fulfill({ status: 403, contentType: 'application/json', body: '{"message":"Invalid key"}' }));
 }
 
 const PATCHED = Symbol('cdn-patched');

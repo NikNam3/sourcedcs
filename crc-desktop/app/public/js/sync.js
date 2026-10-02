@@ -1,4 +1,5 @@
 'use strict';
+import { loadMaptilerKey } from './maptiler-key.js';
 
 // crc-sync client — Casdoor login (via a popup, main.js's
 // setWindowOpenHandler allow-lists the Casdoor authorize URL), the
@@ -241,6 +242,7 @@ export async function getSyncFeedUrl() {
     return null;
   }
   hideLoginGate();
+  loadMaptilerKey(getSyncToken());
   const wsBase = CRCSYNC_URL.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:');
   return `${wsBase}/feed?ticket=${encodeURIComponent(ticket)}`;
 }

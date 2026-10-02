@@ -8,11 +8,13 @@
       "type": "vector"
     },
     "maptiler_planet": {
-      "url": "https://api.maptiler.com/tiles/v3/tiles.json?key=__MAPTILER_KEY__",
+      "tiles": ["https://api.maptiler.com/tiles/v3/{z}/{x}/{y}.pbf"],
+      "minzoom": 0,
+      "maxzoom": 14,
       "type": "vector"
     }
   },
-  "glyphs": "https://api.maptiler.com/fonts/{fontstack}/{range}.pbf?key=__MAPTILER_KEY__",
+  "glyphs": "https://api.maptiler.com/fonts/{fontstack}/{range}.pbf",
   "sprite": "https://api.maptiler.com/maps/streets-v2-dark/sprite",
   "bearing": 0,
   "pitch": 0,

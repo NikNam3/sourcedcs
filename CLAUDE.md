@@ -233,6 +233,7 @@ See `.env.example` for all required variables. Key ones:
 | `AIRSPACE_SERVICE_TOKEN` | sourcedcs-web (sends it to crc-sync's `/api/airspace-registry`; accepts crc-sync's calendar read at `GET /api/bookings/service/upcoming`) + crc-sync (accepts and sends) — must match, as for `FLIGHT_PLAN_SERVICE_TOKEN` |
 | `CRCSYNC_SOURCEDCS_WEB_PUBLIC_URL` | crc-sync (the booking-page link shown on an airspace card; not a secret) |
 | `CRCSYNC_MAPTILER_KEY` | crc-sync (terrain masking for the radar picture — **optional**: without it every radar sees to its full range and nothing is masked, logged once at startup) |
+| `CRCSYNC_MAPTILER_CLIENT_KEY` | crc-sync (the MapTiler key crc-desktop draws its basemap and contours with, served after login by `GET /api/client-config`; **optional**, falls back to `CRCSYNC_MAPTILER_KEY`). crc-desktop's package holds no key; rotation: `infra/RUNBOOK.md` |
 | `CRCSYNC_TERRAIN_CACHE_DIR` | crc-sync (DEM tile cache; the Docker stack points it at the `crc-sync-state` volume) |
 | `DCS_GRPC_POLL_RATE` / `DCS_GRPC_MAX_BACKOFF` | crc-sync (DCS-gRPC unit stream: seconds between polls, default 1, floor 1; longest re-poll wait for a unit that isn't changing, default 5). Leave unset |
 | `ATOBRIEF_USMTF_TOKEN` | atobrief (accepts USMTF ATO reads from a machine caller). **Nothing sends it yet**: crc-sync never reads it, and its ATO import (L14) is paste/drop of a USMTF file, not a fetch from atobrief. Only an external USMTF consumer needs it |

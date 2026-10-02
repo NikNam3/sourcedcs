@@ -1,5 +1,27 @@
 # infra RUNBOOK
 
+## Rotating the MapTiler key
+
+crc-desktop ships with no MapTiler key. After login it asks crc-sync (`GET /api/client-config`, bearer token) and draws
+its basemap and elevation contours with the key it gets back. The key is `CRCSYNC_MAPTILER_CLIENT_KEY`, else
+`CRCSYNC_MAPTILER_KEY` (also crc-sync's own terrain-masking key). Nothing is cached on the client: it is fetched again at
+every login.
+
+The key that older crc-desktop releases shipped is in git history, so it is public. Only revoking it at MapTiler retires it.
+
+1. In the MapTiler account, create a new key. Optionally restrict it, remembering the client loads from `http://localhost:<port>`
+   (an origin allow-list that excludes localhost breaks the basemap). A second key for clients, separate from the server's
+   terrain key, gets its own quota and is what `CRCSYNC_MAPTILER_CLIENT_KEY` is for.
+2. Set `CRCSYNC_MAPTILER_CLIENT_KEY` (and/or `CRCSYNC_MAPTILER_KEY`) in `infra/.env` on the server. Never commit it.
+3. Deploy crc-sync (the human approves every deploy; the VERSION gate applies): `git pull --ff-only`, then
+   `docker compose pull crc-sync && docker compose up -d` in `infra/`. Connected clients pick the new key up at their next
+   login (restart or re-login).
+4. Check: log in with a crc-desktop of this release; the basemap and contours draw.
+5. **Delete the old key in MapTiler.** Until then it still works, and it is public.
+
+Every crc-desktop older than this change keeps the old key built in, so it loses its basemap and contours the moment step 5
+is done. VERSION refuses those clients once the protocol is bumped anyway.
+
 ## 2026-10 — crc-sync / crc-desktop vocabulary and structure release: before the deploy
 
 Every EFSP wire name changed, so **ship the client (a crc-desktop release) and the crc-sync image together**; an old

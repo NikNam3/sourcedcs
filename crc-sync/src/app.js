@@ -100,7 +100,7 @@ const COVERAGE_TICK_MS = 250;
 
 /**
  * @param {object} [deps]
- * @param {object} [deps.env] the environment; `LOG_LEVEL`, `CRCSYNC_TEST_RESET`, `NODE_ENV` and `CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH` are read here
+ * @param {object} [deps.env] the environment; `LOG_LEVEL`, `CRCSYNC_TEST_RESET`, `NODE_ENV` and `CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH`, `CRCSYNC_MAPTILER_CLIENT_KEY` and `CRCSYNC_MAPTILER_KEY` are read here
  * @param {{read:string, write:string}} [deps.paths] the Board snapshot's paths (default: state/ per `env`)
  * @param {object} [deps.grpcClient] the DCS-gRPC client (default: a new, unconnected GrpcClient). server.js connects it
  * @param {object} [deps.srsClient] the SRS client (default: a new, unconnected SrsClient)
@@ -183,6 +183,17 @@ function createApp(deps = {}) {
   // bearer JWT riding directly in the /feed WebSocket URL.
   app.post('/api/ws-ticket', auth.requireAuth, (req, res) => {
     res.json({ ticket: auth.mintTicket(req.user), expiresInMs: 30000 });
+  });
+
+  // ── Client config: the MapTiler key crc-desktop draws its basemap with ────
+  // The client holds no key (MAPKEY, H82 R3-39): it asks here after login, so
+  // rotating the key is an env change on this server, not a client release.
+  // CRCSYNC_MAPTILER_CLIENT_KEY (a browser-restricted key) wins; the terrain
+  // key CRCSYNC_MAPTILER_KEY is the fallback, so one key works today.
+  const maptilerClientKey = (env.CRCSYNC_MAPTILER_CLIENT_KEY || '').trim() || (env.CRCSYNC_MAPTILER_KEY || '').trim() || null;
+  app.get('/api/client-config', auth.requireAuth, (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json({ maptilerKey: maptilerClientKey });
   });
 
   // ── Core components ──────────────────────────────────────────────────────
