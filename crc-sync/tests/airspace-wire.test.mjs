@@ -308,3 +308,33 @@ test('a theater change between missions through the wire: the old theater\'s rec
   const none = efsp.handleMessage(c.CTR.session, panelMsg({ actingPositionId: 'CTR', airspaceId: 'MOA-1', baseRev: 1, op: { kind: 'ApproveActivation' } })).ack;
   assert.equal(none.detail, 'no mission loaded');
 });
+
+test('a replayed refusal or success answers with the same extra fields: conflicts, occupied/staleEntries, created/skipped, removed, effectiveAtRestart', () => {
+  reset({ standing: { [THEATER]: [MOA] } });
+  const efsp = start();
+  svc(efsp, { airspaceId: 'MOA-1', baseDefRev: 1, op: { kind: 'EditAirspace', patch: { workingFrequencyMhz: 140 } } });
+  const stale = { clientMutationId: 'rp-1', theater: THEATER, airspaceId: 'MOA-1', baseDefRev: 1, op: { kind: 'EditAirspace', patch: { workingFrequencyMhz: 141 } } };
+  const first = efsp.applyAsService(ADMIN, stale).ack;
+  const replay = efsp.applyAsService(ADMIN, stale).ack;
+  assert.equal(first.reason, 'STALE_REV');
+  assert.deepEqual(replay.conflicts, first.conflicts);
+  assert.deepEqual(replay.conflicts, [{ field: 'workingFrequencyMhz', base: 134.25, theirs: 140 }]);
+  assert.equal(replay.reason, 'STALE_REV');
+
+  const store = efsp.airspaceStore; const real = store._occupantsFor;
+  store._occupantsFor = () => [{ stripId: 's1', callsign: 'VIPER 1', frequencyMhz: 140 }];
+  const occ = { clientMutationId: 'rp-2', theater: THEATER, airspaceId: 'MOA-1', baseDefRev: 2, op: { kind: 'EditAirspace', patch: { usingPositionId: 'RANGE_THREE', workingFrequencyMhz: 141 } } };
+  const a1 = efsp.applyAsService(ADMIN, occ).ack;
+  const a2 = efsp.applyAsService(ADMIN, occ).ack;
+  for (const k of ['warning', 'occupied', 'staleEntries', 'effectiveAtRestart']) assert.deepEqual(a2[k], a1[k], k);
+  assert.equal(a2.occupied.length, 1);
+  store._occupantsFor = real;
+
+  const imp = { clientMutationId: 'rp-3', theater: THEATER, op: { kind: 'ImportAirspaces', theater: THEATER, source: 'ACO', definitions: [MOA, { ...MOA, airspaceId: 'MOA-3', name: 'Third' }] } };
+  const i1 = efsp.applyAsService(ADMIN, imp).ack; const i2 = efsp.applyAsService(ADMIN, imp).ack;
+  assert.deepEqual(i2.created, i1.created); assert.deepEqual(i2.skipped, i1.skipped);
+
+  const del = { clientMutationId: 'rp-4', theater: THEATER, airspaceId: 'MOA-3', baseDefRev: 1, op: { kind: 'DeleteAirspace' } };
+  const d1 = efsp.applyAsService(ADMIN, del).ack; const d2 = efsp.applyAsService(ADMIN, del).ack;
+  assert.equal(d1.removed, 'MOA-3'); assert.equal(d2.removed, 'MOA-3'); assert.equal(d2.airspace, null);
+});

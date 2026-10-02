@@ -103,19 +103,20 @@ const REGISTRY = [
         }
         return out;
       };
-      // A ROUTE's occupancy: non-DROPPED Strips whose flight data's MTR designator, normalised as flight-data-store
-      // writes it (trimmed, upper case), is the route's id.
+      // A ROUTE's occupancy: the flights (distinct flight data: a handoff leaves a Strip on each Board for one flight)
+      // with a non-DROPPED Strip whose flight data's MTR designator, normalised as flight-data-store writes it
+      // (trimmed, upper case), is the route's id.
       const routeOccupancyFor = (airspaceId) => {
-        let n = 0;
+        const flights = new Set();
         for (const { boardStore } of facilities.values()) {
           for (const s of boardStore.getAll()) {
             if (s.state === 'DROPPED') continue;
             const fd = stores.flightData && stores.flightData.getFlightData(s.flightDataId);
             const d = fd && fd.military && fd.military.mtr && fd.military.mtr.designator;
-            if (typeof d === 'string' && d.trim().toUpperCase() === airspaceId) n++;
+            if (typeof d === 'string' && d.trim().toUpperCase() === airspaceId) flights.add(s.flightDataId);
           }
         }
-        return n;
+        return flights.size;
       };
       return new AirspaceStore({
         clock, currentTheater, occupantsFor, routeOccupancyFor,

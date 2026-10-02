@@ -51,8 +51,18 @@ module.exports = {
       op: msg.op, ...(sp ? { theater: msg.theater } : {}),
     }, actor);
   },
-  rememberId: (result, msg) => msg.airspaceId,
-  fromCached: (ctx, cached, msg) => ({ ...cached, airspace: ctx.airspaceStore.getAirspace(cached.id, theaterOf(ctx, msg)) }),
+  // The replay cache keeps compact records, and `id` is the one free slot: it holds the record's address (theater and
+  // id) AND the extra ack fields, so a retried POST gets back the same `conflicts`, `occupied`, `staleEntries`,
+  // `created`/`skipped`, `removed` and `effectiveAtRestart`, with the record as it is NOW (docs/adr/0081; QA-AIRSP2SA-2).
+  rememberId: (result, msg) => ({
+    airspaceId: msg.airspaceId, theater: result.theater,
+    extra: Object.fromEntries(['occupied', 'staleEntries', 'conflicts', 'blockers', 'created', 'skipped', 'removed', 'effectiveAtRestart']
+      .filter(k => result[k] !== undefined).map(k => [k, result[k]])),
+  }),
+  fromCached: (ctx, cached) => {
+    const { airspaceId, theater, extra } = cached.id || {};
+    return { ...cached, ...(extra || {}), theater, airspace: extra && extra.removed ? null : ctx.airspaceStore.getAirspace(airspaceId, theater) };
+  },
   // The ack (pinned by tests/airspace-ack-contract.test.mjs, which sourcedcs-web and 2S-B read from): the record
   // (null after a delete), the refusal's reason/detail, and what the op adds: `conflicts` [{field, base, theirs}] on a
   // STALE_REV edit, `blockers` on a refused delete, `warning`/`occupied`/`staleEntries` on an edit or release of a
