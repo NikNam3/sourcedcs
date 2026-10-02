@@ -1,38 +1,35 @@
 'use strict';
 
-// Facility adaptation layer (EFSPImplementationGuide.md §8) — Position set,
-// Bay/Rack definitions, the covering chain, and the Bay-implies-State
-// mapping. Persisted JSON config, same pattern as theater-settings.js/
-// apt-config.js: loaded once, at the first use (load()), mutated and re-persisted
-// through setters, survives a crc-sync restart. "The configurability is the
-// specification" (§8.1) — even though this module ships no facility-config
-// *editing* UI, the load/persist path exists from the start so a future
-// editor is additive, not a retrofit.
+// Facility adaptation layer (EFSPImplementationGuide.md §8) — the loader for each Facility's data: Position set,
+// Bay/Rack definitions, consolidation, the Bay-implies-State mapping. "The configurability is the
+// specification" (§8.1).
 //
-// WP4A (docs/adr/0013) added a second Facility, `CENTER` (Ankara Center,
-// Position `CTR`) — every exported function now takes an OPTIONAL trailing
-// `facilityId` parameter defaulting to DEFAULT_FACILITY_ID ('INCIRLIK'), so
-// every zero-arg call site that predates WP4A keeps compiling and behaving
-// identically. `configs` is a Map keyed by facilityId rather than a single
-// module-level object — see docs/adr/0013-facility-config-multi-facility.md.
+// The data is not here. Each shipped Facility is config/efsp-facility-<id>.json (docs/wip/DATA-1.md); this module
+// loads them, lazily (the first use, or an explicit load(), never at require time), and answers questions about
+// them. facility-schema.js says what every key means and where its value comes from (the doctrine and
+// [SOURCE-DEFINED] notes live there, per key, because a JSON file takes no comments). The file layering is: an
+// env override path if set and present, else the live copy in state/, else the shipped config/ file; a copy
+// replaces the shipped one WHOLE, never key by key. A missing or invalid file is a start-up error, not a silent
+// fall back, and so is a file that still carries the replaced `blockVisibility` list (the code token below stays;
+// the file is refused, docs/adr/0041). RANGES alone is derived from the airspace definitions, every boot.
+// setFacilityConfig re-validates, replaces the live copy and persists it to state/, so a config survives a
+// crc-sync restart; the module ships no editing UI.
 //
-// Bay sets below are the guide's own §4.2 defaults, restricted to the
-// Positions each Facility actually has. Each ATC Position's `Coordination`
-// Bay was present-but-inert through Phase 2 (guide §16's build-sequencing
-// note: "an empty-but-present Coordination Bay" is the WP4A seam) — it's
-// now genuinely used by the 5 new coordination-primitive Mutations
-// (permission.js's OP_KINDS) to land a proposed cross-Facility Strip
-// replica. `bayImpliesState` (guide §3.5 rule 4 / §2 "Bay membership
-// expresses operational state") only covers Bays whose name cleanly maps to
-// one EfspState — Filed/Taxi In/Arrivals/every Coordination Bay have none.
+// WP4A (docs/adr/0013) added a second Facility, `CENTER` (Ankara Center, Position `CTR`) — every exported
+// function takes an OPTIONAL trailing `facilityId` defaulting to DEFAULT_FACILITY_ID ('INCIRLIK').
+// `configs` is a Map keyed by facilityId — see docs/adr/0013-facility-config-multi-facility.md.
+//
+// `bayImpliesState` (guide §3.5 rule 4 / §2 "Bay membership expresses operational state") only covers Bays whose
+// name cleanly maps to one strip state — Filed, Arrivals and every Coordination Bay imply none. A Position's
+// `-coordination` Bay is where the cross-Facility coordination primitives (authority/op-kinds.js's
+// COORDINATION_OP_KINDS) land a proposed Strip replica (guide §16's "an empty-but-present Coordination Bay").
 
 const fs = require('fs');
 const runwayStatus = require('./runway-status'); // pure, requires nothing back (docs/adr/0061)
 const schema = require('./facility-schema');
 const { validateConfig, validateRadarSelector, validateSfaRotationRecord, BAY_VIEWS } = schema;
-// Required BEFORE this module builds its configs Map: the RANGES Facility's
-// Position set is derived from the airspace definitions (see
-//  airspace-config.js deliberately does not require
+// The RANGES Facility's Position set is derived from the airspace definitions (see _rangesConfig),
+// so this module needs airspace-config.js; airspace-config.js deliberately does not require
 // this module back, so there is no cycle.
 const airspaceConfig = require('./airspace-config');
 const path = require('path');
@@ -42,11 +39,11 @@ const log = require('../log').logger('efsp:facility-config');
 const DEFAULT_FACILITY_ID = 'INCIRLIK';
 
 // Overridable so tests exercise the mutate/persist path against a temp
-// file — same pattern as theater-settings.js's CRCSYNC_THEATER_SETTINGS_PATH.
+// file (the CRCSYNC_EFSP_FACILITY_CONFIG_PATH* env vars, read by load()).
 // One env var per Facility, so a test can override either (or both)
 // independently without the two Facilities' on-disk state colliding.
-// `setFacilityConfig` rewrites these, so each has a read path (data/ if a live
-// copy exists, else the shipped default) and a write path (always data/) — see
+// `setFacilityConfig` rewrites these, so each has a read path (state/ if a live
+// copy exists, else the shipped default) and a write path (always state/) — see
 // state-paths.js for why that split exists at all.
 const FACILITY_CONFIG_FILES = {
   INCIRLIK: ['efsp-facility-incirlik.json', undefined], // set by load()
@@ -91,13 +88,13 @@ const SHIPPED_FACILITY_IDS = ['INCIRLIK', 'CENTER', 'TACTICAL', 'CARRIER'];
 // onto a working frequency by whichever ATC Position owns the airspace, and
 // there is nobody else to be.
 //
-// `bays` is empty and stays empty. §4.1: "RANGE works no Strips... Give it a
-// Field State board", §4.2: "Airspace board (not a strip rack)". Its board is
+// `bays` is empty and stays empty. §4.1: "RANGE works no Strips. It owns airspace
+// state ... Give it a Runway Status board", §4.2: "Airspace board (not a strip rack)". Its board is
 // airspace-store.js, which is not a Bay of Strips, so there is nothing for
 // getAllBays() to return here — and because the client builds its Position
 // tabs from Bays, a range Position correctly never grows a strip-rack tab.
 //
-// Absent from `consolidation` deliberately: the chain exists to re-route
+// Absent from `consolidation` deliberately: consolidation exists to re-route
 // Strips away from a vacated Position (defect D19), and a Position that owns
 // no Strips has none to strand.
 function _rangesConfig() {
