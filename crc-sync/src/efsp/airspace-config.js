@@ -56,7 +56,8 @@ const AIRSPACE_TYPES = new Set([
 // Vertical limits, in feet. Both optional: an airspace with neither is
 // unbounded as far as this system is concerned, which is honest — the real
 // limits are published elsewhere and this is not a charting tool. When they
-// ARE set, a flight's altitude block has to fit inside them.
+// ARE set, a flight's altitude block has to fit inside them. The 0..100000 ft
+// range is an engineering bound on typed input (a sanity check), not a rule.
 const MIN_ALTITUDE_FT = 0;
 const MAX_ALTITUDE_FT = 100000;
 
@@ -69,6 +70,7 @@ function isValidAltitude(value) {
 // number. The wider repo is inconsistent (atis-store keys by integer Hz,
 // apt-config stores an unvalidated string, the SRS bridge takes float MHz at
 // its HTTP boundary), so conversions happen at those edges, never here.
+// 30..400 MHz is likewise an engineering bound on typed input, not a rule.
 const MIN_FREQUENCY_MHZ = 30;
 const MAX_FREQUENCY_MHZ = 400;
 

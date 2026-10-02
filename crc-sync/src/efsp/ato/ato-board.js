@@ -42,7 +42,7 @@ const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', '
 
 // The seed-owned flight data paths: filled from the ATO, but a controller may type
 // over them (WRITABLE_PATHS), and a re-import then keeps the controller's
-// value (§10.2 rule 3). Mirrored by flight-data-store.js's ATO_SEED_PATHS.
+// value (§10.2 rule 3). Mirrored by the `SEED_PATHS` set in flight-data-store.js's `applyAtoTasking`.
 const SEED_PATH_OF = Object.freeze({
   missionNumber: 'mission.missionNumber',
   packageId: 'mission.packageId',

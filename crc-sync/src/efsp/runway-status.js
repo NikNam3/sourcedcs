@@ -66,6 +66,8 @@ const GEAR_STATES = ['UP', 'DOWN', 'OUT_OF_SERVICE'];
 
 // ── the runway change (rule 3) ─────────────────────────────────────────────
 
+// [SOURCE-DEFINED] (docs/adr/0061) — the runway change's state set is ours;
+// the guide (§9.7 rule 3) requires only coordination with acknowledgements.
 const RUNWAY_CHANGE_STATES = ['PROPOSED', 'ACKNOWLEDGED', 'IN_PROGRESS', 'PENDING_INSPECTION', 'REJECTED'];
 const RUNWAY_CHANGE_OPEN_STATES = ['PROPOSED', 'ACKNOWLEDGED', 'IN_PROGRESS', 'PENDING_INSPECTION'];
 
