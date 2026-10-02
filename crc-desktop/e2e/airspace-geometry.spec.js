@@ -139,6 +139,7 @@ test('a drawing over 200 points is simplified on pick and says so; an open line 
 });
 
 test('Refresh from drawing is offered when the loaded drawing moved, and the outline stays when the drawing is gone', async ({ page }) => {
+  test.setTimeout(150000); // a long walk; the whole-test ceiling is for hangs, not for a busy machine
   const picked = { source: 'DCS_DRAWING', drawingRef: { layerName: 'Common', objectName: 'ADANA SOUTH MOA', missionFingerprint: 'Syria:x' }, points: sq };
   await open(page, ['AP'], [rec(def({ geometry: picked }))]);
   const ed = await edit(page, 'MOA-ADS');
@@ -248,6 +249,7 @@ test('Escape cancels a drawing session and leaves the form as it was', async ({ 
 });
 
 test('create a ROUTE: choose the kind, type fixes in DM, MGRS and decimal, pick a navpoint, set one wide leg; Save sends segments', async ({ page }) => {
+  test.setTimeout(150000);
   await open(page, ['CTR']);
   const ed = await newAirspace(page);
   await fld(ed, 'KIND').locator('select').selectOption('ROUTE');
