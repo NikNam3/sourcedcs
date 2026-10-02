@@ -124,6 +124,7 @@
    "buildBullseye",
    "buildDots",
    "buildDrawings",
+   "buildExtendedCenterline",
    "buildFiledRoute",
    "buildLabels",
    "buildNavpoints",
@@ -182,6 +183,7 @@
   "panels/aprt-panel.js": [
    "_aprtRwyTrueDeg",
    "_aprtSelectedApt",
+   "_setAprtRunwayForTest",
    "_updateAprtRefCard",
    "_updateAprtRwyHeading",
    "initAprtPanel",
@@ -955,7 +957,7 @@
   ]
  },
  "bridge": {
-  "count": 674,
+  "count": 676,
   "skipped": [],
   "names": [
    "$aptDisplay",
@@ -1139,6 +1141,7 @@
    "_setActiveBayId",
    "_setActivePositionTab",
    "_setApproachRwyCourse",
+   "_setAprtRunwayForTest",
    "_setBayContentElForTest",
    "_setBullseyePickTarget",
    "_setCoverageDatalink",
@@ -1252,6 +1255,7 @@
    "buildCarrierFinalLine",
    "buildDots",
    "buildDrawings",
+   "buildExtendedCenterline",
    "buildFiledRoute",
    "buildLabels",
    "buildNavpoints",

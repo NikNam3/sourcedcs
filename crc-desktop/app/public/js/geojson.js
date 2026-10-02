@@ -640,7 +640,7 @@ function _extCenterlineTickPlan(zoom) {
   return { minorNm: 10, majorNm: 20 };
 }
 
-function buildExtendedCenterline() {
+export function buildExtendedCenterline() {
   if (!_aprtSelectedApt || _aprtRwyTrueDeg == null) return { type: 'FeatureCollection', features: [] };
   // Only drawn for an airfield whose approach radar we are actually looking
   // through. Asked by airport rather than by radar id, because the id used to
@@ -673,8 +673,8 @@ function buildExtendedCenterline() {
     const isMajor = (i * minorNm) % majorNm === 0; // majorNm is always a multiple of minorNm
     const halfWidthM = isMajor ? MAJOR_HALF_WIDTH_M : MINOR_HALF_WIDTH_M;
     const [tLat, tLon] = projectPos(_aprtSelectedApt.lat, _aprtSelectedApt.lon, reciprocal, d * 1852);
-    const [aLat, aLon] = projectPos(tLat, tLon, (trueHeading + 90) % 360, halfWidthM);
-    const [bLat, bLon] = projectPos(tLat, tLon, (trueHeading + 270) % 360, halfWidthM);
+    const [aLat, aLon] = projectPos(tLat, tLon, (_aprtRwyTrueDeg + 90) % 360, halfWidthM);
+    const [bLat, bLon] = projectPos(tLat, tLon, (_aprtRwyTrueDeg + 270) % 360, halfWidthM);
     features.push({
       type: 'Feature',
       geometry: { type: 'LineString', coordinates: [[aLon, aLat], [bLon, bLat]] },
