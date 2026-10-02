@@ -1,12 +1,11 @@
 'use strict';
 
 // The Board's persistence (docs/adr/0095, H87): the snapshot and restore, the archive of a DROPPED Strip, when each
-// DROPPED Strip dropped, and the persisted window of the Board's idempotency cache (sync/replay-cache.js). Moved
-// verbatim from board-store.js; the facade delegates to it.
+// DROPPED Strip dropped, and the persisted window of the Board's idempotency cache (sync/replay-cache.js). BoardStore delegates to it.
 //
 // `mutationLog` and `nlaHistory` are read late: setMutationLog() can come after construction, and the NLA history
 // is the facade's. The `droppedWallAt` Map is this object's; restore() replaces it, so StripOps reads it late
-// through the facade.
+// through this object.
 
 const { REPLAY_PERSIST_WINDOW_MS } = require('../sync/replay-cache');
 
@@ -28,7 +27,7 @@ class BoardPersistence {
     this._mutationLogOf = mutationLog;
     this._nlaHistoryOf = nlaHistory;
     // stripId -> Date.now() at its drop: when a DROPPED Strip is archived
-    // (docs/adr/0082, H36). Wall time on purpose, like the NLA latch (board-store.js): a
+    // (docs/adr/0082, H36). Wall time on purpose, like the NLA latch (board/ops/invoke-nla.js): a
     // retention period is a storage lifetime, and the mission clock rewinds on
     // a reload (H11). Not a Strip field, so the wire is unchanged. Persisted.
     this._droppedWallAt = new Map();

@@ -1,6 +1,6 @@
 'use strict';
 
-// WP4A second slice (docs/adr/0025) — TOFI (guide §4.6.3), the
+// TOFI (docs/adr/0025) (guide §4.6.3), the
 // ATC<->MRU sub-protocol. Kept structurally separate from the 5
 // primitives above (own strip.tofiCoordination field, own dispatcher)
 // rather than folded into Coordination.applyOp — TOFI is a two-step

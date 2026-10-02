@@ -15,7 +15,7 @@ function _applyCreateStrip(ctx, op, actingPositionId, by) {
   }
   // Strip-type-scoped CreateStrip (OPS/DEPARTURE: guide §4.1 rule 3; AP/ARRIVAL: docs/adr/0008) — a
   // SECOND permission check beyond the coarse canMutate('CreateStrip')
-  // gate already applied in _dispatch: OPS may only originate DEPARTURE,
+  // gate already applied in `StripOps#dispatch`: OPS may only originate DEPARTURE,
   // AP may only originate ARRIVAL. Checked before touching flightDataStore so
   // a denied CreateStrip has no side effects.
   if (!ctx.rules.canCreateStripType(actingPositionId, stripType)) {
@@ -44,7 +44,7 @@ function _applyCreateStrip(ctx, op, actingPositionId, by) {
     if (!bound) return { ok: false, reason: 'NOT_FOUND', detail: 'referenced FDR not found' };
 
     // Scanned LOCALLY, not through rules.liveStripsForFlightData — that one is
-    // global and role-blind, and the 5 ATC<->ATC primitives legitimately put
+    // global and strip-type-blind, and the 5 ATC<->ATC primitives legitimately put
     // same-strip-type Strips for one flight data on two Boards (docs/adr/0013). Within ONE
     // Board, two same-strip-type Strips on one flight data is §3.6's duplicate
     // origination. Strip-type-agnostic rather than MISSION-specific, so the
@@ -90,8 +90,8 @@ function _applyCreateStrip(ctx, op, actingPositionId, by) {
     // 'INBOUND' : 'PROPOSED'` binary, which silently gave a new
     // OVERFLIGHT Strip the invalid state 'PROPOSED' (a DEPARTURE-only
     // state, not even in OVERFLIGHT_STATE_SET) since no caller passes
-    // op.initialState explicitly. A small per-role table, not a wider
-    // rules-injection — board-store.js only ever needs each role's own
+    // op.initialState explicitly. A small per-strip-type table, not a wider
+    // rules-injection — the Board only ever needs each strip type's own
     // starting state, never the full STATES_BY_STRIP_TYPE list nla.js owns.
     state: op.initialState || ctx.initialStateFor(stripType) || 'PROPOSED',
     ownerPositionId: actingPositionId,
@@ -103,15 +103,15 @@ function _applyCreateStrip(ctx, op, actingPositionId, by) {
     // No `correlation` field. The inert `{ state: 'UNCORRELATED' }` hook that
     // used to sit here was keyed wrongly: one flight data legitimately has several
     // Strips (per-Facility replicas, docs/adr/0013; a TOFI MISSION Strip;
-    // ConvertToArrival keeping one stripId across a role change), so a
+    // ConvertToArrival keeping one stripId across a strip-type change), so a
     // per-Strip correlation lets two replicas hold different answers to
     // "which contact is this airframe" — and two answers to an identity
     // question IS the defect class §6.6 exists to prevent. The correlation
     // is keyed by flightDataId in correlation-store.js (docs/adr/0045), and the
     // client joins on flightDataId to render it.
-    coordination: null, // WP4A hook (docs/adr/0015) — set by _applyCoordinationPropose/receiveCoordinationProposal once this Strip is party to a cross-Facility exchange
-    tofiCoordination: null, // WP4A second slice hook — set by _applyTofiPropose/receiveTofiProposal once this Strip is party to a TOFI exchange
-    airspaceEntry: null, // the RANGE slice — set by _applyApproveAirspaceEntry while this flight is working an airspace
+    coordination: null, // hook (docs/adr/0015) — set by board/coordination.js's _applyCoordinationPropose/receiveCoordinationProposal once this Strip is party to a cross-Facility exchange
+    tofiCoordination: null, // TOFI hook — set by board/tofi.js's _applyTofiPropose/receiveTofiProposal once this Strip is party to a TOFI exchange
+    airspaceEntry: null, // the RANGE slice — set by board/ops/approve-airspace-entry.js's _applyApproveAirspaceEntry while this flight is working an airspace
     previousLeg: null,   // set by ConvertToArrival — the departure leg's archived annotations
     createdAt: now, updatedAt: now, updatedBy: by || null,
   };

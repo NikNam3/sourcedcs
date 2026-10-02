@@ -2,7 +2,7 @@
 
 // Cross-Facility coordination (docs/adr/0095; guide §4.6, docs/adr/0013-0018): the five primitives'
 // PROPOSE / ACCEPT / REJECT / STAND_BY / CANCEL on the sender's Strip, and the four `receive*` calls a peer Board
-// makes on this one. Moved verbatim from board-store.js; the facade's `receiveCoordination*` delegate here.
+// makes on this one. BoardStore's `receiveCoordination*` delegate here.
 
 const crypto = require('crypto');
 const { newFlags, deepClone } = require('./strip-util');
@@ -16,7 +16,7 @@ class Coordination {
    * @param {object} deps.placement Placement
    * @param {{now: () => number}} deps.clock the mission clock
    * @param {object} deps.flightDataStore
-   * @param {(stripId:string) => void} deps.touch late-bound to the facade's _touch (the soak host patches it)
+   * @param {(stripId:string) => void} deps.touch the kernel's `recordTouch` (board/board-state.js)
    * @param {() => string|null} deps.activeCmid the clientMutationId being applied, read late
    * @param {(strip:object, by:string) => object|null} deps.retire late-bound to StripOps' retire
    * @param {() => object|null} deps.mutationLog the facade's current Mutation log, read late (setMutationLog)
@@ -42,28 +42,28 @@ class Coordination {
 
   get _mutationLog() { return this._mutationLogOf(); }
 
-  // ── WP4A: cross-Facility coordination (guide §4.6, docs/adr/0013-0018) ──
+  // ── cross-Facility coordination (guide §4.6, docs/adr/0013-0018) ──
   //
   // "The Strip does not cross the Facility boundary... one logical flight data record, N
   // per-Facility Strip replicas" (guide §4.6, defect D13 if built as a
   // move). Concretely: this BoardStore instance is one Facility's Board
-  // (index.js's composition root now constructs one {BoardStore,
+  // (index.js's composition root constructs one {BoardStore,
   // PositionStore} pair PER Facility — see docs/adr/0013). A coordination
   // primitive's PROPOSE action mutates the SENDER's own existing Strip
-  // (ownership-gated exactly like every other op — _dispatch's existing
+  // (ownership-gated exactly like every other op — `StripOps#dispatch`'s existing
   // NOT_OWNER check already covers it) and, on success, calls a public
   // method on the RECEIVING Facility's own BoardStore instance
   // (`rules.peerBoard(facilityId)`) to mint a brand-new, independent Strip
   // object there. From that point the two replicas are two rows in two
   // separate `_strips` Maps, linked only by `coordination.peerStripId`/
   // `peerFacilityId` — never a shared identity, never one object moved.
-  // Independent removability (a WP4A acceptance criterion) falls out of
-  // this for free: _applyDropStrip on one instance structurally cannot
+  // Independent removability (acceptance criterion D13) falls out of
+  // this for free: board/ops/drop-strip.js's _applyDropStrip on one instance structurally cannot
   // reach the other instance's Map at all.
 
   /**
    * @param {object} strip — the Strip this Mutation targets (already
-   *   verified by _dispatch to be owned by actingPositionId)
+   *   verified by `StripOps#dispatch` to be owned by actingPositionId)
    * @param {{kind:string, action:'PROPOSE'|'ACCEPT'|'REJECT', toFacilityId?:string, toPositionId?:string, note?:string}} op
    */
   applyOp(strip, op, by, actingPositionId) {
@@ -311,7 +311,7 @@ class Coordination {
    * The receiver's replica reached DROPPED (called through rules.peerBoard):
    * an exchange still PROPOSED or ACTIVE ends on the proposer's Strip, which
    * would otherwise carry a link nobody can answer for good (U7). Audited as a
-   * system change, like a covering reassignment.
+   * system change, like a consolidation change.
    * @returns {{ok:boolean, strip?:object}}
    */
   receiveCoordinationPeerGone({ stripId, goneStripId, causedBy }) {
@@ -423,7 +423,7 @@ class Coordination {
         state: 'INITIATED',
         // This Strip exists only because of this exchange — it is the
         // receiver's replica, not a flight record with a life of its own.
-        // Read by _isRejectedReplica to keep a declined replica inert
+        // Read by `StripOps#isRejectedReplica` to keep a declined replica inert
         // wherever it ends up on the Board (F-303); TOFI's `mintedForTofi`
         // is the same field for the same reason.
         mintedForCoordination: true,

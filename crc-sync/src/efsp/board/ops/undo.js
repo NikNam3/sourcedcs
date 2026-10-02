@@ -3,7 +3,7 @@
 /** Reverts the last NLA-driven transition, within its 30s window (guide §3.5 rule 5). */
 function _applyUndo(ctx, strip, by) {
   const last = ctx.nlaHistory.get(strip.stripId);
-  if (!last || Date.now() > last.expiresAt) { // the latch's real-time window, see _applyInvokeNla
+  if (!last || Date.now() > last.expiresAt) { // the latch's real-time window, see board/ops/invoke-nla.js's _applyInvokeNla
     return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no Undo available', strip };
   }
   ctx.nlaHistory.delete(strip.stripId);

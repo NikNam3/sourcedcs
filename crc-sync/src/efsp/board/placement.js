@@ -1,12 +1,13 @@
 'use strict';
 
 // Placement (docs/adr/0095): where a Strip goes. The order keys inside a Rack (fractional keys, the rebalance) and the
-// Bays (strip-type Bays, Bay-implied state, capacity, the Bay a new owner gets, the rack a system move picks). Moved verbatim
-// from board-store.js; the facade calls these methods.
+// Bays (strip-type Bays, Bay-implied state, capacity, the Bay a new owner gets, the rack a system move picks). The
+// BoardStore facade (board-store.js) and the ops in board/ops/ call these methods.
 //
-// Late-bound callbacks, all into the facade: `touch` and `rebalanceRack` (tools/soak/host-core.js patches the facade's
-// _touch and wraps its _rebalanceRack, so both must go through it), and `rejectedReplicaRefusal` (the NLA cluster's,
-// still on the facade).
+// Injected callbacks: `touch` is the kernel's `recordTouch` (board/board-state.js; `observeTouches` sees every call,
+// which is how tools/soak/host-core.js watches them). `rebalanceRack` is late-bound to the facade's `_rebalanceRack`
+// (the soak host wraps it by name, so the call must go through it). `rejectedReplicaRefusal` is `StripOps#rejectedReplicaRefusal`
+// (board/strip-ops.js).
 
 const { keyBetween, rebalance, needsRebalance } = require('../order-key');
 const { runwayRackFor } = require('../runway-status');
@@ -91,7 +92,7 @@ class Placement {
   }
 
   /**
-   * The key that puts a Strip at the END of a Rack, the way _applyCreateStrip
+   * The key that puts a Strip at the END of a Rack, the way board/ops/create-strip.js's _applyCreateStrip
    * places a new one. keyBetween(null, null) is NOT this — it returns the
    * seed key, which lands mid-Rack once anything else is in there.
    */
@@ -133,7 +134,7 @@ class Placement {
    */
   placementRack(strip, bay) {
     // An SFA frequency Bay is placed by the flight's own frequency, so a Strip put
-    // back by a system move (a Position retaken, a covering hand-back) returns to
+    // back by a system move (a Position signed on again, a hand-back from the Position it was consolidated at) returns to
     // the Rack that IS its frequency, not the first one (guide §4.2, D17).
     if (bay && bay.view === 'sfa-freqs') {
       const flightData = this._flightDataStore.getFlightData(strip.flightDataId);
@@ -167,7 +168,7 @@ class Placement {
    * presently inhibited (no beacon code, incomplete flight plan, a hold in
    * force, ...) — is rejected exactly like invoking that NLA would be.
    * Without this, a drag (or a same-controller self-coordinated Transfer,
-   * guide §4.8.3) could silently skip a Strip past every doctrine check
+   * guide §4.8.3) could silently skip a Strip past every lifecycle check
    * NLA enforces — e.g. straight from PROPOSED into a CLEARED Bay with no
    * flight plan at all, which is exactly the bug this closes.
    * @returns {{ok:true, impliedState:string|null}|{ok:false, reason:string, detail:string}}
@@ -191,13 +192,13 @@ class Placement {
 
     // Per-State authority (guide §3.4's "normally owned by" column,
     // permission.js's canActOnState) — checked here too, not just in
-    // _applyInvokeNla, because dragging into an implied-state Bay is the
+    // board/ops/invoke-nla.js's _applyInvokeNla, because dragging into an implied-state Bay is the
     // OTHER path to the exact same transition (§3.5 rule 4: NLA is an
     // accelerator, never the only path). Gating only the NLA button would
     // leave this reachable by drag regardless of who "should" be advancing
     // the Strip. strip.ownerPositionId is the acting Position here —
-    // _dispatch() already verified actingPositionId === strip.ownerPositionId
-    // before any _apply* method runs.
+    // `StripOps#dispatch` already verified actingPositionId === strip.ownerPositionId
+    // before any op in board/ops/ runs.
     if (!this._rules.canActOnState(strip.ownerPositionId, strip.stripType, strip.state)) {
       return { ok: false, reason: 'PERMISSION_DENIED', detail: `${strip.state} is not ${strip.ownerPositionId}'s to advance` };
     }

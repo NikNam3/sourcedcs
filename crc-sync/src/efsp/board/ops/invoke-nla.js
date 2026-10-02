@@ -38,7 +38,7 @@ function _applyInvokeNla(ctx, strip, by) {
     // Transfer-shaped NLA transition (Phase 2's real LC->AP "Hand
     // Off", per docs/adr/0007 superseding the old always-stub DEPARTED
     // case — and ARRIVAL's INBOUND->LC/LANDED->GC steps). Routed
-    // through the EXACT SAME atomic _applyTransferStrip a controller-
+    // through the EXACT SAME atomic board/ops/transfer-strip.js's _applyTransferStrip a controller-
     // initiated drag transfer uses — owner, Bay, Rack and state change
     // together, in one Mutation — not a separate, easier-to-drift path
     // (guide §3.5 rule 4: NLA is an accelerator FOR the same operation,
@@ -55,7 +55,7 @@ function _applyInvokeNla(ctx, strip, by) {
     // same guards, same remove indicator, same beacon release. Routed
     // through the one shared path rather than the generic state setter,
     // for the same reason the transfer-shaped branch above reuses
-    // _applyTransferStrip (§3.5 rule 4: NLA accelerates an operation, it
+    // board/ops/transfer-strip.js's _applyTransferStrip (§3.5 rule 4: NLA accelerates an operation, it
     // does not route around that operation's checks).
     applied = ctx.retire(strip, by);
   } else {
@@ -65,7 +65,7 @@ function _applyInvokeNla(ctx, strip, by) {
   // Undo (§3.5 rule 5) stays scoped to state-only NLA transitions in
   // Phase 2 (docs/adr/0009) — a transfer-shaped transition's failure
   // mode is the existing transfer-timeout-revert path (§4.5 rule 5), not
-  // this button, and _applyTransferStrip already clears any stale entry
+  // this button, and board/ops/transfer-strip.js's _applyTransferStrip already clears any stale entry
   // here regardless of how the transfer happened.
   if (applied.ok && !result.transferTo) {
     ctx.nlaHistory.set(strip.stripId, { invokedAt: wallNow, prevState, expiresAt: wallNow + 30000 });

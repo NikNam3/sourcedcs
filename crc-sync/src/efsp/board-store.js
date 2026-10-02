@@ -5,13 +5,18 @@
 // ordering, ownership, ring-buffer resync) are modelled closely on
 // TrackStore's snapshot+delta-log shape (src/tracks.js).
 //
-// flight data and Position staffing are NOT part of this ring buffer: Phase 1 has
-// at most a few dozen Strips/flight data and four Positions, so efsp-ws.js just
-// includes flightDataStore.getAll()/positionStore.getAll() in full on every
-// snapshot AND delta message, rather than building a second/third
-// ring-buffer for state this small. Revisit only if that stops being cheap.
+// BoardStore is a facade (docs/adr/0095): it keeps the Board's public API and delegates the work to collaborators.
+//   board/board-state.js  the kernel: the Strip map, the seq/ring, the epoch, the touched set (`observeTouches`)
+//   board/placement.js    order keys, Bays and Racks
+//   board/strip-ops.js    dispatch of a Mutation to its op, the NLA, retirement; the ops are in board/ops/
+//   board/coordination.js, board/tofi.js   cross-Facility coordination and TOFI
+//   board/persistence.js  snapshot, restore, archive, the persisted replay window
+//   board/audit.js        the Mutation-log entries
+// Flight data and Position staffing are NOT part of this ring buffer: there are few of each, so efsp-ws.js
+// includes flightDataStore.getAll()/positionStore.getAll() in full on every snapshot AND delta message, rather
+// than building a second/third ring buffer for state this small. Revisit only if that stops being cheap.
 //
-// Doctrinal decisions (block routing, Bay-implies-state, NLA, staffing/
+// Rule decisions (block routing, Bay-implies-state, NLA, staffing/
 // consolidation) are deliberately NOT known to this module — they're
 // injected as `rules` functions from the composition root (index.js),
 // which is what actually knows the Departure Block Map (block-map.js),
@@ -56,16 +61,16 @@ class BoardStore {
    * @param {(state:string, stripType:string) => boolean} rules.isValidState
    * @param {(stripType:string) => boolean} rules.isValidStripType
    * @param {(actingPositionId:string, stripType:string) => boolean} rules.canCreateStripType
-   * @param {string} rules.facilityId — WP4A: this Board's own Facility id (docs/adr/0013)
-   * @param {(facilityId:string) => BoardStore|null} rules.peerBoard — WP4A: the OTHER Facility's BoardStore instance, for cross-Facility coordination (docs/adr/0015)
-   * @param {(positionId:string) => {bayId:string,rackIds:string[]}|null} rules.coordinationBayFor — WP4A
-   * @param {(primitive:string) => object|null} rules.coordinationEffect — WP4A, guide §4.6's primitive table (coordination.js)
+   * @param {string} rules.facilityId — this Board's own Facility id (docs/adr/0013)
+   * @param {(facilityId:string) => BoardStore|null} rules.peerBoard — the OTHER Facility's BoardStore instance, for cross-Facility coordination (docs/adr/0015)
+   * @param {(positionId:string) => {bayId:string,rackIds:string[]}|null} rules.coordinationBayFor
+   * @param {(primitive:string) => object|null} rules.coordinationEffect — guide §4.6's primitive table (coordination.js)
    */
   constructor(flightDataStore, rules, { clock = WALL_CLOCK } = {}) {
     // The mission clock (docs/adr/0079). Every Strip timestamp, every NLA gate
     // and every Mutation-log `at` reads it. The one exception is the NLA
     // double-tap/Undo latch below, which is a UI debounce measured in real
-    // seconds and never shown as a time of day — see _applyInvokeNla.
+    // seconds and never shown as a time of day — see board/ops/invoke-nla.js's _applyInvokeNla.
     assertRules(rules); // a rule the Board reads and the caller omitted is a start-up error, not a check that is silently off
     this._clock = clock;
     this._flightDataStore = flightDataStore;
@@ -81,7 +86,7 @@ class BoardStore {
     // `mutationLog` is read late: setMutationLog() can come after construction.
     this._audit = new BoardAudit({ rules, clock, mutationLog: () => this._mutationLog });
     // Order keys and Bays (board/placement.js). touch is the kernel's recordTouch; rebalanceRack is late-bound to the
-    // facade (host-core wraps it); rejectedReplicaRefusal is the NLA cluster's, still here.
+    // facade (host-core wraps it); rejectedReplicaRefusal is StripOps' (board/strip-ops.js).
     this._placement = new Placement({
       state: this._state, rules, clock, flightDataStore,
       touch,
@@ -90,7 +95,7 @@ class BoardStore {
     });
     this._activeCmid = null;  // the clientMutationId being applied, while applyMutation runs
     // Cross-Facility coordination and TOFI (board/coordination.js, board/tofi.js). touch is the kernel's
-    // recordTouch; retire is late-bound to the facade (it is StripOps'), activeCmid and mutationLog are read late,
+    // recordTouch; retire is late-bound to StripOps' `retire`, activeCmid and mutationLog are read late,
     // and the per-strip-type tables are the authority registry's accessors (authority/index.js), passed in.
     this._coordination = new Coordination({
       rules, state: this._state, audit: this._audit, placement: this._placement, clock, flightDataStore,
@@ -112,7 +117,7 @@ class BoardStore {
     // guard and the 30s Undo window for the last NLA transition (§3.5
     // rules 3 and 5). Deliberately NOT part of the Strip's public shape
     // (not serialized/broadcast) and NOT persisted — losing a still-open
-    // Undo window across a restart is an acceptable Phase-1 UX gap, not a
+    // Undo window across a restart is an acceptable UX gap, not a
     // correctness or safety concern.
     this._nlaHistory = new Map();
     // Snapshot, restore, archive and when each DROPPED Strip dropped (board/persistence.js), which owns that Map.
@@ -121,8 +126,9 @@ class BoardStore {
       mutationLog: () => this._mutationLog,
       nlaHistory: () => this._nlaHistory,
     });
-    // The Strip operations (board/strip-ops.js): the op table, NLA and retirement. The two Maps above stay
-    // here (snapshot, restore and archiveStrip use them) and are read late, because restore replaces them.
+    // The Strip operations (board/strip-ops.js): the op table, NLA and retirement. The NLA history Map stays
+    // here and BoardPersistence's droppedWallAt Map is its own (snapshot, restore and archiveStrip use them); both
+    // are read late, because restore replaces them.
     this._stripOps = new StripOps({
       rules, state: this._state, audit: this._audit, placement: this._placement, clock, flightDataStore,
       coordination: this._coordination, tofi: this._tofi, ops: OPS,
@@ -187,7 +193,7 @@ class BoardStore {
     // This is the ONE choke point every Mutation flows through (guide's
     // "Mutations, not state" architecture), so it's where "never throws"
     // above actually has to be enforced, not just documented — an
-    // unexpected exception anywhere inside _dispatch() must become a
+    // unexpected exception anywhere inside `StripOps#dispatch` must become a
     // rejection for the ONE Mutation that triggered it, never an uncaught
     // exception that crashes the process for every connected controller.
     // Found in production: a MoveStrip crashed the whole server via an
@@ -275,7 +281,7 @@ class BoardStore {
   /**
    * System-initiated bulk reassignment of every non-DROPPED Strip owned by
    * `fromPositionId` to `toPositionId` — used when a Position becomes
-   * fully unstaffed and its Strips must route down the covering chain
+   * fully unstaffed and its Strips must route down the consolidation chain
    * (guide §4.8.6 rule 2). Distinct from applyMutation()'s controller-
    * initiated TransferStrip: there is no controller "sending" this (the
    * Position itself vacated), so it bypasses the ownership/baseRev/
@@ -290,9 +296,9 @@ class BoardStore {
       const before = deepClone(strip);
       strip.ownerPositionId = toPositionId;
       // F10: remember whose it was, so it goes back when that Position is taken
-      // again (returnConsolidatedStrips). A Strip already covered keeps the first name.
+      // again (returnConsolidatedStrips). A Strip already consolidated keeps the first name.
       if (!strip.consolidatedFrom) strip.consolidatedFrom = fromPositionId;
-      // B3: the Strip moves into the covering Position's own Bay, or (no Bay
+      // B3: the Strip moves into the Bay of the Position it is consolidated at, or (no Bay
       // there fits) stays where it is and the caller says so.
       const bay = this._placement.bayForNewOwner(toPositionId, strip.state, strip);
       if (bay) {
@@ -318,11 +324,11 @@ class BoardStore {
 
   /**
    * F10 (docs/adr/0080): `positionId` is staffed again, so the Strips that were
-   * routed away from it to a covering Position — which may not advance them
+   * routed away from it to the Position it is consolidated at — which may not advance them
    * (PENDING_CLEARANCE is not GC's to advance) and which nothing ever returned
    * — go back, each into a Bay of the returning Position. Only a Strip still
    * owned by cover: a Strip anyone transferred on by decision has lost its
-   * `consolidatedFrom` (_applyTransferStrip). Recorded like the reassignment.
+   * `consolidatedFrom` (board/ops/transfer-strip.js's _applyTransferStrip). Recorded like the reassignment.
    * @returns {string[]} stripIds returned
    */
   returnConsolidatedStrips(positionId) {

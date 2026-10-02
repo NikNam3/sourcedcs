@@ -9,7 +9,7 @@
  * audit line, and the frequency Rack the Strip left is kept on the record so an
  * after-action review sees which frequency the rotation was on.
  *
- * PAR must be staffed: there is no covering fallback, because a FINAL Strip at
+ * PAR must be staffed: there is no consolidation fallback, because a FINAL Strip at
  * AP would sit in a Bay AP does not have. Refused, with the aircraft staying
  * where it is. PAR's final Bay holds one Strip (§7.10): a second is refused.
  * Nothing is half applied: validate everything, then change the Strip.

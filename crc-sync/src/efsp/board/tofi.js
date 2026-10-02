@@ -2,7 +2,7 @@
 
 // TOFI, tactical-control hand-in/hand-out (docs/adr/0095; guide §4.6.3, docs/adr/0025): ENTRY/EXIT PROPOSE,
 // ACCEPT / REJECT / TRANSFER_COMMS on the Strip, and the three `receiveTofi*` calls a peer Board makes on this one.
-// Moved verbatim from board-store.js; the facade's `receiveTofi*` delegate here.
+// BoardStore's `receiveTofi*` delegate here.
 
 const crypto = require('crypto');
 const { newFlags, deepClone } = require('./strip-util');
@@ -17,7 +17,7 @@ class Tofi {
    * @param {object} deps.placement Placement
    * @param {{now: () => number}} deps.clock the mission clock
    * @param {object} deps.flightDataStore
-   * @param {(stripId:string) => void} deps.touch late-bound to the facade's _touch (the soak host patches it)
+   * @param {(stripId:string) => void} deps.touch the kernel's `recordTouch` (board/board-state.js)
    * @param {() => string|null} deps.activeCmid the clientMutationId being applied, read late
    * @param {(strip:object, by:string) => object|null} deps.retire late-bound to StripOps' retire
    * @param {(stripType:string) => string|undefined} deps.initialStateFor the authority registry's accessor
@@ -37,7 +37,7 @@ class Tofi {
 
   get _activeCmid() { return this._activeCmidOf(); }
 
-  // ── WP4A second slice: TOFI (guide §4.6.3, docs/adr/0025) ───────────────
+  // ── TOFI (guide §4.6.3, docs/adr/0025) ───────────────
   //
   // A genuinely different sub-protocol from the 5 primitives above, not a
   // 6th row in the same table — deliberately kept structurally separate:
@@ -53,8 +53,8 @@ class Tofi {
   //  3. A distinct, separate comms-transfer ACTION (guide: "followed by a
   //     SEPARATE transfer of communications") — not a boolean baked into
   //     ACCEPT's effect the way commsTransfers is for the 5 primitives.
-  //  4. The receiving side's Strip is a different Strip ROLE (MISSION),
-  //     not a same-role mirror — and it shares the ATC-side Strip's own
+  //  4. The receiving side's Strip is a different strip type (MISSION),
+  //     not a same-strip-type mirror — and it shares the ATC-side Strip's own
   //     flightDataId rather than getting a fresh one (guide §9.8's "bind it to
   //     the same flight data as any tower Strip for that flight," realized now
   //     rather than deferred to WP7).
@@ -89,7 +89,7 @@ class Tofi {
     if (strip.tofiCoordination && strip.tofiCoordination.state === 'INITIATED') {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'this Strip already has an open TOFI proposal', strip };
     }
-    // The same open-link guard _nlaPrecheck and _applyConvertToArrival apply.
+    // The same open-link guard `StripOps#nlaPrecheck` and board/ops/convert-to-arrival.js's _applyConvertToArrival apply.
     // Without it CTR could open tactical control from a handoff replica it had
     // not yet accepted — on a flight AP still worked.
     if (strip.coordination && strip.coordination.state === 'INITIATED') {
@@ -206,7 +206,7 @@ class Tofi {
     // separation_regime's. Both fields describe authority over the same
     // real-world moment, and nothing cross-checked them before — a flight
     // could return to ATC control with the airspace still booked out to the
-    // using agency. But the two are genuinely separable in real operations
+    // using agency. But the two are genuinely separable in our model
     // (a MOA can stay hot after one flight leaves it), so this is the §4.6
     // verbal-path soft-interlock shape, not rule 3's hard precondition.
     let warning;
@@ -245,7 +245,7 @@ class Tofi {
       const activeMarsa = this._rules.activeMarsaFor(strip.flightDataId);
       if (activeMarsa) {
         // The relation owns the regime while it is ACTIVE (docs/adr/0051), and
-        // _applySetBlock refuses a direct SREG write for the same reason.
+        // board/ops/set-block.js's _applySetBlock refuses a direct SREG write for the same reason.
         // Accepting tactical control does not change who is separating, so
         // asking here would offer a choice that cannot be honoured.
         if (op.separationRegime !== undefined && op.separationRegime !== 'MARSA') {
@@ -277,7 +277,7 @@ class Tofi {
     // ENTRY only, and only for a Strip THIS exchange minted — relocate the
     // MISSION Strip out of the Coordination Bay into its normal working Bay
     // for its own (already-correct) state, mirroring
-    // _applyCoordinationAccept's relocation pattern. EXIT never moved the
+    // board/coordination.js's _applyCoordinationAccept's relocation pattern. EXIT never moved the
     // Strip into the Coordination Bay in the first place
     // (receiveTofiExitProposal doesn't touch bayId/rackId at all), so there's
     // nothing to relocate back.
@@ -405,7 +405,7 @@ class Tofi {
    * genuinely new piece of D13-style replication this slice adds: every
    * one of the 5 ATC<->ATC primitives already does this (their replica
    * shares the sender's flightDataId too), but always with the SAME strip type on
-   * both sides; TOFI is the first primitive to bind two DIFFERENT roles
+   * both sides; TOFI is the first primitive to bind two DIFFERENT strip types
    * (the ATC-side stripType, and MISSION) to one shared flight data.
    * @returns {{ok:true, strip}|{ok:false, reason, detail}}
    */

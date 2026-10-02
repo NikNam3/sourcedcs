@@ -18,7 +18,7 @@ const { newFlags } = require('../strip-util');
  * because nothing new was created.
  *
  * Annotations/flags/coordination all reset to their fresh-Strip defaults —
- * none of them carry a meaning that survives a role change (a DEPARTURE-
+ * none of them carry a meaning that survives a strip-type change (a DEPARTURE-
  * phase annotation note, an old coordination link that already resolved,
  * an attention flag from the outbound leg). The correlation is the one
  * thing that does survive, and used to be reset here in error — see the
@@ -31,9 +31,9 @@ function _applyConvertToArrival(ctx, strip, by, actingPositionId) {
   if (strip.stripType !== 'DEPARTURE' || strip.state !== 'HANDED_OFF') {
     return { ok: false, reason: 'VALIDATION_ERROR', detail: 'only a DEPARTURE Strip at HANDED_OFF can be converted to ARRIVAL', strip };
   }
-  // Strip-type-scoped, same two-tier permission shape _applyCreateStrip uses —
+  // Strip-type-scoped, same two-tier permission shape board/ops/create-strip.js's _applyCreateStrip uses —
   // the coarse canMutate('ConvertToArrival') gate already applied in
-  // _dispatch restricts this to AP/CTR; this is the fine-grained half,
+  // `StripOps#dispatch` restricts this to AP/CTR; this is the fine-grained half,
   // reusing canCreateStripType's existing ARRIVAL-origination check
   // rather than a parallel table that would only ever say the same thing.
   if (!ctx.rules.canCreateStripType(actingPositionId, 'ARRIVAL')) {
@@ -41,7 +41,7 @@ function _applyConvertToArrival(ctx, strip, by, actingPositionId) {
   }
   // The conversion nulls both coordination records wholesale below, so an
   // unresolved link has to be refused here rather than silently discarded.
-  // Exactly the guard set _applyDropStrip uses, and asymmetric for the same
+  // Exactly the guard set board/ops/drop-strip.js's _applyDropStrip uses, and asymmetric for the same
   // reason: an ACTIVE *coordination* link is the normal condition of a
   // Strip that has been handed off and accepted — jurisdiction moved, the
   // exchange is finished, and converting for the return leg is precisely
@@ -96,7 +96,7 @@ function _applyConvertToArrival(ctx, strip, by, actingPositionId) {
   if (flightData && flightData.filed.departureAirport) {
     // Captured so it can ride in this method's own return value below —
     // without it, efsp-ws.js's ack/broadcast has no flightData to include
-    // (mirrors _applySetBlock's own result.flightData pattern), and a connected
+    // (mirrors board/ops/set-block.js's _applySetBlock's own result.flightData pattern), and a connected
     // client would never actually see originAirport update at all.
     const flightDataResult = ctx.flightDataStore.setField(strip.flightDataId, 'filed.originAirport', flightData.filed.departureAirport, { by });
     if (flightDataResult.ok) updatedFlightData = flightDataResult.flightData;
@@ -113,7 +113,7 @@ function _applyConvertToArrival(ctx, strip, by, actingPositionId) {
   // them — but erasing them outright destroyed controller-entered data on
   // one click, with no undo (ConvertToArrival records no NLA history, so
   // §3.5 rule 5's window does not cover it). The append-only annotation
-  // model exists because JO 7110.65 ¶2-3-1 forbids erasing an item; a role
+  // model exists because JO 7110.65 ¶2-3-1 forbids erasing an item; a strip type
   // change is not an exception to that.
   //
   // Kept on the Strip rather than left to the Mutation log: the log has it
@@ -135,7 +135,7 @@ function _applyConvertToArrival(ctx, strip, by, actingPositionId) {
   // the same stripId, the same flightDataId, the same airframe — still airborne,
   // still squawking the code docs/adr/0023 went out of its way to keep. It
   // threw away a correct binding for the one aircraft that certainly has
-  // one, which is §6.6 rule 3's silent break reached through a role change
+  // one, which is §6.6 rule 3's silent break reached through a strip-type change
   // instead of a track-id change. Under the flightDataId key there is nothing here
   // to reset: the correlation is a fact about the airframe, and the airframe
   // did not change legs — the paperwork did.
@@ -143,7 +143,7 @@ function _applyConvertToArrival(ctx, strip, by, actingPositionId) {
   return { ok: true, strip, flightData: updatedFlightData };
 }
 
-// docs/adr/0023 — converts this Strip's role IN PLACE, same Strip/
+// docs/adr/0023 — converts this Strip's strip type IN PLACE, same Strip/
 // flight data throughout, for a returning flight at the same Facility.
 module.exports = {
   kind: 'ConvertToArrival',

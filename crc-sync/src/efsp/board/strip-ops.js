@@ -3,7 +3,7 @@
 // The Strip operations (docs/adr/0095): the dispatch of a Mutation to its op in the table (board/ops/), the NLA
 // (precheck, rejected-replica rules, nlaStatusFor) and retirement (Drop, retire). NLA and the ops are one
 // collaborator because they call each other: InvokeNla runs TransferStrip, SetState and DropStrip, and the
-// rejected-replica rules gate every op. Moved from board-store.js.
+// rejected-replica rules gate every op.
 
 const { MAX_FREE_TEXT } = require('../flight-data-store');
 const { deepClone } = require('./strip-util');
@@ -23,10 +23,10 @@ class StripOps {
    * @param {object} deps.coordination Coordination (the HANDOFF... ops call it)
    * @param {object} deps.tofi Tofi (the TOFI op calls it)
    * @param {object[]} deps.ops the op table, `{kind, authorize?, apply(ctx, strip, op, meta)}` each (board/ops/index.js)
-   * @param {(stripId:string) => void} deps.touch late-bound to the facade's _touch
+   * @param {(stripId:string) => void} deps.touch the kernel's `recordTouch` (board/board-state.js)
    * @param {() => string|null} deps.activeCmid the clientMutationId being applied, read late
-   * @param {() => Map} deps.nlaHistory the facade's Map, read late
-   * @param {() => Map} deps.droppedWallAt the facade's Map, read late
+   * @param {() => Map} deps.nlaHistory the NLA latch Map the facade owns, read late
+   * @param {() => Map} deps.droppedWallAt BoardPersistence's Map, read late (restore() replaces it)
    * @param {(stripType:string) => string|undefined} deps.initialStateFor the authority registry's accessor
    */
   constructor(deps) {
@@ -48,11 +48,11 @@ class StripOps {
   }
 
   get _activeCmid() { return this._activeCmidOf(); }
-  /** stripId -> the last NLA's latch record; the facade owns the Map (it is persisted state's neighbour). */
+  /** stripId -> the last NLA's latch record; the facade owns the Map. */
   get nlaHistory() { return this._nlaHistoryOf(); }
-  /** stripId -> wall ms of its drop (docs/adr/0082); the facade owns the Map. */
+  /** stripId -> wall ms of its drop (docs/adr/0082); BoardPersistence owns the Map (board/persistence.js). */
   get droppedWallAt() { return this._droppedWallAtOf(); }
-  /** Late-bound to the facade's _touch (tools/soak/host-core.js patches it). */
+  /** The kernel's `recordTouch` (board/board-state.js); `observeTouches` sees every call. */
   touch(stripId) { this._touchOf(stripId); }
 
   /**
@@ -116,7 +116,7 @@ class StripOps {
     }
 
     // F-303, the rest of it: a rejected replica is inert for every op, not
-    // just the NLA and the Bay-implied drag. See _rejectedReplicaOpRefusal.
+    // just the NLA and the Bay-implied drag. See `StripOps#rejectedReplicaOpRefusal`.
     const inert = this.rejectedReplicaOpRefusal(strip, op);
     if (inert) return { ok: false, reason: inert.reason, detail: inert.detail, strip: deepClone(strip) };
 
@@ -256,9 +256,9 @@ class StripOps {
    *
    * `mintedForCoordination` is stamped by receiveCoordinationProposal and is
    * the authoritative answer, for exactly the reason TOFI's own
-   * `mintedForTofi` exists (see _applyTofiAccept): the alternative — deriving
+   * `mintedForTofi` exists (see board/tofi.js's _applyTofiAccept): the alternative — deriving
    * it from the Strip still sitting in its owner's Coordination Bay, as
-   * _applyCoordinationPropose does — gives the same answer right up until
+   * board/coordination.js's _applyCoordinationPropose does — gives the same answer right up until
    * somebody drags the replica somewhere else, and then silently stops
    * applying. The Bay derivation is kept as the fallback so a replica minted
    * before this field existed, and restored from a persisted Board
@@ -273,14 +273,14 @@ class StripOps {
 
   /**
    * Everything that refuses an NLA BEFORE the state table is consulted —
-   * shared by _applyInvokeNla (which decides) and nlaStatusFor (which only
+   * shared by board/ops/invoke-nla.js's _applyInvokeNla (which decides) and nlaStatusFor (which only
    * reports), so there is exactly one wording per reason.
    * @returns {{reason:string, detail:string}|null}
    */
   nlaPrecheck(strip) {
     // Per-State authority (guide §3.4's "normally owned by" column,
     // permission.js's canActOnState) — the acting Position (==
-    // strip.ownerPositionId; _dispatch() already verified that above)
+    // strip.ownerPositionId; `StripOps#dispatch` already verified that above)
     // must be authorized for the Strip's CURRENT state, not just own the
     // Strip. This is what stops e.g. OPS from single-handedly walking a
     // Strip through CD's, GC's and LC's entire job just because nobody
@@ -300,7 +300,7 @@ class StripOps {
     // so the receiving Facility's replica was silently orphaned, waiting
     // forever for a response that would never come. Mirrors the existing
     // "a Strip cannot have two open coordination links at once" guard in
-    // _applyCoordinationPropose — same open-link concept, different action.
+    // board/coordination.js's _applyCoordinationPropose — same open-link concept, different action.
     if (strip.coordination && strip.coordination.state === 'INITIATED') {
       return { reason: 'VALIDATION_ERROR', detail: 'cannot advance a Strip with an open coordination proposal — accept, reject, or wait for a response first' };
     }
@@ -315,13 +315,13 @@ class StripOps {
   }
 
   /**
-   * F-303: a declined replica is "left inert" — _applyCoordinationPropose's
+   * F-303: a declined replica is "left inert" — board/coordination.js's _applyCoordinationPropose's
    * own comment has said so since WP4A, and nothing anywhere enforced it
    * beyond stopping a re-propose. So AP could reject a Point Out from CTR and
    * then hand that same flight to its own Tower, and the server took it:
    * INCIRLIK Tower holding an arrival for a flight CENTER still owns and AP
    * explicitly declined. The sender's own Strip is untouched — see
-   * _isRejectedReplica for how the two are told apart.
+   * `StripOps#isRejectedReplica` for how the two are told apart.
    *
    * Drop is the deliberate exception, and the only NLA a dead replica should
    * have left: it is how the controller clears it off their Board, and a
@@ -341,7 +341,7 @@ class StripOps {
   }
 
   /**
-   * The op-level half of F-303. _rejectedReplicaRefusal only ever guarded the
+   * The op-level half of F-303. `StripOps#rejectedReplicaRefusal` only ever guarded the
    * NLA and the Bay-implied drag, so a controller who had just rejected a
    * handoff could still open a TOFI on the dead replica (minting a MISSION
    * Strip on TACTICAL for a flight the sender still controls), approve an
@@ -350,11 +350,11 @@ class StripOps {
    *
    * Three op kinds stay allowed, because each already enforces the rule
    * itself and each is how a dead replica gets cleared away: DropStrip,
-   * InvokeNla (which _rejectedReplicaRefusal limits to DROPPED), and
+   * InvokeNla (which `StripOps#rejectedReplicaRefusal` limits to DROPPED), and
    * MoveStrip (which Placement.validateBayImpliedTransition refuses into any Bay that
    * would change the Strip's state — moving it aside is fine).
    *
-   * MARSA and correlation are flight-level and never reach _dispatch; the
+   * MARSA and correlation are flight-level and never reach `StripOps#dispatch`; the
    * client hides their controls on a rejected replica instead.
    *
    * @returns {{reason:string, detail:string}|null}
@@ -368,9 +368,9 @@ class StripOps {
   /**
    * What pressing this Strip's NLA button would do RIGHT NOW, computed for
    * its owner — who is the only Position ever offered it (guide §3.5's one
-   * NLA per State, _dispatch's NOT_OWNER gate).
+   * NLA per State, `StripOps#dispatch`'s NOT_OWNER gate).
    *
-   * Advisory only: _applyInvokeNla still decides, and still refuses. This
+   * Advisory only: board/ops/invoke-nla.js's _applyInvokeNla still decides, and still refuses. This
    * exists because §3.5 rule 2 requires the inhibit REASON to be rendered
    * rather than the control merely greyed out, and until now every reason was
    * computed on the press and never reached the client at all — an NLA the
@@ -387,7 +387,7 @@ class StripOps {
     const flightData = this.flightDataStore.getFlightData(strip.flightDataId);
     const result = this.rules.computeNla(strip, flightData, now, this.placement.nlaCtx());
     // No NLA at all for this State (every strip type's terminal DROPPED) — null, not
-    // a reason. _applyInvokeNla runs the precheck FIRST and so answers a press
+    // a reason. board/ops/invoke-nla.js's _applyInvokeNla runs the precheck FIRST and so answers a press
     // on a terminal Strip with whichever precheck refusal comes up; that is
     // right for a press, and wrong here, where reporting a reason would have
     // the panel render an explanation for a button that does not exist.
@@ -424,8 +424,8 @@ class StripOps {
    * DROPPED — every strip type has one, labelled "Drop" in the UI).
    *
    * Found by an end-to-end scenario trace: this used to live entirely inside
-   * _applyDropStrip, which only the `.drop` dot-command ever reaches. The
-   * ordinary Drop *button* routes through InvokeNla -> _applySetState, a
+   * board/ops/drop-strip.js's _applyDropStrip, which only the `.drop` dot-command ever reaches. The
+   * ordinary Drop *button* routes through InvokeNla -> `StripOps#applySetState`, a
    * generic two-line state setter — so the guide §4.6.3 rule 2 rejection
    * below was trivially bypassable from the default UI (dropping a Strip out
    * from under a live TOFI exchange, leaving the peer's own record stuck at

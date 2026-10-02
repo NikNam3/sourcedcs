@@ -11,7 +11,7 @@ const { runwayInhibitFor, RUNWAY_GATED_STATES } = require('../../runway-status')
  * CURRENT state per STATE_OWNERS_BY_STRIP_TYPE — the authority InvokeNla and the
  * Bay-implied drag already apply — for every strip type. Checked before the runway
  * inhibit (authority before availability), and ONLY on the controller's
- * SetState: the Undo / NLA paths that reach _applySetState carry their own.
+ * SetState: the Undo / NLA paths that reach `StripOps#applySetState` carry their own.
  */
 function _setStateOwnerRefusal(ctx, strip, toState, actingPositionId) {
   if (ctx.rules.canActOnState(actingPositionId, strip.stripType, strip.state)) return null;

@@ -1,7 +1,7 @@
 'use strict';
 
 // The op table (docs/adr/0095): one module per Strip op kind, `{kind, authorize?, apply(ctx, strip, op, meta)}`.
-// board-store.js passes this list to StripOps; an op reaches another only through `ctx.run(kind, ...)`.
+// BoardStore (board-store.js) passes this list to StripOps; an op reaches another only through `ctx.run(kind, ...)`.
 
 const MODULES = [
   require('./create-strip'),

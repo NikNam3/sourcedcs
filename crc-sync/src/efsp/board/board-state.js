@@ -1,9 +1,9 @@
 'use strict';
 
 // The Board's kernel (docs/adr/0095): the Strip map, the seq/`_log` ring, the epoch, the touched-since-drain set and
-// the cid counter. The facade (board-store.js) and its collaborators read and write Strips through it.
+// the cid counter. The BoardStore facade (board-store.js) and its collaborators read and write Strips through it.
 //
-// Every touch (bump, insert, and each collaborator's `touch`, which the facade binds to recordTouch) goes through
+// Every touch (bump, insert, and each collaborator's `touch`, which is `recordTouch` itself) goes through
 // recordTouch, so an observer registered with observeTouches (the facade's, used by tools/soak/host-core.js) sees
 // every one.
 
