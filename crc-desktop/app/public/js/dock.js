@@ -97,7 +97,7 @@ export function initDock() {
   // until below, and dockview has no onShow-style revisit hook despite
   // radar-panel.js's initRadarPanel returning one — see its comment). Re-rendering
   // once more here, now that the whole restore has settled, fixes that.
-  if (typeof renderPanelControls === 'function') renderPanelControls();
+  renderPanelControls();
   wireRadarsPanelButton();
 
   let saveTimer = null;
@@ -131,7 +131,7 @@ export function initDock() {
     // layout change is a cheap enough re-render (a handful of DOM rows) to
     // just do unconditionally rather than trying to detect "was it a
     // close".
-    if (typeof renderPanelControls === 'function') renderPanelControls();
+    renderPanelControls();
     scheduleSave();
   });
 

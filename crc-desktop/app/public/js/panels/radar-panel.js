@@ -204,7 +204,6 @@ const EFSP_FACILITY_POSITIONS = {
  */
 function _efspPositionsFor(facilityId) {
   if (EFSP_FACILITY_POSITIONS[facilityId]) return EFSP_FACILITY_POSITIONS[facilityId];
-  if (typeof getAllEfspPositions !== 'function') return [];
   return getAllEfspPositions()
     .filter(p => p.facilityId === facilityId)
     .map(p => p.positionId);
@@ -228,7 +227,7 @@ let _positionControlsEl = null;
 let _positionWarningsEl = null;
 
 export function renderPositionControls() {
-  if (!_positionControlsEl || typeof getActingPositions !== 'function') return;
+  if (!_positionControlsEl) return;
   const $positions = _positionControlsEl;
   $positions.innerHTML = '';
 

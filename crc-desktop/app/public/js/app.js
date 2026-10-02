@@ -460,7 +460,7 @@ export function applyCoverage(msg) {
   updateZoomLimits();
   // Taking Tower or Approach is what opens the Airport panel now — see
   // dock.js's notifyCoverageChanged.
-  if (typeof notifyCoverageChanged === 'function') notifyCoverageChanged();
+  notifyCoverageChanged();
   updateMap();
 }
 

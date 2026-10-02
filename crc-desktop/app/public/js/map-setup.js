@@ -787,7 +787,7 @@ export function applyMapTheme() {
   // Re-register coalition icons with theme-correct colors
   updateIcons(light);
   // The black ATC scope, if it is on, sits over whatever theme this painted.
-  if (typeof atcBackgroundDirty === 'function') atcBackgroundDirty();
+  atcBackgroundDirty();
 }
 
 // ── The black ATC scope (crc-sync's docs/adr/0088, H41) ───────────────────
@@ -806,7 +806,7 @@ export function applyAtcBackground(black) {
     applyMapTheme();
     return;
   }
-  const gray = typeof ATC_DIM_GRAY !== 'undefined' ? ATC_DIM_GRAY : '#8C8C8C';
+  const gray = ATC_DIM_GRAY;
   map.setPaintProperty('Background', 'background-color', '#000000');
   map.setPaintProperty('Water', 'fill-color', '#000000');
   map.setPaintProperty('Water', 'fill-outline-color', gray);

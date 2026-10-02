@@ -36,10 +36,10 @@ export function _updateAprtRwyHeading() {
     requestTrueFromMagnetic(_aprtRwyHeading, apt.lat, apt.lon).then((t) => {
       if (req !== _aprtRwyReq) return; // a newer entry replaced it
       _aprtRwyTrueDeg = t;
-      if (typeof updateMap === 'function') updateMap();
+      updateMap();
     });
   }
-  if (typeof updateMap === 'function') updateMap();
+  updateMap();
 }
 
 // Per-app-session id so crc-sync can tell "my own next 5s loop tick" apart
