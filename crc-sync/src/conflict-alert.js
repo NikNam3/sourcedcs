@@ -1,6 +1,10 @@
 'use strict';
 
-// Short-term conflict alert (docs/adr/0058).
+// Conflict Alert (CA) (docs/adr/0058).
+//
+// [SOURCE-DEFINED] (docs/adr/0058, 0059): the straight-line prediction model,
+// the thresholds (config/alerting.json `conflictAlert`) and the scoping to ATC
+// Positions are ours, not read from the guide or a cited FAA figure.
 //
 // Every tick, every pair of airborne tracks is projected forward in a straight
 // line — course over ground, ground speed and vertical speed, as DCS reports
