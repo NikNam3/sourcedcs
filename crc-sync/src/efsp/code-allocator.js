@@ -27,8 +27,6 @@
 // aircraft can never correlate on its beacon — it correlates on its callsign or
 // not at all. The guide has no such block.
 
-const { SYNTHETIC_BLOCK_START, SYNTHETIC_BLOCK_SIZE, SYNTHETIC_BLOCK_LABEL } = require('../synthetic-block');
-
 const RESERVED_CODES = new Set(['0000', '7500', '7600', '7700', '7400', '7777']);
 const MONITOR_SET     = new Set(['1200', '1202', '1203', '1255', '1277']);
 const AUTO_ALLOCATE_EXCLUDED = new Set([...RESERVED_CODES, '4000']);
@@ -46,18 +44,28 @@ function isReserved(code) { return RESERVED_CODES.has(code); }
 // this checks the unconditional part of the set only.
 function isMonitorSet(code) { return MONITOR_SET.has(code); }
 
-// The block's range is data (sensor-specs.json, DATA-3); a block that swallows a reserved code is a start-up error.
-for (const c of RESERVED_CODES) {
-  const n = parseInt(c, 8);
-  if (n >= SYNTHETIC_BLOCK_START && n < SYNTHETIC_BLOCK_START + SYNTHETIC_BLOCK_SIZE) {
-    throw new Error(`[sensor-specs] "transponder.syntheticBlock" (${SYNTHETIC_BLOCK_LABEL}) contains the reserved code ${c}`);
+// The block's range is data (sensor-specs.json, DATA-3). It is loaded on first use, not at require time, so the pure
+// ATO parser that imports this file still reads no config when it loads. A block that swallows a reserved code is a
+// start-up error: transponder.js loads it eagerly, and the server requires that.
+let _block = null;
+function syntheticBlock() {
+  if (_block) return _block;
+  const b = require('../synthetic-block');
+  for (const c of RESERVED_CODES) {
+    const n = parseInt(c, 8);
+    if (n >= b.SYNTHETIC_BLOCK_START && n < b.SYNTHETIC_BLOCK_START + b.SYNTHETIC_BLOCK_SIZE) {
+      throw new Error(`[sensor-specs] "transponder.syntheticBlock" (${b.SYNTHETIC_BLOCK_LABEL}) contains the reserved code ${c}`);
+    }
   }
+  _block = b;
+  return b;
 }
 
 /** A code from the block crc-sync reserves for AI transponders. */
 function isSynthetic(code) {
   if (!isValidCodeFormat(code)) return false;
   const n = parseInt(code, 8);
+  const { SYNTHETIC_BLOCK_START, SYNTHETIC_BLOCK_SIZE } = syntheticBlock();
   return n >= SYNTHETIC_BLOCK_START && n < SYNTHETIC_BLOCK_START + SYNTHETIC_BLOCK_SIZE;
 }
 
@@ -119,7 +127,7 @@ class CodeAllocator {
   validateAssignment(code, flightDataId) {
     if (!isValidCodeFormat(code)) return { ok: false, reason: 'VALIDATION_ERROR' };
     if (isReserved(code))         return { ok: false, reason: 'VALIDATION_ERROR' };
-    if (isSynthetic(code))        return { ok: false, reason: 'VALIDATION_ERROR', detail: `reserved for AI aircraft (crc-sync's synthetic block ${SYNTHETIC_BLOCK_LABEL})` };
+    if (isSynthetic(code))        return { ok: false, reason: 'VALIDATION_ERROR', detail: `reserved for AI aircraft (crc-sync's synthetic block ${syntheticBlock().SYNTHETIC_BLOCK_LABEL})` };
     const holder = this._allocated.get(code);
     if (holder && holder !== flightDataId) return { ok: true, warning: 'DUPLICATE_IGNORED_WARNING' };
     return { ok: true };
@@ -146,5 +154,5 @@ class CodeAllocator {
 
 module.exports = {
   CodeAllocator, isReserved, isMonitorSet, isValidCodeFormat, isSynthetic,
-  RESERVED_CODES,
+  RESERVED_CODES, syntheticBlock,
 };

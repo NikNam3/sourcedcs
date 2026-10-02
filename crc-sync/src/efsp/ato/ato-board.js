@@ -26,8 +26,7 @@ const crypto = require('crypto');
 const { ingestAtoText } = require('./ato-ingest');
 const { fitCallsign } = require('./callsign-fit');
 const { MAX_INPUT_BYTES } = require('./usmtf-tokenize');
-const { isValidCodeFormat, isReserved, isSynthetic } = require('../code-allocator');
-const { SYNTHETIC_BLOCK_LABEL } = require('../../synthetic-block');
+const { isValidCodeFormat, isReserved, isSynthetic, syntheticBlock } = require('../code-allocator');
 
 // [SOURCE-DEFINED] — where an ATO lands. Guide §9.8: "TAC_C2 works mission
 // lines". Tanker lines land here too; `tac-c2-tanker` stays inert (Q-L14-7).
@@ -306,7 +305,7 @@ function analyseAto({ text, flightDataList, liveStrips, nowUtc }) {
     const modeThree = l3.extras.identityAto.modeThree || null;
     if (modeThree && !isAssignableModeThree(modeThree)) {
       own.push({ code: 'MODE3_NOT_ADOPTED', severity: 'warning', line: null,
-        message: `The ATO's Mode 3 ${modeThree} can never be assigned${isSynthetic(modeThree) ? ` (it is in the ${SYNTHETIC_BLOCK_LABEL} block crc-sync gives AI aircraft)` : ''}; a new flight keeps the code crc-sync mints.` });
+        message: `The ATO's Mode 3 ${modeThree} can never be assigned${isSynthetic(modeThree) ? ` (it is in the ${syntheticBlock().SYNTHETIC_BLOCK_LABEL} block crc-sync gives AI aircraft)` : ''}; a new flight keeps the code crc-sync mints.` });
     }
     const line = { l3, callsign: callsign || null, modeThree, warnings: [..._humanWarnings(l3.warnings), ...own] };
     const existing = _existingFlightDataFor(l3, flightDataList, byFlightData);
