@@ -386,6 +386,11 @@
    "_isRejectedCoordinationReplica",
    "_openCoordinatePopover"
   ],
+  "panels/efsp/bay/popovers/formation.js": [
+   "_openJoinPopover",
+   "_openSplitPopover",
+   "dispatchFormationOp"
+  ],
   "panels/efsp/bay/popovers/highlight.js": [
    "_cycleHighlight",
    "_openHighlightPopover"
@@ -663,6 +668,25 @@
    "promptText",
    "renderFinalPanel",
    "terminalActionsFor"
+  ],
+  "panels/efsp/formation-rules.js": [
+   "ASSIGNMENT_KINDS",
+   "ASSIGNMENT_LABELS",
+   "FORMATION_GROUND_STATES",
+   "FORMATION_POSITIONS",
+   "FORMATION_STRIP_TYPES",
+   "buildJoinOp",
+   "buildSplitOp",
+   "holdsFormationGrant",
+   "isGroundFormationState",
+   "joinLeadCandidates",
+   "joinOffer",
+   "parseAssignmentToken",
+   "parseAssignmentValue",
+   "parseSplitCommand",
+   "splitChipFor",
+   "splitOffer",
+   "splitRemainderText"
   ],
   "panels/efsp/marsa-badge.js": [
    "MARSA_EXPANSION",
