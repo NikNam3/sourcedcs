@@ -3,9 +3,8 @@
 
 # 0099: A formation splits in two and joins into one, each as one audited Strip op
 
-**Status.** Draft (DES-SPLIT, 2026-10-01). The SPLIT-JOIN lane copies it to `docs/adr/0099-formation-split-and-join.md`
-at its first commit, edits only what its "Code as found" step proves wrong, and changes the status to Built at the end.
-Questions marked **settled H100** were answered by the human (decisions.md H100, `docs/wip/DES-SPLIT.md`).
+**Status.** Built (SJ-S, 2026-10-02). Drafted by DES-SPLIT (2026-10-01); the human's answers are decisions.md H100. Edited at
+build time only where the code as found proved the draft wrong: see "Built notes" at the end.
 
 Written in the post-RENAME vocabulary (H96, H98; `docs/parallel/research/vocabulary.md`): **flight data** (today FDR,
 `fdrId`, `fdr-store.js`), **strip type** (today Strip Role, `strip.role`), **staffed** (today occupied),
@@ -234,3 +233,26 @@ what H100 DR-11 (b) leaves of the earlier draft is exactly this and nothing more
   helper, `stripChangesOf(entry)` (the addressed Strip, then `records`).
 - Wire: two new op kinds on `efsp-mutation`, and new Strip and flight data fields (`splitFrom`, `endReason`,
   `joinedInto`, `identity.splitFrom`, `voided`, `clearance.speed`). No compatibility (R3-2).
+
+## Built notes (SJ-S)
+
+- **No flight-rules field exists** on the flight data, so §4's "refuse a flight whose flight rules say VFR" is not built: the
+  IFR strip types (DEPARTURE, ARRIVAL, OVERFLIGHT) are the whole test.
+- **DEPARTURE already has heading and altitude Blocks** (`20`, `21`); it gains only `9A-SPEED`. OVERFLIGHT (`7A`, `9A-VECTOR`)
+  gains `9A-SPEED`; ARRIVAL's `9A-SPEED` is retargeted from the Strip annotation to the speed cell. The client's Block Map
+  mirror got the same three entries (the parity test); the template rows are SJ-C's.
+- **The grant is `FORMATION_OP_KINDS`** in `authority/op-kinds.js`, listed literally in the civil-atc and Incirlik-military
+  Position sets (OPS, CD, GC, LC, AP, CTR, RSU, SFA, PAR). It is not in `OP_KINDS`, so no `.filter()` grant picks it up.
+  Eligibility reaches the Board as one injected rule, `formationEligibility(stripType)`, read from the strip-type families'
+  `splitEligibleStates`, `joinEligibleStates` and `groundStates`.
+- **Reasons:** the assignment refusal is `ASSIGNMENT_REQUIRED`; every other gate is `VALIDATION_ERROR` with a detail (or
+  `NOT_OWNER`, `STALE_REV`, `NOT_FOUND`, `PERMISSION_DENIED` as the dispatcher gives them).
+- **Flight data:** `createSplitFlightData` copies by the table in `docs/wip/SJ-S.md`; `setFormationSize` and `voidFlightData` are the
+  other two writes. A size change leaves `updatedAt` alone (not a plan amendment).
+- **Traffic count:** `stripChangesOf(entry)` is the one reader of `records`; `undoneDrops(entry)` generalises `isUndoOfDrop`
+  (an Undo that takes a dropped Strip out of DROPPED or removes it); `splitFromFlightDataId` rides the COUNT record.
+- **Wire:** the mutation ack gains `splitStripId` and `split` (a split) or `join` (a join); the new Strip and flight data ride the
+  one Board broadcast. Strip fields `splitFrom`, `endReason`, `joinedInto`, flight data fields `identity.splitFrom`, `voided`,
+  `clearance.speed` joined the persisted-shape allow-list.
+- **Undo:** both modules declare their scope per ADR 0100 (split: lead Strip and flight data, creates the part, its flight data and
+  code; join: both Strips and flight data, the joiner's code and MARSA relations).

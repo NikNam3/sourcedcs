@@ -59,4 +59,9 @@ DEPARTURE already has `20` (heading) and `21` (altitude) clearance Blocks, so DE
 
 ## Findings for other lanes
 
-(filled as they come)
+- **SJ-C:** wire is final. Ack carries `splitStripId`, `split`, `join`; the new Strip arrives in the same board delta; the part's flight data in `flightDataList.updated`. Client Block Map mirror already has `9A-SPEED` (clearance/speed) for the three IFR types; ARRIVAL's template must now READ the speed cell, not the annotation. `clearance.speed` entries have `unit` `KT`|`MACH`, `parsed` knots or Mach number, value `250` / `M.85`. Refusal `reason` is `ASSIGNMENT_REQUIRED` for the missing assignment.
+- **UNDO-S:** after merge, check the executor with `SplitFormation` (removes a created Strip: `records` with `after: null` in its audit entry makes `undoneDrops` VOID a dropped part's COUNT) and `JoinFormation` (restores the joiner, un-voids its flight data: `voided` must be removed by the before-image, the code re-acquired). S10/S11 execution is not tested here; only the declarations are (formation-split-join S10/S11).
+- **AIRSP phase 2 (occupancy):** a split adds a flight (new Strip and flight data on the same Board, `airspaceEntry` copied) and a join removes one (joiner DROPPED with `endReason: 'JOINED'`). Occupancy derived from live Strips follows; a stored count must recount on `SplitFormation` and `JoinFormation`. The part's `airspaceEntry` is a copy: the approval is shared, not re-issued.
+- **Not covered:** S13 (the joiner's correlation ends in `retireFinished`) relies on the existing reconciler, no new test.
+- **Goldens:** re-recorded (37 files): every flight data now carries an empty `clearance.speed` cell; block maps and permission tables list the new entries.
+- The two timing flakes in the baseline (`ato tokenize pathological inputs`, `grpc-client-stream backoff`) fail only under load.
