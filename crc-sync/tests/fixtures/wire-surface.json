@@ -25,6 +25,7 @@
       "coverage",
       "delta",
       "efsp-airspace-ack",
+      "efsp-airspace-calendar",
       "efsp-airspace-delta",
       "efsp-alerts",
       "efsp-ato-ack",
