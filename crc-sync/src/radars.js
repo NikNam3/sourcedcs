@@ -30,6 +30,7 @@ const fs = require('fs');
 const { checkOnGround } = require('./geo');
 const { CONFIG_DIR } = require('./state-paths');
 const { readShipped } = require('./tuning-file');
+const { validateDatalinkConfig, validateTransponderConfig } = require('./surveillance/sensor-config');
 const log = require('./log').logger('radars');
 
 // Field radars (airport, approach, carrier approach) and the ship antenna height
@@ -111,6 +112,8 @@ function loadSensorSpecs(specsPath = SENSOR_SPECS_PATH) {
     transponder: { ...shipped.transponder, ...(cfg.transponder || {}) },
   };
   validateFieldRadar(out, path.resolve(specsPath));
+  validateDatalinkConfig(out.datalink, path.resolve(specsPath));
+  validateTransponderConfig(out.transponder, path.resolve(specsPath));
   return out;
 }
 

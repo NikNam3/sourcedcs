@@ -19,6 +19,7 @@
 // Players and AI both count. Everything here is [SOURCE-DEFINED].
 
 const { USER_COALITION } = require('./iff');
+const { validateDatalinkConfig } = require('./sensor-config');
 
 function hashId(id) {
   let h = 0;
@@ -36,14 +37,15 @@ class DatalinkFeed {
    * @param {object} deps
    * @param {(lua:string)=>Promise<any>} [deps.evalLua]  grpc-client's evalLua; without it there are no locks
    * @param {{getAll:()=>object[]}} deps.trackStore
-   * @param {{participants:string[], pliPeriodMs:number}} deps.config  sensor-specs.json `datalink`
+   * @param {{participants:string[], pliPeriodMs:number, lockPollMs:number}} deps.config  sensor-specs.json `datalink`
    * @param {number} [deps.ownCoalition]
    */
   constructor({ evalLua = null, trackStore, config, ownCoalition = USER_COALITION }) {
     this._eval = evalLua;
     this._tracks = trackStore;
-    this._types = new Set((config && config.participants) || []);
-    this._period = (config && config.pliPeriodMs) || 4000;
+    validateDatalinkConfig(config);
+    this._types = new Set(config.participants);
+    this._period = config.pliPeriodMs;
     this._own = ownCoalition;
     this._reports = new Map(); // trackId -> { at, callsign, type, lock }
     this._locks = new Map();   // trackId -> locked trackId

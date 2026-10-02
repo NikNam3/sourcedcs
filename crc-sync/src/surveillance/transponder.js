@@ -30,6 +30,7 @@
 
 const { SYNTHETIC_BLOCK_START, SYNTHETIC_BLOCK_SIZE } = require('../efsp/code-allocator');
 const { USER_COALITION } = require('./iff');
+const { validateTransponderConfig } = require('./sensor-config');
 
 const EMERGENCIES = { '7500': 'HIJACK', '7600': 'RADIO', '7700': 'GENERAL' };
 
@@ -65,12 +66,13 @@ class Transponders {
   /**
    * @param {object} deps
    * @param {{getTransponder:(playerName:string)=>object|null}|null} deps.srs
-   * @param {{syntheticFor:string[], mode4For:string[]}} [deps.config] sensor-specs.json `transponder`
+   * @param {{syntheticFor:string[], mode4For:string[]}} deps.config sensor-specs.json `transponder`
    */
-  constructor({ srs, config } = {}) {
+  constructor({ srs = null, config } = {}) {
     this._srs = srs || null;
-    this._syntheticFor = new Set((config && config.syntheticFor) || ['own', 'neutral']);
-    this._mode4For = new Set((config && config.mode4For) || ['own']);
+    validateTransponderConfig(config);
+    this._syntheticFor = new Set(config.syntheticFor);
+    this._mode4For = new Set(config.mode4For);
     this._synthetic = new Map(); // trackId -> code
     this._inUse = new Set();     // synthetic codes held
   }

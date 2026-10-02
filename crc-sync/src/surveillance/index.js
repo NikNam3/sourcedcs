@@ -6,6 +6,7 @@
 
 const { DEFAULT_TRANSITION_ALT_FT } = require('../theaters');
 const { Transponders } = require('./transponder');
+const { loadSensorSpecs } = require('../radars');
 const { TrackNumbers } = require('./track-numbers');
 const { Identity } = require('./identity');
 
@@ -22,8 +23,8 @@ const NO_FLIGHT_DATA_LIST = { getFlightData: () => null };
  * @param {object} [deps.datalink]            DatalinkFeed, or null
  * @param {() => {weather:object, transitionAltFt:number}} [deps.env]
  */
-function createSurveillance({ collab, srs = null, sensorSpecs = null, correlationStore, flightDataStore, datalink = null, env }) {
-  const transponders = new Transponders({ srs, config: sensorSpecs && sensorSpecs.transponder });
+function createSurveillance({ collab, srs = null, sensorSpecs = loadSensorSpecs(), correlationStore, flightDataStore, datalink = null, env }) {
+  const transponders = new Transponders({ srs, config: sensorSpecs.transponder });
   const trackNumbers = new TrackNumbers();
   const identity = new Identity({
     correlationStore: correlationStore || NO_CORRELATIONS,
