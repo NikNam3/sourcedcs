@@ -5,8 +5,8 @@
 // The math is ported unchanged from crc-desktop's app/public/js/los.js — same
 // 24 samples along the path, same 4/3-earth curvature model, same fail-open
 // rule. `losSightLineHeightM` and `losProfileBlocked` are byte-for-byte the
-// functions crc-desktop/tests/los-math.test.js already covered, and that test
-// moved here with them (tests/terrain.test.mjs). It is the only pre-existing
+// functions crc-desktop/tests/los-math.test.mjs covers, and a test of the
+// same functions lives here too (tests/terrain.test.mjs). It is the only pre-existing
 // coverage anywhere in the radar area, so it was worth keeping.
 //
 // What had to be replaced is the DEM source. The client decodes MapTiler

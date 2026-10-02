@@ -1,7 +1,7 @@
 'use strict';
 
 // The radar list — ported from crc-desktop's app/public/js/app.js
-// (_buildAllRadars/getAllRadars), which derived it inside each renderer from
+// (the old radar-list builders), which derived it inside each renderer from
 // that client's own copy of the mission data.
 //
 // It lives here now because the radar picture is server-authoritative
