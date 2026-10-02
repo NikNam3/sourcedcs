@@ -25,7 +25,7 @@
 
 const fs = require('fs');
 const { statePaths, ensureDirFor } = require('../state-paths');
-const log = require('../log').logger('efsp:airspace-config');
+const log = require('../log').logger('efsp:airspace-schema');
 
 // Squadron data that a live edit rewrites (setAirspaces), so it reads from
 // data/ if a live copy exists and always writes there — see state-paths.js.

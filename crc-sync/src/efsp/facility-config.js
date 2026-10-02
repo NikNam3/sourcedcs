@@ -29,9 +29,9 @@ const runwayStatus = require('./runway-status'); // pure, requires nothing back 
 const schema = require('./facility-schema');
 const { validateConfig, validateRadarSelector, validateSfaRotationRecord, BAY_VIEWS } = schema;
 // The RANGES Facility's Position set is derived from the airspace definitions (see _rangesConfig),
-// so this module needs airspace-config.js; airspace-config.js deliberately does not require
+// so this module needs airspace-schema.js; airspace-schema.js deliberately does not require
 // this module back, so there is no cycle.
-const airspaceConfig = require('./airspace-config');
+const airspaceConfig = require('./airspace-schema');
 const path = require('path');
 const { CONFIG_DIR, readPath, writePath, ensureDirFor } = require('../state-paths');
 const log = require('../log').logger('efsp:facility-config');
@@ -67,7 +67,7 @@ const FACILITY_CONFIG_PATHS = new Proxy({}, {
 });
 
 // RANGES is deliberately absent from the path table above: its Position set
-// is DERIVED from airspace-config.js, so an on-disk override would freeze a
+// is DERIVED from airspace-schema.js, so an on-disk override would freeze a
 // `positions` array that then silently goes stale the moment an airspace is
 // added or removed. Deriving it every boot is the whole point — there is
 // nothing here a facility config could usefully say. Also spares a
@@ -83,7 +83,7 @@ const SHIPPED_FACILITY_IDS = ['INCIRLIK', 'CENTER', 'TACTICAL', 'CARRIER'];
 // The RANGES Facility (guide §4.1's fifth Facility, §4.1 rule 2). Unlike
 // every Facility above it, this one's Position set is DERIVED rather than
 // listed: a `RANGE` Position exists only for an airspace that has real
-// control of its own (airspace-config.js's usingPositionId). An ordinary MOA
+// control of its own (airspace-schema.js's usingPositionId). An ordinary MOA
 // contributes no Position at all — a flight working inside one is approved
 // onto a working frequency by whichever ATC Position owns the airspace, and
 // there is nobody else to be.

@@ -52,7 +52,7 @@ function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
 
 class AirspaceStore {
   /**
-   * @param {object} airspaceConfig — airspace-config.js (injected rather than
+   * @param {object} airspaceConfig — airspace-schema.js (injected rather than
    *   required directly, so tests can drive a fixture without touching disk)
    * @param {{occupancyFor?:(airspaceId:string)=>number}} [deps] —
    *   `occupancyFor` counts the flights currently approved into an airspace,

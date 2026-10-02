@@ -3,7 +3,7 @@
 // Pure Strip helpers the Board facade and its collaborators share (docs/adr/0095). Every file under board/ may
 // require this one (seam rule 1).
 
-const { isValidAltitude } = require('../airspace-config');
+const { isValidAltitude } = require('../airspace-schema');
 
 function newFlags() {
   return { offset: false, flipped: false, removeIndicator: false, highlight: null, attention: null };
@@ -43,7 +43,7 @@ function deepClone(obj) {
  * click-to-edit cell is an <input type="text"> and always has been — while
  * isValidFrequency() requires a number, deliberately, so that a configured
  * airspace frequency and a flight's approved frequency can never validate
- * differently (airspace-config.js's own header says so).
+ * differently (airspace-schema.js's own header says so).
  *
  * Nothing bridged the two, so typing into Block 22 was refused with
  * `frequency must be a number between 30 and 400 MHz, not "360.200"` — a

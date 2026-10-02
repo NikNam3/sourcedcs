@@ -16,9 +16,9 @@
 const crypto = require('crypto');
 const { CodeAllocator, isValidCodeFormat } = require('./code-allocator');
 // One unit and one type for every frequency inside the EFSP: MHz, as a
-// number. Shared with airspace-config.js so a configured airspace frequency
+// number. Shared with airspace-schema.js so a configured airspace frequency
 // and a frequency a flight is approved onto can never validate differently.
-const { isValidFrequency, MIN_FREQUENCY_MHZ, MAX_FREQUENCY_MHZ } = require('./airspace-config');
+const { isValidFrequency, MIN_FREQUENCY_MHZ, MAX_FREQUENCY_MHZ } = require('./airspace-schema');
 // §9.10's canned-route table (docs/adr/0050). A data-table require rather
 // than the validator-only one above, and deliberately so: createFlightData() is the
 // single place a flat seed is interpreted into identity.*/filed.*, and

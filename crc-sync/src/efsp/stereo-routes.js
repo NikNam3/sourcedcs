@@ -8,11 +8,11 @@
 // without the international form [Annex §12]."
 //
 // Static squadron configuration, loaded once at require time, same
-// load-or-default/validate/persist pattern as airspace-config.js. §8.2 lists
+// load-or-default/validate/persist pattern as airspace-schema.js. §8.2 lists
 // "Routes | Stereo/canned route table" under what MUST be configurable, and
 // §8.1 is blunt about why: "the configurability is the specification."
 //
-// **Ships empty**, exactly as airspace-config.js does and for the same
+// **Ships empty**, exactly as airspace-schema.js does and for the same
 // reason: the real Pack routes are squadron data the project owner supplies,
 // and an invented "PACK 1 out of Incirlik" would be the
 // [SOURCE-DEFINED]-presented-as-doctrine trap defect D11 names — which WP6's
@@ -191,7 +191,7 @@ function toFlightDataFiledSeed(route) {
  * Replaces the whole table (guide §8.4 — an explicit reload step, not a live
  * mutation). No editing UI calls this; it exists so one is additive later,
  * and so tests can exercise the load path — the same standing this function
- * has in airspace-config.js and facility-config.js.
+ * has in airspace-schema.js and facility-config.js.
  *
  * §8.4's "configuration changes MUST be versioned, attributed, and recorded"
  * is satisfied trivially while the only edit path is a file plus a restart.

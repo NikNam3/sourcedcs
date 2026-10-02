@@ -28,7 +28,7 @@ const fs = require('fs');
 
 const carrierModel = require('./carrier');
 const sfaModel = require('./sfa');
-const airspaceConfig = require('./airspace-config');
+const airspaceConfig = require('./airspace-schema');
 const { CodeAllocator } = require('./code-allocator');
 const { BoardStore } = require('./board-store');
 const { MutationLog } = require('./mutation-log');
@@ -332,7 +332,7 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
 
 /**
  * Cross-checks every airspace's `controllingPositionId` against the Facility
- * it names. airspace-config.js validates its own shape but deliberately does
+ * it names. airspace-schema.js validates its own shape but deliberately does
  * not require facility-config.js back (facility-config derives the RANGES
  * Position set FROM it, so the dependency only runs one way) — which leaves
  * exactly one thing unchecked, and it is the one that matters: an airspace

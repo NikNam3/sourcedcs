@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 const { AirspaceStore, AIRSPACE_STATES, INITIAL_STATE } = await import('../src/efsp/airspace-store.js');
-const airspaceConfig = await import('../src/efsp/airspace-config.js');
+const airspaceConfig = await import('../src/efsp/airspace-schema.js');
 
 // Two airspaces covering both shapes the squadron actually flies:
 //  - a range with a control tower of its own, so it has a using agency
