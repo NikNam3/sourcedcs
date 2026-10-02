@@ -72,7 +72,7 @@ const syncEnv = {
   SRS_PORT: '1',
 };
 
-fs.writeFileSync(syncEnv.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
+fs.writeFileSync(syncEnv.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
 // The two-route stereo table (crc-sync's docs/adr/0073) l16-picker-and-times.spec.js picks from. The
 // harness installs it itself so a plain `npx playwright test` needs no environment; E2E_STEREO_ROUTES=<file>
 // substitutes another table, and E2E_STEREO_ROUTES=none starts with an empty one (P5, T11).
