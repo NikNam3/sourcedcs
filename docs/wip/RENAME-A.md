@@ -139,3 +139,28 @@ Result (`docs/wip/RENAME-A/inverse/result.txt`), 44 files:
   - `tables-nla-coordination-config` lines 26-30: `.v.coveringChain` is absent. This is an artifact of the proof: the renamed harness reads `c.consolidation` from a `canonical()` result, and in the proof `canonical()` has already inverted the key back to `coveringChain`. The same lines' `h` (the digest of the whole facility config) is equal. A direct check also passes: the real new golden's `consolidation` maps, inverted, equal the base `coveringChain` maps on all five lines.
 
 Nothing else differs. The wire commit changes names only, plus the one declared refusal wording.
+
+## Step 5: state check, and the S-RENA2 fix
+
+Setup: a base-build (`470c6d1`) `createEfsp` wrote `state/efsp-board.json` and `efsp-mutations.jsonl`, with OPS signed on and one DEPARTURE Strip. `server.js` from the renamed tree then started on it, on port 3592, in a scratch copy.
+
+Before the fix, at `30396bd`:
+- **(a) The Board snapshot loads half-read.** The server boots and serves it. The only sign is one WARN: "restored Strip references a missing FDR … flightDataId=undefined". `fdrs`, Strip `fdrId` and Strip `role` are ignored silently.
+- (b) An old `state/efsp-facility-incirlik.json` fails loudly: "missing required key consolidation" (DATA-1).
+- (c) An old `state/alerting.json` with `stca` is ignored silently.
+
+S-RENA2 ruling (H88 item 8): an unknown key in a persisted or state file is a loud startup error. The fix is commit `behaviour(RENAME-A): an unknown key …`:
+- **The Board snapshot shape:**
+  - `PERSISTED_SHAPE` in `src/efsp/stores.js`, next to the restore registry, is one data structure. Its top level is the REGISTRY keys plus `persistedWallAt`.
+  - It also covers each store's record keys: Strips with their coordination, TOFI, airspace-entry, handoff and previous-leg objects; flight data with its sections and its flat dotted `provenance`; replay records; airspace, correlation, MARSA, runway-status (pads), carrier (stack entries) and SFA records.
+  - `checkPersistedShape` runs in `_restore` before any store restores. It names the file and the key path, and the file stays byte-identical. The pre-WP4A top-level `board` keeps its own, more specific refusal.
+  - The lists come from the union of every key persisted across crc-sync `npm test`, `npm run freeze` and `soak:smoke`, collected by a write hook, and were cross-checked against the code that assigns them.
+  - Proof it is complete: a hook ran `checkPersistedShape` on every persisted body (12,309) in those three runs, with zero violations.
+- **The tuning layers:** `readLayer(name, override, shipped)` refuses a state/ key the shipped file lacks (`_*` keys are free), and `alerting-config` passes `shipped`.
+- **Tests:**
+  - `efsp-restore-refusal.test.mjs` gains three: the step-5 old-names snapshot, a deep `assigned.releaseState`, and an unknown top-level key, which also pins that the shape's top level equals what `_persist` writes.
+  - `tuning-layer-keys.test.mjs` is new: `stca` in a layer, a nested unknown key, a valid partial layer, and the shipped `alerting.json` holding only keys `src/` reads.
+- **After the fix:** (a) fails at start-up with `unknown key "boards.INCIRLIK.strips[].fdrId"`, and the file is unchanged (md5 checked). (c) fails with `[tuning] …/state/alerting.json has an unknown key "stca"`.
+- **Finding:** `tests/efsp-block-altitude.test.mjs` (the SetBlock-wire test) calls `createEfsp()` with the default paths, so it reads and writes the real `crc-sync/state/efsp-board.json`. On a dev machine that still holds an old-shape file there, this test now fails, correctly. The test should use temp paths (L20 or a test-hygiene lane).
+
+**Deploy note (human):** before starting this build on a server, delete `state/efsp-board.json` and `state/efsp-mutations.jsonl` (clean start, R3-2). Also delete or rename any `state/efsp-facility-*.json` written by an older build, and any `state/alerting.json` that uses `stca`. Each of these now stops start-up and names the file.

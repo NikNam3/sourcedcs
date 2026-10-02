@@ -47,7 +47,7 @@ const { Archiver } = require('./archiver');
 const { statePaths, ensureDirFor } = require('../state-paths');
 const { WALL_CLOCK } = require('../mission-clock');
 const { ReplayCache } = require('./sync/replay-cache');
-const { REGISTRY, RESTORE_ORDER } = require('./stores');
+const { REGISTRY, RESTORE_ORDER, checkPersistedShape } = require('./stores');
 const log = require('../log').logger('efsp');
 
 /**
@@ -503,6 +503,9 @@ function _restore({ facilities, stores, paths, mutationLog, clock }) {
   } catch (e) {
     throw new Error(`[efsp] the Board snapshot ${paths.read} is not valid JSON: ${e.message}`);
   }
+  // Every key the build knows, before any store restores (H88 item 8): an older build's names stop start-up here.
+  // The pre-WP4A shape (a top-level `board`) keeps its own, more specific refusal in stores.js's `boards` entry.
+  if (!(data && data.board !== undefined && data.boards === undefined)) checkPersistedShape(data, paths.read);
   const all = { facilities, stores, saved: data };
   const byKey = new Map(REGISTRY.map(e => [e.key, e]));
   // RESTORE_ORDER, not the registry's (write) order: see stores.js.

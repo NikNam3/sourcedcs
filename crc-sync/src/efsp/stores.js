@@ -229,7 +229,115 @@ const REGISTRY = [
   },
 ];
 
+// ── The persisted shape (H88 item 8, decisions.md S-RENA2) ──────────────────────────────────────────────────────
+// Every key the snapshot may hold, as one data structure next to the restore code: a key the build does not know is
+// an unknown persisted shape and stops start-up, naming the file and the key path, before any store restores (the
+// file is left untouched). It catches a snapshot written in the old vocabulary (`fdrs`, `fdrId`, `role`, ...), which
+// would otherwise restore half-read. A future persisted `version` key (S3-4) would pick one of several such shapes.
+//
+//   true          any value, not looked into
+//   { k: shape }  an object whose keys must be among these
+//   { '[]': s }   an array; each object element has shape s
+//   { '*': s }    an object keyed by ids (Facilities, Block ids, Position ids, stacks); each value has shape s
+const anyOf = (...names) => Object.fromEntries(names.map(n => [n, true]));
+const arrayOf = (shape) => ({ '[]': shape });
+const mapOf = (shape) => ({ '*': shape });
+
+const STRIP_HANDOFF = anyOf('at', 'by', 'from', 'fromStripType', 'kind', 'label', 'to', 'toStripType', 'trigger', 'frequencyRackId');
+const STRIP_SHAPE = {
+  ...anyOf('stripId', 'cid', 'flightDataId', 'rev', 'stripType', 'state', 'ownerPositionId', 'bayId', 'rackId', 'orderKey',
+    'annotations', 'flags', 'createdAt', 'updatedAt', 'updatedBy', 'consolidatedFrom'),
+  coordination: anyOf('primitive', 'state', 'note', 'peerFacilityId', 'peerPositionId', 'peerStripId', 'mintedForCoordination',
+    'dataOwnerPositionRef', 'separationResponsibilityRef', 'radarIdTransferred', 'commsTransferred', 'lastForwardedEtaUtc',
+    'initiatedAt', 'initiatedBy', 'acceptedAt', 'acceptedBy', 'lastStandByAt'),
+  tofiCoordination: anyOf('direction', 'state', 'note', 'peerFacilityId', 'peerPositionId', 'peerStripId', 'mintedForTofi',
+    'initiatedAt', 'initiatedBy', 'acceptedAt', 'acceptedBy', 'commsTransferred', 'commsTransferredAt', 'commsTransferredBy'),
+  airspaceEntry: anyOf('airspaceId', 'altitudeBlock', 'approvedAt', 'approvedBy', 'frequencyMhz'),
+  carrierHandoff: STRIP_HANDOFF,
+  sfaTransfer: STRIP_HANDOFF,
+  previousLeg: anyOf('annotations', 'convertedAt', 'convertedBy', 'flags', 'stripType'),
+};
+const FLIGHT_DATA_SECTIONS = {
+  identity: anyOf('aircraftType', 'beaconAssigned', 'beaconObserved', 'callsign', 'degradation', 'equipmentCodes',
+    'equipmentSuffix', 'flightSize', 'homeStation', 'modeOne', 'modeTwo', 'tailNumber', 'trackDegradationFlag', 'unit', 'wakeCategory'),
+  filed: anyOf('arrivalFix', 'departureAirport', 'departureRunway', 'destinationAirport', 'estimatedArrivalTimeUtc',
+    'fullRouteClearance', 'originAirport', 'proposedDepartureTimeUtc', 'remarks', 'requestedAltitude', 'route', 'stereoRouteName'),
+  assigned: anyOf('atisCode', 'callForReleaseTimeUtc', 'callForReleaseWindowEndUtc', 'callForReleaseWindowStartUtc',
+    'clearedAltitude', 'clearedRoute', 'datalinkClearanceIndicator', 'delayInfo', 'departureRelease', 'edctTimeUtc',
+    'edctWindowEndUtc', 'edctWindowStartUtc', 'landingRunway', 'movementAreaEntryTimeUtc', 'releaseTimeUtc', 'takeoffTimeUtc',
+    'taxiTimeUtc', 'voidDeadlineUtc', 'voidTimeUtc'),
+  military: {
+    ...anyOf('alertStatus', 'altrvRef', 'carrier', 'fuelState', 'hookRequired', 'mtr', 'ordnanceState', 'releaseAuthority', 'scl'),
+    arInfo: { ...anyOf('asReceiver', 'asTanker'),
+      links: arrayOf(anyOf('arcp', 'peerCallsign', 'peerFlightDataId', 'peerLineId', 'peerMissionNumber', 'stripType', 'windows')) },
+  },
+  mission: anyOf('controllingAgency', 'missionNumber', 'packageId', 'vulWindowEndUtc', 'vulWindowStartUtc'),
+  tofi: anyOf('changedAt', 'changedBy', 'ifrActive', 'radarService', 'separationRegime'),
+  comms: anyOf('airspaceId', 'changedAt', 'changedBy', 'transitions', 'workingFrequencyMhz'),
+  airspace: anyOf('changedAt', 'changedBy', 'owner', 'transitions'),
+  clearance: anyOf('altitude', 'heading'),
+  timeInputs: anyOf('flightPlanDepartureUtc', 'takeoffStampedUtc'),
+};
+// provenance is flat, keyed by the dotted path it records ('assigned.departureRelease', 'military.mtr.entryFix'), or by a
+// whole section ('ato', 'tofi', 'military').
+const MTR_FIELDS = ['designator', 'entryFix', 'entryTimeUtc', 'exitEstimateUtc', 'exitFix', 'requestedAltitudeAfterExit'];
+const PROVENANCE_SHAPE = anyOf('ato', 'tofi',
+  ...Object.entries(FLIGHT_DATA_SECTIONS).flatMap(([section, keys]) => [section, ...Object.keys(keys).map(k => `${section}.${k}`)]),
+  ...MTR_FIELDS.map(k => `military.mtr.${k}`));
+const FLIGHT_DATA_SHAPE = {
+  ...anyOf('flightDataId', 'rev', 'createdAt', 'updatedAt', 'updatedBy', 'ato', 'trackRef', 'clearanceUpdatedAt'),
+  ...FLIGHT_DATA_SECTIONS,
+  provenance: PROVENANCE_SHAPE,
+};
+const PAD_SHAPE = anyOf('name', 'accessRoute', 'occupied', 'occupantFlightDataId');
+const ENTRY_SHAPES = {
+  boards: mapOf({
+    strips: arrayOf(STRIP_SHAPE),
+    cidSeq: true,
+    // [cmid, record] pairs; the record is sync/replay-cache.js's replayRecord
+    replay: arrayOf(arrayOf(anyOf('ok', 'reason', 'detail', 'warning', 'routedTo', 'selfCoordinated', 'stripId', 'flightDataId',
+      'peerFacilityId', 'peerStripId', 'appliedWallAt'))),
+    droppedWallAt: true,
+  }),
+  flightData: { flightDataList: arrayOf(FLIGHT_DATA_SHAPE), codes: true, codeCursor: true },
+  airspaces: arrayOf(anyOf('airspaceId', 'lastDenial', 'pendingRequest', 'rev', 'state', 'transitions', 'updatedAt', 'updatedBy', 'window')),
+  correlations: arrayOf(anyOf('binding', 'confidence', 'flightDataId', 'lastMatchedAt', 'matchedBy', 'observedBeacon', 'rev', 'state',
+    'trackId', 'transitions', 'updatedAt', 'updatedBy', 'warning')),
+  marsa: arrayOf(anyOf('declaredBy', 'declaredPositionId', 'declaringCallsign', 'endCondition', 'endedAt', 'endedBy', 'marsaId', 'note',
+    'participants', 'rendezvousAt', 'rendezvousBy', 'rev', 'startEvent', 'startedAt', 'state', 'transitions', 'updatedAt', 'updatedBy',
+    'voidedBy', 'voidedDetail')),
+  runwayStatuses: arrayOf({
+    ...anyOf('activeRunway', 'activeRunwaySource', 'facilityId', 'rev', 'runwayChange', 'runways', 'transitions', 'updatedAt',
+      'updatedBy', 'windDerivedSession'),
+    alertPad: PAD_SHAPE, hotCargoPad: PAD_SHAPE,
+  }),
+  carriers: arrayOf({
+    ...anyOf('hullId', 'recoveryCase', 'rev', 'shipInputs', 'transitions'),
+    stacks: mapOf({ ...anyOf('charlieTimeUtc', 'hullId', 'marshalRadialDeg', 'stackId'),
+      entries: arrayOf(anyOf('caseIAngels', 'flightDataId', 'stackIndex', 'status')) }),
+  }),
+  sfaRotation: anyOf('facilityId', 'rev', 'rotation', 'transitions'),
+};
+// The top level is the registry's keys plus the write stamp _persist adds; nothing else.
+const PERSISTED_SHAPE = { persistedWallAt: true, ...Object.fromEntries(REGISTRY.map(e => [e.key, ENTRY_SHAPES[e.key]])) };
+
+/** Throws naming `file` and the first key path the shape does not know. */
+function checkPersistedShape(data, file, shape = PERSISTED_SHAPE) {
+  const walk = (v, s, at) => {
+    if (s === true || v === null || typeof v !== 'object') return;
+    if (Array.isArray(v)) { if (s['[]']) v.forEach(e => walk(e, s['[]'], `${at}[]`)); return; }
+    for (const [k, child] of Object.entries(v)) {
+      const sub = s['*'] || (Object.prototype.hasOwnProperty.call(s, k) ? s[k] : undefined);
+      if (sub === undefined) {
+        throw new Error(`[efsp] the Board snapshot ${file} has an unknown key "${at ? `${at}.` : ''}${k}" (an unknown persisted shape, H88; an older build's names?): delete state/efsp-board.json and state/efsp-mutations.jsonl to start clean`);
+      }
+      walk(child, sub, at ? `${at}.${k}` : k);
+    }
+  };
+  walk(data, shape, '');
+}
+
 // The order the saved body is restored in (it is not the order it is written in, see above).
 const RESTORE_ORDER = ['flightData', 'airspaces', 'boards', 'correlations', 'marsa', 'runwayStatuses', 'carriers', 'sfaRotation'];
 
-module.exports = { REGISTRY, RESTORE_ORDER };
+module.exports = { REGISTRY, RESTORE_ORDER, PERSISTED_SHAPE, checkPersistedShape };
