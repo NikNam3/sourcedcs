@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const { spawn } = require('child_process');
 const http = require('http');
@@ -9,6 +9,7 @@ const fs   = require('fs');
 
 const config = require('./config.json');
 const { computePythonPkgDir, computeRuntimeCwd, ensureLxsrsVenv } = require('./lxsrs-setup');
+const { createExternalLinkGate } = require('./external-link');
 const { writePendingPatchNotes, readAndClearPendingPatchNotes, readLastPatchNotes } = require('./patch-notes');
 
 const IS_LINUX = process.platform === 'linux';
@@ -120,6 +121,8 @@ app.on('ready', async () => {
         if (process.env.CASDOOR_ENDPOINT && url.startsWith(process.env.CASDOOR_ENDPOINT + '/login/oauth/authorize')) {
             return { action: 'allow', overrideBrowserWindowOptions: { width: 480, height: 640, parent: win, modal: true } };
         }
+        // The one link that leaves the app (S-2PA0): the airspace booking page, and only on the origin crc-sync named.
+        if (externalLinks.canOpen(url)) shell.openExternal(url);
         return { action: 'deny' };
     });
 
@@ -224,6 +227,9 @@ ipcMain.handle('update-check-now', async () => {
     }
     return { state: updateInFlight ? 'checking' : 'idle' };
 });
+// The renderer reports the booking page crc-sync sent (efsp-airspace-calendar.bookingUrl); only that origin may open.
+const externalLinks = createExternalLinkGate();
+ipcMain.on('external-link-allow', (_event, bookingUrl) => { externalLinks.allow(bookingUrl); });
 ipcMain.handle('get-app-version', () => app.getVersion());
 
 // Backs the "what's new" button in the topbar — returns { version, notes }

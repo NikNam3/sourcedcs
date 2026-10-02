@@ -123,12 +123,16 @@ export function getActingPositions(facilityId) {
  * pending mutation: the replay-on-reconnect machinery (§5.6.3) is keyed on
  * Strip identity, and an airspace op is cheap to simply reissue by hand.
  */
-export function sendEfspAirspaceMutation(actingPositionId, airspaceId, baseRev, op) {
+export function sendEfspAirspaceMutation(actingPositionId, airspaceId, baseRev, op, extra = {}) {
+  const clientMutationId = efspClientMutationId();
+  // `extra` carries `baseDefRev` for the definition ops (docs/adr/0098 §4): the revision the form was opened on, which
+  // the server checks field by field. Returns the id so the caller can match the ack to the form that sent it.
   _sendEfsp({
     version: 1, type: 'efsp-airspace-mutation',
-    clientMutationId: efspClientMutationId(),
-    airspaceId, baseRev, actingPositionId, op,
+    clientMutationId,
+    airspaceId, baseRev, actingPositionId, op, ...extra,
   });
+  return clientMutationId;
 }
 
 /**

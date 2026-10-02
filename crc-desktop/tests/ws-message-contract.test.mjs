@@ -30,6 +30,8 @@ const FAMILY_FILES = ['airspace', 'correlation', 'marsa', 'runway-status', 'carr
 const SENT_BY_SERVER = [...new Set([
   ...matchAll([...SERVER_FILES, ...FAMILY_FILES].map(readServer).join('\n'), /version:\s*VERSION,\s*type:\s*'([^']+)'/g),
   ...FAMILIES.flatMap(f => [f.ackType, f.deltaType].filter(Boolean)),
+  // airspace-calendar.js builds its frame with the literal `version: 1` (AIRSP-2S-B), which the scan above does not match.
+  ...matchAll(readServer('efsp/airspace-calendar.js'), /version:\s*1,\s*type:\s*'([^']+)'/g),
 ])].sort();
 
 // The client's dispatcher: app.js's ws.onmessage routes every `efsp-*` frame through dispatchEfspMessage(), and each
