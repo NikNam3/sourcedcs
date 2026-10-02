@@ -52,7 +52,6 @@ const {
 } = require('./marshal-stack');
 const {
   SHIP_CATEGORY,
-  ANGLED_DECK_BY_TYPE,
   SHIP_INPUT_KEYS,
   ALTIMETER_MIN_INHG,
   ALTIMETER_MAX_INHG,
@@ -134,7 +133,6 @@ module.exports = {
   setMarshalRadial,
   applyStackOp,
   SHIP_CATEGORY,
-  ANGLED_DECK_BY_TYPE,
   SHIP_INPUT_KEYS,
   ALTIMETER_MIN_INHG,
   ALTIMETER_MAX_INHG,

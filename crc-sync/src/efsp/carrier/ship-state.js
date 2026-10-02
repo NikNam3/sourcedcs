@@ -21,9 +21,7 @@
 //                       builder converts grid → true with an injected grid
 //                       convergence; when none is given it keeps the grid
 //                       value and SAYS so (headingRef: 'GRID').
-//   [SOURCE-DEFINED]  — ANGLED_DECK_BY_TYPE (9° to port for the Nimitz class,
-//                       the published geometry of the Nimitz-class angled deck; the guide gives none);
-//                       the altimeter's sane band 27.00–32.00 inHg; the 1°
+//   [SOURCE-DEFINED]  — the altimeter's sane band 27.00–32.00 inHg; the 1°
 //                       re-broadcast step (`shipStateChanged`'s default
 //                       `headingStepDeg`).
 //
@@ -39,11 +37,6 @@ const MS_TO_KT = 1.943844;
 const PA_PER_INHG = 3386.389;
 const ALTIMETER_MIN_INHG = 27.0; // [SOURCE-DEFINED]
 const ALTIMETER_MAX_INHG = 32.0; // [SOURCE-DEFINED]
-
-// Degrees the landing area is angled to PORT, by DCS type. [SOURCE-DEFINED] —
-// L4 briefing Q2. Any type not listed (CV_59, LHA_Tarawa, Kuznetsov, anything
-// new) has no offset and therefore no final bearing — never a guess (D11).
-const ANGLED_DECK_BY_TYPE = Object.freeze({ CVN_71: 9, CVN_72: 9, CVN_73: 9, CVN_74: 9, CVN_75: 9 });
 
 const SHIP_INPUT_KEYS = Object.freeze(['altimeterInHg']);
 
@@ -63,7 +56,7 @@ function _finite(v) {
 
 /**
  * HullConfig = { hullId, match: { unitName?, type?, coalition?: 'own'|'any' },
- *                angledDeckDeg?: number|null, label? }
+ *                angledDeckDeg: number, label? }
  */
 function validateHullConfig(hull) {
   if (!_isObj(hull)) return _fail('hull config must be an object');
@@ -74,8 +67,8 @@ function validateHullConfig(hull) {
   if (type != null && (typeof type !== 'string' || !type)) return _fail(`${hull.hullId}: match.type must be a non-empty string`);
   if (!unitName && !type) return _fail(`${hull.hullId}: match needs a unitName or a type — never a track id (ids re-mint, docs/adr/0045)`);
   if (coalition != null && coalition !== 'own' && coalition !== 'any') return _fail(`${hull.hullId}: match.coalition must be 'own' or 'any'`);
-  if (hull.angledDeckDeg != null && !(_finite(hull.angledDeckDeg) && hull.angledDeckDeg >= 0 && hull.angledDeckDeg < 45)) {
-    return _fail(`${hull.hullId}: angledDeckDeg must be degrees to port in [0, 45), or null`);
+  if (!(_finite(hull.angledDeckDeg) && hull.angledDeckDeg >= 0 && hull.angledDeckDeg < 45)) {
+    return _fail(`${hull.hullId}: angledDeckDeg is required: degrees to port in [0, 45), 0 for a straight deck (config/efsp-carriers.json, no per-type fallback)`);
   }
   if (hull.label != null && typeof hull.label !== 'string') return _fail(`${hull.hullId}: label must be a string`);
   return { ok: true, hull };
@@ -133,14 +126,6 @@ function computeFinalBearing(brcDeg, angledDeckDeg) {
   return normDeg(brcDeg - angledDeckDeg);
 }
 
-function _angledDeck(hull, type) {
-  if (_isObj(hull) && _finite(hull.angledDeckDeg)) return { deg: hull.angledDeckDeg, source: 'HULL' };
-  if (typeof type === 'string' && Object.prototype.hasOwnProperty.call(ANGLED_DECK_BY_TYPE, type)) {
-    return { deg: ANGLED_DECK_BY_TYPE[type], source: 'TYPE_DEFAULT' };
-  }
-  return { deg: null, source: null };
-}
-
 /** Pa → inHg, 2 decimals. For L17's weather-derived default altimeter. */
 function inHgFromPa(pa) {
   if (!_finite(pa) || pa <= 0) return null;
@@ -191,11 +176,10 @@ function buildShipState({ hull, track = null, now = null, inputs = null, weather
   const headingDeg = trueHdg != null ? trueHdg : grid;
   const headingRef = headingDeg == null ? null : (trueHdg != null ? 'TRUE' : 'GRID');
   const brcDeg = headingDeg == null ? null : normDeg(Math.round(headingDeg));
-  const deck = _angledDeck(hull, track.type);
-  const finalBearingDeg = computeFinalBearing(brcDeg, deck.deg);
+  const angledDeckDeg = _isObj(hull) && _finite(hull.angledDeckDeg) ? hull.angledDeckDeg : null; // a number on every loaded hull (validateHullConfig)
+  const finalBearingDeg = computeFinalBearing(brcDeg, angledDeckDeg);
   let finalBearingUnavailable = null;
   if (brcDeg == null) finalBearingUnavailable = 'no ship heading';
-  else if (deck.deg == null) finalBearingUnavailable = `angled deck not configured for ${track.type || 'unknown type'}`;
 
   return {
     hullId,
@@ -207,8 +191,8 @@ function buildShipState({ hull, track = null, now = null, inputs = null, weather
     headingDeg,
     headingRef,
     brcDeg,
-    angledDeckDeg: deck.deg,
-    angledDeckSource: deck.source,
+    angledDeckDeg,
+    angledDeckSource: 'HULL',
     finalBearingDeg,
     finalBearingUnavailable,
     speedKt: _finite(track.groundSpeed) ? Math.round(track.groundSpeed * MS_TO_KT) : null,
@@ -309,7 +293,6 @@ function displayBearing(deg, { ref = 'TRUE', magneticVariationDeg = null } = {})
 
 module.exports = {
   SHIP_CATEGORY,
-  ANGLED_DECK_BY_TYPE,
   SHIP_INPUT_KEYS,
   ALTIMETER_MIN_INHG,
   ALTIMETER_MAX_INHG,

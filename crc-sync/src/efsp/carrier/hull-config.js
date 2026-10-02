@@ -9,16 +9,14 @@
 // CRCSYNC_EFSP_CARRIERS_PATH points a test at a temp file, like every other
 // config path in this package.
 //
-// `{ "hulls": [ HullConfig ] }`. A hull that fails validateHullConfig is dropped
-// with a warning; an unreadable file, or one with no valid hull, is a startup
-// error naming the file (DATA-2, H88: no code copy of the CVN-72 `UNION` hull,
+// `{ "hulls": [ HullConfig ] }`. A hull that fails validateHullConfig (angledDeckDeg
+// missing, DATA-3) is a startup error naming the file and the hull, as is an unreadable file or one with no hull (DATA-2, H88: no code copy of the CVN-72 `UNION` hull,
 // decisions H13/H26, is kept).
 // v1 has one hull and one stack (H29); the keys allow more.
 
 const fs = require('fs');
 const { readPath } = require('../../state-paths');
 const { validateHullConfig } = require('./ship-state');
-const log = require('../../log').logger('efsp:hull-config');
 
 const CARRIERS_FILE = 'efsp-carriers.json';
 
@@ -36,7 +34,7 @@ function _load() {
   for (const h of list) {
     const v = validateHullConfig(h);
     if (v.ok) hulls.push(JSON.parse(JSON.stringify(h)));
-    else log.warn('dropping a hull', { detail: v.detail });
+    else throw new Error(`[efsp-carriers] ${file}: ${v.detail}`);
   }
   if (!hulls.length) throw new Error(`[efsp-carriers] ${file} has no valid hull`);
   return hulls;
