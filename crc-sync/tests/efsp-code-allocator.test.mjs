@@ -128,7 +128,7 @@ test('reassign() allows two FDRs to hold a duplicate code simultaneously (never 
   const alloc = new CodeAllocator();
   alloc.reassign('flight-data-1', '1234', null);
   alloc.reassign('flight-data-2', '1234', null);
-  assert.equal(alloc.holderOf('1234'), 'flight-data-2'); // last write wins the map entry, both FDRs conceptually "hold" it
+  assert.equal(alloc.holderOf('1234'), 'flight-data-2'); // last write wins the map entry, both flight data records conceptually "hold" it
 });
 
 test('snapshot()/restore() round-trips allocation state', () => {

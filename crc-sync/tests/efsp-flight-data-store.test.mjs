@@ -845,7 +845,7 @@ test('setField cannot reach the military namespace — every path but the six MT
   }
 });
 
-// The durable-snapshot case. Every board that has ever run carries FDRs whose
+// The durable-snapshot case. Every board that has ever run carries flight data records whose
 // `military` is the literal null it was before docs/adr/0052, and a §9.5/§9.7
 // reader must not throw on exactly the flights that were already airborne
 // when the service restarted.

@@ -57,7 +57,7 @@ async function driverTrace({ seed, minutes, profile = 'smoke', restartAt = null,
 
 // ---------------------------------------------------------------------------------------------------------
 // Scripted traces on a World. The crew: one client per Position (so every Position is Primary somewhere),
-// an observer, a ghost that holds nothing, and a second APP session that is demoted to Observer.
+// an observer, a ghost that holds nothing, and a second AP session that is demoted to Observer.
 // ---------------------------------------------------------------------------------------------------------
 const CREW = {
   ops: { INCIRLIK: ['OPS'] }, cd: { INCIRLIK: ['CD'] }, gnd: { INCIRLIK: ['GC'] }, twr: { INCIRLIK: ['LC'] }, app: { INCIRLIK: ['AP'] },
@@ -95,7 +95,7 @@ function setState(w, id, strip, toState) {
   w.mut(id, f, p, strip, { kind: 'SetState', toState });
   return w.strip(f, strip.stripId);
 }
-/** OPS -> HANDED_OFF -> transferred to APP's departures Bay: the usual start of an airborne flight. */
+/** OPS -> HANDED_OFF -> transferred to AP's departures Bay: the usual start of an airborne flight. */
 function airborne(w, callsign) {
   let s = newDeparture(w, callsign);
   if (!s) throw new Error(`could not create ${callsign}: ${JSON.stringify(w.last && w.last.frames.slice(0, 1))}`);
@@ -118,7 +118,7 @@ function opMatrix() {
   let dep = newDeparture(w, 'MTX01');
   ops({ kind: 'CreateStrip', bayId: 'cd-cleared', rackId: 'main', stripType: 'DEPARTURE', flightData: FDR('MTX-BAYCLASS') });              // wrong Position's Bay
   ops({ kind: 'CreateStrip', bayId: 'nope', rackId: 'main', stripType: 'DEPARTURE', flightData: FDR('MTX-NOBAY') });                       // unknown Bay
-  ops({ kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'NOSUCHROLE', flightData: FDR('MTX-NOROLE') });             // unknown Role
+  ops({ kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'NOSUCHROLE', flightData: FDR('MTX-NOROLE') });             // unknown strip type
   ops({ kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'ARRIVAL', flightData: FDR('MTX-ARR') });                   // OPS may not originate ARRIVAL
   cd({ kind: 'CreateStrip', bayId: 'cd-pending-clearance', rackId: 'main', stripType: 'DEPARTURE', flightData: FDR('MTX-CD') });           // CD may not create
   w.mut('ghost', 'INCIRLIK', 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: FDR('MTX-GHOST') });
@@ -279,13 +279,13 @@ function opMatrix() {
     w.family('app', 'efsp-marsa-mutation', { marsaId: marsa.marsaId, baseRev: marsa.rev + 1, actingPositionId: 'AP', op: { kind: 'VoidMarsa', note: 'ATC resuming separation' } });
   }
 
-  // Correlation: bind / unbind a track to an FDR (no tracks fed: a refusal is also an outcome).
+  // Correlation: bind / unbind a track to a flight data record (no tracks fed: a refusal is also an outcome).
   w.tracks({ upsert: [{ id: 'T1', callsign: 'MTX01', lat: 37.0, lon: 35.4, alt: 5000, course: 90, groundSpeed: 250, verticalSpeed: 0, squawk: '4521' }] });
   w.family('app', 'efsp-correlation-mutation', { flightDataId: fd1, baseRev: 0, actingPositionId: 'AP', op: { kind: 'BindTrack', trackId: 'T1' } });
   w.family('app', 'efsp-correlation-mutation', { flightDataId: fd1, baseRev: 1, actingPositionId: 'AP', op: { kind: 'UnbindTrack' } });
   w.family('cd', 'efsp-correlation-mutation', { flightDataId: fd1, baseRev: 0, actingPositionId: 'CD', op: { kind: 'BindTrack', trackId: 'T1' } });
 
-  // Field state.
+  // Runway status.
   let fsRev = 0;
   const fsm = (id, acting, op) => {
     const r = w.family(id, 'efsp-runway-status-mutation', { facilityId: 'INCIRLIK', baseRev: fsRev, actingPositionId: acting, op });
@@ -372,7 +372,7 @@ function walkCivil() {
 
 function walkManning() {
   const w = crewWorld(31);
-  // Strips at CD and GND, then CD's controller drops: the covering chain reassigns CD's Strips.
+  // Strips at CD and GC, then CD's controller drops: the consolidation chain reassigns CD's Strips.
   let d1 = newDeparture(w, 'MAN1'); d1 = chain(w, 'INCIRLIK', d1, 'PENDING_CLEARANCE');
   let d2 = newDeparture(w, 'MAN2'); d2 = chain(w, 'INCIRLIK', d2, 'CLEARED');
   w.close('cd');
@@ -519,7 +519,7 @@ function peerMarsaOrder() {
   const dm = w.family('app', 'efsp-marsa-mutation', { actingPositionId: 'AP', op: { kind: 'DeclareMarsa', participants: [fd1, fd2], startEvent: 'TANKER_ACCEPTED', endCondition: 'VERTICALLY_POSITIONED', declaringCallsign: 'SHELL1' } });
   void dm;
   const replicaOf = (s) => w.truth().facilities.CENTER.strips.find(x => x.coord && x.coord.peerStripId === s.stripId);
-  // Flight 1: the proposer's Strip is dropped first, so the replica is the last live Strip of the FDR.
+  // Flight 1: the proposer's Strip is dropped first, so the replica is the last live Strip of the flight data.
   app({ kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' }, m1);
   const r1 = replicaOf(m1);
   if (r1) ctr({ kind: 'HANDOFF', action: 'ACCEPT' }, r1);

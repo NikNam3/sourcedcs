@@ -5,7 +5,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { HERE, canonical, digest, checkGolden } from './freeze-lib.mjs';
 
-// The decision tables as DATA (Role x state -> owner/actions, Position x op kind, NLA state sets,
+// The decision tables as DATA (strip type x state -> owner/actions, Position x op kind, NLA state sets,
 // coordination effects, shipped facility defaults) and the wire message-type set. A refactor that
 // moves these between files must leave every value here unchanged. Nothing is hand-copied: the values are
 // read from the modules and the message types are read from the source text of the wire files.

@@ -7,9 +7,8 @@ import { fullRules } from "./helpers/full-rules.mjs";
 const { FlightDataStore } = await import('../src/efsp/flight-data-store.js');
 
 // A minimal, deterministic `rules` fixture standing in for block-map.js /
-// facility-config.js / nla.js / position-store.js, which don't exist yet at
-// this point in the build sequence (board-store.js is intentionally
-// decoupled from all of them via dependency injection).
+// facility-config.js / nla.js / position-store.js (BoardStore takes the rules by
+// dependency injection).
 function makeRules(overrides = {}) {
   return {
     resolveBlockTarget: (blockId) => {
@@ -536,7 +535,7 @@ test('Undo consumes the window — a second Undo immediately after has nothing l
 
 // ── Transfer-shaped NLA transitions (Phase 2, docs/adr/0007) ────────────
 // computeNla() can return {toState, transferTo} — e.g. DEPARTED's real
-// Hand Off to APP — routing through the exact same atomic _applyTransferStrip
+// Hand Off to AP — routing through the exact same atomic _applyTransferStrip
 // a controller-initiated drag transfer uses, not a separate path.
 
 function makeTransferNlaRules(overrides = {}) {
@@ -715,7 +714,7 @@ test('without a canActOnState rule supplied, this gate is simply skipped (opt-in
   assert.equal(result.ok, true);
 });
 
-// ── TransferStrip: staffing gating + covering chain (guide §4.5) ──────────
+// ── TransferStrip: staffing gating + consolidation chain (guide §4.5) ──────────
 
 test('TransferStrip to an staffed Position succeeds and changes owner + Bay/Rack atomically', () => {
   const { board } = makeStore();
@@ -781,7 +780,7 @@ test('TransferStrip to an unstaffed Position with no covering Position is reject
 });
 
 test('TransferStrip to an unstaffed Position with an staffed covering Position routes there instead, and reports routedTo', () => {
-  const { board } = makeStore(); // fixture: UNSTAFFED -> covered by COVER, and COVER is staffed
+  const { board } = makeStore(); // fixture: UNSTAFFED -> consolidated at COVER, and COVER is staffed
   const strip = createStrip(board, 'OPS');
   const result = board.applyMutation(
     mutation(strip, { kind: 'TransferStrip', toPositionId: 'UNSTAFFED', bayId: 'x', rackId: 'y' }),

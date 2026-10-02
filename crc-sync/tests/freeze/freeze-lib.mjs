@@ -1,7 +1,7 @@
 // Shared helpers for the freeze suite (docs/wip/FREEZE.md). Test-side only.
 //
 // A "golden" file is JSON with one line per step/cell so a git diff points at the step that
-// moved. Heavy records (a whole Strip, a whole FDR) are not stored verbatim: they are replaced
+// moved. Heavy records (a whole Strip, a whole flight data) are not stored verbatim: they are replaced
 // by a one-line summary carrying a content hash of the FULL normalised record, so any field
 // change anywhere inside still changes the golden, and the readable summary says which Strip.
 // To see the full before/after of a changed record, dump both runs (FREEZE_DUMP=dir, see

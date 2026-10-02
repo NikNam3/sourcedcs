@@ -53,13 +53,13 @@ function makeFacilities() {
       coordinationEligibleState: (stripType) => coordination.coordinationEligibleState(stripType),
       tofiCounterparts: (actingPositionId) => permission.tofiCounterparts(actingPositionId),
       // Wired as of the mission-line slice. It was absent, and
-      // board-store.js's `if (this._rules.tofiEligibleState)` guard meant
+      // the `if (rules.tofiEligibleState)` guard then in the Board meant
       // docs/adr/0031's (stripType, state) gate was SILENTLY SKIPPED across this
       // entire file — the one place TOFI is tested most densely. 0031's own
       // Consequences blessed the omission while nothing depended on the gate
       // being real; find-before-mint does, so it stops being defensible.
       tofiEligibleState: (stripType) => coordination.tofiEligibleState(stripType),
-      // Needed by _releaseFlightDataIfLastStrip once one FDR legitimately carries
+      // Needed by _releaseFlightDataIfLastStrip once one flight data legitimately carries
       // several Strips. Absent here too, so the beacon-release refcount was
       // reading `0` for every Strip in this file.
       liveStripsForFlightData: (flightDataId, excludeStripId) => {
@@ -126,7 +126,7 @@ function completeEntry(facilities) {
   return { atcStrip: ctrBoard.getStrip(atcStrip0.stripId), missionStrip: accepted.strip };
 }
 
-// ── PROPOSE (ENTRY) mints a real MISSION Strip sharing the ATC Strip's FDR ──
+// ── PROPOSE (ENTRY) mints a real MISSION Strip sharing the ATC Strip's flight data ──
 
 test('TOFI ENTRY PROPOSE mints a brand-new MISSION Strip on TACTICAL\'s own Board, sharing the ATC-side Strip\'s flightDataId (guide §9.8\'s binding)', () => {
   const facilities = makeFacilities();
@@ -149,7 +149,7 @@ test('TOFI ENTRY PROPOSE mints a brand-new MISSION Strip on TACTICAL\'s own Boar
   assert.equal(missionStrip.state, 'TASKED');
   assert.equal(missionStrip.ownerPositionId, 'TAC_C2');
   assert.equal(missionStrip.bayId, 'tac-c2-coordination');
-  assert.equal(missionStrip.flightDataId, atcStrip.flightDataId); // shared FDR, not a fresh one
+  assert.equal(missionStrip.flightDataId, atcStrip.flightDataId); // shared flight data, not a fresh one
   assert.equal(missionStrip.tofiCoordination.direction, 'ENTRY');
   assert.equal(missionStrip.tofiCoordination.state, 'INITIATED');
   assert.equal(missionStrip.tofiCoordination.peerStripId, atcStrip.stripId);
@@ -388,7 +388,7 @@ test('the MISSION Strip advances through its own lifecycle via ordinary InvokeNl
 
 test('TOFI ENTRY is refused on an ARRIVAL Strip that is not at INBOUND (docs/adr/0031)', () => {
   // This file's `rules` fixture omitted `tofiEligibleState` until the
-  // mission-line slice, and board-store.js guards on its presence — so the
+  // mission-line slice, and the Board (board/tofi.js) then guarded on its presence — so the
   // gate was skipped across every test here and this assertion would have
   // passed the PROPOSE instead of refusing it. Kept as the proof the wiring
   // is real, not as a restatement of efsp-scenario-military's coverage.

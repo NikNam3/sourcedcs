@@ -7,7 +7,7 @@ import path from 'path';
 
 /* Hung ordnance sorties (guide §9.5, docs/adr/0069).
  *
- * §9.5's one MUST — "HUNG MUST propagate to field state" — is read as an
+ * §9.5's one MUST — "HUNG MUST propagate to runway status" — is read as an
  * advisory on runway assignment plus a routing constraint toward the hot cargo
  * pad (WP6 plan Phase 4; decisions.md H21). These walk it on a real Board: the
  * pilot reports the hung store, whoever is talking to them records it (H55),
@@ -56,7 +56,7 @@ function mustRunwayStatusAct(member, positionId, op) {
 }
 
 let n = 0;
-/** CTR hands an ARRIVAL to APP, which accepts it — the flight as it really comes in. */
+/** CTR hands an ARRIVAL to AP, which accepts it — the flight as it really comes in. */
 function inboundFromCenter() {
   const enroute = mustAct(efsp, c.CTR, 'CTR', null, {
     kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', stripType: 'ARRIVAL',
@@ -66,7 +66,7 @@ function inboundFromCenter() {
   return mustAct(efsp, c.AP, 'AP', efsp.boardStoreFor('INCIRLIK').getStrip(handed.coordination.peerStripId), { kind: 'HANDOFF', action: 'ACCEPT' });
 }
 
-/** A DEPARTURE queued in a runway rack, owned by TWR. */
+/** A DEPARTURE queued in a runway rack, owned by LC. */
 function queued(rackId) {
   let s = mustAct(efsp, c.OPS, 'OPS', null, {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE',
@@ -86,7 +86,7 @@ test('sortie: an arrival reports hung ordnance, is advised toward the hot cargo 
   s = mustAct(efsp, c.LC, 'LC', s, { kind: 'SetBlock', blockId: '8B', value: '05' });
   s = mustAct(efsp, c.LC, 'LC', s, { kind: 'SetBlock', blockId: '3G', value: 'HUNG' });
   assert.equal(flightDataOf(s).military.ordnanceState, 'HUNG');
-  // The write is audited. The entry carries the Strip before/after but not the FDR value it
+  // The write is audited. The entry carries the Strip before/after but not the flight data value it
   // changed — an audit gap for L26 (docs/wip/L12.md "Findings"), so it is found by op and rev.
   const logged = mutations().filter(m => m.stripId === s.stripId && m.op === 'SetBlock' && m.actingPositionId === 'LC');
   assert.ok(logged.some(m => m.after && m.after.rev === s.rev), 'the 3G write is in the Mutation log');

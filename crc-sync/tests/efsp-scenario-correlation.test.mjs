@@ -78,7 +78,7 @@ function reconcilerFor(efsp, trackStore, deltas = []) {
   });
 }
 
-/** An airborne flight at APP, correlated to a contact squawking its assigned code. */
+/** An airborne flight at AP, correlated to a contact squawking its assigned code. */
 function airborneAndCorrelated(efsp, c, sky, { callsign = 'VIPER1', trackId = 101 } = {}) {
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign });
   const flightData = efsp.flightDataStore.getFlightData(strip.flightDataId);
@@ -453,7 +453,7 @@ test('a binding is in the durable Mutation log, attributed to the Position that 
   bind(efsp, c.AP.session, 'AP', strip.flightDataId, 101);
 
   // The log is append-only and shared across this file's tests, so scope to
-  // this flight's own FDR.
+  // this flight's own flight data.
   const entries = efsp.mutationLog.readAll()
     .filter(e => e.op === 'BindTrack' && e.flightDataId === strip.flightDataId);
   assert.equal(entries.length, 1);

@@ -97,7 +97,7 @@ function holding(ctx, session, signedOn) {
 }
 
 // Only OPS may CreateStrip (guide §4.1 rule 3, enforced by permission.js) —
-// tests that need a Strip owned by GND/TWR/etc. must create it as OPS and
+// tests that need a Strip owned by GC/LC/etc. must create it as OPS and
 // then TransferStrip it, exactly like a real controller would.
 function createStripOwnedBy(ctx, toPositionId, bayId) {
   const opsSession = { controllerId: 'controller-ops', who: 'Ops1' };
@@ -161,7 +161,7 @@ test('a rejected mutation\'s ack includes the human-readable detail, not just th
 
   // Drop straight into a Bay whose implied state (RUNWAY_QUEUE) skips
   // ahead of PROPOSED's legal next state (PENDING_CLEARANCE) — the exact
-  // doctrine-bypass case board-store.js's _validateBayImpliedTransition
+  // doctrine-bypass case board/placement.js's `validateBayImpliedTransition`
   // exists to reject, with a detail string explaining why.
   const moveMsg = {
     version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(),
@@ -258,16 +258,16 @@ test('setting held positions acks with the actually-held set and broadcasts posi
 
 test('vacating a Position with Strips and an staffed covering Position reassigns them and reports the warning with routedTo', () => {
   const ctx = makeCtx();
-  handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: ['GC'] }, noopPersist); // Alice holds GND
-  handleMessage(ctx, { controllerId: 'controller-2', who: 'Bob' }, { type: 'efsp-set-positions', signedOn: ['LC'] }, noopPersist); // Bob holds TWR (GND's covering Position)
+  handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: ['GC'] }, noopPersist); // Alice is signed on at GC
+  handleMessage(ctx, { controllerId: 'controller-2', who: 'Bob' }, { type: 'efsp-set-positions', signedOn: ['LC'] }, noopPersist); // Bob signs on at LC (the Position GC is consolidated at)
 
-  // gc-coordination (not gc-taxi-in) — this fixture just needs "GND owns
+  // gc-coordination (not gc-taxi-in) — this fixture just needs "GC owns
   // a Strip", and gc-taxi-in now implies TAXI_IN (Phase 2), which a fresh
   // PROPOSED Strip can't legally jump straight to (correctly rejected by
-  // _validateBayImpliedTransition). gc-coordination implies no state.
+  // `validateBayImpliedTransition`). gc-coordination implies no state.
   const strip = createStripOwnedBy(ctx, 'GC', 'gc-coordination');
 
-  const result = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: [] }, noopPersist); // Alice vacates GND
+  const result = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: [] }, noopPersist); // Alice vacates GC
   assert.equal(result.ack.warnings.length, 1);
   assert.deepEqual(result.ack.warnings[0], { positionId: 'GC', count: 1, routedTo: 'LC' });
   assert.equal(slot(result, 'primary').strips.updated.length, 1);
@@ -277,16 +277,16 @@ test('vacating a Position with Strips and an staffed covering Position reassigns
 
 test('vacating a Position with Strips and NO staffed covering Position anywhere reports routedTo:null, distinctly, and does not silently drop the Strip', () => {
   const ctx = makeCtx();
-  handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: ['GC'] }, noopPersist); // GND held, but nobody holds TWR
-  // gc-coordination (not gc-taxi-in) — this fixture just needs "GND owns
+  handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: ['GC'] }, noopPersist); // GC signed on, but nobody signed on at LC
+  // gc-coordination (not gc-taxi-in) — this fixture just needs "GC owns
   // a Strip", and gc-taxi-in now implies TAXI_IN (Phase 2), which a fresh
   // PROPOSED Strip can't legally jump straight to (correctly rejected by
-  // _validateBayImpliedTransition). gc-coordination implies no state.
+  // `validateBayImpliedTransition`). gc-coordination implies no state.
   const strip = createStripOwnedBy(ctx, 'GC', 'gc-coordination');
 
   const result = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: [] }, noopPersist);
   assert.deepEqual(result.ack.warnings, [{ positionId: 'GC', count: 1, routedTo: null }]);
-  // Strip ownership is untouched — still GND, which is now unstaffed; this
+  // Strip ownership is untouched — still GC, which is now unstaffed; this
   // is the D19 boundary condition itself, surfaced rather than hidden.
   assert.equal(ctx.boardStoreFor('INCIRLIK').getStrip(strip.stripId).ownerPositionId, 'GC');
 });
@@ -307,7 +307,7 @@ test('a non-abrupt vacate does NOT auto-promote a waiting Observer, so its Strip
 
   const result = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: [] }, noopPersist); // Alice explicitly vacates
   assert.equal(ctx.positionStoreFor('INCIRLIK').isStaffed('GC'), false); // Bob was NOT auto-promoted — an explicit prompt is required, not built here
-  assert.equal(result.ack.warnings.length, 1); // so the Strip genuinely needed routing, and GND has no covering Position staffed in this fixture
+  assert.equal(result.ack.warnings.length, 1); // so the Strip genuinely needed routing, and GC has no Position it is consolidated at staffed in this fixture
   assert.equal(result.ack.warnings[0].routedTo, null);
 });
 
@@ -323,7 +323,7 @@ function bindMsg(overrides = {}) {
   };
 }
 
-/** A DEPARTURE Strip at OPS. A correlation op needs only an FDR that exists. */
+/** A DEPARTURE Strip at OPS. A correlation op needs only a flight data record that exists. */
 function createOpsStrip(ctx, session) {
   const created = handleMessage(ctx, session, createStripMsg(), noopPersist);
   if (!created.ack.ok) throw new Error('fixture setup failed: ' + JSON.stringify(created.ack));
@@ -371,7 +371,7 @@ test('a correlation op from a session that is not Primary anywhere is refused (d
   holding(ctx, owner, ['OPS']);
   const strip = createOpsStrip(ctx, owner);
 
-  // Somebody else claims APP without holding it.
+  // Somebody else acts as AP without being signed on at it.
   const impostor = { controllerId: 'c-nobody', who: 'Nobody' };
   const result = handleMessage(ctx, impostor, bindMsg({ flightDataId: strip.flightDataId, baseRev: 0 }), noopPersist);
   assert.equal(result.ack.ok, false);
@@ -380,7 +380,7 @@ test('a correlation op from a session that is not Primary anywhere is refused (d
 });
 
 test('any Primary may bind, whichever Facility holds a Strip for that flight', () => {
-  // A correlation is not a clearance, and the FDR is shared theater-wide
+  // A correlation is not a clearance, and the flight data is shared theater-wide
   // (docs/adr/0013). A controller who can see the contact must be able to say
   // so, even if the Strip is somebody else's.
   const ctx = makeCtx();
@@ -435,7 +435,7 @@ test('the snapshot carries correlation records alongside airspaces', () => {
 
 test('efsp-resync has no correlation branch — a reconnecting client gets the snapshot and the next tick', () => {
   // §5.6's "two paths only" is preserved because correlation never joins the
-  // board-seq delta path (_handleResync's own reasoning for FDRs/Positions).
+  // board-seq delta path (_handleResync's own reasoning for flight data records/Positions).
   const ctx = makeCtx();
   const session = { controllerId: 'c-app', who: 'App1' };
   holding(ctx, session, ['OPS']);

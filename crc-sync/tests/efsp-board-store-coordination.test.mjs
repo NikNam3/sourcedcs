@@ -64,14 +64,14 @@ function makeFacilities({ aitAuthorized = {} } = {}) {
 }
 
 /**
- * APP originates a DEPARTURE Strip already at HANDED_OFF, so it's eligible
+ * AP originates a DEPARTURE Strip already at HANDED_OFF, so it's eligible
  * to PROPOSE coordination to CTR (docs/adr/0022's
  * COORDINATION_ELIGIBLE_STATES.DEPARTURE). SetState first (bypasses the
  * bay-implied-transition sequence check entirely — mirrors this repo's
  * existing test fixtures' use of SetState as a raw jump, e.g.
  * efsp-board-store.test.mjs), THEN TransferStrip into ap-departures —
  * by then strip.state already equals that Bay's impliesState, so
- * _validateBayImpliedTransition's "already there" short-circuit applies
+ * board/placement.js's `validateBayImpliedTransition`'s "already there" short-circuit applies
  * and the transfer is never itself treated as an advancing transition.
  */
 function createAppHandedOffStrip(facilities) {
@@ -97,7 +97,7 @@ function createAppHandedOffStrip(facilities) {
   return transferred.strip;
 }
 
-/** APP proposes coordination to CTR — the mirror of proposeHandoff, other direction. */
+/** AP proposes coordination to CTR — the mirror of proposeHandoff, other direction. */
 function proposeFromApp(facilities, strip, overrides = {}) {
   const { boardStore } = facilities.get('INCIRLIK');
   return boardStore.applyMutation(mutation({
@@ -155,7 +155,7 @@ test('HANDOFF PROPOSE mints a brand-new, independent Strip in the receiving Faci
   assert.equal(receiverStrip.coordination.state, 'INITIATED');
   assert.equal(receiverStrip.coordination.peerStripId, senderStrip.stripId);
   assert.equal(receiverStrip.coordination.peerFacilityId, 'CENTER');
-  assert.equal(receiverStrip.flightDataId, senderStrip.flightDataId); // one logical FDR, shared — docs/adr/0013's simplification
+  assert.equal(receiverStrip.flightDataId, senderStrip.flightDataId); // one logical flight data, shared — docs/adr/0013's simplification
 });
 
 test('ACCEPT moves the receiver replica into its normal INBOUND Bay, sets both sides ACTIVE, and moves data ownership + separation responsibility to the receiver (HANDOFF\'s full-jurisdiction-transfer row)', () => {
@@ -318,7 +318,7 @@ test('a Strip cannot have two open coordination links at once — a second PROPO
 test('D21 regression: only APP/CTR may PROPOSE a coordination primitive — GND is refused even though it owns its own Strip', () => {
   const facilities = makeFacilities();
   const { boardStore: incirlikBoard, positionStore: incirlikPositions } = facilities.get('INCIRLIK');
-  incirlikPositions.setSignedOnPositions('gc-controller', 'Gnd1', ['GC']); // occupy GND so the TransferStrip fixture setup below can route to it
+  incirlikPositions.setSignedOnPositions('gc-controller', 'Gnd1', ['GC']); // occupy GC so the TransferStrip fixture setup below can route to it
   const created = incirlikBoard.applyMutation(mutation({
     op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', flightData: { callsign: 'VIPER1', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' } },
   }), 'OPS', 'ops-controller');
@@ -385,7 +385,7 @@ test('OPERATIONAL_REQUEST APPROVE creates a replica and updates both sides like 
   assert.equal(approved.strip.coordination.radarIdTransferred, false);
 });
 
-// ── docs/adr/0022: APP -> CTR DEPARTURE coordination (the gap-closure) ──
+// ── docs/adr/0022: AP -> CTR DEPARTURE coordination (the gap-closure) ──
 
 test('APP -> CTR HANDOFF PROPOSE mints a DEPARTURE/HANDED_OFF replica at CTR — the previously-hardcoded ARRIVAL/INBOUND shape is now the sender\'s actual role/state', () => {
   const facilities = makeFacilities();
@@ -439,9 +439,9 @@ test('PROPOSE is rejected when the Strip is not in an eligible (stripType, state
   }), 'OPS', 'ops-controller');
   // ap-coordination has no impliesState, so this transfer is never itself
   // treated as an advancing transition — lands a still-PROPOSED DEPARTURE
-  // Strip at APP, isolating the (stripType, state) eligibility check below from
-  // permission.js's separate canMutate gate (APP has full coordination
-  // permissions, unlike the D21 test above's GND).
+  // Strip at AP, isolating the (stripType, state) eligibility check below from
+  // permission.js's separate canMutate gate (AP has full coordination
+  // permissions, unlike the D21 test above's GC).
   const transferred = incirlikBoard.applyMutation(mutation({
     stripId: created.strip.stripId, baseRev: created.strip.rev,
     op: { kind: 'TransferStrip', toPositionId: 'AP', bayId: 'ap-coordination', rackId: 'main' },
@@ -623,12 +623,12 @@ test('a REJECTED replica sitting in its owner\'s Coordination Bay cannot PROPOSE
   assert.equal(retried.ok, false);
   assert.equal(retried.reason, 'VALIDATION_ERROR');
   // Refused by _dispatch's rejected-replica gate (F-303) before the
-  // coordination-Bay check in _applyCoordinationPropose is ever reached.
+  // coordination-Bay check in board/coordination.js's `_applyCoordinationPropose` is ever reached.
   assert.match(retried.detail, /rejected — the replica is inert/);
 });
 
 // ── Bug found in live testing: DEPARTURE_STATE_OWNERS.HANDED_OFF only
-// listed APP, so a CENTER-held HANDED_OFF replica — accepted or rejected
+// listed AP, so a CENTER-held HANDED_OFF replica — accepted or rejected
 // — had NO way to ever be Dropped ─────────────────────────────────────
 
 test('CTR can Drop a HANDED_OFF DEPARTURE Strip it owns, whether accepted-and-relocated or rejected-and-inert', () => {
@@ -678,7 +678,7 @@ test('ConvertToArrival turns a HANDED_OFF DEPARTURE Strip into an INBOUND ARRIVA
 
   assert.equal(converted.ok, true, JSON.stringify(converted));
   assert.equal(converted.strip.stripId, strip.stripId); // same Strip
-  assert.equal(converted.strip.flightDataId, strip.flightDataId);     // same FDR — same beacon code, no copy needed
+  assert.equal(converted.strip.flightDataId, strip.flightDataId);     // same flight data — same beacon code, no copy needed
   assert.equal(converted.strip.stripType, 'ARRIVAL');
   assert.equal(converted.strip.state, 'INBOUND');
   assert.equal(converted.strip.bayId, 'ap-inbound');
@@ -688,9 +688,9 @@ test('ConvertToArrival turns a HANDED_OFF DEPARTURE Strip into an INBOUND ARRIVA
   assert.equal(boardStore.getAll().filter(s => s.flightDataId === strip.flightDataId).length, 1);
 });
 
-// Bug found in live testing: DEPARTURE and ARRIVAL read DIFFERENT FDR
+// Bug found in live testing: DEPARTURE and ARRIVAL read DIFFERENT flight data
 // fields for the same idea (departureAirport vs originAirport) — an
-// in-place conversion that never touched the FDR left originAirport
+// in-place conversion that never touched the flight data left originAirport
 // permanently blank even though departureAirport still held the value.
 test('ConvertToArrival maps the departure record\'s departureAirport onto the new ARRIVAL Strip\'s originAirport, and returns the updated flightData so the client actually sees it', () => {
   const facilities = makeFacilities();
@@ -731,7 +731,7 @@ test('a Strip carries no correlation field at all — it is keyed by flightDataI
   // This assertion used to read the other way: a per-Strip
   // `correlation: { state: 'UNCORRELATED' }` was set on creation and reset by
   // ConvertToArrival. Both were wrong, and docs/adr/0045 explains why — one
-  // FDR legitimately has several Strips, so a per-Strip correlation lets two
+  // flight data legitimately has several Strips, so a per-Strip correlation lets two
   // replicas of one airframe disagree about which contact it is, and
   // ConvertToArrival threw away a correct binding for an aircraft that was
   // still airborne and still squawking the code docs/adr/0023 kept for it.
@@ -768,7 +768,7 @@ test('ConvertToArrival is rejected on anything other than a DEPARTURE Strip at H
   }), 'OPS', 'ops-controller');
   // ap-coordination has no impliesState, so this transfer is never itself
   // treated as an advancing transition (see the D21-isolation test above
-  // for the same pattern) — lands a still-PROPOSED DEPARTURE Strip at APP.
+  // for the same pattern) — lands a still-PROPOSED DEPARTURE Strip at AP.
   const transferred = boardStore.applyMutation(mutation({
     stripId: created.strip.stripId, baseRev: created.strip.rev,
     op: { kind: 'TransferStrip', toPositionId: 'AP', bayId: 'ap-coordination', rackId: 'main' },
@@ -825,5 +825,5 @@ test('ConvertToArrival works identically at CTR (CENTER Facility) — a departur
   assert.equal(converted.strip.stripType, 'ARRIVAL');
   assert.equal(converted.strip.state, 'INBOUND');
   assert.equal(converted.strip.bayId, 'ctr-enroute');
-  assert.equal(converted.strip.flightDataId, senderStrip.flightDataId); // same FDR, all the way through both the HANDOFF and the conversion
+  assert.equal(converted.strip.flightDataId, senderStrip.flightDataId); // same flight data, all the way through both the HANDOFF and the conversion
 });

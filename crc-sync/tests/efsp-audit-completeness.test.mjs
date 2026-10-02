@@ -7,7 +7,7 @@ import crypto from 'crypto';
 import crcLog from '../src/log.js';
 
 // L26 / docs/adr/0083: every EFSP Mutation outcome that reaches crc-sync produces
-// exactly one Mutation-log entry, and every entry names its Facility and its FDR(s).
+// exactly one Mutation-log entry, and every entry names its Facility and its flight data.
 // Driven through createEfsp() and createEfspInstrumentation() together, as
 // efsp-metrics-tap.test.mjs does.
 
@@ -92,7 +92,7 @@ function refusals() {
     ['marsa: NOT_HOLDING_POSITION', c.AP, { type: 'efsp-marsa-mutation', actingPositionId: 'CTR', op: { kind: 'DeclareMarsa', participants: [strip.flightDataId] } }, 'NOT_HOLDING_POSITION'],
     ['marsa: class PERMISSION_DENIED', c.JTAC, { type: 'efsp-marsa-mutation', actingPositionId: 'JTAC', op: { kind: 'DeclareMarsa', participants: [strip.flightDataId] } }, 'PERMISSION_DENIED'],
     ['marsa: store refusal', c.OPS, { type: 'efsp-marsa-mutation', actingPositionId: 'OPS', op: { kind: 'DeclareMarsa', participants: [] } }, null],
-    // Field state.
+    // Runway status.
     ['field state: NOT_HOLDING_POSITION', c.OPS, { type: 'efsp-runway-status-mutation', actingPositionId: 'LC', baseRev: fs0 && fs0.rev, op: { kind: 'CloseRunway' } }, 'NOT_HOLDING_POSITION'],
     ['field state: store refusal', c.OPS, { type: 'efsp-runway-status-mutation', actingPositionId: 'OPS', baseRev: fs0 && fs0.rev, op: { kind: 'NoSuchOp' } }, null],
     // ATO import.
@@ -123,7 +123,7 @@ test('every refusal is logged exactly once', () => {
 test('every entry written by any path names its facilityId, and its FDR where it has one', () => {
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'AUD2' });
   const handed = handedToCenter(efsp, c, strip);
-  // A correlation and a MARSA, a runway-status op, a covering reassignment.
+  // A correlation and a MARSA, a runway-status op, a consolidation reassignment.
   send(c.OPS, { type: 'efsp-correlation-mutation', clientMutationId: crypto.randomUUID(), flightDataId: handed.flightDataId, baseRev: 0, actingPositionId: 'OPS', op: { kind: 'BindTrack', trackId: '9' } });
   const other = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'AUD3' });
   send(c.OPS, { type: 'efsp-marsa-mutation', clientMutationId: crypto.randomUUID(), actingPositionId: 'OPS', op: { kind: 'DeclareMarsa', participants: [strip.flightDataId, other.flightDataId], startEvent: 'LOCAL_DECLARATION', endCondition: 'MTR_COMPLETE', declaringCallsign: 'AUD2' } });
@@ -131,7 +131,7 @@ test('every entry written by any path names its facilityId, and its FDR where it
   let tw = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign: 'AUD8' } });
   tw = jumpTo(efsp, c.OPS, 'OPS', tw, 'DEPARTED');
   mustAct(efsp, c.OPS, 'OPS', tw, { kind: 'TransferStrip', toPositionId: 'LC', bayId: 'lc-airborne', rackId: 'main' });
-  hold(efsp, c.LC.session, 'INCIRLIK', []); // TWR vacates; APP covers it
+  hold(efsp, c.LC.session, 'INCIRLIK', []); // LC vacates; its Strips go to the Position it is consolidated at (AP)
   hold(efsp, c.LC.session, 'INCIRLIK', ['LC']);
 
   const all = efsp.mutationLog.readAll();

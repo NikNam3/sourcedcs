@@ -101,7 +101,7 @@ test('ARRIVAL\'s optional 9A-* sub-fields (destination/point-out/vector/speed) a
 
 test('the assigned altitude and heading are the FLIGHT\'s clearance, on every Role (docs/adr/0058)', () => {
   // One of each per flight, shared by every Facility, with §3.7 history kept on
-  // the FDR — so CTR's copy of a departure carries what APP assigned.
+  // the flight data — so CTR's copy of a departure carries what AP assigned.
   const alt = { kind: 'clearance', field: 'altitude' };
   const hdg = { kind: 'clearance', field: 'heading' };
   assert.deepEqual(resolveBlockTarget('DEPARTURE', '21'), alt);
@@ -279,7 +279,7 @@ test('Block 9F is optional — most flights are not filed on a stereo', () => {
 
 test('the guide\'s M18 number is deliberately NOT taken — it belongs to MISSION\'s own namespace', () => {
   // docs/adr/0026 froze M1-M8/M25/M26 with their own meanings (its M4 is the
-  // beacon; the guide's M4 is IFF Mode 1/2), and MISSION is the one Role that
+  // beacon; the guide's M4 is IFF Mode 1/2), and MISSION is the one strip type that
   // never files a stereo. See block-map.js's '9F' comment.
   for (const map of [DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP]) {
     assert.equal(map['M18'], undefined);
@@ -288,7 +288,7 @@ test('the guide\'s M18 number is deliberately NOT taken — it belongs to MISSIO
 
 test('a SetBlock at 9F routes to filed.stereoRouteName — writing it is how a flight is re-filed', () => {
   assert.deepEqual(resolveBlockTarget('DEPARTURE', '9F'), { kind: 'flightData', path: 'filed.stereoRouteName' });
-  // And nowhere else: the other Roles have no 9F at all, so a SetBlock at it
+  // And nowhere else: the other strip types have no 9F at all, so a SetBlock at it
   // there is the ordinary unknown-Block VALIDATION_ERROR.
   for (const stripType of ['ARRIVAL', 'OVERFLIGHT', 'MISSION']) {
     assert.equal(resolveBlockTarget(stripType, '9F'), null, stripType);
@@ -301,8 +301,8 @@ test('a SetBlock at 9F routes to filed.stereoRouteName — writing it is how a f
 test('every Strip Role a controller issues clearances on has BOTH a course and an altitude interlock Block', () => {
   // The point of this test. §13's acceptance criterion — "a heading or
   // altitude assignment to a MARSA participant before rendezvous voids the
-  // relation" — can pass on one Role while silently not holding on another,
-  // because each Role has its own Block Map. OVERFLIGHT had neither Block
+  // relation" — can pass on one strip type while silently not holding on another,
+  // because each strip type has its own Block Map. OVERFLIGHT had neither Block
   // before this slice, so a participant transiting on one could be vectored
   // with nothing voiding anything, and nothing anywhere would have said so.
   for (const stripType of ['DEPARTURE', 'ARRIVAL', 'OVERFLIGHT']) {
@@ -354,7 +354,7 @@ test('every interlock Block is one a controller can actually write', () => {
 test('OVERFLIGHT\'s two assignment Blocks keep a clearance history (on the flight, docs/adr/0058)', () => {
   // §3.7's append-only model: a transiting flight given three altitudes has to
   // be able to show all three afterwards, and confirmVacated has to be
-  // available. The history now lives in the FDR's clearance cells.
+  // available. The history now lives in the flight data's clearance cells.
   assert.deepEqual(resolveBlockTarget('OVERFLIGHT', '7A'), { kind: 'clearance', field: 'altitude' });
   assert.deepEqual(resolveBlockTarget('OVERFLIGHT', '9A-VECTOR'), { kind: 'clearance', field: 'heading' });
   // And neither is required — a flight that is never vectored needs neither.
@@ -367,10 +367,10 @@ test('OVERFLIGHT\'s two assignment Blocks keep a clearance history (on the fligh
 const ATC_STRIP_TYPES = ['DEPARTURE', 'ARRIVAL', 'OVERFLIGHT'];
 
 test('the hook and ordnance Blocks exist on EVERY ATC Role, not just the one a test happened to use', () => {
-  // docs/adr/0051's lesson, asserted rather than trusted: each Role has its own
+  // docs/adr/0051's lesson, asserted rather than trusted: each strip type has its own
   // Block Map, so a field added to one silently does not exist on the others,
   // and the test that passes is not the test that matters. A hook requirement
-  // and an ordnance state are facts about the airframe — there is no ATC Role
+  // and an ordnance state are facts about the airframe — there is no ATC strip type
   // they stop being true for.
   for (const stripType of ATC_STRIP_TYPES) {
     assert.deepEqual(resolveBlockTarget(stripType, '3F'), { kind: 'military', field: 'hookRequired' }, `${stripType}/3F`);
@@ -384,7 +384,7 @@ test('MISSION gets ordnance (H55) onto the same FDR field, and never the hook', 
   // decisions.md H55 (docs/adr/0069) overrides docs/adr/0052's "MISSION gets
   // neither": a pilot reports hung ordnance to whoever they are talking to,
   // which may be a tactical Position. It is still one fact in one place — the
-  // MISSION Strip and its ATC twin share one FDR — reached from two surfaces.
+  // MISSION Strip and its ATC twin share one flight data — reached from two surfaces.
   assert.deepEqual(resolveBlockTarget('MISSION', '3G'), { kind: 'military', field: 'ordnanceState' });
   assert.equal(MISSION_BLOCK_MAP['3G'].required, false);
   assert.equal(MISSION_BLOCK_MAP['3F'], undefined, 'the hook gates a runway; a mission line uses none');
@@ -407,7 +407,7 @@ test('MILITARY_BLOCK_NAMESPACE agrees with the Block Maps it documents', () => {
   // routes where it says, and every `military`-kind Block on any Map must
   // appear in the table. A row names its Blocks one of two ways: `blockId`
   // (one Block) or `blocks` ({ id: path }, one plain 'flightData' Block per leaf, on
-  // every ATC Role — M10/M11, docs/adr/0062). Never both, never a wildcard.
+  // every ATC strip type — M10/M11, docs/adr/0062). Never both, never a wildcard.
   const claimed = new Map();
   for (const [m, entry] of Object.entries(MILITARY_BLOCK_NAMESPACE)) {
     assert.ok(!(entry.blockId && entry.blocks), `${m} has both blockId and blocks`);

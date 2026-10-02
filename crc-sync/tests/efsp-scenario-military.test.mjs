@@ -187,7 +187,7 @@ test('SCENARIO a loaded flight declares a hung store and a hook requirement, on 
 
   // The whole reason this reaches for the real wiring rather than a rules
   // fixture: the 'military' target kind has to survive block-map.js ->
-  // board-store.js -> flight-data-store.js's dedicated setter. Every hop is somewhere
+  // board/ops/set-block.js -> flight-data-store.js's dedicated setter. Every hop is somewhere
   // a new target kind has been forgotten before.
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'HUNG11' });
 
@@ -206,9 +206,9 @@ test('SCENARIO a loaded flight declares a hung store and a hook requirement, on 
   assert.match(bogus.detail, /invalid ordnance state/);
   assert.equal(efsp.flightDataStore.getFlightData(hooked.flightDataId).military.ordnanceState, 'LOADED');
 
-  // And the same Blocks work on an ARRIVAL, which is the Role that will
+  // And the same Blocks work on an ARRIVAL, which is the strip type that will
   // actually care (§9.7's gear check is on landing). docs/adr/0051's lesson:
-  // check every Role, because the test that passes is not the one that matters.
+  // check every strip type, because the test that passes is not the one that matters.
   const arrival = mustAct(efsp, c.AP, 'AP', hooked, { kind: 'ConvertToArrival' });
   assert.equal(arrival.stripType, 'ARRIVAL');
   const expended = mustAct(efsp, c.AP, 'AP', arrival, { kind: 'SetBlock', blockId: '3G', value: 'EXPENDED' });
@@ -259,7 +259,7 @@ test('SCENARIO a mission line is fragged before the jet moves, and both Strips r
   assert.equal(mission.bayId, 'tac-c2-tasked');
   assert.equal(mission.flightDataId, dep.flightDataId, 'one flight, two Strips');
 
-  // One FDR, so one beacon code — guide §9.8's bridge field, not a copy.
+  // One flight data, so one beacon code — guide §9.8's bridge field, not a copy.
   const flightData = efsp.flightDataStore.getFlightData(dep.flightDataId);
   assert.ok(flightData.identity.beaconAssigned);
   assert.equal(efsp.flightDataStore.getAll().filter(f => f.identity.callsign === 'FRAG11').length, 1);

@@ -190,7 +190,7 @@ test('a consolidation reassignment persists the Board', () => {
   efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId).ownerPositionId = 'CD';
   efsp.persist();
   const beforeText = fs.readFileSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, 'utf8');
-  // CD walks away: its Strips go down the covering chain.
+  // CD walks away: its Strips go down the consolidation chain.
   const out = efsp.handleMessage(c.CD.session, { type: 'efsp-set-positions', facilityId: 'INCIRLIK', signedOn: [] });
   const moved = out.ack.warnings.find(w => w.positionId === 'CD');
   assert.ok(moved && moved.routedTo, JSON.stringify(out.ack));

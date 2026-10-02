@@ -1,5 +1,5 @@
 {
-  "_comment": "docs/adr/0073 \u2014 shared by crc-sync/tests/efsp-time-chains.test.mjs and crc-desktop/tests/efsp-time-chains.test.js. Every case goes here, never in one side's test (T6). Times are 2016-06-21 Zulu (a mission date, H11).",
+  "_comment": "docs/adr/0073 \u2014 shared by crc-sync/tests/efsp-time-chains.test.mjs and crc-desktop/tests/efsp-time-chains.test.mjs. Every case goes here, never in one side's test (T6). Times are 2016-06-21 Zulu (a mission date, H11).",
   "cases": [
     {
       "name": "null FLIGHT_DATA: every chain has no value and no source",

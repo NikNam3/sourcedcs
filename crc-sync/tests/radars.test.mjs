@@ -6,7 +6,7 @@ import path from 'node:path';
 
 /* The radar list, ported out of the renderer (docs/adr/0042).
  *
- * Nothing pinned any of this before — `_buildAllRadars` lived in app.js,
+ * Nothing pinned any of this before — `_buildAllRadars` (removed; the derivation is now src/radars.js) lived in app.js,
  * which has no module.exports guard and could not be required from a test at
  * all. So this is the first coverage the radar derivation has ever had, and
  * it deliberately pins the two bugs the port fixed as well as the behaviour

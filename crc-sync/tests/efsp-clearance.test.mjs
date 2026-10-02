@@ -5,7 +5,7 @@ import os from 'os';
 import path from 'path';
 import crypto from 'crypto';
 
-// docs/adr/0058 — the flight's assigned altitude and heading, on the FDR.
+// docs/adr/0058 — the flight's assigned altitude and heading, on the flight data.
 
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-clearance-test-'));
 process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = path.join(tmpDir, 'incirlik.json');

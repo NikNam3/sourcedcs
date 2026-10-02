@@ -105,13 +105,13 @@ test('a Strip mid-DEPARTED-to-APP-transfer (docs/adr/0007) round-trips correctly
   const app = { controllerId: 'app', who: 'App1' };
   efsp1.handleMessage(ops, { type: 'efsp-set-positions', signedOn: ['OPS'] });
   efsp1.handleMessage(twr, { type: 'efsp-set-positions', signedOn: ['LC'] });
-  efsp1.handleMessage(app, { type: 'efsp-set-positions', signedOn: ['AP'] }); // APP must be staffed for the real, staffing-gated Hand Off
+  efsp1.handleMessage(app, { type: 'efsp-set-positions', signedOn: ['AP'] }); // AP must be staffed for the real, staffing-gated Hand Off
 
   const created = efsp1.handleMessage(ops, createStripMsg());
   let strip = created.ack.strip;
 
   // Jump straight to DEPARTED via SetState (a direct path, independent of
-  // InvokeNla per guide §3.5 rule 4 — see board-store.test.mjs's own
+  // InvokeNla per guide §3.5 rule 4 — see efsp-board-store.test.mjs's own
   // "SetState is a direct path" test) — this test is about the transfer-
   // shaped NLA step itself, not re-walking every intermediate state
   // (already covered by efsp-nla.test.mjs), and avoids InvokeNla's 400ms
@@ -123,8 +123,8 @@ test('a Strip mid-DEPARTED-to-APP-transfer (docs/adr/0007) round-trips correctly
   assert.equal(jumped.ack.ok, true, JSON.stringify(jumped.ack));
   strip = jumped.ack.strip;
 
-  // DEPARTED is TWR's to advance (permission.js's canActOnState), not
-  // OPS's — relocate ownership to TWR first. This TransferStrip targets a
+  // DEPARTED is LC's to advance (permission.js's canActOnState), not
+  // OPS's — relocate ownership to LC first. This TransferStrip targets a
   // Bay whose implied state MATCHES the Strip's current state (twr-
   // airborne implies DEPARTED), so it's a same-state hand-off, not an
   // advance, and isn't itself gated by canActOnState (nothing is being
@@ -229,7 +229,7 @@ test('a failed mutation does not write a new snapshot', () => {
   const before = fs.existsSync(BOARD_SNAPSHOT_PATH) ? fs.readFileSync(BOARD_SNAPSHOT_PATH, 'utf8') : null;
 
   const session = { controllerId: 'c1', who: 'Alice' };
-  const badMsg = { ...createStripMsg(), actingPositionId: 'GC' }; // GND may not CreateStrip
+  const badMsg = { ...createStripMsg(), actingPositionId: 'GC' }; // GC may not CreateStrip
   const result = efsp.handleMessage(session, badMsg);
   assert.equal(result.ack.ok, false);
 

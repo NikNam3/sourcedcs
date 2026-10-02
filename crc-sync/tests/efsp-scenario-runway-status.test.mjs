@@ -21,10 +21,10 @@ import path from 'path';
  * The rest are the questions a lifecycle never poses: a departure already
  * taxiing when the runway goes, one moved to the other direction's rack, an
  * aircraft already on final, two controllers at once, a crc-sync restart in
- * the middle, a controller holding every Position alone.
+ * the middle, a controller signed on at every Position alone.
  *
  * Tower is the sole authority over the runway (decisions.md H18): OPS asks for
- * runway works and TWR takes the runway out; OPS then signs off the
+ * runway works and LC takes the runway out; OPS then signs off the
  * inspection. The gear itself is data only (H17).
  *
  * Its own durable board, like every scenario file (ADR 0002), so the tests
@@ -274,7 +274,7 @@ test('sortie 9: OPS at INCIRLIK is refused when not Primary at INCIRLIK; a CTR c
 test('sortie 10: two controllers reconfigure at once — the second is STALE_REV, audited, and carries the current record', () => {
   const rev = runwayStatus().rev;
   mustRunwayStatusAct(efsp, c.OPS, 'OPS', { kind: 'RequestRunwayStatus', runwayId: RWY, action: 'CLOSE', note: 'FOD' });
-  // APP had the same idea, working from the rev before OPS's.
+  // AP had the same idea, working from the rev before OPS's.
   const late = runwayStatusAct(efsp, c.AP, 'AP', { kind: 'RequestRunwayStatus', runwayId: RWY, action: 'WORKS' }, { baseRev: rev });
   assert.equal(late.reason, 'STALE_REV');
   assert.equal(late.runwayStatus.runways[0].pendingRequest.requestedPositionId, 'OPS');
@@ -448,7 +448,7 @@ test('sortie 12: a restart mid runway-change keeps the acknowledgements already 
 });
 
 test('sortie 13: the D21 twin — an ack sent as TWR never counts as APP’s, and one person holding every Position self-coordinates in one input', () => {
-  // One controller takes TWR and APP (the others give them up first, or the
+  // One controller takes LC and AP (the others give them up first, or the
   // newcomer would only be an Observer, §4.8.2).
   hold(efsp, c.LC.session, 'INCIRLIK', []);
   hold(efsp, c.AP.session, 'INCIRLIK', []);
@@ -456,9 +456,9 @@ test('sortie 13: the D21 twin — an ack sent as TWR never counts as APP’s, an
   hold(efsp, dual.session, 'INCIRLIK', ['LC', 'AP']);
 
   mustRunwayStatusAct(efsp, dual, 'LC', { kind: 'ProposeRunwayChange', toRunwayId: '23' });
-  // Acting TWR, the acknowledgement is refused — never counted as APP's.
+  // Acting LC, the acknowledgement is refused — never counted as AP's.
   assert.equal(runwayStatusAct(efsp, dual, 'LC', { kind: 'AckRunwayChange' }).reason, 'PERMISSION_DENIED');
-  // Acting APP it counts, recorded as self-coordinated (§4.8.3).
+  // Acting AP it counts, recorded as self-coordinated (§4.8.3).
   mustRunwayStatusAct(efsp, dual, 'AP', { kind: 'AckRunwayChange' });
   assert.equal(runwayChange().acks.AP.selfCoordinated, true);
   // OPS is somebody else, and has not answered: tower still cannot begin.
@@ -476,7 +476,7 @@ test('sortie 13: the D21 twin — an ack sent as TWR never counts as APP’s, an
   mustRunwayStatusAct(efsp, c.OPS, 'OPS', { kind: 'CompleteInspection', runwayId: RWY });
   assert.equal(runwayStatus().activeRunway, '23');
 
-  // Low manning (H12): one person holds OPS, TWR and APP. One input takes the
+  // Low manning (H12): one person holds OPS, LC and AP. One input takes the
   // change straight to ACKNOWLEDGED, naming each Position.
   hold(efsp, c.OPS.session, 'INCIRLIK', []);
   hold(efsp, dual.session, 'INCIRLIK', ['OPS', 'LC', 'AP']);

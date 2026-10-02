@@ -300,7 +300,7 @@ test('retention compaction at boot drops records older than retentionDays, atomi
 test('a backfill whose FDR has since been archived is UNKNOWN, basis ARCHIVED (S-R2-13)', () => {
   const archived = quiet(() => new TrafficCount({
     mutationLog: efsp.mutationLog,
-    flightDataStore: { getFlightData: () => null }, // every FDR gone
+    flightDataStore: { getFlightData: () => null }, // every flight data gone
     boardStoreFor: efsp.boardStoreFor,
     facilityIds: facilityConfig.getFacilityIds(),
     config: { retentionDays: 400, homeAirports: HOME },

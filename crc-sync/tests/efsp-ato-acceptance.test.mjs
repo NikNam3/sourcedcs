@@ -36,7 +36,7 @@ const EXPECTED = {
 // WP7 bullet 1 (guide line 1396) — the PARSER half. "Mission Strips" are
 // L14's: this test proves the seed each Strip would be created from, through
 // the real createFlightData. IFF is asserted on the LINE (extras.identityAto), not on
-// the FDR, because no FDR write path for Mode 1/2 exists (flight-data-store.js:
+// the flight data, because no flight data write path for Mode 1/2 exists (flight-data-store.js:
 // "ATO-owned, WP7 hook — no setter exists anywhere") and the ATO's Mode 3 is
 // deliberately never seeded as the beacon (guide §3.10.3 rule 3, ADR 0054).
 test('WP7: An ATO fixture produces mission Strips with correct mission number, package, vul window, controlling agency and IFF codes (parser half: createFlightData seeds + IFF on the line)', () => {
@@ -58,7 +58,7 @@ test('WP7: An ATO fixture produces mission Strips with correct mission number, p
       assert.equal(flightData.identity.callsign, line.extras.ato.callsign);
       const { modeOne, modeTwo, modeThree } = line.extras.identityAto;
       assert.deepEqual([modeOne, modeTwo, modeThree], want.iff, `${file} ${line.lineId}`);
-      // The FDR's own IFF hooks stay untouched, and its beacon is minted, not the ATO's.
+      // The flight data's own IFF hooks stay untouched, and its beacon is minted, not the ATO's.
       assert.equal(flightData.identity.modeOne, null);
       assert.equal(flightData.identity.modeTwo, null);
       assert.notEqual(flightData.identity.beaconAssigned, modeThree);

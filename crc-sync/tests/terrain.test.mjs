@@ -7,7 +7,7 @@ import path from 'node:path';
 
 /* Terrain masking, server-side.
  *
- * The first half is crc-desktop/tests/los-math.test.js, moved here with the
+ * The first half is crc-desktop/tests/los-math.test.mjs, moved here with the
  * math it covers (docs/adr/0044). It was the only test anywhere in the radar
  * area, so it was worth carrying over intact rather than rewriting — the
  * assertions below are the originals.

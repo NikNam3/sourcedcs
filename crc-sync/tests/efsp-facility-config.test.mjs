@@ -65,7 +65,7 @@ test('bayImpliesState resolves the known state-implying Bays from the guide\'s B
   assert.equal(bayImpliesState('lc-runway-queue'), 'RUNWAY_QUEUE');
   assert.equal(bayImpliesState('lc-airborne'), 'DEPARTED');
   assert.equal(bayImpliesState('lc-arrivals'), 'HANDED_TO_TOWER'); // ARRIVAL stripType, Phase 2
-  assert.equal(bayImpliesState('lc-final'), 'FINAL'); // ARRIVAL stripType, Phase 2 — EfspState, not Strip Role
+  assert.equal(bayImpliesState('lc-final'), 'FINAL'); // ARRIVAL strip type, Phase 2 — an EfspState
   assert.equal(bayImpliesState('lc-landed'), 'LANDED'); // ARRIVAL stripType, Phase 2
   assert.equal(bayImpliesState('ap-inbound'), 'INBOUND'); // Phase 2
   assert.equal(bayImpliesState('ap-departures'), 'HANDED_OFF'); // Phase 2

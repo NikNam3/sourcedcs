@@ -146,7 +146,7 @@ test('transfers: a transfer-shaped NLA is NLA_TRANSFER; a terminal NLA is not a 
   assert.equal(act(efsp, c.AP, 'AP', strip, { kind: 'InvokeNla' }).reason, 'NOT_OWNER');
   assert.equal(body().metrics.transfers.attempts, before.attempts);
 
-  strip = await advance(efsp, c.LC, 'LC', strip); // TWR DEPARTED -> APP HANDED_OFF
+  strip = await advance(efsp, c.LC, 'LC', strip); // LC DEPARTED -> AP HANDED_OFF
   assert.equal(strip.ownerPositionId, 'AP');
   let t = body().metrics.transfers;
   assert.equal(t.byKind.NLA_TRANSFER.attempts - before.byKind.NLA_TRANSFER.attempts, 1);
@@ -290,7 +290,7 @@ test('a SystemReassign in the log is counted', () => {
   let strip = newStrip('TAP7');
   strip = jumpTo(efsp, c.OPS, 'OPS', strip, 'DEPARTED');
   mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'TransferStrip', toPositionId: 'LC', bayId: 'lc-airborne', rackId: 'main' });
-  hold(efsp, c.LC.session, 'INCIRLIK', []); // TWR vacates; APP covers it and the Strip follows
+  hold(efsp, c.LC.session, 'INCIRLIK', []); // LC vacates; AP is where it is consolidated and the Strip follows
   assert.equal(efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId).ownerPositionId, 'AP');
   hold(efsp, c.LC.session, 'INCIRLIK', ['LC']);
   const moved = efsp.mutationLog.readAll().filter(e => e.op === 'SystemReassign' && e.reason !== 'position-retaken').length;

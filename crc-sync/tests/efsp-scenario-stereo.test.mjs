@@ -82,7 +82,7 @@ function flightDataOf(efsp, strip) { return efsp.flightDataStore.getFlightData(s
 
 test('SCENARIO a squadron jet files PACK 1 by phone and flies it', async () => {
   // WP6's acceptance criterion, verbatim: "A stereo route filed by short
-  // name produces a complete FDR." OPS is given a callsign and four
+  // name produces a complete flight data." OPS is given a callsign and four
   // characters of route name and nothing else — which is exactly §9.10's
   // "a filing path that does not require a full flight-plan form."
   const efsp = createEfsp();
@@ -102,12 +102,12 @@ test('SCENARIO a squadron jet files PACK 1 by phone and flies it', async () => {
   assert.equal(flightData.filed.stereoRouteName, 'PACK 1');
 
   // And then it is an entirely ordinary Strip: nothing downstream knows or
-  // cares that the FDR came out of a table rather than off a form.
+  // cares that the flight data came out of a table rather than off a form.
   strip = await advance(efsp, c.OPS, 'OPS', strip);      // -> PENDING_CLEARANCE at CD
   assert.equal(strip.state, 'PENDING_CLEARANCE');
   strip = await advance(efsp, c.CD, 'CD', strip);        // -> CLEARED
   assert.equal(strip.state, 'CLEARED');
-  strip = await advance(efsp, c.CD, 'CD', strip);        // -> PUSHBACK at GND
+  strip = await advance(efsp, c.CD, 'CD', strip);        // -> PUSHBACK at GC
   assert.equal(strip.state, 'PUSHBACK');
   assert.equal(strip.ownerPositionId, 'GC');
   // The stereo name survives the whole walk — it is filed intent, and filed
@@ -242,7 +242,7 @@ test('SCENARIO a stereo name is local symbology and never leaves as the route (�
   // Guide §8.3 rule 5: "Local symbology defined in configuration MUST be
   // marked local-only and MUST NOT appear in any inter-facility message."
   // Expansion happens once, at filing, so what CENTER receives is the route
-  // — trivially true given one FDR serves both Facilities, and asserted
+  // — trivially true given one flight data serves both Facilities, and asserted
   // anyway because it is the kind of property that stops being true the
   // moment somebody decides to "save bandwidth" by sending the short name.
   const efsp = createEfsp();
@@ -262,7 +262,7 @@ test('SCENARIO a stereo name is local symbology and never leaves as the route (�
   const centerFlightData = efsp.flightDataStore.getFlightData(accepted.flightDataId);
   assert.equal(centerFlightData.filed.route, PACK_1_ROUTE, 'CENTER sees the expanded route');
   // CENTER's Block Map has no 9F at all, so the name is not renderable
-  // there even though it rides along on the shared FDR.
+  // there even though it rides along on the shared flight data.
   const blockMap = await import('../src/efsp/block-map.js');
   assert.equal(blockMap.resolveBlockTarget('ARRIVAL', '9F'), null);
 });

@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 /* §10.5's fallback chains (docs/adr/0073), crc-sync's copy.
  *
  * The cases live in tests/fixtures/time-chains.json, which crc-desktop's
- * tests/efsp-time-chains.test.js reads too: the two copies of time-chains.js
+ * tests/efsp-time-chains.test.mjs reads too: the two copies of time-chains.js
  * are held to the same answers by the same table (T6). */
 
 const here = path.dirname(fileURLToPath(import.meta.url));
