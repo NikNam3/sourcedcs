@@ -322,7 +322,7 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, currentTheater = () =
      */
     applyAsService: (principal, msg) => {
       const ok = principal && typeof principal.sub === 'string' && principal.sub && typeof principal.name === 'string' && SERVICE_ROWS[principal.service];
-      const session = { controllerId: ok ? principal.sub : null, servicePrincipal: ok ? { service: principal.service, sub: principal.sub, name: principal.name } : { service: String(principal && principal.service) } };
+      const session = { controllerId: ok ? principal.sub : null, servicePrincipal: ok ? { service: principal.service, sub: principal.sub, name: principal.name } : { service: 'INVALID_PRINCIPAL' } };
       return handleMessage(ctx, session, { ...msg, type: 'efsp-airspace-mutation' }, () => _persist({ facilities, stores, persistState, paths }));
     },
 
