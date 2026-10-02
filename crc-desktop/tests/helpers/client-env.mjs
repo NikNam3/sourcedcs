@@ -72,4 +72,3 @@ if (typeof g.WebSocket === 'undefined') {
 define('CRCSYNC_URL', 'ws://localhost:1');
 define('CASDOOR_CLIENT_ID', '');
 define('CASDOOR_ENDPOINT', '');
-define('MAPTILER_KEY', '');

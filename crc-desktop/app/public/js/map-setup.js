@@ -24,7 +24,7 @@ import { _setDrag, _setMap, _setMapReady, _setMeasure } from './app.js';
 // which also retries the glyph ranges that failed without it. maplibre 3.6.2's VectorTileSource has
 // setTiles(), so the source is not re-added and the style is never replaced (setStyle would destroy the
 // GeoJSON layers below).
-export function refreshMaptilerSources() {
+function refreshMaptilerSources() {
   if (!map) return;
   let sources;
   try { sources = map.getStyle().sources; } catch (_) { return; } // style not loaded yet: its first tile requests already carry the key

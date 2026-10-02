@@ -171,6 +171,13 @@
    "applyMapTheme",
    "initMap"
   ],
+  "maptiler-key.js": [
+   "_resetMaptilerKeyForTest",
+   "loadMaptilerKey",
+   "maptilerKey",
+   "onMaptilerKey",
+   "transformMaptilerRequest"
+  ],
   "panels/airport-selector.js": [
    "approachRwyCourseTrue",
    "closeAptWeatherPanel",
