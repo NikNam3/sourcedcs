@@ -21,7 +21,7 @@ const VERSION = 1;
  * left the server: an NLA the server would refuse looked exactly like one it
  * would accept (docs/ui-findings/lane4.md F-408). Computed per Strip for its
  * OWNER, which is the only Position the button is ever offered to (guide §3.5,
- * board-store's NOT_OWNER gate) — Strips are not otherwise scoped per client,
+ * the Board's NOT_OWNER gate, board/strip-ops.js) — Strips are not otherwise scoped per client,
  * so there is nothing per-connection to compute here.
  *
  * Derived at the wire boundary, never stored on the Strip: it is a function of

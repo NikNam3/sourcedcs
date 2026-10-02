@@ -6,7 +6,7 @@ const readScope = require('../../read-scope');
 
 /**
  * Correlation ops (BindTrack/UnbindTrack) — a THIRD dispatch path, for the
- * same reason _handleAirspaceMutation is a second one: this targets a flight data.
+ * same reason the airspace family (airspace.js) is a second one: this targets a flight data.
  * There is no stripId, no Strip baseRev and no Strip-owner check, because no
  * Position owns a flight data.
  *
@@ -29,7 +29,7 @@ module.exports = {
   // (docs/adr/0029), for the same reason: actingPositionId arrives as an
   // untrusted client claim. This is now the THIRD place that check appears,
   // and a new dispatch path is exactly where it gets forgotten and the hole
-  // reopens — _handleAirspaceMutation's own comment says so, and it was right
+  // reopens — the airspace family (airspace.js) says so, and it was right
   // twice.
   //
   // "Primary somewhere" is the right gate here rather than at a particular

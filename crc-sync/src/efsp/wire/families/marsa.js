@@ -36,7 +36,7 @@ module.exports = {
 
   // The same session binding the other three dispatch paths carry
   // (docs/adr/0029). This is now the FOURTH place the check appears, and
-  // _handleAirspaceMutation's comment — "a new dispatch path is exactly where
+  // the airspace family's comment (airspace.js) — "A new dispatch path is exactly where
   // that check gets forgotten and the hole reopens" — has now been right three
   // times. actingPositionId is an untrusted client claim.
   //

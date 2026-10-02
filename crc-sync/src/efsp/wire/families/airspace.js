@@ -30,7 +30,7 @@ module.exports = {
   //
   // Which Facility's PositionStore to ask is the airspace's own controlling
   // Facility, or RANGES for the using side; checking both covers a controller
-  // holding either end without letting them claim a Position they don't hold.
+  // signed on to either end without letting them claim a Position they are not signed on to.
   gate: 'primary-somewhere',
   notHolding: (msg) => `you are not Primary at ${msg.actingPositionId} — select it before acting on airspace`,
 

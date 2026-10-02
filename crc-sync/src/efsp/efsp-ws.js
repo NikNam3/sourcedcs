@@ -3,7 +3,7 @@
 // EFSP WebSocket message handling — the boundary between ws-hub.js's
 // session/broadcast machinery and the EFSP stores. Kept as its own file
 // rather than inlined into ws-hub.js's existing message switch (the way
-// theaterSettingsSet/aptConfigSet are) because the EFSP
+// aptConfigSet is) because the EFSP
 // surface area — three message types, each with a distinct ack/broadcast
 // shape, one of which (mutation) now covers fourteen op kinds — is bigger
 // than those single-shot squadron-config messages.
@@ -12,18 +12,15 @@
 // always goes to the sender only; `broadcasts`, an ordered array of frames (wire/skeleton.js SLOT_ORDER), goes to every
 // connected client (the sender included) — the EFSP Board's guide-mandated
 // <200ms remote-change budget (§7.9) needs an immediate broadcast, not the
-// existing 500ms tick tracks/collab-store use (see board-store.js's module
-// comment; this is docs/adr/0004-immediate-board-broadcast.md).
+// existing 500ms tick tracks/collab-store use
+// (docs/adr/0004-immediate-board-broadcast.md).
 //
-// WP4A (docs/adr/0013) — every message now carries an OPTIONAL `facilityId`
-// field, defaulting to facilityConfig.DEFAULT_FACILITY_ID ('INCIRLIK') when
-// omitted, routed via ctx.boardStoreFor(facilityId)/positionStoreFor(...)
-// rather than the single fixed ctx.boardStore/ctx.positionStore index.js
-// built pre-WP4A. This keeps every pre-WP4A message shape (no facilityId
-// at all) behaving identically — a deliberate choice over a required
-// field, matching facility-config.js's own optional-trailing-param
-// back-compat pattern, and minimizing the blast radius on every existing
-// test/call site (docs/adr/0013's own back-compat discussion). A client
+// Every message carries an OPTIONAL `facilityId` (docs/adr/0013), defaulting
+// to facilityConfig.DEFAULT_FACILITY_ID ('INCIRLIK') when omitted, routed via
+// ctx.boardStoreFor(facilityId)/positionStoreFor(...). A message with no
+// facilityId behaves as an INCIRLIK one — a deliberate choice over a required
+// field, matching facility-config.js's own optional-trailing-param pattern
+// (docs/adr/0013's own back-compat discussion). A client
 // acting across both Facilities sends two independent messages (one per
 // facilityId) rather than one combined one — Boards remain two.
 
@@ -60,15 +57,15 @@ function _handleMutation(ctx, session, msg, persist) {
   }
   // `actingPositionId` arrives as an untrusted client claim, and every
   // per-Position authority rule downstream (permission.js's canMutate,
-  // board-store's NOT_OWNER check, canActOnState — defects D10/D12/D21) is
+  // the Board's NOT_OWNER check in board/strip-ops.js, canActOnState — defects D10/D12/D21) is
   // evaluated against it. Until this check existed, nothing ever tied it to
   // the connecting session: a client could drive any Strip on the Board by
   // naming whichever Position happened to own it, whatever it had actually
   // selected. Bound here, at the wire boundary where the claim enters, so
-  // board-store stays a pure function of (mutation, actingPositionId) with
+  // the Board stays a pure function of (mutation, actingPositionId) with
   // no session concept of its own.
   //
-  // Primary, not merely held: selecting a Position someone else already has
+  // Primary, not merely signed on: selecting a Position someone else already has
   // makes you an Observer (§4.8.2 rule 3, D18), and an Observer watches.
   const positionStore = ctx.positionStoreFor(facilityId);
   if (!positionStore || positionStore.primaryOf(msg.actingPositionId) !== session.controllerId) {
@@ -91,8 +88,8 @@ function _handleMutation(ctx, session, msg, persist) {
   // regime back to ATC on every participant (F-111's other direction). Those
   // writes landed server-side and reached nobody: the ack carries one `flightData` and
   // the delta carried only that one, so a connected client held the stale value
-  // until it next took a full snapshot. board-store.js collects them as
-  // `result.flightDataList`.
+  // until it next took a full snapshot. the Board collects them as
+  // `result.flightDataList` (board/strip-ops.js, board/tofi.js).
   const updatedFlightDataList = mergeFlightDataList(result.flightData, result.flightDataList);
 
   const ack = {
@@ -126,14 +123,14 @@ function _handleMutation(ctx, session, msg, persist) {
 
   // Bug found in live testing: a coordination primitive's PROPOSE/ACCEPT/
   // REJECT/STAND_BY mutates or mints a Strip in a DIFFERENT Facility's
-  // BoardStore (board-store.js's receiveCoordinationProposal/
+  // BoardStore (board/coordination.js's receiveCoordinationProposal/
   // receiveCoordinationResponse — a direct in-process peer-board call, not
   // itself a Mutation dispatched through this function). That side effect
   // was a real, correct change to server state, but nothing ever told any
   // connected client about it — only a full resync (reconnect) would ever
   // pick it up. `peerFacilityId`/`peerStrip` (docs/adr/0022) let this
   // build a SECOND board-delta, scoped to the peer Facility, so a client
-  // holding a Position there sees the new/updated replica immediately,
+  // signed on to a Position there sees the new/updated replica immediately,
   // same <200ms budget as the primary broadcast (guide §7.9).
   //
   // Built from the peer Board's own drain (docs/adr/0081): placing a replica
@@ -233,8 +230,8 @@ function _resyncAnswer(ctx, session, msg) {
         gone: [...dropped, ...delta.gone],
       },
       // flight data/Positions are cheap enough at this scale to always send in
-      // full rather than building a second/third ring buffer — see
-      // board-store.js's module comment. flightDataStore is shared across every
+      // full rather than building a second/third ring buffer: the Board is a
+      // few dozen Strips. flightDataStore is shared across every
       // Facility (docs/adr/0013), so this list is NOT facility-scoped —
       // it's the same full set a snapshot would carry.
       ctx.flightDataStore.getAll(),
@@ -279,11 +276,11 @@ function _handleSetPositions(ctx, session, msg, persist) {
       const moved = boardStore.reassignPositionStrips(positionId, covering);
       reassignedIds.push(...moved);
       const warning = { positionId, count: owned.length, routedTo: covering };
-      if (moved.unplaced && moved.unplaced.length) warning.unplaced = moved.unplaced.length; // no Bay of the covering Position fits: they stay where they were
+      if (moved.unplaced && moved.unplaced.length) warning.unplaced = moved.unplaced.length; // no Bay of the Position they were consolidated at fits: they stay where they were
       warnings.push(warning);
     } else {
-      // Defect D19 boundary: the covering chain bottomed out with nobody
-      // occupying any link. MUST be a visible, distinct condition — never
+      // Defect D19 boundary: the consolidation chain bottomed out with nobody
+      // staffing any link. MUST be a visible, distinct condition — never
       // a Strip silently left owned by an unstaffed Position with no
       // signal to anyone (guide §4.8.6 rule 3).
       warnings.push({ positionId, count: owned.length, routedTo: null });
@@ -307,7 +304,7 @@ function _handleSetPositions(ctx, session, msg, persist) {
     // touched — an LC Strip at DEPARTED becomes "no receiving Position
     // present" the instant AP is released, and F-408's whole point is that
     // the panel be told BEFORE the press. The Board is a few dozen Strips
-    // (board-store.js's module comment) and a Position change is a rare,
+    // (a few dozen Strips) and a Position change is a rare,
     // deliberate act, so re-sending the set is cheaper than tracking which
     // Strips' status actually moved.
     broadcasts: skeleton.orderSlots({ primary: boardDelta(ctx, boardStore, facilityId,
@@ -319,7 +316,7 @@ function _handleSetPositions(ctx, session, msg, persist) {
 // ── The read scope (docs/adr/0080) ───────────────────────────────────────────
 
 /**
- * What `session` is sent of the flights, from what it holds NOW at every
+ * What `session` is sent of the flights, from the Positions it is signed on to NOW at every
  * Facility (nothing is cached, so nothing goes stale). A pure function of the
  * PositionStores and permission.js's capability table.
  */
@@ -391,7 +388,7 @@ function readScopeKey(ctx, session) { return readScope.scopeKey(readScopeOf(ctx,
 
 /**
  * WP4A: sends every Facility's strips/positions/bays in one message (each
- * record stamped with `facilityId`), since a client can now hold Positions
+ * record stamped with `facilityId`), since a client can be signed on to Positions
  * and act across both. `boardSeq`/`facility` stay as top-level back-compat
  * aliases for INCIRLIK specifically — `boardSeqByFacility`/`facilities` are
  * the real, general shape.
@@ -421,7 +418,7 @@ function _fullSnapshotMessage(ctx) {
   const boardEpochByFacility = {};
   // WP4A gap-closure (docs/adr/0022) — lets the client proactively disable
   // the AIT option (rather than let the controller submit-and-silently-fail
-  // against the server-side check in board-store.js's
+  // against the server-side check in board/coordination.js's
   // _applyCoordinationPropose) when no written directive is on file.
   const aitAuthorizedByFacility = {};
 

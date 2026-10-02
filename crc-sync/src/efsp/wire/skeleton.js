@@ -2,7 +2,7 @@
 
 // The one generic skeleton every wire family runs through (docs/wip/ARCH-plan.md §1.2): store present ->
 // session binding (the gate) -> class check -> replay lookup -> apply -> remember -> persist on ok -> ack (with the
-// `_subject` fields) -> broadcasts, in SLOT_ORDER. A family (families/*.js) declares the parts that differ; a family
+// family's `subject` fields) -> broadcasts, in SLOT_ORDER. A family (families/*.js) declares the parts that differ; a family
 // whose shape does not fit declares `handle()` instead and says so in its own file.
 
 const { VERSION } = require('./frames');
