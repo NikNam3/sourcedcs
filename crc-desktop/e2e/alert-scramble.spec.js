@@ -141,7 +141,7 @@ test('alert and scramble: ALERT is quiet, SCRAMBLE lights the Board and flags gr
   await goBay(page, 'LC', 'lc-runway-queue');
   await expect(line).toBeVisible();
   await expect(line.locator('.efsp-scramble-cs')).toHaveText(CS);
-  await panelShot(page, '02-scramble-line-lc');
+  await panelShot(page, '02-scramble-line-twr');
 
   // ── 3. the ground flags. ───────────────────────────────────────────────
   await goBay(page, 'GC', 'gc-taxi-out');

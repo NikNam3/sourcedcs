@@ -182,7 +182,7 @@ test('scene 2: the sender ends — CTR handing COLT31 to AP, LC pointing SNAKE21
   sc.tracks = sc.tracks.filter(t => ['colt', 'snake', 'enf', 'boar', 'hawg', 'sq'].includes(t.id));
   sc.alerts = { conformance: [], conflictAlert: [], obligations: [] };
   await inject(page, sc);
-  await snap(page, 'scene2-senders-ctr-lc.png');
+  await snap(page, 'scene2-senders-ctr-twr.png');
 });
 
 test('scene 2b: the receiver end, after a point-out was accepted and a handoff taken', async ({ page }) => {
