@@ -211,6 +211,7 @@ api.use(require('./routes/grading-requests'));
 api.use(require('./routes/members'));
 api.use(require('./routes/flight-plans'));
 api.use(require('./routes/fpl1801'));
+api.use(require('./routes/airspaces'));
 api.use(require('./routes/bookings'));
 
 app.use('/api', api);

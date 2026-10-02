@@ -1,0 +1,30 @@
+/* Airspace admin page. Tokens come from css/style.css; layout reuses css/bookings.css (bk-*). */
+.aa-wrap { max-width: 1180px; margin: 0 auto; padding: 24px; }
+.aa-banner { border: 1px solid var(--border-strong); background: var(--bg-card); padding: 10px 16px; margin-bottom: 16px; font-size: 11px; letter-spacing: 1px; }
+.aa-banner--err { border-color: #c0392b; color: #e57368; }
+.aa-banner--warn { border-color: #d69e2e; color: #ecc268; }
+.aa-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 16px; }
+.aa-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: var(--font-mono); }
+.aa-table th, .aa-table td { border-bottom: 1px solid var(--border); padding: 6px 8px; text-align: left; vertical-align: top; }
+.aa-table th { font-size: 9px; letter-spacing: 1.5px; color: var(--text-3); }
+.aa-table tr.aa-row { cursor: pointer; }
+.aa-table tr.aa-row:hover { background: var(--bg2); }
+.aa-scroll { overflow-x: auto; }
+.aa-state { font-size: 9px; letter-spacing: 1px; padding: 2px 6px; border: 1px solid var(--border-strong); }
+.aa-state--ACTIVE { border-color: #38a169; color: #68d391; }
+.aa-state--SCHEDULED, .aa-state--RELEASED { border-color: #d69e2e; color: #ecc268; }
+.aa-panel { border: 1px solid var(--border-strong); background: var(--bg-card); margin: 24px 0; }
+.aa-panel-head { padding: 10px 16px; border-bottom: 1px solid var(--border-strong); font-size: 10px; letter-spacing: 2px; display: flex; justify-content: space-between; align-items: center; }
+.aa-panel-body { padding: 16px; }
+.aa-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px 16px; }
+.aa-sub { margin: 18px 0 8px; font-size: 10px; letter-spacing: 2px; color: var(--text-3); }
+.aa-coords td { padding: 3px 4px; border: 0; }
+.aa-coords input { width: 100%; min-width: 80px; }
+.aa-outline { color: var(--text-2); border: 1px solid var(--border); background: var(--bg2); }
+.aa-geo { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+.aa-lock { font-size: 11px; color: #ecc268; margin-bottom: 12px; }
+.aa-conflict td, .aa-conflict th { padding: 4px 10px; font-family: var(--font-mono); font-size: 11px; border-bottom: 1px solid var(--border); text-align: left; }
+.aa-pre { white-space: pre-wrap; font-family: var(--font-mono); font-size: 11px; }
+.aa-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.aa-list { margin: 6px 0 0 18px; font-size: 11px; }
+@media (max-width: 640px) { .aa-wrap { padding: 12px; } }

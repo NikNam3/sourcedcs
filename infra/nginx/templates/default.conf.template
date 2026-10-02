@@ -130,6 +130,8 @@ server {
   server_name ${CRCSYNC_DOMAIN};
   ssl_certificate /etc/letsencrypt/live/${CRCSYNC_DOMAIN}/fullchain.pem;
   ssl_certificate_key /etc/letsencrypt/live/${CRCSYNC_DOMAIN}/privkey.pem;
+  # The airspace registry API is for sourcedcs-web inside the stack only (http://crc-sync:3000); never public.
+  location /api/airspace-registry { return 404; }
   location / {
     set $upstream crc-sync;
     proxy_pass http://$upstream:3000;

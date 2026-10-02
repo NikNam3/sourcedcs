@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bookings — Ranges &amp; Controller Positions — SOURCE DCS</title>
-  <meta name="description" content="Book range time and controller positions for SOURCE DCS operations.">
+  <title>Bookings — Airspaces &amp; Controller Positions — SOURCE DCS</title>
+  <meta name="description" content="Book airspace time and controller positions for SOURCE DCS operations.">
   <link rel="icon" href="sourcelogobg.png">
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/bookings.css">
@@ -42,8 +42,8 @@
 <section class="bk-hero">
   <div class="bk-hero-inner">
     <div class="section-label">FLIGHT OPERATIONS</div>
-    <h1 class="bk-title">RANGE &amp; CONTROLLER BOOKINGS</h1>
-    <p class="bk-sub">All times Zulu (UTC) &middot; Log in to view &amp; book &middot; No controller position or overlapping range altitude can be double-booked</p>
+    <h1 class="bk-title">AIRSPACE &amp; CONTROLLER BOOKINGS</h1>
+    <p class="bk-sub">All times Zulu (UTC) &middot; Log in to view &amp; book &middot; No controller position or overlapping airspace altitude can be double-booked</p>
   </div>
 </section>
 
@@ -64,7 +64,8 @@
   <!-- ── Admin: manage ranges & controller positions ─────── -->
   <div class="bk-container bk-container--flush-top">
     <div class="bk-admin-toggle-row">
-      <button class="btn btn-ghost" id="bkAdminToggleBtn" style="display:none" onclick="bkToggleAdminPanel()">MANAGE RANGES &amp; CONTROLLER POSITIONS</button>
+      <button class="btn btn-ghost" id="bkAdminToggleBtn" style="display:none" onclick="bkToggleAdminPanel()">MANAGE CONTROLLER POSITIONS</button>
+      <a class="btn btn-ghost" id="bkAirspaceAdminLink" href="/airspace-admin.html" style="display:none">MANAGE AIRSPACES</a>
     </div>
     <div id="bkAdminPanel" class="bk-admin-panel" style="display:none"></div>
   </div>
@@ -74,7 +75,12 @@
     <div class="bk-board-controls">
       <label class="bk-check-label"><input type="checkbox" id="bkShowPastToggle" onchange="bkOnShowPastToggle()"> SHOW PAST BOOKINGS</label>
     </div>
-    <div class="bk-section-divider"><span>RANGES</span></div>
+    <div id="bkRegistryNotice"></div>
+    <div class="bk-section-divider"><span>AIRSPACES</span></div>
+    <div id="bkAirspacesBoard"></div>
+  </div>
+  <div class="bk-container bk-container--flush-top" id="bkLegacyWrap" style="display:none">
+    <div class="bk-section-divider"><span>LEGACY RANGES (MIGRATE)</span></div>
     <div id="bkRangesBoard"></div>
   </div>
   <div class="bk-container bk-container--flush-top">
@@ -91,9 +97,13 @@
           <div class="form-group">
             <label class="form-label" for="bkFormType">TYPE <span class="form-required">*</span></label>
             <select class="form-select" id="bkFormType" onchange="bkOnFormTypeChange()">
-              <option value="range">Range</option>
+              <option value="airspace">Airspace</option>
               <option value="controller">Controller Position</option>
             </select>
+          </div>
+          <div class="form-group" id="bkFormTheaterGroup">
+            <label class="form-label" for="bkFormTheater">THEATER <span class="form-required">*</span></label>
+            <select class="form-select" id="bkFormTheater" onchange="bkOnFormTheaterChange()"></select>
           </div>
           <div class="form-group">
             <label class="form-label" for="bkFormResource">RESOURCE <span class="form-required">*</span></label>
@@ -124,7 +134,7 @@
           <div class="form-group">
             <label class="form-label" for="bkFormAltitude">DECONFLICTION ALTITUDE (FT) <span class="form-required">*</span></label>
             <input class="form-input" id="bkFormAltitude" type="number" step="1">
-            <div class="bk-hint" id="bkFormAltitudeHint">Must be at least 999ft from any other overlapping booking on this range.</div>
+            <div class="bk-hint" id="bkFormAltitudeHint">Must be at least 999ft from any other overlapping booking on this airspace.</div>
           </div>
         </div>
         <div class="form-error"   id="bkFormError"   style="display:none"></div>
