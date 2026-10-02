@@ -174,7 +174,7 @@ export function atcRelation(t, strips, acting, letterOf) {
  * @param {object} env
  * @param {object} env.palette    ATC_PALETTES entry
  * @param {number} env.now        local ms, for blink windows
- * @param {string[]} env.conflicts  the STCA conflict ids this track is in
+ * @param {string[]} env.conflicts  the CA conflict ids this track is in
  * @param {{tag:string,color:string}|null} env.conform  docs/adr/0058's tag, if any
  * @param {boolean} env.coast
  */

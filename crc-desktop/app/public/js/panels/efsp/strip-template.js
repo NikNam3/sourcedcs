@@ -629,7 +629,7 @@ export function enumSelectOptionsFor(blockId, fdr) {
 //   14A          -> §3.8's six release states are exhaustive. There is no
 //                   "no release state".
 //   24A          -> airspace ownership is a DIRECTION, and its record is
-//                   append-only precisely so a handover cannot be erased.
+//                   append-only precisely so a handoff cannot be erased.
 //                   "Give it back" is CONTROLLING_AGENCY, not blank.
 //   9F           -> flight-data-store.js's setField('filed.stereoRouteName', '')
 //                   clears the LABEL and keeps the route (docs/adr/0050), so

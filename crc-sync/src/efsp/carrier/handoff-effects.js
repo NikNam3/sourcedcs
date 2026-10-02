@@ -10,7 +10,7 @@
 // FDR), as ConvertToArrival does (docs/adr/0023); a flight's EEAT lives on the
 // FDR so nothing is copied. [SOURCE-DEFINED] states, ADR 0064 B2.
 
-const CARRIER_TRANSFER_EFFECTS = Object.freeze({
+const CARRIER_HANDOFF_EFFECTS = Object.freeze({
   MARSHAL_TO_APPROACH:       Object.freeze({ role: 'MARSHAL', state: 'IN_STACK',  toRole: 'MARSHAL', toState: 'COMMENCED',  owner: 'TO',   defaultTo: null }),
   APPROACH_TO_FINAL:         Object.freeze({ role: 'MARSHAL', state: 'COMMENCED', toRole: 'FINAL',   toState: 'ON_FINAL',   owner: 'SAME', defaultTo: null }),
   FINAL_TO_LSO:              Object.freeze({ role: 'FINAL',   state: 'ON_FINAL',  toRole: 'FINAL',   toState: 'BALL',       owner: 'SAME', defaultTo: null }),
@@ -18,4 +18,4 @@ const CARRIER_TRANSFER_EFFECTS = Object.freeze({
   MARSHAL_TO_PATTERN_CASE_I: Object.freeze({ role: 'MARSHAL', state: 'IN_STACK',  toRole: 'PATTERN', toState: 'IN_PATTERN', owner: 'TO',   defaultTo: 'CV_PRIFLY' }),
 });
 
-module.exports = { CARRIER_TRANSFER_EFFECTS };
+module.exports = { CARRIER_HANDOFF_EFFECTS };

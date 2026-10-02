@@ -2,7 +2,7 @@
 
 /* L17 (crc-sync docs/adr/0074) — the carrier on screen, as a recovery is flown: PriFly sets the
  * Case and every Position sees it change, the Marshal stack's slot board shows the derived
- * angels/DME/push and re-sequences by one drag, the four hand-overs are four buttons, the
+ * angels/DME/push and re-sequences by one drag, the four handoffs are four buttons, the
  * talk-down (FINAL) has nothing to type, and a Case I recovery is an altitude list.
  *
  * Two controllers, one browser context each: the Marshal seat (with both approach lanes) and
@@ -126,7 +126,7 @@ test('02 the slot board shows what the slot means; a drag to a slot is one Move 
   await setCase(pri, 'III');
 });
 
-test('03 Case II hand-overs: Commence feeds a lane, See you hands to PriFly, Radar contact makes it FINAL with nothing to type, Ball and Trapped end it', async ({ browser, baseURL }) => {
+test('03 Case II handoffs: Commence feeds a lane, See you hands to PriFly, Radar contact makes it FINAL with nothing to type, Ball and Trapped end it', async ({ browser, baseURL }) => {
   const marshal = await controller(browser, baseURL, 'e2e-cv-marshal3', ['CV_MARSHAL', 'CV_APP1', 'CV_APP2']);
   const pri = await controller(browser, baseURL, 'e2e-cv-prifly3', ['CV_PRIFLY']);
   await setCase(pri, 'II');

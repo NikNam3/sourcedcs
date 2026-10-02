@@ -99,10 +99,10 @@ test('ship-level predicates take exactly one Position (D21)', () => {
   assert.equal(permission.canSequenceMarshalStack('CV_PRIFLY'), false);
   assert.equal(permission.canEditShipStateInput('CV_APP1'), false);
   assert.equal(permission.canEditShipStateInput('CV_PRIFLY'), true);
-  assert.equal(permission.canRecordCarrierTransfer('CV_MARSHAL', 'MARSHAL_TO_APPROACH'), true);
-  assert.equal(permission.canRecordCarrierTransfer('CV_APP1', 'MARSHAL_TO_APPROACH'), false);
-  assert.equal(permission.canRecordCarrierTransfer('CV_APP2', 'FINAL_TO_LSO'), true);
-  assert.equal(permission.canRecordCarrierTransfer('CV_MARSHAL', 'nonsense'), false);
+  assert.equal(permission.canRecordCarrierHandoff('CV_MARSHAL', 'MARSHAL_TO_APPROACH'), true);
+  assert.equal(permission.canRecordCarrierHandoff('CV_APP1', 'MARSHAL_TO_APPROACH'), false);
+  assert.equal(permission.canRecordCarrierHandoff('CV_APP2', 'FINAL_TO_LSO'), true);
+  assert.equal(permission.canRecordCarrierHandoff('CV_MARSHAL', 'nonsense'), false);
   // a Position of another Facility has none of them
   assert.equal(permission.canSetRecoveryCase('TWR'), false);
 });

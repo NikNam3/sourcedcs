@@ -32,7 +32,7 @@ const { CorrelationReconciler, CORRELATION_TICK_MS } = require('./efsp/correlati
 const { SurveillanceHintMonitor } = require('./efsp/surveillance-hints');
 const { getHintsConfig } = require('./efsp/surveillance-hints-config');
 const { ConformanceMonitor } = require('./efsp/conformance');
-const { StcaMonitor } = require('./conflict-alert');
+const { ConflictAlertMonitor } = require('./conflict-alert');
 const { loadAlertingConfig } = require('./alerting-config');
 const { indicatedAltFt } = require('./altimetry');
 const { MissionClock, WALL_CLOCK } = require('./mission-clock');
@@ -479,7 +479,7 @@ function createApp(deps = {}) {
       if (board) board.setAirborneObserver((s) => surveillanceHints.getAll().some(h => h.stripId === s.stripId && h.kind === 'AIRBORNE_ADVANCE'));
     }
   }
-  const stcaMonitor = new StcaMonitor({
+  const conflictAlertMonitor = new ConflictAlertMonitor({
     trackStore,
     config: alertingConfig.stca,
     fdrForTrack: (trackId) => efsp.correlationStore.fdrForTrack(trackId),
@@ -488,14 +488,14 @@ function createApp(deps = {}) {
     callsignFor: trackSeams.callsign || ((track) => identity.labelFor(track.id)),
   });
   // The one place efsp-alerts is composed (docs/adr/0067). broadcastEfspAlerts
-  // replaces the whole alert state, so every producer — the 1s conformance/STCA
+  // replaces the whole alert state, so every producer — the 1s conformance/CA
   // tick, the 15s obligation sweep, the post-Mutation hook — must send all three
   // slices, or it would erase the others'. A function declaration: the 15s
   // interval above calls it, long after these consts exist.
   function broadcastEfspAlerts() {
     wsHub.broadcastEfspAlerts({
       conformance: conformanceMonitor.getAll(),
-      stca: stcaMonitor.getAll(),
+      stca: conflictAlertMonitor.getAll(),
       obligations: obligationMonitor.getAll(),
       surveillance: surveillanceHints ? surveillanceHints.getAll() : undefined, // docs/adr/0076: the suggestion chip and staleness
     });
@@ -682,14 +682,14 @@ function createApp(deps = {}) {
     { name: 'carrier', periodMs: 1000, tick: () => carrierTick.tick() },
     // Conformance and the hints stamp mission time (the `since` they report is shown to
     // controllers); their pure durations (the heading grace, the airborne hold, staleness)
-    // run on the injected wall clock (docs/adr/0096). STCA stays on the wall clock: it only
+    // run on the injected wall clock (docs/adr/0096). CA stays on the wall clock: it only
     // compares track ages, which tracks.js stamps in wall time, and shows no time
     // of day at all.
-    { name: 'conformance-stca', periodMs: 1000, tick: () => {
+    { name: 'conformance-conflict-alert', periodMs: 1000, tick: () => {
       const conformanceChanged = conformanceMonitor.tick();
       const hintsChanged = surveillanceHints ? surveillanceHints.tick() : false;
-      const stcaChanged = stcaMonitor.tick(Date.now());
-      if (conformanceChanged || stcaChanged || hintsChanged) {
+      const conflictAlertChanged = conflictAlertMonitor.tick(Date.now());
+      if (conformanceChanged || conflictAlertChanged || hintsChanged) {
         broadcastEfspAlerts();
       }
     } },
@@ -810,7 +810,7 @@ function createApp(deps = {}) {
       obligation: obligationMonitor,
       correlation: correlationReconciler,
       conformance: conformanceMonitor,
-      stca: stcaMonitor,
+      stca: conflictAlertMonitor,
       surveillanceHints,
       carrier: carrierTick,
       instrumentation: efspInstrumentation,

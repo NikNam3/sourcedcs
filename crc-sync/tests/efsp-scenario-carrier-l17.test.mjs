@@ -6,7 +6,7 @@ import path from 'path';
 import { slot } from './helpers/wire-slots.mjs';
 
 // L17's walks (docs/adr/0074, WP7A part 2): a carrier sortie from launch to
-// trap on the wire, Case as broadcast state, the four hand-overs as four
+// trap on the wire, Case as broadcast state, the four handoffs as four
 // buttons, the derived fields that cannot be typed, and the whole thing
 // surviving a restart. Same prologue as every scenario file: its own paths.
 
@@ -210,7 +210,7 @@ test('a bolter is a drag to the Bolter Bay, and the NLA brings it back on final'
   assert.equal(again.state, 'ON_FINAL');
 });
 
-test('the four hand-overs are four buttons: a drag into the lane Bay is refused and names the button', () => {
+test('the four handoffs are four buttons: a drag into the lane Bay is refused and names the button', () => {
   const { efsp, c } = fresh();
   const a = checkIn(efsp, c, 'AAA11');
   const ack = act(efsp, c.CV_MARSHAL, 'CV_MARSHAL', a, { kind: 'TransferStrip', toPositionId: 'CV_APP1', bayId: 'cv-app1-lane', rackId: 'main' });

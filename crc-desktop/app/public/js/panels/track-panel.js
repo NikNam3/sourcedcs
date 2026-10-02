@@ -235,7 +235,7 @@ function _refreshTrackAlerts(trackId) {
   const lines = [];
   const clock = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
   for (const c of (typeof stcaConflictsForTrack === 'function' ? stcaConflictsForTrack(trackId) : [])) {
-    lines.push({ bad: true, text: `STCA with ${c.otherCallsign} in ${clock(c.timeToCpaSec)}. Closest ${c.minNm} NM / ${c.vertFt} ft.` });
+    lines.push({ bad: true, text: `CA with ${c.otherCallsign} in ${clock(c.timeToCpaSec)}. Closest ${c.minNm} NM / ${c.vertFt} ft.` });
   }
   for (const a of (fdr && typeof conformanceAlertsForFdr === 'function' ? conformanceAlertsForFdr(fdr.fdrId) : [])) {
     const pad = (n) => String(n).padStart(3, '0');

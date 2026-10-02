@@ -1847,7 +1847,7 @@
    The ship banner and Case selector over the Position tabs, the Marshal stack's
    slot board, and the four hand-over buttons. Prominence is place and shape,
    never colour alone (docs/adr/0056): each trigger type also has its own border
-   style, so the four hand-overs stay four distinct affordances without colour. */
+   style, so the four handoffs stay four distinct affordances without colour. */
 .carrier-banner { padding: 6px 8px; border-bottom: 1px solid #2a3038; background: #151b21; font-size: 12px; }
 .carrier-banner[hidden] { display: none; }
 .carrier-banner-line { display: flex; gap: 10px; align-items: baseline; }

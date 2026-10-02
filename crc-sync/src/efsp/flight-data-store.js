@@ -950,7 +950,7 @@ class FdrStore {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `airspace ownership must be a direction (${[...AIRSPACE_OWNERS].join(' or ')}), not ${JSON.stringify(owner)}` };
     }
     // Append-only transition history alongside the current value. The flat
-    // overwrite this replaces lost the record of every prior handover: a MOA
+    // overwrite this replaces lost the record of every prior handoff: a MOA
     // given to the using agency and later taken back read afterwards as if
     // it had only ever been taken back. Every other controller-entered
     // doctrinal fact is append-only for exactly this reason (§3.7, and JO

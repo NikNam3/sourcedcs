@@ -22,7 +22,7 @@ export const DEFAULT_RULES = {
   canActOnState: () => true,
   canCreateStripRole: () => true,
   canMutate: () => true,
-  canRecordCarrierTransfer: () => false,
+  canRecordCarrierHandoff: () => false,
   canSendSfaRotationTransfer: () => false,
   carrierAppendFlight: () => null,
   carrierApplyEffect: () => ({ ok: true }),
@@ -30,7 +30,7 @@ export const DEFAULT_RULES = {
   carrierInStack: () => true,
   carrierLaneFor: () => null,
   carrierRetireFlight: () => null,
-  carrierTransfers: {},
+  carrierHandoffs: {},
   computeNla: () => null,
   coordinationBayFor: () => null,
   coordinationEffect: () => null,
@@ -58,7 +58,7 @@ export const DEFAULT_RULES = {
   standingReleases: [],
   tofiCounterparts: (positionId) => require('../../src/efsp/permission.js').tofiCounterparts(positionId),
   tofiEligibleState: (role) => coordination.tofiEligibleState(role),
-  validateCarrierTransfer: () => ({ ok: true }),
+  validateCarrierHandoff: () => ({ ok: true }),
   voidMarsaForAssignment: () => null,
 };
 

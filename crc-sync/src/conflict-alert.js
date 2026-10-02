@@ -117,7 +117,7 @@ function findConflicts(tracks, cfg, now = Date.now(), suppress = () => false, ca
   return out;
 }
 
-class StcaMonitor {
+class ConflictAlertMonitor {
   /**
    * @param {object} deps { trackStore, config, fdrForTrack?(trackId), activeMarsaFor?(fdrId), callsignFor?(track) }
    */
@@ -146,4 +146,4 @@ class StcaMonitor {
   }
 }
 
-module.exports = { findConflicts, StcaMonitor, isEligible };
+module.exports = { findConflicts, ConflictAlertMonitor, isEligible };

@@ -450,7 +450,7 @@ function _stripAlerts(strip) {
     const other = c.otherCallsign;
     out.push({
       key: 'stca', tone: 'bad', legacy: 'efsp-stca-indicator',
-      text: `STCA ${other} ${_fmtClock(c.timeToCpaSec)}`,
+      text: `CA ${other} ${_fmtClock(c.timeToCpaSec)}`,
       reason: `Conflict with ${other} in ${_fmtClock(c.timeToCpaSec)}: closest ${c.minNm} NM / ${c.vertFt} ft.`,
     });
   }

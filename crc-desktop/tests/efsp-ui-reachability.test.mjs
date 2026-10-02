@@ -969,11 +969,11 @@ test('conformance and conflict alerts appear on the Strip only while they apply'
   });
   const el = r.sandbox._buildStripEl(strip);
   assert.ok(findByText(el, 'HDG 072'));
-  assert.ok(findByText(el, 'STCA SNAKE21 0:55'));
+  assert.ok(findByText(el, 'CA SNAKE21 0:55'));
   assert.ok(findByText(el, 'Assigned heading 050, tracking 072.'));
   assert.ok(findByText(el, 'Conflict with SNAKE21 in 0:55: closest 1.8 NM / 400 ft.'));
   assert.ok(el.classList.contains('efsp-strip-alert'), 'a conflict gives the Strip its edge');
-  const stcaNode = findByText(el, 'STCA SNAKE21 0:55');
+  const stcaNode = findByText(el, 'CA SNAKE21 0:55');
   const confNode = findByText(el, 'HDG 072');
   const row = descendants(el).find(c => (c.className || '').includes('efsp-strip-slots'));
   assert.ok(row.children.indexOf(stcaNode) < row.children.indexOf(confNode), 'the conflict comes first');

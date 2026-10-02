@@ -331,7 +331,7 @@ function createHost(env, { stateDir }) {
         }
         if (what.has('reconcile')) reply.correlation = ticker.correlation();
         if (what.has('conformanceStca')) {
-          ticker['conformance-stca']();
+          ticker['conformance-conflict-alert']();
           reply.alerts = { conformance: conformance._alerts.size, stca: stca.getAll().length };
         }
         if (what.has('obligationsNla')) {

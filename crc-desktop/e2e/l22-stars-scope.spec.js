@@ -7,7 +7,7 @@
  * The rig has no DCS, so the picture is injected the way the wire would
  * deliver it: a coverage message, an EFSP snapshot (Strips, FDRs,
  * correlations, position letters), a track snapshot with each contact's
- * `scheme`, and the conformance/STCA alerts. Everything after that — the
+ * `scheme`, and the conformance/CA alerts. Everything after that — the
  * relation, the blocks, the colours, the black scope — is the app's own.
  */
 

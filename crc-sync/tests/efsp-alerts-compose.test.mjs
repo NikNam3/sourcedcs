@@ -8,7 +8,7 @@ import TrackStore from '../src/tracks.js';
 import CollaborativeStore from '../src/collab-store.js';
 
 /* docs/adr/0067 (decisions.md S-Q82). efsp-alerts carries three slices from
- * producers on different cadences — conformance/STCA every second,
+ * producers on different cadences — conformance/CA every second,
  * obligations every 15 s and after a Mutation — and WsHub.broadcastEfspAlerts
  * replaces the whole state. So server.js must compose the message in exactly
  * one place, from all three monitors, or one producer erases another's slice.
@@ -27,7 +27,7 @@ test('app.js calls wsHub.broadcastEfspAlerts in exactly one place, the compose f
 
 test('a conformance-only tick does not clear obligations', () => {
   const body = SERVER.match(/\n *function broadcastEfspAlerts\(\) \{[\s\S]*?\n  \}\n/)[0];
-  const compose = new Function('wsHub', 'conformanceMonitor', 'stcaMonitor', 'obligationMonitor', 'surveillanceHints',
+  const compose = new Function('wsHub', 'conformanceMonitor', 'conflictAlertMonitor', 'obligationMonitor', 'surveillanceHints',
     `${body}; return broadcastEfspAlerts;`);
 
   const wsHub = new WsHub({ trackStore: new TrackStore(), collabStore: new CollaborativeStore() });

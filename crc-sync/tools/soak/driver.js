@@ -115,7 +115,7 @@ class Driver {
       restart: { boardLostOnRestart: 0, lostExamples: [], restartDiffs: [], oracleOlder: 0, oracleNewer: 0, ambiguousReplay: [] },
       shadowRegressions: 0, injectedShadowDrops: 0,
       uncarried: { count: 0, byCause: {} },
-      alerts: { conformanceMax: 0, stcaMax: 0, stcaRaised: 0, conformanceRaised: 0 },
+      alerts: { conformanceMax: 0, conflictAlertMax: 0, conflictAlertRaised: 0, conformanceRaised: 0 },
       lost: 0,
     };
     this.samples = [];   // light + heavy samples, numbers only
@@ -1149,9 +1149,9 @@ class Driver {
       const r = await this.call('tick', { what });
       if (r.correlation) this._learnCorrelationStats(r.correlation);
       if (r.alerts) {
-        if (r.alerts.stca > this.stats.alerts.stcaMax) this.stats.alerts.stcaMax = r.alerts.stca;
-        if (r.alerts.stca > 0 && !this._stcaUp) this.stats.alerts.stcaRaised++;
-        this._stcaUp = r.alerts.stca > 0;
+        if (r.alerts.stca > this.stats.alerts.conflictAlertMax) this.stats.alerts.conflictAlertMax = r.alerts.stca;
+        if (r.alerts.stca > 0 && !this._conflictAlertUp) this.stats.alerts.conflictAlertRaised++;
+        this._conflictAlertUp = r.alerts.stca > 0;
         if (r.alerts.conformance > 0 && !this._confUp) this.stats.alerts.conformanceRaised++;
         this._confUp = r.alerts.conformance > 0;
       }

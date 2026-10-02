@@ -216,12 +216,12 @@ class Placement {
     if (!nla || nla.inhibited) {
       return { ok: false, reason: 'NLA_INHIBITED', detail: nla ? nla.inhibited : `no legal transition from ${strip.state}` };
     }
-    // docs/adr/0074: the four carrier hand-overs are four buttons and each
+    // docs/adr/0074: the four carrier handoffs are four buttons and each
     // records its own trigger type (guide §9.12), so a drag into the Bay that
     // implies the NLA's own state is refused with the button's name rather than
     // moving the Strip without the stack effect and the tag.
     if (nla.carrierTransfer && nla.toState === impliedState) {
-      const t = this._rules.carrierTransfers[nla.carrierTransfer];
+      const t = this._rules.carrierHandoffs[nla.carrierTransfer];
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `use the ${t ? t.label : nla.carrierTransfer} button — a carrier hand-over is recorded, not dragged` };
     }
     if (nla.toState !== impliedState && (nla.alsoLegal || []).includes(impliedState)) {

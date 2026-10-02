@@ -74,7 +74,7 @@ class Sky {
     else this.stats.nonConformingAssignments++;
   }
 
-  /** Two aircraft on converging courses at one level, so STCA raises and then clears. */
+  /** Two aircraft on converging courses at one level, so CA raises and then clears. */
   injectConflict() {
     const live = [...this.aircraft.values()].filter(a => !a.done);
     if (live.length < 2) return false;

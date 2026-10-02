@@ -7,20 +7,20 @@
 
 const REQUIRED_RULES = [
   'activeMarsaFor', 'airspaceFor', 'aitAuthorized', 'bayDescriptor', 'bayExists', 'bayForImpliedState', 'bayHoldsRole',
-  'bayImpliesState', 'baysFor', 'canActOnState', 'canCreateStripRole', 'canMutate', 'canRecordCarrierTransfer',
+  'bayImpliesState', 'baysFor', 'canActOnState', 'canCreateStripRole', 'canMutate', 'canRecordCarrierHandoff',
   'canSendSfaRotationTransfer', 'carrierAppendFlight', 'carrierApplyEffect', 'carrierCase', 'carrierInStack',
-  'carrierLaneFor', 'carrierRetireFlight', 'carrierTransfers', 'computeNla', 'coordinationBayFor', 'coordinationEffect',
+  'carrierLaneFor', 'carrierRetireFlight', 'carrierHandoffs', 'computeNla', 'coordinationBayFor', 'coordinationEffect',
   'coordinationEligibleState', 'consolidatedAt', 'drainMarsaRegimeWrites', 'facilityId', 'fieldStateFor',
   'handBackTargetsFor', 'isBlockVisible', 'isStaffed', 'isSelfCoordinated', 'isValidRole', 'isValidState',
   'liveStripsForFdr', 'marsaInterlockFor', 'mayActBesideOwner', 'peerBoard', 'resolveBlockTarget', 'retireMarsaForFdr',
   'sfaFrequencyFor', 'sfaRackFor', 'sfaRotationReceiver', 'sfaTransfers', 'standingReleases', 'tofiCounterparts',
-  'tofiEligibleState', 'validateCarrierTransfer', 'voidMarsaForAssignment',
+  'tofiEligibleState', 'validateCarrierHandoff', 'voidMarsaForAssignment',
 ];
 
 // The rules that are data, not functions, and the kind each must be. Every other required rule is a function.
 const DATA_RULES = {
   aitAuthorized: (v) => typeof v === 'boolean',
-  carrierTransfers: (v) => v !== null && typeof v === 'object',
+  carrierHandoffs: (v) => v !== null && typeof v === 'object',
   sfaTransfers: (v) => v !== null && typeof v === 'object',
   standingReleases: (v) => Array.isArray(v),
   facilityId: (v) => v === null || typeof v === 'string',

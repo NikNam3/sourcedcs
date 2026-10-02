@@ -36,7 +36,7 @@ const APP_LANES = Object.freeze(['CV_APP1', 'CV_APP2']);
 
 const _row = (r) => Object.freeze({ ...r, from: Object.freeze(r.from), cases: Object.freeze(r.cases) });
 
-const CARRIER_TRANSFERS = Object.freeze({
+const CARRIER_HANDOFFS = Object.freeze({
   MARSHAL_TO_APPROACH: _row({
     trigger: 'CONTROLLER_INITIATED',
     from: ['CV_MARSHAL'], to: APP_LANES,
@@ -103,11 +103,11 @@ function _fail(detail) {
  * (toPositionId must be null/omitted).
  * @returns {{ok:true, transfer:object} | {ok:false, reason:'VALIDATION_ERROR', detail:string}}
  */
-function validateCarrierTransfer(kind, { caseValue, fromPositionId, toPositionId = null } = {}) {
-  if (typeof kind !== 'string' || !Object.prototype.hasOwnProperty.call(CARRIER_TRANSFERS, kind)) {
+function validateCarrierHandoff(kind, { caseValue, fromPositionId, toPositionId = null } = {}) {
+  if (typeof kind !== 'string' || !Object.prototype.hasOwnProperty.call(CARRIER_HANDOFFS, kind)) {
     return _fail(`unknown carrier transfer '${kind}'`);
   }
-  const t = CARRIER_TRANSFERS[kind];
+  const t = CARRIER_HANDOFFS[kind];
   if (!t.cases.includes(caseValue)) {
     return _fail(`${t.label} (${kind}) is a Case ${t.cases.join('/')} transfer; the recovery Case is ${caseValue ?? 'unknown'}`);
   }
@@ -167,9 +167,9 @@ function assignLanes(derivedStack, { isStaffed = () => true } = {}) {
 module.exports = {
   TRIGGER_TYPES,
   APP_LANES,
-  CARRIER_TRANSFERS,
+  CARRIER_HANDOFFS,
   GUIDE_TRANSFER_KINDS,
-  validateCarrierTransfer,
+  validateCarrierHandoff,
   laneFor,
   assignLanes,
 };

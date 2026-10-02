@@ -25,7 +25,7 @@ const { CorrelationReconciler, INELIGIBLE_STATES } = await import('../src/efsp/c
 const clone = (o) => JSON.parse(JSON.stringify(o));
 const valid = (cfg) => fc.validateConfig(cfg);
 
-test('INCIRLIK has RSU, SFA and PAR: MILITARY_ATC (so STCA keeps them), unique letters, covering chain without RSU', () => {
+test('INCIRLIK has RSU, SFA and PAR: MILITARY_ATC (so CA keeps them), unique letters, covering chain without RSU', () => {
   const cfg = fc.getFacilityConfig();
   assert.deepEqual(cfg.positions, ['OPS', 'CD', 'GND', 'TWR', 'RSU', 'APP', 'SFA', 'PAR']);
   for (const id of ['RSU', 'SFA', 'PAR']) assert.equal(fc.getPositionClass(id), 'MILITARY_ATC', id);

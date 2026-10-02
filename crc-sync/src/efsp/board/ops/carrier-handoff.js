@@ -1,9 +1,9 @@
 'use strict';
 
-const { CARRIER_TRANSFER_EFFECTS } = require('../../carrier/handoff-effects'); // pure (docs/adr/0074)
+const { CARRIER_HANDOFF_EFFECTS } = require('../../carrier/handoff-effects'); // pure (docs/adr/0074)
 
 /**
- * The carrier's four hand-overs, as one operation (docs/adr/0064, 0074; guide
+ * The carrier's four handoffs, as one operation (docs/adr/0064, 0074; guide
  * §9.12: "MUST NOT be unified behind one button"). Reached by the dedicated
  * CarrierTransfer op and by the NLA button (computeNla's `carrierTransfer`),
  * so there is exactly one implementation of what each does.
@@ -17,10 +17,10 @@ const { CARRIER_TRANSFER_EFFECTS } = require('../../carrier/handoff-effects'); /
  * Order: validate everything, then the stack effect (the one step that can
  * refuse after validation), then the Strip. Nothing is half applied.
  */
-function _applyCarrierTransfer(ctx, strip, kind, toPositionId, by, actingPositionId, clientMutationId) {
-  const fx = typeof kind === 'string' && Object.prototype.hasOwnProperty.call(CARRIER_TRANSFER_EFFECTS, kind) ? CARRIER_TRANSFER_EFFECTS[kind] : null;
+function _applyCarrierHandoff(ctx, strip, kind, toPositionId, by, actingPositionId, clientMutationId) {
+  const fx = typeof kind === 'string' && Object.prototype.hasOwnProperty.call(CARRIER_HANDOFF_EFFECTS, kind) ? CARRIER_HANDOFF_EFFECTS[kind] : null;
   if (!fx) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown carrier transfer '${kind}'`, strip };
-  const row = ctx.rules.carrierTransfers[kind];
+  const row = ctx.rules.carrierHandoffs[kind];
   const label = row ? row.label : kind;
   if (strip.role !== fx.role || strip.state !== fx.state) {
     return { ok: false, reason: 'VALIDATION_ERROR', detail: `${label} applies to a ${fx.role} Strip in ${fx.state}, not ${strip.role} in ${strip.state}`, strip };
@@ -34,7 +34,7 @@ function _applyCarrierTransfer(ctx, strip, kind, toPositionId, by, actingPositio
     if (!dest) return { ok: false, reason: 'NO_RECEIVING_POSITION', detail: 'no receiving Position present', strip };
   }
   const caseValue = ctx.rules.carrierCase();
-  const v = ctx.rules.validateCarrierTransfer(kind, {
+  const v = ctx.rules.validateCarrierHandoff(kind, {
     caseValue, fromPositionId: actingPositionId, toPositionId: fx.owner === 'TO' ? dest : (kind === 'FINAL_TO_LSO' ? null : undefined),
   });
   if (!v.ok) return { ok: false, reason: v.reason || 'VALIDATION_ERROR', detail: v.detail, strip };
@@ -96,15 +96,15 @@ function _applyCarrierTransfer(ctx, strip, kind, toPositionId, by, actingPositio
 }
 
 // CarrierTransfer (docs/adr/0074) is not an OP_KINDS grant: which Position
-// may record WHICH of the four hand-overs is the model's own `from` list
-// (permission.js's canRecordCarrierTransfer), one acting Position and one kind.
-// docs/adr/0074 — the carrier's four hand-overs, each its own button with
+// may record WHICH of the four handoffs is the model's own `from` list
+// (permission.js's canRecordCarrierHandoff), one acting Position and one kind.
+// docs/adr/0074 — the carrier's four handoffs, each its own button with
 // its own trigger type recorded (guide §9.12). One implementation: the NLA
 // button reaches the same method.
 module.exports = {
   kind: 'CarrierTransfer',
   authorize: (ctx, actingPositionId, op) => {
-    if (!(ctx.rules.canRecordCarrierTransfer(actingPositionId, op.transfer))) {
+    if (!(ctx.rules.canRecordCarrierHandoff(actingPositionId, op.transfer))) {
       return { ok: false, reason: 'PERMISSION_DENIED', detail: `${actingPositionId} may not record ${op.transfer || 'that transfer'}` };
     }
     return null;
@@ -115,5 +115,5 @@ module.exports = {
     carrierTransfer: result.carrierTransfer ? result.carrierTransfer.kind : undefined,
     carrierTrigger: result.carrierTransfer ? result.carrierTransfer.trigger : undefined,
   } }),
-  apply: (ctx, strip, op, meta) => _applyCarrierTransfer(ctx, strip, op.transfer, op.toPositionId, meta.by, meta.actingPositionId, meta.clientMutationId),
+  apply: (ctx, strip, op, meta) => _applyCarrierHandoff(ctx, strip, op.transfer, op.toPositionId, meta.by, meta.actingPositionId, meta.clientMutationId),
 };

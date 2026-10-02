@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 // docs/adr/0058 — short-term conflict alert.
-const { findConflicts, StcaMonitor } = await import('../src/conflict-alert.js');
+const { findConflicts, ConflictAlertMonitor } = await import('../src/conflict-alert.js');
 const { loadAlertingConfig } = await import('../src/alerting-config.js');
 const DEFAULTS = loadAlertingConfig();
 
@@ -59,7 +59,7 @@ test('diverging, too far, too slow or too new: no alert', () => {
 test('a MARSA pair is suppressed; the monitor reports a change while conflicts exist and once when they clear', () => {
   const tracks = [track(1, { lat: 37, course: 0 }), track(2, { lat: 37 + 10 * NM_LAT, course: 180 })];
   const store = { getAll: () => tracks };
-  const marsa = new StcaMonitor({
+  const marsa = new ConflictAlertMonitor({
     trackStore: store, config: cfg,
     fdrForTrack: (id) => (String(id) === '1' ? 'fA' : 'fB'),
     activeMarsaFor: (fdrId) => ({ participants: ['fA', 'fB'] }),
@@ -67,7 +67,7 @@ test('a MARSA pair is suppressed; the monitor reports a change while conflicts e
   assert.equal(marsa.tick(NOW), false);
   assert.deepEqual(marsa.getAll(), []);
 
-  const plain = new StcaMonitor({ trackStore: store, config: cfg });
+  const plain = new ConflictAlertMonitor({ trackStore: store, config: cfg });
   assert.equal(plain.tick(NOW), true);
   assert.equal(plain.getAll().length, 1);
   tracks[1] = { ...tracks[1], alt: 9000 };
@@ -77,7 +77,7 @@ test('a MARSA pair is suppressed; the monitor reports a change while conflicts e
 
 test("a track correlated to a Strip is named by the Strip's callsign", () => {
   const tracks = [track(1, { lat: 37, course: 0, callsign: 'Enfield 1-1' }), track(2, { lat: 37 + 10 * NM_LAT, course: 180 })];
-  const monitor = new StcaMonitor({
+  const monitor = new ConflictAlertMonitor({
     trackStore: { getAll: () => tracks }, config: cfg,
     callsignFor: (t) => (t.id === 1 ? 'VIPER11' : null),
   });

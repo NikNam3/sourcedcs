@@ -117,7 +117,7 @@ test('datalink: a participant is seen with no radar, and a lock never reveals a 
   assert.equal(JSON.stringify(snap).includes('Bandit'), false);
 });
 
-test('STCA reaches only an ATC Position, and only when both aircraft are in its picture', () => {
+test('CA reaches only an ATC Position, and only when both aircraft are in its picture', () => {
   const { hub, session } = setup();
   const sent = [];
   const ws = { readyState: 1, send: (raw) => sent.push(JSON.parse(raw)) };
@@ -237,9 +237,9 @@ test('no aircraft is hidden on the ground any more: a parked hostile is a bogey,
   for (const t of snap.tracks) assert.ok(['friendly', 'neutral', 'bogey'].includes(t.iffState), t.iffState);
 });
 
-// docs/adr/0067 — obligations are state in efsp-alerts, beside conformance and STCA.
+// docs/adr/0067 — obligations are state in efsp-alerts, beside conformance and CA.
 
-test('obligations reach every session, including a tactical one that gets no STCA', () => {
+test('obligations reach every session, including a tactical one that gets no CA', () => {
   const { hub, session } = setup();
   const sent = [];
   const ws = { readyState: 1, send: (raw) => sent.push(JSON.parse(raw)) };

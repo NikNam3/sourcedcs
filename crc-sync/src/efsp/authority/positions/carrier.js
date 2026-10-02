@@ -4,7 +4,7 @@
 // CV_APP1, CV_APP2 (docs/adr/0064 B4, docs/adr/0074). Moved from permission.js.
 
 const { NON_CREATE_OPS } = require('../op-kinds');
-const { CARRIER_TRANSFERS } = require('../../carrier/handoffs'); // pure (docs/adr/0064)
+const { CARRIER_HANDOFFS } = require('../../carrier/handoffs'); // pure (docs/adr/0064)
 
 const PERMISSIONS = {
   // The CARRIER Facility (docs/adr/0064 B4, docs/adr/0074; guide §4.1: "Military
@@ -15,7 +15,7 @@ const PERMISSIONS = {
   // (launch and recovery check-in); FINAL and PATTERN Strips come only by a
   // carrier transfer. CarrierTransfer is NOT in OP_KINDS (it is not a `.filter()`
   // grant anyone could pick up silently): board-store.js's dispatch asks
-  // canRecordCarrierTransfer below, one acting Position and one transfer kind.
+  // canRecordCarrierHandoff below, one acting Position and one transfer kind.
   CV_MARSHAL: new Set([...NON_CREATE_OPS, 'CreateStrip']),
   CV_PRIFLY:  new Set(NON_CREATE_OPS),
   CV_APP1:    new Set(NON_CREATE_OPS),
@@ -42,7 +42,7 @@ const CREATE_ROLE_PERMISSIONS = {
  *  sequencesStack  every stack op, including the marshal radial (H27) and Charlie time
  *  editsShipInput  the one thing a controller may enter on the banner: the altimeter
  *
- * A carrier transfer's sender is read from CARRIER_TRANSFERS[kind].from (the
+ * A carrier transfer's sender is read from CARRIER_HANDOFFS[kind].from (the
  * model's own data), not repeated here.
  */
 const CARRIER_CAPABILITIES = {
@@ -59,8 +59,8 @@ function canSetRecoveryCase(actingPositionId) { return _carrierCap(actingPositio
 function canSequenceMarshalStack(actingPositionId) { return _carrierCap(actingPositionId, 'sequencesStack'); }
 function canEditShipStateInput(actingPositionId) { return _carrierCap(actingPositionId, 'editsShipInput'); }
 /** May this Position record this carrier transfer (the model's `from` list)? */
-function canRecordCarrierTransfer(actingPositionId, kind) {
-  const row = typeof kind === 'string' && Object.prototype.hasOwnProperty.call(CARRIER_TRANSFERS, kind) ? CARRIER_TRANSFERS[kind] : null;
+function canRecordCarrierHandoff(actingPositionId, kind) {
+  const row = typeof kind === 'string' && Object.prototype.hasOwnProperty.call(CARRIER_HANDOFFS, kind) ? CARRIER_HANDOFFS[kind] : null;
   return !!row && row.from.includes(actingPositionId);
 }
 
@@ -73,5 +73,5 @@ const family = {
 };
 
 module.exports = {
-  family, CARRIER_CAPABILITIES, canSetRecoveryCase, canSequenceMarshalStack, canEditShipStateInput, canRecordCarrierTransfer,
+  family, CARRIER_CAPABILITIES, canSetRecoveryCase, canSequenceMarshalStack, canEditShipStateInput, canRecordCarrierHandoff,
 };

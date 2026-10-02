@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  TRIGGER_TYPES, CARRIER_TRANSFERS, GUIDE_TRANSFER_KINDS, validateCarrierTransfer, laneFor, assignLanes,
+  TRIGGER_TYPES, CARRIER_HANDOFFS, GUIDE_TRANSFER_KINDS, validateCarrierHandoff, laneFor, assignLanes,
 } from '../src/efsp/carrier/handoffs.js';
 import { deriveStack } from '../src/efsp/carrier/marshal-stack.js';
 
@@ -12,13 +12,13 @@ import { deriveStack } from '../src/efsp/carrier/marshal-stack.js';
 
 test('the four §9.12 kinds have four distinct triggers and four distinct labels', () => {
   assert.equal(GUIDE_TRANSFER_KINDS.length, 4);
-  const rows = GUIDE_TRANSFER_KINDS.map((k) => CARRIER_TRANSFERS[k]);
+  const rows = GUIDE_TRANSFER_KINDS.map((k) => CARRIER_HANDOFFS[k]);
   assert.equal(new Set(rows.map((r) => r.trigger)).size, 4);
   assert.deepEqual(rows.map((r) => r.trigger).sort(), [...TRIGGER_TYPES].sort());
   assert.equal(new Set(rows.map((r) => r.label)).size, 4);
   for (const r of rows) assert.equal(r.source, '§9.12');
   assert.deepEqual(
-    Object.fromEntries(GUIDE_TRANSFER_KINDS.map((k) => [k, CARRIER_TRANSFERS[k].trigger])),
+    Object.fromEntries(GUIDE_TRANSFER_KINDS.map((k) => [k, CARRIER_HANDOFFS[k].trigger])),
     {
       MARSHAL_TO_APPROACH: 'CONTROLLER_INITIATED',
       APPROACH_TO_FINAL: 'RADAR_ACQUISITION',
@@ -29,31 +29,31 @@ test('the four §9.12 kinds have four distinct triggers and four distinct labels
 });
 
 test('every row, including the [SOURCE-DEFINED] Case I row, has a distinct label and a known trigger', () => {
-  const all = Object.values(CARRIER_TRANSFERS);
+  const all = Object.values(CARRIER_HANDOFFS);
   assert.equal(new Set(all.map((r) => r.label)).size, all.length);
   for (const r of all) assert.ok(TRIGGER_TYPES.includes(r.trigger));
-  assert.equal(CARRIER_TRANSFERS.MARSHAL_TO_PATTERN_CASE_I.source, '[SOURCE-DEFINED]');
-  assert.ok(Object.isFrozen(CARRIER_TRANSFERS.MARSHAL_TO_APPROACH));
+  assert.equal(CARRIER_HANDOFFS.MARSHAL_TO_PATTERN_CASE_I.source, '[SOURCE-DEFINED]');
+  assert.ok(Object.isFrozen(CARRIER_HANDOFFS.MARSHAL_TO_APPROACH));
 });
 
 test('no transfer kind carries a frequency (SFA is L18)', () => {
-  for (const r of Object.values(CARRIER_TRANSFERS)) {
+  for (const r of Object.values(CARRIER_HANDOFFS)) {
     assert.equal(Object.keys(r).some((k) => /freq/i.test(k)), false);
   }
 });
 
-test('validateCarrierTransfer: the happy paths', () => {
-  assert.equal(validateCarrierTransfer('MARSHAL_TO_APPROACH', { caseValue: 'III', fromPositionId: 'CV_MARSHAL', toPositionId: 'CV_APP2' }).ok, true);
-  assert.equal(validateCarrierTransfer('APPROACH_TO_FINAL', { caseValue: 'II', fromPositionId: 'CV_APP1' }).ok, true);
-  assert.equal(validateCarrierTransfer('APPROACH_TO_FINAL', { caseValue: 'II', fromPositionId: 'CV_APP1', toPositionId: 'CV_APP1' }).ok, true);
-  assert.equal(validateCarrierTransfer('FINAL_TO_LSO', { caseValue: 'I', fromPositionId: 'CV_APP2' }).ok, true);
-  assert.equal(validateCarrierTransfer('MARSHAL_TO_PRIFLY', { caseValue: 'II', fromPositionId: 'CV_MARSHAL', toPositionId: 'CV_PRIFLY' }).ok, true);
-  assert.equal(validateCarrierTransfer('MARSHAL_TO_PATTERN_CASE_I', { caseValue: 'I', fromPositionId: 'CV_MARSHAL', toPositionId: 'CV_PRIFLY' }).ok, true);
+test('validateCarrierHandoff: the happy paths', () => {
+  assert.equal(validateCarrierHandoff('MARSHAL_TO_APPROACH', { caseValue: 'III', fromPositionId: 'CV_MARSHAL', toPositionId: 'CV_APP2' }).ok, true);
+  assert.equal(validateCarrierHandoff('APPROACH_TO_FINAL', { caseValue: 'II', fromPositionId: 'CV_APP1' }).ok, true);
+  assert.equal(validateCarrierHandoff('APPROACH_TO_FINAL', { caseValue: 'II', fromPositionId: 'CV_APP1', toPositionId: 'CV_APP1' }).ok, true);
+  assert.equal(validateCarrierHandoff('FINAL_TO_LSO', { caseValue: 'I', fromPositionId: 'CV_APP2' }).ok, true);
+  assert.equal(validateCarrierHandoff('MARSHAL_TO_PRIFLY', { caseValue: 'II', fromPositionId: 'CV_MARSHAL', toPositionId: 'CV_PRIFLY' }).ok, true);
+  assert.equal(validateCarrierHandoff('MARSHAL_TO_PATTERN_CASE_I', { caseValue: 'I', fromPositionId: 'CV_MARSHAL', toPositionId: 'CV_PRIFLY' }).ok, true);
 });
 
-test('validateCarrierTransfer refusals: unknown kind, wrong Case, wrong from/to, see-you outside Case II', () => {
+test('validateCarrierHandoff refusals: unknown kind, wrong Case, wrong from/to, see-you outside Case II', () => {
   const refuse = (kind, ctx, re) => {
-    const r = validateCarrierTransfer(kind, ctx);
+    const r = validateCarrierHandoff(kind, ctx);
     assert.equal(r.ok, false, `${kind} ${JSON.stringify(ctx)}`);
     assert.equal(r.reason, 'VALIDATION_ERROR');
     if (re) assert.match(r.detail, re);
@@ -68,7 +68,7 @@ test('validateCarrierTransfer refusals: unknown kind, wrong Case, wrong from/to,
   refuse('MARSHAL_TO_PRIFLY', { caseValue: 'III', fromPositionId: 'CV_MARSHAL', toPositionId: 'CV_PRIFLY' }, /Case II/);
   refuse('MARSHAL_TO_PRIFLY', { caseValue: 'I', fromPositionId: 'CV_MARSHAL', toPositionId: 'CV_PRIFLY' }, /Case II/);
   refuse('MARSHAL_TO_PATTERN_CASE_I', { caseValue: 'III', fromPositionId: 'CV_MARSHAL', toPositionId: 'CV_PRIFLY' });
-  assert.equal(validateCarrierTransfer(undefined).ok, false, 'never throws');
+  assert.equal(validateCarrierHandoff(undefined).ok, false, 'never throws');
 });
 
 test('laneFor alternates, falls back to the manned lane, and is null when neither is', () => {

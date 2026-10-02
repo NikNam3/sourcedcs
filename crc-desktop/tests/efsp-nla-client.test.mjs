@@ -175,9 +175,9 @@ test('the carrier state owners and hand-over table mirror the server exactly', (
   assert.deepEqual(c.MARSHAL_STATE_OWNERS, server.MARSHAL_STATE_OWNERS);
   assert.deepEqual(c.FINAL_STATE_OWNERS, server.FINAL_STATE_OWNERS);
   assert.deepEqual(c.PATTERN_STATE_OWNERS, server.PATTERN_STATE_OWNERS);
-  assert.deepEqual(Object.keys(c.CARRIER_TRANSFERS).sort(), Object.keys(transfers.CARRIER_TRANSFERS).sort());
-  for (const [kind, row] of Object.entries(transfers.CARRIER_TRANSFERS)) {
-    const m = c.CARRIER_TRANSFERS[kind];
+  assert.deepEqual(Object.keys(c.CARRIER_HANDOFFS).sort(), Object.keys(transfers.CARRIER_HANDOFFS).sort());
+  for (const [kind, row] of Object.entries(transfers.CARRIER_HANDOFFS)) {
+    const m = c.CARRIER_HANDOFFS[kind];
     assert.equal(m.label, row.label, kind);
     assert.equal(m.trigger, row.trigger, kind);
     assert.deepEqual(m.from, [...row.from], kind);

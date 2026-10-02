@@ -149,8 +149,8 @@ test('block: a legacy numeric parsed (older snapshot) still conforms as a point'
   assert.deepEqual(kinds(run([[0, { altFt: 5000 }], [1, { altFt: 5000 }], [2, { altFt: 6000 }], [6, { altFt: 6000 }]], { parsed: 5000, at: 0 })), ['LEVEL_BUST']);
 });
 
-// ── STCA ──
-test('STCA is geometry only: an assigned block never enters it', () => {
+// ── CA ──
+test('CA is geometry only: an assigned block never enters it', () => {
   const KT = 0.514444;
   const now = 1_000_000;
   const t = (id, over) => ({ id, callsign: `T${id}`, category: 1, lat: 37, lon: 35, alt: 7000, course: 0, groundSpeed: 400 * KT, verticalSpeed: 0, firstSeenAt: now - 60000, ...over });

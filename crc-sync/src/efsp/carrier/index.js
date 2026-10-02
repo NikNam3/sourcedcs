@@ -85,9 +85,9 @@ const {
 const {
   TRIGGER_TYPES,
   APP_LANES,
-  CARRIER_TRANSFERS,
+  CARRIER_HANDOFFS,
   GUIDE_TRANSFER_KINDS,
-  validateCarrierTransfer,
+  validateCarrierHandoff,
   laneFor,
   assignLanes,
 } = require('./handoffs');
@@ -163,9 +163,9 @@ module.exports = {
   marshalMessage,
   TRIGGER_TYPES,
   APP_LANES,
-  CARRIER_TRANSFERS,
+  CARRIER_HANDOFFS,
   GUIDE_TRANSFER_KINDS,
-  validateCarrierTransfer,
+  validateCarrierHandoff,
   laneFor,
   assignLanes,
 };

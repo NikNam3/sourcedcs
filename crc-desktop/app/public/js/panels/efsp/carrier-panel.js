@@ -1,7 +1,7 @@
 'use strict';
 import { projectPos } from '../../geo.js';
 import { correlatedTrackIdForStrip, getEfspFdr, getEfspStrip } from './efsp-state.js';
-import { CARRIER_TRANSFERS } from './efsp-nla.js';
+import { CARRIER_HANDOFFS } from './efsp-nla.js';
 import {
   carrierBannerParts, carrierCaseValue, carrierDerivedFor, carrierDerivedStack, carrierHhmm, getEfspCarrier
 } from './carrier-state.js';
@@ -315,7 +315,7 @@ export function renderCarrierStackBoard(container) {
 /** Gives the NLA button its hand-over's identity: four trigger types, four looks (WP7A bullet 4). */
 export function carrierDecorateNlaButton(btn, strip) {
   const key = strip && strip.nla && strip.nla.carrierTransfer;
-  const t = key && CARRIER_TRANSFERS[key];
+  const t = key && CARRIER_HANDOFFS[key];
   if (!t) return;
   btn.dataset.carrierTransfer = key;
   btn.dataset.carrierTrigger = t.trigger;
@@ -327,7 +327,7 @@ export function carrierDecorateNlaButton(btn, strip) {
 export function carrierExtraNlaButtons(strip) {
   if (!strip || strip.role !== 'MARSHAL' || strip.state !== 'IN_STACK' || carrierCaseValue() !== 'II') return [];
   if (!getActingPositions('CARRIER').includes(strip.ownerPositionId)) return [];
-  const t = CARRIER_TRANSFERS.MARSHAL_TO_PRIFLY;
+  const t = CARRIER_HANDOFFS.MARSHAL_TO_PRIFLY;
   if (!t.from.includes(strip.ownerPositionId)) return [];
   const btn = _cel('button', `efsp-sbtn efsp-nla-btn efsp-carrier-handover efsp-carrier-trigger-${t.trigger.toLowerCase().replace(/_/g, '-')}`, t.label);
   btn.dataset.carrierTransfer = 'MARSHAL_TO_PRIFLY';

@@ -57,7 +57,7 @@ export const NLA_LABELS = {
   // computeFinalNla, computePatternNla). IN_STACK's label is Case-dependent
   // ('Commence' in Case II and III, 'To pattern' in Case I): the server's own
   // `strip.nla.carrierTransfer` names the hand-over and nlaButtonLabel() below
-  // reads its label from CARRIER_TRANSFERS; this is the fallback.
+  // reads its label from CARRIER_HANDOFFS; this is the fallback.
   MARSHAL: {
     LAUNCH:    'Launched',
     IN_STACK:  'Commence',
@@ -74,11 +74,11 @@ export const NLA_LABELS = {
   },
 };
 
-// The carrier's hand-overs (guide §9.12: four different buttons, four trigger
+// The carrier's handoffs (guide §9.12: four different buttons, four trigger
 // types, "MUST NOT be unified behind one button"). A client mirror of
 // crc-sync's carrier/handoffs.js, drift-tested like the tables below. `seeYou`
 // (MARSHAL_TO_PRIFLY) is the Case II second button beside the NLA.
-export const CARRIER_TRANSFERS = {
+export const CARRIER_HANDOFFS = {
   MARSHAL_TO_APPROACH:       { label: 'Commence',      trigger: 'CONTROLLER_INITIATED', from: ['CV_MARSHAL'], cases: ['II', 'III'] },
   APPROACH_TO_FINAL:         { label: 'Radar contact', trigger: 'RADAR_ACQUISITION',    from: ['CV_APP1', 'CV_APP2'], cases: ['II', 'III'] },
   FINAL_TO_LSO:              { label: 'Ball',          trigger: 'PILOT_BALL_CALL',      from: ['CV_APP1', 'CV_APP2'], cases: ['I', 'II', 'III'] },
@@ -89,7 +89,7 @@ export const CARRIER_TRANSFERS = {
 /** The label on a Strip's NLA button: the hand-over's own name when the server says the NLA is one, else the Role's state table. */
 export function nlaButtonLabel(strip) {
   const t = strip && strip.nla && strip.nla.carrierTransfer;
-  if (t && CARRIER_TRANSFERS[t]) return CARRIER_TRANSFERS[t].label;
+  if (t && CARRIER_HANDOFFS[t]) return CARRIER_HANDOFFS[t].label;
   return strip ? nlaLabelFor(strip.state, strip.role) : null;
 }
 

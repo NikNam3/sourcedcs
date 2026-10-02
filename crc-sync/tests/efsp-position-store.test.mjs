@@ -56,7 +56,7 @@ test('D18: many controllers racing to claim the same Position never resolves to 
   assert.equal(all.observers.length, controllerIds.length - 1);
 });
 
-test('a handover (Primary A -> Primary B for the same Position) is purely an staffing change — PositionStore itself never touches Strip data (it has none to touch)', () => {
+test('a handoff (Primary A -> Primary B for the same Position) is purely an staffing change — PositionStore itself never touches Strip data (it has none to touch)', () => {
   const store = freshStore();
   store.setSignedOnPositions('c1', 'Alice', ['GND']);
   store.setSignedOnPositions('c2', 'Bob', ['GND']);

@@ -171,7 +171,7 @@ const MET_WHEN = {
  * across every Facility. It holds the set of obligations due *right now*
  * (docs/adr/0067, superseding 0021's "alert at most once"): an obligation
  * whose condition stops being true simply leaves the set, and the whole set
- * rides the `efsp-alerts` full-state message beside conformance and STCA.
+ * rides the `efsp-alerts` full-state message beside conformance and CA.
  *
  * Keyed per Strip replica, not per FDR: an obligation is a duty of the
  * Facility holding the Strip, so two Facilities' replicas of one flight
