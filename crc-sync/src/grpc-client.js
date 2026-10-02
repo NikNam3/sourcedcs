@@ -21,16 +21,8 @@ const MAX_BACKOFF = Math.max(POLL_RATE, parseInt(process.env.DCS_GRPC_MAX_BACKOF
 // GroupCategory numeric values to include (AIRPLANE=1, HELICOPTER=2, GROUND=3, SHIP=4)
 const ALLOWED_CATS = new Set([1, 2, 3, 4]);
 
-// DCS altimeter constants (reverse-engineered; T_REF_ALT is empirical)
-const ISA_T0     = 288.15;
-const ISA_P0     = 101325;
-const ISA_L      = 0.0065;
-const ISA_G      = 9.80665;
-const ISA_R      = 287.05287;
-const ISA_EXP    = ISA_G / (ISA_R * ISA_L);
-const ISA_INV    = (ISA_R * ISA_L) / ISA_G;
-const H_TROP     = 11000.0;
-const T_REF_ALT  = 288.97;
+// DCS altimeter constants (reverse-engineered; T_REF_ALT is empirical): one home, altimetry.js.
+const { ISA_T0, ISA_P0, ISA_L, ISA_G, ISA_R, ISA_EXP, ISA_INV, H_TROP, T_REF_ALT } = require('./altimetry');
 
 const WEATHER_POLL_MS   = 60000; // poll atmosphere every 60 s
 // A healthy unit stream sends a unit only when it changes, and the track
@@ -106,9 +98,9 @@ class GrpcClient extends EventEmitter {
     this._missionRetryTimer  = null;
     // ISA defaults — overwritten by live weather polls
     this._weather    = { pressurePa: ISA_P0, tempK: ISA_T0 };
-    // Reference position for weather queries (sea level, theater center)
-    // Updated to first airport lat/lon when mission data arrives.
-    this._weatherRef = { lat: 41.0, lon: 41.0 };
+    // Reference position for weather queries: the first airport's lat/lon, set when mission data
+    // arrives (DATA-3: there is no literal fallback point). Until then the poll does not run and the ISA stands.
+    this._weatherRef = null;
   }
 
   connect() {
@@ -169,7 +161,9 @@ class GrpcClient extends EventEmitter {
         }
         this._missionFetchActive = false;
         if (data.airports[0]) {
+          const first = !this._weatherRef;
           this._weatherRef = { lat: data.airports[0].lat, lon: data.airports[0].lon };
+          if (first) this._fetchWeather(); // do not wait out a poll period for the first answer
         }
         log.info('mission data ready', { airports: data.airports.length, navpoints: data.waypoints.length, drawings: data.drawings.length });
         this.emit('mission-load', data);
@@ -286,7 +280,7 @@ class GrpcClient extends EventEmitter {
   }
 
   _fetchWeather() {
-    if (!this._atmSvc) return;
+    if (!this._atmSvc || !this._weatherRef) return;
     const { lat, lon } = this._weatherRef;
     this._atmSvc.GetTemperatureAndPressure(
       { position: { lat, lon, alt: 0 } },

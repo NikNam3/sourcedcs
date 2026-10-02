@@ -27,7 +27,7 @@ const AIRSPACES = [
   },
 ];
 
-const TUNING_FILES = ['alerting.json', 'efsp-instrumentation.json', 'efsp-surveillance-hints.json', 'efsp-carriers.json', 'sensor-specs.json'];
+const TUNING_FILES = ['alerting.json', 'efsp-instrumentation.json', 'efsp-surveillance-hints.json', 'efsp-carriers.json', 'sensor-specs.json', 'comm-card.json'];
 
 function writeFixtures(stateDir) {
   fs.mkdirSync(path.join(stateDir, 'config-empty'), { recursive: true });

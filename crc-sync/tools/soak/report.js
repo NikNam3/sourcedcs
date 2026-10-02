@@ -7,6 +7,9 @@
 const fs = require('fs');
 const path = require('path');
 const { ols, r2, r3 } = require('./metrics');
+const { REBALANCE_KEY_LENGTH } = require('../../src/efsp/order-key');
+const { RING_MAX } = require('../../src/efsp/sync/sync-log');
+const { APPLIED_MUTATIONS_CAP } = require('../../src/efsp/sync/replay-cache');
 
 // Soak pass/fail thresholds (briefing §7 / §10 Q5), overridable by flag. They are
 // SOURCE's own, rationale beside each; guide §7.9's 200 ms is the one figure here
@@ -15,12 +18,12 @@ const THRESHOLDS = {
   heapSlopeMBPerHour: 1.0,  // WP8 "no memory growth": a fixed-size Board should not grow a MB an hour
   netGrowthPct: 25,         // ... nor end more than 25% above its post-warm-up baseline: H72 — the 2 h archive
                             // retention (H36) fills for 2 h before it plateaus, about +18% by itself
-  maxKeyLen: 40,            // order-key.js REBALANCE_KEY_LENGTH (40, mirrored here): the length the module itself calls "needs rebalance"
+  maxKeyLen: REBALANCE_KEY_LENGTH, // order-key.js: the length the module itself calls "needs rebalance"
   codePoolPct: 50,          // CodeAllocator's 4096-code pool must stay under half used
   p99WarnMs: 50,            // guide §7.9's remote-change budget is 200 ms; warn at a quarter of it
   p99FailMs: 200,
-  logRingMax: 2000,         // sync/sync-log.js RING_MAX (copied)
-  appliedMax: 5000,         // sync/replay-cache.js APPLIED_MUTATIONS_CAP (copied)
+  logRingMax: RING_MAX,     // sync/sync-log.js
+  appliedMax: APPLIED_MUTATIONS_CAP, // sync/replay-cache.js
 };
 
 // Strip retention (ADR 0082), read from the archiver, in minutes.

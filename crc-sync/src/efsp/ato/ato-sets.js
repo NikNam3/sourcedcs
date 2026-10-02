@@ -29,7 +29,7 @@
 // Deliberately NOT flight-data-store.js — it reads config at require time.
 
 const { isDtgShaped } = require('./usmtf-time');
-const { isValidCodeFormat, isReserved, isSynthetic } = require('../code-allocator');
+const { isValidCodeFormat, isReserved, isSynthetic, syntheticBlock } = require('../code-allocator');
 
 // Duplicates flight-data-store.js's CALLSIGN_RE (§3.2 rule 1), after upper-casing.
 // Not required from there (load-time I/O); the parity test in
@@ -313,7 +313,7 @@ function extractMsnacft(set, ctx) {
       if (isValidCodeFormat(code) && isReserved(code)) {
         warnings.push(W(set, 'MODE3_RESERVED', 'warning', `MSNACFT: Mode 3 "${code}" is a reserved code; kept as the ATO wrote it.`, i + 1));
       } else if (isSynthetic(code)) {
-        warnings.push(W(set, 'MODE3_SYNTHETIC', 'warning', `MSNACFT: Mode 3 "${code}" is in the 6000–6777 block crc-sync gives AI transponders; it can never be assigned.`, i + 1));
+        warnings.push(W(set, 'MODE3_SYNTHETIC', 'warning', `MSNACFT: Mode 3 "${code}" is in the ${syntheticBlock().SYNTHETIC_BLOCK_LABEL} block crc-sync gives AI transponders; it can never be assigned.`, i + 1));
       }
     }
     iff[modeKey[mode]] = code;

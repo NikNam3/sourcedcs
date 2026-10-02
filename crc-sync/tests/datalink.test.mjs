@@ -7,7 +7,7 @@ const { DatalinkFeed, luaString } = await import('../src/surveillance/datalink.j
 const { USER_COALITION } = await import('../src/surveillance/iff.js');
 
 const HOSTILE = USER_COALITION === 3 ? 2 : 3;
-const CONFIG = { participants: ['F-16C_50', 'E-3A'], pliPeriodMs: 4000 };
+const CONFIG = { participants: ['F-16C_50', 'E-3A'], pliPeriodMs: 4000, lockPollMs: 2000 };
 
 function storeOf(tracks) { return { getAll: () => tracks }; }
 function unit(id, over = {}) {
@@ -92,4 +92,12 @@ test('a failed poll keeps the last answer', async () => {
 
 test('unit names are quoted safely for Lua', () => {
   assert.equal(luaString('a"b\\c'), '"a\\"b\\\\c"');
+});
+
+test('the datalink config has no defaults in code: a missing or invalid key is an error naming it (DATA-3)', () => {
+  const t = storeOf([]);
+  assert.throws(() => new DatalinkFeed({ trackStore: t }), /"datalink" is missing/);
+  assert.throws(() => new DatalinkFeed({ trackStore: t, config: { ...CONFIG, pliPeriodMs: undefined } }), /"datalink\.pliPeriodMs" must be/);
+  assert.throws(() => new DatalinkFeed({ trackStore: t, config: { ...CONFIG, participants: 'F-16C_50' } }), /"datalink\.participants" must be/);
+  assert.throws(() => new DatalinkFeed({ trackStore: t, config: { ...CONFIG, lockPollMs: 0 } }), /"datalink\.lockPollMs" must be/);
 });

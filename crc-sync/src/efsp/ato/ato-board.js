@@ -26,7 +26,7 @@ const crypto = require('crypto');
 const { ingestAtoText } = require('./ato-ingest');
 const { fitCallsign } = require('./callsign-fit');
 const { MAX_INPUT_BYTES } = require('./usmtf-tokenize');
-const { isValidCodeFormat, isReserved, isSynthetic } = require('../code-allocator');
+const { isValidCodeFormat, isReserved, isSynthetic, syntheticBlock } = require('../code-allocator');
 
 // [SOURCE-DEFINED] — where an ATO lands. Guide §9.8: "TAC_C2 works mission
 // lines". Tanker lines land here too; `tac-c2-tanker` stays inert (Q-L14-7).
@@ -35,7 +35,7 @@ const ATO_IMPORT_ORIGIN = Object.freeze({ facilityId: 'TACTICAL', positionId: 'T
 // [SOURCE-DEFINED] — L3's own input cap, reused so the two never disagree.
 const MAX_ATO_TEXT_BYTES = MAX_INPUT_BYTES;
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+const { DAY_MS } = require('../../units');
 const ACTIONS = new Set(['CREATE', 'BIND', 'UPDATE', 'SKIP']);
 const CALLSIGN_RE = /^[A-Z0-9]{1,7}$/;
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
@@ -305,7 +305,7 @@ function analyseAto({ text, flightDataList, liveStrips, nowUtc }) {
     const modeThree = l3.extras.identityAto.modeThree || null;
     if (modeThree && !isAssignableModeThree(modeThree)) {
       own.push({ code: 'MODE3_NOT_ADOPTED', severity: 'warning', line: null,
-        message: `The ATO's Mode 3 ${modeThree} can never be assigned${isSynthetic(modeThree) ? ' (it is in the 6000–6777 block crc-sync gives AI aircraft)' : ''}; a new flight keeps the code crc-sync mints.` });
+        message: `The ATO's Mode 3 ${modeThree} can never be assigned${isSynthetic(modeThree) ? ` (it is in the ${syntheticBlock().SYNTHETIC_BLOCK_LABEL} block crc-sync gives AI aircraft)` : ''}; a new flight keeps the code crc-sync mints.` });
     }
     const line = { l3, callsign: callsign || null, modeThree, warnings: [..._humanWarnings(l3.warnings), ...own] };
     const existing = _existingFlightDataFor(l3, flightDataList, byFlightData);

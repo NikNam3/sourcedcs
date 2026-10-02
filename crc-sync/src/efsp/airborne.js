@@ -18,7 +18,7 @@
 
 const { checkOnGround, haversineM } = require('../geo');
 
-const MS_PER_KT = 0.514444;
+const { MS_PER_KT } = require('../units');
 const M_PER_FT = 0.3048;
 const FOOTPRINT_M = 5000; // geo.js GROUND_RADIUS_M — kept in step with it, see the test
 

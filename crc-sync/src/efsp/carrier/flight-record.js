@@ -23,8 +23,8 @@
 //                      approach BUTTON, never a frequency (rule 6); the
 //                      marshal message's sixteen fields in their order.
 //   decisions H31    — approach buttons: a validated integer, no defaults.
-//   [SOURCE-DEFINED] — APPROACH_TYPES (L4 briefing Q7); the button range
-//                      1..20 (DCS's radio preset range, a DCS module fact, not from the guide); the fuel
+//   comm card        — approach types and the button rule are config/comm-card.json (R3-53, DATA-3), [SOURCE-DEFINED]
+//                      until the squadron fills it in; the fuel
 //                      sanity bound; BINGO_FIELD_MAX_LEN is an engineering
 //                      bound, not a rule.
 //
@@ -35,9 +35,10 @@
 
 const { displayBearing } = require('./ship-state');
 
-const APPROACH_TYPES = Object.freeze(['TACAN', 'ICLS', 'ACLS', 'PAR', 'VISUAL']); // [SOURCE-DEFINED]
-const APPROACH_BUTTON_MIN = 1; // [SOURCE-DEFINED]
-const APPROACH_BUTTON_MAX = 20; // [SOURCE-DEFINED]
+const { loadCommCard } = require('../../comm-card');
+
+const COMM_CARD = loadCommCard(); // read once at startup; a bad file stops it (P5)
+const APPROACH_TYPES = Object.freeze([...COMM_CARD.approachTypes]);
 const FUEL_MAX_LB = 100000; // [SOURCE-DEFINED] sanity bound
 const BINGO_FIELD_MAX_LEN = 32; // engineering bound on the typed field, not a rule
 
@@ -64,19 +65,26 @@ function _isObj(v) {
   return v != null && typeof v === 'object' && !Array.isArray(v);
 }
 
-function _validateButton(value) {
+/**
+ * The button rule is the comm card's: while `approachButtons.buttons` is empty any integer in min..max (H31, no
+ * defaults until the squadron supplies its buttons); once it lists some, membership in `buttons[].button`.
+ */
+function _validateButton(value, card = COMM_CARD) {
+  const { min, max, buttons } = card.approachButtons;
+  const listed = buttons.map((e) => e.button);
+  const rule = listed.length
+    ? `one of ${listed.join(', ')} (the squadron's list, config/comm-card.json approachButtons.buttons)`
+    : `an integer ${min}..${max} (config/comm-card.json approachButtons min/max)`;
   let v = value;
   if (typeof v === 'string') {
     const t = v.trim();
     if (/^\d+$/.test(t)) v = Number(t);
     else if (/^\d+[.,]\d*$/.test(t)) return _fail(`'${value}' looks like a frequency — ${RULE_6}`);
-    else return _fail(`approachButton must be an integer ${APPROACH_BUTTON_MIN}..${APPROACH_BUTTON_MAX}`);
+    else return _fail(`approachButton must be ${rule}`);
   }
-  if (typeof v !== 'number' || !Number.isFinite(v)) return _fail(`approachButton must be an integer ${APPROACH_BUTTON_MIN}..${APPROACH_BUTTON_MAX}`);
+  if (typeof v !== 'number' || !Number.isFinite(v)) return _fail(`approachButton must be ${rule}`);
   if (!Number.isInteger(v) || v >= 100) return _fail(`${value} looks like a frequency — ${RULE_6}`);
-  if (v < APPROACH_BUTTON_MIN || v > APPROACH_BUTTON_MAX) {
-    return _fail(`approachButton must be an integer ${APPROACH_BUTTON_MIN}..${APPROACH_BUTTON_MAX} [SOURCE-DEFINED range]`);
-  }
+  if (listed.length ? !listed.includes(v) : (v < min || v > max)) return _fail(`approachButton must be ${rule}`);
   return { ok: true, value: v };
 }
 
@@ -91,7 +99,7 @@ function _validateFuel(field, value) {
  * Validate and normalise one field. `null` always clears.
  * @returns {{ok:true, value:any} | {ok:false, reason:'VALIDATION_ERROR', detail:string}}
  */
-function validateCarrierFlightField(field, value) {
+function validateCarrierFlightField(field, value, card = COMM_CARD) {
   if (!CARRIER_FLIGHT_FIELDS.includes(field)) return _fail(`unknown carrier field '${field}'`);
   if (value === null) return { ok: true, value: null };
   switch (field) {
@@ -100,11 +108,11 @@ function validateCarrierFlightField(field, value) {
       return { ok: true, value };
     case 'approachType': {
       const t = typeof value === 'string' ? value.trim().toUpperCase() : null;
-      if (!APPROACH_TYPES.includes(t)) return _fail(`approachType must be one of ${APPROACH_TYPES.join(', ')}`);
+      if (!card.approachTypes.includes(t)) return _fail(`approachType must be one of ${card.approachTypes.join(', ')} (config/comm-card.json approachTypes)`);
       return { ok: true, value: t };
     }
     case 'approachButton':
-      return _validateButton(value);
+      return _validateButton(value, card);
     case 'bingoField': {
       const t = typeof value === 'string' ? value.trim().toUpperCase() : '';
       if (!t) return _fail('bingoField must be an airfield ICAO code or name');
@@ -222,8 +230,6 @@ function marshalMessage({ flightData = null, derived = null, caseValue = null, s
 
 module.exports = {
   APPROACH_TYPES,
-  APPROACH_BUTTON_MIN,
-  APPROACH_BUTTON_MAX,
   CARRIER_FLIGHT_FIELDS,
   MARSHAL_MESSAGE_FIELDS,
   defaultCarrierFlight,

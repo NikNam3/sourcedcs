@@ -2,7 +2,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 // docs/adr/0059 — what each aircraft's transponder is sending.
-const { Transponders, octalCode } = await import('../src/surveillance/transponder.js');
+const { Transponders: RawTransponders, octalCode } = await import('../src/surveillance/transponder.js');
+const { loadSensorSpecs } = await import('../src/radars.js');
+// The config is the shipped sensor-specs.json's `transponder` (DATA-3: no defaults in code).
+const SHIPPED = loadSensorSpecs().transponder;
+class Transponders extends RawTransponders {
+  constructor(deps = {}) { super({ ...deps, config: { ...SHIPPED, ...(deps.config || {}) } }); }
+}
 const { USER_COALITION } = await import('../src/surveillance/iff.js');
 const { isSynthetic, CodeAllocator } = await import('../src/efsp/code-allocator.js');
 
@@ -119,4 +125,23 @@ test('mode4Of: mode4For [] takes Mode 4 away from own AI; a class other than own
   const t = new Transponders({ config: { mode4For: ['own', 'neutral', 'hostile'] } });
   assert.equal(t.mode4Of(air(2, { coalition: 1 })), false, 'crypto check comes first');
   assert.equal(t.mode4Of(air(3, { coalition: HOSTILE })), false);
+});
+
+test('the transponder config has no defaults in code: a missing or invalid key is an error naming it (DATA-3)', () => {
+  assert.throws(() => new RawTransponders({ srs: null }), /"transponder" is missing/);
+  assert.throws(() => new RawTransponders({ config: { syntheticFor: ['own'] } }), /"transponder\.mode4For" must be/);
+  assert.throws(() => new RawTransponders({ config: { ...SHIPPED, syntheticFor: ['blue'] } }), /"transponder\.syntheticFor" must be/);
+});
+
+test('the synthetic block is sensor-specs.json `transponder.syntheticBlock` (DATA-3): shipped 6000-6777, validated at load', async () => {
+  const { SYNTHETIC_BLOCK_START, SYNTHETIC_BLOCK_SIZE, SYNTHETIC_BLOCK_LABEL } = await import('../src/synthetic-block.js');
+  assert.equal(SYNTHETIC_BLOCK_START, 0o6000);
+  assert.equal(SYNTHETIC_BLOCK_SIZE, 0o1000);
+  assert.equal(SYNTHETIC_BLOCK_LABEL, '6000\u20136777');
+  const { validateTransponderConfig } = await import('../src/surveillance/sensor-config.js');
+  const bad = (b) => () => validateTransponderConfig({ ...SHIPPED, syntheticBlock: b });
+  assert.throws(bad(undefined), /"transponder\.syntheticBlock" is missing/);
+  assert.throws(bad({ first: '6000' }), /syntheticBlock\.last" must be a 4-digit octal/);
+  assert.throws(bad({ first: '6008', last: '6777' }), /syntheticBlock\.first" must be a 4-digit octal/);
+  assert.throws(bad({ first: '6777', last: '6000' }), /first must not be above last/);
 });

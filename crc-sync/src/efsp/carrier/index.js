@@ -52,7 +52,6 @@ const {
 } = require('./marshal-stack');
 const {
   SHIP_CATEGORY,
-  ANGLED_DECK_BY_TYPE,
   SHIP_INPUT_KEYS,
   ALTIMETER_MIN_INHG,
   ALTIMETER_MAX_INHG,
@@ -71,8 +70,6 @@ const {
 } = require('./ship-state');
 const {
   APPROACH_TYPES,
-  APPROACH_BUTTON_MIN,
-  APPROACH_BUTTON_MAX,
   CARRIER_FLIGHT_FIELDS,
   MARSHAL_MESSAGE_FIELDS,
   defaultCarrierFlight,
@@ -134,7 +131,6 @@ module.exports = {
   setMarshalRadial,
   applyStackOp,
   SHIP_CATEGORY,
-  ANGLED_DECK_BY_TYPE,
   SHIP_INPUT_KEYS,
   ALTIMETER_MIN_INHG,
   ALTIMETER_MAX_INHG,
@@ -151,8 +147,6 @@ module.exports = {
   normalizeShipInputs,
   displayBearing,
   APPROACH_TYPES,
-  APPROACH_BUTTON_MIN,
-  APPROACH_BUTTON_MAX,
   CARRIER_FLIGHT_FIELDS,
   MARSHAL_MESSAGE_FIELDS,
   defaultCarrierFlight,
