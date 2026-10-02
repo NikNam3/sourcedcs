@@ -4,8 +4,8 @@
 // ACCEPT / REJECT / TRANSFER_COMMS on the Strip, and the three `receiveTofi*` calls a peer Board makes on this one.
 // BoardStore's `receiveTofi*` delegate here.
 
-const crypto = require('crypto');
-const { newFlags, deepClone } = require('./strip-util');
+const { deepClone, trackDegradationRefusal } = require('./strip-util');
+const { mintReplica } = require('./replica');
 const { SEPARATION_REGIMES } = require('../flight-data-store');
 
 class Tofi {
@@ -130,14 +130,8 @@ class Tofi {
       // §4.6 primitive table this rule sits directly under, so it applies
       // here too, for both directions.
       const entryFlightData = this._flightDataStore.getFlightData(strip.flightDataId);
-      const entryDegraded = entryFlightData && entryFlightData.identity.trackDegradationFlag && entryFlightData.identity.trackDegradationFlag !== 'NONE';
-      if (entryDegraded && !op.note) {
-        return {
-          ok: false, reason: 'VALIDATION_ERROR',
-          detail: `track degradation (${entryFlightData.identity.trackDegradationFlag}) forces verbal coordination — a note is required`,
-          strip,
-        };
-      }
+      const entryDegradation = trackDegradationRefusal(entryFlightData, op.note, strip);
+      if (entryDegradation) return entryDegradation;
 
       const proposal = peer.receiveTofiProposal({
         causedBy: this._activeCmid, fromFacilityId: this._rules.facilityId, fromPositionId: actingPositionId,
@@ -166,14 +160,8 @@ class Tofi {
     if (!peer) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown Facility: ${prior.peerFacilityId}`, strip };
 
     const exitFlightData = this._flightDataStore.getFlightData(strip.flightDataId);
-    const exitDegraded = exitFlightData && exitFlightData.identity.trackDegradationFlag && exitFlightData.identity.trackDegradationFlag !== 'NONE';
-    if (exitDegraded && !op.note) {
-      return {
-        ok: false, reason: 'VALIDATION_ERROR',
-        detail: `track degradation (${exitFlightData.identity.trackDegradationFlag}) forces verbal coordination — a note is required`,
-        strip,
-      };
-    }
+    const exitDegradation = trackDegradationRefusal(exitFlightData, op.note, strip);
+    if (exitDegradation) return exitDegradation;
 
     const exitResult = peer.receiveTofiExitProposal({ causedBy: this._activeCmid, stripId: prior.peerStripId, note: op.note || null, by });
     if (!exitResult.ok) return { ok: false, reason: exitResult.reason || 'VALIDATION_ERROR', detail: exitResult.detail, strip };
@@ -462,44 +450,25 @@ class Tofi {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `no Coordination Bay configured for ${toPositionId}` };
     }
 
-    const stripId = crypto.randomUUID();
-    const now = this._clock.now();
-    const rackStrips = this._state.rack(coordinationBay.bayId, coordinationBay.rackIds[0]);
-    const afterStripId = rackStrips.length ? rackStrips[rackStrips.length - 1].stripId : null;
-    const orderKey = this._placement.resolveOrderKey(coordinationBay.bayId, coordinationBay.rackIds[0], afterStripId, null, null);
-
-    const strip = {
-      stripId,
-      cid: this._state.nextCid(),
-      flightDataId, // shared with the ATC-side Strip — guide §9.8's binding
-      rev: 1,
-      stripType: 'MISSION',
-      state: this._initialStateFor('MISSION'),
-      ownerPositionId: toPositionId,
-      bayId: coordinationBay.bayId,
-      rackId: coordinationBay.rackIds[0],
-      orderKey,
-      annotations: {},
-      flags: newFlags(),
-      // No `correlation` — it is keyed by flightDataId, and a replica shares the
-      // originator's flight data (docs/adr/0013), so it shares the correlation too.
-      // That is the case a per-Strip field got wrong: both halves of a
-      // cross-Facility exchange are looking at one airframe.
-      coordination: null,
-      tofiCoordination: {
-        direction: 'ENTRY', state: 'INITIATED',
-        peerFacilityId: fromFacilityId, peerStripId: fromStripId, peerPositionId: fromPositionId,
-        commsTransferred: false, commsTransferredAt: null, commsTransferredBy: null,
-        note: note || null,
-        initiatedAt: now, initiatedBy: by || null, acceptedAt: null, acceptedBy: null,
-        // This exchange put the Strip in a Coordination Bay, so this
-        // exchange is the one allowed to move it out again on ACCEPT.
-        // Absent on the reuse path above, deliberately.
-        mintedForTofi: true,
-      },
-      createdAt: now, updatedAt: now, updatedBy: by || null,
-    };
-    this._state.insert(strip);
+    // flightDataId is shared with the ATC-side Strip — guide §9.8's binding.
+    const strip = mintReplica({ state: this._state, placement: this._placement, clock: this._clock }, {
+      flightDataId, stripType: 'MISSION', state: this._initialStateFor('MISSION'),
+      toPositionId, coordinationBay, by,
+      links: (now) => ({
+        coordination: null,
+        tofiCoordination: {
+          direction: 'ENTRY', state: 'INITIATED',
+          peerFacilityId: fromFacilityId, peerStripId: fromStripId, peerPositionId: fromPositionId,
+          commsTransferred: false, commsTransferredAt: null, commsTransferredBy: null,
+          note: note || null,
+          initiatedAt: now, initiatedBy: by || null, acceptedAt: null, acceptedBy: null,
+          // This exchange put the Strip in a Coordination Bay, so this
+          // exchange is the one allowed to move it out again on ACCEPT.
+          // Absent on the reuse path above, deliberately.
+          mintedForTofi: true,
+        },
+      }),
+    });
     this._audit.recordPeer('TofiProposal', strip, null, { causedBy, fromFacilityId, by });
     return { ok: true, strip };
   }

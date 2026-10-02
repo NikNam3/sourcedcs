@@ -4,8 +4,8 @@
 // PROPOSE / ACCEPT / REJECT / STAND_BY / CANCEL on the sender's Strip, and the four `receive*` calls a peer Board
 // makes on this one. BoardStore's `receiveCoordination*` delegate here.
 
-const crypto = require('crypto');
-const { newFlags, deepClone } = require('./strip-util');
+const { deepClone, trackDegradationRefusal } = require('./strip-util');
+const { mintReplica } = require('./replica');
 
 class Coordination {
   /**
@@ -19,11 +19,10 @@ class Coordination {
    * @param {(stripId:string) => void} deps.touch the kernel's `recordTouch` (board/board-state.js)
    * @param {() => string|null} deps.activeCmid the clientMutationId being applied, read late
    * @param {(strip:object, by:string) => object|null} deps.retire late-bound to StripOps' retire
-   * @param {() => object|null} deps.mutationLog the facade's current Mutation log, read late (setMutationLog)
    * @param {(stripType:string, senderState:string) => string} deps.replicaStateOnReceipt the authority registry's accessor (docs/adr/0087)
    * @param {(primitive:string, stripType:string, senderState:string) => string|undefined} deps.senderStateOnAccept the authority registry's accessor (docs/adr/0087)
    */
-  constructor({ rules, state, audit, placement, clock, flightDataStore, touch, activeCmid, retire, mutationLog, replicaStateOnReceipt, senderStateOnAccept }) {
+  constructor({ rules, state, audit, placement, clock, flightDataStore, touch, activeCmid, retire, replicaStateOnReceipt, senderStateOnAccept }) {
     this._rules = rules;
     this._state = state;
     this._audit = audit;
@@ -33,14 +32,11 @@ class Coordination {
     this._touch = touch;
     this._activeCmidOf = activeCmid;
     this._retire = retire;
-    this._mutationLogOf = mutationLog;
     this._replicaStateOnReceipt = replicaStateOnReceipt;
     this._senderStateOnAccept = senderStateOnAccept;
   }
 
   get _activeCmid() { return this._activeCmidOf(); }
-
-  get _mutationLog() { return this._mutationLogOf(); }
 
   // ── cross-Facility coordination (guide §4.6, docs/adr/0013-0018) ──
   //
@@ -134,14 +130,8 @@ class Coordination {
     // TRK force verbal coordination; a non-empty note is the electronic
     // stand-in for "verbal coordination occurred" (docs/adr/0019).
     const flightData = this._flightDataStore.getFlightData(strip.flightDataId);
-    const degraded = flightData && flightData.identity.trackDegradationFlag && flightData.identity.trackDegradationFlag !== 'NONE';
-    if (degraded && !op.note) {
-      return {
-        ok: false, reason: 'VALIDATION_ERROR',
-        detail: `track degradation (${flightData.identity.trackDegradationFlag}) forces verbal coordination — a note is required`,
-        strip,
-      };
-    }
+    const degradation = trackDegradationRefusal(flightData, op.note, strip);
+    if (degradation) return degradation;
 
     const now = this._clock.now();
     const proposal = peer.receiveCoordinationProposal({
@@ -321,14 +311,7 @@ class Coordination {
     const before = deepClone(strip);
     strip.coordination = null;
     this._state.bump(strip, null);
-    if (this._mutationLog) {
-      this._mutationLog.record({
-        clientMutationId: null, op: 'SystemCoordinationEnd', stripId: strip.stripId,
-        facilityId: this._rules.facilityId || null, flightDataId: strip.flightDataId || null,
-        actingPositionId: null, actorId: 'system', at: this._clock.now(),
-        before, after: deepClone(strip), reason: 'peer-dropped', causedBy: causedBy || null,
-      });
-    }
+    this._audit.recordSystem('SystemCoordinationEnd', strip, { before, after: deepClone(strip), reason: 'peer-dropped', causedBy: causedBy || null });
     return { ok: true, strip };
   }
 
@@ -388,61 +371,39 @@ class Coordination {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `no Coordination Bay configured for ${toPositionId}` };
     }
 
-    const stripId = crypto.randomUUID();
-    const now = this._clock.now();
-    const rackStrips = this._state.rack(coordinationBay.bayId, coordinationBay.rackIds[0]);
-    const afterStripId = rackStrips.length ? rackStrips[rackStrips.length - 1].stripId : null;
-    const orderKey = this._placement.resolveOrderKey(coordinationBay.bayId, coordinationBay.rackIds[0], afterStripId, null, null);
-
-    const strip = {
-      stripId,
-      cid: this._state.nextCid(),
-      flightDataId,
-      rev: 1,
-      // The replica carries the SENDER's own strip type/EfspState (docs/adr/0022)
-      // from the moment it's minted, not a separate "not yet accepted"
-      // pseudo-state — coordination.state is what actually tracks
-      // PROPOSED/ACTIVE/REJECTED. fromState is guaranteed to be one of
-      // coordination.js's COORDINATION_ELIGIBLE_STATES combos (checked by
-      // _applyCoordinationPropose before this is ever called), so the
-      // receiving Facility is guaranteed to have a Bay configured for it.
-      stripType: fromStripType,
-      state: this._replicaStateOnReceipt(fromStripType, fromState),
-      ownerPositionId: toPositionId,
-      bayId: coordinationBay.bayId,
-      rackId: coordinationBay.rackIds[0],
-      orderKey,
-      annotations: {},
-      flags: newFlags(),
-      // No `correlation` — it is keyed by flightDataId, and a replica shares the
-      // originator's flight data (docs/adr/0013), so it shares the correlation too.
-      // That is the case a per-Strip field got wrong: both halves of a
-      // cross-Facility exchange are looking at one airframe.
-      coordination: {
-        primitive,
-        state: 'INITIATED',
-        // This Strip exists only because of this exchange — it is the
-        // receiver's replica, not a flight record with a life of its own.
-        // Read by `StripOps#isRejectedReplica` to keep a declined replica inert
-        // wherever it ends up on the Board (F-303); TOFI's `mintedForTofi`
-        // is the same field for the same reason.
-        mintedForCoordination: true,
-        peerFacilityId: fromFacilityId,
-        peerStripId: fromStripId,
-        peerPositionId: fromPositionId,
-        dataOwnerPositionRef: { facilityId: fromFacilityId, positionId: fromPositionId },
-        separationResponsibilityRef: { facilityId: fromFacilityId, positionId: fromPositionId },
-        radarIdTransferred: false,
-        commsTransferred: false,
-        lastForwardedEtaUtc: flightData.filed.estimatedArrivalTimeUtc || null,
-        note: note || null,
-        initiatedAt: now, initiatedBy: by || null,
-        acceptedAt: null, acceptedBy: null,
-        lastStandByAt: null,
-      },
-      createdAt: now, updatedAt: now, updatedBy: by || null,
-    };
-    this._state.insert(strip);
+    // The replica carries the SENDER's own strip type/EfspState (docs/adr/0022) from the moment it's minted, not a
+    // separate "not yet accepted" pseudo-state — coordination.state is what actually tracks PROPOSED/ACTIVE/REJECTED.
+    // fromState is guaranteed to be one of coordination.js's COORDINATION_ELIGIBLE_STATES combos (checked by
+    // _applyCoordinationPropose before this is ever called), so the receiving Facility is guaranteed to have a Bay
+    // configured for it.
+    const strip = mintReplica({ state: this._state, placement: this._placement, clock: this._clock }, {
+      flightDataId, stripType: fromStripType, state: this._replicaStateOnReceipt(fromStripType, fromState),
+      toPositionId, coordinationBay, by,
+      links: (now) => ({
+        coordination: {
+          primitive,
+          state: 'INITIATED',
+          // This Strip exists only because of this exchange — it is the
+          // receiver's replica, not a flight record with a life of its own.
+          // Read by `StripOps#isRejectedReplica` to keep a declined replica inert
+          // wherever it ends up on the Board (F-303); TOFI's `mintedForTofi`
+          // is the same field for the same reason.
+          mintedForCoordination: true,
+          peerFacilityId: fromFacilityId,
+          peerStripId: fromStripId,
+          peerPositionId: fromPositionId,
+          dataOwnerPositionRef: { facilityId: fromFacilityId, positionId: fromPositionId },
+          separationResponsibilityRef: { facilityId: fromFacilityId, positionId: fromPositionId },
+          radarIdTransferred: false,
+          commsTransferred: false,
+          lastForwardedEtaUtc: flightData.filed.estimatedArrivalTimeUtc || null,
+          note: note || null,
+          initiatedAt: now, initiatedBy: by || null,
+          acceptedAt: null, acceptedBy: null,
+          lastStandByAt: null,
+        },
+      }),
+    });
     this._audit.recordPeer('InterfacilityCoordinationProposal', strip, null, { causedBy, fromFacilityId, by });
     return { ok: true, strip };
   }

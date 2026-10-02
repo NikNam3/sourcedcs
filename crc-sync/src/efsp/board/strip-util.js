@@ -66,4 +66,20 @@ function _frequencyFromBlockValue(value) {
   return /^\d+(\.\d+)?$/.test(trimmed) ? Number(trimmed) : value;
 }
 
-module.exports = { newFlags, _validateAltitudeBlock, deepClone, _frequencyFromBlockValue };
+/**
+ * The track-degradation soft interlock (guide §4.6 rule 5, docs/adr/0019): CST/FAIL/IF/NT/TRK force verbal
+ * coordination, and a non-empty note is the electronic stand-in for it. Returns the refusal result, or null.
+ */
+function trackDegradationRefusal(flightData, note, strip) {
+  const flag = flightData && flightData.identity.trackDegradationFlag;
+  if (flag && flag !== 'NONE' && !note) {
+    return {
+      ok: false, reason: 'VALIDATION_ERROR',
+      detail: `track degradation (${flag}) forces verbal coordination — a note is required`,
+      strip,
+    };
+  }
+  return null;
+}
+
+module.exports = { trackDegradationRefusal, newFlags, _validateAltitudeBlock, deepClone, _frequencyFromBlockValue };
