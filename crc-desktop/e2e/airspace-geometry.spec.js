@@ -263,15 +263,14 @@ test('create a ROUTE: choose the kind, type fixes in DM, MGRS and decimal, pick 
   await cell(0, 'name').fill('A');
   await cell(0, 'lat').fill('N37 21.0'); await cell(0, 'lon').fill('E035 21.0'); await cell(0, 'lon').blur();
   await cell(0, 'altLowerFt').fill('500'); await cell(0, 'altUpperFt').fill('3000');
-  // fix 2 by navpoint
-  await route.locator('#asg-add-fix').click();
+  // fix 2 by navpoint; the table starts with two fixes, a third is added below
   await route.locator('tr[data-fix="1"] .asg-nav').click();
   await route.locator('.asg-navmenu input').fill('SAR');
   await route.locator('.asg-navitem', { hasText: 'SARIN' }).click();
   await expect(cell(1, 'name')).toHaveValue('SARIN');
   await expect(cell(1, 'lat')).toHaveValue('N37 12.0');
   await cell(1, 'altLowerFt').fill('1000'); await cell(1, 'altUpperFt').fill('6000'); await cell(1, 'widthNm').fill('10');
-  // exit fix as a decimal pair pasted in the first cell, then an MGRS one is accepted too
+  // a third fix, the exit fix, as a decimal pair pasted in the first cell
   await route.locator('#asg-add-fix').click();
   await cell(2, 'name').fill('TOPAK');
   await cell(2, 'lat').fill('36.98, 36.15'); await cell(2, 'lat').blur();
