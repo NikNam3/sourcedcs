@@ -14,6 +14,9 @@ for (const [k, v] of Object.entries({
   CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH: 'board.json',
   CRCSYNC_EFSP_MUTATION_LOG_PATH: 'mutations.jsonl',
   CRCSYNC_EFSP_AIRSPACES_PATH: 'airspaces.json',
+  CRCSYNC_EFSP_TRAFFIC_COUNT_PATH: 'traffic-count.jsonl',
+  CRCSYNC_EFSP_METRICS_PATH: 'metrics.json',
+  CRCSYNC_STATE_DIR: 'state',
 })) process.env[k] = path.join(tmpDir, v);
 const BOARD = process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH;
 const STANDING = process.env.CRCSYNC_EFSP_AIRSPACES_PATH;

@@ -27,7 +27,7 @@ for (const [k, v] of Object.entries({
   CRCSYNC_MISSION_SESSION_PATH: 'session.json',
 })) process.env[k] = path.join(tmpDir, v);
 process.env.CRCSYNC_STATE_DIR = tmpDir;
-fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
+fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
 delete process.env.CRCSYNC_TEST_RESET;
 
 const { createApp } = await import('../src/app.js');
