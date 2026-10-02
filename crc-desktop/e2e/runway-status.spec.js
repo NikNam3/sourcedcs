@@ -280,7 +280,7 @@ test('Phase 3 walk: OPS asks for runway works, TWR suspends, the Strips hold, FI
   await goBay(twr, 'LC', 'lc-final');
   const final = stripByCallsign(twr, ARR_FIN);
   await expect(chip(final)).toHaveText('RWY 05 SUSP');
-  await expect(final.locator('.efsp-alert-reason')).toHaveText(/Landing is an observation and is not signedOn\.$/);
+  await expect(final.locator('.efsp-alert-reason')).toHaveText(/Landing is an observation and is not held\.$/);
   await expect(nlaBtn(final)).toBeEnabled();
   await nlaBtn(final).click();
   await expect.poll(async () => (await stripOf(twr, ARR_FIN)).state).toBe('LANDED');
