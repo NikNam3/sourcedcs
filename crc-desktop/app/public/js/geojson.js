@@ -624,11 +624,11 @@ function buildApproachVector() {
   };
 }
 
-// Extended centerline for APP-control: independent of the topbar-driven
+// Extended centerline for AP-control: independent of the topbar-driven
 // buildApproachVector() above (different airport-selection state — the APRT
 // panel's _aprtSelectedApt, not the topbar's selectedApt/approachRwyCourse —
 // and no real runway geometry exists to unify them on). Only drawn when an
-// APP radar for the APRT panel's airport is enabled and a runway heading has
+// AP radar for the APRT panel's airport is enabled and a runway heading has
 // been entered there.
 // Distance-tick spacing in nm, coarser at low zoom so ticks don't merge into
 // noise once the centerline's whole length is only a few screen pixels long.

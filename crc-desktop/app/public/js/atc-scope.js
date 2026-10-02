@@ -264,7 +264,7 @@ export function atcView(t, rel, env) {
 
 /**
  * A flight I handed on that this scope saw go: a cross-Facility handoff
- * accepted, or a same-Facility transfer (a Strip dragged TWR -> APP, which
+ * accepted, or a same-Facility move (a Strip dragged LC -> AP, which
  * moves at once with no PROPOSED step, guide §8). `at` is when this scope saw
  * it happen, or null when it was already so; `key` names its click-down stage.
  */
@@ -307,7 +307,7 @@ export function atcConformTag(alerts) {
   return null;
 }
 
-/** The flight's ACTIVE assigned altitude (ft) and heading, from its FDR's clearance (docs/adr/0058). */
+/** The flight's ACTIVE assigned altitude (ft) and heading, from its flight data's clearance (docs/adr/0058). */
 export function atcAssigned(flightData) {
   if (!flightData || !flightData.clearance) return null;
   const active = (cell) => cell && (cell.entries || []).find(e => e.status === 'ACTIVE');

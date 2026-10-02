@@ -101,7 +101,7 @@ export let missionData      = null;
 let weather          = { pressurePa: 101325, tempK: 288.15 }; // ISA defaults until server sends live data
 export let atisActive       = []; // [{ frequency, ownerId }] — who's currently transmitting ATIS where, from crc-sync
 export let grpcStatus       = 'disconnected';
-export let noRadarsActive   = false; // true when the signedOn Positions grant no radar at all
+export let noRadarsActive   = false; // true when the Positions we are signed on to grant no radar at all
 export let srsStatus        = 'disconnected';
 export let lastUpdateMs     = null;
 export let mapReady         = false;
@@ -134,7 +134,7 @@ export function _setApproachRwyCourse(v) { approachRwyCourse = v; }
 // quietly blank.
 export let coverageRadars = [];          // [{id, type, label, lat, lon, elevM, rangeM, sweepMs, sweepStart, grantedBy, ...}]
 export let coverageSignedOnPositions = [];   // [{facilityId, positionId, isPrimary}]
-export let coverageDatalink = false;     // whether a signedOn Position is on the datalink
+export let coverageDatalink = false;     // whether a Position we are signed on to is on the datalink
 
 /** Every radar this controller is looking through. */
 export function getActiveRadars() { return coverageRadars; }
@@ -176,7 +176,7 @@ const DEFAULTS = {
   braColor:      '#4488cc',
   radarDebug:    false,
   textMarksEnabled: false, // DCS mission-editor Text objects, shown as a map layer
-  extCenterlineNm: 25, // extended APP-radar centerline length
+  extCenterlineNm: 25, // extended AP-radar centerline length
   scale:         1.0,
   lightMode:     false,
   showElevation: false, // computed contour lines + height labels (elevation.js), zoom-independent
@@ -614,8 +614,8 @@ async function connect() {
         saveSettings();
         if (typeof refreshAprtSelectedApt === 'function') refreshAprtSelectedApt();
         break;
-      // Which radars our held Positions let us look through. Arrives before
-      // the first snapshot and again whenever the held set changes — see
+      // Which radars the Positions we are signed on to let us look through. Arrives before
+      // the first snapshot and again whenever the signed-on set changes — see
       // applyCoverage and crc-sync's docs/adr/0042.
       case 'coverage':
         applyCoverage(msg);

@@ -16,7 +16,7 @@ import { atisActive, missionData, saveSettings, settings } from '../app.js';
 export let _aprtSelectedApt = null;
 
 // Numeric heading parsed from the APRT panel's runway field, for the
-// extended APP-radar centerline (geojson.js buildExtendedCenterline()).
+// extended AP-radar centerline (geojson.js buildExtendedCenterline()).
 // Cached rather than read from the DOM every map-update tick. The runway
 // number is MAGNETIC; the map draws in true, and crc-sync does the
 // conversion (its docs/adr/0085 — a typed magnetic value is never converted

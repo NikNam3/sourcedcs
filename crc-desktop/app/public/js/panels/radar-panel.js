@@ -40,7 +40,7 @@ export function refreshRadarPanelData() {
 }
 
 /**
- * The radars our held Positions grant us, and why. An empty list is a real
+ * The radars the Positions we are signed on to grant us, and why. An empty list is a real
  * answer, not a failure: a Ground or Clearance Delivery controller has no
  * scope, and saying which Position would give them one is more use than an
  * empty box.
@@ -71,7 +71,7 @@ export function renderCoverageList() {
     $label.className = 'radar-row-label';
     $label.textContent = r.label + (isGnd ? ' GND' : '');
 
-    // Which of the held Positions put this radar in the list — the answer to
+    // Which of the Positions we are signed on to put this radar in the list — the answer to
     // "why am I seeing this", which a checkbox never had to explain.
     const $via = document.createElement('span');
     $via.className = 'radar-row-via';

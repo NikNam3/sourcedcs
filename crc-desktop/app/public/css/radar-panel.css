@@ -28,7 +28,7 @@
     }
     .radar-row.disabled { color: var(--ui-text-dim); }
     .radar-row-label { flex: 1; }
-    /* Which held Position put this radar in the list — the answer to "why am
+    /* Which Position the controller is signed on to put this radar in the list — the answer to "why am
        I seeing this", which a checkbox never had to give. */
     .radar-row-via {
       font-size: 9px;
