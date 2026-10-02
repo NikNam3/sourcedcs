@@ -1,22 +1,22 @@
 'use strict';
 
-// The MARSHAL Role family (authority registry, S3-2). States and NLA moved
+// The MARSHAL strip-type family (authority registry, S3-2). States and NLA moved
 // from nla.js, state owners from permission.js.
 
-// The carrier's three Roles (docs/adr/0064 B2, docs/adr/0074), guide §4.1 and
+// The carrier's three strip types (docs/adr/0064 B2, docs/adr/0074), guide §4.1 and
 // §9.12. [SOURCE-DEFINED] state names, chosen so they collide with no other
-// Role's state but DROPPED: in particular NOT `FINAL`, which is an ARRIVAL
-// *state* above (the Role named FINAL below lives on strip.stripType, not
+// strip type's state but DROPPED: in particular NOT `FINAL`, which is an ARRIVAL
+// *state* above (the strip type named FINAL below lives on strip.stripType, not
 // strip.state). INELIGIBLE_STATES and Bay `impliesState` are role-blind string
 // sets, so a clash would be silent.
 //
-// MARSHAL is the carrier's holding/launch Role (a launch is a MARSHAL Strip in
+// MARSHAL is the carrier's holding/launch strip type (a launch is a MARSHAL Strip in
 // LAUNCH; the recovery is a NEW MARSHAL Strip on the same flightDataId, so EEAT,
-// which lives on the FDR, survives to it). FINAL is the talk-down Role, shared
-// with PAR (L18); PATTERN is the visual-pattern Role, shared with RSU (L18).
+// which lives on the flight data, survives to it). FINAL is the talk-down strip type, shared
+// with PAR (L18); PATTERN is the visual-pattern strip type, shared with RSU (L18).
 const MARSHAL_STATES = ['LAUNCH', 'IN_STACK', 'COMMENCED', 'DROPPED'];
 
-// The carrier's three Roles (docs/adr/0064 B2, docs/adr/0074), [SOURCE-DEFINED]
+// The carrier's three strip types (docs/adr/0064 B2, docs/adr/0074), [SOURCE-DEFINED]
 // like every state table here: guide §4.1 names the Positions and §9.12 the
 // handoffs, and neither publishes "normally owned by". The Marshal owns a
 // flight until Commence; then the lane controller owns COMMENCED, ON_FINAL,
@@ -32,10 +32,10 @@ const MARSHAL_STATE_OWNERS = {
 /**
  * MARSHAL's NLA table (docs/adr/0064 B2, docs/adr/0074). A NLA result may carry
  * `carrierHandoff`, the key of a CARRIER_HANDOFFS row (carrier/handoffs.js):
- * board-store.js then applies the whole transfer (ownership, Role, stack effect,
+ * the Board (board/ops/carrier-handoff.js) then applies the whole transfer (ownership, strip type, stack effect,
  * the trigger type recorded) instead of a bare state write, so the button and
  * the dedicated CarrierHandoff op are ONE implementation. `stripTypeChange` names
- * the Role the Strip takes in place. Every trigger is a controller gesture
+ * the strip type the Strip takes in place. Every trigger is a controller gesture
  * (guide §10.3, D5): nothing here reads a radar contact.
  */
 function computeMarshalNla(strip, flightData, now, ctx) {
@@ -65,7 +65,7 @@ function computeMarshalNla(strip, flightData, now, ctx) {
 
     case 'COMMENCED':
       // "Radar contact": the lane controller has the aircraft on the scope.
-      // The Role changes in place (as ConvertToArrival does, ADR 0023) and the
+      // The strip type changes in place (as ConvertToArrival does, ADR 0023) and the
       // Strip stays with the lane.
       return { toState: 'ON_FINAL', stripTypeChange: 'FINAL', carrierHandoff: 'APPROACH_TO_FINAL' };
 
@@ -75,7 +75,7 @@ function computeMarshalNla(strip, flightData, now, ctx) {
   }
 }
 
-// The carrier Roles' countability (docs/adr/0074), [SOURCE-DEFINED]: a launch
+// The carrier strip types' countability (docs/adr/0074), [SOURCE-DEFINED]: a launch
 // is a movement (the aircraft left the deck), a trap is one, and a recovered
 // aircraft in the pattern is one. A flight that passes MARSHAL -> FINAL ->
 // PATTERN is dropped once, from the last Strip, so it counts once.

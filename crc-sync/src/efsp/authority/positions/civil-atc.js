@@ -1,8 +1,8 @@
 'use strict';
 
-// The ATC Position family (authority registry, S3-2): Incirlik's OPS, CD, GND,
-// TWR and APP, and CENTER's CTR (guide §4.1). Moved from permission.js. RSU,
-// SFA and PAR are incirlik-military.js, which also adds APP's L18 columns.
+// The ATC Position family (authority registry, S3-2): Incirlik's OPS, CD, GC,
+// LC and AP, and CENTER's CTR (guide §4.1). Moved from permission.js. RSU,
+// SFA and PAR are incirlik-military.js, which also adds AP's L18 columns.
 
 const { OP_KINDS, COORDINATION_OP_KINDS, AP_CTR_ONLY_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_OP_KINDS, NON_CREATE_OPS } = require('../op-kinds');
 
@@ -11,35 +11,35 @@ const PERMISSIONS = {
   CD:  new Set(NON_CREATE_OPS),
   GC: new Set(NON_CREATE_OPS),
   LC: new Set(NON_CREATE_OPS),
-  // APP deliberately excludes TOFI even though it otherwise gets the full
+  // AP deliberately excludes TOFI even though it otherwise gets the full
   // OP_KINDS set — guide §4.1's own Position table lists TOFI only for CTR
-  // among the ATC Positions built so far; APP is not on TOFI's ATC side.
+  // among the ATC Positions built so far; AP is not on TOFI's ATC side.
   AP: new Set(OP_KINDS.filter(k => !TOFI_OP_KINDS.includes(k))),
   // CTR gets CreateStrip too — it self-originates ARRIVAL Strips as the new
   // terminus stub (docs/adr/0014, mirroring the same "nothing further
-  // upstream is built yet" shape as docs/adr/0008's original APP stub),
+  // upstream is built yet" shape as docs/adr/0008's original AP stub),
   // since no third Facility exists upstream of CENTER this slice. CTR also
   // gets TOFI (WP4A second slice) — the full OP_KINDS set already includes it.
   CTR: new Set(OP_KINDS),
 };
 
-// Which Strip Role(s) a Position may originate via CreateStrip. Every
+// Which strip type(s) a Position may originate via CreateStrip. Every
 // Position in PERMISSIONS with CreateStrip in its op-kind set MUST have an
 // entry here (even if empty) — see the "every CreateStrip-eligible
 // Position has a CREATE_STRIP_TYPE_PERMISSIONS entry" test.
 const CREATE_STRIP_TYPE_PERMISSIONS = {
   OPS: new Set(['DEPARTURE']),
   // docs/adr/0023 reopens this — ADR 0014 had deliberately emptied it,
-  // reasoning ARRIVAL Strips at APP should only ever arrive via the real
-  // CTR->APP HANDOFF, never local self-creation. Live testing against real
+  // reasoning ARRIVAL Strips at AP should only ever arrive via the real
+  // CTR->AP HANDOFF, never local self-creation. Live testing against real
   // ATC scenarios (a VFR aircraft picking up an IFR clearance airborne, an
   // aircraft from an uncontrolled field with no flight plan on file, ...)
   // found that reasoning too narrow: guide §4.1's own Position table lists
-  // APP's Strip Roles as "all", and none of those pop-up scenarios have a
+  // AP's strip types as "all", and none of those pop-up scenarios have a
   // sending Facility to HANDOFF from — the flight simply isn't in the
   // system yet until whichever Position takes the radio call originates
   // it directly. ARRIVAL Strips can now originate BOTH ways: via a real
-  // cross-Facility HANDOFF, or via APP self-originating one directly, same
+  // cross-Facility HANDOFF, or via AP self-originating one directly, same
   // as CTR already could.
   AP: new Set(['ARRIVAL', 'OVERFLIGHT']),
   // CTR self-originates ARRIVAL Strips (docs/adr/0014) — now also
@@ -49,19 +49,19 @@ const CREATE_STRIP_TYPE_PERMISSIONS = {
 };
 
 /**
- * Field state (guide §9.7, docs/adr/0061) — who may do what to a runway. An
+ * Runway status (guide §9.7, docs/adr/0061) — who may do what to a runway. An
  * explicit table with its own predicate, NOT entries in OP_KINDS: every
  * PERMISSIONS row built with a `.filter()` over OP_KINDS would pick a new kind
  * up silently (this module's header, and D21). A Position absent from a row —
  * a range Position, an MRU, anything unknown — is refused by that absence.
  *
  * [SOURCE-DEFINED] where the guide is silent:
- *   - Tower is the sole authority over the runways (decisions.md H18): only TWR
+ *   - Tower is the sole authority over the runways (decisions.md H18): only LC
  *     closes, opens, or takes a runway out for runway works. Everyone else
- *     ASKS (RequestRunwayStatus), and TWR accepts or rejects.
+ *     ASKS (RequestRunwayStatus), and LC accepts or rejects.
  *   - OPS completes the runway works and performs the inspection (guide §9.7
  *     rule 2: "by default OPS (AMOPS)").
- *   - TWR proposes, begins and completes a runway change; OPS and APP
+ *   - LC proposes, begins and completes a runway change; OPS and AP
  *     acknowledge it (rule 3; OPS stands in for the SOF). An acknowledger
  *     nobody holds is skipped and audited by the store (decisions.md H20),
  *     never answered from another Facility (S-R2-15).
@@ -79,7 +79,7 @@ const RUNWAY_STATUS_OP_OWNERS = {
   BeginRunwayWorks:           ['LC'],
   CompleteRunwayWorks:        ['OPS'],
   CompleteInspection:         ['OPS'],
-  RequestRunwayStatus:        ['OPS', 'CD', 'GC'], // plus every Position with INCIRLIK_CAPABILITIES' requestsRunwayStatus (positions/incirlik-military.js): APP, RSU
+  RequestRunwayStatus:        ['OPS', 'CD', 'GC'], // plus every Position with INCIRLIK_CAPABILITIES' requestsRunwayStatus (positions/incirlik-military.js): AP, RSU
   AcceptRunwayRequest:        ['LC'],
   RejectRunwayRequest:        ['LC'],
   ProposeRunwayChange:        ['LC'],
@@ -108,7 +108,7 @@ const family = {
   createsStripTypes: CREATE_STRIP_TYPE_PERMISSIONS,
   runwayStatusOwners: RUNWAY_STATUS_OP_OWNERS,
   nonOwnerBlockWrites: NON_OWNER_BLOCK_WRITES,
-  // TOFI's ATC side (guide §4.1): CTR only, not APP.
+  // TOFI's ATC side (guide §4.1): CTR only, not AP.
   tofiCounterparts: {
     CTR: [{ facilityId: 'TACTICAL', positionId: 'TAC_C2' }, { facilityId: 'TACTICAL', positionId: 'GCI' }],
   },

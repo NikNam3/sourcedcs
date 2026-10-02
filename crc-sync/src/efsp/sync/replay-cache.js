@@ -11,7 +11,7 @@
 //
 // Both: a non-string or empty clientMutationId is never cached, and past the cap the oldest entry goes.
 
-// ── the families' shape (moved from src/efsp/replay-cache.js) ──
+// ── the families' shape ──
 //
 // Idempotency for the non-Board dispatch paths (guide §5.2, docs/adr/0081;
 // L6's F13). BoardStore keeps its own cache inside applyMutation (a forBoard instance); the
@@ -31,7 +31,7 @@
 
 const REPLAY_CACHE_CAP = 5000;
 
-// ── the Board's shape (moved from board-store.js) ──
+// ── the Board's shape ──
 
 const APPLIED_MUTATIONS_CAP = 5000;
 // How much of the idempotency cache rides in the Board snapshot (docs/adr/0081,

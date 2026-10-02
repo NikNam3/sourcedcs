@@ -14,7 +14,7 @@ function runwayStatusDelta(store, records) {
 const facilityOf = (ctx, msg) => msg.facilityId || ctx.facilityConfig.DEFAULT_FACILITY_ID;
 
 /**
- * Field state (guide §9.7, docs/adr/0061) — its own dispatch path, since a
+ * Runway status (guide §9.7, docs/adr/0061) — its own dispatch path, since a
  * runway is not a Strip and rides no Board's sequence.
  *
  * The session binding (docs/adr/0029) is PER FACILITY, copied from
@@ -75,7 +75,7 @@ module.exports = {
   }),
   broadcasts: (result, ctx) => ({ primary: runwayStatusDelta(ctx.runwayStatusStore, [result.runwayStatus]) }),
 
-  // Field state (§9.7, docs/adr/0061), one record per Facility with runways,
+  // Runway status (§9.7, docs/adr/0061), one record per Facility with runways,
   // sent whole. No efsp-resync branch, matching airspace, correlation and
   // MARSA: a reconnecting controller gets the current runway status here —
   // which is the point of rule 5's own sequence (a reconnect after a

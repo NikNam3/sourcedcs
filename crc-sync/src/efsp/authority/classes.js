@@ -1,15 +1,16 @@
 'use strict';
 
-// Rules by Position CLASS (facility-config.js's positionClasses), moved from
-// permission.js into the authority registry (AUTH). A class rule covers a
+// Rules by Position CLASS (the facility JSON's `positionClasses`, read through
+// facility-config.js), part of the authority registry. A class rule covers a
 // future Position of that class with no edit to any Position family.
 
 const facilityConfig = require('../facility-config');
 
 // WP4A second slice (docs/adr/0025) — defect D12: "TAC_C2, GCI, AIC and
 // JTAC MUST NOT be given HANDOFF or POINT_OUT" (guide §4.1 rule 1), which
-// this generalizes to all 5 COORDINATION_OP_KINDS. Read from facility-
-// config.js's per-Position positionClasses map (docs/adr/0020's own
+// this generalizes to all 5 COORDINATION_OP_KINDS. Read from the facility
+// JSON's per-Position `positionClasses` (through facility-config.js's
+// getPositionClass; docs/adr/0020's own
 // directive: "gate the 5 coordination op kinds on [a class concept]...
 // rather than the current flat per-Position-ID PERMISSIONS table") instead
 // of a hand-maintained ID list, so a future MRU/non-ATC Position
@@ -24,7 +25,7 @@ function _isMruOrNonAtc(positionId) {
 }
 
 // Guide §4.1's `RANGE` row: Class "Using agency", Primitives "no strip
-// primitives — owns airspace state", Strip Roles "none". A Position of this
+// primitives — owns airspace state", Strip types "none". A Position of this
 // class works no Strips at all, so it is refused every Strip op kind by
 // class, in canMutate below.
 //

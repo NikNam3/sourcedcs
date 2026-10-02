@@ -1,28 +1,28 @@
 'use strict';
 
-// The ARRIVAL Role family (authority registry, S3-2). States and NLA moved
-// from nla.js, state owners from permission.js.
+// The ARRIVAL strip-type family (authority registry, docs/adr/0095): states,
+// NLA table and state owners.
 
 const { _runwayInhibit } = require('./nla-common');
 
 // [SOURCE-DEFINED], per guide §3.4's arrival lifecycle:
 // INBOUND -> HANDED_TO_TOWER -> FINAL -> LANDED -> TAXI_IN -> DROPPED.
-// NOTE: EfspState 'FINAL' here (a value of strip.state) is unrelated to
-// Strip Role 'FINAL' (guide §7.10's PAR/carrier stripType, WP7A, still
-// unbuilt — that would live on strip.stripType) — they share the string but
-// are different fields on different objects. Don't conflate them.
+// NOTE: the state 'FINAL' here (a value of strip.state) is unrelated to the
+// strip type 'FINAL' (guide §7.10's PAR/carrier stripType, strip-types/final.js,
+// a value of strip.stripType) — they share the string but are different fields
+// on different objects. Don't conflate them.
 const ARRIVAL_STATES = ['INBOUND', 'HANDED_TO_TOWER', 'FINAL', 'LANDED', 'TAXI_IN', 'DROPPED'];
 
 // [SOURCE-DEFINED] — ARRIVAL has no guide-published "normally owned by"
 // table (§3.4 only gives the state sequence); this mirrors the same
-// per-Position-per-lifecycle-stage shape as DEPARTURE's guide-sourced one.
+// per-Position-per-lifecycle-stage shape as DEPARTURE's guide-given one.
 const ARRIVAL_STATE_OWNERS = {
   // CTR added (docs/adr/0014) — a CENTER-held INBOUND Strip (CTR's own
-  // local origination, mirroring APP's original ADR 0008 stub) needs its
+  // local origination, mirroring AP's original ADR 0008 stub) needs its
   // owning Position authorized to act on it too, even though "acting on
   // it" now means proposing a cross-Facility HANDOFF via the Coordinate
-  // button rather than an ordinary NLA transfer (nla.js's computeArrivalNla
-  // INBOUND case is Facility-aware — see that module's comment).
+  // button rather than an ordinary NLA transfer (computeArrivalNla's
+  // INBOUND case below is Facility-aware).
   INBOUND:         ['AP', 'CTR'],
   HANDED_TO_TOWER: ['LC'],
   FINAL:           ['LC'],
@@ -35,10 +35,10 @@ function computeArrivalNla(strip, flightData, now, ctx) {
   switch (strip.state) {
     case 'INBOUND':
       // WP4A (docs/adr/0014): a CENTER-held INBOUND Strip's next step is
-      // the cross-Facility HANDOFF to APP — a genuinely different
+      // the cross-Facility HANDOFF to AP — a genuinely different
       // mechanism (guide §4.6, "a different mechanism entirely"), fired
       // via the Coordinate button/dispatch path, not this ordinary
-      // intrafacility-transfer NLA. There is no TWR Position at CENTER to
+      // intrafacility-transfer NLA. There is no LC Position at CENTER to
       // transfer to at all, so this branches BEFORE attempting the
       // INCIRLIK-only LC-staffing check below. Every caller that never
       // sets ctx.facilityId (every pre-WP4A call site, and every
@@ -60,7 +60,7 @@ function computeArrivalNla(strip, flightData, now, ctx) {
     }
 
     case 'FINAL':
-      // Never inhibited by field state, deliberately: LANDED is an
+      // Never inhibited by runway status, deliberately: LANDED is an
       // OBSERVATION that the aircraft touched down, not a clearance. Refusing
       // it would make the board lie about something that already happened
       // and strand a landed aircraft with no legal transition.
@@ -94,7 +94,7 @@ const family = {
   excludedWhenNotCountable: 'NEVER_LANDED',
   replicaStateOnReceipt: null,
   senderStateOnAccept: null,
-  coordinationEligibleState: 'INBOUND',           // docs/adr/0014: CTR->APP
+  coordinationEligibleState: 'INBOUND',           // docs/adr/0014: CTR->AP
   tofiEligibleState: 'INBOUND',
 };
 

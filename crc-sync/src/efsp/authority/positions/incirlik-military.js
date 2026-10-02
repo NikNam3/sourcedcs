@@ -1,14 +1,14 @@
 'use strict';
 
 // Incirlik's military ATC Position family (authority registry, S3-2): RSU, SFA
-// and PAR, plus the columns L18 adds to civil-atc.js's APP. Moved from
-// permission.js. Registered LAST: it extends APP and the Role families' owner
+// and PAR, plus the columns L18 adds to civil-atc.js's AP. Moved from
+// permission.js. Registered LAST: it extends AP and the strip-type families' owner
 // tables, so everything it extends must already be there.
 
 const { NON_CREATE_OPS } = require('../op-kinds');
 
 // Incirlik's radar-approach and visual-pattern Positions (docs/adr/0075, L18):
-// RSU, SFA and PAR, plus APP's two new columns. ONE table, one row per Position,
+// RSU, SFA and PAR, plus AP's two new columns. ONE table, one row per Position,
 // one column per capability (the shape docs/adr/0080 gave the tactical Positions
 // and L17 the carrier), and every grant below is DERIVED from it, so no Position
 // name is repeated in a second table. Static (P5): read at load, never written.
@@ -18,19 +18,19 @@ const { NON_CREATE_OPS } = require('../op-kinds');
 //                      module's header: the maximally-permissive trap). None of
 //                      them gets a coordination primitive, TOFI, ConvertToArrival
 //                      or an airspace-entry op: they sit inside one Facility.
-//  createsStripTypes        the Strip Roles it may originate via CreateStrip. Nothing
-//                      here is a Role a handoff would reach it with: only RSU
+//  createsStripTypes        the strip types it may originate via CreateStrip. Nothing
+//                      here is a strip type a handoff would reach it with: only RSU
 //                      originates (a PATTERN Strip for an aircraft it watches join
-//                      the pattern, [SOURCE-DEFINED]); SFA's arrive from APP and
+//                      the pattern, [SOURCE-DEFINED]); SFA's arrive from AP and
 //                      PAR's by the SFA rotation.
-//  ownsStates          { Role: [states] } this Position works (the "normally owned
+//  ownsStates          { strip type: [states] } this Position works (the "normally owned
 //                      by" authority, §3.4), merged into STATE_OWNERS_BY_STRIP_TYPE.
 //  requestsRunwayStatus  may SEND RequestRunwayStatus (kinds CLOSE, OPEN,
-//                      WORKS; BARRIER_CHANGE is WORKS since L1b). RSU asks; only TWR closes or opens a
+//                      WORKS; BARRIER_CHANGE is WORKS since L1b). RSU asks; only LC closes or opens a
 //                      runway (decisions.md H18, S-L1b), so no column here grants
 //                      CloseRunway, OpenRunway or any other RUNWAY_STATUS_OP_OWNERS row.
 //  rotatesSfa          the CEILING on who may change the SFA rotation record (guide
-//                      §4.7: APP "retains jurisdiction over the rotation"). The
+//                      §4.7: AP "retains jurisdiction over the rotation"). The
 //                      store narrows it to config's `singleFrequencyApproach.
 //                      jurisdiction`, never widens it, as CompleteInspection's
 //                      inspectionAuthorityPositionId does.
@@ -38,7 +38,7 @@ const { NON_CREATE_OPS } = require('../op-kinds');
 //                      -> FINAL at the receiver)
 //  receivesSfaRotation the Position an SFA_ROTATION lands on
 const INCIRLIK_CAPABILITIES = {
-  AP: { // APP's own op grant is in positions/civil-atc.js; these are the columns L18 adds to it
+  AP: { // AP's own op grant is in positions/civil-atc.js; these are the columns L18 adds to it
     ops: null, createsStripTypes: null, ownsStates: {},
     requestsRunwayStatus: true, rotatesSfa: true, sendsSfaRotation: true, receivesSfaRotation: false,
   },

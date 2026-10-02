@@ -14,7 +14,7 @@ const PERMISSIONS = {
   // not by a list that has to stay current. Only the Marshal originates Strips
   // (launch and recovery check-in); FINAL and PATTERN Strips come only by a
   // carrier transfer. CarrierHandoff is NOT in OP_KINDS (it is not a `.filter()`
-  // grant anyone could pick up silently): board-store.js's dispatch asks
+  // grant anyone could pick up silently): board/ops/carrier-handoff.js asks
   // canRecordCarrierHandoff below, one acting Position and one transfer kind.
   CV_MARSHAL: new Set([...NON_CREATE_OPS, 'CreateStrip']),
   CV_PRIFLY:  new Set(NON_CREATE_OPS),
@@ -34,7 +34,7 @@ const CREATE_STRIP_TYPE_PERMISSIONS = {
  * the capability-table shape docs/adr/0080 gave the tactical Positions: one row
  * per Position, one column per capability, static (P5), so the next capability
  * is a column. Read through the one-parameter predicates below (D21: exactly one
- * acting Position, never a held set). They are predicates and not OP_KINDS
+ * acting Position, never a signed-on set). They are predicates and not OP_KINDS
  * entries because the Case, the stack and the ship input are not Strip ops: they
  * go to the CarrierStore (carrier-store.js), which asks these.
  *

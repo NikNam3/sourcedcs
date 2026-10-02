@@ -84,7 +84,7 @@ class SyncLog {
    * The ids of every Strip touched since the last drain, in first-touch
    * order, and forgets them. Called by whoever puts this Board's change on the
    * wire (efsp-ws.js), on this Board and on the peer Board a coordination op
-   * reached — never by board-store itself (docs/adr/0081).
+   * reached — never by the Board itself (docs/adr/0081).
    * @returns {string[]}
    */
   drainTouched() {

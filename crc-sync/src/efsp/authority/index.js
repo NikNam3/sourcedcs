@@ -1,13 +1,13 @@
 'use strict';
 
 // THE AUTHORITY REGISTRY (S3-2, docs/adr/0095; plan §2.4). Who may do what,
-// and how each Role's lifecycle runs, in one place.
+// and how each strip type's lifecycle runs, in one place.
 //
-//  - A Role family (`strip-types/<role>.js`) is one Strip Role: its states, initial
+//  - A strip-type family (`strip-types/<type>.js`) is one strip type: its states, initial
 //    state, NLA, state owners, countable states, replica state on receipt,
 //    sender state on accept, and coordination/TOFI eligibility.
 //  - A Position family (`positions/<family>.js`) is a group of Positions: their
-//    op grants, the Roles they create, their capability columns and read scope.
+//    op grants, the strip types they create, their capability columns and read scope.
 //
 // Families register by being listed below, as plain requires in a fixed order.
 // There is no dynamic discovery. The doctrine tables stay in code (decisions.md
@@ -15,7 +15,7 @@
 // tests/authority-coverage.test.mjs holds the two to each other.
 //
 // permission.js, nla.js and coordination.js are facades over this module and
-// export exactly what they exported before it existed (the client's PARITY
+// export exactly what they exported before it existed (the client's parity
 // tests and the freeze tables read them).
 
 const stripTypeFamilies = new Map();
@@ -46,7 +46,7 @@ function registerStripTypeFamily(def) {
   stripTypeFamilies.set(def.stripType, def);
 }
 
-// ── Role families, in today's STATES_BY_STRIP_TYPE order ─────────────────────────
+// ── strip-type families, in today's STATES_BY_STRIP_TYPE order ─────────────────────────
 registerStripTypeFamily(require('./strip-types/departure').family);
 registerStripTypeFamily(require('./strip-types/arrival').family);
 registerStripTypeFamily(require('./strip-types/overflight').family);
@@ -92,8 +92,8 @@ function registerPositionFamily(def) {
   positionFamilies.push(def);
 }
 
-// ── Position families. incirlik-military is last: it extends civil-atc's APP
-// and the Role families' owner tables. This order also reproduces the key and
+// ── Position families. incirlik-military is last: it extends civil-atc's AP
+// and the strip-type families' owner tables. This order also reproduces the key and
 // array order every composed table below had when it was one file. ──────────
 registerPositionFamily(require('./positions/civil-atc').family);
 registerPositionFamily(require('./positions/tactical').family);
@@ -102,19 +102,19 @@ registerPositionFamily(require('./positions/incirlik-military').family);
 
 sealed = true;
 
-// ── Role tables, composed once ─────────────────────────────────────────────
+// ── strip type tables, composed once ─────────────────────────────────────────────
 const _byStripType = (pick) => Object.fromEntries([...stripTypeFamilies.values()].map(f => [f.stripType, pick(f)]));
 const _byStripTypeWhere = (pick) => Object.fromEntries([...stripTypeFamilies.values()].filter(f => pick(f) != null).map(f => [f.stripType, pick(f)]));
 
-/** { stripType: states[] } — the same arrays the Role families own. */
+/** { stripType: states[] } — the same arrays the strip-type families own. */
 const STATES_BY_STRIP_TYPE = _byStripType(f => f.states);
-/** { stripType: { state: owners[] } } — the same objects the Role families own. */
+/** { stripType: { state: owners[] } } — the same objects the strip-type families own. */
 const STATE_OWNERS_BY_STRIP_TYPE = _byStripType(f => f.stateOwners);
-/** board-store.js's DEFAULT_INITIAL_STATE_BY_STRIP_TYPE (BOARD-3 switches its reads here). */
+/** { stripType: initial state }, read through initialStateFor(). */
 const DEFAULT_INITIAL_STATE_BY_STRIP_TYPE = _byStripType(f => f.initialState);
-/** board-store.js's REPLICA_STATE_ON_RECEIPT: { stripType: { senderState: replicaState } }; absent = the sender's state. */
+/** The replica's state on receipt (board/coordination.js): { stripType: { senderState: replicaState } }; absent = the sender's state. */
 const REPLICA_STATE_ON_RECEIPT = _byStripTypeWhere(f => f.replicaStateOnReceipt);
-/** board-store.js's SENDER_STATE_ON_ACCEPT: { primitive: { stripType: { senderState: stateAfterAccept } } }. */
+/** The sender's state after an accept (board/coordination.js): { primitive: { stripType: { senderState: stateAfterAccept } } }. */
 const SENDER_STATE_ON_ACCEPT = {};
 for (const f of stripTypeFamilies.values()) {
   for (const [primitive, byState] of Object.entries(f.senderStateOnAccept || {})) {
@@ -125,7 +125,7 @@ for (const f of stripTypeFamilies.values()) {
 const COUNTABLE_PRE_DROP_STATES = _byStripType(f => f.countablePreDropStates);
 const EXCLUDED_WHEN_NOT_COUNTABLE = _byStripType(f => f.excludedWhenNotCountable);
 
-// Which EfspState a Strip Role must be in to PROPOSE a coordination link —
+// Which EfspState a strip type must be in to PROPOSE a coordination link —
 // i.e. which (stripType, state) combo has a Bay configured to receive it on the
 // OTHER side (facility-config.js's ARRIVAL ap-inbound/ctr-enroute Bays and
 // DEPARTURE ap-departures/ctr-departures Bays all imply exactly these
@@ -133,18 +133,18 @@ const EXCLUDED_WHEN_NOT_COUNTABLE = _byStripType(f => f.excludedWhenNotCountable
 // OPERATIONAL_REQUEST/AIT conceptually apply to any traffic a Position
 // holds, not just HANDOFF, so this is role-based, never primitive-based.
 // Originally this slice only ever produced ARRIVAL/INBOUND replicas
-// (docs/adr/0014's CTR->APP flow); docs/adr/0022 extends it to
-// DEPARTURE/HANDED_OFF (APP->CTR) without inventing any new EfspState —
+// (docs/adr/0014's CTR->AP flow); docs/adr/0022 extends it to
+// DEPARTURE/HANDED_OFF (AP->CTR) without inventing any new EfspState —
 // CTR's terminus for a received DEPARTURE Strip is Drop-only, mirroring
-// APP's own existing DEPARTURE terminus.
+// AP's own existing DEPARTURE terminus.
 //
 // docs/adr/0087 adds OVERFLIGHT at IN_SECTOR (F14: an overflight used to be
 // unable to propose coordination at all), so a CTR overflight can be handed to
-// APP. The receiving side mints it INBOUND (board-store.js's
-// REPLICA_STATE_ON_RECEIPT).
+// AP. The receiving side mints it INBOUND (board/coordination.js
+// via replicaStateOnReceipt, REPLICA_STATE_ON_RECEIPT here).
 const COORDINATION_ELIGIBLE_STATES = _byStripTypeWhere(f => f.coordinationEligibleState);
 
-// Which EfspState an ATC-side Strip Role must be in to open a TOFI ENTRY —
+// Which EfspState an ATC-side strip type must be in to open a TOFI ENTRY —
 // TOFI's own analogue of COORDINATION_ELIGIBLE_STATES above, and added for
 // the same reason: without it, the TOFI button rendered (and the mutation
 // succeeded) on ANY Strip the acting Position owned, in any state, including
@@ -154,16 +154,16 @@ const COORDINATION_ELIGIBLE_STATES = _byStripTypeWhere(f => f.coordinationEligib
 // airborne and enroute, which is the same set of states the 5 primitives
 // already recognise as "airborne, being worked by an enroute Position" —
 // plus OVERFLIGHT (IN_SECTOR, docs/adr/0087 — the flight being worked). MISSION
-// is deliberately absent: it is the MRU-side Role TOFI *creates*, never a
-// Role that opens an exchange of its own (docs/adr/0026).
+// is deliberately absent: it is the MRU-side strip type TOFI *creates*, never a
+// strip type that opens an exchange of its own (docs/adr/0026).
 const TOFI_ELIGIBLE_STATES = _byStripTypeWhere(f => f.tofiEligibleState);
 
-// ── Role accessors ─────────────────────────────────────────────────────────
+// ── strip type accessors ─────────────────────────────────────────────────────────
 const _own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 
-/** @returns {object|null} the registered Role family, or null. */
+/** @returns {object|null} the registered strip-type family, or null. */
 function stripTypeFamily(stripType) { return (typeof stripType === 'string' && stripTypeFamilies.get(stripType)) || null; }
-/** @returns {string[]} every registered Role, in registration order. */
+/** @returns {string[]} every registered strip type, in registration order. */
 function stripTypeNames() { return [...stripTypeFamilies.keys()]; }
 /** @returns {string[]} who works `stripType` while it is in `state` (guide §3.4), or [] */
 function stateOwners(stripType, state) {
@@ -182,15 +182,15 @@ const { COORDINATION_OP_KINDS } = require('./op-kinds');
 const { _isMruOrNonAtc } = require('./classes');
 
 // The coarse "may this Position class ever perform this KIND of op at
-// all" gate — CreateStrip is included here for OPS/APP (both originate
+// all" gate — CreateStrip is included here for OPS/AP (both originate
 // Strips, just for different roles) but the role itself is gated
-// separately by canCreateStripType(), which board-store.js's
-// _applyCreateStrip calls in addition to this. The 5 COORDINATION_OP_KINDS
-// are included only for APP/CTR (guide §4.6: only ATC⇄ATC Positions that
+// separately by canCreateStripType(), which board/ops/create-strip.js
+// calls in addition to this. The 5 COORDINATION_OP_KINDS
+// are included only for AP/CTR (guide §4.6: only ATC⇄ATC Positions that
 // actually sit on a Facility boundary get these — WP4A's deferred MRU
 // Positions, docs/adr/0020, get none at all, which is D12's refusal case).
 // ConvertToArrival is restricted the same way, for the same underlying
-// reason (only APP/CTR ever hold a DEPARTURE Strip at its HANDED_OFF
+// reason (only AP/CTR ever hold a DEPARTURE Strip at its HANDED_OFF
 // terminus in a position to convert it).
 const PERMISSIONS = {};
 const CREATE_STRIP_TYPE_PERMISSIONS = {};
@@ -225,7 +225,7 @@ for (const f of positionFamilies) {
   }
 }
 
-/** Field state (guide §9.7): the owning family's rows, then each later family's grants appended. */
+/** Runway status (guide §9.7): the owning family's rows, then each later family's grants appended. */
 const RUNWAY_STATUS_OP_OWNERS = {};
 for (const f of positionFamilies) Object.assign(RUNWAY_STATUS_OP_OWNERS, f.runwayStatusOwners || {});
 for (const f of positionFamilies) {
@@ -240,12 +240,12 @@ const NON_OWNER_BLOCK_WRITES = positionFamilies.flatMap(f => f.nonOwnerBlockWrit
 
 // WP4A second slice — TOFI's target resolution (guide §4.6.3, ATC<->MRU).
 // Per guide §4.1's own Position table, TOFI is listed only for CTR among
-// the ATC Positions built so far (not APP) — so the ATC side is CTR only,
+// the ATC Positions built so far (not AP) — so the ATC side is CTR only,
 // but the MRU side has two candidates (TAC_C2, GCI), and this table
 // resolves which counterpart(s) are valid for a given acting Position
 // rather than assuming a fixed 1:1 pair the way the older, narrower
 // COORDINATION_TARGETS-style stub could. Small and static (not full
-// dynamic discovery) — board-store.js's _applyTofiPropose validates a
+// dynamic discovery) — board/tofi.js's TOFI propose validates a
 // proposal's target against this for defense in depth, and
 // crc-desktop's TOFI popover mirrors it to build its target picker.
 const TOFI_COUNTERPARTS = {};
