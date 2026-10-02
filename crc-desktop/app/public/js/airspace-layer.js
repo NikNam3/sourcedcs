@@ -79,8 +79,9 @@ export function corridorRing(rows, defaultWidthNm) {
         const den = d1[0] * d2[1] - d1[1] * d2[0];
         if (Math.abs(den) < 1e-9) { out.push(s1, t0); return; }
         const tt = ((t0[0] - s0[0]) * d2[1] - (t0[1] - s0[1]) * d2[0]) / den;
-        const x = [s0[0] + d1[0] * tt, s0[1] + d1[1] * tt];
-        out.push(x);
+        const uu = ((t0[0] - s0[0]) * d1[1] - (t0[1] - s0[1]) * d1[0]) / den; // the same crossing along the next offset line
+        if (tt >= 0 && tt <= 1 && uu >= 0 && uu <= 1) out.push([s0[0] + d1[0] * tt, s0[1] + d1[1] * tt]);
+        else out.push(s1, t0); // the offsets do not meet inside the legs (a width step on a straight run): step across
       }
     });
     return out;

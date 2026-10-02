@@ -1,9 +1,10 @@
 'use strict';
 import { nlaLabelFor } from '../efsp-nla.js';
 import { sendEfspMutation } from '../efsp-ws.js';
-import { getEfspFlightData, getEfspObligation, getEfspStrip } from '../efsp-state.js';
+import { getAllEfspAirspaces, getEfspFlightData, getEfspObligation, getEfspStrip } from '../efsp-state.js';
 import { BLOCK_MAPS, blockLabelFor, blockTitleFor, supersededAnnotationEntries } from '../strip-template.js';
 import { compactBlocksFor, mtrLostCommsAdvisory } from '../strip-fields.js';
+import { mtrRouteNote } from '../mtr-route-note.js';
 import { appendAtoExpandedRows } from '../ato-strip.js';
 import { _buildStripLayout } from '../strip-view.js';
 import { setAttention, toggleFlip, toggleOffset } from '../efsp-gestures.js';
@@ -258,7 +259,8 @@ export function _appendExpandedView(el, strip) {
   // on the collapsed face — an MTR flight with working radios is not wrong
   // (docs/adr/0058).
   const advisory = mtrLostCommsAdvisory(getEfspFlightData(strip.flightDataId));
-  if (blocks.length === 0 && !advisory) return;
+  const routeNote = mtrRouteNote(getEfspFlightData(strip.flightDataId), getAllEfspAirspaces()); // 2P-B: the registry's ROUTE for this designator
+  if (blocks.length === 0 && !advisory && !routeNote) return;
 
   const panel = document.createElement('div');
   panel.className = 'efsp-strip-expanded';
@@ -266,6 +268,13 @@ export function _appendExpandedView(el, strip) {
     const note = document.createElement('div');
     note.className = 'efsp-expanded-note efsp-mtr-lostcomms';
     note.textContent = advisory;
+    panel.appendChild(note);
+  }
+
+  if (routeNote) {
+    const note = document.createElement('div');
+    note.className = 'efsp-expanded-note mtr-route-note';
+    note.textContent = routeNote;
     panel.appendChild(note);
   }
 
