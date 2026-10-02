@@ -1,20 +1,20 @@
 {
-  "_comment": "Fixed per-theater facts, keyed by the name DCS-gRPC's GetTheatre returns (docs/adr/0079, 0085). Read once at startup, never written by code (P5); a copy in state/theaters.json overrides it theater by theater, field by field. utcOffsetHours: local = Z + offset, standard time, no daylight saving, which is how DCS keeps time. Syria +3 is a squadron decision, [SOURCE-DEFINED] (decisions.md H11); every other offset is MOOSE's UTILS.GMTToLocalTimeDifference() (DCS community source, not the guide). transitionAltFt: below it altitudes read QNH, at and above it flight levels. Syria 10000 is a squadron decision (H62); every other value is [SOURCE-DEFINED], kept at the 18000 every theater used before, and should be checked against that region's AIP. tmCentralMeridianDeg: the central meridian of the theater's DCS Transverse Mercator projection, for grid convergence (true = grid + convergence); mirrors tools/miztoyaml/projection.py. A theater without it has unknown convergence, so DCS grid headings there cannot be turned into true or magnetic. magneticVariation (optional, none shipped): {\"fixedDeg\": n} replaces the World Magnetic Model with one value for the whole map, {\"offsetDeg\": n} adds a squadron correction to the model. East positive. Without it, variation is WMM2025 at the position and mission date (H69). weatherRef: { lat, lon }, a point near the theater's centre where the atmosphere poll asks for sea-level pressure and temperature until mission data supplies the first airfield; REQUIRED for every shipped theater, [SOURCE-DEFINED] (the squadron verifies each point). Until the theater is known the poll does not run and the ISA stands in. defaultTransitionAltFt: what a theater this table does not list gets, the 18000 every theater used before H62; it is the only source of that number (DATA-2).",
+  "_comment": "Fixed per-theater facts, keyed by the name DCS-gRPC's GetTheatre returns (docs/adr/0079, 0085). Read once at startup, never written by code (P5); a copy in state/theaters.json overrides it theater by theater, field by field. utcOffsetHours: local = Z + offset, standard time, no daylight saving, which is how DCS keeps time. Syria +3 is a squadron decision, [SOURCE-DEFINED] (decisions.md H11); every other offset is MOOSE's UTILS.GMTToLocalTimeDifference() (DCS community source, not the guide). transitionAltFt: below it altitudes read QNH, at and above it flight levels. Syria 10000 is a squadron decision (H62); every other value is [SOURCE-DEFINED], kept at the 18000 every theater used before, and should be checked against that region's AIP. tmCentralMeridianDeg: the central meridian of the theater's DCS Transverse Mercator projection, for grid convergence (true = grid + convergence); mirrors tools/miztoyaml/projection.py. A theater without it has unknown convergence, so DCS grid headings there cannot be turned into true or magnetic. magneticVariation (optional, none shipped): {\"fixedDeg\": n} replaces the World Magnetic Model with one value for the whole map, {\"offsetDeg\": n} adds a squadron correction to the model. East positive. Without it, variation is WMM2025 at the position and mission date (H69). defaultTransitionAltFt: what a theater this table does not list gets, the 18000 every theater used before H62; it is the only source of that number (DATA-2).",
   "defaultTransitionAltFt": 18000,
   "theaters": {
-    "Caucasus":           { "utcOffsetHours": 4, "transitionAltFt": 18000, "tmCentralMeridianDeg": 33, "weatherRef": { "lat": 42.0, "lon": 43.0 } },
-    "Nevada":             { "utcOffsetHours": -8, "transitionAltFt": 18000, "tmCentralMeridianDeg": -117, "weatherRef": { "lat": 37.0, "lon": -116.0 } },
-    "Normandy":           { "utcOffsetHours": 0, "transitionAltFt": 18000, "tmCentralMeridianDeg": -3, "weatherRef": { "lat": 49.2, "lon": -0.5 } },
-    "PersianGulf":        { "utcOffsetHours": 4, "transitionAltFt": 18000, "tmCentralMeridianDeg": 57, "weatherRef": { "lat": 26.0, "lon": 55.5 } },
-    "TheChannel":         { "utcOffsetHours": 2, "transitionAltFt": 18000, "weatherRef": { "lat": 50.8, "lon": 1.2 } },
-    "Syria":              { "utcOffsetHours": 3, "transitionAltFt": 10000, "tmCentralMeridianDeg": 39, "weatherRef": { "lat": 34.5, "lon": 37.0 } },
-    "MarianaIslands":     { "utcOffsetHours": 10, "transitionAltFt": 18000, "tmCentralMeridianDeg": 147, "weatherRef": { "lat": 14.0, "lon": 145.0 } },
-    "MarianaIslandsWWII": { "utcOffsetHours": 10, "transitionAltFt": 18000, "weatherRef": { "lat": 14.0, "lon": 145.0 } },
-    "Falklands":          { "utcOffsetHours": -3, "transitionAltFt": 18000, "tmCentralMeridianDeg": -57, "weatherRef": { "lat": -51.7, "lon": -59.0 } },
-    "SinaiMap":           { "utcOffsetHours": 2, "transitionAltFt": 18000, "tmCentralMeridianDeg": 33, "weatherRef": { "lat": 30.0, "lon": 33.0 } },
-    "Kola":               { "utcOffsetHours": 3, "transitionAltFt": 18000, "weatherRef": { "lat": 68.5, "lon": 30.0 } },
-    "Afghanistan":        { "utcOffsetHours": 4.5, "transitionAltFt": 18000, "weatherRef": { "lat": 32.5, "lon": 65.5 } },
-    "Iraq":               { "utcOffsetHours": 3, "transitionAltFt": 18000, "weatherRef": { "lat": 33.0, "lon": 44.0 } },
-    "GermanyCW":          { "utcOffsetHours": 1, "transitionAltFt": 18000, "weatherRef": { "lat": 51.0, "lon": 10.0 } }
+    "Caucasus":           { "utcOffsetHours": 4, "transitionAltFt": 18000, "tmCentralMeridianDeg": 33 },
+    "Nevada":             { "utcOffsetHours": -8, "transitionAltFt": 18000, "tmCentralMeridianDeg": -117 },
+    "Normandy":           { "utcOffsetHours": 0, "transitionAltFt": 18000, "tmCentralMeridianDeg": -3 },
+    "PersianGulf":        { "utcOffsetHours": 4, "transitionAltFt": 18000, "tmCentralMeridianDeg": 57 },
+    "TheChannel":         { "utcOffsetHours": 2, "transitionAltFt": 18000 },
+    "Syria":              { "utcOffsetHours": 3, "transitionAltFt": 10000, "tmCentralMeridianDeg": 39 },
+    "MarianaIslands":     { "utcOffsetHours": 10, "transitionAltFt": 18000, "tmCentralMeridianDeg": 147 },
+    "MarianaIslandsWWII": { "utcOffsetHours": 10, "transitionAltFt": 18000 },
+    "Falklands":          { "utcOffsetHours": -3, "transitionAltFt": 18000, "tmCentralMeridianDeg": -57 },
+    "SinaiMap":           { "utcOffsetHours": 2, "transitionAltFt": 18000, "tmCentralMeridianDeg": 33 },
+    "Kola":               { "utcOffsetHours": 3, "transitionAltFt": 18000 },
+    "Afghanistan":        { "utcOffsetHours": 4.5, "transitionAltFt": 18000 },
+    "Iraq":               { "utcOffsetHours": 3, "transitionAltFt": 18000 },
+    "GermanyCW":          { "utcOffsetHours": 1, "transitionAltFt": 18000 }
   }
 }

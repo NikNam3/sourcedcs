@@ -3,7 +3,6 @@ const EventEmitter = require('events');
 const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
 const path = require('path');
-const { loadTheaters } = require('./theaters');
 const log = require('./log').logger('grpc');
 const srsLog = require('./log').logger('srs');
 
@@ -78,7 +77,6 @@ class GrpcClient extends EventEmitter {
     this._backoffBase  = opts.backoffBaseMs || BACKOFF_BASE_MS;
     this._backoffCap   = opts.backoffCapMs  || BACKOFF_CAP_MS;
     this._stableMs     = opts.stableMs      || STREAM_STABLE_MS;
-    this._theaters     = opts.theaters || loadTheaters(); // per-theater `weatherRef` (DATA-3)
     this._unitRetries  = 0;
     this._eventRetries = 0;
     this._unitEndsSinceLog = 0;
@@ -108,9 +106,8 @@ class GrpcClient extends EventEmitter {
     this._missionRetryTimer  = null;
     // ISA defaults — overwritten by live weather polls
     this._weather    = { pressurePa: ISA_P0, tempK: ISA_T0 };
-    // Reference position for weather queries. Unknown until the theater is: the poll does not run
-    // before that and the ISA stands. Then the theater's `weatherRef` (config/theaters.json), and
-    // the first airport's lat/lon once mission data has airports.
+    // Reference position for weather queries: the first airport's lat/lon, set when mission data
+    // arrives (DATA-3: there is no literal fallback point). Until then the poll does not run and the ISA stands.
     this._weatherRef = null;
   }
 
@@ -165,7 +162,6 @@ class GrpcClient extends EventEmitter {
     this.fetchMissionData()
       .then(data => {
         if (this._closed) return;
-        this._useTheaterWeatherRef(data.theatre);
         if (data.airports.length === 0) {
           log.warn('mission fetch returned no airports, retrying in 5s', { attempt: attempt + 1 });
           this._missionRetryTimer = setTimeout(() => this._fetchMissionWithRetry(attempt + 1), 5000);
@@ -173,7 +169,9 @@ class GrpcClient extends EventEmitter {
         }
         this._missionFetchActive = false;
         if (data.airports[0]) {
+          const first = !this._weatherRef;
           this._weatherRef = { lat: data.airports[0].lat, lon: data.airports[0].lon };
+          if (first) this._fetchWeather(); // do not wait out a poll period for the first answer
         }
         log.info('mission data ready', { airports: data.airports.length, navpoints: data.waypoints.length, drawings: data.drawings.length });
         this.emit('mission-load', data);
@@ -287,15 +285,6 @@ class GrpcClient extends EventEmitter {
   _startWeatherPoll() {
     this._fetchWeather();
     this._weatherTimer = setInterval(() => this._fetchWeather(), WEATHER_POLL_MS);
-  }
-
-  /** The theater is known: until the first airport answers, poll its `weatherRef`, and do not wait a period for the first answer. */
-  _useTheaterWeatherRef(theatre) {
-    const ref = theatre && this._theaters[theatre] && this._theaters[theatre].weatherRef;
-    if (!ref) return;
-    const first = !this._weatherRef;
-    this._weatherRef = { lat: ref.lat, lon: ref.lon };
-    if (first) this._fetchWeather();
   }
 
   _fetchWeather() {

@@ -3,7 +3,7 @@
 // Fixed per-theater facts: each theater's local-time offset from Zulu
 // (docs/adr/0079), its transition altitude (decisions.md H62), the central
 // meridian of its DCS projection and an optional magnetic-variation override
-// (docs/adr/0085) and the weather reference point of the atmosphere poll (`weatherRef`, DATA-3). Shipped in config/theaters.json; a copy in
+// (docs/adr/0085). Shipped in config/theaters.json; a copy in
 // state/theaters.json overrides it theater by theater, field by field, so a
 // wrong value can be corrected on the server without a release.
 //
@@ -36,15 +36,10 @@ function _validVariationOverride(v) {
   return fixed !== offset;
 }
 
-function _validWeatherRef(v) {
-  return !!v && typeof v === 'object' && Number.isFinite(v.lat) && v.lat >= -90 && v.lat <= 90
-    && Number.isFinite(v.lon) && v.lon >= -180 && v.lon <= 180;
-}
-
 /**
  * @param {string} [override] one file to read instead of config/ + state/ (tests)
  * @returns {Record<string, {utcOffsetHours:number, transitionAltFt?:number, tmCentralMeridianDeg?:number,
- *   magneticVariation?:{fixedDeg?:number, offsetDeg?:number}, weatherRef?:{lat:number, lon:number}}>} only entries with a finite offset;
+ *   magneticVariation?:{fixedDeg?:number, offsetDeg?:number}}>} only entries with a finite offset;
  *   an invalid optional field is dropped with a warning, the rest of the entry kept
  */
 function loadTheaters(override) {
@@ -77,17 +72,7 @@ function loadTheaters(override) {
       log.warn('magneticVariation must be exactly one of {fixedDeg} or {offsetDeg} — ignored, the model applies', { theater: name });
       delete clean.magneticVariation;
     }
-    if ('weatherRef' in clean && !_validWeatherRef(clean.weatherRef)) {
-      log.warn('weatherRef must be { lat, lon } within range — ignored', { theater: name });
-      delete clean.weatherRef;
-    }
     out[name] = clean;
-  }
-  // The shipped table states a weatherRef for every theater (DATA-3): a missing or invalid one is a startup error.
-  if (!override) {
-    for (const name of Object.keys(layers[0] || {})) {
-      if (out[name] && !out[name].weatherRef) throw new Error(`[theaters] config/theaters.json: "${name}" needs weatherRef: { lat, lon }`);
-    }
   }
   return out;
 }
