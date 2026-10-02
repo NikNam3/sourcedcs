@@ -22,11 +22,11 @@
 
 import { missionNow } from '../topbar.js';
 import {
-  conformanceAlertsForFlightData, correlatedTrackIdForStrip, getEfspAirspace, getEfspCorrelationForStrip, getEfspFlightData,
+  conformanceAlertsForFlightData, correlatedTrackIdForStrip, getEfspAirspace, getEfspCorrelationForStrip, getEfspFlightData, getAllEfspStrips,
   getEfspStrip, marsaForStrip, otherLiveStripsForFlightData, conflictAlertsForTrack, surveillanceHintsForStrip
 } from './efsp-state.js';
 import { clearEfspArrival, consumeEfspArrivalFlash, efspArrivalFor } from './efsp-arrivals.js';
-import { blockLabelFor, blockTitleFor } from './strip-template.js';
+import { blockLabelFor, blockTitleFor, formatZuluHhmm } from './strip-template.js';
 import { nlaButtonLabel, tofiExitDueFor } from './efsp-nla.js';
 import { toggleOffset } from './efsp-gestures.js';
 import { getActingPositions, sendEfspMutation } from './efsp-ws.js';
@@ -50,6 +50,8 @@ import {
   _tofiExitPrecondition, _tofiProposerOf, _tofiRegimeChoice, _unmountPopover
 } from './bay-view.js';
 import { _setPendingConvertStripId } from './bay-view.js';
+import { _openJoinPopover, _openSplitPopover } from './bay/popovers/formation.js';
+import { holdsFormationGrant, joinOffer, splitChipFor, splitOffer } from './formation-rules.js';
 import { scrambleAlertsFor } from './scramble.js';
 import { convertStripToArrival, efspVisibleBayId, noteEfspArrivalShown } from './efsp-panel.js';
 import { arJoinFor, atoAlertsFor, isArHighlighted } from './ato-strip.js';
@@ -423,7 +425,7 @@ function _buildStripFields(strip) {
 // applies (MARSA, TOFI, an airspace, other Strips on the flight). A quiet Strip
 // has no indicator row at all. Warnings first, so they are always in the same
 // place: the left end of the row.
-export const INDICATOR_ORDER = ['conflictAlert', 'conf', 'rwy', 'gear', 'ord', 'scram', 'trk', 'marsa', 'tofi', 'airspace', 'timer', 'siblings'];
+export const INDICATOR_ORDER = ['conflictAlert', 'conf', 'rwy', 'gear', 'ord', 'scram', 'trk', 'marsa', 'tofi', 'airspace', 'timer', 'siblings', 'split'];
 // Keys whose chips come from _stripAlerts (warnings first, left end of the row). rwy/gear:
 // Runway status (docs/adr/0068); ord: hung ordnance (0069); scram: alert/scramble (0070).
 export const ALERT_SLOT_KEYS = new Set(['conflictAlert', 'conf', 'rwy', 'gear', 'ord', 'scram']);
@@ -573,6 +575,11 @@ function _litIndicator(strip, key, el, obligation, siblings) {
     // The AR join (docs/adr/0071): not MARSA, never a warning — tone 'on'.
     const join = arJoinFor(strip);
     return join ? _indicator(key, join.text, 'on', 'efsp-ar-badge', join.title) : null;
+  }
+  if (key === 'split') {
+    // The part that left a formation (crc-sync docs/adr/0099): a quiet lineage chip, never a warning.
+    const chip = splitChipFor(strip, getEfspStrip, getEfspFlightData, formatZuluHhmm);
+    return chip ? _indicator(key, chip.text, 'on', 'efsp-split-chip', chip.title) : null;
   }
   if (key === 'siblings') {
     if (siblings.length === 0) return null;
@@ -727,6 +734,22 @@ function _stripMenuItems(strip) {
     items.push({ group: 'Flight', key: 'marsa', label: 'MARSA…', cls: 'efsp-marsa-btn', enabled: true,
       title: 'declare, or manage, military authority separating this flight from another',
       run: (anchor) => _openMarsaPopover(strip, anchor) });
+  }
+  // Formation (crc-sync docs/adr/0099): shown to a Position that holds the grant and owns this Strip.
+  if (holdsFormationGrant(strip, getActingPositions())) {
+    const flightData = getEfspFlightData(strip.flightDataId);
+    const split = splitOffer(strip, flightData);
+    if (split.ok || (flightData && flightData.identity && flightData.identity.flightSize >= 2)) {
+      items.push({ group: 'Formation', key: 'split', label: 'Split…', cls: 'efsp-formation-btn', enabled: split.ok && !pendingIn,
+        reason: split.ok ? answerFirst : split.reason, title: 'send part of this formation off with a new callsign and beacon code',
+        run: (anchor) => _openSplitPopover(strip, anchor) });
+    }
+    const join = joinOffer(strip, getAllEfspStrips(), otherLiveStripsForFlightData(strip.flightDataId, strip.stripId));
+    if (join.ok) {
+      items.push({ group: 'Formation', key: 'join', label: 'Join formation…', cls: 'efsp-formation-btn', enabled: !pendingIn,
+        reason: pendingIn ? answerFirst : '', title: 'this flight joins another of your formations and its Strip ends',
+        run: (anchor) => _openJoinPopover(strip, anchor) });
+    }
   }
   const record = getEfspCorrelationForStrip(strip);
   const correlation = correlationBadgeFor(strip);

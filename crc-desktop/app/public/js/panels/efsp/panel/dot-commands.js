@@ -7,6 +7,8 @@ import { getAllEfspStrips, getEfspCorrelationForStrip, getEfspFlightData, getEfs
 import { getSelectedEfspStripId } from '../bay-view.js';
 import { normalizeStereoNameClient } from '../efsp-stereo-routes.js';
 import { parseDotCommand } from '../dot-command.js';
+import { buildJoinOp, buildSplitOp, joinLeadCandidates, parseSplitCommand } from '../formation-rules.js';
+import { dispatchFormationOp } from '../bay/popovers/formation.js';
 
 /**
  * `.mission <CALLSIGN>` — frag a mission line bound to a live flight.
@@ -113,9 +115,35 @@ export function _dispatchDotCommand(parsed) {
       return;
     }
     sendEfspCorrelationMutation(actingPositionId, strip.flightDataId, baseRev, { kind: 'BindTrack', trackId: String(trackId) });
+  } else if (parsed.verb === 'split') {
+    _dispatchSplitDotCommand(parsed, strip);
+  } else if (parsed.verb === 'join') {
+    _dispatchJoinDotCommand(parsed, strip);
   } else if (MARSA_VERBS[parsed.verb]) {
     _dispatchMarsaDotCommand(parsed, strip, actingPositionId);
   }
+}
+
+// crc-sync docs/adr/0099 — `.split <k> <CALLSIGN> <H270|S250|SM.80|A120|FL240> [MARSA]` (the assignment may be left
+// off on a Strip on the ground) and `.join <LEAD-CALLSIGN>`, on the selected Strip. Validation is formation-rules.js's,
+// shared with the popover; the server gates again.
+function _dispatchSplitDotCommand(parsed, strip) {
+  const req = parseSplitCommand(parsed.args);
+  if (!req.ok) { _showDotCommandError(req.error); return; }
+  const built = buildSplitOp(req, { strip, flightData: getEfspFlightData(strip.flightDataId) });
+  if (!built.ok) { _showDotCommandError(built.error); return; }
+  if (!dispatchFormationOp(strip, built.op)) _showDotCommandError('sign on to the Position that holds this Strip first');
+}
+
+function _dispatchJoinDotCommand(parsed, strip) {
+  const wanted = String(parsed.args[0] || '').trim().toUpperCase();
+  if (!wanted) { _showDotCommandError('.join needs the lead\'s callsign — e.g. .join VIPER1'); return; }
+  const lead = joinLeadCandidates(strip, getAllEfspStrips()).find((s) => {
+    const fd = getEfspFlightData(s.flightDataId);
+    return fd && fd.identity && String(fd.identity.callsign || '').toUpperCase() === wanted;
+  });
+  if (!lead) { _showDotCommandError(`${wanted} is not a Strip of yours this one can join`); return; }
+  if (!dispatchFormationOp(strip, buildJoinOp(lead))) _showDotCommandError('sign on to the Position that holds this Strip first');
 }
 
 // WP6 (guide §9.2) — the keyboard path to the MARSA relation, for the same
