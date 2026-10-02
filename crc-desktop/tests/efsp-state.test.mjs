@@ -24,7 +24,7 @@ test.beforeEach(() => _resetEfspStateForTest());
 
 test('applyEfspSnapshot populates strips/flightDataList/positions and boardSeq/facility/bays', () => {
   applyEfspSnapshot({
-    boardSeq: 5, facility: 'INCIRLIK',
+    facilities: ['INCIRLIK'], boardSeqByFacility: { INCIRLIK: 5 },
     strips: [strip()], flightDataList: [{ flightDataId: 'f1' }], positions: [{ positionId: 'OPS' }],
     bays: [{ bayId: 'b1' }],
   });
@@ -60,7 +60,7 @@ test('applyEfspDelta updates flight data and Positions too', () => {
 });
 
 test('applyEfspDelta with a non-finite boardSeq leaves the current one unchanged', () => {
-  applyEfspSnapshot({ boardSeq: 7, strips: [], flightDataList: [], positions: [] });
+  applyEfspSnapshot({ facilities: ['INCIRLIK'], boardSeqByFacility: { INCIRLIK: 7 }, strips: [], flightDataList: [], positions: [] });
   applyEfspDelta({ strips: { updated: [], gone: [] }, flightDataList: { updated: [] }, positions: { updated: [] } });
   assert.equal(getEfspBoardSeq(), 7);
 });

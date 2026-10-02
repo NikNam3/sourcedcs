@@ -14,12 +14,12 @@ test.beforeEach(() => _resetEfspStateForTest());
 
 test('applyEfspDelta: flightDataList.gone removes archived flight data, and leaves the rest', () => {
   applyEfspSnapshot({
-    boardSeq: 4, strips: [{ stripId: 's1', flightDataId: 'f1', state: 'PROPOSED' }],
+    facilities: ['INCIRLIK'], boardSeqByFacility: { INCIRLIK: 4 }, strips: [{ stripId: 's1', flightDataId: 'f1', state: 'PROPOSED' }],
     flightDataList: [{ flightDataId: 'f1' }, { flightDataId: 'f2' }], positions: [],
   });
   // The archiver's delta: the Strip was already DROPPED, so its gone is a no-op
   // here; the ring advanced, so the seq moves.
-  applyEfspDelta({ boardSeq: 5, strips: { updated: [], gone: ['s-archived'] }, flightDataList: { updated: [], gone: ['f2'] }, positions: { updated: [] } });
+  applyEfspDelta({ facilityId: 'INCIRLIK', boardSeq: 5, strips: { updated: [], gone: ['s-archived'] }, flightDataList: { updated: [], gone: ['f2'] }, positions: { updated: [] } });
   assert.equal(getEfspFlightData('f2'), null);
   assert.ok(getEfspFlightData('f1'));
   assert.ok(getEfspStrip('s1'));

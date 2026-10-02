@@ -41,7 +41,7 @@ const nla = require('./nla');
 const blockMap = require('./block-map');
 const facilityConfig = require('./facility-config');
 const coordination = require('./coordination');
-const { handleMessage, snapshotMessage, filterForSession, supplementFor, readScopeKey, directedFor } = require('./efsp-ws');
+const { handleMessage, snapshotMessage, filterForSession, supplementFor, readScopeKey, directedFor, heartbeatBoardsAll, heartbeatBoardsFor } = require('./efsp-ws');
 const { NlaStatusMonitor } = require('./nla-status-monitor');
 const { Archiver } = require('./archiver');
 const { statePaths, ensureDirFor } = require('../state-paths');
@@ -363,6 +363,9 @@ function createEfsp({ clock = WALL_CLOCK, wallClock = WALL_CLOCK, transitionAltF
     // docs/adr/0100 §6: an Undo's panel message to the sessions signed on to a voided Position (ws-hub.js sends it).
     directedFor: (session, directed) => directedFor(ctx, session, directed),
     readScopeKey: (session) => readScopeKey(ctx, session),
+    /** The efsp-heartbeat's `boards` (docs/adr/0104): `heartbeatBoardsAll()` once per tick, `heartbeatBoardsFor(session, all)` per session. */
+    heartbeatBoardsAll: () => heartbeatBoardsAll(ctx),
+    heartbeatBoardsFor: (session, all) => heartbeatBoardsFor(ctx, session, all),
 
     archiver,
   };

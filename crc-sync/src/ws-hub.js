@@ -6,7 +6,6 @@ const { createSurveillance } = require('./surveillance');
 const { getAptConfig, setAptConfig } = require('./apt-config');
 const { consumeTicket } = require('./auth');
 const { WALL_CLOCK } = require('./mission-clock');
-const { DEFAULT_FACILITY_ID } = require('./efsp/facility-config');
 const { WIRE_PROTOCOL } = require('./wire-protocol');
 const log = require('./log').logger('ws-hub');
 
@@ -565,14 +564,15 @@ class WsHub {
   _tickAll() {
     if (this._surv.datalink) this._surv.datalink.tick();
     this._refreshLabels();
-    for (const [ws, session] of this._sessions) this._tick(ws, session, true);
+    const boards = this._efsp ? this._efsp.heartbeatBoardsAll() : null;
+    for (const [ws, session] of this._sessions) this._tick(ws, session, true, boards);
   }
 
   /**
    * One session's tick. `labelsFresh` is false when called on its own (tests),
    * so the contacts are re-described first.
    */
-  _tick(ws, session, labelsFresh = false) {
+  _tick(ws, session, labelsFresh = false, boardsAll = null) {
     if (ws.readyState !== WebSocket.OPEN) return;
     if (!labelsFresh) this._refreshLabels();
 
@@ -582,7 +582,10 @@ class WsHub {
     // arrived" on an idle Board would otherwise be indistinguishable from a
     // dead connection.
     if (this._efsp) {
-      ws.send(JSON.stringify({ version: VERSION, type: 'efsp-heartbeat', boardSeq: this._efsp.boardStoreFor(DEFAULT_FACILITY_ID).currentSeq }));
+      // Names every Board this session is sent (docs/adr/0104): seq and epoch per Facility.
+      // `stores` is reserved for the other stores' seqs (SYNC-B). `type` stays the second key.
+      const all = boardsAll || this._efsp.heartbeatBoardsAll();
+      ws.send(JSON.stringify({ version: VERSION, type: 'efsp-heartbeat', boards: this._efsp.heartbeatBoardsFor(session, all) }));
     }
 
     const lastSent = session.lastSent || (session.lastSent = new Map());
