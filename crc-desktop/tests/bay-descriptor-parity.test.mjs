@@ -26,9 +26,9 @@ const NOT_DESCRIPTOR_FIELDS = new Set(['rackId', 'withOthers']);
 
 const allBays = () => facilities.getFacilityIds().flatMap(f => facilities.getAllBays(f));
 
-// Files that always handle every Bay (the strict set, as before ESM-2a: bay-view.js, now with bay/**, and the panel/state files).
+// Files that always handle every Bay (the strict set, as before ESM-2a/2b: bay-view.js with bay/**, efsp-panel.js with panel/**, and the state files).
 // Other files under panels/efsp/ read flags only some Bays carry (bay-views.js's `view`), so those need at least one Bay with the field.
-const isStrict = (f) => /^panels\/efsp\/(bay-view|efsp-panel|efsp-state|efsp-arrivals|strip-drag)\.js$|^panels\/efsp\/bay\//.test(f);
+const isStrict = (f) => /^panels\/efsp\/(bay-view|efsp-panel|efsp-state|efsp-arrivals|strip-drag)\.js$|^panels\/efsp\/(bay|panel)\//.test(f);
 const readsOf = (files) => new Set(files.flatMap(f => [...readClient(f).matchAll(/\bbay\.([A-Za-z_]\w*)/g)].map(m => m[1])).filter(n => !NOT_DESCRIPTOR_FIELDS.has(n)));
 
 test('every field the client reads off a `bay` is on the server\'s Bay descriptor', () => {
