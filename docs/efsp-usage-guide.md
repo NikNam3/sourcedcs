@@ -1108,6 +1108,42 @@ existing installs:
 
 You can turn either back on in Settings; it stays as you set it.
 
+## 8F1. What is ours and what is sourced
+
+EFSP follows `EFSPImplementationGuide.md` and the FAA and ICAO texts it cites. Where the guide is silent, SOURCE
+chose, and in code and config that choice is marked `[SOURCE-DEFINED]`. The screen carries no such marker, because
+a label makes no claim, so this section lists the things you see without one, once. "SOURCE practice" in a
+message means the same thing: it is how this squadron does it, not a published rule. Nothing below is wrong
+for being ours; it is only not doctrine, and not to be quoted as doctrine.
+
+| What you see | Ours or sourced | Where it is decided |
+|---|---|---|
+| **State names, who owns each state, the button labels** (`PENDING_CLEARANCE`, "Send to Clearance", "Hand Off to AP", the ARRIVAL, OVERFLIGHT and MISSION lifecycles) | Ours (guide §3.4, §3.5 are `[SOURCE-DEFINED]`; real TFDM publishes none of it). The OVERFLIGHT lifecycle is the guide's four-state one (`adr/0087`), itself `[SOURCE-DEFINED]` there | `adr/0012`, `0023`, `0087` |
+| **Bay names and Bay sets**, the Rack per runway end, the Coordination Bays | The Incirlik Bay table is the guide's §4.2 default and is itself `[SOURCE-DEFINED]`; the `CENTER`, `TACTICAL` and `CARRIER` sets, JTAC's viewing Bay and the pattern and SFA Bays are ours | `adr/0013`, `0025`, `0074`, `0075`, `0093` |
+| **Block Maps** for ARRIVAL, OVERFLIGHT and MISSION, all sub-lettered Blocks (`3A`-`3G`, `7A`, `9A-*`, `9F`, `M1`-`M8`), the CID format, the equipment suffix (naive: sorted code letters, nothing fills it today) | Ours. The DEPARTURE Block Map is the FAA strip's (guide §6.2, Annex §2.1) | `adr/0008`, `0023`, `0026`, `0056` |
+| **Which Positions exist**, their letters on the scope | Incirlik's eight (OPS, CD, GC, LC, AP, RSU, SFA, PAR), `CTR` and the tactical four are the guide's; the `CARRIER` Facility and the RSU, SFA and PAR Positions are ours. The Position letters are ours | `adr/0074`, `0075`, `0088` |
+| **Consolidation** (where an unstaffed Position's Strips go) | The guide's default (§4.8.6 rule 2) is `CD→GC→LC→AP→CTR`, `AIC`/`GCI`→`TAC_C2`→`CTR`, `CV_APP*`→`CV_MARSHAL`→`CV_PRIFLY`, `RSU`→`LC`, `SFA`/`PAR`→`AP`. We ship it with four deviations. **No `AP→CTR` and no `TAC_C2→CTR`**: consolidation stays inside one Facility (`adr/0013`). **No `RSU→LC`**: RSU is supervisory, so a Strip never strands on it (`adr/0075`). **The carrier chain is `CV_APP2→CV_APP1→CV_MARSHAL` and stops there**, without `CV_PRIFLY` (`adr/0074`). **`JTAC→TAC_C2`** is ours (`adr/0080`). So `AP`, `CTR`, `TAC_C2` and `CV_MARSHAL` end their chains, and a Strip can be left with an unstaffed Position there; sign-off warns, it does not block (guide §4.8.6) | `facility-schema.js` notes |
+| **Runway status**: which states count as using the runway (`RUNWAY_GATED_STATES`: a DEPARTURE in `RUNWAY_QUEUE`, `LUAW` or `DEPARTED`; an ARRIVAL in `FINAL`), the button labels (CLOSE, OPEN, WORKS, WRK DONE, INSP OK, ACCEPT, REJECT, REQ CLS, REQ WRKS, REQ OPEN, CHG RWY, SELF CHG, ACK, WITHDRAW, BEGIN), the "works in progress" and "runway change in progress" wordings, Tower as sole authority, the wind rule for the active end, the skipped acknowledger | Ours | `adr/0061`, `0068`, `0070` |
+| **Incirlik's runway data**: runway 05/23 with true headings 56 and 236, the airport `LTAG` whose wind picks the active end, acknowledgers `OPS` and `AP`, `OPS` as inspection authority, the hot cargo and alert pad names and the alert access route, no arresting gear | Squadron data, **to verify**. The headings are approximate and true, not magnetic | `adr/0061`, `0070` |
+| **SFA, PAR and the pattern**: five UHF frequencies 232.1 to 236.1 MHz and who starts on which, glidepath tolerance, trend step, prompt hold, long-in-pattern | Ours; the frequencies are placeholders, **to verify** | `adr/0075`, `0093` |
+| **Carrier figures**: default Case III, approach types and button range, Marshal stack limit and radial tolerance, the angled deck, night as the sun 6 degrees below the horizon, the alternating CV_APP lanes | Ours, where the guide's §9.12 gives none. Not yet seen against a real DCS ship | `adr/0064`, `0074` |
+| **Radar picture**: which scope sits at which console (`positionRadars`), the figures and kinds in `sensor-specs.json` (range, sweep, 2D or height-finding, SSR, Mode 4), which scheme draws which radar (ATC or TACTICAL), the datalink membership | Ours. DCS publishes none of it, and none of it describes a real system | `adr/0042`, `0043`, `0059`, `0066`, `0088` |
+| **The synthetic code block `6000`-`6777`** that crc-sync gives AI aircraft | Ours; not a real code allocation | `adr/0059` |
+| **Conformance and Conflict Alert thresholds** (`config/alerting.json`) | Ours, not a published standard. The tactical Positions get no CA: a squadron decision | `adr/0058`, `0059` |
+| **Surveillance hints** (airborne at 60 kt, 200 ft, 5 s; `STALE` after 120 s) | Ours | `adr/0076` |
+| **The transition altitude**: Syria 10,000 ft, 18,000 ft elsewhere | A per-theater setting in `config/theaters.json`; the 18,000 ft is a placeholder | `adr/0085` |
+| **Airspace**: the `type` label set, working and range-control frequencies and approving a flight onto one, MOAs around Incirlik belonging to `CTR`, the shipped airspace list (empty) | Ours (squadron practice and the project owner's airspace picture). Only "ATC approves activation" is sourced (guide §9.11) | `adr/0036`, `0037` |
+| **The ATO import**: the USMTF set layouts (from a community wiki), the vowel-cut rule, one ATO at a time | Ours | `adr/0071`, `0078` |
+| **Metrics notes**: they say `[SOURCE-DEFINED]` on screen, on purpose | Ours | `adr/0072` |
+| **Instrumentation and archiving** (the 2 h retention of finished flights) | Ours, tunable in config | `adr/0065`, `0082` |
+
+**What is sourced, with its clause:** the cross-Facility primitives (HANDOFF, POINT_OUT, TRAFFIC, OPERATIONAL_REQUEST,
+AIT; guide §4.6), the forwarding-obligation timers (§4.6.1, §4.6.2), MARSA (§9.2), amendments (§3.7), beacon codes
+(§3.10), stereo routes (§9.10), activation of a MOA (§9.11), the DEPARTURE Strip (§6.2), the runway-status rules the
+guide spells out (§9.7), alert and scramble (§9.6) and the carrier rules the guide gives (§9.12, §9.13).
+
+Corrections to earlier ADRs (they are never edited) are collected in `adr/0077`.
+
 ## 8G. The runway — runway status (Incirlik)
 
 > **Server and panel are both built** (L1, L1b). The RUNWAY STATUS panel is closed by default: open it
