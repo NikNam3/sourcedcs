@@ -285,7 +285,7 @@ export function renderPositionWarnings(warnings) {
   $el.textContent = warnings.map(w =>
     w.routedTo
       ? `${w.count} Strip(s) from ${w.positionId} routed to ${w.routedTo}`
-      : `${w.count} Strip(s) from ${w.positionId} have no covering Position — unassigned`
+      : `${w.count} Strip(s) from ${w.positionId} have no Position to be consolidated at — unassigned`
   ).join(' · ');
 }
 

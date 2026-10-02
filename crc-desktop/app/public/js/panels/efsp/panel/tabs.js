@@ -156,7 +156,7 @@ export function _renderPositionTabs() {
   if (heldPositionIds.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'efsp-empty';
-    empty.textContent = 'No Position held — select one in Panels.';
+    empty.textContent = 'No Position signed on — select one in Panels.';
     _positionTabsEl.appendChild(empty);
   }
 

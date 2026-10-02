@@ -58,7 +58,7 @@ async function show(page, cs) {
 // outside the window proves nothing and is retried with a fresh pair, and the
 // test fails loudly if the harness cannot produce a double tap at all.
 const DOUBLE_TAP_MS = 400;
-for (const [label, n, tag] of [['Approve Pushback', 2, 'P'], ['To Runway Queue', 4, 'Q'], ['Hand Off to APP', 7, 'H']]) {
+for (const [label, n, tag] of [['Approve Pushback', 2, 'P'], ['To Runway Queue', 4, 'Q'], ['Hand Off to AP', 7, 'H']]) {
   test(`a double-tap on ${label} moves only the Strip that was tapped`, async ({ page }) => {
     test.setTimeout(120000);
     await page.setViewportSize({ width: 1600, height: 1600 });
@@ -109,7 +109,7 @@ test('an NLA the server will refuse says so before it is pressed', async ({ page
   await page.setViewportSize({ width: 1600, height: 1600 });
   await openPanel(page, { held: ALL });
   await seedStrip(page, { callsign: 'L4X1', role: 'DEPARTURE', fdr: FDR });
-  await advance(page, 'L4X1', 7); // DEPARTED, next is Hand Off to APP
+  await advance(page, 'L4X1', 7); // DEPARTED, next is Hand Off to AP
   // Release APP. Nothing else covers it, so the server will now inhibit.
   await page.evaluate((h) => window.sendEfspSetPositions('INCIRLIK', h), ALL.filter((p) => p !== 'APP'));
   await page.waitForFunction(() => !getActingPositions('INCIRLIK').includes('APP'));
@@ -119,5 +119,5 @@ test('an NLA the server will refuse says so before it is pressed', async ({ page
   const btn = stripByCallsign(page, 'L4X1').locator('.efsp-nla-btn');
   const pre = { enabled: await btn.isEnabled(), title: await btn.getAttribute('title'), strip: await stripByCallsign(page, 'L4X1').innerText() };
   expect(pre.enabled && !pre.title && !/no receiving Position/i.test(pre.strip),
-    `Hand Off to APP looks pressable: enabled=${pre.enabled} title=${pre.title}`).toBe(false);
+    `Hand Off to AP looks pressable: enabled=${pre.enabled} title=${pre.title}`).toBe(false);
 });

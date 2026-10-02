@@ -231,7 +231,7 @@ function _fileStereoByName(rawName, rawCallsign) {
 
   const origin = _createStripOrigin();
   if (!origin) {
-    _showDotCommandError('OPS, APP or CTR only — select one in Panels to create Strips');
+    _showDotCommandError('OPS, AP or CTR only — select one in Panels to create Strips');
     return;
   }
   if (!_stereoEligibleOrigin(origin)) {

@@ -75,7 +75,7 @@ function buildAssignedLine(fdr) {
 /** The one alert tag a data block leads with: a conflict first, then conformance. */
 function buildAlertTag(trackId, fdr) {
   const conflicts = typeof conflictAlertsForTrack === 'function' ? conflictAlertsForTrack(trackId) : [];
-  if (conflicts.length) return { tag: 'STCA', color: ALERT_COLOR_BAD };
+  if (conflicts.length) return { tag: 'CA', color: ALERT_COLOR_BAD };
   const alerts = fdr && typeof conformanceAlertsForFlightData === 'function' ? conformanceAlertsForFlightData(fdr.fdrId) : [];
   const bad = alerts.find(a => a.kind !== 'HEADING');
   if (bad && bad.kind === 'LEVEL_BUST') return { tag: `BUST${bad.deviationFt > 0 ? '+' : '−'}${Math.abs(bad.deviationFt)}`, color: ALERT_COLOR_BAD };

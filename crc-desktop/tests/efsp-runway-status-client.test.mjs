@@ -283,7 +283,7 @@ test('a controller holding TWR, OPS and APP is offered the one-input self-coordi
 test('runwayStatusSubjectFor names the runway, else the change, else the Facility', () => {
   assert.equal(rules.runwayStatusSubjectFor({ runwayId: '05/23', facilityId: 'INCIRLIK' }), 'runway 05/23');
   assert.equal(rules.runwayStatusSubjectFor({ op: { kind: 'ProposeRunwayChange', toRunwayId: '23' } }), 'runway change to 23');
-  assert.equal(rules.runwayStatusSubjectFor({ facilityId: 'INCIRLIK' }), 'INCIRLIK field state');
+  assert.equal(rules.runwayStatusSubjectFor({ facilityId: 'INCIRLIK' }), 'INCIRLIK runway status');
 });
 
 // ── Step 2: rule 4 ──────────────────────────────────────────────────────────
@@ -329,7 +329,7 @@ test('RWY SUSP / INSP / CLSD on every runway-using state (Q5 (a)), naming the re
   assert.equal(insp.text, 'RWY 23 INSP');
   const [clsd] = alerts(arrival({ state: 'INBOUND' }), record({ status: 'CLOSED' }), flightDataArr('05'));
   assert.equal(clsd.text, 'RWY 05 CLSD');
-  assert.equal(clsd.reason, 'Runway 05/23 is closed; it reopens when TWR opens it.');
+  assert.equal(clsd.reason, 'Runway 05/23 is closed; it reopens when LC opens it.');
   const [fin] = alerts(arrival({ state: 'FINAL' }), record({ status: 'CLOSED' }), flightDataArr('05'));
   assert.match(fin.reason, /Landing is an observation and is not held\.$/);
 });
@@ -441,7 +441,7 @@ test('OPS\'s button sends the request to tower with the record\'s rev, as OPS, a
   press(req);
   assert.deepEqual(plain(sent), [{ actingPositionId: 'OPS', facilityId: 'INCIRLIK', baseRev: 11, op: { kind: 'RequestRunwayStatus', runwayId: '05/23', action: 'WORKS' } }]);
   assert.equal(req.disabled, true);
-  assert.equal(req.title, 'as OPS — ask TWR to suspend runway 05/23 for works');
+  assert.equal(req.title, 'as OPS — ask LC to suspend runway 05/23 for works');
   assert.equal(button(list, 'BeginRunwayWorks'), undefined, 'OPS never begins works itself (H18)');
 });
 

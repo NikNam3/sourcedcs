@@ -163,7 +163,7 @@ function _fsAckChip(positionId, ack) {
   if (ack === null || ack === undefined) return _fsEl('span', 'runway-status-ack runway-status-ack-waiting', `${positionId} …`);
   if (ack.skipped) {
     const chip = _fsEl('span', 'runway-status-ack runway-status-ack-skipped', `${positionId} skipped`);
-    chip.title = `${positionId} was unmanned when the change was proposed, so it was skipped (and audited)`;
+    chip.title = `${positionId} was unstaffed when the change was proposed, so it was skipped (and audited)`;
     return chip;
   }
   return _fsEl('span', 'runway-status-ack runway-status-ack-done', `${positionId} ✓${ack.selfCoordinated ? ' self' : ''} ${_fsZulu(ack.at)}`);

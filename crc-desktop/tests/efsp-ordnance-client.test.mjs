@@ -124,7 +124,7 @@ test('ordnanceAlertsFor: the chip still shows with no client field state at all 
   const alerts = sb.ordnanceAlertsFor(arrivalStrip());
   assert.equal(alerts.length, 1);
   assert.equal(alerts[0].text, 'HUNG');
-  assert.equal(alerts[0].reason, 'Hung ordnance. The hot cargo pad is shown when field state is available.');
+  assert.equal(alerts[0].reason, 'Hung ordnance. The hot cargo pad is shown when runway status is available.');
 });
 
 test('ordnanceAlertsFor: a Facility with no record yet shows the generic sentence too', () => {

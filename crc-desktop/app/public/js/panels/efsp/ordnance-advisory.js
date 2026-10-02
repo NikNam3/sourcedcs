@@ -94,7 +94,7 @@ export function hungOrdnanceAdvisoryFor(strip, fdr, fieldState) {
 // [SOURCE-DEFINED] shown while the client has no field state for the Facility
 // (L1b's getEfspRunwayStatus not loaded, or no record yet): that ordnance is hung
 // must never depend on another piece arriving first.
-export const ORDNANCE_NO_RUNWAY_STATUS_REASON = 'Hung ordnance. The hot cargo pad is shown when field state is available.';
+export const ORDNANCE_NO_RUNWAY_STATUS_REASON = 'Hung ordnance. The hot cargo pad is shown when runway status is available.';
 
 /**
  * strip-view.js's _stripAlerts hook: [] or one `ord` alert — an amber HUNG chip

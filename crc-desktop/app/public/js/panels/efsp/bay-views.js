@@ -227,7 +227,7 @@ function _renderFinal(container, bay) {
   if (live.length === 0) {
     const none = document.createElement('div');
     none.className = 'efsp-final-none';
-    none.textContent = kind === 'CARRIER' ? 'No aircraft on final.' : 'No aircraft on final. Rotate an aircraft in from SFA or APP.';
+    none.textContent = kind === 'CARRIER' ? 'No aircraft on final.' : 'No aircraft on final. Rotate an aircraft in from SFA or AP.';
     wrap.appendChild(none);
   }
   for (const strip of live) {

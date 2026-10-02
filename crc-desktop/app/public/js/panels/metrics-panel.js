@@ -153,7 +153,7 @@ function _cell(id, block, windowId, ctx) {
       const rate = mannedHours > 0 ? total / mannedHours : null;
       const series = _searchSeries(block, hours);
       return {
-        value: `${_plural(block.total, 'search', 'searches')} · ${_num(rate)} per manned hour`,
+        value: `${_plural(block.total, 'search', 'searches')} · ${_num(rate)} per staffed hour`,
         ..._trendCell(_searchSeries(block, complete), windowId),
         spark: hours.length ? hours.map((h, i) => ({ label: _hourLabel(h), value: series[i] })) : null,
       };
@@ -230,7 +230,7 @@ function _cell(id, block, windowId, ctx) {
       const causes = _topEntries(block.byCause);
       const extra = [
         causes ? `causes: ${causes}` : null,
-        block.routedToCovering ? `${block.routedToCovering} routed to a covering Position` : null,
+        block.routedToCovering ? `${block.routedToCovering} routed to a consolidated Position` : null,
         block.inhibitedPress ? `${block.inhibitedPress} inhibited ${block.inhibitedPress === 1 ? 'press' : 'presses'} (not attempts)` : null,
       ].filter(Boolean).join(' · ');
       return {
@@ -523,7 +523,7 @@ function renderMetricsPanel() {
     const pp = _el('div', 'metrics-per-position');
     pp.appendChild(_el('div', 'metrics-section-title', 'Search invocations'));
     pp.appendChild(model.perPosition.search.length
-      ? _renderTable(['Position', 'Facility', 'Searches', 'Per manned hour', 'Manned hours', 'Last hour'],
+      ? _renderTable(['Position', 'Facility', 'Searches', 'Per staffed hour', 'Staffed hours', 'Last hour'],
         model.perPosition.search.map(r => [r.positionId, r.facilityId, r.total, r.perMannedHour, r.mannedHours, r.lastHour]))
       : _el('div', 'efsp-empty', 'no data'));
     pp.appendChild(_el('div', 'metrics-section-title', 'Time-to-find'));

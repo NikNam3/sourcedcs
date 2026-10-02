@@ -450,7 +450,7 @@ function _stripAlerts(strip) {
     const other = c.otherCallsign;
     out.push({
       key: 'stca', tone: 'bad', legacy: 'efsp-conflict-alert-indicator',
-      text: `STCA ${other} ${_fmtClock(c.timeToCpaSec)}`,
+      text: `Conflict Alert ${other} ${_fmtClock(c.timeToCpaSec)}`,
       reason: `Conflict with ${other} in ${_fmtClock(c.timeToCpaSec)}: closest ${c.minNm} NM / ${c.vertFt} ft.`,
     });
   }
@@ -755,7 +755,7 @@ function _stripMenuItems(strip) {
       reason: blockedBy ? `resolve ${blockedBy} first` : '',
       title: annotated
         ? `Turn this Strip into its return ARRIVAL leg at ${strip.ownerPositionId}. Its ${Object.keys(strip.annotations).length} annotation(s) are archived and cleared from the working Strip — press twice.`
-        : `Turn this Strip into its return ARRIVAL leg at ${strip.ownerPositionId} — same Strip, same FDR, no duplicate`,
+        : `Turn this Strip into its return ARRIVAL leg at ${strip.ownerPositionId} — same Strip, same flight data, no duplicate`,
       // Two presses when it would clear annotations: there is no undo. The
       // first relabels the item in place and keeps the menu open.
       run: (anchor, itemEl) => {

@@ -238,7 +238,7 @@ test('.stereo refuses when no origin Position is held at all', async () => {
   const m = await mounted({ held: [] });
   await runDotCommand(m, '.stereo PACK1 VIPER11');
   assert.equal(m.sent.length, 0);
-  assert.match(m.els['efsp-dot-command-preview'].textContent, /OPS, APP or CTR only/);
+  assert.match(m.els['efsp-dot-command-preview'].textContent, /OPS, AP or CTR only/);
 });
 
 test('every other dot-command verb still works — .stereo did not shadow the selection guard', async () => {

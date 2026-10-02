@@ -659,7 +659,7 @@ test('an NLA the server will refuse says so before it is pressed, and cannot be 
     nla: { inhibited: 'no receiving Position present', reason: 'NLA_INHIBITED' },
   });
   const { el, sent } = await renderStrip({ strip, fdr: FDR, held: ['TWR'] });
-  const btn = findByText(el, 'Hand Off to APP');
+  const btn = findByText(el, 'Hand Off to AP');
   assert.equal(btn.disabled, true);
   assert.equal(btn.dataset.nlaReason, 'NLA_INHIBITED', 'the machine code stays greppable against crc-sync');
   const why = descendants(el).find(c => (c.className || '').includes('efsp-nla-inhibit-reason'));
@@ -969,11 +969,11 @@ test('conformance and conflict alerts appear on the Strip only while they apply'
   });
   const el = r.sandbox._buildStripEl(strip);
   assert.ok(findByText(el, 'HDG 072'));
-  assert.ok(findByText(el, 'STCA SNAKE21 0:55'));
+  assert.ok(findByText(el, 'Conflict Alert SNAKE21 0:55'));
   assert.ok(findByText(el, 'Assigned heading 050, tracking 072.'));
   assert.ok(findByText(el, 'Conflict with SNAKE21 in 0:55: closest 1.8 NM / 400 ft.'));
   assert.ok(el.classList.contains('efsp-strip-alert'), 'a conflict gives the Strip its edge');
-  const conflictAlertNode = findByText(el, 'STCA SNAKE21 0:55');
+  const conflictAlertNode = findByText(el, 'Conflict Alert SNAKE21 0:55');
   const confNode = findByText(el, 'HDG 072');
   const row = descendants(el).find(c => (c.className || '').includes('efsp-strip-slots'));
   assert.ok(row.children.indexOf(conflictAlertNode) < row.children.indexOf(confNode), 'the conflict comes first');
@@ -1897,7 +1897,7 @@ test('a second advancing press inside the double-tap window is discarded, whiche
   const neighbour = stripAt({ stripId: 's2', fdrId: 'f2', state: 'RUNWAY_QUEUE', ownerPositionId: 'TWR' });
   const r = await renderStrip({ strip: tapped, fdr: FDR, held: ['TWR'], otherStrips: [neighbour] });
 
-  click(findByText(r.el, 'Hand Off to APP'));
+  click(findByText(r.el, 'Hand Off to AP'));
   assert.deepEqual(r.sent.map(s => s.op.kind), ['InvokeNla']);
 
   const slidUp = r.sandbox._buildStripEl(neighbour);

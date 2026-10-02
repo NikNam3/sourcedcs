@@ -114,8 +114,8 @@ export function _setCreateStripMsg(text, isError) {
 // the three, not just whichever this list happened to check first.
 const CREATE_STRIP_ORIGINS = [
   { actingPositionId: 'OPS', facilityId: 'INCIRLIK', bayId: 'ops-proposed',    role: undefined,     label: 'OPS · Departure' },
-  { actingPositionId: 'APP', facilityId: 'INCIRLIK', bayId: 'app-inbound',     role: 'ARRIVAL',     label: 'APP · Arrival' },
-  { actingPositionId: 'APP', facilityId: 'INCIRLIK', bayId: 'app-overflight',  role: 'OVERFLIGHT',  label: 'APP · Overflight' },
+  { actingPositionId: 'APP', facilityId: 'INCIRLIK', bayId: 'app-inbound',     role: 'ARRIVAL',     label: 'AP · Arrival' },
+  { actingPositionId: 'APP', facilityId: 'INCIRLIK', bayId: 'app-overflight',  role: 'OVERFLIGHT',  label: 'AP · Overflight' },
   { actingPositionId: 'CTR', facilityId: 'CENTER',   bayId: 'ctr-enroute',     role: 'ARRIVAL',     label: 'CTR · Arrival' },
   { actingPositionId: 'CTR', facilityId: 'CENTER',   bayId: 'ctr-overflight',  role: 'OVERFLIGHT',  label: 'CTR · Overflight' },
   // WP4A second slice — TAC_C2/GCI self-originate a standalone MISSION
@@ -325,7 +325,7 @@ export function _refreshCreateStripAvailability() {
   _createStripInputEl.disabled = !origin;
   _createStripBtnEl.disabled = !origin;
   if (!origin) {
-    _setCreateStripMsg('OPS, APP or CTR only — select one in Panels to create Strips', true);
+    _setCreateStripMsg('OPS, AP or CTR only — select one in Panels to create Strips', true);
   } else if (!_pendingCreateStripMutationId) {
     // Clear a stale "OPS/APP/CTR only"/validation message once one is
     // selected — but never stomp "Creating…" while an attempt is still in
@@ -363,7 +363,7 @@ async function _submitCreateStrip() {
 
   const origin = _createStripOrigin();
   if (!origin) {
-    _setCreateStripMsg('OPS, APP or CTR only — select one in Panels to create Strips', true);
+    _setCreateStripMsg('OPS, AP or CTR only — select one in Panels to create Strips', true);
     return;
   }
   // docs/ui-findings F-308 — the picker is read BEFORE the typed callsign is

@@ -219,7 +219,7 @@ function _fsRwyReason(runway, strip) {
   const id = runway.runwayId;
   let sentence;
   if (runway.status === 'CLOSED') {
-    sentence = `Runway ${id} is closed; it reopens when TWR opens it.`;
+    sentence = `Runway ${id} is closed; it reopens when LC opens it.`;
   } else if (runway.status === 'SUSPENDED_WORKS') {
     sentence = `Runway ${id} is suspended for works; it reopens when OPS completes the works and signs off the inspection.`;
   } else {
@@ -362,11 +362,11 @@ export function runwayStatusActionsFor(record, heldPositionIds) {
     } else if (!holdsTower) {
       // Tower does it directly; asking itself would be noise.
       if (runway.status === 'OPEN') {
-        as('RequestRunwayStatus', { runwayId: id, action: 'CLOSE', label: 'REQ CLS', title: `ask TWR to close runway ${id}` });
-        as('RequestRunwayStatus', { runwayId: id, action: 'WORKS', label: 'REQ WRKS', title: `ask TWR to suspend runway ${id} for works` });
+        as('RequestRunwayStatus', { runwayId: id, action: 'CLOSE', label: 'REQ CLS', title: `ask LC to close runway ${id}` });
+        as('RequestRunwayStatus', { runwayId: id, action: 'WORKS', label: 'REQ WRKS', title: `ask LC to suspend runway ${id} for works` });
       }
       if (runway.status === 'CLOSED') {
-        as('RequestRunwayStatus', { runwayId: id, action: 'OPEN', label: 'REQ OPEN', title: `ask TWR to open runway ${id}` });
+        as('RequestRunwayStatus', { runwayId: id, action: 'OPEN', label: 'REQ OPEN', title: `ask LC to open runway ${id}` });
       }
     }
   }
@@ -416,5 +416,5 @@ export function runwayStatusSubjectFor(msgOrOp) {
   if (runwayId) return `runway ${runwayId}`;
   const to = m.toRunwayId || (m.op && m.op.toRunwayId);
   if (to) return `runway change to ${to}`;
-  return m.facilityId ? `${m.facilityId} field state` : 'field state';
+  return m.facilityId ? `${m.facilityId} runway status` : 'runway status';
 }
