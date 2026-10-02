@@ -36,7 +36,7 @@ const focused = (page) => page.evaluate(() => {
 // function, reading the live Strip for its rev.
 async function setBlockVia(page, stripId, blockId, value, acting = 'OPS') {
   await page.evaluate(([id, b, v, a]) => {
-    window.sendEfspMutation(a, window.getEfspStrip(id), { kind: 'SetBlock', blockId: b, value: v });
+    crc.ws.sendEfspMutation(a, crc.state.getEfspStrip(id), { kind: 'SetBlock', blockId: b, value: v });
   }, [stripId, blockId, value, acting]);
 }
 
@@ -87,15 +87,15 @@ test('F-202: a half-typed Block keeps focus when another controller updates a di
     await openPanel(page2, { signedOn: ['CD'], controller: 'e2e-second' });
     // Hand FOC202 to CD, so the update below is to a Strip this controller
     // is not even looking at any more.
-    await page.evaluate((i) => window.sendEfspMutation('OPS', window.getEfspStrip(i), { kind: 'InvokeNla' }), otherId);
-    await expect.poll(() => page2.evaluate((i) => (window.getEfspStrip(i) || {}).ownerPositionId, otherId)).toBe('CD');
+    await page.evaluate((i) => crc.ws.sendEfspMutation('OPS', crc.state.getEfspStrip(i), { kind: 'InvokeNla' }), otherId);
+    await expect.poll(() => page2.evaluate((i) => (crc.state.getEfspStrip(i) || {}).ownerPositionId, otherId)).toBe('CD');
 
     await mine.locator('.efsp-block-7').click();
     const input = mine.locator('input.efsp-block-input');
     await page.keyboard.type('FL3');
 
     await setBlockVia(page2, otherId, '8', 'LTAG', 'CD');
-    await expect.poll(() => page.evaluate((i) => window.getEfspFlightData(window.getEfspStrip(i).flightDataId).filed.departureAirport, otherId)).toBe('LTAG');
+    await expect.poll(() => page.evaluate((i) => crc.state.getEfspFlightData(crc.state.getEfspStrip(i).flightDataId).filed.departureAirport, otherId)).toBe('LTAG');
     await page.waitForTimeout(100); // one rAF for the batched render
 
     // Measured: focus is now div.efsp-strip — FOC201's own Strip element.
@@ -134,7 +134,7 @@ test('F-204: a Strip with an abandoned Block edit still shows other changes to i
   await expect(s.locator('input.efsp-block-input')).toHaveCount(1);
 
   await setBlockVia(page, id, '8', 'LTAG');
-  await expect.poll(() => page.evaluate((i) => window.getEfspFlightData(window.getEfspStrip(i).flightDataId).filed.departureAirport, id)).toBe('LTAG');
+  await expect.poll(() => page.evaluate((i) => crc.state.getEfspFlightData(crc.state.getEfspStrip(i).flightDataId).filed.departureAirport, id)).toBe('LTAG');
   // Measured: DEP stays blank; data-rev on the element stays at the old rev.
   await expect(s.locator('.efsp-block-8')).toHaveText('LTAG', { timeout: 2000 });
 });
@@ -147,8 +147,8 @@ test('F-204: a Strip with an abandoned Block edit leaves the Bay when it is tran
   await page.keyboard.type('FL3');
   await clickAway(page);
 
-  await page.evaluate((i) => window.sendEfspMutation('OPS', window.getEfspStrip(i), { kind: 'InvokeNla' }), id);
-  await expect.poll(() => page.evaluate((i) => window.getEfspStrip(i).bayId, id)).toBe('cd-pending-clearance');
+  await page.evaluate((i) => crc.ws.sendEfspMutation('OPS', crc.state.getEfspStrip(i), { kind: 'InvokeNla' }), id);
+  await expect.poll(() => page.evaluate((i) => crc.state.getEfspStrip(i).bayId, id)).toBe('cd-pending-clearance');
   // Measured: still drawn in ops-proposed, still offering "Send to Clearance",
   // and pressing it comes back STALE_REV.
   await expect(page.locator(`#efsp-bay-content .efsp-strip[data-strip-id="${id}"]`)).toHaveCount(0, { timeout: 2000 });
@@ -171,8 +171,8 @@ test('blur neither commits nor reverts a free-text Block', async ({ page }) => {
   const s = await seedStrip(page, { callsign: 'BLR201' });
   await page.evaluate(() => {
     window.__l2Sent = [];
-    const orig = window.sendEfspMutation;
-    window.sendEfspMutation = (...a) => { window.__l2Sent.push(a[2]); return orig(...a); };
+    const orig = crc.ws.sendEfspMutation;
+    crc.ws.setEfspSender('sendEfspMutation', (...a) => { window.__l2Sent.push(a[2]); return orig(...a); });
   });
   await s.locator('.efsp-block-7').click();
   await page.keyboard.type('FL350');
@@ -191,8 +191,8 @@ test('F-205: arrowing through an enum Block does not commit until the controller
   const s = await seedStrip(page, { callsign: 'ENM201', actingPositionId: 'CTR', bayId: 'ctr-enroute', stripType: 'ARRIVAL', facilityId: 'CENTER' });
   await page.evaluate(() => {
     window.__l2Sent = [];
-    const orig = window.sendEfspMutation;
-    window.sendEfspMutation = (...a) => { window.__l2Sent.push(a[2]); return orig(...a); };
+    const orig = crc.ws.sendEfspMutation;
+    crc.ws.setEfspSender('sendEfspMutation', (...a) => { window.__l2Sent.push(a[2]); return orig(...a); });
   });
   await s.locator('.efsp-block-5A').click();
   await expect(s.locator('select.efsp-block-enum-select')).toBeFocused();

@@ -30,3 +30,18 @@ test('the harness starts crc-sync with the reset hook through the supervisor', (
   const sup = fs.readFileSync(path.join(E2E, 'helpers', 'sync-supervisor.js'), 'utf8');
   assert.match(sup, /CRCSYNC_TEST_RESET:\s*'1'/);
 });
+
+// BRIDGE: a sender is replaced through the owning module's setter (crc.ws.setEfspSender, crc.sync.setSendToSync),
+// never by assigning to a name, and the specs read no application global (they go through window.crc,
+// e2e/helpers/modules.js).
+test('no e2e file assigns an app sender or reads a bare app global', () => {
+  const files = [...specs, ...fs.readdirSync(path.join(E2E, 'helpers')).filter((f) => f.endsWith('.js')).map((f) => path.join('helpers', f))];
+  const bad = [];
+  for (const f of files) {
+    fs.readFileSync(path.join(E2E, f), 'utf8').split('\n').forEach((line, i) => {
+      if (/\b(?:window|crc\.\w+)\.(?:sendToSync|sendEfsp\w*)\s*=[^=>]/.test(line)) bad.push(`${f}:${i + 1}: ${line.trim()}`);
+      if (/\bwindow\.(?:sendToSync|sendEfsp\w*|getEfsp\w*|toggleDockPanel|isDockPanelOpen|getActingPositions)\b/.test(line)) bad.push(`${f}:${i + 1}: ${line.trim()}`);
+    });
+  }
+  assert.deepEqual(bad, []);
+});

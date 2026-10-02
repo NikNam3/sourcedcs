@@ -16,16 +16,16 @@ const { test, expect } = require('./helpers/test');
 const { openPanel, seedStrip } = require('./helpers/app');
 
 function stripIdOf(page, callsign) {
-  return page.evaluate((cs) => getAllEfspStrips().find((s) => getEfspFlightData(s.flightDataId).identity.callsign === cs).stripId, callsign);
+  return page.evaluate((cs) => crc.state.getAllEfspStrips().find((s) => crc.state.getEfspFlightData(s.flightDataId).identity.callsign === cs).stripId, callsign);
 }
 
 async function raiseObligation(page, callsign) {
   const stripId = await stripIdOf(page, callsign);
   await page.evaluate((stripId) => {
-    applyEfspAlerts({ conformance: [], conflictAlert: [], obligations: [
+    crc.state.applyEfspAlerts({ conformance: [], conflictAlert: [], obligations: [
       { facilityId: 'INCIRLIK', stripId, obligationType: 'VOID_TIME_EXPIRED', severity: 'OVERDUE', dueAt: Date.now(), since: Date.now() },
     ] });
-    renderAllOpenEfspBays();
+    crc.bayView.renderAllOpenEfspBays();
   }, stripId);
 }
 
@@ -41,10 +41,10 @@ async function raiseObligation(page, callsign) {
  */
 async function dropAll(page, callsigns) {
   await page.evaluate((cs) => {
-    for (const s of getAllEfspStrips()) {
-      const flightData = getEfspFlightData(s.flightDataId);
+    for (const s of crc.state.getAllEfspStrips()) {
+      const flightData = crc.state.getEfspFlightData(s.flightDataId);
       if (!flightData || !cs.includes(flightData.identity.callsign) || s.state === 'DROPPED') continue;
-      sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
+      crc.ws.sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
     }
   }, callsigns);
   await page.waitForTimeout(400);
@@ -67,13 +67,13 @@ test('declaring MARSA updates the badge on the participants', async ({ page }) =
     // Sent through the page's own MARSA sender, not the popover — the popover
     // is F-001's, and this is about what happens after the relation exists.
     await page.evaluate(() => {
-      const f = (cs) => getAllEfspStrips().find((s) => getEfspFlightData(s.flightDataId).identity.callsign === cs);
-      sendEfspMarsaMutation('OPS', undefined, undefined, {
+      const f = (cs) => crc.state.getAllEfspStrips().find((s) => crc.state.getEfspFlightData(s.flightDataId).identity.callsign === cs);
+      crc.ws.sendEfspMarsaMutation('OPS', undefined, undefined, {
         kind: 'DeclareMarsa', participants: [f('L4M1').flightDataId, f('L4M2').flightDataId],
         startEvent: 'LOCAL_DECLARATION', endCondition: 'ATC_SEPARATION_ESTABLISHED', declaringCallsign: 'L4M1',
       });
     });
-    await expect.poll(() => page.evaluate(() => getAllEfspMarsa().some((m) => m.state === 'ACTIVE')),
+    await expect.poll(() => page.evaluate(() => crc.state.getAllEfspMarsa().some((m) => m.state === 'ACTIVE')),
       { timeout: 3000, message: 'precondition: the relation is ACTIVE on the page' }).toBe(true);
     await expect(tanker.locator('.efsp-marsa-badge, .efsp-marsa-btn')).not.toHaveText('MARSA…', { timeout: 2000 });
   } finally {

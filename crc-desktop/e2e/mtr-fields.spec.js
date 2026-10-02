@@ -97,8 +97,8 @@ test('CTR overflight: no MTR row until MTR data is posted, then the full group o
 
   // Stored as an instant on the flight, shown as HHMM.
   const stored = await page.evaluate((cs) => {
-    const s = [...efspStrips.values()].find(x => (efspFlightDataList.get(x.flightDataId) || {}).identity?.callsign === cs);
-    return efspFlightDataList.get(s.flightDataId).military.mtr.exitEstimateUtc;
+    const s = [...crc.state.efspStrips.values()].find(x => (crc.state.efspFlightDataList.get(x.flightDataId) || {}).identity?.callsign === cs);
+    return crc.state.efspFlightDataList.get(s.flightDataId).military.mtr.exitEstimateUtc;
   }, 'MTR101');
   expect(typeof stored).toBe('number');
   expect(new Date(stored).getUTCHours() * 100 + new Date(stored).getUTCMinutes()).toBe(1432);
@@ -209,7 +209,7 @@ test('the lost-comms advisory: a grey note in ▼ naming the ALT clearance, noth
   expect(title).toMatch(/Lost comms \(§9\.4\).*FL180/s);
 });
 
-test('APP arrival: the M11 group only — no entry fields on the face', async ({ page }) => {
+test('AP arrival: the M11 group only — no entry fields on the face', async ({ page }) => {
   await openPanel(page, { signedOn: ['AP'] });
   await goBay(page, 'AP', 'ap-inbound');
   const strip = await seedStrip(page, {

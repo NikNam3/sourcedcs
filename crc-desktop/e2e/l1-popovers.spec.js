@@ -33,15 +33,15 @@ async function goBay(page, positionId, bayId) {
 
 /** The server-side Strip for a callsign, as the page's own state has it. */
 const serverStrip = (page, callsign) => page.evaluate((cs) => {
-  const s = [...efspStrips.values()].find(x => efspFlightDataList.get(x.flightDataId).identity.callsign === cs);
+  const s = [...crc.state.efspStrips.values()].find(x => crc.state.efspFlightDataList.get(x.flightDataId).identity.callsign === cs);
   return s && { rev: s.rev, flags: s.flags, tofi: s.tofiCoordination && s.tofiCoordination.state,
     coordination: s.coordination && s.coordination.state, airspace: s.airspaceEntry && s.airspaceEntry.airspaceId };
 }, callsign);
 
 /** Another controller's update to this Strip, through the real send path. */
 const remoteOffset = (page, callsign) => page.evaluate((cs) => {
-  const s = [...efspStrips.values()].find(x => efspFlightDataList.get(x.flightDataId).identity.callsign === cs);
-  sendEfspMutation(s.ownerPositionId, s, { kind: 'SetFlag', flag: 'offset', value: !s.flags.offset });
+  const s = [...crc.state.efspStrips.values()].find(x => crc.state.efspFlightDataList.get(x.flightDataId).identity.callsign === cs);
+  crc.ws.sendEfspMutation(s.ownerPositionId, s, { kind: 'SetFlag', flag: 'offset', value: !s.flags.offset });
 }, callsign);
 
 // crc-sync reads airspaces once at startup and the harness seeds `[]`, with no
@@ -49,7 +49,7 @@ const remoteOffset = (page, callsign) => page.evaluate((cs) => {
 // all client-side, so one airspace in the page's own state is enough to
 // render its <select> and button. The server will not know it — any spec
 // here that needs the entry APPLIED must not rely on this.
-const injectAirspace = (page) => page.evaluate(() => efspAirspaces.set('R-L1', {
+const injectAirspace = (page) => page.evaluate(() => crc.state.efspAirspaces.set('R-L1', {
   airspaceId: 'R-L1', rev: 1, state: 'ACTIVE', definition: { name: 'R-L1', controlFrequencyMhz: 251.0 },
 }));
 
@@ -86,8 +86,8 @@ const POPOVERS = {
     // the rebuild, so the popover itself can be tested past that.
     open: async (strip) => {
       await expect.poll(() => strip.evaluate((el) => {
-        const s = getEfspStrip(el.dataset.stripId);
-        const r = getEfspCorrelationForStrip(s);
+        const s = crc.state.getEfspStrip(el.dataset.stripId);
+        const r = crc.state.getEfspCorrelationForStrip(s);
         return r && r.state;
       }), { timeout: 10000 }).toBe('UNCORRELATED');
       await strip.click({ position: { x: 3, y: 3 } });
@@ -117,14 +117,14 @@ const POPOVERS = {
  */
 async function clearBay(page, bayId) {
   await page.evaluate((bay) => {
-    for (const s of efspStrips.values()) {
-      if (s.bayId === bay && s.state !== 'DROPPED') sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e: clearing the Bay' });
+    for (const s of crc.state.efspStrips.values()) {
+      if (s.bayId === bay && s.state !== 'DROPPED') crc.ws.sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e: clearing the Bay' });
     }
   }, bayId);
   await expect.poll(() => page.evaluate((bay) => {
     const openProposal = (s) => (s.coordination && s.coordination.state === 'INITIATED')
       || (s.tofiCoordination && s.tofiCoordination.state === 'INITIATED');
-    return [...efspStrips.values()].filter(s => s.bayId === bay && s.state !== 'DROPPED' && !openProposal(s)).length;
+    return [...crc.state.efspStrips.values()].filter(s => s.bayId === bay && s.state !== 'DROPPED' && !openProposal(s)).length;
   }, bayId)).toBe(0);
 }
 
@@ -207,7 +207,7 @@ test('extends F-305: an uncorrelated flight shows NO TRK and Bind… on its own'
   await clearBay(page, 'ap-inbound');
   const strip = await seedStrip(page, { callsign: uniqueCallsign('C'), stripType: 'ARRIVAL', bayId: 'ap-inbound', actingPositionId: 'AP' });
   await expect.poll(() => strip.evaluate((el) => {
-    const r = getEfspCorrelationForStrip(getEfspStrip(el.dataset.stripId));
+    const r = crc.state.getEfspCorrelationForStrip(crc.state.getEfspStrip(el.dataset.stripId));
     return r && r.state;
   }), { timeout: 10000 }).toBe('UNCORRELATED');
   // Nothing touches the Strip. The record says UNCORRELATED; the Strip must say so too.
@@ -239,7 +239,7 @@ test.describe('extends F-201', () => {
     // Not an immediate toBeFocused(): focus moves one render frame AFTER the
     // key (renderBay), so an instant check races it and passes.
     await page.waitForTimeout(300);
-    expect(await page.evaluate(() => getSelectedEfspStripId()), 'Space on the picker selected the Strip').toBeNull();
+    expect(await page.evaluate(() => crc.bayView.getSelectedEfspStripId()), 'Space on the picker selected the Strip').toBeNull();
     await expect(picker, 'focus was taken by the Strip').toBeFocused();
   });
 });

@@ -43,7 +43,7 @@ async function controller(browser, opts) {
 }
 
 const ctr = (browser) => controller(browser, { signedOn: ['CTR'], facilityId: 'CENTER', controller: 'ctr-controller' });
-const app = (browser) => controller(browser, { signedOn: ['AP'], facilityId: 'INCIRLIK', controller: 'ap-controller' });
+const ap = (browser) => controller(browser, { signedOn: ['AP'], facilityId: 'INCIRLIK', controller: 'ap-controller' });
 const tacC2 = (browser) => controller(browser, { signedOn: ['TAC_C2'], facilityId: 'TACTICAL', controller: 'tac-c2-controller' });
 
 /**
@@ -70,8 +70,8 @@ function seedCtrArrival(page, callsign) {
 
 /** Every live Strip record for this callsign, as the page's own store has it. */
 function recordsFor(page, callsign) {
-  return page.evaluate((cs) => [...efspStrips.values()]
-    .filter(s => (efspFlightDataList.get(s.flightDataId) || {}).identity && efspFlightDataList.get(s.flightDataId).identity.callsign === cs && s.state !== 'DROPPED')
+  return page.evaluate((cs) => [...crc.state.efspStrips.values()]
+    .filter(s => (crc.state.efspFlightDataList.get(s.flightDataId) || {}).identity && crc.state.efspFlightDataList.get(s.flightDataId).identity.callsign === cs && s.state !== 'DROPPED')
     .map(s => ({ facilityId: s.facilityId, owner: s.ownerPositionId, bayId: s.bayId, state: s.state, stripType: s.stripType,
       coordination: s.coordination && s.coordination.state, tofi: s.tofiCoordination && s.tofiCoordination.state })), callsign);
 }
@@ -126,7 +126,7 @@ function hitTest(locator) {
 
 test('a double-tap on Accept Hand Off accepts only the replica that was tapped', async ({ browser }) => {
   const a = await ctr(browser);
-  const b = await app(browser);
+  const b = await ap(browser);
   await propose(a, await seedCtrArrival(a, 'DBLAC1'), 'HANDOFF');
   await a.locator('.efsp-coordinate-popover').waitFor({ state: 'detached' });
   await propose(a, await seedCtrArrival(a, 'DBLAC2'), 'HANDOFF');
@@ -195,7 +195,7 @@ test('the TOFI popover can be reached on a lone Strip', async ({ browser }) => {
 
 test('the sender can see a HANDOFF is pending, and then that it was accepted', async ({ browser }) => {
   const a = await ctr(browser);
-  const b = await app(browser);
+  const b = await ap(browser);
   const s = await seedCtrArrival(a, 'HOSEE1');
   await propose(a, s, 'HANDOFF');
   await expect.poll(async () => (await recordsFor(a, 'HOSEE1')).length).toBe(2);
@@ -214,7 +214,7 @@ test('the sender can see a HANDOFF is pending, and then that it was accepted', a
 
 test('a rejected proposal is visible to the controller who sent it', async ({ browser }) => {
   const a = await ctr(browser);
-  const b = await app(browser);
+  const b = await ap(browser);
   const s = await seedCtrArrival(a, 'REJSEE');
   await propose(a, s, 'OPERATIONAL_REQUEST');
   await goBay(b, 'AP', 'ap-coordination');
@@ -225,14 +225,14 @@ test('a rejected proposal is visible to the controller who sent it', async ({ br
   const onStrip = /REJECT|UNABLE/i.test(await s.innerText());
   const banner = (await a.locator('#efsp-mutation-error').textContent() || '').trim();
   expect(onStrip || banner.length > 0,
-    'APP said UNABLE; the sender\'s Strip quietly went back to offering Coordinate… and nothing on the panel says the request was refused').toBe(true);
+    'AP said UNABLE; the sender\'s Strip quietly went back to offering Coordinate… and nothing on the panel says the request was refused').toBe(true);
 });
 
 // ── F-303 ─────────────────────────────────────────────────────────────────
 
 test('a rejected replica in the receiver\'s Coordination Bay cannot be worked', async ({ browser }) => {
   const a = await ctr(browser);
-  const b = await app(browser);
+  const b = await ap(browser);
   const s = await seedCtrArrival(a, 'DEADRP');
   await propose(a, s, 'POINT_OUT');
   await goBay(b, 'AP', 'ap-coordination');
@@ -251,7 +251,7 @@ test('a rejected replica in the receiver\'s Coordination Bay cannot be worked', 
   // that answers it — and it is the only shape that tells the controller WHY
   // the flight they declined is still theirs to see.
   const nla = replica.getByRole('button', { name: 'Hand to Tower' });
-  await expect(nla, 'the replica APP just rejected offers an enabled Hand to Tower').toBeDisabled({ timeout: 2000 });
+  await expect(nla, 'the replica AP just rejected offers an enabled Hand to Tower').toBeDisabled({ timeout: 2000 });
   await expect(replica.locator('.efsp-nla-inhibit-reason'),
     'disabled with no reason on the Strip is a control that refuses in silence')
     .toContainText(/rejected/i, { timeout: 2000 });
@@ -275,7 +275,7 @@ test('a rejected replica in the receiver\'s Coordination Bay cannot be worked', 
 
 test('the proposer\'s note reaches the receiver', async ({ browser }) => {
   const a = await ctr(browser);
-  const b = await app(browser);
+  const b = await ap(browser);
   const s = await seedCtrArrival(a, 'NOTE01');
   const note = 'climbing FL200 on request, verbal done';
   await propose(a, s, 'HANDOFF', note);
@@ -345,7 +345,7 @@ test('Accept TOFI Exit enables once CTR has set SEP REG back to ATC', async ({ b
 
   await setSepReg(s, 'ATC');
   // The MRU page's own flight-data store does get the change...
-  await expect.poll(() => b.evaluate(() => [...efspFlightDataList.values()].find(f => f.identity && f.identity.callsign === 'EXIT01').tofi.separationRegime)).toBe('ATC');
+  await expect.poll(() => b.evaluate(() => [...crc.state.efspFlightDataList.values()].find(f => f.identity && f.identity.callsign === 'EXIT01').tofi.separationRegime)).toBe('ATC');
   // ...but the MISSION Strip is not rebuilt (its rev did not move), so the
   // button keeps saying "CTR must set separation regime back to ATC" after
   // CTR has done exactly that.
@@ -368,7 +368,7 @@ test('the regime stated when accepting TOFI shows in SEP REG on both sides', asy
   // crc-sync writes flightData.tofi.separationRegime = DUE_REGARD on this accept —
   // a page opened AFTERWARDS gets it in its snapshot. Neither page that was
   // connected at the time ever receives it.
-  const flightDataRegime = (page) => page.evaluate(() => [...efspFlightDataList.values()].find(f => f.identity && f.identity.callsign === 'SREG01').tofi.separationRegime);
+  const flightDataRegime = (page) => page.evaluate(() => [...crc.state.efspFlightDataList.values()].find(f => f.identity && f.identity.callsign === 'SREG01').tofi.separationRegime);
   await expect.poll(() => flightDataRegime(a), { message: 'the CTR page never learns the regime', timeout: 3000 }).toBe('DUE_REGARD');
   await expect.poll(() => flightDataRegime(b), { message: 'the TAC_C2 page that set it never learns it either', timeout: 3000 }).toBe('DUE_REGARD');
 });
@@ -400,7 +400,7 @@ test('the regime picker can be opened with a real click and keeps what was chose
   await expect(select).toHaveValue('ATC');
   await mission.getByRole('button', { name: 'Accept TOFI Entry' }).click({ timeout: 3000 });
 
-  const flightDataRegime = (page) => page.evaluate(() => [...efspFlightDataList.values()].find(f => f.identity && f.identity.callsign === 'SREG02').tofi.separationRegime);
+  const flightDataRegime = (page) => page.evaluate(() => [...crc.state.efspFlightDataList.values()].find(f => f.identity && f.identity.callsign === 'SREG02').tofi.separationRegime);
   await expect.poll(() => flightDataRegime(a), { timeout: 3000 }).toBe('ATC');
 });
 
