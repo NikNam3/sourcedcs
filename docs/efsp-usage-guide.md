@@ -596,7 +596,7 @@ Only `AP` and `CTR` can use this. It's a **separate mechanism** from the ordinar
 1. Acting as `CTR`, create a Strip (the callsign box works for `CTR` too now — it originates an `ARRIVAL` Strip in `ctr-enroute`; no flight-plan pre-fill for this path, see §4's scope note).
 2. Click **Coordinate…** on the Strip, pick `HANDOFF`, add a note if the flight data has a `trackDegradationFlag` set (required in that case), press Send.
 3. This creates a new Strip in `AP`'s `ap-coordination` Bay, `coordination.state: 'INITIATED'`.
-4. Acting as `AP`, click **Accept** on that Strip — it moves to `ap-inbound`, `state: INBOUND`, and both sides' `coordination.state` become `'ACTIVE'`. Data ownership and separation responsibility both move to `AP` (`HANDOFF`'s full-jurisdiction row).
+4. Acting as `AP`, click **Accept** on that Strip — it moves to `ap-inbound`, `state: INBOUND`, and both sides' `coordination.state` become `'ACTIVE'`. Radar identification and the Strip move to `AP`; communications and control stay with `CTR` until their own steps (next subsection).
 5. From here the `AP`-side Strip proceeds through the normal `ARRIVAL` chain (§2). The `CTR`-side Strip stays in `ctr-enroute` — drop it manually once you're done with it (each side is independently removable).
 
 `coordination` record shape on a Strip:
@@ -616,7 +616,7 @@ Primitive cheat sheet (what moves on ACCEPT):
 
 | Primitive | Data ownership | Separation | Radar ID | Comms |
 |---|---|---|---|---|
-| `HANDOFF` | moves | moves | transfers | transfers |
+| `HANDOFF` | moves | stays until **Control to** | transfers | stays until **Comms to** |
 | `POINT_OUT` | **stays** | moves | transfers | stays |
 | `TRAFFIC` | stays | stays | transfers | stays |
 | `OPERATIONAL_REQUEST` | stays | stays | — | — |
@@ -627,8 +627,7 @@ Primitive cheat sheet (what moves on ACCEPT):
 ### HANDOFF after Accept: communications, ControlRelease and control (`docs/adr/0101`)
 
 **Accept on a `HANDOFF` moves radar identification and the Strip only.** The flight is now on the receiving Position's
-Bay, but the transferring Position is still on the frequency and still has control. (This supersedes the `HANDOFF` row of
-the cheat sheet above and step 4's "separation responsibility moves"; `AIT` still moves everything at Accept.) What is
+Bay, but the transferring Position is still on the frequency and still has control. (`AIT` still moves everything at Accept.) What is
 left to do is three separate steps, shown as chips on the `HANDOFF` row of **both** Strips: `COMMS: CTR` and `CTRL: CTR`
 (the Position that has them; a blue outline means yours), and, when there is one, the `RELEASE` in effect.
 
