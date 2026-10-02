@@ -120,8 +120,8 @@ const WRITABLE_PATHS = new Set([
   'filed.route', 'filed.requestedAltitude', 'filed.departureAirport', 'filed.departureRunway',
   'filed.destinationAirport', 'filed.proposedDepartureTimeUtc', 'filed.fullRouteClearance', 'filed.remarks',
   'filed.stereoRouteName',
-  // ARRIVAL-role fields (Phase 2) — present on every flight data regardless of the
-  // Strip role that ends up referencing it, same "present but unpopulated
+  // ARRIVAL-type fields — present on every flight data regardless of the
+  // strip type that ends up referencing it, same "present but unpopulated
   // until relevant" precedent as the DEPARTURE-only fields above (guide
   // §12). Deliberately separate names from the departure fields, not
   // repurposed ones — filed.departureAirport means something different
@@ -606,9 +606,9 @@ class FlightDataStore {
         proposedDepartureTimeUtc: seedTimes.proposedDepartureTimeUtc,
         fullRouteClearance: !!seed.fullRouteClearance,
         remarks: filedFrom('remarks'),
-        originAirport: seed.originAirport || '',                       // ARRIVAL-role field, Phase 2
-        arrivalFix: seed.arrivalFix || null,                            // ARRIVAL-role field, Phase 2
-        estimatedArrivalTimeUtc: seedTimes.estimatedArrivalTimeUtc,  // ARRIVAL-role field, Phase 2
+        originAirport: seed.originAirport || '',                       // ARRIVAL-type field
+        arrivalFix: seed.arrivalFix || null,                            // ARRIVAL-type field
+        estimatedArrivalTimeUtc: seedTimes.estimatedArrivalTimeUtc,  // ARRIVAL-type field
       },
       clearance: defaultClearance(), // docs/adr/0058 — assigned altitude and heading
       assigned: {
@@ -630,7 +630,7 @@ class FlightDataStore {
         movementAreaEntryTimeUtc: null, // Block 16 — present, unpopulated; metering deferred, guide §12
         taxiTimeUtc: null,              // Block 17 — present, unpopulated
         takeoffTimeUtc: null,
-        landingRunway: null,            // ARRIVAL-role field, Phase 2
+        landingRunway: null,            // ARRIVAL-type field
       },
       // WP6 (docs/adr/0052), guide §6.4 — the military extension namespace.
       // `ordnanceState`/`hookRequired` are written via setMilitary() only,
@@ -890,8 +890,8 @@ class FlightDataStore {
    * This is the missing half of §3.10.2 rule 1: "Assigned and observed are two
    * separate fields. Never one. The panel derives a mismatch state by
    * comparing them, and renders three cases: matching, mismatched, and
-   * assigned but nothing received." `beaconAssigned` has been written since
-   * Phase 1; nothing ever wrote this, so the three-case render had no data
+   * assigned but nothing received." `beaconAssigned` was written from the start;
+   * nothing ever wrote this, so the three-case render had no data
    * behind it and the D22 defect it guards against was untestable.
    *
    * A dedicated setter, structurally excluded from WRITABLE_PATHS, on the

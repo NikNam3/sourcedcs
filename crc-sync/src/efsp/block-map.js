@@ -20,7 +20,7 @@
 // (board/) manages rev/cid/state directly; NLA is computed, never stored). Block 3
 // is a read-only composite render of several identity fields at once, and
 // Block 4A is a flag (strip.flags.removeIndicator), not a SetBlock target
-// in Phase 1 (DropStrip sets it directly). resolveBlockTarget() returns
+// (DropStrip sets it directly). resolveBlockTarget() returns
 // null for all of these, matching board/ops/set-block.js's "unknown blockId is a
 // VALIDATION_ERROR" behavior for anything not flightData/annotation-routed.
 

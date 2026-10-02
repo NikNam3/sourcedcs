@@ -56,7 +56,7 @@ function isSynthetic(code) {
 
 class CodeAllocator {
   constructor() {
-    this._allocated = new Map(); // code -> flightDataId — single INCIRLIK facility in Phase 1, no per-facility pooling yet
+    this._allocated = new Map(); // code -> flightDataId — one pool shared by every Facility (docs/adr/0013)
     // The last code allocate() handed out, as a number (docs/adr/0081). The
     // next scan starts after it, so a released code is not handed out again
     // until the whole discrete pool has cycled. 0 = nothing handed out yet.

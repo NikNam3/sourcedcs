@@ -240,19 +240,20 @@ const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 //    STARS "position symbol"). [SOURCE-DEFINED] (docs/adr/0088): the letters are ours; one A-Z or 0-9 each.
 //    The whole tactical side shares `M`, shown on a flight under tactical control after TOFI (H48).
 //  consolidation: where an unstaffed Position's Strips go, one hop: `{ CD: 'GC' }` reads "CD is consolidated at
-//    GC" (guide §4.5 rule 3, §4.8.6; JO 7210.3 para 2-2-3, 2-6-5). Walked to the end by position-store.js. It is
-//    INTRAFACILITY only: it never crosses a Facility, and so deliberately does not extend LC -> AP to CTR (docs/adr/0013
-//    point 4), a different thing from the cross-Facility handoff of §4.6. The guide's default (§4.8.6 rule 2)
-//    runs on past what we ship: CD, GC, LC, AP, then CTR; AIC and GCI to TAC_C2, then CTR; CV_APP* to CV_MARSHAL to
-//    CV_PRIFLY; RSU to LC; SFA and PAR to AP. What we ship is the guide's, cut where the Facility ends: CD to GC to
-//    LC to AP, SFA and PAR to AP, the tactical and carrier hops inside their Facility. [SOURCE-DEFINED]
-//    (docs/adr/0075): RSU is absent on purpose (the guide's default sends it to LC), as OPS is and PriFly is on
-//    the carrier, so a Strip never strands on a supervisory Position. [SOURCE-DEFINED] (docs/adr/0074): the
-//    carrier chain ends at the Marshal and omits PriFly (the guide's default continues to CV_PRIFLY). [SOURCE-DEFINED] (docs/adr/0025, 0080): AIC, GCI and JTAC are consolidated at TAC_C2 (JTAC
-//    so a line is left with the Position that handed it over, docs/adr/0080); TAC_C2 to CTR is not, because that
-//    hop crosses a Facility. CENTER and RANGES have none: a Position that owns no Strips has none to strand.
-//    An unstaffed Position with no successor is the guide's "warn, do not block" (§4.8.6 rule 5). Whether GC
-//    should consolidate into LC at all is open (decisions H101, RP-F1).
+//    GC" (guide §4.5 rule 3, §4.8.6; JO 7210.3 para 2-2-3, 2-6-5). Walked to the end by position-store.js (the
+//    staffing fallback). Guide §4.8.6 rule 2 gives the default: CD, GC, LC, AP, then CTR; AIC and GCI to TAC_C2,
+//    then CTR; CV_APP* to CV_MARSHAL to CV_PRIFLY; RSU to LC; SFA and PAR to AP. The shipped maps DEVIATE from it
+//    in three places, and none of the three is the guide's: [SOURCE-DEFINED] (docs/adr/0013) there is no AP to
+//    CTR (nor TAC_C2 to CTR): consolidation is INTRAFACILITY, never crossing a Facility, which is a different
+//    thing from the cross-Facility handoff of §4.6 (position-store.js is scoped to one Facility's staffing).
+//    [SOURCE-DEFINED] (docs/adr/0075) there is no RSU to LC: RSU is absent on purpose, as OPS is, so a Strip
+//    never strands on a supervisory Position. [SOURCE-DEFINED] (docs/adr/0074) the carrier chain ends at
+//    CV_MARSHAL and omits CV_PRIFLY, for the same reason. What ships otherwise is the guide's: CD to GC to LC
+//    to AP, SFA and PAR to AP (guide, adopted by docs/adr/0075), AIC/GCI/JTAC to TAC_C2 (the guide's AIC/GCI; JTAC is
+//    [SOURCE-DEFINED], docs/adr/0080, so a line stays with the Position that handed it over). CENTER and RANGES
+//    have none: a Position that owns no Strips has none to strand. An unstaffed Position with no successor is the
+//    guide's "warn, do not block" (§4.8.6 rule 5). Whether GC should consolidate into LC at all is open
+//    (decisions H101, RP-F1).
 //  positionRadars: which radars each Position works through, as selectors, never radar ids (docs/adr/0042,
 //    0043). [SOURCE-DEFINED] (docs/adr/0042, 0043): which scope sits at which console is squadron data, not
 //    doctrine; the guide says nothing about it. A radar's id is derived from live mission data, so a stored id

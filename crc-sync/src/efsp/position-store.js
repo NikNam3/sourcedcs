@@ -25,7 +25,7 @@ const { WALL_CLOCK } = require('../mission-clock');
 
 class PositionStore {
   /**
-   * @param {string[]} positionIds — the fixed Position set, e.g. ['OPS','CD','GC','LC'] for Phase 1
+   * @param {string[]} positionIds — the fixed Position set, e.g. ['OPS','CD','GC','LC'] (a Facility's Position set)
    * @param {object} consolidation — one-hop consolidation map, e.g. { CD:'GC', GC:'LC' } (guide §4.8.6 rule 2's default consolidation, cut where the Facility ends). A Position absent from this map (like OPS) is consolidated nowhere — and OPS is on no chain in the guide's default either.
    */
   constructor(positionIds, consolidation, { clock = WALL_CLOCK } = {}) {
