@@ -63,9 +63,6 @@ const HANDLED_BY_CLIENT = [...new Set([...CORE_CASES, ...REGISTERED])].sort();
 const SERVER_ONLY_OK = {
   // connect()'s onmessage handles it before the switch, because it ends the connection (crc-sync docs/adr/0103).
   'update-required': 'handled in app.js connect() ahead of the switch',
-  // docs/adr/0100 §6: an Undo's panel message to the voided Position. Sent by crc-sync since UNDO-S; UNDO-C adds the
-  // app.js handler and removes this entry.
-  'efsp-undo-voided': 'UNDO-C adds the handler',
 };
 
 test('the scans find the wire at all (guards against a regex that silently matches nothing)', () => {

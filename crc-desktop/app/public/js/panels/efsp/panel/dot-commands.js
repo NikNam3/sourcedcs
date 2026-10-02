@@ -1,6 +1,7 @@
 'use strict';
 import { _availableCreateStripOrigins, _createStripOrigin, _missionBindCandidates, _pendingDuplicateCallsign, _setCreateStripMsg, _setPendingCreateStripMutationId, _setPendingDuplicateCallsign, _stereoEligibleOrigin, _stereoRoutes } from './create-strip.js';
 import { _dotCommandInputEl, _dotCommandPreviewEl } from './state.js';
+import { requestUndo } from './undo-slot.js';
 import { _runEfspSearch } from './tabs.js';
 import { getActingPositions, sendEfspCorrelationMutation, sendEfspCreateStrip, sendEfspMarsaMutation, sendEfspMutation } from '../efsp-ws.js';
 import { getAllEfspStrips, getEfspCorrelationForStrip, getEfspFlightData, getEfspStrip, liveStripsForCallsign, marsaForStrip } from '../efsp-state.js';
@@ -83,6 +84,12 @@ export function _dispatchDotCommand(parsed) {
     return;
   }
 
+  // docs/adr/0100 §10: .undo undoes the slot's action, not "the selected Strip", so it needs no selection.
+  if (parsed.verb === 'undo') {
+    requestUndo();
+    return;
+  }
+
   const stripId = getSelectedEfspStripId();
   const strip = stripId ? getEfspStrip(stripId) : null;
   if (!strip) return;
@@ -92,8 +99,6 @@ export function _dispatchDotCommand(parsed) {
 
   if (parsed.verb === 'drop') {
     sendEfspMutation(actingPositionId, strip, { kind: 'DropStrip', reason: parsed.args.join(' ') || 'manual' });
-  } else if (parsed.verb === 'undo') {
-    sendEfspMutation(actingPositionId, strip, { kind: 'Undo' });
   } else if (parsed.verb === 'bind' || parsed.verb === 'unbind') {
     // WP5 (guide §6.6 rule 1's top rung). The badge's picker is a pointer
     // affordance; this is the keyboard path §7.1 rule 4 asks for at the
