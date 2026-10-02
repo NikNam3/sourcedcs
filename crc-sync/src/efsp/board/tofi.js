@@ -4,8 +4,7 @@
 // ACCEPT / REJECT / TRANSFER_COMMS on the Strip, and the three `receiveTofi*` calls a peer Board makes on this one.
 // BoardStore's `receiveTofi*` delegate here.
 
-const { deepClone, trackDegradationRefusal } = require('./strip-util');
-const { mintReplica } = require('./replica');
+const { deepClone, trackDegradationRefusal, mintReplica } = require('./strip-util');
 const { SEPARATION_REGIMES } = require('../flight-data-store');
 
 class Tofi {

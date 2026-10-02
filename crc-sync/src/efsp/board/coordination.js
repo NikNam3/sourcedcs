@@ -4,8 +4,7 @@
 // PROPOSE / ACCEPT / REJECT / STAND_BY / CANCEL on the sender's Strip, and the four `receive*` calls a peer Board
 // makes on this one. BoardStore's `receiveCoordination*` delegate here.
 
-const { deepClone, trackDegradationRefusal } = require('./strip-util');
-const { mintReplica } = require('./replica');
+const { deepClone, trackDegradationRefusal, mintReplica } = require('./strip-util');
 
 class Coordination {
   /**
