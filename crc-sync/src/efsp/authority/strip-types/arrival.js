@@ -1,28 +1,28 @@
 'use strict';
 
-// The ARRIVAL Role family (authority registry, S3-2). States and NLA moved
-// from nla.js, state owners from permission.js.
+// The ARRIVAL strip-type family (authority registry, docs/adr/0095): states,
+// NLA table and state owners.
 
 const { _runwayInhibit } = require('./nla-common');
 
 // [SOURCE-DEFINED], per guide §3.4's arrival lifecycle:
 // INBOUND -> HANDED_TO_TOWER -> FINAL -> LANDED -> TAXI_IN -> DROPPED.
-// NOTE: EfspState 'FINAL' here (a value of strip.state) is unrelated to
-// Strip Role 'FINAL' (guide §7.10's PAR/carrier stripType, WP7A, still
-// unbuilt — that would live on strip.stripType) — they share the string but
-// are different fields on different objects. Don't conflate them.
+// NOTE: the state 'FINAL' here (a value of strip.state) is unrelated to the
+// strip type 'FINAL' (guide §7.10's PAR/carrier stripType, strip-types/final.js,
+// a value of strip.stripType) — they share the string but are different fields
+// on different objects. Don't conflate them.
 const ARRIVAL_STATES = ['INBOUND', 'HANDED_TO_TOWER', 'FINAL', 'LANDED', 'TAXI_IN', 'DROPPED'];
 
 // [SOURCE-DEFINED] — ARRIVAL has no guide-published "normally owned by"
 // table (§3.4 only gives the state sequence); this mirrors the same
-// per-Position-per-lifecycle-stage shape as DEPARTURE's guide-sourced one.
+// per-Position-per-lifecycle-stage shape as DEPARTURE's guide-given one.
 const ARRIVAL_STATE_OWNERS = {
   // CTR added (docs/adr/0014) — a CENTER-held INBOUND Strip (CTR's own
   // local origination, mirroring APP's original ADR 0008 stub) needs its
   // owning Position authorized to act on it too, even though "acting on
   // it" now means proposing a cross-Facility HANDOFF via the Coordinate
-  // button rather than an ordinary NLA transfer (nla.js's computeArrivalNla
-  // INBOUND case is Facility-aware — see that module's comment).
+  // button rather than an ordinary NLA transfer (computeArrivalNla's
+  // INBOUND case below is Facility-aware).
   INBOUND:         ['AP', 'CTR'],
   HANDED_TO_TOWER: ['LC'],
   FINAL:           ['LC'],

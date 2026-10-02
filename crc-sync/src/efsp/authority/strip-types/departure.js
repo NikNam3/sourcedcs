@@ -1,9 +1,8 @@
 'use strict';
 
-// The DEPARTURE Role family (authority registry, S3-2). States and NLA moved
-// from nla.js, state owners from permission.js, the rest from the tables
-// named on each field below. See nla.js's module comment for the lifecycle's
-// history.
+// The DEPARTURE strip-type family (authority registry, docs/adr/0095): its
+// states, NLA table, state owners and the rest of the per-strip-type tables
+// named on each field below. nla.js and permission.js are facades over it.
 
 const { matchesStandingRelease } = require('../../release-envelope');
 const { _requireNow, _runwayInhibit } = require('./nla-common');
@@ -13,8 +12,9 @@ const DEPARTURE_STATES = [
   'RUNWAY_QUEUE', 'LUAW', 'DEPARTED', 'HANDED_OFF', 'DROPPED',
 ];
 
-// Per-State authority (guide §3.4's "normally owned by" column) — WHO may
-// advance a Strip OUT of a given State. Checked by board-store.js in
+// [SOURCE-DEFINED] (guide §3.4) — per-State authority (the guide's "normally
+// owned by" column, itself [SOURCE-DEFINED]): WHO may advance a Strip OUT of a
+// given State. Checked by the Board (board/ops/invoke-nla.js) in
 // ADDITION to raw Strip ownership, not instead of it: ownership alone
 // (guide §4.4) only ever meant "which Position currently holds this
 // Strip," and nothing enforced that holding it also lined up with §3.4's
@@ -26,8 +26,8 @@ const DEPARTURE_STATES = [
 // Keyed on strip.state — the state the Strip is CURRENTLY in when the
 // action is taken (the FROM state), matching how §3.4's table reads: who
 // works a Strip WHILE it's in a given State. Applies uniformly to every
-// NLA transition (board-store.js's _applyInvokeNla) AND every equivalent
-// drag-based Bay-implied transition (_validateBayImpliedTransition) —
+// NLA transition (board/ops/invoke-nla.js's _applyInvokeNla) AND every equivalent
+// drag-based Bay-implied transition (board/placement.js's validateBayImpliedTransition) —
 // guide §3.5 rule 4 makes NLA an accelerator, never the ONLY path to a
 // transition, so gating only the button would be a trivial bypass via drag.
 const DEPARTURE_STATE_OWNERS = {

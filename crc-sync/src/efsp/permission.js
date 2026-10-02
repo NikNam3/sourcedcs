@@ -1,61 +1,28 @@
 'use strict';
 
 // Per-acting-Position permission evaluation (EFSPImplementationGuide.md
-// §4.8.4) — table-driven, evaluated for the SINGLE acting Position on a
-// Mutation, NEVER as a union of every Position a controller happens to
-// hold (defect D21): "Permissions MUST be evaluated per acting Position,
-// never as the union of the held set."
+// §4.8.4): evaluated for the SINGLE acting Position on a Mutation, NEVER as a
+// union of every Position a controller is signed on to (defect D21): "Permissions
+// MUST be evaluated per acting Position, never as the union of the signed-on set."
+// canMutate()'s signature is the guard by construction: it takes exactly one
+// actingPositionId, with nowhere for a set to sneak in.
 //
-// canMutate()'s signature is the guard against D21 by construction: it
-// takes exactly one actingPositionId, with no parameter through which a
-// caller could pass "the full set of Positions I hold" — there is
-// structurally nowhere for a union to sneak in.
+// The tables live in the authority registry (docs/adr/0095; authority/): the
+// op-kind vocabulary (HANDOFF, POINT_OUT, TOFI and the other coordination
+// kinds included) in op-kinds.js, the class rules in classes.js, each Position
+// family's grants and capability columns in positions/<family>.js (the MRU
+// capability table is docs/adr/0080), each strip type's state owners in
+// strip-types/<type>.js, all composed in authority/index.js. This module is
+// their facade, plus the one-Position predicates (the D21 gates).
 //
-// Ownership (does the acting Position own THIS specific Strip?) is
-// enforced separately and unconditionally by board-store.js. This module
-// answers a different question: is this Position CLASS even allowed to
+// Ownership (does the acting Position own THIS Strip?) is enforced separately
+// and unconditionally by the Board (board/strip-ops.js's NOT_OWNER gate). This
+// module answers a different question: is this Position CLASS allowed to
 // perform this kind of Mutation at all, regardless of ownership?
 //
-// Phase 1 had only Military ATC-class Positions (OPS, CD, GND, TWR) at one
-// Facility — the guide's sharpest example of this rule (a Military Radar
-// Unit like TAC_C2 must never be granted HANDOFF/POINT_OUT, guide §4.1
-// rule 1) doesn't yet apply, since no MRU Position exists until WP4A/WP7,
-// and HANDOFF/POINT_OUT/TOFI aren't even in the Mutation op union yet (see
-// board-store.js's module comment — absent, not stubbed).
-//
-// Phase 2 adds APP. Deliberately NOT folded into the flat table the same
-// maximally-permissive way CD/GND/TWR were — that would reproduce exactly
-// the "looks correct in every demo" trap the guide warns about for D21 (a
-// table where every Position can do everything proves nothing about
-// per-acting-Position evaluation). Instead CreateStrip is a SECOND,
-// role-scoped permission axis, checked by canCreateStripType() below: OPS
-// originates DEPARTURE (guide §4.1 rule 3), APP originates ARRIVAL (the
-// Phase-2 stub for "no CTR Facility to hand an inbound flight off from
-// yet" — see docs/adr/0008, superseded this WP4A slice by docs/adr/0014).
-// Neither Position's CreateStrip right extends to the other's role. This
-// is Phase 2's first genuine cross-Position permission asymmetry, and it's
-// what finally makes a real D21 regression test possible
-// (efsp-permission.test.mjs) — Phase 1's table couldn't reveal a union bug
-// because every Position but OPS was permission-identical.
-//
-// WP4A (docs/adr/0015) adds CTR and 5 new op kinds — HANDOFF, POINT_OUT,
-// TRAFFIC, OPERATIONAL_REQUEST, AIT (guide §4.6's cross-Facility
-// coordination primitives). This is the SECOND genuine per-Position
-// permission asymmetry: only APP and CTR get these 5 kinds — CD/GND/TWR/
-// OPS get none, since none of them is a Position that ever touches a
-// Facility boundary. This table stays a single flat {positionId: Set}
-// map (not Facility-namespaced) ONLY because Position IDs are globally
-// unique strings across both Facilities in this slice (OPS/CD/GND/TWR/APP
-// vs CTR never collide) — a future Facility whose Position-ID space
-// collides with an existing one would break this assumption and needs its
-// own ADR before landing.
-// The tables themselves now live in the authority registry (authority/,
-// S3-2): the op-kind vocabulary in op-kinds.js, the class rules in classes.js,
-// each Position family's grants and capability columns in
-// positions/<family>.js, each Role's state owners in strip-types/<role>.js, all
-// composed in authority/index.js. This module is their facade and exports
-// exactly what it exported before; the one-Position predicates (the D21
-// gates) stay here.
+// CreateStrip is a SECOND, strip-type-scoped permission axis
+// (canCreateStripType): a flat table in which every Position can do everything
+// would prove nothing about per-acting-Position evaluation.
 
 const authority = require('./authority');
 const { OP_KINDS, COORDINATION_OP_KINDS, AP_CTR_ONLY_OP_KINDS, TOFI_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS } = require('./authority/op-kinds');

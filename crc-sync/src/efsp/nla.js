@@ -1,53 +1,33 @@
 'use strict';
 
-// EFSP State machine + Next Logical Action, per Strip Role
-// (EFSPImplementationGuide.md §3.4, §3.5). [SOURCE-DEFINED] per the guide's
-// own admission — the real TFDM EFS STATE/NLA value sets are not published
+// EFSP State machine + Next Logical Action, per strip type
+// (EFSPImplementationGuide.md §3.4, §3.5). [SOURCE-DEFINED] (guide §3.4, by the
+// guide's own admission): the real TFDM EFS STATE/NLA value sets are not published
 // anywhere; only the *shape* (one State per Strip, one NLA button per
 // State, an inhibit reason attached rather than a merely-greyed-out
 // control) is grounded in real prior art (§3.4, §3.5).
 //
-// Phase 1 implemented DEPARTURE only, for OPS/CD/GND/TWR at one Facility.
-// Phase 2 adds ARRIVAL (originated by APP — docs/adr/0008, since there's
-// still no CTR Facility to hand an inbound flight off from) and makes
-// DEPARTED's NLA real: APP is now a configured, occupiable INCIRLIK
-// Position, so "Hand Off" is a genuine, staffing-gated intrafacility
-// TransferStrip (docs/adr/0007 supersedes ADR 0005's always-succeed stub —
-// TWR and APP are both INCIRLIK Positions, so this is NOT WP4A's
-// cross-Facility HANDOFF, which is still APP<->CTR and still unbuilt).
-//
-// docs/adr/0012 extends that same transfer-shaped pattern to EVERY
-// transition that crosses a DEPARTURE_STATE_OWNERS boundary (not just
-// DEPARTED->APP): PROPOSED->PENDING_CLEARANCE, CLEARED->PUSHBACK,
-// HELD->PUSHBACK, and TAXI->RUNWAY_QUEUE all now carry `transferTo` and
-// the same staffing-gated inhibit. A transition that stays with the same
-// owner (PENDING_CLEARANCE->CLEARED, PUSHBACK->TAXI, RUNWAY_QUEUE->LUAW,
-// LUAW->DEPARTED) is still state-only — no Position boundary, nothing to
-// transfer.
-//
-// Field state (§9.7 rule 1, docs/adr/0061) now inhibits: a DEPARTURE's
-// TAXI/RUNWAY_QUEUE/LUAW steps and an ARRIVAL's HANDED_TO_TOWER -> FINAL are
-// refused while the Strip's runway is suspended or closed, with the runway and
-// the cause named — resolved through `ctx.runwayStatusFor()` (runway-status.js).
-// Runway OCCUPANCY is still not implemented: §9.7's schema has no occupancy
-// field and §3.5's RUNWAY_QUEUE row cites no section, so inventing one would
-// be D11. The alert-pad conflict (§9.6) is a FLAG, never an inhibit: a
-// SCRAMBLE is raised client-side from alert-scramble.js (docs/adr/0070) and
-// nothing in this module reads the alert status. The guide's [GAP] forbids a
-// scramble priority ordering until FAA JO 7110.65 §2-1-4 and §9-2-7 are read.
-//
-// WP4A (docs/adr/0014) migrates ARRIVAL's INBOUND origination from ADR
-// 0008's local APP self-creation stub to a real cross-Facility HANDOFF
-// from CTR (CENTER Facility) — see computeArrivalNla's INBOUND case,
-// which is now Facility-aware via ctx.facilityId. DEPARTURE's DEPARTED
-// case is deliberately UNCHANGED this slice (docs/adr/0016 confirms):
-// TWR and APP are both INCIRLIK Positions, so "Hand Off to APP" stays the
-// existing intrafacility TransferStrip, not WP4A's cross-Facility
-// primitive (still nowhere near DEPARTURE's own lifecycle this slice).
-
-// The tables and the per-Role NLA functions now live in the authority
-// registry's Role families (authority/strip-types/<role>.js, S3-2). This module is
-// their facade: it exports exactly what it exported before.
+// The tables and the per-strip-type NLA functions live in the authority
+// registry's strip-type families (authority/strip-types/<type>.js, docs/adr/0095);
+// this module is their facade and adds the injected staffing context
+// (_normalizeCtx) and the one entry point, computeNla. What it encodes, by
+// ADR:
+//  - A transition that crosses a state-owner boundary carries `transferTo` and a
+//    staffing-gated inhibit (docs/adr/0007, 0012); one that stays with the same
+//    owner is state-only. DEPARTED's "Hand Off to AP" is the intrafacility
+//    TransferStrip (docs/adr/0016), not the cross-Facility HANDOFF.
+//  - ARRIVAL's INBOUND origination at CTR is a cross-Facility HANDOFF
+//    (docs/adr/0014), so computeArrivalNla is Facility-aware via ctx.facilityId.
+//  - Runway status (§9.7 rule 1, docs/adr/0061) inhibits: a DEPARTURE's
+//    TAXI/RUNWAY_QUEUE/LUAW steps and an ARRIVAL's HANDED_TO_TOWER -> FINAL are
+//    refused while the Strip's runway is suspended or closed, with the runway and
+//    the cause named — resolved through `ctx.runwayStatusFor()` (runway-status.js).
+//    Runway occupancy is not an input: §9.7's schema has no occupancy field and
+//    §3.5's RUNWAY_QUEUE row cites no section, so inventing one would be D11.
+//    The alert-pad conflict (§9.6) is a FLAG, never an inhibit: a SCRAMBLE is
+//    raised client-side from alert-scramble.js (docs/adr/0070) and nothing in
+//    this module reads the alert status. The guide's [GAP] forbids a scramble
+//    priority ordering until FAA JO 7110.65 §2-1-4 and §9-2-7 are read.
 
 const authority = require('./authority');
 const { _requireNow } = require('./authority/strip-types/nla-common');
@@ -63,8 +43,7 @@ const { DEPARTURE_STATES, REQUIRED_FOR_CLEARANCE, CLEARANCE_BLOCK_LABELS, isFlig
 const STATES_BY_STRIP_TYPE = authority.STATES_BY_STRIP_TYPE;
 const STATE_SETS_BY_STRIP_TYPE = Object.fromEntries(Object.entries(STATES_BY_STRIP_TYPE).map(([stripType, states]) => [stripType, new Set(states)]));
 
-// Backward-compatible alias — every Phase 1 caller/test imports STATES
-// meaning "the departure lifecycle", which is still exactly what it means.
+// Alias: STATES means "the departure lifecycle".
 const STATES = DEPARTURE_STATES;
 
 function isValidState(state, stripType = 'DEPARTURE') {
@@ -72,7 +51,7 @@ function isValidState(state, stripType = 'DEPARTURE') {
   return !!set && set.has(state);
 }
 
-/** Normalizes the injected staffing context, defaulting to "nothing is staffed, nothing covers" when omitted — a safe, meaningful degrade (an staffing-gated NLA simply reports inhibited) rather than a throw, since not every caller has staffing info at hand (e.g. a fixture-driven test). `facilityId` (WP4A) defaults to undefined, which computeArrivalNla treats as "not CENTER" — i.e. every pre-WP4A caller that never passes it keeps the original INCIRLIK behavior unchanged. `standingReleases` (WP4A, §4.6.2) defaults to an empty array — no envelopes configured means nothing is ever pre-cleared by one. */
+/** Normalizes the injected staffing context, defaulting to "nothing is staffed, nothing is consolidated anywhere" when omitted — a safe, meaningful degrade (a staffing-gated NLA simply reports inhibited) rather than a throw, since not every caller has staffing info at hand (e.g. a fixture-driven test). `facilityId` defaults to undefined, which computeArrivalNla treats as "not CENTER", so a caller that never passes it gets the INCIRLIK behavior. `standingReleases` (§4.6.2) defaults to an empty array — no envelopes configured means nothing is ever pre-cleared by one. */
 function _normalizeCtx(ctx) {
   return {
     isStaffed: (ctx && ctx.isStaffed) || (() => false),
@@ -97,8 +76,8 @@ function _normalizeCtx(ctx) {
   };
 }
 
-// Each Role family's computeNla is registered in the same commit as the Role:
-// computeNla falls back to the DEPARTURE table for an unknown Role, which would
+// Each strip-type family's computeNla is registered in the same commit as the type:
+// computeNla falls back to the DEPARTURE table for an unknown strip type, which would
 // show a MARSHAL Strip "Send to Clearance" (ADR 0064's trap for L17).
 const COMPUTE_BY_STRIP_TYPE = Object.fromEntries(authority.stripTypeNames().map(stripType => [stripType, authority.stripTypeFamily(stripType).computeNla]));
 const computeDepartureNla = departure.computeDepartureNla;

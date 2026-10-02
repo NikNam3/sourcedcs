@@ -1,8 +1,8 @@
 'use strict';
 
-// The OVERFLIGHT Role family (authority registry, S3-2). States and NLA moved
-// from nla.js, state owners from permission.js, replica/sender states from
-// board-store.js's REPLICA_STATE_ON_RECEIPT and SENDER_STATE_ON_ACCEPT.
+// The OVERFLIGHT strip-type family (authority registry, docs/adr/0095): states,
+// NLA table, state owners, and the replica/sender states (replicaStateOnReceipt,
+// senderStateOnAccept below).
 
 // [SOURCE-DEFINED] (docs/adr/0087, superseding 0023's two-state lifecycle) —
 // the guide's own OVERFLIGHT lifecycle (EFSPImplementationGuide.md:214, itself

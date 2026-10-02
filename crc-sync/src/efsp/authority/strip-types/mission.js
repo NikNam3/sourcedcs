@@ -1,9 +1,10 @@
 'use strict';
 
-// The MISSION Role family (authority registry, S3-2). States and NLA moved
-// from nla.js, state owners from permission.js.
+// The MISSION strip-type family (authority registry, docs/adr/0095): states,
+// NLA table and state owners.
 
-// Guide-specified lifecycle (§9.8, line 215) — not invented. No staffing/
+// [SOURCE-DEFINED] — the guide's own mission lifecycle (guide line 215, under
+// §3.4's [SOURCE-DEFINED] heading; §9.8 names it too). No staffing/
 // transferTo gating, same reasoning as OVERFLIGHT's own table: TAC_C2/GCI
 // (whichever originated the mission, or received it via a TOFI ENTRY
 // exchange) work its entire lifecycle solo — the cross-Position richness
