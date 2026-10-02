@@ -186,4 +186,5 @@ module.exports = {
   kind: 'Undo',
   undo: 'none', // docs/adr/0100 §1: no redo
   apply: (ctx, strip, op, meta) => _applyUndo(ctx, meta),
+  controlInvariantRefusal: _controlInvariantRefusal, // for tests (U23)
 };
