@@ -18,7 +18,7 @@
 **SHOULD / SHOULD NOT** — required unless a stated reason applies. Departures MUST be recorded as an ADR (§0.4).
 **MAY** — permitted, at the implementer's discretion.
 
-Defined Terms are capitalised throughout (Strip, Bay, Rack, Position, flight data, Mutation, Board). Their definitions are in §2 and are binding: where prose and §2 disagree, §2 governs.
+Defined Terms are capitalised throughout (Strip, Bay, Rack, Position, Flight data, Mutation, Board). Their definitions are in §2 and are binding: where prose and §2 disagree, §2 governs.
 
 > **Editor's note.** This guide is drafted in a general normative register. It has **not** been conformed to the SOURCE Contract Language Standard, because that standard's text was not available to the drafter. A conforming editor's pass is required before this document is published to the wiki — in particular for defect-class naming, apparatus, and the precision rules on quantities and time expressions.
 
@@ -77,7 +77,7 @@ Departure metering and surface scheduling (TOBT/TMAT computation); datalink clea
 
 | # | Assumption | If false |
 |---|---|---|
-| A1 | **RESOLVED by the project owner: the CRC server already keeps a per-aircraft flight record** with callsign, type, route, assigned altitude, squawk, departure and destination. The EFSP reads and writes that record and owns only its own annotations, Bay position and State. WP0 verifies the field set and the write path, not the existence | If the record turns out to be thinner than stated, WP0 raises an ADR and the EFSP extends it rather than replacing it |
+| A1 | **RESOLVED by the project owner: the CRC server already keeps a per-aircraft flight record** with callsign, type, route, assigned altitude, beacon code, departure and destination. The EFSP reads and writes that record and owns only its own annotations, Bay position and strip state. WP0 verifies the field set and the write path, not the existence | If the record turns out to be thinner than stated, WP0 raises an ADR and the EFSP extends it rather than replacing it |
 | A2 | Browser↔server transport is WebSocket; gRPC is service-to-service only | §5 transport clauses change; note gRPC-Web cannot do bidirectional streaming in a browser `[Annex §15.7]` |
 | A3 | A Position/authentication concept exists (a controller logs in as a Position) | WP1 must add it; ownership (§4.4) depends on it entirely |
 | A4 | Surveillance tracks carry a stable identity and a Mode 3/A code | §6.6 correlation changes; expect the identity-reconciliation defect class regardless |
@@ -90,7 +90,7 @@ Departure metering and surface scheduling (TOBT/TMAT computation); datalink clea
 
 **Flight data** — the authoritative record of one flight or one formation: identity, filed intent, assigned clearance, current state. Server-owned. Exactly one per flight per operating day. Not itself a Strip.
 
-**Strip** — a presentation of one flight data to controllers, carrying its own annotations, position in a Bay, and lifecycle State. One flight data MAY have more than one Strip only where §3.6 permits.
+**Strip** — a presentation of one flight's flight data to controllers, carrying its own annotations, position in a Bay, and lifecycle State. One flight's flight data MAY have more than one Strip only where §3.6 permits.
 
 **strip type** — `DEPARTURE`, `ARRIVAL`, `OVERFLIGHT`, `MISSION`, `COORDINATION`, `PATTERN`, `MARSHAL`, `FINAL`. Determines which Block Map applies. The last three are SOURCE additions for the RSU, carrier and precision-approach positions and are `[SOURCE-DEFINED]` in layout, though their field content is sourced (§9.12, §7.10).
 
@@ -98,13 +98,13 @@ Departure metering and surface scheduling (TOBT/TMAT computation); datalink clea
 
 **Block** — an addressable field on a Strip, identified by a Block ID string that follows FAA flight-progress-strip numbering (`"1"`, `"2A"`, `"9E"`, `"25"`, `"26"`) or the SOURCE military extension namespace (`"M1"`…).
 
-**Block Map** — the per-Strip-Role mapping from Block ID to field definition: label, data binding, provenance class, required/optional, editability, actions.
+**Block Map** — the per-strip-type mapping from Block ID to field definition: label, data binding, provenance class, required/optional, editability, actions.
 
 **Bay** — a named container of Racks belonging to a Position. Bay membership expresses operational state.
 
 **Rack** — an ordered vertical column of Strips within a Bay. Order within a Rack is meaningful (a departure Rack's order *is* the departure sequence `[Annex §9]`).
 
-**Position** — an operating role a controller signs into. The set is fixed by the project owner and listed in §4.1. Positions MAY be combined at one workstation **within a Facility**, never across Facilities.
+**Position** — an operating position a controller signs on to (as derived from selected radar stations, §4.8). The set is fixed by the project owner and listed in §4.1. Positions MAY be combined at one workstation **within a Facility**, never across Facilities.
 
 **Board** — the complete set of Bays, Racks and Strips for one facility. The unit of sequencing and resync.
 
@@ -112,17 +112,17 @@ Departure metering and surface scheduling (TOBT/TMAT computation); datalink clea
 
 **Owner** — the Position currently responsible for a Strip. Exactly one at a time.
 
-**EFSP State** — the value of Block 25. `[SOURCE-DEFINED]` — see §3.4.
+**Strip state** — the value of Block 25. `[SOURCE-DEFINED]` — see §3.4.
 
-**Next Logical Action (NLA)** — the single action Block 26 offers for the current EFSP State. Real-world TFDM has this as an on-strip button that state can inhibit `[Annex §3]`; its determination rule is not published, so the table in §3.5 is `[SOURCE-DEFINED]`.
+**Next Logical Action (NLA)** — the single action Block 26 offers for the current strip state. Real-world TFDM has this as an on-strip button that state can inhibit `[Annex §3]`; its determination rule is not published, so the table in §3.5 is `[SOURCE-DEFINED]`.
 
 ---
 
 ## 3. Domain model
 
-### 3.1 flight data and Strip are separate — non-negotiable
+### 3.1 Flight data and Strip are separate — non-negotiable
 
-The flight data is the flight; the Strip is what a controller works with. They MUST be separate entities with separate revisions.
+The flight data is the flight's record; the Strip is what a controller works with. They MUST be separate entities with separate revisions.
 
 Reason: the flight data changes from upstream data (track updates, filed amendments, ATO ingest); the Strip changes from controller action. Collapsing them means every track update invalidates the controller's optimistic edit, and every annotation dirties the flight record. The real systems keep them separate — TFDM's block map marks fields "Computer-generated" versus "manually enter" as distinct provenance classes `[Annex §2.5]`.
 
@@ -143,7 +143,7 @@ Strip {
   stripId          string
   flightDataId            string
   rev              uint64          // independent of flight data rev
-  stripType             StripRole
+  stripType             StripType
   state            EfspState       // Block 25
   ownerPositionId  string
   bayId, rackId    string
@@ -190,7 +190,7 @@ Binding rules, all sourced:
 
 Implement as: `equipmentCodes` (editable, structured) → derived `equipmentSuffix`; plus an independent `degradation` field ∈ `{NONE, TRANSPONDER_FAILED, MODE_C_FAILED}` that overrides the rendered suffix.
 
-### 3.4 EFSP State `[SOURCE-DEFINED]`
+### 3.4 Strip state `[SOURCE-DEFINED]`
 
 **The real TFDM EFS STATE value set is not published in any public source** `[Annex §3, Annex §16 gap 1]`. The values below are SOURCE-defined. They are shaped after three independent analogues — the Lincoln Laboratory prototype's Pending PDT / Ready to Taxi / Active / Unsorted, the FAA WJHTC prototypes' Pending / Outbound / Inbound, and the Raytheon patent's six flight-phase bays — but the labels are ours.
 
@@ -245,7 +245,7 @@ Rules:
 4. Every NLA transition MUST also be reachable by drag-and-drop and by keyboard command. NLA is an accelerator, not the only path.
 5. **`Undo` MUST exist for the last NLA transition per Strip**, with a 30-second window. The Raytheon patent lists Undo as a first-class One Touch Action, and misfires on a touch panel are the expected failure mode `[Annex §3]`.
 
-### 3.6 When one flight data gets more than one Strip
+### 3.6 When one flight's flight data gets more than one Strip
 
 Permitted only in these cases, and MUST NOT be extended without an ADR:
 
@@ -281,7 +281,7 @@ Rules:
 4. `PREPLANNED` entries render distinctly (the paper equivalent is red pencil).
 5. **`Enter` commits, `Esc` cancels and reverts. The EFSP MUST NOT auto-commit an annotation on blur.** An accidental click elsewhere must never amend a clearance. This is VRC's exact contract and the right one `[Annex §15.2]`.
 
-### 3.8 Departure departure release states
+### 3.8 Departure release states
 
 Four states MUST be modelled, from FAA JO 7110.65 ¶4-3-4 `[Annex §9]`:
 
@@ -353,7 +353,7 @@ Identity {
 
 ---
 
-## 4. Positions, Bays and transfer
+## 4. Positions, Bays and strip transfer
 
 ### 4.1 Position set — fixed by the project owner
 
@@ -361,15 +361,15 @@ Eighteen Positions across five Facilities. The **Class** column is load-bearing 
 
 | ID | Name | Class | Facility | Primitives | strip types |
 |---|---|---|---|---|---|
-| `CD` | Clearance Delivery | Military ATC | Incirlik | intrafacility transfer; receives release | `DEPARTURE` |
-| `GC` | Ground | Military ATC | Incirlik | intrafacility transfer | `DEPARTURE`, `ARRIVAL` |
+| `CD` | Clearance Delivery | Military ATC | Incirlik | intrafacility strip transfer; receives departure release | `DEPARTURE` |
+| `GC` | Ground | Military ATC | Incirlik | intrafacility strip transfer | `DEPARTURE`, `ARRIVAL` |
 | `LC` | Tower | Military ATC | Incirlik | intrafacility; `HANDOFF` to `AP` | `DEPARTURE`, `ARRIVAL` |
 | `RSU` | Runway Supervisory Unit | Military ATC, advisory | Incirlik | pattern supervision; **no separation authority** | `PATTERN` |
-| `AP` | Approach / Departure (RAPCON) | **Military ATC** | Incirlik | `HANDOFF`, `POINT_OUT`, `TRAFFIC`, `OPERATIONAL_REQUEST`, release | all |
+| `AP` | Approach / Departure (RAPCON) | **Military ATC** | Incirlik | `HANDOFF`, `POINT_OUT`, `TRAFFIC`, `OPERATIONAL_REQUEST`, departure release | all |
 | `SFA` | Single Frequency Approach | Military ATC | Incirlik | **frequency-rotation transfer** — §4.7 | `ARRIVAL` |
 | `PAR` | PAR Approach | Military ATC | Incirlik | continuous guidance | `FINAL` |
 | `OPS` | Operations | **BASOPS / AMOPS** | Incirlik | files flight plans; owns Runway Status; **not a control position** | originates `DEPARTURE` |
-| `CTR` | Ankara Center | Civil ATC | Center | `HANDOFF`, `POINT_OUT`, `TRAFFIC`, data forwarding, release, `TOFI` | all |
+| `CTR` | Ankara Center | Civil ATC | Center | `HANDOFF`, `POINT_OUT`, `TRAFFIC`, data forwarding, departure release, `TOFI` | all |
 | `RANGE` | Range Control | **Using agency** | Ranges | **no strip primitives** — owns airspace state | none |
 | `TAC_C2` | Tactical C2 | **MRU** | Tactical | **`TOFI` only** | `MISSION` |
 | `AIC` | Air Intercept Controller | MRU position | Tactical | works under `TAC_C2`'s `TOFI` | `MISSION` |
@@ -387,9 +387,9 @@ Eighteen Positions across five Facilities. The **Class** column is load-bearing 
 3. **`OPS` originates the flight data**, matching the real BASOPS path in which the pilot files with base operations and base operations forwards to the centre `[Coord §2.5]`. It is also the owner of Runway Status actions under §9.7.
 4. **`RSU` and `CV_PRIFLY` are supervisory positions over a visual pattern**, not radar control positions. Their Bay is a pattern board, not a strip rack.
 
-**Positions are not signed into. They are derived from the controller's selected radar stations, they combine freely including across Facilities, and the set changes live during a session.** This is a property of the host CRC, it is the normal operating condition under low manning, and it governs §4.8 — read that before implementing anything in this section.
+**Positions are not picked directly. They are derived from the controller's selected radar stations, they combine freely including across Facilities, and the set changes live during a session (a controller is then signed on to each Position the selection yields).** This is a property of the host CRC, it is the normal operating condition under low manning, and it governs §4.8 — read that before implementing anything in this section.
 
-**`AP` unstaffed:** when no controller holds `AP`, the delegated airspace reverts to `CTR`. Delegation is time-bounded in the real world — a verified example has a RAPCON's delegated Class B sector reverting outside published operating hours `[Coord §2.2]`. The panel MUST render reversion explicitly rather than stranding Strips.
+**`AP` unstaffed:** when no controller is signed on to `AP`, the delegated airspace reverts to `CTR`. Delegation is time-bounded in the real world — a verified example has a RAPCON's delegated Class B sector reverting outside published operating hours `[Coord §2.2]`. The panel MUST render reversion explicitly rather than stranding Strips.
 
 ### 4.2 Bay structure
 
@@ -430,13 +430,13 @@ Therefore:
 ### 4.4 Ownership
 
 1. Every Strip has exactly one `ownerPositionId`.
-2. Mutations to owner-controlled Blocks MUST be rejected unless the mutating Position is the Owner, or holds a Position that includes the Owner by combination (§4.1).
+2. Mutations to owner-controlled Blocks MUST be rejected unless the mutating Position is the Owner, or is signed on to a Position that includes the Owner by combination (§4.1).
 3. Annotation Blocks designated `sharedAnnotation` in the Block Map MAY be written by any Position with the Bay in view. Use this sparingly.
 4. **Ownership eliminates most conflicts by construction.** This is the reason the EFSP uses optimistic concurrency rather than a CRDT — see §5.5.
 
-### 4.5 Transfer protocol
+### 4.5 Strip transfer protocol
 
-Transfer is the operation most likely to fail in production. The Lincoln Laboratory prototype measured **99.68%–100%** successful ownership transfers, with the failure residue clustered around restarts and message latency `[Annex §4]`. Design for the failing 0.3%.
+Strip transfer is the operation most likely to fail in production. The Lincoln Laboratory prototype measured **99.68%–100%** successful ownership transfers, with the failure residue clustered around restarts and message latency `[Annex §4]`. Design for the failing 0.3%.
 
 ```
 TransferStrip {
@@ -446,12 +446,12 @@ TransferStrip {
 }
 ```
 
-1. Transfer MUST be a **single atomic server-side Mutation**: owner change, Bay change and Rack placement commit together or not at all.
-2. **Push targets MUST be gated on occupancy.** A Position is occupied when some connected controller is its Primary (§4.8.2). A transfer to an unoccupied Position MUST be rejected with `NO_RECEIVING_POSITION` and MUST NOT silently strand the Strip. vStrips gates external pushes on an active controller at the destination `[Annex §15.1]`. Occupancy is derived and changes live, so this check MUST be evaluated at commit time on the server, never from a cached client-side view.
-3. Where the destination is unstaffed, the Strip MUST route to the **covering Position** per the facility configuration, and the UI MUST say so.
-4. The sending Position MUST see the Strip leave only on server acknowledgement. Optimistic rendering applies to moves *within* a Position; **transfer MUST NOT be rendered optimistically as complete** — it MAY render as "transferring".
-5. A transfer that times out MUST return the Strip to the sender with a visible failure, never disappear.
-6. Every transfer MUST be recorded in the Mutation log with both Positions and the timestamp. `[Annex §9]` notes that in real towers the Clearance Delivery controller **initials the strip** before passing it on; the electronic equivalent is a non-optional audit entry.
+1. A strip transfer MUST be a **single atomic server-side Mutation**: owner change, Bay change and Rack placement commit together or not at all.
+2. **Push targets MUST be gated on staffing.** A Position is staffed when some connected controller is its Primary (§4.8.2). A strip transfer to an unstaffed Position MUST be rejected with `NO_RECEIVING_POSITION` and MUST NOT silently strand the Strip. vStrips gates external pushes on an active controller at the destination `[Annex §15.1]`. Staffing is derived and changes live, so this check MUST be evaluated at commit time on the server, never from a cached client-side view.
+3. Where the destination is unstaffed, the Strip MUST route to the Position it is **consolidated at**, per the facility configuration, and the UI MUST say so.
+4. The sending Position MUST see the Strip leave only on server acknowledgement. Optimistic rendering applies to moves *within* a Position; **a strip transfer MUST NOT be rendered optimistically as complete** — it MAY render as "transferring".
+5. A strip transfer that times out MUST return the Strip to the sender with a visible failure, never disappear.
+6. Every strip transfer MUST be recorded in the Mutation log with both Positions and the timestamp. `[Annex §9]` notes that in real towers the Clearance Delivery controller **initials the strip** before passing it on; the electronic equivalent is a non-optional audit entry.
 
 ### 4.6 Cross-Facility coordination — a different mechanism entirely
 
@@ -497,7 +497,7 @@ These are exactly the obligations a paper strip cannot track and an electronic p
 
 Five states, per §3.8 plus `[Coord §2.7]`: `RELEASED` · `HOLD_FOR_RELEASE` (with mandatory delay information) · `RELEASE_TIME` (with a mandatory time check unless expressed in minutes) · `EDCT` (**±5 min**, ground stop overrides) · `CALL_FOR_RELEASE` (**−2 / +1 min**).
 
-**At a tower-served field the release travels controller-to-controller — `CTR` → `AP` → `LC`. The pilot never hears "released."**
+**At a tower-served field the departure release travels controller-to-controller — `CTR` → `AP` → `LC`. The pilot never hears "released."**
 
 The agreement normally converts the per-flight call into a **standing release** for a named envelope — a stereo route, at or below an altitude, within a radius. Model standing releases as facility configuration; anything outside the envelope falls back to a per-flight `OPERATIONAL_REQUEST`.
 
@@ -539,11 +539,11 @@ Single Frequency Approach exists so a single-piloted jet does not change frequen
 
 **If the panel models "ownership transfer = frequency change", `SFA` breaks it.** Implement `SFA` ownership transfer as a controller-side rotation over a frequency pool, with `AP` holding rotation jurisdiction. The frequency is an attribute of the Strip; the controller is what moves.
 
-### 4.8 Position occupancy, combination and handoff
+### 4.8 Position staffing, combination and handoff
 
-Fixed by the project owner: **a controller's Positions are derived from which radar stations they have selected**, several controllers may hold the same station with one acting as Primary, and **selection changes mid-session with automatic handoff**. Combination across Facilities is normal — one person may be `CTR` and `TAC_C2` simultaneously — and under low manning it is the usual case, not the exception.
+Fixed by the project owner: **a controller's Positions are derived from which radar stations they have selected**, several controllers may select the same radar station with one acting as Primary, and **selection changes mid-session with automatic handoff**. Combination across Facilities is normal — one person may be `CTR` and `TAC_C2` simultaneously — and under low manning it is the usual case, not the exception.
 
-Saab's product describes the general capability: *"roles can be combined or split in real-time based on workload"* `[Annex §4]`. What follows is how to do that without losing the doctrine.
+Saab's product describes the general capability: *"roles can be combined or split in real-time based on workload"* (Saab's word "roles" is theirs; here they are Positions) `[Annex §4]`. What follows is how to do that without losing the doctrine.
 
 #### 4.8.1 Ownership is per-Position, and that makes handoff nearly free
 
@@ -553,7 +553,7 @@ Saab's product describes the general capability: *"roles can be combined or spli
 
 A controller dropping `TAC_C2` and another picking it up is a change to one mapping entry. Every Strip keeps its `ownerPositionId`; the new Primary simply resolves to them. There is no bulk transfer, no re-parenting, and no window in which a Strip is owned by nobody.
 
-**The only case that involves a real move is when a Position becomes unoccupied and nobody replaces it** — see §4.8.4.
+**The only case that involves a real move is when a Position becomes unstaffed and nobody replaces it** — see §4.8.4.
 
 Every Mutation MUST additionally record **the Position the controller was acting as**, not merely their identity:
 
@@ -561,11 +561,11 @@ Every Mutation MUST additionally record **the Position the controller was acting
 Mutation { …, actingPositionId, actorId }
 ```
 
-Without this the audit log cannot answer "who was separating whom", and de-combination cannot be reasoned about after the fact. A controller holding four Positions produces four distinguishable streams in the log, not one.
+Without this the audit log cannot answer "who was separating whom", and de-combination cannot be reasoned about after the fact. A controller signed on to four Positions produces four distinguishable streams in the log, not one.
 
 #### 4.8.2 Primary and Observer
 
-| Role | May act | Sees |
+| Primary or Observer | May act | Sees |
 |---|---|---|
 | **Primary** | yes — owns the Position's Strips | the Position's Bays, editable |
 | **Observer** | no | the same Bays, read-only, visibly marked |
@@ -574,7 +574,7 @@ Rules:
 
 1. **Exactly one Primary per Position at any instant.** Two Primaries is defect class **D18**.
 2. Selecting a station whose Position has no Primary makes the selector Primary.
-3. Selecting a station whose Position already has a Primary makes the selector an **Observer**. An Observer MAY request Primary; the request is delivered to the current Primary and requires their release. An unanswered request MUST NOT auto-promote.
+3. Selecting a station whose Position already has a Primary makes the selector an **Observer**. An Observer MAY request Primary; the request is delivered to the current Primary and requires the current Primary to release Primary. An unanswered request MUST NOT auto-promote.
 4. **Every Strip MUST render its owning Position at all times**, and an Observer's view MUST be unmistakably read-only — not merely disabled controls, but a visible state. A controller who believes they are working an aircraft they cannot act on is the worst outcome here.
 5. Primary status is presence state (§5.7): ephemeral, leased, heartbeat-renewed, and **it MUST NOT enter the durable Mutation log**. What enters the log is `actingPositionId` on each Mutation.
 
@@ -582,7 +582,7 @@ Rules:
 
 **This is the load-bearing rule of the section.**
 
-When one controller holds both sides of a boundary — `CTR` and `TAC_C2`, or `LC` and `AP` — there is no phone call to make. It is tempting to skip the whole exchange. **Do not.**
+When one controller is signed on to both sides of a boundary — `CTR` and `TAC_C2`, or `LC` and `AP` — there is no phone call to make. It is tempting to skip the whole exchange. **Do not.**
 
 The reason: a coordination event is two things bolted together. There is a *dialogue* between two humans, and there is a *state change* to the flight. Combination removes the first. **It does not remove the second**, because the state change is a fact about the aircraft, not about the staffing:
 
@@ -593,27 +593,27 @@ The reason: a coordination event is two things bolted together. There is a *dial
 
 Therefore:
 
-1. A boundary event between two Positions held by the same controller MUST be recorded as a **self-coordination**: a single action that applies the full state change and writes a Mutation naming both Positions, the actor, and the fact that it was self-coordinated.
+1. A boundary event between two Positions signed on by the same controller MUST be recorded as a **self-coordination**: a single action that applies the full state change and writes a Mutation naming both Positions, the actor, and the fact that it was self-coordinated.
 2. The **state change is mandatory and unconditional**. Only the two-party dialogue collapses.
 3. Self-coordination MUST be **one input**. If it costs a controller three clicks to hand an aircraft from themselves to themselves, they will stop doing it, the state will drift, and §10.4's silent-staleness failure arrives by a new route.
 4. The Mutation log MUST distinguish self-coordinated from two-party events, so an after-action review can tell the difference.
 
 #### 4.8.4 Combination is a union of hats, not a merge of powers
 
-A controller holding `CTR` + `TAC_C2` holds **ATC powers as `CTR` and Military Radar Unit powers as `TAC_C2`**. They do not acquire the power to provide ATC service from the MRU hat.
+A controller signed on to `CTR` + `TAC_C2` holds **ATC powers as `CTR` and Military Radar Unit powers as `TAC_C2`**. They do not acquire the power to provide ATC service from the MRU hat.
 
-> **Permissions MUST be evaluated per acting Position, never as the union of the held set.**
+> **Permissions MUST be evaluated per acting Position, never as the union of the signed-on set.**
 
-Concretely: attempting a `HANDOFF` on a Strip owned by `TAC_C2` MUST be refused even though the same person holds `CTR`, because ¶8-1-1 forbids an MRU from being asked to provide ATC service (§4.1, §4.6). Implementing combination as a permission union is the most likely way to reintroduce defect **D12**, and it will look correct in every demo.
+Concretely: attempting a `HANDOFF` on a Strip owned by `TAC_C2` MUST be refused even though the same person is signed on to `CTR`, because ¶8-1-1 forbids an MRU from being asked to provide ATC service (§4.1, §4.6). Implementing combination as a permission union is the most likely way to reintroduce defect **D12**, and it will look correct in every demo.
 
-The same applies to Facilities. **Combination does not merge Facilities.** Holding `CTR` and `TAC_C2` does not collapse the `CENTER` and `TACTICAL` Facilities into one, does not merge their Strip replicas, and does not turn a cross-Facility forwarding into a strip move (§4.6). The controller works two Boards; the Boards remain two.
+The same applies to Facilities. **Combination does not merge Facilities.** Being signed on to `CTR` and `TAC_C2` does not collapse the `CENTER` and `TACTICAL` Facilities into one, does not merge their Strip replicas, and does not turn a cross-Facility forwarding into a strip move (§4.6). The controller works two Boards; the Boards remain two.
 
 #### 4.8.5 Live recomposition
 
 Because the Position set changes during a session, Bay composition is **reactive state, not startup configuration**:
 
 1. The station→Position mapping is facility configuration (§8.2). Selecting a station grants its Positions; deselecting revokes them.
-2. On any change, the Bay set recomposes live. Bays MUST stay **grouped by Position**, never merged into one undifferentiated pile — a Strip belongs to its Position's Bay, and a controller holding six Positions needs to know which hat each Strip is under. With many Positions held, the vStrips model earns its keep: one Bay in view, the rest reachable through header drop zones `[Annex §15.1]`.
+2. On any change, the Bay set recomposes live. Bays MUST stay **grouped by Position**, never merged into one undifferentiated pile — a Strip belongs to its Position's Bay, and a controller signed on to six Positions needs to know which hat each Strip is under. With many Positions signed on, the vStrips model earns its keep: one Bay in view, the rest reachable through header drop zones `[Annex §15.1]`.
 3. Recomposition MUST NOT disturb an in-progress drag, an open annotation cell, or scroll position in Bays the controller retains.
 4. Losing a Position MUST NOT close the panel or reset the view. It removes that Position's Bays and nothing else.
 
@@ -622,9 +622,9 @@ Because the Position set changes during a session, Bay composition is **reactive
 When a controller deselects a station or disconnects:
 
 1. If another controller is an **Observer** on that Position, they are offered Primary. Promotion is explicit — a prompt, not a silent transfer — **except** on an abrupt disconnect, where the longest-waiting Observer is auto-promoted and told so.
-2. If **no controller holds the Position**, its Strips MUST route to the **covering Position** named in facility configuration (§8.2), and the UI MUST say what happened and where they went. The default covering chain: `CD`→`GC`→`LC`→`AP`→`CTR`; `AIC`/`GCI`→`TAC_C2`→`CTR`; `CV_APP*`→`CV_MARSHAL`→`CV_PRIFLY`; `RSU`→`LC`; `SFA`/`PAR`→`AP`.
-3. If the covering Position is also unoccupied, follow the chain to the end. **A Strip MUST NOT be left owned by an unoccupied Position with no covering path.** That is defect class **D19**.
-4. Vacating with delegated airspace held is a special case: when `AP` becomes unoccupied, its delegated airspace reverts to `CTR` (§4.1), and the reversion MUST be rendered rather than merely implied.
+2. If **no controller is signed on to the Position**, its Strips MUST route to the Position it is **consolidated at**, named in facility configuration (§8.2), and the UI MUST say what happened and where they went. The default consolidation: `CD`→`GC`→`LC`→`AP`→`CTR`; `AIC`/`GCI`→`TAC_C2`→`CTR`; `CV_APP*`→`CV_MARSHAL`→`CV_PRIFLY`; `RSU`→`LC`; `SFA`/`PAR`→`AP`.
+3. If that Position is also unstaffed, follow the consolidation to its end. **A Strip MUST NOT be left owned by an unstaffed Position with no consolidation path.** That is defect class **D19**.
+4. Vacating with delegated airspace is a special case: when `AP` becomes unstaffed, its delegated airspace reverts to `CTR` (§4.1), and the reversion MUST be rendered rather than merely implied.
 5. **A controller MUST be warned before deselecting a station that would strand Strips**, with the count and destination shown. Warn, do not block — under low manning, blocking a controller from leaving is worse than the stranding.
 
 #### 4.8.7 Instrumentation
@@ -633,10 +633,10 @@ Add to the §11.5 metric set:
 
 | Metric | Why | Target |
 |---|---|---|
-| Positions held per controller, over time | the low-manning reality this design serves | observed, not targeted |
+| Positions signed on per controller, over time | the low-manning reality this design serves | observed, not targeted |
 | Self-coordination events, as a share of all boundary events | tells you how often combination is active, and whether §4.8.3 clause 3 is being obeyed | self-coord ≈ combined-position share |
 | Handoffs completed without a stranded Strip | §4.8.6 | 100% |
-| Time a Position spends unoccupied while holding Strips | the covering chain working, or not | trending to zero |
+| Time a Position spends unstaffed while it still owns Strips | the consolidation working, or not | trending to zero |
 
 ---
 
@@ -750,7 +750,7 @@ Taken from FAA Order JO 7210.637 Figure 1 `[Annex §2.1]`. Blocks marked ✱ are
 | 22 | Frequency | |
 | 23 | Facility remarks | free text — keep it, §3.9 |
 | 24 ✱ | Miles/minutes-in-trail remarks | |
-| **25 ✱** | **EFSP State** | §3.4 |
+| **25 ✱** | **Strip state** | §3.4 |
 | **26 ✱** | **Next Logical Action** | §3.5 |
 
 **Do not collapse the four time constraints.** Blocks 6 (proposed), 11 (approval request), 14 (release) and 16 (movement-area entry) are different concepts occupying different blocks in the real system `[Annex §2.5]`.
@@ -911,7 +911,7 @@ The prototype implemented these and controllers asked for two of them explicitly
 | Remote change → visible | **< 200 ms** |
 | Strip selection → track highlight | **< 1 s** (the measured real-world benchmark, §6.6) |
 
-No UI transition may be gated on a round trip. Transfer is the sole exception (§4.5.4), and it renders an intermediate state rather than blocking.
+No UI transition may be gated on a round trip. Strip transfer is the sole exception (§4.5.4), and it renders an intermediate state rather than blocking.
 
 ### 7.10 The `FINAL` Strip — minimal by requirement
 
@@ -942,7 +942,7 @@ FAA doctrine states plainly that **"national standardization of items (10 throug
 | Alerts | Which conditions alert, at which severity |
 | Routes | Stereo/canned route table (§9.9) |
 | Positions | Position set and permitted combinations |
-| Transfer | Routing table for unstaffed Positions |
+| Strip transfer | Routing table for unstaffed Positions |
 
 ### 8.3 Configuration validation
 
@@ -1141,7 +1141,7 @@ The panel SHOULD validate internal consistency — angels + 15 = DME, and marsha
 
 **The carrier does not talk to the centre.** FAA JO 7610.14 ¶3-7-1: *"FACSFACs should be used as the point of contact for FAA activities with respect to Navy shipboard operations"*; ¶3-7-5 names the FACSFAC *"the communications link between FAA activities and aircraft carriers"* `[Coord §4.1]`.
 
-Implement a **FACSFAC-equivalent role owning the warning-area boundary** rather than wiring `CV_MARSHAL` to `CTR`. It is sourced, it is the realistic answer, and it gives the community one more genuinely interesting position — the boundary is where the military and civil systems actually meet.
+Implement a **FACSFAC-equivalent Position owning the warning-area boundary** rather than wiring `CV_MARSHAL` to `CTR`. It is sourced, it is the realistic answer, and it gives the community one more genuinely interesting position — the boundary is where the military and civil systems actually meet.
 
 The legal basis for carrier operations without an ATC clearance is **due regard, satisfied by continuous surveillance from a surface facility** — the ship's own 50 NM radar coverage. Model `separation_regime = DUE_REGARD` inside the Carrier Control Area, and a due-regard entry/exit point on the Strip as the boundary at which ownership passes between the civil system and the ship.
 
@@ -1194,7 +1194,7 @@ Apply the same shape to departure time, off-block time and takeoff time. The cho
 
 ### 11.1 Reliability
 
-1. Transfer success rate MUST be ≥ 99.5% measured over a session (the real-world benchmark is 99.68–100% `[Annex §4]`).
+1. Strip transfer success rate MUST be ≥ 99.5% measured over a session (the real-world benchmark is 99.68–100% `[Annex §4]`).
 2. No Mutation may be lost on reconnect (§5.6).
 3. Server restart MUST NOT lose the Board. Persist Strips, Bays, order keys and runway status.
 
@@ -1228,7 +1228,7 @@ The real programme's most useful findings came from instrumentation, not opinion
 | Strip↔track correlation rate | the named defect class (§6.6) | ≥ 95% |
 | Rejected Mutations per session, by reason | conflict surface | trending down |
 | Staleness detections (§10.4) | the silent failure mode | trending down |
-| Transfer failures and their causes | §11.1 | ≤ 0.5% |
+| Strip transfer failures and their causes | §11.1 | ≤ 0.5% |
 
 ---
 
@@ -1261,7 +1261,7 @@ Deliverables:
 2. The existing flight/track data model, transport layer, authentication/Position model and persistence, described as they are.
 3. An integration surface proposal: exactly where the EFSP attaches, what it owns, what it reads.
 4. **Whether the CRC server mints beacon codes today**, and if so from what pools and with what reserved-code exclusions (§3.10.1). If it does not, an ADR proposing where that work lands — in the server, not in this panel.
-5. How the host exposes radar-station selection, since Position occupancy derives from it (§4.8).
+5. How the host exposes radar-station selection, since Position staffing derives from it (§4.8).
 6. An ADR for every point where a finding contradicts this guide.
 
 Acceptance: a reviewer who has not read the codebase can, from the report alone, say where each EFSP subsystem attaches.
@@ -1280,23 +1280,23 @@ Acceptance:
 - Replaying a Mutation with the same `clientMutationId` does not double-apply.
 - An unacknowledged Mutation that fails `baseRev` after reconnect is surfaced, not dropped. **Test this explicitly; it is the worst failure mode in the system.**
 
-### WP1A — Position occupancy, combination and handoff
+### WP1A — Position staffing, combination and handoff
 
 **Entry:** WP1, and the WP0 finding on how the host CRC exposes radar-station selection.
 
 This is foundational, not a feature. Under low manning the combined case is the normal case, so it must be correct before any Position-scoped behaviour is built on top of it.
 
-Deliverables: the station→Position mapping as facility configuration; derived Position sets with live recomposition (§4.8.5); Primary/Observer with claim, request and release (§4.8.2); `actingPositionId` on every Mutation (§4.8.1); per-acting-Position permission evaluation (§4.8.4); the self-coordination action (§4.8.3); the covering chain and vacate handling (§4.8.6); the §4.8.7 metrics.
+Deliverables: the station→Position mapping as facility configuration; derived Position sets with live recomposition (§4.8.5); Primary/Observer with sign-on, request and release of Primary (§4.8.2); `actingPositionId` on every Mutation (§4.8.1); per-acting-Position permission evaluation (§4.8.4); the self-coordination action (§4.8.3); the consolidation and vacate handling (§4.8.6); the §4.8.7 metrics.
 
 Acceptance:
 
-- One controller holding `CTR` and `TAC_C2` sees both Facilities' Bays, **grouped by Position, not merged**, and both Boards remain distinct.
-- **A `HANDOFF` attempted on a `TAC_C2`-owned Strip is refused, even though the same controller holds `CTR`.** Permissions are evaluated per acting Position. Test this specific case; it is defect D21 and it passes a casual demo.
-- A boundary event between two Positions held by one controller **applies the full state change** — separation regime, radar service, IFR status — in **one input**, and writes a Mutation marked self-coordinated and naming both Positions.
-- A second controller taking `TAC_C2` mid-block **inherits correct state**, not a state that was never written because one person held both sides.
+- One controller signed on to `CTR` and `TAC_C2` sees both Facilities' Bays, **grouped by Position, not merged**, and both Boards remain distinct.
+- **A `HANDOFF` attempted on a `TAC_C2`-owned Strip is refused, even though the same controller is signed on to `CTR`.** Permissions are evaluated per acting Position. Test this specific case; it is defect D21 and it passes a casual demo.
+- A boundary event between two Positions signed on by one controller **applies the full state change** — separation regime, radar service, IFR status — in **one input**, and writes a Mutation marked self-coordinated and naming both Positions.
+- A second controller taking `TAC_C2` mid-block **inherits correct state**, not a state that was never written because one person was signed on to both sides.
 - A Position never resolves to two Primaries, under any interleaving of selection changes. Test concurrently.
 - **A handoff moves no Strips.** Verify that `ownerPositionId` values are unchanged across a Primary change.
-- Vacating a Position with no successor routes its Strips down the covering chain, tells the controller where they went, and leaves nothing stranded. Vacating `AP` renders the airspace reversion to `CTR`.
+- Vacating a Position with no successor routes its Strips down the consolidation, tells the controller where they went, and leaves nothing stranded. Vacating `AP` renders the airspace reversion to `CTR`.
 - A controller deselecting a station that would strand Strips is **warned with a count and destination, and not blocked**.
 - Recomposition during an active drag, an open annotation cell, or a scrolled Bay disturbs none of them.
 
@@ -1329,25 +1329,25 @@ Acceptance:
 - A 60-Strip Bay sustains 60 fps during a drag on the target hardware. **Measure; do not assume.**
 - 50 simultaneous Strip updates produce one paint.
 
-### WP4 — States, NLA and transfer
+### WP4 — Strip states, NLA and strip transfer
 
 **Entry:** WP3.
 
-Deliverables: EFSP State machine (§3.4); NLA computation with inhibit reasons (§3.5); Undo within 30 s; transfer protocol with presence gating (§4.5); release-state model with the derived 30-minute void-time deadline (§3.8).
+Deliverables: strip state machine (§3.4); NLA computation with inhibit reasons (§3.5); Undo within 30 s; transfer protocol with presence gating (§4.5); departure-release model with the derived 30-minute void-time deadline (§3.8).
 
 Acceptance:
 
 - Every State has exactly one NLA or a rendered inhibit reason.
 - Double-tap on NLA within 400 ms applies once.
-- Transfer to an unstaffed Position is rejected with a named reason, and the Strip stays with the sender.
-- A transfer interrupted by a server restart resolves to exactly one owner. **Test with an actual restart.**
+- Strip transfer to an unstaffed Position is rejected with a named reason, and the Strip stays with the sender.
+- A strip transfer interrupted by a server restart resolves to exactly one owner. **Test with an actual restart.**
 - Void-time expiry raises an alert at void + 30 minutes.
 
 ### WP4A — Inter-facility coordination
 
 **Entry:** WP4.
 
-Deliverables: the Facility model (§2, §4.6); the coordination primitives `HANDOFF`, `POINT_OUT`, `TRAFFIC`, `OPERATIONAL_REQUEST`, `TOFI`, `AIT` with correct jurisdiction semantics; per-Facility Strip replication from forwarded data; the timed forwarding obligations (§4.6.1); release objects across the boundary (§4.6.2); the three-field separation model (§4.6.3); airspace ownership as a direction (§4.6.4).
+Deliverables: the Facility model (§2, §4.6); the coordination primitives `HANDOFF`, `POINT_OUT`, `TRAFFIC`, `OPERATIONAL_REQUEST`, `TOFI`, `AIT` with correct jurisdiction semantics; per-Facility Strip replication from forwarded data; the timed forwarding obligations (§4.6.1); departure release objects across the boundary (§4.6.2); the three-field separation model (§4.6.3); airspace ownership as a direction (§4.6.4).
 
 Acceptance:
 
@@ -1442,8 +1442,8 @@ Acceptance:
 | D-6 | **Retention: no requirement.** Any retention is a bonus | §11.3 default stands as a SOURCE policy choice, not an obligation |
 | D-7 | **American procedures at Incirlik**, not Turkish | Stated once in the facility configuration; see the header note and `EFSP-Coordination-Annex.md` §6 |
 | D-8 | **Conform to the SOURCE Contract Language Standard** | The conforming pass is **pending receipt of the standard's text**. Until then §0.1's editor's note stands |
-| D-9 | **Positions are derived from selected radar stations**, combine freely including across Facilities, and change live during a session | §4.8 in full; §4.1 combination rule replaced; §4.5 occupancy gating |
-| D-10 | **Several controllers may hold a Position; one is Primary. Selection changes mid-session with automatic handoff** | §4.8.2, §4.8.6; defect classes D18–D21 |
+| D-9 | **Positions are derived from selected radar stations**, combine freely including across Facilities, and change live during a session | §4.8 in full; §4.1 combination rule replaced; §4.5 staffing gating |
+| D-10 | **Several controllers may be signed on to a Position; one is Primary. Selection changes mid-session with automatic handoff** | §4.8.2, §4.8.6; defect classes D18–D21 |
 
 #### 7.6.1 Consequence of D-5 — dockable panel, not a tablet
 
@@ -1477,7 +1477,7 @@ Each is drawn from measured real-world failure, not speculation. Treat each as a
 | **D4 Gesture cost inflation** | Paper affordances re-implemented at three taps instead of one; controllers stop using them | §7.3 |
 | **D5 Auto-advance confusion** | Surveillance-driven strip movement disorients controllers | §10.3 |
 | **D6 Silent mutation loss** | A rejected or unacknowledged amendment disappears without surfacing | §5.3.3, §5.6.3 |
-| **D7 Transfer limbo** | A strip is owned by nobody, or by two Positions, after a restart | §4.5, WP4 acceptance |
+| **D7 Strip transfer limbo** | A strip is owned by nobody, or by two Positions, after a restart | §4.5, WP4 acceptance |
 | **D8 Alert under-prominence** | Operation-blocking conditions rendered at insufficient severity | §7.7.5 |
 | **D9 Legibility regression** | Background contrast, column count and colour choices degrade scanning | §7.7 |
 | **D10 Config drift** | Live re-layout under a working controller | §8.4 |
@@ -1489,9 +1489,9 @@ Each is drawn from measured real-world failure, not speculation. Treat each as a
 | **D16 Carrier DME hand-edited** | Marshal DME, angels or push time editable independently of stack index, allowing the four derived values to drift apart | §9.12 |
 | **D17 SFA modelled as a frequency change** | Ownership transfer implemented as "send the aircraft to a new frequency", which inverts what SFA actually does | §4.7 |
 | **D18 Two Primaries** | A Position resolves to more than one acting controller, so two people can act on the same Strip believing they are the owner | §4.8.2 |
-| **D19 Stranded Strips** | A Strip left owned by an unoccupied Position with no covering path after a controller vacates | §4.8.6 |
-| **D20 Self-coordination skipping the state change** | A boundary event between two Positions held by one controller collapsed away entirely, so the separation regime, radar-service status or MARSA state never updates. Surfaces later as a second controller inheriting a false state | §4.8.3 |
-| **D21 Permissions unioned across held Positions** | Combination implemented as the union of the held set's powers, so an MRU hat acquires ATC primitives from an ATC hat held by the same person. Looks correct in every demo | §4.8.4 |
+| **D19 Stranded Strips** | A Strip left owned by an unstaffed Position with no consolidation path after a controller vacates | §4.8.6 |
+| **D20 Self-coordination skipping the state change** | A boundary event between two Positions signed on by one controller collapsed away entirely, so the separation regime, radar-service status or MARSA state never updates. Surfaces later as a second controller inheriting a false state | §4.8.3 |
+| **D21 Permissions unioned across signed-on Positions** | Combination implemented as the union of the signed-on set's powers, so an MRU hat acquires ATC primitives from an ATC hat signed on by the same person. Looks correct in every demo | §4.8.4 |
 | **D22 Assigned and observed code collapsed** | One `beaconCode` field instead of two, so a mismatch between what was assigned and what the aircraft is squawking becomes invisible | §3.10.2 |
 | **D23 Duplicate code treated as an error** | A duplicate code blocking assignment. Duplicates are structural in the real plan and explicitly accepted as unavoidable; blocking models a guarantee that does not exist | §3.10.2 |
 | **D24 Mode 1 or Mode 2 made ATC-editable** | Mission and airframe identity codes exposed as controller-writable. Neither is ATC's to change, and Mode 2 is physically set on the ground | §3.10.3 |

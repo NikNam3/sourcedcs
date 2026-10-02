@@ -1,0 +1,35 @@
+284	### 3.8 Departure departure release states	### 3.8 Departure release states
+356	## 4. Positions, Bays and transfer	## 4. Positions, Bays and strip transfer
+364	intrafacility transfer; receives release	intrafacility strip transfer; receives departure release
+365	intrafacility transfer	intrafacility strip transfer
+368	`OPERATIONAL_REQUEST`, release	`OPERATIONAL_REQUEST`, departure release
+372	data forwarding, release, `TOFI`	data forwarding, departure release, `TOFI`
+433	or holds a Position that includes	or is signed on to a Position that includes
+437	### 4.5 Transfer protocol	### 4.5 Strip transfer protocol
+439	Transfer is the operation most likely to fail	Strip transfer is the operation most likely to fail
+449	1. Transfer MUST be a	1. A strip transfer MUST be a
+450	A transfer to an unstaffed Position	A strip transfer to an unstaffed Position
+452	**transfer MUST NOT be rendered	**a strip transfer MUST NOT be rendered
+453	5. A transfer that times out	5. A strip transfer that times out
+454	6. Every transfer MUST	6. Every strip transfer MUST
+500	**At a tower-served field the release travels	**At a tower-served field the departure release travels
+500	The pilot never hears "released."**	The pilot never hears "released."**
+564	A controller holding four Positions	A controller signed on to four Positions
+577	requires their release.	requires the current Primary to release Primary.
+585	When one controller holds both sides	When one controller is signed on to both sides
+603	A controller holding `CTR` + `TAC_C2` holds **ATC	A controller signed on to `CTR` + `TAC_C2` holds **ATC
+607	even though the same person holds `CTR`	even though the same person is signed on to `CTR`
+609	Holding `CTR` and `TAC_C2` does not	Being signed on to `CTR` and `TAC_C2` does not
+914	Transfer is the sole exception	Strip transfer is the sole exception
+945	| Transfer | Routing table	| Strip transfer | Routing table
+1197	1. Transfer success rate	1. Strip transfer success rate
+1231	| Transfer failures and their causes	| Strip transfer failures and their causes
+1289	with claim, request and release (§4.8.2)	with sign-on, request and release of Primary (§4.8.2)
+1293	One controller holding `CTR` and `TAC_C2` sees	One controller signed on to `CTR` and `TAC_C2` sees
+1294	even though the same controller holds `CTR`.**	even though the same controller is signed on to `CTR`.**
+1332	### WP4 — States, NLA and transfer	### WP4 — Strip states, NLA and strip transfer
+1342	- Transfer to an unstaffed Position	- Strip transfer to an unstaffed Position
+1343	- A transfer interrupted	- A strip transfer interrupted
+1350	release objects across the boundary	departure release objects across the boundary
+1446	**Several controllers may hold a Position; one is Primary.	**Several controllers may be signed on to a Position; one is Primary.
+1480	| **D7 Transfer limbo**	| **D7 Strip transfer limbo**
