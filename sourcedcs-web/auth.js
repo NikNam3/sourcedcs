@@ -55,6 +55,12 @@ const RELEASE_UPLOAD_TOKEN = process.env.RELEASE_UPLOAD_TOKEN || '';
    one-liner. */
 const FLIGHT_PLAN_SERVICE_TOKEN = process.env.FLIGHT_PLAN_SERVICE_TOKEN || '';
 
+/* Airspace registry service access (docs/adr/0098 section 9): crc-sync reads the
+   upcoming airspace bookings with this shared secret, the same shape as
+   FLIGHT_PLAN_SERVICE_TOKEN but a separate secret. The same token is what the
+   web sends to crc-sync's /api/airspace-registry (crcsync-client.js). */
+const AIRSPACE_SERVICE_TOKEN = process.env.AIRSPACE_SERVICE_TOKEN || '';
+
 /* Low-level "make the request, collect the body" helper shared by every
    hand-rolled REST caller in this codebase (Casdoor here, Discord in
    discord-client.js) — replaces 5 near-identical https.request wrappers
@@ -190,10 +196,19 @@ function requireFlightPlanService(req, res, next) {
   next();
 }
 
+function requireAirspaceService(req, res, next) {
+  const auth = req.headers.authorization || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  if (!checkReleaseUploadToken(token, AIRSPACE_SERVICE_TOKEN)) {
+    return res.status(401).json({ error: 'Invalid or missing airspace service token' });
+  }
+  next();
+}
+
 module.exports = {
   SKILL_ADMIN_ROLES, BOOKING_ADMIN_ROLES,
   CASDOOR_CLIENT_ID, CASDOOR_ENDPOINT,
   rawRequest, casdoorTokenExchange, decodeJWT, registerPilot,
   requireAuth, requireAdmin, requireSkillAdmin, isBookingAdminUser,
-  requireBookingAdmin, requireReleaseUpload, requireFlightPlanService,
+  requireBookingAdmin, requireReleaseUpload, requireFlightPlanService, requireAirspaceService,
 };
