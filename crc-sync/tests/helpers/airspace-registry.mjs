@@ -21,7 +21,7 @@ export const lookup = {
 
 const rowOf = (id) => authority.airspaceAuthority.rowFor(id, {
   familyRows: authority.AIRSPACE_ROWS,
-  classOf: (p) => (p.startsWith('RANGE_') ? 'USING_AGENCY' : null),
+  classOf: (p) => ((p || '').startsWith('RANGE_') ? 'USING_AGENCY' : null),
 });
 
 export const THEATER = 'Test';

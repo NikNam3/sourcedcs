@@ -32,6 +32,7 @@ const CLASS_ROWS = {
 
 /** The registry's row for one Position: its family's row merged over its class's row. Null scopes mean "no". */
 function rowFor(positionId, { familyRows, classOf }) {
+  if (!positionId) return { create: null, edit: null, delete: null, use: false }; // a session signed on to nothing
   const own = familyRows[positionId] || {};
   const cls = CLASS_ROWS[classOf(positionId)] || {};
   return { create: null, edit: null, delete: null, use: false, ...cls, ...own };
