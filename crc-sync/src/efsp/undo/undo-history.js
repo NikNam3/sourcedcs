@@ -204,10 +204,27 @@ class UndoHistory {
   commit(result, { created } = {}) {
     const frame = this._frames.pop();
     if (!frame) return null;
-    if (!result || !result.ok) return null; // a refusal changed nothing it may keep (a touch from a part-way throw is broadcast, not recorded)
+    // A refusal is never recorded. Whatever it did change on the way (a FULL release that a refused control Block write
+    // settled, docs/adr/0101) stands, and blocks the open records it touched like a system change: an undo must not
+    // restore over it.
+    if (!result || !result.ok) {
+      if (frame.footprint.size) this._blockByRefused(frame);
+      return null;
+    }
     if (!frame.isUndo) this._attribute(frame);
     if (!frame.scope) return null;
     return this._record(frame, created || null);
+  }
+
+  _blockByRefused(frame) {
+    for (const record of this._records.values()) {
+      if (record.blockedBy || record.actionId === frame.actionId) continue;
+      for (const k of frame.footprint) {
+        if (!record.keys.has(k)) continue;
+        record.blockedBy = { kind: 'SYSTEM', op: `${frame.meta.op} (refused)`, facilityId: frame.meta.facilityId || null, id: k };
+        break;
+      }
+    }
   }
 
   /** Closes the innermost frame without recording anything (the op threw). */

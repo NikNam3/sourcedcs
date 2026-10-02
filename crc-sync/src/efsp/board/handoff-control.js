@@ -129,7 +129,10 @@ class HandoffControl {
    */
   _commit(strip, patch, by, { bump = true, auditOp, action }) {
     Object.assign(strip.coordination, deepClone(patch));
+    // Always a touch (docs/adr/0100): the undo history attributes this write to the Mutation that is applying, or sees it
+    // as a system change that blocks an open undo of this Strip. A caller that already bumped has touched it this frame.
     if (bump) this._state.bump(strip, by);
+    else this._state.recordTouch(strip.stripId);
     const peer = this._peerOf(strip);
     let peerStrip = null;
     if (peer.board && peer.strip) {
@@ -186,7 +189,8 @@ class HandoffControl {
     const { receiving } = this._sides(strip);
     if (!this._live(receiving) || !receiving.covered) return null;
     const patch = this.controlPatch(strip, 'RECEIVING', 'COMMS_AND_FULL_RELEASE', by);
-    const peer = this._commit(strip, patch, by, { bump: false, auditOp: 'InterfacilityCoordinationResponse', action: 'TRANSFER_CONTROL' });
+    // Bumped: the op that checked may still refuse its own write (a bad altitude), and the settle stands regardless.
+    const peer = this._commit(strip, patch, by, { auditOp: 'InterfacilityCoordinationResponse', action: 'TRANSFER_CONTROL' });
     this.assertControlInvariant(strip, by);
     return { ...peer, control: { trigger: 'COMMS_AND_FULL_RELEASE' } };
   }
@@ -516,7 +520,8 @@ class HandoffControl {
         : { comms: { transferred: to === 'RECEIVING', at: this._clock.now(), by: by || null, byPositionId: null, trigger: 'REPAIR' } };
       // The standing notice both Facilities' panels show (CONTROL_REPAIRED, forwarding-obligations.js): the flight and what moved.
       patch.repair = { at: this._clock.now(), axis: p.axis, from: p.side, to, why: p.why };
-      this._commit(strip, patch, by, { bump: false, auditOp: 'InterfacilityControlRepair', action: p.axis.toUpperCase() });
+      // Bumped: a repair is a change of its own (a change of staffing or a restart runs it outside any Mutation).
+      this._commit(strip, patch, by, { auditOp: 'InterfacilityControlRepair', action: p.axis.toUpperCase() });
       log.warn('control invariant repaired', { stripId: strip.stripId, axis: p.axis, from: p.side, to, why: p.why });
       this._recordRepair(strip, { axis: p.axis, from: p.side, to, why: p.why, repaired: true }, before);
       repairs.push({ axis: p.axis, from: p.side, to });

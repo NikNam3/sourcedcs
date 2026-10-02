@@ -389,6 +389,45 @@ test('I8 the executor refuses a restore while the exchange has nobody covering i
   holds(w, ex);
 }));
 
+test('I8 HandoffControl writes reach the undo history: a repair after a mark touches both Strips and blocks its undo as a system change', () => repairMode(() => {
+  const wallClock = fakeWallClock();
+  const w = world({ wallClock });
+  const ex = ex0(w, 'I8R');
+  const ack = asT(w, ex, { kind: 'HANDOFF', action: 'TRANSFER_CONTROL' });
+  const revs = { T: ex.T().rev, R: ex.R().rev };
+  hold(w.efsp, w.c.AP.session, 'INCIRLIK', []); // AP leaves with nobody to cover: control is repaired back to CTR
+  assert.equal(ex.T().coordination.control.trigger, 'REPAIR');
+  assert.ok(ex.T().rev > revs.T && ex.R().rev > revs.R, `both halves of the repair are bumped (T ${revs.T}->${ex.T().rev}, R ${revs.R}->${ex.R().rev})`);
+  const blocked = asT(w, ex, { kind: 'Undo', actionId: ack.undoable.actionId });
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.reason, 'UNDO_BLOCKED');
+  assert.match(blocked.detail, /system change/);
+  assert.equal(ex.T().coordination.control.trigger, 'REPAIR', 'the undo did not move the record back over the repair');
+  holds(w, ex);
+}));
+
+test('I8 a FULL release settled by a control Block write that is then refused is bumped and blocks an open undo of that Strip', () => {
+  const wallClock = fakeWallClock();
+  const clock = { t: Date.now(), source: 'test', now: () => clock.t };
+  const w = world({ wallClock, clock });
+  const ex = ex0(w, 'I8S');
+  mustT(w, ex, { kind: 'ControlRelease', action: 'GRANT', scopes: ['FULL'], effectiveAt: clock.t + 60_000 });
+  const comms = asT(w, ex, { kind: 'HANDOFF', action: 'TRANSFER_COMMS' }); // comms at CENTER, after the grant: undoable
+  assert.equal(ex.T().coordination.control.holder, 'TRANSFERRING', 'the release is not due yet');
+  clock.t += 120_000; // due: the first control check settles it (ADR 0101 decision 4)
+  const rev = ex.T().rev;
+  const write = asT(w, ex, { kind: 'SetBlock', blockId: '7', value: 'NOT AN ALTITUDE' });
+  assert.equal(write.ok, false, 'the write itself is refused');
+  assert.equal(ex.T().coordination.control.holder, 'RECEIVING', 'but the due release moved control');
+  assert.ok(ex.T().rev > rev, 'the settle is a change of its own (bumped)');
+  const undo = asT(w, ex, { kind: 'Undo', actionId: comms.undoable.actionId });
+  assert.equal(undo.ok, false);
+  assert.equal(undo.reason, 'UNDO_BLOCKED');
+  assert.match(undo.detail, /SetBlock \(refused\)/);
+  assert.equal(ex.T().coordination.control.holder, 'RECEIVING', 'the undo never reverts over the settle');
+  holds(w, ex);
+});
+
 test('I8 controlInvariantRefusal reads ADR 0101\'s holder fields: a retired or unstaffed holder blocks, a retired side holding nothing does not', () => {
   const link = (over) => ({
     primitive: 'HANDOFF', state: 'ACTIVE', peerFacilityId: 'CENTER', peerStripId: 'T1', mintedForCoordination: true,
