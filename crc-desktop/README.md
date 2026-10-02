@@ -112,6 +112,6 @@ Installed apps autoupdate via `electron-updater` (`main.js`) against the generic
 | `casdoorClientId` / `casdoorEndpoint` | Casdoor OAuth — public client ID only, no secret |
 | `srsHost` / `srsPort` | Upstream SRS server the bundled `lxsrs_v2` bridge connects to |
 | `srsApiPort` | Local HTTP API port `lxsrs_v2` exposes for the renderer's radio panel |
-| `wsPort` | Port `app/server.js` (the bundled local Express server) listens on |
+| `wsPort` | Port `app/server.js` (the bundled local Node server) listens on |
 | `sourcedcsWebUrl` | Used for flight-plan lookups proxied through the local server |
 | `freqs` / `txFreq` | Default monitored/transmit radio frequencies |

@@ -40,13 +40,14 @@ npm test   # node --test test/*.test.js
 cd crc-sync && npm install
 npm start
 npm test   # node --test tests/*.test.mjs
+npm run freeze           # opt-in golden-replay suite (tests/freeze/, ADR 0095 §1); not part of npm test
 npm run soak:selfcheck   # proves every soak detector fires (~40 s); not part of npm test
 npm run soak:smoke       # 20 virtual minutes of simulated EFSP traffic; `npm run soak -- --minutes 240` for the §13 run
 ```
 The EFSP soak harness lives in `crc-sync/tools/soak/` (flags and profiles in its `run.js`). The literal four-hour
 run is the manual-dispatch workflow `.github/workflows/crc-sync-soak.yml` ("crc-sync EFSP soak (manual)"). Run
-`soak:selfcheck` after touching `board-store.js`, `efsp-ws.js` or `ws-hub.js`. The wave-2 findings the soak used to
-fail on are fixed (`docs/efsp-briefing.md` §3I/§4 has the state), and the `drop-broadcast` selfcheck detector fires
+`soak:selfcheck` after touching `board-store.js`, `board/**`, `efsp-ws.js`, `wire/**`, `ws-hub.js`, `sync/**` or
+`tools/soak/host-core.js`. The wave-2 findings the soak used to fail on are fixed (`docs/efsp-briefing.md` §3I/§4 has the state), and the `drop-broadcast` selfcheck detector fires
 again (`docs/wip/SOAK.md`). `memory.slope` and `memory.netGrowth` are judged only on runs of 3 hours or more whose
 warm-up covers the 2 h finished-Strip retention (ADR 0082): the heap keeps filling until the archiver starts removing
 DROPPED Strips, so a shorter run (including `soak:smoke`) reports them as **not judged**, which is neither a failure
@@ -57,11 +58,11 @@ uses it). The not-judged rule is `memoryPolicy()` in `tools/soak/report.js` (`do
 ```bash
 cd crc-desktop && npm install
 npm start           # runs the app locally via `electron .`
-npm test             # node --test tests/*.test.js — see "crc-desktop internals" below
+npm test             # node --test 'tests/*.test.{js,mjs}': five CommonJS tests (packaging, lxsrs-setup, patch-notes, proxy routes, sharded runner), the rest ES modules
 npm run pack:linux   # electron-builder AppImage, unpublished, into dist/
 npm run pack:win     # electron-builder NSIS installer, unpublished, into dist/
 ```
-`app/` is its own package (its `package.json` declares "crc-server", the bundled local Express server) with its own `node_modules` — after `npm install` at the crc-desktop root, also run `npm install` inside `crc-desktop/app` before packaging or the asar will be missing `app/node_modules/dotenv`. See "How to build and release crc-desktop" below before touching packaging config.
+`app/` is its own package (its `package.json` declares "crc-server", the bundled local server, plain Node `http`/`https`, no Express) with its own `node_modules` — after `npm install` at the crc-desktop root, also run `npm install` inside `crc-desktop/app` before packaging or the asar will be missing `app/node_modules/dotenv`. See "How to build and release crc-desktop" below before touching packaging config.
 
 ### miztoyaml (Python 3)
 ```bash
@@ -117,13 +118,13 @@ Client secret (`DISCORD_BOT_TOKEN`, `CASDOOR_CLIENT_SECRET`, `RELEASE_UPLOAD_TOK
 
 ### crc-sync
 
-Central backend crc-desktop instances connect to — replaces the old asacs_link server-side role, minus its browser-facing GCI dashboard (crc-sync has no public UI and no `public/` directory: `server.js` still names one, and `GET /js/config.js` is its only live leftover).
+Central backend crc-desktop instances connect to — replaces the old asacs_link server-side role, minus its browser-facing GCI dashboard (crc-sync has no public UI and no `public/` directory: `src/app.js` still names one, and `GET /js/config.js` is its only live leftover).
 
-- `server.js` — Express + `ws`. Casdoor OAuth code exchange (`POST /api/auth/token`), single-use short-TTL WebSocket connect tickets (`POST /api/ws-ticket`, `src/auth.js`) so a long-lived bearer JWT never rides in a `/feed` WebSocket URL.
+- `src/app.js` — `createApp()`, the composition root (ADR 0095 §4): the Express app, the `ws` hub, the EFSP runtime and the **named tickers** (`tickers`, which the soak reuses). It serves `GET /js/config.js`, the Casdoor OAuth code exchange (`POST /api/auth/token`) and single-use short-TTL WebSocket connect tickets (`POST /api/ws-ticket`, `src/auth.js`) so a long-lived bearer JWT never rides in a `/feed` WebSocket URL. `server.js` only builds the gRPC and SRS clients and listens.
 - `src/grpc-client.js` / `src/srs-client.js` — sole gRPC (DCS telemetry) and SRS-transponder client on behalf of every connected crc-desktop instance.
-- `src/tracks.js` / `src/collab-store.js` — in-memory DCS ground truth + the collaborative overlay (manual IFF declarations, tags). Truth never reaches a client.
+- `src/tracks.js` / `src/collab-store.js` / `src/collab-wiring.js` — in-memory DCS ground truth + the collaborative overlay (manual IFF declarations, tags). Truth never reaches a client. The overlay persists to `state/collab-overlay.json`, tied to the mission session and each entry's unit identity (ADR 0094).
 - `src/surveillance/` — **what a controller is told about a contact** (`docs/adr/0059`). `presentation.js`'s `presentTrack()` is the single choke point: a session gets a position, and a code/altitude/name only if one of *its own* sensors could know it (radar `caps.ssr`/`caps.height`, the transponder model in `transponder.js`, the datalink feed in `datalink.js`, identity in `identity.js`: correlated Strip callsign > datalink > tag > track number). Sent by `src/ws-hub.js` every 500ms. Client-side, `crc-desktop/app/public/js/track-label.js` is the only code that turns it into text. Change how a contact is named or shown in those two files, not in consumers. **IFF colour comes from interrogation, not from the DCS coalition** (`docs/adr/0066`, `0084`): `iff.js`'s `classifyIff()` picks it per session from a declaration, the datalink, a valid Mode 4 reply (`transponder.js`'s `mode4Of()`) or a Mode 3/C reply, and automatic IFF never gives bandit/hostile. Radars carry `caps.mode4`; tactical radars and the military field radars (airport, approach, carrier approach) interrogate Mode 4. Nothing on the ground is hidden. `CRCSYNC_COALITION` sets which DCS coalition is "own" (it models the Mode 4 crypto key); two coalitions controlled at once means two crc-sync servers, one each.
-- `src/efsp/` — the Electronic Flight Strip Panel's server half (stores, rules, the wire handler). `docs/efsp-briefing.md` is its handoff note and `docs/efsp-usage-guide.md` the controller's guide, and **`docs/glossary.md`** maps the pre-W7 words (seat, occupied, held, covering chain, FDR, Strip Role, field state, …) to the FAA-based ones — read it before any ADR or note older than the rename; EFSP times come from the injected mission clock (in-game Zulu, `docs/adr/0079`), never `Date.now()`.
+- `src/efsp/` — the Electronic Flight Strip Panel's server half. Layout (ADR 0095): `board-store.js` is the `BoardStore` facade over `board/` (collaborators) and `board/ops/` (one file per Board op); `wire/` and `wire/families/` hold the `/feed` handler's skeleton and one file per wire family (`efsp-ws.js` binds them); `sync/` is the replay cache and sync log; `authority/` is the Position and strip-type tables (who may do what); the other `*-store.js` files are registered in `stores.js`. `docs/efsp-briefing.md` is its handoff note and `docs/efsp-usage-guide.md` the controller's guide, and **`docs/glossary.md`** maps the pre-W7 words (seat, occupied, held, covering chain, FDR, Strip Role, field state, …) to the FAA-based ones — read it before any ADR or note older than the rename; EFSP times come from the injected mission clock (in-game Zulu, `docs/adr/0079`), never `Date.now()`.
 
 Deployed as a Docker image (`ghcr.io/niknam3/sourcedcs/crc-sync`) via `.github/workflows/crc-sync-docker.yml` — see "How the docker-image services deploy" below.
 
@@ -131,9 +132,9 @@ Deployed as a Docker image (`ghcr.io/niknam3/sourcedcs/crc-sync`) via `.github/w
 
 Electron app ("CRC") — the squadron's DCS multiplayer GCI/datalink client. See **`crc-desktop/README.md`** for the full picture (packaging gotchas, the Python venv auto-provisioning, autoupdate wiring); summary:
 
-- `main.js` — Electron main process. Spawns the bundled local server (`app/server.js`, an Express server serving the renderer UI and proxying a few on-demand crc-sync RPCs), creates the `BrowserWindow`, and drives `electron-updater`.
+- `main.js` — Electron main process. Spawns the bundled local server (`app/server.js`, a plain Node `http`/`https` server serving the renderer UI and proxying a few on-demand crc-sync RPCs), creates the `BrowserWindow`, and drives `electron-updater`.
 - `lxsrs-setup.js` — SRS radio bridge launch logic, deliberately kept Electron-free (`require('electron')` outside a running Electron process doesn't return the real API) so it's unit-testable. Creates a Python venv on first run and pip-installs `lxsrs_v2`'s third-party deps into it against whatever `python3` is actually on the machine, since those deps include compiled extensions tied to a specific CPython ABI that can't be reliably pre-bundled.
-- `app/` — the bundled local server + browser UI, **its own npm package** (see Commands above — this is the single most common source of packaging bugs, detailed in crc-desktop/README.md).
+- `app/` — the bundled local server + the renderer UI (`app/public/`), **its own npm package** (see Commands above — this is the single most common source of packaging bugs, detailed in crc-desktop/README.md). The renderer is native ES modules (ADR 0095 §6, `crc-desktop/README.md` "Client modules"): `index.html` loads `/js/config.js` as a classic script, then one `<script type="module" src="./js/main.js">` that imports the rest; `js/classic-globals-bridge.js` is transitional, serving only the Playwright specs (it goes when the specs move to imports).
 - `python-pkg/` — `lxsrs_v2` itself (pure Python source, pip-installed with `--no-deps` and committed to git), bundled via `electron-builder`'s `build.linux.extraResources`.
 
 Released via `.github/workflows/crc-desktop-release.yml` — see "How to build and release crc-desktop" below.
@@ -176,7 +177,7 @@ squadron defaults (facility, airspace, sensor specs, alerting thresholds) and `d
 reference tables (the airfield name-to-ICAO map) — both baked into the image. `state/` holds
 everything the service writes, and is the `crc-sync-state:/app/state` volume. A read prefers `state/`
 and falls back to the shipped default, so a new default added by an image update lands with no
-migration (`crc-sync/src/state-paths.js`, `docs/adr/0048`).
+migration (`crc-sync/src/state-paths.js`, `docs/adr/0048`). **`state/` is strict, not forgiving:** an unknown key or an old shape in a file the service owns, invalid JSON, or a missing/invalid facility file stops start-up with the file and the reason (`checkPersistedShape` in `src/efsp/stores.js`, `docs/adr/0095`); there is no migration or merge, so the fix is to correct or delete the named file.
 
 `config/theaters.json` holds the fixed per-theater facts keyed by the name DCS-gRPC's `GetTheatre` returns: UTC
 offset, **transition altitude** (Syria 10,000 ft, the rest 18,000 until someone checks the AIP), the Transverse
