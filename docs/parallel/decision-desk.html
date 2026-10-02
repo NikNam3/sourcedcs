@@ -387,11 +387,11 @@ details.settled-group > div { display: grid; gap: 14px; margin-top: 8px; }
         if (can === false) { readOnly = true; showNotice("You can read these questions but not answer them from this account."); }
       }
     } catch (_) {}
-    db.collection("questions").onSnapshot(snap => {
+    db.collection("questions").limit(1000).onSnapshot(snap => {
       state.questions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       scheduleRender();
     }, () => showNotice("The question list stopped updating. Reload the page."));
-    db.collection("answers").onSnapshot(snap => {
+    db.collection("answers").limit(1000).onSnapshot(snap => {
       const next = {};
       for (const d of snap.docs) next[d.id] = d.data();
       state.answers = next;
