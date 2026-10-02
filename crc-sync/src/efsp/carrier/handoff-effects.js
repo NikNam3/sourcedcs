@@ -3,10 +3,10 @@
 // What each carrier handoff does to the STRIP (docs/adr/0074). handoffs.js
 // (L4) says who may send it, in which Case, with which trigger type and what it
 // does to the stack; this says which Strip it applies to and what the Strip
-// becomes. Kept beside it, pure, so board-store.js holds no carrier doctrine.
+// becomes. Kept beside it, pure, so the Board (board/ops/carrier-handoff.js) holds no carrier doctrine.
 //
 // `owner`: 'TO' hands the Strip to the receiving Position (the lane, or PriFly);
-// 'SAME' keeps it where it is. A role change is IN PLACE (same Strip, same
+// 'SAME' keeps it where it is. A strip type change is IN PLACE (same Strip, same
 // flight data), as ConvertToArrival does (docs/adr/0023); a flight's EEAT lives on the
 // flight data so nothing is copied. [SOURCE-DEFINED] states, ADR 0064 B2.
 

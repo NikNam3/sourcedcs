@@ -39,7 +39,7 @@ const { WALL_CLOCK } = require('../mission-clock');
 const { SyncLog } = require('./sync/sync-log');
 const log = require('../log').logger('efsp:carrier-store');
 
-const TRANSITIONS_CAP = 200;
+const TRANSITIONS_CAP = 200; // engineering bound: the newest transitions kept per record; no meaning attached
 const SHIP_OP = 'SetShipInput';
 const CASE_OP = 'SetCase';
 
@@ -349,10 +349,10 @@ class CarrierStore {
     return { ok: true, record: deepClone(record), changed: r.changed };
   }
 
-  // ── effects of Strip transfers (called by board-store through rules) ────
+  // ── effects of carrier handoffs (called by board/ops/carrier-handoff.js through the rules) ────
 
   /**
-   * A stack effect of a carrier transfer or a Strip's retirement, audited under
+   * A stack effect of a carrier handoff or a Strip's retirement, audited under
    * the Position that acted. `MARK_PUSHED` (Commence) never renumbers anyone;
    * `REMOVE_NO_CLOSE_UP` leaves a vacancy (decisions H28).
    * @returns {{ok:boolean, reason?:string, detail?:string, changed?:Array}}

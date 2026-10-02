@@ -27,7 +27,7 @@ const { WALL_CLOCK } = require('../mission-clock');
 const { SyncLog } = require('./sync/sync-log');
 const log = require('../log').logger('efsp:sfa-store');
 
-const TRANSITIONS_CAP = 100;
+const TRANSITIONS_CAP = 100; // engineering bound: the newest transitions kept per record; no meaning attached
 const SET_OP = 'SetSfaRotation';
 
 function deepClone(o) { return o == null ? o : JSON.parse(JSON.stringify(o)); }

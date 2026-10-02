@@ -157,7 +157,7 @@ function _hasLiveMissionOnTactical(strips) {
  * The flights a line could bind to. Looks at every live non-MISSION Strip on
  * every Board (flight data is shared, docs/adr/0013) and their flight data; a flight that
  * already has a live MISSION Strip on TACTICAL is excluded (one mission line
- * per flight — board-store would refuse it anyway).
+ * per flight — board/ops/create-strip.js would refuse it anyway).
  *
  * @param {object} line an analysed line ({ callsign, modeThree })
  * @param {object[]} flightDataList every flight data record
@@ -512,7 +512,7 @@ function executeImport({ analysis, plan, boardStore, flightDataStore, clientMuta
     if (!res.ok || res.action === 'SKIP') continue;
     const line = analysis.lines.get(res.lineId);
     const flightData = flightDataStore.getFlightData(res.flightDataId);
-    // A replayed line answered from board-store's cache already carries this
+    // A replayed line answered from BoardStore's replay cache (sync/replay-cache.js) already carries this
     // import's tasking; writing it again would be a second rev bump for nothing.
     if (flightData && flightData.ato && flightData.ato.atoRef && flightData.ato.atoRef.importId === atoRef.importId) { flightDataIds.push(res.flightDataId); continue; }
     const tasking = atoTaskingFor(line, { mode: modeByLineId.get(res.lineId), atoRef, links: links.get(res.lineId) || [] });

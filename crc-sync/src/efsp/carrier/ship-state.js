@@ -22,9 +22,10 @@
 //                       convergence; when none is given it keeps the grid
 //                       value and SAYS so (headingRef: 'GRID').
 //   [SOURCE-DEFINED]  — ANGLED_DECK_BY_TYPE (9° to port for the Nimitz class,
-//                       the commonly published figure; the guide gives none);
+//                       SOURCE's adopted figure; the guide gives none);
 //                       the altimeter's sane band 27.00–32.00 inHg; the 1°
-//                       re-broadcast step.
+//                       re-broadcast step (`shipStateChanged`'s default
+//                       `headingStepDeg`).
 //
 // No clock, no store, no disk: `now` is passed in (the mission clock's now(),
 // decisions H11) and the hull config is data the caller loads. The hull is
@@ -232,6 +233,7 @@ function staleFrom(previous, now) {
 /**
  * Should the banner be re-broadcast? BRC moves only in whole-degree steps of
  * at least `headingStepDeg`, so a ship in a turn does not re-send every tick.
+ * [SOURCE-DEFINED] (docs/adr/0064) — the 1° default step is ours.
  */
 function shipStateChanged(prev, next, { headingStepDeg = 1 } = {}) {
   if (!_isObj(prev) || !_isObj(next)) return prev !== next;
