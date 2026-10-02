@@ -20,10 +20,12 @@
 //   - the "monitor set" (1200,1202,1203,1255,1277, and 4000 in restricted/
 //     warning/VR context) is recognisable on sight (isMonitorSet), not an
 //     allocation concern — display-layer doctrine, exposed here for reuse
-//   - 6000–6777 is the SYNTHETIC block (docs/adr/0059): the codes crc-sync
-//     gives AI aircraft, which have no SRS transponder. Never allocated and
-//     never assignable, so no flight data can hold one and an AI aircraft can never
-//     correlate on its beacon — it correlates on its callsign or not at all.
+//
+// [SOURCE-DEFINED] (docs/adr/0059) — 6000–6777 is crc-sync's SYNTHETIC block, not
+// doctrine: the codes crc-sync gives AI aircraft, which have no SRS transponder.
+// Never allocated and never assignable, so no flight data can hold one and an AI
+// aircraft can never correlate on its beacon — it correlates on its callsign or
+// not at all. The guide has no such block.
 
 const RESERVED_CODES = new Set(['0000', '7500', '7600', '7700', '7400', '7777']);
 const MONITOR_SET     = new Set(['1200', '1202', '1203', '1255', '1277']);

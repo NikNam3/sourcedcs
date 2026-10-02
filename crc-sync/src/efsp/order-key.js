@@ -155,8 +155,9 @@ function keyBetween(a, b) {
 }
 
 // True once a key has grown long enough that rebalancing the Rack is
-// worthwhile. Threshold is a placeholder (not researched — see the
-// implementation plan), tuned once real drag volume is observed.
+// worthwhile. [SOURCE-DEFINED] (S-L27) — an engineering threshold chosen
+// well below exhaustion, not researched and not doctrine; tune it once real
+// drag volume is observed. tools/soak/report.js mirrors the 40.
 const REBALANCE_KEY_LENGTH = 40;
 function needsRebalance(keys) {
   return keys.some(k => k.length > REBALANCE_KEY_LENGTH);

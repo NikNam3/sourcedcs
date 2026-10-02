@@ -5,6 +5,10 @@
 // Pure: a track, the airports and the thresholds in, a phase out. The
 // debounce (`holdSec`) is the caller's, because it needs a memory per flight.
 //
+// [SOURCE-DEFINED] (docs/adr/0076) — `minGroundSpeedKt`, `minAglFt` and `holdSec`
+// (config/efsp-surveillance-hints.json) are SOURCE's own thresholds, not doctrine;
+// the footprint and ground tests below are geo.js's.
+//
 //   AIRBORNE   an aircraft, at least `minGroundSpeedKt`, and at least
 //              `minAglFt` above the nearest airfield when within its footprint
 //              (beyond every footprint height is unknown, speed alone decides).

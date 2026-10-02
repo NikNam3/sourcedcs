@@ -2,7 +2,10 @@
 
 // Which radars a controller is looking through (docs/adr/0042, docs/adr/0043).
 //
-// Coverage follows the Positions you hold. That is the inverse of what
+// [SOURCE-DEFINED] (docs/adr/0042, 0043) — coverage-follows-Position and every
+// positionRadars default (config/efsp-facility-*.json) are ours, not doctrine.
+//
+// Coverage follows the Positions you are signed on at. That is the inverse of what
 // docs/adr/0033 rejected: 0033 refused to derive Positions FROM radar
 // selection, partly because Ground and Clearance Delivery have no radar at
 // all, and partly because "coupling authority to visibility means a controller
@@ -16,9 +19,9 @@
 // Position an Observer, and an Observer watches — so being signed on at a Position gets
 // you its picture whether or not you are the one who may act on its Strips.
 //
-// A controller holding no radar-bearing Position gets an empty set, and the
-// client says so out loud rather than showing a blank map. A Ground controller
-// has no scope; that is the answer.
+// A controller signed on at no radar-bearing Position gets an empty set, and the
+// client says so out loud rather than showing a blank map. In our model a Ground
+// controller has no scope; that is the answer.
 //
 // The datalink rides the same selectors, as `{kind: 'datalink'}`
 // (docs/adr/0059). It is not a radar — it matches none — and a Position that
@@ -30,8 +33,9 @@ const { radarIsHull } = require('./carrier/hull-config');
 const log = require('../log').logger('efsp:position-coverage');
 
 // The Position classes that separate traffic and so get short-term conflict
-// alerts (docs/adr/0059). The tactical side does not: military positions and
-// radars do not do collision avoidance the way ATC does.
+// alerts (docs/adr/0059). The tactical side does not. [SOURCE-DEFINED]
+// (docs/adr/0059, as corrected by 0060): a squadron decision, not a doctrinal
+// finding about military radars.
 const ATC_CLASSES = new Set(['MILITARY_ATC', 'CIVIL_ATC']);
 
 /**

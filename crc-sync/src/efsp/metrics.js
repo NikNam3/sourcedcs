@@ -55,6 +55,9 @@ const METRICS_PATH = writePath('efsp-metrics.json', process.env.CRCSYNC_EFSP_MET
 const VERSION = 1;
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
+// The caps below (sample, event, session and dedupe counts, the 720 h window) are
+// engineering bounds, not doctrine: they keep memory and a report finite. The three
+// TARGET constants are the guide's, each cited on its line.
 const TTF_SAMPLE_CAP = 500;                 // per Position per hour bucket
 const TIME_TO_FIND_TARGET_MS = 3000;        // §11.5: p95 < 3 s
 const CORRELATION_TARGET = 0.95;            // §11.5 / §6.6 rule 6

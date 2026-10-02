@@ -1,10 +1,13 @@
 'use strict';
 
 // Standing-release envelope matching (EFSPImplementationGuide.md §4.6.2,
-// docs/adr/0017) — "the agreement normally converts the per-flight call
-// into a standing release for a named envelope — a stereo route, at or
-// below an altitude, within a radius. Anything outside the envelope falls
-// back to a per-flight OPERATIONAL_REQUEST."
+// docs/adr/0017) — "The agreement normally converts the per-flight call into a
+// **standing release** for a named envelope — a stereo route, at or below an
+// altitude, within a radius. ... anything outside the envelope falls back to a
+// per-flight `OPERATIONAL_REQUEST`."
+//
+// [SOURCE-DEFINED] (docs/adr/0017, 0050) — the matching rules (short name first,
+// then route string, altitude, radius) are ours; the envelope idea is §4.6.2's.
 //
 // Pure predicate, injected into nla.js's ctx the same way
 // isFlightPlanValid/isVoidExpired already are — facility-config.js owns

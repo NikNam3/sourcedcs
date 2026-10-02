@@ -3,6 +3,9 @@
 // Conformance monitoring (docs/adr/0058): is a correlated flight doing what its
 // clearance says?
 //
+// [SOURCE-DEFINED] (docs/adr/0058) — the three checks and every threshold
+// (config/alerting.json) are ours, not a published standard.
+//
 // "Nothing is good": this module only ever reports what is WRONG. A flight that
 // conforms, has no clearance, or has no correlated track has no record here.
 //

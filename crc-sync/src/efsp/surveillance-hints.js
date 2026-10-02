@@ -49,6 +49,7 @@ const EXPECTS = Object.freeze({
 });
 
 // States that deliberately expect nothing.
+// [SOURCE-DEFINED] (docs/adr/0076) — which strip states expect neither ground nor air is our choice.
 const UNEXPECTING = Object.freeze({
   DEPARTURE: Object.freeze(['PROPOSED', 'PENDING_CLEARANCE', 'CLEARED', 'HELD', 'DROPPED']),
   ARRIVAL: Object.freeze(['DROPPED']),

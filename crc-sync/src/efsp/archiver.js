@@ -23,9 +23,12 @@
 // This module decides WHEN; BoardStore.archiveStrip (board-store.js, via board/persistence.js) and
 // FlightDataStore.archiveFlightData do it. The caller persists and broadcasts what a sweep returns (app.js).
 
-/** H36: two hours. A decision, not tuning, so a constant rather than a config file. */
 const log = require('../log').logger('efsp:archiver');
 
+/**
+ * [SOURCE-DEFINED] (H36, docs/adr/0082) — two hours after a Strip is finished is
+ * the human's decision, not tuning, so a constant rather than a config file.
+ */
 const ARCHIVE_AFTER_MS = 2 * 60 * 60 * 1000;
 
 class Archiver {
