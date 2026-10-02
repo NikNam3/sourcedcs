@@ -184,6 +184,9 @@ export function initMap(container) {
       },
     });
 
+    // ── Airspace outlines (AIRSP-2P-B): below the tracks, above the drawings ──
+    registerAirspaceLayers();
+
     // ── Filed route overlay (from the track panel's FPL section) ───────────
     map.addSource('filed-route', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
     map.addLayer({
