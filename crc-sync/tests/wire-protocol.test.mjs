@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const { computeSurface } = require('../tools/wire-surface.js');
-const { parseProtocol, shouldBump, releasedProtocol } = require('../tools/wire-record.js');
+const { parseProtocol, shouldBump, nextProtocol, releasedProtocol } = require('../tools/wire-record.js');
 const { WIRE_PROTOCOL } = require('../src/wire-protocol.js');
 const fixture = JSON.parse(fs.readFileSync(path.join(HERE, 'fixtures', 'wire-surface.json'), 'utf8'));
 
@@ -49,7 +49,20 @@ test('wire:record reads the released protocol from the newest crc-desktop tag', 
   const git = (args) => { calls.push(args.join(' ')); return args[0] === 'tag' ? 'crc-desktop-v1.4.0\ncrc-desktop-v1.3.9\n' : 'export const WIRE_PROTOCOL = 5;\n'; };
   assert.equal(releasedProtocol(git), 5);
   assert.match(calls[1], /^show crc-desktop-v1\.4\.0:crc-desktop\/app\/public\/js\/wire-protocol\.js$/);
-  assert.equal(releasedProtocol((a) => (a[0] === 'tag' ? '' : '')), null);
-  assert.equal(releasedProtocol((a) => { if (a[0] === 'tag') return 'crc-desktop-v1.0.0\n'; throw new Error('missing'); }), null);
+  assert.equal(releasedProtocol((a) => (a[0] === 'tag' ? '' : '')), 1, 'no tag: the pre-handshake baseline');
+  assert.equal(releasedProtocol((a) => { if (a[0] === 'tag') return 'crc-desktop-v1.0.0\n'; throw new Error('missing'); }), 1, 'a tag without the file is protocol 1, not unknown');
+  assert.equal(releasedProtocol(() => { throw new Error('git failed'); }), null);
   assert.equal(parseProtocol('module.exports = { WIRE_PROTOCOL: 7 };'), 7);
+});
+
+test('wire:record is idempotent: against a tag with no record file, running it twice gives one bump at most, and none at 2', () => {
+  // The last release (v1.5.0, say) predates the file: released = 1. The code is at 2, ahead of it.
+  assert.equal(nextProtocol({ current: 2, released: 1, changed: true, force: false }), 2, 'a real change while already ahead does not bump');
+  assert.equal(nextProtocol({ current: 2, released: 1, changed: true, force: true }), 2);
+  // The release shipped 2: the first real change bumps to 3, the second run sees the surface recorded and stays.
+  const first = nextProtocol({ current: 2, released: 2, changed: true, force: false });
+  assert.equal(first, 3);
+  assert.equal(nextProtocol({ current: first, released: 2, changed: false, force: false }), 3);
+  assert.equal(nextProtocol({ current: first, released: 2, changed: true, force: false }), 3, 'even a second change before the release shares the bump');
+  assert.equal(nextProtocol({ current: 2, released: 2, changed: false, force: false }), 2, 'no change, no bump');
 });
