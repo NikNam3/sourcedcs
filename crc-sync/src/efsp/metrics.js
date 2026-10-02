@@ -48,13 +48,12 @@ const { WALL_CLOCK } = require('../mission-clock');
 const { MissionSession } = require('../mission-session');
 const { getInstrumentationConfig } = require('./instrumentation-config');
 const { TrafficCount, hourKey } = require('./traffic-count');
+const { HOUR_MS, DAY_MS } = require('../units');
 const log = require('../log').logger('efsp:metrics');
 
 const METRICS_PATH = writePath('efsp-metrics.json', process.env.CRCSYNC_EFSP_METRICS_PATH);
 
 const VERSION = 1;
-const HOUR_MS = 60 * 60 * 1000;
-const DAY_MS = 24 * HOUR_MS;
 // The caps below (sample, event, session and dedupe counts, the 720 h window) are
 // engineering bounds, not doctrine: they keep memory and a report finite. The three
 // TARGET constants are the guide's, each cited on its line.
