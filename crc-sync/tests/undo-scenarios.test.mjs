@@ -123,7 +123,7 @@ test('U2/U20: LC undoes its hand-off after AP annotated: back after its predeces
   assert.equal(now.rev, note.strip.rev + 1);
 
   assert.deepEqual(r.ack.voided.map(v => [v.op, v.actingPositionId]), [['SetBlock', 'AP']]);
-  assert.deepEqual(r.ack.undone, { actionId: handoff.undoable.actionId, op: 'InvokeNla', label: 'Hand off VIPER1 → AP' });
+  assert.deepEqual(r.ack.undone, { actionId: handoff.undoable.actionId, op: 'InvokeNla', label: 'Hand off VIPER1 → AP', transfer: true });
   // U20: one efsp-undo-voided, to AP's session only, naming AP's voided Mutation
   assert.equal(r.directed.length, 1);
   const forAp = efsp.directedFor(c.AP.session, r.directed[0]);

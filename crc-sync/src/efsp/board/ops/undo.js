@@ -169,7 +169,11 @@ function _applyUndo(ctx, meta) {
   return {
     ok: true,
     strip: subject,
-    undone: { actionId: plan.actionId, op: plan.meta.op, label: plan.meta.label || plan.meta.op },
+    // `transfer`: the undone action had moved the Strip to another Position (metrics' undoneTransfers, §9).
+    undone: {
+      actionId: plan.actionId, op: plan.meta.op, label: plan.meta.label || plan.meta.op,
+      transfer: !!(subjectImage && subjectBefore && subjectImage.strip.ownerPositionId !== subjectBefore.ownerPositionId),
+    },
     voided,
     warning,
     flightDataList: flightDataList.length ? flightDataList : undefined,
