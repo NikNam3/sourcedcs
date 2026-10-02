@@ -99,6 +99,9 @@ function _handleMutation(ctx, session, msg, persist) {
     boardSeq: boardStore.currentSeq, boardEpoch: boardStore.epoch, ok: result.ok,
     strip: stampedStrip, flightData: result.flightData, reason: result.reason, detail: result.detail,
     warning: result.warning, routedTo: result.routedTo,
+    // docs/adr/0099: the part a split made (its Strip rides the broadcast) and what a join did.
+    ...(result.split ? { splitStripId: result.splitStrip.stripId, split: result.split } : {}),
+    ...(result.join ? { join: result.join } : {}),
   };
   // A replay answers from the idempotency cache (docs/adr/0081): the original
   // outcome with the Strip as it is now. Its broadcasts went out the first

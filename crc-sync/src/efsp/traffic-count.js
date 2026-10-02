@@ -68,10 +68,32 @@ function isDropTransition(entry) {
     && (!entry.before || entry.before.state !== 'DROPPED'));
 }
 
-/** An Undo that took a Strip back OUT of DROPPED — voids the record the drop made. */
+/**
+ * Every Strip one Mutation changed on its Board (docs/adr/0099 §5, the audit's optional `records`): the addressed Strip first,
+ * then each `records` element. The ONE reader of `records`.
+ * @returns {{stripId:string, flightDataId:string|null, before:object|null, after:object|null}[]}
+ */
+function stripChangesOf(entry) {
+  if (!entry) return [];
+  const out = [];
+  if (entry.before || entry.after) out.push({ stripId: entry.stripId, flightDataId: entry.flightDataId || null, before: entry.before || null, after: entry.after || null });
+  for (const r of entry.records || []) {
+    if (r && r.stripId) out.push({ stripId: r.stripId, flightDataId: r.flightDataId || null, before: r.before || null, after: r.after || null });
+  }
+  return out;
+}
+
+/** The Strips an Undo took back OUT of DROPPED, or removed while DROPPED (a split part that dropped meanwhile) — each voids the record its drop made. */
+function undoneDrops(entry) {
+  if (!entry || entry.ok === false || entry.op !== 'Undo') return [];
+  return stripChangesOf(entry)
+    .filter(c => c.before && c.before.state === 'DROPPED' && (!c.after || c.after.state !== 'DROPPED'))
+    .map(c => c.stripId);
+}
+
+/** An Undo that took a Strip back OUT of DROPPED (or removed a dropped one) — voids the record the drop made. */
 function isUndoOfDrop(entry) {
-  return !!(entry && entry.ok !== false && entry.op === 'Undo' && entry.before && entry.before.state === 'DROPPED'
-    && entry.after && entry.after.state !== 'DROPPED');
+  return undoneDrops(entry).length > 0;
 }
 
 /**
@@ -91,6 +113,8 @@ function isNotPersistedDrop(entry) {
  */
 function countability(before, after) {
   const stripType = after && after.stripType;
+  // docs/adr/0099 §5: a joiner is not a flight; its aircraft are counted under the lead's flightSize.
+  if (after && after.endReason === 'JOINED') return { counted: false, excludedReason: 'JOINED' };
   if (stripType === 'MISSION') return { counted: false, excludedReason: 'MISSION_LINE' };
   const coord = after && after.coordination;
   if (coord && coord.state === 'REJECTED' && coord.mintedForCoordination) {
@@ -187,8 +211,10 @@ function expectedFromLog(logEntries) {
       pending.set(record.countId, { record, entry: e });
       lastByStrip.set(e.stripId, record.countId);
     } else if (isUndoOfDrop(e)) {
-      const id = lastByStrip.get(e.stripId);
-      if (id) { pending.delete(id); lastByStrip.delete(e.stripId); }
+      for (const stripId of undoneDrops(e)) {
+        const id = lastByStrip.get(stripId);
+        if (id) { pending.delete(id); lastByStrip.delete(stripId); }
+      }
     } else if (isNotPersistedDrop(e)) {
       const id = lastByStrip.get(e.stripId);
       if (id && pending.get(id).entry.clientMutationId === e.clientMutationId) { pending.delete(id); lastByStrip.delete(e.stripId); }
@@ -464,16 +490,21 @@ class TrafficCount {
       this._sua.delete(entry.stripId);
       this._scramble.delete(entry.stripId);
     } else if (isUndoOfDrop(entry)) {
-      const countId = this._liveByStrip.get(entry.stripId);
-      if (!countId) return;
-      const rec = this._records.get(countId);
-      this._append({
-        type: 'VOID', countId, at: entry.at, wallAt: Number.isFinite(entry.wallAt) ? entry.wallAt : this._wallNow(),
-        clientMutationId: entry.clientMutationId || null, actorId: entry.actorId || null,
-      });
-      // The Strip is live again: what it had latched before the drop still holds.
-      for (const a of (rec && rec.suaTraversal) || []) this._latchSua(entry.stripId, a);
-      if (rec && rec.alertScramble) this._scramble.add(entry.stripId);
+      for (const stripId of undoneDrops(entry)) {
+        const countId = this._liveByStrip.get(stripId);
+        if (!countId) continue;
+        const rec = this._records.get(countId);
+        this._append({
+          type: 'VOID', countId, at: entry.at, wallAt: Number.isFinite(entry.wallAt) ? entry.wallAt : this._wallNow(),
+          clientMutationId: entry.clientMutationId || null, actorId: entry.actorId || null,
+        });
+        // The Strip is live again (or gone): what it had latched before the drop still holds for a live one.
+        const live = (stripChangesOf(entry).find(c => c.stripId === stripId) || {}).after;
+        if (live) {
+          for (const a of (rec && rec.suaTraversal) || []) this._latchSua(stripId, a);
+          if (rec && rec.alertScramble) this._scramble.add(stripId);
+        }
+      }
     } else if (isNotPersistedDrop(entry)) {
       // The drop this COUNT recorded never reached the Board (a crash before
       // persist); the Strip came back live. VOID it — the retry, if one comes,
@@ -535,6 +566,8 @@ class TrafficCount {
       legs: strip.previousLeg ? 2 : 1,
       locality, localityBasis,
       formation: flightSize > 1,
+      // docs/adr/0099 §5: a split part is its own flight; this folds it back to the formation it left.
+      splitFromFlightDataId: identity.splitFrom || null,
       suaTraversal: base.suaTraversal,
       alertScramble: scramble,
       backfilled: !!backfilled,
@@ -692,6 +725,8 @@ module.exports = {
   hourKey,
   isDropTransition,
   isUndoOfDrop,
+  undoneDrops,
+  stripChangesOf,
   isNotPersistedDrop,
   countability,
   classifyLocality,

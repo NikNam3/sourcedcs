@@ -96,6 +96,10 @@ const family = {
   senderStateOnAccept: null,
   coordinationEligibleState: 'INBOUND',           // docs/adr/0014: CTR->AP
   tofiEligibleState: 'INBOUND',
+  // docs/adr/0099 §4 (H100 Q-SJ2): any live IFR Strip may split or join; `groundStates` are the states a split needs no assignment in
+  splitEligibleStates: ARRIVAL_STATES.filter(s => s !== 'DROPPED'),
+  joinEligibleStates: ARRIVAL_STATES.filter(s => s !== 'DROPPED'),
+  groundStates: ['LANDED', 'TAXI_IN'],
 };
 
 module.exports = { family, ARRIVAL_STATES, ARRIVAL_STATE_OWNERS, computeArrivalNla };

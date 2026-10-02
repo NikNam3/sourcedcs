@@ -91,6 +91,10 @@ const family = {
   senderStateOnAccept: null,
   coordinationEligibleState: undefined,
   tofiEligibleState: undefined,
+  // docs/adr/0099 §4: never split or joined (MARSA records nothing; carrier control is its own regime)
+  splitEligibleStates: [],
+  joinEligibleStates: [],
+  groundStates: [],
 };
 
 module.exports = { family, MARSHAL_STATES, MARSHAL_STATE_OWNERS, CV_LANES, computeMarshalNla };

@@ -63,6 +63,10 @@ const family = {
   senderStateOnAccept: { HANDOFF: { IN_SECTOR: 'HANDED_OFF' } },
   coordinationEligibleState: 'IN_SECTOR',         // docs/adr/0087 (F14)
   tofiEligibleState: 'IN_SECTOR',
+  // docs/adr/0099 §4 (H100 Q-SJ2): any live IFR Strip may split or join; `groundStates` are the states a split needs no assignment in
+  splitEligibleStates: OVERFLIGHT_STATES.filter(s => s !== 'DROPPED'),
+  joinEligibleStates: OVERFLIGHT_STATES.filter(s => s !== 'DROPPED'),
+  groundStates: [],
 };
 
 module.exports = { family, OVERFLIGHT_STATES, OVERFLIGHT_STATE_OWNERS, computeOverflightNla };

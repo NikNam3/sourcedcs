@@ -38,6 +38,7 @@ export const DEFAULT_RULES = {
   consolidatedAt: () => null,
   drainMarsaRegimeWrites: () => [],
   facilityId: null,
+  formationEligibility: (stripType) => require('../../src/efsp/authority').formationEligibility(stripType),
   runwayStatusFor: () => null,
   handBackTargetsFor: () => null,
   isBlockVisible: () => true,

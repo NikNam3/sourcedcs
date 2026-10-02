@@ -177,6 +177,9 @@ const DEPARTURE_BLOCK_MAP = {
   // as HDG and ALT; Block 7 above reads CRUS ALT (what was filed).
   '20': { required: false, target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' },
   '21': { required: false, target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' },
+  // docs/adr/0099 §3 (H100 DR-11 b): a recorded speed assignment, so a split by speed is visible on the part's Strip. No
+  // interlock and no conformance: speed is not a control axis.
+  '9A-SPEED': { required: false, target: { kind: 'clearance', field: 'speed' } },
   // Guide's own Block 22, "Frequency" — listed in §6.2 with an entirely
   // empty notes column. Structured rather than a free-text annotation so a
   // frequency can be validated as one unit and one type, and so approving a
@@ -275,7 +278,7 @@ const ARRIVAL_BLOCK_MAP = {
   // interlock COURSE (docs/adr/0051) — a radar vector IS a course assignment,
   // and it is the only Block on an ARRIVAL Strip that is one.
   '9A-VECTOR':{ required: false, target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' }, // docs/adr/0058
-  '9A-SPEED': { required: false, target: { kind: 'annotation' } },
+  '9A-SPEED': { required: false, target: { kind: 'clearance', field: 'speed' } }, // docs/adr/0099 §3: the speed cell, a recorded assignment only (no interlock)
   // §9.4 MTR fields (docs/adr/0062) — see DEPARTURE_BLOCK_MAP's '9G-*' comment
   '9G-MTR':   { required: false, target: { kind: 'flightData', path: 'military.mtr.designator' } },
   '9G-ENTRY': { required: false, target: { kind: 'flightData', path: 'military.mtr.entryFix' } },
@@ -353,6 +356,7 @@ const OVERFLIGHT_BLOCK_MAP = {
   // docs/adr/0058 — both are the flight's clearance, shared across Facilities.
   '7A': { required: false, target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' },
   '9A-VECTOR': { required: false, target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' },
+  '9A-SPEED': { required: false, target: { kind: 'clearance', field: 'speed' } }, // docs/adr/0099 §3, no interlock
   '8':  { required: true,  target: { kind: 'flightData', path: 'filed.departureAirport' } },  // the flight's real origin, not Incirlik
   '8B': { required: true,  target: { kind: 'flightData', path: 'filed.destinationAirport' } }, // the flight's real destination, not Incirlik
   '9':  { required: true,  target: { kind: 'flightData', path: 'filed.route' }, provenance: 'COMPUTER_GENERATED' },
