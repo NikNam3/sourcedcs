@@ -71,6 +71,7 @@ class Tofi {
       case 'ACCEPT':         return this._applyTofiAccept(strip, op, by);
       case 'REJECT':         return this._applyTofiReject(strip, op, by);
       case 'TRANSFER_COMMS': return this._applyTofiTransferComms(strip, op, by);
+      case 'MARK_ENTERED':   return this._applyTofiMarkEntered(strip, by);
       default:                return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown TOFI action: ${op.action}`, strip };
     }
   }
@@ -205,6 +206,7 @@ class Tofi {
     // docs/adr/0053 was written to stop (docs/ui-findings/lane3.md F-306,
     // lane1.md F-111's class).
     let writtenFlightData;
+    let tofiRegime; // docs/adr/0102: set when the regime became effective at accept (audit)
     if (tofi.direction === 'EXIT') {
       const flightData = this._flightDataStore.getFlightData(strip.flightDataId);
       if (!flightData || !flightData.tofi || flightData.tofi.separationRegime !== 'ATC') {
@@ -213,6 +215,9 @@ class Tofi {
       if (flightData.airspace && flightData.airspace.owner === 'USING_AGENCY') {
         warning = 'AIRSPACE_STILL_WITH_USING_AGENCY';
       }
+      // docs/adr/0102: the exchange ends, so a regime still waiting for entry (effective is ATC, the gate passed) goes with it.
+      const cleared = this._clearRegime(strip.flightDataId, by);
+      if (cleared) writtenFlightData = cleared;
     }
 
     // ENTRY — the MRU controller MUST say under which regime they are taking
@@ -250,9 +255,22 @@ class Tofi {
             strip,
           };
         }
-        const wrote = this._flightDataStore.setTofi(strip.flightDataId, { separationRegime: op.separationRegime }, { by });
+        // docs/adr/0102: ATC stays the effective regime until the flight is inside an airspace active for this
+        // MRU (or the MRU marks it entered); the picked regime waits as pending. Picking ATC leaves nothing pending.
+        const pick = op.separationRegime;
+        const patch = pick === 'ATC'
+          ? { separationRegime: 'ATC', pendingSeparationRegime: null, pendingSince: null, pendingFacilityId: null, regimeEffective: null }
+          : { separationRegime: 'ATC', pendingSeparationRegime: pick, pendingSince: this._clock.now(), pendingFacilityId: this._rules.facilityId, regimeEffective: null };
+        const wrote = this._flightDataStore.setTofi(strip.flightDataId, patch, { by });
         if (!wrote.ok) return { ok: false, reason: wrote.reason, detail: wrote.detail, strip };
         writtenFlightData = wrote.flightData;
+        if (pick !== 'ATC') {
+          const loc = this._rules.regimeLocation(strip.flightDataId, this._rules.facilityId);
+          if (loc && loc.inside && loc.inside.length) {
+            const entered = this.markEntered(strip.flightDataId, { trigger: 'AIRSPACE', airspaceId: loc.inside[0].airspaceId, by });
+            if (entered.ok) { writtenFlightData = entered.flightData; tofiRegime = { trigger: 'AIRSPACE', airspaceId: loc.inside[0].airspaceId, regime: pick, warning: null }; }
+          }
+        }
       }
     }
 
@@ -299,7 +317,80 @@ class Tofi {
       const peerResult = peer.receiveTofiResponse({ causedBy: this._activeCmid, stripId: tofi.peerStripId, response: 'ACCEPT', by });
       if (peerResult.ok) peerStrip = peerResult.strip;
     }
-    return { ok: true, strip, flightData: writtenFlightData, peerFacilityId: tofi.peerFacilityId, peerStrip, warning };
+    return { ok: true, strip, flightData: writtenFlightData, peerFacilityId: tofi.peerFacilityId, peerStrip, warning, tofiRegime };
+  }
+
+  // ── The regime becomes effective (docs/adr/0102) ─────────────────────────
+
+  /** Drops a regime waiting for entry and its effective stamp. @returns {object|undefined} the flight data when something was cleared. */
+  _clearRegime(flightDataId, by) {
+    const flightData = this._flightDataStore.getFlightData(flightDataId);
+    if (!flightData || !flightData.tofi || (!flightData.tofi.pendingSeparationRegime && !flightData.tofi.regimeEffective)) return undefined;
+    const wrote = this._flightDataStore.setTofi(flightDataId, { pendingSeparationRegime: null, pendingSince: null, pendingFacilityId: null, regimeEffective: null }, { by });
+    return wrote.ok ? wrote.flightData : undefined;
+  }
+
+  /**
+   * The one function that promotes the pending regime to effective: ACCEPT (already inside), MARK_ENTERED and the
+   * regime monitor all call it. The flight data's `separationRegime` becomes the pending value, pending is cleared
+   * and `regimeEffective` stamps how.
+   * @param {{trigger:'AIRSPACE'|'MANUAL', airspaceId?:string|null, by?:string|null, warning?:string}} info
+   * @returns {{ok:true, flightData, regime, airspaceId, trigger, warning}|{ok:false, reason, detail}}
+   */
+  markEntered(flightDataId, { trigger, airspaceId = null, by = null, warning } = {}) {
+    const flightData = this._flightDataStore.getFlightData(flightDataId);
+    const pending = flightData && flightData.tofi && flightData.tofi.pendingSeparationRegime;
+    if (!pending) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no separation regime is waiting for entry on this flight' };
+    const facilityId = flightData.tofi.pendingFacilityId || null;
+    const wrote = this._flightDataStore.setTofi(flightDataId, {
+      separationRegime: pending, pendingSeparationRegime: null, pendingSince: null, pendingFacilityId: null,
+      regimeEffective: { at: this._clock.now(), trigger, airspaceId, facilityId, by },
+    }, { by });
+    if (!wrote.ok) return wrote;
+    return { ok: true, flightData: wrote.flightData, regime: pending, airspaceId, trigger, warning };
+  }
+
+  /** MARK_ENTERED, on the MISSION Strip: the MRU side records that the flight is in its airspace. Allowed without a containing airspace, with a warning. */
+  _applyTofiMarkEntered(strip, by) {
+    const link = strip.tofiCoordination;
+    if (strip.stripType !== 'MISSION') {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'only the MRU side (the MISSION Strip) marks a flight entered', strip };
+    }
+    if (!link || link.direction !== 'ENTRY' || link.state !== 'ACTIVE') {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no active tactical control to mark entered', strip };
+    }
+    const flightData = this._flightDataStore.getFlightData(strip.flightDataId);
+    if (!flightData || !flightData.tofi || !flightData.tofi.pendingSeparationRegime) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no separation regime is waiting for entry — it is already effective, or ATC was picked', strip };
+    }
+    const loc = this._rules.regimeLocation(strip.flightDataId, flightData.tofi.pendingFacilityId || this._rules.facilityId);
+    const hit = loc && loc.inside && loc.inside[0];
+    const warning = hit ? undefined : 'NOT_IN_ACTIVE_AIRSPACE';
+    const entered = this.markEntered(strip.flightDataId, { trigger: 'MANUAL', airspaceId: hit ? hit.airspaceId : null, by, warning });
+    if (!entered.ok) return { ok: false, reason: entered.reason, detail: entered.detail, strip };
+    this._state.bump(strip, by);
+    return {
+      ok: true, strip, flightData: entered.flightData, warning,
+      tofiRegime: { trigger: 'MANUAL', airspaceId: entered.airspaceId, regime: entered.regime, warning: warning || null },
+    };
+  }
+
+  /**
+   * The regime monitor's entry: a system write (actor `system`, one audit entry) on the MISSION Strip holding the
+   * ACTIVE ENTRY exchange. @returns {{ok:true, strip, flightData}|{ok:false, reason, detail}}
+   */
+  markEnteredBySystem(flightDataId, { airspaceId }) {
+    const strip = [...this._state.strips.values()].find(s => s.flightDataId === flightDataId && s.stripType === 'MISSION'
+      && s.state !== 'DROPPED' && s.tofiCoordination && s.tofiCoordination.direction === 'ENTRY' && s.tofiCoordination.state === 'ACTIVE');
+    if (!strip) return { ok: false, reason: 'NOT_FOUND', detail: 'no MISSION Strip under active tactical control on this Board' };
+    const before = deepClone(strip);
+    const entered = this.markEntered(flightDataId, { trigger: 'AIRSPACE', airspaceId, by: 'system' });
+    if (!entered.ok) return entered;
+    this._state.bump(strip, 'system');
+    this._audit.recordSystem('TofiRegimeEntered', strip, {
+      before, after: deepClone(strip), tofiRegime: { trigger: 'AIRSPACE', airspaceId, regime: entered.regime, warning: null },
+    });
+    return { ok: true, strip, flightData: entered.flightData };
   }
 
   /** Always invoked on the MISSION-side Strip, mirroring _applyTofiAccept's own side. */
@@ -309,6 +400,8 @@ class Tofi {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no pending TOFI proposal on this Strip', strip };
     }
     tofi.state = 'REJECTED';
+    // docs/adr/0102: a refused ENTRY leaves no pending regime behind. A refused EXIT does not end tactical control.
+    const clearedFlightData = tofi.direction === 'ENTRY' ? this._clearRegime(strip.flightDataId, by) : undefined;
     // A Strip this exchange minted has no life of its own, so a refused
     // exchange leaves nothing behind (docs/adr/0054). Without this it lingers
     // as residue: find-before-mint would then see a MISSION Strip at the
@@ -342,6 +435,7 @@ class Tofi {
       if (peerResult.ok) peerStrip = peerResult.strip;
     }
     const out = { ok: true, strip, peerFacilityId: tofi.peerFacilityId, peerStrip };
+    if (clearedFlightData) out.flightData = clearedFlightData;
     if (retired && retired.marsaChanged) { out.marsaChanged = retired.marsaChanged; out.flightDataList = retired.flightDataList; }
     return out;
   }

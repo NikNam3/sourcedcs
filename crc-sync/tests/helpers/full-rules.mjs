@@ -12,6 +12,7 @@ class EveryBay extends Array { some() { return true; } }
 export const DEFAULT_RULES = {
   activeMarsaFor: () => null,
   airspaceFor: () => null,
+  regimeLocation: () => ({ located: false, inside: [], unknown: [] }),
   aitAuthorized: false,
   bayDescriptor: () => null,
   bayExists: () => true,

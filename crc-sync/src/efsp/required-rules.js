@@ -12,7 +12,7 @@ const REQUIRED_RULES = [
   'carrierLaneFor', 'carrierRetireFlight', 'carrierHandoffs', 'computeNla', 'coordinationBayFor', 'coordinationEffect',
   'coordinationEligibleState', 'consolidatedAt', 'drainMarsaRegimeWrites', 'facilityId', 'formationEligibility', 'runwayStatusFor',
   'handBackTargetsFor', 'isBlockVisible', 'isStaffed', 'isSelfCoordinated', 'isValidStripType', 'isValidState',
-  'liveStripsForFlightData', 'marsaInterlockFor', 'mayActBesideOwner', 'peerBoard', 'resolveBlockTarget', 'retireMarsaForFlightData',
+  'liveStripsForFlightData', 'marsaInterlockFor', 'mayActBesideOwner', 'peerBoard', 'regimeLocation', 'resolveBlockTarget', 'retireMarsaForFlightData',
   'sfaFrequencyFor', 'sfaRackFor', 'sfaRotationReceiver', 'sfaTransfers', 'standingReleases', 'tofiCounterparts',
   'tofiEligibleState', 'validateCarrierHandoff', 'voidMarsaForAssignment',
 ];

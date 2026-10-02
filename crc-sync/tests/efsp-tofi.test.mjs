@@ -24,7 +24,11 @@ const nla = await import('../src/efsp/nla.js');
 const permission = await import('../src/efsp/permission.js');
 const coordination = await import('../src/efsp/coordination.js');
 
+// docs/adr/0102: where the flight is, for accept and MARK_ENTERED. Outside by default.
+let LOCATION = { located: false, inside: [], unknown: [] };
+
 function makeFacilities() {
+  LOCATION = { located: false, inside: [], unknown: [] };
   const flightDataStore = new FlightDataStore();
   const facilities = new Map();
 
@@ -45,6 +49,7 @@ function makeFacilities() {
       canActOnState: (actingPositionId, stripType, state) => permission.canActOnState(actingPositionId, stripType, state),
       isSelfCoordinated: (controllerId, id) => positionStore.isSelfCoordinated(controllerId, id),
       facilityId,
+      regimeLocation: () => LOCATION,
       peerBoard: (otherFacilityId) => {
         const other = facilities.get(otherFacilityId);
         return other ? other.boardStore : null;
@@ -275,17 +280,23 @@ test('rule 3: EXIT ACCEPT is refused unless separation_regime has already been s
   const facilities = makeFacilities();
   const { atcStrip } = completeEntry(facilities);
   const missionStripId = atcStrip.tofiCoordination.peerStripId;
+  const { boardStore: tacBoard } = facilities.get('TACTICAL');
+  // The regime is only effective once the flight has entered (docs/adr/0102): the MRU marks it.
+  const marked = tacBoard.applyMutation(mutation({
+    stripId: missionStripId, baseRev: tacBoard.getStrip(missionStripId).rev, op: { kind: 'TOFI', action: 'MARK_ENTERED' },
+  }), 'TAC_C2', 'tac-c2-controller');
+  assert.equal(marked.ok, true, JSON.stringify(marked));
+  assert.equal(marked.flightData.tofi.separationRegime, 'MARSA');
 
   const { boardStore: ctrBoard } = facilities.get('CENTER');
   const exitProposed = ctrBoard.applyMutation(mutation({
-    stripId: atcStrip.stripId, baseRev: atcStrip.rev,
+    stripId: atcStrip.stripId, baseRev: ctrBoard.getStrip(atcStrip.stripId).rev,
     op: { kind: 'TOFI', action: 'PROPOSE', direction: 'EXIT' },
   }), 'CTR', 'ctr-controller');
 
-  const { boardStore: tacBoard } = facilities.get('TACTICAL');
   const missionBefore = tacBoard.getStrip(missionStripId);
 
-  // No separation_regime set yet — ACCEPT must be refused.
+  // The regime is effective and not ATC — ACCEPT must be refused.
   const acceptDenied = tacBoard.applyMutation(mutation({
     stripId: missionStripId, baseRev: missionBefore.rev, op: { kind: 'TOFI', action: 'ACCEPT' },
   }), 'TAC_C2', 'tac-c2-controller');
@@ -557,7 +568,8 @@ test('accepting tactical control requires a separation regime, and records it (d
   }), 'TAC_C2', 'tac-c2-controller');
   assert.equal(ok.ok, true, JSON.stringify(ok));
   const flightData = facilities.get('CENTER').boardStore._flightDataStore.getFlightData(atcStrip.flightDataId);
-  assert.equal(flightData.tofi.separationRegime, 'USING_AGENCY', 'the FDR now says who is separating, from the start');
+  assert.equal(flightData.tofi.separationRegime, 'ATC', 'ATC still separates until the flight enters (docs/adr/0102)');
+  assert.equal(flightData.tofi.pendingSeparationRegime, 'USING_AGENCY', 'the picked regime waits');
 });
 
 test('a rejected TOFI leaves no residue, but never retires a mission line TAC_C2 tasked itself', () => {

@@ -772,7 +772,12 @@ class FlightDataStore {
       // generic setField() path — see that method for why (mirrors
       // airspace.owner's exact template, per docs/adr/0018/0020's own
       // directive).
-      tofi: { ifrActive: false, radarService: null, separationRegime: null, changedAt: null, changedBy: null },
+      // docs/adr/0102: the regime picked at TOFI ENTRY accept waits in `pendingSeparationRegime` while
+      // `separationRegime` (what every reader uses) stays ATC, until the flight is inside an airspace active for
+      // the accepting MRU Facility or the MRU marks it entered; `regimeEffective` stamps how it became effective.
+      tofi: { ifrActive: false, radarService: null, separationRegime: null,
+        pendingSeparationRegime: null, pendingSince: null, pendingFacilityId: null, regimeEffective: null,
+        changedAt: null, changedBy: null },
       provenance,
       createdAt: now,
       updatedAt: now,
@@ -1081,7 +1086,7 @@ class FlightDataStore {
    * Rule 5 ("DUE_REGARD and MARSA are mutually exclusive") is resolved BY
    * CONSTRUCTION — separation_regime is one 5-value enum field, not two
    * independent booleans — so no cross-field validation is needed here.
-   * @param {{ifrActive?:boolean, radarService?:string|null, separationRegime?:string|null}} patch
+   * @param {{ifrActive?:boolean, radarService?:string|null, separationRegime?:string|null, pendingSeparationRegime?:string|null, pendingSince?:number|null, pendingFacilityId?:string|null, regimeEffective?:object|null}} patch
    * @returns {{ok:true, flightData}|{ok:false, reason:'NOT_FOUND'|'VALIDATION_ERROR', detail?}}
    */
   setTofi(flightDataId, patch, { by } = {}) {
@@ -1101,6 +1106,23 @@ class FlightDataStore {
     }
     if (patch.separationRegime !== undefined && patch.separationRegime !== null && !SEPARATION_REGIMES.has(patch.separationRegime)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `invalid separation_regime: ${JSON.stringify(patch.separationRegime)}` };
+    }
+    if (patch.pendingSeparationRegime === '') patch.pendingSeparationRegime = null;
+    if (patch.pendingSeparationRegime !== undefined && patch.pendingSeparationRegime !== null
+        && (patch.pendingSeparationRegime === 'ATC' || !SEPARATION_REGIMES.has(patch.pendingSeparationRegime))) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `invalid pending separation_regime: ${JSON.stringify(patch.pendingSeparationRegime)}` };
+    }
+    if (patch.pendingSince !== undefined && patch.pendingSince !== null && !Number.isFinite(patch.pendingSince)) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'pendingSince must be a time or null' };
+    }
+    if (patch.pendingFacilityId !== undefined && patch.pendingFacilityId !== null && typeof patch.pendingFacilityId !== 'string') {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'pendingFacilityId must be a Facility id or null' };
+    }
+    if (patch.regimeEffective !== undefined && patch.regimeEffective !== null) {
+      const e = patch.regimeEffective;
+      if (typeof e !== 'object' || !Number.isFinite(e.at) || (e.trigger !== 'AIRSPACE' && e.trigger !== 'MANUAL')) {
+        return { ok: false, reason: 'VALIDATION_ERROR', detail: 'regimeEffective must be { at, trigger: AIRSPACE|MANUAL, airspaceId, facilityId, by } or null' };
+      }
     }
     flightData.tofi = { ...flightData.tofi, ...patch, changedAt: this._clock.now(), changedBy: by || null };
     flightData.provenance['tofi'] = 'CONTROLLER_ENTERED';

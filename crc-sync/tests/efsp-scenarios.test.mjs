@@ -314,6 +314,8 @@ test('SCENARIO military round trip: Incirlik IFR departure -> CTR -> tactical co
 
   mission = mustAct(efsp, c.TAC_C2, 'TAC_C2', mission, { kind: 'TOFI', action: 'TRANSFER_COMMS' });
   assert.equal(mission.tofiCoordination.commsTransferred, true);
+  // The picked regime is effective only once the flight enters (docs/adr/0102): the MRU marks it.
+  mission = mustAct(efsp, c.TAC_C2, 'TAC_C2', mission, { kind: 'TOFI', action: 'MARK_ENTERED' });
 
   // EXIT. Rule 3 makes this the safety-critical direction: ACCEPT is refused
   // until the ATC controller has explicitly re-established ATC separation.

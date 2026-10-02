@@ -167,7 +167,8 @@ const REGISTRY = [
       clock,
       flightDataExists: (flightDataId) => !!stores.flightData.getFlightData(flightDataId),
       setSeparationRegime: (flightDataId, separationRegime, { by } = {}) =>
-        stores.flightData.setTofi(flightDataId, { separationRegime }, { by }),
+        // A relation owns the regime (docs/adr/0051): whatever was waiting at a TOFI (docs/adr/0102) is dropped, never resurrected.
+        stores.flightData.setTofi(flightDataId, { separationRegime, pendingSeparationRegime: null, pendingSince: null, pendingFacilityId: null, regimeEffective: null }, { by }),
     }),
     snapshot: (s) => s.snapshot(),
     // MARSA relations after the flight data too, and for the opposite reason to the
@@ -296,7 +297,8 @@ const FLIGHT_DATA_SECTIONS = {
       links: arrayOf(anyOf('arcp', 'peerCallsign', 'peerFlightDataId', 'peerLineId', 'peerMissionNumber', 'stripType', 'windows')) },
   },
   mission: anyOf('controllingAgency', 'missionNumber', 'packageId', 'vulWindowEndUtc', 'vulWindowStartUtc'),
-  tofi: anyOf('changedAt', 'changedBy', 'ifrActive', 'radarService', 'separationRegime'),
+  tofi: { ...anyOf('changedAt', 'changedBy', 'ifrActive', 'pendingFacilityId', 'pendingSeparationRegime', 'pendingSince', 'radarService', 'separationRegime'),
+    regimeEffective: anyOf('airspaceId', 'at', 'by', 'facilityId', 'trigger') },
   comms: anyOf('airspaceId', 'changedAt', 'changedBy', 'transitions', 'workingFrequencyMhz'),
   airspace: anyOf('changedAt', 'changedBy', 'owner', 'transitions'),
   clearance: anyOf('altitude', 'heading', 'speed'),

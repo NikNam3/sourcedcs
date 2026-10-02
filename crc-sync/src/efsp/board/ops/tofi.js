@@ -34,4 +34,6 @@ module.exports = {
       ? { strips: [{ facilityId: result.peerFacilityId, stripId: result.peerStrip.stripId }] } : {}),
   },
   apply: (ctx, strip, op, meta) => ctx.tofi.applyOp(strip, op, meta.by, meta.actingPositionId),
+  // docs/adr/0102: the regime entry (ACCEPT already inside, MARK_ENTERED) says how and where it became effective.
+  auditFields: (ctx, result) => (result.tofiRegime ? { tail: { tofiRegime: result.tofiRegime } } : {}),
 };

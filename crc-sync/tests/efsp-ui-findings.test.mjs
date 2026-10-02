@@ -490,12 +490,13 @@ test('F-306: accepting a TOFI ENTRY carries the regime it wrote in the ack AND t
   assert.equal(out.ack.ok, true, JSON.stringify(out.ack));
 
   // The accepter's own page gets it on the ack...
-  assert.equal(out.ack.flightData.tofi.separationRegime, 'DUE_REGARD');
+  assert.equal(out.ack.flightData.tofi.pendingSeparationRegime, 'DUE_REGARD'); // waits for entry (docs/adr/0102)
+  assert.equal(out.ack.flightData.tofi.separationRegime, 'ATC');
   // ...and the proposer's, from the broadcast every client receives. Without
   // this the write landed and neither screen ever showed it (F-306).
   const broadcast = slot(out, 'primary').flightDataList.updated.find(f => f.flightDataId === mission.flightDataId);
   assert.ok(broadcast, 'the FDR is in the board-delta');
-  assert.equal(broadcast.tofi.separationRegime, 'DUE_REGARD');
+  assert.equal(broadcast.tofi.pendingSeparationRegime, 'DUE_REGARD');
 });
 
 // ── F-408, the clock-driven half — the sweep ──────────────────────────────
