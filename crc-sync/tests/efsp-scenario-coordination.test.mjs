@@ -47,9 +47,9 @@ test('SCENARIO a flight pointed out to Center: the data stays with Approach, the
   // the Strip renders two chips rather than one owner.
   assert.equal(accepted.coordination.dataOwnerPositionRef.positionId, 'AP', 'the data stays where it was');
   assert.equal(accepted.coordination.separationResponsibilityRef.positionId, 'CTR', 'the separation moved');
-  assert.equal(accepted.coordination.commsTransferred, false, 'the flight stays on Approach frequency');
+  assert.equal(accepted.coordination.comms, undefined, 'the flight stays on Approach frequency; a Point Out has no comms step');
 
-  // Compare a HANDOFF on another flight, where everything moves together.
+  // Compare a HANDOFF on another flight, where only the data moves at accept.
   const handed = mustAct(efsp, c.AP, 'AP', flight(efsp, c, 'PONT2'), {
     kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR',
   });
@@ -57,8 +57,9 @@ test('SCENARIO a flight pointed out to Center: the data stays with Approach, the
     kind: 'HANDOFF', action: 'ACCEPT',
   });
   assert.equal(handedOver.coordination.dataOwnerPositionRef.positionId, 'CTR');
-  assert.equal(handedOver.coordination.separationResponsibilityRef.positionId, 'CTR');
-  assert.equal(handedOver.coordination.commsTransferred, true);
+  // docs/adr/0101: control and comms stay with Approach until their own steps.
+  assert.equal(handedOver.coordination.separationResponsibilityRef.positionId, 'AP');
+  assert.equal(handedOver.coordination.comms.transferred, false);
 });
 
 // ── 13. operational request with a stand by ──────────────────────────────

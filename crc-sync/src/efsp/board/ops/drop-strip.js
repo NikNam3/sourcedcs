@@ -21,5 +21,6 @@ module.exports = {
     label: (op, strip, ctx) => `Drop ${callsignOf(ctx, strip)}`,
     scope: (ctx, strip) => retireScope(ctx, strip),
   },
+  auditFields: (ctx, result) => (result.controlAudit ? { tail: result.controlAudit } : {}),
   apply: (ctx, strip, op, meta) => _applyDropStrip(ctx, strip, op, meta.by),
 };

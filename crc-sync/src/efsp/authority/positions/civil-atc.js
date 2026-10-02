@@ -4,10 +4,10 @@
 // LC and AP, and CENTER's CTR (guide §4.1). Moved from permission.js. RSU,
 // SFA and PAR are incirlik-military.js, which also adds AP's L18 columns.
 
-const { OP_KINDS, COORDINATION_OP_KINDS, AP_CTR_ONLY_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_OP_KINDS, FORMATION_OP_KINDS, NON_CREATE_OPS } = require('../op-kinds');
+const { OP_KINDS, COORDINATION_OP_KINDS, COORDINATION_STEP_OP_KINDS, AP_CTR_ONLY_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_OP_KINDS, FORMATION_OP_KINDS, NON_CREATE_OPS } = require('../op-kinds');
 
 const PERMISSIONS = {
-  OPS: new Set([...OP_KINDS.filter(k => !COORDINATION_OP_KINDS.includes(k) && !AP_CTR_ONLY_OP_KINDS.includes(k) && !TOFI_OP_KINDS.includes(k) && !AIRSPACE_ENTRY_OP_KINDS.includes(k)), ...FORMATION_OP_KINDS]),
+  OPS: new Set([...OP_KINDS.filter(k => !COORDINATION_OP_KINDS.includes(k) && !COORDINATION_STEP_OP_KINDS.includes(k) && !AP_CTR_ONLY_OP_KINDS.includes(k) && !TOFI_OP_KINDS.includes(k) && !AIRSPACE_ENTRY_OP_KINDS.includes(k)), ...FORMATION_OP_KINDS]),
   CD:  new Set([...NON_CREATE_OPS, ...FORMATION_OP_KINDS]),
   GC: new Set([...NON_CREATE_OPS, ...FORMATION_OP_KINDS]),
   LC: new Set([...NON_CREATE_OPS, ...FORMATION_OP_KINDS]),

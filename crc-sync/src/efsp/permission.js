@@ -62,6 +62,17 @@ function canMutate(actingPositionId, opKind) {
 }
 
 /**
+ * canMutate for one ACTION of an op kind (docs/adr/0101): a Position whose grant of a coordination kind is narrower
+ * than the kind (CV_MARSHAL answers a HANDOFF, never proposes) lists its actions in the registry's COORDINATION_ACTIONS.
+ */
+function canMutateAction(actingPositionId, opKind, action) {
+  if (!canMutate(actingPositionId, opKind)) return false;
+  const rows = Object.prototype.hasOwnProperty.call(authority.COORDINATION_ACTIONS, actingPositionId) ? authority.COORDINATION_ACTIONS[actingPositionId] : null;
+  if (!rows || !Object.prototype.hasOwnProperty.call(rows, opKind)) return true;
+  return rows[opKind].includes(action);
+}
+
+/**
  * May this Position bind or unbind a surveillance contact to a flight
  * (WP5, docs/adr/0045)?
  *
@@ -168,7 +179,7 @@ function canActOnState(actingPositionId, stripType, state) {
 }
 
 module.exports = {
-  canMutate, canCorrelate, canDeclareMarsa, canCreateStripType, canActOnState, tofiCounterparts,
+  canMutate, canMutateAction, canCorrelate, canDeclareMarsa, canCreateStripType, canActOnState, tofiCounterparts,
   PERMISSIONS, CREATE_STRIP_TYPE_PERMISSIONS, STATE_OWNERS_BY_STRIP_TYPE,
   DEPARTURE_STATE_OWNERS, ARRIVAL_STATE_OWNERS, OVERFLIGHT_STATE_OWNERS, MISSION_STATE_OWNERS,
   OP_KINDS, COORDINATION_OP_KINDS, AP_CTR_ONLY_OP_KINDS, TOFI_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, FORMATION_OP_KINDS, TOFI_COUNTERPARTS,

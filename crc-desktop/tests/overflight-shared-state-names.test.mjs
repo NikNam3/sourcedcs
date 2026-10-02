@@ -24,6 +24,7 @@ const ALLOWED = {
   'crc-sync/src/efsp/authority/strip-types/departure.js': 'the DEPARTURE Role family: its own states, owners and NLA',
   'crc-sync/src/efsp/authority/strip-types/arrival.js': 'the ARRIVAL Role family: its own states, owners and NLA',
   'crc-sync/src/efsp/authority/strip-types/overflight.js': 'the OVERFLIGHT Role family: its own states, owners, NLA and replica/sender states',
+  'crc-sync/src/efsp/authority/positions/carrier.js': 'replicaOnReceipt is keyed by Role (ARRIVAL at INBOUND is minted a MARSHAL Strip at IN_STACK at the Marshal, ADR 0101)',
   'crc-sync/src/efsp/authority/positions/incirlik-military.js': 'ownsStates is keyed by Role ({ ARRIVAL: [\'INBOUND\'] })',
   'crc-sync/src/efsp/board/ops/invoke-nla.js': 'comments only (moved from board-store.js); the transitions come from the Role family tables',
   'crc-sync/src/efsp/board/ops/sfa-rotation.js': 'comments only (moved from board-store.js); SFA rotation is keyed by Role',

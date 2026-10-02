@@ -120,6 +120,9 @@ function createEfsp({ clock = WALL_CLOCK, wallClock = WALL_CLOCK, transitionAltF
       isStaffed:          (positionId) => positionStore.isStaffed(positionId),
       consolidatedAt: (positionId) => positionStore.consolidatedAt(positionId),
       canMutate:           (actingPositionId, opKind) => permission.canMutate(actingPositionId, opKind),
+      canMutateAction:     (actingPositionId, opKind, action) => permission.canMutateAction(actingPositionId, opKind, action),
+      // docs/adr/0101 — which control axis (TURNS, ALTITUDE) a Block write is, from the Block Map's own tags.
+      controlAxisFor:      (stripType, blockId) => blockMap.controlAxisFor(stripType, blockId),
       canCreateStripType:  (actingPositionId, stripType) => permission.canCreateStripType(actingPositionId, stripType),
       canActOnState:       (actingPositionId, stripType, state) => permission.canActOnState(actingPositionId, stripType, state),
       isSelfCoordinated:   (controllerId, positionId) => positionStore.isSelfCoordinated(controllerId, positionId),
@@ -553,6 +556,9 @@ function _restore({ facilities, stores, saved: data, mutationLog, clock }) {
   }
   // After the Boards, not before — it has Strips to check against only now.
   _reconcileRestored(facilities, stores.flightData, stores.correlations, stores.marsa);
+  // docs/adr/0101: a snapshot whose HANDOFF record names a retired holder is repaired (InterfacilityControlRepair). Liveness
+  // only: nobody has signed on yet at a restart, so no owner is staffed and staffing is not judged here.
+  for (const { boardStore } of facilities.values()) boardStore.reconcileExchanges({ staffing: false });
   // A Mutation audited but never persisted (a crash inside _persist) gets a
   // NotPersisted marker, so the log says that line never took effect.
   _reconcileLogTail(facilities, mutationLog, data.persistedWallAt, clock, stores.airspaces);

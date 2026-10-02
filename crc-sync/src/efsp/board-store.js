@@ -40,10 +40,11 @@ const { BoardAudit } = require('./board/audit');
 const { Placement } = require('./board/placement');
 const { Coordination } = require('./board/coordination');
 const { Tofi } = require('./board/tofi');
+const { HandoffControl } = require('./board/handoff-control');
 const { StripOps } = require('./board/strip-ops');
 const { BoardPersistence } = require('./board/persistence');
 const OPS = require('./board/ops');
-const { initialStateFor, replicaStateOnReceipt, senderStateOnAccept } = require('./authority');
+const { initialStateFor, replicaOnReceipt, senderStateOnAccept } = require('./authority');
 const { ReplayCache, replayRecord, REPLAY_PERSIST_WINDOW_MS } = require('./sync/replay-cache');
 const { UndoHistory, undoEnv } = require('./undo/undo-history');
 const log = require('../log').logger('efsp:board-store');
@@ -104,12 +105,21 @@ class BoardStore {
     // Cross-Facility coordination and TOFI (board/coordination.js, board/tofi.js). touch is the kernel's
     // recordTouch; retire is late-bound to StripOps' `retire`, activeCmid and mutationLog are read late,
     // and the per-strip-type tables are the authority registry's accessors (authority/index.js), passed in.
+    // Communications, ControlRelease and transfer of control inside a HANDOFF, and the control invariant (docs/adr/0101).
+    // CRCSYNC_CONTROL_INVARIANT=throw makes a violation throw (the tests); otherwise it repairs and alerts.
+    this._control = new HandoffControl({
+      rules, state: this._state, audit: this._audit, clock, flightDataStore,
+      activeCmid: () => this._activeCmid,
+      mutationLog: () => this._mutationLog,
+      invariantMode: () => (process.env.CRCSYNC_CONTROL_INVARIANT === 'throw' ? 'throw' : 'repair'),
+    });
     this._coordination = new Coordination({
       rules, state: this._state, audit: this._audit, placement: this._placement, clock, flightDataStore,
       touch,
       activeCmid: () => this._activeCmid,
       retire: (strip, by) => this._stripOps.retire(strip, by),
-      replicaStateOnReceipt,
+      control: this._control,
+      replicaOnReceipt,
       senderStateOnAccept,
     });
     this._tofi = new Tofi({
@@ -136,7 +146,7 @@ class BoardStore {
     // are read late, because restore replaces them.
     this._stripOps = new StripOps({
       rules, state: this._state, audit: this._audit, placement: this._placement, clock, flightDataStore,
-      coordination: this._coordination, tofi: this._tofi, ops: OPS,
+      coordination: this._coordination, control: this._control, tofi: this._tofi, ops: OPS,
       touch,
       activeCmid: () => this._activeCmid,
       nlaHistory: () => this._nlaHistory,
@@ -313,6 +323,21 @@ class BoardStore {
   /** The receiver ACCEPTed, REJECTed or stood by (board/coordination.js). */
   receiveCoordinationResponse(args) { return this._coordination.receiveCoordinationResponse(args); }
 
+  /** The other half of a HANDOFF's record changed: comms, control, release, request (board/handoff-control.js). */
+  receiveHandoffRecord(args) { return this._control.receiveHandoffRecord(args); }
+
+  /** Is this Strip's owner staffed, or consolidated into a staffed Position? A peer Board asks (the control invariant). */
+  stripOwnerCovered(stripId) { return this._control.ownerCovered(this.getStrip(stripId)); }
+
+  /** Does `positionId` hold what answering a `primitive` takes? A peer Board asks before minting a replica here (docs/adr/0101). */
+  canTakeCoordination(positionId, primitive) { return this._rules.canMutateAction(positionId, primitive, 'ACCEPT'); }
+
+  /** The control invariant for every live exchange Strip here (restore: `{staffing:false}`, nobody has signed on yet; a change of staffing); returns the repairs made. */
+  reconcileExchanges(opts) { return this._control.reconcileExchanges(opts); }
+
+  /** The violations of the control invariant for the exchange this Strip is half of (undo, the standing alert). */
+  exchangeProblems(stripId) { return this._control.exchangeProblems(this.getStrip(stripId)); }
+
   /** A TOFI ENTRY was proposed against this Facility (board/tofi.js). */
   receiveTofiProposal(args) { return this._tofi.receiveTofiProposal(args); }
 
@@ -353,6 +378,7 @@ class BoardStore {
         unplaced.push(strip.stripId);
       }
       this._state.bump(strip, null);
+      this._control.followOwner(strip, null); // control follows the owner (docs/adr/0101 decision 7)
       this._audit.recordSystem('SystemReassign', strip, { before, after: deepClone(strip), reason: 'position-vacated' });
     }
     // `unplaced` rides along without being an element or an enumerable key.
@@ -381,6 +407,7 @@ class BoardStore {
         strip.orderKey = this._placement.appendOrderKey(bay.bayId, bay.rackId, strip.stripId);
       }
       this._state.bump(strip, null);
+      this._control.followOwner(strip, null);
       this._audit.recordSystem('SystemReassign', strip, { before, after: deepClone(strip), reason: 'position-retaken' });
     }
     return back.map(s => s.stripId);
@@ -390,7 +417,13 @@ class BoardStore {
   droppedWallAtOf(stripId) { return this._persistence.droppedWallAtOf(stripId); }
 
   /** Archives one DROPPED Strip (board/persistence.js, docs/adr/0082). */
-  archiveStrip(stripId, reason, extra = {}) { return this._persistence.archiveStrip(stripId, reason, extra); }
+  archiveStrip(stripId, reason, extra = {}) {
+    // docs/adr/0101 (I4): a transferring Strip that reached DROPPED by a path that skipped `retire` still hands what it
+    // holds to the receiving side before it leaves memory; a no-op when its exchange is settled (the usual case).
+    const strip = this.getStrip(stripId);
+    if (strip && strip.state === 'DROPPED') this._control.onTransferringRetired(strip, 'system');
+    return this._persistence.archiveStrip(stripId, reason, extra);
+  }
 
   /** The Board snapshot (board/persistence.js; durable per ADR 0002). */
   snapshot() { return this._persistence.snapshot(); }

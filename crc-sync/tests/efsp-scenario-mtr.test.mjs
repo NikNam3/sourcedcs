@@ -130,8 +130,9 @@ test('sortie 2: "request exit at E instead, estimating 40, request FL210" — a 
     'posting the pilot\'s REQUEST issues nothing, so it must not void the join');
 
   // "…approved FL210": the controller writes the clearance. That IS an
-  // assignment, and voids MARSA before rendezvous.
-  mustAct(efsp, c.CTR, 'CTR', center(ctr), { kind: 'SetBlock', blockId: '21', value: 'FL210' });
+  // assignment, and voids MARSA before rendezvous. (Control has not transferred on the AP to CTR HANDOFF, so the
+  // altitude is a coordinated instruction: docs/adr/0101.)
+  mustAct(efsp, c.CTR, 'CTR', center(ctr), { kind: 'SetBlock', blockId: '21', value: 'FL210', coordinatedWith: 'AP' });
   const voided = efsp.marsaStore.getRelation(relation.marsaId);
   assert.equal(voided.state, 'VOIDED');
   assert.equal(voided.voidedBy, 'CONTROLLER_ALTITUDE_CHANGE');

@@ -641,6 +641,18 @@ function interlockFor(stripType, blockId) {
   return (def && def.interlock) || null;
 }
 
+/**
+ * docs/adr/0101 (H94, H100 DR-11 b): which control axis a Block write is, for the coordination a HANDOFF needs before
+ * control transfers. Read from the same `interlock` tag as MARSA's: COURSE is `TURNS`, ALTITUDE is `ALTITUDE` (the Board
+ * compares the new value with the assigned altitude to say CLIMB or DESCENT). **Speed is not a control axis**: `9A-SPEED`
+ * carries no tag and answers null, so it is never checked and never attested.
+ * @returns {'TURNS'|'ALTITUDE'|null}
+ */
+function controlAxisFor(stripType, blockId) {
+  const tag = interlockFor(stripType, blockId);
+  return tag === 'COURSE' ? 'TURNS' : tag === 'ALTITUDE' ? 'ALTITUDE' : null;
+}
+
 /** Every Block, per strip type, that interlockFor() answers non-null for — used by the test that holds each strip type to having the coverage docs/adr/0051 claims. */
 function interlockBlocks(stripType) {
   const map = BLOCK_MAPS[stripType] || {};
@@ -671,5 +683,5 @@ module.exports = {
   DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP,
   MARSHAL_BLOCK_MAP, FINAL_BLOCK_MAP, PATTERN_BLOCK_MAP, BLOCK_MAPS,
   isValidStripType, requiredBlocksFor, resolveBlockTarget, validateFacilityConfig,
-  interlockFor, interlockBlocks, MILITARY_BLOCK_NAMESPACE,
+  interlockFor, interlockBlocks, controlAxisFor, MILITARY_BLOCK_NAMESPACE,
 };
