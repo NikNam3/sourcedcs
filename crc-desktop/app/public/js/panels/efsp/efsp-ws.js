@@ -1,9 +1,10 @@
 'use strict';
 import { isSyncOpen, sendToSync } from '../../sync.js';
 import {
-  efspEpochChangeOf, efspHeartbeatGapOf, efspResyncPositionFor, getPendingMutations, rebaseForResend,
-  registerPendingMutation
+  efspEpochChangeOf, efspHeartbeatGapOf, efspResyncPositionFor, efspStoreGapOf, efspStoreHeartbeatGapOf,
+  efspStoreResyncPositionFor, getPendingMutations, rebaseForResend, registerPendingMutation
 } from './efsp-state.js';
+import { addEfspMessageObserver } from './efsp-message-registry.js';
 
 // Client-side EFSP WebSocket helpers — constructs efsp-mutation/efsp-
 // set-positions/efsp-resync messages, sends them via sync.js's existing
@@ -255,7 +256,7 @@ function requestEfspResync(facilityId, reason) {
 export function noteEfspResyncAnswered(facilityId) {
   if (facilityId) _resyncInFlight.delete(facilityId);
 }
-export function noteEfspSnapshotLanded() { _resyncInFlight.clear(); }
+export function noteEfspSnapshotLanded() { _resyncInFlight.clear(); _storeResyncInFlight.clear(); }
 
 /** Each heartbeat: age in-flight resyncs, and ask for one when the heartbeat shows a change we never received. */
 export function noteEfspHeartbeatForSync(msg) {
@@ -263,7 +264,36 @@ export function noteEfspHeartbeatForSync(msg) {
     if (n + 1 >= RESYNC_RETRY_HEARTBEATS) _resyncInFlight.delete(f); else _resyncInFlight.set(f, n + 1);
   }
   for (const facilityId of efspHeartbeatGapOf(msg)) requestEfspResync(facilityId, 'heartbeat names a seq or Board lifetime we never received');
+  for (const [key, n] of _storeResyncInFlight) {
+    if (n + 1 >= RESYNC_RETRY_HEARTBEATS) _storeResyncInFlight.delete(key); else _storeResyncInFlight.set(key, n + 1);
+  }
+  requestEfspStoreResyncs(efspStoreHeartbeatGapOf(msg), 'heartbeat names a store seq or lifetime we never received');
 }
+
+// Store -> heartbeats waited since its resync went out (crc-sync docs/adr/0106): one request in flight per store, like a
+// Board. The answer is an `efsp-resync-reply` carrying that store's slice (noteEfspStoreSlicesLanded).
+const _storeResyncInFlight = new Map();
+
+/** One efsp-resync per stale store, each naming only that store. A store already in flight is skipped. */
+function requestEfspStoreResyncs(keys, reason) {
+  for (const key of keys) {
+    if (_storeResyncInFlight.has(key)) continue;
+    const at = efspStoreResyncPositionFor([key]);
+    if (!at) continue;
+    _sendEfsp({ version: 1, type: 'efsp-resync', ...at });
+    _storeResyncInFlight.set(key, 0);
+    console.warn('[efsp] store resync requested for', key, '-', reason);
+  }
+}
+
+/** A reply that answered the stores (any `stores` answer, with or without a slice for a key: no slice means we were current). */
+export function noteEfspStoreAnswerLanded() { _storeResyncInFlight.clear(); }
+
+/** A family delta or ack from another store lifetime, or one that skipped a seq: resync that store. Registered as an observer, so it runs before the family's handler. */
+function noteEfspStoreMessageForSync(msg) {
+  requestEfspStoreResyncs(efspStoreGapOf(msg), 'store epoch changed or a delta was missed');
+}
+addEfspMessageObserver(noteEfspStoreMessageForSync);
 
 /** A delta or ack from another Board lifetime: resync (the server answers a snapshot). Call before applying it. */
 export function noteEfspBoardMessageForSync(msg) {
@@ -277,7 +307,7 @@ export function noteEfspBoardMessageForSync(msg) {
  * message it stands for (the other fields are untouched), for app.js to apply as any other.
  */
 export function efspResyncReplyAsMessage(msg) {
-  const { answer, ...rest } = msg;
+  const { answer, stores, ...rest } = msg; // `stores` is applied by its own handler (efsp-messages.js)
   return { ...rest, type: answer === 'snapshot' ? 'efsp-snapshot' : 'efsp-board-delta' };
 }
 
