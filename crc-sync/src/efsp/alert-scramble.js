@@ -18,7 +18,7 @@
 // aircraft yield to alert scrambles" is SOURCE practice shown as text on a
 // flag — sequencing stays the controller's call.
 //
-// A scramble is ACTIVE while its FDR's military.alertStatus is 'SCRAMBLE' and
+// A scramble is ACTIVE while its flight data's military.alertStatus is 'SCRAMBLE' and
 // it has a live DEPARTURE Strip in a pre-airborne state. Once that Strip is
 // DEPARTED (or DROPPED) the indication ends by itself, derived from state;
 // nothing resets the field (it keeps 'SCRAMBLE' for L5's traffic-count latch
@@ -59,7 +59,7 @@ function _isScrambling(strip, flightData) {
 
 /**
  * Every active scramble, optionally at one Facility. `flightDataOf(flightDataId)` returns
- * the FDR or null (an archived FDR is null, never a throw).
+ * the flight data or null (archived flight data is null, never a throw).
  * @returns {{stripId, flightDataId, facilityId, state, callsign}[]} sorted by callsign
  */
 function activeScrambles(strips, flightDataOf, facilityId) {

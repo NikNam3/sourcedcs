@@ -155,7 +155,7 @@ class AirspaceStore {
    * into an ack. Optimistic concurrency on the record's own rev.
    *
    * @param {{airspaceId:string, baseRev:number, op:{kind:string}}} mutation
-   * @param {string} actingPositionId — already verified by efsp-ws.js to be a
+   * @param {string} actingPositionId — already verified by the wire gate (wire/skeleton.js) to be a
    *   Position the calling session is Primary at (docs/adr/0029)
    * @param {string} by — controllerId, for the audit trail
    */

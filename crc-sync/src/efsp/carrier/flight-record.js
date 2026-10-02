@@ -6,12 +6,12 @@
 // The design point: EEAT survives launch → recovery because it is on the
 // flight, not on a Strip. §9.12 rule 7: "EEAT is issued before launch as the
 // lost-comms fallback and MUST survive from the departure Strip through to
-// recovery. It is the field most likely to be missed." One FDR spans the
+// recovery. It is the field most likely to be missed." One flight's flight data spans the
 // flight's whole life; its Strips come and go (the launch Strip is dropped,
 // the recovery Strip is a new one on the same flightDataId, replicas per Facility —
 // docs/adr/0013). An EEAT held on a Strip dies with the launch Strip.
 //
-// So these fields live on the FDR, in docs/adr/0052's single military
+// So these fields live on the flight data, in docs/adr/0052's single military
 // namespace, as one sub-object: `flightData.military.carrier` (the way §9.4's MTR
 // fields are `flightData.military.mtr`). Round-1 question Q63, supervisor default
 // (a). L17 adds it to flight-data-store.js's defaultMilitary(); this module defines the
@@ -126,7 +126,7 @@ function setCarrierFlightField(flight, field, value) {
 }
 
 /**
- * Restore path, and the read path for an FDR from before L17 wired this in:
+ * Restore path, and the read path for flight data from before L17 wired this in:
  * a missing namespace or key becomes its default (§12's "present and
  * unpopulated" promise — flight-data-store.js's ensureMilitary reasoning); an invalid
  * value becomes null; unknown keys are dropped. A valid set EEAT is never
@@ -143,7 +143,7 @@ function normalizeCarrierFlight(raw) {
   return out;
 }
 
-/** The carrier record of an FDR, wherever it is in its life. */
+/** The carrier record of flight data, wherever it is in its life. */
 function carrierFlightOf(flightData) {
   return normalizeCarrierFlight(_isObj(flightData) && _isObj(flightData.military) ? flightData.military.carrier : null);
 }
@@ -178,7 +178,7 @@ const MARSHAL_MESSAGE_FIELDS = Object.freeze([
  * given (decisions H15).
  *
  * @param {object} args
- * @param {object} args.flightData        the FDR; carrier fields are read from flightData.military.carrier
+ * @param {object} args.flightData        the flight data; carrier fields are read from flightData.military.carrier
  * @param {object} [args.derived]  marshal-stack.deriveEntry() for this flight, or null
  * @param {string} [args.caseValue] the recovery Case (the record's value)
  * @param {object} [args.shipState]

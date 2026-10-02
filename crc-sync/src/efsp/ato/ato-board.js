@@ -7,7 +7,7 @@
 // a flight an earlier ATO tasked, or nothing — and builds the tasking that
 // flight-data-store.js's applyAtoTasking() writes onto the flight. It parses nothing
 // itself and it never trusts a client's parse: the server re-reads the text on
-// import (efsp-ws.js _handleAtoMutation).
+// import (wire/families/ato.js).
 //
 // SOURCE CAVEAT (EFSPImplementationGuide.md §9.9, required to be carried into code):
 // the detailed USMTF set-level breakdown this parser implements comes from a
@@ -40,7 +40,7 @@ const ACTIONS = new Set(['CREATE', 'BIND', 'UPDATE', 'SKIP']);
 const CALLSIGN_RE = /^[A-Z0-9]{1,7}$/;
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 
-// The seed-owned FDR paths: filled from the ATO, but a controller may type
+// The seed-owned flight data paths: filled from the ATO, but a controller may type
 // over them (WRITABLE_PATHS), and a re-import then keeps the controller's
 // value (§10.2 rule 3). Mirrored by flight-data-store.js's ATO_SEED_PATHS.
 const SEED_PATH_OF = Object.freeze({
@@ -155,12 +155,12 @@ function _hasLiveMissionOnTactical(strips) {
 
 /**
  * The flights a line could bind to. Looks at every live non-MISSION Strip on
- * every Board (FDRs are shared, docs/adr/0013) and their FDRs; a flight that
+ * every Board (flight data is shared, docs/adr/0013) and their flight data; a flight that
  * already has a live MISSION Strip on TACTICAL is excluded (one mission line
  * per flight — board-store would refuse it anyway).
  *
  * @param {object} line an analysed line ({ callsign, modeThree })
- * @param {object[]} flightDataList every FDR
+ * @param {object[]} flightDataList every flight data record
  * @param {object[]} liveStrips every live Strip, each stamped with its facilityId
  * @returns {{flightDataId,key:'MODE3'|'CALLSIGN',callsign,beaconAssigned,strips:object[]}[]}
  */

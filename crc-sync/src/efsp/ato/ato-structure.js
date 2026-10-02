@@ -1,7 +1,7 @@
 'use strict';
 
 // Tokenised sets → AtoDocument: header, task units, missions, and the sets
-// each mission carries (docs/adr/0063). No FDR, no Board, no mapping — that
+// each mission carries (docs/adr/0063). No flight data, no Board, no mapping — that
 // is ato-mapping.js.
 //
 // SOURCE CAVEAT (EFSPImplementationGuide.md §9.9, required to be carried into code):

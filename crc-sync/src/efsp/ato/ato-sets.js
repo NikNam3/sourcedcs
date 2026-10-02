@@ -1,7 +1,7 @@
 'use strict';
 
 // One pure extractor per USMTF ATO set: tokenised set → plain object +
-// warnings (docs/adr/0063). Nothing here knows about missions, FDRs or Blocks.
+// warnings (docs/adr/0063). Nothing here knows about missions, flight data or Blocks.
 //
 // SOURCE CAVEAT (EFSPImplementationGuide.md §9.9, required to be carried into code):
 // the detailed USMTF set-level breakdown this parser implements comes from a

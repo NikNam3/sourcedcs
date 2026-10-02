@@ -5,7 +5,7 @@
 // RunwayStatusStore, keyed by `hullId`.
 //
 // The Case and the Marshal stack are facts about the SHIP's recovery, spanning
-// many flights, so they live neither on the Board nor on an FDR, for the reason
+// many flights, so they live neither on the Board nor on flight data, for the reason
 // airspace (ADR 0034) and MARSA (ADR 0051) do not. One record per hull:
 //
 //   { hullId, rev, recoveryCase, stacks: { [stackId]: MarshalStack }, shipInputs, transitions[] }
@@ -28,7 +28,7 @@
 // restart must come up). Every time comes from the injected mission clock
 // (decisions H11); nothing here reads Date.now().
 //
-// Authority is the caller's two-way check: efsp-ws.js verifies the session is
+// Authority is the caller's two-way check: the wire gate (wire/skeleton.js) verifies the session is
 // Primary at the acting Position (docs/adr/0029), and this store asks
 // permission.js's one-parameter predicates which Position may do what (D21).
 
@@ -240,7 +240,7 @@ class CarrierStore {
    * whose derived display moved, in stack order, for the one delta.
    *
    * @param {{clientMutationId:string, hullId?:string, baseRev?:number, op:object}} mutation
-   * @param {string} actingPositionId already verified by efsp-ws.js to be Primary for the session
+   * @param {string} actingPositionId already verified by the wire gate (wire/skeleton.js) to be Primary for the session
    * @param {string} by controllerId
    */
   apply(mutation, actingPositionId, by) {
@@ -383,7 +383,7 @@ class CarrierStore {
 
   /**
    * A flight is gone from the recovery (its last carrier Strip retired, or its
-   * FDR did): its entry leaves WITHOUT closing up, so nobody is re-cleared
+   * flight data did): its entry leaves WITHOUT closing up, so nobody is re-cleared
    * (H28, ADR 0064).
    * @returns {boolean} whether anything changed
    */

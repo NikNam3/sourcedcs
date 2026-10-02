@@ -235,7 +235,7 @@ class RunwayStatusStore {
    * touches.
    *
    * @param {{clientMutationId?:string, facilityId:string, baseRev?:number, op:{kind:string}}} mutation
-   * @param {string} actingPositionId — verified by efsp-ws.js to be a Position
+   * @param {string} actingPositionId — verified by the wire gate (wire/skeleton.js) to be a Position
    *   the session is Primary at, at this Facility (docs/adr/0029)
    * @param {string} by — controllerId
    */

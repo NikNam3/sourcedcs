@@ -3,13 +3,13 @@
 // The SFA rotation record (guide §4.7, docs/adr/0075, docs/adr/0093): which
 // Position is on which of the pool's frequencies. An EIGHTH store, peer to
 // CarrierStore, for the same reason: the record is a fact about the approach as a
-// whole, not about a Strip or a flight, so it lives neither on the Board nor on an
-// FDR.
+// whole, not about a Strip or a flight, so it lives neither on the Board nor on a
+// flight data record.
 //
 //   { facilityId, rev, rotation: { [rackId]: positionId }, transitions[] }
 //
 // It records WHO IS ON A FREQUENCY. It never records a frequency on a Strip and
-// never changes one (D17): the Strip's frequency is the FDR's, and the controller
+// never changes one (D17): the Strip's frequency is the flight data's, and the controller
 // is what moves.
 //
 // Authority is two-sided. permission.js's capability table is the CEILING (which
