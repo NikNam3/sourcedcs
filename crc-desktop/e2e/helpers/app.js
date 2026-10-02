@@ -1,6 +1,7 @@
 'use strict';
 
 const { expect } = require('@playwright/test');
+const { installAppModules } = require('./modules');
 
 /**
  * A bearer token the panel will send and crc-sync will accept.
@@ -37,13 +38,13 @@ async function openPanel(page, { signedOn = ['OPS'], facilityId = 'INCIRLIK', co
 
   await page.goto('/');
   await openEfspPanel(page);
-  await page.waitForFunction(() => typeof window.sendEfspSetPositions === 'function');
-  await page.evaluate(([f, h]) => window.sendEfspSetPositions(f, h), [facilityId, signedOn]);
+  await page.waitForFunction(() => typeof crc.ws.sendEfspSetPositions === 'function');
+  await page.evaluate(([f, h]) => crc.ws.sendEfspSetPositions(f, h), [facilityId, signedOn]);
   // The ack is what actually makes the Positions held server-side; until it
   // lands every op is refused as NOT_HOLDING_POSITION and a spec fails for a
   // reason that has nothing to do with what it is testing.
   await page.waitForFunction(
-    ([f, h]) => (window.getActingPositions ? window.getActingPositions(f) : []).length === h.length,
+    ([f, h]) => (crc.ws.getActingPositions ? crc.ws.getActingPositions(f) : []).length === h.length,
     [facilityId, signedOn],
   );
   return { consoleErrors };
@@ -59,11 +60,12 @@ async function openPanel(page, { signedOn = ['OPS'], facilityId = 'INCIRLIK', co
  * than reaching past dockview and un-hiding the div.
  */
 async function openEfspPanel(page) {
-  // toggleDockPanel is defined as soon as dock.js loads; `dock` is only set when app.js runs
-  // initDock(), a moment later (the first-test race, S-L1b finding). `dock` is a script-scope `let`.
-  await page.waitForFunction(() => typeof window.toggleDockPanel === 'function' && typeof dock !== 'undefined' && dock !== null);
+  // The page's modules are imported once boot has run (helpers/modules.js). `dock` is only set when app.js runs
+  // initDock(), a moment later (the first-test race, S-L1b finding), so wait for the dockview instance too.
+  await installAppModules(page);
+  await page.waitForFunction(() => crc.dock.dock !== null);
   await page.evaluate(() => {
-    if (!window.isDockPanelOpen || !window.isDockPanelOpen('efsp')) window.toggleDockPanel('efsp', true);
+    if (!crc.dock.isDockPanelOpen || !crc.dock.isDockPanelOpen('efsp')) crc.dock.toggleDockPanel('efsp', true);
   });
   await expect(page.locator('#efsp-panel')).toBeVisible({ timeout: 10000 });
 }
@@ -79,7 +81,7 @@ async function openEfspPanel(page) {
  */
 async function seedStrip(page, { callsign, actingPositionId = 'OPS', bayId = 'ops-proposed', stripType, facilityId = 'INCIRLIK', flightData = {} }) {
   const before = await page.locator('.efsp-strip').count();
-  await page.evaluate(([acting, op, fac]) => window.sendEfspCreateStrip(acting, op, fac), [
+  await page.evaluate(([acting, op, fac]) => crc.ws.sendEfspCreateStrip(acting, op, fac), [
     actingPositionId,
     {
       kind: 'CreateStrip', bayId, rackId: 'main', stripType,
@@ -110,7 +112,7 @@ const CORRELATION_INELIGIBLE = ['PROPOSED', 'PENDING_CLEARANCE', 'CLEARED', 'HEL
 async function settleCorrelation(page, callsign) {
   await expect.poll(() => page.evaluate(([cs, ineligible]) => {
     const s = [...efspStrips.values()].find((x) => x.state !== 'DROPPED'
-      && (efspFlightDataList.get(x.flightDataId) || {}).identity && efspFlightDataList.get(x.flightDataId).identity.callsign === cs);
+      && (crc.state.efspFlightDataList.get(x.flightDataId) || {}).identity && crc.state.efspFlightDataList.get(x.flightDataId).identity.callsign === cs);
     if (!s || ineligible.includes(s.state)) return true;
     const el = document.querySelector(`.efsp-strip[data-strip-id="${s.stripId}"]`);
     return !!el && /\|cor:\d/.test(el.dataset.sig || '');
@@ -146,9 +148,9 @@ async function expectDoesSomething(page, locator, what) {
     window.__e2eHooked = true;
     for (const fn of ['sendEfspMutation', 'sendEfspCreateStrip', 'sendEfspMarsaMutation',
       'sendEfspAirspaceMutation', 'sendEfspCorrelationMutation', 'sendEfspSetPositions']) {
-      const original = window[fn];
+      const original = crc.ws[fn];
       if (typeof original !== 'function') continue;
-      window[fn] = (...args) => { (window.__e2eSent = window.__e2eSent || []).push({ fn, args }); return original(...args); };
+      crc.ws.setEfspSender(fn, (...args) => { (window.__e2eSent = window.__e2eSent || []).push({ fn, args }); return original(...args); });
     }
   });
 
@@ -273,10 +275,10 @@ async function startAction(strip, name, opts = {}) {
  */
 async function dropStrips(page, callsigns) {
   await page.evaluate((cs) => {
-    for (const s of getAllEfspStrips()) {
-      const flightData = getEfspFlightData(s.flightDataId);
+    for (const s of crc.state.getAllEfspStrips()) {
+      const flightData = crc.state.getEfspFlightData(s.flightDataId);
       if (!flightData || !cs.includes(flightData.identity.callsign) || s.state === 'DROPPED') continue;
-      sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
+      crc.ws.sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
     }
   }, callsigns);
   await page.waitForTimeout(400);
@@ -291,18 +293,18 @@ async function dropStrips(page, callsigns) {
  * `page` must hold LC, OPS and AP: one controller holding all three self-coordinates the change.
  */
 async function ensureActiveRunway(page, end = '05') {
-  await page.waitForFunction(() => typeof getEfspRunwayStatus === 'function' && !!getEfspRunwayStatus('INCIRLIK'));
+  await page.waitForFunction(() => typeof crc.state.getEfspRunwayStatus === 'function' && !!crc.state.getEfspRunwayStatus('INCIRLIK'));
   const step = async (positionId, op) => {
-    const before = await page.evaluate(() => getEfspRunwayStatus('INCIRLIK').rev);
-    await page.evaluate(([p, o]) => sendEfspRunwayStatusMutation(p, 'INCIRLIK', getEfspRunwayStatus('INCIRLIK').rev, o), [positionId, op]);
-    await expect.poll(() => page.evaluate(() => getEfspRunwayStatus('INCIRLIK').rev), { timeout: 5000 }).toBeGreaterThan(before);
+    const before = await page.evaluate(() => crc.state.getEfspRunwayStatus('INCIRLIK').rev);
+    await page.evaluate(([p, o]) => crc.ws.sendEfspRunwayStatusMutation(p, 'INCIRLIK', crc.state.getEfspRunwayStatus('INCIRLIK').rev, o), [positionId, op]);
+    await expect.poll(() => page.evaluate(() => crc.state.getEfspRunwayStatus('INCIRLIK').rev), { timeout: 5000 }).toBeGreaterThan(before);
   };
-  const active = () => page.evaluate(() => getEfspRunwayStatus('INCIRLIK').activeRunway);
+  const active = () => page.evaluate(() => crc.state.getEfspRunwayStatus('INCIRLIK').activeRunway);
   if ((await active()) === end) return;
   await step('LC', { kind: 'SelfCoordinateRunwayChange', toRunwayId: end });
   await step('LC', { kind: 'BeginRunwayChange' });
   await step('LC', { kind: 'CompleteRunwayChange' });
-  const needsInspection = await page.evaluate(() => getEfspRunwayStatus('INCIRLIK').runways[0].status === 'SUSPENDED_INSPECTION');
+  const needsInspection = await page.evaluate(() => crc.state.getEfspRunwayStatus('INCIRLIK').runways[0].status === 'SUSPENDED_INSPECTION');
   if (needsInspection) await step('OPS', { kind: 'CompleteInspection', runwayId: '05/23' });
   await expect.poll(active, { timeout: 5000 }).toBe(end);
 }

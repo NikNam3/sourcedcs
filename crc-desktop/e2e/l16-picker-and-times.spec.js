@@ -17,8 +17,8 @@ test.describe.configure({ timeout: 90000 });
 const SHOTS = path.join(__dirname, '..', '..', 'docs', 'wip', 'L16');
 
 const flightDataOf = (page, callsign) => page.evaluate((cs) => {
-  const s = [...efspStrips.values()].find(x => (efspFlightDataList.get(x.flightDataId) || {}).identity?.callsign === cs);
-  return s ? efspFlightDataList.get(s.flightDataId) : null;
+  const s = [...efspStrips.values()].find(x => (crc.state.efspFlightDataList.get(x.flightDataId) || {}).identity?.callsign === cs);
+  return s ? crc.state.efspFlightDataList.get(s.flightDataId) : null;
 }, callsign);
 
 async function pick(strip, page, value) {
@@ -37,7 +37,7 @@ async function only(page, callsign) {
 test('9F is a select of the configured stereo routes, never free text', async ({ page }) => {
   test.skip(process.env.E2E_STEREO_ROUTES === 'none', 'needs the two-route stereo table');
   await openPanel(page, { signedOn: ['OPS'] });
-  await page.waitForFunction(() => typeof cachedStereoRoutesClient === 'function' && cachedStereoRoutesClient().length === 2);
+  await page.waitForFunction(() => typeof crc.stereo.cachedStereoRoutesClient === 'function' && crc.stereo.cachedStereoRoutesClient().length === 2);
   const CS = 'L16PK1';
   const s = await seedStrip(page, { callsign: CS, flightData: { route: 'LTAG DCT HAND', requestedAltitude: '120', departureAirport: 'LTAG', destinationAirport: 'LTAG' } });
 

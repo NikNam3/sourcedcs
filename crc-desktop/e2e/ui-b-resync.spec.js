@@ -22,8 +22,8 @@ async function controller(browser, opts) {
   return { page, ctx };
 }
 
-const has = (page, callsign) => page.evaluate((cs) => getAllEfspStrips().some(s => {
-  const f = getEfspFlightData(s.flightDataId); return f && f.identity.callsign === cs && s.state !== 'DROPPED';
+const has = (page, callsign) => page.evaluate((cs) => crc.state.getAllEfspStrips().some(s => {
+  const f = crc.state.getEfspFlightData(s.flightDataId); return f && f.identity.callsign === cs && s.state !== 'DROPPED';
 }), callsign);
 
 test('a websocket killed mid-session reconnects, sends no resync, and converges through the connect snapshot', async ({ browser, page }) => {
@@ -39,7 +39,7 @@ test('a websocket killed mid-session reconnects, sends no resync, and converges 
     ws.on('framereceived', (f) => { try { if (JSON.parse(f.payload).type === 'efsp-snapshot') snapshotsAfterReconnect++; } catch (_) { /* not JSON */ } });
   });
 
-  const before = await page.evaluate(() => ({ epoch: efspResyncPositionFor(getEfspFacility()).boardEpoch, seq: getEfspBoardSeq() }));
+  const before = await page.evaluate(() => ({ epoch: crc.state.efspResyncPositionFor(crc.state.getEfspFacility()).boardEpoch, seq: crc.state.getEfspBoardSeq() }));
   expect(before.epoch).toBeTruthy();
   expect(before.seq).not.toBeUndefined();
 
@@ -52,14 +52,14 @@ test('a websocket killed mid-session reconnects, sends no resync, and converges 
     window.WebSocket = function (url, protocols) { return new Real(window.__blockWs ? 'ws://127.0.0.1:1/' : url, protocols); };
     window.WebSocket.prototype = Real.prototype;
     for (const k of ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED']) window.WebSocket[k] = Real[k];
-    _ws.close();
+    crc.app._ws.close();
   });
-  await expect.poll(() => page.evaluate(() => _ws === null)).toBe(true);
+  await expect.poll(() => page.evaluate(() => crc.app._ws === null)).toBe(true);
 
   // ... while another controller changes the Board
   const callsign = `UIB${Date.now() % 10000}`;
   try {
-    await other.evaluate((cs) => window.sendEfspCreateStrip('OPS', { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE',
+    await other.evaluate((cs) => crc.ws.sendEfspCreateStrip('OPS', { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE',
       flightData: { callsign: cs, aircraftType: 'F16', wakeCategory: 'D' } }, 'INCIRLIK'), callsign);
     await expect.poll(() => has(other, callsign), { timeout: 10000 }).toBe(true);
     expect(await has(page, callsign), 'the watcher is offline and has not seen it').toBe(false);
@@ -72,8 +72,8 @@ test('a websocket killed mid-session reconnects, sends no resync, and converges 
     expect(sent).toEqual([]);
 
     // and it converged on exactly the server's Board
-    const server = await other.evaluate(() => JSON.stringify(getAllEfspStrips().map(s => `${s.stripId}:${s.rev}`).sort()));
-    await expect.poll(() => page.evaluate(() => JSON.stringify(getAllEfspStrips().map(s => `${s.stripId}:${s.rev}`).sort()))).toBe(server);
+    const server = await other.evaluate(() => JSON.stringify(crc.state.getAllEfspStrips().map(s => `${s.stripId}:${s.rev}`).sort()));
+    await expect.poll(() => page.evaluate(() => JSON.stringify(crc.state.getAllEfspStrips().map(s => `${s.stripId}:${s.rev}`).sort()))).toBe(server);
   } finally {
     await dropStrips(other, [callsign]);
   }

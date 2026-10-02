@@ -19,17 +19,17 @@ const { openPanel, seedStrip, stripByCallsign } = require('./helpers/app');
 const FDR = { route: 'DCT', requestedAltitude: 'FL250', departureAirport: 'LTAG', destinationAirport: 'LTAF' };
 const ALL = ['OPS', 'CD', 'GC', 'LC', 'AP'];
 
-const stripOf = (cs) => getAllEfspStrips().find((x) => getEfspFlightData(x.flightDataId).identity.callsign === cs);
+const stripOf = (cs) => crc.state.getAllEfspStrips().find((x) => crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs);
 const info = (page, cs) => page.evaluate((cs) => {
-  const s = getAllEfspStrips().find((x) => getEfspFlightData(x.flightDataId).identity.callsign === cs);
+  const s = crc.state.getAllEfspStrips().find((x) => crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs);
   return s && { owner: s.ownerPositionId, bay: s.bayId, state: s.state };
 }, cs);
-const allStates = (page) => page.evaluate(() => Object.fromEntries(getAllEfspStrips().map((s) => [getEfspFlightData(s.flightDataId).identity.callsign, s.state])));
+const allStates = (page) => page.evaluate(() => Object.fromEntries(crc.state.getAllEfspStrips().map((s) => [crc.state.getEfspFlightData(s.flightDataId).identity.callsign, s.state])));
 
 async function advance(page, cs, n) {
   for (let i = 0; i < n; i++) {
     const before = (await info(page, cs)).state;
-    await page.evaluate((cs) => _invokeNla(getAllEfspStrips().find((x) => getEfspFlightData(x.flightDataId).identity.callsign === cs)), cs);
+    await page.evaluate((cs) => crc.bayView._invokeNla(crc.state.getAllEfspStrips().find((x) => crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs)), cs);
     await expect.poll(async () => (await info(page, cs)).state, {
       timeout: 3000,
       message: `setup: ${cs} stuck at ${before}: ${await page.locator('#efsp-mutation-error').textContent()}`,
@@ -111,8 +111,8 @@ test('an NLA the server will refuse says so before it is pressed', async ({ page
   await seedStrip(page, { callsign: 'L4X1', stripType: 'DEPARTURE', flightData: FDR });
   await advance(page, 'L4X1', 7); // DEPARTED, next is Hand Off to AP
   // Release AP. Nothing else covers it, so the server will now inhibit.
-  await page.evaluate((h) => window.sendEfspSetPositions('INCIRLIK', h), ALL.filter((p) => p !== 'AP'));
-  await page.waitForFunction(() => !getActingPositions('INCIRLIK').includes('AP'));
+  await page.evaluate((h) => crc.ws.sendEfspSetPositions('INCIRLIK', h), ALL.filter((p) => p !== 'AP'));
+  await page.waitForFunction(() => !crc.ws.getActingPositions('INCIRLIK').includes('AP'));
   await show(page, 'L4X1');
   await page.waitForTimeout(500);
 

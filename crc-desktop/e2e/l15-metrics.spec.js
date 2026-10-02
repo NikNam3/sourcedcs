@@ -21,7 +21,7 @@ const metricRow = (page, id) => page.locator(`#metrics-panel .metrics-row[data-m
 const missionCell = (page, id) => metricRow(page, id).locator('.metrics-cell').first();
 
 async function openMetrics(page) {
-  await page.evaluate(() => window.toggleDockPanel('metrics', true));
+  await page.evaluate(() => crc.dock.toggleDockPanel('metrics', true));
   await expect(page.locator('#metrics-panel')).toBeVisible({ timeout: 10000 });
 }
 
@@ -47,18 +47,18 @@ test('what a controller does is measured and shown on METRICS', async ({ page })
   await expect(s).toHaveClass(/efsp-strip-selected/);
 
   // One paper gesture.
-  const flipsBefore = await page.evaluate(() => getAllEfspStrips().filter(x => x.flags && x.flags.flipped).length);
+  const flipsBefore = await page.evaluate(() => crc.state.getAllEfspStrips().filter(x => x.flags && x.flags.flipped).length);
   await stripByCallsign(page, 'MET102').dblclick({ position: { x: 3, y: 3 } });
-  await expect.poll(() => page.evaluate(() => getAllEfspStrips().filter(x => x.flags && x.flags.flipped).length)).toBe(flipsBefore + 1);
+  await expect.poll(() => page.evaluate(() => crc.state.getAllEfspStrips().filter(x => x.flags && x.flags.flipped).length)).toBe(flipsBefore + 1);
 
   // Sent now rather than at the next 10 s flush; the ack says crc-sync took all four.
-  const stats = await page.evaluate(() => { flushEfspMetricsNow(); return efspMetricsClientStats(); });
+  const stats = await page.evaluate(() => { crc.metricsClient.flushEfspMetricsNow(); return crc.metricsClient.efspMetricsClientStats(); });
   expect(stats.sent, JSON.stringify(stats)).toBe(4);
-  await expect.poll(() => page.evaluate(() => efspMetricsClientStats().acked)).toBeGreaterThan(0);
-  expect(await page.evaluate(() => efspMetricsClientStats().rejected)).toBe(0);
+  await expect.poll(() => page.evaluate(() => crc.metricsClient.efspMetricsClientStats().acked)).toBeGreaterThan(0);
+  expect(await page.evaluate(() => crc.metricsClient.efspMetricsClientStats().rejected)).toBe(0);
 
   await openMetrics(page);
-  await page.evaluate(() => requestEfspMetrics());
+  await page.evaluate(() => crc.metricsPanel.requestEfspMetrics());
 
   // Every metric in §11.5 is collected and visible (WP8 bullet 1): seven rows,
   // each with a value, a target and a verdict.
@@ -118,17 +118,17 @@ test('the panel needs no Position and polls only while it is on screen', async (
   // Hidden behind the Strip panel's tab: the next poll tick sends nothing.
   await page.evaluate(() => {
     window.__metricsRequests = 0;
-    const orig = window.sendToSync;
-    window.sendToSync = (m) => { if (m && m.type === 'efsp-metrics-request') window.__metricsRequests += 1; return orig(m); };
+    const orig = crc.sync.sendToSync;
+    crc.sync.setSendToSync((m) => { if (m && m.type === 'efsp-metrics-request') window.__metricsRequests += 1; return orig(m); });
   });
-  await page.evaluate(() => window.toggleDockPanel('efsp', true));
-  await page.evaluate(() => dock.api.getPanel('efsp').api.setActive());
+  await page.evaluate(() => crc.dock.toggleDockPanel('efsp', true));
+  await page.evaluate(() => crc.dock.dock.api.getPanel('efsp').api.setActive());
   await expect(page.locator('#metrics-panel')).toBeHidden();
-  await page.evaluate(() => _metricsPollTick());
+  await page.evaluate(() => crc.metricsPanel._metricsPollTick());
   expect(await page.evaluate(() => window.__metricsRequests)).toBe(0);
   // Shown again: it asks at once.
-  await page.evaluate(() => dock.api.getPanel('metrics').api.setActive());
+  await page.evaluate(() => crc.dock.dock.api.getPanel('metrics').api.setActive());
   await expect(page.locator('#metrics-panel')).toBeVisible();
-  await page.evaluate(() => _metricsPollTick());
+  await page.evaluate(() => crc.metricsPanel._metricsPollTick());
   await expect.poll(() => page.evaluate(() => window.__metricsRequests)).toBeGreaterThan(0);
 });

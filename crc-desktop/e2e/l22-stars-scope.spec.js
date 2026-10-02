@@ -57,9 +57,9 @@ function wire(c) {
 /** Puts a scene on the page: coverage, Board, tracks with trails, alerts, view. */
 async function inject(page, scene) {
   await page.evaluate((sc) => {
-    applyCoverage({ radars: sc.radars, signedOnPositions: sc.signedOn, datalink: !!sc.datalink });
-    applyEfspSnapshot({
-      boardSeq: getEfspBoardSeq(), facility: getEfspFacility(), bays: getEfspBays(), positions: getAllEfspPositions(),
+    crc.app.applyCoverage({ radars: sc.radars, signedOnPositions: sc.signedOn, datalink: !!sc.datalink });
+    crc.state.applyEfspSnapshot({
+      boardSeq: crc.state.getEfspBoardSeq(), facility: crc.state.getEfspFacility(), bays: crc.state.getEfspBays(), positions: crc.state.getAllEfspPositions(),
       strips: sc.strips, flightDataList: sc.flightDataList, correlations: sc.correlations,
       positionLetters: {
         INCIRLIK: { OPS: 'O', CD: 'D', GC: 'G', LC: 'T', AP: 'A' }, CENTER: { CTR: 'C' },
@@ -72,21 +72,21 @@ async function inject(page, scene) {
       delete w._h; delete w._kt; delete w._stale;
       return w;
     });
-    applySnapshot(list);
+    crc.app.applySnapshot(list);
     // Trails and speed: six earlier returns along the track's heading.
     for (const t of sc.tracks) {
       const ms = t._kt * 0.5144;
       const pts = [];
       for (let i = 6; i >= 0; i--) {
-        const [lat, lon] = projectPos(t.lat, t.lon, (t._h + 180) % 360, ms * 5 * i);
+        const [lat, lon] = crc.geo.projectPos(t.lat, t.lon, (t._h + 180) % 360, ms * 5 * i);
         pts.push({ lat, lon, altFt: t.altitude ? t.altitude.ft : null, timestamp: now - t._stale - i * 5000 });
       }
-      history.set(t.id, pts);
+      crc.app.history.set(t.id, pts);
     }
-    applyEfspAlerts(sc.alerts);
-    labelOffsets.clear();
-    map.jumpTo({ center: [sc.center.lon, sc.center.lat], zoom: sc.zoom });
-    updateMap();
+    crc.state.applyEfspAlerts(sc.alerts);
+    crc.app.labelOffsets.clear();
+    crc.app.map.jumpTo({ center: [sc.center.lon, sc.center.lat], zoom: sc.zoom });
+    crc.geojson.updateMap();
   }, scene);
 }
 
@@ -98,10 +98,10 @@ async function snap(page, name) {
 async function openScope(page, signedOn) {
   const facilities = Object.keys(signedOn);
   await openPanel(page, { signedOn: signedOn[facilities[0]], facilityId: facilities[0], controller: `l22-${facilities.join('-')}-${Date.now()}` });
-  for (const f of facilities.slice(1)) await page.evaluate(([fac, h]) => window.sendEfspSetPositions(fac, h), [f, signedOn[f]]);
-  await page.evaluate(() => window.toggleDockPanel && window.toggleDockPanel('efsp', false));
-  await page.waitForFunction(() => typeof mapReady !== 'undefined' && mapReady);
-  await page.evaluate(() => map.resize());
+  for (const f of facilities.slice(1)) await page.evaluate(([fac, h]) => crc.ws.sendEfspSetPositions(fac, h), [f, signedOn[f]]);
+  await page.evaluate(() => crc.dock.toggleDockPanel && crc.dock.toggleDockPanel('efsp', false));
+  await page.waitForFunction(() => typeof crc.app.mapReady !== 'undefined' && crc.app.mapReady);
+  await page.evaluate(() => crc.app.map.resize());
 }
 
 // ── Scene 1 / 4: an AP-only scope ─────────────────────────────────────────
@@ -157,18 +157,18 @@ function appScene() {
 
 test('scene 1: an APP-only scope, map background on', async ({ page }) => {
   await openScope(page, { INCIRLIK: ['AP'] });
-  await page.evaluate(() => { settings.atcMapBackground = true; });
+  await page.evaluate(() => { crc.app.settings.atcMapBackground = true; });
   await inject(page, appScene());
-  const labels = await page.evaluate(() => buildLabels().features.filter(f => f.properties.scheme === 'ATC').length);
+  const labels = await page.evaluate(() => crc.geojson.buildLabels().features.filter(f => f.properties.scheme === 'ATC').length);
   expect(labels).toBeGreaterThan(5);
   await snap(page, 'scene1-app-scope.png');
 });
 
 test('scene 4: "ATC map background" off — the black strict-STARS scope', async ({ page }) => {
   await openScope(page, { INCIRLIK: ['AP'] });
-  await page.evaluate(() => { settings.atcMapBackground = false; });
+  await page.evaluate(() => { crc.app.settings.atcMapBackground = false; });
   await inject(page, appScene());
-  await page.waitForFunction(() => map.getPaintProperty('Background', 'background-color') === '#000000');
+  await page.waitForFunction(() => crc.app.map.getPaintProperty('Background', 'background-color') === '#000000');
   await snap(page, 'scene4-black-scope.png');
 });
 
@@ -194,14 +194,14 @@ test('scene 2b: the receiver end, after a point-out was accepted and a handoff t
   // Accept both, the STARS way: a click on the target sends the ACCEPT
   // mutation. Here the Board is injected, so the server refuses it; flip the
   // two replicas to ACTIVE locally, as its ack would.
-  const clicked = await page.evaluate(() => [atcTargetClick('colt'), atcTargetClick('snake')]);
+  const clicked = await page.evaluate(() => [crc.atc.atcTargetClick('colt'), crc.atc.atcTargetClick('snake')]);
   expect(clicked).toEqual(['ACCEPT_HANDOFF', 'ACCEPT_POINT_OUT']);
   await page.evaluate(() => {
     for (const id of ['s-colt-app', 's-snake-app']) {
-      const s = getEfspStrip(id);
-      applyEfspDelta({ strips: { updated: [{ ...s, coordination: { ...s.coordination, state: 'ACTIVE' } }] } });
+      const s = crc.state.getEfspStrip(id);
+      crc.state.applyEfspDelta({ strips: { updated: [{ ...s, coordination: { ...s.coordination, state: 'ACTIVE' } }] } });
     }
-    updateMap();
+    crc.geojson.updateMap();
   });
   await snap(page, 'scene2b-receiver-after-accept.png');
 });
@@ -230,7 +230,7 @@ test('scene 3: a mixed TAC_C2 + APP session — the tactical scheme wins where t
   });
   const schemes = await page.evaluate(() => {
     const out = {};
-    for (const f of buildDots().features) out[f.properties.id] = f.properties.scheme;
+    for (const f of crc.geojson.buildDots().features) out[f.properties.id] = f.properties.scheme;
     return out;
   });
   expect(schemes.viper).toBe('TACTICAL');

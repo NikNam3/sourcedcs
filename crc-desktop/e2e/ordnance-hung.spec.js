@@ -27,12 +27,12 @@ async function goBay(page, positionId, bayId) {
 }
 
 const stateOf = (page, cs) => page.evaluate((cs) => {
-  const s = getAllEfspStrips().find((x) => getEfspFlightData(x.flightDataId).identity.callsign === cs);
+  const s = crc.state.getAllEfspStrips().find((x) => crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs);
   return s && s.state;
 }, cs);
 const ordnanceOf = (page, cs) => page.evaluate((cs) => {
-  const s = getAllEfspStrips().find((x) => getEfspFlightData(x.flightDataId).identity.callsign === cs);
-  return s && getEfspFlightData(s.flightDataId).military.ordnanceState;
+  const s = crc.state.getAllEfspStrips().find((x) => crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs);
+  return s && crc.state.getEfspFlightData(s.flightDataId).military.ordnanceState;
 }, cs);
 
 /** Press the Strip's own NLA button, then wait out the server's double-tap guard. */

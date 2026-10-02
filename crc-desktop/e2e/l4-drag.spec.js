@@ -57,10 +57,10 @@ function visibleGap(page, upper, lower) {
 
 async function dropAll(page, callsigns) {
   await page.evaluate((cs) => {
-    for (const s of getAllEfspStrips()) {
-      const flightData = getEfspFlightData(s.flightDataId);
+    for (const s of crc.state.getAllEfspStrips()) {
+      const flightData = crc.state.getEfspFlightData(s.flightDataId);
       if (!flightData || !cs.includes(flightData.identity.callsign) || s.state === 'DROPPED') continue;
-      sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
+      crc.ws.sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
     }
   }, callsigns);
   await page.waitForTimeout(400);
@@ -181,14 +181,14 @@ test('a Strip can be dragged from one Rack to another in the same Bay', async ({
     for (const c of cs) {
       await seedStrip(page, { callsign: c, stripType: 'DEPARTURE', flightData: { route: 'DCT', requestedAltitude: 'FL250', departureAirport: 'LTAG', destinationAirport: 'LTAF' } });
       for (let i = 0; i < 5; i++) {
-        await page.evaluate((c) => _invokeNla(getAllEfspStrips().find((s) => getEfspFlightData(s.flightDataId).identity.callsign === c)), c);
+        await page.evaluate((c) => crc.bayView._invokeNla(crc.state.getAllEfspStrips().find((s) => crc.state.getEfspFlightData(s.flightDataId).identity.callsign === c)), c);
         await page.waitForTimeout(500);
       }
     }
-    await page.evaluate(() => _moveStrip(getAllEfspStrips().find((s) => getEfspFlightData(s.flightDataId).identity.callsign === 'L4R3'), 'lc-runway-queue', 'rwy-23', null, null));
+    await page.evaluate(() => crc.bayView._moveStrip(crc.state.getAllEfspStrips().find((s) => crc.state.getEfspFlightData(s.flightDataId).identity.callsign === 'L4R3'), 'lc-runway-queue', 'rwy-23', null, null));
     await page.waitForTimeout(500);
     await openBay(page, 'lc-runway-queue', 'LC');
-    const rackOf = (c) => page.evaluate((c) => getAllEfspStrips().find((s) => getEfspFlightData(s.flightDataId).identity.callsign === c).rackId, c);
+    const rackOf = (c) => page.evaluate((c) => crc.state.getAllEfspStrips().find((s) => crc.state.getEfspFlightData(s.flightDataId).identity.callsign === c).rackId, c);
     expect(await rackOf('L4R1')).toBe('rwy-05');
     expect(await rackOf('L4R3')).toBe('rwy-23');
 

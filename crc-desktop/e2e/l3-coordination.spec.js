@@ -71,7 +71,7 @@ function seedCtrArrival(page, callsign) {
 /** Every live Strip record for this callsign, as the page's own store has it. */
 function recordsFor(page, callsign) {
   return page.evaluate((cs) => [...efspStrips.values()]
-    .filter(s => (efspFlightDataList.get(s.flightDataId) || {}).identity && efspFlightDataList.get(s.flightDataId).identity.callsign === cs && s.state !== 'DROPPED')
+    .filter(s => (crc.state.efspFlightDataList.get(s.flightDataId) || {}).identity && crc.state.efspFlightDataList.get(s.flightDataId).identity.callsign === cs && s.state !== 'DROPPED')
     .map(s => ({ facilityId: s.facilityId, owner: s.ownerPositionId, bayId: s.bayId, state: s.state, stripType: s.stripType,
       coordination: s.coordination && s.coordination.state, tofi: s.tofiCoordination && s.tofiCoordination.state })), callsign);
 }

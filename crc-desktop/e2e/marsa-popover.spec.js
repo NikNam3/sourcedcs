@@ -34,14 +34,14 @@ test.beforeEach(async ({ page }) => {
   await openPanel(page, { signedOn: ['OPS'] });
   // Three Strips, because one Strip cannot be behind anything. The reported
   // symptom needs a neighbour below it in the same Rack.
-  const before = await page.evaluate(() => getAllEfspStrips().map((s) => s.stripId));
+  const before = await page.evaluate(() => crc.state.getAllEfspStrips().map((s) => s.stripId));
   await seedStrip(page, { callsign: 'SHELL71' });
   await seedStrip(page, { callsign: 'VIPER11' });
   await seedStrip(page, { callsign: 'VIPER12' });
   // Read back by DIFFERENCE rather than by callsign: stripByCallsign() takes
   // .first(), and l1-touch-targets.spec.js has its own VIPER11 sitting earlier
   // in this Bay, so a callsign lookup would hand back its Strip instead.
-  seeded = await page.evaluate((had) => getAllEfspStrips()
+  seeded = await page.evaluate((had) => crc.state.getAllEfspStrips()
     .filter((s) => !had.includes(s.stripId)).map((s) => s.stripId), before);
 });
 
@@ -57,9 +57,9 @@ test.beforeEach(async ({ page }) => {
 test.afterEach(async ({ page }) => {
   await page.evaluate((ids) => {
     for (const id of ids) {
-      const s = getEfspStrip(id);
+      const s = crc.state.getEfspStrip(id);
       if (!s || s.state === 'DROPPED') continue;
-      sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
+      crc.ws.sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
     }
   }, seeded);
   await page.waitForTimeout(400);

@@ -15,7 +15,7 @@ const { openPanel, seedStrip, stripByCallsign, expectRefusalIsVisible } = requir
 
 /** The Strip's server-side placement, read from the page's own state. */
 const placement = (page, callsign) => page.evaluate((cs) => {
-  const s = [...efspStrips.values()].find(x => efspFlightDataList.get(x.flightDataId).identity.callsign === cs);
+  const s = [...efspStrips.values()].find(x => crc.state.efspFlightDataList.get(x.flightDataId).identity.callsign === cs);
   return s ? { bayId: s.bayId, state: s.state } : null;
 }, callsign);
 

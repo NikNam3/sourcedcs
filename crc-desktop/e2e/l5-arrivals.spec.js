@@ -32,7 +32,7 @@ async function goBay(page, positionId, bayId) {
 }
 
 const stateOf = (page, cs) => page.evaluate((cs) => {
-  const s = getAllEfspStrips().find((x) => getEfspFlightData(x.flightDataId).identity.callsign === cs);
+  const s = crc.state.getAllEfspStrips().find((x) => crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs);
   return s && s.state;
 }, cs);
 
@@ -40,7 +40,7 @@ const stateOf = (page, cs) => page.evaluate((cs) => {
 async function taxiToTower(page, cs) {
   for (let i = 0; i < 5; i++) {
     const before = await stateOf(page, cs);
-    await page.evaluate((cs) => _invokeNla(getAllEfspStrips().find((x) => getEfspFlightData(x.flightDataId).identity.callsign === cs)), cs);
+    await page.evaluate((cs) => crc.bayView._invokeNla(crc.state.getAllEfspStrips().find((x) => crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs)), cs);
     // 10 s: one Mutation round trip, measured over 3 s under load. The spec's budget is 90 s.
     await expect.poll(() => stateOf(page, cs), { timeout: 10000 }).not.toBe(before);
     await page.waitForTimeout(450); // the server's per-Strip double-tap guard
@@ -116,9 +116,9 @@ test('a Strip arriving in the Bay on screen flashes once, and is not listed on t
   await expect(stripByCallsign(twr, 'ARV602')).toHaveClass(/efsp-strip-arrived-flash/);
   // Force a rebuild of ARV601 by something unrelated to its arrival.
   await twr.evaluate((cs) => {
-    const s = getAllEfspStrips().find((x) => getEfspFlightData(x.flightDataId).identity.callsign === cs);
-    applyEfspDelta({ flightDataList: { updated: [{ ...getEfspFlightData(s.flightDataId), rev: getEfspFlightData(s.flightDataId).rev + 100 }] } });
-    renderAllOpenEfspBays();
+    const s = crc.state.getAllEfspStrips().find((x) => crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs);
+    crc.state.applyEfspDelta({ flightDataList: { updated: [{ ...getEfspFlightData(s.flightDataId), rev: crc.state.getEfspFlightData(s.flightDataId).rev + 100 }] } });
+    crc.bayView.renderAllOpenEfspBays();
   }, 'ARV601');
   const rebuilt = stripByCallsign(twr, 'ARV601');
   await expect(rebuilt).toHaveClass(/efsp-strip-arrived/);

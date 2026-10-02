@@ -23,6 +23,7 @@
 const path = require('path');
 const { test, expect } = require('./helpers/test');
 const { openPanel, stripByCallsign, expectRefusalIsVisible } = require('./helpers/app');
+const { installAppModules } = require('./helpers/modules');
 
 test.describe.configure({ mode: 'serial', timeout: 240000 });
 
@@ -63,21 +64,21 @@ async function controller(browser, signedOn, name) {
 
 // ── the field ────────────────────────────────────────────────────────────
 
-const field = (page) => page.evaluate(() => getEfspRunwayStatus('INCIRLIK'));
+const field = (page) => page.evaluate(() => crc.state.getEfspRunwayStatus('INCIRLIK'));
 const runway = async (page) => (await field(page)).runways[0];
 
 /** Sends a runway-status op with the current rev, as `positionId`, and waits for the record to move. */
 async function fieldOp(page, positionId, op) {
   const before = (await field(page)).rev;
-  await page.evaluate(([p, o]) => sendEfspRunwayStatusMutation(p, 'INCIRLIK', getEfspRunwayStatus('INCIRLIK').rev, o), [positionId, op]);
+  await page.evaluate(([p, o]) => crc.ws.sendEfspRunwayStatusMutation(p, 'INCIRLIK', crc.state.getEfspRunwayStatus('INCIRLIK').rev, o), [positionId, op]);
   await expect.poll(async () => (await field(page)).rev, { message: `${op.kind} as ${positionId}` }).toBeGreaterThan(before);
 }
 
 /** Opens RUNWAY STATUS the way a controller does: its row in the PANELS list. */
 async function openFieldPanel(page) {
-  if (!(await page.evaluate(() => isDockPanelOpen('runwayStatus')))) {
-    if (!(await page.evaluate(() => isDockPanelOpen('radars')))) await page.locator('#btn-radars').click();
-    await page.evaluate(() => dock.api.getPanel('radars').api.setActive());
+  if (!(await page.evaluate(() => crc.dock.isDockPanelOpen('runwayStatus')))) {
+    if (!(await page.evaluate(() => crc.dock.isDockPanelOpen('radars')))) await page.locator('#btn-radars').click();
+    await page.evaluate(() => crc.dock.dock.api.getPanel('radars').api.setActive());
     await page.locator('#panel-controls .panel-ctrl-label', { hasText: /^RUNWAY STATUS/ }).click();
   }
   await expect(page.locator('#runway-status-panel')).toBeVisible();
@@ -91,10 +92,10 @@ async function openFieldPanel(page) {
  */
 async function besideStrips(page) {
   await page.evaluate(() => {
-    const p = dock.api.getPanel('runwayStatus');
-    if (p) dock.api.removePanel(p);
-    dock.addPanel({ id: 'runwayStatus', component: 'runwayStatus', title: PANEL_TITLES.runwayStatus, position: { referencePanel: 'efsp', direction: 'right' } });
-    dock.api.getPanel('efsp').api.setActive();
+    const p = crc.dock.dock.api.getPanel('runwayStatus');
+    if (p) crc.dock.dock.api.removePanel(p);
+    crc.dock.dock.addPanel({ id: 'runwayStatus', component: 'runwayStatus', title: crc.dock.PANEL_TITLES.runwayStatus, position: { referencePanel: 'efsp', direction: 'right' } });
+    crc.dock.dock.api.getPanel('efsp').api.setActive();
   });
   await expect(page.locator('#runway-status-panel')).toBeVisible();
   await expect(page.locator('#efsp-panel')).toBeVisible();
@@ -102,7 +103,7 @@ async function besideStrips(page) {
 
 /** Brings a dock panel to the front of its tab group. */
 async function front(page, id) {
-  await page.evaluate((id) => dock.api.getPanel(id).api.setActive(), id);
+  await page.evaluate((id) => crc.dock.dock.api.getPanel(id).api.setActive(), id);
 }
 
 /** A runway-status button in the panel, pressed. The panel must be in front. */
@@ -139,23 +140,23 @@ async function resetField(page) {
 
 // ── Strips ───────────────────────────────────────────────────────────────
 
-const stripOf = (page, cs) => page.evaluate((cs) => getAllEfspStrips().find((x) => {
-  const f = getEfspFlightData(x.flightDataId);
+const stripOf = (page, cs) => page.evaluate((cs) => crc.state.getAllEfspStrips().find((x) => {
+  const f = crc.state.getEfspFlightData(x.flightDataId);
   return f && f.identity.callsign === cs && x.state !== 'DROPPED';
 }) || null, cs);
 
 /** A Strip op sent as `positionId`, else its owner when held here, else the first Position held here. */
 async function stripOp(page, cs, op, positionId) {
   await page.evaluate(([cs, op, p]) => {
-    const s = getAllEfspStrips().find((x) => getEfspFlightData(x.flightDataId).identity.callsign === cs && x.state !== 'DROPPED');
-    const signedOn = getActingPositions('INCIRLIK');
-    sendEfspMutation(p || (signedOn.includes(s.ownerPositionId) ? s.ownerPositionId : signedOn[0]), s, op);
+    const s = crc.state.getAllEfspStrips().find((x) => crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs && x.state !== 'DROPPED');
+    const signedOn = crc.ws.getActingPositions('INCIRLIK');
+    crc.ws.sendEfspMutation(p || (signedOn.includes(s.ownerPositionId) ? s.ownerPositionId : signedOn[0]), s, op);
   }, [cs, op, positionId || null]);
 }
 
 /** Creates a Strip over the real wire and waits for it in client state (not in whatever Bay is on screen). */
 async function seed(page, { callsign, stripType, actingPositionId = 'OPS', bayId = 'ops-proposed', flightData = {} }) {
-  await page.evaluate(([acting, op]) => window.sendEfspCreateStrip(acting, op, 'INCIRLIK'), [
+  await page.evaluate(([acting, op]) => crc.ws.sendEfspCreateStrip(acting, op, 'INCIRLIK'), [
     actingPositionId, { kind: 'CreateStrip', bayId, rackId: 'main', stripType, flightData: { callsign, aircraftType: 'F16', wakeCategory: 'D', ...FDR, ...flightData } },
   ]);
   await expect.poll(() => stripOf(page, callsign), { message: `${callsign} created` }).not.toBeNull();
@@ -170,7 +171,7 @@ async function setState(page, cs, toState) {
 async function nla(page, cs, n = 1) {
   for (let i = 0; i < n; i++) {
     const before = (await stripOf(page, cs)).state;
-    await page.evaluate((cs) => _invokeNla(getAllEfspStrips().find((x) => getEfspFlightData(x.flightDataId).identity.callsign === cs && x.state !== 'DROPPED')), cs);
+    await page.evaluate((cs) => crc.bayView._invokeNla(crc.state.getAllEfspStrips().find((x) => crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs && x.state !== 'DROPPED')), cs);
     await expect.poll(async () => (await stripOf(page, cs)).state, { message: `${cs} NLA from ${before}` }).not.toBe(before);
     await page.waitForTimeout(450); // the server's per-Strip 400 ms double-tap guard (T5)
   }
@@ -197,7 +198,7 @@ async function dropAll(pages, callsigns) {
     for (const page of pages) {
       const s = await stripOf(page, cs);
       if (!s) break;
-      if (await page.evaluate((o) => getActingPositions('INCIRLIK').includes(o), s.ownerPositionId)) {
+      if (await page.evaluate((o) => crc.ws.getActingPositions('INCIRLIK').includes(o), s.ownerPositionId)) {
         await stripOp(page, cs, { kind: 'DropStrip', reason: 'e2e cleanup' });
         break;
       }
@@ -236,7 +237,7 @@ test('Phase 3 walk: OPS asks for runway works, TWR suspends, the Strips hold, FI
     await stripOp(ops, cs, { kind: 'SetBlock', blockId: '8B', value: '05' }, 'AP');
   }
   await stripOp(ops, ARR_FIN, { kind: 'SetBlock', blockId: '3F', value: true }, 'AP');
-  await expect.poll(async () => (await ops.evaluate((cs) => { const s = getAllEfspStrips().find((x) => getEfspFlightData(x.flightDataId).identity.callsign === cs); return getEfspFlightData(s.flightDataId).military.hookRequired; }, ARR_FIN))).toBe(true);
+  await expect.poll(async () => (await ops.evaluate((cs) => { const s = crc.state.getAllEfspStrips().find((x) => crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs); return crc.state.getEfspFlightData(s.flightDataId).military.hookRequired; }, ARR_FIN))).toBe(true);
   await nla(ops, ARR_TWR, 1); // -> HANDED_TO_TOWER (LC)
   await nla(ops, ARR_FIN, 1);
   await nla(twr, ARR_FIN, 1); // -> FINAL
@@ -297,7 +298,7 @@ test('Phase 3 walk: OPS asks for runway works, TWR suspends, the Strips hold, FI
   // server refuses it anyway when sent by hand — named by the runway.
   await expect(offered(twr, 'CompleteInspection')).toHaveCount(0);
   await front(twr, 'efsp');
-  await twr.evaluate(() => sendEfspRunwayStatusMutation('LC', 'INCIRLIK', getEfspRunwayStatus('INCIRLIK').rev, { kind: 'CompleteInspection', runwayId: '05/23' }));
+  await twr.evaluate(() => crc.ws.sendEfspRunwayStatusMutation('LC', 'INCIRLIK', crc.state.getEfspRunwayStatus('INCIRLIK').rev, { kind: 'CompleteInspection', runwayId: '05/23' }));
   await expect(twr.locator('#efsp-mutation-error')).toHaveText(/^runway 05\/23 — /);
   expect(await expectRefusalIsVisible(twr, 'TWR signing off an inspection')).toMatch(/^runway 05\/23/);
   await shot(twr, '05-inspection-refused-to-twr');
@@ -368,7 +369,7 @@ test('Phase 3 walk: a runway change needs OPS and APP (each a different person),
 
   // Pilot request "request runway 23": LC moves the Strip to 23's rack and
   // the advisory follows the rack (the chip goes).
-  await twr.evaluate((cs) => _moveStrip(getAllEfspStrips().find((s) => getEfspFlightData(s.flightDataId).identity.callsign === cs && s.state !== 'DROPPED'), 'lc-runway-queue', 'rwy-23', null, null), DEP);
+  await twr.evaluate((cs) => crc.bayView._moveStrip(crc.state.getAllEfspStrips().find((s) => crc.state.getEfspFlightData(s.flightDataId).identity.callsign === cs && s.state !== 'DROPPED'), 'lc-runway-queue', 'rwy-23', null, null), DEP);
   await expect.poll(async () => (await stripOf(twr, DEP)).rackId).toBe('rwy-23');
   await expect(chip(stripByCallsign(twr, DEP))).toHaveCount(0);
 
@@ -393,7 +394,8 @@ test('a reload mid-suspension still shows SUSPENDED (the snapshot carries it); t
   await besideStrips(twr);
   await press(twr, 'BeginRunwayWorks', { positionId: 'LC' });
   await twr.reload();
-  await twr.waitForFunction(() => typeof getEfspRunwayStatus === 'function' && !!getEfspRunwayStatus('INCIRLIK'));
+  await installAppModules(twr);
+  await twr.waitForFunction(() => typeof crc.state.getEfspRunwayStatus === 'function' && !!crc.state.getEfspRunwayStatus('INCIRLIK'));
   await openFieldPanel(twr);
   await besideStrips(twr);
   await front(twr, 'runwayStatus');
@@ -401,8 +403,8 @@ test('a reload mid-suspension still shows SUSPENDED (the snapshot carries it); t
   await expect(twr.locator('#runway-status-panel .runway-status-suspension')).toHaveText(/^SUSPENDED WORKS by LC \(maverick\) \d{4}Z$/);
   await shot(twr, '11-reload-still-suspended');
   // The reload dropped the Positions (a new connection); take them back to clean up.
-  await twr.evaluate(() => window.sendEfspSetPositions('INCIRLIK', ['LC', 'OPS']));
-  await twr.waitForFunction(() => getActingPositions('INCIRLIK').length === 2);
+  await twr.evaluate(() => crc.ws.sendEfspSetPositions('INCIRLIK', ['LC', 'OPS']));
+  await twr.waitForFunction(() => crc.ws.getActingPositions('INCIRLIK').length === 2);
   await resetField(twr);
   expect((await runway(twr)).status).toBe('OPEN');
 });

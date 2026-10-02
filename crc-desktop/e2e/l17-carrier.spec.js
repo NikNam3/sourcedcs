@@ -28,20 +28,20 @@ async function controller(browser, baseURL, name, signedOn) {
   _contexts.push(context);
   const page = await context.newPage();
   await openPanel(page, { signedOn, facilityId: 'CARRIER', controller: name });
-  await page.waitForFunction(() => typeof getEfspCarrier === 'function' && !!getEfspCarrier());
+  await page.waitForFunction(() => typeof crc.carrier.getEfspCarrier === 'function' && !!crc.carrier.getEfspCarrier());
   return page;
 }
 
 const strip = (page, callsign) => page.locator('.efsp-strip', { has: page.locator('.efsp-block-C1', { hasText: callsign }) }).first();
 const stripOf = (page, callsign) => page.evaluate((c) => {
-  const s = getAllEfspStrips().find(x => x.state !== 'DROPPED' && (getEfspFlightData(x.flightDataId) || { identity: {} }).identity.callsign === c);
+  const s = crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && (crc.state.getEfspFlightData(x.flightDataId) || { identity: {} }).identity.callsign === c);
   return s ? { stripId: s.stripId, flightDataId: s.flightDataId, stripType: s.stripType, state: s.state, ownerPositionId: s.ownerPositionId, bayId: s.bayId, trigger: s.carrierHandoff && s.carrierHandoff.trigger } : null;
 }, callsign);
 const waitStrip = (page, callsign, pred, what) => expect.poll(async () => { const s = await stripOf(page, callsign); return !!s && pred(s); }, { message: what, timeout: 10000 }).toBe(true);
-const waitCase = (page, value) => expect.poll(() => page.evaluate(() => carrierCaseValue()), { timeout: 10000 }).toBe(value);
+const waitCase = (page, value) => expect.poll(() => page.evaluate(() => crc.carrier.carrierCaseValue()), { timeout: 10000 }).toBe(value);
 
 async function checkIn(page, callsign) {
-  await page.evaluate((c) => window.sendEfspCreateStrip('CV_MARSHAL', {
+  await page.evaluate((c) => crc.ws.sendEfspCreateStrip('CV_MARSHAL', {
     kind: 'CreateStrip', bayId: 'cv-marshal-stack', rackId: 'main', stripType: 'MARSHAL', flightData: { callsign: c, aircraftType: 'F-18C' },
   }, 'CARRIER'), callsign);
   await waitStrip(page, callsign, s => s.state === 'IN_STACK', `${callsign} checked in`);
@@ -56,18 +56,18 @@ async function openBay(page, positionId, bayId) {
 async function cleanUp(...pages) {
   for (const p of pages) {
     await p.evaluate(() => {
-      const signedOn = getActingPositions('CARRIER');
-      for (const s of getAllEfspStrips()) {
+      const signedOn = crc.ws.getActingPositions('CARRIER');
+      for (const s of crc.state.getAllEfspStrips()) {
         if (s.state !== 'DROPPED' && s.facilityId === 'CARRIER' && signedOn.includes(s.ownerPositionId)) {
-          sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
+          crc.ws.sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
         }
       }
     });
   }
-  await expect.poll(() => pages[0].evaluate(() => getAllEfspStrips().filter(s => s.state !== 'DROPPED' && s.facilityId === 'CARRIER').length)).toBe(0);
+  await expect.poll(() => pages[0].evaluate(() => crc.state.getAllEfspStrips().filter(s => s.state !== 'DROPPED' && s.facilityId === 'CARRIER').length)).toBe(0);
 }
 async function setCase(pri, value) {
-  if (await pri.evaluate(() => carrierCaseValue()) === value) return;
+  if (await pri.evaluate(() => crc.carrier.carrierCaseValue()) === value) return;
   await pri.locator('.carrier-case-select').selectOption(value);
   await waitCase(pri, value);
 }
@@ -106,7 +106,7 @@ test('02 the slot board shows what the slot means; a drag to a slot is one Move 
   await marshal.screenshot({ path: path.join(SHOTS, '02-stack-board.png') });
 
   // low state: drag CCC's row onto slot 0, one gesture
-  const before = await marshal.evaluate(() => carrierDerivedStack().map(e => e.flightDataId));
+  const before = await marshal.evaluate(() => crc.carrier.carrierDerivedStack().map(e => e.flightDataId));
   const src = board.locator('.carrier-slot[data-slot-index="2"]');
   const target = board.locator('.carrier-slot[data-slot-index="0"]');
   const s = await src.boundingBox(); const t = await target.boundingBox();
@@ -117,8 +117,8 @@ test('02 the slot board shows what the slot means; a drag to a slot is one Move 
   await expect(target).toHaveClass(/efsp-drop-target/);
   await marshal.screenshot({ path: path.join(SHOTS, '02-drag-to-slot-preview.png') });
   await marshal.mouse.up();
-  await expect.poll(() => marshal.evaluate(() => carrierDerivedStack().map(e => e.flightDataId))).not.toEqual(before);
-  const after = await marshal.evaluate(() => carrierDerivedStack().map(e => [getEfspFlightData(e.flightDataId).identity.callsign, e.stackIndex, e.angels]));
+  await expect.poll(() => marshal.evaluate(() => crc.carrier.carrierDerivedStack().map(e => e.flightDataId))).not.toEqual(before);
+  const after = await marshal.evaluate(() => crc.carrier.carrierDerivedStack().map(e => [crc.state.getEfspFlightData(e.flightDataId).identity.callsign, e.stackIndex, e.angels]));
   expect(after).toEqual([[c, 0, 6], [a, 1, 7], [b, 2, 8]]);
   await expect(strip(marshal, c).locator('.efsp-block-C7')).toHaveText('6');
   await marshal.screenshot({ path: path.join(SHOTS, '02-after-resequence.png') });
@@ -146,7 +146,7 @@ test('03 Case II handoffs: Commence feeds a lane, See you hands to PriFly, Radar
   await marshal.screenshot({ path: path.join(SHOTS, '03-two-handoff-buttons.png') });
   await commence.click();
   await waitStrip(marshal, a, s => s.state === 'COMMENCED' && s.ownerPositionId === 'CV_APP1' && s.trigger === 'CONTROLLER_INITIATED', 'Commence');
-  await expect.poll(() => marshal.evaluate(() => carrierDerivedStack().map(e => [e.stackIndex, e.status]))).toEqual([[0, 'PUSHED'], [1, 'HOLDING']]);
+  await expect.poll(() => marshal.evaluate(() => crc.carrier.carrierDerivedStack().map(e => [e.stackIndex, e.status]))).toEqual([[0, 'PUSHED'], [1, 'HOLDING']]);
 
   // See you: PRIFLY gets it as a PATTERN Strip, and the stack keeps a vacancy at 1
   await seeYou.click();
@@ -154,7 +154,7 @@ test('03 Case II handoffs: Commence feeds a lane, See you hands to PriFly, Radar
   await openBay(pri, 'CV_PRIFLY', 'cv-prifly-pattern');
   await expect(strip(pri, b)).toBeVisible();
   await pri.screenshot({ path: path.join(SHOTS, '03-prifly-pattern.png') });
-  await expect.poll(() => marshal.evaluate(() => carrierDerivedStack().map(e => e.stackIndex))).toEqual([0]);
+  await expect.poll(() => marshal.evaluate(() => crc.carrier.carrierDerivedStack().map(e => e.stackIndex))).toEqual([0]);
 
   // Radar contact at the lane: same Strip, now FINAL
   await openBay(marshal, 'CV_APP1', 'cv-app1-lane');
@@ -176,7 +176,7 @@ test('03 Case II handoffs: Commence feeds a lane, See you hands to PriFly, Radar
   await marshal.waitForTimeout(450);
   await strip(marshal, a).locator('.efsp-nla-btn').click();
   await expect.poll(() => stripOf(marshal, a)).toBeNull();
-  await expect.poll(() => marshal.evaluate(() => carrierDerivedStack().length)).toBe(0);
+  await expect.poll(() => marshal.evaluate(() => crc.carrier.carrierDerivedStack().length)).toBe(0);
 
   await cleanUp(marshal, pri);
   await setCase(pri, 'III');
@@ -214,12 +214,12 @@ test('05 a refusal is visible: a Marshal cannot set the Case, and a frequency is
   const a = cs('GGG');
   await checkIn(marshal, a);
   // the server refuses a Case op from the Marshal, and the panel says so
-  await marshal.evaluate(() => sendEfspCarrierMutation('CV_MARSHAL', undefined, undefined, { kind: 'SetCase', to: 'I' }));
+  await marshal.evaluate(() => crc.ws.sendEfspCarrierMutation('CV_MARSHAL', undefined, undefined, { kind: 'SetCase', to: 'I' }));
   await expect(marshal.locator('#efsp-mutation-error')).toContainText(/PERMISSION_DENIED|Case/i);
   await openBay(marshal, 'CV_MARSHAL', 'cv-marshal-stack');
   await marshal.evaluate((c) => {
-    const s = getAllEfspStrips().find(x => getEfspFlightData(x.flightDataId).identity.callsign === c);
-    sendEfspMutation('CV_MARSHAL', s, { kind: 'SetBlock', blockId: 'C10', value: '251.000' });
+    const s = crc.state.getAllEfspStrips().find(x => crc.state.getEfspFlightData(x.flightDataId).identity.callsign === c);
+    crc.ws.sendEfspMutation('CV_MARSHAL', s, { kind: 'SetBlock', blockId: 'C10', value: '251.000' });
   }, a);
   await expect(marshal.locator('#efsp-mutation-error')).toContainText(/frequency/i);
   await marshal.screenshot({ path: path.join(SHOTS, '05-refusals.png') });
