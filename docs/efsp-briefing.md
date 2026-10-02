@@ -619,7 +619,7 @@ OVERFLIGHT to the guide's own four-state lifecycle (L28), which is where that ge
 
 Same convention as §3I: full notes are in `docs/wip/<lane>.md`. Folded here: L1b, L12, L13, L14,
 L15, L16, L22, L24, L27, F2, F3, F4, L23, L26, U6, L18 (both halves), UI-A,
-L17, L19, TA, PARITY, GRPC, SOAK, SOAKW, HYG, L25 and E2E-fix. Not yet folded: L28 (merged, notes in `docs/wip/L28.md`), UI-B (not merged), L20.
+L17, L19, TA, PARITY, GRPC, SOAK, SOAKW, HYG, L25 and E2E-fix. Not yet folded: L28 (merged, notes in `docs/wip/L28.md`), UI-B (merged since), L20.
 
 **Runway status, client (L1b, `0068`).** Three files: `runway-status-rules.js` (the pure mirror of the
 server rules: `runwayStatusActionsFor` offers a button only for what Tower or OPS would accept,
@@ -903,7 +903,7 @@ correlation and MARSA records. Any new EFSP broadcast must go through `_broadcas
 - U7: `receiveCoordinationPeerGone` ends only a PROPOSED or ACTIVE link (S-L23: a completed handoff is not a live link, so the receiver's later drop leaves the sender's Strip alone; tested).
 - Open: the two UI follow-ups above (a TAC_C2-only controller cannot Accept an AIC-held exit from the
   panel; the JTAC's drop-only tabs); GCI has no hand-back row (unchanged); `permission.js`'s module
-  header still said "no coordination primitives are built" (stale since WP4A; L20-AUTH sweeps it); the 4-hour soak was not
+  header still said "no coordination primitives are built" (stale since WP4A; L20 sweeps it); the 4-hour soak was not
   run for this lane; `CANCEL` and the two system log entries are new op strings (a `CANCEL` is not a
   coordination attempt for the metrics tap).
 
@@ -1179,10 +1179,10 @@ correlation redraw are load-sensitive.
 
 **Not built, in the guide's order.** WP7A: Incirlik's RSU/SFA/PAR is built (§3J); the carrier Positions (L17) have never met a real DCS
 ship. WP8's §10.3 suggestion chip and §10.4 staleness are built (L19). OVERFLIGHT's four-state
-lifecycle is built (L28, `0087`). Not merged: UI-B (below). Not started: the `[SOURCE-DEFINED]` audit fixes (L20), which is a
+lifecycle is built (L28, `0087`). UI-B is merged (below). In progress: the `[SOURCE-DEFINED]` audit fixes (L20), which is a
 WP6 acceptance criterion in its own right and runs last. Everything else in WP6 to WP8 that the guide names is
 built: the runway-status panel, `HUNG`, alert/scramble, the ATO import and AR join, the metrics dashboard.
-**UI-B** is the follow-up lane (not merged): wire `sendEfspResync()` (S-12, with the
+**UI-B** was the follow-up lane (merged at merge4; its note `docs/wip/UI-B.md` and S-UIB in `docs/parallel/decisions.md` say what it closed, so check a row marked UI-B below against them before acting on it): it wired `sendEfspResync()` (S-12, with the
 open question of the other sequence numbers: carrier, runway status, ATO and metrics have their own and no
 resync, Q3-3), the `RUNWAY_CHANGE` suspension label, the L19 chip against a suspended runway, and the
 items in the table marked UI-B.
@@ -1200,7 +1200,7 @@ the hard-coded 18,000 ft (TA); the `tools/miztoyaml` frequency bug (L25).
 
 | Item | Severity | Owner | Source |
 |---|---|---|---|
-| **S-12: `sendEfspResync()` has no caller** in the client, so a client that misses a delta or sees an epoch change has no recovery path but a reconnect; ruled "wire it", and the other stores (carrier, runway status, ATO, metrics) have no resync at all | medium | UI-B | PARITY, S-PARITY, Q3-3 |
+| **S-12: `sendEfspResync()` had no caller** in the client (UI-B wired it, `panels/efsp/efsp-ws.js`; the open part is the other stores), so a client that misses a delta or sees an epoch change has no recovery path but a reconnect; ruled "wire it", and the other stores (carrier, runway status, ATO, metrics) have no resync at all | medium | UI-B | PARITY, S-PARITY, Q3-3 |
 | A runway suspended by a runway change reads "suspended — works in progress" through a fallback (`SUSPENSION_LABELS` has only `WORKS`) | low | UI-B | PARITY |
 | The L19 chip's `SetState` to DEPARTED is refused while the runway is suspended (H19): right for a clearance, odd for an observed fact | decision | UI-B / runway status | L19 |
 | **Gestures at the one-input ceiling**: HIGHLIGHT and OFFSET now have one-input forms (Alt+click, Ctrl/Cmd+click); the menu and swatch forms still cost 2. Accept, or remove the 2-input forms | decision | human | L15, UI-A |
@@ -1270,7 +1270,7 @@ folding when they land).
   `surveillance/presentation.js`, client `track-label.js`. The wire carries no DCS truth.
   `presentation.test.mjs` plus `ws-hub-wire-strictness.test.mjs` hold the line.
 
-## 5. Where to start: what is left of waves 3 and 4
+## 5. Where to start: what is left after the refactor
 
 The plan is `docs/efsp-parallel-plan.md` §3–§4, the per-lane briefings are in `docs/parallel/wave2/`
 (and the later ones beside them), and `docs/parallel/decisions.md` is what is actually dispatched. Each
@@ -1278,15 +1278,17 @@ lane works in its own worktree `/home/nklx/dev/personal/sourcedcs-<lane>` on `la
 `docs/parallel/lane-rules.md`, and leaves `docs/wip/<lane>.md` for the next fold. **Merged into
 `efsp-wp5-correlation`** (folded in §3J except L28): GRPC, SOAK, DOCFOLD, TA, HYG, PARITY, L17, L19, UI-A, L18's
 server half, SOAKW and L28, on top of L1b, L12–L16, L22–L27, F2–F4, U6 and L18's client half; L25, E2E-fix,
-QAC, INFRA2, S13, DOCS2, FREEZE, ARCH, AIRSP and L20-prep are in too. **Not merged:** UI-B, QAS, E2E-harden.
+QAC, INFRA2, S13, DOCS2, FREEZE, ARCH, AIRSP and L20-prep are in too, and so are UI-B, QAS and E2E-harden (merge4), the
+refactor W1-W7 (ADRs `0095`-`0097`) and the rename (`docs/parallel/refactor/README.md`, `docs/parallel/decisions.md` S-M-W7,
+S-REFACTOR-DONE). What is queued after L20 is in `docs/parallel/decisions.md` (S-REFACTOR-DONE's "Next").
 
 | Lane | What | ADR | State |
 |---|---|---|---|
 | L18 (server half) | RSU/SFA/PAR Positions, Bays, `singleFrequencyApproach`, `SfaRotation`, the Bay `view`/`replacesRacks`/`capacity` flags, client mounting | 0093 (0075 Part B) | merged; re-run PARITY's tests |
 | SOAKW | `memory.slope` judged only on 3 h+ runs with a retention-length warm-up | none | merged |
-| UI-B | wire `sendEfspResync()` (and decide the other stores' resync, Q3-3), the `RUNWAY_CHANGE` label, the L19 chip against a suspended runway, the `a.block` reason line, the runway-change owners fallback, the GCI "with" tab (§4) | open | not merged |
-| L28 | OVERFLIGHT's four-state lifecycle (H63, H74, H75), and the E2E hardening for `ordnance-hung`'s order dependence (the latter is E2E-harden, not merged) | 0087 | L28 merged |
-| L20 | the `[SOURCE-DEFINED]` fixes and stale-text sweep (§4); the L19 thresholds, L18's FINAL/placeholder values, non-Syria transition altitudes | 0077 | wave 4, last |
+| UI-B | wire `sendEfspResync()` (and decide the other stores' resync, Q3-3), the `RUNWAY_CHANGE` label, the L19 chip against a suspended runway, the `a.block` reason line, the runway-change owners fallback, the GCI "with" tab (§4) | open | merged (merge4, with R3-47's `efsp-resync-reply`) |
+| L28 | OVERFLIGHT's four-state lifecycle (H63, H74, H75), and the E2E hardening for `ordnance-hung`'s order dependence (the latter is E2E-harden, merged) | 0087 | L28 merged |
+| L20 | the `[SOURCE-DEFINED]` fixes and stale-text sweep (§4); the L19 thresholds, L18's FINAL/placeholder values, non-Syria transition altitudes | 0077 | in progress (briefings in `docs/parallel/l20/`) |
 
 **The integrator, after every wave:** merge in order, run both unit suites and the full Playwright
 suite, restart the local crc-sync, fold `docs/wip/*.md` into the guide and this file, and walk the
