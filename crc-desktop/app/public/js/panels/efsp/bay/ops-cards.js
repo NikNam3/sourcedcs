@@ -101,7 +101,6 @@ export function _renderOpsFiledCards(container) {
 export function _refreshOpsFiledIfStale(container) {
   const stale = Date.now() - _opsFiledFetchedAt > OPS_FILED_REFRESH_MS;
   if (_opsFiledFetching || !stale) return;
-  if (typeof listFiledFlightPlansClient !== 'function') return;
   _opsFiledFetching = true;
   listFiledFlightPlansClient().then((plans) => {
     _opsFiledPlans = plans;

@@ -18,7 +18,7 @@ export function getOpenEfspBayIds() {
 
 /** The client-local Bays (search results, "with AIC/JTAC"): views onto live Strips, never a destination. */
 export function _isPseudoBayId(bayId) {
-  return bayId.endsWith('-search') || (typeof isWithOthersBayId === 'function' && isWithOthersBayId(bayId));
+  return bayId.endsWith('-search') || (isWithOthersBayId(bayId));
 }
 export let _openBayContainers = []; // [{containerEl, bayId}] — element references, not ids; set by efsp-panel.js as the user switches Bay tabs
 

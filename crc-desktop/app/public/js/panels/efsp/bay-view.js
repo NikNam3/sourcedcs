@@ -132,7 +132,7 @@ let _lastAdvancingPressAt = null;
 /** @returns {boolean} true when this press is the tail of a double tap and must be dropped. */
 export function _swallowRepeatAdvance() {
   const now = Date.now();
-  if (typeof isWithinDoubleTapWindow === 'function' && isWithinDoubleTapWindow(_lastAdvancingPressAt, now)) return true;
+  if (isWithinDoubleTapWindow(_lastAdvancingPressAt, now)) return true;
   _lastAdvancingPressAt = now;
   return false;
 }
@@ -140,20 +140,20 @@ export function _swallowRepeatAdvance() {
 export function _dispatchMarsa(strip, marsaId, op) {
   const actingPositionId = _resolveActingPositionId(strip);
   if (!actingPositionId) return;
-  const relation = marsaId && typeof getEfspMarsa === 'function' ? getEfspMarsa(marsaId) : null;
+  const relation = marsaId ? getEfspMarsa(marsaId) : null;
   sendEfspMarsaMutation(actingPositionId, marsaId, relation ? relation.rev : undefined, op);
 }
 
 export function _dispatchCorrelation(strip, op) {
   const actingPositionId = _resolveActingPositionId(strip);
   if (!actingPositionId) return;
-  const record = typeof getEfspCorrelationForStrip === 'function' ? getEfspCorrelationForStrip(strip) : null;
+  const record = getEfspCorrelationForStrip(strip);
   sendEfspCorrelationMutation(actingPositionId, strip.flightDataId, record ? record.rev : 0, op);
 }
 
 export function _selectStrip(stripId) {
   _selectedStripId = _selectedStripId === stripId ? null : stripId;
-  if (typeof noteEfspStripSelected === 'function') noteEfspStripSelected(_selectedStripId); // docs/adr/0072
+  noteEfspStripSelected(_selectedStripId); // docs/adr/0072
   _afterSelectionChanged();
 }
 
@@ -166,7 +166,7 @@ export function _selectStrip(stripId) {
 export function selectEfspStripById(stripId) {
   if (!getEfspStrip(stripId)) return false;
   _selectedStripId = stripId;
-  if (typeof noteEfspStripSelected === 'function') noteEfspStripSelected(_selectedStripId); // docs/adr/0072
+  noteEfspStripSelected(_selectedStripId); // docs/adr/0072
   _afterSelectionChanged();
   const el = _stripElById(stripId);
   if (el && typeof el.scrollIntoView === 'function') {
@@ -181,13 +181,13 @@ function _afterSelectionChanged() {
   // class each Strip element reads while it is being built. Doing it the other
   // way round would leave the highlight one selection behind, which is the kind
   // of off-by-one that looks like a race and is not.
-  if (typeof highlightMarsaParticipants === 'function') highlightMarsaParticipants(_selectedStripId);
-  if (typeof highlightArParticipants === 'function') highlightArParticipants(_selectedStripId); // docs/adr/0071
+  highlightMarsaParticipants(_selectedStripId);
+  highlightArParticipants(_selectedStripId); // docs/adr/0071
   renderAllOpenEfspBays();
   // Ring the selected Strip's contact on the map (guide §6.6 rule 4). One Map
   // lookup plus the existing rAF-batched updateMap() — see
   // correlation-highlight.js on why the 1s budget is not a concern here.
-  if (typeof highlightCorrelatedTrack === 'function') highlightCorrelatedTrack(_selectedStripId);
+  highlightCorrelatedTrack(_selectedStripId);
 }
 
 // Non-drag move path (WCAG 2.2 SC 2.5.7): select a Strip, then click a
@@ -411,9 +411,9 @@ export function renderBay(container, bayId) {
   }
 
   // The Marshal stack's slot board (crc-sync docs/adr/0074): vacancies, derived fields, drop targets.
-  if (bayId === 'cv-marshal-stack' && typeof renderCarrierStackBoard === 'function') renderCarrierStackBoard(container);
+  if (bayId === 'cv-marshal-stack') renderCarrierStackBoard(container);
   // The Bay's descriptor view (crc-sync docs/adr/0093): the pattern board, the FINAL panel or the SFA rotation header.
-  if (typeof renderBayDescriptorView === 'function') renderBayDescriptorView(container, bay);
+  renderBayDescriptorView(container, bay);
 
   container.scrollTop = scrollTop;
   if (focusedStripId && activeEl && !container.contains(activeEl)) {
@@ -539,28 +539,28 @@ export function _stripRenderSignature(strip) {
   // Which Position the controller is acting as decides which controls render.
   parts.push('act:' + (_resolveActingPositionId(strip) || ''));
 
-  const flightData = typeof getEfspFlightData === 'function' ? getEfspFlightData(strip.flightDataId) : null;
+  const flightData = getEfspFlightData(strip.flightDataId);
   parts.push('flightData:' + (flightData ? flightData.rev : ''));
-  parts.push('stereo:' + (typeof stereoRoutesCacheKey === 'function' ? stereoRoutesCacheKey() : '')); // Block 9F's options (docs/adr/0073)
+  parts.push('stereo:' + stereoRoutesCacheKey()); // Block 9F's options (docs/adr/0073)
 
-  const siblings = typeof otherLiveStripsForFlightData === 'function' ? otherLiveStripsForFlightData(strip.flightDataId, strip.stripId) : [];
+  const siblings = otherLiveStripsForFlightData(strip.flightDataId, strip.stripId);
   // Not just the count: the badge's title names each sibling's Facility,
   // Position and strip type, and a sibling that moves desk changes it.
   parts.push('sib:' + siblings.map(s => `${s.stripId}/${s.facilityId || '?'}/${s.ownerPositionId}/${s.stripType}`).sort().join(','));
 
-  const obligation = typeof getEfspObligation === 'function' ? getEfspObligation(strip.stripId) : null;
+  const obligation = getEfspObligation(strip.stripId);
   parts.push('obl:' + (obligation ? `${obligation.obligationType}/${obligation.severity}` : ''));
 
-  const relation = typeof marsaForStrip === 'function' ? marsaForStrip(strip) : null;
+  const relation = marsaForStrip(strip);
   parts.push('mrs:' + (relation
     ? `${relation.marsaId}/${relation.rev}/${relation.state}/${relation.rendezvousAt ? 1 : 0}/${relation.voidedBy || ''}`
     : ''));
-  parts.push('mhl:' + (typeof isMarsaHighlighted === 'function' && isMarsaHighlighted(strip.stripId) ? 1 : 0));
-  parts.push('car:' + (typeof carrierSignatureFor === 'function' ? carrierSignatureFor(strip) : '')); // crc-sync docs/adr/0074 — a Case change moves every carrier Strip's derived fields
-  parts.push('tx:' + (typeof tofiExitSignatureFor === 'function' ? tofiExitSignatureFor(strip) : '')); // UI-A U8 — the mission line's state decides CTR's primary action
-  parts.push('ar:' + (typeof arSignatureFor === 'function' ? arSignatureFor(strip) : '')); // docs/adr/0071 — the AR join lives on OTHER flights' Strips
+  parts.push('mhl:' + (isMarsaHighlighted(strip.stripId) ? 1 : 0));
+  parts.push('car:' + carrierSignatureFor(strip)); // crc-sync docs/adr/0074 — a Case change moves every carrier Strip's derived fields
+  parts.push('tx:' + tofiExitSignatureFor(strip)); // UI-A U8 — the mission line's state decides CTR's primary action
+  parts.push('ar:' + arSignatureFor(strip)); // docs/adr/0071 — the AR join lives on OTHER flights' Strips
 
-  const correlation = typeof getEfspCorrelationForStrip === 'function' ? getEfspCorrelationForStrip(strip) : null;
+  const correlation = getEfspCorrelationForStrip(strip);
   if (!correlation) {
     parts.push('cor:');
   } else {
@@ -581,7 +581,7 @@ export function _stripRenderSignature(strip) {
   }
 
   const entry = strip.airspaceEntry;
-  const airspace = entry && typeof getEfspAirspace === 'function' ? getEfspAirspace(entry.airspaceId) : null;
+  const airspace = entry ? getEfspAirspace(entry.airspaceId) : null;
   parts.push('asp:' + (airspace ? `${airspace.rev}/${airspace.state}` : ''));
 
   const refusal = _refusalForStrip(strip);
@@ -590,23 +590,22 @@ export function _stripRenderSignature(strip) {
   // Whether it carries the just-arrived edge (docs/adr/0057). Only the fact,
   // never the flash: marking the flash played must not itself rebuild the
   // Strip, or the next render would replay it.
-  parts.push('arr:' + (typeof efspArrivalFor === 'function' && efspArrivalFor(strip.stripId) ? 1 : 0));
+  parts.push('arr:' + (efspArrivalFor(strip.stripId) ? 1 : 0));
 
   // Conformance and conflict alerts (docs/adr/0058). A conflict's countdown is
   // part of what the Strip says, so it rebuilds each second while one lasts —
   // only the Strips actually in a conflict.
-  const conf = typeof conformanceAlertsForFlightData === 'function' ? conformanceAlertsForFlightData(strip.flightDataId) : [];
-  const trackId = typeof correlatedTrackIdForStrip === 'function' ? correlatedTrackIdForStrip(strip) : null;
-  const conflictAlert = typeof conflictAlertsForTrack === 'function' ? conflictAlertsForTrack(trackId) : [];
+  const conf = conformanceAlertsForFlightData(strip.flightDataId);
+  const trackId = correlatedTrackIdForStrip(strip);
+  const conflictAlert = conflictAlertsForTrack(trackId);
   parts.push('alr:' + conf.map(a => `${a.kind}/${a.assigned}/${a.actual ?? ''}/${a.deviationFt ?? ''}/${a.fpm ?? ''}`).join(',')
     + ';' + conflictAlert.map(c => `${c.id}/${c.timeToCpaSec}/${c.minNm}/${c.vertFt}`).join(','));
   // Runway status (docs/adr/0068): the RWY/HOOK chips read the Facility's runway record, not the Strip.
-  parts.push('fld:' + (typeof runwayStatusSignatureFor === 'function' ? runwayStatusSignatureFor(strip) : ''));
+  parts.push('fld:' + runwayStatusSignatureFor(strip));
   // Surveillance hints (docs/adr/0076) are stated by the server about this Strip, not part of its own
   // record; whether the chip can be accepted also depends on which Position the controller holds (S-L14).
-  parts.push('sur:' + (typeof surveillanceHintsForStrip === 'function'
-    ? surveillanceHintsForStrip(strip).map(h => `${h.kind}/${h.contactPhase}/${h.since}`).join(',') : '')
-    + (typeof getActingPositions === 'function' && getActingPositions().includes(strip.ownerPositionId) ? '/m' : ''));
+  parts.push('sur:' + surveillanceHintsForStrip(strip).map(h => `${h.kind}/${h.contactPhase}/${h.since}`).join(',')
+    + (getActingPositions().includes(strip.ownerPositionId) ? '/m' : ''));
 
   return parts.join('|');
 }
@@ -642,7 +641,7 @@ export function _stripElNeedsRebuild(el, wanted, selectedStripId, expandedStripI
 function _reconcileRackStrips(rackEl, bayId, rackId) {
   const wanted = bayId.endsWith('-search') ? searchEfspStrips(getActiveEfspSearchQuery())
     : isWithOthersBayId(bayId) ? efspLinesWithOthers(bayId.slice(0, -'-with'.length))
-      : (typeof carrierOrderRack === 'function' ? carrierOrderRack(bayId, getEfspRack(bayId, rackId)) : getEfspRack(bayId, rackId)); // the Marshal stack Bay is ordered by slot (docs/adr/0074)
+      : carrierOrderRack(bayId, getEfspRack(bayId, rackId)); // the Marshal stack Bay is ordered by slot (docs/adr/0074)
   const wantedById = new Map(wanted.map(s => [s.stripId, s]));
   const existingEls = new Map(
     [...rackEl.children].filter(el => el.classList.contains('efsp-strip')).map(el => [el.dataset.stripId, el])
