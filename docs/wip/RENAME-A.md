@@ -2,7 +2,51 @@
 
 ## Report
 
-(written at the end)
+Branch `lane/RENAME-A-crc-sync`, base `470c6d1`, 13 commits (`git log --oneline 470c6d1..HEAD`):
+`8c1347a` file moves + N14P (B and C were cut from it) · `868635b` step 0 + review decisions · `531dd6d` map rows S-RENA0 ·
+`a351e7c` N02-N05 · `1893319` N06+N07 · `debe44d` promote peerFdrId · `a1bb21c` N10 · `1b7facd` promote
+roleChange/toRole/fromRole/byRole · `f23483c` N11 · `1a0360d` N14 · `bc8471a` N01/N16/N18 ·
+**`30396bd` behaviour: wire, snapshot and audit names** · **`5c06f01` behaviour: an unknown persisted/state key stops start-up (S-RENA2)**.
+
+Suites: crc-sync 2110/2111 + 1 todo → 2117/2118 + 1 todo (+7 tests from S-RENA2). crc-desktop 881/883 + 2 todo → the same.
+Every structural commit kept the goldens identical (freeze 48/48).
+- **Wire commit:** all 44 golden files re-recorded. The S-RENA1 inverse proof found 33 byte-identical, 8 equal up to key order, 1 equal up to list order, and 2 explained diffs: the base already had the token "handoff", and one artifact of the proof itself.
+- **S-RENA2 commit:** no golden moved.
+- **Selfchecks:** freeze:selfcheck 18/18 caught; soak:selfcheck PASS, run after the wire commit and again after S-RENA2.
+- **Playwright:** the boot smoke on lane 5 passes. 33 e2e specs were edited (token renames plus 3 trap fixes), so the supervisor's sharded full run covers them.
+
+Structure fixtures:
+- crc-desktop `module-graph-exports.json`: the moved modules' keys, and CARRIER_TRANSFERS → CARRIER_HANDOFFS.
+- `guard-board-surface.json`: `_fdrStore`, `returnCoveredStrips`.
+- `tables-wire-message-types.json`.
+- Selfcheck M12/M16 paths.
+
+Map edits, in my branch with the supervisor's approval:
+- The S-RENA0 rows.
+- Promotions under §1.2: heldPositions, peerFdrId, roleChange, toRole, fromRole and byRole. The goldens hold some of these only inside record hashes, and the coverage frame carries heldPositions without any golden noticing.
+
+Defaults (P2):
+- `board/ops/carrier-transfer.js` → `carrier-handoff.js` was moved in commit 1.
+- The golden `scenario-field-state.json` was renamed in commit 1.
+- Benign MERGEs:
+  - "unmanned"/"unoccupied" in test titles;
+  - createRoles + createsRoles (S-RENA0);
+  - "manned"/"occupied" in nla.js comments and in the efsp-runway-status test helper.
+- B's review decisions were applied as given except two: an override for a `${role}` title that would have been a ReferenceError, and a revert of a Y on the English "is not held".
+
+**Deployed `state/`:** a state/ written by an older build now stops start-up and names the file. Before deploying, delete:
+- `state/efsp-board.json` and `efsp-mutations.jsonl` (clean start, R3-2);
+- any old `state/efsp-facility-*.json`;
+- a `state/alerting.json` that uses `stca`.
+
+**Installed clients:** a crc-desktop older than this build cannot talk to this crc-sync. Every wire type and field it uses was renamed (efsp-runway-status-*, signedOn, flightDataList/flightDataId, stripType, LC/GC/AP Position and Bay ids, and so on). The client must be released together with the server. The saved dock layout holds `fieldState`; RENAME-B's dock-layout-v2 key covers that.
+
+Findings:
+1. `tests/efsp-block-altitude.test.mjs` uses the real `crc-sync/state/`, and on a dev machine with old state it now fails, correctly. Any `--import` preload that requires facility-config before a test sets its env writes into the real state/.
+2. Server log and prose strings still name TWR/APP; that is L20's.
+3. B marked comment prose in CSS/HTML as Y, which gives "the signedOn Positions"; L20 should reword.
+4. The track-panel/strip chip now reads "CA with …", which B may spell out.
+5. RP-F1 stays open.
 
 ## Step 0: code as found (base `470c6d1`)
 
