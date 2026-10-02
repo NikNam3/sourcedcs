@@ -212,7 +212,3 @@ test('module graph: no module reads another module\'s export without importing i
   }
   assert.deepEqual([...new Set(missed)], []);
 });
-
-// Findings (ESM-1, not fixed in a structural lane): reads of names no client module declares. They were latent
-// ReferenceErrors in the classic page and stay so when called; neither runs at module top level.
-test.todo('tools-panel.js apiToIndicated reads _pressureAtAlt, ISA_L, ISA_INV, T_REF_ALT, which nothing declares (ESM-1 finding)');

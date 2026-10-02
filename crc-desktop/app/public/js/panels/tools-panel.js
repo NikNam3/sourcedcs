@@ -1,16 +1,11 @@
 'use strict';
 import { showConnWidget } from '../sync.js';
+import { apiToIndicated } from '../altimetry.js';
 
 // ── Tools tab: DCS altitude calculator ────────────────────────────────────
 // Split out of the former ui.js "god file" (history).
 //
-// The barometric-pressure formula here used to be a second, hand-copied
-// implementation of app.js's `_pressureAtAlt`. That function and its
-// `ISA_L`/`ISA_INV`/`T_REF_ALT` constants are no longer defined anywhere
-// (`git grep` finds only this file), and this module imports none of them,
-// so the calls below are a latent ReferenceError (ESM-GUARDS' list, the
-// `test.todo` in module-graph.test.mjs).
-// `indicatedToApi`'s
+// The barometric-pressure arithmetic is altimetry.js, a hand copy of crc-sync's. `indicatedToApi`'s
 // bisection search has no app.js equivalent (nothing else in the app needs
 // indicated→true altitude, only true→indicated for track display), so it
 // stays local.
@@ -27,13 +22,6 @@ export function initToolsTab() {
   const result  = document.getElementById('tool-alt-result');
 
   const INHG_TO_PA = 3386.389;
-  const FT_TO_M = 0.3048;
-
-  // api altitude (ft) -> indicated altitude (ft) for given conditions
-  function apiToIndicated(apiFt, seaPa, T0) {
-    const P = _pressureAtAlt(apiFt * FT_TO_M, seaPa, T0);
-    return ((T_REF_ALT / ISA_L) * (1 - Math.pow(P / seaPa, ISA_INV))) / FT_TO_M;
-  }
 
   // bisect to find api altitude that yields the desired indicated altitude
   function indicatedToApi(indFt, seaPa, T0) {

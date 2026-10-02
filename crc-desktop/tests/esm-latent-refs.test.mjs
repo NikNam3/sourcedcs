@@ -5,9 +5,28 @@
 import './helpers/client-env.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { initToolsTab } from '../app/public/js/panels/tools-panel.js';
 import { buildExtendedCenterline } from '../app/public/js/geojson.js';
 import { _setAprtRunwayForTest } from '../app/public/js/panels/aprt-panel.js';
 import { _setCoverageRadars } from '../app/public/js/app.js';
+
+test('the Tools tab altitude calculator runs: 10,000 ft indicated at QNH 29.92 and 15 C is about 10,000 ft true', () => {
+  const values = { 'tool-alt-temp': '15', 'tool-alt-qnh': '29.92', 'tool-alt-ind': '10000' };
+  const handlers = {};
+  const els = {};
+  for (const id of ['set-conn-settings', 'tool-alt-calc', 'tool-alt-result', ...Object.keys(values)]) {
+    els[id] = { value: values[id] ?? '', textContent: '', addEventListener: (type, fn) => { handlers[`${id}:${type}`] = fn; } };
+  }
+  const real = document.getElementById;
+  document.getElementById = (id) => els[id] || null;
+  try {
+    initToolsTab();
+    handlers['tool-alt-calc:click']();
+  } finally { document.getElementById = real; }
+  assert.match(els['tool-alt-result'].textContent, /^[\d,.   ]+ ft$/, `result was ${els['tool-alt-result'].textContent}`);
+  const ft = Number(els['tool-alt-result'].textContent.replace(/[^\d]/g, ''));
+  assert.ok(ft > 9500 && ft < 10600, `${ft} ft is not near 10,000`);
+});
 
 test('the extended centreline draws with its ticks, and each tick is perpendicular to the runway', () => {
   const apt = { name: 'Incirlik', lat: 37.0, lon: 35.42 };

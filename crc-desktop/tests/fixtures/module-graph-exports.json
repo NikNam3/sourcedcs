@@ -1,5 +1,17 @@
 {
  "exports": {
+  "altimetry.js": [
+   "H_TROP",
+   "ISA_EXP",
+   "ISA_G",
+   "ISA_INV",
+   "ISA_L",
+   "ISA_P0",
+   "ISA_R",
+   "T_REF_ALT",
+   "apiToIndicated",
+   "pressureAtAlt"
+  ],
   "app.js": [
    "COALITION_COLOR",
    "CRC_RANGE_M",
