@@ -9,5 +9,6 @@
 // was built to express. See board/tofi.js applyOp.
 module.exports = {
   kind: 'TOFI',
+  undo: 'none', // docs/adr/0100: not undoable (yet); UNDO-S step 2 declares the scopes
   apply: (ctx, strip, op, meta) => ctx.tofi.applyOp(strip, op, meta.by, meta.actingPositionId),
 };

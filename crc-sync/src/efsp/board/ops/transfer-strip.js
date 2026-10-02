@@ -90,6 +90,7 @@ function _applyTransferStrip(ctx, strip, op, by) {
 
 module.exports = {
   kind: 'TransferStrip',
+  undo: 'none', // docs/adr/0100: not undoable (yet); UNDO-S step 2 declares the scopes
   auditFields: (ctx, result) => ({ tail: {
     // Distinguishes a self-coordinated boundary event from a two-party
     // one (guide §4.8.3 rule 4) — undefined for every op except a

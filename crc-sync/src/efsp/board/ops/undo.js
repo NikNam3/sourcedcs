@@ -23,5 +23,6 @@ function _applyUndo(ctx, strip, by) {
 
 module.exports = {
   kind: 'Undo',
+  undo: 'none', // docs/adr/0100 §1: no redo
   apply: (ctx, strip, op, meta) => _applyUndo(ctx, strip, meta.by),
 };

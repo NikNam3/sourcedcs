@@ -103,6 +103,7 @@ function _applyCarrierHandoff(ctx, strip, kind, toPositionId, by, actingPosition
 // button reaches the same method.
 module.exports = {
   kind: 'CarrierHandoff',
+  undo: 'none', // docs/adr/0100: not undoable (yet); UNDO-S step 2 declares the scopes
   authorize: (ctx, actingPositionId, op) => {
     if (!(ctx.rules.canRecordCarrierHandoff(actingPositionId, op.transfer))) {
       return { ok: false, reason: 'PERMISSION_DENIED', detail: `${actingPositionId} may not record ${op.transfer || 'that transfer'}` };

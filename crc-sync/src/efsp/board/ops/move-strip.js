@@ -20,5 +20,6 @@ function _applyMoveStrip(ctx, strip, op, by) {
 
 module.exports = {
   kind: 'MoveStrip',
+  undo: 'none', // docs/adr/0100: not undoable (yet); UNDO-S step 2 declares the scopes
   apply: (ctx, strip, op, meta) => _applyMoveStrip(ctx, strip, op, meta.by),
 };

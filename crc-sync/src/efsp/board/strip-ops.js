@@ -7,6 +7,7 @@
 
 const { MAX_FREE_TEXT } = require('../flight-data-store');
 const { deepClone } = require('./strip-util');
+const { undoDeclarationProblem } = require('../undo/undo-history');
 
 // A DEPARTURE in these states has left the ground (docs/adr/0076).
 const DEPARTURE_AIRBORNE_STATES = ['DEPARTED', 'HANDED_OFF'];
@@ -38,6 +39,11 @@ class StripOps {
     this.coordination = deps.coordination;
     this.tofi = deps.tofi;
     this._audit = deps.audit;
+    // docs/adr/0100: every op module declares `undo` ('none' or a scope); a module without it is a start-up error.
+    for (const entry of deps.ops) {
+      const problem = undoDeclarationProblem(entry);
+      if (problem) throw new Error(`op table: ${problem}`);
+    }
     this._ops = new Map(deps.ops.map(entry => [entry.kind, entry]));
     this._touchOf = deps.touch;
     this._activeCmidOf = deps.activeCmid;

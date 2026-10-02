@@ -7,5 +7,6 @@ const KINDS = ['HANDOFF', 'POINT_OUT', 'TRAFFIC', 'OPERATIONAL_REQUEST', 'AIT'];
 
 module.exports = KINDS.map(kind => ({
   kind,
+  undo: 'none', // docs/adr/0100 §1: a coordination primitive has CANCEL (CR-S declares its undoable marks)
   apply: (ctx, strip, op, meta) => ctx.coordination.applyOp(strip, op, meta.by, meta.actingPositionId),
 }));

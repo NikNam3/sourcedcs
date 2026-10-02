@@ -75,6 +75,7 @@ function _applyInvokeNla(ctx, strip, by) {
 
 module.exports = {
   kind: 'InvokeNla',
+  undo: 'none', // docs/adr/0100: not undoable (yet); UNDO-S step 2 declares the scopes
   // An NLA press records what the op it ran would: a transfer's selfCoordinated, or a carrier handoff's kind and trigger.
   auditFields: (ctx, result, op) => ({ tail: {
     ...ctx.auditFieldsFor('TransferStrip', result, op).tail,

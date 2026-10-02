@@ -147,5 +147,6 @@ function _applyConvertToArrival(ctx, strip, by, actingPositionId) {
 // flight data throughout, for a returning flight at the same Facility.
 module.exports = {
   kind: 'ConvertToArrival',
+  undo: 'none', // docs/adr/0100: not undoable (yet); UNDO-S step 2 declares the scopes
   apply: (ctx, strip, op, meta) => _applyConvertToArrival(ctx, strip, meta.by, meta.actingPositionId),
 };

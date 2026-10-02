@@ -61,6 +61,7 @@ function _applySfaRotation(ctx, strip, by, actingPositionId) {
 // controller rotates, the frequency does not. Same shape as a carrier handoff.
 module.exports = {
   kind: 'SfaRotation',
+  undo: 'none', // docs/adr/0100: not undoable (yet); UNDO-S step 2 declares the scopes
   authorize: (ctx, actingPositionId) => {
     if (!(ctx.rules.canSendSfaRotationTransfer(actingPositionId))) {
       return { ok: false, reason: 'PERMISSION_DENIED', detail: `${actingPositionId} may not rotate an aircraft onto PAR` };

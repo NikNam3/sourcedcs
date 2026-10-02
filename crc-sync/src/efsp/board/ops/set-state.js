@@ -90,6 +90,7 @@ function _applySetStateOp(ctx, strip, toState, by) {
 
 module.exports = {
   kind: 'SetState',
+  undo: 'none', // docs/adr/0100: not undoable (yet); UNDO-S step 2 declares the scopes
   auditFields: (ctx, result) => ({ tail: {
     // A gate this Mutation was let past, and why (S-L19 open point, decided in
     // docs/wip/UI-B.md). Undefined, so absent from the line, otherwise.
