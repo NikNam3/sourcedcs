@@ -1,0 +1,116 @@
+# RENAME-A: crc-sync identifiers, file moves, every wire/snapshot name (W7)
+
+## Report
+
+(written at the end)
+
+## Step 0: code as found (base `470c6d1`)
+
+Suites at the base: crc-sync `npm test` 2111 tests, 2110 pass + 1 todo; `npm run freeze` 48/48; crc-desktop
+`npm test` 883 tests, 881 pass + 2 todo (load ~6).
+
+Tool: `docs/wip/RENAME-A/rename_tool.py` is rename-map §8 copied verbatim. Counts:
+`docs/wip/RENAME-A/step0-count.txt` (`count --tokens`). Lane totals now vs §9 (prep at `165a517`): A structural 982
+exact (962) + 2150 stem (2226); A wire 8518 exact (8483) + 139 stem; goldens 47873 (47237); review sites 1505 area A
+(1356), 1269 area B (1260), 3 area C.
+
+Per term (mechanical A/B/C/D/G, prep → now), only the moves that need a sentence:
+- **N18** C 28 → 40: DATA-1 made the four facility JSONs complete (every Bay and consolidation entry is now in
+  `config/efsp-facility-*.json`, not in `DEFAULT_CONFIG` literals), so the Position and Bay ids appear there more often.
+- **N05** C 2 → 4: the same cause (`coveringChain` in the CENTER file too).
+- **N11** A mechanical 277 → 311 (+12 %) and review 892 → 1038 (+16 %): AUTH's `authority/` registry and BOARD-3's
+  `board/ops/*.js` repeat the Role tables per family/op. Under 20 %; no other row moved by more than 5 %.
+
+### Every file of §6 on the new layout
+
+| §6 | Found at (base) | Moved to (commit 1) |
+|---|---|---|
+| station-coverage | `src/efsp/station-coverage.js`, `tests/efsp-station-coverage.test.mjs` | `position-coverage.js` (+ test) |
+| fdr-store | `src/efsp/fdr-store.js`, tests `efsp-fdr-store`, `efsp-fdr-ato` | `flight-data-store.js`, `efsp-flight-data-store`, `efsp-flight-data-ato` |
+| field-state | `src/efsp/field-state.js`, `field-state-store.js`, `src/efsp/wire/families/field-state.js` (WIRE), tests `efsp-field-state`, `-l1b`, `efsp-scenario-field-state` | `runway-status*.js` (+ tests) |
+| stca | `src/stca.js`, `tests/stca.test.mjs` | `conflict-alert.js` (+ test) |
+| carrier transfers | `src/efsp/carrier/transfers.js`, `transfer-effects.js`, `tests/efsp-carrier-transfers.test.mjs` | `handoffs.js`, `handoff-effects.js`, `efsp-carrier-handoffs.test.mjs` |
+| authority/roles/ | `src/efsp/authority/roles/` (AUTH, 8 files) | `authority/strip-types/` |
+| golden | `tests/freeze/golden/scenario-field-state.json` | `scenario-runway-status.json` **in commit 1** (see Defaults) |
+| client | `css/field-state-panel.css`, `js/panels/efsp/field-state-panel.js`, `field-state-rules.js`, `e2e/field-state.spec.js`, `tests/efsp-field-state-client.test.mjs` (now `.mjs`, ESM) | `runway-status-*` |
+| **not in §6** | `src/efsp/board/ops/carrier-transfer.js` (BOARD-3, named after the N06 Mutation kind) | `board/ops/carrier-handoff.js` |
+| **not in §6** | `tests/efsp-carrier-roles.test.mjs` (N11's test-file row) | `efsp-carrier-strip-types.test.mjs` |
+
+Importers: 37 `require`/`import` lines from the briefing's grep, plus path strings in tests (`readServer(...)`,
+`readdirSync(.../authority/roles)`, the module-graph fixture keys, `overflight-shared-state-names` ALLOWED keys,
+selfcheck M12/M16 `file:`), JSDoc `import('./fdr-store')`, `<link href>` in `index.html`, and file-name pointers in
+comments (`fdr-store.js's setField`). All were rewritten **by path** by `docs/wip/RENAME-A/moves.py` (the script
+that ran, quoted there in full: one regex per moved file name, the extensionless form only after a `/`, so the map
+source `'stca'`, the logger `'efsp:station-coverage'` and the `'field-state'` log/trace labels are left for the
+token pass). One hand edit: crc-desktop `ws-message-contract.test.mjs` `FAMILY_FILES` lists `'field-state'` as a file
+name.
+
+### Traps (step-0 greps)
+
+`docs/wip/RENAME-A/step0-traps.txt`. Trap 1 (regex literals naming an id): 14 sites, in
+`e2e/l3-coordination.spec.js:211`, `e2e/runway-status.spec.js:246,252,382,401`, `tests/coverage-panel.test.mjs:80,90,115`,
+`tests/efsp-correlation-client.test.mjs:211`, `tests/efsp-stereo-panel.test.mjs:241`, crc-sync
+`efsp-runway-status.test.mjs:359,967`, `efsp-scenario-incirlik-l18.test.mjs:119`, `efsp-ui-findings.test.mjs:432`.
+The "ids in sentences" grep has ~495 lines: comments and test titles (L20) except the expected server messages,
+which the wire commit fixes where a test fails.
+
+### Promotion check (rename-map §1.2)
+
+`docs/wip/RENAME-A/step0-promotion.txt` (the `A`/`S` exact rows) plus the same grep over every `A`/`S` stem
+compound. **One promotion: N04 `heldPositions` (S → W).** `ws-hub.js` `_coverageMsg()` sends it on the `coverage`
+frame (`heldPositions: session.coverage.heldPositions`) and the client's `app.js:450` reads `msg.heldPositions`. No
+golden carries it, so derivation said S. It is renamed in the wire commit, not in the N04 structural commit. The other
+hits are method calls or locals (`isOccupied`, `setHeldPositions`, `heldBy`, `coveringPositionFor`, `getFdr`,
+`fdrStore`, `fdrExists`, `visibleFdrIdsOf`, `evictMissingFdrs`, `fdrsGone`), and `fdrCallsign`/`fdrType` are
+the internal `who` record; `presentation.js` maps them to `callsign`/`type` before anything is sent.
+
+### Tokens the map does not cover (row requests to main, no hand edit)
+
+`docs/wip/RENAME-A/step0-uncovered.txt` (area A/B/C tokens containing a renamed stem that no row matches). Asked
+for, all A-class, all structural: `createRoles` (the Position-family field, sibling of the `createsRoles` row),
+`registerRoleFamily`, `roleFamilies`, `roleFamily`, `_byRole`, `_byRoleWhere`, `roleBayFor`, `roleNames`, `roleDir`,
+`ARRIVAL-role`/`DEPARTURE-role` (test fragments); `conformance-stca` (ticker name; app.js, app-boot test, soak
+host-core); `OCCUPANCY`, `also-unoccupied`; `CENTER-held`, `AIC-held`, `held-set`, `actually-held`. Left alone
+unless main adds rows. `manned`/`mannedHours`/`perMannedHour` are the metrics' "manned hour" (a staffed-time metric,
+a reported field): it needs a decision (W if renamed). Lower-case test locals (`twr`, `gnd`, `twrBays`, `gndOnly`,
+`twrOnly`, `gndPushback`) are left for L20 (briefing default).
+
+## Review decisions (step 2)
+
+Files: `docs/wip/RENAME-A/review-N03.tsv`, `-N04`, `-N11`, `-N13`, `-N18` (area A), `review-C-N13.tsv` (area C's
+one crc-sync config site). They were made by the classifiers next to them (`classify_small.py` N13+N18,
+`classify_n03.py`, `classify_n04.py`, `classify_n11.py`), and their N/Y output was read site by site. Decision classes:
+
+- **N03** (98 Y / 22 N): Y = a Position's staffing, in code, comments and test titles alike (the `unmanned` exact
+  row renames the same sentences, so the comments stay consistent). N = airspace occupancy (`airspace-store.js`, the
+  airspace family's `occupied` ack field: DES-AIRSP F2), the hot-cargo/alert pad `occupied` flag (a runway-status
+  record field, 655 golden occurrences), Marshal stack slots, runway OCCUPANCY (`nla.js:32`, `departure.js:223`).
+- **N04 `held`** (102 Y / 101 N): Y = the signed-on Position list: the `held` field of `efsp-set-positions` and
+  `efsp-positions-ack`, `setHeldPositions`' `{held, vacated}` result, the coverage list in `position-coverage.js`,
+  read-scope's `scopeOf(held)`, the efsp-ws locals that carry them, and every test/harness/soak helper that passes
+  the list on (`hold(..., held)`, `ws-hub-coverage`'s `c1:held` grant key). N = English prose in comments and test
+  titles (renaming the verb would give "the controller signedOn"), held Strips/codes/contacts/tracks/frequencies
+  (`placement.js`, transponder, track-numbers, `facility-schema.js`'s frequency set), HELD.
+- **N11** (770 Y / 238 N): Y = `role` in code wherever it is the Strip axis (strip/op/Bay/Block-Map/family `role`,
+  locals and params carrying it, the freeze table's `role=` cell labels), a comment's code reference to it
+  (`` `role` ``, `.role`, `role:`, `@param … role`), `roles` locals of `createRoles` values (authority/index.js), and
+  `Role`/`Roles` inside a validation/refusal message string. N = English prose in comments and test titles
+  (`Role` maps to the two-word "strip type"; L20 rewrites those sentences with the glossary), the Casdoor/sourcedcs-web
+  role (`position-store.js:7`, `flight-plan-lookup.js:112`), and the refusal `unknown Strip Role: ${role}` (it would
+  read "Strip strip type"; left for the reword, a finding). No ARIA or Playwright site exists in area A.
+- **N13** (45 Y / 64 N): Y = `coordination.state` / `tofiCoordination.state` values, including where
+  `board/coordination.js` and `board/tofi.js` build the record (`state: 'PROPOSED'`) and compare it (`link.state`,
+  `tofi.state`, `open.state`), the drop/convert/strip-ops cleanup, forwarding obligations, the soak driver's
+  `s.coord.state`. N = Strip state `PROPOSED`, runway-status change `PROPOSED`, the config `impliesState`.
+- **N18 part** (9 Y / 26 N): Y = composite ids built from a Position id: test controller ids `c-TWR`/`c-APP`/`c-GND`
+  and the freeze trace step names `observer-selects-APP`, `combine-GND+CD`. N = `CV_APP` (carrier), `APP_ATC` (a test
+  approach-radar fixture like `APP_RADAR`), `CLIENT_APP` (the app module), and ids in comment/test-title prose.
+
+## Defaults taken (P2)
+
+- `board/ops/carrier-transfer.js` → `carrier-handoff.js` in commit 1: a file named after the N06 Mutation kind that
+  BOARD-3 created after prep. Moved now because B and C are cut from commit 1 (paths must agree); reported to main.
+- The golden `scenario-field-state.json` was renamed in commit 1, not in the wire commit (§6 places it there). Its
+  content is byte-identical, and `freeze-scenarios` derives the golden name from the scenario test file, which §6
+  moves in commit 1.
+- `heldPositions` promoted to W (above).

@@ -1,0 +1,512 @@
+## trap 1: regex literals naming ids
+crc-desktop/e2e/l3-coordination.spec.js:211:  await expect(s, 'accepted HANDOFF: nothing on the sender\'s Strip says so').toContainText(/APP|RADAR CONTACT|ACCEPTED/i, { timeout: 2000 });
+crc-desktop/e2e/runway-status.spec.js:246:  await expect(ops.locator('#field-state-panel .field-state-request')).toHaveText(/^REQUEST WORKS from OPS \(goose\) \d{4}Z · waiting on TWR$/);
+crc-desktop/e2e/runway-status.spec.js:252:    .toHaveText(/^SUSPENDED WORKS by TWR \(maverick\) \d{4}Z · requested by OPS \(goose\)$/);
+crc-desktop/e2e/runway-status.spec.js:382:  await expect(twr.locator('#field-state-panel .field-state-change-rejected')).toHaveText(/^REJECTED by APP \(iceman\) \d{4}Z — wind is 240 at 15$/);
+crc-desktop/e2e/runway-status.spec.js:401:  await expect(twr.locator('#field-state-panel .field-state-suspension')).toHaveText(/^SUSPENDED WORKS by TWR \(maverick\) \d{4}Z$/);
+crc-desktop/tests/coverage-panel.test.mjs:80:  assert.match(text, /GND, CD/);
+crc-desktop/tests/coverage-panel.test.mjs:90:  assert.match(list.children[0].textContent, /GND works no scope/);
+crc-desktop/tests/coverage-panel.test.mjs:115:  assert.match(list.children[0].children[0].textContent, /MAGIC GND/);
+crc-desktop/tests/efsp-correlation-client.test.mjs:211:  assert.match(correlationBadgeFor(state.getEfspStrip('s1')).title, /bound by APP/);
+crc-desktop/tests/efsp-stereo-panel.test.mjs:241:  assert.match(m.els['efsp-dot-command-preview'].textContent, /OPS, APP or CTR only/);
+crc-sync/tests/efsp-runway-status.test.mjs:359:  assert.match(r.detail, /only APP/);
+crc-sync/tests/efsp-runway-status.test.mjs:967:  assert.match(r.detail, /Primary at APP/);
+crc-sync/tests/efsp-scenario-incirlik-l18.test.mjs:119:    refused(r.ack, 'PERMISSION_DENIED', /APP holds jurisdiction/, id);
+crc-sync/tests/efsp-ui-findings.test.mjs:432:    assert.match(ack.detail, /HANDOFF was rejected — the replica is inert, and APP still works the flight/, op.kind);
+## ids in sentences
+crc-desktop/e2e/helpers/app.js:291: * `page` must hold TWR, OPS and APP: one controller holding all three self-coordinates the change.
+crc-desktop/e2e/l18-incirlik.spec.js:4: * rotation header and "Rotate to PAR", and PAR's FINAL panel with nothing to type. One controller holds RSU, APP,
+crc-desktop/e2e/l18-incirlik.spec.js:59:  // APP is held too, so the rotation is editable here: put PAR on freq-4
+crc-desktop/e2e/l22-stars-scope.spec.js:26:const APP_RADAR = { id: 'app:Incirlik', type: 'approach', presentation: 'ATC', label: 'LTAG APP', airport: 'Incirlik', ...LTAG, elevM: 60, rangeM: 80 * 1852, sweepMs: 3000, caps: { ssr: true } };
+crc-desktop/e2e/l22-stars-scope.spec.js:65:        INCIRLIK: { OPS: 'O', CD: 'D', GND: 'G', TWR: 'T', APP: 'A' }, CENTER: { CTR: 'C' },
+crc-desktop/e2e/l22-stars-scope.spec.js:107:// ── Scene 1 / 4: an APP-only scope ─────────────────────────────────────────
+crc-desktop/e2e/l22-stars-scope.spec.js:158:test('scene 1: an APP-only scope, map background on', async ({ page }) => {
+crc-desktop/e2e/l22-stars-scope.spec.js:177:test('scene 2: the sender ends — CTR handing COLT31 to APP, TWR pointing SNAKE21 out', async ({ page }) => {
+crc-desktop/e2e/l22-stars-scope.spec.js:209:// ── Scene 3: TAC_C2 + APP ─────────────────────────────────────────────────
+crc-desktop/e2e/l22-stars-scope.spec.js:211:test('scene 3: a mixed TAC_C2 + APP session — the tactical scheme wins where the E-3 sees a track', async ({ page }) => {
+crc-desktop/e2e/l3-coordination.spec.js:121:// FIRST in the file on purpose. It depends on what else is in APP's
+crc-desktop/e2e/l3-coordination.spec.js:211:  await expect(s, 'accepted HANDOFF: nothing on the sender\'s Strip says so').toContainText(/APP|RADAR CONTACT|ACCEPTED/i, { timeout: 2000 });
+crc-desktop/e2e/l3-coordination.spec.js:227:    'APP said UNABLE; the sender\'s Strip quietly went back to offering Coordinate… and nothing on the panel says the request was refused').toBe(true);
+crc-desktop/e2e/l3-coordination.spec.js:242:  // APP declined this flight. Its NLA must not now hand it to Tower —
+crc-desktop/e2e/l3-coordination.spec.js:253:  await expect(nla, 'the replica APP just rejected offers an enabled Hand to Tower').toBeDisabled({ timeout: 2000 });
+crc-desktop/e2e/l4-chain.spec.js:61:for (const [label, n, tag] of [['Approve Pushback', 2, 'P'], ['To Runway Queue', 4, 'Q'], ['Hand Off to APP', 7, 'H']]) {
+crc-desktop/e2e/l4-chain.spec.js:112:  await advance(page, 'L4X1', 7); // DEPARTED, next is Hand Off to APP
+crc-desktop/e2e/l4-chain.spec.js:113:  // Release APP. Nothing else covers it, so the server will now inhibit.
+crc-desktop/e2e/l4-chain.spec.js:122:    `Hand Off to APP looks pressable: enabled=${pre.enabled} title=${pre.title}`).toBe(false);
+crc-desktop/e2e/l4-drag.spec.js:10: * other spec uses (ops-coordination) or walks its own Strips to TWR, and drops
+crc-desktop/e2e/l4-drag.spec.js:179:    // Walk each to twr-runway-queue through the real NLA chain — TWR cannot
+crc-desktop/e2e/l5-arrivals.spec.js:39:/** OPS files it, CD clears it, GND taxis it and hands it to Tower — all through the page's own NLA. */
+crc-desktop/e2e/l5-arrivals.spec.js:69:  await expect(row).toContainText('from GND');
+crc-desktop/e2e/l5-arrivals.spec.js:80:  await expect(s.locator('.efsp-strip-from')).toHaveText('from GND');
+crc-desktop/e2e/l5-arrivals.spec.js:135:  await expect(page.locator('#efsp-arrivals-line .efsp-arrival-row')).toContainText('from GND');
+crc-desktop/e2e/mtr-fields.spec.js:212:test('APP arrival: the M11 group only — no entry fields on the face', async ({ page }) => {
+crc-desktop/e2e/mtr-pilot-walk.spec.js:56:test('pilot walk: "VIPER11 request a different exit fix", CTR and APP at once', async ({ browser }) => {
+crc-desktop/e2e/mtr-pilot-walk.spec.js:61:  // An inbound at Center, coordinated to APP so both Facilities hold a Strip.
+crc-desktop/e2e/mtr-pilot-walk.spec.js:82:  note('1', `CTR posted IR107/F/1432/FL190; APP's replica showed them without a reload. APP face: ${(await faceIds(a)).join(' ')}`);
+crc-desktop/e2e/mtr-pilot-walk.spec.js:86:  // APP takes the flight.
+crc-desktop/e2e/mtr-pilot-walk.spec.js:93:  note('1b', `APP accepted; its Strip is in ${bayNow}`);
+crc-desktop/e2e/mtr-pilot-walk.spec.js:103:  note('2', `APP overwrote F/1432/FL190 -> ${after.exitFix}/${new Date(after.exitEstimateUtc).toISOString().slice(11, 16)}/${after.requestedAltitudeAfterExit}. `
+crc-desktop/e2e/mtr-pilot-walk.spec.js:117:  note('3', `APP wrote ALT FL210; ▼ advisory reads: "${(await adv.textContent()).trim()}"`);
+crc-desktop/e2e/mtr-pilot-walk.spec.js:147:  // ── 7. On APP's ARRIVAL: the M11 group, no entry on the face. ─────────────
+crc-desktop/e2e/mtr-pilot-walk.spec.js:149:  note('7', `APP ARRIVAL face MTR group: ${ids.filter(id => /^9[GH]/.test(id)).join(' ')}`);
+crc-desktop/e2e/mtr-pilot-walk.spec.js:152:  // ── 8. CTR edits EXIT EST while APP is typing in EXIT. ────────────────────
+crc-desktop/e2e/mtr-pilot-walk.spec.js:166:  note('8', `CTR (its Strip owned by ${ctrWrite}) sent EXIT EST 1445 while APP typed "D" in EXIT: APP input still open=${!!stillOpen}, draft=${JSON.stringify(draft)}; APP's EXIT EST now ${JSON.stringify(est)}; CTR refusal: ${JSON.stringify(ctrErr)}`);
+crc-desktop/e2e/mtr-pilot-walk.spec.js:171:  note('8c', `after APP pressed Enter: EXIT=${JSON.stringify(await mine.locator('.efsp-block-9H-EXIT').textContent())}, EXIT EST=${JSON.stringify(await mine.locator('.efsp-block-9H-TIME').textContent())}`);
+crc-desktop/e2e/ordnance-hung.spec.js:73:test('HUNG: APP records it, TWR sees it, the flight lands normally, CLEAN clears it', async ({ page }) => {
+crc-desktop/e2e/ordnance-hung.spec.js:83:  // is not on APP's face — it is one tap away in the expanded view.
+crc-desktop/e2e/ordnance-hung.spec.js:84:  await expect(strip.locator('.efsp-strip-fields .efsp-block-3G'), 'a CLEAN ORDNANCE costs APP no Strip height').toHaveCount(0);
+crc-desktop/e2e/ordnance-hung.spec.js:97:  // To tower: the chip travels with the flight, on TWR's Strip too.
+crc-desktop/e2e/ordnance-hung.spec.js:117:  // "Ordnance safe" at the pad: GND has no 3G on its grid, so the expanded view.
+crc-desktop/e2e/ordnance-hung.spec.js:139:  // "Request runway 23 for hot cargo" — TWR edits 8B; the advisory re-states the runway, recommends none.
+crc-desktop/e2e/overflight-lifecycle.spec.js:3:/* L28 (docs/adr/0087): an overflight's four states on screen, CTR to APP.
+crc-desktop/e2e/overflight-lifecycle.spec.js:42:test('an overflight walks INBOUND, IN_SECTOR, is handed CTR to APP, and is dropped at APP', async ({ browser }) => {
+crc-desktop/e2e/overflight-lifecycle.spec.js:63:    // 3. HANDOFF to APP: the replica reaches APP INBOUND, in a coordination Bay.
+crc-desktop/e2e/overflight-lifecycle.spec.js:75:    // 4. APP accepts: it lands in APP's overflight Bay (not ARRIVAL's inbound Bay), the sender is HANDED_OFF with Drop on offer.
+crc-desktop/e2e/overflight-lifecycle.spec.js:82:    // 5. APP walks it: Radar Contact, then it is APP's flight to hand off or drop; CTR drops its own.
+crc-desktop/e2e/runway-status.spec.js:14: * person at TWR, and an acknowledgement sent as one Position never counts as
+crc-desktop/e2e/runway-status.spec.js:123:/** Back to OPEN with no change open, whatever the walk left (briefing T12). Needs TWR and OPS held. */
+crc-desktop/e2e/runway-status.spec.js:210:test('Phase 3 walk: OPS asks for runway works, TWR suspends, the Strips hold, FINAL still lands, OPS inspects and reopens', async ({ browser }) => {
+crc-desktop/e2e/runway-status.spec.js:230:  await nla(ops, DEP_TAXI, 4); // -> TAXI (GND)
+crc-desktop/e2e/runway-status.spec.js:232:  await nla(ops, DEP_Q, 5); // -> RUNWAY_QUEUE (TWR)
+crc-desktop/e2e/runway-status.spec.js:240:  await nla(ops, ARR_TWR, 1); // -> HANDED_TO_TOWER (TWR)
+crc-desktop/e2e/runway-status.spec.js:244:  // 3. OPS asks; TWR (another person) accepts, which suspends the runway.
+crc-desktop/e2e/runway-status.spec.js:246:  await expect(ops.locator('#field-state-panel .field-state-request')).toHaveText(/^REQUEST WORKS from OPS \(goose\) \d{4}Z · waiting on TWR$/);
+crc-desktop/e2e/runway-status.spec.js:252:    .toHaveText(/^SUSPENDED WORKS by TWR \(maverick\) \d{4}Z · requested by OPS \(goose\)$/);
+crc-desktop/e2e/runway-status.spec.js:296:  // TWR is not the inspection authority: the button is not offered, and the
+crc-desktop/e2e/runway-status.spec.js:302:  expect(await expectRefusalIsVisible(twr, 'TWR signing off an inspection')).toMatch(/^runway 05\/23/);
+crc-desktop/e2e/runway-status.spec.js:317:test('Phase 3 walk: a runway change needs OPS and APP (each a different person), then an inspection; a Strip left in 05\'s rack is told', async ({ browser }) => {
+crc-desktop/e2e/runway-status.spec.js:339:  // TWR proposes 05 -> 23 from the panel's end picker.
+crc-desktop/e2e/runway-status.spec.js:345:  await expect(offered(twr, 'BeginRunwayChange'), 'APP alone is not enough').toHaveCount(0);
+crc-desktop/e2e/runway-status.spec.js:346:  await expect(twr.locator('#field-state-panel .field-state-ack-done')).toHaveText([/^APP ✓ \d{4}Z$/]);
+crc-desktop/e2e/runway-status.spec.js:369:  // Pilot request "request runway 23": TWR moves the Strip to 23's rack and
+crc-desktop/e2e/runway-status.spec.js:375:  // A change APP rejects: what TWR sees.
+crc-desktop/e2e/runway-status.spec.js:382:  await expect(twr.locator('#field-state-panel .field-state-change-rejected')).toHaveText(/^REJECTED by APP \(iceman\) \d{4}Z — wind is 240 at 15$/);
+crc-desktop/e2e/runway-status.spec.js:401:  await expect(twr.locator('#field-state-panel .field-state-suspension')).toHaveText(/^SUSPENDED WORKS by TWR \(maverick\) \d{4}Z$/);
+crc-desktop/e2e/runway-status.spec.js:410:test('one controller holding TWR, OPS and APP changes the runway in one self-coordinated input (S-Q24)', async ({ browser }) => {
+crc-desktop/e2e/runway-status.spec.js:423:  await expect(solo.locator('#field-state-panel .field-state-ack-done')).toHaveText([/^OPS ✓ self \d{4}Z$/, /^APP ✓ self \d{4}Z$/]);
+crc-desktop/e2e/ui-a.spec.js:90:test('U2: a HANDOFF proposal to CTR announces a new Strip at CTR, even to one controller holding APP and CTR', async ({ browser }) => {
+crc-desktop/e2e/ui-a.spec.js:105:    await expect(page.locator('.efsp-strip', { hasText: callsign }).first().locator('.efsp-strip-from')).toContainText('from APP');
+crc-desktop/tests/atc-scope.test.mjs:18:const LETTERS = { TWR: 'T', APP: 'A', CTR: 'C', TAC_C2: 'M' };
+crc-desktop/tests/atc-scope.test.mjs:93:  const rel = A.atcRelation(unc, [], APP, letterOf);
+crc-desktop/tests/atc-scope.test.mjs:98:  v = A.atcView(prim, A.atcRelation(prim, [], APP, letterOf), env());
+crc-desktop/tests/atc-scope.test.mjs:103:  let rel = A.atcRelation(contact(), [strip()], APP, letterOf);
+crc-desktop/tests/atc-scope.test.mjs:106:  rel = A.atcRelation(contact(), [strip({ ownerPositionId: 'CTR' })], APP, letterOf);
+crc-desktop/tests/atc-scope.test.mjs:115:  const rel = A.atcRelation(contact(), [sender, replica], APP, letterOf);
+crc-desktop/tests/atc-scope.test.mjs:154:  let rel = A.atcRelation(contact(), [owner, replica('PROPOSED')], APP, letterOf);
+crc-desktop/tests/atc-scope.test.mjs:156:  assert.deepEqual([v.kind, v.color, v.blinkBlock, v.posChar, v.l1Suffix[0].text], ['FDB', P.pointout, true, 'T', 'PO'], 'the owner stays TWR');
+crc-desktop/tests/atc-scope.test.mjs:157:  rel = A.atcRelation(contact(), [owner, replica('ACTIVE')], APP, letterOf);
+crc-desktop/tests/atc-scope.test.mjs:169:  let v = A.atcView(contact(), A.atcRelation(contact(), [s('PROPOSED')], TWR, letterOf), env({ now: 1000 }));
+crc-desktop/tests/atc-scope.test.mjs:171:  v = A.atcView(contact(), A.atcRelation(contact(), [s('ACTIVE')], TWR, letterOf), env({ now: 2000 }));
+crc-desktop/tests/atc-scope.test.mjs:175:  A.atcView(contact(), A.atcRelation(contact(), [s('PROPOSED')], TWR, letterOf), env({ now: 1000 }));
+crc-desktop/tests/atc-scope.test.mjs:176:  const rel = A.atcRelation(contact(), [s('REJECTED')], TWR, letterOf);
+crc-desktop/tests/atc-scope.test.mjs:186:  const rel = A.atcRelation(contact(), [atc, mission], APP, letterOf);
+crc-desktop/tests/atc-scope.test.mjs:189:  const exiting = A.atcRelation(contact(), [{ ...atc, tofiCoordination: { direction: 'EXIT', state: 'PROPOSED' } }, mission], APP, letterOf);
+crc-desktop/tests/atc-scope.test.mjs:191:  const done = A.atcRelation(contact(), [{ ...atc, tofiCoordination: { direction: 'EXIT', state: 'COMPLETE' } }], APP, letterOf);
+crc-desktop/tests/atc-scope.test.mjs:197:  const v = A.atcView(t, A.atcRelation(t, [], APP, letterOf), env());
+crc-desktop/tests/atc-scope.test.mjs:202:  assert.deepEqual(A.atcView(bandit, A.atcRelation(bandit, [], APP, letterOf), env()).line0, [], 'hostile only (H71 default)');
+crc-desktop/tests/atc-scope.test.mjs:207:  const rel = A.atcRelation(t, [strip({ ownerPositionId: 'CTR' })], APP, letterOf);
+crc-desktop/tests/atc-scope.test.mjs:225:  const rel = A.atcRelation(contact(), [strip({ ownerPositionId: 'CTR' })], APP, letterOf);
+crc-desktop/tests/atc-scope.test.mjs:233:  const rel = A.atcRelation(contact(), [strip()], APP, letterOf);
+crc-desktop/tests/atc-scope.test.mjs:237:  assert.equal(A.atcView(unc, A.atcRelation(unc, [], APP, letterOf), env({ coast: true })).disc, true);
+crc-desktop/tests/atc-scope.test.mjs:258:test('a same-Facility transfer (TWR -> APP, no PROPOSED step) blinks at the sender like an accepted handoff', () => {
+crc-desktop/tests/atc-scope.test.mjs:269:  // First seen already APP's: no blink.
+crc-desktop/tests/coverage-panel.test.mjs:80:  assert.match(text, /GND, CD/);
+crc-desktop/tests/coverage-panel.test.mjs:90:  assert.match(list.children[0].textContent, /GND works no scope/);
+crc-desktop/tests/coverage-panel.test.mjs:105:  // Sorted by label, so LTAG comes before LTAG APP.
+crc-desktop/tests/coverage-panel.test.mjs:106:  assert.deepEqual(rows, ['LTAG|APP/TWR|40nm', 'LTAG APP|APP|80nm']);
+crc-desktop/tests/coverage-panel.test.mjs:115:  assert.match(list.children[0].children[0].textContent, /MAGIC GND/);
+crc-desktop/tests/efsp-arrivals.test.mjs:47:  // Handed from my GND to my TWR: working several Positions is exactly when a
+crc-desktop/tests/efsp-arrivals.test.mjs:84:test('UI-A U2: a replica minted for a proposal my own controller made is still an arrival (one person on APP and CTR)', () => {
+crc-desktop/tests/efsp-bay-views.test.mjs:186:test('sfa header: every pool frequency is a row; the rack headers say the frequency and the controller; only APP gets selects', () => {
+crc-desktop/tests/efsp-bay-views.test.mjs:197:  assert.equal(heads[0], 'freq-1 · 232.100 · APP');
+crc-desktop/tests/efsp-coordination-client.test.mjs:97:// Strip. The client used to gate on "you hold any Position" alone, so TWR saw
+crc-desktop/tests/efsp-coordination-client.test.mjs:98:// the button on an APP-owned departure and the server refused every press.
+crc-desktop/tests/efsp-correlation-client.test.mjs:211:  assert.match(correlationBadgeFor(state.getEfspStrip('s1')).title, /bound by APP/);
+crc-desktop/tests/efsp-metrics-client.test.mjs:85:  assert.deepEqual(byPos.GND.events, [{ kind: 'SEARCH', bayId: 'gnd-pending', at: 1_700_000_000_000 }]);
+crc-desktop/tests/efsp-metrics-client.test.mjs:86:  assert.deepEqual(byPos.TWR.events, [{ kind: 'GESTURE', gesture: 'FLIP', inputs: 1, at: 1_700_000_000_000 }]);
+crc-desktop/tests/efsp-metrics-client.test.mjs:196:  h.client.onAck({ ok: false, reason: 'NOT_HOLDING_POSITION', detail: 'you do not hold GND' });
+crc-desktop/tests/efsp-metrics-client.test.mjs:317:  h.client.noteStripSelected('s3'); // a TWR Strip, found by GND's search
+crc-desktop/tests/efsp-metrics-client.test.mjs:319:  assert.deepEqual(h.events(), [{ kind: 'TIME_TO_FIND', bayId: 'GND-search', latencyMs: 1200, at: 1_700_000_000_000 }]);
+crc-desktop/tests/efsp-metrics-hooks.test.mjs:159:  assert.deepEqual(gestures.sort(), ['ATTENTION=1@GND', 'FLIP=1@GND', 'HIGHLIGHT=2@GND', 'OFFSET=2@GND']);
+crc-desktop/tests/efsp-nla-client.test.mjs:31:test('DEPARTED uses the real Hand-Off-to-APP wording (docs/adr/0007), not ADR 0005\'s old "(local)" stub', () => {
+crc-desktop/tests/efsp-nla-client.test.mjs:32:  assert.equal(NLA_LABELS.DEPARTURE.DEPARTED, 'Hand Off to APP');
+crc-desktop/tests/efsp-nla-client.test.mjs:136:test('HELD is shared between CD and GND, no one else', () => {
+crc-desktop/tests/efsp-ordnance-client.test.mjs:192:    // GND has no 3G on its grid (H55: only the Positions a pilot reports to), and still sees it.
+crc-desktop/tests/efsp-runway-status-client.test.mjs:245:test('TWR: Close / Begin works, Propose, and Accept/Reject on a pending request', () => {
+crc-desktop/tests/efsp-runway-status-client.test.mjs:262:test('APP acknowledges only while PROPOSED and not yet acked; Begin only once ACKNOWLEDGED', () => {
+crc-desktop/tests/efsp-runway-status-client.test.mjs:274:test('a controller holding TWR, OPS and APP is offered the one-input self-coordinated change (S-Q24)', () => {
+crc-desktop/tests/efsp-runway-status-client.test.mjs:332:  assert.equal(clsd.reason, 'Runway 05/23 is closed; it reopens when TWR opens it.');
+crc-desktop/tests/efsp-runway-status-client.test.mjs:422:  assert.ok(all.includes('SUSPENDED WORKS by TWR (maverick) 1432Z · requested by OPS (goose) — BAK-12 re-rig'), all.join('\n'));
+crc-desktop/tests/efsp-runway-status-client.test.mjs:444:  assert.equal(req.title, 'as OPS — ask TWR to suspend runway 05/23 for works');
+crc-desktop/tests/efsp-runway-status-client.test.mjs:448:test('TWR begins works with the record\'s rev; Close asks for a reason and Cancel aborts', async () => {
+crc-desktop/tests/efsp-runway-status-client.test.mjs:464:    acks: { OPS: { by: 'maverick', positionId: 'OPS', at, selfCoordinated: true }, APP: null }, selfCoordinated: false, rejected: null, pendingInspection: [],
+crc-desktop/tests/efsp-runway-status-client.test.mjs:468:  assert.ok(all.includes('05 → 23 · PROPOSED · proposed by TWR (maverick) 1440Z'), all.join('\n'));
+crc-desktop/tests/efsp-runway-status-client.test.mjs:470:  assert.ok(all.includes('APP …'));
+crc-desktop/tests/efsp-stereo-panel.test.mjs:241:  assert.match(m.els['efsp-dot-command-preview'].textContent, /OPS, APP or CTR only/);
+crc-desktop/tests/efsp-strip-fields.test.mjs:47:test('ORDNANCE: always on Tower\'s face; on APP, CTR and the tactical Positions only once it is not CLEAN (H55, S-L12)', () => {
+crc-desktop/tests/efsp-strip-fields.test.mjs:151:test('GND, TWR and MISSION get no MTR group', () => {
+crc-desktop/tests/efsp-strip-fields.test.mjs:153:    assert.equal(MTR_BLOCKS_BY_POSITION[role].GND, undefined, `${role} GND`);
+crc-desktop/tests/efsp-strip-fields.test.mjs:154:    assert.equal(MTR_BLOCKS_BY_POSITION[role].TWR, undefined, `${role} TWR`);
+crc-desktop/tests/efsp-strip-fields.test.mjs:197:test('ALERT (14E) is on OPS, CD, GND and TWR — the ground Positions — and nowhere else', () => {
+crc-desktop/tests/efsp-ui-a.test.mjs:21:test('U5: RELEASE (14A) is on a departure at APP and CTR, labelled RELEASE', () => {
+crc-desktop/tests/efsp-ui-a.test.mjs:42:test('S-L16 W2: TAXI is on GND\'s face and TAKEOFF on TWR\'s', () => {
+crc-desktop/tests/efsp-ui-reachability.test.mjs:260:  // onto by APP or CTR, who also own the TOFI fields.
+crc-desktop/tests/efsp-ui-reachability.test.mjs:262:    CD: ['14A', '14D'], GND: ['14A', '14D'],
+crc-desktop/tests/efsp-ui-reachability.test.mjs:263:    APP: ['22', 'SREG', '5A', '14A'], CTR: ['22', '24A', 'SREG', 'IFR', 'RSVC', '5A', '14A'], // 14A at APP/CTR: UI-A U5
+crc-desktop/tests/efsp-ui-reachability.test.mjs:662:  const btn = findByText(el, 'Hand Off to APP');
+crc-desktop/tests/efsp-ui-reachability.test.mjs:684:  assert.equal(btn.disabled, true, 'APP declined this flight; its NLA must not now hand it to Tower');
+crc-desktop/tests/efsp-ui-reachability.test.mjs:695:// rejected APP's handoff and then opened a TOFI on the dead copy, minting a
+crc-desktop/tests/efsp-ui-reachability.test.mjs:696:// MISSION Strip for a flight APP still worked. crc-sync now refuses every op on
+crc-desktop/tests/efsp-ui-reachability.test.mjs:728:  assert.ok(!tofi || tofi.disabled, 'APP still works this flight until CTR accepts');
+crc-desktop/tests/efsp-ui-reachability.test.mjs:776:  // TWR holds a Position, which was all the old gate asked for. The server
+crc-desktop/tests/efsp-ui-reachability.test.mjs:777:  // refuses TWR's press (no ConvertToArrival, no ARRIVAL creation).
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1892:  // "Hand Off to APP" pressed "Line Up and Wait" for the jet that slid up.
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1900:  click(findByText(r.el, 'Hand Off to APP'));
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2019:  assert.equal(badgeOf(pending.el).textContent, 'HAND OFF → APP');
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2026:  assert.equal(stateOf(rejected.el), 'REJECTED by APP');
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2041:  assert.equal(badge.textContent, 'OPERATIONAL REQUEST → APP');
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2042:  assert.equal(descendants(el).find(c => (c.className || '').includes('efsp-x-meta')).textContent, 'UNABLE by APP');
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2108:  assert.ok(descendants(first).some(c => c.textContent === 'from GND'), 'and says who it came from');
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2149:test('an APP ARRIVAL with an exit fix shows the M11 group as fields; without MTR data, none of them — all six in ▼', async () => {
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2237:// at TWR always, and at APP, CTR and the tactical Positions in ▼ while CLEAN and
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2256:test('a CLEAN flight: ORDNANCE is on Tower\'s face, and in ▼ at APP, CTR and every tactical Position, which record HUNG from there', async () => {
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2279:test('a set ORDNANCE is on the face at APP, CTR and every tactical Position, and can be cleared from there', async () => {
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2294:test('alert status is a NONE/ALERT/SCRAMBLE picker on a TWR departure, and SCRAMBLE sends SetBlock 14E', async () => {
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2298:  assert.ok(cell, 'Block 14E (alert status) is not rendered on a TWR departure');
+crc-desktop/tests/metrics-panel.test.mjs:32:        GND: { facilityId: 'INCIRLIK', total: 9, mannedHours: 3, perMannedHour: 3, byHour: s({
+crc-desktop/tests/metrics-panel.test.mjs:37:        TWR: { facilityId: 'INCIRLIK', total: 3, mannedHours: 1, perMannedHour: 3, byHour: s({ [H4]: { missionSession: 2, count: 3, mannedMinutes: 20, perMannedHour: 9 } }) },
+crc-desktop/tests/metrics-panel.test.mjs:43:      byPosition: { GND: { samples: 14, p50Ms: 900, p95Ms: 2100, maxMs: 2600 } },
+crc-desktop/tests/metrics-panel.test.mjs:54:      byReason: { STALE_REV: 4, NOT_HOLDING_POSITION: 2 }, byType: {}, byOp: {}, byPosition: { GND: 6 },
+crc-desktop/tests/metrics-panel.test.mjs:57:    staleness: { status: 'COLLECTING', target: { kind: 'TRENDING_DOWN' }, total: 3, byPosition: { GND: 3 }, byState: { COASTING: 3 }, byHour: s({ [H2]: { missionSession: 2, total: 2 }, [H3]: { missionSession: 2, total: 1 } }) },
+crc-desktop/tests/metrics-panel.test.mjs:224:  b.metrics.searchInvocations.byPosition.GND.controllerId = 'c-alice';
+crc-desktop/tests/metrics-panel.test.mjs:225:  b.metrics.searchInvocations.byPosition.GND.controllerName = 'Alice';
+crc-desktop/tests/metrics-panel.test.mjs:226:  b.metrics.timeToFind.byPosition.GND.controllerId = 'c-alice';
+crc-desktop/tests/ws-message-contract.test.mjs:38:const APP = readClient('app.js');
+crc-desktop/tests/ws-message-contract.test.mjs:40:const SWITCH_FROM = APP.indexOf('switch (msg.type)');
+crc-desktop/tests/ws-message-contract.test.mjs:43:  const rest = APP.slice(SWITCH_FROM);
+crc-desktop/tests/ws-message-contract.test.mjs:153:    assert.ok((APP + MESSAGES).includes(`${trigger}(`), `no message handler calls ${trigger}`);
+crc-desktop/tests/ws-message-contract.test.mjs:160:  assert.equal((APP + MESSAGES).includes('resyncHeldEfspBoardsOnOpen'), false, 'app.js resyncs on reconnect again');
+crc-sync/tests/app-boot.test.mjs:39:// Today's timers, by name and period (server.js before APP had these as 11 bare setIntervals).
+crc-sync/tests/authority-registry.test.mjs:36:  assert.equal(app.capabilities.rotatesSfa, true, 'incirlik-military extends APP');
+crc-sync/tests/efsp-airspace-store.test.mjs:150:  // to APP as the guide's §9.11 wording does.
+crc-sync/tests/efsp-archiver.test.mjs:38:  OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER',
+crc-sync/tests/efsp-archiver.test.mjs:78:/** A flight flown to APP's terminus and dropped there: counted traffic. */
+crc-sync/tests/efsp-archiver.test.mjs:194:  // The APP-side Strip of the same flight (the HANDOFF's sender) is DROPPED
+crc-sync/tests/efsp-archiver.test.mjs:195:  // too only if APP dropped it; until every Strip is gone, the FDR stays.
+crc-sync/tests/efsp-archiver.test.mjs:198:    assert.equal(r2.fdrIds.includes(dropped.fdrId), false, 'the APP Strip still references it');
+crc-sync/tests/efsp-archiver.test.mjs:316:  const { ack } = efsp.handleMessage(c.APP.session, { type: 'efsp-resync', facilityId: 'INCIRLIK', lastBoardSeq: seqBefore, boardEpoch: incirlik().epoch });
+crc-sync/tests/efsp-audit-completeness.test.mjs:46:const c = crew(efsp, { OPS: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL', JTAC: 'TACTICAL' });
+crc-sync/tests/efsp-audit-completeness.test.mjs:86:    ['airspace: NOT_HOLDING_POSITION', c.APP, { type: 'efsp-airspace-mutation', airspaceId: 'MOA-AUD', baseRev: rev, actingPositionId: 'CTR', op: { kind: 'ApproveActivation' } }, 'NOT_HOLDING_POSITION'],
+crc-sync/tests/efsp-audit-completeness.test.mjs:88:    ['correlation: NOT_HOLDING_POSITION', c.APP, { type: 'efsp-correlation-mutation', fdrId: strip.fdrId, baseRev: 0, actingPositionId: 'CTR', op: { kind: 'BindTrack', trackId: '1' } }, 'NOT_HOLDING_POSITION'],
+crc-sync/tests/efsp-audit-completeness.test.mjs:92:    ['marsa: NOT_HOLDING_POSITION', c.APP, { type: 'efsp-marsa-mutation', actingPositionId: 'CTR', op: { kind: 'DeclareMarsa', participants: [strip.fdrId] } }, 'NOT_HOLDING_POSITION'],
+crc-sync/tests/efsp-audit-completeness.test.mjs:134:  hold(efsp, c.TWR.session, 'INCIRLIK', []); // TWR vacates; APP covers it
+crc-sync/tests/efsp-block-map.test.mjs:104:  // the FDR — so CTR's copy of a departure carries what APP assigned.
+crc-sync/tests/efsp-board-store-coordination.test.mjs:67: * APP originates a DEPARTURE Strip already at HANDED_OFF, so it's eligible
+crc-sync/tests/efsp-board-store-coordination.test.mjs:100:/** APP proposes coordination to CTR — the mirror of proposeHandoff, other direction. */
+crc-sync/tests/efsp-board-store-coordination.test.mjs:318:test('D21 regression: only APP/CTR may PROPOSE a coordination primitive — GND is refused even though it owns its own Strip', () => {
+crc-sync/tests/efsp-board-store-coordination.test.mjs:388:// ── docs/adr/0022: APP -> CTR DEPARTURE coordination (the gap-closure) ──
+crc-sync/tests/efsp-board-store-coordination.test.mjs:390:test('APP -> CTR HANDOFF PROPOSE mints a DEPARTURE/HANDED_OFF replica at CTR — the previously-hardcoded ARRIVAL/INBOUND shape is now the sender\'s actual role/state', () => {
+crc-sync/tests/efsp-board-store-coordination.test.mjs:407:test('APP -> CTR HANDOFF ACCEPT moves the replica into ctr-departures (not ctr-enroute) and each side stays independently droppable', () => {
+crc-sync/tests/efsp-board-store-coordination.test.mjs:433:test('PROPOSE is rejected when the Strip is not in an eligible (role, state) combo — a DEPARTURE Strip at APP but still PROPOSED (not yet HANDED_OFF) cannot propose HANDOFF', () => {
+crc-sync/tests/efsp-board-store-coordination.test.mjs:442:  // Strip at APP, isolating the (role, state) eligibility check below from
+crc-sync/tests/efsp-board-store-coordination.test.mjs:443:  // permission.js's separate canMutate gate (APP has full coordination
+crc-sync/tests/efsp-board-store-coordination.test.mjs:444:  // permissions, unlike the D21 test above's GND).
+crc-sync/tests/efsp-board-store-coordination.test.mjs:631:// listed APP, so a CENTER-held HANDED_OFF replica — accepted or rejected
+crc-sync/tests/efsp-board-store-coordination.test.mjs:771:  // for the same pattern) — lands a still-PROPOSED DEPARTURE Strip at APP.
+crc-sync/tests/efsp-board-store-coordination.test.mjs:786:test('D21 regression: TWR may not ConvertToArrival even a Strip it happens to own — only APP/CTR ever get this op kind at all', () => {
+crc-sync/tests/efsp-board-store-coordination.test.mjs:809:test('ConvertToArrival works identically at CTR (CENTER Facility) — a departure handed off from APP, then converted for its return leg', () => {
+crc-sync/tests/efsp-board-store.test.mjs:539:// Hand Off to APP — routing through the exact same atomic _applyTransferStrip
+crc-sync/tests/efsp-clearance.test.mjs:78:test('what APP assigns is on CTR\'s copy of the flight — one clearance, not one per Strip', () => {
+crc-sync/tests/efsp-clearance.test.mjs:80:  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' });
+crc-sync/tests/efsp-crash-replay.test.mjs:186:  const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK' });
+crc-sync/tests/efsp-facility-config.test.mjs:33:test('getCoveringChain matches the guide\'s default chain, un-truncated through APP, plus SFA and PAR to APP (L18)', () => {
+crc-sync/tests/efsp-facility-config.test.mjs:37:test('OPS, RSU and APP have no entry in the covering chain — OPS per the guide\'s table, RSU so a Strip never strands on a supervisory Position (ADR 0075), APP because there\'s no CTR Facility yet to cover it', () => {
+crc-sync/tests/efsp-facility-config.test.mjs:81:test('TWR\'s runway-queue Bay has one Rack per configured runway (guide §4.2)', () => {
+crc-sync/tests/efsp-facility-config.test.mjs:220:test('docs/adr/0022: CTR also has a departures Bay implying HANDED_OFF, for a Strip handed off from APP', () => {
+crc-sync/tests/efsp-facility-config.test.mjs:275:test('AIC/GCI -> TAC_C2 is a legal intrafacility covering-chain entry, but TAC_C2 -> CTR is NOT — that hop would cross a Facility boundary (mirrors docs/adr/0013 point 4\'s identical APP -> CTR rejection)', () => {
+crc-sync/tests/efsp-facility-config.test.mjs:338:  assert.equal(allPositionLetters().INCIRLIK.APP, 'A');
+crc-sync/tests/efsp-facility-config.test.mjs:343:  assert.equal(validateConfig({ ...base, positionLetters: { APP: 'AP' } }).ok, false);
+crc-sync/tests/efsp-facility-config.test.mjs:344:  assert.equal(validateConfig({ ...base, positionLetters: { APP: 'a' } }).ok, false);
+crc-sync/tests/efsp-facility-config.test.mjs:346:  assert.equal(validateConfig({ ...base, positionLetters: { APP: 'R' } }).ok, true);
+crc-sync/tests/efsp-facility-schema.test.mjs:69:  const c = shipped('INCIRLIK'); c.coveringChain.APP = 'CD';
+crc-sync/tests/efsp-facility-schema.test.mjs:84:  const c = clone(shipped('INCIRLIK')); c.bays.TWR[0].view = 'nope';
+crc-sync/tests/efsp-incirlik-l18-config.test.mjs:40:test('radars: RSU the airport radar, SFA APP\'s picture, PAR the precision approach radar alone', () => {
+crc-sync/tests/efsp-incirlik-l18-config.test.mjs:101:test('singleFrequencyApproach: APP holds jurisdiction over a pool of at least five, a rotation of three, and the pool IS the SFA Bay\'s Racks', () => {
+crc-sync/tests/efsp-incirlik-l18-config.test.mjs:147:  assert.equal(permission.canMutate('SFA', 'CreateStrip'), false, 'SFA\'s Strips arrive from APP');
+crc-sync/tests/efsp-incirlik-l18-config.test.mjs:177:test('SFA predicates read the one table: APP rotates, APP and SFA send the transfer, PAR receives it (one acting Position, D21)', () => {
+crc-sync/tests/efsp-index.test.mjs:101:test('a Strip mid-DEPARTED-to-APP-transfer (docs/adr/0007) round-trips correctly across a simulated restart — exactly one owner, no strand', () => {
+crc-sync/tests/efsp-index.test.mjs:126:  // DEPARTED is TWR's to advance (permission.js's canActOnState), not
+crc-sync/tests/efsp-index.test.mjs:127:  // OPS's — relocate ownership to TWR first. This TransferStrip targets a
+crc-sync/tests/efsp-metrics-tap.test.mjs:45:const c = crew(efsp, { OPS: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' });
+crc-sync/tests/efsp-metrics-tap.test.mjs:121:  hold(efsp, c.TWR.session, 'INCIRLIK', []);
+crc-sync/tests/efsp-metrics-tap.test.mjs:122:  hold(efsp, c.APP.session, 'INCIRLIK', []);
+crc-sync/tests/efsp-metrics-tap.test.mjs:245:  for (const id of ['c-OPS', 'c-TWR', 'c-APP', 'c-CTR']) assert.ok(!wire.includes(id), `${id} leaked onto the wire`);
+crc-sync/tests/efsp-metrics-tap.test.mjs:293:  hold(efsp, c.TWR.session, 'INCIRLIK', []); // TWR vacates; APP covers it and the Strip follows
+crc-sync/tests/efsp-metrics.test.mjs:83:  assert.equal(t.byPosition.GND.p95Ms, 3800);
+crc-sync/tests/efsp-metrics.test.mjs:107:  const g = body.metrics.searchInvocations.byPosition.GND;
+crc-sync/tests/efsp-metrics.test.mjs:150:  assert.deepEqual(s.byPosition, { TWR: 1 });
+crc-sync/tests/efsp-metrics.test.mjs:176:  assert.deepEqual(Object.keys(body.metrics.searchInvocations.byPosition.GND.byHour), ['2016-06-21T13:00Z'], 'bucketed by the mission clock, not the client');
+crc-sync/tests/efsp-metrics.test.mjs:294:  assert.ok(!raw.includes('c-GND'), 'no controller id is persisted');
+crc-sync/tests/efsp-nla.test.mjs:129:test('CLEARED with releaseState RELEASED but GND neither occupied nor covered is inhibited', () => {
+crc-sync/tests/efsp-nla.test.mjs:135:test('CLEARED with releaseState RELEASED advances to PUSHBACK, transferring to GND, once GND is occupied', () => {
+crc-sync/tests/efsp-nla.test.mjs:150:test('HELD releases once the release time has passed, transferring to GND, once GND is occupied', () => {
+crc-sync/tests/efsp-nla.test.mjs:165:test('HELD with no active hold condition but GND neither occupied nor covered is inhibited', () => {
+crc-sync/tests/efsp-nla.test.mjs:171:test('HELD with no active hold condition releases to PUSHBACK, transferring to GND — a no-op reassignment if GND already held it', () => {
+crc-sync/tests/efsp-nla.test.mjs:186:test('HELD with releaseState HOLD_FOR_RELEASE and a matching standing release proceeds normally (skips straight to the GND-occupancy check)', () => {
+crc-sync/tests/efsp-nla.test.mjs:225:test('PUSHBACK -> TAXI, state-only (still GND\'s own — no boundary crossed)', () => {
+crc-sync/tests/efsp-nla.test.mjs:229:test('TAXI is inhibited when TWR is neither occupied nor covered', () => {
+crc-sync/tests/efsp-nla.test.mjs:234:test('TAXI transitions to RUNWAY_QUEUE, transferring to TWR, once TWR is occupied', () => {
+crc-sync/tests/efsp-nla.test.mjs:239:test('RUNWAY_QUEUE -> LUAW -> DEPARTED, state-only, unconditionally in Phase 2 (WP6 inhibits not yet built; both stay TWR\'s own)', () => {
+crc-sync/tests/efsp-nla.test.mjs:245:// DEPARTED's NLA is now a real, occupancy-gated "Hand Off" to APP.
+crc-sync/tests/efsp-nla.test.mjs:247:test('DEPARTED is inhibited when APP is neither occupied nor covered — no receiving Position present', () => {
+crc-sync/tests/efsp-nla.test.mjs:252:test('DEPARTED transitions to HANDED_OFF, transferring to APP, once APP is occupied', () => {
+crc-sync/tests/efsp-nla.test.mjs:257:test('DEPARTED transitions when APP is unoccupied but covered by another Position', () => {
+crc-sync/tests/efsp-nla.test.mjs:291:test('INBOUND is inhibited when TWR is neither occupied nor covered', () => {
+crc-sync/tests/efsp-nla.test.mjs:296:test('INBOUND transitions to HANDED_TO_TOWER, transferring to TWR, once TWR is occupied', () => {
+crc-sync/tests/efsp-nla.test.mjs:301:test('INBOUND transitions when TWR is unoccupied but covered', () => {
+crc-sync/tests/efsp-nla.test.mjs:307:// cross-Facility HANDOFF, not an intrafacility TWR transfer ────────────
+crc-sync/tests/efsp-nla.test.mjs:309:test('INBOUND is inhibited with a HANDOFF-pointing reason when ctx.facilityId is CENTER, even if TWR would otherwise be occupied — there is no TWR at CENTER to transfer to at all', () => {
+crc-sync/tests/efsp-nla.test.mjs:317:test('every pre-WP4A caller (ctx.facilityId omitted entirely) is completely unaffected — INBOUND still resolves via the ordinary TWR-occupancy path', () => {
+crc-sync/tests/efsp-nla.test.mjs:328:test('LANDED is inhibited when GND is neither occupied nor covered', () => {
+crc-sync/tests/efsp-nla.test.mjs:333:test('LANDED transitions to TAXI_IN, transferring to GND, once GND is occupied', () => {
+crc-sync/tests/efsp-permission.test.mjs:22:test('every INCIRLIK Position (OPS, CD, GND, TWR, APP) is defined in the permission table', () => {
+crc-sync/tests/efsp-permission.test.mjs:28:test('OPS and APP both pass the coarse CreateStrip gate (both originate Strips, just for different roles); CD/GND/TWR do not', () => {
+crc-sync/tests/efsp-permission.test.mjs:36:test('every INCIRLIK/CENTER Position may perform every non-CreateStrip, non-coordination, non-APP/CTR-only, non-TOFI op kind (WP4A\'s coordination primitives, TOFI, and docs/adr/0023\'s ConvertToArrival are op-kind-level asymmetries, tested separately below)', () => {
+crc-sync/tests/efsp-permission.test.mjs:45:test('only APP and CTR may use ConvertToArrival — CD/GND/TWR/OPS get none, same restriction as the 5 coordination primitives, for the same underlying reason (docs/adr/0023)', () => {
+crc-sync/tests/efsp-permission.test.mjs:51:// per-Position permission asymmetry, after OPS/APP's CreateStrip role split.
+crc-sync/tests/efsp-permission.test.mjs:53:test('only APP and CTR may use any of the 5 cross-Facility coordination primitives — CD/GND/TWR/OPS get none, since none of them ever touches a Facility boundary', () => {
+crc-sync/tests/efsp-permission.test.mjs:63:test('CTR may CreateStrip (ARRIVAL only) and use every non-CreateStrip op kind, same shape as APP', () => {
+crc-sync/tests/efsp-permission.test.mjs:70:test('D21 regression: a controller holding both TWR and CTR is refused HANDOFF while acting as TWR, even though the same controller also holds CTR', () => {
+crc-sync/tests/efsp-permission.test.mjs:96:test('TOFI is granted only to CTR, TAC_C2 and GCI (guide §4.1\'s own Position table) — not APP (excluded even though it otherwise gets the full OP_KINDS set), not AIC ("works under TAC_C2\'s TOFI", never independently), not JTAC ("MISSION (read-only)")', () => {
+crc-sync/tests/efsp-permission.test.mjs:135:test('D21 regression (shape-only): evaluating GND and TWR independently never grants either one the other\'s (identical) permissions beyond what each already has standalone', () => {
+crc-sync/tests/efsp-permission.test.mjs:136:  // GND/TWR are still permission-identical in Phase 2 — this asserts the
+crc-sync/tests/efsp-permission.test.mjs:138:  // between calls). OPS-vs-APP below is the real behavioral case.
+crc-sync/tests/efsp-permission.test.mjs:153:// docs/adr/0023 reopens this — ADR 0014 had deliberately emptied APP's
+crc-sync/tests/efsp-permission.test.mjs:154:// ARRIVAL right, reasoning ARRIVAL Strips at APP should only ever arrive
+crc-sync/tests/efsp-permission.test.mjs:155:// via the real CTR->APP HANDOFF. Live testing against real ATC scenarios
+crc-sync/tests/efsp-permission.test.mjs:159:test('APP may originate ARRIVAL and OVERFLIGHT directly (docs/adr/0023), but not DEPARTURE (that stays OPS-only, guide §4.1 rule 3)', () => {
+crc-sync/tests/efsp-permission.test.mjs:171:test('CD/GND/TWR may originate no Strip Role at all', () => {
+crc-sync/tests/efsp-permission.test.mjs:192:  // (Phase 1's CD/GND/TWR were identical and couldn't reveal this).
+crc-sync/tests/efsp-permission.test.mjs:193:  // (WP4A, docs/adr/0014: this used to pair OPS with APP, before APP's own
+crc-sync/tests/efsp-permission.test.mjs:194:  // ARRIVAL right was narrowed away in favor of the real CTR->APP HANDOFF;
+crc-sync/tests/efsp-permission.test.mjs:238:test('the OPS-owns-PROPOSED case: OPS may act on PROPOSED, CD/GND/TWR/APP may not', () => {
+crc-sync/tests/efsp-permission.test.mjs:252:test('HELD is shared between CD and GND (guide §3.4: "CD / GND"), no one else', () => {
+crc-sync/tests/efsp-permission.test.mjs:260:test('DEPARTED is TWR\'s (the one about to press the real Hand Off to APP), not APP\'s — APP only owns HANDED_OFF, after the transfer has already happened', () => {
+crc-sync/tests/efsp-permission.test.mjs:306:test('OVERFLIGHT states have their own authority table — both APP and CTR may act on every live state, OPS may not', () => {
+crc-sync/tests/efsp-permission.test.mjs:338:test('only APP and CTR may approve a flight into an airspace — the Positions that hold an airborne flight', () => {
+crc-sync/tests/efsp-permission.test.mjs:394:  // PERMISSIONS' entries for OPS/APP/CTR are built with .filter() over
+crc-sync/tests/efsp-permission.test.mjs:420:test('FIELD_STATE_OP_OWNERS: TWR alone closes, opens and suspends; OPS completes and inspects; TWR runs a runway change; OPS and APP acknowledge', () => {
+crc-sync/tests/efsp-permission.test.mjs:444:test('D21 regression: a controller holding both TWR and APP cannot satisfy BeginRunwayChange from one acting Position', () => {
+crc-sync/tests/efsp-permission.test.mjs:446:  // acknowledgement sent as TWR never counts as APP's (decisions.md S-Q24).
+crc-sync/tests/efsp-position-coverage.test.mjs:106:test('APP at INCIRLIK is the RAPCON: it gets the approach radar and the field surveillance radar', () => {
+crc-sync/tests/efsp-position-coverage.test.mjs:114:test('TWR gets the field surveillance radar only — the 80nm approach picture is not its job', () => {
+crc-sync/tests/efsp-position-coverage.test.mjs:274:    const check = facilityConfig.validateConfig({ ...base, positionRadars: { APP: [selector] } });
+crc-sync/tests/efsp-position-coverage.test.mjs:282:  const check = facilityConfig.validateConfig({ ...base, positionRadars: { APP: 'app:Incirlik' } });
+crc-sync/tests/efsp-position-coverage.test.mjs:290:    ...base, positionRadars: { APP: [{ kind: 'approach', airport: 'EGLL' }] },
+crc-sync/tests/efsp-position-store.test.mjs:47:  // held-set includes GND as the one who "won" Primary, and getAll()
+crc-sync/tests/efsp-position-store.test.mjs:101:  // GND has no Observer, so vacating leaves it unoccupied; its covering
+crc-sync/tests/efsp-position-store.test.mjs:102:  // chain (CD -> GND -> TWR from GND's perspective is just "GND -> TWR")
+crc-sync/tests/efsp-position-store.test.mjs:103:  // should resolve to TWR, which IS occupied.
+crc-sync/tests/efsp-position-store.test.mjs:104:  const result = store.setHeldPositions('c1', 'Alice', []); // vacate GND
+crc-sync/tests/efsp-position-store.test.mjs:113:  // CD's chain is CD -> GND -> TWR; GND is unoccupied too, so it should skip to TWR.
+crc-sync/tests/efsp-position-store.test.mjs:124:test('OPS and TWR have no covering Position at all, matching the guide\'s own chain table (CD->GND->TWR; OPS uncovered)', () => {
+crc-sync/tests/efsp-position-store.test.mjs:138:  store.setHeldPositions('c1', 'Alice', []); // Alice explicitly deselects GND
+crc-sync/tests/efsp-role-bay-fallback.test.mjs:26:const ATC = { OPS: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' };
+crc-sync/tests/efsp-role-bay-fallback.test.mjs:41:test('SCENARIO TWR vacated: a LUAW DEPARTURE reassigned to APP lands in app-coordination, not app-overflight; and goes back on retake', () => {
+crc-sync/tests/efsp-role-bay-fallback.test.mjs:49:  hold(efsp, c.TWR.session, 'INCIRLIK', []);
+crc-sync/tests/efsp-role-bay-fallback.test.mjs:60:test('a transfer routed to a covering APP, and a new owner at CTR with no matching Bay, never pick a Role Bay for another Role', () => {
+crc-sync/tests/efsp-runway-status.test.mjs:83:  const queue = INCIRLIK.bays.TWR.find(b => b.bayId === 'twr-runway-queue');
+crc-sync/tests/efsp-runway-status.test.mjs:211:  const queue = INCIRLIK.bays.TWR.find(b => b.bayId === 'twr-runway-queue');
+crc-sync/tests/efsp-runway-status.test.mjs:286:test('TWR begins runway works: the whole pavement is suspended in one rev, with the kind and who', () => {
+crc-sync/tests/efsp-runway-status.test.mjs:295:  assert.equal(rwy(fsI).suspension.by, 'c-TWR');
+crc-sync/tests/efsp-runway-status.test.mjs:299:test('OPS cannot begin runway works or close a runway itself — only TWR (decisions.md H18)', () => {
+crc-sync/tests/efsp-runway-status.test.mjs:359:  assert.match(r.detail, /only APP/);
+crc-sync/tests/efsp-runway-status.test.mjs:363:test('CloseRunway / OpenRunway round trip (TWR)', () => {
+crc-sync/tests/efsp-runway-status.test.mjs:390:test('tower rejects a request; a request for what the runway already is, or from TWR itself, is refused', () => {
+crc-sync/tests/efsp-runway-status.test.mjs:548:const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' });
+crc-sync/tests/efsp-runway-status.test.mjs:580:  // OPS's controller naming TWR.
+crc-sync/tests/efsp-runway-status.test.mjs:610:  const resync = efsp.handleMessage(c.TWR.session, { type: 'efsp-resync', facilityId: 'INCIRLIK', lastBoardSeq: efsp.boardStoreFor('INCIRLIK').currentSeq, boardEpoch: efsp.snapshotFor().boardEpochByFacility.INCIRLIK });
+crc-sync/tests/efsp-runway-status.test.mjs:770:test('acknowledgement order is irrelevant: APP then OPS, and OPS then APP, both reach ACKNOWLEDGED', () => {
+crc-sync/tests/efsp-runway-status.test.mjs:791:test('an ack sent as TWR never counts as an acknowledger (the D21 guard at the store)', () => {
+crc-sync/tests/efsp-runway-status.test.mjs:795:  assert.deepEqual(change(store).acks, { OPS: null, APP: null });
+crc-sync/tests/efsp-runway-status.test.mjs:798:test("an acknowledger set of ['OPS'] (a Facility without APP) cannot deadlock", () => {
+crc-sync/tests/efsp-runway-status.test.mjs:805:  // APP was never asked, so it cannot answer either.
+crc-sync/tests/efsp-runway-status.test.mjs:813:  assert.equal(ch.acks.APP.skipped, true);
+crc-sync/tests/efsp-runway-status.test.mjs:814:  assert.equal(ch.acks.APP.reason, 'UNMANNED');
+crc-sync/tests/efsp-runway-status.test.mjs:817:  assert.equal(log().at(-1).after.runwayChange.acks.APP.skipped, true);
+crc-sync/tests/efsp-runway-status.test.mjs:854:test('WithdrawRunwayChange lets TWR retract before Begin, recorded as WITHDRAWN — and not after', () => {
+crc-sync/tests/efsp-runway-status.test.mjs:954:test('SelfCoordinateRunwayChange: one input from a controller Primary on TWR and every manned acknowledger (decisions.md S-Q24)', () => {
+crc-sync/tests/efsp-runway-status.test.mjs:963:  // Not Primary on APP: refused, naming it.
+crc-sync/tests/efsp-runway-status.test.mjs:967:  assert.match(r.detail, /Primary at APP/);
+crc-sync/tests/efsp-runway-status.test.mjs:979:test('a reconnect in the same mission session keeps the end TWR changed to; a new session is considered again (ADR 0086)', () => {
+crc-sync/tests/efsp-scenario-airspace.test.mjs:44:const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' };
+crc-sync/tests/efsp-scenario-airspace.test.mjs:66:  strip = await advance(efsp, c.CD, 'CD', strip);     // -> PUSHBACK at GND
+crc-sync/tests/efsp-scenario-concurrency.test.mjs:33:const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' };
+crc-sync/tests/efsp-scenario-concurrency.test.mjs:51:  // sits down at APP as an Observer and both hold their own cached copy.
+crc-sync/tests/efsp-scenario-concurrency.test.mjs:54:  const first = send(efsp, c.APP.session, {
+crc-sync/tests/efsp-scenario-concurrency.test.mjs:61:  const second = send(efsp, c.APP.session, {
+crc-sync/tests/efsp-scenario-concurrency.test.mjs:87:  const first = send(efsp, c.APP.session, opts);
+crc-sync/tests/efsp-scenario-concurrency.test.mjs:88:  const replay = send(efsp, c.APP.session, opts);
+crc-sync/tests/efsp-scenario-concurrency.test.mjs:148:  const resync = efsp.handleMessage(c.APP.session, { type: 'efsp-resync', lastBoardSeq: before, boardEpoch: efsp.snapshotFor().boardEpochByFacility.INCIRLIK });
+crc-sync/tests/efsp-scenario-concurrency.test.mjs:162:  const resync = efsp.handleMessage(c.APP.session, { type: 'efsp-resync', lastBoardSeq: -999999 });
+crc-sync/tests/efsp-scenario-concurrency.test.mjs:176:  efsp.onDisconnect(c.APP.session);
+crc-sync/tests/efsp-scenario-concurrency.test.mjs:177:  const tooSoon = send(efsp, c.APP.session, {
+crc-sync/tests/efsp-scenario-concurrency.test.mjs:185:  const replayed = send(efsp, c.APP.session, {
+crc-sync/tests/efsp-scenario-concurrency.test.mjs:204:  const replayed = send(efsp, c.APP.session, {
+crc-sync/tests/efsp-scenario-coordination.test.mjs:25:const ATC = { OPS: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' };
+crc-sync/tests/efsp-scenario-coordination.test.mjs:157:  // Pop-up: nobody handed it over, so APP originates the Strip itself.
+crc-sync/tests/efsp-scenario-coordination.test.mjs:165:  // Properly: CTR has it and hands it across, which mints the Strip at APP.
+crc-sync/tests/efsp-scenario-coordination.test.mjs:267:test('SCENARIO an IN_SECTOR overflight at CENTER hands off to APP, arrives INBOUND, and the sender goes HANDED_OFF on accept', async () => {
+crc-sync/tests/efsp-scenario-coordination.test.mjs:285:  assert.equal(accepted.bayId, 'app-overflight', 'APP holds it in its own overflight Bay, not ARRIVAL\'s inbound Bay');
+crc-sync/tests/efsp-scenario-correlation.test.mjs:44:const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' };
+crc-sync/tests/efsp-scenario-correlation.test.mjs:81:/** An airborne flight at APP, correlated to a contact squawking its assigned code. */
+crc-sync/tests/efsp-scenario-correlation.test.mjs:461:  assert.equal(entries[0].actorId, c.APP.session.controllerId);
+crc-sync/tests/efsp-scenario-incirlik-l18.test.mjs:37:const SEATS = { OPS: 'INCIRLIK', TWR: 'INCIRLIK', RSU: 'INCIRLIK', APP: 'INCIRLIK', SFA: 'INCIRLIK', PAR: 'INCIRLIK' };
+crc-sync/tests/efsp-scenario-incirlik-l18.test.mjs:57:/** An inbound ARRIVAL with APP, then handed to SFA on a frequency Rack. */
+crc-sync/tests/efsp-scenario-incirlik-l18.test.mjs:99:test('APP may send the rotation transfer from its own Strip too (APP/SFA to PAR); PAR, RSU and TWR may not', () => {
+crc-sync/tests/efsp-scenario-incirlik-l18.test.mjs:119:    refused(r.ack, 'PERMISSION_DENIED', /APP holds jurisdiction/, id);
+crc-sync/tests/efsp-scenario-incirlik-l18.test.mjs:160:  const snap = efsp.snapshotFor(c.APP.session);
+crc-sync/tests/efsp-scenario-incirlik-l18.test.mjs:185:test('a pilot SWITCHES controller (back to APP, then on to PAR): the frequency is the same each time', () => {
+crc-sync/tests/efsp-scenario-incirlik-l18.test.mjs:264:test('LATE ARRIVAL: SFA vacates with aircraft on its frequencies; the Strips go to APP, every frequency is unchanged, and they come back to their own Racks when SFA returns', () => {
+crc-sync/tests/efsp-scenario-incirlik-l18.test.mjs:273:    assert.equal(now.bayId, 'app-inbound', 'in the Bay APP works inbound aircraft from, not a frequency Rack APP does not have');
+crc-sync/tests/efsp-scenario-incirlik-l18.test.mjs:287:test('LATE ARRIVAL: PAR vacates with an aircraft on final; the Strip is not lost (it goes to APP, which cannot advance it: the trap L17 recorded for the Marshal), and PAR gets it back', () => {
+crc-sync/tests/efsp-scenario-incirlik-l18.test.mjs:296:  assert.ok(efsp.boardStoreFor('INCIRLIK').getRack(now.bayId, now.rackId).some(x => x.stripId === s.stripId), 'on a visible Rack of APP');
+crc-sync/tests/efsp-scenario-incirlik-l18.test.mjs:367:test('RSU asks for a runway change and may not make one (H18): a request reaches TWR, a close is refused', () => {
+crc-sync/tests/efsp-scenario-incirlik-l18.test.mjs:380:  // withdraw by letting TWR reject it, so the shared runway is left as found
+crc-sync/tests/efsp-scenario-incirlik-l18.test.mjs:381:  const twr = c.TWR;
+crc-sync/tests/efsp-scenario-manning.test.mjs:29:const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' };
+crc-sync/tests/efsp-scenario-manning.test.mjs:46:  // GND vacates. TWR covers it (the chain is CD→GND→TWR→APP), so the Strip
+crc-sync/tests/efsp-scenario-manning.test.mjs:48:  const ack = hold(efsp, c.GND.session, 'INCIRLIK', []).ack;
+crc-sync/tests/efsp-scenario-manning.test.mjs:51:  // ...into one of TWR's own Bays, the only ones its panel builds (docs/adr/0080, B3).
+crc-sync/tests/efsp-scenario-manning.test.mjs:53:  assert.ok(['twr-runway-queue', 'twr-airborne', 'twr-arrivals', 'twr-final', 'twr-landed', 'twr-coordination'].includes(bayId), `TWR owns it but it sits in ${bayId}`);
+crc-sync/tests/efsp-scenario-manning.test.mjs:60:  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK' });
+crc-sync/tests/efsp-scenario-manning.test.mjs:65:  // APP has no covering Position at all (the chain ends there), so this is
+crc-sync/tests/efsp-scenario-manning.test.mjs:68:  const ack = hold(efsp, c.APP.session, 'INCIRLIK', []).ack;
+crc-sync/tests/efsp-scenario-manning.test.mjs:79:  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK' });
+crc-sync/tests/efsp-scenario-manning.test.mjs:102:  efsp.onDisconnect(c.APP.session);
+crc-sync/tests/efsp-scenario-marsa.test.mjs:44:const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' };
+crc-sync/tests/efsp-scenario-marsa.test.mjs:49:/** An airborne flight parked at APP's terminus, which is where an AR starts. */
+crc-sync/tests/efsp-scenario-marsa.test.mjs:82:  // APP turns one receiver onto a vector. Block 20 is the guide's own §6.2
+crc-sync/tests/efsp-scenario-marsa.test.mjs:191:  const result = efsp.handleMessage(c.APP.session, {
+crc-sync/tests/efsp-scenario-marsa.test.mjs:310:  const ack = marsaAct(efsp, c.APP, 'CTR', null, {
+crc-sync/tests/efsp-scenario-marsa.test.mjs:342:  const result = efsp.handleMessage(c.APP.session, {
+crc-sync/tests/efsp-scenario-military.test.mjs:25:  OPS: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER',
+crc-sync/tests/efsp-scenario-mtr.test.mjs:10: * Center and back to APP: who posts what, where it shows up, and — the case
+crc-sync/tests/efsp-scenario-mtr.test.mjs:42:const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' };
+crc-sync/tests/efsp-scenario-mtr.test.mjs:59:/** The rest of airborneDeparture(): handed off and parked at APP's terminus. */
+crc-sync/tests/efsp-scenario-mtr.test.mjs:92:  // APP converts its Strip for the recovery. ConvertToArrival archives the
+crc-sync/tests/efsp-scenario-mtr.test.mjs:128:  assert.equal(mtrOf(incirlik(app)).exitFix, 'E', 'APP\'s Strip reads the new exit fix');
+crc-sync/tests/efsp-scenario-ordnance.test.mjs:37:  OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL',
+crc-sync/tests/efsp-scenario-ordnance.test.mjs:59:/** CTR hands an ARRIVAL to APP, which accepts it — the flight as it really comes in. */
+crc-sync/tests/efsp-scenario-ordnance.test.mjs:69:/** A DEPARTURE queued in a runway rack, owned by TWR. */
+crc-sync/tests/efsp-scenario-release.test.mjs:25:const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK' };
+crc-sync/tests/efsp-scenario-runway-status.test.mjs:27: * runway works and TWR takes the runway out; OPS then signs off the
+crc-sync/tests/efsp-scenario-runway-status.test.mjs:51:const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' };
+crc-sync/tests/efsp-scenario-runway-status.test.mjs:277:  // APP had the same idea, working from the rev before OPS's.
+crc-sync/tests/efsp-scenario-runway-status.test.mjs:409:test("sortie 7: APP rejects the runway change, and tower's next proposal starts clean", () => {
+crc-sync/tests/efsp-scenario-runway-status.test.mjs:418:  assert.deepEqual(again.runwayChange.acks, { OPS: null, APP: null }); // OPS's earlier ack does not carry over
+crc-sync/tests/efsp-scenario-runway-status.test.mjs:439:  assert.equal(ch.acks.APP.by, c.APP.session.controllerId);
+crc-sync/tests/efsp-scenario-runway-status.test.mjs:450:test('sortie 13: the D21 twin — an ack sent as TWR never counts as APP’s, and one person holding every Position self-coordinates in one input', () => {
+crc-sync/tests/efsp-scenario-runway-status.test.mjs:451:  // One controller takes TWR and APP (the others give them up first, or the
+crc-sync/tests/efsp-scenario-runway-status.test.mjs:453:  hold(efsp, c.TWR.session, 'INCIRLIK', []);
+crc-sync/tests/efsp-scenario-runway-status.test.mjs:454:  hold(efsp, c.APP.session, 'INCIRLIK', []);
+crc-sync/tests/efsp-scenario-runway-status.test.mjs:459:  // Acting TWR, the acknowledgement is refused — never counted as APP's.
+crc-sync/tests/efsp-scenario-runway-status.test.mjs:461:  // Acting APP it counts, recorded as self-coordinated (§4.8.3).
+crc-sync/tests/efsp-scenario-runway-status.test.mjs:463:  assert.equal(runwayChange().acks.APP.selfCoordinated, true);
+crc-sync/tests/efsp-scenario-runway-status.test.mjs:479:  // Low manning (H12): one person holds OPS, TWR and APP. One input takes the
+crc-sync/tests/efsp-scenario-runway-status.test.mjs:495:  c = { ...c, ...crew(efsp, { OPS: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK' }) };
+crc-sync/tests/efsp-scenario-scramble.test.mjs:39:const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK' });
+crc-sync/tests/efsp-scenario-scramble.test.mjs:72:/** Ground traffic to be flagged: a departure at TAXI (GND), one at RUNWAY_QUEUE (TWR), an arrival at TAXI_IN. */
+crc-sync/tests/efsp-scenario-stereo.test.mjs:70:const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK' };
+crc-sync/tests/efsp-scenario-stereo.test.mjs:110:  strip = await advance(efsp, c.CD, 'CD', strip);        // -> PUSHBACK at GND
+crc-sync/tests/efsp-scenario-tactical-l23.test.mjs:35:const ALL = { OPS: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL', GCI: 'TACTICAL', AIC: 'TACTICAL', JTAC: 'TACTICAL' };
+crc-sync/tests/efsp-scenario-tactical-l23.test.mjs:280:  const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK' });
+crc-sync/tests/efsp-scenario-tactical-l23.test.mjs:302:  const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK' });
+crc-sync/tests/efsp-scenario-tactical.test.mjs:50:const ALL = { OPS: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL', GCI: 'TACTICAL', AIC: 'TACTICAL', JTAC: 'TACTICAL' };
+crc-sync/tests/efsp-scenario-tactical.test.mjs:242:test('SCENARIO A3\'\' the same holds at Incirlik: GND walks away and TWR gets the Strip in a TWR Bay', () => {
+crc-sync/tests/efsp-scenario-tactical.test.mjs:244:  const c = crew(efsp, { OPS: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK' });
+crc-sync/tests/efsp-scenario-tactical.test.mjs:249:  hold(efsp, c.GND.session, 'INCIRLIK', []);
+crc-sync/tests/efsp-scenario-tactical.test.mjs:253:  assert.ok(twrBays.includes(after.bayId), `TWR owns it but it sits in ${after.bayId}`);
+crc-sync/tests/efsp-scenario-tactical.test.mjs:266:  // rejected the identical APP → CTR extension). Warn, do not block.
+crc-sync/tests/efsp-scenario-tactical.test.mjs:302:  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL', JTAC: 'TACTICAL' });
+crc-sync/tests/efsp-scenario-time-chains.test.mjs:35:const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK' };
+crc-sync/tests/efsp-scenario-time-chains.test.mjs:96:  // TWR presses Airborne: the NLA.
+crc-sync/tests/efsp-scenario-traffic-count.test.mjs:38:const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL' });
+crc-sync/tests/efsp-scenario-typed-times.test.mjs:36:const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK' };
+crc-sync/tests/efsp-scenarios.test.mjs:125:  const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' });
+crc-sync/tests/efsp-scenarios.test.mjs:138:  strip = await advance(efsp, c.CD, 'CD', strip);    // -> PUSHBACK, transfers to GND
+crc-sync/tests/efsp-scenarios.test.mjs:148:  // APP hands the flight across the Facility boundary to CTR. The D13
+crc-sync/tests/efsp-scenarios.test.mjs:175:  // then is handed back to APP as an ARRIVAL.
+crc-sync/tests/efsp-scenarios.test.mjs:201:  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK' });
+crc-sync/tests/efsp-scenarios.test.mjs:223:  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK' });
+crc-sync/tests/efsp-scenarios.test.mjs:249:    OPS: 'INCIRLIK', APP: 'INCIRLIK', TWR: 'INCIRLIK', GND: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL',
+crc-sync/tests/efsp-scenarios.test.mjs:357:  // sender-side departure Strip APP kept at handoff and CTR's own Strip are
+crc-sync/tests/efsp-scenarios.test.mjs:375:  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL' });
+crc-sync/tests/efsp-scenarios.test.mjs:402:  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK' });
+crc-sync/tests/efsp-scenarios.test.mjs:414:  // The OPS controller names APP — the Position that genuinely owns the
+crc-sync/tests/efsp-scenarios.test.mjs:420:  // The controller who actually holds APP can.
+crc-sync/tests/efsp-scenarios.test.mjs:503:  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' });
+crc-sync/tests/efsp-scenarios.test.mjs:550:  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK', SOUTH_RANGE: 'RANGES' });
+crc-sync/tests/efsp-scenarios.test.mjs:594:  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK' });
+crc-sync/tests/efsp-scenarios.test.mjs:623:  const c = crew(efsp, { APP: 'INCIRLIK' });
+crc-sync/tests/efsp-scenarios.test.mjs:626:  const ack = airspaceAct(efsp, c.APP, 'WEST_RANGE', 'RANGE-WEST', { kind: 'ScheduleAirspace', fromUtc: Date.now(), toUtc: Date.now() + 1000 });
+crc-sync/tests/efsp-traffic-count.test.mjs:120:const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' };
+crc-sync/tests/efsp-ui-b-hooks.test.mjs:37:const c = crew(efsp, { OPS: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK' });
+crc-sync/tests/efsp-ui-b-hooks.test.mjs:52:const setState = (s, extra = {}, toState = 'DEPARTED') => efsp.handleMessage(c.TWR.session, { version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(),
+crc-sync/tests/efsp-ui-b-hooks.test.mjs:87:  const wrong = efsp.handleMessage(c.GND.session, { version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(),
+crc-sync/tests/efsp-ui-findings.test.mjs:87:  const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK' });
+crc-sync/tests/efsp-ui-findings.test.mjs:91:  // right. LUAW is the deliberate blank: TWR has no Bay implying it, so the
+crc-sync/tests/efsp-ui-findings.test.mjs:306:  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK', TWR: 'INCIRLIK', CTR: 'CENTER' });
+crc-sync/tests/efsp-ui-findings.test.mjs:308:  // A CENTER-held INBOUND ARRIVAL, point-outed to INCIRLIK's APP.
+crc-sync/tests/efsp-ui-findings.test.mjs:344:  const c = crew(efsp, { APP: 'INCIRLIK', TWR: 'INCIRLIK', CTR: 'CENTER' });
+crc-sync/tests/efsp-ui-findings.test.mjs:368:  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' });
+crc-sync/tests/efsp-ui-findings.test.mjs:389:// APP → CTR HANDOFF of a DEPARTURE, answered by CTR. Returns CENTER's replica.
+crc-sync/tests/efsp-ui-findings.test.mjs:409:  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL' });
+crc-sync/tests/efsp-ui-findings.test.mjs:413:  // The user-reported case first: CTR rejected APP's handoff and could then
+crc-sync/tests/efsp-ui-findings.test.mjs:415:  // TACTICAL for a flight APP still worked.
+crc-sync/tests/efsp-ui-findings.test.mjs:432:    assert.match(ack.detail, /HANDOFF was rejected — the replica is inert, and APP still works the flight/, op.kind);
+crc-sync/tests/efsp-ui-findings.test.mjs:444:  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' });
+crc-sync/tests/efsp-ui-findings.test.mjs:453:  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL' });
+crc-sync/tests/efsp-ui-findings.test.mjs:533:  const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK' });
+crc-sync/tests/efsp-ui-findings.test.mjs:586:  const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK' });
+crc-sync/tests/efsp-ws-coordination.test.mjs:113:test('CTR originates an ARRIVAL Strip, proposes HANDOFF to APP, and APP accepts it — full round trip through handleMessage with facilityId routing', () => {
+crc-sync/tests/efsp-ws-coordination.test.mjs:201:  assert.equal(snapshot.ack.positionLetters.INCIRLIK.TWR, 'T');
+crc-sync/tests/efsp-ws-replay.test.mjs:32:const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' };
+crc-sync/tests/efsp-ws-replay.test.mjs:54:  const first = efsp.handleMessage(c.APP.session, msg);
+crc-sync/tests/efsp-ws-replay.test.mjs:56:  const retry = efsp.handleMessage(c.APP.session, JSON.parse(JSON.stringify(msg)));
+crc-sync/tests/efsp-ws-replay.test.mjs:112:  const first = efsp.handleMessage(c.TWR.session, msg);
+crc-sync/tests/efsp-ws-replay.test.mjs:115:  const retry = efsp.handleMessage(c.TWR.session, JSON.parse(JSON.stringify(msg)));
+crc-sync/tests/efsp-ws-replay.test.mjs:188:  const resync = efsp.handleMessage(c.APP.session, { type: 'efsp-resync', facilityId: 'INCIRLIK', lastBoardSeq: efsp.boardStoreFor('INCIRLIK').currentSeq, boardEpoch: epochOf('INCIRLIK') });
+crc-sync/tests/efsp-ws.test.mjs:100:// tests that need a Strip owned by GND/TWR/etc. must create it as OPS and
+crc-sync/tests/efsp-ws.test.mjs:264:  // gnd-coordination (not gnd-taxi-in) — this fixture just needs "GND owns
+crc-sync/tests/efsp-ws.test.mjs:270:  const result = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', held: [] }, noopPersist); // Alice vacates GND
+crc-sync/tests/efsp-ws.test.mjs:281:  // gnd-coordination (not gnd-taxi-in) — this fixture just needs "GND owns
+crc-sync/tests/efsp-ws.test.mjs:289:  // Strip ownership is untouched — still GND, which is now unoccupied; this
+crc-sync/tests/efsp-ws.test.mjs:310:  assert.equal(result.ack.warnings.length, 1); // so the Strip genuinely needed routing, and GND has no covering Position occupied in this fixture
+crc-sync/tests/efsp-ws.test.mjs:374:  // Somebody else claims APP without holding it.
+crc-sync/tests/freeze/freeze-lib.mjs:42:/** Strip -> "S#13 r4 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=ab12cd34ef". */
+crc-sync/tests/freeze/freeze-traces.mjs:60:// an observer, a ghost that holds nothing, and a second APP session that is demoted to Observer.
+crc-sync/tests/freeze/freeze-traces.mjs:98:/** OPS -> HANDED_OFF -> transferred to APP's departures Bay: the usual start of an airborne flight. */
+crc-sync/tests/freeze/freeze-traces.mjs:375:  // Strips at CD and GND, then CD's controller drops: the covering chain reassigns CD's Strips.
+crc-sync/tests/helpers/efsp-scenario.mjs:106:/** A DEPARTURE Strip parked at APP's terminus, which is where most airborne scenarios start. */
+crc-sync/tests/presentation.test.mjs:15:const APP = { caps: { height: false, ssr: true, mode4: false }, sweepMs: 3000, at: 1000 };
+crc-sync/tests/presentation.test.mjs:22:    at: 1000, radars: [APP], dl: null, who: NOBODY, mode4: false, iffOverride: null,
+crc-sync/tests/presentation.test.mjs:78:  const wire = present({ at: 40000, radars: [{ ...APP, at: 40000 }, { ...AWACS, at: 10000 }], transponder: null });
+crc-sync/tests/presentation.test.mjs:125:  assert.equal(present({ radars: [APP], mode4: true }).iffState, 'neutral');
+crc-sync/tests/presentation.test.mjs:132:  assert.equal(present({ radars: [APP], transponder: null }).iffState, 'bogey');
+crc-sync/tests/presentation.test.mjs:146:  const wire = present({ at: 40000, radars: [{ ...APP, at: 40000 }, { ...AWACS, at: 10000 }], mode4: true });
+crc-sync/tests/presentation.test.mjs:178:    { radars: [APP] },
+crc-sync/tests/presentation.test.mjs:183:    { radars: [APP], iffOverride: 'bandit' },
+crc-sync/tests/presentation.test.mjs:197:const APP_ATC = { ...APP, presentation: 'ATC' };
+crc-sync/tests/radars.test.mjs:127:  assert.equal(radars.get('app:Incirlik').label, 'LTAG APP');
+crc-sync/tests/wire-payload-contract.test.mjs:49:const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' });
+crc-sync/tests/ws-hub-coverage.test.mjs:25:  { id: 'app:Incirlik', type: 'approach', label: 'LTAG APP', lat: 37, lon: 35, rangeM: 148160, sweepMs: 3000, caps: SSR_2D },
+crc-sync/tests/ws-hub-read-scope.test.mjs:39:  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK', TAC_C2: 'TACTICAL', JTAC: 'TACTICAL' });
+crc-sync/tests/ws-hub-wire-strictness.test.mjs:20:const APP = { id: 'app:X', sweepMs: 3000, caps: { height: false, ssr: true, mode4: false } };
+crc-sync/tests/ws-hub-wire-strictness.test.mjs:39:    radars: () => [APP],
+crc-sync/tests/ws-hub-wire-strictness.test.mjs:100:    coverageFor: () => ({ radars: [APP], radarIds: new Set(['app:X']), heldPositions: [], radarBearingPositions: [], datalink: true }),
+crc-sync/tests/ws-hub-wire-strictness.test.mjs:102:    radars: () => [APP],
+crc-sync/tests/ws-hub-wire-strictness.test.mjs:159:  const all = [APP, CRC, APT];
+crc-sync/tests/ws-hub-wire-strictness.test.mjs:176:test('two sessions, two colours: one own aircraft is neutral on APP and friendly on a Mode 4 radar', () => {
+crc-sync/tests/ws-hub-wire-strictness.test.mjs:301:  const AP = { ...APP, presentation: 'ATC' };
+crc-sync/tests/ws-hub-wire-strictness.test.mjs:323:  const AP = { ...APP, presentation: 'ATC' };
