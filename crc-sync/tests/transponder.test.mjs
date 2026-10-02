@@ -132,3 +132,16 @@ test('the transponder config has no defaults in code: a missing or invalid key i
   assert.throws(() => new RawTransponders({ config: { syntheticFor: ['own'] } }), /"transponder\.mode4For" must be/);
   assert.throws(() => new RawTransponders({ config: { ...SHIPPED, syntheticFor: ['blue'] } }), /"transponder\.syntheticFor" must be/);
 });
+
+test('the synthetic block is sensor-specs.json `transponder.syntheticBlock` (DATA-3): shipped 6000-6777, validated at load', async () => {
+  const { SYNTHETIC_BLOCK_START, SYNTHETIC_BLOCK_SIZE, SYNTHETIC_BLOCK_LABEL } = await import('../src/synthetic-block.js');
+  assert.equal(SYNTHETIC_BLOCK_START, 0o6000);
+  assert.equal(SYNTHETIC_BLOCK_SIZE, 0o1000);
+  assert.equal(SYNTHETIC_BLOCK_LABEL, '6000\u20136777');
+  const { validateTransponderConfig } = await import('../src/surveillance/sensor-config.js');
+  const bad = (b) => () => validateTransponderConfig({ ...SHIPPED, syntheticBlock: b });
+  assert.throws(bad(undefined), /"transponder\.syntheticBlock" is missing/);
+  assert.throws(bad({ first: '6000' }), /syntheticBlock\.last" must be a 4-digit octal/);
+  assert.throws(bad({ first: '6008', last: '6777' }), /syntheticBlock\.first" must be a 4-digit octal/);
+  assert.throws(bad({ first: '6777', last: '6000' }), /first must not be above last/);
+});

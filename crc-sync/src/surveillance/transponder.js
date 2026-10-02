@@ -9,7 +9,7 @@
 //   - A player: SRS reports their transponder (srs-client.js). No SRS client,
 //     or the transponder switched off, is no transponder at all.
 //   - An AI aircraft: SRS knows nothing about it, so crc-sync gives it a
-//     synthetic code from the reserved 6000–6777 block, stable for the life
+//     synthetic code from the reserved block (sensor-specs.json `transponder.syntheticBlock`), stable for the life
 //     of the unit. [SOURCE-DEFINED] (docs/adr/0059): DCS gives an AI aircraft
 //     no transponder, so the block and which coalitions get a code are ours. Only for the coalitions sensor-specs.json names
 //     (`transponder.syntheticFor`) — hostile AI flies with it off.
@@ -28,7 +28,7 @@
 // (`transponder.mode4For`). Ground vehicles have no IFF. What an answer MEANS
 // on the scope is surveillance/iff.js's job, not this module's.
 
-const { SYNTHETIC_BLOCK_START, SYNTHETIC_BLOCK_SIZE } = require('../efsp/code-allocator');
+const { SYNTHETIC_BLOCK_START, SYNTHETIC_BLOCK_SIZE } = require('../synthetic-block');
 const { USER_COALITION } = require('./iff');
 const { validateTransponderConfig } = require('./sensor-config');
 

@@ -24,7 +24,7 @@ function validateDatalinkConfig(cfg, file = 'sensor-specs.json') {
   return cfg;
 }
 
-/** `transponder`: { syntheticFor, mode4For: arrays of own|neutral|hostile }. */
+/** `transponder`: { syntheticFor, mode4For: arrays of own|neutral|hostile, syntheticBlock: { first, last } octal strings }. */
 function validateTransponderConfig(cfg, file = 'sensor-specs.json') {
   if (!cfg || typeof cfg !== 'object') fail(file, 'transponder', 'is missing');
   for (const k of ['syntheticFor', 'mode4For']) {
@@ -32,6 +32,12 @@ function validateTransponderConfig(cfg, file = 'sensor-specs.json') {
       fail(file, `transponder.${k}`, `must be an array of ${COALITION_CLASSES.join(' | ')}`);
     }
   }
+  const b = cfg.syntheticBlock;
+  const octal = (v) => typeof v === 'string' && /^[0-7]{4}$/.test(v);
+  if (!b || typeof b !== 'object') fail(file, 'transponder.syntheticBlock', 'is missing: { "first": "6000", "last": "6777" }');
+  if (!octal(b.first)) fail(file, 'transponder.syntheticBlock.first', 'must be a 4-digit octal string');
+  if (!octal(b.last)) fail(file, 'transponder.syntheticBlock.last', 'must be a 4-digit octal string');
+  if (parseInt(b.first, 8) > parseInt(b.last, 8)) fail(file, 'transponder.syntheticBlock', 'first must not be above last');
   return cfg;
 }
 
