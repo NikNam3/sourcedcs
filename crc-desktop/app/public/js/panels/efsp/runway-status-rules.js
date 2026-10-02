@@ -79,7 +79,7 @@ function _fsCompactId(text) {
 /**
  * The read view runway-status.js's buildStatusView builds from the inventory,
  * built here from the wire record — whose runway rows carry their own ends
- * and racks (crc-sync getFieldState merges the inventory in).
+ * and racks (crc-sync getRunwayStatus merges the inventory in).
  */
 export function fieldStateViewOf(record) {
   if (!record) return null;
@@ -250,9 +250,9 @@ export function fieldStateAlertsFor(strip, lookups) {
   const out = [];
   if (!strip || strip.state === 'DROPPED') return out;
   if (strip.role !== 'DEPARTURE' && strip.role !== 'ARRIVAL') return out;
-  const fieldStateFor = (lookups && lookups.fieldStateFor) || (typeof getEfspFieldState === 'function' ? getEfspFieldState : () => null);
+  const runwayStatusFor = (lookups && lookups.runwayStatusFor) || (typeof getEfspFieldState === 'function' ? getEfspFieldState : () => null);
   const flightDataFor = (lookups && lookups.flightDataFor) || (typeof getEfspFdr === 'function' ? getEfspFdr : () => null);
-  const record = fieldStateFor(strip.facilityId);
+  const record = runwayStatusFor(strip.facilityId);
   if (!record) return out;
   const fdr = strip.fdrId ? flightDataFor(strip.fdrId) : null;
   const resolved = runwayForStrip(strip, fdr, record);

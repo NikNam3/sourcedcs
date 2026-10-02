@@ -166,12 +166,12 @@ test('state authority: RSU works PATTERN, SFA works INBOUND, PAR works FINAL; no
 });
 
 test('RSU may ask about a runway and never close or open one (H18)', () => {
-  assert.equal(permission.canActOnFieldState('RSU', 'RequestRunwayStatus'), true);
+  assert.equal(permission.canActOnRunwayStatus('RSU', 'RequestRunwayStatus'), true);
   for (const kind of Object.keys(permission.FIELD_STATE_OP_OWNERS)) {
     if (kind === 'RequestRunwayStatus') continue;
-    for (const id of ['RSU', 'SFA', 'PAR']) assert.equal(permission.canActOnFieldState(id, kind), false, `${id} / ${kind}`);
+    for (const id of ['RSU', 'SFA', 'PAR']) assert.equal(permission.canActOnRunwayStatus(id, kind), false, `${id} / ${kind}`);
   }
-  assert.equal(permission.canActOnFieldState('SFA', 'RequestRunwayStatus'), false);
+  assert.equal(permission.canActOnRunwayStatus('SFA', 'RequestRunwayStatus'), false);
 });
 
 test('SFA predicates read the one table: APP rotates, APP and SFA send the transfer, PAR receives it (one acting Position, D21)', () => {

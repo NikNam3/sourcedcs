@@ -37,7 +37,7 @@ const efsp = createEfsp();
 const c = crew(efsp, { OPS: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK' });
 const RWY = '05/23';
 const fs1 = (member, positionId, op) => {
-  const cur = efsp.fieldStateStore.getFieldState('INCIRLIK');
+  const cur = efsp.runwayStatusStore.getRunwayStatus('INCIRLIK');
   const ack = efsp.handleMessage(member.session, { version: 1, type: 'efsp-field-state-mutation', clientMutationId: crypto.randomUUID(),
     facilityId: 'INCIRLIK', baseRev: cur.rev, actingPositionId: positionId, op }).ack;
   assert.equal(ack.ok, true, JSON.stringify(ack));
@@ -88,7 +88,7 @@ test('the bypass never skips the owner check, and a Strip that waits for no inhi
     facilityId: 'INCIRLIK', actingPositionId: 'GND', stripId: s.stripId, baseRev: strip(s).rev, op: { kind: 'SetState', toState: 'DEPARTED', observedAirborne: true } }).ack;
   assert.equal(wrong.ok, false);
   // reopen the runway: the same flagged SetState is an ordinary one, no bypass recorded
-  const cur = efsp.fieldStateStore.getFieldState('INCIRLIK');
+  const cur = efsp.runwayStatusStore.getRunwayStatus('INCIRLIK');
   assert.equal(cur.runways.find(r => r.runwayId === RWY).status, 'SUSPENDED_WORKS');
   fs1(c.OPS, 'OPS', { kind: 'CompleteRunwayWorks', runwayId: RWY });
   fs1(c.OPS, 'OPS', { kind: 'CompleteInspection', runwayId: RWY });

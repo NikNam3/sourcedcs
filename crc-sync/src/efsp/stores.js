@@ -25,7 +25,7 @@ const { FlightDataStore } = require('./flight-data-store');
 const { AirspaceStore } = require('./airspace-store');
 const { CorrelationStore } = require('./correlation-store');
 const { MarsaStore } = require('./marsa-store');
-const { FieldStateStore } = require('./runway-status-store');
+const { RunwayStatusStore } = require('./runway-status-store');
 const { CarrierStore } = require('./carrier-store');
 const { SfaStore } = require('./sfa-store');
 const airspaceConfig = require('./airspace-config');
@@ -165,7 +165,7 @@ const REGISTRY = [
     // Staffing is read lazily through `facilities`, the same
     // shape airspaceStore's occupancyFor has: an unstaffed acknowledger of a
     // runway change reverts or is skipped (decisions.md H20).
-    build: ({ clock, facilities }) => new FieldStateStore(facilityConfig, {
+    build: ({ clock, facilities }) => new RunwayStatusStore(facilityConfig, {
       clock,
       isStaffed: (facilityId, positionId) => {
         const f = facilities.get(facilityId);

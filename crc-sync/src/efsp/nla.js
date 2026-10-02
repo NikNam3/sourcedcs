@@ -28,7 +28,7 @@
 // Field state (§9.7 rule 1, docs/adr/0061) now inhibits: a DEPARTURE's
 // TAXI/RUNWAY_QUEUE/LUAW steps and an ARRIVAL's HANDED_TO_TOWER -> FINAL are
 // refused while the Strip's runway is suspended or closed, with the runway and
-// the cause named — resolved through `ctx.fieldStateFor()` (runway-status.js).
+// the cause named — resolved through `ctx.runwayStatusFor()` (runway-status.js).
 // Runway OCCUPANCY is still not implemented: §9.7's schema has no occupancy
 // field and §3.5's RUNWAY_QUEUE row cites no section, so inventing one would
 // be D11. The alert-pad conflict (§9.6) is a FLAG, never an inhibit: a
@@ -82,7 +82,7 @@ function _normalizeCtx(ctx) {
     // §9.7 (docs/adr/0061): this Facility's runway status view, or null. A
     // caller that never passes it — every pre-L1 caller, a hand-built test
     // ctx, a Facility with no runways — gets null, and null never inhibits.
-    fieldStateFor: (ctx && ctx.fieldStateFor) || (() => null),
+    runwayStatusFor: (ctx && ctx.runwayStatusFor) || (() => null),
     // The rack a drag is dropping the Strip into (decisions.md Q27): judged
     // against the runway it is about to use, not the one it came from.
     targetRackId: ctx && ctx.targetRackId,

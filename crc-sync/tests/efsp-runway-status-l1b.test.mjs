@@ -17,23 +17,23 @@ function fakeWs(readyState = OPEN) {
   return { readyState, send: (raw) => sent.push(JSON.parse(raw)), sent };
 }
 
-test('broadcastEfspFieldStateDelta sends the same efsp-field-state-delta a field-state op returns, to every open client', () => {
+test('broadcastEfspRunwayStatusDelta sends the same efsp-field-state-delta a field-state op returns, to every open client', () => {
   const hub = new WsHub({ trackStore: new TrackStore(), collabStore: new CollaborativeStore(), efsp: null });
   const a = fakeWs();
   const b = fakeWs();
   const closed = { readyState: 3, send: () => { throw new Error('must not send on a closed socket'); } };
   hub._wss = { clients: [a, closed, b] };
   const record = { facilityId: 'INCIRLIK', rev: 3, activeRunway: '23' };
-  hub.broadcastEfspFieldStateDelta({ fieldStateSeq: 9, fieldStates: [record, null] });
+  hub.broadcastEfspRunwayStatusDelta({ fieldStateSeq: 9, fieldStates: [record, null] });
   for (const ws of [a, b]) {
     assert.deepEqual(ws.sent, [{ version: 1, type: 'efsp-field-state-delta', fieldStateSeq: 9, fieldStates: { updated: [record] } }]);
   }
 });
 
-test('broadcastEfspFieldStateDelta is a no-op before the WebSocket server exists', () => {
+test('broadcastEfspRunwayStatusDelta is a no-op before the WebSocket server exists', () => {
   const hub = new WsHub({ trackStore: new TrackStore(), collabStore: new CollaborativeStore(), efsp: null });
   hub._wss = null;
-  hub.broadcastEfspFieldStateDelta({ fieldStateSeq: 1, fieldStates: [] });
+  hub.broadcastEfspRunwayStatusDelta({ fieldStateSeq: 1, fieldStates: [] });
 });
 
 test('H52: the suspension is generic runway works — no barrier-specific kind, status, op or request action remains', () => {

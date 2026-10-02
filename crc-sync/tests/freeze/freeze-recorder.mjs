@@ -67,7 +67,7 @@ function finalState(efsp) {
     out.airspaces = clone(efsp.airspaceStore.snapshot());
     out.correlations = clone(efsp.correlationStore.snapshot());
     out.marsa = clone(efsp.marsaStore.snapshot());
-    out.fieldStates = clone(efsp.fieldStateStore.snapshot());
+    out.fieldStates = clone(efsp.runwayStatusStore.snapshot());
     out.carriers = clone(efsp.carrierStore.snapshot());
   } catch (e) { out.error = String(e && e.message); }
   return out;

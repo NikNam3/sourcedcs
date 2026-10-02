@@ -126,7 +126,7 @@ test('sortie: an alert pair scrambles past taxiing traffic — flagged, never re
 
   assert.deepEqual(scrambles().map(s => [s.callsign, s.state]), [['VIPER11', 'CLEARED']]);
   assert.deepEqual(flagged(), [taxi.stripId, queue.stripId, arr.stripId].sort());
-  const constraint = alertPadConstraint(efsp.fieldStateStore.getFieldState('INCIRLIK'), scrambles());
+  const constraint = alertPadConstraint(efsp.runwayStatusStore.getRunwayStatus('INCIRLIK'), scrambles());
   assert.deepEqual(constraint, {
     route: 'ALERT ACCESS TAXIWAY',
     text: 'ACCESS ROUTE ALERT ACCESS TAXIWAY CONSTRAINED — scramble in progress (VIPER11)',

@@ -72,7 +72,7 @@ function refusals() {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FLIGHT_DATA, callsign: 'AUD1' },
   });
   const rev = efsp.airspaceStore.getAirspace('MOA-AUD').rev;
-  const fs0 = efsp.fieldStateStore.getFieldState('INCIRLIK');
+  const fs0 = efsp.runwayStatusStore.getRunwayStatus('INCIRLIK');
   return [
     // Board path: the tap logs every efsp-mutation refusal.
     ['board: unknown facilityId', c.OPS, { type: 'efsp-mutation', facilityId: 'NOWHERE', actingPositionId: 'OPS', stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'SetFlag', flag: 'highlight', value: true } }, 'VALIDATION_ERROR'],
@@ -266,9 +266,9 @@ test('a backfilled drop of a Strip no Board still holds keeps its Facility from 
 });
 
 test('the field state on the wire carries the configured acknowledgers and inspection authority (S-L1b)', () => {
-  const state = efsp.fieldStateStore.getFieldState('INCIRLIK');
+  const state = efsp.runwayStatusStore.getRunwayStatus('INCIRLIK');
   assert.deepEqual(state.runwayChangeAcknowledgers, ['OPS', 'APP']);
   assert.equal(state.inspectionAuthorityPositionId, 'OPS');
   state.runwayChangeAcknowledgers.push('X');
-  assert.deepEqual(efsp.fieldStateStore.getFieldState('INCIRLIK').runwayChangeAcknowledgers, ['OPS', 'APP'], 'a copy');
+  assert.deepEqual(efsp.runwayStatusStore.getRunwayStatus('INCIRLIK').runwayChangeAcknowledgers, ['OPS', 'APP'], 'a copy');
 });

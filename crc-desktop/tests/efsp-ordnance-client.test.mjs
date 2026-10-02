@@ -26,7 +26,7 @@ const { makeElement, descendants } = domStub;
 
 // ── fixtures ─────────────────────────────────────────────────────────────
 
-/** One Facility's record as crc-sync's runway-status-store.js getFieldState puts it on the wire. */
+/** One Facility's record as crc-sync's runway-status-store.js getRunwayStatus puts it on the wire. */
 function record({ pad = 'Hot cargo pad', activeRunway = '05', facilityId = 'INCIRLIK' } = {}) {
   return {
     facilityId, rev: 2, activeRunway, activeRunwaySource: 'WIND',

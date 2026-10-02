@@ -2,7 +2,7 @@
 
 // The CarrierStore (docs/adr/0064 B6, docs/adr/0074): a SIXTH store, peer to
 // FlightDataStore, BoardStore, AirspaceStore, CorrelationStore, MarsaStore and
-// FieldStateStore, keyed by `hullId`.
+// RunwayStatusStore, keyed by `hullId`.
 //
 // The Case and the Marshal stack are facts about the SHIP's recovery, spanning
 // many flights, so they live neither on the Board nor on an FDR, for the reason

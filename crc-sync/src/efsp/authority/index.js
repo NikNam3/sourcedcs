@@ -60,7 +60,7 @@ const positionOwner = new Map(); // positionId -> family name
 
 /**
  * @param {{family:string, positions:string[], extends?:string[], permissions:object, createsStripTypes?:object,
- *   ownsStates?:object, fieldStateOwners?:object, fieldStateGrants?:object, nonOwnerBlockWrites?:object[],
+ *   ownsStates?:object, runwayStatusOwners?:object, runwayStatusGrants?:object, nonOwnerBlockWrites?:object[],
  *   tofiCounterparts?:object, capabilities?:object}} def
  */
 function registerPositionFamily(def) {
@@ -227,9 +227,9 @@ for (const f of positionFamilies) {
 
 /** Field state (guide §9.7): the owning family's rows, then each later family's grants appended. */
 const FIELD_STATE_OP_OWNERS = {};
-for (const f of positionFamilies) Object.assign(FIELD_STATE_OP_OWNERS, f.fieldStateOwners || {});
+for (const f of positionFamilies) Object.assign(FIELD_STATE_OP_OWNERS, f.runwayStatusOwners || {});
 for (const f of positionFamilies) {
-  for (const [opKind, ids] of Object.entries(f.fieldStateGrants || {})) {
+  for (const [opKind, ids] of Object.entries(f.runwayStatusGrants || {})) {
     if (!FIELD_STATE_OP_OWNERS[opKind]) _fail(`${f.family}: grants ${opKind}, which no family owns`);
     FIELD_STATE_OP_OWNERS[opKind] = [...FIELD_STATE_OP_OWNERS[opKind], ...ids];
   }

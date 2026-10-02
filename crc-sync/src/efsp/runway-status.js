@@ -10,7 +10,7 @@
 //
 //   - facility-config.js requires it (to validate the inventory), so a require
 //     back would be a cycle;
-//   - nla.js reaches it only through `ctx.fieldStateFor()` and so stays a pure
+//   - nla.js reaches it only through `ctx.runwayStatusFor()` and so stays a pure
 //     function of (strip, fdr, now, ctx);
 //   - runway-status-store.js (the stateful half, docs/adr/0061) builds on it the
 //     way correlation-store.js builds on correlation-match.js.
@@ -313,7 +313,7 @@ function _isObject(x) { return !!x && typeof x === 'object' && !Array.isArray(x)
  * any deployment. Returns a problem string, or null when it is well formed.
  * Cross-references to Bays only warn (runwayInventoryWarnings below).
  */
-function validateFieldStateInventory(fieldState, positions = []) {
+function validateRunwayStatusInventory(fieldState, positions = []) {
   if (!_isObject(fieldState)) return 'fieldState must be an object';
   if (!Array.isArray(fieldState.runways)) return 'fieldState.runways must be an array';
   const runwayIds = new Set();
@@ -412,7 +412,7 @@ function runwayInventoryWarnings(config) {
  * (docs/adr/0045's principle; the same argument as rule 4's hook check).
  *
  * `fieldState` is one Facility's record as the wire carries it (runway-status-store.js
- * getFieldState): its runway rows carry their ends and racks, so it is its own inventory.
+ * getRunwayStatus): its runway rows carry their ends and racks, so it is its own inventory.
  * crc-desktop's panels/efsp/ordnance-advisory.js is a copy, held to this by a drift test.
  *
  * @returns {{kind:'HUNG_ORDNANCE', runway:string|null, end:string|null, runwaySource:string|null,
@@ -450,6 +450,6 @@ module.exports = {
   REQUEST_ACTIONS,
   RUNWAY_GATED_STATES, normalizeRunwayEnd, buildStatusView, resolveRunwayForStrip, runwayStatusReason, runwayInhibitFor,
   runwayAdvisoryFor, runwayRackFor, activeEndIntoWind,
-  validateFieldStateInventory, runwayInventoryWarnings,
+  validateRunwayStatusInventory, runwayInventoryWarnings,
   hungOrdnanceAdvisoryFor,
 };

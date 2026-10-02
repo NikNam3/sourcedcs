@@ -139,7 +139,7 @@ function canDeclareMarsa(actingPositionId) {
  * construction. A controller holding TWR and APP acts as one or the other, and
  * an acknowledgement sent as TWR never counts as APP's.
  */
-function canActOnFieldState(actingPositionId, opKind) {
+function canActOnRunwayStatus(actingPositionId, opKind) {
   const owners = Object.prototype.hasOwnProperty.call(FIELD_STATE_OP_OWNERS, opKind) ? FIELD_STATE_OP_OWNERS[opKind] : null;
   return !!owners && owners.includes(actingPositionId);
 }
@@ -203,7 +203,7 @@ module.exports = {
   DEPARTURE_STATE_OWNERS, ARRIVAL_STATE_OWNERS, OVERFLIGHT_STATE_OWNERS, MISSION_STATE_OWNERS,
   OP_KINDS, COORDINATION_OP_KINDS, APP_CTR_ONLY_OP_KINDS, TOFI_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_COUNTERPARTS,
   NO_STRIP_OP_CLASSES,
-  canActOnFieldState, FIELD_STATE_OP_OWNERS,
+  canActOnRunwayStatus, FIELD_STATE_OP_OWNERS,
   TACTICAL_CAPABILITIES, READ_SCOPES, handBackTargetsFor, tofiAnswererFor, readScopeFor, mayActBesideOwner,
   CARRIER_CAPABILITIES, canSetRecoveryCase, canSequenceMarshalStack, canEditShipStateInput, canRecordCarrierHandoff,
   MARSHAL_STATE_OWNERS, FINAL_STATE_OWNERS, PATTERN_STATE_OWNERS,

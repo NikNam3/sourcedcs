@@ -402,10 +402,10 @@ test('MARSA is NOT in OP_KINDS — a new op kind there would be picked up silent
 
 // ── field state (guide §9.7, docs/adr/0061) ─────────────────────────────────
 
-const { canActOnFieldState, FIELD_STATE_OP_OWNERS } = await import('../src/efsp/permission.js');
+const { canActOnRunwayStatus, FIELD_STATE_OP_OWNERS } = await import('../src/efsp/permission.js');
 
-test('canActOnFieldState has exactly two parameters — never a held set (D21 by construction)', () => {
-  assert.equal(canActOnFieldState.length, 2);
+test('canActOnRunwayStatus has exactly two parameters — never a held set (D21 by construction)', () => {
+  assert.equal(canActOnRunwayStatus.length, 2);
 });
 
 test('no field-state op kind is in OP_KINDS — a new kind there would be picked up by every filtered grant', () => {
@@ -434,20 +434,20 @@ test('FIELD_STATE_OP_OWNERS: TWR alone closes, opens and suspends; OPS completes
 test('a range Position, an MRU, CTR and an unknown Position are refused every field-state op', () => {
   for (const positionId of ['RANGE', 'R-2301', 'TAC_C2', 'GCI', 'AIC', 'JTAC', 'CTR', 'NOBODY', undefined]) {
     for (const kind of Object.keys(FIELD_STATE_OP_OWNERS)) {
-      assert.equal(canActOnFieldState(positionId, kind), false, `${positionId} / ${kind}`);
+      assert.equal(canActOnRunwayStatus(positionId, kind), false, `${positionId} / ${kind}`);
     }
   }
-  assert.equal(canActOnFieldState('TWR', 'toString'), false);
-  assert.equal(canActOnFieldState('TWR', 'PaintRunway'), false);
+  assert.equal(canActOnRunwayStatus('TWR', 'toString'), false);
+  assert.equal(canActOnRunwayStatus('TWR', 'PaintRunway'), false);
 });
 
 test('D21 regression: a controller holding both TWR and APP cannot satisfy BeginRunwayChange from one acting Position', () => {
   // Evaluated per acting Position, never a union of what is held: an
   // acknowledgement sent as TWR never counts as APP's (decisions.md S-Q24).
-  assert.equal(canActOnFieldState('TWR', 'AckRunwayChange'), false);
-  assert.equal(canActOnFieldState('APP', 'BeginRunwayChange'), false);
-  assert.equal(canActOnFieldState('APP', 'AckRunwayChange'), true);
-  assert.equal(canActOnFieldState('TWR', 'BeginRunwayChange'), true);
+  assert.equal(canActOnRunwayStatus('TWR', 'AckRunwayChange'), false);
+  assert.equal(canActOnRunwayStatus('APP', 'BeginRunwayChange'), false);
+  assert.equal(canActOnRunwayStatus('APP', 'AckRunwayChange'), true);
+  assert.equal(canActOnRunwayStatus('TWR', 'BeginRunwayChange'), true);
 });
 
 // ── L23: the tactical capability table and B5 (docs/adr/0080) ───────────────

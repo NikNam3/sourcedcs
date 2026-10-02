@@ -3,7 +3,7 @@
 const { VERSION } = require('../frames');
 
 /** Its own delta type with its own seq (rule 5's deliberate deviation, docs/adr/0061). */
-function fieldStateDelta(store, records) {
+function runwayStatusDelta(store, records) {
   return {
     version: VERSION, type: 'efsp-field-state-delta',
     fieldStateSeq: store.currentSeq,
@@ -39,10 +39,10 @@ module.exports = {
   subject: (msg) => ({ facilityId: msg.facilityId, runwayId: msg.op && msg.op.runwayId }),
   head: (ctx, msg) => ({ facilityId: facilityOf(ctx, msg) }),
   refusalTail: (ctx, msg) => {
-    const store = ctx.fieldStateStore;
-    return { fieldState: store ? store.getFieldState(facilityOf(ctx, msg)) : null, fieldStateSeq: store ? store.currentSeq : undefined };
+    const store = ctx.runwayStatusStore;
+    return { fieldState: store ? store.getRunwayStatus(facilityOf(ctx, msg)) : null, fieldStateSeq: store ? store.currentSeq : undefined };
   },
-  store: (ctx) => ctx.fieldStateStore,
+  store: (ctx) => ctx.runwayStatusStore,
   noStore: 'no field-state store',
 
   gate: 'primary-at-facility',
@@ -53,13 +53,13 @@ module.exports = {
   // PERMISSION_DENIED is audited like any other outcome.
   apply: (ctx, session, msg) => {
     const op = msg.op && typeof msg.op === 'object' ? msg.op : {};
-    return ctx.fieldStateStore.apply(
+    return ctx.runwayStatusStore.apply(
       { clientMutationId: msg.clientMutationId, facilityId: facilityOf(ctx, msg), baseRev: msg.baseRev, op },
       msg.actingPositionId, session.controllerId,
     );
   },
   rememberId: (result, msg, ctx) => facilityOf(ctx, msg),
-  fromCached: (ctx, cached) => ({ ...cached, fieldState: ctx.fieldStateStore.getFieldState(cached.id) }),
+  fromCached: (ctx, cached) => ({ ...cached, fieldState: ctx.runwayStatusStore.getRunwayStatus(cached.id) }),
   after: (ctx) => {
     // A runway's status moves the `nla` stamp of Strips this op never touched
     // — every Strip queued for, or landing on, that runway — the same problem
@@ -71,14 +71,14 @@ module.exports = {
   },
   ack: (result, ctx) => ({
     fieldState: result.fieldState, reason: result.reason, detail: result.detail,
-    fieldStateSeq: ctx.fieldStateStore.currentSeq,
+    fieldStateSeq: ctx.runwayStatusStore.currentSeq,
   }),
-  broadcasts: (result, ctx) => ({ primary: fieldStateDelta(ctx.fieldStateStore, [result.fieldState]) }),
+  broadcasts: (result, ctx) => ({ primary: runwayStatusDelta(ctx.runwayStatusStore, [result.fieldState]) }),
 
   // Field state (§9.7, docs/adr/0061), one record per Facility with runways,
   // sent whole. No efsp-resync branch, matching airspace, correlation and
   // MARSA: a reconnecting controller gets the current runway status here —
   // which is the point of rule 5's own sequence (a reconnect after a
   // suspension must not show an OPEN runway).
-  snapshot: (ctx) => ctx.fieldStateStore ? ctx.fieldStateStore.getAll() : [],
+  snapshot: (ctx) => ctx.runwayStatusStore ? ctx.runwayStatusStore.getAll() : [],
 };

@@ -35,7 +35,7 @@ const {
   canGo, buildStatusView, activeEndIntoWind, isRunwayChangeInProgress, isRunwayChangeOpen,
   REQUEST_ACTIONS,
 } = require('./runway-status');
-const log = require('../log').logger('efsp:field-state-store');
+const log = require('../log').logger('efsp:runway-status-store');
 
 function deepClone(obj) { return obj === undefined ? undefined : JSON.parse(JSON.stringify(obj)); }
 
@@ -54,7 +54,7 @@ const REQUEST_VERBS = { CLOSE: 'close', OPEN: 'open', WORKS: 'suspend for works'
 // from the mission wind). Audited under this id, never a Position.
 const SYSTEM_ACTOR = 'crc-sync';
 
-class FieldStateStore {
+class RunwayStatusStore {
   /**
    * @param {object} facilityConfig — facility-config.js (injected, the
    *   AirspaceStore precedent, so a test can pass a fixture exposing
@@ -127,7 +127,7 @@ class FieldStateStore {
 
   get currentSeq() { return this._sync.seq; }
 
-  hasFieldState(facilityId) { return this._records.has(facilityId); }
+  hasRunwayStatus(facilityId) { return this._records.has(facilityId); }
 
   // ── reads ──────────────────────────────────────────────────────────────
 
@@ -138,7 +138,7 @@ class FieldStateStore {
    * Cloned — a caller can never mutate the store through it. Null for a
    * Facility with no inventory.
    */
-  getFieldState(facilityId) {
+  getRunwayStatus(facilityId) {
     const record = this._records.get(facilityId);
     if (!record) return null;
     const inventory = this._inventories.get(facilityId);
@@ -171,10 +171,10 @@ class FieldStateStore {
   }
 
   /** Every Facility's field state — what the snapshot carries. */
-  getAll() { return [...this._records.keys()].map(id => this.getFieldState(id)); }
+  getAll() { return [...this._records.keys()].map(id => this.getRunwayStatus(id)); }
 
   /**
-   * Rule 1's read path (nla.js through ctx.fieldStateFor): a frozen, minimal
+   * Rule 1's read path (nla.js through ctx.runwayStatusFor): a frozen, minimal
    * view, cached per Facility and rebuilt only when that record changes —
    * nlaStatusFor runs for every Strip on every stamp, so it must not clone the
    * record each time. Null for a Facility with no inventory, which fails open.
@@ -253,7 +253,7 @@ class FieldStateStore {
         // which returns here without a trace.
         before = deepClone(record);
         result = { ok: false, reason: 'STALE_REV', detail: `field state is at rev ${record.rev}, not ${mutation.baseRev}` };
-      } else if (!permission.canActOnFieldState(actingPositionId, op.kind)) {
+      } else if (!permission.canActOnRunwayStatus(actingPositionId, op.kind)) {
         before = deepClone(record);
         result = Object.prototype.hasOwnProperty.call(permission.FIELD_STATE_OP_OWNERS, op.kind)
           ? { ok: false, reason: 'PERMISSION_DENIED', detail: `${op.kind} is not ${actingPositionId}'s` }
@@ -268,7 +268,7 @@ class FieldStateStore {
       log.error('unexpected error applying a field-state op — rejecting it instead of crashing', { err });
       result = { ok: false, reason: 'VALIDATION_ERROR', detail: 'internal error processing field-state op' };
     }
-    result.fieldState = this.getFieldState(mutation && mutation.facilityId);
+    result.fieldState = this.getRunwayStatus(mutation && mutation.facilityId);
     this._recordAudit(mutation || {}, actingPositionId, by, before, result);
     return result;
   }
@@ -744,4 +744,4 @@ class FieldStateStore {
   }
 }
 
-module.exports = { FieldStateStore, };
+module.exports = { RunwayStatusStore, };

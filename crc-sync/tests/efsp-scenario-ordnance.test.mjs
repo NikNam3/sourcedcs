@@ -39,18 +39,18 @@ const c = crew(efsp, {
 
 const fresh = (s) => efsp.boardStoreFor(s.facilityId || 'INCIRLIK').getStrip(s.stripId);
 const flightDataOf = (s) => efsp.flightDataStore.getFlightData(s.fdrId);
-const fieldState = () => efsp.fieldStateStore.getFieldState('INCIRLIK');
+const fieldState = () => efsp.runwayStatusStore.getRunwayStatus('INCIRLIK');
 const advisory = (s) => hungOrdnanceAdvisoryFor(fresh(s), flightDataOf(s), fieldState());
 const mutations = () => fs.readFileSync(process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH, 'utf8').trim().split('\n').map(l => JSON.parse(l));
 
-function fieldStateAct(member, positionId, op) {
+function runwayStatusAct(member, positionId, op) {
   return efsp.handleMessage(member.session, {
     version: 1, type: 'efsp-field-state-mutation', clientMutationId: crypto.randomUUID(),
     facilityId: 'INCIRLIK', baseRev: fieldState().rev, actingPositionId: positionId, op,
   }).ack;
 }
-function mustFieldStateAct(member, positionId, op) {
-  const ack = fieldStateAct(member, positionId, op);
+function mustRunwayStatusAct(member, positionId, op) {
+  const ack = runwayStatusAct(member, positionId, op);
   assert.equal(ack.ok, true, `${op.kind} as ${positionId}: ${JSON.stringify({ reason: ack.reason, detail: ack.detail })}`);
   return ack.fieldState;
 }
@@ -128,19 +128,19 @@ test('sortie: hung ordnance does not change the runway queue', () => {
 });
 
 test('sortie: a runway change re-states the runway and does not re-point the pad', () => {
-  efsp.fieldStateStore.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, windKt: 8, missionSession: 1 });
+  efsp.runwayStatusStore.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, windKt: 8, missionSession: 1 });
   assert.equal(fieldState().activeRunway, '05');
   let s = inboundFromCenter();
   s = mustAct(efsp, c.APP, 'APP', s, { kind: 'SetBlock', blockId: '3G', value: 'HUNG' });
   assert.equal(advisory(s).end, '05');
   assert.equal(advisory(s).runwaySource, 'ACTIVE_RUNWAY');
 
-  mustFieldStateAct(c.TWR, 'TWR', { kind: 'ProposeRunwayChange', toRunwayId: '23' });
-  mustFieldStateAct(c.OPS, 'OPS', { kind: 'AckRunwayChange' });
-  mustFieldStateAct(c.APP, 'APP', { kind: 'AckRunwayChange' });
-  mustFieldStateAct(c.TWR, 'TWR', { kind: 'BeginRunwayChange' });
-  mustFieldStateAct(c.TWR, 'TWR', { kind: 'CompleteRunwayChange' });
-  mustFieldStateAct(c.OPS, 'OPS', { kind: 'CompleteInspection', runwayId: '05/23' });
+  mustRunwayStatusAct(c.TWR, 'TWR', { kind: 'ProposeRunwayChange', toRunwayId: '23' });
+  mustRunwayStatusAct(c.OPS, 'OPS', { kind: 'AckRunwayChange' });
+  mustRunwayStatusAct(c.APP, 'APP', { kind: 'AckRunwayChange' });
+  mustRunwayStatusAct(c.TWR, 'TWR', { kind: 'BeginRunwayChange' });
+  mustRunwayStatusAct(c.TWR, 'TWR', { kind: 'CompleteRunwayChange' });
+  mustRunwayStatusAct(c.OPS, 'OPS', { kind: 'CompleteInspection', runwayId: '05/23' });
 
   const a = advisory(s);
   assert.equal(a.end, '23', 'the runway it states follows the field');

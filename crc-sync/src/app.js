@@ -324,20 +324,20 @@ function createApp(deps = {}) {
     const missionSessionSeq = missionSession.currentSeq();
     for (const facilityId of efspFacilityConfig.getFacilityIds()) {
       const icao = (efspFacilityConfig.getFacilityConfig(facilityId).fieldState || {}).airportIcao;
-      if (!icao || !efsp.fieldStateStore.hasFieldState(facilityId)) continue;
+      if (!icao || !efsp.runwayStatusStore.hasRunwayStatus(facilityId)) continue;
       const airport = (missionData.airports || []).find(a => a.icao === icao);
       if (!airport) { fieldLog.warn('no such airport in this mission — active runway left as it is', { facilityId, icao }); continue; }
       grpcClient.getAptWeather(airport.lat, airport.lon, airport.elev || 0)
         .then((w) => {
-          const r = efsp.fieldStateStore.setActiveRunwayFromWind(facilityId, { windFromTrue: w.windFrom, windKt: w.windKt, missionSession: missionSessionSeq });
+          const r = efsp.runwayStatusStore.setActiveRunwayFromWind(facilityId, { windFromTrue: w.windFrom, windKt: w.windKt, missionSession: missionSessionSeq });
           // Persisted even when the end is unchanged: the store has recorded
           // that this session's wind is applied (docs/adr/0086).
           if (r.ok && !r.skipped) efsp.persist();
           if (r.ok && r.changed) {
             // The same delta a field-state op sends (decisions.md S-L1d).
-            wsHub.broadcastEfspFieldStateDelta({
-              fieldStateSeq: efsp.fieldStateStore.currentSeq,
-              fieldStates: [efsp.fieldStateStore.getFieldState(facilityId)],
+            wsHub.broadcastEfspRunwayStatusDelta({
+              fieldStateSeq: efsp.runwayStatusStore.currentSeq,
+              fieldStates: [efsp.runwayStatusStore.getRunwayStatus(facilityId)],
             });
             efsp.nlaStatusMonitor.tick();
             fieldLog.info('active runway from the mission wind', { facilityId, activeRunway: r.activeRunway, windFromDegTrue: w.windFrom, windKt: w.windKt });

@@ -10,7 +10,7 @@ import { slot } from './helpers/wire-slots.mjs';
  * efsp-scenario-runway-status.test.mjs; this file pins each rule on its own.
  */
 
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-field-state-'));
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-runway-status-'));
 for (const [k, v] of Object.entries({
   CRCSYNC_EFSP_FACILITY_CONFIG_PATH: 'incirlik.json',
   CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER: 'center.json',
@@ -27,7 +27,7 @@ const facilityConfig = (await import('../src/efsp/facility-config.js')).default;
 const {
   LEGAL_TRANSITIONS, RUNWAY_STATUSES, canGo, normalizeRunwayEnd, buildStatusView,
   resolveRunwayForStrip, runwayInhibitFor, runwayAdvisoryFor, runwayRackFor, activeEndIntoWind,
-  validateFieldStateInventory, runwayInventoryWarnings,
+  validateRunwayStatusInventory, runwayInventoryWarnings,
 } = fieldState;
 
 const INCIRLIK = facilityConfig.getFacilityConfig('INCIRLIK');
@@ -75,7 +75,7 @@ test('no SUSPENDED_* status can reach CLOSED (no side door around the inspection
 });
 
 test("INCIRLIK's shipped inventory is one pavement whose ends name both twr-runway-queue racks, and validates", () => {
-  assert.equal(validateFieldStateInventory(INVENTORY, INCIRLIK.positions), null);
+  assert.equal(validateRunwayStatusInventory(INVENTORY, INCIRLIK.positions), null);
   assert.equal(INVENTORY.runways.length, 1);
   const [rwy] = INVENTORY.runways;
   assert.equal(rwy.runwayId, '05/23');
@@ -122,7 +122,7 @@ test('validateConfig rejects a malformed runway inventory', () => {
 test('a well-formed gear entry validates (the shape is kept even though none ships)', () => {
   const inv = structuredClone(INVENTORY);
   inv.runways[0].arrestingGear = [{ end: '05', position: 'APPROACH_END', type: 'BAK_12', state: 'UP', distanceFt: 1500 }];
-  assert.equal(validateFieldStateInventory(inv, INCIRLIK.positions), null);
+  assert.equal(validateRunwayStatusInventory(inv, INCIRLIK.positions), null);
 });
 
 test('a rackId mismatch is a warning, never a rejection — and so is a runway-queue rack no runway names', () => {
@@ -232,13 +232,13 @@ test('the active end is the one most into the TRUE wind (decisions.md H22)', () 
 
 // ── step 2 — the store, driven directly ─────────────────────────────────────
 
-const { FieldStateStore } = await import('../src/efsp/runway-status-store.js');
+const { RunwayStatusStore } = await import('../src/efsp/runway-status-store.js');
 const { MutationLog } = await import('../src/efsp/mutation-log.js');
 
 /** A facility-config stand-in over the SHIPPED INCIRLIK config (plus a runway-less CENTER), or an overridden inventory. */
-function fixtureConfig(fieldStateOverride) {
+function fixtureConfig(runwayStatusOverride) {
   const incirlik = structuredClone(INCIRLIK);
-  if (fieldStateOverride) incirlik.fieldState = fieldStateOverride;
+  if (runwayStatusOverride) incirlik.fieldState = runwayStatusOverride;
   const center = facilityConfig.getFacilityConfig('CENTER');
   return {
     getFacilityIds: () => ['INCIRLIK', 'CENTER'],
@@ -247,16 +247,16 @@ function fixtureConfig(fieldStateOverride) {
 }
 
 let logN = 0;
-function freshStore({ fieldStateOverride, deps } = {}) {
+function freshStore({ runwayStatusOverride, deps } = {}) {
   const logPath = path.join(tmpDir, `store-${++logN}.jsonl`);
-  const store = new FieldStateStore(fixtureConfig(fieldStateOverride), deps);
+  const store = new RunwayStatusStore(fixtureConfig(runwayStatusOverride), deps);
   store.setMutationLog(new MutationLog(logPath));
   const log = () => (fs.existsSync(logPath) ? fs.readFileSync(logPath, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)) : []);
   return { store, log };
 }
 
 function op(store, positionId, kind, fields = {}, { by = `c-${positionId}`, baseRev } = {}) {
-  const rev = baseRev === undefined ? store.getFieldState('INCIRLIK').rev : baseRev;
+  const rev = baseRev === undefined ? store.getRunwayStatus('INCIRLIK').rev : baseRev;
   return store.apply({ clientMutationId: `m-${Math.random()}`, facilityId: 'INCIRLIK', baseRev: rev, op: { kind, ...fields } }, positionId, by);
 }
 function mustOp(store, positionId, kind, fields, opts) {
@@ -269,9 +269,9 @@ const rwy = (fs_) => fs_.runways.find(r => r.runwayId === '05/23');
 test('the store seeds one record per Facility with an inventory, every runway OPEN, no active runway yet', () => {
   const { store } = freshStore();
   assert.equal(store.getAll().length, 1);
-  assert.equal(store.getFieldState('CENTER'), null);
+  assert.equal(store.getRunwayStatus('CENTER'), null);
   assert.equal(store.statusView('CENTER'), null);
-  const fsI = store.getFieldState('INCIRLIK');
+  const fsI = store.getRunwayStatus('INCIRLIK');
   assert.equal(fsI.rev, 0);
   assert.equal(fsI.activeRunway, null);
   assert.equal(rwy(fsI).status, 'OPEN');
@@ -351,7 +351,7 @@ test('CompleteInspection is refused to a Position other than inspectionAuthority
   // A config naming another Position narrows OPS out too — it never widens.
   const narrowed = structuredClone(INVENTORY);
   narrowed.inspectionAuthorityPositionId = 'APP';
-  const { store: s2 } = freshStore({ fieldStateOverride: narrowed });
+  const { store: s2 } = freshStore({ runwayStatusOverride: narrowed });
   mustOp(s2, 'TWR', 'BeginRunwayWorks', { runwayId: '05/23' });
   mustOp(s2, 'OPS', 'CompleteRunwayWorks', { runwayId: '05/23' });
   const r = op(s2, 'OPS', 'CompleteInspection', { runwayId: '05/23' });
@@ -472,16 +472,16 @@ test('the status view is cached and rebuilt only when the record changes; nothin
   const v2 = store.statusView('INCIRLIK');
   assert.notEqual(v2, v1);
   assert.equal(v2.runways[0].status, 'CLOSED');
-  const copy = store.getFieldState('INCIRLIK');
+  const copy = store.getRunwayStatus('INCIRLIK');
   copy.runways[0].status = 'OPEN';
-  assert.equal(store.getFieldState('INCIRLIK').runways[0].status, 'CLOSED');
+  assert.equal(store.getRunwayStatus('INCIRLIK').runways[0].status, 'CLOSED');
 });
 
 test('the mission wind sets the active end once per mission; a reconnect keeps what is there (decisions.md H22)', () => {
   const { store, log } = freshStore();
   let r = store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 240, windKt: 12, missionSession: 1 });
   assert.deepEqual([r.ok, r.activeRunway], [true, '23']);
-  let fsI = store.getFieldState('INCIRLIK');
+  let fsI = store.getRunwayStatus('INCIRLIK');
   assert.equal(fsI.activeRunway, '23');
   assert.equal(fsI.activeRunwaySource.kind, 'WIND');
   assert.equal(fsI.activeRunwaySource.windFromTrue, 240);
@@ -489,10 +489,10 @@ test('the mission wind sets the active end once per mission; a reconnect keeps w
   assert.equal(log().at(-1).actorId, 'crc-sync');
   // Same mission again (a reconnect): nothing changes even if the wind reads differently.
   r = store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, windKt: 3, missionSession: 1 });
-  assert.deepEqual([r.changed, store.getFieldState('INCIRLIK').activeRunway], [false, '23']);
+  assert.deepEqual([r.changed, store.getRunwayStatus('INCIRLIK').activeRunway], [false, '23']);
   // A new mission re-derives.
   r = store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, windKt: 8, missionSession: 2 });
-  assert.equal(store.getFieldState('INCIRLIK').activeRunway, '05');
+  assert.equal(store.getRunwayStatus('INCIRLIK').activeRunway, '05');
   assert.equal(store.setActiveRunwayFromWind('CENTER', { windFromTrue: 60 }).reason, 'NOT_FOUND');
 });
 
@@ -503,12 +503,12 @@ test('snapshot/restore round-trips a SUSPENDED_WORKS runway intact', () => {
   const snap = JSON.parse(JSON.stringify(store.snapshot()));
   const { store: reborn } = freshStore();
   reborn.restore(snap);
-  const fsI = reborn.getFieldState('INCIRLIK');
+  const fsI = reborn.getRunwayStatus('INCIRLIK');
   assert.equal(rwy(fsI).status, 'SUSPENDED_WORKS');
   assert.equal(rwy(fsI).suspension.positionId, 'TWR');
   assert.equal(rwy(fsI).suspension.note, 're-rig');
   assert.equal(fsI.activeRunway, '05');
-  assert.equal(fsI.rev, store.getFieldState('INCIRLIK').rev);
+  assert.equal(fsI.rev, store.getRunwayStatus('INCIRLIK').rev);
   assert.equal(reborn.statusView('INCIRLIK').runways[0].status, 'SUSPENDED_WORKS');
   // No inventory in the snapshot — the gear comes from config.
   assert.ok(!('arrestingGear' in snap[0].runways[0]));
@@ -520,13 +520,13 @@ test('restore drops a runway no longer configured and seeds a newly configured o
   const snap = store.snapshot();
   const inv = structuredClone(INVENTORY);
   inv.runways = [{ runwayId: '17/35', ends: ['17', '35'], endHeadingsTrue: { '17': 170, '35': 350 }, arrestingGear: [] }];
-  const { store: reborn } = freshStore({ fieldStateOverride: inv });
+  const { store: reborn } = freshStore({ runwayStatusOverride: inv });
   reborn.restore(snap);
-  const fsI = reborn.getFieldState('INCIRLIK');
+  const fsI = reborn.getRunwayStatus('INCIRLIK');
   assert.deepEqual(fsI.runways.map(r => [r.runwayId, r.status]), [['17/35', 'OPEN']]);
   // A snapshot for a Facility with no inventory is skipped.
   reborn.restore([{ facilityId: 'CENTER', runways: [] }]);
-  assert.equal(reborn.getFieldState('CENTER'), null);
+  assert.equal(reborn.getRunwayStatus('CENTER'), null);
 });
 
 test('apply never throws on garbage input', () => {
@@ -536,7 +536,7 @@ test('apply never throws on garbage input', () => {
     const r = store.apply(bad, 'TWR', 'c-TWR');
     assert.equal(r.ok, false, JSON.stringify(bad));
   }
-  assert.equal(rwy(store.getFieldState('INCIRLIK')).status, 'OPEN');
+  assert.equal(rwy(store.getRunwayStatus('INCIRLIK')).status, 'OPEN');
 });
 
 // ── step 3 — the wire, permission and persistence ───────────────────────────
@@ -548,7 +548,7 @@ const efsp = createEfsp();
 const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' });
 
 function fieldAct(e, member, positionId, op, { facilityId = 'INCIRLIK', baseRev } = {}) {
-  const current = e.fieldStateStore.getFieldState(facilityId);
+  const current = e.runwayStatusStore.getRunwayStatus(facilityId);
   return e.handleMessage(member.session, {
     version: 1, type: 'efsp-field-state-mutation', clientMutationId: `fs-${Math.random()}`,
     facilityId, baseRev: baseRev === undefined ? (current ? current.rev : undefined) : baseRev,
@@ -559,7 +559,7 @@ const mutationLog = () => fs.readFileSync(process.env.CRCSYNC_EFSP_MUTATION_LOG_
 
 test('efsp-field-state-mutation routes, applies, acks and broadcasts efsp-field-state-delta with its own fieldStateSeq', () => {
   const boardSeq = efsp.boardStoreFor('INCIRLIK').currentSeq;
-  const seq = efsp.fieldStateStore.currentSeq;
+  const seq = efsp.runwayStatusStore.currentSeq;
   const out = fieldAct(efsp, c.TWR, 'TWR', { kind: 'CloseRunway', runwayId: '05/23', reason: 'FOD' });
   assert.equal(out.ack.type, 'efsp-field-state-ack');
   assert.equal(out.ack.ok, true);
@@ -627,7 +627,7 @@ test('a field-state op writes the Mutation log with fieldStateFacilityId and run
 test('a suspension persists and a fresh createEfsp() restores it SUSPENDED_WORKS', () => {
   assert.equal(fieldAct(efsp, c.TWR, 'TWR', { kind: 'BeginRunwayWorks', runwayId: '05/23' }).ack.ok, true);
   const reborn = createEfsp();
-  const fsI = reborn.fieldStateStore.getFieldState('INCIRLIK');
+  const fsI = reborn.runwayStatusStore.getRunwayStatus('INCIRLIK');
   assert.equal(rwy(fsI).status, 'SUSPENDED_WORKS');
   assert.equal(rwy(fsI).suspension.positionId, 'TWR');
   // Drive the shared field back to OPEN for whoever runs next.
@@ -648,7 +648,7 @@ test('a handler with no field-state store answers, never throws (a hand-built ct
 const nla = await import('../src/efsp/nla.js');
 const NOW = Date.UTC(2026, 8, 30, 12, 0, 0);
 const everyoneHome = { isStaffed: () => true, consolidatedAt: () => null };
-const ctxWith = (view, extra = {}) => ({ ...everyoneHome, fieldStateFor: () => view, ...extra });
+const ctxWith = (view, extra = {}) => ({ ...everyoneHome, runwayStatusFor: () => view, ...extra });
 const readyFlightData = (over = {}) => ({
   identity: { beaconAssigned: '4001' },
   filed: { route: 'DCT', requestedAltitude: '250', departureAirport: 'LTAG', destinationAirport: 'LTAG', departureRunway: '05', ...over.filed },
@@ -689,7 +689,7 @@ test('an unresolvable runway, a runway not in the inventory, and a Facility with
   assert.deepEqual(nla.computeNla({ role: 'DEPARTURE', state: 'RUNWAY_QUEUE', rackId: 'rwy-05' }, readyFlightData(), NOW, ctxWith(null)), { toState: 'LUAW' });
 });
 
-test('a ctx with no fieldStateFor at all behaves exactly as before (every pre-L1 caller)', () => {
+test('a ctx with no runwayStatusFor at all behaves exactly as before (every pre-L1 caller)', () => {
   assert.deepEqual(nla.computeNla({ role: 'DEPARTURE', state: 'TAXI', rackId: 'main' }, readyFlightData(), NOW, everyoneHome), { toState: 'RUNWAY_QUEUE', transferTo: 'TWR' });
   assert.deepEqual(nla.computeNla({ role: 'DEPARTURE', state: 'LUAW', rackId: 'rwy-05' }, readyFlightData(), NOW, everyoneHome), { toState: 'DEPARTED' });
   assert.deepEqual(nla.computeNla({ role: 'ARRIVAL', state: 'HANDED_TO_TOWER', rackId: 'main' }, readyFlightData(), NOW, everyoneHome), { toState: 'FINAL' });
@@ -727,12 +727,12 @@ test('the inhibit follows the rack a Strip is in, at a field with two independen
 // ── step 5 — rule 3: the runway change and its acknowledgements ─────────────
 
 /** A store with every Position manned and a known active end (05). */
-function manned({ occupied = ['OPS', 'CD', 'GND', 'TWR', 'APP'], primaryOf = (f, p) => `c-${p}`, fieldStateOverride } = {}) {
-  const r = freshStore({ fieldStateOverride, deps: { isStaffed: (f, p) => f === 'INCIRLIK' && occupied.includes(p), primaryOf } });
+function manned({ occupied = ['OPS', 'CD', 'GND', 'TWR', 'APP'], primaryOf = (f, p) => `c-${p}`, runwayStatusOverride } = {}) {
+  const r = freshStore({ runwayStatusOverride, deps: { isStaffed: (f, p) => f === 'INCIRLIK' && occupied.includes(p), primaryOf } });
   r.store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, missionSession: 1 });
   return r;
 }
-const change = (store) => store.getFieldState('INCIRLIK').runwayChange;
+const change = (store) => store.getRunwayStatus('INCIRLIK').runwayChange;
 
 test('BeginRunwayChange is refused in every state but ACKNOWLEDGED', () => {
   const { store } = manned();
@@ -798,7 +798,7 @@ test('an ack sent as TWR never counts as an acknowledger (the D21 guard at the s
 test("an acknowledger set of ['OPS'] (a Facility without APP) cannot deadlock", () => {
   const inv = structuredClone(INVENTORY);
   inv.runwayChangeAcknowledgers = ['OPS'];
-  const { store } = manned({ fieldStateOverride: inv });
+  const { store } = manned({ runwayStatusOverride: inv });
   mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
   mustOp(store, 'OPS', 'AckRunwayChange');
   assert.equal(change(store).state, 'ACKNOWLEDGED');
@@ -813,7 +813,7 @@ test('an acknowledger nobody holds is skipped and recorded, never a deadlock (de
   assert.equal(ch.acks.APP.skipped, true);
   assert.equal(ch.acks.APP.reason, 'UNMANNED');
   assert.equal(ch.state, 'PROPOSED');
-  assert.deepEqual(store.getFieldState('INCIRLIK').transitions.at(-1).skippedAcknowledgers, ['APP']);
+  assert.deepEqual(store.getRunwayStatus('INCIRLIK').transitions.at(-1).skippedAcknowledgers, ['APP']);
   assert.equal(log().at(-1).after.runwayChange.acks.APP.skipped, true);
   mustOp(store, 'OPS', 'AckRunwayChange');
   assert.equal(change(store).state, 'ACKNOWLEDGED');
@@ -883,7 +883,7 @@ test('CompleteRunwayChange sets the active runway, suspends the pavement for ins
   mustOp(store, 'APP', 'AckRunwayChange');
   mustOp(store, 'TWR', 'BeginRunwayChange');
   // IN_PROGRESS changes no runway status (decisions.md Q29).
-  assert.equal(rwy(store.getFieldState('INCIRLIK')).status, 'OPEN');
+  assert.equal(rwy(store.getRunwayStatus('INCIRLIK')).status, 'OPEN');
   const fsI = mustOp(store, 'TWR', 'CompleteRunwayChange');
   assert.equal(fsI.activeRunway, '23');
   assert.equal(fsI.activeRunwaySource.kind, 'RUNWAY_CHANGE');
@@ -897,7 +897,7 @@ test('the change record clears only when every runway in pendingInspection has b
   // Two surfaces: a change from 05 to 17 has to inspect both.
   const inv = structuredClone(INVENTORY);
   inv.runways.push({ runwayId: '17/35', ends: ['17', '35'], endHeadingsTrue: { '17': 175, '35': 355 }, arrestingGear: [] });
-  const { store } = manned({ fieldStateOverride: inv });
+  const { store } = manned({ runwayStatusOverride: inv });
   mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '17' });
   mustOp(store, 'OPS', 'AckRunwayChange');
   mustOp(store, 'APP', 'AckRunwayChange');
@@ -936,7 +936,7 @@ test('CompleteRunwayChange is refused while a runway in the set is mid runway wo
 
 test('runwayChangeInProgress is true exactly in IN_PROGRESS and PENDING_INSPECTION', () => {
   const { store } = manned();
-  const inProgress = () => store.getFieldState('INCIRLIK').runwayChangeInProgress;
+  const inProgress = () => store.getRunwayStatus('INCIRLIK').runwayChangeInProgress;
   assert.equal(inProgress(), false);
   mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
   assert.equal(inProgress(), false);
@@ -973,7 +973,7 @@ test('the wind never moves the active runway while a change is open', () => {
   mustOp(store, 'TWR', 'ProposeRunwayChange', { toRunwayId: '23' });
   const r = store.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 240, missionSession: 2 });
   assert.equal(r.changed, false);
-  assert.equal(store.getFieldState('INCIRLIK').activeRunway, '05');
+  assert.equal(store.getRunwayStatus('INCIRLIK').activeRunway, '05');
 });
 
 test('a reconnect in the same mission session keeps the end TWR changed to; a new session is considered again (ADR 0086)', () => {
@@ -983,13 +983,13 @@ test('a reconnect in the same mission session keeps the end TWR changed to; a ne
   mustOp(store, 'APP', 'AckRunwayChange');
   mustOp(store, 'TWR', 'BeginRunwayChange');
   mustOp(store, 'TWR', 'CompleteRunwayChange');
-  assert.equal(store.getFieldState('INCIRLIK').activeRunwaySource.kind, 'RUNWAY_CHANGE');
+  assert.equal(store.getRunwayStatus('INCIRLIK').activeRunwaySource.kind, 'RUNWAY_CHANGE');
   // A gRPC reconnect or crc-sync restart onto session 1: the wind (still from 060) is not re-applied.
   const { store: reborn } = freshStore();
   reborn.restore(JSON.parse(JSON.stringify(store.snapshot())));
   const r = reborn.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, missionSession: 1 });
   assert.deepEqual([r.ok, r.changed, r.skipped], [true, false, true]);
-  assert.equal(reborn.getFieldState('INCIRLIK').activeRunway, '23');
+  assert.equal(reborn.getRunwayStatus('INCIRLIK').activeRunway, '23');
   // Session 2 (the same .miz restarted) is considered afresh — here held by the
   // change still pending its inspection; the H22 test above shows it re-deriving.
   assert.notEqual(reborn.setActiveRunwayFromWind('INCIRLIK', { windFromTrue: 60, missionSession: 2 }).skipped, true);

@@ -89,7 +89,7 @@ const family = {
   permissions: Object.fromEntries(_rows.filter(([, row]) => row.ops).map(([id, row]) => [id, new Set(row.ops)])),
   createsStripTypes: Object.fromEntries(_rows.filter(([, row]) => row.createsStripTypes && row.createsStripTypes.length).map(([id, row]) => [id, new Set(row.createsStripTypes)])),
   ownsStates: Object.fromEntries(_rows.map(([id, row]) => [id, row.ownsStates || {}])),
-  fieldStateGrants: { RequestRunwayStatus: incirlikPositionsWith('requestsRunwayStatus') },
+  runwayStatusGrants: { RequestRunwayStatus: incirlikPositionsWith('requestsRunwayStatus') },
   capabilities: INCIRLIK_CAPABILITIES,
 };
 

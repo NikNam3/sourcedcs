@@ -265,7 +265,7 @@ class WsHub {
    * deviation), so a client needs one handler for both (docs/adr/0068,
    * decisions.md S-L1d).
    */
-  broadcastEfspFieldStateDelta(payload) {
+  broadcastEfspRunwayStatusDelta(payload) {
     this._broadcast({
       version: VERSION, type: 'efsp-field-state-delta',
       fieldStateSeq: payload.fieldStateSeq,

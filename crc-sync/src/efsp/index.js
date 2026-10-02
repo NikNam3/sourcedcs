@@ -79,7 +79,7 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
   const buildDeps = { clock, transitionAltFt, codeAllocator, mutationLog, facilities, stores };
   for (const entry of REGISTRY) stores[entry.key] = entry.build(buildDeps);
   const { fdr: flightDataStore, airspaces: airspaceStore, correlations: correlationStore, marsa: marsaStore,
-    fieldStates: fieldStateStore, carriers: carrierStore, sfaRotation: sfaStore } = stores;
+    fieldStates: runwayStatusStore, carriers: carrierStore, sfaRotation: sfaStore } = stores;
   const facilityIds = facilityConfig.getFacilityIds();
 
   for (const facilityId of facilityIds) {
@@ -177,7 +177,7 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
       // WP6 (docs/adr/0061), §9.7 rule 1 — this Facility's runway status view
       // (null where there are no runways, which never inhibits). Cached in the
       // store, so every NLA stamp can afford to ask.
-      fieldStateFor:           () => fieldStateStore.statusView(facilityId),
+      runwayStatusFor:           () => runwayStatusStore.statusView(facilityId),
       // docs/adr/0074 — the carrier hooks board-store.js reads. The NLA out of
       // IN_STACK depends on the Case and on the manned lane the stack feeds.
       carrierCase:             () => carrierStore.caseValue(),
@@ -263,7 +263,7 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
     airspaceConfig,
     facilityConfig,
     nlaStatusMonitor,
-    fieldStateStore,
+    runwayStatusStore,
     // The real, Facility-aware accessors WP4A's wire protocol uses.
     boardStoreFor: (facilityId) => {
       const f = _facilityOrThrow(facilities, facilityId);
@@ -285,7 +285,7 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
 
   return {
     flightDataStore, mutationLog, clock,
-    airspaceStore, correlationStore, marsaStore, nlaStatusMonitor, fieldStateStore, carrierStore, sfaStore,
+    airspaceStore, correlationStore, marsaStore, nlaStatusMonitor, runwayStatusStore, carrierStore, sfaStore,
     boardStoreFor: ctx.boardStoreFor, positionStoreFor: ctx.positionStoreFor,
 
     /**

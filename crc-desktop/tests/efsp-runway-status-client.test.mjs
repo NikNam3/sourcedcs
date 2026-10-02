@@ -5,7 +5,7 @@
    The rules are a MIRROR of crc-sync's runway-status.js and permission.js and
    proactive only. A mirror that drifts is worse than none, so the drift tests
    below require the real server modules and run both sides over one table —
-   and replay every offered button against a real FieldStateStore. */
+   and replay every offered button against a real RunwayStatusStore. */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -20,7 +20,7 @@ import * as rules from '../app/public/js/panels/efsp/runway-status-rules.js';
 const require = createRequire(import.meta.url);
 const serverFieldState = require('../../crc-sync/src/efsp/runway-status.js');
 const serverPermission = require('../../crc-sync/src/efsp/permission.js');
-const { FieldStateStore } = require('../../crc-sync/src/efsp/runway-status-store.js');
+const { RunwayStatusStore } = require('../../crc-sync/src/efsp/runway-status-store.js');
 
 // ── fixtures ────────────────────────────────────────────────────────────────
 
@@ -35,7 +35,7 @@ const INVENTORY = {
   pads: { hotCargo: { name: 'Hot cargo pad' }, alert: { name: 'Alert pad' } },
 };
 
-/** A wire record in crc-sync getFieldState()'s shape. */
+/** A wire record in crc-sync getRunwayStatus()'s shape. */
 function record({ status = 'OPEN', activeRunway = '05', suspension = null, closure = null, gear = [], pendingRequest = null, runwayChange = null, facilityId = 'INCIRLIK', rev = 4 } = {}) {
   return {
     facilityId, rev, activeRunway, activeRunwaySource: null,
@@ -55,7 +55,7 @@ const departure = (extra = {}) => ({ stripId: 's-dep', fdrId: 'f-dep', facilityI
 const arrival = (extra = {}) => ({ stripId: 's-arr', fdrId: 'f-arr', facilityId: 'INCIRLIK', role: 'ARRIVAL', state: 'HANDED_TO_TOWER', bayId: 'twr-arrivals', rackId: 'main', ...extra });
 const fdrDep = (rwy) => ({ fdrId: 'f-dep', filed: { departureRunway: rwy }, assigned: {}, military: {} });
 const fdrArr = (rwy, hook = false) => ({ fdrId: 'f-arr', filed: {}, assigned: { landingRunway: rwy }, military: { hookRequired: hook } });
-const lookups = (rec, fdr) => ({ fieldStateFor: (id) => (rec && rec.facilityId === id ? rec : null), flightDataFor: () => fdr });
+const lookups = (rec, fdr) => ({ runwayStatusFor: (id) => (rec && rec.facilityId === id ? rec : null), flightDataFor: () => fdr });
 
 // ── Step 1: client state ────────────────────────────────────────────────────
 
@@ -167,7 +167,7 @@ function facilityConfigFixture() {
 /** A fresh real store, driven through `history` ([positionId, op]) by one controller who holds everything. */
 function storeAfter(history) {
   let t = Date.UTC(2026, 8, 30, 14, 0);
-  const store = new FieldStateStore(facilityConfigFixture(), {
+  const store = new RunwayStatusStore(facilityConfigFixture(), {
     clock: { now: () => (t += 60000) },
     isStaffed: () => true,
     primaryOf: () => 'c1',
@@ -209,14 +209,14 @@ const HELD_SETS = [...ALL_POSITIONS.map(p => [p]), ['TWR', 'OPS', 'APP'], ['OPS'
 test('drift: every offered button names an owned kind, is offered only AS a Position that owns it, and the real store accepts it', () => {
   let offered = 0;
   for (const [name, history] of Object.entries(SCENARIOS)) {
-    const rec = storeAfter(history).getFieldState('INCIRLIK');
+    const rec = storeAfter(history).getRunwayStatus('INCIRLIK');
     for (const held of HELD_SETS) {
       for (const action of rules.fieldStateActionsFor(rec, held)) {
         offered += 1;
         const where = `${name}, holding ${held.join('+')}: ${action.kind} as ${action.positionId}`;
         assert.ok(Object.prototype.hasOwnProperty.call(serverPermission.FIELD_STATE_OP_OWNERS, action.kind), where);
         assert.ok(held.includes(action.positionId), where);
-        assert.equal(serverPermission.canActOnFieldState(action.positionId, action.kind), true, where);
+        assert.equal(serverPermission.canActOnRunwayStatus(action.positionId, action.kind), true, where);
         const store = storeAfter(history);
         const result = store.apply({ facilityId: 'INCIRLIK', baseRev: rec.rev, op: opOf(action) }, action.positionId, 'c1');
         assert.equal(result.ok, true, `${where} was refused: ${result.reason} ${result.detail}`);

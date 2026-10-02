@@ -16,7 +16,7 @@ function _requireNow(now) {
 
 /** Rule 1's inhibit for this Strip's runway, or null (fail open — see runway-status.js). */
 function _runwayInhibit(strip, fdr, ctx) {
-  return runwayInhibitFor(strip, fdr, ctx.fieldStateFor(), { targetRackId: ctx.targetRackId });
+  return runwayInhibitFor(strip, fdr, ctx.runwayStatusFor(), { targetRackId: ctx.targetRackId });
 }
 
 module.exports = { _requireNow, _runwayInhibit };

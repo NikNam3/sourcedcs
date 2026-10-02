@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 const { hungOrdnanceAdvisoryFor, buildStatusView } = await import('../src/efsp/runway-status.js');
 const nla = await import('../src/efsp/nla.js');
 
-/** A field-state record in the shape runway-status-store.js getFieldState puts on the wire. */
+/** A field-state record in the shape runway-status-store.js getRunwayStatus puts on the wire. */
 function record({ pad = 'Hot cargo pad', activeRunway = '05', status = 'OPEN', facilityId = 'INCIRLIK' } = {}) {
   return {
     facilityId,
@@ -112,7 +112,7 @@ test('the advisory is never an inhibit: NLA for a HUNG flight equals the same fl
   const NOW = Date.UTC(2026, 8, 30, 12, 0, 0);
   const rec = record();
   const view = buildStatusView(rec, rec);
-  const ctx = { isStaffed: () => true, consolidatedAt: () => null, fieldStateFor: () => view };
+  const ctx = { isStaffed: () => true, consolidatedAt: () => null, runwayStatusFor: () => view };
   const cases = [
     [arrival({ state: 'HANDED_TO_TOWER' }), { assigned: { landingRunway: '05' } }],
     [arrival({ state: 'FINAL' }), { assigned: { landingRunway: '05' } }],

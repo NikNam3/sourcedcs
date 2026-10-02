@@ -367,7 +367,7 @@ test('LATE ARRIVAL: an aircraft is already in the pattern when RSU leaves; the S
 test('RSU asks for a runway change and may not make one (H18): a request reaches TWR, a close is refused', () => {
   const { efsp, c } = fresh();
   const rsu = c.RSU;
-  const current = () => efsp.fieldStateStore.getFieldState('INCIRLIK');
+  const current = () => efsp.runwayStatusStore.getRunwayStatus('INCIRLIK');
   const send = (op) => efsp.handleMessage(rsu.session, {
     version: 1, type: 'efsp-field-state-mutation', clientMutationId: crypto.randomUUID(),
     facilityId: 'INCIRLIK', baseRev: current().rev, actingPositionId: 'RSU', op,

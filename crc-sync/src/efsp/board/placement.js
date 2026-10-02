@@ -109,7 +109,7 @@ class Placement {
       // §9.7 rule 1 (docs/adr/0061) — the runway status view, on every
       // computeNla call site at once: the button, the advisory stamp, and the
       // drag. `targetRackId` is set only on the drag path (decisions.md Q27).
-      fieldStateFor: this._rules.fieldStateFor,
+      runwayStatusFor: this._rules.runwayStatusFor,
       targetRackId: target ? target.rackId : undefined,
       // docs/adr/0074 — the recovery Case, the manned lane the stack feeds, and
       // whether the flight is in the stack, for the carrier's NLA tables.
@@ -120,8 +120,8 @@ class Placement {
   }
 
   /** This Facility's runway status view, or null (no runways — nothing is runway-gated). */
-  fieldStateView() {
-    return this._rules.fieldStateFor();
+  runwayStatusView() {
+    return this._rules.runwayStatusFor();
   }
 
   /**
@@ -140,7 +140,7 @@ class Placement {
       const rack = fdr && fdr.comms ? this._rules.sfaRackFor(bay.bayId, fdr.comms.workingFrequencyMhz) : null;
       if (rack) return rack;
     }
-    return runwayRackFor(strip, this._fdrStore.getFlightData(strip.fdrId), this.fieldStateView(), bay);
+    return runwayRackFor(strip, this._fdrStore.getFlightData(strip.fdrId), this.runwayStatusView(), bay);
   }
 
   /**

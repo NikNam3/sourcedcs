@@ -75,7 +75,7 @@ function validateConfig(candidate) {
   // anywhere, so it is rejected like a malformed radar selector. How it lines
   // up with the Bays only warns — see _loadOne.
   if (candidate.fieldState !== undefined) {
-    const problem = fieldState.validateFieldStateInventory(candidate.fieldState, candidate.positions || []);
+    const problem = fieldState.validateRunwayStatusInventory(candidate.fieldState, candidate.positions || []);
     if (problem) return { ok: false, reason: 'VALIDATION_ERROR', detail: problem };
   }
   if (candidate.fieldState && candidate.fieldState.pads) {

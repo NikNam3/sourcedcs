@@ -63,7 +63,7 @@ function _setStateRunwayRefusal(ctx, strip, toState) {
   if (!(RUNWAY_GATED_STATES[strip.role] || []).includes(toState)) return null;
   const bay = ctx.rules.bayForImpliedState(strip.ownerPositionId, toState);
   const targetRackId = bay && bay.impliesState === toState ? ctx.placement.placementRack(strip, bay) : undefined;
-  const inhibit = runwayInhibitFor(strip, ctx.flightDataStore.getFlightData(strip.fdrId), ctx.placement.fieldStateView(), { targetRackId });
+  const inhibit = runwayInhibitFor(strip, ctx.flightDataStore.getFlightData(strip.fdrId), ctx.placement.runwayStatusView(), { targetRackId });
   return inhibit ? { ok: false, reason: 'NLA_INHIBITED', detail: inhibit, strip } : null;
 }
 

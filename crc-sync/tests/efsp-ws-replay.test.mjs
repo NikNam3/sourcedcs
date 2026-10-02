@@ -104,22 +104,22 @@ test('a retried airspace op is not re-applied', () => {
 test('a retried field-state op is not re-applied', () => {
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
-  const cur = efsp.fieldStateStore.getFieldState('INCIRLIK');
+  const cur = efsp.runwayStatusStore.getRunwayStatus('INCIRLIK');
   const msg = {
     version: 1, type: 'efsp-field-state-mutation', clientMutationId: crypto.randomUUID(), facilityId: 'INCIRLIK',
     actingPositionId: 'TWR', baseRev: cur.rev, op: { kind: 'CloseRunway', runwayId: '05/23', reason: 'FOD' },
   };
   const first = efsp.handleMessage(c.TWR.session, msg);
   assert.equal(first.ack.ok, true, JSON.stringify(first.ack));
-  const seq = efsp.fieldStateStore.currentSeq;
+  const seq = efsp.runwayStatusStore.currentSeq;
   const retry = efsp.handleMessage(c.TWR.session, JSON.parse(JSON.stringify(msg)));
   assert.equal(retry.ack.ok, true, JSON.stringify(retry.ack));
-  assert.equal(retry.ack.fieldState.rev, efsp.fieldStateStore.getFieldState('INCIRLIK').rev);
-  assert.equal(efsp.fieldStateStore.currentSeq, seq, 'not applied again');
+  assert.equal(retry.ack.fieldState.rev, efsp.runwayStatusStore.getRunwayStatus('INCIRLIK').rev);
+  assert.equal(efsp.runwayStatusStore.currentSeq, seq, 'not applied again');
   assert.equal(slot(retry, 'primary'), undefined);
   assert.equal(logLines(msg.clientMutationId).length, 1);
   // Leave the runway open for whoever shares this file's durable state.
-  const back = send(efsp, c.TWR, { type: 'efsp-field-state-mutation', facilityId: 'INCIRLIK', actingPositionId: 'TWR', baseRev: efsp.fieldStateStore.getFieldState('INCIRLIK').rev, op: { kind: 'OpenRunway', runwayId: '05/23' } });
+  const back = send(efsp, c.TWR, { type: 'efsp-field-state-mutation', facilityId: 'INCIRLIK', actingPositionId: 'TWR', baseRev: efsp.runwayStatusStore.getRunwayStatus('INCIRLIK').rev, op: { kind: 'OpenRunway', runwayId: '05/23' } });
   assert.equal(back.ack.ok, true);
 });
 

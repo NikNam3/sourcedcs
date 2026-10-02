@@ -38,7 +38,7 @@ export const DEFAULT_RULES = {
   consolidatedAt: () => null,
   drainMarsaRegimeWrites: () => [],
   facilityId: null,
-  fieldStateFor: () => null,
+  runwayStatusFor: () => null,
   handBackTargetsFor: () => null,
   isBlockVisible: () => true,
   isStaffed: () => false,
