@@ -22,6 +22,7 @@
 // refusals included. Every time comes from the injected mission clock (H11).
 
 const permission = require('./permission');
+const authority = require('./authority');
 const { validateSfaRotationRecord } = require('./facility-config');
 const { WALL_CLOCK } = require('../mission-clock');
 const { SyncLog } = require('./sync/sync-log');
@@ -117,9 +118,8 @@ class SfaStore {
   _dispatch(mutation, actingPositionId, by) {
     const op = mutation.op || {};
     if (op.kind !== SET_OP) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown SFA op ${JSON.stringify(op.kind)}` };
-    if (!permission.canRotateSfa(actingPositionId) || actingPositionId !== this._config.jurisdiction) {
-      return { ok: false, reason: 'PERMISSION_DENIED', detail: `${this._config.jurisdiction} holds jurisdiction over the SFA rotation (guide §4.7), not ${actingPositionId}` };
-    }
+    const notJurisdiction = authority.sfaJurisdictionRefusal(actingPositionId, this._config);
+    if (notJurisdiction) return notJurisdiction;
     if (mutation.baseRev !== undefined && mutation.baseRev !== null && mutation.baseRev !== this._record.rev) {
       return { ok: false, reason: 'STALE_REV', record: deepClone(this._record) };
     }

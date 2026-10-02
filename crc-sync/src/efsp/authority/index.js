@@ -284,7 +284,10 @@ function creatorsOf(stripType) {
   return Object.keys(CREATE_STRIP_TYPE_PERMISSIONS).filter(p => CREATE_STRIP_TYPE_PERMISSIONS[p].has(stripType));
 }
 
+const { runwayInspectionRefusal, selfCoordinationRefusal, sfaJurisdictionRefusal } = require('./narrowing');
+
 module.exports = {
+  runwayInspectionRefusal, selfCoordinationRefusal, sfaJurisdictionRefusal,
   registerStripTypeFamily, registerPositionFamily,
   positionFamilyOf, positionFamily, positionIds, capabilitiesFor, creatorsOf,
   PERMISSIONS, CREATE_STRIP_TYPE_PERMISSIONS, RUNWAY_STATUS_OP_OWNERS, NON_OWNER_BLOCK_WRITES, TOFI_COUNTERPARTS,

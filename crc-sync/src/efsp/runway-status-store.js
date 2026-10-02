@@ -31,6 +31,7 @@ const crypto = require('crypto');
 const { WALL_CLOCK } = require('../mission-clock');
 const { SyncLog } = require('./sync/sync-log');
 const permission = require('./permission');
+const authority = require('./authority');
 const {
   canGo, buildStatusView, activeEndIntoWind, isRunwayChangeInProgress, isRunwayChangeOpen,
   REQUEST_ACTIONS,
@@ -383,10 +384,8 @@ class RunwayStatusStore {
   }
 
   _completeInspection(ctx) {
-    const authority = ctx.inventory.inspectionAuthorityPositionId;
-    if (authority && ctx.actingPositionId !== authority) {
-      return { ok: false, reason: 'PERMISSION_DENIED', detail: `only ${authority} may sign off a runway inspection here` };
-    }
+    const notAuthority = authority.runwayInspectionRefusal(ctx.actingPositionId, ctx.inventory);
+    if (notAuthority) return notAuthority;
     const { runway, refusal } = this._needRunway(ctx);
     if (refusal) return refusal;
     if (runway.status !== 'SUSPENDED_INSPECTION') {
@@ -469,10 +468,8 @@ class RunwayStatusStore {
     if (selfCoordinate) {
       // One input, legal only when this controller is Primary on every
       // acknowledger that is staffed (LC is checked at the wire).
-      const elsewhere = required.filter(p => this._primaryOf(record.facilityId, p) !== by);
-      if (elsewhere.length) {
-        return { ok: false, reason: 'PERMISSION_DENIED', detail: `a self-coordinated runway change needs you Primary at ${elsewhere.join(' and ')} — ask for the acknowledgement instead` };
-      }
+      const notPrimary = authority.selfCoordinationRefusal(required, p => this._primaryOf(record.facilityId, p), by);
+      if (notPrimary) return notPrimary;
       for (const p of required) acks[p] = { by: by || null, positionId: p, at: now, selfCoordinated: true };
     }
 
