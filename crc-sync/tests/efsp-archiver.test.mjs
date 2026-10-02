@@ -102,7 +102,7 @@ test('the drop time is stamped on drop, cleared by an Undo, and never on the wir
   assert.equal(incirlik().droppedWallAtOf(strip.stripId), null);
 });
 
-test('the drop time survives snapshot/restore, and a pre-L24 DROPPED Strip gets the restore time', async () => {
+test('the drop time survives snapshot/restore, and a snapshot without it is refused', async () => {
   const { BoardStore } = await import('../src/efsp/board-store.js');
   const dropped = droppedFlight('STAMP2');
   const snap = JSON.parse(JSON.stringify(incirlik().snapshot()));
@@ -113,15 +113,13 @@ test('the drop time survives snapshot/restore, and a pre-L24 DROPPED Strip gets 
   fresh.restore(snap);
   assert.equal(fresh.droppedWallAtOf(dropped.stripId), at);
 
-  // A snapshot written before this change has no droppedWallAt at all.
+  // A snapshot written before this change has no droppedWallAt at all: refused, never defaulted (ARCH-D5).
   const old = { ...snap };
   delete old.droppedWallAt;
-  const t0 = Date.now();
-  const restored = new BoardStore(efsp.fdrStore, fullRules(), { clock: efsp.clock });
-  restored.restore(old);
-  assert.ok(restored.droppedWallAtOf(dropped.stripId) >= t0, 'its 2 h start at the restore');
-  const live = snap.strips.find(s => s.state !== 'DROPPED');
-  if (live) assert.equal(restored.droppedWallAtOf(live.stripId), null, 'a live Strip has none');
+  const refused = new BoardStore(efsp.fdrStore, fullRules(), { clock: efsp.clock });
+  assert.throws(() => refused.restore(old), /not in the current shape/);
+  // A DROPPED Strip with no entry in an otherwise current snapshot is refused too.
+  assert.throws(() => refused.restore({ ...snap, droppedWallAt: [] }), new RegExp(`DROPPED Strip ${dropped.stripId} has no drop time`));
 });
 
 // ── the ten rules (§6 step 2) ───────────────────────────────────────────────

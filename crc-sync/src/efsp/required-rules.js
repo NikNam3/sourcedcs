@@ -17,10 +17,25 @@ const REQUIRED_RULES = [
   'tofiEligibleState', 'validateCarrierTransfer', 'voidMarsaForAssignment',
 ];
 
-/** Throws when `rules` lacks a required name (`null`, `false` and `[]` are values; only an absent key is missing). */
+// The rules that are data, not functions, and the kind each must be. Every other required rule is a function.
+const DATA_RULES = {
+  aitAuthorized: (v) => typeof v === 'boolean',
+  carrierTransfers: (v) => v !== null && typeof v === 'object',
+  sfaTransfers: (v) => v !== null && typeof v === 'object',
+  standingReleases: (v) => Array.isArray(v),
+  facilityId: (v) => v === null || typeof v === 'string',
+};
+
+/**
+ * Throws when `rules` lacks a required name, or has one of the wrong kind (a function rule that is `null` is as
+ * missing as an absent one; `false`, `null` and `[]` are legitimate only for the data rules above).
+ */
 function assertRules(rules) {
-  const missing = REQUIRED_RULES.filter(name => !rules || !(name in rules));
-  if (missing.length) throw new Error(`BoardStore built without ${missing.length} required rule(s): ${missing.join(', ')}`);
+  const bad = REQUIRED_RULES.filter(name => {
+    if (!rules || !(name in rules)) return true;
+    return DATA_RULES[name] ? !DATA_RULES[name](rules[name]) : typeof rules[name] !== 'function';
+  });
+  if (bad.length) throw new Error(`BoardStore built without ${bad.length} required rule(s) (absent, or not a ${'function'} where one is needed): ${bad.join(', ')}`);
 }
 
-module.exports = { REQUIRED_RULES, assertRules };
+module.exports = { REQUIRED_RULES, DATA_RULES, assertRules };

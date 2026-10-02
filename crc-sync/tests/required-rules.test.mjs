@@ -37,7 +37,9 @@ test('a BoardStore built without rules it reads fails at construction, naming ea
   const { facilityId, peerBoard, ...partial } = fullRules();
   assert.throws(() => new BoardStore({ getFdr: () => null }, partial), (e) => /2 required rule\(s\)/.test(e.message) && e.message.includes('facilityId') && e.message.includes('peerBoard'));
   assert.throws(() => new BoardStore({ getFdr: () => null }, {}), /50 required rule\(s\)/);
-  // null, false and [] are values, not absences
+  // a function rule that is null is as missing as an absent one
+  assert.throws(() => new BoardStore({ getFdr: () => null }, fullRules({ peerBoard: null })), /1 required rule\(s\).*peerBoard/);
+  // null, false and [] are values for the data rules
   assert.doesNotThrow(() => new BoardStore({ getFdr: () => null }, fullRules({ facilityId: null, aitAuthorized: false, standingReleases: [] })));
 });
 

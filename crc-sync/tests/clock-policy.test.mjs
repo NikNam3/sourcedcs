@@ -32,8 +32,6 @@ export const WALL_ALLOW_LIST = [
     reason: 'a DROPPED Strip with no recorded drop time starts its archive window now (docs/adr/0082: archived at most one sweep late rather than never)' },
   { file: 'src/efsp/board/persistence.js', function: 'snapshot', clock: 'wall',
     reason: '`replay`: the idempotency records of the last REPLAY_PERSIST_WINDOW_MS, so a retry after a restart answers from the cache (docs/adr/0081); the window is wall time like `appliedWallAt`' },
-  { file: 'src/efsp/board/persistence.js', function: 'restore', clock: 'wall',
-    reason: 'docs/adr/0082 — when each DROPPED Strip dropped. One restored with no entry starts its 2 h now' },
   { file: 'src/efsp/correlation-reconciler.js', function: '_accumulate', clock: 'wall',
     reason: 'ADR 0079 table: Correlation below-target warning throttle | wall | limits how often the log is written (code: "stays on the wall clock (_warnIfBelowTarget)")' },
   { file: 'src/efsp/index.js', function: '_persist', clock: 'wall',

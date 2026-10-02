@@ -265,12 +265,12 @@ function createEfsp({ clock = WALL_CLOCK, transitionAltFt, paths = statePaths('e
     nlaStatusMonitor,
     fieldStateStore,
     // The real, Facility-aware accessors WP4A's wire protocol uses.
-    boardStoreFor: (facilityId = facilityConfig.DEFAULT_FACILITY_ID) => {
-      const f = facilities.get(facilityId);
+    boardStoreFor: (facilityId) => {
+      const f = _facilityOrThrow(facilities, facilityId);
       return f ? f.boardStore : null;
     },
-    positionStoreFor: (facilityId = facilityConfig.DEFAULT_FACILITY_ID) => {
-      const f = facilities.get(facilityId);
+    positionStoreFor: (facilityId) => {
+      const f = _facilityOrThrow(facilities, facilityId);
       return f ? f.positionStore : null;
     },
     // WP7 (docs/adr/0071) — the ATO import dates the ATO against the mission
@@ -477,6 +477,13 @@ function assertAuthorityCoverage(config) {
     }
   }
   if (uncovered.length) throw new Error(`[efsp] Position(s) configured with no Position family in authority/: ${uncovered.join(', ')}`);
+}
+
+// boardStoreFor/positionStoreFor take a Facility id and nothing defaults it (ARCH-D5): calling one without is a
+// bug in the caller. An id that is a string but names no Facility still answers null, as it always did.
+function _facilityOrThrow(facilities, facilityId) {
+  if (typeof facilityId !== 'string') throw new Error('boardStoreFor/positionStoreFor need a facilityId');
+  return facilities.get(facilityId);
 }
 
 function _restore({ facilities, stores, paths, mutationLog, clock }) {
